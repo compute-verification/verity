@@ -66,7 +66,7 @@ theorem ExpandComplies : Guarantees.ExpandComplies := by
   have hsize' : d.expand.D.size (P.expand.gates u) = d.D.width (P.gates u) := hsize
   have hnovel : novelReads d.expand (P.expand.gates u) ≤ novelReads d (P.gates u) := by
     have : novelReads d.expand (P.expand.gates u) = (d.expand.unregistered (P.expand.gates u)).card := by
-      simp [novelReads, Circuit.width, Declaration.unregistered]
+      simp [novelReads, Circuit.width, Registered.unregistered]
     rw [this]
     exact hunreg
   refine ⟨?_, ?_⟩

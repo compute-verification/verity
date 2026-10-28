@@ -5,7 +5,7 @@ import Mathlib.Algebra.BigOperators.Group.Finset.Basic
 # A declaration bit by bit, as a declaration
 
 `Circuit.ofDecl d` is `d`'s wiring bit by bit (`Definitions.Nci.BitView`). `bitDecl d` is the same bits as a declaration
-(`Verity.Declaration`), so that the covering bound's vocabulary (`Nci.Covering`), stated over a declaration's gates,
+(`Verity.Registered`), so that the covering bound's vocabulary (`Nci.Covering`), stated over a declaration's gates,
 reads `d` bit by bit: each of its gates is one bit wide, and its counts (`|S|`, `|in(S) \ θ|`, a cut's size) count bits,
 the unit of the NCI policy's novel reads and of the covering bound's costs (an activation's width: 16 at bf16, 8 at FP8,
 4 at FP4).
@@ -48,8 +48,8 @@ open BitView in
 /-- **A declaration bit by bit, as a declaration**: the bits of `d`'s gates, one bit wide each, wired as the bit view
 (`Circuit.ofDecl d`), each bit that reads nothing an input gate, the free bits registered, and each real bit computing
 its bit of its gate's value. -/
-def bitDecl (d : Verity.Declaration) : Verity.Declaration where
-  D :=
+def bitDecl (d : Verity.Registered) : Verity.Registered :=
+  .ofCircuit
     { N := (Circuit.ofDecl d).N
       w := fun _ => 1
       isInput := fun y => decide ((Circuit.ofDecl d).pred y = ∅)
@@ -79,7 +79,6 @@ def bitDecl (d : Verity.Declaration) : Verity.Declaration where
           exact ⟨ha, j.isLt⟩
         · rfl
       outputs := wordBits d d.D.outputs }
-  θ := (Circuit.ofDecl d).θ
-  θ_input y hy := decide_eq_true ((Circuit.ofDecl d).θ_input y hy)
+    (Circuit.ofDecl d).θ fun y hy => decide_eq_true ((Circuit.ofDecl d).θ_input y hy)
 
 end Nci.Cover

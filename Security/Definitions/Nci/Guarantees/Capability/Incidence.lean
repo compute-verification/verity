@@ -18,7 +18,7 @@ gates `S` compute at most `min(r |U| |V|, aout |V|)` counted products whole, `U`
 products use. The rectangle `U × V` overcounts pairs that never meet in a product; a finer count of the incidence graph is
 a structural improvement, not a new premise. -/
 def IncidenceCap : Prop :=
-  ∀ (d : Declaration) (B : Nci.Covering.MulBlocks d) {κ : Type} [DecidableEq κ] (W : Items d.D (Fin B.nw))
+  ∀ (d : Registered) (B : Nci.Covering.MulBlocks d) {κ : Type} [DecidableEq κ] (W : Items d.D (Fin B.nw))
     (O : Items d.D κ) (I : Incidence B W O) (r aout : ℝ),
     (∀ i o, ((B.P.filter fun q => q.1 = i ∧ I.occ q = o).card : ℝ) ≤ r) →
     (∀ o, ((B.P.filter fun q => I.occ q = o).card : ℝ) ≤ aout) →
@@ -31,25 +31,25 @@ def IncidenceCap : Prop :=
 slots priced at most `hw` and operands priced at most `hx`. If `Q` bounds `min(r x y, aout y)` wherever `βw x ≤ hw` and
 `βx y ≤ hx`, each proof block computes at most `Q` counted products whole. -/
 def OperandCapSeparate : Prop :=
-  ∀ (R : Registration) (B : Nci.Covering.MulBlocks R.d) {κ : Type} [DecidableEq κ] (W : Items R.d.D (Fin B.nw))
+  ∀ (R : Committed) (B : Nci.Covering.MulBlocks R.d) {κ : Type} [DecidableEq κ] (W : Items R.d.D (Fin B.nw))
     (O : Items R.d.D κ) (I : Incidence B W O) (r aout βw βx hw hx Q : ℝ),
     0 < βw → 0 < βx → (∀ i, W.price i = βw) → (∀ o, O.price o = βx) →
     (∀ i o, ((B.P.filter fun q => q.1 = i ∧ I.occ q = o).card : ℝ) ≤ r) →
     (∀ o, ((B.P.filter fun q => I.occ q = o).card : ℝ) ≤ aout) →
     HeldPriceAtMost R W hw → HeldPriceAtMost R O hx →
     (∀ x y : ℝ, 0 ≤ x → 0 ≤ y → βw * x ≤ hw → βx * y ≤ hx → min (r * x * y) (aout * y) ≤ Q) →
-    ∀ u, ((completedIn B (R.P.gates u)).card : ℝ) ≤ Q
+    ∀ u, ((completedIn B (R.d.𝓘.gates u)).card : ℝ) ≤ Q
 
 /-- **The operand cap, one joint budget.** As `OperandCapSeparate`, with every proof block holding slots and operands
 priced at most `h` together (a budget on `W.sum O`), and `Q` bounding `min(r x y, aout y)` wherever `βw x + βx y ≤ h`. -/
 def OperandCapJoint : Prop :=
-  ∀ (R : Registration) (B : Nci.Covering.MulBlocks R.d) {κ : Type} [DecidableEq κ] (W : Items R.d.D (Fin B.nw))
+  ∀ (R : Committed) (B : Nci.Covering.MulBlocks R.d) {κ : Type} [DecidableEq κ] (W : Items R.d.D (Fin B.nw))
     (O : Items R.d.D κ) (I : Incidence B W O) (r aout βw βx h Q : ℝ),
     0 < βw → 0 < βx → (∀ i, W.price i = βw) → (∀ o, O.price o = βx) →
     (∀ i o, ((B.P.filter fun q => q.1 = i ∧ I.occ q = o).card : ℝ) ≤ r) →
     (∀ o, ((B.P.filter fun q => I.occ q = o).card : ℝ) ≤ aout) →
     HeldPriceAtMost R (W.sum O) h →
     (∀ x y : ℝ, 0 ≤ x → 0 ≤ y → βw * x + βx * y ≤ h → min (r * x * y) (aout * y) ≤ Q) →
-    ∀ u, ((completedIn B (R.P.gates u)).card : ℝ) ≤ Q
+    ∀ u, ((completedIn B (R.d.𝓘.gates u)).card : ℝ) ≤ Q
 
 end Nci.Guarantees

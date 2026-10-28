@@ -6,14 +6,15 @@ import Mathlib.Data.Nat.Log
 # Local description length on a `(c,k)`-partition: the vocabulary
 
 The working draft's model ("Distinguishing inference from frontier training", §3–§5.1), on core's circuit and its one
-partition. The registered inputs `θ` are a declaration's baseline (`Verity.Declaration`), the blocks are a
+partition. The registered inputs `θ` are a declaration's baseline (`Verity.Registered`), the blocks are a
 `Verity.Partition` of the operation gates, and a block's unregistered input bits `|in(I) \ θ|` are its novel reads
 (`Nci.novelReads`, which on a Boolean circuit, one bit per gate, is the number of those gates). Blocks carry no order:
 each inherits the circuit's topological order.
 
 * `Decoder`, `LDL`: a fixed decoder and `LDL_{t,R}(y) = K^t(y | R)`, the least program length producing `y` within `t`.
-* The registration `R = (θ, C, 𝓘)` is core's `Verity.Registration`: the declaration, the registered values and the
-  partition into `R.B` blocks, fixed once; a run that takes the registered values is `Verity.Registration.Honest`.
+* The committed registered circuit `R = (θ, C, 𝓘)` is core's `Verity.Committed`: the registered circuit, its registered
+  values and the compiler's partition `R.d.𝓘` into `R.d.n` blocks, fixed once; a run that takes the registered values
+  is `Verity.Committed.Honest`.
 * `Exact`, `ReadCap`, `CKPartition`: exactly `c` operation gates per block, at most `k` unregistered input bits per
   block, and both.
 * `Products`, `Products.inBlock`, `Products.acts`, `Products.FanOut`: counted product occurrences, `𝓙_I`, `V_I`, and
@@ -46,11 +47,11 @@ def Exact {C : Circuit} {n : ℕ} (P : Partition C n) (c : ℕ) : Prop :=
   ∀ u, C.size (P.gates u) = c
 
 /-- **At most `k` unregistered input bits into every block**: `|in(I) \ θ| ≤ k`, in bits. -/
-def ReadCap (d : Declaration) {n : ℕ} (P : Partition d.D n) (k : ℕ) : Prop :=
+def ReadCap (d : Registered) {n : ℕ} (P : Partition d.D n) (k : ℕ) : Prop :=
   ∀ u, novelReads d (P.gates u) ≤ k
 
 /-- **A `(c,k)`-partition**: exactly `c` operation gates and at most `k` unregistered input bits per block. -/
-def CKPartition (d : Declaration) {n : ℕ} (P : Partition d.D n) (c k : ℕ) : Prop :=
+def CKPartition (d : Registered) {n : ℕ} (P : Partition d.D n) (c k : ℕ) : Prop :=
   Exact P c ∧ ReadCap d P k
 
 /-- **Counted product occurrences** (§5.1): the occurrences `J`, `M = #J` of them, each with a distinct representative

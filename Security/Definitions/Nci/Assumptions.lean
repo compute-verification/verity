@@ -59,7 +59,7 @@ False when `D` is a declared circuit; it stands when `D` is a reference training
 as the activations' half of `TrainingIncompressible`. `ActivationsSupport`'s counterexample does not
 apply to it: an E2M1 product takes at most 37 values, but an IU that holds the product gate reads its weight and input
 wires whole, at least `b_w + b_a` bits. -/
-def ActivationsIncompressible (D : Declaration) (c : Chain D.D) (Γ : ℕ) (K b_w b_a : ℝ) : Prop :=
+def ActivationsIncompressible (D : Registered) (c : Chain D.D) (Γ : ℕ) (K b_w b_a : ℝ) : Prop :=
   ∀ R ⊆ D.D.computed, D.D.size R ≤ Γ → (novelReads D R : ℝ) ≤ K →
     b_w * (c.weightsUsed R).card +
         b_a * ((c.inputsUsed R).filter fun x => ¬ c.LinkedWhole R x.1 x.2.1 x.2.2).card ≤ novelReads D R
@@ -83,7 +83,7 @@ bound on `R`'s size: the support form says what the values are, not what an IU c
 gate of the first multiplication holds an E2M1 × E2M1 product, `T` that one gate is charged `b_w + b_a` and takes at
 most 37 values, so the assumption fails at every cap of at least `b_w + b_a` once `b_w + b_a > log₂ 37 ≈ 5.21` (the
 calculator's 2.5 + 4 = 6.5). At FP8 (E4M3, 2011 products) this counterexample does not apply. -/
-def ActivationsSupport (D : Declaration) (θv : D.D.Transcript) (c : Chain D.D) (K b_w b_a : ℝ) : Prop :=
+def ActivationsSupport (D : Registered) (θv : D.D.Transcript) (c : Chain D.D) (K b_w b_a : ℝ) : Prop :=
   ∀ R ⊆ D.D.computed, ∀ T ⊆ R, c.charge R b_w b_a T ≤ K → (2 : ℝ) ^ c.charge R b_w b_a T ≤ support D θv T
 
 /-- **Incompressibility of partial sums** (the draft's partial-sum incompressibility, applied jointly with weight
@@ -104,7 +104,7 @@ False when `D` is a declared circuit; it stands when `D` is a reference training
 as the partial sums' half of `TrainingIncompressible`. `PartialSumsSupport`'s counterexample does not
 apply to it: an adder IU over a `k × k × k` block holds values determined by `2k²` entries, but it reads its `k³`
 products' wires to form them. -/
-def PartialSumsIncompressible (D : Declaration) (c : Chain D.D) (Γ : ℕ) (K b_w b_a : ℝ) : Prop :=
+def PartialSumsIncompressible (D : Registered) (c : Chain D.D) (Γ : ℕ) (K b_w b_a : ℝ) : Prop :=
   ∀ (n : ℕ) (P : Partition D.D n), (∀ u, D.D.size (P.gates u) ≤ Γ ∧ (novelReads D (P.gates u) : ℝ) ≤ K) →
     ∃ s : Fin n → ℕ,
       ∑ x : (ℓ : Fin c.L) × Fin c.N × Fin (c.e ℓ), (c.spread P x.1 x.2.1 x.2.2 - 1) ≤ ∑ u, s u ∧
@@ -130,7 +130,7 @@ functions of the few weight and input entries it depends on. In the exact 1-bit 
 the IUs can be charged at most 183 (192 bits of entries) against the 448 required, for every `Γ ≥ 448` and `K ≥ 512`.
 At `d = 7168` and the deployed `K = 2·10⁷` such a division absorbs at most 8.4% of the charge at FP4 and 17.8% at FP8
 (2.5 and 4 bits). -/
-def PartialSumsSupport (D : Declaration) (θv : D.D.Transcript) (c : Chain D.D) (Γ : ℕ) (K b_w b_a : ℝ) : Prop :=
+def PartialSumsSupport (D : Registered) (θv : D.D.Transcript) (c : Chain D.D) (Γ : ℕ) (K b_w b_a : ℝ) : Prop :=
   ∀ (n : ℕ) (P : Partition D.D n), (∀ u, D.D.size (P.gates u) ≤ Γ ∧ (novelReads D (P.gates u) : ℝ) ≤ K) →
     ∃ s : Fin n → ℕ,
       ∑ x : (ℓ : Fin c.L) × Fin c.N × Fin (c.e ℓ), (c.spread P x.1 x.2.1 x.2.2 - 1) ≤ ∑ u, s u ∧

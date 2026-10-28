@@ -22,7 +22,7 @@ them, and, at positions it completes entries of, `K / (4 b_w dd)` per `b_a` bits
 It needs only `PackedActivationsIncompressible` on `c` at read cap `K ≥ αΓ`, besides the θ premise
 `ThetaRegistered`. -/
 def PackedContainedFanOutOn : Prop :=
-  ∀ (k Γ : ℕ) (α K b_w b_a : ℝ) (c d : Declaration) (ch : PackedChain c.D k) (dd emax : ℕ)
+  ∀ (k Γ : ℕ) (α K b_w b_a : ℝ) (c d : Registered) (ch : PackedChain c.D k) (dd emax : ℕ)
     (M : PartialContainment c d),
     0 ≤ α → 0 < K → 0 < b_w → 0 < b_a → 0 < dd → α * Γ ≤ K →
     (∀ ℓ, dd ≤ ch.d ℓ) → (∀ ℓ, ch.e ℓ ≤ emax) → Complies Γ α d → Assumptions.ThetaRegistered c d M →

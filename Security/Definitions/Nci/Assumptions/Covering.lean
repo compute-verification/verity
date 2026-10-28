@@ -44,7 +44,7 @@ Why it's realistic: the weights `θ'` are updated after the commitment, so none 
 `s` gates cannot rebuild an updated weight from fewer bits than the weight compresses to, `r · b` of its `b` bits. That
 holds with a useful `c` when `i` is a parameter slot counted from a step `t0` after the commitment (`c = H(θ'_{t0} | θ)`);
 if each step's version were its own `i`, `c` would be at most one step's increment entropy (the module doc). -/
-def ParameterHard (d : Declaration) (B : MulBlocks d) (s : ℕ) (r b : ℝ) : Prop :=
+def ParameterHard (d : Registered) (B : MulBlocks d) (s : ℕ) (r b : ℝ) : Prop :=
   ∀ S : Subcircuit d.D, S.gates.card ≤ s → r * b * (B.weightsCompleted S).card ≤ (S.ins \ d.θ).card
 
 /-- **Activation-chaining** `(D, r, b)` of the multiplication block `m_{i,j}`, `p = (i, j)` ([ACTIVATION-CHAINING]):
@@ -61,7 +61,7 @@ activation's own `b` bits are a cut, and everything upstream of it (the residual
 
 Without it the bound fails: a one-layer model on data generated from a 64-bit seed lets one block do `s`
 multiplications for `c + 64` bits of reads. -/
-def ActivationChained (d : Declaration) (B : MulBlocks d) (D : ℕ) (r b : ℝ) (p : Fin B.nw × Fin B.nt) : Prop :=
+def ActivationChained (d : Registered) (B : MulBlocks d) (D : ℕ) (r b : ℝ) (p : Fin B.nw × Fin B.nt) : Prop :=
   p ∈ B.P ∧ ∃ (A : Finset (Fin d.D.N)) (W : Finset (Fin B.nw)),
     A ⊆ B.T p.2 ∧ (∀ a ∈ A, ∃ g ∈ B.m p, a ∈ d.D.reads g) ∧ D ≤ W.card ∧
     (∀ i' ∈ W, (i', p.2) ∈ B.P ∧ B.m (i', p.2) ⊆ B.T p.2 ∧
@@ -70,7 +70,7 @@ def ActivationChained (d : Declaration) (B : MulBlocks d) (D : ℕ) (r b : ℝ) 
 
 open Classical in
 /-- `𝓜*`: the chained multiplication blocks. -/
-noncomputable def chainedBlocks (d : Declaration) (B : MulBlocks d) (D : ℕ) (r b : ℝ) : Finset (Fin B.nw × Fin B.nt) :=
+noncomputable def chainedBlocks (d : Registered) (B : MulBlocks d) (D : ℕ) (r b : ℝ) : Finset (Fin B.nw × Fin B.nt) :=
   B.P.filter (ActivationChained d B D r b)
 
 end Nci.Assumptions

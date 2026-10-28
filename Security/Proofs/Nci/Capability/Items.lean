@@ -7,7 +7,7 @@ import Proofs.Core.Formalism
 * `holds_mono`: more gates hold more;
 * `exists_selection`: the items a family of products reads, each among what its own gates hold, have a selection held by
   any gates containing those products;
-* `Registration.recompute_congr`: a proof block's recomputation, on what it holds, reads only `X`'s values on its
+* `Committed.recompute_congr`: a proof block's recomputation, on what it holds, reads only `X`'s values on its
   unregistered inputs;
 * `Circuit.bits_congr`: two runs agreeing on a bundle's gates give it the same bits.
 -/
@@ -51,9 +51,9 @@ theorem Circuit.bits_congr (C : Circuit) {X Y : C.Transcript} {l : List (Fin C.N
     simp only [Circuit.bits, List.flatMap_cons] at ih ⊢
     rw [h g List.mem_cons_self, ih fun x hx => h x (List.mem_cons_of_mem g hx)]
 
-theorem Registration.recompute_congr (R : Registration) {X Y : R.d.D.Transcript} {u : Fin R.B}
-    (h : ∀ g ∈ R.d.unregistered (R.P.gates u), X g = Y g) :
-    ∀ g ∈ Nci.Capability.holds R.d.D (R.P.gates u), R.recompute X u g = R.recompute Y u g := by
+theorem Committed.recompute_congr (R : Committed) {X Y : R.d.D.Transcript} {u : Fin R.d.n}
+    (h : ∀ g ∈ R.d.unregistered (R.d.𝓘.gates u), X g = Y g) :
+    ∀ g ∈ Nci.Capability.holds R.d.D (R.d.𝓘.gates u), R.recompute X u g = R.recompute Y u g := by
   intro g
   induction g using WellFoundedLT.induction with
   | _ g ih => ?_
@@ -61,15 +61,15 @@ theorem Registration.recompute_congr (R : Registration) {X Y : R.d.D.Transcript}
   by_cases hθ : g ∈ R.d.θ
   · rw [recompute, R.d.D.run_fixed (b := R.val g) (by simp [hθ]), recompute,
       R.d.D.run_fixed (b := R.val g) (by simp [hθ])]
-  · by_cases hu : R.P.unit g = some u
+  · by_cases hu : R.d.𝓘.unit g = some u
     · rw [recompute, R.d.D.run_free (by simp [hθ, hu]), recompute, R.d.D.run_free (by simp [hθ, hu])]
       refine R.d.D.op_congr g _ _ fun x hx => ih x (R.d.D.reads_lt g x hx) ?_
-      by_cases hxu : x ∈ R.P.gates u
+      by_cases hxu : x ∈ R.d.𝓘.gates u
       · exact mem_union_left _ hxu
-      · exact mem_union_right _ (mem_filter.2 ⟨mem_univ _, hxu, g, R.P.mem_gates.2 hu, hx⟩)
-    · have hgI : g ∈ R.d.D.into (R.P.gates u) := by
+      · exact mem_union_right _ (mem_filter.2 ⟨mem_univ _, hxu, g, R.d.𝓘.mem_gates.2 hu, hx⟩)
+    · have hgI : g ∈ R.d.D.into (R.d.𝓘.gates u) := by
         rcases mem_union.1 hg with hg | hg
-        · exact absurd (R.P.mem_gates.1 hg) hu
+        · exact absurd (R.d.𝓘.mem_gates.1 hg) hu
         · exact hg
       rw [recompute, R.d.D.run_fixed (b := X g) (by simp [hθ, hu]), recompute,
         R.d.D.run_fixed (b := Y g) (by simp [hθ, hu])]

@@ -73,7 +73,7 @@ end Lemmas
 
 /-- **Products off the books are in dark gates, at most `k` to a gate**: the chain's products number at most those
 whose gates are in `S` plus `k` for each dark gate. This is where `prod_mult` is read. -/
-theorem card_products_le_dark_packed {c d : Declaration} {k : ℕ} (M : PartialContainment c d) (ch : PackedChain c.D k) :
+theorem card_products_le_dark_packed {c d : Registered} {k : ℕ} (M : PartialContainment c d) (ch : PackedChain c.D k) :
     ch.G ≤ (univ.filter fun p : (ℓ : Fin ch.L) × Fin ch.N × Fin (ch.e ℓ) × Fin (ch.d ℓ) =>
       ch.prod p.1 p.2.1 p.2.2.1 p.2.2.2 ∈ M.S).card + k * M.dark.card := by
   have huniv : (univ : Finset ((ℓ : Fin ch.L) × Fin ch.N × Fin (ch.e ℓ) × Fin (ch.d ℓ))).card = ch.G := by
@@ -90,7 +90,7 @@ theorem card_products_le_dark_packed {c d : Declaration} {k : ℕ} (M : PartialC
 
 open Classical in
 /-- **The partial sums, counted over the pieces**, on a packed chain. -/
-theorem partialSums_count_packed {c d : Declaration} {M : PartialContainment c d} {n : ℕ} {P : Partition d.D n}
+theorem partialSums_count_packed {c d : Registered} {M : PartialContainment c d} {n : ℕ} {P : Partition d.D n}
     {k : ℕ} {ch : PackedChain c.D k} {b_w b_a : ℝ} (ha : 0 ≤ b_a)
     {s : Fin (Fintype.card (Fin n ⊕ {v // v ∈ M.dark})) → ℕ}
     (hsum : ∑ x : (ℓ : Fin ch.L) × Fin ch.N × Fin (ch.e ℓ), (ch.spread (withDark M P) x.1 x.2.1 x.2.2 - 1) ≤ ∑ i, s i)
@@ -125,7 +125,7 @@ theorem partialSums_count_packed {c d : Declaration} {M : PartialContainment c d
 open Classical in
 /-- **Training's incompressibility gives the activations'**, on a packed chain: a small IU is a division of `c` into
 it and the rest. -/
-theorem activationsIncompressible_of_training_packed {c : Declaration} {k : ℕ} {ch : PackedChain c.D k}
+theorem activationsIncompressible_of_training_packed {c : Registered} {k : ℕ} {ch : PackedChain c.D k}
     {T : Threading c} {Γ : ℕ} {K b_w b_a : ℝ} (hba : 0 ≤ b_a)
     (h : Assumptions.PackedTrainingIncompressible c ch T Γ K b_w b_a) :
     Assumptions.PackedActivationsIncompressible c ch Γ K b_w b_a := by
@@ -174,7 +174,7 @@ theorem PackedIncompressibleContainedTrainingOn : Guarantees.PackedIncompressibl
       hP hB hX h) hκ (by exact_mod_cast card_products_le_dark_packed M ch)
 
 /-- At `k = 1` the packed training assumption is the per-product one. -/
-theorem packedTrainingIncompressible_toPacked {c : Declaration} {ch : Chain c.D} {T : Threading c} {Γ : ℕ}
+theorem packedTrainingIncompressible_toPacked {c : Registered} {ch : Chain c.D} {T : Threading c} {Γ : ℕ}
     {K b_w b_a : ℝ} :
     Assumptions.PackedTrainingIncompressible c ch.toPacked T Γ K b_w b_a ↔
       Assumptions.TrainingIncompressible c ch T Γ K b_w b_a := by

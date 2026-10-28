@@ -73,7 +73,7 @@ weights, and complies with NCI at `(Γ, α)`, with its θ registered (`ThetaRegi
 `T`'s `Λ = T.bound`, as the memory cap over threads states it. Then `η ≤ s + min(r, μ (1 + L/H)) + ν_T + χ` with
 `ν_T = (1 − s) · 2/(κ ρ_T)` and `μ = 2 reuse · R α/(κ d b_w b_a)` at `T`'s reuse. -/
 def DampenerThreaded : Prop :=
-  ∀ (κ C U W χ : ℝ) (M Mu Mr Mx n Γ : ℕ) (F H L R α b_w b_a : ℝ) (c d : Declaration) (T : Threading c) (dd e : ℕ)
+  ∀ (κ C U W χ : ℝ) (M Mu Mr Mx n Γ : ℕ) (F H L R α b_w b_a : ℝ) (c d : Registered) (T : Threading c) (dd e : ℕ)
     (Mc : Containment c.D d.D),
     0 < κ → 0 < C → 0 ≤ U → 0 < H → 0 < L → 0 ≤ R → 0 ≤ α → 0 < b_w → 0 < b_a → 0 < dd →
     Complies Γ α d → Assumptions.ThetaRegistered c d (PartialContainment.ofContainment Mc) →
@@ -91,7 +91,7 @@ def DampenerThreaded : Prop :=
 circuit's weights incompressible per parameter slot of a slot map `σ` (`Assumptions.WeightsIncompressibleSlots`), its
 declared computation's bound from `Nci.Guarantees.ThreadedThrottledSlots`. -/
 def DampenerThreadedSlots : Prop :=
-  ∀ (κ C U W χ : ℝ) (M Mu Mr Mx n Γ : ℕ) (F H L R α b_w b_a : ℝ) (c d : Declaration) (T : Threading c)
+  ∀ (κ C U W χ : ℝ) (M Mu Mr Mx n Γ : ℕ) (F H L R α b_w b_a : ℝ) (c d : Registered) (T : Threading c)
     (σ : T.Slots) (dd e : ℕ) (Mc : Containment c.D d.D),
     0 < κ → 0 < C → 0 ≤ U → 0 < H → 0 < L → 0 ≤ R → 0 ≤ α → 0 < b_w → 0 < b_a → 0 < dd →
     Complies Γ α d → Assumptions.ThetaRegistered c d (PartialContainment.ofContainment Mc) →

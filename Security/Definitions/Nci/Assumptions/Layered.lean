@@ -36,7 +36,7 @@ fan-out), at a larger capacity factor (`e = 280 + 256 · ⌈8 · cf⌉`), with F
 `163840 · 8` bits, and wherever a gather reads a computed embedding table, as every training step after a run's first
 does when it trains the table: that gather is no lookup, so its thread's first chains key back to the token, where the
 legs of each chain's first root meet (`d₀ = 1`). -/
-def ReferenceLayered (c : Declaration) (T : Threading c) : Prop :=
+def ReferenceLayered (c : Registered) (T : Threading c) : Prop :=
   Nonempty (Layered T 17 2328 0 (163840 * 16))
 
 end Nci.Assumptions

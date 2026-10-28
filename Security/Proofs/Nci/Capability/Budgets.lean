@@ -14,7 +14,7 @@ import Mathlib.Tactic.Linarith
 * `RecoveredBudget`: the proof block's program followed by the recovery's complement is a description of the source, of
   at most `a_blk + ⌈log₂ B⌉ + k + ℓz − βv J + amb` bits, and source hardness bounds it below by `ℓz − δ`;
 * `StatHeldBudget`: in an honest run a proof block's held values are a function of its unregistered input bits
-  (`Registration.recompute_congr`), at most `2^k` views, so one view, and the held value it gives, has probability at
+  (`Committed.recompute_congr`), at most `2^k` views, so one view, and the held value it gives, has probability at
   least `2^-k`, which min-entropy hardness bounds by `2^(Λ − price)`.
 -/
 
@@ -26,8 +26,8 @@ open scoped ENNReal
 theorem HeldBudget : Guarantees.HeldBudget := by
   intro R c k hCK ι X ρ M r t aBlk Λ hev hD u U σ hsel hσ
   classical
-  let U' : Fin R.B → Finset ι := fun v => if v = u then U else ∅
-  have hU' : ∀ v, Selects X (U' v) σ ∧ ∀ i ∈ U' v, σ i ⊆ holds R.d.D (R.P.gates v) := by
+  let U' : Fin R.d.n → Finset ι := fun v => if v = u then U else ∅
+  have hU' : ∀ v, Selects X (U' v) σ ∧ ∀ i ∈ U' v, σ i ⊆ holds R.d.D (R.d.𝓘.gates v) := by
     intro v
     by_cases hv : v = u
     · subst hv
@@ -36,7 +36,7 @@ theorem HeldBudget : Guarantees.HeldBudget := by
   obtain ⟨e, he, hE⟩ := hev U' σ hU'
   have hL := Verity.SecurityProofs.BlockDescription R c k hCK ρ M r t aBlk e _ he hE R.val (fun _ _ => rfl) u
   simp only [U', ↓reduceIte] at hL
-  have h1 : ENNReal.ofReal (∑ i ∈ U, X.price i - Λ) ≤ ENNReal.ofReal ((k + Nat.clog 2 R.B + aBlk : ℕ) : ℝ) := by
+  have h1 : ENNReal.ofReal (∑ i ∈ U, X.price i - Λ) ≤ ENNReal.ofReal ((k + Nat.clog 2 R.d.n + aBlk : ℕ) : ℝ) := by
     refine (hD R.val (fun _ _ => rfl) U σ hsel).trans ?_
     rw [ENNReal.ofReal_natCast]
     exact_mod_cast ENat.toENNReal_le.2 hL
@@ -54,14 +54,14 @@ theorem RecoveredBudget : Guarantees.RecoveredBudget := by
   rw [ENat.toENNReal_coe, ← ENNReal.ofReal_natCast, ENNReal.ofReal_le_ofReal_iff (Nat.cast_nonneg _)] at h1
   push_cast at h1
   have he' : (e.length : ℝ) ≤ aBlk := by exact_mod_cast he
-  have hk : ((R.d.unregistered (R.P.gates u)).card : ℝ) ≤ k := by exact_mod_cast hCK.reads u
+  have hk : ((R.d.unregistered (R.d.𝓘.gates u)).card : ℝ) ≤ k := by exact_mod_cast hCK.reads u
   push_cast
   linarith
 
 /-- In an honest run, what a proof block holds is determined by its unregistered inputs. -/
-theorem eval_eq_of_unregistered (R : Registration) {u : Fin R.B} {a a' : R.d.D.Transcript} (ha : R.Honest a)
-    (ha' : R.Honest a') (h : ∀ g ∈ R.d.unregistered (R.P.gates u), R.d.D.eval a g = R.d.D.eval a' g) :
-    ∀ g ∈ holds R.d.D (R.P.gates u), R.d.D.eval a g = R.d.D.eval a' g := by
+theorem eval_eq_of_unregistered (R : Committed) {u : Fin R.d.n} {a a' : R.d.D.Transcript} (ha : R.Honest a)
+    (ha' : R.Honest a') (h : ∀ g ∈ R.d.unregistered (R.d.𝓘.gates u), R.d.D.eval a g = R.d.D.eval a' g) :
+    ∀ g ∈ holds R.d.D (R.d.𝓘.gates u), R.d.D.eval a g = R.d.D.eval a' g := by
   intro g hg
   rw [← R.recompute_eval ha u, ← R.recompute_eval ha' u]
   exact R.recompute_congr h g hg
@@ -69,7 +69,7 @@ theorem eval_eq_of_unregistered (R : Registration) {u : Fin R.B} {a a' : R.d.D.T
 theorem StatHeldBudget : Guarantees.StatHeldBudget := by
   intro R c k hCK ι X μ Λ hμ hH u U σ hsel hσ
   classical
-  set S := R.d.unregistered (R.P.gates u)
+  set S := R.d.unregistered (R.d.𝓘.gates u)
   let φ : R.d.D.Transcript → (S → Bool) := fun a g => (R.d.D.eval a g.1).getLsbD 0
   let f : R.d.D.Transcript → List Bool := fun a => selectionBits (R.d.D.eval a) U σ
   have hf : ∀ a ∈ μ.support, ∀ a' ∈ μ.support, φ a = φ a' → f a = f a' := by

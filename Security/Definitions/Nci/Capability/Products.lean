@@ -16,22 +16,22 @@ namespace Nci.Capability
 open Verity Finset
 
 /-- **The counted products the gates `S` compute whole.** -/
-def completedIn {d : Declaration} (B : Nci.Covering.MulBlocks d) (S : Finset (Fin d.D.N)) :
+def completedIn {d : Registered} (B : Nci.Covering.MulBlocks d) (S : Finset (Fin d.D.N)) :
     Finset (Fin B.nw × Fin B.nt) :=
   B.P.filter fun q => B.m q ⊆ S
 
 /-- **The uses the gates `S` serve**: those of a counted product they compute whole. -/
-def served {d : Declaration} (B : Nci.Covering.MulBlocks d) (S : Finset (Fin d.D.N)) : Finset (Fin B.nt) :=
+def served {d : Registered} (B : Nci.Covering.MulBlocks d) (S : Finset (Fin d.D.N)) : Finset (Fin B.nt) :=
   (completedIn B S).image Prod.snd
 
 /-- **Each counted product reads a cell of its slot**, among its gates and what they read. -/
-def SlotsRead {d : Declaration} (B : Nci.Covering.MulBlocks d) (W : Items d.D (Fin B.nw)) : Prop :=
+def SlotsRead {d : Registered} (B : Nci.Covering.MulBlocks d) (W : Items d.D (Fin B.nw)) : Prop :=
   ∀ q ∈ B.P, ∃ c ∈ W.cells q.1, c ⊆ holds d.D (B.m q)
 
 /-- **The incidence** of the counted products with the slot items `W` and the operand items `O`: each product `q` reads
 a cell of its slot and a cell of its operand occurrence `occ q`, one scalar of one token's activation, say: a block may
 hold some of a token's activation without the rest. -/
-structure Incidence {d : Declaration} (B : Nci.Covering.MulBlocks d) {κ : Type} (W : Items d.D (Fin B.nw))
+structure Incidence {d : Registered} (B : Nci.Covering.MulBlocks d) {κ : Type} (W : Items d.D (Fin B.nw))
     (O : Items d.D κ) where
   /-- The operand occurrence each product reads. -/
   occ : Fin B.nw × Fin B.nt → κ

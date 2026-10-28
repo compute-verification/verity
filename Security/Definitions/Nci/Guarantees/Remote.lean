@@ -72,7 +72,7 @@ def DampenerRemote : Prop :=
   ∀ (Ω : Type) [Fintype Ω] (μ : PMF Ω) (N : ℕ) (c : Fin N → ℝ) (wrong : Ω → Fin N → Prop) (p ε : ℝ)
     (β ι : Type) [DecidableEq ι] (bad detected : Ω → Finset β) (I : Finset ι) (ident : β → ι) (τ w : β → ℝ)
     (Φ Δ H q B θ εW : ℝ)
-    (κ C U W χ mfu : ℝ) (M Mu Mr Mx : Ω → ℕ) (Γ : ℕ) (α b_w b_a : ℝ) (r d : Declaration) (T : Threading r)
+    (κ C U W χ mfu : ℝ) (M Mu Mr Mx : Ω → ℕ) (Γ : ℕ) (α b_w b_a : ℝ) (r d : Registered) (T : Threading r)
     (dd e : ℕ) (Mc : Containment r.D d.D),
     0 ≤ p → 0 < ε → (∀ i, 0 ≤ c i) → ∑ i, c i ≤ C → Assumptions.PouwSound μ wrong p →
     0 < H → 0 ≤ Δ → Φ * H ≤ C → (∀ ω, ∀ b ∈ bad ω, ident b ∈ I) →

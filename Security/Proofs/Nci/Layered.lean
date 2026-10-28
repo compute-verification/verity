@@ -17,7 +17,7 @@ namespace Nci.SecurityProofs
 
 open Verity Finset
 
-theorem threadMults_subset {c : Declaration} (T : Threading c) (R : Finset (Fin c.D.N)) (t : Fin T.m) :
+theorem threadMults_subset {c : Registered} (T : Threading c) (R : Finset (Fin c.D.N)) (t : Fin T.m) :
     T.threadMults R t ⊆ T.M := by
   intro g hg
   rw [Threading.threadMults, mem_filter, Threading.mults, mem_inter] at hg
@@ -25,7 +25,7 @@ theorem threadMults_subset {c : Declaration} (T : Threading c) (R : Finset (Fin 
 
 section Layered
 
-variable {c : Declaration} {T : Threading c} {d e eLk b : ℕ}
+variable {c : Registered} {T : Threading c} {d e eLk b : ℕ}
 
 /-- The lookups of thread `t` in `R`. -/
 def lookupsIn (L : Layered T d e eLk b) (R : Finset (Fin c.D.N)) (t : Fin T.m) : Finset (Fin c.D.N) :=

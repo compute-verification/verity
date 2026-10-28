@@ -73,7 +73,7 @@ end Words
 
 section Blocks
 
-variable (d : Verity.Declaration)
+variable (d : Verity.Registered)
 
 /-- The numbering of `d`'s bits (`enc`), as the bit view's gates. -/
 def benc : Bit d.D ≃ Fin (Circuit.ofDecl d).N := enc d.D

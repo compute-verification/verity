@@ -14,7 +14,7 @@ namespace Nci.SecurityProofs
 open Verity Nci.Covering Finset
 
 /-- Proof block `u`'s completion `I ∪ in(I)`, with inputs `in(I)`, on a circuit of positive fan-in. -/
-def completion {d : Declaration} {B : ℕ} (P : Partition d.D B)
+def completion {d : Registered} {B : ℕ} (P : Partition d.D B)
     (hfan : ∀ g, d.D.isInput g = false → (d.D.reads g).Nonempty) (u : Fin B) : Subcircuit d.D where
   gates := P.gates u ∪ d.D.into (P.gates u)
   ins := d.D.into (P.gates u)

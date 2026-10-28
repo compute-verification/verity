@@ -35,7 +35,7 @@ It is meant for honest training circuits whose weights, and every activation com
 depend on more than `Γ` work of training since the commitment, with no low-rank update (LoRA) whose factors are
 narrower than the weights they update, and with the read cap: without it an IU that runs a transformer's first layers at
 many positions reads their weights once and computes the next layer's inputs itself. -/
-def ActivationsIncompressibleAll (c : Declaration) (T : Threading c) (L : T.Links) (Γ : ℕ) (K b_w b_a : ℝ) : Prop :=
+def ActivationsIncompressibleAll (c : Registered) (T : Threading c) (L : T.Links) (Γ : ℕ) (K b_w b_a : ℝ) : Prop :=
   ∀ R, Small c Γ K R →
     b_w * (T.weightsUsed R).card + b_a * ((T.actsUsed R).filter fun a => ¬ L.Whole R a).card ≤ novelReads c R
 

@@ -57,7 +57,7 @@ abbrev C : Circuit where
   outputs := {2, 3}
 
 /-- Gate 0 is registered. -/
-abbrev d : Declaration := ⟨C, {0}, by decide⟩
+abbrev d : Registered := .ofCircuit C {0} (by decide)
 
 /-- The serving blocks `{1}` (before the wipe) and `{2}` (after it), and the dark remainder `{3}`. -/
 abbrev P : Partition d.D 3 := ⟨![none, some 0, some 1, some 2], by decide⟩
@@ -94,7 +94,7 @@ abbrev C : Circuit where
   outputs := {1}
 
 /-- Gate 0 is registered. -/
-abbrev d : Declaration := ⟨C, {0}, by decide⟩
+abbrev d : Registered := .ofCircuit C {0} (by decide)
 
 /-- One serving block, `{1}`. -/
 abbrev P : Partition d.D 1 := ⟨![none, some 0], by decide⟩
@@ -138,7 +138,7 @@ abbrev C : Circuit where
   outputs := {2}
 
 /-- Gate 0 is registered. -/
-abbrev d : Declaration := ⟨C, {0}, by decide⟩
+abbrev d : Registered := .ofCircuit C {0} (by decide)
 
 /-- The serving blocks `{1}` (before the wipe) and `{2}` (after it). -/
 abbrev P : Partition d.D 2 := ⟨![none, some 0, some 1], by decide⟩
@@ -176,7 +176,7 @@ abbrev C : Circuit where
   outputs := {2}
 
 /-- Gate 0 is registered. -/
-abbrev d : Declaration := ⟨C, {0}, by decide⟩
+abbrev d : Registered := .ofCircuit C {0} (by decide)
 
 /-- The serving blocks `{1}` (before the wipe) and `{2}` (after it). -/
 abbrev P : Partition d.D 2 := ⟨![none, some 0, some 1], by decide⟩

@@ -23,7 +23,7 @@ open Verity Finset
 
 namespace Threading
 
-variable {c : Declaration} (T : Threading c)
+variable {c : Registered} (T : Threading c)
 
 /-- The activations `R` uses: those of which `R` holds a counted multiplication. -/
 def actsUsed (R : Finset (Fin c.D.N)) : Finset (Fin c.D.N) := (T.mults R).image T.act
@@ -54,7 +54,7 @@ end Threading
 2. the first multiplication's input entries are computed from no counted multiplication; and
 3. each later input entry `x_t^{(ℓ+1)}[j]` is computed from every product of the output entry `y_t^{(ℓ)}[π j]` it is
    linked to, and possibly from more. -/
-structure ChainIn {c : Declaration} (ch : Chain c.D) (T : Threading c) (L : T.Links) where
+structure ChainIn {c : Registered} (ch : Chain c.D) (T : Threading c) (L : T.Links) where
   wgate : (ℓ : Fin ch.L) × Fin (ch.e ℓ) × Fin (ch.d ℓ) → Fin c.D.N
   wgate_inj : Function.Injective wgate
   xgate : (ℓ : Fin ch.L) × Fin ch.N × Fin (ch.d ℓ) → Fin c.D.N

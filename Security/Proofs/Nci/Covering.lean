@@ -43,7 +43,7 @@ theorem inner_or_meets {S : Subcircuit C} {R : Finset (Fin C.N)} {g t : Fin C.N}
 
 /-- A subcircuit that computes a multiplication block's output gate completes the block or has one of its gates as an
 input. -/
-theorem completes_or_meets {d : Declaration} (B : MulBlocks d) {S : Subcircuit d.D} {p : Fin B.nw × Fin B.nt}
+theorem completes_or_meets {d : Registered} (B : MulBlocks d) {S : Subcircuit d.D} {p : Fin B.nw × Fin B.nt}
     (hp : p ∈ B.P) (ho : B.o p ∈ S.inner) : B.Completes S p ∨ ∃ x ∈ B.m p, x ∈ S.ins := by
   by_cases hx : ∃ x ∈ B.m p, x ∈ S.ins
   · exact Or.inr hx

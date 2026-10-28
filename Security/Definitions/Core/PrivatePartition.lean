@@ -1,12 +1,13 @@
 import Definitions.Core.Advice
+import Definitions.Core.Registered
 
 /-!
 # Private partitions with public predicates
 
-A private partition is the prover's advice, committed under a hidden root before any coin that depends on it: its rows,
-under salts of the prover's choosing, in the advice tree (`Advice`). The verifier never sees it: it holds the public
-predicates `Q` and the root, and the commitment's proof shows that the circuit has a partition meeting `Q` whose advice
-has that root (`Commits`). This is `verity/partition/v2`; `verity/partition/v1`'s public partition is unchanged.
+A private partition is the registered compiler's output on the prover's advice, and the advice is committed under a hidden
+root before any coin that depends on it: its rows, under salts of the prover's choosing, in the advice tree (`Advice`).
+The verifier never sees it: it holds the public predicates `Q` and the root, and the commitment's proof shows that the
+compiler's partition on advice with that root meets `Q` (`Commits`). This is `verity/partition/v2`; `verity/partition/v1`'s public partition is unchanged.
 
 `Partition`'s type already gives covering and disjointness: every computed gate is in exactly one unit, and inputs are in
 none. The predicates add the rest of the draft's global ones:
@@ -67,12 +68,12 @@ def Meets (Q : Predicates) : Prop :=
 
 end Partition
 
-/-- `r` commits to `root` under `Q`: its partition meets `Q`, and the advice tree over the partition's rows (`A`) under
-`r`'s salts, framed by `F` and hashed by `H`, has root `root`. The commitment's statement is that some `r` does; the
-verifier holds `Q` and `root`, never `r`. -/
-def Commits {C : Circuit} (H : List UInt8 → Digest) (F : Advice.Framing) (A : Advice.Rows C) (Q : Predicates)
-    (r : Advice.Committed C) (root : Digest) : Prop :=
-  r.P.Meets Q ∧ r.root H F A = root
+/-- `r` commits to `root` under `Q`: the proof blocks the registered compiler `B` outputs on `r`'s advice meet `Q`, and the
+advice tree over the advice's rows (`A`) under `r`'s salts, framed by `F` and hashed by `H`, has root `root`. The
+commitment's statement is that some `r` does; the verifier holds `B`, `Q` and `root`, never `r`. -/
+def Commits (B : Compiler) (H : List UInt8 → Digest) (F : Advice.Framing) (A : Advice.Rows) (Q : Predicates)
+    (r : Advice.Committed) (root : Digest) : Prop :=
+  (B.run r.a).P.Meets Q ∧ r.root H F A = root
 
 /-- The circuit's computed gates grouped into its root Calls `0, …, m − 1`, with the gates the Calls return. A value read
 across Calls, and every output of the circuit, is an input or a returned gate. -/

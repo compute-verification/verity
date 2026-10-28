@@ -1,6 +1,6 @@
 import Definitions.Nci.Assumptions
 import Definitions.Core.Circuit
-import Definitions.Core.Declaration
+import Definitions.Core.Registered
 import Definitions.Core.Partition
 import Definitions.Nci
 
@@ -20,7 +20,7 @@ open scoped ENNReal
 (`ThetaRegistered`), has at least `Reads_Γ(c) / α` gates. Lower bounds on NCI become lower bounds on size when the
 declared circuit computes `c` the way `c` does. -/
 def ReadBound : Prop :=
-  ∀ (Γ : ℕ) (α : ℝ) (c d : Declaration) (M : Containment c.D d.D), Complies Γ α d →
+  ∀ (Γ : ℕ) (α : ℝ) (c d : Registered) (M : Containment c.D d.D), Complies Γ α d →
     Assumptions.ThetaRegistered c d (PartialContainment.ofContainment M) →
     (Reads Γ c : ℝ) ≤ α * d.D.size d.D.computed
 
@@ -28,7 +28,7 @@ def ReadBound : Prop :=
 outside itself only registered information and its own prompt `prompt u`, with at most `α` bits of prompt per gate of the
 session, complies at `(Γ, α)`, and its slowdown factor is at most 1. -/
 def Inference : Prop :=
-  ∀ (Γ : ℕ) (α : ℝ) (d : Declaration) (n : ℕ) (P : Partition d.D n) (prompt : Fin n → Finset (Fin d.D.N)),
+  ∀ (Γ : ℕ) (α : ℝ) (d : Registered) (n : ℕ) (P : Partition d.D n) (prompt : Fin n → Finset (Fin d.D.N)),
     (∀ u, d.D.size (P.gates u) ≤ Γ) → (∀ u, d.D.into (P.gates u) ⊆ d.θ ∪ prompt u) →
     (∀ u, (d.D.width (prompt u) : ℝ) ≤ α * d.D.size (P.gates u)) →
       Complies Γ α d ∧ slowdown (Complies Γ α) d ≤ 1
@@ -39,7 +39,7 @@ multiplications is larger than those multiplications by a factor of at least `F`
 gates: `G` products, and about as many additions. `K = αΓ` is the most an IU reads, `b_w` and `b_a` are the widths of a
 weight entry and an activation entry, and `d` is the smallest inner dimension (a smaller `d` gives a smaller `F`). -/
 def UpdatedMatMul : Prop :=
-  ∀ (Γ : ℕ) (α b_w b_a : ℝ) (D : Declaration) (c : Chain D.D) (d : ℕ),
+  ∀ (Γ : ℕ) (α b_w b_a : ℝ) (D : Registered) (c : Chain D.D) (d : ℕ),
     0 < α → 0 < b_w → 0 < b_a → (∀ ℓ, d ≤ c.d ℓ) → Complies Γ α D →
     Assumptions.ActivationsIncompressible D c Γ (α * Γ) b_w b_a →
     Assumptions.PartialSumsIncompressible D c Γ (α * Γ) b_w b_a →
@@ -50,7 +50,7 @@ training circuit in the class `𝒯`, so that every declared circuit that implem
 multiplications, which take up a fraction `κ` of `size(T)` (the coverage `κ(T)`). If compute-bounded incompressibility
 holds for the multiplications each of them runs, then `ρ_𝒫(T) ≥ κ F`. -/
 def Training : Prop :=
-  ∀ (Γ : ℕ) (α b_w b_a κ : ℝ) (T : Declaration) (d : ℕ),
+  ∀ (Γ : ℕ) (α b_w b_a κ : ℝ) (T : Registered) (d : ℕ),
     0 < α → 0 < b_w → 0 < b_a → 0 < T.D.size T.D.computed →
     (∀ D, T.Implements D → Complies Γ α D → ∃ c : Chain D.D,
       (∀ ℓ, d ≤ c.d ℓ) ∧ κ * T.D.size T.D.computed ≤ 2 * c.G ∧
@@ -90,7 +90,7 @@ for some committed values `θv` of θ. `p_R` is the number of weight entries `R`
 positions, `Q_R` the number of input entries it uses at positions that are not full, and `d` the smallest inner
 dimension. -/
 def _root_.Nci.Guarantees.IuReads : Prop :=
-  ∀ (D : Declaration) (c : Chain D.D) (Γ : ℕ) (K b_w b_a : ℝ) (d : ℕ) (hd : ∀ ℓ, d ≤ c.d ℓ) (hb_a : 0 ≤ b_a) (hb_w : 0 ≤ b_w) (θv : D.D.Transcript) (h : Assumptions.ActivationsSupport D θv c (K + b_w + b_a) b_w b_a) (R : Finset (Fin D.D.N)) (hR : R ⊆ D.D.computed) (hΓ : D.D.size R ≤ Γ) (hK : (novelReads D R : ℝ) ≤ K),
+  ∀ (D : Registered) (c : Chain D.D) (Γ : ℕ) (K b_w b_a : ℝ) (d : ℕ) (hd : ∀ ℓ, d ≤ c.d ℓ) (hb_a : 0 ≤ b_a) (hb_w : 0 ≤ b_w) (θv : D.D.Transcript) (h : Assumptions.ActivationsSupport D θv c (K + b_w + b_a) b_w b_a) (R : Finset (Fin D.D.N)) (hR : R ⊆ D.D.computed) (hΓ : D.D.size R ≤ Γ) (hK : (novelReads D R : ℝ) ≤ K),
     b_w * (c.weightsUsed R).card +
       b_a * (d * (univ.filter (c.Full R)).card + ((c.inputsUsed R).filter fun x => ¬ c.Full R x.2.1).card) ≤
     novelReads D R

@@ -17,7 +17,7 @@ namespace Nci.Cover.SecurityProofs
 open Finset Nci.SecurityProofs.Covering
 
 /-- Conditional parameter-hardness implies parameter-hardness at the same cost. -/
-theorem parameterHardAt_of_conditional {d : Verity.Declaration} {B : Nci.Covering.MulBlocks d} {s : ℕ} {cw : ℝ}
+theorem parameterHardAt_of_conditional {d : Verity.Registered} {B : Nci.Covering.MulBlocks d} {s : ℕ} {cw : ℝ}
     (h : Assumptions.ConditionalParameterHardAt d B s cw) : Nci.Assumptions.ParameterHardAt d B s cw :=
   fun S hS => (h S hS).trans (by exact_mod_cast card_le_card (sdiff_subset_sdiff subset_rfl subset_union_left))
 

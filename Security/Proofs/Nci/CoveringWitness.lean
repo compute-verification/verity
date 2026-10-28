@@ -35,7 +35,7 @@ abbrev exCircuit : Circuit where
   outputs := {10}
 
 /-- The witness declaration: nothing registered. -/
-abbrev exDecl : Declaration := ⟨exCircuit, ∅, by simp⟩
+abbrev exDecl : Registered := .ofCircuit exCircuit ∅ (by simp)
 
 /-- The product gate of weight `i`. -/
 def exProd : Fin 4 → Fin 11 := ![5, 6, 7, 10]
@@ -126,7 +126,7 @@ theorem ex_mem : ((3, 0) : Fin 4 × Fin 1) ∈ Assumptions.chainedBlocks exDecl 
 /-- **The covering bound is not vacuous**: one declaration, its multiplication blocks and a covering satisfy every
 hypothesis of `CoveringBound`, with a chained multiplication block. -/
 theorem coveringBound_nonvacuous :
-    ∃ (d : Declaration) (B : MulBlocks d) (s k D : ℕ) (r b : ℝ) (n : ℕ) (I : Fin n → Subcircuit d.D),
+    ∃ (d : Registered) (B : MulBlocks d) (s k D : ℕ) (r b : ℝ) (n : ℕ) (I : Fin n → Subcircuit d.D),
       (k : ℝ) < r * b * D ∧ Assumptions.ParameterHard d B s r b ∧ Covers d s k I ∧
       (Assumptions.chainedBlocks d B D r b).Nonempty :=
   ⟨exDecl, exBlocks, 3, 2, 3, 1, 1, 6, exCover, by norm_num, ex_parameterHard, ex_covers,

@@ -51,13 +51,13 @@ theorem IncidenceCap : Guarantees.IncidenceCap := by
 
 /-- The slots and the operands a proof block's completed products read are selections it holds: with uniform prices,
 `βw |U| ≤ hw` and `βx |V| ≤ hx` for separate budgets, `βw |U| + βx |V| ≤ h` for a joint one. -/
-theorem held_slots_operands (R : Registration) (B : Nci.Covering.MulBlocks R.d) {κ : Type} [DecidableEq κ]
-    (W : Items R.d.D (Fin B.nw)) (O : Items R.d.D κ) (I : Incidence B W O) (u : Fin R.B) :
-    (∃ σ, Selects W ((completedIn B (R.P.gates u)).image Prod.fst) σ ∧
-      ∀ i ∈ (completedIn B (R.P.gates u)).image Prod.fst, σ i ⊆ holds R.d.D (R.P.gates u)) ∧
-    ∃ σ, Selects O ((completedIn B (R.P.gates u)).image I.occ) σ ∧
-      ∀ o ∈ (completedIn B (R.P.gates u)).image I.occ, σ o ⊆ holds R.d.D (R.P.gates u) := by
-  have hP : ∀ q ∈ completedIn B (R.P.gates u), q ∈ B.P ∧ B.m q ⊆ R.P.gates u := fun q hq => mem_filter.1 hq
+theorem held_slots_operands (R : Committed) (B : Nci.Covering.MulBlocks R.d) {κ : Type} [DecidableEq κ]
+    (W : Items R.d.D (Fin B.nw)) (O : Items R.d.D κ) (I : Incidence B W O) (u : Fin R.d.n) :
+    (∃ σ, Selects W ((completedIn B (R.d.𝓘.gates u)).image Prod.fst) σ ∧
+      ∀ i ∈ (completedIn B (R.d.𝓘.gates u)).image Prod.fst, σ i ⊆ holds R.d.D (R.d.𝓘.gates u)) ∧
+    ∃ σ, Selects O ((completedIn B (R.d.𝓘.gates u)).image I.occ) σ ∧
+      ∀ o ∈ (completedIn B (R.d.𝓘.gates u)).image I.occ, σ o ⊆ holds R.d.D (R.d.𝓘.gates u) := by
+  have hP : ∀ q ∈ completedIn B (R.d.𝓘.gates u), q ∈ B.P ∧ B.m q ⊆ R.d.𝓘.gates u := fun q hq => mem_filter.1 hq
   exact ⟨exists_selection W _ Prod.fst B.m _ (fun q hq => I.slots q (hP q hq).1) (fun q hq => (hP q hq).2),
     exists_selection O _ I.occ B.m _ (fun q hq => I.operands q (hP q hq).1) (fun q hq => (hP q hq).2)⟩
 
@@ -67,20 +67,20 @@ theorem OperandCapSeparate : Guarantees.OperandCapSeparate := by
   have h1 := hW u _ σw hσw hσw'
   have h2 := hO u _ σx hσx hσx'
   simp only [hpw, hpx, sum_const, nsmul_eq_mul] at h1 h2
-  exact (IncidenceCap R.d B W O I r aout hr ha (R.P.gates u)).trans
+  exact (IncidenceCap R.d B W O I r aout hr ha (R.d.𝓘.gates u)).trans
     (hQ _ _ (Nat.cast_nonneg _) (Nat.cast_nonneg _) (by linarith) (by linarith))
 
 theorem OperandCapJoint : Guarantees.OperandCapJoint := by
   intro R B κ _ W O I r aout βw βx h Q _ _ hpw hpx hr ha hWO hQ u
   obtain ⟨⟨σw, hσw, hσw'⟩, ⟨σx, hσx, hσx'⟩⟩ := held_slots_operands R B W O I u
-  set U := (completedIn B (R.P.gates u)).image Prod.fst
-  set V := (completedIn B (R.P.gates u)).image I.occ
+  set U := (completedIn B (R.d.𝓘.gates u)).image Prod.fst
+  set V := (completedIn B (R.d.𝓘.gates u)).image I.occ
   have hsel : Selects (W.sum O) (U.disjSum V) (Sum.elim σw σx) := by
     intro i hi
     cases i with
     | inl i => exact hσw i (by simpa using hi)
     | inr o => exact hσx o (by simpa using hi)
-  have hheld : ∀ i ∈ U.disjSum V, Sum.elim σw σx i ⊆ holds R.d.D (R.P.gates u) := by
+  have hheld : ∀ i ∈ U.disjSum V, Sum.elim σw σx i ⊆ holds R.d.D (R.d.𝓘.gates u) := by
     intro i hi
     cases i with
     | inl i => exact hσw' i (by simpa using hi)
@@ -88,7 +88,7 @@ theorem OperandCapJoint : Guarantees.OperandCapJoint := by
   have h1 := hWO u _ _ hsel hheld
   rw [sum_disjSum] at h1
   simp only [Items.sum, Sum.elim_inl, Sum.elim_inr, hpw, hpx, sum_const, nsmul_eq_mul] at h1
-  exact (IncidenceCap R.d B W O I r aout hr ha (R.P.gates u)).trans
+  exact (IncidenceCap R.d B W O I r aout hr ha (R.d.𝓘.gates u)).trans
     (hQ _ _ (Nat.cast_nonneg _) (Nat.cast_nonneg _) (by linarith))
 
 end Nci.SecurityProofs

@@ -1,4 +1,4 @@
-import Mathlib.Basic.Countable.Basic
+import Mathlib.Logic.Equiv.List
 import Mathlib.Data.Fintype.Pi
 import Mathlib.Data.List.OfFn
 import Definitions.Core.Advice
@@ -211,22 +211,11 @@ theorem Framing.unary_separated : Framing.unary.Separated where
   leaf_ne_node _ _ _ _ _ _ := by simp [Framing.unary]
   pad_ne_node _ _ _ _ _ := by simp [Framing.unary]
 
-theorem partition_unit_injective {C : Circuit} {n : ℕ} :
-    Function.Injective fun P : Partition C n => P.unit := by
-  rintro ⟨u, hu⟩ ⟨u', hu'⟩ h
-  cases h
-  rfl
-
-/-- Rows that decode, for every circuit: a partition's index in a counting of all partitions, in unary. -/
-theorem Rows.exists_decodes (C : Circuit) : ∃ A : Rows C, A.Decodes := by
-  have : Countable ((n : ℕ) × Partition C n) :=
-    have : ∀ n, Countable (Partition C n) := fun _ => partition_unit_injective.countable
-    inferInstance
-  obtain ⟨f, hf⟩ := Countable.exists_injective_nat ((n : ℕ) × Partition C n)
-  let rows : (n : ℕ) → Partition C n → List (List UInt8) := fun n P => [List.replicate (f ⟨n, P⟩) 0]
-  have hrows : Function.Injective fun x : (n : ℕ) × Partition C n => rows x.1 x.2 := fun x y h =>
-    hf (by simpa [rows] using h)
-  exact ⟨⟨rows, Function.partialInv fun x : (n : ℕ) × Partition C n => rows x.1 x.2⟩,
-    fun n P => Function.partialInv_left hrows ⟨n, P⟩⟩
+/-- Rows that decode: an advice list's index in a counting of all advice lists, in unary. -/
+theorem Rows.exists_decodes : ∃ A : Rows, A.Decodes := by
+  obtain ⟨f, hf⟩ := Countable.exists_injective_nat (List (List Bool))
+  let rows : List (List Bool) → List (List UInt8) := fun a => [List.replicate (f a) 0]
+  have hrows : Function.Injective rows := fun x y h => hf (by simpa [rows] using h)
+  exact ⟨⟨rows, Function.partialInv rows⟩, fun a => Function.partialInv_left hrows a⟩
 
 end Verity.Advice

@@ -26,7 +26,7 @@ It fails when a model reaches `L*` with fewer weights per thread: a token-routed
 whose tokens each use fewer than `N*` weights (about 32B a token for Kimi K2), sequence-routed path composition (the
 main open attack), retrieval, looped models, a better recipe than the one the law is fitted to, or a registered base in
 `θ` that an update stacks on. -/
-def Reach (c : Declaration) (T : Threading c) (Nstar : ℕ) : Prop :=
+def Reach (c : Registered) (T : Threading c) (Nstar : ℕ) : Prop :=
   ∀ t, (T.threadMults Finset.univ t).Nonempty → Nstar ≤ (T.threadWeights Finset.univ t).card
 
 /-- **F1 and F4 at window scale (empirical)**: every window `j` of `P` reads at least `b_w` bits of novel information
@@ -44,7 +44,7 @@ It fails when a window rebuilds the weights it uses from fewer bits (registered 
 codes, or updates it computes itself from fewer bits of activations and gradients; a weight in `θ` is a free read, so
 `T.W` must hold updated weights only), or when a window other than `start t` works on a thread from fewer bits: an
 ensemble, whose members each start the token from its id, or a low-bit boundary code. -/
-def Fits (c : Declaration) (T : Threading c) {k : ℕ} (P : Partition c.D k) (start : Fin T.m → Fin k)
+def Fits (c : Registered) (T : Threading c) {k : ℕ} (P : Partition c.D k) (start : Fin T.m → Fin k)
     (b_w w_e : ℝ) : Prop :=
   ∀ j, b_w * (T.weightsUsed (P.gates j)).card + w_e * (T.entered P start j).card ≤ novelReads c (P.gates j)
 
@@ -57,7 +57,7 @@ there it is `Reach`.
 It fails where `Reach` does: a token-routed mixture of experts whose tokens each use fewer than `N*` parameters (about
 32B a token for Kimi K2), sequence-routed path composition, retrieval, looped models, a better recipe than the one the
 law is fitted to, or a registered base in `θ` that an update stacks on. -/
-def ReachSlots (c : Declaration) (T : Threading c) (σ : T.Slots) (Nstar : ℕ) : Prop :=
+def ReachSlots (c : Registered) (T : Threading c) (σ : T.Slots) (Nstar : ℕ) : Prop :=
   ∀ t, (T.threadMults Finset.univ t).Nonempty → Nstar ≤ (σ.threadSlots Finset.univ t).card
 
 /-- **F1 per parameter slot and F4 at window scale (empirical)**: every window `j` of `P` reads at least `b_w` bits of
@@ -73,7 +73,7 @@ initialization in `θ` that the window updates from, low-rank updates, very low-
 fewer bits of activations and gradients, which a window does that holds a slot's every version from its
 initialization), or when a window other than `start t` works on a thread from fewer bits: an ensemble, whose members
 each start the token from its id, or a low-bit boundary code. -/
-def FitsSlots (c : Declaration) (T : Threading c) (σ : T.Slots) {k : ℕ} (P : Partition c.D k)
+def FitsSlots (c : Registered) (T : Threading c) (σ : T.Slots) {k : ℕ} (P : Partition c.D k)
     (start : Fin T.m → Fin k) (b_w w_e : ℝ) : Prop :=
   ∀ j, b_w * (σ.slotsUsed (P.gates j)).card + w_e * (T.entered P start j).card ≤ novelReads c (P.gates j)
 

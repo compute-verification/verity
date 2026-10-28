@@ -19,7 +19,7 @@ open Verity Accounting Finset
 
 /-- Through a containment `M : c ≼ d`, the piece of `c` that a unit of `d` induces reads at most what the unit reads in
 the image of `c`'s novel gates. -/
-theorem novelReads_pull_le_readsIn_compl {c d : Declaration} (M : Containment c.D d.D) {n : ℕ} (P : Partition d.D n)
+theorem novelReads_pull_le_readsIn_compl {c d : Registered} (M : Containment c.D d.D) {n : ℕ} (P : Partition d.D n)
     (u : Fin n) : novelReads c ((pull M P).gates u) ≤ readsIn d (P.gates u) ((c.θᶜ).map ⟨M.emb, M.emb_inj⟩) := by
   unfold novelReads readsIn
   rw [width_map (M := M)]

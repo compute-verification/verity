@@ -28,7 +28,7 @@ open Finset
 compute every gate with a predecessor, each with at most `s` gates and handed `k_u ≤ α σ_u` gates outside `θ`, where
 `0 ≤ σ_u ≤ Γ`, `α Γ < c_w D` and `c_a > 0`, then the multiplication blocks chained at `(D, c_a)` number
 `c_w c_a |𝓜*| ≤ (α² Γ + c_w c_a α) Σ σ_u`. -/
-theorem chained_le_of_blocks {e : Verity.Declaration} (B : Nci.Covering.MulBlocks e) {n : ℕ}
+theorem chained_le_of_blocks {e : Verity.Registered} (B : Nci.Covering.MulBlocks e) {n : ℕ}
     (S : Fin n → Nci.Covering.Subcircuit e.D) (σ : Fin n → ℝ) {Γ s D : ℕ} {α cw ca : ℝ}
     (hα : 0 ≤ α) (hca : 0 < ca) (hhard : Nci.Assumptions.ParameterHardAt e B s cw) (hk : α * Γ < cw * D)
     (hs : ∀ u, (S u).gates.card ≤ s) (hσ0 : ∀ u, 0 ≤ σ u) (hσΓ : ∀ u, σ u ≤ Γ)
@@ -87,30 +87,30 @@ theorem slowdown_of_count {x Γ α cw ca sd sc : ℝ} (hcw : 0 < cw) (hca : 0 < 
     exact div_nonneg hsd hsc
 
 /-- The gate view of `c`'s bits as a declaration is its bit view. -/
-theorem ofGates_bitDecl (c : Verity.Declaration) : ofGates (bitDecl c) = Circuit.ofDecl c := rfl
+theorem ofGates_bitDecl (c : Verity.Registered) : ofGates (bitDecl c) = Circuit.ofDecl c := rfl
 
 /-- **The block of a set `R` of `c`'s gates, as a subcircuit of `bitDecl c`**: its bits, with the inputs the bit view
 hands it. -/
-def bitBlock (c : Verity.Declaration) (R : Finset (Fin c.D.N)) : Nci.Covering.Subcircuit (bitDecl c).D :=
+def bitBlock (c : Verity.Registered) (R : Finset (Fin c.D.N)) : Nci.Covering.Subcircuit (bitDecl c).D :=
   Gates.toSubcircuit (bitDecl c) (block c R)
 
-theorem bitBlock_gates (c : Verity.Declaration) (R : Finset (Fin c.D.N)) : (bitBlock c R).gates = block c R := rfl
+theorem bitBlock_gates (c : Verity.Registered) (R : Finset (Fin c.D.N)) : (bitBlock c R).gates = block c R := rfl
 
-theorem bitBlock_ins (c : Verity.Declaration) (R : Finset (Fin c.D.N)) :
+theorem bitBlock_ins (c : Verity.Registered) (R : Finset (Fin c.D.N)) :
     (bitBlock c R).ins = (Circuit.ofDecl c).inputs (block c R) := rfl
 
-theorem bitBlock_inner (c : Verity.Declaration) (R : Finset (Fin c.D.N)) :
+theorem bitBlock_inner (c : Verity.Registered) (R : Finset (Fin c.D.N)) :
     (bitBlock c R).inner = (Circuit.ofDecl c).computed (block c R) := rfl
 
-theorem bitDecl_θ (c : Verity.Declaration) : (bitDecl c).θ = (Circuit.ofDecl c).θ := rfl
+theorem bitDecl_θ (c : Verity.Registered) : (bitDecl c).θ = (Circuit.ofDecl c).θ := rfl
 
 /-- A bit of `bitDecl c` that is not a source reads something in the bit view. -/
-theorem pred_nonempty_of_not_source {c : Verity.Declaration} {y : Fin (bitDecl c).D.N}
+theorem pred_nonempty_of_not_source {c : Verity.Registered} {y : Fin (bitDecl c).D.N}
     (hy : y ∉ Nci.Covering.sources (bitDecl c).D) : ((Circuit.ofDecl c).pred y).Nonempty :=
   nonempty_iff_ne_empty.2 fun h => hy (Gates.mem_sources.2 h)
 
 /-- A computed gate of `c` lies in a piece of a division pulled back to `c`. -/
-theorem exists_pull_gates {c d : Verity.Declaration} (M : Verity.Containment c.D d.D) {n : ℕ}
+theorem exists_pull_gates {c d : Verity.Registered} (M : Verity.Containment c.D d.D) {n : ℕ}
     (P : Verity.Partition d.D n) {g : Fin c.D.N} (hg : g ∈ c.D.computed) :
     ∃ u, g ∈ (Nci.SecurityProofs.pull M P).gates u := by
   cases h : (Nci.SecurityProofs.pull M P).unit g with

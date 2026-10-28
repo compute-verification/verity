@@ -9,7 +9,7 @@ A gate of `w g` bits is a bundle of `w g` one-bit gates (§3). The expansion `C.
 bit `i` being `C.bit g i`, numbered gate by gate in `C`'s order and, within a gate, least significant bit first, so a
 bundle read in order is `Circuit.bits`. Bit `i` of a computed gate `g` reads every bit of every gate `g` reads and is
 bit `i` of `g`'s operation on the values they assemble (`ofBits`). An input bit is an input gate, a registered one when
-its gate is (`Declaration.expand`), and a partition puts each bit in its gate's unit (`Partition.expand`).
+its gate is (`Registered.expand`), and a partition puts each bit in its gate's unit (`Partition.expand`).
 
 `expandT X` is a transcript of `C` read bit by bit, and `collapse a` is a transcript of the expansion assembled gate by
 gate. Gates of width 0 have no bits.
@@ -104,10 +104,8 @@ def BitFaninPos : Prop :=
 end Circuit
 
 /-- A declaration's expansion: an input bit is registered when its gate is. -/
-@[reducible] def Declaration.expand (d : Declaration) : Declaration where
-  D := d.D.expand
-  θ := univ.filter fun b => (d.D.unbit b).1 ∈ d.θ
-  θ_input _ hb := d.θ_input _ (mem_filter.1 hb).2
+@[reducible] def Registered.expand (d : Registered) : Registered :=
+  .ofCircuit d.D.expand (univ.filter fun b => (d.D.unbit b).1 ∈ d.θ) fun _ hb => d.θ_input _ (mem_filter.1 hb).2
 
 /-- A partition's expansion: each bit is in its gate's unit. -/
 def Partition.expand {C : Circuit} {B : ℕ} (P : Partition C B) : Partition C.expand B where

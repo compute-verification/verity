@@ -110,7 +110,7 @@ and incompressibility, `R` reads at least `b_w p_R + b_a (d τ_R + Q_R)` bits", 
 gates that reads at most `K` bits of novel information, under `Assumptions.ActivationsIncompressible`. `p_R` is the
 number of weight entries `R` uses, `τ_R` its number of full positions, `Q_R` the number of input entries it uses at
 positions that are not full, and `d` the smallest inner dimension. -/
-theorem iu_reads (D : Declaration) (c : Chain D.D) (Γ : ℕ) (K b_w b_a : ℝ) (d : ℕ) (hd : ∀ ℓ, d ≤ c.d ℓ)
+theorem iu_reads (D : Registered) (c : Chain D.D) (Γ : ℕ) (K b_w b_a : ℝ) (d : ℕ) (hd : ∀ ℓ, d ≤ c.d ℓ)
     (hb_a : 0 ≤ b_a) (h : Assumptions.ActivationsIncompressible D c Γ K b_w b_a) (R : Finset (Fin D.D.N))
     (hR : R ⊆ D.D.computed) (hΓ : D.D.size R ≤ Γ) (hK : (novelReads D R : ℝ) ≤ K) :
     b_w * (c.weightsUsed R).card +

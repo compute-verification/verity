@@ -53,7 +53,7 @@ step, so they refute soundly and their not refuting proves nothing; chains longe
 multiplications read activations that take fewer than `n` values (a one-hot embedding matmul), and the fan-out bound
 pays only for values counted multiplications read directly: a subcircuit that computes its activations from fewer novel
 reads pays only by those. -/
-def WeightsSupportFmt2 (c : Declaration) (θv : c.D.Transcript) (T : Threading c) (Src : T.Sources) (Γ : ℕ)
+def WeightsSupportFmt2 (c : Registered) (θv : c.D.Transcript) (T : Threading c) (Src : T.Sources) (Γ : ℕ)
     (S b_w b_a : ℝ) (d e n k₀ : ℕ) : Prop :=
   Src.FanOutBound b_a e n → Src.OffFresh k₀ →
     ∀ R, SmallInfo c θv Γ S R →

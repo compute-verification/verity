@@ -42,10 +42,7 @@ open Verity Finset
   outputs := {2, 3}
 
 /-- The toy declaration: the weight is registered. -/
-@[reducible] def D : Declaration where
-  D := C
-  θ := {0}
-  θ_input := by decide
+@[reducible] def D : Registered := .ofCircuit C {0} (by decide)
 
 /-- One proof block holding both computed gates. -/
 def P1 : Partition C 1 where

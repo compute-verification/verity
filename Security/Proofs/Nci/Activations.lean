@@ -25,7 +25,7 @@ open Verity Finset
 
 section Activations
 
-variable {c : Declaration} {T : Threading c} (L : T.Links)
+variable {c : Registered} {T : Threading c} (L : T.Links)
 
 theorem le_of_feeds {C : Circuit} {g t : Fin C.N} (hf : C.Feeds g t) : g ≤ t := by
   induction hf with
@@ -87,7 +87,7 @@ theorem sum_card_openActs_le (R : Finset (Fin c.D.N)) :
 end Activations
 
 /-- **The activations bound for one subcircuit.** -/
-theorem activations_reads (c : Declaration) (T : Threading c) (L : T.Links) (Γ : ℕ) (K b_w b_a : ℝ) (dd e : ℕ)
+theorem activations_reads (c : Registered) (T : Threading c) (L : T.Links) (Γ : ℕ) (K b_w b_a : ℝ) (dd e : ℕ)
     (hbw : 0 < b_w) (hba : 0 < b_a) (hdd : 0 < dd) (he : ∀ a, (T.M.filter fun g => T.act g = a).card ≤ e)
     (hd : ∀ a, (L.src a).Nonempty →
       dd ≤ (((L.src a).filter fun g => T.thread (T.act g) = T.thread a).image T.act).card)
@@ -147,7 +147,7 @@ theorem ActivationsTrainingOn : Guarantees.ActivationsTrainingOn := by
 
 open Classical in
 /-- **The premise over all counted multiplications gives the chain's**, where the chain is part of the threading. -/
-theorem activationsIncompressible_of_all {c : Declaration} {ch : Chain c.D} {T : Threading c} {L : T.Links}
+theorem activationsIncompressible_of_all {c : Registered} {ch : Chain c.D} {T : Threading c} {L : T.Links}
     (h : ChainIn ch T L) {Γ : ℕ} {K b_w b_a : ℝ} (hw : 0 ≤ b_w) (ha : 0 ≤ b_a)
     (hA : Assumptions.ActivationsIncompressibleAll c T L Γ K b_w b_a) :
     Assumptions.ActivationsIncompressible c ch Γ K b_w b_a := by

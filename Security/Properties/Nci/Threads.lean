@@ -36,11 +36,11 @@ open Flock.Program (Prog)
 `(dd, e)`-threaded with incompressible weights, with its θ registered (`ThetaRegistered`), `Λ` being Theorem 1's bound at read cap `αΓ`, at `Γ = gamma` and
 `α = num / den` (`Nci.Guarantees.ThreadedThrottled`'s conclusion). -/
 def Throttled (j out : Json) : Prop :=
-  ∀ (i : Instance) (P : Prog) (d : Verity.Declaration),
+  ∀ (i : Instance) (P : Prog) (d : Verity.Registered),
     Parses j i → Flock.Program.decode i.program.toUTF8 = .ok P → LaysOut P d.D → Names i.theta d.θ →
     out.getObjVal? "complies" = .ok (.bool true) →
     let α : ℝ := (i.num : ℝ) / i.den
-    ∀ (b_w b_a : ℝ) (c : Verity.Declaration) (T : Nci.Threading c) (dd e : ℕ) (M : Verity.Containment c.D d.D),
+    ∀ (b_w b_a : ℝ) (c : Verity.Registered) (T : Nci.Threading c) (dd e : ℕ) (M : Verity.Containment c.D d.D),
       0 < b_w → 0 < b_a → 0 < dd → Nci.Assumptions.ThetaRegistered c d (Nci.PartialContainment.ofContainment M) →
       T.Threaded i.gamma (α * i.gamma) dd e →
       Nci.Assumptions.WeightsIncompressible c T i.gamma (α * i.gamma) b_w b_a →
@@ -59,11 +59,11 @@ def Throttles : Prop :=
 θ registered (`ThetaRegistered`), has `c`'s counted multiplications at most its dark gates plus
 `αΛ size(d) / b_a`, at `Γ = gamma` and `α = num / den` (`Nci.Guarantees.ThreadedThrottledDark`'s conclusion). -/
 def ThrottledDark (j out : Json) : Prop :=
-  ∀ (i : Instance) (P : Prog) (d : Verity.Declaration),
+  ∀ (i : Instance) (P : Prog) (d : Verity.Registered),
     Parses j i → Flock.Program.decode i.program.toUTF8 = .ok P → LaysOut P d.D → Names i.theta d.θ →
     out.getObjVal? "complies" = .ok (.bool true) →
     let α : ℝ := (i.num : ℝ) / i.den
-    ∀ (b_w b_a : ℝ) (c : Verity.Declaration) (T : Nci.Threading c) (dd e : ℕ) (M : Nci.PartialContainment c d),
+    ∀ (b_w b_a : ℝ) (c : Verity.Registered) (T : Nci.Threading c) (dd e : ℕ) (M : Nci.PartialContainment c d),
       0 < b_w → 0 < b_a → 0 < dd → Nci.Assumptions.ThetaRegistered c d M → T.Threaded i.gamma (α * i.gamma) dd e →
       Nci.Assumptions.WeightsIncompressible c T i.gamma (α * i.gamma) b_w b_a →
         (T.M.card : ℝ) ≤ M.dark.card + α * T.bound (α * i.gamma) b_w dd e * d.D.size d.D.computed / b_a
@@ -80,11 +80,11 @@ def ThrottlesDark : Prop :=
 /-- `Throttled` with the weights charged per parameter slot of a slot map `σ` (`WeightsIncompressibleSlots`):
 `Nci.Guarantees.ThreadedThrottledSlots`'s conclusion. -/
 def ThrottledSlots (j out : Json) : Prop :=
-  ∀ (i : Instance) (P : Prog) (d : Verity.Declaration),
+  ∀ (i : Instance) (P : Prog) (d : Verity.Registered),
     Parses j i → Flock.Program.decode i.program.toUTF8 = .ok P → LaysOut P d.D → Names i.theta d.θ →
     out.getObjVal? "complies" = .ok (.bool true) →
     let α : ℝ := (i.num : ℝ) / i.den
-    ∀ (b_w b_a : ℝ) (c : Verity.Declaration) (T : Nci.Threading c) (σ : T.Slots) (dd e : ℕ)
+    ∀ (b_w b_a : ℝ) (c : Verity.Registered) (T : Nci.Threading c) (σ : T.Slots) (dd e : ℕ)
       (M : Verity.Containment c.D d.D),
       0 < b_w → 0 < b_a → 0 < dd → Nci.Assumptions.ThetaRegistered c d (Nci.PartialContainment.ofContainment M) →
       T.Threaded i.gamma (α * i.gamma) dd e →
@@ -101,11 +101,11 @@ def ThrottlesSlots : Prop :=
 /-- `ThrottledDark` with the weights charged per parameter slot of a slot map `σ` (`WeightsIncompressibleSlots`):
 `Nci.Guarantees.ThreadedThrottledDarkSlots`'s conclusion. -/
 def ThrottledDarkSlots (j out : Json) : Prop :=
-  ∀ (i : Instance) (P : Prog) (d : Verity.Declaration),
+  ∀ (i : Instance) (P : Prog) (d : Verity.Registered),
     Parses j i → Flock.Program.decode i.program.toUTF8 = .ok P → LaysOut P d.D → Names i.theta d.θ →
     out.getObjVal? "complies" = .ok (.bool true) →
     let α : ℝ := (i.num : ℝ) / i.den
-    ∀ (b_w b_a : ℝ) (c : Verity.Declaration) (T : Nci.Threading c) (σ : T.Slots) (dd e : ℕ)
+    ∀ (b_w b_a : ℝ) (c : Verity.Registered) (T : Nci.Threading c) (σ : T.Slots) (dd e : ℕ)
       (M : Nci.PartialContainment c d),
       0 < b_w → 0 < b_a → 0 < dd → Nci.Assumptions.ThetaRegistered c d M → T.Threaded i.gamma (α * i.gamma) dd e →
       Nci.Assumptions.WeightsIncompressibleSlots c T σ i.gamma (α * i.gamma) b_w b_a →

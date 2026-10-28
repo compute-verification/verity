@@ -31,7 +31,7 @@ It covers a reference training circuit with at most `k` of the chain's products 
 whose weights and first inputs depend on more than `Γ` work of training since the commitment, as
 `TrainingIncompressible` does, and not a declared circuit, whose wiring the prover controls and where
 its activations' half is false. -/
-def PackedTrainingIncompressible {k : ℕ} (c : Declaration) (ch : PackedChain c.D k) (T : Threading c) (Γ : ℕ)
+def PackedTrainingIncompressible {k : ℕ} (c : Registered) (ch : PackedChain c.D k) (T : Threading c) (Γ : ℕ)
     (K b_w b_a : ℝ) : Prop :=
   ∀ (n : ℕ) (P : Partition c.D n), ∃ s : Fin n → ℕ,
     ∑ x : (ℓ : Fin ch.L) × Fin ch.N × Fin (ch.e ℓ), (ch.spread P x.1 x.2.1 x.2.2 - 1) ≤ ∑ u, s u ∧

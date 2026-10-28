@@ -26,7 +26,7 @@ open Verity Finset
 
 section Support
 
-variable (d : Declaration) (θv : d.D.Transcript)
+variable (d : Registered) (θv : d.D.Transcript)
 
 theorem mem_admissible_self : θv ∈ admissible d θv :=
   mem_filter.2 ⟨mem_univ _, fun _ _ => rfl⟩
@@ -105,7 +105,7 @@ end Support
 
 section Info
 
-variable (d : Declaration) (θv : d.D.Transcript) (R : Finset (Fin d.D.N))
+variable (d : Registered) (θv : d.D.Transcript) (R : Finset (Fin d.D.N))
 
 theorem novelInfo_le_iff (x : ℝ) :
     novelInfo d θv R ≤ x ↔ (support d θv (d.D.into R \ d.θ) : ℝ) ≤ 2 ^ x :=
@@ -131,19 +131,19 @@ theorem novelInfo_eq_novelReads_of_inputs (hU : ∀ g ∈ d.D.into R \ d.θ, d.D
 
 end Info
 
-theorem smallInfo_of_small {c : Declaration} (θv : c.D.Transcript) {Γ : ℕ} {S : ℝ} {R : Finset (Fin c.D.N)}
+theorem smallInfo_of_small {c : Registered} (θv : c.D.Transcript) {Γ : ℕ} {S : ℝ} {R : Finset (Fin c.D.N)}
     (hR : Small c Γ S R) : SmallInfo c θv Γ S R :=
   ⟨hR.1, hR.2.1, (novelInfo_le_novelReads c θv R).trans hR.2.2⟩
 
 /-- **Support form gives the width form**: `WeightsSupport` gives `WeightsIncompressible` at the same cap and rates. -/
-theorem weightsIncompressible_of_support {c : Declaration} {θv : c.D.Transcript} {T : Threading c} {Γ : ℕ}
+theorem weightsIncompressible_of_support {c : Registered} {θv : c.D.Transcript} {T : Threading c} {Γ : ℕ}
     {S b_w b_a : ℝ} (h : Assumptions.WeightsSupport c θv T Γ S b_w b_a) :
     Assumptions.WeightsIncompressible c T Γ S b_w b_a := fun R hR =>
   ((le_novelInfo_iff c θv R _).2 (h R (smallInfo_of_small θv hR))).trans (novelInfo_le_novelReads c θv R)
 
 /-- **Where the two forms agree**: at a subcircuit whose novel reads are novel input gates, `WeightsSupport`'s
 inequality is `WeightsIncompressible`'s. -/
-theorem weightsSupport_iff_of_inputs {c : Declaration} (θv : c.D.Transcript) (T : Threading c) (b_w b_a : ℝ)
+theorem weightsSupport_iff_of_inputs {c : Registered} (θv : c.D.Transcript) (T : Threading c) (b_w b_a : ℝ)
     (R : Finset (Fin c.D.N)) (hU : ∀ g ∈ c.D.into R \ c.θ, c.D.isInput g = true) :
     (2 : ℝ) ^ (b_w * (T.weightsUsed R).card + b_a * ∑ t, (T.threadReads R t).card) ≤
         support c θv (c.D.into R \ c.θ) ↔
@@ -152,7 +152,7 @@ theorem weightsSupport_iff_of_inputs {c : Declaration} (θv : c.D.Transcript) (T
 
 section Threads
 
-variable {c : Declaration} (T : Threading c) (θv : c.D.Transcript) (Γ : ℕ) (S : ℝ) (d e : ℕ)
+variable {c : Registered} (T : Threading c) (θv : c.D.Transcript) (Γ : ℕ) (S : ℝ) (d e : ℕ)
 
 /-- Threading by information at any cap follows from threading by width at a cap no subcircuit reaches. -/
 theorem threadedInfo_of_threaded (h : T.Threaded Γ (c.D.width univ) d e) : T.ThreadedInfo θv Γ S d e := by
@@ -174,7 +174,7 @@ theorem threadedInfo_one_zero (hθ : ∀ g t, T.thread g = some t → g ∉ c.θ
 end Threads
 
 /-- **Theorem 1 with reads counted by information.** -/
-theorem threaded_reads_info (c : Declaration) (θv : c.D.Transcript) (T : Threading c) (Γ : ℕ) (S b_w b_a : ℝ)
+theorem threaded_reads_info (c : Registered) (θv : c.D.Transcript) (T : Threading c) (Γ : ℕ) (S b_w b_a : ℝ)
     (d e : ℕ) (hbw : 0 < b_w) (hba : 0 < b_a) (hd : 0 < d) (hT : T.ThreadedInfo θv Γ S d e)
     (hW : Assumptions.WeightsSupport c θv T Γ S b_w b_a) (R : Finset (Fin c.D.N)) (hR : SmallInfo c θv Γ S R) :
     b_a * (T.mults R).card ≤ novelInfo c θv R * T.bound S b_w d e :=
@@ -204,7 +204,7 @@ theorem pull_liftRun {C D : Circuit} (M : Containment C D) (θv : D.Transcript) 
 
 /-- Through a containment, `c`'s gates take no more values over its runs with the baseline at `θc` than their images
 over `d`'s with the baseline at `θv`, when `θc` is what `θv` gives the images of `c`'s baseline. -/
-theorem support_le_of_containment {c d : Declaration} (M : Containment c.D d.D)
+theorem support_le_of_containment {c d : Registered} (M : Containment c.D d.D)
     (hθ : ∀ g, c.D.isInput g = true → M.emb g ∈ d.θ → g ∈ c.θ) {θc : c.D.Transcript} {θv : d.D.Transcript}
     (hv : ∀ g ∈ c.θ, M.emb g ∈ d.θ → (θv (M.emb g)).cast (M.emb_w g) = θc g)
     {U : Finset (Fin c.D.N)} {U' : Finset (Fin d.D.N)} (hU : ∀ g ∈ U, M.emb g ∈ U') :
@@ -231,7 +231,7 @@ theorem support_le_of_containment {c d : Declaration} (M : Containment c.D d.D)
     _ ≤ ((admissible d θv).image (values U')).card := card_image_le
 
 /-- A novel read of the piece of `c` inside `W` is, through the containment, a novel read of `W`. -/
-theorem emb_into_filter {c d : Declaration} (M : Containment c.D d.D)
+theorem emb_into_filter {c d : Registered} (M : Containment c.D d.D)
     (hθ : ∀ g, c.D.isInput g = true → M.emb g ∈ d.θ → g ∈ c.θ) {W : Finset (Fin d.D.N)} (hW : W ⊆ d.D.computed) :
     ∀ g ∈ c.D.into (univ.filter fun g => M.emb g ∈ W) \ c.θ, M.emb g ∈ d.D.into W \ d.θ := by
   intro a ha
@@ -250,7 +250,7 @@ theorem emb_into_filter {c d : Declaration} (M : Containment c.D d.D)
 
 /-- **Information through a containment**: the piece of `c` inside a set `W` of `d`'s computed gates reads no more
 information than `W`. -/
-theorem novelInfo_le_of_containment {c d : Declaration} (M : Containment c.D d.D)
+theorem novelInfo_le_of_containment {c d : Registered} (M : Containment c.D d.D)
     (hθ : ∀ g, c.D.isInput g = true → M.emb g ∈ d.θ → g ∈ c.θ) {θc : c.D.Transcript} {θv : d.D.Transcript}
     (hv : ∀ g ∈ c.θ, M.emb g ∈ d.θ → (θv (M.emb g)).cast (M.emb_w g) = θc g) {W : Finset (Fin d.D.N)}
     (hW : W ⊆ d.D.computed) : novelInfo c θc (univ.filter fun g => M.emb g ∈ W) ≤ novelInfo d θv W := by
@@ -320,7 +320,7 @@ theorem eval_agree_of_feeds {D : Circuit} {a b : D.Transcript} :
 /-- **What a set's values carry when novel inputs `P` alone feed it**: at most `2^width(P)` values, whatever the gates
 compute. A declared value that is a function of the baseline and the prompts that feed it carries at most their
 width. -/
-theorem support_le_of_feeds (d : Declaration) (θv : d.D.Transcript) {F P : Finset (Fin d.D.N)}
+theorem support_le_of_feeds (d : Registered) (θv : d.D.Transcript) {F P : Finset (Fin d.D.N)}
     (h : ∀ g, ∀ t ∈ F, d.D.isInput g = true → g ∉ d.θ → d.D.Feeds g t → g ∈ P) :
     support d θv F ≤ 2 ^ d.D.width P := by
   classical
