@@ -134,6 +134,7 @@ theorem below_off {A : Scope} : ∀ {sc : Scope}, Below A sc → Resolve.Good P 
     show A.off ≤ off ∧ off + (P.defs[d]!).gates ≤ A.off + (P.defs[A.d]!).gates
     constructor <;> omega
 
+omit hroot hL in
 /-- **One step of resolution from below `A`**, the activation of member `m` of root node `k` (a batch or a call): it ends
 at a gate at or past its activation's offset, moves below `A`, or leaves `A` up through a parameter, to a reference of
 node `k`'s argument at the root. -/
@@ -155,7 +156,7 @@ theorem step_below {A : Scope} {k m : ℕ} (hA : A = P.child P.rootScope k m)
     rcases hf' : ((P.defs[sc.d]!).body.nodes[i]!).form
     · rw [Resolve.rs_prim P sc i j hf'] at h
       cases h
-      exact ⟨(fun a ha => by cases ha; first | omega | exact Nat.le_add_right_of_le (Nat.le_add_right _ _) | exact Nat.le_add_right _ _), fun s' hs' => by cases hs'⟩
+      exact ⟨(fun a ha => by cases ha; omega), fun s' hs' => by cases hs'⟩
     · rw [Resolve.rs_call P sc i j hf'] at h
       cases h
       exact ⟨(fun a ha => by cases ha), fun s' hs' => by cases hs'; exact Or.inl (Below.child hb)⟩
@@ -163,7 +164,7 @@ theorem step_below {A : Scope} {k m : ℕ} (hA : A = P.child P.rootScope k m)
       by_cases hcp : (P.defs[((P.defs[sc.d]!).body.nodes[i]!).fn]!).prim = true
       · simp only [hcp, ite_true] at h
         cases h
-        exact ⟨(fun a ha => by cases ha; first | omega | exact Nat.le_add_right_of_le (Nat.le_add_right _ _) | exact Nat.le_add_right _ _), fun s' hs' => by cases hs'⟩
+        exact ⟨(fun a ha => by cases ha; omega), fun s' hs' => by cases hs'⟩
       · simp only [hcp, Bool.false_eq_true, ite_false] at h
         cases h
         exact ⟨(fun a ha => by cases ha), fun s' hs' => by cases hs'; exact Or.inl (Below.child hb)⟩
@@ -248,13 +249,13 @@ theorem run_below {A : Scope} {k m : ℕ} (hA : A = P.child P.rootScope k m)
     rcases hx : resolveStep P s with e | (b | s')
     · simp [hx, bind, Except.bind] at h
     · simp only [hx, bind, Except.bind, pure, Except.pure, Except.ok.injEq] at h
-      have h1 := (step_below P hroot hB hL hA hf _ s _ hs hb hx).1 b rfl
+      have h1 := (step_below P hB hA hf _ s _ hs hb hx).1 b rfl
       have h2 := (Resolve.step_ok P hroot hB hL _ s _ hs hx).1 b rfl
       rw [← h]
       exact Or.inl ⟨le_trans (below_off P hroot hB hL hb hs.1).1 h1, h2⟩
     · simp only [hx, bind, Except.bind] at h
       have hs' := (Resolve.step_ok P hroot hB hL _ s _ hs hx).2 s' rfl
-      rcases (step_below P hroot hB hL hA hf _ s _ hs hb hx).2 s' rfl with hb' | ⟨h1, i, t, ht, h2⟩
+      rcases (step_below P hB hA hf _ s _ hs hb hx).2 s' rfl with hb' | ⟨h1, i, t, ht, h2⟩
       · rcases run_below hA hf n s' a hs' hb' h with h3 | ⟨i, t, ht, n', hn', h4⟩
         · exact Or.inl h3
         · exact Or.inr ⟨i, t, ht, n', by omega, h4⟩
@@ -264,6 +265,7 @@ theorem run_below {A : Scope} {k m : ℕ} (hA : A = P.child P.rootScope k m)
         subst h1 h2
         exact h
 
+omit hB in
 /-- **`Prog.gate`'s first step to a gate of `A`** goes into `A`. -/
 theorem gateStep_root {k m g : ℕ} (hk : k < (P.defs[P.root]!).body.nodes.size)
     (hc : (P.defs[((P.defs[P.root]!).body.nodes[k]!).fn]!).prim = false)
@@ -326,7 +328,7 @@ theorem gate_below {k m g p : ℕ} {ops : Array ℕ} {sc : Scope} (hk : k < (P.d
   have hng : ¬ (g ≥ (P.defs[P.root]!).gates) := by omega
   simp only [hng, ite_false, bind, Except.bind] at h
   have hF : Flock.Steps.FUEL = (Flock.Steps.FUEL - 1) + 1 := by unfold Flock.Steps.FUEL; omega
-  have h0 := gateStep_root P hroot hB hL hk hc hm hg1 hg2
+  have h0 := gateStep_root P hroot hL hk hc hm hg1 hg2
   rw [hF] at h
   generalize Flock.Steps.FUEL - 1 = fuel at h
   replace h := ReadsExact.run_inr h0 h

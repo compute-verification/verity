@@ -49,9 +49,7 @@ open Properties.NetworkScan.WalkProof
 theorem fuel_succ : Flock.Steps.FUEL = (Flock.Steps.FUEL - 1) + 1 := by unfold Flock.Steps.FUEL; omega
 
 theorem seq_get_one {s : Seq} {q : Part} (h : s.parts = #[q]) (k : ℕ) : s.get k = q.get k := by
-  first
-  | (unfold Seq.get; rw [h]; rfl)
-  | simp [Seq.get, h]
+  unfold Seq.get; rw [h]; rfl
 
 /-- An argument `inputArg` reads is one affine run over an input node's leaves from its first. -/
 theorem inputArg_some {P : Prog} {a : Arg} {q : ℕ} (h : inputArg P a = some q) :
@@ -281,6 +279,7 @@ theorem param_lands (hok : ∀ i < P.defs.size, BodiesOk.DefOk P.defs i P.defs[i
   simp only [hbatch] at ht
   exact arg_lands P hroot hB hL hk hq ht _ a ha
 
+omit hB in
 /-- `Prog.gate`'s first step to a gate of an input node locates that node's primitive, whose operands are none. -/
 theorem gateStep_input {q x : ℕ} {r : (ℕ × Array ℕ × Scope) ⊕ Scope} (hq : q < (P.defs[P.root]!).body.nodes.size)
     (hprim : (P.defs[((P.defs[P.root]!).body.nodes[q]!).fn]!).prim = true)
@@ -296,7 +295,7 @@ theorem gateStep_input {q x : ℕ} {r : (ℕ × Array ℕ × Scope) ⊕ Scope} (
   split at hs
   · rename_i k' hk'
     obtain ⟨hk'K, hpk⟩ := DescAgree.find?_range_some hk'
-    simp only [Bool.and_eq_true, decide_eq_true_eq] at hpk
+    simp only [Bool.and_eq_true] at hpk
     have hkk : k' = q := DescAgree.node_unique _ _ hmono' hk'K hq
       (by first | exact hpk | exact ⟨of_decide_eq_true hpk.1, of_decide_eq_true hpk.2⟩) ⟨hx1, hx2⟩
     subst k'
@@ -326,7 +325,7 @@ theorem gate_input {q x p : ℕ} {ops : Array ℕ} {sc : Scope} (hq : q < (P.def
   rw [fuel_succ, Flock.Steps.run.eq_2] at h
   rcases hs : gateStep P x P.rootScope with e | r
   · simp [hs, bind, Except.bind] at h
-  · obtain ⟨ops', rfl, hops⟩ := gateStep_input P hroot hB hL hq hprim hx1 hx2 hargs hs
+  · obtain ⟨ops', rfl, hops⟩ := gateStep_input P hroot hL hq hprim hx1 hx2 hargs hs
     simp only [hs, bind, Except.bind, pure, Except.pure, Except.ok.injEq, Prod.mk.injEq] at h
     rw [← h.2.1, hops]
 
