@@ -25,6 +25,7 @@
   "Properties.Evaluate",
   "Properties.NetworkRecords",
   "Properties.NetworkPeriod",
+  "Properties.Core",
   "Properties.SampledProofs",
   "Properties.SampledProofs.Draw",
   "Properties.SampledProofs.Halt",
@@ -266,6 +267,7 @@
   "CoreProtocol.Ratio",
   "CoreProtocol.Profile",
   "CoreProtocol.Protocol",
+  "CoreProtocol.Period",
   "Definitions.Pouw.RelativeSecurity",
   "Properties.Pouw.Commit",
   "PouwCommit.Tagged",
@@ -333,7 +335,8 @@
   "Definitions.Pouw.Window",
   "Definitions.Pouw.PearlC",
   "Definitions.Pouw.Fp8Atom",
-  "Definitions.Pouw.Game.Defs"
+  "Definitions.Pouw.Game.Defs",
+  "Properties.Core"
  ],
  "layers": {
   "Properties.Pouw": {
@@ -565,6 +568,11 @@
    "imports": ["CoreComposition.Product"],
    "except": [],
    "why": "the properties are stated against the composition's own functions and the core interface's, on Lean core: nothing of Mathlib or of `security`"
+  },
+  "Properties.Core": {
+   "imports": ["CoreProtocol.Period", "Definitions.Core.Period"],
+   "except": [],
+   "why": "the code's periods are stated equal to the spec's: the code's copy and the spec's ticks, spans and monitoring period, never a proof"
   },
   "Properties.RemoteAudit.Component": {
    "imports": ["RemoteAudit", "Properties.RemoteAudit.Line"],
@@ -969,6 +977,12 @@
    "signature": ["Properties.Composition.answerAccepts : Properties.Composition.AnswerAccepts"],
    "assumptions": [],
    "type_hash": "9ef48444197e3ddf011a98db92e86110363c2cf80dde2491249648d8fe97dbc2"
+  },
+  "Properties.Core.monitoringPeriodIsSpec": {
+   "owner": "@network-accounting"
+  },
+  "Properties.Core.tickSpanIsSpec": {
+   "owner": "@network-accounting"
   },
   "Properties.DeclaredCircuit.SecurityProofs.scheduledRequirement": {
    "owner": "@compute-accounting",
@@ -3554,6 +3568,46 @@
    "Properties.Composition.answerAccepts": {
     "function": "Core.Protocol.answer",
     "outcome": "accept"
+   },
+   "Properties.Core.monitoringPeriodIsSpec": {
+    "conjuncts": [
+     {
+      "function": "Core.MonitoringPeriod.valid",
+      "outcome": "none"
+     },
+     {
+      "function": "Properties.Core.code",
+      "outcome": "none"
+     },
+     {
+      "function": "Core.MonitoringPeriod.executionSpans",
+      "outcome": "none"
+     },
+     {
+      "function": "Core.MonitoringPeriod.samplingSpans",
+      "outcome": "none"
+     }
+    ]
+   },
+   "Properties.Core.tickSpanIsSpec": {
+    "conjuncts": [
+     {
+      "function": "Properties.Core.spec",
+      "outcome": "none"
+     },
+     {
+      "function": "Core.TickSpan.stop",
+      "outcome": "none"
+     },
+     {
+      "function": "Core.TickSpan.ticks",
+      "outcome": "none"
+     },
+     {
+      "function": "Core.TickSpan.within",
+      "outcome": "none"
+     }
+    ]
    },
    "Properties.RemoteAudit.Line.lineRegistered": {
     "function": "RemoteAudit.Line.lineOfRegistered",
