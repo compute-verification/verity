@@ -45,7 +45,8 @@ from verity_vllm.engine import hooks
 ENV = "VERITY_ROPE_CACHE_FUSED"
 TAG = "rope_cache"
 OPTS = {"enable_fp_fusion": False, "enable_reflect_ftz": False}
-BLOCK_T, WARPS = 2, 4
+# Tokens a program and warps a program: the fastest of BLOCK_T 1..8 x warps 1..8 at T 8,192, 16,384 and 32,768 on an H200.
+BLOCK_T, WARPS = 1, 2
 
 # vLLM d9105ea80's LlamaAttention.forward, statement by statement as ast.unparse prints them.
 _ARGS = ("self", "positions", "hidden_states")
