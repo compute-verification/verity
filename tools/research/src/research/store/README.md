@@ -380,6 +380,12 @@ after a fresh listing of `manifests/` before each batch of `gc.BATCH` (1,000) de
 keeps it; a blob deleted under an upload that landed during its batch is reported `lost` (the pass exits 1). Cite what you need before its TTL: a
 label (`research data label ART note ...`) or a note naming its id. The control pod runs it (`infra/control/store_gc.sh`).
 
+An artifact that holds values which must never be shared leaves by `research data withdraw ART... --reason T --ref ISSUE`
+(`withdraw.py`), cited or not: its blobs are deleted at once and each artifact gets a `withdrawn` label saying why, the
+tombstone. Its manifest stays, so a citation still resolves and `fetch` reports the payload absent. A blob another artifact
+also holds is kept and named (it holds the same bytes, so withdraw that one too or decide otherwise). Read-only without
+`--apply`; it runs where the store's write keys are, the control pod.
+
 ## 8. Labels
 
 `labels/<target>/<ts>-<by>.json` locally; on the remote `labels/<target>/<sha256 of the canonical assertion>.json` (content key,
