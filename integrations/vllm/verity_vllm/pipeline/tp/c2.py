@@ -156,7 +156,7 @@ def no_evaluator_gate(cblock: dict, sr_: dict, *, rank: int, xrank_families: fro
 def replay_gates(cblock: dict, sr_: dict, lk_: dict, ok: bool, why: str | None, *, rank: int, replay_on: bool, required: bool,
                  xrank_families: frozenset[str] | set[str] | None) -> tuple[bool, str | None]:
     """The rank's C2 of record into its verdict, after the gates before it (in the rank's process, or from its bundle on CPU:
-    `pipeline.tp.commit_replay`).  [TP-08, MAN-06] sampled exact replay result True AND boundary linkage True
+    `pipeline.tp.commit_replay`).  Sampled exact replay result True AND boundary linkage True
     on this rank; absence, a partial (a stratum not evaluated, an input not retained), population 0 or a mismatch = FAIL named.
     Per rank, the replay's POPULATION reconciled against Q(P) (`query_population_gate`) and its families with no evaluator
     (`no_evaluator_gate`) go INTO the verdict, fail closed, by the dense committer's rules -- not behind the gates above: a PASS-graded
@@ -183,7 +183,7 @@ def replay_gates(cblock: dict, sr_: dict, lk_: dict, ok: bool, why: str | None, 
 
 
 def pin_gate(cblock: dict, wp_: dict, ok: bool, why: str | None, *, rank: int, required: bool) -> tuple[bool, str | None]:
-    """[MAN-09] the WEIGHTS OF RECORD: every served shard's sha256 == the digest composed from the
+    """The WEIGHTS OF RECORD: every served shard's sha256 == the digest composed from the
     pinned checkpoint by this rank's Program shard map; False -> FAIL named; absent with --required-manifest -> FAIL 'weights unpinned
     (MAN-09)' (fail closed); --no-weights-pin only records that choice, the verdict still FAILs closed.  The pin is NOT behind the
     earlier gates: a served shard that is not the checkpoint of record is the first-named fault even when its downstream symptoms
@@ -288,7 +288,7 @@ SR_SUMMARY_KEYS = ("result", "n", "sample", "population", "weights", "weights_se
 
 
 def sampled_replay_components(rows: list[dict], versions: dict) -> tuple[dict, dict]:
-    """[TP-08, MAN-06] `components.sampled_replay` {result, population, n, strata, seed, unreplayable,
+    """`components.sampled_replay` {result, population, n, strata, seed, unreplayable,
     why, per_rank} and `components.boundary_linkage` {result, method, checked, why, per_rank}, folded over the ranks of the LAST
     instrumented pair (AND: one rank not True = not True) with every earlier instrumented pair AND-ed in (`per_run`), so a failing pair
     or rank is named.  A TP2 row's population is the union of the ranks' rank-Program rows; the `ranks` stratum lists the true ranks."""
@@ -408,7 +408,7 @@ def seal(out: Path, summ: dict[str, Any], rows: list[dict[str, Any]], bundles_of
 
 
 def weights_pin_component(rows: list[dict], versions: dict) -> dict:
-    """[MAN-09] value_correspondence.components.weights_pin folded over ranks and instrumented pairs: True only when
+    """value_correspondence.components.weights_pin folded over ranks and instrumented pairs: True only when
     every rank of every pair compared its served shards to the checkpoint-composed digests of record with no difference; a rank without a
     record is 'unpinned' (result None -> the Commit FAILs closed under --required-manifest)."""
     per_rank: dict[str, dict] = {}
