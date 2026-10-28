@@ -283,6 +283,7 @@ theorem outRow_bytes {st : Stage} {s : ℕ} {x xO : Msg} {w : Claims.Flock.Wit} 
   have hc0 := partCircuit_staged hS hx ht hpi hr hpc h0p
   -- the unit, check 5's site, its rows and its link check
   obtain ⟨_, P⟩ := Flock.Readable.parseFacts_of_parse hx ht hpi h0p
+    (FlockSoundness.Discharge.Recursion.checkParsed_flat (htab 0 h0p).2.2)
   have hn : p.sts[0].c.unit.name = Flock.RecOpen.unitName LANES HH := (htab 0 h0p).1
   have hpar := FlockVBridge.params_of_check P.recNet hn
   rw [e0] at hpar

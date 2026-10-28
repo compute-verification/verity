@@ -92,9 +92,9 @@ theorem plain_session_soundHJ
   intro σ hCR hKS
   exact (Placed.keyProg c hU n).flock_headline_live_tables_subset_missX (Layout.outsOf c hU n) kd hkd Lb src hA3
     (planPHJ dj x₀) (tabPHJ dj x₀) (ppPHJ dj x₀ ht hc hU hscope)
-    {Layout.oneG} (constCols_keyProgH hU (sitesPHJI_parse dj x₀ ht hc (rowsFit_of_scopeH ht hc hscope))
+    {Layout.oneG} (constCols_keyProgH hU (sitesPHJI_stmt dj x₀ ht hc (rowsFit_of_scopeH ht hc hscope))
       (Layout.outsOf c hU n))
-    {Layout.zeroG} (zeroCols_keyProgH hU (sitesPHJI_parse dj x₀ ht hc (rowsFit_of_scopeH ht hc hscope))
+    {Layout.zeroG} (zeroCols_keyProgH hU (sitesPHJI_stmt dj x₀ ht hc (rowsFit_of_scopeH ht hc hscope))
       (Layout.outsOf c hU n))
     (layPHJ dj x₀ ht hc hU hscope (pub := pub)) (rsPHJ dj x₀ ht hc hpub hU hscope)
     (rsPHJ_computes dj x₀ ht hc hpub hU hscope) hk hRw hM hρ hr ht' K I wr
@@ -152,8 +152,8 @@ theorem plain_session_soundHJI
   intro σ hCR hKS
   exact (instProg c n).flock_headline_live_tables_subset_missX (outsOfI c n) kd hkd Lb src hA3
     (planPHJ dj x₀) (tabPHJ dj x₀) (ppPHJI dj x₀ ht hc hrf)
-    {instOneG (c := c) (n := n)} (constCols_instProgH (sitesPHJI_parse dj x₀ ht hc hrf) hrf.1 (outsOfI c n))
-    {instZeroG (c := c) (n := n)} (zeroCols_instProgH (sitesPHJI_parse dj x₀ ht hc hrf) hrf.1 (outsOfI c n))
+    {instOneG (c := c) (n := n)} (constCols_instProgH (sitesPHJI_c dj x₀ ht hc hrf) hrf.1 (outsOfI c n))
+    {instZeroG (c := c) (n := n)} (zeroCols_instProgH (sitesPHJI_c dj x₀ ht hc hrf) hrf.1 (outsOfI c n))
     (layPHJI dj x₀ ht hc hrf (pub := pub)) (rsPHJI dj x₀ ht hc hrf hpub hU hpr hw)
     (rsPHJI_computes dj x₀ ht hc hrf hpub hU hpr hw) hk hRw hM hρ hr ht' K I wr
     (opnPHJ I (planPHJ dj x₀) dj) dg (decJ (planPHJ dj x₀)) (fun _ _ _ _ => true) (fun _ _ _ _ _ => [])
