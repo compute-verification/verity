@@ -1,18 +1,19 @@
-"""serve-openai's window seals in a spawned process of their own (`SealProcess`, ``--seal-process``), so that no seal's Python
-holds the serving process's GIL while the engine loop runs. `sealer_of` is where serve-openai's seals run (`SealingOptions`):
-on the engine loop, on a `serve_seal.Sealer`'s thread, or by default through a `ProcessSealer`'s process.
+"""serve-openai's seals of its execution blocks in a spawned process of their own (`SealProcess`, ``--seal-process``), so that
+no seal's Python holds the serving process's GIL while the engine loop runs. `sealer_of` is where serve-openai's seals run
+(`SealingOptions`): on the engine loop, on a `serve_seal.Sealer`'s thread, or by default through a `ProcessSealer`'s process.
 
-A window's seal is `serve_seal.seal_view` either way, its files and its result the ones `serve_seal.seal_window` writes in the
-serving process; here it runs in two parts. The serving process writes the committed store's step files (its retained
-values, tree levels and salt keys) and the weights' files from the pinned blocks they sit in into the bundle's partial dir
-(`replay_bundle.write_store_files`): the values reach the seal's process as those files, written once, and no block is copied
-for it. It hands the process the rest of what the seal reads, a message at a time (`SealProcess.handoff`): per committed step
-its plan's metas as columns (`PlanMetas.columns`) and the bytes of the port's committed positions, and once a window the
-committer's retained ranges, its rows, the step roots and the seal's arguments; the required manifest once a run. While the
-serving process writes, the seal's process builds the binding map and runs its checks in `seal_window`'s order; once the files
-are written, and the window's blocks given back to the pool (``written``), it writes the store's ``store.json``
-(`store_dump.write_doc`), the context, the manifest, ``runs.jsonl`` and ``verdict.json``. A check that fails before the store
-is written discards the partial dir, which `seal_window` would not have written.
+An execution block's seal is `serve_seal.seal_view` either way, its files and its result the ones `serve_seal.seal_window`
+writes in the serving process; here it runs in two parts. The serving process writes the committed store's step files (its
+retained values, tree levels and salt keys) and the weights' files from the pinned memory blocks they sit in into the bundle's
+partial dir (`replay_bundle.write_store_files`): the values reach the seal's process as those files, written once, and no
+memory block is copied for it. It hands the process the rest of what the seal reads, a message at a time
+(`SealProcess.handoff`): per committed step its plan's metas as columns (`PlanMetas.columns`) and the bytes of the port's
+committed positions, and once an execution block the committer's retained ranges, its rows, the step roots and the seal's
+arguments; the required manifest once a run. While the serving process writes, the seal's process builds the binding map and
+runs its checks in `seal_window`'s order; once the files are written, and the memory blocks given back to the pool
+(``written``), it writes the store's ``store.json`` (`store_dump.write_doc`), the context, the manifest, ``runs.jsonl`` and
+``verdict.json``. A check that fails before the store is written discards the partial dir, which `seal_window` would not
+have written.
 """
 from __future__ import annotations
 
@@ -29,19 +30,19 @@ from typing import Any
 from verity_vllm.config import option
 from verity_vllm.pipeline import serve_seal as SS
 
-#: the keys of a window's line in windows.jsonl that its seal reads
+#: the keys of an execution block's line in windows.jsonl that its seal reads
 REC_KEYS = ("window", "run_id", "steps", "passed", "served_rows")
 
 
 @dataclasses.dataclass(frozen=True, kw_only=True)
 class SealingOptions:
-    """serve-openai's ``sealing`` group: where each window's seal runs (`sealer_of`)."""
+    """serve-openai's ``sealing`` group: where each execution block's seal runs (`sealer_of`)."""
     seal_off_loop: bool = option("--seal-off-loop", action="boolean_optional", default=True,
                                  help="finalize and seal each window on a thread of its own while the engine serves the next one "
                                       "(serve_seal.Sealer; default on); --no-seal-off-loop does both on the engine loop, which "
                                       "stops serving for them")
     seal_process: bool = option("--seal-process", action="boolean_optional", default=True,
-                                help="with --seal-off-loop: seal each window in a spawned process of its own (seal_process.SealProcess; "
+                                help="with --seal-off-loop: seal each execution block in a spawned process (seal_process.SealProcess; "
                                      "default on), the sealer's thread writing only its store's files, so no seal's Python takes the "
                                      "engine's GIL; --no-seal-process seals on the sealer's thread")
 
@@ -55,7 +56,7 @@ def sealer_of(opts: Any) -> SS.Sealer | None:
 
 
 class ProcessSealer(SS.Sealer):
-    """A `serve_seal.Sealer` whose thread seals each window through ``process``, a `SealProcess` it spawns before its thread
+    """A `serve_seal.Sealer` whose thread seals each execution block through ``process``, a `SealProcess` it spawns before its thread
     starts and closes after it ends; its summary names the process, and once closed how it ended."""
 
     def __init__(self, hold_bytes: int, clock: Callable[[], float] = time.perf_counter) -> None:
@@ -71,7 +72,7 @@ class ProcessSealer(SS.Sealer):
 
 
 class SealFailed(RuntimeError):
-    """What the seal's process raised for a window, as ``<type>: <message>``."""
+    """What the seal's process raised for an execution block, as ``<type>: <message>``."""
 
 
 class _Unstored(Exception):
@@ -79,7 +80,7 @@ class _Unstored(Exception):
 
 
 class SealProcess:
-    """One spawned process that seals windows one at a time (`seal`), called from one thread (`serve_seal.Sealer`'s). A process
+    """One spawned process that seals execution blocks one at a time (`seal`), called from one thread (`serve_seal.Sealer`'s). A process
     that has exited, killed or failed, raises at the next seal by name, and every seal after it fails the same way."""
 
     def __init__(self) -> None:
@@ -94,8 +95,8 @@ class SealProcess:
     def seal(self, com: Any, rc: Any, d: str | os.PathLike, *, extras: Any = None, written: Callable[[], Any] | None = None,
              **kw: Any) -> dict[str, Any]:
         """`serve_seal.seal_window(com, rc, d, extras=extras, **kw)`, its store's files written here and the rest in the process;
-        ``written`` is called once the files are, when nothing here reads ``com``'s blocks again. Its result also says how long
-        this process took to hand the window over and to write the files (``engine_s``)."""
+        ``written`` is called once the files are, when nothing here reads ``com``'s memory blocks again. Its result also says how
+        long this process took to hand the execution block over and to write the files (``engine_s``)."""
         from verity_vllm.pipeline import replay_bundle as RB
 
         t0 = time.perf_counter()
@@ -108,7 +109,7 @@ class SealProcess:
             _p, doc = RB.write_store_files(out, 0, com, rc, digests=hashed, extras=extras)
         except Exception as e:
             self.conn.send(("unstored",))
-            if (got := self._receive("seal"))[0] == "error":     # a check the process ran first: the window's error
+            if (got := self._receive("seal"))[0] == "error":     # a check the process ran first: the execution block's error
                 RB.discard(out, 0)
                 raise SealFailed(got[1]) from e
             raise
@@ -129,7 +130,7 @@ class SealProcess:
 
     def handoff(self, com: Any, rc: Any, d: str | os.PathLike, kw: dict[str, Any], t0: float) -> list[tuple]:
         """The messages that hand the process what the seal reads of ``com`` and ``rc`` beside the store's files: the manifest the
-        first time, the window's head, a message per committed step, then ``go``."""
+        first time, the execution block's head, a message per committed step, then ``go``."""
         from verity_vllm.commit import store_dump as SD
         from verity_vllm.commit.committer.plan_cache import PlanMetas
         from verity_vllm.commit.served_record import PORT_NAMES, StepInputPort, committed_raw, served_rows
@@ -205,7 +206,7 @@ def _main(conn: Any) -> None:
 
 
 def _seal(conn: Any, head: dict[str, Any], layouts: dict[int, Any], positions: dict[int, Any], manifests: dict[int, Any]) -> tuple:
-    """One window's seal in the process, its store's files written by the serving process: ``("sealed", result)``, else
+    """One execution block's seal in the process, its store's files written by the serving process: ``("sealed", result)``, else
     ``("error", what was raised, whether the store was still to be written)``, or ``("unstored",)`` when the serving process failed
     to write it and no check failed first."""
     from verity_vllm.commit import store_dump as SD
@@ -227,7 +228,7 @@ def _seal(conn: Any, head: dict[str, Any], layouts: dict[int, Any], positions: d
         return ("sealed", SS.seal_view(view, SimpleNamespace(**head["rc"]), d, store=store, t0=head["t0"], **head["kw"]))
     except _Unstored:
         return ("unstored",)
-    except Exception as e:  # noqa: BLE001  (the window's failure, sent to the serving process)
+    except Exception as e:  # noqa: BLE001  (the execution block's failure, sent to the serving process, which seals the next one)
         if not stored:
             conn.recv()
         return ("error", f"{type(e).__name__}: {e}", not stored)

@@ -440,7 +440,7 @@ def seal_window(com: Any, rc: Any, d: Path, *, rec: Mapping[str, Any], reqs: lis
 
 @dataclass
 class SealView:
-    """What `seal_view` reads of a closed window's committer beside its store: the committer's own state (`view_of`), or, in the
+    """What `seal_view` reads of a closed execution block's committer beside its store: its own state (`view_of`), or, in the
     seal's own process (`seal_process`), a copy of it that holds no value. ``positions`` gives the port's committed positions
     by step (`port_positions`) and ``unretained`` what the committer committed and doesn't hold (`store_dump.not_retained`),
     each read only where the seal reads it."""

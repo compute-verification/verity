@@ -365,10 +365,10 @@ def test_a_full_sealer_holds_the_loop_at_the_close_and_the_window_says_how_long(
     assert [x["seal_wait_s"] for x in records(tmp_path, "seals.jsonl")] == [0.0, 5.0] and s.windows.summary()["passed"]
 
 
-def test_with_a_seal_process_each_window_is_sealed_there_and_its_refusal_is_the_windows_error(tmp_path, monkeypatch):
-    """A sealer with a ``process`` (`seal_process.ProcessSealer`) hands each window's seal to it, never to `seal_window`, with
-    ``written``, which gives the window's lent blocks back once its store's files are written; a seal the process refused is its
-    window's error by the name the process gave it, and the next window is still sealed there."""
+def test_with_a_seal_process_each_execution_block_is_sealed_there_and_its_refusal_is_the_blocks_error(tmp_path, monkeypatch):
+    """A sealer with a ``process`` (`seal_process.ProcessSealer`) hands each execution block's seal to it, never to
+    `seal_window`, with ``written``, which gives the block's lent memory blocks back once its store's files are written; a seal
+    the process refused is the block's error by the name the process gave it, and the next block is still sealed there."""
     from verity_vllm.pipeline.seal_process import SealFailed
 
     monkeypatch.setattr(sc, "seal_window", lambda *_a, **_k: pytest.fail("sealed on the sealer's thread"))

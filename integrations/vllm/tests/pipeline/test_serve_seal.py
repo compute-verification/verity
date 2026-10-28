@@ -514,7 +514,7 @@ def test_a_cap_that_is_not_a_bit_count_is_refused(cap):
 
 # ------------------------------------------------------------------------------------------------- in the seal's own process
 
-#: what a seal's result says of when and how long, which two seals of the same window needn't share
+#: what a seal's result says of when and how long, which two seals of the same execution block needn't share
 TIMES = ("manifest_sha256", "seal_s", "phases_s", "engine_s")
 
 
@@ -545,7 +545,7 @@ def _written(d: Path) -> dict[str, Any]:
 
 
 def _both(d: Path, seal: Any, by: Any) -> tuple[dict[str, Any], dict[str, Any], dict[str, Any], dict[str, Any]]:
-    """The window ``seal`` seals into ``d`` sealed by `seal_window`, then again by ``by``: what each wrote and returned."""
+    """The execution block ``seal`` seals into ``d`` sealed by `seal_window`, then again by ``by``: what each wrote and returned."""
     inline = seal(ss.seal_window)[1]
     first = _written(d)
     shutil.rmtree(d)
@@ -554,11 +554,12 @@ def _both(d: Path, seal: Any, by: Any) -> tuple[dict[str, Any], dict[str, Any], 
 
 
 @pytest.mark.parametrize("window", ["port", "interior"])
-def test_a_window_sealed_in_its_own_process_writes_what_the_serving_process_writes(tmp_path, seal_process, window):
+def test_an_execution_block_sealed_in_its_own_process_writes_what_the_serving_process_writes(tmp_path, seal_process, window):
     """`seal_process.SealProcess`: the store's files written by the serving process, the binding map, the checks, the store's
     store.json, the context, the manifest and the records by the seal's: the files `seal_window` writes, byte for byte but for
-    when the manifest says it was sealed, and the result it returns. A window with the port and the row's manifest (its binder,
-    its positions' check, its port layout), and one committed without its attention interior (`store_dump.not_retained`)."""
+    when the manifest says it was sealed, and the result it returns. An execution block with the port and the row's manifest
+    (its binder, its positions' check, its port layout), and one committed without its attention interior
+    (`store_dump.not_retained`)."""
     if window == "port":
         _fx, seal = _parts_window(tmp_path, True, port=PORT)
         d = tmp_path / "w5"
@@ -572,9 +573,9 @@ def test_a_window_sealed_in_its_own_process_writes_what_the_serving_process_writ
     assert json.loads((d / "commit" / "replay_bundle_p0" / "store" / "store.json").read_text())["steps"][0]["metas"]
 
 
-def test_a_check_failed_in_the_seals_process_is_the_windows_error_and_leaves_no_store(tmp_path, seal_process):
-    """A check that fails in the seal's process fails the window by the same name `seal_window`'s does, and the store the serving
-    process wrote meanwhile is discarded, as `seal_window` never writes it; the process seals the next window."""
+def test_a_check_failed_in_the_seals_process_is_the_blocks_error_and_leaves_no_store(tmp_path, seal_process):
+    """A check that fails in the seal's process fails the execution block by the same name `seal_window`'s does, and the store
+    the serving process wrote meanwhile is discarded, as `seal_window` never writes it; the process seals the next block."""
     from verity_vllm.commit import step_rows
     from verity_vllm.pipeline.seal_process import SealFailed
 
