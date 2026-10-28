@@ -32,10 +32,10 @@
   reached the verifier (`scan_step`). A step on a stand-in (N2 on ``--job``'s ``stand_in``, scan without a warden
   run) never makes the report accepted. Without ``--n2`` the report is the scan's part of the record alone
   (`SCAN_ONLY`, its ``scope``), and its verdict is ``scan accepted`` or ``scan refused``: N2 isn't required, and
-  the rest is held as before. On the certifier-only path (``--job``'s ``path``, `CERTIFIER_ONLY`) there are no warden rows: the scan
-  isn't run or required, and the report's ``stubbed`` says what the path stands on (`STUBBED`, `stubbed`). Its
-  negatives are N2's members, the rehearsal's own check on each run it must refuse, and the I/O tie's verdict on each
-  tampered run that check lets through. d1's K (`horizon_k`) counts the served units' compute audits (``--audit``: each
+  the rest is held as before. On the certifier-only path (``--job``'s ``path``, `CERTIFIER_ONLY`) there are no
+  warden rows: the scan isn't run or required, and the report's ``stubbed`` says what the path stands on (`STUBBED`,
+  `stubbed`). Its negatives are N2's members, the rehearsal's own check on each run it must refuse, and the I/O tie's
+  verdict on each tampered run that check lets through. d1's K (`horizon_k`) counts the served units' compute audits (``--audit``: each
   window's draw and free inputs, `free_inputs`) and the network's own terms (`network_terms`), at each δ. With
   ``--period-answer`` (certifier/v0's ``network-period check`` answer on the period, a ``certifier.answer.json``,
   its case ``certifier.case.json`` beside it or ``--period-case``) and ``--server``, an accepted report also writes
