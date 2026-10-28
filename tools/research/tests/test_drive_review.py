@@ -643,7 +643,7 @@ def test_members_that_change_no_lean_go_below_a_lean_change_and_land_while_its_l
 def test_reviewed_members_that_change_no_lean_above_a_lean_change_at_the_bottom_go_below_it_before_its_check_runs(
         world, monkeypatch):
     """A Lean change already at the bottom of `next` would hold every reviewed member above it for its Lean check: non-Lean
-    first orders only what a sync merges anyway, and the check launches on the reviewed prefix's top, holding them all.  While no Lean check of `next` runs, they go below it and land that tick, and its check starts on
+    first orders only what a sync adds, and the check launches on the reviewed prefix's top, holding them all.  While no Lean check of `next` runs, they go below it and land that tick, and its check starts on
     what is left.  Once it runs, nothing moves below it: one reviewed after waits above it, and lands on its pass."""
     h = Review(world, monkeypatch)
     world.gh.put(1, world.change({"pkg/lean-audit.json": "{}"}))
