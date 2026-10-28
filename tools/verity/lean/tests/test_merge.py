@@ -240,22 +240,57 @@ FIXTURES = HERE / "fixtures" / "merge"
 
 def test_4406_onto_next_merges_its_reads_as_a_candidate(tmp_path, capsys):
     """#4406 (cursor/lean-vocab-hash-fc8d at 172198e129) onto `next` at aa5d70a9f1, base main's b6b9338dcb (26 Oct): #4406
-    moves `Hash.Digest` out of `Definitions.Hash.Basic` while `next` adds readers there, and the driver refused the train.
-    The fixture is that group on each side with the records of its readers (a sample of #4406's new ones)."""
+    takes `Hash.Digest` out of `Definitions.Hash.Basic` while `next` adds readers there, and the driver refused the train.
+    The fixture is that group on each side with the records of its readers (a sample of #4406's new ones).  #4406's readers
+    of the module are the base's, unrestated, and its record reads `Hash.Digest` nowhere, so the removal applies: `main`'s
+    record since reads it nowhere either."""
     sides = json.loads((FIXTURES / "hash-basic-4406-onto-next.json").read_text())
     for n in ("base", "ours", "theirs"):
         (tmp_path / n).write_text(A.text(sides[n]))
     assert M.main([*(str(tmp_path / n) for n in ("base", "ours", "theirs")), "Security/lean-audit.json"]) == 0
     err = capsys.readouterr().err.strip().splitlines()
     assert err == ["merge.py: Security/lean-audit.json: merged derived records as a candidate (the union, or ours' value where "
-                   "marked), which the train's Lean check regenerates: reads[Definitions.Hash.Basic].definitions[Hash.Digest]; "
-                   "reads[Definitions.Hash.Basic].definitions[Hash.Digest.bytes]"]
+                   "marked), which the train's Lean check regenerates: reads[Definitions.Hash.Basic].definitions[Hash.Digest] "
+                   "(removed); reads[Definitions.Hash.Basic].definitions[Hash.Digest.bytes] (removed)"]
     group = json.loads((tmp_path / "ours").read_text())["reads"]["Definitions.Hash.Basic"]
     theirs = sides["theirs"]["reads"]["Definitions.Hash.Basic"]["definitions"]
-    assert group["definitions"] == dict(sorted({**theirs, **{d: sides["ours"]["reads"]["Definitions.Hash.Basic"]["definitions"][d]
-                                                            for d in ("Hash.Digest", "Hash.Digest.bytes")}}.items()))
+    assert "Hash.Digest" not in theirs and group["definitions"] == theirs
     assert set(group["guarantees"]) == set(sides["ours"]["reads"]["Definitions.Hash.Basic"]["guarantees"]) | set(
         sides["theirs"]["reads"]["Definitions.Hash.Basic"]["guarantees"])
+
+
+def test_5977_onto_next_leaves_no_read_of_the_name_it_renamed(tmp_path, capsys):
+    """#5977 (fcfc2901b9, `J10R.Layout` renamed `NoiseLayout`) onto `next` at e50948ba0c, base 5f41e99513, as drive merged it
+    (9a58b81858, 28 Oct): `next` added readers of `Definitions.Accounting.TS.J10R`, and the union kept `Layout` and its four
+    fields beside the new names, so `next`'s after-landing Lean check failed on the record (CI-270; #6044's
+    `PouwCheck.Window`, #5926's `RemoteAudit.Schedule.Block` and #5933's `Compose.PeriodRun` alike).  The fixture is that group
+    on each side with the records of its readers."""
+    sides = json.loads((FIXTURES / "j10r-5977-onto-next.json").read_text())
+    m = "Definitions.Accounting.TS.J10R"
+    old = [d for d in sides["base"]["reads"][m]["definitions"] if ".Layout" in d]
+    assert len(old) == 5 and all(d in sides["ours"]["reads"][m]["definitions"] for d in old)
+    for n in ("base", "ours", "theirs"):
+        (tmp_path / n).write_text(A.text(sides[n]))
+    assert M.main([*(str(tmp_path / n) for n in ("base", "ours", "theirs")), "Security/Properties/lean-audit.json"]) == 0
+    assert capsys.readouterr().err.count("(removed)") == 5
+    group = json.loads((tmp_path / "ours").read_text())["reads"][m]
+    assert group["definitions"] == sides["theirs"]["reads"][m]["definitions"]
+    assert not set(old) & set(group["definitions"]) and f"{m.removeprefix('Definitions.')}.NoiseLayout" in group["definitions"]
+    assert group["guarantees"] == sides["ours"]["reads"][m]["guarantees"]
+
+
+def test_a_definition_one_side_deleted_with_its_guarantee_stays_deleted_and_one_it_stopped_reading_stays():
+    """A side that deletes a guarantee and the definition only it read (next's `NetTiming.Guarantees.EncardAccSeqsLeBlocks`),
+    while the other adds a reader of the module: the union brought the definition back.  A side that restated a reader may
+    only have stopped reading a definition that still exists, so there the union stays."""
+    base = record(t=thm([F]), u=thm([F, G], "P.g n = n", "00000000000000bb"))
+    ours = record(t=thm([F]))
+    theirs = record(t=thm([F]), u=thm([F, G], "P.g n = n", "00000000000000bb"), v=thm([H], "P.h n = n", "00000000000000cc"))
+    merged, why = M.merge(base, ours, theirs, candidate := [])
+    assert why == [] and candidate == ["reads[P.Defs].definitions[P.g] (removed)"]
+    assert A.text(merged) == A.text(record(t=thm([F]), v=thm([H], "P.h n = n", "00000000000000cc")))
+    merged, why = M.merge(base, record(t=thm([F], "P.f n + 0 = n", "00000000000000dd")), theirs, candidate := [])
+    assert why == [] and candidate == ["reads[P.Defs].definitions[P.g]"] and "P.g" in merged["reads"]["P.Defs"]["definitions"]
 
 
 def test_a_32_bit_group_merged_with_a_rehashed_one_is_a_candidate_the_train_regenerates():

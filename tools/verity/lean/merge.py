@@ -18,9 +18,10 @@ What the build determines never refuses: the records `check.py --update` writes 
 a guarantee's record (signature, named assumptions, type hash: restated on both sides, the merged tree's statement decides
 it), each `reads` group (which guarantees read which definition, and each definition's hash) and an assumption's `digest`.
 Where the sides disagree the merge takes the union (a definition or a module one side stopped reading, unless that side
-moved the definition to another module, where alone it stays (`moved`); readers as sets less those the merged record no
-longer lists, a group left without readers or definitions dropped) or ours' value (a
-hash or a record both sides changed differently), and names each in one line on stderr. Whether a guarantee is listed is
+moved the definition to another module, where alone it stays (`moved`), or renamed or deleted it, which its record says by
+reading it nowhere while it states every reader of the module as the base did (`gone`); readers as sets less those the
+merged record no longer lists, a group left without readers or definitions dropped) or ours' value (a hash or a record
+both sides changed differently), and names each in one line on stderr. Whether a guarantee is listed is
 not the build's: one side's removal applies over the other's change to its record. What only a person writes still
 refuses when both sides changed it differently: an `owner`, a `shape` or `frozen` entry, a dependency's revision, a policy
 entry (a layer's field, a `compile_time` digest).
@@ -197,17 +198,23 @@ def core(group):
     return None if group is None else (A.definitions(group), sorted(group.get("guarantees", [])))
 
 
-def group(m: str, x: dict, y: dict, z: dict, why: list[str], candidate: list[str]) -> dict:
+def group(m: str, x: dict, y: dict, z: dict, why: list[str], candidate: list[str], dropped: dict | None = None) -> dict:
     """One module's `reads` entry, both sides having changed it: definitions entry by entry, readers as sets.  A definition one
     side no longer reads while the other still reads it stays, with the other side's hash: the record does not say which
-    guarantees read it, so the union is the candidate (``candidate``), and the train's Lean check regenerates the group.  A
-    hash both sides changed differently is ours' (`derived`)."""
+    guarantees read it, so the union is the candidate (``candidate``), and the train's Lean check regenerates the group.  But
+    when the dropping side's `gone` (``dropped``, by "ours" and "theirs") says it renamed or deleted it, and the other side kept
+    its hash, the removal applies: the union would bring back a read of a definition the merged tree no longer has (#5977's
+    `J10R.Layout`, renamed `NoiseLayout`, came back beside the new name on `next`).  A hash both sides changed differently is
+    ours' (`derived`)."""
     xd, yd, zd = A.definitions(x), A.definitions(y), A.definitions(z)
     defs = {}
     for d in sorted(set(xd) | set(yd) | set(zd)):
         p, q, r = xd.get(d, MISSING), yd.get(d, MISSING), zd.get(d, MISSING)
         if p is not MISSING and (q is MISSING) != (r is MISSING):
-            defs[d] = q if r is MISSING else r
+            h = q if r is MISSING else r
+            if h == p and dropped and dropped["ours" if q is MISSING else "theirs"](d):
+                continue
+            defs[d] = h
             candidate.append(f"reads[{m}].definitions[{d}]")
         elif (v := derived(f"reads[{m}].definitions[{d}]", p, q, r, candidate)) is not MISSING:
             defs[d] = v
@@ -217,7 +224,31 @@ def group(m: str, x: dict, y: dict, z: dict, why: list[str], candidate: list[str
     return {"definitions": defs, "guarantees": sorted((yp & zp) | (yp - xp) | (zp - xp))}
 
 
-def reads(o: dict, a: dict, b: dict, why: list[str], candidate: list[str]) -> dict:
+def gone(m: str, o: dict, side: dict, other: dict, records: tuple[dict, dict, dict], candidate: list[str]):
+    """Whether a definition of module ``m`` that ``side`` (its `reads`) no longer lists anywhere was renamed or deleted there,
+    as `group` asks: every guarantee that read ``m`` at the base is, on that side, removed or stated as at the base, so the same
+    statements no longer reach it.  One the side restated may only have stopped reading it, which leaves the union.  A removal
+    the other side's new or restated readers of ``m`` may still need is named in ``candidate``."""
+    base, mine, others = records
+    listed = {d for g in side.values() for d in A.definitions(g)}
+
+    def same(rec: dict, g: str) -> bool:
+        return g not in rec or (g in base and A.unowned(rec[g]) == A.unowned(base[g]))
+    kept = all(same(mine, g) for g in (o.get(m) or {}).get("guarantees", []))
+    new = any(not same(others, g) for g in (other.get(m) or {}).get("guarantees", []))
+
+    def ask(d: str) -> bool:
+        if d in listed or not kept:
+            return False
+        if new:
+            candidate.append(f"reads[{m}].definitions[{d}] (removed)")
+        return True
+    return ask
+
+
+def reads(o: dict, a: dict, b: dict, why: list[str], candidate: list[str],
+          records: tuple[dict, dict, dict] = ({}, {}, {})) -> dict:
+    """The `reads` sections merged module by module (`group`), ``records`` being the base's, ours' and theirs' guarantees."""
     out = {}
     for m in sorted(set(a) | set(b)):
         x, y, z = o.get(m), a.get(m), b.get(m)
@@ -227,11 +258,14 @@ def reads(o: dict, a: dict, b: dict, why: list[str], candidate: list[str]) -> di
             g = z
         elif core(z) == core(x):
             g = y
-        elif y is None or z is None:
-            g = group(m, x or {}, y or {}, z or {}, why, [])
-            candidate.append(f"reads[{m}]")
         else:
-            g = group(m, x or {}, y, z, why, candidate)
+            drop = {"ours": gone(m, o, a, b, records, candidate),
+                    "theirs": gone(m, o, b, a, (records[0], records[2], records[1]), candidate)}
+            if y is None or z is None:
+                g = group(m, x or {}, y or {}, z or {}, why, [], drop)
+                candidate.append(f"reads[{m}]")
+            else:
+                g = group(m, x or {}, y, z, why, candidate, drop)
         if g is not None:
             out[m] = {"definitions": dict(sorted(A.definitions(g).items())), "guarantees": sorted(g.get("guarantees", []))}
     moved(o, a, b, out, candidate)
@@ -310,7 +344,8 @@ def merge(base: dict, ours: dict, theirs: dict, candidate: list[str] | None = No
     for k in keys("", ours, theirs):
         o, a, b = base.get(k, MISSING), ours.get(k, MISSING), theirs.get(k, MISSING)
         if k == "reads":
-            v = reads({} if o is MISSING else o, {} if a is MISSING else a, {} if b is MISSING else b, why, candidate)
+            records = tuple(s.get("guarantees") if isinstance(s.get("guarantees"), dict) else {} for s in (base, ours, theirs))
+            v = reads({} if o is MISSING else o, {} if a is MISSING else a, {} if b is MISSING else b, why, candidate, records)
         elif k == "guarantees" and isinstance(a, dict) and isinstance(b, dict) and (o is MISSING or isinstance(o, dict)):
             v = guarantees({} if o is MISSING else o, a, b, why, candidate)
         elif k == "assumptions" and all(isinstance(s, dict) for s in (o, a, b) if s is not MISSING):
