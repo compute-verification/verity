@@ -12,6 +12,7 @@ no second card). Each number is an entry `{ value, unit, mark, source }`:
 |---|---|---|---|
 | RTX PRO 6000 Blackwell Server Edition (board 900-2G153-0000-000) | gpu | `cards/rtx-pro-6000-server.toml` | `Security/Definitions/Core/Accel/Sm120.lean` |
 | H200 SXM 141 GB (board 692-2G520-0280-001) | gpu | `cards/h200-sxm-141gb.toml` | `Security/Definitions/Core/Accel/H200.lean` |
+| B200 SXM 180 GB (board 692-2G525-0220-000) | gpu | `cards/b200-sxm-180gb.toml` | none yet: `Security/Definitions/Accounting/Sheets/B200.lean` is held to it |
 | Two Xeon 6776P, the RTX node's host | host | `cards/xeon-6776p-2s.toml` | none |
 | Two Xeon Platinum 8468, the H200 nodes' host | host | `cards/xeon-platinum-8468-2s.toml` | none |
 
