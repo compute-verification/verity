@@ -744,6 +744,7 @@ class Sealer:
         self.gate_mode = settings.VERITY_SEAL_GATE
         self.pace_s = float(settings.VERITY_SEAL_PACE_S)
         self.paced = [0, 0.0, 0]                         # paces that waited, their seconds, paces that ran out
+        self.synced_n = 0
         self.thread = threading.Thread(target=self._run, name="serve-seal", daemon=True)
         self.seal_thread = threading.Thread(target=self._run_seals, name="serve-seal-2", daemon=True)
         self.thread.start()
@@ -762,6 +763,10 @@ class Sealer:
             self._jobs.append((functools.partial(job, waited), int(nbytes)))
             self._cv.notify_all()
         return waited
+
+    def synced(self) -> None:
+        self.synced_n += 1
+        self.gate.clear()
 
     def pace(self) -> None:
         if self.gate.is_set():
@@ -837,7 +842,7 @@ class Sealer:
     def summary(self) -> dict[str, Any]:
         return {"hold_bytes": self.hold_bytes, "held": self.held, "errors": self.errors[:10], "errors_n": len(self.errors),
                 "gate": {"mode": self.gate_mode, "pace_s": self.pace_s, "paced": self.paced[0], "paced_s": round(self.paced[1], 4),
-                         "ran_out": self.paced[2], "mid_layer": getattr(self, "mid_layer", None)}}
+                         "ran_out": self.paced[2], "mid_layer": getattr(self, "mid_layer", None), "synced": self.synced_n}}
 
 
 class DiskFloor:

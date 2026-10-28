@@ -417,16 +417,17 @@ class CommitWindows:
             mode = self.sealer.gate_mode
             self.sealer.gate.clear()
             self.com.step_launched = self.sealer.gate.set
-            if mode == "mid" and not hasattr(self.sealer, "mid_layer"):
+            if mode in ("mid", "midc") and not hasattr(self.sealer, "mid_layer"):
                 self.sealer.mid_layer = None
                 layers = getattr(getattr(getattr(getattr(self.com, "runner", None), "model", None), "model", None), "layers", None)
                 if layers is not None and len(layers):
                     gate = self.sealer.gate
                     layers[len(layers) // 2].register_forward_pre_hook(lambda mod, args: gate.set())
                     self.sealer.mid_layer = len(layers) // 2
-            at = {"sync": "end", "fwd": "begin", "mid": None if getattr(self.sealer, "mid_layer", None) is not None else "begin"}
+            mid = None if getattr(self.sealer, "mid_layer", None) is not None else "begin"
+            at = {"sync": "end", "fwd": "begin", "mid": mid, "midc": mid}
             self.com.step_launched_at = at.get(mode, mode)
-            self.com.step_synced = self.sealer.gate.clear if mode in ("sync", "fwd", "mid") else None
+            self.com.step_synced = self.sealer.synced if mode in ("sync", "fwd", "mid", "midc") else None
         now = self.wall()
         for s in range(len(self.step_t), int(self.com._step_index)):
             self.step_t[s] = now
