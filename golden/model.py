@@ -263,7 +263,9 @@ SCHEMA = {
         "row_bytes": (4096, "hm96 row size of the Commit's tree (4 KiB today; 16 KiB: lever 11 of P1a)"),
         "hash_eff": (None, "share of HASH-38's bar the hash kernels reach (None: b921's 0.497; KCOMMIT: 1.0)"),
         "corun": (False, "hash at the no-cost co-run share beside the GEMMs and at the bar in host gaps"),
-        "seal": ("tree", "tree (per-window tree sealed, b921) | none (5430) | roots (lever 1: seal roots only)"),
+        "seal": ("tree", "tree (per-window tree sealed, b921) | none (5430) | roots (lever 1: seal roots, binding map "
+                         "and records; an estimate: the tree's wait dropped, b921's other seal host time kept, since "
+                         "nobody has split the seal's 1.31 s)"),
         "host": ("today", "today (69 event syncs, host copies, launch gaps of b921) | fixed (at stock's)"),
         "gather": (True, "the gather copy before hashing (False: hash rows in place)"),
         "padded": (True, "commit all T rows (True) or only the real tokens' (False)"),
@@ -449,7 +451,7 @@ def commit_parts(d: dict, stock: dict, units: list) -> tuple[dict, dict]:
     if c["host"] == "today":
         parts["Commit host copies"] = I("commit_copies_ms") * scale
         parts["Commit event syncs and launch gaps"] = I("commit_launch_gap_ms")
-        if c["seal"] == "tree":
+        if c["seal"] in ("tree", "roots"):
             parts["seal: rest of the host gap"] = I("seal_rest_ms")
     if c["seal"] == "tree":
         seal_bytes = (tree["rows"] + tree["nodes"]) * 64
