@@ -34,8 +34,10 @@ from verity_flock import class_statement as CS
 from verity_flock import ir_lower as IL
 
 W = IL.WORD
-#: calls per rendering task: a task's text is about this many calls' rows
-TASK_CALLS = 2048
+#: live ANDs per rendering task (a call is never split): a task's text is about this many rows
+TASK_ANDS = 1 << 16
+#: rendered tasks held ahead of the writer, per worker
+AHEAD = 4
 
 
 class Unstampable(Exception):
@@ -376,6 +378,16 @@ class StampLayout(IL.Layout):
             out.append(fmt % tuple(vals.tolist()))
         return "".join(out).encode()
 
+    def _tasks(self) -> list[tuple[int, int]]:
+        """The recorded calls in runs of about `TASK_ANDS` live ANDs."""
+        n = len(self.st.tids)
+        if not n:
+            return []
+        cum = np.cumsum(np.array([c.count for c in self.closures], dtype=np.int64)[self.cid])
+        cuts = np.searchsorted(cum, np.arange(TASK_ANDS, int(cum[-1]), TASK_ANDS), side="left") + 1
+        bounds = np.unique(np.concatenate([[0], cuts, [n]]))
+        return list(zip(bounds[:-1].tolist(), bounds[1:].tolist()))
+
     def _tail_text(self) -> str:
         rows = []
         rows += ["0 0"] * (self.out_at - self.first - self.n_live)
@@ -392,19 +404,25 @@ class StampLayout(IL.Layout):
         rows = [f"1 {i} 1 {i}" for i in range(self.n_in)] + ["0 0"] * (self.first - self.n_in)
         for k in range(0, len(rows), 1 << 16):
             yield ("\n".join(rows[k:k + (1 << 16)]) + "\n").encode()
-        n = len(self.st.tids)
-        tasks = [(lo, min(n, lo + TASK_CALLS)) for lo in range(0, n, TASK_CALLS)]
+        tasks = self._tasks()
         procs = _procs()
         if procs <= 1 or len(tasks) <= 1:
             for lo, hi in tasks:
                 yield self._calls_text(lo, hi)
         else:
             import multiprocessing as mp
+            from collections import deque
 
             _WORKER[:] = [self]
             try:
                 with mp.get_context("fork").Pool(procs) as pool:
-                    yield from pool.imap(_render, tasks, chunksize=1)
+                    todo, ahead = iter(tasks), deque()
+                    for task in todo:
+                        ahead.append(pool.apply_async(_render, (task,)))
+                        if len(ahead) >= AHEAD * procs:
+                            yield ahead.popleft().get()
+                    while ahead:
+                        yield ahead.popleft().get()
             finally:
                 _WORKER.clear()
         yield self._tail_text().encode()
