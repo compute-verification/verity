@@ -28,11 +28,13 @@ earliest. ``--window K`` holds K to the same rules. Prints what the run publishe
 engine steps, ``every_slot`` whether its requests filled the class's slots, ``refused`` the windows refused, by number. Its
 requests' count, list and users stay on the node.
 
-``pieces``: each subprotocol after sampled proofs (`PIECES`: PoUW, the bandwidth audit, PoUS, the network certifier) runs
-its piece where one is named (``POUW_CMD``, ``BANDWIDTH_CMD``, ``POUS_CMD``, ``CERTIFIER_CMD``: a command run in the tree as
+``pieces``: each subprotocol after sampled proofs (`PIECES`: PoUW, PoUS, the bandwidth audit, the network certifier) runs
+its piece where one is named (``POUW_CMD``, ``POUS_CMD``, ``BANDWIDTH_CMD``, ``CERTIFIER_CMD``: a command run in the tree as
 ``bash -c CMD _ SERVE_DIR WINDOW DIR``, which writes its core answer to ``DIR/answer.json``), one at a time, each within
 ``<COMPONENT>_TIMEOUT`` (else ``PIECE_TIMEOUT``, default `PIECE_TIMEOUT`), else prints a ``MISSING`` line naming it, the
-command it lacks and its owner. Each run leaves ``DIR/piece.json`` (`RAN`: the node it ran on, its exit, its limit). A piece
+command it lacks and its owner. PoUS's piece runs before the bandwidth audit's: the bandwidth session is over
+the store PoUS's piece holds, and that piece writes its answer to the bandwidth piece's ``DIR``, which ``BANDWIDTH_CMD``
+collects. Each run leaves ``DIR/piece.json`` (`RAN`: the node it ran on, its exit, its limit). A piece
 that ran but wrote no answer is its error, unless it refused to run (``DIR/refused.txt``, `REFUSED`, naming why), which
 leaves it missing; no verdict is made for a piece that didn't run. A development piece writes ``DIR/development.json``
 (`DEVELOPMENT`) in place of a core answer: its verdict is printed as a development run's, and it credits nothing. A piece
@@ -123,14 +125,13 @@ INTEGRITY_OWNER = "compute-accounting"
 PIECES: dict[str, tuple[str, str, str, str]] = {
     "work": ("PoUW", "pouw", "compute-accounting",
              "H1's credit on the served window, its coins from vy-challenger-1's gate (H1_GATE)"),
-    "bandwidth": ("the bandwidth audit", "bandwidth", "memory-accounting",
-                  ("a remote bandwidth session over this node's registered store, against the auditor's verifier on "
-                   "vy-auditor-2; served_verdicts.sh sets it where the tree has benchmarks/one_stage/served_bandwidth.sh "
-                   "and this node the verifier's key and the store")),
     "space": ("PoUS", "pous", "memory-accounting",
               ("PoUS over the served model's int8 weights on the serving card, against the memory challenger on "
                "vy-auditor-2; served_verdicts.sh sets it where the tree has benchmarks/pous/served_piece.sh and this node "
                "the challenger's key")),
+    "bandwidth": ("the bandwidth audit", "bandwidth", "memory-accounting",
+                  ("PoUB-P2's session over the store the PoUS piece holds, which that piece runs (POUS_CMD, "
+                   "benchmarks/pous/served_piece.py) and BANDWIDTH_CMD collects (served_bandwidth.py collect)")),
     "communication": ("the network certifier", "certifier", "network-accounting",
                       "the network certifier in front of the serving endpoint"),
 }
