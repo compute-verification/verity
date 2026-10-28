@@ -48,7 +48,7 @@ PRODUCTS = {"onsite": "verity/onsite/v0", "remote": "verity/remote/v0"}
 #: the missing ones.
 COMPONENTS = {
     "onsite": ("verity/certifier/v0", "verity/inference-only/v0", "verity/pous/p2/v4/run", "verity/pouw/period/v1",
-               "verity/remote-bandwidth/v0", "verity/sampled-proofs/one-stage/v2", "verity/wipe/v0"),
+               "verity/remote-bandwidth/p2/v0", "verity/sampled-proofs/one-stage/v2", "verity/wipe/v0"),
     "remote": ("verity/inference-only/v0", "verity/pouw/v1", "verity/sampled-proofs/one-stage/v2"),
 }
 #: The subprotocols a product composes in the clear, as a stated exception to everything-zero-knowledge, each with the

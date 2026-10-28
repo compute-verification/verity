@@ -48,7 +48,7 @@ path = "../network/lean"
 name = "pous_check"
 path = "../pous/check"
 
-# Bandwidth: the remote bandwidth audit's session.
+# Bandwidth: the remote bandwidth audit's P2 session on PoUS's store (`RemoteAudit.P2Protocol`).
 [[require]]
 name = "remote_audit"
 path = "../remote_bandwidth/lean"
