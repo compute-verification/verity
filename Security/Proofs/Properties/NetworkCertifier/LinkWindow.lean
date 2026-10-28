@@ -283,7 +283,7 @@ theorem acceptedOutputs_canon {c : Case} (hA : AsciiStrings c) : ∃ t, Flock.ca
     rcases hp with (rfl | rfl) | rfl
     · exact ⟨by decide, canon_nat 1⟩
     · exact ⟨by decide, canon_nat 1⟩
-    · refine ⟨by decide, ?_⟩
+    · refine ⟨(by dsimp only; decide), ?_⟩
       cases advice with
       | some a => exact canon_str (hA.2.2 view a hk)
       | none => simp only [Flock.canon]; exact ⟨_, rfl⟩
@@ -302,12 +302,12 @@ theorem verdictDigest_ok {c : Case} (hA : AsciiStrings c) : ∃ d, verdictDigest
     simp only [List.mem_cons, List.not_mem_nil, or_false] at hp
     rcases hp with rfl | rfl | rfl | rfl | rfl
     · exact ⟨by decide, canon_str (by decide)⟩
-    · exact ⟨by decide, canon_str hA.1⟩
-    · refine ⟨by decide, canon_arr fun x hx => ?_⟩
+    · exact ⟨(by dsimp only; decide), canon_str hA.1⟩
+    · refine ⟨(by dsimp only; decide), canon_arr fun x hx => ?_⟩
       obtain ⟨s, hs, rfl⟩ := Array.mem_map.1 hx
       exact canon_str (hA.2.1 s hs)
     · exact ⟨by decide, canon_bool true⟩
-    · exact ⟨by decide, acceptedOutputs_canon hA⟩
+    · exact ⟨(by dsimp only; decide), acceptedOutputs_canon hA⟩
   unfold verdictDigest
   simp only [ht, bind, Except.bind, pure, Except.pure]
   exact ⟨_, rfl⟩
