@@ -8,7 +8,8 @@
 * refusals carry their codes.
 
 The Programs: `gemm` (`TGemm{K=32,N=6}`: Input batches, a composite batch, nested calls), `synth` (two zip-able batches, a
-constant, a scan) and `twice` (one specialization called twice).
+constant, a scan), `twice` (one specialization called twice) and `nest` (a batch of `TGemm`, whose body is one batch: the
+two axes of `members(..., k=(r, c))`).
 """
 
 from __future__ import annotations
@@ -76,7 +77,12 @@ Twice = CompositeDefinition("TTwice", 1, (), lambda S: ((("x", Array(16, V16)), 
                             lambda B, S, x, w: B.call(bind(Gemm, K=16, N=16), B.call(bind(Gemm, K=16, N=16), x, w), w),
                             register=False)
 
-PROGRAMS = {"gemm": Program(bind(Gemm, K=32, N=6)), "synth": Program(bind(Synth, N=4)), "twice": Program(bind(Twice))}
+Nest = CompositeDefinition("TNest", 1, (), lambda S: ((("x", Array(3, Array(16, V16))), ("w", Array(4, Array(16, V16)))),
+                                                     Array(3, Array(4, V16))),
+                           lambda B, S, x, w: B.batch(bind(Gemm, K=16, N=4), x, w, axes=(0, None)), register=False)
+
+PROGRAMS = {"gemm": Program(bind(Gemm, K=32, N=6)), "synth": Program(bind(Synth, N=4)), "twice": Program(bind(Twice)),
+            "nest": Program(bind(Nest))}
 TEXT = {name: canonical_json(encode_program(p)).decode() for name, p in PROGRAMS.items()}
 
 QUERIES = {
@@ -93,7 +99,14 @@ QUERIES = {
               'zip(".", ["@0", "@3"])', 'each(zip(".", ["@1", "@2"]), default(8))'],
     "twice": ['default(32)', 'instances("//TGemm_v1")', 'instances("//TGemmCoordinate_v1")', 'members("//TGemm_v1", "@*", k=5)',
               'concat(instances("//TDot_v1"), rest())', 'each("//TGemm_v1", concat(members(".", "@*", k=3), rest()))',
-              'instances("//TDot_v1/@1")', 'members("//TGemm_v1/@0//TDot_v1", "@*")'],
+              'instances("//TDot_v1/@1")', 'members("//TGemm_v1/@0//TDot_v1", "@*")',
+              'members(".", "@call:TGemm_v1", k=(1, 4))', 'members(".", "@*", k=(1, 4))',
+              'concat(members(".", "@call:TGemm_v1", k=(1, 5)), rest())'],
+    "nest": ['members(".", "@batch:TGemm_v1", k=(2, 3))', 'members(".", "@2", k=(1, 4))', 'members(".", "@2", k=(3, 1))',
+             'members(".", "@2", k=(5, 7))', 'concat(members(".", "@2", k=(2, 2)), rest())', 'members(".", "@*", k=(2, 3))',
+             'members("//TGemm_v1", "@*", k=(1, 2))', 'each(members(".", "@2", k=(2, 2)), default(8))',
+             'where(members(".", "@2", k=(2, 2)), form="batch")', 'rest(members(".", "@2", k=(2, 3)))',
+             'concat(members(".", "@2", k=(2, 2)), instances("//TDot_v1"), rest())', 'default(16)'],
 }
 
 
@@ -263,7 +276,9 @@ def test_refusals_carry_codes(server) -> None:
     cases = [
         (synth, to_json(parse('zip(".", ["@0", "@3"])')), None, "plan:"),
         (synth, {"op": "frontier", "w": 32}, None, "term:"),
-        (synth, {"op": "members", "path": ".", "sel": "@*", "k": [2, 2]}, None, "term:"),
+        (synth, {"op": "members", "path": ".", "sel": "@*", "k": [2, 2]}, None, "plan:"),
+        (synth, {"op": "members", "path": ".", "sel": "@*", "k": [2, 0]}, None, "term:"),
+        (synth, {"op": "members", "path": ".", "sel": "@*", "k": [2, 2, 2]}, None, "term:"),
         (synth, {"op": "members", "path": ".", "sel": "@*", "k": 0}, None, "term:"),
         (synth, {"op": "table", "path": ".", "table": "t"}, {"t": {key: [0, None]}}, "table:"),
         (synth, {"op": "table", "path": ".", "table": "t"}, {"t": {key: [0, 2, None, None, None]}}, "table:"),

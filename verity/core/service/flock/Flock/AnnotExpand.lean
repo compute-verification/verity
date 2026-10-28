@@ -58,6 +58,14 @@ def walk : Nat → Nat → Nat → Array GateSet → V (Array GateSet)
         for (a, b) in e.members do
           for m in [a:b] do
             acc ← walk fuel s (at_ e.j m) acc
+      | .grid r s =>
+        let ms := (e.members.foldl (fun xs (a, b) => xs ++ (List.range (b - a)).toArray.map (a + ·)) #[])
+        let mut rows : Array (Array GateSet) := #[]
+        for m in ms do rows := rows.push (← walk fuel s (at_ e.j m) #[])
+        for u in [0:ceilDiv ms.size r] do
+          for v in [0:F.plans[s]!.total] do
+            let gs := (rows.extract (u * r) (u * r + r)).foldl (fun gs row => gs ++ row[v]!.gates) #[]
+            acc := acc.push { callee := some fn, gates := norm gs }
     return acc
 
 end
@@ -81,7 +89,7 @@ def labelled (P : Prog) (D : Desc) (F : Family) : V (Array (Array (Nat × Nat)))
     let mut out := Array.replicate n #[]
     let mut i := 0
     for (e, l) in F.plans[F.top]!.entries.zip ls do
-      let c := e.count (match e.kind with | .descend s => F.plans[s]!.total | _ => 0)
+      let c := e.count ((e.kind.sub?.map (F.plans[·]!.total)).getD 0)
       if let some l := l then
         for s in ss.extract i (i + c) do out := out.modify l (· ++ s.gates)
       i := i + c
