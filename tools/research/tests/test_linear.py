@@ -586,6 +586,23 @@ def test_place_and_an_ask_under_a_parent_from_the_cli(fake, registry, capsys, li
     assert len(lin.sent("issueCreate")) == 2
 
 
+def test_create_files_an_issue_into_your_own_team_with_its_brief_title_and_due_date(fake, registry, capsys, lin, tmp_path):
+    """`ask` refuses your own handle, so a lane had no command to file its own deliverable."""
+    brief = tmp_path / "brief.md"
+    brief.write_text("**Goal:** the figures.\n**Done when:** published.")
+    argv = ["linear", "create", "--as", "infra", "--title", "Publish the figures", "--file", str(brief)]
+    rc, out, _ = run(capsys, *argv, "--dry-run")
+    assert rc == 0 and out.strip() == "dry-run: would file 'Publish the figures' in INF as infra" and lin.sent("issueCreate") == []
+    rc, out, _ = run(capsys, *argv, "--due", "2026-10-29", "--parent", "CMP-92")
+    (_, v, _), = lin.sent("issueCreate")
+    assert rc == 0 and out.startswith("INF-1 https://linear.app/x/issue/INF-1")
+    assert v["i"]["title"] == "Publish the figures" and v["i"]["description"].startswith("**Goal:**") and v["i"]["parentId"] == "P1"
+    assert lin.updated[-1][1] == {"dueDate": "2026-10-29"}
+    for missing, why in ((["--title", "T"], "--file BRIEF.md"), (["--file", str(brief)], "--title")):
+        rc, _, err = run(capsys, "linear", "create", "--as", "infra", *missing)
+        assert rc == 2 and why in err
+
+
 def test_edit_sets_the_title_due_date_description_and_parent_and_refuses_a_bad_date_or_nothing_to_set(tmp_path):
     fake = FakeLinear()
     lin = linear.Linear(KEY, fake, cache=tmp_path / "t")
