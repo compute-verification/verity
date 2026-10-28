@@ -15,10 +15,13 @@ def test_out_of_sample_within_ten_percent(key):
     assert abs(model.validate()[key]["ratio"] - 1) < 0.10
 
 
-def test_row_ands_matches_sampled_proofs():
+def test_row_ands_is_sampled_proofs_at_c_flocks_compression():
+    """optimize.row_ands at its 58,120 ANDs a compression, and 1.40x it at C-Flock's 81,402 rows."""
     from verity.core.protocols.sampled_proofs import optimize
-    for n in (1, 64, 1024, 2048, 4096, 16384, 32768):
-        assert model.row_ands(n) == optimize.row_ands(n)
+    with model.inputs({"sha512_ands": optimize.SHA512_ANDS, "hm96_ands": optimize.HM96_ANDS}):
+        for n in (1, 64, 1024, 2048, 4096, 16384, 32768):
+            assert model.row_ands(n) == optimize.row_ands(n)
+    assert model.row_ands(4096) / optimize.row_ands(4096) == pytest.approx(81_402 / 58_120)
 
 
 def test_unknown_keys_refused():
@@ -63,7 +66,8 @@ def test_pouw_tiles_match_the_inbox_and_small_tiles_prove_cheaper():
     falls with the block, and openings take a larger share of a smaller block (~1.5 (1/R + 1/C))."""
     def pouw(tile, form="tile", **kw):
         return model.J(model.design(pouw={"scheme": "j10r", "tile": tile, "form": form}, **kw))["proving"]["pouw"]
-    small, big = pouw((1, 1))["classes"][0], pouw((32, 32))["classes"][0]
+    with model.inputs({"sha512_ands": 58_120, "hm96_ands": 116_240}):         # the inbox's openings, 454 a byte
+        small, big = pouw((1, 1))["classes"][0], pouw((32, 32))["classes"][0]
     assert small["ands_with_openings"] == pytest.approx(2.7e6, rel=0.15)
     assert big["ands_with_openings"] == pytest.approx(736e6, rel=0.1)
     assert small["openings_share"] > 0.7 and big["openings_share"] < 0.15
@@ -89,15 +93,18 @@ def test_a_bigger_cap_pays_prover_memory_and_cost_a_bit():
     assert dear > flat
 
 
-def test_chunked_lanes_fit_at_every_served_k():
-    """Past K 4,096 a lane is proved in chunks of at most 4,096 entries, so at Llama-3.2-1B's K (2,048 and 8,192)
-    every block stays within 2^27 even with compose's padding (k_pad 1); a whole lane at K 8,192 would not. (At
-    K 14,336 the combine's 32 partial rows and 128 ok rows pass 2^26 ANDs.)"""
-    assert model.I("h1_ands_per_mac") * 32 * 8192 + 12 * model.row_ands(8196) > 2 ** 26
-    for k in (2048, 4096, 8192):
-        r = model.J(model.design(pouw={"scheme": "j10r", "form": "lanes", "K": k}))
-        assert r["infeasible"] == [], (k, r["infeasible"])
-        assert all(b["k_log"] <= 27 for b in r["proving"]["pouw"]["classes"][0]["blocks"])
+def test_lanes_fit_at_k2048_and_need_k_pad_0_past_it():
+    """Past K 4,096 a lane is proved in chunks of at most 4,096 entries. At C-Flock's 81,402 rows a SHA-512
+    compression a 4,096-entry lane (or chunk) is ~75 M ANDs with its 12 operand rows: past 2^26, so within 2^27 only
+    at k_pad 0, not the struct worker's 1. K 2,048's lane (~39 M) fits at k_pad 1."""
+    def lanes(k, k_pad):
+        with model.inputs({"k_pad_h1_lane": k_pad}):
+            return model.J(model.design(pouw={"scheme": "j10r", "form": "lanes", "K": k}))
+    assert lanes(2048, 1)["infeasible"] == []
+    for k in (4096, 8192):
+        assert any("k_log 28 > 27" in m for m in lanes(k, 1)["infeasible"])
+        r = lanes(k, 0)
+        assert r["infeasible"] == [] and all(b["k_log"] <= 27 for b in r["proving"]["pouw"]["classes"][0]["blocks"])
 
 
 def test_stratified_draws_are_ln_s_over_delta_over_eps_a_class():
@@ -131,7 +138,7 @@ def test_joint_moves_pouw_into_the_values_tiles():
 
 def test_inputs_override_is_scoped():
     base = model.J(model.design())["J"]
-    with model.inputs(o_per_and=2 * model.I("o_per_and")):
+    with model.inputs(o_per_and_h200=2 * model.I("o_per_and_h200")):
         assert model.J(model.design())["J"] > base
     assert model.J(model.design())["J"] == base
     with pytest.raises(KeyError):
@@ -142,3 +149,58 @@ def test_unnoised_pouw_earns_no_credit():
     assert not model.J(model.design(pouw={"scheme": "j10r"}))["pouw"]["credit"]["earns_credit"]
     assert model.pouw_credit(model.design(pouw={"L": 8192}))["credited_share_of_linear_macs"] == 0
     assert model.J(model.design())["pouw"]["credit"]["earns_credit"]
+
+
+def test_sessions_pad_draws_to_a_power_of_two_or_split():
+    """GD-PROVER's session: P = max(8, 2^ceil(log2 k)) padded draws, split where a session costs less than its pad."""
+    assert model.sessions(3, 4096, 10.0, 1.0) == (1, 8)
+    assert model.sessions(1500, 4096, 1e6, 1.0) == (1, 2048)          # dear sessions: pad
+    assert model.sessions(1500, 4096, 1.0, 1.0) == (5, 1504)          # cheap sessions: 1024 + 256 + 128 + 64 + 32
+    assert model.sessions(5000, 2048, 1e6, 1.0) == (3, 5120)          # two full sessions and 904 in 1,024
+
+
+def test_the_period_pools_draws():
+    """Draws ~ Lambda / eps a period, so a window's proving falls as 1 / period; eps then bounds the period's work."""
+    one = model.J(model.design())
+    ten = model.J(model.design(sampling={"period": 10}))
+    assert ten["draws"]["values"] == pytest.approx(one["draws"]["values"] / 10, rel=1e-3)
+    assert ten["proving"]["gpu_s"] < one["proving"]["gpu_s"] / 5
+    assert ten["serve_term"] == one["serve_term"] and ten["eps_of_a_window"] == pytest.approx(0.1)
+
+
+def test_one_rep_is_cheaper_at_the_floor_and_sm120_at_its_price():
+    two, one = (model.J(model.design(prover={"reps": r})) for r in (2, 1))
+    assert one["proving"]["gpu_s"] < two["proving"]["gpu_s"]
+    assert (two["soundness_bits"], one["soundness_bits"]) == (195.5, 100.0)
+    assert model.J(model.design(prover={"device": "sm120"}))["proving"]["gpu_s"] < two["proving"]["gpu_s"] / 10
+
+
+def test_hashing_beside_the_gemm_is_never_free():
+    """GD-HASH: a byte hashed beside the GEMM costs it h_b / h_x of the byte's exclusive time, up to the beside
+    capacity; the rest runs alone."""
+    for T in (512, 8192):
+        d = model.design(point={"T": T}, commit={"corun": True, "hash_eff": model.I("hash_eff_rows")})
+        r = model.J(d)
+        o, c = r["serve_overhead_ms"], r["commit"]
+        idle = r["stock_parts_ms"]["host gap between forwards"] + r["stock_parts_ms"]["launch gaps in the forward"]
+        hashed = c["hash_kernel_ms"] - min(idle, c["hash_kernel_ms"])
+        assert hashed > 0 or T == 512                                  # T 512's host gap holds all its hashing
+        assert (o["GEMM's loss to co-running hash"] > 0) == (hashed > 0)
+        assert o["Commit hashing (exposed)"] + o["GEMM's loss to co-running hash"] >= c["beside_h_ratio"] * hashed
+
+
+def test_guessable_words_cost_draws_and_small_groups_are_refused():
+    eight, four = (model.J(model.design(pouw={"word_bits": b}))["proving"]["pouw"]["draws"] for b in (8, 4))
+    assert four / eight == pytest.approx((1 - 2 ** -8) / (1 - 2 ** -4), rel=1e-3)
+    assert any("pouw.agg 4" in m for m in model.J(model.design(pouw={"agg": 4}))["infeasible"])
+    blocks = model.pouw_units(model.design(pouw={"agg": 128}))
+    assert all("(8x16," in u["name"] for u in blocks)
+
+
+def test_dither_serve_parts_are_gd_denoise_arms():
+    """At m 8,192 and L' 128: coins 0.205, X 0.075 and O's recompute 0.202 of the credited calls' plain GEMM."""
+    r = model.J(model.design(pouw={"L_prime": 128, "L": 1024}))
+    o = r["serve_overhead_ms"]
+    coins, x = o["dither: coins (d_A bits and V)"], o["dither: noised A (X)"]
+    assert x / coins == pytest.approx(0.075 / 0.205)
+    assert o["dither: O recomputed on a', b' (less the plain GEMM)"] / coins == pytest.approx(0.202 / 0.205)

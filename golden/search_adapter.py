@@ -7,8 +7,11 @@ input is certain; an estimate carries the range its source allows. `evaluate(kno
 knobs (benchmarks/golden_search/space.py) onto a `golden.model` design at the point (t8192: the throughput preset;
 t512: the demo's window, a prefill of 64 real tokens in T 512 and 3 decode steps), evaluates J under those input
 values, and returns GD-SEARCH's result keys. A knob GD-SEARCH leaves out keeps the model's default; the extra knobs
-`scheme`, `form`, `open`, `steps`, `ptile` (PoUW's tile, (R, C)) and `kmax` (the block cap's k_log, 27 to 30) reach
-pouw.scheme, pouw.form, commit.open, point.steps_per_window, pouw.tile and prover.k_max.
+`scheme`, `form`, `open`, `steps`, `ptile` (PoUW's tile, (R, C)), `kmax` (the block cap's k_log, 27 to 30), `reps`
+(1 | 2), `device` ("h200" | "sm120"), `period` (windows certified together) and `akeys` (keys an attention block)
+reach pouw.scheme, pouw.form, commit.open, point.steps_per_window, pouw.tile, prover.k_max, prover.reps,
+prover.device, sampling.period and partition.attn_keys. `kernels: bar` is the row kernel GD-HASH measured (0.92 of
+the bar), not the bar.
 
 A design is feasible when every credited linear's floor (Dither's forced work as a share of its G, at the best attack
 found) is at least 1 - eps ("floor"), every proof block is within the block cap, 2^27 unless kmax raises it
@@ -35,13 +38,9 @@ class Input:
 #: (low, high) of each estimate: the source's range where it gives one, else a judgement, said in the note
 RANGES = {
     "launch_us": (2.0, 8.0),
-    "corun_share": (0.10, 0.25),
-    "corun4_share": (0.30, 0.50),
-    "corun4_gemm_cost": (0.10, 0.25),
     "guess_p16": (1e-5, 1e-4),
     "h1_rest_floor_ms_8k": (10.0, 30.0),
     "b1_rate_vs_s8": (4.0, 16.0),
-    "wrap_g_frac": (0.10, 0.50),
     "noise_fused_keep": (0.05, 0.30),
     "o_per_and": (0.5e-8, 2.2e-8),
     "staged_per_and": (0.5e-10, 2e-10),
@@ -52,7 +51,11 @@ RANGES = {
     "stage_per_and_staged": (1.4e-9, 5.7e-9),
     "verify_fixed": (6.0, 25.0),
     "verify_per_and": (3.4e-6, 1.34e-5),
-    "h200_vs_sm120": (0.7, 2.0),
+    "o_per_and_h200": (1.2e-8, 3.5e-7),                 # sm_120's per-AND floor (if sm_90's emulated multiply is
+                                                         # fixed) to GD-PROVER's K 65,536 cold session
+    "sm120_gpu_price": (0.3, 1.0),
+    "rep_share": (0.15, 0.5),
+    "one_rep_query_cost": (0.0, 0.1),
     "ew_ands_per_elem": (1000.0, 10000.0),
     "attn_ands_per_mac": (300.0, 1200.0),
     # TOP-138's target (low) against today's measured lowering (r20261028-184657-1d80) a gate (high)
@@ -74,7 +77,7 @@ INPUTS: dict[str, Input] = {
 POINTS = {"t8192": "throughput", "t512": "demo"}
 LOWER_MIN = 15.0
 
-_FUSE = {"all": "every_op", "dedupe": "dedup", "fuse": "fused_mlp"}
+_FUSE = {"all": "every_op", "dedupe": "dedup", "fuse": "fused_mlp", "e1": "e1", "e2": "e2"}
 _NOISE = {"perm": "permuted", "periodic": "periodic", "fresh": "fresh"}
 _LAW = {"work": "achievability", "uniform": "uniform", "stratified": "stratified"}
 _OVERLAP = {"none": False, "corun": True, "corun4": "corun4"}
@@ -95,7 +98,7 @@ def to_design(k: dict, point: str = "t8192") -> dict:
         if knob in k:
             s["commit"][key] = k[knob]
     if "kernels" in k:
-        s["commit"].update({"hash_eff": 1.0, "gather": False} if k["kernels"] == "bar" else {})
+        s["commit"].update({"hash_eff": M.I("hash_eff_rows"), "gather": False} if k["kernels"] == "bar" else {})
     if "overlap" in k:
         s["commit"]["corun"] = _OVERLAP[k["overlap"]]
     if "noise" in k:
@@ -112,8 +115,13 @@ def to_design(k: dict, point: str = "t8192") -> dict:
         s["pouw"]["joint"] = k["joint"] == "joint"
     if "ptile" in k:
         s["pouw"]["tile"] = tuple(k["ptile"])
-    if "kmax" in k:
-        s["prover"]["k_max"] = k["kmax"]
+    if "akeys" in k:
+        s["partition"]["attn_keys"] = k["akeys"]
+    for knob, key in (("kmax", "k_max"), ("reps", "reps"), ("device", "device")):
+        if knob in k:
+            s["prover"][key] = k[knob]
+    if "period" in k:
+        s["sampling"]["period"] = k["period"]
     if "sampling" in k:
         s["sampling"]["law"] = _LAW[k["sampling"]]
     if "stmt" in k:
