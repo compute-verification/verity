@@ -18,6 +18,8 @@ from typing import ClassVar
 import numpy as np
 import pytest
 
+from verity.core.protocols.pouw import core_check as CC
+
 torch = pytest.importorskip("torch")
 
 from verity.ml.commitments import MerkleTree
@@ -41,7 +43,6 @@ from verity.core.protocols.pouw.audit import (
     weight_binding,
     weights_root,
 )
-from verity.core.protocols.pouw import core_check as CC
 from verity.core.protocols.pouw import salt as PS
 from verity.core.protocols.pouw import window as Wd
 from verity.core.protocols.pouw.coins import Challenger, CoinCommitment
