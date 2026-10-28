@@ -1,6 +1,6 @@
-# The honest edited GEMM a MMA as PROFILE measured it: e_l7qs, Dither with duo receipts at L = 32 (LAG 7, a LOP3 tie
+# The honest edited GEMM a MMA as measured: e_l7qs, Dither with duo receipts at L = 32 (LAG 7, a LOP3 tie
 # every 4th MMA, consumers sleeping on the stage barrier), 8192^3. Counts are the kernel's executed mix (ncu, the peel's
-# MMAs included); WAIT, the barrier wait, is left out (it costs no time: PROFILE's eps_sched_work).
+# MMAs included); WAIT, the barrier wait, is left out (it costs no time: eps_sched_work).
 name = "e-l7qs"
 status = "measured"
 source = "PROFILE's e_l7qs at 8192^3, `eps_profile.py OUT --mm 8192 --toml`, census VF3l-16's classes"
