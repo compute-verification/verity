@@ -112,7 +112,7 @@ class Arms:
         self.ops = {"wheel": torch.ops._vllm_fa3_C.fwd}
         for ns, path in sos.items():
             torch.ops.load_library(path)
-            self.ops[ns] = getattr(torch.ops, ns).fwd
+            self.ops[ns] = getattr(torch.ops, Path(path).stem).fwd
         self.sched_cache: dict = {}
 
     def sched(self, s: Step, paged_: bool) -> torch.Tensor:
