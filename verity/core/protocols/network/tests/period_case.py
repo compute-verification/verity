@@ -103,7 +103,8 @@ CHECKER_PARAMS = (("row", "sin", "prog", "sout", "view"), ("state", "row"))
 #: `slotEntryId`: the slot entry's Definition, whose committed `o0` is the entry the scan reads at a slot
 SLOT_ENTRY = "SlotEntry_v1"
 #: `slotEntryPins`: the closure digests (`slot_entry_digest`) of `io_shell.SlotEntry_v1` at its circuit-check rows,
-#: `SlotEntry_v1{KO=2,IDB=17,NP=4,STOP=[]}` and `SlotEntry_v1{KO=64,IDB=17,NP=1024,STOP=[128001]}`, in that order
+#: `SlotEntry_v1{KO=2,IDB=17,NP=4,STOP=[]}` and `SlotEntry_v1{KO=64,IDB=17,NP=1024,STOP=[128001]}`, in that order, which
+#: `test_slot_entry_pins.py` recomputes from `io_shell`
 SLOT_ENTRY_PINS = ("0763102b5fd38583279471486ff8ce51b9caae1bc5dece3d7712ddcec456f1bb"
                    "4e543343ed1399c0665043402d7100173a270cb6a8cc541b60bcdd29b37d7d0a",
                    "662360bfd2b31949f09447a32dec775c3e2e26e2d9132af8898609475e75a753"
