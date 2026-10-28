@@ -68,8 +68,7 @@ window's finalize, its readback and records, then its seal run on a thread of th
 order, while the engine serves the next window: the engine loop's part of a close only detaches the window from the
 committer (`NativeHostCommitter.detach`), and it waits only while the windows awaiting their finalize and seal hold
 ``--seal-hold-gb`` of committed values, in the committer's pinned pool, which
-``--seal-warm-gb`` grows before serving rather than on the engine loop; the committer's GPU tree extension is built before
-serving too (`serve_seal.warm_gpu_ext`), not in its worker's first step. A window closes once its steps have committed
+``--seal-warm-gb`` grows before serving rather than on the engine loop. A window closes once its steps have committed
 ``--window-gb``, which bounds each bundle on disk; under ``--seal`` the server refuses to start unless ``--out``'s filesystem
 has ``--disk-floor-gb`` free beyond one such window, and once a window's seal would take it under that floor, the window is
 not sealed and the server stops: it refuses new requests, finishes those in flight, and exits. ``--copy-records-to`` (the
@@ -744,8 +743,9 @@ def main(opts: Options) -> int:
               "generation_config_not_applied": engine.vllm_config.model_config.get_diff_sampling_param(),
               "default_seed": DEFAULT_SEED, "top_p": "refused below 1", "committer": getattr(com, "name", None),
               "admit": opts.admit, "admit_hold_ms": opts.admit_hold_ms if order is not None else None,
-              "step_rows": "scheduler" if rows is not None else "runner", "of_record": opts.of_record,
+              "step_rows": "scheduler" if rows is not None else "runner",
               "commit": opts.commit, "scheme": getattr(com, "commit_scheme", SS.V1) if com is not None else None,
+              "of_record": opts.of_record,
               "sealed": "windows/w<k>/" if windows is not None and windows.seal is not None else None,
               "served_rows_statics": windows.served if windows is not None else None, "gpu_ext_warm_s": getattr(com, "gpu_ext_warm_s", None),
               "seal_off_loop": sealer is not None, "seal_hold_gb": opts.seal_hold_gb if sealer is not None else None, "pool_warmed": warmed,
