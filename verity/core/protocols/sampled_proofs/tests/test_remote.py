@@ -783,6 +783,19 @@ LEDGERS = {
 }
 
 
+def test_the_verifier_reads_an_entry_whose_text_past_ascii_the_auditor_escaped(tmp_path, signer):
+    """An auditor's string past ASCII is in its line escaped (`ledger_text`), and its signature is over that text: such an
+    entry reads and verifies, and is refused only unescaped (`LEDGERS`)."""
+    class Escaping(Ledger):
+        def end(self, session, directory, closed, **changes):
+            super().end(session, directory, closed, ended="closed by the client \u2026", **changes)
+
+    host = Host(tmp_path, signer, ledger=Escaping(tmp_path / "windows.jsonl", signer))
+    honest(host)
+    assert '"ended":"closed by the client \\u2026"' in R.ledger_lines(host.ledger.path)[-1]
+    host.trusted()
+
+
 @pytest.mark.parametrize("case", sorted(LEDGERS))
 def test_the_verifier_refuses_a_missing_truncated_or_tampered_ledger(tmp_path, signer, case):
     """The window's session is only one the latest ledger opens and ends, every entry chained and signed under the
