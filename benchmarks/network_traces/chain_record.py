@@ -643,8 +643,8 @@ def leak(run: Path, scan: dict | None = None, weights_bits: int = WEIGHTS_BITS) 
     v = (_json(run / "end.json") or {}).get("verdict") or {}
     if not dep or not v.get("windows") or not v.get("requests"):
         raise SystemExit(f"leak: {run} has no deployment.json, or no end.json verdict with its windows and requests")
-    params, cls = W.WardenParams(**dep["params"]), SZ.CLASS
-    cls.serves(params)
+    cls = SZ.CLASS
+    params = cls.schedule(W.WardenParams(**dep["params"]))
     T, units = params.window, 2 * params.window
     drawn = (scan or {}).get("draw", {}).get("honest") if isinstance((scan or {}).get("draw"), dict) else units
     if drawn != units:

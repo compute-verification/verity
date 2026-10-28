@@ -145,7 +145,7 @@ class WindowClass:
     prompt: int
     outputs: int
     lanes: int = 0
-    every: int = 16
+    every: int = SS.RECORD.EVERY
 
     def __post_init__(self) -> None:
         if not self.lanes:
@@ -183,10 +183,10 @@ class WindowClass:
         return SS.scan_class(self.lanes, self.outputs, self.every)
 
 
-#: the class of record, the network certifier's envelope at these fixed slots:
+#: the class of record, the network certifier's envelope at these fixed slots, its scan class `scan_state.RECORD`:
 #: 8 slots a 32-bucket window, 4 at each of buckets 0 and 16 (EVERY 16, D 2.7 s), each of at most 1,024 prompt ids and 64
 #: outputs
-CLASS_OF_RECORD = WindowClass(8, 1024, 64, lanes=4, every=16)
+CLASS_OF_RECORD = WindowClass(8, SS.RECORD.KI, SS.RECORD.KO, lanes=SS.RECORD.lanes, every=SS.RECORD.EVERY)
 
 
 _GRAIN = Grain()

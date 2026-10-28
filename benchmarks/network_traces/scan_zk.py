@@ -151,19 +151,20 @@ class Setup(NamedTuple):
 
 
 W63 = Setup(
-    "w63", IS.Class(B=512, r=4, lanes=4, C=47, IDB=17, EVERY=16, WITHIN=12, D=27, KO=64, KI=1024),
-    W.WardenParams(cell_bytes=512, slots=4, bucket_ms=100, delay=27, lanes=4, queue=4, window=32, ingress_cells=47,
-                   ingress_buckets=12, egress_cells=65, every=16),
+    "w63", IS.CLASS_OF_RECORD,
+    IS.CLASS_OF_RECORD.schedule(W.WardenParams(cell_bytes=512, slots=4, bucket_ms=100, delay=27, lanes=4, queue=4,
+                                               window=32, ingress_cells=47, ingress_buckets=12, egress_cells=65)),
     (tuple((7 * k + 11) % 128_256 for k in range(1024)), tuple(100_000 + k for k in range(600)),
      tuple(131_071 - 3 * k for k in range(40)), tuple((k * k) % 128_256 for k in range(300)),
      tuple(5_000 + k for k in range(100))),
     (0, 2, 2, 12, 15),
     tuple(tuple((97 * k + 13 * q) % (1 << 17) for k in range(n)) for q, n in enumerate((3, 40, 64, 8, 5), 1)),
     windows=2, A=9, max_tokens=16, seed=7)
+_TEST = IS.Class(B=512, r=2, lanes=2, C=4, IDB=17, EVERY=2, WITHIN=3, D=5, KO=8, KI=100)
 TEST = Setup(
-    "test", IS.Class(B=512, r=2, lanes=2, C=4, IDB=17, EVERY=2, WITHIN=3, D=5, KO=8, KI=100),
-    W.WardenParams(cell_bytes=512, slots=2, bucket_ms=100, delay=5, lanes=2, queue=2, window=16, ingress_cells=4,
-                   ingress_buckets=3, egress_cells=9, every=2),
+    "test", _TEST,
+    _TEST.schedule(W.WardenParams(cell_bytes=512, slots=2, bucket_ms=100, delay=5, lanes=2, queue=2, window=16,
+                                  ingress_cells=4, ingress_buckets=3, egress_cells=9)),
     ((1000, 1007, 1014), tuple(2000 + 3 * k for k in range(60)), tuple(131071 - k for k in range(100))),
     (0, 1, 1), ((11, 22, 33), (131071, 0, 5, 6, 7, 8, 9, 10), (40, 41, 42, 43)), windows=1, A=6, max_tokens=5, seed=11)
 SETUPS = {s.name: s for s in (W63, TEST)}
@@ -347,14 +348,14 @@ def warden_run(run: Path, setup: Setup, windows: list[int], out: Path) -> Simple
     import warden_serve as WS
 
     dep = json.loads(_found(run, "deployment.json").read_text())
-    params = W.WardenParams(**dep["params"])
-    if params.digest.hex() != dep["digest"]:
-        raise SystemExit(f"--warden-run {run}: deployment.json's digest isn't its parameters'")
     try:
-        setup.cls.serves(params)
+        params = setup.cls.schedule(W.WardenParams(**dep["params"]))
     except ValueError as e:
         raise SystemExit(f"--warden-run {run}: {e} (warden_serve.py rehearse at scan_zk's schedule, PARAMS, or the "
                          "gate's warden-rehearse --scan)")
+    if params.digest.hex() != dep["digest"]:
+        raise SystemExit(f"--warden-run {run}: deployment.json's digest isn't its parameters' at the class's slot "
+                         f"stride, every = {params.every}")
     key, session = WS.cs.read_public(dep["key"]), bytes.fromhex(dep["session"])
     records = {name: [WS.ar.unpack_record(b, params.cell_bytes) for b in WS.ar.read_blobs(_found(run, f"{name}.records"))]
                for name in WS.CERTIFIED}

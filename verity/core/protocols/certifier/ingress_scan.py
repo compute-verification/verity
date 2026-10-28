@@ -11,9 +11,10 @@ none, each on the connection's ordinal q. A connection's ingress is one warden-f
 (`active.id_request(..., offset=0)`: no LENGTH, its length the content-length plus the head), cut by `warden.cells`, so
 a bucket's cells of a connection are `DATA`, at most one `END`, then `PAD`s, and only `PAD`s once its `END` is in.
 
-**Fixed slots a timestep** (ASK-122, Daniel, 26 Oct: "fixed slots per network timestep"). A timestep is EVERY buckets,
-its boundary the bucket t ≡ 0 mod EVERY of the scan, and the warden's window is whole timesteps (EVERY divides T,
-`Class.serves`), so every link-window has its boundaries at the same buckets and one window circuit serves them all.
+**Fixed slots a timestep** (ASK-122, Daniel, 26 Oct: "fixed slots per network timestep"). The slot stride is EVERY
+buckets, the class's one constant: its boundary the bucket t ≡ 0 mod EVERY of the scan, and the warden's window a
+whole number of slot strides (EVERY divides T, `Class.schedule`), so every link-window has its boundaries at the same
+buckets and one window circuit serves them all.
 A request admitted at bucket s is anchored at A(s), the first boundary at or after s + WITHIN (`Class.anchor`), WITHIN
 the class's ingress bound δ in buckets, and its Program reads its slot in S_{A−1}. Each boundary has SLOTS = lanes
 Program slots, slot j the Program that reads the scan's slot j: a request holds its slot from s to at least
@@ -84,11 +85,12 @@ The outputs are o0, a u16 whose bit 0, ok, is 1 iff every check holds (its other
 egress view at t. Where a check fails, o1 and o2 are what the gates compute (`reference` gives none), and o0 refuses
 them.
 
-**The warden it serves** (`Class.serves`): a class takes every run of a warden whose B, r, lanes and timestep `every`
-are its own (B, r, lanes and EVERY; the warden's window is whole timesteps, `WardenParams`), whose `ingress_cells` is
-at most C, whose `ingress_buckets` is at most WITHIN (a request's `END` is in S_{A−1}, or its ingress failed), whose
-delay is D (at least WITHIN + EVERY − 1, so a request's anchor is at most admitted + D, where its egress starts) and
-whose `egress_cells` is at most KO + 1 (a response's ids fit `out`). The warden frees a lane after its
+**The warden it serves** (`Class.serves`): a class takes every run of a warden whose B, r and lanes are its own, whose
+`ingress_cells` is at most C, whose `ingress_buckets` is at most WITHIN (a request's `END` is in S_{A−1}, or its
+ingress failed), whose delay is D (at least WITHIN + EVERY − 1, so a request's anchor is at most admitted + D, where
+its egress starts) and whose `egress_cells` is at most KO + 1 (a response's ids fit `out`). The warden's schedule
+takes its `every` from the class (`Class.schedule`): the schedule's digest binds the slot stride, and nothing on the
+warden's wire reads it, so a run at another stride is refused at that digest. The warden frees a lane after its
 connection's `END` cell, at admitted + D + ⌊n / r⌋, the bucket the slot's hold ends, so NR = lanes slots suffice.
 A request the class can't hold is refused, never truncated: a prompt of more than KI ids (the warden bounds a
 request's cells, not its ids) at the cell that takes its `fields` past KI, and a Program that gives more than KO
@@ -144,7 +146,7 @@ STATICS = ("B", "r", "lanes", "C", "IDB", "EVERY", "WITHIN", "D", "KO", "KI")
 @dataclass(frozen=True)
 class Class:
     """The scan's public class: B-byte cells, r a connection a bucket, `lanes` connections at once (as many request
-    slots), C cells a request at most, IDB bits a prompt or output id, a timestep of EVERY buckets (a boundary at each
+    slots), C cells a request at most, IDB bits a prompt or output id, a slot stride of EVERY buckets (a boundary at each
     bucket t ≡ 0 mod EVERY of the scan, with SLOTS = lanes Program slots) and WITHIN, the buckets a request's ingress
     may take (δ): a request admitted at s is anchored at the first boundary at or after s + WITHIN, whose Programs
     read the state before it; the warden's delay D, at least WITHIN + EVERY − 1 so that a request's anchor is at most
@@ -196,7 +198,7 @@ class Class:
 
     @property
     def SLOTS(self) -> int:
-        """The Program slots a timestep: the scan's slots, one a lane."""
+        """The Program slots at each boundary: the scan's slots, one a lane."""
         return self.lanes
 
     @property
@@ -226,11 +228,10 @@ class Class:
 
     def serves(self, params: WardenParams) -> None:
         """ValueError, naming the fix, unless the scan takes every run of the warden at `params` (the module
-        docstring's "The warden it serves")."""
+        docstring's "The warden it serves"), whatever its `every`, which `schedule` sets."""
         need = {"cell_bytes": (params.cell_bytes == self.B, f"= B = {self.B}"),
                 "slots": (params.slots == self.r, f"= r = {self.r}"),
                 "lanes": (params.lanes == self.lanes, f"= lanes = {self.lanes}"),
-                "every": (params.every == self.EVERY, f"= EVERY = {self.EVERY}"),
                 "ingress_cells": (params.ingress_cells <= self.C, f"<= C = {self.C}"),
                 "ingress_buckets": (params.ingress_buckets <= self.WITHIN, f"<= WITHIN = {self.WITHIN}"),
                 "delay": (params.delay == self.D, f"= D = {self.D}"),
@@ -238,6 +239,17 @@ class Class:
         bad = [f"{k} {want} (it is {getattr(params, k)})" for k, (ok, want) in need.items() if not ok]
         if bad:
             raise ValueError(f"{self} doesn't serve the warden at these parameters: set " + "; ".join(bad))
+
+    def schedule(self, params: WardenParams) -> WardenParams:
+        """`params` at the class's slot stride, `every` = EVERY, the schedule whose digest the warden's records bind;
+        ValueError unless the class serves `params` (`serves`) and EVERY divides its window."""
+        self.serves(params)
+        return replace(params, every=self.EVERY)
+
+
+#: the class of record, w63's: 512-byte cells, r = 4, 4 lanes, requests of at most 47 cells, and the statics' defaults
+#: (17-bit ids, a slot stride of 16 buckets, WITHIN 12, D 27, KO 64, KI 1,024)
+CLASS_OF_RECORD = Class(B=512, r=4, lanes=4, C=47)
 
 
 def slot_layout(cls: Class) -> tuple[tuple[str, int], ...]:
@@ -863,7 +875,7 @@ def arguments(cls: Class, cases: Sequence[tuple[bytes, Sequence[int], Sequence[i
     return [rows, *([list(c[k]) for c in cases] for k in range(1, len(cases[0])))]
 
 
-__all__ = ["Class", "IngressScanBucket", "IngressScanFirst", "NONE", "Out", "STATICS", "Slot", "State", "arguments",
-           "decode", "due", "empty", "encode", "held", "layout", "position", "prog_bits", "prog_decode", "prog_encode",
-           "programs", "reference", "scan", "slot_row", "state_bits", "step", "token_row", "view", "view_bits",
-           "view_encode", "window_state"]
+__all__ = ["CLASS_OF_RECORD", "Class", "IngressScanBucket", "IngressScanFirst", "NONE", "Out", "STATICS", "Slot",
+           "State", "arguments", "decode", "due", "empty", "encode", "held", "layout", "position", "prog_bits",
+           "prog_decode", "prog_encode", "programs", "reference", "scan", "slot_row", "state_bits", "step", "token_row",
+           "view", "view_bits", "view_encode", "window_state"]

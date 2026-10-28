@@ -210,8 +210,9 @@ A spec-level reference for network accounting's timing channel:
   last egress bucket, `admitted + D + ⌊n/r⌋`) and its egress view, the state as `egress.EgressBucket` reads it (bucket,
   then per slot live, q, admitted, n and the output ids), its outputs beside a public ok bit; `IngressScanFirst`, the
   first bucket's, starts from the empty state, constants of its circuit. Programs start at fixed slots a network
-  timestep (ASK-122): a timestep is `EVERY` buckets, the warden's `every`, which divides its window, with
-  `SLOTS` = lanes Program slots each, and only `EVERY` and the slot count are public. The token-id row a slot's
+  timestep (ASK-122): the slot stride is `EVERY` buckets, the class's one constant, which divides the warden's window
+  and which the warden's schedule takes from the class (`Class.schedule`, its `every`), with `SLOTS` = lanes Program
+  slots at each boundary, and only `EVERY` and the slot count are public. The token-id row a slot's
   Program reads is the scan's state row b − 1 (`verity/certifier/scan-state/v1`, `token_row`): its occupancy word
   `occ` (1 for a slot whose Program starts at b, 0 for an empty slot), its prompt's length `fields` and its prompt ids,
   which the scan reads off the warden's signed ingress cells, so no other tie holds them to the certified bytes;
@@ -222,7 +223,7 @@ A spec-level reference for network accounting's timing channel:
   request the class can't hold is refused at the scan's unit, never truncated: a prompt of more than `KI` ids (1,024
   at w63's class) at its cell, a Program's n over `KO` at its anchor. A window whose warden refused a connection,
   traffic past its slots, has no certified record, and the period check refuses it. `Class.serves` names the warden
-  parameters it takes every run of. `benchmarks/network_traces/scan_zk.py` proves both sides of a group of
+  parameters it takes every run of, and `Class.schedule` sets their slot stride. `benchmarks/network_traces/scan_zk.py` proves both sides of a group of
   link-windows in one registration: ingress unit t's state and view outputs are committed as registered reads of the
   scan's state and view rows t, which ingress unit t + 1 and egress unit t read, and egress unit t's row as a
   registered read of the warden's egress row t, so the chains are wires through the registered roots;
