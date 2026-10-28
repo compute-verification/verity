@@ -425,7 +425,7 @@ theorem scheduleDeterministic_of_checked {Pfx Y : Type} {N T M : ℕ} {blocks a 
 
 /-- **The check's acceptance at the committed cap `a` gives `SteeredLayout` at `a + 1` bits, under
 `ScheduleLayoutGap`.** `a` is the cap the session's parameters committed before its first coin
-(`audit.Params.schedule_cap`, `audit.Ledger.steering`), so it is the same at every prefix and coin. -/
+(`audit.Params.schedule_cap`, `audit.GammaTerms.steering`), so it is the same at every prefix and coin. -/
 theorem steered_of_checked {Pfx Y : Type} {N T M : ℕ} {blocks a : ℕ} {idx : Pfx → ℕ}
     {pos : Pfx → Array (ℕ × ℕ) → Array (ℕ × ℕ) → Fin N ↪ Fin T × Fin M} {appended sent : Pfx → Y → Array (ℕ × ℕ)}
     {layout : Pfx → Y → Fin N ↪ Fin T × Fin M} (gap : ScheduleLayoutGap pos appended sent layout)

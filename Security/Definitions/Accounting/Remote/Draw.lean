@@ -37,7 +37,7 @@ the `U_t` (`RemoteAudit.draws`, `Session.close`): `Key.subset(s'_t, U_t, "openin
   blocks, `(g_t/U_t)^(s'_t)` with `g_t` its correct receipts, `0` when `g_t < s'_t`.
 * `Committed`: **a session read through a coin commitment.** The challenger commits every coin before the first is
   released, as hm96-sha512 leaves (192-byte salts) in a frame-v3-sha512 tree (`coins.py`). It sends the prover each
-  coin as it releases it and the root only after the prover's last root, with the outcome (`audit.Session.disclose`;
+  coin as it releases it and the root only after the prover's last root, with the outcome (`audit.AuditRun.disclose`;
   soundness's ruling of 27 Oct, no hiding premise on the root), so the session the prover plays is a `Session` and the
   guarantees take it plainly. A root is a function of every coin, so a prover holding it from the start could size a
   window off window `t`'s openings coin, and that session is not `Live` (red team RD-12). `view c` is the session

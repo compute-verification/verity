@@ -2,7 +2,7 @@ import Std.Data.HashMap
 import RemoteAudit.Receipts
 
 /-!
-# A window's receipt checks: `audit.py`'s `Session.close` draw and `Session.verify`
+# A window's receipt checks: `audit.py`'s `AuditRun.close` draw and `AuditRun.verify`
 
 `verifyWindow` takes what the verifier holds of window t once its roots are final (its challenge, each pass's root,
 plan and the appends' head received before it, the root before its first pass, the session's appends with their coins)

@@ -7,7 +7,7 @@ import Properties.RemoteAudit.Schedule
 `Accounting.Guarantees.DeclaredCircuitRequirement` (`G`) takes `Accounting.Assumptions.SteeredLayout`: each pass's layout
 reads the codec and the append coins only through an `a`-bit summary. `ScheduledRequirement` is `G` with that premise
 replaced by what the verifier checks: the schedule check (`RemoteAudit.Schedule.check`) at the steering cap the session
-committed before its first coin (`audit.Params.schedule_cap`, `audit.Ledger.steering`) accepts each pass of the
+committed before its first coin (`audit.Params.schedule_cap`, `audit.GammaTerms.steering`) accepts each pass of the
 session, under the named gap between the check and the model's layout, `Properties.RemoteAudit.ScheduleLayoutGap`. It is
 stated here because it reads the verifier's code, which the spec doesn't; its theorem,
 `Properties.DeclaredCircuit.SecurityProofs.scheduledRequirement` in
