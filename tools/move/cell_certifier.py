@@ -6,7 +6,8 @@
     python3 tools/move/cell_certifier.py --avoid REF  leave each line REF changes as it was (and the line on either side),
                                                       so REF merges after it without a conflict; prints what stands. A
                                                       class name such a line still uses is bound by its file's import of
-                                                      the new name (`ALIASES`)
+                                                      the new name (`ALIASES`). Given more than once, the lines any REF
+                                                      changes (refs that conflict with each other can't be one REF)
 
 What it does, on the tree as it is (so it reruns on a later main, and `restack.py --script tools/move/cell_certifier.py`
 carries a branch across it):
@@ -254,7 +255,7 @@ def record(root: Path, moves: dict[str, str]) -> str | None:
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     ap.add_argument("--root", type=Path, default=None)
-    ap.add_argument("--avoid", default=None, metavar="REF")
+    ap.add_argument("--avoid", action="append", default=[], metavar="REF")
     ap.add_argument("--dry-run", action="store_true")
     a = ap.parse_args(argv)
     root = (a.root or Path(git(Path.cwd(), "rev-parse", "--show-toplevel").strip())).resolve()
@@ -262,7 +263,11 @@ def main(argv: list[str] | None = None) -> int:
         raise SystemExit(f"{root}: the worktree isn't clean")
     files = [p for p in git(root, "ls-files", "-z").split("\0") if p]
     moves = {o: n for o, n in MOVES.items() if (root / o).exists()}
-    avoid = avoided(root, a.avoid) if a.avoid else {}
+    avoid: dict[str, set[int]] = {}
+    for ref in a.avoid:
+        for p, lines in avoided(root, ref).items():
+            avoid.setdefault(p, set()).update(lines)
+    refs = a.avoid[0] if len(a.avoid) == 1 else f"one of the {len(a.avoid)} --avoid refs"
     counts, texts, standing = Counter(), {}, Counter()
     for p in files:
         if excluded(p) or not (root / p).is_file() or (root / p).is_symlink():
@@ -284,7 +289,7 @@ def main(argv: list[str] | None = None) -> int:
             for i in sorted(avoid[p]):
                 if i <= len(before) and before[i - 1] != after[i - 1]:
                     if p.endswith(".py") and re.match(r"\s*(from|import)\s", before[i - 1]):
-                        raise SystemExit(f"{p}:{i} imports a moved name on a line {a.avoid} changes: move it after that lands")
+                        raise SystemExit(f"{p}:{i} imports a moved name on a line {refs} changes: move it after that lands")
                     after[i - 1] = before[i - 1]
                     standing[p, i] += 1
             new = "".join(after)
@@ -299,7 +304,7 @@ def main(argv: list[str] | None = None) -> int:
     for (r, n), c in sorted(counts.items(), key=lambda kv: -kv[1]):
         print(f"    {c:5d}  {r!r} -> {n!r}")
     if standing:
-        print(f"  lines left as they were, which {a.avoid} changes: {len(standing)}")
+        print(f"  lines left as they were, which {refs} changes: {len(standing)}")
         for p, i in sorted(standing):
             print(f"    {p}:{i}")
     if a.dry_run:
