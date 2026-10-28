@@ -50,7 +50,7 @@ mkdir -p "$D" "$ROOT/cache"
 export PY=$VENV/bin/python HF_HOME HF_HUB_OFFLINE=1
 export CUDA_HOME TORCH_EXTENSIONS_DIR=$ROOT/cache/torch-extensions
 export PATH=$VENV/bin:$CUDA_HOME/bin:$PATH
-export PYTHONPATH=$TREE:$TREE/integrations/vllm:$TREE/tools/research/src VERITY_WORKLOADS=$TREE/examples/vllm/workloads
+export PYTHONPATH=$TREE:$TREE/integrations/vllm:$TREE/tools/research/src
 export TRITON_CACHE_DIR=$ROOT/cache/triton VLLM_CACHE_ROOT=$ROOT/cache/vllm VLLM_BATCH_INVARIANT=1 VERITY_RETAIN=host
 export HIDDEN_GPU_BUILD=$ROOT/cache/jit/hidden_gpu NATIVE_COLLECT_BUILD=$ROOT/cache/jit/nc
 # A learning step's transient host copy: a 1,984-token prefill step stages over 16 GiB, past the
