@@ -195,10 +195,10 @@ def test_table_group_label_are_query_ast_families(server, name: str, doc: dict, 
     assert _call(server, "annot.term", doc) == ("output", to_json(q))
     try:
         want = [[list(iv) for iv in s.intervals()] for s in G.evaluate(PROGRAMS[name], q, tables)]
-    except G.QueryError:
-        want = None
+    except G.QueryError as e:
+        want = e
     kind, got = _call(server, "annot.sets", annot.instance(TEXT[name], doc, tables))
-    if want is None:
+    if isinstance(want, G.QueryError):
         assert kind == "reject" and got.startswith("plan:"), got
     else:
         assert kind == "output" and got["labels"] == want, got
