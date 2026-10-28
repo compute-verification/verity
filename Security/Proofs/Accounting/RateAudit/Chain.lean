@@ -52,15 +52,15 @@ theorem atRoot_symm_apply (x₀ rt : Bits r) (O : Oracle N b h ρ) (g : {x : Bit
 elsewhere. -/
 def rootSplit (rt : Store N b → Bits r) (x₀ : Bits r) :
     Store N b × PassCoins N b h ρ r s ≃ (Store N b × Coins N b h ρ s) × ({x : Bits r // x ≠ x₀} → Oracle N b h ρ) where
-  toFun x := ((x.1, x.2.1, (atRoot x₀ (rt x.1) x.2.2.1).1, x.2.2.2), (atRoot x₀ (rt x.1) x.2.2.1).2)
-  invFun y := (y.1.1, y.1.2.1, (atRoot x₀ (rt y.1.1)).symm (y.1.2.2.1, y.2), y.1.2.2.2)
+  toFun x := ((x.1, (x.2.1, (atRoot x₀ (rt x.1) x.2.2.1).1), x.2.2.2), (atRoot x₀ (rt x.1) x.2.2.1).2)
+  invFun y := (y.1.1, y.1.2.1.1, (atRoot x₀ (rt y.1.1)).symm (y.1.2.1.2, y.2), y.1.2.2)
   left_inv x := by simp
   right_inv y := by simp
 
 /-- The oracle family at a root the store picks is a uniform oracle: an event of the game's coins has the same bound
 at the family's value there. -/
 theorem pr_root_le (rt : Store N b → Bits r) (Q : Store N b × Coins N b h ρ s → Prop) (ε : ℝ≥0∞) (hQ : pr Q ≤ ε) :
-    pr (fun x : Store N b × PassCoins N b h ρ r s => Q (x.1, x.2.1, x.2.2.1 (rt x.1), x.2.2.2)) ≤ ε := by
+    pr (fun x : Store N b × PassCoins N b h ρ r s => Q (x.1, (x.2.1, x.2.2.1 (rt x.1)), x.2.2.2)) ≤ ε := by
   classical
   let x₀ : Bits r := fun _ => false
   have : Fintype ({x : Bits r // x ≠ x₀} → Oracle N b h ρ) := inferInstance
@@ -68,15 +68,15 @@ theorem pr_root_le (rt : Store N b → Bits r) (Q : Store N b × Coins N b h ρ 
   refine pr_le_of_fiber _ _ (fun g => le_of_eq_of_le ?_ hQ)
   congr 1
   funext y
-  change Q (y.1, y.2.1, (atRoot _ (rt y.1)).symm (y.2.2.1, g) (rt y.1), y.2.2.2) = Q y
+  change Q (y.1, (y.2.1.1, (atRoot _ (rt y.1)).symm (y.2.1.2, g) (rt y.1)), y.2.2) = Q y
   rw [atRoot_symm_apply]
 
 /-- An event that ignores the sample has its bound over the game's coins. -/
 theorem pr_coins_le (Q : Store N b × Bits ρ × Oracle N b h ρ → Prop) (ε : ℝ≥0∞) (hQ : pr Q ≤ ε) :
-    pr (fun y : Store N b × Coins N b h ρ s => Q (y.1, y.2.1, y.2.2.1)) ≤ ε := by
+    pr (fun y : Store N b × Coins N b h ρ s => Q (y.1, y.2.1.1, y.2.1.2)) ≤ ε := by
   classical
   let e : Store N b × Coins N b h ρ s ≃ (Store N b × Bits ρ × Oracle N b h ρ) × (Fin s → Fin N) :=
-    ((Equiv.refl _).prodCongr (Equiv.prodAssoc _ _ _).symm).trans (Equiv.prodAssoc _ _ _).symm
+    (Equiv.prodAssoc _ _ _).symm
   rw [pr_equiv e]
   exact pr_le_of_fiber _ _ (fun _ => hQ)
 
@@ -97,7 +97,7 @@ theorem pr_pass_le (A : Chain P N b h ρ S L q r s)
     (Q : InteractiveDevice N b h ρ S L q → Store N b × Coins N b h ρ s → Prop) (ε : ℝ≥0∞) (j : Fin P)
     (hε : ∀ η, pr (Q (A.device j η)) ≤ ε) :
     pr (fun x : Store N b × (Fin P → PassCoins N b h ρ r s) =>
-      Q (A.dev j x.2) (x.1, (x.2 j).1, A.oracle j x.1 x.2, (x.2 j).2.2)) ≤ ε := by
+      Q (A.dev j x.2) (x.1, ((x.2 j).1, A.oracle j x.1 x.2), (x.2 j).2.2)) ≤ ε := by
   classical
   let e : Store N b × (Fin P → PassCoins N b h ρ r s) ≃
       (Store N b × PassCoins N b h ρ r s) × ({i : Fin P // i ≠ j} → PassCoins N b h ρ r s) :=
@@ -124,11 +124,11 @@ theorem pr_pass_le (A : Chain P N b h ρ S L q r s)
 pick. -/
 theorem pr_short_le (A : Chain P N b h ρ S L q r s) (cTag cEnc F fl : ℕ) (ε : ℝ≥0∞) (j : Fin P)
     (hε : ∀ η, pr (fun x : Store N b × Coins N b h ρ s =>
-        (A.device j η).Accepts x.1 x.2.1 x.2.2.1 x.2.2.2 ∧ (A.device j η).compute cTag cEnc x.1 x.2.1 x.2.2.1 ≤ F ∧
-          (A.device j η).footprint x.1 x.2.1 x.2.2.1 * cEnc < fl) ≤ ε) :
+        (A.device j η).Accepts x.1 x.2.1.1 x.2.1.2 x.2.2 ∧ (A.device j η).compute cTag cEnc x.1 x.2.1.1 x.2.1.2 ≤ F ∧
+          (A.device j η).footprint x.1 x.2.1.1 x.2.1.2 * cEnc < fl) ≤ ε) :
     pr (Short A cTag cEnc F fl j) ≤ ε :=
-  pr_pass_le A (fun D x => D.Accepts x.1 x.2.1 x.2.2.1 x.2.2.2 ∧ D.compute cTag cEnc x.1 x.2.1 x.2.2.1 ≤ F ∧
-    D.footprint x.1 x.2.1 x.2.2.1 * cEnc < fl) ε j hε
+  pr_pass_le A (fun D x => D.Accepts x.1 x.2.1.1 x.2.1.2 x.2.2 ∧ D.compute cTag cEnc x.1 x.2.1.1 x.2.1.2 ≤ F ∧
+    D.footprint x.1 x.2.1.1 x.2.1.2 * cEnc < fl) ε j hε
 
 /-- Pass `j`'s correct receipts' words exceed its reads of every tier, its rebuilt words and `slack`. -/
 def Unpaid {τ : ℕ} (A : Chain P N b h ρ S L q r s) (tier : ℕ → Fin τ) (slack : ℕ) (j : Fin P)
@@ -160,8 +160,8 @@ theorem pr_unpaid_pass_le {τ : ℕ} (A : Chain P N b h ρ S L q r s) (tier : �
         ∑ t, (A.device j η).tierReads tier t x.1 x.2.1 x.2.2 + (A.device j η).rebuilt x.1 x.2.1 x.2.2 * b + slack <
           ((A.device j η).correct x.1 x.2.1 x.2.2).card * b) ≤ ε) :
     pr (Unpaid A tier slack j) ≤ ε :=
-  pr_pass_le A (fun D y => ∑ t, D.tierReads tier t y.1 y.2.1 y.2.2.1 + D.rebuilt y.1 y.2.1 y.2.2.1 * b + slack <
-    (D.correct y.1 y.2.1 y.2.2.1).card * b) ε j (fun η => pr_coins_le (fun z =>
+  pr_pass_le A (fun D y => ∑ t, D.tierReads tier t y.1 y.2.1.1 y.2.1.2 + D.rebuilt y.1 y.2.1.1 y.2.1.2 * b + slack <
+    (D.correct y.1 y.2.1.1 y.2.1.2).card * b) ε j (fun η => pr_coins_le (fun z =>
       ∑ t, (A.device j η).tierReads tier t z.1 z.2.1 z.2.2 + (A.device j η).rebuilt z.1 z.2.1 z.2.2 * b + slack <
         ((A.device j η).correct z.1 z.2.1 z.2.2).card * b) ε (hε η))
 

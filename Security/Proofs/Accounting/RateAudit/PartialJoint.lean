@@ -25,7 +25,7 @@ covers: every op is charged once (`Step.Fits`). -/
 theorem computeAdditive_of_othersWork {N b h ρ s : ℕ} {ι : Type} [Fintype ι] {d : Device ι} {α ΩW ΩS : Type}
     [Fintype α] [DecidableEq α] {r : Run d α ΩW (RateCoins N b h ρ s) ΩS} (real : RealizesRatePartial r) (p : Price)
     (cTag : ℕ) (cost : ℕ → ℕ)
-    (hle : ∀ x y s', (real.dev (x, s')).compute cTag cost y.1 y.2.1 y.2.2.1 ≤ r.othersWork p (x, y, s')) :
+    (hle : ∀ x y s', (real.dev (x, s')).compute cTag cost y.1 y.2.1.1 y.2.1.2 ≤ r.othersWork p (x, y, s')) :
     Assumptions.RateComputeAdditive p cTag cost real := fun x y s' => by
   have h1 := hle x y s'
   have h2 := r.work_add_othersWork p (x, y, s')
@@ -44,9 +44,9 @@ theorem RateOfAuditPartial : Accounting.Guarantees.RateOfAuditPartial := by
   refine ⟨(real.accepts_iff x y s').1 hacc, ?_, ?_⟩
   · have h1 := hadd x y s'
     omega
-  · have h1 := PChip.card_addrs_le ((real.dev (x, s')).world y.1 y.2.1 y.2.2.1)
+  · have h1 := PChip.card_addrs_le ((real.dev (x, s')).world y.1 y.2.1.1 y.2.1.2)
       ((real.dev (x, s')).chip ((real.dev (x, s')).state y.1))
-    have h3 : (real.dev (x, s')).footprint y.1 y.2.1 y.2.2.1 * (rounds * cRoot) ≤
+    have h3 : (real.dev (x, s')).footprint y.1 y.2.1.1 y.2.1.2 * (rounds * cRoot) ≤
         r.read (x, y, s') * (rounds * cRoot) :=
       Nat.mul_le_mul_right _ (h1.trans (real.ingress_le x y s'))
     exact lt_of_le_of_lt h3 hread
