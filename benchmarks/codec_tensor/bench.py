@@ -1,6 +1,6 @@
 """The wide-word codec's benchmark on one GPU: `wt.cu`'s libraries (`--lib PATH`, one per field) gated against
-`wide.py`, then timed. Writes `codec-tensor.json` and `bench.log` under `--out`, and in a `research run` its
-`result.json`.
+`wide.py`, then timed. Writes `codec-tensor.json` and `bench.log` under `--out`, and, with
+`RESEARCH_RUN_DIR` set, its `result.json` there.
 
 Nothing is timed before its gate passed, in this order:
 - `gate`: per field and k, device encode equals `wide.encode_word` on random and edge payloads, and both decodes (CUDA
@@ -585,12 +585,12 @@ def sketch_bits(lib: Lib, seed: bytes, k: int, n: int) -> np.ndarray:
 
 
 def sketch_derive(lib: Lib, seed: bytes, n: int, rows: int = SR.ROWS) -> bytes:
-    return SR.derive(seed, SR.SIGN_DOMAIN, {"tag": SR.KIND, "k": rows, "n": n}).value
+    return SR.rb.derive(seed, SR.rb.SIGN_DOMAIN, {"tag": SR.rb.SKETCH_SHA512, "k": rows, "n": n}).value
 
 
 def receipt_mid(lib: Lib, seed: bytes) -> bytes:
     """sketch-sha512's prefix midstate at `seed` as the host computes it (wt_set_receipt); leaves set_receipt_prefix's."""
-    pre = ctypes.create_string_buffer(SR.prefix(seed))
+    pre = ctypes.create_string_buffer(SR.rb.sketch_prefix(seed))
     lib.call("wt_set_receipt", ctypes.addressof(pre))
     mid = pass_state(lib)["mid"]
     set_receipt_prefix(lib)
@@ -620,7 +620,7 @@ def receipt_commit_gate(torch, tags_dev, nvec: int, seed: bytes) -> dict:
 def gate_pass(lib: Lib, torch, sketch_t: int, log, trials: int = 4, rows: int = SR.ROWS) -> dict:
     """wt_pass (red team F29: pass j's receipt keyed by s_j = pass_seed(σ, j, root_(j−1))) against Python at random
     j and roots: sketch-sha512's s_j, K_S, signs and receipt prefix (its midstate against the host's of
-    sketch_receipt.prefix(s_j)) at k_s = rows, the signs as sign_words and their A as sign_frags (16 rows) or
+    receipts.sketch_prefix(s_j)) at k_s = rows, the signs as sign_words and their A as sign_frags (16 rows) or
     sign_planes (64)."""
     n, st = set_pass(lib, sketch_t, rows=rows), stream(torch)
     signs = torch.empty(128 * rows, dtype=torch.int32, device="cuda")
@@ -734,7 +734,7 @@ def set_receipt_prefix(lib: Lib) -> None:
     """sketch-sha512's receipt prefix at RECEIPT_SEED into a WT_RECEIPT build."""
     if not lib.receipt:
         raise ValueError(f"{lib.name}: the sketch warps' receipts are a WT_RECEIPT build's")
-    pre = ctypes.create_string_buffer(SR.prefix(RECEIPT_SEED))
+    pre = ctypes.create_string_buffer(SR.rb.sketch_prefix(RECEIPT_SEED))
     lib.call("wt_set_receipt", ctypes.addressof(pre))
 
 

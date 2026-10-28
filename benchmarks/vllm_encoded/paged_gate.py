@@ -380,14 +380,14 @@ def main() -> int:
     seed = hashlib.sha512(b"verity/vllm-encoded/paged-gate/receipts").digest()
     packed = SR.sign_bits(seed)
     signs = torch.from_numpy(SR.sign_words(packed).view(np.int32)).cuda()
-    prefix = ctypes.create_string_buffer(SR.prefix(seed))
+    prefix = ctypes.create_string_buffer(SR.rb.sketch_prefix(seed))
     lib.call("pg_rc_gate_pass", signs.data_ptr(), ctypes.addressof(prefix), st)
     rc_sk = torch.empty((BLOCKS * BS, G, SR.ROWS), dtype=torch.int32, device="cuda")
     used = torch.full((BLOCKS * BS,), -1, dtype=torch.int32, device="cuda")
     epoch = torch.zeros(1, dtype=torch.int32, device="cuda")
     tags = torch.full((BLOCKS * BS, LAYERS, 8), -1, dtype=torch.int64, device="cuda")
     sign_bits = np.unpackbits(packed, axis=1, bitorder="little")
-    head = hashlib.sha512(SR.prefix(seed))
+    receipter = SR.rb.SketchReceipter(seed)
     receipt_sets = 0
     plan_checked = False
 
@@ -404,7 +404,7 @@ def main() -> int:
                           .view(torch.int8))
         sk = SKT.sketch_torch(torch, torch.stack(blocks), sign_bits).cpu().numpy().astype("<i4") if blocks else np.empty(
             (0, SR.ROWS), dtype="<i4")
-        want = [SR.receipt_of(head, slot * LAYERS + layer, sk[i].tobytes()) for i, slot in enumerate(active)]
+        want = [receipter.receipt(slot * LAYERS + layer, sk[i].tobytes()) for i, slot in enumerate(active)]
         got = [np.asarray(tags[slot, layer].cpu().numpy()).astype(np.uint64).astype(">u8").tobytes()
                for slot in active]
         plan_ok = True
