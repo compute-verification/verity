@@ -3652,7 +3652,7 @@
    },
    "Properties.Site.refusedAt": {
     "function": "Core.Site.Registration.check",
-    "outcome": "Except.error"
+    "outcome": "accept"
    },
    "Properties.Site.refuses": {
     "function": "Core.Site.Registration.Entry.refusal",
