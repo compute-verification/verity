@@ -1,7 +1,7 @@
 """Any number of codec words for 8 units a key byte, as Model.lean counts on main: `EncodeChainHardness` is false for
 every `E ≥ 1`.
 
-`free_codec.py`'s word was free only under the count before #2420: its XORs and long division narrow through one-word
+`free_codec.py`'s word was free only under the earlier count: its XORs and long division narrow through one-word
 gathers, a unit each under the fix. This module needs no narrowing at all. Every intermediate value is a bit, and the
 model keeps a bit a bit for free:
 

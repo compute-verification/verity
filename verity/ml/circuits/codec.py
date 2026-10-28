@@ -803,13 +803,14 @@ def _record_value(v: Any, fn: Callable[[str], Any]) -> Any:
     return v
 
 
-def decode_program(desc: dict, registry: Registry) -> DecodedProgram:
+def definition_decoder(desc: dict, registry: Registry, built: dict[str, Any] | None = None) -> Callable[[str], Any]:
+    """The per-definition reader `decode_program` uses: each definition of ``desc`` by its id, decoded into ``built``."""
     schema = desc.get("schema")
     if schema not in SCHEMAS:
         raise ValueError(f"unexpected descriptor schema {schema!r}")
     _check_domain(desc)
     ddefs = desc["definitions"]
-    built: dict[str, Any] = {}
+    built = {} if built is None else built
     if schema == SCHEMA_V0:
         callee_id, arg_type = (lambda f: f), _type
     else:
@@ -903,9 +904,15 @@ def decode_program(desc: dict, registry: Registry) -> DecodedProgram:
         admitted[fid] = SpecializedDefinition(reg, record, tuple((k, _static_key(record[k])) for k in reg.statics if k in record))
         return admitted[fid]
 
+    return get
+
+
+def decode_program(desc: dict, registry: Registry) -> DecodedProgram:
+    built: dict[str, Any] = {}
+    get = definition_decoder(desc, registry, built)
     root = get(desc["root"])
     if not isinstance(root, SpecializedDefinition) or root.body.params:
         raise ValueError(f"root {desc['root']!r}: the root is a composite without parameters")
-    pfn_fns = tuple(get(fid) for fid in _record_function_ids(desc["program_fn"]) if fid in ddefs)
+    pfn_fns = tuple(get(fid) for fid in _record_function_ids(desc["program_fn"]) if fid in desc["definitions"])
     P.check(root)
     return DecodedProgram(root, built, desc, pfn_fns)

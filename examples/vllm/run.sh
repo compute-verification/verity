@@ -1,15 +1,15 @@
 #!/usr/bin/env bash
 # `verity example vllm [window|commit|serve] [--dry-run] [FLAG...]`: one of the vLLM example's runs, started by `research run` on the
 # node placement.toml places it on, with that node's paths, the run's own variables and VERITY_WORKLOADS (the example's
-# workloads/ from the tree root, where the integration finds its row) as its environment, and the model the
-# example's row names (the one file workloads/SHA256SUMS lists, fetched by its art id and checked: `model`, `case` and
+# workloads/ from the tree root, where the integration finds its workload) as its environment, and the model the
+# example's workload names (the one file workloads/SHA256SUMS lists, fetched by its art id and checked: `model`, `case` and
 # `engine.revision`; bf16, served as pinned, `--precision pin`):
 #   window   the default: one served window through every subprotocol, benchmarks/one_stage/served_verdicts.sh: the endpoint
-#            committing under the row's Build of record (`predict row`, held to the Commit of record's traced row), its
-#            requests (serve_load.py --varied), every closed window sealed, the window's sampled proofs (C-Flock --zk behind
-#            the Lean firewall, and the Lean verifier's verdict), PoUW, the bandwidth audit, PoUS and the network certifier
-#            where each has its piece, and one record of every verdict
-#   commit   once per row: the row's Commit of record with its sealed replay bundle (commit.sh), the traced row dir the
+#            committing under the workload's Build of record (`predict row`, held to its Commit of record's traced workload
+#            dir), its requests (serve_load.py --varied), every closed window sealed, the window's sampled proofs (C-Flock
+#            --zk behind the Lean firewall, and the Lean verifier's verdict), PoUW, the bandwidth audit, PoUS and the network
+#            certifier where each has its piece, and one record of every verdict
+#   commit   once per workload: its Commit of record with its sealed replay bundle (commit.sh), the traced workload dir the
 #            endpoint's Build of record is held to (placement.toml's COMMIT_RUN names the one `window` and `serve` use)
 #   serve    the endpoint alone, serving until UNTIL (serve.sh)
 # Further FLAGs go to `research run` (`--env WC_RECORD_TIMEOUT=3h`, `--env PP_CHALLENGER=...`); --dry-run prints the command and

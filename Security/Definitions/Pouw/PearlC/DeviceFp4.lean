@@ -6,10 +6,9 @@ import Definitions.Pouw.PearlC.PeelExact
 /-!
 # Pearl-C4's device record: NVFP4 on sm_120 (trusted; definitions only; staged, nothing pinned)
 
-`pearl-c-nvfp4-v0` (`protocols/pouw/verity_pouw/schemes/pearl_c4.py` on `cursor/pearl-c-fp4-3084`), as the Pearl-C4
-theory lane states it (`internal/pouw/rtx-pro/theory-pearl-c4-domain.md` §2, §4). `PearlCDevice`'s maps read E4M3
-codes, 32-MAC atoms and promotion groups, so the FP4 line gets its own record, `Fp4Device`, with the same fields and no
-promotion (`G = 0`):
+`pearl-c-nvfp4-v0` (Pearl-C4's scheme, `pearl_c4.py`), as Pearl-C4's domain theory states it (§2, §4). `PearlCDevice`'s
+maps read E4M3 codes, 32-MAC atoms and promotion groups, so the FP4 line gets its own record, `Fp4Device`, with the
+same fields and no promotion (`G = 0`):
 
 * **The forming** (`Fp4Dev.formRow`, `pearl_c4.form`): per element the noise atom `Fp4.nvf4NoiseElem`, then NVFP4's block
   rule over blocks of 16 along `k`: `s_b = max(ue4m3(f32(amax_b|D|·f32(1/6))), 2⁻⁹)`, `r_b = f32(1/s_b)` and
@@ -24,11 +23,11 @@ promotion (`G = 0`):
   chain is in the model and its lone skip leaves the word unchanged (`debit_pure` at the FP4 atom; soundness
   `Fp4Freeze.fp4PureFlags_iff`); `false` where a row's forming left the model.
 * **The salt-dead predicate** (`Fp4Dev.saltDead4`): of `PearlCSem.saltDead`'s type, on the E2M1 code's value under
-  `formRow`, over every noise draw. The ρ_D bound on it is `Fp4Dev.RhoDFp4`, a named `Prop` that bc-a8466279's
+  `formRow`, over every noise draw. The ρ_D bound on it is `Fp4Dev.RhoDFp4`, a named `Prop` that
   `CodeProofs.rhoDFp4At_ninety` proves from `CodeProofs.PinnedScales` (argued, not proved, for `pearl_c4.stats`).
 * **The row rule** (`Fp4Dev.RowAdmit4`, salt-free): D-NF (`0 ≤ β`, and `a_E = e4m3(β)` with `0x08 ≤ a_E < 0x80`, a
   normal UE4M3 with bit 7 clear), which implies D-SS's scale clauses.
-  D-SS's one-in-64 dead-block cap is no admission rule (theory ruling, 10:50Z): terms (3) and (4) charge a row's
+  D-SS's one-in-64 dead-block cap is no admission rule: terms (3) and (4) charge a row's
   salt-dead codes per element instead. The screen `x² > 90·ρ²`, about 9.49ρ (`Fp4Dev.screenDead`, `DEAD_RHO_SQ = 90`),
   covers every salt-dead element at the pinned scales (`CodeProofs.saltDead4_screened`), and `Fp4Dev.RowRules4`, D-NF
   with the cap, is kept as `RhoDFp4`'s premise.
@@ -37,12 +36,13 @@ promotion (`G = 0`):
   with `E_B`, `F_B` drawn from `seed_B`. The verifier forms `B̃` itself on every drawn tile and rejects when the checked
   values differ. It is a condition of the domain.
 * **The debit** (`Fp4Sem.tileDebit`, §2 with §6's base-split fix, replayed over a tile's credited words, in FP4
-  units). Its executable reference is #556's `pearl_c4.tile_debit` (`9363e5012`), the rule the assessor's grant of
-  6:36 PM PDT names; each term carries #556's name for it:
+  units). Its executable reference is `pearl_c4.tile_debit` (`9363e5012`), and each term carries the
+  reference's name for it:
   - (0) D-24's 2:4 windows (`windows`), 64 per (row, aligned 128 of `k`, word the row feeds), for A′'s rows and B̃'s. A
     window is 2:4 by the hardware's pair rule: of each aligned 8-chunk's four pairs, at most two hold a nonzero code
-    (`Fp4Dev.rowWin24`; sm_120's `kind::mxf4nvf4.sp` metadata picks 2 of 4 pairs). As in #556's `two_four_windows`, it
-    is charged per row window, not per 16-row span, since a cheaper computation may gather any 16 such rows;
+    (`Fp4Dev.rowWin24`; sm_120's `kind::mxf4nvf4.sp` metadata picks 2 of 4 pairs). As in the reference's
+    `two_four_windows`, it is charged per row window, not per 16-row span, since a cheaper computation may gather any 16
+    such rows;
   - (1) **F1′** (§6.2, `split`), in place of §2's 2:4 term on salt-dead codes: per aligned row window of 128, the base
     split's expected saving less `A0`'s scale corrections, `128·min(1, ovf·min(1, E[max(0, R_24 − κ)] +
     E[max(0, R_skip − κ)]))` per word the row feeds (`Fp4Dev.f1Row`), under the exact noise law given the row's `E`
@@ -57,18 +57,17 @@ promotion (`G = 0`):
   - (6) **F2** (§6.3, `int8`): the masked int8 route's saving per chain MAC of the tile, at the largest of three readings
     of the realised scale bytes' flatness: the tile's modal byte, each row's own modal byte, and per block-column class
     (`Fp4Dev.int8Saving`, `int8_saving`), with `c_L` the fast-matmul catalogue's minimum, pinned per shape
-    (`Fp4Dev.cL`, #556's `pearl_c4_c_L`);
+    (`Fp4Dev.cL`, the reference's `pearl_c4_c_L`);
   - (7) **R1** (§6.8): a row whose own F1′ per word (B̃'s at its overfit) exceeds `ρ` times its cell credit is charged
     its whole cell credit.
-* **Exact where #556 bounds.** Salt-deadness is `saltDead4`, over every draw, where #556's `salt_dead` tries three
-  draws and counts the rest as dead; and F1′'s modal byte and `p_t` are exact (`modalByte`, `leaveProb`), where #556's
-  `change_probabilities` certifies the byte and takes a lower bound on `p_t`. #556 makes each choice on the side that
-  charges more (its `change_probabilities_exact` and `salt_dead` docstrings), so it charges at least this debit once its
-  `two_four_windows` reads the pair rule (term (0)), which bc-e8ffd7f2's follow-up to #602 puts in `pearl_c4.py`.
-* **The base-split fix** (§6.2–6.5; the assessor's GO of F1′ + F2 at 14:21Z and its conditions, `ratings.md` 15:18Z,
-  "THE FP4 CONDITIONS, one place"). It adds terms (1), (6) and (7), and changes no forming, credit, `fs`, `qa` or
-  `W_ref`. A tile whose credited rows' debit exceeds `ρ` (the ruled `1/400`, §6.6) is rejected by the cap, not debited:
-  `pearlCTilesFp4`'s `capOK`, and `pearlCProtocolFp4`'s per unit.
+* **Exact where the reference bounds.** Salt-deadness is `saltDead4`, over every draw, where the reference's
+  `salt_dead` tries three draws and counts the rest as dead; and F1′'s modal byte and `p_t` are exact (`modalByte`,
+  `leaveProb`), where its `change_probabilities` certifies the byte and takes a lower bound on `p_t`. The reference
+  makes each choice on the side that charges more (its `change_probabilities_exact` and `salt_dead` docstrings), so it
+  charges at least this debit once its `two_four_windows` reads the pair rule (term (0)).
+* **The base-split fix** (§6.2–6.5, with its FP4 conditions). It adds terms (1), (6) and (7), and changes no forming,
+  credit, `fs`, `qa` or `W_ref`. A tile whose credited rows' debit exceeds `ρ` (`1/400`, §6.6) is rejected by the cap,
+  not debited: `pearlCTilesFp4`'s `capOK`, and `pearlCProtocolFp4`'s per unit.
   - *Replay (protocol side).* The verifier replays F1′, F2 and R1 from the drawn tile's own forming: its `E` rows, its
     realised scale bytes, and the clean rows and scales that the law given `E` reads. The sampled-tile budget prices
     F1′'s pass, about one chain replay per tile.
@@ -76,14 +75,14 @@ promotion (`G = 0`):
     (`tt-out-aw/pearl-c-nvfp4-sm120`, §6.7) takes F1′ on A′ only, the registered B being covered at registration
     (`structure-free/rot-nvfp4` and the registration uncredit) with F2 per tile on both sides; it is not stated here.
   The unit's debit is the tile debit over all its words. None of the terms assumes the chain is exact. Any claim that
-  equates `C̃` with the exact product carries a per-word exact-run condition (option (b) of the 10:50Z ruling;
-  `PeelFp4Proofs.ExactRuns4`, through `Fp4Freeze.cTilde_dot`), because D₄ gives none (`Fp4Freeze.noLoss_gap`). The
+  equates `C̃` with the exact product carries a per-word exact-run condition
+  (`PeelFp4Proofs.ExactRuns4`, through `Fp4Freeze.cTilde_dot`), because D₄ gives none (`Fp4Freeze.noLoss_gap`). The
   peel reads the chain's own words, so it needs nothing.
 * **The accounting** (`creditFp4`, `wrefFp4`): per `m·k`, `n` (the chain, 1 per MAC) `+ 32` (`A′·F_B`, `r = 32`)
   `+ 2·bf16·32·n/k` (the BF16 peel, depth `2r`) `+ fs`. `W_ref` adds `qa` per element.
 * **The protocol, domain and tiles** (`pearlCProtocolFp4`, `pearlCDomainFp4`, `pearlCTilesFp4`) are
   `pearlCProtocolDev`'s, `pearlCDomainDev`'s at `G = 0` and `pearlCTilesDev`'s shapes, on these maps. The domain is
-  the grant's: #556's shapes (`PearlC4.check`) with `n ≥ 4096` in place of its `n ≥ 128`. It also requires D-SK of
+  the reference's shapes (`PearlC4.check`) with `n ≥ 4096` in place of its `n ≥ 128`. It also requires D-SK of
   `sem`'s lines, so it is empty at a `sem` whose `B̃` is not keyed by A's salt.
 
 `Fp4Sem` holds what is not pinned yet, as `PearlCSem` does for FP8: the noise lines from the oracle and the rows'
@@ -158,17 +157,17 @@ def saltDead4 (alpha beta : (k : ℕ) → (Fin k → ℚ) → ℚ) : (k : ℕ) �
 `x² > 90·ρ²`, that is `|x| > √90·ρ ≈ 9.49ρ`, `ρ²` over every 8th position (`Stat.every8`). The constant is `90`
 exactly, not `9.5² = 90.25`: at it every salt-dead element lies in a screened block at the pinned scales
 (`CodeProofs.saltDead4_screened`, any screen of at most `90·ρ²`). The earlier 12ρ screen (`TAU_SQ_INV = 144`) and
-10ρ are superseded. The debit doesn't read it (#556 counts screened blocks, `screened_block_pairs`, and charges
+10ρ are superseded. The debit doesn't read it (the reference counts screened blocks, `screened_block_pairs`, and charges
 none); it is `RowRules4`'s cap. -/
 def screenDead {k : ℕ} (x : Fin k → ℚ) (b : ℕ) : Prop :=
   ∃ l : Fin k, (l : ℕ) / 16 = b ∧ 90 * Stat.every8 k x < x l ^ 2
 
-/-- **Pearl-C4's row rule** (theory ruling, 10:50Z; salt-free): D-NF, `0 ≤ β` and the row's noise scale byte
+/-- **Pearl-C4's row rule** (salt-free): D-NF, `0 ≤ β` and the row's noise scale byte
 `a_E = e4m3(β)` a normal UE4M3 with bit 7 clear, `0x08 ≤ a_E < 0x80` (at least `2⁻⁶`).
-- *The two β clauses* (`internal/pouw/fp4-forming-lean/README.md`, "D-NF's two β clauses"; `pearl_c4.dnf`, #534 at
-  `e7432087`). A negative β casts to a byte with bit 7 set, which `0x08 ≤ a_E` alone admits and sm_120 reads from its
-  low 7 bits: at `β = −1/4096` the byte `0x80` is a zero scale, so the row's noise would be zero, and at `β = −1` the
-  byte `0xB8` reads as `+1.0` (`dnf_rejects`). The pinned stats never make β negative, so no honest row changes verdict.
+- *The two β clauses* (`pearl_c4.dnf` at `e7432087`). A negative β casts to a byte with bit 7 set, which `0x08 ≤ a_E`
+  alone admits and sm_120 reads from its low 7 bits: at `β = −1/4096` the byte `0x80` is a zero scale, so the row's
+  noise would be zero, and at `β = −1` the byte `0xB8` reads as `+1.0` (`dnf_rejects`). The pinned stats never make β
+  negative, so no honest row changes verdict.
 - D-SS's scale clauses follow from D-NF and the design's floor, so they add no condition. D-SS's one-in-64 dead-block
   cap is no longer an admission rule. The debit charges a row's salt-dead codes per element instead
   (`Fp4Sem.tileDebit`, terms (3) and (4)), and the tile's cap rejects a tile that this pushes past `ρ`. -/
@@ -176,7 +175,7 @@ def RowAdmit4 (beta : (k : ℕ) → (Fin k → ℚ) → ℚ) (k : ℕ) (x : Fin 
   0 ≤ beta k x ∧ 8 ≤ (e4m3 (beta k x)).val ∧ (e4m3 (beta k x)).val < 128
 
 open Classical in
-/-- **`RhoDFp4`'s row premise** (`row_passes` before the 10:50Z ruling): D-NF as `RowAdmit4` states it, and D-SS's cap,
+/-- **`RhoDFp4`'s row premise** (the earlier `row_passes`): D-NF as `RowAdmit4` states it, and D-SS's cap,
 at most one block in 64 dead by the screen at `90·ρ²`. It is not the admission rule (`RowAdmit4` is). It keeps the cap
 so that `RhoDFp4` is `CodeProofs.RhoDFp4At 90` by `rfl`: `CodeProofs.RowRules4At` states D-NF in the same form. -/
 def RowRules4 (beta : (k : ℕ) → (Fin k → ℚ) → ℚ) (k : ℕ) (x : Fin k → ℚ) : Prop :=
@@ -190,7 +189,7 @@ open Classical in
 every `alpha` and `beta`.
 - *What it bounds now.* Admission is `RowAdmit4`, so `RhoDFp4` bounds the salt-dead share of the rows that meet the
   old cap. The debit doesn't take it: terms (3) and (4) charge the salt-dead codes themselves.
-- *Proved from `PinnedScales`.* bc-a8466279's `Fp4FormingCode` (`internal/pouw/fp4-forming-lean/`) proves
+- *Proved from `PinnedScales`.* `Fp4FormingCode` proves
   `CodeProofs.rhoDFp4At_ninety : PinnedScales alpha beta → RhoDFp4At 90 alpha beta`, and
   `CodeProofs.rhoDFp4At_ninety_eq : RhoDFp4At 90 = RhoDFp4` is `rfl`, with `screenDead` at `90·ρ²`. In fact every
   salt-dead element lies in a screened block (`CodeProofs.saltDead4_screened`).
@@ -198,7 +197,7 @@ every `alpha` and `beta`.
   `(128/18769)·(1 − 2⁻¹⁰)²·α²·ρ² ≤ β²`; on every row, `0 ≤ β < 464`.
 - *Argued, not proved, for `pearl_c4.stats`.* That the reference's scales meet `PinnedScales` rests on the FP32 error
   bound of `s5_stats`' `ρ²`, about `(k/256 + 13)·u ≈ 270u ≈ 2^-15.9` at `k = 2^16` (`u = 2⁻²⁴`), against the `2⁻¹⁰`
-  allowance, and on the numerical table in `internal/pouw/fp4-forming-lean/review-response.md`. There is no Lean lemma
+  allowance, and on a numerical table of it. There is no Lean lemma
   about `s5_stats` until `s5_stats` is pinned. -/
 def RhoDFp4 (alpha beta : (k : ℕ) → (Fin k → ℚ) → ℚ) : Prop :=
   ∀ (p k : ℕ) (X : Matrix (Fin p) (Fin k) ℚ), 128 ∣ k → (∀ i, RowRules4 beta k (X i)) →
@@ -304,9 +303,9 @@ def peelFp4 (p : Fp4Atom) {m n k : ℕ} (A : Op4 m) (B : Op4 n) (FA FB : Matrix 
 /-- **D-24's 2:4 window** (`two_four_windows`): a formed row's aligned window `w` of 128 along `k` is 2:4 when, in each
 of its 16 aligned 8-chunks (codes `8q` to `8q + 7`), at most two of the four pairs `(2j, 2j + 1)` hold a nonzero code
 (`code & 7 ≠ 0`); `false` where the row's forming left the model. This is the hardware's pair rule: sm_120's NVFP4
-sparse MMA (`kind::mxf4nvf4.sp`, m16n8k128) gives each 8-chunk two 2-bit indices, which pick 2 of its 4 pairs. #556's
-4-group rule (each 4-group at most two nonzero) is `kind::f8f6f4`'s pattern, which has no UE4M3 block scales and saves
-nothing over dense NVFP4; neither rule implies the other (`rowWin24_groups`). -/
+sparse MMA (`kind::mxf4nvf4.sp`, m16n8k128) gives each 8-chunk two 2-bit indices, which pick 2 of its 4 pairs. The
+reference's 4-group rule (each 4-group at most two nonzero) is `kind::f8f6f4`'s pattern, which has no UE4M3 block scales
+and saves nothing over dense NVFP4; neither rule implies the other (`rowWin24_groups`). -/
 def rowWin24 (r : Option Row4) (w : ℕ) : Bool :=
   match r with
   | some r => (List.range 16).all fun q =>
@@ -315,7 +314,7 @@ def rowWin24 (r : Option Row4) (w : ℕ) : Bool :=
           (r.1.getD (128 * w + 8 * q + 2 * j + 1) 0).val % 8 != 0).length ≤ 2)
   | none => false
 
-/-! ## The base-split fix: F1′ and F2 (theory §6.2–6.5; the assessor's FP4 conditions, `ratings.md` 15:18Z)
+/-! ## The base-split fix: F1′ and F2 (theory §6.2–6.5, with its FP4 conditions)
 
 F1′ reads NVFP4's forming (`formRow`, `nvf4NoiseElem`), the forming `devFp4Sm120` runs, since its law needs each code
 at a fixed scale byte. -/
@@ -341,7 +340,7 @@ def modalByte {k : ℕ} (α β : ℚ) (x : Fin k → ℚ) (e : Fin 32 → Nib) (
 def codeAt (α x β : ℚ) (e : Fin 32 → Nib) (s : Fin 256) (f : Fin 32 → Nib) : Option ℚ :=
   (nvf4NoiseElem α x β e f).map fun w => Fp4.decode (e2m1Word (f32Word (wordVal w * nvf4Recip s)))
 
-/-- **`p_t` under the exact noise law** (§6.2; the assessor's condition (2)): the chance that an element's code value at
+/-- **`p_t` under the exact noise law** (§6.2; the FP4 condition (2)): the chance that an element's code value at
 the scale byte `s` is not its modal value, the one `A0` takes. The basis line `f` is uniform over all `16^32`, and the
 value is a function of `f` given `E_i`, so this is the discrete law of the row's noise `E_i·F_t` through the noise atom
 itself, not the Gaussian at `σα`. -/
@@ -351,9 +350,9 @@ def leaveProb (α x β : ℚ) (e : Fin 32 → Nib) (s : Fin 256) : ℚ :=
     16 ^ 32
 
 open Classical in
-/-- F1′'s `p_t` along a row (§6.2): `leaveProb` at its block's modal byte, and `0` on salt-dead codes (`sd`), as #556's
-`change_probabilities`. A `0` treats the code as never changing, the side that charges more. A screened block's other
-codes are charged at their own `p_t`. Positions from `k` on read `0`. -/
+/-- F1′'s `p_t` along a row (§6.2): `leaveProb` at its block's modal byte, and `0` on salt-dead codes (`sd`), as the
+reference's `change_probabilities`. A `0` treats the code as never changing, the side that charges more. A screened
+block's other codes are charged at their own `p_t`. Positions from `k` on read `0`. -/
 noncomputable def rowLeave {k : ℕ} (α β : ℚ) (x : Fin k → ℚ) (e : Fin 32 → Nib) (sd : Fin k → Prop) (t : ℕ) : ℚ :=
   if h : t < k then
     if sd ⟨t, h⟩ then 0 else leaveProb α (x ⟨t, h⟩) β e (modalByte α β x e (t / 16))
@@ -383,11 +382,11 @@ def beyond24 (p : ℕ → ℚ) (w : ℕ) (z : Fin 128 → Bool) : ℕ :=
 /-- **`N_h`**, the changed codes in the aligned k64 half `h` of a window at the change pattern `z` (§6.2). -/
 def halfChanged (z : Fin 128 → Bool) (h : ℕ) : ℕ := ((range 64).filter fun o => chg z (64 * h + o) = true).card
 
-/-- **`R_24`** (the assessor's condition (1)): per MAC of window `w` at the change pattern `z`, one 2:4 pass saves
+/-- **`R_24`** (the FP4 condition (1)): per MAC of window `w` at the change pattern `z`, one 2:4 pass saves
 `1/2`, less the CUDA-core patch of the elements beyond 2:4, `c·X_w`. -/
 def r24 (p : ℕ → ℚ) (w : ℕ) (z : Fin 128 → Bool) : ℚ := max 0 (1 / 2 - f1c * beyond24 p w z)
 
-/-- **`R_skip`** (the assessor's condition (1)): per MAC of a window at the change pattern `z`, a skip or patch per
+/-- **`R_skip`** (the FP4 condition (1)): per MAC of a window at the change pattern `z`, a skip or patch per
 k64 half, each saving `1/2` less the patch of its changed codes, `c·N_h`. -/
 def rSkip (z : Fin 128 → Bool) : ℚ := ∑ h ∈ range 2, max 0 (1 / 2 - f1c * halfChanged z h)
 
@@ -408,8 +407,8 @@ for B̃'s residual is shared by all `n` weight rows, so B̃'s F1′ is charged a
 at the window's MACs. A′'s is charged at 1 (its layout must re-gather B̃). -/
 def f1BOverfit : ℚ := 10
 
-/-- **F1′'s charge per word of one row** (theory §6.2; the assessor's condition (1), with `κ` inside the expectation;
-#556's `split_units` and `split_saving`), in FP4 units: over each aligned window `w` of 128 (8 blocks),
+/-- **F1′'s charge per word of one row** (theory §6.2; the FP4 condition (1), with `κ` inside the expectation;
+the reference's `split_units` and `split_saving`), in FP4 units: over each aligned window `w` of 128 (8 blocks),
 `128·min(1, ovf·min(1, E[max(0, R_24 − κ)] + E[max(0, R_skip − κ)]))` with `κ = min(c·M_w, 1/8)`. The expectation is
 under the exact law of the row's codes given its `E` line `e` (`rowLeave`), at §6.2's sorted in-block layout and modal
 `A0`. The row is the clean `x` at the scales `α`, `β`, with salt-dead elements `sd`, and `r` is its forming in the
@@ -436,7 +435,7 @@ def cLKs : List ℕ := [16, 32, 64, 128, 256, 512, 1024, 2048, 4096, 8192, 16384
 def cLNs : List ℕ := [128, 1024, 8192, 16384, 32768, 65536, 262144]
 
 /-- `cLTable[i][j][l]` is `c_L` at `m = cLMs[i]`, `k = cLKs[j]`, `n = cLNs[l]`, in units of `10⁻⁴` rounded down:
-`pearl_c4_c_L.C_L` exactly (#556 at `b3af5481`, blob `57adb6af9ccc`). -/
+`pearl_c4_c_L.C_L` exactly (at `b3af5481`, blob `57adb6af9ccc`). -/
 def cLTable : List (List (List ℕ)) :=
   [[[20000, 20000, 20000, 20000, 20000, 20000, 20000],  -- m = 128, k = 16
     [17680, 16918, 16801, 16792, 16788, 16786, 16784],  -- k = 32
@@ -559,15 +558,16 @@ def cLTable : List (List (List ℕ)) :=
 /-- `cLTable`'s entry `(i, j, l)`; `0` off the table. -/
 def cLEntry (i j l : ℕ) : ℕ := ((cLTable[i]?.bind (·[j]?)).bind (·[l]?)).getD 0
 
-/-- **F2's `c_L`** (theory §6.3; the assessor's ruling on the FP4 `c_L` pin, `ratings.md` 20:00Z, and condition (3)):
+/-- **F2's `c_L`** (theory §6.3, and the FP4 condition (3)):
 the masked int8 route's least cost per honest MAC before its patch, on a GEMM `(m, k, n)` over NVFP4's blocks of 16.
 - *What it is.* The fast-matmul catalogue's minimum (Perminov at `ac13ca88`), each scheme at its lower-bound add count
-  (one add per new form), with leaves at W1's 2.0 FP4 slots per MAC and 4.25 FP4 slots per pre-add element-op
-  (bc-d9842080's `catalogue-audit/fast-matmul-catalogue-audit.md` §4). A cheater's shared subexpressions put its real
-  add count between that bound and the achievable routes', so F2 charges at least its best saving.
-- *How it is read.* It is #556's pinned table (`pearl_c4_c_L` at `b3af5481`: `cLMs`, `cLKs`, `cLNs`, `cLTable`), at
-  the least tabled `m`, `k` and `n` at least the shape's, as `pearl_c4.int8_depth_cost` reads it. The table falls in
-  each of `m`, `k` and `n` (`cLTable_falls`), so a shape between tabled points takes the lower `c_L` (`cL_between`).
+  (one add per new form), with leaves at W1's 2.0 FP4 slots per MAC and 4.25 FP4 slots per pre-add element-op). A
+  cheater's shared subexpressions put its real add count between that bound and the achievable routes', so F2 charges at
+  least its best saving.
+- *How it is read.* It is the reference's pinned table (`pearl_c4_c_L` at `b3af5481`: `cLMs`, `cLKs`, `cLNs`,
+  `cLTable`), at the least tabled `m`, `k` and `n` at least the shape's, as `pearl_c4.int8_depth_cost` reads it. The
+  table falls in each of `m`, `k` and `n` (`cLTable_falls`), so a shape between tabled points takes the lower `c_L`
+  (`cL_between`).
 - *Values.* 0.6612, 0.5790, 0.5069 and 0.4083 at 8,192³, 16,384³, 32,768³ and 65,536³ (`cL_8192` to `cL_65536`), where
   Strassen–Winograd's formula gave 0.808, 0.707, 0.619 and 0.542, and 0.2697 at the table's corner (`cL_corner`).
 - *Past the table* (`m > 2^24`, `k > 2^16` or `n > 2^18`) it is `0`, the most F2 can charge (`cL_beyond`), where
@@ -598,8 +598,9 @@ def colLabel (rows : List (List ℤ)) (b : ℕ) : ℤ := mostCommon (rows.map fu
 `save`): `max(0, 1 − c_L(m, kk, n) − 4·(2 − fa − fb))`, the patch at 4 slots per useful MAC per side. -/
 def int8Save (m n : ℕ) (fa fb : ℚ) (kk : ℕ) : ℚ := max 0 (1 - cL m kk n - 4 * (2 - fa - fb))
 
-/-- **F2 per chain MAC** (theory §6.3; #556's `int8_saving`) on a tile's realised scale bytes, `a` for A′'s rows and
-`b` for B̃'s, `nb` blocks of 16 per row, in a unit of `m` and `n` rows: the largest of three readings of flatness,
+/-- **F2 per chain MAC** (theory §6.3; the reference's `int8_saving`) on a tile's realised scale bytes, `a` for A′'s
+rows and `b` for B̃'s, `nb` blocks of 16 per row, in a unit of `m` and `n` rows: the largest of three
+readings of flatness,
 - the tile's modal byte (`share` of all the bytes) on each side, over `k = 16·nb`;
 - each row's own modal byte (`rowShare`), over `k`;
 - per block-column class: a column's class is its label on A′ and on B̃ (`colLabel`), and each class is a sub-GEMM over
@@ -636,9 +637,8 @@ structure Fp4Prices where
   qa : ℚ
 
 /-- **sm_120's prices in FP4 units** (theory §2–§4, node 2 at locked 2,100 MHz), with an FP8 unit worth 2 FP4 units,
-the block scale on `lut256` (bc-a8466279's ruling, `theory-pearl-c4-domain.md` §6.6) and FADD at the measured `1047/125`
-= 8.376, as `Prices.sm120Loop`. It is `Fp4Prices.sm120At (1047/125) Fp4ScalePath.lut256` of
-`internal/pouw/price-twins-lean/fp4-delta/`:
+the block scale on `lut256` (§6.6) and FADD at the measured `1047/125`
+= 8.376, as `Prices.sm120Loop`. It is `Fp4Prices.sm120At (1047/125) Fp4ScalePath.lut256`:
 - a BF16 MAC is 4 (2.000 FP8 units);
 - `fs = 105299/1000 = 105.299`: the noise atom 64 (a dense k64 NVFP4 `mma.sync`, 64 lanes, at full shape); the block
   scale on `lut256` at its W1 issue prices, `7.5 + FADD/8 = 8.547` (half an `F2FP`, 1.25 `PRMT` and one `LDS` per block
@@ -714,7 +714,7 @@ structure Fp4Sem (Q R S : Type) where
 
 variable {Q R S : Type}
 
-/-- **D-SK: `B̃` is keyed by this job's salt** (theory §1, "D-SK", 11:00Z; `pearl_c4.seed_b`), a domain rule of
+/-- **D-SK: `B̃` is keyed by this job's salt** (theory §1, "D-SK"; `pearl_c4.seed_b`), a domain rule of
 TT_OUT-FP4. `seed_B = H_"pearl-c4/v1/seed-B"(salt ‖ root_B)` (SHA-512, `pearl_c4.labelled`), with the salt from this
 job's epoch beacon and `root_B` as committed, and `B̃ = form(B, E_B, F_B)` with `E_B`, `F_B` the lines of `seed_B`.
 - `seedB s W` is the query `seed_B` at salt `s` and B's committed words `W`, which `root_B` binds. It is injective in
@@ -774,10 +774,10 @@ noncomputable def Fp4Sem.unitUseful (sem : Fp4Sem Q R S) (d : Fp4Device) (H : Q 
     (fun j => eTilde (z.EB j) (e4m3 (sem.beta sh.k (W j))))
 
 open Classical in
-/-- **A tile's replayed debit at an FP4 record** (theory §2, with §6.2–6.5's base-split fix, which the assessor GOed at
-14:21Z under its 15:18Z conditions, `ratings.md`; #556's `pearl_c4.tile_debit` at `9363e5012` is the executable
-reference), in FP4 units, over the words `rows × cols` of unit `u`, from the committed activations, the weights and the
-realized noise (the `unitForm` the ticket reads, and its lines `E_A`, `E_B`):
+/-- **A tile's replayed debit at an FP4 record** (theory §2, with §6.2–6.5's base-split fix under its FP4 conditions;
+`pearl_c4.tile_debit` at `9363e5012` is the executable reference), in FP4 units, over the words `rows × cols` of unit
+`u`, from the committed activations, the weights and the realized noise (the `unitForm` the ticket reads, and its lines
+`E_A`, `E_B`):
 - (0) D-24's 2:4 windows (`windows`): per row and aligned 128 of `k` that is 2:4 (`Fp4Dev.rowWin24`), 64 per word the
   row feeds (half the window's 128 MACs), for `A′`'s rows and `B̃`'s;
 - (1) **F1′** (§6.2, `split`; in place of §2's 2:4 term on salt-dead codes): `Fp4Dev.f1Row` of each row on every word it
@@ -789,7 +789,7 @@ realized noise (the `unitForm` the ticket reads, and its lines `E_A`, `E_B`):
 - (4) the forming (`forming`): each `A′` element of the rows that is salt-dead, or that is unneeded (every formed `B̃`
   row of the tile has a zero code there, `code & 7 = 0`), at `fs` times the column share `|cols|/n`. A row's screened
   blocks are not charged as such: their salt-dead codes are, here and in (3), and F1′ charges their other codes at
-  their own `p_t`. This replaces D-SS's one-in-64 row rejection (the 10:50Z ruling);
+  their own `p_t`. This replaces D-SS's one-in-64 row rejection;
 - (5) the sub-grid blocks (`subgrid`): the blocks `b < k/16` of each word that are sub-grid in their firing, at 16;
 - (6) **F2** (§6.3, `int8`; condition (3)): `Fp4Dev.int8Saving` on the tile's realised scale bytes, `A′`'s rows and
   `B̃`'s, at the unit's `m` and `n`, per chain MAC of the tile (`|rows|·|cols|·k`). Its first reading, at the tile's
@@ -857,14 +857,14 @@ noncomputable def pearlCProtocolFp4 (d : Fp4Device) (sem : Fp4Sem Q R S) (ρ : �
   capOK := fun H s U u act => sem.unitDebit d H s U u act ≤ ρ * creditFp4 d (U.layout.shape u)
   Wref := fun L u => (wrefFp4 d (L.shape u) : ℝ)
 
-/-- **D₄'s shapes**, the ones the assessor's grant names: #556's (`PearlC4.check`) with `n ≥ 4096` in place of its
+/-- **D₄'s shapes**: the reference's (`PearlC4.check`) with `n ≥ 4096` in place of its
 `n ≥ 128`. `0 < m ≤ 2^24` and `4096 ≤ n ≤ 2^18`, both whole numbers of 64-row tiles, and `1024 ≤ k ≤ 2^16`, a whole
 number of 128-deep kernel tiles. Every such unit is inside F2's `c_L` table, and B-OVF's credit discount is `0` from
 `n = 4096` on. -/
 def pearlCShapeFp4 (s : Shape) : Prop :=
   0 < s.m ∧ s.m ≤ 2 ^ 24 ∧ 64 ∣ s.m ∧ 4096 ≤ s.n ∧ s.n ≤ 2 ^ 18 ∧ 64 ∣ s.n ∧ 1024 ≤ s.k ∧ s.k ≤ 2 ^ 16 ∧ 128 ∣ s.k
 
-/-- **D₄** (theory §2) at `sem`: D-SK of `sem`'s lines (`Fp4Sem.SaltKeyedB`), and every unit of a shape the grant names
+/-- **D₄** (theory §2) at `sem`: D-SK of `sem`'s lines (`Fp4Sem.SaltKeyedB`), and every unit of a shape D₄ admits
 (`pearlCShapeFp4`); no promotion (the record has none). It is empty at a `sem` whose `B̃` is not keyed by A's salt. The
 row rules are the protocol's `actOK` and `weightOK`. -/
 def pearlCDomainFp4 (sem : Fp4Sem Q R S) (L : Layout) : Prop :=
