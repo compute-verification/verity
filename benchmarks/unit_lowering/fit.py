@@ -4,10 +4,10 @@ shapes and projected to others.
     fit.py RECORD... [--project K,R,C ...] [--out FILE]
 
 A RECORD is a run.py ``unit_lowering.json`` or a run's directory holding one (``out/unit_lowering.json``), all of one unit and
-form. Each quantity is fitted by least squares on the unit's terms (`TERMS`): for the tile a constant (its fixed part), R C (its
-cells, each lane R C / 32 of them), R C K (its multiply-accumulates) and (R + C) K (its operand rows and columns); for the 32 x 32
-leaf's lane and combine, whose tile is fixed, a constant and K. Peak and wall are fitted on the same terms as ANDs, so a
-projection far past the measured K says which term carries it.
+form, and for a lane or combine of one leaf. Each quantity is fitted by least squares on the unit's terms (`TERMS`): for the tile
+a constant (its fixed part), R C (its cells, each lane R C / 32 of them), R C K (its multiply-accumulates) and (R + C) K (its
+operand rows and columns); for a leaf's lane and combine a constant and K. Peak and wall are fitted on the same terms as ANDs,
+so a projection far past the measured K says which term carries it.
 """
 from __future__ import annotations
 
@@ -20,8 +20,9 @@ import numpy as np
 
 TERMS = {"tile": ("1", "RC", "RCK", "(R+C)K"), "lane": ("1", "K"), "combine": ("1", "K")}
 QUANTITIES = ("ands", "bytes", "peak_gib", "wall_min")
-PROJECT = {"tile": ((2048, 32, 32), (8192, 32, 32), (128, 32, 32)),
-           "lane": ((2048, 32, 32), (8192, 32, 32), (14336, 32, 32)), "combine": ((2048, 32, 32), (8192, 32, 32), (14336, 32, 32))}
+#: the tile's projections, and each K a leaf's lane and combine are projected to at their own leaf
+PROJECT = ((2048, 32, 32), (8192, 32, 32), (128, 32, 32))
+LEAF_K = (2048, 8192, 14336)
 
 
 def terms(unit: str, k: int, r: int, c: int) -> list[float]:
@@ -39,8 +40,10 @@ def load(path: Path) -> dict:
 
 def fit(points: list[dict], project: tuple[tuple[int, int, int], ...] | None = None) -> dict:
     """Each quantity's coefficients on its unit's `TERMS`, its largest relative residual over the points, and its value at each
-    ``project`` shape (the unit's `PROJECT` by default)."""
+    ``project`` shape (by default the tile's `PROJECT`, or a leaf's `LEAF_K` at its own R x C)."""
     unit = points[0]["unit"]
+    if project is None:
+        project = PROJECT if unit == "tile" else tuple((k, *points[0]["tile"]) for k in LEAF_K)
     X = np.array([terms(unit, p["k"], *p["tile"]) for p in points])
     rank = int(np.linalg.matrix_rank(X))
     out = {"unit": unit, "terms": list(TERMS[unit]), "rank": rank, "points": points, "fits": {}, "projections": []}
@@ -49,7 +52,7 @@ def fit(points: list[dict], project: tuple[tuple[int, int, int], ...] | None = N
         coef, *_ = np.linalg.lstsq(X, y, rcond=None)
         resid = float(np.max(np.abs(X @ coef - y) / y))
         out["fits"][q] = {"coef": dict(zip(TERMS[unit], map(float, coef))), "max_rel_residual": resid}
-    for k, r, c in project or PROJECT[unit]:
+    for k, r, c in project:
         x = np.array(terms(unit, k, r, c))
         row = {"k": k, "tile": [r, c]}
         for q in QUANTITIES:
@@ -79,8 +82,8 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--out", type=Path)
     a = ap.parse_args(argv)
     points = [load(p) for p in a.records]
-    if len({(p["unit"], p["form"]) for p in points}) > 1:
-        raise SystemExit("fit: the records mix units or forms; fit one of each at a time")
+    if len({(p["unit"], p["form"], None if p["unit"] == "tile" else tuple(p["tile"])) for p in points}) > 1:
+        raise SystemExit("fit: the records mix units, forms or a lane's or combine's leaves; fit one of each at a time")
     doc = fit(points, tuple(a.project) if a.project else None)
     if a.out:
         a.out.write_text(json.dumps(doc, indent=1) + "\n")

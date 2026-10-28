@@ -1,13 +1,13 @@
-"""`verity bench unit_lowering`: what writing the flat circuit file of PoUW's H1 tile unit, or of the 32 x 32 leaf's lane and
+"""`verity bench unit_lowering`: what writing the flat circuit file of PoUW's H1 tile unit, or of an R x C leaf's lane and
 combine statements, costs, and the file it writes.
 
-    run.py --k K --tile R,C [--unit tile|lane|combine] [--form flat|structural] --scratch DIR --out DIR [--guard] [--tree PATH]
-           [--staging fast|library]
+    run.py --k K --tile R,C [--unit tile|lane|combine] [--form flat|structural] --scratch DIR --out DIR [--guard [all]]
+           [--tree PATH] [--staging fast|library]
     run.py --guard [all] --scratch DIR --out DIR [--tree PATH]
     run.py --pin-reference --scratch DIR --out DIR
 
 The tile's lowering is `pouw_h1_circuits --lower K R C BIND PATH` (integrations/vllm), the auditor's lowering whose file a PoUW
-period-open commits as ``k<K>``, bound to `BIND`. A lane's or the combine's is h1_lanes' staging of that statement of the 32 x 32
+period-open commits as ``k<K>``, bound to `BIND`. A lane's or the combine's is h1_lanes' staging of that statement of the R x C
 leaf (`lanes.py`), bound to the Program a served window's verifier derives for it. Each runs in a child process with
 ``HZ_STAGE`` (``fast`` by default) and ``H1_TMPL`` unset for the flat form or ``structural``. Its peak RSS is the child's
 ``ru_maxrss`` (`os.wait4`, KiB on Linux) and its wall time the child's. The file is then read once for its SHA-512, bytes,
@@ -16,9 +16,9 @@ META's ``k_log`` and AND rows (`scan`), and deleted.
 ``--k`` writes OUT/unit_lowering.json and prints one ``UNIT-LOWERING`` line. ``--guard`` lowers each shape of `PINS` (``--guard
 all``: and of `WIDE`) flat, holds its SHA-512 to `REFERENCE`'s and its ``k_log`` to C-Flock's 2^`K_MAX` block, writing
 OUT/guard.json and exiting 1 naming each shape that fails. ``--pin-reference`` writes OUT/reference.json from this tree's
-lowering at `PINS` and `WIDE`, the guard's reference when this tree is the one pinned. ``--tree`` runs another checkout's lowering: its integrations/vllm and h1_lanes,
-its import roots first on the child's PYTHONPATH (`research.pythonpath.tree_pythonpath`), and its .venv's Python where it has
-one.
+lowering at `PINS` and `WIDE`, the guard's reference when this tree is the one pinned. ``--tree`` runs another checkout's
+lowering: its integrations/vllm and h1_lanes, its import roots first on the child's PYTHONPATH
+(`research.pythonpath.tree_pythonpath`), and its .venv's Python where it has one.
 """
 from __future__ import annotations
 
@@ -38,13 +38,11 @@ ROOT = HERE.parents[1]
 REFERENCE = HERE / "reference.json"
 #: the bind every tile file here is bound to; a period-open's (its Program's and partition's digests) moves META's bytes only
 BIND = {"partition": "0" * 128, "program": "0" * 128}
-#: the statements: the H1 tile unit, and the 32 x 32 leaf's lane (all 32 lanes one circuit) and combine (h1_lanes)
+#: the statements: the H1 tile unit, and a leaf's lane (all its lanes one circuit) and combine (h1_lanes)
 UNITS = ("tile", "lane", "combine")
-#: the leaf h1_lanes stages (`h1_lanes/run.py`'s ``RC``)
-LEAF = (32, 32)
-#: the guard's shapes (unit, K, R, C), about 10 min and 12 GiB together. A tile is R = 4 i rows by C = 8 j columns, i j lanes
-#: (`h1tile.Layout.lanes`), at K a multiple of 32 from 64; the combine takes K >= 384 (`h1zy.combine`), and 448 is h1_lanes'
-#: default
+#: the guard's shapes (unit, K, R, C), about 10 min and 12 GiB together. A tile or leaf is R = 4 i rows by C = 8 j columns, i j
+#: lanes (`h1tile.Layout.lanes`, `leaf_lanes.lanes`), at K a multiple of 32 from 64; the combine takes K >= 384
+#: (`h1zy.combine`), and 448 is h1_lanes' default
 PINS = (("tile", 64, 4, 8), ("tile", 256, 8, 8), ("lane", 448, 32, 32), ("combine", 448, 32, 32))
 #: pinned as well, and guarded only under ``--guard all``: a long K, and the leaf's own tile (40 and 56 GiB)
 WIDE = (("tile", 2048, 4, 8), ("tile", 64, 32, 32))
@@ -76,8 +74,6 @@ def commit(tree: Path) -> str:
 def lower(k: int, r: int, c: int, path: Path, form: str = "flat", tree: Path = ROOT, staging: str = "fast",
           unit: str = "tile") -> tuple[int, float]:
     """Lower ``unit`` at (K, R, C) in ``form`` to ``path`` in a child process: its peak RSS in KiB and its wall seconds."""
-    if unit != "tile" and (r, c) != LEAF:
-        raise SystemExit(f"unit_lowering: h1_lanes stages the {LEAF[0]}x{LEAF[1]} leaf's {unit}, not a {r}x{c} one")
     env = dict(os.environ, HZ_STAGE=staging)
     env.pop("H1_TMPL", None)
     if FORMS[form]:
@@ -92,7 +88,7 @@ def lower(k: int, r: int, c: int, path: Path, form: str = "flat", tree: Path = R
         argv, cwd = [python, "-m", "tests.protocols.pouw_h1_circuits", "--lower", str(k), str(r), str(c), json.dumps(BIND),
                      str(path)], tree / "integrations" / "vllm"
     else:
-        argv, cwd = [python, str(HERE / "lanes.py"), unit, str(k), str(path), str(tree)], tree
+        argv, cwd = [python, str(HERE / "lanes.py"), unit, str(k), str(r), str(c), str(path), str(tree)], tree
     start = time.monotonic()
     child = subprocess.Popen(argv, cwd=cwd, env=env)
     _, status, usage = os.wait4(child.pid, 0)
@@ -221,7 +217,7 @@ def guard(scratch: Path, tree: Path = ROOT, staging: str = "fast", shapes: list[
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     ap.add_argument("--k", type=int)
-    ap.add_argument("--tile", type=lambda v: tuple(int(x) for x in v.split(",")), default=(32, 32), metavar="R,C")
+    ap.add_argument("--tile", type=lambda v: tuple(int(x) for x in v.split(",")), metavar="R,C")
     ap.add_argument("--unit", choices=UNITS, default="tile")
     ap.add_argument("--form", choices=sorted(FORMS), default="flat")
     ap.add_argument("--scratch", type=Path, required=True, help="where the circuit file is written (deleted once read)")
@@ -235,6 +231,8 @@ def main(argv: list[str] | None = None) -> int:
     a = ap.parse_args(argv)
     if not (a.k or a.guard or a.pin_reference):
         ap.error("--k, --guard or --pin-reference")
+    if a.k and not a.tile:
+        ap.error("--k needs --tile R,C")
     tree = a.tree.resolve()
     a.out.mkdir(parents=True, exist_ok=True)
     rc = 0
