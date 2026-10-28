@@ -86,8 +86,8 @@ def _window_a() -> tuple[Any, Any, dict[str, Any]]:
     com.pool = PP.PinnedPool(1 << 14, exact=False, populate_threads=0)
     rc = _commit(com, A)
     com.weights_tree, com.model = {"root": (rc.weight_registration or {}).get("root"), "names": []}, torch.nn.Module()
-    leds = {"alice": sc.Ledger("cmpl-1", "e1", [1, 2, 3], {"params": {"max_tokens": 4}}, "alice", streamed=[7, 9]),
-            "cmpl-2": sc.Ledger("cmpl-2", "e2", [4, 5], {"params": {"max_tokens": 2}}, None, streamed=[8])}
+    leds = {"alice": sc.LiveRequest("cmpl-1", "e1", [1, 2, 3], {"params": {"max_tokens": 4}}, "alice", streamed=[7, 9]),
+            "cmpl-2": sc.LiveRequest("cmpl-2", "e2", [4, 5], {"params": {"max_tokens": 2}}, None, streamed=[8])}
     reqs, rows = ss.window_requests(ROWS, NAMES.get, leds.get)
     kw = dict(rec={"window": 5, "run_id": "t/w5", "steps": len(rc.steps), "passed": True}, reqs=reqs, request_rows=rows,
               tokens={k: v.streamed for k, v in leds.items()}, sampling={}, label="serve-openai:t", code="c0de",
