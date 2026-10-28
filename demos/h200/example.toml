@@ -1,0 +1,32 @@
+# The H200 example (demos/README.md): the remote protocol's sampled-proofs half at a frozen shape on one H200, and
+# nothing else. `verity example h200 --out OUT` runs its step driver, run.py (on the CPU at small shapes, or the H200 at the
+# frozen shape), and writes a replay bundle and a block record; phases.sh runs the drawn-block proving, one phase a run.
+# Its evidence is sampled proofs': the step committed on the H200, 8 proof blocks drawn by one live coin, each proved by
+# C-Flock --zk and accepted by the Lean verifier. The other subprotocols in e2e_h200 (PoUS, the bandwidth audit, network
+# certification and the memory wipe) are a skeleton on fixture coins, not runs, and aren't claimed.
+# Placed where the drawn-block proving's runs ran: the step committed and replayed on the H200 node, the coin from the
+# challenger host, and the drawn blocks proved and the Lean verifier run together on a CPU node. Being placed needs the
+# Lean verifier off the machines the prover runs.
+# Once a run of record of PoUS and the bandwidth audit on the H200 exists, its id joins `runs` and `protocol` becomes a
+# list with "pous" and "bandwidth".
+protocol = "sampled_proofs"
+workload = "none"              # the frozen MQA shape on seeded INT8 weights, not yet an integration
+level = 1
+
+[placement]
+prover = "gpu-node"            # the H200 node: the step's commit and the drawn slots' replay; the C-Flock prover on a CPU node
+verifier = "cpu-node"          # the Lean verifier, on the CPU node beside the prover
+challenger = "auditor-host"    # the challenger host, one live coin through the gate
+
+[evidence]
+# The drawn-block proving: 8 live-drawn proof blocks, each proved by C-Flock --zk behind the firewall and accepted by the
+# Lean verifier, one flipped bit refused (at an 8-block draw, at most 43.77% of the step's proof blocks wrong at δ = 1%);
+# the H200 report (m3.template); the drawn blocks' tree it proved, whose manifest names every phase's run; the step
+# registration, recorded before the coin; then the phases' runs: commit, the weights registration, coin, weights open,
+# replay, build
+runs = ["r20261027-013625-8e25",
+        "art:0e5de97332019dbd62a74222189ec65787fa52890f2acb8a083dda3244f4ed86",
+        "art:c6dffca9da195a1fd516219c2008a350c48e861edcb9d0053436902f7d9585d6",
+        "art:f6ca889131fe3a8c140d3bde6022ee6ba3556e0438d421c58cdd1f4d6b155a2a",
+        "r20261026-233451-2217", "r20261026-204952-3496", "r20261027-001440-06e6", "r20261027-002008-de25",
+        "r20261027-001958-231a", "r20261027-003035-bca7"]
