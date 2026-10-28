@@ -9,8 +9,9 @@ h is in MAC-times a committed byte (hash_cost_h.py). For each T and row size rb:
                floored at 0 (a point inside the noise) and capped at h_x (past that the bytes go exclusive); h_b_hi adds twice the
                A/A noise floor where an A-B-A run measured it
   h(rb, σ; B) = σ h_b(rb, σ B) + (1 - σ) h_x(rb), for B committed bytes a forward, σ of them hashed beside the GEMM
-  G(rb)        the free room: the most bytes a forward a measured point saves outright, max over points of b (1 - h_b / h_x).
-               Hashing that point's b beside and the rest exclusive gives h(rb, B) = h_x (1 - G / B), for B at least b
+  G(rb)        the free room: the most bytes of leaves a forward a measured point saves outright, max over points of
+               b (1 - h_b / h_leaf). Hashing that point's b beside, the rest exclusive and the whole tree after gives
+               h(rb, B) = h_x - h_leaf G / B, for B at least b
   h_b median   the robust beside figure: the median h_beside of the A-B-A points at the phases whose median is least
   h_cycles     the same with the clock's fall beside the hash taken out (NVML in each leg), the per-clock figure
 A point's phases and cap are its kernel configuration: VERITY_ROWS_PHASES (data launches a leaf batch) and CTAs a launch. Each loop
@@ -114,11 +115,12 @@ def model(by: dict) -> dict:
                       "h_b_quartiles": [round(x, 1) for x in statistics.quantiles(hs, n=4)] if len(hs) >= 2 else None,
                       "share_of_h_x": round(statistics.median(hs) / h_x, 3) if hs else None,
                       "max_gbps": max((p["beside_gbps"] for p in sel), default=None)}
-            room = max(use, key=lambda p: p["bytes_per_fwd"] * (1 - val(p, False) / h_x), default=None)
-            g = room["bytes_per_fwd"] * (1 - val(room, False) / h_x) if room else 0.0
-            free = {"bytes": round(max(g, 0.0)), "at": room and {k: room[k] for k in ("run", "arm", "phases", "cap", "bytes_per_fwd",
-                                                                                      "h_beside", "h_noise")},
-                    "h_at_b921": round(h_x * (1 - max(g, 0.0) / B921), 1) if room and room["bytes_per_fwd"] <= B921 else None}
+            h_leaf = best["h_leaf"]
+            room = max(use, key=lambda p: p["bytes_per_fwd"] * (1 - val(p, False) / h_leaf), default=None)
+            g = max(room["bytes_per_fwd"] * (1 - val(room, False) / h_leaf), 0.0) if room else 0.0
+            free = {"bytes": round(g), "at": room and {k: room[k] for k in ("run", "arm", "phases", "cap", "bytes_per_fwd",
+                                                                            "h_beside", "h_noise")},
+                    "h_at_b921": round(h_x - h_leaf * g / B921, 1) if room and room["bytes_per_fwd"] <= B921 else None}
             out.setdefault(T, {})[rb] = {"h_x": round(h_x, 1), "h_b": robust, "h_leaf": best["h_leaf"], "h_tree": trees.get(rb),
                                          "alone_at": best, "free": free,
                                          "h_b_by_mb_per_fwd": env, "points": pts}
