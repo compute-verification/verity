@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# One-stage audit, run A8, on a CPU machine: one window of the remote bandwidth audit's openings proved in zero knowledge
+# One-stage audit, run A8, on a CPU machine: one window of PoUB's openings proved in zero knowledge
 # through the opening unit (a8.py), honest and with a tampered block, and the cost points, on hidden_zk's builds (its
 # job.sh, sourced: C-Flock's flock-circuit and the Lean flock-verify). From a clone, since the verifier of record builds
 # the sampled-proofs Lean in the tree:

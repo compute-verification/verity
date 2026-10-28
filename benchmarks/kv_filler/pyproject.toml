@@ -4,7 +4,7 @@
 testpaths = ["tests"]
 
 [tool.verity.tests]
-# bench.py puts benchmarks/word_codec on the path for kv.py, which takes the remote bandwidth audit's codec (on the
+# bench.py puts benchmarks/word_codec on the path for kv.py, which takes PoUB's codec (on the
 # commitments, which import blake3)
 inputs = ["benchmarks/word_codec/kv.py", "verity/__init__.py", "verity/errors.py", "verity/core/__init__.py",
           "verity/core/protocols/__init__.py", "verity/core/protocols/remote_bandwidth/__init__.py",

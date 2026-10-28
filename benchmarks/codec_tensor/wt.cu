@@ -2020,7 +2020,7 @@ __global__ void __launch_bounds__(128) tag_level_kernel(const u64 *__restrict__ 
 // wt_set_pass puts the messages' fixed bytes in kPass (zeros where s_j, j, the root, K_S and the row go); pass_kernel,
 // one CTA on the stream after the previous commit, fills them in, so the chain needs no host round trip.
 //
-// A WT_RECEIPT = 1 build's receipt is the remote bandwidth driver's sketch-sha512 instead (`receipts.SketchReceipter`):
+// A WT_RECEIPT = 1 build's receipt is the PoUB driver's sketch-sha512 instead (`receipts.SketchReceipter`):
 // s_j is the whole 64-byte SHA-512 (`receipts.seed`), K_S = derive(s_j, "verity/remote-bandwidth/sketch-signs/v0",
 // {"k": k_s, "n": 4096, "tag": "sketch-sha512"}) at the registration's k_s (16 or 64), a vector is the store's block,
 // its 4,096 bytes in store order (store-order/v0: task q's halves are blocks 2 q and 2 q + 1, receipt_warp), and

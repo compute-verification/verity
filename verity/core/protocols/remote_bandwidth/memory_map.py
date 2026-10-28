@@ -1,5 +1,5 @@
 """memory-map/v1 (`verity/memory-map/v1`, the program's I3): the per-step record of the KV blocks a serving node wrote
-and freed beside its registered store, the remote bandwidth audit's input from serving, and `Replay`, which turns it
+and freed beside its registered store, PoUB's input from serving, and `Replay`, which turns it
 into the audit's appends, releases and plan changes.
 
 ~~~text

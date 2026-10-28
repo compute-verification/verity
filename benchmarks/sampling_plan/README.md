@@ -9,8 +9,8 @@ source and status, measured or assumed (`inputs.py`).
 B is the budget model's unit, GPU-seconds of overhead per plain GPU-second over a window, and it is the serve-time
 total (everything is committed at serve time): every
 scale's serve-time commitments under the PoUW scheme (`--scheme`: `floor`, the measured s8 A-operand floor alone;
-`h1`, `h1-bf16`, `pearl-c`, each scheme's rows a token a layer) and the store-block receipts of proof of useful
-bandwidth (PoUB), which every plan pays; then proving and the verifier's CPU (at its price ratio) for the drawn units,
+`h1`, `h1-bf16`, `pearl-c`, each scheme's rows a token a layer) and the store-block receipts of
+PoUB, which every plan pays; then proving and the verifier's CPU (at its price ratio) for the drawn units,
 the commitment of every unit's outputs, replay of the layer-steps the draw meets (to build their witnesses), and the
 zero-work subcircuits at their floor.
 

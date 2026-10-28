@@ -10,7 +10,7 @@ testpaths = ["tests"]
 # (benchmarks/pous/p2_v1: reference.py, pinned by vectors.json; stage.py imports gpu.py); the toy test reads P2's toy
 # store (p2_v1/store-toy); gemm.py's check evaluates
 # ScaledMmS8Coordinate_v1 (verity.ml.circuits), and what those import; full.py's GEMM is s8_linear's int_mm.py.
-# sketch.py's receipts are the remote bandwidth audit's (verity.core.protocols.remote_bandwidth, which imports
+# sketch.py's receipts are PoUB's (verity.core.protocols.remote_bandwidth, which imports
 # sampled_proofs and the profile), held to serve.py's fixture (p2_v1/serve.py, store.py), with sha512_rows' engine
 # and its host twin's sources. sketch.py and that engine read their variables through their settings.py, on
 # verity_config.settings.

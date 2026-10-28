@@ -133,7 +133,7 @@ the egress counted (`R` the declared memory past the fill), and `M` (vacuous) ot
 undecided. `wipe_period.leg(period_dir, node, out)` is the wipe's leg of the all-protocols period runner.
 `wipe_monitoring` reports one accepted wipe over a week, a month and a year of a deployment's machines, each wiped
 every `cadence_s` seconds (a day by default), at δ = 1% and 10⁻⁶: the T wipes, at most M − 1 of them failing their bound
-except with δ (`prCoin_count_le_choose`'s count bound, which the remote bandwidth audit's period shares), every one
+except with δ (`prCoin_count_le_choose`'s count bound, which PoUB's period shares), every one
 meeting it except with T·`eps`, and what each certifies (`foreign_bits` of `memory_bits`, its tiers and devices).
 `wipe_parties` is the same memory challenger and prover as parties of the deployment layer (`verity.core.deploy`), the
 reads the challenger's machine gives it: on the same coins, clock readings, key and reads it signs the bytes
