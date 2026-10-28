@@ -672,7 +672,8 @@ def call_gates(fn: Any, memo: dict | None = None) -> CallGates:
 
 def evaluate_call(fn: Any, X: int = CALL_X, memo: dict | None = None) -> CallCut:
     """`Q_call{X}` on one activation of `fn` (steps 0, 2-4): `QueryInapplicable` (`gate-too-wide`) when a computing gate is wider than
-    X bits; the units are the term's sets (`query_ast.frontier_pieces`), each computing gate in exactly one.  Memoised by Definition id."""
+    X bits; the proof blocks are the term's sets (`query_ast.frontier_pieces`), each computing gate in exactly one.  Memoised by
+    Definition id."""
     memo = {} if memo is None else memo
     key = ("Q_call", fn.id, X)
     got = memo.get(key)

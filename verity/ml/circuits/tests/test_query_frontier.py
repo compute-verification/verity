@@ -1,8 +1,8 @@
-"""`frontier(X)`: Q_call v1's rule as a term of `query_ast`.  `cut.evaluate_call` reads its units from the term, so
+"""`frontier(X)`: Q_call v1's rule as a term of `query_ast`.  `cut.evaluate_call` reads its proof blocks from the term, so
 `qcall_vectors.json` pins the term byte for byte; here the term is held to the rule decided from the gates alone (`rule`, the
 layout's last readers in `cut.CallGates`), on the pinned programs and on a seeded corpus of nested calls, batches and scans with
 pass-throughs, constants, dead gates and values returned twice, at several X; `each(instances("@*"), frontier(X))` over a
-program is `CallPartition`'s units in order; its codec and string syntax round-trip; and its counts build no set."""
+program is `CallPartition`'s proof blocks in order; its codec and string syntax round-trip; and its counts build no set."""
 from __future__ import annotations
 
 import random
@@ -27,8 +27,8 @@ QCALL = 'each(instances("@*"), frontier(%d))'
 
 def rule(Gs: cut.CallGates, X: int) -> list:
     """Q_call's step 4 from the gates: from the Call down, depth first in layout order, a piece without computing gates is no
-    unit, one whose computing gates read at or after its end (or returned) sum to at most X bits is one, else its children:
-    an activation's body nodes, a batch or scan node's members or iterations."""
+    proof block, one whose computing gates read at or after its end (or returned) sum to at most X bits is one, else its
+    children: an activation's body nodes, a batch or scan node's members or iterations."""
     units: list = []
 
     def piece(lo: int, hi: int, path: tuple, how: tuple) -> None:
@@ -166,7 +166,7 @@ def test_the_term_is_the_rule_on_the_pinned_calls(fn):
 
 
 def _steps(fn, path: tuple):
-    """The kind of each step of a unit's path: a node whole (its form) or a member (form + "-member")."""
+    """The kind of each step of a proof block's path: a node whole (its form) or a member (form + "-member")."""
     for st in path:
         node = fn.body.nodes[st[0]]
         yield node.form if len(st) == 1 else node.form + "-member"
