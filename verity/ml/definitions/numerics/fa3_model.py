@@ -83,7 +83,7 @@ def kblock_n_for(D: int, seqlen_q: int, qh_per_kvh: int) -> int:
         return KBLOCK_N
     if D == 256:
         return KBLOCK_N_HD256
-    raise ValueError(f"FA3 head dim {D}: no kBlockN rule (tile_size_fwd_sm90 is followed at D <= 128 and D = 256)")
+    raise ValueError(f"FA3 head dim {D}: no kBlockN rule (tile_size.h is followed at D <= 128 and D = 256)")
 
 
 def kblock_m_for(D: int, seqlen_q: int, qh_per_kvh: int) -> int:
@@ -99,7 +99,7 @@ def kblock_m_for(D: int, seqlen_q: int, qh_per_kvh: int) -> int:
         return KBLOCK_M_DECODE if one_wg else KBLOCK_M_PREFILL
     if D == 256:
         return KBLOCK_M_PREFILL
-    raise ValueError(f"FA3 head dim {D}: no kBlockM rule (tile_size_fwd_sm90 is followed at D <= 128 and D = 256)")
+    raise ValueError(f"FA3 head dim {D}: no kBlockM rule (tile_size.h is followed at D <= 128 and D = 256)")
 
 KERNEL = {
     "source": "vllm-flash-attn (vllm-project/flash-attention) commit 506341a143fcabd4bb79052a7605ada727d6b3f5, hopper/ (FA3)",
