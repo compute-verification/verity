@@ -6,11 +6,13 @@ import Definitions.Accounting.Assumptions.Compose
 # PoUW's credit on an arbitrary declared circuit (trusted)
 
 THEOREM's composed statement. Each `def G : Prop` is proved as `Accounting.SecurityProofs.Compose.G` in
-`Proofs.Accounting.Compose`, whose module doc gives each proof's steps. The circuit is any `Declared` one, a `Gates.Dag`
-with its call sites, its rounds, their coin modes, the service's commit coins and its proof units, its words, kinds,
-cuts and late cones read off the IR.
+`Proofs.Accounting.Compose`, whose module doc gives each proof's steps. The circuit is any `Declared` one: the served
+circuit `D`, a `Gates.Dag` with no coin input and no template or receipt gate, and its annotation (`Annotation`: its
+call sites, its rounds, their coin modes, the service's commit coins and its proof units), its words, kinds, cuts and
+late cones read off the IR. The protocol's work (each tile's noise, receipt and fold) is A's, read only through the
+scheme's lucks, so the certified words are `D`'s committed words.
 Nothing about its form is a hypothesis beyond `Declared.Wf` (call sites, rounds and units in range; one unit's gates in
-one round; each coin input read in its own round; one unit's words of one kind).
+one round; `D` plain; one unit's words of one kind).
 
 The live statements (`CircuitWork`, `CircuitCredit`) need every round that holds a credited tile live and the service
 committing by the IR's cuts, a computed value only its own unit reads (a receipt) by the draw (`Scope`'s

@@ -59,8 +59,9 @@ committed after the coin of the round that reads it (`witPubLate_notTie`, `witPu
 
 `witTieRing`: a ring of depth `D = 6` is tied, a `zTree` window of eight steps whose step `s` receipt is committed under
 round `s + 5`'s root, the last five steps' in the manifest before the draw; step `0`'s receipt is cut at coin `1` and
-committed at coin `5` (`witRing_late`), so only `LayerCommitted`'s second case covers it, and the window is in
-Compose's scope (`witRing_scope`, at a scheme whose luck is proved, `witScheme`). `witCross_notTie`: a receipt that a
+committed at coin `5` (`witRing_late`), so only `LayerCommitted`'s second case covers it. Its circuit holds its coins
+and receipts as gates, so it is not the served circuit Compose reads (`witRing_not_plain`) and is out of Compose's scope
+(`witRing_not_scope`). `witCross_notTie`: a receipt that a
 gate of another unit reads, committed at the draw, after that reader's coin, fails `Tie.readers`, and `LayerCommitted`
 too (`witCross_notLayerCommitted`).
 
@@ -1913,12 +1914,10 @@ theorem witRing_late : witRing.Writes 3 ∧ witRing.cutOf 3 = 1 ∧ witRing.comm
 theorem witRing_layerCommitted : LayerCommitted witRing :=
   tieCommits Unit witLayout8 .zTree witRing witRingCls witTieRing
 
-theorem witRing_wf : witRing.Wf := by
-  have hcoin : ∀ i, i < witRing.dag.length → ∀ j, j < witRing.dag.length → witRing.binding i = some .coin →
-      witRing.Reads j i → witRing.round (witRing.call i) = witRing.round (witRing.call j) := by
-    unfold Declared.Reads; decide +kernel
-  exact ⟨by decide +kernel, by decide +kernel, fun _ _ _ _ h => h, fun i j hi hj hb hR => hcoin i hi j hj hb hR,
-    by decide +kernel⟩
+/-- The ring's circuit holds its coins and receipts as gates, so it is not a served circuit (`Declared.Plain`). -/
+theorem witRing_not_plain : ¬ witRing.Plain := fun h =>
+  absurd (h (witGate (.input .coin ()) [] false)
+    (List.mem_flatMap.mpr ⟨0, List.mem_range.mpr (by norm_num), List.mem_cons_self⟩)) (by decide)
 
 /-- Every kind credited, its operand luck pinned (`0`), its receipt luck and guess bound `½`. -/
 noncomputable def witScheme : Scheme Unit where
@@ -1934,9 +1933,9 @@ noncomputable def witScheme : Scheme Unit where
 
 theorem witScheme_luckProved : witScheme.LuckProved := fun _ => by norm_num [witScheme, LuckForm.value]
 
-/-- **The ring of depth six is in Compose's scope**, at any positive `δ_s`. -/
-theorem witRing_scope {δs : ℝ} (hδs : 0 < δs) : Scope witScheme witRing δs :=
-  tieScope Unit Unit witScheme witLayout8 .zTree witRing witRingCls δs witTieRing witRing_wf hδs witScheme_luckProved
+/-- **The ring of depth six is out of Compose's scope**, at every `δ_s`: tied, but its receipts and coins are gates of
+its circuit, which Compose's circuit, the served one, has none of. -/
+theorem witRing_not_scope (δs : ℝ) : ¬ Scope witScheme witRing δs := fun h => witRing_not_plain h.1.2.2.2.1
 
 /-- `witLayout` over two steps: two calls and two rounds in a form of a round a step. -/
 def witLayout2s : Layout := { witLayout with steps := 2 }

@@ -134,7 +134,7 @@ theorem shareCone_eq (t : Fin 1) : shareCone scheme circuit 1 t = 1 := by
 
 theorem circuit_wf : circuit.Wf := by
   refine ⟨fun _ _ => ⟨Nat.one_pos, Nat.one_pos⟩, fun _ _ => Nat.one_pos, fun _ _ _ _ _ => rfl,
-    fun _ _ _ _ _ _ => rfl, fun i hi j hj _ => ?_⟩
+    fun g hg => by obtain rfl := List.mem_singleton.mp hg; rfl, fun i hi j hj _ => ?_⟩
   obtain rfl : i = 0 := Nat.lt_one_iff.mp (List.mem_range.mp (List.mem_filter.mp hi).1)
   obtain rfl : j = 0 := Nat.lt_one_iff.mp (List.mem_range.mp (List.mem_filter.mp hj).1)
   rfl

@@ -4,12 +4,16 @@ import Definitions.Accounting.Device
 import Definitions.Pouw.Window
 
 /-!
-# PoUW as a compile pass over an arbitrary declared circuit (trusted)
+# PoUW's credit over a served circuit and its annotation (trusted)
 
-The vocabulary of `Definitions.Accounting.Guarantees.Compose`. The
-compile pass `C → C′` replaces each credited product of a declared circuit by its kind's template, with its noise drawn
-after its operands are committed, one coin a round. The service then draws one uniform subset of the
-window's grid-padded tiles, one a proof unit, and proves each drawn tile with the generation of its own noise.
+The vocabulary of `Definitions.Accounting.Guarantees.Compose`. The circuit is `D`, the served circuit as B outputs it:
+the products the workload computes and commits, with no coin input and no template or receipt gate (`Declared.Plain`).
+Beside it is its annotation (`Annotation`): each gate's tile, each call site's round, each round's coin mode, the coin
+before which the service commits each value and what each round's seed names. The protocol's work, each tile's noise, its
+receipt and its fold, is A's and is read only through the scheme's lucks (`Scheme`). It is not a gate of `D`, so the
+certified words are `D`'s committed words: a drawn tile's proof opens its tile's outputs, which are `D`'s committed
+coordinate outputs. The service then draws one uniform subset of the window's grid-padded tiles, one a proof unit, and
+proves each drawn tile with the generation of its own noise.
 
 Each round's coin is `live` (the verifier's, released after the round's served values are committed) or `seeded`
 (a seed: SHA-512 of the window's salt, the unit's position and its operands' roots, Fiat–Shamir). The live statements
@@ -26,8 +30,10 @@ data sheet, which prices those words as time on a declared device.
 
 The logical layer:
 
-* `CoinMode`, `Declared`: the circuit as the IR gives it, a `Accounting.Gates.Dag` (memory accounting's form, with its
-  wiring), each gate's Definition call site, each call site's round (the coin its noise reads: one coin a round),
+* `CoinMode`, `Annotation`, `Declared`, `isTemplate`, `Declared.Plain`: the served circuit `D` as the IR gives it, a
+  `Accounting.Gates.Dag` (memory accounting's form, with its wiring) with no coin input and no template or receipt
+  gate, and its annotation: each gate's Definition call site, each call site's round (the coin its tile's noise reads:
+  one coin a round),
   each round's coin mode (live or seeded), the coin before which the service commits each value under
   a root (`Declared.commitRound`, where the proofs' layer cuts it, and `LayerCommitted` holds it to the IR's cut, or
   to the draw for a computed value only its own unit reads),
@@ -35,7 +41,8 @@ The logical layer:
   proof unit (an
   output coordinate, a K-chunk committing its running sum, which no served kind is cut into, or a unit
   of glue). `Declared.Wf`: the call sites, rounds and units in range, one unit's gates in
-  one round, each coin input read only in its own round, and one unit's words of one kind.
+  one round, `D` plain, and one unit's words of one kind. The annotation's units cover `D`'s words by construction:
+  `unit` is a function on `D`'s gates, so each committed word is in exactly one tile, and `wordGates` reads only `D`'s.
 * `Declared.binding`, `Declared.Reads`, `Declared.Writes`: each gate's input binding, which gates read which, and the
   values the prover writes (every gate but a coin input).
 * `isWord`, `wordGates`, `Kind`, `kindAt`: the circuit's committed words of served products (`T_t`), and each gate's
@@ -141,11 +148,12 @@ inductive CoinMode
   | seeded
   deriving DecidableEq, Repr
 
-/-- **A declared circuit**: its gates in the IR's canonical order (`Accounting.Gates.Dag`: each gate's operation,
-operands, interval, primitive, site and whether it is committed), and as the IR binds them:
+/-- **A served circuit's annotation**: what the service reads beside the served circuit `D`, as the IR binds it, and
+none of it a gate. It is computed from `D` and the service's layout, never chosen by the prover (`window.py`'s tiles
+of each call's description; `Properties.Compose.UnitsOfLayout` is that tie, unproved):
 * `call i`: the Definition call site, of `calls`, that made gate `i`, numbered in the circuit's order;
-* `round c`: call site `c`'s round, of `rounds`: its noise reads that round's coin, released after the round's operands
-  are committed (one coin a round; one salt for the window, COMPILE);
+* `round c`: call site `c`'s round, of `rounds`: its tiles' noise reads that round's coin, released after the round's
+  operands are committed (one coin a round; one salt for the window, COMPILE);
 * `coinMode r`: round `r`'s coin's mode, live or seeded (`CoinMode`). The live statements need every round that holds a
   credited tile live (`Declared.Live`, in `Scope`); the seeded statements need every one seeded, one call site a round
   (`Declared.Seeded`, in `ScopeSeeded`);
@@ -159,11 +167,10 @@ operands, interval, primitive, site and whether it is committed), and as the IR 
   checked against that root (`SHA-512(tag ‖ salt ‖ position ‖ root(A) ‖ root(B))`, whose salt names
   the weights' root). The seeded statements need every value a seeded round reads named (`SeedNamed`, in
   `ScopeSeeded`); the live ones read none of it;
-* `unit i`: gate `i`'s proof unit, of `units`, the unit the service draws and proves alone (an output
-  coordinate, or a K-chunk committing its running sum, which no served kind is cut into; glue between
+* `unit i`: gate `i`'s tile, of `units`, the proof unit the service draws and proves alone (an output
+  coordinate block of a served product, whose proof opens those coordinates of `D`'s committed output; glue between
   products is in units of its own). -/
-structure Declared (ι : Type) where
-  dag : Gates.Dag ι
+structure Annotation where
   calls : ℕ
   call : ℕ → ℕ
   rounds : ℕ
@@ -173,6 +180,27 @@ structure Declared (ι : Type) where
   seedNames : ℕ → ℕ → Bool
   units : ℕ
   unit : ℕ → ℕ
+
+/-- **A declared circuit**: the served circuit `D`, its gates in the IR's canonical order (`Accounting.Gates.Dag`: each
+gate's operation, operands, interval, primitive, site and whether it is committed), as B outputs it, and its
+annotation. `D` holds no protocol work (`Declared.Plain`, in `Declared.Wf`): a tile's noise, receipt and fold are A's,
+read through the scheme's lucks, so the words its proofs certify are `D`'s committed words. -/
+structure Declared (ι : Type) extends Annotation where
+  dag : Gates.Dag ι
+
+/-- **A gate of protocol work**: a coin input (a round's coin, which a tile's noise reads) or a receipt word (a
+template's checkpoint, `Gates.Site.receipt`). The served circuit has none: they are A's. -/
+def isTemplate {ι : Type} (g : Gates.Gate ι) : Bool :=
+  (match g.op with
+    | .input .coin _ => true
+    | _ => false) ||
+  (match g.site with
+    | .receipt _ _ _ _ _ => true
+    | _ => false)
+
+/-- **The circuit is the served one**: no gate of `D` is protocol work (`isTemplate`), so its committed words are the
+served products' outputs and no value of it reads a coin. -/
+def Declared.Plain {ι : Type} (Cd : Declared ι) : Prop := ∀ g ∈ Cd.dag, isTemplate g = false
 
 /-- **Gate `i`'s input binding**: `some b` for an input bound at `b` (`Gates.Binding`: registered, a coin or at run
 time), and `none` for any other gate or past the circuit. -/
@@ -245,16 +273,16 @@ def kindAt {ι : Type} (Cd : Declared ι) (i : ℕ) : Kind :=
   (Cd.dag[i]?).elim ⟨"", .other, false, false⟩ (kindOfGate Cd.dag)
 
 /-- **The circuit is well formed**: every gate's call site and unit are in range, every call site's round is, one
-unit's gates are in one round, each coin input's round is the round of every gate that reads it (so of the unit that
-reads it: a round's noise reads that round's coin, which `coinMark` and `StageCoins` read), and one unit's words are of
-one kind. -/
+unit's gates are in one round, the circuit is the served one (`Declared.Plain`: no coin input and no receipt gate, so
+the coin a tile's noise reads is its round's by its template, which is A's, and not by a gate of `D`), and one unit's
+words are of one kind. With `unit` a function on `D`'s gates, every committed word is in exactly one tile and no tile
+holds a word outside `D`. -/
 def Declared.Wf {ι : Type} (Cd : Declared ι) : Prop :=
   (∀ i, i < Cd.dag.length → Cd.call i < Cd.calls ∧ Cd.unit i < Cd.units) ∧
     (∀ c, c < Cd.calls → Cd.round c < Cd.rounds) ∧
     (∀ i j, i < Cd.dag.length → j < Cd.dag.length → Cd.unit i = Cd.unit j →
       Cd.round (Cd.call i) = Cd.round (Cd.call j)) ∧
-    (∀ i j, i < Cd.dag.length → j < Cd.dag.length → Cd.binding i = some .coin → Cd.Reads j i →
-      Cd.round (Cd.call i) = Cd.round (Cd.call j)) ∧
+    Cd.Plain ∧
     ∀ i ∈ wordGates Cd, ∀ j ∈ wordGates Cd, Cd.unit i = Cd.unit j → kindAt Cd i = kindAt Cd j
 
 /-- Unit `u`'s gates, in the circuit's order. -/

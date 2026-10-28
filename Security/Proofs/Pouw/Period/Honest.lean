@@ -147,7 +147,7 @@ theorem sum_tileWords : ∑ t : Fin 144, (tileWords Honest.scheme circuit 144 t 
 
 theorem circuit_wf : circuit.Wf := by
   refine ⟨fun i hi => ⟨Nat.one_pos, lt_of_lt_of_eq hi length_dag⟩, fun _ _ => Nat.one_pos, fun _ _ _ _ _ => rfl,
-    fun _ _ _ _ _ _ => rfl, fun i _ j _ h => ?_⟩
+    fun g hg => by obtain rfl := List.eq_of_mem_replicate hg; rfl, fun i _ j _ h => ?_⟩
   have e : i = j := h
   rw [e]
 

@@ -129,7 +129,8 @@ theorem sum_tileWords (N : ℕ) : ∑ t : Fin N, (tileWords Honest.scheme (circu
 
 theorem circuit_wf (N : ℕ) : (circuit N).Wf := by
   refine ⟨fun i hi => ⟨Nat.one_pos, lt_of_lt_of_eq hi (length_dag N)⟩, fun _ _ => Nat.one_pos,
-    fun _ _ _ _ _ => rfl, fun _ _ _ _ _ _ => rfl, fun i _ j _ h => ?_⟩
+    fun _ _ _ _ _ => rfl, fun g hg => by obtain rfl := List.eq_of_mem_replicate hg; rfl,
+    fun i _ j _ h => ?_⟩
   have e : i = j := h
   rw [e]
 
