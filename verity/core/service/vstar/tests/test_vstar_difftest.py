@@ -14,6 +14,7 @@ from __future__ import annotations
 import hashlib
 import json
 import shutil
+import struct
 import subprocess
 from pathlib import Path
 from types import SimpleNamespace
@@ -291,6 +292,18 @@ def link_tree(v) -> dict:
         raise D.Reject("pos: [unit, row]")
     t = LK.Tree(leaves, LK.depth(UB, PB))
     return {"root": t.root.hex(), "path": [s.hex() for s in t.path(at(o["pos"]))]}
+
+
+def link_ref(v) -> dict:
+    o = _obj(v, ("UB", "PB", "ports"))
+    if not isinstance(o["ports"], list) or len(o["ports"]) != 7 or not all(isinstance(p, list) for p in o["ports"]):
+        raise D.Reject("ports: seven lists")
+    ports = [[_nat(w) for w in p] for p in o["ports"]]
+    UB, PB = _nat(o["UB"]), _nat(o["PB"])
+    if any(w >> 16 for p in ports for w in p):
+        raise D.Reject("u16 words")
+    rin, rout = LK.link_ref(UB, PB, *ports)
+    return {"rin": rin, "rout": rout}
 
 
 def _rec_open_text(o: dict) -> str:
@@ -887,3 +900,37 @@ def test_link_unit_agrees(server, ub_pb):
     if ub_pb == (0, 0):
         for bad in ({"UB": 31, "PB": 0}, {"UB": 0, "PB": 17}, {"UB": 16, "PB": 17}, {"UB": True, "PB": 0}, {"UB": 1}):
             assert D.replay(p, bad, server)[0] == "reject", bad
+
+
+@st.composite
+def _link_refs(draw):
+    """A table row of each kind (fields in range and just past it, a filler's zero, a tail byte set), the reader's digest
+    the writer's or another, and random salts and siblings."""
+    UB, PB = draw(st.integers(0, 2)), draw(st.integers(0, 2))
+    a = LK.aux_words(UB + PB)
+    def words(n):
+        return draw(st.lists(st.integers(0, 65535), min_size=n, max_size=n))
+    kind = draw(st.sampled_from([0, 1, 1, 1, 2]))
+    fields = [kind] + [draw(st.integers(0, 2 ** b)) for b in (UB, PB, UB, PB)]
+    if kind == 0 and draw(st.booleans()):
+        fields = [0] * 5
+    row = struct.pack("<5I", *fields) + bytes(108)
+    if draw(st.integers(0, 9)) == 0:
+        row = row[:-1] + b"\1"
+    xr = words(32)
+    xw = xr if draw(st.booleans()) else words(32)
+    return {"UB": UB, "PB": PB, "ports": [_words_le(row), xr, words(96), words(a), xw, words(96), words(a)]}
+
+
+def _words_le(b: bytes) -> list[int]:
+    return [b[i] | b[i + 1] << 8 for i in range(0, len(b), 2)]
+
+
+LINK_REF = _link_refs() | st.fixed_dictionaries({"UB": _near(0, 30), "PB": _near(0, 16), "ports": st.just([[]] * 7)}) | JSON
+
+
+def test_link_ref_agrees(server):
+    """The link unit's Lean reference (`Flock.RecLinkRef.linkRef`, whose outputs' meaning `linkOut_meaning` and `okRef_link`
+    state) against `rec_link.link_ref`, on drawn rows that pass and that don't."""
+    stats = D.run(port("link_ref", link_ref, LINK_REF), examples=60, seed=SEED, server=server)
+    assert stats.outputs >= 30 and stats.rejects >= 5, stats
