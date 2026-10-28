@@ -14,6 +14,13 @@ PY=${VERITY_BENCH_VENV:+$VERITY_BENCH_VENV/bin/python3}
 for v in /workspace/cp/venv312 /workspace/cache/kernels-j10r/venv312 /workspace/jobs/venv312; do
   [ -z "${PY:-}" ] && [ -x "$v/bin/python3" ] && PY=$v/bin/python3
 done
+if [ -z "${PY:-}" ] && command -v uv > /dev/null; then
+  # no venv on the node: torch through uv (U2_TORCH, U2_TORCH_INDEX), fetched here, before the lease
+  PY=$S/python
+  printf '#!/usr/bin/env bash\nexec uv run -q --no-project --with "torch==%s" --with numpy --index-url %s python "$@"\n' \
+    "${U2_TORCH:-2.9.*}" "${U2_TORCH_INDEX:-https://download.pytorch.org/whl/cu128}" > "$PY"
+  chmod +x "$PY"
+fi
 [ -x "${PY:-}" ] || { echo "u2_cutlass: no Python with torch (VERITY_BENCH_VENV)" >&2; exit 2; }
 git rev-parse HEAD > "$OUT/commit.txt" 2>/dev/null || echo "${RESEARCH_SOURCE_SHA:-unknown}" > "$OUT/commit.txt"
 ship() {
@@ -30,7 +37,8 @@ export -f ship; export S SHIP OUT U2_SHIP_DIR
 if [ -z "${U2_SHIP_DIR:-}" ]; then
   ship || { echo "u2_cutlass: the ship $SHIP is missing or fails its MANIFEST" >&2; exit 2; }
 fi
-"$PY" -c 'import torch; print(torch.__version__, torch.version.cuda)' > "$OUT/python.txt" 2>&1
+"$PY" -c 'import torch; print(torch.__version__, torch.version.cuda)' > "$OUT/python.txt" 2>&1 \
+  || { cat "$OUT/python.txt" >&2; echo "u2_cutlass: $PY has no torch" >&2; exit 2; }
 nvidia-smi --query-gpu=index,uuid,name,driver_version,clocks.max.sm,power.limit,enforced.power.limit --format=csv \
   > "$OUT/gpus.txt" 2>&1
 echo "u2_cutlass: asking for one GPU at $(date -u +%H:%M:%SZ)"
