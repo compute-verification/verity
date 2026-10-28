@@ -302,13 +302,15 @@ class Now(Later):
 
 def test_the_arm_is_ready_before_the_server_listens(tmp_path, monkeypatch):
     """`arm_of` reserves window 0's session off the loop, and `H1Windows.ready` computes the weights' roots, builds the
-    call tables' hasher, compiles the z/y kernels and waits for that reserve, all before serve-openai listens: window 0's
-    open then reserves nothing for itself and computes no root, and its session is the one reserved at startup."""
+    call tables' hasher, compiles the z/y kernels, builds the Lean verifier and waits for that reserve, all before
+    serve-openai listens: window 0's open then reserves nothing for itself and computes no root, and its session is the
+    one reserved at startup."""
+    from verity.core.protocols.pouw import verifier
     from verity_vllm.protocols.pouw.h1 import hooks as PHK
     from verity_vllm.protocols.pouw.h1 import tables_device as TD
 
     srv, auditor = _Server(monkeypatch), _GateAuditor(tmp_path, monkeypatch)
-    calls, roots, warmed = [], [], []
+    calls, roots, warmed, built = [], [], [], []
 
     def gate(argv: list[str]) -> tuple[int, str]:
         calls.append(shlex.split(argv[-1])[0])
@@ -323,12 +325,13 @@ def test_the_arm_is_ready_before_the_server_listens(tmp_path, monkeypatch):
     monkeypatch.setattr(PH, "weight_root", lambda w, rows, *key: roots.append(w) or weight_root(w, rows, *key))
     monkeypatch.setattr(PHK, "warm_zy", lambda layers, rows: warmed.append((len(layers), rows)) or 3)
     monkeypatch.setattr(TD, "available", lambda: False)
+    monkeypatch.setattr(verifier, "executable", lambda: built.append(len(calls)))
     opts = SimpleNamespace(protocols=SH.ENTRY, max_num_batched_tokens=ROWS, window_steps=STEPS, protocols_config=None)
     arm = SH.arm_of(opts, SimpleNamespace(model=srv.model, vllm=object()), srv.com, tmp_path)
     (held,) = sessions.held
     assert arm.describe()["ready"] == {"tables": "off", "kernels": 3, "session": held["session"],
-                                       "seconds": {"roots": 1, "tables": 1, "kernels": 1, "reserve": 1}}
-    assert held["window"] == 0 and calls == ["reserve"] and roots == [0, 1] and warmed == [(2, ROWS)]
+                                       "seconds": {"roots": 1, "tables": 1, "kernels": 1, "lean": 1, "reserve": 1}}
+    assert held["window"] == 0 and calls == ["reserve"] and roots == [0, 1] and warmed == [(2, ROWS)] and built == [1]
     arm.open(0)
     srv.serve(PROMPTS[0], 0)
     out = arm.close(0)

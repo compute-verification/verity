@@ -31,8 +31,9 @@ own Commit.
 * **Ready before it listens.** `H1Windows.ready`, before serve-openai listens, does what the first block's first step
   would otherwise do before its first token: the weights' roots (`pouw_h1_hooks.weight_roots`, which each install
   reuses), the call tables' GPU hasher built (`pouw_h1_tables_device.available`), every z/y kernel a step of up to T
-  rows runs compiled (`pouw_h1_hooks.warm_zy`), and the wait for that block's reserve (window 0's, which `arm_of` makes
-  while the Program is declared). Round 0's open stays at the block's first admission: its open root binds that round's
+  rows runs compiled (`pouw_h1_hooks.warm_zy`), the Lean verifier of record built (`verifier.executable`, once a
+  process: in a fresh tree a minute's build, which in-process coins otherwise run at the first one's draw), and the wait
+  for that block's reserve (window 0's, which `arm_of` makes while the Program is declared). Round 0's open stays at the block's first admission: its open root binds that round's
   requests, and the call tables are bound under the salt the open draws.
 * **Off the engine loop.** At a window's close the loop takes only H1's hooks and tap off; its release (the empty
   steps' calls, the manifest's commit, the draw coin, the session's close and the wait for its end entry) runs on
@@ -381,9 +382,11 @@ class H1Windows:
 
     def ready(self) -> dict[str, Any]:
         """What window 0's first step would otherwise do before its first token, done now (the module's "Ready before it
-        listens"): the weights' roots computed, the call tables' GPU hasher built, the z/y kernels compiled and window 0's
-        reserve ended (`GateSessions.settled`, made here unless made ahead already); ``readied``, with where each part's
-        time went (``seconds``)."""
+        listens"): the weights' roots computed, the call tables' GPU hasher built, the z/y kernels compiled, the Lean
+        verifier of record built (the in-process coins' entropy and each release's verdicts) and window 0's reserve ended
+        (`GateSessions.settled`, made here unless made ahead already); ``readied``, with where each part's time went
+        (``seconds``)."""
+        from verity.core.protocols.pouw import verifier
         from verity_vllm.protocols.pouw.h1 import hooks as PHK
         from verity_vllm.protocols.pouw.h1 import tables_device as TD
 
@@ -394,18 +397,20 @@ class H1Windows:
         t2 = self.clock()
         kernels = PHK.warm_zy(self.layers, self.rows)
         t3 = self.clock()
+        verifier.executable()
+        t4 = self.clock()
         session = None
         if self.sessions is not None:
             self.sessions.ahead_of(0)
             session = (self.sessions.settled(0) or {}).get("session")
-        t4 = self.clock()
+        t5 = self.clock()
         self.readied = {"tables": tables, "kernels": kernels, "session": session,
                         "seconds": {"roots": round(t1 - t0, 4), "tables": round(t2 - t1, 4), "kernels": round(t3 - t2, 4),
-                                    "reserve": round(t4 - t3, 4)}}
+                                    "lean": round(t4 - t3, 4), "reserve": round(t5 - t4, 4)}}
         print(f"[serve-h1] ready: weight roots in {t1 - t0:.1f} s, the call tables' GPU hasher {tables} in {t2 - t1:.1f} s, "
-              f"{kernels} z/y kernels compiled in {t3 - t2:.1f} s"
+              f"{kernels} z/y kernels compiled in {t3 - t2:.1f} s, the Lean verifier built in {t4 - t3:.1f} s"
               + ("" if self.sessions is None else f", window 0's session {session or 'not reserved (its open reserves)'}"
-                                                  f" after {t4 - t3:.1f} s"), flush=True)
+                                                  f" after {t5 - t4:.1f} s"), flush=True)
         return self.readied
 
     def describe(self) -> dict[str, Any]:
