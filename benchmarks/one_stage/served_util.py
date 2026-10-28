@@ -1,4 +1,4 @@
-"""The whole-step tensor utilization of one `served_util.sh` run (VLLM-33): the mean of Nsight Systems' Tensor Active GPU
+"""The whole-step tensor utilization of one `served_util.sh` run: the mean of Nsight Systems' Tensor Active GPU
 metric over the engine's steady state, the step wall time from the server's step trace, and where the rest of the step went.
 
     python benchmarks/one_stage/served_util.py --sqlite PROF.sqlite --trace ADVICE_TRACE.jsonl --T 8192 [--serve-dir D]
