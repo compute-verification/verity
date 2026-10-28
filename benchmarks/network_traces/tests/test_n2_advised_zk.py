@@ -1,9 +1,9 @@
-"""n2_advised_zk's link-windows on the advised tests' traffic (`advised_traffic`). At the driver's T = 512 the session
-is varied, every window receives, its honest windows' output words are verdict 1 and deadline 1, and each negative (a
-moved release bucket, an output length one short, extra egress) fails in some window on the advised counts alone, its
-head checks passing and every window's unit taking an instance; the verifier's own ``pub`` row, from public fields,
-the certificates and its own view of the public advice, is the prover's, in whole u16 words. The --e2e link's advice
-(`joined`) numbers each Commit window's requests after the windows' before it. At the tests' T = 8 the
+"""n2_advised_zk's sampling blocks on the advised tests' traffic (`advised_traffic`). At the driver's T = 512 the
+session is varied, every window receives, its honest windows' output words are verdict 1 and deadline 1, and each
+negative (a moved release bucket, an output length one short, extra egress) fails in some window on the advised counts
+alone, its head checks passing and every window's unit taking an instance; the verifier's own ``pub`` row, from public
+fields, the certificates and its own view of the public advice, is the prover's, in whole u16 words. The --e2e link's
+advice (`joined`) numbers each Commit window's requests after the windows' before it. At the tests' T = 8 the
 proof block (`LinkWindows.proof_unit`), evaluated on the rows the prover stages, gives the output words the gates'
 references do (`LinkWindows.outputs`) in every window of every member and on a head the prover changed. ``--jobs`` is 1
 unless given and 2 is refused, naming the rule (`n2_zk.ONE_SESSION`). Nothing here lowers or proves

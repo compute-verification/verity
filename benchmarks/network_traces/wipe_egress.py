@@ -63,7 +63,7 @@ def origin_ns(origin_unix: float) -> int:
 
 
 def covering(origin: int, width: int, t0: int, t1: int, pad: int = PAD_NS) -> range:
-    """The link-windows w, each [origin + w·width, origin + (w+1)·width), that meet [t0 − pad, t1 + pad)."""
+    """The sampling blocks w, each [origin + w·width, origin + (w+1)·width), that meet [t0 − pad, t1 + pad)."""
     return range((t0 - pad - origin) // width, -((origin - t1 - pad) // width))
 
 

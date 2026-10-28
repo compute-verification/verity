@@ -12,7 +12,7 @@ challenger's coins (``--challenger``), a `service.Stream`'s.
     python benchmarks/network_traces/scan_zk.py schedule [--class w63|test]    # its schedule as warden_serve.py's flags
 
 * **The setups** (`SETUPS`, ``--class``): ``w63`` (`W63`, whose `CLASS`, `SHAPE` and `PARAMS` these are), w63's class
-  (B 512, r 4, 4 lanes, C 47, IDB 17, EVERY 16, WITHIN 12: 4 Program slots a timestep, 8 a link-window) with the
+  (B 512, r 4, 4 lanes, C 47, IDB 17, EVERY 16, WITHIN 12: 4 Program slots a slot stride, 8 a sampling block) with the
   warden's delay D 27 (WITHIN + EVERY − 1), KO 64 outputs and KI 1,024 prompt ids a request,
   egress at `CLASS.egress` (16 cells in lanes of 4, 4 request slots of 64 17-bit ids), the warden at `PARAMS`, 32-bucket
   link-windows; and ``test`` (`TEST`), the certifier tests' class (B 512, r 2, 2 lanes, C 4, EVERY 2, WITHIN 3, D 5,
@@ -26,12 +26,12 @@ challenger's coins (``--challenger``), a `service.Stream`'s.
 * **A warden's run** (``--warden-run RUN``, `warden_run`) in its place: a warden_serve run's directory (``serve``'s, or
   the gate's ``warden-rehearse --scan``'s with its witness under ``witness/``) at the setup's schedule (w63's:
   ``scan_zk.py schedule``) carrying the scan's traffic (``rehearse --ids``). The verifier reads ``deployment.json`` (the
-  warden's public key, the session, the schedule and its digest) and each link's registration of each link-window of
+  warden's public key, the session, the schedule and its digest) and each link's registration of each sampling block of
   the group in ``cells.jsonl``, its head's signature verified under that key; the prover's rows are the records under
   ``cells.salts``, held to that head. Each is refused by name where it doesn't hold, as is a schedule the class doesn't
   serve and a response that isn't id-form.
-* **The group** (``--group G``, default 1; `link`'s ``start``, its first link-window, 0): G link-windows of each link,
-  one registration, the scan's buckets 0 … G·T − 1 from the empty state, T a link-window's.
+* **The group** (``--group G``, default 1; `link`'s ``start``, its first sampling block, 0): G sampling blocks of each
+  link, one registration, the scan's buckets 0 … G·T − 1 from the empty state, T a sampling block's.
 * **The scan's rows**, committed by the prover before the draw as hiding rows (`verity.ml.commitments.advice`, each
   tree's root in the registration), G·T leaves each: ``state``, leaf t S_t; ``prog``, leaf t the Programs' row t (each
   request's response ids at its anchor, standing in for the anchored Programs' outputs); and ``view``, leaf t S_t's
@@ -135,8 +135,8 @@ _spec.loader.exec_module(traffic)
 class Setup(NamedTuple):
     """A class the scan is proved at, the warden's schedule it serves and the synthetic run's traffic: request i's
     prompt ``prompts[i]`` (max_tokens ``max_tokens`` + i, seed ``seed``·i) arrives at bucket ``arrivals[i]`` and is
-    answered ``responses[i]``, and the warden serves ``windows`` link-windows, every connection ended by the last's end;
-    the chain round swaps S_A and S_{A+1}."""
+    answered ``responses[i]``, and the warden serves ``windows`` sampling blocks, every connection ended by the last's
+    end; the chain round swaps S_A and S_{A+1}."""
 
     name: str
     cls: IS.Class
@@ -416,8 +416,8 @@ def warden_run(run: Path, setup: Setup, windows: list[int], out: Path) -> Simple
 
 
 def _tamper(got: SimpleNamespace, egress: list[bytes], T: int, B: int, R: int) -> SimpleNamespace:
-    """The tampered round's egress link-window: the group's first egress row with a `DATA` cell, the last digit of
-    that cell's id changed, its link-window's rows committed afresh and their head signed by ``got.issuer``, the
+    """The tampered round's egress sampling block: the group's first egress row with a `DATA` cell, the last digit of
+    that cell's id changed, its sampling block's rows committed afresh and their head signed by ``got.issuer``, the
     registration read back under ``got.key``."""
     t, s = next(((t, s) for t, row in enumerate(egress) for s in range(R) if row[s * B] == DATA), (None, None))
     if t is None:
@@ -726,7 +726,7 @@ def staged_wires(members: list[dict]) -> list[str]:
 
 def window_root(at: SimpleNamespace) -> str:
     """The root the challenger's session opens on (128 hex digits): the SHA-512 of the warden's session and the group's
-    registrations, each link's in link-window order, whose heads the warden signed. The gate opens a root once, ever,
+    registrations, each link's in sampling block order, whose heads the warden signed. The gate opens a root once, ever,
     so a warden run's group is drawn once."""
     return hashlib.sha512(canonical_json({"format": WINDOW_ROOT, "session": at.session.hex(),
                                           "registrations": {s: [x.registration for x in ws]
@@ -1063,7 +1063,7 @@ def per_unit(members: list[dict], statement: dict) -> dict[str, dict]:
 
 
 def window_answer(reg: dict, record: dict | None, delta: Fraction, reason: str) -> dict:
-    """One-stage's answer for the group's registration ``reg`` as a period check reads a link-window's scan answer
+    """One-stage's answer for the group's registration ``reg`` as a period check reads a sampling block's scan answer
     (`NetworkCheck.Period`'s rows form, `pouw.core_check.answer_of`): from an accepted audit record (``record``,
     `audit`'s ``audit.json``), its draw and proved units with one-stage's profile and bound on wrong units at
     ``delta`` (`audit.profile`, `audit.wrong_units`: every unit drawn, the bound 0); else a reject naming ``reason``."""

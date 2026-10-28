@@ -1,9 +1,9 @@
 """network-e2e: network accounting end to end on a served model, as one report. A certifier-serve rehearsal's runs (the
-network certifier in front of a served endpoint, `certifier_serve.py`), N2's verdict of record on every link-window and
-the link's network verdict (`LinkWindows.verify` through the proof service's stream, `network_verdict`), every
-link-window's head checks proved by C-Flock ``prove --zk`` behind the Lean firewall and held by Lean (`n2_zk.prove`), and
+network certifier in front of a served endpoint, `certifier_serve.py`), N2's verdict of record on every sampling block
+and the link's network verdict (`LinkWindows.verify` through the proof service's stream, `network_verdict`), every
+sampling block's head checks proved by C-Flock ``prove --zk`` behind the Lean firewall and held by Lean (`n2_zk.prove`), and
 the negatives (``late``, ``extra`` and a tampered head) refused, in `report.json` and `report.md` under ``--out``; then
-the chain's stages (`chain`): the advice's bits per link-window, the prove path's audit and the negatives
+the chain's stages (`chain`): the advice's bits per sampling block, the prove path's audit and the negatives
 (`negatives.py`), and what is still stubbed.
 
     python benchmarks/network_e2e/e2e.py --from SRC [SRC ...] --out DIR (--bin flock-circuit --lean flock-verify |
@@ -25,27 +25,27 @@ then runs this. The README says what the report establishes and what it doesn't.
   prover's node, though not on the auditor host. The negatives' drop, when the rehearsal ran it, is a negative (refused
   by N2's counts, and on the advice profile by the rehearsal's own check), and its token is refused only by the I/O tie
   (``PENDING``): on the advice profile, where the tie is required (`chain.tie`, `chain.tie_gate`), token is a negative
-  it must refuse at the link-windows its changed ids fall in; on the others, where the tie doesn't run, a row pending
+  it must refuse at the sampling blocks its changed ids fall in; on the others, where the tie doesn't run, a row pending
   it. An honest run is required: the tampered head is its window 0's egress head one count off (`n2_zk.one_count`).
-* **N2.** Per run, each link-window committed under fresh salts, registered on N2's stream, selected (Selection All) and
-  decided in the clear, with the Lean audit (`n2_zk.link_windows` with a clock: `LinkWindows.unproved_outcome`, as for
-  any run that proves nothing), then `network_verdict`. A summary `n2_zk.prove` wrote before N2's registered unit was
-  proved (adopted) carries honest's, tampered's and extra's verdicts on the roots it proved under; any other run's are
-  taken here.
+* **N2.** Per run, each sampling block committed under fresh salts, registered on N2's stream, selected (Selection All)
+  and decided in the clear, with the Lean audit (`n2_zk.link_windows` with a clock: `LinkWindows.unproved_outcome`, as
+  for any run that proves nothing), then `network_verdict`. A summary `n2_zk.prove` wrote before N2's registered unit
+  was proved (adopted) carries honest's, tampered's and extra's verdicts on the roots it proved under; any other run's
+  are taken here.
 * **Proofs** (planned profile). `n2_zk.prove` on the honest run and, when its plan has the honest run's windows, the
   extra run: each member (honest egress and ingress, tampered egress, extra egress) one statement of n units, drawn by the
   verifier's Lean, proved ``--zk`` behind the firewall and held by Lean; the verifier opens each unit's ``pub`` row to its
   own copy and its verdict row. With ``--proofs`` they are a run's of its own, adopted (`adopt`: each proved unit's
   certificate digest must be these runs'), so that what n2_zk's own run proved isn't proved again. Not yet on `n2_zk` as
-  it now proves: one member a round, each link-window decided by its proof of N2's registered unit; `prove` refuses and
-  `adopt` refuses such a summary, each saying so (``--no-prove`` takes N2's verdicts only). On the served profile
+  it now proves: one member a round, each sampling block decided by its proof of N2's registered unit; `prove` refuses
+  and `adopt` refuses such a summary, each saying so (``--no-prove`` takes N2's verdicts only). On the served profile
   nothing is proved: its count check is `NetworkServedCounts_v1`, which `n2_zk` doesn't prove (the claim says so).
-* **Cost.** A member proves all n of its link-windows in one session, one statement and one pair of proofs, so a
-  link-window has no time or proof of its own. Per session: the prover's time (``prove_total_s``), Lean's ``verify --zk``
+* **Cost.** A member proves all n of its sampling blocks in one session, one statement and one pair of proofs, so a
+  sampling block has no time or proof of its own. Per session: the prover's time (``prove_total_s``), Lean's ``verify --zk``
   time, the bytes of its two proofs (``circuit.rep0.bin``, ``circuit.rep1.bin``) and the peak RSS of the largest process
   the driver had run by its end (``max_child_rss_gb``, `RUSAGE_CHILDREN`, which only grows: n2_zk proves the honest
-  members first). Beside them, n2_zk's cost pass (``summary.json``'s ``cost``): one honest link-window proved alone, per
-  end (`alone`); and the driver's own peak (the unit's lowering).
+  members first). Beside them, n2_zk's cost pass (``summary.json``'s ``cost``): one honest sampling block proved alone,
+  per end (`alone`); and the driver's own peak (the unit's lowering).
 * **Varied traffic** (``rehearse --traffic varied``, passed on): N2's profile is ``advice``, on which N2 gives no
   verdict without N2's advised counts, so nothing is proved and the rehearsal's own check (certified, the certified I/O,
   audit, salt) is each run's verdict, late, extra and drop its negatives (`CLAIM_ADVICE`).
@@ -384,7 +384,7 @@ def rehearse(args, rest: list[str], out: Path) -> Path:
 # --- N2 and the proofs ------------------------------------------------------------------------------------------------
 
 def parts(rd: SimpleNamespace, x: SimpleNamespace) -> dict[str, list[str] | None]:
-    """Each end's head-check parts that fail on link-window x, by the reference in the clear
+    """Each end's head-check parts that fail on sampling block x, by the reference in the clear
     (`head_check.reference_parts`), and on a served link the served counts (`LinkWindows.served_check`)."""
     out = {end: None if c is None else [k for k, ok in HC.reference_parts(c).items() if not ok]
            for end, c in zip(n2_zk.ENDS, x.insts)}
@@ -396,7 +396,7 @@ def parts(rd: SimpleNamespace, x: SimpleNamespace) -> dict[str, list[str] | None
 
 def host(rd: SimpleNamespace) -> dict:
     """`n2_zk.link_windows`'s result on its stream as an adopted `n2_zk.prove` summary records N2's verdicts (its
-    ``host``), with each link-window's failed parts (`parts`)."""
+    ``host``), with each sampling block's failed parts (`parts`)."""
     return {"windows": [{"window": x.window, "registration": x.digest, **(x.host or {}), "parts": parts(rd, x)}
                         for x in rd.windows], "network": rd.network, "issuer_refused": rd.issuer_refused}
 
@@ -415,7 +415,8 @@ def adopt(d: Path, runs: dict[str, dict]) -> dict:
     """`n2_zk.prove`'s output from a run of its own (its ``--out``, or `n2_zk.sh`'s ``$OUT/n2zk``), as `prove` returns
     it, so that what n2_zk's own run proved isn't proved again. Refused unless every proved member is of these runs: the
     certificate digest each of its units' public row carries (``signed``, in the verifier's ``n2.json``) is the one
-    that run's certified record of that end and link-window carries (the tampered head keeps the honest certificate)."""
+    that run's certified record of that end and sampling block carries (the tampered head keeps the honest
+    certificate)."""
     summary = _read(d / "summary.json") or {}
     members = summary.get("members") or {}
     if not members:
@@ -473,7 +474,7 @@ def _round(x, places: int = 3):
 
 def _member(m: dict) -> dict:
     """One n2_zk member's proofs: held by Lean or not, what the verifier received, and its session's cost (all n
-    link-windows in one session and one pair of proofs)."""
+    sampling blocks in one session and one pair of proofs)."""
     t, rec = m.get("timing") or {}, m.get("received") or {}
     proofs = (t.get("timing") or {}).get("proof_bytes")
     return {"held": bool(m.get("accepted")) and all((m.get("verdicts") or {}).values()), "lean": m.get("verdicts"),
@@ -487,8 +488,8 @@ def _member(m: dict) -> dict:
 
 
 def report(runs: dict[str, dict], n2: dict[str, dict], proofs: dict, meta: dict, stages: dict | None = None) -> dict:
-    """The report (`FORMAT`): per run its network verdict, per link-window N2's verdict and the proofs' with their cost,
-    the negatives' refusals, the chain's stages (``stages``: `chain`'s advice, bits, prove path and the negatives
+    """The report (`FORMAT`): per run its network verdict, per sampling block N2's verdict and the proofs' with their
+    cost, the negatives' refusals, the chain's stages (``stages``: `chain`'s advice, bits, prove path and the negatives
     (`negatives.py`), each when it ran) and the claim. ``proofs``: `prove`'s result, or ``{"ran": False, "why": ...}``.
     On the advice profile N2 gives no verdict (``n2`` has no windows), so the rehearsal's own check is the verdict, and
     late and extra its negatives; the I/O tie (``stages``' ``tie``) is required there (`chain.tie_gate`), and token is
@@ -575,8 +576,8 @@ def report(runs: dict[str, dict], n2: dict[str, dict], proofs: dict, meta: dict,
 
 
 def alone(summary: dict, d: Path | None) -> dict | None:
-    """n2_zk's cost pass, per end: one honest link-window proved by itself (a session whose verifier draws one unit of
-    the n staged), with its prover and Lean seconds, its two proofs' bytes (read from ``d``, n2_zk's output, when
+    """n2_zk's cost pass, per end: one honest sampling block proved by itself (a session whose verifier draws one unit
+    of the n staged), with its prover and Lean seconds, its two proofs' bytes (read from ``d``, n2_zk's output, when
     there) and the peak, as the report's sessions."""
     out = {}
     for end, rows in (summary.get("cost") or {}).items():
@@ -633,7 +634,7 @@ def negative(run: dict, rows: list[dict], name: str | None = None, tie: dict | N
 
 
 def _tie_by(tie: dict) -> str:
-    """The I/O tie as what refused a negative: its codes, the link-windows they refused, and token's changed ids'."""
+    """The I/O tie as what refused a negative: its codes, the sampling blocks they refused, and token's changed ids'."""
     at = f" at link-windows {tie['windows']}" if tie["windows"] else ""
     lost = f", {tie['unplaced']} committed outputs no certified cell carries" if tie.get("unplaced") else ""
     changed = (f", the link-windows its changed ids fall in" if tie.get("changed") == tie["windows"] and tie["windows"]
@@ -646,7 +647,7 @@ def _cell(x) -> str:
 
 
 def markdown(r: dict) -> str:
-    """The report as Markdown: the verdicts, one row per link-window, the negatives and the claim."""
+    """The report as Markdown: the verdicts, one row per sampling block, the negatives and the claim."""
     p, v = r.get("proofs") or {}, r.get("varied")
     traffic = (f"varied traffic: {_cell(v.get('requests'))} requests, max_tokens drawn per request up to "
                f"{_cell(v.get('max_tokens'))}, prompts of {'–'.join(map(str, v.get('prompt_tokens') or ())) or '—'} "
@@ -762,7 +763,7 @@ def markdown(r: dict) -> str:
 
 
 def stages_of(runs: dict[str, dict], plan: dict, args, work: Path, clock) -> dict:
-    """The chain's stages (`chain`): the advice and its bits per link-window when ``--advice`` gives it (T, the
+    """The chain's stages (`chain`): the advice and its bits per sampling block when ``--advice`` gives it (T, the
     certified I/O and the windows from the honest run), or the endpoint's own when ``--endpoint-run`` names its records
     (`endpoint_advice`), the prove path when ``--prove-path`` does, and the negatives (`negatives.py`) on the runs
     unless ``--no-negatives`` (not on the advice profile: its rows take N2's verdict), with the I/O tie's verdict when

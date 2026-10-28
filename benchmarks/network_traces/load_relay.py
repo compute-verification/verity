@@ -681,7 +681,8 @@ def verifier_domain(program: str) -> Callable[[Value], CommitmentDomain]:
 
 def heads(link: str, program: str, values: Sequence[Value], roots: Mapping[str, bytes],
           domain: Callable[[Value], CommitmentDomain]) -> list[TR.TransferHead]:
-    """Each value's head for the load's link-window (`transfer_rows.TransferHead`: kind ``load``, ingress, window 0)."""
+    """Each value's head for the load's sampling block (`transfer_rows.TransferHead`: kind ``load``, ingress, window
+    0)."""
     return [TR.TransferHead(link, Direction.INGRESS, WINDOW, KIND, v.name, bytes.fromhex(program), v.reg_words, v.leaves,
                             domain(v).domain_id, roots[v.name], v.word_bits, v.schema) for v in values]
 
@@ -699,7 +700,7 @@ def sign_heads(issuer: Issuer, heads_: Sequence[TR.TransferHead]) -> list[dict[s
 
 def sign(issuer: Issuer, link: str, program: str, values: Sequence[Value], roots: dict[str, bytes],
          domain: Callable[[Value], CommitmentDomain]) -> list[dict[str, Any]]:
-    """Each value's head signed for the load's link-window: its registration (`transfer_rows.registration`)."""
+    """Each value's head signed for the load's sampling block: its registration (`transfer_rows.registration`)."""
     return sign_heads(issuer, heads(link, program, values, roots, domain))
 
 

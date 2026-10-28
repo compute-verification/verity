@@ -59,7 +59,7 @@ def test_a_link_window_is_a_row_a_bucket_whatever_the_load(traffic):
 
 
 def test_the_wiring_places_each_connections_cells_where_its_client_got_them(traffic):
-    """Connection q's cell k of the link-window is at its row's slot `place` gives: the cells its client got that
+    """Connection q's cell k of the sampling block is at its row's slot `place` gives: the cells its client got that
     window, in order. Ordinals count connections from 1 in the order they reached the warden (the wire's ingress
     ordinal: the active certifier's `Requests` and the I/O tie's map number them so). A bucket's cells are sorted by
     stream."""
@@ -148,9 +148,9 @@ def test_salts_are_fresh_and_never_shared_and_the_witness_reads_back():
 
 
 def test_the_registration_reads_back_and_refuses_anything_but_its_own(traffic, tmp_path):
-    """The verifier's read takes the link-window it expects and the schedule's parameters; any other field, an extra
-    key, a root or wiring the certificate doesn't sign, another key, session or link-window, or the wire record's
-    certificate of the same link-window, is refused."""
+    """The verifier's read takes the sampling block it expects and the schedule's parameters; any other field, an extra
+    key, a root or wiring the certificate doesn't sign, another key, session or sampling block, or the wire record's
+    certificate of the same sampling block, is refused."""
     warden, _ = traffic
     record = records(warden)[1][1]
     issuer, cells_, cert = _attest(tmp_path / "a", record)

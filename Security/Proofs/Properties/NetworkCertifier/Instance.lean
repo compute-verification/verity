@@ -138,7 +138,7 @@ theorem recordHead_grid {l : String} {d : Direction} {w : Int} {gr : Array (Arra
       cases Except.ok.inj e
       exact ⟨rfl, rfl, rfl, rfl⟩
 
-/-- The honest certifier's record of link-window `(d, l, 0)` under parameters digest `pd` and `salt`, signed at leaf
+/-- The honest certifier's record of sampling block `(d, l, 0)` under parameters digest `pd` and `salt`, signed at leaf
 `q`: its head, the head's digest and a signature that verifies under the key over the certificate message of that
 digest under `salt`. -/
 theorem signed (d : Direction) (l : String) {pd : ByteArray} (hpd : pd.size = 64) (hl : l.toUTF8.size < 2 ^ 16)
@@ -210,15 +210,15 @@ theorem honestAccepted_instance {eg ig : ByteArray} (hpd : ParamsDigests params 
     subst hl hw
     exact ⟨hi, salt, dgi, σi, hib, hia, hif, hibm, hip, his, hidl, hdgi, hreci, mi, hmi, hσi⟩
 
-/-- **`accepts_of_linkWindowsAccepted`'s hypothesis holds**: for parameters digests `eg` and `ig`, every link-window of
-the honest commitment is accepted. -/
+/-- **`accepts_of_linkWindowsAccepted`'s hypothesis holds**: for parameters digests `eg` and `ig`, every sampling block
+of the honest commitment is accepted. -/
 theorem linkWindowsAccepted_instance {eg ig : ByteArray} (hpd : ParamsDigests params eg ig) :
     ∃ c, LinkWindowsAccepted params c evidence :=
   let ⟨c, h⟩ := honestAccepted_instance hpd
   ⟨c, acceptsLinkWindows params c evidence h⟩
 
 /-- **`undecided_of_somePending`'s hypothesis holds**: for parameters digests `eg` and `ig`, the unit with no records
-has every link-window pending, so it is undecided. -/
+has every sampling block pending, so it is undecided. -/
 theorem somePending_instance {eg ig : ByteArray} (hpd : ParamsDigests params eg ig) :
     SomePending params ⟨#[], ByteArray.empty⟩ evidence ∧
       ∃ why, protocol.check params ⟨#[], ByteArray.empty⟩ evidence = .undecided why := by

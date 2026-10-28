@@ -4,7 +4,7 @@ Nothing here is in a Spec or proved. The cells are the warden's (`warden`, its r
 registration v2); no Commit writes the port yet, so the fake upstream commits it as the design has the Commit commit
 it, under `hm96-sha512/row/v2` rows in a `frame-v3-sha512` tree.
 
-**The cells are the warden's.** A link-window's egress is T rows, row t bucket t's R = lanes·r slots of B bytes, so
+**The cells are the warden's.** A sampling block's egress is T rows, row t bucket t's R = lanes·r slots of B bytes, so
 cell i is slot i mod R of bucket ⌊i / R⌋. A bucket's live connections hold r slots each, ranked by ordinal (slots
 ρ·r … ρ·r + r − 1 for rank ρ), and a slot no connection holds is B zero bytes (`pad_cell(B)`, a `PAD` on stream 0).
 Connection q, admitted at bucket s, has a `PAD` on q in each of its slots before s + D (`pad_cell(B, q)`); then its
@@ -57,7 +57,7 @@ Commit's registered port, which the proof system reads (the Lean verifier's regi
 --registered`: unit t reads row t by `warden_rows.bucket_port`, and its `port[s]` its bucket's s-th step by
 `port_reads`), so no gate of it hashes. It holds every cell to the map (`IoTieContent`): the port's E entries, each its
 id and its index e, routed to the slots by the prover's switches; any setting is a permutation, and `IoTieMatch` holds
-each `DATA` cell's id to the entry the map names, by its index. A link-window's tie is its T units. Public: the
+each `DATA` cell's id to the entry the map names, by its index. A sampling block's tie is its T units. Public: the
 warden's root and domain id (its registration), the port's root and domain id (the Commit's), and, until the named gap
 closes, the steps (the port's read positions) and the map. Witness: the rows and the read port rows (each with its salt
 and path, the registered reads'), and the switches.
@@ -201,7 +201,7 @@ def route_depth(cells: int, entries: int) -> int:
 
 @dataclass(frozen=True)
 class Shape:
-    """A link-window's egress, T ≥ 2 buckets of R slots of B-byte cells (N = T·R cells, the warden's T rows of R =
+    """A sampling block's egress, T ≥ 2 buckets of R slots of B-byte cells (N = T·R cells, the warden's T rows of R =
     lanes·r slots), and each bucket's port: S read rows of P ids each (E = S·P entries) from a port tree of depth
     DS. A bucket's routing is over M = 2^D ≥ max(R, E) positions."""
 
@@ -409,7 +409,7 @@ def fake_salt(seed: bytes, i: int) -> bytes:
 
 @dataclass(frozen=True)
 class Instance:
-    """One egress link-window's tie: the shape; the warden's cells with one salt a bucket row, their root and domain
+    """One egress sampling block's tie: the shape; the warden's cells with one salt a bucket row, their root and domain
     id (its registration: unit t reads row t there); the verifier's map and each bucket's S steps; each bucket's
     opened port rows (its steps' rows of the Commit's tree), their salts and paths; and the Commit's root and domain
     id. Public: the roots, the domain ids, the map and the steps; the rest is witness."""
@@ -490,7 +490,7 @@ def reference_parts(inst: Instance) -> dict[str, bool]:
 
 
 def reference(inst: Instance) -> bool:
-    """The link-window's tie: its rows are the registered roots', and every bucket's unit is 1."""
+    """The sampling block's tie: its rows are the registered roots', and every bucket's unit is 1."""
     return all(reference_parts(inst).values())
 
 

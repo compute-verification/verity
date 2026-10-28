@@ -5,9 +5,9 @@ session, charged by `advice.bits`) says in which egress bucket each kept output'
 request's prompt is, which with the link's public framing (`AdvisedProfile.request_frames`) says where it ends on the
 ingress link. Each window's egress counts must be the advice's releases in its buckets, and the advice is held to the
 certified ingress head under the declared syncs. A Boolean Definition, a gated part of N2's advised proof block
-(`service`'s `NetworkAdvisedLinkWindow` v2), which runs on every link-window; its one output is the ok bit. That unit's
-Program holds it as one gate that names its circuit digest (`gate`), pinned in this module's sidecar and held to the
-Definition by circuit-check, and N2's in-the-clear check runs its `reference`, which the tests hold to the circuit.
+(`service`'s `NetworkAdvisedLinkWindow` v2), which runs on every sampling block; its one output is the ok bit. That
+unit's Program holds it as one gate that names its circuit digest (`gate`), pinned in this module's sidecar and held to
+the Definition by circuit-check, and N2's in-the-clear check runs its `reference`, which the tests hold to the circuit.
 
     NetworkAdvisedCounts_v1{T, RIN, OWN}
         (ingress: Array<T, Count>, egress: Array<T, Count>, released: Array<T, Count>, floor: Array<T, Count>,
@@ -271,7 +271,7 @@ class SignedClocks:
     opening it took no sync from was refused: not a salted clock's opening (a record's `CertifiedRecord` among them),
     not an egress certificate, another key's, a sync and salt that don't open the digest signed (an altered
     digest or sync), a signature that doesn't verify (forged, or another session's, or relabelled to another link or
-    window), a salt another link-window's opening has too, or a window with two signed syncs. Whoever delivers the
+    window), a salt another sampling block's opening has too, or a window with two signed syncs. Whoever delivers the
     openings, the prover included, can't forge one."""
 
     key: PublicKey

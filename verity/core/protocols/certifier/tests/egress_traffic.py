@@ -34,7 +34,7 @@ class Served:
 def serve(params: W.WardenParams, arrivals: Sequence[int], responses: Sequence[Sequence[int]], windows: int) -> Served:
     """Connection k, ordinal k + 1, arrives at bucket arrivals[k] with response responses[k] (its ids, each one id
     event of P bytes, then `TRAILER`, all there by their deadlines), and the warden serves the link for `windows`
-    link-windows: admitted at the first bucket with a free lane in arrival order."""
+    sampling blocks: admitted at the first bucket with a free lane in arrival order."""
     P = params.payload
     fails: list[bytes] = []
     warden = SimpleNamespace(params=params, fails=SimpleNamespace(enqueue=fails.append))

@@ -88,8 +88,8 @@ H200_WIDTH, H200_HEAD, H200_CODES = 16384, 64, 256
 @dataclass(frozen=True)
 class Block:
     """A server block's one template, ``ScaledMmS8Coordinate_v1{K}`` on the s8 step ``gemm``; each port's value, its
-    kind and the link-window it crosses in (a load's the server session's, 0); and `load`, each load port's whole value
-    as the certifier commits it, ``{port: (rows of u16 words, stride)}``, unit i reading row ``i * stride``."""
+    kind and the sampling block it crosses in (a load's the server session's, 0); and `load`, each load port's whole
+    value as the certifier commits it, ``{port: (rows of u16 words, stride)}``, unit i reading row ``i * stride``."""
 
     name: str
     k: int

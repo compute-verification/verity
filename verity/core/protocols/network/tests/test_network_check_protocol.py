@@ -316,8 +316,9 @@ def _grid_json(g: GridParams) -> dict:
 @dataclasses.dataclass
 class Drawn:
     """A generated spatial unit before it is encoded: the change `m` (drawn with `n`), its parameters as JSON, the
-    certified records, each link-window's raw record and grid by `(direction, link, window)`, the egress links' frames and
-    syncs, and the link-window the change aims at (`target`, and an egress one, `egress_target`, when there is one)."""
+    certified records, each sampling block's raw record and grid by `(direction, link, window)`, the egress links' frames and
+    syncs, and the sampling block the change aims at (`target`, and an egress one, `egress_target`, when there is
+    one)."""
 
     m: str
     n: int

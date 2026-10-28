@@ -42,9 +42,9 @@ wiring are the record's).
       ‖ wiring (64 bytes) ‖ domain (64 bytes) ‖ root (64 bytes)
     cells digest = tagged_sha512(CELLS_TAG, H)
 
-and its certificate is `Issuer.sign`'s of the cells digest: the certifier's message for the link-window in its session
-(`certificate.certificate_message`). The wire record's certificate of the same link-window signs its salted record
-digest instead, so neither verifies as the other (each would need a SHA-512 preimage).
+and its certificate is `Issuer.sign`'s of the cells digest: the certifier's message for the sampling block in its
+session (`certificate.certificate_message`). The wire record's certificate of the same sampling block signs its salted
+record digest instead, so neither verifies as the other (each would need a SHA-512 preimage).
 
 **The registration** (`registration`) is the head and its certificate as one public JSON object:
 
@@ -60,10 +60,10 @@ the session over the head's digest.
 
 **How a unit reads it** (`port`). The verifier's own `--registered` port (`verity/registered-reads/v1`) names the value,
 root, leaves, words, word bits, domain and row schema, and `reads`: unit `reads_from + i` opens the row of its read
-(q, k), connection q's cell k of the link-window. The verifier takes the wiring only when it is the one the head names
-and the schedule's (ordinals and first rows in admission order, r cells a row, at most `lanes` connections a row), and
-refuses a read of a connection it doesn't hold, of a cell past the connection's, or of a cell another read opens. So a
-read opens its own connection's cell and no other: never an empty slot, a foreign connection's cell or a cell twice.
+(q, k), connection q's cell k of the sampling block. The verifier takes the wiring only when it is the one the head
+names and the schedule's (ordinals and first rows in admission order, r cells a row, at most `lanes` connections a row),
+and refuses a read of a connection it doesn't hold, of a cell past the connection's, or of a cell another read opens. So
+a read opens its own connection's cell and no other: never an empty slot, a foreign connection's cell or a cell twice.
 The unit's cell is at its slot's words of the row (`Wiring.place`). A population of one unit a bucket (the I/O tie's)
 reads whole rows instead (`bucket_port`): unit `reads_from + t` opens row t, every slot held or not, and no wiring.
 
@@ -137,9 +137,9 @@ def window_rows(record: Record, params: WardenParams) -> list[bytes]:
 
 @dataclass(frozen=True)
 class Wiring:
-    """Which connection holds which slots of a link-window's rows (the module docstring's "The wiring"):
-    `connections` is each connection's (ordinal q, first row, cells in the link-window), by q, and `salt` the 64 bytes
-    that hide them. Witness; the signed head names its `digest`."""
+    """Which connection holds which slots of a sampling block's rows (the module docstring's "The wiring"):
+    `connections` is each connection's (ordinal q, first row, cells in the sampling block), by q, and `salt` the 64
+    bytes that hide them. Witness; the signed head names its `digest`."""
 
     connections: tuple[tuple[int, int, int], ...]
     salt: bytes
@@ -224,8 +224,8 @@ def wiring(record: Record, params: WardenParams, salt: bytes | None = None) -> W
 @dataclass(frozen=True)
 class Units:
     """The units' wiring, as the Program pins it (the module docstring's "The units' wiring is the Program's"): unit
-    `reads_from + i` of the population reads `cells[i]` = (q, k), connection q's cell k of the link-window. Public, and
-    fixed from public structure alone, never from the cells' bytes."""
+    `reads_from + i` of the population reads `cells[i]` = (q, k), connection q's cell k of the sampling block. Public,
+    and fixed from public structure alone, never from the cells' bytes."""
 
     cells: tuple[tuple[int, int], ...]
 
@@ -349,7 +349,7 @@ class Cells:
     @classmethod
     def of(cls, link: str, direction: Direction, record: Record, params: WardenParams, session: bytes,
            salts: Sequence[bytes] | None = None, wiring_salt: bytes | None = None) -> Cells:
-        """`record`'s rows and wiring committed as `link`'s link-window in `direction`."""
+        """`record`'s rows and wiring committed as `link`'s sampling block in `direction`."""
         return cls.commit(link, direction, record.window, window_rows(record, params),
                           wiring(record, params, wiring_salt), params, session, salts)
 
@@ -419,7 +419,8 @@ def read_witness(blob: bytes) -> tuple[list[bytes], bytes]:
 
 def attest(issuer: Issuer, record: Record, params: WardenParams, direction: Direction,
            salts: Sequence[bytes] | None = None, wiring_salt: bytes | None = None) -> tuple[Cells, Certificate | None]:
-    """The link-window's rows and wiring committed and their head signed by `issuer` (None when its signer refuses)."""
+    """The sampling block's rows and wiring committed and their head signed by `issuer` (None when its signer
+    refuses)."""
     cells = Cells.of(record.link, direction, record, params, issuer.session, salts, wiring_salt)
     return cells, issuer.sign(record.link, direction, record.window, cells.head.digest())
 

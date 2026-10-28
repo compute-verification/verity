@@ -33,7 +33,7 @@ LINK, SESSION = "responses", bytes(64)
 
 
 def _record():
-    """One clean link-window: connection 1 holds a DATA cell and then a PAD in its own two slots of bucket 0;
+    """One clean sampling block: connection 1 holds a DATA cell and then a PAD in its own two slots of bucket 0;
     connection 2 holds two DATA cells. Later buckets are idle (empty slots, B zero bytes)."""
     bucket0 = (cell(DATA, 1, bytes(P), B), cell(PAD, 1, b"", B), cell(DATA, 2, bytes(P), B), cell(DATA, 2, bytes(P), B))
     grid = (bucket0,) + ((None,) * S,) * (T - 1)

@@ -6,7 +6,7 @@ audit's scope `NetTiming.ScopeAcc` that isn't sampling's). The record is ``circu
 before any coin.
 
 **The record's ``boundary``**, one template a side (and the ingress side's first bucket's), whose units are its
-link-windows' buckets:
+sampling blocks' buckets:
 
     {"format": "verity/boundary/v3",
      "egress":  {"template": "<id>", "frame": "<output>", "verdict": "<output>", "links": L, "buckets": T, "slots": R,

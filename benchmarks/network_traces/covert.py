@@ -241,7 +241,7 @@ def control_symbols(windows: int, seed: int) -> list[int]:
 
 def pool(summaries: Sequence[dict], sync_set: SyncSet) -> dict:
     """`measure_runs` over the runs of several `active_replay.py` summaries (one per trace, say), per strategy, with the
-    link-windows each strategy had accepted, raw and committed."""
+    sampling blocks each strategy had accepted, raw and committed."""
     out: dict[str, dict] = {}
     for strategy in sorted({s for doc in summaries for s in doc.get("covert", {})}):
         mine = [doc["covert"][strategy] for doc in summaries if strategy in doc.get("covert", {})]

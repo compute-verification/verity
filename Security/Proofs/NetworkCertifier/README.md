@@ -402,8 +402,8 @@ lemmas by name in its tests; its `PROTOCOL.md` lists them per test file. The wit
 
 ## Modelling choices a reader of the statements checks
 
-1. **Steps are buckets across all of ∂X.** The note states its bounds per link-window. The guarantees count steps, and
-   Theorem 1(b)'s tree lemma is still stated per step. The per-window ones read the horizon of the run's first `m` whole
+1. **Steps are buckets across all of ∂X.** The note states its bounds per sampling block. The guarantees count steps,
+   and Theorem 1(b)'s tree lemma is still stated per step. The per-window ones read the horizon of the run's first `m` whole
    windows of `T` buckets, `n = m·T`, each with its parent's hypotheses at that horizon and no other: the shipped
    schedule's bound is `#Ac · (#Σ_sync · D^T)^m` (`EncardAccSeqsLeConstantRatePerWindow`,
    `EncardDecodableLeConstantRatePerWindow`), and the ingress bound `(∏_ℓ (r ℓ + 1)^T · D^T)^m` per content assignment
@@ -441,7 +441,7 @@ The ingress bound adds these:
     and W4 hold for every action, faults included, and complete statuses carry nothing.
 11. **One allocation per link, one bucket width.** Link `ℓ` has allocation `r ℓ` (`Allocated`) within the shared slot
     count `S`, and every link shares the step, a bucket of ∂X. Ingress links with different bucket widths are not
-    modelled. Over the first `m` whole windows each link-window contributes `(r ℓ + 1)^T`
+    modelled. Over the first `m` whole windows each sampling block contributes `(r ℓ + 1)^T`
     (`EncardIngressObsDecodableLePerWindow`).
 12. **No Program, no clock.** The bound reads no Program and no advice: the outside sender chooses when frames arrive,
     so no clock pins ingress timing. Jitter on the inward release adds `D^n` (J, `D = 1` when tested ideal). W3's frame
