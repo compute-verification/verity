@@ -20,10 +20,10 @@ def _col(n, v):
 
 
 def test_mma_clamps_or_wraps_outside_s32_and_proven_refuses_a_wide_operand():
-    big = R.Gate(R.Op("const", c=2 ** 20), (), 2 ** 20, 2 ** 20)
-    zero = R.Gate(R.Op("const", c=0), (), 0, 0)
-    sat = R.Gate(R.Op("mma", k=1, sat=True), (1, 0, 0), R.S32_MIN, R.S32_MAX)
-    wrap = R.Gate(R.Op("mma", k=1, sat=False), (1, 0, 0), R.S32_MIN, R.S32_MAX)
+    big = R.WordGate(R.WordOp("const", c=2 ** 20), (), 2 ** 20, 2 ** 20)
+    zero = R.WordGate(R.WordOp("const", c=0), (), 0, 0)
+    sat = R.WordGate(R.WordOp("mma", k=1, sat=True), (1, 0, 0), R.S32_MIN, R.S32_MAX)
+    wrap = R.WordGate(R.WordOp("mma", k=1, sat=False), (1, 0, 0), R.S32_MIN, R.S32_MAX)
     vs, window, _hold = R.evaluate([big, zero, sat, wrap], {}, 1)
     assert vs[2][0] == R.S32_MAX and vs[3][0] == (2 ** 40 - R.S32_MIN) % 2 ** 32 + R.S32_MIN
     assert not window[0]  # the operand 2^20 leaves s8, and the exact sum leaves the declared interval
@@ -31,19 +31,19 @@ def test_mma_clamps_or_wraps_outside_s32_and_proven_refuses_a_wide_operand():
 
 
 def test_derive_is_the_interval_image_and_a_budgeted_gate_keeps_its_declaration():
-    a = R.Gate(R.Op("input", slot=0), (), 0, 15)
-    b = R.Gate(R.Op("input", slot=1), (), -8, 7)
-    zero = R.Gate(R.Op("const", c=0), (), 0, 0)
-    m = R.Gate(R.Op("mma", fa=(False, 4), fb=(True, 4), k=1), (2, 0, 1), 0, 0)
-    f = R.Gate(R.Op("affine", c=3, coeff=(2, -1)), (0, 1), 0, 0)
-    g = R.Gate(R.Op("budgeted", f=lambda v: v[0] // 2), (0,), 0, 7)
+    a = R.WordGate(R.WordOp("input", slot=0), (), 0, 15)
+    b = R.WordGate(R.WordOp("input", slot=1), (), -8, 7)
+    zero = R.WordGate(R.WordOp("const", c=0), (), 0, 0)
+    m = R.WordGate(R.WordOp("mma", fa=(False, 4), fb=(True, 4), k=1), (2, 0, 1), 0, 0)
+    f = R.WordGate(R.WordOp("affine", c=3, coeff=(2, -1)), (0, 1), 0, 0)
+    g = R.WordGate(R.WordOp("budgeted", f=lambda v: v[0] // 2), (0,), 0, 7)
     ivs = R.intervals([a, b, zero, m, f, g])
     assert ivs[3] == (-120, 105) and ivs[4] == (3 + 0 - 7, 3 + 30 + 8) and ivs[5] == (0, 7)
 
 
 def test_fan_in_and_width_are_restricted_s():
-    a = R.Gate(R.Op("input", slot=0), (), 0, 255)
-    g = R.Gate(R.Op("budgeted", f=lambda v: v[0]), (0, 0, 0, 0, 0), 0, 255)
+    a = R.WordGate(R.WordOp("input", slot=0), (), 0, 255)
+    g = R.WordGate(R.WordOp("budgeted", f=lambda v: v[0]), (0, 0, 0, 0, 0), 0, 255)
     assert not R.fan_in(4, [a, g]) and R.fan_in(5, [a, g])
     assert R.width(8, [a]) and not R.width(7, [a])
 

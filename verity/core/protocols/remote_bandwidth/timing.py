@@ -250,7 +250,7 @@ def spanning(node: hardware.NodeFigures, device_bytes: int) -> int:
 
 def stated(node: hardware.NodeFigures, store_bytes: int, window_ns: int, windows: int, *, rtt_ns: int, samples: int,
            delta: float = audit.DELTA, gap_ns: int = 50 * US, jitter_ns: int = 50 * US,
-           read_bytes_per_s: float | None = None, capacity_bytes_per_s: float | None = None) -> audit.Ledger:
+           read_bytes_per_s: float | None = None, capacity_bytes_per_s: float | None = None) -> audit.GammaTerms:
     """The ledger of the honest prover's session over a store of `store_bytes` on `node`, of `capacity_bytes_per_s`
     (R measured by default; R at spec, the headline): a pass is the store's read at `read_bytes_per_s` (R measured by
     default), `samples` openings a window at `delta` bound its wrong receipts (`wrong_bound`), the node's chips hold
