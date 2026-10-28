@@ -105,8 +105,8 @@ def test_the_charge_chain_is_code_v1s_through_forced_admissions(recs):
         as_ones.append([b for *_at, b in sorted([(d.step, d.request, int(d.arrived)) for d in ds] + ones)])
     D = 32
     ses = CC.session(D, book, [([1] * len(d) + [0] * (D - len(d)), d + [0] * (D - len(d))) for d in per])
-    lens = list(CV.encode([CV.Window(arrived=d) for d in per], CV.Book.from_json(book)).lens)
-    other = CV.encode([CV.Window(arrived=d) for d in as_ones], CV.Book.from_json(book)).lens
+    lens = list(CV.encode([CV.Advice(arrived=d) for d in per], CV.Book.from_json(book)).lens)
+    other = CV.encode([CV.Advice(arrived=d) for d in as_ones], CV.Book.from_json(book)).lens
     assert forced == [1] * 339
     assert [s[0] for s in ses] == lens and sum(lens) == 5500
     assert (sum(a != b for a, b in zip(other, lens)), sum(other)) == (330, 5968)

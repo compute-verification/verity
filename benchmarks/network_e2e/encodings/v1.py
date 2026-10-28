@@ -35,7 +35,7 @@ replayed rows, which recomputes every start and n by vLLM's rules and checks the
 under the cumulative pool bound to the longest cached prefix, and gives `kind`, the canonical `sources`, and the request
 records (the tie: prompt and output lengths against the certified ids, `finish` by the stop rule).
 
-**Sent**, as `window_charge.Window`s (`residual`), and nothing else:
+**Sent**, as `window_charge.Advice`s (`residual`), and nothing else:
 - `arrived`: the replay's decisions, one per open step: whether the next request had arrived.
 - `order`: the order's deviations from release order, as above.
 - `hits`: past the pool bound, every prefix-cache lookup the replay's scheduler reads (`_KV.hit`: each candidate its
@@ -472,7 +472,7 @@ def _charged(record: Record, reg: Registered, order: Sequence[int], rp: Any, W: 
 
 def _residual(record: Record, reg: Registered, engine: Any, order: Sequence[int], rp: Any,
               decisions: Sequence[Decision], looks: Sequence[Sequence[Lookup]], W: int) -> list[Any]:
-    """The windows v1 sends (`window_charge.Window`). A decision goes to the earlier of its arrival's ingress window
+    """The windows v1 sends (`window_charge.Advice`). A decision goes to the earlier of its arrival's ingress window
     and the earliest window that shows its step's rows; an order entry to the earlier of its arrival's ingress window
     and the earliest window that shows the rows of the first step that reads that arrival (a lookup, a decision or its
     admission); and a sent hit's shortfall to the earliest window that shows its step's. Each is nondecreasing in the
@@ -500,7 +500,7 @@ def _residual(record: Record, reg: Registered, engine: Any, order: Sequence[int]
                 raise V1Error(f"a {field} charged to window {w}, after one charged to window {last}")
             last = w
             {"decision": arrived, "order entry": ranks, "hit": hits}[field][w].append(v)
-    return [CV.Window(arrived=tuple(a), hits=tuple(h), order=tuple(o)) for a, h, o in zip(arrived, hits, ranks)]
+    return [CV.Advice(arrived=tuple(a), hits=tuple(h), order=tuple(o)) for a, h, o in zip(arrived, hits, ranks)]
 
 
 # --- the string --------------------------------------------------------------------------------------------------------
@@ -638,7 +638,7 @@ def _residual_of(advice: I1.Advice, record: Record, reg: Registered) -> tuple[li
 
 
 def residual(advice: I1.Advice, record: Record, reg: Registered) -> list[Any]:
-    """The windows `encode` codes (`window_charge.Window`s: the decisions, the order's deviations and the sent hits):
+    """The windows `encode` codes (`window_charge.Advice`s: the decisions, the order's deviations and the sent hits):
     what a codebook is fit on."""
     return _total(lambda: _residual_of(advice, record, reg)[0])
 
@@ -831,7 +831,7 @@ def measure(label: str, path: str, stop_ids: Sequence[int], T: int = 600, ingres
         t1 = time.monotonic()
         got = decode_full(data, rec, reg)
         by = bits_by_window(data, rec, reg)
-        unordered = sum(_string([CV.Window(w.arrived, w.hits) for w in wins], reg)[1])
+        unordered = sum(_string([CV.Advice(w.arrived, w.hits) for w in wins], reg)[1])
         row[name] = {"bits": sum(by.values()), "by_window": by, "max_window": max(by.values()),
                      "order_bits": sum(by.values()) - unordered, "bytes": len(data),
                      "round_trip": got.advice == adv and got.streams == streams(adv, rec), "book": _book(reg).digest(),
@@ -881,7 +881,7 @@ def _measure_job(job: tuple) -> dict[str, Any]:
 def held_out_books(residuals: Sequence[dict[str, Any]]) -> list[dict | None]:
     """For each trace, the book `code_v1.fit_book` fits on every other trace's windows (None where it has none), as a
     registration would fix it from history before the run."""
-    runs = [None if "error" in r else [CV.Window(**w) for w in r["windows"]] for r in residuals]
+    runs = [None if "error" in r else [CV.Advice(**w) for w in r["windows"]] for r in residuals]
     return [None if mine is None else
             CV.fit_book([w for j, w in enumerate(runs) if j != k and w is not None], TABLE_CAPS).to_json()
             for k, mine in enumerate(runs)]
