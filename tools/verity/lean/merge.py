@@ -243,7 +243,8 @@ def moved(o: dict, a: dict, b: dict, out: dict, candidate: list[str]) -> None:
     table and no longer lists it under this one) leaves the module the other side's group kept it in, and is no longer the
     candidate `group` named.  Its hash is the mover's; when the other side changed it in the old module, or added
     guarantees there that may read it in the new one, the new module's group is the candidate."""
-    defs = lambda s, m: A.definitions(s.get(m) or {})
+    def defs(s: dict, m: str) -> dict:
+        return A.definitions(s.get(m) or {})
     where: dict[str, list[str]] = {}
     for m, g in out.items():
         for d in g["definitions"]:

@@ -185,9 +185,9 @@ def test_a_module_one_side_stops_reading_merges_as_the_union_and_one_left_unread
 
 
 def test_a_definition_one_side_moved_to_another_module_leaves_the_module_the_other_side_changed():
-    """Queue merge 0aaf13f4f6 (#5020 onto main 607634c6d8, base b8d31f5123): #5020 moved 20 definitions from
-    `Definitions.Flock.Circuit` to the new `Definitions.Core.Boolean` while main changed Flock.Circuit's readers, and the
-    union kept them under both modules, which no build writes."""
+    """A side that moves definitions to a new module (`Definitions.Flock.Circuit`'s to `Definitions.Core.Boolean` in queue
+    merge 0aaf13f4f6) while the other changes the old module's readers: the union kept them under both modules, which no
+    build writes."""
     base = record(t=thm([F, G]), s=thm([G], "P.g n = n", "00000000000000bb"))
     ours = record(t=thm([F, G]))
     moved_f = read("P.f", "P.More", "1" * 16)
