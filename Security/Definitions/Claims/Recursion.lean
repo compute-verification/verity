@@ -349,7 +349,8 @@ def pLog (ell : ℕ) : ℕ := Nat.log 2 (2 * ell + 1) + 1
 unit of its population. No circuit commitment; the inner table at a fast100 `m` (`22 ≤ m ≤ 35`), `k_log ≥ 6`, two
 claims and two per region; and the dense form only: public circuits (not `holo`), no RecSparse phase and no R. The
 compiled verifier refuses the holo and sparse forms (`RecSetup.denseOnly`), which `RecursiveKS` doesn't cover, so they
-are out of scope. Every V* session's record holds a draw, and it is the full draw (`Draw.Full`). -/
+are out of scope. Every V* session's
+record holds a draw, and it is the full draw (`Draw.Full`). -/
 def InScope (s : Stmt) : Prop :=
   s.circ = none ∧ 22 ≤ s.form.m ∧ s.form.m ≤ 35 ∧ 6 ≤ s.form.kLog ∧ s.form.claims = 2 + 2 * s.form.regions ∧
     (s.form.holo = false ∧ s.form.sparse = none ∧ s.form.stacked = none) ∧
