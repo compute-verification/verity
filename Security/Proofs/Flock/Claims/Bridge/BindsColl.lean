@@ -8,7 +8,7 @@ statement's roots) and any opening family of `u`'s registered commit strings (`V
 every registered opening reads as a claims opening at the gate's position that passes the commitment (`Transports`), and
 that the witness opens every committed, non-constant gate the unit needs (`Covers`), `Binds` holds unless two openings
 that pass at one position under the statement's roots carry different values (`binds_or_disagree`). Under the
-commitment's binding (`Commitment.Binds`, proved at the deployed record), the `H` calls of those two openings' checks
+commitment's binding (`CommitmentScheme.Binds`, proved at the deployed record), the `H` calls of those two openings' checks
 collide (`binds_or_logColl`): a collision among the inputs the two openings hashed, which cr/sha-512 charges per prover. -/
 
 namespace FlockSoundness.Discharge.ZkLink.WrongSet
@@ -25,14 +25,14 @@ variable (A : Arith F K) {C : Circuit} {n : ℕ} (P : Audit.Partition C n) {Reg 
 /-- **The registered openings read as claims openings**: an opening `q` of `u`'s registered commit string at the wire
 `φ g` is, as `tr g q`, an opening at gate `g`'s position, of the bit `q` carries on that wire, that passes the
 commitment under the statement's roots. -/
-def Transports (H : Claims.Msg → Claims.Msg) (Cm : Claims.Sampling.Commitment Bool) (s : Claims.Sampling.AuditStatement)
+def Transports (H : Claims.Msg → Claims.Msg) (Cm : Claims.Sampling.CommitmentScheme Bool) (s : Claims.Sampling.AuditStatement)
     (R : Reg) (u : Fin n) (φ : ℕ → Fin C.N) (tr : ℕ → vb.Opening → Claims.Sampling.Opening Bool) : Prop :=
   ∀ g q, φ g ∈ P.io u → vb.com q = vb.cs R (vb.pos (φ g)) →
     (tr g q).pos = g ∧ (tr g q).val = vb.bit (vb.val q) (φ g) ∧ Cm.Opens H s.roots (tr g q) = true
 
 /-- **The witness covers the unit**: at each committed, non-constant gate of `need` that `r` reads from outside or
 commits, `φ` lands in `P.io u` and the witness opens the gate. -/
-def Covers (H : Claims.Msg → Claims.Msg) (Cm : Claims.Sampling.Commitment Bool) (s : Claims.Sampling.AuditStatement)
+def Covers (H : Claims.Msg → Claims.Msg) (Cm : Claims.Sampling.CommitmentScheme Bool) (s : Claims.Sampling.AuditStatement)
     (w : Claims.Sampling.Wit) (r : Claims.Sampling.RU) (φ : ℕ → Fin C.N) (u : Fin n) : Prop :=
   ∀ g ∈ need s.prog r, (∀ b, s.prog.gates[g]? ≠ some (.const b)) →
     (g ∉ Claims.Sampling.RU.gates r ∨ s.prog.Boundary (Claims.Sampling.RU.gates r) g = true) →
@@ -41,7 +41,7 @@ def Covers (H : Claims.Msg → Claims.Msg) (Cm : Claims.Sampling.Commitment Bool
 variable {A P planZ tab vb}
 
 /-- **`Binds`, or two passing openings at one position that disagree.** -/
-theorem binds_or_disagree {H : Claims.Msg → Claims.Msg} {Cm : Claims.Sampling.Commitment Bool}
+theorem binds_or_disagree {H : Claims.Msg → Claims.Msg} {Cm : Claims.Sampling.CommitmentScheme Bool}
     {s : Claims.Sampling.AuditStatement} {w : Claims.Sampling.Wit} {r : Claims.Sampling.RU} {φ : ℕ → Fin C.N} {R : Reg}
     {u : Fin n} {tr : ℕ → vb.Opening → Claims.Sampling.Opening Bool}
     (hcov : Covers P H Cm s w r φ u) (htr : Transports A P planZ tab vb H Cm s R u φ tr) :
@@ -68,7 +68,7 @@ theorem binds_or_disagree {H : Claims.Msg → Claims.Msg} {Cm : Claims.Sampling.
       exact congrArg some (hval.trans htv)
 
 /-- **`Binds`, or a collision among the two openings' checks**, under the commitment's binding. -/
-theorem binds_or_logColl {H : Claims.Msg → Claims.Msg} {Cm : Claims.Sampling.Commitment Bool}
+theorem binds_or_logColl {H : Claims.Msg → Claims.Msg} {Cm : Claims.Sampling.CommitmentScheme Bool}
     {s : Claims.Sampling.AuditStatement} {w : Claims.Sampling.Wit} {r : Claims.Sampling.RU} {φ : ℕ → Fin C.N} {R : Reg}
     {u : Fin n} {tr : ℕ → vb.Opening → Claims.Sampling.Opening Bool} (hb : Cm.Binds H)
     (hcov : Covers P H Cm s w r φ u) (htr : Transports A P planZ tab vb H Cm s R u φ tr) :
@@ -81,7 +81,7 @@ theorem binds_or_logColl {H : Claims.Msg → Claims.Msg} {Cm : Claims.Sampling.C
 
 /-- **`Binds` at every unit, or a collision**: `faulty_card_le_wrongRegZ`'s `hbind`, unless the checks of two openings
 the witness and the registration pass at one position collide. -/
-theorem binds_all_or_logColl {H : Claims.Msg → Claims.Msg} {Cm : Claims.Sampling.Commitment Bool}
+theorem binds_all_or_logColl {H : Claims.Msg → Claims.Msg} {Cm : Claims.Sampling.CommitmentScheme Bool}
     {s : Claims.Sampling.AuditStatement} {w : Claims.Sampling.Wit} {r : Fin n → Claims.Sampling.RU} {φ : ℕ → Fin C.N}
     {R : Reg} {tr : ℕ → vb.Opening → Claims.Sampling.Opening Bool} (hb : Cm.Binds H)
     (hcov : ∀ u, Covers P H Cm s w (r u) φ u) (htr : ∀ u, Transports A P planZ tab vb H Cm s R u φ tr) :

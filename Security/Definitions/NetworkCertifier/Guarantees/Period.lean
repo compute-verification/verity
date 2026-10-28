@@ -18,7 +18,7 @@ audits, not from a premise:
 
 * each window's audit, at a statement in its scope, fails the leak relation at the network certifier's rows with
   probability at most `δ + ε_ks + ε_bind + Pr[B_tap]` at that statement (`Claims.Sampling.KS`'s errors, and `B_tap` the
-  collisions between the extracted trace's openings and the network certifier's, under `Commitment.Binds`);
+  collisions between the extracted trace's openings and the network certifier's, under `CommitmentScheme.Binds`);
 * where the network certifier registers its observations, the secrets of a covert sender in the server whose every
   window meets its good event (`WindowGood`) number at most
   `#Ss · ∏_c (cap_c + 1) · ∏_i 2^#(freeInputs_i \ reg_i) · #faultySets_i(δ) · 2^β_i · Dj^k_i`: the sender moves at most
@@ -42,7 +42,7 @@ set_option linter.unusedVariables false
 
 /-- **The leak through the network certifier over a monitoring period of accepted sampled audits.** At every
 deployment `D` of the sampled verifier where `Claims.Sampling.KS` holds and the trace's commitment binds
-(`Commitment.Binds`), with a decoder that lists every trace within Flock's radius, over a monitoring period of `n`
+(`CommitmentScheme.Binds`), with a decoder that lists every trace within Flock's radius, over a monitoring period of `n`
 windows registered as `sw i` (partition `Pw i`, registered values `ρ i`, operator `op i`, and `β i` bounding the
 committed bits of each of its possible faulty sets), with the network certifier's openings `tops s` at each statement,
 and a network certifier that runs its code by `trusted-host` on schedules in `Ss`, each held by its record format `f`

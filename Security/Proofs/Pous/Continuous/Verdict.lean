@@ -35,6 +35,7 @@ Composing this with sampling's knowledge soundness into the proof layer's soundn
 namespace PousVerdict
 
 open Pous Claims.Sampling Claims.Sampling.Univ
+open Verity (bitsLE)
 
 /-! ## The openings and their verdicts -/
 

@@ -7,7 +7,7 @@ Definitions only. `RAcc` pins the circuit's inputs to the trace's committed valu
 inputs pinned at the registered inputs (`AsReg`) is at whatever values the trace holds there. The registration commits
 those values under the statement's roots: openings `ops` (`RegOpens`), its values `regVal ops`. An extracted trace that
 opens a registered input to another value makes, with the registration's opening there, two passing openings of one
-position to different values, so under `Commitment.Binds` the calls that check them collide. `Breg` is the finder that
+position to different values, so under `CommitmentScheme.Binds` the calls that check them collide. `Breg` is the finder that
 looks for that collision: the extractor run on the judged run, and the first collision among its own calls and those
 that check the registration's openings.
 -/
@@ -22,11 +22,11 @@ def regVal (ops : List (Opening Bool)) (g : ℕ) : Bool :=
 
 /-- **The registration opens the registered inputs** `reg` under the statement's roots: each of its openings `ops`
 passes, and every gate of `reg` has one. -/
-def RegOpens (H : Msg → Msg) (Cm : Commitment Bool) (s : AuditStatement) (reg : Finset ℕ) (ops : List (Opening Bool)) : Prop :=
+def RegOpens (H : Msg → Msg) (Cm : CommitmentScheme Bool) (s : AuditStatement) (reg : Finset ℕ) (ops : List (Opening Bool)) : Prop :=
   (∀ o ∈ ops, Cm.Opens H s.roots o = true) ∧ ∀ g ∈ reg, ∃ o ∈ ops, o.pos = g
 
 /-- The `H` calls that check the openings `ops` under `roots`. -/
-def regLog (H : Msg → Msg) (Cm : Commitment Bool) (roots : List Msg) (ops : List (Opening Bool)) : List (Msg × Msg) :=
+def regLog (H : Msg → Msg) (Cm : CommitmentScheme Bool) (roots : List Msg) (ops : List (Opening Bool)) : List (Msg × Msg) :=
   ops.flatMap fun o => ((Cm.opens roots o).eval H).2
 
 section Finder
@@ -36,7 +36,7 @@ variable {Coin W : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin]
 /-- **`B_reg`**, the registration's collision finder: on the judged run's tape and coins and the extractor's coins, the
 extractor run, and the first collision among its own `H` calls and the calls that check the registration's openings
 `ops s` under the statement's roots. Its cost is the extraction's SHA-512 calls, its reruns' included, and the checks'. -/
-noncomputable def Breg (H : Msg → Msg) (V : Verifier Coin) (E : Extractor Coin W V) (Cm : Commitment Bool)
+noncomputable def Breg (H : Msg → Msg) (V : Verifier Coin) (E : Extractor Coin W V) (Cm : CommitmentScheme Bool)
     (parse : Msg → Option AuditStatement) (ops : AuditStatement → List (Opening Bool)) : FinderFamily :=
   fun Ω _ _ P x =>
     let rl := ((parse x).map fun s => regLog H Cm s.roots (ops s)).getD []
