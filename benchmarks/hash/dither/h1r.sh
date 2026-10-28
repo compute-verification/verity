@@ -14,7 +14,7 @@ CUDA=${CUDA:-/usr/local/cuda-13.0}
   -o "$S/libh1r.so" benchmarks/hash/dither/h1r.cu > "$OUT/build.log" 2>&1 \
   || { echo "h1r: NVCC_FAIL"; grep -v "^ptxas info" "$OUT/build.log" | tail -30; exit 11; }
 grep -A2 "h1r_units_k\|h1r_seeds" "$OUT/build.log" | grep -i "registers\|spill" | head
-"$CUDA/bin/nvcc" -O3 -std=c++17 -gencode arch=compute_120a,code=sm_120a -I benchmarks/codec_tensor -cubin \
+"$CUDA/bin/nvcc" -O3 -std=c++17 -gencode arch=compute_120a,code=sm_120a -cubin \
   -o "$S/noise.cubin" benchmarks/pouw/served_h1/noise.cu > "$OUT/nvcc-noise.txt" 2>&1 \
   || { echo "h1r: NVCC_FAIL noise.cu"; tail -20 "$OUT/nvcc-noise.txt"; exit 11; }
 PY=${PY:-/workspace/jobs/venv312/bin/python3}

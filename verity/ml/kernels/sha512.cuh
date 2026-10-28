@@ -14,8 +14,8 @@
 //
 // ROLL = 1 runs rounds 16..79 as a loop of 16-round bodies (a quarter of the code: a lone warp otherwise waits on
 // instruction fetch), 0 straight-line, 2 all 80 rounds as five passes of one 16-round body with the schedule in place, the
-// form the codec's and the bandwidth tagger's kernels hold, statement for statement: two thirds of ROLL 1's SASS, faster
-// than it in dither's h1c and h1r, slower in its h1u.
+// form the codecs', the bandwidth tagger's and the streamed wipe's kernels run: two thirds of ROLL 1's SASS, faster than it
+// in dither's h1c and h1r, slower in its h1u.
 //
 // `sha::` holds the committer's forms over the same constants: `compress_from<R0>` from a midstate, `compress_kw` over a
 // precomputed schedule, and the issue knobs SHA_ADD, SHA_ROT and SHA_ROLL (below), with the helpers that build their inputs.
@@ -397,11 +397,14 @@ SX_HD void kw_of(const u64* w, u64* kw) {
 
 namespace sha {
 
-using sx::ch;
 using sx::iv;
 using sx::K_DEV;
 using sx::K_HOST;
 using sx::maj;
+
+// The same function as sx::ch, written as the committer's rates were measured with it: ptxas schedules the two forms'
+// LOP3s differently.
+SX_HD uint64_t ch(uint64_t e, uint64_t f, uint64_t g) { return (e & f) ^ (~e & g); }
 
 SX_HD uint64_t add(uint64_t a, uint64_t b) {
 #if SHA_ADD == 1 && defined(__CUDA_ARCH__)
@@ -432,10 +435,22 @@ SX_HD uint64_t add3(uint64_t a, uint64_t b, uint64_t c) {
 #endif
 }
 
-SX_HD uint64_t S0(uint64_t a) { return sx::S0<(SHA_ROT & 1) ? 2 : 0>(a); }
-SX_HD uint64_t S1(uint64_t e) { return sx::S1<(SHA_ROT & 2) ? 2 : 0>(e); }
-SX_HD uint64_t s0(uint64_t w) { return sx::s0<(SHA_ROT & 4) ? 2 : 0>(w); }
-SX_HD uint64_t s1(uint64_t w) { return sx::s1<(SHA_ROT & 8) ? 2 : 0>(w); }
+// The same functions as sx's sigmas, written as the committer's rates were measured with them: ptxas schedules sm_90's
+// shifts differently from sx's forms.
+SX_HD uint64_t rotr(uint64_t x, int n) { return (x >> n) | (x << (64 - n)); }
+#ifdef __CUDA_ARCH__
+#define SHA_R(mask, x, n) ((SHA_ROT & (mask)) ? sx::rotr<2, n>(x) : rotr(x, n))
+#define SHA_SHR(mask, x, n) ((SHA_ROT & (mask)) ? sx::shr<2, n>(x) : (x) >> (n))
+#else
+#define SHA_R(mask, x, n) rotr(x, n)
+#define SHA_SHR(mask, x, n) ((x) >> (n))
+#endif
+SX_HD uint64_t S0(uint64_t a) { return SHA_R(1, a, 28) ^ SHA_R(1, a, 34) ^ SHA_R(1, a, 39); }
+SX_HD uint64_t S1(uint64_t e) { return SHA_R(2, e, 14) ^ SHA_R(2, e, 18) ^ SHA_R(2, e, 41); }
+SX_HD uint64_t s0(uint64_t w) { return SHA_R(4, w, 1) ^ SHA_R(4, w, 8) ^ SHA_SHR(4, w, 7); }
+SX_HD uint64_t s1(uint64_t w) { return SHA_R(8, w, 19) ^ SHA_R(8, w, 61) ^ SHA_SHR(8, w, 6); }
+#undef SHA_R
+#undef SHA_SHR
 
 // Rounds R0..79 of the block w (all 16 words given; the schedule overwrites w), from round-R0 state m, feeding forward cv.
 template <int R0>
