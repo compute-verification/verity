@@ -70,8 +70,7 @@ def run(args) -> int:
     new = [*(f"op {k}" for k, o in ops.items() if "proposed" in o),
            *(f"pipe {k}" for k, o in c.table("pipe").items() if "proposed" in o),
            *(f"fmt {k}" for k, o in c.table("fmt").items() if "proposed" in o)]
-    print(f"Coverage of the envelope ISA: {c.envelope['source']}: {accel}; proposed: {', '.join(new)} "
-          f"(data/cover/envelope.toml)")
+    print(f"The ACCEL ops: {c.envelope['source']}: {accel}; proposed: {', '.join(new)} (data/cover/envelope.toml)")
     for dev in devs:
         print(f"{dev}: {_counts(c, dev, True)}")
         print(f"{dev} on Accel.Op alone (a row resting on a proposed entry a hole): {_counts(c, dev, False)}")
@@ -80,7 +79,7 @@ def run(args) -> int:
         if r.mark in C.DOMINATED and (rests := C.rests_on(c, r)) and any(d in r.devices for d in devs):
             forms = f" [{', '.join(r.forms)}]" if r.forms else ""
             print(f"- {'/'.join(r.devices)} {', '.join(r.ops)}{forms}: {', '.join(rests)}")
-    print("\nHoles (each a gap in the coverage premise):")
+    print("\nHoles (each a gap in the card premise):")
     for devices, what, sev, why in C.holes(c):
         if any(d in devices.split("/") for d in devs):
             print(f"- [{sev}] {devices} {what}: {why}")
@@ -91,7 +90,7 @@ def run(args) -> int:
     for dev in devs:
         theta = T.theta(device(dev))
         print(f"\n## {dev}\n")
-        print("| Opcode | Forms | Mark | Envelope | Units | Rate a SM-clock, in the op's units, against ρ | Argument "
+        print("| Opcode | Forms | Mark | ACCEL op | Units | Rate a SM-clock, in the op's units, against ρ | Argument "
               "| Source |")
         print("|---|---|---|---|---|---|---|---|")
         for r in c.rows:
@@ -107,7 +106,7 @@ def run(args) -> int:
                       f"{_cell(_rate(c, r, dev, theta))} | {_cell(r.raw.get('argument'))} | "
                       f"{_cell(r.raw.get('source'))} |")
         print(f"\n### {dev}: units outside the SM pipes\n")
-        print("| Unit | What | Mark | Envelope | Argument |")
+        print("| Unit | What | Mark | ACCEL op | Argument |")
         print("|---|---|---|---|---|")
         for u in c.units:
             if dev in u.get("devices", C.DEVICES):
