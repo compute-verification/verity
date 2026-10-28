@@ -81,9 +81,9 @@ theorem soundness_of_subprotocols : Soundness := by
     _ ≤ ∑ a, V.error a θ F c σ := Finset.sum_le_sum fun a _ => hT a θ F c σ
 
 /-- An event every play after `θ`, `F` and `c` meets has probability one. -/
-theorem prob_play_eq_one (ns : List ℕ) (θ F c : ByteArray) (p : Outcome → Prop)
+theorem prob_play_eq_one (ns : List ℕ) (θ F c : ByteArray) (p : Ending → Prop)
     (hp : ∀ log e, p ⟨θ, F, c, log, e⟩) (σ : Game.Strategy (play ns θ F c)) : Game.prob p (play ns θ F c) σ = 1 := by
-  refine (Game.prob_bind_of_const (fun log => Game.send ByteArray fun e => Game.ret (⟨θ, F, c, log, e⟩ : Outcome)) p
+  refine (Game.prob_bind_of_const (fun log => Game.send ByteArray fun e => Game.ret (⟨θ, F, c, log, e⟩ : Ending)) p
     (fun _ => True) (fun log t => ?_) (releases ns) σ).trans (Game.prob_true _ _)
   simp [Game.prob, hp]
 
@@ -131,7 +131,7 @@ variable {ι α : Type} [Fintype α] {d : Device ι} (V : Vocab d α)
 /-- **The honest commitment's case of sampled proofs' claim**: when the extractor's transcript is correct on every unit
 and the commitment opens every gate to it (a registered constant to its constant), no unit is unbound, and the claim
 holds at any `ε ≥ 0`. -/
-theorem holds_sampled_of_opens (θ F c : ByteArray) (σ : Game.Strategy (V.game θ F c)) (o : Outcome)
+theorem holds_sampled_of_opens (θ F c : ByteArray) (σ : Game.Strategy (V.game θ F c)) (o : Ending)
     (hc : ∀ u, (V.partsOf F).Correct (V.extract θ F c σ) u) (ho : ∀ g, V.Opens θ F c g (V.extract θ F c σ g))
     (hε : 0 ≤ (V.certOf θ).ε) : V.Holds θ F c σ .sampled o := by
   have hu : Accounting.unbound (V.partsOf F) (V.Opens θ F c) (V.extract θ F c σ) = ∅ := by

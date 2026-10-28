@@ -524,7 +524,7 @@ component in place of onsite's sampled component. The conjuncts:
 
 The blobs are content-addressed bytes sent with the evidence, last, and the event counts any blobs on which the
 component accepts. -/
-def RecVerdict (V : Vocab d α) (o : Verity.Outcome) : Prop :=
+def RecVerdict (V : Vocab d α) (o : Verity.Ending) : Prop :=
   V.Registered o.params o.file ∧ RegistrationAccepts o.sent ∧
     (∃ j p, Core.canonicalJson o.params = .ok j ∧ VStar.Recursive.Sampled.paramsOfJson j = .ok (.inr p)) ∧
     ∃ bs, (VStar.Recursive.Sampled.protocol.answer o.params o.commitment o.evidence bs).verdict = .accept
@@ -609,9 +609,9 @@ structure SessionIn (V : Vocab d α) (q : Dep) (θ F c : ByteArray) (σ : Game.S
   [neΩ : Nonempty Ω]
   x : Ξ → Msg
   P : Ξ → Claims.Prover Ω
-  out : (ξ : Ξ) → Ω × (Fin (q.D.V.k (x ξ)) → Coin) → Verity.Outcome
+  out : (ξ : Ξ) → Ω × (Fin (q.D.V.k (x ξ)) → Coin) → Verity.Ending
   drawOf : Ξ → Finset (Fin (V.units F))
-  prob_le : ∀ E : Verity.Outcome → Prop, Game.prob E (V.game θ F c) σ ≤
+  prob_le : ∀ E : Verity.Ending → Prop, Game.prob E (V.game θ F c) σ ≤
     ENNReal.ofReal (Claims.Ex fun ξ => Claims.Pr fun s : Ω × (Fin (q.D.V.k (x ξ)) → Coin) => E (out ξ s))
   names_shows : ∀ ξ s bs j p e,
     (VStar.Recursive.Sampled.protocol.answer (out ξ s).params (out ξ s).commitment (out ξ s).evidence bs).verdict =

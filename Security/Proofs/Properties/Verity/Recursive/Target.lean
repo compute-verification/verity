@@ -144,9 +144,9 @@ open Target
 open Claims (Ex Pr Ex_nonneg Ex_mono Ex_div Pr_nonneg Pr_mono Pr_le_one Pr_false)
 
 /-- An event no play after `θ`, `F` and `c` meets has probability zero. -/
-theorem prob_play_eq_zero (ns : List ℕ) (θ F c : ByteArray) (p : Outcome → Prop)
+theorem prob_play_eq_zero (ns : List ℕ) (θ F c : ByteArray) (p : Ending → Prop)
     (hp : ∀ log e, ¬ p ⟨θ, F, c, log, e⟩) (σ : Game.Strategy (play ns θ F c)) : Game.prob p (play ns θ F c) σ = 0 := by
-  refine (Game.prob_bind_of_const (fun log => Game.send ByteArray fun e => Game.ret (⟨θ, F, c, log, e⟩ : Outcome)) p
+  refine (Game.prob_bind_of_const (fun log => Game.send ByteArray fun e => Game.ret (⟨θ, F, c, log, e⟩ : Ending)) p
     (fun _ => False) (fun log t => ?_) (releases ns) σ).trans (Game.prob_false _ _)
   simp [Game.prob, hp]
 

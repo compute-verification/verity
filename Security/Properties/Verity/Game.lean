@@ -135,7 +135,7 @@ def releases : List ℕ → Game (List Release)
 
 /-- How a play ends: the parameters, the committed files and the commitment sent first, the device's log, and the
 evidence sent last. -/
-structure Outcome where
+structure Ending where
   params : ByteArray
   file : ByteArray
   commitment : ByteArray
@@ -143,11 +143,11 @@ structure Outcome where
   evidence : ByteArray
 
 /-- What the prover sent onsite in the play that ended with `o`. -/
-def Outcome.sent (o : Outcome) : Sent := ⟨o.params, o.commitment, o.evidence⟩
+def Ending.sent (o : Ending) : Sent := ⟨o.params, o.commitment, o.evidence⟩
 
 /-- **The causal game after the parameters `θ`, the committed files `F` and the commitment `c`**: the device's rounds
 `ns`, each release after the bytes it answers, then the evidence. -/
-def play (ns : List ℕ) (θ F c : ByteArray) : Game Outcome :=
+def play (ns : List ℕ) (θ F c : ByteArray) : Game Ending :=
   (releases ns).bind fun log => .send ByteArray fun e => .ret ⟨θ, F, c, log, e⟩
 
 /-- SHA-512, the compiled one (`Flock.Sha512.hash`), as a 64-byte digest. -/
@@ -234,8 +234,8 @@ structure Vocab {ι : Type} (d : Device ι) (α : Type) [Fintype α] where
   /-- **The finder's SHA-512 calls are at most `c · calls(τ) + d`**, on every coin of the finder. -/
   finder_calls : ∀ a θ F c σ (x : (finder a θ F c σ).S),
     (finder a θ F c σ).cost x ≤ callsMul θ a * cost θ F c σ + callsAdd θ a
-  computed : (θ F c : ByteArray) → Game.Strategy (play (rounds θ) θ F c) → Outcome → Finset (Fin (read F).circuit.N)
-  world : (θ F c : ByteArray) → Game.Strategy (play (rounds θ) θ F c) → Outcome → World d α
+  computed : (θ F c : ByteArray) → Game.Strategy (play (rounds θ) θ F c) → Ending → Finset (Fin (read F).circuit.N)
+  world : (θ F c : ByteArray) → Game.Strategy (play (rounds θ) θ F c) → Ending → World d α
   honest : (θ F c : ByteArray) → Game.Strategy (play (rounds θ) θ F c)
   certOf : ByteArray → Certificates
   crBound : ByteArray → Audit → ℕ → ℝ
@@ -247,7 +247,7 @@ namespace Vocab
 variable {ι : Type} {d : Device ι} {α : Type} [Fintype α] (V : Vocab d α)
 
 /-- The game after `θ`, `F` and `c`. -/
-def game (θ F c : ByteArray) : Game Outcome := play (V.rounds θ) θ F c
+def game (θ F c : ByteArray) : Game Ending := play (V.rounds θ) θ F c
 
 /-- The committed files' circuit. -/
 noncomputable def circuitOf (F : ByteArray) : Verity.Circuit := (V.read F).circuit
@@ -273,7 +273,7 @@ def Opens (θ F c : ByteArray) (g : Fin (V.circuitOf F).N) (v : BitVec ((V.circu
 
 /-- **Subprotocol `a`'s verdict**: the committed blob passed the commit phase's check, NCI accepted the registration
 sampled proofs committed to, and `a`'s compiled component accepts its own case in what the prover sent. -/
-def Verdict (a : Audit) (o : Outcome) : Prop :=
+def Verdict (a : Audit) (o : Ending) : Prop :=
   V.Registered o.params o.file ∧ RegistrationAccepts o.sent ∧ ComponentAccepts a o.sent
 
 /-- **The period after `θ`, `F` and `c`, as the one vocabulary's `Accounting.PeriodLive`**: the committed files'
@@ -293,12 +293,12 @@ period and the published certificates. Sampled proofs' on the extractor's transc
 the units unbound in it under the commitment's openings), PoUW's in gates (at least `W` gates of the committed circuit
 computed after their window's coin), and the others' on the world the play realized (at least `S` bits of device memory
 held on average, at least `Q` bits read, at most `K` bits through the network certifiers). -/
-def Holds (θ F c : ByteArray) (σ : Game.Strategy (V.game θ F c)) : Audit → Outcome → Prop :=
+def Holds (θ F c : ByteArray) (σ : Game.Strategy (V.game θ F c)) : Audit → Ending → Prop :=
   (V.live θ F c).Holds (V.certOf θ) σ
 
 /-- Every release `a`'s check read is in the device's log; outside it, the release is a forgery of the device's LMS
 signature, which `a`'s finder turns into a collision. -/
-def Logged (a : Audit) (o : Outcome) : Prop := ∀ r ∈ V.coinsRead a o.sent, r ∈ o.log
+def Logged (a : Audit) (o : Ending) : Prop := ∀ r ∈ V.coinsRead a o.sent, r ∈ o.log
 
 /-- **The finder for a second file with the registered digest**: on its one coin it hashes the committed blob and the
 registered one, and outputs them when they differ, a SHA-512 collision when the blob passed the file check. -/
