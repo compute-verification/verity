@@ -571,7 +571,6 @@ theorem registeredOf_own {j : Json}
   obtain ⟨_, _, h⟩ := bind_ok h
   obtain ⟨c, _, h⟩ := bind_ok h
   obtain ⟨k, _, h⟩ := bind_ok h
-  obtain ⟨ps, _, h⟩ := bind_ok h
   cases h
   exact h1
 

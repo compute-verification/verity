@@ -34,7 +34,7 @@ open Lean (Json)
 
 section Walks
 
-variable {tags : Tags} {cf pf : ByteArray} {coins : Coins} {count : ℕ} {tables : List (String × ByteArray)}
+variable {tags : Tags} {cf pf : ByteArray} {coins : Flock.Coins} {count : ℕ} {tables : List (String × ByteArray)}
   {draw partition : Option Json} {program : Option ByteArray} {work : Option (ℕ × Array (String × ℕ × ℕ))}
   {stratified : Option ℕ} {closure : Option (Std.HashMap ℕ (Array ℕ))} {publicInputs : Option ByteArray}
   {spec : SessionSpec} {sts : Array Flock.Stmt}
@@ -99,7 +99,7 @@ theorem setupHidden_shape {st : Flock.Stmt}
     · first | (cases hd; assumption) | cases hd
 
 /-- `HmIn.loadPublic`'s population is `HmRow.loadPublic`'s, at the circuit with its public input row. -/
-theorem hmIn_loadPublic_row {c : Circuit} {pi : HmIn.Ports} {f : ByteArray} {pop : Public}
+theorem hmIn_loadPublic_row {c : Flock.Circuit} {pi : HmIn.Ports} {f : ByteArray} {pop : Public}
     (h : HmIn.loadPublic tags c pi f = .ok pop) : ∃ c', HmRow.loadPublic tags c' f = .ok pop := by
   unfold HmIn.loadPublic at h
   dsimp only at h
@@ -111,7 +111,7 @@ theorem hmIn_loadPublic_row {c : Circuit} {pi : HmIn.Ports} {f : ByteArray} {pop
     exact ⟨_, by assumption⟩
 
 /-- `HmIn.regions` returns one region per public input block, a count of the circuit's alone. -/
-theorem hmIn_regions_size {c : Circuit} {pi : HmIn.Ports} {pub : Public} {B : Array Region}
+theorem hmIn_regions_size {c : Flock.Circuit} {pi : HmIn.Ports} {pub : Public} {B : Array Region}
     (h : HmIn.regions c pi pub = .ok B) : B.size = if pi.ports.isEmpty then 0 else (HmIn.inRegions c pi).size := by
   unfold HmIn.regions at h
   dsimp only at h
