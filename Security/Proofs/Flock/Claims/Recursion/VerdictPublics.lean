@@ -19,7 +19,7 @@ open FlockSoundness.Refine (ebind_ok)
 
 /-- **S7 reads a table missing from `publics` as empty bytes.** -/
 theorem decodeJWithK_publics (keep : Bool → Bool) (hs : Hashes Flock.V) {spec : SessionSpec} {j : Json}
-    {sess : Session} (h : Record.decodeJWithK keep hs spec j = .ok sess) :
+    {sess : RunRecord} (h : Record.decodeJWithK keep hs spec j = .ok sess) :
     ∃ l pubs, Record.fld j "link" = .ok l ∧ Record.fld l "publics" = .ok pubs ∧
       List.Forall₂ (fun t p => Record.isNull pubs t = true → p = ByteArray.empty) spec.tables.toList
         sess.publics.toList := by

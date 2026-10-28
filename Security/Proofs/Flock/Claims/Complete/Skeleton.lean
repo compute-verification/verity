@@ -105,7 +105,7 @@ def live {H : Claims.Msg → Claims.Msg} {rel : Readable.Parsed → Readable.Rel
 
 /-- The record, decoded. -/
 def sess {H : Claims.Msg → Claims.Msg} {rel : Readable.Parsed → Readable.Relation}
-    (o : Run H rel) : Session := val (Record.decodeWith o.hs o.spec o.record)
+    (o : Run H rel) : RunRecord := val (Record.decodeWith o.hs o.spec o.record)
 
 /-- Table `i`'s schedule. -/
 def sch {H : Claims.Msg → Claims.Msg} {rel : Readable.Parsed → Readable.Relation}
