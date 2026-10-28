@@ -294,6 +294,9 @@ SCHEMA = {
         "delta": (2.0 ** -40, "failure probability a window"),
         "eps": (0.01, "share of credited work allowed wrong"),
         "pouw_sampled": (True, "PoUW's units drawn at (eps, delta) a window too (guarantee 2)"),
+        "retain_GB": (100.0, "GB a window may hold until its draw (the Commit's step bytes, Dither's values, H1's "
+                             "records, times steps a window): an estimate, the H200's 141 GB less weights, KV cache "
+                             "and activations; over it, the design is listed infeasible"),
     },
     "partition": {
         "units": (None, "list of unit classes {name, per_token, work, extra_ands, open_rows, out_bits}; None: the "
@@ -760,6 +763,12 @@ def J(dsg: dict | None = None) -> dict:
     verify_cpu_s = values["verify_cpu_s"] + pouw["verify_cpu_s"]
     serve_term = t_remote / t_stock - 1
     prove_term = proving_gpu_s / stock_gpu_s
+    retained = S * (cinfo.get("step_bytes", 0.0) + winfo.get("value_bytes", 0.0)
+                    + winfo.get("records_GB", 0.0) * 1e9) / 1e9
+    infeasible = values["infeasible"] + pouw["infeasible"]
+    if retained > d["sampling"]["retain_GB"]:
+        infeasible.append(f"a window retains {retained:,.1f} GB for its draw > sampling.retain_GB "
+                          f"{d['sampling']['retain_GB']}")
     return {
         "J": serve_term + prove_term,
         "serve_term": serve_term,
@@ -779,7 +788,8 @@ def J(dsg: dict | None = None) -> dict:
                          "per_stock_gpu_s": verify_cpu_s * price / stock_gpu_s,
                          "statements": values["statements"] + pouw["statements"]},
         "draws": {"values": values["draws"], "pouw": pouw["draws"], "bound_each": values.get("draws_bound")},
-        "infeasible": values["infeasible"] + pouw["infeasible"],
+        "retained_GB_per_window": retained,
+        "infeasible": infeasible,
         "u_1830": ideal_ms_1830(d) / t_remote,
         "u_stock_1830": ideal_ms_1830(d) / t_stock,
     }
