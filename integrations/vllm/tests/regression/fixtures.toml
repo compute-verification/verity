@@ -54,6 +54,16 @@ status = "pending_review"
 reason = "Landing 01e7539353 brings the one naming scheme (merge 6e4def4744 of cursor/one-naming-21f3, 602e58006a's content): query.required deletes the Residual table of v1 member spellings (a linear's `0`, RoPE's `0` / `1`, fused_q's and index_k's ports) and names a member structurally (its port, else the recorded hint, else `out`); query.manifest.bind owns the runtime spellings. The rename is intended, and nothing required changed. On this row, rebuilt at c0ebeb8b against f4c839da (the last pass, whose first child on main is 01e7539353): program_digest 9ce48951... (109219 identities) unchanged, removed_n 0 -> 49152 and added_n 0 -> 49152, so as many rows left v1's spelling as joined a new one. The rows beyond the pass are exactly model.layers.<k>.mlp.down_proj/out 8192, model.layers.<k>.mlp.gate_up_proj/out 8192, model.layers.<k>.self_attn.o_proj/out 8192, model.layers.<k>.self_attn.qkv_proj/out 8192, model.layers.<k>.self_attn.rotary_emb/key 8192, model.layers.<k>.self_attn.rotary_emb/query 8192: v1's `0` / `1` returns renamed `<linear>/out`, `rotary_emb/query` and `rotary_emb/key`."
 expected = { identities = 109219, program_digest = "9ce48951f04eb440501c4e829e3a492a58ca963997ca707d47fb129fe73cf590", added_n = 49152, removed_n = 49152, complete = true, manifest_digest = "bec879b7964f43985dbb9d730f90e200e496c9dde1485d753675d07b7b322210", identity_rows_sha256 = "19bcac1e21f661eaf35a8c754288c57a34f0db15d256c800a61830622662c99a" }
 
+# labelled decision (Draft 3 §7): the required manifest stops asking for the FlashAttention M1 stream
+[[rows."llama32-1b__bf16__l40s__tp1__b1__i4096__o512__mixed__greedy__bi-eager".decisions]]
+check = "manifest_digest"
+since = "#5777 (e09f3f818c)"
+since_commit = "e09f3f818ca12449b96cc95a8008dcf881a49b44"
+finding = "#5777 no FlashAttention M1 stream (e09f3f818c)"
+status = "pending_review"
+reason = "The required manifest stops asking for the FlashAttention M1 stream (fa2_hidden_m1_stream, op paths fa2.m1/L<k>/<geometry>), which no proof unit reads, and drops the `hidden = ...` clause from the query text, so manifest_digest moves. Solely that: the same rebuild at the change's base a65dcb3980 reproduces this row's contract, and at e09f3f818c program_digest 9ce48951... is unchanged and identities fall 109219 -> 101027, exactly the base manifest's 8192 fa2_hidden_m1_stream rows (5 geometry classes, 8192 distinct identity keys). Those 8192 keys are the whole move in the set difference against v1: v1's manifest had all 8192 of them, so removed_n grows by 8192 (removed_n 49152 -> 57344, added_n 49152 -> 49152)."
+expected = { identities = 101027, program_digest = "9ce48951f04eb440501c4e829e3a492a58ca963997ca707d47fb129fe73cf590", added_n = 49152, removed_n = 57344, complete = true, manifest_digest = "9a3dfe4976f037bced12dc4ad1681e20bdcd44692e4e304cd283945007cc2eb0", identity_rows_sha256 = "7433f6a3ee7d70b392ecec95e18cf29ab47eade7785803128c001ce63586c183" }
+
 [rows."llama32-1b__bf16__l40s__tp1__b1__i4096__o512__mixed__greedy__bi-eager".local]
 
 [rows."llama32-1b__bf16__l40s__tp1__b1__i4096__o512__mixed__greedy__bi-eager".artifacts]
@@ -81,6 +91,16 @@ finding = "#2614 one naming (01e7539353)"
 status = "pending_review"
 reason = "Landing 01e7539353 brings the one naming scheme (merge 6e4def4744 of cursor/one-naming-21f3, 602e58006a's content): query.required deletes the Residual table of v1 member spellings (a linear's `0`, RoPE's `0` / `1`, fused_q's and index_k's ports) and names a member structurally (its port, else the recorded hint, else `out`); query.manifest.bind owns the runtime spellings. The rename is intended, and nothing required changed. On this row, rebuilt at c0ebeb8b against f4c839da (the last pass, whose first child on main is 01e7539353): program_digest 4bc2937c... (505743 identities) unchanged, removed_n 0 -> 245376 and added_n 0 -> 245376, so as many rows left v1's spelling as joined a new one. The rows beyond the pass are exactly model.layers.<k>.mlp.down_proj/out 40896, model.layers.<k>.mlp.gate_up_proj/out 40896, model.layers.<k>.self_attn.o_proj/out 40896, model.layers.<k>.self_attn.qkv_proj/out 40896, model.layers.<k>.self_attn.rotary_emb/key 40896, model.layers.<k>.self_attn.rotary_emb/query 40896: v1's `0` / `1` returns renamed `<linear>/out`, `rotary_emb/query` and `rotary_emb/key`."
 expected = { identities = 505743, program_digest = "4bc2937c31fb22a511fce7a827788bf16b6478f2f48b5a2327b8503c72b3e313", added_n = 245376, removed_n = 245376, complete = true, manifest_digest = "2d4e122adf139a8c822c8a3de5ce7dc93e0d90b4426035f2a3c2d15148d3ddfe", identity_rows_sha256 = "ad7a085cb205715da8aa002e9d3c94bac11f50ed1f0e47ba9005f1f80e763d2a" }
+
+# labelled decision (Draft 3 §7): the required manifest stops asking for the FlashAttention M1 stream
+[[rows."llama32-1b__bf16__l40s__tp1__b64__i1024__o128__mixed__greedy__bi-eager".decisions]]
+check = "manifest_digest"
+since = "#5777 (e09f3f818c)"
+since_commit = "e09f3f818ca12449b96cc95a8008dcf881a49b44"
+finding = "#5777 no FlashAttention M1 stream (e09f3f818c)"
+status = "pending_review"
+reason = "The required manifest stops asking for the FlashAttention M1 stream (fa2_hidden_m1_stream, op paths fa2.m1/L<k>/<geometry>), which no proof unit reads, and drops the `hidden = ...` clause from the query text, so manifest_digest moves. Solely that: the same rebuild at the change's base a65dcb3980 reproduces this row's contract, and at e09f3f818c program_digest 4bc2937c... is unchanged and identities fall 505743 -> 503695, exactly the base manifest's 2048 fa2_hidden_m1_stream rows (46 geometry classes, 736 distinct identity keys). Those 736 keys are the whole move in the set difference against v1: v1's manifest had all 736 of them, so removed_n grows by 736 (removed_n 245376 -> 246112, added_n 245376 -> 245376)."
+expected = { identities = 503695, program_digest = "4bc2937c31fb22a511fce7a827788bf16b6478f2f48b5a2327b8503c72b3e313", added_n = 245376, removed_n = 246112, complete = true, manifest_digest = "f6ab4c4cf6fe1363ea5e32d69590ca040dfbe18d4f07902d11ce0a518d2236e6", identity_rows_sha256 = "df2c34953d32071514e17d80fbcfa0eab4da93c5257fb35231788b0531ab13ea" }
 
 [rows."llama32-1b__bf16__l40s__tp1__b64__i1024__o128__mixed__greedy__bi-eager".local]
 tp2 = "/workspace/cp/sweep/r19-int-7/llama32-1b__bf16__l40s__tp1__b64__i1024__o128__mixed__greedy__bi-eager"
@@ -117,6 +137,16 @@ finding = "#2614 one naming (01e7539353)"
 status = "pending_review"
 reason = "Landing 01e7539353 brings the one naming scheme (merge 6e4def4744 of cursor/one-naming-21f3, 602e58006a's content): query.required deletes the Residual table of v1 member spellings (a linear's `0`, RoPE's `0` / `1`, fused_q's and index_k's ports) and names a member structurally (its port, else the recorded hint, else `out`); query.manifest.bind owns the runtime spellings. The rename is intended, and nothing required changed. On this row, rebuilt at c0ebeb8b against f4c839da (the last pass, whose first child on main is 01e7539353): program_digest fdb622a6... (203575 identities) unchanged, removed_n 0 -> 86016 and added_n 14336 -> 100352, so as many rows left v1's spelling as joined a new one. The rows beyond the pass are exactly model.layers.<k>.mlp.down_proj/out 14336, model.layers.<k>.mlp.gate_up_proj/out 14336, model.layers.<k>.self_attn.o_proj/out 14336, model.layers.<k>.self_attn.qkv_proj/out 14336, model.layers.<k>.self_attn.rotary_emb/key 14336, model.layers.<k>.self_attn.rotary_emb/query 14336: v1's `0` / `1` returns renamed `<linear>/out`, `rotary_emb/query` and `rotary_emb/key`."
 expected = { identities = 203575, program_digest = "fdb622a62644af5569b29096730aa26ddcb1b367de449d432b695ee7dd7eb443", added_n = 100352, removed_n = 86016, complete = true, manifest_digest = "9586b789c65fa79788780b7ce344ae87e1dcdd619bb14d605996b82823b2f10e", identity_rows_sha256 = "b153a8d7d74c7650bde2ad96f37b280907f8cfe4d28a965d0d0241fdd0b8937a" }
+
+# labelled decision (Draft 3 §7): the required manifest stops asking for the FlashAttention M1 stream
+[[rows."qwen25-15b__bf16__l40s__tp1__b1__i4096__o512__mixed__greedy__bi-eager".decisions]]
+check = "manifest_digest"
+since = "#5777 (e09f3f818c)"
+since_commit = "e09f3f818ca12449b96cc95a8008dcf881a49b44"
+finding = "#5777 no FlashAttention M1 stream (e09f3f818c)"
+status = "pending_review"
+reason = "The required manifest stops asking for the FlashAttention M1 stream (fa2_hidden_m1_stream, op paths fa2.m1/L<k>/<geometry>), which no proof unit reads, and drops the `hidden = ...` clause from the query text, so manifest_digest moves. Solely that: the same rebuild at the change's base a65dcb3980 reproduces this row's contract, and at e09f3f818c program_digest fdb622a6... is unchanged and identities fall 203575 -> 189239, exactly the base manifest's 14336 fa2_hidden_m1_stream rows (9 geometry classes, 14336 distinct identity keys). Those 14336 keys are the whole move in the set difference against v1: v1's manifest had all 14336 of them, so removed_n grows by 14336 (removed_n 86016 -> 100352, added_n 100352 -> 100352)."
+expected = { identities = 189239, program_digest = "fdb622a62644af5569b29096730aa26ddcb1b367de449d432b695ee7dd7eb443", added_n = 100352, removed_n = 100352, complete = true, manifest_digest = "108f365076cc27a8c3250b9f2719c26969bbcb27d5f09fa37864a716fdb2a672", identity_rows_sha256 = "0650909ec3c951c57993810a1b3a28c47c0799e16d742402fcf1642197d6577d" }
 
 [rows."qwen25-15b__bf16__l40s__tp1__b1__i4096__o512__mixed__greedy__bi-eager".local]
 
@@ -186,6 +216,16 @@ status = "pending_review"
 reason = "Landing 01e7539353 brings the one naming scheme (merge 6e4def4744 of cursor/one-naming-21f3, 602e58006a's content): query.required deletes the Residual table of v1 member spellings (a linear's `0`, RoPE's `0` / `1`, fused_q's and index_k's ports) and names a member structurally (its port, else the recorded hint, else `out`); query.manifest.bind owns the runtime spellings. The rename is intended, and nothing required changed. On this row, rebuilt at c0ebeb8b against f4c839da (the last pass, whose first child on main is 01e7539353): program_digest 44801d07... (504764 identities) unchanged, removed_n 0 -> 67392 and added_n 341712 -> 409104, so as many rows left v1's spelling as joined a new one. The rows beyond the pass are exactly model.layers.<k>.mlp.down_proj/out 11232, model.layers.<k>.mlp.gate_up_proj/out 11232, model.layers.<k>.self_attn.o_proj/out 11232, model.layers.<k>.self_attn.qkv_proj/out 11232, model.layers.<k>.self_attn.rotary_emb/key 11232, model.layers.<k>.self_attn.rotary_emb/query 11232: v1's `0` / `1` returns renamed `<linear>/out`, `rotary_emb/query` and `rotary_emb/key`. It replaces this row's Q_word v1 sanction (the partition of record, manifest_digest 691f00d4..., removed_n 0), whose account stands (every v1 identity kept, 341712 added: the dataflow promotion's 432 model/out and 341280 call boundaries inside module bodies), now with the 67392 v1-spelt linear and RoPE rows renamed. The rebuild still completes, as it has since the dataflow promotion, so test_negative_57 reads this decision in place of the refusal."
 expected = { identities = 504764, program_digest = "44801d07a45e925cd80ab5e8c2fed7a78461c3ac309d9406dd009288af7fad53", added_n = 409104, removed_n = 67392, complete = true, manifest_digest = "a1d5a631003badbde196bd8121d7975547cd1e8f5fc258c9f5f4f824e4ac475d", identity_rows_sha256 = "e05e7d0628f5b5889a99a581853f974e8de35a7848ce2e6c4481136edb074a00" }
 
+# labelled decision (Draft 3 §7): the required manifest stops asking for the FlashAttention M1 stream
+[[rows."gemma2-2b__bf16__l40s__tp1__b8__i1024__o128__mixed__greedy__bi-eager".decisions]]
+check = "manifest_digest"
+since = "#5777 (e09f3f818c)"
+since_commit = "e09f3f818ca12449b96cc95a8008dcf881a49b44"
+finding = "#5777 no FlashAttention M1 stream (e09f3f818c)"
+status = "pending_review"
+reason = "The required manifest stops asking for the FlashAttention M1 stream (fa2_hidden_m1_stream, op paths fa2.m1/L<k>/<geometry>), which no proof unit reads, and drops the `hidden = ...` clause from the query text, so manifest_digest moves. Solely that: the same rebuild at the change's base a65dcb3980 reproduces this row's contract, and at e09f3f818c program_digest 44801d07... is unchanged and identities fall 504764 -> 501436, exactly the base manifest's 3328 fa2_hidden_m1_stream rows (21 geometry classes, 286 distinct identity keys). Those 286 keys are the whole move in the set difference against v1: v1's manifest had all 286 of them, so removed_n grows by 286 (removed_n 67392 -> 67678, added_n 409104 -> 409104)."
+expected = { identities = 501436, program_digest = "44801d07a45e925cd80ab5e8c2fed7a78461c3ac309d9406dd009288af7fad53", added_n = 409104, removed_n = 67678, complete = true, manifest_digest = "ffc0805f857b51d046fd869cb9ab1bdb9af906844f6d7d4c07a48bed2ecd9761", identity_rows_sha256 = "95224f0751d0bf73b1216931e4dcc31282a35a41c87f8b1786e746010dae641c" }
+
 [rows."gemma2-2b__bf16__l40s__tp1__b8__i1024__o128__mixed__greedy__bi-eager".local]
 tp2 = "/workspace/cp/sweep/r19-int-10/gemma2-2b__bf16__l40s__tp1__b8__i1024__o128__mixed__greedy__bi-eager"
 
@@ -211,6 +251,16 @@ finding = "#2614 one naming (01e7539353)"
 status = "pending_review"
 reason = "Landing 01e7539353 brings the one naming scheme (merge 6e4def4744 of cursor/one-naming-21f3, 602e58006a's content): query.required deletes the Residual table of v1 member spellings (a linear's `0`, RoPE's `0` / `1`, fused_q's and index_k's ports) and names a member structurally (its port, else the recorded hint, else `out`); query.manifest.bind owns the runtime spellings. The rename is intended, and nothing required changed. On this row, rebuilt at c0ebeb8b against f4c839da (the last pass, whose first child on main is 01e7539353): program_digest fc911941... (205144 identities) unchanged, removed_n 0 -> 99072 and added_n 0 -> 99072, so as many rows left v1's spelling as joined a new one. The rows beyond the pass are exactly model.layers.<k>.mlp.down_proj/out 16512, model.layers.<k>.mlp.gate_up_proj/out 16512, model.layers.<k>.self_attn.o_proj/out 16512, model.layers.<k>.self_attn.qkv_proj/out 16512, model.layers.<k>.self_attn.rotary_emb/key 16512, model.layers.<k>.self_attn.rotary_emb/query 16512: v1's `0` / `1` returns renamed `<linear>/out`, `rotary_emb/query` and `rotary_emb/key`."
 expected = { identities = 205144, program_digest = "fc91194139375ddaae2f8b42ffd44d388ded000c8b3eec5eee51c7303eb53501", added_n = 99072, removed_n = 99072, complete = true, manifest_digest = "ec2e1f0d684f1c2a3d203fa1552ae7b558bc1ec1777b431421550d8ee38c8e3d", identity_rows_sha256 = "1cc7187c018547f1092d8ecf6947d2fee4657ef8169f1527d9f7e6a008415e0b" }
+
+# labelled decision (Draft 3 §7): the required manifest stops asking for the FlashAttention M1 stream
+[[rows."mistral-7b__bf16__l40s__tp1__b8__i1024__o128__mixed__greedy__bi-eager".decisions]]
+check = "manifest_digest"
+since = "#5777 (e09f3f818c)"
+since_commit = "e09f3f818ca12449b96cc95a8008dcf881a49b44"
+finding = "#5777 no FlashAttention M1 stream (e09f3f818c)"
+status = "pending_review"
+reason = "The required manifest stops asking for the FlashAttention M1 stream (fa2_hidden_m1_stream, op paths fa2.m1/L<k>/<geometry>), which no proof unit reads, and drops the `hidden = ...` clause from the query text, so manifest_digest moves. Solely that: the same rebuild at the change's base a65dcb3980 reproduces this row's contract, and at e09f3f818c program_digest fc911941... is unchanged and identities fall 205144 -> 201048, exactly the base manifest's 4096 fa2_hidden_m1_stream rows (11 geometry classes, 352 distinct identity keys). Those 352 keys are the whole move in the set difference against v1: v1's manifest had all 352 of them, so removed_n grows by 352 (removed_n 99072 -> 99424, added_n 99072 -> 99072)."
+expected = { identities = 201048, program_digest = "fc91194139375ddaae2f8b42ffd44d388ded000c8b3eec5eee51c7303eb53501", added_n = 99072, removed_n = 99424, complete = true, manifest_digest = "2a1c0f8fa073fb7d74b04126fdff3c5673808245c0cfd59787bf714666266093", identity_rows_sha256 = "5dfd77e3de415f334462370378f3d2fdeb61e519522d74ffa97efc904b7f2469" }
 
 [rows."mistral-7b__bf16__l40s__tp1__b8__i1024__o128__mixed__greedy__bi-eager".local]
 
@@ -260,6 +310,16 @@ status = "pending_review"
 reason = "Landing 01e7539353 brings the one naming scheme (merge 6e4def4744 of cursor/one-naming-21f3, 602e58006a's content): query.required deletes the Residual table of v1 member spellings (a linear's `0`, RoPE's `0` / `1`, fused_q's and index_k's ports) and names a member structurally (its port, else the recorded hint, else `out`); query.manifest.bind owns the runtime spellings. The rename is intended, and nothing required changed. On this row, rebuilt at c0ebeb8b against f4c839da (the last pass, whose first child on main is 01e7539353): program_digest fdd998d4... (406432 identities) unchanged, removed_n 0 -> 104640 and added_n 20928 -> 125568, so as many rows left v1's spelling as joined a new one. The rows beyond the pass are exactly model.layers.<k>.mlp.gate/out 20928, model.layers.<k>.self_attn.o_proj/out 20928, model.layers.<k>.self_attn.qkv_proj/out 20928, model.layers.<k>.self_attn.rotary_emb/key 20928, model.layers.<k>.self_attn.rotary_emb/query 20928: v1's `0` / `1` returns renamed `<linear>/out`, `rotary_emb/query` and `rotary_emb/key`."
 expected = { identities = 406432, program_digest = "fdd998d46fac4b37f55acd28b0f83d71a15fc412950e741d4ba7a7078e975a72", added_n = 125568, removed_n = 104640, complete = true, manifest_digest = "cc5ff1c69612993fcc59dac027a3ffee101b5246958f9ececeb3863ace21a73a", identity_rows_sha256 = "0177b534f349aba014a7ebcadfb21b622ecb13df1fe8953785d2ac3b28822efc" }
 
+# labelled decision (Draft 3 §7): the required manifest stops asking for the FlashAttention M1 stream
+[[rows."olmoe-1b-7b__bf16__l40s__tp1__b32__i1024__o128__mixed__greedy__bi-eager".decisions]]
+check = "manifest_digest"
+since = "#5777 (e09f3f818c)"
+since_commit = "e09f3f818ca12449b96cc95a8008dcf881a49b44"
+finding = "#5777 no FlashAttention M1 stream (e09f3f818c)"
+status = "pending_review"
+reason = "The required manifest stops asking for the FlashAttention M1 stream (fa2_hidden_m1_stream, op paths fa2.m1/L<k>/<geometry>), which no proof unit reads, and drops the `hidden = ...` clause from the query text, so manifest_digest moves. Solely that: the same rebuild at the change's base a65dcb3980 reproduces this row's contract, and at e09f3f818c program_digest fdd998d4... is unchanged and identities fall 406432 -> 404384, exactly the base manifest's 2048 fa2_hidden_m1_stream rows (32 geometry classes, 512 distinct identity keys). Those 512 keys are the whole move in the set difference against v1: v1's manifest had all 512 of them, so removed_n grows by 512 (removed_n 104640 -> 105152, added_n 125568 -> 125568)."
+expected = { identities = 404384, program_digest = "fdd998d46fac4b37f55acd28b0f83d71a15fc412950e741d4ba7a7078e975a72", added_n = 125568, removed_n = 105152, complete = true, manifest_digest = "b7fe3967c7c2011a0e742051f09901fd13b5e28b99b476c80b225dac7fb8e809", identity_rows_sha256 = "24f1d2abc5218cd629de9b9a1dfb7e650b6696973dbb9d138eae627dd9785de1" }
+
 [rows."olmoe-1b-7b__bf16__l40s__tp1__b32__i1024__o128__mixed__greedy__bi-eager".local]
 
 [rows."olmoe-1b-7b__bf16__l40s__tp1__b32__i1024__o128__mixed__greedy__bi-eager".artifacts]
@@ -307,6 +367,16 @@ finding = "#2614 one naming (01e7539353)"
 status = "pending_review"
 reason = "Landing 01e7539353 brings the one naming scheme (merge 6e4def4744 of cursor/one-naming-21f3, 602e58006a's content): query.required deletes the Residual table of v1 member spellings (a linear's `0`, RoPE's `0` / `1`, fused_q's and index_k's ports) and names a member structurally (its port, else the recorded hint, else `out`); query.manifest.bind owns the runtime spellings. The rename is intended, and nothing required changed. On this row, rebuilt at c0ebeb8b against f4c839da (the last pass, whose first child on main is 01e7539353): program_digest 6de1e6af... (402938 identities) unchanged, removed_n 0 -> 103520 and added_n 20704 -> 124224, so as many rows left v1's spelling as joined a new one. The rows beyond the pass are exactly model.layers.<k>.mlp.gate/out 20704, model.layers.<k>.self_attn.o_proj/out 20704, model.layers.<k>.self_attn.qkv_proj/out 20704, model.layers.<k>.self_attn.rotary_emb/key 20704, model.layers.<k>.self_attn.rotary_emb/query 20704: v1's `0` / `1` returns renamed `<linear>/out`, `rotary_emb/query` and `rotary_emb/key`."
 expected = { identities = 402938, program_digest = "6de1e6afdeffc1a8772201a8491aca7fdeeebae10c6b20fa65db2f84fb349ddf", added_n = 124224, removed_n = 103520, complete = true, manifest_digest = "75dfcf6656d04db0313de687b05e535aa62f9192255e5cce917a91f9127d9847", identity_rows_sha256 = "9d590021742682f3da0dfb9e9533e0a25d73ab732a453ab59096150813d99e13" }
+
+# labelled decision (Draft 3 §7): the required manifest stops asking for the FlashAttention M1 stream
+[[rows."olmoe-1b-7b__bf16__l40s__tp1__b32__i1024__o128__mixed-arrivals__greedy__bi-eager".decisions]]
+check = "manifest_digest"
+since = "#5777 (e09f3f818c)"
+since_commit = "e09f3f818ca12449b96cc95a8008dcf881a49b44"
+finding = "#5777 no FlashAttention M1 stream (e09f3f818c)"
+status = "pending_review"
+reason = "The required manifest stops asking for the FlashAttention M1 stream (fa2_hidden_m1_stream, op paths fa2.m1/L<k>/<geometry>), which no proof unit reads, and drops the `hidden = ...` clause from the query text, so manifest_digest moves. Solely that: the same rebuild at the change's base a65dcb3980 reproduces this row's contract, and at e09f3f818c program_digest 6de1e6af... is unchanged and identities fall 402938 -> 400058, exactly the base manifest's 2880 fa2_hidden_m1_stream rows (56 geometry classes, 896 distinct identity keys). Those 896 keys are the whole move in the set difference against v1: v1's manifest had all 896 of them, so removed_n grows by 896 (removed_n 103520 -> 104416, added_n 124224 -> 124224)."
+expected = { identities = 400058, program_digest = "6de1e6afdeffc1a8772201a8491aca7fdeeebae10c6b20fa65db2f84fb349ddf", added_n = 124224, removed_n = 104416, complete = true, manifest_digest = "27ca58928b5beb9fc219cbb6918bd606ce1c8cba89bb7a7b554f58fb49c9048f", identity_rows_sha256 = "b38dcbc17386a860917960bee85ebb637e7087dc2c7d0ddc76ee420fe646bc83" }
 
 [rows."olmoe-1b-7b__bf16__l40s__tp1__b32__i1024__o128__mixed-arrivals__greedy__bi-eager".local]
 tp2 = "/workspace/cp/sweep/r19-int-10/olmoe-1b-7b__bf16__l40s__tp1__b32__i1024__o128__mixed-arrivals__greedy__bi-eager"
@@ -359,6 +429,16 @@ finding = "#2614 one naming (01e7539353) and the FA3 composed geometry (50a7e184
 status = "pending_review"
 reason = "Landing 01e7539353 brings the one naming scheme (merge 6e4def4744 of cursor/one-naming-21f3, 602e58006a's content): query.required deletes the Residual table of v1 member spellings (a linear's `0`, RoPE's `0` / `1`, fused_q's and index_k's ports) and names a member structurally (its port, else the recorded hint, else `out`); query.manifest.bind owns the runtime spellings. The rename is intended, and nothing required changed. On this row, rebuilt at c0ebeb8b against f4c839da (the last pass, whose first child on main is 01e7539353): program_digest 357b965d... (316347 identities) unchanged, removed_n 0 -> 103212 and added_n 0 -> 103212, so as many rows left v1's spelling as joined a new one. The rows beyond the pass are exactly model.layers.<k>.mlp.down_proj/out 17136, model.layers.<k>.mlp.gate_up_proj/out 17136, model.layers.<k>.self_attn.o_proj/out 17136, model.layers.<k>.self_attn.qkv_proj/out 17136, model.layers.<k>.self_attn.rotary_emb/key 17136, model.layers.<k>.self_attn.rotary_emb/query 17136: v1's `0` / `1` returns renamed `<linear>/out`, `rotary_emb/query` and `rotary_emb/key`. Beside them, 396 FA3 batch-level hidden rows (fa3.m1/L<k>/g<HB>x<M>x<NB>x<BN>x<D>: 11 geometries x 36 attention layers) are a correction of what is required, not a rename: 50a7e18423, also in that landing (vllm compose_global reads an FA3 attention's composed hidden stream geometry as FA3 packs it, HB = KVH and M = rows * NH / KVH; it read FA2's, NH = HB, so it required the stream under M = 1, which the FA3 tap does not commit, so a Commit failed required_value_coverage on 224 fa3_hidden_m1_stream identities because the manifest named g8x168x2x128x64 and the tap writes g8x672x2x128x64). Paired one to one against the v1 manifest (same op_path, engine step and every other key field, row by row), each row's member goes g<HB>x1x... -> g<HB>x4x... (M = NH / KVH = 32 / 8) and its word range grows exactly x4: the required words of those rows go 8,676,529,632 -> 34,706,118,528. The requirement is now the committed stream: stricter and correct."
 expected = { identities = 316347, program_digest = "357b965dca2497df1cc97c6b45b5d0f773e4aba40ee8ae0bc630469d45d10262", added_n = 103212, removed_n = 103212, complete = true, manifest_digest = "710bfe787dcfff4030b08a03774a389066c91012134487f93838269e902195e1", identity_rows_sha256 = "69417bfaa71ad81a5a435b31ff6fd98a8e7aaa0b9b434c762800622a54c6cdd8" }
+
+# labelled decision (Draft 3 §7): the required manifest stops asking for the FlashAttention M1 stream
+[[rows."qwen3-4b__bf16__h100__tp1__b8__i1024__o128__mixed__greedy__bi-eager".decisions]]
+check = "manifest_digest"
+since = "#5777 (e09f3f818c)"
+since_commit = "e09f3f818ca12449b96cc95a8008dcf881a49b44"
+finding = "#5777 no FlashAttention M1 stream (e09f3f818c)"
+status = "pending_review"
+reason = "The required manifest stops asking for the FlashAttention M1 stream (fa3_hidden_m1_stream, op paths fa3.m1/L<k>/<geometry>), which no proof unit reads, and drops the `hidden = ...` clause from the query text, so manifest_digest moves. Solely that: the same rebuild at the change's base a65dcb3980 reproduces this row's contract, and at e09f3f818c program_digest 357b965d... is unchanged and identities fall 316347 -> 311739, exactly the base manifest's 4608 fa3_hidden_m1_stream rows (11 geometry classes, 396 distinct identity keys). Those 396 keys are the whole move in the set difference against v1: none of them was in v1's manifest, so added_n falls by 396 (removed_n 103212 -> 103212, added_n 103212 -> 102816)."
+expected = { identities = 311739, program_digest = "357b965dca2497df1cc97c6b45b5d0f773e4aba40ee8ae0bc630469d45d10262", added_n = 102816, removed_n = 103212, complete = true, manifest_digest = "251d2e6c824535e2ca4b62f117b636ddf410201aec47387612c300f5177359ea", identity_rows_sha256 = "0ada6efa206b3a4dd2f15a097e3ed4031869dd36ec21f1cfba0a8ba05ae18e7d" }
 
 [rows."qwen3-4b__bf16__h100__tp1__b8__i1024__o128__mixed__greedy__bi-eager".local]
 
@@ -417,6 +497,16 @@ finding = "#2614 one naming (01e7539353)"
 status = "pending_review"
 reason = "Landing 01e7539353 brings the one naming scheme (merge 6e4def4744 of cursor/one-naming-21f3, 602e58006a's content): query.required deletes the Residual table of v1 member spellings (a linear's `0`, RoPE's `0` / `1`, fused_q's and index_k's ports) and names a member structurally (its port, else the recorded hint, else `out`); query.manifest.bind owns the runtime spellings. The rename is intended, and nothing required changed. On this row, rebuilt at c0ebeb8b against f4c839da (the last pass, whose first child on main is 01e7539353): program_digest 079ee0a8... (7043 identities) unchanged, removed_n 0 -> 3072 and added_n 0 -> 3072, so as many rows left v1's spelling as joined a new one. The rows beyond the pass are exactly model.layers.<k>.mlp.down_proj/out 512, model.layers.<k>.mlp.gate_up_proj/out 512, model.layers.<k>.self_attn.o_proj/out 512, model.layers.<k>.self_attn.qkv_proj/out 512, model.layers.<k>.self_attn.rotary_emb/key 512, model.layers.<k>.self_attn.rotary_emb/query 512: v1's `0` / `1` returns renamed `<linear>/out`, `rotary_emb/query` and `rotary_emb/key`."
 expected = { identities = 7043, program_digest = "079ee0a8e3e0355b2600b8576588edb4d5df56bb21f3ff707e9117a8e843c1de", added_n = 3072, removed_n = 3072, complete = true, manifest_digest = "6833798a5bad6d373017fc15e42c21d69e3db257054bb499ac76a0db224f74b0", identity_rows_sha256 = "e7b18054f657560509c194da76c5906c7ef1f18c63a3524797e7e21b3e938827" }
+
+# labelled decision (Draft 3 §7): the required manifest stops asking for the FlashAttention M1 stream
+[[rows."llama32-1b__bf16__l40s__tp1__b1__i256__o32__mixed__stoch-t0.8-p0.95__bi-eager".decisions]]
+check = "manifest_digest"
+since = "#5777 (e09f3f818c)"
+since_commit = "e09f3f818ca12449b96cc95a8008dcf881a49b44"
+finding = "#5777 no FlashAttention M1 stream (e09f3f818c)"
+status = "pending_review"
+reason = "The required manifest stops asking for the FlashAttention M1 stream (fa2_hidden_m1_stream, op paths fa2.m1/L<k>/<geometry>), which no proof unit reads, and drops the `hidden = ...` clause from the query text, so manifest_digest moves. Solely that: the same rebuild at the change's base a65dcb3980 reproduces this row's contract, and at e09f3f818c program_digest 079ee0a8... is unchanged and identities fall 7043 -> 6531, exactly the base manifest's 512 fa2_hidden_m1_stream rows (2 geometry classes, 512 distinct identity keys). Those 512 keys are the whole move in the set difference against v1: v1's manifest had all 512 of them, so removed_n grows by 512 (removed_n 3072 -> 3584, added_n 3072 -> 3072)."
+expected = { identities = 6531, program_digest = "079ee0a8e3e0355b2600b8576588edb4d5df56bb21f3ff707e9117a8e843c1de", added_n = 3072, removed_n = 3584, complete = true, manifest_digest = "21d237b7a73054c4980224901724aa95ce90d5663e90e777fa9fe9982cd96f69", identity_rows_sha256 = "ca1008f4acabbc1cc84a5d167f6a2a797a10fff2317d73eeb2c232d4d2eb1bbe" }
 
 [rows."llama32-1b__bf16__l40s__tp1__b1__i256__o32__mixed__stoch-t0.8-p0.95__bi-eager".local]
 
