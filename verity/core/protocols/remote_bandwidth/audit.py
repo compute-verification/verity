@@ -485,7 +485,8 @@ class Store:
     """The prover's encoded store `E` under a registration, with its payload tree and the payloads' salts, and the
     blocks appended after the codec seed (`append`) at the next fresh store indices, each encoded under its bound key
     and its append's coin once the verifier has sent it (`encode`; None until then, its payload `pending`).  A
-    released block is kept, since a window's draws may still open it from a pass before its release."""
+    released block is kept, since a window's draws may still open it from a pass before its release.  Each block's
+    payload (`payload`) is the witness check 3's unit takes (`opening.witness`)."""
 
     def __init__(self, registration: Registration, payloads: Sequence[bytes], salts: Sequence[bytes]) -> None:
         if len(payloads) != registration.blocks:
@@ -499,6 +500,7 @@ class Store:
         self.blocks: list[bytes | None] = [codec.encode(m, j, k) for j, m in enumerate(self.payloads)]
         self.appends: list[Append] = []
         self.pending: dict[int, tuple[bytes, ...]] = {}
+        self.append_coins: dict[int, bytes] = {}
 
     @property
     def extent(self) -> int:
@@ -536,15 +538,32 @@ class Store:
         k = self.registration.key
         encoded = [codec.encode(m, first + u, k, bound=True, coin=coin) for u, m in enumerate(payloads)]
         del self.pending[first]
+        self.append_coins[first] = coin
         self.blocks[first:first + len(encoded)] = encoded
+
+    def _append_of(self, j: int) -> Append:
+        return self.appends[bisect.bisect_right([x.first for x in self.appends], j) - 1]
 
     def committed(self, j: int) -> tuple[bytes, tuple[bytes, ...], bytes]:
         """Block j's payload salt, its path to the payload root or its append's, and its digest `d_j` (empty under
         the seed's key)."""
         if j < self.registration.blocks:
             return self.salts[j], self.payload_tree.open(j).path, b""
-        a = self.appends[bisect.bisect_right([x.first for x in self.appends], j) - 1]
+        a = self._append_of(j)
         return a.salts[j - a.first], a.tree.open(j).path, a.digests[j - a.first]
+
+    def payload(self, j: int) -> bytes:
+        """Block j's payload: registered, or appended, its append's while it awaits its coin and then its block decoded
+        under its digest and that coin, so the store keeps no second copy of what it appends."""
+        if j < self.registration.blocks:
+            return self.payloads[j]
+        a = self._append_of(j)
+        if a.first in self.pending:
+            return self.pending[a.first][j - a.first]
+        m = codec.decode(self.blocks[j], j, self.registration.key, a.digests[j - a.first], self.append_coins[a.first])
+        if m is None:
+            raise ValueError(f"block {j} decodes to no payload of its digest under its append's coin")
+        return m
 
 
 @dataclass(frozen=True, slots=True)
@@ -591,6 +610,33 @@ class Opening:
         return (4 + 8 + len(self.block) + len(self.leaf) + len(self.leaf_salt) + len(self.payload_salt)
                 + DIGEST_BYTES * (len(self.receipt_path) + len(self.payload_path)) + len(self.tile) + len(self.digest)
                 + 4 * 3)
+
+
+@dataclass(frozen=True)
+class PositionSample:
+    """What the verifier knows of one draw (`AuditRun.drawn`): window t, pass i at step s, position p, block j =
+    plan_i[p], the pass's seed, plan and root, and the commitment block j's payload is a leaf of: the registration's
+    payload tree (``coin`` None) or its append's, under the append's coin."""
+
+    window: int
+    index: int
+    position: int
+    block: int
+    step: int
+    seed: bytes
+    plan: Plan
+    root: bytes
+    domain: CommitmentDomain
+    commitment: Commitment
+    coin: bytes | None
+
+    @property
+    def leaf(self) -> int:
+        return self.position // receipts.PER_LEAF
+
+    @property
+    def leaf_size(self) -> int:
+        return min(receipts.PER_LEAF, self.plan.length - receipts.PER_LEAF * self.leaf)
 
 
 class Prover:
@@ -898,7 +944,8 @@ class AuditRun:
     `Record.end_ns` over the same store, less the trusted round-trip floor if there is one, or the clock at
     registration for the store's first session, so that no read serves receipts of two sessions.  `tiles` is PoUW's
     check if the registration binds z, and None if it does not.  Blocks appended after the codec seed (`append`) are
-    the session's: they take indices from N up, and a later session over the store starts again from N.  A session
+    the session's: they take indices from N up, and a later session over the store starts again from N.  A window's
+    draws are decided by their openings (`verify`), or by check 3's outcome on each (`drawn`, `decide`).  A session
     over PoUS's P2 store is `p2.Session`, whose blocks are units of `block_bytes` (`codecs`, the codec it takes)."""
 
     codecs: tuple[type, ...] = (Codec,)
@@ -1296,6 +1343,40 @@ class AuditRun:
         if receipters[i](j, o.block, z) != y:
             return "receipt"
         return None
+
+    def drawn(self, t: int) -> tuple[PositionSample, ...]:
+        """What the verifier knows of window t's draws, in the order drawn, for check 3 decided by proofs (`opening`)
+        in place of `verify`'s openings."""
+        w = self.windows[t] if 0 <= t < len(self.windows) else None
+        if w is None or w.draws is None:
+            raise SessionError(f"window {t} has no draws")
+        N, out = self.params.blocks, []
+        for i, p in w.draws:
+            plan = w.plans[i]
+            j = plan.block(p)
+            if j < N:
+                domain, commitment, coin = self._payload_domain, Commitment(self.registration.payload_root, N), None
+            else:
+                _f, domain, commitment, coin = self._appends[bisect.bisect_right(self._appends, j, key=lambda a: a[0]) - 1]
+            out.append(PositionSample(t, i, p, j, w.steps[i], receipts.seed(w.challenge, i, self._previous(t, i)), plan,
+                                      w.roots[i], domain, commitment, coin))
+        return tuple(out)
+
+    def decide(self, t: int, failures: Sequence[str | None]) -> Verdict:
+        """Window t's verdict from check 3's outcome on each of its draws (`drawn`), in the order drawn, in place of
+        `verify`'s openings: the first failure (one of `FAILURES`) rejects it, and a window with no draws is
+        `malformed`, as `verify` has it."""
+        self._live()
+        w = self.windows[t] if 0 <= t < len(self.windows) else None
+        if w is None or w.draws is None or w.verdict is not None:
+            raise SessionError(f"window {t} has no draws awaiting check 3")
+        if not w.draws or len(failures) != len(w.draws):
+            return self._fail(t, "malformed")
+        for at, f in zip(w.draws, failures):
+            if f is not None:
+                return self._fail(t, f if f in FAILURES else "malformed", at)
+        w.verdict = Verdict(t, True)
+        return w.verdict
 
     @property
     def outcome(self) -> str | None:
