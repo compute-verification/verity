@@ -196,7 +196,7 @@ A spec-level reference for network accounting's timing channel:
   shape and one step a row). `pins` gives the verifier's pinned roots from the certificates alone, so the interface's
   ``input_count`` under them has no free input, and `certified` refuses a wire whose two certifiers' roots differ (the
   receiver's commits under the sender's salts, so the rows that arrived are the rows that left). An inference block
-  runs on a single server (NET-92, Daniel's ruling of 26 Oct): a server's ingress and egress carry only its inference
+  runs on a single server: a server's ingress and egress carry only its inference
   blocks' declared inputs and outputs, so which server may read an inference block's input bits is unambiguous. `check`
   reads each unit's (slot, step) from the record's inference entries (``blocks.inference``) and refuses, by name, a
   block whose units are on two servers, and two servers or more over a record that states no inference block;
@@ -324,7 +324,7 @@ uv run network-certifier-calibrate trace.json --ingress-bucket-ms 100
 
 Every protocol is to be zero-knowledge. The network audit's claim is counts only: N2 holds each window's per-bucket
 counts to the occupancy profile on every link-window (on a served link, to the ones its ingress counts derive under
-the declared sync), beside the proved timing bound (Daniel's provisional call on ASK-70, 19 Oct). N3, the content check,
+the declared sync), beside the proved timing bound (provisional). N3, the content check,
 is retired, superseded by the step-indexed scan (`ingress_scan`, `egress`).
 
 N2's verifier of record, `LinkWindows.verify`, decides each link-window on a `--zk` proof of N2's registered unit
