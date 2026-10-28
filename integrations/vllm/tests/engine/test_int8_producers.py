@@ -334,6 +334,13 @@ WIRING = textwrap.dedent('''
     out["live_after"] = len(hooks.live(int8_producers.TAG))
     got, _, out["quants_after"] = run()
     out["after_equal"] = same(got, ref)
+    keep = int8_fused.PRODUCER_WARPS
+    int8_fused.PRODUCER_WARPS = {sm: {"norm": t["norm"]} for sm, t in keep.items()}
+    int8_producers.install(model)
+    got, _, out["quants_norms_only"] = run()
+    out["norms_only_equal"] = same(got, ref)
+    int8_producers.uninstall()
+    int8_fused.PRODUCER_WARPS = keep
     print(json.dumps(out))
 ''')
 
@@ -346,8 +353,12 @@ def test_the_producers_hand_their_codes_to_the_linears_they_feed():
     bit the unfused forward's, and the quantizer runs only for layer 0's qkv (its input norm has no residual) and each
     o_proj.  Under a dispatch mode the producers stand aside, under the norm tap (a patched
     `_C.fused_add_rms_norm`) the norms do, and an int8 source wrapping `int8_ops.row_quant` acquires the same values;
-    uninstalled, the forward is the unfused one again."""
+    uninstalled, the forward is the unfused one again, and with no measured win for the silu's width it alone stands
+    aside."""
     pytest.importorskip("vllm")
+    from verity_vllm.engine import int8_fused as F
+    if F.producer_warps("norm", 2048) is None or F.producer_warps("silu", 8192) is None:
+        pytest.skip(f"{F.arch()} has no measured producer win at H 2048, I 8192 (`PRODUCER_WARPS`)")
     r = subprocess.run([sys.executable, "-c", WIRING], check=True, capture_output=True, text=True,
                        env={**os.environ, "VLLM_BATCH_INVARIANT": "1", "VERITY_INT8_FUSED_PRODUCERS": "1"})
     import json
@@ -357,4 +368,6 @@ def test_the_producers_hand_their_codes_to_the_linears_they_feed():
     assert out["quants_unfused"] == out["quants_dispatch"] == out["quants_after"] == [2048, 2048, 2048, 8192] * 2, out
     assert out["quants_fused"] == out["quants_int8_source"] == [2048, 2048, 2048], out
     assert out["quants_norm_tap"] == [2048] * 6, out
-    assert all(out[k] for k in ("fused_equal", "dispatch_equal", "norm_tap_equal", "int8_source_equal", "after_equal")), out
+    assert out["quants_norms_only"] == [2048, 2048, 8192, 2048, 8192], out
+    assert all(out[k] for k in ("fused_equal", "dispatch_equal", "norm_tap_equal", "int8_source_equal", "after_equal",
+                                "norms_only_equal")), out

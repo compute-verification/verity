@@ -162,21 +162,23 @@ class Silu:
 
 
 def forward(norm: Norm, silu: Silu, fused: bool):
-    """One prefill's int8 producers: per layer its input norm (not layer 0's), its post-attention norm and its silu, the
-    fused ones at the engine's warps."""
+    """One prefill's int8 producers: per layer its input norm (not layer 0's), its post-attention norm and its silu, fused
+    as the engine fuses them (at `producer_warps`' widths and warps)."""
     from verity_vllm.engine import int8_fused as F
     x0, x1, r = norm.xs[0], norm.xs[-1], norm.rs[0]
     gu = silu.gus[0]
+    fuse_norm = fused and F.producer_warps("norm", H) is not None
+    fuse_silu = fused and F.producer_warps("silu", I) is not None
 
     def f():
         for layer in range(LAYERS):
             for x in ((x0, x1) if layer else (x1,)):
-                if fused:
+                if fuse_norm:
                     F.add_norm_quant(x, r, norm.w, EPS, norm.xq, norm.s)
                 else:
                     torch.ops._C.fused_add_rms_norm(x, r, norm.w, EPS)
                     F.quant_rows(x, norm.xq, norm.s)
-            if fused:
+            if fuse_silu:
                 F.silu_mul_quant(gu, silu.h, silu.xq, silu.s)
             else:
                 torch.ops._C.silu_and_mul(silu.h, gu)
