@@ -69,6 +69,9 @@ ALLOWED = {
     # a workload declare to it, so neither gains an ml edge.
     "core.wire": set(),
     "core.deploy": {"core.wire"},
+    # The registration log every subprotocol and both composites read, the Python of `Core.Registration`: canonical JSON
+    # and SHA-512 only, so it reaches no ml.
+    "core.protocols.registration": {"core.wire"},
     "core.protocols.profile": {"ml.circuits"},
     # The verifier's coins sample its own bytes as the Lean verifier does (`coins`), and the proof service's challenger
     # draws with them (`service.Stream.select`); every coin source is named by a claim instance (`challenger.coin_claim`).
