@@ -1,8 +1,10 @@
-"""H1's hooks on the served engine (`pouw.install`): the linear layers it records (`layers`), each layer's ``observe``
-(`observer`) and ``apply`` under the credit gate's trace (`traced`), and the model runner's ``execute_model``, which
-hands each step's admissions to the window (`admitting`), all wired at install by `wire`."""
+"""H1's hooks on the served engine (`pouw.install`): the linear layers it records (`layers`) and their weights' roots
+(`weight_roots`), each layer's ``observe`` (`observer`) and ``apply`` under the credit gate's trace (`traced`), and the
+model runner's ``execute_model``, which hands each step's admissions to the window (`admitting`), all wired at install by
+`wire`."""
 from __future__ import annotations
 
+import weakref
 from typing import Any
 
 from verity_vllm.protocols.pouw import credit_gate as CG
@@ -41,6 +43,38 @@ def layers(model: Any, types: tuple[type, ...]) -> list[Any]:
     if bad:
         raise ValueError(f"pouw:{PH.SCHEME} refused at install: " + "; ".join(bad))
     return out
+
+
+#: the roots `weight_roots` computed, by salt key and global index: the weight (a weak reference), its `_tensor_key` and
+#: its root
+_ROOTS: dict[tuple[bytes, int], tuple[Any, tuple, bytes]] = {}
+
+
+def weight_roots(layers: list[Any], lo: int = 0) -> dict[int, bytes]:
+    """`pouw_h1.weight_root` of each layer's int8 weight as it is served, by global index from ``lo``, under this process's
+    salt key (`pouw_h1.WEIGHT_KEY`), once a process: the weights are fixed after install, so each window's install reuses a
+    root while the key is the one it was computed under and the layer's weight the tensor it was computed from, with the
+    same storage, shape, dtype and version. Anything else (another key, a weight replaced or written in place, or an array
+    that isn't a tensor) is computed again."""
+    out, salt = {}, PH.WEIGHT_KEY
+    for i, m in enumerate(layers):
+        w, weight = lo + i, m.weight
+        key, hit = _tensor_key(weight), _ROOTS.get((salt, w))
+        if key is not None and hit is not None and hit[0]() is weight and hit[1] == key:
+            out[w] = hit[2]
+            continue
+        out[w] = PH.weight_root(w, PH.numpy_of(weight), salt)
+        if key is not None:
+            _ROOTS[(salt, w)] = (weakref.ref(weight), key, out[w])
+    return out
+
+
+def _tensor_key(t: Any) -> tuple | None:
+    """What a write to or a move of tensor ``t`` changes (its version counts in-place writes through any view), or None
+    when ``t`` isn't a tensor."""
+    if not (hasattr(t, "data_ptr") and hasattr(t, "_version")):
+        return None
+    return t.data_ptr(), tuple(t.shape), tuple(t.stride()), str(t.dtype), str(t.device), t._version
 
 
 def expert_names(layers: list[Any]) -> dict[int, str]:
@@ -101,4 +135,4 @@ def wire(run: PH.H1Run, hooks: Any, layers: list[Any], runner: Any, rows: int) -
             hooks.patch(layer.quant_method, "zy_rows", rows)
 
 
-__all__ = ["admitting", "layers", "observer", "traced", "wire"]
+__all__ = ["admitting", "layers", "observer", "traced", "weight_roots", "wire"]
