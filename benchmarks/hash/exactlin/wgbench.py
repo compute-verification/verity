@@ -16,10 +16,14 @@ CUDA graph, warmed, then items of at least --secs seconds, the arms alternating 
 Around every item, `stamp.cu` reads each SM's %clock64 and %globaltimer (one CTA an SM), so an item reports its declared
 MACs a SM clock against 4,096 (the wgmma s8 rate a clock), its SM clock, and its rate against
 theta = 989.4 T int8 MAC/s (4,096 x 132 x 1,830 MHz).  `dcgmi dmon` samples Tensor Active (1004), SM clock and power
-beside the run; an item's mean is over the samples inside it.
+beside the run; an item's mean is over the samples inside it.  Back to back, every arm holds the card at its power cap
+(about 1,350 to 1,600 MHz); a served step's GEMMs run near 1,713 MHz between memory-bound kernels.  `--rest R` puts the SMs
+to sleep after each call (`stamp.cu`'s rest, R times the call's clocks at 0.7 of the rate) and takes their rest clocks out
+of the span, so an item's rate is the GEMM's at that lower mean power and higher clock.  `--plan` times
+`int8_fused._plan`'s Triton config beside TRITON: what serves today where the shape has no row.
 
     python wgbench.py --out OUT [--ms 8192,16384,32768] [--linears qkv,o,gate_up,down] [--variants all] [--secs 2]
-                      [--rounds 2] [--no-lt] [--gate-only] [--no-edges] [--time-kinds served,random]
+                      [--rounds 2] [--no-lt] [--gate-only] [--no-edges] [--time-kinds served,random] [--plan] [--rest R]
 """
 from __future__ import annotations
 
@@ -53,29 +57,39 @@ def stamp_lib(tmp: Path) -> ctypes.CDLL:
                     str(so), str(HERE / "stamp.cu")], check=True)
     dll = ctypes.CDLL(str(so))
     dll.stamp.argtypes = [ctypes.c_void_p, ctypes.c_int, ctypes.c_void_p]
-    dll.stamp.restype = ctypes.c_int
+    dll.rest.argtypes = [ctypes.c_longlong, ctypes.c_void_p, ctypes.c_int, ctypes.c_void_p]
+    dll.stamp.restype = dll.rest.restype = ctypes.c_int
     return dll
 
 
 class Clock:
-    """Stamps of every SM's %clock64 and %globaltimer on the current stream."""
+    """Stamps of every SM's %clock64 and %globaltimer on the current stream, and the clocks each SM spent in `rest`."""
 
     def __init__(self, dll: ctypes.CDLL):
         self.dll = dll
         self.sms = torch.cuda.get_device_properties(0).multi_processor_count
         self.buf = torch.zeros(2, self.sms * 3, dtype=torch.int64, device="cuda")
+        self.acc = torch.zeros(1024, dtype=torch.int64, device="cuda")  # by %smid
 
     def mark(self, i: int) -> None:
+        if i == 0:
+            self.acc.zero_()
         if self.dll.stamp(self.buf[i].data_ptr(), self.sms, torch.cuda.current_stream().cuda_stream):
             raise RuntimeError("stamp launch failed")
 
+    def rest(self, cycles: int) -> None:
+        if self.dll.rest(cycles, self.acc.data_ptr(), self.sms, torch.cuda.current_stream().cuda_stream):
+            raise RuntimeError("rest launch failed")
+
     def span(self) -> dict:
         a, b = (v.view(-1, 3).cpu().tolist() for v in self.buf)
+        rest = self.acc.cpu().tolist()
         sa, sb = {r[0]: r for r in a}, {r[0]: r for r in b}
         common = sorted(set(sa) & set(sb))
         clk = [sb[s][1] - sa[s][1] for s in common]
         ns = [sb[s][2] - sa[s][2] for s in common]
         return {"sms": len(common), "clk_mean": sum(clk) / len(clk), "ns_mean": sum(ns) / len(ns),
+                "rest_mean": sum(rest[s] for s in common) / len(common),
                 "mhz": sum(c / n * 1e3 for c, n in zip(clk, ns)) / len(clk)}
 
 
@@ -177,25 +191,30 @@ def gate(m, n, k, variants, kinds=KINDS, seed=0) -> list[dict]:
     return rows
 
 
-def arm_fn(arm: str, ops: list, ys: list):
-    if arm == "triton":
-        cfg = X.Cfg.parse(TRITON)
-        return lambda: [X.scaled_mm(xq, sa, w, sw, y, cfg) for (xq, sa, w, sw), y in zip(ops, ys)]
+def arm_fn(arm: str, ops: list, ys: list, after=lambda: None):
+    if arm in ("triton", "plan"):
+        m, k = ops[0][0].shape
+        n = ops[0][2].shape[0]
+        cfg = (X.Cfg.parse(TRITON), None) if arm == "triton" else X._plan(m, n, k, ops[0][0].device)
+        return lambda: [(X.scaled_mm(xq, sa, w, sw, y, *cfg), after()) for (xq, sa, w, sw), y in zip(ops, ys)]
     if arm == "lt":
-        return lambda: [torch._int_mm(xq, w.t()) for (xq, sa, w, sw), y in zip(ops, ys)]
+        return lambda: [(torch._int_mm(xq, w.t()), after()) for (xq, sa, w, sw), y in zip(ops, ys)]
     text, _, flags = arm.removeprefix("wg:").partition("#")
     cfg, flags = W.WgCfg.parse(text), int(flags or 0)
-    return lambda: [W.scaled_mm(xq, sa, w, sw, y, cfg, flags) for (xq, sa, w, sw), y in zip(ops, ys)]
+    return lambda: [(W.scaled_mm(xq, sa, w, sw, y, cfg, flags), after()) for (xq, sa, w, sw), y in zip(ops, ys)]
 
 
-def timed(m, n, k, arms, secs, rounds, clock, dmon, name, kind) -> list[dict]:
+def timed(m, n, k, arms, secs, rounds, clock, dmon, name, kind, rest=0.0) -> list[dict]:
     l2 = torch.cuda.get_device_properties(0).L2_cache_size
     copies = max(2, math.ceil(2 * l2 / (n * k + m * k)))
     ops = [operands(m, n, k, kind, 100 + c) for c in range(copies)]
     ys = [torch.empty(m, n, dtype=torch.bfloat16, device="cuda") for _ in range(copies)]
     graphs, per_replay = {}, {}
+    # a call's rest: `rest` times its clocks at 0.7 of the s8 rate
+    cycles = int(rest * m * n * k / (0.7 * PER_CLK * clock.sms))
+    after = (lambda: clock.rest(cycles)) if cycles else (lambda: None)
     for arm in arms:
-        f = arm_fn(arm, ops, ys)
+        f = arm_fn(arm, ops, ys, after)
         f()
         torch.cuda.synchronize()
         g = torch.cuda.CUDAGraph()
@@ -227,11 +246,14 @@ def timed(m, n, k, arms, secs, rounds, clock, dmon, name, kind) -> list[dict]:
             t1 = time.time()
             sp = clock.span()
             calls = reps * copies
-            sec = sp["ns_mean"] / 1e9
+            # with rests, a call's time is the span's clocks less the SMs' rest, at the span's mean clock
+            busy = sp["clk_mean"] - sp["rest_mean"]
+            sec = sp["ns_mean"] / 1e9 * busy / sp["clk_mean"]
             macs = macs_call * calls
             it = {"linear": name, "shape": [m, n, k], "kind": kind, "arm": arm, "round": r, "calls": calls, "secs": sec,
                   "us_per_call": sec / calls * 1e6, "theta_frac": macs / (sec * THETA), "sm_mhz": sp["mhz"],
-                  "per_clk_frac": macs / (sp["clk_mean"] * sp["sms"] * PER_CLK), "sms": sp["sms"]}
+                  "per_clk_frac": macs / (busy * sp["sms"] * PER_CLK), "sms": sp["sms"],
+                  "rest_frac": sp["rest_mean"] / sp["clk_mean"]}
             it.update(dmon.between(t0 + 0.2, t1 - 0.1))
             items.append(it)
             print(json.dumps(it), flush=True)
@@ -268,6 +290,9 @@ def main() -> int:
     ap.add_argument("--no-edges", action="store_true")
     ap.add_argument("--time-kinds", default="served", help="input kinds timed (served, random)")
     ap.add_argument("--probes", default="", help="extra timed arms CFG#FLAGS (int8_wgmma.scaled_mm's flags), not gated")
+    ap.add_argument("--plan", action="store_true", help="time `int8_fused._plan`'s Triton config too (what serves today)")
+    ap.add_argument("--rest", type=float, default=0.0,
+                    help="the SMs asleep after each call for this many times its clocks at 0.7 of the rate (a served step's clock)")
     a = ap.parse_args()
     out = Path(a.out)
     out.mkdir(parents=True, exist_ok=True)
@@ -295,12 +320,13 @@ def main() -> int:
         return 0
     tmp = Path(tempfile.mkdtemp())
     clock, dmon = Clock(stamp_lib(tmp)), Dmon()
-    arms = ["triton"] + [f"wg:{v}" for v in variants] + [f"wg:{v}" for v in a.probes.split(",") if v] + ([] if a.no_lt else ["lt"])
+    arms = (["triton"] + (["plan"] if a.plan else []) + [f"wg:{v}" for v in variants]
+            + [f"wg:{v}" for v in a.probes.split(",") if v] + ([] if a.no_lt else ["lt"]))
     items = []
     try:
         for lin, m, n, k in shapes:
             for kind in a.time_kinds.split(","):
-                items += timed(m, n, k, arms, a.secs, a.rounds, clock, dmon, lin, kind)
+                items += timed(m, n, k, arms, a.secs, a.rounds, clock, dmon, lin, kind, a.rest)
                 torch.cuda.empty_cache()
     finally:
         dmon.stop()
