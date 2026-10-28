@@ -18,6 +18,7 @@ from typing import Any
 import pytest
 import torch
 
+from verity.core.protocols.pouw.circuit import h1window as HW
 from verity.core.protocols.sampled_proofs.challenger import CoinError
 from verity_vllm.engine import handle
 from verity_vllm.pipeline import cli
@@ -27,13 +28,14 @@ from verity_vllm.pipeline import serve_openai as so
 from verity_vllm.protocols import pouw
 from verity_vllm.protocols.pouw import h1 as PH
 from verity_vllm.protocols.pouw.h1 import challenger as PHC
+from verity_vllm.protocols.pouw.h1 import served as SV
 
 from tests.pipeline.test_commit_coins import GATE, KEY, PEER, _Auditor
 from tests.pipeline.test_serve_openai import CERTIFIER_BODY, Serving, records, serve_concurrently
 from tests.protocols import challenger_host as CH
 from tests.protocols.test_pouw_h1 import Runner, _so
 from tests.protocols.test_pouw_h1_commit import K, ROWS, STEPS, Committer, Linear, Model, _ids, _manifest_sites, _served_commit
-from tests.protocols.test_pouw_h1_served import _unit
+from tests.protocols.test_pouw_h1_served import StandInJ10R, _unit
 
 #: each window's two requests: step 0 admits both (prompt tokens, cap), step 1 decodes a row of each
 PROMPTS = ({"a": [5, 6, 7], "b": [8, 9]}, {"c": [11, 12], "d": [13, 14, 15, 16]})
@@ -44,9 +46,9 @@ class _Server:
     and the bench row's int8 source at engine steps 0..S-1 of each window (the committer's steps restart at its reset),
     the stand-in model, and the engine's runner, which `handle.model_runner` hands H1."""
 
-    def __init__(self, monkeypatch, quant=None):
+    def __init__(self, monkeypatch, quant=None, model=None):
         monkeypatch.setattr(pouw, "linear_types", lambda: (Linear,))
-        self.runner, self.model, self.com = Runner(), Model(), Committer()
+        self.runner, self.model, self.com = Runner(), model or Model(), Committer()
         monkeypatch.setattr(handle, "model_runner", lambda llm: self.runner)
         self.port, self.src = _served_commit(self.com, self.model, _manifest_sites(range(STEPS)) if quant is None else quant)
         self.src.install()
@@ -62,7 +64,7 @@ class _Server:
             self.com._plan_shape = (len(got), len(prompts))
             self.port._pre(None, (torch.tensor(got), torch.arange(len(got))), {})
             for layer in self.model.model.layers:
-                layer((torch.randn(len(run.owners[s]), K, generator=g) * 3).bfloat16())
+                layer((torch.randn(len(run.owners[s]), layer.weight.shape[1], generator=g) * 3).bfloat16())
             self.com._cur = None
         return run
 
@@ -100,6 +102,58 @@ def test_each_commit_window_is_an_h1_window_tied_to_the_servers_commit_on_coins_
     srv.src.uninstall()
 
 
+def test_with_a_prover_dir_each_window_keeps_its_prover_state_and_its_rounds_live_rows(tmp_path, monkeypatch):
+    """``--h1-prover DIR``: each window's salt key and served calls' rows go in ``DIR/w<k>`` (owner-only), and its rounds'
+    live@<s> rows in ``DIR/w<k>/live`` (`pouw_h1_live.dump`: the public window.json at the server's T and S, one
+    directory a round), the outcome's ``live_dump``; without it nothing is kept and the outcome's ``live_dump`` is None."""
+    import stat
+
+    from verity_vllm.protocols.pouw.h1 import prover as PV
+
+    srv = _Server(monkeypatch)
+    arm = SH.H1Windows(srv.model, srv.com, ROWS, STEPS, engine=object(), out=tmp_path / "serve", unit=_unit(),
+                       prover=tmp_path / "prover")
+    arm.open(0)
+    srv.serve(PROMPTS[0], 0)
+    out = arm.close(0)
+    w0 = tmp_path / "prover" / "w0"
+    assert out["tied"] and out["live_dump"] == {"dir": str(w0 / "live"), "rounds": STEPS}, out["live_dump"]
+    assert stat.S_IMODE(w0.stat().st_mode) == 0o700 and (w0 / PV.KEY).is_file() and any((w0 / PV.CALLS).iterdir())
+    pub = json.loads((w0 / "live" / "window.json").read_text())
+    assert (pub["T"], pub["S"], pub["program"]) == (ROWS, STEPS, arm.digest) and len(pub["served"]) == STEPS
+    assert all((w0 / "live" / str(s) / "rows.npz").is_file() for s in range(STEPS))
+    srv.src.uninstall()
+    bare = _Server(monkeypatch)
+    plain = SH.H1Windows(bare.model, bare.com, ROWS, STEPS, engine=object(), out=tmp_path / "plain", unit=_unit())
+    plain.open(0)
+    bare.serve(PROMPTS[0], 0)
+    assert plain.close(0)["live_dump"] is None and not (tmp_path / "plain" / "prover").exists()
+    bare.src.uninstall()
+
+
+def test_the_declared_program_is_written_as_its_digest_is_hashed_with_the_layout_credit_reads_from_it(tmp_path, monkeypatch):
+    """``h1/window-program.json.gz`` is the descriptor whose SHA-512 is the server's Program digest (serve.json's
+    ``program``), and its meta's layout is the one core's credit reads from those bytes, so a period-open can commit the
+    digest and the circuit files built from that directory."""
+    import gzip
+    import hashlib
+
+    from verity.core.protocols.pouw import credit as CR
+    from verity.ml.circuits.codec import program_digest
+    from verity_vllm.protocols.pouw.h1 import served as SV
+
+    srv = _Server(monkeypatch)
+    arm = SH.H1Windows(srv.model, srv.com, ROWS, STEPS, engine=object(), out=tmp_path, unit=_unit())
+    body = gzip.decompress((tmp_path / "h1" / SH.PROGRAM).read_bytes())
+    meta = json.loads((tmp_path / "h1" / SH.PROGRAM_META).read_text())
+    assert hashlib.sha512(body).hexdigest() == arm.digest == program_digest(arm.program) == meta["program_digest"]
+    assert body == SV.descriptor(arm.program) and meta["bytes"] == len(body)
+    assert (meta["rows"], meta["steps"]) == (ROWS, STEPS) and arm.describe()["program_file"] == f"h1/{SH.PROGRAM}"
+    layout, why = CR.layout_of(body)
+    assert why is None and json.loads(json.dumps(layout)) == meta["layout"]
+    srv.src.uninstall()
+
+
 class _GateAuditor(_Auditor):
     """`test_commit_coins._Auditor` answering ``status`` as infra's gate does, with the session's open and end entries;
     `settle` (the arm's wait between polls) ends each session whose client has closed it, as serve.py's exit does."""
@@ -128,7 +182,7 @@ def test_each_window_draws_its_coins_from_a_gate_session_of_its_own(tmp_path, mo
     auditor's ledger (`pouw_h1_challenger.session_reason`) passes."""
     srv, auditor = _Server(monkeypatch), _GateAuditor(tmp_path, monkeypatch)
     ports: list[int] = []
-    sessions = SH.GateSessions(CC.Gate(GATE, auditor.run), PEER, STEPS, wait=auditor.settle,
+    sessions = SH.GateSessions(CC.ChallengerGate(GATE, auditor.run), PEER, STEPS, wait=auditor.settle,
                                listens=lambda port: ports.append(port) or True)
     arm = SH.H1Windows(srv.model, srv.com, ROWS, STEPS, engine=object(), out=tmp_path, unit=_unit(), sessions=sessions)
     assert (arm.describe()["coins"], arm.describe()["peer"]) == ("challenger", PEER)
@@ -161,7 +215,7 @@ def test_a_window_whose_reserve_the_gate_refuses_installs_nothing(tmp_path, monk
     """The gate refuses the window's reserve: its open raises the refusal before any tap or hook goes on, so the Commit
     serves on and the window's line carries the error."""
     srv = _Server(monkeypatch)
-    sessions = SH.GateSessions(CC.Gate(GATE, lambda argv: (3, json.dumps({"refused": "--peer 'x': one of []"}))), PEER,
+    sessions = SH.GateSessions(CC.ChallengerGate(GATE, lambda argv: (3, json.dumps({"refused": "--peer 'x': one of []"}))), PEER,
                                STEPS, wait=lambda s: pytest.fail("no poll"), listens=lambda p: pytest.fail("no port"))
     arm = SH.H1Windows(srv.model, srv.com, ROWS, STEPS, engine=object(), out=tmp_path, unit=_unit(), sessions=sessions)
     with pytest.raises(CoinError, match="the challenger gate refused reserve"):
@@ -223,11 +277,11 @@ class _InOrderAuditor(_GateAuditor):
 
 
 def test_reserves_and_releases_run_off_the_loop_while_the_next_window_serves(tmp_path, monkeypatch):
-    """With ``ahead`` and ``closer``: window 0's session is reserved at its open (after any period the run opened) and
-    window k+1's while window k serves, and window k's release (its manifest, draw coin, session close and the wait for
-    its end entry) runs after window k+1 has opened and served on a session of its own. The loop's gate calls are window
-    0's reserve and each window's open; each window keeps its own session, coins and transcript, and the outcomes are
-    recorded in window order."""
+    """With ``ahead`` and ``closer``: window 0's session is reserved at its open when none was made ahead (`arm_of` makes
+    one) and window k+1's while window k serves, and window k's release (its manifest, draw coin, session close and the
+    wait for its end entry) runs after window k+1 has opened and served on a session of its own. The loop's gate calls
+    are window 0's reserve and each window's open; each window keeps its own session, coins and transcript, and the
+    outcomes are recorded in window order."""
     srv, auditor = _Server(monkeypatch), _InOrderAuditor(tmp_path, monkeypatch)
     ahead, closer = Later(), Later()
     calls: list[tuple[str, bool]] = []
@@ -235,7 +289,7 @@ def test_reserves_and_releases_run_off_the_loop_while_the_next_window_serves(tmp
     def gate(argv: list[str]) -> tuple[int, str]:
         calls.append((shlex.split(argv[-1])[0], ahead.inside or closer.inside))
         return auditor.run(argv)
-    sessions = SH.GateSessions(CC.Gate(GATE, gate), PEER, STEPS, wait=auditor.settle, listens=lambda port: True,
+    sessions = SH.GateSessions(CC.ChallengerGate(GATE, gate), PEER, STEPS, wait=auditor.settle, listens=lambda port: True,
                                ahead=ahead, now=lambda: datetime(2026, 10, 20, 11, 8, tzinfo=UTC))
     arm = SH.H1Windows(srv.model, srv.com, ROWS, STEPS, engine=object(), out=tmp_path, unit=_unit(), sessions=sessions,
                        closer=closer)
@@ -283,13 +337,83 @@ def test_a_reserve_ahead_that_expires_before_its_window_is_replaced_and_none_is_
         return 0, json.dumps({"session": f"s20261027T2000{len(seen):02d}Z-{len(seen):04x}", "seq": len(seen),
                               "peer": PEER, "by": "vllm", **next(answers)})
     ahead = Later()
-    sessions = SH.GateSessions(CC.Gate(GATE, gate), PEER, STEPS, ahead=ahead,
+    sessions = SH.GateSessions(CC.ChallengerGate(GATE, gate), PEER, STEPS, ahead=ahead,
                                now=lambda: datetime(2026, 10, 27, 20, 0, tzinfo=UTC))
     sessions.ahead_of(0)
     ahead.run()
     got = sessions.take(0)
     assert got["period"] == "p1" and sessions.held[0]["unused"].startswith("its reserve expires at 2026-10-27T20:04:00Z")
     assert seen == ["reserve", "reserve"] and not ahead.jobs, "none ahead inside a period"
+
+
+class Now(Later):
+    """`serve_h1.worker` running what it is handed at once."""
+
+    def submit(self, fn: Any, *args: Any) -> Future:
+        fut = super().submit(fn, *args)
+        self.run()
+        return fut
+
+
+def test_the_arm_is_ready_before_the_server_listens(tmp_path, monkeypatch):
+    """`arm_of` reserves window 0's session off the loop, and `H1Windows.ready` computes the weights' roots, builds the
+    call tables' hasher, compiles the z/y kernels, builds the Lean verifier and waits for that reserve, all before
+    serve-openai listens: window 0's open then reserves nothing for itself and computes no root, and its session is the
+    one reserved at startup."""
+    from verity.core.protocols.pouw import verifier
+    from verity_vllm.protocols.pouw.h1 import hooks as PHK
+    from verity_vllm.protocols.pouw.h1 import tables_device as TD
+
+    srv, auditor = _Server(monkeypatch), _GateAuditor(tmp_path, monkeypatch)
+    calls, roots, warmed, built = [], [], [], []
+
+    def gate(argv: list[str]) -> tuple[int, str]:
+        calls.append(shlex.split(argv[-1])[0])
+        return auditor.run(argv)
+    sessions = SH.GateSessions(CC.ChallengerGate(GATE, gate), PEER, STEPS, wait=auditor.settle, listens=lambda port: True,
+                               ahead=Now(), now=lambda: datetime(2026, 10, 20, 11, 8, tzinfo=UTC))
+    weight_root, ticks = PH.weight_root, iter(range(1000))
+    monkeypatch.setattr(SH, "sessions_of", lambda opts: sessions)
+    monkeypatch.setattr(SH, "worker", lambda name: None)
+    monkeypatch.setattr(SH, "H1Windows", functools.partial(SH.H1Windows, unit=_unit(), clock=lambda: next(ticks)))
+    monkeypatch.setattr(PHK, "_ROOTS", {})
+    monkeypatch.setattr(PH, "weight_root", lambda w, rows, *key: roots.append(w) or weight_root(w, rows, *key))
+    monkeypatch.setattr(PHK, "warm_zy", lambda layers, rows: warmed.append((len(layers), rows)) or 3)
+    monkeypatch.setattr(TD, "available", lambda: False)
+    monkeypatch.setattr(verifier, "executable", lambda: built.append(len(calls)))
+    opts = SimpleNamespace(protocols=SH.ENTRY, max_num_batched_tokens=ROWS, window_steps=STEPS, protocols_config=None,
+                           gate=SimpleNamespace(h1_prover=None))
+    arm = SH.arm_of(opts, SimpleNamespace(model=srv.model, vllm=object()), srv.com, tmp_path)
+    (held,) = sessions.held
+    assert arm.describe()["ready"] == {"tables": "off", "kernels": 3, "session": held["session"],
+                                       "seconds": {"roots": 1, "tables": 1, "kernels": 1, "lean": 1, "reserve": 1}}
+    assert held["window"] == 0 and calls == ["reserve"] and roots == [0, 1] and warmed == [(2, ROWS)] and built == [1]
+    arm.open(0)
+    srv.serve(PROMPTS[0], 0)
+    out = arm.close(0)
+    assert out["tied"] and out["session"]["session"] == held["session"], out
+    assert [h["window"] for h in sessions.held] == [0, 1], "window 1's reserved ahead at window 0's open, none for 0"
+    assert roots == [0, 1], "window 0's install reuses the roots computed before the server listened"
+    arm.drain()
+    assert arm.summary()["unused"] == [sessions.held[1]["session"]]
+    srv.src.uninstall()
+
+
+def test_a_reserve_at_startup_that_fails_leaves_window_0_s_to_its_open():
+    """`GateSessions.settled` is None for a window with no reserve made ahead and for one whose reserve failed, and that
+    window's `take` reserves at its open."""
+    refusals = []
+
+    def gate(argv: list[str]) -> tuple[int, str]:
+        refusals.append(shlex.split(argv[-1])[0])
+        return 3, json.dumps({"refused": "--peer 'x': one of []"})
+    sessions = SH.GateSessions(CC.ChallengerGate(GATE, gate), PEER, STEPS, ahead=Now())
+    assert sessions.settled(0) is None and not refusals
+    sessions.ahead_of(0)
+    assert sessions.settled(0) is None and refusals == ["reserve"]
+    with pytest.raises(CoinError, match="the challenger gate refused reserve"):
+        sessions.take(0)
+    assert refusals == ["reserve", "reserve"] and sessions.held == []
 
 
 def test_a_release_that_fails_off_the_loop_is_its_windows_outcome_in_order(tmp_path, monkeypatch):
@@ -372,7 +496,7 @@ def test_a_served_window_under_release_after_pouw_releases_exactly_h1s_drawn_rea
     sessions = None
     if coins == "gate":
         auditor = _PeriodAuditor(tmp_path, monkeypatch)
-        sessions = SH.GateSessions(CC.Gate(GATE, auditor.run), PEER, STEPS, wait=auditor.settle, listens=lambda port: True)
+        sessions = SH.GateSessions(CC.ChallengerGate(GATE, auditor.run), PEER, STEPS, wait=auditor.settle, listens=lambda port: True)
         k = _PeriodAuditor.K
     else:
         monkeypatch.setattr(PHC, "draw_k", lambda layout: 1)
@@ -440,7 +564,7 @@ def test_a_window_with_no_draw_refuses_its_release_by_name(tmp_path, monkeypatch
     from verity_vllm.pipeline import serve_release as SL
 
     srv, auditor, draws = _Server(monkeypatch), _GateAuditor(tmp_path, monkeypatch), SL.Draws((SH.DRAWER,))
-    sessions = SH.GateSessions(CC.Gate(GATE, auditor.run), PEER, STEPS, wait=auditor.settle, listens=lambda port: True)
+    sessions = SH.GateSessions(CC.ChallengerGate(GATE, auditor.run), PEER, STEPS, wait=auditor.settle, listens=lambda port: True)
     arm = SH.H1Windows(srv.model, srv.com, ROWS, STEPS, engine=object(), out=tmp_path, unit=_unit(), sessions=sessions)
     arm.drawing(draws)
     assert arm.close(3) is None
@@ -581,6 +705,8 @@ def test_serve_openai_refuses_protocols_it_cant_serve_before_the_model_loads(tmp
     assert refusal(*h1, *gate) is None
     assert "go together" in refusal(*h1, *gate[:2]) and "go together" in refusal(*h1, *gate[2:])
     assert "needs --protocols" in refusal(*gate)
+    assert refusal(*h1, "--h1-prover", str(tmp_path / "p")) is None
+    assert "--h1-prover keeps PoUW H1's prover state" in refusal("--h1-prover", str(tmp_path / "p"))
     assert "(pouw)" in refusal(*h1, "--protocols-config", json.dumps({"pous": {}}))
     assert "'admission' is one of" in refusal(*h1, "--protocols-config", json.dumps({"pouw": {"admission": "never"}}))
     assert "--protocols-config {" in refusal(*h1, "--protocols-config", "{not json")
@@ -601,3 +727,25 @@ def test_the_window_program_holds_a_tile_unit_for_each_32_rows_of_slot_and_32_co
     assert SH.units(llama, 2048, 1) == 64 * 11_776 == 753_664
     assert SH.units(llama, 1536, 1) == SH.units(llama, 2048, 1)
     assert SH.units(llama, 512, 16) == 16 * 16 * 11_776
+
+
+def test_the_pouw_settings_unit_and_ks_serve_a_j10r_window_over_the_linears_at_one_k(tmp_path, monkeypatch):
+    """``{"pouw": {"unit": "j10r", "ks": [K]}}`` over a linear at K and one at 2K: H1's linears, its declared Program (its
+    tile unit the setting's, `pouw_h1_served.unit_of`), its registered weights and its tap are the K linear's alone, so
+    the Program's units are J10-R's at one K; the 2K linear serves on its arm unhooked, and the window names it
+    uncovered, as it does attention. The window ties at ROOTS1 as one over every linear does."""
+    monkeypatch.setattr(SV, "unit_of", lambda name: _unit(defn=StandInJ10R) if name == "j10r" else None)
+    srv = _Server(monkeypatch, model=Model(ks=(K, 2 * K)))
+    dense, wide = srv.model.model.layers
+    arm = SH.H1Windows(srv.model, srv.com, ROWS, STEPS, engine=object(), out=tmp_path,
+                       config={"pouw": {"unit": "j10r", "ks": [K]}})
+    assert arm.layers == [dense] and arm.describe()["linears"] == 1
+    assert HW.is_j10r(arm.program) and [k for k, _t in arm.program.fn.S().TILES] == [K]
+    arm.open(0)
+    assert "apply" in vars(dense.quant_method) and "apply" not in vars(wide.quant_method)
+    run = srv.serve(PROMPTS[0], 0)
+    out = arm.close(0)
+    assert out["tied"] and (out["steps_served"], out["refused"]) == (STEPS, []), out
+    assert {(c.layer, c.k) for c in run.calls} == {(0, K)} and len(run.calls) == STEPS
+    assert f"outside the pouw setting 'ks' [{K}]" in run.details["uncovered"]
+    srv.src.uninstall()
