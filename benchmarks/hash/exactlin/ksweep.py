@@ -11,20 +11,29 @@ copies (so the weights stream from DRAM):
              xq: `reps` interleaved items
 
 A config's gate: y equal to int8_exact's reference (`dequantize(int_mm(...))`) into 0xA5, again on a second call (a
-split-K config's workspace and counters zero again), and the last copy's y after the timing's replays.  A config that
-fails to compile (shared memory) or fails its gate is recorded and not timed.  The quantizer, at each of the models' K:
-each (num_warps, rows a program) plan gated (`quant`) and timed over copies of plain rows past the L2.
+split-K config's workspace and counters zero again), and the last copy's y after the timing's replays.  With `--zy` a final
+config's gate also runs the served zy path (`int8_fused.scaled_mm_zy`, H1's fused z/y check) at that config into 0xA5
+twice: y equal to the reference and the records over T = M rounded up to 32 slots byte-identical to
+`int8_exact.scaled_mm_zy`'s, its PTX `ptx_check`ed; the winner and vLLM's tiles are then timed on the zy path too
+(`reps` interleaved items), and each winner's plain and zy cubins go through `benchmarks/pouw/harness/sass_gate.py`.  A
+config that fails to compile (shared memory) or fails its gate is recorded and not timed.  The quantizer, at each of the
+models' K: each (num_warps, rows a program) plan gated (`quant`) and timed over copies of plain rows past the L2.
 
-Writes sweep.jsonl (every config's record), best.json ({"arch", "table": {"n,k": [[m, cfg, us, vllm_tiles_us, stock_us],
-...]}}, what exactlin.CONFIGS[arch] takes) and quant.json (`--quant-only`: only it).
+Writes sweep.jsonl (every config's record), best.json after each shape ({"arch", "table": {"n,k": [[m, cfg, us,
+vllm_tiles_us, stock_us] (with `--zy` also zy_us, vllm_tiles_zy_us), ...]}}, what exactlin.CONFIGS[arch] takes, and with
+`--zy` "sass_gate"), quant.json (`--quant-only`: only it), and with `--zy` cubins/ and sass_gate.json.
+
+`--only CFG,...` skips coarse and refine: the final stage runs on those configs and vLLM's tiles (a confirmation).
 
     python ksweep.py --out OUT [--models llama-3.1-8b,qwen3-8b] [--ms 1,16,32,64,256] [--top 4] [--reps 9] [--skip-quant]
-                     [--quant-only] [--tma]
+                     [--quant-only] [--tma] [--zy] [--only CFG,...]
 """
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
+import subprocess
 import sys
 from pathlib import Path
 
@@ -35,6 +44,7 @@ import exactlin as X
 import kbench
 import kgate
 
+SASS_GATE = Path(__file__).resolve().parents[2] / "pouw/harness/sass_gate.py"
 BKS = (128, 256, 512)
 WARPS = (4, 8)
 STAGES = (2, 3, 4, 5)
@@ -63,7 +73,7 @@ def log(out: Path, rec: dict) -> None:
 
 
 class Shape:
-    def __init__(self, n: int, k: int, m: int):
+    def __init__(self, n: int, k: int, m: int, zy: bool = False):
         e = kgate.E()
         self.n, self.k, self.m = n, k, m
         self.copies = kbench.copies_for(n, k)
@@ -73,6 +83,11 @@ class Shape:
         self.y_first = e.dequantize(e.int_mm(self.xq, self.ws[0][0]), self.sa, self.ws[0][1])
         self.y_last = e.dequantize(e.int_mm(self.xq, self.ws[-1][0]), self.sa, self.ws[-1][1])
         self.y = torch.empty((m, n), dtype=torch.bfloat16, device="cuda")
+        self.kernels: dict[str, dict] = {}
+        if zy:
+            self.rows = -(-m // e.UNIT[0]) * e.UNIT[0]
+            self.zy_ref = e.scaled_mm_zy(self.xq, self.sa, self.ws[0][0], self.ws[0][1].reshape(-1), self.rows)[1]
+            self.zy = torch.empty_like(self.zy_ref)
 
     def fn(self, cfg: X.Cfg):
         work = kgate.work()
@@ -82,7 +97,17 @@ class Shape:
                 X.scaled_mm(self.xq, self.sa, w, sw, self.y, cfg, work)
         return f
 
-    def gate(self, cfg: X.Cfg) -> dict:
+    def fn_zy(self, cfg: X.Cfg):
+        from verity_vllm.engine import int8_fused as F
+        work = kgate.work()
+        ws = [(w, sw.reshape(-1)) for w, sw in self.ws]
+
+        def f():
+            for w, sw in ws:
+                F.scaled_mm_zy(self.xq, self.sa, w, sw, self.y, self.zy, self.rows, cfg, work)
+        return f
+
+    def gate(self, cfg: X.Cfg, zy: bool = False) -> dict:
         work = kgate.work()
         w, sw = self.ws[0]
         rec: dict = {}
@@ -94,21 +119,46 @@ class Shape:
         rec["workspace_nonzero"] = int((work.ws != 0).sum()) + int((work.cnt != 0).sum())
         rec["ptx_ok"] = X.ptx_check(km)["ok"]
         rec["ok"] = rec["y_diff_0"] == 0 and rec["y_diff_1"] == 0 and rec["workspace_nonzero"] == 0 and rec["ptx_ok"]
+        self.kernels[str(cfg)] = {"plain": km}
+        if zy:
+            rec.update(self.gate_zy(cfg))
+            rec["ok"] = rec["ok"] and rec["zy_ok"]
+        return rec
+
+    def gate_zy(self, cfg: X.Cfg) -> dict:
+        """The served zy path at `cfg`, twice into 0xA5: y the reference's, the records `int8_exact.scaled_mm_zy`'s."""
+        from verity_vllm.engine import int8_fused as F
+        work = kgate.work()
+        w, sw = self.ws[0]
+        rec: dict = {"zy_rows": self.rows}
+        for i in range(2):
+            kgate.poison(self.y, self.zy)
+            kz = F.scaled_mm_zy(self.xq, self.sa, w, sw.reshape(-1), self.y, self.zy, self.rows, cfg, work)
+            torch.cuda.synchronize()
+            rec[f"zy_y_diff_{i}"] = kgate.diff(self.y, self.y_first)
+            rec[f"zy_records_diff_{i}"] = kgate.diff(self.zy, self.zy_ref)
+        rec["zy_workspace_nonzero"] = int((work.ws != 0).sum()) + int((work.cnt != 0).sum())
+        rec["zy_ptx_ok"] = F.ptx_check(kz)["ok"]
+        rec["zy_ok"] = (all(rec[f"zy_{v}_diff_{i}"] == 0 for v in ("y", "records") for i in range(2))
+                        and rec["zy_workspace_nonzero"] == 0 and rec["zy_ptx_ok"])
+        self.kernels[str(cfg)]["zy"] = kz
         return rec
 
     def after(self) -> int:
         return kgate.diff(self.y, self.y_last)
 
 
-def stage(out: Path, shape: Shape, cfgs: list[X.Cfg], reps: int, clock, phase: str, extra: dict | None = None) -> dict:
-    """Gate each config, time the ones that pass together (interleaved), and check the last y after the replays."""
+def stage(out: Path, shape: Shape, cfgs: list[X.Cfg], reps: int, clock, phase: str, extra: dict | None = None,
+          zy: bool = False) -> dict:
+    """Gate each config (with `zy` its zy path too), time the ones that pass together (interleaved), and check the last y
+    after the replays."""
     fns, recs = {}, {}
     for cfg in cfgs:
         rec = {"phase": phase, "n": shape.n, "k": shape.k, "m": shape.m, "cfg": str(cfg)}
         if cfg[5] > 1 and shape.m * shape.n > kgate.work().ws.numel():
             continue
         try:
-            rec.update(shape.gate(cfg))
+            rec.update(shape.gate(cfg, zy))
         except Exception as ex:  # noqa: BLE001 - a config that doesn't compile or launch is a record, not a crash
             rec.update({"ok": False, "error": f"{type(ex).__name__}: {str(ex)[:200]}"})
             torch.cuda.synchronize()
@@ -139,28 +189,58 @@ def best(med: dict, top: int, skip=()) -> list[X.Cfg]:
     return [X.Cfg.parse(c) for c, _ in sorted(((c, u) for c, u in med.items() if c not in skip), key=lambda cu: cu[1])[:top]]
 
 
-def gemm(out: Path, models: tuple[str, ...], ms: tuple[int, ...], top: int, reps: int, clock, tma: bool = False) -> dict:
+def cubins(out: Path, shape: Shape, cfg: X.Cfg) -> None:
+    """`cfg`'s compiled plain and zy kernels at `shape` into OUT/cubins, one file per distinct binary."""
+    (out / "cubins").mkdir(exist_ok=True)
+    for path, km in shape.kernels[str(cfg)].items():
+        data = km.asm["cubin"]
+        name = f"{km.metadata.name}-{str(cfg).replace(':', '_')}-{hashlib.sha256(data).hexdigest()[:12]}.cubin"
+        (out / "cubins" / name).write_bytes(data)
+
+
+def sass(out: Path) -> dict:
+    """sass_gate.py on every cubin `cubins` wrote: no .FTZ and no FP32 MUFU outside its pinned sequences."""
+    files = sorted((out / "cubins").glob("*.cubin"))
+    if not files:
+        return {"ok": False, "error": "no cubins"}
+    p = subprocess.run([sys.executable, str(SASS_GATE), *map(str, files), "--json", str(out / "sass_gate.json")],
+                       capture_output=True, text=True)
+    (out / "sass_gate.txt").write_text(p.stdout + p.stderr)
+    return {"ok": p.returncode == 0, "rc": p.returncode, "cubins": [f.name for f in files]}
+
+
+def gemm(out: Path, models: tuple[str, ...], ms: tuple[int, ...], top: int, reps: int, clock, tma: bool = False,
+         zy: bool = False, only: tuple[X.Cfg, ...] = ()) -> dict:
     from vllm.model_executor.layers.quantization.compressed_tensors.triton_scaled_mm import (
         triton_scaled_mm,
     )
     table: dict = {}
     for n, k, m, names in kgate.shapes_of(models, ms):
-        shape = Shape(n, k, m)
-        med = stage(out, shape, coarse_grid(m, tma), 3, clock, "coarse")
-        refine = [X.Cfg(*c[:3], w, st, *c[5:]) for c in best(med, top) for w in WARPS for st in STAGES]
-        med = stage(out, shape, list(dict.fromkeys(refine)), 3, clock, "refine")
+        shape = Shape(n, k, m, zy)
+        if not only:
+            med = stage(out, shape, coarse_grid(m, tma), 3, clock, "coarse")
+            refine = [X.Cfg(*c[:3], w, st, *c[5:]) for c in best(med, top) for w in WARPS for st in STAGES]
+            med = stage(out, shape, list(dict.fromkeys(refine)), 3, clock, "refine")
         vt = X.default_cfg(m, n, k)
         sa2 = shape.sa.reshape(-1, 1)
 
         def stock(xq=shape.xq, sa2=sa2, ws=shape.ws):
             for w, sw in ws:
                 triton_scaled_mm(xq, w.t(), sa2, sw, torch.bfloat16)
-        final = list(dict.fromkeys(best(med, top) + [vt]))
-        med = stage(out, shape, final, reps, clock, "final", {"stock_triton_scaled_mm": stock})
+        final = list(dict.fromkeys((list(only) if only else best(med, top)) + [vt]))
+        med = stage(out, shape, final, reps, clock, "final", {"stock_triton_scaled_mm": stock}, zy)
         win = best(med, 1, skip=("stock_triton_scaled_mm",))[0]
         row = [m, str(win), med[str(win)], med.get(str(vt)), med.get("stock_triton_scaled_mm")]
+        if zy:
+            cubins(out, shape, win)
+            timed_zy = list(dict.fromkeys(final if only else [win, vt]))
+            arms = {f"zy:{c}": shape.fn_zy(c) for c in timed_zy if str(c) in med}
+            zmed = stage(out, shape, [], reps, clock, "zy", arms)
+            row += [zmed.get(f"zy:{win}"), zmed.get(f"zy:{vt}")]
         table.setdefault(f"{n},{k}", []).append(row)
         print(json.dumps({"n": n, "k": k, "m": m, "layers": names, "best": row}), flush=True)
+        (out / "best.json").write_text(json.dumps({"device": torch.cuda.get_device_name(), "arch": X.arch(),
+                                                   "models": models, "table": table}, indent=1) + "\n")
         del shape
         torch.cuda.empty_cache()
     return table
@@ -225,20 +305,28 @@ def main() -> int:
     ap.add_argument("--skip-quant", action="store_true")
     ap.add_argument("--quant-only", action="store_true")
     ap.add_argument("--tma", action="store_true", help="add the TMA kernel's configs to the coarse grid")
+    ap.add_argument("--zy", action="store_true", help="gate the final configs' zy path too, time the winner's, and "
+                                                      "sass_gate.py the winners' cubins")
+    ap.add_argument("--only", default="", help="comma-separated configs: no coarse or refine stage, the final stage on "
+                                               "these and vLLM's tiles (with --zy each timed on the zy path too)")
     a = ap.parse_args()
     out = Path(a.out)
     out.mkdir(parents=True, exist_ok=True)
     models = tuple(a.models.split(","))
     ms = tuple(int(v) for v in a.ms.split(","))
+    only = tuple(X.Cfg.parse(c) for c in a.only.split(",") if c)
     clock = kbench.nvml()
     if not a.skip_quant:
         (out / "quant.json").write_text(json.dumps(quant(out, models, ms, a.reps, clock), indent=1) + "\n")
     if a.quant_only:
         return 0
-    table = gemm(out, models, ms, a.top, a.reps, clock, a.tma)
-    (out / "best.json").write_text(json.dumps({"device": torch.cuda.get_device_name(), "arch": X.arch(), "models": models,
-                                               "table": table}, indent=1) + "\n")
-    return 0
+    table = gemm(out, models, ms, a.top, a.reps, clock, a.tma, a.zy, only)
+    if not a.zy:
+        return 0
+    doc = {"device": torch.cuda.get_device_name(), "arch": X.arch(), "models": models, "table": table, "sass_gate": sass(out)}
+    (out / "best.json").write_text(json.dumps(doc, indent=1) + "\n")
+    print(json.dumps({"sass_gate": doc["sass_gate"]}), flush=True)
+    return 0 if doc["sass_gate"]["ok"] else 6
 
 
 if __name__ == "__main__":
