@@ -6,9 +6,9 @@ self-delimiting code (`code_v1.py`) under the registered codebook.
 `decode(encode(a)) == a`. `decode` is total: any byte string decodes to one I1 v0 or is refused by name (`V1Error`),
 deterministically, and a string longer than the cap ℓ (`Registered.cap_bits`) is refused unread.
 
-**Certified, 0 bits** (`Record`, from the warden's signed records under design v3; the compile unit holds them as
-witness):
-- the warden's connection ordinals, in the order its own schedule admitted them (`Record.requests`);
+**Certified, 0 bits** (`CertifiedRequests`, from the warden's signed records under design v3; the compile unit holds
+them as witness):
+- the warden's connection ordinals, in the order its own schedule admitted them (`CertifiedRequests.requests`);
 - each request's ingress bytes, an id request's fields (`id_request_fields`): its `user` (I1's id), its `prompt` ids and
   its `max_tokens`; and its release, the bucket a of its connection's last ingress cell (`Request.end`), from which the
   server holds its whole body;
@@ -140,7 +140,7 @@ class Request:
 
 
 @dataclass(frozen=True)
-class Record:
+class CertifiedRequests:
     """The certified record: the requests in the warden's admission order."""
 
     requests: tuple[Request, ...]
@@ -153,13 +153,13 @@ class Record:
             raise V1Error("two requests share an id")
 
 
-def release_order(record: Record) -> list[int]:
+def release_order(record: CertifiedRequests) -> list[int]:
     """The certified reference order: the warden's release order, each request's last ingress cell landing, by
     (`end`, ordinal)."""
     return sorted(range(len(record.requests)), key=lambda k: (record.requests[k].end, k))
 
 
-def arrival_order(advice: I1.Advice, record: Record, row_order: str) -> list[int]:
+def arrival_order(advice: I1.Advice, record: CertifiedRequests, row_order: str) -> list[int]:
     """The engine's arrival order (ordinals) that v1 replays the advice under. FCFS admits new requests in arrival
     order, so it is by first step, and within a step by the scheduling order. Under the scheduler's row order that is
     the step's own. Under the batch order (a stable sort by n) it is the order that puts a request after any request of
@@ -234,7 +234,7 @@ def _topo(after: dict[int, set[int]], key: Callable[[int], int]) -> tuple[list[i
     return out, unique
 
 
-def streams(advice: I1.Advice, record: Record) -> tuple[int, ...]:
+def streams(advice: I1.Advice, record: CertifiedRequests) -> tuple[int, ...]:
     """The order permutation as the I/O tie's egress side reads it (`walk.order` through the arrival order): for each I1
     request q, the warden's ingress ordinal of the stream that carries it."""
     ordinal = {q.id: k for k, q in enumerate(record.requests)}
@@ -251,7 +251,7 @@ class Decoded(NamedTuple):
     arrival: tuple[int, ...]
 
 
-def _deviations(record: Record, arrival: Sequence[int]) -> list[tuple[int, int]]:
+def _deviations(record: CertifiedRequests, arrival: Sequence[int]) -> list[tuple[int, int]]:
     """The permutation from release order to the arrival order, as (position, rank): each arrival that isn't the
     earliest in release order of the requests not yet arrived, and its rank among them."""
     left, out = release_order(record), []
@@ -263,7 +263,7 @@ def _deviations(record: Record, arrival: Sequence[int]) -> list[tuple[int, int]]
     return out
 
 
-def _arrival(record: Record, deviations: Sequence[tuple[int, int]]) -> list[int]:
+def _arrival(record: CertifiedRequests, deviations: Sequence[tuple[int, int]]) -> list[int]:
     """`_deviations`' inverse; refuses a position or rank past the requests left, and a rank of 0."""
     left, out, at = release_order(record), [], dict(deviations)
     if len(at) != len(deviations) or any(not 0 <= p < len(left) or r < 1 for p, r in deviations):
@@ -276,7 +276,7 @@ def _arrival(record: Record, deviations: Sequence[tuple[int, int]]) -> list[int]
     return out
 
 
-def windows(record: Record, T: int) -> int:
+def windows(record: CertifiedRequests, T: int) -> int:
     """W: the windows the record covers, through its last bucket."""
     return max(max(q.end, *q.release) for q in record.requests) // T + 1
 
@@ -318,7 +318,7 @@ class Registered:
                         row_order=self.row_order)
 
 
-def _check(record: Record, reg: Registered, engine: Any) -> Any:
+def _check(record: CertifiedRequests, reg: Registered, engine: Any) -> Any:
     """The derived config, once the record and the pool are ones the replay runs to the end on: every output the stop
     rule's, within max_model_len, and the pool holding any one request alone, async's two steps ahead included."""
     cfg = reg.config(engine)
@@ -334,7 +334,7 @@ def _check(record: Record, reg: Registered, engine: Any) -> Any:
 
 # --- the residual ------------------------------------------------------------------------------------------------------
 
-def _ios(record: Record, engine: Any, order: Sequence[int], stops: frozenset[int]) -> list[Any]:
+def _ios(record: CertifiedRequests, engine: Any, order: Sequence[int], stops: frozenset[int]) -> list[Any]:
     out = []
     for k in order:
         q = record.requests[k]
@@ -384,7 +384,7 @@ def _recording() -> Iterator[list[tuple[list[Lookup], Any]]]:
         R._KV.hit, R._Sched.schedule = hit0, schedule0
 
 
-def _replay(record: Record, reg: Registered, engine: Any, order: Sequence[int],
+def _replay(record: CertifiedRequests, reg: Registered, engine: Any, order: Sequence[int],
             bit_of: Callable[[int, int], bool]) -> tuple[Any, list[Decision], list[list[Lookup]]]:
     """The replay, each decision `bit_of(request, step)`: its steps, its decisions in order, and each executed step's
     lookups in the order the scheduler read them (`would_admit`'s and the waiting loop's own of one request read once;
@@ -406,7 +406,7 @@ def _replay(record: Record, reg: Registered, engine: Any, order: Sequence[int],
     return rp, decisions, looks
 
 
-def _sent(record: Record, engine: Any, order: Sequence[int], rp: Any,
+def _sent(record: CertifiedRequests, engine: Any, order: Sequence[int], rp: Any,
           looks: Sequence[Sequence[Lookup]]) -> list[tuple[int, int]]:
     """The hits v1 sends, as (step, shortfall): every lookup of a step the no-eviction bound doesn't cover, as the
     longest prefix a cache that never evicts holds less the replay's hit, in whole blocks. The bound is
@@ -443,7 +443,8 @@ def _sent(record: Record, engine: Any, order: Sequence[int], rp: Any,
     return out
 
 
-def _charged(record: Record, reg: Registered, order: Sequence[int], rp: Any, W: int) -> tuple[list[int], list[int]]:
+def _charged(record: CertifiedRequests, reg: Registered, order: Sequence[int], rp: Any,
+             W: int) -> tuple[list[int], list[int]]:
     """A5's windows, as I1's `bits_by_window` charges: each step's, the earliest window an output at that step or later
     is released in (the last window where none follows); and each arrival's ingress window, the earliest of its own
     and every later arrival's last frame's, so that it never decreases where the arrivals deviate from release order."""
@@ -470,7 +471,7 @@ def _charged(record: Record, reg: Registered, order: Sequence[int], rp: Any, W: 
     return earliest, win
 
 
-def _residual(record: Record, reg: Registered, engine: Any, order: Sequence[int], rp: Any,
+def _residual(record: CertifiedRequests, reg: Registered, engine: Any, order: Sequence[int], rp: Any,
               decisions: Sequence[Decision], looks: Sequence[Sequence[Lookup]], W: int) -> list[Any]:
     """The windows v1 sends (`window_charge.Advice`). A decision goes to the earlier of its arrival's ingress window
     and the earliest window that shows its step's rows; an order entry to the earlier of its arrival's ingress window
@@ -543,7 +544,7 @@ def _parse(data: Any, reg: Registered, W: int) -> list[Any]:
     return _frames(C.BitReader.from_bytes(bytes(data), 8 * len(data)).bits, reg, W, padded=True)
 
 
-def bits_by_window(data: bytes, record: Record, reg: Registered) -> dict[int, int]:
+def bits_by_window(data: bytes, record: CertifiedRequests, reg: Registered) -> dict[int, int]:
     """Each window's charge: its segment's bits, a function of the string alone. They sum to the string's bits less
     padding."""
     return _total(lambda: dict(enumerate(_string(_parse(data, reg, windows(record, reg.T)), reg)[1])))
@@ -551,7 +552,7 @@ def bits_by_window(data: bytes, record: Record, reg: Registered) -> dict[int, in
 
 # --- I1 from the replay ------------------------------------------------------------------------------------------------
 
-def _advice(record: Record, reg: Registered, cfg: Any, order: Sequence[int], rp: Any) -> I1.Advice:
+def _advice(record: CertifiedRequests, reg: Registered, cfg: Any, order: Sequence[int], rp: Any) -> I1.Advice:
     """I1 v0 from the replayed steps: the batch order, I1's numbering by first row, then the derived rules' walk, which
     must give the replay's every start and n back, and the tie's request fields; each kept output's release from the
     record."""
@@ -619,7 +620,7 @@ def _advice(record: Record, reg: Registered, cfg: Any, order: Sequence[int], rp:
 
 # --- encode and decode -------------------------------------------------------------------------------------------------
 
-def _residual_of(advice: I1.Advice, record: Record, reg: Registered) -> tuple[list[Any], Any, list[int]]:
+def _residual_of(advice: I1.Advice, record: CertifiedRequests, reg: Registered) -> tuple[list[Any], Any, list[int]]:
     """The windows of the advice's residual, the replay that gives them, and the arrival order."""
     if type(advice) is not I1.Advice:
         raise V1Error(f"v1 encodes an I1 Advice, not a {type(advice).__name__}")
@@ -637,13 +638,13 @@ def _residual_of(advice: I1.Advice, record: Record, reg: Registered) -> tuple[li
     return _residual(record, reg, engine, order, rp, decisions, looks, windows(record, reg.T)), rp, order
 
 
-def residual(advice: I1.Advice, record: Record, reg: Registered) -> list[Any]:
+def residual(advice: I1.Advice, record: CertifiedRequests, reg: Registered) -> list[Any]:
     """The windows `encode` codes (`window_charge.Advice`s: the decisions, the order's deviations and the sent hits):
     what a codebook is fit on."""
     return _total(lambda: _residual_of(advice, record, reg)[0])
 
 
-def encode(advice: I1.Advice, record: Record, reg: Registered, *, check: bool = True) -> bytes:
+def encode(advice: I1.Advice, record: CertifiedRequests, reg: Registered, *, check: bool = True) -> bytes:
     """The advice's v1 string under the record; refuses an advice v1 can't carry (one whose schedule isn't the
     replay's under its arrival order, whose rows aren't in the registered order, or whose sources aren't the canonical
     ones). `check` decodes the string back and holds it to the advice."""
@@ -666,17 +667,17 @@ def encode(advice: I1.Advice, record: Record, reg: Registered, *, check: bool = 
     return data
 
 
-def decode(data: bytes, record: Record, reg: Registered) -> I1.Advice:
+def decode(data: bytes, record: CertifiedRequests, reg: Registered) -> I1.Advice:
     """The I1 v0 the string `data` carries under the record, or `V1Error`."""
     return decode_full(data, record, reg).advice
 
 
-def decode_full(data: bytes, record: Record, reg: Registered) -> Decoded:
+def decode_full(data: bytes, record: CertifiedRequests, reg: Registered) -> Decoded:
     """`decode`, with the order the string sends (`Decoded`)."""
     return _total(lambda: _decode(_parse(data, reg, windows(record, reg.T)), record, reg))
 
 
-def decode_bits(bits: Sequence[int], record: Record, reg: Registered) -> I1.Advice:
+def decode_bits(bits: Sequence[int], record: CertifiedRequests, reg: Registered) -> I1.Advice:
     """`decode` of the bit string itself, unpadded: refused unless its windows end exactly at its end."""
     def run() -> I1.Advice:
         if len(bits) > reg.cap_bits:
@@ -696,7 +697,7 @@ def _total(run: Callable[[], T]) -> T:
         raise V1Error(str(e)) from None
 
 
-def _decode(wins: Sequence[Any], record: Record, reg: Registered) -> Decoded:
+def _decode(wins: Sequence[Any], record: CertifiedRequests, reg: Registered) -> Decoded:
     engine = reg.engine
     cfg = _check(record, reg, engine)
     if any(w.resumes or w.lag for w in wins):
@@ -729,7 +730,7 @@ def _decode(wins: Sequence[Any], record: Record, reg: Registered) -> Decoded:
 
 # --- from a trace ------------------------------------------------------------------------------------------------------
 
-def record_of(trace: Any, stop_ids: Sequence[int], *, bucket_s: float = 0.1) -> Record:
+def record_of(trace: Any, stop_ids: Sequence[int], *, bucket_s: float = 0.1) -> CertifiedRequests:
     """A trace's certified record (`replay.Trace`, clocked, with each request's tokens): each request's certified
     ingress bucket standing for its release a, its ingress time then its engine index for its ordinal, so that the
     record is in release order, and the trace's release buckets."""
@@ -747,10 +748,10 @@ def record_of(trace: Any, stop_ids: Sequence[int], *, bucket_s: float = 0.1) -> 
                           f"{output[-1]}")
         out.append(Request(trace.ids[k], tuple(io.tokens[:io.prompt_len]), io.max_tokens, output, cert.ingress[k],
                            tuple(cert.release[k])))
-    return Record(tuple(out))
+    return CertifiedRequests(tuple(out))
 
 
-def advice_of(trace: Any, record: Record) -> I1.Advice:
+def advice_of(trace: Any, record: CertifiedRequests) -> I1.Advice:
     """The trace as I1 v0: its rows in the order its runner ran them, I1's numbering by first row, each admitting row's
     hit its start and its sources the canonical ones, and each kept output released in the record's bucket. The trace's
     requests are the record's, by id."""
@@ -793,7 +794,7 @@ def advice_of(trace: Any, record: Record) -> I1.Advice:
 INGRESS = ("client", "warden")
 
 
-def _trace(path: str, stop_ids: Sequence[int], ingress: str = "client") -> tuple[Any, Record, I1.Advice]:
+def _trace(path: str, stop_ids: Sequence[int], ingress: str = "client") -> tuple[Any, CertifiedRequests, I1.Advice]:
     tr = R.read_corpus_trace(path, ingress=ingress)
     rec = record_of(tr, stop_ids)
     return tr, rec, advice_of(tr, rec)
