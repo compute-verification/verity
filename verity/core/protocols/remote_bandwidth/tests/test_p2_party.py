@@ -72,14 +72,19 @@ class Prover:
         self.store, self.clock, self.skip, self.garble, self.whole = store, clock, skip, garble, whole
         self.passes: dict[tuple[int, int], object] = {}
         self.held = self.plan = None
+        self.seen: list[str] = []
+        self.ended: tuple | None = None
 
-    def hold(self, registration, commitment) -> None:
+    def hold(self, registration) -> None:
+        self.seen.append("hold")
         if p2_party.registration_of(registration) != self.store.registration:
             raise ValueError("not this store's registration")
         self.plan = p2_party.plan_of({} if self.whole else registration, self.store.registration)
-        self.held = p2.Prover(self.store, commitment, entropy=Entropy(b"p2-party-test/leaf-salts"))
+        self.held = p2.Prover(self.store, entropy=Entropy(b"p2-party-test/leaf-salts"))
 
     def run(self, challenge, t, i, previous) -> bytes:
+        self.seen.append("run")
+        self.held.received.setdefault(t, challenge)
         seed = receipts.seed(coins.coin(challenge), i, previous)
         sk = p2.Sketcher(seed, self.store.registration.rows)
         ys = [sk(g, bytes(p2.UNIT_BYTES) if g == self.skip else self.store.unit(g)) for g in self.plan]
@@ -89,8 +94,14 @@ class Prover:
         return ps.root
 
     def open(self, t, draws):
+        self.seen.append("open")
         out = [self.held.open(self.passes[t, i], p) for i, p in draws]
         return [dataclasses.replace(o, leaf_salt=o.leaf_salt[:-1]) for o in out] if self.garble else out
+
+    def end(self, commitment, openings) -> None:
+        self.seen.append("end")
+        self.ended = (commitment, tuple(openings))
+        self.held.end(commitment, openings)
 
 
 def run(store: p2.Store, prover_of, request: dict, plan: receipts.Plan | None = None) -> tuple[dict, dict]:
@@ -125,7 +136,7 @@ def test_the_registration_and_openings_round_trip_their_json(store) -> None:
     bad = p2_party.registration_json(reg) | {"rows": 64}
     with pytest.raises(ValueError, match="digest"):
         p2_party.registration_of(bad)
-    prover = p2.Prover(store, coins.local(reg.digest, 0, 1, Entropy(b"c")).commitment, entropy=Entropy(b"s"))
+    prover = p2.Prover(store, entropy=Entropy(b"s"))
     ps = prover.pass_under(0, 0, b"\x01" * 64)
     o = prover.open(ps, 1)
     assert p2_party.opening_of(json.loads(json.dumps(p2_party.opening_json(o)))) == o
