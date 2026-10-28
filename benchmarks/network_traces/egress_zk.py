@@ -47,7 +47,8 @@ sys.path.insert(0, str(HERE))
 import warden_zk as WZ  # noqa: E402
 from verity.ml.circuits.defs import bind  # noqa: E402
 from verity.ml.crypto import lms  # noqa: E402
-from verity.core.protocols.certifier import egress as EG, io_tie as IT, warden as W, warden_rows as WR  # noqa: E402
+from verity.core.protocols.certifier import egress as EG  # noqa: E402
+from verity.core.protocols.certifier import io_tie as IT, warden as W, warden_rows as WR  # noqa: E402
 from verity.core.protocols.certifier.active import DATA  # noqa: E402
 from verity.core.protocols.certifier.certificate import Direction, Issuer, LmsSigner  # noqa: E402
 

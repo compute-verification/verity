@@ -56,7 +56,7 @@
     {"file": "benchmarks/network_e2e/e2e.py", "rule": "F541", "count": 1},
     {"file": "benchmarks/network_e2e/encodings/cache_pool_vectors.py", "rule": "RUF100", "count": 2},
     {"file": "benchmarks/network_e2e/encodings/code_v1.py", "rule": "B008", "count": 2},
-    {"file": "benchmarks/network_e2e/encodings/compile_slice_pool.py", "rule": "RUF100", "count": 4},
+    {"file": "benchmarks/network_e2e/encodings/compile_slice_pool.py", "rule": "RUF100", "count": 3},
     {"file": "benchmarks/network_e2e/encodings/replay_vectors.py", "rule": "RUF100", "count": 1},
     {"file": "benchmarks/network_e2e/encodings/sched_trace.py", "rule": "F841", "count": 1},
     {"file": "benchmarks/network_e2e/encodings/tests/test_code.py", "rule": "F841", "count": 1},

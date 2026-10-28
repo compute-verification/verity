@@ -51,7 +51,8 @@ sys.path[:0] = [str(HERE), str(REPO / "benchmarks/network_traces")]
 import leak_scan as LS  # noqa: E402
 import served_tie_window as STW  # noqa: E402
 import served_tie_zk as STZ  # noqa: E402
-from verity.core.protocols.certifier import served_rows as SR, served_statics as SS, served_tie as ST  # noqa: E402
+from verity.core.protocols.certifier import served_rows as SR  # noqa: E402
+from verity.core.protocols.certifier import served_statics as SS, served_tie as ST  # noqa: E402
 from verity.core.protocols.sampled_proofs.one_stage import registered as REG  # noqa: E402
 
 CLASSES = {k: {s: c[s] for s in ("R", "P", "IW", "L", "T")} for k, c in STZ.CLASSES.items()}
