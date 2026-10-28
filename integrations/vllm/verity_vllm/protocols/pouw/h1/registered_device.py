@@ -3,6 +3,12 @@ frame-v3-sha512 tree, computed by `protocol_options/pouw_cuda/registered_rows.cu
 the device (ChaCha20 under the run's key at the value's nonce, `audit.hm96_salt`) or given, under the domain id the host
 computes (`registered.domain`).
 
+A call's z/y records are two tables' rows: its registered ``zy@<c>`` and its call z table (`pouw_h1_tables_device`, under
+``hm96-sha512/row-seg/v1``). With ``also``, `device_hash` commits both from one read of each record
+(`pouw_cuda/zy_commit.cu`, on `verity.ml.kernels`' ``row_commit.cuh``): each record's two row digests from the same loads,
+each table's leaf, the value's tree as before and the call table's a level at a time, the call table's root `Hashing.also`.
+`host_zy` is its twin on the CPU (`zy_commit_host.cpp`).
+
 `device_commit` copies the rows to the device in chunks of at most `CHUNK_BYTES` (rows already there, as a call's z/y
 records are, it reads in place), hashes each row (its ``sha512/row/v2`` digest, salt, hm96-sha512 string, tree leaf and
 frame leaf) and then the pads and levels, on a stream of its own, and returns the strings and levels as `Registered`
@@ -13,12 +19,6 @@ the same functions on the CPU (`registered_rows_host.cpp`, built with the system
 hold to `pouw_h1_registered.commit`'s NumPy path on machines without a GPU. Builds share the Commit's row-table builder
 (`row_tables_device._build`, keyed by sources, flags and compiler); nvcc is `pouw_device`'s (its `TOOLCHAIN`'s,
 or the one on the path).
-
-A call's z/y records are two tables' rows: its registered ``zy@<c>`` and its call z table (`pouw_h1_tables_device`, under
-``hm96-sha512/row-seg/v1``). With ``also``, `device_hash` commits both from one read of each record
-(`pouw_cuda/zy_commit.cu`, on `verity.ml.kernels`' ``row_commit.cuh``): each record's two row digests from the same loads,
-each table's leaf, the value's tree as before and the call table's a level at a time, the call table's root `Hashing.also`.
-`host_zy` is its twin on the CPU (`zy_commit_host.cpp`).
 """
 from __future__ import annotations
 
@@ -301,21 +301,6 @@ class _Device:
         if rc:
             raise RuntimeError(f"rr_midstates: CUDA error {rc}")
         self.stream.synchronize()
-        self._zy: tuple[ctypes.CDLL, Any, int] | None = None
-
-    def zy(self, torch: Any) -> tuple[ctypes.CDLL, Any, int]:
-        """`zy_commit.cu`'s build for this device, the hm96 key's nibble table there, and the plan's bytes: built once."""
-        if self._zy is None:
-            dev = self.hm.device
-            major, minor = torch.cuda.get_device_capability(dev)
-            lib = zy_device_lib(f"{major}{minor}")
-            key, tab = np.frombuffer(HM_KEY, np.uint8).copy(), np.empty(1 << 13, np.uint8)
-            lib.zy_nibbles(key.ctypes.data, tab.ctypes.data)
-            with torch.cuda.stream(self.stream):
-                nib = torch.from_numpy(tab).to(dev)
-            self.stream.synchronize()
-            self._zy = (lib, nib, int(lib.zy_plan_bytes()))
-        return self._zy
 
 
 _DEVICES: dict[int, _Device] = {}
@@ -345,6 +330,25 @@ def available() -> bool:
     return True
 
 
+_ZY_LIBS: dict[int, tuple[ctypes.CDLL, Any, int]] = {}
+
+
+def _zy(torch: Any) -> tuple[ctypes.CDLL, Any, int]:
+    """`zy_commit.cu`'s build for the current device, the hm96 key's nibble table there and the plan's bytes: built once."""
+    index = torch.cuda.current_device()
+    if index not in _ZY_LIBS:
+        d = _device(torch)
+        major, minor = torch.cuda.get_device_capability(index)
+        lib = zy_device_lib(f"{major}{minor}")
+        key, tab = np.frombuffer(HM_KEY, np.uint8).copy(), np.empty(1 << 13, np.uint8)
+        lib.zy_nibbles(key.ctypes.data, tab.ctypes.data)
+        with torch.cuda.stream(d.stream):
+            nib = torch.from_numpy(tab).to(d.hm.device)
+        d.stream.synchronize()
+        _ZY_LIBS[index] = (lib, nib, int(lib.zy_plan_bytes()))
+    return _ZY_LIBS[index]
+
+
 @cache
 def zy_available() -> bool:
     """Whether `device_hash` takes ``also`` in this process: `available`, and `zy_commit.cu` built for the current device
@@ -354,7 +358,7 @@ def zy_available() -> bool:
     import torch
 
     try:
-        _device(torch).zy(torch)
+        _zy(torch)
     except (OSError, RuntimeError, AttributeError, subprocess.SubprocessError) as e:
         warnings.warn(f"H1's call z tables hash apart from their zy@<c> values: zy_commit.cu doesn't build here "
                       f"({type(e).__name__}: {e})", RuntimeWarning, stacklevel=2)
@@ -456,10 +460,10 @@ def device_hash(words: Any, key: bytes, nonce: int, row_salts: bytes | None, dom
     return Hashing(done, got_bcs, got_levels, t.W, (words, rows, salts, bcs, levels, chunks))
 
 
-def _hash_both(torch: Any, d: _Device, words: Any, rows: Any, t: Table, key: bytes, nonce: int, domain_id: bytes,
+def _hash_both(torch: Any, d: Any, words: Any, rows: Any, t: Table, key: bytes, nonce: int, domain_id: bytes,
                also: tuple[bytes, int]) -> Hashing:
     """`device_hash` with ``also``, its stream already behind the rows' writer."""
-    lib, nib, plan_bytes = d.zy(torch)
+    lib, nib, plan_bytes = _zy(torch)
     dev, st, n = d.hm.device, d.stream, t.n
     a = zy_args(n, t.row_bytes, key, also, (domain_id, nonce))
     staged = torch.empty(plan_bytes, dtype=torch.uint8, pin_memory=True)
