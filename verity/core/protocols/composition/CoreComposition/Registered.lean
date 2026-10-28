@@ -67,9 +67,11 @@ structure Tie where
 one's, with both; `none` when they all named it, or when one of them has no case or names nothing, its commitment not
 decoding, so that it rejects as a component. -/
 def Tie.strays (t : Tie) (ev : List Case) : Option String :=
-  match t.names.mapM fun (s, f) => ((ev.find? (·.id == s)).bind fun k => f k.commitment).map (s, ·) with
-  | some ((s, d) :: rest) => (rest.find? (·.2 != d)).map fun (u, d') =>
-    s!"{t.what}: {s} committed {Flock.hexOf d}, {u} committed {Flock.hexOf d'}"
+  let named (n : String × (ByteArray → Option ByteArray)) : Option (String × ByteArray) :=
+    ((ev.find? fun (k : Case) => k.id == n.1).bind fun k => n.2 k.commitment).map (n.1, ·)
+  match t.names.mapM named with
+  | some ((s, d) :: rest) => (rest.find? fun (x : String × ByteArray) => x.2 != d).map fun x =>
+    s!"{t.what}: {s} committed {Flock.hexOf d}, {x.1} committed {Flock.hexOf x.2}"
   | _ => none
 
 /-- Why a registered composition refuses when the registration check `r` checked the registration digest `d` and the
