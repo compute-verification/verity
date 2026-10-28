@@ -4,9 +4,7 @@
 # 25), bench.py's gates and timings and Nsight Compute on the standalone decode and the fused GEMM. Results go to
 # $RESEARCH_RUN_DIR/out.
 #
-#   research run --on vy-nebius-2 --project verity --source . --cwd source --mem-gb 48 \
-#     --campaign resource-accounting --declared-output 'out/*' --env GPU_LEASE_WHO=ra-word-codec \
-#     -- taskset -c 48-95 bash benchmarks/word_codec/run.sh
+#   RESEARCH_RUN_DIR=DIR GPU_LEASE_WHO=ra-word-codec taskset -c 48-95 bash benchmarks/word_codec/run.sh
 #
 # ENV_DIR holds the shared torch venv (benchmarks/pous/pod.sh's WORK). BENCH_ARGS passes through to bench.py; NCU=0 skips
 # the profiles (NCU_KS, default 2,3, the GEMM's k there; NCU_WS and NCU_TAG_WS its configurations); LIBSET (default
@@ -21,9 +19,8 @@
 # KV_ARGS; SANITIZE=1 runs KV_SCRIPT's --sanitize smoke under compute-sanitizer's memcheck, racecheck and synccheck,
 # and SANITIZE=2 runs KV_SCRIPT after it if every tool passed. KV_NCU=1 profiles KV_SCRIPT --ncu instead of timing it.
 # KV=1 under the queue, kv.cu's gates alone (the bound key's among them):
-#   research run --queue --on vy-nebius-2 --gpus 1 --max-min 20 --project verity --source . --cwd source \
-#     --campaign resource-accounting --env QUEUED=1 --env KV=1 --env KV_FIELDS='512 1024m' \
-#     --env KV_ARGS='--gates-only --ks 2,3' -- bash benchmarks/word_codec/run.sh
+#   RESEARCH_RUN_DIR=DIR QUEUED=1 KV=1 KV_FIELDS='512 1024m' KV_ARGS='--gates-only --ks 2,3' bash \
+#     benchmarks/word_codec/run.sh
 set -uxo pipefail
 export O=${RESEARCH_RUN_DIR:?}/out; mkdir -p "$O"
 ENV_DIR=${ENV_DIR:-/workspace/pouw/fill-out/pous/work/pous-bench}
@@ -85,8 +82,8 @@ if [ "${KV:-0}" = 1 ]; then
       exit 0' _ "$NCU_BIN" "$O" "$PY" $WC/$KV_SCRIPT "${LIBS[@]}" ${KV_ARGS:-}
     exit $?
   fi
-  # KV_REPEAT=N (default 1) runs KV_SCRIPT N times in one lease, each its own process, writing under $O/repI; under
-  # `research run --queue` (QUEUED=1) the GPU is leased around the whole job and gpu-lease is skipped
+  # KV_REPEAT=N (default 1) runs KV_SCRIPT N times in one lease, each its own process, writing under $O/repI; with
+  # QUEUED=1 (a queue that leases the GPU around the whole job) gpu-lease is skipped
   if [ "${KV_REPEAT:-1}" = 1 ]; then
     LEASE=(gpu-lease 1 --wait ${GPU:+--on "$GPU"} --max-min "${MAXMIN:-25}" --)
     [ "${QUEUED:-0}" = 1 ] && LEASE=()

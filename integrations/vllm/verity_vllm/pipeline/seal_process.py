@@ -43,8 +43,8 @@ class SealingOptions:
                                       "stops serving for them")
     seal_process: bool = option("--seal-process", action="boolean_optional", default=True,
                                 help="with --seal-off-loop: seal each execution block in a spawned process (seal_process.SealProcess; "
-                                     "default on), the sealer's thread writing only its store's files, so no seal's Python takes the "
-                                     "engine's GIL; --no-seal-process seals on the sealer's thread")
+                                     "default on), the sealer's second thread writing only its store's files, so no seal's Python takes "
+                                     "the engine's GIL; --no-seal-process seals on that thread")
 
 
 def sealer_of(opts: Any) -> SS.Sealer | None:
@@ -80,7 +80,7 @@ class _Unstored(Exception):
 
 
 class SealProcess:
-    """One spawned process that seals execution blocks one at a time (`seal`), called from one thread (`serve_seal.Sealer`'s). A process
+    """One spawned process that seals execution blocks one at a time (`seal`), called from one thread (`serve_seal.Sealer`'s second). A process
     that has exited, killed or failed, raises at the next seal by name, and every seal after it fails the same way."""
 
     def __init__(self) -> None:
