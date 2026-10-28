@@ -16,4 +16,7 @@ inputs = [
   "verity/core/protocols/profile.py",
   "verity/__init__.py", "verity/core/__init__.py", "verity/core/protocols/__init__.py", "verity/ml/__init__.py",
   "verity/ml/circuits",
+  # the compute dampener D is the overhead calculator's (statement.py, fit.py, imported by path)
+  "benchmarks/rho/rho/__init__.py",
+  "benchmarks/rho/rho/theorem.py",
 ]
