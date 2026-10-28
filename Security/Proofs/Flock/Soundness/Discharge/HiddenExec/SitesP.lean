@@ -42,7 +42,7 @@ theorem committed : Hidden.Committed I.tags I.circuitFile I.tables x.st.c := Hid
 include ht hcS in
 /-- **A drawn table's statement circuit is the session's**: its committed circuit unrolls to `c`. -/
 theorem unrolled_eq : HmOut.unrolled x.st.c = c :=
-  Except.ok.inj ((Hidden.parseStmt_of_commit ht x.specP.parse).symm.trans hcS)
+  Except.ok.inj ((FlockSoundness.parseStmt_of_commit ht x.specP.parse).symm.trans hcS)
 
 include ht hcS hv1 in
 /-- A drawn table's output rows are the statement circuit's (`outRowsS_of_unrolled`). -/

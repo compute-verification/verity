@@ -52,7 +52,7 @@ theorem setupHidden_mPts_of_provedP {c : Flock.Circuit} {d : Json} {N₀ : ℕ} 
     (h : Stmt.setupHidden tags cf pf coins tables (some d) partition program own = .ok st) :
     st.mPts = mPtsOf c.g N₀ := by
   obtain ⟨ud, hud, hm⟩ := setupHidden_mPts_drawnP h
-  have e := Hidden.parseStmt_of_commit hty (Hidden.setupHidden_specP h).choose_spec.parse
+  have e := FlockSoundness.parseStmt_of_commit hty (Hidden.setupHidden_specP h).choose_spec.parse
   rw [hcS] at e
   rw [hm, ← unrolled_g st.c, ← Except.ok.inj e, hD ud hud]
 
