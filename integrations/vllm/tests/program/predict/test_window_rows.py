@@ -136,8 +136,8 @@ def test_every_unit_holds_its_nodes_value_or_its_definitions_function(window):
     below the prompt cap) holds its token and carried slot; each slot's scan read every lane's first token and carried slot,
     occupancy word and head of the state row at its anchor (`io_shell.scan_reference`), its last collector the 2 outputs
     from its prompt's last position on and its entry their count and ids; each head's first
-    key block (`Attention_v20`'s cut) is evaluated, and its end's Definition on that block's state is the node's value, the
-    row kernel's. With no served values every unit is computed or evaluated."""
+    key block's softmax and P·V group (`Attention_v22`'s cut) are evaluated, and its end's Definition on the softmax's sum
+    and the group's O is the node's value, the row kernel's. With no served values every unit is computed or evaluated."""
     low, fields, tables, _w, slots = window
     rows = WR.Rows(low, slots, tables)
     assert {int(x) for v in rows.source.values() for x in v} == {WR.COMPUTED, WR.EVALUATED}
@@ -186,10 +186,11 @@ def test_every_unit_holds_its_nodes_value_or_its_definitions_function(window):
         assert sum(int(w) << 16 * k for k, w in enumerate(rows.outs[et][0][eu])) == 2 | outs[0] << 32 | outs[1] << 49
         assert len(P.heads) == 2 * (CLASS.prompt + CLASS.outputs - 1)
         for j, (plan, calls) in P.heads.items():
-            (first, _), (end, _) = plan
-            (ft, fu), (et, eu) = calls
-            assert first.name == "AttnBlockFirst" and end.name == "AttnHeadEnd" and rows.source[ft][fu] == WR.EVALUATED
-            l, o = (np.ascontiguousarray(rows.outs[ft][k][fu:fu + 4]).view("<u4") for k in (1, 2))
+            (soft, _), (pv, _), (end, _) = plan
+            (st, su), (pt, pu), (et, eu) = calls
+            assert (soft.name, pv.name, end.name) == ("AttnBlockSoftmax", "AttnBlockPv", "AttnHeadEnd")
+            assert rows.source[st][su] == rows.source[pt][pu] == WR.EVALUATED
+            l, o = (np.ascontiguousarray(rows.outs[t][k][u:u + 4]).view("<u4") for t, k, u in ((st, 1, su), (pt, 0, pu)))
             node = np.asarray(evaluate_batch(end, l, o)).reshape(4, -1).astype(np.uint16)
             assert np.array_equal(node, rows.outs[et][0][eu:eu + 4])
             assert np.array_equal(node.reshape(-1), WR._words(s.values[j])) and node.any()
