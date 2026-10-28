@@ -16,7 +16,7 @@ import pytest
 from remote_bandwidth_fakes import Clock, Entropy
 from verity.core.protocols.profile import IntegrityProfile, Subset
 from verity.core.protocols.remote_bandwidth import audit, codec, coins, receipts, timing
-from verity.core.protocols.remote_bandwidth.audit import Params, Session, SessionError
+from verity.core.protocols.remote_bandwidth.audit import AuditRun, Params, SessionError
 from verity.ml.randomness import frame
 
 N = 20
@@ -117,8 +117,8 @@ def drive(store, p: Params, schedule: timing.Schedule, *, tiles=None, verifier_t
     The session's coins are `coins_`, or a challenger in this process drawing under `label`."""
     tiles = tiles or (audit.NoiseTiles(96) if store.registration.bind else None)
     clock = Clock()
-    s = Session(p, store.registration, verifier_tiles or tiles, coins_ or challenger(store, p, label), not_before_ns=0,
-                clock=clock)
+    s = AuditRun(p, store.registration, verifier_tiles or tiles, coins_ or challenger(store, p, label), not_before_ns=0,
+                 clock=clock)
     prover = audit.Prover(store, tiles, entropy=Entropy(b"receipt salts"))
     events = sorted([(0, 0, -1)] + [(b, 0, t) for t, b in enumerate(schedule.boundaries)]
                     + [(a, 1, (t, i)) for t, i, a in schedule.arrivals])
@@ -138,7 +138,7 @@ def drive(store, p: Params, schedule: timing.Schedule, *, tiles=None, verifier_t
     return s, prover, passes, clock
 
 
-def finish(s: Session, prover: audit.Prover, passes, clock: Clock, open_=None):
+def finish(s: AuditRun, prover: audit.Prover, passes, clock: Clock, open_=None):
     clock.now = max(clock.now, s.deadline(len(s.windows) - 1) + 1)
     out = []
     for t in range(s.params.windows):
@@ -278,7 +278,7 @@ def test_a_receipt_depends_on_its_block_not_its_position(stores, bind) -> None:
     np.array([[0.0, 5.0]]),
 ])
 def test_a_plan_that_repeats_a_block_or_is_not_canonical_rejects(store, runs) -> None:
-    s = Session(params(), store.registration, None, challenger(store, params()), not_before_ns=0, clock=Clock())
+    s = AuditRun(params(), store.registration, None, challenger(store, params()), not_before_ns=0, clock=Clock())
     s.start()
     assert s.receive(0, 0, bytes(64), runs, step=0) == audit.Verdict(0, False, "plan")
 
@@ -286,7 +286,7 @@ def test_a_plan_that_repeats_a_block_or_is_not_canonical_rejects(store, runs) ->
 def test_a_pass_that_would_take_its_window_to_the_receipt_limit_rejects(store) -> None:
     """A window's receipts stay below `RECEIPT_LIMIT`: over a store appended to its codec's `max_blocks`, every pass of
     all of it is kept until the one that would take window 0's receipts to the limit, which rejects with `plan`."""
-    s = Session(params(), store.registration, None, challenger(store, params()), not_before_ns=0, clock=Clock())
+    s = AuditRun(params(), store.registration, None, challenger(store, params()), not_before_ns=0, clock=Clock())
     s.start()
     top = s.params.codec.max_blocks
     s.append(bytes(64), top - s.extent)
@@ -539,12 +539,12 @@ def test_a_session_refuses_parameters_that_are_not_the_registrations(store, stor
                   (store, params(bind=True)), (bound, params()), (store, params(rows=64)), (rows64_store, params()),
                   (rows64_store, params(rows=16))):
         with pytest.raises(ValueError, match="not the registration's"):
-            Session(p, st.registration, audit.NoiseTiles(96) if p.bind else None, challenger(st, p), not_before_ns=0,
-                    clock=Clock())
+            AuditRun(p, st.registration, audit.NoiseTiles(96) if p.bind else None, challenger(st, p), not_before_ns=0,
+                     clock=Clock())
     other = copy.copy(store)
     other.registration = dataclasses.replace(store.registration, layout="gemm-a-fragment/v0")
     with pytest.raises(ValueError, match="not the registration's"):                # a layout the session can't map
-        Session(params(), other.registration, None, challenger(other, params()), not_before_ns=0, clock=Clock())
+        AuditRun(params(), other.registration, None, challenger(other, params()), not_before_ns=0, clock=Clock())
     with pytest.raises(ValueError, match="a receipt kind is one of"):
         params(receipt="sha512")
     with pytest.raises(ValueError, match="bind is True or False"):
@@ -557,7 +557,7 @@ def test_tiles_are_taken_only_by_a_registration_that_binds_z(store, stores) -> N
     bound = stores[receipts.DEFAULT, True]
     for st, tiles in ((store, audit.NoiseTiles(96)), (bound, None)):
         with pytest.raises(ValueError, match="binds z takes PoUW's tiles"):
-            Session(params_of(st), st.registration, tiles, challenger(st, params()), not_before_ns=0, clock=Clock())
+            AuditRun(params_of(st), st.registration, tiles, challenger(st, params()), not_before_ns=0, clock=Clock())
         with pytest.raises(ValueError, match="binds z takes PoUW's tiles"):
             audit.Prover(st, tiles)
 
@@ -793,8 +793,8 @@ def test_the_honest_prover_is_never_late_and_the_allowance_is_tight() -> None:
 
 
 def test_roots_out_of_order_reject(store) -> None:
-    def session() -> Session:
-        return Session(params(), store.registration, None, challenger(store, params()), not_before_ns=0, clock=Clock())
+    def session() -> AuditRun:
+        return AuditRun(params(), store.registration, None, challenger(store, params()), not_before_ns=0, clock=Clock())
     s = session()
     with pytest.raises(SessionError, match="not started"):
         s.receive(0, 0, bytes(64), step=0)
@@ -808,7 +808,7 @@ def test_roots_out_of_order_reject(store) -> None:
     s.start()
     assert s.receive(1, 0, bytes(64), step=0) == audit.Verdict(0, False, "order")  # window 1's challenge isn't out
     clock = Clock()
-    s = Session(params(), store.registration, None, challenger(store, params()), not_before_ns=0, clock=clock)
+    s = AuditRun(params(), store.registration, None, challenger(store, params()), not_before_ns=0, clock=clock)
     s.start()
     clock.now = 1000
     s.boundary()
@@ -837,7 +837,7 @@ def test_each_pass_names_a_step_above_the_previous_passs(store, steps, failure) 
     """A pass covers one step of the served circuit, named with its root: a root with no step, or one not above the
     previous pass's, across windows too, rejects the session (`step`), and an accepted window records them."""
     clock = Clock()
-    s = Session(params(), store.registration, None, challenger(store, params()), not_before_ns=0, clock=clock)
+    s = AuditRun(params(), store.registration, None, challenger(store, params()), not_before_ns=0, clock=clock)
     s.start()
     out = None
     for k, step in enumerate(steps):
@@ -859,7 +859,7 @@ def test_a_window_of_too_few_passes_is_rejected(store) -> None:
 
 def test_draws_wait_for_the_windows_roots(store) -> None:
     clock = Clock()
-    s = Session(params(), store.registration, None, challenger(store, params()), not_before_ns=0, clock=clock)
+    s = AuditRun(params(), store.registration, None, challenger(store, params()), not_before_ns=0, clock=clock)
     s.start()
     assert s.receive(0, 0, bytes(64), step=0) is None
     with pytest.raises(SessionError, match="not final"):
@@ -883,7 +883,7 @@ def test_a_paced_windows_roots_are_final_at_its_k_th_root(store) -> None:
     the challenger's log."""
     clock = Clock()
     p = params(pace=audit.Pace(2))
-    s = Session(p, store.registration, None, challenger(store, p), not_before_ns=0, clock=clock)
+    s = AuditRun(p, store.registration, None, challenger(store, p), not_before_ns=0, clock=clock)
     s.start()
     assert s.receive(0, 0, bytes(64), step=0) is None
     with pytest.raises(SessionError, match="not final"):
@@ -906,7 +906,7 @@ def test_a_boundary_waits_out_the_stated_window(store) -> None:
     p = Params(blocks=N, deadline_ns=A, windows=3)
     assert (p.window_ns, p.samples, p.delta) == (audit.WINDOW_NS, audit.SAMPLES, audit.DELTA) == (60 * 10**9, 33_273, 2.0**-40)
     clock = Clock()
-    s = Session(params(), store.registration, None, challenger(store, params()), not_before_ns=0, clock=clock)
+    s = AuditRun(params(), store.registration, None, challenger(store, params()), not_before_ns=0, clock=clock)
     s.start()
     clock.now = 999
     with pytest.raises(SessionError, match="may leave at 1000 ns, not 999"):
@@ -992,8 +992,8 @@ def test_a_session_over_the_store_starts_after_the_one_before_it_ends(store) -> 
     finish(s, prover, passes, clock)
     end = s.record().end_ns
     clock = Clock()
-    nxt = Session(params(), store.registration, None, challenger(store, params(), b"next", 1), clock=clock,
-                  not_before_ns=end)
+    nxt = AuditRun(params(), store.registration, None, challenger(store, params(), b"next", 1), clock=clock,
+                   not_before_ns=end)
     clock.now = end - 1
     with pytest.raises(SessionError, match="may still be reading"):
         nxt.start()
@@ -1001,10 +1001,10 @@ def test_a_session_over_the_store_starts_after_the_one_before_it_ends(store) -> 
     assert nxt.start().index == 0
     later = challenger(store, params(), b"later", 2)
     with pytest.raises(TypeError, match="not_before_ns"):           # every session names when it may start
-        Session(params(), store.registration, None, later, clock=clock)
+        AuditRun(params(), store.registration, None, later, clock=clock)
     for bad in (None, -1, 1.5, True):
         with pytest.raises(ValueError, match="not_before_ns"):
-            Session(params(), store.registration, None, later, not_before_ns=bad, clock=clock)
+            AuditRun(params(), store.registration, None, later, not_before_ns=bad, clock=clock)
 
 
 def test_opening_size_matches_the_timing_model(store) -> None:
@@ -1108,7 +1108,7 @@ def test_the_ledgers_count_bounds_auditros_binomial() -> None:
 
 
 def test_auditros_slack_adds_at_most_2_to_the_minus_50_over_an_hour_of_the_fastest_passes() -> None:
-    """`SLACK_LOG2`'s reason: an hour of the node's passes over gate runs 8 and 9's store, 130,023,424 blocks read at
+    """`SLACK_LOG2`'s reason: an hour of the node's passes over eight GPUs' 62 GiB shards, 130,023,424 blocks read at
     `timing.READ_BYTES_PER_S`, is under 2^17 passes, and their slack adds at most 2^-50 to γ's error and the memory
     line's δ, 2^-10 of `DELTA`."""
     pass_s = 130_023_424 * codec.BLOCK_BYTES / timing.READ_BYTES_PER_S

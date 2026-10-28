@@ -1,4 +1,4 @@
-"""The verifier's process: the remote bandwidth audit v0's `Session` (verity/core/protocols/remote_bandwidth/audit.py)
+"""The verifier's process: the remote bandwidth audit v0's `AuditRun` (verity/core/protocols/remote_bandwidth/audit.py)
 driven over the wire against a prover on another process or machine, with a secret of its own.
 
 One connection serves one registration and then `--sessions` sessions over it, each of `--windows` windows of
@@ -17,20 +17,20 @@ One connection serves one registration and then `--sessions` sessions over it, e
    (`--lifetime`, windows, by default those of `--window-ms` in 30 s, `audit.lifetime_windows`, sent with the
    session so the prover re-keys in time); σ_0, then a boundary message every window, each coin sent as its value and
    the root it was opened after (`coins.Released`), each append answered with its coin (`Verifier.append`), each root
-   fed to `Session.receive` stamped with the time its last byte was read (with the releases its message carries first, and
+   fed to `AuditRun.receive` stamped with the time its last byte was read (with the releases its message carries first, and
    the withdrawn blocks among them, its plan as a change when it carries one, and the step its pass covers:
    `Verifier.root`), each window closed
-   (`Session.close`) as soon as its roots are final and its draws sent; the prover's openings
+   (`AuditRun.close`) as soon as its roots are final and its draws sent; the prover's openings
    checked by the Lean verifier on its threads as their frames arrive (`Pair.verify`), so a window's checks run while
-   the next window's passes arrive; once every window is accepted the record (`Session.record`), its declared outputs
+   the next window's passes arrive; once every window is accepted the record (`AuditRun.record`), its declared outputs
    (`ledger.declared`'s: γ at both R and the memory line, snapshot and, paced, time-held and link-charged), and as
    diagnostics the node's HBM it shows held by kind (`memory`: the credited share and the residual, at ε, held at
    every pass and held on average), and with `--host-bytes` the same by kind against the node's HBM and host DRAM
    (`node_line`); last, once the prover has answered the session's `end` with `ended`, the coin commitment and every
-   released coin's opening (`coins`, `audit.Session.disclose`), which the prover checks each coin it was sent against.
+   released coin's opening (`coins`, `audit.AuditRun.disclose`), which the prover checks each coin it was sent against.
 
 With `--paced K:T_MS:DRAWS:WINDOWS[:F]` each session is paced (`pace_of`, `audit.Pace(K, T, F)`): a coin every K
-passes, each boundary message at `Session.next_boundary_ns`, WINDOWS stretches of as many groups as T_MS holds at the
+passes, each boundary message at `AuditRun.next_boundary_ns`, WINDOWS stretches of as many groups as T_MS holds at the
 `--pace-pass-ms` pass and a closing stretch, and γ declared per fixed T, so the record has a time-held memory line
 (`ledger.memory`); `paced_line`'s per-stretch line stays beside it as a diagnostic. A group is drawn at its k-th
 root, its roots final then, so its openings coin is asked for after that root first: the challenger's signed log
@@ -63,9 +63,9 @@ store's shape, both roots, the Lean's answer and `bound`), which `auditor_line.p
 hello, so its sessions share the one root it held; another process's payload key is fresh, so its root is another.
 
 The verdicts are the Lean verifier's, the process `remote-audit-verifier` (`lean_verifier.py`): it holds
-the registry and every session, and each registration, session, event and window goes to it and to `audit.Session`
+the registry and every session, and each registration, session, event and window goes to it and to `audit.AuditRun`
 at one reading of the clock (`Pair`). An accepted session's record is the Lean's (`Pair.record`), and its ledger
-reads that record. `audit.Session` keeps the driver's books (its coins, its plans, when the next boundary leaves) and
+reads that record. `audit.AuditRun` keeps the driver's books (its coins, its plans, when the next boundary leaves) and
 is the reference: an event, a window's verdict or a record field on which the two differ refuses the session at that
 window as `disagreement`. It checks no openings: it takes the Lean's window verdicts (`Checks.settle`), and the
 Python check of a window's openings beside the Lean's is the transcript's replay (`--transcript`). `--close` closes
@@ -88,8 +88,8 @@ machine and reached through `sampled_proofs.remote`'s client (`--challenger serv
 auditor host's challenger through its gate, a session reserved in the audit's period and opened at the session's
 window root (`--challenger gate`, `challengers.ChallengerGate`). Each coin is asked for after the root it follows, the
 Lean takes it with the event that released it, and once the session ends what the challenger signed holds the session's
-coins (`Session.released_reason`, and under the gate the auditor's ledger, `Session.trusted_reason`, which also holds the
-session's pin to the host's pins log and to `--challenger-main`, the auditor's first-parent list of main): a session
+coins (`AuditRun.released_reason`, and under the gate the auditor's ledger, `AuditRun.trusted_reason`, which also holds
+the session's pin to the host's pins log and to `--challenger-main`, the auditor's first-parent list of main): a session
 whose coins fail it is refused as `coins`, the reason in its `challenger`. Each session reserves W challenges, ⌈W/G⌉
 openings coins (`--groups-per-coin` G, 1 by default: each draw's G windows drawn together at its last window's close,
 at two windows in flight, as the Lean's `session` refuses one in flight at G > 1) and `--appends` append coins,
@@ -254,7 +254,7 @@ def memory(record: audit.Record, plans, regions, *, hbm_bytes: int, rebuild: aud
     """The node's memory a session's record shows held, against its HBM, in two forms.
 
     Held at every pass (`WORST_PASS`, the worst pass's): each window's passes each read the distinct blocks of their
-    plan (`plans`, a list of each window's, as `Session` received them) inside the window's span, so at every pass the
+    plan (`plans`, a list of each window's, as `AuditRun` received them) inside the window's span, so at every pass the
     node held them, but for the receipts the pooled event leaves wrong (`audit.floors`, f_t of the window's U_t, every
     window's at once except with the record's δ), the blocks its GPUs could re-encode from their payloads in the
     span instead (`rebuild`, its squarings at `codec.encode_squarings` a block), and the blocks its on-chip storage
@@ -267,7 +267,7 @@ def memory(record: audit.Record, plans, regions, *, hbm_bytes: int, rebuild: aud
     A registered block counts as the layout labels it (`regions_of`; None, the drivers' stores: the whole store
     filler in HBM), HBM only toward the share; an appended block
     (index N and up) is KV the session wrote, in HBM, and is credited only on the property's verdict and the session's
-    schedule check (`schedule`, `audit.Session.scheduled`, as `audit.ledger` requires them), less the most its carriers
+    schedule check (`schedule`, `audit.AuditRun.scheduled`, as `audit.ledger` requires them), less the most its carriers
     hold (`credit_post_seed`, as `audit.ledger`'s μ_carrier).  Weights and KV are each credited on their
     own: the lost blocks come off each.  The session's line is its worst window's: `credited_bytes`, `share` of
     `hbm_bytes` and `residual` = 1 − share, the HBM it doesn't show used, with ε, the share of the window's held
@@ -276,7 +276,7 @@ def memory(record: audit.Record, plans, regions, *, hbm_bytes: int, rebuild: aud
     if credit_post_seed is not None and credit_post_seed.holds is not True:
         raise ValueError("a verdict that the property fails credits nothing after the seed: pass None")
     if credit_post_seed is not None and (type(schedule) is not audit.Scheduled or not schedule.of(record)):
-        raise ValueError("KV is credited only on this session's schedule check (`audit.Session.scheduled`)")
+        raise ValueError("KV is credited only on this session's schedule check (`audit.AuditRun.scheduled`)")
     if len(plans) != len(record.windows) or any(len(p) != w.passes for p, w in zip(plans, record.windows)):
         raise ValueError("a plan for each pass of each window of the record")
     if rebuild.codec != record.codec:
@@ -434,7 +434,7 @@ TIME_HELD = "held over time"
 
 
 def pace_of(spec: str, pass_ms: float) -> dict:
-    """`K:T_MS:DRAWS:WINDOWS[:F]` as a session's pacing: groups of K passes, each a `Session` window of its own whose
+    """`K:T_MS:DRAWS:WINDOWS[:F]` as a session's pacing: groups of K passes, each a `AuditRun` window of its own whose
     coin is a live coin, WINDOWS credited stretches of T_MS and a closing one after them, `groups` groups a stretch (at
     `pass_ms` a pass) and `draws` = DRAWS/groups openings a group, so a stretch draws as an unpaced T_MS window would;
     F the windows in flight (`audit.Pace.in_flight`, 2 when absent, named only at 1)."""
@@ -713,10 +713,10 @@ def hold_store(lean: lv.Lean, bound: dict | None, b: rstore.Binding, node: bytes
 
 
 class Pair:
-    """Session k through the verifiers, with `audit.Session`'s interface: each event goes to `s`, the driver's books,
+    """Session k through the verifiers, with `audit.AuditRun`'s interface: each event goes to `s`, the driver's books,
     and to the Lean process's session k, at one reading of the verifier's clock. The result is the one
     they agree on; where they differ, the session is refused at the event's window as `disagreement` (in both
-    verifiers), returned as that rejection, or raised as `audit.SessionError` where `audit.Session` returns no verdict.
+    verifiers), returned as that rejection, or raised as `audit.SessionError` where `audit.AuditRun` returns no verdict.
     Everything else is read from `s`. The Lean's session takes its coins live (`"coins": null`): each the challenger
     releases goes with the event that released it, σ_t with its start or boundary, window t's openings coin with its
     close and an append's coin with the append.
@@ -727,7 +727,7 @@ class Pair:
     events in order with their clock readings, so its answers are the ones it would give were each waited on. An
     event the books reject or refuse is waited on, behind every one before it."""
 
-    def __init__(self, v: Verifier, s: audit.Session, k: int, case: lv.DifftestCase | None = None) -> None:
+    def __init__(self, v: Verifier, s: audit.AuditRun, k: int, case: lv.DifftestCase | None = None) -> None:
         self.v, self.s, self.k, self.lean, self.case = v, s, k, v.lean, case
         self.node, self.disagreement, self.outcome_json = s.registration.node.hex(), None, None
         self.late: tuple | None = None
@@ -923,7 +923,7 @@ class Pair:
 
     def record(self) -> audit.Record:
         """The accepted session's record: the Lean's (its `outcome` at `end`, as `lv.record_of` reads it, with the
-        session's bounds, `audit.Session.bounded`)."""
+        session's bounds, `audit.AuditRun.bounded`)."""
         return self.s.bounded(lv.record_of(self.outcome_json["record"], self.s.registration, self.s.commitment.root,
                                            self.s.params.delta, self.s.params.samples))
 
@@ -1106,7 +1106,7 @@ class Verifier:
     def session(self, k: int, allowance_ns: int, not_before_ns: int | None, pace: dict | None = None) -> dict:
         """One session.  With `pace` (`pace_of`), the protocol paces it (`audit.Pace(k, T)`, T its stretch, over which
         γ is declared): its windows are groups of `pace["k"]` passes, and each boundary leaves at
-        `Session.next_boundary_ns`: once its group has k − 1 roots (the pass in flight is its last), or for k = 1 once
+        `AuditRun.next_boundary_ns`: once its group has k − 1 roots (the pass in flight is its last), or for k = 1 once
         the group before has its root (the first group's at once), so the honest prover never waits on a coin; and at
         the latest at max(its coin + (k − 1)·A, the group before's deadline), so its roots are due within about k
         allowances of its coin.  The lifetime cap, unless `lifetime` states it, is the windows of T in 30 s, or paced,
@@ -1391,8 +1391,8 @@ class Verifier:
         return out
 
     @staticmethod
-    def append(session: audit.Session, head: dict) -> dict | audit.Verdict:
-        """An append's message to the session (`Session.append`), `{"type": "append", "root": hex, "count": n}`: the
+    def append(session: audit.AuditRun, head: dict) -> dict | audit.Verdict:
+        """An append's message to the session (`AuditRun.append`), `{"type": "append", "root": hex, "count": n}`: the
         reply `{"type": "appended", "first": j, "coin": hex}`, its first index and its coin `c_a`, drawn now, or the
         rejection."""
         got = session.append(bytes.fromhex(head["root"]), head["count"])
@@ -1402,10 +1402,10 @@ class Verifier:
         return {"type": "appended", "first": first, "coin": coin.hex()}
 
     @staticmethod
-    def root(session: audit.Session, head: dict) -> audit.Verdict | None:
+    def root(session: audit.AuditRun, head: dict) -> audit.Verdict | None:
         """A root's message to the session in the order the prover sends it: the blocks it releases, with those among
-        them it withdrew (`Session.release`), then the root with its plan, a change from the last plan if it carries
-        one and the registered store otherwise, and its step (`Session.receive`).  The first rejection, if any.
+        them it withdrew (`AuditRun.release`), then the root with its plan, a change from the last plan if it carries
+        one and the registered store otherwise, and its step (`AuditRun.receive`).  The first rejection, if any.
         Appends come as messages of their own (`append`), each answered with its coin: a root's message carrying any
         is malformed."""
         if "appends" in head:
@@ -1426,7 +1426,7 @@ class Verifier:
         every GPU's HBM and the host's DRAM, the node's S_chip and squaring ceiling, `--disk-bytes-per-s` and
         `--link-bytes-per-s`, and their bursts), whatever share of the node the store is on.  Both R are the verifier's, which the
         prover's calibration can only raise: a prover reporting a slower read would shrink every term but the timing.
-        Each reading (`spec`, `measured`) also carries the session's terms (`audit.Ledger`) and its
+        Each reading (`spec`, `measured`) also carries the session's terms (`audit.GammaTerms`) and its
         certified bytes, `(1 − γ)·R·Σ`, the same in both readings: they are what a session over part of the node
         establishes, whose γ is the node's only once its store spans the node; and its timing term's parts
         (`timing_parts`) when the calibration has a bare read of each tier covering the registered store and a window

@@ -13,7 +13,8 @@ inputs = ["verity/__init__.py", "verity/errors.py", "verity/core/__init__.py", "
           "verity/ml/circuits", "verity/ml/crypto", "verity/ml/commitments", "verity/ml/randomness",
           # the registration log a store is read from (`audit.stored`), and the canonical JSON it imports
           "verity/core/protocols/registration.py", "verity/core/wire/__init__.py",
-          # the Lean verifier a session runs beside audit.Session, and the difftest a replay serves: their Lake packages
+          # the Lean verifier a session runs beside audit.AuditRun, and the difftest a replay serves: their Lake
+          # packages
           "verity/core/service/flock/Flock", "verity/core/service/flock/lakefile.toml",
           "verity/core/service/flock/lake-manifest.json", "verity/core/service/flock/lean-toolchain",
           "verity/core/primitives/randomness", "verity/core/difftest/lean", "verity/core/difftest/python",
