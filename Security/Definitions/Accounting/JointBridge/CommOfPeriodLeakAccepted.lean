@@ -53,7 +53,7 @@ structure RealizesCommOfPeriodLeakAccepted {ι : Type} {d : Device ι} {α : Typ
     {I : Type} {Ω : I → Type} [DecidableEq I] [∀ i, Fintype (Ω i)] {Coin Col T : Type} [Fintype Coin] [Nonempty Coin]
     [Inhabited Coin] [DecidableEq Col] [Zero Col]
     (r : PeriodRun d α C Ω) (K : ℝ) (H : Msg → Msg) (D : Deploy Coin Col T) (L Kₒ S : ℕ)
-    (lay : AuditStatement → Layout L S) (k : AuditStatement → ℕ) (δ : ℝ) (decode : List (ℕ × Col) → List T) (reg : AuditStatement → Finset ℕ)
+    (lay : AuditStatement → BoundaryGates L S) (k : AuditStatement → ℕ) (δ : ℝ) (decode : List (ℕ × Col) → List T) (reg : AuditStatement → Finset ℕ)
     (Dj n : ℕ) where
   /-- each window's registration -/
   sw : Fin n → AuditStatement

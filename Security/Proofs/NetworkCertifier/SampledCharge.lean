@@ -6,12 +6,12 @@ import Mathlib.Tactic.Ring
 # The sampled audit's charge (`Guarantees.SampledCharge`)
 
 A gate's value under held gates reads only the gates it depends on (`valOver_congr_inp`). The layout fits the program
-(`Layout.Fits`), so step `t`'s egress gates depend on no later step's ingress, and holding every committed gate of the
-faulty units at the value it takes over the whole horizon leaves each step's egress rows as they were (`valOver_hold`,
-`rows_holdAll`). So an accepted sequence is accepted with advice that holds each of those gates at one bit, and the count
-is Theorem 3's with that advice (`encard_acceptedFaulty_le`): the inputs besides the ingress, one bit per committed gate
-of the faulty units, and the jitter code, summed over the possible faulty sets (`encard_accSeqsSampled_le`). At
-`δ ≥ miss(1)` the only possible faulty set is empty (`eq_empty_of_mem_faultySets`).
+(`BoundaryGates.Fits`), so step `t`'s egress gates depend on no later step's ingress, and holding every committed gate
+of the faulty units at the value it takes over the whole horizon leaves each step's egress rows as they were
+(`valOver_hold`, `rows_holdAll`). So an accepted sequence is accepted with advice that holds each of those gates at one
+bit, and the count is Theorem 3's with that advice (`encard_acceptedFaulty_le`): the inputs besides the ingress, one bit
+per committed gate of the faulty units, and the jitter code, summed over the possible faulty sets
+(`encard_accSeqsSampled_le`). At `δ ≥ miss(1)` the only possible faulty set is empty (`eq_empty_of_mem_faultySets`).
 -/
 
 namespace NetTiming
@@ -102,12 +102,12 @@ theorem length_ingressUpTo {In : Type} (op : ℕ → List (Obs L K S) → In) (o
 
 /-- A gate that an egress gate of step `t` depends on reads the same input whether the ingress runs to `t` or further:
 by causality it is no ingress gate of a later step. -/
-theorem inputOf_eq_of_causal {lay : Layout L S} {C : Prog} {n t : ℕ} (hfits : lay.Fits C n) (ht : t < n)
+theorem inputOf_eq_of_causal {lay : BoundaryGates L S} {C : Prog} {n t : ℕ} (hfits : lay.Fits C n) (ht : t < n)
     {ℓ : Fin L} {σ : Fin S} {e : ℕ} (he : e ∈ slotGates (lay.egress t ℓ σ)) {ins ins' : List (List Bool)}
     (hlen : ins.length = t + 1) (hlen' : t + 1 ≤ ins'.length) (hlen'' : ins'.length ≤ n)
     (hpre : ∀ j ≤ t, ins.getD j [] = ins'.getD j []) (a : ℕ → Bool) {i : ℕ} (hi : Depends C i e) :
     lay.inputOf n ins a i = lay.inputOf n ins' a i := by
-  unfold Layout.inputOf
+  unfold BoundaryGates.inputOf
   have hnone : ∀ j, t + 1 ≤ j → j < ins'.length →
       ((lay.ingress j).findIdx? (· == i)).map (j, ·) = none := by
     intro j h1 h2
@@ -165,11 +165,11 @@ theorem rowOf_congr {val val' : ℕ → Bool} {p : Fin S → ℕ × List ℕ}
 
 /-- **The advice that holds each gate of `G` at one bit**: its value over the whole horizon, on the ingress `o`'s
 operator moves give. -/
-noncomputable def holdAll (C : Prog) (lay : Layout L S) (n : ℕ) (op : ℕ → List (Obs L K S) → List Bool)
+noncomputable def holdAll (C : Prog) (lay : BoundaryGates L S) (n : ℕ) (op : ℕ → List (Obs L K S) → List Bool)
     (o : List (Obs L K S)) (a : ℕ → Bool) (free : ℕ → Option Bool) (G : Finset ℕ) : ℕ → Option Bool :=
   fun g => if g ∈ G then some (valOver C (lay.inputOf n (ingressUpTo op o (n - 1)) a) free g) else none
 
-theorem rows_holdAll (C : Prog) (lay : Layout L S) (n : ℕ) (hfits : lay.Fits C n)
+theorem rows_holdAll (C : Prog) (lay : BoundaryGates L S) (n : ℕ) (hfits : lay.Fits C n)
     (op : ℕ → List (Obs L K S) → List Bool) (o : List (Obs L K S)) (p : (ℕ → Bool) × (ℕ → Option Bool))
     (G : Finset ℕ) (hG : ∀ g b, p.2 g = some b → g ∈ G) {t : ℕ} (ht : t < n) :
     (circuitProgram C lay n).rows t (ingressUpTo op o t) p =
@@ -213,7 +213,7 @@ theorem encard_biUnion_le {α ι : Type} [DecidableEq ι] (s : Finset ι) (f : �
 /-- **One faulty set's count.** The sequences accepted with the faulty set `F` number at most
 `#As · 2^(faultyBits F) · D^n`: each maps injectively to its inputs besides the ingress, the bit at which `holdAll` holds
 each committed gate of `F`'s units, and its jitter code. -/
-theorem encard_acceptedFaulty_le (C : Prog) (P : Partition) (lay : Layout L S) (n : ℕ) (hfits : lay.Fits C n)
+theorem encard_acceptedFaulty_le (C : Prog) (P : Partition) (lay : BoundaryGates L S) (n : ℕ) (hfits : lay.Fits C n)
     (As : Set (ℕ → Bool)) (F : Finset ℕ) (op : ℕ → List (Obs L K S) → List Bool) (D : ℕ) :
     {o : List (Obs L K S) | o.length = n ∧ (∀ x ∈ o, x.jitter < D) ∧ AcceptedFaulty C P lay n As F op o}.encard ≤
       As.encard * ((2 ^ faultyBits C P F * D ^ n : ℕ) : ℕ∞) := by
@@ -293,7 +293,7 @@ theorem eq_empty_of_mem_faultySets (d : Design) (P : Partition) {δ : ℝ} (hδ 
       (Set.finite_range _).bddAbove ⟨F, hsub, hcard⟩
   exact absurd hM (not_lt.mpr (hle.trans hδ))
 
-theorem encard_accSeqsSampled_le (C : Prog) (P : Partition) (d : Design) (lay : Layout L S) (n : ℕ)
+theorem encard_accSeqsSampled_le (C : Prog) (P : Partition) (d : Design) (lay : BoundaryGates L S) (n : ℕ)
     (hfits : lay.Fits C n) (δ : ℝ) (As : Set (ℕ → Bool)) (c : ℕ) (hAs : As.encard ≤ ((2 ^ c : ℕ) : ℕ∞)) (β : ℕ)
     (hβ : ∀ F ∈ faultySets d P δ, faultyBits C P F ≤ β) (op : ℕ → List (Obs L K S) → List Bool) (D : ℕ) :
     (AccSeqsSampled C P d lay n As δ op D).encard ≤

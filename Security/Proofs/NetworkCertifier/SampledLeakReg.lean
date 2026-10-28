@@ -52,9 +52,9 @@ theorem traceVal_of_val {C : Prog} {ref : ℕ → Option Bool} {g : ℕ} {b : Bo
 
 /-! ### Moving the advice to the registration's values -/
 
-theorem inputOf_congr_at {L S : ℕ} (lay : Layout L S) (k : ℕ) (ins : List (List Bool)) {a a' : ℕ → Bool} {g : ℕ}
+theorem inputOf_congr_at {L S : ℕ} (lay : BoundaryGates L S) (k : ℕ) (ins : List (List Bool)) {a a' : ℕ → Bool} {g : ℕ}
     (h : a g = a' g) : lay.inputOf k ins a g = lay.inputOf k ins a' g := by
-  unfold Layout.inputOf
+  unfold BoundaryGates.inputOf
   split
   · rfl
   · rw [h]
@@ -81,7 +81,7 @@ theorem valOver_congr_held (C : Prog) {inp inp' : ℕ → Bool} (free : ℕ → 
 /-- **At the registration's values**: on a partitioned program, `RAcc δ` at a trace that opens each registered input,
 where it opens one, to the registration's value `ρ` there gives the leak relation at the inputs pinned at `ρ`. -/
 theorem rLeak_reg_of_rAcc {H : Msg → Msg} {Cm : Commitment Bool} {parse : Msg → Option AuditStatement}
-    {partition : AuditStatement → Option Partition} {L K S : ℕ} {lay : AuditStatement → Layout L S} {k : AuditStatement → ℕ} {δ : ℝ} {Dj : ℕ}
+    {partition : AuditStatement → Option Partition} {L K S : ℕ} {lay : AuditStatement → BoundaryGates L S} {k : AuditStatement → ℕ} {δ : ℝ} {Dj : ℕ}
     (reg : AuditStatement → Finset ℕ) (ρ : AuditStatement → ℕ → Bool) {x : Msg} {w : Wit}
     (hpart : ∀ s P, parse x = some s → partition s = some P → P.Partitions s.prog)
     (hagree : ∀ s, parse x = some s → ∀ g ∈ reg s, ∀ b, w.val H Cm s g = some b → b = ρ s g)
@@ -239,7 +239,7 @@ openings `ops` of them. On the statements in scope whose registration opens thei
 `Pr[acc ∧ ¬RLeak] ≤ δ + ε_ks + ε_bind + Pr[B_reg]`, with the leak relation at the inputs pinned at the registration's
 values (`AsReg` at `regVal`), a set the statement and the registration fix. -/
 theorem sampledLeak_registered (hSA : Guarantees.SampledAuditAccepted) (H : Msg → Msg) (D : Deploy Coin Col T)
-    (hks : KS H D) (hb : D.commit.Binds H) (L K S : ℕ) (lay : AuditStatement → Layout L S) (k : AuditStatement → ℕ) (δ : ℝ)
+    (hks : KS H D) (hb : D.commit.Binds H) (L K S : ℕ) (lay : AuditStatement → BoundaryGates L S) (k : AuditStatement → ℕ) (δ : ℝ)
     (decode : List (ℕ × Col) → List T) (hδ : 0 ≤ δ)
     (hdec : Claims.Flock.ListWithin D.flock.len D.flock.enc D.flock.θ decode) (reg : AuditStatement → Finset ℕ)
     (ops : AuditStatement → List (Opening Bool)) (Dj : ℕ) (x : Msg) (hx : ScopeAcc D lay k x)
