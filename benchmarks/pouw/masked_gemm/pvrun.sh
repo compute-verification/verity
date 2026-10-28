@@ -6,7 +6,7 @@
 # check every gated arm against hashlib and numpy, and stable.py and pvtable.py render the tables (an arm whose gate
 # failed is marked). Clocks are read, never set.
 #
-#   research run --on vy-nebius-2 --project verity --campaign cmp-13 --source . --cwd clone --env GPU_LEASE_WHO=LANE \
+#   research run --on vy-nebius-2 --project verity --source . --cwd clone --env GPU_LEASE_WHO=LANE \
 #     --send benchmarks/pouw/masked_gemm/pvrun.sh -- bash -c 'bash "$RESEARCH_RUN_DIR/inputs/pvrun.sh"'
 # STAGE=build|all (default all); REPS (default 7); PV_S (default "2048 8192"); SHAPES; SG_ARMS; PV_ARMS.
 set -uo pipefail
