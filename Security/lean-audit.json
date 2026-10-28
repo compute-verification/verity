@@ -2493,6 +2493,10 @@
   "Pouw.SecurityProofs.Dither.WorkSound": {
    "honest": ["Pouw.SecurityProofs.Dither.WorkSound_honest"],
    "nontrivial": "Pouw.SecurityProofs.Dither.WorkSound_nontrivial"
+  },
+  "Pouw.SecurityProofs.OnsiteFreed": {
+   "honest": ["Pouw.SecurityProofs.OnsiteFreed_honest"],
+   "nontrivial": "Pouw.SecurityProofs.OnsiteFreed_nontrivial"
   }
  },
  "unwitnessed": {
@@ -10693,25 +10697,46 @@
    "owner": "@compute-research",
    "signature": [
     "Pouw.SecurityProofs.OnsiteFreed_nontrivial :",
-    "  Not",
-    "    (Pouw.Dither.FreedSound Pouw.Witness.tw Pouw.Witness.twRound 2",
-    "      (Pouw.Dither.onsiteVerdict (fun x x_1 x_2 x_3 => True) fun x x_1 x_2 x_3 => True) Pouw.Witness.twDev",
-    "      Pouw.Witness.twPd 1",
-    "      (fun x =>",
-    "        instHDiv.hDiv",
-    "          (Real.instMax.max 0",
-    "            (instHAdd.hAdd",
-    "              (instHSub.hSub",
-    "                (Finset.univ.sum fun r =>",
-    "                  instHMul.hMul (Pouw.Witness.twμ r) (instHMul.hMul 1 (Pouw.Witness.twPd.hon r)))",
-    "                Pouw.SecurityProofs.OnsiteFreedWitness.twF)",
-    "              (instHMul.hMul 0 0)))",
-    "          (Finset.univ.sum fun r => instHMul.hMul (Pouw.Witness.twμ r) (instHMul.hMul 1 (Pouw.Witness.twPd.hon r))))",
-    "      (Finset.univ.sum fun r => instHMul.hMul (Pouw.Witness.twμ r) (instHMul.hMul 1 (Pouw.Witness.twPd.hon r))) fun x =>",
-    "      instHAdd.hAdd (1 / 2) 0)"
+    "  And (Pouw.Witness.twPd.DualOpt Pouw.Witness.twμ 1)",
+    "    (And",
+    "      (Real.instLT.lt 0",
+    "        (Finset.univ.sum fun r => instHMul.hMul (Pouw.Witness.twμ r) (instHMul.hMul 1 (Pouw.Witness.twPd.hon r))))",
+    "      (And (Real.instLE.le 0 0)",
+    "        (And Pouw.Witness.tw.G1",
+    "          (And Pouw.Witness.tw.G2",
+    "            (And Pouw.Witness.tw.P1",
+    "              (And Pouw.Witness.tw.P2",
+    "                (And",
+    "                  (Not",
+    "                    (Pouw.Assumptions.RemoteWorkFloor Pouw.Witness.tw Pouw.Witness.twRound 2 (fun x x_1 x_2 x_3 => True)",
+    "                      Pouw.Witness.twμ Pouw.SecurityProofs.OnsiteFreedWitness.twF (1 / 2)))",
+    "                  (And",
+    "                    (Pouw.Assumptions.OutsourceWithinEgressPeriod Pouw.Witness.tw Pouw.Witness.twRound 2",
+    "                      Pouw.Witness.twμ 0)",
+    "                    (And",
+    "                      (Pouw.Assumptions.CertifiedImport Pouw.Witness.tw Pouw.Witness.twRound 2",
+    "                        (fun x x_1 x_2 x_3 => True) Pouw.Witness.twDev 0 0)",
+    "                      (Not",
+    "                        (Pouw.Dither.FreedSound Pouw.Witness.tw Pouw.Witness.twRound 2",
+    "                          (Pouw.Dither.onsiteVerdict (fun x x_1 x_2 x_3 => True) fun x x_1 x_2 x_3 => True)",
+    "                          Pouw.Witness.twDev Pouw.Witness.twPd 1",
+    "                          (fun x =>",
+    "                            instHDiv.hDiv",
+    "                              (Real.instMax.max 0",
+    "                                (instHAdd.hAdd",
+    "                                  (instHSub.hSub",
+    "                                    (Finset.univ.sum fun r =>",
+    "                                      instHMul.hMul (Pouw.Witness.twμ r) (instHMul.hMul 1 (Pouw.Witness.twPd.hon r)))",
+    "                                    Pouw.SecurityProofs.OnsiteFreedWitness.twF)",
+    "                                  (instHMul.hMul 0 0)))",
+    "                              (Finset.univ.sum fun r =>",
+    "                                instHMul.hMul (Pouw.Witness.twμ r) (instHMul.hMul 1 (Pouw.Witness.twPd.hon r))))",
+    "                          (Finset.univ.sum fun r =>",
+    "                            instHMul.hMul (Pouw.Witness.twμ r) (instHMul.hMul 1 (Pouw.Witness.twPd.hon r)))",
+    "                          fun x => instHAdd.hAdd (1 / 2) 0)))))))))))"
    ],
    "assumptions": [],
-   "type_hash": "d4c91cf9fdef3c6f85636bd6a7513a765e26a6093c62f9f031276985a6581a53"
+   "type_hash": "1a9cb1b3b3aabac715eed371c474396f7e59bcd28421604a60064ca0f59f9ab1"
   },
   "Pouw.SecurityProofs.PearlC.GammaFp4ChainOnlySm120IssueLut256_8192": {
    "owner": "@compute-accounting",
@@ -13369,7 +13394,7 @@
    "Pouw.SecurityProofs.Dither.WorkSound_nontrivial": "lemma: WorkSound's nontrivial witness (LEAN-66): its conclusion at the toy instance is false at the verifier that accepts everything; a counterexample about no protocol function (CMP-154).",
    "Pouw.SecurityProofs.OnsiteFreed": "frozen (verdict): a probability statement over quantified work and certifier verdicts whose soundness is the premises RemoteWorkFloor and CertifiedImport, not a property of one function; it gets the shape when the onsite protocol's verdict is a named Lean function the event reads.",
    "Pouw.SecurityProofs.OnsiteFreed_honest": "completeness: OnsiteFreed's honest witness: every premise, RemoteWorkFloor from WorkSound's conclusion, OutsourceWithinEgressPeriod from the per-program premise and CertifiedImport from ImportWithinCertifier among them, holds at the toy instance (Definitions.Pouw.Witness), the bound is below 1, and the onsite verdict accepts the honest prover, which exchanges nothing, so OnsiteFreed is not vacuous.",
-   "Pouw.SecurityProofs.OnsiteFreed_nontrivial": "lemma: OnsiteFreed's nontrivial witness: its conclusion at the toy instance is false at the verdicts that accept everything; a counterexample about no protocol function.",
+   "Pouw.SecurityProofs.OnsiteFreed_nontrivial": "lemma: OnsiteFreed's nontrivial witness, in the Lean check's three-part form: at the toy instance with a work check that accepts everything, every premise of OnsiteFreed but RemoteWorkFloor holds, RemoteWorkFloor fails (the quiet prover exchanges nothing, is accepted and spends 0 < F) and the conclusion fails; a counterexample about no protocol function.",
    "Pouw.SecurityProofs.outsourcePeriod_of_perProgram": "lemma: the per-program OutsourceWithinEgress implies its period form OutsourceWithinEgressPeriod, one premise's form from another's, about no protocol function's acceptance."
   },
   "conjectures": {
@@ -27313,6 +27338,7 @@
    "guarantees": [
     "Pouw.SecurityProofs.OnsiteFreed",
     "Pouw.SecurityProofs.OnsiteFreed_honest",
+    "Pouw.SecurityProofs.OnsiteFreed_nontrivial",
     "Pouw.SecurityProofs.outsourcePeriod_of_perProgram"
    ]
   },
