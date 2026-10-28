@@ -325,7 +325,7 @@ before any of its coins.
 
 The number of sampling blocks and of selected ones is bounded by nothing here. The clocks are the auditor's devices,
 and nothing here reads a time the prover reports. -/
-def Timed {G : Accel} {P : RoundProto} {nsb : ℕ} {Obs : Type} (verdict : Verdict P nsb Obs) (Pd : Period G) (Δ : ℝ)
+def Timed {G : Accel} {P : RoundProto} {nsb : ℕ} {Obs : Type} (verdict : Verdict P nsb Obs) (Pd : Jobs G) (Δ : ℝ)
     (opArrive t arrive : Obs → Fin nsb → ℝ) (sel : P.Chk → Prop) (τans : ℝ) (tc ansAt : Obs → Fin nsb → ℝ) :
     Verdict P nsb Obs :=
   fun o x tr ob => verdict o x tr ob ∧ (∀ b, 0 ≤ t ob b ∧ t ob b + Δ ≤ Pd.T ∧ arrive ob b ≤ t ob b + Δ) ∧
@@ -335,10 +335,10 @@ def Timed {G : Accel} {P : RoundProto} {nsb : ℕ} {Obs : Type} (verdict : Verdi
 
 /-- **An accepted period's sampling blocks' commit phases and work fit the period**: for every prover whose period the
 verdict accepts, its sampling blocks' timed use (`Prover.timedUse`: each block's commit phase and work, from the
-previous block's work to its commitment) is, resource by resource, at most the period's capacity `Period.cap`. This is what lets the headline count that use
+previous block's work to its commitment) is, resource by resource, at most the period's capacity `Jobs.cap`. This is what lets the headline count that use
 against the period's devices: it was done on them, inside the period. -/
 def TimedWorkFits (G : Accel) (P : RoundProto) (nsb : ℕ) {Obs : Type} (verdict : Verdict P nsb Obs)
-    (dev : Readings G P nsb Obs) (Pd : Period G) : Prop :=
+    (dev : Readings G P nsb Obs) (Pd : Jobs G) : Prop :=
   ∀ (A : Prover G P nsb) (o : P.Orc) (x : Fin nsb → P.Draw × P.Chk), A.Passes verdict dev o x →
     ∀ r, A.timedUse o x r ≤ Pd.cap r
 
