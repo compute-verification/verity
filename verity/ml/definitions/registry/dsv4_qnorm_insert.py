@@ -42,7 +42,7 @@ fmax(amax, 1e-4) * f32(1/448) (`mul.f32`); the scale's word rounded up to a powe
 inverse's `0x7F000000 - bits` (the PTX's shifts by 23; +inf amax gives the scale +inf, the inverse -inf); byte i
 `cvt.rn.satfinite.e4m3x2.f32`(x_i * inv) (no clamp); the weight f32(w) * f32(SCALE) * scale (`weights_out`, SCALE the host's
 `softmax_scale * head_scale` in double, narrowed to f32 at the launch).  Not GLM-5.3's `dsa.DsaIndexerQHead_v1` (bf16 cos_sin, `div.rn`
-by 448 and `__nv_log2f`), nor DSV4-IDX's MXFP4 path; `IndexerQFp8Kernel` is the kernel of record on sm_90 with CuTe DSL present.
+by 448 and `__nv_log2f`), nor the DeepSeek-V4 indexer's MXFP4 path; `IndexerQFp8Kernel` is the kernel of record on sm_90 with CuTe DSL present.
 """
 from __future__ import annotations
 
