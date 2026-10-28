@@ -84,7 +84,8 @@ if [ "${1:-}" != leased ]; then
   exit "$rc"
 fi
 
-# under the lease
+# under the lease; the server holds one socket a request in flight, so N past the default 1,024 files needs the hard limit
+ulimit -n "$(ulimit -Hn)"
 export HF_HOME=/workspace/hf HF_HUB_OFFLINE=1 CUDA_HOME=/usr/local/cuda-13.0
 export PATH=$VENV/bin:$CUDA_HOME/bin:$HOME/.elan/bin:$PATH
 export PYTHONPATH=$TREE:$TREE/integrations/vllm:$TREE/tools/research/src
