@@ -103,8 +103,8 @@ PUBLIC = (
 )
 #: the items a registration carries; the verdict and the draw come after it
 REGISTERED = ("work", "check", "sampling", "length", "root_W")
-#: what a registration made before the fixed-length rule carries: no `length`, so not of record
-LEGACY_REGISTERED = ("work", "check", "sampling", "root_W")
+#: what a registration made before the fixed-length rule carries: `REGISTERED` without `length`, so not of record
+LEGACY_REGISTERED = tuple(i for i in REGISTERED if i != "length")
 KINDS = ("call", "filler", "none")
 #: the check item's coin mode (`mode`), Compose's `CoinMode`
 COINS = "coins"
