@@ -8,9 +8,9 @@ window was drawn; the draw's bound at δ is C(n − b − 1, k) / C(n, k)'s; lea
 warden run's files, and refuses a sampled draw and a warden the scan's class doesn't serve; the job's copy of the
 gates' records into its output keeps no gate run's witness/. On the certifier-only path the report needs no scan,
 names what it stubs, and counts the rehearsal's refused runs and the I/O tie's verdict on each tampered run the check
-let through as negatives; d1's K is #4404's horizon count over the compute audits' draws and free inputs and the
-network's own terms. Given no N2 summary the report is the scan's alone, its verdict `scan accepted` (exit 0) when the
-honest round is accepted, every other refused and no witness piece reached the verifier, and `scan refused` (exit 1)
+let through as negatives; d1's K is all_protocols' monitoring-period count over the compute audits' draws and free
+inputs and the network's own terms. Given no N2 summary the report is the scan's alone, its verdict `scan accepted`
+(exit 0) when the honest round is accepted, every other refused and no witness piece reached the verifier, and `scan refused` (exit 1)
 on a wrong verdict, a leak or a missing record; the full report holds the scan to its negatives too. On certifier/v0's
 period answer, an accepted report writes the block record's certifier entry by `block_certifier.block_leg`, in the
 block record's schema, only when the answer is this chain's (its case's commitment the answer's, the chain's link,
@@ -242,7 +242,7 @@ def period():
 
 
 def _period(d: Path, case: dict, answer: dict) -> str:
-    """#4404's runner's pair, ``certifier.answer.json`` with ``certifier.case.json`` beside it."""
+    """all_protocols' runner's pair, ``certifier.answer.json`` with ``certifier.case.json`` beside it."""
     d.mkdir(parents=True, exist_ok=True)
     (d / "certifier.case.json").write_text(json.dumps(case))
     (d / "certifier.answer.json").write_text(json.dumps(answer))
@@ -317,7 +317,7 @@ def test_the_block_entry_is_written_only_for_this_chains_period_and_the_verifier
         "the case's link, session: not the chain's, so another certifier session's period")
     assert why(period_answer=_period(tmp_path / "mixed", foreign, answer)) == (
         "the case isn't the answer's: its commitment's digest is another")
-    rows = period.case("accept", 0, "rows")
+    rows = period.build("rows-honest", 0, small=True)
     assert why(period_answer=_period(tmp_path / "rows", rows, period.reference(rows))).startswith("a rows-form answer")
     assert why(period_answer=_period(tmp_path / "k", case, answer | {"public": answer["public"] | {"K": 1}})) == (
         f"network-period check on the case answers accept with K {answer['public']['K']}, not the given answer: it "
@@ -413,12 +413,12 @@ def test_leak_counts_the_scans_terms_on_the_warden_run(tmp_path):
     (run / "out/deployment.json").write_text(json.dumps({"params": asdict(sz.PARAMS)}))
     (run / "end.json").write_text(json.dumps({"run": "c1", "verdict": {"windows": 75, "requests": 100}}))
     doc = cr.leak(run, {"draw": {"honest": 64}, "T": 32})
-    assert doc["widths"] == {"NS": 149_648, "NP": 4_480, "NV": 4_832, "egress_row": 65_536}
+    assert doc["widths"] == {"NS": 149_648, "NP": 4_496, "NV": 4_832, "egress_row": 65_536}
     assert doc["terms"]["b"] == 154_480 and doc["terms"]["fmax"] == {"0.01": 5, "1e-06": 14}
     week = {r["prog"]: r for r in doc["rows"] if r["period"] == "week" and r["machines"] == 1}
     lw, rate, cap = 604_800 / 3.2, 100 / 75, math.log2(66)
-    assert week["registered"]["per_period"] == pytest.approx(lw * (32 * 4_480 + rate * cap))
-    assert week["anchors"]["per_link_window"] == pytest.approx(rate * (1_120 + cap))
+    assert week["registered"]["per_period"] == pytest.approx(lw * (32 * 4_496 + rate * cap))
+    assert week["anchors"]["per_link_window"] == pytest.approx(rate * (1_121 + cap))
     assert week["anchors"]["pooled"]["0.01"] - week["anchors"]["per_period"] == pytest.approx(
         5 * (154_480 + math.log2(lw * 64 + 1)))
     with pytest.raises(SystemExit, match="drew 16 of 64"):
