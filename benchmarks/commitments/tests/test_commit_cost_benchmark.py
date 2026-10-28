@@ -73,6 +73,15 @@ def test_hiding_leaf_cost_writes_a_valid_result(tmp_path: Path) -> None:
     assert tool.resolve_params(["--rows", "64"], ROOT)[1] == {"row_bytes": "4,256,1536,3072,4096,8192", "rows": 64}
 
 
+def test_the_ripple_carry_model_counts_sampled_proofs_sha512_ands() -> None:
+    """hiding_leaf_cost's model of a SHA-512 compression (80 rounds of 7 additions, Ch and Maj, 64 schedule words of 3
+    additions and 8 feed-forward additions, a w-bit addition w - 1 ANDs at w = 64) gives the count it reads."""
+    from verity.core.protocols.sampled_proofs.optimize import SHA512_ANDS
+
+    add64 = 63
+    assert 80 * (7 * add64 + 64 + 64) + 64 * 3 * add64 + 8 * add64 == SHA512_ANDS
+
+
 @pytest.mark.slow  # the suite's first import of verity_vllm: 8-9 s on the shared pod, a fraction of a second warm
 def test_step_root_cost_writes_a_valid_result_whose_root_is_the_references(tmp_path: Path) -> None:
     spec = importlib.util.spec_from_file_location("step_root_cost", ROOT / "benchmarks" / "commitments" / "step_root_cost.py")
