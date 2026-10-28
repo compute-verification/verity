@@ -14,7 +14,8 @@ import types
 
 import numpy as np
 import pytest
-from verity.core.protocols.pouw.audit import Epoch, Workload, activation_binding, commit_rows, weight_binding, weights_root
+from verity.core.protocols.pouw.audit import (HM96, HM96_WEIGHTS, Epoch, Workload, activation_binding, commit_rows, weight_binding,
+                                              weights_root)
 from verity.core.protocols.pouw.coins import Challenger, CoinCommitment, CoinOpening, coin_reason
 from verity.core.protocols.pouw.protocol import Context as UnitContext
 from verity.core.protocols.pouw.protocol import DomainError, Matmul, Shape, Tile
@@ -195,8 +196,11 @@ def test_weights_are_committed_before_the_salt_and_the_int7_linear_is_served_exa
     settings = {"pouw": {"coins": coins, "transcript_dir": str(tmp_path)}}
     comp = PO.install(model, _serve("pouw:ncp-v1", settings=settings))
     opt = comp.get("pouw")
-    roots = {w: commit_rows(weight_binding(w), -2, [r.tobytes() for r in pouw.quantize(m)[0]]).commitment.root
-             for w, m in enumerate((w0, w1))}
+    key = pouw._SALT_KEYS["pouw:ncp-v1"]
+    rows = {w: [r.tobytes() for r in pouw.quantize(m)[0]] for w, m in enumerate((w0, w1))}
+    roots = {w: commit_rows(weight_binding(w), -2, r, HM96, key, HM96_WEIGHTS + w).commitment.root for w, r in rows.items()}
+    plain = {commit_rows(weight_binding(w), -2, r, h, public=True).commitment.root for w, r in rows.items() for h in ("sha256", "sha512")}
+    assert not plain & set(roots.values())                   # hiding: the weights' candidates alone don't give the roots
     declared = Workload((Matmul(0, Shape(16, K, N), 0), Matmul(1, Shape(16, N, N + 64), 1)))
     c = opt.commitment()
     assert comp.weight_commitments["pouw:ncp-v1"]["weight_roots"] == {str(w): r.hex() for w, r in roots.items()}
@@ -231,7 +235,7 @@ def test_the_executor_is_the_schemes_reference_bit_for_bit():
     b = rng.integers(-63, 64, (N, K)).astype(np.int8)
     u = Matmul(7, Shape(16, K, N), 3)
     rows = [r.tobytes() for r in a]
-    ctx = UnitContext(b"\x11" * 32, u, commit_rows(activation_binding(b"\x11" * 32, 7), 7, rows).commitment.root, b"\x22" * 32)
+    ctx = UnitContext(b"\x11" * 32, u, commit_rows(activation_binding(b"\x11" * 32, 7), 7, rows, HM96, bytes(32), 7).commitment.root, b"\x22" * 32)
     noise = s.noise(ctx)
     got = pouw.ncp_tiles(s, ctx, noise, a, pouw.Operands(np.ones(N, np.float32), *pouw.stack_y(s, ctx.salt, u.weight, b, noise)))
     tile = Tile(tuple(range(16)), tuple(range(48, 64)))

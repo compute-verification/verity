@@ -75,6 +75,9 @@ def test_the_tree_cases_reach_every_branch():
     assert any("ok" in c["python"] and c["in"]["hash"] == "hm96-sha512" and not c["in"]["digests"]
                and any(len(r) > 2 * 2048 for r in c["in"]["rows"]) for c in commits), "a row of three segments"
     assert any("error" in c["python"] for c in commits)
+    for h in ("sha256", "sha512"):
+        refused = [c for c in commits if c["in"]["hash"] == h and not c["in"]["public"]]
+        assert refused and all(c["python"] == {"error": "ProtocolError"} for c in refused), h
     verdicts = collections.Counter(json.dumps(c["python"]) for c in _of("verify"))
     assert {'{"ok": true}', '{"ok": false}', '{"error": "ProtocolError"}'} <= set(verdicts)
     assert any(c["in"]["hash"] == "hm96-sha512" and c["python"] == {"ok": True} for c in _of("verify"))
