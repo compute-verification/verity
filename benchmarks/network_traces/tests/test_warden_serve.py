@@ -687,10 +687,10 @@ def test_a_window_with_a_refused_connection_is_certified_nowhere(tmp_path, proce
 def test_a_windows_commit_and_signatures_move_no_tick_past_its_slack_in_the_publisher_process(tmp_path):
     """A window's commit that takes `SLOW_COMMIT_S` of its process's time (`slow_commit`), run in the warden's process
     as the inline `Publisher` runs it, puts the ticks after the window's end past their slack: the next window faults
-    (`monitor-unavailable`) and the check refuses it. In `serve`'s `PublisherProcess` the same commit runs in the
-    spawned process, which signs and commits from the rows released to it: every tick is on time, and the check
-    accepts every link-window, certified and registered. A commit that fails there fails `close`, and the warden's
-    process doesn't wait on it."""
+    (`monitor-unavailable`), the issuer certifies none of its records, and the check refuses it. In `serve`'s
+    `PublisherProcess` the same commit runs in the spawned process, which signs and commits from the rows released to
+    it: every tick is on time, and the check accepts every link-window, certified and registered. A commit that fails
+    there fails `close`, and the warden's process doesn't wait on it."""
     requests = [ws.http_request({"prompt": "x" * n}, "h:1") for n in (10, 200, 30)]
     responses = [_response([" a", " b"]), _response([" word"] * 40), _response([])]
     runs = {name: tmp_path / name for name in ("inline", "process", "refusing")}
@@ -700,8 +700,11 @@ def test_a_windows_commit_and_signatures_move_no_tick_past_its_slack_in_the_publ
     inline = _run(runs["inline"], tmp_path / "inline-key", requests, responses, windows=2, commit=slow_commit)
     late = [t for t, x in enumerate(inline.lateness) if x > inline.slack]
     assert late[0] == PARAMS.window and max(inline.lateness) > SLOW_COMMIT_S
-    problems = ws.check(runs["inline"])["problems"]
-    assert {f"{name} window 1: {Reason.MONITOR_UNAVAILABLE.value}" for name in ws.CERTIFIED} <= set(problems)
+    result = ws.check(runs["inline"])
+    assert {f"{name} window 1 isn't certified" for name in ws.CERTIFIED} <= set(result["problems"])
+    assert {(x["record"], x["status"]) for x in result["windows"] if x["window"] == 1} == \
+        {(name, Reason.MONITOR_UNAVAILABLE.value) for name in ws.CERTIFIED}
+    assert sorted(w for *_, w in result["summary"]["signer_refused"]) == [1] * len(ws.CERTIFIED)
 
     process = _run(runs["process"], tmp_path / "process-key", requests, responses, windows=2, commit=slow_commit,
                    process=True)
