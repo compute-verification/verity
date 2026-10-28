@@ -88,8 +88,10 @@ ALLOWED = {
     # trees, draws from the verifier's secret, and records its openings as an integrity profile.  Its coins are the
     # proof service's one challenger's (`sampled_proofs.challenger`).
     # The remote bandwidth audit is over the P2-encoded weights store, and a P2 store is PoUS's `C*`, under its setup and `vk`, reused as they are (`p2.py`).
+    # The session's verifier and prover are parties of the deployment layer (`session_parties`), their messages the wire's.
     "core.protocols.remote_bandwidth": {"ml.commitments", "ml.randomness", "core.protocols.profile",
-                                        "core.protocols.sampled_proofs", "core.protocols.pous"},
+                                        "core.protocols.sampled_proofs", "core.protocols.pous", "core.wire",
+                                        "core.deploy"},
     # PoUW's tile check is a sampled proof (`.agents/skills/friction/SKILL.md`).  Its schemes and
     # circuits are stated over the catalog's silicon models and Definitions (the tensor-core steps, FP32 and the casts its
     # verifier recomputes): the one edge into the catalog.
