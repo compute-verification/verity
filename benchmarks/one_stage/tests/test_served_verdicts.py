@@ -23,6 +23,7 @@ import itertools
 import json
 import os
 import shlex
+import shutil
 import subprocess
 import sys
 import tarfile
@@ -625,11 +626,13 @@ def test_the_preflight_refuses_a_front_flag_the_trees_front_does_not_take_and_a_
 
 FAKE_COMPOSITE = '''import json, sys
 from pathlib import Path
-COMPONENTS = {"onsite": ("verity/pous/p2/v4/run", "verity/wipe/v0"), "remote": ("verity/pouw/v1",)}
-REGISTRATION = "verity/nci/v1"
+COMPONENTS = {"onsite": ("verity/pous/p2/v4/run", "verity/wipe/v0"),
+              "remote": ("verity/pouw/v1", "verity/sampled-proofs/one-stage/v2")}
 if __name__ == "__main__":
     a = sys.argv[1:]
     Path(a[a.index("--private-out") + 1]).mkdir(parents=True)
+    Path(a[a.index("--public-out") + 1]).mkdir(parents=True)
+    Path(a[a.index("--public-out") + 1], "composite.json").write_text(json.dumps({"product": a[0]}))
     cases = [a[i + 1] for i, x in enumerate(a) if x == "--cases"]
     Path(a[a.index("--private-out") + 1], "argv.json").write_text(json.dumps(cases))
     print("PIECE verity/pous/p2/v4/run accept 0123456789abcdef0123")
@@ -640,11 +643,12 @@ if __name__ == "__main__":
 
 
 def test_the_composite_step_publishes_only_each_cases_verdict_and_each_products_lean_verdict(tmp_path):
-    """served_composite.sh with a stand-in lake, served_case.sh and composite.py: PoUS's case is written under the serve
-    dir's private dir with both Lean answers built and passed; onsite gets the cases of its own subprotocols and remote
-    none of them; OUT/verdicts.txt gets the CASE line's protocol and verdict and each product's NOT_ESTABLISHED and VERDICT
-    lines, never a PIECE line, a log or a path; and without composite.py in the tree it says so and fails, since no Lean
-    answered."""
+    """served_composite.sh with a stand-in lake, served_case.sh, served_cases.py and composite.py: PoUS's case is written
+    under the serve dir's private dir with both Lean answers built and passed, and served_cases.py's under it, given no α
+    or Γ while ALPHA and GAMMA are unset; each product gets the cases of its own subprotocols; OUT/verdicts.txt gets each
+    CASE line's protocol and verdict, each case not written by its protocol, and each product's NOT_ESTABLISHED and
+    VERDICT lines, never a PIECE line, a reason, a log or a path; each product's public output is OUT/composite/PRODUCT;
+    and without composite.py in the tree it says so and fails, since no Lean answered."""
     tree, bin_, d, out = tmp_path / "tree", tmp_path / "bin", tmp_path / "serve", tmp_path / "out"
     out.mkdir()
     _script(bin_ / "lake", 'mkdir -p .lake/build/bin && touch ".lake/build/bin/$2"')
@@ -660,6 +664,17 @@ echo 'CASE {{"piece": "{d}/private/pous/w0", "protocol": "verity/pous/p2/v4/run"
         (tree / "verity" / "core" / pkg).mkdir(parents=True)
     (tree / "benchmarks" / "one_stage").mkdir(parents=True)
     (tree / "benchmarks" / "one_stage" / "composite.py").write_text(FAKE_COMPOSITE)
+    v2 = d / "private" / "sampled-proofs-v2"
+    (tree / "benchmarks" / "one_stage" / "served_cases.py").write_text(f'''import json, sys
+from pathlib import Path
+assert sys.argv[1:] == ["--serve-dir", "{d}", "--private", "{d}/private"], sys.argv
+Path("{v2}").mkdir(parents=True)
+Path("{v2}", "case.json").write_text(json.dumps({{"evidence": "beef"}}))
+Path("{v2}", "answer.json").write_text(json.dumps({{"protocol": "verity/sampled-proofs/one-stage/v2", "verdict": "accept"}}))
+print("CASE " + json.dumps({{"protocol": "verity/sampled-proofs/one-stage/v2", "verdict": "accept", "dir": "{v2}"}}))
+print("NOT_WRITTEN " + json.dumps({{"protocol": "verity/inference-only/v0", "reason": "no alpha 0123456789abcdef"}}))
+sys.exit(1)
+''')
     env = {"PATH": f"{bin_}:{os.defpath}", "HOME": str(tmp_path), "PY": sys.executable, "TPY": sys.executable}
     run = lambda: subprocess.run(["bash", str(HERE.parent / "served_composite.sh"), str(d), str(out)], cwd=tree, env=env,  # noqa: E731
                                  check=False, capture_output=True, text=True)
@@ -667,14 +682,20 @@ echo 'CASE {{"piece": "{d}/private/pous/w0", "protocol": "verity/pous/p2/v4/run"
     assert r.returncode == 0, r.stderr
     assert (out / "verdicts.txt").read_text().splitlines() == [
         "COMPOSITE CASE verity/pous/p2/v4/run accept", "COMPOSITE CASES: served_case.sh exit 0",
+        "COMPOSITE CASE verity/sampled-proofs/one-stage/v2 accept", "COMPOSITE NOT_WRITTEN verity/inference-only/v0",
+        "COMPOSITE CASES: served_cases.py exit 1, its log on the node",
         "COMPOSITE remote: NOT_ESTABLISHED missing verity/wipe/v0", "COMPOSITE remote: VERDICT verity/remote/v0 reject components",
         "COMPOSITE onsite: NOT_ESTABLISHED missing verity/wipe/v0", "COMPOSITE onsite: VERDICT verity/onsite/v0 reject components"]
     p = d / "private" / "composite"
-    assert json.loads((p / "remote" / "private" / "argv.json").read_text()) == []
+    assert json.loads((p / "remote" / "private" / "argv.json").read_text()) == [str(v2)]
     assert json.loads((p / "onsite" / "private" / "argv.json").read_text()) == [str(d / "private" / "pous" / "w0")]
-    assert oct((d / "private").stat().st_mode & 0o777) == "0o700" and list(out.iterdir()) == [out / "verdicts.txt"]
+    assert oct((d / "private").stat().st_mode & 0o777) == "0o700"
+    assert sorted(out.iterdir()) == [out / "composite", out / "verdicts.txt"]
+    assert sorted(f.relative_to(out).as_posix() for f in (out / "composite").rglob("*") if f.is_file()) == [
+        "composite/onsite/composite.json", "composite/remote/composite.json"]
     (tree / "benchmarks" / "one_stage" / "composite.py").unlink()
     (out / "verdicts.txt").unlink()
+    shutil.rmtree(out / "composite")
     assert run().returncode == 1
     assert (out / "verdicts.txt").read_text() == "COMPOSITE: not run, this tree has no benchmarks/one_stage/composite.py\n"
 
