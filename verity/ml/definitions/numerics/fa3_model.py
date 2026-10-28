@@ -74,7 +74,7 @@ def kblock_n_for(D: int, seqlen_q: int, qh_per_kvh: int) -> int:
     seqlen_q * qheads_per_kvhead <= 64`` (``hopper/heuristics.h``; ``seqlen_q`` = the launch's max_seqlen_q under varlen): D <= 64 ->
     192 under one MMA warpgroup (64 x 192 tile) else 128 (192 x 128 tile); D <= 96 -> 128 (paged non-TMA); D <= 128 -> 128 (causal);
     D = 256 -> 80 (the 128 x 80 tile, paged or not).  Any other head dim is refused.  The tile holds at more head dims than the
-    arithmetic below models (`SUPPORTED_HEAD_DIMS`), which `attention_rows` and `coverage` refuse on their own."""
+    arithmetic below models (`SUPPORTED_HEAD_DIMS`), which `modelled_tile`, `attention_rows` and `coverage` refuse on their own."""
     D, seqlen_q, qh = int(D), int(seqlen_q), int(qh_per_kvh)
     one_wg = D in (64, 128) and seqlen_q * qh <= 64
     if D <= 64:
@@ -100,6 +100,13 @@ def kblock_m_for(D: int, seqlen_q: int, qh_per_kvh: int) -> int:
     if D == 256:
         return KBLOCK_M_PREFILL
     raise ValueError(f"FA3 head dim {D}: no kBlockM rule (tile_size.h is followed at D <= 128 and D = 256)")
+
+
+def modelled_tile(D: int, seqlen_q: int, qh_per_kvh: int) -> tuple[int, int]:
+    """(kBlockM, kBlockN) of the launch, at a head dim this module models (`SUPPORTED_HEAD_DIMS`); refused at any other."""
+    if int(D) not in SUPPORTED_HEAD_DIMS:
+        raise ValueError(f"FA3 head dim {D}: not modelled (supported {SUPPORTED_HEAD_DIMS})")
+    return kblock_m_for(D, seqlen_q, qh_per_kvh), kblock_n_for(D, seqlen_q, qh_per_kvh)
 
 KERNEL = {
     "source": "vllm-flash-attn (vllm-project/flash-attention) commit 506341a143fcabd4bb79052a7605ada727d6b3f5, hopper/ (FA3)",
@@ -199,7 +206,7 @@ def split_plan(seqlens: list[int] | np.ndarray, H: int, KVH: int, D: int, *, num
     if not L or len(L) > PREPARE_VARLEN_MAX_BATCHES_1CTA:
         return 1, [1] * len(L)
     max_q = max(L)
-    BM, BN = kblock_m_for(D, max_q, g), kblock_n_for(D, max_q, g)
+    BM, BN = modelled_tile(D, max_q, g)
     nmb_static = -(-(max_q * g) // BM)
     nnb_static = -(-max_q // BN)
     static = num_splits_heuristic(int(KVH) * nmb_static, int(num_sms), nnb_static, nmb_static, max_q * (int(D) + Dv) * 2, True, 128)
