@@ -12,9 +12,9 @@ alternating), at Llama-3.1-8B's linears (qkv, o, gate_up, down) at a ``--slot``-
 Each time is CUDA events around the work on torch's stream, the median over ``--reps`` after a warm-up, given per call
 (``ms``), per unit (``ns_unit``) and per decode step of ``--layers`` layers (``step_ms``). Before timing, each linear's
 J10-R units-kernel receipts are held to the torch chain's over hashlib's stream, word for word, and noise.cu's J10-R
-stream to hashlib's. Writes ``--out`` (JSON) and prints a line a linear.
+stream to hashlib's. Writes ``--out`` (JSON) and prints a line a linear. On an RTX PRO 6000 node (NODE):
 
-    research run --on vy-nebius-2 --pool research --mem-gb 48 --cwd source --source . --as LANE --env JOB=tests -- \
+    research run --on NODE --pool research --mem-gb 48 --cwd source --source . --as LANE --env JOB=tests -- \
       bash benchmarks/pouw/served_h1/j10r_gpu.sh
 """
 from __future__ import annotations

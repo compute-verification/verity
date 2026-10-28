@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
 # served_passes.py on a node, from the run tree's root, in the harness's environment (benchmarks/harness/env.sh):
-# (vy-nebius-2 takes a run only through a slot of its gpu pool, and its GPUs from gpu-lease):
-#   research run --on vy-nebius-2 --source . --project verity --campaign pouw-served --mem-gb 96 -- \
+# (the RTX PRO 6000 node, NODE, takes a run only through a slot of its gpu pool, and its GPUs from gpu-lease):
+#   research run --on NODE --source . --project verity --campaign pouw-served --mem-gb 96 -- \
 #     env CHECK_SLOTS=/workspace/research/locks/gpu/slots python3 tools/verity/check/slot.py --by LANE -- \
 #     /workspace/pouw/infra/bin/gpu-lease 1 --wait --max-min 90 --mem-gb 96 -- env VERITY_BENCH_VENV=/workspace/jobs/venv312 \
 #     bash benchmarks/pouw/pearl_c_vllm/served_passes.sh serve [served_passes.py serve's options]
-#   research run --on vy-nebius-2 --source . --project verity --campaign pouw-served --mem-gb 64 -- \
+#   research run --on NODE --source . --project verity --campaign pouw-served --mem-gb 64 -- \
 #     env CHECK_SLOTS=/workspace/research/locks/gpu/slots python3 tools/verity/check/slot.py --by LANE -- \
 #     env VERITY_BENCH_VENV=/workspace/jobs/venv312 PASSES=<the serve run's passes directory> \
 #     bash benchmarks/pouw/pearl_c_vllm/served_passes.sh verify [--fast]

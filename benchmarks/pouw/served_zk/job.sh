@@ -2,8 +2,8 @@
 # served_zk's window through the proof service on a node's CPUs: SZ_CALLS served calls of a retained request committed as
 # one audit window (padded with filler tiles to a grid level), registered with exactly PoUW's public items, received,
 # drawn subset:K' once, every drawn tile proved hidden and opened, a filler tile proved beside them, and the outcome; after
-# serve.sh's run SERVED_RUN retained its two requests under $WORK/passes/$SERVED_RUN.
-#   research run --on vy-nebius-2 --project verity --campaign pouw --source <tree> --cwd source --declared-output 'out/*' \
+# serve.sh's run SERVED_RUN retained its two requests under $WORK/passes/$SERVED_RUN, on that run's node (NODE).
+#   research run --on NODE --project verity --campaign pouw --source <tree> --cwd source --declared-output 'out/*' \
 #     --declared-output 'out/*/*' --env SERVED_RUN=<serve.sh run id> --env HZ_MEM_GB=<GB> \
 #     --env HZ_CACHE=/workspace/research/cache/pouw-hidden-zk --env HZ_JOB=benchmarks/pouw/served_zk/job.sh -- bash benchmarks/pouw/hidden_zk/scope.sh CPUS GB
 # The drawn units run as a parallel fan-out across the scope's cores (step 5): SZ_JOBS workers at once (default HZ_MEM_GB * 3/4 /

@@ -37,11 +37,11 @@ Writes ``<out>/<label>.tiles.jsonl`` (a line a tile, as each finishes; the label
 the measurement is of the committed pass.
 
 **On a served pass.** `window.sh` keeps each served window's verify pass outside its run directory, under
-``$WORK/passes/<run id>/{prefill,decode}/manifest.json`` on node 2 (``WORK=/workspace/pouw/mvp-e2e``, about 45 GB a run,
+``$WORK/passes/<run id>/{prefill,decode}/manifest.json`` on the window's node, NODE (``WORK=/workspace/pouw/mvp-e2e``, about 45 GB a run,
 so a pass lasts only until it is cleaned).  Run on the machine that holds it, through the queue's CPU cores, with one BLAS
 thread a worker (``--jobs`` defaults to the CPUs this process may use)::
 
-  research run --on vy-nebius-2 --queue --phase cpu --cpus 44 --mem-gb 64 --preemptible --custody-r2 --custody-ttl 8h \\
+  research run --on NODE --queue --phase cpu --cpus 44 --mem-gb 64 --preemptible --custody-r2 --custody-ttl 8h \\
       --project verity --campaign pouw --question Q --declared-output 'out/*' -- bash -c \\
       'export OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 MKL_NUM_THREADS=1 \\
          PYTHONPATH=$PWD:$PWD/tools/config:$PWD/integrations/vllm:$PWD/benchmarks/pouw
