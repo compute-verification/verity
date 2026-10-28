@@ -169,45 +169,53 @@ template <int CL> DEV void release(u32 bar) {
 }
 
 // ---------------------------------------------------------------- the GEMM
-struct Stream {
-  int KB, rows_u, tiles_n, units, first_u, step_u, rank, group;
-  long n;  // k-blocks in this CTA's stream
+template <int CL> DEV int units_of(const Params& p) { return p.M / TM / CL * (p.N / BN); }
+template <int CL> DEV int rank_of() { return CL == 1 ? 0 : (int)cta_rank(); }
+
+// tile t of the passes: its tile row and column
+template <int CL> DEV void tile_of(const Params& p, int t, int& tm, int& tn) {
+  raster(t % units_of<CL>(p), p.M / TM / CL, p.N / BN, p.group, tm, tn);
+  tm = tm * CL + rank_of<CL>();
+}
+
+// thread 0's next load, kept in shared memory so that the producer holds no registers beside the accumulators
+struct Cursor {
+  int t, kb, tm, tn;
+  u32 e;  // its element of the CTA's k-block stream
 };
 
-// element e of the CTA's k-block stream into stage e % STAGES, once every warp (both CTAs' with CL = 2) released it
-template <int CL> DEV void produce(const Params& p, const Stream& q, u32 base, u32 bars, long e) {
-  const int s = (int)(e % STAGES);
-  const u32 round = (u32)(e / STAGES), st = base + s * STAGE, full = bars + 8 * s;
+// the cursor's element into stage e % STAGES once every warp (both CTAs' with CL = 2) released it, then the next
+template <int CL> DEV void produce(const Params& p, Cursor& c, u32 base, u32 bars) {
+  if (c.t >= units_of<CL>(p) * p.passes) return;
+  const u32 s = c.e % STAGES, st = base + s * STAGE, full = bars + 8 * s;
   if constexpr (CL == 1)
-    mbar_wait(bars + 8 * (STAGES + s), (round & 1) ^ 1);
+    mbar_wait(bars + 8 * (STAGES + s), ((c.e / STAGES) & 1) ^ 1);
   else
-    mbar_wait_cluster(bars + 8 * (STAGES + s), (round & 1) ^ 1);
-  const long it = e / q.KB;
-  const int kb = (int)(e - it * q.KB);
-  int tm, tn;
-  raster((int)((q.first_u + it * q.step_u) % q.units), q.rows_u, q.tiles_n, q.group, tm, tn);
-  tm = tm * CL + q.rank;
+    mbar_wait_cluster(bars + 8 * (STAGES + s), ((c.e / STAGES) & 1) ^ 1);
   constexpr u32 B_PART = BN / CL * BK;
+  const int rank = rank_of<CL>();
   mbar_expect_tx(full, STAGE);
-  tma_load(st, &p.a, full, kb * BK, tm * TM);
-  const u32 bdst = st + A_BYTES + q.rank * B_PART;
-  const int brow = tn * BN + q.rank * (BN / CL);
+  tma_load(st, &p.a, full, c.kb * BK, c.tm * TM);
+  const u32 bdst = st + A_BYTES + rank * B_PART;
+  const int brow = c.tn * BN + rank * (BN / CL);
   if constexpr (CL == 1)
-    tma_load(bdst, &p.b, full, kb * BK, brow);
+    tma_load(bdst, &p.b, full, c.kb * BK, brow);
   else
-    tma_load_mc(bdst, &p.b, full, kb * BK, brow, 0x3);
+    tma_load_mc(bdst, &p.b, full, c.kb * BK, brow, 0x3);
+  c.e++;
+  if (++c.kb == p.K / BK) {
+    c.kb = 0;
+    c.t += gridDim.x / CL;
+    tile_of<CL>(p, c.t, c.tm, c.tn);
+  }
 }
 
 template <int CL> DEV void gemm_body(const Params& p) {
   extern __shared__ __align__(1024) uint8_t smem[];
+  __shared__ Cursor cur;
   const u32 base = (smem_at(smem) + 1023) & ~1023u, bars = base + STAGES * STAGE;
   const int tid = threadIdx.x, warp = tid / 32, lane = tid % 32, wg = warp / 4;
-  const int KB = p.K / BK, tiles_m = p.M / TM, tiles_n = p.N / BN, rows_u = tiles_m / CL, units = rows_u * tiles_n;
-  const long total = (long)units * p.passes;
-  const int rank = CL == 1 ? 0 : (int)cta_rank(), first_u = blockIdx.x / CL, step_u = gridDim.x / CL;
-  const Stream q{KB, rows_u, tiles_n, units, first_u, step_u, rank, p.group,
-                 first_u < total ? (long)KB * ((total - first_u + step_u - 1) / step_u) : 0};
-  u64 t0 = 0, c0 = 0;
+  const int KB = p.K / BK, total = units_of<CL>(p) * p.passes, first_u = blockIdx.x / CL, step_u = gridDim.x / CL;
   if (tid == 0) {
     for (int s = 0; s < STAGES; s++) {
       mbar_init(bars + 8 * s, 1);
@@ -215,8 +223,8 @@ template <int CL> DEV void gemm_body(const Params& p) {
     }
     asm volatile("fence.mbarrier_init.release.cluster;" ::: "memory");
     atomicAdd(p.started, 1);
-    t0 = gtimer();
-    c0 = clock64();
+    p.stamps[blockIdx.x].t0 = gtimer();
+    p.stamps[blockIdx.x].c0 = clock64();
   }
   if constexpr (CL == 1)
     __syncthreads();
@@ -226,28 +234,28 @@ template <int CL> DEV void gemm_body(const Params& p) {
   if (tid == 0) {
     tma_prefetch(&p.a);
     tma_prefetch(&p.b);
-    for (long e = 0; e < STAGES && e < q.n; e++) produce<CL>(p, q, base, bars, e);
+    cur.t = first_u;
+    cur.kb = 0;
+    cur.e = 0;
+    tile_of<CL>(p, first_u, cur.tm, cur.tn);
+    for (int i = 0; i < STAGES; i++) produce<CL>(p, cur, base, bars);
   }
   __syncwarp();
   {
     const int x = tid % 128;
     int n = 0, li = 0;
-    long g = 0;  // the stream's next element
+    u32 g = 0;  // the stream's next element
     int32_t d[NA];
-    // release element g - 1 (its wgmma has retired) and load element g - 1 + STAGES into its stage
+    // release element g - 1, whose wgmma has retired; thread 0 then loads element g - 1 + STAGES into its stage
     auto retire = [&]() {
-      const int s = (int)((g - 1) % STAGES);
-      if (lane == 0) release<CL>(bars + 8 * (STAGES + s));
-      if (tid == 0 && g - 1 + STAGES < q.n) produce<CL>(p, q, base, bars, g - 1 + STAGES);
+      if (lane == 0) release<CL>(bars + 8 * (STAGES + (g - 1) % STAGES));
+      if (tid == 0) produce<CL>(p, cur, base, bars);
       __syncwarp();
     };
-    for (long t = first_u; t < total; t += step_u) {
-      int tm, tn;
-      raster((int)(t % units), rows_u, tiles_n, p.group, tm, tn);
-      tm = tm * CL + rank;
+    for (int t = first_u; t < total; t += step_u) {
       for (int kb = 0; kb < KB; kb++, g++) {
-        const int s = (int)(g % STAGES);
-        mbar_wait(bars + 8 * s, (u32)(g / STAGES) & 1);
+        const u32 s = g % STAGES;
+        mbar_wait(bars + 8 * s, (g / STAGES) & 1);
         __syncwarp();
         const u32 a0 = base + s * STAGE + wg * 64 * BK, b0 = base + s * STAGE + A_BYTES;
         WG_FENCE;
@@ -262,6 +270,8 @@ template <int CL> DEV void gemm_body(const Params& p) {
       WG_WAIT(0);
       acc_fence(d);
       retire();
+      int tm, tn;
+      tile_of<CL>(p, t, tm, tn);
       const int row = tm * TM + wg * 64 + 16 * (x / 32) + (x % 32) / 4, col0 = tn * BN + 2 * (x % 4);
       int2* o0 = reinterpret_cast<int2*>(p.o + (size_t)row * p.N + col0);
       int2* o1 = reinterpret_cast<int2*>(p.o + (size_t)(row + 8) * p.N + col0);
@@ -280,8 +290,6 @@ template <int CL> DEV void gemm_body(const Params& p) {
   __syncthreads();
   if (tid == 0) {
     Stamp& o = p.stamps[blockIdx.x];
-    o.t0 = t0;
-    o.c0 = c0;
     o.t1 = gtimer();
     o.c1 = clock64();
     o.sm = smid();
