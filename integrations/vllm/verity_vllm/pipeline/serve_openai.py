@@ -754,7 +754,7 @@ def main(opts: Options) -> int:
               "commit": opts.commit, "scheme": getattr(com, "commit_scheme", SS.V1) if com is not None else None,
               "of_record": opts.of_record, "learn_warmup": getattr(com, "learn_warmup", None),
               "sealed": "windows/w<k>/" if windows is not None and windows.seal is not None else None,
-              "served_rows_statics": windows.served if windows is not None else None,
+              "served_rows_statics": windows.served if windows is not None else None, "gpu_ext_warm_s": getattr(com, "gpu_ext_warm_s", None),
               "seal_off_loop": sealer is not None, "seal_hold_gb": opts.seal_hold_gb if sealer is not None else None, "pool_warmed": warmed,
               "seal_process": sealer.summary()["process"] if sealer is not None and sealer.process is not None else None,
               "finalize_off_loop": sealer is not None and windows.finalize_on_loop is None,
