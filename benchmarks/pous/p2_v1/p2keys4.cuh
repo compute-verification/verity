@@ -113,6 +113,10 @@ constexpr int ROW_WORDS = P2_BITS / 64;   // W/8 bytes
 constexpr int CHUNKS = (ROW_WORDS + 7) / 8;
 static_assert(P2_BITS % 64 == 0, "rows of whole 64-bit words");
 
+__device__ __forceinline__ uint64_t bswap(uint64_t x) {
+  return (uint64_t)__byte_perm((uint32_t)x, 0, 0x0123) << 32 | __byte_perm((uint32_t)(x >> 32), 0, 0x0123);
+}
+
 #ifndef P2K4_MODE
 #define P2K4_MODE 1
 #endif
@@ -153,7 +157,7 @@ __global__ void __launch_bounds__(P2K4_TPB, P2K4_MINB) keys_kernel(const __grid_
   if (live) {
 #pragma unroll
     for (int j = 0; j < 8; j++)
-      if (j < n) st[at - base + j] = sx::bswap64(o[j]);
+      if (j < n) st[at - base + j] = bswap(o[j]);
   }
   __syncwarp();
   const uint32_t words = __reduce_max_sync(0xffffffffu, live ? (uint32_t)(at - base) + n : 0);
@@ -162,7 +166,7 @@ __global__ void __launch_bounds__(P2K4_TPB, P2K4_MINB) keys_kernel(const __grid_
   if (live) {
 #pragma unroll
     for (int j = 0; j < 8; j++)
-      if (8 * c + j < ROW_WORDS) out[at + j] = sx::bswap64(o[j]);
+      if (8 * c + j < ROW_WORDS) out[at + j] = bswap(o[j]);
   }
 #endif
 #else
@@ -174,7 +178,7 @@ __global__ void __launch_bounds__(P2K4_TPB, P2K4_MINB) keys_kernel(const __grid_
     chunk(mid, seg, blk, w4(p, c), o);
 #pragma unroll
     for (int j = 0; j < 8; j++)
-      if (8 * c + j < ROW_WORDS) row[8 * c + j] = sx::bswap64(o[j]);
+      if (8 * c + j < ROW_WORDS) row[8 * c + j] = bswap(o[j]);
   }
 #endif
 }
