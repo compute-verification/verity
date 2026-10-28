@@ -54,7 +54,7 @@ from dataclasses import dataclass
 
 DOMAIN = b"verity/word-codec/kv/v0\0"
 SEED_BYTES = 32
-DIGEST_BYTES = hashlib.sha512().digest_size
+DIGEST_BYTES = 64
 TWEAK_INDEX = (1 << 32) - 1
 MASK_INDEX = (1 << 32) - 2
 BIND_INDEX = (1 << 32) - 3
