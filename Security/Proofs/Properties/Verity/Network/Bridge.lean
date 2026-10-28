@@ -25,6 +25,11 @@ from the play, not what the code checks, so they hold by construction at a reali
   different admissible statements (`stmtOf_break`, from `stmtOf_collision` and `coinMode_collision`): two preimages of
   one binding digest. The coupling's break answers for all three.
 * **S6's `wit`**: a witness in the leak relation wherever the statement has one (`witOf`, `couples_wit`).
+* **S6's `windows`, from `θ`**: what the prover sent carries the game's parameters `θ`, fixed before every coin
+  (`Vocab.Coupling.sent_params`). Onsite's network component is its first and no other has its id
+  (`onsite_network_first`), so every period its network case decodes to is the one `θ`'s first component's
+  parameters name (`networkPeriod_params`, `periodParamsOf`), and where that one has `n` windows at least, so has every
+  decoded period (`couples_windows`).
 * **The run's verdicts**: a coupling's guarantee (`Vocab.Coupling.bound`) reads its run only through the run at the
   code, which sets the verdicts itself, and `BreakBound`, which reads none: `Vocab.Coupling.atCode_withAccepts` and
   `Vocab.Coupling.breakBound_withAccepts`, at the coupling with its run's verdicts replaced
@@ -319,6 +324,62 @@ theorem couples_wit (h : ∀ ξ i, R.wit ξ i = witOf (Rlt R) (R.stmt ξ i)) :
   rw [h ξ i]
   exact witOf_spec _ hw
 
+/-- Onsite's network component is its first, and no other component has its id. -/
+theorem onsite_network_first :
+    Core.Onsite.components = (NetworkCheck.Period.protocol : Core.BlobProtocol) :: Core.Onsite.components.tail ∧
+      NetworkCheck.Period.protocol.id ∉ Core.Onsite.components.tail.map (·.id) :=
+  ⟨rfl, by decide +kernel⟩
+
+/-- **Onsite's network triple is its first**: a triple of onsite's components, on any blobs, whose protocol is the
+period check names the first of the composition's parameters. -/
+theorem network_triple_first {bs : Core.Blobs} {ps : List Core.Composition.Named} {ev : List Core.Composition.Case}
+    {x : Core.Protocol × Core.Composition.Named × Core.Composition.Case}
+    (hx : x ∈ Properties.Composition.triples (Core.Onsite.components.map (·.onBlobs bs)) ps ev)
+    (h1 : x.1 = NetworkCheck.Period.protocol) : ∃ ps', ps = x.2.1 :: ps' := by
+  unfold Properties.Composition.triples at hx
+  rw [onsite_network_first.1, List.map_cons] at hx
+  cases ps with
+  | nil => simp at hx
+  | cons p ps' =>
+    cases ev with
+    | nil => simp at hx
+    | cons e ev' =>
+      simp only [List.zip_cons_cons, List.mem_cons] at hx
+      rcases hx with rfl | hx
+      · exact ⟨ps', rfl⟩
+      · refine absurd ?_ onsite_network_first.2
+        have hm := List.mem_map_of_mem (f := Core.Protocol.id) (List.of_mem_zip (a := x.1) (b := x.2) hx).1
+        rw [h1, List.map_map] at hm
+        exact hm
+
+/-- **The period the parameters `θ` name onsite's network component**: their first component's, decoded. -/
+def periodParamsOf (θ : ByteArray) : Option NetworkCheck.Period.Params :=
+  match Core.canonicalJson θ >>= Core.Composition.decodeParams with
+  | .ok (nm :: _) => Except.toOption (Core.canonicalJson nm.params.toUTF8 >>= NetworkCheck.Period.paramsOf)
+  | _ => none
+
+/-- **Every period onsite's network case decodes to is the one its parameters name** (`periodParamsOf`). -/
+theorem networkPeriod_params {s : Sent} {p : NetworkCheck.Period.Params} {c : NetworkCheck.Period.Commitment}
+    {e : NetworkCheck.Period.Evidence} (h : NetworkPeriod .onsite s p c e) : periodParamsOf s.params = some p := by
+  obtain ⟨ps, b, ev, ⟨hps, -, -⟩, x, hx, hx1, hp, -, -⟩ := h
+  obtain ⟨ps', rfl⟩ := network_triple_first (bs := Core.Blobs.ofArray s.blobs) hx hx1
+  unfold periodParamsOf
+  rw [hps]
+  exact congrArg Except.toOption hp
+
+omit [DecidableEq I] [∀ i, Fintype (Ω i)] in
+/-- **S6's `windows` from the parameters**: where what the prover sent carries the parameters `θ` at every coin, and
+the period `θ` names onsite's network component has `n` windows at least, so has every period its network case
+decodes to. -/
+theorem couples_windows {s : ((i : I) → Ω i) → Sent} {θ : ByteArray} (hθ : ∀ ξ, (s ξ).params = θ)
+    {p₀ : NetworkCheck.Period.Params} (h₀ : periodParamsOf θ = some p₀) (hn : n ≤ p₀.windows) :
+    ∀ ξ p c e, NetworkPeriod .onsite (s ξ) p c e → n ≤ p.windows := fun ξ p c e h => by
+  have hp : periodParamsOf θ = some p := by
+    rw [← hθ ξ]
+    exact networkPeriod_params h
+  rw [h₀] at hp
+  exact hn.trans_eq (congrArg NetworkCheck.Period.Params.windows (Option.some.inj hp))
+
 /-! ## The run's verdicts -/
 
 omit [Nonempty Coin] in
@@ -352,5 +413,8 @@ theorem atCode_withAccepts (M : Audit → ((i : q.I) → q.Ω i) → Prop) : (q.
 /-- **The error beyond `δ` doesn't read the run's verdicts.** -/
 theorem breakBound_withAccepts (M : Audit → ((i : q.I) → q.Ω i) → Prop) :
     (q.withAccepts M).BreakBound ↔ q.BreakBound := Iff.rfl
+
+/-- **What the prover sent carries the game's parameters `θ`**, fixed before every coin. -/
+theorem sent_params (ξ : (i : q.I) → q.Ω i) : (V.outcome θ F c σ q.coins ξ).sent.params = θ := rfl
 
 end Verity.Vocab.Coupling
