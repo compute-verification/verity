@@ -476,8 +476,10 @@ def test_a_refused_report_names_each_failing_step_and_its_why_and_a_scan_that_ex
            "found at the verifier: ['first o1 0 @0']; scan_zk's ok is not true")
     assert (got["verdict"], got["steps"]["scan"]["verdict"], got["steps"]["scan"]["why"]) == ("refused", "failed", why)
     assert got["why"] == {"scan": f"failed: {why}"}
+    Path(steps.job).write_text(json.dumps(ok | {"rc": {"n2": "0", "scan": "1"}, "why": {"scan": "done: FAILED"}}))
+    assert cr.report(steps)["why"] == {"scan": f"failed: done: FAILED; {why}"}
     Path(steps.scan).unlink()
-    assert cr.report(steps)["why"] == {"scan": "failed: scan_zk exited 1"}
+    assert cr.report(steps)["why"] == {"scan": "failed: done: FAILED; scan_zk exited 1"}
     stand_in = cr.report(_steps(tmp_path, ok | {"stand_in": {"n2": "the simulated link"}}))
     assert stand_in["why"] == {"n2": "stand-in: the simulated link"}
 

@@ -480,7 +480,7 @@ def scan_step(s: dict | None, warden_run: str | None, job: dict | None = None) -
     job = job or {}
     if s is None or (job.get("rc") or {}).get("scan") not in (None, "0"):
         return {"verdict": "not run" if s is None and not (job.get("rc") or {}).get("scan") else "failed",
-                "why": (job.get("why") or {}).get("scan") or scan_exit(s, job), "in_the_clear": CLEAR["scan"]}
+                "why": scan_exit(s, job), "in_the_clear": CLEAR["scan"]}
     rounds = {}
     for name, r in (s.get("rounds") or {}).items():
         a = r.get("audit") or {}
@@ -507,15 +507,15 @@ def scan_step(s: dict | None, warden_run: str | None, job: dict | None = None) -
 
 
 def scan_exit(s: dict | None, job: dict) -> str | None:
-    """Why `scan_zk.py prove` exited nonzero, from its summary: each round's witness pieces found at the verifier, and
-    its own ``ok``; None when it didn't."""
-    rc = (job.get("rc") or {}).get("scan")
+    """Why the scan step didn't run or failed: the job's own line for it and, when `scan_zk.py prove` exited nonzero,
+    from its summary each round's witness pieces found at the verifier and its own ``ok``."""
+    rc, said = (job.get("rc") or {}).get("scan"), (job.get("why") or {}).get("scan")
     if rc in (None, "0"):
-        return None
+        return said
     found = {n: ((r.get("audit") or {}).get("received") or {}).get("verifier_found")
              for n, r in ((s or {}).get("rounds") or {}).items()}
-    return "; ".join([f"scan_zk exited {rc}", *(f"{n}: witness pieces found at the verifier: {v}"
-                                                  for n, v in found.items() if v),
+    return "; ".join([*([said] if said else []), f"scan_zk exited {rc}",
+                      *(f"{n}: witness pieces found at the verifier: {v}" for n, v in found.items() if v),
                       *(["scan_zk's ok is not true"] if s is not None and s.get("ok") is not True else [])])
 
 
