@@ -1,12 +1,14 @@
 """wipe_gate.sh against a stub gate: the lane's own `fetch` (with witness/) is kept 0700 under KEEP, outside the run dir,
-and $OUT, which custody publishes, holds only the bundle less witness/, which `wipe_egress.read_run` still reads; a KEEP
-inside the run dir is refused before anything is sent. Every output is held under KEEP until the leak guard passes it:
-one holding a witness value is refused, and a SIGTERM releases nothing."""
+and $OUT, which custody publishes, holds only the bundle less witness/, which `wipe_egress.read_run` still reads; the
+gate's start reply, which names the unit the witness records, stays in KEEP/RUN; a KEEP inside the run dir is refused
+before anything is sent. Every output is held under KEEP until the leak guard passes it: one holding a witness value is
+refused, and a SIGTERM releases nothing."""
 from __future__ import annotations
 
 import hashlib
 import json
 import os
+import shutil
 import signal
 import subprocess
 import sys
@@ -18,13 +20,20 @@ ROOT = HERE.parents[1]
 RUN = "c20261027T160500Z-0000"
 #: a witness value the stub's status plants (STUB_NOTE), 64 hex characters: two of the guard's text pieces
 PLANTED = hashlib.sha256(b"a certified line").hexdigest()
+#: the warden's stall probe's record of its cgroup, as the gate's unit runs it: the unit's name begins one of the guard's
+#: aligned text pieces (`leak_guard.TEXT` bytes)
+_CGROUP = '{"cgroups": {"warden": {"path": "/sys/fs/cgroup/system.slice/system-vy\\\\x2dcertifier.slice/'
+STALLS = " " * (-len(_CGROUP) % 32) + _CGROUP + f'vy-certifier@{RUN}.service"}}}}}}\n'
 
 STUB = r'''#!/usr/bin/env python3
 import io, json, os, signal, sys, tarfile
 cmd = sys.argv[-1]
 if cmd.startswith("warden-rehearse "):
     sys.stdin.read()
-    print(json.dumps({"run": "%(run)s", "started": True}))
+    if os.environ.get("STUB_REFUSE"):
+        print(json.dumps({"refused": "another rehearsal still runs"}))
+        sys.exit(1)
+    print(json.dumps({"run": "%(run)s", "started": True, "unit": "vy-certifier@%(run)s.service"}))
 elif cmd == "status %(run)s":
     if os.environ.get("STUB_FIFO"):
         open(os.environ["STUB_FIFO"], "w")
@@ -36,7 +45,8 @@ elif cmd == "fetch %(run)s":
     files = {"end.json": b"{}", "request.json": b"{}", "out/certificates.jsonl": b"",
              "out/deployment.json": json.dumps({"windows": 3, "origin_unix": 1.5,
                                                 "params": {"window": 32, "bucket_ms": 100}}).encode(),
-             "witness/certified.jsonl": b"%(planted)s\n", "witness/prompts.json": b"[]"}
+             "witness/certified.jsonl": b"%(planted)s\n", "witness/prompts.json": b"[]",
+             "witness/stalls.json": %(stalls)r.encode()}
     buf = io.BytesIO()
     with tarfile.open(fileobj=buf, mode="w:gz") as tar:
         for d in ("", "/out", "/witness"):
@@ -50,7 +60,7 @@ elif cmd == "fetch %(run)s":
     sys.stdout.buffer.write(buf.getvalue())
 else:
     sys.exit(f"stub gate: no verb {cmd!r}")
-''' % {"run": RUN, "planted": PLANTED}
+''' % {"run": RUN, "planted": PLANTED, "stalls": STALLS}
 
 
 def _gate(tmp_path: Path, popen: bool = False, **env: str):
@@ -84,11 +94,9 @@ def test_record_keeps_no_witness(tmp_path):
         (0o700, 0o700, 0)
     with tarfile.open(kept) as tar:
         assert f"{RUN}/witness/certified.jsonl" in tar.getnames()
-    assert _published(tmp_path) == ["bundle.tgz", "leak-guard.json", "start.json", "status.json", "summary.json",
-                                    "wipe-gate.log"]
+    assert _published(tmp_path) == ["bundle.tgz", "leak-guard.json", "status.json", "summary.json", "wipe-gate.log"]
     report = json.loads((tmp_path / "run" / "out" / "leak-guard.json").read_text())
-    assert (report["verdict"], report["gate_runs"], report["pieces"], report["held"], report["released"]) == \
-        ("clean", [RUN], 2, 5, 5)
+    assert (report["verdict"], report["gate_runs"], report["held"], report["released"]) == ("clean", [RUN], 4, 4)
     assert list((keep / "held" / "r1").iterdir()) == []
     with tarfile.open(tmp_path / "run" / "out" / "bundle.tgz") as tar:
         names = tar.getnames()
@@ -97,6 +105,39 @@ def test_record_keeps_no_witness(tmp_path):
     sys.path.insert(0, str(HERE))
     import wipe_egress
     assert sorted(wipe_egress.read_run(tmp_path / "run" / "out" / "bundle.tgz")) == sorted(wipe_egress.FILES)
+
+
+def test_the_gates_start_reply_stays_in_keep_since_it_names_the_unit_the_warden_records(tmp_path):
+    """The gate's start reply names the run's systemd unit, vy-certifier@RUN.service, as the warden's stall probe
+    records its cgroup in the witness (stalls.json), and no public file of the run holds it: in the hold, the leak guard
+    holds the reply (and the log it was echoed to) as a piece of the witness, and the job exited 3. The reply goes to
+    KEEP/RUN alone (0600), so the job exits on the gate's rc."""
+    keep = tmp_path / "keep"
+    got = _gate(tmp_path, KEEP=str(keep))
+    assert got.returncode == 0, got.stdout + got.stderr
+    reply, out = keep / RUN / "start.json", tmp_path / "run" / "out"
+    assert json.loads(reply.read_text())["unit"] == f"vy-certifier@{RUN}.service"
+    assert reply.stat().st_mode & 0o777 == 0o600 and "start.json" not in _published(tmp_path)
+    assert "vy-certifier@" not in (out / "wipe-gate.log").read_text()
+    assert json.loads((out / "leak-guard.json").read_text())["found"] == []
+    published, q = tmp_path / "published", tmp_path / "q"
+    published.mkdir()
+    shutil.copyfile(reply, published / "start.json")
+    held = subprocess.run([sys.executable, str(HERE / "leak_guard.py"), str(published), str(q), "--gates",
+                           str(keep / RUN / "fetch.tar.gz"), "--dry", "--report", str(tmp_path / "report.json")],
+                          capture_output=True, text=True)
+    assert held.returncode == 3, held.stdout + held.stderr
+    (piece,) = [p for f in json.loads((q / "leak-guard.json").read_text())["found"] for p in f["pieces_found"]]
+    assert (piece["witness"], piece["keypath"]) == (f"{RUN}/witness/stalls.json", ["unit"])
+
+
+def test_a_refused_start_is_a_visible_failure_and_keeps_nothing(tmp_path):
+    keep = tmp_path / "keep"
+    got = _gate(tmp_path, KEEP=str(keep), STUB_REFUSE="1")
+    assert got.returncode == 1, got.stdout + got.stderr
+    log = (tmp_path / "run" / "out" / "wipe-gate.log").read_text()
+    assert "the gate didn't start the session (exit 1)" in log and "another rehearsal still runs" in log
+    assert not (keep / RUN).exists() and "start.json" not in _published(tmp_path)
 
 
 def test_keep_inside_the_run_dir_is_refused(tmp_path):
@@ -130,4 +171,5 @@ def test_sigterm_mid_session_releases_nothing(tmp_path):
     assert p.returncode == 143, said
     assert "SIGTERM ended the run before the leak guard read it: nothing released" in said
     assert _published(tmp_path) == []
-    assert sorted(x.name for x in (keep / "held" / "r1").iterdir()) == ["start.json", "status.json", "wipe-gate.log"]
+    assert sorted(x.name for x in (keep / "held" / "r1").iterdir()) == ["status.json", "wipe-gate.log"]
+    assert (keep / RUN / "start.json").is_file()
