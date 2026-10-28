@@ -4,8 +4,9 @@ window's declared sync signed), refuses the window of a record whose signature i
 certificate's, a kept certificate whose signature is changed, and a key under `lms.DEPLOYED`'s height with --deployed;
 the report needs the endpoint's step on the advice profile and never accepts a stand-in, merges N2's members proved in
 several runs, and counts a negative that escaped a sampled draw within the draw's bound but never one whose faulty
-window was drawn; the draw's bound at δ is C(n − b − 1, k) / C(n, k)'s; leak counts the scan's widths and terms on a
-warden run's files, and refuses a sampled draw and a warden the scan's class doesn't serve; the job's copy of the
+window was drawn; the draw's bound at δ is the integrity profile's count bound, which counts a miss of exactly δ, as
+Lean's does; leak counts the scan's widths and terms on a warden run's files, and refuses a sampled draw and a warden
+the scan's class doesn't serve; the job's copy of the
 gates' records into its output keeps no gate run's witness/. On the certifier-only path the report needs no scan,
 names what it stubs, and counts the rehearsal's refused runs and the I/O tie's verdict on each tampered run the check
 let through as negatives; d1's K is all_protocols' monitoring-period count over the compute audits' draws and free
@@ -223,6 +224,7 @@ def test_report_merges_runs_and_counts_a_negative_that_escaped_the_draw(tmp_path
     assert n2s["members"]["honest"]["structured"] == {"head egress 45 @320": "across"}
     assert n2s["members"]["moved"]["escaped_the_draw"] == {"faulty_windows": [0], "drawn": [1, 2]}
     assert n2s["eps_at_delta"]["law"] == "subset:2" and (n2s["eps_at_delta"]["units"], n2s["eps_at_delta"]["drawn"]) == (4, 2)
+    assert n2s["eps_at_delta"]["wrong_units_at_delta"]["0.5"] == 1
     steps.n2[1] = run("moved", {"windows": [window] * 2, "network": {"accepted": True}, "reference": reference}, [0, 1])
     got = cr.report(steps)["steps"]["n2"]
     assert got["verdict"] == "failed" and got["why"] == "moved: network accepted"
@@ -442,6 +444,8 @@ def test_subset_bound():
     assert cr.subset_bound(256, 64, 0.5) == 2
     assert cr.subset_bound(256, 2, 0.5) == 74
     assert cr.subset_bound(0, 0, 0.5) is None
+    # one wrong unit of 4 escapes a sample of 2 with C(3, 2)/C(4, 2) = 1/2 exactly: within δ = 1/2
+    assert cr.subset_bound(4, 2, 0.5) == 1
 
 
 def test_the_certifier_only_path_needs_no_scan_names_its_stubs_and_counts_the_tampers(tmp_path):
