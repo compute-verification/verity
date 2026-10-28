@@ -9,4 +9,5 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 [tool.verity.tests]
 # settings.py declares the job's variables in a verity_config `Registry` and checks them with the harness's `check` (stdlib
 # only).
-inputs = ["benchmarks/harness/verity_bench/__init__.py", "benchmarks/harness/verity_bench/settings.py", "tools/config/verity_config"]
+inputs = ["benchmarks/harness/verity_bench/__init__.py", "benchmarks/harness/verity_bench/settings.py", "tools/config/verity_config",
+          "verity/__init__.py", "verity/settings.py"]
