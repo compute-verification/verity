@@ -11,9 +11,9 @@ import Mathlib.Algebra.Order.BigOperators.Group.Finset
 # The network certifier's lemmas
 
 The statements that are steps of the guarantees' proofs (`Definitions.NetworkCertifier.Guarantees`) rather than bounds or rules
-a document cites: the occupancy facts, Theorem 1(b)'s counting bound, the advice cap the clock-sync and block forms
-specialise, and the composed block statement. Each is a `def G : Prop` under the guarantees' namespace, proved by
-`NetTiming.SecurityProofs.G`, so they are audited with them and pinned by no record.
+a document cites: the occupancy facts, Theorem 1(b)'s counting bound and the advice cap the clock-sync form
+specialises. Each is a `def G : Prop` under the guarantees' namespace, proved by `NetTiming.SecurityProofs.G`, so they
+are audited with them and pinned by no record.
 -/
 
 namespace NetTiming.Guarantees
@@ -112,20 +112,5 @@ def EncardAccSeqsLeAdvice : Prop :=
   ∀ {L K S : ℕ} {In Adv : Type} [Fintype Adv] (P : EgressPrediction L S In Adv)
     (op : ℕ → List (Obs L K S) → In) (n D : ℕ),
     (AccSeqs P op n D).encard ≤ ((Fintype.card Adv * D ^ n : ℕ) : ℕ∞)
-
-/-- **The composed statement (W2, J and both conditions).** A decoder reads the wire and recovers every secret in `Zs`,
-all of whose runs are accepted up to `n`. Then `Zs` is no larger than the block cap. -/
-def EncardDecodableLeBlocks : Prop :=
-  ∀ {L K S : ℕ} {Z In Act Wire Ac B C : Type} {At : B → Type} {U : C → Type}
-    [Fintype Ac] [Fintype B] [DecidableEq B] [∀ β, Fintype (At β)] [Fintype C] [DecidableEq C] [∀ c, Fintype (U c)]
-    (I : Interaction L K S Z In Act Wire) (P : EgressPrediction L S In (Ac × ((β : B) → At β))) (n D : ℕ)
-    (view : ℕ → Obs L K S → Wire) (hW2 : Regenerates I.certifier view) (hJ : JitterBounded I.certifier D)
-    (step : C → ℕ) (blk : C → B) (occ : (c : C) → List In → Ac × ((β : B) → At β) → U c)
-    (h1 : FramesReadNoTimingAdvice P step occ) (h2 : OccupancyReadsOwnBlock blk occ)
-    (Zs : Set Z) (hacc : ∀ z ∈ Zs, AcceptedUpTo P I.op n (I.obsRun z n))
-    (dec : List Wire → Z) (hdec : ∀ z ∈ Zs, dec (I.wireRun z n) = z),
-    Zs.encard ≤
-      ((Fintype.card Ac * D ^ n *
-        ∏ β, min (Fintype.card (At β)) (∏ c ∈ univ.filter (fun c => blk c = β), Fintype.card (U c)) : ℕ) : ℕ∞)
 
 end NetTiming.Guarantees
