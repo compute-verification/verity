@@ -3,7 +3,7 @@ import Definitions.Accounting.JointLive
 /-!
 # The joint guarantee over a causal game: a period, a horizon of periods, and server-time blocks (trusted)
 
-Soundness's R5 and R4′ (26 Oct, LEAN-62, LEAN-64): a period is one causal game (`Verity.Game`), each device release
+In the one theorem's form, a period is one causal game (`Verity.Game`), each device release
 drawn after the bytes it answers and the evidence last; its claims are read off the run it ends in
 (`Accounting.PeriodLive`), the sampled-proofs claim on the fixed extractor's values (`PeriodLive.extract`), PoUW's in
 gates, and its break is the probability that a fixed finder built from the strategy outputs a collision
@@ -18,7 +18,7 @@ the probability that some subprotocol accepts while its claim fails is at most t
 
 * `JointPeriodLive`: one period, the five subprotocols (sampled proofs, PoUW, PoUS, the bandwidth audit and the network
   certifier);
-* `JointPeriodLiveECR`: the same in Daniel's form (`PeriodLive.error`) with `ecr/sha-512` asked of each finder, so the
+* `JointPeriodLiveECR`: the same in the one adversary form (`PeriodLive.error`) with `ecr/sha-512` asked of each finder, so the
   bound is numbers;
 * `JointHorizonLive`: `m` periods read off one game's run, each over its own circuit;
 * `JointHorizonBlocksLive`: `B` server-time blocks read off one game's run, with the wipe that opens each block and each
@@ -51,7 +51,7 @@ def JointPeriodLive : Prop :=
     ∀ s : Verity.Game.Strategy G,
       Verity.Game.prob (fun o => ∃ a, r.accepts a o ∧ ¬ r.Holds c s a o) G s ≤ ∑ a, err a s
 
-/-- **The joint guarantee over a period in Daniel's form, with `ecr/sha-512` asked of the finders only.** As
+/-- **The joint guarantee over a period in the one adversary form, with `ecr/sha-512` asked of the finders only.** As
 `JointPeriodLive`, with each subprotocol's error `δ_a(s) + loss_a(Pr[B_a^s finds a collision of H])`
 (`PeriodLive.error`), and suppose each subprotocol's loss is monotone and, at every strategy `s`, its finder meets
 `ecr/sha-512` at `H` (`Claims.ExpectedCR`: it outputs a collision with probability at most its expected calls over
@@ -127,7 +127,7 @@ suppose, over `G` at every strategy `s`:
 Then at every strategy `s` the probability that some block's accepted subprotocol's claim fails, some accepted wipe's
 survivor bound fails, or some block's memory term fails while its PoUS accepted is at most
 $$\sum_b \sum_a \mathrm{err}_{b,a}(s) + \sum_b \varepsilon_{\mathrm{wipe},b}(s) + \sum_b \delta_{\mathrm{PoUS},b}(s).$$
-**Gap (PRF-167):** the state a block carries across a wipe (the KV cache, committed before the wipe and re-read after
+**Gap:** the state a block carries across a wipe (the KV cache, committed before the wipe and re-read after
 it) is outside the integrity bound. -/
 def JointHorizonBlocksLive : Prop :=
   ∀ (ι α : Type) [Fintype ι] [Fintype α] (d : Device ι) (B : ℕ) (C : Fin B → Verity.Circuit) (O : Type)

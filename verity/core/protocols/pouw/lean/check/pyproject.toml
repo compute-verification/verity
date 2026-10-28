@@ -1,7 +1,7 @@
 [project]
 name = "verity-pouw-check-difftest"
 version = "0.0.0"
-description = "The difftest of `pouw_check` against `verity.core.protocols.pouw.core_check`."
+description = "The difftest of `pouw_check` against `verity.core.protocols.pouw.core_check`, `credit` and `period_check`."
 requires-python = ">=3.12"
 dependencies = []
 
@@ -14,8 +14,8 @@ testpaths = ["tests"]
 markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 
 [tool.verity.tests]
-# Test-only: the harness (`verity_difftest`); the switch, `verifier.py`; the Python held to the Lean, `core_check.py`
-# and `credit.py`, and what they import (`window.py`, `weights.py`, `coins.py`, `audit.py` and `protocol.py`, the proof system's challenger and
+# Test-only: the harness (`verity_difftest`); the switch, `verifier.py`; the Python held to the Lean, `core_check.py`,
+# `credit.py` and `period_check.py`, and what they import (`window.py`, `weights.py`, `coins.py`, `audit.py` and `protocol.py`, the proof system's challenger and
 # one-stage's registered domains (`one_stage/registered.py` and the `partition.py` it imports), one-stage's proof
 # verification (`one_stage/proofs.py`, its `verifier.py` and what that imports, with the integrity profile and the
 # proof system), and what they import: `verity.ml`'s circuits codec, commitments, crypto and randomness, and `verity.errors`) with the packages
@@ -27,6 +27,7 @@ inputs = ["verity/core/difftest", "verity/__init__.py", "verity/core/__init__.py
           "verity/core/protocols/__init__.py", "verity/core/protocols/pouw/__init__.py",
           "verity/core/claims/__init__.py",
           "verity/core/protocols/pouw/window.py", "verity/core/protocols/pouw/core_check.py",
+          "verity/core/protocols/pouw/period_check.py",
           "verity/core/protocols/pouw/verifier.py", "verity/core/protocols/pouw/salt.py",
           "verity/core/protocols/pouw/credit.py", "verity/core/protocols/pouw/weights.py",
           "verity/core/protocols/pouw/coins.py", "verity/core/protocols/pouw/audit.py",

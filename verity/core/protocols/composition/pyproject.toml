@@ -18,12 +18,13 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 # harness drives) and, through their path requires, the core interface, C-Flock's verifier, and the ported components'
 # Lean: sampled proofs' one-stage audit (with the LMS verifier and the difftest harness's Lean), PoUW's check (with
 # its window, commitments, and core's identity and randomness), the network certifier's period check (with the
-# certifier program and the LMS verifier), PoUS's run check (with the memory challenger's Lean) and the remote bandwidth
-# session's. The reference runs the components' Python: PoUW's
+# certifier program and the LMS verifier), PoUS's run check (with the memory challenger's Lean), the remote bandwidth
+# session's, and onsite's registration check, NCI's (`NciCheck.Protocol`). The reference runs the components' Python: PoUW's
 # `core_check` and what it imports, and sampled proofs' one-stage difftest (`one_stage`, the integrity profile, the
 # proof system) with its generators, PoUW's check cases, and the network certifier's period difftest (its mirror over
-# the certifier's certificates, LMS and PoUW's reading of one-stage's answers) with its generator, each from its own
-# suite's tests; and space's and bandwidth's period hooks (`pous.period`, `remote_bandwidth.period`), space's signed by
+# the certifier's certificates, LMS and PoUW's reading of one-stage's answers) with its generator, and the wipe's
+# protocol (`wipe_protocol_case`, its mirror and signed wipes), and NCI's protocol difftest (`test_nci_protocol`, its
+# reference and θ's provenance declarations), each from its own suite's tests; and space's and bandwidth's period hooks (`pous.period`, `remote_bandwidth.period`), space's signed by
 # the memory challenger's tests' deployed key (`mc_cases.py`, which reads the PoUS tests' test signer by path); with
 # them what they import of `verity.ml` and `verity.errors`.
 inputs = ["verity/__init__.py", "verity/errors.py", "verity/ml", "verity/core/__init__.py", "verity/core/claims",

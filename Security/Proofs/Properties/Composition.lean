@@ -1,10 +1,15 @@
 import Properties.Composition
+import Proofs.Properties.Pouw.LiveSalt.Canon
+import Proofs.Flock.Claims.Complete.Json.Hex
 
 /-!
 # The composition's properties, proved
 
-`answerAccepts` and `acceptMeans` of `Properties.Composition`, by unfolding `Core.Protocol.answer`, and
-`Core.Composition.check` into `run` and `judge`.
+`answerAccepts`, `acceptMeans` and `acceptRegistration` of `Properties.Composition`, by unfolding
+`Core.Protocol.answer`, `Core.Composition.check` into `run` and `judge`, and `Core.Composition.checkRegistered` into its
+registration check and then `check`. `bindCollision`, because `bindMessage` is injective in the digests: past the id
+and the zero byte, its JSON reads back entry by entry, each escaped string ending at its first unescaped quote
+(`canonStr_split`) and lowercase hex decoding to its bytes (`unhex_hexOf`).
 -/
 
 namespace Properties.Composition
@@ -139,5 +144,165 @@ theorem acceptMeans : AcceptMeans := by
   obtain ⟨P, n, k⟩ := x
   simp only at hd ⊢
   rw [hd]
+
+theorem acceptRegistration : AcceptRegistration := by
+  intro id R s cs n ps b d k ev pub prof h
+  simp only [checkRegistered] at h
+  split at h
+  · cases h
+  rename_i hn
+  split at h
+  · cases h
+  rename_i hk
+  split at h
+  · cases h
+  rename_i hp
+  split at h
+  · cases h
+  rename_i hv
+  split at h
+  · cases h
+  rename_i hd
+  split at h
+  · cases h
+  rename_i answers hrun
+  split at h
+  · cases h
+  rename_i hs
+  have hv' : (registrationAnswer R n k).verdict = .accept := Decidable.of_not_not hv
+  have hc : check id cs ps b ev = .accept pub prof := by
+    unfold check
+    rw [hrun]
+    exact h
+  refine ⟨Decidable.of_not_not hn, Decidable.of_not_not hk, Decidable.of_not_not hp, answerAccepts _ _ _ _ hv', ?_, ?_,
+    acceptMeans _ _ _ _ _ _ _ hc⟩
+  · rw [← answer_digest hv']
+    exact Decidable.of_not_not hd
+  · have hs' : committedBy s cs ev = some d := Decidable.of_not_not hs
+    unfold committedBy at hs'
+    cases hf : (cs.zip ev).find? (fun x => x.1.id == s) with
+    | none => rw [hf] at hs'; cases hs'
+    | some x =>
+      rw [hf] at hs'
+      exact ⟨x, List.mem_of_find?_eq_some hf, by simpa using List.find?_some hf, hs'⟩
+
+/-! ## `bind`'s messages, read back
+
+Over any quoting `q` that ends where it ends and any injective encoding `h` of the digests: `bodyOf` is the JSON `bind`
+writes, and it determines the digests (`body_inj`). -/
+
+namespace BindInj
+
+variable (q : String → String) (h : ByteArray → String)
+
+def entryOf (x : String × ByteArray) : String :=
+  "{\"commitment\":" ++ q (h x.2) ++ ",\"id\":" ++ q x.1 ++ "}"
+
+def restOf : List (String × ByteArray) → List Char
+  | [] => [']', '}']
+  | x :: xs => ',' :: ((entryOf q h x).toList ++ restOf xs)
+
+def itemsOf : List (String × ByteArray) → List Char
+  | [] => [']', '}']
+  | x :: xs => (entryOf q h x).toList ++ restOf q h xs
+
+theorem intercalate_items (ds : List (String × ByteArray)) :
+    (",".intercalate (ds.map (entryOf q h))).toList ++ [']', '}'] = itemsOf q h ds := by
+  match ds with
+  | [] => simp [itemsOf]
+  | [x] => simp [itemsOf, restOf]
+  | x :: y :: ds =>
+    rw [List.map_cons, List.map_cons, String.intercalate_cons_cons, String.toList_append, String.toList_append]
+    have ih := intercalate_items (y :: ds)
+    rw [List.map_cons] at ih
+    rw [List.append_assoc, List.append_assoc, ih]
+    simp [itemsOf, restOf]
+
+theorem entry_split (hq : ∀ s s' r r', (q s).toList ++ r = (q s').toList ++ r' → s = s' ∧ r = r')
+    (hh : ∀ a b, h a = h b → a = b) {x y : String × ByteArray} {r r' : List Char}
+    (e : (entryOf q h x).toList ++ r = (entryOf q h y).toList ++ r') : x = y ∧ r = r' := by
+  simp only [entryOf, String.toList_append, List.append_assoc] at e
+  have e1 := List.append_cancel_left e
+  obtain ⟨h2, e2⟩ := hq _ _ _ _ e1
+  have e3 := List.append_cancel_left e2
+  obtain ⟨h1, e4⟩ := hq _ _ _ _ e3
+  have e5 := List.append_cancel_left e4
+  obtain ⟨x1, x2⟩ := x
+  obtain ⟨y1, y2⟩ := y
+  exact ⟨Prod.ext h1 (hh _ _ h2), e5⟩
+
+theorem entry_head (x : String × ByteArray) (r : List Char) : ∃ t, (entryOf q h x).toList ++ r = '{' :: t := by
+  simp only [entryOf, String.toList_append, List.append_assoc]
+  exact ⟨_, rfl⟩
+
+theorem rest_inj (hq : ∀ s s' r r', (q s).toList ++ r = (q s').toList ++ r' → s = s' ∧ r = r')
+    (hh : ∀ a b, h a = h b → a = b) :
+    ∀ ds ds' : List (String × ByteArray), restOf q h ds = restOf q h ds' → ds = ds'
+  | [], [], _ => rfl
+  | [], _ :: _, e => by simp [restOf] at e
+  | _ :: _, [], e => by simp [restOf] at e
+  | x :: xs, y :: ys, e => by
+    simp only [restOf, List.cons.injEq, true_and] at e
+    obtain ⟨rfl, e'⟩ := entry_split q h hq hh e
+    rw [rest_inj hq hh xs ys e']
+
+theorem items_inj (hq : ∀ s s' r r', (q s).toList ++ r = (q s').toList ++ r' → s = s' ∧ r = r')
+    (hh : ∀ a b, h a = h b → a = b) :
+    ∀ ds ds' : List (String × ByteArray), itemsOf q h ds = itemsOf q h ds' → ds = ds'
+  | [], [], _ => rfl
+  | [], y :: ys, e => by
+    obtain ⟨t, ht⟩ := entry_head q h y (restOf q h ys)
+    simp only [itemsOf] at e
+    rw [ht] at e
+    simp at e
+  | x :: xs, [], e => by
+    obtain ⟨t, ht⟩ := entry_head q h x (restOf q h xs)
+    simp only [itemsOf] at e
+    rw [ht] at e
+    simp at e
+  | x :: xs, y :: ys, e => by
+    simp only [itemsOf] at e
+    obtain ⟨rfl, e'⟩ := entry_split q h hq hh e
+    rw [rest_inj q h hq hh xs ys e']
+
+def bodyOf (ds : List (String × ByteArray)) : String :=
+  "{\"components\":[" ++ ",".intercalate (ds.map fun (i, d) =>
+    "{\"commitment\":" ++ q (h d) ++ ",\"id\":" ++ q i ++ "}") ++ "]}"
+
+theorem body_inj (hq : ∀ s s' r r', (q s).toList ++ r = (q s').toList ++ r' → s = s' ∧ r = r')
+    (hh : ∀ a b, h a = h b → a = b) {ds ds' : List (String × ByteArray)} (e : bodyOf q h ds = bodyOf q h ds') :
+    ds = ds' := by
+  have e1 := congrArg String.toList e
+  have hm : ∀ ds : List (String × ByteArray), (ds.map fun (i, d) =>
+      "{\"commitment\":" ++ q (h d) ++ ",\"id\":" ++ q i ++ "}") = ds.map (entryOf q h) := fun _ => rfl
+  simp only [bodyOf, hm, String.toList_append, List.append_assoc] at e1
+  have e2 := List.append_cancel_left e1
+  have hr : ("]}" : String).toList = [']', '}'] := by simp
+  rw [hr, intercalate_items, intercalate_items] at e2
+  exact items_inj q h hq hh ds ds' e2
+
+theorem msg_inj (id : String) {B B' : String}
+    (e : id.toUTF8 ++ ByteArray.mk #[0] ++ B.toUTF8 = id.toUTF8 ++ ByteArray.mk #[0] ++ B'.toUTF8) : B = B' := by
+  have e1 := congrArg (fun b : ByteArray => b.data.toList) e
+  simp only [ByteArray.data_append, Array.toList_append, List.append_assoc] at e1
+  have e2 := List.append_cancel_left (List.append_cancel_left e1)
+  exact String.toByteArray_inj.1 (ByteArray.ext (Array.ext' e2))
+
+end BindInj
+
+theorem bindCollision : BindCollision := by
+  intro id ds ds'
+  by_cases e : bind id ds = bind id ds'
+  · refine Or.inr ?_
+    by_cases hd : ds = ds'
+    · exact Or.inl hd
+    · refine Or.inr ⟨fun hm => hd ?_, e⟩
+      unfold bindMessage at hm
+      refine BindInj.body_inj Flock.canonStr Flock.hexOf
+        (fun _ _ _ _ h => Properties.Pouw.LiveSalt.Canon.canonStr_split h) (fun a b h => ?_) (BindInj.msg_inj id hm)
+      have e := FlockComplete.JsonRT.unhex_hexOf a
+      rw [h, FlockComplete.JsonRT.unhex_hexOf] at e
+      exact (Except.ok.inj e).symm
+  · exact Or.inl e
 
 end Properties.Composition
