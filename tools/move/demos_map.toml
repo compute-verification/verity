@@ -37,10 +37,8 @@ exclude = ["*.lean", "fixtures/**", "**/fixtures/**", "**/*vectors*.json", "**/*
 include = ["fixtures/artifacts.json", "**/fixtures/README.md", "**/fixtures/**/README.md", "**/lake-manifest.json"]
 
 [rewrite.keep_in]
-# the handle registry's `examples` key is each handle's example posts, not the directory; the Glossary's row of older names
-# names the old directory
+# the handle registry's `examples` key is each handle's example posts, not the directory
 ".agents/skills/using-slack/registry.json" = ["examples"]
-"GLOSSARY.md" = ["examples"]
 
 [modules]
 # the renames [paths] and [roots] imply (`layout.py --modules`)

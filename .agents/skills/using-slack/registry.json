@@ -555,6 +555,7 @@
         "tests/",
         "fixtures/",
         "demos/README.md",
+        "demos/lifecycle/",
         "pyproject.toml",
         "uv.lock",
         ".gitattributes",

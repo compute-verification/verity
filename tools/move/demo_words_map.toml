@@ -87,10 +87,12 @@ files = ["benchmarks/torch_gpu/commit_slots/README.md", "benchmarks/torch_gpu/un
 "examples/h200/" = "demos/h200/"
 
 [keep]
-# "for example" is English; the Glossary's row of older names names the old ones
-patterns = ['[Ff]or example', '(?m)^\| "example" \(.*$']
+# "for example" and "a worked example" are English
+patterns = ['[Ff]or example', '[Ww]orked example']
 
 [rewrite]
+# Never rewritten: records of what was (the moves' maps, changelogs, research's recorded moves), the retired-terms test and
+# the Glossary, which name the old words to refuse them, and files whose bytes a digest pins.
 exclude = ["*.lean", "fixtures/**", "**/fixtures/**", "**/*vectors*.json", "**/*vectors*.txt.gz", "**/CHANGELOG.md", "*.patch",
            "**/TRUSTED.sha256", "**/lake-manifest.json.lock", "uv.lock", "tools/move/**",
-           "tools/research/src/research/store/moves.json"]
+           "tools/research/src/research/store/moves.json", "tests/test_retired_terms.py", "GLOSSARY.md"]
