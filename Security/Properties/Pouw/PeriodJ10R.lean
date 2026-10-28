@@ -24,7 +24,7 @@ draw size is the block's `k s_T`, read from the block's draw, not chosen here.
   stratum's escape from the joint draw, `Law.stratified σ k hk`'s coordinate `s_T`, a lemma to be), it makes the
   period's tile coin the block's draw restricted to the tile stratum. Neither is a premise here: the period's game
   draws its permutation uniformly, and the bound below is about that game.
-* `Committed`, `Answered`, `WindowAccepts`, `CreditWindows`, `creditDrawn`: `Credit.window`'s 18 inputs, split into what
+* `PreDraw`, `Answered`, `WindowAccepts`, `CreditWindows`, `creditDrawn`: `Credit.window`'s 18 inputs, split into what
   the window commits before its draw coin and the rest; its verdict, an accept being some credited calls; each
   window's inputs as functions of the period's coins; and the units its draw demands proofs of, as `windowLayout`
   draws them (`Credit.descriptorDrawn`: `Credit.windowDrawn` at the descriptor's strata and the draw coin).
@@ -36,7 +36,7 @@ draw size is the block's `k s_T`, read from the block's draw, not chosen here.
 * `TileDrawIsCoin`, `TileServiceSound`: on every accepted window, `creditDrawn` gives the units of the tile coordinate at
   the window's draw coin, `k s_T` of them; the service's soundness against `Credit.window`.
 * `RegisteredBeforeDraw`: each window's commitment fixed before its draw coin, `Properties.Pouw.Period`'s form at
-  `Committed`.
+  `PreDraw`.
 * `saltOf`, `Place`, `pinnedAt`, `j10rAtCoin`, `SharedNoiseLucks`, `j10rRate`: each window's salt as
   `Credit.window` reads it; a unit's place (its position, its call's first unit, the call's slot and `K`, its tile and
   tile coordinates, its call's roots) and the noise and fold keys J10-R derives there; the unit's relation, its one
@@ -146,8 +146,8 @@ abbrev Coin (C Ξ : Type) (m : ℕ) {nB mB : ℕ} (σ : Fin nB → Fin mB) (sT :
 /-- **What a window commits before its draw coin**, of `Credit.window`'s inputs: its open root and window record
 (`window`), the circuit in hex (`descriptor`), its committed values (`entries`, θ's among them by reference), its commit,
 its manifest (`calls`), its served rows (`served`), its salt, its period's committed `k` and its T table rows (`rows`).
-It is the window's commitment, not the registration log: θ and the builder are the log's. -/
-structure Committed where
+Its pre-draw inputs: the window's commitment, not the registration log, whose θ and builder these only reference. -/
+structure PreDraw where
   window : Json
   descriptor : Json
   entries : Json
@@ -172,7 +172,7 @@ structure Answered where
   live : Json
 
 /-- **Served H1's verdict credits the window**: `Credit.window` on its inputs gives credited calls, not a refusal. -/
-def WindowAccepts (r : Committed) (e : Answered) : Prop :=
+def WindowAccepts (r : PreDraw) (e : Answered) : Prop :=
   ∃ got : List ℕ, PouwCheck.Credit.window e.key e.ledger e.pins e.main r.window e.session r.salt r.calls r.served
     r.commit e.rounds e.draw r.descriptor r.entries e.proofs e.live r.k r.rows = .ok got
 
@@ -180,13 +180,13 @@ def WindowAccepts (r : Committed) (e : Answered) : Prop :=
 (the draw `Credit.windowLayout` holds the proofs to) over the strata of the descriptor's layout, at the window's root,
 the draw's coin, root and receipts and the period's `k`. The `window-drawn` difftest holds it to the Python verifier's
 `credit._window_drawn`. -/
-def creditDrawn (r : Committed) (e : Answered) : PouwCheck.R (Array ℕ) :=
+def creditDrawn (r : PreDraw) (e : Answered) : PouwCheck.R (Array ℕ) :=
   PouwCheck.Credit.descriptorDrawn r.window e.draw r.descriptor r.k
 
 /-- **A period's windows as `Credit.window` reads them**: on the period's coins, window `w`'s registration and the
 rest of its inputs, each any function of the coins. -/
 structure CreditWindows (Ω : Type) (n : ℕ) where
-  reg : Paths Ω n → Fin n → Committed
+  reg : Paths Ω n → Fin n → PreDraw
   ev : Paths Ω n → Fin n → Answered
 
 namespace CreditWindows
@@ -265,7 +265,7 @@ def TileServiceSound {C Ξ V : Type} [Fintype C] [Fintype Ξ] {m nB mB n : ℕ} 
         ¬ rel x w t (opened x w (unitOf (tileAt σ sT t)))) ≤ δks
 
 /-- **Each window's commitment is fixed before its draw coin**: `Properties.Pouw.Period.RegisteredBeforeDraw` at
-`Credit.window`'s committed inputs (`Committed`). -/
+`Credit.window`'s pre-draw inputs (`PreDraw`). -/
 def RegisteredBeforeDraw {C B : Type} {m n : ℕ} (ws : CreditWindows (Paths C m × B) n) : Prop :=
   ∀ (x z : Paths (Paths C m × B) n) (w : Fin n), ws.reg (spliceAt w.val m x z) w = ws.reg x w
 
