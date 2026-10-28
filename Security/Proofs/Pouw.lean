@@ -60,6 +60,7 @@ import Proofs.Pouw.H1Zy
 import Proofs.Pouw.LiveCredit
 import Proofs.Pouw.M1
 import Proofs.Pouw.MerkleExtract
+import Proofs.Pouw.OnsiteFreed
 import Proofs.Pouw.ShaRealize
 import Proofs.Pouw.ShaRealizeWitness
 import Proofs.Pouw.Milestone
@@ -180,6 +181,8 @@ import Proofs.Pouw.RelativeSecurityJ10R
 import Proofs.Pouw.SakLb
 import Proofs.Pouw.Sampling
 import Proofs.Pouw.Sanity
+import Proofs.Pouw.ServedFreed
+import Proofs.Pouw.ServedFreed.Honest
 import Proofs.Pouw.ServedWork
 import Proofs.Pouw.ServedWork.Honest
 import Proofs.Pouw.SteinerRigidity
