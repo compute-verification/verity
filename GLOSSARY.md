@@ -293,8 +293,8 @@ Some words keep a different, narrower sense:
     A matrix's row (a slot is one row of a step's activations) stays plain English. A workload or a server block is
     never a row (Older names).
   - **Transcript**: the messages of a proof or a session, what its verifier sees (C-Flock's, PoUS's transcript hash).
-    The values of a run's gates are its trace; `evaluate_call`'s `transcript` argument and `ExecutionTranscript` keep
-    the old word until they are renamed.
+    The values of a run's gates are its trace (`evaluation.reference.Trace`); the Python and Lean evaluators'
+    shared refusal text keeps the old word.
   - **Stage**: to stage a statement is to fix and write it before any coin draws (the firewall's staged statements).
     A step of a run is a phase (Older names); a stage of a Boolean lowering, such as one level of a log shifter, is a
     level; a pipeline stage keeps its sense (above).
