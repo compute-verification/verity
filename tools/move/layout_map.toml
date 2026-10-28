@@ -1,5 +1,4 @@
-# The repository's layout move: what `tools/move/layout.py` moves, renames and rewrites (the platform layout, Notion hub
-# 'Verity repository', draft of 7 Oct 2026).
+# The repository's layout move: what `tools/move/layout.py` moves, renames and rewrites (the platform layout).
 #
 # [paths] maps an old path prefix (a file, or a directory ending in "/") to its new one; the longest prefix that matches a
 # tracked file decides where it goes, and a row that maps a directory to itself keeps it where it is. Python module names follow from the paths and [roots] (`layout.py` derives every rename);
@@ -62,7 +61,7 @@ new = { verity = "verity", verity_flock = "verity/ml/flock/python/verity_flock",
 "tools/check/" = "tools/verity/check/"
 "tools/circuit_check/" = "tools/verity/circuit_check/"
 "tools/lean/" = "tools/verity/lean/"
-# the Lean check's entry point takes the check's name (ruling of 06:42Z); `lean-audit.json` keeps its name until it retires
+# the Lean check's entry point takes the check's name; `lean-audit.json` keeps its name until it retires
 "tools/lean/audit.py" = "tools/verity/lean/check.py"
 
 # --- infra/: our machines, cluster, deploys and messaging
