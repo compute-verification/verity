@@ -247,6 +247,8 @@ theorem checkParsed_v1 {s : VStar.Stmt} {c : Flock.Circuit} (h : RecVStar.checkP
   unfold RecVStar.checkParsed at h
   dsimp only at h
   split at h
+  · cases h
+  split at h
   · rw [pure_bind] at h
     split at h
     · cases h
