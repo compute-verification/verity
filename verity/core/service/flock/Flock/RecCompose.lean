@@ -157,12 +157,14 @@ def Shared.Complete (inner : String) (s : Shared) : Prop :=
     s.innerStatementCoins.isSome ∧ s.innerTables.isSome
 
 /-- **`rec-compose`'s acceptance** over the parts' verdicts, at V*'s `n` statements, the composition's own rows file's
-SHA-512 `rows` and inner shape's `inner`: one verdict per statement, `rec_part` `j` once for each `j < n`; each accepted,
+SHA-512 `rows` and inner shape's `inner`: one verdict per statement, `rec_part` `j` once for each `j < n`; each accepted
+at one of them,
 `--zk`, with no identifier, at `rows`; one `Shared` in the compiled verifier's form at `inner` that every part names; and
 every session's coin key named, no two alike. -/
 def Accepts (n : Nat) (rows inner : String) (vs : List Verdict) : Prop :=
   0 < n ∧ vs.length = n ∧ (∀ j, j < n → (vs.map (·.part)).count (some j) = 1) ∧
-    (∀ v ∈ vs, v.accepted = true ∧ v.zk = some true ∧ v.identifier = false ∧ v.rows = some rows) ∧
+    (∀ v ∈ vs, v.accepted = true ∧ v.zk = some true ∧ v.identifier = false ∧ v.rows = some rows ∧
+      ∃ j, v.part = some j ∧ j < n) ∧
     (∃ sh, sh.Complete inner ∧ ∀ v ∈ vs, v.shared = some sh) ∧
     (∀ v ∈ vs, v.coinKey.isSome) ∧ (vs.map (·.coinKey)).Nodup
 
@@ -287,15 +289,18 @@ theorem forM_ok {α : Type} {f : α → Except String Unit} :
     | tail _ hm => exact forM_ok h a hm
 
 theorem checkOne_ok {n : Nat} {rows name : String} {v : Verdict} (h : checkOne n rows name v = .ok ()) :
-    v.accepted = true ∧ v.zk = some true ∧ v.identifier = false ∧ v.rows = some rows := by
+    v.accepted = true ∧ v.zk = some true ∧ v.identifier = false ∧ v.rows = some rows ∧
+      ∃ j, v.part = some j ∧ j < n := by
   unfold checkOne at h
   split at h
   · cases h
   rename_i ha
   split at h
   · cases h
+  rename_i j hj
   split at h
   · cases h
+  rename_i hn
   split at h
   · cases h
   rename_i hz
@@ -307,7 +312,7 @@ theorem checkOne_ok {n : Nat} {rows name : String} {v : Verdict} (h : checkOne n
   rename_i hr
   split at h
   · rename_i hh
-    exact ⟨by simpa using ha, by simpa using hz, by simpa using hi, by rw [hr, hh]⟩
+    exact ⟨by simpa using ha, by simpa using hz, by simpa using hi, by rw [hr, hh], j, hj, by omega⟩
   · cases h
 
 theorem checkForm_ok {name inner : String} {s : Shared} (h : checkForm name inner s = .ok ()) : s.Complete inner := by
