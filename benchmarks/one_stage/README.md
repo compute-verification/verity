@@ -107,8 +107,9 @@ negatives.
   keep is rebuilt by the command its `m0/compose.log` records and used only at the log's pin.
 - `served_composite.sh SRC [K]`: remote's and onsite's Lean verdicts on a served run's kept records (`served_verdicts.sh`'s
   `out/`, or a tarball of it) on a CPU node: it builds the products and the pieces' checks, writes PoUW's pieces
-  (`pouw_piece.py`), v2's (`v2_case.py`) and every kept piece holding a case beside its answer, all private in scratch,
-  and runs `composite.py remote` and `onsite`; `$OUT` gets only their public output.
+  (`pouw_piece.py`; the period from the kept `pieces/pouw/`, `main.txt`, `H1_KEY_SHA512` and the drawn and live legs'
+  statements, `POUW_STATEMENTS` and `POUW_LIVE`), v2's (`v2_case.py`) and every kept piece holding a case beside its
+  answer, all private in scratch, and runs `composite.py remote` and `onsite`; `$OUT` gets only their public output.
 - `a8.sh`: run A8's entry point, on the same builds. A8 is one window of the remote bandwidth audit over a registered store of
   a few thousand blocks with every opening proved by the opening unit (`remote_bandwidth.opening`) under `--zk` and held by
   Lean, honest and with a tampered block, a scan of everything the verifier received for the drawn blocks' bytes, and the
