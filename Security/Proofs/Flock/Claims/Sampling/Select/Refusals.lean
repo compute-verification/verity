@@ -41,7 +41,7 @@ def Partition.Cuts (P : Partition) (C : Prog) : Prop :=
 
 /-- A partition of `C` cuts it into proof units. -/
 theorem Partition.Partitions.cuts {P : Partition} {C : Prog} (h : P.Partitions C) : P.Cuts C :=
-  ⟨h.1, ⟨h.2.1, h.2.2.1⟩, h.2.2.2.2.1, h.2.2.2.2.2⟩
+  ⟨h.1, ⟨h.2.1, h.2.2.1⟩, h.2.2.2.1, h.2.2.2.2⟩
 
 /-- **A partition partitions `C` exactly when it cuts it.** -/
 theorem partitions_iff_cuts (P : Partition) (C : Prog) : P.Partitions C ↔ P.Cuts C :=

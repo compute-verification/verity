@@ -333,10 +333,11 @@ theorem classesPa_eq_zero : ∀ (rs : List OneStage) (cs : List (List (List (Lis
   | r :: rs, c :: cs, o, B, h => by
     simp only [classesPa]
     by_cases h2 : Disjoint B (allSlotsFrom rs cs (o + c.flatten.length))
-    · rw [allSlotsFrom, Finset.disjoint_union_right] at h
-      cases r
+    · cases r
       case all =>
-        have h1 : ¬ Disjoint B (Finset.Ico o (o + c.flatten.length)) := fun h1 => h ⟨h1, h2⟩
+        have h1 : ¬ Disjoint B (Finset.Ico o (o + c.flatten.length)) := fun h1 =>
+          h (Finset.disjoint_union_right.2 ⟨h1, h2⟩ :
+            Disjoint B (Finset.Ico o (o + c.flatten.length) ∪ allSlotsFrom rs cs (o + c.flatten.length)))
         obtain ⟨v, hvB, hvI⟩ := Finset.not_disjoint_iff.1 h1
         have hw : window o c.flatten.length B ≠ ∅ := by
           intro he
@@ -348,7 +349,9 @@ theorem classesPa_eq_zero : ∀ (rs : List OneStage) (cs : List (List (List (Lis
         have h0 : OneStage.Pa (strataSizes c) .all (window o c.flatten.length B) = 0 := by
           simpa [OneStage.Pa] using hw
         rw [h0, zero_mul]
-      all_goals exact absurd ⟨Finset.disjoint_empty_right B, h2⟩ h
+      all_goals exact absurd
+        (Finset.disjoint_union_right.2 ⟨Finset.disjoint_empty_right B, h2⟩ :
+          Disjoint B (∅ ∪ allSlotsFrom rs cs (o + c.flatten.length))) h
     · rw [classesPa_eq_zero rs cs _ B h2, mul_zero]
 
 theorem disjoint_allSlots {d : Design} {P : Partition} {δ : ℝ} {B : Finset ℕ} (hδ : 0 ≤ δ) (hM : B ∈ d.M P δ) :

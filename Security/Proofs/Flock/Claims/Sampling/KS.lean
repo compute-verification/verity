@@ -331,7 +331,8 @@ theorem faulty_wrong {H : Msg → Msg} {Cm : Commitment Bool} {s : Stmt} {P : Pa
   classical
   unfold faulty at hv
   obtain ⟨hlt, hf⟩ := mem_filter.1 hv
-  have hget : P.blocks[v]? = some P.blocks[v] := List.getElem?_eq_getElem (mem_range.1 hlt)
+  have hlt' : v < P.blocks.length := mem_range.1 hlt
+  have hget : P.blocks[v]? = some P.blocks[v] := List.getElem?_eq_getElem hlt'
   exact ⟨P.blocks[v], hget, fun hc => hf ⟨_, hget, ι, hc⟩⟩
 
 /-! ## What the deployed sampled verifier is taken to do -/
@@ -800,9 +801,16 @@ theorem inner_bad_le (H : Msg → Msg) (D : Deploy Coin Col T) (decode : List (�
     (add_nonneg hesc0 hκs0) hy
   have hcard : (({()} : Finset Unit).card : ℝ) ^ (1 / (D.k x : ℝ)) ≤ slack :=
     rpow_k_le_slack D x (m := 0) (by simp) (by omega)
-  refine Eq.trans_le ?_ (hw.trans (add_le_add le_rfl (mul_le_mul_of_nonneg_right hcard (add_nonneg hesc0 hκs0))))
-  congr 1
-  exact Pr_congr fun e => by simp [BadOuter]
+  have hE : Pr (fun e : E1 D x => BadOuter H D decode x run' B (forkOn (D.stage2 x) r) e) =
+      Pr (fun c : E1 D x =>
+        (accList (fun d => (run' (forkOn (D.stage2 x) r d)).out = .acc) (D.k x)
+          ((List.finRange (D.cap x)).map c.1)).length < D.k x ∨
+        ∃ _u ∈ ({()} : Finset Unit), AllBad (fun d => (run' (forkOn (D.stage2 x) r d)).out = .acc) (D.k x)
+          (fun d u => ∀ v ∈ B, ¬ Good H D decode x run' (forkOn (D.stage2 x) r d) v u)
+          ((List.finRange (D.cap x)).map c.1) c.2) :=
+    Pr_congr fun e => by simp [BadOuter]
+  rw [hE]
+  exact hw.trans (add_le_add le_rfl (mul_le_mul_of_nonneg_right hcard (add_nonneg hesc0 hκs0)))
 
 set_option synthInstance.maxSize 1024 in
 omit [Inhabited Coin] in
