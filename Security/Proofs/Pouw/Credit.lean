@@ -355,4 +355,22 @@ theorem establishedSound_of (htile : Properties.Pouw.Strata.StrataTile) : Establ
 (`Properties.Pouw.Strata.strataTile`), so the total work `established` passes `epsAt` is the strata's. -/
 theorem establishedSound : EstablishedSound := establishedSound_of Properties.Pouw.Strata.strataTile
 
+/-- **The grouped draw misses a set of blocks of work `ε·C` with probability at most `δ`** (`GroupedDrawMisses`): the
+blocks of `Bb` miss every drawn group exactly when their leaves `Bb.image leafOf` are all missed, and those leaves do at
+least the blocks' work, so `workDrawMisses` at `B = Bb.image leafOf`. -/
+theorem groupedDrawMisses : GroupedDrawMisses := by
+  intro layout ss K strata eps δ C k' hss hlaw hk' β leafOf w Bb hk'K hw hB
+  classical
+  have hle : ∑ b ∈ Bb, w b ≤ ∑ u ∈ Bb.image leafOf, unitWork ss u := by
+    rw [← Finset.sum_fiberwise_of_maps_to (fun b hb => Finset.mem_image_of_mem leafOf hb)]
+    exact Finset.sum_le_sum fun u _ => hw u
+  have hev : (fun g : (i : Fin strata.size) → Fin strata[i].need → Fin 256 =>
+      ∃ d, drawnOn strata g = some d ∧ ∀ b ∈ Bb, leafOf b ∉ d) =
+      fun g => ∃ d, drawnOn strata g = some d ∧ ∀ u ∈ Bb.image leafOf, u ∉ d := by
+    funext g
+    simp only [Finset.forall_mem_image]
+  rw [hev]
+  exact workDrawMisses layout ss K strata eps δ C k' hss hlaw hk' (Bb.image leafOf) hk'K
+    (hB.trans (Nat.cast_le.mpr hle))
+
 end Properties.Pouw.Credit.SecurityProofs
