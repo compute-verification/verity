@@ -10,6 +10,23 @@ The challenger draws its coins on its own host, designates the session id from t
 (`period.SESSION_DOMAIN`), signs under its own key and claims the id in its own session log. It reports `{"host",
 "public_key", "session", "session_id", "warmups"}`.
 
+That id is a request's that names no audit (`period.audit`'s), whose salt is drawn where setup ran. An audit's two coins
+are the challenger's, the setup's salt and the session's:
+
+- **The salt.** Before setup encodes `C*`, the prover's side sends `{"salt": {"audit", "commitment"}}`: the audit's
+  64-byte binding and the commitment to `W` that setup will publish. The challenger draws the salt's source from its
+  host's OS after it (`give_salt`), logs the audit, the commitment and the salt (`setup.draw_salt` of that source) in its
+  salt log (`memory_challenger.SaltLog`, which holds one salt an audit), and prints `{"source": HEX}`, which setup takes
+  as its salt source (`salt`).
+- **The session.** A request naming its audit (`audit`, and `published`, setup's published outputs) runs under
+  `session_id(audit, commitment, salt)`, derived from what the challenger logged and never drawn. The challenger
+  refuses it (`designate`) unless the published outputs carry exactly the logged commitment and salt and the session
+  binds the root they publish; its session log refuses a second session under the id. So an audit has one salt and one
+  session, and a retry is a visible failure, never a redraw. The verifier computes the id from the audit's binding and
+  what setup published, never from the report, so a session under any other id is refused.
+
+A refusal prints `{"refused": REASON}` and exits 1 before the side listens.
+
 The two sides are parties of the deployment layer (`verity.core.deploy`), the challenger (`Challenger`) and the prover
 (`Prover`), whose messages are those frames. The challenger takes its coin tree's hiding key and each round's salt from
 its host's coins too:
@@ -25,26 +42,30 @@ they are given. The challenger reads its clock once before each index it sends a
 those readings alone, so on the same coins and readings it signs the same bytes wherever it runs.
 
 `python -m verity.core.protocols.pous.challenger_party --device DIR [--listen HOST:PORT]` is the challenger's side
-(`main`): it reads the request `{"binding", "block_bytes", "blocks", "k", "limit_ns", "node"}` as one JSON line on stdin,
-prints `{"listening": PORT}`, serves one prover (`serve`) and prints its report. `side_of(period, node, device)` is where
-`period.json` puts that side (`stream.Side`), and `session(side, request, respond)` is the leg's: it starts the side,
-connects to it and answers each index with `respond(index)` (`answer`).
+(`main`): it reads one JSON line on stdin, a salt request or the session's `{"binding", "block_bytes", "blocks", "k",
+"limit_ns", "node"}` (with `audit` and `published` when it names its audit), and answers the salt request with its
+source, or prints `{"listening": PORT}`, serves one prover (`serve`) and prints its report. Its key, session log
+(`sessions`) and salt log (`salts`) are in `DIR`. `side_of(period, node, device)` is where `period.json` puts that side
+(`stream.Side`), `salt(side, audit, commitment)` asks it for a salt, and `session(side, request, respond)` is the leg's:
+it starts the side, connects to it and answers each index with `respond(index)` (`answer`).
 
-The request may carry the setup it binds, `"setup": {"blocks", "commitment", "root", "salt", "params"}` (setup's
-published outputs and P2's parameters, `request_of`'s `setup`), refused before the session unless its root is the
-binding and its blocks the request's (`setup_of`). Each session the challenger completes is kept on its own host,
-`DIR/setups/<session id>.json` (0700, the file 0600: `keep`), the request and the id it designated: the auditor's record
-of that window's setup, from which the remote bandwidth audit's verifier on the same host builds its registration
-(`remote_bandwidth.p2_party --pous-record`), never from a file the prover sends.
+A request naming its audit also carries P2's parameters (`params`, `request_of`), and `setup_of` reads setup's published
+outputs with them, refused unless their root is the binding and their blocks the request's. Each session the
+challenger completes is kept on its own host, `DIR/setups/<session id>.json` (0700, the file 0600: `keep`), the request
+and the id it designated: the auditor's record of that window's setup, from which the remote bandwidth audit's verifier
+on the same host builds its registration (`remote_bandwidth.p2_party --pous-record`), never from a file the prover sends.
 """
 
 from __future__ import annotations
 
 import argparse
+import fcntl
+import hashlib
 import json
 import os
 import secrets
 import socket
+import subprocess
 import sys
 import time
 from collections.abc import Callable, Mapping, Sequence
@@ -61,6 +82,7 @@ from verity.ml.randomness import derive
 
 from . import memory_challenger as mc
 from . import run as R
+from . import setup as pous_setup
 from .schemes.p2 import P2Params
 
 END = 2 ** 64 - 1
@@ -74,6 +96,10 @@ CHALLENGER, PROVER = "memory-challenger", "prover"
 COIN_BYTES = 64
 """The session's coins, which the challenger draws first (`main`'s `secrets.token_bytes(64)`), before its coin tree's
 hiding key and salts."""
+SOURCE_BYTES = 64
+"""The setup salt's source, which the challenger draws from its OS for an audit (`give_salt`)."""
+SESSION_ID_TAG = b"verity-pous/memory-challenger/session-id/v1\0"
+AUDIT_BYTES = 64
 MAX_BLOCK = 1 << 24
 MANIFEST = Manifest(
     ID, VERSION, "verity.core.protocols.pous.challenger_party:request_of",
@@ -117,13 +143,65 @@ def _read_clock() -> Send:
     return Send("clock", Message("ClockRead"))
 
 
+class Refusal(RuntimeError):
+    """A request the challenger's side refuses; the message is why."""
+
+
+def session_id(audit: bytes, commitment: bytes, salt: bytes) -> bytes:
+    """The id an audit's session runs under: the first 32 bytes of `SHA-512(SESSION_ID_TAG ‖ audit ‖ commitment ‖ salt)`,
+    of the audit's binding, the commitment to `W` and the salt the challenger drew after it for that audit. The salt and
+    the commitment are in it because the signed header binds only the root of `C*`: an id of the audit alone would let a
+    setup under a salt of the prover's pass as one under the challenger's."""
+    if (len(audit), len(commitment), len(salt)) != (AUDIT_BYTES, 64, mc.SALT_BYTES):
+        raise ValueError(f"an audit's binding and a commitment to W are 64 bytes, a salt {mc.SALT_BYTES}")
+    return hashlib.sha512(SESSION_ID_TAG + audit + commitment + salt).digest()[:32]
+
+
+def give_salt(salts: mc.SaltLog, request: Mapping[str, Any], draw: Callable[[int], bytes] = os.urandom) -> bytes:
+    """The challenger's answer to a salt request `{"audit", "commitment"}`: a source drawn from `draw` after the
+    commitment, its salt (`setup.draw_salt`) logged under the audit in `salts` before the source is returned. Refused
+    (`Refusal`) when the audit has a salt already."""
+    audit, commitment = bytes.fromhex(request["audit"]), bytes.fromhex(request["commitment"])
+    source = draw(SOURCE_BYTES)
+    try:
+        salts.record(audit, commitment, pous_setup.draw_salt(source, commitment))
+    except (mc.SessionLogError, ValueError) as e:
+        raise Refusal(str(e)) from None
+    return source
+
+
+def designate(request: Mapping[str, Any], salts: mc.SaltLog, sessions: mc.SessionLog) -> bytes:
+    """The id of the session `request` names its audit for (`session_id`), from the commitment and salt `salts` logged
+    under the audit; `Refusal` unless setup's published outputs (`published`) carry exactly those and the session audits
+    the `C*` they publish, or when a session has run under the id (`sessions`)."""
+    try:
+        audit, published = bytes.fromhex(request["audit"]), R.Setup.from_json(request["published"])
+    except (KeyError, TypeError, ValueError) as e:
+        raise Refusal(f"the request names no audit and setup's published outputs ({type(e).__name__}: {e})") from None
+    logged = salts.get(audit)
+    if logged is None:
+        raise Refusal(f"the memory challenger drew no salt for audit {audit.hex()}: a session runs on a setup salted by it")
+    if (published.commitment, published.salt) != logged:
+        raise Refusal(f"setup's published outputs do not carry the commitment and salt the memory challenger logged for "
+                      f"audit {audit.hex()}")
+    if published.root.hex() != request.get("binding") or published.blocks != request.get("blocks"):
+        raise Refusal("the session does not audit the C* setup published: its binding and blocks are the published root's "
+                      "and count")
+    sid = session_id(audit, *logged)
+    if sid in sessions:
+        raise Refusal(f"a session has run for audit {audit.hex()}: the memory challenger runs one an audit, and a retry "
+                      "is refused, never redrawn")
+    return sid
+
+
 class Challenger:
-    """The memory challenger: one session of `request_of`'s parameters on its clock and coins (module docstring), the id
-    designated under `domain` (`period.SESSION_DOMAIN`). Its machine gives it `signing-key` (`capabilities["signer"]`,
-    a `memory_challenger.Signer`, with `capabilities["log"]`, its session log); `resolution_ns` is how finely its clock
-    ticks (`memory_challenger.resolution_of`). It finishes with the session and its id (private: what it signs is
-    witness), or refused by name when the prover leaves (`closed`), sends a frame the wire refuses, or one out of
-    phase."""
+    """The memory challenger: one session of `request_of`'s parameters on its clock and coins (module docstring), under
+    its audit's id (`designate`, from `capabilities["salts"]`, its salt log) when the request names one, else the id
+    designated from its coins under `domain` (`period.SESSION_DOMAIN`). Its machine gives it `signing-key`
+    (`capabilities["signer"]`, a `memory_challenger.Signer`, with `capabilities["log"]`, its session log);
+    `resolution_ns` is how finely its clock ticks (`memory_challenger.resolution_of`). It finishes with the session and
+    its id (private: what it signs is witness), or refused: with `designate`'s reason before any frame, or by name when
+    the prover leaves (`closed`), sends a frame the wire refuses, or one out of phase."""
 
     def __init__(self, domain: str, warmups: int = WARMUPS, resolution_ns: float = 1) -> None:
         self.domain, self.warmups, self.resolution_ns = domain, warmups, resolution_ns
@@ -138,6 +216,13 @@ class Challenger:
     def start(self, params: Mapping[str, Any], identity: Identity) -> list[Any]:
         self.request, caps = dict(params), identity.capabilities
         self.signer, self.log = caps["signer"], caps["log"]
+        if "audit" in self.request:
+            try:
+                if caps.get("salts") is None:
+                    raise Refusal("the memory challenger keeps no salt log, so it runs no audit's session")
+                self.sid = designate(self.request, caps["salts"], self.log)
+            except (Refusal, mc.SessionLogError) as e:
+                return [Finish(None, str(e), kind="private")]
         self.phase = Phase("Coins")
         return [Send("coins", Message("CoinsDraw", {"n": COIN_BYTES}))]
 
@@ -177,7 +262,8 @@ class Challenger:
             return [Send("coins", Message("CoinsDraw", {"n": n}))]
         coins, key, *salts = self._drawn
         binding = bytes.fromhex(q["binding"])
-        self.sid = derive(coins, self.domain, {"node": q["node"], "setup": binding}).stream("session", 32)
+        if self.sid is None:
+            self.sid = derive(coins, self.domain, {"node": q["node"], "setup": binding}).stream("session", 32)
         tree = mc.CoinTree.draw(coins, self.sid, q["blocks"], q["k"], key=mc.coin_key(key), salts=salts)
         self.c = mc.MemoryChallenger(tree, self.signer, log=self.log, limit_ns=q["limit_ns"],
                                      block_bytes=q["block_bytes"], binding=binding, clock=self._clock,
@@ -243,16 +329,20 @@ PROTOCOL = ProtocolDef(MANIFEST, {CHALLENGER: _challenger, PROVER: Prover})
 
 
 def serve(f: BinaryIO, request: Mapping[str, Any], *, signer: mc.Signer, log: mc.SessionLog, coins: bytes,
-          domain: str, clock: Callable[[], int] = time.perf_counter_ns, warmups: int = WARMUPS,
-          draw: Callable[[int], bytes] = os.urandom) -> tuple[bytes, R.Session]:
-    """The challenger's side of one session over the connection `f`: `Challenger` on `coins` and `clock`, its id
-    designated under `domain`, its coin tree's hiding key and salts from `draw`, `warmups` untimed exchanges first, the
-    session signed by `signer`, with the collector paused (`memory_challenger.collector_paused`); its id and record."""
+          domain: str, salts: mc.SaltLog | None = None, clock: Callable[[], int] = time.perf_counter_ns,
+          warmups: int = WARMUPS, draw: Callable[[int], bytes] = os.urandom) -> tuple[bytes, R.Session]:
+    """The challenger's side of one session over the connection `f`: `Challenger` on `coins` and `clock`, under its
+    audit's id from `salts` when `request` names one, else the id designated under `domain`, its coin tree's hiding key
+    and salts from `draw`, `warmups` untimed exchanges first, the session signed by `signer`, with the collector paused
+    (`memory_challenger.collector_paused`); its id and record. `Refusal` when the party refuses the session."""
     party, given = Challenger(domain, warmups, mc.resolution_of(clock)), [coins]
     with mc.collector_paused():
-        stream.run(party, request, Identity(CHALLENGER, capabilities={"signer": signer, "log": log}), f,
-                   Frames(request["block_bytes"]), peer=PROVER, clock=clock,
-                   coins=lambda n: given.pop() if given else draw(n))
+        done, _ = stream.run(party, request,
+                             Identity(CHALLENGER, capabilities={"signer": signer, "log": log, "salts": salts}), f,
+                             Frames(request["block_bytes"]), peer=PROVER, clock=clock,
+                             coins=lambda n: given.pop() if given else draw(n))
+    if done.refused is not None:
+        raise Refusal(done.refused)
     return party.sid, party.session
 
 
@@ -272,7 +362,7 @@ def report(sid: bytes, session: R.Session, public_key: bytes, warmups: int = WAR
 
 
 def command(device: str | Path) -> tuple[str, ...]:
-    """The argv that starts the challenger's side as a process on this machine, its key and session log in `device`."""
+    """The argv that starts the challenger's side as a process on this machine, its key and logs in `device`."""
     return (sys.executable, "-m", MODULE, "--device", str(device), "--listen", "127.0.0.1:0")
 
 
@@ -305,31 +395,52 @@ def session(side: Side, request: Mapping[str, Any], respond: Callable[[int], byt
     return out | {"rounds": rounds - out.get("warmups", 0)}
 
 
-def request_of(node: str, point: R.Point, binding: bytes, setup: R.Setup | None = None) -> dict[str, Any]:
-    """The session's request; with `setup`, setup's published outputs under `point`'s parameters, which the challenger
-    keeps (`keep`)."""
+def salt(side: Side, audit: bytes, commitment: bytes) -> bytes:
+    """The salt's source for the audit `audit`, which the challenger's side `side` draws after `commitment` and logs
+    (`give_salt`); RuntimeError with the side's refusal, or when it answers anything else or exits nonzero."""
+    p = subprocess.Popen(list(side.command), stdin=subprocess.PIPE, stdout=subprocess.PIPE, text=True)
+    try:
+        p.stdin.write(json.dumps({"salt": {"audit": audit.hex(), "commitment": commitment.hex()}}, sort_keys=True) + "\n")
+        p.stdin.close()
+        line = p.stdout.readline()
+        doc = json.loads(line) if line.strip() else {}
+        if "listening" in doc:
+            # a side older than the salt request waits for a session's prover, holding the host's gate: end it now
+            with socket.create_connection(side.address or ("127.0.0.1", doc["listening"])):
+                pass
+    finally:
+        rc = p.wait()
+    if rc == 0 and isinstance(doc.get("source"), str):
+        return bytes.fromhex(doc["source"])
+    why = doc.get("refused") or (f"it answered {line.strip()[:200]!r}" if "listening" in doc else f"it exited {rc}")
+    raise RuntimeError(f"the memory challenger on {side.host} drew no salt: {why}")
+
+
+def request_of(node: str, point: R.Point, binding: bytes, *, audit: bytes | None = None,
+               published: R.Setup | None = None) -> dict[str, Any]:
+    """The session's request, `binding` the root of the `C*` it audits; with `audit`, the request names its audit and
+    setup's `published` outputs, whose root is `binding`."""
     q = point.params
     out = {"binding": binding.hex(), "block_bytes": q.block_bytes, "blocks": q.blocks, "k": point.k,
            "limit_ns": point.limit_ns, "node": node}
-    if setup is not None:
-        out["setup"] = setup.to_json() | {"params": {k: getattr(q, k) for k in PARAMS}}
+    if audit is not None:
+        out |= {"audit": audit.hex(), "published": published.to_json(), "params": {k: getattr(q, k) for k in PARAMS}}
     return out
 
 
 def setup_of(request: Mapping[str, Any]) -> dict[str, Any] | None:
-    """The request's setup (`request_of`), None without one; ValueError unless its root is the session's binding, its
-    blocks the request's, its commitment and root 64 bytes, its salt PoUS's, and its parameters P2's at those blocks
-    and block size."""
-    s = request.get("setup")
-    if s is None:
+    """Setup's published outputs with P2's parameters, as a request naming its audit carries them (`request_of`), None
+    for a request without them; ValueError unless their root is the session's binding, their blocks the request's,
+    their commitment and root 64 bytes, their salt PoUS's, and the parameters P2's at those blocks and block size."""
+    if "published" not in request and "params" not in request:
         return None
-    if not isinstance(s, dict) or sorted(s) != sorted(("blocks", "commitment", "params", "root", "salt")):
-        raise ValueError("a request's setup is {blocks, commitment, params, root, salt}")
+    s, p = request.get("published"), request.get("params")
+    if not isinstance(s, dict) or sorted(s) != sorted(("blocks", "commitment", "root", "salt")):
+        raise ValueError("a request's published outputs are {blocks, commitment, root, salt}")
     if s["root"] != request["binding"]:
         raise ValueError("the setup's root is not the session's binding")
     if s["blocks"] != request["blocks"]:
         raise ValueError(f"the setup is of {s['blocks']} blocks, the session of {request['blocks']}")
-    p = s["params"]
     if not isinstance(p, dict) or sorted(p) != sorted(PARAMS):
         raise ValueError(f"a setup's params are {list(PARAMS)}")
     q = P2Params(**p)
@@ -338,7 +449,7 @@ def setup_of(request: Mapping[str, Any]) -> dict[str, Any] | None:
     published = R.Setup.from_json(s)
     if len(published.commitment) != 64 or len(published.root) != 64 or len(published.salt) != R.SALT_BYTES:
         raise ValueError("a setup's commitment and root are 64 bytes and its salt PoUS's")
-    return s
+    return s | {"params": p}
 
 
 def keep(device: Path, sid: bytes, request: Mapping[str, Any]) -> Path:
@@ -353,39 +464,60 @@ def keep(device: Path, sid: bytes, request: Mapping[str, Any]) -> Path:
     return path
 
 
+def _logs(device: Path) -> tuple[mc.SaltLog, mc.SessionLog]:
+    """The salt log and session log in `device`, made there the first time under its lock (`period.challenger`'s)."""
+    device.mkdir(parents=True, exist_ok=True)
+    with open(device / "device.lock", "a") as lock:
+        fcntl.flock(lock, fcntl.LOCK_EX)
+        for name, log in (("salts", mc.SaltLog), ("sessions", mc.SessionLog)):
+            if not (device / name).exists():
+                log.create(device / name)
+    return mc.SaltLog(device / "salts"), mc.SessionLog(device / "sessions")
+
+
+def _refused(e: BaseException) -> int:
+    print(json.dumps({"refused": str(e)}), flush=True)
+    return 1
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     from . import period  # noqa: PLC0415  (period imports this module)
 
     ap = argparse.ArgumentParser(prog=MODULE, description=__doc__.split("\n\n")[0])
-    ap.add_argument("--device", required=True, help="the challenger's key and session log (`period.challenger`)")
+    ap.add_argument("--device", required=True, help="the challenger's key, session log and salt log (`period.challenger`)")
     ap.add_argument("--listen", default="127.0.0.1:0", help="HOST:PORT to listen on (port 0: any)")
     a = ap.parse_args(argv)
     request = json.loads(sys.stdin.readline())
-    try:
-        setup_of(request)
-    except (ValueError, TypeError, KeyError) as e:
-        print(f"challenger_party: the request is refused: {e}", file=sys.stderr, flush=True)
-        return 2
     device = Path(a.device)
+    try:
+        salts, sessions = _logs(device)
+        if "salt" in request:
+            source = give_salt(salts, request["salt"])
+            print(json.dumps({"source": source.hex()}), flush=True)
+            return 0
+        if "audit" in request:
+            designate(request, salts, sessions)
+        setup_of(request)
+    except (Refusal, mc.SessionLogError, KeyError, TypeError, ValueError) as e:
+        return _refused(e)
     signer = period.challenger(device, workers=min(period.SETUP_WORKERS, len(os.sched_getaffinity(0))))
-    if not (device / "sessions").exists():
-        mc.SessionLog.create(device / "sessions")
     host, _, port = a.listen.rpartition(":")
     with socket.create_server((host, int(port))) as srv:
         print(json.dumps({"listening": srv.getsockname()[1]}), flush=True)
         conn, _ = srv.accept()
         with conn, conn.makefile("rwb") as f:
             conn.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
-            sid, s = serve(f, request, signer=signer, log=mc.SessionLog(device / "sessions"),
+            sid, s = serve(f, request, signer=signer, log=sessions, salts=salts,
                            coins=secrets.token_bytes(COIN_BYTES), domain=period.SESSION_DOMAIN)
     keep(device, sid, request)
     print(json.dumps(report(sid, s, signer.public_key), sort_keys=True), flush=True)
     return 0
 
 
-__all__ = ["CHALLENGER", "COIN_BYTES", "END", "ID", "MANIFEST", "PARAMS", "PREMISE", "PROTOCOL", "PROVER", "SETUPS",
-           "VERSION", "WARMUPS", "WARMUP_INDEX", "Challenger", "Frames", "Prover", "answer", "command", "keep", "main",
-           "placement", "report", "request_of", "serve", "session", "setup_of", "side_of"]
+__all__ = ["AUDIT_BYTES", "CHALLENGER", "COIN_BYTES", "END", "ID", "MANIFEST", "PARAMS", "PREMISE", "PROTOCOL", "PROVER",
+           "SESSION_ID_TAG", "SETUPS", "SOURCE_BYTES", "VERSION", "WARMUPS", "WARMUP_INDEX", "Challenger", "Frames",
+           "Prover", "Refusal", "answer", "command", "designate", "give_salt", "keep", "main", "placement", "report",
+           "request_of", "salt", "serve", "session", "session_id", "setup_of", "side_of"]
 
 if __name__ == "__main__":
     sys.exit(main())

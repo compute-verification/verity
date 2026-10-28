@@ -11,15 +11,18 @@ from __future__ import annotations
 
 import dataclasses
 import fcntl
+import functools
 import hashlib
 import importlib.util
 import json
+import os
 import shutil
 import socket
 import stat
 import struct
 import subprocess
 import sys
+import tempfile
 from concurrent import futures
 from fractions import Fraction
 from pathlib import Path
@@ -147,15 +150,58 @@ def _in_process_party(signer, log, keep=None, record=lambda request: request):
     return session, calls
 
 
-def _run(s: Served, tmp_path, monkeypatch, keep=None, record=lambda request: request, **kw):
-    signer = ts.TestSigner(b"pous-served-piece", directory=tmp_path)
-    session, calls = _in_process_party(signer, ts.session_log(tmp_path), keep, record)
-    monkeypatch.setattr(CP, "session", session)
-    kw.setdefault("trusted_sha512", hashlib.sha512(signer.public_key).hexdigest())
+class Auditor:
+    """The memory challenger's side in this process, as `challenger_party.main` serves it, on one device (a salt log and
+    a session log) across a test's runs: a salt request answered by `challenger_party.give_salt` from ``draw``, a
+    session refused before it listens as `designate` refuses it (the `RuntimeError` `Side.talk` raises), then served by
+    `_in_process_party` with the device's salt log, which `_run` binds into `challenger_party.serve`, and kept in
+    ``keep`` as ``record`` has it. With ``forget``, it serves the request without its audit, under an id of its coins;
+    with ``claim`` too, it reports the audit's id."""
+
+    def __init__(self, tmp_path: Path, forget: bool = False, claim: bool = False, keep: Path | None = None,
+                 record=lambda request: request, draw=os.urandom) -> None:
+        self.signer = ts.TestSigner(b"pous-served-piece", directory=tmp_path)
+        device = Path(tempfile.mkdtemp(prefix="auditor-", dir=tmp_path))
+        mc.SaltLog.create(device / "salts")
+        self.salts, self.log = mc.SaltLog(device / "salts"), ts.session_log(tmp_path)
+        self.forget, self.claim, self.draw = forget, claim, draw
+        self.serve, self.calls = _in_process_party(self.signer, self.log, keep, record)
+        self.sources = []
+
+    def salt(self, party, audit, commitment):
+        try:
+            source = CP.give_salt(self.salts, {"audit": audit.hex(), "commitment": commitment.hex()}, self.draw)
+        except CP.Refusal as e:
+            raise RuntimeError(f"the memory challenger on {party.host} drew no salt: {e}") from None
+        self.sources.append(source)
+        return source
+
+    def session(self, party, request, respond):
+        try:
+            CP.designate(request, self.salts, self.log)
+        except CP.Refusal as e:
+            raise RuntimeError(f"the side on {party.host} refused: {e}") from None
+        if not self.forget:
+            return self.serve(party, request, respond)
+        audited = ("audit", "published", "params")
+        report = self.serve(party, {k: v for k, v in request.items() if k not in audited}, respond)
+        if not self.claim:
+            return report
+        pub = request["published"]
+        sid = CP.session_id(bytes.fromhex(request["audit"]), bytes.fromhex(pub["commitment"]), bytes.fromhex(pub["salt"]))
+        return report | {"session_id": sid.hex()}
+
+
+def _run(s: Served, tmp_path, monkeypatch, auditor: Auditor | None = None, **kw):
+    auditor = auditor or Auditor(tmp_path)
+    monkeypatch.setattr(CP, "salt", auditor.salt)
+    monkeypatch.setattr(CP, "session", auditor.session)
+    monkeypatch.setattr(CP, "serve", functools.partial(CP.serve, salts=auditor.salts))
+    kw.setdefault("trusted_sha512", hashlib.sha512(auditor.signer.public_key).hexdigest())
     answer = SP.run(s.serve, 3, s.out, hf_home=s.hf, device="cpu", node=NODE,
                     party=Side(AUDITOR, ("ssh", AUDITOR, "challenger_party"), ("192.0.2.36", 47610)),
                     private=s.private, pins=s.pins, schemes=ts.SCHEMES, protocol=TEST_PROTOCOL, **kw)
-    return answer, calls
+    return answer, auditor.calls
 
 
 def _public_text(s: Served) -> str:
@@ -188,10 +234,77 @@ def test_an_honest_store_is_accepted_in_the_answer_the_composed_run_reads(served
     party, request = calls[0]
     assert party.host == AUDITOR and request["node"] == NODE and request["blocks"] == 48
     assert request["k"] == SP.ROUNDS == 320 and prof["k"] == 320
+    assert prof["placement"]["salt"].startswith(f"drawn by the memory challenger on {AUDITOR} from its OS")
 
     doc = json.loads((served.out / "pous.json").read_text())
-    assert doc["key_pinned"] and doc["rounds_answered"] == 320 and doc["latency"]["late"] == 0
-    assert json.loads((served.private / "run.json").read_text())["point"]["k"] == 320
+    assert doc["key_pinned"] and not {"latency", "rounds_answered", "warmups", "reported_host"} & set(doc)
+    run = json.loads((served.private / "run.json").read_text())
+    assert run["point"]["k"] == 320 and run["rounds_answered"] == 320 and run["latency"]["late"] == 0
+    assert run["warmups"] == CP.WARMUPS and run["host"] == AUDITOR
+
+
+def test_the_challenger_draws_the_salt_and_the_verdict_derives_the_session_id(served, tmp_path, monkeypatch):
+    """Setup's salt is the one the memory challenger drew after the commitment and logged under the window's binding, and
+    the session runs under the id derived from that binding, the commitment and the salt, which the verdict computes
+    itself: the request names the binding and setup's published outputs, and the private record carries the id."""
+    auditor = Auditor(tmp_path)
+    answer, calls = _run(served, tmp_path, monkeypatch, auditor)
+    assert answer["verdict"] == "accept", answer["reason"]
+    run = json.loads((served.private / "run.json").read_text())
+    published = run["published"]
+    bind = SP.binding(REPO, REV, 3, None)
+    commitment, salt = bytes.fromhex(published["commitment"]), bytes.fromhex(published["salt"])
+    assert len(auditor.sources) == 1 and auditor.salts.get(bind) == (commitment, salt)
+    assert salt == period.setup.draw_salt(auditor.sources[0], commitment)
+    sid = CP.session_id(bind, commitment, salt)
+    assert run["session_id"] == sid.hex() == run["session"]["commitment"]["session"] and sid in auditor.log
+    request = calls[0][1]
+    assert request["audit"] == bind.hex() and request["published"] == published
+    assert sid.hex() not in _public_text(served)
+
+
+def test_a_second_session_under_the_windows_binding_is_refused(served, tmp_path, monkeypatch):
+    """A prover that runs the window again finds the challenger draws no second salt for its binding; one that reuses the
+    first salt's source, so setup publishes the logged salt, finds the challenger runs no second session for it. Each
+    is undecided with its reason, and no retry redraws."""
+    auditor = Auditor(tmp_path)
+    first, _ = _run(served, tmp_path, monkeypatch, auditor)
+    assert first["verdict"] == "accept", first["reason"]
+    again, calls = _run(served, tmp_path, monkeypatch, auditor)
+    assert again["verdict"] == "undecided" and len(calls) == 1
+    assert again["reason"].startswith(f"the memory challenger on {AUDITOR} drew no salt for the setup: ")
+    assert "draws one salt an audit, and a retry never redraws it" in again["reason"]
+    monkeypatch.setattr(auditor, "salt", lambda party, audit, commitment: auditor.sources[0])
+    replay, calls = _run(served, tmp_path, monkeypatch, auditor)
+    assert replay["verdict"] == "undecided" and len(calls) == 1
+    assert replay["reason"].startswith(f"the memory challenger's session on {AUDITOR} did not complete: RuntimeError: "
+                                       f"the side on {AUDITOR} refused: a session has run for audit")
+    assert len(auditor.log.path.read_text().splitlines()) == 2
+
+
+def test_a_session_whose_setup_salt_is_not_the_challengers_is_refused(served, tmp_path, monkeypatch):
+    """A prover that takes the challenger's salt but salts setup from a source of its own publishes another salt: the
+    challenger refuses the session, and the period is undecided."""
+    auditor = Auditor(tmp_path)
+    drawn = auditor.salt
+    monkeypatch.setattr(auditor, "salt", lambda party, audit, commitment: (drawn(party, audit, commitment),
+                                                                           b"the prover's own" * 4)[1])
+    answer, calls = _run(served, tmp_path, monkeypatch, auditor)
+    assert answer["verdict"] == "undecided" and calls == []
+    assert answer["reason"].endswith(f"refused: setup's published outputs do not carry the commitment and salt the memory "
+                                     f"challenger logged for audit {SP.binding(REPO, REV, 3, None).hex()}")
+    assert auditor.log.path.read_text() == f"{mc.SESSION_LOG}\n"
+
+
+def test_a_report_of_a_session_under_another_id_is_rejected(served, tmp_path, monkeypatch):
+    """The verdict takes the session id from the window's binding and setup, never the report: a challenger that ran the
+    session under an id of its coins is rejected for its report, and one that reports the window's id over that session
+    is rejected by the run's check."""
+    answer, calls = _run(served, tmp_path, monkeypatch, Auditor(tmp_path, forget=True))
+    assert answer["verdict"] == "reject" and len(calls) == 1
+    assert answer["reason"].startswith("the memory challenger's report is of a session under another id")
+    lie, _ = _run(served, tmp_path, monkeypatch, Auditor(tmp_path, forget=True, claim=True))
+    assert lie["verdict"] == "reject" and lie["reason"] == "the session does not run under the id the auditor designated"
 
 
 def test_the_rounds_are_the_sessions_and_the_verdicts(served, tmp_path, monkeypatch):
@@ -199,7 +312,7 @@ def test_the_rounds_are_the_sessions_and_the_verdicts(served, tmp_path, monkeypa
     answer, calls = _run(served, tmp_path, monkeypatch, rounds=period.K)
     assert answer["verdict"] == "accept", answer["reason"]
     assert calls[0][1]["k"] == period.K and answer["profile"]["k"] == period.K
-    assert json.loads((served.out / "pous.json").read_text())["rounds_answered"] == period.K
+    assert json.loads((served.private / "run.json").read_text())["rounds_answered"] == period.K
 
 
 def test_the_answer_reveals_nothing_of_the_weights_and_its_commitment_opens_privately(served, tmp_path, monkeypatch):
@@ -285,12 +398,12 @@ def test_a_session_signed_under_another_key_is_rejected(served, tmp_path, monkey
 
 
 def test_a_challenger_whose_side_does_not_start_leaves_the_period_undecided(served, tmp_path):
-    """No retry and no exception: the answer says the session didn't complete, and why."""
+    """No retry and no exception: the answer says the challenger drew no salt for the setup, and why."""
     answer = SP.run(served.serve, 3, served.out, hf_home=served.hf, device="cpu", node=NODE, private=served.private,
                     party=Side(AUDITOR, (sys.executable, "-c", "import sys; sys.exit(3)"), ("127.0.0.1", 9)),
                     pins=served.pins, schemes=ts.SCHEMES, protocol=TEST_PROTOCOL)
     assert answer["verdict"] == "undecided" and answer["reason"].startswith(
-        f"the memory challenger's session on {AUDITOR} did not complete")
+        f"the memory challenger on {AUDITOR} drew no salt for the setup: ")
     assert SV.piece_row("space", served.out.parent)["verdict"] == "undecided"
     assert not (served.private / "case.json").exists()
 
@@ -318,10 +431,9 @@ def case_exe() -> Path:
 @pytest.fixture
 def registered(served, monkeypatch) -> Served:
     """`served` at PoUS's registered point, the one a P2 registration names (2,056-byte blocks, 4 a segment: the two
-    layers' 8 linears in 2 segments, 2 units), with the salt's source fixed and each segment's encode kept across the
-    module's tests, so ``C*`` is encoded once."""
+    layers' 8 linears in 2 segments, 2 units), with each segment's encode kept across the module's tests, so ``C*``,
+    whose salt `_bandwidth`'s challenger draws from a fixed source, is encoded once."""
     monkeypatch.setattr(pous, "_base", lambda scheme: REGISTERED)
-    monkeypatch.setattr(SP, "_salt_source", lambda commitment: SOURCE[:32])
     S = pous._p2("store")
     encode = S.CpuEncoder.encode
 
@@ -334,14 +446,15 @@ def registered(served, monkeypatch) -> Served:
     return served
 
 
-def _bandwidth(tmp_path, **kw):
+def _bandwidth(tmp_path, record=lambda request: request, **kw):
     """`served_piece.run`'s bandwidth session: the party in the gate's shape (`p2_party --listen` from the tree with no
-    site packages), its registration the challenger's record in ``parties/pous``, which the in-process challenger keeps,
-    and a short session, which a toy party's flags hold it to."""
+    site packages), its registration the challenger's record in ``parties/pous``, which the in-process challenger keeps
+    as ``record`` has it, and a short session, which a toy party's flags hold it to."""
     party = (f"cd {ROOT} && exec {sys.executable} -S -E -m verity.core.protocols.remote_bandwidth.p2_party "
              f"--device {tmp_path / 'parties' / 'bw'} --listen 127.0.0.1:0 --pous-record {tmp_path / 'parties' / 'pous'} "
              f"--windows 2 --passes 2 --samples 4 --window-ns 1000000 --deadline-ns 1000000")
-    return {"keep": tmp_path / "parties" / "pous", "bw_party": party, "bw_host": "127.0.0.1",
+    auditor = Auditor(tmp_path, keep=tmp_path / "parties" / "pous", record=record, draw=lambda n: SOURCE[:n])
+    return {"auditor": auditor, "bw_party": party, "bw_host": "127.0.0.1",
             "bw_request": SP.HB.request(NODE.encode(), windows=2, passes=2, samples=4, window_s=0.001,
                                         deadline_s=0.001)} | kw
 
@@ -373,8 +486,10 @@ def test_the_bandwidth_session_is_over_the_store_pous_held_its_case_private_and_
     assert bw["verdict"] == "accept", bw["reason"]
     published = json.loads((s.private / "run.json").read_text())["published"]
     request = calls[0][1]
-    assert request["setup"]["root"] == request["binding"] == published["root"]
-    assert request["setup"]["salt"] == published["salt"] and request["setup"]["commitment"] == published["commitment"]
+    setup = CP.setup_of(request)
+    assert setup["root"] == request["binding"] == published["root"]
+    assert setup["salt"] == published["salt"] and setup["commitment"] == published["commitment"]
+    assert setup["params"] == {k: getattr(REGISTERED.with_segments(2), k) for k in CP.PARAMS}
 
     private = s.serve / "private" / "bandwidth"
     case = json.loads((private / p2_case.CASE).read_text())
@@ -415,8 +530,8 @@ def test_a_challenger_record_of_another_store_is_refused_and_no_case_is_made(reg
     other = hashlib.sha512(b"another store").hexdigest()
 
     def elsewhere(request):
-        return request | {"binding": other, "setup": request["setup"] | {"root": other}}
-    answer, _ = _run(registered, tmp_path, monkeypatch, record=elsewhere, **_bandwidth(tmp_path))
+        return request | {"binding": other, "published": request["published"] | {"root": other}}
+    answer, _ = _run(registered, tmp_path, monkeypatch, **_bandwidth(tmp_path, record=elsewhere))
     assert answer["verdict"] == "accept", answer["reason"]
     bw = json.loads((registered.out.parent / "bandwidth" / "answer.json").read_text())
     assert bw["verdict"] == "undecided" and "the verifier's registration is not the held store's" in bw["reason"]

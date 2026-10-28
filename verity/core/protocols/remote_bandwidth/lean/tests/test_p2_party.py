@@ -304,7 +304,8 @@ def test_the_registration_is_the_challengers_record_of_the_pous_session_it_names
     reg = store.registration
     q = reg.params
     point = R.Point(q, 1, 1)
-    request = CP.request_of(NODE.decode(), point, reg.root, R.Setup(q.blocks, reg.commitment, reg.root, reg.salt))
+    request = CP.request_of(NODE.decode(), point, reg.root, audit=hashlib.sha512(b"a window's binding").digest(),
+                            published=R.Setup(q.blocks, reg.commitment, reg.root, reg.salt))
     sid = hashlib.sha512(b"a PoUS session").digest()[:32]
     CP.keep(tmp_path, sid, request)
     doc = json.loads(p2_party.pous_record(tmp_path, sid.hex()))
