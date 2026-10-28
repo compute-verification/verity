@@ -7,7 +7,10 @@ so h is the SM-cycles a byte holds the whole card, times 4,096:
   alone:  h = ruler x (hash time) / bytes                       the leaves alone (leaf), with the best tree form added (commit)
   beside: h = ruler x (the GEMM loop's extra time) / bytes      the leaves on a low-priority stream beside the served int8 GEMM
           h_noise: the same for the median |A' - A| of the loop alone before and after (A-B-A runs only)
+          where NVML sampled each leg (mhz_beside): f is B's own clock, and h_cycles = 4,096 x SMs x (B's SM-cycles - A's) / bytes is
+          the loss once the clock's fall is taken out (the per-clock figure); h_beside - h_cycles is what the clock's fall costs
 Beside, the hash also needs room: at a point hashing r GB/s while the GEMM runs, a forward of t_G ms carries r x t_G bytes at that h.
+A STEP run's loop is shaped like the served step (hash_cost.py's Gemm), so its forward and bytes_per_fwd are a served forward's.
 """
 from __future__ import annotations
 
@@ -80,7 +83,7 @@ def analyze(run: Path) -> dict:
                                         / res["total_bytes"], 1), tree=e["tree"])
             pts = []
             for b in e.get("beside", []):
-                f_b = mhz(f"{form}:{rb}:cap{b['cap']}:beside")
+                f_b = b.get("mhz_beside") or mhz(f"{form}:{rb}:cap{b['cap']}:beside")
                 ruler_b = MACS_SM_CLK * sms * f_b * 1e6
                 pts.append({"cap": b["cap"], "warps_per_sm": round(b["cap"] * int(form[1:]) / 32 / sms, 2) if b["cap"] else None,
                             "mhz": f_b, "alone_gbps": b["alone_gbps"], "beside_gbps": b["hash_gbps"], "kappa": b["kappa_window"],
@@ -90,10 +93,13 @@ def analyze(run: Path) -> dict:
                 if "aa_ms" in b:   # A-B-A runs: the median |A' - A| and B's delta range over reps, in h
                     pts[-1].update(h_noise=round(ruler_b * b["aa_ms"] * 1e-3 / b["bytes"], 1),
                                    h_range=[round(ruler_b * d * 1e-3 / b["bytes"], 1) for d in b["delta_ms_range"]])
+                if "delta_mcycles" in b:
+                    pts[-1].update(mhz_alone_nvml=b["mhz_alone"], w_alone=b["w_alone"], w_beside=b["w_beside"],
+                                   h_cycles=round(MACS_SM_CLK * sms * b["delta_mcycles"] * 1e6 / b["bytes"], 1))
             row["beside"] = pts
             out["rows"][f"{form}:{rb}"] = row
     out.update(phases=res.get("phases", "4"), form_kind=res.get("form", "split"), stride0=res.get("stride0", False),
-               gemm_priority=res.get("gemm_priority", -100))
+               gemm_priority=res.get("gemm_priority", -100), step=res.get("step", False), gap_cycles=res.get("gap_cycles", 0))
     return out
 
 

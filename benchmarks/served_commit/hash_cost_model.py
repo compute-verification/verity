@@ -10,7 +10,9 @@ h is in MAC-times a committed byte (hash_cost_h.py). For each T and row size rb:
                A/A noise floor where an A-B-A run measured it
   h(rb, σ; B) = σ h_b(rb, σ B) + (1 - σ) h_x(rb), for B committed bytes a forward, σ of them hashed beside the GEMM
   h_b median   the robust beside figure: the median h_beside of the A-B-A points at the phases whose median is least
-A point's phases and cap are its kernel configuration: VERITY_ROWS_PHASES (data launches a leaf batch) and CTAs a launch.
+  h_cycles     the same with the clock's fall beside the hash taken out (NVML in each leg), the per-clock figure
+A point's phases and cap are its kernel configuration: VERITY_ROWS_PHASES (data launches a leaf batch) and CTAs a launch. Each loop
+is its own key: T for the bare GEMM loop, T:step for the loop shaped like the served step (T:step:nogap without the host gap).
 """
 from __future__ import annotations
 
@@ -33,17 +35,19 @@ def collect(runs: list[Path]) -> dict:
         if a["stride0"]:                                       # hashes one row over and over: a diagnostic, not a commitment
             continue
         rid = next((p for p in run.parts if p.startswith("r2026")), str(run))
+        loop = f"{a['T']}" + (":step" if a["step"] else "") + (":nogap" if a["step"] and not a["gap_cycles"] else "")
         for key, row in a["rows"].items():
-            e = by.setdefault(str(a["T"]), {}).setdefault(str(row["row_bytes"]), {"alone": [], "tree": [], "points": []})
+            e = by.setdefault(loop, {}).setdefault(str(row["row_bytes"]), {"alone": [], "tree": [], "points": []})
             src = {"run": rid, "arm": run.name, "form": row["form"], "phases": a["phases"], "kind": a["form_kind"]}
             e["alone"].append({**src, "h_leaf": row["h_leaf"], "gbps": row["leaf_gbps"]})
             if "h_tree" in row:
                 e["tree"].append({**src, "h_tree": row["h_tree"]})
             for p in row["beside"]:
-                if p["cap"] == 0 or not p["overlapped"]:
-                    continue                                   # the whole grid: the hash displaces the GEMM, it doesn't share
+                # the whole grid beside the bare GEMM loop displaces it rather than sharing; beside the step it's the served launch
+                if (p["cap"] == 0 and not a["step"]) or not p["overlapped"]:
+                    continue
                 e["points"].append({**src, **{k: p.get(k) for k in ("cap", "beside_gbps", "kappa", "h_beside", "h_noise",
-                                                                    "bytes_per_fwd")}})
+                                                                    "h_cycles", "w_alone", "w_beside", "bytes_per_fwd")}})
     return by
 
 
@@ -99,7 +103,9 @@ def model(by: dict) -> dict:
                 by_ph.setdefault(p["phases"], []).append(p)
             ph, sel = min(by_ph.items(), key=lambda kv: statistics.median(p["h_beside"] for p in kv[1])) if by_ph else (None, [])
             hs = sorted(p["h_beside"] for p in sel)
+            hc = sorted(p["h_cycles"] for p in sel if p.get("h_cycles") is not None)
             robust = {"phases": ph, "n": len(hs), "paired": bool(paired), "h_b_median": round(statistics.median(hs), 1) if hs else None,
+                      "h_cycles_median": round(statistics.median(hc), 1) if hc else None,
                       "h_b_quartiles": [round(x, 1) for x in statistics.quantiles(hs, n=4)] if len(hs) >= 2 else None,
                       "share_of_h_x": round(statistics.median(hs) / h_x, 3) if hs else None,
                       "max_gbps": max((p["beside_gbps"] for p in sel), default=None)}
@@ -112,14 +118,14 @@ def model(by: dict) -> dict:
 def main() -> None:
     res = model(collect([Path(p) for p in sys.argv[2:]]))
     Path(sys.argv[1]).write_text(json.dumps(res, indent=1))
-    for T, rows in sorted(res.items(), key=lambda kv: -int(kv[0])):
+    for T, rows in sorted(res.items(), key=lambda kv: (-int(kv[0].split(":")[0]), kv[0])):
         for rb, m in sorted(rows.items(), key=lambda kv: int(kv[0])):
             env = "  ".join(f"{x['mb_per_fwd']}MB:{x['h_b']:.0f}" + (f"/{x['h_b_hi']:.0f}" if x["h_b_hi"] != x["h_b"] else "")
                             for x in m["h_b_by_mb_per_fwd"])
             r = m["h_b"]
             print(f"T {T:>5} rows {int(rb) // 1024:>2} KiB  h_x {m['h_x']:7.1f} (leaf {m['h_leaf']}, tree {m['h_tree']})  h_b median "
-                  f"{r['h_b_median']} quartiles {r['h_b_quartiles']} ({r['share_of_h_x']} of h_x; phases {r['phases']}, {r['n']} points, "
-                  f"paired {r['paired']})\n      envelope: {env}")
+                  f"{r['h_b_median']} quartiles {r['h_b_quartiles']} ({r['share_of_h_x']} of h_x; per clock {r['h_cycles_median']}; "
+                  f"phases {r['phases']}, {r['n']} points, paired {r['paired']})\n      envelope: {env}")
 
 
 if __name__ == "__main__":
