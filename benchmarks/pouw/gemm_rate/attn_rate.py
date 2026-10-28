@@ -331,12 +331,7 @@ def main() -> None:
         from vllm.vllm_flash_attn import flash_attn_interface as fai
     import importlib.metadata as md
 
-    vers = {}
-    for pkg in ("vllm", "torch", "triton"):
-        try:
-            vers[pkg] = md.version(pkg)
-        except md.PackageNotFoundError:
-            vers[pkg] = None
+    vers = {pkg: md.version(pkg) for pkg in ("vllm", "torch", "triton")}
     sup = {v: (fai.is_fa_version_supported(v) if fai and hasattr(fai, "is_fa_version_supported") else None) for v in (2, 3)}
     emit({"kind": "device", "uuid": nv.uuid, "name": torch.cuda.get_device_name(0), "sms": st.nsm, "cuda": torch.version.cuda,
           "versions": vers, "fa_supported": sup, "model": {k: v for k, v in m.items() if k != "linears"},

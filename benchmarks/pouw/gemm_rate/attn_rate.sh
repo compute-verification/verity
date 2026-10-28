@@ -41,7 +41,8 @@ if [ -z "${PY:-}" ]; then
   echo "venv rc $?" >> "$O/rc.txt"
   PY=$W/venv/bin/python
 fi
-export PY PYTHONPATH=$TREE:$TREE/integrations/vllm ATTN_BF16_CUBIN=$W/attn_bf16/attn_bf16.sm_90a.cubin
+export PY PYTHONPATH=$TREE:$TREE/integrations/vllm:$TREE/tools/config
+export ATTN_BF16_CUBIN=$W/attn_bf16/attn_bf16.sm_90a.cubin
 $PY - > "$O/versions.txt" 2>&1 << 'EOF'
 import importlib.metadata as md
 import torch
