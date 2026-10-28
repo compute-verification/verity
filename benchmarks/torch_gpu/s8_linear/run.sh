@@ -9,7 +9,8 @@
 # gate); each writes into $OUT/<i>-<script>. @OUT@ in a step is $OUT ("bench.py --configs @OUT@/1-tune/best.json"), @S@
 # the run's scratch directory (deleted at exit, never uploaded), and a step "cpu:SCRIPT ..." runs with no lease ("cpu:realw.py
 # --gen --weights @S@/realw" then "realw.py --weights @S@/realw"). A step that fails ends the run (S8_KEEP_GOING=1: the rest
-# still run).
+# still run). S8_LOCK_MHZ locks the leased GPU's SM clock there for each step (`nvidia-smi -lgc`, where sudo allows it,
+# lock.txt), reset before the lease ends.
 # Outside any lease: the ship unpacked and held to its MANIFEST.sha256 (s8_wgmma.cubin, its sass.json; row_table/ seeds
 # ~/.cache/verity/row_table), the card and Python recorded. VERITY_BENCH_VENV names the Python with torch and vLLM.
 set -uo pipefail
@@ -51,8 +52,12 @@ for step in "$@"; do
   smi=$!
   # shellcheck disable=SC2016
   gpu-lease 1 --wait --max-min "$MAX_MIN" -- bash -c '
+    lock=${S8_LOCK_MHZ:-}
+    [ -n "$lock" ] && { sudo -n nvidia-smi -i "$GPU_LEASE_UUID" -lgc "$lock,$lock" > "$0/lock.txt" 2>&1 || lock=; }
     [ -n "${GPU_LEASE_UUID:-}" ] && nvidia-smi -i "$GPU_LEASE_UUID" -q -d CLOCK,PERFORMANCE,POWER > "$0/clocks.txt" 2>&1
-    exec timeout $((60 * $1 - 30)) "$2" "$3" --out "$0" "${@:4}"' "$dir" "$MAX_MIN" "$PY" "$ROOT/benchmarks/torch_gpu/s8_linear/$script" \
+    timeout $((60 * $1 - 30)) "$2" "$3" --out "$0" "${@:4}"; rc=$?
+    [ -n "$lock" ] && sudo -n nvidia-smi -i "$GPU_LEASE_UUID" -rgc >> "$0/lock.txt" 2>&1
+    exit $rc' "$dir" "$MAX_MIN" "$PY" "$ROOT/benchmarks/torch_gpu/s8_linear/$script" \
     "${argv[@]:1}" 2>&1 | tee "$dir/log.txt"
   rc=${PIPESTATUS[0]}
   kill "$smi" 2>/dev/null
