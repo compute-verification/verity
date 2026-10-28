@@ -3,7 +3,7 @@ PoUS over the served checkpoint's linear weights, held as P2's ``C*`` on the car
 challenger on the auditor's host; its core answer in ``DIR/answer.json``.
 
     served_piece.py SERVE_DIR WINDOW DIR --hf-home H [--p2-lib LIB] [--device cuda] [--node NAME] [--private P]
-      [--challenger-host NAME --challenger-address HOST:PORT --challenger-command ARGV] [--trusted-sha512 HEX]
+      [--rounds K] [--challenger-host NAME --challenger-address HOST:PORT --challenger-command ARGV] [--trusted-sha512 HEX]
 
 `served_piece.sh` runs it under a lease of the card, as the composed run starts a piece (``bash -c CMD _ SERVE_DIR WINDOW
 DIR``).
@@ -19,14 +19,19 @@ DIR``).
    commitment to ``W``, the salt drawn after it from the node's OS, ``C*`` encoded on the card (``libp2v1.so``,
    ``--p2-lib``), the memory challenger's table and the root. Setup's own inputs are kept as it sent them, for the tie.
 3. **The session**: the memory challenger's side started on its host by ``--challenger-command`` (the auditor gate's
-   ``challenger_party`` verb), the prover connecting to ``--challenger-address`` and answering each index from ``C*`` on
-   the card (`challenger_party.session`).
-4. **The verdict**: `period.answer`: the tie, the run's check under the challenger key that ``--trusted-sha512`` pins (a
-   session signed under any other is refused), and what an accepted run certifies (`period.certify`).
+   ``challenger_party`` verb), the prover connecting to ``--challenger-address`` and answering each of ``--rounds``
+   indices (`ROUNDS` by default) from ``C*`` on the card (`challenger_party.session`).
+4. **The verdict**: the run protocol's case (`period.case`: setup's published outputs, the session, the table and setup's
+   own inputs) and its answer on that case's bytes (`served_case.pous_answer`, `period.answer`): the tie, the run's
+   check under the challenger key that ``--trusted-sha512`` pins (a session signed under any other is refused), and what
+   an accepted run certifies (`period.certify`): at `ROUNDS` challenges, ``⌊ρ·|C|⌋`` bits at ``2^-20``
+   (`p2.wide320_certificate`); at 105, at ``1% + 2^-128``. The check takes about 2.3 minutes at the registered point at
+   105 challenges or 320: the tie is its cost, not the rounds.
 5. **Zero knowledge**: the answer's commitment is a hiding one, one ``hm96-sha512/row/v2`` row in a ``frame-v3-sha512``
    tree (`verity.ml.commitments.advice`) holding the run's commitment (the SHA-512 of what setup published) under
    `binding`, so the record fixes the run and reveals nothing of ``W``'s digest, the salt or ``C*``'s root. Its opening,
-   setup's published outputs, the session, the trusted key and the table go to ``--private`` (by default
+   setup's published outputs, the session, the trusted key, the table, and the case with the run protocol's own answer
+   on it (``case.json``, ``answer.json``: the composite's piece, `served_case.write`) go to ``--private`` (by default
    ``SERVE_DIR/private/pous/w<WINDOW>``, 0700), never to ``DIR``. The profile carries the point, the certificate, the
    placement and the weights' public properties: their model, count and size.
 
@@ -48,7 +53,7 @@ import struct
 import sys
 import time
 from collections.abc import Mapping, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from fractions import Fraction
 from pathlib import Path
 from typing import Any
@@ -59,9 +64,15 @@ from verity.core.protocols.pous import challenger_party as CP
 from verity.core.protocols.pous import memory_challenger as mc
 from verity.core.protocols.pous import period
 from verity.core.protocols.pous import run as R
+from verity.core.protocols.pous.schemes import p2 as P2
 from verity.ml.commitments import advice
 from verity.ml.commitments.identity import canonical_json_bytes
 from verity_vllm import protocols as PO
+
+if str(Path(__file__).resolve().parent) not in sys.path:
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+
+import served_case as SC
 
 pous = PO.adapter("pous")
 ROOT = Path(__file__).resolve().parents[2]
@@ -85,6 +96,8 @@ CHALLENGER_COMMAND = ("ssh", "-i", "~/.ssh/vy-auditor2-pous", "-o", "IdentitiesO
 TRUSTED_SHA512 = ("39cd635aea2e124a0fcae035e416b107de27955118914642bb8d9d06814a17a2"
                   "f73014a3b9229bf1293ce4703ccc52a5f3119d22789db6778f34e237dfa631bb")
 BINDING_TAG = b"verity/pous/served-window/v1"
+#: the period's challenges: the 320-read window's, at which an accepted run certifies at `2^-20`
+ROUNDS = P2.CERT_K_WIDE320
 DTYPES = {"I8": torch.int8, "F32": torch.float32, "BF16": torch.bfloat16, "F16": torch.float16}
 SIZES = {"I8": 1, "U8": 1, "F16": 2, "BF16": 2, "F32": 4, "I32": 4, "F64": 8, "I64": 8}
 
@@ -250,10 +263,10 @@ def _private(directory: Path, docs: Mapping[str, Any], digests: bytes) -> None:
 def run(serve_dir: Path, window: int, out: Path, *, hf_home: Path, device: str = "cuda", p2_lib: str | None = None,
         node: str | None = None, party: CP.Party | None = None, trusted_sha512: str = TRUSTED_SHA512,
         private: Path | None = None, pins: Path = PINS, schemes: Mapping[str, mc.Verify] = mc.SCHEMES,
-        protocol: str = period.PROTOCOL) -> dict[str, Any]:
+        protocol: str = period.PROTOCOL, rounds: int = ROUNDS) -> dict[str, Any]:
     """The piece (module docstring): its answer, written with ``pous.json`` to ``out``; `Refusal` when none can be made.
     ``schemes`` and ``protocol`` are the signatures the verifier accepts and the id it answers under (a test signer's in
-    tests)."""
+    tests), ``rounds`` the session's challenges."""
     if not (serve_dir / "serve.json").is_file():
         raise Refusal(f"{serve_dir} has no serve.json")
     serve = json.loads((serve_dir / "serve.json").read_text())
@@ -307,6 +320,7 @@ def run(serve_dir: Path, window: int, out: Path, *, hf_home: Path, device: str =
         try:
             opt = comp.get("pous")
             s = opt.store
+            point = replace(s.point, k=rounds)
             inputs = (s.commitment, s.salt, s.segments())
             details = opt.details
             weights = {"model": repo, "revision": rev, "covers": pous.COVERS, "linears": details["layers"], "bytes": details["tensor_bytes"],
@@ -316,7 +330,7 @@ def run(serve_dir: Path, window: int, out: Path, *, hf_home: Path, device: str =
                         "details": details}
             t = time.monotonic()
             try:
-                rep = CP.session(party, CP.request_of(node, s.point, s.root), opt.prover(()))
+                rep = CP.session(party, CP.request_of(node, point, s.root), opt.prover(()))
                 key, sid = bytes.fromhex(rep["public_key"]), bytes.fromhex(rep["session_id"])
                 session = R.ChallengerRecord.from_json(rep["session"])
             except (OSError, RuntimeError, ValueError, KeyError, TypeError) as e:
@@ -327,10 +341,11 @@ def run(serve_dir: Path, window: int, out: Path, *, hf_home: Path, device: str =
             trusted = (key,) if key_sha == trusted_sha512 else ()
             published = s.published()
             t = time.monotonic()
-            inner = period.answer(s.point, schemes, trusted, published, s.digests, session, sid, protocol,
-                                  setup_inputs=inputs)
-            answer_s = round(time.monotonic() - t, 3)
+            case = period.case(point, sid, trusted, published, s.digests, session,
+                               period.setup_case(s.point.params, *inputs))
             del inputs
+            inner = SC.pous_answer(case, schemes=schemes, protocol=protocol)
+            answer_s = round(time.monotonic() - t, 3)
             row = bytes.fromhex(inner["commitment"])
             hidden = advice.register([row], 8 * len(row), bind)
             opening = hidden.open(0)
@@ -338,9 +353,11 @@ def run(serve_dir: Path, window: int, out: Path, *, hf_home: Path, device: str =
                 "opening.json": {"binding": bind.hex(), "count": 1, "index": opening.index, "n_bits": 8 * len(row),
                                  "path": [p.hex() for p in opening.path], "root": hidden.root.hex(), "row": row.hex(),
                                  "salt": opening.salt.hex()},
-                "run.json": {"answer": inner, "point": period.point_json(s.point), "published": published.to_json(),
+                "run.json": {"answer": inner, "point": period.point_json(point), "published": published.to_json(),
                              "session": rep["session"], "session_id": sid.hex(), "trusted": [k.hex() for k in trusted],
                              "public_key": key.hex(), "host": rep.get("host")}}, s.digests)
+            SC.write(private, case, inner)
+            del case
             answer = inner | {"commitment": hidden.root.hex()}
             if inner["verdict"] == "accept":
                 answer["profile"] = inner["profile"] | {
@@ -354,7 +371,7 @@ def run(serve_dir: Path, window: int, out: Path, *, hf_home: Path, device: str =
                     "outside": outside, "window": window}
             return done(answer, session_s=session_s, answer_s=answer_s, key_sha512=key_sha,
                         key_pinned=bool(trusted), reported_host=rep.get("host"), rounds_answered=rep.get("rounds"),
-                        warmups=rep.get("warmups"), latency=_latencies(session, s.point.limit_ns),
+                        warmups=rep.get("warmups"), latency=_latencies(session, point.limit_ns),
                         private=str(private), public=inner["public"])
         finally:
             comp.close()
@@ -388,6 +405,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     ap.add_argument("--device", default="cuda")
     ap.add_argument("--node", help="the prover's node, as the session names it (default: this host's name)")
     ap.add_argument("--private", type=Path, help="where the private record goes (default SERVE_DIR/private/pous/wK)")
+    ap.add_argument("--rounds", type=int, default=ROUNDS, help=f"the session's challenges (default {ROUNDS})")
     ap.add_argument("--challenger-host", default=CHALLENGER_HOST)
     ap.add_argument("--challenger-address", default=CHALLENGER_ADDRESS, help="HOST:PORT the prover connects to")
     ap.add_argument("--challenger-command", help="the argv that starts the challenger's side, one shell-split line")
@@ -397,7 +415,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     party = CP.Party(a.challenger_host, tuple(os.path.expanduser(x) for x in command), _address(a.challenger_address))
     try:
         answer = run(a.serve_dir, a.window, a.out, hf_home=a.hf_home, device=a.device, p2_lib=a.p2_lib, node=a.node,
-                     party=party, trusted_sha512=a.trusted_sha512, private=a.private)
+                     party=party, trusted_sha512=a.trusted_sha512, private=a.private, rounds=a.rounds)
     except Refusal as e:
         print(f"POUS: no answer: {e}", file=sys.stderr, flush=True)
         return 2
