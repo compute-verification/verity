@@ -38,8 +38,7 @@ from verity.ml.circuits.ports import In, Out, Ports  # noqa: E402
 from verity.ml.circuits.refs import Coll, coll_concat  # noqa: E402
 from verity.ml.circuits.types import Array, Record, Value  # noqa: E402
 from verity.ml.commitments import hm96  # noqa: E402
-from verity.ml.commitments.merkle import root_from_subtrees  # noqa: E402
-from verity.ml.commitments.merkle import tree_levels  # noqa: E402
+from verity.ml.commitments.merkle import root_from_subtrees, tree_levels  # noqa: E402
 from verity.ml.commitments.rowleaf import row_leaf, sha512_row_v2_digest  # noqa: E402
 from verity_vllm.engine import int8_ops as OPS  # noqa: E402
 from verity_vllm.protocols.pouw import h1 as PH  # noqa: E402
