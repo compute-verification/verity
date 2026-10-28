@@ -1064,7 +1064,8 @@ def renamed(name: str, moved: dict[str, str]) -> str:
 
 
 def renamed_witnesses(policy: dict, moved: dict[str, str]) -> dict:
-    """The policy's `witnesses` and `unwitnessed` with every guarantee and theorem they name `renamed` by ``moved``."""
+    """The policy's `witnesses`, `unwitnessed` and `shape.inline` with every guarantee and theorem they name `renamed` by
+    ``moved``."""
     out, ws, allow = {}, policy.get("witnesses"), policy.get("unwitnessed")
     if isinstance(ws, dict):
         out["witnesses"] = {renamed(g, moved): {k: [renamed(n, moved) if isinstance(n, str) else n for n in v]
@@ -1072,6 +1073,8 @@ def renamed_witnesses(policy: dict, moved: dict[str, str]) -> dict:
                                                 for k, v in w.items()} if isinstance(w, dict) else w for g, w in ws.items()}
     if isinstance(allow, dict):
         out["unwitnessed"] = {renamed(g, moved): h for g, h in allow.items()}
+    if isinstance(spec := policy.get("shape"), dict) and isinstance(spec.get("inline"), dict):
+        out["shape"] = spec | {"inline": {renamed(g, moved): h for g, h in spec["inline"].items()}}
     return out
 
 

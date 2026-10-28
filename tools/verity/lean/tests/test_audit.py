@@ -1018,7 +1018,7 @@ def test_a_lift_writes_the_four_name_form_and_the_update_certifies_it(tmp_path):
     `Guarantees` module, which then imports the module of the definition it reads, and `theorem X.SecurityProofs.G :
     X.Guarantees.G` beside the proof, or in the module `beside` names, which then imports the spec module and the proof's;
     after a build, `--update --moved` with the moves it returns certifies each as the same statement under its old name,
-    and the record changes no statement."""
+    the record changes no statement, and `shape.inline`'s entry (`twice`'s `m = n`) follows its guarantee."""
     pkg = tmp_path / "control"
     shutil.copytree(HERE / "fixtures" / "control", pkg, ignore=shutil.ignore_patterns(".lake"))
     (pkg / "Control.lean").write_text((pkg / "Control.lean").read_text()
@@ -1034,9 +1034,11 @@ def test_a_lift_writes_the_four_name_form_and_the_update_certifies_it(tmp_path):
         "open Classical in\ntheorem pick (p : Prop) : (if p then j else j) = j + 0 := by split <;> rfl\nend\n"
         "end Control.Sub\n")
     pol = unclaimed(A.load(pkg))
+    why = {"Eq m n": "inline when the rule came"}
     A.dump(pkg, pol | {"guarantees": {n: {"owner": "@lean"} for n in ("Control.main_thm", "Control.Sub.twice", "Control.Sub.refl",
                                                                         "Control.Sub.pick")},
-                       "layers": pol["layers"] | {"Control.Guarantees": {"imports": ["Control.Defs"]}}})
+                       "layers": pol["layers"] | {"Control.Guarantees": {"imports": ["Control.Defs"]}},
+                       "shape": (pol.get("shape") or {}) | {"inline": {"Control.Sub.twice": why}}})
     build = lambda: subprocess.run(["lake", "build"], cwd=pkg, check=True, capture_output=True, env=A.lake_env())
     audit = lambda **kw: A.audit(pkg, tmp_path / "out", replay=False, runs=False, log=lambda *_: None, **kw)
     build()
@@ -1069,6 +1071,7 @@ def test_a_lift_writes_the_four_name_form_and_the_update_certifies_it(tmp_path):
     assert unshaped(rep) == [] and A.statement_changes(rep["review"]) == []
     assert set(A.load(pkg)["guarantees"]) == {"Control.main_thm", "Control.SecurityProofs.Twice", "Control.SecurityProofs.Refl",
                                               "Control.SecurityProofs.Pick"}
+    assert A.load(pkg)["shape"]["inline"] == {"Control.SecurityProofs.Twice": why}
 
 
 def test_a_lift_whose_statement_reads_a_proof_package_s_definition_is_refused(tmp_path):
@@ -1926,14 +1929,15 @@ def premise(text, head=None, unfolded=None, range=False, closed=False, outer=Tru
 
 def inlined(*premises, **policy):
     """(policy, facts) with `P.t` taking ``premises`` (`P.Fits` and `P.Hyp` listed, `P.SecurityProofs.u` a listed
-    guarantee lifted into `P.Guarantees.U`) and recorded."""
+    guarantee lifted into `P.Guarantees.U`) and recorded; `P.Fits`, which no fact reads, is listed again after the
+    update, which lists only the assumptions read."""
     u = fact(signature="P.SecurityProofs.u : P.Guarantees.U", hyps=[], h="00000000000000bb") | {
         "lift": {"head": "P.Guarantees.U", "module": "P.Guarantees"}, "inline": []}
     f = facts(pins={"P.t": fact() | {"inline": list(premises)}, "P.SecurityProofs.u": u})
     pol = POLICY | {"assumptions": {"P.Hyp": {"owner": "@lean"}, "P.Fits": {"owner": "@lean"}},
                     "guarantees": {"P.t": {"owner": "@lean"}, "P.SecurityProofs.u": {"owner": "@lean"}}}
-    pol = A.judge(pol, f, FILES, update=True)[1] | policy
-    return pol, f
+    pol = A.judge(pol, f, FILES, update=True)[1]
+    return pol | {"assumptions": {"P.Fits": {"owner": "@lean"}} | pol["assumptions"]} | policy, f
 
 
 def inline_codes(pol, f) -> list[str]:
@@ -1984,8 +1988,9 @@ def test_an_unnamed_inline_hypothesis_fails_with_the_fix():
 def test_a_grandfathered_inline_hypothesis_passes_and_the_list_only_shrinks():
     """`shape.inline` lists the offenders when the rule came, keyed by their text with its whitespace as one space: they
     pass, a new one fails, and `--update` drops each entry whose premise no longer offends (all of a guarantee's, its key
-    with them, and the map once empty), keeps those of a guarantee the lock doesn't list yet, and adds none. A property
-    `shape.properties` holds is the shape rule's; a frozen one is judged here. An entry with no reason fails."""
+    with them, and the map once empty), keeps those of a guarantee the lock doesn't list yet, and adds none; `--moved`
+    carries an entry to its guarantee's new name. A property `shape.properties` holds is the shape rule's; a frozen one
+    is judged here. An entry with no reason fails."""
     why = "inline when the rule came"
     pol, f = inlined(premise("P.f n\n    = 3", "Eq"), premise("P.g n = 4", "Eq"))
     allow = {"P.t": {"P.f n = 3": why, "P.g n = 4": why, "P.h n = 5": why}, "P.ahead": {"x = y": why}}
@@ -2007,6 +2012,8 @@ def test_a_grandfathered_inline_hypothesis_passes_and_the_list_only_shrinks():
     assert A.judge(alone, fixed, FILES, update=True)[1]["shape"] == {}
     assert A.inline_failures(held, grown)[1:] == ({"P.ahead": {"x = y": why}, "P.t": {"P.f n = 3": why}},
                                                   {"P.t": ["P.f n = 3", "P.k n = 6"]})
+    assert A.renamed_witnesses({"shape": held["shape"]}, {"P.t": "P.SecurityProofs.T"}) == {"shape": {
+        "premises": ["P.Assumptions"], "inline": {"P.SecurityProofs.T": allow["P.t"], "P.ahead": allow["P.ahead"]}}}
     prop = {"function": "P.f", "outcome": "none"}
     assert inline_codes(pol | {"shape": {"properties": {"P.t": prop}}}, grown) == []
     assert inline_codes(pol | {"shape": {"properties": {"P.t": prop}, "frozen": {"P.t": "frozen: open"}}}, grown) == \

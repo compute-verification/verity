@@ -275,8 +275,8 @@ installs it first, so a machine without elan works), must pass clean and fail on
   (`⟨s, e, fs, r⟩` and `⟨s', e', fs', r⟩`). A guarantee under `frozen` (with why it doesn't fit yet) is
   exempt, and fails once it fits, so the list only shrinks. `"inline": {G: {premise as printed: why}}` lists the
   inline hypotheses (above) each guarantee took when that rule came, keyed by their text with each run of whitespace
-  one space: they pass, `--update` drops each that no longer offends and adds none, and the AUDIT line prints the map's
-  size as `inline debt N`. Every `def G : Prop` of a spec module that holds statements (`"statements"`: module prefixes; by default a module
+  one space: they pass, `--update` drops each that no longer offends and adds none, `--moved` carries an entry to its
+  guarantee's new name, and the AUDIT line prints the map's size as `inline debt N`. Every `def G : Prop` of a spec module that holds statements (`"statements"`: module prefixes; by default a module
   with a `Guarantees` component) must be the statement of a
   listed guarantee, or be under `frozen` until one is. A reason starts with its category (`restatable`, `frozen`,
   `lemma`, `completeness`, `falsified`, or `unstated` for a statement no guarantee states), so a record counts its
