@@ -57,9 +57,14 @@ import sys
 from dataclasses import dataclass, replace
 from pathlib import Path
 
+from verity_machine_model.headline import row
+
 A, B, P, P0 = 0.218, 0.998, 7 / 8, 0.5
 DELTA_S_LOG2 = 40
-EPS_FLAT = 0.00571
+#: ε_♭ + ε_μ on sm_120's data sheet (H1 + fx1), the machine model's sheet row: ε_skip + ε_machine is Compose's ε_♭ and
+#: ε_mand its ε_μ (`epsFlat`, `epsMu`); the row's ε_luck is Λ's term here
+SHEET = row("sm_120", "sheet")
+EPS_FLAT = SHEET.skip + SHEET.machine + SHEET.mand
 TARGET = 0.01
 DAY = 86_400.0
 
@@ -451,7 +456,7 @@ def sensitivity() -> dict:
     base = Config("sensitivity", u=1.0)
     return dict(
         delta_s_log2={str(d): windows(replace(base, delta_s_log2=d)) for d in (20, 30, 40, 64, 80)},
-        eps_flat={f"{e:.3%}": windows(replace(base, eps_flat=e)) for e in (0.003, 0.00571, 0.007, 0.008, 0.009)},
+        eps_flat={f"{e:.3%}": windows(replace(base, eps_flat=e)) for e in (0.003, EPS_FLAT, 0.007, 0.008, 0.009)},
     )
 
 
