@@ -1,42 +1,42 @@
-"""The physical layer's reading of the claims: credit, headroom, where things were, and the covert budget, per block.
+"""The physical layer's reading of the claims: credit, headroom, where things were, and the covert budget, per zone.
 
 `account` reads only public things: the claims (logical facts about the prover system) and the profile (the
-placement's public properties, the declaration with its named assumptions, the verifier's plan). For each block it
+placement's public properties, the declaration with its named assumptions, the verifier's plan). For each zone it
 concludes:
 
 - `credited`: the declared size in ANDs of the Program's part the claims prove ran there (`Profile.ands`), with its
   multiply-adds by format beside it, never credited (`macs`);
-- `busy` and `headroom`: the share of the epoch that work needs on the block's devices, each kind at their declared
+- `busy` and `headroom`: the share of the epoch that work needs on the zone's devices, each kind at their declared
   rate for it (multiply-adds at a precision, word operations, Boolean gates), and the share the audits leave
   unaccounted;
-- `outsourceable` and `local_at_least`: the work a helper off the block could have done for it, and so the credited
-  work that must have run on the block. Crossing bytes bound nothing by themselves: a helper holding the registered
-  weights needs only small inputs and outputs. Work is pinned to the block only by data it must consume that only the
-  block receives, a trusted device's fresh data (a run input placed on a trusted device), which a helper could get only through the
-  block's certified egress: outsourceable ≤ egress × work per forced bit. Or by the named premise `FLEET_CLOSED`. Or,
-  under the premise `SALT_CUSTODY`, by a salt the block's own certifier releases only into it: the work that depends
-  on it is pinned while `custody`, k, the bits that could carry the salt out before registration (the block's egress
+- `outsourceable` and `local_at_least`: the work a helper off the zone could have done for it, and so the credited
+  work that must have run on the zone. Crossing bytes bound nothing by themselves: a helper holding the registered
+  weights needs only small inputs and outputs. Work is pinned to the zone only by data it must consume that only the
+  zone receives, a trusted device's fresh data (a run input placed on a trusted device), which a helper could get only through the
+  zone's certified egress: outsourceable ≤ egress × work per forced bit. Or by the named premise `FLEET_CLOSED`. Or,
+  under the premise `SALT_CUSTODY`, by a salt the zone's own certifier releases only into it: the work that depends
+  on it is pinned while `custody`, k, the bits that could carry the salt out before registration (the zone's egress
   timing advice, the profile's advice, inside inputs and salt-dependent values crossing out), stays at most 384. With
   none, it is unbounded and nothing is attributed;
-- `reads` and `reads_local_at_least`: the reads the bandwidth audits certify for stores on the block's devices, and the
+- `reads` and `reads_local_at_least`: the reads the bandwidth audits certify for stores on the zone's devices, and the
   part no path into the registered device (a boundary link, or host DRAM over PCIe) can have carried in;
 - `carried`: the bits that could have been carried into the epoch: each device's memory, less what a wipe's labels
-  filled (at most its `fill_rate` over the wipe), and never less than its residual. For a block out for maintenance,
+  filled (at most its `fill_rate` over the wipe), and never less than its residual. For a zone out for maintenance,
   only a wipe after it counts.
 
 For the whole datacenter it gives where each held store could have been (`located`: the devices that could have
 answered its sample by the deadline, and none when the prover could rebuild the sample in time), the covert budget (the profile's
 advice, timing advice, inputs, every refused port-window charged at its link's full capacity, so it fails closed, and
-everything a block out for maintenance held), and the failure probability (the sum of the claims' deltas). Beside the
+everything a zone out for maintenance held), and the failure probability (the sum of the claims' deltas). Beside the
 covert budget, which is only what goes beyond the committed computation, it reports the export (λ_out, `export_bits`):
-the committed bits that crossed a certified boundary out of a block, by port. They count as novel information read by
+the committed bits that crossed a certified boundary out of a zone, by port. They count as novel information read by
 their receivers once the declaration's certifiers cover every link; until then the export is reported
 as not applicable, with the uncovered links named.
 
-Every claim's credit is also a `Credit` on a unit: compute in block-ticks, PoUW's proved bound (`Profile.ticks`, (1 − ε)
-of the floor program's block-ticks, which no accepted window undercuts over any route) as `compute` on the whole block
+Every claim's credit is also a `Credit` on a unit: compute in zone-ticks, PoUW's proved bound (`Profile.ticks`, (1 − ε)
+of the floor program's zone-ticks, which no accepted window undercuts over any route) as `compute` on the whole zone
 where the scheme gives one, else the honest routing's
-time on each facet (kinds on one facet add up, kinds on different facets run at once) as `compute:<facet>`, on the block as far as attribution places it there and graded by its anchor,
+time on each facet (kinds on one facet add up, kinds on different facets run at once) as `compute:<facet>`, on the zone as far as attribution places it there and graded by its anchor,
 the rest on the whole datacenter, since PoUW credits the prover system; a store's device the bits read from it and the
 bit-ticks it held over the interval the claim proves (a snapshot proves an instant, and carries none). `capacity` gives each unit's resources a tick by the
 declaration, and an account whose credits exceed them anywhere (`overcredited`, by `double_credit`, Horn's interval
@@ -56,16 +56,16 @@ from .memory import answer_time, fill_rate, into, regen_time
 from .physical import Assumption, Datacenter, Port
 from .time import Interval
 
-#: the premise that no undeclared compute is reachable from a block
+#: the premise that no undeclared compute is reachable from a zone
 FLEET_CLOSED = Assumption("fleet-closed", 1, "premise", "declared")
-#: salt custody (unproved): a salt the block's certifier releases only into it pins the work that depends on it, while
+#: salt custody (unproved): a salt the zone's certifier releases only into it pins the work that depends on it, while
 #: k, the bits that could carry it out before registration, stays at most this many
 SALT_CUSTODY = Assumption("salt-custody", 384, "bits", "declared")
-#: a block's proof blocks counted under the served query (Q_word v1 at X = 16) because no one-stage registration named the
+#: a zone's proof blocks counted under the served query (Q_word v1 at X = 16) because no one-stage registration named the
 #: Program's partition
 SERVED_PARTITION = Assumption("served-partition", 1, "premise", "declared")
-#: σ, the side channel from each server to machines off its block, under the premise that no untrusted
-#: machine shares a block's rack
+#: σ, the side channel from each server to machines off its zone, under the premise that no untrusted
+#: machine shares a zone's rack
 DEDICATED_RACKS = Assumption("dedicated-racks", 1e3, "bit/s per server", "declared")
 
 
@@ -77,10 +77,10 @@ def facet(kind: str) -> str:
 
 
 @dataclass
-class BlockAccount:
-    block: str
+class ZoneAccount:
+    zone: str
     credited: float
-    #: the share of the epoch the credited work needs on the block's devices: each facet's kinds at their declared rates
+    #: the share of the epoch the credited work needs on the zone's devices: each facet's kinds at their declared rates
     #: added up, and the busiest facet's share (`loads` has each)
     busy: float
     outsourceable: float
@@ -89,11 +89,11 @@ class BlockAccount:
     reads_local_at_least: float = 0.0
     forced: float = 0.0
     assumptions: list[str] = field(default_factory=list)
-    #: for a block with a salt in its certifier's custody, k: the bits that could carry it out before registration
+    #: for a zone with a salt in its certifier's custody, k: the bits that could carry it out before registration
     custody: float | None = None
     #: each facet's share of the epoch
     loads: dict[str, float] = field(default_factory=dict)
-    #: what places the work on the block: "fleet-closed", "salt-custody" or "forced" (the tightest bound), or None
+    #: what places the work on the zone: "fleet-closed", "salt-custody" or "forced" (the tightest bound), or None
     anchor: str | None = None
     #: its multiply-adds by format (`mac:bf16`, ...), never credited
     macs: dict[str, float] = field(default_factory=dict)
@@ -105,13 +105,13 @@ class BlockAccount:
 
     @property
     def local_at_least(self) -> float:
-        """Work that must have run on the block itself: the credited work less what a helper could have done."""
+        """Work that must have run on the zone itself: the credited work less what a helper could have done."""
         return max(self.credited - self.outsourceable, 0.0)
 
 
 @dataclass
 class Account:
-    blocks: list[BlockAccount]
+    zones: list[ZoneAccount]
     timing_bits: float
     input_bits: dict[str, int]
     refused: list[Refused]
@@ -119,16 +119,16 @@ class Account:
     advice_bits: float = 0.0
     refused_bits: float = 0.0
     delta: float = 0.0
-    #: each block out for maintenance: the bits its devices hold, which may leave with whoever services it
+    #: each zone out for maintenance: the bits its devices hold, which may leave with whoever services it
     serviced: dict[str, float] = field(default_factory=dict)
     #: what the claims credit each unit, by resource and interval, and what each unit can give a tick (`capacity`)
     credits: list[Credit] = field(default_factory=list)
     capacity: dict[tuple[str, str], float] = field(default_factory=dict)
-    #: the committed bits each egress port carried out of its block (`Profile.exported`)
+    #: the committed bits each egress port carried out of its zone (`Profile.exported`)
     exported: dict[Port, float] = field(default_factory=dict)
     #: the links the declaration leaves uncovered (`Datacenter.uncovered_links`), by their ends
     uncovered: list[str] = field(default_factory=list)
-    #: the epoch's real duration, in seconds, and its servers, counted as the blocks' GPU devices: what the side-channel
+    #: the epoch's real duration, in seconds, and its servers, counted as the zones' GPU devices: what the side-channel
     #: premise multiplies (`Ledger.custody`)
     seconds: float = 0.0
     servers: int = 0
@@ -137,7 +137,7 @@ class Account:
 
     @property
     def export_bits(self) -> float:
-        """The export, λ_out: the committed bits that crossed a certified boundary out of a block, novel information
+        """The export, λ_out: the committed bits that crossed a certified boundary out of a zone, novel information
         read by their receivers. Charged only when the declaration's certifiers cover every link (`export_charged`)."""
         return sum(self.exported.values())
 
@@ -167,10 +167,10 @@ class Account:
                 + sum(self.serviced.values()))
 
     def __repr__(self) -> str:
-        lines = [f"{'block':8} {'ANDs':>9} {'local ≥':>9} {'busy':>9} {'outsource':>9} {'reads':>8} {'local ≥':>8} "
+        lines = [f"{'zone':8} {'ANDs':>9} {'local ≥':>9} {'busy':>9} {'outsource':>9} {'reads':>8} {'local ≥':>8} "
                  f"{'carried (bits)':>14}  MACs by format (not credited)"]
-        for b in self.blocks:
-            lines.append(f"{b.block:8} {b.credited:9.3g} {b.local_at_least:9.3g} {100 * b.busy:8.3g}% {b.outsourceable:9.3g} "
+        for b in self.zones:
+            lines.append(f"{b.zone:8} {b.credited:9.3g} {b.local_at_least:9.3g} {100 * b.busy:8.3g}% {b.outsourceable:9.3g} "
                          f"{b.reads:8.3g} {b.reads_local_at_least:8.3g} {b.carried:14.3g}  "
                          + (", ".join(f"{k[4:]} {n:.3g}" for k, n in sorted(b.macs.items())) or "none"))
         if self.uncounted:
@@ -183,15 +183,15 @@ class Account:
                      + "".join(f" + {v:.3g} held by {b} in maintenance" for b, v in self.serviced.items()))
         if self.exported:
             ports = ", ".join(f"{p!r}: {v:g}" for p, v in sorted(self.exported.items(), key=lambda kv: repr(kv[0])))
-            lines.append(f"export: {self.export_bits:g} committed bits out of blocks ({ports}), " + (
+            lines.append(f"export: {self.export_bits:g} committed bits out of zones ({ports}), " + (
                 "charged as novel information read by their receivers" if self.export_charged else
                 f"not applicable while no certifier covers {', '.join(self.uncovered)}"))
         for s, where in self.located.items():
             lines.append(f"store {s}: held on {where[0]}" if len(where) == 1 else
                          f"store {s}: held on one of {', '.join(where)}" if where else
                          f"store {s}: located nowhere (its deadline leaves time to rebuild it)")
-        lines += [f"salt custody of {b.block}: k = {b.custody:g} bits could carry its salt out before registration"
-                  for b in self.blocks if b.custody is not None]
+        lines += [f"salt custody of {b.zone}: k = {b.custody:g} bits could carry its salt out before registration"
+                  for b in self.zones if b.custody is not None]
         if self.delta:
             lines.append(f"fails with probability at most {self.delta:.3g}")
         lines += [f"REFUSED {r.on!r}: {r.why}" for r in self.refused]
@@ -199,10 +199,10 @@ class Account:
         return "\n".join(lines)
 
 
-def _boundary_rate(dc: Datacenter, block: str) -> float:
-    """Bits a second the block's certified boundary links carry, one direction (each link is full duplex)."""
-    return sum(float(l.capacity) for l in dc.boundary if block in
-               {getattr(dc.block_of(l.a), "name", None), getattr(dc.block_of(l.b), "name", None)})
+def _boundary_rate(dc: Datacenter, zone: str) -> float:
+    """Bits a second the zone's certified boundary links carry, one direction (each link is full duplex)."""
+    return sum(float(l.capacity) for l in dc.boundary if zone in
+               {getattr(dc.zone_of(l.a), "name", None), getattr(dc.zone_of(l.b), "name", None)})
 
 
 def _sample(profile: Profile, c: Held) -> float:
@@ -229,7 +229,7 @@ def account(claims: list[Claim], profile: Profile, assume: tuple[Assumption, ...
             credited[c.part] += c.work
 
     serviced = [m for m in profile.plan.maintenance if m.during.start < epoch.end and epoch.start < m.during.end]
-    back = {m.block: max(n.during.end for n in serviced if n.block == m.block) for m in serviced}
+    back = {m.zone: max(n.during.end for n in serviced if n.zone == m.zone) for m in serviced}
 
     located: dict[str, list[str]] = {}
     filled: dict[str, float] = defaultdict(float)
@@ -239,7 +239,7 @@ def account(claims: list[Claim], profile: Profile, assume: tuple[Assumption, ...
             located[c.store] = [] if regen_time(dc, s, bits) <= deadline else [
                 d.name for d in dc.devices.values() if d.memory is not None and float(d.memory) >= c.bits
                 and answer_time(dc, c.by, s.device, d.name, bits) <= deadline]
-            rejoined = c.during.start >= back.get(getattr(dc.block_of(s.device), "name", None), epoch.start)
+            rejoined = c.during.start >= back.get(getattr(dc.zone_of(s.device), "name", None), epoch.start)
             if s.content == "labels" and located[c.store] == [s.device] and rejoined:
                 filled[s.device] = max(filled[s.device], min(s.bits, fill_rate(dc, s.device) * deadline))
 
@@ -247,15 +247,15 @@ def account(claims: list[Claim], profile: Profile, assume: tuple[Assumption, ...
     for c in claims:
         if isinstance(c, Read) and inside(c) and c.store not in refused_stores:
             device = profile.stores[c.store].device
-            if (b := dc.block_of(device)) is not None:
+            if (b := dc.zone_of(device)) is not None:
                 reads[b.name] += c.bits
                 reads_local[b.name] += max(c.bits - into(dc, device) * dc.cadence.seconds(c.during.length), 0.0)
 
     premises = {a.name for a in assume}
     ports = {repr(p): p for p in dc.ports}
-    refused_blocks = {dc.watched(ports[r.on.name]).name for r in refused if r.on.kind == "port" and r.on.name in ports}
-    blocks = []
-    for b in dc.blocks:
+    refused_zones = {dc.watched(ports[r.on.name]).name for r in refused if r.on.kind == "port" and r.on.name in ports}
+    zones = []
+    for b in dc.zones:
         work = profile.work[b.name] if credited[b.name] else {}
         rates = {k: sum(float(d.rate[k]) for d in b.devices if k in d.rate) for k in work}
         loads: dict[str, float] = defaultdict(float)
@@ -279,11 +279,11 @@ def account(claims: list[Claim], profile: Profile, assume: tuple[Assumption, ...
             k = profile.salt_out[b.name] + sum(c.bits for c in claims if isinstance(c, Scheduled)) + sum(
                 c.bits for c in claims if isinstance(c, Carried) and c.port.direction == "egress"
                 and dc.watched(c.port).name == b.name and c.during.start < profile.plan.registration)
-            if SALT_CUSTODY.name in premises and k <= float(SALT_CUSTODY) and b.name not in refused_blocks:
+            if SALT_CUSTODY.name in premises and k <= float(SALT_CUSTODY) and b.name not in refused_zones:
                 bounds[SALT_CUSTODY.name] = max(credited[b.name] - profile.pinned[b.name], 0.0)
                 names.append(SALT_CUSTODY.name)
         anchor = min(bounds, key=lambda a: bounds[a])
-        blocks.append(BlockAccount(b.name, credited[b.name], busy, bounds[anchor], carried, reads[b.name],
+        zones.append(ZoneAccount(b.name, credited[b.name], busy, bounds[anchor], carried, reads[b.name],
                                    reads_local[b.name], profile.forced[b.name], names, k, dict(loads), anchor,
                                    {kind: n for kind, n in profile.work.get(b.name, {}).items() if kind.startswith("mac:")}))
 
@@ -291,36 +291,36 @@ def account(claims: list[Claim], profile: Profile, assume: tuple[Assumption, ...
     window_seconds = dc.cadence.seconds(dc.cadence.window_ticks)
     voided = {(r.on.name, r.on.during) for r in refused if r.on.kind == "port"}
     refused_bits = sum(float(links[name].capacity) * window_seconds for name, _ in voided if name in links)
-    return Account(blocks,
+    return Account(zones,
                    sum(c.bits for c in claims if isinstance(c, Carried) and inside(c)),
                    {c.input: c.bits for c in claims if isinstance(c, Entered)},
                    refused, located,
                    sum(c.bits for c in claims if isinstance(c, Scheduled)),
                    refused_bits,
                    sum(c.delta for c in claims if isinstance(c, (Computed, Held, Read))),
-                   {b: sum(float(d.memory) for d in dc.block(b).devices if d.memory is not None) for b in back},
-                   _credits(claims, profile, blocks, inside, refused_stores), capacity(dc),
+                   {b: sum(float(d.memory) for d in dc.zone(b).devices if d.memory is not None) for b in back},
+                   _credits(claims, profile, zones, inside, refused_stores), capacity(dc),
                    dict(profile.exported), [f"{l.a}-{l.b}" for l in dc.uncovered_links()], seconds,
-                   sum(d.kind == "gpu" for b in dc.blocks for d in b.devices), profile.uncounted)
+                   sum(d.kind == "gpu" for b in dc.zones for d in b.devices), profile.uncounted)
 
 
-def _credits(claims: list[Claim], profile: Profile, blocks: list[BlockAccount], inside, refused_stores) -> list[Credit]:
-    """What the claims credit each unit. PoUW credits the prover system, so a block's busy share is the block's only as
+def _credits(claims: list[Claim], profile: Profile, zones: list[ZoneAccount], inside, refused_stores) -> list[Credit]:
+    """What the claims credit each unit. PoUW credits the prover system, so a zone's busy share is the zone's only as
     far as attribution places it there (`local_at_least`, graded by its anchor), and the rest is the whole datacenter's.
     A store's device is credited the bits read from it and the bit-ticks it held."""
     epoch, stores, fleet = profile.plan.epoch, profile.stores, profile.datacenter.name
     out = []
-    for b in blocks:
+    for b in zones:
         if not b.credited:
             continue
         local = b.local_at_least / b.credited
-        proved = b.block in profile.ticks
-        timed = {"compute": profile.ticks[b.block]} if proved else {
+        proved = b.zone in profile.ticks
+        timed = {"compute": profile.ticks[b.zone]} if proved else {
             f"compute:{f}": share * epoch.length for f, share in b.loads.items()}
         basis = "proved" if proved else "honest-routing"
         for resource, ticks in timed.items():
             if local:
-                out.append(Credit(b.block, resource, epoch, ticks * local, b.anchor, basis))
+                out.append(Credit(b.zone, resource, epoch, ticks * local, b.anchor, basis))
             if local < 1:
                 out.append(Credit(fleet, resource, epoch, ticks * (1 - local), None, basis))
     for c in claims:
@@ -347,7 +347,7 @@ class Ledger:
     def joint(self) -> list[tuple[str, str, Interval, float, float]]:
         """The joint rule across the ledger's accounts: every interval where they credit a unit's resource more than the
         declaration says it can do. Two audits of one device in overlapping windows can't both have its whole time. And
-        two PoUW windows (`compute` timed by its proved bound) that overlap on one block are refused outright: their
+        two PoUW windows (`compute` timed by its proved bound) that overlap on one zone are refused outright: their
         bounds don't add, since an honest pair may have run on different facets at once, and the sound joint credit
         would be PoUW's bound over the union of their work."""
         cap = {k: v for a in self.epochs for k, v in a.capacity.items()}
@@ -374,7 +374,7 @@ class Ledger:
 
     @property
     def carried(self) -> list[float]:
-        return [sum(b.carried for b in a.blocks) for a in self.epochs]
+        return [sum(b.carried for b in a.zones) for a in self.epochs]
 
     def custody(self, registered_bits: float, sigma: Assumption = DEDICATED_RACKS) -> Custody:
         """The share of the registered weights, `registered_bits`, that could have left over the ledger's epochs: each
@@ -425,8 +425,8 @@ class Custody:
 
 @dataclass(frozen=True)
 class Credit:
-    """Work `work` of `resource` an audit credits to `unit` within `during`: a block's `compute` (PoUW's proved bound) or
-    `compute:<facet>` in block-ticks,
+    """Work `work` of `resource` an audit credits to `unit` within `during`: a zone's `compute` (PoUW's proved bound) or
+    `compute:<facet>` in zone-ticks,
     a device's `read` in bits and its `held` in bit-ticks over the interval the claim proves (`capacity` gives each per
     tick; a unit with no capacity for a resource can give it nothing)."""
 
@@ -434,7 +434,7 @@ class Credit:
     resource: str
     during: Interval
     work: float
-    #: what places it on the unit, for a block's compute (its attribution anchor)
+    #: what places it on the unit, for a zone's compute (its attribution anchor)
     grade: str | None = None
     #: for compute, what the time rests on: "proved" (PoUW's bound, (1 − ε) of the floor program's time, over every
     #: route) or "honest-routing" (each kind on its named facet at the declared rates, which no audit proves)
@@ -442,13 +442,13 @@ class Credit:
 
 
 def capacity(dc: Datacenter) -> dict[tuple[str, str], float]:
-    """What each unit can give each resource in one tick, by the declaration: a block one tick of each facet of its
-    devices (`compute:<facet>`, in block-ticks), and the datacenter its blocks' together, for the compute no anchor
-    places on a block; a device its read bandwidth (`read`, in bits) and its memory (`held`, in bits, so bit-ticks a
+    """What each unit can give each resource in one tick, by the declaration: a zone one tick of each facet of its
+    devices (`compute:<facet>`, in zone-ticks), and the datacenter its zones' together, for the compute no anchor
+    places on a zone; a device its read bandwidth (`read`, in bits) and its memory (`held`, in bits, so bit-ticks a
     tick)."""
     tick = dc.cadence.seconds(1)
-    out = {(b.name, f"compute:{f}"): 1.0 for b in dc.blocks for f in {facet(k) for d in b.devices for k in d.rate}}
-    out.update({(b.name, "compute"): 1.0 for b in dc.blocks})
+    out = {(b.name, f"compute:{f}"): 1.0 for b in dc.zones for f in {facet(k) for d in b.devices for k in d.rate}}
+    out.update({(b.name, "compute"): 1.0 for b in dc.zones})
     for (b, r) in list(out):
         out[dc.name, r] = out.get((dc.name, r), 0.0) + 1.0
     for d in dc.devices.values():

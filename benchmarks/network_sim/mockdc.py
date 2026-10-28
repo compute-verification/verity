@@ -219,7 +219,7 @@ def status(args) -> None:
     ext = outside(dc)
     ext_address = plan.namespace(ext).interfaces[0].address.split("/")[0]
     checks = []
-    for b in (b.name for b in dc.blocks):
+    for b in (b.name for b in dc.zones):
         _, cert = records.uplink(dc, b)
         checks += [(ext, plan.fabric_address(cert), True), (ext, plan.address(b, cert), False),
                    (cert, plan.address(b, cert), True), (b, plan.address(cert, b), False), (b, ext_address, False)]
@@ -292,12 +292,12 @@ def charge(dc: Datacenter, plan: Plan, claims: list, block: str | None = None) -
     plan (`datacenter.account`, which charges every block its plan has out), on a profile that credits no work and
     registers no store: whether it is sound, and its covert budget, which is the carried windows' timing advice, every
     refused port-window at its uplink's full capacity, and everything a block holds if it is out for maintenance."""
-    mine = plan if block is None else Plan(plan.epoch, maintenance=[m for m in plan.maintenance if m.block == block])
-    acc = account(claims, Profile(dc, mine, {}, {}, {b.name: 0.0 for b in dc.blocks}, {}))
-    ours = [x for x in acc.blocks if block is None or x.block == block]
+    mine = plan if block is None else Plan(plan.epoch, maintenance=[m for m in plan.maintenance if m.zone == block])
+    acc = account(claims, Profile(dc, mine, {}, {}, {b.name: 0.0 for b in dc.zones}, {}))
+    ours = [x for x in acc.zones if block is None or x.zone == block]
     return {"sound": acc.sound, "covert_bits": acc.covert_bits, "timing_bits": acc.timing_bits,
             "refused_bits": acc.refused_bits, "serviced_bits": sum(v for b, v in acc.serviced.items() if b in
-                                                                   {x.block for x in ours}),
+                                                                   {x.zone for x in ours}),
             "carried_bits": sum(x.carried for x in ours)}
 
 
@@ -383,7 +383,7 @@ def run(args) -> None:
     plan_ns = plan_of(args, dc)
     if diff := differences(plan_ns):
         raise SystemExit(f"{'; '.join(diff)}: {RESHAPE}")
-    blocks = [b.name for b in dc.blocks]
+    blocks = [b.name for b in dc.zones]
     strategies = ({b.split("=")[0]: b.split("=")[1] for b in args.block} if args.block else
                   {b: STRATEGIES[k % len(STRATEGIES)] for k, b in enumerate(blocks)})
     if bad := {b: s for b, s in strategies.items() if b not in blocks or s not in STRATEGIES}:
@@ -454,7 +454,7 @@ def audit(out: Path, dc: Datacenter, honest_plan: dict, plans: dict, report: dic
     summary = {"declaration": dc.name, "cadence": {k: v for k, v in vars(dc.cadence).items() if k != "tick"},
                "wan": [[f"{e.a}-{e.b}", repr(e.capacity), repr(e.latency)] for e in dc.links if e.kind == "wan"],
                "plan": {"epoch": [verifier.epoch.start, verifier.epoch.end],
-                        "maintenance": [[m.block, [m.during.start, m.during.end]] for m in verifier.maintenance]},
+                        "maintenance": [[m.zone, [m.during.start, m.during.end]] for m in verifier.maintenance]},
                "blocks": {}}
     honest = next((b for b, s in strategies.items() if s == "honest"), None)
     width = max(map(len, strategies.values()))
@@ -502,7 +502,7 @@ def audit(out: Path, dc: Datacenter, honest_plan: dict, plans: dict, report: dic
         line += f" ({', '.join(failed)})" if failed else ""
         if out_for:
             u = entry["datacenter"]["unplanned"]
-            m = next(m for m in verifier.maintenance if m.block == b)
+            m = next(m for m in verifier.maintenance if m.zone == b)
             line += ("; datacenter records without the plan " + ("ACCEPTED" if u["accepted"] else
                      f"REFUSED ({'; '.join(u['refused'])})") + f", {describe(u['account'])}"
                      + f"; with Maintenance({b}, {m.during}) " + ("ACCEPTED" if not refused else
@@ -692,7 +692,7 @@ def seal_fabric(args, out: Path, frame_bytes: int, frames: int) -> dict:
     plan_ns = plan_of(args, dc)
     if diff := differences(plan_ns):
         raise SystemExit(f"{'; '.join(diff)}: {RESHAPE}")
-    (_, a), (_, b) = (records.uplink(dc, x.name) for x in dc.blocks[:2])
+    (_, a), (_, b) = (records.uplink(dc, x.name) for x in dc.zones[:2])
     d = out / f"fabric-{frame_bytes}"
     d.mkdir(parents=True, exist_ok=True)
     common = {"out": str(d), "frame_bytes": frame_bytes, "frames": frames}

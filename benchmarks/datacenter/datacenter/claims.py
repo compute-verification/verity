@@ -10,7 +10,7 @@ trusted clock:
   its ANDs.
 - `Carried(port, bits)`: a certifier port carried exactly the committed crossings in the declared occupancy, so its only
   freedom was `bits` of timing advice.
-- `Entered(input, bits)`: a run input's bits entered the computation from outside the blocks or from a device in one
+- `Entered(input, bits)`: a run input's bits entered the computation from outside the zones or from a device in one
   (registered inputs open the registration instead, and a trusted device's are the verifier's coins).
 - `Scheduled(bits)`: the occupancy profile was one of several registered ones: advice, once. A declared occupancy
   that isn't one of them is refused, and so is a plan whose number of profiles isn't the one the registration commits;
@@ -23,7 +23,7 @@ trusted clock:
   registered one whose bytes aren't the registration's), the occupancy profile.
 
 A record must exist for every certifier port and every window of the epoch: a missing one is refused, never silence.
-The one exception is a block the verifier's plan has out for maintenance, whose ports owe no records then; the account
+The one exception is a zone the verifier's plan has out for maintenance, whose ports owe no records then; the account
 charges what that costs.
 """
 from __future__ import annotations

@@ -63,9 +63,9 @@ def main() -> None:
     print("An honest night:\n")
     print(night())
     print("\nUnder the salt custody premise (unproved):\n")
-    for b in night(assume=(SALT_CUSTODY,)).blocks:
-        print(f"  {b.block}: k = {b.custody:g} bits, so at least {b.local_at_least:g} of {b.credited:g} credited ran on "
-              f"{b.block}")
+    for b in night(assume=(SALT_CUSTODY,)).zones:
+        print(f"  {b.zone}: k = {b.custody:g} bits, so at least {b.local_at_least:g} of {b.credited:g} credited ran on "
+              f"{b.zone}")
     print("\nThe same night with an adversary:\n")
     adversary = Deviation(extra={(Port("n0.cert", "egress"), 5): 2},      # covert frames on n0's uplink
                           moved={"kv": "n1.cpu0"},                         # KV kept in host DRAM, not on the GPU
@@ -76,8 +76,8 @@ def main() -> None:
     for r in acc.refused:
         print(f"  REFUSED {r.on!r}: {r.why}")
     print(f"\n  covert budget with the refused windows charged at line rate: {acc.covert_bits:.3g} bits")
-    print(f"  KV reads certified local to n1: {acc.blocks[1].reads_local_at_least:.3g} bits "
-          f"(honest night: {night().blocks[1].reads_local_at_least:.3g})")
+    print(f"  KV reads certified local to n1: {acc.zones[1].reads_local_at_least:.3g} bits "
+          f"(honest night: {night().zones[1].reads_local_at_least:.3g})")
 
 
 if __name__ == "__main__":

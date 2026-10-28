@@ -54,11 +54,11 @@ def test_an_honest_run_is_audited_and_credited_to_the_blocks_it_ran_on():
     acc = D.account(claims, profile)
     assert acc.sound
     ands = D.ands(ctx.model.program)
-    per_block = {u: sum(n for k, n in ands.items() if dp.block(dp.device[k]) == u) for u in ctx.hw.units}
-    assert {b.block: b.credited for b in acc.blocks} == per_block and min(per_block.values()) > 0
+    per_block = {u: sum(n for k, n in ands.items() if dp.zone(dp.device[k]) == u) for u in ctx.hw.units}
+    assert {b.zone: b.credited for b in acc.zones} == per_block and min(per_block.values()) > 0
     assert sum(acc.input_bits.values()) == ctx.spec.requests * ctx.spec.d * ctx.spec.act_bits
     closed = D.account(claims, profile, assume=(D.FLEET_CLOSED,))
-    assert all(b.local_at_least == b.credited for b in closed.blocks)
+    assert all(b.local_at_least == b.credited for b in closed.zones)
 
 
 def test_a_covert_frame_is_refused():
@@ -83,7 +83,7 @@ def test_the_served_program_is_audited_and_its_macs_reported_uncredited():
     trace, claims, profile = audited(dp, run_inputs)
     assert ctx.model.output_words(trace.values) == ctx.model.reference(1)
     acc = D.account(claims, profile)
-    assert {c.part: c.work for c in claims if isinstance(c, D.Computed)} == {b.block: 0 for b in acc.blocks}
-    assert acc.sound and all(b.macs.get("mac:bf16", 0) > 0 for b in acc.blocks)
+    assert {c.part: c.work for c in claims if isinstance(c, D.Computed)} == {b.zone: 0 for b in acc.zones}
+    assert acc.sound and all(b.macs.get("mac:bf16", 0) > 0 for b in acc.zones)
     assert "no Boolean gate count" in profile.uncounted and f"nothing credited: {profile.uncounted}" in repr(acc)
     assert acc.input_bits == {"prompt": 32 * cfg.prompt}

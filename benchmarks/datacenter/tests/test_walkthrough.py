@@ -12,9 +12,9 @@ from verity.ml.circuits.program import Program
 from verity.ml.circuits.refs import tuple_of
 from verity.ml.circuits.types import Array, Tuple
 
-from datacenter import (FLEET_CLOSED, Append, Assumption, Block, Cadence, Carried, Challenge, Credit, Datacenter,
+from datacenter import (FLEET_CLOSED, Append, Assumption, Cadence, Carried, Challenge, Credit, Datacenter,
                         Deviation, Device, Fleet, Interval, Ledger, Link, Maintenance, Plan, Port, ReadWindow, Refused,
-                        Release, Store, Wipe, account, ands, audit, commit, crossings, double_credit, evaluate, names,
+                        Release, Store, Wipe, Zone, account, ands, audit, commit, crossings, double_credit, evaluate, names,
                         occupancy, place, read, register, run, values, work)
 from datacenter.examples import GB
 from datacenter.models import WEIGHTS, X, words
@@ -74,7 +74,7 @@ def section_4():
     up = Assumption("uplink", 400e9, "bit/s", "declared")
     dc = Datacenter(
         "dc0",
-        blocks=[Block("a", [gpu("a.gpu")]), Block("b", [gpu("b.gpu")])],
+        zones=[Zone("a", [gpu("a.gpu")]), Zone("b", [gpu("b.gpu")])],
         fabric=[Device("a.cert", "certifier"), Device("b.cert", "certifier"), Device("leaf", "switch"),
                 Device("challenger", "challenger"), Device("world", "outside")],
         links=[Link("a.gpu", "a.cert", up), Link("a.cert", "leaf", up),
@@ -141,7 +141,7 @@ def section_9(p, plan, profile, t):
 def section_10(claims, profile):
     acc = account(claims, profile)
     print(acc)
-    print(account(claims, profile, assume=(FLEET_CLOSED,)).blocks[0].local_at_least)
+    print(account(claims, profile, assume=(FLEET_CLOSED,)).zones[0].local_at_least)
     return acc
 
 
@@ -153,7 +153,7 @@ def section_11(program, registration):
                  bandwidth=Assumption("a.gpu.hbm_bw", 1.6e12 * 8, "bit/s"))
     dram = Device("a.dram", "dram", memory=Assumption("a.dram.size", 512 * GB, "bits"),
                   bandwidth=Assumption("a.dram.bw", 200e9 * 8, "bit/s"))
-    node = Datacenter("dc1", [Block("a", [hbm, dram])],
+    node = Datacenter("dc1", [Zone("a", [hbm, dram])],
                       [Device("a.cert", "certifier"), Device("challenger", "challenger"), Device("leaf", "switch"),
                        Device("world", "outside")],
                       [Link("a.gpu", "a.dram", Assumption("pcie5x16", 64e9 * 8, "bit/s"), kind="pcie"),
@@ -169,7 +169,7 @@ def section_11(program, registration):
     late = run(q, {"x": X}, plan, Deviation(moved={"kv": "a.dram"}))
     print([x for x in audit(late, q.public(plan)) if isinstance(x, Refused)])
     reads = Plan(Interval(0, 16), reads=[ReadWindow("kv", start=0, boundary=10, deadline=12)])
-    a = account(audit(run(q, {"x": X}, reads), q.public(reads)), q.public(reads)).blocks[0]
+    a = account(audit(run(q, {"x": X}, reads), q.public(reads)), q.public(reads)).zones[0]
     print(a.reads, a.reads_local_at_least)
     sampled = Plan(Interval(0, 1000), challenges=[Challenge("kv", at=0, deadline=1, sample=4096 * 8)])
     print(account(audit(run(q, {"x": X}, sampled), q.public(sampled)), q.public(sampled)).located)
@@ -227,7 +227,7 @@ def section_14(program, registration, dc, p):
     serviced = Plan(Interval(0, 16), maintenance=[Maintenance("b", Interval(12, 16))])
     off = Deviation(down={(Port("b.cert", "egress"), 3), (Port("b.cert", "ingress"), 3)})
     acc = account(audit(run(p, {"x": X}, serviced, off), p.public(serviced)), p.public(serviced))
-    print(acc.sound, acc.serviced, acc.blocks[1].carried)
+    print(acc.sound, acc.serviced, acc.zones[1].carried)
     return ledger
 
 
@@ -269,9 +269,9 @@ def walkthrough(between=lambda n: None):
 
 def test_the_walkthrough_runs_as_shown(capsys):
     program, acc, acc12, ledger = walkthrough()
-    assert acc.sound and sum(b.credited for b in acc.blocks) == sum(ands(program).values())
-    assert all(b.credited > 0 for b in acc.blocks)        # each stage is credited to the block it ran on
-    assert acc.export_bits == 1024 and acc.uncovered == ["world-leaf"]   # h and y leave their blocks, uncharged
+    assert acc.sound and sum(b.credited for b in acc.zones) == sum(ands(program).values())
+    assert all(b.credited > 0 for b in acc.zones)        # each stage is credited to the zone it ran on
+    assert acc.export_bits == 1024 and acc.uncovered == ["world-leaf"]   # h and y leave their zones, uncharged
     assert acc12.sound and acc12.input_bits == {"x": 512, "temperature": 16}
     assert ledger.sound and len(ledger.epochs) == 3 and ledger.custody(32768).share < 0.1
     out = capsys.readouterr().out

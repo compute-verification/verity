@@ -79,7 +79,7 @@ def datacenter(hw: Hardware, cadence: D.Cadence, kinds: set[str], rate: float = 
 
     return D.Datacenter(
         "netsim",
-        [D.Block(u, [device(x) for x in sorted(hw.units[u])]) for u in sorted(hw.units)],
+        [D.Zone(u, [device(x) for x in sorted(hw.units[u])]) for u in sorted(hw.units)],
         [device(x) for x in range(len(hw.leaves)) if hw.unit(x) == OUTSIDE],
         [D.Link(hw.leaves[k.ends[0]], hw.leaves[k.ends[1]],
                 D.Assumption(f"{k.name}.beta", k.beta / float(cadence.tick), "bit/s", "declared")) for k in hw.links],
@@ -110,7 +110,7 @@ def placement(model, hw: Hardware, p: P.Placement, dc: D.Datacenter, registratio
 def crossing_pairs(dp: D.Placement) -> set[tuple[int, str]]:
     """The accounting layer's crossings as (gate, reading unit), the pairs `placement.crossings` makes edges of: each
     crossing census value expanded to its gates."""
-    return {(g, getattr(dp.datacenter.block_of(x.dst), "name", OUTSIDE)) for x in D.crossings(dp)
+    return {(g, getattr(dp.datacenter.zone_of(x.dst), "name", OUTSIDE)) for x in D.crossings(dp)
             for g in gates(dp.program, x.value)}
 
 

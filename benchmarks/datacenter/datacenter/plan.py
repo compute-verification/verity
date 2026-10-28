@@ -2,7 +2,7 @@
 
 A `Plan` says which epoch is audited, which devices the challenger wipes and when, which stores it challenges, which
 read windows it opens, how its stores change (`changes`: blocks appended, released and re-keyed under the verifier's
-coins, with their `lifetime` in read windows and whether residency is `deferred`), which blocks are out for maintenance,
+coins, with their `lifetime` in read windows and whether residency is `deferred`), which zones are out for maintenance,
 and how many occupancy profiles the developer registered, which it reads from the registration that commits them (so
 the choice among them is advice worth log2 of that, once).
 """
@@ -17,11 +17,11 @@ from .time import Interval
 
 @dataclass(frozen=True)
 class Maintenance:
-    """Block `block` out of service during `during`: someone the auditor doesn't control has it in hand. Its certifiers'
+    """Zone `zone` out of service during `during`: someone the auditor doesn't control has it in hand. Its certifiers'
     records aren't required then, everything its devices hold may leave with whoever services it, and anything may come
-    back in with them, so only a wipe after it bounds what the block holds when it rejoins."""
+    back in with them, so only a wipe after it bounds what the zone holds when it rejoins."""
 
-    block: str
+    zone: str
     during: Interval
 
 
@@ -37,7 +37,7 @@ class Plan:
     changes: tuple[Append | Release | Rekey, ...] = ()
     lifetime: int | None = None
     deferred: bool = False
-    #: the tick the prover's registration is due by; the verifier publishes the blocks' salts only after it
+    #: the tick the prover's registration is due by; the verifier publishes the zones' salts only after it
     registration: int | None = None
 
     def __init__(self, epoch: Interval, wipes=(), challenges=(), reads=(), maintenance=(),
@@ -61,9 +61,9 @@ class Plan:
                     raise ValueError(f"block {i} of store {store!r} stays {windows} read windows, past its lifetime "
                                      f"of {lifetime}: release or re-key it")
 
-    def out(self, block: str, during: Interval) -> bool:
-        """Whether `block` is out for maintenance at any tick of `during`."""
-        return any(m.block == block and m.during.start < during.end and during.start < m.during.end
+    def out(self, zone: str, during: Interval) -> bool:
+        """Whether `zone` is out for maintenance at any tick of `during`."""
+        return any(m.zone == zone and m.during.start < during.end and during.start < m.during.end
                    for m in self.maintenance)
 
     def resident(self) -> list[tuple[str, int, Interval]]:

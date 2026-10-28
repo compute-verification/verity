@@ -16,9 +16,9 @@ from verity.ml.circuits.ops.boolean.gemm import GEMM_SM120_E4M3, GemmCoordinateE
 from verity.ml.circuits.refs import tuple_of
 from verity.ml.circuits.types import Array, Tuple
 
-from datacenter import (FLEET_CLOSED, SALT_CUSTODY, SERVED_PARTITION, Assumption, Block, Cadence, Carried, Challenge, Computed, Credit,
+from datacenter import (FLEET_CLOSED, SALT_CUSTODY, SERVED_PARTITION, Assumption, Cadence, Carried, Challenge, Computed, Credit,
                         Datacenter, Deviation, Device, Entered, Fleet, Held, Interval, Ledger, Link, Maintenance, On,
-                        Plan, Port, Record, Refused, Store, Wipe, account, ands, audit, check_records, crossings,
+                        Plan, Port, Record, Refused, Store, Wipe, Zone, account, ands, audit, check_records, crossings,
                         double_credit, evaluate, names, occupancy, place, read, register, run, traffic, values, work)
 from datacenter.binding import hops
 from datacenter.logical import census_of, committed
@@ -34,12 +34,12 @@ ANDS = 528640 + 2112                                # its ANDs on bits: the BF16
 HBM, RESIDUAL = 6.4e10, 8e6
 
 
-def node(n: str) -> Block:
+def node(n: str) -> Zone:
     gpu = Device(f"{n}.gpu", "gpu", rate={"mac:bf16": Assumption(f"{n}.gpu.bf16", 1e6, "MAC/s"),
                                           "cuda:gate": Assumption(f"{n}.gpu.gates", 1e7, "gate/s")},
                  memory=Assumption(f"{n}.gpu.hbm", HBM, "bits"), residual=Assumption(f"{n}.gpu.residual", RESIDUAL, "bits"),
                  write=Assumption(f"{n}.gpu.write", 1e14, "bit/s"))
-    return Block(n, [gpu])
+    return Zone(n, [gpu])
 
 
 def datacenter(tick: float = 1e-3) -> Datacenter:
@@ -99,11 +99,11 @@ def test_a_program_of_registered_definitions_has_census_values_work_and_its_eval
 
 
 @pytest.mark.slow
-def test_each_blocks_computed_claim_rests_on_its_proof_units_under_the_registered_partition(setup):
+def test_each_zones_computed_claim_rests_on_its_proof_units_under_the_registered_partition(setup):
     """The sampled proofs draw proof blocks from the Program's partition, which one-stage registers with the Program (the
-    record names the query's digest, the partition's and the population). A block's proof blocks are that partition's
+    record names the query's digest, the partition's and the population). A zone's proof blocks are that partition's
     whose gates run there, read with the verifier's copy of the query and held to the record (proofs, review 4): under
-    Q_word v1 at X = 16 each linear is 32 units, one a coordinate, so each stage's block rests its `Computed` claim on its
+    Q_word v1 at X = 16 each linear is 32 units, one a coordinate, so each stage's zone rests its `Computed` claim on its
     own 32 of the 64. Without a record they are the served query's, and the account says it assumed it. Slow: core checks
     Q_word's cut on the Boolean linear's 1.6 million gates, once for the record and once for the verifier (about 45 s),
     and no other test reads a registered partition."""
@@ -116,7 +116,7 @@ def test_each_blocks_computed_claim_rests_on_its_proof_units_under_the_registere
     assert Computed("a", ANDS, EPOCH, units=32) in claims and Computed("b", ANDS, EPOCH, units=32) in claims
     assumed = p.public(Plan(EPOCH))
     assert assumed.units == profile.units and assumed.partition == "assumed"
-    assert [SERVED_PARTITION.name in account(claims, x).blocks[0].assumptions for x in (assumed, profile)] == [True, False]
+    assert [SERVED_PARTITION.name in account(claims, x).zones[0].assumptions for x in (assumed, profile)] == [True, False]
     with pytest.raises(ValueError, match="copy of its query"):
         p.public(Plan(EPOCH), record=rec, query=partition_object.call_query(8))
     with pytest.raises(ValueError, match="isn't this Program's"):
@@ -124,13 +124,13 @@ def test_each_blocks_computed_claim_rests_on_its_proof_units_under_the_registere
 
 
 @pytest.mark.slow
-def test_pouws_compiled_program_is_placed_with_its_salt_entering_at_the_blocks_certifier():
+def test_pouws_compiled_program_is_placed_with_its_salt_entering_at_the_zones_certifier():
     """PoUW's compiler rewrites a served s8 matmul into sm_120's H1 tile unit, whose one coin is `pouw.salt`. The compiled
-    Program is placed like any other, read at the census's grain without expanding a gate: the salt enters at the block's
-    certifier, so it is trusted data the block consumes and the salt compute's custody counts, and the unit's work comes
+    Program is placed like any other, read at the census's grain without expanding a gate: the salt enters at the zone's
+    certifier, so it is trusted data the zone consumes and the salt compute's custody counts, and the unit's work comes
     out by kind, its SHA-512 seed, noise and receipt fold as Boolean gates and its products, `z`'s and the lanes' segment
     dots (r·c·(2K + 32m)), as int8 multiply-adds, of which census/v1 counts none served (Lean's `Accounting.Gates.roleOf`
-    puts the tile's served role on its receipt's words, which take no MACs). Its salt's cone, gate by gate, is past the explicit limit, so nothing is pinned by it. The block's compute is PoUW's
+    puts the tile's served role on its receipt's words, which take no MACs). Its salt's cone, gate by gate, is past the explicit limit, so nothing is pinned by it. The zone's compute is PoUW's
     proved bound for its census (benchmarks/pouw/proved_ticks.py), basis "proved", which credits its tile's `z` products,
     r·c·K, and not the segment dots'. Slow: compiling builds the unit's 15
     million gates (about 40 s), and no other test has a compiled Program."""
@@ -156,7 +156,7 @@ def test_pouws_compiled_program_is_placed_with_its_salt_entering_at_the_blocks_c
     assert PT.tiles(compiled) == {PT.Tile(4, 16, 64, 64): 1} and PT.placed(work["a"], PT.tiles(compiled)) == {
         "mac:linears": 4 * 16 * 64}
     ticks = PT.proved_block_ticks(PT.placed(work["a"], PT.tiles(compiled)), PT.sheet(), PT.SHEET_EPS, dc.cadence.seconds(1),
-                                  gpus=sum(d.kind == "gpu" for d in dc.block("a").devices))
+                                  gpus=sum(d.kind == "gpu" for d in dc.zone("a").devices))
     profile = p.public(Plan(EPOCH), ticks={"a": ticks})
     assert census_of(compiled)["totals"]["served_macs"] == 0
     assert profile.salt["a"] == profile.forced["a"] == 512 and profile.pinned["a"] == 0
@@ -171,7 +171,7 @@ def test_pouws_compiled_program_is_placed_with_its_salt_entering_at_the_blocks_c
 @pytest.mark.slow
 def test_pouws_one_stream_program_is_placed_and_credits_z_at_its_k():
     """The same s8 grid compiled to the one stream (`h1tile.SCHEME_V3`): its unit is `PouwH1Tile_v3`, whose z is the
-    lanes' folded words recombined, so its block's int8 products are the segment dots' alone, r·c·(K + 32m), and the
+    lanes' folded words recombined, so its zone's int8 products are the segment dots' alone, r·c·(K + 32m), and the
     proved figure credits z's r·c·K as on v1. Slow: compiling builds the unit's gates (about 40 s); it catches a v3 block
     `tiles` doesn't find, which `placed` refuses."""
     import importlib.util
@@ -195,7 +195,7 @@ def test_pouws_one_stream_program_is_placed_and_credits_z_at_its_k():
     assert PT.tiles(compiled) == {PT.Tile(4, 16, 64, 64, 3): 1}
     assert PT.placed(work["a"], PT.tiles(compiled)) == {"mac:linears": 4 * 16 * 64}
     ticks = PT.proved_block_ticks(PT.placed(work["a"], PT.tiles(compiled)), PT.sheet(), PT.SHEET_EPS, dc.cadence.seconds(1),
-                                  gpus=sum(d.kind == "gpu" for d in dc.block("a").devices))
+                                  gpus=sum(d.kind == "gpu" for d in dc.zone("a").devices))
     profile = p.public(Plan(EPOCH), ticks={"a": ticks})
     acc = account([Computed("a", profile.ands["a"], EPOCH)], profile, assume=(FLEET_CLOSED,))
     assert [c for c in acc.credits if c.resource.startswith("compute")] == [
@@ -207,8 +207,8 @@ def test_pouws_one_stream_program_is_placed_and_credits_z_at_its_k():
 def test_work_is_credited_in_ands_and_takes_time_by_kind_at_its_rate():
     """Compute credit is the declared circuit's AND count under one pinned lowering, with the
     multiply-adds reported by format beside it. A device's rate depends on the operand format, so each primitive's
-    gates are work of its kind, timed at the block's rate for it. Kinds on one facet (the tensor cores' `mac:*`) add
-    up; the roundings on the CUDA cores run beside them, so the block's busy share is the busiest
+    gates are work of its kind, timed at the zone's rate for it. Kinds on one facet (the tensor cores' `mac:*`) add
+    up; the roundings on the CUDA cores run beside them, so the zone's busy share is the busiest
     facet's, and the ledger credits and caps each facet."""
     row8 = Array(32, word(8))
     qk = bind(GemmCoordinateE4m3, K=32, **GEMM_SM120_E4M3)
@@ -219,7 +219,7 @@ def test_work_is_credited_in_ands_and_takes_time_by_kind_at_its_rate():
     dc = datacenter()
     rates = {"mac:bf16": Assumption("a.gpu.bf16", 1e6, "MAC/s"), "mac:fp8": Assumption("a.gpu.fp8", 5e5, "MAC/s"),
              "cuda:gate": Assumption("a.gpu.gates", 1e7, "gate/s")}
-    dc.blocks[0] = Block("a", [replace(dc.blocks[0].devices[0], rate=rates)])
+    dc.zones[0] = Zone("a", [replace(dc.zones[0].devices[0], rate=rates)])
     k = [0x30 + i % 8 for i in range(32)]                            # E4M3 codes 0.5 to 0.94
     p = place(attend, dc, "a.gpu", registration=register(attend, {"w1": WEIGHTS["w1"], "k": k}), deliver="world",
               x="world", q="world")
@@ -227,7 +227,7 @@ def test_work_is_credited_in_ands_and_takes_time_by_kind_at_its_rate():
     assert profile.work == {"a": {"mac:bf16": 1024, "mac:fp8": 32, "cuda:gate": 5728 + 179}, "b": {}}
     assert profile.ands == {"a": ANDS + 9194, "b": 0}                # the E4M3 coordinate's 9194 ANDs on bits
     acc = account(audit(run(p, {"x": X, "q": [0x38] * 32}, Plan(EPOCH)), profile), profile)
-    a = acc.blocks[0]
+    a = acc.zones[0]
     mac = (1024 / 1e6 + 32 / 5e5) / 16e-3
     assert a.credited == ANDS + 9194 and a.loads == pytest.approx({"mac": mac, "cuda": 5907 / 1e7 / 16e-3})
     assert a.macs == {"mac:bf16": 1024, "mac:fp8": 32} and "MACs by format (not credited)" in repr(acc)
@@ -244,7 +244,7 @@ def test_a_boundary_link_without_a_certifier_breaks_coverage():
 
 
 def test_where_an_input_enters_says_where_its_bits_come_from_and_place_refuses_what_isnt_there():
-    """A run input's source is the device it enters on: the outside world, a device in a block (telemetry), or a trusted
+    """A run input's source is the device it enters on: the outside world, a device in a zone (telemetry), or a trusted
     device (the verifier's coins). A registered input's is its registration, which a Program that has one is placed
     with."""
     dc = datacenter()
@@ -269,10 +269,10 @@ def test_crossings_are_derived_from_the_placement_including_inputs_and_delivery(
     assert set(traffic(p)) == {Port(c, d) for c in ("a.cert", "b.cert") for d in ("ingress", "egress")}
 
 
-def test_a_registered_value_has_a_copy_in_every_block_that_reads_it_unless_held_in_one():
-    """Memory accounting, review 4: registration puts a copy of a registered value in every block that reads it, as
+def test_a_registered_value_has_a_copy_in_every_zone_that_reads_it_unless_held_in_one():
+    """Memory accounting, review 4: registration puts a copy of a registered value in every zone that reads it, as
     serving holds its weights and the remote audit registers each copy, so a weight both stages read never crosses. Held
-    in one copy instead (named in `place`), it is moved to the other block before it is read, and that crossing is
+    in one copy instead (named in `place`), it is moved to the other zone before it is read, and that crossing is
     bandwidth like any other: 512 more frames on a's uplink, which the profile declares and the run shows."""
     def shared(B, x, w):
         h = B.call(LINEAR, x, w, name="h")
@@ -310,14 +310,14 @@ def test_an_honest_run_is_credited_and_its_only_freedom_is_timing_advice(setup):
     carried = [x for x in claims if isinstance(x, Carried)]
     assert len(carried) == len(dc.ports) * 4 and all(x.bits == 7 for x in carried)
     acc = account(claims, profile)
-    a, b = acc.blocks
+    a, b = acc.zones
     assert acc.sound and a.credited == b.credited == ANDS
     assert b.carried == RESIDUAL and a.carried == HBM                # b was wiped down to its residual
     assert acc.input_bits == {"x": 512} and acc.located == {"labels@b.gpu": ["b.gpu"]}
 
 
 def certified(tick: float = 1e-3) -> Datacenter:
-    """The test datacenter with the outside world behind a certifier of its own: every link off a block ends at a
+    """The test datacenter with the outside world behind a certifier of its own: every link off a zone ends at a
     trusted device."""
     dc = datacenter(tick)
     up = dc.link("world", "leaf").capacity
@@ -328,9 +328,9 @@ def certified(tick: float = 1e-3) -> Datacenter:
 
 
 def test_the_links_where_two_machines_the_auditor_doesnt_control_meet_are_uncovered():
-    """A link is covered when a trusted device ends it, a certifier or the challenger, and a link inside a block is the
-    block's own. The test datacenter's world reaches the leaf switch directly, so that link is uncovered, and so is a
-    bypass from a block to the leaf; with the world behind a certifier of its own, every link is covered."""
+    """A link is covered when a trusted device ends it, a certifier or the challenger, and a link inside a zone is the
+    zone's own. The test datacenter's world reaches the leaf switch directly, so that link is uncovered, and so is a
+    bypass from a zone to the leaf; with the world behind a certifier of its own, every link is covered."""
     dc = datacenter()
     assert [(l.a, l.b) for l in dc.uncovered_links()] == [("world", "leaf")]
     dc.links.append(Link("a.gpu", "leaf", Assumption("bypass", 1e9, "bit/s")))
@@ -340,8 +340,8 @@ def test_the_links_where_two_machines_the_auditor_doesnt_control_meet_are_uncove
 
 def test_the_export_is_reported_by_port_and_charged_only_when_certifiers_cover_every_link(setup):
     """The covert budget is only what goes beyond the committed computation, so committed
-    values leaving a block were free, and something off the block can read them. The export, λ_out, is the committed
-    bits that cross a certified boundary out of a block, to another block or outside, by egress port and within the
+    values leaving a zone were free, and something off the zone can read them. The export, λ_out, is the committed
+    bits that cross a certified boundary out of a zone, to another zone or outside, by egress port and within the
     epoch, read from the declared crossings: h out of a and y out of b, 512 bits each, and not x, which comes in.
     It counts as novel information read by its receivers once network certifiers cover every link,
     and not before. The test datacenter's world-to-leaf link is uncovered, so the export is reported and not
@@ -439,8 +439,8 @@ def test_a_refused_window_is_charged_at_its_links_full_capacity(setup):
     assert not acc.sound and acc.refused_bits == pytest.approx(1e8 * 4e-3)
 
 
-def test_a_block_out_for_maintenance_owes_no_records_but_what_it_held_is_charged(setup):
-    """Maintenance: someone the auditor doesn't control has the block in hand. Its certifiers owe no records then, so the
+def test_a_zone_out_for_maintenance_owes_no_records_but_what_it_held_is_charged(setup):
+    """Maintenance: someone the auditor doesn't control has the zone in hand. Its certifiers owe no records then, so the
     epoch stays sound, but everything it held may leave (charged to the covert budget), anything may come back in, and
     only a wipe after the maintenance bounds what it holds when it rejoins."""
     dc, p = setup
@@ -449,7 +449,7 @@ def test_a_block_out_for_maintenance_owes_no_records_but_what_it_held_is_charged
     for wipe, carried in ((Interval(0, 2), HBM), (Interval(12, 14), RESIDUAL)):
         plan = Plan(EPOCH, wipes=[Wipe("b.gpu", HBM - RESIDUAL, wipe)], maintenance=[serviced])
         acc = account(audit(run(p, INPUTS, plan, off), p.public(plan)), p.public(plan))
-        assert acc.sound and acc.serviced == {"b": HBM} and acc.blocks[1].carried == carried
+        assert acc.sound and acc.serviced == {"b": HBM} and acc.zones[1].carried == carried
         assert acc.covert_bits == 14 * 7 + 512 + HBM
     unplanned = Plan(EPOCH)
     assert not account(audit(run(p, INPUTS, unplanned, off), p.public(unplanned)), p.public(unplanned)).sound
@@ -464,16 +464,16 @@ def noised(B, x, w1, w2, z):
 NOISED = program("Noised", {"x": VEC, "w1": MAT, "w2": MAT, "z": VEC}, VEC, noised, registered=("w1", "w2"))
 
 
-def test_work_is_pinned_to_a_block_only_by_data_it_must_consume_there_or_a_named_premise(setup):
+def test_work_is_pinned_to_a_zone_only_by_data_it_must_consume_there_or_a_named_premise(setup):
     """A helper holding the registered weights needs only small inputs and outputs, so crossing bytes
-    alone attribute nothing. Fresh data from a trusted device that only the block receives pins the work there: a helper
-    could get it only through the block's certified egress. So does the named premise that the fleet is closed."""
+    alone attribute nothing. Fresh data from a trusted device that only the zone receives pins the work there: a helper
+    could get it only through the zone's certified egress. So does the named premise that the fleet is closed."""
     dc, p = setup
     profile = p.public(Plan(EPOCH))
     claims = audit(run(p, INPUTS, Plan(EPOCH)), profile)
-    a = account(claims, profile).blocks[0]
+    a = account(claims, profile).zones[0]
     assert a.credited > 0 and a.local_at_least == 0                 # no anchor: nothing is attributed
-    closed = account(claims, profile, assume=(FLEET_CLOSED,)).blocks[0]
+    closed = account(claims, profile, assume=(FLEET_CLOSED,)).zones[0]
     assert closed.local_at_least == closed.credited and "fleet-closed" in closed.assumptions
 
     def attributed(tick: float):
@@ -483,15 +483,15 @@ def test_work_is_pinned_to_a_block_only_by_data_it_must_consume_there_or_a_named
         claims2 = audit(run(p2, INPUTS | {"z": words("noise", 32)}, Plan(EPOCH)), profile2)
         assert not refusals(claims2)
         assert not any(isinstance(x, Entered) and x.input == "z" for x in claims2)   # the verifier's coins aren't charged
-        return account(claims2, profile2).blocks[0]
+        return account(claims2, profile2).zones[0]
 
     narrow, wide = attributed(1e-9), attributed(1e-3)               # 16 ns of egress: almost nothing out; 16 ms: plenty
     assert narrow.forced == 512 and narrow.local_at_least > 0.85 * narrow.credited and wide.local_at_least == 0
 
 
 def test_a_salt_in_its_certifiers_custody_pins_the_work_that_depends_on_it():
-    """The salt anchor. Block a's certifier releases a 512-bit salt into a alone. The noised product p
-    (PoUW's proof work) depends on it and never leaves, so a helper off the block can't have computed it. That holds
+    """The salt anchor. Zone a's certifier releases a 512-bit salt into a alone. The noised product p
+    (PoUW's proof work) depends on it and never leaves, so a helper off the zone can't have computed it. That holds
     while k, the bits that could carry the salt out before registration, stays at most 384: a's egress timing advice
     (4 windows × 7 bits) and nothing else here. A 512-bit telemetry input delivered out of a voids it, and so does a
     refused port-window of a's."""
@@ -511,23 +511,23 @@ def test_a_salt_in_its_certifiers_custody_pins_the_work_that_depends_on_it():
         return profile, account(audit(run(p, inputs, Plan(EPOCH), deviation), profile), profile, assume=(SALT_CUSTODY,))
 
     profile, acc = custody()
-    a = acc.blocks[0]
+    a = acc.zones[0]
     dot = 14907                                                      # p's ANDs the salt reaches: its 16586 less h's own
     assert profile.salt == {"a": 512, "b": 0} and profile.pinned["a"] == dot and profile.salt_out["a"] == 0
     assert a.custody == 4 * 7 and a.local_at_least == dot and "salt-custody" in a.assumptions
-    assert acc.blocks[1].custody is None and acc.blocks[1].local_at_least == 0
+    assert acc.zones[1].custody is None and acc.zones[1].local_at_least == 0
     leaky, acc = custody(t="a.gpu")
-    assert leaky.salt_out["a"] == 512 and acc.blocks[0].custody == 4 * 7 + 512 and acc.blocks[0].local_at_least == 0
+    assert leaky.salt_out["a"] == 512 and acc.zones[0].custody == 4 * 7 + 512 and acc.zones[0].local_at_least == 0
     _, acc = custody(deviation=Deviation(down={(Port("a.cert", "egress"), 0)}))
-    assert not acc.sound and acc.blocks[0].local_at_least == 0
+    assert not acc.sound and acc.zones[0].local_at_least == 0
 
 
 def test_the_joint_ledger_credits_each_units_time_and_memory_once(setup):
-    """The joint rule on real accounts. The claims credit a block its busy share of the epoch, and a store's device the
+    """The joint rule on real accounts. The claims credit a zone its busy share of the epoch, and a store's device the
     bits read from it and the bit-ticks it held, and `capacity` says what each can give a tick. Two 50 Gbit stores held
     on one 64 Gbit GPU at once is more than it has, so that account is unsound. And the same night entered twice in a
     ledger credits the wiped GPU's memory twice over the wipe, which `joint` refuses, though each account alone is
-    sound. A block's compute is the block's only as far as attribution places it there: without
+    sound. A zone's compute is the zone's only as far as attribution places it there: without
     an anchor it comes out of the whole datacenter's capacity, and under one it carries that anchor as its grade."""
     dc, p = setup
     stores = (Store("s1", 5e10, "a.gpu"), Store("s2", 5e10, "a.gpu"))
@@ -545,16 +545,16 @@ def test_the_joint_ledger_credits_each_units_time_and_memory_once(setup):
     closed = account(audit(run(p, INPUTS, night), p.public(night)), p.public(night), assume=(FLEET_CLOSED,))
     assert {(x.unit, x.grade) for x in closed.credits if x.resource.startswith("compute")} == {
         ("a", "fleet-closed"), ("b", "fleet-closed")}
-    # PoUW's proved bound, when the scheme gives it, is the block's compute credit: one
-    # number per block per window, at 1 block-tick a tick, in place of the honest routing's per-facet loads
+    # PoUW's proved bound, when the scheme gives it, is the zone's compute credit: one
+    # number per zone per window, at 1 zone-tick a tick, in place of the honest routing's per-facet loads
     timed = p.public(night, ticks={"a": 2.0})
     pouw = account(audit(run(p, INPUTS, night), timed), timed, assume=(FLEET_CLOSED,))
-    a = pouw.blocks[0]
+    a = pouw.zones[0]
     assert pouw.sound and a.busy == 2.0 / 16
     assert [(x.unit, x.resource, x.work, x.grade, x.basis) for x in pouw.credits if x.unit == "a"] == [
         ("a", "compute", 2.0, "fleet-closed", "proved")]
     assert {x.basis for x in closed.credits if x.resource.startswith("compute")} == {"honest-routing"}
-    overlap = Ledger([pouw, pouw]).joint()                      # 4 block-ticks fit in 16, but the windows overlap
+    overlap = Ledger([pouw, pouw]).joint()                      # 4 zone-ticks fit in 16, but the windows overlap
     assert ("a", "compute", EPOCH, 4.0, 0.0) in overlap and not any(r == "compute" and v > 0 for _, r, _, _, v in overlap)
     twice = Ledger().add(honest).add(honest)
     assert not twice.sound and [(u, r, i) for u, r, i, _, _ in twice.joint()] == [("b.gpu", "held", Interval(0, 2))]
@@ -647,9 +647,9 @@ def test_a_program_placed_across_a_fleet_crosses_the_inter_datacenter_link():
 
 
 def test_a_link_between_datacenters_is_fabric_and_coverage_is_per_block():
-    """A link between datacenters may join any two fabric devices, a certifier included: each block's boundary is
+    """A link between datacenters may join any two fabric devices, a certifier included: each zone's boundary is
     already certified. What the fleet refuses is each datacenter's own problems, a device in two of them, a link naming
-    no device, and one that leaves a block without passing a certifier."""
+    no device, and one that leaves a zone without passing a certifier."""
     east, west = datacenter().prefixed("east"), datacenter().prefixed("west")
     wan = Assumption("wan", 1e9, "bit/s")
     for a, b in (("east.leaf", "west.leaf"), ("east.leaf", "west.a.cert"), ("east.challenger", "world")):
@@ -682,7 +682,7 @@ def test_a_ledger_adds_covert_bits_across_nights_and_wipes_bound_what_each_night
 
 def test_custody_is_the_share_of_the_registered_weights_the_ledgers_epochs_could_have_carried_out():
     """What could leave adds up over a horizon, so weight custody is a cumulative check. Over the ledger's
-    epochs it adds each one's covert budget, its export where it is charged, and σ from each server (a block's GPU)
+    epochs it adds each one's covert budget, its export where it is charged, and σ from each server (a zone's GPU)
     over the epoch's real duration, under `DEDICATED_RACKS` (1 kbit/s a server), against the registered weights' bits:
     three 16 ms nights on two GPUs give 96 bits of side channel. On the leaf datacenter the export isn't charged and is
     reported beside the bits; with every link covered it is charged. At a co-resident DRAM channel's rate (DRAMA, about

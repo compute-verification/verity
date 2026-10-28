@@ -37,7 +37,7 @@ def test_a_declaration_reads_as_blocks_of_gpus_behind_their_uplinks(datacenter):
     hw = Hardware.from_datacenter(dc)
     assert hw.leaves[hw.client] == "ext0" and hw.bucket_ticks == 10
     assert {u: sorted(hw.leaves[x] for x in xs) for u, xs in hw.units.items()} == {
-        b.name: sorted(d.name for d in b.devices) for b in dc.blocks}
+        b.name: sorted(d.name for d in b.devices) for b in dc.zones}
     assert [hw.leaves[x] for x in hw.devices("b1")] == [f"b1.gpu{k}" for k in range(8)]
     assert {hw.leaves[x] for x in hw.cert} == {"b0.cert", "b1.cert"}
     assert all(hw.covered(u) for u in hw.units)

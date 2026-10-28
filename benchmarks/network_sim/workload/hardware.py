@@ -180,7 +180,7 @@ class Hardware:
             client = next((x for x, d in devices.items() if d.kind == "outside"), None)
             if client is None:
                 raise ValueError(f"{dc.name} has no device of kind `outside` for the client")
-        hw = cls(leaves, {b.name: frozenset(index[d.name] for d in b.devices) for b in dc.blocks},
+        hw = cls(leaves, {b.name: frozenset(index[d.name] for d in b.devices) for b in dc.zones},
                  tuple(Link(f"{k.a}-{k.b}", (index[k.a], index[k.b]), float(k.capacity) * tick) for k in dc.links),
                  frozenset(index[x] for x, d in devices.items() if d.kind == "certifier"), dc.cadence.bucket_ticks, 1,
                  index[client], frozenset(index[x] for x, d in devices.items() if d.kind == "gpu"))

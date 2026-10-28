@@ -10,7 +10,7 @@ from datacenter import Cadence, Port, route
 from datacenter.examples import GB, leaf_spine, rack, rtx_node, two_sites, with_dpu
 
 
-def test_a_node_is_one_block_of_eight_gpus_on_two_sockets_with_the_measured_pcie_tree():
+def test_a_node_is_one_zone_of_eight_gpus_on_two_sockets_with_the_measured_pcie_tree():
     """Its devices add up to the remote audit's node, `ledger.Node`: `Accounting.Device`'s one Python mirror."""
     dc, node = rtx_node("n"), ledger.Node.stated()
     ds = dc.devices.values()
@@ -21,9 +21,9 @@ def test_a_node_is_one_block_of_eight_gpus_on_two_sockets_with_the_measured_pcie
     for w, rate in node.squarings_per_s.items():
         assert sum(float(d.rate[f"square-{w[1:]}"]) for d in ds if d.rate) == pytest.approx(rate)
     assert dc.validate() == []
-    (block,) = dc.blocks
-    assert block.name == "n" and dc.fabric == [] and dc.boundary == []
-    assert Counter(d.kind for d in block.devices) == {"gpu": 8, "cpu": 2, "switch": 2, "nic": 1}
+    (zone,) = dc.zones
+    assert zone.name == "n" and dc.fabric == [] and dc.boundary == []
+    assert Counter(d.kind for d in zone.devices) == {"gpu": 8, "cpu": 2, "switch": 2, "nic": 1}
     for k in range(8):
         assert [(e.a, e.b, e.kind) for e in dc.links if f"n.gpu{k}" in (e.a, e.b)] == \
             [(f"n.gpu{k}", f"n.pcie{k // 4}", "pcie")]  # its own root port, on its socket
@@ -41,7 +41,7 @@ def test_a_dpu_sits_between_the_nic_and_the_way_out_with_its_bmc_behind_it():
     dc = with_dpu(rtx_node("n"))
     assert dc.validate() == []
     dpu, bmc = dc.devices["n.dpu"], dc.devices["n.bmc"]
-    assert dc.block_of("n.dpu").name == dc.block_of("n.bmc").name == "n"
+    assert dc.zone_of("n.dpu").name == dc.zone_of("n.bmc").name == "n"
     assert [(e.a, e.b) for e in dc.links if "n.dpu" in (e.a, e.b)] == [("n.nic0", "n.dpu"), ("n.dpu", "n.bmc")]
     assert dpu.memory.value == 200 * GB and dpu.residual.value == pytest.approx(6.48 * GB)
     assert dpu.write is bmc.write is None                             # no write ceiling stated: a wipe fills at its links
@@ -53,7 +53,7 @@ def test_a_dpu_sits_between_the_nic_and_the_way_out_with_its_bmc_behind_it():
 def test_leaf_spine_puts_each_node_behind_its_certifier():
     dc = leaf_spine(2)
     assert dc.validate() == []
-    assert [b.name for b in dc.blocks] == ["b0", "b1"]
+    assert [b.name for b in dc.zones] == ["b0", "b1"]
     assert [(d.name, d.kind, d.trusted) for d in dc.fabric] == [
         ("leaf0", "switch", False), ("b0.cert", "certifier", True), ("b1.cert", "certifier", True),
         ("ext0", "outside", False)]
@@ -77,7 +77,7 @@ def test_leaf_spine_puts_each_node_behind_its_certifier():
 def test_the_rack_is_nodes_with_dpus_on_one_leaf_with_a_challenger_and_the_world_over_a_wan():
     dc = rack(nodes=2)
     assert dc.validate() == []
-    assert dc.name == "rack" and [b.name for b in dc.blocks] == ["n0", "n1"]
+    assert dc.name == "rack" and [b.name for b in dc.zones] == ["n0", "n1"]
     assert [(d.name, d.kind, d.trusted) for d in dc.fabric] == [
         ("leaf0", "switch", False), ("n0.cert", "certifier", True), ("n1.cert", "certifier", True),
         ("world", "outside", False), ("challenger", "challenger", True)]
@@ -91,18 +91,18 @@ def test_the_rack_is_nodes_with_dpus_on_one_leaf_with_a_challenger_and_the_world
     named += [a for e in dc.links for a in (e.capacity, e.latency) if a] + [c.tick]
     assert all(a.name and a.source in ("datasheet", "measured", "declared") for a in named)
     assert all(a == b for a in named for b in named if a.name == b.name)  # one name, one record
-    assert [b.name for b in rack(nodes=1, dpus=False).blocks] == ["n0"] and "n0.dpu" not in rack(1, False).devices
+    assert [b.name for b in rack(nodes=1, dpus=False).zones] == ["n0"] and "n0.dpu" not in rack(1, False).devices
 
 
 def test_two_sites_are_two_leaf_spines_joined_by_a_wan_between_their_spines():
     """The WAN's capacity and latency are declared assumptions; it is fabric between the two spines, with no certifier
-    and no port, since every block is behind its own certifier; and an east block's way out to the one outside host, on
+    and no port, since every zone is behind its own certifier; and an east zone's way out to the one outside host, on
     the west site, crosses it."""
     fleet = two_sites()
     assert fleet.validate() == []
     dc = fleet.merged()
     assert dc.validate() == [] and dc.name == "east+west"
-    assert [b.name for b in dc.blocks] == ["east.b0", "east.b1", "west.b0", "west.b1"]
+    assert [b.name for b in dc.zones] == ["east.b0", "east.b1", "west.b0", "west.b1"]
     assert [repr(p) for p in dc.ports] == [f"{s}.b{i}.cert:{d}" for s in ("east", "west") for i in range(2)
                                            for d in ("in", "out")]
     assert sorted(d.name for d in dc.fabric if d.kind == "certifier") == [f"{s}.b{i}.cert" for s in ("east", "west")

@@ -22,7 +22,7 @@ registration (`program.bindings`), then its Calls. The accounting layer reads it
 
 - a *node* is a root node, named by its parameter or by the `name` its Call was given (`names`);
 - a *value* (`Value`) is a census value: a run of one node's output leaves that the same Calls read, which is what moves
-  between blocks when they sit apart;
+  between zones when they sit apart;
 - a node's *work* (`work`) is its gates by kind: a tensor-core step's products (`mac:<precision>`, the census's `PRODUCTS`),
   a Boolean gate (`cuda:gate`) or any other word operation (`cuda:op`). Inputs, constants and wiring (`cut.WIRING`) are no
   work. It times the work and is never credited;
