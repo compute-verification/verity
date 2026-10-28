@@ -3147,7 +3147,7 @@
     "function": "PousCheck.Run.check",
     "outcome": "accept"
    },
-   "Properties.NetworkCertifier.acceptsLinkWindows": {
+   "Properties.NetworkCertifier.acceptsSamplingBlocks": {
     "function": "NetworkCheck.Check.protocol.check",
     "outcome": "accept"
    },
@@ -3511,7 +3511,7 @@
     "function": "RemoteAudit.Shared.run",
     "outcome": "accept"
    },
-   "Properties.NetworkCertifier.linkWindowAcceptMeans": {
+   "Properties.NetworkCertifier.samplingBlockAcceptMeans": {
     "function": "NetworkCheck.LinkWindow.verdict",
     "outcome": "accept"
    },
