@@ -72,6 +72,13 @@ def weight_roots(layers: list[Any], lo: int = 0) -> dict[int, bytes]:
     return out
 
 
+def committed(layers: list[Any]) -> dict[str, Any]:
+    """`pouw.commit_weights` under H1: ``layers``' `weight_roots` and weight shapes by index, ``{"weight_roots": {id: hex},
+    "shapes": {id: [n, k]}}``."""
+    return {"weight_roots": {str(w): r.hex() for w, r in weight_roots(layers).items()},
+            "shapes": {str(w): list(m.weight.shape) for w, m in enumerate(layers)}}
+
+
 def _tensor_key(t: Any) -> tuple | None:
     """What a write to or a move of tensor ``t`` changes (its version counts in-place writes through any view), or None
     when ``t`` isn't a tensor."""
@@ -125,10 +132,14 @@ def admitting(run: PH.H1Run, orig: Any, runner: Any) -> Any:
     return execute_model
 
 
-def wire(run: PH.H1Run, hooks: Any, layers: list[Any], runner: Any, rows: int) -> None:
+def wire(run: PH.H1Run, hooks: Any, layers: list[Any], runner: Any, rows: int, ks: tuple[int, ...] | None = None) -> None:
     """The run's hooks on ``hooks`` (the option's `Hooks`): ``runner``'s ``execute_model`` (`admitting`), if given, and
     each layer's ``observe`` (`observer`) and ``apply`` (`traced`); a committing run's layer on an arm with ``zy_rows``
-    whose N is whole tile columns serves z/y records over ``rows`` slots."""
+    whose N is whole tile columns serves z/y records over ``rows`` slots. With ``ks`` (the pouw setting `layers` took
+    ``layers`` at), the run's ``details["uncovered"]`` names every linear at another K, which serves on its arm unhooked."""
+    if ks is not None:
+        run.details["uncovered"] += (f", and every linear at a K outside the pouw setting 'ks' {list(ks)}, which serves on "
+                                     "its arm unrecorded")
     if runner is not None:
         hooks.wrap(runner, "execute_model", lambda orig: admitting(run, orig, runner))
     for w, layer in enumerate(layers):
@@ -174,4 +185,4 @@ def warm_zy(layers: list[Any], rows: int, *, pick: Any = None, call: Any = None)
     return len(seen)
 
 
-__all__ = ["admitting", "layers", "observer", "serves_zy", "traced", "warm_zy", "weight_roots", "wire"]
+__all__ = ["admitting", "committed", "layers", "observer", "serves_zy", "traced", "warm_zy", "weight_roots", "wire"]

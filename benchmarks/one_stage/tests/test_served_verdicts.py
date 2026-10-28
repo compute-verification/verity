@@ -9,7 +9,8 @@ development piece checks the window's gate session and credits nothing, and the 
 open. The period the served windows join opens, through infra's own gate, on the Program serve-openai declared and
 the circuit files built for it, as core's credit reads them, and is refused on files of anything else.
 `served_verdicts.sh`'s window circuits gate on every class of CLASSES, and the class of record's count after them
-gates nothing. Its load, `serve_load.py --varied`, writes each request's send, first-token and done times beside its
+gates nothing; its endpoint gets one token budget, T, with or without H1. Its load, `serve_load.py --varied`, writes
+each request's send, first-token and done times beside its
 record, on an injected clock and a stand-in endpoint."""
 from __future__ import annotations
 
@@ -766,6 +767,38 @@ def test_the_offline_program_is_the_one_serve_openai_declares_under_the_same_pro
     with pytest.raises(ValueError, match=r"no linear at K \[4096\]"):
         S.program(tmp_path / "none", model, 512, 16, config=json.dumps({"pouw": {"ks": [4096]}}))
 
+
+
+def _serve_argv(tmp_path: Path, env: dict[str, str]) -> tuple[int, list[str]]:
+    """`served_verdicts.sh serve` in a toy tree whose venv python records serve-openai's argv and exits before listening,
+    under a no-op `sleep`: the exit status and that argv."""
+    tree, bin_, venv = tmp_path / "tree", tmp_path / "bin", tmp_path / "venv" / "bin"
+    for d in (tree / "integrations" / "vllm", bin_, venv):
+        d.mkdir(parents=True)
+    for path, body in ((venv / "python", f"printf '%s\\n' \"$@\" > {tmp_path}/argv; exit 1"), (bin_ / "sleep", "exit 0")):
+        path.write_text(f"#!/bin/sh\n{body}\n")
+        path.chmod(0o755)
+    env = {"PATH": f"{bin_}:{os.defpath}", "HOME": str(tmp_path), "VENV": str(venv.parent), "D": str(tmp_path / "serve"),
+           "OUT": str(tmp_path / "out"), **env}
+    rc = subprocess.run(["bash", str(HERE.parent / "served_verdicts.sh"), "serve"], cwd=tree, env=env, check=False,
+                        capture_output=True).returncode
+    return rc, (tmp_path / "argv").read_text().splitlines()
+
+
+@pytest.mark.parametrize("env, budget", [
+    ({"H1_GATE": ""}, "512"),
+    ({"H1_GATE": GATE}, "512"),
+    ({"H1_GATE": GATE, "H1_T": "8192"}, "8192"),
+    ({"H1_GATE": "", "H1_T": "8192"}, "8192"),
+    ({"T": "2048", "H1_T": "8192", "H1_GATE": GATE}, "2048"),
+])
+def test_the_engine_gets_one_token_budget_with_or_without_h1(tmp_path, env, budget):
+    """serve-openai gets ``--max-num-batched-tokens`` once, T (default H1_T, else 512), whether H1 serves or not (H1_GATE
+    empty turns H1 off); without it the engine would take serve-openai's own 2048 with H1 off."""
+    rc, argv = _serve_argv(tmp_path, env)
+    assert rc == 10 and argv[:3] == ["-m", "verity_vllm.pipeline.cli", "serve-openai"], (rc, argv)
+    assert argv.count("--max-num-batched-tokens") == 1 and argv[argv.index("--max-num-batched-tokens") + 1] == budget
+    assert ("--protocols" in argv) == bool(env["H1_GATE"])
 
 
 class _Response:

@@ -705,7 +705,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     w.add_argument("--window", type=int)
     g = sub.add_parser("gate")
     g.add_argument("--gate", default=os.environ.get("H1_GATE"))
-    g.add_argument("--lane", default=os.environ.get("H1_LANE") or "vllm")
+    g.add_argument("--lane", default="vllm")
     g.add_argument("--main", type=Path, default=os.environ.get("MAIN_FILE") or None)
     pe = sub.add_parser("period")
     pe.add_argument("verb", choices=("open", "served", "close"))
