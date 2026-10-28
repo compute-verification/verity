@@ -1,4 +1,4 @@
-"""R15 lane moe — MOE-B2: the fused-MoE block-stream planes at B>1 are per-token (pair-major) members split by the step's request->row
+"""The fused-MoE block-stream planes at B>1 are per-token (pair-major) members split by the step's request->row
 map, like every other per-token member -- never the whole batched plane bound to every request (the hidden-launch rule).
 
 Through the committer's offline core (no engine, no CUDA): a step stream with two requests (r0 = 100 token rows, r1 = 200 rows), the six

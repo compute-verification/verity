@@ -44,7 +44,7 @@ _CA: dict = {}
 
 def ca_tree() -> str | None:
     """The tree of credit's banded reference (at CA_SHA): $J10_CA_TREE, else the run's inputs/banded-CA_SHA.tar.gz
-    (`git archive CA_SHA verity | gzip`, sent with `research run --send`) extracted once a process; None without either."""
+    (`git archive CA_SHA verity | gzip`) extracted once a process; None without either."""
     if "tree" not in _CA:
         tree = settings.J10_CA_TREE
         arc = Path(settings.RESEARCH_RUN_DIR or ".") / "inputs" / f"banded-{CA_SHA}.tar.gz"
