@@ -21,9 +21,9 @@ import v31
 import v31lib
 
 
-def _coins(f: v31.Fill, seed: int = 3) -> tuple[dict[str, bytes], v31.Coins]:
+def _coins(f: v31.Fill, seed: int = 3) -> tuple[dict[str, bytes], v31.CallNoise]:
     seeds = {s: bytes([seed, i]) * 32 for i, s in enumerate(v31.STREAMS)}
-    return seeds, v31.Coins.expand(f, seeds)
+    return seeds, v31.CallNoise.expand(f, seeds)
 
 
 def test_coins_have_their_ranges():
@@ -38,7 +38,7 @@ def test_coins_have_their_ranges():
 def test_a_tiles_coins_are_the_calls_rows(lp):
     f = v31.Fill(384, 256, 1536, lp, 3 * lp)
     seeds, c = _coins(f, 5)
-    r = v31.Coins.rows(f, seeds, range(256, 384), range(128, 256))
+    r = v31.CallNoise.rows(f, seeds, range(256, 384), range(128, 256))
     assert (r.dA == c.dA[256:]).all() and (r.V == c.V[256:]).all()
     assert (r.dB == c.dB[128:]).all() and (r.U == c.U[128:]).all() and (r.perm == c.perm).all()
 
@@ -147,7 +147,7 @@ def test_fill_is_dithers_no_fold_call(case):
         A = v31.pad_rows(seeds, range(m), k)
         assert hashlib.sha512(A.tobytes()).hexdigest() == pad_h
         assert np.array_equal(v31.pad_rows(seeds, range(5, 9), k), A[5:9])
-    values = v31.fill_buffer(f, *v31.fill_values(f, A, B, v31.Coins.expand(f, seeds)))
+    values = v31.fill_buffer(f, *v31.fill_values(f, A, B, v31.CallNoise.expand(f, seeds)))
     assert hashlib.sha512(values).hexdigest() == values_h
     assert f.leaves == leaves and f.domain().domain_id.hex() == dom_h
     assert v31.fill_commit(f, values, bytes(range(192, 256)), 3 * leaves).root.hex() == root_h
@@ -178,7 +178,7 @@ def test_fill_verdicts(cheat, served, L):
         seeds = v31.call_seeds(rng.bytes(64), rng.bytes(64))
         A = None
     Aop = v31.pad_rows(seeds, range(f.m), f.k) if A is None else A
-    co = v31.Coins.expand(f, seeds)
+    co = v31.CallNoise.expand(f, seeds)
     T, O = v31.fill_values(f, Aop, B, co, skip=5 if cheat == "skip" else None)
     if cheat == "forge" and f.W >= 2:
         T[1] ^= 0x0F0F
@@ -203,7 +203,7 @@ def test_fill_verdicts(cheat, served, L):
 
 
 def test_fill_refuses_t_past_8():
-    """t = min(L, K) / L' is at most 8 (dither/PROTOCOL.md, "The segment and the noise period"): L 8,192 at L' 256 is
+    """t = min(L, K) / L' is at most 8 (dither/PROTOCOL.md, "The segment and the noise tile"): L 8,192 at L' 256 is
     refused at K 16,384 and L 4,096 at L' 512 passes, as do the defaults, L >= K at L' >= K / 8, and every call the GPU's
     gates (v31lib.GATES and PIPELINE) and fill_dither.py's cases build."""
     with pytest.raises(ValueError, match="at most 8"):
@@ -234,7 +234,7 @@ def test_fill_sample_rebuilds_a_tile_and_the_params(tmp_path, capsys, served):
         seeds = v31.call_seeds(rng.bytes(64), rng.bytes(64))
         A = v31.pad_rows(seeds, range(f.m), f.k)
     ks, off = rng.bytes(64), 5 * f.leaves
-    values = v31.fill_buffer(f, *v31.fill_values(f, A, B, v31.Coins.expand(f, seeds)))
+    values = v31.fill_buffer(f, *v31.fill_values(f, A, B, v31.CallNoise.expand(f, seeds)))
     cm = v31.fill_commit(f, values, ks, off)
     args = ["--served"] if served else []
     assert v31.main(["v31", "fill-params", str(tmp_path / "p"), "--L", "512", "--row", "2048", "x:256:384:1024", *args]) == 0
@@ -275,11 +275,13 @@ def test_fill_table(tmp_path, capsys):
                  wbn=256, fused_leaves=3 * 28672, o_leaves=4 * 28672, fused_blocks=(3 * 129 + 40) * 28672, row_blocks=129)
     no_row = dict(fused, fused_leaves=0, fused_blocks=129 * 28672, lminb=4, sahead=1)
     words = dict(fused, rp=5, S=4, W=3, wgw=1, r5w=0, leaves=10 * 28672)
-    lines = (line, later, served, fused, no_row, words)
+    tst = dict(words, r5w=1, tst=1)
+    lines = (line, later, served, fused, no_row, words, tst)
     (tmp_path / "b.jsonl").write_text("x\n" + "\n".join(json.dumps(x) for x in lines) + "\n")
     assert v31.main(["v31", "fill-table", str(tmp_path / "b.jsonl")]) == 0
-    row, row2, row3, row4, row5, row6 = capsys.readouterr().out.splitlines()[-6:]
+    row, row2, row3, row4, row5, row6, row7 = capsys.readouterr().out.splitlines()[-7:]
     assert "| served r16384 hi k1 s1 wg256 rp5 r5w0 |" in row6 and row6.endswith("| 30.0% / 33.1% |")
+    assert "| served r16384 hi k1 s1 wg256 rp5 tst |" in row7
     assert row.endswith("| - | - | - |") and row3.endswith("| - | - | - |")
     assert "| served r16384 hi k1 s1 wg256 rp4 |" in row4 and row4.endswith("| 2.500 | 1.000 | 75.0% / 82.8% |")
     assert row5.endswith("| 0.0% / 25.0% |") and "| served r16384 hi k1 s1 wg256 rp4 m4 sa |" in row5

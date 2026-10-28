@@ -1,6 +1,6 @@
 // The census's unpriced sm_90a tensor class, DMMA (mma.sync f64: no H200 DS_tensor row lists f64), timed alone at
-// cuBLAS's two heaviest shapes and beside a saturated wgmma s8 (note:20261019T0520Z-draft-rt-isa G3). This is
-// MM-SHEETS' flag-12 probe, DMMA-SHARES-TENSOR, on the H200: unpriced.cu's B200 joint with wgmma for tcgen05.
+// cuBLAS's two heaviest shapes and beside a saturated wgmma s8. This is
+// The DMMA-SHARES-TENSOR probe on the H200: unpriced.cu's B200 joint with wgmma for tcgen05.
 // Built and gated by ../opcode_probe/probe.py build --arch sm_90a; rates.sh with ARCH=sm_90a is the job.
 //   s_dmma, s_dmma_w8, s_imma   unpriced.cuh's: DMMA.8x8x4 (256 MACs a warp instruction), IMMA.16832 (4096)
 //   s_dmma16, s_dmma16_w8       DMMA.16x8x16 (m16n8k16 f64, 2048 MACs a warp instruction), 8 chains a thread

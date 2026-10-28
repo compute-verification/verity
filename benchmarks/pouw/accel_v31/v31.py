@@ -5,10 +5,10 @@ call is accepted or refused by the checks its proof blocks' Programs make.
 The call is verity/core/protocols/pouw/circuit/dither.py's, and this module is its client: `Fill` is `dither.Shape` at
 the GPU prover's defaults (its segments, layout and domain), the seeds are `dither.seeds` (a served call's) and
 `dither.fill_seeds` (a filler's), every stream is `dither.prg`'s, the permutations are `dither.perms` and the tree is
-`dither.commit` under `dither.salts(Ks, off)`. What it adds is numpy, where dither's own forms are pure Python: the coins
-of whole operands (`Coins`), X and W' (`form`), the prefix sums T_s and a served call's O (`fill_values`), their bytes in
-`dither.values_buffer`'s layout (`fill_buffer`) and a filler's pad (`pad_rows`). A served call commits T_1 .. T_{S-1}
-and O mod 2^32 (T_S is implied by O); a filler call commits T_1 .. T_S.
+`dither.commit` under `dither.salts(Ks, off)`. What it adds is numpy, where dither's own forms are pure Python: the
+noise of whole operands (`CallNoise`), X and W' (`form`), the prefix sums T_s and a served call's O (`fill_values`),
+their bytes in `dither.values_buffer`'s layout (`fill_buffer`) and a filler's pad (`pad_rows`). A served call commits
+T_1 .. T_{S-1} and O mod 2^32 (T_S is implied by O); a filler call commits T_1 .. T_S.
 
 The verifier opens q proof blocks drawn by the check coin (a cell uniformly, then s with probability its segment's share
 of K) and runs the proof block's checks in the clear on the opened rows, a stand-in for its C-Flock --zk proof: the rows
@@ -72,7 +72,9 @@ def noise(seed: bytes, tag: str, rows: range, lp: int) -> np.ndarray:
 
 
 @dataclass
-class Coins:
+class CallNoise:
+    """A call's noise, the public inputs its checks read: the dithers d_A, d_B, the noise V, U and the permutations,
+    expanded from the call's seeds as dither.py expands its coins."""
     dA: np.ndarray
     dB: np.ndarray
     U: np.ndarray
@@ -80,23 +82,24 @@ class Coins:
     perm: np.ndarray
 
     @staticmethod
-    def expand(sh: Fill, seeds: dict[str, bytes]) -> Coins:
-        return Coins.rows(sh, seeds, range(sh.m), range(sh.n))
+    def expand(sh: Fill, seeds: dict[str, bytes]) -> CallNoise:
+        return CallNoise.rows(sh, seeds, range(sh.m), range(sh.n))
 
     @staticmethod
-    def rows(sh: Fill, seeds: dict[str, bytes], ia: range, ja: range) -> Coins:
-        """The coins of A's rows ia and B's rows ja (and every permutation)."""
-        return Coins(bits(seeds["dA"], "dA", ia, sh.k), bits(seeds["dB"], "dB", ja, sh.k), noise(seeds["U"], "U", ja, sh.lp),
-                     noise(seeds["V"], "V", ia, sh.lp), np.array(dither.perms(seeds, sh.k, sh.lp), dtype=np.int64))
+    def rows(sh: Fill, seeds: dict[str, bytes], ia: range, ja: range) -> CallNoise:
+        """The noise of A's rows ia and B's rows ja (and every permutation)."""
+        return CallNoise(bits(seeds["dA"], "dA", ia, sh.k), bits(seeds["dB"], "dB", ja, sh.k),
+                         noise(seeds["U"], "U", ja, sh.lp), noise(seeds["V"], "V", ia, sh.lp),
+                         np.array(dither.perms(seeds, sh.k, sh.lp), dtype=np.int64))
 
 
 # ------------------------------------------------------------------------------------------------------------ forming
-def v_full(sh: Fill, c: Coins, rows: slice | None = None) -> np.ndarray:
+def v_full(sh: Fill, c: CallNoise, rows: slice | None = None) -> np.ndarray:
     V = c.V if rows is None else c.V[rows]
     return np.tile(V, (1, sh.k // sh.lp))
 
 
-def u_full(sh: Fill, c: Coins, rows: slice | None = None) -> np.ndarray:
+def u_full(sh: Fill, c: CallNoise, rows: slice | None = None) -> np.ndarray:
     U = c.U if rows is None else c.U[rows]
     return np.concatenate([U[:, c.perm[tau]] for tau in range(sh.k // sh.lp)], axis=1)
 
@@ -109,7 +112,7 @@ class Formed:
     Bd: np.ndarray
 
 
-def form(sh: Fill, A: np.ndarray, B: np.ndarray, c: Coins) -> Formed:
+def form(sh: Fill, A: np.ndarray, B: np.ndarray, c: CallNoise) -> Formed:
     Ad, Bd = A.astype(np.int64) + c.dA, B.astype(np.int64) + c.dB
     return Formed(wrap8(Ad + v_full(sh, c)), wrap8(Bd + u_full(sh, c)), Ad, Bd)
 
@@ -131,11 +134,11 @@ FILL_STREAMS = (PAD, *STREAMS)
 
 @dataclass(frozen=True)
 class Fill(dither.Shape):
-    """`dither.Shape` at the GPU prover's defaults: a filler's call, L' 256, L 2,048 and rows of 1 KiB."""
+    """`dither.Shape` at the GPU prover's defaults: a filler's call at L' 256 and L 2,048, in the protocol's rows of
+    16 KiB."""
 
     lp: int = 256
     L: int = 2048
-    row: int = 1024
     o: bool = False
 
 
@@ -160,7 +163,7 @@ def pad_rows(seeds: dict[str, bytes], rows: range, k: int) -> np.ndarray:
     return raw.reshape(len(rows), kb * 64)[:, :k].copy()
 
 
-def fill_words(f: Fill, A: np.ndarray, B: np.ndarray, c: Coins, skip: int | None = None, upto: int | None = None) -> np.ndarray:
+def fill_words(f: Fill, A: np.ndarray, B: np.ndarray, c: CallNoise, skip: int | None = None, upto: int | None = None) -> np.ndarray:
     """T_1 .. T_upto (default S; upto x rows(A) x rows(B)) mod 2^16 (skip: a prover that leaves noise tile `skip` out of
     X W'^T)."""
     fm = form(f, A, B, c)
@@ -177,7 +180,7 @@ def fill_words(f: Fill, A: np.ndarray, B: np.ndarray, c: Coins, skip: int | None
     return T
 
 
-def fill_values(f: Fill, A: np.ndarray, B: np.ndarray, c: Coins, skip: int | None = None) -> tuple[np.ndarray, np.ndarray | None]:
+def fill_values(f: Fill, A: np.ndarray, B: np.ndarray, c: CallNoise, skip: int | None = None) -> tuple[np.ndarray, np.ndarray | None]:
     """The call's committed values: T_1 .. T_W (W x rows(A) x rows(B), mod 2^16) and a served call's O (mod 2^32; None for
     a filler's)."""
     T = fill_words(f, A, B, c, skip, f.W)
@@ -246,7 +249,7 @@ def fill_check(f: Fill, seeds: dict[str, bytes], root: bytes, i: int, j: int, s:
         return "a served call's proof block reads A's row"
     Ai = pad_rows(seeds, range(i, i + 1), f.k) if ans.get("A") is None else np.asarray(ans["A"], dtype=np.int8)[None, :]
     Bj = np.asarray(ans["B"], dtype=np.int8)[None, :]
-    c = Coins.rows(f, seeds, range(i, i + 1), range(j, j + 1))
+    c = CallNoise.rows(f, seeds, range(i, i + 1), range(j, j + 1))
     fm = form(f, Ai, Bj, c)
     try:
         if f.o and s == f.S:
@@ -346,7 +349,7 @@ def cmd_fill_sample(a: argparse.Namespace) -> int:
         tm, tn = divmod(tile, f.n // TILE)
         A = np.frombuffer((d / f"t{idx}_A.bin").read_bytes(), dtype=np.int8).reshape(TILE, f.k)
         B = np.frombuffer((d / f"t{idx}_B.bin").read_bytes(), dtype=np.int8).reshape(TILE, f.k)
-        c = Coins.rows(f, seeds, range(tm * TILE, (tm + 1) * TILE), range(tn * TILE, (tn + 1) * TILE))
+        c = CallNoise.rows(f, seeds, range(tm * TILE, (tm + 1) * TILE), range(tn * TILE, (tn + 1) * TILE))
         words = fill_buffer(tl, *fill_values(tl, A, B, c))
         g_leaves = (d / f"t{idx}_leaves.bin").read_bytes()
         bad = 0
@@ -402,6 +405,7 @@ def cmd_fill_table(a: argparse.Namespace) -> int:
                    + (" hall" if r.get("hall") else "") + (f" c{r['hchunk']}" if r.get("hchunk") else "")
                    + (" w0" if r.get("wg") and r.get("W") and not r.get("wgw", 1) else "")
                    + (" r5w0" if r.get("rp") == 5 and r.get("W") and r.get("wgw", 1) and not r.get("r5w", 1) else "")
+                   + (" tst" if r.get("rp") == 5 and r.get("tst") else "")
                    + (" m4" if r.get("lminb") == 4 else "") + (" sa" if r.get("sahead") else ""))
         variant += commit_labels(r)
         named.append((r, variant))
@@ -570,7 +574,7 @@ def main(argv: list[str]) -> int:
     p.add_argument("shapes", nargs="+", help="[name:]M:N:K")
     p.add_argument("--lp", type=int, default=256)
     p.add_argument("--L", type=int, default=2048, help="the segment length (0: K), at most 8 L' below K")
-    p.add_argument("--row", type=int, default=1024)
+    p.add_argument("--row", type=int, default=Fill.row, help="the leaf row's bytes (default the protocol's 16 KiB)")
     p.add_argument("--served", action="store_true", help="served calls (O committed, dither.TAG), not the filler's")
     p = sub.add_parser("fill-sample")
     p.add_argument("dir")

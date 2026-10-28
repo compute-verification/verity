@@ -1,5 +1,5 @@
-"""ε against a fixed verification budget B: what each lever costs, what it buys, and the ε-optimal allocation (BUDGET,
-cmp-13; Derived).
+"""ε against a fixed verification budget B: what each lever costs, what it buys, and the ε-optimal allocation
+(Derived).
 
     uv run benchmarks/pouw/budget.py [--md OUT] [--json OUT] [--sweep] [--sampling-sweep TREE]
 
@@ -7,29 +7,27 @@ B is the verification overhead as a fraction of the plain workload's compute: GP
 family, with every other resource converted at its price. Its parts:
 
 - the PoUW transform, γ − 1 (honest over plain int8, the machine model's γ on the family's measured kernel);
-- commitment hashing, receipts and the noise's draws (COMMIT-GPU r5's fractions of plain prefill time);
-- sampling, B_s: proving, staging and verifying the drawn units under proofs' fitted C-Flock cost model (cost-model/v1),
-  as OPT2's planner spends it. `budget_sampling.json` is its frontier at δ_s (`sampling_sweep`): the least ε_sample at
-  each spend over a GPU-week of one RTX PRO 6000, with the plan's draws and cut. The provers are RTX PRO 6000 workers,
-  so a family's B_s buys B_s·gpu_usd_h/PROVER_USD_H of that spend.
+- commitment hashing, receipts and the noise's draws (`commit_gpu`'s measured fractions of plain prefill time);
+- sampling, B_s: proving, staging and verifying the drawn units under the fitted C-Flock cost model (cost-model/v1),
+  as the sampling planner spends it. `budget_sampling.json` is its frontier at δ_s (`sampling_sweep`): the least
+  ε_sample at each spend over a GPU-week of one RTX PRO 6000, with the plan's draws and cut. The provers are RTX PRO
+  6000 workers, so a family's B_s buys B_s·gpu_usd_h/PROVER_USD_H of that spend.
 
-ε is the headline's sum, core plus sampling (NOTATION's ε[Π], note:20261018T0206Z-draft-notation, with luck in the core
-by decision 92(a)). Core is ε_skip (less the share that checking P·V's served output removes) and ε_machine (route +
-cert), the machine model's under the floor credit at q* = 1.22 with operands free (decision 89), and ε_luck at the
-protocol's rule. Sampling is OPT2's ε_sample, the units a plan's draws leave unproved. With a seed a matmul (decision
-101) a drawn deficient unit is caught at 1 − p, so luck is ε_sample·σ_w/(1 − p): the machine model's full-checking
-ε_luck (one σ a round) times S over the draws. The cheater's best mix of wrong and deficient units gains
-ε_sample·max(σ_w/(1 − p), 1), which the sum bounds.
+ε is the headline's sum, core plus sampling (ε[Π], with luck in the core). Core is ε_skip (less the share that checking
+P·V's served output removes) and ε_machine (route + cert), the machine model's under the floor credit at q* = 1.22 with
+operands free, and ε_luck at the protocol's rule. Sampling is the planner's ε_sample, the units a plan's draws leave
+unproved. With a seed a matmul, a drawn deficient unit is caught at 1 − p, so luck is ε_sample·σ_w/(1 − p): the machine
+model's full-checking ε_luck (one σ a round) times S over the draws. The cheater's best mix of wrong and deficient units
+gains ε_sample·max(σ_w/(1 − p), 1), which the sum bounds.
 
-The levers the optimum moves are verified filler (extra lane instructions a word, `FILL`; decision 90 divides every term
-by the design's own floor program, filler included), the sampling spend B_s (the rest of the budget: ε_sample only falls
-with it) and checking P·V's served output (on, since it costs only an opening and the epilogue in a drawn P·V unit's
-proof). The allocation is reported in cost-model/v1's two regimes: `plain` (fitted, one unit a session) and
-`sessions/256` (multi-round sessions amortize a session's cost 256-fold, OPT2's estimate). `levers` reports the rest
-(draws, batching, running sums committed anyway, hashing leaf size, the operand floor, P·V's noise, credited subset, L
-and noise bits) with what each moves. The run prints the allocation at 1×, 2×, 5× and 10× each family's B today and
-every lever's marginal Δε per unit of B there. Every constant carries its source and whether it is measured, modeled or
-assumed.
+The levers the optimum moves are verified filler (extra lane instructions a word, `FILL`; every term is divided by the
+design's own floor program, filler included), the sampling spend B_s (the rest of the budget: ε_sample only falls with
+it) and checking P·V's served output (on, since it costs only an opening and the epilogue in a drawn P·V unit's proof).
+The allocation is reported in cost-model/v1's two regimes: `plain` (fitted, one unit a session) and `sessions/256`
+(multi-round sessions amortize a session's cost 256-fold, the planner's estimate). `levers` reports the rest (draws,
+batching, running sums committed anyway, hashing leaf size, the operand floor, P·V's noise, credited subset, L and noise
+bits) with what each moves. The run prints the allocation at 1×, 2×, 5× and 10× each family's B today and every lever's
+marginal Δε per unit of B there. Every constant carries its source and whether it is measured, modeled or assumed.
 """
 
 from __future__ import annotations
@@ -49,7 +47,7 @@ ROUNDS = 48_000                   # S: one week of 12.6 s rounds (Theorem S; SPE
 P_PASS = 0.75                     # a deficient unit's pass probability at 1-bit coins (Theorem S)
 DEFICIT = LN_INV_DELTA / ((1 - P_PASS) * ROUNDS)   # d̄: full checking's deficit; the machine model's luck = σ_w·d̄
 
-#: cost-model/v1 (art:551e804f4585f234f9c64b7e12655788e7af0fbe2eb75977fe1e913b8f2f22f2) is GPU-seconds of an RTX PRO
+#: cost-model/v1 is GPU-seconds of an RTX PRO
 #: 6000 proving and CPU-seconds at 1/55 of one, so a family pays it at this price (vy-nebius-1/2, measured price; that
 #: the provers are RTX PRO 6000 workers is assumed)
 PROVER_USD_H = 1.80
@@ -61,14 +59,14 @@ REGIMES = {"plain": (1.0, 1.0), "sessions/256": (1.0, 1 / 256), "prefix, session
 ALLOCATED = ("plain", "sessions/256")
 #: the sweep's spends B_s, a fraction of an RTX PRO 6000's week, 8 a decade
 SPEND_GRID = tuple(round(10 ** (e / 8), 6) for e in range(-28, 21))
-#: today's draws: 2 a round over a week (SAMPLING, note:20261017T0608Z-draft-eps1-sampling, after PRF-57)
+#: today's draws: 2 a round over a week
 TODAY_DRAWS = 2 * ROUNDS
 #: a drawn unit's proof grows with the filler it recomputes (p = 0 needs the check to recompute it): its ANDs by
 #: (1 + y/16) at y extra lane instructions a word, as if the receipt arm were a quarter of the proof at fx1's 4 a word
 #: (assumed); it scales the part of a draw's cost that grows with the unit's ANDs (`unit_share`)
 FILL_PROOF = 1 / 16
 
-#: of plain prefill time (COMMIT-GPU r5, r20261016-183051-a379; measured on sm_120 at 8 × 4K, applied to every family as
+#: of plain prefill time (`commit_gpu`, measured on sm_120 at 8 × 4K, applied to every family as
 #: assumed): SHA-512 operand tile leaves at R = 128 (+6.0%; R = 64 is +10.1%), receipts at S = 128, simulated draws.
 #: R = 128's is cost-model/v1's commitment floor too.
 HASH_LEAVES = {64: 0.101, 128: 0.060}
@@ -77,7 +75,7 @@ DRAWS = 0.019
 
 
 def hash_leaves(r: int) -> float:
-    """SHA-512 tile-leaf hashing at leaf size R: a + b/R through COMMIT-GPU's two points (modeled past R = 128)."""
+    """SHA-512 tile-leaf hashing at leaf size R: a + b/R through commit_gpu's two points (modeled past R = 128)."""
     b = (HASH_LEAVES[64] - HASH_LEAVES[128]) * 128
     return HASH_LEAVES[128] - b / 128 + b / r
 
@@ -86,7 +84,7 @@ FILL_DATA = Path(__file__).with_name("budget_fill.json")
 #: the filler sweep's grid, extra lane instructions a word on top of the design's own fillers
 FILL_GRID = (0, 0.25, 0.5, 0.75, 1, 1.25, 1.5, 2, 2.5, 3, 3.5, 4, 5, 6, 7, 8, 10, 12, 14, 16, 20, 24, 28, 32, 40, 48, 56, 64)
 FILL_MIXES = {"int": {"ALU": 1.0, "IMAD": 1.0}, "ffma": {"FFMA": 1.0}}
-#: FFMA filler's p = 0 holds only once a bit-exact FFMA check exists (decision 99); integer filler (LOP3 and IMAD
+#: FFMA filler's p = 0 holds only once a bit-exact FFMA check exists; integer filler (LOP3 and IMAD
 #: alternating) is exact today. A device whose two sweeps agree keeps only the integer one.
 CONDITIONAL = {"ffma": "p = 0 needs a bit-exact FFMA check (decision 99)"}
 
@@ -210,7 +208,7 @@ def _cut_label(cut: dict) -> str:
 
 def sampling_sweep(tree: Path, out: Path = SAMPLING_DATA) -> dict:
     """Regenerate `budget_sampling.json` from OPT2's planner on `tree`, a checkout with
-    `benchmarks/sampling_plan/int8_llama.py` whose B is the serve-time total (ASK-25), run with `scheme=None` so a spend
+    `benchmarks/sampling_plan/int8_llama.py` whose B is the serve-time total, run with `scheme=None` so a spend
     is sampling's alone, the serve-time commitments being `budget.py`'s own terms. Per regime its frontier at δ_s, and at
     each spend of SPEND_GRID the least-ε plan within it (`at_budget`, the zero-work templates included): ε_sample, the
     draws a week, the share of the plan's cost that grows with a unit's ANDs (all but the sessions' fixed cost) and the

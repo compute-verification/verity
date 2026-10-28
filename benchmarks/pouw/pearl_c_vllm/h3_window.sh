@@ -4,7 +4,7 @@
 # MODE=smoke with SCHEME (default pearl-c-sm120-v1-h3) and the served row's switches (whole step, deferred tile hashing, both
 # arms graphed).
 #   research run --on vy-nebius-2 --project verity --campaign pouw --source <tree> --cwd source --declared-output 'out/*' \
-#     --env GPU_LEASE_WHO=<id> -- bash benchmarks/pouw/pearl_c_vllm/h3_window.sh
+#     --env GPU_LEASE_WHO=LANE -- bash benchmarks/pouw/pearl_c_vllm/h3_window.sh
 # STEPS: the steps to run, of build (the ship), capture (the screen's, on the GPU), check (the capture against the reference,
 # on the CPUs) and smoke (on the GPU); default all four; screen is "build capture check", smoke "build smoke" and both all four.
 # The smoke passes when window.sh does and smoke.json has the gates and no error.  Without build, SHIP_TAR names a ship tarred by
