@@ -63,7 +63,7 @@ theorem wiredDeltaH {tags : Tags} {cf pf : ByteArray} {coins : Coins} {tables : 
   have P : ParseFacts tags st.c := F.parse
   have C : CheckFacts st.c := F.check
   have hda : st.da = (HmRow.delta st.c st.pin).1 ++ (Hidden.outPairs st.c).toArray := by
-    rw [sp.da, Hidden.hidden_delta']
+    rw [sp.da, Hidden.hidden_delta_unpinned (Hidden.setupHidden_unpinned ht h hrows.1)]
   have hflat := delta_wired Lf F hn hsha hhm hg hi hf j
   obtain ⟨ho, -⟩ := feed_some hf
   obtain ⟨p, tb, hp, htb, hpt⟩ := Aliased.mem_portBits ho
@@ -575,7 +575,7 @@ theorem out_copy_instH {T : Model.Statement} {c : Flock.Circuit} {n : ℕ} (a : 
   have L0 := flat_layout ht' h
   have F0 := flat_unitFacts ht' h
   have hda : st.da = (HmRow.delta st.c st.pin).1 ++ (Hidden.outPairs st.c).toArray := by
-    rw [s.da, Hidden.hidden_delta']
+    rw [s.da, Hidden.hidden_delta_unpinned (Hidden.setupHidden_unpinned ht' h hrows.1)]
   have hmc := Hidden.Any.msg_copyF L L0 F0 hda hrows hz o' hg hjo hkw ht
   generalize o - Hidden.outAt st.c (outPortOf st.c o) = kk at hk hkw hsrc hmc
   have hb' : (16 * kk + t) / 8 = 2 * kk + t / 8 := by omega

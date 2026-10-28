@@ -276,7 +276,7 @@ theorem correct_of_progCorrect {κ : Fin C.N → Option Bool} {n : ℕ} (P : Flo
 theorem wrong_subset_faulty {n : ℕ} (P : FlockSoundness.Audit.Partition C n) (κ : Fin C.N → Option Bool) (kd : ℕ)
     (desc : Claims.Msg) (q : Query) (roots : List Claims.Msg) (H : Claims.Msg → Claims.Msg) (Cm : CommitmentScheme Bool)
     (w : Wit) {u : Fin n} (hu : u ∈ P.wrong (openedOf C κ (w.val H Cm (stmtOf P κ kd desc q roots)))) :
-    u.val ∈ faulty H Cm (stmtOf P κ kd desc q roots) (partOf P) w := by
+    u.val ∈ faulty H Cm (stmtOf P κ kd desc q roots) (partOf P κ) w := by
   classical
   rw [FlockSoundness.Audit.Partition.mem_wrong] at hu
   have hlt := u.isLt
@@ -284,13 +284,16 @@ theorem wrong_subset_faulty {n : ℕ} (P : FlockSoundness.Audit.Partition C n) (
   rintro ⟨r, hr, ι, hι⟩
   rw [rus_partOf_getElem? P u] at hr
   cases Option.some.inj hr
-  exact hu (correct_of_progCorrect P u _ ι (hι _ (List.mem_singleton_self _)))
+  have h := hι (unitGates P u) (List.mem_append_left _ (List.mem_singleton_self _))
+  change (progOf C κ).Correct (RU.ref (progOf C κ) (slotOf P κ u) _ ι) (unitGates P u) at h
+  rw [ref_slotOf] at h
+  exact hu (correct_of_progCorrect P u _ ι h)
 
 theorem card_wrong_le_faulty {n : ℕ} (P : FlockSoundness.Audit.Partition C n) (κ : Fin C.N → Option Bool) (kd : ℕ)
     (desc : Claims.Msg) (q : Query) (roots : List Claims.Msg) (H : Claims.Msg → Claims.Msg) (Cm : CommitmentScheme Bool)
     (w : Wit) :
     (P.wrong (openedOf C κ (w.val H Cm (stmtOf P κ kd desc q roots)))).card ≤
-      ((faulty H Cm (stmtOf P κ kd desc q roots) (partOf P) w).filter (· < n)).card :=
+      ((faulty H Cm (stmtOf P κ kd desc q roots) (partOf P κ) w).filter (· < n)).card :=
   Finset.card_le_card_of_injOn Fin.val
     (by intro u hu; exact Finset.mem_filter.2 ⟨wrong_subset_faulty P κ kd desc q roots H Cm w hu, u.isLt⟩)
     (by intro a _ b _ h; exact Fin.ext h)
@@ -300,13 +303,13 @@ than `K₀` of the circuit's units wrong in the wire values it opens. -/
 theorem card_wrong_lt_of_relS {n : ℕ} (P : FlockSoundness.Audit.Partition C n) (κ : Fin C.N → Option Bool)
     (kd K₀ : ℕ) (desc : Claims.Msg) (q : Query) (roots : List Claims.Msg) (H : Claims.Msg → Claims.Msg)
     (Cm : CommitmentScheme Bool) (w : Wit)
-    (h : RelS H Cm (((n - K₀).choose kd : ℝ) / (n.choose kd : ℝ)) (stmtOf P κ kd desc q roots) (partOf P) w) :
+    (h : RelS H Cm (((n - K₀).choose kd : ℝ) / (n.choose kd : ℝ)) (stmtOf P κ kd desc q roots) (partOf P κ) w) :
     (P.wrong (openedOf C κ (w.val H Cm (stmtOf P κ kd desc q roots)))).card < K₀ := by
   have hle := card_wrong_le_faulty P κ kd desc q roots H Cm w
   have hpa : ((n - K₀).choose kd : ℝ) / (n.choose kd : ℝ) <
-      (designOf kd).Pa (partOf P) (faulty H Cm (stmtOf P κ kd desc q roots) (partOf P) w) := h
+      (designOf kd).Pa (partOf P κ) (faulty H Cm (stmtOf P κ kd desc q roots) (partOf P κ) w) := h
   rw [pa_partOf_window, window_zero_filter] at hpa
-  generalize (faulty H Cm (stmtOf P κ kd desc q roots) (partOf P) w).filter (· < n) = S at hpa hle
+  generalize (faulty H Cm (stmtOf P κ kd desc q roots) (partOf P κ) w).filter (· < n) = S at hpa hle
   by_contra hK
   have hc : (n - S.card).choose kd ≤ (n - K₀).choose kd := Nat.choose_le_choose _ (by omega)
   have hdiv : ((n - S.card).choose kd : ℝ) / (n.choose kd : ℝ) ≤ ((n - K₀).choose kd : ℝ) / (n.choose kd : ℝ) := by
@@ -367,7 +370,7 @@ transcript it opens. -/
 theorem card_wrong_partsOf_lt (κ : Fin (keyCircuit D hU n).N → Option Bool) (kd K₀ : ℕ) (desc : Claims.Msg)
     (q : Query) (roots : List Claims.Msg) (H : Claims.Msg → Claims.Msg) (Cm : CommitmentScheme Bool) (w : Wit)
     (h : RelS H Cm (((n - K₀).choose kd : ℝ) / (n.choose kd : ℝ)) (stmtOf (keyPartition D hU n) κ kd desc q roots)
-      (partOf (keyPartition D hU n)) w) :
+      (partOf (keyPartition D hU n) κ) w) :
     ((partsOf D hU n).wrong
       (transcriptOf D hU n κ (w.val H Cm (stmtOf (keyPartition D hU n) κ kd desc q roots)))).card < K₀ := by
   rw [transcriptOf, partsOf_wrong]

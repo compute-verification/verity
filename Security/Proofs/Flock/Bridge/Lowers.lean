@@ -9,7 +9,8 @@ import Proofs.Flock.Soundness.Audit.Circuit
 `lowers`: for every circuit `C`, partition `P` and unit `u`, `WrongSet.Lowers (progOf C κ) [unitGates P u] φ Xv`, at any
 `φ` that inverts `posOf` (`wireAt C d` does, `wireAt_posOf`), when every input the constants `κ` fix and the unit reads
 evaluates to its constant. So the claims program of a statement is `progOf C κ`, defined from the parsed circuit, and its unit `u` computes what `C` computes there; `faulty_card_le_wrongRegZ` reads
-it at `r u := [unitGates P u]`, slot `u` of `partOf P` (`rus_partOf_getElem?`).
+it at `r u := [unitGates P u]`. Slot `u` of `partOf P κ` (`rus_partOf_getElem?`) adds a one-gate proof unit per input
+`u` owns, which reads nothing, so the slot's values are that proof unit's (`ref_slotOf`).
 
 * Where the lowered gates sit: wire `g`'s `gateSize` gates are at `off C g` onward (`gates_off`), every gate of
   `progOf C` is one of them (`exists_block`), and two wires' blocks don't meet (`block_inj`).
@@ -531,18 +532,92 @@ theorem wireAt_posOf (d g : Fin C.N) : wireAt C d (posOf C g) = g := by
   rw [hg', Option.getD_some]
   exact posOf_injective (by simpa using List.find?_some hg')
 
-theorem inputClassOf_flatten : (inputClassOf C).flatten = (inputsOf C).map fun g => [[posOf C g]] := by
-  unfold inputClassOf
-  split <;> simp_all
+/-! ## Unit `u`'s slot -/
 
-theorem rus_partOf {n : ℕ} (P : Partition C n) :
-    (partOf P).rus = ((List.finRange n).map fun u => [unitGates P u]) ++ (inputsOf C).map fun g => [[posOf C g]] := by
-  simp [partOf, Claims.Sampling.Partition.rus, inputClassOf_flatten]
+theorem rus_partOf {n : ℕ} (P : Partition C n) : (partOf P κ).rus = (List.finRange n).map (slotOf P κ) := by
+  simp [partOf, Claims.Sampling.Partition.rus]
 
-/-- Slot `u` of `partOf P` is unit `u`'s replay unit. -/
+/-- Slot `u` of `partOf P κ` is unit `u`'s replay unit. -/
 theorem rus_partOf_getElem? {n : ℕ} (P : Partition C n) (u : Fin n) :
-    (partOf P).rus[u.val]? = some [unitGates P u] := by
-  rw [rus_partOf, List.getElem?_append_left (by simp)]
-  simp
+    (partOf P κ).rus[u.val]? = some (slotOf P κ u) := by
+  simp [rus_partOf]
+
+theorem mem_insOf {n : ℕ} {P : Partition C n} {u : Fin n} {g : Fin C.N} :
+    g ∈ insOf P κ u ↔ C.op g = .input ∧ κ g = none ∧ owner P g = some u := by
+  simp only [insOf, List.mem_filter, List.mem_finRange, true_and, Bool.and_eq_true, decide_eq_true_eq,
+    Option.isNone_iff_eq_none]
+  constructor
+  · rintro ⟨⟨h1, h2⟩, h3⟩
+    exact ⟨input_of_isInput h1, h2, h3⟩
+  · rintro ⟨h1, h2, h3⟩
+    exact ⟨⟨by simp [h1, Op.isInput], h2⟩, h3⟩
+
+/-- A wire's owner reads it. -/
+theorem reads_of_owner {n : ℕ} {P : Partition C n} {g : Fin C.N} {u : Fin n} (ho : owner P g = some u) :
+    ∃ h, P.unit h = some u ∧ g ∈ (C.op h).args := by
+  simpa using List.find?_some ho
+
+/-- An input the constants don't fix lowers to an input, at its wire's position. -/
+theorem gates_posOf_input {a : Fin C.N} (hin : C.op a = .input) (hk : κ a = none) :
+    (progOf C κ).gates[posOf C a]? = some .input := by
+  have h1 : 0 < gateSize (C.op a) := by rw [hin]; simp [gateSize]
+  have hp : posOf C a = off C a.val + 0 := by rw [posOf_eq, hin]; rfl
+  rw [hp, gates_off a h1]
+  simp [lower, hin, hk]
+
+theorem mem_gates_slotOf {n : ℕ} {P : Partition C n} {u : Fin n} {i : ℕ} :
+    i ∈ RU.gates (slotOf P κ u) ↔ i ∈ unitGates P u ∨ ∃ g ∈ insOf P κ u, posOf C g = i := by
+  simp only [RU.gates, slotOf, List.flatten_append, List.mem_append, List.flatten_cons, List.flatten_nil,
+    List.append_nil, List.mem_flatten, List.mem_map]
+  constructor
+  · rintro (h | ⟨l, ⟨g, hg, rfl⟩, hi⟩)
+    · exact Or.inl h
+    · exact Or.inr ⟨g, hg, (List.mem_singleton.1 hi).symm⟩
+  · rintro (h | ⟨g, hg, rfl⟩)
+    · exact Or.inl h
+    · exact Or.inr ⟨[posOf C g], ⟨g, hg, rfl⟩, List.mem_singleton_self _⟩
+
+/-- An owned input reads nothing, so it moves no gate of `unitGates P u` off the slot's boundary. -/
+theorem boundary_slotOf {n : ℕ} {P : Partition C n} {u : Fin n} {i : ℕ}
+    (h : (progOf C κ).Boundary (unitGates P u) i = true) :
+    (progOf C κ).Boundary (RU.gates (slotOf P κ u)) i = true := by
+  simp only [Prog.Boundary, Bool.or_eq_true, List.any_eq_true, Bool.and_eq_true, decide_eq_true_eq] at h ⊢
+  rcases h with (h | h) | ⟨g', hg', h1, h2⟩
+  · exact Or.inl (Or.inl h)
+  · exact Or.inl (Or.inr h)
+  · refine Or.inr ⟨g', hg', fun hm => ?_, h2⟩
+    rcases mem_gates_slotOf.1 hm with hm | ⟨g, hg, rfl⟩
+    · exact h1 hm
+    · rw [gates_posOf_input (mem_insOf.1 hg).1 (mem_insOf.1 hg).2.1] at h2
+      simp [BGate.reads] at h2
+
+/-- **The owned inputs leave the unit's values alone**: an input reads nothing and is on every boundary, so slot `u`
+reads and writes what its proof unit `unitGates P u` does alone. -/
+theorem ref_slotOf {n : ℕ} (P : Partition C n) (u : Fin n) (val : ℕ → Option Bool) (ι : ℕ → Bool) :
+    RU.ref (progOf C κ) (slotOf P κ u) val ι = RU.ref (progOf C κ) [unitGates P u] val ι := by
+  have hgates : RU.gates [unitGates P u] = unitGates P u := by simp [RU.gates]
+  have hiff : ∀ i, (i ∈ RU.gates (slotOf P κ u) ∧ (progOf C κ).Boundary (RU.gates (slotOf P κ u)) i = false) ↔
+      (i ∈ RU.gates [unitGates P u] ∧ (progOf C κ).Boundary (RU.gates [unitGates P u]) i = false) := by
+    intro i
+    rw [hgates]
+    constructor
+    · rintro ⟨hi, hB⟩
+      rcases mem_gates_slotOf.1 hi with hi | ⟨g, hg, rfl⟩
+      · refine ⟨hi, ?_⟩
+        cases hb : (progOf C κ).Boundary (unitGates P u) i
+        · rfl
+        · rw [boundary_slotOf hb] at hB
+          exact absurd hB (by simp)
+      · rw [Boundary.boundary_input _ (gates_posOf_input (mem_insOf.1 hg).1 (mem_insOf.1 hg).2.1)] at hB
+        exact absurd hB (by simp)
+    · rintro ⟨hi, hB⟩
+      refine ⟨mem_gates_slotOf.2 (Or.inl hi), ?_⟩
+      cases hb : (progOf C κ).Boundary (RU.gates (slotOf P κ u)) i
+      · rfl
+      · rw [Boundary.boundary_mono _ (fun j hj => mem_gates_slotOf.2 (Or.inl hj)) hb] at hB
+        exact absurd hB (by simp)
+  funext i
+  unfold RU.ref
+  exact if_congr (hiff i) rfl rfl
 
 end Flock.Bridge
