@@ -1,9 +1,11 @@
 /-
 The `#guard`s that pin the composition's verdict rule on a product of two stubs, `a` and `b` (`Core.Example.protocol`,
 k = 2): every pair of the components' verdicts, reject dominating; a commitment that doesn't bind their digests; and
-every way the cases can fail to fit the composition.
+every way the cases can fail to fit the composition. Then three stubs `a`, `b` and `c` of which `a` and `c` must commit
+to one record (`same`): a pair that didn't refused whatever the components answer.
 -/
 import CoreComposition.Cases
+import CoreComposition.Same
 import CoreComposition.Stubs
 
 namespace Core.Composition.Guards
@@ -86,5 +88,31 @@ private def readsBack (a : Answer) : Bool :=
 #guard (toy.answer (paramsOf [accepts "a", accepts "b"]).toUTF8 (commitmentOf toy [accepts "a", accepts "b"])
   "{\"components\":[{\"id\":\"a\"}]}".toUTF8).reason ==
   some "evidence: a component's case: the keys must be [commitment, evidence, id, params], not [id]"
+
+private def sameToy : Protocol := same "verity/toy/v2" ["a", "c"] [Stub.stub "a", Stub.stub "b", Stub.stub "c"]
+
+private def answerS (xs : List Stubbed) (c : ByteArray := commitmentOf sameToy xs) : Answer :=
+  Cases.answer sameToy xs (c := c)
+
+private def hex (b : Nat) : String := String.join (List.replicate 32 s!"0{b}")
+
+private def stray (x : Stubbed) : Stubbed := { x with root := ⟨(List.replicate 32 9).toArray⟩ }
+
+-- `a` and `c` committed to one record: the verdict is `product`'s, whatever `b` committed to
+#guard (answerS [accepts "a", accepts "b", accepts "c"]).verdict == .accept
+#guard (answerS [accepts "a", stray (accepts "b"), accepts "c"]).verdict == .accept
+#guard (answerS [accepts "a", undecided "b", accepts "c"]).verdict == .undecided
+#guard (answerS [rejects "a", accepts "b", accepts "c"]).reason == some "a reject: 1 of 2 drawn units failed"
+-- `a` and `c` committed to two: refused once the cases fit, whatever the components answer
+#guard (answerS [accepts "a", accepts "b", stray (accepts "c")]).reason ==
+  some s!"record: a committed {hex 7}, c committed {hex 9}"
+#guard (answerS [accepts "a", undecided "b", stray (undecided "c")]).verdict == .reject
+#guard (answerS [rejects "a", accepts "b", stray (accepts "c")]).reason ==
+  some s!"record: a committed {hex 7}, c committed {hex 9}"
+#guard (answerS [accepts "a", accepts "b", stray (accepts "c")]).published.isNone
+#guard (answerS [accepts "a", stray (accepts "c")]).reason == some "params: b is missing"
+-- a commitment that doesn't decode rejects as its component
+#guard (answerS [accepts "a", accepts "b", { accepts "c" with root := ByteArray.empty }]).reason ==
+  some "c reject: commitment: a root is 32 bytes, not 0"
 
 end Core.Composition.Guards

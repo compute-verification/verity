@@ -8,7 +8,7 @@ derives the window's units from its own copy of the Program under the `Q_templat
   down_proj's calls, at K the intermediate size, instantiate their own template in the same Program. The tile's
   architecture (`h1_tile`'s ``arch``, sm_120 unless given) is its `h1device` record, which binds its exact accumulator and
   bounds its K; sm_90's binds the same step, so its Program is sm_120's.
-* **The unit** reads its rows and its z/y record and proves the record (`h1zy`, RT4-INT-33): the H1 tile (`h1_tile`) on the
+* **The unit** reads its rows and its z/y record and proves the record (`h1zy`): the H1 tile (`h1_tile`) on the
   rows' codes gives z and the receipt, and the unit returns the receipt and ``ok``, 1 exactly when the record is z and its
   dequant y = RN_bf16(RN32(RN32(RN32(z) s_a) s_w)) at each cell's row scale s_a and column scale s_w, which ride on the
   rows (`h1zy.ROW`: an A row is its K codes then its f32 s_a, a B row its K weight codes then their f32 s_w). The record
@@ -435,7 +435,7 @@ def unit_reads(program: Program, tp: Any, u: int) -> dict[str, tuple[str, int]]:
     return {**out, **{field: (prefix + field, u) for field in OUTPUTS}}
 
 
-#: the tables a call's rows are committed in under its round's root before the round's coin (#3053's ``tables``): ``a``,
+#: the tables a call's rows are committed in under its round's root before the round's coin: ``a``,
 #: its step's A table of its K, and ``zy``, its z table
 TABLES = ("a", "zy")
 #: the table a call's receipts are committed in under its round's root before the round's coin: one receipt a unit of the
@@ -638,7 +638,7 @@ def public_table(prog: str, value: str, salt: str, window: str, u0: int, n: int,
 @functools.lru_cache(maxsize=8)
 def ok_table(prog: str, value: str, window: str, population: int) -> tuple[list[list[int]], list[bytes], G.Registered]:
     """The window's ok rows ``value`` (``<prefix>ok``, `OUTPUTS`) over its ``population`` units, their salts and their
-    registration (h1_prove's `register_ok`, #3124): row u the one word 1 (`core_check.OK_ROW`) under
+    registration (h1_prove's `register_ok`): row u the one word 1 (`core_check.OK_ROW`) under
     `core_check.ok_salt` of the window's open root ``window`` and u, registered under the window Program's digest
     ``prog`` binding ``window``."""
     rows = [list(CC.OK_ROW) for _u in range(population)]
@@ -815,7 +815,7 @@ def leaf_reads_file(program: Program, u: int, kind: str, ln: int | None, roots: 
     weights' ``b/<K>``), ``partials``' entry ``partials`` and a J10-R leaf's carries' and ok rows' theirs in
     ``produced`` (each `produced.entry` under the window's registration). A read of an A row, a B row, a partials row,
     a carry or an ok row is marked `READ_IN_FULL` (`leaf_lanes.read_in_full`), never an ``o0``. Then ``known_ports``
-    (`produced.known_port` of `leaf_known_rows`), and ``complete``."""
+    (`produced.known_port` of `leaf_known_rows`)."""
     S = program.fn.S()
     c = call_of(program, u)[0]
     shape, b = _shapes(program, c, steps), f"{S.PREFIX}b/{_k(S)[S.CALLS[c][0]]}"
@@ -841,4 +841,4 @@ def leaf_reads_file(program: Program, u: int, kind: str, ln: int | None, roots: 
             out[port][READ_IN_FULL] = True
     if both := sorted(set(out) & set(known_ports)):
         raise ValueError(f"ports {both} are both reads and known")
-    return {"format": G.READS, "ports": {**out, **known_ports}, LL.COMPLETE: True}
+    return {"format": G.READS, "ports": {**out, **known_ports}}

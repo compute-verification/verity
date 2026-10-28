@@ -1,9 +1,10 @@
 # The remote protocol
 
 The remote protocol audits a datacenter whose auditor has no devices at the site: the developer commits everything its
-hardware computes, and the auditor checks it from outside with live coins and a Lean verifier. It composes two
+hardware computes, and the auditor checks it from outside with live coins and a Lean verifier. It composes three
 subprotocols into one verdict over one commitment: sampled proofs (the committed values satisfy the declared circuit,
-except on few proof blocks) and PoUW (the hardware's time went to the declared work).
+except on few proof blocks), PoUW (the hardware's time went to the declared work) and the inference-only policy (the
+declared circuit is inference, not training).
 
 **The open gap.** Remote's composed soundness theorem, `Verity.Soundness`, is not in Lean yet. It is due after the Lean
 dedupe (one vocabulary). Today the pieces below compose by hand: each is proved on its own,
@@ -55,16 +56,19 @@ monitoring period's pooled bound, `Session*` a run of a subprotocol, and `Window
 
 | Subprotocol | What it establishes | Lean check | id |
 |---|---|---|---|
-| Sampled proofs ([README](../sampled_proofs/README.md)) | the committed values satisfy the declared circuit outside the proof blocks the draw misses | `SampledProofs.OneStage.protocol` (`verity/core/service/sampled_proofs`) | `verity/sampled-proofs/one-stage/v1` |
+| Sampled proofs ([README](../sampled_proofs/README.md)) | the committed values satisfy the declared circuit outside the proof blocks the draw misses, on the proofs themselves, which it reads as blobs | `SampledProofs.OneStageZk.protocol` (`verity/core/service/sampled_proofs`) | `verity/sampled-proofs/one-stage/v2` |
 | PoUW ([README](../pouw/README.md)) | the period's credited work, in live words, is the declared work's | `PouwCheck.protocol` (`verity/core/protocols/pouw/lean/check`) | `verity/pouw/v1` |
+| The inference-only policy ([README](../network/nci/README.md); its Lean is still named `Nci`, `NciCheck`) | the declared circuit divides into inference blocks within their gate and fresh-input budgets, and θ is registered information | `NciCheck.Protocol.protocol` (`verity/core/protocols/network/nci/lean`) | `verity/inference-only/v0` |
 
-**Coming, not there yet:** the inference-only policy (its Lean is still named `Nci`, `NciCheck`) is to join as a third
-subprotocol. Under it, the declared circuit divides into inference blocks of bounded size, each reading a bounded amount
-of fresh input (input that isn't registered information). Its check reads only the declared circuit and the registered
-information, so it needs no hardware at the site. On `main`, `Core.Remote.components` holds only the two rows above.
+The inference-only policy's check reads only the declared circuit and the registered information, so it needs no
+hardware at the site. Its commitment is the run's record, which must name the declared circuit, and remote refuses
+unless it is the record PoUW's window and sampled proofs commit to (one record, below). Its evidence, the declared
+division and θ's provenance, reaches the verifier in the clear, not inside a zero-knowledge proof.
 
-The code is `CoreRemote.lean`, `protocol = product "verity/remote/v0" [PouwCheck.protocol,
-SampledProofs.OneStage.protocol]`. Its executable is `remote id | check PARAMS COMMITMENT EVIDENCE | serve`
+The code is `CoreRemote.lean`, `protocol = sameB "verity/remote/v0" ids components` over `components =
+[NciCheck.Protocol.protocol, PouwCheck.protocol, SampledProofs.OneStageZk.protocol]`, `ids` their ids: every one of the
+three commits to the run's record, and once the cases fit, two records' digests reject remote whatever the subprotocols
+answer (`Core.Composition.same`; the `#guard`s pin a policy on one record and the others on another). Its executable is `remote id | check PARAMS COMMITMENT EVIDENCE | serve`
 (`RemoteMain.lean`). The Lake package `core_remote` is code: it has no Mathlib and nothing of `Security/`
 (`lean-audit.json`). The product's rule and its difftest are the composition's ([README](../composition/README.md),
 `verity/core/protocols/composition/tests/test_composition_difftest.py`).
@@ -73,8 +77,7 @@ SampledProofs.OneStage.protocol]`. Its executable is `remote id | check PARAMS C
 
 1. **Registration**, once, before any coin. The developer registers R = (θ, D, 𝓘): the registered inputs θ, the declared
    circuit D, and D's (c, k)-partition 𝓘 into inference blocks (`GLOSSARY.md`, `Verity.Declaration`; read by the
-   inference-only policy once it joins). It also registers
-   each subprotocol's public Program and parameters, by digest.
+   inference-only policy). It also registers each subprotocol's public Program and parameters, by digest.
 2. **Declarations**, one or more per declaration period (a span of one or more sampling periods). A declaration is one
    act of declaring: the developer reports its declared advice (a bit string that a registered compiler compiles, its
    length charged), and the compiler appends one declaration block to the declared circuit. The block's values are
@@ -441,12 +444,13 @@ gives the overhead lower bound for monitoring periods of a week, a month and a y
 
 **No example runs the remote verifier yet:** `remote check` has no run of record; its first is due Wed 28 Oct, 11 AM
 PDT (D3). Lifecycle is the only example that steps through the whole remote composite, with a stand-in prover; h200
-and vllm each run remote's sampled-proofs half for real:
+runs remote's sampled-proofs half for real, and the vLLM demo runs both halves on one served run, PoUW's as a
+development run:
 
 - `verity example lifecycle` (`examples/lifecycle/README.md`): the remote composite stepped through one monitoring period
   on CPU in about 2 s: hardware registration, registration, declarations, live draws, each declaration's verdict and the
   period's accounting, with every deviation it lists refused by name. Its prover is a labelled stand-in for C-Flock, and
-  its verdict is the composition's Python mirror over per-declaration stand-ins for the two subprotocols, not `remote
+  its verdict is the composition's Python mirror over per-declaration stand-ins for its subprotocols, not `remote
   check`. It runs; nothing about it is proved.
 
 - `verity example h200` (`examples/h200/README.md`): a fixed attention shape committed on one H200. Eight proof blocks
@@ -454,13 +458,14 @@ and vllm each run remote's sampled-proofs half for real:
   refused. At an 8-block draw, that allows at most 43.77% faulty proof blocks at δ = 1%. It runs, at proof level
   none, and isn't placed: its Lean verifier ran beside the prover. On a CPU at a small shape, run
   `uv run python examples/h200/run.py --out /tmp/e2e` (`--tamper l1.wup` must exit 3).
-- `verity example vllm` (`examples/vllm/README.md`): Llama-3.2-1B in bf16 served by vLLM on one RTX PRO 6000 (its run
-  of record), its values committed while serving, and a sampling period's proof blocks drawn by live coins, proved by
-  C-Flock `--zk` and checked by the Lean verifier. It runs, at proof level none: no remote guarantee exists for those
-  verdicts to reach (the open gap, above). The int8 served run on an H200 (`benchmarks/one_stage/served_verdicts.sh`'s
-  default) is tonight's, Tue 27 Oct, 6 PM PDT.
+- `verity example vllm` (`examples/vllm/README.md`), the vLLM demo: Llama-3.2-1B INT8 served by vLLM on one H200, its
+  values committed while serving, a sampling block's proof blocks sampled by live coins, proved by C-Flock `--zk` and
+  checked by the Lean verifier, and PoUW's H1 on the served model. PoUW's verdict there is a development run under the
+  challenger's development key and credits nothing, and an H1 commitment's served execution blocks aren't yet a
+  `verity/pouw/v1` case, so no run of record of the remote verdict has passed: its run is moved, at proof level none,
+  and no remote guarantee exists for its verdicts to reach (the open gap, above).
 
-PoUW's half has no runner. `examples/dither_full_util/README.md` has no runner and no run of record. What of PoUW runs
+`examples/dither_full_util/README.md` has no runner and no run of record. What of PoUW's own check runs
 is its Lean check, through its difftest against the Python (`lake exe pouw-check`, the suite
 `verity-pouw-check-difftest`; `verity/core/protocols/pouw/lean/check/README.md`), and the composite's difftest
 (`verity/core/protocols/composition/tests`).

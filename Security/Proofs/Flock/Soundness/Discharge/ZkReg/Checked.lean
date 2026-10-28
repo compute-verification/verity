@@ -25,8 +25,17 @@ open FlockSoundness.Discharge.Exec (Inputs recordDraw)
 /-- `AcceptsZKR` is `AcceptsZK` with the registered check: it implies `AcceptsZK`. -/
 theorem acceptsZK_of_R {I : Inputs} {own : Array Registered.Port} {t : Exec.Transcript} (h : AcceptsZKR I own t) :
     AcceptsZK I t := by
-  obtain ⟨spec, sts, hs, -, hshape, hv⟩ := h
+  obtain ⟨spec, sts, hs, -, -, hshape, hv⟩ := h
   exact ⟨spec, sts, hs, hshape, hv⟩
+
+/-- **Every port of an accepted statement is a registered read**: at an outcome `verify --zk --registered F` accepts,
+every port of each table's circuit, each input port and each output row, is named by a port of `own`
+(`Registered.checkComplete_ok`). -/
+theorem complete_of_R {I : Inputs} {own : Array Registered.Port} {t : Exec.Transcript} (h : AcceptsZKR I own t) :
+    ∃ spec sts, Exec.setupOf (zkInputs I) t.record = .ok (spec, sts) ∧
+      ∀ (j : ℕ) (hj : j < sts.size), ∀ p ∈ sts[j].c.ports, ∃ r ∈ own, r.name = p.name := by
+  obtain ⟨spec, sts, hs, -, hc, -⟩ := h
+  exact ⟨spec, sts, hs, fun j hj => Registered.checkComplete_ok (array_forM_ok hc j hj)⟩
 
 /-- `checkRegistered` accepting a statement is `Registered.check` accepting it. -/
 theorem checkRegistered_ok {st : Stmt} {r : Option (Array Registered.Port)} (h : checkRegistered st r = .ok ()) :
