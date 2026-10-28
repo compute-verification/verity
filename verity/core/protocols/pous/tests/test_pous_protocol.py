@@ -586,6 +586,31 @@ def test_p2_wide_certificate_is_period_held_at():
         assert wide_certificate(q) is None, q
 
 
+def test_p2_wide320_certificate_is_the_320_read_window():
+    """`p2.wide320_certificate` is `Pous.SecurityProofs.ObligationWide320`: the wide certificate's audit at k = 320,
+    with `δ` the window's `2^-20` and `2^eps_log2` the `ε_prf = 2^-127` that `Hash.Assumptions.Sha512Prf` adds at the
+    memory challenger's SHA-512 indices, under `WIDE_CLAIMS` and `prf/sha-512`, over the same 2^19 to 2^27 blocks; none
+    elsewhere."""
+    from fractions import Fraction
+
+    from verity.core.protocols.pous.schemes.p2 import (CERT_K_WIDE320, WIDE320_CLAIMS, WIDE_CLAIMS, wide320_certificate,
+                                                       wide_certificate)
+
+    assert CERT_K_WIDE320 == 320 and WIDE320_CLAIMS == (*WIDE_CLAIMS, "prf/sha-512")
+    for bps, segments in ((1 << 16, 8), (1 << 12, 128), (1 << 16, 1038), (1 << 16, 1 << 11)):
+        q = P2Params(16448, 21065, bps, segments)
+        cert = wide320_certificate(q)
+        assert cert.to_json() == wide_certificate(q).to_json() | {
+            "k": 320, "theorem": "Pous.SecurityProofs.ObligationWide320", "delta": f"1/{2 ** 20}", "eps_log2": -127,
+            "claims": list(WIDE320_CLAIMS)}
+        assert cert.delta + Fraction(1, 2 ** -cert.eps_log2) == Fraction(1, 1 << 20) + Fraction(1, 1 << 127)
+        assert all(protocol.claim(c).id == c for c in cert.claims)
+        assert cert.refusals(319, 0) == ("k = 319 is below the certificate's 320",)
+    for q in (P2Params(16448, 21065, (1 << 16) - 1, 8), P2Params(16448, 21065, 1 << 16, (1 << 11) + 1),
+              P2Params(1024, 105, 1 << 16, 1038), P2Params(16448, 21065, 1 << 16, 1038, CHACHA8)):
+        assert wide320_certificate(q) is None, q
+
+
 def test_p2_encode_blocks_are_slices_of_the_segment():
     """`p2.encode_blocks` from block `j0` of a segment gives those blocks of `encode_segment`, and refuses payloads that
     are not whole blocks inside the segment."""

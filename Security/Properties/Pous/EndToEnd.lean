@@ -47,7 +47,9 @@ separately so that each can be rejected alone:
    locally, which a Lean function does for free): this step is a claim, never a theorem.
 4. `prf/sha-512`: the indices the memory challenger derives from its secret source (`Randomness.derive`, then the
    counter-mode SHA-512 stream that `Randomness.uniform` reads) are as good as uniform: each stream is replaced here by
-   `DRAW_BYTES` uniform bytes, and `uniformOn` reads them exactly as the code does.
+   `DRAW_BYTES` uniform bytes, and `uniformOn` reads them exactly as the code does. Over the challenger's own
+   derivation it is the premise `Hash.Assumptions.Sha512Prf`, its advantage `ε_prf(t, Q)` explicit, which
+   `Pous.Period.PeriodHeldSha512` (`Properties.Pous.PeriodGame`) takes at the derivation's two tests.
 
 The ring game takes one more named assumption, `Pous.P2.Assumptions.CoinCommitHides` (`statistical-hiding`), because
 it hands the server the session commitment, and `P2RingAuditSecure`, the conjecture that P2 is secure in the ring model.

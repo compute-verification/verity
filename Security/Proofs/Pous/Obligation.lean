@@ -182,6 +182,34 @@ theorem ObligationDemoWide : Pous.Guarantees.ObligationDemoWide := by
   rw [hlow, Nat.cast_ofNat] at hb
   exact hb.trans hnum
 
+/-- **A 320-read window at `2^-20`, from the widened per-round floor** (`Pous.Guarantees.ObligationWide320`). -/
+theorem ObligationWide320 : Pous.Guarantees.ObligationWide320 := by
+  intro p ε₀ D Q L hnum h N _ h1 h2 T _ _ tag htag Sz hSz W A₁ A₂
+  have hb := ObligationOfRoundSecureWide p ε₀ D Q L h N h1 h2 T tag htag Sz 320 W A₁ A₂
+  rw [lowBoundaries_of_le hSz] at hb
+  exact hb.trans hnum
+
+/-- **`ObligationWide320`'s premise holds at P2's floor**: `p = 0.043` and `ε₀ = 2^-137` meet `RoundsBound` at 320
+rounds and `2^-20` (`PousP2Rounds.floor_043_eps_320`). -/
+theorem ObligationWide320_honest :
+    Pous.Guarantees.RoundsBound (43 / 1000) ((2⁻¹ : ℝ≥0∞) ^ 137) 320 ((2⁻¹ : ℝ≥0∞) ^ 20) := by
+  unfold Pous.Guarantees.RoundsBound
+  rw [Nat.cast_ofNat]
+  exact PousP2Rounds.floor_043_eps_320
+
+/-- **`ObligationWide320`'s bound says something**: at the registered point's `2^19` blocks and 320 reads, the event a
+verifier that accepts everything passes has probability 1, above `2^-20`. -/
+theorem ObligationWide320_nontrivial :
+    ¬ pr (fun _ : Oracle 16448 (2 ^ 16448 - 21065) (Fin (2 ^ 19)) × Unit × (Fin 320 → Fin (2 ^ 19)) => True) ≤
+      (2⁻¹ : ℝ≥0∞) ^ 20 := by
+  haveI : Nonempty (Oracle 16448 (2 ^ 16448 - 21065) (Fin (2 ^ 19))) :=
+    (ringRO (2 ^ 19) 16448 (2 ^ 16448 - 21065)).nonemptyΩ
+  haveI : Nonempty (Fin (2 ^ 19)) := ⟨⟨0, by norm_num⟩⟩
+  have h1 : pr (fun _ : Oracle 16448 (2 ^ 16448 - 21065) (Fin (2 ^ 19)) × Unit × (Fin 320 → Fin (2 ^ 19)) => True) = 1 :=
+    pr_eq_one fun _ => trivial
+  rw [h1]
+  exact not_le.2 (pow_lt_one₀ zero_le (ENNReal.inv_lt_one.2 ENNReal.one_lt_two) (by norm_num))
+
 end Pous.SecurityProofs
 
 namespace Pous.Period.SecurityProofs
