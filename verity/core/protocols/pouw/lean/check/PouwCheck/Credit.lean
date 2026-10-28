@@ -101,7 +101,7 @@ round log's roots, which only `roundsCheck` (`core_check.rounds`) holds to the o
   one the open of the window's period signed (`committedWeights`), so every window of a period opens the same B rows.
   That open names the model the root is of, a role and checkpoint `models.json` pins (`PINNED_MODELS`, the file
   `credit.py` reads, embedded here), else the period counts nothing.
-* `Internal.length` is `credit._length` (Daniel, 19 Oct, ASK-39): the open of the window's period commits each
+* `Internal.length` is `credit._length`: the open of the window's period commits each
   request's public max_tokens with the public-cap done source (`committedLength`, `{max_tokens, stop}` with stop
   `STOP_FIXED`), and each step's served rows m_s the manifest fixed before the draw coin (`Internal.servedRows`) are
   that fixed length's schedule:
@@ -1054,9 +1054,9 @@ def PUB_PORT : String := "pub"
 def OK_PORT : String := "o1"
 /-- `credit.OK_VALUE`: the window Program's output the ok rows are, after its prefix: row u unit u's. -/
 def OK_VALUE : String := "ok"
-/-- `core_check.OK_ROW`: the ok row the verifier accepts, a unit's one output bit, 1, in its one word (h1_prove's, #3124). -/
+/-- `core_check.OK_ROW`: the ok row the verifier accepts, a unit's one output bit, 1, in its one word (h1_prove's). -/
 def OK_ROW : Array Nat := #[1]
-/-- `core_check.OK_SALT_TAG`: the ok row's hm96 salt tag (h1_prove's, #3124). -/
+/-- `core_check.OK_SALT_TAG`: the ok row's hm96 salt tag (h1_prove's). -/
 def OK_SALT_TAG : ByteArray := "verity/pouw/h1-prove/ok-row-salt/v0".toUTF8.push 0
 
 /-- `core_check.ok_salt`: SHAKE-256 of `OK_SALT_TAG` ‖ context ‖ 0 ‖ u64be(position), `PouwCheck.saltBytes` bytes. -/
