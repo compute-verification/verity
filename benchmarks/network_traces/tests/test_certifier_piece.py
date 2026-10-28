@@ -6,8 +6,9 @@ and its outcome. The piece, on a serve dir whose window was the warden's synthet
 link-window: the period mirror's certifier/v0 accept (`period_case`) then goes through `served_verdicts.py record` into
 the block record's certifier leg, which `block_record.check` holds and its schema admits. A window request the warden
 didn't certify is rejected before any chain runs; a chain that refused, requests outside the scan's link-window and a
-period the check rejects are rejects; a step that can't run (no kept run, no report, no build, the time limit) refuses,
-which leaves the certifier missing. The leak guard reads the piece's DIR against the run's witness. The front's
+period the check rejects are rejects; a rehearsal the gate's check failed (each request late) and a step that can't run
+(no kept run, no report, no build, the time limit) refuse, which leaves the certifier missing. The leak guard reads the
+piece's DIR against the run's witness. The front's
 warm-ups go straight to the endpoint, one at a time, each recorded in a closed window of its own before the gate is
 asked, and the pick passes over those windows for the group's."""
 from __future__ import annotations
@@ -39,6 +40,10 @@ from verity_e2e_demo import block_record as BR  # noqa: E402
 PERIOD_CASE = ROOT / "verity" / "core" / "protocols" / "network" / "tests" / "period_case.py"
 SCHEMA = json.loads((Path(BR.__file__).parent / "schemas" / "block-record.v1.schema.json").read_text())
 K = 3
+#: the gate's end of a rehearsal its check passed, and of one whose every request was late past the warden's D·τ
+PASSED = {"run": RUN, "rc": 0, "ended": "the rehearsal ended", "verdict": {"accepted": True, "problems": 0}}
+LATE = {"run": RUN, "rc": 1, "ended": "the rehearsal exited 1",
+        "verdict": {"accepted": False, "problems": 8, "requests": 4, "ended": 0, "failed": ["fail"]}}
 
 
 @pytest.fixture(scope="module")
@@ -52,7 +57,8 @@ def period():
 
 @pytest.fixture(scope="module")
 def warden(tmp_path_factory):
-    """The synthetic warden run, its fetch, and the link-window holding the most whole certified requests."""
+    """The synthetic warden run, its fetch (``late``: the same run, its rehearsal failed late), and the link-window
+    holding the most whole certified requests."""
     d = tmp_path_factory.mktemp("warden")
     run = gate_run(d)
     io, T = WC.io(run), WC.deployment(run)[1].window
@@ -62,10 +68,13 @@ def warden(tmp_path_factory):
         if len(ws) == 1:
             by.setdefault(ws.pop(), []).append(r)
     w = max(by, key=lambda x: (len(by[x]), -x))
-    fetch = d / "fetch.tar.gz"
-    with tarfile.open(fetch, "w:gz") as tar:
-        tar.add(run, arcname=RUN)
-    return {"fetch": fetch, "w": w, "records": by[w][:4], "others": [r for x, rs in by.items() if x != w for r in rs],
+    fetches = {}
+    for name, end in (("late", LATE), ("fetch", PASSED)):
+        (run / "end.json").write_text(json.dumps(end))
+        fetches[name] = d / f"{name}.tar.gz"
+        with tarfile.open(fetches[name], "w:gz") as tar:
+            tar.add(run, arcname=RUN)
+    return {**fetches, "w": w, "records": by[w][:4], "others": [r for x, rs in by.items() if x != w for r in rs],
             "windows": WC.deployment(run)[0]["windows"]}
 
 
@@ -73,9 +82,10 @@ def _write(path: Path, rows: list[dict]) -> None:
     path.write_text("".join(json.dumps(r) + "\n" for r in rows))
 
 
-def _serve_dir(d: Path, warden: dict, records: list[dict] | None = None, kept: bool = True) -> Path:
+def _serve_dir(d: Path, warden: dict, records: list[dict] | None = None, kept: bool = True,
+               fetch: str = "fetch") -> Path:
     """A serve dir whose window K served ``records`` (the warden's, by default those of its link-window) and whose
-    gate fetch the front kept."""
+    gate fetch (``warden[fetch]``) the front kept."""
     records = warden["records"] if records is None else records
     d.mkdir(parents=True)
     reqs = [{"engine_id": f"e{i}", "user": r["user"], "prompt_ids": r["prompt"], "streamed_ids": r["output"],
@@ -87,7 +97,7 @@ def _serve_dir(d: Path, warden: dict, records: list[dict] | None = None, kept: b
     (d / "serve.json").write_text("{}")
     if kept:
         (d / CP.PRIVATE / RUN).mkdir(parents=True)
-        (d / CP.PRIVATE / RUN / "fetch.tar.gz").write_bytes(warden["fetch"].read_bytes())
+        (d / CP.PRIVATE / RUN / "fetch.tar.gz").write_bytes(warden[fetch].read_bytes())
     return d
 
 
@@ -239,6 +249,30 @@ def test_a_step_that_cant_run_refuses_and_leaves_the_certifier_missing(case, tmp
         assert not list((d / CP.PRIVATE / RUN).glob("unpacked-*"))
     rec, line = _record(monkeypatch, capsys, d, tmp_path / "pieces")
     assert rec is not None and line["composed"] == "pending" and "the network certifier" in line["missing"]
+
+
+def test_a_rehearsal_the_gates_check_failed_late_leaves_the_certifier_missing_not_rejected(tmp_path, warden, capsys,
+                                                                                          monkeypatch):
+    """Each request late past the warden's D·τ: the gate's check fails the rehearsal, and the served answers, longer
+    than what the warden passed, don't bind to its certified ones. That is the endpoint's lateness, not the protocol
+    rejecting a served answer, so the piece refuses before any chain and the certifier is missing, as for a busy gate;
+    the same window on a rehearsal the check passed is a reject."""
+    served = [dict(r, output=[*r["output"], 7]) for r in warden["records"]]
+    d = _serve_dir(tmp_path / "serve", warden, served, fetch="late")
+    chain = _chain_out(tmp_path / "chain", "accepted", warden["w"])
+    S.pieces(d, K, tmp_path / "pieces", env=dict(os.environ, CERTIFIER_CMD=_piece_cmd(tmp_path, chain, {})))
+    piece = tmp_path / "pieces" / "certifier"
+    why = (piece / CP.REFUSED).read_text()
+    assert why.startswith("the gate's rehearsal didn't pass, so it certified no served answer: exit 1, the rehearsal "
+                          "exited 1; its check accepted False with 8 problems"), why
+    assert {p.name for p in piece.iterdir()} - {"piece.json"} == {CP.REFUSED, "piece.log"}
+    assert not (d / CP.PRIVATE / RUN / "chain").exists() and not list((d / CP.PRIVATE / RUN).glob("unpacked-*"))
+    assert S.piece_row("communication", tmp_path / "pieces")["verdict"] == "missing"
+    rec, line = _record(monkeypatch, capsys, d, tmp_path / "pieces")
+    assert rec is not None and line["composed"] == "pending" and "the network certifier" in line["missing"]
+    a, _ = CP.decide(_serve_dir(tmp_path / "passed", warden, served), K, tmp_path / "out",
+                     chain=lambda *x: pytest.fail("no chain"), check=lambda *x: {})
+    assert a["verdict"] == "reject" and "streamed_ids aren't the certified output" in a["reason"]
 
 
 def test_n2_and_the_tie_take_every_link_window_of_a_short_run_unless_named():
