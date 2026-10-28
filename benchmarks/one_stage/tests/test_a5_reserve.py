@@ -165,7 +165,9 @@ def nothing_reserved(tmp_path: Path) -> bool:
 
 def test_the_local_challenger_opens_on_the_needs_reserve_and_the_draw_holds(tmp_path, monkeypatch):
     """The local challenger opens the session once the rank has planned its draw, on the layout of its need (26 coins). The
-    18-family draw reads its 24 coins after the rank's commitment, and its coins' evidence holds (`coins.coins_reason`)."""
+    18-family draw reads its 24 coins after the rank's commitment. Its coins' evidence (`coins.coins_reason`) holds but for
+    one thing: the local challenger's session releases its commitment as it runs, and a draw is read only from a withheld
+    session (`challenger.withheld_on`), so the evidence is refused for that alone."""
     rule, law, n = "stratified:1", law_of("stratified:1", ALL_FAMILIES), sum(ALL_FAMILIES)
     manager, draws, opener = local(tmp_path, monkeypatch, [0])
     try:
@@ -184,7 +186,7 @@ def test_the_local_challenger_opens_on_the_needs_reserve_and_the_draw_holds(tmp_
     plan = published["plan"]
     assert plan["needs"] == {"0": 25} and plan["families"] == [[AC.FAMILY, 26]] and plan["session"]
     assert published["trusted"]["released"] == {AC.FAMILY: 1 + 24} and len(coins.read) == 1496
-    assert CC.coins_reason(AC.evidence(published, segment), ROOT, AFTER, bytes(coins.read), AC.lms_verify) is None
+    assert CC.coins_reason(AC.evidence(published, segment), ROOT, AFTER, bytes(coins.read), AC.lms_verify) == Ch.WITHHELD
 
 
 def test_two_ranks_open_the_session_once_both_have_planned(tmp_path, monkeypatch):
