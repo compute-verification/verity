@@ -132,7 +132,7 @@ def test_hole_b_is_refused_by_the_gather_hull():
     assert b.fixed_units == 128
     with pytest.raises(AssertionError, match="outside s32"):
         S.holeb_square(b, once)  # the next squaring's columns, over the bytes' derived hulls, leave s32
-    b._append(S.Op("mma", fa=S.U8, fb=S.U8, k=1), (b.const(0), once[0], once[0]), S.S32_MIN, S.S32_MAX)
+    b._append(S.WordOp("mma", fa=S.U8, fb=S.U8, k=1), (b.const(0), once[0], once[0]), S.S32_MIN, S.S32_MAX)
     errs = S.proven(b.gates)
     for g in once:
         assert b.gates[g].op.kind == "gather" and (b.gates[g].lo, b.gates[g].hi) == (0, 255)

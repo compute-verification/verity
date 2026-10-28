@@ -297,7 +297,7 @@ IMMA_U8 = IntegerMma(name="blackwell_sm120_u8u8_m16n8k32", arch="sm_120", dtype=
                      k_per_instruction=32, satfinite=True, validated="run r20261015-084000-06d8, form u8.u8 .satfinite")
 
 
-class Circuit:
+class DigitArithmetic:
     """Multi-precision arithmetic mod p = 2^1024 - 105 on 128 u8 digits, every operation a registry evaluator call or an
     IMMA step, counted by primitive id."""
 
@@ -443,7 +443,7 @@ def section_encode_in_circuit(prims: dict[str, PrimitiveDefinition], rng: random
     for w in range(words):
         m = int.from_bytes(bytes(rng.randrange(256) for _ in range(f.word_bytes - 1)), "little")
         i = rng.randrange(1 << 20)
-        ckt = Circuit(prims)
+        ckt = DigitArithmetic(prims)
         t = ckt.mul(digits(k.tau), digits(i))
         x = digits(m)
         for r, c in enumerate(k.c):
@@ -458,7 +458,7 @@ def section_encode_in_circuit(prims: dict[str, PrimitiveDefinition], rng: random
     # Comparison-only carries: the same circuit with every `split` by compares and selects, checked on modular products,
     # its encode census the measured one with each carry's I32Div + I32Rem replaced by the cmp split's 80 calls.
     p = f.p
-    ckt = Circuit(prims, carry="cmp")
+    ckt = DigitArithmetic(prims, carry="cmp")
     cmp_ok = 0
     trials = 4
     for _ in range(trials):

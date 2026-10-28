@@ -324,7 +324,7 @@ def spanning(gpu_bytes: int) -> int:
 
 def stated(store_bytes: int, window_ns: int, windows: int, *, rtt_ns: int, samples: int, delta: float = audit.DELTA,
            gap_ns: int = 50 * US, jitter_ns: int = 50 * US, read_bytes_per_s: float = READ_BYTES_PER_S,
-           capacity_bytes_per_s: float = READ_BYTES_PER_S) -> audit.Ledger:
+           capacity_bytes_per_s: float = READ_BYTES_PER_S) -> audit.GammaTerms:
     """The ledger of the honest prover's session over a store of `store_bytes` on one node of `capacity_bytes_per_s`
     (R measured; `SPEC_BYTES_PER_S`, the headline): a pass is the store's read at `read_bytes_per_s`, `samples`
     openings a window at `delta` bound its wrong receipts (`wrong_bound`), the node's chips hold `CHIP_BYTES`, and
