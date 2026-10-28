@@ -198,11 +198,10 @@ on review, and the full check runs after landing (how a PR lands: the team skill
 - Solve the task with the smallest clear implementation, reusing code and commands before adding any. Enforce
   deterministic requirements in code, with the fix in the failure message, rather than in prose. Remove obsolete rules and
   machinery rather than accumulating them.
-- **Something broken becomes a benchmark** (Daniel, 28 Oct). A step that fails or costs far too much (an OOM, hours
-  where minutes would do) gets a directory under `benchmarks/` with one or two numbers, a guard that a faster version is
-  still correct, its baseline and a target. Several workers then drive the numbers down, each with its own approach,
-  branch and `research run` compute. Each measured run carries a label with its numbers, and the best one that passes the
-  guard lands. TOP-138, the K 2048 circuit file, is the first.
+- **Something broken becomes a benchmark.** A step that fails or costs far too much (an OOM, hours where minutes would
+  do) gets a directory under `benchmarks/` with one or two numbers, a guard that a faster version is still correct, its
+  baseline and a target. Several workers then drive the numbers down, each with its own approach, branch and `research
+  run` compute. Each measured run carries a label with its numbers, and the best one that passes the guard lands.
 - **The tree gets smaller over time.** Make two interfaces or definitions of one thing one, make things extensible,
   delete dead and superseded code, and move data and logs to the evidence store.
 - **A decision rolls out in the change that records it.** A PR that records a ruling, or retires a term, a path or a
