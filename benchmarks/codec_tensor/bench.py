@@ -45,7 +45,9 @@ import numpy as np
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
+sys.path.append(str(HERE.parents[1]))
 
+from benchmarks.word_codec import cuda_lib  # noqa: E402
 import sketch_receipt as SR  # noqa: E402
 import sketching as SKT  # noqa: E402
 import tagging as TG  # noqa: E402
@@ -78,39 +80,42 @@ def word_codec():
     return mod
 
 
+_v, _i, _q = ctypes.c_void_p, ctypes.c_int, ctypes.c_uint64
+_FUSED_SKETCH = [_i, _v, _v, _v, _i, _i, _i, _q, _i, _i, _i, _i, _i, _v, _v, _q, _i, _v, _v, _i, _i, _v, _v]
+WT = {   # wt.cu's functions every build exports (`cuda_lib.load`)
+    "wt_set_key": [_v, _i, _v, _v],
+    "wt_set_mask": [_v],
+    "wt_encode": [_v, _v, _q, _q, _i, _i, _v],
+    "wt_decode": [_v, _v, _q, _q, _i, _v, _i, _v],
+    "wt_decode_rows": [_v, _v, _q, _q, _i, _i, _v, _i, _v],
+    "wt_tc_decode": [_v, _v, _q, _q, _i, _v, _i, _v],
+    "wt_read": [_v, _q, _v, _i, _v],
+    "wt_tc_square_gate": [_v, _v, _i, _v],
+    "wt_chain": [_i, _i, _i, _q, _v, _i, _v],
+    "wt_mix": [_q, _q, _i, _v, _i, _v],
+    "wt_gemm": [_i, _v, _v, _v, _i, _i, _i, _i, _i, _i, _i, _i, _v, _v, _v],
+    "wt_fused": [_i, _v, _v, _v, _i, _i, _i, _q, _i, _i, _i, _i, _i, _v, _v, _q, _v, _v],
+    "wt_fused_sketch": _FUSED_SKETCH,
+    "wt_set_pass": [_v, _i, _i],
+    "wt_pass": [ctypes.c_uint, _v, _v, _i, _v],
+    "wt_sign_frags": [_v, _v, _i, _v],
+    "wt_pass_state": [_v],
+    "wt_pass_ptrs": [_v],
+    "wt_sketch_vectors": ([_i, _i, _i, _i], _q),
+    "wt_set_tag": [_v, _v],
+    "wt_set_dbg": [_v],
+    "wt_tag_leaves": [_v, _q, _v, _v],
+    "wt_tag_tree": [_v, _q, _v, _v],
+    "wt_spin": [ctypes.c_longlong, _v],
+    "wt_empty": [_i, _v],
+}
+WT_BUILT = {"wt_fused_sketch_bf": _FUSED_SKETCH, "wt_prim": [_i, _v, _v, _v, _i, _v]}   # not in builds from before them
+
+
 class Lib:
     def __init__(self, path: str) -> None:
-        v, i, q = ctypes.c_void_p, ctypes.c_int, ctypes.c_uint64
-        self.path, self.so = path, ctypes.CDLL(path)
+        self.path, self.so = path, cuda_lib.load(path, WT, WT_BUILT)
         so = self.so
-        so.wt_set_key.argtypes = [v, i, v, v]
-        so.wt_set_mask.argtypes = [v]
-        so.wt_encode.argtypes = [v, v, q, q, i, i, v]
-        so.wt_decode.argtypes = [v, v, q, q, i, v, i, v]
-        so.wt_decode_rows.argtypes = [v, v, q, q, i, i, v, i, v]
-        so.wt_tc_decode.argtypes = [v, v, q, q, i, v, i, v]
-        so.wt_read.argtypes = [v, q, v, i, v]
-        so.wt_tc_square_gate.argtypes = [v, v, i, v]
-        so.wt_chain.argtypes = [i, i, i, q, v, i, v]
-        so.wt_mix.argtypes = [q, q, i, v, i, v]
-        so.wt_gemm.argtypes = [i, v, v, v, i, i, i, i, i, i, i, i, v, v, v]
-        so.wt_fused.argtypes = [i, v, v, v, i, i, i, q, i, i, i, i, i, v, v, q, v, v]
-        so.wt_fused_sketch.argtypes = [i, v, v, v, i, i, i, q, i, i, i, i, i, v, v, q, i, v, v, i, i, v, v]
-        if hasattr(so, "wt_fused_sketch_bf"):   # builds from before it
-            so.wt_fused_sketch_bf.argtypes = so.wt_fused_sketch.argtypes
-        so.wt_set_pass.argtypes = [v, i, i]
-        so.wt_pass.argtypes = [ctypes.c_uint, v, v, i, v]
-        so.wt_sign_frags.argtypes = [v, v, i, v]
-        so.wt_pass_state.argtypes = [v]
-        so.wt_pass_ptrs.argtypes = [v]
-        so.wt_sketch_vectors.argtypes = [i, i, i, i]
-        so.wt_sketch_vectors.restype = q
-        so.wt_set_tag.argtypes = [v, v]
-        so.wt_set_dbg.argtypes = [v]
-        so.wt_tag_leaves.argtypes = [v, q, v, v]
-        so.wt_tag_tree.argtypes = [v, q, v, v]
-        so.wt_spin.argtypes = [ctypes.c_longlong, v]
-        so.wt_empty.argtypes = [i, v]
         cs = (ctypes.c_int * 20)()
         so.wt_constants(cs)
         (self.n, self.nl, self.s, self.pb, self.tw, self.u, self.c, self.wpb, self.tc_mmas, self.tc_bytes, self.kmax,
