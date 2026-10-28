@@ -228,7 +228,7 @@ template <int WM, int BN, int CO, int CL> DEV void body(const Params& p) {
       tma_prefetch(&p.a);
       tma_prefetch(&p.b);
       // W's boxes of the first unit's first stages into L2 while the kernel before drains
-      if (first_u < units) {
+      if (first_u < units && !(p.flags & 64)) {
         int tm, tn;
         raster(first_u, rows_u, tiles_n, p.group, tm, tn);
         for (int kb = 0; kb < KB && kb < STAGES; kb++) tma_prefetch_l2(&p.b, kb * BK, tn * BN + rank * (BN / CL));
@@ -492,7 +492,7 @@ extern "C" int int8_wgmma_launch(int v, const void* xq, const void* w, const flo
   p.K = K;
   p.group = group;
   const int rows_c = VCO[v] ? wm / 2 : wm;  // a consumer's rows
-  p.flags = flags & 7;
+  p.flags = flags & 71;
   if (N % 8 == 0 && reinterpret_cast<uintptr_t>(y) % 16 == 0 && !(flags & 16)) {
     if (tmap_y(&p.c, y, M, N, rows_c)) return 14;
     p.flags |= Y_TMA;
