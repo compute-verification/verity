@@ -87,6 +87,7 @@ from pathlib import Path
 from typing import Protocol
 
 from verity.ml.commitments.identity import canonical_json_bytes, tagged_sha512
+from verity.ml.commitments.scheme import DIGEST_BYTES as _DIGEST_BYTES
 from verity.ml.crypto import lms
 from verity.core.protocols.certifier.grid import Grid, GridParams, Reason, Record, Status, row_left_packed
 from verity.core.protocols.certifier.schedule import ClockSync, SyncSet
@@ -98,7 +99,7 @@ FRAME_TAG = b"verity-network-certifier/frame/v2\0"
 EMPTY_TAG = b"verity-network-certifier/empty/v2\0"
 NODE_TAG = b"verity-network-certifier/node/v2\0"
 CERTIFICATE_TAG = b"verity/net-cert/v1"
-DIGEST_BYTES = 64
+DIGEST_BYTES = _DIGEST_BYTES["sha512"]
 SALT_BYTES = 64
 
 STATUS_CODES: dict[Reason | None, int] = {
