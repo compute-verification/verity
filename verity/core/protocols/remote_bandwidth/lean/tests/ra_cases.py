@@ -214,11 +214,18 @@ def event_of(v: Any) -> tuple:
 # --- the session ----------------------------------------------------------------------------------------------------
 
 class Clock:
-    def __init__(self) -> None:
-        self.now = 0
+    """The suite's one injected clock: nanoseconds from `now`, each reading `step` after the last (at `step = 0` time moves
+    only when a test sets `now`); waiting until `t` (`period.run`'s `sleep_until`) moves it there."""
+
+    def __init__(self, now: int = 0, step: int = 0) -> None:
+        self.now, self.step = now, step
 
     def __call__(self) -> int:
+        self.now += self.step
         return self.now
+
+    def sleep_until(self, _clock, t: int) -> None:
+        self.now = max(self.now, t)
 
 
 class Replay:
@@ -446,7 +453,8 @@ def registry(v: Any) -> dict:
 # --- recorded sessions ----------------------------------------------------------------------------------------------
 
 class Entropy:
-    """SHA-512 in counter mode under `label`, in place of the operating system's generator."""
+    """The suite's one entropy source: SHA-512 in counter mode under `label`, in place of the operating system's
+    generator."""
 
     def __init__(self, label: bytes) -> None:
         self.label, self.count = label, 0
