@@ -1123,7 +1123,7 @@ def test_the_ledgers_count_bounds_auditros_binomial() -> None:
 
 
 def test_auditros_slack_adds_at_most_2_to_the_minus_50_over_an_hour_of_the_fastest_passes() -> None:
-    """`SLACK_LOG2`'s reason: an hour of the node's passes over gate runs 8 and 9's store, 130,023,424 blocks read at
+    """`SLACK_LOG2`'s reason: an hour of the node's passes over eight GPUs' 62 GiB shards, 130,023,424 blocks read at
     `timing.READ_BYTES_PER_S`, is under 2^17 passes, and their slack adds at most 2^-50 to γ's error and the memory
     line's δ, 2^-10 of `DELTA`."""
     pass_s = 130_023_424 * codec.BLOCK_BYTES / timing.READ_BYTES_PER_S
