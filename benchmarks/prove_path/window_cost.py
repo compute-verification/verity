@@ -21,8 +21,9 @@ Levers (`LEVERS`), each a change to the circuit's layout or the commitment's for
   under a length-masked class Program (V3b's) a position past its request's end outputs zero rows: their rows are computed
   once and kept, and no pad pass runs them. Their hiding leaves stay fresh every window, since which slots are filled is
   private (their digests x could be kept too, which this doesn't price).
-- ``L3b``, one state row. A key block's running state (max, lane sums, O) is three rows, each hashed and re-leafed by its
-  reader; as one row it is one.
+- ``L3b``, one state row. A softmax step's running state (its max and lane sums, and below a head's first block its O)
+  is two or three rows, each hashed and re-leafed by its reader; as one row it is one, and the next step reads it and the
+  last P·V group's O as two rows, not three.
 - ``W`` and ``R``, ports by reference: a reader's wired or registered port is the writer's or the pinned weight's leaves
   (a drawn member's port tree is derived at the audit), so no input row is re-leafed.
 - ``P``, shared output rows (`commit_slots --row-bytes`): units' outputs packed into rows of `ROW_BYTES`, so a
@@ -52,11 +53,13 @@ from dataclasses import dataclass, replace
 from pathlib import Path
 
 from verity_vllm.program.predict import scan_state as SS
+from verity_vllm.program.predict import window_circuit as WC
 from verity_vllm.program.predict.window_circuit import WindowClass
 
 from verity.core.protocols.sampled_proofs.optimize import SHA512_ANDS
 from verity.ml.circuits.defs import bind
 from verity.ml.definitions.registry import io_shell as IO
+from verity.ml.definitions.registry.fa2_check_inf import pv_groups
 from verity.ml.windows import interface as IF
 
 HERE = Path(__file__).resolve().parent
@@ -64,11 +67,7 @@ sys.path.insert(0, str(HERE))
 import class_rows as CR  # noqa: E402
 import class_size as CS  # noqa: E402
 
-FIRST, END = "AttnBlockFirst_v1", "AttnHeadEnd_v1"
-#: a first block's families (`class_size.FIRSTS`): v2's body is v1's node for node, so it is priced as v1
-FIRSTS = CS.FIRSTS
-#: a full key block by target: FA3's (sm_90) and FA2's (sm_120)
-BLOCKS = {"h200": "AttnBlock_v4", "sm120": "AttnBlock_v5"}
+END = CS.END
 #: prefill is exact against the decode-shaped Definitions at this many keys or fewer
 EXACT_KEYS = 128
 #: a shared output row's bytes (`P`): 1 KiB rows
@@ -95,42 +94,20 @@ class Costs:
 CENSUS = Costs("census", CR.FRESH_EXTRA, CR.REUSED)
 ENGINE = Costs("engine", CR.FRESH_EXTRA + 1, CR.REUSED + 1)
 
-#: ANDs a unit on the H200 (int8 linears, FA3 attention), each `BS.compile(...).counts["and"]` of its Boolean twin at
-#: GEMM_SM90_S8 / HopperBF16WgmmaDot16 (`tests/test_window_cost.py` holds them to it): `ScaledMmS8Coordinate_v2{K}` and
-#: `Int8RowQuant_v2{K}` by K, `GemmCoordinate_v3{K}` by K, `AttnBlock_v9{D=64, NVIS=BN, FIRST=False, BN, CHECK}` by (BN, CHECK)
+#: ANDs a unit on the H200 (int8 linears), each `BS.compile(...).counts["and"]` of its Boolean twin at GEMM_SM90_S8 /
+#: HopperBF16WgmmaDot16 (`tests/test_window_cost.py` holds them to it): `ScaledMmS8Coordinate_v2{K}` and
+#: `Int8RowQuant_v2{K}` by K, `GemmCoordinate_v3{K}` by K
 S8_COORD = {2048: 271_342, 8192: 1_069_678}
 ROW_QUANT = {2048: 7_727_887, 8192: 30_903_055}
 #: the row quantizers priced by `ROW_QUANT`: `Int8RowQuant_v3{K, R}` is v1's body over x by reference, its Boolean twin
 #: `Int8RowQuant_v4{K, R}` v2's gates
 ROW_QUANTS = ("Int8RowQuant_v1", "Int8RowQuant_v3")
 BF16_COORD = {2048: 1_007_682}
-FA3_FULL = {(128, False): 8_131_559, (128, True): 8_131_622, (192, False): 12_107_687, (192, True): 12_107_750}
-#: `AttnBlock_v9{D=64, NVIS, FIRST=True, BN, CHECK=True}`'s ANDs at NVIS = 1 ... 192, the same at every BN >= NVIS (FA3's first
-#: block, `AttnBlockFirst_v1`, is FA2's word for word)
-FA3_FIRST = (
-    125_257, 186_040, 241_007, 296_926, 355_285, 411_140, 466_171, 525_418, 581_273, 637_192, 694_775, 750_630, 806_549,
-    864_196, 920_051, 975_970, 1_117_073, 1_177_664, 1_233_519, 1_289_438, 1_348_621, 1_404_476, 1_460_395, 1_519_578,
-    1_575_433, 1_631_352, 1_688_871, 1_744_726, 1_800_645, 1_858_228, 1_914_083, 1_970_002, 2_111_105, 2_171_696, 2_227_551,
-    2_283_470, 2_342_653, 2_398_508, 2_454_427, 2_513_610, 2_569_465, 2_625_384, 2_682_903, 2_738_758, 2_794_677, 2_852_260,
-    2_908_115, 2_964_034, 3_105_137, 3_165_728, 3_221_583, 3_277_502, 3_336_685, 3_392_540, 3_448_459, 3_507_642, 3_563_497,
-    3_619_416, 3_676_935, 3_732_790, 3_788_709, 3_846_292, 3_902_147, 3_958_066, 4_099_169, 4_159_760, 4_215_615, 4_271_534,
-    4_330_717, 4_386_572, 4_442_491, 4_501_674, 4_557_529, 4_613_448, 4_670_967, 4_726_822, 4_782_741, 4_840_324, 4_896_179,
-    4_952_098, 5_093_201, 5_153_792, 5_209_647, 5_265_566, 5_324_749, 5_380_604, 5_436_523, 5_495_706, 5_551_561, 5_607_480,
-    5_664_999, 5_720_854, 5_776_773, 5_834_356, 5_890_211, 5_946_130, 6_087_233, 6_147_824, 6_203_679, 6_259_598, 6_318_781,
-    6_374_636, 6_430_555, 6_489_738, 6_545_593, 6_601_512, 6_659_031, 6_714_886, 6_770_805, 6_828_388, 6_884_243, 6_940_162,
-    7_081_265, 7_141_856, 7_197_711, 7_253_630, 7_312_813, 7_368_668, 7_424_587, 7_483_770, 7_539_625, 7_595_544, 7_653_063,
-    7_708_918, 7_764_837, 7_822_420, 7_878_275, 7_934_194, 8_075_297, 8_135_888, 8_191_743, 8_247_662, 8_306_845, 8_362_700,
-    8_418_619, 8_477_802, 8_533_657, 8_589_576, 8_647_095, 8_702_950, 8_758_869, 8_816_452, 8_872_307, 8_928_226, 9_069_329,
-    9_129_920, 9_185_775, 9_241_694, 9_300_877, 9_356_732, 9_412_651, 9_471_834, 9_527_689, 9_583_608, 9_641_127, 9_696_982,
-    9_752_901, 9_810_484, 9_866_339, 9_922_258, 10_063_361, 10_123_952, 10_179_807, 10_235_726, 10_294_909, 10_350_764,
-    10_406_683, 10_465_866, 10_521_721, 10_577_640, 10_635_159, 10_691_014, 10_746_933, 10_804_516, 10_860_371, 10_916_290,
-    11_057_393, 11_117_984, 11_173_839, 11_229_758, 11_288_941, 11_344_796, 11_400_715, 11_459_898, 11_515_753, 11_571_672,
-    11_629_191, 11_685_046, 11_740_965, 11_798_548, 11_854_403, 11_910_322)
 
 
 def unit_ands(lab: str, target: str = "h200") -> int:
-    """ANDs of one unit ``lab`` (class_size's label): on the H200 its int8 linears, bf16 GEMMs and FA3 blocks from the tables
-    above, the rest (and every unit on sm_120) `class_size.measured`'s, refused where neither has it."""
+    """ANDs of one unit ``lab`` (class_size's label): on the H200 its int8 linears and bf16 GEMMs from the tables above, the
+    rest (and every unit on sm_120) `class_size.measured`'s, refused where neither has it."""
     fam, s = CS.statics(lab)
     if target == "h200":
         if fam == "ScaledMmS8_v1":
@@ -139,10 +116,6 @@ def unit_ands(lab: str, target: str = "h200") -> int:
             return ROW_QUANT[s["K"]]
         if fam == "Gemm_v2":
             return s["N"] * BF16_COORD[s["K"]]
-        if fam in FIRSTS and s["D"] == 64:
-            return FA3_FIRST[s["NVIS"] - 1]
-        if fam == "AttnBlock_v4" and s["D"] == 64 and s["NVIS"] == s["BN"]:
-            return FA3_FULL[(s["BN"], s["CHECK"])]
     return CS.measured(lab)[0]
 
 
@@ -197,126 +170,119 @@ def units_of(census: dict) -> list[Unit]:
     return out
 
 
-def kv_bytes(D: int) -> int:
-    """A key's bytes in a key block's reads: its key's row and its value's, D bf16 each."""
-    return 4 * D
+def key_bytes(D: int) -> int:
+    """A key's bytes in its softmax step's reads, and its value's in its P·V group's: D bf16."""
+    return 2 * D
 
 
 @dataclass(frozen=True)
 class Heads:
-    """The class circuit's attention as `window_circuit` cuts it: S slots of P positions, H heads a position (over the layers),
-    R wired rows a key (its key's and its value's rows as their writers hold them), head dim D, key blocks of BN (`BLOCKS`'
-    family ``block``), and the rows of a first block, a full block and a head's end (``first``, ``full``, ``end``: `Unit`s of
-    n = 1, a block's ``wired`` and ``wired_bytes`` those beside its keys' and values', R rows and `kv_bytes` a key). A first
-    block is of family ``first_family`` (`FIRSTS`), its values slices of ``VS`` columns where that is v2."""
+    """The class circuit's attention as `window_circuit` cuts it (`class_size.head`): S slots of P positions, H heads a
+    position (over the layers), head dim D, key blocks of BN keys, each its softmax step (``later`` below a head's first
+    visited block) and its P·V groups of PK keys, a key's value as rows of VS words. ``soft``, ``pv`` and ``end`` are a
+    first visited block's softmax step, its first group and a head's end (`Unit`s of n = 1), a step's and a group's rows
+    those beside its keys': a step reads ``Rk`` wired rows a key of its keys (`key_bytes` a key) and writes its m and l and
+    a P row of its keys a group (a bf16 a key); a group reads its P row and ``Rv`` wired rows a key of its values. Below a
+    head's first block a step reads the last step's m and l and the last group's O and writes its O too, and every group
+    but the head's first reads the O before it."""
     S: int
     P: int
     H: int
-    R: int
     D: int
     BN: int
-    block: str
-    first: Unit
-    full: Unit
+    PK: int
+    VS: int
+    later: str
+    Rk: int
+    Rv: int
+    soft: Unit
+    pv: Unit
     end: Unit
-    first_family: str = FIRST
-    VS: int | None = None
 
-    def blocks_at(self, T: int, BN: int) -> tuple[int, int]:
-        """(key blocks, the first visited block's keys) of a head over T keys."""
-        nb = -(-T // BN)
-        return nb, T - (nb - 1) * BN
+    def keys(self, BN: int) -> int:
+        """PK at key blocks of BN: the census's at its own, else `window_circuit.group_keys`'."""
+        return self.PK if BN == self.BN else WC.group_keys(self.D, BN, self.VS)
 
-    def first_label(self, nvis: int, BN: int) -> str:
-        return f"{self.first_family}{{D={self.D},NVIS={nvis},BN={BN}" + ("}" if self.VS is None else f",VS={self.VS}}}")
+    def head(self, T: int, BN: int | None = None) -> Counter:
+        """A head's units over T keys at key blocks of ``BN`` (the census's by default), by label."""
+        BN = BN or self.BN
+        return CS.head(T, self.D, BN, self.keys(BN), self.VS, self.later)
 
-    def full_label(self, BN: int) -> str:
-        """A full block's label, priced at CHECK=false's ANDs wherever the census has CHECK=true (63 ANDs more on the H200)."""
-        return f"{self.block}{{D={self.D},NVIS={BN},FIRST=false,BN={BN},CHECK=false}}"
+    def unit(self, lab: str, packed: bool = False) -> Unit:
+        """A head's unit ``lab`` (n = 1), its step's state ``packed`` in one row (`L3b`): the next step reads it and the last
+        group's O as two rows."""
+        fam, s = CS.statics(lab)
+        o = 4 * self.D
+        if fam == END:
+            return replace(self.end, label=lab)
+        if fam == CS.PV:
+            u, n, more = self.pv, s["N"], int(not s["FIRST"])
+            return replace(u, label=lab, wired=u.wired + self.Rv * n + more,
+                           wired_bytes=u.wired_bytes + (key_bytes(self.D) + 2) * n + more * o)
+        u, n, below = self.soft, s["NVIS"], int(not s["FIRST"])
+        groups = [hi - lo for lo, hi in pv_groups(n, s["PK"])]
+        state, state_bytes = u.out + below, u.out_bytes + below * o
+        x = CR.blocks(128 + state_bytes) if packed else u.x + below * CR.blocks(128 + o)
+        return replace(u, label=lab, wired=u.wired + self.Rk * n + below * (2 if packed else u.out + 1),
+                       wired_bytes=u.wired_bytes + key_bytes(self.D) * n + below * (u.out_bytes + o),
+                       out=(1 if packed else state) + len(groups), out_bytes=state_bytes + 2 * n,
+                       x=x + sum(CR.blocks(128 + 2 * g) for g in groups))
 
     def ands_at(self, T: int, BN: int, target: str) -> int:
         """The ANDs of a position's heads over T keys at key blocks of BN."""
-        nb, nvis = self.blocks_at(T, BN)
-        return self.H * (unit_ands(self.first_label(nvis, BN), target) + (nb - 1) * unit_ands(self.full_label(BN), target)
-                         + unit_ands(self.end.label, target))
+        return self.H * sum(k * unit_ands(lab, target) for lab, k in self.head(T, BN).items())
 
     def units(self, BN: int | None = None, packed: bool = False) -> list[Unit]:
-        """The attention's units at key blocks of ``BN`` (the census's by default), each block reading its keys' and values'
-        rows, its blocks' state ``packed`` in one row (`L3b`)."""
-        BN = BN or self.BN
-        first, full = Counter(), 0
+        """The attention's units at key blocks of ``BN`` (the census's by default), each step reading its keys' rows and each
+        group its values', each step's state ``packed`` in one row (`L3b`)."""
+        n: Counter = Counter()
         for T in range(1, self.P + 1):
-            nb, nvis = self.blocks_at(T, BN)
-            first[nvis] += 1
-            full += nb - 1
-        S, H, R, kv = self.S, self.H, self.R, kv_bytes(self.D)
-        fu, bu, eu = self.first, self.full, self.end
-        if packed:
-            fu = replace(fu, out=1, x=CR.blocks(128 + fu.out_bytes))
-            bu = replace(bu, out=1, x=CR.blocks(128 + bu.out_bytes), wired=bu.wired - (bu.out - 1))
-            eu = replace(eu, wired=1)
-        out = [replace(eu, n=S * H * self.P)]
-        for nvis, k in sorted(first.items()):
-            out.append(replace(fu, label=self.first_label(nvis, BN), n=S * H * k, wired=fu.wired + R * nvis,
-                               wired_bytes=fu.wired_bytes + kv * nvis))
-        if full:
-            out.append(replace(bu, label=self.full_label(BN), n=S * H * full, wired=bu.wired + R * BN,
-                               wired_bytes=bu.wired_bytes + kv * BN))
-        return [u for u in out if u.n]
+            n.update(self.head(T, BN))
+        return [replace(self.unit(lab, packed), n=self.S * self.H * k) for lab, k in sorted(n.items())]
 
 
-def _one(xs: list, what: str):
-    if len(set(xs)) != 1:
-        raise ValueError(f"the census's attention differs in {what}: {sorted(set(xs))}")
-    return xs[0]
+def _shape(u: Unit) -> tuple:
+    return (u.n, u.wired, u.registered, u.other, u.out, u.out_bytes, u.x, u.wired_bytes, u.registered_bytes, u.other_bytes)
 
 
-def split(units: list[Unit], cls: dict, target: str = "h200") -> tuple[list[Unit], Heads]:
-    """The census's units outside attention, and its attention (`Heads`, its full blocks ``target``'s family), refused unless
-    `Heads.units` at the census's BN is exactly the census's attention, each unit's rows and bytes with its count: its first
-    blocks, full blocks and head ends, its rows a key read off its first blocks of the two fewest keys."""
-    S, P, block = cls["slots"], cls["positions"], BLOCKS[target]
-    firsts = [u for u in units if u.label.split("{")[0] in FIRSTS]
-    ss = [CS.statics(u.label)[1] for u in firsts]
-    D, BN = _one([s["D"] for s in ss], "D"), _one([s["BN"] for s in ss], "BN")
-    fam, VS = _one([u.label.split("{")[0] for u in firsts], "family"), _one([s.get("VS") for s in ss], "VS")
-    (end,) = [u for u in units if u.label.startswith(END + "{")]
-    fulls = [u for u in units if u.label.split("{")[0] in BLOCKS.values()]
-    if any(u.label.split("{")[0] != block for u in fulls):
-        raise ValueError(f"the census's full key blocks are not {target}'s {block}: {sorted({u.label for u in fulls})}")
-    H = end.n // (S * P)
-    by_keys = {s["NVIS"]: u for u, s in zip(firsts, ss)}
-    if len(by_keys) < 2:
-        raise ValueError(f"the census's first blocks are at {sorted(by_keys)} keys: its rows a key need two key counts")
-    a, b = sorted(by_keys)[:2]
-    R = (by_keys[b].wired - by_keys[a].wired) // (b - a)
-    kv = kv_bytes(D)
-    f0 = replace(by_keys[a], label="", n=1, wired=by_keys[a].wired - R * a, wired_bytes=by_keys[a].wired_bytes - kv * a)
-    full = (replace(fulls[0], label="", n=1, wired=fulls[0].wired - R * BN, wired_bytes=fulls[0].wired_bytes - kv * BN)
-            if fulls else replace(f0, wired=f0.wired + f0.out, wired_bytes=f0.wired_bytes + f0.out_bytes))
-    heads = Heads(S, P, H, R, D, BN, block, f0, full, replace(end, n=1), fam, VS)
+def split(units: list[Unit], cls: dict, blocks: dict) -> tuple[list[Unit], Heads]:
+    """The census's units outside attention, and its attention (`Heads`) at ``blocks`` (`class_size.key_blocks`' of its class
+    Program, a census's ``key_blocks``), refused unless `Heads.units` is exactly the census's attention, each unit's rows
+    and bytes with its count: its rows a key read off its first visited blocks' steps and first groups of the two fewest
+    keys."""
+    S, P, BN, later = cls["slots"], cls["positions"], blocks["BN"], blocks["later"]
+    hs = CS.heads_of({u.label: u for u in units})
+    D, PK, VS = hs["D"], hs["PK"], hs["VS"]
+    att = list(hs["labels"].values())
+    (end,) = [u for u in att if u.label.startswith(END + "{")]
 
-    def shape(u: Unit) -> tuple:
-        return (u.wired, u.registered, u.other, u.out, u.out_bytes, u.x, u.wired_bytes, u.registered_bytes, u.other_bytes)
+    def firsts(fam: str, keys: str) -> tuple[int, Unit, int]:
+        """(the fewest keys, its unit, rows a key) of the census's first visited blocks' ``fam`` units."""
+        us = [(CS.statics(u.label)[1], u) for u in att if u.label.split("{")[0] == fam]
+        by = {s[keys]: u for s, u in us if s["FIRST"]}
+        if len(by) < 2:
+            raise ValueError(f"the census's first {fam} units are at {sorted(by)} keys: its rows a key need two key counts")
+        a, b = sorted(by)[:2]
+        return a, by[a], (by[b].wired - by[a].wired) // (b - a)
 
-    have, shapes = Counter(), {}
-    for u in units:
-        lab = u.label.replace(",CHECK=true", ",CHECK=false")
-        have[lab] += u.n
-        shapes.setdefault(lab, set()).add(shape(u))
-    att = {u.label.replace(",CHECK=true", ",CHECK=false") for u in firsts + fulls + [end]}
-    if ({lab: (have[lab], shapes[lab]) for lab in att} !=
-            {u.label: (u.n, {shape(u)}) for u in heads.units()}):
-        raise ValueError(f"the census's attention units are not the cut at D {D}, BN {BN}, {H} heads, {R} rows a key and "
-                         f"{S} × {P} positions")
-    att = {u.label for u in firsts + fulls + [end]}
-    return [u for u in units if u.label not in att], heads
+    a, sa, Rk = firsts(CS.SOFTMAX, "NVIS")
+    groups = [hi - lo for lo, hi in pv_groups(a, PK)]
+    soft = replace(sa, label="", n=1, wired=sa.wired - Rk * a, wired_bytes=sa.wired_bytes - key_bytes(D) * a,
+                   out=sa.out - len(groups), out_bytes=sa.out_bytes - 2 * a,
+                   x=sa.x - sum(CR.blocks(128 + 2 * g) for g in groups))
+    c, pc, Rv = firsts(CS.PV, "N")
+    pv = replace(pc, label="", n=1, wired=pc.wired - Rv * c, wired_bytes=pc.wired_bytes - (key_bytes(D) + 2) * c)
+    heads = Heads(S, P, end.n // (S * P), D, BN, PK, VS, later, Rk, Rv, soft, pv, replace(end, n=1))
+    if {u.label: _shape(u) for u in att} != {u.label: _shape(u) for u in heads.units()}:
+        raise ValueError(f"the census's attention units are not the cut at D {D}, BN {BN}, PK {PK}, VS {VS}, {heads.H} heads, "
+                         f"{Rk} and {Rv} rows a key and {S} × {P} positions")
+    return [u for u in units if u.label not in hs["labels"]], heads
 
 
 LEVERS = {
     "L1": "one FA3 tile (blocks of 128 at every launch)",
     "L2": "empty slots and past-end positions as cached constants",
-    "L3b": "a key block's state in one row",
+    "L3b": "a softmax step's state in one row",
     "W": "wired ports by reference",
     "R": "registered ports by reference",
     "L4": "one Merkle root over members",
@@ -537,16 +503,16 @@ def _slot_unit(u: Unit, lab: str, at: WindowClass, cls: WindowClass) -> Unit:
     return rows(lab, cls)
 
 
-def project(census: dict, slots: int, prompt: int, outputs: int, target: str = "h200", lanes: int = 0,
+def project(census: dict, slots: int, prompt: int, outputs: int, lanes: int = 0,
             every: int = 16) -> tuple[list[Unit], Heads, dict]:
-    """A census of one Program at a probe class within one key block (`class_rows.py --probe`), projected to the class of
-    ``slots`` Programs of ``prompt`` ids and ``outputs`` outputs (``lanes`` and ``every`` `window_circuit.WindowClass`'s), each
-    template outside attention at `class_size.projected`'s label and count, a slot's at its Definition's rows there; the
-    heads rebuilt at the class's positions (`Heads.units`)."""
+    """A census of one Program at a probe class (`class_rows.py --probe`), projected to the class of ``slots`` Programs of
+    ``prompt`` ids and ``outputs`` outputs (``lanes`` and ``every`` `window_circuit.WindowClass`'s), each template outside
+    attention at `class_size.projected`'s label and count, a slot's at its Definition's rows there; the heads rebuilt at the
+    class's positions (`Heads.units`)."""
     c0 = census["class"]
     if c0["slots"] != 1:
         raise ValueError(f"a probe of {c0['slots']} Programs: project one")
-    rest, heads = split(units_of(census), c0, target)
+    rest, heads = split(units_of(census), c0, census["key_blocks"])
     at, to = WindowClass(1, c0["prompt"], c0["outputs"]), WindowClass(slots, prompt, outputs, lanes, every)
     out = []
     for u in rest:
@@ -575,12 +541,8 @@ def position_layout(rest: list[Unit], heads: Heads, levers: frozenset[str], T: i
             if r:
                 raise ValueError(f"{u.n} {u.label} units are not a fixed count at each of {S} × {P} positions")
         here.append((u, k))
-    nb, nvis = heads.blocks_at(T, BN)
-    one = replace(heads, S=1, P=T, BN=BN)
-    for u in one.units(BN=BN, packed="L3b" in levers):
-        fam, s = CS.statics(u.label)
-        k = heads.H * (nb - 1) if fam == heads.block else heads.H if fam == END or s["NVIS"] == nvis else 0
-        here.append((u, k))
+    for lab, k in sorted(heads.head(T, BN).items()):
+        here.append((heads.unit(lab, "L3b" in levers), heads.H * k))
     groups = []
     for u, k in here:
         if not k or not u.out:
@@ -610,10 +572,10 @@ def price(census: dict, target: str = "h200", served_s: float = 1.7, step_s: flo
     bound). With an arena ``sizing`` record, serving's own stream commit too (`stream`)."""
     if to is None:
         cls = census["class"]
-        rest, heads = split(units_of(census), cls, target)
+        rest, heads = split(units_of(census), cls, census["key_blocks"])
         total = census["total"]["compressions"]
     else:
-        rest, heads, cls = project(census, *to[:3], target, *to[3:])
+        rest, heads, cls = project(census, *to)
         total = None
     out = {"class": cls, "target": target, "served_s": served_s, "step_s": step_s, "sha512_ands": SHA512_ANDS,
            "census_compressions": total, "projected_from": None if to is None else census["class"], "cpu": cpu}
@@ -746,8 +708,7 @@ def main(argv: list[str] | None = None) -> int:
     to = tuple(int(v) for v in a.project.split(",")) if a.project else None
     if a.layout:
         census = json.loads(Path(a.census).read_text())
-        rest, heads = (project(census, *to[:3], a.target, *to[3:])[:2] if to else
-                       split(units_of(census), census["class"], a.target))
+        rest, heads = project(census, *to)[:2] if to else split(units_of(census), census["class"], census["key_blocks"])
         levers, d = frozenset(v for v in a.layout_levers.split(",") if v), Path(a.layout[1])
         d.mkdir(parents=True, exist_ok=True)
         for T in (int(v) for v in a.layout[0].split(",")):

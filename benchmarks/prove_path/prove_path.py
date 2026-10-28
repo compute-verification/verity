@@ -107,7 +107,7 @@ Two kinds of committed run:
   ``records_audit.py count`` recounts from the record alone. A5 audits it once the committer writes each
   unit's rows as the record's members (V3c).
 * **class-size**: that Circuit's padded size at ``--class``, too large to lower there (`class_size_of_advice`): one class
-  Program of the window's registration lowered at the small class ``--probe`` and projected with v19's heads
+  Program of the window's registration lowered at the small class ``--probe`` and projected with its cut's heads
   (`class_size.project`), its units, ANDs and m a Program and at the class's slots (the window's circuit, whatever its
   requests).
 * **window-commit** (the prover, V3c): the served window committed as that Circuit's units (`window_commit_of_advice`):
@@ -1302,8 +1302,8 @@ def window_circuit_of_advice(a: argparse.Namespace) -> dict[str, Any]:
 
 def class_size_of_advice(a: argparse.Namespace) -> dict[str, Any]:
     """A served window's padded size at its class ``--class`` (`class_size`): one class Program of the window's registration
-    lowered at the small class ``--probe`` (`window_circuit.class_circuit`, exact), projected to ``--class`` with v19's heads
-    (`class_size.project`) and priced (`class_size.size`) a Program and at the class's slots, the window's circuit whatever
+    lowered at the small class ``--probe`` (`window_circuit.class_circuit`, exact), projected to ``--class`` with its cut's
+    heads (`class_size.project`, at `class_size.key_blocks`') and priced (`class_size.size`) a Program and at the class's slots, the window's circuit whatever
     its requests. -> the probe's census, the requests its advice compiles to and the two sizes."""
     from dataclasses import asdict
 
@@ -1317,7 +1317,7 @@ def class_size_of_advice(a: argparse.Namespace) -> dict[str, Any]:
     seen = CZ.census(class_circuit(compiler.inner.registered, probe, 1, provable=False))
     lowered = time.time() - t0
     try:
-        one = CZ.project(seen, probe, cls)
+        one = CZ.project(seen, probe, cls, **CZ.key_blocks(compiler.inner.registered, probe))
         sizes = {"program": CZ.size(one), "window": CZ.size(one, cls.slots)}
     except ValueError as e:
         raise ValueError(f"{e} (the probe's census: {json.dumps(seen, sort_keys=True)})") from None

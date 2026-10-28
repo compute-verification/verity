@@ -2,7 +2,8 @@
 (the weights'), ``value`` (a per-window registered value's, such as the scan state rows), ``table_root``, ``opening``, else
 ``free``) and their bytes, its output rows and their bytes, and the SHA-512
 compressions a by-reference commit spends on them: every output row hashed fresh, every input row only re-leafed in its
-port's tree, since a wired row's b||c is its writer's and a registered row's the registration's.
+port's tree, since a wired row's b||c is its writer's and a registered row's the registration's. ``key_blocks`` is the
+class Program's attention cut (`class_size.key_blocks`), which `window_cost` reads.
 
     python class_rows.py --tiny [--slots]                                 # TINY, locally
     python class_rows.py --llama1b [--int8] --probe 1,2,2                 # one Program at a probe class, ~2 s
@@ -93,6 +94,7 @@ def main(argv=None) -> int:
     ap.add_argument("--out", default=None)
     a = ap.parse_args(argv)
     sys.path.insert(0, str(Path.cwd() / "integrations/vllm"))
+    import class_size
     from verity_vllm.program.predict import window_circuit as WC
     from verity_vllm.program.predict.window_circuit import CLASS_OF_RECORD, Grain, WindowClass, class_circuit
     from verity.ml.windows import interface as IF
@@ -125,6 +127,7 @@ def main(argv=None) -> int:
     t1 = time.perf_counter()
     doc = census(circuit, IF)
     doc["class"] = {"slots": cls.slots, "prompt": cls.prompt, "outputs": cls.outputs, "positions": cls.positions}
+    doc["key_blocks"] = class_size.key_blocks(reg, cls)
     doc["seconds"] = round(t1 - t0, 1)
     doc["max_rss_gb"] = round(resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / 2**20, 1)
     s = json.dumps(doc, indent=1, sort_keys=True)
