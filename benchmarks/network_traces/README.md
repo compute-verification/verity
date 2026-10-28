@@ -215,6 +215,16 @@ The terms, in the generator reading of the scan's statement (each unit's registe
   warden hands each bucket to a pacer that releases it at a time fixed before the bucket is made
   (`warden.Warden(paced=…)`, `warden_serve.py --paced-ms`).
 
+Each `prog` entry carries a read bit as well (`ingress_scan.entry_layout`: an occupied slot no Program reads is
+refused), so a scan run past it registers NP = 4,496: 143,872 bits a link-window, or 1,121 a request. Until each
+due, occupied slot's entry is a wire from its Program's `SlotEntry_v1` unit, that bit is the prover's word (an entry
+of read 1 and no outputs passes the scan), so `NetworkCheck.Period` refuses every rows-form period of a link-window,
+last, by name (`unwired`), and the rows form publishes no K yet.
+Tied (`NetworkCheck.Period`'s `progTied`, scan_zk's block round), these rows are a compute audit's outputs
+and the scan's own free term is 0: the bits are that audit's free inputs (the toy block's `x`), which the rows form's
+K charges to the link-window's term (`tiedAudits`). The egress tie moves the free term from the scan's `prog` to the
+tied audit's inputs; K is unchanged in what it bounds, 143,872 bits a link-window at w63.
+
 The two forms:
 - The pooled form (`HorizonLeakAccepted`) adds Fmax = ⌈ln(1/δ)⌉ units of b = NS + NV = 154,480 bits, and
   Fmax·log2(N + 1). Fmax is 5 at δ = 1% and 14 at δ = 10⁻⁶. The form is conditional: `hesc` and `hleak` await
@@ -268,7 +278,8 @@ K also rests on these conditions:
 - At light traffic (40 requests over 43 link-windows, 0.93 a link-window, its scan's every unit drawn) the
   anchored table's machine-week is 1.01% of the weights and its machine-year 52.2%; as registered it is 1.37×
   a machine-week either way.
-- The compute audit's free inputs don't enter K: its δ goes into JointPeriodLive's sum.
+- An untied compute audit's (the loop's) free inputs don't enter K: its δ goes into JointPeriodLive's sum. The tied
+  audit's (the toy block's) are the link-window's free inputs above.
 
 The report names what it stands on beyond the theorem (`chain_record.STUBBED`, `WARDEN_STUBBED` and
 `HORIZON_CONDITION`) and what the theorem doesn't cover (its `uncovered`).
