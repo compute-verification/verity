@@ -18,13 +18,12 @@ from pathlib import Path
 
 import pytest
 
-from verity.hardware import load, skus
+from verity.hardware import WORD, load, number, rate, skus
 
 ROOT = Path(__file__).resolve().parents[3]
 ISA = ROOT / "Security/Definitions/Core/Accel/Isa.lean"
 SHEET = ROOT / "Security/Definitions/Accounting/Sheets/B200.lean"
 LEAN = [sku for sku in skus("gpu") if "lean" in load(sku)]
-WORD = 4  # bytes in a 32-bit word, the unit of every store and of device memory's rate
 OPS = {ast.Add: operator.add, ast.Sub: operator.sub, ast.Mult: operator.mul, ast.Div: operator.truediv}
 
 
@@ -80,21 +79,17 @@ def card_table(text: str) -> tuple[dict[str, Fraction], dict[str, dict[str, str]
     return {"clock": hz, "tensorClock": evaluate(tensor.group(1)) if tensor else hz}, fields
 
 
-def number(entry: dict) -> Fraction:
-    return Fraction(str(entry["value"]))
-
-
 def expected(card: dict) -> tuple[dict[str, Fraction], dict[str, dict[str, Fraction] | Fraction]]:
     """The Lean table the card file gives: its clocks in Hz, each store's words, each resource's units a second (the
-    tensor's at the tensor's clock), each format's weight, and the model's ranges."""
+    tensor's at the tensor's clock: ``verity.hardware.rate``, so the arms hold the one calculator), each format's weight,
+    and the model's ranges."""
     sms = number(card["sm"]["count"])
     clocks = {"clock": number(card["clock"]["sm"]) * 10 ** 6, "tensorClock": number(card["clock"]["tensor"]) * 10 ** 6}
-    store, rate = card["store"], card["rate"]
+    store = card["store"]
     size = {"reg": sms * (number(store["reg"]) + number(store["reg_extra"])),
             "smem": sms * number(store["smem"]) / WORD, "l2": number(store["l2"]) / WORD,
             "dram": number(store["dram"]) / WORD}
-    rho = ({r: sms * number(rate[r]) * clocks["tensorClock" if r == "tensor" else "clock"] for r in rate}
-           | {"dram": number(card["memory"]["bandwidth"]) / WORD})
+    rho = {r: rate(card, r) for r in [*card["rate"], "dram"]}
     return clocks, {"size": size, "ρ": rho, "weight": {f: number(e) for f, e in card["weight"].items()},
                     "exact": number(card["model"]["exact"]),
                     "text": number(store["dram"]) / number(card["model"]["instruction_bytes"])}
@@ -157,8 +152,8 @@ def test_a_changed_number_is_a_disagreement() -> None:
     card = load("rtx-pro-6000-server")
     text = (ROOT / card["lean"]).read_text(encoding="utf-8")
     assert disagreements(card, text) == []
-    rate = text.replace("188 * 1024 * clock", "188 * 1025 * clock")
-    assert disagreements(card, rate) == [f"ρ tensor: Lean 188 * 1025 * clock = {188 * 1025 * 2430 * 10 ** 6}, "
+    faster = text.replace("188 * 1024 * clock", "188 * 1025 * clock")
+    assert disagreements(card, faster) == [f"ρ tensor: Lean 188 * 1025 * clock = {188 * 1025 * 2430 * 10 ** 6}, "
                                          f"card file {188 * 1024 * 2430 * 10 ** 6}"]
     default = text.replace("    | _ => 1\n", "    | _ => 2\n")
     assert sorted(m.split(":")[0] for m in disagreements(card, default)) == [

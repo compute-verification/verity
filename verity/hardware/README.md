@@ -33,6 +33,12 @@ load("xeon-6776p-2s")["rate"]["ops"]            # {'value': 1045299200000000.0, 
 `load(sku) -> dict` returns the parsed file and refuses a number without its unit, mark and source, and a card without
 its kind. `skus(kind=None)` lists the cards, or those of one kind.
 
+`rate(card, resource="tensor", *, fmt=None, mhz=None) -> Fraction` is the one calculator of a GPU card's peak rates:
+Lean's `card.ρ`, the SMs times the resource's rate times its clock (`clock.tensor` for the tensor, `clock.sm` for the
+rest, or the clock `mhz` names), in MACs of operand format `fmt` when given, and device memory's `memory.bandwidth` in
+words. A benchmark that quotes a peak calls it rather than multiplying the card's numbers itself, and
+`tests/test_lean.py` holds it to each Lean table.
+
 **Changing a number:** change the card file, then its Lean table to match. `tests/test_lean.py` evaluates each Lean
 `card` arm as an exact rational and fails on any number that differs, and on a store, resource or format of
 `Security/Definitions/Core/Accel/Isa.lean` that either side lacks. A new SKU is a new card file and its own Lean table.

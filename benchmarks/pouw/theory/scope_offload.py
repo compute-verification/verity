@@ -48,10 +48,11 @@ package.
 
 Run: `python scope_offload.py [--mutations] [--device-lean Security/Definitions/Accounting/Device.lean] [--verdict PATH]`.
 Stdlib, exact_kit, and verity_machine_model for each headline design's eps and credited time a word.
-Sources: MAC_rate = s8 macs/SM/clk * SMs * f_max; the headline eps at both
+Sources: each device's card (verity.hardware): MAC_rate = s8 macs/SM/clk * SMs * f_max (`verity.hardware.rate` at the
+card's SM clock), and its device memory; the headline eps at both
 readings, `headline.row` for `machine_model/data/headline.toml`'s designs; PCIe5 x16 64 GB/s one way;
 ConnectX-7/BlueField-3 400 Gb/s = 50 GB/s a NIC; NVLink4 450 GB/s and NVLink5 900 GB/s one way; RTX PRO 6000 has no
-NVLink; HBM3e 4.8 (H200) / 8 (B200) TB/s, GDDR7 ~1.8 TB/s (sm_120); device memory 96 / 141 / 192 GB; H1's smallest tile
+NVLink; HBM3e 4.8 (H200) / 8 (B200) TB/s, GDDR7 ~1.8 TB/s (sm_120); H1's smallest tile
 4 x 8 at K = 64 (`h1tile.circuit-check.py`). Host rates: `benchmarks/host_tiles` runs, cited where they're used; host
 core counts from each run's lscpu, and NVIDIA's DGX H200 / B200 data sheets (2 x 56 cores beside 8 GPUs); cores and
 clocks of the Xeon 6776P, 8468, 8480C, 8570 and 8580 from Intel ARK.
@@ -67,6 +68,8 @@ from verity_machine_model.eps import design, machine, setup
 from verity_machine_model.headline import CREDIT, OPERANDS, READINGS, row, spec
 from verity_machine_model.model import device as family_data
 
+from verity import hardware
+
 MAC_PER_WORD = 32  # a committed word sums 32 int8 products (FOLD-BW)
 BYTES_PER_WORD = 4  # a fresh s32
 DIGEST_BYTES = 64  # a tile's SHA-512 digest, the transcript's leaf
@@ -77,17 +80,17 @@ M32 = 0xFFFFFFFF
 INT8 = range(-128, 128)
 WEIGHT = range(-63, 64)
 
-# Per device: s8 dense MACs a SM clock, SMs, f_max (Hz). Sheet constants.
-DEVICES = {
-    "sm_120 RTX PRO 6000": (1024, 188, 2430e6),
-    "H200 sm_90": (4096, 132, 1980e6),
-    "B200 sm_100": (8192, 148, 1965e6),
-}
+# Per device, its card (verity/hardware/cards), whose numbers are read from it.
+CARDS = {"sm_120 RTX PRO 6000": hardware.load("rtx-pro-6000-server"), "H200 sm_90": hardware.load("h200-sxm-141gb"),
+         "B200 sm_100": hardware.load("b200-sxm-180gb")}
+# Per device: s8 dense MACs a SM clock, SMs, f_max (Hz, the SM clock).
+DEVICES = {name: (c["rate"]["tensor"]["value"], c["sm"]["count"]["value"], c["clock"]["sm"]["value"] * 1e6)
+           for name, c in CARDS.items()}
 
 # Per device, its headline.toml family; the headline eps and design come from it at each reading.
 FAMILY = {"sm_120 RTX PRO 6000": "sm_120", "H200 sm_90": "sm_90", "B200 sm_100": "sm_100"}
 TARGET = 0.01
-MEMORY_BYTES = {"sm_120 RTX PRO 6000": 96e9, "H200 sm_90": 141e9, "B200 sm_100": 192e9}
+MEMORY_BYTES = {name: c["store"]["dram"]["value"] for name, c in CARDS.items()}
 
 # Per device, one-way ingress into one chip (bytes/s) and the channel's model class.
 GB = 1e9
@@ -140,8 +143,8 @@ HOSTS = {
 
 
 def mac_rate(device: str) -> float:
-    m, sms, f = DEVICES[device]
-    return m * sms * f
+    """The device's s8 MACs a second at f_max, the SM clock its credited word is timed at (`credited_word`)."""
+    return float(hardware.rate(CARDS[device], mhz=CARDS[device]["clock"]["sm"]["value"]))
 
 
 def amx_rate(host: str, mode: str) -> float:
