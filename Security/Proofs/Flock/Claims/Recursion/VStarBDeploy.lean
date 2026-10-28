@@ -45,7 +45,7 @@ of the shape, each V* statement shows the run's coins and, as the commit string 
 run's message at that round. -/
 def StagedB (H : Msg → Msg) (D : Deploy Coin) (I : Inner Coin W) (L : LayoutB) (shape : Form → Prop)
     (shows : ℕ → Msg → Msg → (ℕ → Coin) → Prop) (cmt : Msg → ℕ → Msg → Msg) : Prop :=
-  ∀ (x : Msg) (st : Stmt), D.parse x = some st → shape st.form →
+  ∀ (x : Msg) (st : CompiledStatement), D.parse x = some st → shape st.form →
     ∀ (Ω : Type) (P : Prover Ω) (ω : Ω) (r : Fin (D.V.k x) → Coin), (run H P D.V x ω r).out = .acc →
       ∀ s < D.nS x, shows s x ((runVstar H D I P x ω r).getD s []) (coinSeq r) ∧
         ∀ i, i + 1 < L.rounds x →
@@ -125,7 +125,7 @@ theorem vstarShowsB_deployRec_forces {W : Type} {IV : Claims.Verifier Coin} {ivS
     {I : Claims.Recursion.Inner Coin W} {L : Claims.Recursion.VStarB.LayoutB} {shape : Claims.Recursion.Form → Prop}
     {decC : Msg → Msg → Coin} {shows : ℕ → Msg → Msg → (ℕ → Coin) → Prop} {cmt : Msg → ℕ → Msg → Msg}
     (hV : Claims.Recursion.VStarB.VstarShowsB (deployRec IV ivScope b) I L shape decC shows cmt)
-    {x : Msg} {st : Claims.Recursion.Stmt} (hst : parse x = some st) (hf : shape st.form) {s : ℕ} (hs : s < nS x)
+    {x : Msg} {st : Claims.Recursion.CompiledStatement} (hst : parse x = some st) (hf : shape st.form) {s : ℕ} (hs : s < nS x)
     (hset : ∃ ms, (setupO (staged b.st x ms s)).isSome) (hk : 0 < I.V.k (xIOf x)) (hr : 1 < L.rounds x) :
     False := by
   let ps : Msg → List (Msg × Out) := fun a =>
@@ -196,7 +196,7 @@ theorem vstarShowsB_deployed_rejects (rel : _root_.Flock.Readable.Parsed → _ro
     let D := recBound rel b L Bd.IVStar
     Claims.Recursion.VStarB.HeldB D (Claims.Recursion.Inner.ofFlock Bd.deploy decI) L shape →
     Claims.Recursion.VStarB.VstarShowsB D (Claims.Recursion.Inner.ofFlock Bd.deploy decI) L shape decC shows cmt →
-    ∀ (x : Msg) (st : Claims.Recursion.Stmt), parse x = some st → shape st.form → 0 < nS x →
+    ∀ (x : Msg) (st : Claims.Recursion.CompiledStatement), parse x = some st → shape st.form → 0 < nS x →
       ∀ (H : Msg → Msg) (Ω : Type) (P : Claims.Prover Ω) (ω : Ω) (r : Fin (D.V.k x) → Coin),
         (Claims.run H P D.V x ω r).out ≠ .acc := by
   intro Bd D hH hV x st hst hf hn H Ω P ω r hacc
@@ -227,7 +227,7 @@ round (`layoutOf_rounds_pos`), and round 0, the link message, is neither fixed n
 theorem heldB_layoutBOf_iff {W : Type} (D : Claims.Recursion.Deploy Coin) (I : Claims.Recursion.Inner Coin W)
     (shape : Claims.Recursion.Form → Prop) :
     Claims.Recursion.VStarB.HeldB D I layoutBOf shape ↔
-      ∀ (x : Msg) (st : Claims.Recursion.Stmt), D.parse x = some st → ¬ shape st.form := by
+      ∀ (x : Msg) (st : Claims.Recursion.CompiledStatement), D.parse x = some st → ¬ shape st.form := by
   constructor
   · intro h x st hst hf
     obtain ⟨hK, hcl, -⟩ := h x st hst hf

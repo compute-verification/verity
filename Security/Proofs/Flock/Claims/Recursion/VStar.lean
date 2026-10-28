@@ -498,7 +498,7 @@ agrees with the messages the part holds; or two of its recorded calls collide, o
 the setup makes at `xO` (`SetupColl`, which `Br` finds). -/
 def PartChecks (H : Msg → Msg) (D : Deploy Coin) (DO : Flock.Deploy Coin Col T) (L : Layout) (shape : Form → Prop)
     (shows : ℕ → Msg → Msg → (ℕ → Coin) → Prop) (chk : ℕ → Msg → (ℕ → Coin) → List Msg → Prop) (s : ℕ) : Prop :=
-  ∀ (x : Msg) (st : Stmt), D.parse x = some st → shape st.form → ∀ (xO : Msg) (w : Flock.Wit),
+  ∀ (x : Msg) (st : CompiledStatement), D.parse x = some st → shape st.form → ∀ (xO : Msg) (w : Flock.Wit),
     Flock.check DO.parse xO w = true → (∀ e ∈ L.calls x s w, H e.1 = e.2) →
     (∀ (c : ℕ → Coin), shows s x xO c → ∀ ms : List Msg,
       (∀ i < L.rounds x, ∀ m, L.held x s w i = some m → ms.getD i [] = m) → chk s x c ms) ∨
@@ -512,7 +512,7 @@ one of them ties with an evaluation the setup makes at `xO` (a climb whose top n
 children). -/
 def PartOpens (H : Msg → Msg) (D : Deploy Coin) (DO : Flock.Deploy Coin Col T) (L : Layout) (shape : Form → Prop)
     (shows : ℕ → Msg → Msg → (ℕ → Coin) → Prop) (opening : Opening) (cmt : Msg → ℕ → Msg → Msg) (s : ℕ) : Prop :=
-  ∀ (x : Msg) (st : Stmt), D.parse x = some st → shape st.form → ∀ (xO : Msg) (w : Flock.Wit),
+  ∀ (x : Msg) (st : CompiledStatement), D.parse x = some st → shape st.form → ∀ (xO : Msg) (w : Flock.Wit),
     Flock.check DO.parse xO w = true → (∀ e ∈ L.calls x s w, H e.1 = e.2) →
       (∀ (c : ℕ → Coin), shows s x xO c → ∀ i < L.rounds x, ∀ m, L.held x s w i = some m →
         ∃ cs, cs ⊆ L.calls x s w ∧ opening.opens (cmt x i xO) m cs) ∨
@@ -523,7 +523,7 @@ an accepted run of a compiled statement of the shape, each V* statement shows th
 of each inner round the layout spans, the run's message at that round. -/
 def Staged (H : Msg → Msg) (D : Deploy Coin) (I : Inner Coin W) (L : Layout) (shape : Form → Prop)
     (shows : ℕ → Msg → Msg → (ℕ → Coin) → Prop) (cmt : Msg → ℕ → Msg → Msg) : Prop :=
-  ∀ (x : Msg) (st : Stmt), D.parse x = some st → shape st.form →
+  ∀ (x : Msg) (st : CompiledStatement), D.parse x = some st → shape st.form →
     ∀ (Ω : Type) (P : Prover Ω) (ω : Ω) (r : Fin (D.V.k x) → Coin), (run H P D.V x ω r).out = .acc →
       ∀ s < D.nS x, shows s x ((runVstar H D I P x ω r).getD s []) (coinSeq r) ∧
         ∀ i < L.rounds x,
@@ -534,7 +534,7 @@ the shape): at a compiled statement of the shape, inner messages on which every 
 `c` are accepted by `IV` at those coins. -/
 def Decomp (H : Msg → Msg) (D : Deploy Coin) (IV : Verifier Coin) (shape : Form → Prop)
     (chk : ℕ → Msg → (ℕ → Coin) → List Msg → Prop) : Prop :=
-  ∀ (x : Msg) (st : Stmt), D.parse x = some st → shape st.form → ∀ (c : ℕ → Coin) (ms : List Msg),
+  ∀ (x : Msg) (st : CompiledStatement), D.parse x = some st → shape st.form → ∀ (c : ℕ → Coin) (ms : List Msg),
     (∀ s < D.nS x, chk s x c ms) → (run H (replay ms) IV (xI D x) () fun i => c i.val).out = .acc
 
 /-- **The inner verifier is its checks together** (a code fact about the inner verifier `IV` at the shape): at a
@@ -542,14 +542,14 @@ compiled statement of the shape, inner messages on which each of its `nC x` chec
 by `IV` at those coins. -/
 def InnerConj (H : Msg → Msg) (D : Deploy Coin) (IV : Verifier Coin) (shape : Form → Prop) (nC : Msg → ℕ)
     (check : ℕ → Msg → (ℕ → Coin) → List Msg → Prop) : Prop :=
-  ∀ (x : Msg) (st : Stmt), D.parse x = some st → shape st.form → ∀ (c : ℕ → Coin) (ms : List Msg),
+  ∀ (x : Msg) (st : CompiledStatement), D.parse x = some st → shape st.form → ∀ (c : ℕ → Coin) (ms : List Msg),
     (∀ j < nC x, check j x c ms) → (run H (replay ms) IV (xI D x) () fun i => c i.val).out = .acc
 
 /-- **V\*'s parts cover the inner checks** (a code fact about how the compiled statement cuts the inner verifier into
 V*'s parts, at the shape): each of the inner verifier's checks follows from some part's inner check. -/
 def Covers (D : Deploy Coin) (shape : Form → Prop) (nC : Msg → ℕ) (check : ℕ → Msg → (ℕ → Coin) → List Msg → Prop)
     (chk : ℕ → Msg → (ℕ → Coin) → List Msg → Prop) : Prop :=
-  ∀ (x : Msg) (st : Stmt), D.parse x = some st → shape st.form → ∀ j < nC x, ∃ s < D.nS x,
+  ∀ (x : Msg) (st : CompiledStatement), D.parse x = some st → shape st.form → ∀ j < nC x, ∃ s < D.nS x,
     ∀ (c : ℕ → Coin) (ms : List Msg), chk s x c ms → check j x c ms
 
 omit [Fintype Coin] [Nonempty Coin] in
@@ -565,7 +565,7 @@ theorem decomp_of_covers {H : Msg → Msg} {D : Deploy Coin} {IV : Verifier Coin
 wherever the part's outer relation holds at a V* statement of a compiled statement that parses, each evaluation the
 part records is a true evaluation of `H`. -/
 def PartCallsTrue (H : Msg → Msg) (D : Deploy Coin) (DO : Flock.Deploy Coin Col T) (L : Layout) (s : ℕ) : Prop :=
-  ∀ (x : Msg) (st : Stmt), D.parse x = some st → ∀ (xO : Msg) (w : Flock.Wit), Flock.check DO.parse xO w = true →
+  ∀ (x : Msg) (st : CompiledStatement), D.parse x = some st → ∀ (xO : Msg) (w : Flock.Wit), Flock.check DO.parse xO w = true →
     ∀ e ∈ L.calls x s w, H e.1 = e.2
 
 /-- **Every recorded call is a true evaluation** (`CallsRecord`'s second half, a code fact): wherever `E_O` gives
@@ -627,7 +627,7 @@ one round, which open one commit string (`Staged`) two ways (`PartOpens`), a col
 theorem agree_or_coll {H : Msg → Msg} {D : Deploy Coin} {I : Inner Coin W} {DO : Flock.Deploy Coin Col T}
     {IV : Verifier Coin} {L : Layout} {shape : Form → Prop} {shows : ℕ → Msg → Msg → (ℕ → Coin) → Prop}
     {opening : Opening} {cmt : Msg → ℕ → Msg → Msg} (hR : ReadsThrough H D IV L.msgs L.calls) (hVL : VstarLen D)
-    (hO : ∀ s, PartOpens H D DO L shape shows opening cmt s) (hS : Staged H D I L shape shows cmt) {x : Msg} {st : Stmt}
+    (hO : ∀ s, PartOpens H D DO L shape shows opening cmt s) (hS : Staged H D I L shape shows cmt) {x : Msg} {st : CompiledStatement}
     (hst : D.parse x = some st) (hf : shape st.form) {Ω : Type} {P : Prover Ω} {ω : Ω} {r : Fin (D.V.k x) → Coin}
     (hacc : (run H P D.V x ω r).out = .acc) {ws : List Flock.Wit}
     (ho : OuterHolds DO (runVstar H D I P x ω r) (D.nS x) ws) (htrue : ∀ e ∈ D.calls x ws, H e.1 = e.2) :
@@ -665,7 +665,7 @@ outer relation at the run's V* statements, whose recorded calls are true evaluat
 two of their recorded calls collide, or a registered tie at the run's V* statements. -/
 def VStarAcceptsR (H : Msg → Msg) (D : Deploy Coin) (I : Inner Coin W) (DO : Flock.Deploy Coin Col T)
     (shape : Form → Prop) : Prop :=
-  ∀ (x : Msg) (s : Stmt), D.parse x = some s → shape s.form →
+  ∀ (x : Msg) (s : CompiledStatement), D.parse x = some s → shape s.form →
     ∀ (Ω : Type) (P : Prover Ω) (ω : Ω) (r : Fin (D.V.k x) → Coin), (run H P D.V x ω r).out = .acc →
       ∀ ws, OuterHolds DO (runVstar H D I P x ω r) (D.nS x) ws → (∀ e ∈ D.calls x ws, H e.1 = e.2) →
         (D.innerView H x r ws).out = .acc ∨ CallsColl H D x (runVstar H D I P x ω r) ws
@@ -833,7 +833,7 @@ compiled statement of the shape, the layout spans the inner verifier's rounds, a
 verifier's last is a public round (`pubAt`), a round the statement fixes (`fixedAt`), or one some part holds. The last
 inner round, Flock's last message, is `FinalOpens`'. -/
 def HeldPub (D : Deploy Coin) (I : Inner Coin W) (L : Layout) (shape : Form → Prop) : Prop :=
-  ∀ (x : Msg) (st : Stmt), D.parse x = some st → shape st.form →
+  ∀ (x : Msg) (st : CompiledStatement), D.parse x = some st → shape st.form →
     I.V.k (xI D x) ≤ L.rounds x ∧ ∀ i, i + 1 < I.V.k (xI D x) →
       L.pubAt x i = true ∨ (L.fixedAt x i).isSome ∨ ∃ s < D.nS x, (L.msgAt x s i).isSome
 
@@ -850,7 +850,7 @@ theorem opensPlayed_of_parts {H : Msg → Msg} {D : Deploy Coin} {I : Inner Coin
     (hS : Staged H D I L shape shows cmt) (hPub : ReadsPub H D I DO L) (hFin : FinalOpens H D I DO opening)
     {decO : List (ℕ × Col) → List T} {x : Msg} {Ω : Type} {P : Prover Ω} {ω : Ω} {r : Fin (D.V.k x) → Coin}
     {c : (EO D I DO decO).C x} {ws : List Flock.Wit} (hg : EOGives H D I DO decO P x ω r c ws)
-    (htrue : ∀ e ∈ D.calls x ws, H e.1 = e.2) {st : Stmt} (hst : D.parse x = some st) (hf : shape st.form) :
+    (htrue : ∀ e ∈ D.calls x ws, H e.1 = e.2) {st : CompiledStatement} (hst : D.parse x = some st) (hf : shape st.form) :
     ∀ j < (D.innerView H x r ws).msgs.length,
       (∀ m, L.fixedAt x j = some m → ((D.innerView H x r ws).msgs.map Prod.fst).getD j [] = m) ∧
       (L.pubAt x j = true →
@@ -1159,7 +1159,7 @@ compiled statement of the shape, each SHA-512 call `IV` makes on the inner messa
 some part's inner check makes there (`logs s x c ms`). -/
 def LogDecomp (H : Msg → Msg) (D : Deploy Coin) (IV : Verifier Coin) (shape : Form → Prop)
     (logs : ℕ → Msg → (ℕ → Coin) → List Msg → List (Msg × Msg)) : Prop :=
-  ∀ (x : Msg) (st : Stmt), D.parse x = some st → shape st.form → ∀ (c : ℕ → Coin) (ms : List Msg),
+  ∀ (x : Msg) (st : CompiledStatement), D.parse x = some st → shape st.form → ∀ (c : ℕ → Coin) (ms : List Msg),
     ∀ e ∈ (run H (replay ms) IV (xI D x) () fun i => c i.val).vLog, ∃ s < D.nS x, e ∈ logs s x c ms
 
 /-- **The inner verifier's calls are its parts' or public** (a code fact about the inner verifier `IV` at the shape):
@@ -1167,7 +1167,7 @@ at a compiled statement of the shape, each SHA-512 call `IV` makes on the inner 
 that some part's inner check makes there, or one of the calls `pub x` on the statement's public data. -/
 def LogDecompPub (H : Msg → Msg) (D : Deploy Coin) (IV : Verifier Coin) (shape : Form → Prop)
     (logs : ℕ → Msg → (ℕ → Coin) → List Msg → List (Msg × Msg)) (pub : Msg → List (Msg × Msg)) : Prop :=
-  ∀ (x : Msg) (st : Stmt), D.parse x = some st → shape st.form → ∀ (c : ℕ → Coin) (ms : List Msg),
+  ∀ (x : Msg) (st : CompiledStatement), D.parse x = some st → shape st.form → ∀ (c : ℕ → Coin) (ms : List Msg),
     ∀ e ∈ (run H (replay ms) IV (xI D x) () fun i => c i.val).vLog, (∃ s < D.nS x, e ∈ logs s x c ms) ∨ e ∈ pub x
 
 omit [Fintype Coin] [Nonempty Coin] in
@@ -1181,7 +1181,7 @@ theorem logDecompPub_of_logDecomp {H : Msg → Msg} {D : Deploy Coin} {IV : Veri
 shape, each call in `pub x` is an evaluation the setup makes at the V* statements the staging gives at any rounds
 (`setupCalls`), which `Br` reads. -/
 def PubReg (H : Msg → Msg) (D : Deploy Coin) (shape : Form → Prop) (pub : Msg → List (Msg × Msg)) : Prop :=
-  ∀ (x : Msg) (st : Stmt), D.parse x = some st → shape st.form → ∀ ps : List (Msg × Out), ∀ e ∈ pub x,
+  ∀ (x : Msg) (st : CompiledStatement), D.parse x = some st → shape st.form → ∀ ps : List (Msg × Out), ∀ e ∈ pub x,
     e ∈ setupCalls H D (D.vstar x ps)
 
 omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] in
@@ -1196,7 +1196,7 @@ one of them ties with an evaluation the setup makes at `xO` (`SetupColl`). -/
 def PartLogs (H : Msg → Msg) (D : Deploy Coin) (DO : Flock.Deploy Coin Col T) (L : Layout) (shape : Form → Prop)
     (shows : ℕ → Msg → Msg → (ℕ → Coin) → Prop) (logs : ℕ → Msg → (ℕ → Coin) → List Msg → List (Msg × Msg))
     (s : ℕ) : Prop :=
-  ∀ (x : Msg) (st : Stmt), D.parse x = some st → shape st.form → ∀ (xO : Msg) (w : Flock.Wit),
+  ∀ (x : Msg) (st : CompiledStatement), D.parse x = some st → shape st.form → ∀ (xO : Msg) (w : Flock.Wit),
     Flock.check DO.parse xO w = true → (∀ e ∈ L.calls x s w, H e.1 = e.2) →
     (∀ (c : ℕ → Coin), shows s x xO c → ∀ ms : List Msg,
       (∀ i < L.rounds x, ∀ m, L.held x s w i = some m → ms.getD i [] = m) → ∀ e ∈ logs s x c ms, e ∈ L.calls x s w) ∨
@@ -1214,7 +1214,7 @@ theorem logColl_of_parts {H : Msg → Msg} {D : Deploy Coin} {I : Inner Coin W} 
     (hS : Staged H D I L shape shows cmt) (hLD : LogDecompPub H D I.V shape logs pub) (hPR : PubReg H D shape pub)
     {decO : List (ℕ × Col) → List T} {x : Msg} {Ω : Type} {P : Prover Ω}
     {ω : Ω} {r : Fin (D.V.k x) → Coin} {c : (EO D I DO decO).C x} {ws : List Flock.Wit}
-    (hg : EOGives H D I DO decO P x ω r c ws) (htrue : ∀ e ∈ D.calls x ws, H e.1 = e.2) {st : Stmt}
+    (hg : EOGives H D I DO decO P x ω r c ws) (htrue : ∀ e ∈ D.calls x ws, H e.1 = e.2) {st : CompiledStatement}
     (hst : D.parse x = some st) (hf : shape st.form) :
     (∀ e ∈ (innerRun H D I x r ws).vLog, e ∈ D.calls x ws ∨ e ∈ setupCalls H D (runVstar H D I P x ω r)) ∨
       CallsColl H D x (runVstar H D I P x ω r) ws := by
@@ -1377,7 +1377,7 @@ verifier messages show (`shows`) and, as the commit string of each inner round t
 message at that round (`cmt`). -/
 def VstarShows (D : Deploy Coin) (I : Inner Coin W) (L : Layout) (shape : Form → Prop) (decC : Msg → Msg → Coin)
     (shows : ℕ → Msg → Msg → (ℕ → Coin) → Prop) (cmt : Msg → ℕ → Msg → Msg) : Prop :=
-  ∀ (x : Msg) (st : Stmt), D.parse x = some st → shape st.form → ∀ ps : List (Msg × Out),
+  ∀ (x : Msg) (st : CompiledStatement), D.parse x = some st → shape st.form → ∀ ps : List (Msg × Out),
     ps.length = I.V.k (xI D x) + D.kS x → ∀ c : ℕ → Coin,
       (∀ i < ps.length, ∃ m, (ps.getD i ([], .rej)).2 = .msg m ∧ decC x m = c i) →
         ∀ s < D.nS x, shows s x ((D.vstar x ps).getD s []) c ∧
