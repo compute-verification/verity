@@ -21,7 +21,7 @@ def window_shortfall(w: audit.WindowRecord) -> float:
 
 def test_rb1_the_ledger_bounds_every_window_s_shortfall(store) -> None:  # noqa: F811
     """The claim is the hybrid: short by under 0.15% over the horizon and by under 1% in every window.
-    `GammaTerms.floor` is the every-window half, but it is only the openings' bound on a window's wrong receipts.  A
+    `Ledger.floor` is the every-window half, but it is only the openings' bound on a window's wrong receipts.  A
     prover that reads one block a pass through window 5 (every receipt correct, every one opened) is accepted with
     floor 0; the window's certified reads are 3.3% of its capacity, and the session's γ moves by about 1/W of that, 8%
     at W = 12 (0.17% at 600 windows of 1 s).  Fixed: the ledger reads each window over its own span, and names window 5

@@ -76,8 +76,8 @@ many reads of a node's registered blocks the node made in each window, from rece
    circuit's requirement linked to the passes (`requirement`, a `RequirementLink`: I4's plan and memory-map units and
    the census's layout rule, the memory-map unit's verdict on the record's appends and heads among them, `mapped`),
    each pass is credited the bits the circuit reads from complete blocks at its step, less a block for each planned
-   block it credits no receipt of (`linked_bits`, `Accounting.Guarantees.RequirementMoved`; `GammaTerms.linked`), less
-   the share ε of it the units' draw leaves unproved, its δ added to the ledger's error (`GammaTerms.error`);
+   block it credits no receipt of (`linked_bits`, `Accounting.Guarantees.RequirementMoved`; `Ledger.linked`), less
+   the share ε of it the units' draw leaves unproved, its δ added to the ledger's error (`Ledger.error`);
    without one the credit is the node's reads of its store.
    What an accepted window certifies, and on what, is `PROTOCOL.md`.
 
@@ -230,7 +230,7 @@ class Params:
     schedule_cap: int | None = None
     """a, the most bits of the schedule the prover will publish (`schedule.check`), which it commits with the session's
     parameters, so before the session's first coin: the schedule check refuses a schedule over it, and the ledger
-    credits it as the layout's steering (`GammaTerms.steering`, the `a` of `SteeredLayout`) at every coin alike.  None
+    credits it as the layout's steering (`Ledger.steering`, the `a` of `SteeredLayout`) at every coin alike.  None
     (the default) commits none, and the session credits no appended block (`Session.scheduled` refuses)."""
 
     def __post_init__(self) -> None:
@@ -1482,8 +1482,8 @@ LEDGER_SOURCES = {
               "[b_(t−1), D_t]; on a requirement link, each pass's credit is the circuit's reads from complete blocks "
               "at its step, less a block for each planned block it credits no receipt of (`linked_bits`, "
               "RequirementMoved), less the link's ε of the session's (the whole of it from any one window)",
-    "sample": "the record: its openings' bound on wrong receipts, each window's own at delta (`GammaTerms.sample`, the "
-              "per-window reading), or the session's pooled over its windows at one delta (`GammaTerms.horizon`, "
+    "sample": "the record: its openings' bound on wrong receipts, each window's own at delta (`Ledger.sample`, the "
+              "per-window reading), or the session's pooled over its windows at one delta (`Ledger.horizon`, "
               "`pooled`)",
     "chip": "S_chip, measured: one pass's worth a block held on chip need not be read again",
     "counting": "AuditRO's slack, a pass's `named_bits` of its receipts (log2 of q^k/k!, which bounds C(q, k); every "
@@ -1616,7 +1616,7 @@ class WindowLedger(_Terms):
 
 
 @dataclass(frozen=True, slots=True)
-class GammaTerms(_Terms):
+class Ledger(_Terms):
     """Each γ term as a fraction of the node's read capacity over the session's span; γ is their sum.  μ_sample comes
     both ways: `sample`, each window's openings bounding its own wrong receipts at δ, and `horizon`, the session's
     openings pooled over its windows at one δ (`pooled`).  `floor` is the most of any window's receipts the pooled
@@ -1780,11 +1780,11 @@ def ledger(record: Record, *, capacity_bytes_per_s: float, chip_bytes: int, rebu
            link: float = 0.0, queries_log2: int = QUERIES_LOG2, slack_log2: int = SLACK_LOG2,
            wrong: Callable[[IntegrityProfile], float] = IntegrityProfile.bound,
            credit_post_seed: PostSeedVerdict | None = None, requirement: RequirementLink | None = None,
-           schedule: Scheduled | None = None) -> GammaTerms:
+           schedule: Scheduled | None = None) -> Ledger:
     """γ's terms for an accepted session on a node of `capacity_bytes_per_s` (HBM plus host DRAM) and `chip_bytes` of
     on-chip storage: the read bytes the record credits are at least `(1 − γ)·capacity·span`, except with probability
     `windows · delta`, and at least `(1 − γ_horizon)·capacity·span` except with `delta` (each plus 2^-slack_log2 a
-    pass), and each window's over its own span likewise with its own terms (`GammaTerms.windows`), the horizon's every
+    pass), and each window's over its own span likewise with its own terms (`Ledger.windows`), the horizon's every
     window's at once with the session's.  μ_rebuild is `rebuild`'s fraction of the capacity, a model of the record's
     own codec (name and parameters) at a stated squaring ceiling.  `host` and `link` are the models' fractions, passed
     through.  All three are the same in every window: the record does not bound them.
@@ -1798,13 +1798,13 @@ def ledger(record: Record, *, capacity_bytes_per_s: float, chip_bytes: int, rebu
     that fails is refused), and only with this session's schedule check (`schedule`, `Session.scheduled`): every
     pass's plan the published schedule's at its step and the schedule within the cap on its bits the session committed
     before its coins, so the layout the appended blocks are read at is the verifier's function of the schedule, steered
-    through at most the cap's bits on every coin (`GammaTerms.steering`, the cap; `SteeredLayout` at cap + 1).
+    through at most the cap's bits on every coin (`Ledger.steering`, the cap; `SteeredLayout` at cap + 1).
     Without it, or with another session's, crediting them is refused.  Crediting them charges μ_carrier, each pass the
     least of the verdict's carrier bytes and its post-seed bytes.  `sample`, `counting`, the horizon and the capacity check count every certified receipt.
     On `requirement`, the served circuit's requirement linked to the passes (`RequirementLink`, which must hold, its
     memory-map unit making the record's appends at the passes' heads, `mapped`), a pass's credit is the bits the
     circuit reads from complete blocks at its step, less a block for each planned block it credits no receipt of
-    (`linked_bits`, by `RequirementMoved`), so the credit is the circuit's reads (`GammaTerms.linked`), and a plan
+    (`linked_bits`, by `RequirementMoved`), so the credit is the circuit's reads (`Ledger.linked`), and a plan
     topped up with filler earns nothing for it; `sample` still charges a whole block for a wrong receipt, as
     `RequirementMoved` charges a planned block the pass didn't move.
     The link's units are sampled: the session's credit is 1 − ε of that sum, and a window's is its own less ε of the
@@ -1881,7 +1881,7 @@ def ledger(record: Record, *, capacity_bytes_per_s: float, chip_bytes: int, rebu
     horizon, floor = pooled(record)
     lam_bits = sum(named[k] for w in record.windows for k in w.lengths)
     beside = record.passes * 2.0 ** -slack_log2 + link_delta
-    return GammaTerms(timing=1 - (sum(credits) - unproved) / whole, sample=sum(wrong_receipts) * b / whole,
+    return Ledger(timing=1 - (sum(credits) - unproved) / whole, sample=sum(wrong_receipts) * b / whole,
                   chip=record.passes * chip_bytes / whole, counting=lam_bits / 8 / whole, rebuild=mu_rebuild, host=host,
                   link=link, carrier=sum(carriers) / whole, horizon=horizon * b / whole, floor=floor,
                   windows=tuple(windows), error=sum(w.profile.delta for w in record.windows) + beside,
