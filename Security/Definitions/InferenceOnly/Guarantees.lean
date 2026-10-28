@@ -5,7 +5,7 @@ import Definitions.Core.Partition
 import Definitions.InferenceOnly
 
 /-!
-# NCI's guarantees
+# The inference-only policy's guarantees
 
 Each is a `def G : Prop` over `Protocol`'s definitions and the assumptions, proved as
 `InferenceOnly.SecurityProofs.G : InferenceOnly.Guarantees.G`.
@@ -17,15 +17,16 @@ open Verity
 open scoped ENNReal
 
 /-- **The read bound**: a declaration that contains the reference circuit `r` (`M`) and complies at `(c, k)`, with its
-baseline registered (`BaselineRegistered`), has at least `Reads_c(r) / α` gates, at the rate `α = k / c`. Lower bounds
-on NCI become lower bounds on size when the declared circuit computes `r` the way `r` does. -/
+registered information free of the reference circuit's fresh input (`BaselineRegistered`), has at least `Reads_c(r) / α`
+gates, at the rate `α = k / c`. Lower bounds on the fresh input a computation reads become lower bounds on size when the
+declared circuit computes `r` the way `r` does. -/
 def ReadBound : Prop :=
   ∀ (c k : ℕ) (r d : Declaration) (M : Containment r.D d.D), Complies c k d →
     Assumptions.BaselineRegistered r d (PartialContainment.ofContainment M) →
     (Reads c r : ℝ) ≤ (k / c : ℝ) * d.D.size d.D.computed
 
 /-- **Inference complies as declared**: a Boolean declaration divided into sessions of exactly `c` gates, padding
-included, each reading from outside itself only baseline information and its own prompt `prompt u` of at most `k`
+included, each reading from outside itself only registered information and its own prompt `prompt u` of at most `k`
 bits, complies at `(c, k)`, and its slowdown factor is at most 1. -/
 def Inference : Prop :=
   ∀ (c k : ℕ) (d : Declaration) (B : ℕ) (P : Partition d.D B) (prompt : Fin B → Finset (Fin d.D.N)),
@@ -35,9 +36,9 @@ def Inference : Prop :=
 /-- **Updated matrix multiplications are throttled** (the draft's theorem, "Throttling updated matrix
 multiplications"): under compute-bounded incompressibility, every declared circuit `D ⊨ 𝒫` that runs updated matrix
 multiplications is larger than those multiplications by a factor of at least `F`. The multiplications have about `2G`
-gates: `G` products, and about as many additions. The policy is at `(c, k)`, `k` is the most an IU reads, `F` is taken
-at the rate `k / c`, `b_w` and `b_a` are the widths of a weight entry and an activation entry, and `d` is the smallest
-inner dimension (a smaller `d` gives a smaller `F`). -/
+gates: `G` products, and about as many additions. The policy is at `(c, k)`, `k` is the most an inference block reads,
+`F` is taken at the rate `k / c`, `b_w` and `b_a` are the widths of a weight entry and an activation entry, and `d` is
+the smallest inner dimension (a smaller `d` gives a smaller `F`). -/
 def UpdatedMatMul : Prop :=
   ∀ (c k : ℕ) (b_w b_a : ℝ) (D : Declaration) (ch : Chain D.D) (d : ℕ),
     0 < c → 0 < k → 0 < b_w → 0 < b_a → (∀ ℓ, d ≤ ch.d ℓ) → Complies c k D →
@@ -83,12 +84,12 @@ namespace InferenceOnly.SecurityProofs
 open Verity Finset
 
 open Classical in
-/-- **What an IU reads** (the draft's proof of its theorem, "Throttling updated matrix multiplications"): "By the lemmas
-and incompressibility, `R` reads at least `b_w p_R + b_a (d τ_R + Q_R)` bits", for an IU `R` of at most `c` computed
-gates that reads at most `k` bits of novel information, under `Assumptions.ActivationsSupport` at cap `k + b_w + b_a`
-for some committed values `θv` of the baseline. `p_R` is the number of weight entries `R` uses, `τ_R` its number of full
-positions, `Q_R` the number of input entries it uses at positions that are not full, and `d` the smallest inner
-dimension. -/
+/-- **What an inference block reads** (the draft's proof of its theorem, "Throttling updated matrix multiplications"):
+"By the lemmas and incompressibility, `R` reads at least `b_w p_R + b_a (d τ_R + Q_R)` bits", for an inference block `R`
+of at most `c` computed gates that reads at most `k` fresh input bits, under `Assumptions.ActivationsSupport` at cap
+`k + b_w + b_a` for some committed values `θv` of the registered information. `p_R` is the number of weight entries `R`
+uses, `τ_R` its number of full positions, `Q_R` the number of input entries it uses at positions that are not full, and
+`d` the smallest inner dimension. -/
 def _root_.InferenceOnly.Guarantees.IuReads : Prop :=
   ∀ (D : Declaration) (ch : Chain D.D) (c : ℕ) (k b_w b_a : ℝ) (d : ℕ) (hd : ∀ ℓ, d ≤ ch.d ℓ) (hb_a : 0 ≤ b_a) (hb_w : 0 ≤ b_w) (θv : D.D.Transcript) (h : Assumptions.ActivationsSupport D θv ch (k + b_w + b_a) b_w b_a) (R : Finset (Fin D.D.N)) (hR : R ⊆ D.D.computed) (hc : D.D.size R ≤ c) (hk : (novelReads D R : ℝ) ≤ k),
     b_w * (ch.weightsUsed R).card +
@@ -114,8 +115,8 @@ open Verity Finset
 
 /-- **Lemma 2 (other positions)** (the draft, "Throttling updated matrix multiplications"): "At positions that are not
 full positions of `R`, every entry of `x^{(ℓ-1)}` that `R` uses costs `R` a read of at least `b_a` bits, and every entry
-of `y^{(ℓ)}` that `R` contributes products to is split." `R` is an IU of a division `P`; the read is the one
-`Assumptions.ActivationsIncompressible` charges, since such an entry is not linked to an entry whole in `R`. -/
+of `y^{(ℓ)}` that `R` contributes products to is split." `R` is an inference block of a division `P`; the read is the
+one `Assumptions.ActivationsIncompressible` charges, since such an entry is not linked to an entry whole in `R`. -/
 def _root_.InferenceOnly.Guarantees.OtherPositions : Prop :=
   ∀ {D : Circuit} (c : Chain D) {n : ℕ} (P : Partition D n) (u : Fin n),
     (∀ ℓ t j, ⟨ℓ, t, j⟩ ∈ c.inputsUsed (P.gates u) → ¬ c.Full (P.gates u) t →

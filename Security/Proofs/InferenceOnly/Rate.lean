@@ -6,7 +6,7 @@ import Definitions.InferenceOnly
 An inference block of a `(c, k)`-partition has exactly `c` gates and at most `k` fresh input bits, each gate one bit
 wide, so the partition complies at `c` gates per block and the rate `k / c` (`compliesRate_of_complies`), and at
 `c > 0` the rate times `c` is `k` (`rate_mul`). Each guarantee over `Complies c k` is proved from its rate form over
-`CompliesRate`, the form the NCI check's verdicts read.
+`CompliesRate`, the form the inference-only check's verdicts read.
 -/
 
 namespace InferenceOnly.SecurityProofs

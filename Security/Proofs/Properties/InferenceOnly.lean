@@ -2,7 +2,7 @@ import Proofs.Properties.InferenceOnly.Lemmas
 import Proofs.Properties.InferenceOnly.Desc
 
 /-!
-# The NCI check's properties, proved
+# The inference-only check's properties, proved
 
 Each statement of `Properties.InferenceOnly`, proved of `NciCheck.evaluate` from the lemmas about its steps
 (`Proofs.Properties.InferenceOnly.Lemmas`), and the description-sized check's summaries against it (`sizes_eq_tally`, with
@@ -107,7 +107,7 @@ theorem Decodes : Properties.Decodes := by
     rw [mem_iff_index, ← hmem]
     exact (Finset.mem_filter.1 hg).2
 
-/-- One step of `failure`: IU `u`'s verdict. -/
+/-- One step of `failure`: inference block `u`'s verdict. -/
 def failStep (gamma num den : ℕ) (r : Array (ℕ × ℕ)) (u : ℕ) : Option (ℕ × String) :=
   if r[u]!.1 > gamma then some (u, "size") else if r[u]!.2 * den > num * r[u]!.1 then some (u, "nci") else none
 
@@ -285,7 +285,7 @@ theorem refused_instance : evaluate Json.null = .error "instance" := rfl
 theorem check_refused_instance : (check Json.null).getObjVal? "error" = .ok (.str "instance") :=
   (check_error _ _).2 refused_instance
 
-/-- The instance of program text `s` with θ and the owners empty, `Γ = 0` and `α = 0 / 1`. -/
+/-- The instance of program text `s` with θ and the owners empty, `gamma = 0` and `alpha = 0 / 1`. -/
 def noGates (s : String) : Json :=
   Json.mkObj [("program", .str s), ("theta", .arr #[]), ("owner", .arr #[]), ("gamma", toJson (0 : ℕ)),
     ("alpha", .arr #[toJson (0 : ℕ), toJson (1 : ℕ)])]
@@ -301,9 +301,10 @@ theorem wellFormed_instance {s : String} {P : Prog} (hP : Flock.Program.decode s
 
 /-! ## The description-sized check -/
 
-/-- **`NciCheck.Desc.sizes` is the unrolled tally.** On a division that is the expansion of the root nodes' IUs `own`
-(root node `k` holding gates `[offs[k], offs[k + 1])`, `offs` from `0` to the circuit's `N`, each of them in IU
-`own[k]`), the description-sized check's size of each IU is the one `NciCheck.tally` counts gate by gate. -/
+/-- **`NciCheck.Desc.sizes` is the unrolled tally.** On a division that is the expansion of the root nodes' inference
+blocks `own` (root node `k` holding gates `[offs[k], offs[k + 1])`, `offs` from `0` to the circuit's `N`, each of them
+in inference block `own[k]`), the description-sized check's size of each inference block is the one `NciCheck.tally`
+counts gate by gate. -/
 theorem sizes_eq_tally (c : Circuit) (d : Division) (offs : Array ℕ) (own : Array (Option ℕ))
     (h0 : offs[0]! = 0) (hN : offs[own.size]! = c.N) (hmono : ∀ k < own.size, offs[k]! ≤ offs[k + 1]!)
     (hexp : ∀ k < own.size, ∀ g, offs[k]! ≤ g → g < offs[k + 1]! → d.owner[g]! = own[k]!) (u : ℕ) (hu : u < d.n) :

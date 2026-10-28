@@ -7,9 +7,9 @@ import Properties.InferenceOnlyDesc.Verdict
 /-!
 # A verdict of compliance of the check of record carries the cover theorem's factor
 
-`CoverTrained` is `InferenceOnly.Cover.Guarantees.CoverTraining`'s conclusion on a verdict, at the gate budget `c = gamma`
-and the fresh-input budget `k = α c`, `α = num / den`, in the shape of `Properties.InferenceOnly.Threads`'s statements:
-its premises on the reference training circuit's bit view (`UpdateHardness`, the upstream certificate
+`CoverTrained` is `InferenceOnly.Cover.Guarantees.CoverTraining`'s conclusion on a verdict, at the gate budget
+`c = gamma` and the fresh-input budget `k = α c`, `α = num / den`, in the shape of `Properties.InferenceOnly.Threads`'s
+statements: its premises on the reference training circuit's bit view (`UpdateHardness`, the upstream certificate
 `MulBlocks.Upstream`) and on the registered information (`BaselineRegistered`) are named assumptions, which the check
 does not see.
 
@@ -30,8 +30,8 @@ open Flock.Program (Prog)
 /-- When the verdict `out` on `j` has `complies` `true`, every declaration `d` the Program lays out with the registered
 information `theta` names, containing a reference training circuit `r` with none of its fresh input registered
 (`BaselineRegistered`), pays the cover theorem's factor at `c = gamma`, `α = num / den` and `k = α c`,
-`α₀ b c size(r) ≤ (k² + b k) size(d)` (`InferenceOnly.Cover.Guarantees.CoverTraining`'s conclusion, under its premises on
-`r`'s bit view). -/
+`α₀ b c size(r) ≤ (k² + b k) size(d)` (`InferenceOnly.Cover.Guarantees.CoverTraining`'s conclusion, under its premises
+on `r`'s bit view). -/
 def CoverTrained (j out : Json) : Prop :=
   ∀ (i : Instance) (P : Prog) (d : Verity.Declaration),
     Parses j i → Flock.Program.decode i.program.toUTF8 = .ok P → LaysOut P d.D → Names i.theta d.θ →
@@ -50,8 +50,9 @@ def CoverTrained (j out : Json) : Prop :=
         α₀ * b * c * r.D.size r.D.computed ≤ (k * k + b * k) * d.D.size d.D.computed
 
 /-- **A verdict of compliance of the check of record carries the cover theorem's factor**, for every reference training
-circuit the declaration contains, under the cover theorem's premises on its bit view and its baseline registered. On every
-verdict of `NciCheck.Baseline.evaluate`, the verdict is `CoverTrained` on every expansion. -/
+circuit the declaration contains, under the cover theorem's premises on its bit view and its registered information free
+of the reference circuit's fresh input. On every verdict of `NciCheck.Baseline.evaluate`, the verdict is `CoverTrained`
+on every expansion. -/
 def CheckedCoverTraining : Prop :=
   ∀ (j tr out : Json), Baseline.evaluate j tr = .ok out → OnExpansions CoverTrained j out
 

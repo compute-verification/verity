@@ -63,7 +63,8 @@ def inputsUsed (R : Finset (Fin D.N)) : Finset ((ℓ : Fin c.L) × Fin c.N × Fi
 def Whole (R : Finset (Fin D.N)) (ℓ : Fin c.L) (t : Fin c.N) (i : Fin (c.e ℓ)) : Prop :=
   ∀ j, c.prod ℓ t i j ∈ R
 
-/-- The entry `y_t^{(ℓ)}[i]` is **split** in a division `P` into IUs: no IU holds the gates of all of its products. -/
+/-- The entry `y_t^{(ℓ)}[i]` is **split** in a division `P` into inference blocks: no inference block holds the gates of
+all of its products. -/
 def Split {n : ℕ} (P : Partition D n) (ℓ : Fin c.L) (t : Fin c.N) (i : Fin (c.e ℓ)) : Prop :=
   ¬ ∃ u, c.Whole (P.gates u) ℓ t i
 
@@ -78,7 +79,7 @@ def LinkedWhole (R : Finset (Fin D.N)) : (ℓ : Fin c.L) → Fin c.N → Fin (c.
   | ⟨ℓ + 1, h⟩, t, j => c.Whole R ⟨ℓ, by omega⟩ t (c.π ⟨ℓ, by omega⟩ h j)
 
 open Classical in
-/-- The number of IUs of a division `P` that hold gates of products of the entry `y_t^{(ℓ)}[i]`. -/
+/-- The number of inference blocks of a division `P` that hold gates of products of the entry `y_t^{(ℓ)}[i]`. -/
 noncomputable def spread {n : ℕ} (P : Partition D n) (ℓ : Fin c.L) (t : Fin c.N) (i : Fin (c.e ℓ)) : ℕ :=
   (univ.filter fun u => ∃ j, c.prod ℓ t i j ∈ P.gates u).card
 

@@ -36,7 +36,7 @@ open Lean (Json)
 open Flock.Program (Prog)
 
 /-- When the verdict `out` on `j` has `complies` `true`, every declaration `d` the Program lays out with the registered
-information `theta` names has at least `b_a / (αΛ)` gates per counted multiplication of each reference circuit `r` it
+information `theta` names has at least `c b_a / (k Λ)` gates per counted multiplication of each reference circuit `r` it
 contains that is `(dd, e)`-threaded with incompressible weights, with no fresh input of `r` in `d`'s registered
 information (`BaselineRegistered`), `Λ` being Theorem 1's bound at read cap `k`, at `c = gamma`, `α = num / den` and
 `k = α c` (`InferenceOnly.Guarantees.ThreadedThrottled`'s conclusion). -/

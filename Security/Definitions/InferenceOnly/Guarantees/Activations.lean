@@ -3,9 +3,9 @@ import Definitions.InferenceOnly.Assumptions
 import Definitions.InferenceOnly.Dark
 
 /-!
-# NCI's activations bound over all of training ([ACTIVATIONS-BOUND])
+# The inference-only policy's activations bound over all of training ([ACTIVATIONS-BOUND])
 
-Under `ActivationsIncompressibleAll`, every small subcircuit of the reference circuit `c` computes at most
+Under `ActivationsIncompressibleAll`, every small subcircuit of the reference circuit `r` computes at most
 `Λ = max(e, c_r · K / (4 dd b_w))` counted multiplications per `b_a` bits it reads, where `e` bounds how many counted
 multiplications one activation enters, `c_r = T.reuse` how many times a thread uses one weight, and `dd` how many
 distinct activations of its own thread each linked activation is computed from (`ActivationsReads`). The bound is
@@ -20,8 +20,8 @@ activations of its earliest complete one, none of which the subcircuit completes
 
 Through a partial containment (`ActivationsBoundOn`) the bound holds for the counted multiplications the declaration
 computes, with no term for the dark gates: a partial sum added outside the declaration, or any other value computed
-off the books, enters it as an input, novel by `BaselineRegistered`, and does not make an activation whole in a piece.
-`ActivationsTrainingOn` is the training form, with the counted multiplications off the books as dark gates.
+off the books, enters it as an input, fresh input by `BaselineRegistered`, and does not make an activation whole in a
+piece. `ActivationsTrainingOn` is the training form, with the counted multiplications off the books as dark gates.
 -/
 
 namespace InferenceOnly.Guarantees
@@ -29,8 +29,8 @@ namespace InferenceOnly.Guarantees
 open Verity
 
 /-- **The activations bound for one subcircuit**: under `ActivationsIncompressibleAll` at read cap `K`, every small
-subcircuit `R` of the reference circuit `c` computes at most `Λ = max(e, c_r · K / (4 dd b_w))` counted multiplications
-per `b_a` bits of novel information it reads, where each activation enters at most `e` counted multiplications and each
+subcircuit `R` of the reference circuit `r` computes at most `Λ = max(e, c_r · K / (4 dd b_w))` counted multiplications
+per `b_a` fresh input bits it reads, where each activation enters at most `e` counted multiplications and each
 activation computed from counted multiplications is computed from at least `dd` distinct activations of its own thread. -/
 def ActivationsReads : Prop :=
   ∀ (r : Declaration) (T : Threading r) (L : T.Links) (c : ℕ) (k b_w b_a : ℝ) (dd e : ℕ),
@@ -42,11 +42,11 @@ def ActivationsReads : Prop :=
     ∀ R, Small r c k R → b_a * (T.mults R).card ≤ novelReads r R * T.bound k b_w dd e
 
 /-- **The activations bound over all of training, with dark gates** ([ACTIVATIONS-BOUND]): a declaration `d` that
-complies at `(Γ, α)` and contains the reference circuit `c` partly, computing the gates `S` of `c` and leaving the rest
-dark (`PartialContainment`), computes at most `α Λ size(d) / b_a` of `c`'s counted multiplications, with
-`Λ = max(e, c_r · K / (4 dd b_w))` at read cap `K ≥ αΓ`, under `ActivationsIncompressibleAll` on `c` at `K` and
-`BaselineRegistered`. There is no term for the dark gates, so it holds however much of `c`, the partial sums included, is
-computed off the books. -/
+complies at `(c, k)` and contains the reference circuit `r` partly, computing the gates `S` of `r` and leaving the rest
+dark (`PartialContainment`), computes at most `(k / c) Λ size(d) / b_a` of `r`'s counted multiplications, with
+`Λ = max(e, c_r · K / (4 dd b_w))` at read cap `K ≥ k`, under `ActivationsIncompressibleAll` on `r` at `K` and
+`BaselineRegistered`. There is no term for the dark gates, so it holds however much of `r`, the partial sums included,
+is computed off the books. -/
 def ActivationsBoundOn : Prop :=
   ∀ (c k : ℕ) (K b_w b_a : ℝ) (r d : Declaration) (T : Threading r) (L : T.Links) (dd e : ℕ)
     (M : PartialContainment r d),
@@ -58,10 +58,10 @@ def ActivationsBoundOn : Prop :=
       b_a * (T.M ∩ M.S).card ≤ (k / c : ℝ) * T.bound K b_w dd e * d.D.size d.D.computed
 
 /-- **Training is slowed, by the activations bound, with dark gates**: when counted multiplications are a fraction `κ`
-of the reference circuit's flops (2 flops each), a declaration that complies at `(Γ, α)` and contains it partly, with its
-baseline registered (`BaselineRegistered`), is larger by a factor of at least `κ b_a / (2αΛ)`, less what its dark gates
-absorb:
-`κ b_a size(c) ≤ 2 b_a #dark + 2 α Λ size(d)`. -/
+of the reference circuit's flops (2 flops each), a declaration that complies at `(c, k)` and contains it partly, with
+its registered information free of the reference circuit's fresh input (`BaselineRegistered`), is larger by a factor of
+at least `κ c b_a / (2 k Λ)`, less what its dark gates absorb:
+`κ b_a size(r) ≤ 2 b_a #dark + 2 (k / c) Λ size(d)`. -/
 def ActivationsTrainingOn : Prop :=
   ∀ (c k : ℕ) (K b_w b_a κ : ℝ) (r d : Declaration) (T : Threading r) (L : T.Links) (dd e : ℕ)
     (M : PartialContainment r d),

@@ -2,16 +2,17 @@ import Definitions.InferenceOnly
 import NciCheck.Check
 
 /-!
-# The NCI check's properties, stated against the Lean function
+# The inference-only check's properties, stated against the Lean function
 
 `NciCheck.evaluate` (`verity/core/protocols/network/nci/lean/NciCheck/Check.lean`, package `nci_check`) is
-the verifier's check of a declared division against the inference-only policy at its rate, `InferenceOnly.CompliesRate c α`
-(`Definitions/InferenceOnly.lean`), at the gate budget `c = gamma` and the rate `α = num / den`, and
-`NciCheck.check` is `evaluate` with a refusal written `{"error": code}` (with a `message` giving the fix for some codes).
-θ, the baseline, holds only input gates bound at registration (`IsRegistered`): one bound per run is refused. The difftest holds it to the Python reference on
-random instances; the statements here say what it computes on every instance. Each is a named `Prop`, proved as
-`NciCheck.Properties.SecurityProofs.X : NciCheck.Properties.X` in `Proofs.Properties.InferenceOnly`, and a guarantee of this
-package (`lean-audit.json`).
+the verifier's check of a declared division against the inference-only policy at its rate,
+`InferenceOnly.CompliesRate c α` (`Definitions/InferenceOnly.lean`), at the gate budget `c = gamma` and the rate
+`α = num / den`, and `NciCheck.check` is `evaluate` with a refusal written `{"error": code}` (with a `message` giving
+the fix for some codes). θ, the registered information, holds only input gates bound at registration (`IsRegistered`):
+one bound per run is refused. The difftest holds it to the Python reference on random instances; the statements here say
+what it computes on every instance. Each is a named `Prop`, proved as
+`NciCheck.Properties.SecurityProofs.X : NciCheck.Properties.X` in `Proofs.Properties.InferenceOnly`, and a guarantee of
+this package (`lean-audit.json`).
 
 Each statement has one shape (the lean-proofs skill, "One shape"): for every instance, if the check gives a verdict (or
 doesn't refuse with a code), its named conclusion holds. The converses, that the check refuses exactly the malformed
@@ -34,13 +35,14 @@ gate when its primitive is an input node, reading the gates its operands name). 
 widths, input gates and reads, which is all `size` and `InferenceOnly.novelReads` read, and leaves its operations and outputs free.
 
 * `Decodes`: on every instance with a verdict, the Program lays out a circuit (`Verity.Circuit`, its gates in
-  topological order and its input gates reading nothing), `theta` names a baseline of it (`Verity.Declaration`), and the
-  owners are a partition of its computed gates into IUs `0 … n - 1`, none empty (`Verity.Partition`, `Divides`).
-* `Reports`: for every declaration `d` laid out by the Program with the baseline `theta` names, and the partition `U`
-  the owners are, the verdict's `gates` is `d`'s number of gates, its `ius` lists per IU `u` its `size` and
-  `InferenceOnly.novelReads` exactly, its `complies` is `true` exactly when every inference block has at most `c` gates
-  and at most `α` fresh input bits per gate (`Meets`), and its `failure` is the first block that doesn't, with the rule it
-  breaks first.
+  topological order and its input gates reading nothing), `theta` names its registered information
+  (`Verity.Declaration`), and the owners are a partition of its computed gates into inference blocks `0 … n - 1`, none
+  empty (`Verity.Partition`, `Divides`).
+* `Reports`: for every declaration `d` laid out by the Program with the registered information `theta` names, and the
+  partition `U` the owners are, the verdict's `gates` is `d`'s number of gates, its `ius` lists per inference block `u`
+  its `size` and `InferenceOnly.novelReads` exactly, its `complies` is `true` exactly when every inference block has at
+  most `c` gates and at most `α` fresh input bits per gate (`Meets`), and its `failure` is the first block that doesn't,
+  with the rule it breaks first.
 * `Witnesses`: a verdict whose `complies` is `true` means the declaration complies at the rate,
   `InferenceOnly.CompliesRate c α d`, with the owners as the witness.
 * `Refines`: on such a verdict the owners' blocks are within the policy's budgets at `c` and `k = α c`: at most `c`
@@ -125,18 +127,18 @@ def ThetaFault (P : Prog) (theta : Array Json) (t : ℕ) (k : String) : Prop :=
     (k = "theta-duplicate" ∧ ∃ g, natOf? theta[t]! = some g ∧ g < gates P ∧ IsInput P g ∧ IsRegistered P g ∧
       ∃ t' < t, natOf? theta[t']! = some g)
 
-/-- Gate `g`'s owner is `"input"` and `g` an input gate, or an IU and `g` a computed gate. -/
+/-- Gate `g`'s owner is `"input"` and `g` an input gate, or an inference block and `g` a computed gate. -/
 def OwnerOk (P : Prog) (owner : Array Json) (g : ℕ) : Prop :=
   (owner[g]! = .str "input" ∧ IsInput P g) ∨ ((∃ u, natOf? owner[g]! = some u) ∧ ¬ IsInput P g)
 
 /-- Gate `g`'s owner's refusal `k`: `owner-entry` where it is neither `"input"` nor a natural, `input-in-iu` where it
-puts an input gate in an IU, `gate-in-no-iu` where it puts a computed gate in none. -/
+puts an input gate in an inference block, `gate-in-no-iu` where it puts a computed gate in none. -/
 def OwnerFault (P : Prog) (owner : Array Json) (g : ℕ) (k : String) : Prop :=
   (k = "owner-entry" ∧ owner[g]! ≠ .str "input" ∧ natOf? owner[g]! = none) ∨
     (k = "input-in-iu" ∧ (∃ u, natOf? owner[g]! = some u) ∧ IsInput P g) ∨
     (k = "gate-in-no-iu" ∧ owner[g]! = .str "input" ∧ ¬ IsInput P g)
 
-/-- An IU below one that an owner names holds no gate. -/
+/-- An inference block below one that an owner names holds no gate. -/
 def EmptyIU (owner : Array Json) : Prop :=
   ∃ g u, g < owner.size ∧ natOf? owner[g]! = some u ∧ ∃ u' < u, ∀ g' < owner.size, natOf? owner[g']! ≠ some u'
 
@@ -149,8 +151,8 @@ def FirstFault (ok : ℕ → Prop) (fault : ℕ → String → Prop) (n : ℕ) (
 /-- `j` is refused with `k`: the first condition it fails, in the order the check reads them, is `k`'s. First the
 fields (`instance`), `c` and `α` (`params`), the program's decoding and its widths (`program`: `Reinterprets`), then
 gate by gate (`GateFault`), then
-θ entry by entry (`ThetaFault`), then one owner per gate (`owner-length`), then gate by gate (`OwnerFault`), then the IUs
-(`empty-iu`). -/
+θ entry by entry (`ThetaFault`), then one owner per gate (`owner-length`), then gate by gate (`OwnerFault`), then the
+inference blocks (`empty-iu`). -/
 def Malformed (j : Json) (k : String) : Prop :=
   (¬ Shaped j ∧ k = "instance") ∨
   (Shaped j ∧ (¬ ∃ i, Parses j i) ∧ k = "params") ∨
@@ -168,7 +170,7 @@ def Malformed (j : Json) (k : String) : Prop :=
              (∀ g < gates P, OwnerOk P i.owner g) ∧ EmptyIU i.owner ∧ k = "empty-iu"))))))
 
 /-- `j` is well-formed: its fields parse, its program decodes and reads every leaf at its width, and every gate, every
-entry of θ and every owner is as stated, with no IU empty. -/
+entry of θ and every owner is as stated, with no inference block empty. -/
 def WellFormed (j : Json) : Prop :=
   ∃ i P, Parses j i ∧ Flock.Program.decode i.program.toUTF8 = .ok P ∧ ¬ Reinterprets P ∧ (∀ g < gates P, GateOk P g) ∧
     (∀ t < i.theta.size, ThetaOk P i.theta t) ∧ i.owner.size = gates P ∧ (∀ g < gates P, OwnerOk P i.owner g) ∧
@@ -221,7 +223,7 @@ def Meets (d : Verity.Declaration) {n : ℕ} (U : Verity.Partition d.D n) (c : �
   d.D.size (U.gates u) ≤ c ∧ (InferenceOnly.novelReads d (U.gates u) : ℝ) ≤ α * d.D.size (U.gates u)
 
 /-- **What a verdict is about.** On every instance with a verdict, the Program lays out a circuit of the definition's,
-the entries of `theta` name a baseline of it, and the owners are a partition of its computed gates. -/
+the entries of `theta` name its registered information, and the owners are a partition of its computed gates. -/
 def Decodes : Prop :=
   ∀ (j out : Json), evaluate j = .ok out →
     ∃ i P, Parses j i ∧ Flock.Program.decode i.program.toUTF8 = .ok P ∧

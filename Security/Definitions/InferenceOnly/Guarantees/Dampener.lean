@@ -13,8 +13,9 @@ guarantee or of the model's accounting:
 * the monitored compute residual trains at full efficiency, `M_r ≤ κ (C − W_cert)/2`: the reading, outside its error,
   of the compute audit's covert residual (`Accounting.Guarantees.CovertResidual`, `CovertResidualPerRun`), whose other
   accounts stay within `F·T − W_cert`;
-* the declared computation runs at `ρ` declared gates per counted multiplication, `M_d ≤ C/ρ`: NCI's thread bound,
-  `InferenceOnly.Guarantees.ThreadedThrottled`, which `DampenerThreaded` takes as proved rather than as a hypothesis;
+* the declared computation runs at `ρ` declared gates per counted multiplication, `M_d ≤ C/ρ`: the inference-only
+  policy's thread bound, `InferenceOnly.Guarantees.ThreadedThrottled`, which `DampenerThreaded` takes as proved rather
+  than as a hypothesis;
 * faulty proof blocks skip or inject at most the cheating share, `M_χ ≤ χ κ (C + U)/2`: what the sampled proofs' draw
   establishes (the cumulative bound, `Population.Exfil.tail_cumPrev`, at a budget);
 * the memory cap bounds the residual and the declared computation on the monitored servers together,
@@ -66,11 +67,12 @@ def DampenerWindows : Prop :=
         unmonitoredShare C U + min (residualShare W C) (memoryCap reuse κ R α d b_w b_a * (1 + L / H)) +
           declaredShare κ ρ C U + χ
 
-/-- **The compute dampener over NCI's thread bound.** As `DampenerWindows`, with the declared computation's bound proved:
-the declared circuit `d` contains the reference training circuit `c` (`Mc`), threaded by `T` and with incompressible
-weights, and complies with NCI at `(Γ, α)`, with its baseline registered (`BaselineRegistered`), so its counted multiplications `|T.M|` number at most `size(d)/ρ_T`
-(`InferenceOnly.Guarantees.ThreadedThrottled`), `ρ_T = b_a/(α Λ(αΓ))`, and `size(d) ≤ C`. The windows' bound is stated with
-`T`'s `Λ = T.bound`, as the memory cap over threads states it. Then `η ≤ s + min(r, μ (1 + L/H)) + ν_T + χ` with
+/-- **The compute dampener over the inference-only policy's thread bound.** As `DampenerWindows`, with the declared
+computation's bound proved: the declared circuit `d` contains the reference training circuit `r` (`Mc`), threaded by `T`
+and with incompressible weights, and complies at `(c, k)`, with its registered information free of the reference
+circuit's fresh input (`BaselineRegistered`), so its counted multiplications `|T.M|` number at most `size(d)/ρ_T`
+(`InferenceOnly.Guarantees.ThreadedThrottled`), `ρ_T = c b_a/(k Λ(k))`, and `size(d) ≤ C`. The windows' bound is stated
+with `T`'s `Λ = T.bound`, as the memory cap over threads states it. Then `η ≤ s + min(r, μ (1 + L/H)) + ν_T + χ` with
 `ν_T = (1 − s) · 2/(κ ρ_T)` and `μ = 2 reuse · R α/(κ d b_w b_a)` at `T`'s reuse. -/
 def DampenerThreaded : Prop :=
   ∀ (κ C U W χ : ℝ) (M Mu Mr Mx n c k : ℕ) (F H L R b_w b_a : ℝ) (r d : Declaration) (T : Threading r) (dd e : ℕ)
@@ -87,9 +89,10 @@ def DampenerThreaded : Prop :=
         unmonitoredShare C U + min (residualShare W C) (memoryCap T.reuse κ R (k / c : ℝ) dd b_w b_a * (1 + L / H)) +
           declaredShare κ (rhoT (k / c : ℝ) b_a (T.bound k b_w dd e)) C U + χ
 
-/-- **The compute dampener over NCI's thread bound, per parameter slot**: `DampenerThreaded` with the reference
-circuit's weights incompressible per parameter slot of a slot map `σ` (`Assumptions.WeightsIncompressibleSlots`), its
-declared computation's bound from `InferenceOnly.Guarantees.ThreadedThrottledSlots`. -/
+/-- **The compute dampener over the inference-only policy's thread bound, per parameter slot**: `DampenerThreaded` with
+the reference circuit's weights incompressible per parameter slot of a slot map `σ`
+(`Assumptions.WeightsIncompressibleSlots`), its declared computation's bound from
+`InferenceOnly.Guarantees.ThreadedThrottledSlots`. -/
 def DampenerThreadedSlots : Prop :=
   ∀ (κ C U W χ : ℝ) (M Mu Mr Mx n c k : ℕ) (F H L R b_w b_a : ℝ) (r d : Declaration) (T : Threading r)
     (σ : T.Slots) (dd e : ℕ) (Mc : Containment r.D d.D),

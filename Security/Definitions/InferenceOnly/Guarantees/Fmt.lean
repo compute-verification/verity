@@ -1,7 +1,7 @@
 import Definitions.InferenceOnly.Assumptions.Fmt
 
 /-!
-# NCI over threads, each thread charged by its work at a format's rate: the guarantees
+# The inference-only policy over threads, each thread charged by its work at a format's rate: the guarantees
 
 `ThreadedReadsInfo`, `ThreadedContainedInfo` and `ThreadedOfState` restated under `WeightsSupportFmt`, which takes the
 place of both `WeightsSupport` and the threading premise `ThreadedInfo`: Theorem 1 with reads counted by information
@@ -13,10 +13,10 @@ namespace InferenceOnly.Guarantees
 
 open Verity Finset
 
-/-- **Theorem 1 with reads counted by information, each thread charged by its work**: if the reference circuit `c`'s
+/-- **Theorem 1 with reads counted by information, each thread charged by its work**: if the reference circuit `r`'s
 weights are incompressible with each thread charged by the work done on it, at `log₂ n − μ ≥ b_a` bits per thread
 value's worth, every subcircuit `R` small by information computes at most `Λ = max(e, c · S / (4 d b_w))` counted
-multiplications per `b_a` bits of information its novel reads carry. It is `ThreadedReadsInfo` with
+multiplications per `b_a` bits of information its fresh input reads carry. It is `ThreadedReadsInfo` with
 `WeightsSupportFmt` in place of `WeightsSupport` and the threading premise. -/
 def ThreadedReadsInfoFmt : Prop :=
   ∀ (r : Declaration) (θv : r.D.Transcript) (T : Threading r) (c : ℕ) (S b_w b_a : ℝ) (d e n : ℕ) (μ : ℝ),
@@ -25,10 +25,10 @@ def ThreadedReadsInfoFmt : Prop :=
     ∀ R, SmallInfo r θv c S R → b_a * (T.mults R).card ≤ novelInfo r θv R * T.bound S b_w d e
 
 /-- **Theorem 1 through a containment, each thread charged by its work**: a declaration `d` contains the reference
-circuit `c` through `M`, with `c`'s baseline values `θc` the ones `θv` gives their images, and `c` is as in
-`ThreadedReadsInfoFmt` at cap `K`. Every set `W` of `d`'s computed gates, at most `Γ` of them, whose novel reads carry
-at most `K` bits of information, holds at most `Λ` of `c`'s counted multiplications per `b_a` bits of information `W`'s
-novel reads carry. -/
+circuit `r` through `M`, with `r`'s registered values `θc` the ones `θv` gives their images, and `r` is as in
+`ThreadedReadsInfoFmt` at cap `K`. Every set `W` of `d`'s computed gates, at most `c` of them, whose fresh input reads
+carry at most `K` bits of information, holds at most `Λ` of `r`'s counted multiplications per `b_a` bits of information
+`W`'s fresh input reads carry. -/
 def ThreadedContainedInfoFmt : Prop :=
   ∀ (r d : Declaration) (M : Containment r.D d.D) (θc : r.D.Transcript) (θv : d.D.Transcript) (T : Threading r)
     (c : ℕ) (K b_w b_a : ℝ) (dd e n : ℕ) (μ : ℝ),
@@ -39,9 +39,9 @@ def ThreadedContainedInfoFmt : Prop :=
     ∀ W, W ⊆ d.D.computed → d.D.size W ≤ c → novelInfo d θv W ≤ K →
       b_a * (T.mults (univ.filter fun g => M.emb g ∈ W)).card ≤ novelInfo d θv W * T.bound K b_w dd e
 
-/-- **The count a memory cap needs, each thread charged by its work**: with `d`, `c` and `M` as in
-`ThreadedContainedInfoFmt`, a set `W` of `d`'s computed gates, at most `Γ` of them, whose novel reads are a state that
-is a function of `k` bits and an ingress `Sin`, holds at most `K · Λ(K) / b_a` of `c`'s counted multiplications, at
+/-- **The count a memory cap needs, each thread charged by its work**: with `d`, `r` and `M` as in
+`ThreadedContainedInfoFmt`, a set `W` of `d`'s computed gates, at most `c` of them, whose fresh input reads are a state
+that is a function of `k` bits and an ingress `Sin`, holds at most `K · Λ(K) / b_a` of `r`'s counted multiplications, at
 `K = k + width(Sin)`. -/
 def ThreadedOfStateFmt : Prop :=
   ∀ (r d : Declaration) (M : Containment r.D d.D) (θc : r.D.Transcript) (θv : d.D.Transcript) (T : Threading r)

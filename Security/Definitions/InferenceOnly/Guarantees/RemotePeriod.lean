@@ -37,7 +37,7 @@ coins, over window `t`'s own (`∀ ξ, P_a[E_t(ξ[t ↦ a])] ≤ p`).
   `Properties.SampledProofs` proves what it does (`FleetHaltIsFinal`, `NoAcceptAfterHalt`), but not this form: it halts
   an operator at its `budget`-th failure, not its first (`budget ≥ 1`); it ends the operator's registrations, not its
   hardware's use; and nothing states the verdict's time `Δ` after the detected block.
-* **NCI** (in place of `Complies` and `ThreadedThrottled`'s premises): each declared run `i` meets
+* **The inference-only policy** (in place of `Complies` and `ThreadedThrottled`'s premises): each declared run `i` meets
   `NciCheck.Properties.Throttled`'s conclusion, `b_a |M_i| ≤ (k / c) Λ_i size(d_i)`, which
   `NciCheck.Properties.DescThrottles` gives for every declaration a verdict of compliance of the check of record lays
   out (`NciCheck.Baseline.evaluate`, whose verdict is `Desc.evaluate`'s), at `c = gamma` and the rate
@@ -65,8 +65,8 @@ with its own uniform coins `Ω t`, independent of the others' (a window is a rou
 window, or a finer cut of it where its PoUW and sampled-proofs coins are drawn at different times). Every bound on a
 window holds at any value `ξ` of the other windows' coins, over its own (`ξ[t ↦ a]`, `a` uniform on `Ω t`).
 
-* PoUW certifies window `t` at capacity `cap_t ≥ 0`, `∑ cap_t ≤ C`, its certificate wrong (`wrong t`) with probability at
-  most `p ≥ 0`: `CircuitCredit`'s conclusion at window `t`'s play.
+* PoUW certifies window `t` at capacity `cap_t ≥ 0`, `∑ cap_t ≤ C`, its certificate wrong (`wrong t`) with probability
+  at most `p ≥ 0`: `CircuitCredit`'s conclusion at window `t`'s play.
 * Sampled proofs: the developer's faulty proof blocks `bad ξ` (block `b` in window `win b`, skipping `0 ≤ w_b ≤ B` of
   declared work) are fixed before their window's coins; the units the window draws (`drawn`) and the faulty blocks it
   detects (`detected`, those of a window flock-verify rejects) read only its coins and the earlier windows'. The draw
@@ -77,9 +77,9 @@ window holds at any value `ξ` of the other windows' coins, over its own (`ξ[t 
   its window's time, and each identity's windows run in their order. Detection is terminal at a lag `Δ ≥ 0`
   (`TerminalDetection`), and one identity's faulty blocks within any span of `Δ` skip at most `Φ Δ`, `Φ H ≤ C` over the
   period's length `H > 0`, as in `VerdictLag`.
-* NCI: each declared run `i` (declaration `d_i`, containing a reference circuit `r_i` threaded by `Th_i`) meets
-  `Throttled`'s conclusion, `b_a |M_i| ≤ (k / c) Λ_i size(d_i)` at `Λ_i = Th_i.bound k b_w dd e ≤ Λ`, at the read
-  cap `k ≥ 0` and the rate `k / c`: what
+* The inference-only policy: each declared run `i` (declaration `d_i`, containing a reference circuit `r_i` threaded by
+  `Th_i`) meets `Throttled`'s conclusion, `b_a |M_i| ≤ (k / c) Λ_i size(d_i)` at `Λ_i = Th_i.bound k b_w dd e ≤ Λ`, at
+  the read cap `k ≥ 0` and the rate `k / c`: what
   `DescThrottles` gives for a declaration the check of record accepts. The runs fit on the monitored compute,
   `∑ size(d_i) ≤ C`.
 * The counted multiplications `M` are as in `DampenerRemote`, with the declared runs' `∑ |M_i|`: unmonitored compute at
@@ -123,7 +123,7 @@ def DampenerRemotePeriod : Prop :=
     (∀ ξ, Assumptions.TerminalDetection (bad ξ) (detected ξ) (fun b => idW (win b)) (fun b => τw (win b)) Δ) →
     (∀ ξ j s, ∑ b ∈ bad ξ with idW (win b) = j ∧ s ≤ τw (win b) ∧ τw (win b) ≤ s + Δ, w b ≤ Φ * Δ) →
     (∀ b, 0 ≤ w b) → 0 ≤ B → (∀ ξ, ∀ b ∈ bad ξ, w b ≤ B) →
-    -- NCI: each declared run as a verdict of compliance of the check of record carries it
+    -- The inference-only policy: each declared run as a verdict of compliance of the check of record carries it
     0 < κ → 0 < C → 0 ≤ U → 0 < mfu → mfu ≤ 1 → 0 ≤ k → 0 < b_a → 0 ≤ Λ →
     (∀ i, b_a * (Th i).M.card ≤ (k / c : ℝ) * (Th i).bound k b_w dd e * (d i).D.size (d i).D.computed) →
     (∀ i, (Th i).bound k b_w dd e ≤ Λ) → ∑ i, ((d i).D.size (d i).D.computed : ℝ) ≤ C →
@@ -181,7 +181,7 @@ def DampenerRemotePeriod_honest : Prop :=
     (∀ ξ, Assumptions.TerminalDetection (bad ξ) (detected ξ) (fun b => idW (win b)) (fun b => τw (win b)) Δ) ∧
     (∀ ξ j s, ∑ b ∈ bad ξ with idW (win b) = j ∧ s ≤ τw (win b) ∧ τw (win b) ≤ s + Δ, w b ≤ Φ * Δ) ∧
     (∀ b, 0 ≤ w b) ∧ 0 ≤ B ∧ (∀ ξ, ∀ b ∈ bad ξ, w b ≤ B) ∧
-    -- NCI: each declared run as a verdict of compliance of the check of record carries it
+    -- The inference-only policy: each declared run as a verdict of compliance of the check of record carries it
     0 < κ ∧ 0 < C ∧ 0 ≤ U ∧ 0 < mfu ∧ mfu ≤ 1 ∧ 0 ≤ k ∧ 0 < b_a ∧ 0 ≤ Λ ∧
     (∀ i, b_a * (Th i).M.card ≤ (k / c : ℝ) * (Th i).bound k b_w dd e * (d i).D.size (d i).D.computed) ∧
     (∀ i, (Th i).bound k b_w dd e ≤ Λ) ∧ ∑ i, ((d i).D.size (d i).D.computed : ℝ) ≤ C ∧
@@ -274,7 +274,7 @@ def DampenerRemotePeriod_nontrivial : Prop :=
   (∀ ξ j s, ∑ b ∈ AcceptAll.bad ξ with AcceptAll.idW (AcceptAll.win b) = j ∧ s ≤ AcceptAll.τw (AcceptAll.win b) ∧
     AcceptAll.τw (AcceptAll.win b) ≤ s + 0, AcceptAll.w b ≤ 0 * 0) ∧
   (∀ b, 0 ≤ AcceptAll.w b) ∧ (0 : ℝ) ≤ 0 ∧ (∀ ξ, ∀ b ∈ AcceptAll.bad ξ, AcceptAll.w b ≤ 0) ∧
-  -- NCI
+  -- The inference-only policy
   (0 : ℝ) < 2 ∧ (0 : ℝ) < 1 ∧ (0 : ℝ) ≤ 0 ∧ (0 : ℝ) < 1 ∧ (1 : ℝ) ≤ 1 ∧ (0 : ℝ) ≤ 1 ∧ (0 : ℝ) < 100 ∧ (0 : ℝ) ≤ 1 ∧
   (∀ i, 100 * (AcceptAll.Th i).M.card ≤
     1 / ((1 : ℕ) : ℝ) * (AcceptAll.Th i).bound 1 0 0 0 * (AcceptAll.d i).D.size (AcceptAll.d i).D.computed) ∧
