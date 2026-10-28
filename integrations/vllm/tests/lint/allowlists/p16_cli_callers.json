@@ -4,7 +4,6 @@
     "advice": "benchmarks/network_e2e/e2e.py",
     "advice-windows": "benchmarks/one_stage/a5_tp.sh",
     "build": "benchmarks/stacked_share/job.sh",
-    "epoch": "demos/vllm/commit.sh",
     "int8-checkpoint": "benchmarks/hash/dither/pin_glm53.sh",
     "row": "tools/research/src/research/pods/nebius/n2_commit.sh",
     "serve-openai": "demos/vllm/serve.sh",
@@ -13,7 +12,8 @@
     "serving-rows": "benchmarks/one_stage/a5.sh",
     "tp-serving-rows": "benchmarks/one_stage/a5_tp.sh",
     "weights-tie": "benchmarks/prove_path/run.sh",
-    "workload": "benchmarks/stacked_share/job.sh"
+    "workload": "benchmarks/stacked_share/job.sh",
+    "research-outputs": "demos/vllm/commit.sh"
   },
   "entries": [
     {"file": "verity_vllm/acquire/served.py", "kind": "uncalled-command", "symbol": "<module>", "detail": "served"},
@@ -30,7 +30,6 @@
     {"file": "verity_vllm/pipeline/pouw_serve.py", "kind": "uncalled-command", "symbol": "<module>", "detail": "pouw-serve"},
     {"file": "verity_vllm/pipeline/prefix_cache.py", "kind": "uncalled-command", "symbol": "<module>", "detail": "prefix-cache"},
     {"file": "verity_vllm/pipeline/program_graph.py", "kind": "uncalled-command", "symbol": "<module>", "detail": "program-graph"},
-    {"file": "verity_vllm/pipeline/research_outputs.py", "kind": "uncalled-command", "symbol": "<module>", "detail": "research-outputs"},
     {"file": "verity_vllm/pipeline/serving_view.py", "kind": "uncalled-command", "symbol": "<module>", "detail": "serving-view"},
     {"file": "verity_vllm/pipeline/topp_split_probe.py", "kind": "uncalled-command", "symbol": "<module>", "detail": "topp-split-probe"},
     {"file": "verity_vllm/pipeline/tp/rejudge.py", "kind": "uncalled-command", "symbol": "<module>", "detail": "rejudge"},

@@ -73,8 +73,6 @@ records() {  # the row's records into $OUT (never the bundle, the store or the c
     commit.log match.log build.log replay.log manifest.log; do cp "$D/$f" "$OUT/" 2>/dev/null; done
   mkdir -p "$OUT/commit"
   find "$D/commit" -maxdepth 1 -type f -size -50M -exec cp {} "$OUT/commit/" \; 2>/dev/null
-  [ -d "$D/commit/replay_bundle_p0" ] && mkdir -p "$OUT/commit/replay_bundle_p0" \
-    && cp "$D/commit/replay_bundle_p0/MANIFEST.json" "$D/commit/replay_bundle_p0/context.json" "$OUT/commit/replay_bundle_p0/" 2>/dev/null
   du -sh "$D" "$D"/* "$WD" 2>/dev/null > "$OUT/sizes.txt"
 }
 window_off() {  # the Commit's window out of the run dir (custody uploads it), its public files and error into $OUT
