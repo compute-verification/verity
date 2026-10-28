@@ -3,7 +3,7 @@
 # `Flock.Annot`), which the Python mirror's tests call through `verity_difftest.annot`. Code, not analysis: Lean core and
 # C-Flock's verifier.
 name = "verity_difftest"
-defaultTargets = ["Difftest", "difftest-example", "annot-difftest"]
+defaultTargets = ["Difftest", "AnnotDifftest", "difftest-example", "annot-difftest"]
 
 [leanOptions]
 autoImplicit = false
@@ -16,10 +16,13 @@ path = "../../service/flock"
 [[lean_lib]]
 name = "Difftest"
 
+[[lean_lib]]
+name = "AnnotDifftest"
+
 [[lean_exe]]
 name = "difftest-example"
 root = "DifftestExample"
 
 [[lean_exe]]
 name = "annot-difftest"
-root = "AnnotDifftest"
+root = "AnnotDifftestMain"

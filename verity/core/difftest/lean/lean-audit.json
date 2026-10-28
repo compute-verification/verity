@@ -1,5 +1,8 @@
 {
  "roots": ["Difftest", "DifftestExample", "AnnotDifftest"],
+ "exempt": {
+  "AnnotDifftestMain": "the annot-difftest executable's entry point, one line: Difftest.serve AnnotDifftest.table, audited under AnnotDifftest; a root of its own would put a second `main` beside DifftestExample's"
+ },
  "layers": {
   "AnnotDifftest": {
    "imports": ["Lean", "Difftest", "Flock.Annot", "Flock.AnnotExpand"],
