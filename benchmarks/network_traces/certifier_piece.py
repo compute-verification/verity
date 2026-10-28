@@ -35,10 +35,13 @@ the active warden in front of serve-openai there (its ``CERTIFIER_FRONT``).
   5. The period check: `scan_period.rows_case` of the warden run and the chain's scan, checked by ``network-period``
      (``--lean``, else built in verity/core/protocols/network/lean); its answer is the piece's.
   DIR also gets the chain's public report, job and leak-guard files and the check's three input files in DIR/period,
-  the case's only copy (its params alone run to tens of megabytes on a served window); the record's leak guard
-  (`leak_guard.py`) then reads DIR against the warden run's witness. Only the protocol rejects: a step that can't run
+  the case's only copy (its params alone run to tens of megabytes on a served window). All of them and the answer are
+  written to a fresh hold under SERVE_DIR/`PRIVATE`/held (0700) and reach DIR only through the record's leak guard
+  (`leak_guard.py`), which reads DIR and the hold against the warden run's witness, moves what holds a piece of it to
+  SERVE_DIR/`PRIVATE`/quarantine and only then releases the rest. Only the protocol rejects: a step that can't run
   (no kept run, a build, a tool or the chain failing without a report, an input missing, the leak guard failing, or
-  SIGTERM from the piece's time limit) is `NotRun`, and the piece then refuses: DIR keeps only its log and gets
+  SIGTERM from the piece's time limit) is `NotRun`, and the piece then refuses, releasing nothing from the hold: DIR
+  keeps only its log and gets
   DIR/`REFUSED` naming why, with no answer, which `served_verdicts.py` reads as the certifier missing. ``--draw K`` is the scan's K drawn units (every
   unit by default); a CR_K=V goes to the chain; ``--chain-cmd`` replaces the chain (a test's, which writes the report
   and the scan's answers under RESEARCH_RUN_DIR/out).
@@ -328,13 +331,13 @@ def decide(serve_dir: Path, window: int, d: Path, *, chain: Callable[[Path, str,
         raise
 
 
-def guard(d: Path, unpacked: Path | None, quarantine: Path) -> int:
-    """The record's leak guard on DIR against the warden run's witness (0 when nothing of it was found)."""
-    if unpacked is None:
-        return 0
+def guard(d: Path, hold: Path, unpacked: Path | None, quarantine: Path) -> int:
+    """The record's leak guard on DIR and the hold against the warden run's witness, which releases the hold to DIR once
+    it passes (0 when nothing of the witness was found, 3 when a find was moved to the quarantine)."""
     quarantine.mkdir(mode=0o700, parents=True, exist_ok=True)
-    got = subprocess.run([sys.executable, str(HERE / "leak_guard.py"), str(d), str(quarantine), "--gates",
-                          str(unpacked), "--report", str(quarantine / "piece-guard.json")],
+    got = subprocess.run([sys.executable, str(HERE / "leak_guard.py"), str(d), str(quarantine),
+                          *(["--gates", str(unpacked)] if unpacked is not None else []), "--hold", str(hold),
+                          "--release-to", str(d), "--report", str(quarantine / "piece-guard.json")],
                          capture_output=True, text=True)
     print(f"leak guard (exit {got.returncode}): {got.stdout.strip()[-400:]}", flush=True)
     return got.returncode
@@ -366,19 +369,21 @@ def piece(a: argparse.Namespace) -> int:
         if not kv.startswith("CR_") or "=" not in kv:
             print(f"refused: {kv!r}: CR_K=V, a chain_record.sh variable", file=sys.stderr)
             return 2
-    was, unpacked = signal.signal(signal.SIGTERM, ended), None
+    was, unpacked, hold = signal.signal(signal.SIGTERM, ended), None, None
     try:
         if not any((serve_dir / PRIVATE).glob("*/fetch.tar.gz")):
             raise NotRun(f"no warden run kept under {serve_dir / PRIVATE}: the run's load didn't go through the "
                          "certifier's front (CERTIFIER_FRONT unset, or the gate, its tunnel or ssh failed)")
+        (serve_dir / PRIVATE / "held").mkdir(mode=0o700, exist_ok=True)
+        hold = Path(tempfile.mkdtemp(dir=serve_dir / PRIVATE / "held", prefix=f"window-{a.window}-"))
         exe = period_exe(a.lean)
         chain = lambda keep, run, ep, n: run_chain(keep, run, ep, a.eos_ids, a.draw, sized(n, a.set),  # noqa: E731
                                                    a.chain_cmd)
-        got, unpacked = decide(serve_dir, a.window, d, chain=chain, check=lambda c, p: period_check(exe, c, p))
-        (d / "answer.json").write_text(json.dumps(got, indent=1, sort_keys=True) + "\n")
-        g = guard(d, unpacked, serve_dir / PRIVATE / "quarantine")
+        got, unpacked = decide(serve_dir, a.window, hold, chain=chain, check=lambda c, p: period_check(exe, c, p))
+        (hold / "answer.json").write_text(json.dumps(got, indent=1, sort_keys=True) + "\n")
+        g = guard(d, hold, unpacked, serve_dir / PRIVATE / "quarantine")
         if g not in (0, 3) or not (d / "answer.json").is_file():
-            raise NotRun(f"the leak guard failed (exit {g}): DIR withheld")
+            raise NotRun(f"the leak guard failed (exit {g}): DIR withheld, the piece's files left in {hold}")
     except NotRun as e:
         return refuse(d, str(e))
     except (OSError, ValueError, tarfile.TarError) as e:
@@ -387,6 +392,8 @@ def piece(a: argparse.Namespace) -> int:
     finally:
         if unpacked is not None:
             rm(unpacked)
+        if hold is not None and hold.is_dir() and not any(p.is_file() for p in hold.rglob("*")):
+            rm(hold)
         signal.signal(signal.SIGTERM, was)
     print(f"CERTIFIER {json.dumps({k: got.get(k) for k in ('verdict', 'reason', 'public')}, sort_keys=True)}",
           flush=True)
