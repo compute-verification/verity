@@ -84,12 +84,12 @@ theorem mulVec_single' {N : ℕ} (M : Matrix (Fin N) (Fin N) (ZMod 2)) {r : Fin 
 /-- **A witness of an accepted statement with pinned outputs satisfies its statement without Δ's pinned copies**
 (`Hidden.unpin`), when every pinned bit is a linear row: at `unpin`'s layout `L` and its flat twin's unit facts `F`. -/
 theorem sat_pinned {tags : Tags} {st : Stmt} (L : FlockSoundness.Layout (Hidden.unpin st))
-    (F : Aliased.UnitFacts tags (Hidden.flatTwin st)) (hleaf : st.leaf = default)
+    (F : Aliased.UnitFacts tags (Hidden.flatTwin st)) (hW : Integrate.NetWidths st.c) (hleaf : st.leaf = default)
     (hda : st.da = (HmOut.delta st.c st.pin).1) (hdb : st.db = (HmOut.delta st.c st.pin).2) (hwf : StmtWF st)
     (hlin : ∀ x ∈ Hidden.pinnedCols st.c, LinearBit st.c x)
     (regs : List (Model.Region st.c.kLog (st.m - st.c.kLog))) {z : Model.Witness st.m}
     (hz : (stmtOf st hwf regs).Satisfies z) : (stmtOf (Hidden.unpin st) (Hidden.unpin_wf hwf) regs).Satisfies z := by
-  have P : ParseFacts tags st.c := F.parse
+  have hK : Integrate.NetKinds st.c := F.parse.kinds
   have C : CheckFacts st.c := F.check
   have hcnt : ∀ r : ℕ, ((Hidden.pinnedCols st.c).count r : ZMod 2) = 1 → r ∈ Hidden.pinnedCols st.c := by
     intro r hr
@@ -109,7 +109,7 @@ theorem sat_pinned {tags : Tags} {st : Stmt} (L : FlockSoundness.Layout (Hidden.
       refine ⟨(Hidden.matA_unpin hda r.val j.val).trans ?_, (Hidden.matB_unpin hdb r.val j.val).trans ?_⟩ <;>
         simp [Hidden.pinCnt, hnp] <;> rfl
     exact (Pinned.sat_unpin hPR hz (fun _ _ h => absurd h zero_ne_one) (fun _ _ h => absurd h zero_ne_one)).1
-  have huse := (built_spec (L.built_flat P.tmpl)).2.1
+  have huse : st.c.unit.useful = st.c.unit.constPos + 1 := F.useful
   have hZ : Hm.zeroCol st.c < 2 ^ st.c.kLog := L.unit_slot_lt hs₀ C.unit_zero
   have hA0 : ∀ j, (stmtOf (Hidden.unpin st) (Hidden.unpin_wf hwf) regs).A₀ ⟨Hm.zeroCol st.c, hZ⟩ j = 0 := by
     intro j
@@ -123,7 +123,7 @@ theorem sat_pinned {tags : Tags} {st : Stmt} (L : FlockSoundness.Layout (Hidden.
       rw [ite_eq_right (by have h : st.c.unit.b.rows ≤ st.c.unit.useful := F.rowsB; omega)]
       rfl
     show matA (Hidden.unpin st) (Hm.zeroCol st.c) j.val = 0
-    exact (Integrate.placedA_eq (st := Hidden.unpin st) P L hleaf ⟨Hm.zeroCol st.c, hZ⟩ j).symm.trans
+    exact (Integrate.placedA_eqW (st := Hidden.unpin st) hW hK L hleaf ⟨Hm.zeroCol st.c, hZ⟩ j).symm.trans
       (L.placed_zero hs₀ C.unit_zero huse hA hB _ j rfl).1
   have hPR := Hidden.pinRows_unpin hda hdb hwf regs ⟨Hm.zeroCol st.c, hZ⟩ rfl
   refine (Hidden.sat_unpin hda hdb hwf (zero := ⟨Hm.zeroCol st.c, hZ⟩) rfl hz
@@ -135,22 +135,22 @@ theorem sat_pinned {tags : Tags} {st : Stmt} (L : FlockSoundness.Layout (Hidden.
   have hkv : k.val = pos st.c g (code n i (netOf st.c n).constPos) := rfl
   have hBr : ∀ j, (stmtOf (Hidden.unpin st) (Hidden.unpin_wf hwf) regs).B₀ r j =
       if j.val = pos st.c g (code n i (netOf st.c n).constPos) then 1 else 0 := fun j =>
-    (Integrate.placedB_eq (st := Hidden.unpin st) P L hleaf r j).symm.trans
+    (Integrate.placedB_eqW (st := Hidden.unpin st) hW hK L hleaf r j).symm.trans
       (placedB_linear L C hg hn hi hlo hhi hBe r j hx)
   refine (mulVec_single' _ hBr hk _).trans ?_
   have hrow := rowAt_const_eq hn hsha hhm hi (L.fit n).1
-  have hconst := placed_const L [] P C hg hrow k
+  have hconst := placed_const L [] F.nets C hg hrow k
   have hnk : (Hidden.pinnedCols st.c).count k.val = 0 :=
     List.count_eq_zero.2 fun hm => linear_ne_const L C (hlin _ hm) hn hg hi hkv
   have hpc : ∀ j, Hidden.pinCnt st.c k.val j = 0 := fun j => by rw [Hidden.pinCnt, hnk, Nat.zero_mul]
   have hAk : ∀ j, (stmtOf st hwf regs).A₀ k j = if j = (stmtOf st hwf regs).pin then 1 else 0 := fun j =>
     (Hidden.matA_unpin hda k.val j.val).trans (by
       rw [hpc, Nat.cast_zero, add_zero]
-      exact (Integrate.placedA_eq (st := Hidden.unpin st) P L hleaf k j).symm.trans (hconst j hkv).1)
+      exact (Integrate.placedA_eqW (st := Hidden.unpin st) hW hK L hleaf k j).symm.trans (hconst j hkv).1)
   have hBk : ∀ j, (stmtOf st hwf regs).B₀ k j = if j = (stmtOf st hwf regs).pin then 1 else 0 := fun j =>
     (Hidden.matB_unpin hdb k.val j.val).trans (by
       rw [hpc, Nat.cast_zero, add_zero]
-      exact (Integrate.placedB_eq (st := Hidden.unpin st) P L hleaf k j).symm.trans (hconst j hkv).2)
+      exact (Integrate.placedB_eqW (st := Hidden.unpin st) hW hK L hleaf k j).symm.trans (hconst j hkv).2)
   exact (hz.1 o k).symm.trans ((congrArg₂ (· * ·) (Pinned.mulVec_single _ hAk _) (Pinned.mulVec_single _ hBk _)).trans
     ((congrArg₂ (· * ·) (hz.2.1 o) (hz.2.1 o)).trans (one_mul 1)))
 

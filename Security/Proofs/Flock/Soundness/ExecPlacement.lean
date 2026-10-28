@@ -378,8 +378,8 @@ theorem upos_flat {c : Circuit} (h : c.tmpl = none) (x : ℕ) : upos c x = x := 
 
 /-- **The unit is its logical net placed at `upos`**: `upos` keeps the input rows, puts the logical constant at the
 committed one and every other logical column at or below it, each computed row past the input rows and before the
-constant, and the committed row at a logical computed row's position reads, in `A` and in `B`, the logical row's
-columns through `upos`. A flat unit is its own logical net at `upos = id` (`UnitAt.flat`). -/
+constant, and the committed row at a logical row's position below the constant (an input row or a computed one)
+reads, in `A` and in `B`, the logical row's columns through `upos`. A flat unit is its own logical net at `upos = id` (`UnitAt.flat`). -/
 structure UnitAt (c : Circuit) : Prop where
   in_eq : (lunit c).inWords = c.unit.inWords
   groups : (lunit c).inGroups = c.unit.inGroups
@@ -391,9 +391,9 @@ structure UnitAt (c : Circuit) : Prop where
   inputs : ∀ x < c.unit.inWords * WORD, upos c x = x
   comp : ∀ x, c.unit.inWords * WORD ≤ x → x < (lunit c).constPos →
     c.unit.inWords * WORD ≤ upos c x ∧ upos c x < c.unit.constPos
-  row_a : ∀ x, c.unit.inWords * WORD ≤ x → x < (lunit c).constPos → ∀ j,
+  row_a : ∀ x, x < (lunit c).constPos → c.unit.unitLog ≤ 32 → ∀ j,
     sparseEntry c.unit.a (upos c x) j = (((((lunit c).a.row x).toList.map (upos c)).count j : ℕ) : ZMod 2)
-  row_b : ∀ x, c.unit.inWords * WORD ≤ x → x < (lunit c).constPos → ∀ j,
+  row_b : ∀ x, x < (lunit c).constPos → c.unit.unitLog ≤ 32 → ∀ j,
     sparseEntry c.unit.b (upos c x) j = (((((lunit c).b.row x).toList.map (upos c)).count j : ℕ) : ZMod 2)
 
 /-- **A flat built unit is its own logical net, at `upos = id`.** -/
@@ -793,7 +793,7 @@ theorem placement (regs : List (Model.Region st.c.kLog (st.m - st.c.kLog))) {g :
     rw [L.rangesEntry_unit hs (lt_trans (hcomp' i).2 L.unit_const_lt),
       L.delta_unit_comp hs (hcomp' i).1 (hcomp' i).2, add_zero,
       count_map_shiftAt hW _ _ L.upos_lt _ (hshift u hu) j, hmap, L.unitRows_a (L.lunitLog_le hs) i]
-    exact if_congr Iff.rfl (hA.row_a _ (hcomp i).1 (hcomp i).2 _) rfl
+    exact if_congr Iff.rfl (hA.row_a _ (hcomp i).2 (L.unitLog_le hs) _) rfl
   · intro u hu i j
     have hs := L.slot_lt hg hu
     show rangesEntry st (slotEntryB st) (st.c.unitRange.slot (g * st.c.upv + u) +
@@ -808,7 +808,7 @@ theorem placement (regs : List (Model.Region st.c.kLog (st.m - st.c.kLog))) {g :
     rw [hlk]
     show sparseEntry st.c.unit.b _ _ + 0 = _
     rw [add_zero]
-    exact hA.row_b _ (hcomp i).1 (hcomp i).2 _
+    exact hA.row_b _ (hcomp i).2 (L.unitLog_le hs) _
   · intro u hu j
     have hs := L.slot_lt hg hu
     show rangesEntry st (slotEntryA st) (st.c.unitRange.slot (g * st.c.upv + u) +

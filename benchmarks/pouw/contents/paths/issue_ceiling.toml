@@ -1,4 +1,0 @@
-order = 95
-path = "`issue_ceiling/`"
-runs_on = "RTX PRO 6000"
-what = "ISSUE's opcode probes (note:20261016T0150Z-draft-issue-ceiling and its rounds 2 and 3): the mixed-stream issue ceiling of IMMA/OMMA beside single-pipe ops, warp-specialized and unrolled schedules, the uniform datapath's slots (`issue_uniform.cu`), 64-bit word ops and their IMMA displacement (`issue_wide.cu`), CE7 against cuBLASLt int8, and BS-CSA's {±1} GEMM (`bs_csa.cu`, its chunk reducer from `bs_csa_gen.py`); `run.sh` builds and times them, each `.py` combines a run's JSONL with the SASS"

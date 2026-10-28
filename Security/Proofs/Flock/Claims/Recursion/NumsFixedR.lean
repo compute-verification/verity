@@ -19,7 +19,7 @@ table (`RecSetup.oneFull`) under `verity/flock-circuit`'s hidden outputs (`stage
 statement (`setupTables_okH'`).
 
 The numbers read a table's `m`, `mPts`, `k_log` and region count and the spec's `points` and `mPts`. `setupHidden_key`
-reads those off the circuit (`HmOut.parse`, the same file) and the statement's `n`: without a draw, the loaded file's
+reads those off the circuit (`HmOut.parseCommit`, the same file) and the statement's `n`: without a draw, the loaded file's
 instance count, which `RecVStar.checkCircuit` holds to the instances of V*'s statement `s` at the verifier's own inner
 shape (`staged_pop`); with one, the draw's proved units (`Layout.drawn_spec`), the same draw.
 -/
@@ -125,12 +125,12 @@ theorem inLoad_row {tags : Tags} {c : Circuit} {pi : HmIn.Ports} {f : ByteArray}
     exact ⟨_, by assumption⟩
 
 set_option maxHeartbeats 4000000 in
-/-- **What `Stmt.setupHidden` set up**, at any `--public-inputs`: its circuit is `HmOut.parse`'s, its public file the
+/-- **What `Stmt.setupHidden` set up**, at any `--public-inputs`: its circuit is `HmOut.parseCommit`'s, its public file the
 loaded one or its draw, and its `n`, `m`, `mPts` and region count are the circuit's and the public file's. -/
 theorem setupHidden_key {tags : Tags} {cf pf : ByteArray} {coins : Coins} {tables : List (String × ByteArray)}
     {draw partition : Option Json} {program q : Option ByteArray} {st : Flock.Stmt}
     (h : Stmt.setupHidden tags cf pf coins tables draw partition program q = .ok st) :
-    HmOut.parse tags cf tables = .ok st.c ∧ ∃ pi pop, HmIn.parse st.c = .ok pi ∧
+    HmOut.parseCommit tags cf tables = .ok st.c ∧ ∃ pi pop, HmIn.parse st.c = .ok pi ∧
       HmIn.loadPublic tags st.c pi pf = .ok pop ∧ (draw = none → st.pub = pop) ∧
       (∀ d, draw = some d → HmIn.drawn st.c pi pop d = .ok st.pub) ∧
       st.regions.size = st.c.ports.size + (if pi.ports.isEmpty then 0 else (HmIn.inRegions st.c pi).size) ∧

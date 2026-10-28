@@ -11,13 +11,16 @@ the acceptance peels to the one table's two `verifyRep` successes (`setupTables_
 (`zk_verifyRep_ok`), and `zk_rep_run_plays` and `zk_table_verdict`, which read the table only through those seams, make
 each run a `RepRun` for `decAtZ` and the table's verdict accept at the two results.
 
-`runsZC_liveHI` is the proof, from `TablesAtZKHLiveI`, on every circuit `HmOut.parse` accepts; `runsZC_liveH` reads it
-where the unit returns the outputs.
+`runsZC_liveHU` is the proof, from the session alone (`tablesAtZKH_liveU`). `runsZC_liveHI` and `runsZC_liveH` read it
+on every circuit `HmOut.parse` accepts (where the unit returns the outputs, for `runsZC_liveH`), and `runsZC_liveHISt` and
+`runsZC_liveHSt` on every statement circuit (`HmOut.parseStmt`, a templated file's template unrolled).
 -/
 
 namespace FlockSoundness.Discharge.ZkHidden
 
 open Flock Refine Exec Game Model DecodeZL ZkSession ZkExec HiddenExec
+
+local notation "𝕂" => FlockLevel3.GF256
 
 section Table
 
@@ -34,11 +37,18 @@ theorem table_layH (y : DrawSetupZKH I mPts S d) : ZkTabLay y.table (Setup.ofCir
 
 end Table
 
-theorem runsZC_liveHI : RunsZCLiveHI := by
-  intro n mPts Reg I ht c hc dj S₀ y₀ wr L hTab hT hRec hDraw ω R o hacc
+/-- **`RunsZC` at the live hidden-output `--zk` tables, from the session alone** (`tablesAtZKH_liveU`). -/
+theorem runsZC_liveHU {n mPts : ℕ} {Reg : Type} (I : Inputs) (ht : I.tags.typed = false)
+    (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)} (y₀ : DrawSetupZKH I mPts S₀ (dj S₀))
+    (wr : Finset (Fin n) → Reg → LiveOut mPts → Exec.Transcript) (L : Audit.Law n)
+    (hT : HiddenDec.TagsOkH I) (hRec : ZkLink.RecordsLiveZK I dj wr) (hDraw : ∀ ω, DrawOkZKH I dj mPts (L.draw ω)) :
+    RunsOnZC (K := 𝕂) execArith hs512 (tablesAtZKH (Reg := Reg) dj y₀) I wr
+      (opnAtZH (tablesAtZKH dj y₀) I dj) (decAtZ (tablesAtZKH dj y₀)) (fun _ _ _ _ => [])
+      (fun _ _ b _ => capOfRoot b) L := by
+  intro ω R o hacc
   obtain ⟨hh, hrr, hl, hc1⟩ := hT
   obtain ⟨st, sch, tPad, -, -, hst, hz, y, rfl, rfl, rfl, hTy, hextR⟩ :=
-    hTab I ht hc dj y₀ wr hh hc1 hRec (L.draw ω) R o (hDraw ω) hacc
+    tablesAtZKH_liveU (Reg := Reg) I ht dj y₀ wr hh hc1 hRec (L.draw ω) R o (hDraw ω) hacc
   obtain ⟨hd, hprf, hrec⟩ := hRec _ R o hacc
   obtain ⟨spec, sts, hs, -, hv⟩ := hacc
   have hh' : (zkTags I).hiddenOutputs = true := (zkTags_hiddenOutputs I).trans hh
@@ -157,8 +167,20 @@ theorem runsZC_liveHI : RunsZCLiveHI := by
     rw [hopn, ← hroot]
     exact hacc'
 
+theorem runsZC_liveHI : RunsZCLiveHI := by
+  intro n mPts Reg I ht c _ dj S₀ y₀ wr L _ hT hRec hDraw
+  exact runsZC_liveHU I ht dj y₀ wr L hT hRec hDraw
+
 theorem runsZC_liveH : RunsZCLiveH := by
-  intro n mPts Reg I ht c hc _ dj S₀ y₀ wr L _ hT hRec hDraw
-  exact runsZC_liveHI I ht hc dj y₀ wr L tablesAtZKH_liveI hT hRec hDraw
+  intro n mPts Reg I ht c _ _ dj S₀ y₀ wr L _ hT hRec hDraw
+  exact runsZC_liveHU I ht dj y₀ wr L hT hRec hDraw
+
+theorem runsZC_liveHISt : RunsZCLiveHISt := by
+  intro n mPts Reg I ht c _ dj S₀ y₀ wr L _ hT hRec hDraw
+  exact runsZC_liveHU I ht dj y₀ wr L hT hRec hDraw
+
+theorem runsZC_liveHSt : RunsZCLiveHSt := by
+  intro n mPts Reg I ht c _ _ dj S₀ y₀ wr L _ hT hRec hDraw
+  exact runsZC_liveHU I ht dj y₀ wr L hT hRec hDraw
 
 end FlockSoundness.Discharge.ZkHidden

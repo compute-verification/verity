@@ -1,5 +1,5 @@
 /-
-PROTOCOL.md §16.10: `verity/flock-circuit` from PR #83 `eb90718f`. Serving rows are `hm96-sha512/row/v1` leaves proved in
+PROTOCOL.md §16.10: `verity/flock-circuit` from the circuit prover's `eb90718f`. Serving rows are `hm96-sha512/row/v1` leaves proved in
 the circuit: per VU, each input port's row is hashed by SHA-512 compressions in `sha512x3` slots (three per slot, chained from
 the prefix's midstate) and closed by an `hm96` slot (the padding compression, then `b ‖ c` from the row's private salt). Both
 slot circuits are sections of the circuit file, which must be the nets the verifier generates (`Flock.HmNets`). Every identity and binding digest is SHA-512: the circuit pin, the public
@@ -309,7 +309,7 @@ theorem lookup_index_test (n size : Nat) : (n != Nat.log2 size || 2 ^ n != size)
   · subst h; simp [Nat.log2_two_pow]
   · simp [h]
 
-/-- #273's `check_typed`: the instance's root one slot per VU, its ports the rows' words and the output words (16 bits each,
+/-- The typed statement's `check_typed`: the instance's root one slot per VU, its ports the rows' words and the output words (16 bits each,
 one output group); each placed layout's circuit one slot of its range per part; a forced-zero row in the root's slot; the
 pinned dummy values and leaf scheme. -/
 def checkTyped (c : Circuit) (t : TypedBlock) (tags : Tags) (leafScheme : Json) : V Unit := do
@@ -383,7 +383,7 @@ def check (c : Circuit) (tags : Tags) (leafScheme : Json) : V Unit := do
   let ur := c.ranges.filter (·.kind == Kind.net c.unitNet)
   if ur.size != 1 || ur[0]!.count != c.g * c.upv || (c.outNet == c.unitNet && !isPow2 ur[0]!.count) then
     throw "not one unit range of vus_per_block x units_per_vu (a power of two) units"
-  -- a tail that returns the outputs (PR #83 from 15260468): its last stage's only output group is the output words; a
+  -- a tail that returns the outputs (the circuit prover from 15260468): its last stage's only output group is the output words; a
   -- repeated last stage's (`out_net_ports` of `[slot, port]` pairs), under hidden outputs only, one port of a slot each
   let tailOut := c.outNet != c.unitNet
   let g0in := unit.inGroups.getD 0 default
@@ -469,7 +469,7 @@ def check (c : Circuit) (tags : Tags) (leafScheme : Json) : V Unit := do
 def slotOf (ps : Array (Nat × Nat)) (i : Nat) : Nat :=
   ((ps.toList.take i).filter (·.1 == (ps.getD i default).1)).length
 
-/-- A template's block with its parts placed (#273's `TypedBlock`), by position: `parse` puts the root's circuit first and
+/-- A template's block with its parts placed (the typed statement's `TypedBlock`), by position: `parse` puts the root's circuit first and
 then the placed layouts' in order, so placed layout `k`'s circuit is `1 + k`. Part `i` is its layout's circuit, its slot
 (`slotOf`, in item order) and its base. -/
 def blockOf (t : Typed.Template) : TypedBlock :=
@@ -523,7 +523,7 @@ theorem slotOf_lt_of_lt {ps : Array (Nat × Nat)} {i j : Nat} (hij : i < j) (hj 
   simp only [List.filter_append, List.filter_cons, he, beq_self_eq_true, ↓reduceIte, List.length_append, List.length_cons]
   omega
 
-/-- A typed template's META keys that its block derives instead (#273): stating one is refused. -/
+/-- A typed template's META keys that its block derives instead: stating one is refused. -/
 def TEMPLATE_DERIVED : List String :=
   ["unit_log", "units_per_vu", "leaves_in", "leaves_out", "wires", "leaf_cuts", "out_net", "out_net_ports", "lookups"]
 
@@ -948,7 +948,7 @@ theorem parse_eq_fast : @parse = @parseFast := by
 /-- A typed statement (item 1e), its rows derived once through `deriveChecked` (`Typed.read`), every net built from them.
 A flat class is the typed file parsed with its unit's net first (`parse`'s `pre`), where the old statement's `CIRCUIT
 unit` section was. A template is parsed with its block (`parse`'s `tmpl`): the root and placed layouts' circuits, the
-derived wiring, and Δ in #273's order. The circuit carries its class (`Circuit.cls`). -/
+derived wiring, and Δ in the typed statement's order. The circuit carries its class (`Circuit.cls`). -/
 def parseTyped (tags : Tags) (bytes : ByteArray) (tables : List (String × ByteArray) := []) : V Circuit := do
   let (k, r) ← Typed.read tags bytes tables
   let c ← match r with
@@ -1067,7 +1067,7 @@ def delta (c : Circuit) (pin : Nat) : Array (Nat × Nat) × Array (Nat × Nat) :
       let dst := c.slotCol w.dst.1 g w.dst.2.1 + dc.1
       let src := c.slotCol w.src.1 g w.src.2.1 + sc.1
       for t in [0:dc.2] do d := d.push (dst + t, dst + t) |>.push (dst + t, src + t)
-  -- a typed template (#273), per VU: each input of the instance a copy of its message bit (input w: bit w % 16 of row word
+  -- a typed template, per VU: each input of the instance a copy of its message bit (input w: bit w % 16 of row word
   -- w / 16); each part's bound input rows their forms over the unit's columns, in A and B; the root's rows' entries at
   -- its parts' columns, A's in A and B's in B
   let some tb := c.typed | return (d, d)
@@ -1112,7 +1112,7 @@ def EVALUABLE : List (String × Nat) := [("Q_word", 1), ("Q_word", 2)]
 /-- `Q_call` v1, which the verifier evaluates itself (`Flock.Qcall`). -/
 def Q_CALL : String × Nat := ("Q_call", 1)
 
-/-- A `verity/partition/v1` object's form (#111's canonical form, open query names): exactly `format`, `program`, `query`; a
+/-- A `verity/partition/v1` object's form (`verity.ir.cut`'s canonical form, open query names): exactly `format`, `program`, `query`; a
 SHA-512 program; a query of exactly `name` (a non-empty string), `version` (a natural number) and `params` (an object). For a
 query the verifier evaluates, its parameters too (`Q_word` v1 and v2: exactly `X`, `W`, positive integers; `Q_call` v1: exactly
 `X`, an integer in 1..2^16). The query's name and version. -/
@@ -1306,7 +1306,7 @@ def checkPartition (c : Circuit) (obj : Option Json) : V PartitionFinding := do
 def publicDigest (header : Json) (pubs : ByteArray) : V ByteArray := do
   return Sha512.hash ((← canon header).toUTF8 ++ pubs)
 
-/-- Header `shared_rows` (from PR #83 `967b8d06`): exactly the circuit's input ports, each a table of at least one row (a count
+/-- Header `shared_rows` (from the circuit prover's `967b8d06`): exactly the circuit's input ports, each a table of at least one row (a count
 that is not a non-negative integer counts as none, as upstream reads it); none for a per-instance file. -/
 def sharedRows (tags : Tags) (c : Circuit) (header : Json) : V (Option (Array Nat)) := do
   let .ok s := header.getObjVal? "shared_rows" | return none
@@ -1669,7 +1669,7 @@ def pinnedNames (v : Json) : Option (Array String) :=
   | .arr a => a.mapM fun x => x.getStr?.toOption
   | _ => none
 
-/-- META `pinned_outputs` (CMP-149's form B), as the prover's `Composite::parse` reads it: the names of the last output
+/-- META `pinned_outputs`, as the prover's `Composite::parse` reads it: the names of the last output
 ports, each once, at least one, in a flat statement of bit rows (META `row_schemas`, which makes every row a bit row; at least one row) whose padding instance's pinned
 output words are zero; and each pinned bit's row a linear row (`linearRow`, its B the constant alone) of a slot of a net
 past the rows' circuits, so that Δ's copy of the forced-zero row onto it (`delta`) pins the bit and its linear form to
@@ -1717,8 +1717,10 @@ def checkRows (c : Circuit) : V Unit := do
 
 /-- Parse the circuit file as `HmRow.parse` (a typed one as `HmRow.parseTyped`) reads it, its rows every row, and check
 them (`checkRows`). `HmRow.checkTyped` holds a template's instance inputs to every row, so it reads the template with the
-output rows' words after its inputs, and the circuit keeps the template's own block. -/
-def parse (tags : Tags) (bytes : ByteArray) (tables : List (String × ByteArray) := []) : V Circuit := do
+output rows' words after its inputs, and the circuit keeps the template's own block. A templated statement's tags
+(`Tags.isTmpl`) are refused: its circuit is read from its template (`parseTmpl`, `parseCommit`, `parseStmt`). -/
+def parse (tags : Tags) (bytes : ByteArray) (tables : List (String × ByteArray) := []) : V Circuit :=
+  if tags.isTmpl then throw s!"{tags.name}: a templated statement's circuit is read from its template" else do
   let c ← if !tags.typed then HmRow.parse tags bytes tables else do
     let (k, r) ← Typed.read tags bytes tables
     match r with
@@ -1730,7 +1732,8 @@ def parse (tags : Tags) (bytes : ByteArray) (tables : List (String × ByteArray)
   return c
 
 /-- `parse` through `HmRow.parseFast` (`parse_eq_fast`): the firewall's setup (`Firewall.Hello.Setup.setup`). -/
-def parseFast (tags : Tags) (bytes : ByteArray) (tables : List (String × ByteArray) := []) : V Circuit := do
+def parseFast (tags : Tags) (bytes : ByteArray) (tables : List (String × ByteArray) := []) : V Circuit :=
+  if tags.isTmpl then throw s!"{tags.name}: a templated statement's circuit is read from its template" else do
   let c ← if !tags.typed then HmRow.parseFast tags bytes tables else do
     let (k, r) ← Typed.read tags bytes tables
     match r with
@@ -1747,6 +1750,14 @@ theorem parse_eq_fast : @parse = @parseFast := by
   simp -zeta only [HmRow.parse_eq_fast]
   try rfl
 
+/-- `parse` refuses a templated statement's tags. -/
+theorem parse_isTmpl {tags : Tags} {bytes : ByteArray} {tables : List (String × ByteArray)} {c : Circuit}
+    (h : parse tags bytes tables = .ok c) : tags.isTmpl = false := by
+  unfold parse at h
+  cases hi : tags.isTmpl
+  · rfl
+  · rw [if_pos hi] at h; cases h
+
 /-- META, read off the file's second line alone, between its first two newlines, as `HmRow.parse` reads that line: neither
 the rest of the file's UTF-8 nor its lines are read. -/
 def metaOf (bytes : ByteArray) : V Json := do
@@ -1759,12 +1770,20 @@ def metaOf (bytes : ByteArray) : V Json := do
   | .ok j => pure j
   | .error e => throw s!"META: {e}"
 
-/-- A templated file (PRF-133, `Tags.templated`): META's `template`, a `flock-ir-tmpl/v2` template's lines, and `layout`,
+/-- **A recursion unit's name** (`RecOpen.params`, `RecOpen.stackedParams`, `RecResiduals.params`, `RecSparse.params`,
+`RecOpening.params`): `parseTmpl` refuses a template whose unit carries one, since the recursion's claims read such a
+unit as a flat net. -/
+def recUnit (name : String) : Bool :=
+  (RecOpen.params name).isSome || (RecOpen.stackedParams name).isSome || (RecResiduals.params name).isSome ||
+    (RecSparse.params name).isSome || (RecOpening.params name).isSome
+
+/-- A templated file (`Tags.templated`): META's `template`, a `flock-ir-tmpl/v2` template's lines, and `layout`,
 its mode (`Tmpl.modeOf`). The unit is read from them (`TmplUnit.read`: well-formed, laid out, passing `Tmpl.unrollOk`; its
 net `Tmpl.unitNet`, whose rows are built only when read), parsed as the file's `unit` circuit where a flat file's
 `CIRCUIT unit` section is (`HmRow.parse`'s `pre`), and carried on the circuit (`Circuit.tmpl`). META is read off its own
 line first (`metaOf`), so the file's lines are split once, by `HmRow.parse`. A file that carries a unit's or a root's rows
-itself is refused: none of the nets `HmRow.parse` read after `pre` is named `unit` or `root`. -/
+itself is refused: none of the nets `HmRow.parse` read after `pre` is named `unit` or `root`. So is a template whose unit
+is a recursion unit (`recUnit`). -/
 def parseTmpl (tags : Tags) (bytes : ByteArray) (tables : List (String × ByteArray) := []) : V Circuit := do
   let mj ← metaOf bytes
   let ctx := "templated statement META"
@@ -1775,8 +1794,37 @@ def parseTmpl (tags : Tags) (bytes : ByteArray) (tables : List (String × ByteAr
   let c ← HmRow.parse tags bytes tables (pre := #[("unit", tu.net)])
   if (c.nets.extract 1 c.nets.size).any (fun x => x.1 == "unit" || x.1 == "root") then
     throw "circuit: a templated statement carries no unit rows; the verifier reads them from its template"
+  if recUnit tu.net.name then
+    throw s!"circuit: a templated statement's unit {tu.net.name} is a recursion unit, which is read flat"
   checkRows c
   return { c with tmpl := some tu }
+
+/-- **A templated file's statement circuit** (ASK-112, option A): the flat circuit its template unrolls to, its unit net
+`Tmpl.unroll`'s in place of the committed one (`Tmpl.unitNet`), carrying no template. A circuit without one is its own. -/
+def unrolled (c : Circuit) : Circuit :=
+  match c.tmpl with
+  | some tu => match Tmpl.unroll tu.t with
+    | .ok n => { c with nets := c.nets.set! c.unitNet ("unit", n), tmpl := none }
+    | .error _ => c
+  | none => c
+
+/-- **The circuit a hidden-output session commits**: a templated statement's (`Tags.isTmpl`) as `parseTmpl` reads it,
+carrying its template, any other's `parse`'s. -/
+def parseCommit (tags : Tags) (bytes : ByteArray) (tables : List (String × ByteArray) := []) : V Circuit :=
+  if tags.isTmpl then parseTmpl tags bytes tables else parse tags bytes tables
+
+/-- `parseCommit` through `parseFast` (`parseCommit_eq_fast`). -/
+def parseCommitFast (tags : Tags) (bytes : ByteArray) (tables : List (String × ByteArray) := []) : V Circuit :=
+  if tags.isTmpl then parseTmpl tags bytes tables else parseFast tags bytes tables
+
+theorem parseCommit_eq_fast : @parseCommit = @parseCommitFast := by
+  funext tags bytes tables
+  simp only [parseCommit, parseCommitFast, parse_eq_fast]
+
+/-- **The statement circuit of a hidden-output file**: a templated statement's (`Tags.isTmpl`) is the flat circuit its
+template unrolls to (`unrolled`), any other's `parse`'s. -/
+def parseStmt (tags : Tags) (bytes : ByteArray) (tables : List (String × ByteArray) := []) : V Circuit :=
+  if tags.isTmpl then return unrolled (← parseTmpl tags bytes tables) else parse tags bytes tables
 
 /-- Row `p` of the padding instance (u16 LE): zero, or an output row's pinned dummy outputs, zero-padded. -/
 def dummyRow (c : Circuit) (p : Nat) : ByteArray := Id.run do
@@ -2285,11 +2333,12 @@ def check (c : Circuit) (pop : Public) (program : ByteArray) : V Nat := do
 end HmLinks
 
 /-- `Stmt.setupH` for a statement with hidden outputs (`Tags.hiddenOutputs`): every check `setupH` makes, on `HmOut`'s rows,
-public file, Δ and regions, and on its public input ports (`HmIn`) against the verifier's own `publicInputs`. -/
+public file, Δ and regions, and on its public input ports (`HmIn`) against the verifier's own `publicInputs`. Its circuit is
+the one the session commits (`HmOut.parseCommit`): a templated statement's carries its template. -/
 def Stmt.setupHidden (tags : Tags) (circuitFile publicFile : ByteArray) (coins : Coins) (tables : List (String × ByteArray) := [])
     (draw : Option Json := none) (partition : Option Json := none) (program : Option ByteArray := none)
     (publicInputs : Option ByteArray := none) : V Stmt := do
-  let c ← HmOut.parse tags circuitFile tables
+  let c ← HmOut.parseCommit tags circuitFile tables
   let pi ← HmIn.parse c
   let finding0 ← if tags.bindings then (some <$> HmRow.checkPartition c partition)
     else if partition.isSome then throw s!"{tags.name}: the statement binds no partition" else pure none
@@ -2441,7 +2490,7 @@ def Stmt.setupTables (tags : Tags) (circuitFile publicFile : ByteArray) (coins :
   return ({ tables := names, domain := tags.tableDomain count, sigma, hello, mPts, retainRounds := tags.retainRounds,
             unitDraw := draw, instances := units.size, sha512Digests := tags.hm96Rows, coinTree := coins.tree? }, sts)
 
-/-- `Stmt.setupHidden` on its circuit as `HmOut.parse` returns it (`parsed`), which the caller parses once
+/-- `Stmt.setupHidden` on its circuit as `HmOut.parseCommit` returns it (`parsed`), which the caller parses once
 (`Stmt.setupHidden_eq`). -/
 def Stmt.setupHiddenOf (parsed : V Circuit) (tags : Tags) (publicFile : ByteArray) (coins : Coins)
     (draw : Option Json := none) (partition : Option Json := none) (program : Option ByteArray := none)
@@ -2506,7 +2555,7 @@ def Stmt.setupHiddenOf (parsed : V Circuit) (tags : Tags) (publicFile : ByteArra
   return { tags, leaf := default, c, pub, n, blocksReal, nbl, m, mPts := PT_LOCAL + nbl, pin, regions, da, db, digest, sigma,
            hello, coinTree := coins.tree?, merkle, partition := (finding.map (·.toJson)).getD Json.null }
 
-/-- `Stmt.setupTables` on its circuit as `HmOut.parse` returns it under `tags` (`parsed`), which the caller parses once: a
+/-- `Stmt.setupTables` on its circuit as `HmOut.parseCommit` returns it under `tags` (`parsed`), which the caller parses once: a
 one-table session sets up on it, several tables each parse their own (`Stmt.setupTables_eq`). -/
 def Stmt.setupTablesOf (parsed : V Circuit) (tags : Tags) (circuitFile publicFile : ByteArray) (coins : Coins) (count : Nat)
     (tables : List (String × ByteArray) := []) (draw : Option Json := none) (partition : Option Json := none)
@@ -2603,7 +2652,8 @@ set_option maxRecDepth 20000 in
 theorem Stmt.setupHidden_eq (tags : Tags) (circuitFile publicFile : ByteArray) (coins : Coins)
     (tables : List (String × ByteArray)) (draw partition : Option Json) (program publicInputs : Option ByteArray) :
     Stmt.setupHidden tags circuitFile publicFile coins tables draw partition program publicInputs
-      = Stmt.setupHiddenOf (HmOut.parse tags circuitFile tables) tags publicFile coins draw partition program publicInputs :=
+      = Stmt.setupHiddenOf (HmOut.parseCommit tags circuitFile tables) tags publicFile coins draw partition program
+          publicInputs :=
   rfl
 
 set_option maxRecDepth 20000 in
@@ -2612,8 +2662,8 @@ theorem Stmt.setupTables_eq (tags : Tags) (circuitFile publicFile : ByteArray) (
     (work : Option (Nat × Array (String × Nat × Nat))) (stratified : Option Nat)
     (closure : Option (Std.HashMap Nat (Array Nat))) (publicInputs : Option ByteArray) :
     Stmt.setupTables tags circuitFile publicFile coins count tables draw partition program work stratified closure publicInputs
-      = Stmt.setupTablesOf (HmOut.parse tags circuitFile tables) tags circuitFile publicFile coins count tables draw partition
-          program work stratified closure publicInputs :=
+      = Stmt.setupTablesOf (HmOut.parseCommit tags circuitFile tables) tags circuitFile publicFile coins count tables draw
+          partition program work stratified closure publicInputs :=
   rfl
 
 end Flock

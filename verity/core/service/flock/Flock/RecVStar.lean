@@ -499,10 +499,12 @@ def vstarRows (sub : VStar.Sub) (u : VStar.UnitC) : List (String × Nat × Nat) 
 
 /-- **The circuit parsed from V*'s file carries V*'s META** (`VStar.metaHead`): one unit per VU, no leaf cuts, the
 unit's input leaves its input words in order, V*'s row ports (`vstarRows`), each a `sha512/row/v1` row as V*'s META writes
-them (`row_schema`, no `row_schemas`), and the unit's output leaves its output words in order (`UnitC.leaves`' `out`).
-`checkFile` holds the bytes to V*'s;
+them (`row_schema`, no `row_schemas`), and the unit's output leaves its output words in order (`UnitC.leaves`' `out`),
+with no template (V*'s circuits are flat). `checkFile` holds the bytes to V*'s;
 this holds what the verifier parsed from them, which no proof reads through `Lean.Json.parse`, to what V* wrote. -/
 def checkParsed (s : VStar.Stmt) (c : Circuit) : V Unit := do
+  if c.tmpl.isSome then
+    throw s!"{s.name}: the parsed circuit is templated, and V*'s circuits are flat"
   let u ← match s.unit with
     | .ok u => pure u
     | .error e => throw s!"{s.name}: V*'s unit: {e}"

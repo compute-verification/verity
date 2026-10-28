@@ -1,5 +1,5 @@
 /-
-The sampled run's Hello (`note:proofs/20261017T1030Z-draft-sampled-committed-coins`): at the run's round 0 the challenger
+The sampled run's Hello: at the run's round 0 the challenger
 answers the prover's Hello with one keyed coin tree, `coin-tree/hm96-sha512/v2`, over every coin of the run: the selection
 draw's stream (or streams) first, then each session slot's streams in session order. The verifier of record checks the
 run's record with C-Flock's own checks (`Flock.CoinTree`) at run scope: R7 with the prover's nonce, the record's

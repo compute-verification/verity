@@ -8,7 +8,7 @@
 #           (pouw_h1_gpu.py --workload fill --served --commit --negatives --receipts --j10r; DECLARE its --declare,
 #           RECEIPTS=cubin noise.cu's torch chain in the units kernel's place, NOISE=v1 the window over v1's unit)
 #
-#   research run --on vy-nebius-2 --pool research --mem-gb 96 --cwd source --source . --as LANE --env JOB=window \
+#   research run --on MACHINE --pool research --mem-gb 96 --cwd source --source . --as LANE --env JOB=window \
 #     -- bash benchmarks/pouw/served_h1/j10r_gpu.sh
 set -euo pipefail
 PY=${PY:-/workspace/jobs/venv312/bin/python}
