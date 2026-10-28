@@ -935,7 +935,6 @@
     {"file": "integrations/vllm/tests/test_no_by_name_rules.py", "count": 1},
     {"file": "integrations/vllm/tests/test_target_family.py", "count": 4},
     {"file": "integrations/vllm/tests/tools/test_ratchet_gate.py", "count": 7},
-    {"file": "integrations/vllm/tools/migrate/superseded_quarantine.py", "count": 1},
     {"file": "integrations/vllm/tools/ratchet_gate.py", "count": 6},
     {"file": "integrations/vllm/verity_vllm/acquire/compiled.py", "count": 7},
     {"file": "integrations/vllm/verity_vllm/acquire/fa2_tap_src/fa2_stubs.cu", "count": 1},

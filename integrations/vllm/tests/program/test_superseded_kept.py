@@ -1,12 +1,9 @@
-"""The superseded Definition versions that stay registered so old records replay (`tools/migrate/superseded_quarantine.py`'s
-`KEPT`, each with what keeps it): each at a small binding keeps its id, its definition entry's digest and its Program's digest.
-A changed digest means the version now computes or encodes something else, and the records that name it no longer replay."""
+"""The superseded Definition versions that stay registered so old records replay: each at a small binding keeps its id, its
+definition entry's digest and its Program's digest. A changed digest means the version now computes or encodes something
+else, and the records that name it no longer replay."""
 from __future__ import annotations
 
 import hashlib
-import importlib.util
-import sys
-from pathlib import Path
 
 import pytest
 
@@ -74,12 +71,3 @@ def test_a_kept_superseded_version_keeps_its_identity(version):
     assert fn.id == fid
     assert hashlib.sha512(canonical_json(definition_entry(fn))).hexdigest() == entry
     assert (program_digest(Program(fn)) if prog is not None else None) == prog
-
-
-def test_the_pinned_versions_are_the_migration_script_s_kept_list():
-    script = Path(__file__).resolve().parents[2] / "tools" / "migrate" / "superseded_quarantine.py"
-    spec = importlib.util.spec_from_file_location("superseded_quarantine_kept", script)
-    mod = importlib.util.module_from_spec(spec)
-    sys.modules[spec.name] = mod
-    spec.loader.exec_module(mod)
-    assert set(mod.KEPT) == set(KEPT) and not set(mod.DELETE) & set(KEPT)
