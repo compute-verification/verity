@@ -21001,6 +21001,13 @@
     "Verity.SecurityProofs.ServingBlockSum"
    ]
   },
+  "Definitions.Core.Period": {
+   "digest": "64ff92563a3e8bfb37d23cbd140ed5a0a7d98c8c18106516bc40a6682e8038c2",
+   "definitions": {
+    "Verity.Play": "3bbdee84d52f15499326d35b28f028c2bf9a07508ae21cb25902bb6d448ca5f4"
+   },
+   "guarantees": ["Accounting.SecurityProofs.RateSessionDraw", "Accounting.SecurityProofs.RateSessionSampledNamedRO"]
+  },
   "Definitions.Core.Prims": {
    "digest": "4312e4a3d0083549f51fbce5cb2aaec7b9ad11629465723400d743378a31d747",
    "definitions": {
