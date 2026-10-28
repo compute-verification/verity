@@ -24,6 +24,9 @@ def test_knobs_reach_the_design():
     d = A.to_design({**GOOD, "ptile": (2, 4), "kmax": 28, "reps": 1, "device": "sm120", "period": 10})
     assert d["pouw"]["tile"] == (2, 4) and d["prover"]["k_max"] == 28 and d["prover"]["reps"] == 1
     assert d["prover"]["device"] == "sm120" and d["sampling"]["period"] == 10 and d["partition"]["attn_keys"] == 64
+    d = A.to_design({**GOOD, "census": "b4", "udraw": "call", "mmax": 37, "retain": "host", "noise": "segment"}, "t512")
+    assert d["partition"]["census"] == "b4" and d["pouw"]["u_draw"] == "call" and d["prover"]["m_max"] == 37
+    assert d["sampling"]["retain"] == "host" and d["pouw"]["noise"] == "segment"
 
 
 def test_a_block_past_the_cap_or_the_prover_memory_is_infeasible():
@@ -42,6 +45,8 @@ def test_the_period_divides_proving_and_not_serving():
 def test_a_floor_under_one_minus_eps_is_infeasible():
     assert "floor" in A.evaluate({**GOOD, "t": 8, "lp": 128})["reasons"]          # 1/8 + 3/8 < 0.99
     assert "floor" in A.evaluate({**GOOD, "t": 8, "lp": 512})["reasons"]          # L 4,096 >= K 2,048: O alone
+    assert "floor" in A.evaluate({**GOOD, "t": 3})["reasons"]                      # per-tile pi: 0.97 (GD-NOISE)
+    assert "floor" not in A.evaluate({**GOOD, "t": 3, "noise": "segment"})["reasons"]
 
 
 def test_scenario_inputs_move_j_and_ranges_hold_the_value():

@@ -145,10 +145,55 @@ def test_inputs_override_is_scoped():
         model.inputs(no_such_input=1)
 
 
-def test_unnoised_pouw_earns_no_credit():
+def test_credit_needs_one_minus_eps_of_g_forced():
+    """Un-noised calls earn 0; a noised one earns only at a forced share of at least 1 - eps (GD-SMELL MODEL-2)."""
     assert not model.J(model.design(pouw={"scheme": "j10r"}))["pouw"]["credit"]["earns_credit"]
     assert model.pouw_credit(model.design(pouw={"L": 8192}))["credited_share_of_linear_macs"] == 0
-    assert model.J(model.design())["pouw"]["credit"]["earns_credit"]
+    assert not model.pouw_credit(model.design())["earns_credit"]                     # t 8: 1/8 + 3/8 of G
+    assert model.pouw_credit(model.design(pouw={"L": 256, "L_prime": 128}))["earns_credit"]
+
+
+def test_per_tile_pi_loses_the_floor_at_t3_and_per_segment_pi_keeps_it():
+    """GD-NOISE finding 1: pi re-drawn each tile has a 2:4 route to 0.97 G at t 3; re-drawn each segment closes it."""
+    t3 = {"L": 384, "L_prime": 128}
+    assert model.pouw_forced_frac(model.design(pouw={**t3, "noise": "permuted"})) == pytest.approx(0.125 + 2.54 / 3)
+    assert model.pouw_forced_frac(model.design(pouw={**t3, "noise": "segment"})) == 1.0
+    assert model.pouw_forced_frac(model.design(pouw={"L": 256, "L_prime": 128, "noise": "permuted"})) == 1.0
+
+
+def test_jr2_u_drawn_every_call_pays_its_prg_at_small_m():
+    """GD-NOISE: JR2 per period 1.32 G; per call adds U's PRG, 3,492 / m G (55 G at the demo's 64 tokens)."""
+    def noise(u, point):
+        return model.J(model.design(point, pouw={"scheme": "jr2", "u_draw": u, "tile": (1, 1)}))["pouw"]["jr2_noise_g"]
+    assert noise("period", "demo") == noise("period", "throughput") == 1.32
+    assert noise("call", "demo") == pytest.approx(1.33 + 3492 / 64)
+    assert noise("call", "throughput") < 2
+
+
+def test_host_retention_holds_more_and_pays_the_copy():
+    """VERITY_RETAIN=host: host_retain_GB bounds the window, and each step's bytes cross PCIe at d2h_GBs beside it."""
+    dev, host = (model.J(model.design(sampling={"retain": w})) for w in ("device", "host"))
+    part = "retain: D2H to the host, beyond the step and the DMA's HBM share"
+    copy = host["commit"]["d2h_ms_a_step"]
+    assert copy == pytest.approx(host["retained_GB_per_window"] / model.I("d2h_GBs") * 1e3)
+    assert host["serve_overhead_ms"][part] >= max(0.0, copy - dev["t_remote_ms"]) and part not in dev["serve_overhead_ms"]
+    big = {"retain_GB": None}
+    many = model.design(point={"steps_per_window": 4}, sampling=big)
+    assert any("on the device" in m for m in model.J(many)["infeasible"])
+    assert not any("retains" in m for m in model.J(model.design(point={"steps_per_window": 2},
+                                                                sampling={**big, "retain": "host"}))["infeasible"])
+
+
+def test_the_census_adds_the_served_templates():
+    """GD-PLANNER's 4,32,4 census: 60 templates beside the 4 linear tiles (26 with attention padded into one)."""
+    base = model.J(model.design("demo"))["proving"]["values"]
+    b4, bk = (model.J(model.design("demo", partition={"census": c}, prover={"k_pad": 1}))["proving"]["values"]
+              for c in ("b4", "b4-buckets"))
+    assert (len(base["classes"]), len(b4["classes"]), len(bk["classes"])) == (6, 64, 30)
+    assert b4["statements"] > bk["statements"] > base["statements"] and b4["gpu_s"] > bk["gpu_s"]
+    assert not b4["infeasible"] and b4["draws"] == pytest.approx(base["draws"], rel=0.01)
+    with pytest.raises(ValueError):
+        model.J(model.design("throughput", partition={"census": "b4"}))
 
 
 def test_sessions_pad_draws_to_a_power_of_two_or_split():

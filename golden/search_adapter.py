@@ -7,16 +7,19 @@ input is certain; an estimate carries the range its source allows. `evaluate(kno
 knobs (benchmarks/golden_search/space.py) onto a `golden.model` design at the point (t8192: the throughput preset;
 t512: the demo's window, a prefill of 64 real tokens in T 512 and 3 decode steps), evaluates J under those input
 values, and returns GD-SEARCH's result keys. A knob GD-SEARCH leaves out keeps the model's default; the extra knobs
-`scheme`, `form`, `open`, `steps`, `ptile` (PoUW's tile, (R, C)), `kmax` (the block cap's k_log, 27 to 30), `reps`
-(1 | 2), `device` ("h200" | "sm120"), `period` (windows certified together) and `akeys` (keys an attention block)
-reach pouw.scheme, pouw.form, commit.open, point.steps_per_window, pouw.tile, prover.k_max, prover.reps,
-prover.device, sampling.period and partition.attn_keys. `kernels: bar` is the row kernel GD-HASH measured (0.92 of
-the bar), not the bar.
+`scheme`, `form`, `open`, `steps`, `ptile` (PoUW's tile, (R, C)), `kmax` (the block cap's k_log, 27 to 30), `mmax`
+(C-Flock's m cap, 35 to 40), `reps` (1 | 2), `device` ("h200" | "sm120"), `period` (windows certified together),
+`retain` ("device" | "host"), `akeys` (keys an attention block), `census` (None | "b4" | "b4-buckets", the t512
+point only) and `udraw` (JR2's U, "period" | "call") reach pouw.scheme, pouw.form, commit.open,
+point.steps_per_window, pouw.tile, prover.k_max, prover.m_max, prover.reps, prover.device, sampling.period,
+sampling.retain, partition.attn_keys, partition.census and pouw.u_draw. `noise: segment` is pi re-drawn each
+segment. `kernels: bar` is the row kernel GD-HASH measured (0.92 of the bar), not the bar.
 
 A design is feasible when every credited linear's floor (Dither's forced work as a share of its G, at the best attack
 found) is at least 1 - eps ("floor"), every proof block is within the block cap, 2^27 unless kmax raises it
 ("k_log"), its prover memory fits the H200 ("prover_mem"), its largest block lowers within lowering.ram_gib and 15
-minutes ("lowering"), and the window's retained bytes fit the retain_GB input ("retain").
+minutes ("lowering"), the window's retained bytes fit the device's or the host's bound ("retain"), and an aggregate
+word covers at least 8 cells ("agg").
 """
 from __future__ import annotations
 
@@ -40,8 +43,11 @@ RANGES = {
     "launch_us": (2.0, 8.0),
     "guess_p16": (1e-5, 1e-4),
     "h1_rest_floor_ms_8k": (10.0, 30.0),
-    "b1_rate_vs_s8": (4.0, 16.0),
     "noise_fused_keep": (0.05, 0.30),
+    "permuted_limbs": (2.0, 3.0),                        # every limb dense on 2:4 to none
+    "jr2_noise_g": (1.0, 1.81),                          # the noised product alone to GD-NOISE's per-call row
+    "jr2_wprg_g_m": (873.0, 3492.0),                     # one PRG byte an entry (GD-NOISE finding 5) to four
+    "host_retain_GB": (100.0, 1600.0),                   # half an eighth of a node to the whole node's host memory
     "o_per_and": (0.5e-8, 2.2e-8),
     "staged_per_and": (0.5e-10, 2e-10),
     "stmt_fixed": (1.5, 6.0),
@@ -78,7 +84,7 @@ POINTS = {"t8192": "throughput", "t512": "demo"}
 LOWER_MIN = 15.0
 
 _FUSE = {"all": "every_op", "dedupe": "dedup", "fuse": "fused_mlp", "e1": "e1", "e2": "e2"}
-_NOISE = {"perm": "permuted", "periodic": "periodic", "fresh": "fresh"}
+_NOISE = {"perm": "permuted", "periodic": "periodic", "fresh": "fresh", "segment": "segment"}
 _LAW = {"work": "achievability", "uniform": "uniform", "stratified": "stratified"}
 _OVERLAP = {"none": False, "corun": True, "corun4": "corun4"}
 
@@ -117,11 +123,16 @@ def to_design(k: dict, point: str = "t8192") -> dict:
         s["pouw"]["tile"] = tuple(k["ptile"])
     if "akeys" in k:
         s["partition"]["attn_keys"] = k["akeys"]
-    for knob, key in (("kmax", "k_max"), ("reps", "reps"), ("device", "device")):
+    if "census" in k:
+        s["partition"]["census"] = k["census"]
+    if "udraw" in k:
+        s["pouw"]["u_draw"] = k["udraw"]
+    for knob, key in (("kmax", "k_max"), ("mmax", "m_max"), ("reps", "reps"), ("device", "device")):
         if knob in k:
             s["prover"][key] = k[knob]
-    if "period" in k:
-        s["sampling"]["period"] = k["period"]
+    for knob, key in (("period", "period"), ("retain", "retain")):
+        if knob in k:
+            s["sampling"][key] = k[knob]
     if "sampling" in k:
         s["sampling"]["law"] = _LAW[k["sampling"]]
     if "stmt" in k:
@@ -170,6 +181,8 @@ def evaluate(knobs: dict, v: dict | None = None, point: str = "t8192") -> dict:
         reasons.append("lowering")
     if any(m.startswith("a window retains") for m in r["infeasible"]):
         reasons.append("retain")
+    if any(m.startswith("pouw.agg") for m in r["infeasible"]):
+        reasons.append("agg")
     return {
         "J": r["J"], "serve": r["serve_term"], "prove_ratio": r["prove_term"],
         "prove_gpu_s": pr["total_gpu_s"], "verify_cpu_s": r["verification"]["cpu_s"],

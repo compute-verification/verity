@@ -20,13 +20,16 @@ The design dict (`design(**overrides)` builds one; `SCHEMA` lists every key, its
               bytes_per_token,
               bits_per_word, row_bytes, hash_eff, corun, seal ("tree" | "none" | "roots"), host ("today" | "fixed"),
               gather, padded
-    pouw      scheme ("off" | "j10r" | "jr2" | "dither"), K, L, L_prime, noise ("periodic" | "fresh" | "permuted"),
+    pouw      scheme ("off" | "j10r" | "jr2" | "dither"), K, L, L_prime,
+              noise ("periodic" | "fresh" | "permuted" | "segment"), u_draw ("period" | "call"),
               record_bytes_per_cell, trees, h1_host ("pre" | "main" | "main+6192" | "stack" | "floor"), kdhash,
               hash_at_bar, coin_off_loop, noise_fused, denoise_g_frac, value_row_bytes, tile (R, C),
-              form ("tile" | "lanes")
-    sampling  delta, eps, pouw_sampled, law ("achievability" | "uniform" | "stratified"), retain_GB, period
+              form ("tile" | "lanes"), credit, word_bits, agg, joint
+    sampling  delta, eps, pouw_sampled, law ("achievability" | "uniform" | "stratified"), retain ("device" | "host"),
+              retain_GB, period
     partition units: [{name, per_token, work, extra_ands, open_rows, out_bits, blocks?}] or None for the preset of
-              `commit.values`; a unit drawn as a group of proof blocks lists them, blocks: [{name, count, ands}]
+              `commit.values`; a unit drawn as a group of proof blocks lists them, blocks: [{name, count, ands}];
+              tile, kchunk, attn_keys, census (None | "b4" | "b4-buckets")
     prover    device ("h200" | "sm120"), reps (1 | 2), o_per_and, staged_per_and, stmt_fixed, stmt_per_and, speed,
               m_max, k_max, k_pad, shared, stmt ("template" | "universal")
     lowering  gates_per_and, s_per_gate, bytes_per_gate, per ("template" | "instance"), ram_gib
@@ -41,6 +44,7 @@ import copy
 import json
 import math
 import sys
+from pathlib import Path
 
 # ---------------------------------------------------------------------------------------------------------------------
 # Inputs. (value, status, source). M = measured (run id), E = estimate, D = derived.
@@ -138,8 +142,18 @@ INPUTS: dict[str, tuple[float, str, str]] = {
     "h1_rest_floor_ms_8k": (10.0 + 4.7 + 3.5, "E", f"{H1_COST}'s floors: tables 10 ms, value check 4.7, record write 3.5"),
     # PoUW: the Dither floor and noise
     "noise_amp": (80, "M", "Dither v3.2: U, V uniform on +-80 (verity/core/protocols/pouw/dither/PROTOCOL.md)"),
-    "b1_rate_vs_s8": (8.0, "E", f"{FLOOR}: the b1 product at 8x the s8 rate a clock, the coordinator's figure, "
-                                f"unmeasured on Hopper (mma.sync only)"),
+    "b1_rate_vs_s8": (8.0, "M", f"{FLOOR}: the b1 product at 8x the s8 rate a clock; H200 mma.sync m16n8k256 "
+                                f".and.popc 21,845 against s8 m16n8k32 2,731 MACs an SM-clock, r20261028-090323-2c56 "
+                                f"(#6216, note:kernels-kfa3/20261028T0912Z-report-h200-b1-mma-rate)"),
+    "permuted_limbs": (2.54, "E", "GD-NOISE finding 1 (note:compute-research/20261028T1932Z-report-gd-noise): pi re-"
+                                  "drawn each tile, the merged factor's high limb (11.7% dense, 0.16% over 2:4 at "
+                                  "+-80, t 3) on 2:4 sparse s8 at half price: 1 + 0.5 + 0.05 + 1 limb-products a word"),
+    "jr2_noise_g": (1.32, "E", "GD-NOISE's table, JR2 per period at m 8,192 (qkv): the noised product 1.00 G, CUDA "
+                               "0.18 and d_A's PRG 0.14; the lane receipts' hashing ~0 beside H1's"),
+    "jr2_call_extra_g": (0.01, "E", "GD-NOISE's table, JR2 per call (#6369) over per period, without W-PRG: CUDA "
+                                    "0.19 against 0.18"),
+    "jr2_wprg_g_m": (3492.0, "E", "GD-NOISE finding 6: U drawn every call needs n K PRG bytes, 3,492 / m G (7.7 G at "
+                                  "m 512, 982 at m 4)"),
     "noise_fused_keep": (0.1, "E", "X formed in the GEMM's operand load keeps 10% of GD-DENOISE's separate X arm"),
     # proving: C-Flock --zk, costfit over ZK_RUN. Measured on sm_120 at ~3-6 M ANDs a block; estimates for the H200
     # (and for larger blocks) until GD-PROVER's H200 fit lands.
@@ -215,6 +229,15 @@ INPUTS: dict[str, tuple[float, str, str]] = {
     "retain_GB": (100.0, "E", "GB a window may retain until its draw: the H200's 141 GB less weights, KV cache and "
                               "activations under --retain device; VERITY_RETAIN=host (served_verdicts.sh) is bounded by "
                               "the pod's host cgroup instead (host_retention.py), size not looked up"),
+    "host_retain_GB": (200.0, "E", "GB of host memory a GPU's window may retain under VERITY_RETAIN=host: an eighth of "
+                                   "a node's, at the Nebius RTX PRO 6000 nodes' 1,690 GiB (infra/cluster/descriptions/"
+                                   "nebius.toml) less the system; the H200 node's size isn't in the repo"),
+    "d2h_GBs": (57.1, "M", "pinned D2H over PCIe 5.0 x16 (64 MiB pieces), r20261012-070151-be14 on the RTX PRO 6000 "
+                           "(note:ra-pcie-exhaust/20261012T0642Z-report-ra-pcie-exhaust); the H200 SXM's host link is "
+                           "the same Gen5 x16 (estimate)"),
+    "dma_hbm_cost": (0.07, "M", "a DMA'd stream costs 7% of HBM read (1,531 to 1,423 GB/s), r20261012-070151-be14; "
+                                "charged on the step's time the copy overlaps (estimate: as if the step were all "
+                                "memory-bound)"),
     "partial_words_per_ks": (2, "M", "leaf_lanes: a lane partial is 2 (KS + m) u32, KS = K / 32 segments"),
     "cpu_s_in_gpu_s": (1 / 55, "M", "benchmarks/sampling_plan/inputs.py: vCPU $0.033/h against sm_120 $1.80/h"),
 }
@@ -375,7 +398,11 @@ SCHEMA = {
         "K": (2048, "inner width of the credited linears (H1 credits the K = 2,048 linears)"),
         "L": (1024, "dither: segment, a 16-bit word a cell every L (L >= K: O alone, un-noised, credit 0)"),
         "L_prime": (None, "noise period (None: dither 128, PROTOCOL.md's static setting at L 1,024, t 8; J10-R 32)"),
-        "noise": ("periodic", "periodic | fresh (along K) | permuted (U's columns re-permuted each tile)"),
+        "noise": ("periodic", "periodic | fresh (along K) | permuted (v3.2: U's columns re-permuted each tile; "
+                              "GD-NOISE's 2:4 route forces 0.97 G at t 3) | segment (pi re-drawn each segment, "
+                              "which closes that route)"),
+        "u_draw": ("period", "jr2: U drawn once a period, W' and U stored (GD-NOISE's 'JR2 per period') | call "
+                             "(#6369: U drawn every call, n K PRG bytes, SHA-bound at small m)"),
         "record_bytes_per_cell": (6, "J10-R's z/y records, 6 B a cell"),
         "trees": (2, "trees H1's records are hashed into (2 today: z table and zy@c; 1: Daniel's)"),
         "h1_host": ("main", "pre (a1fc) | main (#5975, #6016: 5430) | main+6192 (65ca) | stack (every H1 host lever) | "
@@ -408,9 +435,12 @@ SCHEMA = {
                                  "at eps w_avg / w_max of the units, so that eps still bounds the wrong work) | "
                                  "stratified (the deployed IntegrityPeriod law, benchmarks/sampling_plan/h200.py: each "
                                  "unit class its own uniform kd-subset at eps of its units and delta / S, S classes)"),
+        "retain": ("device", "where a window's retained bytes wait for the draw: device (HBM, retain_GB) | host "
+                             "(VERITY_RETAIN=host, served_verdicts.sh: host_retain_GB, each step's bytes copied over "
+                             "PCIe on a copy engine beside the step, the excess and the DMA's HBM share exposed)"),
         "retain_GB": (None, "GB a window may hold until its draw (the Commit's step bytes, Dither's values, H1's "
-                            "records, times steps a window; None: INPUTS retain_GB); over it, the design is listed "
-                            "infeasible"),
+                            "records, times steps a window; None: INPUTS retain_GB or host_retain_GB); over it, the "
+                            "design is listed infeasible"),
         "period": (1, "windows certified together (the accounting period, ASK-64's form: Properties/Pouw/Period.lean, "
                       "eps(j) = Lambda ln(1/delta) / j): draws ~ Lambda / eps a period, so proving a window falls as "
                       "1 / period, while eps bounds the period's work, not a window's (a window's share up to "
@@ -424,6 +454,10 @@ SCHEMA = {
         "attn_keys": (64, "keys an attention proof block (None: class_size's measured 128, whose block with its K and "
                           "V rows' openings at C-Flock's SHA-512 passes 2^27 at k_pad 2; 64 fits, at "
                           "attn_ands_per_mac, an estimate below the measured block)"),
+        "census": (None, "None: the model's classes (attention in attn_keys blocks, one elementwise class) | b4: "
+                         "GD-PLANNER's census of the served 4,32,4 window (census_b4.json), every template its own "
+                         "class beside the model's linear tiles, lm_head rebound at N 1 | b4-buckets: b4 with the "
+                         "35 attention templates padded into the widest (the planner's pad:35)"),
     },
     "prover": {
         "device": ("h200", "the prover's GPU: h200 (GD-PROVER's measured drawn-AND cost, o_per_and_h200) | sm120 (the "
@@ -639,8 +673,10 @@ def l_prime(w: dict) -> int:
 def pouw_forced_frac(d: dict) -> float:
     """The least work a credited call forces, as a share of its plain s8 GEMM G, under SAK on noised operands, at the
     best attack found. Un-noised calls earn 0 (the brief): J10-R as served adds no noise at serve time, and at L >= K a
-    dither cell commits O alone. Dither, periodic or permuted (v3.2: V, U periodic in L' with pi fresh each tile):
-    min(1, 1/8 + 3/t) (the floor note); fresh noise along K, or JR2: G (estimate: no shared period to separate)."""
+    dither cell commits O alone. Dither, periodic or with pi re-drawn each segment: min(1, 1/8 + 3/t) (the floor note;
+    GD-NOISE finding 2). Pi re-drawn each tile (v3.2): the merged factor's high limb runs on 2:4 sparse s8 at half
+    price, 2.54 limb-products a word, min(1, 1/8 + 2.54/t) (GD-NOISE finding 1, shown at t 3: 0.97 G). Noise fresh
+    along K, or JR2: G, the one-word bound's second product (GD-NOISE finding 3; GD-BITS, if JR2's proof holds)."""
     w = d["pouw"]
     if w["scheme"] in ("off", "j10r"):
         return 0.0
@@ -651,8 +687,11 @@ def pouw_forced_frac(d: dict) -> float:
         return 0.0
     if w["noise"] == "fresh":
         return 1.0
+    if w["noise"] not in ("periodic", "permuted", "segment"):
+        raise ValueError(f"pouw.noise {w['noise']!r}")
     t = max(1, L // Lp)
-    return min(1.0, 1.0 / I("b1_rate_vs_s8") + 3.0 / t)
+    limbs = I("permuted_limbs") if w["noise"] == "permuted" else 3.0
+    return min(1.0, 1.0 / I("b1_rate_vs_s8") + limbs / t)
 
 
 def guess_p(bits: int) -> float:
@@ -679,12 +718,14 @@ def pouw_credit(d: dict) -> dict:
         cred = sum(K * N for _, K, N in LINEARS if K == w["K"]) / total
     else:
         cred = 0.0
+    forced = pouw_forced_frac(d)
     return {"credited_share_of_linear_macs": cred,
-            "forced_share_at_best_attack": cred * pouw_forced_frac(d),
-            "earns_credit": cred > 0 and pouw_forced_frac(d) > 0,
-            "basis": "best attack found (an upper bound on the floor)" if w["scheme"] == "dither" else
-                     ("estimate (JR2: fresh U, no floor note)" if w["scheme"] == "jr2" else
-                      "un-noised at serve time: 0 under guarantee 2")}
+            "forced_share_at_best_attack": cred * forced,
+            "earns_credit": cred > 0 and forced >= 1 - d["sampling"]["eps"],
+            "basis": "best attack found (an upper bound on the floor; no proved lower bound yet)"
+                     if w["scheme"] == "dither" else
+                     ("one-word bound, G (GD-NOISE finding 3, GD-BITS), if JR2's proof holds" if w["scheme"] == "jr2"
+                      else "un-noised at serve time: 0 under guarantee 2")}
 
 
 def _h1_main_ms_8k(h1_host: str) -> float:
@@ -763,8 +804,15 @@ def pouw_parts(d: dict, stock: dict) -> tuple[dict, dict]:
         info.update({"cells": cells, "records_GB": rec_gb, "h1_device_ms": dev,
                      "j10r_floor_frac": 1 / 8 + l_prime(w) / w["K"]})
         if w["scheme"] == "jr2":
-            dg = w["denoise_g_frac"] if w["denoise_g_frac"] is not None else 1.0
-            parts["JR2: de-noising the K-credited calls (fresh U: estimate 1 G)"] = dg * G_ms * k_share
+            if w["u_draw"] not in ("period", "call"):
+                raise ValueError(f"pouw.u_draw {w['u_draw']!r}")
+            dg = I("jr2_noise_g")
+            if w["u_draw"] == "call":
+                dg += I("jr2_call_extra_g") + I("jr2_wprg_g_m") / max(1.0, tok)
+            if w["denoise_g_frac"] is not None:
+                dg = w["denoise_g_frac"]
+            parts[f"JR2: the noised product and U's noise (GD-NOISE, U a {w['u_draw']})"] = dg * G_ms * k_share
+            info["jr2_noise_g"] = dg
         return parts, info
     # dither: GD-DENOISE's served call over the credited calls' plain GEMM (an L >= K call commits O alone, un-noised)
     L, Lp = w["L"], l_prime(w)
@@ -869,6 +917,8 @@ def preset_units(d: dict) -> list:
             extra, vrows = dither_check(d, K, Kc, r * c)
             u.update({"extra_ands": extra, "open_rows": rows + vrows, "credit_work": r * c * Kc})
         units.append(u)
+    if d["partition"]["census"]:
+        return units + census_units(d)
     bn = d["partition"]["attn_keys"] or I("attn_keys_per_block")
     blocks = max(1.0, seq_len / 2 / bn)                        # a query's causal keys, on average, in key blocks
     kb = min(bn, seq_len / 2)
@@ -947,6 +997,39 @@ def pouw_units(d: dict) -> list:
                       "open_rows": [b for _ in range(r) for b in opened(L, R, mode)] + b_rows * c + t_rows * 2 * r,
                       "out_bits": 16})
     return units
+
+
+CENSUS_B4 = Path(__file__).with_name("census_b4.json")
+
+
+def census_units(d: dict) -> list:
+    """GD-PLANNER's census of the served 4,32,4 window as unit classes, a template a class at its own ANDs and rows,
+    counted a window: every template but the int8 linears (ScaledMmS8_v1), which stay the model's tiles. lm_head
+    (Gemm_v2 at N 16, all 140 rows) is rebound at N 1, the planner's s*, into Gemm_v2{K=2048,N=1}'s template.
+    b4-buckets pads the 35 AttnBlockFirst_v2 templates into their widest (NVIS 35)."""
+    mode = d["partition"]["census"]
+    if mode not in ("b4", "b4-buckets"):
+        raise ValueError(f"partition.census {mode!r}")
+    if d["point"]["window_class"] != "4,32,4":
+        raise ValueError(f"partition.census {mode!r} is the 4,32,4 window's; the point is "
+                         f"{d['point']['window_class']!r}")
+    rows = {}
+    for t in json.loads(CENSUS_B4.read_text())["templates"]:
+        t = dict(t)
+        if t["label"].startswith("ScaledMmS8_v1"):
+            continue
+        if t["label"] == "Gemm_v2{K=2048,N=16}":
+            t = {**t, "label": "Gemm_v2{K=2048,N=1}", "units": t["units"] * 16, "ands": None}
+        if mode == "b4-buckets" and t["label"].startswith("AttnBlockFirst_v2"):
+            t["label"] = "AttnBlockFirst_v2{pad:35}"
+        r = rows.setdefault(t["label"], {**t, "units": 0})
+        r["units"] += t["units"]
+        if t["ands"] is not None and (r["ands"] is None or t["ands"] > r["ands"]):
+            r.update({k: t[k] for k in ("ands", "in", "out", "out_bits")})
+    tok = window_tokens(d)
+    return [{"name": f"{r['label']} (census)", "per_token": r["units"] / tok, "work": float(r["ands"]),
+             "extra_ands": 0.0, "open_rows": list(r["in"]) + list(r["out"]), "out_bits": r["out_bits"]}
+            for r in rows.values()]
 
 
 def window_tokens(d: dict) -> float:
@@ -1186,6 +1269,17 @@ def _step(d: dict, units: list) -> tuple:
     wparts, winfo = pouw_parts(d, stock)
     remote.update(cparts)
     remote.update(wparts)
+    where = d["sampling"]["retain"]
+    if where not in ("device", "host"):
+        raise ValueError(f"sampling.retain {where!r}")
+    if where == "host":
+        step_bytes = (cinfo.get("step_bytes", 0.0) + winfo.get("value_bytes", 0.0)
+                      + winfo.get("records_GB", 0.0) * 1e9)
+        copy = step_bytes / (I("d2h_GBs") * 1e9) * 1e3
+        t = sum(remote.values())
+        remote["retain: D2H to the host, beyond the step and the DMA's HBM share"] = (
+            max(0.0, copy - t) + I("dma_hbm_cost") * min(copy, t))
+        cinfo = {**cinfo, "d2h_ms_a_step": copy}
     return stock, t_stock, anchor, remote, cinfo, winfo
 
 
@@ -1223,9 +1317,11 @@ def J(dsg: dict | None = None) -> dict:
     serve_term = win_remote_ms / win_stock_ms - 1
     prove_term = proving_gpu_s / stock_gpu_s
     infeasible = values["infeasible"] + pouw["infeasible"]
-    retain_GB = _get(d, "sampling", "retain_GB", "retain_GB")
+    retain_GB = _get(d, "sampling", "retain_GB", "retain_GB" if d["sampling"]["retain"] == "device"
+                     else "host_retain_GB")
     if retained > retain_GB:
-        infeasible.append(f"a window retains {retained:,.1f} GB for its draw > retain_GB {retain_GB}")
+        infeasible.append(f"a window retains {retained:,.1f} GB for its draw > {retain_GB} GB on the "
+                          f"{d['sampling']['retain']}")
     if d["pouw"]["scheme"] == "dither" and 1 < d["pouw"]["agg"] < 8:
         infeasible.append(f"pouw.agg {d['pouw']['agg']}: an aggregate word under 8 cells loses the floor to the "
                           f"attacks GD-AGG measured (safe from 8 with mix4)")
