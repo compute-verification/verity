@@ -57,7 +57,7 @@ def _trace(p: Path, T: int = 8) -> Path:
 
 
 def test_steady_state_mean_and_losses(tmp_path):
-    got = U.analyse(_report(tmp_path / "prof.sqlite"), _trace(tmp_path / "advice_trace.jsonl"), 8)
+    got = U.analyse(_report(tmp_path / "prof.sqlite"), _trace(tmp_path / "advice_trace.jsonl"), 8, sent_s=(Z + 5 * MS) / 1e9)
     w = got["queued"]
     assert (w["steps"], w["first_step"], w["last_step"]) == (4, 1, 4)
     assert w["step_wall_ms"]["mean"] == pytest.approx(10.0, abs=1e-3)
@@ -68,7 +68,18 @@ def test_steady_state_mean_and_losses(tmp_path):
     assert loss == pytest.approx({"elementwise": 20.0, "idle, D2H copy": 10.0, "idle, no GPU work": 10.0, "gemm": 6.0})
     assert sum(loss.values()) == pytest.approx(100 - w["tensor_active_pct"])
     assert w["other_metrics_mean"]["SM Active [Throughput %]"] == pytest.approx(80.0)
+    gaps = {g["us"]: (g["gaps"], g["time_pct"]) for g in w["idle_gaps"]}
+    assert gaps["2000-20000"] == (4, pytest.approx(20.0)) and gaps["0-20"] == (0, 0.0)
     assert got["all"]["steps"] == 4
+
+
+def test_queued_starts_once_the_last_request_is_sent(tmp_path):
+    got = U.analyse(_report(tmp_path / "prof.sqlite"), _trace(tmp_path / "advice_trace.jsonl"), 8, sent_s=(Z + 25 * MS) / 1e9)
+    assert (got["queued"]["steps"], got["queued"]["first_step"]) == (2, 3)
+    assert "queued" not in U.analyse(tmp_path / "prof.sqlite", tmp_path / "advice_trace.jsonl", 8)
+    timings = tmp_path / "main.timings.json"
+    timings.write_text(json.dumps({"start_unix": 1000.0, "requests": [{"send_s": 0.002}, {"send_s": 0.025}, {"send_s": None}]}))
+    assert U.last_send(timings) == pytest.approx(1000.025)
 
 
 def test_generic_short_names_go_by_their_demangled_name(tmp_path):
@@ -78,8 +89,9 @@ def test_generic_short_names_go_by_their_demangled_name(tmp_path):
     names = {n for _, _, n in U.kernels(db)}
     assert "void cutlass::device_kernel<Sm90GemmTile>()" in names
     assert U.category("void cutlass::device_kernel<Sm90GemmTile>()") == "gemm"
-    assert [U.category(n) for n in ("sha512_rows_kernel", "h1_noise_fold", "fa3_matReqG_tap", "flash_fwd_kernel")] \
-        == ["commit", "pouw", "tap", "attention"]
+    fa3 = "void cutlass::device_kernel<flash::enable_sm90_or_later<flash::FlashAttnFwdSm90<flash::CollectiveMainloopFwdSm90<"
+    assert [U.category(n) for n in ("sha512_rows_kernel", "h1_noise_fold", "fa3_matReqG_tap", fa3, "reshape_and_cache_flash_kernel")] \
+        == ["commit", "pouw", "tap", "attention", "copy"]
 
 
 def test_too_few_full_steps_is_said(tmp_path):

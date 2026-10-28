@@ -32,11 +32,11 @@ from typing import Any
 CATEGORIES = (
     ("commit", r"sha512|sha_|hm96|merkle|frame|hash|leaf|commit|tree|digest"),
     ("pouw", r"(^|_)h1|pouw|noise|duo|pearl"),
-    ("tap", r"tap|collect|matreq|hidden|readback|snapshot"),
-    ("attention", r"flash|fmha|attn|attention|mha|softmax"),
+    ("attention", r"flashattn|flash_fwd|flash_attn|fmha|attn|attention|mha|softmax"),
+    ("tap", r"tap|collector|matreq|hidden|readback|snapshot"),
     ("gemm", r"gemm|matmul|cutlass|xmma|wgmma|imma|_mma|cublas|scaled_mm|gemv|linear"),
     ("quant", r"quant|int8|s8|scale|amax"),
-    ("copy", r"copy|memcpy|cat_|concat|index|gather|scatter|fill|contiguous|transpose|arange"),
+    ("copy", r"copy|memcpy|cat_|concat|index|gather|scatter|fill|contiguous|transpose|arange|cache"),
     ("elementwise", r"elementwise|vectorized|reduce|norm|rms|silu|act|rotary|rope|add|mul|unrolled|triton|sum|max|where"),
 )
 D2H, H2D = 2, 1                                      # CUPTI_ActivityMemcpyKind
@@ -103,11 +103,37 @@ def copies(db: sqlite3.Connection) -> list[tuple[int, int, int, int]]:
     return [tuple(map(int, r)) for r in db.execute("SELECT start, end, copyKind, bytes FROM CUPTI_ACTIVITY_KIND_MEMCPY ORDER BY start")]
 
 
-def steps(trace: Path) -> tuple[list[dict[str, Any]], list[float]]:
-    """The trace's step records (with ``t``) in step order, and its arrivals' times."""
+def steps(trace: Path) -> list[dict[str, Any]]:
+    """The trace's step records (with ``t``) in step order."""
     recs = [json.loads(x) for x in trace.read_text().splitlines() if x.strip()]
-    st = sorted((r for r in recs if r.get("kind") == "step" and "t" in r), key=lambda r: r["step"])
-    return st, sorted(r["t"] for r in recs if r.get("kind") == "arrive" and "t" in r)
+    return sorted((r for r in recs if r.get("kind") == "step" and "t" in r), key=lambda r: r["step"])
+
+
+def last_send(timings: Path | None) -> float | None:
+    """The wall-clock second the load's last request was sent (its timings file: ``start_unix`` plus the latest ``send_s``)."""
+    if timings is None or not timings.exists():
+        return None
+    doc = json.loads(timings.read_text())
+    sends = [r["send_s"] for r in doc["requests"] if r.get("send_s") is not None]
+    return doc["start_unix"] + max(sends) if sends else None
+
+
+#: idle gaps between kernels by length, in µs: launch gaps, short host work, long host work, stalls
+GAPS = ((0, 20), (20, 200), (200, 2_000), (2_000, 20_000), (20_000, 1 << 40))
+
+
+def runtime_calls(db: sqlite3.Connection, lo: int, hi: int, top: int = 12) -> list[dict[str, Any]]:
+    """The CUDA runtime and driver calls the host spent the most time in over [lo, hi]: name, calls, total ms."""
+    got: dict[str, list[float]] = defaultdict(lambda: [0, 0.0])
+    for table in ("CUPTI_ACTIVITY_KIND_RUNTIME", "CUPTI_ACTIVITY_KIND_DRIVER"):
+        if not _has(db, table):
+            continue
+        q = (f"SELECT s.value, COUNT(*), SUM(MIN(r.end, ?) - MAX(r.start, ?)) FROM {table} r JOIN StringIds s ON s.id = r.nameId "
+             "WHERE r.end > ? AND r.start < ? GROUP BY s.value")
+        for name, n, ns in db.execute(q, (hi, lo, lo, hi)):
+            got[str(name)][0] += int(n)
+            got[str(name)][1] += float(ns or 0)
+    return [{"name": n, "calls": int(c), "ms": round(ns / 1e6, 3)} for n, (c, ns) in sorted(got.items(), key=lambda kv: -kv[1][1])[:top]]
 
 
 def steady(st: list[dict[str, Any]], T: int, lo_s: float, hi_s: float, after_s: float | None = None) -> list[int]:
@@ -146,7 +172,8 @@ def mean_in(ts: list[int], vs: list[float], lo: int, hi: int) -> float | None:
     return statistics.fmean(vs[a:b]) if b > a else None
 
 
-def analyse(sqlite: Path, trace: Path, T: int) -> dict[str, Any]:
+def analyse(sqlite: Path, trace: Path, T: int, sent_s: float | None = None) -> dict[str, Any]:
+    """``sent_s``: when the load's last request was sent (`last_send`), from which the ``queued`` window starts."""
     db = sqlite3.connect(sqlite)
     z = utc0_ns(db)
     names, series = metrics(db)
@@ -157,12 +184,12 @@ def analyse(sqlite: Path, trace: Path, T: int) -> dict[str, Any]:
     ts, tv = series[tensor]
     period = statistics.median(b - a for a, b in zip(ts, ts[1:])) if len(ts) > 1 else 0
     ks, cs = kernels(db), copies(db)
-    st, arrivals = steps(trace)
+    st = steps(trace)
     cap = ((ts[0] + z) / 1e9, (ts[-1] + z) / 1e9)
     at = lambda s: int(s * 1e9) - z                      # noqa: E731  (a wall-clock second on the report's timeline)
     picks = {"all": steady(st, T, *cap)}
-    if arrivals:
-        picks["queued"] = steady(st, T, *cap, after_s=max(arrivals))
+    if sent_s is not None:
+        picks["queued"] = steady(st, T, *cap, after_s=sent_s)
     out: dict[str, Any] = {"capture_s": round(cap[1] - cap[0], 3), "metric_period_us": period / 1e3, "metrics": sorted(names),
                            "tensor_metric": next(n for n, i in names.items() if i == tensor), "steps_traced": len(st),
                            "full_steps_traced": sum(1 for r in st if r["T"] == T), "kernels": len(ks), "memcpys": len(cs)}
@@ -192,6 +219,12 @@ def analyse(sqlite: Path, trace: Path, T: int) -> dict[str, Any]:
         d2h = union([(a, b) for a, b, k, _ in cs if k == D2H], lo, hi)
         h2d = union([(a, b) for a, b, k, _ in cs if k == H2D], lo, hi)
         w["gpu_busy_pct"] = round(100 * busy_ns / (hi - lo), 3)
+        edges = [lo] + [x for iv in busy for x in iv] + [hi]
+        gaps = [(edges[k + 1] - edges[k]) / 1e3 for k in range(0, len(edges), 2) if edges[k + 1] > edges[k]]
+        w["idle_gaps"] = [{"us": f"{a}-{b}" if b < 1 << 40 else f">{a}", "gaps": sum(1 for g in gaps if a <= g < b),
+                           "time_pct": round(100 * sum(g for g in gaps if a <= g < b) * 1e3 / (hi - lo), 3),
+                           "per_step": round(sum(1 for g in gaps if a <= g < b) / len(idx), 2)} for a, b in GAPS]
+        w["host_cuda_calls"] = runtime_calls(db, lo, hi)
         w["copies"] = {kind: {"GB": round(sum(n for a, b, k, n in cs if k == code and a >= lo and b <= hi) / 1e9, 3),
                               "busy_pct": round(100 * sum(b - a for a, b in u) / (hi - lo), 3)}
                        for kind, code, u in (("d2h", D2H, d2h), ("h2d", H2D, h2d))}
@@ -276,13 +309,15 @@ def main() -> int:
     ap.add_argument("--timings", type=Path, default=None)
     ap.add_argument("--out", required=True, type=Path)
     a = ap.parse_args()
-    doc: dict[str, Any] = {"arm": a.arm, "T": a.T, "N": a.N, **analyse(a.sqlite, a.trace, a.T)}
+    doc: dict[str, Any] = {"arm": a.arm, "T": a.T, "N": a.N, **analyse(a.sqlite, a.trace, a.T, last_send(a.timings))}
     if a.serve_dir is not None:
         doc["serve"] = windows(a.serve_dir)
     if a.timings is not None and a.timings.exists():
         reqs = json.loads(a.timings.read_text())["requests"]
         done = [r["done_s"] for r in reqs if r.get("done_s") is not None]
-        doc["load"] = {"requests": len(reqs), "ok": sum(1 for r in reqs if r.get("ok")), "span_s": round(max(done), 3) if done else None}
+        sent = [r["send_s"] for r in reqs if r.get("send_s") is not None]
+        doc["load"] = {"requests": len(reqs), "ok": sum(1 for r in reqs if r.get("ok")), "span_s": round(max(done), 3) if done else None,
+                       "last_send_s": round(max(sent), 3) if sent else None}
     a.out.write_text(json.dumps(doc, indent=1))
     for key in ("queued", "all"):
         w = doc.get(key)
@@ -295,6 +330,8 @@ def main() -> int:
             print(f"  loss {r['loss_pts']:6.2f} pts  {r['label']:<40} {r['share_pct']:6.2f}% of the time at {r['tensor_pct']:.1f}% tensor")
         for r in w["kernels_top"][:12]:
             print(f"  kernel {r['time_pct']:6.2f}%  tensor {r['tensor_pct'] if r['tensor_pct'] is not None else '-':>6}  {r['category']:<11} {r['name'][:90]}")
+        print("  idle gaps " + ", ".join(f"{g['us']} us: {g['per_step']}/step {g['time_pct']:.1f}%" for g in w["idle_gaps"]))
+        print("  host CUDA calls " + ", ".join(f"{c['name']} {c['calls']}x {c['ms']:.0f} ms" for c in w["host_cuda_calls"][:6]))
     return 0
 
 
