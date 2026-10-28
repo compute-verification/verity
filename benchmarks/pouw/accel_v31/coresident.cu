@@ -283,6 +283,9 @@ __global__ void __launch_bounds__(NWG * 128, 1) cta(const __grid_constant__ Prm 
     if constexpr (FL & NOSW) return (uint64_t)((addr & 0x3FFFF) >> 4) | (uint64_t)(128 >> 4) << 16 | (uint64_t)(256 >> 4) << 32;
     else return wgp::desc_sw128(addr);
   };
+  // the k-tile within its tile, (g + q) % TK, counted: ptxas puts a division's chain between a group's MMAs, delaying
+  // their issue by tens of clocks a group
+  int kq = 0;
   for (int g = 0; g < groups; g += KG) {
     if (bar) wgp::mbar_wait_warp(bars + 8 * s, ph);
     const uint32_t stg = base + (FL & LOAD ? s : 0) * S::STAGE, b0 = stg + S::A_BYTES;
@@ -291,7 +294,8 @@ __global__ void __launch_bounds__(NWG * 128, 1) cta(const __grid_constant__ Prm 
     WGP_FENCE;
 #pragma unroll
     for (int q = 0; q < KG; q++) {
-      const uint32_t sd = (g + q) % TK != 0;
+      const uint32_t sd = kq != 0;
+      if (++kq == TK) kq = 0;
       if constexpr (FORM == N128 || FORM == N256) {
 #pragma unroll
         for (int i = 0; i < 4; i++) wgp::imma<S::BN>(d, da(i), db(i, 0), i > 0 || sd);
@@ -314,7 +318,7 @@ __global__ void __launch_bounds__(NWG * 128, 1) cta(const __grid_constant__ Prm 
     pend = s;
     if (++s == STAGES) { s = 0; ph ^= 1; }
     if constexpr (FL & EPI) {
-      if (g % TK == TK - 1) {
+      if (kq == 0) {   // g was its tile's last k-tile
         WGP_WAIT(0);
         wgp::acc_fence<S::NA>(d);
         if (bar && lane == 0) release<CL>(bars + 8 * (STAGES + pend));
