@@ -41,12 +41,13 @@ theorem ofPayloads_registered {N b : ℕ} (E : Fin N → Bits b) : (ofPayloads E
 /-- The store a game draws is resident whole at every step: its registered blocks, nothing written or freed. -/
 theorem resident_ofPayloads {N b : ℕ} (E : Fin N → Bits b) (s : ℕ) :
     (ofPayloads E).resident s = Finset.range N := by
+  ext x
   simp [resident, ofPayloads]
 
 /-- A game's draw is the payloads of the store it stands for. -/
 theorem payloads_ofPayloads {N b : ℕ} (E : Fin N → Bits b) : (ofPayloads E).payloads N b = E := by
   funext j i
-  simp only [payloads, ofPayloads, dif_pos j.isLt, payloadOfBits]
+  simp only [payloads, ofPayloads, j.isLt, ↓reduceDIte, payloadOfBits]
   rw [BitVec.testBit_toNat, BitVec.getLsbD_ofBoolListLE]
   simp
 
