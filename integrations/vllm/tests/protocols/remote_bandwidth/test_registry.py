@@ -399,8 +399,7 @@ def test_openings_of_subtrees_and_the_tail_verify_as_the_drivers():
     for o in s.open([(0, q) for q in range(pc.blocks)]):
         info = next(r for r in lay.regions if r.name == o.region)
         assert verify_opening(info, pc, plan, o, RECEIPT, CODEC.decode, None)
-        assert rb.verify_leaf(pc.seed, driver_plan, pc.root, o.position, b"".join(o.leaf_receipts), o.salt,
-                              o.leaf_path + o.segment_path)
+        assert rb.verify_leaf(pc.seed, driver_plan, pc.root, o.position, b"".join(o.leaf_receipts), o.salt, o.leaf.path)
     o = s.open([(0, 85)])[0]
     assert not verify_opening(s.region("w"), pc, plan, o.__class__(**{**o.__dict__, "salt": bytes(192)}), RECEIPT,
                               CODEC.decode, None)
