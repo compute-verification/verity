@@ -200,9 +200,9 @@ THRESH_PATCHES = (
 
 HELD_LIMIT = 65536
 HELD_FNS = f"""    // [lazy max, held] A kept block's exp2 run against the kept max unchecked; each thread then tests its rows' block
-    // sums (below {HELD_LIMIT}, so every P is, and inf or NaN fails), and one bar.red.or a warpgroup (hardware barriers
-    // 2-4, which FA3's forward leaves free) says whether any failed. Then the warpgroup recomputes S from K, which the
-    // mainloop holds until here, and every warp redoes the block exactly from the state it had before it.
+    // sums (below {HELD_LIMIT}, so every P is, and inf or NaN fails), and one bar.red.or a warpgroup says whether any
+    // failed. Then the warpgroup recomputes S from K, which the mainloop holds until here, and every warp redoes the
+    // block exactly from the state it had before it.
     __forceinline__ __device__ bool lazy_redo(int barrier_id) {{
         int r;
         asm volatile("{{\\n .reg .pred p, q;\\n setp.ne.b32 p, %1, 0;\\n bar.red.or.pred q, %2, 128, p;\\n selp.s32 %0, 1, 0, q;\\n}}\\n"
@@ -253,7 +253,11 @@ HELD_MAINLOOP = (
     ("                    pipeline_v.consumer_release(smem_pipe_read_v);  // release V\n                }\n"
      "                VERITY_FA3_O(tOrO, n_block + 1)",
      "                    pipeline_v.consumer_release(smem_pipe_read_v);  // release V\n                }\n"
-     "                if (softmax.lazy_redo(2 + warp_group_idx)) {\n"
+     "                static_assert(!Transpose_V && !AppendKV,\n"
+     "                              \"the held lazy max's barriers are FA3's Transpose, Transform and AppendKV ones\");\n"
+     "                if (softmax.lazy_redo(warp_group_idx == 0 ? int(cutlass::arch::ReservedNamedBarriers::TransposeBarrier)\n"
+     "                                      : warp_group_idx == 1 ? int(cutlass::arch::ReservedNamedBarriers::TransformBarrier)\n"
+     "                                      : int(cutlass::arch::ReservedNamedBarriers::FirstUserBarrier) + int(FwdNamedBarriers::AppendKV))) {\n"
      "                    flash::gemm</*zero_init=*/true, /*wg_wait=*/0>(tiled_mma_qk, tSrQ, tSrK(_, _, _, smem_pipe_read.index()), tSrS);\n"
      "                    scoremod_premask_fn(tSrS);\n                    mask_fn(tSrS, n_block);\n                    softmax.redo_softmax(tSrS);\n"
      "                }\n                pipeline_k.consumer_release(smem_pipe_read);  // release K\n"
