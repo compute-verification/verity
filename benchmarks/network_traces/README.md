@@ -183,53 +183,62 @@ circuit-check pins (`advised.circuit-check.py`).
 
 ## The leak bound
 
-`chain_record.py leak` computes K, the bits a covert sender's secrets can number over a monitoring period, from a run's
-files: its parameters (`deployment.json`), its traffic and the scan's class. The terms are those of
-`NetTiming.Guarantees.PeriodLeakAccepted` (`Security/Definitions/NetworkCertifier/Guarantees/Period.lean`, proved in
-`Security/Proofs/NetworkCertifier.lean`), whose sampling blocks' failures `NetTiming.periodLeak_le_sum` sums by a union
-bound (`Security/Proofs/NetworkCertifier/PeriodSum.lean`); the pooled form is
-`NetTiming.Guarantees.HorizonLeakAccepted` (`Security/Definitions/NetworkCertifier/Guarantees/HorizonLeak.lean`). The
-report's `d1` lists, per sampling block, whether its certificates, N2 and the scan accepted.
+`leak_bounds.py` is the one calculator of K, the bits a covert sender's secrets can number over a monitoring period.
+`per_link` gives K for one link: one network certifier on one uplink, certifying a request rate of one scan class (an
+`ingress_scan.Class`, or a window class's `scan`). `datacenter` sums K over a datacenter's links. Each comes in two
+forms beside its share of the weights. The terms are those of `NetTiming.Guarantees.PeriodLeakAccepted`
+(`Security/Definitions/NetworkCertifier/Guarantees/Period.lean`, proved in `Security/Proofs/NetworkCertifier.lean`),
+whose sampling blocks' failures `NetTiming.periodLeak_le_sum` sums by a union bound
+(`Security/Proofs/NetworkCertifier/PeriodSum.lean`); the pooled form is `NetTiming.Guarantees.HorizonLeakAccepted`
+(`Security/Definitions/NetworkCertifier/Guarantees/HorizonLeak.lean`). Both are about one device on one uplink. The sum
+over links is our composition, which no Lean statement covers. It holds except where some link's statement fails, so
+a datacenter at δ takes each link at δ / links, and each link pays its own faulty proof blocks (`datacenter`'s
+docstring says why pooling them by weight copy would be unsound).
+
+`chain_record.py leak` reads `leak_bounds` on a run's files: its parameters (`deployment.json`), its traffic and the
+scan's class. The report's `d1` lists, per sampling block, whether its certificates, N2 and the scan accepted.
 
 **K per monitoring period** (`chain_record.py leak`), on the full-traffic relay run of record with its scan, every
-unit drawn and accepted. K uses:
+proof block drawn and accepted. K uses:
 - the run's parameters (`deployment.json`), the same on every active-warden run: B = 512, lanes = 4, r = 4, D = 21,
   T = 32 buckets of 100 ms, and egress_cells = 65;
-- its traffic: 100 requests over 75 link-windows, 1.33 a link-window;
+- its traffic: 100 requests over 75 sampling blocks, 1.33 a sampling block;
 - the scan's class: B = 512, r = 4, lanes = 4, C = 47, IDB = 17 and KO = 64;
-- every unit drawn.
+- every proof block drawn.
 
-The terms, in the generator reading of the scan's statement (each unit's registered rows its boundary values):
+The terms, in the generator reading of the scan's statement (each proof block's registered rows its boundary values):
 - log2 #S_s = 0.
 - log2(cap_c + 1) = log2 66 = 6.04 bits a connection. Here cap_c bounds `WardenSchedule.cells c`, the egress cells of
   connection c's lane, which is egress_cells. The endpoint's slot count isn't a term of the network certifier's
   schedule: it enters the compute audit's terms, which go into JointPeriodLive.
-- The free inputs are the scan's `prog` rows: T·NP = 32 × 4,480 = 143,360 bits a link-window as registered today, or
-  32 + KO·IDB = 1,120 bits a request if `prog` is an input only at its anchored entries.
-- No faulty term with every unit drawn, and D_j = 1, so the jitter term is 0: assumed (J), `NetTiming.JitterBounded`,
-  not met at D_j = 1 until a run shows the warden's written buckets tell a receiver no more than an idle one. The
-  warden hands each bucket to a pacer that releases it at a time fixed before the bucket is made
+- The free inputs are the scan's `prog` rows: T·NP = 32 × 4,480 = 143,360 bits a sampling block as registered today,
+  or 32 + KO·IDB = 1,120 bits a request if `prog` is an input only at its anchored entries.
+- No faulty term with every proof block drawn, and D_j = 1, so the jitter term is 0: assumed (J),
+  `NetTiming.JitterBounded`, not met at D_j = 1 until a run shows the warden's written buckets tell a receiver no more
+  than an idle one. The warden hands each bucket to a pacer that releases it at a time fixed before the bucket is made
   (`warden.Warden(paced=…)`, `warden_serve.py --paced-ms`).
 
 The two forms:
-- The pooled form (`HorizonLeakAccepted`) adds Fmax = ⌈ln(1/δ)⌉ units of b = NS + NV = 154,480 bits, and
-  Fmax·log2(N + 1). Fmax is 5 at δ = 1% and 14 at δ = 10⁻⁶. The form is conditional: `hesc` and `hleak` await
-  `SampledKSLive` and P2.
-- The per-period form (`PeriodLeakAccepted`) has no δ term with every unit drawn.
+- The pooled form (`HorizonLeakAccepted`) adds Fmax = ⌈ln(1/δ)⌉ faulty proof blocks of b = NS + NV = 154,480 bits,
+  and Fmax·log2(N + 1). Fmax is 5 at δ = 1% and 14 at δ = 10⁻⁶ for one link. The form is conditional: `hesc` and
+  `hleak` await `SampledKSLive` and P2.
+- The per-period form (`PeriodLeakAccepted`) has no δ term with every proof block drawn.
 - Both are proved: `NetTiming.SecurityProofs.PeriodLeakAccepted` and `NetTiming.SecurityProofs.HorizonLeakAccepted`.
 
 The scale:
-- A week, a month and a year of one machine and of 1,000 machines: the census's convention, on the census's
-  `rtx-pro-6000-server`.
-- Each machine has one network certifier in front of all its compute, serving at the run's rate.
+- A week, a month and a year of one machine and of 1,000 machines, on the census's `rtx-pro-6000-server`. The
+  census's reference datacenter (`benchmarks/census/deployments.json`) is 12,500 machines, one link each to
+  `datacenter`.
+- Each machine has one network certifier in front of all its compute, serving at the run's rate. The 1,000 machines
+  are `datacenter`'s sum over 1,000 such links, each pooled at δ / 1,000 (Fmax 12 at δ = 1% and 21 at 10⁻⁶).
 - The weights are Llama-3.2-1B's 1,235,814,400 BF16 parameters: 1.98·10^10 bits, 2.47 GB.
 
 **`prog` as registered today (the record's K)**, bits, and the share of the weights (the jitter term 0, assumed (J)):
 
-| period | machines | K pooled, δ = 1% | K pooled, δ = 1e-6 | K per period | a link-window |
+| period | machines | K pooled, δ = 1% | K pooled, δ = 1e-6 | K per period | a sampling block |
 |---|---|---|---|---|---|
 | week | 1 | 2.71·10^10 (1.37×) | 2.71·10^10 (1.37×) | 2.71·10^10 (1.37×) | 143,368 |
-| week | 1,000 | 2.71·10^13 (1,370×) | 2.71·10^13 (1,370×) | 2.71·10^13 (1,370×) | 143,368 |
+| week | 1,000 | 2.71·10^13 (1,370×) | 2.71·10^13 (1,371×) | 2.71·10^13 (1,370×) | 143,368 |
 | month | 1 | 1.16·10^11 (5.87×) | 1.16·10^11 (5.87×) | 1.16·10^11 (5.87×) | 143,368 |
 | month | 1,000 | 1.16·10^14 (5,873×) | 1.16·10^14 (5,873×) | 1.16·10^14 (5,873×) | 143,368 |
 | year | 1 | 1.41·10^12 (71.5×) | 1.41·10^12 (71.5×) | 1.41·10^12 (71.5×) | 143,368 |
@@ -241,12 +250,12 @@ monitoring period.
 **`prog` only at its anchored entries (conditional on the generator-form lowering)**, bits, and the share of
 the weights (the jitter term 0, assumed (J)):
 
-| period | machines | K pooled, δ = 1% | K pooled, δ = 1e-6 | K per period | a link-window |
+| period | machines | K pooled, δ = 1% | K pooled, δ = 1e-6 | K per period | a sampling block |
 |---|---|---|---|---|---|
 | week | 1 | 2.85·10^8 (1.44%) | 2.86·10^8 (1.45%) | 2.84·10^8 (1.44%) | 1,501 |
-| week | 1,000 | 2.84·10^11 (14.4×) | 2.84·10^11 (14.4×) | 2.84·10^11 (14.4×) | 1,501 |
+| week | 1,000 | 2.86·10^11 (14.4×) | 2.87·10^11 (14.5×) | 2.84·10^11 (14.4×) | 1,501 |
 | month | 1 | 1.22·10^9 (6.15%) | 1.22·10^9 (6.16%) | 1.22·10^9 (6.15%) | 1,501 |
-| month | 1,000 | 1.22·10^12 (61.5×) | 1.22·10^12 (61.5×) | 1.22·10^12 (61.5×) | 1,501 |
+| month | 1,000 | 1.22·10^12 (61.6×) | 1.22·10^12 (61.7×) | 1.22·10^12 (61.5×) | 1,501 |
 | year | 1 | 1.48·10^10 (74.8%) | 1.48·10^10 (74.8%) | 1.48·10^10 (74.8%) | 1,501 |
 | year | 1,000 | 1.48·10^13 (748×) | 1.48·10^13 (748×) | 1.48·10^13 (748×) | 1,501 |
 
@@ -254,16 +263,17 @@ This second table is what the generator-form lowering would give if it registers
 It is not the record's number.
 
 K also rests on these conditions:
-- The generator reading of the scan's statement, in which each unit's registered rows are its boundary values. That
-  reading is a claim, with lean and Daniel.
+- The generator reading of the scan's statement, in which each proof block's registered rows are its boundary values.
+  That reading is a claim, with lean and Daniel.
 - log2 #S_s = 0 only once the schedule's digest binds each connection's admission bucket and lane, and the server
   can't move an admission. Neither holds today.
-- The scan proves link-window 0. A period's figures scale its per-link-window and per-request terms at the run's rate.
+- The scan proves sampling block 0. A monitoring period's figures scale its per-sampling-block and per-request terms at
+  the run's rate.
 - The jitter term is 0 at D_j = 1, assumed (J), not met until a run shows the paced warden's written buckets tell a
   receiver no more than an idle one.
-- At light traffic (40 requests over 43 link-windows, 0.93 a link-window, its scan's every unit drawn) the
-  anchored table's machine-week is 1.01% of the weights and its machine-year 52.2%; as registered today it is 1.37×
-  a machine-week either way.
+- At light traffic (40 requests over 43 sampling blocks, 0.93 a sampling block, its scan's every proof block drawn)
+  the anchored table's machine-week is 1.01% of the weights and its machine-year 52.2%; as registered today it is
+  1.37× a machine-week either way.
 - The compute audit's free inputs don't enter K: its δ goes into JointPeriodLive's sum.
 
 The report names what it stands on beyond the theorem (`chain_record.STUBBED`, `WARDEN_STUBBED` and
