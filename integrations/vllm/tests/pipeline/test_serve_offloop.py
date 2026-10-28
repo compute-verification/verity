@@ -211,6 +211,51 @@ def test_a_failed_seal_is_its_windows_and_the_next_one_still_runs():
     assert ran == [1] and sealer.errors == ["RuntimeError: disk"]
 
 
+def test_a_windows_seal_runs_beside_the_next_windows_job_and_holds_its_bytes_until_it_has_run():
+    sealing, go, job1 = threading.Event(), threading.Event(), threading.Event()
+    order: list[str] = []
+
+    def seal0() -> None:
+        sealing.set()
+        go.wait()
+        order.append("seal 0")
+
+    def first(_w: float) -> Any:
+        order.append("job 0")
+        return seal0
+
+    def second(_w: float) -> Any:
+        sealing.wait()
+        order.append("job 1")
+        job1.set()
+        return lambda: order.append("seal 1")
+
+    sealer = ss.Sealer(1 << 20)
+    sealer.submit(first, 10)
+    sealer.submit(second, 10)
+    job1.wait()
+    assert order == ["job 0", "job 1"], "window 1's job ran while window 0's seal was still running"
+    assert sealer.held == 20, "a window's bytes stay held until its seal has run"
+    go.set()
+    sealer.drain()
+    assert order == ["job 0", "job 1", "seal 0", "seal 1"] and sealer.held == 0, "the seals ran in window order, and drain waited for them"
+    sealer.close()
+    assert not sealer.errors
+
+
+def test_a_failed_seal_is_its_windows_and_the_next_window_still_seals():
+    ran: list[int] = []
+
+    def bad() -> None:
+        raise RuntimeError("store")
+
+    sealer = ss.Sealer(1 << 20)
+    sealer.submit(lambda _w: bad, 1)
+    sealer.submit(lambda _w: lambda: ran.append(1), 1)
+    sealer.close()
+    assert ran == [1] and sealer.errors == ["RuntimeError: store"] and sealer.held == 0
+
+
 # ---------------------------------------------------------------------------------------------------------------- serving
 
 class Counted(Committer):
