@@ -60,8 +60,8 @@ changes here and the older name gets a row under Older names, in the same change
   ticks). It is what a result is about; results are given for a week, a month and a year, against the adversary
   resource model. A **tick** is one step of the one clock. Every other span is a block's: an execution block, a sampling
   block (the network certifier's is T ticks, about 3.2 s), a server block. A block occupies ticks, and its span is said
-  as the block's ("E_j's span"), never as a period or a window of its own. The network certifier's timestep (SLOTS
-  execution blocks every EVERY ticks) is a parameter, not a period.
+  as the block's ("E_j's span"), never as a period or a window of its own. The network certifier's **slot stride** (EVERY
+  ticks, holding SLOTS execution blocks) is a parameter, not a period.
 - **Horizon** means a monitoring period. A bound over it has two readings: per sampling block, each at its own δ,
   summed; and **pooled**, the total at one δ, since each sampling block draws its own coins. The pooled reading is the
   result: its sampling term doesn't grow with the monitoring period, while a per-tick term such as a link's capacity
