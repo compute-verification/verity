@@ -2879,7 +2879,9 @@
    "Proofs.Properties.NetworkCertifier.Bytes": "the byte conversion `bs`, which the deployed sampling commitment's SHA-512 (`Claims.Sampling.Path.sha512Msg`) and registration roots read in SampledKSLive; C-Flock is excepted until proofs extracts its spec",
    "Proofs.Accounting.JointBridge.Guarantees.IntegrityOfIntegrityPeriod": "the integrity bridge's realization reads C-Flock's integrity audit over a period (Flock.Guarantees.IntegrityHorizon, its SamplingBlock and Period.run), which is in Proofs; C-Flock is excepted until proofs extracts its spec",
    "Proofs.Accounting.JointBridge.Guarantees.IntegrityOfIntegrityBlock": "the block integrity bridge's realization reads C-Flock's integrity audit of a server-time block (Flock.Guarantees.IntegrityBlock, its ServerBlocks, SamplingBlock and ServerBlocks.run), which is in Proofs; C-Flock is excepted until proofs extracts its spec",
-   "Proofs.Pouw.OnsiteFreed": "OnsiteFreed's witnesses read the toy instance's floor, certifier check and quiet prover (`twF`, `twNet`, `quiet`), proof-only beside it"
+   "Proofs.Pouw.OnsiteFreed": "OnsiteFreed's witnesses read the toy instance's floor, certifier check and quiet prover (`twF`, `twNet`, `quiet`), proof-only beside it",
+   "Proofs.Pouw.Period.Honest": "CheckProofSystemSound's witnesses read H1's honest live-salt period (`prm`, `windows`, `opened`, `salt`, `staged`), proof-only beside it",
+   "Proofs.Pouw.Period.Accept": "CheckProofSystemSound's witnesses read the leg's honest registration and answer (`h1Params`, `h1Reg`, `h1Evidence`) through H1's honest period, proof-only beside it"
   }
  },
  "four_names": ["Nci", "NetTiming", "Accounting", "Hash"],
@@ -4528,6 +4530,15 @@
    "signature": ["Accounting.SecurityProofs.TS.BindingOfFork : Accounting.Guarantees.TS.BindingOfFork"],
    "assumptions": [],
    "type_hash": "35df2fcc55dd37402511f188176a776059b9c8e8cabacb798f5dceb4b3c5d8ff"
+  },
+  "Accounting.SecurityProofs.TS.CheckProofSystemSound": {
+   "owner": "@soundness"
+  },
+  "Accounting.SecurityProofs.TS.CheckProofSystemSound_honest": {
+   "owner": "@soundness"
+  },
+  "Accounting.SecurityProofs.TS.CheckProofSystemSound_nontrivial": {
+   "owner": "@soundness"
   },
   "Accounting.SecurityProofs.TS.CheckedSessionSound": {
    "owner": "@proofs",
@@ -64936,6 +64947,10 @@
   "Pous.SecurityProofs.ObligationWide320": {
    "honest": ["Pous.SecurityProofs.ObligationWide320_honest"],
    "nontrivial": "Pous.SecurityProofs.ObligationWide320_nontrivial"
+  },
+  "Accounting.SecurityProofs.TS.CheckProofSystemSound": {
+   "honest": ["Accounting.SecurityProofs.TS.CheckProofSystemSound_honest"],
+   "nontrivial": "Accounting.SecurityProofs.TS.CheckProofSystemSound_nontrivial"
   }
  },
  "unwitnessed": {
