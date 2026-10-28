@@ -2797,6 +2797,18 @@
  },
  "four_names": ["Nci", "NetTiming", "Accounting", "Hash"],
  "guarantees": {
+  "Accounting.SecurityProofs.AccelAdditive": {
+   "owner": "@compute-research",
+   "signature": ["Accounting.SecurityProofs.AccelAdditive : Accounting.Guarantees.AccelAdditive"],
+   "assumptions": [],
+   "type_hash": "d40d7bc6a40c0afeb4793787bda1f439b2855b67e79a509cad8645dc792f7a5d"
+  },
+  "Accounting.SecurityProofs.AccelRate": {
+   "owner": "@compute-research",
+   "signature": ["Accounting.SecurityProofs.AccelRate : Accounting.Guarantees.AccelRate"],
+   "assumptions": [],
+   "type_hash": "ceb44afb1f12b9cd4607f52406ddb1ef61e0e2441adec746f17aa50a268d8cbb"
+  },
   "Accounting.SecurityProofs.Actual.DampenerWindowsCap": {
    "owner": "@lean",
    "signature": [
@@ -12547,7 +12559,9 @@
    "Verity.SecurityProofs.AndSizeLe": "frozen (no-function): It is about an arbitrary circuit and set of its gates (Verity.Circuit.andSize, Security/Definitions/Core/Formalism.lean): its AND gates are operation gates, so the AND count is at most the size; not about a function's code.",
    "Verity.SecurityProofs.CreditSizeLe": "frozen (no-function): It is about an arbitrary lowering from declarations to circuits and an arbitrary declaration (Verity.creditSize, Security/Definitions/Core/Formalism.lean): the credit, the lowered circuit's AND count, is at most its size; not about a function's code.",
    "Verity.SecurityProofs.ExpandAndSize": "frozen (no-function): It is about an arbitrary declaration, a partition of it and their expansions (Verity.Circuit.andSize, Verity.Declaration.expand, Verity.Partition.expand): the expansion's AND count is at most the bits it expands; not about a function's code.",
-   "Verity.SecurityProofs.ToCircuitAnd": "frozen (no-function): It is about an arbitrary C-Flock circuit of the Boolean profile and its toCircuit (FlockSoundness.Audit.Circuit, Security/Definitions/Core/Boolean.lean): which of its gates are AND gates (Verity.Circuit.IsAnd); not about a function's code."
+   "Verity.SecurityProofs.ToCircuitAnd": "frozen (no-function): It is about an arbitrary C-Flock circuit of the Boolean profile and its toCircuit (FlockSoundness.Audit.Circuit, Security/Definitions/Core/Boolean.lean): which of its gates are AND gates (Verity.Circuit.IsAnd); not about a function's code.",
+   "Accounting.SecurityProofs.AccelRate": "frozen (no-function): It shows the instructions of runs of the machine model 𝓜 back to back (Verity.Accel.Machine.run) meet a rate at their backlogs summed, not a Lean function's acceptance.",
+   "Accounting.SecurityProofs.AccelAdditive": "frozen (no-function): It bounds the resource units of disjoint sets of the instructions a period issues on the machine model 𝓜 by the period's rate, not a Lean function's acceptance."
   },
   "conjectures": {
    "Pous.P2.Assumptions.P2RingAuditSecure": {
@@ -12708,6 +12722,20 @@
     "Accounting.SecurityProofs.Remote.ReceiptsBindingOfCR",
     "Accounting.SecurityProofs.Remote.ReceiptsBindingOfFork"
    ]
+  },
+  "Definitions.Accounting.Additive": {
+   "digest": "d10c94bf638a80049f1534c83e93749cf40477cee7651467985757144c740ddd",
+   "definitions": {
+    "Accounting.AccelRun": "cce34274971a2e22d7ff7f52ab1962eb3996fc4ed4c7a554115db282a8b68892",
+    "Accounting.AccelRun.P": "b5def4e0e360a94af48d926b065f0d78c96c108bbaa7e0af1b6e4153f3570b66",
+    "Accounting.AccelRun.instrs": "ca8692aaba48efab03453432890c0d448ff15b0d8a5cfcf2845b8fc57ec98814",
+    "Accounting.AccelRun.sched": "9e19ba0b44f0fd3b04047b77733d26bd6555605811f905b58e1034ecd2f4c752",
+    "Accounting.AccelRun.σ": "78bd2fde4cf1f3512692fa0de1b0fafcd94247dc782f8b7f0699895202be94d8",
+    "Accounting.issued": "543f347025a8081eb01f4d831c122eacd3103f9aa56191d78d184f8b7e934be4",
+    "Accounting.occUse": "6426cc8b9bd903b81d076e1a81ab09d136c19516b0177725030dc5ed555d2b8a",
+    "Accounting.stream": "564a1676de827e64028f0f7aba27a9ad953cd046a41a2e8bd92de99c9cbb860b"
+   },
+   "guarantees": ["Accounting.SecurityProofs.AccelAdditive", "Accounting.SecurityProofs.AccelRate"]
   },
   "Definitions.Accounting.Assumptions.Compose": {
    "digest": "f877cd444d2c9b5ff22043805110e73fcd44382af61a45bfb2376b2ce24449b3",
@@ -13666,6 +13694,8 @@
     "Accounting.instFintypeOp": "215511804eac7984ffc432e02f18ff1db6a3ae8f96101691aa6f1d5338bddd4d"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.AccelAdditive",
+    "Accounting.SecurityProofs.AccelRate",
     "Accounting.SecurityProofs.BandwidthOfAudit",
     "Accounting.SecurityProofs.BandwidthOfAuditPerRun",
     "Accounting.SecurityProofs.Bridge.BandwidthOfAuditPerRunPeriod",
@@ -14142,6 +14172,14 @@
     "Accounting.SecurityProofs.Actual.ThreadedRuntimeDarkSlots",
     "Accounting.SecurityProofs.Actual.ThreadedRuntimeSlots"
    ]
+  },
+  "Definitions.Accounting.Guarantees.Additive": {
+   "digest": "1d77f9a5311174238b982a6c727c5f85e1629a4e0ae279462fae461c360a0e71",
+   "definitions": {
+    "Accounting.Guarantees.AccelAdditive": "6f858ede87b9a4d223e3800b04808bd6c6f371b1d9dba7f87c1ea807ec2bcd26",
+    "Accounting.Guarantees.AccelRate": "e3de3716619a14ea7c11b4684197b5e4e35f2276c8dd1c52270b2ce414bc0826"
+   },
+   "guarantees": ["Accounting.SecurityProofs.AccelAdditive", "Accounting.SecurityProofs.AccelRate"]
   },
   "Definitions.Accounting.Guarantees.Bandwidth": {
    "digest": "71fb78cd62c87a3e6762f035dfab04f030ac6c761371e26bb809172c897d7fb0",
@@ -18737,6 +18775,8 @@
     "Verity.Accel.Word": "a743e9b37b547ce9b60bc650ce9ea8e342ac8deeff0b63e589e665628cb9e7b0"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.AccelAdditive",
+    "Accounting.SecurityProofs.AccelRate",
     "Pouw.SecurityProofs.DitherInstance.WorkSoundH200",
     "Pouw.SecurityProofs.DitherInstance.WorkSoundOnCardH200",
     "Pouw.SecurityProofs.DitherInstance.WorkSoundOnCardSm120",
