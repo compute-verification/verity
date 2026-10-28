@@ -21,12 +21,15 @@ DIR``).
 3. **The session**: the memory challenger's side started on its host by ``--challenger-command`` (the auditor gate's
    ``challenger_party`` verb), the prover connecting to ``--challenger-address`` and answering each index from ``C*`` on
    the card (`challenger_party.session`).
-4. **The verdict**: `period.answer`: the tie, the run's check under the challenger key that ``--trusted-sha512`` pins (a
-   session signed under any other is refused), and what an accepted run certifies (`period.certify`).
+4. **The verdict**: the run protocol's case (`period.case`: setup's published outputs, the session, the table and setup's
+   own inputs) and its answer on that case's bytes (`served_case.pous_answer`, `period.answer`): the tie, the run's
+   check under the challenger key that ``--trusted-sha512`` pins (a session signed under any other is refused), and what
+   an accepted run certifies (`period.certify`).
 5. **Zero knowledge**: the answer's commitment is a hiding one, one ``hm96-sha512/row/v2`` row in a ``frame-v3-sha512``
    tree (`verity.ml.commitments.advice`) holding the run's commitment (the SHA-512 of what setup published) under
    `binding`, so the record fixes the run and reveals nothing of ``W``'s digest, the salt or ``C*``'s root. Its opening,
-   setup's published outputs, the session, the trusted key and the table go to ``--private`` (by default
+   setup's published outputs, the session, the trusted key, the table, and the case with the run protocol's own answer
+   on it (``case.json``, ``answer.json``: the composite's piece, `served_case.write`) go to ``--private`` (by default
    ``SERVE_DIR/private/pous/w<WINDOW>``, 0700), never to ``DIR``. The profile carries the point, the certificate, the
    placement and the weights' public properties: their model, count and size.
 
@@ -63,6 +66,11 @@ from verity.core.protocols.pous import run as R
 from verity.ml.commitments import advice
 from verity.ml.commitments.identity import canonical_json_bytes
 from verity_vllm import protocols as PO
+
+if str(Path(__file__).resolve().parent) not in sys.path:
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+
+import served_case as SC
 
 pous = PO.adapter("pous")
 ROOT = Path(__file__).resolve().parents[2]
@@ -328,10 +336,11 @@ def run(serve_dir: Path, window: int, out: Path, *, hf_home: Path, device: str =
             trusted = (key,) if key_sha == trusted_sha512 else ()
             published = s.published()
             t = time.monotonic()
-            inner = period.answer(s.point, schemes, trusted, published, s.digests, session, sid, protocol,
-                                  setup_inputs=inputs)
-            answer_s = round(time.monotonic() - t, 3)
+            case = period.case(s.point, sid, trusted, published, s.digests, session,
+                               period.setup_case(s.point.params, *inputs))
             del inputs
+            inner = SC.pous_answer(case, schemes=schemes, protocol=protocol)
+            answer_s = round(time.monotonic() - t, 3)
             row = bytes.fromhex(inner["commitment"])
             hidden = advice.register([row], 8 * len(row), bind)
             opening = hidden.open(0)
@@ -342,6 +351,8 @@ def run(serve_dir: Path, window: int, out: Path, *, hf_home: Path, device: str =
                 "run.json": {"answer": inner, "point": period.point_json(s.point), "published": published.to_json(),
                              "session": rep["session"], "session_id": sid.hex(), "trusted": [k.hex() for k in trusted],
                              "public_key": key.hex(), "host": rep.get("host")}}, s.digests)
+            SC.write(private, case, inner)
+            del case
             answer = inner | {"commitment": hidden.root.hex()}
             if inner["verdict"] == "accept":
                 answer["profile"] = inner["profile"] | {
