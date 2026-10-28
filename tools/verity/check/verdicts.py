@@ -98,7 +98,7 @@ def _index_load(base: Path) -> dict:
 def _digests(found: dict[str, Path] | None = None) -> dict[str, str]:
     """`{pack path: sha256}` of every entry, reading only the files the root's index doesn't know by (size, mtime_ns).  The
     caches run to hundreds of GB, and re-reading every entry at both ends of a check held a finished run for an hour of disk
-    reads once another job had evicted the page cache (14 Oct, r20261014-032950-9e49).  A stale or garbled index only costs the
+    reads once another job had evicted the page cache.  A stale or garbled index only costs the
     re-read; an entry rewritten in place with its size and mtime_ns unchanged is the one change it would miss, and every writer
     replaces entries atomically."""
     found = entries() if found is None else found
@@ -141,7 +141,7 @@ def snapshot() -> dict[str, str]:
 
 
 #: an xz pack's filter: a dictionary spanning many entries, since one tree's circuit-check entries share most of what they record
-#: (300 of them, 68 MB: 11 MB gzipped, 0.35 MB this way, in less time; vy-nebius-cpu-1, 19 Oct)
+#: (300 of them, 68 MB: 11 MB gzipped, 0.35 MB this way, in less time)
 XZ_FILTERS = [{"id": lzma.FILTER_LZMA2, "preset": 1, "dict_size": 64 << 20}]
 
 
