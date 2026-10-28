@@ -1,4 +1,4 @@
-// H1's attention on sm_120a, S never stored: cohalf's QK^T (cgemm.cu's h_l7qs, Decision 82) with its words and receipts,
+// H1's attention on sm_120a, S never stored: cohalf's QK^T (cgemm.cu's h_l7qs) with its words and receipts,
 // the softmax, and the adopted P.V's P~ path (apv.cu's apv_fu), for Llama-3.1-8B's GQA (H query heads, kvh = H / rep KV
 // heads, head dimension 128, s tokens, causal).
 //
@@ -318,7 +318,7 @@ struct FA {
   size_t tpk = 0;
   uint32_t seed = 0, inst = 0, A = 0;
   float inv7 = 0.5f;
-  bool h1 = false;    // cohalf H1's QK^T (co32c-u16, decision 82): Q/K floored at top 111, the digit-split tail
+  bool h1 = false;    // cohalf H1's QK^T (co32c-u16): Q/K floored at top 111, the digit-split tail
   uint16_t* x;
   float2* qa = nullptr;   // cohalf H1's per (head, token) (max(x), max(-x)), filled by hrow_s for hquant_h1
   int8_t *W7, *X, *PA, *Wp, *PB, *Wh;

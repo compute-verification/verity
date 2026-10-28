@@ -17,9 +17,9 @@ closure, r producer DPs proved at random noise-active coordinates of each drawn 
 steered consumer as if it had failed (`closure`); at any coordinates of the row, it detects with the row's wrong
 fraction (`closure_any`). ε_luck + ε_adapt = luck factor × (saving / S).
 
-Inputs are SPEC's and SKIP's (note:20261017T0340Z-draft-skip) shapes and Theorem S's constants. The proof cost is the
-proofs team's (PRF-57): C-Flock's `--zk` CPU prover by session size, one session at a time per site, one per table
-until PRF-48. A round is 12.6 s, so proving keeps up only if a session batches enough rounds (`Cost.batch`); a round
+Inputs are the spec's and eps_budget's shapes and Theorem S's constants. The proof cost is
+C-Flock's `--zk` CPU prover by session size, one session at a time per site, one per table
+unless batched. A round is 12.6 s, so proving keeps up only if a session batches enough rounds (`Cost.batch`); a round
 that waits for its own proofs is longer, and ε grows with it (`unbatched`). Run `uv run
 benchmarks/pouw/proof_sampling.py` for the table.
 """
@@ -40,10 +40,10 @@ LUCK_FACTOR = 0.403
 
 COMPONENTS = ("qkv", "qk", "pv", "o", "gu", "down", "lm")
 
-# One `flock-circuit --zk` session on a 32-thread CPU prover (PRF-57, note:proofs/20261017T0552Z-report-proof-service-
-# cost-model; Pc4Tile_v1 at K = 4096): (whole DPs of length 4,096, prove s, process wall s). A DP's marginal cost is
+# One `flock-circuit --zk` session on a 32-thread CPU prover (the proof service's cost model; Pc4Tile_v1 at K =
+# 4096): (whole DPs of length 4,096, prove s, process wall s). A DP's marginal cost is
 # linear in its length; below 16 DPs the 16–256 line runs down to the session's fixed cost (1.8 s prove, 12.1 s wall).
-# Sessions run one at a time per site, and until PRF-48 each DP shape (a padded length class) is its own session.
+# Sessions run one at a time per site, and unless batched each DP shape (a padded length class) is its own session.
 ZK_SESSION = ((16, 2.4, 14.0), (256, 11.3, 42.0), (4096, 283.0, 950.0))
 DP_K = 4096
 
@@ -458,7 +458,7 @@ def session_s(dps: float) -> tuple[float, float]:
 
 
 def sessions_s(dps: float) -> float:
-    """Wall seconds to prove `dps` DPs in back-to-back sessions of at most 256 (PRF-57's sweet spot)."""
+    """Wall seconds to prove `dps` DPs in back-to-back sessions of at most 256 (the cost model's sweet spot)."""
     full, rest = divmod(dps, ZK_SESSION[1][0])
     return full * ZK_SESSION[1][2] + (session_s(rest)[1] if rest > 0 else 0.0)
 
@@ -490,11 +490,11 @@ class Cost:
 
     @property
     def wall_s(self) -> float:
-        """One multi-table session a round (PRF-48)."""
+        """One multi-table session a round."""
         return session_s(self.dps)[1]
 
     def keep_up_s(self, rounds: int, today: bool = False) -> float:
-        """Wall seconds to prove `rounds` rounds' draws: as one multi-table batch (PRF-48), or `today` one per table."""
+        """Wall seconds to prove `rounds` rounds' draws: as one multi-table batch, or `today` one per table."""
         if not today:
             return sessions_s(rounds * self.dps)
         out = 0.0
@@ -563,7 +563,7 @@ def table(cs: list[Cell], strategies: list[str], draws: list[int], closure_r: in
     """ε and Λ, the worst cell per model and design, against the round's proof cost (each column's worst cell).
 
     ε is at S = 48,000 rounds of 12.6 s, which holds when sessions batch enough rounds to keep up (the batch columns);
-    "unbatched" is ε when every round waits for its own session (PRF-48's one multi-table session a round).
+    "unbatched" is ε when every round waits for its own session (rather than one multi-table session a round).
     """
     groups: dict[str, list[Cell]] = {}
     for c in cs:

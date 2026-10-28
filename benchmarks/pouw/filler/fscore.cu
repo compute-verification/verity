@@ -1,4 +1,4 @@
-// FILL's arm-side driver for the filler scorer (cmp-13; approach pouw/filler-fused): dscore.cu's `dscore` protocol and
+// FILL's arm-side driver for the filler scorer: dscore.cu's `dscore` protocol and
 // row, with the arm block's serving step the fused one (dcap.cu's flin.cuh: the decode linears through flin_k, a
 // warp-specialized GEMM whose filler warps run the DRAM-free chain while its consumers wait on memory, and each layer's
 // attention blocks with filler warps), on the split's step SMs beside FILL v1's pump on the rest. filler-arm/v1's

@@ -1,4 +1,4 @@
-// RT2-HOPPER's (M′) probe on the H200 (sm_90a), for SLOT-LEMMA (#2755, note:20261019T0745Z-draft-fp-joint): does the
+// The (M′) probe on the H200 (sm_90a), for the slot lemma: does the
 // legacy shallow sparse shape mma.sp m16n8k32 (s8.sp, IMMA.SP.16832) hold a full slot step, alone and beside an
 // IADD3+FFMA lane? tensor_kinds/sm80.cu's own forms, kernels and timing, built for sm_90a: the dense m16n8k32 and the
 // deep sparse m16n8k64 beside it, each alone at 2, 4 and 8 warps a SMSP (and with the loop thinned, U = 4) and
