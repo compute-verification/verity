@@ -179,8 +179,27 @@ def cmd_run(a) -> None:
                   f"{scen} {point} shard {i}/{n}: {res['evaluated']} designs, none feasible", flush=True)
 
 
+def distinct(best: list[dict], top: int) -> list[dict]:
+    """The first `top` designs of distinct (J, serve); a tie's knobs that differ go in its row's `ties`."""
+    out: list[dict] = []
+    seen: dict[tuple, dict] = {}
+    for b in best:
+        sig = (f"{b['J']:.6g}", f"{b['serve']:.6g}")
+        if sig in seen:
+            row = seen[sig]
+            row["ties"] = sorted(set(row.get("ties", [])) | set(changed(row["design"], b["design"])))
+            continue
+        if len(out) == top:
+            continue
+        row = dict(b)
+        out.append(row)
+        seen[sig] = row
+    return out
+
+
 def merge(parts: list[dict], top: int = 10) -> dict:
     best = sorted((b for p in parts for b in p["best"]), key=lambda b: (b["J"], b["index"]))
+    best = distinct(best, top)
     f = Front()
     for p in parts:
         for r in p["front"]:
@@ -275,11 +294,12 @@ def render(report: dict) -> str:
                          f", {nom['shards']} shards, {nom['cpu_s'] / 60:.0f} CPU-min), {nom['feasible']:,} feasible")
             lines.append(f"infeasible by reason: {json.dumps(nom['reasons'])}")
             lines.append("")
-            lines.append("| # | J | serve | proving | proving GPU-s | verify CPU-s | design |")
-            lines.append("|---|---:|---:|---:|---:|---:|---|")
+            lines.append("| # | J | serve | proving | proving GPU-s | verify CPU-s | design | ties on |")
+            lines.append("|---|---:|---:|---:|---:|---:|---|---|")
             for n, t in enumerate(nom["top"], 1):
                 lines.append(f"| {n} | {fmt(t['J'])} | {fmt(t['serve'])} | {fmt(t['prove_ratio'])} | "
-                             f"{fmt(t['prove_gpu_s'])} | {fmt(t['verify_cpu_s'])} | `{t['key']}` |")
+                             f"{fmt(t['prove_gpu_s'])} | {fmt(t['verify_cpu_s'])} | `{t['key']}` | "
+                             f"{','.join(t.get('ties', [])) or '-'} |")
             lines.append("")
             lines.append(f"Pareto front, serve overhead against proving ({len(nom['front'])} points):")
             lines.append("")

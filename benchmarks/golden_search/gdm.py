@@ -87,6 +87,8 @@ INPUTS: dict[str, Input] = {
     "denoise_main": Input(1.0, 0.5, 2.5,
                           f"the noised GEMM over (S-1)L as a share of its plain mainloop: 1 at the protocol's in-kernel "
                           f"T_s (estimate), 2.5 at {DENOISE}'s chunked cuBLASLt with T_s through DRAM (an upper bound)"),
+    "rep_share": Input(0.3, 0.1, 0.6, "estimate: share of C-Flock's prove and verify time in its two reps' query "
+                                      "phases (GD-PROVER to measure); prices prover.reps 1"),
     "fresh_call_g": Input(1.0, 0.75, 1.5, f"x the served fresh-noise call, {DENOISE}: +3.2 (m 64) to +4.0 (m 8,192) G, "
                                           f"measured without T_s and the weight side"),
 }
@@ -114,7 +116,9 @@ def _apply(v: dict[str, float]) -> None:
 # ---------------------------------------------------------------------------------------------------------------------
 
 KNOBS = ("values", "bits", "row", "seal", "host", "kernels", "corun", "padded", "scheme", "L", "t", "noise", "drow",
-         "block", "law", "steps", "vtile")
+         "block", "law", "steps", "vtile", "period", "hiding", "reps")
+#: knobs a grid may leave out, at these values (a design's key names them only when they differ)
+DEFAULTS = {"period": 1, "hiding": "hm96", "reps": 2}
 
 GRIDS: dict[str, dict[str, tuple]] = {
     "coarse": {
@@ -158,6 +162,9 @@ GRIDS["fine"] = {**GRIDS["coarse"],
                            (16, 16, "lanes"), (32, 32, "single"), (32, 32, "lanes")),
                  "steps": (1, 2, 4, 8, 16, 32),
                  "vtile": ((1, 1), (1, 2), (1, 4), (1, 8), (2, 2), (4, 4), (8, 8))}
+#: the accounting period: oat-lite at each period n (windows certified together), each hiding form and C-Flock's reps
+GRIDS["period"] = {**GRIDS["oat-lite"], "period": (1, 10, 100, 1000, 10_000, 100_000), "hiding": ("hm96", "prf"),
+                   "reps": (2, 1)}
 
 _DITHER_ONLY = ("L", "t", "noise", "drow")
 
@@ -171,7 +178,7 @@ def grid(name: str):
     g = GRIDS[name]
     first = {k: g[k][0] for k in _DITHER_ONLY}
     j = 0
-    for values in product(*(g[k] for k in KNOBS)):
+    for values in product(*(g.get(k, (DEFAULTS.get(k),)) for k in KNOBS)):
         d = dict(zip(KNOBS, values))
         if d["scheme"] == "jr2" and any(d[k] != first[k] for k in _DITHER_ONLY):
             continue
@@ -191,7 +198,8 @@ def key(d: dict) -> str:
     pouw = (f"dither/L{d['L']}/t{d['t']}/{d['noise']}/drow{d['drow']}" if d["scheme"] == "dither" else "jr2")
     return (f"{d['values']}/b{d['bits']}/row{d['row']}/{d['seal']}/{d['host']}/{d['kernels']}/"
             f"{'corun' if d['corun'] else 'nocorun'}/{'pad' if d['padded'] else 'real'}/{pouw}/blk{blk}/{d['law']}/"
-            f"S{d['steps']}/vt{'x'.join(map(str, d['vtile']))}")
+            f"S{d['steps']}/vt{'x'.join(map(str, d['vtile']))}"
+            + "".join(f"/{k}{d[k]}" for k in DEFAULTS if d.get(k, DEFAULTS[k]) != DEFAULTS[k]))
 
 
 POINTS = {"t8192": "throughput", "t512": "demo"}
@@ -327,7 +335,7 @@ def pouw_units(gd: dict, d: dict, v: dict[str, float]) -> list:
     return units
 
 
-def proving(gd: dict, units: list, label: str) -> dict:
+def proving(gd: dict, units: list, label: str, n_win: int = 1, prover: float = 1.0) -> dict:
     """GD-MODEL's `proving` (achievability or the uniform kd-subset), with a unit's draw proving each of its `blocks`
     (ANDs, count): statements a block template, k_log and lowering a block, the 2^27 cap a block."""
     s, pv, lo = gd["sampling"], gd["prover"], gd["lowering"]
@@ -341,7 +349,7 @@ def proving(gd: dict, units: list, label: str) -> dict:
         if "blocks" not in u:
             u["blocks"] = [(u["work"] + u["extra_ands"] + sum(gm.row_ands(x) for x in u["open_rows"]), 1)]
     F = sum(u["per_token"] * T * u["work"] for u in units)
-    C = s["eps"] * F
+    C = s["eps"] * F * n_win
     out = {"population": label, "draws": 0.0, "gpu_s": 0.0, "statements": 0, "lower_cpu_s": 0.0, "stage_cpu_s": 0.0,
            "verify_cpu_s": 0.0, "lower_peak_GiB": 0.0, "lower_peak_GiB_today": 0.0, "max_block_ands": 0.0,
            "lower_wall_s": 0.0, "classes": [], "infeasible": []}
@@ -359,10 +367,10 @@ def proving(gd: dict, units: list, label: str) -> dict:
             nb = draws * count
             k_log = math.ceil(math.log2(max(ands, 2))) + 1
             cap = 1 << max(0, pv["m_max"] - k_log)
-            stmts = math.ceil(nb / cap) if nb > 0 else 0
-            gpu = (nb * o * ands + nb * so * ands + stmts * (f0 + f1 * ands)) / speed
+            stmts = (math.ceil(nb * n_win / cap) if nb > 0 else 0) / n_win
+            gpu = prover * (nb * o * ands + nb * so * ands + stmts * (f0 + f1 * ands)) / speed
             gates = ands * gpa
-            lower = (1 if nb > 0 else 0) * gates * spg
+            lower = (1 if nb > 0 else 0) * gates * spg / n_win
             peak = gates * bpg / 2 ** 30
             if ands > BLOCK_CAP:
                 out["infeasible"].append("block>2^27")
@@ -375,7 +383,7 @@ def proving(gd: dict, units: list, label: str) -> dict:
             out["statements"] += stmts
             out["lower_cpu_s"] += lower
             out["stage_cpu_s"] += stage
-            out["verify_cpu_s"] += stmts * (vf + va * ands)
+            out["verify_cpu_s"] += prover * stmts * (vf + va * ands)
             out["lower_peak_GiB"] = max(out["lower_peak_GiB"], peak)
             out["lower_peak_GiB_today"] = max(out["lower_peak_GiB_today"],
                                               gates * gm.I("lower_bytes_per_gate_today") / 2 ** 30)
@@ -390,7 +398,10 @@ def proving(gd: dict, units: list, label: str) -> dict:
 # J under the guarantees
 # ---------------------------------------------------------------------------------------------------------------------
 
-_gm_proving = gm.proving
+_gm_proving, _gm_pouw_units = gm.proving, gm.pouw_units
+_gm_row_ands, _gm_compressions_per_row = gm.row_ands, gm.compressions_per_row
+#: GD-KNOBS (inbox 19:46Z): one C-Flock rep with each level's queries raised to clear 100 bits, about +3% queries
+REP1_EXTRA_QUERIES = 0.03
 
 
 def evaluate(d: dict, v: dict[str, float] | None = None, point: str = "t8192") -> dict:
@@ -399,18 +410,26 @@ def evaluate(d: dict, v: dict[str, float] | None = None, point: str = "t8192") -
     if point == "t512" and d["steps"] != 1:
         return {"J": math.inf, "serve": math.inf, "prove_ratio": math.inf, "feasible": False,
                 "reasons": ["window class"]}
-    gd = to_design(d, point, v)
-    vunits = value_units(gd, d)
-    punits = pouw_units(gd, d, v)
-    gd["partition"]["units"] = vunits
-    # J's own proving is replaced by the block-aware one; its serve side and retention are GD-MODEL's
-    pops = iter((proving(gd, vunits, "values"), proving(gd, punits, "PoUW")))
-    gm.proving = lambda *_: next(pops)
-    gm.pouw_units = lambda _d: punits
+    n_win = d.get("period", 1)
+    prover = 1.0 if d.get("reps", 2) == 2 else 1 - v["rep_share"] / 2 * (1 - REP1_EXTRA_QUERIES)
+    if d.get("hiding", "hm96") == "prf":
+        # a leaf H(salt || row) under SHA-512 as a PRF: an opening drops hm96's two compressions (116,240 ANDs), a row
+        # on the serve side its 7 of 42 at 4 KiB
+        gm.row_ands = lambda nbytes: gm.I("sha512_ands") * math.ceil((nbytes + 17) / 128)
+        gm.compressions_per_row = lambda row: math.ceil((row + 17) / 128) + 2
     try:
+        gd = to_design(d, point, v)
+        vunits = value_units(gd, d)
+        punits = pouw_units(gd, d, v)
+        gd["partition"]["units"] = vunits
+        # J's own proving is replaced by the block-aware one; its serve side and retention are GD-MODEL's
+        pops = iter((proving(gd, vunits, "values", n_win, prover), proving(gd, punits, "PoUW", n_win, prover)))
+        gm.proving = lambda *_: next(pops)
+        gm.pouw_units = lambda _d: punits
         r = gm.J(gd)
     finally:
-        gm.proving = _gm_proving
+        gm.proving, gm.pouw_units = _gm_proving, _gm_pouw_units
+        gm.row_ands, gm.compressions_per_row = _gm_row_ands, _gm_compressions_per_row
     vals, pouw = r["proving"]["values"], r["proving"]["pouw"]
     floor = gm.pouw_forced_frac(gd)
     credit = gm.pouw_credit(gd)
