@@ -3,7 +3,7 @@
 # (Llama-3.2-1B at T 8,192) at a range of hash shares, the SM clock sampled beside it all. The libraries are built before the lease.
 # Measurement only. cwd: the source tree's root.
 #   VERITY_BENCH_VENV (the node's torch + triton environment), CUDA_HOME (/usr/local/cuda-13.0), LEASE_MIN (20), and hash_cost.py's
-#   ROWS, TOTAL_GB, THREADS, WARPS, T, HASH_MS, REPS.
+#   ROWS, TOTAL_GB, THREADS, WARPS, T, HASH_MS, REPS, STEP, GAP_CYCLES.
 set -uo pipefail
 . benchmarks/harness/env.sh
 export OUT=${OUT:-${RESEARCH_RUN_DIR:-.}/out}; mkdir -p "$OUT"
@@ -58,6 +58,18 @@ if has paired; then
         a16k_p4:$D,ROWS=16384,CAPS=2+16+132
         a4k_t512:$D,T=512,ROWS=4096,VERITY_ROWS_PHASES=33,CAPS=2+8+16+33
         a16k_t512:$D,T=512,ROWS=16384,VERITY_ROWS_PHASES=64,CAPS=2+8+16+33"
+fi
+# ARMSET=step: beside a loop shaped like the served step (STEP=1: the non-GEMM kernels between the linears, the host gap after each
+# forward) at the cheapest phases and the served 4, then GEMM-only controls (STEP=0) with the clock sampled in each leg
+if has step; then
+  D=THREADS=256,TREE=0,HASH_MS=60
+  ARMS="${ARMS:-} s4k:$D,STEP=1,ROWS=4096,VERITY_ROWS_PHASES=33,CAPS=33+132+396+0
+        s16k:$D,STEP=1,ROWS=16384,VERITY_ROWS_PHASES=64,CAPS=33+132+396+0
+        s64k:$D,STEP=1,ROWS=65536,VERITY_ROWS_PHASES=64,CAPS=16+66+264+0
+        s16k_p4:$D,STEP=1,ROWS=16384,CAPS=132+0
+        s16k_nogap:$D,STEP=1,GAP_CYCLES=0,ROWS=16384,VERITY_ROWS_PHASES=64,CAPS=132+0
+        g4k:$D,ROWS=4096,VERITY_ROWS_PHASES=33,CAPS=33+132+396+0
+        g16k:$D,ROWS=16384,VERITY_ROWS_PHASES=64,CAPS=33+132+396+0"
 fi
 say "leased CUDA_VISIBLE_DEVICES=${CUDA_VISIBLE_DEVICES-unset}"
 nvidia-smi --query-gpu=name,uuid,clocks.sm,clocks.max.sm,power.limit,memory.used --format=csv | tee -a "$OUT/steps.txt"

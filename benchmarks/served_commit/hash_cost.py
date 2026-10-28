@@ -38,6 +38,7 @@ SRC = ROOT / "integrations/vllm/verity_vllm/commit/committer/native_rows.cu"
 LAYER = (("qkv", 3072, 2048), ("o", 2048, 2048), ("gate_up", 16384, 2048), ("down", 2048, 8192))   # Llama-3.2-1B (N, K)
 LAYERS = 16
 MACS_SM_CLK = 4096                                     # int8 dense MACs an SM-clock (the P1a ruler)
+SPIN_S = 0.04                                          # a leg's 60 M-cycle spin, at 1.5 GHz or more
 c_p, c_u64 = ctypes.c_void_p, ctypes.c_uint64
 
 
@@ -164,6 +165,58 @@ def timed(fn, reps: int, s: torch.cuda.Stream) -> float:
     return statistics.median(ts)
 
 
+class Clock:
+    """This GPU's SM clock and power through NVML (libnvidia-ml by ctypes), sampled about every 2 ms in a thread over one leg.
+    Off (every reading None) where NVML can't be opened."""
+
+    def __init__(self) -> None:
+        self.nv, self.h = None, ctypes.c_void_p()
+        try:
+            nv = ctypes.CDLL("libnvidia-ml.so.1")
+            uuid = f"GPU-{torch.cuda.get_device_properties(0).uuid}".encode()
+            if nv.nvmlInit_v2() == 0 and nv.nvmlDeviceGetHandleByUUID(uuid, ctypes.byref(self.h)) == 0:
+                self.nv = nv
+        except (OSError, AttributeError):
+            pass
+
+    def read(self) -> tuple[int, float]:
+        mhz, mw = ctypes.c_uint(), ctypes.c_uint()
+        self.nv.nvmlDeviceGetClockInfo(self.h, 1, ctypes.byref(mhz))           # NVML_CLOCK_SM
+        self.nv.nvmlDeviceGetPowerUsage(self.h, ctypes.byref(mw))
+        return mhz.value, mw.value / 1000
+
+    def leg(self, skip_s: float):
+        """A context whose value, once it exits, is (median MHz, median W, samples) after the first skip_s (the leg's spin)."""
+        import threading
+        out: dict[str, Any] = {"mhz": None, "w": None, "n": 0}
+        clock = self
+
+        class Leg:
+            def __enter__(self):
+                if clock.nv is None:
+                    return out
+                self.stop, self.xs, t0 = threading.Event(), [], time.monotonic()
+
+                def run():
+                    while not self.stop.is_set():
+                        if time.monotonic() - t0 >= skip_s:
+                            self.xs.append(clock.read())
+                        self.stop.wait(0.002)
+                self.th = threading.Thread(target=run, daemon=True)
+                self.th.start()
+                return out
+
+            def __exit__(self, *exc):
+                if clock.nv is None:
+                    return False
+                self.stop.set()
+                self.th.join()
+                if self.xs:
+                    out.update(mhz=statistics.median(m for m, _ in self.xs), w=statistics.median(w for _, w in self.xs), n=len(self.xs))
+                return False
+        return Leg()
+
+
 def compressions_leaf(rb: int) -> int:
     """A leaf's SHA-512 compressions: the row after P's midstate, salt 3, c 2, h 2, frame leaf 2."""
     return math.ceil((rb + 17) / 128) + 9
@@ -171,10 +224,13 @@ def compressions_leaf(rb: int) -> int:
 
 class Gemm:
     """One forward's int8 linears at T tokens: the served kernel (int8_fused.scaled_mm at _plan's config), 16 layers of distinct weights,
-    captured once into a CUDA graph."""
+    captured once into a CUDA graph.  step: shaped like the served step instead, each layer's GEMMs between stand-ins sized to
+    HASH-56's per-class times at T 8,192 (two bf16 passes a norm, a rope pass, torch's causal flash attention at 1,024-token sequences
+    and hd64, silu x mul), and gap_cycles of one spinning thread after each forward for the host gap between forwards."""
 
-    def __init__(self, T: int) -> None:
+    def __init__(self, T: int, step: bool = False, gap_cycles: int = 0) -> None:
         from verity_vllm.engine import int8_fused as F
+        self.step, self.gap_cycles = step, gap_cycles
         dev = torch.device("cuda")
         g = torch.Generator(device=dev).manual_seed(7)
         self.T, self.calls, self.cfgs = T, [], {}
@@ -198,65 +254,101 @@ class Gemm:
         ref = (xq[:64].float() @ w[:64].float().t()) * sa[:64, None] * sw[None, :64]
         got = self.calls[0][4][:64, :64].float()
         self.close = bool(torch.allclose(got, ref.to(torch.bfloat16).float(), rtol=1e-2, atol=1e-2))
+        if step:
+            hid, inter, heads, hd = 2048, 8192, 32, 64
+            seq = min(T, 1024)
+            bf = {"dtype": torch.bfloat16, "device": dev}
+            self.x, self.xn, self.x2 = (torch.randn(T, hid, **bf) for _ in range(3))
+            self.nw = torch.rand(hid, **bf) + 0.5
+            self.q, self.q2, self.k, self.v, self.rc = (torch.randn(T // seq, heads, seq, hd, **bf) for _ in range(5))
+            self.gu, self.act = outs[2 * inter], torch.empty(T, inter, **bf)
+        self.forward()                                        # every kernel once outside the capture
+        torch.cuda.synchronize()
         s = torch.cuda.Stream()
         s.wait_stream(torch.cuda.current_stream())
         self.graph = torch.cuda.CUDAGraph()
         with torch.cuda.graph(self.graph, stream=s):
-            for c in self.calls:
-                F.scaled_mm(*c[:5], c[5], c[6])
+            self.forward()
         torch.cuda.synchronize()
+
+    def forward(self) -> None:
+        F = self.F
+        for li in range(LAYERS):
+            qkv, o, gate_up, down = self.calls[4 * li: 4 * li + 4]
+            if self.step:
+                self.norm()
+            F.scaled_mm(*qkv[:5], qkv[5], qkv[6])
+            if self.step:
+                torch.mul(self.q, self.rc, out=self.q2)
+                torch.nn.functional.scaled_dot_product_attention(self.q2, self.k, self.v, is_causal=True)
+            F.scaled_mm(*o[:5], o[5], o[6])
+            if self.step:
+                self.norm()
+            F.scaled_mm(*gate_up[:5], gate_up[5], gate_up[6])
+            if self.step:
+                half = self.gu.shape[1] // 2
+                torch.mul(torch.nn.functional.silu(self.gu[:, :half]), self.gu[:, half:], out=self.act)
+            F.scaled_mm(*down[:5], down[5], down[6])
+        if self.gap_cycles:
+            torch.cuda._sleep(self.gap_cycles)
+
+    def norm(self) -> None:
+        torch.mul(self.x, self.nw, out=self.xn)
+        torch.mul(self.xn, self.nw, out=self.x2)
 
     def replay(self) -> None:
         self.graph.replay()
 
 
 def beside(R: Rows, P, data: torch.Tensor, rb: int, n_rows: int, lv: torch.Tensor, scratch: torch.Tensor, cap: int, G: Gemm,
-           n_fwd: int, hs: torch.cuda.Stream, gs: torch.cuda.Stream, reps: int) -> dict[str, Any]:
+           n_fwd: int, hs: torch.cuda.Stream, gs: torch.cuda.Stream, reps: int, clk: Clock) -> dict[str, Any]:
     """The GEMM loop (n_fwd forwards, an event after each) on gs and n_rows leaves on hs, released by one event; medians over reps.
     Each rep runs the loop alone (A), beside the hash (B), and alone again (A'), each behind the same spin, so the power-capped clock
     starts each leg alike: B's baseline is (A + A') / 2, and A' - A is the noise floor (aa_ms)."""
     main = torch.cuda.current_stream()
 
-    def leg(hashing: bool) -> tuple[float, dict[str, Any] | None]:
+    def leg(hashing: bool) -> tuple[float, dict[str, Any] | None, dict[str, Any]]:
         e0, eh, eh0, eg0 = (torch.cuda.Event(enable_timing=True) for _ in range(4))
         ef = [torch.cuda.Event(enable_timing=True) for _ in range(n_fwd)]
         torch.cuda.synchronize()
-        torch.cuda._sleep(60_000_000)
-        e0.record(main)
-        gs.wait_event(e0)
-        with torch.cuda.stream(gs):
-            eg0.record(gs)
-            for i in range(n_fwd):
-                G.replay()
-                ef[i].record(gs)
-        if hashing:
-            hs.wait_event(e0)
-            with torch.cuda.stream(hs):
-                eh0.record(hs)
-                R.leaves(P, data, rb, n_rows, n_rows, lv, scratch, hs, cap)
-                eh.record(hs)
-        torch.cuda.synchronize()
+        with clk.leg(SPIN_S) as c:
+            torch.cuda._sleep(60_000_000)
+            e0.record(main)
+            gs.wait_event(e0)
+            with torch.cuda.stream(gs):
+                eg0.record(gs)
+                for i in range(n_fwd):
+                    G.replay()
+                    ef[i].record(gs)
+            if hashing:
+                hs.wait_event(e0)
+                with torch.cuda.stream(hs):
+                    eh0.record(hs)
+                    R.leaves(P, data, rb, n_rows, n_rows, lv, scratch, hs, cap)
+                    eh.record(hs)
+            torch.cuda.synchronize()
         done = [e0.elapsed_time(e) for e in ef]
         g0 = e0.elapsed_time(eg0)
         if not hashing:
-            return done[-1] - g0, None
+            return done[-1] - g0, None, c
         th = e0.elapsed_time(eh)
         k = sum(1 for t in done if t <= th)
         prev = done[k - 1] if k else g0
         frac = k + ((th - prev) / (done[k] - prev) if k < n_fwd and done[k] > prev else 0.0)
         return done[-1] - g0, {"hash_ms": th, "gemm_ms": done[-1], "hash_start_ms": e0.elapsed_time(eh0), "gemm_start_ms": g0,
-                               "fwd_in_hash_window": frac, "overlapped": th < done[-1]}
+                               "fwd_in_hash_window": frac, "overlapped": th < done[-1]}, c
 
     rows = []
     for r in range(reps + 1):
-        a, _ = leg(False)
-        b, row = leg(True)
-        a2, _ = leg(False)
+        a, _, ca = leg(False)
+        b, row, cb = leg(True)
+        a2, _, ca2 = leg(False)
         if not r:
             continue
         base = (a + a2) / 2
         row.update(loop_a_ms=a, loop_a2_ms=a2, delta_ms=b - base, aa_ms=a2 - a,
-                   kappa=row["fwd_in_hash_window"] * base / n_fwd / row["hash_ms"], slowdown=b / base)
+                   kappa=row["fwd_in_hash_window"] * base / n_fwd / row["hash_ms"], slowdown=b / base,
+                   mhz=[ca["mhz"], cb["mhz"], ca2["mhz"]], w=[ca["w"], cb["w"], ca2["w"]], clock_n=[ca["n"], cb["n"], ca2["n"]])
         rows.append(row)
     med = {k: statistics.median(x[k] for x in rows) for k in ("hash_ms", "gemm_ms", "hash_start_ms", "gemm_start_ms", "fwd_in_hash_window")}
     H = n_rows * rb
@@ -269,6 +361,15 @@ def beside(R: Rows, P, data: torch.Tensor, rb: int, n_rows: int, lv: torch.Tenso
             "gemm_slowdown_total": round(statistics.median(x["slowdown"] for x in rows), 4),
             "aa_ms": round(statistics.median(abs(x["aa_ms"]) for x in rows), 4),
             "delta_ms_range": [round(min(x["delta_ms"] for x in rows), 4), round(max(x["delta_ms"] for x in rows), 4)],
+            **({"mhz_alone": statistics.median(v for x in rows for v in (x["mhz"][0], x["mhz"][2])),
+                "mhz_beside": statistics.median(x["mhz"][1] for x in rows),
+                "w_alone": round(statistics.median(v for x in rows for v in (x["w"][0], x["w"][2])), 1),
+                "w_beside": round(statistics.median(x["w"][1] for x in rows), 1),
+                # the GEMM's extra SM-cycles: what the loss is once the clock's own fall is taken out
+                "delta_mcycles": round(statistics.median(((x["gemm_ms"] - x["gemm_start_ms"]) * x["mhz"][1]
+                                                          - (x["loop_a_ms"] * x["mhz"][0] + x["loop_a2_ms"] * x["mhz"][2]) / 2) * 1e-3
+                                                         for x in rows), 4)}
+               if all(None not in x["mhz"] for x in rows) else {}),
             "delta_ms_per_gb": round(delta / (H * 1e-9), 4), **{k: round(v, 4) for k, v in med.items()}, "reps": rows}
 
 
@@ -286,22 +387,25 @@ def main() -> None:
     tree = os.environ.get("TREE", "1") == "1"
     stride0 = os.environ.get("STRIDE0", "0") == "1"
     gprio = int(os.environ.get("GPRIO", "-100"))
+    step = os.environ.get("STEP", "0") == "1"
+    gap_cycles = int(float(os.environ.get("GAP_CYCLES", "16.8e6" if step else "0")))   # HASH-56: 9.6 ms at 1,750 MHz
     build_dir = Path(os.environ.get("BUILD_DIR") or tempfile.mkdtemp(prefix="hash-cost-"))
     prop = torch.cuda.get_device_properties(0)
     arch, sms = f"{prop.major}{prop.minor}", prop.multi_processor_count
     res: dict[str, Any] = {"device": prop.name, "sms": sms, "arch": arch, "total_bytes": total, "T": T,
                            "phases": os.environ.get("VERITY_ROWS_PHASES", "4"), "form": os.environ.get("VERITY_ROWS_FORM", "split"),
-                           "stride0": stride0, "gemm_priority": gprio, "cuda_cflags": list(CUDA_CFLAGS), "forms": {}, "clock_marks": []}
+                           "stride0": stride0, "gemm_priority": gprio, "step": step, "gap_cycles": gap_cycles, "cuda_cflags": list(CUDA_CFLAGS), "forms": {}, "clock_marks": []}
 
     def mark(tag: str) -> None:
         res["clock_marks"].append([tag, time.time()])
 
     hs, gs = torch.cuda.Stream(priority=0), torch.cuda.Stream(priority=gprio)   # -100: clamped to the highest
     mark("gemm_build")
-    G = Gemm(T)
+    G = Gemm(T, step, gap_cycles)
+    clk = Clock()
     fwd_ms = timed(lambda s: G.replay(), max(reps, 9), gs)
     res["gemm"] = {"macs_per_forward": G.macs, "configs": G.cfgs, "spot_check_close": G.close, "forward_ms": round(fwd_ms, 4),
-                   "tmacs_per_s": round(G.macs / fwd_ms * 1e-9, 1)}
+                   "tmacs_per_s": round(G.macs / fwd_ms * 1e-9, 1), "nvml": clk.nv is not None}
     mark("gemm_alone")
     print("gemm", json.dumps(res["gemm"]), flush=True)
 
@@ -363,7 +467,7 @@ def main() -> None:
                 n_fwd = max(2, math.ceil(2.5 * alone_ms / fwd_ms))
                 mark(f"t{threads}:{rb}:cap{cap}:beside")
                 for _ in range(3):
-                    r = beside(R, P, data, rb, n_rows, lv, scratch, cap, G, n_fwd, hs, gs, reps)
+                    r = beside(R, P, data, rb, n_rows, lv, scratch, cap, G, n_fwd, hs, gs, reps, clk)
                     if r["overlapped"]:
                         break
                     n_fwd = max(2 * n_fwd, math.ceil(1.5 * r["hash_ms"] / fwd_ms))   # beside, the hash can run 10x slower than alone
