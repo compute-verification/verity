@@ -75,9 +75,18 @@ def compare(sync: list[dict], asy: list[dict]) -> dict[str, Any]:
     roots = [[r for w in ws for r in w.get("step_roots") or []] for ws in held]
     failed = [[w["window"] for w in ws if not (w.get("passed") and w.get("committed_bytes"))] for ws in held]
     differ = [i for i, (x, y) in enumerate(zip(*roots)) if x != y]
+    h1 = [[w.get("pouw_h1") for w in ws] for ws in held]
+    on = any(h is not None for hs in h1 for h in hs)
+    untied = [[w["window"] for w, h in zip(ws, hs) if h is None or h.get("tied") is not True] for ws, hs in zip(held, h1)]
+    same = {k: sum(1 for x, y in zip(*h1) if x and y and x.get(k) == y.get(k)) for k in ("tied", "steps_served", "roots1", "calls_root")}
     return {"windows": [len(ws) for ws in held], "steps": [len(r) for r in roots], "sync_failed": failed[0][:10],
             "async_failed": failed[1][:10], "differ": differ[:10], "roots_equal": sum(x == y for x, y in zip(*roots)),
-            "passed": bool(roots[1]) and not failed[0] and not failed[1] and len(roots[0]) == len(roots[1]) and not differ}
+            "h1": on and {"untied": [u[:10] for u in untied], "equal": same,
+                          "per_window": [[[w["window"], (h or {}).get("tied"), (h or {}).get("steps_served"),
+                                           str((h or {}).get("calls_root"))[:16], (h or {}).get("error")] for w, h in zip(ws, hs)]
+                                         for ws, hs in zip(held, h1)]},
+            "passed": (bool(roots[1]) and not failed[0] and not failed[1] and len(roots[0]) == len(roots[1]) and not differ
+                       and not (on and (untied[0] or untied[1])))}
 
 
 def verdict(sync_dir: Path, async_dir: Path, out: Path) -> int:
@@ -106,7 +115,7 @@ def arm(name: str, out: Path, a: argparse.Namespace) -> Path:
         drain.start()
         for b in range(1, a.batches + 1):
             subprocess.run([sys.executable, str(LOAD), "--port", str(port), "--model", model, "--fixed", str(a.requests),
-                            "--window-steps", "1", "--prompt-range", f"{a.prompt_ids}:{a.prompt_ids}", "--release", f"ab{b}",
+                            "--window-steps", str(a.steps), "--prompt-range", f"{a.prompt_ids}:{a.prompt_ids}", "--release", f"ab{b}",
                             "--seed", str(b), "--out", str(d / "load.jsonl")], check=True)
         srv.send_signal(signal.SIGTERM)
         print(f"{name}: serve-openai exited {srv.wait()}", flush=True)
@@ -125,6 +134,7 @@ def main(argv: list[str] | None = None) -> int:
             p.add_argument("--batches", type=int, default=8)
             p.add_argument("--requests", type=int, default=8)
             p.add_argument("--prompt-ids", type=int, default=1024)
+            p.add_argument("--steps", type=int, default=1)
             p.add_argument("--port", type=int, default=18300)
         p.add_argument("serve", nargs=argparse.REMAINDER)
     c = sub.add_parser("compare")
