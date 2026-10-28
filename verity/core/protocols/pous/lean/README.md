@@ -31,16 +31,11 @@ Definitions/Pous/Model/Continuous.lean
                                     the continuous audit: an explicit memory challenger (sequential reveal, a hard
                                     deadline, every answer past `Δ` counted) and a responder on its clock; the
                                     arrivals the memory challenger draws (queued, never dropped) and the memory at each time
-Definitions/Pous/Model/{Digest,SecureErasure}.lean
-                                    the keyed digest of a region (from PR #1010, without its bandwidth
-                                    assumption); the secure-erasure audit: a keyed fill of all volatile memory,
-                                    timed spot reads, and the foreign content the prover keeps (4 Oct model)
-Definitions/Pous/Accounting/{Params,LemmaA,PubMeets,GradedMeets,Rebuild,EraseMeets}.lean
+Definitions/Pous/Accounting/{Params,LemmaA,PubMeets,GradedMeets,Rebuild}.lean
                                     ρ, δ, expansion, `Meets`; Lemma A's bound and A7′'s rows;
                                     `PubMeets`, the requirement with a public encoder; `GradedMeets`, with grace `t`;
                                     a band segment's re-encode cost `R(d)`, a graded row's round span and
-                                    the memory challenger's cap on an audit's duration; `EraseMeets`,
-                                    the secure-erasure requirement
+                                    the memory challenger's cap on an audit's duration
 Definitions/Pous/P2/Cost.lean       P2's cost model, the generic ring over `Z/p` with random odd labels
                                     and the junk label (`ringRO`), the bound `RingBounded D Q L` beside `Bounded`,
                                     `MeetsOn`, `MeetsWithSlack`, and P2 in it (`p2ring`)
@@ -61,16 +56,9 @@ Definitions/Pous/Guarantees/Obligation.lean
                                     memory term at `1038·2^16` blocks (`ObligationDemo`, `ObligationDemoWide`),
                                     and a 320-read window at `2^-20` from `2^19` to `2^27` blocks
                                     (`ObligationWide320`), proved in `Proofs/Pous/Obligation.lean`
-Definitions/Pous/Guarantees/SecureErasure.lean
-                                    two frozen statements, which grade.sh grades against: secure erasure on the
-                                    band at every `N` and at 96 GiB (`SecureErasureMeetsFamily`,
-                                    `SecureErasureMeets96GiB`); no named assumption, no bandwidth-separation premise;
-                                    in the ideal-permutation model only, not a bound on a band-fill wipe at the
-                                    reference `Π₂` (art:7617c8017e80)
-Proofs/Pous/Statements.lean         trusted, the lemmas' statements (math, not claims): 42 lemmas, the
+Proofs/Pous/Statements.lean         trusted, the lemmas' statements (math, not claims): 40 lemmas, the
                                     completeness theorem `ContinuousComplete` and `InvExPostFactoTwoLayer`, which
-                                    `N10Refuted` negates, among them `DigestAU` and `SecureErasureMeets`; it
-                                    imports no proof, and grade.sh grades `KFloor`, `Theorem1ii` and the open
+                                    `N10Refuted` negates; it imports no proof, and grade.sh grades `KFloor`, `Theorem1ii` and the open
                                     `A2LemmaAM1`, `A5RabinGcd` and `A7Params` against it
 Proofs/Pous.lean                    proved, the proofs: imports every proof module, and proves
                                     Pous.SecurityProofs.X : Pous.Guarantees.X for each proved guarantee
@@ -97,9 +85,6 @@ Proofs/Pous/Graded/                 proved: the tail rule (`Tail.lean`), Theorem
 Proofs/Pous/Rebuild/                proved: under the memory challenger's duration cap, no audit re-encodes a whole band
                                     segment from `W` alone (`Clock.lean`, the cumulative chain clock;
                                     `Window.lean`, the counts; `Exclusion.lean`, `BackgroundRebuildExcluded`)
-Proofs/Pous/SecureErasure/          proved: `DigestAU` (Digest), secure erasure from the audit by counting
-                                    (Reduction), and the band's audit at 2152 reads with `EraseMeets` at
-                                    `f = 1/19`, `ε = 2^-128` (Band)
 lean-audit.json                     the policy and guarantee records for tools/verity/lean/check.py
 ~~~
 
