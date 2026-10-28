@@ -80,7 +80,7 @@ carries them as hex under `blobs`.
 ## A registration check
 
 `registered id R s components` checks a registration before composing, in its commit phase, and `registeredB` is the
-same over blobs. Onsite is one, with NCI's check of record as `R` (`NciCheck.Protocol.protocol`, `verity/nci/v1`):
+same over blobs. Onsite is one, with NCI's check of record as `R` (`NciCheck.Protocol.protocol`, `verity/inference-only/v0`):
 `registeredB "verity/onsite/v0" NciCheck.Protocol.protocol
 SampledProofs.OneStageZk.protocol.id components`, whose registration is the one sampled proofs' one-stage audit commits
 to, one registration digest in both. Onsite has six subprotocols, and NCI is none of them. Its formats are the
