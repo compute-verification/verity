@@ -192,7 +192,7 @@ class Ledger:
     prompt_ids: list[int]
     ingress: dict[str, Any] = field(default_factory=dict)
     user: str | None = None                      # the body's `user`, the id the advice names the request by
-    release: Any = None                          # (the warden's run, its place in the release order), under --admit release-order
+    release: Any = None                          # (the network certifier's run, its place in the release order), under --admit release-order
     admitted: int = -1                           # its place in the order requests were added to the engine
     streamed: list[int] = field(default_factory=list)
     finish: dict[str, Any] | None = None

@@ -2,14 +2,15 @@
 # commit_slots on one leased GPU (cwd = the source tree's root): outside the lease, the engine's build (sha512_rows; nvcc,
 # for this GPU) and its host twin's; under one lease of at most LEASE_MIN minutes, the GPU tests, check.py (the roots
 # against the CPU reference's, the frozen layout at 4,096 to 20,480 slots on sampled slots) and bench.py (GB/s and share of
-# the step). Python is the node's serving venv (CUDA torch), with the tree on PYTHONPATH.
+# the step). Python is PY (CUDA torch), with the tree on PYTHONPATH.
 #
-#   research run --on vy-dc-h200 --project verity --campaign e2e-demo --cwd source --env GPU_LEASE_WHO=LANE \
-#     -- bash benchmarks/torch_gpu/commit_slots/gpu.sh
+#   OUT=DIR bash benchmarks/torch_gpu/commit_slots/gpu.sh
+#
+# Needs a CUDA GPU (an H200 for the frozen layout), CUDA's nvcc and `gpu-lease` on PATH.
 # STEPS (default "tests check bench"; a failing tests step ends the lease; "step" runs step.py's time on STEP_ARGS, layout
 # files and options; STEP_WRAP, a command it runs under, e.g. nsys profile ...), CHECK_ARGS, BENCH_ARGS, STEP_ARGS,
 # LEASE_MIN (default 25), PY,
-# LEASE_END (a UTC time `date -d` reads, e.g. YYYY-MM-DDTHH:MMZ, on a card lent until then: a lease that starts too late
+# LEASE_END (a UTC time `date -d` reads, e.g. YYYY-MM-DDTHH:MMZ, on a GPU lent until then: a lease that starts too late
 # to end by it runs nothing).
 set -uo pipefail
 O=${OUT:?}

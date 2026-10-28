@@ -14,7 +14,8 @@ the change's base, the list's total held, a loosened lint failing, a base lint t
 the silent-except check beside that (a new swallowing handler, typed or broad, refused by name with the fix, one that
 re-raises or records its outcome passing, a rename moving its entry, the list's total held, a loosened lint failing, both
 counted lints counting one change), a repository list (ruff's, a counted lint's) catching up to what its base holds and no
-further, a public command P16's list gains (passing when the file it names runs it, refused when that file doesn't or isn't
+further, a counted lint's list rising with an edit to its lint at the files the change leaves untouched and no others, a
+public command P16's list gains (passing when the file it names runs it, refused when that file doesn't or isn't
 there), the source checks' findings kept beside the verdict, where ruff comes from (this
 Python, uv's cache, the index, else the gate can't judge and names the host's fix), the `noqa` count (no change adds more
 than it removes; a moved one is kept; only comments count; a new copy of a line is named where it was added), the exemptions
@@ -192,7 +193,7 @@ CHECK, COMMIT, RECORDS = "verity_vllm/check", "verity_vllm/commit", "verity_vllm
 
 
 def _or_empty(package: str, n: int) -> dict:
-    """typed_records' count of `.get(k) or []` reads in one package (#4525)"""
+    """typed_records' count of `.get(k) or []` reads in one package"""
     return {"file": package, "kind": "or-empty", "symbol": "<package>", "detail": ".get(k) or [] / {}", "count": n}
 
 
@@ -202,12 +203,12 @@ def _schema(file: str) -> dict:
 
 
 def test_a_move_between_packages_keeps_its_kinds_total_as_4545_moves_reads_from_check_to_commit(repo):
-    """clean-engine's #4545 moves `.get(k) or []` reads from check/ to commit/ to break their cycle: commit's count rises
-    53 -> 87 as check's falls 252 -> 218.  A new package is paid for the same way; a new per-site entry isn't, by any kind."""
+    """A move of `.get(k) or []` reads from check/ to commit/, to break their cycle, raises commit's count 53 -> 87 as
+    check's falls 252 -> 218.  A new package is paid for the same way; a new per-site entry isn't, by any kind."""
     gates = _schema("verity_vllm/check/gates.py")
     repo.commit("typed_records", {TYPED: _allowlist(_or_empty(CHECK, 252), _or_empty(COMMIT, 53), gates)})
     repo.git("checkout", "-q", "-b", "pr")
-    repo.commit("#4545", {TYPED: _allowlist(_or_empty(CHECK, 218), _or_empty(COMMIT, 87), gates)})
+    repo.commit("moves check's reads to commit", {TYPED: _allowlist(_or_empty(CHECK, 218), _or_empty(COMMIT, 87), gates)})
     [c] = G.gate("main", "pr")["changes"]
     assert (c["verdict"], c["before"], c["after"], c["fix"]) == ("passed", 5, 5, [])
     assert c["pooled"] == [f"{TYPED} or-empty 305 -> 305 in total over 2 moved key(s)"]
@@ -447,8 +448,8 @@ def test_a_worktree_git_wont_remove_decides_no_verdict_and_goes_by_hand(linted, 
 
 
 def test_a_worktree_that_leaves_files_behind_decides_no_verdict(linted, monkeypatch, tmp_path):
-    """ci's review of #4852: when git won't remove the worktree and the removal by hand leaves a file, the scratch directory's own
-    cleanup raised on 3.12, past `main`'s `GitError`, and the gate exited 1 naming no failure."""
+    """When git won't remove the worktree and the removal by hand leaves a file, the scratch directory's own cleanup raises
+    on 3.12, past `main`'s `GitError`: the gate still reaches its verdict, rather than exiting 1 naming no failure."""
     linted.commit("fixes a.py and retires its entry", {"integrations/vllm/verity_vllm/a.py": "A = 'ok'\n",
                                                        P01: _allowlist(_entry("verity_vllm/b.py", "B"))})
     run = subprocess.run
@@ -1040,7 +1041,7 @@ def _caught_up(listed: str, total: str, n: int) -> str:
 
 
 def test_a_counted_lint_s_list_catches_up_to_what_its_base_holds_and_no_further(silent_linted):
-    """A handler that landed with no entry (a PR on `next` before the lint did, CI-198) may be listed in any file, the list's
+    """A handler that landed with no entry (a PR on `next` before the lint did) may be listed in any file, the list's
     own or one the change edits; a count past what the base's lint finds there, or a site the lint doesn't count (an edit to
     the lint's module buys nothing), is growth."""
     u = {"file": "tools/u.py", "count": 1}
@@ -1126,9 +1127,9 @@ def callers_linted(repo) -> Repo:
 
 
 def test_a_public_command_a_change_adds_passes_when_its_caller_runs_it_and_is_refused_when_it_does_not(callers_linted):
-    """#5088's weights-tie, run only from benchmarks/prove_path/run.sh: the base's P16 lint, run on the change's tree, reads
-    the change's public table, and the gate checks each caller the table gains (a new command's, or one moved to another
-    file) as that lint finds a call."""
+    """A command run only from benchmarks/, as weights-tie is from benchmarks/prove_path/run.sh: the base's P16 lint, run on
+    the change's tree, reads the change's public table, and the gate checks each caller the table gains (a new command's, or
+    one moved to another file) as that lint finds a call."""
     callers_linted.commit("adds tie, run from benchmarks", {
         CLI: _cli("row", "tie"), G.CALLERS_LIST: _callers({**ROW, "tie": "benchmarks/tie/run.sh"}),
         "benchmarks/tie/run.sh": 'WT="$PY -m verity_vllm.pipeline.cli tie"\n$WT --x 1\n'})
@@ -1214,3 +1215,104 @@ def test_the_command_line(repo):
     assert run("main", "main").returncode == 0
     r = run("main", "no-such-ref")
     assert r.returncode == 2 and "ratchet gate: git rev-parse" in r.stderr
+
+
+REPO_LANE_LINT = "tests/lint/test_repo_lane_text.py"
+REPO_LANE_JSON = "tests/lint/allowlists/repo_lane_text.json"
+DOCS_A = {"file": "docs/a.md", "count": 1}
+
+
+@pytest.fixture
+def lane_linted(repo) -> Repo:
+    """``repo`` with the repository's real lane-text lint: docs/a.md's ``#1234`` is its one site, which the list allows."""
+    repo.commit("lane text", {REPO_LANE_LINT: (SCRIPT.parents[3] / REPO_LANE_LINT).read_text(),
+                              REPO_LANE_JSON: _allowlist(DOCS_A), "docs/a.md": "# A\n\nSee #1234.\n"})
+    repo.git("checkout", "-q", "-b", "pr")
+    return repo
+
+
+def _lane_lint(repo: Repo) -> str | None:
+    """the repository's lane-text lint, as the root suite runs it after landing, on ``repo``'s checkout"""
+    r = subprocess.run([sys.executable, "-c", "import sys; sys.path.insert(0, 'tests/lint'); "
+                        "import test_repo_lane_text as T; T.test_no_new_lane_text()"],
+                       cwd=repo.root, capture_output=True, text=True)
+    return None if r.returncode == 0 else r.stderr
+
+
+def test_lane_text_is_counted_in_every_kind_of_file_its_lint_reads_naming_where_the_text_goes(lane_linted):
+    """Markdown, a Lean comment and a Python docstring count, each by its path; a Python string literal is code, not prose."""
+    lane_linted.commit("an attribution, a Linear id, a PR and a literal", {
+        "docs/a.md": "# A\n\nSee #1234 (Daniel, 8 Oct).\n", "Security/B.lean": "-- VLLM-136\ndef b := 1\n",
+        "tools/c.py": '"""Built for #4321."""\nX = "#1234"\n', "tools/d.json": '{"pr": "#1234"}\n'})
+    [c] = G.gate("main", "pr")["changes"]
+    assert (c["verdict"], c["counted"].get("repo_lane_text")) == (
+        "failed", ["Security/B.lean", "docs/a.md", "tools/c.py"]), c["why"]
+    assert c["why"].startswith(
+        f"adds 3 lane-text site(s) to the files it changes, as the base's {REPO_LANE_LINT} counts them (Security/B.lean 0 -> 1; "
+        "docs/a.md 1 -> 2; tools/c.py 0 -> 1): Say what is true now, and put the rest where it lives: history in git "
+        "(the commit message), work in Linear (the issue), rulings in Notion (the decisions log), results in the store"), c["why"]
+    assert c["fix"] == ["Security/B.lean:1 linear: VLLM-136", "docs/a.md:3 attribution: (Daniel, 8 Oct)",
+                        "tools/c.py:1 pr: #4321"]
+    assert "docs/a.md: 2 found, 1 allowed" in (_lane_lint(lane_linted) or "")
+
+
+def test_a_lane_text_count_that_falls_refuses_nobody_and_its_list_may_run_ahead_or_be_pruned(lane_linted):
+    """Every area cleans its own while the list stands at its landing counts: a list ahead of its tree is fine, and only
+    growth is refused."""
+    lane_linted.commit("says what is true now", {"docs/a.md": "# A\n\nSee the queue's README.\n"})
+    [c] = G.gate("main", "pr")["changes"]
+    assert (c["verdict"], c["counted"].get("repo_lane_text"), c["why"]) == (
+        "passed", ["docs/a.md"], "no lane-text site is new in the 1 file(s) it changes"), c["why"]
+    assert _lane_lint(lane_linted) is None
+    subprocess.run([sys.executable, REPO_LANE_LINT, "--prune"], cwd=lane_linted.root, check=True, capture_output=True)
+    assert json.loads((lane_linted.root / REPO_LANE_JSON).read_text())["entries"] == []
+    lane_linted.commit("prunes its entry", {REPO_LANE_JSON: (lane_linted.root / REPO_LANE_JSON).read_text()})
+    [c] = G.gate("main", "pr")["changes"]
+    assert (c["verdict"], c["lints"]) == ("passed", ["repo_lane_text"]), c["why"]
+    assert c["why"].startswith("3 -> 2 ratchet exceptions"), c["why"]
+
+
+def test_a_lane_text_list_catches_up_to_what_its_base_holds_and_a_pinned_file_has_no_entry(lane_linted):
+    e = {"file": "tools/e.py", "count": 1}
+    lane_linted.git("checkout", "-q", "main")
+    lane_linted.commit("lane text with no entry", {"tools/e.py": "X = 1  # VLLM-136\n"})
+    lane_linted.git("checkout", "-q", "-B", "pr")
+    lane_linted.commit("the list takes it", {REPO_LANE_JSON: _allowlist(DOCS_A, e)})
+    [c] = G.gate("main", "pr")["changes"]
+    assert (c["verdict"], c["lints"], c["pooled"]) == (
+        "passed", ["repo_lane_text"], [_caught_up(REPO_LANE_JSON, "1 -> 2", 1)]), c["why"]
+    assert _lane_lint(lane_linted) is None
+    lane_linted.git("checkout", "-q", "-B", "pr", "main")
+    lane_linted.commit("lane text in AGENTS.md, listed", {"AGENTS.md": "Owned by @vllm (Daniel, 8 Oct).\n",
+                                                         REPO_LANE_JSON: _allowlist(DOCS_A, {"file": "AGENTS.md", "count": 1})})
+    [c] = G.gate("main", "pr")["changes"]
+    assert (c["verdict"], c["fix"]) == ("failed", [f"{REPO_LANE_JSON}: {G.key({'file': 'AGENTS.md'})} 0 -> 1"]), c["why"]
+    assert "repo_lane_text.json: AGENTS.md is pinned at zero (PINNED), so it has no entry" in (_lane_lint(lane_linted) or "")
+
+
+def test_a_lint_that_comes_to_count_more_records_its_list_at_the_files_it_leaves_untouched_and_no_others(lane_linted):
+    """The base's lint can't count a new kind, so the rise is taken from a change to the lint's module at each file of the
+    base's tree it leaves untouched, where it adds no text; a file it edits, or a rise with no edit to the lint, is
+    held as before, and main stays green after it lands."""
+    b = {"file": "docs/b.md", "count": 2}
+    lane_linted.git("checkout", "-q", "main")
+    lane_linted.commit("text the lint will count", {"docs/b.md": "# B\n\nTOY1 and TOY2.\n"})
+    lane_linted.git("checkout", "-q", "-B", "pr")
+    real = (SCRIPT.parents[3] / REPO_LANE_LINT).read_text()
+    lane = '    ("codename", r"\\[lane ", None),\n'
+    wider = real.replace(lane, '    ("toy", r"TOY\\d\\b", None),\n' + lane, 1)
+    assert wider != real
+    lane_linted.commit("counts TOY ids, and records them", {REPO_LANE_LINT: wider, REPO_LANE_JSON: _allowlist(DOCS_A, b)})
+    [c] = G.gate("main", "pr")["changes"]
+    assert (c["verdict"], c["lints"], c["pooled"]) == ("passed", ["repo_lane_text"], [
+        f"{REPO_LANE_JSON} 1 -> 3 in total, 2 of it in 1 key(s) at files the change leaves untouched, recorded as the lint "
+        "it edits counts them"]), c["why"]
+    assert _lane_lint(lane_linted) is None
+    lane_linted.commit("and one more in the file", {"docs/b.md": "# B\n\nTOY1, TOY2 and TOY3.\n",
+                                                    REPO_LANE_JSON: _allowlist(DOCS_A, {**b, "count": 3})})
+    [c] = G.gate("main", "pr")["changes"]
+    assert (c["verdict"], c["fix"]) == ("failed", [f"{REPO_LANE_JSON}: {G.key({'file': 'docs/b.md'})} 0 -> 3"]), c["why"]
+    lane_linted.git("checkout", "-q", "-B", "pr", "main")
+    lane_linted.commit("records them with the lint as it is", {REPO_LANE_JSON: _allowlist(DOCS_A, b)})
+    [c] = G.gate("main", "pr")["changes"]
+    assert (c["verdict"], c["fix"]) == ("failed", [f"{REPO_LANE_JSON}: {G.key({'file': 'docs/b.md'})} 0 -> 2"]), c["why"]
