@@ -33,7 +33,7 @@ from rho.params import Registry
 RUN_KINDS: Mapping[str, str] = {
     "pretrain": "train from scratch to a loss",
     "sft": "supervised fine-tuning from a registered base (data-heavy; its delta isn't low-rank)",
-    "rl-elicit": "RL whose gain the base already holds: math RLVR, format and sharpening (TVI A2)",
+    "rl-elicit": "RL whose gain the base already holds: math RLVR, format and sharpening",
     "rl-agentic": "frontier agentic RL that adds skill (no small-state result above 32B)",
 }
 
