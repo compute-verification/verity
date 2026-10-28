@@ -12,7 +12,7 @@ argmax), each id `stub:` until it lands, its ANDs composed from pinned pieces.
 session drawing a uniform `subset:k` of its n units, split over `tables` tables of at most `_cap` drawn units each
 (m = k_log + nbl <= 35). Every subcircuit draws `k = ceil(ln(S/delta)/share)`, so by `IntegrityPeriodLog` each sampling block has
 fewer than `K0 = ln(S/delta) n/k` <= share n units wrong outside delta (the S sampling blocks of the block split delta), and by
-`IntegrityHorizon` a subcircuit's sampling blocks over any period have fewer than ln(S/delta) n/k in all. The faulty ANDs beside
+`IntegrityPooled` a subcircuit's sampling blocks over any period have fewer than ln(S/delta) n/k in all. The faulty ANDs beside
 them (`Stratified.harm_bound`, each unit weighted by its ANDs) are informative: the law-level bound is proved
 (`FlockSoundness.Audit.stratified_isHarmBound_exact`), but no guarantee in the lock composes it with acceptance.
 
@@ -201,7 +201,7 @@ class Window:
 def window(t: Template, k: int, windows: int, r: Rates) -> Window:
     """`t`'s sampling block drawing k: its tables (at most `_cap` drawn units each, k rounded up to a multiple of them, as
     `HiddenWindow.hdiv` needs), its expected proving cost, and at each delta `IntegrityPeriodLog`'s K0 (delta split over
-    the block's `windows`) and `IntegrityHorizon`'s bound over any number of the subcircuit's sampling blocks."""
+    the block's `windows`) and `IntegrityPooled`'s bound over any number of the subcircuit's sampling blocks."""
     a, cap = t.proved, X._cap(t.proved)
     k = min(t.units, k)
     tables = ceil(k / cap)
@@ -305,7 +305,7 @@ def render(o: dict) -> str:
              f"{m['batch']:,} requests, {o['block_s']:g} s", "",
              f"Every subcircuit's sampling block draws k = ceil(ln(S/1%)/{o['share']:g}) of its units (S = {len(o['windows'])} "
              f"sampling blocks), so each has fewer than K0 = ln(S/delta) n/k units wrong outside delta (IntegrityPeriodLog), "
-             f"and its sampling blocks over any period fewer than that in all (IntegrityHorizon). {o['units']:,} units, "
+             f"and its sampling blocks over any period fewer than that in all (IntegrityPooled). {o['units']:,} units, "
              f"{o['ands']:.4g} ANDs a block.", "",
              "| template | units a block | k | statements | ANDs a unit | proved, rows opened | statements GPU-s "
              "| drawn GPU-s | K0 at 1% | K0 at 1e-6 |", "|---|---|---|---|---|---|---|---|---|---|"]
@@ -328,7 +328,7 @@ def render(o: dict) -> str:
     lines += ["", "| cut | sampling blocks | proving GPU-s a block |", "|---|---|---|",
               f"| as planned (tiles {o['tiles']}, padded {o['pad']}) | {len(o['windows'])} | {c['proving']:.4g} |"]
     lines += [f"| {k} | {v['windows']} | {v['proving']:.4g} |" for k, v in o["alternatives"].items()]
-    lines += ["", "faulty proof blocks over a period, summed over the templates (Lean: pooled is IntegrityHorizon a template, "
+    lines += ["", "faulty proof blocks over a period, summed over the templates (Lean: pooled is IntegrityPooled a template, "
               "delta split over the S templates; each block is IntegrityPeriodLog at delta / (S blocks)):", "",
               "| period | fleet | blocks | pooled at 1% | at 1e-6 | each block at 1% | at 1e-6 |",
               "|---|---|---|---|---|---|---|"]

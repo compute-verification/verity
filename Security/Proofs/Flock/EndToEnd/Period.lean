@@ -1,20 +1,20 @@
 import Proofs.Flock.EndToEnd.Period.Statement
 import Proofs.Flock.EndToEnd.Period.Union
 import Proofs.Flock.EndToEndHidden
-import Proofs.Flock.Soundness.Audit.Horizon
+import Proofs.Flock.Soundness.Audit.Pooled
 import Proofs.Flock.Soundness.Game.Union
 
 /-!
-# Proof of the integrity audit over a period, and over a horizon
+# Proof of the integrity audit over a period, per sampling block and pooled
 
 * `Flock.SecurityProofs.IntegrityPeriod`: `period_union` over the sampling blocks, each sampling block's bound
   `Flock.SecurityProofs.EndToEndHidden` at the strategy that plays it (`SamplingBlock.accepted_wrong_le`), with its
   knowledge term at the worst registration.
-* `Flock.SecurityProofs.IntegrityHorizon`: a run in which every sampling block is accepted and the wrong units total at
+* `Flock.SecurityProofs.IntegrityPooled`: a run in which every sampling block is accepted and the wrong units total at
   least `M` either has a sampling block accepted with a drawn unit wrong, at most `Σ_w (ε_ks,w + δ_link,w)` by
   `period_union` over `Flock.SecurityProofs.EndToEndHiddenDrawn` (`SamplingBlock.accepted_drawnWrong_le`), or every
   sampling block's draw misses its wrong units with at least `M` of them in all, at most `(1 − q)^M` by
-  `period_horizon`: sampling block `w`'s draw misses its `|W|` wrong units with probability at most
+  `period_pooled`: sampling block `w`'s draw misses its `|W|` wrong units with probability at most
   `C(n − |W|, kd)/C(n, kd) ≤ (1 − kd/n)^{|W|}` under A3 (`SamplingBlock.drawMiss_le`; `Law.execOS_subset_escape_le`,
   `Law.choose_div_le_one_sub_pow`). At `M = ⌈ln(1/δ)/q⌉`, `(1 − q)^M ≤ e^{−qM} ≤ δ`.
 -/
@@ -154,8 +154,8 @@ theorem IntegrityPeriodLog : Flock.Guarantees.IntegrityPeriodLog := by
   gcongr
   exact (W t).miss_le hq hδ (hqt t ht') (hK t ht')
 
-/-- **The integrity audit over a horizon.** -/
-theorem IntegrityHorizon : Flock.Guarantees.IntegrityHorizon := by
+/-- **The integrity audit over a period, pooled.** -/
+theorem IntegrityPooled : Flock.Guarantees.IntegrityPooled := by
   intro W T q δ hq hδ hqt hA3 s hT hL
   classical
   have hs : PeriodGood (fun t => (W t).game) (fun t => (W t).CR) 0 T s :=
@@ -172,7 +172,7 @@ theorem IntegrityHorizon : Flock.Guarantees.IntegrityHorizon := by
     (fun t => (W t).ks + (W t).link)
     (fun t τ hτ => (W t).accepted_drawnWrong_le τ hτ.2) T 0 s hgood
   -- every draw misses, with at least `M` wrong units in all
-  have hB := period_horizon (fun t => (W t).game) (fun t => (W t).record t) (fun r => ¬ r.drawnWrong)
+  have hB := period_pooled (fun t => (W t).game) (fun t => (W t).record t) (fun r => ¬ r.drawnWrong)
     WindowRec.wrong (fun t τ => t < T ∧ (W t).CR τ) x hx
     (fun t τ hτ => ⟨((W t).wrongSet τ).card, fun _ => rfl,
       ((W t).drawMiss_le (hA3 t hτ.1) _ τ).trans (hfac t hτ.1 _)⟩) T 0 s M hgood

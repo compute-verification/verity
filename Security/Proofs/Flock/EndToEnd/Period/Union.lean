@@ -3,14 +3,14 @@ import Proofs.Flock.Soundness.Game.Prob
 import Proofs.Flock.Soundness.Game.Interleave
 
 /-!
-# A period's run: the union bound and the horizon escape
+# A period's run: the union bound and the pooled escape
 
 * `period_union`: if every sampling block's event has probability at most `ε i` at every strategy satisfying `good i`,
   then in a period whose prover satisfies `good` at every sampling block on every run (`PeriodGood`), some sampling
   block's event happens with probability at most `Σ_i ε i`.
-* `period_horizon`: if at every such strategy the sampling block's records all carry one weight `w` and the sampling
+* `period_pooled`: if at every such strategy the sampling block's records all carry one weight `w` and the sampling
   block's "miss" event has probability at most `x ^ w`, then every sampling block misses with total weight at least `M`
-  with probability at most `x ^ M`, for `x ≤ 1`. It is `FlockSoundness.Audit.Law.horizon_escape`'s induction on the
+  with probability at most `x ^ M`, for `x ≤ 1`. It is `FlockSoundness.Audit.Law.pooled_escape`'s induction on the
   period's game tree: sampling block `i`'s weight is fixed by the strategy that plays it, before its coins.
 
 Both are inductions on the sampling blocks; within a sampling block, `value_runBind_le_add` and `value_runBind_le_mul`
@@ -161,8 +161,8 @@ theorem period_union {ρ : Type} (G : (i : ℕ) → Game (β i)) (rec : (i : ℕ
             congr 1
             exact Finset.sum_congr rfl fun t _ => by rw [Nat.add_assoc, Nat.add_comm 1 t]
 
-/-- **The horizon escape over a period's sampling blocks.** -/
-theorem period_horizon {ρ : Type} (G : (i : ℕ) → Game (β i)) (rec : (i : ℕ) → Strategy (G i) → β i → ρ)
+/-- **The pooled escape over a period's sampling blocks.** -/
+theorem period_pooled {ρ : Type} (G : (i : ℕ) → Game (β i)) (rec : (i : ℕ) → Strategy (G i) → β i → ρ)
     (miss : ρ → Prop) (wt : ρ → ℕ) (good : (i : ℕ) → Strategy (G i) → Prop) (x : ℝ≥0∞) (hx : x ≤ 1)
     (hstage : ∀ i τ, good i τ →
       ∃ w : ℕ, (∀ b, wt (rec i τ b) = w) ∧ prob (fun b => miss (rec i τ b)) (G i) τ ≤ x ^ w) :
@@ -185,7 +185,7 @@ theorem period_horizon {ρ : Type} (G : (i : ℕ) → Game (β i)) (rec : (i : �
           rw [value_map]
           by_cases hm : miss (rec i (Strategy.ofBind _ (G i) s) b)
           · rw [if_pos hm]
-            refine (value_mono (fun l hl => ?_) _).trans (period_horizon G rec miss wt good x hx hstage T (i + 1) s'
+            refine (value_mono (fun l hl => ?_) _).trans (period_pooled G rec miss wt good x hx hstage T (i + 1) s'
               (M - w) hg)
             obtain ⟨hall, hsum⟩ := hl
             refine ⟨fun r hr => hall r (List.mem_cons_of_mem _ hr), ?_⟩

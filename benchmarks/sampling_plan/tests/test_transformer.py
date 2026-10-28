@@ -1,6 +1,6 @@
 """The transformer's sampling plan (`transformer.py`): its DAG's units are their Definitions' and counted right, a unit is
 credited its ANDs whatever the cut, the frontier prices every serve-time commitment and is monotone, the chosen plan's
-certificate recomputes through core's `Stratified`, the pooled bound is IntegrityHorizon's in the uniform case, the
+certificate recomputes through core's `Stratified`, the pooled bound is IntegrityPooled's in the uniform case, the
 hand-off's work law draws the plan's k and its windows are IntegrityPeriodLog's, and the large model fills the card and
 meets the target share."""
 

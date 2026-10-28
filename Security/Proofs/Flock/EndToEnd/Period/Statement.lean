@@ -2,7 +2,7 @@ import Proofs.Flock.EndToEndHidden.Statement
 import Proofs.Flock.EndToEnd.Period.Run
 
 /-!
-# The integrity audit over a period, and over a horizon (trusted)
+# The integrity audit over a period, per sampling block and pooled (trusted)
 
 A period's integrity audit is a sequence of sampling blocks, each one `--zk` session under hidden outputs with a fresh
 live subset draw, as in `EndToEndHidden` (a `SamplingBlock`: every binder of `EndToEndHidden` but the prover). One
@@ -16,7 +16,7 @@ and whether a drawn unit is one of them.
   flock-verify accepts every sampling block, every sampling block has fewer than its `K₀` units wrong.
 * `IntegrityPeriodLog`: `IntegrityPeriod` with each sampling block's threshold `K₀ ≥ ln(1/δ)/q`, where its draw covers a
   fraction `q` of its units, so each sampling block's sampling term is at most `δ`.
-* `IntegrityHorizon`: over `T` sampling blocks whose draws each cover at least a fraction `q` of their units, the
+* `IntegrityPooled`: over `T` sampling blocks whose draws each cover at least a fraction `q` of their units, the
   probability that every sampling block is accepted and the wrong units total at least `ln(1/δ)/q` is at most
   `δ + Σ_w (ε_ks,w + δ_link,w)`.
 
@@ -25,7 +25,7 @@ is the prover's; `miss_w` and `δ_link,w` are `EndToEndHidden`'s. The named assu
 sampling block: A3 (`uniform/io-getrandombytes`) for the sampling block's draw bytes, `live-verifier`
 (`SamplingBlock.hCust`), and `cr/sha-512` and `ecr/sha-512` (`TableCRZ` and `LinkCRZC`) at every strategy the period's
 prover plays the sampling block with on some run (`Period.Plays`), stated flat as `EndToEndHidden` states them. The
-proofs are `Flock.SecurityProofs.IntegrityPeriod`, `IntegrityPeriodLog` and `IntegrityHorizon`.
+proofs are `Flock.SecurityProofs.IntegrityPeriod`, `IntegrityPeriodLog` and `IntegrityPooled`.
 
 C-Flock's definitions are still in its proofs package, so, like `EndToEndHidden`, this module imports them.
 -/
@@ -228,12 +228,12 @@ def IntegrityPeriodLog : Prop :=
     value (fun l => ∃ r ∈ l, r.accepted ∧ (W r.idx).K₀ ≤ r.wrong) (Period.run W T s) ≤
       ∑ t ∈ Finset.range T, (ENNReal.ofReal δ + (W t).ks + (W t).link)
 
-/-- **The integrity audit over a horizon.** In `T` sampling blocks as in `IntegrityPeriod`, each sampling block's draw
-covering at least a fraction `q > 0` of its units (`q ≤ kd_t/n_t`), the probability that every sampling block is
-accepted and the wrong units total at least `ln(1/δ)/q` is at most
+/-- **The integrity audit over a period, pooled.** In `T` sampling blocks as in `IntegrityPeriod`, each sampling
+block's draw covering at least a fraction `q > 0` of its units (`q ≤ kd_t/n_t`), the probability that every sampling
+block is accepted and the wrong units total at least `ln(1/δ)/q` is at most
 $$\delta + \sum_t (\varepsilon_{ks,t} + \delta_{link,t}).$$
 Its named assumptions are `IntegrityPeriod`'s. -/
-def IntegrityHorizon : Prop :=
+def IntegrityPooled : Prop :=
   ∀ (W : ℕ → SamplingBlock) (T : ℕ) (q δ : ℝ), 0 < q → 0 < δ →
     (∀ t < T, q ≤ ((W t).kd : ℝ) / (W t).n) →
     (∀ t < T, Assumptions.UniformRandomBytes (W t).Lb (W t).src) →
