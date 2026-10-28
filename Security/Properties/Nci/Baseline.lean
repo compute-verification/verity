@@ -5,9 +5,9 @@ import NciCheck.Baseline
 
 `NciCheck.Baseline.evaluate` (`verity/core/protocols/network/nci/lean/NciCheck/Baseline.lean`) is the NCI check of
 record: the policy check, then each θ entry's provenance against the trusted input, the service's registration log, the
-run's own record and the program function's parameters. `Nci.Assumptions.BaselineRegistered`
-(`Definitions/Nci/Assumptions/Baseline.lean`, [BASELINE-REGISTERED]) states what θ must hold: registered public data,
-registered at the start of the deployment, which the log's first record registers.
+run's own record and the program function's parameters. `Nci.Assumptions.ThetaRegistered`
+(`Definitions/Nci/Assumptions/Baseline.lean`, [THETA-REGISTERED]) states what θ must hold: registered information,
+public data registered at the start of the deployment, which the log's first record registers.
 
 * `BaselineProvenance`: on every instance and trusted input it accepts, the trusted input's log is in R6's chain from a
   record that opens it (`Chained`), the run's own record is one of its records, the parameters are the trusted input's
@@ -15,10 +15,10 @@ registered at the start of the deployment, which the log's first record register
   registers the cited value under the cited root, and the run's own record, of this program, registers the parameter
   whose input node θ names under that same root.
 
-What this does not give, and `BaselineRegistered` still assumes, is what no check sees, since commitments are hiding:
+What this does not give, and `ThetaRegistered` still assumes, is what no check sees, since commitments are hiding:
 that equal roots hold equal values (the binding premise the reduction would name, `Nci.Assumptions.RootsBind`, not
 stated in Lean yet), that the data the log's first record registers was public and not computed off the books, that
-the auditor knows which log is the deployment's, and how the reference circuit `c` takes its own baseline `c.θ`.
+the auditor knows which log is the deployment's, and how the reference circuit `c` takes its own `c.θ`.
 `theta-width` (the cited value's dimensions give the parameter's gates) is checked but not stated here: under the
 binding premise equal roots already give equal rows.
 
