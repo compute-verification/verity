@@ -2,7 +2,9 @@
 // (`-x c++`) it runs them on the host, and built by nvcc also on the device, a thread a case.
 #include "../row_commit.cuh"
 
-namespace {
+// Named: the extern "C" entry points take its Case and Out, and nvcc gives a function whose parameter types have internal
+// linkage internal linkage too, which would hide rc_cases and rc_cases_cuda from ctypes.
+namespace rcc {
 
 using rc::u64;
 
@@ -142,6 +144,8 @@ RC_HD int run(const Case& k, const Tabs& T, rc::FrameK& F, rc::NodeK& N, Out& o)
 }
 
 }  // namespace
+
+using namespace rcc;
 
 extern "C" int rc_case_bytes() { return (int)sizeof(Case); }
 extern "C" int rc_out_bytes() { return (int)sizeof(Out); }
