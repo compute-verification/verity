@@ -29,9 +29,10 @@ SOURCES = ("int8_wgmma_acc.h", "int8_wgmma.cu")
 NVCC_FLAGS = ("-O3", "-std=c++17", "-gencode", "arch=compute_90a,code=sm_90a", "-fmad=false", "-Xcompiler", "-fPIC",
               "-shared", "-Xptxas", "-v")
 BUILD_DIR = Path.home() / ".cache" / "verity" / "int8_wgmma"
-#: the library's variants, in `int8_wgmma_layout`'s order: (consumer tile rows, columns, cluster)
+#: the library's variants, in `int8_wgmma_layout`'s order: (tile rows, columns, cluster); `pp` ping-pong (each consumer
+#: its own tile), `co` cooperative (both consumers one tile, 64 rows each)
 VARIANTS = {"pp_128x128": (128, 128, 1), "ppm2_128x128": (128, 128, 2), "pp_64x256": (64, 256, 1),
-            "ppm2_64x256": (64, 256, 2)}
+            "ppm2_64x256": (64, 256, 2), "co_128x256": (128, 256, 1), "com2_128x256": (128, 256, 2)}
 _vp, _i = ctypes.c_void_p, ctypes.c_int
 
 

@@ -5,7 +5,9 @@ Gate, per shape and input kind, in this process before any timing (a failed gate
 `int8_wgmma` variant, each into a y poisoned with 0xA5 bytes, equals `exactlin_scaled_mm_tma`'s at TRITON and the reference,
 an exact s32 product (float64 GEMM of the int8 operands: every partial sum an integer under 2^53) with the epilogue in torch
 (float32 cvt, * s_a, * s_w, to bf16), word for word.  Input kinds: `served` (bf16 rows with log-normal channel scales and
-outlier channels, quantized by `int8_fused.quant_rows`), `random` (int8 over all of [-128, 127], log-uniform scales) and
+outlier channels, quantized by `int8_fused.quant_rows`, and heavy-tailed weight rows each scaled to its absmax, so most
+words are small as a checkpoint's are: the power, and so the clock, of serving), `random` (int8 over all of [-128, 127],
+log-uniform scales: the most power) and
 `extremes` (rows and weight rows all -128 or all 127 among random ones).  EDGES adds shapes whose M, N and K are not
 multiples of any tile.
 
@@ -17,7 +19,7 @@ theta = 989.4 T int8 MAC/s (4,096 x 132 x 1,830 MHz).  `dcgmi dmon` samples Tens
 beside the run; an item's mean is over the samples inside it.
 
     python wgbench.py --out OUT [--ms 8192,16384,32768] [--linears qkv,o,gate_up,down] [--variants all] [--secs 2]
-                      [--rounds 2] [--no-lt] [--gate-only]
+                      [--rounds 2] [--no-lt] [--gate-only] [--no-edges] [--time-kinds served,random]
 """
 from __future__ import annotations
 
@@ -121,8 +123,12 @@ def operands(m: int, n: int, k: int, kind: str, seed: int):
         xq = torch.empty(m, k, dtype=torch.int8, device="cuda")
         sa = torch.empty(m, dtype=torch.float32, device="cuda")
         X.quant_rows(x, xq, sa)
-        w = torch.randint(-127, 128, (n, k), dtype=torch.int8, device="cuda", generator=g)
-        sw = (torch.rand(n, device="cuda", generator=g) * 0.01 + 1e-4).float()
+        # weights as a checkpoint's quantize: heavy-tailed rows, each scaled to its absmax (most words small)
+        wf = torch.randn(n, k, device="cuda", generator=g) * torch.exp(torch.randn(n, k, device="cuda", generator=g) * 0.5)
+        amax = wf.abs().amax(1, keepdim=True)
+        w = (wf * (127.0 / amax)).round().to(torch.int8)
+        sw = (amax[:, 0] / 127.0 * 0.02).float()
+        del wf
     else:
         xq = torch.randint(-128, 128, (m, k), dtype=torch.int8, device="cuda", generator=g)
         w = torch.randint(-128, 128, (n, k), dtype=torch.int8, device="cuda", generator=g)
@@ -181,10 +187,10 @@ def arm_fn(arm: str, ops: list, ys: list):
     return lambda: [W.scaled_mm(xq, sa, w, sw, y, cfg) for (xq, sa, w, sw), y in zip(ops, ys)]
 
 
-def timed(m, n, k, arms, secs, rounds, clock, dmon, name) -> list[dict]:
+def timed(m, n, k, arms, secs, rounds, clock, dmon, name, kind) -> list[dict]:
     l2 = torch.cuda.get_device_properties(0).L2_cache_size
     copies = max(2, math.ceil(2 * l2 / (n * k + m * k)))
-    ops = [operands(m, n, k, "served", 100 + c) for c in range(copies)]
+    ops = [operands(m, n, k, kind, 100 + c) for c in range(copies)]
     ys = [torch.empty(m, n, dtype=torch.bfloat16, device="cuda") for _ in range(copies)]
     graphs, per_replay = {}, {}
     for arm in arms:
@@ -222,7 +228,7 @@ def timed(m, n, k, arms, secs, rounds, clock, dmon, name) -> list[dict]:
             calls = reps * copies
             sec = sp["ns_mean"] / 1e9
             macs = macs_call * calls
-            it = {"linear": name, "shape": [m, n, k], "arm": arm, "round": r, "calls": calls, "secs": sec,
+            it = {"linear": name, "shape": [m, n, k], "kind": kind, "arm": arm, "round": r, "calls": calls, "secs": sec,
                   "us_per_call": sec / calls * 1e6, "theta_frac": macs / (sec * THETA), "sm_mhz": sp["mhz"],
                   "per_clk_frac": macs / (sp["clk_mean"] * sp["sms"] * PER_CLK), "sms": sp["sms"]}
             it.update(dmon.between(t0 + 0.2, t1 - 0.1))
@@ -233,17 +239,17 @@ def timed(m, n, k, arms, secs, rounds, clock, dmon, name) -> list[dict]:
 
 
 def summary(items: list[dict]) -> str:
-    out = ["| linear | M | arm | us a call | of theta (1,830 MHz) | SM MHz | MACs/SM-clk / 4096 | Tensor Active | W |",
-           "|---|---:|---|---:|---:|---:|---:|---:|---:|"]
+    out = ["| linear | M | data | arm | us a call | of theta (1,830 MHz) | SM MHz | MACs/SM-clk / 4096 | Tensor Active | W |",
+           "|---|---:|---|---|---:|---:|---:|---:|---:|---:|"]
     key = {}
     for it in items:
-        key.setdefault((it["linear"], it["shape"][0], it["arm"]), []).append(it)
-    for (lin, m, arm), its in key.items():
+        key.setdefault((it["linear"], it["shape"][0], it["kind"], it["arm"]), []).append(it)
+    for (lin, m, kind, arm), its in key.items():
         def mean(f, its=its):
             got = [i[f] for i in its if f in i]
             return sum(got) / len(got) if got else None
         ta, watts = mean("tensor_active"), mean("watts")
-        out.append(f"| {lin} | {m} | {arm} | {mean('us_per_call'):.1f} | {mean('theta_frac'):.4f} | {mean('sm_mhz'):.0f} | "
+        out.append(f"| {lin} | {m} | {kind} | {arm} | {mean('us_per_call'):.1f} | {mean('theta_frac'):.4f} | {mean('sm_mhz'):.0f} | "
                    f"{mean('per_clk_frac'):.4f} | {'' if ta is None else f'{ta:.3f}'} | {'' if watts is None else f'{watts:.0f}'} |")
     return "\n".join(out) + "\n"
 
@@ -258,6 +264,8 @@ def main() -> int:
     ap.add_argument("--rounds", type=int, default=2)
     ap.add_argument("--no-lt", action="store_true")
     ap.add_argument("--gate-only", action="store_true")
+    ap.add_argument("--no-edges", action="store_true")
+    ap.add_argument("--time-kinds", default="served", help="input kinds timed (served, random)")
     a = ap.parse_args()
     out = Path(a.out)
     out.mkdir(parents=True, exist_ok=True)
@@ -269,7 +277,7 @@ def main() -> int:
     ms = [int(v) for v in a.ms.split(",")]
     shapes = [(lin, m, *LINEARS[lin]) for m in ms for lin in a.linears.split(",")]
     gates = []
-    for m, n, k in EDGES:
+    for m, n, k in () if a.no_edges else EDGES:
         gates += gate(m, n, k, variants)
     for _, m, n, k in shapes:
         gates += gate(m, n, k, variants, seed=m)
@@ -289,8 +297,9 @@ def main() -> int:
     items = []
     try:
         for lin, m, n, k in shapes:
-            items += timed(m, n, k, arms, a.secs, a.rounds, clock, dmon, lin)
-            torch.cuda.empty_cache()
+            for kind in a.time_kinds.split(","):
+                items += timed(m, n, k, arms, a.secs, a.rounds, clock, dmon, lin, kind)
+                torch.cuda.empty_cache()
     finally:
         dmon.stop()
         with (out / "items.jsonl").open("w") as f:

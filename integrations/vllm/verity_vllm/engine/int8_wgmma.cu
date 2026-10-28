@@ -110,9 +110,11 @@ template <int NA> DEV void acc_fence(int32_t* d) {
 // ---------------------------------------------------------------- the GEMM
 constexpr int BK = 128, SMEM_MAX = 232448, MAX_STAGES = 8;
 
-template <int WM, int BN> struct Tile {
-  static_assert(WM * BN == 16384 && (WM == 64 || WM == 128), "a 64 x 256 or 128 x 128 tile a consumer");
-  static constexpr int NH = WM / 64, NA = BN / 2;  // m64 atoms a k32 step; accumulators a thread an atom
+// a WM x BN tile, CO = 0: a consumer's own (ping-pong); CO = 1: both consumers', rows 64 wg .. of it (cooperative)
+template <int WM, int BN, int CO> struct Tile {
+  static constexpr int R = CO ? WM / 2 : WM;  // a consumer's rows
+  static_assert(R * BN == 16384 && (R == 64 || R == 128), "a 64 x 256 or 128 x 128 tile a consumer");
+  static constexpr int NH = R / 64, NA = BN / 2;  // m64 atoms a k32 step; accumulators a thread an atom
   static constexpr uint32_t A_BYTES = WM * BK, STAGE = (WM + BN) * BK;
   // the stages from a 1,024-byte-aligned base (SWIZZLE_128B's period), then full[s], empty[s] and order[2]
   static constexpr int FIT = (SMEM_MAX - 1024 - 16) / (STAGE + 16);
@@ -142,12 +144,13 @@ template <int CL> DEV void release(uint32_t bar) {
   }
 }
 
-// CTA c (a pair's with CL = 2) takes units c, c + G, ... (G the CTAs, or pairs), the j-th of them by consumer j % 2.  The
-// producer fills the ring in that order, so unit j's k-block kb is the ring's fill j KB + kb.  A unit is one tile (CL = 1) or
-// a pair of M-adjacent tiles, CTA r taking tile row 2 u + r (zeros past M, stored nowhere) and loading half r of W's box.
-template <int WM, int BN, int CL> DEV void body(const Params& p) {
-  using T = Tile<WM, BN>;
-  constexpr int STAGES = T::STAGES, NH = T::NH, NA = T::NA;
+// CTA c (a pair's with CL = 2) takes units c, c + G, ... (G the CTAs, or pairs), the j-th of them by consumer j % 2 (CO = 0)
+// or by both (CO = 1).  The producer fills the ring in that order, so unit j's k-block kb is the ring's fill j KB + kb.  A
+// unit is one tile (CL = 1) or a pair of M-adjacent tiles, CTA r taking tile row 2 u + r (zeros past M, stored nowhere) and
+// loading half r of W's box.
+template <int WM, int BN, int CO, int CL> DEV void body(const Params& p) {
+  using T = Tile<WM, BN, CO>;
+  constexpr int STAGES = T::STAGES, NH = T::NH, NA = T::NA, NC = CO ? 2 : 1;  // NC: the consumers that read a stage
   static_assert(CL == 1 || CL == 2, "a CTA or a pair");
   extern __shared__ __align__(1024) uint8_t smem[];
   const uint32_t base = (smem_at(smem) + 1023) & ~1023u, bars = base + STAGES * T::STAGE, order = bars + 16 * STAGES;
@@ -158,7 +161,7 @@ template <int WM, int BN, int CL> DEV void body(const Params& p) {
   if (tid == 0) {
     for (int s = 0; s < STAGES; s++) {
       mbar_init(bars + 8 * s, 1);
-      mbar_init(bars + 8 * (STAGES + s), 4 * CL);
+      mbar_init(bars + 8 * (STAGES + s), 4 * NC * CL);
     }
     mbar_init(order, 4);
     mbar_init(order + 8, 4);
@@ -210,19 +213,20 @@ template <int WM, int BN, int CL> DEV void body(const Params& p) {
   const int x = tid % 128, lane = tid % 32;
   int32_t d[NH][NA];
   int i = 0;
-  for (int t = first_u + wg * step_u, j = wg; t < units; t += 2 * step_u, j += 2, i++) {
+  constexpr int STEP = CO ? 1 : 2;
+  for (int t = first_u + (CO ? 0 : wg) * step_u, j = CO ? 0 : wg; t < units; t += STEP * step_u, j += STEP, i++) {
     int tm, tn;
     raster(t, rows_u, tiles_n, p.group, tm, tn);
     tm = tm * CL + rank;
-    // the other consumer's mainloop of unit j - 1 has issued its last stage: every fill before this unit's first has
-    // been waited on, so each parity wait below is on the fill it names
-    if (j > 0) mbar_wait_warp(order + 8 * (1 - wg), (uint32_t)(wg == 0 ? i - 1 : i) & 1);
+    // ping-pong: the other consumer's mainloop of unit j - 1 has issued its last stage, so every fill before this unit's
+    // first has been waited on and each parity wait below is on the fill it names
+    if (!CO && j > 0) mbar_wait_warp(order + 8 * (1 - wg), (uint32_t)(wg == 0 ? i - 1 : i) & 1);
     const uint32_t g = (uint32_t)j * KB;
     int s = g % STAGES, sp = 0;
     uint32_t ph = (g / STAGES) & 1;
     for (int kb = 0; kb < KB; kb++) {
       mbar_wait_warp(bars + 8 * s, ph);
-      const uint32_t a0 = base + s * T::STAGE, b0 = a0 + T::A_BYTES;
+      const uint32_t b0 = base + s * T::STAGE + T::A_BYTES, a0 = base + s * T::STAGE + (CO ? wg * T::R * BK : 0);
       WG_FENCE;
 #pragma unroll
       for (int k = 0; k < 4; k++)
@@ -235,7 +239,7 @@ template <int WM, int BN, int CL> DEV void body(const Params& p) {
       sp = s;
       if (++s == STAGES) { s = 0; ph ^= 1; }
     }
-    if (lane == 0) mbar_arrive(order + 8 * wg);
+    if (!CO && lane == 0) mbar_arrive(order + 8 * wg);
     WG_WAIT(0);
 #pragma unroll
     for (int h = 0; h < NH; h++) acc_fence<NA>(d[h]);
@@ -243,7 +247,7 @@ template <int WM, int BN, int CL> DEV void body(const Params& p) {
 
 #pragma unroll
     for (int h = 0; h < NH; h++) {
-      const int row = tm * WM + 64 * h + 16 * (x / 32) + (x % 32) / 4, col0 = tn * BN + 2 * (x % 4);
+      const int row = tm * WM + (CO ? wg * T::R : 0) + 64 * h + 16 * (x / 32) + (x % 32) / 4, col0 = tn * BN + 2 * (x % 4);
       const bool live0 = row < M, live1 = row + 8 < M;
       const float r0 = live0 ? p.sa[row] : 0.0f, r1 = live1 ? p.sa[row + 8] : 0.0f;
       uint32_t* y0 = reinterpret_cast<uint32_t*>(p.y + (size_t)row * N);
@@ -261,27 +265,32 @@ template <int WM, int BN, int CL> DEV void body(const Params& p) {
   }
 }
 
-#define PP(WM, BN)                                                                                                       \
-  extern "C" __global__ void __launch_bounds__(384, 1) int8_wgmma_pp_##WM##x##BN(const __grid_constant__ Params p) {     \
-    body<WM, BN, 1>(p);                                                                                                  \
+#define KERNELS(S, WM, BN, CO)                                                                                           \
+  extern "C" __global__ void __launch_bounds__(384, 1) int8_wgmma_##S##_##WM##x##BN(const __grid_constant__ Params p) {  \
+    body<WM, BN, CO, 1>(p);                                                                                              \
   }                                                                                                                      \
   extern "C" __global__ void __cluster_dims__(2, 1, 1) __launch_bounds__(384, 1)                                         \
-      int8_wgmma_ppm2_##WM##x##BN(const __grid_constant__ Params p) {                                                    \
-    body<WM, BN, 2>(p);                                                                                                  \
+      int8_wgmma_##S##m2_##WM##x##BN(const __grid_constant__ Params p) {                                                 \
+    body<WM, BN, CO, 2>(p);                                                                                              \
   }
-PP(128, 128)
-PP(64, 256)
+KERNELS(pp, 128, 128, 0)
+KERNELS(pp, 64, 256, 0)
+KERNELS(co, 128, 256, 1)
 
 // ---------------------------------------------------------------- the host side (int8_wgmma.py's ctypes calls)
-// Variants, in this order: 128x128, 128x128 pairs, 64x256, 64x256 pairs.
+// Variants, in this order: ping-pong 128x128, its pairs, 64x256, its pairs, cooperative 128x256, its pairs.
 namespace {
-constexpr int NV = 4;
-constexpr int VWM[NV] = {128, 128, 64, 64}, VBN[NV] = {128, 128, 256, 256}, VCL[NV] = {1, 2, 1, 2};
-constexpr int VSMEM[NV] = {Tile<128, 128>::SMEM, Tile<128, 128>::SMEM, Tile<64, 256>::SMEM, Tile<64, 256>::SMEM};
-constexpr int VSTAGES[NV] = {Tile<128, 128>::STAGES, Tile<128, 128>::STAGES, Tile<64, 256>::STAGES, Tile<64, 256>::STAGES};
+constexpr int NV = 6;
+constexpr int VWM[NV] = {128, 128, 64, 64, 128, 128}, VBN[NV] = {128, 128, 256, 256, 256, 256}, VCL[NV] = {1, 2, 1, 2, 1, 2};
+using T0 = Tile<128, 128, 0>;
+using T1 = Tile<64, 256, 0>;
+using T2 = Tile<128, 256, 1>;
+constexpr int VSMEM[NV] = {T0::SMEM, T0::SMEM, T1::SMEM, T1::SMEM, T2::SMEM, T2::SMEM};
+constexpr int VSTAGES[NV] = {T0::STAGES, T0::STAGES, T1::STAGES, T1::STAGES, T2::STAGES, T2::STAGES};
 constexpr int MAX_DEV = 64;
 const void* const VFN[NV] = {(const void*)int8_wgmma_pp_128x128, (const void*)int8_wgmma_ppm2_128x128,
-                             (const void*)int8_wgmma_pp_64x256, (const void*)int8_wgmma_ppm2_64x256};
+                             (const void*)int8_wgmma_pp_64x256,  (const void*)int8_wgmma_ppm2_64x256,
+                             (const void*)int8_wgmma_co_128x256, (const void*)int8_wgmma_com2_128x256};
 // per device: SMs, and per variant the CTAs (or pairs) the card holds at once; 0 until the device's first call
 int g_sms[MAX_DEV], g_most[MAX_DEV][NV];
 
