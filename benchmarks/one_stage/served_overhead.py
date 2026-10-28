@@ -2,11 +2,17 @@
 stock control, the same endpoint, engine and load with no protocol and no Commit.
 
     python benchmarks/one_stage/served_overhead.py metrics SERVE_DIR...
-    python benchmarks/one_stage/served_overhead.py table --composed DIR... --stock DIR... [--served-table FILE] [--allow KEY]
+    python benchmarks/one_stage/served_overhead.py table --composed RUN... --stock RUN... [--served-table FILE] [--allow KEY]
         [--out DIR]
 
+A serve dir's traces and the load's records hold request values and stay on the node, so `metrics` runs there, over each
+serve dir, and prints one aggregate a line (`aggregate`): each load's counts and metrics, the Commit windows' parts, the
+engine's identity and scheduler, and no step's or request's own times or values. That line is what leaves the node
+(`served_verdicts.sh`'s ``$OUT/serve/overhead.json``, `served_stock.sh`'s ``$OUT/<lifetime>/overhead.json``), and
+`table`'s RUN is such a file, or a serve dir when it runs on the node.
+
 Two rulers, each the same code in both arms. The client's is `demos/vllm/serve_load.py --varied`'s timings file
-(``load.timings.json`` beside its record; `served_verdicts.sh` copies the composed run's to ``$OUT/timings/``): each request's
+(``load.timings.json`` beside its record, in the serve dir on the node): each request's
 send, first-token and done times on the client's monotonic clock. Per load, from it:
 
 - ``client_time_per_output_token_s``: the first send to the last done, over the output ids the requests streamed;
@@ -29,11 +35,11 @@ The trace doesn't see the HTTP side and the client, anything after a load's last
 window's on-loop close (the seal runs off the loop; the verdict pieces run after serving), or anything before the first
 arrival (the model load, the weights registration).
 
-`table` takes each composed dir's first load and each stock dir's first load (the first load after its endpoint listens, as
-the composed run's one load is), refuses dirs whose engines differ (`identity`, except a key ``--allow`` names), and writes
+`table` takes each composed run's first load and each stock run's first load (the first load after its endpoint listens, as
+the composed run's one load is), refuses runs whose engines differ (`identity`, except a key ``--allow`` names), and writes
 ``table.md`` and ``table.json``: each metric's mean with its 95% Student-t interval, and composed over stock as a ratio of
 means whose interval is the delta method's over both arms' standard errors (one arm alone when the other has one run). The
-stock dirs' later loads are reported as the warm control. ``--served-table`` (`verity-bench served-table --json`) adds the
+stock runs' later loads are reported as the warm control. ``--served-table`` (`verity-bench served-table --json`) adds the
 single-protocol rows beside it.
 """
 from __future__ import annotations
@@ -50,6 +56,9 @@ TRACE, WINDOWS, SERVE = "advice_trace.jsonl", "windows.jsonl", "serve.json"
 METRICS = ("time_per_output_token_s", "time_to_first_token_s", "tokens_per_s", "busy_tokens_per_s")
 CLIENT = ("client_time_per_output_token_s", "client_time_to_first_token_s", "client_tokens_per_s")
 TIMINGS = "*.timings.json"
+AGGREGATE = "verity-bench/served-overhead-metrics/v0"
+#: a load's fields an aggregate keeps: the counts the run's settings fix, the metrics and the windows' parts
+PUBLIC_LOAD = ("requests", "tokens", "steps", "span_s", "windows") + METRICS + CLIENT
 #: two-sided 95% Student-t quantiles by degrees of freedom (verity_bench.vllm.runner's T95, its first rows)
 T95 = {1: 12.706, 2: 4.303, 3: 3.182, 4: 2.776, 5: 2.571, 6: 2.447, 7: 2.365, 8: 2.306, 9: 2.262, 10: 2.228, 15: 2.131,
        20: 2.086, 30: 2.042, 60: 2.000, 120: 1.980}
@@ -131,7 +140,7 @@ def client_metrics(doc: dict[str, Any]) -> dict[str, Any]:
 
 def timings_of(d: Path) -> list[Path]:
     """A serve dir's timings files in load order: beside its records (`served_stock.sh`'s load-<j>, the serve dir's load), else
-    in ``../timings`` (`served_verdicts.sh`'s ``$OUT/timings`` beside ``$OUT/serve``)."""
+    in ``../timings`` (an older run's ``$OUT/timings`` beside its ``$OUT/serve``)."""
     key = lambda f: (len(f.name), f.name)   # noqa: E731  (load-2 before load-10)
     return sorted(d.glob(TIMINGS), key=key) or sorted((d.parent / "timings").glob(TIMINGS), key=key)
 
@@ -180,6 +189,24 @@ def serve_dir(d: Path) -> dict[str, Any]:
             "loads": got}
 
 
+def aggregate(d: Path) -> dict[str, Any]:
+    """`serve_dir` less what stays on the node: each load's `PUBLIC_LOAD` fields, without its step times or its client's
+    file and start time."""
+    s = serve_dir(d)
+    return {"schema": AGGREGATE} | {k: s[k] for k in ("run_id", "commit", "protocols", "remote_session", "identity", "scheduler")} \
+        | {"loads": [{k: ld[k] for k in PUBLIC_LOAD if k in ld} for ld in s["loads"]]}
+
+
+def run_of(p: Path) -> dict[str, Any]:
+    """`table`'s RUN: an aggregate file (`metrics`'s line), or a serve dir aggregated here."""
+    if p.is_dir():
+        return aggregate(p) | {"dir": str(p)}
+    doc = json.loads(p.read_text())
+    if doc.get("schema") != AGGREGATE:
+        raise ValueError(f"{p}: not a {AGGREGATE} aggregate (served_overhead.py metrics' line)")
+    return doc | {"dir": str(p)}
+
+
 def summary(values: list[float]) -> dict[str, Any]:
     out: dict[str, Any] = {"mean": statistics.fmean(values), "n": len(values)}
     if len(values) >= 2:
@@ -213,7 +240,7 @@ def single_rows(served_table: dict[str, Any]) -> list[dict[str, Any]]:
 
 
 def table(composed: list[Path], stock: list[Path], *, allow: tuple[str, ...] = (), served_table: dict[str, Any] | None = None) -> dict[str, Any]:
-    cs, ss = [serve_dir(d) for d in composed], [serve_dir(d) for d in stock]
+    cs, ss = [run_of(d) for d in composed], [run_of(d) for d in stock]
     ref = cs[0]["identity"]
     allowed: dict[str, dict[str, list[Any]]] = {}
     for x in cs[1:] + ss:
@@ -230,7 +257,7 @@ def table(composed: list[Path], stock: list[Path], *, allow: tuple[str, ...] = (
     if {(ld["requests"]) for ld in c1 + s1} != {c1[0]["requests"]}:
         raise ValueError(f"loads of different sizes: composed {[ld['requests'] for ld in c1]}, stock {[ld['requests'] for ld in s1]}")
     rows = {}
-    client = all("client" in ld for ld in c1 + s1 + warm)
+    client = all(set(CLIENT) <= set(ld) for ld in c1 + s1 + warm)
     for m in (CLIENT if client else ()) + METRICS:
         c, s = summary([ld[m] for ld in c1]), summary([ld[m] for ld in s1])
         rows[m] = {"composed": c, "stock": s, "ratio": ratio(c, s),
@@ -293,15 +320,19 @@ def main(argv: list[str] | None = None) -> int:
     m = sub.add_parser("metrics")
     m.add_argument("dirs", nargs="+", type=Path)
     t = sub.add_parser("table")
-    t.add_argument("--composed", nargs="+", type=Path, required=True)
-    t.add_argument("--stock", nargs="+", type=Path, required=True)
+    t.add_argument("--composed", nargs="+", type=Path, required=True, help="aggregate files, or serve dirs on the node")
+    t.add_argument("--stock", nargs="+", type=Path, required=True, help="aggregate files, or serve dirs on the node")
     t.add_argument("--served-table", type=Path)
     t.add_argument("--allow", action="append", default=[])
     t.add_argument("--out", type=Path)
     a = ap.parse_args(argv)
     if a.cmd == "metrics":
-        for d in a.dirs:
-            print(json.dumps(serve_dir(d)))
+        try:
+            lines = [json.dumps(aggregate(d)) for d in a.dirs]
+        except (ValueError, OSError) as e:
+            print(f"served_overhead.py metrics: {e}", file=sys.stderr)
+            return 2
+        print("\n".join(lines))
         return 0
     try:
         got = table(a.composed, a.stock, allow=tuple(a.allow),
