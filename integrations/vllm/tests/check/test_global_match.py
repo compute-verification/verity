@@ -477,7 +477,7 @@ def test_fast_path_passes_its_operations_and_rebinds_nothing(memory, tmp_path, m
     from verity_vllm.check.match import batch_decomp as BD
     from verity_vllm.check.match import program_compare as C
     from verity_vllm.check.match import global_match_fast as GMF
-    names = [(codec, "_spec_id"), (refs, "runs"), (C, "compare_steps"), (C, "_canonical_hash"), (C, "_canon_step_relative"),
+    names = [(codec, "descriptor_id"), (refs, "runs"), (C, "compare_steps"), (C, "_canonical_hash"), (C, "_canon_step_relative"),
              (C, "load_oracle"), (C, "load_derived"), (BD, "dag_hashes"), (BD, "live_cone"), (BD, "Projection")]
     before = [getattr(m, n) for m, n in names]
     canon = C.Prog.__dict__["canon"]

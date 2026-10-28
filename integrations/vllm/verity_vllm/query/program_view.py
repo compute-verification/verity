@@ -712,7 +712,7 @@ def from_descriptor(desc: dict[str, Any] | str, registry=None) -> ProgramView:
     if isinstance(desc, str):
         with gzip.open(desc, "rt") if desc.endswith(".gz") else open(desc) as f:
             desc = json.load(f)
-    from verity.ml.circuits.codec import decode_program
+    from verity.ml.circuits.codec import decode_program, descriptor_id
     from verity.ml.circuits.refs import runs
     if registry is None:
         registry, _errors = _registry()
@@ -736,13 +736,8 @@ def from_descriptor(desc: dict[str, Any] | str, registry=None) -> ProgramView:
         remap = lambda r: (("p", inputs[r[1]], *r[2:]) if r[1] in inputs else ("n", pos[r[1]], *r[2:])) if r[0] == "n" else r  # noqa: E731
     b = _Builder(params)
     for i, (k, n) in enumerate(rows):
-        b.add(i, _spec_id(n.fn), n.form, hints.get(k, getattr(n, "name", "") or ""), ports_of_type(n.out),
+        b.add(i, descriptor_id(n.fn), n.form, hints.get(k, getattr(n, "name", "") or ""), ports_of_type(n.out),
               ([remap(r) for r in runs(a.refs)] for a in n.args))
     outs = b.outputs([remap(r) for r in runs(body.ret)])
     from verity.ml.circuits.codec import program_digest
     return b.view(outs, program_digest(desc), "descriptor")
-
-
-def _spec_id(fn) -> str:
-    from verity.ml.circuits.codec import _spec_id as sid
-    return sid(fn)
