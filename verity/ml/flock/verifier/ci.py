@@ -23,7 +23,7 @@ For each set (in `vectors.json` `replayable.sets`) whose M0 commit has an upstre
 `--live` runs `live.sets` instead: sets with no upstream binary, whose upstream verdicts are the live server's in each
 case's `case.json` (`agree.py --upstream live`).
 
-`--inputs DIR` holds the stored inputs already fetched (`DIR/<art id prefix>/…`, as `research data fetch --to` lays them
+`--inputs DIR` holds the stored inputs already fetched (`DIR/<art id prefix>/…`, as the store's fetch lays them
 out), for a machine without store access. `--jobs` runs sets in parallel, and `--session-jobs` a set's sessions across that
 many verifier processes at once over all sets (by default the cores, and the available memory at 8 GB a process): each set's
 sessions are dealt into chunks of four or more (`agree.py --jobs`), and a set finishing early frees its slots for the
