@@ -34,7 +34,7 @@ open Accounting.SecurityProofs.ComposePeriod
 
 /-- The flat machine's period: `H` seconds of its one resource, all of it the honest use, worth `H`, and one other job
 worth 1 a unit at one unit of the resource. -/
-def pd (c H : ℝ) : Pouw.Dither.Period (fa c) where
+def pd (c H : ℝ) : Pouw.Dither.Jobs (fa c) where
   T := H
   J := Unit
   val _ := 1
