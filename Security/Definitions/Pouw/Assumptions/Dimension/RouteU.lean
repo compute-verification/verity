@@ -18,12 +18,12 @@ that reads the target words only modulo `V₀` transfers:
   the four-point evaluation lemma holds as it is (`SecondDifferenceU`);
 * a family's independence modulo a subspace `V` passes to every family that differs from it by elements of `V`
   (`IndepModShift`, generic); with `count_le`, whose bound reads only the targets' independence modulo `V(inputs)`,
-  Theorem D (`AlgBoundU`), its priced count, its sharpness (`AlgSharpU`), `TTNCPAlgU`, the chain's step
-  `TTNCPOfA2U`, the causal bound (`AlgBoundCausalU`) and the mixing lemma (`MixingLemmaU`) hold for route-U words with
-  the same bounds, and so does the wrapped form for `β ∈ {127, 128, 129}` when `R` is a signed permutation and
-  `k ≤ 2^15` (`AlgBoundWrappedU`) or a permutation matrix and `k ≤ 2^16` (`AlgBoundWrappedUUnsigned`);
+  Theorem D (`AlgBoundU`), its priced count, its sharpness (`AlgSharpU`), `TTNCPAlgU`, the causal bound
+  (`AlgBoundCausalU`) and the mixing lemma (`MixingLemmaU`) hold for route-U words with the same bounds, and so does
+  the wrapped form for `β ∈ {127, 128, 129}` when `R` is a signed permutation and `k ≤ 2^15` (`AlgBoundWrappedU`) or
+  a permutation matrix and `k ≤ 2^16` (`AlgBoundWrappedUUnsigned`);
 * A1 is stated on the unbiased span and is unchanged: it gives the same inequality on the route-U span (`A1U`), so
-  `AlgBound4090U`, `TTNCPOfA1A2U` and `TTNCPOfA1A2W1U` hold with the same A1.
+  `AlgBound4090U` holds with the same A1.
 
 No reduction between programs is used, so no free instruction is added.
 
@@ -129,15 +129,6 @@ def TTNCPAlgU : Prop :=
     OutputsU β k m n N R A B U P L → 16 / (3 * k : ℝ) ≤ γ₀ → γ₀ < 1 →
     ¬ ((cost P : ℝ) / (1 - γ₀) < ∑ _u ∈ U, 3 * ((m * k * n : ℕ) : ℝ))
 
-/-- **TT_NCP from A2 into AlgM_16 on route U** (`TTNCPOfA2` for a machine program that outputs route-U words). -/
-def TTNCPOfA2U : Prop :=
-  ∀ (β : ℤ) (k m n N : ℕ) (R : Mat) (A : (Fin k → Fin n → Fin 64) → ℕ → Mat) (B : ℕ → Mat) (U : Finset ℕ)
-    (M : Machine (Noise N m n k)) (q : M.Prog) (γ₀ γ₂ : ℝ), 16 ∣ k → 0 < k → CheckpointIndependent k 16 R →
-    U ⊆ range N → A2_algebraicSufficiency γ₂ M H16 (wordSet (wordU β k m n N R A B) U) →
-    (∀ u ∈ U, ∀ p < nonFinal k m n, wordU β k m n N R A B u p ∈ M.outputs q) →
-    γ₂ < 1 → γ₀ < 1 → 1 - γ₀ ≤ (1 - γ₂) * (1 - 16 / (3 * k : ℝ)) →
-    ¬ (M.cost q / (1 - γ₀) < ∑ _u ∈ U, 3 * ((m * k * n : ℕ) : ℝ))
-
 /-- **Theorem D with causal inputs on route U** (`AlgBoundCausal` for route-U words). -/
 def AlgBoundCausalU : Prop :=
   ∀ (β : ℤ) (k m n N : ℕ) (R : Mat) (A : Noise N m n k → ℕ → Mat) (B : ℕ → Mat) (U : Finset ℕ)
@@ -205,28 +196,6 @@ def AlgBound4090U : Prop :=
     CheckpointIndependent k 16 R → U ⊆ range N → (∀ f ∈ L, f ∈ V0 N m n k) → H4090 cs P →
     OutputsU β k m n N R A B U P L → A1_multiplicative c γ₁ k R → 16 ≤ c * cs → 0 ≤ γ₁ → γ₁ ≤ 1 →
     16 * (1 - γ₁) * ((U.card * (m * n) * (3 * k / 16 - 1) : ℕ) : ℝ) ≤ cost P
-
-/-- **`TT_NCP_of_A1_A2` on route U** (`TTNCPOfA1A2` for a machine program that outputs route-U words). -/
-def TTNCPOfA1A2U : Prop :=
-  ∀ (β : ℤ) (k m n N : ℕ) (R : Mat) (A : (Fin k → Fin n → Fin 64) → ℕ → Mat) (B : ℕ → Mat) (U : Finset ℕ)
-    (M : Machine (Noise N m n k)) (q : M.Prog) (cs : ℕ) (c γ₀ γ₁ γ₂ : ℝ), 16 ∣ k → 0 < k →
-    CheckpointIndependent k 16 R → U ⊆ range N →
-    A2_algebraicSufficiency γ₂ M (H4090 cs) (wordSet (wordU β k m n N R A B) U) →
-    A1_multiplicative c γ₁ k R → 16 ≤ c * cs →
-    (∀ u ∈ U, ∀ p < nonFinal k m n, wordU β k m n N R A B u p ∈ M.outputs q) →
-    0 ≤ γ₁ → γ₁ ≤ 1 → γ₂ < 1 → γ₀ < 1 → 1 - γ₀ ≤ (1 - γ₂) * (1 - γ₁) * (1 - 16 / (3 * k : ℝ)) →
-    ¬ (M.cost q / (1 - γ₀) < ∑ _u ∈ U, 3 * ((m * k * n : ℕ) : ℝ))
-
-/-- **`TT_NCP_of_A1_A2` at W1's constants on route U** (`TTNCPOfA1A2W1` for route-U words: `A1_W1`, scalar-pipe
-products at 8). -/
-def TTNCPOfA1A2W1U : Prop :=
-  ∀ (β : ℤ) (k m n N : ℕ) (R : Mat) (A : (Fin k → Fin n → Fin 64) → ℕ → Mat) (B : ℕ → Mat) (U : Finset ℕ)
-    (M : Machine (Noise N m n k)) (q : M.Prog) (γ₀ γ₁ γ₂ : ℝ), 16 ∣ k → 0 < k →
-    CheckpointIndependent k 16 R → MinRank2 k R → U ⊆ range N →
-    A2_algebraicSufficiency γ₂ M (H4090 8) (wordSet (wordU β k m n N R A B) U) →
-    A1_W1 γ₁ k R → (∀ u ∈ U, ∀ p < nonFinal k m n, wordU β k m n N R A B u p ∈ M.outputs q) →
-    0 ≤ γ₁ → γ₁ ≤ 1 → γ₂ < 1 → γ₀ < 1 → 1 - γ₀ ≤ (1 - γ₂) * (1 - γ₁) * (1 - 16 / (3 * k : ℝ)) →
-    ¬ (M.cost q / (1 - γ₀) < ∑ _u ∈ U, 3 * ((m * k * n : ℕ) : ℝ))
 
 /-- **Theorem D on route U's hypotheses hold jointly, and its bound is attained** (`AlgWitness` for route-U words):
 for every `k ≥ 1024` with `16 ∣ k`, some admissible, checkpoint-independent `R` and some H_16 program on the noise
