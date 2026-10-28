@@ -176,7 +176,6 @@
   "art:958f39a2b56cc3c0c9df8c21b03f3133b2764cfc789bca09bb7438eca62d6bb5": "integrations/vllm/manifests/semantic-profiles/llama-eager-batch-invariant-v2.json",
   "art:017ac8d962ec2628f98f3a61a69eb5ad3ff8f3ee51caabea88c0825b03ec55fb": "integrations/vllm/manifests/semantic-profiles/llama-eager-batch-invariant-v1.json",
   "art:ca9544e3781926c76b0980b26326112bf86aae29d3481165bad816f05e5f22dd": "integrations/vllm/tests/check/fixtures/glm_moe_dsa/config.json",
-  "art:ba055eaa1f9dcf25a7c7f199efe058d9db7ed9ad7f54fb53ac88d881ad68e469": "integrations/vllm/tests/commit/challenge_legacy_vectors.json",
   "art:76398a8149f3e74bd9959f043570e8187a48354f0c259fa85dd9cc23a4fbf11e": "integrations/vllm/tests/records/data",
   "art:98ccdf6cfe3a5a632e5babed1245d0600d6ef38d67672113d25a32ffa026ef4f": "integrations/vllm/tests/commit/serving_row_leaf_vector.json",
   "previous": {

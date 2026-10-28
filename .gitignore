@@ -120,7 +120,6 @@ integrations/vllm/manifests/semantic-profiles/qwen2-eager-batch-invariant-v1.jso
 integrations/vllm/manifests/semantic-profiles/llama-eager-batch-invariant-v2.json
 integrations/vllm/manifests/semantic-profiles/llama-eager-batch-invariant-v1.json
 integrations/vllm/tests/check/fixtures/glm_moe_dsa/config.json
-integrations/vllm/tests/commit/challenge_legacy_vectors.json
 integrations/vllm/tests/records/data
 integrations/vllm/tests/commit/serving_row_leaf_vector.json
 examples/vllm/workloads/llama32-1b__bf16__rtxpro6000__tp1__b4__i256__o32__mixed__greedy__bi-eager.json
