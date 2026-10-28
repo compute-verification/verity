@@ -124,12 +124,12 @@ def isInputGate (P : Prog) (g : Nat) : V Bool := do
 
 /-- The meaning decided gate by gate: the tiling on the family's sets, each gate in increasing order (`input-held`,
 `overlap`, `gate-in-no-set`), then `too-many` on the labels, then `too-large` on the largest label's gates. -/
-def reference (Φ : Meaning) (P : Prog) (D : Desc) : V Verdict := do
+def reference (Φ : Meaning) (P : Prog) (D : Desc) : V CheckResult := do
   let F ← eval P D
   let ss ← sets P F
   let ls ← labelled P D F
   let count := ls.size
-  let refused := fun (code : String) => (pure { accept := false, code, count } : V Verdict)
+  let refused := fun (code : String) => (pure { accept := false, code, count } : V CheckResult)
   if let some t := Φ.tiling then
     let mut held := Array.replicate (P.defs[P.root]!).gates 0
     for s in ss do

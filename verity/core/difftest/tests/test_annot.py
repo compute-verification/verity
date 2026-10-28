@@ -3,7 +3,7 @@
 * `annot.sets` gives, set for set, the gate intervals `verity.ml.circuits.query_ast` evaluates for the same query, on the
   terms both evaluate, `table`, `group` (every key part) and `label` (affine or by a table) among them, with the same
   tables, and `annot.term` writes `query_codec`'s document back as `query_codec` does;
-* `annot.check`, at the size of the description, gives `annot.reference`'s verdict, the meaning decided gate by gate, on
+* `annot.check`, at the size of the description, gives `annot.reference`'s result, the meaning decided gate by gate, on
   drawn tables, label maps and meanings, and accepts only what the reference accepts;
 * refusals carry their codes.
 
@@ -257,7 +257,7 @@ def _instances(draw):
           suppress_health_check=[HealthCheck.too_slow])
 @given(_instances())
 def test_check_is_the_reference(server, inst) -> None:
-    """The check's verdict is the reference's, but where the check bounds a group's or a label table's gates by the sum of
+    """The check's result is the reference's, but where the check bounds a group's or a label table's gates by the sum of
     its sets' sizes: there it may refuse what the reference accepts, never the converse."""
     check = _call(server, "annot.check", inst)
     ref = _call(server, "annot.reference", inst)
@@ -312,12 +312,12 @@ def test_partition_reads_inputs_as_held_by_none(server) -> None:
     whole = to_json(parse("default(32)"))
     computed = to_json(parse('instances("@2")'))
 
-    def verdict(q, t):
+    def result(q, t):
         return _call(server, "annot.check", annot.instance(text, q, None, {"tiling": t}))[1]
 
-    assert verdict(whole, "cover")["accept"]
-    assert verdict(whole, "partition")["code"] == "input-held"
-    assert verdict(computed, "partition") == {"accept": True, "count": 6}
+    assert result(whole, "cover")["accept"]
+    assert result(whole, "partition")["code"] == "input-held"
+    assert result(computed, "partition") == {"accept": True, "count": 6}
     twice = to_json(parse('concat(instances("@2"), instances("//TDot_v1"))'))
-    assert verdict(twice, "partition")["code"] == "overlap"
-    assert verdict(twice, "cover") == {"accept": True, "count": 12}
+    assert result(twice, "partition")["code"] == "overlap"
+    assert result(twice, "cover") == {"accept": True, "count": 12}
