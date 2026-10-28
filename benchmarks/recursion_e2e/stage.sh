@@ -10,6 +10,7 @@
 #     FLOCK_WORK=/workspace/cache/rec-bench STEPS=build,inner,icheck,vstage,vcap,oprove,oreplay,lean,negative
 # env: SUBCIRCUIT (a census-style id)  N=3 (seeded draws; WINDOW: the member's own n)  SEED (rec_inner.py's)
 #      WINDOW=DIR MEMBER=0  FLOCK_WORK=/workspace/jobs/rec-bench  TAG=rb-<run id>
+#      SERVE_RUN=DIR SERVE_WINDOW=0 (with WINDOW: the window's run root must be the one DIR/windows.jsonl published for it)
 for kv in "$@"; do case $kv in *=*) export "$kv" ;; esac; done
 set -uo pipefail
 : "${SUBCIRCUIT:?SUBCIRCUIT=<census-style subcircuit id>}"
@@ -27,6 +28,15 @@ export PYTHONPATH=$REPO:$REPO/benchmarks/numerical/python:$REPO/verity/ml/flock/
 S=$DD/inputs
 rm -rf "$DD/stage" "$DD/stage-zk" "$S"
 if [ -n "${WINDOW:-}" ]; then
+  if [ -n "${SERVE_RUN:-}" ]; then   # the window's rows the served run's: its run root the one windows.jsonl published
+    $PY -c 'import json, sys
+w = json.load(open(sys.argv[1] + "/window.json"))
+pub = [x for x in map(json.loads, open(sys.argv[2] + "/windows.jsonl")) if int(x["window"]) == int(sys.argv[3])]
+ok = len(pub) == 1 and pub[0]["run_root"] == w["run"]
+print(json.dumps({"served_root_held": ok, "window_run_root": w["run"], "published": [x["run_root"] for x in pub],
+                  "registration_digest": w["registration_digest"]}))
+sys.exit(0 if ok else 1)' "$WINDOW" "$SERVE_RUN" "${SERVE_WINDOW:-0}" | tee "$O/served-root.json" || exit 1
+  fi
   /usr/bin/time -v -o "$O/time-stage.txt" $PY verity/ml/flock/pod/rec_inner.py stage-window --window "$WINDOW" \
     --member "${MEMBER:-0}" --subcircuit "$SUBCIRCUIT" --sets "$S/sets" --out "$DD/stage" --zk-out "$DD/stage-zk" \
     > "$O/stage.json" 2> "$O/stage.err" || { tail -20 "$O/stage.err"; exit 1; }
