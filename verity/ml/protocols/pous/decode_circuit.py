@@ -38,7 +38,7 @@ candidate would cost 33 more compressions for it.
 a below p and odd, a² mod p is not 0 (p is prime), so p − s is below p; ``ok`` already rejects every input that could
 make it p.
 
-Costs at the registered point are pinned in `tests/test_pous_decode_circuit.py`: 31,960,530 ANDs per label, of which the
+Costs at the registered point are pinned in `verity/core/protocols/pous/tests/test_pous_decode_circuit.py`: 31,960,530 ANDs per label, of which the
 two `sq` are 28,147,478 (each 14,040,852 for the square and 32,887 for the negation), the 67 SHA-512 compressions
 3,697,905 (one for the prefix, 33 per stream), σ_K 32,895 and the subtraction with its bounds 82,252.
 """

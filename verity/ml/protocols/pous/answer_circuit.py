@@ -24,7 +24,7 @@ So h must be the label's ``sha512/row/v2`` digest: the memory challenger hashes 
 C's root are other parts of the session's statement.
 
 At N = 2,056 the circuit is 19 compressions: 16 for the label's whole 128-byte blocks after P's constant first block,
-one for its last 8 bytes and the padding, and hm96's two for c (b is XORs).  `tests/test_pous_answer_circuit.py` pins
+one for its last 8 bytes and the padding, and hm96's two for c (b is XORs).  `verity/core/protocols/pous/tests/test_pous_answer_circuit.py` pins
 the counts.
 """
 from __future__ import annotations
