@@ -179,7 +179,7 @@ that for every `S ⊆ Wh q a` at most a share `e^{−Σ_{v∈S} h v}` of `q`'s a
 event `Break` of probability at most `δ_b`, off which, where the proofs' seed answers `q` (`sq a r = some q`), round
 `r`'s whole tiles are `Wh q a` and a whole tile whose checked values are honest (`same`) is in `Lk q a`.
 
-What a whole-skipped H1 + fx1 tile must reproduce (`verity/core/protocols/pouw/circuit/h1tile.py`): its served `z`,
+What a whole-skipped H1 + fx1 tile must reproduce (`verity/ml/protocols/pouw/circuit/h1tile.py`): its served `z`,
 each cell's exact product, which reads no salt, and the CP-W receipt, `2·(K/32 + m)` 32-bit words (`256` served at
 `K = 4096`, then `O′` and `D`), each set's pair the XOR over the tile's 32 lanes and 8 duo chains of `PouwXinFinal`
 of the fx1 state, which starts from the lane's 512 seed-derived key bits (16,384 a tile). The fold state itself is

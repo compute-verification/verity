@@ -4,7 +4,7 @@ import Definitions.Pous.Model.Continuous
 /-!
 # The PoUS verdict unit decides the continuous audit's verdict
 
-`PousVerdict_v1{K, M, LIMIT}` (`verity/core/protocols/pous/verdict_circuit.py`) is one proof unit in the Boolean
+`PousVerdict_v1{K, M, LIMIT}` (`verity/ml/protocols/pous/verdict_circuit.py`) is one proof unit in the Boolean
 profile. Its inputs are committed values: the `K` rounds' records as the memory challenger writes them
 (`u32 j ‖ u64 index ‖ u64 send_ns ‖ u64 receipt_ns ‖ H(block)`), then the expected digests of the blocks they
 challenged. Its one public output is the verdict. `verdictProg` restates its gates (`verdict_circuit.gates`) builder for
