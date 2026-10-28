@@ -614,13 +614,16 @@ class H1Run:
 
     def judge(self, trace: CG.Trace, y: Any) -> dict[str, Any] | None:
         """The credit gate on the call `record` made inside ``trace`` (None if it made none): y is what the linear handed
-        back to vLLM; a call the trace credits whose records don't hold is refused (`pouw_h1_records.refusal`)."""
+        back to vLLM; a call the trace credits whose records don't hold is refused (`pouw_h1_records.refusal`), read on
+        the records' device first (`pouw_h1_records.holds_on`) and on the host's copy only when that doesn't hold."""
         made, self._recorded = self._recorded, None
         if made is None:
             return None
         call, z, held = made
         v = CG.verdict(trace, y, z)
-        if v["credit"] and (why := ZR.refusal(held, call, y)):
+        if v["credit"] and not (held is not None and ZR.holds_on(z, call.rows, call.n, y, held[1], held[2])) \
+                and (why := ZR.refusal(held and (held[0], numpy_of(held[1]), numpy_of(held[2])), call,
+                                       TD.row_words(y, call.m, "<i2"))):
             v = {**v, "credit": False, "reason": f"credit: {CG.RECORDS}: {trace.linear} {why}"}
         self.verdicts[call.index] = v
         return v
