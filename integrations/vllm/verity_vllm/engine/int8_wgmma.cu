@@ -28,11 +28,15 @@
 
 struct alignas(128) Params {
   CUtensorMap a, b;  // X: M rows of K bytes, boxes of WM rows; W: N rows, boxes of BN / CL rows
+  CUtensorMap c;     // y: M rows of N bf16 words, boxes of a consumer's rows by 64 columns (with Y_TMA)
   const float* sa;   // s_a [M]
   const float* sw;   // s_w [N]
   uint16_t* y;       // y [M, N], bf16 words, row-major
-  int M, N, K, group, flags;  // flags: timing probes (1 streaming stores, 2 no epilogue, 4 no stores of y)
+  int M, N, K, group, flags;
 };
+// flags: Y_TMA, y through shared memory and a TMA store (N a multiple of 8, y 16-byte aligned), else stored by each thread;
+// the rest are timing probes: 1 streaming stores, 2 no epilogue, 4 no stores (the last two leave y unwritten)
+constexpr int Y_TMA = 8;
 
 // ---------------------------------------------------------------- mbarriers, TMA, wgmma
 DEV uint32_t smem_at(const void* p) { return (uint32_t)__cvta_generic_to_shared(p); }
@@ -53,6 +57,22 @@ DEV void mbar_wait(uint32_t bar, uint32_t parity) {
 DEV void mbar_wait_warp(uint32_t bar, uint32_t parity) {
   mbar_wait(bar, parity);
   __syncwarp();
+}
+DEV void tma_store(const void* map, uint32_t src, int c0, int c1) {
+  asm volatile("cp.async.bulk.tensor.2d.global.shared::cta.bulk_group [%0, {%2, %3}], [%1];" ::"l"(map), "r"(src), "r"(c0),
+               "r"(c1)
+               : "memory");
+}
+DEV void bulk_commit() { asm volatile("cp.async.bulk.commit_group;" ::: "memory"); }
+DEV void bulk_wait_read() { asm volatile("cp.async.bulk.wait_group.read 0;" ::: "memory"); }
+DEV void bulk_wait() { asm volatile("cp.async.bulk.wait_group 0;" ::: "memory"); }
+DEV void fence_async_smem() { asm volatile("fence.proxy.async.shared::cta;" ::: "memory"); }
+DEV void bar_named(int id) { asm volatile("bar.sync %0, 128;" ::"r"(id) : "memory"); }
+// four 8 x 8 b16 matrices, lanes 8 j .. 8 j + 7 naming matrix j's rows; register j holds matrix j's (lane / 4, 2 (lane % 4) ..)
+DEV void stsm4(uint32_t addr, uint32_t r0, uint32_t r1, uint32_t r2, uint32_t r3) {
+  asm volatile("stmatrix.sync.aligned.m8n8.x4.shared.b16 [%0], {%1, %2, %3, %4};" ::"r"(addr), "r"(r0), "r"(r1), "r"(r2),
+               "r"(r3)
+               : "memory");
 }
 DEV void tma_prefetch(const void* map) { asm volatile("prefetch.tensormap [%0];" ::"l"(map) : "memory"); }
 DEV void tma_load(uint32_t dst, const void* map, uint32_t bar, int c0, int c1) {
@@ -117,11 +137,12 @@ template <int WM, int BN, int CO> struct Tile {
   static constexpr int R = CO ? WM / 2 : WM;  // a consumer's rows
   static_assert(R * BN == 16384 && (R == 64 || R == 128), "a 64 x 256 or 128 x 128 tile a consumer");
   static constexpr int NH = R / 64, NA = BN / 2;  // m64 atoms a k32 step; accumulators a thread an atom
-  static constexpr uint32_t A_BYTES = WM * BK, STAGE = (WM + BN) * BK;
-  // the stages from a 1,024-byte-aligned base (SWIZZLE_128B's period), then full[s], empty[s] and order[2]
-  static constexpr int FIT = (SMEM_MAX - 1024 - 16) / (STAGE + 16);
+  static constexpr uint32_t A_BYTES = WM * BK, STAGE = (WM + BN) * BK, Y_BYTES = R * BN * 2;
+  // the stages from a 1,024-byte-aligned base (SWIZZLE_128B's period), each consumer's y tile, then full[s], empty[s] and
+  // order[2]
+  static constexpr int FIT = (SMEM_MAX - 1024 - 16 - 2 * Y_BYTES) / (STAGE + 16);
   static constexpr int STAGES = FIT < MAX_STAGES ? FIT : MAX_STAGES;
-  static constexpr int SMEM = 1024 + STAGES * STAGE + 16 * STAGES + 16;
+  static constexpr int SMEM = 1024 + STAGES * STAGE + 2 * Y_BYTES + 16 * STAGES + 16;
   static_assert(STAGE % 1024 == 0 && A_BYTES % 1024 == 0 && SMEM <= SMEM_MAX, "1,024-byte-aligned boxes in 227 KiB");
 };
 
@@ -131,10 +152,13 @@ DEV void raster(int t, int tiles_m, int tiles_n, int group, int& tm, int& tn) {
   tn = r / size;
 }
 
-// two adjacent columns of one row, each exactlin's: cvt.rn.f32.s32, mul.rn by s_a, mul.rn by s_w, cvt.rn.bf16.f32
+// two adjacent columns of one row, each exactlin's: cvt.rn.f32.s32, mul.rn by s_a, mul.rn by s_w, then both cvt.rn to bf16 by
+// one cvt.rn.bf16x2.f32 (each half rounded on its own), a's word low
 DEV uint32_t words(int32_t a, int32_t b, float sr, float c0, float c1) {
   const float ya = __fmul_rn(__fmul_rn(__int2float_rn(a), sr), c0), yb = __fmul_rn(__fmul_rn(__int2float_rn(b), sr), c1);
-  return (uint32_t)__bfloat16_as_ushort(__float2bfloat16_rn(ya)) | (uint32_t)__bfloat16_as_ushort(__float2bfloat16_rn(yb)) << 16;
+  uint32_t w;
+  asm("cvt.rn.bf16x2.f32 %0, %1, %2;" : "=r"(w) : "f"(yb), "f"(ya));
+  return w;
 }
 
 DEV void put(uint32_t* at, uint32_t v, int flags) {
@@ -165,7 +189,8 @@ template <int WM, int BN, int CO, int CL> DEV void body(const Params& p) {
   constexpr int STAGES = T::STAGES, NH = T::NH, NA = T::NA, NC = CO ? 2 : 1;  // NC: the consumers that read a stage
   static_assert(CL == 1 || CL == 2, "a CTA or a pair");
   extern __shared__ __align__(1024) uint8_t smem[];
-  const uint32_t base = (smem_at(smem) + 1023) & ~1023u, bars = base + STAGES * T::STAGE, order = bars + 16 * STAGES;
+  const uint32_t base = (smem_at(smem) + 1023) & ~1023u, ybuf = base + STAGES * T::STAGE, bars = ybuf + 2 * T::Y_BYTES;
+  const uint32_t order = bars + 16 * STAGES;
   const int M = p.M, N = p.N, KB = (p.K + BK - 1) / BK;
   const int tiles_m = (M + WM - 1) / WM, tiles_n = (N + BN - 1) / BN, rows_u = (tiles_m + CL - 1) / CL, units = rows_u * tiles_n;
   const int tid = threadIdx.x, wg = tid / 128, rank = CL == 1 ? 0 : (int)cta_rank();
@@ -273,6 +298,35 @@ template <int WM, int BN, int CO, int CL> DEV void body(const Params& p) {
     if (lane == 0) release<CL>(bars + 8 * (STAGES + sp));
     if (p.flags & 2) continue;
 
+    if (p.flags & Y_TMA) {
+      // the consumer's R x BN words into its buffer as BN / 64 boxes of R rows by 128 bytes, SWIZZLE_128B (16-byte chunk
+      // c of row r at c ^ (r % 8)), then one TMA store a box, which writes rows < M and columns < N alone
+      const uint32_t buf = ybuf + wg * T::Y_BYTES;
+      if (x == 0) bulk_wait_read();  // the last tile's stores have read the buffer
+      bar_named(1 + wg);
+      const int jm = lane / 8, rr = 16 * (x / 32) + 8 * (jm & 1) + lane % 8;
+#pragma unroll
+      for (int h = 0; h < NH; h++) {
+#pragma unroll
+        for (int q = 0; q < NA / 4; q += 2) {
+          const int row = 64 * h + rr, chunk = q + (jm >> 1);
+          stsm4(buf + (chunk / 8) * (T::R * 128) + row * 128 + (((chunk % 8) ^ (row % 8)) << 4),
+                words(d[h][4 * q], d[h][4 * q + 1], r[h][0], c[q].x, c[q].y),
+                words(d[h][4 * q + 2], d[h][4 * q + 3], r[h][1], c[q].x, c[q].y),
+                words(d[h][4 * q + 4], d[h][4 * q + 5], r[h][0], c[q + 1].x, c[q + 1].y),
+                words(d[h][4 * q + 6], d[h][4 * q + 7], r[h][1], c[q + 1].x, c[q + 1].y));
+        }
+      }
+      fence_async_smem();
+      bar_named(1 + wg);
+      if (x == 0) {
+#pragma unroll
+        for (int b = 0; b < BN / 64; b++) tma_store(&p.c, buf + b * (T::R * 128), tn * BN + 64 * b, tm * WM + (CO ? wg * T::R : 0));
+        bulk_commit();
+      }
+      continue;
+    }
+
 #pragma unroll
     for (int h = 0; h < NH; h++) {
       const int row = row0 + 64 * h;
@@ -289,6 +343,8 @@ template <int WM, int BN, int CO, int CL> DEV void body(const Params& p) {
       }
     }
   }
+  // the CTA's shared memory outlives its last TMA stores' reads
+  if ((p.flags & Y_TMA) && x == 0) bulk_wait();
 }
 
 #define KERNELS(S, WM, BN, CO)                                                                                           \
@@ -308,6 +364,7 @@ KERNELS(co, 128, 256, 1)
 namespace {
 constexpr int NV = 6;
 constexpr int VWM[NV] = {128, 128, 64, 64, 128, 128}, VBN[NV] = {128, 128, 256, 256, 256, 256}, VCL[NV] = {1, 2, 1, 2, 1, 2};
+constexpr int VCO[NV] = {0, 0, 0, 0, 1, 1};
 using T0 = Tile<128, 128, 0>;
 using T1 = Tile<64, 256, 0>;
 using T2 = Tile<128, 256, 1>;
@@ -351,6 +408,14 @@ int tmap(CUtensorMap* m, const void* ptr, int rows, int depth, int box_rows) {
                                 CU_TENSOR_MAP_INTERLEAVE_NONE, CU_TENSOR_MAP_SWIZZLE_128B, CU_TENSOR_MAP_L2_PROMOTION_L2_128B,
                                 CU_TENSOR_MAP_FLOAT_OOB_FILL_NONE) != CUDA_SUCCESS;
 }
+// y (rows x cols bf16 words, row-major) as the epilogue's TMA stores write it: boxes of box_rows x 64 words, SWIZZLE_128B
+int tmap_y(CUtensorMap* m, void* ptr, int rows, int cols, int box_rows) {
+  const cuuint64_t dims[2] = {(cuuint64_t)cols, (cuuint64_t)rows}, strides[1] = {(cuuint64_t)cols * 2};
+  const cuuint32_t box[2] = {64, (cuuint32_t)box_rows}, estr[2] = {1, 1};
+  return cuTensorMapEncodeTiled(m, CU_TENSOR_MAP_DATA_TYPE_UINT16, 2, ptr, dims, strides, box, estr,
+                                CU_TENSOR_MAP_INTERLEAVE_NONE, CU_TENSOR_MAP_SWIZZLE_128B, CU_TENSOR_MAP_L2_PROMOTION_NONE,
+                                CU_TENSOR_MAP_FLOAT_OOB_FILL_NONE) != CUDA_SUCCESS;
+}
 }  // namespace
 
 // each variant's (WM, BN, cluster, stages, shared bytes), five ints a variant; returns the variant count
@@ -366,7 +431,9 @@ extern "C" int int8_wgmma_layout(int* out) {
 }
 
 // y = exactlin(xq W^T) on `stream` with variant v, at most `ctas` CTAs (0: every SM) and raster groups of `group` tile rows
-// (pairs of them with a cluster); returns 0, or a nonzero code naming the failed step, and writes the grid to *grid
+// (pairs of them with a cluster); returns 0, or a nonzero code naming the failed step, and writes the grid to *grid.  y goes
+// out by TMA stores where its rows allow (N a multiple of 8, y 16-byte aligned) unless flags has 16; flags' 1, 2 and 4 are
+// the kernel's timing probes.
 extern "C" int int8_wgmma_launch(int v, const void* xq, const void* w, const float* sa, const float* sw, void* y, int M, int N,
                                  int K, int group, int ctas, int flags, void* stream, int* grid) {
   if (v < 0 || v >= NV || M < 1 || N < 2 || N % 2 || K < 16 || K % 16 || group < 1) return 10;
@@ -383,7 +450,12 @@ extern "C" int int8_wgmma_launch(int v, const void* xq, const void* w, const flo
   p.N = N;
   p.K = K;
   p.group = group;
-  p.flags = flags;
+  const int rows_c = VCO[v] ? wm / 2 : wm;  // a consumer's rows
+  p.flags = flags & 7;
+  if (N % 8 == 0 && reinterpret_cast<uintptr_t>(y) % 16 == 0 && !(flags & 16)) {
+    if (tmap_y(&p.c, y, M, N, rows_c)) return 14;
+    p.flags |= Y_TMA;
+  }
   const int units = ((M + wm - 1) / wm + cl - 1) / cl * ((N + bn - 1) / bn);
   int cap = cl == 1 ? g_sms[dev] : g_most[dev][v];
   if (ctas > 0) cap = min(cap, cl == 1 ? ctas : max(ctas / 2, 1));

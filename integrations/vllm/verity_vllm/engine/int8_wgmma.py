@@ -137,7 +137,8 @@ def available(index: int) -> bool:
 def scaled_mm(xq: torch.Tensor, s_a: torch.Tensor, w: torch.Tensor, s_w: torch.Tensor, y: torch.Tensor,
               cfg: WgCfg, flags: int = 0) -> int:
     """xq [M, K] int8, s_a [M] f32, w [N, K] int8 (row-major), s_w [N] f32 -> y [M, N] bf16, in place; returns the grid.
-    `flags` are timing probes (1 streaming stores of y; 2 no epilogue and 4 no stores, which leave y unwritten)."""
+    y goes out by TMA stores where N is a multiple of 8 (else by each thread); `flags` 16 keeps the threads' stores, and
+    1, 2 and 4 are timing probes (streaming stores; no epilogue and no stores, which leave y unwritten)."""
     m, k = xq.shape
     n = w.shape[0]
     assert xq.dtype == torch.int8 and w.dtype == torch.int8 and w.shape[1] == k and xq.is_contiguous() and w.is_contiguous()
