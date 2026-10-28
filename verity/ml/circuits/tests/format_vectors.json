@@ -74,13 +74,13 @@
   "outside": [
    [
     "\u00e9",
-    "225c753030653922",
+    "ValueError: outside the canonical JSON domain: $: string '\u00e9' is not ASCII without DEL",
     "22c3a922",
     "$: string '\u00e9' is not ASCII without DEL"
    ],
    [
     "\u007f",
-    "225c753030376622",
+    "ValueError: outside the canonical JSON domain: $: string '\\x7f' is not ASCII without DEL",
     "227f22",
     "$: string '\\x7f' is not ASCII without DEL"
    ],
@@ -107,7 +107,7 @@
      "\ue000": 1,
      "\ud83d\ude00": 2
     },
-    "7b225c7565303030223a312c225c75643833645c7564653030223a327d",
+    "ValueError: outside the canonical JSON domain: $.<key>: string '\ud83d\ude00' is not ASCII without DEL",
     "7b22f09f9880223a322c22ee8080223a317d",
     "$.<key>: string '\ud83d\ude00' is not ASCII without DEL"
    ]

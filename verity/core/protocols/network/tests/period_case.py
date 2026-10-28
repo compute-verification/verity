@@ -1218,7 +1218,8 @@ def build(m: str, seed: int, small: bool = False) -> dict:
     key = _key(ki)
     N, W, H, toy = KEYS[ki]
     session = r.randbytes(lms.SESSION_BYTES)
-    link = r.choice(["eth0", "a", "dé"])
+    # each form binds the link in its window domain's canonical JSON, whose strings are ASCII without DEL
+    link = r.choice(["eth0", "a", "d-e"])
     least_windows = 2 if m == "clock-reused" else 1
     least_audits = 1 if m.startswith(("audit", "state")) or m == "count-audits" else 0
     n_windows = r.randint(least_windows, least_windows if small else 3)
