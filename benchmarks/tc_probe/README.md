@@ -18,6 +18,9 @@ with the instruction's pinned model.
   evidence store and the discrepancy log (`verity/ml/circuits/silicon/discrepancy_log.json`), never set by hand, and the
   dossier that shows why.
 - `tool.py`: the store declarations, which say which parameters key a result.
+- `b1_rate.cu` (run by `b1_rate.sh`): a rate probe, not a semantics one. The sustained `mma.sync` rate per SM clock of
+  b1 m16n8k256 (`.and.popc`, `.xor.popc`) against s8 m16n8k32, register-resident on every SM, with each kernel's SASS
+  opcode counts.
 
 From the repository root after `uv sync --all-packages`, on a GPU of the instruction's architecture with nvcc (and
 `cuobjdump` for `--sass-check`):
