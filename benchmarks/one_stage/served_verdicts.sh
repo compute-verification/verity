@@ -17,7 +17,8 @@
 #     length instead (`serve_load.py --fixed SLOTS --window-steps WINDOW_STEPS`): SLOTS requests of PROMPTS tokens, each
 #     with ignore_eos and max_tokens WINDOW_STEPS, all prefilled at the window's first step and run through its last. With
 #     LOAD=front there are none: CERTIFIER_FRONT's group, sent through the warden, is the run's one load and its execution
-#     block the one the run audits (a period that admits a single block, say), and the front's exit is the requests'.
+#     block the one the run audits (a period that admits a single block, say), and the front's exit is the requests': a
+#     front that failed stops the endpoint at once, with no window to seal.
 #     CERTIFIER_FRONT runs within CERTIFIER_FRONT_TIMEOUT (default 20m), and a flag it passes to `certifier_piece.py front`
 #     that this tree's front doesn't take is refused before the lease. The
 #     lease ends once every closed window is sealed. Each request's
