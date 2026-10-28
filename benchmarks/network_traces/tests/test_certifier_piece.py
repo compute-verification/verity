@@ -3,8 +3,9 @@ the gate's fetch, witness and all, 0700 under the serve dir's private/certifier,
 and its outcome. The piece, on a serve dir whose window was the warden's synthetic run's certified requests (the run
 `test_warden_chain.gate_run` publishes in the gate's layout), runs as `served_verdicts.py pieces` runs it and writes
 `network-period`'s answer only when the chain accepted and the window's requests are certified ones in the scan's
-link-window: the period mirror's certifier/v0 accept (`period_case`) then goes through `served_verdicts.py record` into
-the block record's certifier leg, which `block_record.check` holds and its schema admits. A window request the warden
+link-window: the period mirror's certifier/v0 accept (`period_case`'s honest clock period, one-stage v2 taken as
+accepting its link-windows' proofs, which the mirror can't run) then goes through `served_verdicts.py record` into the
+block record's certifier leg, which `block_record.check` holds and its schema admits. A window request the warden
 didn't certify is rejected before any chain runs; a chain that refused, requests outside the scan's link-window and a
 period the check rejects are rejects; a step that can't run (no kept run, no report, no build, the time limit) refuses,
 which leaves the certifier missing. The leak guard reads the piece's DIR against the run's witness."""
@@ -134,7 +135,8 @@ def _record(monkeypatch, capsys, serve: Path, pieces: Path) -> tuple[dict | None
 def test_the_pieces_certifier_row_is_the_period_checks_accept_and_composes_into_the_block_record(tmp_path, warden,
                                                                                                 period, capsys,
                                                                                                 monkeypatch):
-    accept = period.reference(period.case("accept", 1, "clock"))
+    monkeypatch.setattr(period, "_proved", lambda *a: None)
+    accept = period.reference(period.build("honest", 1, small=True))
     assert accept["verdict"] == "accept" and accept["protocol"] == CP.PROTOCOL
     d = _serve_dir(tmp_path / "serve", warden)
     env = dict(os.environ, CERTIFIER_CMD=_piece_cmd(tmp_path, _chain_out(tmp_path / "chain", "accepted", warden["w"]),
