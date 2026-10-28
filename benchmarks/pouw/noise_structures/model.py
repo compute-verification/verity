@@ -1,0 +1,344 @@
+"""PoUW noise structures on the H200: the floor at A = B = 0, honest de-noising, noise generation and committed bytes.
+
+Every figure is an estimate from the rates below (theta.toml sm_90 and the runs it cites), not a timing. Costs are in
+G-times: a call's plain s8 GEMM, m·n·K MACs at the s8 rate, is 1. CUDA-core work is priced at its issue rate against
+s8's, SHA-512 at its measured compression rate, HBM at its measured bandwidth. A structure's floor is the cheapest
+cheater route found at A = B = 0 per credited MAC, an upper bound on the true floor; `check.py` checks every route's
+algebra exactly.
+
+`uv run benchmarks/pouw/noise_structures/model.py --out DIR` writes DIR/structures.json (every call class × m × structure,
+the best parameters of each) and DIR/structures.md (the tables).
+"""
+
+from __future__ import annotations
+
+import argparse
+import dataclasses
+import json
+import math
+import pathlib
+import sys
+
+import numpy as np
+
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
+from check import sparse_hi, wraps
+
+CLK = 1.769e9  # measured event clock under the served GEMM, run b57f
+SMS = 132
+S8 = 4096.0  # s8 wgmma MACs a SM-clock (theta tensor.s8.k32, measured 4095.6)
+R_B = 1 / 8  # b1 .and.popc at 8× s8 (r20261028-090323-2c56, #6216)
+SP24 = 0.5  # 2:4 sparse s8 wgmma, A in registers: 8191 logical MACs a SM-clock (dc/README, wgsprs_s8)
+ALU = 64.0  # IADD3/LOP3 results a SM-clock (theta alu.iadd3 sheet 64, alu.lop3 measured 63.01)
+ADD = S8 / (2 * ALU)  # MAC-times a sparse add: IADD3 folds two adds an instruction
+OP = S8 / ALU  # MAC-times a dense ALU instruction
+SHA_C = 0.018327  # SHA-512 compressions a SM-clock (theta sha512, measured)
+PRG_B = S8 / (SHA_C * 64)  # MAC-times a PRG byte (64 output bytes a compression): about 3,492
+HASH_BPS = 521e9  # SHA-512 over 16 KiB rows, the whole card (b921; note:compute-research/20261028T1600Z-finding-commit-bytes)
+R_S8 = S8 * SMS * CLK  # MACs a second
+HASH_B = R_S8 / HASH_BPS  # MAC-times a hashed byte: about 1,836
+HBM = 4.26e12  # bytes a second, measured (theta hbm)
+WRAP_8B = {"p_W": 0.0119, "p_X": 0.0016}  # Llama-3.1-8B real weights and activations at ±80 (note 20261026T0225Z-draft-accel-bet-hybrid-2)
+
+CALLS = {"qkv": (3072, 2048), "o": (2048, 2048), "gate_up": (16384, 2048), "down": (2048, 8192), "lm_head": (128256, 2048)}
+MS = (4, 64, 512, 8192)
+LAYER = ("qkv", "o", "gate_up", "down")
+LAYERS = 16
+
+
+@dataclasses.dataclass(frozen=True)
+class Call:
+    name: str
+    m: int
+    n: int
+    k: int
+
+    @property
+    def macs(self) -> float:
+        return self.m * self.n * self.k
+
+    @property
+    def t_g(self) -> float:
+        return self.macs / R_S8
+
+    @property
+    def t_stock(self) -> float:
+        return max(self.t_g, self.n * self.k / HBM)
+
+
+_HI: dict = {}
+_WR: dict = {}
+
+
+def hi_res(perm: str, t: int, amp: int) -> float:
+    """The merged factor's 2:4 residual density (entries of hi past each 4-group's first two), from `check.sparse_hi`."""
+    key = (perm, t, amp)
+    if key not in _HI:
+        rng = np.random.default_rng(7 + t + 131 * amp)
+        r = sparse_hi(rng, 512, 4, 256, t, perm if perm != "none" else "segment", amp)
+        _HI[key] = (r["hi_density"], r["residual_density"])
+    return _HI[key]
+
+
+def wrap_rates(amp: int) -> dict:
+    """Wrap rates at ±amp: synthetic operands (check.wraps), scaled so ±80 meets the measured Llama-3.1-8B rates."""
+    if not _WR:
+        rows = wraps(np.random.default_rng(3), 128, 8192, [16, 32, 48, 64, 80, 127])
+        _WR.update({r["amp"]: r for r in rows})
+    s = _WR[amp]
+    return {"p_X": s["p_X"] * WRAP_8B["p_X"] / _WR[80]["p_X"], "p_W": s["p_W"] * WRAP_8B["p_W"] / _WR[80]["p_W"]}
+
+
+def c_segment(perm: str, t: int, amp: int, word_bits: int, words: int, dither_bits: int = 1) -> tuple[float, str]:
+    """The cheater's s8 limb-products a period of L' for one word, beyond the binary product, and the route.
+
+    The word's increment is d_A,s d_B,sᵀ + F Uᵀ + V Y_sᵀ with F = D_s + V M_s (check.hyb). F Uᵀ: one limb if F fits int8,
+    or the word is 8 bits (F mod 2^8 as u8); else a dense low limb plus the high limb dense or 2:4 sparse with a CUDA
+    residual; under per-segment π, D_s Uᵀ and t·(Vπ_s⁻¹)Uᵀ as two dense limbs. Unpermuted: V Uᵀ is shared by every
+    segment, so D_s Uᵀ + V Y_sᵀ + t·VUᵀ costs 2 + 1/words."""
+    if perm == "none":
+        return 2 + 1 / words, "D_s·Uᵀ + V·Y_sᵀ dense, V·Uᵀ once a call"
+    fmax = t * (amp + 2 ** dither_bits - 1)
+    if word_bits <= 8 or fmax <= 127:
+        return 2.0, "F·Uᵀ one limb (F mod 2^8 or F in int8) + V·Y_sᵀ"
+    dens, res = hi_res(perm, t, amp)
+    sparse = 1 + SP24 + res * ADD  # low limb, 2:4 high limb, and res·L' residual adds a cell at ADD MAC-times each
+    routes = {"F lo dense + F hi 2:4 + residual adds": sparse, "F lo + hi dense": 2.0}
+    if perm == "segment":
+        routes["D_s·Uᵀ + t·(Vπ_s⁻¹)·Uᵀ dense"] = 2.0
+    name = min(routes, key=routes.get)
+    return routes[name] + 1, f"{name} ({routes[name]:.2f}) + V·Y_sᵀ (1); hi density {dens:.3f}, residual {res:.4f}"
+
+
+@dataclasses.dataclass
+class Row:
+    structure: str
+    call: str
+    m: int
+    n: int
+    k: int
+    params: dict
+    floor: float
+    route: str
+    credited: float
+    tensor: float
+    cuda: float
+    prg: float
+    prg_weight_per_call: float
+    hash_words: float
+    hash_o: float
+    hbm: float
+    words_bytes_cell: float
+    committed: str
+    block: str
+    premise: str
+    serial: float = 0.0
+    overlap: float = 0.0
+    objective: float = 0.0
+
+    def finish(self, c: Call) -> "Row":
+        """Time over the stock call: serialized max(tensor, HBM) + CUDA + SHA, and overlapped max of all four."""
+        tg = c.t_g
+        t_tensor = tg * (1 + self.tensor)
+        t_hbm = self.hbm * c.n * c.k / HBM
+        t_cuda = tg * self.cuda
+        t_sha = tg * (self.prg + self.prg_weight_per_call + self.hash_words)
+        self.serial = (max(t_tensor, t_hbm) + t_cuda + t_sha) / c.t_stock - 1
+        self.overlap = max(t_tensor, t_hbm, t_cuda, t_sha) / c.t_stock - 1
+        self.objective = self.serial / self.credited if self.credited > 0 else math.inf
+        return self
+
+
+def lprimes(k: int) -> list[int]:
+    return [lp for lp in (32, 64, 128, 256, 512, 1024, 2048, 4096) if lp < k and k % lp == 0]
+
+
+def hyb(c: Call, name: str, perm: str, word_bits: int, amp_v: int = 80, amp_u: int = 80, v_bytes: int = 4,
+        fold: bool = False, dither_bits: int = 1, weight_per_call: bool = False, receipt_bits: int = 8,
+        lanes: int = 1) -> list[Row]:
+    """Dither-style periodic noise: V, U period L', words every L = t·L' (W of them), O from the noised GEMM by the peel.
+
+    Only V's amplitude enters the cheater's limbs (F = D_s + V M_s); U's sets only the weight-side wrap rate, since U is
+    the right factor at one s8 limb whatever its width, and the H200 has no narrower integer or FP format faster than s8.
+    v_bytes is the PRG bytes a V entry: 4 in dither.py's `_noise` (one u32 a value), 1 for a byte-wide draw."""
+    rb = dither_bits * dither_bits * R_B
+    wr = {"p_X": wrap_rates(amp_v)["p_X"], "p_W": wrap_rates(amp_u)["p_W"]}
+    rows = []
+    for lp in lprimes(c.k):
+        for t in range(1, 9):
+            for w in range(1, c.k // (t * lp) + 1):
+                cs, route = c_segment(perm, t, amp_v, word_bits, w, dither_bits)
+                seg = t * lp
+                floor = (rb * seg + min(cs * lp, (1 - rb) * seg)) / seg
+                credit = w * seg
+                if floor < 1 - 1e-9:
+                    continue
+                f = credit / c.k
+                wrap_w = min(ADD * wr["p_W"], SP24)
+                cuda = (2 * OP + ADD) / c.n + ADD * wr["p_X"] + (0 if wrap_w == SP24 else wrap_w)
+                tensor = 4 * lp / c.k + (SP24 if wrap_w == SP24 else 0)
+                prg = (c.m * c.k * dither_bits / 8 + v_bytes * c.m * lp) * PRG_B / c.macs
+                wpc = (c.n * c.k * dither_bits / 8 + 4 * c.n * lp) * PRG_B / c.macs if weight_per_call else 0.0
+                if weight_per_call:
+                    cuda += 2 * OP / c.m
+                wb = receipt_bits / 8 / lanes if fold else w * word_bits / 8
+                if fold:
+                    cuda += w * 3 * OP / c.k
+                hbm = 1 + 3 * lp / c.k + 4 * wr["p_W"]
+                rows.append(Row(
+                    name, c.name, c.m, c.n, c.k,
+                    {"lp": lp, "t": t, "W": w, "word_bits": word_bits, "amp_v": amp_v, "amp_u": amp_u, "v_bytes": v_bytes,
+                     "perm": perm, "dither_bits": dither_bits, "fold": fold},
+                    floor, f"binary {rb:.3f}/MAC + per word min(separation {cs:.2f}·L', direct): {route}", f,
+                    tensor, cuda, prg, wpc, wb * HASH_B / c.k, 4 * HASH_B / c.k, hbm, wb,
+                    (f"1 folded {receipt_bits}-bit receipt per {lanes} cell(s) over {w} virtual {word_bits}-bit prefix words a cell, and O (32-bit)" if fold else
+                     f"{w} prefix words T_s at {word_bits} bits a cell, and O (32-bit); weight root + per-period W′, U, Y_W, wrap list"),
+                    f"{lanes} cell(s)' whole K" if fold else f"one cell × one segment (L = {seg}); the O block opens the whole rows",
+                    ("ARX fold unpredictable without its inputs (not SHA-512: a new named premise)" if fold else "SAK on noised operands"),
+                ).finish(c))
+    return rows
+
+
+def two_gemm(c: Call, word_bits: int = 8, dither_bits: int = 1, lanes: int = 1) -> list[Row]:
+    """O = A·Bᵀ plain; one noised word per cell, T = wrap8(A + d_A)·Rᵀ mod 2^b, R fresh int8 along K, per period, stored.
+
+    A word mod 2^b over a d-bit dither needs the b1 plane pairs (i, j) with i + j < b (check.planes): 8 at d = 1, b = 8.
+    lanes > 1 folds that many cells' words into one receipt (J10-R's lane fold), a premise and a lane-sized proof block."""
+    pairs = sum(1 for i in range(dither_bits) for j in range(8) if i + j < word_bits)
+    floor = min(1.0, pairs * R_B)
+    if floor < 1 - 1e-9:
+        return []
+    fold = lanes > 1
+    return [Row(
+        "fresh-R two-GEMM" + (f" + fold of {lanes} cells" if fold else ""), c.name, c.m, c.n, c.k,
+        {"word_bits": word_bits, "dither_bits": dither_bits, "lanes": lanes},
+        floor, f"s8 direct = {pairs} b1 plane products = two 2:4 halves: all {floor:.2f}", 1.0,
+        1.0, (1.5 * OP) / c.n + (3 * OP / c.k if fold else 0), c.m * c.k * dither_bits / 8 * PRG_B / c.macs, 0.0,
+        word_bits / 8 / lanes * HASH_B / c.k, 4 * HASH_B / c.k, 2.0, word_bits / 8 / lanes,
+        (f"1 receipt over {lanes} cells' words" if fold else f"1 word T at {word_bits} bits a cell")
+        + " (and O, plain); weight root + per-period R (n×K int8, +1× weight memory)",
+        f"{lanes} cells' whole K" if fold else "one cell's whole K",
+        "SAK on noised operands, with R fixed for the period (one operand known ahead)"
+        + ("; the receipt fold, as J10-R" if fold else ""),
+    ).finish(c)]
+
+
+def jr2(c: Call, per_call: bool) -> list[Row]:
+    """J10-R v2 (#6369): X = A + b, W′ = B + c + U with U fresh at every K entry (±64), O′ = T − X·Uᵀ, receipts by the
+    duo/fx1 fold over the lane's sets. Per call as the PR has it, or with c and U drawn once a period and stored."""
+    wr = wrap_rates(64)
+    wrap_w = min(ADD * wr["p_W"], SP24)
+    cuda = 1.5 * OP / c.n + (0 if wrap_w == SP24 else wrap_w) + (2 * OP / c.m if per_call else 0)
+    wpc = c.n * c.k * 9 / 8 * PRG_B / c.macs if per_call else 0.0
+    return [Row(
+        "JR2 fresh U " + ("per call (#6369)" if per_call else "per period"), c.name, c.m, c.n, c.k, {"u_amp": 64},
+        1.0, "b·(c+U)ᵀ: s8 direct or 8 b1 planes, both 1.00 (U fresh, no fold)", 1.0,
+        1.0 + (SP24 if wrap_w == SP24 else 0), cuda, c.m * c.k / 8 * PRG_B / c.macs, wpc,
+        0.0, 4 * HASH_B / c.k, 1.0 if per_call else 2.0, 0.0,
+        "receipts (2(KS+1) words a lane) folded over T_0..T_(KS−1) and O′; the z/y records are the values' commitment",
+        "a whole tile (32×32 cells × K)", "the duo/fx1 receipt fold, as J10-R v1",
+    ).finish(c)]
+
+
+def fresh_v(c: Call) -> list[Row]:
+    """X = A + d_A + V with V fresh int8 per entry, per call; W′ = B + d_B. One 8-bit word. O = T − V·W′ᵀ."""
+    wr = wrap_rates(80)
+    return [Row(
+        "fresh-V (per call)", c.name, c.m, c.n, c.k, {"word_bits": 8},
+        1.0, "V·d_Bᵀ mod 2^8: 8 b1 planes or s8 direct, 1.00", 1.0,
+        1.0, (2 * OP + ADD) / c.n + ADD * wr["p_X"], c.m * c.k * 9 / 8 * PRG_B / c.macs, 0.0,
+        HASH_B / c.k, 4 * HASH_B / c.k, 1.0, 1.0,
+        "1 word at 8 bits a cell, and O (32-bit)", "one cell's whole K", "SAK on noised operands",
+    ).finish(c)]
+
+
+ENG = {"amp_u": 16, "v_bytes": 1}  # U narrow (weight wraps ≈ 0) and V one PRG byte an entry: neither changes a floor
+
+STRUCTS = {
+    "HYB per-tile π, 16-bit (Dither v3.2 as specified)": lambda c, s: hyb(c, s, "tile", 16),
+    "HYB per-segment π, 16-bit (v3.2 noise)": lambda c, s: hyb(c, s, "segment", 16),
+    "HYB per-tile π, 16-bit, U ±16, V 1 B": lambda c, s: hyb(c, s, "tile", 16, **ENG),
+    "HYB per-segment π, 16-bit, U ±16, V 1 B": lambda c, s: hyb(c, s, "segment", 16, **ENG),
+    "HYB no π, 16-bit, U ±16, V 1 B": lambda c, s: hyb(c, s, "none", 16, **ENG),
+    "HYB per-segment π, 8-bit, U ±16, V 1 B": lambda c, s: hyb(c, s, "segment", 8, **ENG),
+    "HYB per-segment π, 2-bit dithers, U ±16, V 1 B": lambda c, s: hyb(c, s, "segment", 16, dither_bits=2, **ENG),
+    "HYB per-segment π, weight noise per call": lambda c, s: hyb(c, s, "segment", 16, weight_per_call=True, **ENG),
+    "HYB per-segment π + ARX fold, 8-bit receipt a cell": lambda c, s: hyb(c, s, "segment", 16, fold=True, **ENG),
+    "HYB per-segment π + ARX fold of 32 cells": lambda c, s: hyb(c, s, "segment", 16, fold=True, lanes=32, **ENG),
+    "fresh-R two-GEMM, 8-bit word": lambda c, s: two_gemm(c),
+    "fresh-R two-GEMM + fold of 32 cells": lambda c, s: two_gemm(c, lanes=32),
+    "JR2 fresh U per call (#6369)": lambda c, s: jr2(c, True),
+    "JR2 fresh U per period": lambda c, s: jr2(c, False),
+    "fresh-V per call, 8-bit word": lambda c, s: fresh_v(c),
+}
+
+
+def best(rows: list[Row], min_credit: float) -> Row | None:
+    ok = [r for r in rows if r.credited >= min_credit - 1e-9]
+    return min(ok, key=lambda r: (r.objective, -r.credited)) if ok else None
+
+
+def main() -> int:
+    p = argparse.ArgumentParser()
+    p.add_argument("--out", type=pathlib.Path, required=True)
+    p.add_argument("--min-credit", type=float, default=0.75)
+    a = p.parse_args()
+    out = []
+    for name, (n, k) in CALLS.items():
+        for m in MS:
+            c = Call(name, m, n, k)
+            for s, fn in STRUCTS.items():
+                r = best(fn(c, s), a.min_credit)
+                if r is not None:
+                    r.structure = s
+                    out.append(dataclasses.asdict(r))
+    steps = {}
+    for m in MS:
+        for s in STRUCTS:
+            rs = [r for r in out if r["structure"] == s and r["m"] == m and r["call"] in LAYER]
+            if len(rs) < len(LAYER):
+                continue
+            stock = sum(Call(r["call"], m, r["n"], r["k"]).t_stock for r in rs)
+            extra = sum(r["serial"] * Call(r["call"], m, r["n"], r["k"]).t_stock for r in rs)
+            cred = sum(r["credited"] * Call(r["call"], m, r["n"], r["k"]).macs for r in rs) / sum(Call(r["call"], m, r["n"], r["k"]).macs for r in rs)
+            steps.setdefault(m, {})[s] = {"overhead_over_linear_stock": extra / stock, "credited_share": cred,
+                                          "extra_ms_step": LAYERS * extra * 1e3}
+    rep = {"rates": {"clock_hz": CLK, "s8_macs_sm_clk": S8, "r_b": R_B, "sp24_cost": SP24, "alu_ops_sm_clk": ALU,
+                     "macs_per_sparse_add": ADD, "macs_per_prg_byte": PRG_B, "macs_per_hashed_byte": HASH_B, "hbm_Bps": HBM,
+                     "wrap_anchor_8B": WRAP_8B},
+           "wrap_rates": {amp: wrap_rates(amp) for amp in (16, 32, 48, 64, 80, 127)},
+           "hi_limb": {f"{k[0]} t{k[1]} a{k[2]}": v for k, v in _HI.items()},
+           "min_credit": a.min_credit, "rows": out, "steps": steps}
+    a.out.mkdir(parents=True, exist_ok=True)
+    (a.out / "structures.json").write_text(json.dumps(rep, indent=1, default=str))
+    (a.out / "structures.md").write_text(render(rep))
+    print(render(rep))
+    return 0
+
+
+def render(rep: dict) -> str:
+    lines = ["# PoUW noise structures on the H200 (estimates from theta rates; floor per credited MAC at A = B = 0)", ""]
+    for m in MS:
+        lines += [f"## m = {m}", "",
+                  "| call | structure | params | floor | credited | tensor | CUDA | PRG/call | weight PRG/call | hash words | hash O | HBM× | serial | overlap |",
+                  "|---|---|---|---|---|---|---|---|---|---|---|---|---|---|"]
+        for r in rep["rows"]:
+            if r["m"] != m:
+                continue
+            pr = r["params"]
+            ps = (f"L′{pr['lp']} t{pr['t']} W{pr['W']} {pr['word_bits']}b" if "lp" in pr else
+                  ",".join(f"{k}{v}" for k, v in pr.items()))
+            lines.append(f"| {r['call']} | {r['structure']} | {ps} | {r['floor']:.2f} | {r['credited']:.2f} | {r['tensor']:.3f} | "
+                         f"{r['cuda']:.3f} | {r['prg']:.3f} | {r['prg_weight_per_call']:.2f} | {r['hash_words']:.3f} | "
+                         f"{r['hash_o']:.3f} | {r['hbm']:.2f} | {r['serial']:.2f} | {r['overlap']:.2f} |")
+        lines.append("")
+    lines += ["## A 16-layer step's linears (qkv, o, gate_up, down), each at its best parameters", "",
+              "| T | structure | overhead / stock linear time | credited share | extra ms a step |", "|---|---|---|---|---|"]
+    for m, d in rep["steps"].items():
+        for s, v in sorted(d.items(), key=lambda kv: kv[1]["overhead_over_linear_stock"]):
+            lines.append(f"| {m} | {s} | {v['overhead_over_linear_stock']:.2f} | {v['credited_share']:.3f} | {v['extra_ms_step']:.2f} |")
+    return "\n".join(lines) + "\n"
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
