@@ -39,18 +39,6 @@ def test_a_pool_slot_free_now_wins_even_when_node_2_could_start_the_job():
     assert target == (CPU5, "research"), "cpu-5's pool when cpu-1's is busy"
 
 
-def test_every_cpu_node_with_an_any_lane_research_pool_is_a_spill_target():
-    """cpu-6 to cpu-9's research pools sat idle while cpu-1's had a line, because auto never tried them."""
-    assert [m for m, p in auto.SPILL if p == "research"] == [
-        "vy-nebius-cpu-1", "vy-nebius-cpu-5", "vy-nebius-cpu-3", "vy-nebius-cpu-6", "vy-nebius-cpu-7", "vy-nebius-cpu-8",
-        "vy-nebius-cpu-9"]
-    full = pool(*(slot(f"r{i}", held=True) for i in range(8)), waiters=12)
-    idle = "vy-nebius-cpu-9"
-    target, why = auto.choose({N2: share(waiters=5), CPU1: full, CPU5: full, "vy-nebius-cpu-3": full,
-                               idle: pool(slot("r0", cpus="0-15", mem=96))}, 4, 16)
-    assert target == (idle, "research") and why.endswith("a slot is free there now")
-
-
 def test_cpu_3s_research_pool_takes_a_job_while_cpu_1s_and_cpu_5s_are_full():
     """INF-281, 27 Oct 03:06Z: cpu-1 had 22 waiting and cpu-5 34 while cpu-3's research pool sat idle, outside SPILL."""
     cpu3 = "vy-nebius-cpu-3"
