@@ -113,7 +113,7 @@ SERVED, SERVED_TOKENS = {"request": 0, "other": 1}, 4
 SERVED_RECORD = "served.json"
 #: the quality run's schemes: Pearl-C v1 (G = 4) and v2 (no promotion), each in an arm engine of its own
 QUALITY = {"pearlc-v1": "pearl-c-sm120-v1-h3", "pearlc-v2": "pearl-c-sm120-unpromoted-v1-h3"}
-#: WikiText-2 (raw), its test split, at the revision cached on node 2
+#: WikiText-2 (raw), its test split, at the revision cached on the RTX PRO 6000 node
 WIKITEXT = ("Salesforce/wikitext", "b08601e04326c79dfdd32d625aee71d232d685c3", "wikitext-2-raw-v1/test-00000-of-00001.parquet")
 #: the quality run's windows: BOS and 2,047 tokens each, non-overlapping; its batch budget, one window a step
 WINDOW, PPL_BATCH, PPL_WINDOWS_A_PASS = 2048, 2048, 8
