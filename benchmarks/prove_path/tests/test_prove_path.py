@@ -1080,12 +1080,17 @@ def test_a_served_runs_weights_registration_is_the_committers_under_its_own_key(
     against its manifest. Written to ``--out``: a root for each weight parameter but the rotary table's, what `verity-vllm
     advice --weights-of-record` records and ``window-circuit --pins`` takes (the embedding's table its own, its ``row-seg``
     rows), and what the verifier holds to its own weights
-    record's shapes (`registration_pins`) without computing a root. Another key gives other roots for every weight; a key
+    record's shapes (`registration_pins`) without computing a root. With the engine's served rotary table in the run's
+    ``private/cos_sin_cache.npy`` (serve-openai's) it roots that too, the other roots unchanged, and refuses by name a
+    table outside the analytic table's bound. Another key gives other roots for every weight; a key
     file of another length, a checkpoint the manifest pins as another model than the run served, or a shard other than the
     one the manifest pins, is refused by name, nothing registered."""
     import functools
 
+    import numpy as np
+
     from verity_vllm.pipeline import advice as ADV
+    from verity_vllm.program import model as M
     from verity_vllm.program.predict import window_weights as WW
     from verity_vllm.program.predict.window_weights import Grain
 
@@ -1114,9 +1119,23 @@ def test_a_served_runs_weights_registration_is_the_committers_under_its_own_key(
     assert [p for p in pins if p.endswith("/table")] == ["weights/model.embed_tokens.weight@64/table"]
     assert said["unrooted"] == sorted(reg["unrooted"]) and all("rotary_emb" in p for p in said["unrooted"])
     registered = PP.registered_of_serve(serve, str(hf), None, PP.CAP_BITS)
-    assert WW.registration_pins(reg, WW.weights_record(registered, str(ck), str(man), grain=grain)) == pins
+    record = WW.weights_record(registered, str(ck), str(man), grain=grain)
+    assert WW.registration_pins(reg, record) == pins
     assert register(key) == 0 and json.loads(out.read_text()) == reg
+    C = next(f for f in record["fields"] if f.get("pinned") == "analytic")["analytic"]["C"]
+    table = run / "private" / "cos_sin_cache.npy"
+    table.parent.mkdir()
+    np.save(table, M.cos_sin_table(C))
     capsys.readouterr()
+    assert register(key) == 0
+    rooted, said = json.loads(out.read_text()), json.loads(capsys.readouterr().out)
+    assert said["roots"] == 17 and said["unrooted"] == [] == list(rooted["unrooted"])
+    assert {p: e for p, e in rooted["values"].items() if p not in reg["unrooted"]} == reg["values"]
+    assert WW.registration_pins(rooted, record) == ADV.registered_weights(rooted, serve)
+    np.save(table, M.cos_sin_table({**C, "ROPE_THETA": 2 * C["ROPE_THETA"]}))
+    assert register(key) == PP.REFUSED
+    assert "served words outside the analytic table's bound" in capsys.readouterr().err
+    table.unlink()
     assert register(tmp_path / "other.key") == 0
     other = ADV.registered_weights(json.loads(out.read_text()), serve)
     assert sorted(other) == sorted(pins) and all(other[p] != pins[p] for p in pins)
@@ -1139,7 +1158,7 @@ def test_a_served_runs_weights_registration_is_the_committers_under_its_own_key(
 
 
 def test_an_int8_served_runs_weights_registration_roots_its_scales_fused_linears_and_tied_embedding(tmp_path, capsys, monkeypatch):
-    """Wed 28's model is an exact-int8 checkpoint (`engine.int8_checkpoint`'s v1: each decoder linear an s8 weight and an f32
+    """The int8 Llama-3.2-1B is an exact-int8 checkpoint (`engine.int8_checkpoint`'s v1: each decoder linear an s8 weight and an f32
     row scale, the embedding bf16 and tied to the LM head), served under a target whose ``int8_exact`` is ``linears``, and
     ``weights-registration`` roots its weight parameters as the window circuit reads them: the s8 weights and their scales of
     q|k|v and gate|up fused as vLLM serves them, o and down, the norms, and the tied embedding at the embedding's and the LM
