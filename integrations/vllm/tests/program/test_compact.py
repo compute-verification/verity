@@ -161,17 +161,17 @@ def test_bind_splits_counts_readers_per_progression_exactly_as_the_record_counts
     from verity_vllm.check.match import program_compare as C
     from tests.check.test_compare_splits_binding import _prog
 
-    def raw(**kw) -> C.Prog:
+    def raw(**kw) -> C.RootView:
         """The builder's instance sequence BEFORE binding (its _bind_splits replaced by a no-op for the call)."""
-        saved = C.Prog._bind_splits
+        saved = C.RootView._bind_splits
         try:
-            C.Prog._bind_splits = lambda self: None
+            C.RootView._bind_splits = lambda self: None
             return _prog("raw", **kw)
         finally:
-            C.Prog._bind_splits = saved
+            C.RootView._bind_splits = saved
 
-    def bound(R: C.Prog, compact: bool) -> C.Prog:
-        Q = C.Prog.__new__(C.Prog)
+    def bound(R: C.RootView, compact: bool) -> C.RootView:
+        Q = C.RootView.__new__(C.RootView)
         Q.__dict__.update(R.__dict__)
         Q.compact = compact
         Q.inst = [dict(r, args=[K.from_runs(a) if compact else list(a) for a in r["args"]]) for r in R.inst]
@@ -180,7 +180,7 @@ def test_bind_splits_counts_readers_per_progression_exactly_as_the_record_counts
         Q._segment()
         return Q
 
-    def same(R: C.Prog) -> tuple[C.Prog, C.Prog]:
+    def same(R: C.RootView) -> tuple[C.RootView, C.RootView]:
         P, Q = bound(R, False), bound(R, True)
         assert (P.n_splits_consts_bound, P.splits_values, P.splits_nodes) == (Q.n_splits_consts_bound, Q.splits_values, Q.splits_nodes)
         assert [r["k"] for r in P.inst] == [r["k"] for r in Q.inst] and P.steps == Q.steps
@@ -222,7 +222,7 @@ def test_tp_rank_compare_in_compact_form_is_the_records(tmp_path, monkeypatch):
         res, A, B = T.compare_rank(d, rank, T.fold_rank(rank, **fold_kw), T.rank_program(rank, **prog_kw), compact=compact)
         return res, A, B
 
-    def canon_runs(P: C.Prog, i: int) -> list:
+    def canon_runs(P: C.RootView, i: int) -> list:
         return [K.expand_mixed(a) for a in P.canon(i)]
 
     for rank in (0, 1):
@@ -437,7 +437,7 @@ def test_persist_program_progressions_form_gives_the_same_prog_and_document_and_
     IF.convert_instances(i2, c21, "runs")
     assert open(c21).read().split("\n")[1:] == rows1
     assert json.loads(open(c21).readline())["operand_refs_form"] == "runs" and json.loads(open(c12).readline())["schema"] == RC.INSTANCES_SCHEMA_V2
-    # (2) the same Prog (record form and compact form) and the same GM-01 document
+    # (2) the same RootView (record form and compact form) and the same GM-01 document
     for compact in (False, True):
         C.LOAD_NOTES.clear()
         assert _prog_facts(C.load_oracle(o1, "o", compact=compact)) == _prog_facts(C.load_oracle(o2, "o", compact=compact))

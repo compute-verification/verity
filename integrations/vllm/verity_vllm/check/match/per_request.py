@@ -29,13 +29,13 @@ class RequestFacts:
     exec_pop: int
     unexercised: int
     proj: dict[str, PJ.Projection]
-    comps: dict[str, SEQ.Prog]
+    comps: dict[str, SEQ.RootView]
     engine_step_of: dict[int, int]
     dep_viol: list[dict]
     perm_facts: dict[str, dict]
 
 
-def perm_match(A: SEQ.Prog, P: SEQ.Prog, s: int, ha: dict, hb: dict) -> list:
+def perm_match(A: SEQ.RootView, P: SEQ.RootView, s: int, ha: dict, hb: dict) -> list:
     """G8's Merkle (order-insensitive) matching of one request step: fold instance -> component index with the same DAG hash, chosen
     in emission order inside a hash class; None where no component instance is left with that hash.  `ha` / `hb` must be
     dag_hashes(A) / dag_hashes(P) of ONE process (the fast path's ids are per process)."""
@@ -49,7 +49,7 @@ def perm_match(A: SEQ.Prog, P: SEQ.Prog, s: int, ha: dict, hb: dict) -> list:
     return pi
 
 
-def perm_eligible(A: SEQ.Prog, P: SEQ.Prog, s) -> bool:
+def perm_eligible(A: SEQ.RootView, P: SEQ.RootView, s) -> bool:
     return not (s is None or s >= len(P.steps) or s >= len(A.steps) or len(A.steps[s]) != len(P.steps[s]))
 
 
@@ -67,9 +67,9 @@ def check_requests(run: MatchRun, att: Attribution, param_of: dict) -> RequestFa
     loc_count = 0
     exec_pop = 0
     unexercised = 0
-    A_cache: dict[str, SEQ.Prog] = _loaded.setdefault("components", {})  # decoded components shared with the alternate-criterion run
+    A_cache: dict[str, SEQ.RootView] = _loaded.setdefault("components", {})  # decoded components shared with the alternate-criterion run
     proj: dict[str, PJ.Projection] = {}
-    comps: dict[str, SEQ.Prog] = {}
+    comps: dict[str, SEQ.RootView] = {}
     xstep_specs: collections.Counter = collections.Counter()
     weight_readers: set[str] = set()
     if getattr(B, "oracle_wmap_overlaps", None):
@@ -190,7 +190,7 @@ def _prepare_requests(run: MatchRun, att: Attribution, param_of: dict, proj: dic
             continue
         pidx = param_of.get(rid)
         # the request's seed parameter (`seed_<i>`, fold._header) is its own input, not a cross-request read
-        # (`Input64_v1` nodes in request order, compare.Prog.seed_index: the i-th seed node is request index i's)
+        # (`Input64_v1` nodes in request order, compare.RootView.seed_index: the i-th seed node is request index i's)
         seed_index = dict(getattr(B, "seed_index", {}))
         my_seed = next((k for k, i in seed_index.items() if i == g["index"]), None)
         my_peers = next((k for k, i in _peer_index_all.items() if i == g["index"]), None)   # the request's own peers node
@@ -212,7 +212,7 @@ def _prepare_requests(run: MatchRun, att: Attribution, param_of: dict, proj: dic
     return pre
 
 
-def _request_leg(steps: dict, B: SEQ.Prog, fast: bool, ops: BD.Ops, within_step: str, weights_nodes: frozenset[int],
+def _request_leg(steps: dict, B: SEQ.RootView, fast: bool, ops: BD.Ops, within_step: str, weights_nodes: frozenset[int],
                  engine_step_of: dict[int, int], pre: list[tuple], k: int) -> dict:
     """The request's own facts: canonical operand sources (P.canon), chronology of its producers, comparison with its component
     (compare_steps; under `dag` the Merkle matching per executed step -> canonical addresses).  Reads shared objects, writes none."""
@@ -289,14 +289,14 @@ def _request_leg(steps: dict, B: SEQ.Prog, fast: bool, ops: BD.Ops, within_step:
     return _compare_component(ops, within_step, fast, g, ent, P, A, cd, LP, out)
 
 
-def addressed_instances(A: SEQ.Prog) -> int:
+def addressed_instances(A: SEQ.RootView) -> int:
     """The component's instances as GP-01's address map counts them (`n_instances` = its root nodes): the compared sequence plus the
-    single-request splits constants `Prog._bind_splits` removed from it (one `Const32[S]` per top-p select; a batched component reads S
+    single-request splits constants `RootView._bind_splits` removed from it (one `Const32[S]` per top-p select; a batched component reads S
     from an Input and has none)."""
     return len(A.inst) + int(getattr(A, "n_splits_consts_bound", 0))
 
 
-def _compare_component(ops: BD.Ops, within_step: str, fast: bool, g: dict, ent: dict, P: PJ.Projection, A: SEQ.Prog | None,
+def _compare_component(ops: BD.Ops, within_step: str, fast: bool, g: dict, ent: dict, P: PJ.Projection, A: SEQ.RootView | None,
                        cd: str | None, LP: int, out: dict) -> dict:
     """The request's projection against its component over the executed steps: the leg's G3/G4 facts and the canonical address of
     every executed fold instance."""
