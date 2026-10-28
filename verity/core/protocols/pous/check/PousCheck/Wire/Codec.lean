@@ -1,4 +1,5 @@
 import PousCheck.Randomness
+import Identity.Domains
 
 /-!
 # The decode an audit with verification flag bit 0 checks
@@ -23,8 +24,8 @@ namespace PousCheck.Wire.Codec
 
 open Randomness
 
-def KEYS_TAG : ByteArray := "verity/pous/p2/keys/v4".toUTF8.push 0
-def PROTOCOL := "p2/v4"
+def KEYS_TAG : ByteArray := Domains.POUS_P2_KEYS.toUTF8.push 0
+def PROTOCOL := Domains.POUS_P2_SCHEME
 
 /-- The setup's key-stream prefix, zero-padded to whole 128-byte blocks. -/
 def expandPrefix (primeId : String) (model salt : ByteArray) : ByteArray :=

@@ -1,5 +1,6 @@
 import Flock.Canon
 import RemoteAudit.Flight
+import Identity.Domains
 
 /-!
 # The verifier's registrations: `audit.py`'s `Registry`
@@ -23,7 +24,7 @@ namespace RemoteAudit
 open Lean (Json)
 open Flock
 
-def Registry.SCHEMA : String := "verity/remote-bandwidth/registry/v0"
+def Registry.SCHEMA : String := Domains.REMOTE_BANDWIDTH_REGISTRY
 def Registry.UNENDED : String := "unended"
 
 /-- A live registration's session: one this registry started, as it stands, with its windows in flight (`Flight`)

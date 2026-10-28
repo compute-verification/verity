@@ -3,6 +3,7 @@ import PousCheck.Merkle
 import PousCheck.Challenge
 import PousCheck.Certificate
 import PousCheck.Prim.PyJson
+import Identity.Domains
 
 /-!
 # The timed audit's verdict on its record
@@ -168,5 +169,9 @@ def run (readyPath leavesPath auditPath : String) : IO UInt32 := do
   | .ok text => IO.println text
   | .error e => IO.eprintln e; return 2
   return if v.getObjValD "accepted" == .bool true then 0 else 1
+
+/-! Each separator below keeps its literal while a lock reads its definition, whose record hashes the value as
+written: tied here to its entry of the table (`Identity.Domains`), it reads the entry at its next record change. -/
+example : CHALLENGE_DOMAIN = Domains.POUS_AUDIT_CHALLENGE := rfl
 
 end PousCheck.TimedAudit

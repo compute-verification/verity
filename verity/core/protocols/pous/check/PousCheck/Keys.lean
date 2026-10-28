@@ -1,6 +1,7 @@
 import Identity.Sha512
 import Randomness
 import PousCheck.P2
+import Identity.Domains
 
 /-!
 P2 v4's per-block keys (`p2/PROTOCOL.md` §4, `schemes/p2.py`'s `expand_prefix`, `stream`, `below`, `sha512_keys`):
@@ -99,5 +100,10 @@ def Expander.keys (e : Expander) (q : P2.Params) (s j : Nat) : Except String (Na
   let k := natOfBE (e.range s j PURPOSE_K 0 n)
   let (t, a) ← e.below s j n q.p (STREAM_BYTES / n) 0
   return (k, t, a)
+
+/-! Each separator below keeps its literal while a lock reads its definition, whose record hashes the value as
+written: tied here to its entry of the table (`Identity.Domains`), it reads the entry at its next record change. -/
+example : KEYS_TAG = Domains.POUS_P2_KEYS.toUTF8.push 0 := rfl
+example : PROTOCOL_ID = Domains.POUS_P2_SCHEME := rfl
 
 end PousCheck.Keys

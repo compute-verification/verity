@@ -1,6 +1,7 @@
 import CoreProtocol.Cli
 import CoreProtocol.Ratio
 import RemoteAudit.Difftest
+import Identity.Domains
 
 /-!
 # A remote bandwidth session as a core protocol
@@ -38,7 +39,7 @@ namespace RemoteAudit.Protocol
 open Lean (Json JsonNumber)
 open Flock
 
-def ID : String := "verity/remote-bandwidth/v0"
+def ID : String := Domains.REMOTE_BANDWIDTH_PROTOCOL
 
 /-- `audit.DELTA`: the pooled bound's δ, `2^-40`. -/
 def DELTA : Rat := 1 / (2 ^ 40 : Nat)

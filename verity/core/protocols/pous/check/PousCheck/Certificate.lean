@@ -1,4 +1,5 @@
 import PousCheck.Wire
+import Identity.Domains
 
 /-!
 # What an accepted timed audit establishes: the certificate gate and the StorageProfile
@@ -160,5 +161,9 @@ def assess (q : Wire.Params) (final : ByteArray) : Json := Id.run do
   let covered := refused.isEmpty
   return Json.mkObj [("verdict", .bool true), ("covered", .bool covered), ("accepted", .bool covered),
     ("profile", profileJson s records delta rtt)]
+
+/-! Each separator below keeps its literal while a lock reads its definition, whose record hashes the value as
+written: tied here to its entry of the table (`Identity.Domains`), it reads the entry at its next record change. -/
+example : ("verity-pous/storage-profile/v1" : String) = Domains.POUS_STORAGE_PROFILE := rfl
 
 end PousCheck.Certificate

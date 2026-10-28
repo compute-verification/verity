@@ -1,5 +1,6 @@
 import CoreProtocol.Cli
 import PousCheck.Setup
+import Identity.Domains
 
 /-!
 # The public-encoder setup as a core protocol
@@ -166,5 +167,9 @@ def HONEST : Array String := #["03c7dc4c7c6466f2", "16f7feeb615c1874"]
 #guard match check ⟨64, 187, 2, 1⟩ ⟨.empty, .empty⟩ #[] with
   | .reject r => r == "params: c0 ≡ 1 mod 4 (so p ≡ 3 mod 4) and below 2^16"
   | _ => false
+
+/-! Each separator below keeps its literal while a lock reads its definition, whose record hashes the value as
+written: tied here to its entry of the table (`Identity.Domains`), it reads the entry at its next record change. -/
+example : ID = Domains.POUS_P2_SETUP := rfl
 
 end PousCheck.SetupProtocol

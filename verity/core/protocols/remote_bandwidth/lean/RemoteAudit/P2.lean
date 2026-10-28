@@ -1,5 +1,6 @@
 import PousCheck.Merkle
 import RemoteAudit.Window
+import Identity.Domains
 
 /-!
 # A P2 store's registration, receipts and openings: `p2.py`
@@ -26,12 +27,12 @@ blocks on the registration's vk root, by PoUS's own leaf and RFC 9162 path check
 
 namespace RemoteAudit.P2
 
-def REGISTRATION_DOMAIN : ByteArray := tag0 "verity/remote-bandwidth/p2-registration/v0"
+def REGISTRATION_DOMAIN : ByteArray := tag0 Domains.REMOTE_BANDWIDTH_P2_REGISTRATION
 /-- PoUS's registered point (`codec.P2_POINT`) and its keys' expander. -/
 def W : Nat := 16448
 def C0 : Nat := 21065
 def EXPANDER : String := "sha512-ctr-v4"
-def LAYOUT : String := "p2-unit4/v0"
+def LAYOUT : String := Domains.REMOTE_BANDWIDTH_P2_BLOCK4
 def BLOCK_BYTES : Nat := 2056
 def UNIT_BLOCKS : Nat := 4
 def UNIT_BYTES : Nat := UNIT_BLOCKS * BLOCK_BYTES

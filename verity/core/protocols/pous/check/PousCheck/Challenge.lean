@@ -1,4 +1,5 @@
 import PousCheck.Randomness
+import Identity.Domains
 
 /-!
 # The audit's challenges
@@ -13,9 +14,9 @@ namespace PousCheck.Challenge
 
 open Randomness
 
-def AUDIT_ID_DOMAIN := "verity/pous/p2-audit-id/v4"
-def CHALLENGE_DOMAIN := "verity/pous/p2-audit-challenge/v4"
-def ROUND_DOMAIN := "verity/pous/p2-audit-round/v4"
+def AUDIT_ID_DOMAIN := Domains.POUS_P2_AUDIT_ID
+def CHALLENGE_DOMAIN := Domains.POUS_P2_AUDIT_CHALLENGE
+def ROUND_DOMAIN := Domains.POUS_P2_AUDIT_ROUND
 /-- A nonce's length, bytes. -/
 def NONCE := 32
 

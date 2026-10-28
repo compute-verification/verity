@@ -1,5 +1,6 @@
 import MemoryChallenger.Records
 import MemoryChallenger.SignedMessage
+import Identity.Domains
 
 /-!
 # The verdict on a signed session
@@ -113,5 +114,9 @@ def verdict (schemes : Schemes) (trusted : List ByteArray) (expected : Nat → O
   if wrong > 0 then reasons := reasons.push s!"{wrong} answers are not their blocks of C"
   if late > 0 then reasons := reasons.push s!"{late} answers are past Δ + RTT = {c.limitNs} ns"
   return ⟨reasons.isEmpty, reasons, late, wrong⟩
+
+/-! Each separator below keeps its literal while a lock reads its definition, whose record hashes the value as
+written: tied here to its entry of the table (`Identity.Domains`), it reads the entry at its next record change. -/
+example : LMS = Domains.LMS_SHA512_N64_W1_H20 := rfl
 
 end MemoryChallenger

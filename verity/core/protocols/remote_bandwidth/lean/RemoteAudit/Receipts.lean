@@ -1,6 +1,7 @@
 import Flock.Hm96
 import RemoteAudit.Codec
 import RemoteAudit.Plan
+import Identity.Domains
 
 /-!
 # Receipts, seeds and the receipt tree: `receipts.py`, and `audit.py`'s chain over appends
@@ -135,5 +136,16 @@ def treeDomain (seed : ByteArray) (plan : Plan) : FrameV3.Domain :=
 def verifyLeaf (seed : ByteArray) (plan : Plan) (root : ByteArray) (p : Nat) (leaf salt : ByteArray)
     (path : Array ByteArray) : Bool :=
   FrameV3.verifyOpening (treeDomain seed plan) root (p / PER_LEAF) (hidden leaf salt) SCHEMA path
+
+/-! Each separator below keeps its literal while a lock reads its definition, whose record hashes the value as
+written: tied here to its entry of the table (`Identity.Domains`), it reads the entry at its next record change. -/
+example : SEED_DOMAIN = tag0 Domains.REMOTE_BANDWIDTH_SEED := rfl
+example : RECEIPT_DOMAIN = tag0 Domains.REMOTE_BANDWIDTH_RECEIPT := rfl
+example : SKETCH_RECEIPT_DOMAIN = tag0 Domains.REMOTE_BANDWIDTH_SKETCH_RECEIPT := rfl
+example : SIGN_DOMAIN = Domains.REMOTE_BANDWIDTH_SKETCH_SIGNS := rfl
+example : TREE_DOMAIN = tag0 Domains.REMOTE_BANDWIDTH_RECEIPT_TREE := rfl
+example : APPENDS_DOMAIN = tag0 Domains.REMOTE_BANDWIDTH_APPENDS := rfl
+example : CHAINED_DOMAIN = tag0 Domains.REMOTE_BANDWIDTH_CHAINED := rfl
+example : SCHEMA = Domains.HM96_SHA512_ROW := rfl
 
 end RemoteAudit

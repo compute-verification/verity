@@ -1,4 +1,5 @@
 import RemoteAudit.Basic
+import Identity.Domains
 
 /-!
 # A pass's plan: `receipts.Plan`
@@ -92,5 +93,9 @@ def Plan.changed (pl : Plan) (added removed : Array (Int × Int)) (blocks : Nat)
       if a == ob then out := out.pop.push (oa, b) else out := out.push (a, b)
     | none => out := out.push (a, b)
   return Plan.make? (out.map fun (a, b) => ((a : Int), ((b - a : Nat) : Int))) blocks
+
+/-! Each separator below keeps its literal while a lock reads its definition, whose record hashes the value as
+written: tied here to its entry of the table (`Identity.Domains`), it reads the entry at its next record change. -/
+example : PLAN_DOMAIN = tag0 Domains.REMOTE_BANDWIDTH_PLAN := rfl
 
 end RemoteAudit

@@ -1,4 +1,5 @@
 import RemoteAudit.Basic
+import Identity.Domains
 
 /-!
 # The store's codec, decoding: `codec.py`
@@ -148,5 +149,10 @@ def decode (block : ByteArray) (j : Nat) (k : Key) (bound : Option (ByteArray ×
   match bound with
   | some (d, _) => return if digest payload == d then some payload else none
   | none => return some payload
+
+/-! Each separator below keeps its literal while a lock reads its definition, whose record hashes the value as
+written: tied here to its entry of the table (`Identity.Domains`), it reads the entry at its next record change. -/
+example : DOMAIN = tag0 Domains.WORD_CODEC_KV := rfl
+example : ("verity/sha512-row/v2" : String) = Domains.SHA512_ROW := rfl
 
 end RemoteAudit.Codec

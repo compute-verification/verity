@@ -2,6 +2,7 @@ import CoreProtocol.Cli
 import CoreProtocol.Ratio
 import PousCheck.Certificate
 import PousCheck.Run
+import Identity.Domains
 
 /-!
 # A PoUS run as a core protocol
@@ -43,7 +44,7 @@ namespace PousCheck.RunProtocol
 open Lean (Json JsonNumber)
 open Flock MemoryChallenger
 
-def ID : String := "verity/pous/p2/v4/run"
+def ID : String := Domains.POUS_P2_RUN
 
 structure Params where
   point : Run.Point

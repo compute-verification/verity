@@ -2,6 +2,7 @@ import CoreProtocol.Cli
 import CoreProtocol.Ratio
 import MemoryChallenger.Protocol
 import MemoryChallenger.WipeJudge
+import Identity.Domains
 
 /-!
 # The wipe as a core protocol
@@ -38,7 +39,7 @@ namespace MemoryChallenger.WipeProtocol
 open Lean (Json)
 open Flock
 
-def ID : String := "verity/wipe/v0"
+def ID : String := Domains.WIPE_PROTOCOL
 
 /-- The error the bound holds at, `2^-128`. -/
 def EPS : Core.Ratio := ⟨1, 2 ^ 128⟩
