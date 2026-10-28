@@ -65,14 +65,6 @@ the caller's blobs. `toProtocol` is the protocol on no blobs, so a composition o
 file) and a `serve` case that may carry `"blobs": ["<hex>", ...]` (absent: none). `CoreProtocol/BlobsExample.lean` is
 the toy protocol whose guards cover both.
 
-## The profile (`CoreProtocol/Profile.lean`)
-
-`Core.Integrity` is `verity.core.protocols.profile.IntegrityProfile.to_json`: `programs`, `prescribed`,
-`linked`, `covered`, the `levels` coarse to fine (name, query, size, and draw: `{"bernoulli":"p"}`, `{"subset":k}` or
-`{"law":"stratified","strata":[...]}`), `delta` and `drawn`. The one change is that δ is an exact ratio, not a float. A
-protocol whose acceptance isn't a sampling design over proof blocks (a timed storage audit, a certificate check) declares its
-own profile type and JSON.
-
 ## Records (`CoreProtocol/Record.lean`)
 
 `Core.Record` is a record entry: one message of a run's transcript (a registration, a commitment, the challenger's
@@ -83,6 +75,14 @@ SHA-512 of the protocol's role, the signer's LMS identifier and `d`, the schema'
 sig (`Record.unsigned`). `Record.ofJson` reads the form; what a protocol accepts beyond it (its schemas, kinds, bodies,
 signer and sessions) is its own check. The auditor's ledger (`SampledProofs.Challenger.ledgerEntry?`, schemas
 `verity/challenger-auditor/v1|v2`) reads its entries through it. `verity/core/protocols/record.py` is its Python.
+
+## The profile (`CoreProtocol/Profile.lean`)
+
+`Core.Integrity` is `verity.core.protocols.profile.IntegrityProfile.to_json`: `programs`, `prescribed`,
+`linked`, `covered`, the `levels` coarse to fine (name, query, size, and draw: `{"bernoulli":"p"}`, `{"subset":k}` or
+`{"law":"stratified","strata":[...]}`), `delta` and `drawn`. The one change is that δ is an exact ratio, not a float. A
+protocol whose acceptance isn't a sampling design over proof blocks (a timed storage audit, a certificate check) declares its
+own profile type and JSON.
 
 ## Properties
 

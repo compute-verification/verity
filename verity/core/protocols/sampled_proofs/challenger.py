@@ -82,8 +82,9 @@ more entries, its `period-open` and `period-close`:
               null for a reserve never opened
     message = SHA-512([LEDGER_ROLE] || I || [identity_digest_sha512(LEDGER_TAGS[schema], entry without sig)])
 
-each entry a record entry (`verity.core.protocols.record`, `Core.Record`) and each line as the auditor writes it
-(`ledger_text`).  The window is `{root}`, the served Commit's root, its prover the
+each entry a record entry (`verity.core.protocols.record`, `Core.Record`), each line as the auditor writes it
+(`ledger_text`, every character past ASCII escaped), and each signature over the entry's canonical JSON in UTF-8
+(`ledger_message`).  The window is `{root}`, the served Commit's root, its prover the
 open's `for`, else its `by` (`lane_of`).  The verifier pins the challenger key from outside the ledger (the window's
 deployment; `key_of_record` reads the operator's published pin), and refuses any open or period-open naming another
 key's
@@ -154,7 +155,7 @@ from verity.core.protocols import record as core_record
 from verity.ml.commitments import (Commitment, CommitmentDomain, MerkleTree, Opening, RangeIndexedDomain,
                                    VerificationLimits, verify_opening)
 from verity.ml.commitments import hm96
-from verity.ml.commitments.identity import canonical_json_text, identity_digest_sha512
+from verity.ml.commitments.identity import canonical_json_text, identity_digest_sha512, tagged_sha512
 
 BINDING = "verity/challenger/coins/v1"
 COIN_BYTES = 64
@@ -723,16 +724,30 @@ def _window(doc: Any) -> bool:
     return isinstance(doc, dict) and sorted(doc) == ["root"] and _digest_hex(doc["root"])
 
 
+def _hexed(v: Any) -> Any:
+    """`v` with every string, keys included, as its UTF-8 in hex: what `canonical_json_text` takes to check `v`'s numbers
+    and keys alone, since a string past ASCII is canonical as the ledger writes it, escaped."""
+    if isinstance(v, str):
+        return v.encode().hex()
+    if isinstance(v, dict):
+        return {_hexed(k): _hexed(x) for k, x in v.items()}
+    return [_hexed(x) for x in v] if isinstance(v, (list, tuple)) else v
+
+
 def ledger_message(I: bytes, entry: dict) -> bytes:
     """What an entry's `sig` signs: SHA-512([ROLE] || I || [identity_digest_sha512(TAG, entry without sig)]), each [x] x
     prefixed with its length (u64), as `challenger.record_message` frames the challenger's record under its own role; TAG is
-    the entry's schema's (`TAGS`)."""
+    the entry's schema's (`TAGS`). The digest is over the entry's canonical JSON in UTF-8, a string past ASCII as its own
+    characters, as the challenger signs it, not over its line, where `ledger_text` escapes them."""
     if len(I) != 16:
         raise ValueError(f"an LMS identifier is 16 bytes, not {len(I)}")
     tag = LEDGER_TAGS.get(entry.get("schema"))
     if tag is None:
         raise ValueError(f"schema {entry.get('schema')!r} is none of {sorted(LEDGER_TAGS)}")
-    return core_record.message(LEDGER_ROLE, I, identity_digest_sha512(tag, core_record.unsigned(entry)))
+    unsigned = core_record.unsigned(entry)
+    canonical_json_text(_hexed(unsigned))
+    text = json.dumps(unsigned, ensure_ascii=False, allow_nan=False, sort_keys=True, separators=(",", ":"))
+    return core_record.message(LEDGER_ROLE, I, tagged_sha512(tag, text.encode()))
 
 
 def leaf_of(sig: Any) -> int:
@@ -986,12 +1001,9 @@ def _ledger_entry(line: Any) -> dict | None:
         e = json.loads(line) if type(line) is str and len(line) <= MAX_LEDGER_LINE else None
         if e is None or ledger_text(e) != line or any(f"\\ud{c}" in line for c in "89abcdef"):
             return None
-        canonical_json_text(e).encode()
-    except (ValueError, TypeError, RecursionError):
-        return None
-    try:
+        canonical_json_text(_hexed(e))
         core_record.of_json(e)
-    except ValueError:
+    except (ValueError, TypeError, RecursionError):
         return None
     if e["schema"] not in LEDGER_TAGS or len(e["sig"]) < 8:
         return None
