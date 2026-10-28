@@ -180,9 +180,19 @@ def test_an_honest_store_is_accepted_in_the_answer_the_composed_run_reads(served
     assert set(period.profile(period.point_for(1))) <= set(prof)                      # the run protocol's own profile
     party, request = calls[0]
     assert party.host == AUDITOR and request["node"] == NODE and request["blocks"] == 48
+    assert request["k"] == SP.ROUNDS == 320 and prof["k"] == 320
 
     doc = json.loads((served.out / "pous.json").read_text())
-    assert doc["key_pinned"] and doc["rounds_answered"] == period.K and doc["latency"]["late"] == 0
+    assert doc["key_pinned"] and doc["rounds_answered"] == 320 and doc["latency"]["late"] == 0
+    assert json.loads((served.private / "run.json").read_text())["point"]["k"] == 320
+
+
+def test_the_rounds_are_the_sessions_and_the_verdicts(served, tmp_path, monkeypatch):
+    """`--rounds` sets the challenges the session asks for and the verdict checks: at 105 the run is checked there."""
+    answer, calls = _run(served, tmp_path, monkeypatch, rounds=period.K)
+    assert answer["verdict"] == "accept", answer["reason"]
+    assert calls[0][1]["k"] == period.K and answer["profile"]["k"] == period.K
+    assert json.loads((served.out / "pous.json").read_text())["rounds_answered"] == period.K
 
 
 def test_the_answer_reveals_nothing_of_the_weights_and_its_commitment_opens_privately(served, tmp_path, monkeypatch):
