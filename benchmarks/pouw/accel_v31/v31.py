@@ -13,8 +13,8 @@ to 8 bytes, one compression a 512-bit chunk:
     pi_tau      Fisher-Yates over L' with word tau L' + c of the "P" stream: c from L' - 1 down to 1, x = (w_c (c + 1)) >> 32,
                 swap perm[c] and perm[x]; pi_tau(c) = perm[c]
     pad[i]      a filler call's A row i: the first K bytes of chunks i ceil(K / 64) .. of the "pad" stream, as int8
-The operands are X = wrap8(A + d_A + V[:, k % L']) and W' = wrap8(B + d_B + U[:, pi_tau(k % L')]), tau = k // L', L' the
-noise period. A segment is L inner indices (S = ceil(K / L) of them, t = min(L, K) / L' at most 8); per output cell the
+The operands are X = wrap8(A + d_A + V[:, k % L']) and W' = wrap8(B + d_B + U[:, pi_tau(k % L')]), tau = k // L', L' a
+noise tile's length. A segment is L inner indices (S = ceil(K / L) of them, t = min(L, K) / L' at most 8); per output cell the
 prefix sums are T_s = X W'^T over the first min(s L, K) indices mod 2^16 (s = 1..S). A served call commits T_1 .. T_{S-1}
 and O mod 2^32 (T_S is implied by O); a filler call commits T_1 .. T_S.
 
@@ -205,8 +205,8 @@ K_LIMIT = 1 << 17
 
 @dataclass(frozen=True)
 class Fill:
-    """A no-fold call: m x n output cells at contraction k, noise period lp (L'), segments of L, leaf rows of `row` bytes,
-    O committed (`o`: a served call; a filler's commits none) (dither.Shape)."""
+    """A no-fold call: m x n output cells at contraction k, noise tiles of lp (L'), segments of L, leaf rows of `row`
+    bytes, O committed (`o`: a served call; a filler's commits none) (dither.Shape)."""
 
     m: int
     n: int
@@ -227,7 +227,7 @@ class Fill:
             raise ValueError(f"L a multiple of L' {self.lp}, not {self.L}")
         if min(self.L, self.k) > 8 * self.lp:
             raise ValueError(f"t = min(L, K) / L' is at most 8 (verity/core/protocols/pouw/dither/PROTOCOL.md, The segment "
-                             f"and the noise period), not {min(self.L, self.k)} / {self.lp} at L {self.L}, K {self.k}")
+                             f"and the noise tile), not {min(self.L, self.k)} / {self.lp} at L {self.L}, K {self.k}")
         if self.row % 16 or 32768 % self.row:
             raise ValueError(f"rows of a multiple of 16 bytes dividing 32 KiB, not {self.row}")
 

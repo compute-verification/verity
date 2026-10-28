@@ -24,9 +24,9 @@
 # and nreg (the GEMM's register cap, V31_MAXNREG or under V31_WG V31_WG_NREG, a build of its own; default v31.cu's).
 # Default "row=1024,cprio=hi,sched=1 row=8192,cprio=hi,sched=1".
 # FILL_LS: the segment lengths L (default "768 2048", t 3 and 8 at LP 256; 0: L = K; each with min(L, K) at most 8 LP,
-# dither/PROTOCOL.md's "The segment and the noise period"); FILL_SHAPES: the bench's NAME:M:N:K list (default Llama 3
+# dither/PROTOCOL.md's "The segment and the noise tile"); FILL_SHAPES: the bench's NAME:M:N:K list (default Llama 3
 # 8B's QKV, O, gate-up and down at m 16384); V31_ARMS, the bench's arms to time (default all); REPS (default 7); Q, the
-# proof blocks a verdict opens (default 64); LP, the noise period L' (default 256).
+# proof blocks a verdict opens (default 64); LP, a noise tile's length L' (default 256).
 # FILL_GATE_KNOBS=1 runs the gates (and FILL_DITHER's recheck) under the first variant's knobs (else v31.cu's defaults).
 # FILL_DITHER=1 also runs fill_dither.py under the gate's lease (the GPU against dither.py itself). FILL_NSYS=1 adds,
 # before the bench, Nsight Systems on `v31 fill-once` (OVL_CALLS overlapped calls, default 6, after two serial ones) for

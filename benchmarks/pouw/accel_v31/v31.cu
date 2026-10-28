@@ -1,7 +1,7 @@
 // Dither's no-fold call (verity/core/protocols/pouw/circuit/dither.py) on the GPU, the prover's side of one call, bit for
 // bit v31.py's reference (its docstring has the semantics, the coin streams and the layout; this file follows it):
 //
-//   coins    d_A, d_B (bits), U, V (uniform on -80..80), the noise periods' permutations and a filler call's pad, from
+//   coins    d_A, d_B (bits), U, V (uniform on -80..80), the noise tiles' permutations and a filler call's pad, from
 //            the call's six 512-bit seeds in SHA-512 counter mode (bits_kernel, noise_kernel, perm_kernel)
 //   form     X = wrap8(A + d_A + V) and W' = wrap8(B + d_B + U pi_tau) (fill_a_kernel, fill_b_kernel); a served call's
 //            O operands a' = A + d_A - sigma and b' with their row sums and shifts (serve_rows_kernel). The weight side
@@ -2720,7 +2720,7 @@ static int foreign() { return g_live && std::this_thread::get_id() != g_thread ?
 extern "C" {
 const char* v31_error() { return g_err.c_str(); }
 
-// A context for calls of m x n x k at noise period lp (L'), segments of L and leaf rows of row bytes, served calls (O
+// A context for calls of m x n x k at noise tiles of lp (L'), segments of L and leaf rows of row bytes, served calls (O
 // committed, T_S implied) or a filler's, committed under the CGP1 params file's domain and salted under its Ks
 // (v31lib.Prover writes it), on CUDA device dev. Null on failure.
 void* v31_create(int m, int n, int k, int lp, int L, int row, int served, const char* params_path, int dev) {
