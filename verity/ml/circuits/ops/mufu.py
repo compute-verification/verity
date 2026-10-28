@@ -412,10 +412,10 @@ def mufu_tanh_coverage() -> dict:
 
 
 @primitive("MufuTanh", 1, [("x", F32)], F32,
-           conformance="quarantine: measured exact table 2026-09-17 (RTX 4090 sm_89, driver 580.178.04, triton 3.7.1) covering all 2^32 "
-                       "words — in-tree quarantine/dense/tables/mufu_tanh_sm89.xzblocks (sha256 5e261b88…) + three exhaustively-scanned "
-                       "rules; on-worker conformance job 0917T215619-1af45f 400,077 words 0 mismatches; exercised end-to-end by the "
-                       "dense/AttentionSoftcap@v1 difftest vs FA2 (job 0917T223335-9ad747, 25/25 bitwise, driver 595.91.07)",
+           conformance="quarantine: measured exact table (RTX 4090 sm_89, driver 580.178.04, triton 3.7.1) covering all 2^32 "
+                       "words — in-tree tables/mufu_tanh_sm89.xzblocks (sha256 5e261b88…) + three exhaustively-scanned rules; the "
+                       "manifest's conformance job: 400,077 words 0 mismatches; exercised end-to-end by the "
+                       "dense/AttentionSoftcap@v1 difftest vs FA2 (25/25 bitwise, driver 595.91.07)",
            tables=(("tanh_mufu", library.LIBRARY),))
 def MufuTanh(x: int) -> int:
     """`tanh.approx.f32` (MUFU.TANH) as FA2 `apply_softcap` executes it on sm_89: NaN and the exhaustively scanned regions from
