@@ -327,7 +327,7 @@ def remote_session(req, layout, store, plans: dict[int, list[int]], salts: dict[
     clock = Clock()
     s = C3.Session(p, rs.registration, None, coins.local(rs.registration.digest, 0, p.windows, Entropy(b"a7 coins")),
                    not_before_ns=0, clock=clock)
-    prover = audit.Prover(rs, None, s.commitment, entropy=Entropy(b"a7 receipt salts"))
+    prover = audit.Prover(rs, None, entropy=Entropy(b"a7 receipt salts"))
     head = MM.Header(rs.registration.digest, NR)
     replay = MM.Replay(head, rs.registration)
     slot_of, free_slots, nxt_slot, record, index = {}, [], NR, [], {}

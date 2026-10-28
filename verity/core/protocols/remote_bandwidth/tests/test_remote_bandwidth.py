@@ -11,6 +11,7 @@ import math
 import numpy as np
 import pytest
 
+from remote_bandwidth_fakes import Clock, Entropy
 from verity.core.protocols.profile import IntegrityProfile, Subset
 from verity.core.protocols.remote_bandwidth import audit, codec, coins, receipts, timing
 from verity.core.protocols.remote_bandwidth.audit import Params, Session, SessionError
@@ -26,28 +27,6 @@ SCHEDULE = timing.honest(1000, 3, 300, gap_ns=10, down_ns=20, up_ns=30, jitter_n
 A = 20 + 30 + 2 * 5 + 300 + 10
 APPENDS = 8
 """The append coins a test session's challenger commits to: these sessions append none, so a few keep it quick."""
-
-
-class Clock:
-    def __init__(self) -> None:
-        self.now = 0
-
-    def __call__(self) -> int:
-        return self.now
-
-
-class Entropy:
-    """A deterministic stand-in for the operating system's generator: SHA-512 in counter mode under `label`."""
-
-    def __init__(self, label: bytes) -> None:
-        self.label, self.count = label, 0
-
-    def __call__(self, n: int) -> bytes:
-        out = b""
-        while len(out) < n:
-            out += hashlib.sha512(self.label + self.count.to_bytes(8, "big")).digest()
-            self.count += 1
-        return out[:n]
 
 
 def payload(j: int) -> bytes:
@@ -121,7 +100,7 @@ def params_of(st: audit.Store, **kw) -> Params:
     return params(receipt=st.registration.receipt, bind=st.registration.bind, rows=st.registration.rows, **kw)
 
 
-def challenger(store, p: Params, label: bytes = b"coins", session: int = 0) -> coins.Coins:
+def challenger(store, p: Params, label: bytes = b"coins", session: int = 0) -> coins.SessionCoins:
     return coins.local(store.registration.digest, session, p.windows, Entropy(label), appends=APPENDS)
 
 
@@ -140,7 +119,7 @@ def drive(store, p: Params, schedule: timing.Schedule, *, tiles=None, verifier_t
     clock = Clock()
     s = Session(p, store.registration, verifier_tiles or tiles, coins_ or challenger(store, p, label), not_before_ns=0,
                 clock=clock)
-    prover = audit.Prover(store, tiles, s.commitment, entropy=Entropy(b"receipt salts"))
+    prover = audit.Prover(store, tiles, entropy=Entropy(b"receipt salts"))
     events = sorted([(0, 0, -1)] + [(b, 0, t) for t, b in enumerate(schedule.boundaries)]
                     + [(a, 1, (t, i)) for t, i, a in schedule.arrivals])
     challenges, passes, previous = {}, {}, store.registration.digest
@@ -277,8 +256,7 @@ def test_a_receipt_depends_on_its_block_not_its_position(stores, bind) -> None:
     """The plan's order is only the tree's: the same blocks listed in another order give each block the same receipt
     (z, when the receipts bind it, is the tile before the block's read), and a different root."""
     store = stores[receipts.DEFAULT, bind]
-    prover = audit.Prover(store, audit.NoiseTiles(96) if bind else None, challenger(store, params()).commitment,
-                          entropy=Entropy(b"s"))
+    prover = audit.Prover(store, audit.NoiseTiles(96) if bind else None, entropy=Entropy(b"s"))
     seed = receipts.seed(bytes(range(32)), 0, store.registration.digest)
     a = prover.pass_under(0, 0, seed, receipts.Plan(((0, 10),), N))
     b = prover.pass_under(0, 0, seed, receipts.Plan.of(list(reversed(range(10))), N))
@@ -576,7 +554,7 @@ def test_tiles_are_taken_only_by_a_registration_that_binds_z(store, stores) -> N
         with pytest.raises(ValueError, match="binds z takes PoUW's tiles"):
             Session(params_of(st), st.registration, tiles, challenger(st, params()), not_before_ns=0, clock=Clock())
         with pytest.raises(ValueError, match="binds z takes PoUW's tiles"):
-            audit.Prover(st, tiles, challenger(st, params()).commitment)
+            audit.Prover(st, tiles)
 
 
 def test_payload_leaves_hide_the_payload_under_their_salts(store) -> None:
@@ -748,8 +726,14 @@ def test_each_pass_is_seeded_by_the_chain_from_its_windows_coin(store) -> None:
     forged = dataclasses.replace(first, coin=bytes([first.coin[0] ^ 1]) + first.coin[1:])
     assert (coins.coin_reason(c.commitment, forged, coins.CHALLENGE, 0)
             == "coin does not open against the epoch's coin commitment")
-    with pytest.raises(ValueError, match="does not open"):
+    with pytest.raises(ValueError, match="sent again, another coin"):
         prover.run(forged, 0, store.registration.digest)
+    fresh = audit.Prover(store, None, entropy=Entropy(b"fresh"))
+    fresh.run(forged, 0, store.registration.digest)
+    with pytest.raises(ValueError, match="does not open"):
+        fresh.end(c.commitment, (forged,))
+    with pytest.raises(ValueError, match="is not the one opened"):
+        fresh.end(c.commitment, (first,))
     with pytest.raises(ValueError, match="openings coin"):
         prover.run(c.openings(0, first.after), 0, store.registration.digest)
     with pytest.raises(ValueError, match="already open"):
@@ -1057,8 +1041,8 @@ def test_the_stated_claim_holds_in_every_window_and_for_the_horizons_sampling_te
 
 
 def test_the_node_figures_are_the_sums_over_its_devices() -> None:
-    """R, S_chip, the squaring ceiling and the SHA-512 rate are the node's (MEM-26): its 8 GPUs' and its host's, every
-    tier, read off their cards, each GPU's value kept apart for the benches that read one GPU.  R measured, S_chip, the
+    """R, S_chip, the squaring ceiling and the SHA-512 rate are the node's: its 8 GPUs' and its host's, every tier,
+    read off their cards, each GPU's value kept apart for the benches that read one GPU.  R measured, S_chip, the
     squaring ceiling and the SHA-512 rate are the figures this module held before the cards did, to the bit; R at spec
     reads the card's memory bandwidth, 1,597.568 GB/s, where it held the product page's 1,597."""
     gpu, host = RTX.devices[0], RTX.host
@@ -1075,17 +1059,17 @@ def test_the_node_figures_are_the_sums_over_its_devices() -> None:
 
 
 def test_the_write_ceilings_are_the_sheets_above_every_write_measured() -> None:
-    """One GPU's write ceiling (MEM-45) is its card's bandwidth ceiling, which bounds every prover where a measurement
-    bounds only the kernels tried, above every write its run measured: 1,528.98 GB/s on the device and 56.39 streamed
-    in (r20261020-211937-b9c0).  The host DRAM's is its host card's `memory.write`, 819.2 GB/s above the 207.69 its
-    run measured (r20261020-212232-6ba5), and a placeholder the node is read with: DDR5-6400's, the installed DIMMs
-    not on record.  The card files' sources name the runs; a fill of derived codec labels is bounded by the
-    labeller, about 1.05 GB/s a GPU under the default codec, and no DPU's is stated."""
+    """One GPU's write ceiling is its card's bandwidth ceiling, which bounds every prover where a measurement bounds
+    only the kernels tried, above every write its bench measured: 1,528.98 GB/s on the device and 56.39 streamed in
+    (`write.cu`).  The host DRAM's is its host card's `memory.write`, 819.2 GB/s above the 207.69 its bench measured
+    (`write_host.c`), and a placeholder the node is read with: DDR5-6400's, the installed DIMMs not on record.  The
+    card files' sources cite the evidence; a fill of derived codec labels is bounded by the labeller, about 1.05 GB/s a
+    GPU under the default codec, and no DPU's is stated."""
     assert RTX.device_write_bytes_per_s == RTX.devices[0].spec_bytes_per_s == 1.597568e12 > 1528.98e9 > 56.39e9
     assert RTX.host_write_bytes_per_s == RTX.host.write_bytes_per_s == 819.2e9 > 207.69e9
     card, host = load("rtx-pro-6000-server"), load("xeon-6776p-2s")
-    assert "r20261020-211937-b9c0" in card["memory"]["read"]["source"]
-    assert "r20261020-212232-6ba5" in host["memory"]["write"]["source"]
+    assert "art:c79e348a98dd" in card["memory"]["read"]["source"]
+    assert "art:414bbca7c1fd" in host["memory"]["write"]["source"]
     assert card["memory"]["bandwidth"]["mark"] == "ceiling"
     assert RTX.placeholders == ("xeon-6776p-2s memory.bandwidth", "xeon-6776p-2s memory.write")
     gpu = RTX.devices[0].squarings_per_s[codec.DEFAULT.field.name]
@@ -1123,7 +1107,7 @@ def test_the_ledgers_count_bounds_auditros_binomial() -> None:
 
 
 def test_auditros_slack_adds_at_most_2_to_the_minus_50_over_an_hour_of_the_fastest_passes() -> None:
-    """`SLACK_LOG2`'s reason: an hour of the node's passes over gate runs 8 and 9's store, 130,023,424 blocks read at
+    """`SLACK_LOG2`'s reason: an hour of the node's passes over eight GPUs' 62 GiB shards, 130,023,424 blocks read at
     R measured, is under 2^17 passes, and their slack adds at most 2^-50 to γ's error and the memory
     line's δ, 2^-10 of `DELTA`."""
     pass_s = 130_023_424 * codec.BLOCK_BYTES / RTX.read_bytes_per_s
