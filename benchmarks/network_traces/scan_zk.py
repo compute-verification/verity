@@ -1,4 +1,4 @@
-"""scan-zk: NET-68's step-indexed scan composed in zero knowledge, in the generator form. Ingress bucket t
+"""scan-zk: the network certifier's step-indexed scan composed in zero knowledge, in the generator form. Ingress bucket t
 (`ingress_scan.IngressScanBucket`; bucket 0's `IngressScanFirst`, from the empty state) reads the warden's ingress row
 t, the scan's state S_{t−1} and the Programs' row t, and computes S_t and its egress view; egress bucket t
 (`egress.EgressBucket`) reads that view and computes the warden's egress row t. A group of link-windows is one
@@ -79,7 +79,7 @@ challenger's coins (``--challenger``), a `service.Stream`'s.
   the challenger) held to the Python's, and each altered evidence (`a5_coins.negatives`, the evidence for another
   window) refused by `coins.coins_reason` and the Lean's run (`coins_outcome`). ``local`` is a development session on
   this machine (its own key; it shows the path, not an auditor's coins); ``gate:USER@HOST`` is vy-challenger-1's through
-  infra's gate, its challenger on ``--peer``'s 127.0.0.1, under the deployment's key record ``--challenger-key``. The
+  its gate, its challenger on ``--peer``'s 127.0.0.1, under the deployment's key record ``--challenger-key``. The
   gate opens a root once, ever: a run's group is drawn once (the synthetic run's registrations carry fresh salts, so
   each synthetic run has a root of its own). The other rounds keep the verifier's Lean's own coins: one session serves
   one draw, and their refusal is Lean's registered reads, whatever the coins.
@@ -1276,11 +1276,11 @@ def main(argv=None) -> int:
                         "every unit")
     p.add_argument("--challenger", help="with --draw: the honest round's K drawn on the auditor's challenger's coins "
                    "(a5_coins, the round's service.Stream), not the verifier's: local, or gate:USER@HOST "
-                   "(vy-challenger-1 through infra's gate, with --peer and --challenger-key)")
+                   "(vy-challenger-1 through its gate, with --peer and --challenger-key)")
     p.add_argument("--peer", help="with --challenger gate:USER@HOST: this machine as the gate's /etc/vy/peers names it, "
                    "whose 127.0.0.1 the session's challenger listens on")
     p.add_argument("--challenger-key", help="with --challenger gate:USER@HOST: the challenger's key record of its "
-                   "deployment (infra's challenger-key/v1), never the session's key.json")
+                   "deployment (challenger-key/v1), never the session's key.json")
     p.add_argument("--gate-key", help="with --challenger gate:USER@HOST: the lane's own gate key (default ssh's own)")
     p.add_argument("--main", help="with --challenger: the verifier's own copy of main's first-parent history (git "
                    "rev-list --first-parent origin/main), which must hold the commit the session's host pins")

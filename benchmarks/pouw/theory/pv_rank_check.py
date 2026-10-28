@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Referee check of CHECKED-STRIP's P6 (note:20261017T0030Z-draft-checked-strip): pv's cross ranks over F₂.
+"""A check of checked_strip.py's P6: pv's cross ranks over F₂.
 
 P6 states that the rows of (word, served coin) have rank (q + 1) + r at every instance, and checks it at shapes whose query
 sits at q ≥ r − 1. `PVBlock` puts the query in the diagonal block (k − L ≤ q < k), so q < r − 1 happens only in a

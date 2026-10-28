@@ -6,7 +6,7 @@
 A :class:`Subcircuit` carries what both kinds of input set need: the IR target its instances are evaluated with
 (``verity.ml.circuits.evaluation.evaluate_batch``, the one evaluator: a registered kernel where one is self-checked against the gate
 reference, else the reference), its input and output ports, and the ``relation`` / set name the vLLM VU exporter writes
-(``verity_vllm.pipeline.vu_export``, PR #42), so a synthetic set and a captured set of one subcircuit have the same name,
+(``verity_vllm.pipeline.vu_export``), so a synthetic set and a captured set of one subcircuit have the same name,
 relation and ports.  :func:`identify` maps a set's ``relation`` back to its subcircuit, whichever wrote it.
 
 The templates of row #101 (Llama-3.2-1B) and their Definitions:
