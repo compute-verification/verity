@@ -43,7 +43,7 @@ SWITCHES=(${SCHEDULE:+--schedule "$SCHEDULE"} ${SCHEME:+--scheme "$SCHEME"} ${GR
 fail() { echo "WINDOW_FAIL_$1: ${*:2}" | tee "$OUT/window.fail" >&2; exit 3; }
 [ -x "$PY" ] && [ -f "$WORK/ready.json" ] || fail SETUP "no $WORK/ready.json: run setup.sh first"
 export PATH=$WORK/venv312/bin:$PATH FLASHINFER_CUDA_ARCH_LIST=12.0f
-# the epoch's coins are the Lean verifier of record's (e2e.Coins, pouw.verifier.coins), which Lake builds and runs
+# the epoch's coins are the Lean verifier of record's (e2e.EpochCoins, pouw.verifier.coins), which Lake builds and runs
 command -v lake >/dev/null || export PATH="$HOME/.elan/bin:$PATH"
 . benchmarks/pouw/pearl_c_vllm/flashinfer_env.sh
 "$PY" -c 'import json, os, sys

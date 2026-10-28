@@ -22,7 +22,7 @@
   (`pearl_c.Prices`, the device's own by default): `debitDev` (`debitOf` at `Params.pi`, `Costs.adopted` on the H100),
   per flagged atom-word its 32 MACs and a quarter of a promotion add (40 on the H100, 34 on sm_120) and fs per debited
   element (64 and 40), and an add per later +0 promotion (32 and 8).
-* The cap ρ is the device record's (`Device.cap`; `CAP` is the H100's 1/400, sm_120's is 1/1,000): a tile whose debit
+* The cap ρ is the device record's (`DeviceProfile.cap`; `CAP` is the H100's 1/400, sm_120's is 1/1,000): a tile whose debit
   exceeds ρ times its credited cells' credit, their share of the unit's `creditDevRev1` (`clear_work.tile_cap`), is
   rejected (`pearlCTilesDevRev1`'s `capOK`, per tile: `Tile.lean`'s `tileShare`).
 
@@ -38,7 +38,7 @@ from fractions import Fraction
 from verity.ml.circuits.silicon import fp32
 
 from . import pearl_kw as P
-from .pearl_c_device import H100, Device, Prices
+from .pearl_c_device import H100, DeviceProfile, Prices
 
 G = H100.g                             # atoms per promotion group (`Params.pi.G`)
 ATOM = H100.atom.k
@@ -47,13 +47,13 @@ ATOM_UNITS = ATOM + Fraction(H100.prices.fadd, G)  # `debitOf`: 32 MACs and 1/G 
 ELEMENT_UNITS = H100.prices.forming_credited       # `Costs.adopted`'s fs per debited forming element
 
 
-def _promoted(device: Device) -> int:
+def _promoted(device: DeviceProfile) -> int:
     if device.g is None:
         raise NotImplementedError(f"{device.name}: Skip's debit is stated for promotion groups; no rule without promotion")
     return device.g
 
 
-def atom_units(device: Device = H100, prices: Prices | None = None) -> Fraction:
+def atom_units(device: DeviceProfile = H100, prices: Prices | None = None) -> Fraction:
     """`debitOf`'s price of one flagged atom-word on `device` at `prices` (its own by default): its MACs and 1/G of a
     promotion add."""
     return device.atom.k + Fraction((prices or device.prices).fadd, _promoted(device))
@@ -76,7 +76,7 @@ def _promote(total: int, word: int) -> int:
     return 0 if out == 0x80000000 else out
 
 
-def _step(word: int, a: Sequence[int], b: Sequence[int], device: Device) -> int:
+def _step(word: int, a: Sequence[int], b: Sequence[int], device: DeviceProfile) -> int:
     out = device.atom.step(word, a, b)
     if (out >> 23) & 0xFF == 0xFF:
         raise P.Reject("an atom left the finite range")
@@ -103,7 +103,7 @@ def _least(pred) -> int:
     return lo
 
 
-def _masked(atoms: Sequence[tuple[Sequence[int], Sequence[int]]], device: Device) -> dict[int, int]:
+def _masked(atoms: Sequence[tuple[Sequence[int], Sequence[int]]], device: DeviceProfile) -> dict[int, int]:
     """A group's word from +0 under each mask of skipped atoms (bit j: atom j passes its incoming word through)."""
     words = {0: 0}
     for j, (a, b) in enumerate(atoms):
@@ -115,12 +115,12 @@ def _masked(atoms: Sequence[tuple[Sequence[int], Sequence[int]]], device: Device
     return words
 
 
-def word_flags(a: Sequence[int], b: Sequence[int], device: Device = H100) -> list[bool]:
+def word_flags(a: Sequence[int], b: Sequence[int], device: DeviceProfile = H100) -> list[bool]:
     """`Skip.wordFlags k a b t` for t < k/32."""
     return word_debit(a, b, device)[0]
 
 
-def word_debit(a: Sequence[int], b: Sequence[int], device: Device = H100) -> tuple[list[bool], int]:
+def word_debit(a: Sequence[int], b: Sequence[int], device: DeviceProfile = H100) -> tuple[list[bool], int]:
     """A word's flags (`word_flags`) and its later promotions into a +0 total, rev1's `laterZeroPromos`: the g in
     [1, k/(32·G)) whose total after g groups is ±0, so that promotion g + 1 returns its group's word."""
     g_, atom = _promoted(device), device.atom.k
@@ -146,7 +146,7 @@ def word_debit(a: Sequence[int], b: Sequence[int], device: Device = H100) -> tup
     return flags, sum(1 for t in totals[1:-1] if t == 0)
 
 
-def chain_debit(a_rows: Sequence[Sequence[int]], b_rows: Sequence[Sequence[int]], device: Device = H100
+def chain_debit(a_rows: Sequence[Sequence[int]], b_rows: Sequence[Sequence[int]], device: DeviceProfile = H100
                 ) -> tuple[int, int]:
     """(atoms, zeros) over every word (a_row, b_row) of a tile, both additive over words: the flagged atoms
     (`Skip.chainDebit`'s count) and the later promotions into a +0 total (`laterZeroPromos`)."""
@@ -163,7 +163,7 @@ def forming_elements(a_rows: Sequence[Sequence[int]], b_rows: Sequence[Sequence[
     return 0
 
 
-def debit_units(atoms: int, elements: int, prices: Prices | None = None, device: Device = H100, *, zeros: int
+def debit_units(atoms: int, elements: int, prices: Prices | None = None, device: DeviceProfile = H100, *, zeros: int
                 ) -> Fraction:
     """rev1's debit at a device's prices (`tileDebitRev1`): `debitDev` (`debitOf Params.pi Costs.adopted` at the H100's),
     per flagged atom-word its 32 MACs and 1/G of a promotion add and fs per debited element, and an add per later

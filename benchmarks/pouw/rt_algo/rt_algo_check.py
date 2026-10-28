@@ -11,7 +11,7 @@ from __future__ import annotations
 import random
 
 from verity.core.protocols.pouw.circuit import h1tile, segment as SG, seeds as SD
-from verity.core.protocols.pouw.circuit.h1tile import Layout, fold_keys, noise, reference
+from verity.core.protocols.pouw.circuit.h1tile import TileShape, fold_keys, noise, reference
 
 M32 = (1 << 32) - 1
 #: (r, c, K, adversarial) tiles the check runs; adversarial forces the s8 wrap on both operands.
@@ -44,7 +44,7 @@ def _build(rng, r, c, K, adversarial):
 
 def _recompute_words(a, b, salt, position, roots):
     """The unit's per-lane absorbed sets (T_0..T_{KS-1}, O', D_1..D_{m-1}), independently of the reference's fold."""
-    lay = Layout(len(a), len(b), len(a[0]))
+    lay = TileShape(len(a), len(b), len(a[0]))
     rows, cols = noise(SD.seed(salt, position, *roots), lay)
     ks, m = lay.ks, lay.m
     per_lane = []

@@ -1,4 +1,4 @@
-"""H1 + fx1's noise floor on one H200 or B200: the per-unit SHA-512 noise every H1 unit derives (h1tile.Layout's `blocks`
+"""H1 + fx1's noise floor on one H200 or B200: the per-unit SHA-512 noise every H1 unit derives (h1tile.TileShape's `blocks`
 from seed_j and `lanes` key blocks from sigma_R), timed interleaved with the plain int8 GEMM of the same call, at
 Llama-3.1-8B's linears and M = 1, 32, 256, 2048, 8192. Whatever the GEMM and fold cost, an H1 kernel on these cards costs
 at least this noise, so 1 + noise / plain is a lower bound on its gamma.
@@ -174,7 +174,7 @@ def auto_j(S: int, nb: int, sms: int) -> int:
 
 def bench(lib: Lib, args, name: str, n: int, k: int, m: int, Xh: np.ndarray, clock: Clock, l2: int, sms: int,
           gen: torch.Generator) -> dict:
-    lay = HT.Layout(32, 32, k)
+    lay = HT.TileShape(32, 32, k)
     S = max(1, m // 32) * (n // 32)
     nb = lay.blocks
     out: dict = {"linear": name, "m": m, "n": n, "k": k, "units": S, "noise_blocks": nb, "key_blocks": KEY_BLOCKS,
@@ -265,7 +265,7 @@ def main() -> int:
            "torch": torch.__version__, "started": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), "gates": [],
            "shapes": []}
     for k in sorted({LINEARS[n][1] for n in args.linears.split(",")}):
-        for nb in (HT.Layout(32, 32, k).blocks, KEY_BLOCKS):
+        for nb in (HT.TileShape(32, 32, k).blocks, KEY_BLOCKS):
             g = gate(lib, nb, sorted({*args.js, 2, 9}), gen)
             doc["gates"].append(g)
             print(json.dumps(g), flush=True)

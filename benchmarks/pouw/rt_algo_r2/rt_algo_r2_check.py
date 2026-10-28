@@ -23,7 +23,7 @@ import math
 import random
 
 from verity.core.protocols.pouw.circuit import compile as C, h1tile, segment as SG
-from verity.core.protocols.pouw.circuit.h1tile import Layout, reference
+from verity.core.protocols.pouw.circuit.h1tile import TileShape, reference
 
 M32 = (1 << 32) - 1
 
@@ -45,7 +45,7 @@ def _unit(rng, r, c, K, zero_a=False):
 def check_receipt_is_2_sets(rng):
     """The compiled unit's receipt is 2 (KS + m) words, one pair a set: KS prefix sets, O' and D_1 .. D_(m-1)."""
     for r, c, K in ((4, 8, 64), (4, 8, 128), (8, 16, 256)):
-        lay = Layout(r, c, K)
+        lay = TileShape(r, c, K)
         _z, receipt = reference(*_unit(rng, r, c, K))
         if lay.sets != lay.ks + lay.m or len(receipt) != 2 * lay.sets:
             return False, f"{r}x{c} K={K}: sets {lay.sets}, receipt {len(receipt)}, want 2 (KS + m) = {2 * (lay.ks + lay.m)}"

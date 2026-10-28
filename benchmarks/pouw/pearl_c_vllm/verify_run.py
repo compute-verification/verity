@@ -62,7 +62,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "clear"))
 import fast_tile as FT
 import clear_work as CW
-from clear_audit import TileOpening, Transcript, Verifier
+from clear_audit import TileOpening, Publication, Verifier
 
 settings = of(__file__)
 DRAWS = 3
@@ -202,7 +202,7 @@ def verify(path: Path, draws: int, jobs: int, commit: str, source: bytes | None 
         if reason is not None:
             raise ValueError(reason)
         c = man["commitment"]
-        transcript = Transcript(tuple(bytes.fromhex(u["root_a"]) for u in man["matmuls"]), Commitment(bytes.fromhex(c["root"]), c["count"]),
+        transcript = Publication(tuple(bytes.fromhex(u["root_a"]) for u in man["matmuls"]), Commitment(bytes.fromhex(c["root"]), c["count"]),
                                 ())
         verifier = Verifier(CW._TileRuleView(scheme), epoch)
         if len(verifier.refs) != c["count"]:

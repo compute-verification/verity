@@ -1,6 +1,6 @@
 """A served window's live coins: where they come from, and the verifier's check of them from the challenger's own run.
 
-* **Off the node** (`Session`: its id, the HOST:PORT its challenger listens on, the secret its hello carries and the
+* **Off the node** (`GateSession`: its id, the HOST:PORT its challenger listens on, the secret its hello carries and the
   coin commitment's root the gate's open answered): the proof service's challenger on its auditor host
   (`sampled_proofs.remote.RemoteChallenger`), one session a window, from infra's gate in two steps; lanes don't start
   challenger sessions themselves. `reserve` (``ssh GATE reserve`` with the peer node and the window's layout) gives the
@@ -86,7 +86,7 @@ SSH = ("ssh", "-o", "BatchMode=yes")
 
 
 @dataclass(frozen=True)
-class Session:
+class GateSession:
     """A challenger session as infra's gate opened it: its id, the HOST:PORT its challenger listens on here, the secret
     its hello carries (None for a challenger that takes none), and the root (hex) of the coin commitment the gate's open
     answered, which the hello's must be (None: not held)."""
@@ -111,7 +111,7 @@ def write_secret(path: str | os.PathLike, secret: bytes) -> None:
 
 
 def session(address: str | None = None, sid: str | None = None, secret_file: str | None = None,
-            commitment: str | None = None) -> Session | None:
+            commitment: str | None = None) -> GateSession | None:
     """The window's challenger session: `address`, `sid`, `secret_file` and `commitment`, else ``$POUW_CHALLENGER``,
     ``$POUW_CHALLENGER_SESSION``, ``$POUW_CHALLENGER_SECRET_FILE`` and ``$POUW_CHALLENGER_COMMITMENT``; None (none) for
     the in-process challenger.  An address without its id, or a secret or commitment without both, is refused."""
@@ -125,7 +125,7 @@ def session(address: str | None = None, sid: str | None = None, secret_file: str
                            f"${CHALLENGER_ENV} and ${SESSION_ENV}, with --secret-file or ${SECRET_ENV})")
     if commitment is not None and not re.fullmatch(r"[0-9a-f]{128}", commitment):
         raise Ch.CoinError(f"a coin commitment's root is 128 lowercase hex digits, not {commitment[:20]!r}…")
-    return None if at is None else Session(sid, at, None if secret_file is None else read_secret(secret_file), commitment)
+    return None if at is None else GateSession(sid, at, None if secret_file is None else read_secret(secret_file), commitment)
 
 
 def layout(epoch: int, rounds: int) -> dict:
@@ -169,7 +169,7 @@ def reserve(gate: str, peer: str, epoch: int, rounds: int, minutes: int | None =
 
 
 def open_window(gate: str, sid: str, root: bytes, ssh: Sequence[str] = SSH,
-                run: Callable[..., Any] = subprocess.run) -> tuple[Session, dict]:
+                run: Callable[..., Any] = subprocess.run) -> tuple[GateSession, dict]:
     """Reserved session `sid` opened at infra's gate on the window's root `root` (``ssh GATE open --session S --root
     R``), after which alone its challenger opens the salt coin: the session (its challenger at the peer's
     127.0.0.1:PORT, the secret its hello carries, which only this answer holds, and the root of the coin commitment its
@@ -187,7 +187,7 @@ def open_window(gate: str, sid: str, root: bytes, ssh: Sequence[str] = SSH,
     if not re.fullmatch(r"[0-9a-f]{128}", str(got.get("commitment"))):
         raise Ch.CoinError(f"infra's gate opened {sid}, and its challenger signed no coin commitment (commitment "
                            f"{got.get('commitment')!r}): it serves no window; `status {sid}` says why")
-    return Session(sid, f"127.0.0.1:{got['port']}", bytes.fromhex(secret), got["commitment"]), got
+    return GateSession(sid, f"127.0.0.1:{got['port']}", bytes.fromhex(secret), got["commitment"]), got
 
 
 def stand_in_root(sid: str) -> bytes:
@@ -206,12 +206,12 @@ def layout_reason(commitment: Ch.LiveCommitment, epoch: int, rounds: int) -> str
     return None
 
 
-class Coins:
+class LiveCoins:
     """A window's live coins from `challenger` (`LiveChallenger`'s commitment and open: a `RemoteChallenger`, or the
     in-process `LiveChallenger`), `source` "off-node" or "in-process": its salt and draw coins, and its rounds through
     `LiveRecord` (`rounds`)."""
 
-    def __init__(self, challenger: Any, source: str, session: Session | None = None) -> None:
+    def __init__(self, challenger: Any, source: str, session: GateSession | None = None) -> None:
         self.challenger, self.source, self.session = challenger, source, session
         self.commitment: Ch.LiveCommitment = challenger.commitment
         self.rounds = Ch.LiveRecord(challenger, Wd.ROUND)
@@ -244,7 +244,7 @@ class RoundPipe:
     `LiveRecord`'s, `reason` its `order_reason`, and `sent_at` / `got_at` each round's times on `clock`; `draw` opens the
     window's draw coin with its time on the same clock."""
 
-    def __init__(self, coins: Coins, clock: Callable[[], float] = time.monotonic) -> None:
+    def __init__(self, coins: LiveCoins, clock: Callable[[], float] = time.monotonic) -> None:
         rec = coins.rounds
         self.coins, self.commitment, self.label = coins, coins.commitment, rec.label
         self.roots, self.openings = list(rec.roots), list(rec.openings)
@@ -362,7 +362,7 @@ class RoundPipe:
         return Ch.order_reason(self.commitment, self.label, self.roots, self.openings)
 
     def close(self) -> None:
-        """Every sent round's coin back, then the session closed (`Coins.close`)."""
+        """Every sent round's coin back, then the session closed (`LiveCoins.close`)."""
         with self._cv:
             while self._pending and self._error is None:
                 self._cv.wait()
@@ -374,9 +374,9 @@ class RoundPipe:
             self.coins.close()
 
 
-def open_coins(at: Session | None, epoch: int, rounds: int, entropy: Callable[[int], bytes] | None = None,
+def open_coins(at: GateSession | None, epoch: int, rounds: int, entropy: Callable[[int], bytes] | None = None,
                connect: Callable[..., Any] | None = None, wait_s: float = R.TUNNEL_WAIT_S,
-               clock: Callable[[], float] = time.monotonic, sleep: Callable[[float], None] = time.sleep) -> Coins:
+               clock: Callable[[], float] = time.monotonic, sleep: Callable[[float], None] = time.sleep) -> LiveCoins:
     """The window's coins: the challenger of session `at`, its hello carrying the session's secret when it has one, its
     commitment held to `layout` and to the root the gate's open answered when `at` holds one, or with no session the
     in-process challenger over `entropy` (the Lean verifier of record's coins by default).  The client connects once
@@ -386,7 +386,7 @@ def open_coins(at: Session | None, epoch: int, rounds: int, entropy: Callable[[i
         if entropy is None:
             from verity.core.protocols.pouw import verifier
             entropy = verifier.coins
-        return Coins(Wd.live_challenger(epoch, rounds, entropy), "in-process")
+        return LiveCoins(Wd.live_challenger(epoch, rounds, entropy), "in-process")
     client = R.connect_when_listening(at.address, at.secret, connect, wait_s, clock, sleep)
     why = layout_reason(client.commitment, epoch, rounds)
     if why is None and at.commitment is not None and client.commitment.root.hex() != at.commitment:
@@ -395,7 +395,7 @@ def open_coins(at: Session | None, epoch: int, rounds: int, entropy: Callable[[i
     if why is not None:
         client.close()
         raise Ch.CoinError(why)
-    return Coins(client, "off-node", at)
+    return LiveCoins(client, "off-node", at)
 
 
 def lms_verify(key: Ch.ChallengerKey, message: bytes, signature: bytes) -> bool:

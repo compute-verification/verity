@@ -330,10 +330,10 @@ def test_a_served_challenger_refuses_coins_no_claim_instance_names(tmp_path, mon
     import e2e
     for source in (os.urandom, random.Random(0).randbytes):
         with pytest.raises(Ch.CoinError, match="coins-without-claim"):
-            e2e.Coins(0, source)
+            e2e.EpochCoins(0, source)
     state = tmp_path / "state"
     state.write_bytes(random.Random(1).randbytes(512))
-    assert e2e.Coins(0, e2e.state_entropy(str(state))).challenger.claim == SC.PV.CLAIM == "uniform/io-getrandombytes"
+    assert e2e.EpochCoins(0, e2e.state_entropy(str(state))).challenger.claim == SC.PV.CLAIM == "uniform/io-getrandombytes"
     monkeypatch.setattr(SC.PV, "coins", random.Random(2).randbytes)
     (tmp_path / "params.json").write_text("{}")
     with pytest.raises(SystemExit, match="coins-without-claim"):
@@ -504,7 +504,7 @@ def test_a_pass_registered_again_on_another_stream_is_refused(served):
     *_, words = served
     params, public, _, _ = _window(words)
     rec = _register(params, public)
-    ch = _challenger(params, record=OR.Record(lean=False))
+    ch = _challenger(params, record=OR.VerdictPair(lean=False))
     _held(ch, "honest", rec)
     with pytest.raises(S.Refused) as e:
         _held(ch, "again", rec, stream="again")
@@ -521,7 +521,7 @@ def test_a_window_received_after_the_epochs_draw_coin_is_refused(served, tmp_pat
     *_, words = served
     params, public, _, _ = _window(words)
     rec = _register(params, public)
-    ch = _challenger(params, record=OR.Record(lean=False))
+    ch = _challenger(params, record=OR.VerdictPair(lean=False))
     _held(ch, "honest", rec)
     ch.select("honest")
     with pytest.raises(S.Refused) as e:
@@ -532,7 +532,7 @@ def test_a_window_received_after_the_epochs_draw_coin_is_refused(served, tmp_pat
     assert ch.select("ctl").units == ch.draws["honest"].units
 
     bare = {k: v for k, v in params.items() if k != "registration_deadline"}
-    old = SC.Challenger(bare, _coins(), record=OR.Record(lean=False), predates_deadline=True)
+    old = SC.Challenger(bare, _coins(), record=OR.VerdictPair(lean=False), predates_deadline=True)
     log = tmp_path / "log"
     log.mkdir()
     (log / "coins.json").write_text(json.dumps(old.coins.commitment.to_json()))
@@ -546,7 +546,7 @@ def test_a_window_received_after_the_epochs_draw_coin_is_refused(served, tmp_pat
     (log / "requests.jsonl").write_text("".join(json.dumps({"request": json.dumps(r), "reply": x}) + "\n"
                                                 for r, x in zip(reqs, replies)))
     (log / "openings.jsonl").write_text("".join(json.dumps(o.to_json()) + "\n" for o in old.openings.values()))
-    assert SC.replay(bare, log, tmp_path / "replay", record=OR.Record(lean=False)) == []
+    assert SC.replay(bare, log, tmp_path / "replay", record=OR.VerdictPair(lean=False)) == []
     (tmp_path / "bare.json").write_text(json.dumps(bare))
     assert SC.main(["replay", str(tmp_path / "bare.json"), str(log), str(tmp_path / "replay2"), "--python-record"]) == 0
 
@@ -669,7 +669,7 @@ def test_rows_formed_before_any_salt_are_refused_in_every_certified_window(serve
     for p in (0, 1):
         params, raw, rec, *_ = _certified_window(words, run, salts[p], sid, prover, p)
         live, ck = _live(tmp_path / f"w{p}.json")
-        ch = SC.Challenger(params, live, clock=lambda: 0.0, record=OR.Record(lean=False), certifier=client,
+        ch = SC.Challenger(params, live, clock=lambda: 0.0, record=OR.VerdictPair(lean=False), certifier=client,
                            prover=prover, coin_record=tmp_path / f"w{p}.json", deployment=_deployment(client, ck),
                            registrations=ledger)
         with pytest.raises(S.Refused) as e:
@@ -696,7 +696,7 @@ def test_one_windows_rows_are_refused_under_two_streams(served, tmp_path, monkey
         assert SC.stream_id({"deployment": f"served-zk/{run}"}, s, SC.certifier_run(client)) == sid
         params, raw, rec, *_ = _certified_window(words, run, salts[0], sid, prover)
         live, ck = _live(tmp_path / f"{s}.json")
-        ch = SC.Challenger(params, live, clock=lambda: 0.0, record=OR.Record(lean=False), certifier=client,
+        ch = SC.Challenger(params, live, clock=lambda: 0.0, record=OR.VerdictPair(lean=False), certifier=client,
                            prover=prover, coin_record=tmp_path / f"{s}.json", deployment=_deployment(client, ck),
                            registrations=ledger)
         with pytest.raises(S.Refused) as e:
@@ -750,7 +750,7 @@ def test_past_the_salt_rule_a_certified_window_is_recorded_revealed_drawn_under_
 
     def challenger(name: str, certifier=client, prover=prover, p=params, entropy=None) -> SC.Challenger:
         live, ck = _live(tmp_path / f"{name}.json", entropy)
-        return SC.Challenger(p, live, clock=lambda: 0.0, record=OR.Record(lean=False), certifier=certifier,
+        return SC.Challenger(p, live, clock=lambda: 0.0, record=OR.VerdictPair(lean=False), certifier=certifier,
                              prover=prover, coin_record=tmp_path / f"{name}.json",
                              deployment=_deployment(certifier, ck), registrations=ledger)
 
@@ -792,7 +792,7 @@ def test_past_the_salt_rule_a_certified_window_is_recorded_revealed_drawn_under_
     pub, op = _unit_pub(advice, priv, u), SC.opening(advice, priv, params, u)
     unread = "the window is certified, and its template's unit reads no salt"
     assert ch.check("honest", u, pub, op).startswith(unread)
-    assert SC.check(params, rec, d.draw, u, pub, op, record=OR.Record(lean=False)).startswith(unread)
+    assert SC.check(params, rec, d.draw, u, pub, op, record=OR.VerdictPair(lean=False)).startswith(unread)
     assert held == [salt, None]
     monkeypatch.setattr(CC, "opening", opening)
     assert refused(challenger("again"), "certifier").startswith("the certifier doesn't reveal PoUW window 0's salt")
@@ -1077,12 +1077,12 @@ def test_lean_is_of_record_and_python_its_witness(served, tmp_path):
     assert all(e["same"] and e["of_record"] == "lean" and e["lean"] == e["python"] for e in w)
     answer = w[-1]["lean"]
     assert o.accepted and answer["verdict"] == "accept" and pub == answer["public"]
-    record = OR.Record(lean=False)
+    record = OR.VerdictPair(lean=False)
     py = _challenger(params, record=record)
     o2, pub2, _ = _through(py, rec)
     assert o2.accepted and pub2 == pub and all(e["lean"] is None and e["of_record"] == "python" for e in py.witness["honest"])
     t = ch.draws["honest"].units[0]
-    lean = OR.Record()
+    lean = OR.VerdictPair()
     assert SC.check(params, rec, ch.draws["honest"].draw, t, _unit_pub(advice, priv, t), SC.opening(advice, priv, params, t),
                     record=lean) is None
     assert [(e["check"], e["same"], e["lean"]) for e in lean.witness] == [("opening", True, None),
@@ -1101,7 +1101,7 @@ def test_r1_r6_of_a_window_are_leans(served):
     prog, q = SC.PT.population_program(SC.template(K), n), SC.PT.template_instance_query(SC.template(K))
     law, ports = SC.law_of(params, ell), SC.ports(params, ell)
     p = OR.registration_params(prog, q, law, S.SCHEME, ports, [], params["delta"])
-    record = OR.Record()
+    record = OR.VerdictPair()
 
     def codes(r) -> list[str]:
         return record.registration(p, r, lambda: R.check(r, prog, q, law, S.SCHEME, ports, None, (), [], None, None, None).codes)
@@ -1121,11 +1121,11 @@ def test_r1_r6_of_a_window_are_leans(served):
 
 def test_the_record_follows_the_switch(monkeypatch):
     """`Record()` takes its side of record from `pouw.verifier.RECORD_VERDICT`, and an explicit `lean` overrides it."""
-    assert OR.Record().lean is (OR.V.RECORD_VERDICT == "lean")
+    assert OR.VerdictPair().lean is (OR.V.RECORD_VERDICT == "lean")
     monkeypatch.setattr(OR.V, "RECORD_VERDICT", "python")
-    assert OR.Record().lean is False and OR.Record(lean=True).lean is True
+    assert OR.VerdictPair().lean is False and OR.VerdictPair(lean=True).lean is True
     monkeypatch.setattr(OR.V, "RECORD_VERDICT", "lean")
-    assert OR.Record().lean is True and OR.Record(lean=False).lean is False
+    assert OR.VerdictPair().lean is True and OR.VerdictPair(lean=False).lean is False
 
 
 @LEAN
@@ -1139,7 +1139,7 @@ def test_the_public_items_rule_of_a_window_is_leans(served):
     rec = _register(params, public)
     ell, n = SC.level_of(rec), rec["population"]
     spec = SC.spec_of(params, ell)
-    record = OR.Record(lean=True)
+    record = OR.VerdictPair(lean=True)
 
     def verdict(r: dict) -> dict:
         return record.public(OR.public_params(spec, r, S.SCHEME), lambda: S.check_public(spec, r).to_json())
@@ -1229,7 +1229,7 @@ def test_a_disagreement_rejects_the_session(served, monkeypatch):
     assert _codes(e) == {"final"}
     t = ch.draws["honest"].units[0]
     monkeypatch.setattr(OR, "py_opening", lambda x: "forced")
-    record = OR.Record()
+    record = OR.VerdictPair()
     assert SC.check(params, rec, ch.draws["honest"].draw, t, _unit_pub(advice, priv, t), SC.opening(advice, priv, params, t),
                     record=record) == f"{OR.DISAGREE}: opening"
     assert record.witness[0]["python"] == "forced" and record.witness[0]["lean"] is None
@@ -1237,7 +1237,7 @@ def test_a_disagreement_rejects_the_session(served, monkeypatch):
     monkeypatch.undo()
     op, served_domain = SC.opening(advice, priv, params, t), SC.window_domain
     monkeypatch.setattr(SC, "window_domain", lambda params, ell: served_domain({**params, "context": "other"}, ell))
-    record = OR.Record()
+    record = OR.VerdictPair()
     assert SC.check(params, rec, ch.draws["honest"].draw, t, _unit_pub(advice, priv, t), op, record=record) == \
         f"{OR.DISAGREE}: prelude"
     assert [(e["check"], e["same"]) for e in record.witness] == [("opening", True), ("prelude", False)]

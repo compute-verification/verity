@@ -55,7 +55,7 @@ halves: `Accounting.Served.ValueChecked`'s product and dequant are checked by th
   `PouwH1LaneZy_v1{TILE}` is lane l of TILE's leaf, ``(a: its 4 A rows
   by row slot, b: its 8 B rows by column slot, admit: the leaf's R admit bits, zy: the leaf's whole record, partials: its
   row, salt, position, roots, lane) -> {ok}``. Its noise is the leaf's seed_j stream at its rows' and columns' blocks
-  (`h1tile.Layout`) and its keys block l of σ_R's, so its chain's words are the lane's partial as the served receipt XORs
+  (`h1tile.TileShape`) and its keys block l of σ_R's, so its chain's words are the lane's partial as the served receipt XORs
   them (kernels' ``lane_partials``, #3095), each masked by v4's gate, the admit bits' OR (`PouwOrBit`, `PouwMask32`): a
   dead leaf's partials are zero. ok is 1 exactly when its partials row is those words and its 32 cells of the record
   (`lane_cells`: by row slot, then column slot) pass `PouwZyCheck_v1{4, 8}` at its rows' z (TILE's v1 or v3 form) and
@@ -73,7 +73,7 @@ halves: `Accounting.Served.ValueChecked`'s product and dequant are checked by th
   CHUNK = c}` over entries [c K_c, (c + 1) K_c), K_c = K / n a multiple of `CHUNK_ALIGN` (6144: 2 × 3072, 12288: 3 × 4096,
   14336: 4 × 3584, 16384: 4 × 4096). A chunk reads its 4 A and 8 B rows at its entries, each with the row's scale
   (`ROW`(K_c)), the leaf's salt, position and roots and the index. A table at such a K commits each row as those n
-  chunk rows, row r's chunk c its leaf n r + c (`chunk_leaves`, `chunk_words`). Its noise is the whole lane's (`h1tile.Layout` at K):
+  chunk rows, row r's chunk c its leaf n r + c (`chunk_leaves`, `chunk_words`). Its noise is the whole lane's (`h1tile.TileShape` at K):
   its entries' dither and coin bits, and U at offset K of each column's stream, so every chunk derives the same U. Its
   chain is the whole lane's, continued: chunk c > 0 reads ``carry_in``, what chunk c - 1 hands on (`CARRY`: the fx1
   state, each entry's prefix sum T, each row slot's residue sums, each cell's z, the chain's words so far, unmasked, and
@@ -315,7 +315,7 @@ def lane_bits(r: int, c: int) -> int:
     return ((r // 4) * (c // 8)).bit_length() - 1
 
 
-def lane_cells(lay: H.Layout, ln: int) -> list[int]:
+def lane_cells(lay: H.TileShape, ln: int) -> list[int]:
     """Lane ln's cells as indices of its leaf's record (row-major), by its row slot then its column slot."""
     return [i * lay.c + j for i in lay.rows(ln) for j in lay.cols(ln)]
 
@@ -335,12 +335,12 @@ def _refuse_lane(b: dict, tiles: tuple[str, ...] = TILES) -> str | None:
     return None
 
 
-def _lane_layout(S: Any) -> H.Layout:
+def _lane_layout(S: Any) -> H.TileShape:
     r, c, k = _tile(S)
-    return H.Layout(r, c, k)
+    return H.TileShape(r, c, k)
 
 
-def _words(lay: H.Layout) -> Array:
+def _words(lay: H.TileShape) -> Array:
     """A lane's partial, or the leaf's receipt: 2 (KS + m) u32."""
     return Array(2 * lay.sets, H.U32)
 
@@ -378,7 +378,7 @@ def _noise(B: Any, seed: Coll, sel: list, firsts: list[int], n: int, const: Any,
 
 def _lane_seeds(B: Any, S: Any, v: dict, keys: bool) -> tuple[Coll, Coll | None, tuple[Coll, Coll] | None, int]:
     """A lane statement's noise seed, σ_R (with ``keys``), the bases its counters add to (J10-R's ``blocks``, else None)
-    and what each column's first block (`h1tile.Layout.col`) less is its counter: seed_j and today's constant counters,
+    and what each column's first block (`h1tile.TileShape.col`) less is its counter: seed_j and today's constant counters,
     or under J10-R seed_c from one `seeds.PouwCallSeeds`, row i's blocks from ``blocks[0] + i RB`` and column j's from
     ``blocks[1] + j CB``, as `h1tile`'s v5 derives them. A J10-R chunk past the first takes seed_c from the same call and
     leaves its σ_R unread."""
@@ -439,7 +439,7 @@ def _or_all(B: Any, bits: list) -> Coll:
     return bits[0]
 
 
-def _cells_ok(B: Any, lay: H.Layout, sel: list, zy: Coll, z: list, a: Coll, b: Coll) -> Coll:
+def _cells_ok(B: Any, lay: H.TileShape, sel: list, zy: Coll, z: list, a: Coll, b: Coll) -> Coll:
     """`PouwZyCheck_v1{4, 8}` of the lane's 32 cells of the leaf's record, each picked over the index's low bits, at the
     lane's z (refs, cell by cell) and its rows' scales."""
     zf, yf = zy.field("z"), zy.field("y")
@@ -453,7 +453,7 @@ def _cells_ok(B: Any, lay: H.Layout, sel: list, zy: Coll, z: list, a: Coll, b: C
                   _rows(b, 8, "scale"))
 
 
-def _gated(B: Any, lay: H.Layout, admit: Coll, words: list) -> Coll:
+def _gated(B: Any, lay: H.TileShape, admit: Coll, words: list) -> Coll:
     """The chain's words (refs) each AND the admit bits' OR."""
     live = _or_all(B, [admit[i] for i in range(lay.r)])
     return B.batch(H.PouwMask32, Coll(_words(lay), concat(words)), live, axes=(0, None))
@@ -526,7 +526,7 @@ PouwH1Combine = CompositeDefinition(
 OK_WORD = Array(16, BIT)
 
 
-def leaf_statements(lay: H.Layout) -> int:
+def leaf_statements(lay: H.TileShape) -> int:
     """The lane and lane chunk statements of a leaf, the combine's ``oks``: each lane's `chunks`(K)."""
     return lay.lanes * chunks(lay.k)
 
@@ -588,7 +588,7 @@ def combine(tile: Any) -> Any:
     compresses before its last block (``no row has a compression before its last block``, `verity_flock.circuit`'s and
     `Flock.HmRow`'s), a row of at least 112 bytes, whose 17 bytes of SHA-512 padding spill past its first block."""
     k = _leaf(tile)
-    n = 8 * H.Layout(4, 8, k).sets
+    n = 8 * H.TileShape(4, 8, k).sets
     if n + 17 <= 128:
         raise ValueError(f"K = {k}: the combine reads only a lane's partials and the receipt, {n}-byte rows, but C-Flock "
                          f"proves a statement only with a row that compresses before its last block, at least 112 bytes: "
@@ -619,7 +619,7 @@ def chunk_words(rows: Sequence[bytes], k: int) -> list[list[int]]:
     return [[leaf[i] | leaf[i + 1] << 8 for i in range(0, len(leaf), 2)] for row in rows for leaf in chunk_leaves(row, k)]
 
 
-def CARRY(lay: H.Layout, n: int, c: int) -> Record:
+def CARRY(lay: H.TileShape, n: int, c: int) -> Record:
     """What chunk c of a lane in n chunks hands chunk c + 1: after its last segment, its fx1 state (16 u32), each entry's
     prefix sum T (32 u32), each row slot's residue sums (4 × 32 u32), each cell's z (32 s32, by row slot then column slot),
     every chain word so far, unmasked (2 (c + 1) KS_c u32, KS_c = K / 32 n), and its rows' scales (4 and 8 f32):
@@ -630,7 +630,7 @@ def CARRY(lay: H.Layout, n: int, c: int) -> Record:
                   ("sw", Array(8, F32)))
 
 
-def _chunk(S: Any) -> tuple[H.Layout, int, int, int]:
+def _chunk(S: Any) -> tuple[H.TileShape, int, int, int]:
     lay = _lane_layout(S)
     return lay, S.CHUNKS, S.CHUNK, lay.k // S.CHUNKS
 
@@ -1028,7 +1028,7 @@ def chunks_reference(a: Sequence[Sequence[int]], b: Sequence[Sequence[int]], sa:
 J10R = tuple[int, tuple[int, int]] | None
 
 
-def _leaf_noise(salt: bytes, position: int, roots: tuple[bytes, bytes], lay: H.Layout, j10r: J10R) -> tuple[list, list]:
+def _leaf_noise(salt: bytes, position: int, roots: tuple[bytes, bytes], lay: H.TileShape, j10r: J10R) -> tuple[list, list]:
     if j10r is None:
         return H.noise(SD.seed(salt, position, *roots), lay)
     return H.j10r_noise(SD.call_seed(salt, j10r[0], *roots), lay, j10r[1])
@@ -1039,7 +1039,7 @@ def lane_partial(a: Sequence[Sequence[int]], b: Sequence[Sequence[int]], admit: 
     """Lane ``lane``'s honest partial on words, the row the prover commits for it, from its 4 A rows and 8 B rows by slot
     (s8 encodings) and the leaf's R admit bits: `h1tile.lane_partials`' for the lane, zero words for a dead leaf. With
     ``j10r`` ``(call, blocks)`` the leaf is J10-R's v5, its noise `h1tile.j10r_noise`'s."""
-    lay = H.Layout(int(tile[0]), int(tile[1]), len(a[0]))
+    lay = H.TileShape(int(tile[0]), int(tile[1]), len(a[0]))
     if isinstance(admit, (bool, int)) or len(admit) != lay.r:
         raise ValueError(f"admit is the leaf's {lay.r} admit bits, not {admit!r}")
     if not any(g & 1 for g in admit):
@@ -1063,7 +1063,7 @@ def lane_reference(a: Sequence[Sequence[int]], b: Sequence[Sequence[int]], sa: S
     ``partial``, and the leaf's salt, position and roots: 1 exactly when ``lane`` is one of the leaf's lanes, the partial
     is `lane_partial`'s and the lane's cells of the record pass `check`; ``lane`` a `LANE` word. With ``j10r``
     ``(call, blocks)`` it is `PouwH1LaneZy_v2`'s, over J10-R's v5."""
-    lay = H.Layout(int(tile[0]), int(tile[1]), len(a[0]))
+    lay = H.TileShape(int(tile[0]), int(tile[1]), len(a[0]))
     if not 0 <= lane < 1 << LANE.n:
         raise ValueError(f"a lane index is a {LANE.n}-bit word, not {lane}")
     if lane >= lay.lanes:
@@ -1091,7 +1091,7 @@ def carry_words(carry: dict) -> list[int]:
                               *carry["words"], *carry["sa"], *carry["sw"])]
 
 
-def _chunk_step(lay: H.Layout, n: int, c: int, a: Sequence[Sequence[int]], b: Sequence[Sequence[int]], sa: Sequence[int],
+def _chunk_step(lay: H.TileShape, n: int, c: int, a: Sequence[Sequence[int]], b: Sequence[Sequence[int]], sa: Sequence[int],
                 sw: Sequence[int], rows: list, cols: list, key: Sequence[int] | None, ln: int, cin: dict | None) -> dict:
     """Chunk c of n of lane ln on words, from its rows' entries of the chunk (``a`` 4 and ``b`` 8, s8 encodings) and their
     scales, the leaf's noise (`h1tile.noise` at the whole K), the lane's fold keys (chunk 0) or the carry in: the carry
@@ -1127,7 +1127,7 @@ def _chunk_step(lay: H.Layout, n: int, c: int, a: Sequence[Sequence[int]], b: Se
     return {"state": st, "t": T, "res": Y, "z": z, "words": words, "sa": [v & M32 for v in sa], "sw": [v & M32 for v in sw]}
 
 
-def _chunk_noise(salt: bytes, position: int, roots: tuple[bytes, bytes], lay: H.Layout, ln: int, j10r: J10R) -> tuple:
+def _chunk_noise(salt: bytes, position: int, roots: tuple[bytes, bytes], lay: H.TileShape, ln: int, j10r: J10R) -> tuple:
     rows, cols = _leaf_noise(salt, position, roots, lay, j10r)
     return rows, cols, H.fold_keys(SD.receipt_seed(salt, position, *roots), lay)[ln]
 
@@ -1139,7 +1139,7 @@ def lane_chunk_carries(a: Sequence[Sequence[int]], b: Sequence[Sequence[int]], s
     encodings) and their scales: each chunk's carry out (`CARRY`, as `carry_words` takes it), the honest ``carry_out`` of
     chunks 0 .. n - 2 and the ``carry_in`` of chunks 1 .. n - 1; the last's ``words`` are the lane's chain, unmasked, and
     its ``z`` the lane's cells' exact products. With ``j10r`` ``(call, blocks)``: over J10-R's v5, at the whole K."""
-    lay = H.Layout(int(tile[0]), int(tile[1]), len(a[0]))
+    lay = H.TileShape(int(tile[0]), int(tile[1]), len(a[0]))
     rows, cols, key = _chunk_noise(salt, position, roots, lay, lane, j10r)
     kc, out, cin = lay.k // n, [], None
     for c in range(n):
@@ -1161,7 +1161,7 @@ def lane_chunk_reference(a: Sequence[Sequence[int]], b: Sequence[Sequence[int]],
     one of the leaf's lanes, the scales are ``carry_in``'s, and the last chunk's partial is the chain's words (zero for a
     dead leaf) and its cells pass `check`, any other's ``carry_out`` what it computed. With ``j10r`` ``(call, blocks)`` it
     is `PouwH1LaneZyChunk_v2`'s, over J10-R's v5 (``blocks`` at the whole K)."""
-    lay = H.Layout(int(tile[0]), int(tile[1]), len(a[0]) * n)
+    lay = H.TileShape(int(tile[0]), int(tile[1]), len(a[0]) * n)
     if not 0 <= lane < 1 << LANE.n:
         raise ValueError(f"a lane index is a {LANE.n}-bit word, not {lane}")
     if lane >= lay.lanes:

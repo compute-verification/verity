@@ -248,9 +248,9 @@ def test_the_red_team_s_capped_window_is_refused():
     import pytest
 
     shape = ncp2.Shape(16, 64, 16)
-    call0 = PL.Layout(shape, (), (PL.StratumSpec("w2", "form_x", tuple(range(1000)), 2 * 1000),
+    call0 = PL.PlanUnits(shape, (), (PL.StratumSpec("w2", "form_x", tuple(range(1000)), 2 * 1000),
                                   PL.StratumSpec("t0", "tile", tuple(range(1000, 1010)), 1000 * 10)), {})
-    call1 = PL.Layout(shape, (), (PL.StratumSpec("y1", "dequant", tuple(range(100_000)), 0),
+    call1 = PL.PlanUnits(shape, (), (PL.StratumSpec("y1", "dequant", tuple(range(100_000)), 0),
                                   PL.StratumSpec("t1", "tile", (100_000,), 1)), {})
     total, k = call0.work() + call1.work(), 5000
     share = -(-k * call0.work() // total)
@@ -269,8 +269,8 @@ def test_a_window_that_does_no_work_is_refused():
     import pytest
 
     shape = ncp2.Shape(16, 64, 16)
-    idle = PL.Layout(shape, (), (PL.StratumSpec("t", "tile", (0,), 0), PL.StratumSpec("y", "dequant", (1, 2), 0)), {})
-    busy = PL.Layout(shape, (), (PL.StratumSpec("t", "tile", (0,), 5), PL.StratumSpec("y", "dequant", (1, 2), 0)), {})
+    idle = PL.PlanUnits(shape, (), (PL.StratumSpec("t", "tile", (0,), 0), PL.StratumSpec("y", "dequant", (1, 2), 0)), {})
+    busy = PL.PlanUnits(shape, (), (PL.StratumSpec("t", "tile", (0,), 5), PL.StratumSpec("y", "dequant", (1, 2), 0)), {})
     for window in ([idle], [idle, idle]):
         with pytest.raises(ValueError, match="does some work"):
             PL.window_laws(window)
@@ -285,7 +285,7 @@ def test_a_window_with_no_y_cells_is_refused():
     import pytest
 
     shape = ncp2.Shape(16, 64, 16)
-    dry = PL.Layout(shape, (), (PL.StratumSpec("t", "tile", (0, 1), 10), PL.StratumSpec("k", "key", (2,), 0)), {})
+    dry = PL.PlanUnits(shape, (), (PL.StratumSpec("t", "tile", (0, 1), 10), PL.StratumSpec("k", "key", (2,), 0)), {})
     for window in ([dry], [dry, dry]):
         with pytest.raises(ValueError, match="has y cells"):
             PL.window_laws(window)
@@ -319,7 +319,7 @@ def test_the_window_law_is_the_window_pin_s():
             for name, role, size, w in spec:
                 strata.append(PL.StratumSpec(name, role, tuple(range(at, at + size)), w * size))
                 at += size
-            layouts.append(PL.Layout(shape, (), tuple(strata), {}))
+            layouts.append(PL.PlanUnits(shape, (), tuple(strata), {}))
         floors = tuple((z, rng.randint(1, 4)) for z in ("z0", "z1") if rng.random() < 0.5)
         laws = PL.window_laws(layouts, k=k, floors=floors)
         big_w = sum(s.work for lay in layouts for s in lay.strata)
@@ -387,7 +387,7 @@ def _anchors(call, **kw):
 
 def _window(t, anchors, source=bytes(range(32)), commitments=None):
     """A window over ``anchors`` (each of ``t``'s shape, with a commitment of its own unless ``commitments`` gives them):
-    its `Receipt`, and the `Ledger` opened from it, with the fresh source replaced by ``source`` so the draws are
+    its `Receipt`, and the `AdmittedCalls` opened from it, with the fresh source replaced by ``source`` so the draws are
     reproducible."""
     import hashlib
     from unittest import mock
@@ -397,7 +397,7 @@ def _window(t, anchors, source=bytes(range(32)), commitments=None):
     cs = commitments or [hashlib.sha512(repr(an).encode()).digest() for an in anchors]
     receipt = A.Receipt(tuple((an, t.shape, c) for an, c in zip(anchors, cs)))
     with mock.patch.object(A, "_fresh_source", lambda: source):
-        return receipt, A.Ledger.open(receipt)
+        return receipt, A.AdmittedCalls.open(receipt)
 
 
 def test_equal_calls_under_one_key_draw_different_tiles():
@@ -437,7 +437,7 @@ def test_the_verifier_draws_over_its_own_layout():
 def test_a_repeated_call_index_is_refused_before_any_draw(monkeypatch):
     """The window pin takes a window's per-call draws as independent (M1), and each call's subsets are keyed by its index
     under the one window key. A receipt lists each call index once, and `Traced.draw` admits the call to the window's
-    `Ledger` before it draws: a call index already drawn, even with another weight id, is refused before `plan.draw`
+    `AdmittedCalls` before it draws: a call index already drawn, even with another weight id, is refused before `plan.draw`
     runs. A draw without a ledger is refused."""
     import hashlib
 
@@ -474,7 +474,7 @@ def test_a_repeated_call_index_is_refused_before_any_draw(monkeypatch):
 
 def test_the_window_key_is_derived_from_the_complete_receipt(monkeypatch):
     """Root's C1: the window's key comes after every call's commitment. A `Receipt` lists every call of the window with its
-    shape and commitment, and is immutable; `Ledger.open` derives the key from it alone, under `DRAW_DOMAIN` with
+    shape and commitment, and is immutable; `AdmittedCalls.open` derives the key from it alone, under `DRAW_DOMAIN` with
     {"receipt": digest}, and `Traced.draw` refuses a ledger not opened from a receipt and a call the receipt doesn't list
     (another index, the same index with other anchors, or another shape), before `plan.draw` runs. The digest binds each
     call's full anchors (salt, weight id, rows and columns), shape and commitment, and not the order they are listed in."""
@@ -499,7 +499,7 @@ def test_the_window_key_is_derived_from_the_complete_receipt(monkeypatch):
     monkeypatch.setattr(plan_module, "draw", lambda key, lay, law, index: drawn.append(index) or real(key, lay, law, index))
     other_shape = ncp2.Shape(32, 128, 32)
     twin = dataclasses.replace(a, weight=a.weight + 1)
-    refusals = [(lambda: t.draw(law, a, A.Ledger()), "opened from its complete receipt"),
+    refusals = [(lambda: t.draw(law, a, A.AdmittedCalls()), "opened from its complete receipt"),
                 (lambda: t.draw(law, unlisted, window), "not on the window's receipt"),
                 (lambda: t.draw(law, twin, window), "not on the window's receipt"),
                 (lambda: window.admit(a, other_shape), "not on the window's receipt")]
@@ -523,27 +523,27 @@ def test_the_window_key_is_derived_from_the_complete_receipt(monkeypatch):
     with pytest.raises(dataclasses.FrozenInstanceError):
         receipt.calls = ()
     with pytest.raises(TypeError):
-        A.Ledger.open([(a, t.shape, ca)])
+        A.AdmittedCalls.open([(a, t.shape, ca)])
 
 
 def test_a_caller_built_ledger_has_no_key():
-    """The red team's first probe: a ledger built with a key from a caller-chosen source. `Ledger` takes no receipt, key
-    or source, and sets none afterwards, so only `Ledger.open` makes one that draws."""
+    """The red team's first probe: a ledger built with a key from a caller-chosen source. `AdmittedCalls` takes no receipt, key
+    or source, and sets none afterwards, so only `AdmittedCalls.open` makes one that draws."""
     import pytest
 
     import circuit_fixtures as F
     from verity.core.protocols.pouw.circuit import traced_as
-    from verity.core.protocols.pouw.circuit.anchors import Ledger
+    from verity.core.protocols.pouw.circuit.anchors import AdmittedCalls
     from verity.core.protocols.pouw.protocol import DomainError
 
     call = F.call(32, 64, 32)
     t, an = traced_as("ncp-v2-shift24", 32, 64, 32), _anchors(call)
     receipt, _window_ = _window(t, [an])
     chosen = derive(b"caller-chosen", PL.DRAW_DOMAIN, {"receipt": receipt.digest()})
-    for built in (lambda: Ledger(receipt=receipt, key=chosen), lambda: Ledger(receipt, chosen)):
+    for built in (lambda: AdmittedCalls(receipt=receipt, key=chosen), lambda: AdmittedCalls(receipt, chosen)):
         with pytest.raises(TypeError):
             built()
-    bare = Ledger()
+    bare = AdmittedCalls()
     for name, value in (("key", chosen), ("_key", chosen), ("receipt", receipt), ("_receipt", receipt), ("_source", b"x")):
         with pytest.raises(AttributeError):
             setattr(bare, name, value)
@@ -552,7 +552,7 @@ def test_a_caller_built_ledger_has_no_key():
 
 
 def test_an_opened_ledger_s_key_cannot_be_reassigned():
-    """The red team's second probe: an opened ledger whose key is reassigned. The key is set once, in `Ledger.open`, and
+    """The red team's second probe: an opened ledger whose key is reassigned. The key is set once, in `AdmittedCalls.open`, and
     `Traced.draw` reads it from the ledger, so a caller's key never reaches a draw."""
     import pytest
 
@@ -572,7 +572,7 @@ def test_an_opened_ledger_s_key_cannot_be_reassigned():
 
 def test_an_opened_ledger_s_receipt_cannot_be_swapped():
     """The red team's third probe: an opened ledger whose receipt is swapped for a larger one after the key exists, so a
-    call committed after the key would be drawn under it. The receipt is set once, in `Ledger.open`, and the later call
+    call committed after the key would be drawn under it. The receipt is set once, in `AdmittedCalls.open`, and the later call
     is refused."""
     import hashlib
 
@@ -597,7 +597,7 @@ def test_an_opened_ledger_s_receipt_cannot_be_swapped():
 
 def test_openings_are_checked_against_the_receipt_s_commitment():
     """The red team's tier-3 item: the call's A-row openings are checked against its commitment as the opened ledger's
-    receipt lists it, by call index (`Ledger.commitment`), never one supplied with the openings. The prover's own rows
+    receipt lists it, by call index (`AdmittedCalls.commitment`), never one supplied with the openings. The prover's own rows
     under the receipt's commitment pass; rows committed under any other commitment, a missing row, a row opened twice,
     or a call the receipt doesn't list are refused."""
     import pytest
@@ -605,7 +605,7 @@ def test_openings_are_checked_against_the_receipt_s_commitment():
     import circuit_fixtures as F
     from verity.core.protocols.pouw import audit
     from verity.core.protocols.pouw.circuit import traced_as
-    from verity.core.protocols.pouw.circuit.anchors import Ledger
+    from verity.core.protocols.pouw.circuit.anchors import AdmittedCalls
     from verity.core.protocols.pouw.protocol import DomainError
 
     call = F.call(32, 64, 32)
@@ -624,7 +624,7 @@ def test_openings_are_checked_against_the_receipt_s_commitment():
                 [tree.open(r) for r in opened] + [tree.open(opened[0])]):
         with pytest.raises(DomainError):
             t.check_openings(plan, an, window, domain, bad)
-    for no_receipt in (Ledger(),):
+    for no_receipt in (AdmittedCalls(),):
         with pytest.raises(DomainError, match="window's receipt"):
             no_receipt.commitment(an)
     with pytest.raises(DomainError, match="not on the window's receipt"):
@@ -661,7 +661,7 @@ def test_the_record_keeps_the_source_once_the_draw_is_sent():
 
 
 def test_each_window_s_source_is_fresh():
-    """Root's C2: A4 models one fresh uniform source per derivation. `Ledger.open` takes no source: it draws 32 fresh bytes
+    """Root's C2: A4 models one fresh uniform source per derivation. `AdmittedCalls.open` takes no source: it draws 32 fresh bytes
     from the operating system's CSPRNG (`secrets`) for each window, once the receipt is complete, so two windows, even
     over one receipt, get independent keys, and no window's key is a function of another's."""
     import inspect
@@ -673,9 +673,9 @@ def test_each_window_s_source_is_fresh():
     call = F.call(32, 64, 32)
     t = traced_as("ncp-v2-shift24", 32, 64, 32)
     receipt, _window_ = _window(t, [_anchors(call)])
-    assert list(inspect.signature(A.Ledger.open).parameters) == ["receipt"]
+    assert list(inspect.signature(A.AdmittedCalls.open).parameters) == ["receipt"]
     assert len(A._fresh_source()) == A.SOURCE_BYTES == 32
-    keys = {A.Ledger.open(receipt).key for _ in range(8)}
+    keys = {A.AdmittedCalls.open(receipt).key for _ in range(8)}
     assert len(keys) == 8
 
 

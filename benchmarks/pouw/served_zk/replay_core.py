@@ -293,7 +293,7 @@ class Sides:
         self.core = D.Server(D.ProtocolPort("pouw-check", CC.case, inputs=None, package=LEAN).argv())
         self.opening = D.Server(D.Port("pouw-check-difftest", "opening", opening_reference, inputs=None,
                                        package=LEAN).argv())
-        self.record = OR.Record()
+        self.record = OR.VerdictPair()
 
     def coin(self, kind: str, x: dict) -> tuple[Any, bool]:
         """Lean's outcome of a pass or draw check, and whether Python's is the same (`of_record`)."""

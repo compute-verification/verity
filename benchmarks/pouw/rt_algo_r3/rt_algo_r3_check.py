@@ -133,7 +133,7 @@ def _u129(x: int) -> int:
 
 def forms(M: int, N: int, K: int, rng: random.Random) -> tuple[list[Form], dict]:
     """The candidate forms on one call (M × N at K), with the step's and the window's seeds."""
-    lay = H.Layout(M, N, K)
+    lay = H.TileShape(M, N, K)
     m = lay.m
     salt, rootA, rootB = _bytes(rng), _bytes(rng), _bytes(rng)
     seed_step = SD.seed(salt, 7, rootA, rootB)
@@ -205,7 +205,7 @@ def forms(M: int, N: int, K: int, rng: random.Random) -> tuple[list[Form], dict]
 
 def unit_words(a, b, rows, cols, K: int) -> list[list[list[int]]]:
     """Each lane's absorbed sets (T_0 .. T_(KS-1), O', D_1 .. D_(m-1)) of one 32 × 32 unit, from injected noise."""
-    lay = H.Layout(TILE, TILE, K)
+    lay = H.TileShape(TILE, TILE, K)
     ks, m = lay.ks, lay.m
     out = []
     for ln in range(lay.lanes):
@@ -307,7 +307,7 @@ def honest_macs(M: int, N: int, K: int, m: int) -> int:
 
 def compare(form: Form, A_l, B_l, T, Op, D, K: int, units: list[tuple[int, int]]):
     """Whether the route's words equal `segment.call_words`' at every lane, entry and set of the listed units."""
-    lay = H.Layout(TILE, TILE, K)
+    lay = H.TileShape(TILE, TILE, K)
     ks = lay.ks
     for I, J in units:
         a, b, rows, cols = _unit_slices(form, A_l, B_l, I, J)
@@ -336,7 +336,7 @@ def check_injected_reference_is_h1tile(rng):
     K = 128
     A, B = _operands(rng, TILE, TILE, K)
     salt, pos, roots = _bytes(rng), rng.randint(0, 1 << 20), (_bytes(rng), _bytes(rng))
-    lay = H.Layout(TILE, TILE, K)
+    lay = H.TileShape(TILE, TILE, K)
     rows, cols = H.noise(SD.seed(salt, pos, *roots), lay)
     keys = H.fold_keys(SD.receipt_seed(salt, pos, *roots), lay)
     got = receipt(unit_words(A, B, rows, cols, K), keys)
@@ -349,10 +349,10 @@ def check_routes_bit_exact(rng, M=64, N=64, K=128):
     fs, _ = forms(M, N, K, rng)
     A_l, B_l = _operands(rng, M, N, K)
     A, B = np.array(A_l, dtype=np.int64), np.array(B_l, dtype=np.int64)
-    m = H.Layout(M, N, K).m
+    m = H.TileShape(M, N, K).m
     units = [(I, J) for I in range(M // TILE) for J in range(N // TILE)]
     bad = []
-    lay = H.Layout(TILE, TILE, K)
+    lay = H.TileShape(TILE, TILE, K)
     keys = [[rng.getrandbits(32) for _ in range(16)] for _ in range(lay.lanes)]
     for f in fs:
         T, Op, D = route(f, A, B, K, m)
@@ -442,10 +442,10 @@ def check_forms_verdicts(rng, M=64, N=64, K=128):
     honest unit's; every shared or structured form loses the record's count; only forms structured on both sides lose
     the op count; window-cols loses the record's whole count."""
     fs, _ = forms(M, N, K, rng)
-    m = H.Layout(M, N, K).m
+    m = H.TileShape(M, N, K).m
     sv = {}
     for f in fs:
-        sh = _shares(form_costs(_shape(f), 256, 4096, 4096, H.Layout(256, 4096, 4096).m, 1 / 510, 0.00456))
+        sh = _shares(form_costs(_shape(f), 256, 4096, 4096, H.TileShape(256, 4096, 4096).m, 1 / 510, 0.00456))
         sv[f.name] = (sh, _structure(f, K, m))
     bad = []
     for name in ("J10-R", "mix32-prf"):
@@ -492,7 +492,7 @@ def check_luck_correlation(rng, S=96, K=128):
     bit is 0. Under J10 the two units read the same bit, so their pass events are one event (P[both] = P[one] = ½);
     under per-unit seeds they are independent (P[both] about ¼). Each unit's luck is the same ½ either way."""
     M, N = TILE, 2 * TILE
-    lay = H.Layout(M, N, K)
+    lay = H.TileShape(M, N, K)
     i0, k0 = 0, 5
     res = {"J10-R": [], "per-unit": []}
     for _ in range(S):
@@ -501,7 +501,7 @@ def check_luck_correlation(rng, S=96, K=128):
         salt, rootA, rootB = _bytes(rng), _bytes(rng), _bytes(rng)
         rows, cols = H.noise(SD.seed(salt, 3, rootA, rootB), lay)
         per_unit = [H.noise(SD.seed(salt, 3 * 64 + J, rootA, hashlib.sha512(rootB + bytes([J])).digest()),
-                            H.Layout(TILE, TILE, K)) for J in range(2)]
+                            H.TileShape(TILE, TILE, K)) for J in range(2)]
         for name in res:
             ev = []
             for J in range(2):
@@ -542,7 +542,7 @@ def check_luck_correlation(rng, S=96, K=128):
 def gen_cost(M: int, N: int, K: int) -> dict:
     """SHA-512 compressions a 32 × 32 unit: per-unit (h1tile today) and J10-R (streams a call row and column, seeds and
     σ_R a call, 32 key blocks a unit kept), and JOINT-POUW's noise-only model of both."""
-    lay = H.Layout(TILE, TILE, K)
+    lay = H.TileShape(TILE, TILE, K)
     rb, cb = lay.rb, lay.cb
     units = M * N / (TILE * TILE)
     per_unit = TILE * rb + TILE * cb + 32 + 4
@@ -610,7 +610,7 @@ def report(seed: int = 20261019) -> dict:
     rng = random.Random(f"{seed}:report")
     M, N, K = 64, 64, 128
     fs, _ = forms(M, N, K, rng)
-    m = H.Layout(M, N, K).m
+    m = H.TileShape(M, N, K).m
     big, dW, dX = wrap_density(rng, n=512, k=4096)
     shapes = [(32, 4096, 4096), (256, 4096, 4096), (256, 14336, 4096), (1024, 4096, 14336), (8192, 4096, 4096)]
     rows = []
@@ -618,7 +618,7 @@ def report(seed: int = 20261019) -> dict:
         st = _structure(f, K, m)
         per = {}
         for (Ms, Ns, Ks) in shapes:
-            ms = H.Layout(Ms, Ns, Ks).m
+            ms = H.TileShape(Ms, Ns, Ks).m
             per[f"{Ms}x{Ns}x{Ks}"] = {k: round(v, 4) for k, v in
                                        _shares(form_costs(_shape(f), Ms, Ns, Ks, ms, dX, dW)).items()}
         rows.append({"form": f.name, "what": f.what, "structure": st, "at_shape": per})

@@ -76,7 +76,7 @@ def test_registered_at_a_warp():
 def test_lanes_are_the_tile_once(r, c):
     """Each lane's 32 entries, at their row and column slots, are the tile's cells once each; at 32 × 32 lane 4 g + q is
     cgemm.cu's thread (rows g + 8 s, columns 2 q + 8 (s >> 1) + (s & 1))."""
-    lay = H.Layout(r, c, 64)
+    lay = H.TileShape(r, c, 64)
     cells = [(lay.rows(ln)[H.SG.row_slot(e)], lay.cols(ln)[H.SG.col_slot(e)]) for ln in range(lay.lanes) for e in range(32)]
     assert sorted(cells) == [(i, j) for i in range(r) for j in range(c)]
     if (r, c) == (32, 32):
@@ -90,14 +90,14 @@ def test_noise_is_counter_mode():
     """Every row's and column's noise is its own blocks of seed_j's stream, and every lane's fold keys a block of σ_R's
     (decision 121), so a kernel derives any of them alone; at a warp and K = 4096 the receipt is #2438's 8,320 bits a warp a
     call (2 (KS + m) words, KS = 128, m = 2)."""
-    lay = H.Layout(32, 32, 4096)
+    lay = H.TileShape(32, 32, 4096)
     assert (lay.ks, lay.m, lay.rb, lay.cb, lay.lanes, lay.blocks) == (128, 2, 9, 9, 32, 576)
     assert 2 * lay.sets * 32 == 8320
     firsts = [lay.row(i) for i in range(32)] + [lay.col(j) for j in range(32)]
     spans = [lay.rb] * 32 + [lay.cb] * 32
     assert sorted(b for f, n in zip(firsts, spans) for b in range(f, f + n)) == list(range(lay.blocks))
     assert [lay.lane(ln) for ln in range(32)] == list(range(32))
-    small = H.Layout(4, 8, 64)
+    small = H.TileShape(4, 8, 64)
     seed_j, sigma_r = SD.seed(SALT, 3, *ROOTS), SD.receipt_seed(SALT, 3, *ROOTS)
     rows, cols = H.noise(seed_j, small)
     block = SD.leaves(SD.noise_block(seed_j, small.row(2)), True)
@@ -120,7 +120,7 @@ def test_fold_chains_start_from_sigma_r():
     D = SD.DIGEST_BITS.leaves
     seed_j, sigma_r = [("n", us, 0, D)], [("n", us, D, 2 * D)]
     blocks = {k: runs(body.nodes[k].args[0].refs) for k, d in enumerate(defn) if d is SD.PouwNoiseBlockBits}
-    lay = H.Layout(4, 16, 64)
+    lay = H.TileShape(4, 16, 64)
     assert sorted(map(str, blocks.values())) == sorted(map(str, [seed_j] * lay.blocks + [sigma_r] * lay.lanes))
     absorbs = {k for k, d in enumerate(defn) if d is H.SG.PouwFx1Absorb}
     starts = [runs(body.nodes[k].args[0].refs) for k in absorbs]
@@ -165,7 +165,7 @@ def test_reference_follows_the_seed():
     rng = random.Random(4)
     a, b = _rows(rng, 4, 64, -127, 127), _rows(rng, 16, 64, -60, 60)
     z, rc = H.reference(a, b, SALT, 0, ROOTS)
-    assert len(rc) == 2 * H.Layout(4, 16, 64).sets == 8
+    assert len(rc) == 2 * H.TileShape(4, 16, 64).sets == 8
     assert z == [H.SG.seg_dot(0, a[i], b[j]) for i in range(4) for j in range(16)]
     for other in (H.reference(a, b, SALT, 1, ROOTS), H.reference(a, b, hashlib.sha512(b"x").digest(), 0, ROOTS),
                   H.reference(a, b, SALT, 0, (ROOTS[1], ROOTS[0]))):
@@ -186,7 +186,7 @@ def test_the_receipt_is_the_lanes_partials_xored(r, c):
     ungated ones and a dead tile's are zero words, whose XOR is v4's zero receipt."""
     rng = random.Random(5)
     a, b = _rows(rng, r, 64, -127, 127), _rows(rng, c, 64, -127, 127)
-    lay = H.Layout(r, c, 64)
+    lay = H.TileShape(r, c, 64)
     parts = H.lane_partials(a, b, SALT, 3, ROOTS)
     rc = H.reference(a, b, SALT, 3, ROOTS)[1]
     assert len(parts) == lay.lanes and {len(p) for p in parts} == {2 * lay.sets}
@@ -271,7 +271,7 @@ def _served(a, b):
 
 def _noised(a, b, position=0):
     """X Ŵᵀ, the MMAs' product of the noised operands: X = A + b mod 2^8 (the int8 the MMA reads) and Ŵ = B + c."""
-    lay = H.Layout(len(a), len(b), len(a[0]))
+    lay = H.TileShape(len(a), len(b), len(a[0]))
     rows, cols = H.noise(SD.seed(SALT, position, *ROOTS), lay)
     X = [[_sx8((v + rows[i][0][t]) & 0xFF) for t, v in enumerate(a[i])] for i in range(lay.r)]
     W = [[_sx8(v) + cols[j][0][t] for t, v in enumerate(b[j])] for j in range(lay.c)]
@@ -288,7 +288,7 @@ def _full(rng, n, k):
 
 def _cells(a, b, position=0):
     """Each cell's folded O' and D words, and the peel's and the wrap's inputs: X, wb, (b, xa) by row, (B, c) by column."""
-    lay = H.Layout(len(a), len(b), len(a[0]))
+    lay = H.TileShape(len(a), len(b), len(a[0]))
     rows, cols = H.noise(SD.seed(SALT, position, *ROOTS), lay)
     words = {}
     for ln in range(lay.lanes):
@@ -317,7 +317,7 @@ def test_v3_is_registered_beside_v1():
 
 def _wraps(r, b, position=0):
     """How many entries of B wrap in W' = B + c + U, each way, in an r-row tile."""
-    lay = H.Layout(r, len(b), len(b[0]))
+    lay = H.TileShape(r, len(b), len(b[0]))
     _rows_, cols = H.noise(SD.seed(SALT, position, *ROOTS), lay)
     wb = [w for j in range(lay.c) for w in H.col_wrap(b[j], cols[j])]
     return wb.count(1), wb.count(2)
@@ -332,9 +332,9 @@ def test_one_stream_is_the_served_product(r, c, k):
     a, b = _full(rng, r, k), _rows(rng, c, k, -128, 127)
     z3, rc3 = H.reference(a, b, SALT, 0, ROOTS, stream=True)
     z1, rc1 = H.reference(a, b, SALT, 0, ROOTS)
-    assert H.Layout(r, c, k).m == (3 if k > 4096 else 2)
+    assert H.TileShape(r, c, k).m == (3 if k > 4096 else 2)
     assert min(_wraps(r, b)) > 0
-    lay = H.Layout(r, c, k)
+    lay = H.TileShape(r, c, k)
     rows = H.noise(SD.seed(SALT, 0, *ROOTS), lay)[0]
     assert all(sum(H.row_wrap(a[i], rows[i])) > 0 for i in range(r))
     assert [_s32(v) for v in z3] == _served(a, b) != _noised(a, b)
@@ -363,7 +363,7 @@ def test_the_dither_peel_is_needed():
     a, b = _full(rng, 4, k), _rows(rng, 8, k, -128, 127)
     a[0] = [rng.randrange(-126, 127) & 0xFF for _ in range(k)]
     words, X, wbs, pis, pjs = _cells(a, b)
-    lay = H.Layout(4, 8, k)
+    lay = H.TileShape(4, 8, k)
     unpeeled = {}
     for (i, j), (op, d) in words.items():
         v = H.one_stream(op, d)
@@ -522,7 +522,7 @@ def test_a_tampered_word_moves_z():
     rng = random.Random(3)
     k = 14336
     a, b = _rows(rng, 4, k, -128, 127), _rows(rng, 8, k, -128, 127)
-    lay = H.Layout(4, 8, k)
+    lay = H.TileShape(4, 8, k)
     rows, cols = H.noise(SD.seed(SALT, 0, *ROOTS), lay)
     sets = H.lane_sets(a, b, rows, cols, lay, 0)
     ks = lay.ks
@@ -663,7 +663,7 @@ def test_v4_masks_only_the_receipt():
         assert (x.form, x.fn, x.axes, x.n) == (y.form, y.fn, y.axes, y.n)
         assert [_remap(runs(c.refs)) for c in x.args] == [runs(c.refs) for c in y.args]
     tail = [getattr(nd.fn, "defn", nd.fn) for nd in b4.nodes[n:]]
-    words = 2 * H.Layout(4, 8, 64).sets
+    words = 2 * H.TileShape(4, 8, 64).sets
     assert tail == [H.PouwOrBit] * 3 + [H.PouwMask32] * words
     ors = b4.nodes[n:n + 3]
     assert [[runs(c.refs) for c in o.args] for o in ors] == [

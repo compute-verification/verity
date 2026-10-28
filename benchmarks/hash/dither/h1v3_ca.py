@@ -10,7 +10,7 @@ from typing import Sequence
 
 from verity.core.protocols.pouw.circuit import seeds as SD
 from verity.core.protocols.pouw.circuit import segment as SG
-from verity.core.protocols.pouw.circuit.h1tile import (FOLD, M32, Layout, col_wrap, fold_keys, lane_sets, noise,  # noqa: F401
+from verity.core.protocols.pouw.circuit.h1tile import (FOLD, M32, TileShape, col_wrap, fold_keys, lane_sets, noise,  # noqa: F401
                                                        one_stream, wrap_bits, wrap_seg)
 
 SOURCE = "h1tile's word functions; the unpeeled stream_cell and reference at 5f54fbe355"
@@ -31,7 +31,7 @@ def reference(a: Sequence[Sequence[int]], b: Sequence[Sequence[int]], salt: byte
     """The unit on words: (z, receipt) for A's r rows and B's c rows (int8 encodings), its salt, position and roots, z at
     `pairs` (the full grid in row-major order by default). `stream`: v3's z, each cell's `one_stream` of its lane's O' and
     D words with its wrap correction (`stream_cell`); else v1's, the exact A Bᵀ cell."""
-    lay = Layout(len(a), len(b), len(a[0]))
+    lay = TileShape(len(a), len(b), len(a[0]))
     rows, cols = noise(SD.seed(salt, position, *roots), lay)
     xs = [[(a[i][t] + rows[i][0][t]) & 0xFF for t in range(lay.k)] for i in range(lay.r)] if stream else None
     wbs = [col_wrap(b[j], cols[j]) for j in range(lay.c)] if stream else None

@@ -385,7 +385,7 @@ def test_a_j10r_public_row_is_then_its_call_and_blocks():
 
 
 def test_the_verifiers_j10r_blocks_are_the_tiles():
-    """`core_check.j10r_blocks`, the verifier's arithmetic, is `h1tile.j10r_blocks` (`h1tile.Layout`'s row and column
+    """`core_check.j10r_blocks`, the verifier's arithmetic, is `h1tile.j10r_blocks` (`h1tile.TileShape`'s row and column
     blocks at call scale) at every slot, K, tile and unit tried, and `core_check.n_digits` is `segment.n_digits`."""
     from verity.core.protocols.pouw.circuit import h1tile as H
     for k in (32, 64, 384, 416, 896, 4096, 14336, 1 << 20):

@@ -168,7 +168,7 @@ def small(tmp_path_factory):
     trees = P.operand_trees(cfg, secret, _Serial())
     drv = P.RefDriver(cfg, prep["row"], secret)
     work = tmp_path_factory.mktemp("work")
-    return P.Period(drv, _Coins(), trees, cfg, prep["row"], prep["source"], secret, work, _Serial())
+    return P.PeriodRun(drv, _Coins(), trees, cfg, prep["row"], prep["source"], secret, work, _Serial())
 
 
 def test_every_operand_row_opens_against_its_root_and_no_other(small):
@@ -232,7 +232,7 @@ def test_one_segment_a_call_when_L_exceeds_K(small, tmp_path, lp_max, layers, lp
         assert [P.shape(n, k, prep["row"]).lp for _, n, k in P.LAYERS] == lps
         assert [P.shape(n, k, prep["row"]).S for _, n, k in P.LAYERS] == [1] * len(layers)
         secret = b"\x07" * 64
-        per = P.Period(P.RefDriver(cfg, prep["row"], secret), _Coins(), P.operand_trees(cfg, secret, _Serial()), cfg,
+        per = P.PeriodRun(P.RefDriver(cfg, prep["row"], secret), _Coins(), P.operand_trees(cfg, secret, _Serial()), cfg,
                        prep["row"], prep["source"], secret, tmp_path, _Serial())
         r = per.proto("t-s1", P.Plan(2, 2, 12))
         assert r["accepted"], r["verdict"]

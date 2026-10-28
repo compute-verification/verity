@@ -11,7 +11,7 @@
     column ids  the weight's global column indices, shards included (X-SPC-40), distinct     `colids`
 
 The verifier builds these inputs itself (`Anchors.call_inputs`, `Anchors.weight_inputs`), or compares a prover's
-(`Anchors.check_call`, `Anchors.check_weight`); it never takes them as stated.  A window's `Ledger` refuses a repeated
+(`Anchors.check_call`, `Anchors.check_weight`); it never takes them as stated.  A window's `AdmittedCalls` refuses a repeated
 call index, (forward, position): the Lean statement's A11, `UniqueCallIndices`. `SaltWindows` refuses one across every
 window of a salt, since a call's noise key reads the salt and its call index.
 
@@ -29,7 +29,7 @@ rule (``verity/pouw/anchor/<scheme>/<anchor>/slice/v<n>``, at the anchor's own v
 name.
 
 A window's `Receipt` lists every call of the window, each with its anchors, shape and commitment, complete and immutable
-before any key exists. `Ledger.open` derives the window's key from it alone, a fresh source under the receipt's digest,
+before any key exists. `AdmittedCalls.open` derives the window's key from it alone, a fresh source under the receipt's digest,
 and admits only the calls it lists; `Traced.draw` draws only under that key. So the key comes after every call's
 commitment (the window pin's order and root's C1), and each window's source is fresh and used once (C2).
 """
@@ -365,12 +365,12 @@ def _fresh_source() -> bytes:
     return secrets.token_bytes(SOURCE_BYTES)
 
 
-class Ledger:
+class AdmittedCalls:
     """A window's calls, as the verifier admits them: a repeated call index is refused.
 
-    A window's ledger comes from `Ledger.open(receipt)`, the only place its receipt, key and source are set: callers
+    A window's ledger comes from `AdmittedCalls.open(receipt)`, the only place its receipt, key and source are set: callers
     set no attribute of a ledger, before or after (`__setattr__` refuses), and `Traced.draw` takes the key from the
-    ledger. A ledger built as `Ledger()` has none of them; it only refuses repeats (a window's input builders use
+    ledger. A ledger built as `AdmittedCalls()` has none of them; it only refuses repeats (a window's input builders use
     that) and draws nothing. Once the window's draw is sent (`sent`), the ledger draws nothing more, and `record`
     gives the audit record its source and receipt digest."""
 
@@ -381,7 +381,7 @@ class Ledger:
             object.__setattr__(self, name, value)
 
     def __setattr__(self, name, value) -> None:
-        raise AttributeError(f"a Ledger's {name!r} is not set by callers: a window's ledger comes from Ledger.open")
+        raise AttributeError(f"a window ledger's {name!r} is not set by callers: a window's ledger comes from AdmittedCalls.open")
 
     @property
     def receipt(self) -> Receipt | None:
@@ -392,7 +392,7 @@ class Ledger:
         return self._key
 
     @classmethod
-    def open(cls, receipt: Receipt) -> "Ledger":
+    def open(cls, receipt: Receipt) -> "AdmittedCalls":
         """The window's ledger: its key derived from a fresh source (`_fresh_source`) under `plan.DRAW_DOMAIN` with
         ``{"receipt": receipt.digest()}`` as its context, and only the receipt's calls admitted. No source is taken
         from the caller, so a window's secret is fresh and used once (C2)."""
@@ -419,7 +419,7 @@ class Ledger:
     def check_draw(self) -> None:
         """Refuse a draw from a ledger not opened from a receipt, or once the window's draw has been sent."""
         if self._receipt is None or self._key is None:
-            raise DomainError("a window draws only from a ledger opened from its complete receipt (Ledger.open)")
+            raise DomainError("a window draws only from a ledger opened from its complete receipt (AdmittedCalls.open)")
         if self._sent:
             raise DomainError("the window's draw has been sent: it draws nothing more")
 
@@ -427,7 +427,7 @@ class Ledger:
         """The call's commitment as the window's receipt lists it, by call index: the only commitment its openings are
         checked against (`Traced.check_openings`), never one supplied with them."""
         if self._receipt is None:
-            raise DomainError("a call's commitment comes from its window's receipt (Ledger.open)")
+            raise DomainError("a call's commitment comes from its window's receipt (AdmittedCalls.open)")
         entry = self._receipt.entry(anchors)
         if entry is None:
             raise DomainError(f"call {anchors.call_index} is not on the window's receipt")
@@ -457,7 +457,7 @@ class SaltWindows:
 
     A call's noise key reads the salt and its call index, so a call index that two windows of a salt both use would
     reuse one key. `open` refuses a receipt that lists a call of another salt or a call index an earlier window of this
-    salt listed, and only then opens the window's ledger (`Ledger.open`). `next_forward` is the first forward index no
+    salt listed, and only then opens the window's ledger (`AdmittedCalls.open`). `next_forward` is the first forward index no
     window of the salt has used, where the verifier's enumeration of the next window's forwards starts."""
 
     __slots__ = ("salt", "_seen", "_next")
@@ -469,7 +469,7 @@ class SaltWindows:
     def next_forward(self) -> int:
         return self._next
 
-    def open(self, receipt: Receipt) -> Ledger:
+    def open(self, receipt: Receipt) -> AdmittedCalls:
         if not isinstance(receipt, Receipt):
             raise TypeError("a window opens from its complete Receipt")
         indices = [a.call_index for a, _, _ in receipt.calls]
@@ -478,7 +478,7 @@ class SaltWindows:
         repeated = sorted((i for i in indices if i in self._seen), key=_index_parts)
         if repeated:
             raise DomainError(f"call index (forward, position) = {repeated[0]} is on an earlier window of this salt")
-        ledger = Ledger.open(receipt)
+        ledger = AdmittedCalls.open(receipt)
         self._seen.update(indices)
         self._next = max(self._next, 1 + max(f for f, _ in indices))
         return ledger
@@ -495,5 +495,5 @@ def replay_key(record: dict[str, str]):
     return derive(bytes.fromhex(record["source"]), DRAW_DOMAIN, {"receipt": bytes.fromhex(record["receipt"])})
 
 
-__all__ = ["ANCHORED", "ANCHOR_RULE", "Anchors", "Derivation", "Ledger", "PUBLIC_INPUTS_FORMAT", "REGION_WORD_BITS", "Receipt",
+__all__ = ["ANCHORED", "ANCHOR_RULE", "Anchors", "Derivation", "AdmittedCalls", "PUBLIC_INPUTS_FORMAT", "REGION_WORD_BITS", "Receipt",
            "SaltWindows", "TileAnchors", "WORD_BITS", "public_ports", "region_bytes", "region_words", "replay_key"]

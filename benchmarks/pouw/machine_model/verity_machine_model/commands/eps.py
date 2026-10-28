@@ -136,7 +136,7 @@ def _adapt(args, d: E.Design) -> E.Adapt | None:
     return E.adapt(args.adapt or d.unit, args.data)
 
 
-def _eps_record(d: E.Design, pi: E.Machine, q: float, data: Path, operands: str, credit: str = "H",
+def _eps_record(d: E.Design, pi: E.IssueCosts, q: float, data: Path, operands: str, credit: str = "H",
                 table: E.Table | None = None, adapt: E.Adapt | None = None, checking: str = "full") -> dict:
     e = E.eps(d, pi, q, data, operands=operands, credit=credit, table=table, adapt=adapt)
     sampled, dt = checking == "sampled", d.table(table)
@@ -180,7 +180,7 @@ def _eps_record(d: E.Design, pi: E.Machine, q: float, data: Path, operands: str,
     }
 
 
-def _eps_table(args, pi: E.Machine) -> int:
+def _eps_table(args, pi: E.IssueCosts) -> int:
     names = args.designs or E.designs(args.data)
     sweep = [float(x) for x in args.fold_sweep.split(",")] if args.fold_sweep else [None]
     qs = (2, 4, 8, 16)

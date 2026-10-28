@@ -23,7 +23,7 @@ from pathlib import Path
 
 import numpy as np
 
-from verity_machine_model.eps import MMA, Machine, binding, honest
+from verity_machine_model.eps import MMA, IssueCosts, binding, honest
 from verity_machine_model.model import DATA
 
 TERMS = ("stage", "tile", "cross", "launch")
@@ -89,7 +89,7 @@ class Counts:
         """Counts by class with the MMAs under their form's class, as the ε LP prices them."""
         return {self.form if c == MMA else c: v for c, v in per.items()}
 
-    def bound(self, pi: Machine, m: int, n: int, k: int) -> tuple[float, tuple[str, ...]]:
+    def bound(self, pi: IssueCosts, m: int, n: int, k: int) -> tuple[float, tuple[str, ...]]:
         """The model's time for the kernel at m x n x k, SMSP-cycles a MMA, and its binding rows."""
         load = pi.load(self.priced(self.per_mma(m, n, k)))
         t = max(load.values())
@@ -107,7 +107,7 @@ class Counts:
                     bad.append(f"{o.run} {'x'.join(map(str, o.shape))} {c}: ncu {got}, n {w} ({(got - w) / max(w, 1):+.2e})")
         return bad
 
-    def check_bound(self, pi: Machine) -> list[str]:
+    def check_bound(self, pi: IssueCosts) -> list[str]:
         """Every observation's model bound at n against at ncu's counts: what is out of `bound_tolerance`."""
         bad = []
         for o in self.obs:

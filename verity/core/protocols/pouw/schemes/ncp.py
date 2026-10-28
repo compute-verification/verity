@@ -34,7 +34,7 @@ from functools import lru_cache
 
 from verity.ml.randomness import Part, frame
 
-from ..protocol import Certificate, Context, DomainError, Matmul, Shape, Tile, grid_tiles
+from ..protocol import GuaranteeBasis, Context, DomainError, Matmul, Shape, Tile, grid_tiles
 
 NAME = "ncp-v1"
 NAME_SHIFT24 = "ncp-v1-shift24"
@@ -230,7 +230,7 @@ class NCP:
         self.name = NAME if perm == "word" else NAME_SHIFT24
         self.beta = BETA
         lead = k_min >= 1088 and n_min >= 1600
-        self.certificate = Certificate(
+        self.certificate = GuaranteeBasis(
             conjecture="tt-ncp-u",
             gamma0=Fraction(1, 200) if lead else None,
             omega=Fraction(3 * n_min + FORM_UNITS, 3 * n_min),

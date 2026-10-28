@@ -92,7 +92,7 @@ class Context:
 
 
 @dataclass(frozen=True, slots=True)
-class Certificate:
+class GuaranteeBasis:
     """What a scheme's guarantee rests on.
 
     ``omega`` is Ω*, the largest W_ref over the work the conjecture credits, across the domain (m·k·n for TT, 3·m·k·n for
@@ -121,7 +121,7 @@ class PoUWScheme(Protocol):
     #: The scheme's registered name; its spec section and pinned vectors carry the same string.
     name: str
     #: What an accepted audit's guarantee rests on.
-    certificate: Certificate
+    certificate: GuaranteeBasis
 
     def check(self, matmul: Matmul) -> None:
         """Raise `DomainError` when the declaration is outside the domain."""
@@ -161,4 +161,4 @@ class PoUWScheme(Protocol):
         ...
 
 
-__all__ = ["U64", "Certificate", "Context", "DomainError", "Matmul", "PoUWScheme", "Shape", "Tile", "grid_tiles", "tagged"]
+__all__ = ["U64", "GuaranteeBasis", "Context", "DomainError", "Matmul", "PoUWScheme", "Shape", "Tile", "grid_tiles", "tagged"]

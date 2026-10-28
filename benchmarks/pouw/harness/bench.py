@@ -193,7 +193,7 @@ class Bench:
         self.items: list[dict] = []
         self.rejected: list[dict] = []
         self.chained = False
-        self.sass: SG.Gate | None = None
+        self.sass: SG.SassGate | None = None
         self.warmups: list[dict] = []
         self.poisoning: list[dict] = []
 
@@ -1210,7 +1210,7 @@ def main(argv: list[str] | None = None) -> int:
     try:
         import native as N
 
-        dev = N.Device()
+        dev = N.CudaDevice()
         gpu, expected = I.expected_for(args.gpu, args.expect_uuid,
                                        args.server_md.read_text() if args.server_md else None, dict(os.environ))
         ident = I.check(dict(os.environ), gpu, dev.device_count, dev.info["uuid"], expected, pod=args.pod)
@@ -1232,7 +1232,7 @@ def main(argv: list[str] | None = None) -> int:
         out["clocks"] = lock or {"locked": False}
         out["clocks"]["label"] = "locked" if (lock or {}).get("locked") else args.clock_label or "unlocked"
         arms = [A.load(s) for s in args.arm]
-        sass = SG.Gate(log)
+        sass = SG.SassGate(log)
         for a in arms:
             A.check_arm(a, set(B.FAMILIES))
             build = a.build({"device": dev, "arch": "sm_120a", "out_dir": str(args.out.parent),

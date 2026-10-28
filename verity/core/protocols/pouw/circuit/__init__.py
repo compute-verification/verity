@@ -115,16 +115,16 @@ class Traced:
     def draw(self, law, anchors, ledger):
         """The verifier's plan for this call: `plan.draw` over its own layout (`layout`), never a given one (X-SPC-97), each
         stratum's subset keyed by the call's index (``anchors.call_index``) with its template (X-SPC-96), under the key of
-        ``ledger``, the window's `anchors.Ledger` opened from its complete `Receipt` (`Ledger.open`): no key is taken from
+        ``ledger``, the window's `anchors.AdmittedCalls` opened from its complete `Receipt` (`AdmittedCalls.open`): no key is taken from
         the caller. The draw is refused for a ledger not opened from a receipt or whose draw was sent, and for a call the
         receipt doesn't list or the window already holds, before anything is drawn. So every call's commitment precedes
         the key (C1), and each call of a window draws under a context of its own: the product law root's window pin takes
         as M1."""
         from . import plan
-        from .anchors import Ledger
+        from .anchors import AdmittedCalls
 
-        if not isinstance(ledger, Ledger):
-            raise TypeError("a call is drawn only under its window's Ledger")
+        if not isinstance(ledger, AdmittedCalls):
+            raise TypeError("a call is drawn only under its window's AdmittedCalls")
         ledger.check_draw()
         ledger.admit(anchors, self.shape)
         index = anchors.call_index
@@ -132,7 +132,7 @@ class Traced:
 
     def check_openings(self, plan, anchors, ledger, domain, openings, limits=None) -> None:
         """Refuse the call's A-row openings unless they are the plan's A rows, once each, and each authenticates under
-        the call's commitment as the window's receipt lists it (`Ledger.commitment`, by call index), never one supplied
+        the call's commitment as the window's receipt lists it (`AdmittedCalls.commitment`, by call index), never one supplied
         with the openings. ``domain`` is the verifier's row domain for the call (`audit.rows_domain`)."""
         from verity.ml.commitments import Commitment, VerificationLimits, verify_opening
 

@@ -62,8 +62,8 @@ def test_unit_slices_are_the_call_scale_noise(m, n, k, tile):
     C J .. C J + C - 1 of the call-scale `noise(seed_c, Layout(M, N, K))`: dither bits, digit coins, coin bits and U."""
     r, c = tile
     seed_c = SD.call_seed(SALT, 40, *ROOTS)
-    rows, cols = H.noise(seed_c, H.Layout(m, n, k))
-    lay = H.Layout(r, c, k)
+    rows, cols = H.noise(seed_c, H.TileShape(m, n, k))
+    lay = H.TileShape(r, c, k)
     for I in range(m // r):
         for J in range(n // c):
             ur, uc = H.j10r_noise(seed_c, lay, H.j10r_blocks(m, k, tile, I, J))
@@ -74,7 +74,7 @@ def test_the_call_streams_are_shared_once_each():
     """The call's units read each of its row streams once a column tile and each column stream once a row tile, and every
     block they read is the call-scale Layout's: rows' blocks [0, M RB), columns' [M RB, M RB + N CB)."""
     m, n, k, tile = 8, 32, 64, (4, 8)
-    lay, call = H.Layout(*tile, k), H.Layout(m, n, k)
+    lay, call = H.TileShape(*tile, k), H.TileShape(m, n, k)
     reads = [b for I in range(2) for J in range(4) for b in H.j10r_unit_blocks(lay, H.j10r_blocks(m, k, tile, I, J))]
     assert sorted(set(reads)) == list(range(call.blocks))
     assert sorted(reads) == sorted([*range(m * call.rb)] * (n // tile[1]) + [*range(m * call.rb, call.blocks)] * (m // tile[0]))
@@ -90,7 +90,7 @@ def test_blocks_of_no_unit_are_refused(args):
 def _note(m, n, k, tile=(32, 32)):
     """The note's per-unit compressions, 9216 (1/M + 1/N) + 32 + 4/units at a warp and RB = CB = 9, in general
     R C (RB/N + CB/M) + lanes + 4/units: each call row's and column's blocks once, the lanes' key blocks, the seeds once."""
-    lay = H.Layout(*tile, k)
+    lay = H.TileShape(*tile, k)
     units = Fraction(m * n, tile[0] * tile[1])
     return tile[0] * tile[1] * (Fraction(lay.rb, n) + Fraction(lay.cb, m)) + lay.lanes + 4 / units, units
 
@@ -104,7 +104,7 @@ def test_compressions_a_unit_against_the_note(m, n, k):
     note, units = _note(m, n, k)
     got = H.j10r_compressions(m, n, k)
     assert got == note + 2 - 2 / units
-    lay = H.Layout(32, 32, k)
+    lay = H.TileShape(32, 32, k)
     assert H.unit_compressions(k) == lay.blocks + lay.lanes + 4
     if k == 4096:
         assert H.unit_compressions(k) == 612 and (lay.rb, lay.cb) == (9, 9)
@@ -165,7 +165,7 @@ def test_the_seed_moves_every_slice():
     """seed_c reads the salt, the call and both roots: another A root (or B root, salt or call) moves every row and column of
     a unit's noise, so no column stream is seeded without the A root; two calls of one step and K, which share their roots,
     share no stream; and seed_c is neither a unit's seed_j nor its σ_R at the call's position."""
-    lay, blocks = H.Layout(4, 8, 64), H.j10r_blocks(8, 64, (4, 8), 1, 2)
+    lay, blocks = H.TileShape(4, 8, 64), H.j10r_blocks(8, 64, (4, 8), 1, 2)
     base = H.j10r_noise(SD.call_seed(SALT, 40, *ROOTS), lay, blocks)
     other = hashlib.sha512(b"other").digest()
     for seed_c in (SD.call_seed(SALT, 40, other, ROOTS[1]), SD.call_seed(SALT, 40, ROOTS[0], other),
@@ -189,7 +189,7 @@ def test_the_fold_keys_are_today_s():
     assert [_s32(v) for v in z5] == [sum(_sx8(x) * _sx8(w) for x, w in zip(ai, bj)) for ai in a for bj in b] == \
         [_s32(v) for v in z6]
     assert rc5 == rc6 and rc5 != H.reference(a, b, SALT, 46, ROOTS)[1]
-    lay = H.Layout(4, 8, 64)
+    lay = H.TileShape(4, 8, 64)
     rows, cols = H.j10r_noise(SD.call_seed(SALT, 40, *ROOTS), lay, blocks)
     keys = H.fold_keys(SD.receipt_seed(SALT, 46, *ROOTS), lay)
     assert rc5 == H.fold(keys[0], H.lane_sets(a, b, rows, cols, lay, 0))

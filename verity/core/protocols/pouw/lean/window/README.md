@@ -29,7 +29,7 @@ fixed length, ignore_eos at each slot's public max_tokens, which the window regi
 `pouw-window-difftest` (`PouwWindow/DifftestMain.lean`) serves that table on the shared harness
 (`verity/core/difftest/`), and the suite `verity-pouw-window-difftest`, which `check` runs after its Lean steps, holds
 each function to Python on Hypothesis-drawn inputs, refusals included: `tests/test_difftest.py` to `window.py`, and
-`tests/test_lanes.py` `PouwWindow.Lanes` to `h1zy.statement_ports` and `h1tile.Layout`, also at the served 32 × 32 leaf at
+`tests/test_lanes.py` `PouwWindow.Lanes` to `h1zy.statement_ports` and `h1tile.TileShape`, also at the served 32 × 32 leaf at
 K = 448, 4096 and 14336 and at the sidecar's 8 × 16 at K = 64, every lane and the combine, and its input wires to the
 circuits C-Flock lowers the statements to (the combine's at the sidecar's leaf, at 8 × 16 and at the served leaf at K = 448,
 with its circuit file's META; the sidecar's lane, which C-Flock refuses; and, with `VERITY_POUW_WINDOW_LOWERED_LANES=1`,

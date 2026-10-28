@@ -69,7 +69,7 @@ def _tile(win, leaf):
 
 def _by_lane(a, b, salt, pos, roots) -> np.ndarray:
     """h1tile.reference's chains lane by lane: lane ln's [y XOR, z XOR] after each set."""
-    lay = HT.Layout(32, 32, len(a[0]))
+    lay = HT.TileShape(32, 32, len(a[0]))
     rows, cols = HT.noise(SD.seed(salt, pos, *roots), lay)
     keys = HT.fold_keys(SD.receipt_seed(salt, pos, *roots), lay)
     out = np.zeros((lay.lanes, 2 * lay.sets), dtype=np.uint32)
@@ -97,7 +97,7 @@ def _receipts(win, s: int, w: int) -> np.ndarray:
 def test_partials_are_the_reference_by_lane(leaf):
     win = _window({3: 40, 4: 20})
     p = PT.lane_partials(win, leaf)
-    W = 2 * HT.Layout(32, 32, win.k(leaf.call)).sets
+    W = 2 * HT.TileShape(32, 32, win.k(leaf.call)).sets
     assert p.shape == (32, W) and p.dtype == np.uint32
     tile = _tile(win, leaf)
     assert np.array_equal(p, _by_lane(*tile))

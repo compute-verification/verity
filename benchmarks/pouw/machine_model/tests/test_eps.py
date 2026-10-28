@@ -117,7 +117,7 @@ def test_a_uniform_instruction_on_the_issue_rows():
     pi = PIU
     assert pi.c["UNI"]["issue"] == pi.c["UNI"]["JI3e_0"] == 1.0 and pi.c["UNI"]["UP"] == UP
     assert "issue" not in PI.c["UNI"] and "UNI on issue at 1" in pi.vector
-    refit = E.Machine(vector="X", rows=("issue", "JI3n_0", "JI3n_1", "A", "UP"), cuda=(),
+    refit = E.IssueCosts(vector="X", rows=("issue", "JI3n_0", "JI3n_1", "A", "UP"), cuda=(),
                       c={"ALU": {"issue": 1.0, "JI3n_0": 0.9346, "JI3n_1": 0.2963, "A": 2.0}, "UNI": {"UP": UP}})
     assert E.uniform_on_issue(refit, 0.92).c["UNI"] == pytest.approx({"UP": UP, "issue": 0.92, "JI3n_0": 0.92 * 0.9346})
     charged = replace(refit, c={**refit.c, "UNI": {"UP": UP, "issue": 1.0, "JI3n_0": 0.69}})   # VF3p-16's kind of census

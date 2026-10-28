@@ -43,7 +43,7 @@ KERNEL_SCHEMES = {"pearl_c_sm120": "pearl-c-sm120-v1-h3", "pearl_c_sm90": "pearl
 
 
 class _Coins:
-    """`e2e.Coins`, trimmed: one epoch's challenger, each coin opened once."""
+    """`e2e.EpochCoins`, trimmed: one epoch's challenger, each coin opened once."""
 
     def __init__(self, epoch: int) -> None:
         from verity.core.protocols.pouw import verifier

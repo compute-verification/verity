@@ -865,7 +865,7 @@ def test_the_gate_names_the_failing_binary_function_and_instruction(tmp_path, mo
     lib = a_library(tmp_path / "libarm.so")
     fake_tools(monkeypatch, "fast_math")
     logged: list[str] = []
-    g = SG.Gate(log=logged.append, tools=TOOLS, cache=None, pins=pins_file(tmp_path / "pins.json"))
+    g = SG.SassGate(log=logged.append, tools=TOOLS, cache=None, pins=pins_file(tmp_path / "pins.json"))
     with pytest.raises(SG.SassGateFailed, match=r"libarm\.so: 42 flagged instruction\(s\) .* first \w+ 0x[0-9a-f]+: "):
         g.check([str(lib)], "arm:x")
     assert logged[0].startswith(f"sass gate: FAIL {lib} (ptxas 12.9.1; 55 flagged, covered ")
@@ -887,7 +887,7 @@ def test_discovery_takes_mapped_device_code_and_leaves_nvidias_libraries_unscann
     libs = [a_library(tmp_path / "libcublasLt.so.12"), a_library(tmp_path / "libarm.so"), tmp_path / "libhost.so"]
     libs[2].write_bytes(elf(62, {".text": b"\x90" * 16}))
     monkeypatch.setattr(SG, "mapped", lambda: [str(p) for p in libs])
-    g = SG.Gate(tools=TOOLS, cache=None)
+    g = SG.SassGate(tools=TOOLS, cache=None)
     assert g.discover() == [str(libs[1])]
     assert g.report()["not_scanned"] == [{"path": str(libs[0]), "reason": "NVIDIA's library"}]
     for gone in (str(tmp_path / "libgone.so") + " (deleted)", "/memfd:lib (deleted)", "/dev/shm/x (deleted)"):
@@ -900,7 +900,7 @@ def test_shared_anonymous_memory_is_not_a_library(tmp_path, monkeypatch):
     """The CUDA driver maps shared anonymous memory, which /proc/self/maps names '/dev/zero (deleted)'."""
     anon = ["/dev/zero (deleted)", "/SYSV0000a1b2 (deleted)"]
     monkeypatch.setattr(SG, "mapped", lambda: [*anon, str(a_library(tmp_path / "libarm.so"))])
-    g = SG.Gate(tools=TOOLS, cache=None)
+    g = SG.SassGate(tools=TOOLS, cache=None)
     assert g.discover() == [str(tmp_path / "libarm.so")]
     assert g.report()["not_scanned"] == [{"path": p, "reason": "shared anonymous memory, not a file"} for p in anon]
 
@@ -913,7 +913,7 @@ def test_a_deleted_posix_semaphore_is_not_a_library_but_a_bigger_or_code_bearing
     sems = [p for p in SG.mapped() if SG.POSIX_SEM.fullmatch(p)]
     assert sems, "a multiprocessing lock maps no /dev/shm/sem.* (deleted)"
     monkeypatch.setattr(SG, "mapped", lambda: sems[:1])
-    g = SG.Gate(tools=TOOLS, cache=None)
+    g = SG.SassGate(tools=TOOLS, cache=None)
     assert g.discover() == [] and g.report()["not_scanned"][0]["reason"].startswith("a POSIX semaphore")
     fake = "/dev/shm/sem.mp-planted (deleted)"
     monkeypatch.setattr(SG, "mapped", lambda: [fake])
@@ -921,7 +921,7 @@ def test_a_deleted_posix_semaphore_is_not_a_library_but_a_bigger_or_code_bearing
         monkeypatch.setattr(SG, "regions", lambda p, size=size: [(0x1000, 0x1000 + size)])
         monkeypatch.setattr(SG, "read_mapped", lambda s, n, data=data: data.ljust(n, b"\0"))
         with pytest.raises(SG.SassGateFailed, match="mapped but deleted"):
-            SG.Gate(tools=TOOLS, cache=None).discover()
+            SG.SassGate(tools=TOOLS, cache=None).discover()
 
 
 def test_this_process_maps_the_python_interpreter():

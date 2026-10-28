@@ -138,7 +138,7 @@ def _tiles(d: Path, jobs: int) -> dict:
     """Every tile of a pass under `Verifier.check_tile`: its openings, then its leaf recomputed by the reference."""
     import verify_run as VR
     from verity.ml.commitments import Commitment
-    from clear_audit import Transcript, Verifier
+    from clear_audit import Publication, Verifier
     from verity.core.protocols.pouw.coins import CoinCommitment
     import clear_work as CW
     from verity_vllm.protocols.pouw.pearl_c import manifest as PM
@@ -147,7 +147,7 @@ def _tiles(d: Path, jobs: int) -> dict:
     s = _scheme(man)
     epoch, _ = PM.manifest_epoch(man, CoinCommitment.from_json(man["coins"]))
     c = man["commitment"]
-    transcript = Transcript(tuple(bytes.fromhex(u["root_a"]) for u in man["matmuls"]), Commitment(bytes.fromhex(c["root"]), c["count"]), ())
+    transcript = Publication(tuple(bytes.fromhex(u["root_a"]) for u in man["matmuls"]), Commitment(bytes.fromhex(c["root"]), c["count"]), ())
     verifier = Verifier(CW._TileRuleView(s), epoch)
     _JOB.update(verifier=verifier, transcript=transcript, epoch=epoch, prover=VR.Opened(man, VR.Files(d), verifier.refs))
     ids = range(c["count"])

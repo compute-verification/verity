@@ -50,7 +50,7 @@ def test_one_design_across_schemes():
     assert H.KINDS == ("GemmAccumulatorS8_v2", "S8Dot_v2")            # h1tile takes the s8 kinds on bits
     assert EPS.OUT == "chains"                                        # the reference's receipt view
     _z, rc = H.reference(_rows(random.Random(0), 4, 64, -1, 1), _rows(random.Random(1), 8, 64, -1, 1), SALT, 0, ROOTS)
-    assert len(rc) == 2 * H.Layout(4, 8, 64).sets                    # h1tile's CP-W: two words a set, not eight a thread
+    assert len(rc) == 2 * H.TileShape(4, 8, 64).sets                    # h1tile's CP-W: two words a set, not eight a thread
 
 
 def test_both_serve_the_exact_s8_product():

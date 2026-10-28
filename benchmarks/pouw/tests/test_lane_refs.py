@@ -35,9 +35,9 @@ def _s8(shape, seed: int) -> torch.Tensor:
     return torch.randint(-128, 128, shape, generator=torch.Generator().manual_seed(seed), dtype=torch.int8)
 
 
-def _window(nk, steps, dev="cpu", u_step=0) -> "PT.Window":
+def _window(nk, steps, dev="cpu", u_step=0) -> "PT.WindowCalls":
     units = [(T // 32) * (n // 32) for n, _ in nk]
-    win = PT.Window([_s8((n, k), 10 + w).to(dev) for w, (n, k) in enumerate(nk)],
+    win = PT.WindowCalls([_s8((n, k), 10 + w).to(dev) for w, (n, k) in enumerate(nk)],
                     [bytes([w + 1]) * 64 for w in range(len(nk))], [sum(units[:w]) for w in range(len(nk))],
                     u_step + sum(units))
     for s, m in steps.items():

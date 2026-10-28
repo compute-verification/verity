@@ -450,7 +450,7 @@ class Shape:
     @cached_property
     def layout(self):
         from verity.core.protocols.pouw.circuit import h1tile as H
-        return H.Layout(self.r, self.c, self.k)
+        return H.TileShape(self.r, self.c, self.k)
 
     @property
     def ab_words(self) -> int:

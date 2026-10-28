@@ -37,7 +37,7 @@ import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from checked_strip import (MASK, TS_SHAPES, Block, co32c_words, cross_ranks, instance, n_digits, o_routes,  # noqa: E402
+from checked_strip import (MASK, TS_SHAPES, DesignBlock, co32c_words, cross_ranks, instance, n_digits, o_routes,  # noqa: E402
                            s32, ts_best)
 from exact_kit.checks import Checks  # noqa: E402
 
@@ -54,8 +54,8 @@ def planes(N, even=False):
     return np.array(w, dtype=np.int64)
 
 
-class NarrowBlock(Block):
-    """checked_strip.py's Block with U = −N + β·w, N the half-width the planes span."""
+class NarrowBlock(DesignBlock):
+    """checked_strip.py's DesignBlock with U = −N + β·w, N the half-width the planes span."""
 
     def __init__(self, design, n, k, n2, r, L, w):
         super().__init__(design, n, k, n2, r, L, w=w)

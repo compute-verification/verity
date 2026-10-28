@@ -372,7 +372,7 @@ def slots(s: Scan) -> set[str]:
 
 
 #: The most lines ``KNOWN`` may hold. Raising it, for a new line, needs lean's review; `--prune` lowers it to the count.
-KNOWN_MAX = 360
+KNOWN_MAX = 327
 
 #: Every hit that is not a canonical, a mirror, a reading of the canonical or a protocol's slot, with its reason and owner.
 #: For new code, read the canonical or rename; `--prune` deletes the lines whose declarations went.
@@ -611,56 +611,10 @@ KNOWN: dict[str, str] = {
         "duplicate of `CircuitRequirement.Store`: becomes a client of it (memory-accounting)",
     "benchmarks/pouw/accel_v31/v31.py::Coins":
         "duplicate of the live coins (`Verity.Coins`; `SampledProofs.Challenger.LiveCommitment` in code): becomes a client of it (compute-accounting)",
-    "benchmarks/pouw/clear/clear_audit.py::Transcript":
-        "homonym, what a clear audit's prover publishes: rename (compute-accounting)",
-    "benchmarks/pouw/clear/clear_audit.py::Verdict":
-        "duplicate of `Core.Verdict`: becomes a client of it (compute-accounting)",
-    "benchmarks/pouw/dc/census.py::Device": "homonym, a census family's merged runs: rename (compute-accounting)",
-    "benchmarks/pouw/e2e_120/window.py::Coins":
-        "duplicate of the live coins (`Verity.Coins`; `SampledProofs.Challenger.LiveCommitment` in code): becomes a client of it (compute-accounting)",
-    "benchmarks/pouw/e2e_120/window.py::Draw":
-        "duplicate of `service.Draw`: becomes a client of it (compute-accounting)",
-    "benchmarks/pouw/e2e_120/window.py::Verdict":
-        "duplicate of `Core.Verdict`: becomes a client of it (compute-accounting)",
-    "benchmarks/pouw/e2e_120/window.py::Window":
-        "duplicate of the execution block (no canonical yet: LEAN-93): becomes a client of it (compute-accounting)",
     "benchmarks/pouw/filler/arms.py::Placement": "homonym, a filler arm's placement: rename (compute-accounting)",
     "benchmarks/pouw/grind_price.py::Site": "homonym, one seed group: rename (compute-accounting)",
-    "benchmarks/pouw/harness/arm.py::Gate": "homonym, a kernel gate's verdict at one shape: rename (compute-accounting)",
-    "benchmarks/pouw/harness/chain.py::Link":
-        "homonym, one operand set's call in a kernel chain: rename (compute-accounting)",
-    "benchmarks/pouw/harness/native.py::Device": "homonym, one CUDA device handle: rename (compute-accounting)",
-    "benchmarks/pouw/harness/sass_gate.py::Gate": "homonym, a run's SASS gate: rename (compute-accounting)",
-    "benchmarks/pouw/highutil/period.py::Coins":
-        "duplicate of the live coins (`Verity.Coins`; `SampledProofs.Challenger.LiveCommitment` in code): becomes a client of it (compute-accounting)",
-    "benchmarks/pouw/highutil/period.py::Period":
-        "duplicate of the period (`Verity.Period`, not yet in Core): becomes a client of it (compute-accounting)",
-    "benchmarks/pouw/machine_model/verity_machine_model/capacity.py::Window":
-        "homonym, a capacity model's window and node cell: rename (compute-accounting)",
-    "benchmarks/pouw/machine_model/verity_machine_model/eps.py::Machine":
-        "homonym, a machine model's Π: rename (compute-accounting)",
-    "benchmarks/pouw/pearl_c_vllm/e2e.py::Coins":
-        "duplicate of the live coins (`Verity.Coins`; `SampledProofs.Challenger.LiveCommitment` in code): becomes a client of it (compute-accounting)",
-    "benchmarks/pouw/rt2_hopper/li_window_sat.py::Program":
-        "homonym, a SAT model's instruction list: rename (compute-accounting)",
-    "benchmarks/pouw/served_h1/coins.py::Coins":
-        "duplicate of the live coins (`Verity.Coins`; `SampledProofs.Challenger.LiveCommitment` in code): becomes a client of it (compute-accounting)",
-    "benchmarks/pouw/served_h1/coins.py::Session":
-        "homonym, the old word for a run, here a gate session: rename (compute-accounting)",
-    "benchmarks/pouw/served_h1/partials.py::Window":
-        "duplicate of the execution block (no canonical yet: LEAN-93): becomes a client of it (compute-accounting)",
-    "benchmarks/pouw/served_h1/serve.py::Record":
-        "homonym, a served request's benchmark row: rename (compute-accounting)",
-    "benchmarks/pouw/served_zk/of_record.py::Record":
-        "homonym, a check's two verdicts side by side: rename (compute-accounting)",
-    "benchmarks/pouw/served_zk/replay_window.py::Window":
-        "homonym, one replayed window's checks: rename (compute-accounting)",
     "benchmarks/pouw/served_zk/served_commit.py::Challenger":
         "duplicate of `parties.Challenger`: becomes a client of it (compute-accounting)",
-    "benchmarks/pouw/served_zk/statement.py::Statement":
-        "homonym, a benchmark's statement bench: rename (compute-accounting)",
-    "benchmarks/pouw/theory/checked_strip.py::Block":
-        "homonym, a block of rows and columns of one design: rename (compute-accounting)",
     "benchmarks/pouw/theory/checked_strip.py::Ledger":
         "homonym, a strategy's priced products: rename (compute-accounting)",
     "benchmarks/pouw/theory/ksw_k.py::Layout":
@@ -874,22 +828,8 @@ KNOWN: dict[str, str] = {
         "duplicate of `parties.Challenger`: becomes a reading of it (memory-accounting)",
     "verity/core/protocols/pous/wipe_parties.py::Challenger":
         "duplicate of `parties.Challenger`: becomes a reading of it (memory-accounting)",
-    "verity/core/protocols/pouw/circuit/anchors.py::Ledger":
-        "homonym, a window's admitted calls: rename (compute-accounting)",
-    "verity/core/protocols/pouw/circuit/compile.py::Site":
-        "homonym, a node of the served function and a kind of dot: rename (compute-accounting)",
-    "verity/core/protocols/pouw/circuit/h1device.py::Device":
-        "duplicate of the Site (`Verity.Site`, not yet in Core: LEAN-93): becomes a reading of it: the card by digest (compute-accounting)",
-    "verity/core/protocols/pouw/circuit/h1tile.py::Layout": "homonym, a tile shape: rename (compute-accounting)",
-    "verity/core/protocols/pouw/circuit/plan.py::Layout": "homonym, the units a plan reads: rename (compute-accounting)",
     "verity/core/protocols/pouw/coins.py::Challenger":
         "duplicate of `parties.Challenger`: becomes it (deleted) (compute-accounting)",
-    "verity/core/protocols/pouw/protocol.py::Certificate":
-        "homonym, what a scheme's guarantee rests on: rename (compute-accounting)",
-    "verity/core/protocols/pouw/schemes/pearl_c_device.py::Device":
-        "duplicate of the Site (`Verity.Site`, not yet in Core: LEAN-93): becomes a reading of it: the card by digest; prices stay the scheme's (compute-accounting)",
-    "verity/core/protocols/pouw/schemes/pearl_kw.py::Device":
-        "homonym, a code's parameters: rename (compute-accounting)",
     "verity/core/protocols/remote_bandwidth/audit.py::Ledger": "homonym, the γ cost terms: rename (memory-accounting)",
     "verity/core/protocols/remote_bandwidth/audit.py::Record":
         "duplicate of the auditor's record chain (`SampledProofs.Challenger.LedgerEntry`): becomes a reading of it (memory-accounting)",

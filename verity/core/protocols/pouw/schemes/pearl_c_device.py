@@ -48,7 +48,7 @@ class Prices:
 
 
 @dataclass(frozen=True, slots=True)
-class Device:
+class DeviceProfile:
     """One device's record (module docstring)."""
 
     name: str                # the scheme name's device part: pearl-c-<name>-v1
@@ -96,9 +96,9 @@ PRICES = {p.device: p for p in (H100_PRICES, SM120_PRICES)}
 
 #: k = 256 is GLM-5.3's shared-expert down_proj and sharded routed w2 per TP8 rank: TT_OUT's census at k = 256 (hopper, s5
 #: at line norm 16, δ = 1, every family, tiles 64 x 64 and 64 x 16, runs 1-3) passed with the debit in r20261023-170626-9dea
-H100 = Device("h100", HOPPER_E4M3_K32, HOPPER_BF16_WGMMA_K16, 4, H100_PRICES, 1 << 16, census_ks=(256,))
+H100 = DeviceProfile("h100", HOPPER_E4M3_K32, HOPPER_BF16_WGMMA_K16, 4, H100_PRICES, 1 << 16, census_ks=(256,))
 
-SM120 = Device(
+SM120 = DeviceProfile(
     "sm120", BLACKWELL_SM120_E4M3_M16N8K32, HOPPER_BF16_M16N8K16, 4, SM120_PRICES, 1 << 16,
     standins=(
         "peel: HOPPER_BF16_M16N8K16, matched on the RTX 5090's mma.sync m16n8k16 bf16 (204,800/204,800) and exact in the "

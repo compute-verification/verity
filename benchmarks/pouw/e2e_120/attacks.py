@@ -27,7 +27,7 @@ from __future__ import annotations
 import numpy as np
 
 import window as WD
-from window import SG, Coins, Draw, Honest, Round, Refused, Shape, Tree, Window, label, tile_rows
+from window import SG, RoundCoins, TilePick, Honest, Round, Refused, Shape, Tree, ServedValues, label, tile_rows
 
 M32 = WD.M32
 KA, KK, ROT = SG.KA, SG.KK, SG.ROT
@@ -47,11 +47,11 @@ class SkipFraction(Honest):
         rng = np.random.default_rng(mask_seed)
         self.skip = rng.random((self.shape.tiles, self.shape.ks)) < frac
 
-    def products(self, coins: Coins) -> np.ndarray:
-        Wp, Xp = WD.noised(Window(self.served_weights(), self.window.X), coins, self.shape)
+    def products(self, coins: RoundCoins) -> np.ndarray:
+        Wp, Xp = WD.noised(ServedValues(self.served_weights(), self.window.X), coins, self.shape)
         return WD.prefix_words(Wp, Xp, self.shape, self.skip)
 
-    def skipped(self, d: Draw) -> bool:
+    def skipped(self, d: TilePick) -> bool:
         return bool(self.skip[d.tile, d.seg])
 
 
@@ -103,7 +103,7 @@ class Mitm(Honest):
         self.candidates, self.rng = candidates, np.random.default_rng(mitm_seed)
         self.matches = 0
 
-    def products(self, coins: Coins) -> np.ndarray:
+    def products(self, coins: RoundCoins) -> np.ndarray:
         # it computes nothing; the honest products only feed the operand leaves, opened straight from the window
         return np.zeros((self.shape.tiles, self.shape.ks + 1, WD.NCT, 32), np.uint32)
 
@@ -115,7 +115,7 @@ class Mitm(Honest):
         pl = draw.place(sh)
         i, first = pl["i"], pl["w"] == 0
         target = int(R[draw.tile, pl["w"], draw.thread])
-        Wp, Xp = WD.noised(Window(self.served_weights(), self.window.X), coins, sh)
+        Wp, Xp = WD.noised(ServedValues(self.served_weights(), self.window.X), coins, sh)
         j = draw.seg
         ap = (Wp[pl["a_rows"], 32 * j:32 * j + 32] & 0xFF).tolist()
         bp = (Xp[pl["b_rows"], 32 * j:32 * j + 32] & 0xFF).tolist()
@@ -185,7 +185,7 @@ class CommitAfterCoin(Honest):
     """Commits the activations, then (having seen the coin) commits a second activation tree."""
 
     def run(self, rd: Round):
-        coins = Coins(rd.operands(self.x_tree(rd.rnd, self.window.X).root))
+        coins = RoundCoins(rd.operands(self.x_tree(rd.rnd, self.window.X).root))
         X2 = self.window.X ^ np.int8(int.from_bytes(coins.sigma[:1], "big") & 1)
         rd.operands(self.x_tree(rd.rnd, X2).root)             # Refused: once a round, before its coin
         raise AssertionError("commit-after-coin: the round let a second activation commitment through")
@@ -196,7 +196,7 @@ class CommitAfterDraw(Honest):
 
     def run(self, rd: Round):
         xt = self.x_tree(rd.rnd, self.window.X)
-        coins = Coins(rd.operands(xt.root))
+        coins = RoundCoins(rd.operands(xt.root))
         P = self.products(coins)
         R = self.receipts(P, coins)
         rt = Tree(label(self.session, rd.rnd, "R"), WD.receipt_rows(R), self.salt_key)
@@ -209,23 +209,23 @@ class CommitAfterDraw(Honest):
 
 def honest(shape: Shape | None = None, seed: int = 0, fold: str = "duo") -> Honest:
     shape = shape or Shape()
-    return Honest(Window.stand_in(shape, seed), shape, receipt_fold=fold)
+    return Honest(ServedValues.stand_in(shape, seed), shape, receipt_fold=fold)
 
 
-def _play_until(prover: SkipFraction, shape: Shape, base_seed: int = 0, tries: int = 200) -> WD.Verdict:
+def _play_until(prover: SkipFraction, shape: Shape, base_seed: int = 0, tries: int = 200) -> WD.RoundResult:
     """Play ``prover`` until the draw lands on a step it skipped (the only draws its forgery is exposed on)."""
     for s in range(base_seed, base_seed + tries):
         rd = Round(shape, prover.w_tree.root, prover.session, 1, __import__("random").Random(s), "duo")
         op = prover.run(rd)
         if prover.skipped(rd.draw_):
-            return WD.Verdict(rd.judge(op) is None, rd.judge(op), rd.draw_, rd.sigma, op, rd.log)
+            return WD.RoundResult(rd.judge(op) is None, rd.judge(op), rd.draw_, rd.sigma, op, rd.log)
     raise RuntimeError("skip-fraction: no draw landed on a skipped step")
 
 
-def run_attack(name: str, shape: Shape | None = None, seed: int = 1) -> WD.Verdict:
+def run_attack(name: str, shape: Shape | None = None, seed: int = 1) -> WD.RoundResult:
     """Play attack ``name`` once against today's check and return its verdict."""
     shape = shape or Shape()
-    win = Window.stand_in(shape)
+    win = ServedValues.stand_in(shape)
     other = np.roll(win.W, 1, axis=0)
     makers = {
         "skip-fraction": lambda: _play_until(SkipFraction(win, shape), shape, seed),
@@ -262,7 +262,7 @@ class Replay(Honest):
         return self.prev["R"]
 
 
-def play_replay(win: Window, shape: Shape, seed: int) -> WD.Verdict:
+def play_replay(win: ServedValues, shape: Shape, seed: int) -> WD.RoundResult:
     """Round 1 honest (captured), then round 2 replays round 1's receipts and witness under round 2's fresh coin."""
     import random
     pr = Replay(win, shape)
@@ -271,7 +271,7 @@ def play_replay(win: Window, shape: Shape, seed: int) -> WD.Verdict:
     rd = Round(shape, pr.w_tree.root, pr.session, 2, random.Random(seed + 1), "duo")
     op = pr.run(rd)
     why = rd.judge(op)
-    return WD.Verdict(why is None, why, rd.draw_, rd.sigma, op, rd.log)
+    return WD.RoundResult(why is None, why, rd.draw_, rd.sigma, op, rd.log)
 
 
 #: each attack and whether today's check (duo) catches it (False: xfail, with the reason PIN's v3 closes it)

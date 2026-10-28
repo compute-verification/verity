@@ -27,7 +27,7 @@ def call_seed(salt: bytes, roots: tuple[bytes, bytes]) -> bytes:
     return SD.seed(salt, STEP, *roots)
 
 
-def call_noise(seed_c: bytes, lay: HT.Layout, rows: Sequence[int], cols: Sequence[int]) -> tuple[dict, dict]:
+def call_noise(seed_c: bytes, lay: HT.TileShape, rows: Sequence[int], cols: Sequence[int]) -> tuple[dict, dict]:
     """h1tile.noise(seed_c, lay) at the listed call rows and columns only."""
     k, m = lay.k, lay.m
     out_r, out_c = {}, {}
@@ -44,7 +44,7 @@ def unit(a: Sequence[Sequence[int]], b: Sequence[Sequence[int]], rows: list, col
          keys: list[list[int]]) -> tuple[list[int], list[int]]:
     """v3's unit on words (h1v3_ca.reference with stream=True) on the given noise and fold keys: (z in row-major order,
     receipt)."""
-    lay = HT.Layout(len(a), len(b), len(a[0]))
+    lay = HT.TileShape(len(a), len(b), len(a[0]))
     xs = [[(a[i][t] + rows[i][0][t]) & 0xFF for t in range(lay.k)] for i in range(lay.r)]
     wbs = [V3.col_wrap(b[j], cols[j]) for j in range(lay.c)]
     ks = lay.ks
@@ -69,8 +69,8 @@ def reference(a: np.ndarray, b: np.ndarray, salt: bytes, base: int, roots: tuple
     """J10-R's (z, receipt, row noise, column noise) at the listed units of a call: A [rows, K] and B [N, K] int8, unit
     u = (u // (N / 32), u % (N / 32)) at position base + u."""
     (M, K), N = a.shape, b.shape[0]
-    call = HT.Layout(M, N, K)
-    tile = HT.Layout(32, 32, K)
+    call = HT.TileShape(M, N, K)
+    tile = HT.TileShape(32, 32, K)
     seed_c = call_seed(salt, roots)
     ncb = N // 32
     out = {}
@@ -90,7 +90,7 @@ def injected_is_v3(a: Sequence[Sequence[int]], b: Sequence[Sequence[int]], salt:
                    roots: tuple[bytes, bytes]) -> bool:
     """`unit` on a unit's own noise and keys gives h1v3_ca.reference's z and receipt
     (rt_algo_r3_check's check_injected_reference_is_h1tile, for v3)."""
-    lay = HT.Layout(len(a), len(b), len(a[0]))
+    lay = HT.TileShape(len(a), len(b), len(a[0]))
     rows, cols = HT.noise(SD.seed(salt, position, *roots), lay)
     keys = HT.fold_keys(SD.receipt_seed(salt, position, *roots), lay)
     return unit(a, b, rows, cols, keys) == V3.reference(a, b, salt, position, roots, stream=True)

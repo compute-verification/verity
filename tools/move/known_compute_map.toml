@@ -122,3 +122,216 @@ words = { "Machine K R" = "FacetCosts K R", "structure Machine" = "structure Fac
 files = ["Security/Proofs/Pouw/RelativeSecurity.lean"]
 words = { "Gate K" = "Step K", "structure Gate" = "structure Step", "Prog K" = "Steps K", "abbrev Prog" = "abbrev Steps" }
 
+# PoUW's Python and benchmarks/pouw: each class where its module names it, then the files where its bare name means it.
+[[words_in]]
+files = ["**"]
+words = { "clear_audit.Transcript" = "clear_audit.Publication", "clear_audit.Verdict" = "clear_audit.TileCheck", "census.Device" = "census.FamilyRuns", "native.Device" = "native.CudaDevice", "sass_gate.Gate" = "sass_gate.SassGate", "chain.Link" = "chain.ChainCall", "e2e.Coins" = "e2e.EpochCoins", "li_window_sat.Program" = "li_window_sat.SatListing", "of_record.Record" = "of_record.VerdictPair", "replay_window.Window" = "replay_window.WindowReplay", "checked_strip.Block" = "checked_strip.DesignBlock", "anchors.Ledger" = "anchors.AdmittedCalls", "compile.Site" = "compile.DotNode", "h1device.Device" = "h1device.H1Arch", "h1tile.Layout" = "h1tile.TileShape", "plan.Layout" = "plan.PlanUnits", "pearl_c_device.Device" = "pearl_c_device.DeviceProfile", "pearl_kw.Device" = "pearl_kw.CodeParams", "arm.Gate" = "arm.GateResult", "partials.Window" = "partials.WindowCalls", "serve.Record" = "serve.RequestRow", "capacity.Window" = "capacity.WindowCell", "eps.Machine" = "eps.IssueCosts" }
+
+[[words_in]]
+files = ["benchmarks/pouw/e2e_120/**"]
+words = { "window.Coins" = "window.RoundCoins", "window.Draw" = "window.TilePick", "window.Window" = "window.ServedValues", "window.Verdict" = "window.RoundResult" }
+
+[[words_in]]
+files = ["benchmarks/pouw/highutil/**"]
+words = { "period.Coins" = "period.PeriodCoins", "period.Period" = "period.PeriodRun" }
+
+[[words_in]]
+files = ["benchmarks/pouw/served_h1/**"]
+words = { "coins.Coins" = "coins.LiveCoins", "coins.Session" = "coins.GateSession" }
+
+[[words_in]]
+files = ["benchmarks/pouw/served_zk/**"]
+words = { "statement.Statement" = "statement.StatementBench" }
+
+[[words_in]]
+files = ["verity/core/protocols/pouw/PROTOCOL.md", "verity/core/protocols/pouw/circuit/__init__.py"]
+words = { "Ledger.open" = "AdmittedCalls.open" }
+
+[[words_in]]
+files = ["verity/core/protocols/pouw/schemes/pearl_c.py"]
+words = { "P.Device" = "P.CodeParams" }
+
+[[words_in]]
+files = ["benchmarks/pouw/clear/clear_audit.py", "benchmarks/pouw/clear/clear_work.py", "benchmarks/pouw/pearl_c_sm90/glm53_passes.py", "benchmarks/pouw/pearl_c_vllm/h3_screen.py", "benchmarks/pouw/pearl_c_vllm/served_debit.py", "benchmarks/pouw/pearl_c_vllm/verify_run.py"]
+words = { "Transcript" = "Publication" }
+
+[[words_in]]
+files = ["benchmarks/pouw/clear/clear_audit.py", "benchmarks/pouw/clear/clear_work.py"]
+words = { "Verdict" = "TileCheck" }
+
+[[words_in]]
+files = ["benchmarks/pouw/dc/census.py"]
+words = { "Device" = "FamilyRuns" }
+
+[[words_in]]
+files = ["benchmarks/pouw/e2e_120/window.py", "benchmarks/pouw/e2e_120/attacks.py"]
+words = { "Coins" = "RoundCoins", "Draw" = "TilePick", "Window" = "ServedValues" }
+
+[[words_in]]
+files = ["benchmarks/pouw/e2e_120/window.py"]
+words = { "Verdict" = "RoundResult" }
+
+[[words_in]]
+files = ["benchmarks/pouw/harness/arm.py", "benchmarks/pouw/harness/example_arm.py", "benchmarks/pouw/pearl_c4/pearl_c4_arm.py"]
+words = { "Gate" = "GateResult" }
+
+[[words_in]]
+files = ["benchmarks/pouw/harness/chain.py"]
+words = { "Link" = "ChainCall" }
+
+[[words_in]]
+files = ["benchmarks/pouw/harness/native.py"]
+words = { "Device" = "CudaDevice" }
+
+[[words_in]]
+files = ["benchmarks/pouw/harness/sass_gate.py"]
+words = { "Gate" = "SassGate" }
+
+[[words_in]]
+files = ["benchmarks/pouw/highutil/period.py"]
+words = { "Coins" = "PeriodCoins", "Period" = "PeriodRun" }
+
+[[words_in]]
+files = ["benchmarks/pouw/machine_model/verity_machine_model/capacity.py"]
+words = { "Window" = "WindowCell" }
+
+[[words_in]]
+files = ["benchmarks/pouw/machine_model/verity_machine_model/eps.py", "benchmarks/pouw/machine_model/verity_machine_model/capacity.py", "benchmarks/pouw/machine_model/verity_machine_model/counts.py"]
+words = { "Machine" = "IssueCosts" }
+
+[[words_in]]
+files = ["benchmarks/pouw/pearl_c_vllm/e2e.py"]
+words = { "Coins" = "EpochCoins" }
+
+[[words_in]]
+files = ["benchmarks/pouw/rt2_hopper/li_window_sat.py"]
+words = { "Program" = "SatListing" }
+
+[[words_in]]
+files = ["benchmarks/pouw/served_h1/coins.py"]
+words = { "Coins" = "LiveCoins", "Session" = "GateSession" }
+
+[[words_in]]
+files = ["benchmarks/pouw/served_h1/partials.py"]
+words = { "Window" = "WindowCalls" }
+
+[[words_in]]
+files = ["benchmarks/pouw/served_h1/serve.py"]
+words = { "Record" = "RequestRow" }
+
+[[words_in]]
+files = ["benchmarks/pouw/served_zk/of_record.py"]
+words = { "Record" = "VerdictPair" }
+
+[[words_in]]
+files = ["benchmarks/pouw/served_zk/replay_window.py"]
+words = { "Window" = "WindowReplay" }
+
+[[words_in]]
+files = ["benchmarks/pouw/served_zk/statement.py"]
+words = { "Statement" = "StatementBench" }
+
+[[words_in]]
+files = ["benchmarks/pouw/theory/checked_strip.py", "benchmarks/pouw/theory/attn_noise.py", "benchmarks/pouw/theory/narrow_u.py"]
+words = { "Block" = "DesignBlock" }
+
+[[words_in]]
+files = ["verity/core/protocols/pouw/circuit/anchors.py", "verity/core/protocols/pouw/circuit/__init__.py", "verity/core/protocols/pouw/tests/test_circuit_anchors.py", "verity/core/protocols/pouw/tests/test_circuit_plan.py"]
+words = { "Ledger" = "AdmittedCalls" }
+
+[[words_in]]
+files = ["verity/core/protocols/pouw/circuit/compile.py"]
+words = { "Site" = "DotNode" }
+
+[[words_in]]
+files = ["verity/core/protocols/pouw/circuit/h1device.py"]
+words = { "Device" = "H1Arch" }
+
+[[words_in]]
+files = ["verity/core/protocols/pouw/circuit/h1tile.py", "benchmarks/pouw/rt_algo/rt_algo_check.py", "benchmarks/pouw/rt_algo_r2/rt_algo_r2_check.py", "benchmarks/hash/dither/h1v3_ca.py"]
+words = { "Layout" = "TileShape" }
+
+[[words_in]]
+files = ["verity/core/protocols/pouw/circuit/plan.py"]
+words = { "Layout" = "PlanUnits" }
+
+[[words_in]]
+files = ["verity/core/protocols/pouw/protocol.py", "verity/core/protocols/pouw/schemes/ncp.py", "verity/core/protocols/pouw/schemes/pearl_c.py", "verity/core/protocols/pouw/schemes/pearl_c4.py", "verity/core/protocols/pouw/schemes/pearl_kw.py", "benchmarks/pouw/clear/clear_audit.py"]
+words = { "Certificate" = "GuaranteeBasis" }
+
+[[words_in]]
+files = ["verity/core/protocols/pouw/schemes/pearl_c_device.py", "verity/core/protocols/pouw/schemes/pearl_c.py", "verity/core/protocols/pouw/schemes/pearl_c_debit.py", "verity/core/protocols/pouw/schemes/pearl_c_u.py", "benchmarks/pouw/pearl_c_sm120/fixture.py", "benchmarks/pouw/pearl_c_sm90/fixture.py"]
+words = { "Device" = "DeviceProfile" }
+
+[[words_in]]
+files = ["verity/core/protocols/pouw/schemes/pearl_kw.py"]
+words = { "Device" = "CodeParams" }
+
+# The same classes where a module alias names them (`import h1tile as H`: `H.Layout`), in the files that bind that alias to it.
+[[words_in]]
+files = ["benchmarks/pouw/tests/test_harness.py", "benchmarks/pouw/tests/test_refs.py"]
+words = { "A.Gate" = "A.GateResult" }
+
+[[words_in]]
+files = ["verity/core/protocols/pouw/tests/test_circuit_plan.py"]
+words = { "A.Ledger" = "A.AdmittedCalls" }
+
+[[words_in]]
+files = ["benchmarks/pouw/filler/capacity_of.py"]
+words = { "C.Window" = "C.WindowCell" }
+
+[[words_in]]
+files = ["benchmarks/pouw/pearl_c4/replay.py"]
+words = { "CA.Transcript" = "CA.Publication" }
+
+[[words_in]]
+files = ["benchmarks/pouw/pearl_c4/replay.py"]
+words = { "CA.Verdict" = "CA.TileCheck" }
+
+[[words_in]]
+files = ["benchmarks/pouw/machine_model/tests/test_eps.py", "benchmarks/pouw/machine_model/verity_machine_model/commands/eps.py", "benchmarks/pouw/machine_model/verity_machine_model/redteam.py"]
+words = { "E.Machine" = "E.IssueCosts" }
+
+[[words_in]]
+files = ["benchmarks/pouw/h1_prove/h1unit.py", "benchmarks/pouw/h1_prove/window.py", "benchmarks/pouw/h1_splitk/run.py", "benchmarks/pouw/rt_algo_r3/rt_algo_r3_check.py", "verity/core/protocols/pouw/circuit/banded.py", "verity/core/protocols/pouw/circuit/h1zy.py", "verity/core/protocols/pouw/lean/window/tests/test_lanes.py", "verity/core/protocols/pouw/tests/test_circuit_banded.py", "verity/core/protocols/pouw/tests/test_circuit_h1tile.py", "verity/core/protocols/pouw/tests/test_circuit_h1tile_j10r.py", "verity/core/protocols/pouw/tests/test_circuit_h1zy.py", "verity/core/protocols/pouw/tests/test_h1_gates.py", "verity/core/protocols/pouw/tests/test_h1tile_matches_eps1.py", "verity/core/protocols/pouw/tests/test_j10r_lean_vectors.py", "verity/core/protocols/pouw/tests/test_leaf_lanes.py", "verity/core/protocols/pouw/tests/test_pouw_supplied_inputs.py"]
+words = { "H.Layout" = "H.TileShape" }
+
+[[words_in]]
+files = ["benchmarks/hash/dither/dither_one.py", "benchmarks/hash/dither/h1bench.py", "benchmarks/hash/dither/h1ubench.py", "benchmarks/hash/dither/h1zbench.py", "benchmarks/hash/dither/hb_peel.py", "benchmarks/hash/dither/j10b_ref.py", "benchmarks/hash/dither/j10hb.py", "benchmarks/hash/dither/j10r_ca.py", "benchmarks/hash/dither/j10r_units.py", "benchmarks/pouw/served_h1/j10r_time.py", "benchmarks/pouw/served_h1/lane_refs.py", "benchmarks/pouw/served_h1/receipts.py", "benchmarks/pouw/tests/test_partials.py", "benchmarks/pouw/tests/test_served_h1_producer.py", "benchmarks/torch_gpu/j10r_sm90/check.py", "benchmarks/torch_gpu/j10r_sm90/fixtures.py", "benchmarks/torch_gpu/j10r_sm90/tests/test_j10r_sm90.py", "examples/h200/e2e_h200/percall.py"]
+words = { "HT.Layout" = "HT.TileShape" }
+
+[[words_in]]
+files = ["benchmarks/pouw/harness/bench.py", "benchmarks/pouw/harness/characterize.py"]
+words = { "N.Device" = "N.CudaDevice" }
+
+[[words_in]]
+files = ["benchmarks/pouw/served_zk/replay_core.py", "benchmarks/pouw/served_zk/served_commit.py", "benchmarks/pouw/tests/test_salt_bind.py", "benchmarks/pouw/tests/test_served_zk.py"]
+words = { "OR.Record" = "OR.VerdictPair" }
+
+[[words_in]]
+files = ["verity/core/protocols/pouw/tests/test_pouw_pearl_kw.py"]
+words = { "P.Device" = "P.CodeParams" }
+
+[[words_in]]
+files = ["benchmarks/pouw/highutil/tests/test_highutil.py"]
+words = { "P.Period" = "P.PeriodRun" }
+
+[[words_in]]
+files = ["verity/core/protocols/pouw/tests/test_circuit_plan.py"]
+words = { "PL.Layout" = "PL.PlanUnits" }
+
+[[words_in]]
+files = ["benchmarks/pouw/served_h1/lane_refs.py", "benchmarks/pouw/tests/test_lane_refs.py"]
+words = { "PT.Window" = "PT.WindowCalls" }
+
+[[words_in]]
+files = ["benchmarks/pouw/harness/bench.py", "benchmarks/pouw/tests/test_sass_gate.py"]
+words = { "SG.Gate" = "SG.SassGate" }
+
+[[words_in]]
+files = ["benchmarks/pouw/e2e_120/attacks.py"]
+words = { "WD.Verdict" = "WD.RoundResult" }
+
+[[words_in]]
+files = ["verity/core/protocols/pouw/tests/test_pouw_pearl_c_sm120.py"]
+words = { "Device" = "DeviceProfile" }

@@ -9,7 +9,7 @@ end-to-end vectors through it, and the Lean's draws (`PouwCommit.Draws`) are dif
 3. **Units.**  For each matmul the prover commits the activation rows (bound to the salt and the index); the scheme
    derives its noise from (salt, matmul, roots), and every tile yields checked values and a digest.  The useful output is
    assembled from the tiles.
-4. **Transcript.**  A Merkle root over every tile's digest, in matmul order and then tile order (core's `tile_refs`).
+4. **Publication.**  A Merkle root over every tile's digest, in matmul order and then tile order (core's `tile_refs`).
 5. **Selection.**  `Sampled`: ``derive(source, "verity/pouw/audit/v1", {"transcript": root, "salt": salt})`` draws t
    tiles independently, each with probability ``W_ref(tile)/W`` (Lean `WorkWeightedSampling`); on an epoch with coins the
    source is the epoch's draw coin, which the challenger opens after the verifier recorded the transcript.  `Lottery` is
@@ -39,7 +39,7 @@ from verity.core.protocols.pouw.audit import (HM96, HM96_TRANSCRIPT, HM96_WEIGHT
                                               Workload, activation_binding, commit_rows, hm96_salt, opened_value, rows_domain,
                                               tile_refs, transcript_domain, weight_binding)
 from verity.core.protocols.pouw.coins import Challenger, coin_reason
-from verity.core.protocols.pouw.protocol import Certificate, Context, DomainError, PoUWScheme, Tile
+from verity.core.protocols.pouw.protocol import GuaranteeBasis, Context, DomainError, PoUWScheme, Tile
 from verity.errors import ProtocolError
 from verity.ml.commitments import Commitment, CommitmentDomain, MerkleTree, Opening, VerificationLimits, verify_opening
 from verity.ml.randomness import derive
@@ -63,7 +63,7 @@ def draw_coin(epoch: Epoch, challenger: Challenger, after: bytes) -> tuple[bytes
 
 
 @dataclass(frozen=True, slots=True)
-class Transcript:
+class Publication:
     """What the prover publishes: every activation root and the transcript commitment; the useful outputs go to the
     workload."""
 
@@ -114,7 +114,7 @@ class Prover:
     def weight_roots(self) -> dict[int, bytes]:
         return {w: t.commitment.root for w, t in self.weight_trees.items()}
 
-    def prove(self, epoch: Epoch, activations: Mapping[int, Sequence[bytes]]) -> Transcript:
+    def prove(self, epoch: Epoch, activations: Mapping[int, Sequence[bytes]]) -> Publication:
         scheme, work = self.scheme, epoch.workload
         for u in work.matmuls:
             scheme.check(u)
@@ -140,7 +140,7 @@ class Prover:
         if self.hash == HM96:
             leaves = [d + hm96_salt(self.salt_key, HM96_TRANSCRIPT, i) for i, d in enumerate(leaves)]
         self._tree = MerkleTree(transcript_domain(epoch, len(leaves), self.hash), dict(enumerate(leaves)), lambda _: TILE_SCHEMA)
-        return Transcript(tuple(t.commitment.root for t in self._act_trees), self._tree.commitment, tuple(outputs))
+        return Publication(tuple(t.commitment.root for t in self._act_trees), self._tree.commitment, tuple(outputs))
 
     def digest(self, tile_id: int) -> bytes:
         return opened_value(self.hash, self._tree.open(tile_id).value)
@@ -167,7 +167,7 @@ class Sampled:
 
     t: int
 
-    def select(self, scheme: PoUWScheme, epoch: Epoch, transcript: Transcript, source: bytes, refs: Sequence[TileRef],
+    def select(self, scheme: PoUWScheme, epoch: Epoch, transcript: Publication, source: bytes, refs: Sequence[TileRef],
                digest: Callable[[int], bytes]) -> tuple[int, ...]:
         key = derive(source, AUDIT_DOMAIN, {"transcript": transcript.commitment.root, "salt": epoch.salt})
         cumulative = list(accumulate(tickets(scheme, epoch.workload, refs)))
@@ -183,7 +183,7 @@ class Lottery:
     def wins(self, digest: bytes, cost: int) -> bool:
         return int.from_bytes(digest, "little") <= self.target * cost
 
-    def select(self, scheme: PoUWScheme, epoch: Epoch, transcript: Transcript, source: bytes, refs: Sequence[TileRef],
+    def select(self, scheme: PoUWScheme, epoch: Epoch, transcript: Publication, source: bytes, refs: Sequence[TileRef],
                digest: Callable[[int], bytes]) -> tuple[int, ...]:
         mm = epoch.workload.matmuls
         return tuple(r.id for r in refs if self.wins(digest(r.id), r.tile.cells * mm[r.matmul].shape.k))
@@ -200,7 +200,7 @@ class WorkProfile:
     work: int
     drawn: int
     sampled: bool
-    certificate: Certificate
+    certificate: GuaranteeBasis
 
     def delta_s(self, eps_s: Fraction) -> Fraction | None:
         if not 0 < eps_s <= 1:
@@ -221,7 +221,7 @@ class WorkProfile:
 
 
 @dataclass(frozen=True, slots=True)
-class Verdict:
+class TileCheck:
     tile: int
     ok: bool
     reason: str = ""
@@ -231,7 +231,7 @@ class Verdict:
 class Audit:
     accepted: bool
     selected: tuple[int, ...]
-    verdicts: tuple[Verdict, ...]
+    verdicts: tuple[TileCheck, ...]
     profile: WorkProfile | None
 
 
@@ -247,17 +247,17 @@ class Verifier:
     def work(self) -> int:
         return sum(self.scheme.wref(u.shape) for u in self.epoch.workload.matmuls)
 
-    def check_tile(self, transcript: Transcript, opening: TileOpening) -> Verdict:
+    def check_tile(self, transcript: Publication, opening: TileOpening) -> TileCheck:
         scheme, ep, ref = self.scheme, self.epoch, opening.ref
         if not 0 <= ref.id < len(self.refs) or ref != self.refs[ref.id]:
-            return Verdict(ref.id, False, "tile does not match the verifier's own enumeration")
+            return TileCheck(ref.id, False, "tile does not match the verifier's own enumeration")
         u = ep.workload.matmuls[ref.matmul]
         root_a, root_b = transcript.activation_roots[ref.matmul], ep.weight_roots[u.weight]
         h = commitment_hash(scheme)
         da = rows_domain(activation_binding(ep.salt, u.index), u.index, u.shape.m, h)
         db = rows_domain(weight_binding(u.weight), -2, u.shape.n, h)
         if [o.position for o in opening.a] != list(ref.tile.rows) or [o.position for o in opening.b] != list(ref.tile.cols):
-            return Verdict(ref.id, False, "openings do not cover the tile")
+            return TileCheck(ref.id, False, "openings do not cover the tile")
 
         def opens(dom: CommitmentDomain, c: Commitment, o: Opening, schema: str) -> bool:
             try:
@@ -266,23 +266,23 @@ class Verifier:
                 return False
 
         if not all(opens(da, Commitment(root_a, u.shape.m), o, ROW_SCHEMA) for o in opening.a):
-            return Verdict(ref.id, False, "activation opening")
+            return TileCheck(ref.id, False, "activation opening")
         if not all(opens(db, Commitment(root_b, u.shape.n), o, ROW_SCHEMA) for o in opening.b):
-            return Verdict(ref.id, False, "weight opening")
+            return TileCheck(ref.id, False, "weight opening")
         if opening.leaf.position != ref.id or not opens(transcript_domain(ep, len(self.refs), h), transcript.commitment,
                                                         opening.leaf, TILE_SCHEMA):
-            return Verdict(ref.id, False, "transcript opening")
+            return TileCheck(ref.id, False, "transcript opening")
         ctx = Context(ep.salt, u, root_a, root_b)
         noise = scheme.noise(ctx)
         ops = scheme.encode(ctx, noise, [opened_value(h, o.value) for o in opening.a], [opened_value(h, o.value) for o in opening.b],
                             ref.tile)
         if ops is None or not scheme.admissible(ctx, ops):
-            return Verdict(ref.id, False, "inadmissible inputs")
+            return TileCheck(ref.id, False, "inadmissible inputs")
         if scheme.digest(ctx, noise, scheme.checked(ctx, ops)) != opened_value(h, opening.leaf.value):
-            return Verdict(ref.id, False, "checked values")
-        return Verdict(ref.id, True)
+            return TileCheck(ref.id, False, "checked values")
+        return TileCheck(ref.id, True)
 
-    def audit(self, prover: Prover, transcript: Transcript, selection: Sampled | Lottery, source: bytes | Challenger
+    def audit(self, prover: Prover, transcript: Publication, selection: Sampled | Lottery, source: bytes | Challenger
               ) -> Audit:
         """Draw, open and check the selected tiles.  On an epoch with a coin commitment `source` is the challenger, asked
         for the epoch's draw coin after the transcript is recorded; on one without, the draw's bare source bytes."""
@@ -292,7 +292,7 @@ class Verifier:
             source, reason = ((None, "an epoch with a coin commitment draws from its draw coin, not from bare bytes")
                               if isinstance(source, bytes) else draw_coin(self.epoch, source, transcript.commitment.root))
             if reason is not None:
-                return Audit(False, (), (Verdict(-1, False, reason),), None)
+                return Audit(False, (), (TileCheck(-1, False, reason),), None)
         selected = selection.select(self.scheme, self.epoch, transcript, source, self.refs, prover.digest)
         verdicts = tuple(self.check_tile(transcript, prover.open(self.epoch, tid)) for tid in selected)
         ok = all(v.ok for v in verdicts)
@@ -301,5 +301,5 @@ class Verifier:
         return Audit(ok, selected, verdicts, profile)
 
 
-__all__ = ["AUDIT_DOMAIN", "Audit", "Lottery", "Prover", "Sampled", "TileOpening", "Transcript", "Verdict", "Verifier",
+__all__ = ["AUDIT_DOMAIN", "Audit", "Lottery", "Prover", "Sampled", "TileOpening", "Publication", "TileCheck", "Verifier",
            "WorkProfile", "commitment_hash", "draw_coin", "reference_kernel", "tickets"]

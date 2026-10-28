@@ -213,7 +213,7 @@ def _registered_receipts(run, made_by, c) -> np.ndarray:
     from verity_vllm.protocols.pouw.h1 import served as SV
     served, rc = run.served, run.served.receipt_table(c.index)
     words, n = SV.receipt_words(made_by[c.index]), HW.call_units(served.program)[c.index][1]
-    assert words.shape == served.receipt_shape(c.index) == (n, 2 * HT.Layout(32, 32, c.k).sets * 2)
+    assert words.shape == served.receipt_shape(c.index) == (n, 2 * HT.TileShape(32, 32, c.k).sets * 2)
     tree = NR.commit(served.program_digest, rc, words, run._key, SV.RECEIPT_NONCE + c.index, window=served.root)
     assert tree.root == served.registered[rc].root, f"call {c.index}'s {rc} is not its receipts' words"
     return words
@@ -406,7 +406,7 @@ def test_a_j10r_units_counters_are_its_rows_and_columns_blocks_of_its_calls_one_
     """`receipts.j10r_counters` of every unit (I, J) of an M × N call at K is `h1tile.j10r_unit_blocks` at its
     `h1tile.j10r_blocks`, the counters its gates read, all inside the call's stream (`receipts.stream_blocks`): units of
     one row block share their rows' counters and units of one column block their columns'."""
-    RC, lay = PR.RC, HT.Layout(32, 32, k)
+    RC, lay = PR.RC, HT.TileShape(32, 32, k)
     us = RC.units(m, n)
     got = RC.j10r_counters(torch.tensor([i for i, _j in us]), torch.tensor([j for _i, j in us]), m, k)
     want = [HT.j10r_unit_blocks(lay, HT.j10r_blocks(m, k, (32, 32), i, j)) for i, j in us]
@@ -441,7 +441,7 @@ def test_j10r_receipts_are_h1tile_j10r_reference_and_check_refuses_v1s_in_their_
     got = made(call, *args)
     v1 = _At(u0, SimpleNamespace(m=64), SimpleNamespace(salt=SALT), roots=lambda c: (RA, RB))(call, *args)
     units = 2 * (n // 32)
-    assert got.dtype == np.uint32 and got.shape == v1.shape == (units, 2 * HT.Layout(32, 32, k).sets)
+    assert got.dtype == np.uint32 and got.shape == v1.shape == (units, 2 * HT.TileShape(32, 32, k).sets)
     a = np.zeros((64, k), np.int8)
     a[:m] = codes
     for u in range(units):

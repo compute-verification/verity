@@ -7,7 +7,7 @@ without that tree is labelled `LABEL`.
 Unit u = (I, J) of a call, u = I ncb + J, sits at position base + u (as today), its band b = J // g and its band leader
 unit (I, b g). seed_j(v) = seeds.seed(salt, base + v, root_a, root_b) and σ_R(v) = seeds.receipt_seed(...) as today.
 * Row streams are shared along the band: unit (I, J)'s row i is its leader's h1tile row i, the blocks i RB .. of
-  seed_j(leader)'s stream (h1tile.Layout(32, 32, K)): up to g units read one row stream.
+  seed_j(leader)'s stream (h1tile.TileShape(32, 32, K)): up to g units read one row stream.
 * Column streams stay per unit (they carry I): the unit's own h1tile columns, blocks 32 RB + j CB .. of seed_j(u).
 * Fold keys stay per unit: h1tile.fold_keys(σ_R(u)).
 With g = 1 every unit is its own leader and this is h1tile.reference exactly (`self_check`). The unit's z and receipt
@@ -81,7 +81,7 @@ def leader(u: int, ncb: int, g: int) -> int:
     return ri * ncb + (cj // g) * g
 
 
-def rows_of(seed_l: bytes, lay: HT.Layout) -> list:
+def rows_of(seed_l: bytes, lay: HT.TileShape) -> list:
     """h1tile.noise's rows from the band leader's seed_j: per row (dither bits, digit coins)."""
     k, m = lay.k, lay.m
     out = []
@@ -91,7 +91,7 @@ def rows_of(seed_l: bytes, lay: HT.Layout) -> list:
     return out
 
 
-def cols_of(seed_j: bytes, lay: HT.Layout) -> list:
+def cols_of(seed_j: bytes, lay: HT.TileShape) -> list:
     """h1tile.noise's columns from the unit's own seed_j: per column (coin bits, U's int8 encodings)."""
     k = lay.k
     out = []
@@ -103,7 +103,7 @@ def cols_of(seed_j: bytes, lay: HT.Layout) -> list:
 
 def band_noise(salt: bytes, pos: int, lead_pos: int, roots: tuple[bytes, bytes], k: int) -> tuple[list, list]:
     """The unit at `pos` whose band leader sits at `lead_pos`: (rows, columns) in h1tile.noise's format."""
-    lay = HT.Layout(32, 32, k)
+    lay = HT.TileShape(32, 32, k)
     return rows_of(SD.seed(salt, lead_pos, *roots), lay), cols_of(SD.seed(salt, pos, *roots), lay)
 
 
@@ -112,7 +112,7 @@ def unit(a: Sequence[Sequence[int]], b: Sequence[Sequence[int]], salt: bytes, po
     """v3's (z row-major, receipt) of one 32 x 32 unit (int8 encodings) on its banded noise and its own fold keys."""
     k = len(a[0])
     rows, cols = band_noise(salt, pos, lead_pos, roots, k)
-    keys = HT.fold_keys(SD.receipt_seed(salt, pos, *roots), HT.Layout(32, 32, k))
+    keys = HT.fold_keys(SD.receipt_seed(salt, pos, *roots), HT.TileShape(32, 32, k))
     return J10.unit(a, b, rows, cols, keys)
 
 
@@ -120,7 +120,7 @@ def reference(a: np.ndarray, b: np.ndarray, salt: bytes, base: int, roots: tuple
               g: int) -> dict[int, tuple[list[int], list[int], list, list]]:
     """(z, receipt, rows, columns) at the listed units of a call: A [rows, K] and B [N, K] int8, bands of g column tiles."""
     ncb, k = b.shape[0] // 32, a.shape[1]
-    lay = HT.Layout(32, 32, k)
+    lay = HT.TileShape(32, 32, k)
     out = {}
     for u in units:
         ri, cj = divmod(u, ncb)
@@ -136,11 +136,11 @@ def reference(a: np.ndarray, b: np.ndarray, salt: bytes, base: int, roots: tuple
 def row_block(seed_l: bytes, i: int, c: int, k: int) -> list[int]:
     """Row i's c-th noise chunk from the leader's seed_j, as 16 big-endian halves (seeds.halves): what the kernels'
     band workspace holds at (row i, chunk c)."""
-    return SD.halves(SD.noise_block(seed_l, HT.Layout(32, 32, k).row(i) + c))
+    return SD.halves(SD.noise_block(seed_l, HT.TileShape(32, 32, k).row(i) + c))
 
 
 def col_block(seed_j: bytes, j: int, c: int, k: int) -> list[int]:
-    return SD.halves(SD.noise_block(seed_j, HT.Layout(32, 32, k).col(j) + c))
+    return SD.halves(SD.noise_block(seed_j, HT.TileShape(32, 32, k).col(j) + c))
 
 
 def self_check(seed: int = 7) -> dict:
@@ -157,7 +157,7 @@ def self_check(seed: int = 7) -> dict:
     per = [V3.reference(a8, bt[j], salt, base + j, roots, stream=True) for j in range(ncb)]
     g1 = reference(a, b, salt, base, roots, range(ncb), 1)
     g2 = reference(a, b, salt, base, roots, range(ncb), 2)
-    lay = HT.Layout(32, 32, k)
+    lay = HT.TileShape(32, 32, k)
     r0, c0 = HT.noise(SD.seed(salt, base, *roots), lay)
     _, c1 = HT.noise(SD.seed(salt, base + 1, *roots), lay)
     doc = {"g1_is_h1tile": all(list(g1[j][:2]) == list(per[j]) for j in range(ncb)),

@@ -45,7 +45,7 @@ def load(serving_macs: float, filler_macs: float, ms: float, mhz: float, sms: in
     return w
 
 
-def sigma(pi, entry: dict, mhz: float | None = None, **kw) -> C.Window:
+def sigma(pi, entry: dict, mhz: float | None = None, **kw) -> C.WindowCell:
     w = load(entry["serving_macs"], entry["filler_macs"], entry["t1_ms"], mhz or entry["mhz"], **kw)
     return C.window(pi, [(1.0, w)])
 

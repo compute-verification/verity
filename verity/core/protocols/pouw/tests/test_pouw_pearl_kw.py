@@ -82,7 +82,7 @@ def test_layout():
     assert P.PATTERN.hex() == OUT["pattern"] and P.LANES == OUT["lanes"] and P.budget(1024, 16, 16) == OUT["budget"]
 
 
-def side(c: dict, dev: P.Device) -> tuple[P.Built, list, bytes, bytes]:
+def side(c: dict, dev: P.CodeParams) -> tuple[P.Built, list, bytes, bytes]:
     k = PV.K
     ints, scales = bytes.fromhex(c["ints"]), struct.unpack(f"<{len(c['scales']) // 4}H", bytes.fromhex(c["scales"]))
     rows = [P.fp10_row([x - 256 if x >= 128 else x for x in ints[r * k:(r + 1) * k]], scales[r * k // 8:(r + 1) * k // 8])

@@ -83,7 +83,7 @@ from verity.ml.commitments import verify_opening  # noqa: E402
 from verity.ml.randomness import derive  # noqa: E402
 from verity.core.protocols.pouw.audit import (ROW_SCHEMA, activation_binding, opened_value, rows_domain,  # noqa: E402
                                               weight_binding)
-from clear_audit import Transcript, Verifier, commitment_hash  # noqa: E402
+from clear_audit import Publication, Verifier, commitment_hash  # noqa: E402
 from verity.core.protocols.pouw.coins import CoinCommitment  # noqa: E402
 from verity.core.protocols.pouw.protocol import Context, Matmul, Shape  # noqa: E402
 from verity.core.protocols.pouw.schemes import pearl_c_work as PW  # noqa: E402
@@ -179,7 +179,7 @@ def load(path: Path, light: bool = False, coins: CoinCommitment | None = None) -
     sha = hashlib.sha256(raw).hexdigest()
     if light:
         return {"man": man, "sha256": sha, "scheme": scheme, "epoch": epoch, "records": records, "tile": index}
-    transcript = Transcript(tuple(bytes.fromhex(u["root_a"]) for u in man["matmuls"]), Commitment(bytes.fromhex(c["root"]), c["count"]), ())
+    transcript = Publication(tuple(bytes.fromhex(u["root_a"]) for u in man["matmuls"]), Commitment(bytes.fromhex(c["root"]), c["count"]), ())
     view = _Kept(scheme)
     verifier = Verifier(view, epoch)
     if len(verifier.refs) != c["count"]:

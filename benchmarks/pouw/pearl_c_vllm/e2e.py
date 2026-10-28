@@ -194,7 +194,7 @@ def engine(args, group: str):
 def install(model, args, coins):
     """Every LinearBase layer's apply, found by type (`verity_vllm.protocols.linear.vllm_site`), through one `Stack` whose executor is a
     `PearlCDeviceRun` over the layers' own weights, attached through `engine.hooks`.  The epoch's salt is `coins`' salt coin,
-    asked for once the weights are committed (`Coins`).  Returns the run, the weights by id and the stack; the stack starts
+    asked for once the weights are committed (`EpochCoins`).  Returns the run, the weights by id and the stack; the stack starts
     inactive (vLLM's own apply), and `arm_of` gives each mode's arm."""
     from verity.core.protocols.pouw.audit import weights_root
     from verity_vllm.engine.hooks import Hooks
@@ -659,7 +659,7 @@ def prompt_logprobs(llm, sampling_params, timed, windows: list[list[int]]) -> di
     return {"nll": nll, "tokens": count, "top1": top1}
 
 
-class Coins:
+class EpochCoins:
     """The challenger's side of one epoch in the controller: its coins (`coins.Challenger`), committed before any engine
     starts, drawn from `entropy` (by default the Lean verifier of record's, `pouw.verifier.coins`, `IO.getRandomBytes`),
     which a claim instance must name (`challenger.served_claim`). A coin opens once; an engine started again in the same
@@ -686,7 +686,7 @@ class Coins:
 
 
 class PipeCoins:
-    """The engine's side: the epoch's commitment, and each coin asked of the controller's `Coins` over the pipe."""
+    """The engine's side: the epoch's commitment, and each coin asked of the controller's `EpochCoins` over the pipe."""
 
     def __init__(self, conn, commitment: dict):
         from verity.core.protocols.pouw.coins import CoinCommitment
@@ -706,7 +706,7 @@ class Worker:
     started = 0
     live: ClassVar[list[Worker]] = []
 
-    def __init__(self, ctx, args, group: str, coins: Coins):
+    def __init__(self, ctx, args, group: str, coins: EpochCoins):
         Worker.started += 1
         self.group, self.serial, (self.conn, child) = group, Worker.started, ctx.Pipe()
         self.coins = coins
@@ -726,7 +726,7 @@ class Worker:
                              f"({PROMPT} + 1 + {STEPS})): vLLM would queue or preempt requests inside the timed step; raise --mem-*")
 
     def recv(self, timeout: float = 1200) -> dict:
-        """The engine's answer; a coin it asks for on the way is answered from the epoch's `Coins`."""
+        """The engine's answer; a coin it asks for on the way is answered from the epoch's `EpochCoins`."""
         from verity.core.protocols.pouw.protocol import DomainError
         while True:
             if not self.conn.poll(timeout):
@@ -862,12 +862,12 @@ def state_entropy(path: str):
     return take
 
 
-def epoch_coins(args, epoch: int) -> Coins:
+def epoch_coins(args, epoch: int) -> EpochCoins:
     """The run's epoch coins, committed before any engine starts; with ``--retain`` the commitment is published beside the
     passes (``coins.json``), where `verify_run.py --coins` reads it.  ``POUW_COIN_STATE`` names a file holding the
     challenger's entropy (`state_entropy`)."""
     state = settings.POUW_COIN_STATE
-    coins = Coins(epoch, state_entropy(state)) if state else Coins(epoch)
+    coins = EpochCoins(epoch, state_entropy(state)) if state else EpochCoins(epoch)
     if getattr(args, "retain", None):
         Path(args.retain).mkdir(parents=True, exist_ok=True)
         (Path(args.retain) / "coins.json").write_text(json.dumps(coins.commitment.to_json()) + "\n")
@@ -988,7 +988,7 @@ def perplexity(args) -> int:
         ran = True
         a = copy.copy(args)
         a.scheme, a.batch_tokens = scheme, PPL_BATCH
-        w = Worker(ctx, a, group, Coins(epoch))
+        w = Worker(ctx, a, group, EpochCoins(epoch))
         try:
             res = {"gate": w.ready.get("gate"), "committer": w.ready.get("committer"), "modes": {}}
             if group == "arm" and not all(g["ok"] for g in w.ready["gate"]):
@@ -1122,7 +1122,7 @@ def main() -> None:
     finish(args, out, records, ready, tokens, verify)
 
 
-def run_workers(ctx, args, coins: Coins, p: dict, records: list[dict], out: dict, arm_steps) -> None:
+def run_workers(ctx, args, coins: EpochCoins, p: dict, records: list[dict], out: dict, arm_steps) -> None:
     """Both engines resident, the reps alternating; or, if the arm can't start beside the base, ABAB blocks."""
     warm: set = set()
     base = Worker(ctx, args, "base", coins)

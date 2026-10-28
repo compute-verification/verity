@@ -59,7 +59,7 @@ from functools import lru_cache
 from verity.ml.crypto.blake3 import blake3, keyed
 from verity.ml.circuits.silicon import models as tc_models
 
-from ..protocol import Certificate, Context, DomainError, Matmul, Shape, Tile, grid_tiles
+from ..protocol import GuaranteeBasis, Context, DomainError, Matmul, Shape, Tile, grid_tiles
 
 NAME = "pearl-fp8-v4"
 R = 32
@@ -79,7 +79,7 @@ class Reject(ValueError):
 
 
 @dataclass(frozen=True, slots=True)
-class Device:
+class CodeParams:
     name: str
     code: int            # the p_B device byte (H100 = 0, B200 = 1 in Pearl; 2 is ours)
     lg2_delta: int
@@ -96,9 +96,9 @@ class Device:
         return 14 + self.lg2_delta
 
 
-H100 = Device("h100", 0, 0, 13, 14, True)
-B200 = Device("b200", 1, -1, 25, 26, False)
-ADA = Device("ada", 2, 0, 13, 14, True)
+H100 = CodeParams("h100", 0, 0, 13, 14, True)
+B200 = CodeParams("b200", 1, -1, 25, 26, False)
+ADA = CodeParams("ada", 2, 0, 13, 14, True)
 DEVICES = {"h100": H100, "b200": B200, "ada": ADA}
 WINDOW = 128
 
@@ -310,7 +310,7 @@ def _group(values: list[_Term], width: int) -> _Term:
     return (sign, _ZERO_EXP, 0) if sig == 0 else (sign, exp, sig)
 
 
-def _atom(dev: Device, local: float, a: Sequence[int], b: Sequence[int]) -> float:
+def _atom(dev: CodeParams, local: float, a: Sequence[int], b: Sequence[int]) -> float:
     """One rank-32 atom into the local accumulator."""
     if dev is ADA:
         word = tc_models.ADA_E4M3_M16N8K32.step(f32_bits(local), list(a), list(b))
@@ -335,7 +335,7 @@ def _canon(x: float) -> float:
     return 0.0 if x == 0 else x
 
 
-def replay(dev: Device, a: Sequence[int], b: Sequence[int]) -> tuple[float, list[float], list[tuple[int, int, int]]]:
+def replay(dev: CodeParams, a: Sequence[int], b: Sequence[int]) -> tuple[float, list[float], list[tuple[int, int, int]]]:
     """One cell ``a·b`` on the device: (value, the partial after each atom, the census windows ``(start, end, grid)``).
 
     B200 chains every 32-product group into the carry (Pearl's `B200::matmul_fp8`); its census reads one grid from the
@@ -379,7 +379,7 @@ def replay(dev: Device, a: Sequence[int], b: Sequence[int]) -> tuple[float, list
     return total, partials, [(s, e, grid_from_binades(dev, z, m_cell)) for s, e, z in zs]
 
 
-def device_dot(dev: Device, a: Sequence[int], b: Sequence[int], partials: list | None = None) -> float:
+def device_dot(dev: CodeParams, a: Sequence[int], b: Sequence[int], partials: list | None = None) -> float:
     value, parts, _ = replay(dev, a, b)
     if partials is not None:
         partials.extend(parts)
@@ -462,7 +462,7 @@ def bf16_sqrt(v: Fraction) -> int:
         code += -1 if not lo_ok else 1
 
 
-def delta_consts(dev: Device) -> tuple[int, int]:
+def delta_consts(dev: CodeParams) -> tuple[int, int]:
     """(δ√r, δ√r/256²) as BF16, each one rounding of the f64 value through FP32 (Pearl's double rounding, proved equal)."""
     d = dev.delta * math.sqrt(R)
     return f32_to_bf16(f32(d)), f32_to_bf16(f32(d / (NOISE_NORM * NOISE_NORM)))
@@ -480,7 +480,7 @@ class Built:
     noise: list[list[int]]      # N = E·Fᵀ rows, BF16
 
 
-def noisy_quantize(dev: Device, clean: list[list[int]], norms: list[tuple[int, int]], e: list[list[int]], f: list[list[int]]) -> Built:
+def noisy_quantize(dev: CodeParams, clean: list[list[int]], norms: list[tuple[int, int]], e: list[list[int]], f: list[list[int]]) -> Built:
     delta_r, delta_over_std = delta_consts(dev)
     q_max, floor = f32_to_bf16(Q_MAX), NORM_FLOOR_BF16
     codes, alphas, betas, l2s, noises = [], [], [], [], []
@@ -526,7 +526,7 @@ def _e_star_m(code: int) -> tuple[int, int]:
     return (1, man) if exp == 0 else (exp, 128 + man)
 
 
-def lam(dev: Device, alpha: int, x: int, l2: int) -> int:
+def lam(dev: CodeParams, alpha: int, x: int, l2: int) -> int:
     """Pearl's λ: a fixed-point lower bound on 64·(log2(X̄² + σ²) + 508) for a clean entry x of a row with (α, l2)."""
     ae, am = _e_star_m(alpha)
     xe, xm = _e_star_m(x)
@@ -546,13 +546,13 @@ def lam(dev: Device, alpha: int, x: int, l2: int) -> int:
     return 128 * max(x_enc, s_enc) - 2624 + _log2_fixed(sos >> 17)
 
 
-def grid_from_binades(dev: Device, z: int | None, m: int | None) -> int:
+def grid_from_binades(dev: CodeParams, z: int | None, m: int | None) -> int:
     """Pearl's `grid_exponent_from_binades`: the larger of e(Z) − W and e(M) − 18, biased by 157; 0 when both are zero."""
     qs = [q for q in ((None if z is None else z - dev.window_bits), (None if m is None else m - M_WINDOW_BITS)) if q is not None]
     return 0 if not qs else max(qs) + GRID_BIAS
 
 
-def grid_exponent(dev: Device, z: float, m: float) -> int:
+def grid_exponent(dev: CodeParams, z: float, m: float) -> int:
     return grid_from_binades(dev, _binade(z), _binade(m))
 
 
@@ -605,7 +605,7 @@ def _f_basis(seed_b: bytes, side: int, k: int) -> tuple[tuple[int, ...], ...]:
     return tuple(tuple(sample_line(seed_b, side, 1, u)) for u in range(k))
 
 
-def p_b(n: int, k: int, dev: Device) -> bytes:
+def p_b(n: int, k: int, dev: CodeParams) -> bytes:
     return n.to_bytes(4, "little") + k.to_bytes(4, "little") + R.to_bytes(2, "little") + bytes([0, dev.code, HASH_ID]) + PATTERN + (0).to_bytes(2, "little")
 
 
@@ -619,7 +619,7 @@ class PearlKW:
     def __init__(self, device: str = "ada"):
         self.device = DEVICES[device]
         self.name = NAME
-        self.certificate = Certificate(
+        self.certificate = GuaranteeBasis(
             conjecture="pearl-quantized-subspace-hardness",
             gamma0=None,
             omega=Fraction(1),

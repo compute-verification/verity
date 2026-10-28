@@ -15,7 +15,7 @@ from verity.core.protocols.pouw.circuit import seeds as SD
 pytestmark = pytest.mark.skipif(H.SG is None, reason="H1's receipts (circuit.segment, E2E-120) are not on this tree")
 SALT = hashlib.sha512(b"salt").digest()
 ROOTS = (hashlib.sha512(b"A0").digest(), hashlib.sha512(b"B0").digest())
-LAY = H.Layout(32, 32, 64)
+LAY = H.TileShape(32, 32, 64)
 #: a call of 2 row blocks by 5 column tiles, unit positions from 7 in row-major order
 POS = [[7 + 5 * i + j for j in range(5)] for i in range(2)]
 

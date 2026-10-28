@@ -465,7 +465,7 @@ def bench(libs: dict, wlibs: dict, nlibs: dict, ref: Ref, args, name: str, n: in
           clock: Clock, l2: int, sms: int, rng: random.Random, shift: int) -> dict:
     """libs: arm NAME-os -> one-stream build (the main one first); wlibs: arm NAME-ws -> its receipts-only form; nlibs: the
     noise floors."""
-    lay = HT.Layout(32, 32, k)
+    lay = HT.TileShape(32, 32, k)
     X = torch.from_numpy(Xh[:m]).to("cuda")
     a = X if m >= 32 else torch.cat([X, X.new_zeros(32 - m, k)])
     rows = a.shape[0]

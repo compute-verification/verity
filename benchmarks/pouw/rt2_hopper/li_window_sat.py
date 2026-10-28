@@ -47,7 +47,7 @@ LOW = ("LOP3", "IADD3", "IMAD", "LEA")
 HIGH = ("IMAD.HI", "IMAD.WIDE.HI", "SHF.L", "SHF.R", "LEA.HI", "PRMT")
 
 
-class Program:
+class SatListing:
     """n instructions over `nin` inputs at width w, each with an opcode, three operand selectors (an input, an earlier
     result or the slot's own constant), a LUT, three signs and a shift; every field a z3 variable."""
 
@@ -251,7 +251,7 @@ class Target:
 def cegis(t: Target, n: int, ops: tuple[str, ...], seed: int, max_rounds: int = 400, limit_s: int = 0) -> dict:
     w = t.w
     rng = random.Random(seed)
-    prog = Program(n, t.nin, w, ops, t.nout)
+    prog = SatListing(n, t.nin, w, ops, t.nout)
     synth = z3.Solver()
     if limit_s:
         synth.set("timeout", 1000 * limit_s)

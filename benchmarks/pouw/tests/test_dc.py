@@ -241,7 +241,7 @@ def test_census_sm90_rows(tmp_path):
     shared line joins M, outside it gets MS."""
     census = _load("census")
     run = _sm90_run(tmp_path / "r20261017-000000-abcd" / "out", 0.05)
-    dev = census.Device("sm90", [run])
+    dev = census.FamilyRuns("sm90", [run])
     lines, rows = census.census(dev)
     cu = census.rowsmod.CYCLE_U
     by_row = _census_tables(census, lines, rows)
@@ -256,7 +256,7 @@ def test_census_sm90_rows(tmp_path):
     text = census.tables(dev)
     assert "q*: c_M 61.740 SMSP-cycles over 128 words a lane" in text
     run2 = _sm90_run(tmp_path / "r20261017-000001-abce" / "out", 0.2)
-    by_row = _census_tables(census, *census.census(census.Device("sm90", [run2])))
+    by_row = _census_tables(census, *census.census(census.FamilyRuns("sm90", [run2])))
     assert "IMMA16816_S8" in by_row["MS"] and "IMMA16816_S8" not in by_row["M"]
 
 
@@ -531,7 +531,7 @@ def test_census_write_keeps_what_it_does_not_write(tmp_path, capsys):
         rows_before = list(csv.DictReader(f))
     foreign = [ln for ln in before if ln["kind"] == "UNI" or not census.OWN_ROW.fullmatch(ln["row"])]
     assert sheet in foreign and any(ln["kind"] == "UNI" for ln in foreign)
-    gen_rows = census.census(census.Device("sm90", [run]))[1]
+    gen_rows = census.census(census.FamilyRuns("sm90", [run]))[1]
     gen_m = next(r for r in gen_rows if r["row"] == "M")["description"]
     stale = {**before[0], "row": "JPA90_7", "cycles": "1", "rate": "", "noise": "", "u": ""}
     with open(dev / "census.csv", "a", newline="") as f:

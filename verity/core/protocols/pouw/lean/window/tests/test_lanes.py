@@ -63,7 +63,7 @@ def _tile(r: int, c: int, k: int, defn: Any = H.PouwH1Tile) -> Any:
     return bind(defn, EXACT=exact, R=r, C=c, PAIRS=tuple((i, j) for i in range(r) for j in range(c)))
 
 
-def _j10r_statement(x: dict) -> tuple[Any, H.Layout, tuple]:
+def _j10r_statement(x: dict) -> tuple[Any, H.TileShape, tuple]:
     """A J10-R leaf's chunk ``x["chunk"]`` of lane ``x["lane"]`` in ``x["n"]`` (`PouwH1LaneZy_v2` at n = 1,
     `PouwH1LaneZyChunk_v2` past it) or its combine (`PouwH1Combine_v2`, ``lane`` None), over `PouwH1Tile_v5`, bound; a
     reject where `h1zy` refuses them. The drawn ``n`` is `weights.chunks`(K) wherever the tile is a leaf's, the lanes'
@@ -82,14 +82,14 @@ def _j10r_statement(x: dict) -> tuple[Any, H.Layout, tuple]:
     except ValueError as e:
         raise D.Reject(str(e)) from e
     assert n == W.chunks(k), f"the drawn n is chunks(K) = {W.chunks(k)} at a leaf's K = {k}, not {n}"
-    lay = H.Layout(x["r"], x["c"], k)
+    lay = H.TileShape(x["r"], x["c"], k)
     if ln is not None and not 0 <= ln < lay.lanes:
         raise D.Reject(f"an {lay.r} × {lay.c} leaf has {lay.lanes} lanes, not lane {ln}")
     kind = LL.COMBINE if ln is None else LL.LANE if n == 1 else LL.CHUNK
     return d, lay, (kind, ln, None if n == 1 else ch, k)
 
 
-def _statement(x: dict, defn: Any = H.PouwH1Tile) -> tuple[Any, H.Layout, tuple]:
+def _statement(x: dict, defn: Any = H.PouwH1Tile) -> tuple[Any, H.TileShape, tuple]:
     """The lane (``x["lane"]`` its index) or the combine (``lane`` None or absent) of ``x``'s leaf, bound, with the
     statement as `leaf_lanes` keys it (kind, lane, chunk, J10-R's K); a reject where `h1zy` refuses the tile or the index
     is none of its lanes (`leaf_lanes.lane_rows`). A J10-R leaf's where ``x["n"]`` is given (`_j10r_statement`)."""
@@ -100,13 +100,13 @@ def _statement(x: dict, defn: Any = H.PouwH1Tile) -> tuple[Any, H.Layout, tuple]
         d = bind(Z.PouwH1Combine if ln is None else Z.PouwH1LaneZy, TILE=_tile(x["r"], x["c"], x["k"], defn))
     except ValueError as e:
         raise D.Reject(str(e)) from e
-    lay = H.Layout(x["r"], x["c"], x["k"])
+    lay = H.TileShape(x["r"], x["c"], x["k"])
     if ln is not None and not 0 <= ln < lay.lanes:
         raise D.Reject(f"an {lay.r} × {lay.c} leaf has {lay.lanes} lanes, not lane {ln}")
     return d, lay, (LL.COMBINE if ln is None else LL.LANE, ln, None, None)
 
 
-def _sources(lay: H.Layout, at: tuple) -> dict[str, dict]:
+def _sources(lay: H.TileShape, at: tuple) -> dict[str, dict]:
     """Where the verifier opens each port's row (`leaf_lanes.reads`, `known`) for the statement ``at`` (`_statement`'s):
     a read of a registered value's row, or a known row (statement i's ``o0`` the value ``ok<i>``, i = lane, then the
     combine; a J10-R leaf's lanes' and chunks' ``o0`` row i of ``oks``)."""
@@ -370,7 +370,7 @@ def test_the_python_is_the_lean(fn: str, server) -> None:
 def test_the_leaves(r: int, c: int, k: int, server) -> None:
     """Every lane's ports and the combine's are Python's at the served leaf and the sidecar's, the same over both H1 tiles
     (the statements read a tile's signature, which its form doesn't change)."""
-    for ln in [*range(H.Layout(r, c, k).lanes), None]:
+    for ln in [*range(H.TileShape(r, c, k).lanes), None]:
         x = {"r": r, "c": c, "k": k, "lane": ln}
         assert ports(x, TILES[0]) == ports(x, TILES[1])
         D.replay(PORTS["combine_ports" if ln is None else "lane_ports"][0], x, server)
@@ -382,7 +382,7 @@ def test_the_served_rows_are_proved_rows(r: int, c: int, k: int, server) -> None
     `unit_lowering`; the Lean verifier's v2 rule takes a row of any length, #3148), and the combine has a row that
     compresses before its last SHA-512 block, at least 112 bytes (C-Flock's, `h1zy.LEAST_K`), so a proof can take every
     statement."""
-    lanes = H.Layout(r, c, k).lanes
+    lanes = H.TileShape(r, c, k).lanes
     for ln in [*range(lanes), None]:
         x = {"r": r, "c": c, "k": k, "lane": ln}
         got = json.loads(D.replay(PORTS["combine_ports" if ln is None else "lane_ports"][0], x, server)[1])
@@ -407,7 +407,7 @@ def test_the_known_rows_are_the_known_ports(r: int, c: int, k: int, server) -> N
 
     want = {"salt": halves_up(salt), "position": (position & 0xFFFFFFFF) << 32 | position >> 32,
             "roots": halves_up(roots[0] + roots[1]), "admit": sum(b << i for i, b in enumerate(admit)), "ok": 1}
-    for ln in [*range(H.Layout(r, c, k).lanes), None]:
+    for ln in [*range(H.TileShape(r, c, k).lanes), None]:
         x = {"r": r, "c": c, "k": k, "lane": ln}
         got = json.loads(D.replay(PORTS["combine_ports" if ln is None else "lane_ports"][0], x, server)[1])
         lean = {p["name"]: p for p in got if "known" in p["source"]}
@@ -446,7 +446,7 @@ def test_the_j10r_leaves(r: int, c: int, k: int, server) -> None:
         rows = [p for p in got if not p["output"]]
         assert r % 16 or all(p["bits"] % 16 == 0 for p in rows), (x, [p["name"] for p in rows if p["bits"] % 16])
         assert x["lane"] is not None or max(2 * p["words"] for p in rows) + 17 > 128
-        assert got[-1]["source"] == ({"known": f"ok{H.Layout(r, c, k).lanes * x['n']}"} if x["lane"] is None else
+        assert got[-1]["source"] == ({"known": f"ok{H.TileShape(r, c, k).lanes * x['n']}"} if x["lane"] is None else
                                      {"read": LL.OKS, "row": x["n"] * x["lane"] + x["chunk"]})
 
 

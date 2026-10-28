@@ -47,7 +47,7 @@ def _call_seed_local(salt: bytes, call: int, root_a: bytes, root_b: bytes) -> by
 
 
 def _blocks_local(t: int, k: int, ri: int, cj: int) -> tuple[int, int]:
-    lay = HT.Layout(t, TILE[1], k)
+    lay = HT.TileShape(t, TILE[1], k)
     return lay.row(TILE[0] * ri), lay.col(TILE[1] * cj)
 
 

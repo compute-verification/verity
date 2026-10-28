@@ -28,7 +28,7 @@ from verity.core.protocols.pouw.schemes import pearl_c_debit as D
 from verity.core.protocols.pouw.schemes import pearl_c_u as U
 from verity.core.protocols.pouw.schemes import pearl_c_work as W
 from verity.core.protocols.pouw.schemes import pearl_kw as P
-from verity.core.protocols.pouw.schemes.pearl_c_device import DEVICES, H100, SM120, SM120_UNPROMOTED, Device, Prices
+from verity.core.protocols.pouw.schemes.pearl_c_device import DEVICES, H100, SM120, SM120_UNPROMOTED, DeviceProfile, Prices
 
 # the clear audit is a reference tool (benchmarks/pouw/clear), imported by name
 sys.path.insert(0, str(Path(__file__).resolve().parents[5] / "benchmarks" / "pouw" / "clear"))

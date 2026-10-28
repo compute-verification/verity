@@ -191,7 +191,7 @@ def eps_tensor_l32(census_dirs: list[Path], rates: list[dict], rho5: float) -> d
     (the MMA waiting on its own commit, no read) bounds any program's tcgen05 words from above."""
     census = _module("dc_census", HERE / "census.py")
     analyze = census.analyze
-    dev = census.Device("sm100", census_dirs)
+    dev = census.FamilyRuns("sm100", census_dirs)
     base = dev.model()
     region = list(base["tmem_points"]) + [(r["slots_per_clk"] / rho5, r["committed_words_per_clk"] / rho5)
                                           for r in rates if r["arm"] in (1, 2) and r["L"] == 32]

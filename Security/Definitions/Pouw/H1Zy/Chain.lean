@@ -15,7 +15,7 @@ chunk's carry is its state. On the primitives' word views:
   SHA-512 of `NOISE_TAG ‖ seed ‖ u64(t)` (`noiseBlock`), and its bit `β` is bit `β mod 32` of big-endian half
   `⌊(β mod 512) / 32⌋` of block `⌊β / 512⌋` (`streamBit`). The salt, position and roots are the `pub` port's fields
   (`SeedIn`): field bit `t` is bit `t mod 32` of the field's 32-bit half `⌊t / 32⌋`, halves big-endian (`seeds.leaves`).
-* **The lane's noise** (`h1tile.noise`, `fold_keys`, at the layout `h1tile.Layout(32, 32, K)`, `laneNoise`): row `i`'s
+* **The lane's noise** (`h1tile.noise`, `fold_keys`, at the layout `h1tile.TileShape(32, 32, K)`, `laneNoise`): row `i`'s
   stream starts at block `i · RB` and holds its `K` dither bits then `m - 1` digit coins of 32 bits; column `j`'s at
   block `32 RB + j · CB` holds its `K` coin bits then U's 32 bytes, each `PouwU129` of the byte's value; the lane's fold
   keys are block `l` of σ_R's stream, 16 words. Its rows and columns are `laneRow l s` and `laneCol l t`.
@@ -77,7 +77,7 @@ def streamBit (seed : List ℕ) (first β : ℕ) : Bool := blockBit (noiseBlock 
 def streamVal (seed : List ℕ) (first β n : ℕ) : ℕ :=
   ((List.range n).map fun i => if streamBit seed first (β + i) then 2 ^ i else 0).sum
 
-/-! ## The layout (`h1tile.Layout` at a 32 × 32 leaf) -/
+/-! ## The layout (`h1tile.TileShape` at a 32 × 32 leaf) -/
 
 /-- `m` at contraction `K`. -/
 def digitsK (K : ℕ) : ℕ := nDigits (K / 32)

@@ -128,7 +128,7 @@ def site_of(name: str) -> tuple[int, str]:
     return int(name.split(".layers.")[1].split(".")[0]), name.rsplit(".", 1)[1]
 
 
-class Record:
+class RequestRow:
     def __init__(self, out: Path):
         self.out, self.doc = out, {"schema": RECORD, "argv": sys.argv, "steps": {}}
 
@@ -408,7 +408,7 @@ def run(a: argparse.Namespace) -> dict:
 
     out = Path(a.out)
     out.mkdir(parents=True, exist_ok=True)
-    rec = Record(out)
+    rec = RequestRow(out)
     if a.gate:
         raise ValueError(f"--gate {a.gate}: served_h1's own gated window is superseded; the gated served window of "
                          "record is vllm's H1 path, integrations/vllm/verity_vllm/protocols/pouw/h1/__init__.py (#3053), "

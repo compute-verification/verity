@@ -719,7 +719,7 @@ def j10r_blocks(m: int, k: int, tile: tuple[int, int], i: int, j: int) -> tuple[
     """`h1tile.j10r_blocks`: unit (I, J) = (`i`, `j`)'s first row block and first column block of its call's one stream at
     call scale, row block R I at R I RB and column block C J at M RB + C J CB, for a call of slot `m` (its A rows), an
     R × C `tile` and K = `k`: RB = ⌈(K + 32 (m_K - 1)) / 512⌉ a row's blocks and CB = ⌈(K + 256) / 512⌉ a column's
-    (`h1tile.Layout`'s). Every input is the window's public structure, so the verifier derives them."""
+    (`h1tile.TileShape`'s). Every input is the window's public structure, so the verifier derives them."""
     r, c = tile
     rb, cb = -(-(k + 32 * (n_digits(k) - 1)) // 512), -(-(k + 256) // 512)
     return r * i * rb, m * rb + c * j * cb

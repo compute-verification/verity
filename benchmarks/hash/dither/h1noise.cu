@@ -1,6 +1,6 @@
 // H1's per-unit noise (seeds.noise_block: block t of a seed's stream is SHA-512(NOISE_TAG || seed || u64be t), one
 // compression of a 96-byte message) on sm_90a / sm_100a, the floor of any H1 + fx1 kernel on these cards: a unit derives
-// h1tile.Layout's `blocks` from seed_j and `lanes` from sigma_R (576 + 32 at K = 4096, 1856 + 32 at K = 14336).
+// h1tile.TileShape's `blocks` from seed_j and `lanes` from sigma_R (576 + 32 at K = 4096, 1856 + 32 at K = 14336).
 //
 //   ca     compute accounting's benchmarks/pouw/served_h1/noise.cu `h1_noise`, copied verbatim but for the compression:
 //          one thread a noise chunk, sx::compress<0, 2> (sha512x.cuh; codec_tensor's sha512_compress statement for
@@ -111,7 +111,7 @@ extern "C" int kn_mid(const void* seeds, unsigned S, unsigned nb, unsigned J, vo
 
 // The tile-width price (measured only): h1u.cu's h1s_noise and h1j_noise with the layout's counts and the seeds'
 // row stride (u64 words) as arguments, so an r x c tile's noise (nb = r rb + c cb blocks, its rows_nb = r rb row tiles first,
-// h1tile.Layout's order) runs at any c. Unit u = ri ncb + cj hashes its blocks t >= t0: t0 = 0 for a band leader
+// h1tile.TileShape's order) runs at any c. Unit u = ri ncb + cj hashes its blocks t >= t0: t0 = 0 for a band leader
 // (cj % band == 0), rows_nb otherwise (J10: a non-leader reads its leader's rows); band 1 is per-unit noise.
 __global__ void __launch_bounds__(256) h1_noise_band(const u64* __restrict__ seeds, u32 stride, u32 S, u32 ncb, u32 nb,
                                                      u32 rows_nb, u32 band, u32 J, u32* __restrict__ out) {

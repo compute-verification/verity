@@ -1,4 +1,4 @@
-"""The device, through ctypes: `libpouw_harness.so` (native/build.sh) and NVML. `Device` is what the harness, its baselines
+"""The device, through ctypes: `libpouw_harness.so` (native/build.sh) and NVML. `CudaDevice` is what the harness, its baselines
 and every arm see (`arm.py`); `Nvml` reads one GPU's sensors, addressed by its UUID."""
 
 from __future__ import annotations
@@ -100,7 +100,7 @@ class Graph:
     nodes: int
 
 
-class Device:
+class CudaDevice:
     """One CUDA device (device 0 of the process: CUDA_VISIBLE_DEVICES names it), its timing stream and its L2 flush."""
 
     def __init__(self, path: Path | None = None):
@@ -389,7 +389,7 @@ def smi(uuid: str, *args: str) -> dict:
     return {"returncode": r.returncode, "out": (r.stdout + r.stderr).strip()[-4000:]}
 
 
-def versions(dev: Device) -> dict:
+def versions(dev: CudaDevice) -> dict:
     """Driver, CUDA runtime and driver API, cuBLASLt (from the process), nvcc, numpy, Python, and the build record (its SASS
     MMA counts), which must describe the loaded library."""
     import hashlib

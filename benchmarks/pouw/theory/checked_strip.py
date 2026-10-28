@@ -85,7 +85,7 @@ def s32(x):
     return (np.asarray(x, dtype=np.int64) & MASK).astype(M32)
 
 
-class Block:
+class DesignBlock:
     """A block of n rows and n′ columns of one design, with its bit layout: U's planes, then c, then b, then (co32c)
     the carry coins z, m − 1 digits by r by n′."""
 
@@ -150,7 +150,7 @@ class Block:
         return np.stack(out, axis=1) & MASK
 
 
-class PVBlock(Block):
+class PVBlock(DesignBlock):
     """P·V's block (design `pv`): n query rows at key positions q_i (default the last n keys) over k keys, P peeled (in
     Lean coordinates P = P_prob − 64, P_prob ∈ [0, 126]) and V served, keys κ > q_i masked. The last L keys are the
     diagonal block; Ycum, V's residue sums over the complete blocks before it, is shared by the query block, and its
@@ -228,7 +228,7 @@ def pv_served(Op, D, X, M):
     return O, S, 2 * (O + 64 * S) - S
 
 
-def instance(B: Block, kind, rng, vbits=8):
+def instance(B: DesignBlock, kind, rng, vbits=8):
     if isinstance(B, PVBlock):
         V = rng.integers(-128, 127, (B.k, B.n2))
         if kind == "zero":
@@ -274,7 +274,7 @@ def unit(nbits, idx):
     return Z
 
 
-def pair_diffs(B: Block, P, V, pairs, chunk=8192):
+def pair_diffs(B: DesignBlock, P, V, pairs, chunk=8192):
     """pairDiff of every word at every pair (x, y), x ≠ y: W(e_x + e_y) − W(e_x) − W(e_y) + W(0), mod 2³²."""
     W0 = B.words(P, V, np.zeros((1, B.nbits), np.uint8))[0]
     W1 = B.words(P, V, np.eye(B.nbits, dtype=np.uint8))
@@ -288,7 +288,7 @@ def pair_diffs(B: Block, P, V, pairs, chunk=8192):
     return out
 
 
-def cross_ranks(B: Block, P, V, mod=MASK):
+def cross_ranks(B: DesignBlock, P, V, mod=MASK):
     """(rank of rows (word, peeled bit) × served coins, rank of rows (word, served coin) × peeled bits, the number of
     same-side pair differences nonzero mod `mod` + 1: over Z/2³², or with mod = 1 over F₂), for a one-cell block."""
     pairs = [(x, y) for x in B.left for y in B.right]
@@ -305,7 +305,7 @@ def cross_ranks(B: Block, P, V, mod=MASK):
 # ---------------------------------------------------------------- C: SAT tensor rank over F2
 
 
-def f2_targets(B: Block, rng):
+def f2_targets(B: DesignBlock, rng):
     """Each word's alternating form mod 2 (a set of pairs u < v), from pair differences at a random instance."""
     P, V = instance(B, "random", rng)
     pairs = list(itertools.combinations(range(B.nbits), 2))
@@ -743,7 +743,7 @@ def main():
                  f"{out['limbs']}; centring miss ≤ {hoeff:.1e}")
     checks.check("A4 r = k/2 with a 7-bit served side: Y is int8 at every instance (1 limb)",
                  lt[(128, 64, 7)] == (1, 1) and lt[(4096, 2048, 7)] == (1, 1) and lt[(128, 64, 8)] == (2, 1))
-    B = Block("co", 1, k, n2, r, L)
+    B = DesignBlock("co", 1, k, n2, r, L)
     Pb, Vb = instance(B, "balanced", rng)
     _, _, bb = draw(rng, 1, k, n2, r)
     Yb = (Vb + bb).reshape(k // r, r, n2).sum(0)
@@ -786,7 +786,7 @@ def main():
     rank_tab = {}
     for (kk, rr, LL) in [(128, 32, 32), (64, 32, 32), (96, 16, 32)]:
         for design in DESIGNS:
-            Bc = Block(design, 1, kk, 1, rr, LL)
+            Bc = DesignBlock(design, 1, kk, 1, rr, LL)
             res = []
             for kind in ("zero", "random", "balanced"):
                 P, V = instance(Bc, kind, rng)
@@ -799,7 +799,7 @@ def main():
                          all(x[:2] == w_ for x in res) and all(x[2] == 0 for x in res),
                          f"{[x[:2] for x in res]}, same-side nonzero {[x[2] for x in res]}; honest count {kk + rr}")
     for (kk, rr, LL) in [(128, 32, 32), (64, 32, 32), (96, 16, 32)]:
-        Bc = Block("co32c", 1, kk, 1, rr, LL)
+        Bc = DesignBlock("co32c", 1, kk, 1, rr, LL)
         res = [cross_ranks(Bc, *instance(Bc, kind, rng), mod=1) for kind in ("zero", "random", "balanced")]
         rank_tab[f"co32c k={kk} r={rr} L={LL}"] = list(res[0][:2])
         checks.check(f"B {Bc}: both cross ranks k + r = {kk + rr} at the zero, a random and a structured instance, "
@@ -810,7 +810,7 @@ def main():
     if checks.mutations:
         for name, kw in [("co with an even alphabet (U's parity constant)", {"w": W_EVEN}),
                          ("co without c (one-sided)", {"design": "checked1"})]:
-            Bm = Block(kw.get("design", "co"), 1, 64, 1, 32, 32, w=kw.get("w", W_RE))
+            Bm = DesignBlock(kw.get("design", "co"), 1, 64, 1, 32, 32, w=kw.get("w", W_RE))
             P, V = instance(Bm, "random", rng)
             r1, r2, _ = cross_ranks(Bm, P, V)
             with checks.mutant(name):
@@ -823,7 +823,7 @@ def main():
              ("checked1", 1, 4, 1, 2, 2, 4), ("co_p2", 1, 4, 1, 2, 2, 6), ("co32c", 1, 2, 1, 1, 1, 4),
              ("co32c", 1, 4, 1, 1, 2, 6)]
     for design, nn, kk, nn2, rr, LL, target in cases:
-        Bs = Block(design, nn, kk, nn2, rr, LL, w=np.array([1]))
+        Bs = DesignBlock(design, nn, kk, nn2, rr, LL, w=np.array([1]))
         tg = f2_targets(Bs, rng)
         lo_ok, _ = sat_products(tg, Bs.nbits, target - 1)
         hi_ok, prog = sat_products(tg, Bs.nbits, target)
@@ -833,7 +833,7 @@ def main():
         checks.check(f"C {Bs}: F2 tensor rank (affine products, no purity) = {target}; honest count {honest}",
                      lo_ok is False and valid, f"{target - 1} UNSAT, {target} SAT (model checked)")
     if "--full" in checks.args:
-        Bs = Block("co", 2, 2, 2, 1, 1, w=np.array([1]))
+        Bs = DesignBlock("co", 2, 2, 2, 1, 1, w=np.array([1]))
         tg = f2_targets(Bs, rng)
         lo_ok, _ = sat_products(tg, Bs.nbits, 11, budget=3_000_000)
         hi_ok, prog = sat_products(tg, Bs.nbits, 12)
@@ -888,7 +888,7 @@ def main():
         rows = {}
         for inst, strat in [("random", "strip"), ("random", "direct"), ("zero", "strip"), ("zero", "fp4"),
                             ("balanced", "strip"), ("small", "fp4")]:
-            Bc = Block("co", n, k, n2, rr, L)
+            Bc = DesignBlock("co", n, k, n2, rr, L)
             if inst == "small":
                 P, V = np.zeros((n, k), np.int64), rng.choice([1, 3], (k, n2))
             else:
@@ -917,7 +917,7 @@ def main():
     z = rng.integers(0, 2, (m - 1, 32, n2))
     cprice = {}
     for inst in ("random", "zero", "balanced"):
-        P, V = instance(Block("co", n, k, n2, 32, L), inst, rng)
+        P, V = instance(DesignBlock("co", n, k, n2, 32, L), inst, rng)
         if inst == "random":
             V = np.where(rng.random((k, n2)) < 0.5, -128, 126)
         led = Ledger()

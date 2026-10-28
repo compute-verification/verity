@@ -17,8 +17,8 @@ hgref.py pins it) behind the e2e slice's round (cursor/e2e-slice-ea24's challeng
         verified (C-Flock --zk, the Lean verifier of record on the pod; here `ideal_proof`, the statement's public file
         computed from its rows)
 
-Nothing is retried or redrawn: a round refused at any step is rejected (`Refused`). Real values plug in at `Window` (W
-and X: vLLM's int8 window, once it exists), `Coins` (H1's derivations of U, d and the receipt key from sigma: cgemm.cu's
+Nothing is retried or redrawn: a round refused at any step is rejected (`Refused`). Real values plug in at `ServedValues` (W
+and X: vLLM's int8 window, once it exists), `RoundCoins` (H1's derivations of U, d and the receipt key from sigma: cgemm.cu's
 tags) and `Honest.receipts` (the H1 kernel's receipts, once it writes them in this layout).
 """
 from __future__ import annotations
@@ -107,7 +107,7 @@ class Shape:
 
 
 @dataclass
-class Window:
+class ServedValues:
     """A served window's values: the registered weights W and the activations X it serves (int8). Stand-in values until
     vLLM's int8 window exists (`stand_in`)."""
 
@@ -115,9 +115,9 @@ class Window:
     X: np.ndarray
 
     @staticmethod
-    def stand_in(shape: Shape, seed: int = 0) -> "Window":
+    def stand_in(shape: Shape, seed: int = 0) -> "ServedValues":
         rng = np.random.default_rng(seed)
-        return Window(rng.integers(-100, 101, (shape.m, shape.k), dtype=np.int8),
+        return ServedValues(rng.integers(-100, 101, (shape.m, shape.k), dtype=np.int8),
                       rng.integers(-127, 127, (shape.n, shape.k), dtype=np.int8))
 
 
@@ -126,7 +126,7 @@ def _h(sigma: bytes, tag: bytes, *ints: int) -> bytes:
 
 
 @dataclass(frozen=True)
-class Coins:
+class RoundCoins:
     """What the coin gives a round (stand-ins for H1's derivations): U's 32 values a weight row in ±1..±16, d's bit an
     activation entry, and the receipts' fold key."""
 
@@ -225,7 +225,7 @@ def _sx8(v: np.ndarray) -> np.ndarray:
     return ((v.astype(np.int64) + 128) % 256 - 128).astype(np.int64)
 
 
-def noised(window: Window, coins: Coins, shape: Shape) -> tuple[np.ndarray, np.ndarray]:
+def noised(window: ServedValues, coins: RoundCoins, shape: Shape) -> tuple[np.ndarray, np.ndarray]:
     """W' = W + U (period 32 along k) and X' = X + d, mod 2^8 as int8, as the check computes them."""
     U = coins.u_rows(range(shape.m))
     Wp = _sx8(window.W.astype(np.int64) + np.tile(U, (1, shape.ks)))
@@ -325,7 +325,7 @@ def _bits(v) -> np.ndarray:
 
 
 @dataclass(frozen=True)
-class Draw:
+class TilePick:
     tile: int
     thread: int
     seg: int
@@ -343,7 +343,7 @@ class Draw:
                 "b_rows": TM * tn + 32 * wn + 2 * q + 8 * (np.arange(8) >> 1) + (np.arange(8) & 1)}
 
 
-def public_rows(shape: Shape, coins: Coins, draw: Draw, fold: str = "duo") -> dict[str, np.ndarray]:
+def public_rows(shape: Shape, coins: RoundCoins, draw: TilePick, fold: str = "duo") -> dict[str, np.ndarray]:
     """The rows the challenger recomputes from the coin and the draw."""
     pl = draw.place(shape)
     st = np.array(SG.fold_keys(fold, coins.seed, draw.tile, draw.thread, pl["w"], shape.nw), "<u4")
@@ -399,10 +399,10 @@ class Opened:
 
 
 @dataclass
-class Verdict:
+class RoundResult:
     accepted: bool
     why: str | None
-    draw: Draw | None = None
+    draw: TilePick | None = None
     sigma: bytes | None = None
     opened: Opened | None = None
     log: list[str] = field(default_factory=list)
@@ -426,13 +426,13 @@ class Round:
         self.log.append("operands, coin")
         return self.sigma
 
-    def receipts(self, r_root: bytes) -> Draw:
+    def receipts(self, r_root: bytes) -> TilePick:
         """(d) then (e): the receipts' root, answered by the draw."""
         if self.sigma is None or self.r_root is not None:
             raise Refused("receipts: once a round, after its coin")
         self.r_root = r_root
         sh = self.shape
-        self.draw_ = Draw(self.rng.randrange(sh.tiles), self.rng.randrange(NCT), self.rng.randrange(sh.ks))
+        self.draw_ = TilePick(self.rng.randrange(sh.tiles), self.rng.randrange(NCT), self.rng.randrange(sh.ks))
         self.log.append(f"receipts, draw {self.draw_}")
         return self.draw_
 
@@ -441,7 +441,7 @@ class Round:
         `ideal_proof` here, sound by construction)."""
         if self.draw_ is None:
             return "opening before its draw"
-        sh, d, coins = self.shape, self.draw_, Coins(self.sigma)
+        sh, d, coins = self.shape, self.draw_, RoundCoins(self.sigma)
         pub = op.public if op.public is not None else ideal_proof(op.rows, op.salts, self.sigma, sh.S, self.fold)
         bits = {r: b for r, _s, b, _ps in in_rows(sh.S, self.fold)}
         for port, row in public_rows(sh, coins, d, self.fold).items():
@@ -468,7 +468,7 @@ class Honest:
     receipts under the coin and the statement at the draw. ``receipt_fold``: the fold its receipts use (the check's, duo,
     by default; H1 + fx1's kernel folds fx1)."""
 
-    def __init__(self, window: Window, shape: Shape, session: str = "e2e-120", salt_key: bytes = b"stand-in",
+    def __init__(self, window: ServedValues, shape: Shape, session: str = "e2e-120", salt_key: bytes = b"stand-in",
                  receipt_fold: str = "duo"):
         self.window, self.shape, self.session, self.salt_key, self.receipt_fold = window, shape, session, salt_key, receipt_fold
         self.w_tree = Tree(label(session, 0, "W"), tile_rows(window.W), salt_key)
@@ -485,28 +485,28 @@ class Honest:
     def served_weights(self) -> np.ndarray:
         return self.window.W
 
-    def products(self, coins: Coins) -> np.ndarray:
-        Wp, Xp = noised(Window(self.served_weights(), self.window.X), coins, self.shape)
+    def products(self, coins: RoundCoins) -> np.ndarray:
+        Wp, Xp = noised(ServedValues(self.served_weights(), self.window.X), coins, self.shape)
         return prefix_words(Wp, Xp, self.shape)
 
-    def receipts(self, P: np.ndarray, coins: Coins) -> np.ndarray:
+    def receipts(self, P: np.ndarray, coins: RoundCoins) -> np.ndarray:
         return receipts(P, coins.seed, self.shape, self.receipt_fold)
 
-    def witness(self, P: np.ndarray, R: np.ndarray, coins: Coins, draw: Draw, rows: dict) -> list[list[int]]:
+    def witness(self, P: np.ndarray, R: np.ndarray, coins: RoundCoins, draw: TilePick, rows: dict) -> list[list[int]]:
         pl = draw.place(self.shape)
         return P[draw.tile, pl["w"] * self.shape.S:pl["w"] * self.shape.S + self.shape.S + 1, draw.thread].astype(np.int64).tolist()
 
     def run(self, rd: Round) -> Opened:
         sh = self.shape
         xt = self.x_tree(rd.rnd, self.window.X)
-        coins = Coins(rd.operands(xt.root))
+        coins = RoundCoins(rd.operands(xt.root))
         P = self.products(coins)
         R = self.receipts(P, coins)
         rt = Tree(label(self.session, rd.rnd, "R"), receipt_rows(R), self.salt_key)
         draw = rd.receipts(rt.root)
         return self.open(draw, coins, P, R, xt, rt)
 
-    def open(self, draw: Draw, coins: Coins, P: np.ndarray, R: np.ndarray, xt: Tree, rt: Tree) -> Opened:
+    def open(self, draw: TilePick, coins: RoundCoins, P: np.ndarray, R: np.ndarray, xt: Tree, rt: Tree) -> Opened:
         pl = draw.place(self.shape)
         wt = self.open_w_tree
         rows = {"xa": wt.rows[pl["pos_a"]], "wb": xt.rows[pl["pos_b"]], "rc": rt.rows[pl["pos_r"]],
@@ -517,13 +517,13 @@ class Honest:
         return Opened(rows, salts, {"xa": wt.path(pl["pos_a"]), "wb": xt.path(pl["pos_b"]), "rc": rt.path(pl["pos_r"])})
 
 
-def play(prover, shape: Shape, rnd: int = 1, seed: int | None = None, fold: str = "duo") -> Verdict:
+def play(prover, shape: Shape, rnd: int = 1, seed: int | None = None, fold: str = "duo") -> RoundResult:
     """One round of ``prover`` against today's check, its coins and draw from ``seed`` (None: the OS generator)."""
     rng = random.Random(seed) if seed is not None else random.SystemRandom()
     rd = Round(shape, prover.w_tree.root, prover.session, rnd, rng, fold)
     try:
         op = prover.run(rd)
     except Refused as e:
-        return Verdict(False, f"refused: {e}", rd.draw_, rd.sigma, log=rd.log)
+        return RoundResult(False, f"refused: {e}", rd.draw_, rd.sigma, log=rd.log)
     why = rd.judge(op)
-    return Verdict(why is None, why, rd.draw_, rd.sigma, op, rd.log)
+    return RoundResult(why is None, why, rd.draw_, rd.sigma, op, rd.log)

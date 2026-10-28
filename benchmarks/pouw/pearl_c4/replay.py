@@ -240,7 +240,7 @@ class _Openings:
                               _opening(o["leaf"]))
 
 
-def _check_with_debit(f: Callable, pick) -> tuple[CA.Verdict, dict | None]:
+def _check_with_debit(f: Callable, pick) -> tuple[CA.TileCheck, dict | None]:
     scheme = f.args[0]
     scheme.last_debit = None
     v = f(pick)
@@ -259,7 +259,7 @@ def verify(t: dict, workers: int = 1, scheme: F.PearlC4 | None = None) -> dict:
     splits = {int(w): W.Split(sp["k"], tuple(sp["side"]), bytes.fromhex(sp["calibration"]))
               for w, sp in t["splits"].items()}
     commitment = Commitment(bytes.fromhex(t["transcript"]["root"]), t["transcript"]["count"])
-    transcript = CA.Transcript(tuple(bytes.fromhex(r) for r in t["activation_roots"]), commitment, ())
+    transcript = CA.Publication(tuple(bytes.fromhex(r) for r in t["activation_roots"]), commitment, ())
     beacon = CW.RecordedDraw(t["draw"]["round"], bytes.fromhex(t["draw"]["value"]))
     report = {"format": REPORT, "scheme": s.name, "run": t["run"], "shape": t["shape"], "t": t["t"],
               "shortcuts": list(SHORTCUTS), "salt": epoch.salt.hex()}
