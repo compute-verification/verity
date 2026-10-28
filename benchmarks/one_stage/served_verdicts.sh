@@ -486,12 +486,13 @@ for k in $("$PY" -c "import json,sys; [print(json.loads(l)['window']) for l in o
   [ -d "$D/advice/.w$k/w$k" ] && mv "$D/advice/.w$k/w$k" "$D/advice/w$k"
   [ "$k" = "$K" ] && break
 done
-# the advice's length, the request Programs' names (their prompt lengths) and the window's request count are values: the
-# advice and compile logs and the registration stay in the serve dir, and only the advice's root leaves
+# the advice and compile logs name the request Programs by their prompt lengths and count the window's requests, which
+# are values: they stay in the serve dir
 [ -f "$D/advice/w$K/registration.json" ] || { say "ADVICE w$K: none written (the serve dir's advice.log, on the node)"; stop advice 14; }
+cp "$D/advice/w$K/registration.json" "$OUT/registration-w$K.json"
 "$PY" tools/advice_compile.py "$D" --window "$K" > "$D/compile_w$K.log" 2>&1
 rc=$?
-say "ADVICE w$K: $("$PY" -c 'import json, sys; w = json.load(open(sys.argv[1]))["windows"][sys.argv[2]]; print("root", w["root"][:16] + "…")' \
+say "ADVICE w$K: $("$PY" -c 'import json, sys; w = json.load(open(sys.argv[1]))["windows"][sys.argv[2]]; print("root", w["root"][:16] + "…", "bits", w["bits"])' \
   "$D/advice/.w$K/windows.json" "$K" 2>&1 | cut -c1-200); $("$PY" -c 'import json, sys; print(len(json.load(open(sys.argv[1])).get("registered_roots") or {}))' \
   "$D/advice/w$K/registration.json" 2>&1 | cut -c1-200) weight roots recorded (${WA[*]:-$NO_WEIGHTS}); compile (advice_compile.py) exit $rc$([ "$rc" = 0 ] || echo ", the serve dir's compile_w$K.log on the node")"
 [ "$rc" = 0 ] || stop compile 15
