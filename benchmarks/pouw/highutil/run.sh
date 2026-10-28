@@ -28,7 +28,7 @@
 # made; V31_LTW defaults to 1 (a call at S = 1 takes cuBLASLt's int32 X W'^T in place of v31's GEMM, the same leaf bytes).
 # TEXT: wikitext-2-raw-v1's test split for capture.py (default the datasets cache's arrow file, else its parquet at the same
 # revision, fetched from the hub into the run's scratch). The H200 (vy-dc-h200-2): GENCODE=arch=compute_90a,code=sm_90a
-# NVFLAGS=-DV31_WG=1 THETA_DEVICE=sm_90 (with #5202's V31_SCHED=2 V31_LMINB=4 V31_SAHEAD=1), CARD its card file, and the checkpoint built into the node's HF cache first
+# NVFLAGS=-DV31_WG=1 THETA_DEVICE=sm_90 (with the fast path's V31_SCHED=2 V31_LMINB=4 V31_SAHEAD=1), CARD its card file, and the checkpoint built into the node's HF cache first
 # (benchmarks/hash/dither/pin.sh). SERVED=1: prep --served, every call in its served form (T_1 .. T_{S-1} and O committed; with
 # V31_GEMM=1 V31_RP=5 the GEMM hashes O's rows on warps of its own).
 set -uo pipefail
@@ -53,13 +53,13 @@ git rev-parse HEAD > "$O/commit.txt" 2>&1
 : > "$O/rc.txt"
 export V31_LTW=${V31_LTW-1}
 LIB=$W/libv31.so
+A=benchmarks/pouw/accel_v31
 # shellcheck disable=SC2086
 nvcc -O3 -std=c++17 -gencode "$GENCODE" -Xptxas -v -DSHA_ADD=0 -DSHA_ROT=0 -DSHA_ROLL=1 -DV31_LIB -DCOMMIT_GPU_DOMS=8 $NVFLAGS \
-  -Xcompiler -fPIC -shared -o "$LIB" $D/hu_lib.cu -lcuda -lcublasLt > "$O/build.log" 2>&1
+  -Xcompiler -fPIC -shared -o "$LIB" $A/v31.cu -lcuda -lcublasLt > "$O/build.log" 2>&1
 echo "build rc $?" >> "$O/rc.txt"
 [ -s "$LIB" ] || { cat "$O/rc.txt"; tail -30 "$O/build.log"; exit 1; }
-A=benchmarks/pouw/accel_v31
-sha256sum $A/v31.cu $A/wg_proto.cuh $A/v31.py $A/v31lib.py $D/hu_lib.cu $D/period.py $D/capture.py $D/breakdown.py $D/timeline.py $D/pipes.py > "$O/sources.sha256"
+sha256sum $A/v31.cu $A/wg_proto.cuh $A/v31.py $A/v31lib.py $D/period.py $D/capture.py $D/terms.py $D/breakdown.py $D/timeline.py $D/pipes.py > "$O/sources.sha256"
 if [ "$CKPT" = seeded ]; then SRC=(--seeded); else SRC=(--checkpoint "$CKPT"); fi
 SERVEDA=()
 [ "${SERVED:-0}" = 1 ] && SERVEDA=(--served)

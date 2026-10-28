@@ -1,4 +1,4 @@
-"""[D90] The CROSS-RANK leg of the per-rank Match: the two ranks' folds (and, when given, the collective recorder's rows
+"""The CROSS-RANK leg of the per-rank Match: the two ranks' folds (and, when given, the collective recorder's rows
 and the rank Programs' `tp_links.json`) must state the SAME collectives -- so that rank r's `peers_<request>` root field (step, k) IS the other
 rank's own partial of collective (step, k), produced in the other rank's log by its own EmbeddingShard / Gemm instance, and never a value
 either rank invented.  Everything here is structural (kind, N, rows per request, site, order, count, producer class, link binding); the
@@ -6,7 +6,7 @@ VALUE of the received collective is the value leg's (`tp2_match` provenance: rec
 recorded partials; TP-12 at Commit from the committed partials).  The checks FAIL BY NAME:
 
     count          the two ranks (and the recorder) issued the same number of collectives in every step, over the same steps
-    order          collective k of step s has the same kind on both ranks (a reordered lane fails here)
+    order          collective k of step s has the same kind on both ranks (a reordered sequence fails here)
     op             ... and the same N (AllReduce2_v1{N} / AllGather2_v1{N})
     segmentation   ... and the same rows, split over the same requests with the same per-request row counts
     site           ... issued by the same module
@@ -127,7 +127,7 @@ def own_producers(result: Any) -> dict[tuple[int, int], list[str]]:
 def own_producers_from_record(instances_path: str | Path, program_nodes_spec: dict[int, str] | None = None) -> dict[tuple[int, int], list[str]]:
     """The same from a persisted record: `instances.jsonl` rows carrying `collective` + `operand_refs` (node-space runs kept in the file);
     the producer's spec is read from the row whose `node` the own run names."""
-    from verity_vllm.program.compact import runs_from_file_items   # [R17 mfast F2] v2 files hold node-space progressions
+    from verity_vllm.program.compact import runs_from_file_items   # v2 files hold node-space progressions
     spec_of: dict[int, str] = {}
     step_of: dict[int, Any] = {}
     args_of: dict[int, list] = {}
@@ -195,8 +195,8 @@ def cross_rank_check(colls: dict[int, list[dict]], *, producers: dict[int, dict[
     res: dict[str, Any] = {"schema": "tp2/rank_match/v1", "ranks": sorted(colls), "checks": [], "verdict": None}
     ranks = sorted(colls)
     world = len(ranks)
-    # [lane vllm-tp-n] any world >= 2: the ranks must be exactly 0..world-1; every pairwise check below runs rank r against rank 0 and the
-    # peer checks over every OTHER rank (world-1 peers per collective); at world 2 this is the R17 two-rank rule verbatim
+    # any world >= 2: the ranks must be exactly 0..world-1; every pairwise check below runs rank r against rank 0 and the
+    # peer checks over every OTHER rank (world-1 peers per collective); at world 2 this is the two-rank rule verbatim
     if world < 2 or ranks != list(range(world)):
         res["checks"].append({"name": "ranks", "pass": False, "fails": [f"need ranks 0..world-1 (world >= 2), got {ranks}"]})
         res["verdict"] = "FAIL"
@@ -337,7 +337,7 @@ def cross_rank_check(colls: dict[int, list[dict]], *, producers: dict[int, dict[
         # VALUE leg from the recorder's digests (every collective, both ranks; the recorder ran in the observer's engine run): the two ranks
         # RECEIVED the same bytes at (s, k), the received geometry is the Definition's, and the bytes rank r's peers field (s, k) must bind at
         # Commit are rank 1-r's PARTIAL at (s, k) -- published per (rank, step, k) as `peer_binding` (part_sha256 of the other rank, received
-        # sha256 of this rank) so the Commit binder is checked against a digest fixed at Match, not trusted by construction (rev M-0026 R1).
+        # sha256 of this rank) so the Commit binder is checked against a digest fixed at Match, not trusted by construction.
         c = _Check(res, "value", "every rank received the same bytes at (s, k) (recorder digests) with the Definition's received geometry")
         rows_by = {r: {(int(x["step"]), int(x["k"])): x for x in recorder.get(r, [])} for r in ranks}
         binding: dict[str, dict[str, Any]] = {}
@@ -360,7 +360,7 @@ def cross_rank_check(colls: dict[int, list[dict]], *, producers: dict[int, dict[
                 if not x.get("part_sha256"):
                     c.fail(f"rank {r} {key}: recorder row without a partial digest")
             # one binding per (rank r, peer p, s, k): the digest rank r's peers leaf of collective k from rank p must bind at Commit.  World 2
-            # keeps the R17 key `rank<r>:s<s>_k<k>` (one peer); beyond, `rank<r>:s<s>_k<k>_r<p>` (the fold's field name per peer)
+            # keeps the two-rank key `rank<r>:s<s>_k<k>` (one peer); beyond, `rank<r>:s<s>_k<k>_r<p>` (the fold's field name per peer)
             for r in ranks:
                 mine = xs[r]
                 for p in peers_of[r]:
@@ -375,18 +375,18 @@ def cross_rank_check(colls: dict[int, list[dict]], *, producers: dict[int, dict[
         # the value leg over the STORED steps (tp2_match `check` part 2: received == AllReduce2/AllGather2(part_rank0, part_rank1) bit-exact,
         # both ranks) is REQUIRED here: every common (step, k) must have been checked, none mismatching
         c = _Check(res, "provenance", "tp2_match provenance: received == Def(part_rank0 .. part_rank{world-1}) bit-exact at every (step, k), every rank, "
-                                      "over stored tensors DIGEST-BOUND to the recorder rows this leg loaded (rev F-r17-03)")
+                                      "over stored tensors DIGEST-BOUND to the recorder rows this leg loaded")
         n_checked, n_left, n_mis = int(provenance.get("collectives_checked") or 0), int(provenance.get("fused_norm_unfused_left_to_commit") or 0), int(provenance.get("n_mismatches") or len(provenance.get("mismatches") or []))
         if not provenance.get("pass"):
             c.fail(f"provenance FAIL: {n_mis} mismatches, first {json.dumps((provenance.get('mismatches') or [None])[0])[:200]}")
         if n_checked + n_left != len(common):
             c.fail(f"provenance checked {n_checked} collectives (+{n_left} unfused fused-norm calls left to the Commit), the folds state {len(common)} (steps stored: {provenance.get('steps_checked')})")
-        # [rev F-r17-03] the provenance record must be THIS run's: its recorder-file digests are the digests of the rows loaded here, every
+        # the provenance record must be THIS run's: its recorder-file digests are the digests of the rows loaded here, every
         # stored tensor was digested against its row (part + out, both ranks = 4 per collective), none mismatching.  A record without
-        # digests (pre-F-r17-03, or hand-written) or from another run is refused by name.
+        # digests (an older record, or hand-written) or from another run is refused by name.
         psha = provenance.get("recorder_sha256")
         if not isinstance(psha, dict) or not psha:
-            c.fail("provenance record carries no recorder_sha256: not bound to any recorder rows (another run, a hand-written file, or a pre-F-r17-03 tp2_match)")
+            c.fail("provenance record carries no recorder_sha256: not bound to any recorder rows (another run, a hand-written file, or an older tp2_match)")
         elif recorder_sha256 is None:
             c.fail("the recorder files' digests were not given to this leg (recorder_sha256=None): the provenance record cannot be bound to the rows loaded")
         else:
@@ -441,7 +441,7 @@ def cross_rank_check(colls: dict[int, list[dict]], *, producers: dict[int, dict[
         c.close()
 
     if require_all:
-        # [rev M-0092, not blocking] the library itself refuses an incomplete leg set: any second consumer inherits the entry point's rule
+        # the library itself refuses an incomplete leg set: any second consumer inherits the entry point's rule
         c = _Check(res, "complete", "every leg present: recorder rows, link tables and the provenance record of the same run (require_all)")
         for name, val in (("recorder", recorder), ("links", links), ("provenance", provenance)):
             if val is None:
@@ -454,7 +454,7 @@ def cross_rank_check(colls: dict[int, list[dict]], *, producers: dict[int, dict[
 
 
 def commit_binding(match_dir: str | Path, *, world: int = 2, match_oracle: dict[str, dict] | None = None, require: bool = False) -> dict:
-    """[D90, R1 at Commit] The COMMIT-STAGE binder of the peer inputs: the fold Match published, per (rank r, step, k), the
+    """The COMMIT-STAGE binder of the peer inputs: the fold Match published, per (rank r, step, k), the
     digest its `peers_r[s,k]` leaf is bound to (`peer_binding` of tp2_rank_match.json = the recorder's digest of rank 1-r's partial at (s,k));
     the Commit compared every committed rank-local partial against the SAME recorder's stored tensors bit-exact (`match_oracle`, per rank,
     exhaustive over (step, k)).  This closes the chain BY VALUE: fold peer leaf (r, s, k) == recorder part digest (1-r, s, k) == the bytes

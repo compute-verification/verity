@@ -1,5 +1,5 @@
-"""Where each period's time goes, by resource, from a HIGHUTIL run's stored outputs (no GPU): what CERT-SHARE (CMP-190)
-needs to price the protocol's own work at the public best's cost and recompute ε_undecl. For each period:
+"""Where each period's time goes, by resource, from a HIGHUTIL run's stored outputs (no GPU): what pricing the protocol's
+own work at the public best's cost needs, to recompute ε_undecl. For each period:
 
 - `gpu`: the blocks' GPU time, split exclusively: `gemm` (any GEMM kernel running: cuBLASLt's, v31's `gemm_kernel`,
   torch._int_mm's `Kernel2`), `protocol` (only the protocol's own kernels running, an instant shared equally among
