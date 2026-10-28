@@ -28,7 +28,7 @@ from verity.ml.crypto import lms
 
 KEY = lms.keygen(lms.Params(64, 4, 4), bytes([7]) * 64)
 """The challenger key: sixteen leaves, enough for a period's open and two sessions' opens, records, closes and ends."""
-HOST = "vy-test-challenger"
+HOST = "test-challenger"
 LANE = "memory-accounting"
 APPENDS = 8
 CIRCUIT = hashlib.sha512(b"verity/remote-bandwidth/v0").hexdigest()
@@ -37,7 +37,7 @@ MAIN = R.main_lines(Path(__file__).resolve().parents[2] / "sampled_proofs" / "te
 """Main's first-parent history, newest first, from c81c31e6d5 back to 6c2de12715: sampled_proofs' fixture."""
 PIN = MAIN[0]
 PINS = [C.pin_line(PIN, PIN, "2026-10-22T11:07:28Z")]
-"""The host's pins log as infra published it when it repinned vy-challenger-1 to `PIN`; every open seals it unless a
+"""The host's pins log as infra published it when it repinned the challenger's host to `PIN`; every open seals it unless a
 test says otherwise."""
 BRANCH, MERGE = "882770e6009e73bdf015f4069fa77ef698d7f326", "1018753ee5ff8c659fa8e8c5ccbc31b0d2b1a366"
 """A pin in main's history through the queue's merge `MERGE`, never on its first-parent line."""
