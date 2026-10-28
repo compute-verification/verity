@@ -40,7 +40,7 @@ theorem sum_card_filter {α : Type} [Fintype α] (S : Finset (Fin A.N)) (acct : 
 open Classical in
 /-- **The induced schedule fits the device.** -/
 theorem fits {ι α E : Type} [Fintype α] (R : Actual.Run L) (d : Device ι) (chip mem : Finset L)
-    (cls : Fin R.A.N → Option Op) (acct : Fin R.A.N → α) {𝒳 : Set (Finset L)} {M : Finset L → ℕ} {ends : E → L × L}
+    (cls : Fin R.A.N → Option OpClass) (acct : Fin R.A.N → α) {𝒳 : Set (Finset L)} {M : Finset L → ℕ} {ends : E → L × L}
     {β : E → ℕ} {link : Fin R.A.N → Fin R.A.N → E} (hbm : E × L) (side : ι → E × L)
     (hΦ : ∀ o, R.A.ComputeRate {chip ∪ mem} (R.A.classPrice cls o) (fun _ => d.rate o))
     (hM : R.Memory 𝒳 M) (hchip : chip ∈ 𝒳) (hmem : mem ∈ 𝒳) (hMc : M chip ≤ d.chip) (hMm : M mem ≤ d.mem)
@@ -70,13 +70,13 @@ open Classical in
 /-- **A feasible run's schedule fits the device**, when its locations `chip` and `mem` and its links are the device's,
 its memory per run is the hardware's and each op class runs at most at its rate. `Feasible`'s `Memory` bounds only the
 circuit's `state` (`memory_of_mem` derives it from the run's), so the run's memory is a hypothesis of its own. -/
-theorem fits_of_feasible {ι α E : Type} [Fintype α] (R : Actual.Run L) {H : Hardware L E} {ann : Annotation R.A E}
-    (hF : Feasible H R.A ann) (hM : R.Memory H.units H.M) (d : Device ι) (chip mem : Finset L)
-    (cls : Fin R.A.N → Option Op) (acct : Fin R.A.N → α) (hbm : E × L) (side : ι → E × L)
+theorem fits_of_feasible {ι α E : Type} [Fintype α] (R : Actual.Run L) {H : Hardware L E} {usage : Usage R.A E}
+    (hF : Feasible H R.A usage) (hM : R.Memory H.units H.M) (d : Device ι) (chip mem : Finset L)
+    (cls : Fin R.A.N → Option OpClass) (acct : Fin R.A.N → α) (hbm : E × L) (side : ι → E × L)
     (hΦ : ∀ o, R.A.ComputeRate {chip ∪ mem} (R.A.classPrice cls o) (fun _ => d.rate o))
     (hchip : chip ∈ H.units) (hmem : mem ∈ H.units) (hMc : H.M chip ≤ d.chip) (hMm : H.M mem ≤ d.mem)
     (hbw : H.β hbm.1 ≤ d.bw) (hcap : ∀ i, H.β (side i).1 ≤ d.cap i) :
-    (R.schedule chip mem cls acct ann.link hbm side).Fits d :=
+    (R.schedule chip mem cls acct usage.link hbm side).Fits d :=
   fits R d chip mem cls acct hbm side hΦ hM hchip hmem hMc hMm hF.2.2.2.2 hbw hcap
 
 open Classical in
@@ -84,7 +84,7 @@ open Classical in
 toward `hbm.2` or on a side channel toward its device end, what `chip` reads at `t` from outside it, from account `a`'s
 gates, is at most `a`'s `read` and `side` charges at `t`. -/
 theorem covers_ingress {ι α E : Type} [Fintype ι] (R : Actual.Run L) (chip mem : Finset L)
-    (cls : Fin R.A.N → Option Op) (acct : Fin R.A.N → α) (link : Fin R.A.N → Fin R.A.N → E) (hbm : E × L)
+    (cls : Fin R.A.N → Option OpClass) (acct : Fin R.A.N → α) (link : Fin R.A.N → Fin R.A.N → E) (hbm : E × L)
     (side : ι → E × L)
     (hcov : ∀ g, ∀ s ∈ R.A.reads g, R.A.x g ∈ chip → R.A.x s ∉ chip →
       (link g s = hbm.1 ∧ R.A.x g = hbm.2) ∨ ∃ i, link g s = (side i).1 ∧ R.A.x g = (side i).2) (t : ℕ) (a : α) :
@@ -122,7 +122,7 @@ theorem covers_ingress {ι α E : Type} [Fintype ι] (R : Actual.Run L) (chip me
 open Classical in
 /-- **The schedule charges the work**: when the pricing `π` is `p` on each op class and nothing on gates of none,
 account `a`'s work over a window of the device's gates is the schedule's `work p` for `a`. -/
-theorem covers_work {ι α E : Type} (R : Actual.Run L) (chip mem : Finset L) (cls : Fin R.A.N → Option Op)
+theorem covers_work {ι α E : Type} (R : Actual.Run L) (chip mem : Finset L) (cls : Fin R.A.N → Option OpClass)
     (acct : Fin R.A.N → α) [DecidableEq α] (link : Fin R.A.N → Fin R.A.N → E) (hbm : E × L) (side : ι → E × L)
     {p : Price} {π : Fin R.A.N → ℕ} (hπ : ∀ g, R.A.x g ∈ chip ∪ mem → π g = (cls g).elim 0 p) (w : Window) (a : α) :
     R.A.work π ((R.A.region (chip ∪ mem) (Set.Ico w.start (w.start + w.len))).filter fun g => acct g = a) =
