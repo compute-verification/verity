@@ -1,4 +1,4 @@
-"""One link-window's network certificates through the proof service (N2): the round trip to an accepted, exhaustive
+"""One link-window's network certificates through the proof system (N2): the round trip to an accepted, exhaustive
 outcome, the public-items rule on the registration, the head check against the declared grid and the occupancy
 profile, and each way a link-window fails closed, on injected coins and an injected clock. Each round's verdict of
 record is decided on a stand-in proof of the unit (`standin`: the prover's rows and output word by the gates'
@@ -94,7 +94,7 @@ class Run:
     def honest(self, w: int):
         return self.lw.commit(w, self.egress(egress_records()[w]), self.ingress(ingress_records()[w]), SALTS[w])
 
-    def register(self, opening) -> S.Registration:
+    def register(self, opening) -> S.WindowCommitmentRecord:
         reg = self.lw.register(self.stream, self.lw.registration(opening, self.previous))
         self.previous = reg.digest
         return reg

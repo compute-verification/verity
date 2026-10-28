@@ -1,4 +1,4 @@
-"""The ingress tie through the proof service: each bucket row of an ingress link-window of the warden's cells proved as
+"""The ingress tie through the proof system: each bucket row of an ingress link-window of the warden's cells proved as
 `io_request.IoTieRequest`, and the verifier of record that builds `advised.IoTieVerdict`, the tie of an advised link's
 requests to its certified ingress, only from IoTieRequest proofs it verified on lanes it computed itself (PROTOCOL.md,
 "The ingress tie").
@@ -303,7 +303,7 @@ class IngressTie:
         return R.record(self._program, self.query, {"law": "subset", "k": self.T}, S.SCHEME, roots,
                         self.provenance(head.window), previous=previous)
 
-    def register(self, stream: S.Stream, record: Mapping[str, Any]) -> S.Registration:
+    def register(self, stream: S.Stream, record: Mapping[str, Any]) -> S.WindowCommitmentRecord:
         """`stream.register` with the window's own ports, after holding its `window` provenance to exactly
         `{"kind": "served", "window": order}`."""
         window = len(stream.records)

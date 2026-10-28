@@ -174,7 +174,7 @@ def test_the_verifier_of_record_takes_the_certified_syncs_only_from_its_own_sour
 
 
 def test_the_verifier_of_record_refuses_a_link_declared_off_its_certified_syncs(tmp_path):
-    """Through the proof service (stand-in proofs): an honest session is accepted in every window where the clock
+    """Through the proof system (stand-in proofs): an honest session is accepted in every window where the clock
     source holds the declared syncs, and refused in every window where it says the certifier ran each window at a δ
     above the declared one, or where there is no source."""
     session = serve(1)
