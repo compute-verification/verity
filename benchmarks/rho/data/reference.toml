@@ -7,8 +7,8 @@
 # Its regimes are data/envelopes.toml's onsite (a wipe every 24 h leaving 5 GB of each server's whole memory,
 # ruled), onsite-today (today's wipe, about 12 GB a server plus the boot disk), onsite-per-device (10 GB
 # a device and the host unwiped: the sensitivity) and remote, and remote-h200-pouw and onsite-today-h200-pouw (PoUW
-# as deployed on the demo H200). A scenario with structure = "elementary" counts the uncertified and dark gates at one
-# counted operation a gate (data/exclusion.toml).
+# with per-call J10-R, as measured on an H200 server). A scenario with structure = "elementary" counts the
+# uncertified and dark gates at one counted operation a gate (data/exclusion.toml).
 
 [model.deepseek-v4-pro]
 n_total = { value = 1.6e12, unit = "param", source = "ruled: the reference datacenter (1.6T total)", status = "ruled" }
@@ -184,7 +184,7 @@ horizon = "year"
 run = "v4-pretrain"
 families = ["full"]
 
-# The reference H200 fleet under PoUW as deployed on the demo H200 (per-call J10-R: data/envelopes.toml
+# The reference H200 fleet under PoUW with per-call J10-R, as measured on an H200 server (data/envelopes.toml
 # regime.remote-h200-pouw), remote and with today's wipe.
 [scenario.reference-remote-h200-pouw]
 fleet = "world-h200"
