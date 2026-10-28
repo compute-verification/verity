@@ -20,7 +20,8 @@ def share(free: int = 0, waiters: int = 0, size: int = 48, fits: bool | None = N
     return {"share": {"share": size, "claims": 2, "waiters": waiters, "free": free, "fits": free >= 4 if fits is None else fits}}
 
 
-def slot(name: str, cpus: str = "8-19", mem: int = 40, held: bool = False, blocked: str | None = None, trains: bool = False) -> dict:
+def slot(name: str, cpus: str = "8-19", mem: int | None = 40, held: bool = False, blocked: str | None = None,
+         trains: bool = False) -> dict:
     return {"name": name, "cpus": cpus, "mem": mem, "trains": trains, "holder": {"pid": 1} if held else None, "blocked": blocked}
 
 
@@ -39,13 +40,23 @@ def test_a_pool_slot_free_now_wins_even_when_node_2_could_start_the_job():
     assert target == (CPU5, "research"), "cpu-5's pool when cpu-1's is busy"
 
 
-def test_cpu_3s_research_pool_takes_a_job_while_cpu_1s_and_cpu_5s_are_full():
-    """INF-281, 27 Oct 03:06Z: cpu-1 had 22 waiting and cpu-5 34 while cpu-3's research pool sat idle, outside SPILL."""
-    cpu3 = "vy-nebius-cpu-3"
-    assert (cpu3, "research") in auto.SPILL
+def test_the_later_research_pools_take_a_job_while_the_ones_before_them_are_full():
+    """cpu-1 and cpu-5 had 20 and 38 waiting while cpu-3's and cpu-6's research pools sat idle: their slots name no mem=, which
+    `choose` read as 0 GB, so every job skipped them. A slot without mem= reserves what the run asks (slot.py's `asking`)."""
+    cpu3, later = "vy-nebius-cpu-3", [f"vy-nebius-cpu-{k}" for k in (6, 7, 8, 9)]
+    assert auto.SPILL == ((CPU1, "research"), (CPU5, "research"), (cpu3, "research"), *((m, "research") for m in later))
     full = pool(*(slot(f"r{i}", held=True) for i in range(8)), waiters=22)
-    target, why = auto.choose({N2: share(waiters=5), CPU1: full, CPU5: full, cpu3: pool(slot("b4", cpus="0-15", mem=48))}, 4, 16)
+    idle = pool(*(slot(f"r{i}", cpus=f"{12 + 22 * i}-{33 + 22 * i}", mem=None) for i in range(8)))
+    docs = {N2: share(waiters=5), CPU1: full, CPU5: full}
+    target, why = auto.choose({**docs, cpu3: pool(slot("b4", cpus="0-15", mem=None)), **{m: idle for m in later}}, 4, 16)
     assert target == (cpu3, "research") and why.endswith("a slot is free there now")
+    target, why = auto.choose({**docs, cpu3: full, **{m: idle for m in later}}, 4, 16)
+    assert target == (later[0], "research") and why.endswith("a slot is free there now")
+    assert f"{later[0]}'s research pool: slots r0 free, r1 free" in why
+    target, _ = auto.choose({**docs, cpu3: full, **{m: full for m in later[:3]}, later[3]: idle}, 4, 16)
+    assert target == (later[3], "research")
+    target, _ = auto.choose({**docs, cpu3: full, later[0]: "exit 255: ssh: connect timed out", later[1]: idle}, 4, 16)
+    assert target == (later[1], "research"), "a machine that can't be read is skipped"
 
 
 def test_with_nothing_free_the_pool_with_the_shortest_line_per_fitting_slot_wins():
@@ -65,6 +76,8 @@ def test_a_slot_too_small_trains_only_or_blocked_never_takes_the_job():
         assert target is None and f"{CPU1}'s research pool skipped: no slot of" in why
     target, why = auto.choose({**docs, CPU1: pool(slot("r0", blocked="its window opens"))}, 4, 16)
     assert target == (CPU1, "research") and "r0 blocked" in why and "shortest line" in why, "a blocked slot is no free one"
+    target, _ = auto.choose({**docs, CPU1: pool(slot("r0", mem=None))}, 4, 200)
+    assert target == (CPU1, "research"), "a slot without mem= reserves what the run asks, so any memory fits it"
 
 
 def test_a_machine_that_cant_be_read_is_skipped_and_with_neither_a_pool_nor_node_2_the_job_is_refused():

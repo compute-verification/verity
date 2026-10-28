@@ -8,8 +8,9 @@ from 17:40Z for hours (a 16-job quick tier and a 32-core Lean check) while 56 ru
 node 2 for its share's live claims and waiters, and each SPILL machine for its pool's `slot.py --status --json`. `choose`
 then takes, in order:
 
-  - a pool where a slot that fits the job (not trains-only, at least its CPUs and its memory: the slot's mem= reserves the
-    run, with no cgroup cap) is free and unblocked for every waiter ahead and this job;
+  - a pool where a slot that fits the job (not trains-only, at least its CPUs, and its memory if the slot has mem=; one
+    without mem= fits any, since slot.py reserves what the run asks there, and neither is a cgroup cap) is free and unblocked
+    for every waiter ahead and this job;
   - else the pool with the shortest wait, as waiters ahead per fitting slot;
   - node 2 only when no pool fits the job or none can be read, and node 2 itself can be. Node 2 is the only GPU node, and on
     24 Oct 02:10Z its GPUs sat at 0% under a load of 235 on 120 cores from CPU work while cpu-5 ran at 8 of 192 (top).
@@ -29,10 +30,13 @@ from pathlib import Path
 from typing import Any, Callable
 
 AUTO_NODE, AUTO_PROJECT = "vy-nebius-2", "verity"
-#: (machine, pool) where `--on auto` may spill: cpu-1's, cpu-3's and cpu-5's `research` pools are any lane's, on cores no check
-#: slot holds (slot_only.POOLS). cpu-3's joined 27 Oct, when the other two had 34 and 22 waiting while it sat idle (INF-281).
-#: cpu-2's cores are the train slot's and proofs', cpu-4's the train slot's, proofs' and soundness's.
-SPILL = (("vy-nebius-cpu-1", "research"), ("vy-nebius-cpu-5", "research"), ("vy-nebius-cpu-3", "research"))
+#: (machine, pool) where `--on auto` may spill, in the order `choose` tries them: a CPU node's `research` pool (slot_only.POOLS),
+#: any lane's, on cores no merge-check or train slot holds. cpu-6's to cpu-9's share their cores with other pools (proofs' and
+#: soundness' Lean pools, and on cpu-9 ci's), so they come last. cpu-2's cores are the train slot's and proofs', cpu-4's the
+#: train slot's, proofs' and soundness's.
+SPILL = (("vy-nebius-cpu-1", "research"), ("vy-nebius-cpu-5", "research"), ("vy-nebius-cpu-3", "research"),
+         ("vy-nebius-cpu-6", "research"), ("vy-nebius-cpu-7", "research"), ("vy-nebius-cpu-8", "research"),
+         ("vy-nebius-cpu-9", "research"))
 DESCRIPTION = Path("infra/cluster/descriptions/nebius.toml")
 SLOT_PY = Path("tools/verity/check/slot.py")
 READ_TIMEOUT_S = 30
@@ -156,7 +160,8 @@ def _pool(doc: Any, cpus: int, mem_gb: float) -> tuple[int, int, int, str]:
     """A pool's fitting slots, free ones among them and waiters; ValueError when no slot of it fits the job."""
     if not isinstance(doc, dict) or "error" in doc:
         raise ValueError(doc.get("error") if isinstance(doc, dict) else doc or "not read")
-    fit = [s for s in doc.get("slots") or [] if not s.get("trains") and cpulist(s["cpus"]) >= cpus and (s.get("mem") or 0) >= mem_gb]
+    fit = [s for s in doc.get("slots") or []
+           if not s.get("trains") and cpulist(s["cpus"]) >= cpus and (not s.get("mem") or s["mem"] >= mem_gb)]
     if not fit:
         raise ValueError(f"no slot of {doc.get('file')} gives {cpus} CPUs and {mem_gb:g} GB")
     free = [s for s in fit if s.get("holder") is None and not s.get("blocked")]
