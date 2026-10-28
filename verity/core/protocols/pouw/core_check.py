@@ -2,7 +2,7 @@
 reference beside the Lean `pouw_check` (`verity/core/protocols/pouw/lean/check`), the served window's verifier of record
 (`benchmarks/pouw/served_zk/of_record.py`), held to it answer for answer by the difftest.
 
-The proof service registers the window, draws, proves and verifies; PoUW states what it registers and what the outcome
+The proof system registers the window, draws, proves and verifies; PoUW states what it registers and what the outcome
 must show, and publishes `window.PUBLIC` from it.  This is that composition in one function, the parts of
 `benchmarks/pouw/served_zk/served_commit.py` (`public_problem`, `register` and `Challenger.outcome`) that are PoUW's.
 
@@ -59,7 +59,7 @@ opened once, after R.  `live_salt` is its Pearl-C form (LIVESALT2, `Properties.P
 epoch's root, `salt.epoch_open_root` of its weights' root W and its ``pass_index`` k, the session is reserved for the salt
 coin alone (`window.SALT_FAMILIES`) and counts only when the ledger ends it complete, and the pass's coins, salt coin,
 salt and session are held to what the ledger and the session's files show.
-`rounds` is the rule on a live window's round coins (`window.rounds_reason`, over the proof service's challenger
+`rounds` is the rule on a live window's round coins (`window.rounds_reason`, over the proof system's challenger
 `sampled_proofs.challenger`): it reads the challenger's coins only through the session the auditor's signed ledger
 opens and ends for the window, under the window's pinned key, run from a commit the host's pins log records on main's
 first-parent line (`challenger.trusted_session_of`, over `challenger.pinned_session`), never a commitment the prover
@@ -568,7 +568,7 @@ def _registered(p: dict, c: dict) -> tuple[str | None, Any]:
                 f"{p['context']}"), None
     if sorted(items) != sorted(Wd.REGISTERED):
         if sorted(items) == sorted(Wd.LEGACY_REGISTERED):
-            return "window-form: no-fixed-length: registered before the fixed-length rule, so not of record", None
+            return "window-form: no-fixed-length: registered before the fixed-length rule (19 Oct), so not of record", None
         return f"public-items: registered {', '.join(sorted(items))}, declared {', '.join(sorted(Wd.REGISTERED))}", None
     why = Wd.length_problem(items["length"], p["max_tokens"])
     if why is not None:
