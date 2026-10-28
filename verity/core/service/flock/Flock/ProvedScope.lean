@@ -452,10 +452,10 @@ theorem plainCoins_ok {tags : Tags} {coins : Coins} (h : plainCoins tags coins =
   cases coins with
   | tree s => exact .inl ⟨s, rfl⟩
   | os =>
-    unfold plainCoins at h
-    split at h
-    · exact .inr ⟨rfl, by assumption⟩
-    · cases h
-  | seed => cases h
+    refine .inr ⟨rfl, ?_⟩
+    cases hl : tags.liveOs
+    · simp [plainCoins, hl] at h
+    · rfl
+  | seed => simp [plainCoins] at h
 
 end Flock.ProvedScope
