@@ -21,10 +21,12 @@
 
 on words, and each one's v2 the same function on bits (its ``word`` the v1, so `boolean.boolean_version` finds it): `GemmF32Out_v2`
 takes the K/16 steps of every W row at once, each step one batch over the rows, and `BatchedGemm_v2` is `GemmF32Out_v2` of each
-member, then `F2fpBf16_v2` of each word.  Their only `DOT` on bits is `HopperBF16WgmmaDot16_v2`, cut into `HOPPER_STEP`'s four
+member, then `F2fpBf16_v2` of each word.  Their `DOT` on bits is `HopperBF16WgmmaDot16_v2`, cut into `HOPPER_STEP`'s four
 element Definitions (`chain_step`): the first step's from the +0 accumulator, its 32 constant bits folded into the gates, and a
 later step's; and each of those in two, the gates that read only the x block, once per block, and the rest, once per row.  So no
-row computes a value another computes, nor a step a value its accumulator's constant bits fix.  Each of the four is bound to the
+row computes a value another computes, nor a step a value its accumulator's constant bits fix.  The training routes' `DOT`
+(`TRAIN_DOT`) is `HopperBF16WgmmaDot16_v3`, the same function without the finite stand-ins, cut the same way into
+`HOPPER_STEP_V3` (the four parts' `_v2`).  Each part is bound to the
 k16 step's silicon model (`census.silicon_step`), so census/v1 counts their gates as the step's, `tc:bf16`.  `BatchedGemm_v2` is the function
 of `mla.MlaBmm_v1` (vLLM's batch-invariant Triton `bmm_kernel` on sm_120), which names no word; `tests/program/test_bf16_gemm.py`
 checks that they agree.  `bf16_gemm_check` holds the numpy models, `kernels.batched_gemm_rows` and `kernels.cublas_gemm_rows` the
@@ -42,12 +44,12 @@ slices meet in its epilogue through the bf16 output: `CublasSerialSplitKGemm`.
 smollm2-135m's training step (`TRAIN_CAPTURE`) reuses these Definitions on bits for every GEMM it runs.  F.linear's three GEMMs
 at x (M, K), W (N, K) are each one row's `x @ w^T` (`TRAIN_LINEAR_ROLES`): forward x = X's row against W's rows, dX = dY's row
 against W^T's, dW = dY^T's row against X^T's.  `train_route` is the route sm_120 takes for one at the captured (M, K, N), and
-`route_gemm` binds a route, an explicit parameter: unsplit `Gemm_v3`, `CublasSplitKGemmBf16Partials_v2`,
+`route_gemm` binds a route, an explicit parameter, on `TRAIN_DOT`: unsplit `Gemm_v3`, `CublasSplitKGemmBf16Partials_v2`,
 `CublasSerialSplitKGemm_v2`, or, where cuBLAS slices K over grid.z at ceil(K / z) rounded up to 8 (B 8 x S 512's dW),
 `CublasSplitKGemmBf16PartialsAligned_v1{K, N, SPLIT_K, ALIGN, TILE_K, DOT}`, on bits only, whose chunks need not be whole
 k16 steps: each chunk's chain takes its k-tiles of TILE_K words residue first, as the launched cutlass kernel does;
 `train_linear` is the two together.  Eager attention's six bmm's (`TRAIN_BMM`) are all unsplit, the batch on grid.z and no
-reduction kernel: `attention_bmm` binds `BatchedGemm_v2` over B members (heads), one query or key row each.  Either refuses a
+reduction kernel: `attention_bmm` binds `BatchedGemm_v2` on `TRAIN_DOT` over B members (heads), one query or key row each.  Either refuses a
 shape or role the capture does not cover.
 """
 from __future__ import annotations
@@ -72,9 +74,11 @@ from verity.ml.definitions.evidence import EVIDENCE
 __all__ = ["BatchedGemm", "BatchedGemmWord", "ChainStep", "CublasSerialSplitKGemm", "CublasSerialSplitKGemmWord",
            "CublasSplitKGemm", "CublasSplitKGemmBf16Partials", "CublasSplitKGemmBf16PartialsAligned",
            "CublasSplitKGemmBf16PartialsWord", "CublasSplitKGemmF32Out", "CublasSplitKGemmF32OutWord", "CublasSplitKGemmWord",
-           "GemmF32Out", "GemmF32OutWord", "HOPPER_STEP",
-           "HopperBf16Dot16Step", "HopperBf16Dot16StepFirst", "HopperBf16Dot16StepFirstX", "HopperBf16Dot16StepX",
-           "TRAIN_BMM", "TRAIN_BMM_SHAPES", "TRAIN_CAPTURE", "TRAIN_LINEARS", "TRAIN_LINEAR_ROLES", "TRAIN_M", "TRAIN_ROUTES",
+           "GemmF32Out", "GemmF32OutWord", "HOPPER_STEP", "HOPPER_STEP_V3",
+           "HopperBf16Dot16Step", "HopperBf16Dot16StepFirst", "HopperBf16Dot16StepFirstV2", "HopperBf16Dot16StepFirstX",
+           "HopperBf16Dot16StepFirstXV2", "HopperBf16Dot16StepV2", "HopperBf16Dot16StepX", "HopperBf16Dot16StepXV2",
+           "TRAIN_BMM", "TRAIN_BMM_SHAPES", "TRAIN_CAPTURE", "TRAIN_DOT", "TRAIN_LINEARS", "TRAIN_LINEAR_ROLES", "TRAIN_M",
+           "TRAIN_ROUTES",
            "aligned_bounds", "attention_bmm", "chain_step", "conformance_cc12", "dot_step", "residue_first", "route_gemm",
            "split_bounds", "train_linear", "train_route"]
 
@@ -131,28 +135,36 @@ class ChainStep(NamedTuple):
         return B.batch(self.step, acc, x, w, xd, axes=(0, None, 0, None)) if rows else B.call(self.step, acc, x, w, xd)
 
 
-def chain_step(name: str, build: Callable, params: Sequence[tuple[str, Type]], docs: tuple[str, str]) -> ChainStep:
-    """The `ChainStep` of ``build(C, *elements)`` over ``params`` = (acc, x, w): ``<name>FirstX_v1`` and ``<name>First_v1``
-    trace it with acc the 32 constant-0 bits, ``<name>X_v1`` and ``<name>_v1`` as it is.  ``docs``: what the step computes, and
-    what x is."""
+def chain_step(name: str, build: Callable, params: Sequence[tuple[str, Type]], docs: tuple[str, str],
+               version: int = 1) -> ChainStep:
+    """The `ChainStep` of ``build(C, *elements)`` over ``params`` = (acc, x, w): ``<name>FirstX_v{version}`` and
+    ``<name>First_v{version}`` trace it with acc the 32 constant-0 bits, ``<name>X_v{version}`` and ``<name>_v{version}`` as it
+    is.  ``docs``: what the step computes, and what x is."""
     what, x = docs
     zero = const_bits(0, 32)
     first = EW.shared_operand(
-        (f"{name}FirstX", f"{name}First"), 1, lambda C, *els: build(C, zero, *els), params[1:], F32, 0,
+        (f"{name}FirstX", f"{name}First"), version, lambda C, *els: build(C, zero, *els), params[1:], F32, 0,
         (f"the gates of {what} from acc = +0 that read only {x}, once per {x}", f"{what} from acc = +0, from {x}'s own gates"))
     later = EW.shared_operand(
-        (f"{name}X", name), 1, build, params, F32, 1,
+        (f"{name}X", name), version, build, params, F32, 1,
         (f"the gates of {what} that read only {x}, once per {x}", f"{what}, from {x}'s own gates"))
     return ChainStep(*first, *later)
 
 
 _A16 = Array(16, BF16)
-HOPPER_STEP = chain_step("HopperBf16Dot16Step", BG.HopperBF16WgmmaDot16.build, (("acc", F32), ("a", _A16), ("b", _A16)),
+_HOPPER_PARAMS = (("acc", F32), ("a", _A16), ("b", _A16))
+HOPPER_STEP = chain_step("HopperBf16Dot16Step", BG.HopperBF16WgmmaDot16.build, _HOPPER_PARAMS,
                          ("HopperBF16WgmmaDot16_v1(acc, a, b)", "a"))
 HopperBf16Dot16StepFirstX, HopperBf16Dot16StepFirst, HopperBf16Dot16StepX, HopperBf16Dot16Step = HOPPER_STEP
-for _part in HOPPER_STEP:
+#: `HopperBF16WgmmaDot16_v3`'s four parts, the `_v2` of `HOPPER_STEP`'s
+HOPPER_STEP_V3 = chain_step("HopperBf16Dot16Step", BG.HopperBF16WgmmaDot16V3.build, _HOPPER_PARAMS,
+                            ("HopperBF16WgmmaDot16_v1(acc, a, b)", "a"), version=2)
+HopperBf16Dot16StepFirstXV2, HopperBf16Dot16StepFirstV2, HopperBf16Dot16StepXV2, HopperBf16Dot16StepV2 = HOPPER_STEP_V3
+for _part in (*HOPPER_STEP, *HOPPER_STEP_V3):
     silicon_step(_part, BG.HopperBF16WgmmaDot16.silicon)
-_DOT_STEPS = {BG.HopperBF16WgmmaDot16.id: HOPPER_STEP}
+_DOT_STEPS = {BG.HopperBF16WgmmaDot16.id: HOPPER_STEP, BG.HopperBF16WgmmaDot16V3.id: HOPPER_STEP_V3}
+#: the k16 step the training routes bind (`route_gemm`, `attention_bmm`)
+TRAIN_DOT = BG.HopperBF16WgmmaDot16V3
 
 
 def dot_step(name: str, DOT: Any) -> ChainStep:
@@ -398,9 +410,9 @@ def train_route(role: str, M: int, K: int, N: int) -> dict[str, Any]:
 
 
 def route_gemm(route: dict[str, Any], K: int, N: int) -> Any:
-    """``route``'s Definition on bits at the row GEMM (K, N), `HopperBF16WgmmaDot16_v2` its k16 step: (x: Array<K, BF16>,
-    w: Array<N, Array<K, BF16>>) -> Array<N, BF16>."""
-    kind, dot = route.get("kernel"), BG.HopperBF16WgmmaDot16
+    """``route``'s Definition on bits at the row GEMM (K, N), `HopperBF16WgmmaDot16_v3` (`TRAIN_DOT`) its k16 step:
+    (x: Array<K, BF16>, w: Array<N, Array<K, BF16>>) -> Array<N, BF16>."""
+    kind, dot = route.get("kernel"), TRAIN_DOT
     if kind == "nosplit":
         return bind(BG.Gemm, K=K, N=N, DOT=dot)
     if "align" in route and kind == "splitk" and route.get("partial") == "bf16":
@@ -424,7 +436,7 @@ def train_linear(role: str, M: int, K: int, N: int) -> Any:
 
 
 def attention_bmm(op: str, S: int, D: int, B: int = 1) -> Any:
-    """`BatchedGemm_v2{B, K, N, HopperBF16WgmmaDot16_v2}` of eager attention's bmm ``op`` (`TRAIN_BMM`) at S tokens and head
+    """`BatchedGemm_v2{B, K, N, HopperBF16WgmmaDot16_v3}` of eager attention's bmm ``op`` (`TRAIN_BMM`) at S tokens and head
     dimension D: B members (heads), each one x row against its head's w rows; refuses any (S, D) the capture does not cover."""
     if op not in TRAIN_BMM:
         raise ValueError(f"attention_bmm: op {op!r} (only {', '.join(TRAIN_BMM)})")
@@ -433,4 +445,4 @@ def attention_bmm(op: str, S: int, D: int, B: int = 1) -> Any:
     if B < 1:
         raise ValueError(f"attention_bmm: B = {B}")
     K, N = TRAIN_BMM[op][2](S, D)
-    return bind(BatchedGemm, B=B, K=K, N=N, DOT=BG.HopperBF16WgmmaDot16)
+    return bind(BatchedGemm, B=B, K=K, N=N, DOT=TRAIN_DOT)
