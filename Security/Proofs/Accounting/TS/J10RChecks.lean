@@ -5,7 +5,7 @@ import Definitions.Accounting.TS.J10R
 
 - `unit_row_is_call_row`, `unit_col_is_call_col`, `j10r_rows`, `j10r_cols`: at `unitBlocks`' bases a unit's row `i` and
   column `j` are the call-scale layout's row `R I + i` and column `C J + j`, for every seed, call, tile and `K`.
-- `callSeed_vec` … `keys_vec`: `J10R` against `verity/core/protocols/pouw/circuit/seeds.py` and `h1tile.py` (`call_seed`,
+- `callSeed_vec` … `keys_vec`: `J10R` against `verity/ml/protocols/pouw/circuit/seeds.py` and `h1tile.py` (`call_seed`,
   `receipt_seed`, `seed`, `noise_block`, `j10r_blocks`, `j10r_noise`, `fold_keys`) on unit (1, 2) of an 8 × 32 call at
   `K = 64`, the call at position 40 and the unit at 46, salt `0, 1, …, 63` and roots `(7i + 3) mod 256` (A) and
   `(5i + 1) mod 256` (B), evaluated by the kernel. `test_j10r_lean_vectors.py` recomputes each.

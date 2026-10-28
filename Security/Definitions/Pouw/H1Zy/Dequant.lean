@@ -3,7 +3,7 @@ import Mathlib.Data.Int.Basic
 /-!
 # `PouwZyDequant_v1`, the served dequant, on words (trusted)
 
-`h1zy.dequant` (`verity/core/protocols/pouw/circuit/h1zy.py`): y = RN_bf16(RN32(RN32(RN32(z) · s_a) · s_w)), z an s32
+`h1zy.dequant` (`verity/ml/protocols/pouw/circuit/h1zy.py`): y = RN_bf16(RN32(RN32(RN32(z) · s_a) · s_w)), z an s32
 word, the scales f32 words, y a bf16 word, the activation scale first and no bias add (`int8_ops.scaled_mm`'s epilogue).
 Its primitives' word evaluators, by integer arithmetic on the encodings:
 
