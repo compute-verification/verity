@@ -16,7 +16,8 @@ the leaves the drawn blocks open.
   refused (a draw is never redrawn), as is any draw once the window was released. The sealed bundle then holds the kept set,
   and the commitment over every leaf with every step's levels and salt key, so each kept leaf's opening path stays whole until
   the last proof that reads it ends; a read of a dropped leaf is refused by name (`refused`, and the committer's own `open`).
-* **Where draws come in.** `Draws.put` in process, or `DrawDir`: ``--draws-dir`` (default ``OUT/draws``) holds one file a draw,
+* **Where draws come in.** `Draws.put` in process (PoUW H1's under ``pouw``, from its arm once the window's draw coin is
+  open: `serve_h1.H1Windows.drawn`), or `DrawDir`: ``--draws-dir`` (default ``OUT/draws``) holds one file a draw,
   ``w<k>.<protocol>.json`` = ``{"window": k, "protocol": P, "reads": [[step, name, lo, hi], ...]}``, written whole (to a temporary
   name, then renamed) once the window's ``windows.jsonl`` line, its commitment, is out. A file that doesn't parse, or names
   another window or protocol, fails that window's release by name; the server serves on.
@@ -282,9 +283,10 @@ class RetentionOptions:
                                      help="--retain device: the device pool's size, beside the engine and the window ring; it must hold "
                                           "every window awaiting its release and the open one, so at least --window-gb")
     release_after: str = option("--release-after", default="", metavar="PROTOCOLS",
-                                help="--retain device --seal: the subprotocols (comma-separated, e.g. sampled_proofs,pouw_h1) whose draw "
-                                     "of each window its release waits for; the union of the leaves their drawn blocks open is kept "
-                                     "(serve_release)")
+                                help="--retain device --seal: the subprotocols (comma-separated, e.g. pouw) whose draw of each "
+                                     "window its release waits for; the union of the leaves their drawn blocks open is kept "
+                                     "(serve_release); pouw is PoUW H1's, put by its arm (--protocols), the rest come in "
+                                     "through --draws-dir")
     draws_dir: str = option("--draws-dir", default="", metavar="DIR",
                             help="--release-after: where each draw comes in, w<k>.<protocol>.json (default OUT/draws)")
 

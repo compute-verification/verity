@@ -1,7 +1,6 @@
 #!/usr/bin/env bash
 # The timed window's legs under one lease, from the run tree's root (--cwd clone: the PoUS and joint legs build Lean in it):
-#   research run --on vy-nebius-2 --project verity --campaign resource-accounting --source <tree> --cwd clone --no-sampler \
-#     --env GPU_LEASE_WHO=<id> --env LEGS=A,B,C,F [--env AT=2026-10-12T15:00Z --env RELEASE='<its booking's text>'] -- \
+#   GPU_LEASE_WHO=<id> LEGS=A,B,C,F [AT=<the booking's start, UTC> RELEASE='<its booking's text>'] \
 #     bash benchmarks/resource_accounting/window.sh
 # Each leg (`leg` below) is run.sh into $OUT/<leg> with that leg's env, and TUNED for the tuned arms:
 #  1. every leg's PHASE=prepare, over one scratch, on the CPUs: the ship, the PoUS verdict and the tagger, each built once; a

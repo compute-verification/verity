@@ -91,7 +91,7 @@ def test_the_seal_reads_the_port_positions_of_a_step_no_draw_named(cs, tmp_path)
     from verity_vllm.commit.served_record import PORT_NAMES, committed_raw
 
     pos = bytes(range(40, 48)) * 8
-    _host, rc, dev = committed(cs, {1: [(PORT_NAMES[1], pos)]})
+    _host, rc, dev = committed(cs, extra={1: [(PORT_NAMES[1], pos)]})
     before = committed_raw(dev, 1, PORT_NAMES[1])
     assert before is not None and before[0] == pos
     draws = SL.Draws(("pouw",))

@@ -29,11 +29,11 @@ def cs(request):
     return request.param
 
 
-def committed(cs, extra=None):
-    """Steps committed as --retain host keeps them (their blocks, ``host``), then moved into a device pool as --retain device holds them;
-    ``extra`` adds members by step."""
+def committed(cs, values=None, extra=None):
+    """Steps committed as --retain host keeps them (their blocks, ``host``), then moved into a device pool as --retain device holds them:
+    ``values`` (`commit_steps`' form), else `steps`'; ``extra`` adds members by step."""
     k = (R.ROW_BYTES if cs else GPU_CHUNK_BYTES) // 256
-    st = steps(k)
+    st = dict(values or steps(k))
     for s, members in (extra or {}).items():
         st[s] = st[s] + members
     dev, rc = commit_steps(st, commit_scheme=cs)
