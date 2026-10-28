@@ -242,6 +242,16 @@ theorem Witnesses : Properties.Witnesses := by
   obtain ⟨U, hU⟩ := exists_partition h3 h4 hL
   exact ⟨dv.n, U, (Reports j out hev i' P d dv.n U hpar hdec hL hθ hU).2.2.1.1 hc⟩
 
+/-- **The check's rate refines the policy's budgets**: a block of at most `c` gates with at most `α` fresh input bits
+per gate has at most `k = α c`, as `α ≥ 0`. -/
+theorem Refines : Properties.Refines := by
+  intro j out hev i P d n U hpar hdec hL hθ hU hc
+  dsimp only
+  intro u
+  obtain ⟨hs, hr⟩ := (Reports j out hev i P d n U hpar hdec hL hθ hU).2.2.1.1 hc u
+  exact ⟨hs, hr.trans (mul_le_mul_of_nonneg_left (by exact_mod_cast hs)
+    (div_nonneg (Nat.cast_nonneg _) (Nat.cast_nonneg _)))⟩
+
 /-! ## Completeness
 
 The converses of the refusals and of the verdict: the check refuses only the malformed, and gives a verdict on every
