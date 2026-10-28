@@ -142,7 +142,7 @@ theorem Run.rep (S : Claims.JsonSpec printJ Flock.canon) (h64 : Claims.Out64 H) 
         (o.proof 0 r).cap = cm.cap ∧ (o.proof 0 r).params = pcsParams (Setup.ofCircuit st).merkle sch := by
   obtain ⟨st, rb, streams, hst, ht, htabs, hss, hpf, hex, hlink, -, hrec, hdec, hsess, hlv, hlive⟩ :=
     Run.json S h64 hP o
-  obtain ⟨hct, -, -, -⟩ := stmtOk S o.toCase
+  obtain ⟨hct, -, -, -⟩ := stmtOk o.toCase
   obtain ⟨hC, -⟩ := hP o.toCase st (by rw [hst]; simp)
   have hrun := o.ran
   unfold sessionS at hrun
