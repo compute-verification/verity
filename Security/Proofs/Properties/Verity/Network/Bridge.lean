@@ -11,9 +11,13 @@ from the play, not what the code checks, so they hold by construction at a reali
   blocks of `m` challenger's coins, one block a window (`OwnCoins`), window `i`'s coins are the first `D.V.k` of its
   block and its prover's tape the rest of the own coin (`OwnTape`, `splitOwn`, `windowCoinsLive_split`).
 * **S6's `stmt`, fixed before the own coin**: window `i`'s statement is the one its decoding most often gives over the
-  network audit's own coin (`coinMode`) where that is in the sampled audit's scope, else a fixed in-scope one
-  (`stmtOf`). It reads the coins only off the other coordinates (`stmtOf_update`, `couples_stmt`) and is in scope at
-  every coin (`stmtOf_scope`), so `R.scope` holds as stated.
+  network audit's own coin among accepted plays (`coinMode`) where that is in the sampled audit's scope, else a fixed
+  in-scope one (`stmtOf`). It reads the coins only off the other coordinates (`stmtOf_update`, `couples_stmt`) and is
+  in scope at every coin (`stmtOf_scope`), so `R.scope` holds as stated. The commitment the game's `c` binds holds the
+  network's only by digest, so an accepted play may decode to another statement; where every accepted play's is in
+  scope, that event's probability is at most the square root of two independent own coins' accepted plays decoding to
+  different statements (`stmtOf_collision`, from `coinMode_collision`): two preimages of one binding digest, which the
+  coupling's break answers for.
 * **S6's `wit`**: a witness in the leak relation wherever the statement has one (`witOf`, `couples_wit`).
 * **The run's verdicts**: a coupling's guarantee (`Vocab.Coupling.bound`) reads its run only through the run at the
   code, which sets the verdicts itself, and `BreakBound`, which reads none: `Vocab.Coupling.atCode_withAccepts` and
@@ -82,47 +86,154 @@ section Mode
 
 variable {β γ : Type} [Fintype β] [Nonempty β]
 
-/-- **The value `g` most often takes** over a uniform coin. -/
-noncomputable def coinMode (g : β → γ) : γ :=
-  g (Classical.choose (Finite.exists_max fun x => Pouw.pr fun y => g y = g x))
+/-- **The value `g` most often takes where `A` holds**, over a uniform coin. -/
+noncomputable def coinMode (A : β → Prop) (g : β → γ) : γ :=
+  g (Classical.choose (Finite.exists_max fun x => Pouw.pr fun y => A y ∧ g y = g x))
 
-/-- No value is likelier than the mode. -/
-theorem coinMode_max (g : β → γ) (c : γ) : Pouw.pr (fun y => g y = c) ≤ Pouw.pr (fun y => g y = coinMode g) := by
+/-- No value is likelier than the mode where `A` holds. -/
+theorem coinMode_max (A : β → Prop) (g : β → γ) (c : γ) :
+    Pouw.pr (fun y => A y ∧ g y = c) ≤ Pouw.pr (fun y => A y ∧ g y = coinMode A g) := by
   by_cases hc : ∃ x, g x = c
   · obtain ⟨x, rfl⟩ := hc
-    exact Classical.choose_spec (Finite.exists_max fun x => Pouw.pr fun y => g y = g x) x
-  · rw [Pouw.pr_eq_zero fun y hy => hc ⟨y, hy⟩]
+    exact Classical.choose_spec (Finite.exists_max fun x => Pouw.pr fun y => A y ∧ g y = g x) x
+  · rw [Pouw.pr_eq_zero fun y (hy : A y ∧ g y = c) => hc ⟨y, hy.2⟩]
     exact Pouw.pr_nonneg _
+
+theorem pr_pos_of {P : β → Prop} {x : β} (hx : P x) : 0 < Pouw.pr P := by
+  classical
+  rw [Pouw.pr_eq_card P (Finset.univ.filter P) fun y => by simp]
+  apply div_pos
+  · exact_mod_cast Finset.card_pos.2 ⟨x, by simp [hx]⟩
+  · exact_mod_cast Fintype.card_pos
+
+/-- Where `A` holds somewhere, some coin where it holds takes the mode. -/
+theorem coinMode_attained {A : β → Prop} (g : β → γ) {x : β} (hx : A x) : ∃ y, A y ∧ g y = coinMode A g := by
+  by_contra hn
+  have h0 : Pouw.pr (fun y => A y ∧ g y = coinMode A g) = 0 := Pouw.pr_eq_zero fun y hy => hn ⟨y, hy⟩
+  have h1 := (pr_pos_of (P := fun y => A y ∧ g y = g x) ⟨hx, rfl⟩).trans_le (coinMode_max A g (g x))
+  rw [h0] at h1
+  exact lt_irrefl _ h1
+
+open Finset in
+/-- **Two independent coins' plays where `A` holds disagree on `g` at least as often as the square of one's
+disagreeing with the mode**: the counting behind a finder that runs the play at two coins. Every coin disagrees with at
+least as many coins in `A` as the mode does, the mode's being the largest of the counts. -/
+theorem coinMode_collision (A : β → Prop) (g : β → γ) :
+    Pouw.pr (fun y => A y ∧ g y ≠ coinMode A g) ^ 2 ≤
+      Pouw.pr (fun z : β × β => (A z.1 ∧ A z.2) ∧ g z.1 ≠ g z.2) := by
+  classical
+  have hcard : ∀ (P : β → Prop) [DecidablePred P], Pouw.pr P = ((univ.filter P).card : ℝ) / Fintype.card β :=
+    fun P _ => Pouw.pr_eq_card P _ fun x => by simp
+  have hcard2 : ∀ (P : β × β → Prop) [DecidablePred P],
+      Pouw.pr P = ((univ.filter P).card : ℝ) / Fintype.card (β × β) :=
+    fun P _ => Pouw.pr_eq_card P _ fun x => by simp
+  have hN : (0 : ℝ) < Fintype.card β := by exact_mod_cast Fintype.card_pos
+  have hmax : ∀ c, (univ.filter fun y => A y ∧ g y = c).card ≤
+      (univ.filter fun y => A y ∧ g y = coinMode A g).card := fun c => by
+    have h := coinMode_max A g c
+    rw [hcard, hcard] at h
+    exact_mod_cast (div_le_div_iff_of_pos_right hN).1 h
+  have hsplit : ∀ c, (univ.filter fun y => A y ∧ g y = c).card + (univ.filter fun y => A y ∧ g y ≠ c).card =
+      (univ.filter A).card := fun c => by
+    rw [card_filter, card_filter, card_filter, ← sum_add_distrib]
+    refine sum_congr rfl fun y _ => ?_
+    by_cases h1 : A y <;> by_cases h2 : g y = c <;> simp [h1, h2]
+  have hfib : ∀ x, (univ.filter fun y => A y ∧ g y ≠ coinMode A g).card ≤
+      (univ.filter fun y => A y ∧ g y ≠ g x).card := fun x => by
+    have h1 := hsplit (coinMode A g)
+    have h2 := hsplit (g x)
+    have h3 := hmax (g x)
+    omega
+  have hpairs : (univ.filter fun z : β × β => (A z.1 ∧ A z.2) ∧ g z.1 ≠ g z.2).card =
+      ∑ x ∈ univ.filter A, (univ.filter fun y => A y ∧ g y ≠ g x).card := by
+    rw [card_filter, Fintype.sum_prod_type, sum_filter]
+    refine sum_congr rfl fun x _ => ?_
+    by_cases hx : A x
+    · rw [if_pos hx, card_filter]
+      exact sum_congr rfl fun y _ =>
+        if_congr ⟨fun h => ⟨h.1.2, Ne.symm h.2⟩, fun h => ⟨⟨hx, h.1⟩, Ne.symm h.2⟩⟩ rfl rfl
+    · rw [if_neg hx]
+      exact sum_eq_zero fun y _ => if_neg fun h => hx h.1.1
+  have hB : (univ.filter fun y => A y ∧ g y ≠ coinMode A g).card ≤ (univ.filter A).card := by
+    have := hsplit (coinMode A g)
+    omega
+  have hcount : (univ.filter fun y => A y ∧ g y ≠ coinMode A g).card *
+      (univ.filter fun y => A y ∧ g y ≠ coinMode A g).card ≤
+      (univ.filter fun z : β × β => (A z.1 ∧ A z.2) ∧ g z.1 ≠ g z.2).card := by
+    rw [hpairs]
+    calc _ ≤ (univ.filter A).card * (univ.filter fun y => A y ∧ g y ≠ coinMode A g).card := Nat.mul_le_mul hB le_rfl
+      _ = ∑ x ∈ univ.filter A, (univ.filter fun y => A y ∧ g y ≠ coinMode A g).card := by
+          rw [sum_const, smul_eq_mul]
+      _ ≤ _ := sum_le_sum fun x _ => hfib x
+  rw [hcard, hcard2, Fintype.card_prod, div_pow, sq, sq, Nat.cast_mul]
+  exact div_le_div_of_nonneg_right (by exact_mod_cast hcount) (by positivity)
 
 end Mode
 
 open Classical in
-/-- **A statement fixed before the coordinate `o`**: the one `dec` most often gives over `o` at the other coordinates
-of `ξ`, where that is in the sampled audit's scope at `D`, `lay` and `k`, else `s₀`. -/
+/-- **A statement fixed before the coordinate `o`**: the one `dec` most often gives over `o` where `acc` holds, at the
+other coordinates of `ξ`, where that is in the sampled audit's scope at `D`, `lay` and `k`, else `s₀`. -/
 noncomputable def stmtOf (D : Deploy Coin Col T) (lay : Stmt → Layout L S) (k : Stmt → ℕ) (s₀ : Msg) (o : I)
-    [Nonempty (Ω o)] (dec : ((i : I) → Ω i) → Msg) (ξ : (i : I) → Ω i) : Msg :=
-  if ScopeAcc D lay k (coinMode fun x => dec (Function.update ξ o x)) then
-    coinMode (fun x => dec (Function.update ξ o x))
+    [Nonempty (Ω o)] (acc : ((i : I) → Ω i) → Prop) (dec : ((i : I) → Ω i) → Msg) (ξ : (i : I) → Ω i) : Msg :=
+  if ScopeAcc D lay k (coinMode (fun x => acc (Function.update ξ o x)) fun x => dec (Function.update ξ o x)) then
+    (coinMode (fun x => acc (Function.update ξ o x)) fun x => dec (Function.update ξ o x))
   else s₀
 
 /-- `stmtOf` doesn't read the coordinate `o`. -/
-theorem stmtOf_update (s₀ : Msg) (o : I) [Nonempty (Ω o)] (dec : ((i : I) → Ω i) → Msg) (ξ : (i : I) → Ω i)
-    (x : Ω o) : stmtOf D lay k s₀ o dec (Function.update ξ o x) = stmtOf D lay k s₀ o dec ξ := by
+theorem stmtOf_update (s₀ : Msg) (o : I) [Nonempty (Ω o)] (acc : ((i : I) → Ω i) → Prop)
+    (dec : ((i : I) → Ω i) → Msg) (ξ : (i : I) → Ω i) (x : Ω o) :
+    stmtOf D lay k s₀ o acc dec (Function.update ξ o x) = stmtOf D lay k s₀ o acc dec ξ := by
   simp only [stmtOf, Function.update_idem]
 
 /-- `stmtOf` is in the sampled audit's scope where `s₀` is. -/
-theorem stmtOf_scope {s₀ : Msg} (h₀ : ScopeAcc D lay k s₀) (o : I) [Nonempty (Ω o)] (dec : ((i : I) → Ω i) → Msg)
-    (ξ : (i : I) → Ω i) : ScopeAcc D lay k (stmtOf D lay k s₀ o dec ξ) := by
+theorem stmtOf_scope {s₀ : Msg} (h₀ : ScopeAcc D lay k s₀) (o : I) [Nonempty (Ω o)] (acc : ((i : I) → Ω i) → Prop)
+    (dec : ((i : I) → Ω i) → Msg) (ξ : (i : I) → Ω i) : ScopeAcc D lay k (stmtOf D lay k s₀ o acc dec ξ) := by
   unfold stmtOf
   split_ifs with h
   exacts [h, h₀]
 
+/-- Where every play `acc` accepts decodes to a statement in scope, `stmtOf` is the mode wherever some value of `o`
+is accepted. -/
+theorem stmtOf_eq_coinMode {acc : ((i : I) → Ω i) → Prop} {dec : ((i : I) → Ω i) → Msg}
+    (h : ∀ ξ, acc ξ → ScopeAcc D lay k (dec ξ)) (s₀ : Msg) (o : I) [Nonempty (Ω o)] (ξ : (i : I) → Ω i) (x : Ω o)
+    (hx : acc (Function.update ξ o x)) :
+    stmtOf D lay k s₀ o acc dec ξ =
+      coinMode (fun x => acc (Function.update ξ o x)) fun x => dec (Function.update ξ o x) := by
+  obtain ⟨y, hy, he⟩ := coinMode_attained (A := fun x => acc (Function.update ξ o x))
+    (fun x => dec (Function.update ξ o x)) hx
+  have hs : ScopeAcc D lay k
+      (coinMode (fun x => acc (Function.update ξ o x)) fun x => dec (Function.update ξ o x)) := by
+    rw [← he]
+    exact h _ hy
+  unfold stmtOf
+  rw [if_pos hs]
+
+/-- **The break `stmtOf` leaves, at the square root of a collision**: where every accepted play decodes to a
+statement in scope, the probability over `o` that a play is accepted while its decoded statement isn't `stmtOf`'s,
+squared, is at most the probability over two independent values of `o` that both plays are accepted with different
+decoded statements. Two statements under one binding digest are a collision, which a finder that runs the play at both
+outputs. -/
+theorem stmtOf_collision {acc : ((i : I) → Ω i) → Prop} {dec : ((i : I) → Ω i) → Msg}
+    (h : ∀ ξ, acc ξ → ScopeAcc D lay k (dec ξ)) (s₀ : Msg) (o : I) [Nonempty (Ω o)] (ξ : (i : I) → Ω i) :
+    Pouw.pr (fun x : Ω o => acc (Function.update ξ o x) ∧ dec (Function.update ξ o x) ≠ stmtOf D lay k s₀ o acc dec ξ)
+        ^ 2 ≤
+      Pouw.pr (fun z : Ω o × Ω o => (acc (Function.update ξ o z.1) ∧ acc (Function.update ξ o z.2)) ∧
+        dec (Function.update ξ o z.1) ≠ dec (Function.update ξ o z.2)) := by
+  by_cases ha : ∃ x, acc (Function.update ξ o x)
+  · obtain ⟨x, hx⟩ := ha
+    rw [stmtOf_eq_coinMode h s₀ o ξ x hx]
+    exact coinMode_collision (fun x => acc (Function.update ξ o x)) fun x => dec (Function.update ξ o x)
+  · rw [Pouw.pr_eq_zero (P := fun x : Ω o => acc (Function.update ξ o x) ∧
+      dec (Function.update ξ o x) ≠ stmtOf D lay k s₀ o acc dec ξ) fun x hx => ha ⟨x, hx.1⟩]
+    calc (0 : ℝ) ^ 2 = 0 := by norm_num
+      _ ≤ _ := Pouw.pr_nonneg _
+
 /-- **S6's `stmt` by construction**: a realization whose window statements are `stmtOf`'s at the network audit's own
 coin reads the coins only off the other coordinates. -/
-theorem couples_stmt [Nonempty (Ω (r.own .network))] (s₀ : Msg) (dec : Fin n → ((i : I) → Ω i) → Msg)
-    (h : ∀ ξ i, R.stmt ξ i = stmtOf D lay k s₀ (r.own .network) (dec i) ξ) :
+theorem couples_stmt [Nonempty (Ω (r.own .network))] (s₀ : Msg) (acc : ((i : I) → Ω i) → Prop)
+    (dec : Fin n → ((i : I) → Ω i) → Msg) (h : ∀ ξ i, R.stmt ξ i = stmtOf D lay k s₀ (r.own .network) acc (dec i) ξ) :
     ∀ ξ i x, R.stmt (Function.update ξ (r.own .network) x) i = R.stmt ξ i := fun ξ i x =>
-  (h _ i).trans ((stmtOf_update s₀ _ (dec i) ξ x).trans (h ξ i).symm)
+  (h _ i).trans ((stmtOf_update s₀ _ acc (dec i) ξ x).trans (h ξ i).symm)
 
 open Classical in
 /-- **A witness in `Rl` at `x`** wherever there is one. -/
