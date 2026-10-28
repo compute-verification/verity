@@ -25,8 +25,8 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 # a5_coins, whose local session is live_challenger's auditor host and serve.py (under its tests' stub).
 # chain_record writes the block record's certifier entry by block_certifier's block_leg, which test_block_certifier
 # holds to the block record's schema, `block_record` and its period-0 fixture, and test_chain_record to the schema on
-# certifier/v0 cases from period_case (the period check's Python mirror, with verity_difftest's decoders), which also
-# re-decides them.
+# certifier/v0 cases from period_case (the period check's Python mirror, with verity_difftest's decoders, and its pinned
+# slot entry's fixture), which also re-decides them.
 # demo_stub's endpoint records are read as the warden path's endpoint step reads them: `verity-vllm advice` (with the
 # step trace and the records it imports) and network-e2e's chain. certifier_piece is the network certifier's piece of
 # one_stage's served_verdicts, whose pieces and record test_certifier_piece runs it through into the block record.
@@ -42,6 +42,7 @@ inputs = ["integrations/vllm/workloads", "integrations/vllm/verity_vllm/__init__
           "benchmarks/network_e2e/encodings/replay.py", "benchmarks/network_e2e/encodings/replay_vectors.py",
           "benchmarks/network_e2e/encodings/cache_vectors.py", "benchmarks/network_e2e/encodings/derived.py",
           "benchmarks/network_e2e/encodings/tests/fixtures",
+          "verity/core/protocols/network/tests/fixtures/slot_entry.json",
           "verity/ml/flock/verifier/redigest.py", "verity/ml/flock/verifier/transcript_check.py",
           "examples/h200/interfaces/verity_e2e_demo/schemas/block-record.v1.schema.json",
           "examples/h200/interfaces/verity_e2e_demo/block_record.py",
