@@ -29,7 +29,7 @@ def value(card: dict, key: str) -> Fraction:
 
 
 def test_the_cards_we_run() -> None:
-    assert skus("gpu") == ["h200-sxm-141gb", "rtx-pro-6000-server"]
+    assert skus("gpu") == ["b200-sxm-180gb", "h200-sxm-141gb", "rtx-pro-6000-server"]
     assert skus("host") == ["xeon-6776p-2s", "xeon-platinum-8468-2s"]
     assert skus() == sorted(skus("gpu") + skus("host"))
 
@@ -77,9 +77,10 @@ def test_derived_host_numbers(sku: str) -> None:
 def test_the_quoted_numbers() -> None:
     """The firmware ceilings, host peaks and bandwidths already quoted outside this package, pinned so that a change to
     one is deliberate: among them remote_bandwidth/timing.py's HOST_ figures, which the RTX node's host card states."""
-    server, h200 = load("rtx-pro-6000-server"), load("h200-sxm-141gb")
+    server, h200, b200 = load("rtx-pro-6000-server"), load("h200-sxm-141gb"), load("b200-sxm-180gb")
     assert [value(server, k) for k in ("clock.sm", "clock.memory", "power.limit")] == [2430, 12481, 600]
     assert [value(h200, k) for k in ("clock.sm", "clock.memory", "power.limit")] == [1980, 3201, 700]
+    assert [value(b200, k) for k in ("clock.sm", "clock.memory", "power.limit")] == [1965, 3996, 1000]
     assert value(server, "memory.bandwidth") == 1597568 * 10 ** 6
     assert value(h200, "memory.bandwidth") == 4916736 * 10 ** 6
     granite, sapphire = load("xeon-6776p-2s"), load("xeon-platinum-8468-2s")
@@ -90,7 +91,7 @@ def test_the_quoted_numbers() -> None:
 
 
 def test_an_unknown_sku_names_the_cards() -> None:
-    cards = ["h200-sxm-141gb", "rtx-pro-6000-server", "xeon-6776p-2s", "xeon-platinum-8468-2s"]
+    cards = ["b200-sxm-180gb", "h200-sxm-141gb", "rtx-pro-6000-server", "xeon-6776p-2s", "xeon-platinum-8468-2s"]
     with pytest.raises(KeyError, match=re.escape(f"the cards are {cards}")):
         load("rtx-pro-6000-workstation")
 
