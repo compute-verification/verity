@@ -50,8 +50,9 @@ theorem atRoot_symm_apply (x₀ rt : Bits r) (O : Oracle N b h ρ) (g : {x : Bit
 
 /-- A pass's coins, with its oracle family split at the root the store picks: the game's coins and the family
 elsewhere. -/
-def rootSplit (rt : Store N b → Bits r) (x₀ : Bits r) :
-    Store N b × PassCoins N b h ρ r s ≃ (Store N b × Coins N b h ρ s) × ({x : Bits r // x ≠ x₀} → Oracle N b h ρ) where
+def rootSplit (rt : Payloads N b → Bits r) (x₀ : Bits r) :
+    Payloads N b × PassCoins N b h ρ r s ≃ (Payloads N b × Coins N b h ρ s) ×
+      ({x : Bits r // x ≠ x₀} → Oracle N b h ρ) where
   toFun x := ((x.1, (x.2.1, (atRoot x₀ (rt x.1) x.2.2.1).1), x.2.2.2), (atRoot x₀ (rt x.1) x.2.2.1).2)
   invFun y := (y.1.1, y.1.2.1.1, (atRoot x₀ (rt y.1.1)).symm (y.1.2.1.2, y.2), y.1.2.2)
   left_inv x := by simp
@@ -59,8 +60,8 @@ def rootSplit (rt : Store N b → Bits r) (x₀ : Bits r) :
 
 /-- The oracle family at a root the store picks is a uniform oracle: an event of the game's coins has the same bound
 at the family's value there. -/
-theorem pr_root_le (rt : Store N b → Bits r) (Q : Store N b × Coins N b h ρ s → Prop) (ε : ℝ≥0∞) (hQ : pr Q ≤ ε) :
-    pr (fun x : Store N b × PassCoins N b h ρ r s => Q (x.1, (x.2.1, x.2.2.1 (rt x.1)), x.2.2.2)) ≤ ε := by
+theorem pr_root_le (rt : Payloads N b → Bits r) (Q : Payloads N b × Coins N b h ρ s → Prop) (ε : ℝ≥0∞) (hQ : pr Q ≤ ε) :
+    pr (fun x : Payloads N b × PassCoins N b h ρ r s => Q (x.1, (x.2.1, x.2.2.1 (rt x.1)), x.2.2.2)) ≤ ε := by
   classical
   let x₀ : Bits r := fun _ => false
   have : Fintype ({x : Bits r // x ≠ x₀} → Oracle N b h ρ) := inferInstance
@@ -72,10 +73,10 @@ theorem pr_root_le (rt : Store N b → Bits r) (Q : Store N b × Coins N b h ρ 
   rw [atRoot_symm_apply]
 
 /-- An event that ignores the sample has its bound over the game's coins. -/
-theorem pr_coins_le (Q : Store N b × Bits ρ × Oracle N b h ρ → Prop) (ε : ℝ≥0∞) (hQ : pr Q ≤ ε) :
-    pr (fun y : Store N b × Coins N b h ρ s => Q (y.1, y.2.1.1, y.2.1.2)) ≤ ε := by
+theorem pr_coins_le (Q : Payloads N b × Bits ρ × Oracle N b h ρ → Prop) (ε : ℝ≥0∞) (hQ : pr Q ≤ ε) :
+    pr (fun y : Payloads N b × Coins N b h ρ s => Q (y.1, y.2.1.1, y.2.1.2)) ≤ ε := by
   classical
-  let e : Store N b × Coins N b h ρ s ≃ (Store N b × Bits ρ × Oracle N b h ρ) × (Fin s → Fin N) :=
+  let e : Payloads N b × Coins N b h ρ s ≃ (Payloads N b × Bits ρ × Oracle N b h ρ) × (Fin s → Fin N) :=
     (Equiv.prodAssoc _ _ _).symm
   rw [pr_equiv e]
   exact pr_le_of_fiber _ _ (fun _ => hQ)
@@ -86,7 +87,7 @@ variable {P S L q : ℕ}
 
 /-- Pass `j` was accepted within the compute budget with its footprint short of the floor `fl`. -/
 def Short (A : Chain P N b h ρ S L q r s) (cTag cEnc F fl : ℕ) (j : Fin P)
-    (x : Store N b × (Fin P → PassCoins N b h ρ r s)) : Prop :=
+    (x : Payloads N b × (Fin P → PassCoins N b h ρ r s)) : Prop :=
   (A.dev j x.2).Accepts x.1 (x.2 j).1 (A.oracle j x.1 x.2) (x.2 j).2.2 ∧
     (A.dev j x.2).compute cTag cEnc x.1 (x.2 j).1 (A.oracle j x.1 x.2) ≤ F ∧
     (A.dev j x.2).footprint x.1 (x.2 j).1 (A.oracle j x.1 x.2) * cEnc < fl
@@ -94,13 +95,13 @@ def Short (A : Chain P N b h ρ S L q r s) (cTag cEnc F fl : ℕ) (j : Fin P)
 /-- **Sequencing**: an event of pass `j`'s device and its game's coins has at most the game's error for the devices
 the earlier passes' coins pick. -/
 theorem pr_pass_le (A : Chain P N b h ρ S L q r s)
-    (Q : InteractiveDevice N b h ρ S L q → Store N b × Coins N b h ρ s → Prop) (ε : ℝ≥0∞) (j : Fin P)
+    (Q : InteractiveDevice N b h ρ S L q → Payloads N b × Coins N b h ρ s → Prop) (ε : ℝ≥0∞) (j : Fin P)
     (hε : ∀ η, pr (Q (A.device j η)) ≤ ε) :
-    pr (fun x : Store N b × (Fin P → PassCoins N b h ρ r s) =>
+    pr (fun x : Payloads N b × (Fin P → PassCoins N b h ρ r s) =>
       Q (A.dev j x.2) (x.1, ((x.2 j).1, A.oracle j x.1 x.2), (x.2 j).2.2)) ≤ ε := by
   classical
-  let e : Store N b × (Fin P → PassCoins N b h ρ r s) ≃
-      (Store N b × PassCoins N b h ρ r s) × ({i : Fin P // i ≠ j} → PassCoins N b h ρ r s) :=
+  let e : Payloads N b × (Fin P → PassCoins N b h ρ r s) ≃
+      (Payloads N b × PassCoins N b h ρ r s) × ({i : Fin P // i ≠ j} → PassCoins N b h ρ r s) :=
     ((Equiv.refl _).prodCongr (Equiv.funSplitAt j _)).trans (Equiv.prodAssoc _ _ _).symm
   rw [pr_equiv e]
   refine pr_le_of_fiber _ _ (fun ω' => ?_)
@@ -123,7 +124,7 @@ theorem pr_pass_le (A : Chain P N b h ρ S L q r s)
 /-- **Sequencing**: pass `j` is accepted short with at most the game's error for the devices the earlier passes' coins
 pick. -/
 theorem pr_short_le (A : Chain P N b h ρ S L q r s) (cTag cEnc F fl : ℕ) (ε : ℝ≥0∞) (j : Fin P)
-    (hε : ∀ η, pr (fun x : Store N b × Coins N b h ρ s =>
+    (hε : ∀ η, pr (fun x : Payloads N b × Coins N b h ρ s =>
         (A.device j η).Accepts x.1 x.2.1.1 x.2.1.2 x.2.2 ∧ (A.device j η).compute cTag cEnc x.1 x.2.1.1 x.2.1.2 ≤ F ∧
           (A.device j η).footprint x.1 x.2.1.1 x.2.1.2 * cEnc < fl) ≤ ε) :
     pr (Short A cTag cEnc F fl j) ≤ ε :=
@@ -132,14 +133,14 @@ theorem pr_short_le (A : Chain P N b h ρ S L q r s) (cTag cEnc F fl : ℕ) (ε 
 
 /-- Pass `j`'s correct receipts' words exceed its reads of every tier, its rebuilt words and `slack`. -/
 def Unpaid {τ : ℕ} (A : Chain P N b h ρ S L q r s) (tier : ℕ → Fin τ) (slack : ℕ) (j : Fin P)
-    (x : Store N b × (Fin P → PassCoins N b h ρ r s)) : Prop :=
+    (x : Payloads N b × (Fin P → PassCoins N b h ρ r s)) : Prop :=
   ∑ t, (A.dev j x.2).tierReads tier t x.1 (x.2 j).1 (A.oracle j x.1 x.2) +
       (A.dev j x.2).rebuilt x.1 (x.2 j).1 (A.oracle j x.1 x.2) * b + slack <
     ((A.dev j x.2).correct x.1 (x.2 j).1 (A.oracle j x.1 x.2)).card * b
 
 /-- Words summed over the passes beyond their reads, rebuilt words and `P` slacks leave some pass unpaid. -/
 theorem exists_unpaid {τ : ℕ} (A : Chain P N b h ρ S L q r s) (tier : ℕ → Fin τ) (slack : ℕ)
-    (x : Store N b × (Fin P → PassCoins N b h ρ r s))
+    (x : Payloads N b × (Fin P → PassCoins N b h ρ r s))
     (hx : ∑ j, (∑ t, (A.dev j x.2).tierReads tier t x.1 (x.2 j).1 (A.oracle j x.1 x.2) +
         (A.dev j x.2).rebuilt x.1 (x.2 j).1 (A.oracle j x.1 x.2) * b) + P * slack <
       ∑ j, ((A.dev j x.2).correct x.1 (x.2 j).1 (A.oracle j x.1 x.2)).card * b) :
@@ -156,7 +157,7 @@ theorem exists_unpaid {τ : ℕ} (A : Chain P N b h ρ S L q r s) (tier : ℕ �
 /-- **Sequencing**: pass `j` is unpaid with at most the game's error for the devices the earlier passes' coins pick. -/
 theorem pr_unpaid_pass_le {τ : ℕ} (A : Chain P N b h ρ S L q r s) (tier : ℕ → Fin τ) (slack : ℕ) (ε : ℝ≥0∞)
     (j : Fin P)
-    (hε : ∀ η, pr (fun x : Store N b × Bits ρ × Oracle N b h ρ =>
+    (hε : ∀ η, pr (fun x : Payloads N b × Bits ρ × Oracle N b h ρ =>
         ∑ t, (A.device j η).tierReads tier t x.1 x.2.1 x.2.2 + (A.device j η).rebuilt x.1 x.2.1 x.2.2 * b + slack <
           ((A.device j η).correct x.1 x.2.1 x.2.2).card * b) ≤ ε) :
     pr (Unpaid A tier slack j) ≤ ε :=
@@ -168,10 +169,10 @@ theorem pr_unpaid_pass_le {τ : ℕ} (A : Chain P N b h ρ S L q r s) (tier : �
 /-- A window's unpaid words from a per-pass bound: the probability that the words summed over the passes exceed their
 reads, rebuilt words and `P` slacks is at most `P·ε`. -/
 theorem pr_unpaid_le {τ : ℕ} (A : Chain P N b h ρ S L q r s) (tier : ℕ → Fin τ) (slack : ℕ) (ε : ℝ≥0∞)
-    (hε : ∀ j η, pr (fun x : Store N b × Bits ρ × Oracle N b h ρ =>
+    (hε : ∀ j η, pr (fun x : Payloads N b × Bits ρ × Oracle N b h ρ =>
         ∑ t, (A.device j η).tierReads tier t x.1 x.2.1 x.2.2 + (A.device j η).rebuilt x.1 x.2.1 x.2.2 * b + slack <
           ((A.device j η).correct x.1 x.2.1 x.2.2).card * b) ≤ ε) :
-    pr (fun x : Store N b × (Fin P → PassCoins N b h ρ r s) =>
+    pr (fun x : Payloads N b × (Fin P → PassCoins N b h ρ r s) =>
         ∑ j, (∑ t, (A.dev j x.2).tierReads tier t x.1 (x.2 j).1 (A.oracle j x.1 x.2) +
             (A.dev j x.2).rebuilt x.1 (x.2 j).1 (A.oracle j x.1 x.2) * b) + P * slack <
           ∑ j, ((A.dev j x.2).correct x.1 (x.2 j).1 (A.oracle j x.1 x.2)).card * b)
@@ -186,7 +187,7 @@ open Classical in
 /-- Footprints summing short of `P + 1 − c` floors, in passes all accepted within the budget, leave at least `c`
 passes short. -/
 theorem le_card_short (A : Chain P N b h ρ S L q r s) (cTag cEnc F fl c : ℕ)
-    (x : Store N b × (Fin P → PassCoins N b h ρ r s))
+    (x : Payloads N b × (Fin P → PassCoins N b h ρ r s))
     (hall : ∀ j, (A.dev j x.2).Accepts x.1 (x.2 j).1 (A.oracle j x.1 x.2) (x.2 j).2.2 ∧
       (A.dev j x.2).compute cTag cEnc x.1 (x.2 j).1 (A.oracle j x.1 x.2) ≤ F)
     (hsum : ∑ j, (A.dev j x.2).footprint x.1 (x.2 j).1 (A.oracle j x.1 x.2) * cEnc < (P + 1 - c) * fl) :
@@ -213,17 +214,17 @@ theorem le_card_short (A : Chain P N b h ρ S L q r s) (cTag cEnc F fl c : ℕ)
 with the footprints summed short of `P + 1 − c` floors is at most `P·ε`. -/
 theorem mul_pr_sum_le (A : Chain P N b h ρ S L q r s) (cTag cEnc F fl c : ℕ) (ε : ℝ≥0∞)
     (hε : ∀ j, pr (Short A cTag cEnc F fl j) ≤ ε) :
-    (c : ℝ≥0∞) * pr (fun x : Store N b × (Fin P → PassCoins N b h ρ r s) =>
+    (c : ℝ≥0∞) * pr (fun x : Payloads N b × (Fin P → PassCoins N b h ρ r s) =>
         (∀ j, (A.dev j x.2).Accepts x.1 (x.2 j).1 (A.oracle j x.1 x.2) (x.2 j).2.2 ∧
           (A.dev j x.2).compute cTag cEnc x.1 (x.2 j).1 (A.oracle j x.1 x.2) ≤ F) ∧
         ∑ j, (A.dev j x.2).footprint x.1 (x.2 j).1 (A.oracle j x.1 x.2) * cEnc < (P + 1 - c) * fl)
       ≤ (P : ℝ≥0∞) * ε := by
   classical
-  calc (c : ℝ≥0∞) * pr (fun x : Store N b × (Fin P → PassCoins N b h ρ r s) =>
+  calc (c : ℝ≥0∞) * pr (fun x : Payloads N b × (Fin P → PassCoins N b h ρ r s) =>
           (∀ j, (A.dev j x.2).Accepts x.1 (x.2 j).1 (A.oracle j x.1 x.2) (x.2 j).2.2 ∧
             (A.dev j x.2).compute cTag cEnc x.1 (x.2 j).1 (A.oracle j x.1 x.2) ≤ F) ∧
           ∑ j, (A.dev j x.2).footprint x.1 (x.2 j).1 (A.oracle j x.1 x.2) * cEnc < (P + 1 - c) * fl)
-      ≤ (c : ℝ≥0∞) * pr (fun x : Store N b × (Fin P → PassCoins N b h ρ r s) =>
+      ≤ (c : ℝ≥0∞) * pr (fun x : Payloads N b × (Fin P → PassCoins N b h ρ r s) =>
           c ≤ (Finset.univ.filter (fun j => Short A cTag cEnc F fl j x)).card) := by
         gcongr
         exact Bandwidth.pr_mono (fun x hx => le_card_short A cTag cEnc F fl c x hx.1 hx.2)
@@ -240,7 +241,7 @@ variable {P S L q G : ℕ}
 /-- Words summed over the passes beyond their reads, rebuilt words and `P` slacks leave some pass unpaid in the chain
 that keeps, at every pass, the candidate that pass kept. -/
 theorem exists_unpaid {τ : ℕ} (A : GrindChain P N b h ρ S L q r s G) (tier : ℕ → Fin τ) (slack : ℕ)
-    (x : Store N b × (Fin P → PassCoins N b h ρ r s))
+    (x : Payloads N b × (Fin P → PassCoins N b h ρ r s))
     (hx : ∑ j, (∑ t, (A.dev j x.1 x.2).tierReads tier t x.1 (x.2 j).1 (A.oracle j x.1 x.2) +
         (A.dev j x.1 x.2).rebuilt x.1 (x.2 j).1 (A.oracle j x.1 x.2) * b) + P * slack <
       ∑ j, ((A.dev j x.1 x.2).correct x.1 (x.2 j).1 (A.oracle j x.1 x.2)).card * b) :
@@ -257,10 +258,10 @@ theorem exists_unpaid {τ : ℕ} (A : GrindChain P N b h ρ S L q r s G) (tier :
 /-- A grinding window's unpaid words from a per-pass bound: the probability that the words summed over the passes
 exceed their reads, rebuilt words and `P` slacks is at most `P·G·ε`. -/
 theorem pr_unpaid_le {τ : ℕ} (A : GrindChain P N b h ρ S L q r s G) (tier : ℕ → Fin τ) (slack : ℕ) (ε : ℝ≥0∞)
-    (hε : ∀ j η c, pr (fun x : Store N b × Bits ρ × Oracle N b h ρ =>
+    (hε : ∀ j η c, pr (fun x : Payloads N b × Bits ρ × Oracle N b h ρ =>
         ∑ t, (A.device j η c).tierReads tier t x.1 x.2.1 x.2.2 + (A.device j η c).rebuilt x.1 x.2.1 x.2.2 * b + slack <
           ((A.device j η c).correct x.1 x.2.1 x.2.2).card * b) ≤ ε) :
-    pr (fun x : Store N b × (Fin P → PassCoins N b h ρ r s) =>
+    pr (fun x : Payloads N b × (Fin P → PassCoins N b h ρ r s) =>
         ∑ j, (∑ t, (A.dev j x.1 x.2).tierReads tier t x.1 (x.2 j).1 (A.oracle j x.1 x.2) +
             (A.dev j x.1 x.2).rebuilt x.1 (x.2 j).1 (A.oracle j x.1 x.2) * b) + P * slack <
           ∑ j, ((A.dev j x.1 x.2).correct x.1 (x.2 j).1 (A.oracle j x.1 x.2)).card * b)

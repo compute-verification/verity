@@ -244,7 +244,7 @@ variable {P N b h ρ S L q r s : ℕ}
 /-- A chain's passes are sampled as a whole: every pass accepted with at most `K` correct receipts in all is at most
 `(K/(P·N))^(s·P)`. -/
 theorem pr_pooled_le (A : Chain P N b h ρ S L q r s) (K : ℕ) :
-    pr (fun x : Store N b × (Fin P → PassCoins N b h ρ r s) =>
+    pr (fun x : Payloads N b × (Fin P → PassCoins N b h ρ r s) =>
         (∀ j, (A.dev j x.2).Accepts x.1 (x.2 j).1 (A.oracle j x.1 x.2) (x.2 j).2.2) ∧
           ∑ j, ((A.dev j x.2).correct x.1 (x.2 j).1 (A.oracle j x.1 x.2)).card ≤ K)
       ≤ ((K : ℝ≥0∞) / (P * N)) ^ (s * P) := by

@@ -25,7 +25,7 @@ the honest `N·b` sits above the floor `k·b − λ` by the sample's slack `(N �
 `Bandwidth.SecurityProofs.HonestPasses`. -/
 def HonestPasses : Prop :=
   ∀ N b h : ℕ, ∃ A : Device N b h 0 0 0 N,
-    ∀ (E : Store N b) (O : Oracle N b h) (s : ℕ) (I : Fin s → Fin N), Accepts A E O I ∧ A.ingress E O = N * b
+    ∀ (E : Payloads N b) (O : Oracle N b h) (s : ℕ) (I : Fin s → Fin N), Accepts A E O I ∧ A.ingress E O = N * b
 
 /-- **The bandwidth audit v0 with relayed tags, in the random-oracle model.** `AuditRO` for a `RelayDevice`, whose side
 sources may depend on the oracle: a peer holding a copy of the store can compute tags after the seed and relay them,
@@ -46,7 +46,7 @@ Frozen (no-function, hash): a bound in the random-oracle model over an abstract 
 the bandwidth audit's code computes. -/
 def AuditRelay : Prop :=
   ∀ (N b h S c G q s k m lam : ℕ) (A : RelayDevice N b h S c G q),
-    pr (fun x : Store N b × Oracle N b h × (Fin s → Fin N) =>
+    pr (fun x : Payloads N b × Oracle N b h × (Fin s → Fin N) =>
         A.Accepts x.1 x.2.1 x.2.2 ∧ A.ingress x.1 x.2.1 + S + c + m * b + G * b + lam < k * b)
       ≤ (((k - 1 : ℕ) : ℝ≥0∞) / N) ^ s + (N.choose m : ℝ≥0∞) * 2 ^ c / 2 ^ (h * m)
         + ((q.choose (k - m) : ℕ) : ℝ≥0∞) / 2 ^ lam
@@ -66,7 +66,7 @@ Frozen (no-function, hash): a bound in the random-oracle model over an abstract 
 the bandwidth audit's code computes. -/
 def AuditInteractive : Prop :=
   ∀ (N b h S c G q s k m lam : ℕ) (A : InteractiveDevice N b h S c G q),
-    pr (fun x : Store N b × Oracle N b h × (Fin s → Fin N) =>
+    pr (fun x : Payloads N b × Oracle N b h × (Fin s → Fin N) =>
         A.Accepts x.1 x.2.1 x.2.2 ∧ A.ingress x.1 x.2.1 + S + c + m * b + G * b + lam < k * b)
       ≤ (((k - 1 : ℕ) : ℝ≥0∞) / N) ^ s + (N.choose m : ℝ≥0∞) * 2 ^ c / 2 ^ (h * m)
         + ((q.choose (k - m) : ℕ) : ℝ≥0∞) / 2 ^ lam
@@ -80,7 +80,7 @@ Frozen (no-function, hash): as `AuditInteractive`. -/
 def AuditInteractiveRO : Prop :=
   ∀ (N b h S c G q s k lam : ℕ) (A : InteractiveDevice N b h S c G q),
     (∀ E O O', A.side E O = A.side E O') →
-    pr (fun x : Store N b × Oracle N b h × (Fin s → Fin N) =>
+    pr (fun x : Payloads N b × Oracle N b h × (Fin s → Fin N) =>
         A.Accepts x.1 x.2.1 x.2.2 ∧ A.ingress x.1 x.2.1 + S + c + G * b + lam < k * b)
       ≤ (((k - 1 : ℕ) : ℝ≥0∞) / N) ^ s + (s : ℝ≥0∞) / 2 ^ h + (q.choose k : ℝ≥0∞) / 2 ^ lam
 
@@ -104,7 +104,7 @@ tick, `Bandwidth.SecurityProofs.Causal.audit_joint`. Proof: `Bandwidth.SecurityP
 Frozen (no-function, hash): as `AuditRO`. -/
 def AuditJoint : Prop :=
   ∀ (N b h S c G q n s k lam : ℕ) (A : JointDevice N b h S c G q n), A.Recovers →
-    pr (fun x : (Store N b × Bits n) × Oracle N b h × (Fin s → Fin N) =>
+    pr (fun x : (Payloads N b × Bits n) × Oracle N b h × (Fin s → Fin N) =>
         A.Accepts x.1.1 x.1.2 x.2.1 x.2.2 ∧ A.ingress x.1.1 x.1.2 x.2.1 + S + c + G * b + lam < k * b + n)
       ≤ (((k - 1 : ℕ) : ℝ≥0∞) / N) ^ s + (s : ℝ≥0∞) / 2 ^ h + (q.choose k : ℝ≥0∞) / 2 ^ lam
 

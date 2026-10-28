@@ -24,7 +24,7 @@ namespace Accounting
 
 /-- The rate audit's coins in its game with a store of `N` words of `b` bits, a `ρ`-bit certified stream, `h`-bit tags
 and `s` sampled words: the store, and the window's stream, oracle and sample. -/
-abbrev RateCoins (N b h ρ s : ℕ) : Type := Rate.Store N b × Rate.Coins N b h ρ s
+abbrev RateCoins (N b h ρ s : ℕ) : Type := Rate.Payloads N b × Rate.Coins N b h ρ s
 
 /-- Run `r`'s bandwidth audit is the rate audit's game at price `p`, `c_tag` per tag and `c_enc` per rebuilt word,
 played at each value of the other audits' coins by a device of the game within the device model's limits over the

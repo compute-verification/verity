@@ -36,32 +36,32 @@ variable {N b h ρ S L q : ℕ}
 /-- A device of `RateAudit`'s class whose free side sources may depend on the certified stream and the oracle as well as
 the store. Its other fields and its bounds are `Device`'s. -/
 structure RelayDevice (N b h ρ S L q : ℕ) where
-  state : Store N b → Bits S
-  mem : Store N b → ℕ → Bool
-  side : Store N b → Bits ρ → Oracle N b h ρ → ℕ → Bool
+  state : Payloads N b → Bits S
+  mem : Payloads N b → ℕ → Bool
+  side : Payloads N b → Bits ρ → Oracle N b h ρ → ℕ → Bool
   chip : Bits S → Chip N b h ρ (Fin N → Bits h)
   bounded : ∀ (st : Bits S) (w : World N b h ρ), (chip st).linkBits w ≤ L ∧ ((chip st).queries w).length ≤ q
 
 namespace RelayDevice
 
 /-- The world a relay device's chip runs in, for store `E`, certified stream `R` and oracle `O`. -/
-def world (A : RelayDevice N b h ρ S L q) (E : Store N b) (R : Bits ρ) (O : Oracle N b h ρ) : World N b h ρ :=
+def world (A : RelayDevice N b h ρ S L q) (E : Payloads N b) (R : Bits ρ) (O : Oracle N b h ρ) : World N b h ρ :=
   ⟨O, A.mem E, A.side E R O, R, E⟩
 
 /-- The tags the device commits to. -/
-def tags (A : RelayDevice N b h ρ S L q) (E : Store N b) (R : Bits ρ) (O : Oracle N b h ρ) : Fin N → Bits h :=
+def tags (A : RelayDevice N b h ρ S L q) (E : Payloads N b) (R : Bits ρ) (O : Oracle N b h ρ) : Fin N → Bits h :=
   (A.chip (A.state E)).run (A.world E R O)
 
 /-- The device's footprint in the window, in bits. -/
-def footprint (A : RelayDevice N b h ρ S L q) (E : Store N b) (R : Bits ρ) (O : Oracle N b h ρ) : ℕ :=
+def footprint (A : RelayDevice N b h ρ S L q) (E : Payloads N b) (R : Bits ρ) (O : Oracle N b h ρ) : ℕ :=
   ((A.chip (A.state E)).addrs (A.world E R O)).card
 
 /-- The device's compute in the window, at `c_tag` per oracle query and `c_enc` per rebuilt word. -/
-def compute (A : RelayDevice N b h ρ S L q) (cTag cEnc : ℕ) (E : Store N b) (R : Bits ρ) (O : Oracle N b h ρ) : ℕ :=
+def compute (A : RelayDevice N b h ρ S L q) (cTag cEnc : ℕ) (E : Payloads N b) (R : Bits ρ) (O : Oracle N b h ρ) : ℕ :=
   ((A.chip (A.state E)).queries (A.world E R O)).length * cTag + (A.chip (A.state E)).rebuilds (A.world E R O) * cEnc
 
 /-- The verifier accepts: every sampled word's committed tag is the oracle's tag of that word under the stream. -/
-def Accepts {s : ℕ} (A : RelayDevice N b h ρ S L q) (E : Store N b) (R : Bits ρ) (O : Oracle N b h ρ)
+def Accepts {s : ℕ} (A : RelayDevice N b h ρ S L q) (E : Payloads N b) (R : Bits ρ) (O : Oracle N b h ρ)
     (I : Fin s → Fin N) : Prop :=
   ∀ i, A.tags E R O (I i) = O (R, I i, E (I i))
 
@@ -72,16 +72,16 @@ def Device.toRelay (A : Device N b h ρ S L q) : RelayDevice N b h ρ S L q :=
   ⟨A.state, A.mem, fun E _ _ => A.side E, A.chip, A.bounded⟩
 
 /-- The words whose contents the device queried the oracle at, under the certified stream. -/
-def queried (A : RelayDevice N b h ρ S L q) (E : Store N b) (R : Bits ρ) (O : Oracle N b h ρ) : Finset (Fin N) :=
+def queried (A : RelayDevice N b h ρ S L q) (E : Payloads N b) (R : Bits ρ) (O : Oracle N b h ρ) : Finset (Fin N) :=
   Finset.univ.filter (fun j => (R, j, E j) ∈ (A.chip (A.state E)).queries (A.world E R O))
 
 /-- What a run had besides the oracle, in bits: its on-chip state, its footprint, the link's bits and its rebuilt
 words. -/
-def taken (A : RelayDevice N b h ρ S L q) (E : Store N b) (R : Bits ρ) (O : Oracle N b h ρ) : ℕ :=
+def taken (A : RelayDevice N b h ρ S L q) (E : Payloads N b) (R : Bits ρ) (O : Oracle N b h ρ) : ℕ :=
   A.footprint E R O + S + (A.chip (A.state E)).linkBits (A.world E R O) +
     (A.chip (A.state E)).rebuilds (A.world E R O) * b
 
-theorem card_queried_le (A : RelayDevice N b h ρ S L q) (E : Store N b) (R : Bits ρ) (O : Oracle N b h ρ) :
+theorem card_queried_le (A : RelayDevice N b h ρ S L q) (E : Payloads N b) (R : Bits ρ) (O : Oracle N b h ρ) :
     (queried A E R O).card ≤ ((A.chip (A.state E)).queries (A.world E R O)).length := by
   classical
   refine (Finset.card_le_card_of_injOn (fun j => (R, j, E j)) (fun j hj => ?_) ?_).trans (List.toFinset_card_le _)
@@ -91,7 +91,7 @@ theorem card_queried_le (A : RelayDevice N b h ρ S L q) (E : Store N b) (R : Bi
 
 /-- A run that queried at least `k` words within the compute budget `F` and whose footprint is short of the floor had
 less than the stream and `k` words: tagging `k` words leaves `F − k·c_tag` for rebuilt words, at `c_enc` each. -/
-theorem taken_lt_of_floor (A : RelayDevice N b h ρ S L q) (E : Store N b) (R : Bits ρ) (O : Oracle N b h ρ)
+theorem taken_lt_of_floor (A : RelayDevice N b h ρ S L q) (E : Payloads N b) (R : Bits ρ) (O : Oracle N b h ρ)
     {k F cTag cEnc lam : ℕ} (hk : k ≤ (queried A E R O).card) (hc : A.compute cTag cEnc E R O ≤ F)
     (hf : A.footprint E R O * cEnc < floor b ρ S L F cTag cEnc k lam) :
     taken A E R O + lam < k * b + ρ := by
@@ -122,7 +122,7 @@ theorem taken_lt_of_floor (A : RelayDevice N b h ρ S L q) (E : Store N b) (R : 
 
 /-- At a store and a stream where the side sources ignore the oracle, a word the device never queried has the right
 tag for at most a `2^-h` fraction of oracles. -/
-theorem card_guess_le (A : RelayDevice N b h ρ S L q) (E : Store N b) (R : Bits ρ) (j : Fin N)
+theorem card_guess_le (A : RelayDevice N b h ρ S L q) (E : Payloads N b) (R : Bits ρ) (j : Fin N)
     (hA : ∀ O O', A.side E R O = A.side E R O')
     [DecidablePred (fun O : Oracle N b h ρ => j ∉ queried A E R O ∧ A.tags E R O j = O (R, j, E j))] :
     (Finset.univ.filter (fun O : Oracle N b h ρ => j ∉ queried A E R O ∧ A.tags E R O j = O (R, j, E j))).card *
@@ -157,7 +157,7 @@ open Classical in
 /-- The stores and streams a code describes: those whose stream is each named position's query's, and whose word
 there holds the query's contents. -/
 noncomputable def fib (A : RelayDevice N b h ρ S L q) (O : Oracle N b h ρ) (r : ℕ) (code : Bits S × Bits r × Finset ℕ) :
-    Finset (Store N b × Bits ρ) :=
+    Finset (Payloads N b × Bits ρ) :=
   Finset.univ.filter (fun x => ∀ p ∈ code.2.2, ∀ y, (decoded A O r code)[p]? = some y → y.1 = x.2 ∧ x.1 y.2.1 = y.2.2)
 
 open Classical in
@@ -188,11 +188,11 @@ theorem card_fib (A : RelayDevice N b h ρ S L q) (O : Oracle N b h ρ) (r : ℕ
         simp
 
 theorem card_compress_le (A : RelayDevice N b h ρ S L q) (O : Oracle N b h ρ) (k lam : ℕ) (hk : 0 < k)
-    [DecidablePred (fun x : Store N b × Bits ρ =>
+    [DecidablePred (fun x : Payloads N b × Bits ρ =>
       k ≤ (queried A x.1 x.2 O).card ∧ taken A x.1 x.2 O + lam < k * b + ρ)] :
-    (Finset.univ.filter (fun x : Store N b × Bits ρ =>
+    (Finset.univ.filter (fun x : Payloads N b × Bits ρ =>
         k ≤ (queried A x.1 x.2 O).card ∧ taken A x.1 x.2 O + lam < k * b + ρ)).card * 2 ^ lam ≤
-      q.choose k * Fintype.card (Store N b × Bits ρ) := by
+      q.choose k * Fintype.card (Payloads N b × Bits ρ) := by
   classical
   by_cases hpar : S + lam ≤ k * b + ρ ∧ k ≤ N
   swap
@@ -202,7 +202,7 @@ theorem card_compress_le (A : RelayDevice N b h ρ S L q) (O : Oracle N b h ρ) 
   obtain ⟨hSl, hkN⟩ := hpar
   set r := k * b + ρ - S - lam with hr
   let codes : Finset (Bits S × Bits r × Finset ℕ) := Finset.univ ×ˢ Finset.univ ×ˢ (Finset.range q).powersetCard k
-  have hsub : Finset.univ.filter (fun x : Store N b × Bits ρ =>
+  have hsub : Finset.univ.filter (fun x : Payloads N b × Bits ρ =>
         k ≤ (queried A x.1 x.2 O).card ∧ taken A x.1 x.2 O + lam < k * b + ρ) ⊆
       (codes.filter (fun code => k ≤ (named A O r code).card)).biUnion (fib A O r) := by
     rintro ⟨E, R⟩ hx
@@ -253,8 +253,8 @@ theorem card_compress_le (A : RelayDevice N b h ρ S L q) (O : Oracle N b h ρ) 
       exact ⟨rfl, rfl⟩
   have hcodes : codes.card = 2 ^ S * (2 ^ r * q.choose k) := by
     simp [codes, Finset.card_product, Finset.card_powersetCard]
-  have hΩ : Fintype.card (Store N b × Bits ρ) = (2 ^ b) ^ N * 2 ^ ρ := by simp
-  calc (Finset.univ.filter (fun x : Store N b × Bits ρ =>
+  have hΩ : Fintype.card (Payloads N b × Bits ρ) = (2 ^ b) ^ N * 2 ^ ρ := by simp
+  calc (Finset.univ.filter (fun x : Payloads N b × Bits ρ =>
           k ≤ (queried A x.1 x.2 O).card ∧ taken A x.1 x.2 O + lam < k * b + ρ)).card * 2 ^ lam
       ≤ (codes.card * (2 ^ b) ^ (N - k)) * 2 ^ lam := by
         gcongr
@@ -265,7 +265,7 @@ theorem card_compress_le (A : RelayDevice N b h ρ S L q) (O : Oracle N b h ρ) 
           exact (card_fib A O r code (by omega)).trans (Nat.pow_le_pow_right (by positivity) (by omega))
         · rw [smul_eq_mul]
           exact Nat.mul_le_mul_right _ (Finset.card_filter_le _ _)
-    _ = q.choose k * Fintype.card (Store N b × Bits ρ) := by
+    _ = q.choose k * Fintype.card (Payloads N b × Bits ρ) := by
         have e1 : (2 : ℕ) ^ S * 2 ^ r * 2 ^ lam = 2 ^ (k * b) * 2 ^ ρ := by
           rw [← pow_add, ← pow_add, ← pow_add]
           congr 1
@@ -291,7 +291,7 @@ open Bandwidth.AuditRO (card_sample)
 /-- `RateAudit`'s bound for a relay device whose side sources ignore the oracle. -/
 theorem _root_.Accounting.Rate.RelayDevice.audit {N b h ρ S L q : ℕ} (A : RelayDevice N b h ρ S L q)
     (hA : ∀ E R O O', A.side E R O = A.side E R O') (s k F cTag cEnc lam : ℕ) :
-    pr (fun x : Store N b × (Bits ρ × Oracle N b h ρ × (Fin s → Fin N)) =>
+    pr (fun x : Payloads N b × (Bits ρ × Oracle N b h ρ × (Fin s → Fin N)) =>
         A.Accepts x.1 x.2.1 x.2.2.1 x.2.2.2 ∧ A.compute cTag cEnc x.1 x.2.1 x.2.2.1 ≤ F ∧
           A.footprint x.1 x.2.1 x.2.2.1 * cEnc < floor b ρ S L F cTag cEnc k lam)
       ≤ (((k - 1 : ℕ) : ℝ≥0∞) / N) ^ s + (s : ℝ≥0∞) / 2 ^ h + (q.choose k : ℝ≥0∞) / 2 ^ lam := by
@@ -299,7 +299,7 @@ theorem _root_.Accounting.Rate.RelayDevice.audit {N b h ρ S L q : ℕ} (A : Rel
   rcases Nat.eq_zero_or_pos k with rfl | hk0
   · refine (pr_le_of_card _ 1 0 one_ne_zero ?_).trans (by simp)
     rw [Finset.filter_false_of_mem (fun x _ hx => by simp [floor] at hx), Finset.card_empty, zero_mul, zero_mul]
-  have hsplit : ∀ x : Store N b × (Bits ρ × Oracle N b h ρ × (Fin s → Fin N)),
+  have hsplit : ∀ x : Payloads N b × (Bits ρ × Oracle N b h ρ × (Fin s → Fin N)),
       (A.Accepts x.1 x.2.1 x.2.2.1 x.2.2.2 ∧ A.compute cTag cEnc x.1 x.2.1 x.2.2.1 ≤ F ∧
         A.footprint x.1 x.2.1 x.2.2.1 * cEnc < floor b ρ S L F cTag cEnc k lam) →
       (((queried A x.1 x.2.1 x.2.2.1).card < k ∧ ∀ i, x.2.2.2 i ∈ queried A x.1 x.2.1 x.2.2.1) ∨
@@ -315,8 +315,8 @@ theorem _root_.Accounting.Rate.RelayDevice.audit {N b h ρ S L q : ℕ} (A : Rel
       · push Not at hall
         obtain ⟨i, hi⟩ := hall
         exact Or.inl (Or.inr ⟨i, hi, hacc i⟩)
-  have hΩ : Fintype.card (Store N b × (Bits ρ × Oracle N b h ρ × (Fin s → Fin N))) =
-      Fintype.card (Store N b) * (Fintype.card (Bits ρ) * (Fintype.card (Oracle N b h ρ) * N ^ s)) := by
+  have hΩ : Fintype.card (Payloads N b × (Bits ρ × Oracle N b h ρ × (Fin s → Fin N))) =
+      Fintype.card (Payloads N b) * (Fintype.card (Bits ρ) * (Fintype.card (Oracle N b h ρ) * N ^ s)) := by
     simp only [Fintype.card_prod, Fintype.card_fun, Fintype.card_fin]
   by_cases hN : N ^ s = 0
   · rw [pr_eq_zero_of_card _ (by rw [hΩ, hN]; simp)]
@@ -324,7 +324,7 @@ theorem _root_.Accounting.Rate.RelayDevice.audit {N b h ρ S L q : ℕ} (A : Rel
   refine (pr_mono hsplit).trans ?_
   refine (pr_or_le _ _).trans (add_le_add ((pr_or_le _ _).trans (add_le_add ?_ ?_)) ?_)
   · -- the sample misses the words never queried
-    have hc := pr_le_of_card (fun x : Store N b × (Bits ρ × Oracle N b h ρ × (Fin s → Fin N)) =>
+    have hc := pr_le_of_card (fun x : Payloads N b × (Bits ρ × Oracle N b h ρ × (Fin s → Fin N)) =>
         (queried A x.1 x.2.1 x.2.2.1).card < k ∧ ∀ i, x.2.2.2 i ∈ queried A x.1 x.2.1 x.2.2.1) (N ^ s) ((k - 1) ^ s)
         hN (by
       rw [hΩ]
@@ -342,7 +342,7 @@ theorem _root_.Accounting.Rate.RelayDevice.audit {N b h ρ S L q : ℕ} (A : Rel
     rw [Nat.cast_pow, Nat.cast_pow, div_eq_mul_inv, div_eq_mul_inv, mul_pow, ENNReal.inv_pow]
   · -- a guessed tag
     refine (pr_exists_le _).trans ?_
-    have hi : ∀ i : Fin s, pr (fun x : Store N b × (Bits ρ × Oracle N b h ρ × (Fin s → Fin N)) =>
+    have hi : ∀ i : Fin s, pr (fun x : Payloads N b × (Bits ρ × Oracle N b h ρ × (Fin s → Fin N)) =>
         x.2.2.2 i ∉ queried A x.1 x.2.1 x.2.2.1 ∧
           A.tags x.1 x.2.1 x.2.2.1 (x.2.2.2 i) = x.2.2.1 (x.2.1, x.2.2.2 i, x.1 (x.2.2.2 i))) ≤
         ((1 : ℕ) : ℝ≥0∞) / ((2 ^ h : ℕ) : ℝ≥0∞) := fun i =>
@@ -358,8 +358,8 @@ theorem _root_.Accounting.Rate.RelayDevice.audit {N b h ρ S L q : ℕ} (A : Rel
     simp [div_eq_mul_inv]
   · -- compression
     refine (pr_le_of_card _ (2 ^ lam) (q.choose k) (by positivity) (by
-      rw [hΩ, card_filter_equiv (Equiv.prodAssoc (Store N b) (Bits ρ) (Oracle N b h ρ × (Fin s → Fin N))).symm]
-      refine (card_filter_prod_le' _ _ (q.choose k * Fintype.card (Store N b × Bits ρ)) (fun y => ?_)).trans
+      rw [hΩ, card_filter_equiv (Equiv.prodAssoc (Payloads N b) (Bits ρ) (Oracle N b h ρ × (Fin s → Fin N))).symm]
+      refine (card_filter_prod_le' _ _ (q.choose k * Fintype.card (Payloads N b × Bits ρ)) (fun y => ?_)).trans
         (le_of_eq (by simp only [Fintype.card_prod, Fintype.card_fun, Fintype.card_fin]; ring))
       exact card_compress_le A y.1 k lam hk0)).trans (le_of_eq ?_)
     push_cast

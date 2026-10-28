@@ -118,7 +118,7 @@ noncomputable def code (j : Fin N) (x : ℕ) (g : Bits b → Bits x) (i : Fin x)
   Nat.pair j.1 (Nat.pair x (Nat.pair (Fintype.equivFin (Bits b → Bits x) g).1 i.1))
 
 /-- Bit `i` of the `x`-bit function numbered `gi` of word `j` of the store, or `false` if they name none. -/
-noncomputable def decodeAt (E : Store N b) (j x gi i : ℕ) : Bool :=
+noncomputable def decodeAt (E : Payloads N b) (j x gi i : ℕ) : Bool :=
   if hj : j < N then
     if hg : gi < Fintype.card (Bits b → Bits x) then
       if hi : i < x then ((Fintype.equivFin (Bits b → Bits x)).symm ⟨gi, hg⟩ (E ⟨j, hj⟩)) ⟨i, hi⟩ else false
@@ -126,10 +126,10 @@ noncomputable def decodeAt (E : Store N b) (j x gi i : ℕ) : Bool :=
   else false
 
 /-- The bit an address names, read from the store: bit `i` of `g (E_j)` at `code j x g i`. -/
-noncomputable def decode (E : Store N b) (c : ℕ) : Bool :=
+noncomputable def decode (E : Payloads N b) (c : ℕ) : Bool :=
   decodeAt E c.unpair.1 c.unpair.2.unpair.1 c.unpair.2.unpair.2.unpair.1 c.unpair.2.unpair.2.unpair.2
 
-theorem decode_code (E : Store N b) (j : Fin N) (x : ℕ) (g : Bits b → Bits x) (i : Fin x) :
+theorem decode_code (E : Payloads N b) (j : Fin N) (x : ℕ) (g : Bits b → Bits x) (i : Fin x) :
     decode E (code j x g i) = g (E j) i := by
   simp only [decode, code, Nat.unpair_pair]
   unfold decodeAt
@@ -139,7 +139,7 @@ theorem decode_code (E : Store N b) (j : Fin N) (x : ℕ) (g : Bits b → Bits x
 
 /-- Side sources that also answer completions: an original read at `a` is at `2a`, and `code j x g i` at
 `2·code j x g i + 1`. -/
-noncomputable def sideOf (E : Store N b) (f : List Bool → ℕ → Bool) (v : List Bool) (a : ℕ) : Bool :=
+noncomputable def sideOf (E : Payloads N b) (f : List Bool → ℕ → Bool) (v : List Bool) (a : ℕ) : Bool :=
   if a % 2 = 0 then f v (a / 2) else decode E (a / 2)
 
 /-- The simulating chip: link bits within `ℓ` and queries within `m`, a completion read from the side sources. -/
@@ -311,7 +311,7 @@ noncomputable def toInteractive (A : PIDevice N b h ρ S L q) (X : ℕ) : Intera
   chip st := PIChip.sim (fun _ _ => false) (L + X) q (A.chip st)
   bounded st w := PIChip.sim_bounded _ w (A.chip st) (L + X) q []
 
-theorem toInteractive_world (A : PIDevice N b h ρ S L q) (X : ℕ) (E : Store N b) (R : Bits ρ) (O : Oracle N b h ρ) :
+theorem toInteractive_world (A : PIDevice N b h ρ S L q) (X : ℕ) (E : Payloads N b) (R : Bits ρ) (O : Oracle N b h ρ) :
     (A.toInteractive X).world E R O = PIChip.simWorld (A.world E R O) := rfl
 
 theorem toInteractive_side (A : PIDevice N b h ρ S L q) (X : ℕ) (hA : ∀ E R O O', A.side E R O = A.side E R O') :
@@ -320,7 +320,7 @@ theorem toInteractive_side (A : PIDevice N b h ρ S L q) (X : ℕ) (hA : ∀ E R
 
 /-- When `X` covers the bits completed, the simulating device commits the device's receipts with its tier reads, and
 rebuilds nothing. -/
-theorem toInteractive_eq {τ : ℕ} (A : PIDevice N b h ρ S L q) (X : ℕ) (tier : ℕ → Fin τ) (E : Store N b) (R : Bits ρ)
+theorem toInteractive_eq {τ : ℕ} (A : PIDevice N b h ρ S L q) (X : ℕ) (tier : ℕ → Fin τ) (E : Payloads N b) (R : Bits ρ)
     (O : Oracle N b h ρ) (hX : A.completed E R O ≤ X) :
     (A.toInteractive X).correct E R O = A.correct E R O ∧
       (∀ t, (A.toInteractive X).tierReads tier t E R O = A.tierReads tier t E R O) ∧
@@ -353,7 +353,7 @@ end TimeBudget
 
 /-- `WorkHardness` and the squaring ceiling: a pass completes at most `b·F/(rounds·c_root)` bits. -/
 theorem completed_le (A : PIDevice N b h ρ S L q) {rounds cRoot F : ℕ} {cost : ℕ → ℕ} (hrc : 0 < rounds * cRoot)
-    (hW : Assumptions.WorkHardness b rounds cRoot cost) (hF : Assumptions.SquaringCeiling cost F A) (E : Store N b)
+    (hW : Assumptions.WorkHardness b rounds cRoot cost) (hF : Assumptions.SquaringCeiling cost F A) (E : Payloads N b)
     (R : Bits ρ) (O : Oracle N b h ρ) : A.completed E R O ≤ Deployed.rebuildBits b rounds cRoot F := by
   unfold Deployed.rebuildBits
   rw [Nat.le_div_iff_mul_le hrc]
@@ -365,7 +365,7 @@ theorem completed_le (A : PIDevice N b h ρ S L q) {rounds cRoot F : ℕ} {cost 
 in its link; `toInteractive_eq` carries it to the pass device once `X` covers them. -/
 theorem pr_unpaid_le {τ : ℕ} (A : PIDevice N b h ρ S L q) (tier : ℕ → Fin τ) (X lam : ℕ)
     (hA : ∀ E R O O', A.side E R O = A.side E R O') :
-    pr (fun x : Store N b × Bits ρ × Oracle N b h ρ =>
+    pr (fun x : Payloads N b × Bits ρ × Oracle N b h ρ =>
         ∑ t, (A.toInteractive X).tierReads tier t x.1 x.2.1 x.2.2 + (A.toInteractive X).rebuilt x.1 x.2.1 x.2.2 * b +
             (S + (L - ρ) + X + lam) < ((A.toInteractive X).correct x.1 x.2.1 x.2.2).card * b)
       ≤ (N : ℝ≥0∞) / 2 ^ h + (q.choose 2 : ℝ≥0∞) / 2 ^ h + (2 ^ N : ℝ≥0∞) / 2 ^ lam :=
@@ -385,7 +385,7 @@ noncomputable def toGrind (A : DeployedWindow P N b h ρ S L q r s G) (X : ℕ) 
   pick := A.pick
 
 /-- A window's correct receipts are its passes' correct receipts, counted together. -/
-theorem card_correctAll (A : DeployedWindow P N b h ρ S L q r s G) (E : Store N b)
+theorem card_correctAll (A : DeployedWindow P N b h ρ S L q r s G) (E : Payloads N b)
     (ω : Fin P → PassCoins N b h ρ r s) :
     (A.correctAll E ω).card = ∑ j, ((A.dev j E ω).correct E (ω j).1 (A.oracle j E ω)).card := by
   classical
@@ -399,15 +399,15 @@ theorem card_correctAll (A : DeployedWindow P N b h ρ S L q r s G) (E : Store N
 its reads and `P` slacks fall short of its correct receipts' words is at most `P·G·ε`. -/
 theorem pr_unpaid_draw_le {τ : ℕ} (A : DeployedWindow P N b h ρ S L q r s G) (tier : ℕ → Fin τ) (X slack d : ℕ)
     (ε : ℝ≥0∞) (hX : ∀ j η c E R O, (A.device j η c).completed E R O ≤ X)
-    (hε : ∀ j η c, pr (fun x : Store N b × Bits ρ × Oracle N b h ρ =>
+    (hε : ∀ j η c, pr (fun x : Payloads N b × Bits ρ × Oracle N b h ρ =>
         ∑ t, ((A.device j η c).toInteractive X).tierReads tier t x.1 x.2.1 x.2.2 +
             ((A.device j η c).toInteractive X).rebuilt x.1 x.2.1 x.2.2 * b + slack <
           (((A.device j η c).toInteractive X).correct x.1 x.2.1 x.2.2).card * b) ≤ ε) :
-    pr (fun y : Store N b × WindowCoins P N b h ρ r s d =>
+    pr (fun y : Payloads N b × WindowCoins P N b h ρ r s d =>
         A.reads tier y.1 y.2.1 + P * slack < (A.correctAll y.1 y.2.1).card * b) ≤ (P : ℝ≥0∞) * (G * ε) := by
   classical
-  let e : Store N b × WindowCoins P N b h ρ r s d ≃
-      (Store N b × (Fin P → PassCoins N b h ρ r s)) × (Fin d → Fin P × Fin N) :=
+  let e : Payloads N b × WindowCoins P N b h ρ r s d ≃
+      (Payloads N b × (Fin P → PassCoins N b h ρ r s)) × (Fin d → Fin P × Fin N) :=
     (Equiv.prodAssoc _ _ _).symm
   rw [pr_equiv e]
   refine pr_le_of_fiber _ _ (fun D => ?_)
@@ -431,12 +431,12 @@ variable {n P N b h ρ S L q r s d G : ℕ}
 /-- **Sequencing over windows**: an event of window `w`'s prover and its coins has at most its bound for the provers the
 earlier windows' coins pick. -/
 theorem pr_window_le (A : DeployedSession n P N b h ρ S L q r s d G) (w : Fin n)
-    (Q : DeployedWindow P N b h ρ S L q r s G → Store N b × WindowCoins P N b h ρ r s d → Prop) (ε : ℝ≥0∞)
+    (Q : DeployedWindow P N b h ρ S L q r s G → Payloads N b × WindowCoins P N b h ρ r s d → Prop) (ε : ℝ≥0∞)
     (hQ : ∀ η, pr (Q (A.window w η)) ≤ ε) :
-    pr (fun x : Store N b × (Fin n → WindowCoins P N b h ρ r s d) => Q (A.win w x.2) (x.1, x.2 w)) ≤ ε := by
+    pr (fun x : Payloads N b × (Fin n → WindowCoins P N b h ρ r s d) => Q (A.win w x.2) (x.1, x.2 w)) ≤ ε := by
   classical
-  let e : Store N b × (Fin n → WindowCoins P N b h ρ r s d) ≃
-      (Store N b × WindowCoins P N b h ρ r s d) × ({v : Fin n // v ≠ w} → WindowCoins P N b h ρ r s d) :=
+  let e : Payloads N b × (Fin n → WindowCoins P N b h ρ r s d) ≃
+      (Payloads N b × WindowCoins P N b h ρ r s d) × ({v : Fin n // v ≠ w} → WindowCoins P N b h ρ r s d) :=
     ((Equiv.refl _).prodCongr (Equiv.funSplitAt w _)).trans (Equiv.prodAssoc _ _ _).symm
   rw [pr_equiv e]
   refine pr_le_of_fiber _ _ (fun ω' => ?_)
@@ -455,13 +455,13 @@ theorem pr_window_le (A : DeployedSession n P N b h ρ S L q r s d G) (w : Fin n
 /-- A session's draws over one store as a causal family over the monitoring period (`Rate.Causal`): any event of the
 openings and correct receipts that the family's own bound covers has at most that bound, on any store `store ω` drawn
 before the session's coins. -/
-theorem pr_draws_map_of_causal {Ω : Type} [Fintype Ω] (store : Ω → Store N b)
-    (A : DeployedSession n P N b h ρ S L q r s d G) (Ev : Store N b →
+theorem pr_draws_map_of_causal {Ω : Type} [Fintype Ω] (store : Ω → Payloads N b)
+    (A : DeployedSession n P N b h ρ S L q r s d G) (Ev : Payloads N b →
       (Fin n → WindowCoins P N b h ρ r s d) → Prop) (B : ℝ≥0∞)
     (hB : ∀ (X : Fin n → Type) [∀ w, Fintype (X w)]
       (Gs : (w : Fin n) → ((v : Fin n) → X v × (Fin d → Fin (P * N))) → Finset (Fin (P * N))),
       Causal (s := fun _ => d) Gs → ∀ (f : ((v : Fin n) → X v × (Fin d → Fin (P * N))) → Fin n →
-        WindowCoins P N b h ρ r s d) (E : Store N b),
+        WindowCoins P N b h ρ r s d) (E : Payloads N b),
         (∀ ω w t, (f ω w).2 t ∈ (A.win w (f ω)).correctAll E (f ω w).1 → (ω w).2 t ∈ Gs w ω) →
         (∀ ω w, (Gs w ω).card = ((A.win w (f ω)).correctAll E (f ω w).1).card) →
         pr (fun ω => Ev E (f ω)) ≤ B) :
@@ -494,21 +494,21 @@ theorem pr_draws_map_of_causal {Ω : Type} [Fintype Ω] (store : Ω → Store N 
   exact hB X Gs hG e.symm E hmem hcard
 
 /-- `pr_draws_map_of_causal` on a uniform store. -/
-theorem pr_draws_of_causal (A : DeployedSession n P N b h ρ S L q r s d G) (Ev : Store N b →
+theorem pr_draws_of_causal (A : DeployedSession n P N b h ρ S L q r s d G) (Ev : Payloads N b →
       (Fin n → WindowCoins P N b h ρ r s d) → Prop) (B : ℝ≥0∞)
     (hB : ∀ (X : Fin n → Type) [∀ w, Fintype (X w)]
       (Gs : (w : Fin n) → ((v : Fin n) → X v × (Fin d → Fin (P * N))) → Finset (Fin (P * N))),
       Causal (s := fun _ => d) Gs → ∀ (f : ((v : Fin n) → X v × (Fin d → Fin (P * N))) → Fin n →
-        WindowCoins P N b h ρ r s d) (E : Store N b),
+        WindowCoins P N b h ρ r s d) (E : Payloads N b),
         (∀ ω w t, (f ω w).2 t ∈ (A.win w (f ω)).correctAll E (f ω w).1 → (ω w).2 t ∈ Gs w ω) →
         (∀ ω w, (Gs w ω).card = ((A.win w (f ω)).correctAll E (f ω w).1).card) →
         pr (fun ω => Ev E (f ω)) ≤ B) :
-    pr (fun x : Store N b × (Fin n → WindowCoins P N b h ρ r s d) => Ev x.1 x.2) ≤ B :=
+    pr (fun x : Payloads N b × (Fin n → WindowCoins P N b h ρ r s d) => Ev x.1 x.2) ≤ B :=
   pr_draws_map_of_causal id A Ev B hB
 
 /-- **A session's pooled draws over the monitoring period**: every window's openings land on correct receipts while the
 session holds at most `K`. -/
-theorem pr_draws_pooled_le_map {Ω : Type} [Fintype Ω] (store : Ω → Store N b)
+theorem pr_draws_pooled_le_map {Ω : Type} [Fintype Ω] (store : Ω → Payloads N b)
     (A : DeployedSession n P N b h ρ S L q r s d G) (K : ℕ) :
     pr (fun x : Ω × (Fin n → WindowCoins P N b h ρ r s d) =>
         (∀ w t, (x.2 w).2 t ∈ (A.win w x.2).correctAll (store x.1) (x.2 w).1) ∧
@@ -536,7 +536,7 @@ theorem pr_draws_pooled_le_map {Ω : Type} [Fintype Ω] (store : Ω → Store N 
 
 /-- `pr_draws_pooled_le_map` on a uniform store. -/
 theorem pr_draws_pooled_le (A : DeployedSession n P N b h ρ S L q r s d G) (K : ℕ) :
-    pr (fun x : Store N b × (Fin n → WindowCoins P N b h ρ r s d) =>
+    pr (fun x : Payloads N b × (Fin n → WindowCoins P N b h ρ r s d) =>
         (∀ w t, (x.2 w).2 t ∈ (A.win w x.2).correctAll x.1 (x.2 w).1) ∧
           ∑ w, ((A.win w x.2).correctAll x.1 (x.2 w).1).card ≤ K)
       ≤ ((K : ℝ≥0∞) / (n * P * N)) ^ (d * n) :=
@@ -544,7 +544,7 @@ theorem pr_draws_pooled_le (A : DeployedSession n P N b h ρ S L q r s d G) (K :
 
 /-- **A session's pooled draws in every window**: every window's openings land on correct receipts while some window
 holds at most `K_w`. -/
-theorem pr_draws_window_le_map {Ω : Type} [Fintype Ω] (store : Ω → Store N b)
+theorem pr_draws_window_le_map {Ω : Type} [Fintype Ω] (store : Ω → Payloads N b)
     (A : DeployedSession n P N b h ρ S L q r s d G) (Kw : ℕ) :
     pr (fun x : Ω × (Fin n → WindowCoins P N b h ρ r s d) =>
         (∀ w t, (x.2 w).2 t ∈ (A.win w x.2).correctAll (store x.1) (x.2 w).1) ∧
@@ -559,7 +559,7 @@ theorem pr_draws_window_le_map {Ω : Type} [Fintype Ω] (store : Ω → Store N 
 
 /-- `pr_draws_window_le_map` on a uniform store. -/
 theorem pr_draws_window_le (A : DeployedSession n P N b h ρ S L q r s d G) (Kw : ℕ) :
-    pr (fun x : Store N b × (Fin n → WindowCoins P N b h ρ r s d) =>
+    pr (fun x : Payloads N b × (Fin n → WindowCoins P N b h ρ r s d) =>
         (∀ w t, (x.2 w).2 t ∈ (A.win w x.2).correctAll x.1 (x.2 w).1) ∧
           ∃ w, ((A.win w x.2).correctAll x.1 (x.2 w).1).card ≤ Kw)
       ≤ ((((n - 1) * (P * N) + Kw : ℕ) : ℝ≥0∞) / (n * P * N)) ^ (d * n) :=
@@ -567,7 +567,7 @@ theorem pr_draws_window_le (A : DeployedSession n P N b h ρ S L q r s d G) (Kw 
 
 /-- **A session's pooled draws**, on any store `store ω` drawn before the session's coins: every window's openings
 land on correct receipts while the session holds at most `K` in all or some window at most `K_w`. -/
-theorem pr_draws_le_map {Ω : Type} [Fintype Ω] (store : Ω → Store N b)
+theorem pr_draws_le_map {Ω : Type} [Fintype Ω] (store : Ω → Payloads N b)
     (A : DeployedSession n P N b h ρ S L q r s d G) (K Kw : ℕ) :
     pr (fun x : Ω × (Fin n → WindowCoins P N b h ρ r s d) =>
         (∀ w t, (x.2 w).2 t ∈ (A.win w x.2).correctAll (store x.1) (x.2 w).1) ∧
@@ -581,7 +581,7 @@ theorem pr_draws_le_map {Ω : Type} [Fintype Ω] (store : Ω → Store N b)
 /-- **A session's pooled draws**: every window's openings land on correct receipts while the session holds at most
 `K` in all or some window at most `K_w`. -/
 theorem pr_draws_le (A : DeployedSession n P N b h ρ S L q r s d G) (K Kw : ℕ) :
-    pr (fun x : Store N b × (Fin n → WindowCoins P N b h ρ r s d) =>
+    pr (fun x : Payloads N b × (Fin n → WindowCoins P N b h ρ r s d) =>
         (∀ w t, (x.2 w).2 t ∈ (A.win w x.2).correctAll x.1 (x.2 w).1) ∧
           (∑ w, ((A.win w x.2).correctAll x.1 (x.2 w).1).card ≤ K ∨
             ∃ w, ((A.win w x.2).correctAll x.1 (x.2 w).1).card ≤ Kw))
@@ -592,14 +592,14 @@ theorem pr_draws_le (A : DeployedSession n P N b h ρ S L q r s d G) (K Kw : ℕ
 /-- A session's unpaid words from a per-window bound: the probability that some window's reads and `P` slacks fall
 short of its correct receipts' words is at most `n·ε`. -/
 theorem pr_unpaid_le {τ : ℕ} (A : DeployedSession n P N b h ρ S L q r s d G) (tier : ℕ → Fin τ) (slack : ℕ)
-    (ε : ℝ≥0∞) (hε : ∀ w η, pr (fun y : Store N b × WindowCoins P N b h ρ r s d =>
+    (ε : ℝ≥0∞) (hε : ∀ w η, pr (fun y : Payloads N b × WindowCoins P N b h ρ r s d =>
         (A.window w η).reads tier y.1 y.2.1 + P * slack < ((A.window w η).correctAll y.1 y.2.1).card * b) ≤ ε) :
-    pr (fun x : Store N b × (Fin n → WindowCoins P N b h ρ r s d) =>
+    pr (fun x : Payloads N b × (Fin n → WindowCoins P N b h ρ r s d) =>
         ∃ w, (A.win w x.2).reads tier x.1 (x.2 w).1 + P * slack <
           ((A.win w x.2).correctAll x.1 (x.2 w).1).card * b)
       ≤ (n : ℝ≥0∞) * ε := by
   classical
-  calc _ ≤ ∑ w, pr (fun x : Store N b × (Fin n → WindowCoins P N b h ρ r s d) =>
+  calc _ ≤ ∑ w, pr (fun x : Payloads N b × (Fin n → WindowCoins P N b h ρ r s d) =>
           (A.win w x.2).reads tier x.1 (x.2 w).1 + P * slack <
             ((A.win w x.2).correctAll x.1 (x.2 w).1).card * b) := pr_exists_le _
     _ ≤ ∑ _w : Fin n, ε := Finset.sum_le_sum (fun w _ => pr_window_le A w
@@ -609,7 +609,7 @@ theorem pr_unpaid_le {τ : ℕ} (A : DeployedSession n P N b h ρ S L q r s d G)
 /-- **The session's words, in counts, from an unpaid bound**, on any store `store ω` drawn before the session's coins:
 every opening passes while the session's reads and `n·P` slacks fall short of `K + 1` words, or some window's reads
 and `P` slacks of `K_w + 1`, at most the draws' bound and `ε_u`, a bound on some window's unpaid words. -/
-theorem pr_paid_of_unpaid_map {τ : ℕ} {Ω : Type} [Fintype Ω] (store : Ω → Store N b)
+theorem pr_paid_of_unpaid_map {τ : ℕ} {Ω : Type} [Fintype Ω] (store : Ω → Payloads N b)
     (A : DeployedSession n P N b h ρ S L q r s d G) (tier : ℕ → Fin τ) (slack K Kw : ℕ) (εu : ℝ≥0∞)
     (hu : pr (fun x : Ω × (Fin n → WindowCoins P N b h ρ r s d) =>
         ∃ w, (A.win w x.2).reads tier (store x.1) (x.2 w).1 + P * slack <
@@ -645,9 +645,9 @@ theorem pr_paid_of_unpaid_map {τ : ℕ} {Ω : Type} [Fintype Ω] (store : Ω �
 `n·P` slacks fall short of `K + 1` words, or some window's reads and `P` slacks of `K_w + 1`, at most the draws' bound
 and `n·ε`. -/
 theorem pr_paid_of_window {τ : ℕ} (A : DeployedSession n P N b h ρ S L q r s d G) (tier : ℕ → Fin τ) (slack K Kw : ℕ)
-    (ε : ℝ≥0∞) (hε : ∀ w η, pr (fun y : Store N b × WindowCoins P N b h ρ r s d =>
+    (ε : ℝ≥0∞) (hε : ∀ w η, pr (fun y : Payloads N b × WindowCoins P N b h ρ r s d =>
         (A.window w η).reads tier y.1 y.2.1 + P * slack < ((A.window w η).correctAll y.1 y.2.1).card * b) ≤ ε) :
-    pr (fun x : Store N b × (Fin n → WindowCoins P N b h ρ r s d) =>
+    pr (fun x : Payloads N b × (Fin n → WindowCoins P N b h ρ r s d) =>
         (∀ w t, (x.2 w).2 t ∈ (A.win w x.2).correctAll x.1 (x.2 w).1) ∧
           (∑ w, (A.win w x.2).reads tier x.1 (x.2 w).1 + n * (P * slack) < (K + 1) * b ∨
             ∃ w, (A.win w x.2).reads tier x.1 (x.2 w).1 + P * slack < (Kw + 1) * b))
@@ -658,11 +658,11 @@ theorem pr_paid_of_window {τ : ℕ} (A : DeployedSession n P N b h ρ S L q r s
 /-- **The session's words, in counts**: `pr_paid_of_window` at `pr_unpaid_draw_le`'s `P·G·ε` a window. -/
 theorem pr_paid_le {τ : ℕ} (A : DeployedSession n P N b h ρ S L q r s d G) (tier : ℕ → Fin τ) (X slack K Kw : ℕ)
     (ε : ℝ≥0∞) (hX : ∀ w η j ι c E R O, ((A.window w η).device j ι c).completed E R O ≤ X)
-    (hε : ∀ w η j ι c, pr (fun x : Store N b × Bits ρ × Oracle N b h ρ =>
+    (hε : ∀ w η j ι c, pr (fun x : Payloads N b × Bits ρ × Oracle N b h ρ =>
         ∑ t, (((A.window w η).device j ι c).toInteractive X).tierReads tier t x.1 x.2.1 x.2.2 +
             (((A.window w η).device j ι c).toInteractive X).rebuilt x.1 x.2.1 x.2.2 * b + slack <
           ((((A.window w η).device j ι c).toInteractive X).correct x.1 x.2.1 x.2.2).card * b) ≤ ε) :
-    pr (fun x : Store N b × (Fin n → WindowCoins P N b h ρ r s d) =>
+    pr (fun x : Payloads N b × (Fin n → WindowCoins P N b h ρ r s d) =>
         (∀ w t, (x.2 w).2 t ∈ (A.win w x.2).correctAll x.1 (x.2 w).1) ∧
           (∑ w, (A.win w x.2).reads tier x.1 (x.2 w).1 + n * (P * slack) < (K + 1) * b ∨
             ∃ w, (A.win w x.2).reads tier x.1 (x.2 w).1 + P * slack < (Kw + 1) * b))

@@ -50,28 +50,28 @@ namespace InteractiveDevice
 
 variable {N b h ρ S L q : ℕ}
 
-theorem sum_tierReads {τ : ℕ} (A : InteractiveDevice N b h ρ S L q) (tier : ℕ → Fin τ) (E : Store N b) (R : Bits ρ)
+theorem sum_tierReads {τ : ℕ} (A : InteractiveDevice N b h ρ S L q) (tier : ℕ → Fin τ) (E : Payloads N b) (R : Bits ρ)
     (O : Oracle N b h ρ) : ∑ t, A.tierReads tier t E R O = A.ingress E R O :=
   IChip.sum_tierBits tier _ _ []
 
-theorem footprint_le_sum_tierReads {τ : ℕ} (A : InteractiveDevice N b h ρ S L q) (tier : ℕ → Fin τ) (E : Store N b)
+theorem footprint_le_sum_tierReads {τ : ℕ} (A : InteractiveDevice N b h ρ S L q) (tier : ℕ → Fin τ) (E : Payloads N b)
     (R : Bits ρ) (O : Oracle N b h ρ) : A.footprint E R O ≤ ∑ t, A.tierReads tier t E R O := by
   rw [sum_tierReads]
   exact footprint_le_ingress A E R O
 
-theorem toRelay_rebuilds (A : InteractiveDevice N b h ρ S L q) (E : Store N b) (R : Bits ρ) (O : Oracle N b h ρ) :
+theorem toRelay_rebuilds (A : InteractiveDevice N b h ρ S L q) (E : Payloads N b) (R : Bits ρ) (O : Oracle N b h ρ) :
     (A.toRelay.chip (A.toRelay.state E)).rebuilds (A.toRelay.world E R O) = A.rebuilt E R O := by
   change ((A.chip (A.state E)).toChip []).rebuilds (A.toRelay.world E R O) = _
   rw [IChip.toChip_rebuilds, lift_world]
   rfl
 
-theorem toRelay_correct (A : InteractiveDevice N b h ρ S L q) (E : Store N b) (R : Bits ρ) (O : Oracle N b h ρ) :
+theorem toRelay_correct (A : InteractiveDevice N b h ρ S L q) (E : Payloads N b) (R : Bits ρ) (O : Oracle N b h ρ) :
     A.toRelay.correct E R O = A.correct E R O := by
   simp only [RelayDevice.correct, correct, toRelay_tags]
 
 /-- What the relay device had besides the oracle is at most the reads of every tier, the state, the link and the
 rebuilt words. -/
-theorem taken_le {τ : ℕ} (A : InteractiveDevice N b h ρ S L q) (tier : ℕ → Fin τ) (E : Store N b) (R : Bits ρ)
+theorem taken_le {τ : ℕ} (A : InteractiveDevice N b h ρ S L q) (tier : ℕ → Fin τ) (E : Payloads N b) (R : Bits ρ)
     (O : Oracle N b h ρ) : taken A.toRelay E R O ≤ ∑ t, A.tierReads tier t E R O + S + L + A.rebuilt E R O * b := by
   have h1 := footprint_le_sum_tierReads A tier E R O
   have h2 := (A.toRelay.bounded (A.toRelay.state E) (A.toRelay.world E R O)).1
@@ -80,7 +80,7 @@ theorem taken_le {τ : ℕ} (A : InteractiveDevice N b h ρ S L q) (tier : ℕ �
   omega
 
 /-- A correct receipt for a word never queried, or every correct receipt's word queried. -/
-theorem guess_or_le (A : InteractiveDevice N b h ρ S L q) (E : Store N b) (R : Bits ρ) (O : Oracle N b h ρ) :
+theorem guess_or_le (A : InteractiveDevice N b h ρ S L q) (E : Payloads N b) (R : Bits ρ) (O : Oracle N b h ρ) :
     (∃ j, j ∉ queried A.toRelay E R O ∧ A.toRelay.tags E R O j = O (R, j, E j)) ∨
       (A.correct E R O).card ≤ (queried A.toRelay E R O).card := by
   by_cases hg : ∃ j, j ∉ queried A.toRelay E R O ∧ A.toRelay.tags E R O j = O (R, j, E j)
@@ -91,7 +91,7 @@ theorem guess_or_le (A : InteractiveDevice N b h ρ S L q) (E : Store N b) (R : 
     exact hg ⟨j, hq, by rw [toRelay_tags]; exact hj⟩
 
 /-- The correct receipts are the relayed ones and the queried ones. -/
-theorem correct_le_relayed (A : InteractiveDevice N b h ρ S L q) (E : Store N b) (R : Bits ρ) (O : Oracle N b h ρ) :
+theorem correct_le_relayed (A : InteractiveDevice N b h ρ S L q) (E : Payloads N b) (R : Bits ρ) (O : Oracle N b h ρ) :
     (A.correct E R O).card ≤ (A.toRelay.relayed E R O).card + (queried A.toRelay E R O).card := by
   rw [← toRelay_correct]
   exact Finset.card_le_card_sdiff_add_card
@@ -105,12 +105,12 @@ variable {N b h ρ S L q : ℕ}
 /-- With side sources that ignore the oracle, a correct receipt for a word never queried has probability at most
 `N/2^h`. -/
 theorem pr_guess_le (A : RelayDevice N b h ρ S L q) (hA : ∀ E R O O', A.side E R O = A.side E R O') :
-    pr (fun x : Store N b × Bits ρ × Oracle N b h ρ =>
+    pr (fun x : Payloads N b × Bits ρ × Oracle N b h ρ =>
         ∃ j, j ∉ queried A x.1 x.2.1 x.2.2 ∧ A.tags x.1 x.2.1 x.2.2 j = x.2.2 (x.2.1, j, x.1 j))
       ≤ (N : ℝ≥0∞) / 2 ^ h := by
   classical
   refine (pr_exists_le _).trans ?_
-  have hj : ∀ j : Fin N, pr (fun x : Store N b × Bits ρ × Oracle N b h ρ =>
+  have hj : ∀ j : Fin N, pr (fun x : Payloads N b × Bits ρ × Oracle N b h ρ =>
       j ∉ queried A x.1 x.2.1 x.2.2 ∧ A.tags x.1 x.2.1 x.2.2 j = x.2.2 (x.2.1, j, x.1 j)) ≤
       ((1 : ℕ) : ℝ≥0∞) / ((2 ^ h : ℕ) : ℝ≥0∞) := fun j =>
     pr_le_of_card _ (2 ^ h) 1 (by positivity) (by
@@ -123,13 +123,13 @@ theorem pr_guess_le (A : RelayDevice N b h ρ S L q) (hA : ∀ E R O O', A.side 
 
 /-- `k` queried words and too little else have probability at most `C(q, k)/2^λ`. -/
 theorem pr_compress_le (A : RelayDevice N b h ρ S L q) (k lam : ℕ) (hk : 0 < k) :
-    pr (fun x : Store N b × Bits ρ × Oracle N b h ρ =>
+    pr (fun x : Payloads N b × Bits ρ × Oracle N b h ρ =>
         k ≤ (queried A x.1 x.2.1 x.2.2).card ∧ taken A x.1 x.2.1 x.2.2 + lam < k * b + ρ)
       ≤ (q.choose k : ℝ≥0∞) / 2 ^ lam := by
   classical
   refine (pr_le_of_card _ (2 ^ lam) (q.choose k) (by positivity) (by
-    rw [card_filter_equiv (Equiv.prodAssoc (Store N b) (Bits ρ) (Oracle N b h ρ)).symm]
-    refine (card_filter_prod_le' _ _ (q.choose k * Fintype.card (Store N b × Bits ρ)) (fun O => ?_)).trans
+    rw [card_filter_equiv (Equiv.prodAssoc (Payloads N b) (Bits ρ) (Oracle N b h ρ)).symm]
+    refine (card_filter_prod_le' _ _ (q.choose k * Fintype.card (Payloads N b × Bits ρ)) (fun O => ?_)).trans
       (le_of_eq (by simp only [Fintype.card_prod]; ring))
     exact card_compress_le A O k lam hk)).trans (le_of_eq ?_)
   push_cast
@@ -137,12 +137,12 @@ theorem pr_compress_le (A : RelayDevice N b h ρ S L q) (k lam : ℕ) (hk : 0 < 
 
 /-- At some count `k ≤ q`, `k` queried words and too little else: probability at most `∑ₖ C(q, k)/2^λ = 2^q/2^λ`. -/
 theorem pr_compress_any_le (A : RelayDevice N b h ρ S L q) (lam : ℕ) :
-    pr (fun x : Store N b × Bits ρ × Oracle N b h ρ => ∃ k : Fin (q + 1),
+    pr (fun x : Payloads N b × Bits ρ × Oracle N b h ρ => ∃ k : Fin (q + 1),
         0 < k.1 ∧ k.1 ≤ (queried A x.1 x.2.1 x.2.2).card ∧ taken A x.1 x.2.1 x.2.2 + lam < k.1 * b + ρ)
       ≤ (2 ^ q : ℝ≥0∞) / 2 ^ lam := by
   classical
   refine (pr_exists_le _).trans ?_
-  calc ∑ k : Fin (q + 1), pr (fun x : Store N b × Bits ρ × Oracle N b h ρ =>
+  calc ∑ k : Fin (q + 1), pr (fun x : Payloads N b × Bits ρ × Oracle N b h ρ =>
           0 < k.1 ∧ k.1 ≤ (queried A x.1 x.2.1 x.2.2).card ∧ taken A x.1 x.2.1 x.2.2 + lam < k.1 * b + ρ)
       ≤ ∑ k : Fin (q + 1), (q.choose k.1 : ℝ≥0∞) / 2 ^ lam := by
         refine Finset.sum_le_sum (fun k _ => ?_)
@@ -162,7 +162,7 @@ theorem pr_compress_any_le (A : RelayDevice N b h ρ S L q) (lam : ℕ) :
 probability at most `N/2^h + C(q, k)/2^λ`. -/
 theorem pr_guess_or_compress (A : RelayDevice N b h ρ S L q) (hA : ∀ E R O O', A.side E R O = A.side E R O')
     (k lam : ℕ) (hk : 0 < k) :
-    pr (fun x : Store N b × Bits ρ × Oracle N b h ρ =>
+    pr (fun x : Payloads N b × Bits ρ × Oracle N b h ρ =>
         (∃ j, j ∉ queried A x.1 x.2.1 x.2.2 ∧ A.tags x.1 x.2.1 x.2.2 j = x.2.2 (x.2.1, j, x.1 j)) ∨
           (k ≤ (queried A x.1 x.2.1 x.2.2).card ∧ taken A x.1 x.2.1 x.2.2 + lam < k * b + ρ))
       ≤ (N : ℝ≥0∞) / 2 ^ h + (q.choose k : ℝ≥0∞) / 2 ^ lam :=
@@ -170,7 +170,7 @@ theorem pr_guess_or_compress (A : RelayDevice N b h ρ S L q) (hA : ∀ E R O O'
 
 /-- With any side sources, `m` relayed receipts have probability at most `C(N, m)·2^L/2^(h·m)`. -/
 theorem pr_relay_le (A : RelayDevice N b h ρ S L q) (m : ℕ) :
-    pr (fun x : Store N b × Bits ρ × Oracle N b h ρ => m ≤ (A.relayed x.1 x.2.1 x.2.2).card)
+    pr (fun x : Payloads N b × Bits ρ × Oracle N b h ρ => m ≤ (A.relayed x.1 x.2.1 x.2.2).card)
       ≤ (N.choose m : ℝ≥0∞) * 2 ^ L / 2 ^ (h * m) := by
   classical
   refine (pr_le_of_card _ (2 ^ (h * m)) (N.choose m * 2 ^ L) (by positivity) (by
@@ -186,7 +186,7 @@ theorem pr_relay_le (A : RelayDevice N b h ρ S L q) (m : ℕ) :
 /-- With any side sources: `m` relayed receipts, or `k − m` queried words and too little else, with probability at
 most `C(N, m)·2^L/2^(h·m) + C(q, k − m)/2^λ`. -/
 theorem pr_relay_or_compress (A : RelayDevice N b h ρ S L q) (k m lam : ℕ) (hk : 0 < k - m) :
-    pr (fun x : Store N b × Bits ρ × Oracle N b h ρ =>
+    pr (fun x : Payloads N b × Bits ρ × Oracle N b h ρ =>
         m ≤ (A.relayed x.1 x.2.1 x.2.2).card ∨
           (k - m ≤ (queried A x.1 x.2.1 x.2.2).card ∧ taken A x.1 x.2.1 x.2.2 + lam < (k - m) * b + ρ))
       ≤ (N.choose m : ℝ≥0∞) * 2 ^ L / 2 ^ (h * m) + ((q.choose (k - m) : ℕ) : ℝ≥0∞) / 2 ^ lam :=
@@ -237,7 +237,7 @@ theorem RateConservation : Accounting.Guarantees.RateConservation := by
 /-- The capacities bound the footprint. -/
 theorem footprint_mul_lt_of_capped {N b h ρ S L q τ cEnc fl : ℕ} {tier : ℕ → Fin τ} {cap : Fin τ → ℕ}
     (A : InteractiveDevice N b h ρ S L q) (hcap : A.TierCapped tier cap) (hfl : (∑ t, cap t) * cEnc < fl)
-    (E : Store N b) (R : Bits ρ) (O : Oracle N b h ρ) : A.toRelay.footprint E R O * cEnc < fl := by
+    (E : Payloads N b) (R : Bits ρ) (O : Oracle N b h ρ) : A.toRelay.footprint E R O * cEnc < fl := by
   rw [InteractiveDevice.toRelay_footprint]
   refine lt_of_le_of_lt (Nat.mul_le_mul_right cEnc ?_) hfl
   exact (InteractiveDevice.footprint_le_sum_tierReads A tier E R O).trans

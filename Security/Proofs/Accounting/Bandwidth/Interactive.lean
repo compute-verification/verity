@@ -99,7 +99,7 @@ variable {N b h S c G q : ℕ}
 
 /-- The relay device's side source: at `addr v a`, the answer to `v` at `a`; nothing at an address that is no such
 pair. -/
-def relaySide (A : InteractiveDevice N b h S c G q) (E : Store N b) (O : Oracle N b h) (n : ℕ) : Bool :=
+def relaySide (A : InteractiveDevice N b h S c G q) (E : Payloads N b) (O : Oracle N b h) (n : ℕ) : Bool :=
   match (Encodable.decode n : Option (List Bool × ℕ)) with
   | some p => A.side E O p.1 p.2
   | none => false
@@ -115,39 +115,39 @@ def toRelay (A : InteractiveDevice N b h S c G q) : RelayDevice N b h S c G q wh
     rw [IChip.toChip_sideBits, IChip.toChip_regens, IChip.toChip_queries]
     exact A.bounded st (IChip.lift w)
 
-theorem lift_world (A : InteractiveDevice N b h S c G q) (E : Store N b) (O : Oracle N b h) :
+theorem lift_world (A : InteractiveDevice N b h S c G q) (E : Payloads N b) (O : Oracle N b h) :
     IChip.lift (A.toRelay.world E O) = A.world E O := by
   simp only [IChip.lift, RelayDevice.world, toRelay, world, IWorld.mk.injEq, true_and, and_true]
   funext v a
   simp [relaySide, IChip.addr, Encodable.encodek]
 
-theorem toRelay_tags (A : InteractiveDevice N b h S c G q) (E : Store N b) (O : Oracle N b h) :
+theorem toRelay_tags (A : InteractiveDevice N b h S c G q) (E : Payloads N b) (O : Oracle N b h) :
     A.toRelay.tags E O = A.tags E O := by
   change ((A.chip (A.state E)).toChip []).run (A.toRelay.world E O) = _
   rw [IChip.toChip_run, lift_world]
   rfl
 
-theorem toRelay_ingress (A : InteractiveDevice N b h S c G q) (E : Store N b) (O : Oracle N b h) :
+theorem toRelay_ingress (A : InteractiveDevice N b h S c G q) (E : Payloads N b) (O : Oracle N b h) :
     A.toRelay.ingress E O = A.ingress E O := by
   change ((A.chip (A.state E)).toChip []).ingressBits (A.toRelay.world E O) = _
   rw [IChip.toChip_ingressBits, lift_world]
   rfl
 
-theorem toRelay_accepts {s : ℕ} (A : InteractiveDevice N b h S c G q) (E : Store N b) (O : Oracle N b h)
+theorem toRelay_accepts {s : ℕ} (A : InteractiveDevice N b h S c G q) (E : Payloads N b) (O : Oracle N b h)
     (I : Fin s → Fin N) : A.toRelay.Accepts E O I ↔ A.Accepts E O I := by
   simp only [RelayDevice.Accepts, Accepts, toRelay_tags]
 
 /-- When the answers ignore the oracle, the relay device at any one oracle runs, at every oracle, as the relay device
 does. -/
 theorem atOracle_world (A : InteractiveDevice N b h S c G q) (hA : ∀ E O O', A.side E O = A.side E O')
-    (O₀ : Oracle N b h) (E : Store N b) (O : Oracle N b h) :
+    (O₀ : Oracle N b h) (E : Payloads N b) (O : Oracle N b h) :
     (A.toRelay.atOracle O₀).world E O = A.toRelay.world E O := by
   simp only [Device.world, RelayDevice.world, RelayDevice.atOracle, World.mk.injEq, true_and, and_true]
   funext n
   simp only [toRelay, relaySide, hA E O₀ O]
 
 theorem atOracle_tags (A : InteractiveDevice N b h S c G q) (hA : ∀ E O O', A.side E O = A.side E O')
-    (O₀ : Oracle N b h) (E : Store N b) (O : Oracle N b h) :
+    (O₀ : Oracle N b h) (E : Payloads N b) (O : Oracle N b h) :
     (A.toRelay.atOracle O₀).tags E O = A.tags E O := by
   rw [← toRelay_tags]
   change (A.toRelay.chip (A.toRelay.state E)).run ((A.toRelay.atOracle O₀).world E O) = _
@@ -155,7 +155,7 @@ theorem atOracle_tags (A : InteractiveDevice N b h S c G q) (hA : ∀ E O O', A.
   rfl
 
 theorem atOracle_ingress (A : InteractiveDevice N b h S c G q) (hA : ∀ E O O', A.side E O = A.side E O')
-    (O₀ : Oracle N b h) (E : Store N b) (O : Oracle N b h) :
+    (O₀ : Oracle N b h) (E : Payloads N b) (O : Oracle N b h) :
     (A.toRelay.atOracle O₀).ingress E O = A.ingress E O := by
   rw [← toRelay_ingress]
   change (A.toRelay.chip (A.toRelay.state E)).ingressBits ((A.toRelay.atOracle O₀).world E O) = _
@@ -252,8 +252,8 @@ variable {N b h S c G q : ℕ}
 /-- **A program bounded on its runs as an interactive device**: state, device memory, side sources and a chip program
 whose run, in the world of every store and oracle, reads at most `c` side bits, regenerates at most `G` blocks and
 makes at most `q` queries. The device runs the program capped at those budgets. -/
-def ofRuns (state : Store N b → Bits S) (mem : Store N b → ℕ → Bool)
-    (side : Store N b → Oracle N b h → List Bool → ℕ → Bool) (chip : Bits S → IChip N b h (Fin N → Bits h)) :
+def ofRuns (state : Payloads N b → Bits S) (mem : Payloads N b → ℕ → Bool)
+    (side : Payloads N b → Oracle N b h → List Bool → ℕ → Bool) (chip : Bits S → IChip N b h (Fin N → Bits h)) :
     InteractiveDevice N b h S c G q where
   state := state
   mem := mem
@@ -261,9 +261,9 @@ def ofRuns (state : Store N b → Bits S) (mem : Store N b → ℕ → Bool)
   chip st := (chip st).cap (fun _ _ => false) c G q
   bounded st w := IChip.cap_bounded _ w (chip st) c G q []
 
-theorem ofRuns_run (state : Store N b → Bits S) (mem : Store N b → ℕ → Bool)
-    (side : Store N b → Oracle N b h → List Bool → ℕ → Bool) (chip : Bits S → IChip N b h (Fin N → Bits h))
-    (E : Store N b) (O : Oracle N b h)
+theorem ofRuns_run (state : Payloads N b → Bits S) (mem : Payloads N b → ℕ → Bool)
+    (side : Payloads N b → Oracle N b h → List Bool → ℕ → Bool) (chip : Bits S → IChip N b h (Fin N → Bits h))
+    (E : Payloads N b) (O : Oracle N b h)
     (hb : (chip (state E)).sideBits ⟨O, mem E, side E O, E⟩ [] ≤ c ∧ (chip (state E)).regens ⟨O, mem E, side E O, E⟩ [] ≤ G ∧
       ((chip (state E)).queries ⟨O, mem E, side E O, E⟩ []).length ≤ q) :
     (ofRuns (c := c) (G := G) (q := q) state mem side chip).tags E O = (chip (state E)).run ⟨O, mem E, side E O, E⟩ [] ∧
@@ -280,7 +280,7 @@ open InteractiveDevice
 /-- **The bandwidth audit v0 with interactive side sources** (`Bandwidth.Guarantees.AuditInteractive`). -/
 theorem AuditInteractive : Bandwidth.Guarantees.AuditInteractive := by
   intro N b h S c G q s k m lam A
-  have hev : (fun x : Store N b × Oracle N b h × (Fin s → Fin N) =>
+  have hev : (fun x : Payloads N b × Oracle N b h × (Fin s → Fin N) =>
         A.Accepts x.1 x.2.1 x.2.2 ∧ A.ingress x.1 x.2.1 + S + c + m * b + G * b + lam < k * b) =
       fun x => A.toRelay.Accepts x.1 x.2.1 x.2.2 ∧ A.toRelay.ingress x.1 x.2.1 + S + c + m * b + G * b + lam < k * b := by
     funext x
@@ -293,7 +293,7 @@ theorem AuditInteractive : Bandwidth.Guarantees.AuditInteractive := by
 theorem AuditInteractiveRO : Bandwidth.Guarantees.AuditInteractiveRO := by
   intro N b h S c G q s k lam A hA
   let O₀ : Oracle N b h := fun _ _ => false
-  have hev : (fun x : Store N b × Oracle N b h × (Fin s → Fin N) =>
+  have hev : (fun x : Payloads N b × Oracle N b h × (Fin s → Fin N) =>
         A.Accepts x.1 x.2.1 x.2.2 ∧ A.ingress x.1 x.2.1 + S + c + G * b + lam < k * b) =
       fun x => Accepts (A.toRelay.atOracle O₀) x.1 x.2.1 x.2.2 ∧
         (A.toRelay.atOracle O₀).ingress x.1 x.2.1 + S + c + G * b + lam < k * b := by

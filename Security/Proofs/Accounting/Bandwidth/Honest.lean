@@ -17,13 +17,13 @@ open scoped ENNReal
 variable {N b h : ℕ} {α : Type}
 
 /-- Device memory holding the store as it is: bit `i` of block `j` at address `j·b + i`. -/
-def layout (E : Store N b) (a : ℕ) : Bool :=
+def layout (E : Payloads N b) (a : ℕ) : Bool :=
   if ha : a < N * b then
     E ⟨a / b, Nat.div_lt_of_lt_mul (by rwa [mul_comm] at ha)⟩
       ⟨a % b, Nat.mod_lt _ (Nat.pos_of_ne_zero (by rintro rfl; simp at ha))⟩
   else false
 
-theorem layout_block (E : Store N b) (j : Fin N) (i : Fin b) : layout E (j * b + i) = E j i := by
+theorem layout_block (E : Payloads N b) (j : Fin N) (i : Fin b) : layout E (j * b + i) = E j i := by
   have hb : 0 < b := Nat.lt_of_le_of_lt (Nat.zero_le _) i.2
   have hlt : (j : ℕ) * b + i < N * b := by
     have := j.2; have := i.2
@@ -115,7 +115,7 @@ def honest (N b h : ℕ) : Device N b h 0 0 0 N where
     obtain ⟨-, -, h3, h4, h5⟩ := loop_eq w (List.finRange N) (fun _ _ => false)
     simp [h3, h4, h5]
 
-theorem honest_tags (E : Store N b) (O : Oracle N b h) (j : Fin N) :
+theorem honest_tags (E : Payloads N b) (O : Oracle N b h) (j : Fin N) :
     (honest N b h).tags E O j = O (j, E j) := by
   have := congrFun (loop_eq ((honest N b h).world E O) (List.finRange N) (fun _ _ => false)).1 j
   simp only [List.mem_finRange, ↓reduceIte] at this
@@ -123,7 +123,7 @@ theorem honest_tags (E : Store N b) (O : Oracle N b h) (j : Fin N) :
   exact layout_block E j i
 
 /-- **Completeness.** The honest device is accepted on every store, oracle and sample, and reads exactly the store. -/
-theorem honest_accepts {s : ℕ} (E : Store N b) (O : Oracle N b h) (I : Fin s → Fin N) :
+theorem honest_accepts {s : ℕ} (E : Payloads N b) (O : Oracle N b h) (I : Fin s → Fin N) :
     Accepts (honest N b h) E O I ∧ (honest N b h).ingress E O = N * b := by
   refine ⟨fun i => honest_tags E O (I i), ?_⟩
   have := (loop_eq ((honest N b h).world E O) (List.finRange N) (fun _ _ => false)).2.1

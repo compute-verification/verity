@@ -73,8 +73,8 @@ theorem mul_pr_le_sum {Ω ι : Type} [Fintype Ω] [Fintype ι] (P : ι → Ω �
 variable {n N b h ρ S L q s : ℕ}
 
 /-- Window `i` was accepted within the compute budget with its footprint short of the floor `fl`. -/
-def Short (A : Devices n N b h ρ S L q s) (cTag cEnc F fl : ℕ) (i : Fin n) (x : Store N b × (Fin n → Coins N b h ρ s)) :
-    Prop :=
+def Short (A : Devices n N b h ρ S L q s) (cTag cEnc F fl : ℕ) (i : Fin n)
+    (x : Payloads N b × (Fin n → Coins N b h ρ s)) : Prop :=
   (A.dev i x.2).Accepts x.1 (x.2 i).1.1 (x.2 i).1.2 (x.2 i).2 ∧
     (A.dev i x.2).compute cTag cEnc x.1 (x.2 i).1.1 (x.2 i).1.2 ≤ F ∧
     (A.dev i x.2).footprint x.1 (x.2 i).1.1 (x.2 i).1.2 * cEnc < fl
@@ -83,7 +83,7 @@ open Classical in
 /-- Footprints summing short of `n + 1 − m` floors, in windows all accepted within the budget, leave at least `m`
 windows short. -/
 theorem le_card_short (A : Devices n N b h ρ S L q s) (cTag cEnc F fl m : ℕ)
-    (x : Store N b × (Fin n → Coins N b h ρ s))
+    (x : Payloads N b × (Fin n → Coins N b h ρ s))
     (hall : ∀ i, (A.dev i x.2).Accepts x.1 (x.2 i).1.1 (x.2 i).1.2 (x.2 i).2 ∧
       (A.dev i x.2).compute cTag cEnc x.1 (x.2 i).1.1 (x.2 i).1.2 ≤ F)
     (hsum : ∑ i, (A.dev i x.2).footprint x.1 (x.2 i).1.1 (x.2 i).1.2 * cEnc < (n + 1 - m) * fl) :
@@ -111,8 +111,8 @@ theorem pr_short_le (A : Devices n N b h ρ S L q s) (cTag cEnc F k lam : ℕ) (
     pr (Short A cTag cEnc F (floor b ρ S L F cTag cEnc k lam) i) ≤
       (((k - 1 : ℕ) : ℝ≥0∞) / N) ^ s + (s : ℝ≥0∞) / 2 ^ h + (q.choose k : ℝ≥0∞) / 2 ^ lam := by
   classical
-  let e : Store N b × (Fin n → Coins N b h ρ s) ≃
-      (Store N b × Coins N b h ρ s) × ({j : Fin n // j ≠ i} → Coins N b h ρ s) :=
+  let e : Payloads N b × (Fin n → Coins N b h ρ s) ≃
+      (Payloads N b × Coins N b h ρ s) × ({j : Fin n // j ≠ i} → Coins N b h ρ s) :=
     ((Equiv.refl _).prodCongr (Equiv.funSplitAt i _)).trans (Equiv.prodAssoc _ _ _).symm
   rw [pr_equiv e]
   refine pr_le_of_fiber _ _ (fun ω' => ?_)
@@ -138,12 +138,12 @@ open scoped ENNReal
 theorem RateAuditWindows : Accounting.Guarantees.RateAuditWindows := by
   classical
   intro n N b h ρ S L q s k F cTag cEnc lam m A
-  calc (m : ℝ≥0∞) * pr (fun x : Store N b × (Fin n → Coins N b h ρ s) =>
+  calc (m : ℝ≥0∞) * pr (fun x : Payloads N b × (Fin n → Coins N b h ρ s) =>
           (∀ i, (A.dev i x.2).Accepts x.1 (x.2 i).1.1 (x.2 i).1.2 (x.2 i).2 ∧
             (A.dev i x.2).compute cTag cEnc x.1 (x.2 i).1.1 (x.2 i).1.2 ≤ F) ∧
           ∑ i, (A.dev i x.2).footprint x.1 (x.2 i).1.1 (x.2 i).1.2 * cEnc <
             (n + 1 - m) * floor b ρ S L F cTag cEnc k lam)
-      ≤ (m : ℝ≥0∞) * pr (fun x : Store N b × (Fin n → Coins N b h ρ s) =>
+      ≤ (m : ℝ≥0∞) * pr (fun x : Payloads N b × (Fin n → Coins N b h ρ s) =>
           m ≤ (Finset.univ.filter (fun i => Short A cTag cEnc F (floor b ρ S L F cTag cEnc k lam) i x)).card) := by
         gcongr
         exact Bandwidth.pr_mono (fun x hx => le_card_short A cTag cEnc F _ m x hx.1 hx.2)

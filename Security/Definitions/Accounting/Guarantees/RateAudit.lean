@@ -81,7 +81,7 @@ Frozen (no-function, hash): a bound in the random-oracle model over an abstract 
 the rate audit's code computes. -/
 def RateAudit : Prop :=
   ∀ (N b h ρ S L q s k F cTag cEnc lam : ℕ) (A : Rate.Device N b h ρ S L q),
-    pr (fun x : Store N b × Coins N b h ρ s =>
+    pr (fun x : Payloads N b × Coins N b h ρ s =>
         A.Accepts x.1 x.2.1.1 x.2.1.2 x.2.2 ∧ A.compute cTag cEnc x.1 x.2.1.1 x.2.1.2 ≤ F ∧
           A.footprint x.1 x.2.1.1 x.2.1.2 * cEnc < floor b ρ S L F cTag cEnc k lam)
       ≤ (((k - 1 : ℕ) : ℝ≥0∞) / N) ^ s + (s : ℝ≥0∞) / 2 ^ h + (q.choose k : ℝ≥0∞) / 2 ^ lam
@@ -99,7 +99,7 @@ the oracle at it under the stream. Against `RateAudit` at `S = 0`, `L = ρ` (so 
 Frozen (completeness): the honest device's acceptance, which shows that `RateAudit`'s event is not vacuous. -/
 def RateHonest : Prop :=
   ∀ N b h ρ : ℕ, ∃ A : Rate.Device N b h ρ 0 ρ N,
-    ∀ (cTag cEnc : ℕ) (E : Store N b) (R : Bits ρ) (O : Oracle N b h ρ) (s : ℕ) (I : Fin s → Fin N),
+    ∀ (cTag cEnc : ℕ) (E : Payloads N b) (R : Bits ρ) (O : Oracle N b h ρ) (s : ℕ) (I : Fin s → Fin N),
       A.Accepts E R O I ∧ A.footprint E R O = N * b ∧ A.ingress E R O = N * b ∧ A.compute cTag cEnc E R O = N * cTag
 
 /-- **The rate audit over `n` windows: time-averaged residency.** Over a uniform store and `n` windows, each with its
@@ -122,7 +122,7 @@ coins.
 Frozen (no-function, hash): like `RateAudit`, a bound in the random-oracle model over abstract chip programs. -/
 def RateAuditWindows : Prop :=
   ∀ (n N b h ρ S L q s k F cTag cEnc lam m : ℕ) (A : Devices n N b h ρ S L q s),
-    (m : ℝ≥0∞) * pr (fun x : Store N b × (Fin n → Coins N b h ρ s) =>
+    (m : ℝ≥0∞) * pr (fun x : Payloads N b × (Fin n → Coins N b h ρ s) =>
         (∀ i, (A.dev i x.2).Accepts x.1 (x.2 i).1.1 (x.2 i).1.2 (x.2 i).2 ∧
           (A.dev i x.2).compute cTag cEnc x.1 (x.2 i).1.1 (x.2 i).1.2 ≤ F) ∧
         ∑ i, (A.dev i x.2).footprint x.1 (x.2 i).1.1 (x.2 i).1.2 * cEnc < (n + 1 - m) * floor b ρ S L F cTag cEnc k lam)
@@ -190,7 +190,7 @@ Frozen (no-function, hash): as `RateAudit`, a bound in the random-oracle model o
 def RateAuditInteractiveRO : Prop :=
   ∀ (N b h ρ S L q s k F cTag cEnc lam : ℕ) (A : Rate.InteractiveDevice N b h ρ S L q),
     (∀ E R O O', A.side E R O = A.side E R O') →
-    pr (fun x : Store N b × Coins N b h ρ s =>
+    pr (fun x : Payloads N b × Coins N b h ρ s =>
         A.Accepts x.1 x.2.1.1 x.2.1.2 x.2.2 ∧ A.compute cTag cEnc x.1 x.2.1.1 x.2.1.2 ≤ F ∧
           A.footprint x.1 x.2.1.1 x.2.1.2 * cEnc < floor b ρ S L F cTag cEnc k lam)
       ≤ (((k - 1 : ℕ) : ℝ≥0∞) / N) ^ s + (s : ℝ≥0∞) / 2 ^ h + (q.choose k : ℝ≥0∞) / 2 ^ lam
@@ -222,7 +222,7 @@ oracle from at most `L` bits read.
 Frozen (no-function, hash): as `RateAudit`, a bound in the random-oracle model over an abstract chip program. -/
 def RateAuditInteractive : Prop :=
   ∀ (N b h ρ S L q s k m F cTag cEnc lam : ℕ) (A : Rate.InteractiveDevice N b h ρ S L q),
-    pr (fun x : Store N b × Coins N b h ρ s =>
+    pr (fun x : Payloads N b × Coins N b h ρ s =>
         A.Accepts x.1 x.2.1.1 x.2.1.2 x.2.2 ∧ A.compute cTag cEnc x.1 x.2.1.1 x.2.1.2 ≤ F ∧
           A.footprint x.1 x.2.1.1 x.2.1.2 * cEnc < floor b ρ S L F cTag cEnc (k - m) lam)
       ≤ (((k - 1 : ℕ) : ℝ≥0∞) / N) ^ s + (N.choose m : ℝ≥0∞) * 2 ^ L / 2 ^ (h * m)

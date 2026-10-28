@@ -289,7 +289,7 @@ the store, the certified stream and the oracle (`input`), or `x ≤ b` bits of w
 which the circuit computes (`encode`). -/
 inductive PassProvenance (N b h ρ : ℕ) (α : Type) : Type where
   | done : α → PassProvenance N b h ρ α
-  | input : (x : ℕ) → (Store N b → Bits ρ → Oracle N b h ρ → Bits x) → (Bits x → PassProvenance N b h ρ α) →
+  | input : (x : ℕ) → (Payloads N b → Bits ρ → Oracle N b h ρ → Bits x) → (Bits x → PassProvenance N b h ρ α) →
       PassProvenance N b h ρ α
   | encode : Fin N → (x : ℕ) → x ≤ b → (Bits b → Bits x) → (Bits x → PassProvenance N b h ρ α) →
       PassProvenance N b h ρ α
@@ -299,25 +299,25 @@ namespace PassProvenance
 variable {N b h ρ : ℕ} {α : Type}
 
 /-- The circuit's values at store `E`, stream `R` and oracle `O`. -/
-def run (E : Store N b) (R : Bits ρ) (O : Oracle N b h ρ) : PassProvenance N b h ρ α → α
+def run (E : Payloads N b) (R : Bits ρ) (O : Oracle N b h ρ) : PassProvenance N b h ρ α → α
   | done a => a
   | input _ f k => (k (f E R O)).run E R O
   | encode j _ _ f k => (k (f (E j))).run E R O
 
 /-- The bits fed as inputs: `x` per `input` step of `x` bits. -/
-def inputs (E : Store N b) (R : Bits ρ) (O : Oracle N b h ρ) : PassProvenance N b h ρ α → ℕ
+def inputs (E : Payloads N b) (R : Bits ρ) (O : Oracle N b h ρ) : PassProvenance N b h ρ α → ℕ
   | done _ => 0
   | input x f k => (k (f E R O)).inputs E R O + x
   | encode j _ _ f k => (k (f (E j))).inputs E R O
 
 /-- The bits encoded: `x` per `encode` step of `x` bits. -/
-def encoded (E : Store N b) (R : Bits ρ) (O : Oracle N b h ρ) : PassProvenance N b h ρ α → ℕ
+def encoded (E : Payloads N b) (R : Bits ρ) (O : Oracle N b h ρ) : PassProvenance N b h ρ α → ℕ
   | done _ => 0
   | input _ f k => (k (f E R O)).encoded E R O
   | encode j x _ f k => (k (f (E j))).encoded E R O + x
 
 /-- The budgeted gates the encodes cost, at `cost x` per `encode` step of `x` bits. -/
-def gates (cost : ℕ → ℕ∞) (E : Store N b) (R : Bits ρ) (O : Oracle N b h ρ) : PassProvenance N b h ρ α → ℕ∞
+def gates (cost : ℕ → ℕ∞) (E : Payloads N b) (R : Bits ρ) (O : Oracle N b h ρ) : PassProvenance N b h ρ α → ℕ∞
   | done _ => 0
   | input _ f k => (k (f E R O)).gates cost E R O
   | encode j x _ f k => (k (f (E j))).gates cost E R O + cost x

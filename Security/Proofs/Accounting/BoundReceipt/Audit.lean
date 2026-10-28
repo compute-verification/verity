@@ -100,19 +100,20 @@ def Rest.view (B : Rest N a h Lz qz) : RelayDevice N a h 0 0 Lz qz where
     rw [Chip.inline_linkBits, Chip.inline_queries]
     exact B.bounded _
 
-theorem Rest.view_world (B : Rest N a h Lz qz) (E : Store N b) (z : Store N a) (G : Mix N a b h) :
+theorem Rest.view_world (B : Rest N a h Lz qz) (E : Payloads N b) (z : Payloads N a) (G : Mix N a b h) :
     { B.view.world z noStream (atE G E) with mem := B.mem } = B.world E z G := rfl
 
-theorem Rest.view_tags (B : Rest N a h Lz qz) (E : Store N b) (z : Store N a) (G : Mix N a b h) :
+theorem Rest.view_tags (B : Rest N a h Lz qz) (E : Payloads N b) (z : Payloads N a) (G : Mix N a b h) :
     B.view.tags z noStream (atE G E) = B.receipts E z G :=
   Chip.inline_run _ _ _
 
-theorem Rest.mem_view_queried (B : Rest N a h Lz qz) (E : Store N b) (z : Store N a) (G : Mix N a b h) (j : Fin N) :
+theorem Rest.mem_view_queried (B : Rest N a h Lz qz) (E : Payloads N b) (z : Payloads N a)
+    (G : Mix N a b h) (j : Fin N) :
     j ∈ queried B.view z noStream (atE G E) ↔ (noStream, j, z j) ∈ B.chip.queries (B.world E z G) := by
   simp only [queried, Finset.mem_filter, Finset.mem_univ, true_and]
   exact Iff.of_eq (congrArg _ (Chip.inline_queries _ _ _))
 
-theorem Rest.view_taken (B : Rest N a h Lz qz) (E : Store N b) (z : Store N a) (G : Mix N a b h) :
+theorem Rest.view_taken (B : Rest N a h Lz qz) (E : Payloads N b) (z : Payloads N a) (G : Mix N a b h) :
     taken B.view z noStream (atE G E) =
       B.chip.linkBits (B.world E z G) + B.chip.rebuilds (B.world E z G) * a := by
   simp only [taken, RelayDevice.footprint]
@@ -135,7 +136,7 @@ open Bandwidth (card_line_le)
 along an injection `ι`, and side sources that ignore the oracle, a word the device never queried has the right tag,
 `G` at `ι`'s image of its point, for at most a `2^-h` fraction of `G`. -/
 theorem card_guess_at_le {X : Type} [Fintype X] [DecidableEq X] {N b h ρ S L q : ℕ} (A : RelayDevice N b h ρ S L q)
-    (E : Store N b) (R : Bits ρ) (j : Fin N) (φ : (X → Bits h) → Oracle N b h ρ) (ι : Bits ρ × Fin N × Bits b → X)
+    (E : Payloads N b) (R : Bits ρ) (j : Fin N) (φ : (X → Bits h) → Oracle N b h ρ) (ι : Bits ρ × Fin N × Bits b → X)
     (hι : Function.Injective ι) (hφ : ∀ G x, φ G x = G (ι x)) (x₀ : X) (hx₀ : ι (R, j, E j) = x₀)
     (hA : ∀ O O', A.side E R O = A.side E R O')
     [DecidablePred (fun G : X → Bits h => j ∉ queried A E R (φ G) ∧ A.tags E R (φ G) j = G x₀)] :
@@ -182,20 +183,22 @@ open Pous (Bits)
 
 variable {N a b h S L q Lz qz : ℕ}
 
-theorem inj_atZ (z : Store N a) : Function.Injective (fun x : Bits 0 × Fin N × Bits b => (x.2.1, x.2.2, z x.2.1)) := by
+theorem inj_atZ (z : Payloads N a) :
+    Function.Injective (fun x : Bits 0 × Fin N × Bits b => (x.2.1, x.2.2, z x.2.1)) := by
   rintro ⟨r₁, j₁, x₁⟩ ⟨r₂, j₂, x₂⟩ he
   simp only [Prod.mk.injEq] at he
   obtain ⟨rfl, rfl, -⟩ := he
   rw [noStream_eq r₁, noStream_eq r₂]
 
-theorem inj_atE (E : Store N b) : Function.Injective (fun x : Bits 0 × Fin N × Bits a => (x.2.1, E x.2.1, x.2.2)) := by
+theorem inj_atE (E : Payloads N b) :
+    Function.Injective (fun x : Bits 0 × Fin N × Bits a => (x.2.1, E x.2.1, x.2.2)) := by
   rintro ⟨r₁, j₁, y₁⟩ ⟨r₂, j₂, y₂⟩ he
   simp only [Prod.mk.injEq] at he
   obtain ⟨rfl, -, rfl⟩ := he
   rw [noStream_eq r₁, noStream_eq r₂]
 
 /-- The GPU's guess: a receipt it never made is right for at most a `2^-h` fraction of mixes. -/
-theorem card_guess_gpu (A : Node N a b h S L q Lz qz) (E : Store N b) (z : Store N a) (j : Fin N)
+theorem card_guess_gpu (A : Node N a b h S L q Lz qz) (E : Payloads N b) (z : Payloads N a) (j : Fin N)
     [DecidablePred (fun G : Mix N a b h => A.gpuReceipts E z G j = G (j, E j, z j) ∧ ¬ A.MadeAtGpu E z G j)] :
     (Finset.univ.filter (fun G : Mix N a b h =>
       A.gpuReceipts E z G j = G (j, E j, z j) ∧ ¬ A.MadeAtGpu E z G j)).card * 2 ^ h ≤
@@ -208,7 +211,7 @@ theorem card_guess_gpu (A : Node N a b h S L q Lz qz) (E : Store N b) (z : Store
   exact ⟨hG.2, hG.1⟩
 
 /-- The rest's guess: a receipt it never made is right for at most a `2^-h` fraction of mixes. -/
-theorem card_guess_rest (A : Node N a b h S L q Lz qz) (E : Store N b) (z : Store N a) (j : Fin N)
+theorem card_guess_rest (A : Node N a b h S L q Lz qz) (E : Payloads N b) (z : Payloads N a) (j : Fin N)
     [DecidablePred (fun G : Mix N a b h => A.restReceipts E z G j = G (j, E j, z j) ∧ ¬ A.MadeAtRest E z G j)] :
     (Finset.univ.filter (fun G : Mix N a b h =>
       A.restReceipts E z G j = G (j, E j, z j) ∧ ¬ A.MadeAtRest E z G j)).card * 2 ^ h ≤
@@ -279,11 +282,11 @@ theorem BoundReceiptLink : Accounting.Guarantees.BoundReceiptLink := by
   · refine (pr_le_of_card _ 1 0 one_ne_zero ?_).trans (by simp)
     rw [Finset.filter_false_of_mem (fun x _ hx => by simp [floor, hkm] at hx), Finset.card_empty, zero_mul,
       zero_mul]
-  let gQ : Store N b → Store N a → Mix N a b h → Finset (Fin N) :=
+  let gQ : Payloads N b → Payloads N a → Mix N a b h → Finset (Fin N) :=
     fun E z G => queried (A.gpu z).toRelay E noStream (atZ G z)
-  let rQ : Store N b → Store N a → Mix N a b h → Finset (Fin N) :=
+  let rQ : Payloads N b → Payloads N a → Mix N a b h → Finset (Fin N) :=
     fun E z G => queried (A.rest E).view z noStream (atE G E)
-  have hsplit : ∀ x : Store N b × (Store N a × Mix N a b h × (Fin s → Fin N)),
+  have hsplit : ∀ x : Payloads N b × (Payloads N a × Mix N a b h × (Fin s → Fin N)),
       (A.Accepts x.1 x.2.1 x.2.2.1 x.2.2.2 ∧ A.compute cTag cEnc x.1 x.2.1 x.2.2.1 ≤ F ∧
         A.tileWork w x.1 x.2.1 x.2.2.1 ≤ Fz ∧
         A.footprint x.1 x.2.1 x.2.2.1 * cEnc < floor b 0 S L F cTag cEnc (k - m) lam) →
@@ -334,8 +337,8 @@ theorem BoundReceiptLink : Accounting.Guarantees.BoundReceiptLink := by
         rcases hacc i with h | h
         · exact Or.inl ⟨h, hi.1⟩
         · exact Or.inr ⟨h, hi.2⟩
-  have hΩ : Fintype.card (Store N b × (Store N a × Mix N a b h × (Fin s → Fin N))) =
-      Fintype.card (Store N b) * (Fintype.card (Store N a) * (Fintype.card (Mix N a b h) * N ^ s)) := by
+  have hΩ : Fintype.card (Payloads N b × (Payloads N a × Mix N a b h × (Fin s → Fin N))) =
+      Fintype.card (Payloads N b) * (Fintype.card (Payloads N a) * (Fintype.card (Mix N a b h) * N ^ s)) := by
     simp only [Fintype.card_prod, Fintype.card_fun, Fintype.card_fin]
   by_cases hN : N ^ s = 0
   · rw [pr_eq_zero_of_card _ (by rw [hΩ, hN]; simp)]
@@ -345,12 +348,12 @@ theorem BoundReceiptLink : Accounting.Guarantees.BoundReceiptLink := by
   refine (add_le_add ((pr_or_le _ _).trans (add_le_add ?_ ?_)) ((pr_or_le _ _).trans (add_le_add ?_ ?_))).trans
     (le_of_eq (add_assoc _ _ _).symm)
   · -- the sample misses the blocks made nowhere
-    have hc := pr_le_of_card (fun x : Store N b × (Store N a × Mix N a b h × (Fin s → Fin N)) =>
+    have hc := pr_le_of_card (fun x : Payloads N b × (Payloads N a × Mix N a b h × (Fin s → Fin N)) =>
         (gQ x.1 x.2.1 x.2.2.1 ∪ rQ x.1 x.2.1 x.2.2.1).card < k ∧
           ∀ i, x.2.2.2 i ∈ gQ x.1 x.2.1 x.2.2.1 ∪ rQ x.1 x.2.1 x.2.2.1) (N ^ s) ((k - 1) ^ s) hN (by
       rw [hΩ]
       refine (card_filter_prod_le _ _
-        (Fintype.card (Store N a) * (Fintype.card (Mix N a b h) * ((k - 1) ^ s * N ^ s)))
+        (Fintype.card (Payloads N a) * (Fintype.card (Mix N a b h) * ((k - 1) ^ s * N ^ s)))
         (fun E => ?_)).trans (le_of_eq (by ring))
       refine card_filter_prod_le _ _ _ (fun z => ?_)
       refine card_filter_prod_le _ _ _ (fun G => ?_)
@@ -363,7 +366,7 @@ theorem BoundReceiptLink : Accounting.Guarantees.BoundReceiptLink := by
     rw [Nat.cast_pow, Nat.cast_pow, div_eq_mul_inv, div_eq_mul_inv, mul_pow, ENNReal.inv_pow]
   · -- a guessed receipt, at either location
     refine (pr_exists_le _).trans ?_
-    have hi : ∀ i : Fin s, pr (fun x : Store N b × (Store N a × Mix N a b h × (Fin s → Fin N)) =>
+    have hi : ∀ i : Fin s, pr (fun x : Payloads N b × (Payloads N a × Mix N a b h × (Fin s → Fin N)) =>
         (A.gpuReceipts x.1 x.2.1 x.2.2.1 (x.2.2.2 i) = x.2.2.1 (x.2.2.2 i, x.1 (x.2.2.2 i), x.2.1 (x.2.2.2 i)) ∧
             ¬ A.MadeAtGpu x.1 x.2.1 x.2.2.1 (x.2.2.2 i)) ∨
           (A.restReceipts x.1 x.2.1 x.2.2.1 (x.2.2.2 i) = x.2.2.1 (x.2.2.2 i, x.1 (x.2.2.2 i), x.2.1 (x.2.2.2 i)) ∧
@@ -371,13 +374,13 @@ theorem BoundReceiptLink : Accounting.Guarantees.BoundReceiptLink := by
       refine (pr_or_le _ _).trans ((add_le_add ?_ ?_).trans (le_of_eq (two_div_eq h)))
       · refine pr_le_of_card _ (2 ^ h) 1 (by positivity) ?_
         rw [hΩ, one_mul]
-        refine (card_filter_prod_le _ _ (Fintype.card (Store N a) *
+        refine (card_filter_prod_le _ _ (Fintype.card (Payloads N a) *
           (Fintype.card (Mix N a b h) * Fintype.card (Fin s → Fin N))) (fun E => ?_)).trans (le_of_eq (by simp))
         refine card_filter_prod_le _ _ _ (fun z => ?_)
         exact card_filter_prod_le' _ _ _ (fun I => card_guess_gpu A E z (I i))
       · refine pr_le_of_card _ (2 ^ h) 1 (by positivity) ?_
         rw [hΩ, one_mul]
-        refine (card_filter_prod_le _ _ (Fintype.card (Store N a) *
+        refine (card_filter_prod_le _ _ (Fintype.card (Payloads N a) *
           (Fintype.card (Mix N a b h) * Fintype.card (Fin s → Fin N))) (fun E => ?_)).trans (le_of_eq (by simp))
         refine card_filter_prod_le _ _ _ (fun z => ?_)
         exact card_filter_prod_le' _ _ _ (fun I => card_guess_rest A E z (I i))
@@ -386,7 +389,7 @@ theorem BoundReceiptLink : Accounting.Guarantees.BoundReceiptLink := by
   · -- the GPU made `k − m`: compressing the store
     refine (pr_le_of_card _ (2 ^ lam) (q.choose (k - m)) (by positivity) (by
       rw [hΩ]
-      refine (card_filter_prod_le' _ _ (q.choose (k - m) * Fintype.card (Store N b)) (fun y => ?_)).trans
+      refine (card_filter_prod_le' _ _ (q.choose (k - m) * Fintype.card (Payloads N b)) (fun y => ?_)).trans
         (le_of_eq (by simp only [Fintype.card_prod, Fintype.card_fun, Fintype.card_fin]; ring))
       have := card_compress_le (A.gpu y.1).toRelay (atZ y.2.1 y.1) (k - m) lam hk0
       rw [← card_filter_noStream] at this
@@ -396,9 +399,9 @@ theorem BoundReceiptLink : Accounting.Guarantees.BoundReceiptLink := by
   · -- the rest made `m + 1`: compressing the tile outputs
     refine (pr_le_of_card _ (2 ^ lam) (qz.choose (m + 1)) (by positivity) (by
       rw [hΩ]
-      refine (card_filter_prod_le _ _ (qz.choose (m + 1) * Fintype.card (Store N a) *
+      refine (card_filter_prod_le _ _ (qz.choose (m + 1) * Fintype.card (Payloads N a) *
         (Fintype.card (Mix N a b h) * N ^ s)) (fun E => ?_)).trans (le_of_eq (by ring))
-      refine (card_filter_prod_le' _ _ (qz.choose (m + 1) * Fintype.card (Store N a)) (fun y => ?_)).trans
+      refine (card_filter_prod_le' _ _ (qz.choose (m + 1) * Fintype.card (Payloads N a)) (fun y => ?_)).trans
         (le_of_eq (by simp only [Fintype.card_prod, Fintype.card_fun, Fintype.card_fin]))
       have := card_compress_le (A.rest E).view (atE y.1 E) (m + 1) lam (Nat.succ_pos m)
       rw [← card_filter_noStream] at this

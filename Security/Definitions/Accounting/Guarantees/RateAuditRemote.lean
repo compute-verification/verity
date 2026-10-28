@@ -59,7 +59,7 @@ Frozen (no-function, hash): as `RateAudit`, a bound in the random-oracle model o
 def RateConservationRO : Prop :=
   ∀ (N b h ρ S L q k lam τ : ℕ) (tier : ℕ → Fin τ) (A : Rate.InteractiveDevice N b h ρ S L q),
     (∀ E R O O', A.side E R O = A.side E R O') →
-    pr (fun x : Store N b × Bits ρ × Oracle N b h ρ =>
+    pr (fun x : Payloads N b × Bits ρ × Oracle N b h ρ =>
         k ≤ (A.correct x.1 x.2.1 x.2.2).card ∧
           ∑ t, A.tierReads tier t x.1 x.2.1 x.2.2 + A.rebuilt x.1 x.2.1 x.2.2 * b + S + (L - ρ) + lam < k * b)
       ≤ (N : ℝ≥0∞) / 2 ^ h + (q.choose k : ℝ≥0∞) / 2 ^ lam
@@ -83,7 +83,7 @@ Proof: `Accounting.SecurityProofs.RateConservation`, `RateAuditInteractive`'s re
 Frozen (no-function, hash): as `RateAudit`. -/
 def RateConservation : Prop :=
   ∀ (N b h ρ S L q k m lam τ : ℕ) (tier : ℕ → Fin τ) (A : Rate.InteractiveDevice N b h ρ S L q),
-    pr (fun x : Store N b × Bits ρ × Oracle N b h ρ =>
+    pr (fun x : Payloads N b × Bits ρ × Oracle N b h ρ =>
         k ≤ (A.correct x.1 x.2.1 x.2.2).card ∧
           ∑ t, A.tierReads tier t x.1 x.2.1 x.2.2 + A.rebuilt x.1 x.2.1 x.2.2 * b + S + (L - ρ) + lam < (k - m) * b)
       ≤ (N.choose m : ℝ≥0∞) * 2 ^ L / 2 ^ (h * m) + ((q.choose (k - m) : ℕ) : ℝ≥0∞) / 2 ^ lam
@@ -114,7 +114,7 @@ def RateConservationCapRO : Prop :=
     (A : Rate.InteractiveDevice N b h ρ S L q),
     (∀ E R O O', A.side E R O = A.side E R O') → A.TierCapped tier cap →
     (∑ t, cap t) * cEnc < floor b ρ S L F cTag cEnc k lam →
-    pr (fun x : Store N b × Bits ρ × Oracle N b h ρ =>
+    pr (fun x : Payloads N b × Bits ρ × Oracle N b h ρ =>
         k ≤ (A.correct x.1 x.2.1 x.2.2).card ∧ A.compute cTag cEnc x.1 x.2.1 x.2.2 ≤ F)
       ≤ (N : ℝ≥0∞) / 2 ^ h + (q.choose k : ℝ≥0∞) / 2 ^ lam
 
@@ -130,7 +130,7 @@ def RateConservationCap : Prop :=
     (A : Rate.InteractiveDevice N b h ρ S L q),
     A.TierCapped tier cap →
     (∑ t, cap t) * cEnc < floor b ρ S L F cTag cEnc (k - m) lam →
-    pr (fun x : Store N b × Bits ρ × Oracle N b h ρ =>
+    pr (fun x : Payloads N b × Bits ρ × Oracle N b h ρ =>
         k ≤ (A.correct x.1 x.2.1 x.2.2).card ∧ A.compute cTag cEnc x.1 x.2.1 x.2.2 ≤ F)
       ≤ (N.choose m : ℝ≥0∞) * 2 ^ L / 2 ^ (h * m) + ((q.choose (k - m) : ℕ) : ℝ≥0∞) / 2 ^ lam
 
@@ -154,7 +154,7 @@ Frozen (no-function, hash): as `RateAudit`. -/
 def RateDisplacement : Prop :=
   ∀ (N b h ρ S L q k D lam τ : ℕ) (tier : ℕ → Fin τ) (t₀ : Fin τ) (A : Rate.InteractiveDevice N b h ρ S L q),
     (∀ E R O O', A.side E R O = A.side E R O') →
-    pr (fun x : Store N b × Bits ρ × Oracle N b h ρ =>
+    pr (fun x : Payloads N b × Bits ρ × Oracle N b h ρ =>
         k ≤ (A.correct x.1 x.2.1 x.2.2).card ∧
           A.tierReads tier t₀ x.1 x.2.1 x.2.2 + D + S + (L - ρ) + lam ≤ k * b ∧
           ∑ t ∈ Finset.univ.erase t₀, A.tierReads tier t x.1 x.2.1 x.2.2 + A.rebuilt x.1 x.2.1 x.2.2 * b < D)
@@ -181,7 +181,7 @@ def RateChainPassRO : Prop :=
   ∀ (P N b h ρ S L q r s k F cTag cEnc lam : ℕ) (A : Rate.Chain P N b h ρ S L q r s),
     (∀ j η E R O O', (A.device j η).side E R O = (A.device j η).side E R O') →
     ∀ j : Fin P,
-      pr (fun x : Store N b × (Fin P → PassCoins N b h ρ r s) =>
+      pr (fun x : Payloads N b × (Fin P → PassCoins N b h ρ r s) =>
           (A.dev j x.2).Accepts x.1 (x.2 j).1 (A.oracle j x.1 x.2) (x.2 j).2.2 ∧
             (A.dev j x.2).compute cTag cEnc x.1 (x.2 j).1 (A.oracle j x.1 x.2) ≤ F ∧
             (A.dev j x.2).footprint x.1 (x.2 j).1 (A.oracle j x.1 x.2) * cEnc < floor b ρ S L F cTag cEnc k lam)
@@ -195,7 +195,7 @@ answer as any function of pass `j`'s oracle too, at `RateAuditInteractive`'s flo
 Frozen (no-function, hash): as `RateAudit`. -/
 def RateChainPass : Prop :=
   ∀ (P N b h ρ S L q r s k m F cTag cEnc lam : ℕ) (A : Rate.Chain P N b h ρ S L q r s) (j : Fin P),
-    pr (fun x : Store N b × (Fin P → PassCoins N b h ρ r s) =>
+    pr (fun x : Payloads N b × (Fin P → PassCoins N b h ρ r s) =>
         (A.dev j x.2).Accepts x.1 (x.2 j).1 (A.oracle j x.1 x.2) (x.2 j).2.2 ∧
           (A.dev j x.2).compute cTag cEnc x.1 (x.2 j).1 (A.oracle j x.1 x.2) ≤ F ∧
           (A.dev j x.2).footprint x.1 (x.2 j).1 (A.oracle j x.1 x.2) * cEnc <
@@ -220,7 +220,7 @@ Frozen (no-function, hash): as `RateAudit`. -/
 def RateChainRO : Prop :=
   ∀ (P N b h ρ S L q r s k F cTag cEnc lam c : ℕ) (A : Rate.Chain P N b h ρ S L q r s),
     (∀ j η E R O O', (A.device j η).side E R O = (A.device j η).side E R O') →
-    (c : ℝ≥0∞) * pr (fun x : Store N b × (Fin P → PassCoins N b h ρ r s) =>
+    (c : ℝ≥0∞) * pr (fun x : Payloads N b × (Fin P → PassCoins N b h ρ r s) =>
         (∀ j, (A.dev j x.2).Accepts x.1 (x.2 j).1 (A.oracle j x.1 x.2) (x.2 j).2.2 ∧
           (A.dev j x.2).compute cTag cEnc x.1 (x.2 j).1 (A.oracle j x.1 x.2) ≤ F) ∧
         ∑ j, (A.dev j x.2).footprint x.1 (x.2 j).1 (A.oracle j x.1 x.2) * cEnc <
@@ -233,7 +233,7 @@ def RateChainRO : Prop :=
 Frozen (no-function, hash): as `RateAudit`. -/
 def RateChain : Prop :=
   ∀ (P N b h ρ S L q r s k m F cTag cEnc lam c : ℕ) (A : Rate.Chain P N b h ρ S L q r s),
-    (c : ℝ≥0∞) * pr (fun x : Store N b × (Fin P → PassCoins N b h ρ r s) =>
+    (c : ℝ≥0∞) * pr (fun x : Payloads N b × (Fin P → PassCoins N b h ρ r s) =>
         (∀ j, (A.dev j x.2).Accepts x.1 (x.2 j).1 (A.oracle j x.1 x.2) (x.2 j).2.2 ∧
           (A.dev j x.2).compute cTag cEnc x.1 (x.2 j).1 (A.oracle j x.1 x.2) ≤ F) ∧
         ∑ j, (A.dev j x.2).footprint x.1 (x.2 j).1 (A.oracle j x.1 x.2) * cEnc <
@@ -262,7 +262,7 @@ Frozen (no-function, hash): as `RateAudit`. -/
 def RatePaidRO : Prop :=
   ∀ (N b h ρ S L q lam τ : ℕ) (tier : ℕ → Fin τ) (A : Rate.InteractiveDevice N b h ρ S L q),
     (∀ E R O O', A.side E R O = A.side E R O') →
-    pr (fun x : Store N b × Bits ρ × Oracle N b h ρ =>
+    pr (fun x : Payloads N b × Bits ρ × Oracle N b h ρ =>
         ∑ t, A.tierReads tier t x.1 x.2.1 x.2.2 + A.rebuilt x.1 x.2.1 x.2.2 * b + S + (L - ρ) + lam <
           (A.correct x.1 x.2.1 x.2.2).card * b)
       ≤ (N : ℝ≥0∞) / 2 ^ h + (2 ^ q : ℝ≥0∞) / 2 ^ lam
@@ -279,7 +279,7 @@ is at most `C(N, m)·2^L/2^(h·m) + 2^q/2^λ`: `m` relayed receipts, about `L/h`
 Frozen (no-function, hash): as `RateAudit`. -/
 def RatePaid : Prop :=
   ∀ (N b h ρ S L q m lam τ : ℕ) (tier : ℕ → Fin τ) (A : Rate.InteractiveDevice N b h ρ S L q),
-    pr (fun x : Store N b × Bits ρ × Oracle N b h ρ =>
+    pr (fun x : Payloads N b × Bits ρ × Oracle N b h ρ =>
         ∑ t, A.tierReads tier t x.1 x.2.1 x.2.2 + A.rebuilt x.1 x.2.1 x.2.2 * b + S + (L - ρ) + lam + m * b <
           (A.correct x.1 x.2.1 x.2.2).card * b)
       ≤ (N.choose m : ℝ≥0∞) * 2 ^ L / 2 ^ (h * m) + (2 ^ q : ℝ≥0∞) / 2 ^ lam
@@ -306,7 +306,7 @@ Frozen (no-function, hash): as `RateAudit`. -/
 def RateChainPaidRO : Prop :=
   ∀ (P N b h ρ S L q r s lam τ : ℕ) (tier : ℕ → Fin τ) (A : Rate.Chain P N b h ρ S L q r s),
     (∀ j η E R O O', (A.device j η).side E R O = (A.device j η).side E R O') →
-    pr (fun x : Store N b × (Fin P → PassCoins N b h ρ r s) =>
+    pr (fun x : Payloads N b × (Fin P → PassCoins N b h ρ r s) =>
         ∑ j, (∑ t, (A.dev j x.2).tierReads tier t x.1 (x.2 j).1 (A.oracle j x.1 x.2) +
             (A.dev j x.2).rebuilt x.1 (x.2 j).1 (A.oracle j x.1 x.2) * b) + P * (S + (L - ρ) + lam) <
           ∑ j, ((A.dev j x.2).correct x.1 (x.2 j).1 (A.oracle j x.1 x.2)).card * b)
@@ -319,7 +319,7 @@ most `P·(C(N, m)·2^L/2^(h·m) + 2^q/2^λ)`. Proof: `Accounting.SecurityProofs.
 Frozen (no-function, hash): as `RateAudit`. -/
 def RateChainPaid : Prop :=
   ∀ (P N b h ρ S L q r s m lam τ : ℕ) (tier : ℕ → Fin τ) (A : Rate.Chain P N b h ρ S L q r s),
-    pr (fun x : Store N b × (Fin P → PassCoins N b h ρ r s) =>
+    pr (fun x : Payloads N b × (Fin P → PassCoins N b h ρ r s) =>
         ∑ j, (∑ t, (A.dev j x.2).tierReads tier t x.1 (x.2 j).1 (A.oracle j x.1 x.2) +
             (A.dev j x.2).rebuilt x.1 (x.2 j).1 (A.oracle j x.1 x.2) * b) + P * (S + (L - ρ) + lam + m * b) <
           ∑ j, ((A.dev j x.2).correct x.1 (x.2 j).1 (A.oracle j x.1 x.2)).card * b)
@@ -345,7 +345,7 @@ Frozen (no-function, hash): as `RateAudit`. -/
 def RateGrindPaidRO : Prop :=
   ∀ (P N b h ρ S L q r s G lam τ : ℕ) (tier : ℕ → Fin τ) (A : Rate.GrindChain P N b h ρ S L q r s G),
     (∀ j η c E R O O', (A.device j η c).side E R O = (A.device j η c).side E R O') →
-    pr (fun x : Store N b × (Fin P → PassCoins N b h ρ r s) =>
+    pr (fun x : Payloads N b × (Fin P → PassCoins N b h ρ r s) =>
         ∑ j, (∑ t, (A.dev j x.1 x.2).tierReads tier t x.1 (x.2 j).1 (A.oracle j x.1 x.2) +
             (A.dev j x.1 x.2).rebuilt x.1 (x.2 j).1 (A.oracle j x.1 x.2) * b) + P * (S + (L - ρ) + lam) <
           ∑ j, ((A.dev j x.1 x.2).correct x.1 (x.2 j).1 (A.oracle j x.1 x.2)).card * b)
@@ -358,7 +358,7 @@ is at most `P·G·(C(N, m)·2^L/2^(h·m) + 2^q/2^λ)`. Proof: `Accounting.Securi
 Frozen (no-function, hash): as `RateAudit`. -/
 def RateGrindPaid : Prop :=
   ∀ (P N b h ρ S L q r s G m lam τ : ℕ) (tier : ℕ → Fin τ) (A : Rate.GrindChain P N b h ρ S L q r s G),
-    pr (fun x : Store N b × (Fin P → PassCoins N b h ρ r s) =>
+    pr (fun x : Payloads N b × (Fin P → PassCoins N b h ρ r s) =>
         ∑ j, (∑ t, (A.dev j x.1 x.2).tierReads tier t x.1 (x.2 j).1 (A.oracle j x.1 x.2) +
             (A.dev j x.1 x.2).rebuilt x.1 (x.2 j).1 (A.oracle j x.1 x.2) * b) + P * (S + (L - ρ) + lam + m * b) <
           ∑ j, ((A.dev j x.1 x.2).correct x.1 (x.2 j).1 (A.oracle j x.1 x.2)).card * b)

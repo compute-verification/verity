@@ -38,7 +38,7 @@ theorem pouw_pr_le {α : Type} [Fintype α] {Q : α → Prop} {B : ℝ≥0∞} (
 
 /-- The run's tier reads are the session's windows' reads. -/
 theorem ofDeployed_reads (A : DeployedSession n P N b h ρ S L q r s d G) (tier : ℕ → Fin τ) (X : ℕ)
-    (Nd : Node (Fin τ)) (a : Audit) (x : Store N b × (Fin n → WindowCoins P N b h ρ r s d)) :
+    (Nd : Node (Fin τ)) (a : Audit) (x : Payloads N b × (Fin n → WindowCoins P N b h ρ r s d)) :
     (Run.ofDeployed A tier X Nd a).reads x = ∑ w, (A.win w x.2).reads tier x.1 (x.2 w).1 := by
   simp only [Run.reads, Run.ofDeployed, DeployedWindow.reads]
   rw [Finset.sum_comm]
@@ -46,7 +46,7 @@ theorem ofDeployed_reads (A : DeployedSession n P N b h ρ S L q r s d G) (tier 
 
 /-- The run's payments at every location: its tier reads and the `n·P` passes' `L − ρ`, `S` and `X` bits. -/
 theorem ofDeployed_paid (A : DeployedSession n P N b h ρ S L q r s d G) (tier : ℕ → Fin τ) (X : ℕ)
-    (Nd : Node (Fin τ)) (a : Audit) (x : Store N b × (Fin n → WindowCoins P N b h ρ r s d)) :
+    (Nd : Node (Fin τ)) (a : Audit) (x : Payloads N b × (Fin n → WindowCoins P N b h ρ r s d)) :
     (Run.ofDeployed A tier X Nd a).paid x =
       (Run.ofDeployed A tier X Nd a).reads x + n * P * (L - ρ) + n * P * S + n * P * X := by
   simp only [Run.paid]
@@ -136,14 +136,14 @@ theorem roErr_toReal_window (P G N h q lam : ℕ) :
 
 /-- Window `w`'s run's tier reads are the window's reads. -/
 theorem ofDeployedWindow_reads (A : DeployedSession n P N b h ρ S L q r s d G) (w : Fin n) (tier : ℕ → Fin τ)
-    (X : ℕ) (Nd : Node (Fin τ)) (a : Audit) (x : Store N b × (Fin n → WindowCoins P N b h ρ r s d)) :
+    (X : ℕ) (Nd : Node (Fin τ)) (a : Audit) (x : Payloads N b × (Fin n → WindowCoins P N b h ρ r s d)) :
     (Run.ofDeployedWindow A w tier X Nd a).reads x = (A.win w x.2).reads tier x.1 (x.2 w).1 := by
   simp only [Run.reads, Run.ofDeployedWindow, DeployedWindow.reads]
   exact Finset.sum_comm
 
 /-- Window `w`'s run's payments at every location: its tier reads and the `P` passes' `L − ρ`, `S` and `X` bits. -/
 theorem ofDeployedWindow_paid (A : DeployedSession n P N b h ρ S L q r s d G) (w : Fin n) (tier : ℕ → Fin τ)
-    (X : ℕ) (Nd : Node (Fin τ)) (a : Audit) (x : Store N b × (Fin n → WindowCoins P N b h ρ r s d)) :
+    (X : ℕ) (Nd : Node (Fin τ)) (a : Audit) (x : Payloads N b × (Fin n → WindowCoins P N b h ρ r s d)) :
     (Run.ofDeployedWindow A w tier X Nd a).paid x =
       (Run.ofDeployedWindow A w tier X Nd a).reads x + P * (L - ρ) + P * S + P * X := by
   simp only [Run.paid]

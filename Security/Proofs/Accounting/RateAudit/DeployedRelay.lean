@@ -92,7 +92,7 @@ variable {N b h ρ : ℕ} {α : Type}
 
 /-- Device memory that also answers completions: an original read at `a` is at `2a`, and `code j x g i` at
 `2·code j x g i + 1`. -/
-noncomputable def memOf (E : Store N b) (f : ℕ → Bool) (a : ℕ) : Bool :=
+noncomputable def memOf (E : Payloads N b) (f : ℕ → Bool) (a : ℕ) : Bool :=
   if a % 2 = 0 then f (a / 2) else decode E (a / 2)
 
 /-- The simulating chip with completions read from device memory: link bits within `ℓ` and queries within `m`. -/
@@ -244,7 +244,7 @@ noncomputable def toInteractiveMem (A : PIDevice N b h ρ S L q) : InteractiveDe
 
 /-- The simulating device commits the device's receipts, reads over the tiers what the device reads and completes, and
 rebuilds nothing. -/
-theorem toInteractiveMem_eq {τ : ℕ} (A : PIDevice N b h ρ S L q) (tier : ℕ → Fin τ) (E : Store N b) (R : Bits ρ)
+theorem toInteractiveMem_eq {τ : ℕ} (A : PIDevice N b h ρ S L q) (tier : ℕ → Fin τ) (E : Payloads N b) (R : Bits ρ)
     (O : Oracle N b h ρ) :
     A.toInteractiveMem.correct E R O = A.correct E R O ∧
       ∑ t, A.toInteractiveMem.tierReads (fun a => tier (a / 2)) t E R O =
@@ -259,7 +259,7 @@ theorem toInteractiveMem_eq {τ : ℕ} (A : PIDevice N b h ρ S L q) (tier : ℕ
 
 /-- **A pass device's correct receipts are paid for, with any side sources**: `RatePaid` at the simulating device. -/
 theorem pr_unpaid_relay_le {τ : ℕ} (A : PIDevice N b h ρ S L q) (tier : ℕ → Fin τ) (m lam : ℕ) :
-    pr (fun x : Store N b × Bits ρ × Oracle N b h ρ =>
+    pr (fun x : Payloads N b × Bits ρ × Oracle N b h ρ =>
         ∑ t, A.toInteractiveMem.tierReads (fun a => tier (a / 2)) t x.1 x.2.1 x.2.2 +
             A.toInteractiveMem.rebuilt x.1 x.2.1 x.2.2 * b + (S + (L - ρ) + lam + m * b) <
           (A.toInteractiveMem.correct x.1 x.2.1 x.2.2).card * b)
@@ -284,15 +284,15 @@ the probability that its reads and `P` slacks `X + slack` fall short of its corr
 `P·G·ε`. -/
 theorem pr_unpaid_draw_mem_le {τ : ℕ} (A : DeployedWindow P N b h ρ S L q r s G) (tier : ℕ → Fin τ) (X slack d : ℕ)
     (ε : ℝ≥0∞) (hX : ∀ j η c E R O, (A.device j η c).completed E R O ≤ X)
-    (hε : ∀ j η c, pr (fun x : Store N b × Bits ρ × Oracle N b h ρ =>
+    (hε : ∀ j η c, pr (fun x : Payloads N b × Bits ρ × Oracle N b h ρ =>
         ∑ t, (A.device j η c).toInteractiveMem.tierReads (fun a => tier (a / 2)) t x.1 x.2.1 x.2.2 +
             (A.device j η c).toInteractiveMem.rebuilt x.1 x.2.1 x.2.2 * b + slack <
           ((A.device j η c).toInteractiveMem.correct x.1 x.2.1 x.2.2).card * b) ≤ ε) :
-    pr (fun y : Store N b × WindowCoins P N b h ρ r s d =>
+    pr (fun y : Payloads N b × WindowCoins P N b h ρ r s d =>
         A.reads tier y.1 y.2.1 + P * (X + slack) < (A.correctAll y.1 y.2.1).card * b) ≤ (P : ℝ≥0∞) * (G * ε) := by
   classical
-  let e : Store N b × WindowCoins P N b h ρ r s d ≃
-      (Store N b × (Fin P → PassCoins N b h ρ r s)) × (Fin d → Fin P × Fin N) :=
+  let e : Payloads N b × WindowCoins P N b h ρ r s d ≃
+      (Payloads N b × (Fin P → PassCoins N b h ρ r s)) × (Fin d → Fin P × Fin N) :=
     (Equiv.prodAssoc _ _ _).symm
   rw [pr_equiv e]
   refine pr_le_of_fiber _ _ (fun D => ?_)
@@ -351,7 +351,7 @@ theorem relayErr_toReal (P G N h L m q lam : ℕ) :
 theorem window_relay_le (A : DeployedSession n P N b h ρ S L q r s d G) (tier : ℕ → Fin τ) {lam m rounds cRoot F : ℕ}
     {cost : ℕ → ℕ} (hrc : 0 < rounds * cRoot) (hW : Accounting.Assumptions.WorkHardness b rounds cRoot cost)
     (hF : ∀ w η j ι c, Accounting.Assumptions.SquaringCeiling cost F ((A.window w η).device j ι c)) (w : Fin n) (η) :
-    Pous.pr (fun y : Store N b × WindowCoins P N b h ρ r s d =>
+    Pous.pr (fun y : Payloads N b × WindowCoins P N b h ρ r s d =>
         (A.window w η).reads tier y.1 y.2.1 + P * (S + (L - ρ) + Deployed.rebuildBits b rounds cRoot F + (lam + m * b)) <
           ((A.window w η).correctAll y.1 y.2.1).card * b)
       ≤ (P : ℝ≥0∞) * (G * ((N.choose m : ℝ≥0∞) * 2 ^ L / 2 ^ (h * m) + (2 ^ q : ℝ≥0∞) / 2 ^ lam)) := by
@@ -428,7 +428,7 @@ theorem ofDeployedWindow_paid_relay (A : DeployedSession n P N b h ρ S L q r s 
 /-- `RemoteSessionConservationRelay`'s reading on any store `store ω` drawn before the session's coins, from a bound
 `ε_u` on some window's unpaid words at the slack `S + (L − ρ) + X + (λ + m·b)` a pass: the draws' terms hold at every
 store, and only the unpaid words read the store's distribution. -/
-theorem session_relay_of_unpaid {Ω : Type} [Fintype Ω] (store : Ω → Store N b)
+theorem session_relay_of_unpaid {Ω : Type} [Fintype Ω] (store : Ω → Payloads N b)
     (A : DeployedSession n P N b h ρ S L q r s d G) (tier : ℕ → Fin τ) (lam m rounds cRoot F : ℕ) (dbar dw : ℝ)
     (hn : 0 < n) (hP : 0 < P) (hN : 0 < N) (hb : 0 < b) (hdw : dw ≤ 1) (εu : ℝ≥0∞)
     (hu : Pous.pr (fun x : Ω × (Fin n → WindowCoins P N b h ρ r s d) =>

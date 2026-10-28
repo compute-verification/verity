@@ -20,7 +20,7 @@ namespace Accounting
 
 /-- The bandwidth audit's coins in its game with a store of `N` blocks of `b` bits, `h`-bit tags and `s` sampled blocks:
 the store, the oracle at the fresh seed and the sample. -/
-abbrev BandwidthCoins (N b h s : ℕ) : Type := Bandwidth.Store N b × Bandwidth.Oracle N b h × (Fin s → Fin N)
+abbrev BandwidthCoins (N b h s : ℕ) : Type := Bandwidth.Payloads N b × Bandwidth.Oracle N b h × (Fin s → Fin N)
 
 /-- Run `r`'s bandwidth audit is the bandwidth audit's game, played at each value of the other audits' coins by a device
 of the game within the device model's limits over the bandwidth window and at most `G` regenerations, whose ingress the

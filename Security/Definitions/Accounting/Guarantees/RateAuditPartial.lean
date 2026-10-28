@@ -74,7 +74,7 @@ the rate audit's code computes. -/
 def RateAuditPartial : Prop :=
   ∀ (N b h ρ S L q s k F cTag rounds cRoot lam : ℕ) (cost : ℕ → ℕ) (A : Rate.PartialDevice N b h ρ S L q),
     Assumptions.WorkHardness b rounds cRoot cost →
-    pr (fun x : Store N b × Coins N b h ρ s =>
+    pr (fun x : Payloads N b × Coins N b h ρ s =>
         A.Accepts x.1 x.2.1.1 x.2.1.2 x.2.2 ∧ A.compute cTag cost x.1 x.2.1.1 x.2.1.2 ≤ F ∧
           A.footprint x.1 x.2.1.1 x.2.1.2 * (rounds * cRoot) < floor b ρ S L F cTag (rounds * cRoot) k lam)
       ≤ (((k - 1 : ℕ) : ℝ≥0∞) / N) ^ s + (s : ℝ≥0∞) / 2 ^ h + (q.choose k : ℝ≥0∞) / 2 ^ lam
@@ -89,7 +89,7 @@ its compute is `N·c_tag` at every price of a completion. It is `RateHonest`'s d
 Frozen (completeness): the honest device's acceptance, which shows that `RateAuditPartial`'s event is not vacuous. -/
 def RatePartialHonest : Prop :=
   ∀ N b h ρ : ℕ, ∃ A : Rate.PartialDevice N b h ρ 0 ρ N,
-    ∀ (cTag : ℕ) (cost : ℕ → ℕ) (E : Store N b) (R : Bits ρ) (O : Oracle N b h ρ) (s : ℕ) (I : Fin s → Fin N),
+    ∀ (cTag : ℕ) (cost : ℕ → ℕ) (E : Payloads N b) (R : Bits ρ) (O : Oracle N b h ρ) (s : ℕ) (I : Fin s → Fin N),
       A.Accepts E R O I ∧ A.footprint E R O = N * b ∧ A.ingress E R O = N * b ∧ A.completed E R O = 0 ∧
         A.compute cTag cost E R O = N * cTag
 
@@ -111,7 +111,7 @@ code computes. -/
 def RatePartialRebuild : Prop :=
   ∀ (N b h ρ S L q rounds cRoot : ℕ) (cost : ℕ → ℕ) (A : Rate.PartialDevice N b h ρ S L q),
     Assumptions.WorkHardness b rounds cRoot cost →
-    ∀ (E : Store N b) (R : Bits ρ) (O : Oracle N b h ρ),
+    ∀ (E : Payloads N b) (R : Bits ρ) (O : Oracle N b h ρ),
       A.completed E R O * (rounds * cRoot) ≤ b * A.work cost E R O
 
 /-- **The rate audit with partial completion as a joint run's bandwidth guarantee, the adversary's idle compute

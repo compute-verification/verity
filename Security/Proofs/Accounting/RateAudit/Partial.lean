@@ -35,15 +35,15 @@ variable {N b h ρ S L q : ℕ}
 namespace PartialDevice
 
 /-- The words whose contents the device queried the oracle at, under the certified stream. -/
-def queried (A : PartialDevice N b h ρ S L q) (E : Store N b) (R : Bits ρ) (O : Oracle N b h ρ) : Finset (Fin N) :=
+def queried (A : PartialDevice N b h ρ S L q) (E : Payloads N b) (R : Bits ρ) (O : Oracle N b h ρ) : Finset (Fin N) :=
   Finset.univ.filter (fun j => (R, j, E j) ∈ (A.chip (A.state E)).queries (A.world E R O))
 
 /-- What a run had besides the oracle, in bits: its on-chip state, its footprint, the link's bits and the bits it
 completed. -/
-def taken (A : PartialDevice N b h ρ S L q) (E : Store N b) (R : Bits ρ) (O : Oracle N b h ρ) : ℕ :=
+def taken (A : PartialDevice N b h ρ S L q) (E : Payloads N b) (R : Bits ρ) (O : Oracle N b h ρ) : ℕ :=
   A.footprint E R O + S + (A.chip (A.state E)).linkBits (A.world E R O) + A.completed E R O
 
-theorem card_queried_le (A : PartialDevice N b h ρ S L q) (E : Store N b) (R : Bits ρ) (O : Oracle N b h ρ) :
+theorem card_queried_le (A : PartialDevice N b h ρ S L q) (E : Payloads N b) (R : Bits ρ) (O : Oracle N b h ρ) :
     (A.queried E R O).card ≤ ((A.chip (A.state E)).queries (A.world E R O)).length := by
   classical
   refine (Finset.card_le_card_of_injOn (fun j => (R, j, E j)) (fun j hj => ?_) ?_).trans (List.toFinset_card_le _)
@@ -54,7 +54,7 @@ theorem card_queried_le (A : PartialDevice N b h ρ S L q) (E : Store N b) (R : 
 /-- A run that queried at least `k` words within the compute budget `F` and whose footprint is short of the floor at
 `c_enc = rounds · c_root` had less than the stream and `k` words: tagging `k` words leaves `F − k·c_tag` for
 completions, which under `WorkHardness` complete at most `(F − k·c_tag)·b/(rounds · c_root)` bits. -/
-theorem taken_lt_of_floor (A : PartialDevice N b h ρ S L q) (E : Store N b) (R : Bits ρ) (O : Oracle N b h ρ)
+theorem taken_lt_of_floor (A : PartialDevice N b h ρ S L q) (E : Payloads N b) (R : Bits ρ) (O : Oracle N b h ρ)
     {k F cTag rounds cRoot lam : ℕ} {cost : ℕ → ℕ} (hw : Assumptions.WorkHardness b rounds cRoot cost)
     (hk : k ≤ (A.queried E R O).card) (hc : A.compute cTag cost E R O ≤ F)
     (hf : A.footprint E R O * (rounds * cRoot) < floor b ρ S L F cTag (rounds * cRoot) k lam) :
@@ -88,7 +88,7 @@ theorem taken_lt_of_floor (A : PartialDevice N b h ρ S L q) (E : Store N b) (R 
 /-! ## A guessed tag -/
 
 /-- A word the device never queried has the right tag for at most a `2^-h` fraction of oracles. -/
-theorem card_guess_le (A : PartialDevice N b h ρ S L q) (E : Store N b) (R : Bits ρ) (j : Fin N)
+theorem card_guess_le (A : PartialDevice N b h ρ S L q) (E : Payloads N b) (R : Bits ρ) (j : Fin N)
     [DecidablePred (fun O : Oracle N b h ρ => j ∉ A.queried E R O ∧ A.tags E R O j = O (R, j, E j))] :
     (Finset.univ.filter (fun O : Oracle N b h ρ => j ∉ A.queried E R O ∧ A.tags E R O j = O (R, j, E j))).card *
         2 ^ h ≤ Fintype.card (Oracle N b h ρ) := by
@@ -121,7 +121,7 @@ open Classical in
 /-- The stores and streams a code describes: those whose stream is each named position's query's, and whose word
 there holds the query's contents. -/
 noncomputable def fib (A : PartialDevice N b h ρ S L q) (O : Oracle N b h ρ) (r : ℕ)
-    (code : Bits S × Bits r × Finset ℕ) : Finset (Store N b × Bits ρ) :=
+    (code : Bits S × Bits r × Finset ℕ) : Finset (Payloads N b × Bits ρ) :=
   Finset.univ.filter (fun x => ∀ p ∈ code.2.2, ∀ y, (A.decoded O r code)[p]? = some y → y.1 = x.2 ∧ x.1 y.2.1 = y.2.2)
 
 open Classical in
@@ -152,11 +152,11 @@ theorem card_fib (A : PartialDevice N b h ρ S L q) (O : Oracle N b h ρ) (r : �
         simp
 
 theorem card_compress_le (A : PartialDevice N b h ρ S L q) (O : Oracle N b h ρ) (k lam : ℕ) (hk : 0 < k)
-    [DecidablePred (fun x : Store N b × Bits ρ =>
+    [DecidablePred (fun x : Payloads N b × Bits ρ =>
       k ≤ (A.queried x.1 x.2 O).card ∧ A.taken x.1 x.2 O + lam < k * b + ρ)] :
-    (Finset.univ.filter (fun x : Store N b × Bits ρ =>
+    (Finset.univ.filter (fun x : Payloads N b × Bits ρ =>
         k ≤ (A.queried x.1 x.2 O).card ∧ A.taken x.1 x.2 O + lam < k * b + ρ)).card * 2 ^ lam ≤
-      q.choose k * Fintype.card (Store N b × Bits ρ) := by
+      q.choose k * Fintype.card (Payloads N b × Bits ρ) := by
   classical
   by_cases hpar : S + lam ≤ k * b + ρ ∧ k ≤ N
   swap
@@ -166,7 +166,7 @@ theorem card_compress_le (A : PartialDevice N b h ρ S L q) (O : Oracle N b h ρ
   obtain ⟨hSl, hkN⟩ := hpar
   set r := k * b + ρ - S - lam with hr
   let codes : Finset (Bits S × Bits r × Finset ℕ) := Finset.univ ×ˢ Finset.univ ×ˢ (Finset.range q).powersetCard k
-  have hsub : Finset.univ.filter (fun x : Store N b × Bits ρ =>
+  have hsub : Finset.univ.filter (fun x : Payloads N b × Bits ρ =>
         k ≤ (A.queried x.1 x.2 O).card ∧ A.taken x.1 x.2 O + lam < k * b + ρ) ⊆
       (codes.filter (fun code => k ≤ (A.named O r code).card)).biUnion (A.fib O r) := by
     rintro ⟨E, R⟩ hx
@@ -217,8 +217,8 @@ theorem card_compress_le (A : PartialDevice N b h ρ S L q) (O : Oracle N b h ρ
       exact ⟨rfl, rfl⟩
   have hcodes : codes.card = 2 ^ S * (2 ^ r * q.choose k) := by
     simp [codes, Finset.card_product, Finset.card_powersetCard]
-  have hΩ : Fintype.card (Store N b × Bits ρ) = (2 ^ b) ^ N * 2 ^ ρ := by simp
-  calc (Finset.univ.filter (fun x : Store N b × Bits ρ =>
+  have hΩ : Fintype.card (Payloads N b × Bits ρ) = (2 ^ b) ^ N * 2 ^ ρ := by simp
+  calc (Finset.univ.filter (fun x : Payloads N b × Bits ρ =>
           k ≤ (A.queried x.1 x.2 O).card ∧ A.taken x.1 x.2 O + lam < k * b + ρ)).card * 2 ^ lam
       ≤ (codes.card * (2 ^ b) ^ (N - k)) * 2 ^ lam := by
         gcongr
@@ -229,7 +229,7 @@ theorem card_compress_le (A : PartialDevice N b h ρ S L q) (O : Oracle N b h ρ
           exact (card_fib A O r code (by omega)).trans (Nat.pow_le_pow_right (by positivity) (by omega))
         · rw [smul_eq_mul]
           exact Nat.mul_le_mul_right _ (Finset.card_filter_le _ _)
-    _ = q.choose k * Fintype.card (Store N b × Bits ρ) := by
+    _ = q.choose k * Fintype.card (Payloads N b × Bits ρ) := by
         have e1 : (2 : ℕ) ^ S * 2 ^ r * 2 ^ lam = 2 ^ (k * b) * 2 ^ ρ := by
           rw [← pow_add, ← pow_add, ← pow_add]
           congr 1
@@ -256,7 +256,7 @@ def Device.toPartial (A : Device N b h ρ S L q) : PartialDevice N b h ρ S L q 
 
 /-- As a partial device, a device commits to the same tags with the same footprint and ingress, completes `b` bits per
 rebuilt word and pays `cost b` for each. -/
-theorem Device.toPartial_eq (A : Device N b h ρ S L q) (E : Store N b) (R : Bits ρ) (O : Oracle N b h ρ) :
+theorem Device.toPartial_eq (A : Device N b h ρ S L q) (E : Payloads N b) (R : Bits ρ) (O : Oracle N b h ρ) :
     A.toPartial.tags E R O = A.tags E R O ∧ A.toPartial.footprint E R O = A.footprint E R O ∧
       A.toPartial.ingress E R O = A.ingress E R O ∧
       A.toPartial.completed E R O = (A.chip (A.state E)).rebuilds (A.world E R O) * b ∧
@@ -273,7 +273,7 @@ theorem Device.toPartial_eq (A : Device N b h ρ S L q) (E : Store N b) (R : Bit
 /-- Under `WorkHardness`, the bits a partial device completes, at `rounds · c_root` per `b` of them, cost at most its
 completions' compute. -/
 theorem PartialDevice.completed_mul_le {rounds cRoot : ℕ} {cost : ℕ → ℕ}
-    (hw : Assumptions.WorkHardness b rounds cRoot cost) (A : PartialDevice N b h ρ S L q) (E : Store N b)
+    (hw : Assumptions.WorkHardness b rounds cRoot cost) (A : PartialDevice N b h ρ S L q) (E : Payloads N b)
     (R : Bits ρ) (O : Oracle N b h ρ) : A.completed E R O * (rounds * cRoot) ≤ b * A.work cost E R O :=
   PChip.completed_mul_le hw (A.world E R O) (A.chip (A.state E))
 
@@ -297,7 +297,7 @@ theorem RateAuditPartial : Accounting.Guarantees.RateAuditPartial := by
   rcases Nat.eq_zero_or_pos k with rfl | hk0
   · refine (pr_le_of_card _ 1 0 one_ne_zero ?_).trans (by simp)
     rw [Finset.filter_false_of_mem (fun x _ hx => by simp [floor] at hx), Finset.card_empty, zero_mul, zero_mul]
-  have hsplit : ∀ x : Store N b × (Bits ρ × Oracle N b h ρ × (Fin s → Fin N)),
+  have hsplit : ∀ x : Payloads N b × (Bits ρ × Oracle N b h ρ × (Fin s → Fin N)),
       (A.Accepts x.1 x.2.1 x.2.2.1 x.2.2.2 ∧ A.compute cTag cost x.1 x.2.1 x.2.2.1 ≤ F ∧
         A.footprint x.1 x.2.1 x.2.2.1 * (rounds * cRoot) < floor b ρ S L F cTag (rounds * cRoot) k lam) →
       (((A.queried x.1 x.2.1 x.2.2.1).card < k ∧ ∀ i, x.2.2.2 i ∈ A.queried x.1 x.2.1 x.2.2.1) ∨
@@ -313,8 +313,8 @@ theorem RateAuditPartial : Accounting.Guarantees.RateAuditPartial := by
       · push Not at hall
         obtain ⟨i, hi⟩ := hall
         exact Or.inl (Or.inr ⟨i, hi, hacc i⟩)
-  have hΩ : Fintype.card (Store N b × (Bits ρ × Oracle N b h ρ × (Fin s → Fin N))) =
-      Fintype.card (Store N b) * (Fintype.card (Bits ρ) * (Fintype.card (Oracle N b h ρ) * N ^ s)) := by
+  have hΩ : Fintype.card (Payloads N b × (Bits ρ × Oracle N b h ρ × (Fin s → Fin N))) =
+      Fintype.card (Payloads N b) * (Fintype.card (Bits ρ) * (Fintype.card (Oracle N b h ρ) * N ^ s)) := by
     simp only [Fintype.card_prod, Fintype.card_fun, Fintype.card_fin]
   by_cases hN : N ^ s = 0
   · rw [pr_eq_zero_of_card _ (by rw [hΩ, hN]; simp)]
@@ -322,7 +322,7 @@ theorem RateAuditPartial : Accounting.Guarantees.RateAuditPartial := by
   refine (pr_mono hsplit).trans ?_
   refine (pr_or_le _ _).trans (add_le_add ((pr_or_le _ _).trans (add_le_add ?_ ?_)) ?_)
   · -- the sample misses the words never queried
-    have hc := pr_le_of_card (fun x : Store N b × (Bits ρ × Oracle N b h ρ × (Fin s → Fin N)) =>
+    have hc := pr_le_of_card (fun x : Payloads N b × (Bits ρ × Oracle N b h ρ × (Fin s → Fin N)) =>
         (A.queried x.1 x.2.1 x.2.2.1).card < k ∧ ∀ i, x.2.2.2 i ∈ A.queried x.1 x.2.1 x.2.2.1) (N ^ s)
         ((k - 1) ^ s) hN (by
       rw [hΩ]
@@ -340,7 +340,7 @@ theorem RateAuditPartial : Accounting.Guarantees.RateAuditPartial := by
     rw [Nat.cast_pow, Nat.cast_pow, div_eq_mul_inv, div_eq_mul_inv, mul_pow, ENNReal.inv_pow]
   · -- a guessed tag
     refine (pr_exists_le _).trans ?_
-    have hi : ∀ i : Fin s, pr (fun x : Store N b × (Bits ρ × Oracle N b h ρ × (Fin s → Fin N)) =>
+    have hi : ∀ i : Fin s, pr (fun x : Payloads N b × (Bits ρ × Oracle N b h ρ × (Fin s → Fin N)) =>
         x.2.2.2 i ∉ A.queried x.1 x.2.1 x.2.2.1 ∧
           A.tags x.1 x.2.1 x.2.2.1 (x.2.2.2 i) = x.2.2.1 (x.2.1, x.2.2.2 i, x.1 (x.2.2.2 i))) ≤
         ((1 : ℕ) : ℝ≥0∞) / ((2 ^ h : ℕ) : ℝ≥0∞) := fun i =>
@@ -356,8 +356,8 @@ theorem RateAuditPartial : Accounting.Guarantees.RateAuditPartial := by
     simp [div_eq_mul_inv]
   · -- compression
     refine (pr_le_of_card _ (2 ^ lam) (q.choose k) (by positivity) (by
-      rw [hΩ, card_filter_equiv (Equiv.prodAssoc (Store N b) (Bits ρ) (Oracle N b h ρ × (Fin s → Fin N))).symm]
-      refine (card_filter_prod_le' _ _ (q.choose k * Fintype.card (Store N b × Bits ρ)) (fun y => ?_)).trans
+      rw [hΩ, card_filter_equiv (Equiv.prodAssoc (Payloads N b) (Bits ρ) (Oracle N b h ρ × (Fin s → Fin N))).symm]
+      refine (card_filter_prod_le' _ _ (q.choose k * Fintype.card (Payloads N b × Bits ρ)) (fun y => ?_)).trans
         (le_of_eq (by simp only [Fintype.card_prod, Fintype.card_fun, Fintype.card_fin]; ring))
       exact A.card_compress_le y.1 k lam hk0)).trans (le_of_eq ?_)
     push_cast

@@ -32,7 +32,7 @@ structure IWorld (N b h : ℕ) where
   oracle : Oracle N b h
   mem : ℕ → Bool
   side : List Bool → ℕ → Bool
-  block : Store N b
+  block : Payloads N b
 
 namespace IChip
 
@@ -90,9 +90,9 @@ before the seed, side sources that answer as any function of the store, the orac
 program from the state. In every world, starting from nothing sent, the program reads at most `c` bits of side sources,
 regenerates at most `G` blocks and makes at most `q` oracle queries. -/
 structure InteractiveDevice (N b h S c G q : ℕ) where
-  state : Store N b → Bits S
-  mem : Store N b → ℕ → Bool
-  side : Store N b → Oracle N b h → List Bool → ℕ → Bool
+  state : Payloads N b → Bits S
+  mem : Payloads N b → ℕ → Bool
+  side : Payloads N b → Oracle N b h → List Bool → ℕ → Bool
   chip : Bits S → IChip N b h (Fin N → Bits h)
   bounded : ∀ (st : Bits S) (w : IWorld N b h),
     (chip st).sideBits w [] ≤ c ∧ (chip st).regens w [] ≤ G ∧ ((chip st).queries w []).length ≤ q
@@ -102,19 +102,19 @@ namespace InteractiveDevice
 variable {N b h S c G q : ℕ}
 
 /-- The world an interactive device's chip runs in, for store `E` and oracle `O`. -/
-def world (A : InteractiveDevice N b h S c G q) (E : Store N b) (O : Oracle N b h) : IWorld N b h :=
+def world (A : InteractiveDevice N b h S c G q) (E : Payloads N b) (O : Oracle N b h) : IWorld N b h :=
   ⟨O, A.mem E, A.side E O, E⟩
 
 /-- The tags the device commits to. -/
-def tags (A : InteractiveDevice N b h S c G q) (E : Store N b) (O : Oracle N b h) : Fin N → Bits h :=
+def tags (A : InteractiveDevice N b h S c G q) (E : Payloads N b) (O : Oracle N b h) : Fin N → Bits h :=
   (A.chip (A.state E)).run (A.world E O) []
 
 /-- The device's ingress in the window, in bits. -/
-def ingress (A : InteractiveDevice N b h S c G q) (E : Store N b) (O : Oracle N b h) : ℕ :=
+def ingress (A : InteractiveDevice N b h S c G q) (E : Payloads N b) (O : Oracle N b h) : ℕ :=
   (A.chip (A.state E)).ingressBits (A.world E O) []
 
 /-- The verifier accepts: every sampled block's committed tag is the oracle's tag of that block. -/
-def Accepts {s : ℕ} (A : InteractiveDevice N b h S c G q) (E : Store N b) (O : Oracle N b h) (I : Fin s → Fin N) :
+def Accepts {s : ℕ} (A : InteractiveDevice N b h S c G q) (E : Payloads N b) (O : Oracle N b h) (I : Fin s → Fin N) :
     Prop :=
   ∀ i, A.tags E O (I i) = O (I i, E (I i))
 

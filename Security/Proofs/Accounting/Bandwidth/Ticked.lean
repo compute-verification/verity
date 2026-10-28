@@ -51,11 +51,11 @@ structure Chip (N b h S : ℕ) where
   tags : Bits S → List (Obs h) → Fin N → Bits h
 
 /-- HBM: bit `j` of its reply at a tick, from the store and the requests the chip sent it so far (newest first). -/
-abbrev Hbm (N b : ℕ) := Store N b → List ℕ → ℕ → Bool
+abbrev Hbm (N b : ℕ) := Payloads N b → List ℕ → ℕ → Bool
 
 /-- The rest of the prover: bit `j` of its signal at tick `u`, from the store, the oracle and the bits the chip sent it
 so far (newest first). -/
-abbrev Rest (N b h : ℕ) := Store N b → Oracle N b h → List Bool → ℕ → ℕ → Bool
+abbrev Rest (N b h : ℕ) := Payloads N b → Oracle N b h → List Bool → ℕ → ℕ → Bool
 
 /-- The bits HBM replied with over the ticks observed. -/
 def hbmBits {h : ℕ} (o : List (Obs h)) : ℕ := (o.map fun x => x.1.length).sum
@@ -101,24 +101,24 @@ def prog (C : Chip N b h S) (βs : ℕ) (st : Bits S) (fin : List (Obs h) → α
           askAll (C.ask st o) fun ys => prog C βs st fin n ((m, r, ys) :: o) (C.key st o :: ks)
 
 /-- HBM as device memory: the bit at `memAddr ks j` is bit `j` of its reply after the requests `ks`. -/
-def mem (hbm : Hbm N b) (E : Store N b) (a : ℕ) : Bool :=
+def mem (hbm : Hbm N b) (E : Payloads N b) (a : ℕ) : Bool :=
   match (Encodable.decode a : Option (List ℕ × ℕ)) with
   | some (ks, j) => hbm E ks j
   | none => false
 
 /-- The rest as side sources: the bit at `sideAddr u j` is bit `j` of its signal at tick `u`. -/
-def side (rest : Rest N b h) (E : Store N b) (O : Oracle N b h) (v : List Bool) (a : ℕ) : Bool :=
+def side (rest : Rest N b h) (E : Payloads N b) (O : Oracle N b h) (v : List Bool) (a : ℕ) : Bool :=
   match (Encodable.decode a : Option (ℕ × ℕ)) with
   | some (u, j) => rest E O v u j
   | none => false
 
 /-- The world the chip runs in, for store `E` and oracle `O`. -/
-def world (hbm : Hbm N b) (rest : Rest N b h) (E : Store N b) (O : Oracle N b h) : IWorld N b h :=
+def world (hbm : Hbm N b) (rest : Rest N b h) (E : Payloads N b) (O : Oracle N b h) : IWorld N b h :=
   ⟨O, mem hbm E, side rest E O, E⟩
 
 /-- **What the chip observes** over `n` more ticks, having observed `o`, sent HBM the requests `ks` and the rest the
 bits `v` (all newest first). -/
-def observe (C : Chip N b h S) (βs : ℕ) (st : Bits S) (hbm : Hbm N b) (rest : Rest N b h) (E : Store N b)
+def observe (C : Chip N b h S) (βs : ℕ) (st : Bits S) (hbm : Hbm N b) (rest : Rest N b h) (E : Payloads N b)
     (O : Oracle N b h) : ℕ → List (Obs h) → List ℕ → List Bool → List (Obs h)
   | 0, o, _, _ => o
   | n + 1, o, ks, v =>
@@ -191,24 +191,25 @@ theorem sendAll_eq (bs : List Bool) (p : IChip N b h α) (v : List Bool) :
 
 end Blocks
 
-theorem mem_memAddr (hbm : Hbm N b) (E : Store N b) (ks : List ℕ) (j : ℕ) : mem hbm E (memAddr ks j) = hbm E ks j := by
+theorem mem_memAddr (hbm : Hbm N b) (E : Payloads N b) (ks : List ℕ) (j : ℕ) :
+    mem hbm E (memAddr ks j) = hbm E ks j := by
   simp [mem, memAddr]
 
-theorem side_sideAddr (rest : Rest N b h) (E : Store N b) (O : Oracle N b h) (v : List Bool) (u j : ℕ) :
+theorem side_sideAddr (rest : Rest N b h) (E : Payloads N b) (O : Oracle N b h) (v : List Bool) (u j : ℕ) :
     side rest E O v (sideAddr u j) = rest E O v u j := by
   simp [side, sideAddr]
 
-theorem world_mem (hbm : Hbm N b) (rest : Rest N b h) (E : Store N b) (O : Oracle N b h) (ks : List ℕ) (j : ℕ) :
+theorem world_mem (hbm : Hbm N b) (rest : Rest N b h) (E : Payloads N b) (O : Oracle N b h) (ks : List ℕ) (j : ℕ) :
     (world hbm rest E O).mem (memAddr ks j) = hbm E ks j :=
   mem_memAddr hbm E ks j
 
-theorem world_side (hbm : Hbm N b) (rest : Rest N b h) (E : Store N b) (O : Oracle N b h) (v : List Bool) (u j : ℕ) :
+theorem world_side (hbm : Hbm N b) (rest : Rest N b h) (E : Payloads N b) (O : Oracle N b h) (v : List Bool) (u j : ℕ) :
     (world hbm rest E O).side v (sideAddr u j) = rest E O v u j :=
   side_sideAddr rest E O v u j
 
 /-- **The chip runs the transducer**: its output is `fin` of what it observes. -/
 theorem prog_run (C : Chip N b h S) (βs : ℕ) (st : Bits S) (fin : List (Obs h) → α) (hbm : Hbm N b)
-    (rest : Rest N b h) (E : Store N b) (O : Oracle N b h) (n : ℕ) (o : List (Obs h)) (ks : List ℕ) (v : List Bool) :
+    (rest : Rest N b h) (E : Payloads N b) (O : Oracle N b h) (n : ℕ) (o : List (Obs h)) (ks : List ℕ) (v : List Bool) :
     (prog C βs st fin n o ks).run (world hbm rest E O) v = fin (observe C βs st hbm rest E O n o ks v) := by
   induction n generalizing o ks v with
   | zero => rfl
@@ -221,7 +222,7 @@ theorem prog_run (C : Chip N b h S) (βs : ℕ) (st : Bits S) (fin : List (Obs h
 /-- **The chip's device-memory reads are HBM's replies**: over `n` ticks it reads from device memory exactly the bits
 HBM replies with. -/
 theorem prog_ingress (C : Chip N b h S) (βs : ℕ) (st : Bits S) (fin : List (Obs h) → α) (hbm : Hbm N b)
-    (rest : Rest N b h) (E : Store N b) (O : Oracle N b h) (n : ℕ) (o : List (Obs h)) (ks : List ℕ) (v : List Bool) :
+    (rest : Rest N b h) (E : Payloads N b) (O : Oracle N b h) (n : ℕ) (o : List (Obs h)) (ks : List ℕ) (v : List Bool) :
     (prog C βs st fin n o ks).ingressBits (world hbm rest E O) v + hbmBits o =
       hbmBits (observe C βs st hbm rest E O n o ks v) := by
   induction n generalizing o ks v with
@@ -258,7 +259,7 @@ theorem prog_counts (C : Chip N b h S) (βs q : ℕ) (hq : ∀ st o, (C.ask st o
 
 /-- Every tick's reply has width at most `βm`, so `n` ticks add at most `n βm` bits. -/
 theorem hbmBits_le (C : Chip N b h S) (βs βm : ℕ) (hw : ∀ st o, C.width st o ≤ βm) (st : Bits S) (hbm : Hbm N b)
-    (rest : Rest N b h) (E : Store N b) (O : Oracle N b h) (n : ℕ) (o : List (Obs h)) (ks : List ℕ) (v : List Bool) :
+    (rest : Rest N b h) (E : Payloads N b) (O : Oracle N b h) (n : ℕ) (o : List (Obs h)) (ks : List ℕ) (v : List Bool) :
     hbmBits (observe C βs st hbm rest E O n o ks v) ≤ n * βm + hbmBits o := by
   induction n generalizing o ks v with
   | zero => simp [observe]
@@ -271,12 +272,12 @@ theorem hbmBits_le (C : Chip N b h S) (βs βm : ℕ) (hw : ∀ st o, C.width st
 
 /-- **The transducer as an interactive device** over `T` ticks: its state from the store, HBM as device memory, the
 rest as side sources, and `prog` from the state, capped at `c` side bits and `q` queries. -/
-def device (C : Chip N b h S) (βs T : ℕ) (state : Store N b → Bits S) (hbm : Hbm N b) (rest : Rest N b h)
+def device (C : Chip N b h S) (βs T : ℕ) (state : Payloads N b → Bits S) (hbm : Hbm N b) (rest : Rest N b h)
     (c q : ℕ) : InteractiveDevice N b h S c 0 q :=
   InteractiveDevice.ofRuns state (mem hbm) (side rest) fun st => prog C βs st (C.tags st) T [] []
 
 theorem device_run (C : Chip N b h S) (βs qt T : ℕ) (hq : ∀ st o, (C.ask st o).length ≤ qt)
-    (state : Store N b → Bits S) (hbm : Hbm N b) (rest : Rest N b h) (E : Store N b) (O : Oracle N b h) :
+    (state : Payloads N b → Bits S) (hbm : Hbm N b) (rest : Rest N b h) (E : Payloads N b) (O : Oracle N b h) :
     (device C βs T state hbm rest (T * βs) (T * qt)).tags E O =
         C.tags (state E) (observe C βs (state E) hbm rest E O T [] [] []) ∧
       (device C βs T state hbm rest (T * βs) (T * qt)).ingress E O =
@@ -301,8 +302,8 @@ chip and replying at the width the chip fixes, and at most `qt` queries a tick, 
 oracle and the sample that the chip's tags pass while `hbmBits + S + βs T + m b + λ < k b` is at most
 `AuditInteractive`'s bound at `c = βs T`. -/
 theorem audit_reads (C : Ticked.Chip N b h S) (βs qt T : ℕ) (hq : ∀ st o, (C.ask st o).length ≤ qt)
-    (state : Store N b → Bits S) (hbm : Hbm N b) (rest : Rest N b h) (s k m lam : ℕ) :
-    pr (fun x : Store N b × Oracle N b h × (Fin s → Fin N) =>
+    (state : Payloads N b → Bits S) (hbm : Hbm N b) (rest : Rest N b h) (s k m lam : ℕ) :
+    pr (fun x : Payloads N b × Oracle N b h × (Fin s → Fin N) =>
         (∀ i, C.tags (state x.1) (observe C βs (state x.1) hbm rest x.1 x.2.1 T [] [] []) (x.2.2 i) =
             x.2.1 (x.2.2 i, x.1 (x.2.2 i))) ∧
           hbmBits (observe C βs (state x.1) hbm rest x.1 x.2.1 T [] [] []) + S + βs * T + m * b + lam < k * b)
@@ -322,9 +323,9 @@ theorem audit_reads (C : Ticked.Chip N b h S) (βs qt T : ℕ) (hq : ∀ st o, (
 signal of its alphabet a tick, so every reply has width at most `βm`, and the probability that the chip's tags pass while
 `βm T + S + βs T + m b + λ < k b` is at most `AuditInteractive`'s bound at `c = βs T`. -/
 theorem audit (C : Ticked.Chip N b h S) (βm βs qt T : ℕ) (hw : ∀ st o, C.width st o ≤ βm)
-    (hq : ∀ st o, (C.ask st o).length ≤ qt) (state : Store N b → Bits S) (hbm : Hbm N b) (rest : Rest N b h)
+    (hq : ∀ st o, (C.ask st o).length ≤ qt) (state : Payloads N b → Bits S) (hbm : Hbm N b) (rest : Rest N b h)
     (s k m lam : ℕ) :
-    pr (fun x : Store N b × Oracle N b h × (Fin s → Fin N) =>
+    pr (fun x : Payloads N b × Oracle N b h × (Fin s → Fin N) =>
         (∀ i, C.tags (state x.1) (observe C βs (state x.1) hbm rest x.1 x.2.1 T [] [] []) (x.2.2 i) =
             x.2.1 (x.2.2 i, x.1 (x.2.2 i))) ∧
           βm * T + S + βs * T + m * b + lam < k * b)
@@ -338,9 +339,9 @@ theorem audit (C : Ticked.Chip N b h S) (βm βs qt T : ℕ) (hw : ∀ st o, C.w
 
 /-- **The reads form when the rest ignores the oracle**: `AuditInteractiveRO`'s bound, with no relayed-tag term. -/
 theorem audit_reads_ro (C : Ticked.Chip N b h S) (βs qt T : ℕ) (hq : ∀ st o, (C.ask st o).length ≤ qt)
-    (state : Store N b → Bits S) (hbm : Hbm N b) (rest : Rest N b h) (hrest : ∀ E O O', rest E O = rest E O')
+    (state : Payloads N b → Bits S) (hbm : Hbm N b) (rest : Rest N b h) (hrest : ∀ E O O', rest E O = rest E O')
     (s k lam : ℕ) :
-    pr (fun x : Store N b × Oracle N b h × (Fin s → Fin N) =>
+    pr (fun x : Payloads N b × Oracle N b h × (Fin s → Fin N) =>
         (∀ i, C.tags (state x.1) (observe C βs (state x.1) hbm rest x.1 x.2.1 T [] [] []) (x.2.2 i) =
             x.2.1 (x.2.2 i, x.1 (x.2.2 i))) ∧
           hbmBits (observe C βs (state x.1) hbm rest x.1 x.2.1 T [] [] []) + S + βs * T + lam < k * b)
@@ -362,9 +363,9 @@ theorem audit_reads_ro (C : Ticked.Chip N b h S) (βs qt T : ℕ) (hq : ∀ st o
 
 /-- **The capacity form when the rest ignores the oracle**. -/
 theorem audit_ro (C : Ticked.Chip N b h S) (βm βs qt T : ℕ) (hw : ∀ st o, C.width st o ≤ βm)
-    (hq : ∀ st o, (C.ask st o).length ≤ qt) (state : Store N b → Bits S) (hbm : Hbm N b) (rest : Rest N b h)
+    (hq : ∀ st o, (C.ask st o).length ≤ qt) (state : Payloads N b → Bits S) (hbm : Hbm N b) (rest : Rest N b h)
     (hrest : ∀ E O O', rest E O = rest E O') (s k lam : ℕ) :
-    pr (fun x : Store N b × Oracle N b h × (Fin s → Fin N) =>
+    pr (fun x : Payloads N b × Oracle N b h × (Fin s → Fin N) =>
         (∀ i, C.tags (state x.1) (observe C βs (state x.1) hbm rest x.1 x.2.1 T [] [] []) (x.2.2 i) =
             x.2.1 (x.2.2 i, x.1 (x.2.2 i))) ∧
           βm * T + S + βs * T + lam < k * b)

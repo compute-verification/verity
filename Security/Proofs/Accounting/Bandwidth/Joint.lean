@@ -57,7 +57,7 @@ namespace JointDevice
 variable {N b h S c G q n : ℕ}
 
 /-- The blocks whose contents the chip queried the oracle at. -/
-def queried (A : JointDevice N b h S c G q n) (E : Store N b) (z : Bits n) (O : Oracle N b h) : Finset (Fin N) :=
+def queried (A : JointDevice N b h S c G q n) (E : Payloads N b) (z : Bits n) (O : Oracle N b h) : Finset (Fin N) :=
   Finset.univ.filter (fun j => (j, E j) ∈ (A.chip (A.state E z)).queries (A.world E z O))
 
 end JointDevice
@@ -70,7 +70,7 @@ variable {N b h S c G q n : ℕ}
 
 /-! ## A guessed tag -/
 
-theorem card_guess_le (A : JointDevice N b h S c G q n) (E : Store N b) (z : Bits n) (j : Fin N)
+theorem card_guess_le (A : JointDevice N b h S c G q n) (E : Payloads N b) (z : Bits n) (j : Fin N)
     [DecidablePred (fun O : Oracle N b h => j ∉ A.queried E z O ∧ (A.out E z O).1 j = O (j, E j))] :
     (Finset.univ.filter (fun O : Oracle N b h => j ∉ A.queried E z O ∧ (A.out E z O).1 j = O (j, E j))).card *
         2 ^ h ≤ Fintype.card (Oracle N b h) := by
@@ -103,7 +103,7 @@ def value (A : JointDevice N b h S c G q n) (O : Oracle N b h) (r : ℕ) (code :
 open Classical in
 /-- The pairs a code describes: its value, and stores holding, at each named position's query, its block. -/
 noncomputable def fib (A : JointDevice N b h S c G q n) (O : Oracle N b h) (r : ℕ)
-    (code : Bits S × Bits r × Finset ℕ) : Finset (Store N b × Bits n) :=
+    (code : Bits S × Bits r × Finset ℕ) : Finset (Payloads N b × Bits n) :=
   Finset.univ.filter (fun x => x.2 = value A O r code ∧
     ∀ p ∈ code.2.2, ∀ y, (decoded A O r code)[p]? = some y → x.1 y.1 = y.2)
 
@@ -130,11 +130,11 @@ theorem card_fib (A : JointDevice N b h S c G q n) (O : Oracle N b h) (r : ℕ) 
         simp
 
 theorem card_compress_le (A : JointDevice N b h S c G q n) (hA : A.Recovers) (O : Oracle N b h) (k lam : ℕ)
-    [DecidablePred (fun x : Store N b × Bits n =>
+    [DecidablePred (fun x : Payloads N b × Bits n =>
       k ≤ (A.queried x.1 x.2 O).card ∧ A.ingress x.1 x.2 O + S + c + G * b + lam < k * b + n)] :
-    (Finset.univ.filter (fun x : Store N b × Bits n =>
+    (Finset.univ.filter (fun x : Payloads N b × Bits n =>
         k ≤ (A.queried x.1 x.2 O).card ∧ A.ingress x.1 x.2 O + S + c + G * b + lam < k * b + n)).card * 2 ^ lam ≤
-      q.choose k * Fintype.card (Store N b × Bits n) := by
+      q.choose k * Fintype.card (Payloads N b × Bits n) := by
   classical
   by_cases hpar : S + lam ≤ k * b + n ∧ k ≤ N
   swap
@@ -144,7 +144,7 @@ theorem card_compress_le (A : JointDevice N b h S c G q n) (hA : A.Recovers) (O 
   obtain ⟨hSl, hkN⟩ := hpar
   set r := k * b + n - S - lam with hr
   let codes : Finset (Bits S × Bits r × Finset ℕ) := Finset.univ ×ˢ Finset.univ ×ˢ (Finset.range q).powersetCard k
-  have hsub : Finset.univ.filter (fun x : Store N b × Bits n =>
+  have hsub : Finset.univ.filter (fun x : Payloads N b × Bits n =>
         k ≤ (A.queried x.1 x.2 O).card ∧ A.ingress x.1 x.2 O + S + c + G * b + lam < k * b + n) ⊆
       (codes.filter (fun code => k ≤ (named A O r code).card)).biUnion (fib A O r) := by
     rintro ⟨E, z⟩ hE
@@ -199,8 +199,8 @@ theorem card_compress_le (A : JointDevice N b h S c G q n) (hA : A.Recovers) (O 
       rfl
   have hcodes : codes.card = 2 ^ S * (2 ^ r * q.choose k) := by
     simp [codes, Finset.card_product, Finset.card_powersetCard]
-  have hpair : Fintype.card (Store N b × Bits n) = (2 ^ b) ^ N * 2 ^ n := by simp
-  calc (Finset.univ.filter (fun x : Store N b × Bits n =>
+  have hpair : Fintype.card (Payloads N b × Bits n) = (2 ^ b) ^ N * 2 ^ n := by simp
+  calc (Finset.univ.filter (fun x : Payloads N b × Bits n =>
           k ≤ (A.queried x.1 x.2 O).card ∧ A.ingress x.1 x.2 O + S + c + G * b + lam < k * b + n)).card * 2 ^ lam
       ≤ (codes.card * (2 ^ b) ^ (N - k)) * 2 ^ lam := by
         gcongr
@@ -211,7 +211,7 @@ theorem card_compress_le (A : JointDevice N b h S c G q n) (hA : A.Recovers) (O 
           exact (card_fib A O r code).trans (Nat.pow_le_pow_right (by positivity) (by omega))
         · rw [smul_eq_mul]
           exact Nat.mul_le_mul_right _ (Finset.card_filter_le _ _)
-    _ = q.choose k * Fintype.card (Store N b × Bits n) := by
+    _ = q.choose k * Fintype.card (Payloads N b × Bits n) := by
         have e1 : S + r + lam = k * b + n := by omega
         have e2 : (2 : ℕ) ^ (k * b) * (2 ^ b) ^ (N - k) = (2 ^ b) ^ N := by
           rw [mul_comm k b, pow_mul, ← pow_add, Nat.add_sub_cancel' hkN]
@@ -236,7 +236,7 @@ open Bandwidth.AuditRO Bandwidth.AuditJoint Bandwidth.JointDevice
 theorem AuditJoint : Bandwidth.Guarantees.AuditJoint := by
   classical
   intro N b h S c G q n s k lam A hA
-  have hsplit : ∀ x : (Store N b × Bits n) × Oracle N b h × (Fin s → Fin N),
+  have hsplit : ∀ x : (Payloads N b × Bits n) × Oracle N b h × (Fin s → Fin N),
       A.Accepts x.1.1 x.1.2 x.2.1 x.2.2 ∧ A.ingress x.1.1 x.1.2 x.2.1 + S + c + G * b + lam < k * b + n →
       (((A.queried x.1.1 x.1.2 x.2.1).card < k ∧ ∀ i, x.2.2 i ∈ A.queried x.1.1 x.1.2 x.2.1) ∨
         (∃ i, x.2.2 i ∉ A.queried x.1.1 x.1.2 x.2.1 ∧
@@ -252,8 +252,8 @@ theorem AuditJoint : Bandwidth.Guarantees.AuditJoint := by
       · push Not at hall
         obtain ⟨i, hi⟩ := hall
         exact Or.inl (Or.inr ⟨i, hi, hacc i⟩)
-  have hΩ : Fintype.card ((Store N b × Bits n) × Oracle N b h × (Fin s → Fin N)) =
-      Fintype.card (Store N b × Bits n) * (Fintype.card (Oracle N b h) * N ^ s) := by
+  have hΩ : Fintype.card ((Payloads N b × Bits n) × Oracle N b h × (Fin s → Fin N)) =
+      Fintype.card (Payloads N b × Bits n) * (Fintype.card (Oracle N b h) * N ^ s) := by
     simp only [Fintype.card_prod, Fintype.card_fun, Fintype.card_fin]
   by_cases hN : N ^ s = 0
   · rw [pr_eq_zero_of_card _ (by rw [hΩ, hN]; simp)]
@@ -261,7 +261,7 @@ theorem AuditJoint : Bandwidth.Guarantees.AuditJoint := by
   refine (pr_mono hsplit).trans ?_
   refine (pr_or_le _ _).trans (add_le_add ((pr_or_le _ _).trans (add_le_add ?_ ?_)) ?_)
   · -- the sample misses the blocks never queried
-    have hc := pr_le_of_card (fun x : (Store N b × Bits n) × Oracle N b h × (Fin s → Fin N) =>
+    have hc := pr_le_of_card (fun x : (Payloads N b × Bits n) × Oracle N b h × (Fin s → Fin N) =>
         (A.queried x.1.1 x.1.2 x.2.1).card < k ∧ ∀ i, x.2.2 i ∈ A.queried x.1.1 x.1.2 x.2.1) (N ^ s) ((k - 1) ^ s)
         hN (by
       rw [hΩ]
@@ -277,7 +277,7 @@ theorem AuditJoint : Bandwidth.Guarantees.AuditJoint := by
     rw [Nat.cast_pow, Nat.cast_pow, div_eq_mul_inv, div_eq_mul_inv, mul_pow, ENNReal.inv_pow]
   · -- a guessed tag
     refine (pr_exists_le _).trans ?_
-    have hi : ∀ i : Fin s, pr (fun x : (Store N b × Bits n) × Oracle N b h × (Fin s → Fin N) =>
+    have hi : ∀ i : Fin s, pr (fun x : (Payloads N b × Bits n) × Oracle N b h × (Fin s → Fin N) =>
         x.2.2 i ∉ A.queried x.1.1 x.1.2 x.2.1 ∧
           (A.out x.1.1 x.1.2 x.2.1).1 (x.2.2 i) = x.2.1 (x.2.2 i, x.1.1 (x.2.2 i))) ≤
         ((1 : ℕ) : ℝ≥0∞) / ((2 ^ h : ℕ) : ℝ≥0∞) := fun i =>
@@ -292,7 +292,7 @@ theorem AuditJoint : Bandwidth.Guarantees.AuditJoint := by
   · -- compression of the pair
     refine (pr_le_of_card _ (2 ^ lam) (q.choose k) (by positivity) (by
       rw [hΩ]
-      refine (card_filter_prod_le' _ _ (q.choose k * Fintype.card (Store N b × Bits n)) (fun y => ?_)).trans
+      refine (card_filter_prod_le' _ _ (q.choose k * Fintype.card (Payloads N b × Bits n)) (fun y => ?_)).trans
         (le_of_eq (by simp only [Fintype.card_prod, Fintype.card_fun, Fintype.card_fin]; ring))
       exact card_compress_le A hA y.1 k lam)).trans (le_of_eq ?_)
     push_cast

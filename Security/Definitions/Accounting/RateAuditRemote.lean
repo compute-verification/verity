@@ -64,16 +64,16 @@ namespace InteractiveDevice
 variable {N b h ρ S L q : ℕ}
 
 /-- The device's reads of tier `t` in the window, in bits. -/
-def tierReads {τ : ℕ} (A : InteractiveDevice N b h ρ S L q) (tier : ℕ → Fin τ) (t : Fin τ) (E : Store N b)
+def tierReads {τ : ℕ} (A : InteractiveDevice N b h ρ S L q) (tier : ℕ → Fin τ) (t : Fin τ) (E : Payloads N b)
     (R : Bits ρ) (O : Oracle N b h ρ) : ℕ :=
   (A.chip (A.state E)).tierBits tier t (A.world E R O) []
 
 /-- The words rebuilt in the window, each at `c_enc` of compute. -/
-def rebuilt (A : InteractiveDevice N b h ρ S L q) (E : Store N b) (R : Bits ρ) (O : Oracle N b h ρ) : ℕ :=
+def rebuilt (A : InteractiveDevice N b h ρ S L q) (E : Payloads N b) (R : Bits ρ) (O : Oracle N b h ρ) : ℕ :=
   (A.chip (A.state E)).rebuilds (A.world E R O) []
 
 /-- The words whose committed receipt is the oracle's under the stream, however the device came by it. -/
-def correct (A : InteractiveDevice N b h ρ S L q) (E : Store N b) (R : Bits ρ) (O : Oracle N b h ρ) :
+def correct (A : InteractiveDevice N b h ρ S L q) (E : Payloads N b) (R : Bits ρ) (O : Oracle N b h ρ) :
     Finset (Fin N) :=
   Finset.univ.filter (fun j => A.tags E R O j = O (R, j, E j))
 
@@ -96,7 +96,7 @@ class, and the root its seed is drawn at, each any function of the earlier passe
 store). -/
 structure Chain (P N b h ρ S L q r s : ℕ) where
   device : (j : Fin P) → ({i : Fin P // i < j} → PassCoins N b h ρ r s) → InteractiveDevice N b h ρ S L q
-  root : (j : Fin P) → ({i : Fin P // i < j} → PassCoins N b h ρ r s) → Store N b → Bits r
+  root : (j : Fin P) → ({i : Fin P // i < j} → PassCoins N b h ρ r s) → Payloads N b → Bits r
 
 namespace Chain
 
@@ -108,7 +108,7 @@ def dev (A : Chain P N b h ρ S L q r s) (j : Fin P) (ω : Fin P → PassCoins N
   A.device j (fun i => ω i.1)
 
 /-- Pass `j`'s oracle: its family at the root its seed is drawn at, `H(σ_t, j, root_{j−1}, ·)`. -/
-def oracle (A : Chain P N b h ρ S L q r s) (j : Fin P) (E : Store N b) (ω : Fin P → PassCoins N b h ρ r s) :
+def oracle (A : Chain P N b h ρ S L q r s) (j : Fin P) (E : Payloads N b) (ω : Fin P → PassCoins N b h ρ r s) :
     Oracle N b h ρ :=
   (ω j).2.1 (A.root j (fun i => ω i.1) E)
 
@@ -119,8 +119,8 @@ and the store fix, picked as any function of pass `j`'s whole oracle family; pas
 too. -/
 structure GrindChain (P N b h ρ S L q r s G : ℕ) where
   device : (j : Fin P) → ({i : Fin P // i < j} → PassCoins N b h ρ r s) → Fin G → InteractiveDevice N b h ρ S L q
-  cand : (j : Fin P) → ({i : Fin P // i < j} → PassCoins N b h ρ r s) → Store N b → Fin G → Bits r
-  pick : (j : Fin P) → ({i : Fin P // i < j} → PassCoins N b h ρ r s) → Store N b → (Bits r → Oracle N b h ρ) →
+  cand : (j : Fin P) → ({i : Fin P // i < j} → PassCoins N b h ρ r s) → Payloads N b → Fin G → Bits r
+  pick : (j : Fin P) → ({i : Fin P // i < j} → PassCoins N b h ρ r s) → Payloads N b → (Bits r → Oracle N b h ρ) →
     Fin G
 
 namespace GrindChain
@@ -128,17 +128,17 @@ namespace GrindChain
 variable {P N b h ρ S L q r s G : ℕ}
 
 /-- The candidate pass `j` keeps at the window's coins `ω`. -/
-def kept (A : GrindChain P N b h ρ S L q r s G) (j : Fin P) (E : Store N b) (ω : Fin P → PassCoins N b h ρ r s) :
+def kept (A : GrindChain P N b h ρ S L q r s G) (j : Fin P) (E : Payloads N b) (ω : Fin P → PassCoins N b h ρ r s) :
     Fin G :=
   A.pick j (fun i => ω i.1) E (ω j).2.1
 
 /-- Pass `j`'s device at the window's coins `ω`, at the candidate it kept. -/
-def dev (A : GrindChain P N b h ρ S L q r s G) (j : Fin P) (E : Store N b) (ω : Fin P → PassCoins N b h ρ r s) :
+def dev (A : GrindChain P N b h ρ S L q r s G) (j : Fin P) (E : Payloads N b) (ω : Fin P → PassCoins N b h ρ r s) :
     InteractiveDevice N b h ρ S L q :=
   A.device j (fun i => ω i.1) (A.kept j E ω)
 
 /-- Pass `j`'s oracle: its family at the kept candidate root. -/
-def oracle (A : GrindChain P N b h ρ S L q r s G) (j : Fin P) (E : Store N b) (ω : Fin P → PassCoins N b h ρ r s) :
+def oracle (A : GrindChain P N b h ρ S L q r s G) (j : Fin P) (E : Payloads N b) (ω : Fin P → PassCoins N b h ρ r s) :
     Oracle N b h ρ :=
   (ω j).2.1 (A.cand j (fun i => ω i.1) E (A.kept j E ω))
 

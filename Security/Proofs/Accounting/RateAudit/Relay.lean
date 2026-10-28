@@ -37,7 +37,7 @@ def sideTrace (w : World N b h ρ) : Chip N b h ρ α → List Bool
 
 /-- A run's value, recomputed from an oracle, device memory, the certified stream, the store and a stream of the
 side-source bits it read. -/
-def runSide (O : Oracle N b h ρ) (mem : ℕ → Bool) (R : Bits ρ) (E : Store N b) : Chip N b h ρ α → (ℕ → Bool) → α
+def runSide (O : Oracle N b h ρ) (mem : ℕ → Bool) (R : Bits ρ) (E : Payloads N b) : Chip N b h ρ α → (ℕ → Bool) → α
   | done a, _ => a
   | tag x k, f => (k (O x)).runSide O mem R E f
   | ingress a k, f => (k (mem a)).runSide O mem R E f
@@ -81,18 +81,18 @@ variable {N b h ρ S L q : ℕ}
 namespace RelayDevice
 
 /-- The words whose committed tag is the oracle's under the stream. -/
-def correct (A : RelayDevice N b h ρ S L q) (E : Store N b) (R : Bits ρ) (O : Oracle N b h ρ) : Finset (Fin N) :=
+def correct (A : RelayDevice N b h ρ S L q) (E : Payloads N b) (R : Bits ρ) (O : Oracle N b h ρ) : Finset (Fin N) :=
   Finset.univ.filter (fun j => A.tags E R O j = O (R, j, E j))
 
 /-- The words with a correct tag whose contents the chip never queried the oracle at, under the stream. -/
-def relayed (A : RelayDevice N b h ρ S L q) (E : Store N b) (R : Bits ρ) (O : Oracle N b h ρ) : Finset (Fin N) :=
+def relayed (A : RelayDevice N b h ρ S L q) (E : Payloads N b) (R : Bits ρ) (O : Oracle N b h ρ) : Finset (Fin N) :=
   A.correct E R O \ queried A E R O
 
 end RelayDevice
 
 open RelayDevice
 
-theorem card_relay_le (A : RelayDevice N b h ρ S L q) (E : Store N b) (R : Bits ρ) (m : ℕ)
+theorem card_relay_le (A : RelayDevice N b h ρ S L q) (E : Payloads N b) (R : Bits ρ) (m : ℕ)
     [DecidablePred (fun O : Oracle N b h ρ => m ≤ (A.relayed E R O).card)] :
     (Finset.univ.filter (fun O : Oracle N b h ρ => m ≤ (A.relayed E R O).card)).card * 2 ^ (h * m) ≤
       N.choose m * 2 ^ L * Fintype.card (Oracle N b h ρ) := by
@@ -187,7 +187,7 @@ open Bandwidth.AuditRO (card_sample)
 at `k − m` words, at `((k − 1)/N)^s + C(N, m)·2^L/2^(h·m) + C(q, k − m)/2^λ`. -/
 theorem _root_.Accounting.Rate.RelayDevice.auditRelay {N b h ρ S L q : ℕ} (A : RelayDevice N b h ρ S L q)
     (s k m F cTag cEnc lam : ℕ) :
-    pr (fun x : Store N b × (Bits ρ × Oracle N b h ρ × (Fin s → Fin N)) =>
+    pr (fun x : Payloads N b × (Bits ρ × Oracle N b h ρ × (Fin s → Fin N)) =>
         A.Accepts x.1 x.2.1 x.2.2.1 x.2.2.2 ∧ A.compute cTag cEnc x.1 x.2.1 x.2.2.1 ≤ F ∧
           A.footprint x.1 x.2.1 x.2.2.1 * cEnc < floor b ρ S L F cTag cEnc (k - m) lam)
       ≤ (((k - 1 : ℕ) : ℝ≥0∞) / N) ^ s + (N.choose m : ℝ≥0∞) * 2 ^ L / 2 ^ (h * m)
@@ -197,7 +197,7 @@ theorem _root_.Accounting.Rate.RelayDevice.auditRelay {N b h ρ S L q : ℕ} (A 
   · refine (pr_le_of_card _ 1 0 one_ne_zero ?_).trans (by simp)
     rw [Finset.filter_false_of_mem (fun x _ hx => by simp [floor, hkm] at hx), Finset.card_empty, zero_mul,
       zero_mul]
-  have hsplit : ∀ x : Store N b × (Bits ρ × Oracle N b h ρ × (Fin s → Fin N)),
+  have hsplit : ∀ x : Payloads N b × (Bits ρ × Oracle N b h ρ × (Fin s → Fin N)),
       (A.Accepts x.1 x.2.1 x.2.2.1 x.2.2.2 ∧ A.compute cTag cEnc x.1 x.2.1 x.2.2.1 ≤ F ∧
         A.footprint x.1 x.2.1 x.2.2.1 * cEnc < floor b ρ S L F cTag cEnc (k - m) lam) →
       (((A.correct x.1 x.2.1 x.2.2.1).card < k ∧ ∀ i, x.2.2.2 i ∈ A.correct x.1 x.2.1 x.2.2.1) ∨
@@ -215,8 +215,8 @@ theorem _root_.Accounting.Rate.RelayDevice.auditRelay {N b h ρ S L q : ℕ} (A 
         Finset.card_le_card_sdiff_add_card
       omega
     exact Or.inr ⟨hq, taken_lt_of_floor A E R O hq hc hf⟩
-  have hΩ : Fintype.card (Store N b × (Bits ρ × Oracle N b h ρ × (Fin s → Fin N))) =
-      Fintype.card (Store N b) * (Fintype.card (Bits ρ) * (Fintype.card (Oracle N b h ρ) * N ^ s)) := by
+  have hΩ : Fintype.card (Payloads N b × (Bits ρ × Oracle N b h ρ × (Fin s → Fin N))) =
+      Fintype.card (Payloads N b) * (Fintype.card (Bits ρ) * (Fintype.card (Oracle N b h ρ) * N ^ s)) := by
     simp only [Fintype.card_prod, Fintype.card_fun, Fintype.card_fin]
   by_cases hN : N ^ s = 0
   · rw [pr_eq_zero_of_card _ (by rw [hΩ, hN]; simp)]
@@ -224,7 +224,7 @@ theorem _root_.Accounting.Rate.RelayDevice.auditRelay {N b h ρ S L q : ℕ} (A 
   refine (pr_mono hsplit).trans ?_
   refine (pr_or_le _ _).trans (add_le_add ((pr_or_le _ _).trans (add_le_add ?_ ?_)) ?_)
   · -- the sample misses the words without a correct tag
-    have hc := pr_le_of_card (fun x : Store N b × (Bits ρ × Oracle N b h ρ × (Fin s → Fin N)) =>
+    have hc := pr_le_of_card (fun x : Payloads N b × (Bits ρ × Oracle N b h ρ × (Fin s → Fin N)) =>
         (A.correct x.1 x.2.1 x.2.2.1).card < k ∧ ∀ i, x.2.2.2 i ∈ A.correct x.1 x.2.1 x.2.2.1) (N ^ s)
         ((k - 1) ^ s) hN (by
       rw [hΩ]
@@ -241,7 +241,7 @@ theorem _root_.Accounting.Rate.RelayDevice.auditRelay {N b h ρ S L q : ℕ} (A 
     refine hc.trans (le_of_eq ?_)
     rw [Nat.cast_pow, Nat.cast_pow, div_eq_mul_inv, div_eq_mul_inv, mul_pow, ENNReal.inv_pow]
   · -- relayed tags
-    have hc := pr_le_of_card (fun x : Store N b × (Bits ρ × Oracle N b h ρ × (Fin s → Fin N)) =>
+    have hc := pr_le_of_card (fun x : Payloads N b × (Bits ρ × Oracle N b h ρ × (Fin s → Fin N)) =>
         m ≤ (A.relayed x.1 x.2.1 x.2.2.1).card) (2 ^ (h * m)) (N.choose m * 2 ^ L) (by positivity) (by
       rw [hΩ]
       refine (card_filter_prod_le _ _
@@ -256,8 +256,8 @@ theorem _root_.Accounting.Rate.RelayDevice.auditRelay {N b h ρ S L q : ℕ} (A 
     rfl
   · -- compression at `k − m` words
     refine (pr_le_of_card _ (2 ^ lam) (q.choose (k - m)) (by positivity) (by
-      rw [hΩ, card_filter_equiv (Equiv.prodAssoc (Store N b) (Bits ρ) (Oracle N b h ρ × (Fin s → Fin N))).symm]
-      refine (card_filter_prod_le' _ _ (q.choose (k - m) * Fintype.card (Store N b × Bits ρ)) (fun y => ?_)).trans
+      rw [hΩ, card_filter_equiv (Equiv.prodAssoc (Payloads N b) (Bits ρ) (Oracle N b h ρ × (Fin s → Fin N))).symm]
+      refine (card_filter_prod_le' _ _ (q.choose (k - m) * Fintype.card (Payloads N b × Bits ρ)) (fun y => ?_)).trans
         (le_of_eq (by simp only [Fintype.card_prod, Fintype.card_fun, Fintype.card_fin]; ring))
       exact card_compress_le A y.1 (k - m) lam hk0)).trans (le_of_eq ?_)
     push_cast

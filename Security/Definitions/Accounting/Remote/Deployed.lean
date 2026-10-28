@@ -37,7 +37,7 @@ variable {n P N b h ρ S L q r s d G τ : ℕ}
 
 /-- A deployed session as a run of the remote audit on node `Nd` with parameters `a`, with `X` bits completed a pass. -/
 def Run.ofDeployed (A : DeployedSession n P N b h ρ S L q r s d G) (tier : ℕ → Fin τ) (X : ℕ) (Nd : Node (Fin τ))
-    (a : Audit) : Run Nd a (Store N b × (Fin n → WindowCoins P N b h ρ r s d)) where
+    (a : Audit) : Run Nd a (Payloads N b × (Fin n → WindowCoins P N b h ρ r s d)) where
   accepts x := ∀ w t, (x.2 w).2 t ∈ (A.win w x.2).correctAll x.1 (x.2 w).1
   committed _ := n * P * N
   correct x := ∑ w, ((A.win w x.2).correctAll x.1 (x.2 w).1).card
@@ -59,7 +59,7 @@ def Run.ofDeployed (A : DeployedSession n P N b h ρ S L q r s d G) (tier : ℕ 
 /-- Window `w` of a deployed session as a run of the remote audit on node `Nd` with parameters `a`, over the session's
 coins: `Run.ofDeployed`'s fields at window `w`'s `P` passes, accepting when every window's draw passes. -/
 def Run.ofDeployedWindow (A : DeployedSession n P N b h ρ S L q r s d G) (w : Fin n) (tier : ℕ → Fin τ) (X : ℕ)
-    (Nd : Node (Fin τ)) (a : Audit) : Run Nd a (Store N b × (Fin n → WindowCoins P N b h ρ r s d)) where
+    (Nd : Node (Fin τ)) (a : Audit) : Run Nd a (Payloads N b × (Fin n → WindowCoins P N b h ρ r s d)) where
   accepts x := ∀ v t, (x.2 v).2 t ∈ (A.win v x.2).correctAll x.1 (x.2 v).1
   committed _ := P * N
   correct x := ((A.win w x.2).correctAll x.1 (x.2 w).1).card

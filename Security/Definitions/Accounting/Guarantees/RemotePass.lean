@@ -40,7 +40,7 @@ Frozen (no-function, hash): a bound in the random-oracle model over an abstract 
 the bandwidth audit's code computes. -/
 def AuditRO : Prop :=
   ∀ (N b h S c G q s k lam : ℕ) (A : Bandwidth.Device N b h S c G q),
-    Pous.pr (fun x : Bandwidth.Store N b × Bandwidth.Oracle N b h × (Fin s → Fin N) =>
+    Pous.pr (fun x : Bandwidth.Payloads N b × Bandwidth.Oracle N b h × (Fin s → Fin N) =>
         Bandwidth.Accepts A x.1 x.2.1 x.2.2 ∧ A.ingress x.1 x.2.1 + S + c + G * b + lam < k * b)
       ≤ (((k - 1 : ℕ) : ℝ≥0∞) / N) ^ s + (s : ℝ≥0∞) / 2 ^ h + (q.choose k : ℝ≥0∞) / 2 ^ lam
 

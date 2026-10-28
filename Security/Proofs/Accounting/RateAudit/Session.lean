@@ -107,7 +107,7 @@ namespace Chain
 variable {P N b h ρ S L q r s : ℕ}
 
 /-- A window's correct receipts are its passes' correct receipts, counted together. -/
-theorem card_correctAll (A : Chain P N b h ρ S L q r s) (E : Store N b) (ω : Fin P → PassCoins N b h ρ r s) :
+theorem card_correctAll (A : Chain P N b h ρ S L q r s) (E : Payloads N b) (ω : Fin P → PassCoins N b h ρ r s) :
     (A.correctAll E ω).card = ∑ j, ((A.dev j ω).correct E (ω j).1 (A.oracle j E ω)).card := by
   classical
   unfold correctAll
@@ -119,12 +119,12 @@ theorem card_correctAll (A : Chain P N b h ρ S L q r s) (E : Store N b) (ω : F
 /-- **A window's pooled draw**: every opening lands on a correct receipt while the window holds at most `K`,
 at most `(K/(P·N))^d`. -/
 theorem pr_draw_le (A : Chain P N b h ρ S L q r s) (d K : ℕ) :
-    pr (fun x : Store N b × WindowCoins P N b h ρ r s d =>
+    pr (fun x : Payloads N b × WindowCoins P N b h ρ r s d =>
         (∀ t, x.2.2 t ∈ A.correctAll x.1 x.2.1) ∧ (A.correctAll x.1 x.2.1).card ≤ K)
       ≤ ((K : ℝ≥0∞) / (P * N)) ^ d := by
   classical
-  let e : Store N b × WindowCoins P N b h ρ r s d ≃
-      (Fin d → Fin P × Fin N) × (Store N b × (Fin P → PassCoins N b h ρ r s)) :=
+  let e : Payloads N b × WindowCoins P N b h ρ r s d ≃
+      (Fin d → Fin P × Fin N) × (Payloads N b × (Fin P → PassCoins N b h ρ r s)) :=
     (Equiv.prodAssoc _ _ _).symm.trans (Equiv.prodComm _ _)
   rw [pr_equiv e]
   refine pr_le_of_fiber _ _ (fun y => ?_)
@@ -139,14 +139,14 @@ theorem pr_draw_le (A : Chain P N b h ρ S L q r s) (d K : ℕ) :
 
 /-- A window's unpaid words from a per-pass bound, with its draw beside: at most `P·ε`. -/
 theorem pr_unpaid_draw_le {τ : ℕ} (A : Chain P N b h ρ S L q r s) (tier : ℕ → Fin τ) (slack d : ℕ) (ε : ℝ≥0∞)
-    (hε : ∀ j η, pr (fun x : Store N b × Bits ρ × Oracle N b h ρ =>
+    (hε : ∀ j η, pr (fun x : Payloads N b × Bits ρ × Oracle N b h ρ =>
         ∑ t, (A.device j η).tierReads tier t x.1 x.2.1 x.2.2 + (A.device j η).rebuilt x.1 x.2.1 x.2.2 * b + slack <
           ((A.device j η).correct x.1 x.2.1 x.2.2).card * b) ≤ ε) :
-    pr (fun y : Store N b × WindowCoins P N b h ρ r s d =>
+    pr (fun y : Payloads N b × WindowCoins P N b h ρ r s d =>
         A.spent tier y.1 y.2.1 + P * slack < (A.correctAll y.1 y.2.1).card * b) ≤ (P : ℝ≥0∞) * ε := by
   classical
-  let e : Store N b × WindowCoins P N b h ρ r s d ≃
-      (Store N b × (Fin P → PassCoins N b h ρ r s)) × (Fin d → Fin P × Fin N) :=
+  let e : Payloads N b × WindowCoins P N b h ρ r s d ≃
+      (Payloads N b × (Fin P → PassCoins N b h ρ r s)) × (Fin d → Fin P × Fin N) :=
     (Equiv.prodAssoc _ _ _).symm
   rw [pr_equiv e]
   refine pr_le_of_fiber _ _ (fun D => ?_)
@@ -164,12 +164,12 @@ variable {n P N b h ρ S L q r s d : ℕ}
 /-- **Sequencing over windows**: an event of window `w`'s chained prover and its coins has at most its bound for the
 chained provers the earlier windows' coins pick. -/
 theorem pr_window_le (A : Session n P N b h ρ S L q r s d) (w : Fin n)
-    (Q : Chain P N b h ρ S L q r s → Store N b × WindowCoins P N b h ρ r s d → Prop) (ε : ℝ≥0∞)
+    (Q : Chain P N b h ρ S L q r s → Payloads N b × WindowCoins P N b h ρ r s d → Prop) (ε : ℝ≥0∞)
     (hQ : ∀ η, pr (Q (A.window w η)) ≤ ε) :
-    pr (fun x : Store N b × (Fin n → WindowCoins P N b h ρ r s d) => Q (A.chain w x.2) (x.1, x.2 w)) ≤ ε := by
+    pr (fun x : Payloads N b × (Fin n → WindowCoins P N b h ρ r s d) => Q (A.chain w x.2) (x.1, x.2 w)) ≤ ε := by
   classical
-  let e : Store N b × (Fin n → WindowCoins P N b h ρ r s d) ≃
-      (Store N b × WindowCoins P N b h ρ r s d) × ({v : Fin n // v ≠ w} → WindowCoins P N b h ρ r s d) :=
+  let e : Payloads N b × (Fin n → WindowCoins P N b h ρ r s d) ≃
+      (Payloads N b × WindowCoins P N b h ρ r s d) × ({v : Fin n // v ≠ w} → WindowCoins P N b h ρ r s d) :=
     ((Equiv.refl _).prodCongr (Equiv.funSplitAt w _)).trans (Equiv.prodAssoc _ _ _).symm
   rw [pr_equiv e]
   refine pr_le_of_fiber _ _ (fun ω' => ?_)
@@ -188,7 +188,7 @@ theorem pr_window_le (A : Session n P N b h ρ S L q r s d) (w : Fin n)
 /-- **A session's pooled draws**: every window's openings land on correct receipts while the session holds at most
 `K` in all or some window at most `K_w`. -/
 theorem pr_draws_le (A : Session n P N b h ρ S L q r s d) (K Kw : ℕ) :
-    pr (fun x : Store N b × (Fin n → WindowCoins P N b h ρ r s d) =>
+    pr (fun x : Payloads N b × (Fin n → WindowCoins P N b h ρ r s d) =>
         (∀ w t, (x.2 w).2 t ∈ (A.chain w x.2).correctAll x.1 (x.2 w).1) ∧
           (∑ w, ((A.chain w x.2).correctAll x.1 (x.2 w).1).card ≤ K ∨
             ∃ w, ((A.chain w x.2).correctAll x.1 (x.2 w).1).card ≤ Kw))
@@ -241,16 +241,16 @@ theorem pr_draws_le (A : Session n P N b h ρ S L q r s d) (K Kw : ℕ) :
 /-- A session's unpaid words from a per-pass bound: the probability that some window's reads, rebuilt words and `P`
 slacks fall short of its correct receipts' words is at most `n·P·ε`. -/
 theorem pr_unpaid_le {τ : ℕ} (A : Session n P N b h ρ S L q r s d) (tier : ℕ → Fin τ) (slack : ℕ) (ε : ℝ≥0∞)
-    (hε : ∀ w η j ι, pr (fun x : Store N b × Bits ρ × Oracle N b h ρ =>
+    (hε : ∀ w η j ι, pr (fun x : Payloads N b × Bits ρ × Oracle N b h ρ =>
         ∑ t, ((A.window w η).device j ι).tierReads tier t x.1 x.2.1 x.2.2 +
             ((A.window w η).device j ι).rebuilt x.1 x.2.1 x.2.2 * b + slack <
           (((A.window w η).device j ι).correct x.1 x.2.1 x.2.2).card * b) ≤ ε) :
-    pr (fun x : Store N b × (Fin n → WindowCoins P N b h ρ r s d) =>
+    pr (fun x : Payloads N b × (Fin n → WindowCoins P N b h ρ r s d) =>
         ∃ w, (A.chain w x.2).spent tier x.1 (x.2 w).1 + P * slack <
           ((A.chain w x.2).correctAll x.1 (x.2 w).1).card * b)
       ≤ (n : ℝ≥0∞) * (P * ε) := by
   classical
-  calc _ ≤ ∑ w, pr (fun x : Store N b × (Fin n → WindowCoins P N b h ρ r s d) =>
+  calc _ ≤ ∑ w, pr (fun x : Payloads N b × (Fin n → WindowCoins P N b h ρ r s d) =>
           (A.chain w x.2).spent tier x.1 (x.2 w).1 + P * slack <
             ((A.chain w x.2).correctAll x.1 (x.2 w).1).card * b) := pr_exists_le _
     _ ≤ ∑ _w : Fin n, (P : ℝ≥0∞) * ε := Finset.sum_le_sum (fun w _ => pr_window_le A w

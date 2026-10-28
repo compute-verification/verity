@@ -73,7 +73,7 @@ def sideTrace (w : World N b h) : Chip N b h α → List Bool
   | regen j k => (k (w.block j)).sideTrace w
 
 /-- A run's value, recomputed from an oracle, device memory, the store and a stream of the side-source bits it read. -/
-def runSide (O : Oracle N b h) (mem : ℕ → Bool) (blk : Store N b) : Chip N b h α → (ℕ → Bool) → α
+def runSide (O : Oracle N b h) (mem : ℕ → Bool) (blk : Payloads N b) : Chip N b h α → (ℕ → Bool) → α
   | done a, _ => a
   | tag x k, f => (k (O x)).runSide O mem blk f
   | ingress a k, f => (k (mem a)).runSide O mem blk f

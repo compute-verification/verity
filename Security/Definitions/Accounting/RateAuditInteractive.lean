@@ -41,7 +41,7 @@ structure IWorld (N b h ρ : ℕ) where
   mem : ℕ → Bool
   side : List Bool → ℕ → Bool
   stream : Bits ρ
-  store : Store N b
+  store : Payloads N b
 
 namespace IChip
 
@@ -116,9 +116,9 @@ oracle and the bits sent so far, and a chip program from the state. In every wor
 program takes in at most `L` bits over the side link (side sources and the certified stream together) and makes at most
 `q` oracle queries. -/
 structure InteractiveDevice (N b h ρ S L q : ℕ) where
-  state : Store N b → Bits S
-  mem : Store N b → ℕ → Bool
-  side : Store N b → Bits ρ → Oracle N b h ρ → List Bool → ℕ → Bool
+  state : Payloads N b → Bits S
+  mem : Payloads N b → ℕ → Bool
+  side : Payloads N b → Bits ρ → Oracle N b h ρ → List Bool → ℕ → Bool
   chip : Bits S → IChip N b h ρ (Fin N → Bits h)
   bounded : ∀ (st : Bits S) (w : IWorld N b h ρ), (chip st).linkBits w [] ≤ L ∧ ((chip st).queries w []).length ≤ q
 
@@ -127,29 +127,29 @@ namespace InteractiveDevice
 variable {N b h ρ S L q : ℕ}
 
 /-- The world an interactive device's chip runs in, for store `E`, certified stream `R` and oracle `O`. -/
-def world (A : InteractiveDevice N b h ρ S L q) (E : Store N b) (R : Bits ρ) (O : Oracle N b h ρ) : IWorld N b h ρ :=
+def world (A : InteractiveDevice N b h ρ S L q) (E : Payloads N b) (R : Bits ρ) (O : Oracle N b h ρ) : IWorld N b h ρ :=
   ⟨O, A.mem E, A.side E R O, R, E⟩
 
 /-- The tags the device commits to. -/
-def tags (A : InteractiveDevice N b h ρ S L q) (E : Store N b) (R : Bits ρ) (O : Oracle N b h ρ) : Fin N → Bits h :=
+def tags (A : InteractiveDevice N b h ρ S L q) (E : Payloads N b) (R : Bits ρ) (O : Oracle N b h ρ) : Fin N → Bits h :=
   (A.chip (A.state E)).run (A.world E R O) []
 
 /-- The device's ingress in the window: every bit it read from device memory, in bits. -/
-def ingress (A : InteractiveDevice N b h ρ S L q) (E : Store N b) (R : Bits ρ) (O : Oracle N b h ρ) : ℕ :=
+def ingress (A : InteractiveDevice N b h ρ S L q) (E : Payloads N b) (R : Bits ρ) (O : Oracle N b h ρ) : ℕ :=
   (A.chip (A.state E)).ingressBits (A.world E R O) []
 
 /-- The device's footprint in the window: the distinct device-memory addresses it read, in bits. -/
-def footprint (A : InteractiveDevice N b h ρ S L q) (E : Store N b) (R : Bits ρ) (O : Oracle N b h ρ) : ℕ :=
+def footprint (A : InteractiveDevice N b h ρ S L q) (E : Payloads N b) (R : Bits ρ) (O : Oracle N b h ρ) : ℕ :=
   ((A.chip (A.state E)).addrs (A.world E R O) []).card
 
 /-- The device's compute in the window, at `c_tag` per oracle query and `c_enc` per rebuilt word. -/
-def compute (A : InteractiveDevice N b h ρ S L q) (cTag cEnc : ℕ) (E : Store N b) (R : Bits ρ) (O : Oracle N b h ρ) :
+def compute (A : InteractiveDevice N b h ρ S L q) (cTag cEnc : ℕ) (E : Payloads N b) (R : Bits ρ) (O : Oracle N b h ρ) :
     ℕ :=
   ((A.chip (A.state E)).queries (A.world E R O) []).length * cTag +
     (A.chip (A.state E)).rebuilds (A.world E R O) [] * cEnc
 
 /-- The verifier accepts: every sampled word's committed tag is the oracle's tag of that word under the stream. -/
-def Accepts {s : ℕ} (A : InteractiveDevice N b h ρ S L q) (E : Store N b) (R : Bits ρ) (O : Oracle N b h ρ)
+def Accepts {s : ℕ} (A : InteractiveDevice N b h ρ S L q) (E : Payloads N b) (R : Bits ρ) (O : Oracle N b h ρ)
     (I : Fin s → Fin N) : Prop :=
   ∀ i, A.tags E R O (I i) = O (R, I i, E (I i))
 

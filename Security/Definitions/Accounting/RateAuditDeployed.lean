@@ -119,9 +119,9 @@ stream, the oracle and the bits sent so far, and a chip program with completions
 starting from nothing sent, the program takes in at most `L` bits over the side link (side sources and the certified
 stream together) and makes at most `q` oracle queries. -/
 structure PIDevice (N b h ρ S L q : ℕ) where
-  state : Store N b → Bits S
-  mem : Store N b → ℕ → Bool
-  side : Store N b → Bits ρ → Oracle N b h ρ → List Bool → ℕ → Bool
+  state : Payloads N b → Bits S
+  mem : Payloads N b → ℕ → Bool
+  side : Payloads N b → Bits ρ → Oracle N b h ρ → List Bool → ℕ → Bool
   chip : Bits S → PIChip N b h ρ (Fin N → Bits h)
   bounded : ∀ (st : Bits S) (w : IWorld N b h ρ), (chip st).linkBits w [] ≤ L ∧ ((chip st).queries w []).length ≤ q
 
@@ -130,24 +130,24 @@ namespace PIDevice
 variable {N b h ρ S L q : ℕ}
 
 /-- The world a device's chip runs in, for store `E`, certified stream `R` and oracle `O`. -/
-def world (A : PIDevice N b h ρ S L q) (E : Store N b) (R : Bits ρ) (O : Oracle N b h ρ) : IWorld N b h ρ :=
+def world (A : PIDevice N b h ρ S L q) (E : Payloads N b) (R : Bits ρ) (O : Oracle N b h ρ) : IWorld N b h ρ :=
   ⟨O, A.mem E, A.side E R O, R, E⟩
 
 /-- The receipts the device commits to. -/
-def tags (A : PIDevice N b h ρ S L q) (E : Store N b) (R : Bits ρ) (O : Oracle N b h ρ) : Fin N → Bits h :=
+def tags (A : PIDevice N b h ρ S L q) (E : Payloads N b) (R : Bits ρ) (O : Oracle N b h ρ) : Fin N → Bits h :=
   (A.chip (A.state E)).run (A.world E R O) []
 
 /-- The device's reads of tier `t` in the pass, in bits. -/
-def tierReads {τ : ℕ} (A : PIDevice N b h ρ S L q) (tier : ℕ → Fin τ) (t : Fin τ) (E : Store N b) (R : Bits ρ)
+def tierReads {τ : ℕ} (A : PIDevice N b h ρ S L q) (tier : ℕ → Fin τ) (t : Fin τ) (E : Payloads N b) (R : Bits ρ)
     (O : Oracle N b h ρ) : ℕ :=
   (A.chip (A.state E)).tierBits tier t (A.world E R O) []
 
 /-- The bits the device completed in the pass. -/
-def completed (A : PIDevice N b h ρ S L q) (E : Store N b) (R : Bits ρ) (O : Oracle N b h ρ) : ℕ :=
+def completed (A : PIDevice N b h ρ S L q) (E : Payloads N b) (R : Bits ρ) (O : Oracle N b h ρ) : ℕ :=
   (A.chip (A.state E)).completed (A.world E R O) []
 
 /-- The compute the device's completions cost in the pass, at `cost x` per completion of `x` bits. -/
-def work (A : PIDevice N b h ρ S L q) (cost : ℕ → ℕ) (E : Store N b) (R : Bits ρ) (O : Oracle N b h ρ) : ℕ :=
+def work (A : PIDevice N b h ρ S L q) (cost : ℕ → ℕ) (E : Payloads N b) (R : Bits ρ) (O : Oracle N b h ρ) : ℕ :=
   (A.chip (A.state E)).work cost (A.world E R O) []
 
 /-- **A pass's completion work split across the node's concurrent compute devices.** `rate i` is device `i`'s
@@ -163,7 +163,7 @@ structure TimeBudget (A : PIDevice N b h ρ S L q) (cost : ℕ → ℕ) (k durat
   workAt_le : ∀ st w i, workAt st w i ≤ rate i * duration
 
 /-- The words whose committed receipt is the oracle's under the stream, however the device came by it. -/
-def correct (A : PIDevice N b h ρ S L q) (E : Store N b) (R : Bits ρ) (O : Oracle N b h ρ) : Finset (Fin N) :=
+def correct (A : PIDevice N b h ρ S L q) (E : Payloads N b) (R : Bits ρ) (O : Oracle N b h ρ) : Finset (Fin N) :=
   Finset.univ.filter (fun j => A.tags E R O j = O (R, j, E j))
 
 end PIDevice
@@ -174,8 +174,8 @@ any function of the earlier passes' coins (the candidates also of the store), an
 pass `j`'s whole oracle family. -/
 structure DeployedWindow (P N b h ρ S L q r s G : ℕ) where
   device : (j : Fin P) → ({i : Fin P // i < j} → PassCoins N b h ρ r s) → Fin G → PIDevice N b h ρ S L q
-  cand : (j : Fin P) → ({i : Fin P // i < j} → PassCoins N b h ρ r s) → Store N b → Fin G → Bits r
-  pick : (j : Fin P) → ({i : Fin P // i < j} → PassCoins N b h ρ r s) → Store N b → (Bits r → Oracle N b h ρ) →
+  cand : (j : Fin P) → ({i : Fin P // i < j} → PassCoins N b h ρ r s) → Payloads N b → Fin G → Bits r
+  pick : (j : Fin P) → ({i : Fin P // i < j} → PassCoins N b h ρ r s) → Payloads N b → (Bits r → Oracle N b h ρ) →
     Fin G
 
 namespace DeployedWindow
@@ -183,28 +183,28 @@ namespace DeployedWindow
 variable {P N b h ρ S L q r s G : ℕ}
 
 /-- The candidate pass `j` keeps at the window's coins `ω`. -/
-def kept (A : DeployedWindow P N b h ρ S L q r s G) (j : Fin P) (E : Store N b) (ω : Fin P → PassCoins N b h ρ r s) :
+def kept (A : DeployedWindow P N b h ρ S L q r s G) (j : Fin P) (E : Payloads N b) (ω : Fin P → PassCoins N b h ρ r s) :
     Fin G :=
   A.pick j (fun i => ω i.1) E (ω j).2.1
 
 /-- Pass `j`'s device at the window's coins `ω`, at the candidate it kept. -/
-def dev (A : DeployedWindow P N b h ρ S L q r s G) (j : Fin P) (E : Store N b) (ω : Fin P → PassCoins N b h ρ r s) :
+def dev (A : DeployedWindow P N b h ρ S L q r s G) (j : Fin P) (E : Payloads N b) (ω : Fin P → PassCoins N b h ρ r s) :
     PIDevice N b h ρ S L q :=
   A.device j (fun i => ω i.1) (A.kept j E ω)
 
 /-- Pass `j`'s oracle: its family at the kept candidate root, `H(σ_t, j, root_{j−1}, ·)`. -/
-def oracle (A : DeployedWindow P N b h ρ S L q r s G) (j : Fin P) (E : Store N b)
+def oracle (A : DeployedWindow P N b h ρ S L q r s G) (j : Fin P) (E : Payloads N b)
     (ω : Fin P → PassCoins N b h ρ r s) : Oracle N b h ρ :=
   (ω j).2.1 (A.cand j (fun i => ω i.1) E (A.kept j E ω))
 
 /-- The window's correct receipts, as the (pass, word) pairs whose opening its pooled draw passes. -/
-def correctAll (A : DeployedWindow P N b h ρ S L q r s G) (E : Store N b) (ω : Fin P → PassCoins N b h ρ r s) :
+def correctAll (A : DeployedWindow P N b h ρ S L q r s G) (E : Payloads N b) (ω : Fin P → PassCoins N b h ρ r s) :
     Finset (Fin P × Fin N) :=
   Finset.univ.filter (fun p => p.2 ∈ (A.dev p.1 E ω).correct E (ω p.1).1 (A.oracle p.1 E ω))
 
 /-- The window's reads of every tier, in bits, summed over its passes. Completions are not reads: what they cost is
 the compute `PIChip.work`, which the guarantee's assumptions turn into the term `muRebuild`. -/
-def reads {τ : ℕ} (A : DeployedWindow P N b h ρ S L q r s G) (tier : ℕ → Fin τ) (E : Store N b)
+def reads {τ : ℕ} (A : DeployedWindow P N b h ρ S L q r s G) (tier : ℕ → Fin τ) (E : Payloads N b)
     (ω : Fin P → PassCoins N b h ρ r s) : ℕ :=
   ∑ j, ∑ t, (A.dev j E ω).tierReads tier t E (ω j).1 (A.oracle j E ω)
 

@@ -76,11 +76,11 @@ theorem readBits_eq (w : World N b h ρ) (a n : ℕ) (k : Bits n → Chip N b h 
     exact ⟨rfl, by omega, rfl, rfl, rfl, rfl⟩
 
 /-- Query the oracle at each listed word of `V` under the stream `R`, recording the tag. -/
-def tagAll (R : Bits ρ) (V : Store N b) : List (Fin N) → (Fin N → Bits h) → Chip N b h ρ (Fin N → Bits h)
+def tagAll (R : Bits ρ) (V : Payloads N b) : List (Fin N) → (Fin N → Bits h) → Chip N b h ρ (Fin N → Bits h)
   | [], acc => .done acc
   | j :: js, acc => .tag (R, j, V j) (fun y => tagAll R V js (Function.update acc j y))
 
-theorem tagAll_eq (w : World N b h ρ) (R : Bits ρ) (V : Store N b) (js : List (Fin N)) (acc : Fin N → Bits h) :
+theorem tagAll_eq (w : World N b h ρ) (R : Bits ρ) (V : Payloads N b) (js : List (Fin N)) (acc : Fin N → Bits h) :
     (tagAll R V js acc).run w = (fun j => if j ∈ js then w.oracle (R, j, V j) else acc j) ∧
     (tagAll R V js acc).ingressBits w = 0 ∧ (tagAll R V js acc).addrs w = ∅ ∧
     (tagAll R V js acc).linkBits w = 0 ∧ (tagAll R V js acc).rebuilds w = 0 ∧
@@ -104,7 +104,7 @@ theorem word_lt {j : Fin N} {i : Fin b} : (j : ℕ) * b + i < N * b := by
     _ ≤ N * b := Nat.mul_le_mul_right _ (by omega)
 
 /-- The store's words in `N·b` bits laid out word by word. -/
-def words (v : Bits (N * b)) : Store N b := fun j i => v ⟨j * b + i, word_lt⟩
+def words (v : Bits (N * b)) : Payloads N b := fun j i => v ⟨j * b + i, word_lt⟩
 
 /-- The honest chip: read the stream, then device memory's `N·b` bits, then tag every word under the stream. -/
 def chip (N b h ρ : ℕ) : Chip N b h ρ (Fin N → Bits h) :=
@@ -148,7 +148,7 @@ def honest (N b h ρ : ℕ) : Device N b h ρ 0 ρ N where
 
 /-- **Completeness.** The honest device is accepted on every store, stream, oracle and sample; its footprint and
 ingress are the store, its compute `N` tags. -/
-theorem honest_accepts (cTag cEnc : ℕ) (E : Store N b) (R : Bits ρ) (O : Oracle N b h ρ) {s : ℕ}
+theorem honest_accepts (cTag cEnc : ℕ) (E : Payloads N b) (R : Bits ρ) (O : Oracle N b h ρ) {s : ℕ}
     (I : Fin s → Fin N) :
     (honest N b h ρ).Accepts E R O I ∧ (honest N b h ρ).footprint E R O = N * b ∧
       (honest N b h ρ).ingress E R O = N * b ∧ (honest N b h ρ).compute cTag cEnc E R O = N * cTag := by

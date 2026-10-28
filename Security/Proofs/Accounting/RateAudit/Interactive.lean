@@ -123,7 +123,8 @@ variable {N b h ρ S L q : ℕ}
 
 /-- The relay device's side source: at `addr v a`, the answer to `v` at `a`; nothing at an address that is no such
 pair. -/
-def relaySide (A : InteractiveDevice N b h ρ S L q) (E : Store N b) (R : Bits ρ) (O : Oracle N b h ρ) (n : ℕ) : Bool :=
+def relaySide (A : InteractiveDevice N b h ρ S L q) (E : Payloads N b) (R : Bits ρ) (O : Oracle N b h ρ)
+    (n : ℕ) : Bool :=
   match (Encodable.decode n : Option (List Bool × ℕ)) with
   | some p => A.side E R O p.1 p.2
   | none => false
@@ -139,37 +140,37 @@ def toRelay (A : InteractiveDevice N b h ρ S L q) : RelayDevice N b h ρ S L q 
     rw [IChip.toChip_linkBits, IChip.toChip_queries]
     exact A.bounded st (IChip.lift w)
 
-theorem lift_world (A : InteractiveDevice N b h ρ S L q) (E : Store N b) (R : Bits ρ) (O : Oracle N b h ρ) :
+theorem lift_world (A : InteractiveDevice N b h ρ S L q) (E : Payloads N b) (R : Bits ρ) (O : Oracle N b h ρ) :
     IChip.lift (A.toRelay.world E R O) = A.world E R O := by
   simp only [IChip.lift, RelayDevice.world, toRelay, world, IWorld.mk.injEq, true_and, and_true]
   funext v a
   simp [relaySide, IChip.addr, Encodable.encodek]
 
-theorem toRelay_tags (A : InteractiveDevice N b h ρ S L q) (E : Store N b) (R : Bits ρ) (O : Oracle N b h ρ) :
+theorem toRelay_tags (A : InteractiveDevice N b h ρ S L q) (E : Payloads N b) (R : Bits ρ) (O : Oracle N b h ρ) :
     A.toRelay.tags E R O = A.tags E R O := by
   change ((A.chip (A.state E)).toChip []).run (A.toRelay.world E R O) = _
   rw [IChip.toChip_run, lift_world]
   rfl
 
-theorem toRelay_footprint (A : InteractiveDevice N b h ρ S L q) (E : Store N b) (R : Bits ρ) (O : Oracle N b h ρ) :
+theorem toRelay_footprint (A : InteractiveDevice N b h ρ S L q) (E : Payloads N b) (R : Bits ρ) (O : Oracle N b h ρ) :
     A.toRelay.footprint E R O = A.footprint E R O := by
   change (((A.chip (A.state E)).toChip []).addrs (A.toRelay.world E R O)).card = _
   rw [IChip.toChip_addrs, lift_world]
   rfl
 
-theorem toRelay_compute (A : InteractiveDevice N b h ρ S L q) (cTag cEnc : ℕ) (E : Store N b) (R : Bits ρ)
+theorem toRelay_compute (A : InteractiveDevice N b h ρ S L q) (cTag cEnc : ℕ) (E : Payloads N b) (R : Bits ρ)
     (O : Oracle N b h ρ) : A.toRelay.compute cTag cEnc E R O = A.compute cTag cEnc E R O := by
   change (((A.chip (A.state E)).toChip []).queries (A.toRelay.world E R O)).length * cTag +
     ((A.chip (A.state E)).toChip []).rebuilds (A.toRelay.world E R O) * cEnc = _
   rw [IChip.toChip_queries, IChip.toChip_rebuilds, lift_world]
   rfl
 
-theorem toRelay_accepts {s : ℕ} (A : InteractiveDevice N b h ρ S L q) (E : Store N b) (R : Bits ρ)
+theorem toRelay_accepts {s : ℕ} (A : InteractiveDevice N b h ρ S L q) (E : Payloads N b) (R : Bits ρ)
     (O : Oracle N b h ρ) (I : Fin s → Fin N) : A.toRelay.Accepts E R O I ↔ A.Accepts E R O I := by
   simp only [RelayDevice.Accepts, Accepts, toRelay_tags]
 
 /-- The footprint is at most the ingress: each address is read at least once. -/
-theorem footprint_le_ingress (A : InteractiveDevice N b h ρ S L q) (E : Store N b) (R : Bits ρ)
+theorem footprint_le_ingress (A : InteractiveDevice N b h ρ S L q) (E : Payloads N b) (R : Bits ρ)
     (O : Oracle N b h ρ) : A.footprint E R O ≤ A.ingress E R O := by
   rw [← toRelay_footprint]
   have h := Chip.card_addrs_le (A.toRelay.world E R O) ((A.chip (A.state E)).toChip [])
@@ -280,20 +281,20 @@ def toInteractive (A : Device N b h ρ S L q) : InteractiveDevice N b h ρ S L q
     rw [Chip.toIChip_linkBits, Chip.toIChip_queries]
     exact A.bounded st (w.atSent [])
 
-theorem toInteractive_tags (A : Device N b h ρ S L q) (E : Store N b) (R : Bits ρ) (O : Oracle N b h ρ) :
+theorem toInteractive_tags (A : Device N b h ρ S L q) (E : Payloads N b) (R : Bits ρ) (O : Oracle N b h ρ) :
     A.toInteractive.tags E R O = A.tags E R O :=
   Chip.toIChip_run _ _ _
 
-theorem toInteractive_ingress (A : Device N b h ρ S L q) (E : Store N b) (R : Bits ρ) (O : Oracle N b h ρ) :
+theorem toInteractive_ingress (A : Device N b h ρ S L q) (E : Payloads N b) (R : Bits ρ) (O : Oracle N b h ρ) :
     A.toInteractive.ingress E R O = A.ingress E R O :=
   Chip.toIChip_ingressBits _ _ _
 
-theorem toInteractive_compute (A : Device N b h ρ S L q) (cTag cEnc : ℕ) (E : Store N b) (R : Bits ρ)
+theorem toInteractive_compute (A : Device N b h ρ S L q) (cTag cEnc : ℕ) (E : Payloads N b) (R : Bits ρ)
     (O : Oracle N b h ρ) : A.toInteractive.compute cTag cEnc E R O = A.compute cTag cEnc E R O := by
   simp only [InteractiveDevice.compute, Device.compute, toInteractive, Chip.toIChip_queries, Chip.toIChip_rebuilds]
   rfl
 
-theorem toInteractive_accepts {s : ℕ} (A : Device N b h ρ S L q) (E : Store N b) (R : Bits ρ) (O : Oracle N b h ρ)
+theorem toInteractive_accepts {s : ℕ} (A : Device N b h ρ S L q) (E : Payloads N b) (R : Bits ρ) (O : Oracle N b h ρ)
     (I : Fin s → Fin N) : A.toInteractive.Accepts E R O I ↔ A.Accepts E R O I := by
   simp only [InteractiveDevice.Accepts, Device.Accepts, toInteractive_tags]
 
@@ -336,7 +337,7 @@ theorem RateAuditInteractiveRO : Accounting.Guarantees.RateAuditInteractiveRO :=
   intro N b h ρ S L q s k F cTag cEnc lam A hA
   rw [Bandwidth.pr_coins_flat]
   dsimp only
-  have hev : (fun x : Store N b × (Bits ρ × Oracle N b h ρ × (Fin s → Fin N)) =>
+  have hev : (fun x : Payloads N b × (Bits ρ × Oracle N b h ρ × (Fin s → Fin N)) =>
         A.Accepts x.1 x.2.1 x.2.2.1 x.2.2.2 ∧ A.compute cTag cEnc x.1 x.2.1 x.2.2.1 ≤ F ∧
           A.footprint x.1 x.2.1 x.2.2.1 * cEnc < floor b ρ S L F cTag cEnc k lam) =
       fun x => A.toRelay.Accepts x.1 x.2.1 x.2.2.1 x.2.2.2 ∧ A.toRelay.compute cTag cEnc x.1 x.2.1 x.2.2.1 ≤ F ∧
@@ -352,7 +353,7 @@ theorem RateAuditInteractive : Accounting.Guarantees.RateAuditInteractive := by
   intro N b h ρ S L q s k m F cTag cEnc lam A
   rw [Bandwidth.pr_coins_flat]
   dsimp only
-  have hev : (fun x : Store N b × (Bits ρ × Oracle N b h ρ × (Fin s → Fin N)) =>
+  have hev : (fun x : Payloads N b × (Bits ρ × Oracle N b h ρ × (Fin s → Fin N)) =>
         A.Accepts x.1 x.2.1 x.2.2.1 x.2.2.2 ∧ A.compute cTag cEnc x.1 x.2.1 x.2.2.1 ≤ F ∧
           A.footprint x.1 x.2.1 x.2.2.1 * cEnc < floor b ρ S L F cTag cEnc (k - m) lam) =
       fun x => A.toRelay.Accepts x.1 x.2.1 x.2.2.1 x.2.2.2 ∧ A.toRelay.compute cTag cEnc x.1 x.2.1 x.2.2.1 ≤ F ∧

@@ -25,7 +25,7 @@ open scoped ENNReal
 variable {N b h S c G q : ℕ}
 
 /-- The blocks whose contents the device queried the oracle at. -/
-def queried (A : Device N b h S c G q) (E : Store N b) (O : Oracle N b h) : Finset (Fin N) :=
+def queried (A : Device N b h S c G q) (E : Payloads N b) (O : Oracle N b h) : Finset (Fin N) :=
   Finset.univ.filter (fun j => (j, E j) ∈ (A.chip (A.state E)).queries (A.world E O))
 
 namespace AuditRO
@@ -41,7 +41,7 @@ theorem card_sample (K : Finset (Fin N)) (s : ℕ) [DecidablePred (fun I : Fin s
 
 /-! ## A guessed tag -/
 
-theorem card_guess_le (A : Device N b h S c G q) (E : Store N b) (j : Fin N)
+theorem card_guess_le (A : Device N b h S c G q) (E : Payloads N b) (j : Fin N)
     [DecidablePred (fun O : Oracle N b h => j ∉ queried A E O ∧ A.tags E O j = O (j, E j))] :
     (Finset.univ.filter (fun O : Oracle N b h => j ∉ queried A E O ∧ A.tags E O j = O (j, E j))).card * 2 ^ h ≤
       Fintype.card (Oracle N b h) := by
@@ -71,7 +71,7 @@ def decoded (A : Device N b h S c G q) (O : Oracle N b h) (r : ℕ) (code : Bits
 open Classical in
 /-- The stores a code describes: those holding, at each named position's query, its block. -/
 noncomputable def fib (A : Device N b h S c G q) (O : Oracle N b h) (r : ℕ) (code : Bits S × Bits r × Finset ℕ) :
-    Finset (Store N b) :=
+    Finset (Payloads N b) :=
   Finset.univ.filter (fun E => ∀ p ∈ code.2.2, ∀ x, (decoded A O r code)[p]? = some x → E x.1 = x.2)
 
 open Classical in
@@ -97,10 +97,10 @@ theorem card_fib (A : Device N b h S c G q) (O : Oracle N b h) (r : ℕ) (code :
         simp
 
 theorem card_compress_le (A : Device N b h S c G q) (O : Oracle N b h) (k lam : ℕ)
-    [DecidablePred (fun E : Store N b => k ≤ (queried A E O).card ∧ A.ingress E O + S + c + G * b + lam < k * b)] :
-    (Finset.univ.filter (fun E : Store N b =>
+    [DecidablePred (fun E : Payloads N b => k ≤ (queried A E O).card ∧ A.ingress E O + S + c + G * b + lam < k * b)] :
+    (Finset.univ.filter (fun E : Payloads N b =>
         k ≤ (queried A E O).card ∧ A.ingress E O + S + c + G * b + lam < k * b)).card * 2 ^ lam ≤
-      q.choose k * Fintype.card (Store N b) := by
+      q.choose k * Fintype.card (Payloads N b) := by
   classical
   by_cases hpar : S + lam ≤ k * b ∧ k ≤ N
   swap
@@ -110,7 +110,7 @@ theorem card_compress_le (A : Device N b h S c G q) (O : Oracle N b h) (k lam : 
   obtain ⟨hSl, hkN⟩ := hpar
   set r := k * b - S - lam with hr
   let codes : Finset (Bits S × Bits r × Finset ℕ) := Finset.univ ×ˢ Finset.univ ×ˢ (Finset.range q).powersetCard k
-  have hsub : Finset.univ.filter (fun E : Store N b =>
+  have hsub : Finset.univ.filter (fun E : Payloads N b =>
         k ≤ (queried A E O).card ∧ A.ingress E O + S + c + G * b + lam < k * b) ⊆
       (codes.filter (fun code => k ≤ (named A O r code).card)).biUnion (fib A O r) := by
     intro E hE
@@ -161,8 +161,8 @@ theorem card_compress_le (A : Device N b h S c G q) (O : Oracle N b h) (k lam : 
       rfl
   have hcodes : codes.card = 2 ^ S * (2 ^ r * q.choose k) := by
     simp [codes, Finset.card_product, Finset.card_powersetCard]
-  have hstore : Fintype.card (Store N b) = (2 ^ b) ^ N := by simp
-  calc (Finset.univ.filter (fun E : Store N b =>
+  have hstore : Fintype.card (Payloads N b) = (2 ^ b) ^ N := by simp
+  calc (Finset.univ.filter (fun E : Payloads N b =>
           k ≤ (queried A E O).card ∧ A.ingress E O + S + c + G * b + lam < k * b)).card * 2 ^ lam
       ≤ (codes.card * (2 ^ b) ^ (N - k)) * 2 ^ lam := by
         gcongr
@@ -173,7 +173,7 @@ theorem card_compress_le (A : Device N b h S c G q) (O : Oracle N b h) (k lam : 
           exact (card_fib A O r code).trans (Nat.pow_le_pow_right (by positivity) (by omega))
         · rw [smul_eq_mul]
           exact Nat.mul_le_mul_right _ (Finset.card_filter_le _ _)
-    _ = q.choose k * Fintype.card (Store N b) := by
+    _ = q.choose k * Fintype.card (Payloads N b) := by
         have e1 : S + r + lam = k * b := by omega
         have e2 : (2 : ℕ) ^ (k * b) * (2 ^ b) ^ (N - k) = (2 ^ b) ^ N := by
           rw [mul_comm k b, pow_mul, ← pow_add, Nat.add_sub_cancel' hkN]
@@ -201,7 +201,7 @@ open Bandwidth.AuditRO
 theorem _root_.Accounting.SecurityProofs.Remote.AuditRO : Accounting.Guarantees.Remote.AuditRO := by
   classical
   intro N b h S c G q s k lam A
-  have hsplit : ∀ x : Store N b × Oracle N b h × (Fin s → Fin N),
+  have hsplit : ∀ x : Payloads N b × Oracle N b h × (Fin s → Fin N),
       Accepts A x.1 x.2.1 x.2.2 ∧ A.ingress x.1 x.2.1 + S + c + G * b + lam < k * b →
       (((queried A x.1 x.2.1).card < k ∧ ∀ i, x.2.2 i ∈ queried A x.1 x.2.1) ∨
         (∃ i, x.2.2 i ∉ queried A x.1 x.2.1 ∧ A.tags x.1 x.2.1 (x.2.2 i) = x.2.1 (x.2.2 i, x.1 (x.2.2 i)))) ∨
@@ -215,8 +215,8 @@ theorem _root_.Accounting.SecurityProofs.Remote.AuditRO : Accounting.Guarantees.
       · push Not at hall
         obtain ⟨i, hi⟩ := hall
         exact Or.inl (Or.inr ⟨i, hi, hacc i⟩)
-  have hΩ : Fintype.card (Store N b × Oracle N b h × (Fin s → Fin N)) =
-      Fintype.card (Store N b) * (Fintype.card (Oracle N b h) * N ^ s) := by
+  have hΩ : Fintype.card (Payloads N b × Oracle N b h × (Fin s → Fin N)) =
+      Fintype.card (Payloads N b) * (Fintype.card (Oracle N b h) * N ^ s) := by
     simp only [Fintype.card_prod, Fintype.card_fun, Fintype.card_fin]
   by_cases hN : N ^ s = 0
   · rw [pr_eq_zero_of_card _ (by rw [hΩ, hN]; simp)]
@@ -224,7 +224,7 @@ theorem _root_.Accounting.SecurityProofs.Remote.AuditRO : Accounting.Guarantees.
   refine (pr_mono hsplit).trans ?_
   refine (pr_or_le _ _).trans (add_le_add ((pr_or_le _ _).trans (add_le_add ?_ ?_)) ?_)
   · -- the sample misses the blocks never queried
-    have hc := pr_le_of_card (fun x : Store N b × Oracle N b h × (Fin s → Fin N) =>
+    have hc := pr_le_of_card (fun x : Payloads N b × Oracle N b h × (Fin s → Fin N) =>
         (queried A x.1 x.2.1).card < k ∧ ∀ i, x.2.2 i ∈ queried A x.1 x.2.1) (N ^ s) ((k - 1) ^ s) hN (by
       rw [hΩ]
       refine (card_filter_prod_le _ _ (Fintype.card (Oracle N b h) * ((k - 1) ^ s * N ^ s))
@@ -239,7 +239,7 @@ theorem _root_.Accounting.SecurityProofs.Remote.AuditRO : Accounting.Guarantees.
     rw [Nat.cast_pow, Nat.cast_pow, div_eq_mul_inv, div_eq_mul_inv, mul_pow, ENNReal.inv_pow]
   · -- a guessed tag
     refine (pr_exists_le _).trans ?_
-    have hi : ∀ i : Fin s, pr (fun x : Store N b × Oracle N b h × (Fin s → Fin N) =>
+    have hi : ∀ i : Fin s, pr (fun x : Payloads N b × Oracle N b h × (Fin s → Fin N) =>
         x.2.2 i ∉ queried A x.1 x.2.1 ∧ A.tags x.1 x.2.1 (x.2.2 i) = x.2.1 (x.2.2 i, x.1 (x.2.2 i))) ≤
         ((1 : ℕ) : ℝ≥0∞) / ((2 ^ h : ℕ) : ℝ≥0∞) := fun i =>
       pr_le_of_card _ (2 ^ h) 1 (by positivity) (by
@@ -253,7 +253,7 @@ theorem _root_.Accounting.SecurityProofs.Remote.AuditRO : Accounting.Guarantees.
   · -- compression
     refine (pr_le_of_card _ (2 ^ lam) (q.choose k) (by positivity) (by
       rw [hΩ]
-      refine (card_filter_prod_le' _ _ (q.choose k * Fintype.card (Store N b)) (fun y => ?_)).trans
+      refine (card_filter_prod_le' _ _ (q.choose k * Fintype.card (Payloads N b)) (fun y => ?_)).trans
         (le_of_eq (by simp only [Fintype.card_prod, Fintype.card_fun, Fintype.card_fin]; ring))
       exact card_compress_le A y.1 k lam)).trans (le_of_eq ?_)
     push_cast

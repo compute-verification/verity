@@ -75,7 +75,7 @@ its good set, which the store, the earlier passes' coins and pass `j`'s stream a
 Frozen (no-function, hash): as `RateAudit`. -/
 def RatePooled : Prop :=
   ∀ (P N b h ρ S L q r s K : ℕ) (A : Rate.Chain P N b h ρ S L q r s),
-    pr (fun x : Store N b × (Fin P → PassCoins N b h ρ r s) =>
+    pr (fun x : Payloads N b × (Fin P → PassCoins N b h ρ r s) =>
         (∀ j, (A.dev j x.2).Accepts x.1 (x.2 j).1 (A.oracle j x.1 x.2) (x.2 j).2.2) ∧
           ∑ j, ((A.dev j x.2).correct x.1 (x.2 j).1 (A.oracle j x.1 x.2)).card ≤ K)
       ≤ ((K : ℝ≥0∞) / (P * N)) ^ (s * P)
@@ -98,7 +98,7 @@ Frozen (no-function, hash): as `RateAudit`. -/
 def RateChainSampledRO : Prop :=
   ∀ (P N b h ρ S L q r s K lam τ : ℕ) (tier : ℕ → Fin τ) (A : Rate.Chain P N b h ρ S L q r s),
     (∀ j η E R O O', (A.device j η).side E R O = (A.device j η).side E R O') →
-    pr (fun x : Store N b × (Fin P → PassCoins N b h ρ r s) =>
+    pr (fun x : Payloads N b × (Fin P → PassCoins N b h ρ r s) =>
         (∀ j, (A.dev j x.2).Accepts x.1 (x.2 j).1 (A.oracle j x.1 x.2) (x.2 j).2.2) ∧
         ∑ j, (∑ t, (A.dev j x.2).tierReads tier t x.1 (x.2 j).1 (A.oracle j x.1 x.2) +
             (A.dev j x.2).rebuilt x.1 (x.2 j).1 (A.oracle j x.1 x.2) * b) + P * (S + (L - ρ) + lam) <
@@ -113,7 +113,7 @@ receipts: with `m` words a pass added to the slack, the probability is at most
 Frozen (no-function, hash): as `RateAudit`. -/
 def RateChainSampled : Prop :=
   ∀ (P N b h ρ S L q r s K m lam τ : ℕ) (tier : ℕ → Fin τ) (A : Rate.Chain P N b h ρ S L q r s),
-    pr (fun x : Store N b × (Fin P → PassCoins N b h ρ r s) =>
+    pr (fun x : Payloads N b × (Fin P → PassCoins N b h ρ r s) =>
         (∀ j, (A.dev j x.2).Accepts x.1 (x.2 j).1 (A.oracle j x.1 x.2) (x.2 j).2.2) ∧
         ∑ j, (∑ t, (A.dev j x.2).tierReads tier t x.1 (x.2 j).1 (A.oracle j x.1 x.2) +
             (A.dev j x.2).rebuilt x.1 (x.2 j).1 (A.oracle j x.1 x.2) * b) + P * (S + (L - ρ) + lam + m * b) <
@@ -137,7 +137,7 @@ independent of the window's other coins, so at each value of them it lands in th
 Frozen (no-function, hash): as `RateAudit`. -/
 def RateWindowDraw : Prop :=
   ∀ (P N b h ρ S L q r s d K : ℕ) (A : Rate.Chain P N b h ρ S L q r s),
-    pr (fun x : Store N b × WindowCoins P N b h ρ r s d =>
+    pr (fun x : Payloads N b × WindowCoins P N b h ρ r s d =>
         (∀ t, x.2.2 t ∈ A.correctAll x.1 x.2.1) ∧ (A.correctAll x.1 x.2.1).card ≤ K)
       ≤ ((K : ℝ≥0∞) / (P * N)) ^ d
 
@@ -162,7 +162,7 @@ window holding at most `K_w`, whose correct receipts are its good set.
 Frozen (no-function, hash): as `RateAudit`. -/
 def RateSessionDraw : Prop :=
   ∀ (n P N b h ρ S L q r s d K Kw : ℕ) (A : Rate.Session n P N b h ρ S L q r s d),
-    pr (fun x : Store N b × (Fin n → WindowCoins P N b h ρ r s d) =>
+    pr (fun x : Payloads N b × (Fin n → WindowCoins P N b h ρ r s d) =>
         (∀ w t, (x.2 w).2 t ∈ (A.chain w x.2).correctAll x.1 (x.2 w).1) ∧
           (∑ w, ((A.chain w x.2).correctAll x.1 (x.2 w).1).card ≤ K ∨
             ∃ w, ((A.chain w x.2).correctAll x.1 (x.2 w).1).card ≤ Kw))

@@ -43,12 +43,12 @@ namespace Chain
 variable {P N b h ρ S L q r s : ℕ}
 
 /-- A chained window's correct receipts, as the (pass, word) pairs whose opening its pooled draw passes. -/
-def correctAll (A : Chain P N b h ρ S L q r s) (E : Store N b) (ω : Fin P → PassCoins N b h ρ r s) :
+def correctAll (A : Chain P N b h ρ S L q r s) (E : Payloads N b) (ω : Fin P → PassCoins N b h ρ r s) :
     Finset (Fin P × Fin N) :=
   Finset.univ.filter (fun p => p.2 ∈ (A.dev p.1 ω).correct E (ω p.1).1 (A.oracle p.1 E ω))
 
 /-- A chained window's reads of every tier and its rebuilt words, in bits, summed over its passes. -/
-def spent {τ : ℕ} (A : Chain P N b h ρ S L q r s) (tier : ℕ → Fin τ) (E : Store N b)
+def spent {τ : ℕ} (A : Chain P N b h ρ S L q r s) (tier : ℕ → Fin τ) (E : Payloads N b)
     (ω : Fin P → PassCoins N b h ρ r s) : ℕ :=
   ∑ j, (∑ t, (A.dev j ω).tierReads tier t E (ω j).1 (A.oracle j E ω) +
     (A.dev j ω).rebuilt E (ω j).1 (A.oracle j E ω) * b)

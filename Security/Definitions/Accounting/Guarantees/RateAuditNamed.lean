@@ -52,7 +52,7 @@ Frozen (no-function, hash): as `RateAudit`, a bound in the random-oracle model o
 def RateConservationNamedRO : Prop :=
   ∀ (N b h ρ S L q k lam τ : ℕ) (tier : ℕ → Fin τ) (A : Rate.InteractiveDevice N b h ρ S L q),
     (∀ E R O O', A.side E R O = A.side E R O') →
-    pr (fun x : Store N b × Bits ρ × Oracle N b h ρ =>
+    pr (fun x : Payloads N b × Bits ρ × Oracle N b h ρ =>
         k ≤ (A.correct x.1 x.2.1 x.2.2).card ∧
           ∑ t, A.tierReads tier t x.1 x.2.1 x.2.2 + A.rebuilt x.1 x.2.1 x.2.2 * b + S + (L - ρ) + lam < k * b)
       ≤ (N : ℝ≥0∞) / 2 ^ h + (q.choose 2 : ℝ≥0∞) / 2 ^ h + (N.choose k : ℝ≥0∞) / 2 ^ lam
@@ -76,7 +76,7 @@ Frozen (no-function, hash): as `RateAudit`. -/
 def RatePaidNamedRO : Prop :=
   ∀ (N b h ρ S L q lam τ : ℕ) (tier : ℕ → Fin τ) (A : Rate.InteractiveDevice N b h ρ S L q),
     (∀ E R O O', A.side E R O = A.side E R O') →
-    pr (fun x : Store N b × Bits ρ × Oracle N b h ρ =>
+    pr (fun x : Payloads N b × Bits ρ × Oracle N b h ρ =>
         ∑ t, A.tierReads tier t x.1 x.2.1 x.2.2 + A.rebuilt x.1 x.2.1 x.2.2 * b + S + (L - ρ) + lam <
           (A.correct x.1 x.2.1 x.2.2).card * b)
       ≤ (N : ℝ≥0∞) / 2 ^ h + (q.choose 2 : ℝ≥0∞) / 2 ^ h + (2 ^ N : ℝ≥0∞) / 2 ^ lam
@@ -99,7 +99,7 @@ Frozen (no-function, hash): as `RateAudit`. -/
 def RateChainSampledNamedRO : Prop :=
   ∀ (P N b h ρ S L q r s K lam τ : ℕ) (tier : ℕ → Fin τ) (A : Rate.Chain P N b h ρ S L q r s),
     (∀ j η E R O O', (A.device j η).side E R O = (A.device j η).side E R O') →
-    pr (fun x : Store N b × (Fin P → PassCoins N b h ρ r s) =>
+    pr (fun x : Payloads N b × (Fin P → PassCoins N b h ρ r s) =>
         (∀ j, (A.dev j x.2).Accepts x.1 (x.2 j).1 (A.oracle j x.1 x.2) (x.2 j).2.2) ∧
         ∑ j, (∑ t, (A.dev j x.2).tierReads tier t x.1 (x.2 j).1 (A.oracle j x.1 x.2) +
             (A.dev j x.2).rebuilt x.1 (x.2 j).1 (A.oracle j x.1 x.2) * b) + P * (S + (L - ρ) + lam) <
@@ -134,7 +134,7 @@ Frozen (no-function, hash): as `RateAudit`. -/
 def RateSessionSampledNamedRO : Prop :=
   ∀ (n P N b h ρ S L q r s d K Kw lam τ : ℕ) (tier : ℕ → Fin τ) (A : Rate.Session n P N b h ρ S L q r s d),
     (∀ w η j ι E R O O', ((A.window w η).device j ι).side E R O = ((A.window w η).device j ι).side E R O') →
-    pr (fun x : Store N b × (Fin n → WindowCoins P N b h ρ r s d) =>
+    pr (fun x : Payloads N b × (Fin n → WindowCoins P N b h ρ r s d) =>
         (∀ w t, (x.2 w).2 t ∈ (A.chain w x.2).correctAll x.1 (x.2 w).1) ∧
           (∑ w, (A.chain w x.2).spent tier x.1 (x.2 w).1 + n * (P * (S + (L - ρ) + lam)) < (K + 1) * b ∨
             ∃ w, (A.chain w x.2).spent tier x.1 (x.2 w).1 + P * (S + (L - ρ) + lam) < (Kw + 1) * b))

@@ -18,9 +18,9 @@ open Pous (Bits)
 value of `n` bits. Its bounds are `Device`'s: in every world the program reads at most `c` bits of side sources,
 regenerates at most `G` blocks and makes at most `q` oracle queries. -/
 structure JointDevice (N b h S c G q n : ℕ) where
-  state : Store N b → Bits n → Bits S
-  mem : Store N b → Bits n → ℕ → Bool
-  side : Store N b → Bits n → ℕ → Bool
+  state : Payloads N b → Bits n → Bits S
+  mem : Payloads N b → Bits n → ℕ → Bool
+  side : Payloads N b → Bits n → ℕ → Bool
   chip : Bits S → Chip N b h ((Fin N → Bits h) × Bits n)
   bounded : ∀ (st : Bits S) (w : World N b h),
     (chip st).sideBits w ≤ c ∧ (chip st).regens w ≤ G ∧ ((chip st).queries w).length ≤ q
@@ -30,16 +30,16 @@ namespace JointDevice
 variable {N b h S c G q n : ℕ}
 
 /-- The world the chip runs in, for store `E`, the bits `z` and oracle `O`. -/
-def world (A : JointDevice N b h S c G q n) (E : Store N b) (z : Bits n) (O : Oracle N b h) : World N b h :=
+def world (A : JointDevice N b h S c G q n) (E : Payloads N b) (z : Bits n) (O : Oracle N b h) : World N b h :=
   ⟨O, A.mem E z, A.side E z, E⟩
 
 /-- What the chip outputs: its tags and its value. -/
-def out (A : JointDevice N b h S c G q n) (E : Store N b) (z : Bits n) (O : Oracle N b h) :
+def out (A : JointDevice N b h S c G q n) (E : Payloads N b) (z : Bits n) (O : Oracle N b h) :
     (Fin N → Bits h) × Bits n :=
   (A.chip (A.state E z)).run (A.world E z O)
 
 /-- The device's ingress in the window, in bits. -/
-def ingress (A : JointDevice N b h S c G q n) (E : Store N b) (z : Bits n) (O : Oracle N b h) : ℕ :=
+def ingress (A : JointDevice N b h S c G q n) (E : Payloads N b) (z : Bits n) (O : Oracle N b h) : ℕ :=
   (A.chip (A.state E z)).ingressBits (A.world E z O)
 
 /-- The chip's view determines `z`: in every world of a store, `z` and an oracle, its value is `z`. -/
@@ -47,7 +47,7 @@ def Recovers (A : JointDevice N b h S c G q n) : Prop :=
   ∀ E z O, (A.out E z O).2 = z
 
 /-- The verifier accepts: every sampled block's committed tag is the oracle's tag of that block. -/
-def Accepts {s : ℕ} (A : JointDevice N b h S c G q n) (E : Store N b) (z : Bits n) (O : Oracle N b h)
+def Accepts {s : ℕ} (A : JointDevice N b h S c G q n) (E : Payloads N b) (z : Bits n) (O : Oracle N b h)
     (I : Fin s → Fin N) : Prop :=
   ∀ i, (A.out E z O).1 (I i) = O (I i, E (I i))
 

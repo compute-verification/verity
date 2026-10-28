@@ -118,9 +118,9 @@ store before the seed and the stream, and a chip program with completions from t
 takes in at most `L` bits over the side link (free side sources and the certified stream together) and makes at most
 `q` oracle queries. -/
 structure PartialDevice (N b h ρ S L q : ℕ) where
-  state : Store N b → Bits S
-  mem : Store N b → ℕ → Bool
-  side : Store N b → ℕ → Bool
+  state : Payloads N b → Bits S
+  mem : Payloads N b → ℕ → Bool
+  side : Payloads N b → ℕ → Bool
   chip : Bits S → PChip N b h ρ (Fin N → Bits h)
   bounded : ∀ (st : Bits S) (w : World N b h ρ), (chip st).linkBits w ≤ L ∧ ((chip st).queries w).length ≤ q
 
@@ -129,36 +129,36 @@ namespace PartialDevice
 variable {N b h ρ S L q : ℕ}
 
 /-- The world a device's chip runs in, for store `E`, certified stream `R` and oracle `O`. -/
-def world (A : PartialDevice N b h ρ S L q) (E : Store N b) (R : Bits ρ) (O : Oracle N b h ρ) : World N b h ρ :=
+def world (A : PartialDevice N b h ρ S L q) (E : Payloads N b) (R : Bits ρ) (O : Oracle N b h ρ) : World N b h ρ :=
   ⟨O, A.mem E, A.side E, R, E⟩
 
 /-- The tags the device commits to. -/
-def tags (A : PartialDevice N b h ρ S L q) (E : Store N b) (R : Bits ρ) (O : Oracle N b h ρ) : Fin N → Bits h :=
+def tags (A : PartialDevice N b h ρ S L q) (E : Payloads N b) (R : Bits ρ) (O : Oracle N b h ρ) : Fin N → Bits h :=
   (A.chip (A.state E)).run (A.world E R O)
 
 /-- The device's ingress in the window: every bit it read from device memory, in bits. -/
-def ingress (A : PartialDevice N b h ρ S L q) (E : Store N b) (R : Bits ρ) (O : Oracle N b h ρ) : ℕ :=
+def ingress (A : PartialDevice N b h ρ S L q) (E : Payloads N b) (R : Bits ρ) (O : Oracle N b h ρ) : ℕ :=
   (A.chip (A.state E)).ingressBits (A.world E R O)
 
 /-- The device's footprint in the window: the distinct device-memory addresses it read, in bits. -/
-def footprint (A : PartialDevice N b h ρ S L q) (E : Store N b) (R : Bits ρ) (O : Oracle N b h ρ) : ℕ :=
+def footprint (A : PartialDevice N b h ρ S L q) (E : Payloads N b) (R : Bits ρ) (O : Oracle N b h ρ) : ℕ :=
   ((A.chip (A.state E)).addrs (A.world E R O)).card
 
 /-- The bits the device completed in the window. -/
-def completed (A : PartialDevice N b h ρ S L q) (E : Store N b) (R : Bits ρ) (O : Oracle N b h ρ) : ℕ :=
+def completed (A : PartialDevice N b h ρ S L q) (E : Payloads N b) (R : Bits ρ) (O : Oracle N b h ρ) : ℕ :=
   (A.chip (A.state E)).completed (A.world E R O)
 
 /-- The compute the device's completions cost in the window, at `cost x` per completion of `x` bits. -/
-def work (A : PartialDevice N b h ρ S L q) (cost : ℕ → ℕ) (E : Store N b) (R : Bits ρ) (O : Oracle N b h ρ) : ℕ :=
+def work (A : PartialDevice N b h ρ S L q) (cost : ℕ → ℕ) (E : Payloads N b) (R : Bits ρ) (O : Oracle N b h ρ) : ℕ :=
   (A.chip (A.state E)).work cost (A.world E R O)
 
 /-- The device's compute in the window, at `c_tag` per oracle query and `cost x` per completion of `x` bits. -/
-def compute (A : PartialDevice N b h ρ S L q) (cTag : ℕ) (cost : ℕ → ℕ) (E : Store N b) (R : Bits ρ)
+def compute (A : PartialDevice N b h ρ S L q) (cTag : ℕ) (cost : ℕ → ℕ) (E : Payloads N b) (R : Bits ρ)
     (O : Oracle N b h ρ) : ℕ :=
   ((A.chip (A.state E)).queries (A.world E R O)).length * cTag + A.work cost E R O
 
 /-- The verifier accepts: every sampled word's committed tag is the oracle's tag of that word under the stream. -/
-def Accepts {s : ℕ} (A : PartialDevice N b h ρ S L q) (E : Store N b) (R : Bits ρ) (O : Oracle N b h ρ)
+def Accepts {s : ℕ} (A : PartialDevice N b h ρ S L q) (E : Payloads N b) (R : Bits ρ) (O : Oracle N b h ρ)
     (I : Fin s → Fin N) : Prop :=
   ∀ i, A.tags E R O (I i) = O (R, I i, E (I i))
 

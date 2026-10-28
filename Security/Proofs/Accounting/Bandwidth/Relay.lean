@@ -33,11 +33,11 @@ def atOracle (A : RelayDevice N b h S c G q) (O : Oracle N b h) : Device N b h S
   bounded := A.bounded
 
 /-- The blocks whose committed tag is the oracle's. -/
-def correct (A : RelayDevice N b h S c G q) (E : Store N b) (O : Oracle N b h) : Finset (Fin N) :=
+def correct (A : RelayDevice N b h S c G q) (E : Payloads N b) (O : Oracle N b h) : Finset (Fin N) :=
   Finset.univ.filter (fun j => A.tags E O j = O (j, E j))
 
 /-- The blocks with a correct tag whose contents the chip never queried the oracle at. -/
-def relayed (A : RelayDevice N b h S c G q) (E : Store N b) (O : Oracle N b h) : Finset (Fin N) :=
+def relayed (A : RelayDevice N b h S c G q) (E : Payloads N b) (O : Oracle N b h) : Finset (Fin N) :=
   A.correct E O \ queried (A.atOracle O) E O
 
 end RelayDevice
@@ -46,7 +46,7 @@ namespace AuditRelay
 
 open RelayDevice
 
-theorem card_relay_le (A : RelayDevice N b h S c G q) (E : Store N b) (m : ℕ)
+theorem card_relay_le (A : RelayDevice N b h S c G q) (E : Payloads N b) (m : ℕ)
     [DecidablePred (fun O : Oracle N b h => m ≤ (A.relayed E O).card)] :
     (Finset.univ.filter (fun O : Oracle N b h => m ≤ (A.relayed E O).card)).card * 2 ^ (h * m) ≤
       N.choose m * 2 ^ c * Fintype.card (Oracle N b h) := by
@@ -137,7 +137,7 @@ open Bandwidth.AuditRO Bandwidth.AuditRelay Bandwidth.RelayDevice
 theorem AuditRelay : Bandwidth.Guarantees.AuditRelay := by
   classical
   intro N b h S c G q s k m lam A
-  have hsplit : ∀ x : Store N b × Oracle N b h × (Fin s → Fin N),
+  have hsplit : ∀ x : Payloads N b × Oracle N b h × (Fin s → Fin N),
       A.Accepts x.1 x.2.1 x.2.2 ∧ A.ingress x.1 x.2.1 + S + c + m * b + G * b + lam < k * b →
       (((A.correct x.1 x.2.1).card < k ∧ ∀ i, x.2.2 i ∈ A.correct x.1 x.2.1) ∨
         m ≤ (A.relayed x.1 x.2.1).card) ∨
@@ -158,8 +158,8 @@ theorem AuditRelay : Bandwidth.Guarantees.AuditRelay := by
       change A.ingress E O + S + c + G * b + lam < (k - m) * b
       rw [e]
       omega
-  have hΩ : Fintype.card (Store N b × Oracle N b h × (Fin s → Fin N)) =
-      Fintype.card (Store N b) * (Fintype.card (Oracle N b h) * N ^ s) := by
+  have hΩ : Fintype.card (Payloads N b × Oracle N b h × (Fin s → Fin N)) =
+      Fintype.card (Payloads N b) * (Fintype.card (Oracle N b h) * N ^ s) := by
     simp only [Fintype.card_prod, Fintype.card_fun, Fintype.card_fin]
   by_cases hN : N ^ s = 0
   · rw [pr_eq_zero_of_card _ (by rw [hΩ, hN]; simp)]
@@ -167,7 +167,7 @@ theorem AuditRelay : Bandwidth.Guarantees.AuditRelay := by
   refine (pr_mono hsplit).trans ?_
   refine (pr_or_le _ _).trans (add_le_add ((pr_or_le _ _).trans (add_le_add ?_ ?_)) ?_)
   · -- the sample misses the blocks without a correct tag
-    have hc := pr_le_of_card (fun x : Store N b × Oracle N b h × (Fin s → Fin N) =>
+    have hc := pr_le_of_card (fun x : Payloads N b × Oracle N b h × (Fin s → Fin N) =>
         (A.correct x.1 x.2.1).card < k ∧ ∀ i, x.2.2 i ∈ A.correct x.1 x.2.1) (N ^ s) ((k - 1) ^ s) hN (by
       rw [hΩ]
       refine (card_filter_prod_le _ _ (Fintype.card (Oracle N b h) * ((k - 1) ^ s * N ^ s))
@@ -181,7 +181,7 @@ theorem AuditRelay : Bandwidth.Guarantees.AuditRelay := by
     refine hc.trans (le_of_eq ?_)
     rw [Nat.cast_pow, Nat.cast_pow, div_eq_mul_inv, div_eq_mul_inv, mul_pow, ENNReal.inv_pow]
   · -- relayed tags
-    have hc := pr_le_of_card (fun x : Store N b × Oracle N b h × (Fin s → Fin N) =>
+    have hc := pr_le_of_card (fun x : Payloads N b × Oracle N b h × (Fin s → Fin N) =>
         m ≤ (A.relayed x.1 x.2.1).card) (2 ^ (h * m)) (N.choose m * 2 ^ c) (by positivity) (by
       rw [hΩ]
       refine (card_filter_prod_le _ _ (N.choose m * 2 ^ c * Fintype.card (Oracle N b h) * N ^ s)
@@ -195,7 +195,7 @@ theorem AuditRelay : Bandwidth.Guarantees.AuditRelay := by
   · -- compression at `k − m` blocks
     refine (pr_le_of_card _ (2 ^ lam) (q.choose (k - m)) (by positivity) (by
       rw [hΩ]
-      refine (card_filter_prod_le' _ _ (q.choose (k - m) * Fintype.card (Store N b)) (fun y => ?_)).trans
+      refine (card_filter_prod_le' _ _ (q.choose (k - m) * Fintype.card (Payloads N b)) (fun y => ?_)).trans
         (le_of_eq (by simp only [Fintype.card_prod, Fintype.card_fun, Fintype.card_fin]; ring))
       exact card_compress_le (A.atOracle y.1) y.1 (k - m) lam)).trans (le_of_eq ?_)
     push_cast

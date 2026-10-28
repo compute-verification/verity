@@ -88,7 +88,7 @@ def RemoteSessionConservation : Prop :=
     Assumptions.WorkHardness b rounds cRoot cost →
     (∀ w η j ι c, Assumptions.SquaringCeiling cost F ((A.window w η).device j ι c)) →
     (∀ w η j ι c E R O O', ((A.window w η).device j ι c).side E R O = ((A.window w η).device j ι c).side E R O') →
-    pr (fun x : Store N b × (Fin n → WindowCoins P N b h ρ r s d) =>
+    pr (fun x : Payloads N b × (Fin n → WindowCoins P N b h ρ r s d) =>
         (∀ w t, (x.2 w).2 t ∈ (A.win w x.2).correctAll x.1 (x.2 w).1) ∧
           ((((∑ w, (A.win w x.2).reads tier x.1 (x.2 w).1 : ℕ)) : ℝ) <
               (1 - (dbar + Deployed.gammaPass N b ρ S L lam rounds cRoot F)) * (n * P * N * b) ∨
@@ -123,7 +123,7 @@ def RemoteSessionConservationDeployed : Prop :=
     Assumptions.WorkHardness 32768 3 cRoot cost →
     (∀ w η j ι c, Assumptions.SquaringCeiling cost F ((A.window w η).device j ι c)) →
     (∀ w η j ι c E R O O', ((A.window w η).device j ι c).side E R O = ((A.window w η).device j ι c).side E R O') →
-    pr (fun x : Store N 32768 × (Fin n → WindowCoins P N 32768 512 ρ r s 2773) =>
+    pr (fun x : Payloads N 32768 × (Fin n → WindowCoins P N 32768 512 ρ r s 2773) =>
         (∀ w t, (x.2 w).2 t ∈ (A.win w x.2).correctAll x.1 (x.2 w).1) ∧
           ((((∑ w, (A.win w x.2).reads tier x.1 (x.2 w).1 : ℕ)) : ℝ) <
               (1 - (0.0015 + Deployed.gammaPass N 32768 ρ S L lam 3 cRoot F)) * (n * P * N * 32768) ∨
@@ -253,7 +253,7 @@ def RemoteSessionConservationRelay : Prop :=
     0 < n → 0 < P → 0 < N → 0 < b → 0 < rounds * cRoot → dw ≤ 1 →
     Assumptions.WorkHardness b rounds cRoot cost →
     (∀ w η j ι c, Assumptions.SquaringCeiling cost F ((A.window w η).device j ι c)) →
-    pr (fun x : Store N b × (Fin n → WindowCoins P N b h ρ r s d) =>
+    pr (fun x : Payloads N b × (Fin n → WindowCoins P N b h ρ r s d) =>
         (∀ w t, (x.2 w).2 t ∈ (A.win w x.2).correctAll x.1 (x.2 w).1) ∧
           ((((∑ w, (A.win w x.2).reads tier x.1 (x.2 w).1 : ℕ)) : ℝ) <
               (1 - (dbar + Deployed.gammaPass N b ρ S L (lam + m * b) rounds cRoot F)) * (n * P * N * b) ∨

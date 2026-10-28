@@ -221,12 +221,12 @@ namespace RelayDevice
 /-- With side sources that ignore the oracle, a collision among the run's queries has probability at most
 `C(q, 2)/2^h`. -/
 theorem pr_collides_le (A : RelayDevice N b h ρ S L q) (hA : ∀ E R O O', A.side E R O = A.side E R O') :
-    pr (fun x : Store N b × Bits ρ × Oracle N b h ρ =>
+    pr (fun x : Payloads N b × Bits ρ × Oracle N b h ρ =>
         Collides x.2.2 ((A.chip (A.state x.1)).queries (A.world x.1 x.2.1 x.2.2)))
       ≤ (q.choose 2 : ℝ≥0∞) / 2 ^ h := by
   classical
   refine (pr_le_of_card _ (2 ^ h) (q.choose 2) (by positivity) ?_).trans (le_of_eq (by push_cast; rfl))
-  calc _ ≤ Fintype.card (Store N b) * (Fintype.card (Bits ρ) * (q.choose 2 * Fintype.card (Oracle N b h ρ))) := by
+  calc _ ≤ Fintype.card (Payloads N b) * (Fintype.card (Bits ρ) * (q.choose 2 * Fintype.card (Oracle N b h ρ))) := by
         refine card_filter_prod_le _ _ _ (fun E => card_filter_prod_le _ _ _ (fun R => ?_))
         let O₀ : Oracle N b h ρ := fun _ _ => false
         have hw : ∀ O, A.world E R O = { A.world E R O₀ with oracle := O } := fun O => by
@@ -236,7 +236,7 @@ theorem pr_collides_le (A : RelayDevice N b h ρ S L q) (hA : ∀ E R O O', A.si
         refine le_trans (le_of_eq ?_) (card_collides_le (A.chip (A.state E)) (A.world E R O₀) hq)
         congr 2
         exact Finset.filter_congr (fun O _ => by simp only [hw O])
-    _ = q.choose 2 * Fintype.card (Store N b × Bits ρ × Oracle N b h ρ) := by
+    _ = q.choose 2 * Fintype.card (Payloads N b × Bits ρ × Oracle N b h ρ) := by
         simp only [Fintype.card_prod]
         ring
 
@@ -256,7 +256,7 @@ open Classical in
 /-- The stores and streams a code describes: at each named word, the stream and the contents of the query it is
 located at. -/
 noncomputable def fibNamed (A : RelayDevice N b h ρ S L q) (O : Oracle N b h ρ) (r : ℕ)
-    (code : Bits S × Bits r × Finset (Fin N)) : Finset (Store N b × Bits ρ) :=
+    (code : Bits S × Bits r × Finset (Fin N)) : Finset (Payloads N b × Bits ρ) :=
   Finset.univ.filter (fun x => ∀ j ∈ code.2.2, ∃ y, namedAt A O r code j = some y ∧ y.1 = x.2 ∧ x.1 j = y.2.2)
 
 /-- A code that names a word fixes the stream, and the words it names. -/
@@ -286,13 +286,13 @@ theorem card_fibNamed (A : RelayDevice N b h ρ S L q) (O : Oracle N b h ρ) (r 
 /-- `k` correct receipts whose words were queried, no collision, and too little else: a `C(N, k)·2^-λ` fraction of
 stores and streams, by compression with the named words. -/
 theorem card_compress_named_le (A : RelayDevice N b h ρ S L q) (O : Oracle N b h ρ) (k lam : ℕ) (hk : 0 < k)
-    [DecidablePred (fun x : Store N b × Bits ρ =>
+    [DecidablePred (fun x : Payloads N b × Bits ρ =>
       k ≤ (A.correct x.1 x.2 O ∩ queried A x.1 x.2 O).card ∧ taken A x.1 x.2 O + lam < k * b + ρ ∧
         ¬ Collides O ((A.chip (A.state x.1)).queries (A.world x.1 x.2 O)))] :
-    (Finset.univ.filter (fun x : Store N b × Bits ρ =>
+    (Finset.univ.filter (fun x : Payloads N b × Bits ρ =>
         k ≤ (A.correct x.1 x.2 O ∩ queried A x.1 x.2 O).card ∧ taken A x.1 x.2 O + lam < k * b + ρ ∧
           ¬ Collides O ((A.chip (A.state x.1)).queries (A.world x.1 x.2 O)))).card * 2 ^ lam ≤
-      N.choose k * Fintype.card (Store N b × Bits ρ) := by
+      N.choose k * Fintype.card (Payloads N b × Bits ρ) := by
   classical
   by_cases hpar : S + lam ≤ k * b + ρ ∧ k ≤ N
   swap
@@ -303,7 +303,7 @@ theorem card_compress_named_le (A : RelayDevice N b h ρ S L q) (O : Oracle N b 
   set r := k * b + ρ - S - lam with hr
   let codes : Finset (Bits S × Bits r × Finset (Fin N)) :=
     Finset.univ ×ˢ Finset.univ ×ˢ (Finset.univ : Finset (Fin N)).powersetCard k
-  have hsub : Finset.univ.filter (fun x : Store N b × Bits ρ =>
+  have hsub : Finset.univ.filter (fun x : Payloads N b × Bits ρ =>
         k ≤ (A.correct x.1 x.2 O ∩ queried A x.1 x.2 O).card ∧ taken A x.1 x.2 O + lam < k * b + ρ ∧
           ¬ Collides O ((A.chip (A.state x.1)).queries (A.world x.1 x.2 O))) ⊆
       codes.biUnion (fibNamed A O r) := by
@@ -352,8 +352,8 @@ theorem card_compress_named_le (A : RelayDevice N b h ρ S L q) (O : Oracle N b 
         exact ⟨_, rfl, rfl, rfl⟩
   have hcodes : codes.card = 2 ^ S * (2 ^ r * N.choose k) := by
     simp [codes, Finset.card_product, Finset.card_powersetCard]
-  have hΩ : Fintype.card (Store N b × Bits ρ) = (2 ^ b) ^ N * 2 ^ ρ := by simp
-  calc (Finset.univ.filter (fun x : Store N b × Bits ρ =>
+  have hΩ : Fintype.card (Payloads N b × Bits ρ) = (2 ^ b) ^ N * 2 ^ ρ := by simp
+  calc (Finset.univ.filter (fun x : Payloads N b × Bits ρ =>
           k ≤ (A.correct x.1 x.2 O ∩ queried A x.1 x.2 O).card ∧ taken A x.1 x.2 O + lam < k * b + ρ ∧
             ¬ Collides O ((A.chip (A.state x.1)).queries (A.world x.1 x.2 O)))).card * 2 ^ lam
       ≤ (codes.card * (2 ^ b) ^ (N - k)) * 2 ^ lam := by
@@ -366,7 +366,7 @@ theorem card_compress_named_le (A : RelayDevice N b h ρ S L q) (O : Oracle N b 
             exact hc.2
           exact (card_fibNamed A O r code (by omega)).trans (le_of_eq (by rw [hk']))
         · rw [smul_eq_mul]
-    _ = N.choose k * Fintype.card (Store N b × Bits ρ) := by
+    _ = N.choose k * Fintype.card (Payloads N b × Bits ρ) := by
         have e1 : (2 : ℕ) ^ S * 2 ^ r * 2 ^ lam = 2 ^ (k * b) * 2 ^ ρ := by
           rw [← pow_add, ← pow_add, ← pow_add]
           congr 1
@@ -381,15 +381,15 @@ theorem card_compress_named_le (A : RelayDevice N b h ρ S L q) (O : Oracle N b 
 /-- `k` correct receipts whose words were queried, no collision, and too little else: probability at most
 `C(N, k)/2^λ`. -/
 theorem pr_compress_named_le (A : RelayDevice N b h ρ S L q) (k lam : ℕ) (hk : 0 < k) :
-    pr (fun x : Store N b × Bits ρ × Oracle N b h ρ =>
+    pr (fun x : Payloads N b × Bits ρ × Oracle N b h ρ =>
         k ≤ (A.correct x.1 x.2.1 x.2.2 ∩ queried A x.1 x.2.1 x.2.2).card ∧
           taken A x.1 x.2.1 x.2.2 + lam < k * b + ρ ∧
           ¬ Collides x.2.2 ((A.chip (A.state x.1)).queries (A.world x.1 x.2.1 x.2.2)))
       ≤ (N.choose k : ℝ≥0∞) / 2 ^ lam := by
   classical
   refine (pr_le_of_card _ (2 ^ lam) (N.choose k) (by positivity) (by
-    rw [card_filter_equiv (Equiv.prodAssoc (Store N b) (Bits ρ) (Oracle N b h ρ)).symm]
-    refine (card_filter_prod_le' _ _ (N.choose k * Fintype.card (Store N b × Bits ρ)) (fun O => ?_)).trans
+    rw [card_filter_equiv (Equiv.prodAssoc (Payloads N b) (Bits ρ) (Oracle N b h ρ)).symm]
+    refine (card_filter_prod_le' _ _ (N.choose k * Fintype.card (Payloads N b × Bits ρ)) (fun O => ?_)).trans
       (le_of_eq (by simp only [Fintype.card_prod]; ring))
     exact card_compress_named_le A O k lam hk)).trans (le_of_eq ?_)
   push_cast
@@ -398,14 +398,14 @@ theorem pr_compress_named_le (A : RelayDevice N b h ρ S L q) (k lam : ℕ) (hk 
 /-- At some count `k ≤ N`, `k` correct receipts whose words were queried, no collision, and too little else:
 probability at most `∑ₖ C(N, k)/2^λ = 2^N/2^λ`. -/
 theorem pr_compress_any_named_le (A : RelayDevice N b h ρ S L q) (lam : ℕ) :
-    pr (fun x : Store N b × Bits ρ × Oracle N b h ρ => ∃ k : Fin (N + 1),
+    pr (fun x : Payloads N b × Bits ρ × Oracle N b h ρ => ∃ k : Fin (N + 1),
         0 < k.1 ∧ k.1 ≤ (A.correct x.1 x.2.1 x.2.2 ∩ queried A x.1 x.2.1 x.2.2).card ∧
           taken A x.1 x.2.1 x.2.2 + lam < k.1 * b + ρ ∧
           ¬ Collides x.2.2 ((A.chip (A.state x.1)).queries (A.world x.1 x.2.1 x.2.2)))
       ≤ (2 ^ N : ℝ≥0∞) / 2 ^ lam := by
   classical
   refine (pr_exists_le _).trans ?_
-  calc ∑ k : Fin (N + 1), pr (fun x : Store N b × Bits ρ × Oracle N b h ρ =>
+  calc ∑ k : Fin (N + 1), pr (fun x : Payloads N b × Bits ρ × Oracle N b h ρ =>
           0 < k.1 ∧ k.1 ≤ (A.correct x.1 x.2.1 x.2.2 ∩ queried A x.1 x.2.1 x.2.2).card ∧
             taken A x.1 x.2.1 x.2.2 + lam < k.1 * b + ρ ∧
             ¬ Collides x.2.2 ((A.chip (A.state x.1)).queries (A.world x.1 x.2.1 x.2.2)))

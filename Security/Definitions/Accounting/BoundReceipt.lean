@@ -39,14 +39,14 @@ named assumptions), read in the generic model.
 namespace Accounting.BoundReceipt
 
 open Pous (Bits)
-open Accounting.Rate (Store Oracle Chip World Device)
+open Accounting.Rate (Payloads Oracle Chip World Device)
 
 /-- The mix at the window's fresh challenge: block `j`'s receipt is `Mix(j, E_j, z_j)`, an `h`-bit receipt of the
 block's index, its encoded contents (`b` bits) and the tile output its receipt binds (`a` bits). -/
 abbrev Mix (N a b h : ℕ) : Type := Fin N × Bits b × Bits a → Bits h
 
 /-- What a window's checks read besides its sample: the tile outputs and the mix. -/
-abbrev Pub (N a b h : ℕ) : Type := Store N a × Mix N a b h
+abbrev Pub (N a b h : ℕ) : Type := Payloads N a × Mix N a b h
 
 /-- A window's coins: the live coins (`Verity.Coins`) with the tile outputs and the mix as their public part, and the
 `s` sampled blocks as their draw. -/
@@ -61,16 +61,16 @@ def noStream : Bits 0 := fun i => i.elim0
 variable {N a b h : ℕ}
 
 /-- The mix as the GPU reaches it, at the tile outputs `z` it holds: block `j` at contents `x` is `Mix(j, x, z_j)`. -/
-def atZ (G : Mix N a b h) (z : Store N a) : Oracle N b h 0 := fun x => G (x.2.1, x.2.2, z x.2.1)
+def atZ (G : Mix N a b h) (z : Payloads N a) : Oracle N b h 0 := fun x => G (x.2.1, x.2.2, z x.2.1)
 
 /-- The mix as the rest reaches it, at the store `E` it holds: block `j` at tile output `y` is `Mix(j, E_j, y)`. -/
-def atE (G : Mix N a b h) (E : Store N b) : Oracle N a h 0 := fun x => G (x.2.1, E x.2.1, x.2.2)
+def atE (G : Mix N a b h) (E : Payloads N b) : Oracle N a h 0 := fun x => G (x.2.1, E x.2.1, x.2.2)
 
 /-- The rest of the node at one store: its memory, what the GPU sends it as a function of the tile outputs, and its
 chip, which takes in at most `Lz` bits from the GPU and makes at most `qz` mix queries in every world. -/
 structure Rest (N a h Lz qz : ℕ) where
   mem : ℕ → Bool
-  side : Store N a → ℕ → Bool
+  side : Payloads N a → ℕ → Bool
   chip : Chip N a h 0 (Fin N → Bits h)
   bounded : ∀ w : World N a h 0, chip.linkBits w ≤ Lz ∧ (chip.queries w).length ≤ qz
 
@@ -80,56 +80,61 @@ variable {Lz qz : ℕ}
 
 /-- The world the rest's chip runs in: the mix at the store, its memory, what the GPU sent, and the tile outputs, which
 its `rebuild` steps recompute. -/
-def world (B : Rest N a h Lz qz) (E : Store N b) (z : Store N a) (G : Mix N a b h) : World N a h 0 :=
+def world (B : Rest N a h Lz qz) (E : Payloads N b) (z : Payloads N a) (G : Mix N a b h) : World N a h 0 :=
   ⟨atE G E, B.mem, B.side z, noStream, z⟩
 
 /-- The receipts the rest commits to. -/
-def receipts (B : Rest N a h Lz qz) (E : Store N b) (z : Store N a) (G : Mix N a b h) : Fin N → Bits h :=
+def receipts (B : Rest N a h Lz qz) (E : Payloads N b) (z : Payloads N a) (G : Mix N a b h) : Fin N → Bits h :=
   B.chip.run (B.world E z G)
 
 end Rest
 
 /-- A node: the GPU at each value of the tile outputs, and the rest at each store. -/
 structure Node (N a b h S L q Lz qz : ℕ) where
-  gpu : Store N a → Device N b h 0 S L q
-  rest : Store N b → Rest N a h Lz qz
+  gpu : Payloads N a → Device N b h 0 S L q
+  rest : Payloads N b → Rest N a h Lz qz
 
 namespace Node
 
 variable {S L q Lz qz : ℕ}
 
 /-- The receipts the GPU commits to. -/
-def gpuReceipts (A : Node N a b h S L q Lz qz) (E : Store N b) (z : Store N a) (G : Mix N a b h) : Fin N → Bits h :=
+def gpuReceipts (A : Node N a b h S L q Lz qz) (E : Payloads N b) (z : Payloads N a)
+    (G : Mix N a b h) : Fin N → Bits h :=
   (A.gpu z).tags E noStream (atZ G z)
 
 /-- The receipts the rest commits to. -/
-def restReceipts (A : Node N a b h S L q Lz qz) (E : Store N b) (z : Store N a) (G : Mix N a b h) : Fin N → Bits h :=
+def restReceipts (A : Node N a b h S L q Lz qz) (E : Payloads N b) (z : Payloads N a)
+    (G : Mix N a b h) : Fin N → Bits h :=
   (A.rest E).receipts E z G
 
 /-- The verifier accepts: every sampled block's receipt, from the GPU or from the rest, is the mix of its index, its
 contents and its tile output. -/
-def Accepts {s : ℕ} (A : Node N a b h S L q Lz qz) (E : Store N b) (z : Store N a) (G : Mix N a b h)
+def Accepts {s : ℕ} (A : Node N a b h S L q Lz qz) (E : Payloads N b) (z : Payloads N a) (G : Mix N a b h)
     (I : Fin s → Fin N) : Prop :=
   ∀ i, A.gpuReceipts E z G (I i) = G (I i, E (I i), z (I i)) ∨ A.restReceipts E z G (I i) = G (I i, E (I i), z (I i))
 
 /-- The GPU made block `j`'s receipt: it queried the mix at the block's contents, under the tile outputs it holds. -/
-def MadeAtGpu (A : Node N a b h S L q Lz qz) (E : Store N b) (z : Store N a) (G : Mix N a b h) (j : Fin N) : Prop :=
+def MadeAtGpu (A : Node N a b h S L q Lz qz) (E : Payloads N b) (z : Payloads N a)
+    (G : Mix N a b h) (j : Fin N) : Prop :=
   (noStream, j, E j) ∈ ((A.gpu z).chip ((A.gpu z).state E)).queries ((A.gpu z).world E noStream (atZ G z))
 
 /-- The rest made block `j`'s receipt: it queried the mix at the block's tile output, under the store it holds. -/
-def MadeAtRest (A : Node N a b h S L q Lz qz) (E : Store N b) (z : Store N a) (G : Mix N a b h) (j : Fin N) : Prop :=
+def MadeAtRest (A : Node N a b h S L q Lz qz) (E : Payloads N b) (z : Payloads N a)
+    (G : Mix N a b h) (j : Fin N) : Prop :=
   (noStream, j, z j) ∈ (A.rest E).chip.queries ((A.rest E).world E z G)
 
 /-- The GPU's footprint in the window: the distinct HBM addresses it read, in bits. -/
-def footprint (A : Node N a b h S L q Lz qz) (E : Store N b) (z : Store N a) (G : Mix N a b h) : ℕ :=
+def footprint (A : Node N a b h S L q Lz qz) (E : Payloads N b) (z : Payloads N a) (G : Mix N a b h) : ℕ :=
   (A.gpu z).footprint E noStream (atZ G z)
 
 /-- The GPU's compute in the window, at `c_tag` per mix query and `c_enc` per rebuilt block. -/
-def compute (A : Node N a b h S L q Lz qz) (cTag cEnc : ℕ) (E : Store N b) (z : Store N a) (G : Mix N a b h) : ℕ :=
+def compute (A : Node N a b h S L q Lz qz) (cTag cEnc : ℕ) (E : Payloads N b) (z : Payloads N a)
+    (G : Mix N a b h) : ℕ :=
   (A.gpu z).compute cTag cEnc E noStream (atZ G z)
 
 /-- The rest's tile work in the window, at `w` per tile output it recomputed. -/
-def tileWork (A : Node N a b h S L q Lz qz) (w : ℕ) (E : Store N b) (z : Store N a) (G : Mix N a b h) : ℕ :=
+def tileWork (A : Node N a b h S L q Lz qz) (w : ℕ) (E : Payloads N b) (z : Payloads N a) (G : Mix N a b h) : ℕ :=
   (A.rest E).chip.rebuilds ((A.rest E).world E z G) * w
 
 end Node
@@ -139,12 +144,12 @@ namespace Node
 variable {S L q Lz qz : ℕ}
 
 /-- The GPU's mix queries in the window, each a block and contents, under the tile outputs it holds. -/
-def gpuQueries (A : Node N a b h S L q Lz qz) (E : Store N b) (z : Store N a) (G : Mix N a b h) :
+def gpuQueries (A : Node N a b h S L q Lz qz) (E : Payloads N b) (z : Payloads N a) (G : Mix N a b h) :
     List (Bits 0 × Fin N × Bits b) :=
   ((A.gpu z).chip ((A.gpu z).state E)).queries ((A.gpu z).world E noStream (atZ G z))
 
 /-- The rest's mix queries in the window, each a block and a tile output, under the store it holds. -/
-def restQueries (A : Node N a b h S L q Lz qz) (E : Store N b) (z : Store N a) (G : Mix N a b h) :
+def restQueries (A : Node N a b h S L q Lz qz) (E : Payloads N b) (z : Payloads N a) (G : Mix N a b h) :
     List (Bits 0 × Fin N × Bits a) :=
   (A.rest E).chip.queries ((A.rest E).world E z G)
 
@@ -157,8 +162,8 @@ memory, fixed before the mix is drawn, with what the rest answers the GPU (`gpuS
 (`restSide`) any functions of the mix, the store and the tile outputs. -/
 structure InteractiveNode (N a b h S L q Lz qz : ℕ) where
   node : Node N a b h S L q Lz qz
-  gpuSide : Store N a → Mix N a b h → Store N b → ℕ → Bool
-  restSide : Store N b → Mix N a b h → Store N a → ℕ → Bool
+  gpuSide : Payloads N a → Mix N a b h → Payloads N b → ℕ → Bool
+  restSide : Payloads N b → Mix N a b h → Payloads N a → ℕ → Bool
 
 namespace InteractiveNode
 
@@ -174,7 +179,7 @@ every store, tile outputs and two mixes that agree at every point either locatio
 locations commit the same receipts under both. An interleaved run of the two locations over one mix, each answering
 the other from what it computed and was sent, has this property; the game takes it as a hypothesis on the node. -/
 def QueryDetermined (A : InteractiveNode N a b h S L q Lz qz) : Prop :=
-  ∀ (E : Store N b) (z : Store N a) (G G' : Mix N a b h),
+  ∀ (E : Payloads N b) (z : Payloads N a) (G G' : Mix N a b h),
     (∀ x ∈ (A.under G).gpuQueries E z G, G' (x.2.1, x.2.2, z x.2.1) = G (x.2.1, x.2.2, z x.2.1)) →
     (∀ y ∈ (A.under G).restQueries E z G, G' (y.2.1, E y.2.1, y.2.2) = G (y.2.1, E y.2.1, y.2.2)) →
     (A.under G').gpuReceipts E z G' = (A.under G).gpuReceipts E z G ∧

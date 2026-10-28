@@ -57,7 +57,7 @@ mix at the receipt's point (`Chip.run_congr`), so at most one value of the mix t
 Frozen (no-function, hash): a bound in the random-oracle model over abstract chip programs, which no Lean function of
 the remote protocol's code computes. -/
 def Colocation : Prop :=
-  ∀ (N a b h S L q Lz qz : ℕ) (A : Node N a b h S L q Lz qz) (j : Fin N) (E : Store N b) (z : Store N a),
+  ∀ (N a b h S L q Lz qz : ℕ) (A : Node N a b h S L q Lz qz) (j : Fin N) (E : Payloads N b) (z : Payloads N a),
     pr (fun G : Mix N a b h =>
         (A.gpuReceipts E z G j = G (j, E j, z j) ∧ ¬ A.MadeAtGpu E z G j) ∨
           (A.restReceipts E z G j = G (j, E j, z j) ∧ ¬ A.MadeAtRest E z G j))
@@ -113,7 +113,7 @@ Frozen (no-function, hash): as `Colocation`, a bound in the random-oracle model 
 def BoundReceiptLink : Prop :=
   ∀ (N a b h S L q Lz qz s k m F cTag cEnc w Fz lam : ℕ) (A : Node N a b h S L q Lz qz),
     (Lz + lam) * w + Fz * a < (m + 1) * a * w →
-    pr (fun x : Store N b × BoundReceipt.Coins N a b h s =>
+    pr (fun x : Payloads N b × BoundReceipt.Coins N a b h s =>
         A.Accepts x.1 x.2.1.1 x.2.1.2 x.2.2 ∧ A.compute cTag cEnc x.1 x.2.1.1 x.2.1.2 ≤ F ∧
           A.tileWork w x.1 x.2.1.1 x.2.1.2 ≤ Fz ∧
           A.footprint x.1 x.2.1.1 x.2.1.2 * cEnc < floor b 0 S L F cTag cEnc (k - m) lam)
@@ -144,7 +144,7 @@ def BoundReceiptLinkInteractive : Prop :=
   ∀ (N a b h S L q Lz qz s k m F cTag cEnc w Fz lam : ℕ) (A : InteractiveNode N a b h S L q Lz qz),
     A.QueryDetermined →
     (Lz + lam) * w + Fz * a < (m + 1) * a * w →
-    pr (fun x : Store N b × BoundReceipt.Coins N a b h s =>
+    pr (fun x : Payloads N b × BoundReceipt.Coins N a b h s =>
         (A.under x.2.1.2).Accepts x.1 x.2.1.1 x.2.1.2 x.2.2 ∧
           (A.under x.2.1.2).compute cTag cEnc x.1 x.2.1.1 x.2.1.2 ≤ F ∧
           (A.under x.2.1.2).tileWork w x.1 x.2.1.1 x.2.1.2 ≤ Fz ∧

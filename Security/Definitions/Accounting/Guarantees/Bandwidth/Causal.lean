@@ -45,7 +45,7 @@ the actual-circuit model's B3 at `e > 0`, `m·b` less for relayed tags, with no 
 Frozen (no-function, world-unlisted): stated over arbitrary strategies causal from every tick, with the chip's ports'
 constraints as hypotheses that are not on the premises list, rather than a function's acceptance. -/
 def B3 : Prop :=
-  ∀ {L K : Type*} [LinearOrder L] {N b h : ℕ} (S : Store N b × Oracle N b h → Actual.Run L), CausalFrom S →
+  ∀ {L K : Type*} [LinearOrder L] {N b h : ℕ} (S : Payloads N b × Oracle N b h → Actual.Run L), CausalFrom S →
     ∀ (β : K → ℕ) (link : ∀ r, Fin (S r).A.N → Fin (S r).A.N → K), Alphabet S β link →
     ∀ (X : Finset L) (t₀ T M qt : ℕ), (∀ r, (S r).mem X t₀ ≤ M) →
     (∀ E O O', (S (E, O)).content X t₀ = (S (E, O')).content X t₀) →
@@ -56,7 +56,7 @@ def B3 : Prop :=
     ∀ Q : ℕ → Acts L → List (Fin N × Bits b), (∀ u a, (Q u a).length ≤ qt) →
     OracleLocation S link X t₀ T orPorts Q →
     ∀ (τ : Acts L → Fin N → Bits h) (s k m lam : ℕ),
-    pr (fun x : Store N b × Oracle N b h × (Fin s → Fin N) =>
+    pr (fun x : Payloads N b × Oracle N b h × (Fin s → Fin N) =>
         (∀ i, τ ((S (x.1, x.2.1)).acts ↑X (Set.Ico t₀ (t₀ + T))) (x.2.2 i) = x.2.1 (x.2.2 i, x.1 (x.2.2 i))) ∧
           (∑ i ∈ Finset.range T, wd (t₀ + i) ((S (x.1, x.2.1)).acts ↑X (Set.Ico t₀ (t₀ + i)))) + (M + 1) +
             (sidePorts.map fun p => β p.1).sum * T + m * b + lam < k * b)
@@ -72,7 +72,7 @@ pass while `∑ wd + (M + 1) + βs·T + λ < k·b` is at most `AuditInteractiveR
 
 Frozen (no-function, world-unlisted): as `B3`. -/
 def B3RO : Prop :=
-  ∀ {L K : Type*} [LinearOrder L] {N b h : ℕ} (S : Store N b × Oracle N b h → Actual.Run L), CausalFrom S →
+  ∀ {L K : Type*} [LinearOrder L] {N b h : ℕ} (S : Payloads N b × Oracle N b h → Actual.Run L), CausalFrom S →
     ∀ (β : K → ℕ) (link : ∀ r, Fin (S r).A.N → Fin (S r).A.N → K), Alphabet S β link →
     ∀ (X : Finset L) (t₀ T M qt : ℕ), (∀ r, (S r).mem X t₀ ≤ M) →
     (∀ E O O', (S (E, O)).content X t₀ = (S (E, O')).content X t₀) →
@@ -84,7 +84,7 @@ def B3RO : Prop :=
     OracleLocation S link X t₀ T orPorts Q →
     (∀ E O O' u, portSignals S link sidePorts (E, O) u = portSignals S link sidePorts (E, O') u) →
     ∀ (τ : Acts L → Fin N → Bits h) (s k lam : ℕ),
-    pr (fun x : Store N b × Oracle N b h × (Fin s → Fin N) =>
+    pr (fun x : Payloads N b × Oracle N b h × (Fin s → Fin N) =>
         (∀ i, τ ((S (x.1, x.2.1)).acts ↑X (Set.Ico t₀ (t₀ + T))) (x.2.2 i) = x.2.1 (x.2.2 i, x.1 (x.2.2 i))) ∧
           (∑ i ∈ Finset.range T, wd (t₀ + i) ((S (x.1, x.2.1)).acts ↑X (Set.Ico t₀ (t₀ + i)))) + (M + 1) +
             (sidePorts.map fun p => β p.1).sum * T + lam < k * b)
@@ -98,7 +98,7 @@ delivers is a function of the store and of what the chip did), so it holds witho
 
 Frozen (no-function, world-unlisted): as `B3`. -/
 def B3Capacity : Prop :=
-  ∀ {L K : Type*} [LinearOrder L] {N b h : ℕ} (S : Store N b × Oracle N b h → Actual.Run L), CausalFrom S →
+  ∀ {L K : Type*} [LinearOrder L] {N b h : ℕ} (S : Payloads N b × Oracle N b h → Actual.Run L), CausalFrom S →
     ∀ (β : K → ℕ) (link : ∀ r, Fin (S r).A.N → Fin (S r).A.N → K), Alphabet S β link →
     ∀ (X : Finset L) (t₀ T M qt : ℕ), (∀ r, (S r).mem X t₀ ≤ M) →
     (∀ E O O', (S (E, O)).content X t₀ = (S (E, O')).content X t₀) →
@@ -109,7 +109,7 @@ def B3Capacity : Prop :=
     ∀ Q : ℕ → Acts L → List (Fin N × Bits b), (∀ u a, (Q u a).length ≤ qt) →
     OracleLocation S link X t₀ T orPorts Q →
     ∀ (τ : Acts L → Fin N → Bits h) (s k m lam : ℕ),
-    pr (fun x : Store N b × Oracle N b h × (Fin s → Fin N) =>
+    pr (fun x : Payloads N b × Oracle N b h × (Fin s → Fin N) =>
         (∀ i, τ ((S (x.1, x.2.1)).acts ↑X (Set.Ico t₀ (t₀ + T))) (x.2.2 i) = x.2.1 (x.2.2 i, x.1 (x.2.2 i))) ∧
           (hbmPorts.map fun p => β p.1).sum * T + (M + 1) + (sidePorts.map fun p => β p.1).sum * T + m * b + lam <
             k * b)
@@ -123,7 +123,7 @@ at most `B3RO`'s bound. Proof: `Bandwidth.SecurityProofs.B3CapacityRO`.
 
 Frozen (no-function, world-unlisted): as `B3`. -/
 def B3CapacityRO : Prop :=
-  ∀ {L K : Type*} [LinearOrder L] {N b h : ℕ} (S : Store N b × Oracle N b h → Actual.Run L), CausalFrom S →
+  ∀ {L K : Type*} [LinearOrder L] {N b h : ℕ} (S : Payloads N b × Oracle N b h → Actual.Run L), CausalFrom S →
     ∀ (β : K → ℕ) (link : ∀ r, Fin (S r).A.N → Fin (S r).A.N → K), Alphabet S β link →
     ∀ (X : Finset L) (t₀ T M qt : ℕ), (∀ r, (S r).mem X t₀ ≤ M) →
     (∀ E O O', (S (E, O)).content X t₀ = (S (E, O')).content X t₀) →
@@ -135,7 +135,7 @@ def B3CapacityRO : Prop :=
     OracleLocation S link X t₀ T orPorts Q →
     (∀ E O O' u, portSignals S link sidePorts (E, O) u = portSignals S link sidePorts (E, O') u) →
     ∀ (τ : Acts L → Fin N → Bits h) (s k lam : ℕ),
-    pr (fun x : Store N b × Oracle N b h × (Fin s → Fin N) =>
+    pr (fun x : Payloads N b × Oracle N b h × (Fin s → Fin N) =>
         (∀ i, τ ((S (x.1, x.2.1)).acts ↑X (Set.Ico t₀ (t₀ + T))) (x.2.2 i) = x.2.1 (x.2.2 i, x.1 (x.2.2 i))) ∧
           (hbmPorts.map fun p => β p.1).sum * T + (M + 1) + (sidePorts.map fun p => β p.1).sum * T + lam < k * b)
       ≤ (((k - 1 : ℕ) : ℝ≥0∞) / N) ^ s + (s : ℝ≥0∞) / 2 ^ h + (((T * qt).choose k : ℕ) : ℝ≥0∞) / 2 ^ lam
@@ -154,7 +154,7 @@ model's Mbw for the chip of a strategy's run. Proof: `Bandwidth.SecurityProofs.M
 
 Frozen (no-function, world-unlisted): as `B3`. -/
 def Mbw : Prop :=
-  ∀ {L K : Type*} [LinearOrder L] {N b h n : ℕ} (S : (Store N b × Bits n) × Oracle N b h → Actual.Run L),
+  ∀ {L K : Type*} [LinearOrder L] {N b h n : ℕ} (S : (Payloads N b × Bits n) × Oracle N b h → Actual.Run L),
     CausalFrom S →
     ∀ (β : K → ℕ) (link : ∀ r, Fin (S r).A.N → Fin (S r).A.N → K), Alphabet S β link →
     ∀ (X : Finset L) (t₀ T M qt : ℕ), (∀ r, (S r).mem X t₀ ≤ M) →
@@ -170,7 +170,7 @@ def Mbw : Prop :=
     (∀ E z O, ζ ((S ((E, z), O)).content X t₀)
       ((List.range T).map fun i => (S ((E, z), O)).crossing (↑X)ᶜ ↑X {t₀ + i}) = z) →
     ∀ (τ : Acts L → Fin N → Bits h) (s k lam : ℕ),
-    pr (fun x : (Store N b × Bits n) × Oracle N b h × (Fin s → Fin N) =>
+    pr (fun x : (Payloads N b × Bits n) × Oracle N b h × (Fin s → Fin N) =>
         (∀ i, τ ((S (x.1, x.2.1)).acts ↑X (Set.Ico t₀ (t₀ + T))) (x.2.2 i) = x.2.1 (x.2.2 i, x.1.1 (x.2.2 i))) ∧
           (∑ i ∈ Finset.range T, wd (t₀ + i) ((S (x.1, x.2.1)).acts ↑X (Set.Ico t₀ (t₀ + i)))) + (M + 1) +
             (sidePorts.map fun p => β p.1).sum * T + lam < k * b + n)
@@ -184,7 +184,7 @@ is at most `AuditRO`'s error. So an accept gives `n ≤ βm·T − cert_bw`, the
 
 Frozen (no-function, world-unlisted): as `B3`. -/
 def MbwCapacity : Prop :=
-  ∀ {L K : Type*} [LinearOrder L] {N b h n : ℕ} (S : (Store N b × Bits n) × Oracle N b h → Actual.Run L),
+  ∀ {L K : Type*} [LinearOrder L] {N b h n : ℕ} (S : (Payloads N b × Bits n) × Oracle N b h → Actual.Run L),
     CausalFrom S →
     ∀ (β : K → ℕ) (link : ∀ r, Fin (S r).A.N → Fin (S r).A.N → K), Alphabet S β link →
     ∀ (X : Finset L) (t₀ T M qt : ℕ), (∀ r, (S r).mem X t₀ ≤ M) →
@@ -200,7 +200,7 @@ def MbwCapacity : Prop :=
     (∀ E z O, ζ ((S ((E, z), O)).content X t₀)
       ((List.range T).map fun i => (S ((E, z), O)).crossing (↑X)ᶜ ↑X {t₀ + i}) = z) →
     ∀ (τ : Acts L → Fin N → Bits h) (s k lam : ℕ),
-    pr (fun x : (Store N b × Bits n) × Oracle N b h × (Fin s → Fin N) =>
+    pr (fun x : (Payloads N b × Bits n) × Oracle N b h × (Fin s → Fin N) =>
         (∀ i, τ ((S (x.1, x.2.1)).acts ↑X (Set.Ico t₀ (t₀ + T))) (x.2.2 i) = x.2.1 (x.2.2 i, x.1.1 (x.2.2 i))) ∧
           (hbmPorts.map fun p => β p.1).sum * T + (M + 1) + (sidePorts.map fun p => β p.1).sum * T + lam <
             k * b + n)
