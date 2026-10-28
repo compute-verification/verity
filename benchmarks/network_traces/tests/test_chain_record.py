@@ -37,7 +37,7 @@ import pytest
 
 HERE = Path(__file__).resolve().parents[1]
 PERIOD_CASE = HERE.parents[1] / "verity" / "core" / "protocols" / "network" / "tests" / "period_case.py"
-BLOCK_SCHEMA = HERE.parents[1] / "examples" / "h200" / "interfaces" / "verity_e2e_demo" / "schemas" / "block-record.v1.schema.json"
+BLOCK_SCHEMA = HERE.parents[1] / "demos" / "h200" / "interfaces" / "verity_e2e_demo" / "schemas" / "block-record.v1.schema.json"
 
 
 def _load(name: str):
