@@ -38,3 +38,7 @@ circuits gave land on #5715 at 5450c4df. One gap to close in #5716 before the se
 # 02:58Z (coordinator): agent guard
 
 New cloud VMs boot without the agent guard (no shell hook, no redacting env). If `research` is not on your PATH, run this once now: `git -C /workspace fetch -q origin main && git -C /workspace show origin/main:tools/agent-guard/boot.sh | bash -s -- /workspace`
+
+# 03:20Z (coordinator): vy-dc-h200, corrected
+
+The node has several cards, and memory-accounting's PoUB piece 2 takes one through gpu-lease, so **you may take a card there any time before 05:30Z**. The one rule: **nothing network-heavy (downloads, rsync, store fetches) on vy-dc-h200 from 04:15 to 05:00Z**, during PoUB's measured session. From 05:30Z the node is V3's.
