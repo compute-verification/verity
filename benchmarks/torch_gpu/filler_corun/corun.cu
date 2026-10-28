@@ -98,17 +98,12 @@ DEV void mbar_wait(u32 bar, u32 parity) {
       "r"(parity)
       : "memory");
 }
-DEV void mbar_wait_cluster(u32 bar, u32 parity) {
-  asm volatile(
-      "{\n .reg .pred p;\n WAITC:\n mbarrier.try_wait.parity.acquire.cluster.shared::cta.b64 p, [%0], %1;\n @!p bra "
-      "WAITC;\n}\n" ::"r"(bar),
-      "r"(parity)
-      : "memory");
-}
+// an arrive on a cluster peer's barrier at the default (CTA) scope, CUTLASS's ClusterBarrier form: a .cluster-scoped
+// release puts a MEMBAR.ALL.GPU in front of it in every warp
 DEV void mbar_arrive_at(u32 bar, u32 rank) {
   u32 r;
   asm volatile("mapa.shared::cluster.u32 %0, %1, %2;" : "=r"(r) : "r"(bar), "r"(rank));
-  asm volatile("mbarrier.arrive.release.cluster.shared::cluster.b64 _, [%0];" ::"r"(r) : "memory");
+  asm volatile("mbarrier.arrive.shared::cluster.b64 _, [%0];" ::"r"(r) : "memory");
 }
 DEV void tma_prefetch(const void* map) { asm volatile("prefetch.tensormap [%0];" ::"l"(map) : "memory"); }
 DEV void tma_load(u32 dst, const void* map, u32 bar, int c0, int c1) {
@@ -188,10 +183,7 @@ struct Cursor {
 template <int CL> DEV void produce(const Params& p, Cursor& c, u32 base, u32 bars) {
   if (c.t >= units_of<CL>(p) * p.passes) return;
   const u32 s = c.e % STAGES, st = base + s * STAGE, full = bars + 8 * s;
-  if constexpr (CL == 1)
-    mbar_wait(bars + 8 * (STAGES + s), ((c.e / STAGES) & 1) ^ 1);
-  else
-    mbar_wait_cluster(bars + 8 * (STAGES + s), ((c.e / STAGES) & 1) ^ 1);
+  mbar_wait(bars + 8 * (STAGES + s), ((c.e / STAGES) & 1) ^ 1);
   constexpr u32 B_PART = BN / CL * BK;
   const int rank = rank_of<CL>();
   mbar_expect_tx(full, STAGE);

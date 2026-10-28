@@ -4,7 +4,8 @@
 # among them), a spill or local memory, and without IGMMA.64x256x32 in each GEMM kernel; ptxas's report and the SASS
 # opcode counts kept in $OUT; a Python with torch and pynvml (VERITY_BENCH_VENV, the node's /workspace/cp/venv312, else
 # torch 2.13.0+cu129 in scratch). Then one lease of at most LEASE_MIN (default 15) minutes for corun.py with this
-# script's arguments, nvidia-smi sampling the card beside it. Outputs go to OUT (default $RESEARCH_RUN_DIR/out).
+# script's arguments at each K of CORUN_KS (default 8192; outputs in $OUT/kK), nvidia-smi sampling the card beside it.
+# OUT defaults to $RESEARCH_RUN_DIR/out.
 #
 #   bash benchmarks/torch_gpu/filler_corun/run.sh [corun.py's options]
 #
@@ -39,7 +40,9 @@ for f in fns[1:]:
     name = f.split("\n", 1)[0].strip()
     ops = collections.Counter(re.findall(r"/\*[0-9a-f]{4,}\*/\s+(?:@!?U?P\w+\s+)?([A-Z][A-Za-z0-9_.]+)", f))
     tensor = {k: v for k, v in ops.items() if "GMMA" in k}
-    print(f"{name}: {sum(ops.values())} instructions, tensor {tensor}, LDL/STL {ops.get('LDL', 0) + ops.get('STL', 0)}")
+    fence = {k: v for k, v in ops.items() if k.startswith(("MEMBAR", "FENCE"))}
+    print(f"{name}: {sum(ops.values())} instructions, tensor {tensor}, fences {fence}, "
+          f"LDL/STL {ops.get('LDL', 0) + ops.get('STL', 0)}")
     if name.startswith("gemm_") and not any(k.startswith("IGMMA.64x256x32") for k in tensor):
         bad.append(f"{name} has no IGMMA.64x256x32")
     if any(k.startswith(("LDL", "STL")) for k in ops):
@@ -73,13 +76,15 @@ gpu-lease 1 --wait --max-min "${LEASE_MIN:-15}" -- bash -c '
   nvidia-smi --query-gpu=timestamp,clocks.sm,power.draw,temperature.gpu,clocks_event_reasons.active --format=csv -lms 200 \
     ${GPU_LEASE_UUID:+-i "$GPU_LEASE_UUID"} > "$OUT/smi.csv" 2>&1 &
   smi=$!
-  timeout $((60 * ${LEASE_MIN:-15} - 30)) "$PY" "$HERE/corun.py" --cubin "$S/corun.cubin" --out "$OUT" "$@" \
-    > "$OUT/corun.log" 2>&1
-  r=$?
+  r=0
+  for k in ${CORUN_KS:-8192}; do
+    timeout $((60 * ${LEASE_MIN:-15} - 30)) "$PY" "$HERE/corun.py" --cubin "$S/corun.cubin" --out "$OUT/k$k" --k "$k" \
+      "$@" > "$OUT/corun-k$k.log" 2>&1 || r=$?
+    tail -20 "$OUT/corun-k$k.log"
+  done
   kill $smi 2>/dev/null
   echo "run.sh: corun.py exited $r at $(date -u +%H:%M:%SZ)"
   exit $r' bash "$@"
 rc=$?
-tail -40 "$OUT/corun.log"
 echo "corun $rc" | tee -a "$OUT/status.txt"
 exit $rc
