@@ -140,6 +140,10 @@ MIRRORS: dict[str, tuple[str, str, str]] = {
                                                              "the service's port parses the Python's laws"),
     "verity/ml/crypto/lms.py::Signature": ("verity/core/primitives/lms/lean/Lms/Verify.lean::Lms.Signature", "lms-difftest",
                                            "the LMS port verifies the Python's signatures"),
+    "verity/core/protocols/answer.py::Answer": (f"{PROTOCOL}::Core.Answer", "core-protocol-example",
+                                               "the core interface's example port writes the Python's answers byte for byte"),
+    "verity/core/protocols/answer.py::Verdict": (f"{PROTOCOL}::Core.Verdict", "core-protocol-example",
+                                                "the core interface's example port, on each verdict"),
     f"{REQ_PY}::Store": (f"{REQ}::CircuitRequirement.Store", "requirement-difftest", "the requirement's port"),
     f"{REQ_PY}::Placement": (f"{REQ}::CircuitRequirement.Placement", "requirement-difftest", "the requirement's port"),
     f"{RA_PY}::Opening": (f"{RA}Window.lean::RemoteAudit.Opening", "remote-audit-difftest", "the remote audit's port"),
@@ -154,10 +158,6 @@ MIRRORS: dict[str, tuple[str, str, str]] = {
                                           "memory-challenger-difftest", "the memory challenger's port, for the streamed wipe"),
     f"{MC_PY}run.py::Session": ("verity/core/protocols/pous/check/PousCheck/Run.lean::PousCheck.Run.Session", "pous-run",
                                 "the PoUS run's protocol port reads the sessions the Python records"),
-    "verity/core/protocols/answer.py::Answer": (f"{PROTOCOL}::Core.Answer", "core-protocol-example",
-                                               "the core interface's example port writes the Python's answers byte for byte"),
-    "verity/core/protocols/answer.py::Verdict": (f"{PROTOCOL}::Core.Verdict", "core-protocol-example",
-                                                "the core interface's example port, on each verdict"),
 }
 
 
