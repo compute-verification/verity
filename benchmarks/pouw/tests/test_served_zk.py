@@ -324,7 +324,7 @@ def test_the_challenger_on_the_serving_controllers_state_holds_its_coins(served,
 
 def test_a_served_challenger_refuses_coins_no_claim_instance_names(tmp_path, monkeypatch):
     """The serving controller's coins (e2e.py's `Coins`) and `served_commit.py challenger`'s are named by a claim
-    instance, the Lean verifier of record's (`pouw.verifier.CLAIM`) or its state file's, which an earlier start drew from
+    instance, the Lean verifier's (`pouw.verifier.CLAIM`) or its state file's, which an earlier start drew from
     it; a source no claim instance names, `os.urandom` among them, is refused before any coin is drawn or published."""
     sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "pearl_c_vllm"))
     import e2e
