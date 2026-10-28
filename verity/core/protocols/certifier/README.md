@@ -7,7 +7,7 @@ A spec-level reference for network accounting's timing channel:
   certificates (`certificate`: the network certifier's signature over the record's SHA-512 digest hidden under a
   64-byte salt the certifier draws fresh for each record, with the window's frames in a fixed-depth SHA-512 tree), and
   the ingress links' status check;
-- one sampling block's certificates through the proof service (`service`): the network `Spec`, a salted root over the
+- one link-window's certificates through the proof service (`service`): the network `Spec`, a salted root over the
   certified records, and the check, whose Boolean part is each head's check (`head_check`: the head's hiding opening,
   its fields, its counts against the public occupancy profile, and its record digest under the certifier's salt
   against the digest its certificate signs), with a host-side verifier of record (no proof of the
@@ -264,7 +264,7 @@ A spec-level reference for network accounting's timing channel:
   source (`LinkWindows.ties`), never beside the advice: the tie service's (below). The served size class isn't
   pinned, so there every advised link is refused (fail closed), as is a link without the certifier's clock
   certificates;
-- the ingress tie through the proof service (`tie_service`): `IngressTie`, each ingress sampling block's `IoTieRequest`
+- the ingress tie through the proof service (`tie_service`): `IngressTie`, each ingress link-window's `IoTieRequest`
   units, one a bucket row of the warden's registered ingress cells, proved as `NetworkIngressTieBucket` (one gate
   naming its pinned circuit digest, `io_request.circuit-check.json`) with the row read off the warden's root
   (`warden_rows.bucket_port`), decided by the verifier of record on its own lanes from the advice and the warden's

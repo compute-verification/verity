@@ -1,9 +1,9 @@
-"""The ingress tie through the proof service (`tie_service`): each bucket row of an ingress sampling block of the
-warden's cells proved as IoTieRequest (a stand-in proof, `standin.prove_tie`, its rows read off the warden's root and
-decided by the verifier of record on its own lanes), and `advised.IoTieVerdict` built from the stream's outcomes of
-record alone. An honest link is tied, `advised.ends` reads the tie, and the advised link takes it only from `Ties`, the
-tie, its stream and the release as its source of record; a carried field count, a forged advice and the swapped split
-are refused, as are an outcome on another advice, in the clear or late, a stream short of the advice's windows,
+"""The ingress tie through the proof service (`tie_service`): each bucket row of an ingress link-window of the warden's
+cells proved as IoTieRequest (a stand-in proof, `standin.prove_tie`, its rows read off the warden's root and decided by
+the verifier of record on its own lanes), and `advised.IoTieVerdict` built from the stream's outcomes of record alone.
+An honest link is tied, `advised.ends` reads the tie, and the advised link takes it only from `Ties`, the tie, its
+stream and the release as its source of record; a carried field count, a forged advice and the swapped split are
+refused, as are an outcome on another advice, in the clear or late, a stream short of the advice's windows,
 out of order or past them, a profile that frames requests otherwise than the warden cuts them, a row that isn't the
 warden's, a head of another window, an advice whose `received` isn't the release's, and an unpinned size class.
 Nothing in `verity` but the tie service builds the verdict."""

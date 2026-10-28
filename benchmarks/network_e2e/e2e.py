@@ -1,7 +1,7 @@
 """network-e2e: network accounting end to end on a served model, as one report. A certifier-serve rehearsal's runs (the
-network certifier in front of a served endpoint, `certifier_serve.py`), N2's verdict of record on every sampling block
-and the link's network verdict (`LinkWindows.verify` through the proof service's stream, `network_verdict`), every
-sampling block's head checks proved by C-Flock ``prove --zk`` behind the Lean firewall and held by Lean (`n2_zk.prove`), and
+network certifier in front of a served endpoint, `certifier_serve.py`), N2's verdict of record on every link-window and
+the link's network verdict (`LinkWindows.verify` through the proof service's stream, `network_verdict`), every
+link-window's head checks proved by C-Flock ``prove --zk`` behind the Lean firewall and held by Lean (`n2_zk.prove`), and
 the negatives (``late``, ``extra`` and a tampered head) refused, in `report.json` and `report.md` under ``--out``; then
 the chain's stages (`chain`): the advice's bits per sampling block, the prove path's audit and the negatives
 (`negatives.py`), and what is still stubbed.

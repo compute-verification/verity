@@ -39,7 +39,7 @@ request's max_tokens, at most KO.
   The lane's own fetch, with ``witness/``, goes to KEEP/RUN/fetch.tar.gz (KEEP and KEEP/RUN 0700, refused inside the
   run dir: custody publishes all of ``--out``). ``--out`` gets ``bundle.tgz``, what ``fetch`` gives any other key (the
   bundle less ``witness/``), and ``session.json``, the public outcome: the gate run, its rc, the check's verdict and
-  counts, the sampling blocks, the origin and the session's span. Before it exits, every file of ``--out`` and member of
+  counts, the link-windows, the origin and the session's span. Before it exits, every file of ``--out`` and member of
   ``bundle.tgz`` is read for a prompt's ids, and one that holds them is removed (exit 4). Exit 0 when the gate's check
   accepted the run, its rc (or 1) when it didn't, 2 when the gate refused the request.
 * **chain** runs chain_record.sh's warden path on the kept fetch (CR_PATH=warden, CR_GATES=KEEP/RUN/fetch.tar.gz), with

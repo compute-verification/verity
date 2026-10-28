@@ -1,5 +1,5 @@
-"""One sampling block's network certificates through the proof service (N2): the network `Spec`, the firewall's salted
-commitment to the sampling block's certified records, and the check's verifier of record.
+"""One link-window's network certificates through the proof service (N2): the network `Spec`, the firewall's salted
+commitment to the link-window's certified records, and the check's verifier of record.
 
 **What is committed.** One `Value`, `certificates`: four leaves under one salted root, the sampling block's two
 certified records (`CertifiedRecord`), egress leaf 0 and ingress leaf 1, and their heads, egress leaf 2 and ingress leaf
@@ -878,11 +878,11 @@ class LinkWindows:
 
     def register(self, stream: S.Stream, record: Mapping[str, Any],
                  drawn: Mapping[str, Any] | None = None) -> S.Registration:
-        """`stream.register` with the sampling block's own ports, after holding the record's `window` provenance to
-        exactly `{"kind": "served", "window": w}`: the service declares the provenance one public item and doesn't read
-        it, and anything else there would reach the auditor. w is the registration's order in the stream, or with
-        `drawn`, a period draw (`period_draw`) over this stream, the order-th drawn window, whose record's root must be
-        the one the period committed. Raises `Refused` (`window`, `period`) otherwise."""
+        """`stream.register` with the link-window's own ports, after holding the record's `window` provenance to exactly
+        `{"kind": "served", "window": w}`: the service declares the provenance one public item and doesn't read it,
+        and anything else there would reach the auditor. w is the registration's order in the stream, or with `drawn`,
+        a period draw (`period_draw`) over this stream, the order-th drawn window, whose record's root must be the one
+        the period committed. Raises `Refused` (`window`, `period`) otherwise."""
         order = len(stream.log)
         if drawn is None:
             window = order

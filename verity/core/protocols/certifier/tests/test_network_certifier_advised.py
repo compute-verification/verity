@@ -1,4 +1,4 @@
-"""N2's advised counts (`advised`): the circuit held to its reference, and advised sampling blocks through the proof
+"""N2's advised counts (`advised`): the circuit held to its reference, and advised link-windows through the proof
 service on simulated vLLM serving written as I1's advice v0 (varied prompt, request and output lengths, chunked
 prefill, prefix-cache hits and their sources, a preemption and its resume, the async row past a finish, a step's rows
 out of request order, frames released after they're handed and responses spanning windows): honest traffic accepted
