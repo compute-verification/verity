@@ -3,6 +3,7 @@ import Definitions.Core
 import Properties.Composition
 import Properties.NciDesc
 import Properties.Nci.Baseline
+import Properties.SampledProofs
 
 /-!
 # Remote's acceptance and the inference-only policy
@@ -22,7 +23,9 @@ the check of record, `NciCheck.Baseline.evaluate`: the policy check at the size 
   owners are, meet the policy (`PolicyMet`): every inference block of `U` has at most `Γ` gates and reads at most `α`
   fresh input bits per gate, so the declaration complies (`Nci.Complies Γ α`), and it has a padded
   `(Γ, ⌊αΓ⌋)`-partition when Boolean, its bit-level expansion a padded `(ΓW, ⌊αΓW⌋)`-partition when its gates are 1 to
-  `W` bits wide.
+  `W` bits wide; and the record the one-stage audit's case commits to names, by its SHA-512, the program the audit
+  verifies the sessions against (`StageHeld`). With one digest for the two records, the circuit the policy checked and
+  the program the one-stage audit verifies have one SHA-512.
 * `AcceptComplies`: its corollary in the form `Nci.Guarantees.DampenerRemote` reads, `Nci.Complies Γ α d` from
   acceptance.
 
@@ -73,12 +76,21 @@ def CaseHeld (k : Case) : Prop :=
     NciCheck.Protocol.commitmentOf k.commitment = .ok c ∧ NciCheck.Protocol.evidenceOf k.evidence = .ok e ∧
     PolicyHeld p c e
 
+/-- The one-stage audit's case `k` decodes under the audit's own decoders, and the record it decodes to names the
+program of the audit's own verifier, the program its sessions are verified against, by its SHA-512
+(`Properties.SampledProofs.R2`). -/
+def StageHeld (k : Case) : Prop :=
+  ∃ (p : SampledProofs.OneStageZk.Params) (c : SampledProofs.OneStage.Commitment),
+    (canonicalJson k.params.toUTF8 >>= SampledProofs.OneStageZk.paramsOfJson) = .ok p ∧
+    SampledProofs.OneStage.commitmentOf k.commitment = .ok c ∧ Properties.SampledProofs.R2 c.record p.base.verifier
+
 /-- **Remote's acceptance gives the inference-only policy on the registered circuit.** On every input remote's check
 accepts, on any blobs: the evidence is the three components' cases in order, the policy's `kI`, PoUW's `kW` and the
 one-stage audit's `kS`; the three commitments decode, each under its own component's decoder, to one digest `r`, the
-run's record's; and the policy's case is `CaseHeld`: the record names the declared circuit by its SHA-512, θ holds what
+run's record's; the policy's case is `CaseHeld`: the record names the declared circuit by its SHA-512, θ holds what
 the log's first record registers, and every declaration the circuit lays out, with the declared division, meets the
-policy. -/
+policy; and the one-stage audit's case is `StageHeld`: its record names, by its SHA-512, the program the audit verifies
+the sessions against. -/
 def AcceptInferenceOnly : Prop :=
   ∀ (blobs : Array ByteArray) (ps : List Named) (c : ByteArray) (ev : List Case) (pub prof : Keyed),
     (Core.Remote.protocol.on blobs).check ps c ev = .accept pub prof →
@@ -86,7 +98,7 @@ def AcceptInferenceOnly : Prop :=
         Properties.Composition.digestOf NciCheck.Protocol.protocol kI.commitment = some r ∧
         Properties.Composition.digestOf PouwCheck.protocol kW.commitment = some r ∧
         Properties.Composition.digestOf SampledProofs.OneStageZk.protocol.toProtocol kS.commitment = some r ∧
-        CaseHeld kI
+        CaseHeld kI ∧ StageHeld kS
 
 /-- **Remote's acceptance gives `Nci.Complies`**, the hypothesis `Nci.Guarantees.DampenerRemote` takes. On every input
 remote's check accepts, the evidence is the three components' cases in order, the policy's case decodes to the
