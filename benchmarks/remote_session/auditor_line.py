@@ -159,6 +159,7 @@ from verity.core.protocols.remote_bandwidth import audit, coins, ledger, line, p
 from verity.core.protocols.remote_bandwidth import store as rstore  # noqa: E402
 from verity.core.protocols.sampled_proofs import challenger as Ch  # noqa: E402
 from verity.core.protocols.sampled_proofs import remote  # noqa: E402
+from verity.hardware import node as hardware  # noqa: E402
 from verity.ml.crypto import lms  # noqa: E402
 
 RATES = {"disk_bytes_per_s": 4.4e9, "link_bytes_per_s": 5e10}
@@ -1170,9 +1171,15 @@ def main(argv: list[str] | None = None) -> int:
                          "node)")
     ap.add_argument("--site-keys", type=Path, metavar="KEYS",
                     help="--site: the auditor's devices' keys, a JSON object of id to key")
+    ap.add_argument("--host-card", default=hardware.VY_NEBIUS[1], metavar="SKU",
+                    help="--site: the host's card, which the Site doesn't register (default: a vy-nebius node's)")
+    ap.add_argument("--placeholder", action="append", metavar="NAME",
+                    help="--site: a placeholder figure the node is read with, '<sku> <table>.<key>', repeated "
+                         "(default: a vy-nebius node's)")
     a = ap.parse_args(argv)
     if a.site:
-        V.NODE = V.site_node(Path(a.site[0]), a.site[1], a.site_keys)
+        V.NODE = V.site_node(Path(a.site[0]), a.site[1], a.site_keys, a.host_card,
+                             hardware.VY_NEBIUS[2] if a.placeholder is None else a.placeholder)
     if (a.boundary is None) != (a.boundary_pin is None):
         ap.error("--boundary and --boundary-pin go together")
     boundary = None if a.boundary is None else read_boundary(a.boundary, a.boundary_pin)

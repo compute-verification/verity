@@ -115,7 +115,9 @@ the node's, the sum over its devices, whatever share of the node the store is on
 
 - \(R\) is the node's read capacity over every registered tier: its 8 GPUs' HBM plus its host's DRAM. Measured, that
   is 8 × 1,539 + 606.8 = 12,918.8 GB/s (`read_bytes_per_s`); specified, 8 × 1,597.568 + 819.2 = 13,599.744 GB/s
-  (`spec_bytes_per_s`).
+  (`spec_bytes_per_s`). The host's 819.2 is DDR5-6400's, a placeholder on its card: the installed DIMMs aren't on
+  record, and the part takes MRDIMMs up to 8,800 MT/s (1,126.4 GB/s), so the node is read with it named open
+  (`Node.placeholders`).
 - \(S_{\text{chip}}\) is every GPU's on-chip storage and the host's: 8 × 263,163,904 + 1,000,341,504 =
   3,105,652,736 B (`chip_bytes`). The host's part bounds the whole host, two Xeon 6776P sockets of 64 cores,
   whatever share its VM gets: their caches at the guest's CPUID sizes, with allowances for registers and buffers.
@@ -123,7 +125,7 @@ the node's, the sum over its devices, whatever share of the node the store is on
 
 Each is the node's (`verity.hardware.node`, the value of the Site's `node h`), the exact sum over its devices' and
 host's cards: one device's own values are its card's (`verity/hardware/cards/rtx-pro-6000-server.toml`), and the
-host's its card's `host` table. A device the store isn't on can still hold store
+host's its host card's (`verity/hardware/cards/xeon-6776p-2s.toml`). A device the store isn't on can still hold store
 bytes on chip and re-encode blocks, which is why \(S_{\text{chip}}\) and \(C_{\text{sq}}\) are the node's in every
 session (as the red team found). A session over part of the node, as on one GPU, establishes its certified bytes,
 \((1 - \gamma) R \Sigma\), in which \(R\) cancels, so they are the same at either \(R\). Its γ is the node's only once
@@ -148,7 +150,7 @@ is the verifier's, never the prover's: a node's own calibration can only raise i
 term is a fixed byte count over \(R\Sigma\), and a prover reporting a slower read would shrink them all with no more
 bytes read (0.066 read as 0.0057 at the slowest calibration still accepted). The measured reading takes each
 tier's fastest measured read: 1,539 GB/s a GPU (an honest session's, the card's `memory.read`) and
-606.8 GB/s of host DRAM (the host card's `host.dram_read`), which
+606.8 GB/s of host DRAM (the host card's `memory.read`), which
 `benchmarks/remote_session/verifier.py`'s ledgers take as the node's `read_bytes_per_s`. \(R\) is the rate of plain, incompressible reads,
 which the store's encoded blocks are: the GPU's compression engine reads a compressible buffer faster
 (7.55 TB/s against 1.536 TB/s plain), but the encoded store reads at 1.515 TB/s under a

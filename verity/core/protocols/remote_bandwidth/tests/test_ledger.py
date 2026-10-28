@@ -315,7 +315,7 @@ def test_the_time_held_line_is_held_over_times_conclusion(k1) -> None:
 
 def test_the_stated_node_has_a_burst_for_each_way_back() -> None:
     """`Node.stated`: a rebuild batch is at most S_chip, a disk read a second of the disks' ceiling, and a link window
-    the host's (its card's `host.link_window`) when the links are charged; each may be stated instead."""
+    the host's (its host card's `link.window`) when the links are charged; each may be stated instead."""
     n = ledger.Node.stated(RTX, disk_bytes_per_s=4.32e9, link_bytes_per_s=50e9)
     assert (n.rebuild_burst_bytes, n.disk_burst_bytes, n.link_burst_bytes) == (
         RTX.chip_bytes, 4.32e9, RTX.host.link_window_bytes) == (3_105_652_736, 4.32e9, 6_291_456)
@@ -351,25 +351,26 @@ def _site(*skus: str) -> Site:
 
 
 def test_the_node_is_the_sites_node_h_read_off_its_devices_cards() -> None:
-    """`Node.of_site` reads host h's node off the Site (`Site.node h`): a device of the card each device's sheet names,
-    on the devices' server card's host, so eight RTX PRO 6000s registered under node0 are a vy-nebius node.  A host
-    with no device, an id the Site registers as no host, a node of mixed cards with no host card named, and a card
-    with a placeholder figure are each refused."""
-    site = _site(*hardware.VY_NEBIUS[0])
-    assert ledger.figures(site, "node0") == RTX
-    assert ledger.Node.of_site(site, "node0", disk_bytes_per_s=4.4e9) == ledger.Node.stated(RTX, disk_bytes_per_s=4.4e9)
+    """`Node.of_site` reads host h's node off the Site (`Site.node h`): a device of the GPU card each device's sheet
+    names, on the host card named, so eight RTX PRO 6000s registered under node0 on two Xeon 6776Ps are a vy-nebius
+    node.  A host with no device, an id the Site registers as no host, and a card with a placeholder figure the
+    caller doesn't name are each refused."""
+    devices, host, open_ = hardware.VY_NEBIUS
+    site = _site(*devices)
+    assert ledger.figures(site, "node0", host, open_) == RTX
+    assert ledger.Node.of_site(site, "node0", host, open_, disk_bytes_per_s=4.4e9) == ledger.Node.stated(
+        RTX, disk_bytes_per_s=4.4e9)
     with pytest.raises(ValueError, match="holds no device"):
-        ledger.figures(site, "node1")
+        ledger.figures(site, "node1", host, open_)
     for h in ("gpu0", "site0", "node9"):
         with pytest.raises(ValueError, match="is no host the Site registers"):
-            ledger.figures(site, h)
-    mixed = _site("rtx-pro-6000-server", "h200-sxm-141gb")
-    with pytest.raises(ValueError, match="name its host's card"):
-        ledger.figures(mixed, "node0")
+            ledger.figures(site, h, host, open_)
+    with pytest.raises(ValueError, match="xeon-6776p-2s memory.bandwidth is a placeholder"):
+        ledger.figures(site, "node0", host)
+    with pytest.raises(ValueError, match="h200-sxm-141gb memory.read is a placeholder"):
+        ledger.figures(_site("rtx-pro-6000-server", "h200-sxm-141gb"), "node0", host, open_)
     with pytest.raises(ValueError, match="placeholder"):
-        ledger.figures(mixed, "node0", host="rtx-pro-6000-server")
-    with pytest.raises(ValueError, match="placeholder"):
-        ledger.Node.of_site(_site("h200-sxm-141gb"), "node0")
+        ledger.Node.of_site(_site("h200-sxm-141gb"), "node0", "xeon-platinum-8468-2s")
 
 
 def test_the_sketch_charges_the_outside_factor_the_node_states(store) -> None:

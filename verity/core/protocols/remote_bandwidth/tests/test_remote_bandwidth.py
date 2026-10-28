@@ -1075,17 +1075,19 @@ def test_the_node_figures_are_the_sums_over_its_devices() -> None:
 
 
 def test_the_write_ceilings_are_the_sheets_above_every_write_measured() -> None:
-    """One GPU's and the host DRAM's write ceilings (MEM-45) are their cards' bandwidth ceilings, which bound every
-    prover where a measurement bounds only the kernels tried, each above every write its run measured: the card's
-    1,528.98 GB/s on the device and 56.39 streamed in (r20261020-211937-b9c0), the host's 207.69
-    (r20261020-212232-6ba5).  The card files' sources name the runs; a fill of derived codec labels is bounded by the
+    """One GPU's write ceiling (MEM-45) is its card's bandwidth ceiling, which bounds every prover where a measurement
+    bounds only the kernels tried, above every write its run measured: 1,528.98 GB/s on the device and 56.39 streamed
+    in (r20261020-211937-b9c0).  The host DRAM's is its host card's `memory.write`, 819.2 GB/s above the 207.69 its
+    run measured (r20261020-212232-6ba5), and a placeholder the node is read with: DDR5-6400's, the installed DIMMs
+    not on record.  The card files' sources name the runs; a fill of derived codec labels is bounded by the
     labeller, about 1.05 GB/s a GPU under the default codec, and no DPU's is stated."""
     assert RTX.device_write_bytes_per_s == RTX.devices[0].spec_bytes_per_s == 1.597568e12 > 1528.98e9 > 56.39e9
-    assert RTX.host_write_bytes_per_s == RTX.host.spec_bytes_per_s == 819.2e9 > 207.69e9
-    card = load("rtx-pro-6000-server")
+    assert RTX.host_write_bytes_per_s == RTX.host.write_bytes_per_s == 819.2e9 > 207.69e9
+    card, host = load("rtx-pro-6000-server"), load("xeon-6776p-2s")
     assert "r20261020-211937-b9c0" in card["memory"]["read"]["source"]
-    assert "r20261020-212232-6ba5" in card["host"]["dram_bandwidth"]["source"]
-    assert {card["memory"]["bandwidth"]["mark"], card["host"]["dram_bandwidth"]["mark"]} == {"ceiling"}
+    assert "r20261020-212232-6ba5" in host["memory"]["write"]["source"]
+    assert card["memory"]["bandwidth"]["mark"] == "ceiling"
+    assert RTX.placeholders == ("xeon-6776p-2s memory.bandwidth", "xeon-6776p-2s memory.write")
     gpu = RTX.devices[0].squarings_per_s[codec.DEFAULT.field.name]
     labels = gpu * codec.BLOCK_BYTES / codec.DEFAULT.encode_squarings
     assert labels == pytest.approx(1.05e9, rel=0.01)

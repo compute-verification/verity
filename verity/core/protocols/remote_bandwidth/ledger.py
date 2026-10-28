@@ -28,7 +28,7 @@ windows' PRF advantages, which are named (`PRF_CLAIM`) and in no δ here.  γ's 
 from __future__ import annotations
 
 import math
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from types import MappingProxyType
 
@@ -58,22 +58,19 @@ def _rate(x: object, what: str) -> float:
     return float(x)
 
 
-def figures(site: Site, h: str, host: str | None = None) -> hardware.Node:
+def figures(site: Site, h: str, host: str, placeholders: Sequence[str] = ()) -> hardware.Node:
     """The figures of host `h`'s node as `site` registers it (`Site.node h`): for each of its devices, in the log's
-    order, the card its sheet names (`Sheet.sku`), on the host of card `host`, by default the devices' one card (a
-    server card's `host` table).  An `h` the site registers as no host, a node without a device, and a node of mixed
-    cards with no host card named are refused, as `verity.hardware.node` refuses a placeholder figure."""
+    order, the GPU card its sheet names (`Sheet.sku`), on the host of host card `host` (a host carries no sheet in the
+    Site, so its card is named), reading the placeholders `placeholders` names as open figures.  An `h` the site
+    registers as no host and a node without a device are refused, as `verity.hardware.node` refuses a placeholder
+    figure it isn't told to read."""
     n = site.node(h)
     if n is None:
         raise ValueError(f"{h!r} is no host the Site registers")
     skus = [n.sheet(d).sku for d in n.units]
     if not skus:
         raise ValueError(f"host {h!r} holds no device the Site registers")
-    if host is None:
-        if len(set(skus)) > 1:
-            raise ValueError(f"host {h!r}'s devices are of cards {sorted(set(skus))}: name its host's card")
-        host = skus[0]
-    return hardware.node(skus, host)
+    return hardware.node(skus, host, placeholders)
 
 
 @dataclass(frozen=True, slots=True)
@@ -122,9 +119,9 @@ class Node:
         object.__setattr__(self, "squarings_per_s", MappingProxyType(squarings))
 
     @classmethod
-    def of_site(cls, site: Site, h: str, *, host: str | None = None, **stated) -> Node:
-        """The node of host `h` as `site` registers it (`figures`), stated (`stated`)."""
-        return cls.stated(figures(site, h, host), **stated)
+    def of_site(cls, site: Site, h: str, host: str, placeholders: Sequence[str] = (), **stated) -> Node:
+        """The node of host `h` as `site` registers it on host card `host` (`figures`), stated (`stated`)."""
+        return cls.stated(figures(site, h, host, placeholders), **stated)
 
     @classmethod
     def stated(cls, figures: hardware.Node, *, reported_read_bytes_per_s: float = 0.0, disk_bytes_per_s: float = 0.0,

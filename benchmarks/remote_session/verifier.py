@@ -124,6 +124,7 @@ import secrets
 import sys
 import threading
 import time
+from collections.abc import Sequence
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
@@ -158,12 +159,17 @@ def device_memory(node: hardware.Node) -> int:
 HBM_BYTES = device_memory(NODE)
 
 
-def site_node(log: Path, host: str, keys: Path | None = None) -> hardware.Node:
-    """The figures of host `host`'s node in the Site a registration log registers (`ledger.figures`): the log
+def site_node(log: Path, host: str, keys: Path | None = None, host_card: str = hardware.VY_NEBIUS[1],
+              placeholders: Sequence[str] = hardware.VY_NEBIUS[2]) -> hardware.Node:
+    """The figures of host `host`'s node in the Site a registration log registers (`ledger.figures`), on host card
+    `host_card` with the placeholders `placeholders` names read as open (by default a vy-nebius node's): the log
     (`verity.core.site.Registration`'s JSON) checked entry by entry (`site.check`) against the auditor's data sheets,
-    every card file's, and its own devices' keys, `keys` (a JSON object of id to key)."""
-    auditor = site.Auditor.of_files([load(sku) for sku in skus()], json.loads(keys.read_text()) if keys else None)
-    return ledger.figures(site.check(site.Registration.of_json(json.loads(log.read_text())), auditor), host)
+    every GPU card file's, and its own devices' keys, `keys` (a JSON object of id to key)."""
+    auditor = site.Auditor.of_files([load(sku) for sku in skus("gpu")], json.loads(keys.read_text()) if keys else None)
+    return ledger.figures(site.check(site.Registration.of_json(json.loads(log.read_text())), auditor), host,
+                          host_card, placeholders)
+
+
 DISK_BYTES_PER_S = 4.4e9
 """The node's disks' read ceiling, each disk's highest second summed (4.311e9) and rounded up:
 how much of a paced line's ingress charge is its disks (`ingress_bursts`)."""
@@ -494,7 +500,7 @@ def paced_groups(mem: dict, seen: list[dict], *, block_bytes: int) -> list[line.
 def ingress_bursts(ingress_bytes_per_s: float, disk_bytes_per_s: float = DISK_BYTES_PER_S) -> float:
     """B, the bytes the routes back into node memory bring at once beyond their rates at an ingress charge of
     `ingress_bytes_per_s`, `ledger.Node.stated`'s bursts: one rebuild batch in flight (S_chip), one second at the disks'
-    ceiling (the charge up to `disk_bytes_per_s`), and one link window (the host card's `host.link_window`) when the
+    ceiling (the charge up to `disk_bytes_per_s`), and one link window (the host card's `link.window`) when the
     charge is above that, the boundary links charged too."""
     disk = min(ingress_bytes_per_s, disk_bytes_per_s)
     n = ledger.Node.stated(NODE, disk_bytes_per_s=disk, link_bytes_per_s=ingress_bytes_per_s - disk)
@@ -552,7 +558,7 @@ def recorded_chip_bytes(mem: dict) -> int:
     """S_chip as a recorded session's line deducts it: the record's, or the auditor's node's (`NODE.chip_bytes`) where
     that is larger. A record keeps the S_chip its verifier ran at, which can be short of the node's: gate runs 7 to 9's
     3,045,746,688 B took the host's term from an estimate of its caches, 59,906,048 B under the host card's
-    `host.chip`."""
+    `store.chip`."""
     return max(mem["chip_bytes"], NODE.chip_bytes)
 
 
@@ -1467,7 +1473,7 @@ class Verifier:
         node = {"gpus": len(NODE.devices), "gpu_spec_bytes_per_s": gpu.spec_bytes_per_s,
                 "gpu_read_bytes_per_s": gpu.read_bytes_per_s, "host_spec_bytes_per_s": NODE.host.spec_bytes_per_s,
                 "host_read_bytes_per_s": NODE.host.read_bytes_per_s, "gpu_chip_bytes": gpu.chip_bytes,
-                "host_chip_bytes": NODE.host.chip_bytes}
+                "host_chip_bytes": NODE.host.chip_bytes, "host": NODE.host.sku, "placeholders": list(NODE.placeholders)}
         out = {"inputs": {"spec_bytes_per_s": spec, "measured_read_bytes_per_s": measured,
                           "reported_read_bytes_per_s": reported, "node": node,
                           "disk_bytes_per_s": stated.disk_bytes_per_s, "link_bytes_per_s": stated.link_bytes_per_s,
@@ -1569,6 +1575,11 @@ def main() -> int:
                          "its figures read off its devices' cards (default: a vy-nebius node, `hardware.VY_NEBIUS`)")
     ap.add_argument("--site-keys", type=Path, metavar="KEYS",
                     help="--site: the auditor's devices' keys, a JSON object of id to key")
+    ap.add_argument("--host-card", default=hardware.VY_NEBIUS[1], metavar="SKU",
+                    help="--site: the host's card, which the Site doesn't register (default: a vy-nebius node's)")
+    ap.add_argument("--placeholder", action="append", metavar="NAME",
+                    help="--site: a placeholder figure the node is read with, '<sku> <table>.<key>', repeated "
+                         "(default: a vy-nebius node's, `hardware.VY_NEBIUS`)")
     ap.add_argument("--hbm-bytes", type=int,
                     help="the node's HBM, the memory line's capacity (default: its devices' cards' memory)")
     ap.add_argument("--host-bytes", type=int, default=0,
@@ -1581,7 +1592,7 @@ def main() -> int:
     ap.add_argument("--disk-burst-bytes", type=float,
                     help="the most the disks bring back at once beyond their ceiling (default: a second of it)")
     ap.add_argument("--link-burst-bytes", type=float,
-                    help="one link window, charged with the links (default: the host card's `host.link_window`)")
+                    help="one link window, charged with the links (default: the host card's `link.window`)")
     ap.add_argument("--close", metavar="NODE_HEX",
                     help="close the node's live registration in --registry, its sessions counted as they stood, "
                          "and exit")
@@ -1657,7 +1668,8 @@ def main() -> int:
                          "verifier's threads recomputing it at the same time")
     a = ap.parse_args()
     if a.site:
-        NODE = site_node(Path(a.site[0]), a.site[1], a.site_keys)
+        NODE = site_node(Path(a.site[0]), a.site[1], a.site_keys, a.host_card,
+                         hardware.VY_NEBIUS[2] if a.placeholder is None else a.placeholder)
     a.hbm_bytes = device_memory(NODE) if a.hbm_bytes is None else a.hbm_bytes
     a.engines = len(NODE.devices) if a.engines is None else a.engines
     if a.memory_of is not None:
