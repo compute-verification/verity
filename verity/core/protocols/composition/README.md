@@ -20,6 +20,9 @@ These two are the only composites a verifier runs. `product IDS id | check | ser
 onsite's subprotocols and remote's for remote's, in any order, and refuses every other set, since protocol soundness
 covers only these two.
 
+Their security argument, layer by layer from one proof to the training slowdown, is the remote protocol's README
+(`../remote/README.md`, "The security argument, end to end"); onsite shares its layers and adds its own subprotocols'.
+
 ## The protocol
 
 The JSON key `components` below is the wire format's name for the list of subprotocols.
