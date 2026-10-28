@@ -21,6 +21,8 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any, Protocol
 
+from verity_vllm.commit.run_roots import RunRoots, StepRoot
+
 
 @dataclass
 class StepCommitment:
@@ -49,6 +51,11 @@ class RunCommitment:
     temporary_bytes_peak: int           # arena / staging peak, measured
     weight_registration: dict | None = None
     extra: dict = field(default_factory=dict)
+
+    def roots(self) -> RunRoots:
+        """The run root and each step's root and sizes, without the committer's measurements, Merkle roots or layout digests: what a
+        committed store keeps of the run (`commit.store_dump`)."""
+        return RunRoots(self.run_root, [StepRoot(s.step, s.root, s.n_leaves, s.n_bytes, s.n_tensors) for s in self.steps])
 
 
 @dataclass
