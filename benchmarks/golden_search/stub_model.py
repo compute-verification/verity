@@ -90,8 +90,10 @@ INPUTS: dict[str, Input] = {
                        "sm_120 unpriced)", "M"),
     "staged_and": Input(1.016e-10, 0.5e-10, 2e-10, "GPU-s an AND of a staged proof block (costfit)", "M"),
     "stmt_fixed": Input(3.03, 1.5, 6.0, "GPU-s a touched statement (costfit)", "M"),
-    "stmt_and": Input(3.51e-6, 1.7e-6, 7e-6, "GPU-s an AND of the statement's proof block, a touched statement (costfit)",
-                      "M"),
+    "stmt_and": Input(3.51e-6, 0.0, 7e-6, "GPU-s an AND of the statement's proof block, a touched statement (costfit); "
+                      "0 if a template's preprocessing is kept across windows", "M"),
+    "window_steps": Input(1, 1, 1, "served steps a window: one (b921; V3 at S 1); proving a window doesn't grow with it",
+                          "A", False),
     "verify_fixed": Input(12.44, 12.44, 12.44, "CPU-s Lean verify --zk a statement (costfit)", "M", False),
     "verify_and": Input(6.71e-6, 6.71e-6, 6.71e-6, "CPU-s an AND a statement (costfit)", "M", False),
     "nonlin_share": Input(0.2, 0.05, 0.5, "share of the window's AND gates outside the int8 linears (norms, SiLU, rope, "
@@ -169,7 +171,7 @@ def evaluate(design: dict, v: dict | None = None, point: str = "t8192") -> dict:
     else:
         t_stock, t_fwd = v["stock_ms_512"] * 1e-3, v["fwd_ms_512"] * 1e-3
     t_gemm = t_fwd * v["gemm_share"] if big else v["gemm_ms_512"] * 1e-3
-    macs = {c: real * n * k * LAYERS for c, (k, n) in CALLS.items()}
+    macs = {c: real * n * k * LAYERS * v["window_steps"] for c, (k, n) in CALLS.items()}
     mac_all = sum(macs.values())
     cred = credited(design)
     mac_cred = sum(macs[c] for c in cred)
@@ -289,8 +291,8 @@ def evaluate(design: dict, v: dict | None = None, point: str = "t8192") -> dict:
     p_stmt = sum(v["stmt_fixed"] + v["stmt_and"] * a for a in templates)
     prove = p_values + p_c + p_stmt
     verify = sum(v["verify_fixed"] + v["verify_and"] * a for a in templates)
-    prove_ratio = prove / t_stock
-    p_lin, p_nl = p_values, 0.0
+    prove_ratio = prove / (t_stock * v["window_steps"])
+    p_lin = p_values
 
     # lowering: the largest proof block's circuit
     gates = max_ands * v["gates_per_and"]
