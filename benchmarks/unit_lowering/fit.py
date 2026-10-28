@@ -3,10 +3,11 @@ shapes and projected to others.
 
     fit.py RECORD... [--project K,R,C ...] [--out FILE]
 
-A RECORD is a run.py ``unit_lowering.json`` or a run's directory holding one (``out/unit_lowering.json``). Each quantity is fitted
-by least squares on `TERMS`: a constant (the unit's fixed part), R C (the tile's cells, each lane R C / 32 of them), R C K (its
-multiply-accumulates) and (R + C) K (its operand rows and columns). The fit is exact for ANDs where the measured shapes span the
-terms; peak and wall are fitted on the same terms, so a projection far past the measured K says which term carries it.
+A RECORD is a run.py ``unit_lowering.json`` or a run's directory holding one (``out/unit_lowering.json``), all of one unit and
+form. Each quantity is fitted by least squares on the unit's terms (`TERMS`): for the tile a constant (its fixed part), R C (its
+cells, each lane R C / 32 of them), R C K (its multiply-accumulates) and (R + C) K (its operand rows and columns); for the 32 x 32
+leaf's lane and combine, whose tile is fixed, a constant and K. Peak and wall are fitted on the same terms as ANDs, so a
+projection far past the measured K says which term carries it.
 """
 from __future__ import annotations
 
@@ -17,37 +18,39 @@ from pathlib import Path
 
 import numpy as np
 
-TERMS = ("1", "RC", "RCK", "(R+C)K")
+TERMS = {"tile": ("1", "RC", "RCK", "(R+C)K"), "lane": ("1", "K"), "combine": ("1", "K")}
 QUANTITIES = ("ands", "bytes", "peak_gib", "wall_min")
-PROJECT = ((2048, 32, 32), (8192, 32, 32), (128, 32, 32))
+PROJECT = {"tile": ((2048, 32, 32), (8192, 32, 32), (128, 32, 32)),
+           "lane": ((2048, 32, 32), (8192, 32, 32), (14336, 32, 32)), "combine": ((2048, 32, 32), (8192, 32, 32), (14336, 32, 32))}
 
 
-def terms(k: int, r: int, c: int) -> list[float]:
-    return [1.0, r * c, r * c * k, (r + c) * k]
+def terms(unit: str, k: int, r: int, c: int) -> list[float]:
+    return [1.0, r * c, r * c * k, (r + c) * k] if unit == "tile" else [1.0, k]
 
 
 def load(path: Path) -> dict:
     for p in (path, path / "unit_lowering.json", path / "out" / "unit_lowering.json"):
         if p.is_file():
             d = json.loads(p.read_text())
-            return {"k": d["k"], "tile": d["tile"], "form": d["form"], "ands": d["ands"], "bytes": d["bytes"],
+            return {"unit": d.get("unit", "tile"), "k": d["k"], "tile": d["tile"], "form": d["form"], "ands": d["ands"], "bytes": d["bytes"],
                     "peak_gib": d["peak_gib"], "wall_min": d["wall_min"], "record": str(p)}
     raise SystemExit(f"fit: no unit_lowering.json at {path}")
 
 
-def fit(points: list[dict], project: tuple[tuple[int, int, int], ...] = PROJECT) -> dict:
-    """Each quantity's coefficients on `TERMS`, its largest relative residual over the points, and its value at each
-    `project` shape."""
-    X = np.array([terms(p["k"], *p["tile"]) for p in points])
+def fit(points: list[dict], project: tuple[tuple[int, int, int], ...] | None = None) -> dict:
+    """Each quantity's coefficients on its unit's `TERMS`, its largest relative residual over the points, and its value at each
+    ``project`` shape (the unit's `PROJECT` by default)."""
+    unit = points[0]["unit"]
+    X = np.array([terms(unit, p["k"], *p["tile"]) for p in points])
     rank = int(np.linalg.matrix_rank(X))
-    out = {"terms": list(TERMS), "rank": rank, "points": points, "fits": {}, "projections": []}
+    out = {"unit": unit, "terms": list(TERMS[unit]), "rank": rank, "points": points, "fits": {}, "projections": []}
     for q in QUANTITIES:
         y = np.array([float(p[q]) for p in points])
         coef, *_ = np.linalg.lstsq(X, y, rcond=None)
         resid = float(np.max(np.abs(X @ coef - y) / y))
-        out["fits"][q] = {"coef": dict(zip(TERMS, map(float, coef))), "max_rel_residual": resid}
-    for k, r, c in project:
-        x = np.array(terms(k, r, c))
+        out["fits"][q] = {"coef": dict(zip(TERMS[unit], map(float, coef))), "max_rel_residual": resid}
+    for k, r, c in project or PROJECT[unit]:
+        x = np.array(terms(unit, k, r, c))
         row = {"k": k, "tile": [r, c]}
         for q in QUANTITIES:
             row[q] = float(x @ np.array(list(out["fits"][q]["coef"].values())))
@@ -57,8 +60,9 @@ def fit(points: list[dict], project: tuple[tuple[int, int, int], ...] = PROJECT)
 
 
 def table(doc: dict) -> str:
-    lines = [f"fit on {len(doc['points'])} shapes (rank {doc['rank']} of {len(TERMS)} terms)", "",
-             "| quantity | " + " | ".join(TERMS) + " | max residual |", "| --- " * (len(TERMS) + 2) + "|"]
+    names = doc["terms"]
+    lines = [f"{doc['unit']}: fit on {len(doc['points'])} shapes (rank {doc['rank']} of {len(names)} terms)", "",
+             "| quantity | " + " | ".join(names) + " | max residual |", "| --- " * (len(names) + 2) + "|"]
     for q, f in doc["fits"].items():
         lines.append(f"| {q} | " + " | ".join(f"{v:.4g}" for v in f["coef"].values()) + f" | {f['max_rel_residual']:.1%} |")
     lines += ["", "| K | tile | ANDs | bytes | peak GiB | B/AND at peak | wall min |", "| --- " * 7 + "|"]
@@ -75,9 +79,9 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--out", type=Path)
     a = ap.parse_args(argv)
     points = [load(p) for p in a.records]
-    if len({p["form"] for p in points}) > 1:
-        raise SystemExit("fit: the records mix forms; fit one form at a time")
-    doc = fit(points, tuple(a.project or PROJECT))
+    if len({(p["unit"], p["form"]) for p in points}) > 1:
+        raise SystemExit("fit: the records mix units or forms; fit one of each at a time")
+    doc = fit(points, tuple(a.project) if a.project else None)
     if a.out:
         a.out.write_text(json.dumps(doc, indent=1) + "\n")
     print(table(doc))

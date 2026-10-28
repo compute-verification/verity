@@ -32,11 +32,12 @@ def test_scan_counts_the_and_rows_ir_lower_lays_out(tmp_path):
     lay = small()
     text = IL.netlist(lay, "unit")
     path = tmp_path / "small.circuit.txt"
-    path.write_bytes(b"flock-circuit small\nMETA {}\n" + b"CIRCUIT unit %d\n" % text.count("\n") + text.encode()
+    path.write_bytes(b'flock-circuit small\nMETA {"k_log": 11}\n' + b"CIRCUIT unit %d\n" % text.count("\n") + text.encode()
                      + b"CIRCUIT again %d\n" % text.count("\n") + text.encode())
     got = run.scan(path)
     data = path.read_bytes()
-    assert (got["sha512"], got["bytes"], got["format"]) == (hashlib.sha512(data).hexdigest(), len(data), "flock-circuit")
+    assert (got["sha512"], got["bytes"], got["format"], got["k_log"]) == (hashlib.sha512(data).hexdigest(), len(data),
+                                                                         "flock-circuit", 11)
     want = {"rows": lay.useful, "ands": lay.counts["ands"], "asserts": lay.counts["asserts"]}
     assert want == {"rows": lay.useful, "ands": 10, "asserts": 1}
     assert got["ands"] == 10 and got["sections"] == {"unit": want, "again": want}
@@ -45,7 +46,7 @@ def test_scan_counts_the_and_rows_ir_lower_lays_out(tmp_path):
 def test_scan_refuses_a_section_whose_line_count_is_not_its_netlist(tmp_path):
     text = IL.netlist(small(), "unit")
     path = tmp_path / "short.circuit.txt"
-    path.write_bytes(b"flock-circuit short\nMETA {}\n" + b"CIRCUIT unit %d\n" % (text.count("\n") - 1) + text.encode())
+    path.write_bytes(b'flock-circuit short\nMETA {"k_log": 11}\n' + b"CIRCUIT unit %d\n" % (text.count("\n") - 1) + text.encode())
     with pytest.raises(ValueError, match="holds a netlist of"):
         run.scan(path)
 
@@ -56,7 +57,7 @@ def test_the_guard_passes_at_the_smallest_shape(tmp_path):
     byte for byte reference.json's (d40fe21d26's lowering). About 2 min and 5 GiB on that lowering: nothing cheaper catches a
     change to the flat file's bytes, since the unit's netlist, sha512x3's, hm96's and META all come out of the whole
     lowering."""
-    g = run.guard(tmp_path, shapes=[(64, 4, 8)])
+    g = run.guard(tmp_path, shapes=[("tile", 64, 4, 8)])
     (shape,) = g["shapes"]
-    assert g["guard"] == "pass", f"sha512 {shape['sha512']}, reference {shape['reference']}"
-    assert shape["ands"] == 2_384_742 and not (tmp_path / "k64-4x8-flat" / "k64.circuit.txt").exists()
+    assert g["guard"] == "pass", f"sha512 {shape['sha512']}, reference {shape['reference']}, k_log {shape['k_log']}"
+    assert shape["ands"] == 2_384_742 and not (tmp_path / "tile-k64-4x8-flat" / "k64.circuit.txt").exists()

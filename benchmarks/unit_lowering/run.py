@@ -1,19 +1,24 @@
-"""`verity bench unit_lowering`: what writing the flat circuit file of PoUW's H1 tile unit costs, and the file it writes.
+"""`verity bench unit_lowering`: what writing the flat circuit file of PoUW's H1 tile unit, or of the 32 x 32 leaf's lane and
+combine statements, costs, and the file it writes.
 
-    run.py --k K --tile R,C [--form flat|structural] --scratch DIR --out DIR [--guard] [--tree PATH] [--staging fast|library]
+    run.py --k K --tile R,C [--unit tile|lane|combine] [--form flat|structural] --scratch DIR --out DIR [--guard] [--tree PATH]
+           [--staging fast|library]
     run.py --guard --scratch DIR --out DIR [--tree PATH]
     run.py --pin-reference --scratch DIR --out DIR
 
-The lowering is `pouw_h1_circuits --lower K R C BIND PATH` (integrations/vllm), the auditor's lowering whose file a PoUW
-period-open commits as ``k<K>``, run in a child process with ``HZ_STAGE`` (``fast`` by default) and ``H1_TMPL`` unset for
-the flat form or ``structural``, bound to `BIND`. Its peak RSS is the child's ``ru_maxrss`` (`os.wait4`, KiB on Linux) and
-its wall time the child's. The file is then read once for its SHA-512, bytes and AND rows (`scan`), and deleted.
+The tile's lowering is `pouw_h1_circuits --lower K R C BIND PATH` (integrations/vllm), the auditor's lowering whose file a PoUW
+period-open commits as ``k<K>``, bound to `BIND`. A lane's or the combine's is h1_lanes' staging of that statement of the 32 x 32
+leaf (`lanes.py`), bound to the Program a served window's verifier derives for it. Each runs in a child process with
+``HZ_STAGE`` (``fast`` by default) and ``H1_TMPL`` unset for the flat form or ``structural``. Its peak RSS is the child's
+``ru_maxrss`` (`os.wait4`, KiB on Linux) and its wall time the child's. The file is then read once for its SHA-512, bytes,
+META's ``k_log`` and AND rows (`scan`), and deleted.
 
-``--k`` writes OUT/unit_lowering.json and prints one ``UNIT-LOWERING`` line. ``--guard`` lowers every shape of
-`REFERENCE` flat and holds its SHA-512 to the pinned one, writing OUT/guard.json and exiting 1 naming each shape that
-differs. ``--pin-reference`` writes OUT/reference.json from this tree's lowering at `PINS`, the guard's reference when
-this tree is the one pinned. ``--tree`` runs another checkout's lowering: its integrations/vllm, its import roots first
-on the child's PYTHONPATH (`research.pythonpath.tree_pythonpath`), and its .venv's Python where it has one.
+``--k`` writes OUT/unit_lowering.json and prints one ``UNIT-LOWERING`` line. ``--guard`` lowers every shape of `REFERENCE`
+flat, holds its SHA-512 to the pinned one and its ``k_log`` to C-Flock's 2^`K_MAX` block, writing OUT/guard.json and exiting 1
+naming each shape that fails. ``--pin-reference`` writes OUT/reference.json from this tree's lowering at `PINS`, the guard's
+reference when this tree is the one pinned. ``--tree`` runs another checkout's lowering: its integrations/vllm and h1_lanes,
+its import roots first on the child's PYTHONPATH (`research.pythonpath.tree_pythonpath`), and its .venv's Python where it has
+one.
 """
 from __future__ import annotations
 
@@ -31,10 +36,18 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[1]
 REFERENCE = HERE / "reference.json"
-#: the bind every file here is bound to; a period-open's (its Program's and partition's digests) moves META's bytes only
+#: the bind every tile file here is bound to; a period-open's (its Program's and partition's digests) moves META's bytes only
 BIND = {"partition": "0" * 128, "program": "0" * 128}
-#: the guard's shapes (K, R, C); a tile is R = 4 i rows by C = 8 j columns, i j lanes (`h1tile.Layout.lanes`)
-PINS = ((64, 4, 8), (256, 8, 8), (2048, 4, 8), (64, 32, 32))
+#: the statements: the H1 tile unit, and the 32 x 32 leaf's lane (all 32 lanes one circuit) and combine (h1_lanes)
+UNITS = ("tile", "lane", "combine")
+#: the leaf h1_lanes stages (`h1_lanes/run.py`'s ``RC``)
+LEAF = (32, 32)
+#: the guard's shapes (unit, K, R, C). A tile is R = 4 i rows by C = 8 j columns, i j lanes (`h1tile.Layout.lanes`), at K a
+#: multiple of 32 from 64; the combine takes K >= 384 (`h1zy.combine`), and 448 is h1_lanes' default
+PINS = (("tile", 64, 4, 8), ("tile", 256, 8, 8), ("tile", 2048, 4, 8), ("tile", 64, 32, 32), ("lane", 448, 32, 32),
+        ("combine", 448, 32, 32))
+#: C-Flock's largest block, 2^K_MAX bits (`verity_flock.circuit.K_MAX`): no file past it can be proved
+K_MAX = 27
 #: ``H1_TMPL`` for each form (`h1unit.layout`)
 FORMS = {"flat": None, "structural": "structural"}
 #: ``flock-ir-unit/v2``'s columns per word (`ir_lower.WORD`)
@@ -58,8 +71,11 @@ def commit(tree: Path) -> str:
     return head + ("+dirty" if dirty else "")
 
 
-def lower(k: int, r: int, c: int, path: Path, form: str = "flat", tree: Path = ROOT, staging: str = "fast") -> tuple[int, float]:
-    """Lower the (K, R, C) unit in ``form`` to ``path`` in a child process: its peak RSS in KiB and its wall seconds."""
+def lower(k: int, r: int, c: int, path: Path, form: str = "flat", tree: Path = ROOT, staging: str = "fast",
+          unit: str = "tile") -> tuple[int, float]:
+    """Lower ``unit`` at (K, R, C) in ``form`` to ``path`` in a child process: its peak RSS in KiB and its wall seconds."""
+    if unit != "tile" and (r, c) != LEAF:
+        raise SystemExit(f"unit_lowering: h1_lanes stages the {LEAF[0]}x{LEAF[1]} leaf's {unit}, not a {r}x{c} one")
     env = dict(os.environ, HZ_STAGE=staging)
     env.pop("H1_TMPL", None)
     if FORMS[form]:
@@ -70,14 +86,18 @@ def lower(k: int, r: int, c: int, path: Path, form: str = "flat", tree: Path = R
         env["PYTHONPATH"] = ":".join(p for p in (tree_pythonpath(tree), env.get("PYTHONPATH")) if p)
         if (tree / ".venv" / "bin" / "python").exists():
             python = str(tree / ".venv" / "bin" / "python")
-    argv = [python, "-m", "tests.protocols.pouw_h1_circuits", "--lower", str(k), str(r), str(c), json.dumps(BIND), str(path)]
+    if unit == "tile":
+        argv, cwd = [python, "-m", "tests.protocols.pouw_h1_circuits", "--lower", str(k), str(r), str(c), json.dumps(BIND),
+                     str(path)], tree / "integrations" / "vllm"
+    else:
+        argv, cwd = [python, str(HERE / "lanes.py"), unit, str(k), str(path), str(tree)], tree
     start = time.monotonic()
-    child = subprocess.Popen(argv, cwd=tree / "integrations" / "vllm", env=env)
+    child = subprocess.Popen(argv, cwd=cwd, env=env)
     _, status, usage = os.wait4(child.pid, 0)
     wall = time.monotonic() - start
     child.returncode = os.waitstatus_to_exitcode(status)
     if child.returncode:
-        raise SystemExit(f"unit_lowering: the lowering at K={k} tile={r}x{c} form={form} exited {child.returncode} after "
+        raise SystemExit(f"unit_lowering: the {unit} lowering at K={k} tile={r}x{c} form={form} exited {child.returncode} after "
                          f"{wall / 60:.1f} min at {usage.ru_maxrss / (1 << 20):.2f} GiB peak")
     return usage.ru_maxrss, wall
 
@@ -130,14 +150,18 @@ def _netlist(f, lines: int) -> dict:
 
 
 def scan(path: Path) -> dict:
-    """A circuit file's SHA-512, bytes, and each ``CIRCUIT`` section's rows and AND rows (`_netlist`); ``ands`` the unit section's,
-    None for a templated file, whose unit is META's template and no section."""
+    """A circuit file's SHA-512, bytes, META's ``k_log`` (an instance's block, 2^k_log bits) and each ``CIRCUIT`` section's rows
+    and AND rows (`_netlist`); ``ands`` the unit section's, None for a templated file, whose unit is META's template and no
+    section."""
     with ThreadPoolExecutor(1) as pool:
         digest = pool.submit(_sha512, path)
         sections = {}
         with open(path, "rb") as f:
             first = f.readline()
-            f.readline()
+            tag, meta = f.readline().split(b" ", 1)
+            if tag != b"META":
+                raise ValueError(f"{path}: {tag[:80]!r} where META is")
+            k_log = json.loads(meta).get("k_log")
             for line in f:
                 tag, name, lines = line.split()
                 if tag != b"CIRCUIT":
@@ -145,44 +169,50 @@ def scan(path: Path) -> dict:
                 sections[name.decode()] = _netlist(f, int(lines))
         sha512, size = digest.result()
     unit = sections.get("unit")
-    return {"sha512": sha512, "bytes": size, "format": first.split()[0].decode(), "ands": unit["ands"] if unit else None,
-            "sections": sections}
+    return {"sha512": sha512, "bytes": size, "format": first.split()[0].decode(), "k_log": k_log,
+            "ands": unit["ands"] if unit else None, "sections": sections}
 
 
 def measure(k: int, r: int, c: int, scratch: Path, form: str = "flat", tree: Path = ROOT, staging: str = "fast",
-            keep: bool = False) -> dict:
-    """Lower (K, R, C) under ``scratch`` and read the file: the benchmark's record."""
-    d = scratch / f"k{k}-{r}x{c}-{form}"
+            keep: bool = False, unit: str = "tile") -> dict:
+    """Lower ``unit`` at (K, R, C) under ``scratch`` and read the file: the benchmark's record."""
+    d = scratch / f"{unit}-k{k}-{r}x{c}-{form}"
     d.mkdir(parents=True, exist_ok=True)
     path = d / f"k{k}.circuit.txt"
-    kib, wall = lower(k, r, c, path, form, tree, staging)
-    doc = {"k": k, "tile": [r, c], "form": form, "staging": staging, "peak_gib": round(kib / (1 << 20), 3),
+    kib, wall = lower(k, r, c, path, form, tree, staging, unit)
+    doc = {"unit": unit, "k": k, "tile": [r, c], "form": form, "staging": staging, "peak_gib": round(kib / (1 << 20), 3),
            "wall_min": round(wall / 60, 3), **scan(path), "peak_kib": kib, "wall_s": round(wall, 2), "commit": commit(tree),
-           "bind": BIND}
+           "bind": BIND if unit == "tile" else "derived"}
     if not keep:
         path.unlink()
     return doc
 
 
 def line(doc: dict) -> str:
-    return (f"UNIT-LOWERING k={doc['k']} tile={doc['tile'][0]}x{doc['tile'][1]} form={doc['form']} peak_gib={doc['peak_gib']} "
-            f"wall_min={doc['wall_min']} ands={doc['ands']} bytes={doc['bytes']} sha512={doc['sha512'][:16]}")
+    return (f"UNIT-LOWERING unit={doc['unit']} k={doc['k']} tile={doc['tile'][0]}x{doc['tile'][1]} form={doc['form']} "
+            f"peak_gib={doc['peak_gib']} wall_min={doc['wall_min']} ands={doc['ands']} bytes={doc['bytes']} "
+            f"k_log={doc['k_log']} sha512={doc['sha512'][:16]}")
 
 
-def guard(scratch: Path, tree: Path = ROOT, staging: str = "fast", shapes: list[tuple[int, int, int]] | None = None) -> dict:
-    """Every `REFERENCE` shape (or those of ``shapes``) lowered flat and held to its pinned SHA-512: ``{guard, shapes}``, each shape
-    with its ``reference`` and whether it ``matches``."""
+def _key(s: dict) -> tuple:
+    return (s.get("unit", "tile"), s["k"], *s["tile"])
+
+
+def guard(scratch: Path, tree: Path = ROOT, staging: str = "fast", shapes: list[tuple] | None = None) -> dict:
+    """Every `REFERENCE` shape (or those of ``shapes``, each ``(unit, K, R, C)``) lowered flat, its SHA-512 held to the pinned
+    one and its ``k_log`` to `K_MAX`: ``{guard, shapes}``, each shape with its ``reference`` and whether it ``matches``."""
     ref = json.loads(REFERENCE.read_text())
-    pinned = {(s["k"], *s["tile"]): s for s in ref["shapes"]}
+    pinned = {_key(s): s for s in ref["shapes"]}
     out = []
-    for k, r, c in shapes or list(pinned):
-        if (k, r, c) not in pinned:
-            raise SystemExit(f"unit_lowering: K={k} tile={r}x{c} is not one of {REFERENCE.name}'s shapes")
-        doc = measure(k, r, c, scratch, tree=tree, staging=staging)
-        want = pinned[(k, r, c)]["sha512"]
-        out.append({**doc, "reference": want, "matches": doc["sha512"] == want})
-        print(f"UNIT-LOWERING-GUARD k={k} tile={r}x{c} sha512={doc['sha512'][:16]} reference={want[:16]} "
-              f"{'pass' if doc['sha512'] == want else 'FAIL'}", flush=True)
+    for unit, k, r, c in shapes or list(pinned):
+        if (unit, k, r, c) not in pinned:
+            raise SystemExit(f"unit_lowering: {unit} K={k} tile={r}x{c} is not one of {REFERENCE.name}'s shapes")
+        doc = measure(k, r, c, scratch, tree=tree, staging=staging, unit=unit)
+        want = pinned[(unit, k, r, c)]["sha512"]
+        ok = doc["sha512"] == want and doc["k_log"] is not None and doc["k_log"] <= K_MAX
+        out.append({**doc, "reference": want, "matches": ok})
+        print(f"UNIT-LOWERING-GUARD unit={unit} k={k} tile={r}x{c} sha512={doc['sha512'][:16]} reference={want[:16]} "
+              f"k_log={doc['k_log']} {'pass' if ok else 'FAIL'}", flush=True)
     return {"guard": "pass" if all(s["matches"] for s in out) else "fail", "reference_commit": ref["commit"], "shapes": out}
 
 
@@ -190,6 +220,7 @@ def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     ap.add_argument("--k", type=int)
     ap.add_argument("--tile", type=lambda v: tuple(int(x) for x in v.split(",")), default=(32, 32), metavar="R,C")
+    ap.add_argument("--unit", choices=UNITS, default="tile")
     ap.add_argument("--form", choices=sorted(FORMS), default="flat")
     ap.add_argument("--scratch", type=Path, required=True, help="where the circuit file is written (deleted once read)")
     ap.add_argument("--out", type=Path, required=True)
@@ -206,24 +237,28 @@ def main(argv: list[str] | None = None) -> int:
     rc = 0
     if a.pin_reference:
         shapes = []
-        for k, r, c in PINS:
-            doc = measure(k, r, c, a.scratch, tree=tree, staging=a.staging)
+        for unit, k, r, c in PINS:
+            doc = measure(k, r, c, a.scratch, tree=tree, staging=a.staging, unit=unit)
             print(line(doc), flush=True)
-            shapes.append({x: doc[x] for x in ("k", "tile", "sha512", "bytes", "ands", "peak_gib", "wall_min")})
+            shapes.append({x: doc[x] for x in ("unit", "k", "tile", "sha512", "bytes", "ands", "k_log", "peak_gib", "wall_min")})
         (a.out / REFERENCE.name).write_text(json.dumps({"commit": commit(tree), "bind": BIND, "shapes": shapes}, indent=1) + "\n")
     if a.guard:
         g = guard(a.scratch, tree, a.staging)
         (a.out / "guard.json").write_text(json.dumps(g, indent=1) + "\n")
         if g["guard"] != "pass":
-            bad = [f"K={s['k']} tile={s['tile'][0]}x{s['tile'][1]}" for s in g["shapes"] if not s["matches"]]
-            print(f"unit_lowering: guard FAILED: the flat file's SHA-512 is not the reference's at {', '.join(bad)}", file=sys.stderr)
+            bad = [f"{s['unit']} K={s['k']} tile={s['tile'][0]}x{s['tile'][1]}" for s in g["shapes"] if not s["matches"]]
+            print(f"unit_lowering: guard FAILED: the flat file's SHA-512 is not the reference's, or its k_log is past {K_MAX}, "
+                  f"at {', '.join(bad)}", file=sys.stderr)
             rc = 1
     if a.k:
-        doc = measure(a.k, *a.tile, a.scratch, a.form, tree, a.staging, a.keep)
+        doc = measure(a.k, *a.tile, a.scratch, a.form, tree, a.staging, a.keep, a.unit)
         if a.guard:
             doc["guard"] = g["guard"]
         (a.out / "unit_lowering.json").write_text(json.dumps(doc, indent=1) + "\n")
         print(line(doc), flush=True)
+        if doc["k_log"] is not None and doc["k_log"] > K_MAX:
+            print(f"unit_lowering: k_log {doc['k_log']} is past C-Flock's 2^{K_MAX} block: no proof of this file", file=sys.stderr)
+            rc = 1
     return rc
 
 
