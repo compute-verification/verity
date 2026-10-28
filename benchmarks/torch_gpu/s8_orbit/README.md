@@ -10,8 +10,10 @@ identity). B's forms and carries are made once a weight; A's are made per call, 
   down), at three kinds of activation, with B's carry densities and metadata sizes. Exits 4 on any difference.
 - `s8_orbit.cu`, `s8_orbit_acc.h`: the kernel. `s8orbit_<BN>` (BN 64, 80 or 96) runs the seven products as `wgmma
   m64nBNk32 .s32.s8.s8` on the wrapped forms, persistent, with no carry corrections. `s8orbit_bfix` then adds B's
-  carries' corrections from lists made once a weight. `build.sh` builds the cubin off the card and refuses a spill,
-  local memory, a serialized wgmma, or an orbit kernel without IGMMA.
+  carries' corrections at full width from lists made once a weight, each group of 32 lists' entries cut into 32 equal
+  runs, a lane each. `s8orbit_pfix` makes the same corrections modulo 2^10 only, all that bit 9 of O reads, as two-bit
+  sums 32 rows to a word: the packed form, for comparing its cost against the full-width one. `build.sh` builds the
+  cubin off the card and refuses a spill, local memory, a serialized wgmma, or an orbit kernel without IGMMA.
 - `orbit_gpu.py`: the cubin from Python on torch tensors, and the plain int8 GEMM entry:
 
   ```python
@@ -22,11 +24,12 @@ identity). B's forms and carries are made once a weight; A's are made per call, 
   `int_mm` runs the orbit and `s8orbit_bfix`, and adds A's carry terms only when the kernel's flags say A's forms
   carried.
 - `gate.py`: the kernel against `torch._int_mm` (cuBLASLt's exact s32 GEMM): no-carry shapes with tails, full-range
-  operands with the corrections, the B correction pass, and the entry at M 1, 7, 34 and 2,048.
+  operands with the corrections, the B correction pass, the packed pass against X~·Gᵀ mod 4 and O mod 2^10, and the
+  entry at M 1, 7, 34 and 2,048.
 - `bench.py`: the wall time at M 16,384 on a checkpoint's four linears against `torch._int_mm` and s8_linear's
   `wgmma.scaled_mm`, alone and with SHA-512 rows hashed beside it on the SMs the orbit leaves free. It records θ against
-  989.4 T int8 MACs a second at 1,830 MHz, the SM clock, and κ: `s8orbit_bfix`'s time per correction MAC in tensor-MAC
-  time.
+  989.4 T int8 MACs a second at 1,830 MHz, the SM clock, and κ: each correction pass's time per correction MAC in
+  tensor-MAC time, total and less its pass over empty lists, and the two forms' ratio.
 - `subset.py`: one layer's linears in one safetensors file, for a node without the snapshot.
 - `run.sh`: builds both cubins in the run, then runs the GPU steps under gpu-lease.
 
