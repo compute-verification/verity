@@ -1,4 +1,4 @@
-"""HC-SCHED's arm-side runner (cmp-13, approach pouw/filler-sched): the locked scorer's run (`score.py`) for an arm that adds
+"""The scheduled arm's runner: the locked scorer's run (`score.py`) for an arm that adds
 a phase filler (`phase(phase, B, L)`, psched_arm.py), which filler-arm/v1 can't place, and may name a chunk shape per
 point (`filler_at(phase, B, L)`, a `Filler`; the arm's `filler` where it has none, and always at a phase point), which v1
 runs one of. It changes nothing in the scorer; it calls score.py's own functions wherever they apply and adds only what

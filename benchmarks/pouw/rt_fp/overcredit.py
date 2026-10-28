@@ -1,16 +1,16 @@
-"""RT-FP's over-credit witness for FPX-DESIGN's FP designs: each variant's credited floor ♭ against a route that writes
+"""The over-credit witness for fpx_design's FP designs: each variant's credited floor ♭ against a route that writes
 the same committed words without the variant's extraction.
 
     uv run --project benchmarks/pouw/machine_model python benchmarks/pouw/rt_fp/overcredit.py FPX_EPS OUT
 
-FPX_EPS is FPX-DESIGN's `benchmarks/pouw/fpx_design/fpx_eps.py` (its VARIANTS and `write_variant` are read as they are,
+FPX_EPS is fpx_design's `benchmarks/pouw/fpx_design/fpx_eps.py` (its VARIANTS and `write_variant` are read as they are,
 so this prices exactly what it pushed). Each variant puts the FP32 word's extraction into the design's `[fold]`
 (`fold_add`), and the LP charges that fold to every tensor form the cheater may write on (eps.py `fastest`), the int8
 ones included, and to the credited floor program. data/forms.toml states the opposite convention: converting an FP
 accumulator to s32 costs the cheater nothing.
 
 The cheater against variant V runs a design that writes V's committed words with no extraction op (ROUTES, by the
-variant's kind): `rt-V-x0`, V with `fold_add` removed, or a variant FPX-DESIGN wrote for that route (its int8-unit g1),
+variant's kind): `rt-V-x0`, V with `fold_add` removed, or a variant fpx_design wrote for that route (its int8-unit g1),
 at the L that writes V's words (an FP4 k64 word is two chained k32 int8 MMAs). The bound is
 ε_machine ≥ 1 − T_cheat / ♭_V a committed word, with T_cheat the lesser of the cheater's LP and its own floor program. A
 variant with no such route is listed with its reason. Every bound is at the record's convention (credit ♭, operands

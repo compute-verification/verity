@@ -1,4 +1,4 @@
-"""The reference for H-FALSIFY: the zero instance's tiled transcript and the duo receipt every arm folds it into.
+"""The reference for h_falsify: the zero instance's tiled transcript and the duo receipt every arm folds it into.
 
 The zero instance is A* = B* = 0, so Ã = R ∈ {0,1}^{m×k} and B̃ = S with S[t, j] = U[j, t mod 32], U ∈ {±1..±64}^{n×32}.
 The transcript is every 32-step prefix word

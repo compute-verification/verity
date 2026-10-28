@@ -1,4 +1,4 @@
-// Dither-C's linear (co32c: note:20261017T0030Z-draft-checked-strip, `checked_strip.co32c_words`) on sm_120a, on the
+// Dither-C's linear (co32c, `checked_strip.co32c_words`) on sm_120a, on the
 // honest Dither-1S kernel's mainloop (egemm.cu's e_l7qs: duo every 32 steps, absorbs 7 MMAs behind, consumers asleep on
 // the stage barrier).
 //
@@ -27,7 +27,7 @@
 //                    D_d = IMMA (A_d, U), each word absorbed as it is made, O = O' - 128^d D_d (one IMAD a word a digit);
 //                    c_*_o writes O' instead of O (the recombination's cost, and O' for the CPU reference); c_l7qs_v
 //                    writes P.V's served value f = float(2 O + 127 S) s_row s_col instead (that epilogue's cost a cell);
-//                    c_fx1 is c_l7qs with fx1's fold (decision 83: egemm.cu's fx_chain<FX1>, one IMAD by
+//                    c_fx1 is c_l7qs with fx1's fold (egemm.cu's fx_chain<FX1>, one IMAD by
 //                    key_mul(1, (4 t + e) 32) on word e of tile position t before duo, f = 4) on every word it absorbs
 //   hquant, hwedit   cohalf's X and P_A = [Y_lo | Y_hi | 0 | 0], W' and P_B = [-U_lo | -U_hi | 0 | 0]
 //   h_l7qs, h_l2q    cohalf's GEMM (htail: O = T_last - U Y, absorbed), on c_*'s schedules
@@ -49,7 +49,7 @@ constexpr uint32_t C_TAG = 8, Z_TAG = 9, BETA_TAG = 10;
 DEV uint32_t bits01(uint32_t nib) { return (nib * 0x00204081u) & 0x01010101u; }
 // U from a digest byte: -64 + sum_p w_p beta_p, w = (1, 2, 4, 8, 16, 32, 65)
 __host__ __device__ inline int u_beta(uint32_t v) { return -64 + (int)(v & 63u) + ((v & 64u) ? 65 : 0); }
-// H1's narrow U (co32c-u16, decision 82): -16 + sum_p w_p beta_p, w = (1, 2, 4, 8, 17), five planes (narrow_u.planes(16),
+// H1's narrow U (co32c-u16): -16 + sum_p w_p beta_p, w = (1, 2, 4, 8, 17), five planes (narrow_u.planes(16),
 // offset 16), U in {-16..-1, 1..16}, so W' = W + c + U stays s8 at W in [-110, 110]
 __host__ __device__ inline int u_beta16(uint32_t v) { return -16 + (int)(v & 15u) + ((v & 16u) ? 17 : 0); }
 __host__ __device__ inline int n_dig(int k) { return k <= 4096 ? 2 : 3; }
@@ -58,7 +58,7 @@ __host__ __device__ inline int n_dig(int k) { return k <= 4096 ? 2 : 3; }
 // cost-split stand-ins (wrong P_A): DIG 0 neither z nor digits (P_A row 0 = S's low byte), DIG 2 the digits over a z
 // that is zeroed, not hashed. z's digest rides on lane np of the last round's patch hashes when that round leaves a lane
 // idle (k / 128 not a multiple of 32: down's k = 14,336), else it is lane 0's own hash first
-// H1 (co32c-u16, decision 82): the per-token amax `amax_row[r]` (crow_s) gives the scale s = amax_row[r] / tq (tq = 126),
+// H1 (co32c-u16): the per-token amax `amax_row[r]` (crow_s) gives the scale s = amax_row[r] / tq (tq = 126),
 // and X divides by it, X = floor(clamp(x / s, lo, 126)) + b, as steps.act_quant does (s = amax / 126, v = (x / s).clamp,
 // two roundings, not one reciprocal), clamped on [`lo`, 126] (lo = -126 for H1, -127 for Dither-C's one-scale x * inv_s
 // form). Both the per-row s = amax_row / tq and the per-entry x / s divide here, so ptxas shares one generic div.rn slow
@@ -347,7 +347,7 @@ __global__ void __launch_bounds__(256) hquant(const uint16_t* __restrict__ x, in
 // H1's per (head, token) activation extremes for cohalf's QK^T: amax = max(x), namax = max(-x) over the 128 head-dim
 // (steps.floor_quant's x.amax and (-x).amax at top 111), packed as (amax, namax). A separate reduction (no division), so
 // hquant_h1's divides share the one pinned generic div.rn slow path, as crow_s does for cquant_h1 (an inline reduction
-// interleaves warp barriers that make ptxas emit an unpinned div slow-path body, probe r20261017-215903-5a44).
+// interleaves warp barriers that make ptxas emit an unpinned div slow-path body).
 __global__ void __launch_bounds__(256) hrow_s(const uint16_t* __restrict__ x, float2* __restrict__ an, int rows) {
   const int w = (blockIdx.x * blockDim.x + threadIdx.x) / 32, lane = threadIdx.x % 32;
   if (w >= rows) return;
@@ -729,13 +729,13 @@ CGEMM(c_l2q, 2, 4, false)
 // _v: pv's served epilogue (SERVE 2)
 __global__ void __launch_bounds__(MLW::NT, 1) c_l7qs_v(const __grid_constant__ Args a) { c_body<7, 4, true, false, 2>(a); }
 __global__ void __launch_bounds__(MLW::NT, 1) c_l7qs_v_k3(const __grid_constant__ Args a) { c_body<7, 4, true, true, 2>(a); }
-// c_fx1: c_l7qs with every absorbed word behind fx1's keyed IMAD (decision 83, SAT-120's fx1_l7qs chain and keys)
+// c_fx1: c_l7qs with every absorbed word behind fx1's keyed IMAD (the fx1_l7qs chain and keys)
 __global__ void __launch_bounds__(MLW::NT, 1) c_fx1(const __grid_constant__ Args a) { c_body<7, 4, true, false, 1, 0, FX1>(a); }
 __global__ void __launch_bounds__(MLW::NT, 1) c_fx1_k3(const __grid_constant__ Args a) { c_body<7, 4, true, true, 1, 0, FX1>(a); }
 // cohalf (k = 128)
 __global__ void __launch_bounds__(MLW::NT, 1) h_l7qs(const __grid_constant__ Args a) { c_body<7, 4, true, false, 1, 1>(a); }
 __global__ void __launch_bounds__(MLW::NT, 1) h_l2q(const __grid_constant__ Args a) { c_body<2, 4, false, false, 1, 1>(a); }
-// cohalf H1 (co32c-u16, decision 82): Q/K floored at top 111, the digit-split tail (htail_h1, TAIL 2)
+// cohalf H1 (co32c-u16): Q/K floored at top 111, the digit-split tail (htail_h1, TAIL 2)
 __global__ void __launch_bounds__(MLW::NT, 1) h_l7qs_h1(const __grid_constant__ Args a) { c_body<7, 4, true, false, 1, 2>(a); }
 __global__ void __launch_bounds__(MLW::NT, 1) h_l2q_h1(const __grid_constant__ Args a) { c_body<2, 4, false, false, 1, 2>(a); }
 
@@ -762,7 +762,7 @@ struct CP {
   LtG ref;
   uint32_t inst = 0;
   bool half = false;
-  bool h1 = false;    // H1's numerics (co32c-u16, decision 82): per-token scales, +-110 weights, the narrow U
+  bool h1 = false;    // H1's numerics (co32c-u16): per-token scales, +-110 weights, the narrow U
   float inv7 = 0;
   float* amax_row = nullptr;   // H1's per-token activation amax (max|x|, clamped), filled by crow_s; cquant_h1 forms amax/126
   float2* hqa = nullptr;       // cohalf H1's per (head, token) (max(x), max(-x)), filled by hrow_s; hquant_h1 forms amax/111, namax/112
