@@ -155,6 +155,14 @@ window is served on, before its engine loads, with the memory challenger on vy-a
 key that isn't on the node, and kills nothing. Its header lists the challenger's settings. `tests/test_pous_served_wipe.py`
 runs it on a CPU, with one segment in host memory.
 
+`served_case.py --window DIR` builds PoUS's or the wipe's piece for the one-stage composite (composite.py, beside
+served_verdicts.py) from what a served window kept: `case.json`, the component's case, and `answer.json`, its own answer
+on it, whose commitment is the digest the composite binds. Both go to the window's private directory (0700), never
+beside the public answer. `served_piece.py` and `streamed_wipe/served_wipe.sh` write that piece through it while they
+run; after a run, from the kept outputs alone, PoUS's `C*` is encoded again from the served snapshot at the kept salt, and
+each kept output is held to the others before anything is written. `served_case.sh PIECES` runs it on a served run's
+pieces, PoUS's under a lease of a card. `tests/test_pous_served_case.py` runs both on a CPU.
+
 `wipe_resume/` runs the red team's resume attack (art:7617c8017e80) on both wipes, on CPU. `pi2_state_attack.py` rebuilds
 band and dense blocks from the five odd rounds' SHAKE256 states (1,000 B a 64 KiB block) and times an answer against the
 `D = 5` read deadline. `resume.py` adapts the attack to the streamed wipe, which the prover can't evaluate without `K`, and runs
