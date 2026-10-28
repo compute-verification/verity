@@ -122,7 +122,7 @@ A transcript written before it named its session's pace (20 Oct) replays only wi
   store's padding past them, which is PoUS's: MEM-72), drives the session on its own clock and coins, and answers
   the verdict with the credited reads (`q_bytes`), the Lean's (`Twin`), with `p2.Session`'s books (`Books`) as its
   veto. `prove` is the prover's side of the channel.
-- `p2_lean.py`: the Lean verifier of record of a P2 session, the process `remote-audit-verifier`, as `p2_party.py` runs
+- `p2_lean.py`: the Lean verifier of a P2 session, the process `remote-audit-verifier`, as `p2_party.py` runs
   it: built in `lean/` unless `--lean-exe` names a built one (without lake on the PATH, the one built there), a fresh
   process each session. The standard library only, so the party runs as an auditor gate starts it (`python3 -s -E`).
 - `session_parties.py`: `period.session` as two parties of the deployment layer (`verity.core.deploy`): the verifier
