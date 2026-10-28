@@ -159,7 +159,9 @@ negatives.
 - `served_stock.sh` (with `served_overhead.py`): `served_verdicts.sh`'s stock control, the same endpoint, engine and load
   served with `serve-openai --no-commit` and no protocol, once per fresh endpoint for `REPS` endpoints. `served_overhead.py
   table` compares the composed run with it on two clocks, each the same code in both runs: the client's
-  (`serve_load.py --varied`'s timings files) and the engine's step trace (`advice_trace.jsonl`). It reports time per output
+  (`serve_load.py --varied`'s timings files) and the engine's step trace (`advice_trace.jsonl`). The trace and the load's
+  records stay in the serve dir on the node, where `served_overhead.py metrics` reads them, and each run publishes only
+  that aggregate (`overhead.json`), which `table` reads. It reports time per output
   token, time to first token and tokens per second as composed over stock, the composed run's window open and close on
   the engine loop, and `verity-bench served-table`'s single-protocol rows beside them.
 - `served_util.sh` (with `served_util.py`): the whole-step tensor utilization of serve-openai on the int8 Llama-3.2-1B
@@ -167,6 +169,9 @@ negatives.
   Commit unsealed or sealed, the Commit with PoUW H1 on in-process coins), under Nsight Systems' GPU metrics.
   `served_util.py` takes Tensor Active's mean over the longest run of full steps, each step from the previous step's end
   to its own on the step trace's clock, and splits the rest into losses by what the GPU was running at each sample.
+- `served_composite.sh`: `served_verdicts.sh`'s step after its record. It writes PoUS's and the wipe's composite cases
+  (PoUS's `served_case.sh`), then gets remote's and onsite's Lean verdicts on the run's cases (`composite.py`), all on the
+  node. Only the verdict lines reach the run's `verdicts.txt`, and a tree without those two scripts skips the step.
 
 C-Flock's circuit prover (M0, `verity_flock.circuit`) is on `main`, but a run does not take it from its checkout:
 `pod.sh` takes `git archive`s of M0's tree and the Lean verifier's tree at pinned commits, and a captured input set, as
