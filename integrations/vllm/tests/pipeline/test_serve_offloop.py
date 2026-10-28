@@ -854,3 +854,12 @@ def test_a_windows_record_carries_its_collections_and_names_the_long_ones():
     rc = SimpleNamespace(extra={"gc": {"pauses": [(0, 1.0, 0.002, "MainThread"), (2, 5.0, 1.25, "serve-seal")], "freeze_s": [0.3]}})
     assert sc.gc_of(rc) == {"n": 2, "total_s": 1.252, "max_s": 1.25, "long": [[2, 5.0, 1.25, "serve-seal"]], "freeze_s": [0.3]}
     assert sc.gc_of(SimpleNamespace(extra={})) is None and sc.gc_of(None) is None
+
+
+def test_a_windows_record_splits_its_steps_commit_time_by_thread_and_leaves_the_finalize_wait_out():
+    per = {0: {"acquisition": 0.002, "movement": 0.001, "wait": 0.03, "hashing": 0.05, "worker_idle": 0.01},
+           1: {"wait": 0.02, "hashing": 0.04, "device_pool_wait": 0.005, "root_finalisation": 0.001}}
+    rc = SimpleNamespace(spans={"total_s": {"wait": 9.0}, "per_step": per})
+    assert sc.commit_s_of(rc) == {"serving": {"acquisition": 0.002, "movement": 0.001, "wait": 0.05},
+                                  "worker": {"hashing": 0.09, "worker_idle": 0.01, "root_finalisation": 0.001, "device_pool_wait": 0.005}}
+    assert sc.commit_s_of(SimpleNamespace(spans={"per_step": {}})) is None and sc.commit_s_of(None) is None
