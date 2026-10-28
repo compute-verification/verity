@@ -254,10 +254,13 @@ the local bound (an activation price, a joint price, a recoverable source), each
 
 **Lean.**
 
-- The local bounds' premises, `Nci.Assumptions.DescriptionHard` and `Nci.Assumptions.CoversEfficientMethods`, the
-  wiring property `Nci.Capability.Upstream`, and the caps `Nci.Guarantees.HeldBudget`, `Nci.Guarantees.ImportOrRecompute`,
-  `Nci.Guarantees.RecomputeByGates`, `Nci.Guarantees.RecomputeByState`, `Nci.Guarantees.WeightedProductCap` and
-  `Nci.Guarantees.CapabilityFloor`: **written, not in a lock**.
+- The local bounds' caps `Nci.Guarantees.HeldBudget`, `Nci.Guarantees.ImportOrRecompute`,
+  `Nci.Guarantees.RecomputeByGates`, `Nci.Guarantees.RecomputeByState` and `Nci.Guarantees.WeightedProductCap`, and the
+  floor `Nci.Guarantees.CapabilityFloor`: **stated** (held in the lock by `Nci.Guarantees.LocalBoundsStated` and
+  `Nci.Guarantees.CapabilityFloorStated`), not proved.
+- Their premises: `Nci.Assumptions.CoversEfficientMethods` is a named assumption in the lock;
+  `Nci.Assumptions.DescriptionHard` and the wiring property `Nci.Capability.Upstream` are recorded through those
+  statements but **written, not in a lock** as named assumptions.
 - The overhead lower bound over remote, `Nci.Guarantees.DampenerRemote`: **proved**, but as arithmetic over inline
   hypotheses (`Nci.Assumptions.PouwSound` among them, which no PoUW guarantee discharges), not over the local bounds.
 - Over a monitoring period, `Nci.Guarantees.DampenerRemotePeriod`: **stated** (its lock entry is
@@ -378,12 +381,12 @@ The overhead, `DampenerRemote`:
   replace (`Security/README.md`, part 2).
 - `Nci.Complies` (`Security/Definitions/Nci.lean`): the declaration meets the inference-only policy.
 
-The local bounds (part 5), written, not in a lock:
+The local bounds (part 5):
 
-- `Nci.Assumptions.DescriptionHard`: every selection of an item family (updated weights, operands, or both) has
-  time-bounded description length at least its price, less a deficit.
-- `Nci.Assumptions.CoversEfficientMethods`: every sufficiently cheap successful method carries at least the covered
-  work Ω_*, except with probability η.
+- `Nci.Assumptions.DescriptionHard` (written, not yet a named assumption in the lock): every selection of an item
+  family (updated weights, operands, or both) has time-bounded description length at least its price, less a deficit.
+- `Nci.Assumptions.CoversEfficientMethods` (in the lock): every sufficiently cheap successful method carries at least
+  the covered work Ω_*, except with probability η.
 
 ## Results per monitoring period
 
