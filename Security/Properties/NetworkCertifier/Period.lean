@@ -86,7 +86,7 @@ the evidence the link-window shows, with a profile of one level of one unit draw
 def PeriodWindowV2 (p : Params) (l : ClockLink) (log : Array Json) (w : Nat) (reg : Json) (x : Window)
     (bs : Core.Blobs) : Prop :=
   ∃ clock salts ev, x.shown = .clock clock salts ev ∧
-    ∃ dom ps d pub prof, LinkWindow.domainId (linkCase p l w .empty #[] #[] none salts) = .ok dom ∧
+    ∃ dom ps d pub prof, NetworkCheck.LinkWindow.domainId (linkCase p l w .empty #[] #[] none salts) = .ok dom ∧
       windowParams l dom log = .ok ps ∧ Flock.WindowRecord.digest reg = .ok d ∧
       SampledProofs.OneStageZk.checkBlobs ps ⟨reg, d⟩ ev bs = .accept pub prof ∧
       (prof.levels.map (fun lv => (lv.name, lv.size, lv.draw)) ==
@@ -95,16 +95,16 @@ def PeriodWindowV2 (p : Params) (l : ClockLink) (log : Array Json) (w : Nat) (re
 
 /-- **Link-window `w`'s proof opens to the verifier's own public row** (`opening`, N2's verdict of record's opening):
 the public file its v2 evidence names is a blob, its ``pub`` row commitment for the drawn unit opens under the
-delivered salt to the verifier's own public row of the link-window (`LinkWindow.pubRow` of `linkCase`: both
+delivered salt to the verifier's own public row of the link-window (`NetworkCheck.LinkWindow.pubRow` of `linkCase`: both
 certificates' signed digests, then each end's registered root, served domain, link, window, grid and profile row), and
-its ``o0`` row commitment to the word 3, verdict and deadline bits 1 (`LinkWindow.opened`). -/
+its ``o0`` row commitment to the word 3, verdict and deadline bits 1 (`NetworkCheck.LinkWindow.opened`). -/
 def PeriodWindowOpened (p : Params) (l : ClockLink) (w : Nat) (reg : Json) (x : Window) (bs : Core.Blobs) : Prop :=
   ∃ clock salts ev, x.shown = .clock clock salts ev ∧ ∃ file row,
     bs.get ev.pub "public file" = .ok file ∧
-    LinkWindow.pubRow (linkCase p l w (rootOf reg) x.certificates ev.base.provedUnits (some file) salts) =
+    NetworkCheck.LinkWindow.pubRow (linkCase p l w (rootOf reg) x.certificates ev.base.provedUnits (some file) salts) =
       .ok (some row) ∧
-    LinkWindow.opened (linkCase p l w (rootOf reg) x.certificates ev.base.provedUnits (some file) salts) (some row) =
-      some 3
+    NetworkCheck.LinkWindow.opened
+        (linkCase p l w (rootOf reg) x.certificates ev.base.provedUnits (some file) salts) (some row) = some 3
 
 /-- Clock-form link-window `w` of the clock link `l` (registered as `reg`, answered by `x`, after the period's earlier
 clock digests `earlier` and registrations `log`, on the blobs `bs`) is accepted: registered as the link's Program at `w`,
