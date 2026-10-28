@@ -134,7 +134,7 @@ GRIDS: dict[str, dict[str, tuple]] = {
         "L": (32, 64, 128, 256, 1024),
         "t": (1, 2, 3, 4),
         "noise": ("permuted", "fresh"),
-        "drow": (4096, 16384),
+        "drow": (1024, 4096, 16384),
         "block": ((1, 1, "single"), (1, 32, "single"), (8, 8, "single"), (8, 8, "lanes"), (32, 32, "single"),
                   (32, 32, "lanes")),
         "law": ("achievability", "uniform"),
@@ -299,7 +299,8 @@ def pouw_units(gd: dict, d: dict, v: dict[str, float]) -> list:
             def ands(rr: int) -> float:
                 work = rr * c * L / 32 * gm.I("s8_step_ands")
                 noise = (rr + c) * L * gm.I("sha512_ands") / 64
-                rows = _rows(L, Rv) * (rr + c) + _rows(2 * rr * c, Rv) * 2
+                # T_s and T_{s-1} of the block's cells: whole value rows, as GD-MODEL's [Rv, Rv] for one cell
+                rows = _rows(L, Rv) * (rr + c) + [Rv] * (2 * math.ceil(2 * rr * c / Rv))
                 return v["dither_ands_scale"] * (work + noise + sum(gm.row_ands(x) for x in rows)), work
 
             n_per_token = gm.LAYERS * N * S_seg / (r * c)
