@@ -415,17 +415,6 @@ def Checks : Entry → Prop
 before it: it follows the head, and passes its kind's checks. -/
 def Valid (e : Entry) : Prop := Follows head e ∧ Checks D A c S I e
 
-/-- A θ or builder entry's refusal: the first of `Information`'s checks it fails. -/
-def informationRefusal (e : Entry) : Option Refusal :=
-  (Site.Entry.refusal D A c S {}).or (if Once I e then none else some .duplicateInformation)
-
-/-- The refusal of the entry's kind: a site entry's (`Site.Entry.refusal`), and a θ or builder entry's
-(`informationRefusal`). -/
-def kindRefusal : Entry → Option Refusal
-  | .site _ s => s.refusal D A c S
-  | .theta p vs => informationRefusal D A c S I (.theta p vs)
-  | .builder p b => informationRefusal D A c S I (.builder p b)
-
 instance instDecidableFollows (e : Entry) : Decidable (Follows head e) := by unfold Follows; infer_instance
 
 instance instDecidableOnce (e : Entry) : Decidable (Once I e) := by unfold Once; infer_instance
@@ -439,6 +428,17 @@ instance instDecidableChecks : ∀ e : Entry, Decidable (Checks D A c S I e)
   | .builder p b => inferInstanceAs (Decidable (Information D A c S I (.builder p b)))
 
 instance instDecidableValid (e : Entry) : Decidable (Valid D A c S I head e) := by unfold Valid; infer_instance
+
+/-- A θ or builder entry's refusal: the first of `Information`'s checks it fails. -/
+def informationRefusal (e : Entry) : Option Refusal :=
+  (Site.Entry.refusal D A c S {}).or (if Once I e then none else some .duplicateInformation)
+
+/-- The refusal of the entry's kind: a site entry's (`Site.Entry.refusal`), and a θ or builder entry's
+(`informationRefusal`). -/
+def kindRefusal : Entry → Option Refusal
+  | .site _ s => s.refusal D A c S
+  | .theta p vs => informationRefusal D A c S I (.theta p vs)
+  | .builder p b => informationRefusal D A c S I (.builder p b)
 
 /-- **The refusal**: `previous` when the entry doesn't follow the log's head, else its kind's, or `none` when it passes
 every check. -/
