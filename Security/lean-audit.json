@@ -2026,6 +2026,10 @@
    "owner": "@lean",
    "digest": "6c8b0ffd3222a58091c7755158d171c1f1f37b959832b0ad5b40c4452c431481"
   },
+  "Verity.DeviceFigures.Accepted": {
+   "owner": "@soundness",
+   "digest": "e79ecdc887349564c389cf682a4b8a6e7a7467e8f9de6e664ee9c4853fc07516"
+  },
   "Verity.Evaluates": {
    "owner": "@lean",
    "digest": "e6ffb734aa9967ab730adf8846a81aa573d0a5e1c738580a49d710731725d020"
@@ -2069,10 +2073,6 @@
   "Verity.TC.Relation.packHolds": {
    "owner": "@proofs",
    "digest": "ba87ddd4f64a0fe79b117e6376e5b113805dbe47547cd9ba45537cdafbfdc22e"
-  },
-  "Verity.DeviceFigures.Accepted": {
-   "owner": "@soundness",
-   "digest": "e79ecdc887349564c389cf682a4b8a6e7a7467e8f9de6e664ee9c4853fc07516"
   }
  },
  "meaning": [
