@@ -412,15 +412,15 @@ def test_o16_and_act_layout():
     """O at 16 bits takes a tile-segment's rows, and A′'s rows follow each tile-row's tiles, a row's I codes and its
     record in rows of `row` bytes with the last short: every value's leaf and offset is the one `leaf_of` lists it at, and
     the leaves' rows tile the values end to end. At 8B's gate-up (one segment, 16 KiB rows) a tile is O's two leaves and an
-    A′ row one of 14,352 bytes. A row whose codes fill its leaves puts its record in a leaf of its own. A gate cell's last
+    A′ row one of 14,340 bytes. A row whose codes fill its leaves puts its record in a leaf of its own. A gate cell's last
     block opens its A′ and its row's record too; no Definition checks that block yet; today's shapes keep their layout
     and domain."""
     big = D.Shape(16384, 28672, 4096, lp=512, L=4096, row=16384, ow=16, act=True)
     assert (big.S, big.W, big.row_o, big.lpt, big.I, big.arow, big.apr, big.stride, big.leaves) == \
-        (1, 0, 2, 2, 14336, 14352, 1, 576, 73728)
-    assert big.leaf_of(448)[0] == D.ACT and big.leaf_span(448) == (448 * 16384, 14352)
+        (1, 0, 2, 2, 14336, 14340, 1, 576, 73728)
+    assert big.leaf_of(448)[0] == D.ACT and big.leaf_span(448) == (448 * 16384, 14340)
     assert big.rec_leaf(0) == (448, 14336) and big.leaf_of(448)[1][-1] == (0, 14336)
-    assert big.leaf_span(576) == (448 * 16384 + 128 * 14352, 16384) and big.leaf_of(576)[0] is None
+    assert big.leaf_span(576) == (448 * 16384 + 128 * 14340, 16384) and big.leaf_of(576)[0] is None
     assert D.Shape(16384, 65536, 16384, lp=512, L=4096, row=16384, ow=16, act=True).apr == 3
     assert D.Shape(256, 128, 4096).label() == {"m": 256, "n": 128, "k": 4096, "lp": 128, "t": 8, "row": 16384, "leaves": 20}
     assert D.Shape(256, 128, 4096, ow=16).domain() != D.Shape(256, 128, 4096).domain()
@@ -504,7 +504,8 @@ def test_o16_act_honest_producer_and_consumer():
     assert len(cm.rows) == PSH.leaves == 320 and len({x for r in Ap for x in r}) > 64
     assert all(-127 <= x <= 127 for r in Ap for x in r) and {abs(max(r, key=abs)) for r in Ap} == {127}
     H = D.act_hs(PSH, O, sc)
-    assert all(rec.amax == D.abs_max(h) and 1 <= len(rec.named) <= D.NAMED for rec, h in zip(recs, H))
+    assert all(rec.amax == D.abs_max(h) and rec.k < PSH.I and h[rec.k] & 0x7FFF == rec.amax
+               and all(h[j] & 0x7FFF != rec.amax for j in range(rec.k)) for rec, h in zip(recs, H))
     rng = random.Random(21)
     cells = [(0, 0), (127, 127), (5, 200), (64, 255), *((rng.randrange(PSH.m), rng.randrange(PSH.n)) for _ in range(6))]
     for i, j in cells:
@@ -527,7 +528,7 @@ def test_o16_act_honest_producer_and_consumer():
         assert a_i == Ap[i] and rec == recs[i].pack()
         for s in range(1, CSH.S + 1):
             assert _check(CSH, cs, i, j, s, _block(CSH, cs, {i: a_i}, Bc, cc, None, i, j, s)) == 1
-    assert all(D.check_named(PSH, SEEDS, A[i], B, i, Ap[i], recs[i].pack(), sc) == 1 for i in range(PSH.m))
+    assert all(D.check_amax(PSH, SEEDS, A[i], B, i, recs[i].pack(), sc) == 1 for i in range(PSH.m))
 
 
 def test_o16_a_forged_o_is_refused():
@@ -565,71 +566,92 @@ def test_o16_a_forged_act_is_refused():
 
 
 def test_o16_a_forged_amax_is_refused():
-    """A prover that sets row i's amax to the row's second-largest |h| clips the true maximum to ±127. With A′ and S_i
-    formed under that amax every gate cell's last block passes, the maximum's included; the consumer's amax check
-    refuses the row, the maximum being in S_i with |h| > amax. It refuses an amax one step above the maximum (attained by
-    no cell), a record whose S_i drops or adds a column, and an empty S_i under an amax whose own code is 127."""
+    """A prover that sets row i's amax to the row's second-largest |h| and names that cell passes the consumer's amax
+    check, and with A′ formed under that amax every gate cell's last block but the maximum's passes: the clamp codes the
+    maximum ±127 as before, and its block refuses |h| > amax. The consumer refuses an amax one step above the maximum
+    (attained by no cell, whichever column the record names), a record naming a column off the maximum, and one naming a
+    column ≥ I."""
     A, B, T, O, sc, Ap, recs, cm = _producer()
     H = D.act_hs(PSH, O, sc)
     rng = random.Random(27)
     for i in [0, 127, *rng.sample(range(1, 127), 6)]:
         top, second = sorted({h & 0x7FFF for h in H[i]}, reverse=True)[:2]
         codes = _codes(H[i], second)
-        forged = D.ActRecord(second, D.named_of(codes))
+        forged = D.ActRecord(second, D.argmax(H[i], second))
         kmax = [j for j, h in enumerate(H[i]) if h & 0x7FFF == top]
-        assert set(kmax) <= set(forged.named) and len(forged.named) <= D.NAMED and codes != Ap[i]
-        for j in kmax[:1] + rng.sample(range(PSH.I), 3):
+        assert codes != Ap[i] and all(abs(codes[j]) == 127 for j in kmax)
+        assert D.check_amax(PSH, SEEDS, A[i], B, i, forged.pack(), sc) == 1
+        for j in kmax[:1] + rng.sample([j for j in range(PSH.I) if j not in kmax], 3):
             ins = _block(PSH, SEEDS, A, B, cm, sc, i, j, PSH.S, amax=second, ap=codes[j])
-            assert D.check_last(PSH, SEEDS, i, j, ins) == 1, (i, j)
-        assert D.check_named(PSH, SEEDS, A[i], B, i, codes, forged.pack(), sc) == 0
-        above = _codes(H[i], top + 1)
-        assert D.check_named(PSH, SEEDS, A[i], B, i, above, D.ActRecord(top + 1, D.named_of(above)).pack(), sc) == 0
+            assert D.check_last(PSH, SEEDS, i, j, ins) == int(j not in kmax), (i, j)
         rec = recs[i]
-        extra = next(j for j in range(PSH.I) if j not in rec.named)
-        for named in (rec.named[1:], tuple(sorted(rec.named + (extra,)))):
-            assert D.check_named(PSH, SEEDS, A[i], B, i, Ap[i], D.ActRecord(rec.amax, named).pack(), sc) == 0
-        assert D.check_named(PSH, SEEDS, A[i], B, i, Ap[i], rec.pack(), sc) == 1
-    assert D.named_ok([0] * 16, D.ActRecord(0x3F80, ()).pack(), {}) == 0
+        for k in (rec.k, forged.k, rng.randrange(PSH.I)):
+            assert D.check_amax(PSH, SEEDS, A[i], B, i, D.ActRecord(top + 1, k).pack(), sc) == 0
+        for k in (forged.k, PSH.I, D.NO_INDEX):
+            assert D.check_amax(PSH, SEEDS, A[i], B, i, D.ActRecord(rec.amax, k).pack(), sc) == 0
+        assert D.check_amax(PSH, SEEDS, A[i], B, i, rec.pack(), sc) == 1
+
+
+def test_o16_a_negative_maximum_is_bound():
+    """A row whose maximum is negative: the served map's [−128, 127] codes a forged amax's clipped maximum −128, outside a
+    set of columns at |A′| = 127, and the quantizer here codes it −127. Under the row's second-largest |h| the maximum's
+    gate cell refuses |h| > amax and its −127, and a −128 code at the honest amax is refused as a forged A′ byte."""
+    A, B, T, O, sc, Ap, recs, cm = _producer()
+    H = D.act_hs(PSH, O, sc)
+    neg = [i for i in range(PSH.m) if H[i][recs[i].k] & 0x8000]
+    assert len(neg) > 16
+    for i in neg[:4]:
+        k, top = recs[i].k, recs[i].amax
+        second = max(h & 0x7FFF for h in H[i] if h & 0x7FFF < top)
+        assert Ap[i][k] == -127 and D.requant(H[i][k], second) == 0x81
+        assert D.check_amax(PSH, SEEDS, A[i], B, i, D.ActRecord(second, D.argmax(H[i], second)).pack(), sc) == 1
+        assert D.check_last(PSH, SEEDS, i, k, _block(PSH, SEEDS, A, B, cm, sc, i, k, PSH.S, amax=second, ap=0x81)) == 0
+        assert D.check_last(PSH, SEEDS, i, k, _block(PSH, SEEDS, A, B, cm, sc, i, k, PSH.S, ap=0x80)) == 0
+        assert D.check_last(PSH, SEEDS, i, k, _block(PSH, SEEDS, A, B, cm, sc, i, k, PSH.S)) == 1
 
 
 def test_amax_check_bounds_the_maximum_by_magnitude():
     """At the top of a binade an amax one bf16 step below the row's maximum still rounds the maximum to 127 (2 / RN(1.9921875
-    / 127) ≈ 127.498), so a rounding check alone passes it: `named_ok` refuses it on |h| > amax. A row under the scale's
-    floor has an empty S_i under any amax that shares its scale. A row with more columns at ±127 than a record's slots
-    isn't served under this layout. A NaN h, which amax skips and the quantizer codes −127, is named in S_i and passes the
-    bound."""
+    / 127) ≈ 127.498), so a rounding check alone passes it: `bounded` refuses it on |h| > amax, and the consumer passes the
+    record naming the second cell. Zero rows and rows under the scale's floor take no special case; the first of tied
+    maxima is named; a row of NaN alone has no column to name. A NaN h, which amax skips and the quantizer codes −127,
+    passes the bound. An amax that is NaN or negative is refused, and +inf, a row's honest amax beside an infinite h,
+    passes."""
     from verity.ml.circuits.ops import fp32 as F
+
+    def ok(row, rec):
+        return D.amax_ok(len(row), rec.pack(), lambda k: row[k])
 
     top, below = 0x4000, 0x3FFF
     row = [top, below] + [0x3F00] * 30
     q = float(F.f32_of(F.f32_div_bits(F.bf16_to_f32_bits(top), D.act_scale(below))))
     assert 127.49 < q < 127.5 and D.requant(top, below) == 127
-    codes = _codes(row, below)
-    named = D.named_of(codes)
-    assert named == (0, 1)
-    assert D.named_ok(codes, D.ActRecord(below, named).pack(), {j: row[j] for j in named}) == 0
+    assert _codes(row, below)[:2] == [127, 127] and not D.bounded(top, below) and D.bounded(below, below)
+    assert ok(row, D.ActRecord(below, 1)) == 1
     honest, rec = D.act_codes(row)
-    assert D.named_ok(honest, rec.pack(), {j: row[j] for j in rec.named}) == 1 and rec == D.ActRecord(top, (0, 1))
-    tiny = [0x0001, 0x0080, 0x8100] * 4
-    codes, rec = D.act_codes(tiny)
-    assert rec.named == () and set(codes) == {0}
-    assert all(D.named_ok(codes, D.ActRecord(a, ()).pack(), {}) == 1 for a in (rec.amax, 0, 0x0200))
-    assert D.named_ok(codes, D.ActRecord(0x3F80, ()).pack(), {}) == 0
-    _, wide = D.act_codes([0x3F80] * (D.NAMED + 1))
-    with pytest.raises(ValueError, match="slots"):
-        wide.pack()
+    assert rec == D.ActRecord(top, 0) and ok(row, rec) == 1 and all(D.bounded(h, top) for h in row)
+    for r, want in (([0x0001, 0x0080, 0x8100] * 4, D.ActRecord(0x0100, 2)), ([0x8000, 0] * 4, D.ActRecord(0, 0)),
+                    ([0x3F00] + [0xBF80, 0x3F80] * 9, D.ActRecord(0x3F80, 1))):
+        codes, rec = D.act_codes(r)
+        assert rec == want and ok(r, rec) == 1 and all(D.bounded(h, rec.amax) for h in r), r
+    assert set(D.act_codes([0x0001, 0x0080, 0x8100])[0]) == {0}
+    assert D.act_codes([0x7FC0, 0xFFC1])[1] == D.ActRecord(0, D.NO_INDEX)
     nan = [0x3F80, 0x7FC0, 0xFFC0, 0x3F00]
     codes, rec = D.act_codes(nan)
-    assert rec == D.ActRecord(0x3F80, (0, 1, 2)) and codes[1:3] == [-127, -127]
-    assert D.named_ok(codes, rec.pack(), {j: nan[j] for j in rec.named}) == 1
-    assert D.named_ok(codes, D.ActRecord(0x3F00, rec.named).pack(), {j: nan[j] for j in rec.named}) == 0
+    assert rec == D.ActRecord(0x3F80, 0) and codes[1:3] == [-127, -127] and ok(nan, rec) == 1
+    assert all(D.bounded(h, 0x3F80) for h in nan) and not D.bounded(0x3F80, 0x3F00)
+    assert ok([0x7FC0], D.ActRecord(0x7FC0, 0)) == 0 and not D.bounded(0, 0x7FC0)
+    assert ok([0xBF80], D.ActRecord(0xBF80, 0)) == 0 and not D.bounded(0, 0x8000)
+    inf = [0x3F80, 0xFF80]
+    assert D.act_codes(inf)[1] == D.ActRecord(0x7F80, 1) and ok(inf, D.ActRecord(0x7F80, 1)) == 1
+    assert D.amax_ok(4, D.ActRecord(0x3F80, 4).pack(), lambda k: 0x3F80) == 0
 
 
 @pytest.mark.parametrize("k", [64, 128])
 def test_o16_a_guessed_act_passes_only_with_the_o16_it_guesses(k):
     """Requant is many-to-one, so A′ alone is guessed: at A = B = 0 a prover that skips the work commits A′ = 0 under an
     amax past every |h|, which every gate cell's A′ check alone (`act_ok`) passes and the consumer's amax check refuses
-    (S_i empty, the amax's own code 127). The last block also checks O mod 2^16, which it has to guess: with T_{S−1}
+    (no column's |h| is that amax). The last block also checks O mod 2^16, which it has to guess: with T_{S−1}
     honest (S = 1 at K 64, 2 at K 128), exactly the cells whose O mod 2^16 is the guess pass (O = Σ d_A d_B ~ Bin(K, 1/4),
     the guess its mode ⌊(K + 1)/4⌋), about a tenth of them."""
     sh = D.Shape(128, 256, k, lp=32, L=64, row=1024, ow=16, act=True)
@@ -648,4 +670,4 @@ def test_o16_a_guessed_act_passes_only_with_the_o16_it_guesses(k):
         assert got == int(o & D.M16 == g), (i, j, o)
         passed += got
     assert a_only == len(cells) and 0 < passed < len(cells) / 5
-    assert D.check_named(sh, SEEDS, A[0], B, 0, [0] * sh.I, D.ActRecord(0x7F7F, ()).pack(), sc) == 0
+    assert not any(D.check_amax(sh, SEEDS, A[0], B, 0, D.ActRecord(0x7F7F, k).pack(), sc) for k in range(0, sh.I, 17))

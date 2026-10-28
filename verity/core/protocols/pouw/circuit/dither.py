@@ -63,26 +63,24 @@ A gate-up call ([gate ‖ up], n = 2I) may also commit its consumer's int8 opera
 
 (`PouwZyDequant_v1`'s word, `SiluMulBf16_v2`'s, then the served quantizer's code, `Int8RowQuant_v1`'s: the scale
 RN32(max(amax, RN32(1e-30)) / 127) and the code clamp(rint(RN32(h / scale)), -127, 127), ties to even), with s_a per row and
-s_w per column (f32, `ActScales`). Row i's record (`ActRecord`, `REC` bytes) follows its I codes: amax_i (bf16) and S_i, the
-columns where |A′_ij| = 127, ascending in `NAMED` u16 slots (`NO_INDEX` past the last). The rows have leaves of their own:
-after tile-row tm's tiles come its 128 rows, each row's I codes and its record cut into rows of `row` bytes, the last short
-(`Shape.act_leaf`, `Shape.rec_leaf`).
+s_w per column (f32, `ActScales`). Row i's record (`ActRecord`, `REC` bytes) follows its I codes: amax_i (bf16) and k_i
+(u16), the first column whose |h| is amax_i (`argmax`). The rows have leaves of their own: after tile-row tm's tiles come
+its 128 rows, each row's I codes and its record cut into rows of `row` bytes, the last short (`Shape.act_leaf`,
+`Shape.rec_leaf`).
 
-The s = S block of a gate cell (i, j) opens A′_ij and amax_i, and checks A′_ij = requant(h_ij, amax_i) on its own in-circuit
-32-bit dot and the up column's, which it recomputes from B's row j + I (`check_last`, `act_ok`). That binds each code to the
-committed amax_i, and the consumer's s = S block binds amax_i to the row: it opens A′'s whole row i as its A (`act_row`)
-with its record (`rec_at`), and checks (`check_named`, `named_ok`)
+The s = S block of a gate cell (i, j) opens A′_ij and its row's record, and on h_ij from its own in-circuit 32-bit dot and
+the up column's, which it recomputes from B's row j + I, checks A′_ij = requant(h_ij, amax_i) and |h_ij| ≤ amax_i, a NaN
+h_ij (which amax skips) aside (`check_last`, `act_ok`). The consumer's s = S block opens A′'s whole row i as its A
+(`act_row`) with its record (`rec_at`), and checks that k_i < I and, on h_ik recomputed from the producer's A row i and
+B's rows k_i and k_i + I (two K-long dots), that |h_ik| = amax_i (`check_amax`, `amax_ok`). Both refuse an amax_i that is
+NaN or negative (above +inf's word).
 
-* that S_i is exactly {j : |A′_ij| = 127} over the row;
-* for each j in S_i, h_ij recomputed from the producer's A row i and B's rows j and j + I (two K-long dots), that
-  |h_ij| ≤ amax_i and A′_ij = requant(h_ij, amax_i);
-* that some j in S_i has |h_ij| = amax_i, or, S_i empty, that amax_i's own code is below 127 (a row under the scale's
-  floor, whose scale every such amax shares).
-
-An amax_i above the row's maximum is attained by no cell. One below it clips the maximum to ±127, which puts its cell in
-S_i, where |h| ≤ amax_i fails. That bound is on the magnitudes because rounding alone admits a maximum one bf16 step above
-an amax at the top of a binade (127 · 256 / 255 rounds to 127). No Definition here evaluates the 16-bit or the A′ blocks
-yet: `block_definition` refuses them.
+An amax_i above the row's maximum is attained by no cell, so the consumer refuses it. One below it fails |h| ≤ amax_i at
+the maximum's gate cell, at the rate a forged A′ byte is caught there. That bound is on the magnitudes because the code
+can't show it: the clamp codes the maximum ±127 under any smaller amax, a negative one too, and even a rounding check
+admits a maximum one bf16 step above an amax at the top of a binade (127 · 256 / 255 rounds to 127). Whatever dequantizes
+the consumer's output for row i reads its s_a, act_scale(amax_i), from the same committed record. No Definition here
+evaluates the 16-bit or the A′ blocks yet: `block_definition` refuses them.
 
 The reference: `values` gives a call's T (S × m × n) and O; `cell_values` one cell's from its two rows alone;
 `values_buffer`, `row_bytes` and `leaf_row` the leaf rows, the last from only the cells it holds; `tree` and `opens` the
@@ -143,9 +141,8 @@ TILE_WORD_BYTES, TILE_O_BYTES = 2 * CELLS, 4 * CELLS
 M16, M32 = (1 << 16) - 1, (1 << 32) - 1
 #: `Shape.leaf_of`'s kind of an A′ row
 ACT = "act"
-#: an A′ row's record: amax (bf16), then S_i's columns in NAMED u16 slots, NO_INDEX past the last
-NAMED = 7
-REC = 2 + 2 * NAMED
+#: an A′ row's record: amax (bf16), then k, the column of the row's maximum (u16; NO_INDEX for a row with none)
+REC = 4
 NO_INDEX = M16
 F32_127, F32_NEG127, F32_INF = 0x42FE0000, 0xC2FE0000, 0x7F800000
 #: the served quantizer's scale floor, RN32(1e-30)
@@ -184,7 +181,7 @@ class Shape:
         if self.act and not self.o:
             raise ValueError("A′ is checked against O's block: a call that commits A′ commits O")
         if self.act and self.n // 2 >= NO_INDEX:
-            raise ValueError(f"S_i's columns are u16 below {NO_INDEX}: I = n / 2 is {self.n // 2}")
+            raise ValueError(f"a record's column is a u16 below {NO_INDEX}: I = n / 2 is {self.n // 2}")
         if self.m <= 0 or self.n <= 0 or self.m % TILE or self.n % TILE:
             raise ValueError(f"m and n are whole tiles of {TILE}, not {self.m} × {self.n}")
         if self.lp <= 0 or self.lp % 32 or self.k % self.lp:
@@ -618,16 +615,21 @@ class ActScales:
 
 @dataclass(frozen=True)
 class ActRecord:
-    """A′ row i's record: amax, the bf16 word of the row's max |h| (`abs_max`), and named, S_i, the columns j where
-    |A′_ij| = 127, ascending."""
+    """A′ row i's record: amax, the bf16 word of the row's max |h| (`abs_max`), and k, the first column whose |h| it is
+    (`argmax`)."""
 
     amax: int
-    named: tuple[int, ...]
+    k: int
 
     def pack(self) -> bytes:
-        """The record's `REC` bytes: amax, then the columns in `NAMED` u16 slots, `NO_INDEX` past the last
-        (little-endian)."""
-        return struct.pack(f"<{1 + NAMED}H", self.amax & M16, *slots(self.named))
+        """The record's `REC` bytes: amax, then k, each a little-endian u16."""
+        return struct.pack("<HH", self.amax & M16, self.k & M16)
+
+    @classmethod
+    def unpack(cls, rec: bytes) -> "ActRecord":
+        if len(rec) != REC:
+            raise ValueError(f"a record is {REC} bytes, not {len(rec)}")
+        return cls(*struct.unpack("<HH", rec))
 
 
 def dequant(z: int, sa: int, sw: int) -> int:
@@ -689,24 +691,21 @@ def abs_max(hs: Iterable[int]) -> int:
     return max((x for x in (h & 0x7FFF for h in hs) if x <= 0x7F80), default=0)
 
 
-def named_of(codes: Iterable[int]) -> tuple[int, ...]:
-    """S_i of an A′ row (int8 values or bytes): its columns where |A′| = 127, ascending."""
-    return tuple(j for j, c in enumerate(codes) if abs(_sx8(c)) == 127)
+def argmax(hs: Sequence[int], amax: int) -> int:
+    """The first column whose |h| is amax, `NO_INDEX` when none is (every h NaN, a row this layout can't commit)."""
+    return next((j for j, h in enumerate(hs) if h & 0x7FFF == amax), NO_INDEX)
 
 
-def slots(named: Sequence[int]) -> tuple[int, ...]:
-    """S_i in a record's `NAMED` slots, `NO_INDEX` past the last. Refused past `NAMED` columns: the record holds no more,
-    so such a row isn't served under this layout."""
-    if len(named) > NAMED:
-        raise ValueError(f"S_i has {len(named)} columns, more than a record's {NAMED} slots")
-    return (*named, *[NO_INDEX] * (NAMED - len(named)))
+def bounded(h: int, amax: int) -> bool:
+    """The gate cell's bound on its h under its row's amax: amax is no NaN and not negative, and |h| ≤ amax unless h is
+    NaN, which `abs_max` skips."""
+    return amax <= F32_INF >> 16 and not amax < h & 0x7FFF <= F32_INF >> 16
 
 
 def act_codes(hs: Sequence[int]) -> tuple[list[int], ActRecord]:
     """A row's A′ (int8 values) and record from its h words, as the served quantizer forms them."""
     amax = abs_max(hs)
-    codes = [_sx8(requant(h, amax)) for h in hs]
-    return codes, ActRecord(amax, named_of(codes))
+    return [_sx8(requant(h, amax)) for h in hs], ActRecord(amax, argmax(hs, amax))
 
 
 def act_scales(sh: Shape, sa: Sequence[int], sw: Sequence[int]) -> ActScales:
@@ -1181,61 +1180,44 @@ def check_last(sh: Shape, seeds: Mapping[str, bytes], i: int, j: int, ins: Seque
 
 
 def act_ok(sh: Shape, ins: Sequence[Sequence[int]]) -> int:
-    """A gate cell's A′ check on its last block's `block_inputs`, in the clear: A′_ij is `act_word` of the cell's own dot
+    """A gate cell's A′ check on its last block's `block_inputs`, in the clear: on h, `act_h` of the cell's own dot
     Σ (a + da)(b + db) and the up column's Σ (a + da)(b_u + db_u), each the s32 word mod 2^32 (exact below `K_LIMIT`), the
-    block's in-circuit 32-bit sums whatever O's committed width."""
+    block's in-circuit 32-bit sums whatever O's committed width, A′_ij is requant(h, amax) and h is `bounded` by amax."""
     base = 8 if sh.S > 1 else 5
     a8, da = ins[0], ins[1]
     b8, db = (ins[3], ins[4]) if base == 8 else (ins[2], ins[3])
     bu8, dbu, (sa, swg, swu, amax), (ap,) = ins[base:]
-    zg, zu = out_dot(0, a8, da, b8, db), out_dot(0, a8, da, bu8, dbu)
-    return int(act_word(zg, zu, sa, swg, swu, amax) == ap & 0xFF)
+    h = act_h(out_dot(0, a8, da, b8, db), out_dot(0, a8, da, bu8, dbu), sa, swg, swu)
+    return int(bounded(h, amax) and requant(h, amax) == ap & 0xFF)
 
 
-def named_ok(codes: Sequence[int], rec: bytes, hs: Mapping[int, int]) -> int:
-    """The consumer's amax check of one A′ row, in the clear, on its I opened codes (`codes`), its opened record (`rec`,
-    `REC` bytes) and h at the columns the codes name (`hs`, column to bf16 word, as `check_named` recomputes them): the
-    record's slots are exactly S_i = `named_of(codes)`'s; amax is no NaN; each j in S_i has |h_j| ≤ amax (a NaN h_j, which
-    `abs_max` skips and the quantizer codes -127, aside) and A′_j = requant(h_j, amax); and some j in S_i has
-    |h_j| = amax, or, S_i empty, |requant(amax, amax)| < 127."""
-    if len(rec) != REC:
-        raise ValueError(f"a record is {REC} bytes, not {len(rec)}")
-    amax, *got = struct.unpack(f"<{1 + NAMED}H", rec)
-    named = named_of(codes)
-    if len(named) > NAMED or tuple(got) != slots(named) or amax > F32_INF >> 16:
-        return 0
-    if not named:
-        return int(abs(_sx8(requant(amax, amax))) < 127)
-    mags = [hs[j] & 0x7FFF for j in named]
-    if any(amax < m <= F32_INF >> 16 or requant(hs[j], amax) != codes[j] & 0xFF for j, m in zip(named, mags)):
-        return 0
-    return int(amax in mags)
+def amax_ok(I: int, rec: bytes, h_k: Callable[[int], int]) -> int:  # noqa: E741
+    """The consumer's amax check of one A′ row, in the clear, on its opened record (`rec`, `REC` bytes) and h at the
+    record's column (`h_k(k)`, a bf16 word, as `check_amax` recomputes it): k < I, amax is no NaN and not negative, and
+    |h_k| = amax."""
+    r = ActRecord.unpack(rec)
+    return int(r.k < I and r.amax <= F32_INF >> 16 and h_k(r.k) & 0x7FFF == r.amax)
 
 
-def check_named(sh: Shape, seeds: Mapping[str, bytes], a_i: Sequence[int], B: Mapping[int, Sequence[int]], i: int,
-                codes: Sequence[int], rec: bytes, sc: ActScales) -> int:
-    """`named_ok` on A′ row i of the gate-up call `sh` as its consumer's s = S block opens it (`codes`, `rec`), with h at
-    each column j it names recomputed as a gate cell's block computes it: two K-long dots from the producer's A row i
-    (`a_i`), B's rows j and j + I (`B`, by row) and the producer's coins `seeds`, then `act_h`."""
-    named = named_of(codes)
-    hs = {}
-    if len(named) <= NAMED:
+def check_amax(sh: Shape, seeds: Mapping[str, bytes], a_i: Sequence[int], B: Mapping[int, Sequence[int]], i: int,
+               rec: bytes, sc: ActScales) -> int:
+    """`amax_ok` on A′ row i of the gate-up call `sh` as its consumer's s = S block opens its record (`rec`), with h at the
+    record's column k recomputed as a gate cell's block computes it: two K-long dots from the producer's A row i (`a_i`),
+    B's rows k and k + I (`B`, by row) and the producer's coins `seeds`, then `act_h`."""
+    def h_k(k: int) -> int:
         a8, da = _int8s(_row(f"A's row {i}", a_i, sh.k)), dithers(sh, seeds, "A", [i])[0]
-        for j in named:
-            ju = j + sh.I
-            zg, zu = (out_dot(0, a8, da, _int8s(_row(f"B's row {c}", B[c], sh.k)), dithers(sh, seeds, "B", [c])[0])
-                      for c in (j, ju))
-            hs[j] = act_h(zg, zu, sc.sa[i], sc.sw[j], sc.sw[ju])
-    return named_ok(codes, rec, hs)
+        zg, zu = (out_dot(0, a8, da, _int8s(_row(f"B's row {c}", B[c], sh.k)), dithers(sh, seeds, "B", [c])[0])
+                  for c in (k, k + sh.I))
+        return act_h(zg, zu, sc.sa[i], sc.sw[k], sc.sw[k + sh.I])
+    return amax_ok(sh.I, rec, h_k)
 
 
-__all__ = ["ACT", "ActRecord", "ActScales", "DEVICES", "K_LIMIT", "NAMED", "NOISE", "NO_INDEX", "PAD", "REC", "STREAMS",
+__all__ = ["ACT", "ActRecord", "ActScales", "DEVICES", "K_LIMIT", "NOISE", "NO_INDEX", "PAD", "REC", "STREAMS",
            "Shape", "TAG", "TILE", "Tree", "PouwDitherBlock", "PouwDitherFirst", "PouwDitherLast", "PouwDitherLastOk",
            "PouwDitherOnlyOk", "PouwDitherOutDot", "PouwDitherOutDot0", "PouwDitherStep", "abs_max", "act_at",
-           "act_codes", "act_h", "act_hs", "act_ok", "act_row", "act_scale", "act_scales", "act_word", "acts",
-           "block_bits", "block_definition", "block_inputs", "block_widths", "cell_values", "check_block", "check_last",
-           "check_named", "checkpoint_digest", "commit", "dequant", "dithers", "dot_steps", "fill_seeds", "leaf_h",
-           "leaf_row", "named_of", "named_ok", "noise_a", "noise_b", "operand_domain", "operand_row", "operand_tree",
+           "act_codes", "act_h", "act_hs", "act_ok", "act_row", "act_scale", "act_scales", "act_word", "acts", "amax_ok",
+           "argmax", "block_bits", "block_definition", "block_inputs", "block_widths", "bounded", "cell_values",
+           "check_amax", "check_block", "check_last", "checkpoint_digest", "commit", "dequant", "dithers", "dot_steps",
+           "fill_seeds", "leaf_h", "leaf_row", "noise_a", "noise_b", "operand_domain", "operand_row", "operand_tree",
            "opens", "out_at", "out_dot", "pad_rows", "perms", "prf_salt", "prg", "rec_at", "requant", "row_bytes",
-           "salts", "seeds", "silu_f32", "silu_mul", "slots", "step_ok", "tree", "values", "values_buffer", "word_at",
-           "wrap8"]
+           "salts", "seeds", "silu_f32", "silu_mul", "step_ok", "tree", "values", "values_buffer", "word_at", "wrap8"]

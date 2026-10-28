@@ -6,7 +6,7 @@ A call's components (compressions on the device; a leaf's row is R bytes):
   t_S    a filler's T_S rows (a served call's O implies its T_S): R / 128 + 1 a leaf, from P's midstate
   t_s    the T_s rows for s < S
   O      O's rows (a served call's), at 32 bits or, in layout (d), 16
-  act    layout (d)'s A′ rows in a gate-up call's value root: each of its m rows' n / 2 codes and its record (amax and S_i,
+  act    layout (d)'s A′ rows in a gate-up call's value root: each of its m rows' n / 2 codes and its record (amax and k,
          `dither.REC` bytes) in rows of R bytes, the last short, from the same midstate (a row/v2 prefix is one block at
          every length)
   salt   a leaf's salt: prf_salt's y (3) and hm96's c = H(salt_prefix ‖ y) from its midstate (2)

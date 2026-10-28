@@ -43,8 +43,8 @@ def test_a_served_call_of_one_segment_draws_no_noise_and_commits_O():
 
 
 def test_layout_d_a_rows_carry_their_record():
-    """Under layout (d) the gate-up call's A′ rows hold their record: on 8B one 14,352-byte leaf a row, as many blocks as
-    its codes alone; on mqa16k52, whose codes fill two leaves, a 16-byte third leaf a row."""
+    """Under layout (d) the gate-up call's A′ rows hold their record: on 8B one 14,340-byte leaf a row, as many blocks as
+    its codes alone; on mqa16k52, whose codes fill two leaves, a 4-byte third leaf a row."""
     c = C.components(16384, 28672, 4096, row=16384, kind="served", ow=16, act=True)
     assert c["parts"]["act"] == 16384 * C.row_blocks(14336 + dither.REC) == 16384 * C.row_blocks(14336)
     q = C.components(16384, 65536, 16384, row=16384, kind="served", ow=16, act=True)
