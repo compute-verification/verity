@@ -19,7 +19,7 @@ and every tier counted, C5 and C6 are the game's shape, which the challenger's d
 every tier counted means `D` is every byte the disks can hold, each SSD's spare area and cache included, and what the
 fill doesn't overwrite (the root filesystem, filesystem metadata, the margin) counts in `R` in full. The root
 filesystem needs no premise of its own: it is in `R`. **What it covers:** the sequential reveal (batch size 1), the
-only one the wipe accepts.
+only one the verdict accepts.
 -/
 
 namespace Pous.Guarantees
