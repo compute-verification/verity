@@ -31,7 +31,8 @@ same y bit for bit (`pick_wgmma`; where its library doesn't build or load, the T
 `scaled_mm_zy` (`verity_int8::scaled_mm_zy`'s CUDA body, `product_zy`) is `scaled_mm` at the same config whose epilogue also
 writes `int8_exact`'s z/y records from the same int32 accumulator: the y it computes once is both the served y and the
 record's, and its grid covers the call's T slots, a row tile at or past M multiplying nothing and writing only its empty
-slots' records (z 0, y dq(0, 0, s_w)).  Split-K sums into the same workspace before the one epilogue.
+slots' records (z 0, y dq(0, 0, s_w)).  Split-K sums into the same workspace before the one epilogue.  `product_zy` takes
+`product`'s wgmma row the same way (`int8_wgmma.scaled_mm_zy`, the same y and records byte for byte).
 """
 from __future__ import annotations
 
@@ -464,7 +465,12 @@ def product_zy(xq: torch.Tensor, s_a: torch.Tensor, w: torch.Tensor, s_w: torch.
     y = torch.empty((m, n), dtype=torch.bfloat16, device=xq.device)
     zy = torch.empty((zy_units(m, n, rows), ZY_BYTES), dtype=torch.uint8, device=xq.device)
     if m:
-        scaled_mm_zy(xq, s_a.reshape(-1), w, s_w.reshape(-1), y, zy, rows, *_plan(m, n, k, xq.device))
+        s_a, s_w = s_a.reshape(-1), s_w.reshape(-1)
+        wg = pick_wgmma(m, n, k, xq.device.index)
+        if wg is not None and int8_wgmma.fits(xq, s_a, w, s_w, y, zy):
+            int8_wgmma.scaled_mm_zy(xq, s_a, w, s_w, y, zy, rows, wg)
+        else:
+            scaled_mm_zy(xq, s_a, w, s_w, y, zy, rows, *_plan(m, n, k, xq.device))
     else:
         zy.zero_()
     return y, zy

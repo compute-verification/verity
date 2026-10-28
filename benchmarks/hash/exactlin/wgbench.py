@@ -22,8 +22,16 @@ to sleep after each call (`stamp.cu`'s rest, R times the call's clocks at 0.7 of
 of the span, so an item's rate is the GEMM's at that lower mean power and higher clock.  `--plan` times
 `int8_fused._plan`'s Triton config beside TRITON: what serves today where the shape has no row.
 
+`--zy` gates the z/y-record kernels too (`int8_wgmma.scaled_mm_zy`) and times them in place of the plain ones: the same
+shapes and kinds, an edge's N rounded up to whole 32-column units and its call over T = M rounded up to whole 32-row units
+plus 160 slots (a row tile past M), a served shape's over T = M.  Each variant's y and records (into 0xA5-poisoned ones,
+twice) equal the reference's, its y and `int8_exact.zy_records` of the exact s32 product over the T slots (zero codes under
+scale 0 past M) and its dequant, and `exactlin_scaled_mm_zy_tma`'s at TRITON, byte for byte.  The Triton arms are then
+`scaled_mm_zy` at TRITON and (`--plan`) at `_plan`'s config, what serves the records today.
+
     python wgbench.py --out OUT [--ms 8192,16384,32768] [--linears qkv,o,gate_up,down] [--variants all] [--secs 2]
                       [--rounds 2] [--no-lt] [--gate-only] [--no-edges] [--time-kinds served,random] [--plan] [--rest R]
+                      [--zy]
 """
 from __future__ import annotations
 
@@ -41,6 +49,7 @@ from pathlib import Path
 
 import torch
 
+from verity_vllm.engine import int8_exact as E
 from verity_vllm.engine import int8_fused as X
 from verity_vllm.engine import int8_wgmma as W
 
@@ -50,6 +59,12 @@ LINEARS = {"qkv": (3072, 2048), "o": (2048, 2048), "gate_up": (16384, 2048), "do
 TRITON = "128x128x128:w4:s3:k1:t1"  # the tuned Triton tile for Llama-3.2-1B's linears on sm_90 at M 8,192 to 32,768
 EDGES = ((8193, 3072, 2048), (1000, 3000, 2064), (129, 136, 160), (8191, 2050, 8192), (300, 16384, 2048), (17, 256, 16))
 KINDS = ("served", "random", "extremes")
+UR, UC = E.UNIT
+ZY_EDGES = tuple((m, -(-n // UC) * UC, k) for m, n, k in EDGES)
+
+
+def zy_slots(m: int, edge: bool) -> int:
+    return -(-m // UR) * UR + (160 if edge else 0)
 
 
 def stamp_lib(tmp: Path) -> ctypes.CDLL:
@@ -189,14 +204,60 @@ def gate(m, n, k, variants, kinds=KINDS, seed=0) -> list[dict]:
     return rows
 
 
-def arm_fn(arm: str, ops: list, ys: list, after=lambda: None):
-    if arm in ("triton", "plan"):
-        m, k = ops[0][0].shape
-        n = ops[0][2].shape[0]
-        cfg = (X.Cfg.parse(TRITON), None) if arm == "triton" else X._plan(m, n, k, ops[0][0].device)
+def gate_zy(m, n, k, rows, variants, kinds=KINDS, seed=0) -> list[dict]:
+    """Per kind, each arm's differing y words plus differing record bytes against the reference."""
+    out = []
+    tri = X.Cfg.parse(TRITON)
+    units = E.zy_units(m, n, rows)
+    for kind in kinds:
+        xq, sa, w, sw = operands(m, n, k, kind, seed)
+        z = torch.zeros(rows, n, dtype=torch.int32, device="cuda")
+        z[:m] = (xq.double() @ w.double().T).to(torch.int32)
+        scales = torch.zeros(rows, dtype=torch.float32, device="cuda")
+        scales[:m] = sa
+        yr = E.dequantize(z, scales, sw)
+        ref_y, ref_zy = yr[:m].view(torch.int16).clone(), E.zy_records(z, yr)
+        del z, yr
+
+        def bad(y, zy):
+            return int((y.view(torch.int16) != ref_y).sum()) + int((zy != ref_zy).sum())
+        row = {"shape": [m, n, k], "rows": rows, "kind": kind, "zy": True}
+        y, zy = poisoned(m, n), torch.full((units, E.ZY_BYTES), 0xA5, dtype=torch.uint8, device="cuda")
+        try:
+            X.scaled_mm_zy(xq, sa, w, sw, y, zy, rows, tri)
+            row["triton_vs_ref"] = bad(y, zy)
+        except Exception as e:  # noqa: BLE001  (as `gate`)
+            row["triton_refused"] = repr(e)[:200]
+        for v in variants:
+            for call in (0, 1):
+                y = poisoned(m, n)
+                zy.fill_(0xA5)
+                W.scaled_mm_zy(xq, sa, w, sw, y, zy, rows, W.WgCfg.parse(v))
+                torch.cuda.synchronize()
+                row[f"{v}#{call}"] = bad(y, zy)
+        row["ok"] = all(v == 0 for key, v in row.items() if key not in ("shape", "rows", "kind", "zy", "ok", "triton_refused"))
+        out.append(row)
+        del xq, w, y, zy, ref_y, ref_zy
+    return out
+
+
+def arm_fn(arm: str, ops: list, ys: list, after=lambda: None, zys=None):
+    """An arm's calls over the copies; the zy arms (triton-zy, plan-zy, wgzy:CFG#FLAGS) write records over T = M slots."""
+    m, k = ops[0][0].shape
+    n = ops[0][2].shape[0]
+    if arm in ("triton", "plan", "triton-zy", "plan-zy"):
+        cfg = (X.Cfg.parse(TRITON), None) if arm.startswith("triton") else X._plan(m, n, k, ops[0][0].device)
+        if arm.endswith("-zy"):
+            return lambda: [(X.scaled_mm_zy(xq, sa, w, sw, y, zy, m, *cfg), after())
+                            for (xq, sa, w, sw), y, zy in zip(ops, ys, zys)]
         return lambda: [(X.scaled_mm(xq, sa, w, sw, y, *cfg), after()) for (xq, sa, w, sw), y in zip(ops, ys)]
     if arm == "lt":
         return lambda: [(torch._int_mm(xq, w.t()), after()) for (xq, sa, w, sw), y in zip(ops, ys)]
+    if arm.startswith("wgzy:"):
+        text, _, flags = arm.removeprefix("wgzy:").partition("#")
+        cfg, flags = W.WgCfg.parse(text), int(flags or 0)
+        return lambda: [(W.scaled_mm_zy(xq, sa, w, sw, y, zy, m, cfg, flags), after())
+                        for (xq, sa, w, sw), y, zy in zip(ops, ys, zys)]
     text, _, flags = arm.removeprefix("wg:").partition("#")
     cfg, flags = W.WgCfg.parse(text), int(flags or 0)
     return lambda: [(W.scaled_mm(xq, sa, w, sw, y, cfg, flags), after()) for (xq, sa, w, sw), y in zip(ops, ys)]
@@ -207,12 +268,15 @@ def timed(m, n, k, arms, secs, rounds, clock, dmon, name, kind, rest=0.0) -> lis
     copies = max(2, math.ceil(2 * l2 / (n * k + m * k)))
     ops = [operands(m, n, k, kind, 100 + c) for c in range(copies)]
     ys = [torch.empty(m, n, dtype=torch.bfloat16, device="cuda") for _ in range(copies)]
+    zys = None
+    if any(a.endswith("-zy") or a.startswith("wgzy:") for a in arms):
+        zys = [torch.empty((E.zy_units(m, n, m), E.ZY_BYTES), dtype=torch.uint8, device="cuda") for _ in range(copies)]
     graphs, per_replay = {}, {}
     # a call's rest: `rest` times its clocks at 0.7 of the s8 rate
     cycles = int(rest * m * n * k / (0.7 * PER_CLK * clock.sms))
     after = (lambda: clock.rest(cycles)) if cycles else (lambda: None)
     for arm in arms:
-        f = arm_fn(arm, ops, ys, after)
+        f = arm_fn(arm, ops, ys, after, zys)
         f()
         torch.cuda.synchronize()
         g = torch.cuda.CUDAGraph()
@@ -291,6 +355,7 @@ def main() -> int:
     ap.add_argument("--plan", action="store_true", help="time `int8_fused._plan`'s Triton config too (what serves today)")
     ap.add_argument("--rest", type=float, default=0.0,
                     help="the SMs asleep after each call for this many times its clocks at 0.7 of the rate (a served step's clock)")
+    ap.add_argument("--zy", action="store_true", help="gate the z/y-record kernels too and time them (probes CFG#FLAGS too)")
     a = ap.parse_args()
     out = Path(a.out)
     out.mkdir(parents=True, exist_ok=True)
@@ -306,6 +371,13 @@ def main() -> int:
         gates += gate(m, n, k, variants)
     for _, m, n, k in shapes:
         gates += gate(m, n, k, variants, seed=m)
+    if a.zy:
+        for m, n, k in () if a.no_edges else ZY_EDGES:
+            gates += gate_zy(m, n, k, zy_slots(m, True), variants)
+            torch.cuda.empty_cache()
+        for _, m, n, k in shapes:
+            gates += gate_zy(m, n, k, zy_slots(m, False), variants, seed=m)
+            torch.cuda.empty_cache()
     with (out / "gates.jsonl").open("w") as f:
         for g in gates:
             f.write(json.dumps(g) + "\n")
@@ -318,8 +390,12 @@ def main() -> int:
         return 0
     tmp = Path(tempfile.mkdtemp())
     clock, dmon = Clock(stamp_lib(tmp)), Dmon()
-    arms = (["triton"] + (["plan"] if a.plan else []) + [f"wg:{v}" for v in variants]
-            + [f"wg:{v}" for v in a.probes.split(",") if v] + ([] if a.no_lt else ["lt"]))
+    if a.zy:
+        arms = (["triton-zy"] + (["plan-zy"] if a.plan else []) + [f"wgzy:{v}" for v in variants]
+                + [f"wgzy:{v}" for v in a.probes.split(",") if v] + ([] if a.no_lt else ["lt"]))
+    else:
+        arms = (["triton"] + (["plan"] if a.plan else []) + [f"wg:{v}" for v in variants]
+                + [f"wg:{v}" for v in a.probes.split(",") if v] + ([] if a.no_lt else ["lt"]))
     items = []
     try:
         for lin, m, n, k in shapes:

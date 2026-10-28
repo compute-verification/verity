@@ -1,7 +1,8 @@
-"""`engine.int8_wgmma`, `int8_fused.product`'s sm_90a plan: its configs and plan rows on the CPU, its PTX's rounding where
-nvcc is, and on an sm_90 GPU with nvcc every variant bit for bit against `exactlin_scaled_mm_tma` and an exact int32 product
-with exactlin's epilogue, at shapes that are no multiple of any tile, at -128 and 127, into a poisoned y, and replayed from
-a CUDA graph."""
+"""`engine.int8_wgmma`, `int8_fused.product`'s and `product_zy`'s sm_90a plan: its configs and plan rows on the CPU, its
+PTX's rounding where nvcc is, and on an sm_90 GPU with nvcc every variant bit for bit against `exactlin_scaled_mm_tma` and
+an exact int32 product with exactlin's epilogue, at shapes that are no multiple of any tile, at -128 and 127, into a
+poisoned y, and replayed from a CUDA graph; and every zy variant's y and z/y records byte for byte against
+`exactlin_scaled_mm_zy_tma`'s and `int8_exact.zy_records` of that product, over slots past M and row tiles past M."""
 from __future__ import annotations
 
 import subprocess
@@ -9,6 +10,7 @@ import subprocess
 import pytest
 import torch
 
+from verity_vllm.engine import int8_exact as E
 from verity_vllm.engine import int8_wgmma as W
 from verity_vllm.engine.profiles import int8_gemm_configs as C
 
@@ -141,3 +143,82 @@ def test_product_takes_the_row_and_keeps_the_values(monkeypatch):
     got = X.product(xq, sa, w, sw).view(torch.int16)
     assert calls == [("co_128x256", 8, 0)]
     assert torch.equal(got, want) and torch.equal(got, _reference(xq, sa, w, sw))
+
+
+def _zy_reference(xq, sa, w, sw, rows) -> tuple[torch.Tensor, torch.Tensor]:
+    """(y bits [M, N], records) of the exact product over `rows` slots, zero codes under scale 0 past M."""
+    m = xq.shape[0]
+    z = torch.zeros(rows, w.shape[0], dtype=torch.int32, device="cuda")
+    z[:m] = (xq.double() @ w.double().T).to(torch.int32)
+    scales = torch.zeros(rows, dtype=torch.float32, device="cuda")
+    scales[:m] = sa
+    y = E.dequantize(z, scales, sw)
+    return y[:m].view(torch.int16), E.zy_records(z, y)
+
+
+def _poisoned_zy(m, n, rows) -> torch.Tensor:
+    return torch.full((E.zy_units(m, n, rows), E.ZY_BYTES), 0xA5, dtype=torch.uint8, device="cuda")
+
+
+@sm90
+@pytest.mark.parametrize("variant", list(W.VARIANTS))
+@pytest.mark.parametrize("m,n,k,rows,extremes", [(1, 32, 16, 32, False), (129, 160, 160, 320, False),
+                                                 (300, 512, 2064, 512, True), (1000, 3008, 2048, 1024, False),
+                                                 (513, 288, 8192, 704, True)])
+def test_every_zy_variant_writes_exactlins_records_byte_for_byte(variant, m, n, k, rows, extremes):
+    """Slots past M in a multiplying tile and in row tiles (or pairs) that multiply nothing, negative s_w (whose empty
+    slots' y is -0), raster groups of 8 and of 1 on 8 CTAs, twice into the same poisoned buffers."""
+    from verity_vllm.engine import int8_fused as X
+
+    xq, sa, w, sw = _operands(m, n, k, seed=m + n + k + rows, extremes=extremes)
+    if extremes:
+        sw[::3] = -sw[::3]
+    ref_y, ref_zy = _zy_reference(xq, sa, w, sw, rows)
+    yt, zt = _poisoned(m, n), _poisoned_zy(m, n, rows)
+    X.scaled_mm_zy(xq, sa, w, sw, yt, zt, rows, X.Cfg.parse("128x128x128:w4:s3:k1:t1"))
+    assert torch.equal(yt.view(torch.int16), ref_y) and torch.equal(zt, ref_zy)
+    for cfg in (f"{variant}:g8", f"{variant}:g1:c8"):
+        y, zy = _poisoned(m, n), _poisoned_zy(m, n, rows)
+        for _ in range(2):
+            W.scaled_mm_zy(xq, sa, w, sw, y, zy, rows, W.WgCfg.parse(cfg))
+            assert torch.equal(y.view(torch.int16), ref_y), cfg
+            assert torch.equal(zy, ref_zy), (cfg, int((zy != ref_zy).any(dim=1).sum()))
+
+
+@sm90
+def test_a_graph_replays_the_zy_kernel_on_new_operands():
+    m, n, k, rows = 384, 512, 1024, 448
+    xq, sa, w, sw = _operands(m, n, k, seed=4)
+    y, zy = _poisoned(m, n), _poisoned_zy(m, n, rows)
+    cfg = W.WgCfg.parse("ppm2_128x128:g8")
+    W.scaled_mm_zy(xq, sa, w, sw, y, zy, rows, cfg)
+    g = torch.cuda.CUDAGraph()
+    with torch.cuda.graph(g):
+        W.scaled_mm_zy(xq, sa, w, sw, y, zy, rows, cfg)
+    x2, s2, w2, sw2 = _operands(m, n, k, seed=5)
+    for dst, src in ((xq, x2), (sa, s2), (w, w2), (sw, sw2)):
+        dst.copy_(src)
+    y.view(torch.int16).fill_(0x5A5A)
+    zy.fill_(0x5A)
+    g.replay()
+    torch.cuda.synchronize()
+    ref_y, ref_zy = _zy_reference(x2, s2, w2, sw2, rows)
+    assert torch.equal(y.view(torch.int16), ref_y) and torch.equal(zy, ref_zy)
+
+
+@sm90
+def test_product_zy_takes_the_row_and_keeps_the_values(monkeypatch):
+    from verity_vllm.engine import int8_fused as X
+
+    m, n, k, rows = 2048, 768, 2048, 2112
+    xq, sa, w, sw = _operands(m, n, k, seed=6)
+    want_y, want_zy = X.product_zy(xq, sa, w, sw, rows)
+    calls = []
+    real = W.scaled_mm_zy
+    monkeypatch.setattr(W, "scaled_mm_zy", lambda *a: calls.append(a[-1]) or real(*a))
+    monkeypatch.setattr(W, "WGMMA", {"sm_90": {(n, k): [(1024, "co_128x256:g8")]}})
+    got_y, got_zy = X.product_zy(xq, sa, w, sw, rows)
+    assert calls == [("co_128x256", 8, 0)]
+    ref_y, ref_zy = _zy_reference(xq, sa, w, sw, rows)
+    assert torch.equal(got_y.view(torch.int16), want_y.view(torch.int16)) and torch.equal(got_zy, want_zy)
+    assert torch.equal(got_y.view(torch.int16), ref_y) and torch.equal(got_zy, ref_zy)

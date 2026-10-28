@@ -16,6 +16,14 @@
 // stage).  M, N and K need not be multiples of the tile: a box past the matrix reads zeros, which add nothing, and the
 // epilogue stores rows < M and columns < N alone (N even, K a multiple of 16).  The kernels are named
 // exactlin_scaled_mm_wgmma_*, so a profile's kernel classes count them with exactlin's GEMM.
+//
+// The zy kernels (exactlin_scaled_mm_zy_wgmma_*, `int8_fused.scaled_mm_zy`'s product, word for word `_zy_epilogue`'s) also
+// write the call's z/y records over its T slots (`int8_exact.zy_records`): unit (i / 32, j / 32) is record
+// (i / 32) (N / 32) + j / 32, ZY_BYTES bytes, its 32 x 32 s32 z row-major then its 32 x 32 bf16 y row-major, the y the
+// served y's words.  Tile rows run over the T slots (T >= M, both T and N whole units): a unit whose first tile row starts at
+// or past M loads nothing and multiplies nothing, its accumulators zero, so its records are z = 0 and y = dq(0, +0, s_w), as
+// a slot past M is everywhere.  Each thread stores its own cells from the accumulators, a z pair and a y word a row, under
+// the stores of y.
 #include <cstddef>
 #include <cstdint>
 #include <cuda.h>
@@ -32,11 +40,14 @@ struct alignas(128) Params {
   const float* sa;   // s_a [M]
   const float* sw;   // s_w [N]
   uint16_t* y;       // y [M, N], bf16 words, row-major
-  int M, N, K, group, flags;
+  uint8_t* zy;       // the zy kernels' records [(T / 32) (N / 32), ZY_BYTES], 16-byte aligned
+  int M, N, K, group, flags, T;
 };
 // flags: Y_TMA, y through shared memory and a TMA store (N a multiple of 8, y 16-byte aligned), else stored by each thread;
-// the rest are timing probes: 1 streaming stores, 2 no epilogue, 4 no stores (the last two leave y unwritten)
-constexpr int Y_TMA = 8;
+// the rest are timing probes: 1 streaming stores, 2 no epilogue, 4 no stores (the last two leave y unwritten), and for the
+// zy kernels 32 streaming record stores, 64 no record stores (records unwritten)
+constexpr int Y_TMA = 8, REC_CS = 32, REC_NONE = 64;
+constexpr int UNIT = 32, ZY_BYTES = 6 * UNIT * UNIT;
 
 // ---------------------------------------------------------------- mbarriers, TMA, wgmma
 DEV uint32_t smem_at(const void* p) { return (uint32_t)__cvta_generic_to_shared(p); }
@@ -173,6 +184,20 @@ DEV void put(uint32_t* at, uint32_t v, int flags) {
   }
 }
 
+// a record's z pair (8 bytes) and y word (4 bytes)
+DEV void put_z(uint8_t* at, int32_t a, int32_t b, int flags) {
+  if (flags & REC_CS)
+    __stcs(reinterpret_cast<int2*>(at), make_int2(a, b));
+  else
+    *reinterpret_cast<int2*>(at) = make_int2(a, b);
+}
+DEV void put_y(uint8_t* at, uint32_t v, int flags) {
+  if (flags & REC_CS)
+    __stcs(reinterpret_cast<unsigned int*>(at), v);
+  else
+    *reinterpret_cast<uint32_t*>(at) = v;
+}
+
 template <int CL> DEV void release(uint32_t bar) {
   if constexpr (CL == 1) {
     mbar_arrive(bar);
@@ -185,8 +210,9 @@ template <int CL> DEV void release(uint32_t bar) {
 // CTA c (a pair's with CL = 2) takes units c, c + G, ... (G the CTAs, or pairs), the j-th of them by consumer j % 2 (CO = 0)
 // or by both (CO = 1).  The producer fills the ring in that order, so unit j's k-block kb is the ring's fill j KB + kb.  A
 // unit is one tile (CL = 1) or a pair of M-adjacent tiles, CTA r taking tile row 2 u + r (zeros past M, stored nowhere) and
-// loading half r of W's box.
-template <int WM, int BN, int CO, int CL> DEV void body(const Params& p) {
+// loading half r of W's box.  ZY: the units cover the T slots, and one whose first tile row starts at or past M has no fills
+// (both CTAs of a pair agree on it), so unit j's first fill is KB times the units before it that multiply.
+template <int WM, int BN, int CO, int CL, bool ZY> DEV void body(const Params& p) {
   using T = Tile<WM, BN, CO>;
   constexpr int STAGES = T::STAGES, NH = T::NH, NA = T::NA, NC = CO ? 2 : 1;  // NC: the consumers that read a stage
   static_assert(CL == 1 || CL == 2, "a CTA or a pair");
@@ -194,7 +220,8 @@ template <int WM, int BN, int CO, int CL> DEV void body(const Params& p) {
   const uint32_t base = (smem_at(smem) + 1023) & ~1023u, ybuf = base + STAGES * T::STAGE, bars = ybuf + 2 * T::Y_BYTES;
   const uint32_t order = bars + 16 * STAGES;
   const int M = p.M, N = p.N, KB = (p.K + BK - 1) / BK;
-  const int tiles_m = (M + WM - 1) / WM, tiles_n = (N + BN - 1) / BN, rows_u = (tiles_m + CL - 1) / CL, units = rows_u * tiles_n;
+  const int tiles_m = ((ZY ? p.T : M) + WM - 1) / WM, tiles_n = (N + BN - 1) / BN, rows_u = (tiles_m + CL - 1) / CL;
+  const int units = rows_u * tiles_n;
   const int tid = threadIdx.x, wg = tid / 128, rank = CL == 1 ? 0 : (int)cta_rank();
   const int first_u = blockIdx.x / CL, step_u = gridDim.x / CL;
   if (tid == 0) {
@@ -223,6 +250,7 @@ template <int WM, int BN, int CO, int CL> DEV void body(const Params& p) {
       for (int t = first_u; t < units; t += step_u) {
         int tm, tn;
         raster(t, rows_u, tiles_n, p.group, tm, tn);
+        if (ZY && tm * CL * WM >= M) continue;
         tm = tm * CL + rank;
         for (int kb = 0; kb < KB; kb++) {
           const uint32_t st = base + s * T::STAGE, full = bars + 8 * s;
@@ -253,32 +281,49 @@ template <int WM, int BN, int CO, int CL> DEV void body(const Params& p) {
   int32_t d[NH][NA];
   int i = 0;
   constexpr int STEP = CO ? 1 : 2;
+  // ZY: whether unit t multiplies, and the fills before this consumer's first unit
+  auto multiplies = [&](int t) {
+    int tm, tn;
+    raster(t, rows_u, tiles_n, p.group, tm, tn);
+    return !ZY || tm * CL * WM < M;
+  };
+  uint32_t fills = ZY && !CO && wg == 1 && first_u < units && multiplies(first_u) ? KB : 0;
   for (int t = first_u + (CO ? 0 : wg) * step_u, j = CO ? 0 : wg; t < units; t += STEP * step_u, j += STEP, i++) {
     int tm, tn;
     raster(t, rows_u, tiles_n, p.group, tm, tn);
+    const bool mult = !ZY || tm * CL * WM < M;
     tm = tm * CL + rank;
     // ping-pong: the other consumer's mainloop of unit j - 1 has issued its last stage, so every fill before this unit's
     // first has been waited on and each parity wait below is on the fill it names
     if (!CO && j > 0) mbar_wait_warp(order + 8 * (1 - wg), (uint32_t)(wg == 0 ? i - 1 : i) & 1);
-    const uint32_t g = (uint32_t)j * KB;
+    const uint32_t g = ZY ? fills : (uint32_t)j * KB;
+    if constexpr (ZY) fills += (mult ? KB : 0) + (!CO && t + step_u < units && multiplies(t + step_u) ? KB : 0);
     int s = g % STAGES, sp = 0;
     uint32_t ph = (g / STAGES) & 1;
-    for (int kb = 0; kb < KB; kb++) {
-      mbar_wait_warp(bars + 8 * s, ph);
-      const uint32_t b0 = base + s * T::STAGE + T::A_BYTES, a0 = base + s * T::STAGE + (CO ? wg * T::R * BK : 0);
-      WG_FENCE;
+    if (mult) {
+      for (int kb = 0; kb < KB; kb++) {
+        mbar_wait_warp(bars + 8 * s, ph);
+        const uint32_t b0 = base + s * T::STAGE + T::A_BYTES, a0 = base + s * T::STAGE + (CO ? wg * T::R * BK : 0);
+        WG_FENCE;
 #pragma unroll
-      for (int k = 0; k < 4; k++)
+        for (int k = 0; k < 4; k++)
 #pragma unroll
-        for (int h = 0; h < NH; h++)
-          imma<BN>(d[h], desc_sw128(a0 + h * 64 * BK + 32 * k), desc_sw128(b0 + 32 * k), kb > 0 || k > 0);
-      WG_COMMIT;
-      // ping-pong: past its last wait on a stage, so the other consumer may start, its MMAs queued behind these
-      if (!CO && kb == KB - 1 && lane == 0) mbar_arrive(order + 8 * wg);
-      WG_WAIT(1);
-      if (kb > 0 && lane == 0) release<CL>(bars + 8 * (STAGES + sp));
-      sp = s;
-      if (++s == STAGES) { s = 0; ph ^= 1; }
+          for (int h = 0; h < NH; h++)
+            imma<BN>(d[h], desc_sw128(a0 + h * 64 * BK + 32 * k), desc_sw128(b0 + 32 * k), kb > 0 || k > 0);
+        WG_COMMIT;
+        // ping-pong: past its last wait on a stage, so the other consumer may start, its MMAs queued behind these
+        if (!CO && kb == KB - 1 && lane == 0) mbar_arrive(order + 8 * wg);
+        WG_WAIT(1);
+        if (kb > 0 && lane == 0) release<CL>(bars + 8 * (STAGES + sp));
+        sp = s;
+        if (++s == STAGES) { s = 0; ph ^= 1; }
+      }
+    } else {
+#pragma unroll
+      for (int h = 0; h < NH; h++)
+#pragma unroll
+        for (int a = 0; a < NA; a++) d[h][a] = 0;
+      if (!CO && lane == 0) mbar_arrive(order + 8 * wg);
     }
 
     // the tile's s_a and its first round's s_w, every load issued under the last stage's MMAs and each later round's under
@@ -302,8 +347,37 @@ template <int WM, int BN, int CO, int CL> DEV void body(const Params& p) {
     WG_WAIT(0);
 #pragma unroll
     for (int h = 0; h < NH; h++) acc_fence<NA>(d[h]);
-    if (lane == 0) release<CL>(bars + 8 * (STAGES + sp));
+    if (mult && lane == 0) release<CL>(bars + 8 * (STAGES + sp));
     if (p.flags & 2) continue;
+
+    // ZY: thread x's cells of its 32 x 32 units: atom h's rows 16 (x / 32) + (x % 32) / 4 (+ 8) are rows
+    // 16 ((x / 32) % 2) + (x % 32) / 4 (+ 8) of row block x / 64 of the atom's two, columns 8 q + 2 (x % 4) (+ 1) of the
+    // consumer's columns are columns 8 (q % 4) + 2 (x % 4) (+ 1) of column block q / 4.  zb and yb: the z and y of the
+    // thread's first cell in its first unit; atom h's units are 2 h block rows below, each block row N / 32 records.  A
+    // block row at or past T, or a column block at or past N, has no records.
+    uint8_t *zb = nullptr, *yb = nullptr;
+    size_t hstep = 0;
+    bool rlive[NH];
+    if constexpr (ZY) {
+      const int nu = N / UNIT, rb0 = tm * WM + (CO ? wg * T::R : 0);
+      const size_t u0 = (size_t)(rb0 / UNIT + x / 64) * nu + tn * BN / UNIT;
+      const int cell0 = (16 * ((x / 32) % 2) + (x % 32) / 4) * UNIT + 2 * (x % 4);
+      zb = p.zy + u0 * ZY_BYTES + 4 * cell0;
+      yb = p.zy + u0 * ZY_BYTES + 4 * UNIT * UNIT + 2 * cell0;
+      hstep = (size_t)2 * nu * ZY_BYTES;
+#pragma unroll
+      for (int h = 0; h < NH; h++) rlive[h] = rb0 + 64 * h + 16 * (x / 32) < p.T;
+    }
+    // group q of atom h: its z pairs from the accumulators, its y words w0 (row r) and w1 (row r + 8)
+    auto rec = [&](int h, int q, uint32_t w0, uint32_t w1) {
+      if (!rlive[h] || tn * BN + 8 * q >= N || (p.flags & REC_NONE)) return;
+      const size_t o = h * hstep + (size_t)(q / 4) * ZY_BYTES;
+      uint8_t *z = zb + o + 32 * (q % 4), *yr = yb + o + 16 * (q % 4);
+      put_z(z, d[h][4 * q], d[h][4 * q + 1], p.flags);
+      put_z(z + 4 * 8 * UNIT, d[h][4 * q + 2], d[h][4 * q + 3], p.flags);
+      put_y(yr, w0, p.flags);
+      put_y(yr + 2 * 8 * UNIT, w1, p.flags);
+    };
 
     if (p.flags & Y_TMA) {
       // the consumer's R x BN words through its buffer, Y_BOXES boxes of R rows by 128 bytes a round, SWIZZLE_128B (16-byte
@@ -323,6 +397,16 @@ template <int WM, int BN, int CO, int CL> DEV void body(const Params& p) {
             v[h][u][1] = words(d[h][4 * q + 2], d[h][4 * q + 3], r[h][1], c[q].x, c[q].y);
             v[h][u][2] = words(d[h][4 * q + 4], d[h][4 * q + 5], r[h][0], c[q + 1].x, c[q + 1].y);
             v[h][u][3] = words(d[h][4 * q + 6], d[h][4 * q + 7], r[h][1], c[q + 1].x, c[q + 1].y);
+          }
+        }
+        if constexpr (ZY) {
+#pragma unroll
+          for (int h = 0; h < NH; h++) {
+#pragma unroll
+            for (int u = 0; u < QR / 2; u++) {
+              rec(h, rd * QR + 2 * u, v[h][u][0], v[h][u][1]);
+              rec(h, rd * QR + 2 * u + 1, v[h][u][2], v[h][u][3]);
+            }
           }
         }
         if (rd + 1 < T::Y_ROUNDS) col_scales((rd + 1) * QR, (rd + 2) * QR);
@@ -360,8 +444,11 @@ template <int WM, int BN, int CO, int CL> DEV void body(const Params& p) {
       for (int q = 0; q < NA / 4; q++) {
         const int col = col0 + 8 * q;
         if (col < N) {
-          if (live0) put(y0 + col / 2, words(d[h][4 * q], d[h][4 * q + 1], r[h][0], c[q].x, c[q].y), p.flags);
-          if (live1) put(y1 + col / 2, words(d[h][4 * q + 2], d[h][4 * q + 3], r[h][1], c[q].x, c[q].y), p.flags);
+          const uint32_t w0 = words(d[h][4 * q], d[h][4 * q + 1], r[h][0], c[q].x, c[q].y);
+          const uint32_t w1 = words(d[h][4 * q + 2], d[h][4 * q + 3], r[h][1], c[q].x, c[q].y);
+          if (live0) put(y0 + col / 2, w0, p.flags);
+          if (live1) put(y1 + col / 2, w1, p.flags);
+          if constexpr (ZY) rec(h, q, w0, w1);
         }
       }
     }
@@ -372,11 +459,18 @@ template <int WM, int BN, int CO, int CL> DEV void body(const Params& p) {
 
 #define KERNELS(S, WM, BN, CO)                                                                                           \
   extern "C" __global__ void __launch_bounds__(384, 1) exactlin_scaled_mm_wgmma_##S##_##WM##x##BN(const __grid_constant__ Params p) {  \
-    body<WM, BN, CO, 1>(p);                                                                                              \
+    body<WM, BN, CO, 1, false>(p);                                                                                       \
   }                                                                                                                      \
   extern "C" __global__ void __cluster_dims__(2, 1, 1) __launch_bounds__(384, 1)                                         \
       exactlin_scaled_mm_wgmma_##S##m2_##WM##x##BN(const __grid_constant__ Params p) {                                                 \
-    body<WM, BN, CO, 2>(p);                                                                                              \
+    body<WM, BN, CO, 2, false>(p);                                                                                       \
+  }                                                                                                                      \
+  extern "C" __global__ void __launch_bounds__(384, 1) exactlin_scaled_mm_zy_wgmma_##S##_##WM##x##BN(const __grid_constant__ Params p) {  \
+    body<WM, BN, CO, 1, true>(p);                                                                                        \
+  }                                                                                                                      \
+  extern "C" __global__ void __cluster_dims__(2, 1, 1) __launch_bounds__(384, 1)                                         \
+      exactlin_scaled_mm_zy_wgmma_##S##m2_##WM##x##BN(const __grid_constant__ Params p) {                                              \
+    body<WM, BN, CO, 2, true>(p);                                                                                        \
   }
 KERNELS(pp, 128, 128, 0)
 KERNELS(co, 128, 256, 1)
@@ -394,7 +488,11 @@ constexpr int VSTAGES[NV] = {T0::STAGES, T0::STAGES, T2::STAGES, T2::STAGES};
 constexpr int MAX_DEV = 64;
 const void* const VFN[NV] = {(const void*)exactlin_scaled_mm_wgmma_pp_128x128, (const void*)exactlin_scaled_mm_wgmma_ppm2_128x128,
                              (const void*)exactlin_scaled_mm_wgmma_co_128x256, (const void*)exactlin_scaled_mm_wgmma_com2_128x256};
-// per device: SMs, and per variant the CTAs (or pairs) the card holds at once; 0 until the device's first call
+const void* const VFN_ZY[NV] = {
+    (const void*)exactlin_scaled_mm_zy_wgmma_pp_128x128, (const void*)exactlin_scaled_mm_zy_wgmma_ppm2_128x128,
+    (const void*)exactlin_scaled_mm_zy_wgmma_co_128x256, (const void*)exactlin_scaled_mm_zy_wgmma_com2_128x256};
+// per device: SMs, and per variant the CTAs (or pairs) the card holds at once (a zy kernel's the same: its threads and
+// shared memory are); 0 until the device's first call
 int g_sms[MAX_DEV], g_most[MAX_DEV][NV];
 
 int setup(int dev) {
@@ -402,8 +500,11 @@ int setup(int dev) {
   int sms = 0;
   if (cudaDeviceGetAttribute(&sms, cudaDevAttrMultiProcessorCount, dev) != cudaSuccess) return 1;
   for (int v = 0; v < NV; v++) {
-    if (cudaFuncSetAttribute(VFN[v], cudaFuncAttributeMaxDynamicSharedMemorySize, VSMEM[v]) != cudaSuccess) return 2;
-    if (cudaFuncSetAttribute(VFN[v], cudaFuncAttributePreferredSharedMemoryCarveout, 100) != cudaSuccess) return 3;
+    const void* const fns[2] = {VFN[v], VFN_ZY[v]};
+    for (const void* fn : fns) {
+      if (cudaFuncSetAttribute(fn, cudaFuncAttributeMaxDynamicSharedMemorySize, VSMEM[v]) != cudaSuccess) return 2;
+      if (cudaFuncSetAttribute(fn, cudaFuncAttributePreferredSharedMemoryCarveout, 100) != cudaSuccess) return 3;
+    }
     if (VCL[v] == 1) {
       g_most[dev][v] = sms;
     } else {
@@ -436,6 +537,45 @@ int tmap_y(CUtensorMap* m, void* ptr, int rows, int cols, int box_rows) {
                                 CU_TENSOR_MAP_INTERLEAVE_NONE, CU_TENSOR_MAP_SWIZZLE_128B, CU_TENSOR_MAP_L2_PROMOTION_NONE,
                                 CU_TENSOR_MAP_FLOAT_OOB_FILL_NONE) != CUDA_SUCCESS;
 }
+
+// int8_wgmma_launch's and int8_wgmma_launch_zy's body: zy null for the plain kernels
+int launch(int v, const void* xq, const void* w, const float* sa, const float* sw, void* y, void* zy, int M, int N, int K,
+           int T, int group, int ctas, int flags, void* stream, int* grid) {
+  if (v < 0 || v >= NV || M < 1 || N < 2 || N % 2 || K < 16 || K % 16 || group < 1) return 10;
+  if (zy && (T < M || T % UNIT || N % UNIT || reinterpret_cast<uintptr_t>(zy) % 16)) return 15;
+  int dev = 0;
+  if (cudaGetDevice(&dev) != cudaSuccess || dev >= MAX_DEV) return 11;
+  if (int e = setup(dev)) return 20 + e;
+  const int wm = VWM[v], bn = VBN[v], cl = VCL[v];
+  Params p;
+  if (tmap(&p.a, xq, M, K, wm) || tmap(&p.b, w, N, K, bn / cl)) return 12;
+  p.sa = sa;
+  p.sw = sw;
+  p.y = static_cast<uint16_t*>(y);
+  p.zy = static_cast<uint8_t*>(zy);
+  p.M = M;
+  p.N = N;
+  p.K = K;
+  p.T = zy ? T : M;
+  p.group = group;
+  const int rows_c = VCO[v] ? wm / 2 : wm;  // a consumer's rows
+  p.flags = flags & (zy ? 7 | REC_CS | REC_NONE : 7);
+  if (N % 8 == 0 && reinterpret_cast<uintptr_t>(y) % 16 == 0 && !(flags & 16)) {
+    if (tmap_y(&p.c, y, M, N, rows_c)) return 14;
+    p.flags |= Y_TMA;
+  }
+  const int units = ((p.T + wm - 1) / wm + cl - 1) / cl * ((N + bn - 1) / bn);
+  int cap = cl == 1 ? g_sms[dev] : g_most[dev][v];
+  if (ctas > 0) cap = min(cap, cl == 1 ? ctas : max(ctas / 2, 1));
+  // the fewest CTAs (pairs) that keep the same rounds of units
+  const int rounds = (units + cap - 1) / cap, n = (units + rounds - 1) / rounds;
+  *grid = n * cl;
+  void* args[] = {&p};
+  if (cudaLaunchKernel(zy ? VFN_ZY[v] : VFN[v], dim3(n * cl), dim3(384), args, VSMEM[v], static_cast<cudaStream_t>(stream)) !=
+      cudaSuccess)
+    return 13;
+  return 0;
+}
 }  // namespace
 
 // each variant's (WM, BN, cluster, stages, shared bytes), five ints a variant; returns the variant count
@@ -456,34 +596,13 @@ extern "C" int int8_wgmma_layout(int* out) {
 // the kernel's timing probes.
 extern "C" int int8_wgmma_launch(int v, const void* xq, const void* w, const float* sa, const float* sw, void* y, int M, int N,
                                  int K, int group, int ctas, int flags, void* stream, int* grid) {
-  if (v < 0 || v >= NV || M < 1 || N < 2 || N % 2 || K < 16 || K % 16 || group < 1) return 10;
-  int dev = 0;
-  if (cudaGetDevice(&dev) != cudaSuccess || dev >= MAX_DEV) return 11;
-  if (int e = setup(dev)) return 20 + e;
-  const int wm = VWM[v], bn = VBN[v], cl = VCL[v];
-  Params p;
-  if (tmap(&p.a, xq, M, K, wm) || tmap(&p.b, w, N, K, bn / cl)) return 12;
-  p.sa = sa;
-  p.sw = sw;
-  p.y = static_cast<uint16_t*>(y);
-  p.M = M;
-  p.N = N;
-  p.K = K;
-  p.group = group;
-  const int rows_c = VCO[v] ? wm / 2 : wm;  // a consumer's rows
-  p.flags = flags & 7;
-  if (N % 8 == 0 && reinterpret_cast<uintptr_t>(y) % 16 == 0 && !(flags & 16)) {
-    if (tmap_y(&p.c, y, M, N, rows_c)) return 14;
-    p.flags |= Y_TMA;
-  }
-  const int units = ((M + wm - 1) / wm + cl - 1) / cl * ((N + bn - 1) / bn);
-  int cap = cl == 1 ? g_sms[dev] : g_most[dev][v];
-  if (ctas > 0) cap = min(cap, cl == 1 ? ctas : max(ctas / 2, 1));
-  // the fewest CTAs (pairs) that keep the same rounds of units
-  const int rounds = (units + cap - 1) / cap, n = (units + rounds - 1) / rounds;
-  *grid = n * cl;
-  void* args[] = {&p};
-  if (cudaLaunchKernel(VFN[v], dim3(n * cl), dim3(384), args, VSMEM[v], static_cast<cudaStream_t>(stream)) != cudaSuccess)
-    return 13;
-  return 0;
+  return launch(v, xq, w, sa, sw, y, nullptr, M, N, K, M, group, ctas, flags, stream, grid);
+}
+
+// the same, and the call's z/y records over T slots into zy ((T / 32) (N / 32) records of ZY_BYTES; T >= M, T and N
+// multiples of 32, zy 16-byte aligned, else 15); flags' 32 and 64 are the records' timing probes
+extern "C" int int8_wgmma_launch_zy(int v, const void* xq, const void* w, const float* sa, const float* sw, void* y, void* zy,
+                                    int M, int N, int K, int T, int group, int ctas, int flags, void* stream, int* grid) {
+  if (!zy) return 15;
+  return launch(v, xq, w, sa, sw, y, zy, M, N, K, T, group, ctas, flags, stream, grid);
 }
