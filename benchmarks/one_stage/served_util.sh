@@ -128,7 +128,7 @@ if [ "$up" != 1 ]; then
 fi
 say "SERVE $(grep -am1 'SERVE-OPENAI listening' "$SCR/serve.log" | cut -c1-200)"
 load() {  # $1 requests, $2 seed, $3 name
-  "$PY" "$TREE/examples/vllm/serve_load.py" --port "$PORT" --model "$REPO" --varied "$1" --prompt-range 1024:1024 \
+  "$PY" "$TREE/demos/vllm/serve_load.py" --port "$PORT" --model "$REPO" --varied "$1" --prompt-range 1024:1024 \
     --max-tokens 1 --rate 1000 --seed "$2" --out "$SCR/$3.jsonl" > "$SCR/$3.log" 2>&1
 }
 load "$WARM" 7 warm; say "WARM $WARM requests (exit $?)"
