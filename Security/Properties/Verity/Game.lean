@@ -65,7 +65,8 @@ The statement's form is the causal game, the committed files, one fixed extracto
   file check, the composite's own acceptance as a `same` composition (`SameAccepts`: an accepted composition of its
   components whose record subprotocols committed to one record, `Properties.Composition.AcceptSame`'s conclusion, and
   at onsite PoUS and PoUB-P2 on one store, `AcceptTied`'s), and `a`'s compiled component's acceptance of its own case.
-  The releases each component's check read (`coinsRead`) are the targets' to bound (`Logged`).
+  That the releases each component's check read (`coinsRead`) are the device's at the rounds the parameters assign them
+  is the targets' to bound (`Logged`): membership alone would let a prover keep the better of two rounds' coins.
 * **PoUW counts gates** of the committed circuit the play computed after their window's coin, over the period's windows
   (`computed`), with no pricing.
 
@@ -427,9 +428,11 @@ def Holds (k : Verity.Registration.Composite) (θ F c : ByteArray) (σ : Game.St
   | .inferenceOnly, _ => Nci.Complies (V.gates θ) (V.fresh θ) (V.declaration θ F)
   | .wipe, o => ¬ (V.wipeRun θ F c σ).Kept (V.foreignBits θ) o
 
-/-- Every release `a`'s check read is in the device's log; outside it, the release is a forgery of the device's LMS
-signature, which `a`'s error bounds by its forgery term (`Vocab.forgery`). -/
-def Logged (a : Subprotocol) (o : Exchange) : Prop := ∀ r ∈ V.coinsRead a o.sent, r ∈ o.log
+/-- **Each release `a`'s check read is the device's at its round**: the `k`-th release `a`'s check read is the log's
+release at round `pos k`, the round the parameters assign it. Out of place, it is a forgery of the device's LMS
+signature over its ledger or a session's close, which `a`'s error bounds by its forgery term (`Vocab.forgery`). -/
+def Logged (pos : ℕ → ℕ) (a : Subprotocol) (o : Exchange) : Prop :=
+  ∀ k r, (V.coinsRead a o.sent)[k]? = some r → o.log[pos k]? = some r
 
 /-- **The finder for a second file with the registered digest**: on its one coin it hashes the committed blob and the
 registered one, and outputs them when they differ, a SHA-512 collision when the blob passed the file check. -/
