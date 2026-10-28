@@ -88,8 +88,9 @@
     "PouwWindow.Rounds",
     "SampledProofs.ChallengerSession",
     "SampledProofs.PyJson",
-    "SampledProofs.Registered"
-   , "Flock.FV3"],
+    "SampledProofs.Registered",
+    "Flock.FV3"
+   ],
    "except": [],
    "why": "the program is code: Lean core only, no Mathlib and nothing of Security (Daniel's layout ruling, 5 Oct)"
   },
