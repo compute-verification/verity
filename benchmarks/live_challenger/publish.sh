@@ -10,10 +10,12 @@
 # preserved, v1 while it holds only v1 entries) each time it has grown since the last put, and labelled `challenger-ledger
 # head`; a ledger that isn't the last put one with entries appended (a fork, a cut or an edit) is refused, exit 4, and
 # nothing is put until it is resolved by hand. Each session with an end entry is put once, `--kind challenger-session/v1 --ref
-# ledger=art:...`, its tree the session's request.json and out/. What was put is kept in $VY_CHALLENGER_STATE (default
+# ledger=art:...`, its tree the session's request.json and out/ less any plan.json, probe.json and io.json (a rehearsal's,
+# which hold request values and stay on the host). What was put is kept in $VY_CHALLENGER_STATE (default
 # ~/.local/state/vy-challenger: ledger.jsonl, ledger.sha512, ledger.art, sessions, and pins.* as ledger.*), so a rerun puts only what is new; an
 # artifact's id is its manifest's hash, so two publishers putting the same ledger get the same art. With --every, each pass is
-# its own run of this script, started SECONDS after the last one ended; a failed pass is printed and tried again at the next. A
+# its own run of this script, started SECONDS after the last one ended; a failed pass is printed and tried again at the next,
+# and after each pass the store's copies already verified on its remote are evicted until $VY_CHALLENGER_FREE_GB (8) GB is free. A
 # verifier reads the ledger's art, checks it (auditor.verify_ledger) and takes a window's one session from it. The pins log
 # (the gate's `pins`) is put first, the same way (`--kind challenger-pins/v1`, label `challenger-pins head`, a log that isn't
 # the last put one extended refused, exit 4), so no published open seals lines the store lacks; `pinned_session` reads it.
@@ -24,6 +26,9 @@ if [ "${1:-}" = --every ]; then
   shift 2
   while :; do
     bash "$0" "$@" || { rc=$?; echo "$(date -u +%FT%TZ) pass failed (rc=$rc); next in ${every}s"; }
+    # every session's tree stays in the local store after its put, and the control pod's root is a 20 GiB overlay
+    research data evict --target-free-gb "${VY_CHALLENGER_FREE_GB:-8}" > /dev/null \
+      || echo "$(date -u +%FT%TZ) evict failed (rc=$?); the store keeps its copies until the next pass"
     sleep "$every"
   done
 fi
@@ -92,6 +97,8 @@ for l in open(sys.argv[1]):
   grep -qx "$s" "$ST/sessions" && continue
   mkdir -p "$W/$s"
   gate fetch "$s" | tar -xz -C "$W/$s" --no-same-owner
+  # a rehearsal's plan, probe and I/O hold the served requests' values: they stay on the auditor host
+  find "$W/$s/$s" -type f \( -name plan.json -o -name probe.json -o -name io.json \) -delete
   art=$(put --kind challenger-session/v1 --tree "$W/$s/$s" --ref "ledger=$(cat "$ST/ledger.art")" \
     --meta "{\"session\": \"$s\", \"host\": \"vy-challenger-1\"}")
   echo "$s" >> "$ST/sessions"

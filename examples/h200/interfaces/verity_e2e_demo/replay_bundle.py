@@ -14,7 +14,7 @@ in the payload and holds only public structure, hiding commitments and paths bes
 * ``target``: the card's binding of the templates' dot, ``{binding, card, dot}`` (`BINDINGS`: ``GEMM_SM90_S8`` for the
   H200's INT8 and ``GEMM_HOPPER`` for its BF16, ``GEMM_SM120_S8`` for the RTX PRO 6000; ``BOOLEAN_…`` the same cards' dots
   on bits, which the Boolean-profile templates bind). Every unit's template binds that dot, as circuits resolves the binding.
-* ``draw``: the drawn units (global indices), the law, and ``source``: ``live`` (the proof service's draw of record, with
+* ``draw``: the drawn units (global indices), the law, and ``source``: ``live`` (the proof system's draw of record, with
   ``receipt``, the challenger's live-coin receipt, which a live draw must carry) or ``fixture`` (chosen by hand). The law is
   the window's registered one, fixed before any coin, and a live draw's ``record`` (the verifier's draw object, when it
   carries one) is a draw under it over the registered population, of exactly the bundle's units (`check` against the
@@ -189,7 +189,7 @@ class Commitment:
     """The run's step commitments, the prover's side: its context, step layout, slots, and each ``(block, step)``'s record."""
 
     context: bytes
-    layout: S.Layout
+    layout: S.CommitShape
     slots: int
     steps: Mapping[tuple[int, int], StepRecord]
 
@@ -202,14 +202,14 @@ def target(binding: str) -> dict[str, Any]:
     return {"binding": binding, "card": card, "dot": statics["DOT"].id}
 
 
-def block_domain(context: bytes, layout: S.Layout, block: int, steps: Sequence[int]) -> CommitmentDomain:
+def block_domain(context: bytes, layout: S.CommitShape, block: int, steps: Sequence[int]) -> CommitmentDomain:
     """This bundle's tree over one server-time block's step roots, in ascending step order."""
     return CommitmentDomain(identity_digest_sha512(BLOCK_TAG, {"context": context.hex(), "layout": S.layout_digest(layout).hex(),
                                                                "block": block, "steps": list(steps), "schema": ROOTS_SCHEMA}),
                             -1, RangeIndexedDomain(0, len(steps)), hash="sha512")
 
 
-def layout_json(layout: S.Layout) -> dict[str, Any]:
+def layout_json(layout: S.CommitShape) -> dict[str, Any]:
     """The layout as JSON, a group the layout repeats (the same object: its layers) written once and then as the index of
     its first place, so an H200 step's six million units are three groups' worth."""
     first: dict[int, int] = {}
@@ -224,7 +224,7 @@ def layout_json(layout: S.Layout) -> dict[str, Any]:
     return {"name": layout.name, "groups": groups}
 
 
-def layout_of_json(doc: Mapping[str, Any]) -> S.Layout:
+def layout_of_json(doc: Mapping[str, Any]) -> S.CommitShape:
     groups: list[S.Group] = []
     for g in doc["groups"]:
         if isinstance(g, int) and not isinstance(g, bool):
@@ -234,7 +234,7 @@ def layout_of_json(doc: Mapping[str, Any]) -> S.Layout:
             continue
         groups.append(S.Group(tuple(int(n) for n in g["sources"]),
                               tuple(tuple(S.Row(tuple(S.Part(*map(int, p)) for p in r)) for r in u) for u in g["units"])))
-    return S.Layout(str(doc["name"]), tuple(groups))
+    return S.CommitShape(str(doc["name"]), tuple(groups))
 
 
 def _leaf_value(bc: bytes) -> bytes:
@@ -468,10 +468,10 @@ class WindowLocate:
     ``Registered(value, row, offset, nbytes)`` (bytes of a registered weight). A port of one Registered piece is a registered
     read: its position is the piece's byte offset in the value, ``row * stride(value) + offset``, over the registered row's
     bytes, which the piece must be exactly (``stride`` defaults to one registered row: ``row`` is the registered row, as
-    circuits' `Window.locate` names the weights registration's rows). ``Run("token")`` is ingress, which no commitment holds: refused. Coordinates
+    circuits' `Locator.locate` names the weights registration's rows). ``Run("token")`` is ingress, which no commitment holds: refused. Coordinates
     are ``{step, slot, op: the family, unit: the block's index in it}``."""
 
-    def __init__(self, window: Any, layout: S.Layout, weights: Mapping[str, Any] | None = None,
+    def __init__(self, window: Any, layout: S.CommitShape, weights: Mapping[str, Any] | None = None,
                  stride: Callable[[str], int] | None = None) -> None:
         self.window, self.layout, self.weights, self.stride = window, layout, dict(weights or {}), stride
         self._base = list(layout.row_base[:layout.unit_count])
@@ -834,7 +834,7 @@ def _bits_of(row: bytes, n: int) -> np.ndarray:
     return np.unpackbits(np.frombuffer(row, np.uint8), bitorder="little")[:n].reshape(1, n)
 
 
-def _replay_bits(fn: Any, params: Sequence[Any], ret: Any, lay: IF.Layout, rows: Mapping[str, bytes]) -> bool:
+def _replay_bits(fn: Any, params: Sequence[Any], ret: Any, lay: IF.RowLayout, rows: Mapping[str, bytes]) -> bool:
     """`replay` of a Boolean-profile template: each row is its port's bits in order, packed little-endian into its u16
     words (`IF.layout`), and an output field of fewer than 16 bits is its bits low in one zero-padded word, which must be
     zero."""

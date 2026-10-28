@@ -12,7 +12,8 @@ partition. The registered inputs `θ` are a declaration's baseline (`Verity.Decl
 each inherits the circuit's topological order.
 
 * `Decoder`, `LDL`: a fixed decoder and `LDL_{t,R}(y) = K^t(y | R)`, the least program length producing `y` within `t`.
-* `Registration`: `R = (θ, C, 𝓘)` with the registered values, fixed once; `Registration.Consistent`: a run takes them.
+* The registration `R = (θ, C, 𝓘)` is core's `Verity.Registration`: the declaration, the registered values and the
+  partition into `R.B` blocks, fixed once; a run that takes the registered values is `Verity.Registration.Honest`.
 * `Exact`, `ReadCap`, `CKPartition`: exactly `c` operation gates per block, at most `k` unregistered input bits per
   block, and both.
 * `Products`, `Products.inBlock`, `Products.acts`, `Products.FanOut`: counted product occurrences, `𝓙_I`, `V_I`, and
@@ -39,17 +40,6 @@ abbrev Decoder : Type := List Bool → ℕ → Option (List Bool)
 within `t` steps, `⊤` when there is none. -/
 noncomputable def LDL (D : Decoder) (t : ℕ) (y : List Bool) : ℕ∞ :=
   ⨅ (p : List Bool) (_ : D p t = some y), (p.length : ℕ∞)
-
-/-- **A registration** `R = (θ, C, 𝓘)` of the declaration `d = (C, θ)`, fixed once, before the monitored computation:
-the registered values `val` (read only at `θ`) and the partition `P` of `C`'s operation gates into the blocks
-`0, …, n − 1`. Nothing computed later is added to it. -/
-structure Registration (d : Declaration) (n : ℕ) where
-  val : d.D.Transcript
-  P : Partition d.D n
-
-/-- The run `X` takes the registered values at `θ`. -/
-def Registration.Consistent {d : Declaration} {n : ℕ} (R : Registration d n) (X : d.D.Transcript) : Prop :=
-  ∀ g ∈ d.θ, X g = R.val g
 
 /-- **Exactly `c` operation gates in every block**, so that `|C| = c B`: padding counts as gates. -/
 def Exact {C : Circuit} {n : ℕ} (P : Partition C n) (c : ℕ) : Prop :=

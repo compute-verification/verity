@@ -10,7 +10,7 @@ The records, every one in the window's directory but the advice's opening:
 * **the values**, committed before any coin: the registration (``registration.json``) and the files `rows.write` writes;
 * **on a draw, the drawn units' openings** (``m<k>-private.bin``), which reach only the prover behind the firewall.
 
-The verifier's window is `interface.of_records`'s, each template resolved in Verity's catalog (`interface.resolve`), or, for a
+The verifier's window is `interface.of_records`'s, each template resolved in Verity's catalog (`catalog_resolve`), or, for a
 template the verifier lowers from its own input set (``--template-sets``), that set's Definition; a window with row tables
 is refused until its records carry their segment roots. Before the draw the audit holds the registration to that circuit,
 to the run root the run published (``--run``) and, for a compiled circuit, to the compiler and advice it was compiled from
@@ -127,6 +127,20 @@ PORTS = range(10000, 32000)
 #: a compile command's exit code for advice it refuses (not advice it compiles: malformed, over its cap, or a choice it can't
 #: compile), the reason on stderr; any other nonzero exit is an error. Either fails the compile check (``compiles``).
 REFUSED = 2
+
+
+def catalog_resolve(tid: str) -> Any:
+    """`interface.resolve` over the whole of Verity's catalog, the registry's Definitions loaded too (a window's io shell and
+    its blocks, which `interface`'s own walk can't import); a refusal names the registry modules that failed to import."""
+    from verity.ml.definitions.registry.catalog import load
+
+    _, errors = load()
+    try:
+        return IF.resolve(tid)
+    except ValueError as e:
+        if errors:
+            raise ValueError(f"{e} (registry modules that failed to import: {'; '.join(errors)})") from e
+        raise
 
 
 def free_ports(span: int, bases: Iterable[int] | None = None) -> int:
@@ -550,13 +564,13 @@ def composer(fn: Any, st: Mapping[str, Any]) -> Callable[[Path, str, str], dict[
 def verifier_window(window_dir: Path, law: Mapping[str, Any], template_sets: Path | None) -> tuple[Any, dict, dict]:
     """The verifier's window and circuit record from the records (`interface.of_records`), and a5's template sets: each
     statement's template composed from its Definition (`composer`), every other template lowered from the verifier's own
-    input set, whose Definition it resolves to; any other template from Verity's catalog (`interface.resolve`). A window
+    input set, whose Definition it resolves to; any other template from Verity's catalog (`catalog_resolve`). A window
     with row tables is refused: a5 checks their segment roots against the ones recorded before each coin (``step_roots``),
     which the records don't carry yet."""
     import a5 as A5
 
     own = A5.template_sets(template_sets) if template_sets else {}
-    resolve = lambda t: own[t][1] if t in own else IF.resolve(t)  # noqa: E731
+    resolve = lambda t: own[t][1] if t in own else catalog_resolve(t)  # noqa: E731
     mine, doc = IF.of_records(window_dir, law, resolve)
     if mine.row_tables:
         raise ValueError(f"the window has {len(mine.row_tables)} row tables, and its records don't carry the segment roots "
@@ -648,7 +662,7 @@ def audit(a: argparse.Namespace) -> int:
         mine, doc, sets = verifier_window(wdir, law, Path(a.template_sets) if a.template_sets else None)
         pins = pinned(json.loads(Path(a.registered).read_text())) if a.registered else {}
         def resolve(t: str) -> Any:
-            return sets[t][1] if t in sets else IF.resolve(t)
+            return sets[t][1] if t in sets else catalog_resolve(t)
         own = json.loads((wdir / "registration.json").read_text()).get("window") or {}
         ties, untied = window_pins(own, doc, resolve)
         if twice := sorted((set(ties) | set(untied)) & set(pins)):
@@ -763,7 +777,7 @@ def main(argv: list[str] | None = None) -> int:
     sub = ap.add_subparsers(dest="cmd", required=True)
     p = sub.add_parser("audit", help="a window's audit from its records alone")
     p.add_argument("--window", required=True, help="the window's directory: circuit.json, registration.json, the value files")
-    p.add_argument("--law", required=True, help="the proof service's law of the window (subset:K, stratified:K, work:K)")
+    p.add_argument("--law", required=True, help="the proof system's law of the window (subset:K, stratified:K, work:K)")
     p.add_argument("--opening", help="the advice's opening (interface.advice_opening): the named gap, until the compile unit")
     p.add_argument("--compilers", help="with --opening: the registered compilers the verifier holds, {name: {digest, argv, "
                    "code, pythonpath}}")

@@ -2,7 +2,7 @@
 served step (`examples/h200`'s `Driver` at the frozen shape, resident weights), as JSON to ``--out``/overlap.json
 and a summary to ``--out``/summary.txt.
 
-Today's loop (`e2e_h200.driver.Driver.step_slots`) streams each group (the embedding, a layer, the head) to the commit's
+The served loop (`e2e_h200.driver.Driver.step_slots`) streams each group (the embedding, a layer, the head) to the commit's
 side stream as it is written, at most `e2e_h200.commit.LAG` groups ahead of the side stream's reads, but it serializes
 the rest: ``Committer.finish`` waits for the step's root before the step returns, so step t + 1 starts only after step
 t's commit, and the driver's timing ticks (`Driver._tick`) synchronize the whole device, the side stream included, around
@@ -11,7 +11,7 @@ every micro-batch's attention. Each run here is ``--steps`` lockstep steps at po
 * ``serve``: the served step alone (its tables written and dropped, nothing committed);
 * ``commit``: the commit alone, a step's groups added back to back from stand-in tables (one layer's tensors for every
   layer: the groups are alike), no forward;
-* ``serial``: today's loop, unchanged;
+* ``serial``: the served loop, unchanged;
 * ``low``, ``high``, ``equal``: overlapped. The step returns once its forward ends and its last groups and root are in
   flight on the side stream, which trails the forward by at most ``LAG`` groups across step boundaries too, so the commit
   of step t's last groups runs while step t + 1 computes and no step's tables stay resident beyond those groups; the
@@ -23,7 +23,7 @@ every micro-batch's attention. Each run here is ``--steps`` lockstep steps at po
   the launch queue is full, and on a pageable upload's synchronization).
 
 A run is ``MODE:LAYOUT[:STEPS[:SMS]]``, LAYOUT ``shared`` (circuits' shared-row Layout JSON, ``--shared``) or ``families``
-(today's, `e2e_h200.commit.layout`). SMS ``N`` puts the commit on a green context of N SMs (`slots_gpu.Plan`'s ``sms``),
+(the served one, `e2e_h200.commit.layout`). SMS ``N`` puts the commit on a green context of N SMs (`slots_gpu.Plan`'s ``sms``),
 the forward on every SM as before; ``Nr`` puts the forward on the green context of the other SMs too (``serve`` with
 ``Nr``: the served step alone there, against the served step on every SM). A step's time is
 the median interval between step ends after the first; the hidden fraction is (serve + commit - step) / commit, commit
@@ -159,7 +159,7 @@ class Smi:
             self.proc.terminate()
 
 
-def describe(layout: S.Layout) -> dict[str, Any]:
+def describe(layout: S.CommitShape) -> dict[str, Any]:
     return {"name": layout.name, "digest": S.layout_digest(layout).hex(), "groups": len(layout.groups),
             "distinct_groups": len({id(g) for g in layout.groups}), "units_a_slot": layout.unit_count,
             "rows_a_slot": layout.row_count, "bytes_a_slot": layout.slot_bytes}
@@ -196,7 +196,7 @@ class Null:
 
 
 class LayoutCommitter(CM.Committer):
-    """`e2e_h200.commit.Committer`'s slots backend on a given plan (its layout), unchanged otherwise: today's loop."""
+    """`e2e_h200.commit.Committer`'s slots backend on a given plan (its layout), unchanged otherwise: the served loop."""
 
     def __init__(self, plan: G.Plan, context: bytes, key: bytes, shape: Any, salt: Any, fused: frozenset[str] = frozenset(),
                  uncommitted: frozenset[str] = frozenset()) -> None:
@@ -328,7 +328,7 @@ def committed(shape: Any, fused: frozenset[str], uncommitted: frozenset[str]) ->
     return [[t for t in g if t.op.split(".")[-1] not in uncommitted] for g in CM.tables(shape, fused)]
 
 
-def check_sources(groups: list[list[Any]], layout: S.Layout) -> None:
+def check_sources(groups: list[list[Any]], layout: S.CommitShape) -> None:
     """Refuses a layout whose groups' tensors aren't ``groups``' tables (each one's codes, then a quantizer's word)."""
     if len(groups) != len(layout.groups):
         raise SystemExit(f"the layout has {len(layout.groups)} groups and the served map {len(groups)}")
@@ -454,7 +454,7 @@ def run_one(name: str, mode: str, steps: int, d: OverlapDriver, plan: G.Plan | N
 
 
 def derive(runs: list[dict], equal: dict[str, bool]) -> dict[str, Any]:
-    """Per layout: the served step alone, the commit alone at each SMS, and today's loop and each overlapped run, with its
+    """Per layout: the served step alone, the commit alone at each SMS, and the served loop and each overlapped run, with its
     hidden fraction (of the commit alone at its SMS, and of the commit alone on every SM) and its overhead a step against
     `TARGET_S`; ``best``, the run of least overhead whose roots are its reference's."""
     serve = next((r["step_s"] for r in runs if r["mode"] == "serve" and not r["sms"]), None)
@@ -532,7 +532,7 @@ def verdicts(doc: dict) -> list[str]:
             if e is None:
                 continue
             ref = "" if name == _reference_run(doc["runs"], "serial") else \
-                f", roots equal today's loop's at its {n} steps: {eq}"
+                f", roots equal the served loop's at its {n} steps: {eq}"
             hid = "" if e.get("hidden_s") is None else \
                 (f", commit alone at its SMs {e['commit_s']:.3f} s, hidden {e['hidden_s']:.3f} s "
                  f"({100 * e['hidden_fraction']:.1f}% of it; {100 * e.get('hidden_fraction_of_full_commit', 0):.1f}% of the "
@@ -583,7 +583,7 @@ def summary(doc: dict) -> str:
 
 
 def _reference(runs: list[dict], r: dict) -> dict | None:
-    """``r``'s reference: the commit alone on every SM for a capped commit alone, else today's loop on every SM; none for
+    """``r``'s reference: the commit alone on every SM for a capped commit alone, else the served loop on every SM; none for
     those two themselves and the served step."""
     if r["mode"] == "serve" or (r["mode"] in ("serial", "commit") and not r["sms"]):
         return None
@@ -663,7 +663,7 @@ def main(argv: list[str] | None = None) -> int:
         d.step(t, prompts[:, t])
     d.results = []
     plans: dict[tuple[str, int], G.Plan] = {}
-    current: tuple[str, S.Layout] | None = None
+    current: tuple[str, S.CommitShape] | None = None
 
     def drop(capped_only: bool) -> None:
         """Frees the plans (or the capped ones), and their partitions' streams and green contexts."""

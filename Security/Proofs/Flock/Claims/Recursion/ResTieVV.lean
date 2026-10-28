@@ -1,7 +1,7 @@
 import Proofs.Flock.Claims.Recursion.VVTieOf
 
 /-!
-# Check 5's tie at a piece's copy, at RECR's verifier values
+# Check 5's tie at a piece's copy, at `Rows.resVRead`'s verifier values
 
 `resTie_resVRead`: `resTie_site` at `vvAt := Rows.resVRead`, its coin tie `VVTie` discharged by `vvTie_dense` at a dense
 compiled statement whose coins run to the deployed plain verifier's inner rounds.

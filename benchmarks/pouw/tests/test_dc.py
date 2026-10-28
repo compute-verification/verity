@@ -286,9 +286,12 @@ def test_census_tables_take_one_line_an_epoch():
 def test_device_census_is_well_formed():
     """Every device directory's lines are lines machine_model reads (one of rate, cycles and u), each on a row rows.csv
     states, once a row in each epoch of model.toml, naming its runs; a `datasheet` row and its lines name the note that
-    cites the vendor document instead, since no run measured them."""
+    cites the vendor document instead (directly, or as `@NAME` from machine_model's data/citations.toml), since no run
+    measured them."""
+    import tomllib
     census = _load("census")
     note = re.compile(r"note:\d{8}T\d{4}Z-[a-z0-9-]+")
+    named = tomllib.loads((DC.parent / "machine_model" / "data" / "citations.toml").read_text())
     devices = DC.parent / "machine_model" / "data" / "devices"
     dirs = sorted(p for p in devices.iterdir() if p.is_dir()) if devices.exists() else []
     for d in dirs:
@@ -297,14 +300,14 @@ def test_device_census_is_well_formed():
         with open(d / "rows.csv", newline="") as f:
             rows = list(csv.DictReader(f))
         assert tuple(lines[0]) == census.rowsmod.CENSUS_COLUMNS
-        import tomllib
         epochs = tomllib.loads((d / "model.toml").read_text())["epochs"]
         by_row = _census_tables(census, lines, rows, epochs, every_row=False)
         assert {"issue", "M", "A", "I", "SHFL"} <= set(by_row), d
         sheet = {r["row"] for r in rows if r["status"] == "datasheet"}
         for ln in lines + rows:
             cite = note if ln["row"] in sheet else census.rowsmod.RUN_ID
-            assert ln["runs"] and all(cite.fullmatch(r) for r in ln["runs"].split()), (d, ln)
+            runs = [named.get(r[1:], r) if r.startswith("@") else r for r in ln["runs"].split()]
+            assert runs and all(cite.fullmatch(r) for r in runs), (d, ln)
 
 
 def test_analyze_sm90_pass_line(tmp_path):
@@ -554,8 +557,8 @@ def test_census_write_keeps_what_it_does_not_write(tmp_path, capsys):
 def test_census_prices_a_memory_lane_and_moves_every_scalar_coefficient_class(tmp_path):
     """A memory lane timed alone and beside the tensor puts its class on the issue row and every joint issue row at the
     scalar coefficient (LD.E's is UNLISTED, the measured readings' catch-all); --write gives the classes that carry the
-    scalar coefficient without a lane in this run (NOROW, ATOMS32 from r20261021-070616-d06c, and STS32 and STG32 from
-    r20261021-161119-62ac) the new hull's joint issue lines, and keeps their issue lines."""
+    scalar coefficient without a lane in this run (NOROW, and ATOMS32, STS32 and STG32 from earlier runs) the new hull's
+    joint issue lines, and keeps their issue lines."""
     import shutil
     census = _load("census")
     dev = tmp_path / "sm_90"

@@ -7,15 +7,19 @@
  "layers": {
   "CoreOnsite": {
    "imports": [
+    "CoreComposition.Blobs",
     "CoreComposition.Cases",
+    "CoreComposition.Tie",
+    "MemoryChallenger.WipeProtocol",
+    "NciCheck.Protocol",
     "NetworkCheck.Period",
     "PousCheck.RunProtocol",
-    "PouwCheck.Protocol",
-    "RemoteAudit.Protocol",
-    "SampledProofs.OneStage"
+    "PouwCheck.Period",
+    "RemoteAudit.P2Protocol",
+    "SampledProofs.OneStageZk"
    ],
    "except": [],
-   "why": "the program is code: the core interface, C-Flock's Lean and its components' ports, no Mathlib and nothing of Security (Daniel's layout ruling, 5 Oct)"
+   "why": "the program is code: the core interface, C-Flock's Lean and its components' ports, no Mathlib and nothing of Security"
   },
   "CoreProduct": {
    "imports": ["CoreOnsite"],
@@ -24,6 +28,6 @@
   }
  },
  "dependencies": {
-  "toolchain": "27511a72ecc19f2a3ce5d7dc8dd5400d2c5ba32555d12a4f390d1806b92e6e15"
+  "toolchain": "acccb6f641a52c9be17964be42390d079cbad65923ee098c4c0dc7d6803f861b"
  }
 }

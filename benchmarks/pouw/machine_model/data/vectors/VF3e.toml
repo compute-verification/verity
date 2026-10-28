@@ -1,8 +1,7 @@
-# VF3e: VF3d with every kind charged its measured displacement beside an MMA (RS-W′ round 4).
+# VF3e: VF3d with every kind charged its measured displacement beside an MMA.
 name = "VF3e"
 epoch = "VF3e"
-summary = "VF3d with every kind charged its measured displacement beside an MMA (RS-W′ round 4)."
-note = "note:20261016T0751Z-draft-rs-vf3e"
+summary = "VF3d with every kind charged its measured displacement beside an MMA."
 rows = [
     "issue", "M", "R1", "F", "VMNX", "H", "I", "A",
     "F2FS", "XU", "R6r", "LDSi", "R6w", "LDG", "L2red", "UP",
@@ -20,9 +19,8 @@ credits = [
     ["W2", 2048], ["DMUL", 1024], ["DMUL", 2048],
 ]
 
-[published]  # as the legacy scripts printed them: τ, τ at 600 W and U/F_low to 4 places, the margin to 3
+[published]  # as the legacy scripts printed them: τ and U/F_low to 4 places, the margin to 3
 tau = 0.1349
-tau_600w = 0.1055
 uf_low = 1.0938
 margin = 1.935
 

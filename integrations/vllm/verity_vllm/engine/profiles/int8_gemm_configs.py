@@ -27,7 +27,7 @@ CONFIGS: dict[str, dict[tuple[int, int], list[tuple[int, str]]]] = {
                         (64, "32x64x512:w8:s3:k1"), (256, "128x64x128:w4:s5:k1"), (2048, "128x128x64:w4:s3:k1:t1"),
                         (8192, "128x128x64:w4:s3:k1:t1")],
     },
-    "sm_90": {  # H200: M <= 32; M 64 to 8192 (pointer and TMA)
+    "sm_90": {  # H200: M <= 32; M 64 to 8192 (pointer and TMA); the 1B's M 8192 to 32768 (pointer and TMA)
         (6144, 4096): [(1, "16x64x512:w4:s4:k1"), (16, "16x64x512:w4:s4:k1"), (32, "32x32x512:w4:s3:k1"),
                        (64, "64x32x256:w4:s4:k1:t1"), (256, "128x128x256:w4:s3:k1:t1"),
                        (2048, "128x128x128:w4:s3:k1:t1"), (8192, "128x128x128:w4:s3:k1:t1")],
@@ -46,6 +46,19 @@ CONFIGS: dict[str, dict[tuple[int, int], list[tuple[int, str]]]] = {
         (4096, 12288): [(1, "16x32x256:w4:s3:k4"), (16, "16x32x512:w4:s4:k2"), (32, "32x32x512:w4:s5:k1"),
                         (64, "64x32x256:w4:s5:k1:t2"), (256, "64x128x256:w8:s4:k1:t2"),
                         (2048, "128x128x128:w8:s3:k1:t1"), (8192, "128x128x128:w8:s3:k1:t1")],
+        # Llama-3.2-1B: vLLM's tiles to M 4096 (not swept); M 8192 to 32768 swept (pointer and TMA, the zy path gated)
+        (3072, 2048): [(64, "64x64x256:w4:s3:k1"), (128, "64x128x128:w4:s3:k1"), (4096, "128x128x128:w4:s3:k1"),
+                       (8192, "128x128x128:w4:s3:k1:t1"), (16384, "128x128x128:w4:s3:k1:t1"),
+                       (32768, "128x128x128:w4:s3:k1:t1")],
+        (2048, 2048): [(64, "64x64x256:w4:s3:k1"), (128, "64x128x128:w4:s3:k1"), (4096, "128x128x128:w4:s3:k1"),
+                       (8192, "128x128x128:w4:s3:k1:t1"), (16384, "128x128x128:w4:s3:k1:t1"),
+                       (32768, "128x128x128:w4:s3:k1:t1")],
+        (16384, 2048): [(32, "64x128x256:w4:s3:k1"), (64, "64x64x256:w4:s3:k1"), (128, "64x128x128:w4:s3:k1"),
+                        (4096, "128x128x128:w4:s3:k1"), (8192, "128x128x128:w4:s3:k1:t1"),
+                        (16384, "128x128x128:w4:s3:k1:t1"), (32768, "128x128x128:w4:s3:k1:t1")],
+        (2048, 8192): [(64, "64x64x256:w4:s3:k1"), (128, "64x128x128:w4:s3:k1"), (4096, "128x128x128:w4:s3:k1"),
+                       (8192, "128x128x128:w4:s3:k1:t1"), (16384, "128x128x128:w4:s3:k1:t1"),
+                       (32768, "128x128x128:w4:s3:k1:t1")],
     },
     "sm_100": {  # B200: M <= 64; M 256 to 8192 (pointer and TMA)
         (6144, 4096): [(1, "16x64x512:w4:s4:k1"), (16, "16x64x512:w4:s4:k1"), (32, "32x16x256:w4:s4:k1"),
@@ -66,5 +79,21 @@ CONFIGS: dict[str, dict[tuple[int, int], list[tuple[int, str]]]] = {
         (4096, 12288): [(1, "16x64x256:w4:s5:k4"), (16, "16x64x512:w4:s3:k4"), (32, "32x64x256:w4:s5:k4"),
                         (64, "64x32x512:w4:s4:k1"), (256, "64x64x256:w4:s3:k1:t1"), (2048, "128x64x128:w4:s3:k1:t1"),
                         (8192, "128x128x128:w4:s3:k1:t1")],
+    },
+}
+
+# `int8_fused.product`'s sm_90a GEMM (`engine.int8_wgmma`) per architecture and (N, K): (m_min, config) rows, the last whose
+# m_min <= M taken (`int8_wgmma.row`); a shape with no row runs CONFIGS' Triton plan.  A config is `int8_wgmma.WgCfg`'s
+# text: kernel, raster group, CTAs.  Each row is the fastest config at its shape that `benchmarks/hash/exactlin/wgbench.py`
+# gated bit for bit, by MACs a SM clock against the Triton plan at a served step's clock (`--rest 1.0`), at M 8,192, 16,384
+# and 32,768; below M 8,192 the Triton plan is unmeasured against it.  WGMMA_ARCH is the target `int8_wgmma.cu` is built for
+# (wgmma and setmaxnreg are sm_90a's).
+WGMMA_ARCH = "sm_90a"
+WGMMA: dict[str, dict[tuple[int, int], list[tuple[int, str]]]] = {
+    "sm_90": {  # H200, Llama-3.2-1B
+        (3072, 2048): [(8192, "pp_128x128:g8"), (32768, "ppm2_128x128:g8")],
+        (2048, 2048): [(8192, "pp_128x128:g8")],
+        (16384, 2048): [(8192, "pp_128x128:g8")],
+        (2048, 8192): [(8192, "pp_128x128:g8"), (16384, "co_128x256:g8"), (32768, "ppm2_128x128:g8")],
     },
 }

@@ -6,7 +6,7 @@ one whole PoUW window aligned at 0 and nothing else; `Epoch.certified` applies `
 the stream and the prover, 64 bytes, which the seeds and the identifier take, with the challenger's draw coin; two
 registrations of one window are salted apart; `core_check.pass_epoch` passes a certified window's pass only when its
 salt is that of the certifier's reveal and its weights, stream and prover those the prover recorded with the certifier,
-signed, before it drew that salt (`Proxy.commit_weights`, read back by `committed`); `Registrations` admits a window
+signed, before it drew that salt (`Proxy.commit_weights`, read back by `committed`); `WindowOpens` admits a window
 once per stream and prover; a certified window credits only units that read its salt (`unit_reason`); and a live
 window's open root (`window_open_root`) is pinned. The prover salts its pass from the salt it receives in-band (`certifier`'s `drawn`), so the
 verifier's one reveal comes after the registration that names the pass."""
@@ -37,7 +37,7 @@ from verity.core.protocols.pouw.circuit import seeds as SD
 from verity.core.protocols.pouw.protocol import DomainError, Matmul, Shape
 from verity.core.protocols.pouw.schemes import ncp
 from verity.core.protocols.sampled_proofs.one_stage import registration as R
-from verity.core.protocols.sampled_proofs.service import Registration
+from verity.core.protocols.sampled_proofs.service import WindowCommitmentRecord
 
 EGRESS = GridParams(buckets=6, allocation=3, frame_bytes=512)
 INGRESS = GridParams(buckets=6, allocation=2, frame_bytes=512)
@@ -68,12 +68,12 @@ def signed(c: Proxy, p: int, record: bytes, sign=SIGN, context: bytes | None = N
     return sign(active.weights_message(c.bucketer.certifier.link, p, record, ctx))
 
 
-def registration(p: int, ctx: str | None = None, window: dict | None = None) -> Registration:
-    """PoUW's registration of window p as the proof service returns it: a record whose served window's context names p,
+def registration(p: int, ctx: str | None = None, window: dict | None = None) -> WindowCommitmentRecord:
+    """PoUW's registration of window p as the proof system returns it: a record whose served window's context names p,
     with its receipt and digest."""
     w = {"kind": "served", "context": PS.context("served-zk/test", p, MANIFEST) if ctx is None else ctx, "public": {}}
     record = {"window": w if window is None else window}
-    return Registration(record, R.receipt(record, "test", received=str(p)), R.digest(record), p)
+    return WindowCommitmentRecord(record, R.receipt(record, "test", received=str(p)), R.digest(record), p)
 
 
 def certifier(windows: int, records: dict[int, bytes] | None = None, clock=lambda: 0.0,
@@ -518,18 +518,18 @@ def test_a_certified_window_passes_only_weights_and_a_binding_recorded_before_it
 
 
 def test_a_certified_window_registers_once_per_stream_and_prover():
-    """`Registrations` admits PoUW window p once per stream and prover: a second registration of p under them, which has
-    their salt and so their seeds, is refused (`Reregistered`), naming the first; p under another stream or prover, and
+    """`WindowOpens` admits PoUW window p once per stream and prover: a second registration of p under them, which has
+    their salt and so their seeds, is refused (`Reopened`), naming the first; p under another stream or prover, and
     another window under them, are admitted. A window that isn't a u64, or a stream or prover that isn't 64 bytes, is
     refused."""
     other = hashlib.sha512(b"another").digest()
-    ledger = PS.Registrations()
+    ledger = PS.WindowOpens()
     ledger.admit(1, STREAM, PROVER, "aa" * 64)
-    with pytest.raises(PS.Reregistered, match=r"PoUW window 1 is already registered \(aaaaaaaaaaaaaaaa\)"):
+    with pytest.raises(PS.Reopened, match=r"PoUW window 1 is already registered \(aaaaaaaaaaaaaaaa\)"):
         ledger.admit(1, STREAM, PROVER, "bb" * 64)
     for window, stream, prover in ((1, other, PROVER), (1, STREAM, other), (2, STREAM, PROVER)):
         ledger.admit(window, stream, prover, "cc" * 64)
-    with pytest.raises(PS.Reregistered):
+    with pytest.raises(PS.Reopened):
         ledger.admit(2, STREAM, PROVER, "dd" * 64)
     for window, stream, prover in ((-1, STREAM, PROVER), (1, STREAM[:32], PROVER), (1, STREAM, None)):
         with pytest.raises(DomainError):

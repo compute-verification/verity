@@ -18,7 +18,6 @@ from pathlib import Path
 from typing import Any, Iterable
 
 SCHEMA = "recursion-e2e/v1"
-GPU_STEPS = ("inner", "oprove")
 #: the steps one recursive run needs, in order (vcap stages RecCap, which V*'s verdict needs; ``negative`` checks the
 #: run, ``icheck`` and ``oreplay`` time more of it)
 E2E_STEPS = ("build", "inner", "vstage", "vcap", "oprove", "lean")
@@ -425,8 +424,14 @@ def read(root: Path) -> dict[str, Any]:
     if fw:
         s["flock_firewall"] = fw
     steps = step_status(root)
-    return {"schema": SCHEMA, "params": params(root), "inputs": STATEMENTS, "rows": [r.to_json() for r in rows], "summary": s,
-            "steps": steps, "headline": headline(rows, s, steps)}
+    staged = json.loads(text(root / "stage.json") or "null")
+    inputs = STATEMENTS if staged is None else {**STATEMENTS, "inner": (
+        f"{staged['n']} x {staged['unit']} ({staged['subcircuit']}, m = {staged['m']}) under Q_template_instance, staged by "
+        + (f"stage.sh from served window {staged['window']['run'][:16]}'s member {staged['window']['member']}"
+           if staged.get("window") else "stage.sh from seeded draws (generated values)")
+        + ", verity/flock-circuit+plain-leaves, M0 (no --zk), FC_COINS=os, through rec_live's proxy")}
+    return {"schema": SCHEMA, "params": params(root), "inputs": inputs, "rows": [r.to_json() for r in rows], "summary": s,
+            "steps": steps, "headline": headline(rows, s, steps), **({"staged": staged} if staged else {})}
 
 
 def staged_units(p: Path) -> dict[str, dict[str, Any]]:
@@ -711,7 +716,10 @@ def markdown(doc: dict[str, Any]) -> str:
     verdict = ("one whole recursive run, accepted" if h.get("ok") else
                "one whole recursive run, **not accepted** (see ok and the steps' exits)" if h.get("complete") else
                "**not a whole recursive run**: some of " + ", ".join(E2E_STEPS) + " did not run")
-    lines = [f"Recursion bench: K = {p.get('K')}, N = {p.get('N')}, oprove modes {p.get('modes', '?')}, "
+    st = doc.get("staged")
+    shape = (f"{st['subcircuit']} x {st['n']} (m = {st['m']}, {'served window' if st.get('window') else 'generated values'})"
+             if st else f"K = {p.get('K')}, N = {p.get('N')}")
+    lines = [f"Recursion bench: {shape}, oprove modes {p.get('modes', '?')}, "
              + ("; ".join(f"{k}: {each(q)}" for k, q in runs.items()) if runs else each(p))
              + f". Seconds: median [min–max] (n). Verdict: {verdict}"
              + (" (merged runs)" if h.get("merged") else "") + ".", "",

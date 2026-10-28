@@ -47,7 +47,8 @@ mod 2^16. The operand rows A[i], B[j] are taken in the clear (their commitments 
     python3 v31.py fill-params DIR NAME:M:N:K ... [--L L] [--served]   CGP1 params of Dither's no-fold calls for
                                                 `v31 fill-bench` (served: O committed; else the filler's)
     python3 v31.py fill-sample DIR              a fill-bench shape's two sampled tiles against the no-fold reference
-    python3 v31.py fill-table BENCH.jsonl ...   the no-fold call's gamma over cuBLASLt and CUTLASS, and where its time goes
+    python3 v31.py fill-table BENCH.jsonl ... [--bar B]   the no-fold call's gamma over cuBLASLt and CUTLASS, where its
+                                                time goes, and the commit's compressions a SM-cycle over the ruler (and B)
 
 Dither's no-fold call (verity/core/protocols/pouw/circuit/dither.py), served or the filler's, is `Fill` below: its
 reference and verifier here, its GPU prover v31.cu's Fill, and its per-call binding v31lib.py.
@@ -110,7 +111,7 @@ class Shape:
             raise ValueError(f"L' a multiple of 32 dividing K, not L' {self.lp} at K {self.k}")
         if min(self.L, self.k) > 8 * self.lp:
             raise ValueError(f"t = min(L, K) / L' is at most 8 (verity/core/protocols/pouw/dither/PROTOCOL.md, The segment "
-                             f"and the noise period), not {min(self.L, self.k)} / {self.lp} at L {self.L}, K {self.k}")
+                             f"and the noise tile), not {min(self.L, self.k)} / {self.lp} at L {self.L}, K {self.k}")
         if self.row % 16 or 32768 % self.row:
             raise ValueError(f"rows of a multiple of 16 bytes dividing 32 KiB, not {self.row}")
 
@@ -169,9 +170,7 @@ class Shape:
 
 
 # ---------------------------------------------------------------------------------------------------------- the coins
-def prg(seed: bytes, tag: str, idx: int) -> bytes:
-    assert len(seed) == 64
-    return hashlib.sha512(seed + tag.encode().ljust(8, b"\0") + idx.to_bytes(8, "big")).digest()
+prg = dither.prg
 
 
 def stream(seed: bytes, tag: str, first: int, blocks: int) -> bytes:
@@ -220,7 +219,10 @@ def noise_rows(seed: bytes, tag: str, rows: range, lp: int) -> np.ndarray:
 
 
 @dataclass
-class Coins:
+class CallNoise:
+    """A call's noise, the public inputs its checks read: the dithers d_A, d_B, the noise V, U and the permutations,
+    expanded from the call's seeds as dither.py expands its coins (a served call's seeds are `dither.seeds` of the
+    challenger's live coin; v3.1's static call's are the stub challenger's)."""
     dA: np.ndarray
     dB: np.ndarray
     U: np.ndarray
@@ -228,16 +230,17 @@ class Coins:
     perm: np.ndarray
 
     @staticmethod
-    def expand(sh: Shape, seeds: dict[str, bytes]) -> Coins:
-        return Coins(bits(seeds["dA"], "dA", sh.m, sh.k), bits(seeds["dB"], "dB", sh.n, sh.k), noise(seeds["U"], "U", sh.n, sh.lp),
-                     noise(seeds["V"], "V", sh.m, sh.lp), perms(seeds["P"], sh.k // sh.lp, sh.lp))
+    def expand(sh: Shape, seeds: dict[str, bytes]) -> CallNoise:
+        return CallNoise(bits(seeds["dA"], "dA", sh.m, sh.k), bits(seeds["dB"], "dB", sh.n, sh.k),
+                         noise(seeds["U"], "U", sh.n, sh.lp), noise(seeds["V"], "V", sh.m, sh.lp),
+                         perms(seeds["P"], sh.k // sh.lp, sh.lp))
 
     @staticmethod
-    def rows(sh: Shape, seeds: dict[str, bytes], ia: range, ja: range) -> Coins:
-        """The coins of A's rows ia and B's rows ja (and every permutation)."""
-        return Coins(bits_rows(seeds["dA"], "dA", ia, sh.k), bits_rows(seeds["dB"], "dB", ja, sh.k),
-                     noise_rows(seeds["U"], "U", ja, sh.lp), noise_rows(seeds["V"], "V", ia, sh.lp),
-                     perms(seeds["P"], sh.k // sh.lp, sh.lp))
+    def rows(sh: Shape, seeds: dict[str, bytes], ia: range, ja: range) -> CallNoise:
+        """The noise of A's rows ia and B's rows ja (and every permutation)."""
+        return CallNoise(bits_rows(seeds["dA"], "dA", ia, sh.k), bits_rows(seeds["dB"], "dB", ja, sh.k),
+                         noise_rows(seeds["U"], "U", ja, sh.lp), noise_rows(seeds["V"], "V", ia, sh.lp),
+                         perms(seeds["P"], sh.k // sh.lp, sh.lp))
 
 
 def seeds_bytes(seeds: dict[str, bytes]) -> bytes:
@@ -254,12 +257,12 @@ def wrap8(x: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
     return w, (x - w) // 256
 
 
-def v_full(sh: Shape, c: Coins, rows: slice | None = None) -> np.ndarray:
+def v_full(sh: Shape, c: CallNoise, rows: slice | None = None) -> np.ndarray:
     V = c.V if rows is None else c.V[rows]
     return np.tile(V, (1, sh.k // sh.lp))
 
 
-def u_full(sh: Shape, c: Coins, rows: slice | None = None) -> np.ndarray:
+def u_full(sh: Shape, c: CallNoise, rows: slice | None = None) -> np.ndarray:
     U = c.U if rows is None else c.U[rows]
     return np.concatenate([U[:, c.perm[tau]] for tau in range(sh.k // sh.lp)], axis=1)
 
@@ -274,7 +277,7 @@ class Formed:
     Bd: np.ndarray
 
 
-def form(sh: Shape, A: np.ndarray, B: np.ndarray, c: Coins) -> Formed:
+def form(sh: Shape, A: np.ndarray, B: np.ndarray, c: CallNoise) -> Formed:
     Ad, Bd = A.astype(np.int64) + c.dA, B.astype(np.int64) + c.dB
     X, wX = wrap8(Ad + v_full(sh, c))
     Wp, wW = wrap8(Bd + u_full(sh, c))
@@ -287,7 +290,7 @@ def imatmul(a: np.ndarray, b: np.ndarray) -> np.ndarray:
     return np.rint(a.astype(np.float64) @ b.astype(np.float64).T).astype(np.int64)
 
 
-def peels(sh: Shape, f: Formed, c: Coins) -> tuple[np.ndarray, np.ndarray]:
+def peels(sh: Shape, f: Formed, c: CallNoise) -> tuple[np.ndarray, np.ndarray]:
     """Z_X (m x L') and Y_W (N x L')."""
     T = sh.k // sh.lp
     At = f.Ad + v_full(sh, c)
@@ -324,7 +327,7 @@ def values(sh: Shape, f: Formed, skip: int | None = None) -> Values:
     return Values(T, O, acc)
 
 
-def binding(sh: Shape, f: Formed, c: Coins, T_full: np.ndarray) -> np.ndarray:
+def binding(sh: Shape, f: Formed, c: CallNoise, T_full: np.ndarray) -> np.ndarray:
     """O from the tensor product's full-width T_S, the wraps and the peels (the honest prover's route), mod 2^32."""
     Z, Y = peels(sh, f, c)
     wrap = imatmul(f.wX, f.Wp) + imatmul(f.X, f.wW) + 256 * imatmul(f.wX, f.wW)
@@ -510,7 +513,7 @@ def tile_mask(sh: Shape, frac: float, rng: np.random.Generator) -> np.ndarray:
 
 def prove(sh: Shape, A: np.ndarray, B: np.ndarray, seeds: dict[str, bytes], ks: bytes, off: int = 0,
           cheat: str | None = None) -> tuple[Prover, Values]:
-    c = Coins.expand(sh, seeds)
+    c = CallNoise.expand(sh, seeds)
     f = form(sh, A, B, c)
     skip = int(cheat.split(":")[1]) if cheat and cheat.startswith("skip:") else None
     v = values(sh, f, skip)
@@ -525,7 +528,7 @@ def prove(sh: Shape, A: np.ndarray, B: np.ndarray, seeds: dict[str, bytes], ks: 
 
 # ------------------------------------------------------------------------------------------------------- the verifier
 def check_block(sh: Shape, seeds: dict[str, bytes], root: bytes, i: int, j: int, s: int, ans: dict,
-                coins: Coins | None = None) -> str | None:
+                coins: CallNoise | None = None) -> str | None:
     """The proof block's checks (None: passed; else the first failure)."""
     dom, cmt, lim = sh.domain(), Commitment(root, sh.leaves), VerificationLimits()
     rows = {}
@@ -542,9 +545,9 @@ def check_block(sh: Shape, seeds: dict[str, bytes], root: bytes, i: int, j: int,
         p, o = sh.word_leaf(i, j, s_)
         return int.from_bytes(rows[p][o:o + 2], "little")
 
-    c = coins or Coins.expand(sh, seeds)
+    c = coins or CallNoise.expand(sh, seeds)
     Ai, Bj = ans["A"].astype(np.int64)[None, :], ans["B"].astype(np.int64)[None, :]
-    one = Coins(c.dA[i:i + 1], c.dB[j:j + 1], c.U[j:j + 1], c.V[i:i + 1], c.perm)
+    one = CallNoise(c.dA[i:i + 1], c.dB[j:j + 1], c.U[j:j + 1], c.V[i:i + 1], c.perm)
     f = form(sh, Ai, Bj, one)
     a, b = sh.seg(s)
     seg = int((f.X[0, a:b] * f.Wp[0, a:b]).sum())
@@ -565,7 +568,7 @@ def check_block(sh: Shape, seeds: dict[str, bytes], root: bytes, i: int, j: int,
 
 def verdict(sh: Shape, ch: StubChallenger, call: int, prover: Prover, q: int) -> tuple[bool, list[str], str]:
     picks = ch.check(call, prover.cm.root, sh, q)
-    coins = Coins.expand(sh, prover.seeds)
+    coins = CallNoise.expand(sh, prover.seeds)
     fails = []
     for (i, j, s) in picks:
         why = check_block(sh, prover.seeds, prover.cm.root, i, j, s, prover.answer(i, j, s), coins)
@@ -594,8 +597,8 @@ K_LIMIT = 1 << 17
 
 @dataclass(frozen=True)
 class Fill:
-    """A no-fold call: m x n output cells at contraction k, noise period lp (L'), segments of L, leaf rows of `row` bytes,
-    O committed (`o`: a served call; a filler's commits none) (dither.Shape)."""
+    """A no-fold call: m x n output cells at contraction k, noise tiles of lp (L'), segments of L, leaf rows of `row`
+    bytes, O committed (`o`: a served call; a filler's commits none) (dither.Shape)."""
 
     m: int
     n: int
@@ -616,7 +619,7 @@ class Fill:
             raise ValueError(f"L a multiple of L' {self.lp}, not {self.L}")
         if min(self.L, self.k) > 8 * self.lp:
             raise ValueError(f"t = min(L, K) / L' is at most 8 (verity/core/protocols/pouw/dither/PROTOCOL.md, The segment "
-                             f"and the noise period), not {min(self.L, self.k)} / {self.lp} at L {self.L}, K {self.k}")
+                             f"and the noise tile), not {min(self.L, self.k)} / {self.lp} at L {self.L}, K {self.k}")
         if self.row % 16 or 32768 % self.row:
             raise ValueError(f"rows of a multiple of 16 bytes dividing 32 KiB, not {self.row}")
 
@@ -706,7 +709,7 @@ def pad_rows(seeds: dict[str, bytes], rows: range, k: int) -> np.ndarray:
     return raw.reshape(len(rows), kb * 64)[:, :k].copy()
 
 
-def fill_words(f: Fill, A: np.ndarray, B: np.ndarray, c: Coins, skip: int | None = None, upto: int | None = None) -> np.ndarray:
+def fill_words(f: Fill, A: np.ndarray, B: np.ndarray, c: CallNoise, skip: int | None = None, upto: int | None = None) -> np.ndarray:
     """T_1 .. T_upto (default S; upto x rows(A) x rows(B)) mod 2^16 (skip: a prover that leaves noise tile `skip` out of
     X W'^T)."""
     fm = form(f, A, B, c)
@@ -723,7 +726,7 @@ def fill_words(f: Fill, A: np.ndarray, B: np.ndarray, c: Coins, skip: int | None
     return T
 
 
-def fill_values(f: Fill, A: np.ndarray, B: np.ndarray, c: Coins, skip: int | None = None) -> tuple[np.ndarray, np.ndarray | None]:
+def fill_values(f: Fill, A: np.ndarray, B: np.ndarray, c: CallNoise, skip: int | None = None) -> tuple[np.ndarray, np.ndarray | None]:
     """The call's committed values: T_1 .. T_W (W x rows(A) x rows(B), mod 2^16) and a served call's O (mod 2^32; None for
     a filler's)."""
     T = fill_words(f, A, B, c, skip, f.W)
@@ -820,7 +823,7 @@ def fill_check(f: Fill, seeds: dict[str, bytes], root: bytes, i: int, j: int, s:
         return "a served call's proof block reads A's row"
     Ai = pad_rows(seeds, range(i, i + 1), f.k) if ans.get("A") is None else np.asarray(ans["A"], dtype=np.int8)[None, :]
     Bj = np.asarray(ans["B"], dtype=np.int8)[None, :]
-    c = Coins.rows(f, seeds, range(i, i + 1), range(j, j + 1))
+    c = CallNoise.rows(f, seeds, range(i, i + 1), range(j, j + 1))
     fm = form(f, Ai, Bj, c)
     try:
         if f.o and s == f.S:
@@ -899,7 +902,7 @@ def cmd_fill_sample(a: argparse.Namespace) -> int:
         tm, tn = divmod(tile, f.n // TILE)
         A = np.frombuffer((d / f"t{idx}_A.bin").read_bytes(), dtype=np.int8).reshape(TILE, f.k)
         B = np.frombuffer((d / f"t{idx}_B.bin").read_bytes(), dtype=np.int8).reshape(TILE, f.k)
-        c = Coins.rows(f, seeds, range(tm * TILE, (tm + 1) * TILE), range(tn * TILE, (tn + 1) * TILE))
+        c = CallNoise.rows(f, seeds, range(tm * TILE, (tm + 1) * TILE), range(tn * TILE, (tn + 1) * TILE))
         words = fill_buffer(tl, *fill_values(tl, A, B, c))
         g_leaves = (d / f"t{idx}_leaves.bin").read_bytes()
         bad = 0
@@ -915,6 +918,13 @@ def cmd_fill_sample(a: argparse.Namespace) -> int:
     return 0 if rep["exact"] else 1
 
 
+def commit_labels(r: dict) -> str:
+    """A fill-bench line's commit knobs off their defaults, as fill-table labels its rows after the call's knobs."""
+    return ((f" m{r['lminb']}" if r.get("lminb", 5) not in (4, 5) else "")
+            + (f" sm{r['sminb']}" if r.get("sminb", 4) != 4 else "") + (" cf" if r.get("lfold") == 1 else "")
+            + (" nofull" if r.get("full") == 0 else "") + (f" mk{r['mask']}" if r.get("mask") else ""))
+
+
 def cmd_fill_table(a: argparse.Namespace) -> int:
     """`v31 fill-bench`'s JSON lines: gamma of Dither's no-fold call overlapped (a served call's, or a filler's), over
     cuBLASLt and CUTLASS, with the weight side a period's (v3.2: ovl), a call's (the run of record's per-call weight coins:
@@ -922,8 +932,12 @@ def cmd_fill_table(a: argparse.Namespace) -> int:
     registers; wrong roots, timing only), the GEMM's tensor duty (cuBLASLt's time over the call's period, per-call weight
     coins) and where the call's time goes. An arm the call doesn't run (a served call's pad) is "-". Then wgmma.linear's
     time (a -DV31_WG build's served bench), gamma ovl_w over it, and the share of O's rows the GEMM's hash warps hashed
-    (V31_RP 4, the last overlapped call)."""
-    rows = []
+    (V31_RP 4, the last overlapped call).
+
+    Then the commit's parts alone (lines that carry them): each part's SHA-512 compressions a SM-cycle at its median time
+    and clock, over the build's own compression rate (the sha arm, commit_gpu's ruler), and with ``--bar`` (the card's
+    fastest full-output compression a SM-cycle) over that bar."""
+    rows, named = [], []
     for path in a.files:
         for line in Path(path).read_text().splitlines():
             if line.startswith("{") and '"fill": true' in line:
@@ -944,7 +958,10 @@ def cmd_fill_table(a: argparse.Namespace) -> int:
                    + (" hall" if r.get("hall") else "") + (f" c{r['hchunk']}" if r.get("hchunk") else "")
                    + (" w0" if r.get("wg") and r.get("W") and not r.get("wgw", 1) else "")
                    + (" r5w0" if r.get("rp") == 5 and r.get("W") and r.get("wgw", 1) and not r.get("r5w", 1) else "")
+                   + (" tst" if r.get("rp") == 5 and r.get("tst") else "")
                    + (" m4" if r.get("lminb") == 4 else "") + (" sa" if r.get("sahead") else ""))
+        variant += commit_labels(r)
+        named.append((r, variant))
         fused = "-"
         rows_all = r.get("leaves") or r.get("o_leaves")
         if r.get("fused_leaves", -1) >= 0 and rows_all:
@@ -955,11 +972,32 @@ def cmd_fill_table(a: argparse.Namespace) -> int:
         gcut, gcut_w = (r.get("gamma_ovl_cutlass"), r.get("gamma_ovl_w_cutlass")) if "cutlass" in ms else (None, None)
         parts = ", ".join(g(ms[x]["ms"]) if x in ms else "-" for x in ("coins", "coins_w", "pad", "form_a", "form_b", "gemm", "commit"))
         duty = r.get("gamma_ovl_w") if r.get("o") else r["gamma_ovl"]
-        print(f"| {r['shape']} | {r['m']} x {r['n']} x {r['k']} | {r['L']} | {r['S']} | {variant} | {g(ms['lt']['ms'])} | {cut} | "
-              f"{g(ms['ovl']['ms'])} | {g(r['gamma_ovl'])} | {g(gcut)} | {g(r.get('gamma_ovl_w'))} | {g(gcut_w)} | "
+        lt, ovl = (g(ms[x]["ms"]) if x in ms else "-" for x in ("lt", "ovl"))
+        print(f"| {r['shape']} | {r['m']} x {r['n']} x {r['k']} | {r['L']} | {r['S']} | {variant} | {lt} | {cut} | "
+              f"{ovl} | {g(r['gamma_ovl'])} | {g(gcut)} | {g(r.get('gamma_ovl_w'))} | {g(gcut_w)} | "
               f"{g(r.get('gamma_ovl_pad'))} | {g(r.get('gamma_ovl_nomem'))} | {g(r['gamma_call'])} | {g(r['gamma_gemm'])} | "
-              f"{100 / duty:.1f}% | {parts} | {g(ms['wgl']['ms']) if 'wgl' in ms else '-'} | {g(r.get('gamma_ovl_w_wgl'))} | "
+              f"{f'{100 / duty:.1f}%' if duty else '-'} | {parts} | {g(ms['wgl']['ms']) if 'wgl' in ms else '-'} | {g(r.get('gamma_ovl_w_wgl'))} | "
               f"{fused} |")
+    parts = [(r, variant) for r, variant in named if "per_sm_cycle" in r]
+    if not parts:
+        return 0
+
+    def c(x) -> str:
+        return "-" if x is None else f"{x:.5f}"
+
+    def of(x, bar) -> str:
+        return "-" if x is None or not bar else f"{x / bar:.3f}"
+
+    print()
+    print("| shape | variant | sha / SM-cycle | part | ms | MHz | compressions | / SM-cycle | of sha | of bar |")
+    print("|---|---|---|---|---|---|---|---|---|---|")
+    for r, variant in parts:
+        pc, cm = r["per_sm_cycle"], r["comp"]
+        for part, comp in (("leaf", cm["leaf"]), ("leaf_nomem", cm["leaf"]), ("salt", cm["salt"]),
+                           ("commit", cm["leaf"] + cm["salt"])):
+            arm = r["arms"].get(part, {})
+            print(f"| {r['shape']} | {variant} | {c(pc['sha'])} | {part} | {g(arm.get('ms'))} | {arm.get('mhz', '-')} | "
+                  f"{comp:.0f} | {c(pc[part])} | {g(r['of_sha'][part])} | {of(pc[part], a.bar)} |")
     return 0
 
 
@@ -1046,7 +1084,7 @@ def cmd_gpu_check(a: argparse.Namespace) -> int:
         print(json.dumps({"ok": False, "error": "params.bin isn't this shape's CGP1 file"}))
         return 1
     g_words, g_o, g_lv = (d / "words.bin").read_bytes(), (d / "O.bin").read_bytes(), (d / "levels.bin").read_bytes()
-    c = Coins.expand(sh, seeds)
+    c = CallNoise.expand(sh, seeds)
     f = form(sh, A, B, c)
     v = values(sh, f)
     r_words, r_o = words_buffer(sh, v.T), o_buffer(v.O)
@@ -1102,7 +1140,7 @@ def cmd_gpu_sample(a: argparse.Namespace) -> int:
         tm, tn = divmod(tile, sh.n // TILE)
         A = np.frombuffer((d / f"t{idx}_A.bin").read_bytes(), dtype=np.int8).reshape(TILE, sh.k)
         B = np.frombuffer((d / f"t{idx}_B.bin").read_bytes(), dtype=np.int8).reshape(TILE, sh.k)
-        c = Coins.rows(sh, seeds, range(tm * TILE, (tm + 1) * TILE), range(tn * TILE, (tn + 1) * TILE))
+        c = CallNoise.rows(sh, seeds, range(tm * TILE, (tm + 1) * TILE), range(tn * TILE, (tn + 1) * TILE))
         f = form(tl, A, B, c)
         v = values(tl, f)
         words, obuf = words_buffer(tl, v.T), o_buffer(v.O)
@@ -1337,6 +1375,8 @@ def main(argv: list[str]) -> int:
     p.add_argument("dir")
     p = sub.add_parser("fill-table")
     p.add_argument("files", nargs="+")
+    p.add_argument("--bar", type=float, default=None,
+                   help="the card's fastest full-output SHA-512 compressions a SM-cycle, for the commit's parts")
     a = ap.parse_args(argv[1:])
     return {"cpu-run": cmd_cpu_run, "gpu-prep": cmd_gpu_prep, "gpu-check": cmd_gpu_check, "gpu-sample": cmd_gpu_sample,
             "params": cmd_params, "table": cmd_table, "timeline": cmd_timeline, "fill-params": cmd_fill_params,

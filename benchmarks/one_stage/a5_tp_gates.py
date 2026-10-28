@@ -204,7 +204,7 @@ def bc(row: np.ndarray, salt: bytes) -> bytes:
 
 # --- the window ------------------------------------------------------------------------------------------------------------
 
-def window(r: int, hidden: int, tokens: int, requests: int, rest: int) -> CS.Window:
+def window(r: int, hidden: int, tokens: int, requests: int, rest: int) -> CS.Binding:
     """Rank r's window: a chunk of `tokens` transfer-gate units for each request's collective, then the rest."""
     tg, other = templates(hidden)
     units = len(sites(requests)) * tokens
@@ -217,11 +217,11 @@ def window(r: int, hidden: int, tokens: int, requests: int, rest: int) -> CS.Win
                             schemas=tuple((p, V2) for p in (*ports, "o0"))) for u, (q, k) in enumerate(sites(requests)))
     w = REST_BYTES // 2
     others = (CS.Member(rid, rows=(("row", w),), outs=(("o0", w),), n=rest, base=units, schemas=(("row", V2), ("o0", V2))),)
-    return CS.Window(program, query, law, f"{ROOT}/rank{r}", gates + others,
+    return CS.Binding(program, query, law, f"{ROOT}/rank{r}", gates + others,
                      work_table=SRW.work_table_of(law, {tid: units, rid: rest}, [tid]))
 
 
-def chunks(mine: CS.Window) -> list[tuple[int, int, CS.Member]]:
+def chunks(mine: CS.Binding) -> list[tuple[int, int, CS.Member]]:
     """The transfer-gate chunks, q<q>c<k> request q's collective k's, with their request and collective."""
     gates = [m for m in mine.members if m.template == mine.members[0].template]
     return [(q, k, m) for (q, k), m in zip(sites(len(gates) // len(COLLECTIVES)), gates, strict=True)]
@@ -245,7 +245,7 @@ def rest_rows(m: CS.Member) -> np.ndarray:
     return np.asarray([WR.words(hashlib.shake_256(b"a5-tp-gates/rest/%d" % i).digest(2 * w)) for i in range(m.n)], np.uint16)
 
 
-def commit(out: Path, mine: CS.Window, parts: dict, r: int, altered: bool = False, made: str | None = None) -> CS.Committed:
+def commit(out: Path, mine: CS.Binding, parts: dict, r: int, altered: bool = False, made: str | None = None) -> CS.Committed:
     """Rank r's window committed into ``out`` as serving would commit it: each chunk's ``part<j>`` table rank j's partial's rows
     under rank j's salts, its header naming the value, positions and paths, its ``o0`` the sums of the rows it read, and the
     rest under fresh salts. ``altered`` / ``made``: chunk q0c0's port of the sender's partial (``part<1 − r>``) made for
@@ -281,7 +281,7 @@ def registrations(windows: Path) -> dict[int, dict]:
     return {r: json.loads((windows / f"rank{r}" / "registration.json").read_text()) for r in RANKS}
 
 
-def reads(mine: CS.Window, r: int, regs: dict[int, dict]) -> dict[str, dict]:
+def reads(mine: CS.Binding, r: int, regs: dict[int, dict]) -> dict[str, dict]:
     """The verifier's own ``--registered`` file of each of rank r's chunks: ``part<j>`` at the root rank j's registration names
     for its partial of collective k for request q, unit i (from the chunk's first) reading row i. Refused while any rank's
     registration is unread: a rank's ports read every rank's registered partials, so every registration comes before any
@@ -300,7 +300,7 @@ def reads(mine: CS.Window, r: int, regs: dict[int, dict]) -> dict[str, dict]:
     return out
 
 
-def source_of(mine: CS.Window, r: int, regs: dict[int, dict]):
+def source_of(mine: CS.Binding, r: int, regs: dict[int, dict]):
     """The verifier's check of rank r's registration's window: a stand-in of rank r's run, of this step at the TP run root, its
     partials each the verifier's own shape and domain (any root), and its peers exactly the partials rank 1 − r registered."""
     gates = chunks(mine)
@@ -328,7 +328,7 @@ def source_of(mine: CS.Window, r: int, regs: dict[int, dict]):
     return source
 
 
-def transfer_refusals(mine: CS.Window, parts: dict, r: int, regs: dict[int, dict]) -> dict[str, dict]:
+def transfer_refusals(mine: CS.Binding, parts: dict, r: int, regs: dict[int, dict]) -> dict[str, dict]:
     """Rank r's q0c0 port of the sender's partial (``part<1 − r>``) opened by the statement of each `TRANSFERS` kind, read as
     Lean's registered reads read it (`warden_rows.refusal`) against the verifier's own port: each refused by its reason."""
     j, (q, k, m) = 1 - r, chunks(mine)[0]
@@ -347,7 +347,7 @@ def transfer_refusals(mine: CS.Window, parts: dict, r: int, regs: dict[int, dict
     return out
 
 
-def negatives(mine: CS.Window, parts: dict, r: int, regs: dict[int, dict]) -> dict[str, dict]:
+def negatives(mine: CS.Binding, parts: dict, r: int, regs: dict[int, dict]) -> dict[str, dict]:
     """Rank r's registration naming its peer's partial under another root, its own partial as its peer's, another request's
     partial as its peer's, a partial under another TP run's domain, and the other rank's registration as its own, each
     refused by `source`; its ports built before the peer's registration is read, refused by `reads`; and the receiving port's
@@ -373,7 +373,7 @@ def negatives(mine: CS.Window, parts: dict, r: int, regs: dict[int, dict]) -> di
                                                                    "before any rank's coin")} | transfer_refusals(mine, parts, r, regs)
 
 
-def gate_rows(mine: CS.Window, regs: dict[int, dict]) -> list[dict]:
+def gate_rows(mine: CS.Binding, regs: dict[int, dict]) -> list[dict]:
     """Each chunk's request, collective, units and the registered partial each port opens: unit base + i reads row i of both."""
     return [{"chunk": m.key, "request": q, "collective": COLLECTIVES[k], "units": [m.base, m.base + m.n],
              "ports": {f"part{j}": {"value": value_name(j, q, k), "rank": j,

@@ -31,11 +31,13 @@ of the calls that made the key and of the one they are about. No statement takes
   `⟨egressLink, w, ρ (w·T) … ρ (w·T + T − 1), σ w⟩` with the egress grid's parameters: every published egress record's
   grid is the `T` rows its buckets released, each the frames its bucket wrote. No other event writes the link or
   publishes anything but an ingress record.
-* `CompleteRows`: a record an egress tick publishes whose status is complete, of a window with a declared sync, has
-  every row equal to `NetworkCertifier.expectedRow` over the frames the shaper handed through that tick (their bits,
-  `bitsOf`, as the difftest compares) under the syncs `step` declared through it (`ProgramRows`). It needs no honest
-  timing: the shaper hands a frame at its logical hand bucket (`NetworkCertifier.handingBuckets`) or later, and a frame
-  handed later faults the window it is handed in, so no complete window holds one.
+* `CompleteRows`: a record an egress tick publishes whose status is complete has every row equal to the FIFO's release
+  at the allocation (`NetworkCertifier.fifoGrid`) of the frames the shaper handed through that tick, each enqueued at
+  the bucket that handed it (`handed`) and leaving in the order handed (their bits, `bitsOf`, as the difftest compares)
+  (`ProgramRows`). It reads no sync and no `NetworkCertifier.expectedRow`: the buckets are the ones the device handed
+  the frames at. That each was handed at the bucket the Program gives it is a separate fact of a run whose windows are
+  all complete (`Proofs.CertifierDevice.hands_honest`, and `Proofs.CertifierDevice.completeRows_honest` for the
+  Program's rows).
 
 **(3) Fail-closed.** `FailClosed`: once the egress certifier holds a fault `r`, every later egress tick of that window
 releases nothing (it writes `r · B` zero bytes), and the window's record has status `notEstablished r` and padding in
@@ -55,7 +57,7 @@ signature `signAt` returns verifies, are completeness, not guarantees: `Proofs.C
 namespace Properties.CertifierDevice
 
 open _root_.CertifierDevice
-open NetworkCertifier (Reason Status LogicalFrame)
+open NetworkCertifier (Reason Status)
 
 /-! ## A trace -/
 
@@ -161,27 +163,29 @@ def handed : State → List Event → List (Frame × Nat)
   | _, [] => []
   | st, ev :: tr => (handedAt st ev).map (·, st.shaper.t) ++ handed (step st ev).1 tr
 
-/-- **The complete records of `tr` are the Program's.** Every record an egress tick of `tr` publishes, event `n`, whose
-status is complete, of a window with a sync among those `step` declared through event `n`, has as row `j`, slot by slot,
-`NetworkCertifier.expectedRow` at bucket `w·T + j` of the frames the shaper handed through event `n` (their bits, as the
-difftest's honest check reads them), under those syncs.
+/-- The bits of the `i`-th frame of `hs`, in the order handed, and none past the last. -/
+def handedBits (hs : List (Frame × Nat)) (i : Nat) : List Bool := (hs.map fun x => bitsOf x.1.bytes).getD i []
 
-Its record is the Program's on the frames handed by its close: the Program's grid on the frames handed by the record's
-publish, not on every frame the Program places in its window. A frame the Program places in window `w` but the shaper
-hands late, in `w + 1`, faults `w + 1`, and `w` still closes complete without it. An accepted run excludes that, since
-every one of its windows must be complete. -/
+/-- How many frames of `hs` bucket `u` handed. -/
+def handedCount (hs : List (Frame × Nat)) (u : Nat) : Nat := (hs.map Prod.snd).count u
+
+/-- **The complete records of `tr` are the FIFO's release of what was handed.** Every record an egress tick of `tr`
+publishes, event `n`, whose status is complete, has as row `j`, slot by slot, the FIFO certifier's release at the
+allocation (`NetworkCertifier.fifoGrid`) at bucket `w·T + j`, when the frames the shaper handed through event `n` are
+enqueued each at the bucket that handed it and leave in the order handed (their bits, as the difftest compares them).
+
+The count is of every frame handed, in a faulted window too, where the certifier enqueued nothing: a window that closes
+faulted with frames still counted faults the next one, so a complete window starts from what the count holds. -/
 def ProgramRows (c : Config) (tr : List Event) : Prop :=
   ∀ n k backlog acts rec p, EgressAt c tr n k backlog → (outputs (init c) tr)[n]? = some acts → .publish rec p ∈ acts →
     let hs := handed (init c) (tr.take (n + 1))
-    let syncs := (after (init c) (tr.take (n + 1))).shaper.syncs
-    let frames : List LogicalFrame := hs.map fun x => ⟨bitsOf x.1.bytes, x.1.anchor, x.1.index⟩
     let T := c.egress.buckets
-    rec.status = .complete → rec.window < syncs.size →
-    ∀ j < T, ∀ (s : Nat) (hs : s < c.egress.allocation),
-      NetworkCertifier.expectedRow c.egress.allocation T syncs.size (fun w => syncs[w]) frames (rec.window * T + j)
-        ⟨s, hs⟩ = (rec.grid[j]!)[s]!.map bitsOf
+    rec.status = .complete →
+    ∀ j < T, ∀ (s : Nat) (hs' : s < c.egress.allocation),
+      NetworkCertifier.fifoGrid (rec.window * T + j + 1) c.egress.allocation (handedBits hs) (handedCount hs)
+        (Fin.last (rec.window * T + j)) ⟨s, hs'⟩ = (rec.grid[j]!)[s]!.map bitsOf
 
-/-- **A complete record is the Program's**, on every trace. -/
+/-- **A complete record is the FIFO's release of what was handed**, on every trace. -/
 def CompleteRows : Prop := ∀ (c : Config) (tr : List Event), ProgramRows c tr
 
 /-! ## (3) Fail-closed -/
@@ -213,8 +217,8 @@ verifies (`CertifiedRecord.verify`) under the parameters and the key's public ke
 def IssuerVerifies : Prop :=
   ∀ (N W H : Nat) (toy : Bool) (p : Lms.Params) (I seed : ByteArray) (k : Lms.PrivateKey) (session : ByteArray)
     (refused : Array (String × NetworkCheck.Direction × Nat)) (i' : Issuer) (salt : ByteArray) (leaf : Except String Nat)
-    (record : Record) (direction : NetworkCheck.Direction) (params : Params) (parameters : ByteArray) (deadline : Bool)
-    (cr : CertifiedRecord),
+    (record : BlockGrid) (direction : NetworkCheck.Direction) (params : Params) (parameters : ByteArray)
+    (deadline : Bool) (cr : CertifiedRecord),
     Lms.Params.make N W H toy = .ok p → Lms.key p I seed = .ok k →
     ({ key := k, session, refused } : Issuer).certify salt leaf record direction params parameters deadline =
       .ok (i', some cr) →

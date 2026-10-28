@@ -1,4 +1,4 @@
-"""One link-window's network certificates through the proof service (N2): the round trip to an accepted, exhaustive
+"""One link-window's network certificates through the proof system (N2): the round trip to an accepted, exhaustive
 outcome, the public-items rule on the registration, the head check against the declared grid and the occupancy
 profile, and each way a link-window fails closed, on injected coins and an injected clock. Each round's verdict of
 record is decided on a stand-in proof of the unit (`standin`: the prover's rows and output word by the gates'
@@ -18,7 +18,7 @@ from verity.ml.circuits.program import Program
 from verity.core.protocols.certifier import head_check as HC, service as SVC
 from verity.core.protocols.certifier.certificate import (CertifiedRecord, Direction, Issuer, LmsSigner,
                                                                           RecordHead, parameters_digest)
-from verity.core.protocols.certifier.grid import Certifier, GridParams, Record, occupancy
+from verity.core.protocols.certifier.grid import Certifier, GridParams, BlockGrid, occupancy
 from verity.core.protocols.certifier.schedule import ClockSync, SyncSet, run_shaper
 from verity.ml.commitments import hm96
 from verity.ml.commitments.gates.frame_v3 import root_ref
@@ -85,16 +85,16 @@ class Run:
                                      clock=self.clock)
         self.previous = None
 
-    def egress(self, record: Record, **kw) -> CertifiedRecord:
+    def egress(self, record: BlockGrid, **kw) -> CertifiedRecord:
         return self.issuer.certify(record, EGRESS, PARAMS, parameters_digest(PARAMS, SYNC_SET), **kw)
 
-    def ingress(self, record: Record, **kw) -> CertifiedRecord:
+    def ingress(self, record: BlockGrid, **kw) -> CertifiedRecord:
         return self.issuer.certify(record, INGRESS, PARAMS, parameters_digest(PARAMS), **kw)
 
     def honest(self, w: int):
         return self.lw.commit(w, self.egress(egress_records()[w]), self.ingress(ingress_records()[w]), SALTS[w])
 
-    def register(self, opening) -> S.Registration:
+    def register(self, opening) -> S.WindowCommitmentRecord:
         reg = self.lw.register(self.stream, self.lw.registration(opening, self.previous))
         self.previous = reg.digest
         return reg

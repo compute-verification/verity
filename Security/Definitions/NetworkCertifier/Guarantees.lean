@@ -57,6 +57,16 @@ def EncardFifoGrids : Prop :=
 
 /-! ## Theorem 3: the advice caps -/
 
+/-- **Theorem 3, the fixed advice budget.** This is the `2^A` cap with the advice type `Fin E → Fin k → Bool`: one
+string of exactly `k` bits for each of `E` execution blocks, padded to that length whatever is used. The accepted
+observation sequences of length `n` with jitter below `D` number at most `2^(E·k) · D^n`, that is `k` bits per
+execution block plus jitter. Every advice value has the same length, so the charge is `k` whatever an honest session
+used, and nothing used is counted: no cap per sampling block, no Kraft inequality and no `BitsCount`. -/
+def EncardAccSeqsLeAdviceBits : Prop :=
+  ∀ {L K S : ℕ} {In : Type} (E k : ℕ) (P : Program L S In (Fin E → Fin k → Bool))
+    (op : ℕ → List (Obs L K S) → In) (n D : ℕ),
+    (AccSeqs P op n D).encard ≤ ((2 ^ (E * k) * D ^ n : ℕ) : ℕ∞)
+
 /-- **Theorem 3, the clock-sync form.** This is the `2^A` cap with the advice type `Ac × (Fin W → Sync)`: one
 clock-sync value per window from `Sync`, for example an offset δ and a rate ρ, 16 × 8 values. Over `W` windows the
 accepted sequences number at most `#Ac · #Sync^W · D^n`, that is `A_c + W·log2 #Sync` bits plus jitter.
@@ -77,35 +87,6 @@ def EncardAccSeqsLeFixedClock : Prop :=
   ∀ {L K S : ℕ} {In Ac : Type} [Fintype Ac] (W : ℕ)
     (P : Program L S In (Ac × (Fin W → Unit))) (op : ℕ → List (Obs L K S) → In) (n D : ℕ),
     (AccSeqs P op n D).encard ≤ ((Fintype.card Ac * D ^ n : ℕ) : ℕ∞)
-
-/-- **Theorem 3, the block cap, under the two dataflow conditions.** The advice is content advice `Ac` and timing
-advice `At β` per block `β`. The cells `C` carry the Program's occupancy predictions `occ c : U c`, at step `step c`,
-in block `blk c`. Then the accepted sequences number at most
-`#Ac · D^n · ∏_β min(#At β, ∏_{c ∈ β} #U c)`. -/
-def EncardAccSeqsLeBlocks : Prop :=
-  ∀ {L K S : ℕ} {In Ac B C : Type} {At : B → Type} {U : C → Type}
-    [Fintype Ac] [Fintype B] [DecidableEq B] [∀ β, Fintype (At β)] [Fintype C] [DecidableEq C] [∀ c, Fintype (U c)]
-    (P : Program L S In (Ac × ((β : B) → At β))) (op : ℕ → List (Obs L K S) → In) (n D : ℕ)
-    (step : C → ℕ) (blk : C → B) (occ : (c : C) → List In → Ac × ((β : B) → At β) → U c)
-    (h1 : FramesReadNoTimingAdvice P step occ) (h2 : OccupancyReadsOwnBlock blk occ),
-    (AccSeqs P op n D).encard ≤
-      ((Fintype.card Ac * D ^ n *
-        ∏ β, min (Fintype.card (At β)) (∏ c ∈ univ.filter (fun c => blk c = β), Fintype.card (U c)) : ℕ) : ℕ∞)
-
-/-- **The left-packed instance.** Cells are the (link, step) pairs of the horizon, and the Program's occupancy at a
-cell is the count of its row, a value in `Fin (S + 1)`. Then the block cap reads
-`#Ac · D^n · ∏_β min(#At β, (S + 1)^|β|)`. -/
-def EncardAccSeqsLeBlocksCounts : Prop :=
-  ∀ {L K S : ℕ} {In Ac B : Type} {At : B → Type}
-    [Fintype Ac] [Fintype B] [DecidableEq B] [∀ β, Fintype (At β)]
-    (P : Program L S In (Ac × ((β : B) → At β))) (op : ℕ → List (Obs L K S) → In) (n D : ℕ)
-    (blk : Fin L × Fin n → B)
-    (h1 : FramesReadNoTimingAdvice P (fun c : Fin L × Fin n => (c.2 : ℕ))
-      (fun c ins a => rowCount (P.rows c.2 ins a c.1)))
-    (h2 : OccupancyReadsOwnBlock blk (fun c : Fin L × Fin n => fun ins a => rowCount (P.rows c.2 ins a c.1))),
-    (AccSeqs P op n D).encard ≤
-      ((Fintype.card Ac * D ^ n *
-        ∏ β, min (Fintype.card (At β)) ((S + 1) ^ (univ.filter (fun c => blk c = β)).card) : ℕ) : ℕ∞)
 
 /-! ## Theorem 3 for the shipped schedule: the constant-rate Program
 

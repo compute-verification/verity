@@ -1,6 +1,6 @@
 """The wide-word codec's benchmark on one GPU: `wt.cu`'s libraries (`--lib PATH`, one per field) gated against
-`wide.py`, then timed. Writes `codec-tensor.json` and `bench.log` under `--out`, and in a `research run` its
-`result.json`.
+`wide.py`, then timed. Writes `codec-tensor.json` and `bench.log` under `--out`, and, with
+`RESEARCH_RUN_DIR` set, its `result.json` there.
 
 Nothing is timed before its gate passed, in this order:
 - `gate`: per field and k, device encode equals `wide.encode_word` on random and edge payloads, and both decodes (CUDA
@@ -45,7 +45,9 @@ import numpy as np
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
+sys.path.append(str(HERE.parents[1]))
 
+from benchmarks.word_codec import cuda_lib  # noqa: E402
 import sketch_receipt as SR  # noqa: E402
 import sketching as SKT  # noqa: E402
 import tagging as TG  # noqa: E402
@@ -78,39 +80,42 @@ def word_codec():
     return mod
 
 
+_v, _i, _q = ctypes.c_void_p, ctypes.c_int, ctypes.c_uint64
+_FUSED_SKETCH = [_i, _v, _v, _v, _i, _i, _i, _q, _i, _i, _i, _i, _i, _v, _v, _q, _i, _v, _v, _i, _i, _v, _v]
+WT = {   # wt.cu's functions every build exports (`cuda_lib.load`)
+    "wt_set_key": [_v, _i, _v, _v],
+    "wt_set_mask": [_v],
+    "wt_encode": [_v, _v, _q, _q, _i, _i, _v],
+    "wt_decode": [_v, _v, _q, _q, _i, _v, _i, _v],
+    "wt_decode_rows": [_v, _v, _q, _q, _i, _i, _v, _i, _v],
+    "wt_tc_decode": [_v, _v, _q, _q, _i, _v, _i, _v],
+    "wt_read": [_v, _q, _v, _i, _v],
+    "wt_tc_square_gate": [_v, _v, _i, _v],
+    "wt_chain": [_i, _i, _i, _q, _v, _i, _v],
+    "wt_mix": [_q, _q, _i, _v, _i, _v],
+    "wt_gemm": [_i, _v, _v, _v, _i, _i, _i, _i, _i, _i, _i, _i, _v, _v, _v],
+    "wt_fused": [_i, _v, _v, _v, _i, _i, _i, _q, _i, _i, _i, _i, _i, _v, _v, _q, _v, _v],
+    "wt_fused_sketch": _FUSED_SKETCH,
+    "wt_set_pass": [_v, _i, _i],
+    "wt_pass": [ctypes.c_uint, _v, _v, _i, _v],
+    "wt_sign_frags": [_v, _v, _i, _v],
+    "wt_pass_state": [_v],
+    "wt_pass_ptrs": [_v],
+    "wt_sketch_vectors": ([_i, _i, _i, _i], _q),
+    "wt_set_tag": [_v, _v],
+    "wt_set_dbg": [_v],
+    "wt_tag_leaves": [_v, _q, _v, _v],
+    "wt_tag_tree": [_v, _q, _v, _v],
+    "wt_spin": [ctypes.c_longlong, _v],
+    "wt_empty": [_i, _v],
+}
+WT_BUILT = {"wt_fused_sketch_bf": _FUSED_SKETCH, "wt_prim": [_i, _v, _v, _v, _i, _v]}   # not in builds from before them
+
+
 class Lib:
     def __init__(self, path: str) -> None:
-        v, i, q = ctypes.c_void_p, ctypes.c_int, ctypes.c_uint64
-        self.path, self.so = path, ctypes.CDLL(path)
+        self.path, self.so = path, cuda_lib.load(path, WT, WT_BUILT)
         so = self.so
-        so.wt_set_key.argtypes = [v, i, v, v]
-        so.wt_set_mask.argtypes = [v]
-        so.wt_encode.argtypes = [v, v, q, q, i, i, v]
-        so.wt_decode.argtypes = [v, v, q, q, i, v, i, v]
-        so.wt_decode_rows.argtypes = [v, v, q, q, i, i, v, i, v]
-        so.wt_tc_decode.argtypes = [v, v, q, q, i, v, i, v]
-        so.wt_read.argtypes = [v, q, v, i, v]
-        so.wt_tc_square_gate.argtypes = [v, v, i, v]
-        so.wt_chain.argtypes = [i, i, i, q, v, i, v]
-        so.wt_mix.argtypes = [q, q, i, v, i, v]
-        so.wt_gemm.argtypes = [i, v, v, v, i, i, i, i, i, i, i, i, v, v, v]
-        so.wt_fused.argtypes = [i, v, v, v, i, i, i, q, i, i, i, i, i, v, v, q, v, v]
-        so.wt_fused_sketch.argtypes = [i, v, v, v, i, i, i, q, i, i, i, i, i, v, v, q, i, v, v, i, i, v, v]
-        if hasattr(so, "wt_fused_sketch_bf"):   # builds from before it
-            so.wt_fused_sketch_bf.argtypes = so.wt_fused_sketch.argtypes
-        so.wt_set_pass.argtypes = [v, i, i]
-        so.wt_pass.argtypes = [ctypes.c_uint, v, v, i, v]
-        so.wt_sign_frags.argtypes = [v, v, i, v]
-        so.wt_pass_state.argtypes = [v]
-        so.wt_pass_ptrs.argtypes = [v]
-        so.wt_sketch_vectors.argtypes = [i, i, i, i]
-        so.wt_sketch_vectors.restype = q
-        so.wt_set_tag.argtypes = [v, v]
-        so.wt_set_dbg.argtypes = [v]
-        so.wt_tag_leaves.argtypes = [v, q, v, v]
-        so.wt_tag_tree.argtypes = [v, q, v, v]
-        so.wt_spin.argtypes = [ctypes.c_longlong, v]
-        so.wt_empty.argtypes = [i, v]
         cs = (ctypes.c_int * 20)()
         so.wt_constants(cs)
         (self.n, self.nl, self.s, self.pb, self.tw, self.u, self.c, self.wpb, self.tc_mmas, self.tc_bytes, self.kmax,
@@ -665,14 +670,14 @@ def sketch_bits(lib: Lib, seed: bytes, k: int, n: int) -> np.ndarray:
 
 def sketch_derive(lib: Lib, seed: bytes, n: int, rows: int = SR.ROWS) -> bytes:
     if lib.receipt:
-        return SKT.randomness().derive(seed, SR.SIGN_DOMAIN, {"tag": SR.KIND, "k": rows, "n": n}).value
+        return SKT.randomness().derive(seed, SR.rb.SIGN_DOMAIN, {"tag": SR.rb.SKETCH_SHA512, "k": rows, "n": n}).value
     return SKT.randomness().derive(seed, SKT.SIGN_DOMAIN, {"tag": SKT.NAME, "k": rows, "n": n}).value
 
 
 def receipt_mid(lib: Lib, seed: bytes) -> bytes:
     """sketch-sha512's prefix midstate at `seed` as the host computes it (wt_set_tag); leaves set_sketch_tag's."""
     k = ctypes.create_string_buffer(SKT.key(TAG_SEED))
-    pre = ctypes.create_string_buffer(SR.prefix(seed))
+    pre = ctypes.create_string_buffer(SR.rb.sketch_prefix(seed))
     lib.call("wt_set_tag", ctypes.addressof(k), ctypes.addressof(pre))
     mid = pass_state(lib)["mid"]
     set_sketch_tag(lib)
@@ -703,7 +708,7 @@ def gate_pass(lib: Lib, torch, sketch_t: int, log, trials: int = 4, rows: int = 
     """wt_pass (red team F29: pass j's receipt keyed by s_j = pass_seed(σ, j, root_(j−1))) against Python at random
     j and roots: s_j, K_S, the tag key, the signs (sign_fragments of sign_bits(s_j)) and, through wt_tag_leaves over
     random tags, the leaves' prefix (commit_gate at s_j); in a WT_RECEIPT build sketch-sha512's s_j, K_S, signs and
-    receipt prefix (its midstate against the host's of sketch_receipt.prefix(s_j)) at k_s = rows, the signs as
+    receipt prefix (its midstate against the host's of receipts.sketch_prefix(s_j)) at k_s = rows, the signs as
     sign_words and their A as sign_frags (16 rows) or sign_planes (64)."""
     n, m, st = set_pass(lib, sketch_t, rows=rows), SKT.steps(lib.sb), stream(torch)
     signs = torch.empty(128 * rows if lib.receipt else sketch_t * m * 32, dtype=torch.int32, device="cuda")
@@ -834,7 +839,7 @@ def set_sketch_tag(lib: Lib) -> None:
     """ro-sketch-blake3/v0's key and leaf prefix at TAG_SEED into the library (set_tag restores ro-blake3/v1's); a
     WT_RECEIPT build's sketch-sha512 prefix at RECEIPT_SEED."""
     k = ctypes.create_string_buffer(SKT.key(TAG_SEED))
-    pre = ctypes.create_string_buffer(SR.prefix(RECEIPT_SEED) if lib.receipt else SKT.leaf_prefix(TAG_SEED))
+    pre = ctypes.create_string_buffer(SR.rb.sketch_prefix(RECEIPT_SEED) if lib.receipt else SKT.leaf_prefix(TAG_SEED))
     lib.call("wt_set_tag", ctypes.addressof(k), ctypes.addressof(pre))
 
 

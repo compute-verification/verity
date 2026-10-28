@@ -1,13 +1,13 @@
 import Proofs.Flock.EndToEnd.Period.Statement
 
 /-!
-# The integrity audit per server-time block, and over a horizon of blocks (trusted)
+# The integrity audit per server-time block, and pooled over a monitoring period's blocks (trusted)
 
-A server's life is cut into server-time blocks by certified wipes. Over a horizon, its `--zk` sessions are numbered in
-serve order, session `t` a `SamplingBlock` `W t` with a fresh live subset draw, and block `b` is the sessions from
-`start b` up to `start (b + 1)` (`ServerBlocks`): a wipe separates block `b`'s last session from block `b + 1`'s
-first. One prover strategy plays every session of every block (`Period.game` over the horizon's sessions), adaptively,
-so a block's sessions may depend on everything the prover saw in the blocks before.
+A server's life is cut into server-time blocks by certified wipes. Over a monitoring period, its `--zk` sessions are
+numbered in serve order, session `t` a `SamplingBlock` `W t` with a fresh live subset draw, and block `b` is the
+sessions from `start b` up to `start (b + 1)` (`ServerBlocks`): a wipe separates block `b`'s last session from block
+`b + 1`'s first. One prover strategy plays every session of every block (`Period.game` over the monitoring period's
+sessions), adaptively, so a block's sessions may depend on everything the prover saw in the blocks before.
 
 * `IntegrityBlock`: for block `b`, the probability that every session of block `b` is accepted and its wrong units total
   at least `ln(1/δ)/q` is at most `δ + Σ_{t ∈ b} (ε_ks,t + δ_link,t)`, where each of block `b`'s draws covers at least a
@@ -16,7 +16,8 @@ so a block's sessions may depend on everything the prover saw in the blocks befo
 * `IntegrityBlocks`: the probability that some block is accepted with at least `ln(1/δ)/q` wrong units is at most
   `Σ_b (δ + Σ_{t ∈ b} (ε_ks,t + δ_link,t))`: the per-block form a joint horizon over blocks sums with the other legs.
 * `IntegrityHorizonBlocks`: the probability that every session of every block is accepted and the wrong units over the
-  horizon total at least `ln(1/δ)/q` is at most `δ + Σ_b Σ_{t ∈ b} (ε_ks,t + δ_link,t)`, the pooled reading.
+  horizon total at least `ln(1/δ)/q` is at most `δ + Σ_b Σ_{t ∈ b} (ε_ks,t + δ_link,t)`, the pooled reading. It is a
+  lemma: the listed guarantee of the pooled reading is `IntegrityHorizonCarried`, which also covers carried state.
 
 The named assumptions are `IntegrityHorizon`'s, at the sessions each statement reads: A3 (`uniform/io-getrandombytes`)
 for each session's draw bytes, `live-verifier` (`SamplingBlock.hCust`), and `cr/sha-512` (`TableCRZ`) and `ecr/sha-512`
@@ -25,7 +26,8 @@ for each session's draw bytes, `live-verifier` (`SamplingBlock.hCust`), and `cr/
 
 A wrong unit is counted in the session that holds it (`SamplingBlock.wrongSet`). The state a block carries across a wipe
 (the KV cache, committed before the wipe and read after it) is an input of the next block's sessions, and these
-statements say nothing of whether the value a session reads there is the one the block before committed.
+statements say nothing of whether the value a session reads there is the one the block before committed;
+`IntegrityHorizonCarried` (`EndToEnd/Carry/Statement.lean`) does.
 -/
 
 namespace Flock.Guarantees
@@ -35,9 +37,9 @@ open FlockSoundness FlockSoundness.Game FlockSoundness.Audit FlockSoundness.Disc
   FlockSoundness.Discharge.Composed FlockSoundness.Discharge.ZkHidden
 open scoped ENNReal
 
-/-- **A server's sessions over a horizon, cut at wipes into `B` server-time blocks.** Session `t` is `W t`, in serve
-order; block `b` is the sessions from `start b` up to `start (b + 1)`, so the blocks partition the horizon's first
-`start B` sessions, and a wipe sits before session `start b` for each `0 < b < B`. -/
+/-- **A server's sessions over a monitoring period, cut at wipes into `B` server-time blocks.** Session `t` is `W t`,
+in serve order; block `b` is the sessions from `start b` up to `start (b + 1)`, so the blocks partition the monitoring
+period's first `start B` sessions, and a wipe sits before session `start b` for each `0 < b < B`. -/
 structure ServerBlocks where
   W : ℕ → SamplingBlock
   B : ℕ
@@ -49,16 +51,16 @@ namespace ServerBlocks
 
 variable (S : ServerBlocks)
 
-/-- The horizon's number of sessions. -/
+/-- The monitoring period's number of sessions. -/
 def T : ℕ := S.start S.B
 
 /-- Block `b`'s sessions. -/
 def sessions (b : ℕ) : Finset ℕ := Finset.Ico (S.start b) (S.start (b + 1))
 
-/-- The horizon's game: every block's sessions in serve order, against one prover. -/
+/-- The monitoring period's game: every block's sessions in serve order, against one prover. -/
 noncomputable def game : Game Unit := Period.game S.W S.T
 
-/-- The horizon's run at the prover strategy `s`: each session's record, in serve order. -/
+/-- The monitoring period's run at the prover strategy `s`: each session's record, in serve order. -/
 noncomputable def run (s : Strategy S.game) : Game (List WindowRec) := Period.run S.W S.T s
 
 /-- Block `b`'s wrong units in a run's records. -/
@@ -74,9 +76,10 @@ noncomputable def err (b : ℕ) : ℝ≥0∞ := ∑ t ∈ S.sessions b, ((S.W t)
 
 end ServerBlocks
 
-/-- **The integrity audit of one server-time block.** In a horizon of server-time blocks as in `ServerBlocks`, played
-by one adaptive prover `s`, if each of block `b`'s draws covers at least a fraction `q > 0` of its session's units, the
-probability that every session of block `b` is accepted and its wrong units total at least `ln(1/δ)/q` is at most
+/-- **The integrity audit of one server-time block.** In a monitoring period of server-time blocks as in
+`ServerBlocks`, played by one adaptive prover `s`, if each of block `b`'s draws covers at least a fraction `q > 0` of
+its session's units, the probability that every session of block `b` is accepted and its wrong units total at least
+`ln(1/δ)/q` is at most
 $$\delta + \sum_{t \in b} (\varepsilon_{ks,t} + \delta_{link,t}).$$
 Its named assumptions are `IntegrityHorizon`'s, at block `b`'s sessions. -/
 def IntegrityBlock : Prop :=
@@ -92,9 +95,9 @@ def IntegrityBlock : Prop :=
         (reg ((S.W t).sim τ)) (cont ((S.W t).sim τ)) (S.W t).k (S.W t).Rw (S.W t).M (S.W t).t') →
     value (S.BlockEscapes q δ b) (S.run s) ≤ ENNReal.ofReal δ + S.err b
 
-/-- **The integrity audit per server-time block, over a horizon of `B` blocks.** In a horizon as in `IntegrityBlock`
-whose draws each cover at least a fraction `q > 0` of their session's units, the probability that some block is
-accepted with at least `ln(1/δ)/q` wrong units is at most
+/-- **The integrity audit per server-time block, over a monitoring period of `B` blocks.** In a monitoring period as in
+`IntegrityBlock` whose draws each cover at least a fraction `q > 0` of their session's units, the probability that some
+block is accepted with at least `ln(1/δ)/q` wrong units is at most
 $$\sum_{b < B} \Big(\delta + \sum_{t \in b} (\varepsilon_{ks,t} + \delta_{link,t})\Big).$$
 Its named assumptions are `IntegrityHorizon`'s. -/
 def IntegrityBlocks : Prop :=
@@ -111,9 +114,9 @@ def IntegrityBlocks : Prop :=
     value (fun l => ∃ b < S.B, S.BlockEscapes q δ b l) (S.run s) ≤
       ∑ b ∈ Finset.range S.B, (ENNReal.ofReal δ + S.err b)
 
-/-- **The integrity audit over a horizon of `B` server-time blocks, pooled.** In a horizon as in `IntegrityBlocks`, the
-probability that every session of every block is accepted and the wrong units over the horizon total at least
-`ln(1/δ)/q` is at most
+/-- **The integrity audit over a monitoring period of `B` server-time blocks, pooled.** In a monitoring period as in
+`IntegrityBlocks`, the probability that every session of every block is accepted and the wrong units over the monitoring
+period total at least `ln(1/δ)/q` is at most
 $$\delta + \sum_{b < B} \sum_{t \in b} (\varepsilon_{ks,t} + \delta_{link,t}).$$
 Its named assumptions are `IntegrityHorizon`'s. -/
 def IntegrityHorizonBlocks : Prop :=

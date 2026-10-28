@@ -1,4 +1,4 @@
-"""The proof service's challenger (`challenger`): it commits to every coin of a layout before the epoch and opens each
+"""The proof system's challenger (`challenger`): it commits to every coin of a layout before the epoch and opens each
 once, after the root the verifier recorded for it; the verifier refuses a coin opened twice, one opened before its root
 was recorded, a foreign epoch's or another challenger's, a coin that isn't the one asked for, and a recorded root whose
 coin was never opened.  The layouts are any client's: named by no protocol.  The verifier trusts only the commitment in
@@ -18,7 +18,7 @@ from verity.core.protocols.sampled_proofs import challenger as C
 from verity.ml.crypto import lms
 
 LABEL = "commit"
-HOST = "vy-nebius-cpu-1"
+HOST = "auditor-1"
 
 
 def entropy(seed: str):
@@ -290,7 +290,7 @@ def test_a_commitment_the_prover_supplies_is_refused(tmp_path):
     assert forged.commitment == prover.commitment
     assert C.trusted_reason(key, forged.to_json(), prover.commitment, lms_verify) == unsigned
     assert C.trusted_reason(verifier_key(1), doc, ch.commitment, lms_verify) == unsigned
-    for bad in ({**doc, "host": "vy-nebius-2"}, {**doc, "signature": doc["signature"][:-2]},
+    for bad in ({**doc, "host": "auditor-2"}, {**doc, "signature": doc["signature"][:-2]},
                 {**doc, "commitment": {**doc["commitment"], "epoch": 8}}):
         assert C.record_reason(key, bad, lms_verify) == unsigned
     rewritten_path = tmp_path / "rewritten.json"

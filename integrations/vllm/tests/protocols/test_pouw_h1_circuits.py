@@ -141,6 +141,9 @@ def test_the_live_templates_circuit_file_is_built_beside_the_strata_and_a_commit
     assert sorted(doc["files"]) == ["k128", "k64", CR.LIVE]
     assert PC.build(d, out, lower=lambda *_a: pytest.fail("relowered"), live=(ROWS, STEPS),
                     lower_live=stand_in_live) == doc and lived == [ROWS]
+    only = PC.build(d, tmp_path / "live-only", lower=lambda *_a: pytest.fail("lowered a stratum"), live=(ROWS, STEPS),
+                    lower_live=stand_in_live, only=())
+    assert only["files"] == {CR.LIVE: doc["files"][CR.LIVE]} and only["bind"] == doc["bind"]
 
     layout = json.loads((d / RH.PROGRAM_META).read_text())["layout"]
     decl = SimpleNamespace(rows=ROWS, steps=STEPS)
@@ -156,6 +159,19 @@ def test_the_live_templates_circuit_file_is_built_beside_the_strata_and_a_commit
         GPU.period_files(out, _sha(raw), layout, decl)
 
 
+def test_past_the_piece_rows_the_live_file_is_bound_to_the_pieced_live_program():
+    """At T past `live.PIECE_ROWS` (a V3 prefill round's T 8,192) the live Program is cut by rows: ``--live T,S`` binds
+    the live file to `live.program_rows` of T / 64 pieces a round and its `live.query_rows` partition, and up to it to
+    v2's."""
+    from verity.core.protocols.pouw.circuit import live as L
+    from verity.core.protocols.sampled_proofs.one_stage import partition as P
+
+    for t, (program, query) in ((8192, (L.program_rows(8192, 1, "h1/"), L.query_rows(8192))),
+                                (64, (L.program_v2(64, 1, "h1/"), L.query_v2(64)))):
+        assert PC.live_part(t, 1, "h1/") == P.partition(program, query)
+    assert P.evaluate(L.program_rows(8192, 1, "h1/"), L.query_rows(8192)).population == 128
+
+
 def test_a_template_the_declared_program_does_not_define_is_lowered_for_no_stratum(program, tmp_path, monkeypatch):
     """The lowering is of the declared Program's own templates: when K's template (`h1window.template` over
     `tile_unit` at the layout's tile) is none of the descriptor's definitions, no file is built and nothing is
@@ -166,3 +182,29 @@ def test_a_template_the_declared_program_does_not_define_is_lowered_for_no_strat
     with pytest.raises(ValueError, match=r"K = \[64, 128\]'s template .* is not one of the declared Program's"):
         PC.build(d, tmp_path / "circuits", lower=lambda k, *_a: lowered.append(k))
     assert lowered == [] and not (tmp_path / "circuits" / PC.MANIFEST).exists()
+
+
+def test_a_j10r_program_builds_its_live_file_and_refuses_to_lower_its_strata(tmp_path, monkeypatch):
+    """A Program over J10-R's tile unit (serve-openai's pouw setting ``unit`` j10r) is bound as v1's is, each K's
+    template the declared J10-R one (`h1tile.PouwH1Tile5`'s, here the served tests' stand-in): with ``--strata none``
+    its live file and manifest are built, the files a period opens on; a stratum it would lower is refused, since
+    `h1unit.Shape`'s statement is v1's or v3's."""
+    from verity.core.protocols.pouw.circuit import h1tile as HT
+
+    from tests.protocols.test_pouw_h1_served import StandInJ10R
+    j10r = _unit(defn=StandInJ10R)
+    monkeypatch.setattr(HW, "tile_unit", lambda k, tile, definition=None:
+                        (j10r if definition is HT.PouwH1Tile5 else _unit())(k))
+    raw = SV.descriptor(SV.declared(SHAPES, MODULES, ROWS, STEPS, unit=j10r))
+    d = tmp_path / "program"
+    d.mkdir()
+    (d / RH.PROGRAM).write_bytes(gzip.compress(raw))
+    (d / RH.PROGRAM_META).write_text(json.dumps({"program_digest": _sha(raw),
+                                                 "layout": SV.declared_layout(SHAPES, MODULES, ROWS, STEPS)}))
+    out = tmp_path / "circuits"
+    doc = PC.build(d, out, lower=lambda *_a: pytest.fail("lowered a J10-R stratum"), live=(ROWS, STEPS),
+                   lower_live=lambda T, part, path: path.write_text(f"the live template at T = {T}\n"), only=())
+    assert doc["templates"] == {f"k{k}": PO.template_id(HW.template(k, j10r(k))) for k in (64, 128)}
+    assert sorted(doc["files"]) == [CR.LIVE] and doc["program"] == _sha(raw)
+    with pytest.raises(ValueError, match=r"K = \[64\]'s template is over J10-R's tile unit"):
+        PC.build(d, out, lower=lambda *_a: pytest.fail("lowered a J10-R stratum"), only=(64,))

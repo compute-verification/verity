@@ -4,8 +4,9 @@ window's declared sync signed), refuses the window of a record whose signature i
 certificate's, a kept certificate whose signature is changed, and a key under `lms.DEPLOYED`'s height with --deployed;
 the report needs the endpoint's step on the advice profile and never accepts a stand-in, merges N2's members proved in
 several runs, and counts a negative that escaped a sampled draw within the draw's bound but never one whose faulty
-window was drawn; the draw's bound at δ is C(n − b − 1, k) / C(n, k)'s; leak counts the scan's widths and terms on a
-warden run's files, and refuses a sampled draw and a warden the scan's class doesn't serve; the job's copy of the
+window was drawn; the draw's bound at δ is the integrity profile's count bound, which counts a miss of exactly δ, as
+Lean's does; leak counts the scan's widths and terms on a warden run's files, and refuses a sampled draw and a warden
+the scan's class doesn't serve; the job's copy of the
 gates' records into its output keeps no gate run's witness/. On the certifier-only path the report needs no scan,
 names what it stubs, and counts the rehearsal's refused runs and the I/O tie's verdict on each tampered run the check
 let through as negatives; d1's K is all_protocols' monitoring-period count over the compute audits' draws and free
@@ -223,6 +224,7 @@ def test_report_merges_runs_and_counts_a_negative_that_escaped_the_draw(tmp_path
     assert n2s["members"]["honest"]["structured"] == {"head egress 45 @320": "across"}
     assert n2s["members"]["moved"]["escaped_the_draw"] == {"faulty_windows": [0], "drawn": [1, 2]}
     assert n2s["eps_at_delta"]["law"] == "subset:2" and (n2s["eps_at_delta"]["units"], n2s["eps_at_delta"]["drawn"]) == (4, 2)
+    assert n2s["eps_at_delta"]["wrong_units_at_delta"]["0.5"] == 1
     steps.n2[1] = run("moved", {"windows": [window] * 2, "network": {"accepted": True}, "reference": reference}, [0, 1])
     got = cr.report(steps)["steps"]["n2"]
     assert got["verdict"] == "failed" and got["why"] == "moved: network accepted"
@@ -317,7 +319,7 @@ def test_the_block_entry_is_written_only_for_this_chains_period_and_the_verifier
         "the case's link, session: not the chain's, so another certifier session's period")
     assert why(period_answer=_period(tmp_path / "mixed", foreign, answer)) == (
         "the case isn't the answer's: its commitment's digest is another")
-    rows = period.case("accept", 0, "rows")
+    rows = period.build("rows-honest", 0, small=True)
     assert why(period_answer=_period(tmp_path / "rows", rows, period.reference(rows))).startswith("a rows-form answer")
     assert why(period_answer=_period(tmp_path / "k", case, answer | {"public": answer["public"] | {"K": 1}})) == (
         f"network-period check on the case answers accept with K {answer['public']['K']}, not the given answer: it "
@@ -403,6 +405,19 @@ def test_a_scan_only_report_exits_0_on_the_expected_verdicts_and_1_on_a_wrong_on
     assert got["scope"] is None and got["verdict"] == "refused" and got["negatives_refused"]["scan/forged"] is False
 
 
+def test_the_scans_block_round_is_accepted_like_its_honest_round_and_is_no_negative(tmp_path):
+    def rnd(accepted):
+        return {"audit": {"window_accepted": accepted}}
+
+    def scan(block):
+        return {"ok": True, "T": 1, "rounds": {"block": rnd(block), "honest": rnd(True), "chain": rnd(False)}}
+
+    got = cr.scan_step(scan(True), "g1/warden")
+    assert got["verdict"] == "accepted" and got["negatives"] == {"chain": True}, got
+    got = cr.scan_step(scan(False), "g1/warden")
+    assert (got["verdict"], got["why"]) == ("failed", "block: window refused")
+
+
 def test_leak_counts_the_scans_terms_on_the_warden_run(tmp_path):
     import math
     from dataclasses import asdict
@@ -413,12 +428,12 @@ def test_leak_counts_the_scans_terms_on_the_warden_run(tmp_path):
     (run / "out/deployment.json").write_text(json.dumps({"params": asdict(sz.PARAMS)}))
     (run / "end.json").write_text(json.dumps({"run": "c1", "verdict": {"windows": 75, "requests": 100}}))
     doc = cr.leak(run, {"draw": {"honest": 64}, "T": 32})
-    assert doc["widths"] == {"NS": 149_648, "NP": 4_480, "NV": 4_832, "egress_row": 65_536}
+    assert doc["widths"] == {"NS": 149_648, "NE": 1_136, "entries": 8, "NV": 4_832, "egress_row": 65_536}
     assert doc["terms"]["b"] == 154_480 and doc["terms"]["fmax"] == {"0.01": 5, "1e-06": 14}
     week = {r["prog"]: r for r in doc["rows"] if r["period"] == "week" and r["machines"] == 1}
     lw, rate, cap = 604_800 / 3.2, 100 / 75, math.log2(66)
-    assert week["registered"]["per_period"] == pytest.approx(lw * (32 * 4_480 + rate * cap))
-    assert week["anchors"]["per_link_window"] == pytest.approx(rate * (1_120 + cap))
+    assert week["registered"]["per_period"] == pytest.approx(lw * (8 * 1_136 + rate * cap))
+    assert week["anchors"]["per_link_window"] == pytest.approx(rate * (1_121 + cap))
     assert week["anchors"]["pooled"]["0.01"] - week["anchors"]["per_period"] == pytest.approx(
         5 * (154_480 + math.log2(lw * 64 + 1)))
     with pytest.raises(SystemExit, match="drew 16 of 64"):
@@ -433,6 +448,8 @@ def test_subset_bound():
     assert cr.subset_bound(256, 64, 0.5) == 2
     assert cr.subset_bound(256, 2, 0.5) == 74
     assert cr.subset_bound(0, 0, 0.5) is None
+    # one wrong unit of 4 escapes a sample of 2 with C(3, 2)/C(4, 2) = 1/2 exactly: within δ = 1/2
+    assert cr.subset_bound(4, 2, 0.5) == 1
 
 
 def test_the_certifier_only_path_needs_no_scan_names_its_stubs_and_counts_the_tampers(tmp_path):

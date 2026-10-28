@@ -57,7 +57,7 @@ from verity.ml.circuits.program import Program
 from verity.ml.circuits.types import Array, Tuple, Value
 from verity.ml.circuits.cut import DefinitionCut
 from verity.ml.circuits.defs import PrimitiveDefinition
-from verity.ml.circuits.units import Activation, PartitionUnits, UnitCircuit
+from verity.ml.circuits.units import Activation, PartitionUnits, ProofBlockCircuit
 
 from . import circuit as FC
 from . import class_sweep
@@ -146,7 +146,7 @@ class ClassDefinition:
         return params, Array(self.w_out, Value(16))
 
 
-def sources(act: Activation, uc: UnitCircuit, owner_of: dict[int, str]) -> list[list[int]]:
+def sources(act: Activation, uc: ProofBlockCircuit, owner_of: dict[int, str]) -> list[list[int]]:
     """The unit's inputs grouped by source, in first-read order: one group per Call parameter it reads leaves of, and one per class
     (shape) of producing units whose committed outputs it reads (``owner_of``: computing gate -> its unit's shape in the flat cut),
     as serving commits a tensor once, not per element. Each group is one row, and every instance reading the same values opens
@@ -161,7 +161,7 @@ def sources(act: Activation, uc: UnitCircuit, owner_of: dict[int, str]) -> list[
     return list(groups.values())
 
 
-def element_rows(act: Activation, uc: UnitCircuit, groups: list[list[int]]) -> tuple[list[list[int]], list[tuple[int, ...]], list[int]]:
+def element_rows(act: Activation, uc: ProofBlockCircuit, groups: list[list[int]]) -> tuple[list[list[int]], list[tuple[int, ...]], list[int]]:
     """FLOCK_CORE_ROWS's rows of an FP GEMM coordinate (`ELEMENT_ROWS`): x with its scales one row and the W column with its
     scales another, each core's bit row (``verity.ml.commitments.rowleaf.bit_row``: each element's bits low first, the codes, then
     the scales, nothing after). Returns the merged source groups, the `sources` groups each one joins, and each row's length in
@@ -251,7 +251,7 @@ def _whole_row(reads: Sequence[tuple[int, int] | None], n_out) -> int | None:
     return v
 
 
-def link_ports(uc: UnitCircuit, groups: list[list[int]], reads: list[list], n_out) -> tuple[list[list[int]], list[int], list]:
+def link_ports(uc: ProofBlockCircuit, groups: list[list[int]], reads: list[list], n_out) -> tuple[list[list[int]], list[int], list]:
     """Split every source group through which some unit reads another unit's outputs into segments, at each leaf where any unit's
     reads stop being one run (circuit inputs, or one writer's consecutive outputs). Each segment must then be, in every unit,
     circuit inputs only or exactly one writer's whole output row in order (``n_out(v)``: writer ``v``'s output count); a partial
@@ -318,7 +318,7 @@ def links_file(program: Any, query: dict, text: str, indices: Sequence[int]) -> 
             "ports": [x["port"] for x in meta.get("links") or []], "links": [list(x) for x in triples]}
 
 
-def class_lowering(act: Activation, uc: UnitCircuit, name: str, groups: list[list[int]] | None = None,
+def class_lowering(act: Activation, uc: ProofBlockCircuit, name: str, groups: list[list[int]] | None = None,
                    packed: bool | Sequence[bool] = False, blocks: bool = True) -> IL.Lowering:
     """The class's unit on u16 ports: one row port per source group (``groups``: input positions; default one row for all), its
     words laid out by `_slots` (``packed``: narrow words share leaves; per group when a sequence), each padded to whole 64-word
@@ -351,7 +351,7 @@ def class_lowering(act: Activation, uc: UnitCircuit, name: str, groups: list[lis
     return IL.Lowering(name, ClassDefinition(name, port_words, w_out), units, C, lay)
 
 
-def pack(uc: UnitCircuit, ins: Sequence[Sequence[int]], want: Sequence[Sequence[int]], w_in: int, w_out: int,
+def pack(uc: ProofBlockCircuit, ins: Sequence[Sequence[int]], want: Sequence[Sequence[int]], w_in: int, w_out: int,
          groups: list[list[int]] | None = None, port_words: Sequence[int] | None = None, packed: bool | Sequence[bool] = False):
     """The lanes as each port's rows ``{p{i}: (n, words)}``, all ports side by side ``(n, w_in)``, and outputs ``(n, w_out)``, u16, in
     the layout `class_lowering` reads (``packed`` as there)."""
@@ -755,7 +755,7 @@ def stage(units: PartitionUnits, spec: str, shape: str, cl, lanes_: tuple, out_d
         ({"links": links, "definition": definition} if wiring is not None else {})
 
 
-def _check_bit_rows(uc: UnitCircuit, ins: Sequence[Sequence[int]], groups: list[list[int]], bits: list[int], per_port: dict,
+def _check_bit_rows(uc: ProofBlockCircuit, ins: Sequence[Sequence[int]], groups: list[list[int]], bits: list[int], per_port: dict,
                     name: str, lanes: int = 8) -> None:
     """The first ``lanes`` staged rows of each port are core's bit row of the lane's elements (``rowleaf.bit_row``), then zero."""
     from verity.ml.commitments.rowleaf import bit_row
@@ -771,7 +771,7 @@ def _check_bit_rows(uc: UnitCircuit, ins: Sequence[Sequence[int]], groups: list[
 
 #: FLOCK_GEMM_TILE=PxC: a GemmCoordinate class whose tile fits a block (K = 2048 at 4x4) is staged as P x C tiles, one tile a VU:
 #: C rows of the unit's port 0 and P of its port 1, and P * C units, unit (a, b) reading row b and row C + a, so each row is
-#: hashed once per tile rather than once per coordinate (internal/gemm-column-batch-tiles-layout-scope.md)
+#: hashed once per tile rather than once per coordinate
 GEMM_TILE = tuple(int(x) for x in os.environ["FLOCK_GEMM_TILE"].split("x")) if os.environ.get("FLOCK_GEMM_TILE") else None
 
 
@@ -1861,7 +1861,7 @@ def _device(gpu: bool) -> str | None:
 
 
 def write_result(results: Path, a) -> None:
-    """``$RESEARCH_RUN_DIR/result.json`` (research/result/v0.1) when run under ``research run``: the settings as the fingerprint, the
+    """``$RESEARCH_RUN_DIR/result.json`` (research/result/v0.1) when run as a recorded run: the settings as the fingerprint, the
     shapes' counts and summed timings as measurements, and every shape's record (keyed by shape digest) in ``results.jsonl``, copied
     beside it as the measurement file."""
     run_dir = os.environ.get("RESEARCH_RUN_DIR")

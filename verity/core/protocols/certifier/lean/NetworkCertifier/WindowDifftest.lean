@@ -9,8 +9,7 @@ import Lean.Data.Json
 reads both files and fails unless `evaluate`, which computes the same results from the program's definitions
 (`NetworkCertifier.WindowCharge`), gives every one of them. The Lean audit runs it (`runs` in `lean-audit.json`):
 compiled evaluation, a test and not a proof. `Proofs.NetworkCertifier.Code` (`CodeChargesWhole`) proves `charges` equal
-to the reference's (`Security/Definitions/NetworkCertifier/WindowCharge.lean`), which `EncardChargedLeWhole` and the
-whole window's leak bounds read.
+to the reference's (`Security/Definitions/NetworkCertifier/WindowCharge.lean`).
 
 An instance is a window's slot counts `N`, `H` and `O`, a book (each of `window_charge.SYMBOLS`' tables, its frequencies
 at the bins a window reaches and its total, and the contexts' `priors`), a carry, and windows, each its `N` decision
@@ -94,7 +93,7 @@ def held {α : Type} (en : List Bool) (v : List α) : List α :=
   (en.zip v).filterMap fun (e, x) => if e then some x else none
 
 /-- A window's advice: each field's values at the slots that hold one. -/
-def advice (s : Slots) : Window := ⟨held s.en s.bit, held s.hen s.short, held s.oen (s.p.zip s.r)⟩
+def advice (s : Slots) : Advice := ⟨held s.en s.bit, held s.hen s.short, held s.oen (s.p.zip s.r)⟩
 
 /-- The bins of each table a window of `N`, `H` and `O` slots reaches (`window_charge._bins`): bins `0 … bitlen v` of
 the largest value `v` it codes, 0 for n_resumes and n_lag. -/
@@ -104,7 +103,7 @@ def bins (N H O : Nat) : List Nat :=
 def pairsJson (l : List (Nat × Nat)) : Json := toJson (l.map fun p => [p.1, p.2])
 
 /-- `window` from `cy` on each window in turn, up to and including the first it refuses. -/
-def steps (bk : Book) (N H O : Nat) : Carry → List Window → List Json
+def steps (bk : Book) (N H O : Nat) : Carry → List Advice → List Json
   | _, [] => []
   | cy, x :: ws => match window bk N H O cy x with
     | none => [.null]

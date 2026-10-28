@@ -12,6 +12,7 @@ import math
 import pytest
 
 import pous_test_signer as ts
+from pous_fakes import Clock
 from verity.core.protocols.pous import memory_challenger as mc
 from verity.core.protocols.pous import streamed_wipe as sw
 from verity.ml.randomness import derive
@@ -21,23 +22,13 @@ SESSION = hashlib.sha512(b"wipe session").digest()[:32]
 N, K, LIMIT = 256, 40, 1_000_000
 
 
-class Clock:
-    """Time advances only when a responder spends it."""
-
-    def __init__(self) -> None:
-        self.now = 1_000_000
-
-    def __call__(self) -> int:
-        return self.now
-
-
 def params(batch: int = 1, limit: int = LIMIT) -> sw.WipeParams:
     return sw.WipeParams(N, K, batch, limit, (("gpu", 128 * sw.LABEL_BYTES), ("host-dram", 128 * sw.LABEL_BYTES)))
 
 
 def challenger(p: sw.WipeParams | None = None, *, clock=None, signer=None, log=None) -> sw.Challenger:
     return sw.Challenger(SECRET, SERVER, SESSION, p or params(), signer or ts.TestSigner(b"wipe challenger", height=2),
-                         log=log or ts.session_log(), clock=clock or Clock(), coin_secret=b"coins")
+                         log=log or ts.session_log(), clock=clock or Clock(1_000_000), coin_secret=b"coins")
 
 
 def run(c: sw.Challenger, respond=None, *, clock: Clock | None = None, spend=lambda b: 20_000) -> sw.SignedWipe:
@@ -80,7 +71,7 @@ def test_draws_are_uniform_indices_from_the_coin_secret():
 def test_honest_session_is_accepted_at_batch_1_and_refused_above(batch):
     """An honest session runs to completion at any batch size, but only the sequential reveal is accepted: the guarantee
     doesn't cover a larger batch, so the verdict refuses it by name."""
-    clock = Clock()
+    clock = Clock(1_000_000)
     signer = ts.TestSigner(b"wipe challenger", height=2)
     c = challenger(params(batch), clock=clock, signer=signer)
     signed = run(c, clock=clock)
@@ -95,7 +86,7 @@ def test_honest_session_is_accepted_at_batch_1_and_refused_above(batch):
 
 
 def test_wrong_answer_ends_the_session():
-    clock = Clock()
+    clock = Clock(1_000_000)
     signer = ts.TestSigner(b"wipe challenger", height=2)
     c = challenger(clock=clock, signer=signer)
     key = sw.wipe_key(SECRET, SERVER, SESSION)
@@ -114,7 +105,7 @@ def test_wrong_answer_ends_the_session():
 
 
 def test_late_batch_ends_the_session():
-    clock = Clock()
+    clock = Clock(1_000_000)
     signer = ts.TestSigner(b"wipe challenger", height=2)
     c = challenger(clock=clock, signer=signer)
     signed = run(c, clock=clock, spend=lambda b: LIMIT + 1 if b == 3 else 1000)
@@ -160,7 +151,7 @@ def test_the_declared_tiers_hold_the_fill():
 
 
 def test_verdict_fails_closed():
-    clock = Clock()
+    clock = Clock(1_000_000)
     signer = ts.TestSigner(b"wipe challenger", height=2)
     c = challenger(clock=clock, signer=signer)
     signed = run(c, clock=clock)
@@ -229,17 +220,18 @@ def least_reads(r: int) -> int:
 
 
 def test_h200_at_5GB() -> None:
-    """`StreamedWipeMeets141GB5`: at 141·10^9 bytes with 2.3 GB of driver reserve, `r = 59` is the least ratio whose
-    threshold is at most 5 GB, `k = 5231` the least read count for it, and the threshold `39,721,768,854` bits; the
-    family's own point, `r = 24` and `k = 2152`, is `512·(⌈n/24⌉ − 1) + n + 141`."""
-    n, reserve, cap = 2_203_125_000, 23 * 10**8 * 8, 5 * 10**9 * 8
-    assert least_reads(59) == 5231 and least_reads(24) == 2101
-    assert reads_threshold(n, 59, 5231, reserve) == 39_721_768_854 <= cap
-    assert reads_threshold(n, 59, 5231) == 21_321_768_854 <= cap - reserve
-    assert reads_threshold(n, 58, least_reads(58), reserve) > cap
+    """`StreamedWipeMeetsH200`: an H200 of 141 GiB (151,397,597,184 bytes) filled whole, `R = 0`: `r = 33` is the least
+    ratio whose threshold is at most 5 GB, `k = 2906` the least read count for it, and the threshold `39,068,035,213`
+    bits; the family's own point, `r = 24` and `k = 2152`, is `512·(⌈n/24⌉ − 1) + n + 141`."""
+    device, cap = 141 << 30, 5 * 10**9 * 8
+    n = device // sw.LABEL_BYTES
+    assert device == 151_397_597_184 and n * sw.LABEL_BYTES == device and n == 2_365_587_456
+    assert least_reads(33) == 2906 and least_reads(32) == 2817 and least_reads(24) == 2101
+    assert reads_threshold(n, 33, 2906) == 39_068_035_213 <= cap
+    assert reads_threshold(n, 32, least_reads(32)) == 40_214_986_381 > cap
     assert reads_threshold(n, 24, 2152) == sw.LABEL_BITS * (-(-n // 24) - 1) + n + 141
-    q, _ = sw.retained_bits(n, 5231, n * sw.LABEL_BITS + reserve, 0, -128)
-    assert q <= reads_threshold(n, 59, 5231, reserve)  # the exact count needs less
+    q, _ = sw.retained_bits(n, 2906, n * sw.LABEL_BITS, 0, -128)
+    assert q <= reads_threshold(n, 33, 2906)  # the exact count needs less
 
 
 def log2_floor(x: int) -> int:

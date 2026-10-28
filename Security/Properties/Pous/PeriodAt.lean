@@ -12,12 +12,14 @@ import Properties.Pous.EndToEndAt
 
 * `AuditsOf sch`, `AuditsAt N`: `Audits` with the payload as `sch`'s bits and the capacity coins the ring model's at `N`.
   `Accepts pt`, `Break pt` and `Certified pt` read the composed check, the table's break and the certificate at `pt`.
-* `RingDeviceAt N pt`: `RingDevice` with `pt`'s certificate and the ring game at `N` (`ServerAt N`, `PassesAt N`, state
-  bound `SAt N`): `pous-ring-device`, `pous-ring-instantiation` and `prf/sha-512` per run, read at `N`. It is meaningful
-  at `N = pt.params.blocks`, the block count `pt`'s session challenges.
-* `PeriodHeldAt`: at every such `pt` and `N`, from the coin commitments' hiding at `N` and `P2RingRoundSecureWide`, the
-  verifier's whole decision at `pt` accepts a period with no break while the capacity account held fewer than `S · len`
-  bit-ticks with probability at most `δ + ε_max`.
+* `RingDeviceAt N pt`: a ring-model server at `N` for `pt`'s certificate (`ServerAt N`, `PassesAt N`, state bound
+  `SAt N`): `pous-ring-device`, `pous-ring-instantiation` and `prf/sha-512` per run, read at `N`, still in the form the
+  deployed point's premise had before `PeriodHeld` split it into `DeviceModel` and `Instantiates` over every prover
+  strategy (`Pous.Period`'s header). It is meaningful at `N = pt.params.blocks`, the block count `pt`'s session
+  challenges.
+* `PeriodHeldAt`: at every such `pt` and `N`, from `P2RingRoundSecureWide`, the verifier's whole decision at `pt`
+  accepts a period with no break while the capacity account held fewer than `S · len` bit-ticks with probability at most
+  `δ + ε_max`.
 * `PeriodHeldDemo`: `PeriodHeldAt` at `N = 1038·2^16`, whose state bound is 1,060,008,348,186 bits.
 -/
 
@@ -83,10 +85,11 @@ def Certified (pt : Run.Point) (ω : ΩW × ΩQ × ((ringRO B w p).Ω × HmCoins
 end AuditsOf
 
 /-- `pous-ring-device`, `pous-ring-instantiation` and `prf/sha-512`, per run, **at the point `pt` and `N` blocks**:
-`RingDevice` with `pt`'s certificate and the ring game at `N`. At each value `o` of the other audits' coins and each
+a ring-model server for `pt`'s certificate and the ring game at `N`, in the form `PeriodHeld` no longer takes (it reads
+the fixed extractor `extract` of every prover strategy instead). At each value `o` of the other audits' coins and each
 bound `B` with `B + S_chip + ∑ cap_i · round` within the ring game's state bound `SAt N`, there is one `(D, Q, L)`-bounded
 server at `N` with `SAt N` bits of state, fixed before the capacity coins, that passes the ring game's session at `N`
-(`PassesAt N`, at the designated id, bound to the published root, on the payload `W`) on every capacity coin where the
+(`PassesAt N`, at the designated id, on the payload `W`) on every capacity coin where the
 capacity account holds at most `B` bits at every tick of the capacity window and the period is certified at `pt`. It
 is the deployed device's modeling, not a property of a Lean function; it is meaningful at `N = pt.params.blocks`. -/
 def RingDeviceAt (N : ℕ) [NeZero N] (pt : Run.Point) {ι : Type} [Fintype ι] {d : Accounting.Device ι}
@@ -97,12 +100,12 @@ def RingDeviceAt (N : ℕ) [NeZero N] (pt : Run.Point) {ι : Type} [Fintype ι] 
     ∃ A : ServerAt N (SAt N) D Q L,
       ∀ x : (ringRO N 16448 (2 ^ 16448 - 21065)).Ω × HmCoins × Streams,
         (∀ t ∈ (r.win .capacity).ticks, (r.schedule (o.1, o.2, x) t).mem (r.acct .capacity) ≤ B) →
-          P.Certified pt (o.1, o.2, x) → PassesAt N P.sid (P.pub o).root (P.W o) A x
+          P.Certified pt (o.1, o.2, x) → PassesAt N P.sid (P.W o) A x
 
 /-- **PoUS's per-period guarantee at any point and block count to `2^27`.** `PeriodHeld` with the composed check at
 `pt`, the ring game at `N` and `P2RingRoundSecureWide` (with `(1 − p)^105 + 105·ε₀ ≤ 1% + 2^-129 + 2^-130`) in place of
-`P2RingAuditSecure`: given the coin commitments' hiding at `N`, for every joint run whose capacity coins are the ring
-game's at `N`, every period's audit `P` whose device is a ring-model server at `N` for `pt` (`RingDeviceAt`), every
+`P2RingAuditSecure`: for every joint run whose capacity coins are the ring game's at `N`, every period's audit `P`
+whose device is a ring-model server at `N` for `pt` (`RingDeviceAt`), every
 certificate `S` with `S · len + S_chip + ∑ cap_i · round ≤ SAt N` and every value of the other audits' coins, the
 verifier's whole decision at `pt` accepts the period with no break while the capacity account held fewer than `S · len`
 bit-ticks with probability at most `δ + ε_max`. Rests on the open conjecture `P2RingRoundSecureWide`, unchecked in `N`
@@ -112,7 +115,6 @@ def PeriodHeldAt : Prop :=
     (1 - p) ^ 105 + 105 * ε₀ ≤ ENNReal.ofReal Params.δ + ((2⁻¹ : ℝ≥0∞) ^ 129 + (2⁻¹ : ℝ≥0∞) ^ 130) →
     Pous.P2.Assumptions.P2RingRoundSecureWide p ε₀ D Q L →
       ∀ (pt : Run.Point) (N : ℕ) [NeZero N], 2 ^ 19 ≤ N → N ≤ 2 ^ 27 →
-        Pous.P2.Assumptions.CoinCommitHides (coinViewAt N) ((2⁻¹ : ℝ≥0∞) ^ 131) →
         ∀ (ι α ΩW ΩQ : Type) [Fintype ι] [Fintype α] (d : Accounting.Device ι)
           (r : Accounting.Run d α ΩW ΩQ ((ringRO N 16448 (2 ^ 16448 - 21065)).Ω × HmCoins × Streams))
           (P : AuditsAt N ΩW ΩQ) (round : ℕ) (S : ℝ),
@@ -132,7 +134,6 @@ def PeriodHeldDemo : Prop :=
     (1 - p) ^ 105 + 105 * ε₀ ≤ ENNReal.ofReal Params.δ + ((2⁻¹ : ℝ≥0∞) ^ 129 + (2⁻¹ : ℝ≥0∞) ^ 130) →
     Pous.P2.Assumptions.P2RingRoundSecureWide p ε₀ D Q L →
       ∀ (pt : Run.Point) (N : ℕ) [NeZero N], N = 1038 * 2 ^ 16 →
-        Pous.P2.Assumptions.CoinCommitHides (coinViewAt N) ((2⁻¹ : ℝ≥0∞) ^ 131) →
         ∀ (ι α ΩW ΩQ : Type) [Fintype ι] [Fintype α] (d : Accounting.Device ι)
           (r : Accounting.Run d α ΩW ΩQ ((ringRO N 16448 (2 ^ 16448 - 21065)).Ω × HmCoins × Streams))
           (P : AuditsAt N ΩW ΩQ) (round : ℕ) (S : ℝ),

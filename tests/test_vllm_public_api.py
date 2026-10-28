@@ -52,6 +52,8 @@ PUBLIC = {
                                               "the registered value, its class, its words and a slot's bridge",
     "verity_vllm.pipeline.workload_file": "I1: a workload file, fetched from the evidence store when absent and checked against "
                                           "its digest",
+    "verity_vllm.pipeline.serve_h1": "I1: serve-openai's PoUW H1 arm, its --protocols-config (config_of) and the window "
+                                     "Program it declares (H1Windows), which a period's offline Program must equal",
 }
 
 #: Every other module of the package that outside code imports. Move its importers onto a public interface and delete it.
@@ -112,6 +114,9 @@ KNOWN = frozenset({
     "verity_vllm.pipeline.cpu_replay",
     "verity_vllm.pipeline.deferred_rows",
     "verity_vllm.pipeline.replay_bundle",
+    "verity_vllm.pipeline.serve_admit",
+    "verity_vllm.pipeline.serve_openai",
+    "verity_vllm.pipeline.serve_protocol",
     "verity_vllm.pipeline.serving_rows",
     "verity_vllm.pipeline.slice_rows",
     "verity_vllm.pipeline.tp.capture",
@@ -179,8 +184,6 @@ KNOWN_PRIVATE = frozenset({
     ('verity_vllm.check.fold_compare', '_in_place'),
     ('verity_vllm.program.frontend.rules.family', '_field_intervals'),
     ('verity_vllm.protocols.remote_bandwidth.registry', '_page_blocks'),
-    ('verity_vllm.query.program_view', '_registry'),
-    ('verity_vllm.query.program_view', '_spec_id'),
 })
 
 

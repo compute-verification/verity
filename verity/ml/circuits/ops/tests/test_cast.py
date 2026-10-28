@@ -63,7 +63,7 @@ def test_known_roundings() -> None:
 
 @pytest.mark.parametrize("path", MEASURED, ids=lambda p: p.parent.name)
 def test_hw_cast_matches_every_measured_cvt_word(path: Path) -> None:
-    """L6's `cvt.rn.bf16.f32` campaign: 4403 words per device, 84 of them NaN, 0 non-deterministic."""
+    """The A100 and RTX 4090 `cvt.rn.bf16.f32` campaign: 4403 words per device, 84 of them NaN, 0 non-deterministic."""
     record = json.loads(path.read_text())
     assert "cvt.rn.bf16.f32" in record["instruction"]
     assert record["n_nondeterministic"] == 0

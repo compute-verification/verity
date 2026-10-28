@@ -38,9 +38,8 @@ theorem readWith_std (tags : Tags) (bytes : ByteArray) (tables : List (String ×
   simp only [classOfWith_std, templateOfWith_std]
   try rfl
 
-set_option maxRecDepth 20000 in
 theorem descParseWith_std (bytes : ByteArray) :
-    TemplateQuery.Desc.parseWith std bytes = TemplateQuery.Desc.parse bytes := rfl
+    TemplateQuery.Desc.parseWith std.sha512 bytes = TemplateQuery.Desc.parse bytes := rfl
 
 set_option maxRecDepth 20000 in
 theorem programDecodeWith_std (bytes : ByteArray) : Program.decodeWith std.sha512 bytes = Program.decode bytes := rfl
@@ -139,7 +138,7 @@ theorem fv3LeafWith_std (dom : ByteArray) (i : Nat) (schema : String) (payload :
 
 theorem rootWith_std (dom : ByteArray) (leaves : Array ByteArray) :
     FV3.rootWith std dom leaves = pure (FV3.root dom leaves Sha512.hash) := by
-  unfold FV3.rootWith FV3.root
+  unfold FV3.rootWith FV3.rootM FV3.root
   simp only [hashWith_std, Array.mapM_pure, pure_bind, Std.Legacy.Range.forIn_eq_forIn_range',
     List.forIn_pure_yield_eq_foldl]
   rfl

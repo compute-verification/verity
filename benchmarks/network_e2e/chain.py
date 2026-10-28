@@ -218,7 +218,7 @@ def opens(reg: dict, opening: dict, adv) -> bool:
     w = reg["row_bits"] // 8
     rows = [data[i:i + w].ljust(w, b"\0") for i in range(0, max(len(data), 1), w)]
     binding = hashlib.sha512(canonical_json({"scheme": reg["scheme"], "compiler": reg["binding"]["compiler"]})).digest()
-    got = AC.register(rows, reg["row_bits"], binding, [bytes.fromhex(s) for s in opening["salts"]])
+    got = AC.commit(rows, reg["row_bits"], binding, [bytes.fromhex(s) for s in opening["salts"]])
     return got.root.hex() == reg["binding"]["advice"]["root"]
 
 
@@ -407,7 +407,7 @@ def _utc(t: float) -> str:
 
 
 def serve_record(d: Path) -> dict:
-    """The serving run's own record (``d``, the `research run` directory of the serve): by window, what its advice loop
+    """The serving run's own record (``d``, the serve's run directory): by window, what its advice loop
     registered (``out/advice_windows.jsonl``: the root and ``at``, the UTC time of day to the second, stamped once the
     registration was in place), the last window it logged, and when its session ended (``status.json``'s ``ended_utc``,
     None while it serves)."""

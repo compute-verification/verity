@@ -2,7 +2,7 @@
 with the grid compared and without it) against `audit.py`, through the difftest harness.
 
 The cases are `test_network_check_protocol`'s generated spatial units, their records published as one kind
-(`KINDS`): all raw (`grid.Record`), all committed (`commitment.commit`), all certified, or mixed, each record's kind drawn
+(`KINDS`): all raw (`grid.BlockGrid`), all committed (`commitment.commit`), all certified, or mixed, each record's kind drawn
 and the changed record's the kind its change needs. Each kind gets the changes that apply to it (`EXPECT`), and the
 record-kind negative controls: a raw grid slot changed, a raw record relabelled to another link, a committed digest
 changed, and a committed status in the clear that disagrees with its digest either way. The reference decodes the
@@ -27,7 +27,7 @@ from verity.ml.commitments.identity import tagged_sha512
 from verity.core.protocols.certifier.audit import Audit
 from verity.core.protocols.certifier.certificate import CertifiedRecord
 from verity.core.protocols.certifier.commitment import CommittedRecord, commit, record_digest
-from verity.core.protocols.certifier.grid import COMPLETE, Reason, Record, Status
+from verity.core.protocols.certifier.grid import COMPLETE, Reason, BlockGrid, Status
 from verity.core.protocols.certifier.lean_audit import encode
 from verity.core.protocols.certifier.schedule import expected_grids
 
@@ -86,7 +86,7 @@ def records(b: bytes) -> tuple[list, bytes]:
                         raise D.Reject(f"slot tag {t}")
                     row.append(btake(bbe(4)) if t else None)
                 grid.append(tuple(row))
-            out.append(Record(link, window, tuple(grid), status))
+            out.append(BlockGrid(link, window, tuple(grid), status))
         elif kind == 1:
             link, window, status = btext("a link"), bbe(8), bstatus()
             out.append(CommittedRecord(link, window, btext("a digest"), status))
@@ -182,7 +182,9 @@ def _bad_records(c: bytes, n: int) -> list[bytes]:
 def record_cases(draw, kinds: tuple[str, ...] = KINDS, only: tuple[str, ...] | None = None) -> dict:
     kind = draw(st.sampled_from(kinds))
     m = draw(st.sampled_from([x for x in EXPECT[kind] if only is None or x in only]))
-    d = draw(V2.units((m if m in V2.EXPECT else "honest",), need_egress=m in EGRESS_ONLY))
+    # a committed record's digest binds its link in canonical JSON, whose strings are ASCII without DEL
+    links = V2.LINKS if kind in ("raw", "certified") else ("a", "b", "c", "d-e")
+    d = draw(V2.units((m if m in V2.EXPECT else "honest",), need_egress=m in EGRESS_ONLY, links=links))
     aim = ("egress", *d.egress_target) if m in EGRESS_ONLY and d.egress_target else d.target
     lws = [(r.direction.value, r.link, r.window) for r in d.records]
     # in a mixed unit every record of the changed link-window, either direction, has the kind the change needs: a raw or
@@ -192,7 +194,7 @@ def record_cases(draw, kinds: tuple[str, ...] = KINDS, only: tuple[str, ...] | N
     at = next((i for i, lw in enumerate(lws) if lw == aim), None) if m in RAW or m in COMMITTED else None
     if at is not None:
         r, n = published[at], d.n
-        if m == "raw-slot" and isinstance(r, Record):
+        if m == "raw-slot" and isinstance(r, BlockGrid):
             rows = [list(row) for row in r.grid]
             t, s = n % len(rows), n % len(rows[0])
             f = rows[t][s]
@@ -201,7 +203,7 @@ def record_cases(draw, kinds: tuple[str, ...] = KINDS, only: tuple[str, ...] | N
             grid = draw(st.sampled_from([tuple(map(tuple, rows)), r.grid[:-1], r.grid + (r.grid[0],),
                                          (r.grid[0] + (None,),) + r.grid[1:]]))
             published[at] = dataclasses.replace(r, grid=grid)
-        elif m == "raw-other-link" and isinstance(r, Record):
+        elif m == "raw-other-link" and isinstance(r, BlockGrid):
             published[at] = dataclasses.replace(r, link=draw(st.sampled_from(["zz", *d.egress, *d.params["ingress"]["links"]])))
         elif isinstance(r, CommittedRecord):
             raw, g = d.raws[aim]
@@ -369,7 +371,7 @@ def test_the_encoding_round_trips(kind):
     from hypothesis import given, settings
 
     @settings(derandomize=True, database=None, deadline=None, max_examples=30)
-    @given(V2.units(("honest", "status", "extra")))
+    @given(V2.units(("honest", "status", "extra"), links=V2.LINKS if kind in ("raw", "certified") else ("a", "b", "c", "d-e")))
     def roundtrip(d):
         published = [_as(kind, r, d) for r in d.records]
         assert records(b"".join(encode(r) for r in published))[0] == published

@@ -39,7 +39,7 @@ def _root(name: str) -> bytes:
 
 class _Auditor:
     """The challenger gate (`challenger_host.Gate`) and the auditor host's challenger in this process: `run` answers the Commit's
-    gate requests (`CC.Gate`'s argv, one shell word after the command) as the gate's forced command does, refusing a
+    gate requests (`CC.ChallengerGate`'s argv, one shell word after the command) as the gate's forced command does, refusing a
     second open for a root; an open starts that challenge phase's challenger, signed under `KEY` at the gate's next leaves, which
     the Commit reaches over a socket pair. `end` appends the challenge phase's end entry once its client closed it, and `heads`
     writes the ledger (or the lines given) where a verifier reads it."""
@@ -119,7 +119,8 @@ def _commit(auditor: _Auditor, names: list[str]) -> tuple[list[dict], list[bytes
     for name in names:
         rc = SimpleNamespace(run_root=_root(name), extra={})
         kw = CC.positions(rc, coins)
-        assert kw["legacy"] is False and len(challenge_positions(rc.run_root, [8, 8], 4, b"0", **kw)) == 4
+        assert kw == {"source": bytes.fromhex(rc.extra["coins"]["keys"][CC.POSITIONS])}
+        assert len(challenge_positions(rc.run_root, [8, 8], 4, b"0", **kw)) == 4
         assert CC.identities(rc)["source"] == bytes.fromhex(rc.extra["coins"]["keys"][CC.IDENTITIES])
         chal, rec = CC.replay_challenge(rc, None)
         assert rec == {"source": CC.CHALLENGER, "family": CC.REPLAY, "index": len(records)}
@@ -252,12 +253,12 @@ def test_the_commits_options_and_draws_refuse_by_name(tmp_path, monkeypatch):
     with pytest.raises(SystemExit, match="--challenger-gate: the challenger gate refused reserve \\(exit 3\\): busy"):
         CC.of_options(_options(), 1, gate_run=lambda argv: (3, json.dumps({"refused": "busy"})))
     with pytest.raises(CoinError, match="refused status \\(exit 255\\): ssh: connect"):
-        CC.Gate(GATE, lambda argv: (255, "ssh: connect to host auditor")).call("status", "s")
+        CC.ChallengerGate(GATE, lambda argv: (255, "ssh: connect to host auditor")).call("status", "s")
     lines, asked = ['{"kind":"period-open"}', '{"kind":"reserve"}'], []
-    assert CC.Gate(GATE, lambda argv: asked.append(argv) or (0, "".join(f"{x}\n" for x in lines))).ledger() == lines
+    assert CC.ChallengerGate(GATE, lambda argv: asked.append(argv) or (0, "".join(f"{x}\n" for x in lines))).ledger() == lines
     assert asked[0][-1] == "ledger"
     with pytest.raises(CoinError, match="refused ledger \\(exit 3\\)"):
-        CC.Gate(GATE, lambda argv: (3, json.dumps({"refused": "no such verb"}))).ledger()
+        CC.ChallengerGate(GATE, lambda argv: (3, json.dumps({"refused": "no such verb"}))).ledger()
     auditor = _Auditor(tmp_path, monkeypatch)
     coins = CC.of_options(_options(), 1, gate_run=auditor.run)
     with pytest.raises(CoinError, match="not this run's 32-byte root \\(vllm-v1\\)"):

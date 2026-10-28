@@ -1,4 +1,4 @@
-"""Acceptance test: the running example (veritor's docs/verity-ir-2026-09-07.md §5, §7.2) exactly."""
+"""Acceptance test: the running example of veritor's IR document (§5, §7.2), exactly."""
 
 from __future__ import annotations
 

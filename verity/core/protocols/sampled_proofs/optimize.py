@@ -5,7 +5,7 @@ Nothing trusts it.  A plan is a stratified sampling design, `k_s` proof blocks o
 table carrying the credited work and floors equal to the sizes (`work_law`: `one_stage.draw.work_k(1, w, n, W, f)` is
 `min(n, f)`).  Its certificate is recomputed from the sizes alone (`certify`): core's `Stratified.harm_bound` for the
 objective's harm and for credited work, and `density_bound`, the closed form that `work_escape_le`'s proof extends to any
-sizes (the note's gap G1).
+sizes.
 
 **Cuts.**  An op type is cut into proof blocks one of several ways, each a set of subcircuits (`Candidate.cut`): one subcircuit per
 op is a partition of it; a shared piece is either its own subcircuit, committed once and read by the others, or
@@ -23,7 +23,7 @@ witness is built by re-executing its replay block from the last committed state 
 A subcircuit's costs are measured (`TemplateCost`) or derived from the model's rates and its features: ANDs, and the hm96
 rows a proved proof block opens (`row_ands`).
 
-**Sweep.**  The note's Lagrangian: one density `lam` on every subcircuit (`k_s = ceil(min(1, lam w_b v_s) n_s)`, `w_b` the
+**Sweep.**  A Lagrangian sweep: one density `lam` on every subcircuit (`k_s = ceil(min(1, lam w_b v_s) n_s)`, `w_b` the
 weight of the subcircuit's weight class, 1 unless the plan weighs classes), some subcircuits at their floor only, some proved
 whole, and the cut per op type and the statement size each the cheapest at that `lam`.  With no statement cost and a proof block
 cost proportional to work, the cheapest plan certifying `C` is `Achievability`'s rates, `q_s = min(1, ln(1/delta) w_s / C)`.
@@ -38,7 +38,7 @@ from math import ceil, exp, expm1, floor, fsum, inf, lgamma, log, log1p, nextaft
 
 from verity.core.protocols.profile import HARM_MARGIN, IntegrityProfile, Stratified, Stratum
 from verity.core.protocols.sampled_proofs.consumers import exfiltration_bound
-from verity.core.protocols.sampled_proofs.one_stage.partition import UNIT_CLASS_MAX, unit_class
+from verity.ml.circuits.partition_v2 import UNIT_CLASS_MAX, unit_class
 
 #: ANDs of one SHA-512 compression in Boolean form (hm96 PROTOCOL §5)
 SHA512_ANDS = 58_120
@@ -56,7 +56,7 @@ def row_ands(nbytes: int) -> int:
 class Candidate:
     """One subcircuit of one way (`cut`, default the subcircuit alone) to cut one op type into proof blocks, derived from the IR,
     never from the prover: `units` instances, each credited `work` (the verifier's work table), with `out_bits` over
-    `out_gates` boundary gates, its committed bits, which fit a public size class (`one_stage.partition.unit_class`, at
+    `out_gates` boundary gates, its committed bits, which fit a public size class (`partition_v2.unit_class`, at
     most `UNIT_CLASS_MAX`, as the one-stage partition refuses a wider proof block), and `influence`, the credited work a wrong
     one can forfeit downstream.  A proved proof block costs `ands` plus opening `rows` (bytes each) in circuit; serving commits
     `commit_bits` in `commit_rows` rows per proof block whatever the sampling design; one statement holds at most `cap` proof blocks

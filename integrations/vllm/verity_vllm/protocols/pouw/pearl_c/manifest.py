@@ -6,15 +6,14 @@ from __future__ import annotations
 
 from verity.core.protocols.pouw.audit import Epoch, Workload
 from verity.core.protocols.pouw.coins import CoinCommitment, CoinOpening
+from verity.core.protocols.pouw.core_check import MANIFEST_RECORDED as MANIFEST_SCHEMA_RECORDED
+from verity.core.protocols.pouw.core_check import MANIFEST_SCHEMA
 from verity.core.protocols.pouw.protocol import DomainError, Matmul, Shape
 from verity.core.protocols.pouw.window import LIVE_SCHEME
 from verity.core.protocols.sampled_proofs.challenger import LiveCommitment, LiveOpening
 
 from verity_vllm.protocols.pouw.pearl_c.host import epoch_of
 
-MANIFEST_SCHEMA = "verity-vllm/pouw-pearl-c-run/v2"
-#: a pass recorded before epoch coins, salted from a beacon: only a replay of a recorded pass reads it (`manifest_epoch`)
-MANIFEST_SCHEMA_RECORDED = "verity-vllm/pouw-pearl-c-run/v1"
 MANIFEST_SCHEMAS = (MANIFEST_SCHEMA, MANIFEST_SCHEMA_RECORDED)
 #: what a live pass's manifest names of its session: the gate's open answer's session, ledger seq, root (its salt epoch's
 #: epoch root, `salt.epoch_open_root`) and coin commitment's root (`pouw_h1_challenger.SESSION_FIELDS`), never its hello's

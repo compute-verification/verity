@@ -1,5 +1,6 @@
 """``frame-v3-sha512`` and ``vllm-v1-sha512``: each reference reproduces its vectors, the variant is the SHA-256 framing's bytes
-through SHA-512, openings verify only under their own hash, and a configuration never mixes hashes."""
+through SHA-512, openings verify only under their own hash, and a configuration never mixes hashes; a tree's levels and root
+from chunks folded on their own (`levels`) and from subtree roots (`root_from_subtrees`) are `tree_levels`'."""
 
 from __future__ import annotations
 
@@ -15,8 +16,9 @@ from verity.ml.commitments.identity import identity_digest_sha512, tagged_sha512
 from verity.ml.commitments.indexed import ExplicitIndexedDomain, RangeIndexedDomain, RangeU64Domain
 from verity.ml.commitments.leaves import LIFT_TAG, NODE_TAG, H
 from verity.ml.commitments.limits import VerificationLimits
-from verity.ml.commitments.merkle import (RANGE_U64_MESSAGE_BYTES, Commitment, CommitmentDomain, MerkleTree, Opening, _hash, _uint,
-                                          range_u64_domain_message, validate_commitment, verify_opening)
+from verity.ml.commitments.merkle import (RANGE_U64_MESSAGE_BYTES, Commitment, CommitmentDomain, MerkleTree, Opening, _uint,
+                                          frame_hash, levels, range_u64_domain_message, root_from_subtrees, tree_levels,
+                                          validate_commitment, verify_opening)
 from verity.ml.commitments.multiproof import multiproof, verify_multiproof
 from verity.ml.commitments.rowleaf import ROLE_X, SCHEMA_HM96_SHA512_ROW, SCHEMA_SHA512_ROW, row_leaf, sha512_row_digest
 from verity.ml.commitments.scheme import CommitmentScheme
@@ -47,7 +49,7 @@ def test_frame_vectors_file_is_what_the_reference_generates() -> None:
 
 
 def test_a_sha512_domain_is_the_sha256_frame_through_sha512() -> None:
-    d256 = CommitmentDomain(hashlib.sha256(b"x").digest(), 0, RangeIndexedDomain(4))
+    d256 = CommitmentDomain(hashlib.sha256(b"x").digest(), 0, RangeIndexedDomain(4), hash="sha256")
     d512 = CommitmentDomain(d256.binding, 0, RangeIndexedDomain(4), hash="sha512")
     assert d512 != d256 and len(d512.domain_id) == 64 and d512.digest_bytes == 64
     message = d512.leaf_prefix(0, 0, "u8", 3) + b"abc"
@@ -174,7 +176,7 @@ def test_range_u64_tree_round_trips_through_verify_opening(case: dict) -> None:
     assert [x.hex() for x in leaves] == case["leaves"]
     assert leaves == [hashlib.sha512(d.leaf_prefix(r, p, "u16", 2) + v).digest() for r, (p, v) in enumerate(zip(positions, values, strict=True))]
     assert [d.pad(r).hex() for r in range(len(positions), 8)] == case["pads"]
-    assert d.node(0, 0, leaves[0], leaves[1]) == _hash(b"node", d.domain_id, _uint(0), _uint(0), leaves[0], leaves[1], hash="sha512")
+    assert d.node(0, 0, leaves[0], leaves[1]) == frame_hash(b"node", d.domain_id, _uint(0), _uint(0), leaves[0], leaves[1], hash="sha512")
     tree = MerkleTree(d, dict(zip(positions, values, strict=True)), lambda _p: "u16")
     assert tree.commitment == Commitment(_b(case["root"]), doc["count"])
     json_domain = CommitmentDomain(d.binding, d.owner, RangeIndexedDomain(positions[0], positions[-1] + 1), hash="sha512")
@@ -192,11 +194,11 @@ def test_range_u64_tree_round_trips_through_verify_opening(case: dict) -> None:
 def test_range_u64_refuses_other_hashes_short_bindings_and_counts_past_2_64() -> None:
     b64 = identity_digest_sha512("verity/test/range-u64", {})
     positions = RangeU64Domain(0, 4)
-    for h in ("sha256", "blake3", "blake3-s256"):
-        with pytest.raises(ProtocolError, match="SHA-512 only"):
+    with pytest.raises(ProtocolError, match="SHA-512 only"):
+        CommitmentDomain(b64, 0, positions, hash="sha256")
+    for h in ("sha384", "blake3", "blake3-s256"):
+        with pytest.raises(ValueError):
             CommitmentDomain(b64, 0, positions, hash=h)
-    with pytest.raises(ValueError):
-        CommitmentDomain(b64, 0, positions, hash="sha384")
     for width in (0, 32, 63, 65, 128):
         with pytest.raises(ProtocolError, match="binding"):
             CommitmentDomain(bytes(width), 0, positions, hash="sha512")
@@ -212,10 +214,14 @@ def test_every_frame_binds_a_64_byte_identity_apart_from_its_halves() -> None:
     b64 = identity_digest_sha512("verity/test/binding/v1", {"x": 1})
     positions = RangeIndexedDomain(4)
     d = CommitmentDomain(b64, -1, positions, hash="sha512")
-    assert d.domain_id == _hash(b"domain", b64, _uint(1), positions.identity_sha512(), _uint(4), hash="sha512")
+    assert d.domain_id == frame_hash(b"domain", b64, _uint(1), positions.identity_sha512(), _uint(4), hash="sha512")
     s = CommitmentDomain(b64, -1, positions, hash="sha256")
-    assert s.domain_id == _hash(b"domain", b64, _uint(1), bytes.fromhex(positions.identity_digest), _uint(4))
-    for h in ("sha512", "sha256", "blake3", "blake3-s256"):
+    assert s.domain_id == frame_hash(b"domain", b64, _uint(1), bytes.fromhex(positions.identity_digest), _uint(4), hash="sha256")
+    assert CommitmentDomain(b64, -1, positions) == d
+    for h in ("blake3", "blake3-s256", "sha3_512"):
+        with pytest.raises(ValueError, match="framing hash"):
+            CommitmentDomain(b64, -1, positions, hash=h)
+    for h in ("sha512", "sha256"):
         whole = CommitmentDomain(b64, -1, positions, hash=h).domain_id
         assert whole != CommitmentDomain(b64[:32], -1, positions, hash=h).domain_id
         assert whole != CommitmentDomain(b64[32:], -1, positions, hash=h).domain_id
@@ -246,7 +252,7 @@ def test_frame_multiproofs_run_under_the_domains_hash() -> None:
 
 
 def test_a_frame_configuration_never_mixes_hashes() -> None:
-    d256 = CommitmentDomain(hashlib.sha256(b"a").digest(), 0, RangeIndexedDomain(2))
+    d256 = CommitmentDomain(hashlib.sha256(b"a").digest(), 0, RangeIndexedDomain(2), hash="sha256")
     d512 = CommitmentDomain(d256.binding, 0, RangeIndexedDomain(2), hash="sha512")
     with pytest.raises(ValueError):
         FrameV3({"a": Port(d256, WordLeaf("u8", 1)), "b": Port(d512, WordLeaf("u8", 1))})
@@ -339,7 +345,7 @@ def test_vllm_configuration_names_its_hash_and_never_mixes() -> None:
     assert ref.VllmV1({}).name == ref.NAME
 
 
-# --- the red team's conditions on PR #93 ---------------------------------------------------------------------------
+# --- the red team's conditions on the SHA-512 framings --------------------------------------------------------------
 
 
 def test_the_tagged_sha512_identity_frame() -> None:
@@ -354,8 +360,8 @@ def test_a_sha512_frame_absorbs_the_positions_sha512_identity() -> None:
     for positions in (RangeIndexedDomain(2, 11, 3), ExplicitIndexedDomain([4, 9, 1])):
         d = CommitmentDomain(binding, 1, positions, hash="sha512")
         assert len(positions.identity_sha512()) == 64
-        assert d.domain_id == _hash(b"domain", binding, _uint(3), positions.identity_sha512(), _uint(positions.count), hash="sha512")
-        assert d.domain_id != _hash(b"domain", binding, _uint(3), bytes.fromhex(positions.identity_digest), _uint(positions.count), hash="sha512")
+        assert d.domain_id == frame_hash(b"domain", binding, _uint(3), positions.identity_sha512(), _uint(positions.count), hash="sha512")
+        assert d.domain_id != frame_hash(b"domain", binding, _uint(3), bytes.fromhex(positions.identity_digest), _uint(positions.count), hash="sha512")
 
     class Opaque:
         count = 2
@@ -366,7 +372,7 @@ def test_a_sha512_frame_absorbs_the_positions_sha512_identity() -> None:
 
 
 def test_validate_commitment_rejects_a_root_of_the_other_width() -> None:
-    d256 = CommitmentDomain(hashlib.sha256(b"w").digest(), 0, RangeIndexedDomain(3))
+    d256 = CommitmentDomain(hashlib.sha256(b"w").digest(), 0, RangeIndexedDomain(3), hash="sha256")
     d512 = CommitmentDomain(d256.binding, 0, RangeIndexedDomain(3), hash="sha512")
     t256 = MerkleTree(d256, {p: bytes([p]) for p in range(3)}, lambda _p: "raw")
     t512 = MerkleTree(d512, {p: bytes([p]) for p in range(3)}, lambda _p: "raw")
@@ -387,7 +393,7 @@ def test_vllm_sha512_domain_digests_are_sha512() -> None:
 
 
 def test_hiding_row_schemas_are_named_at_their_widths() -> None:
-    d256 = CommitmentDomain(hashlib.sha256(b"h").digest(), 0, RangeIndexedDomain(1))
+    d256 = CommitmentDomain(hashlib.sha256(b"h").digest(), 0, RangeIndexedDomain(1), hash="sha256")
     d512 = CommitmentDomain(d256.binding, 0, RangeIndexedDomain(1), hash="sha512")
     assert row_leaf(d512, 0, bytes(64), SCHEMA_HM96_SHA512_ROW) == d512.leaf(0, 0, "hm96-sha512/row/v1", bytes(64))
     assert row_leaf(d512, 0, bytes(64), SCHEMA_HM96_SHA512_ROW) != row_leaf(d512, 0, bytes(64), SCHEMA_SHA512_ROW)
@@ -395,3 +401,37 @@ def test_hiding_row_schemas_are_named_at_their_widths() -> None:
         row_leaf(d512, 0, bytes(32), SCHEMA_HM96_SHA512_ROW)
     with pytest.raises(ValueError, match="unknown row schema"):
         row_leaf(d256, 0, bytes(32), "hm96-sha256/row/v1")
+
+
+@pytest.mark.parametrize("hash", ["sha512", "sha256"])
+@pytest.mark.parametrize("n", [1, 2, 5, 8, 13])
+def test_levels_and_subtrees_are_the_trees(hash: str, n: int) -> None:
+    """Each aligned chunk of the padded leaves folded on its own, then its roots folded from their level, is `tree_levels`;
+    the root from any aligned subtrees and the pads past the count is its root, and from too few is None."""
+    d = CommitmentDomain(hashlib.sha256(b"levels").digest(), 1, RangeIndexedDomain(n), hash=hash)
+    leaves = [d.leaf(r, r, "u8", bytes([r])) for r in range(n)]
+    full = tree_levels(d, leaves)
+    padded = list(full[0])
+    assert levels(d.domain_id, padded, hash=hash) == full
+    for size in (1, 2, 4):
+        if size > len(padded):
+            continue
+        tops = [levels(d.domain_id, padded[s:s + size], s, hash=hash)[-1][0] for s in range(0, len(padded), size)]
+        assert tops == list(full[size.bit_length() - 1])
+        assert levels(d.domain_id, tops, 0, size.bit_length() - 1, hash=hash)[-1] == full[-1]
+    root = full[-1][0]
+    assert root_from_subtrees(d.domain_id, n, {(0, r): leaves[r] for r in range(n)}, hash) == root
+    assert root_from_subtrees(d.domain_id, n, {(len(full) - 1, 0): root}, hash) == root
+    if len(full) > 2:
+        assert root_from_subtrees(d.domain_id, n, {(1, 0): full[1][0], **{(0, r): leaves[r] for r in range(2, n)}}, hash) == root
+    assert root_from_subtrees(d.domain_id, n, {(0, r): leaves[r] for r in range(n - 1)}, hash) is None
+    with pytest.raises(ProtocolError, match="power of two"):
+        levels(d.domain_id, [leaves[0]] * 3, hash=hash)
+    with pytest.raises(ProtocolError, match="aligned"):
+        levels(d.domain_id, [leaves[0]] * 2, 1, hash=hash)
+
+
+def test_frame_hash_and_the_domain_default_to_sha512() -> None:
+    assert frame_hash(b"pad", b"x") == hashlib.sha512(b"veritor/protocol/merkle/frame/v3\0" + (3).to_bytes(4, "big") + b"pad"
+                                                     + (1).to_bytes(8, "big") + b"x").digest()
+    assert CommitmentDomain(bytes(64), -1, RangeIndexedDomain(3)).hash == "sha512"

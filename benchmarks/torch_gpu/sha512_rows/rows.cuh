@@ -1,10 +1,12 @@
 // The commitment's hashes as host+device functions, one thread's work each (engine.py is the call, README.md the formats):
 // nvcc builds rows.cu (the kernels), g++ builds rows_host.cpp (the host twin, a loop a kernel), and both run what is below.
-// A digest is 8 u64 words, each the big-endian value of its 8 bytes. C is a compression: C::run(st, w) has sx::compress's
-// contract, C::kw(st, kw) sx::compress_kw's. SXR_COUNT_CHACHA(), if defined, runs once a ChaCha20 block (the host twin's
-// count).
+// The frame-v3-sha512 leaf, node and pad and the hm96 leaf's mask, salt digest and value are row_commit.cuh's; this file
+// keeps the schedule: the row digest, the layout engine.py fills, the salts and each lane's column order.
+// A digest is 8 u64 words, each the big-endian value of its 8 bytes. C is a compression, row_commit.cuh's policy:
+// C::compress(st, w) has sx::compress's contract, C::compress_kw(st, kw) sx::compress_kw's. SXR_COUNT_CHACHA(), if defined,
+// runs once a ChaCha20 block (the host twin's count).
 #pragma once
-#include "sha512x.cuh"
+#include "../../../verity/ml/kernels/row_commit.cuh"
 
 #ifndef SXR_COUNT_CHACHA
 #define SXR_COUNT_CHACHA()
@@ -46,22 +48,11 @@ static_assert(sizeof(LeafRow) == 224, "LeafRow is 224 bytes");
 constexpr int SALT_U32 = 48;     // hm96-sha512's 192-byte salt, as little-endian u32 words
 constexpr int T_BYTES = 256 * 256;   // T: 256 rows of 256 bytes, in shared memory as in global memory
 
-#define SXR_FRAME "veritor/protocol/merkle/frame/v3"
-
 // --- loads ---------------------------------------------------------------------------------------------------------------
 
 SX_HD uint4 ld16(const uint8_t* p) {
 #ifdef __CUDA_ARCH__
   return __ldg(reinterpret_cast<const uint4*>(p));
-#else
-  uint4 v;
-  memcpy(&v, p, 16);
-  return v;
-#endif
-}
-SX_HD uint4 ld16_any(const uint8_t* p) {   // 16 aligned bytes from any space (shared memory included)
-#ifdef __CUDA_ARCH__
-  return *reinterpret_cast<const uint4*>(p);
 #else
   uint4 v;
   memcpy(&v, p, 16);
@@ -83,83 +74,6 @@ SX_HD uint8_t ld1(const uint8_t* p) {
 #endif
 }
 
-// --- a message built a byte run at a time (frame-v3's framing), big-endian packed --------------------------------------
-
-constexpr int MSG_WORDS = 48;
-struct Msg {
-  u64 w[MSG_WORDS];
-  u32 n;
-};
-SX_HD void msg_init(Msg& m) {
-  for (int i = 0; i < MSG_WORDS; ++i) m.w[i] = 0;
-  m.n = 0;
-}
-// the low nbytes (0 to 8) bytes of v, big-endian
-SX_HD void put(Msg& m, u64 v, int nbytes) {
-  if (nbytes == 0) return;
-  const u64 x = nbytes == 8 ? v : v << (64 - 8 * nbytes);
-  const u32 o = m.n & 7, i = m.n >> 3;
-  m.w[i] |= x >> (8 * o);
-  if (o && (int)o + nbytes > 8) m.w[i + 1] |= x << (64 - 8 * o);
-  m.n += nbytes;
-}
-template <int N>
-SX_HD void put_str(Msg& m, const char (&s)[N], bool nul) {
-  for (int k = 0; k < (nul ? N : N - 1); ++k) put(m, (uint8_t)s[k], 1);
-}
-SX_HD void put_words(Msg& m, const u64* v, int nbytes) {   // nbytes of big-endian packed words
-  for (int k = 0; k < nbytes / 8; ++k) put(m, v[k], 8);
-  if (nbytes & 7) put(m, v[nbytes / 8] >> (64 - 8 * (nbytes & 7)), nbytes & 7);
-}
-SX_HD int uint_len(u64 v) {   // merkle._uint: big-endian in the fewest bytes, one for 0
-  int n = 1;
-  while (n < 8 && (v >> (8 * n))) ++n;
-  return n;
-}
-SX_HD void put_uint(Msg& m, u64 v) {   // a frame part: u64be(length) || uint(v)
-  const int n = uint_len(v);
-  put(m, (u64)n, 8);
-  put(m, v, n);
-}
-SX_HD void put_digest(Msg& m, const u64* d) {   // a frame part: u64be(64) || d
-  put(m, 64, 8);
-  for (int i = 0; i < 8; ++i) put(m, d[i], 8);
-}
-// SHA-512's padding for a message whose first `before` bytes are already in cv, then its blocks
-template <class C>
-SX_HD void msg_hash(Msg& m, u64 before, u64* cv) {
-  const u32 len = m.n, blocks = (len + 17 + 127) / 128;
-  put(m, 0x80, 1);
-  m.w[16 * blocks - 1] = 8 * (before + len);
-  for (u32 b = 0; b < blocks; ++b) C::run(cv, m.w + 16 * b);
-}
-template <int N>
-SX_HD void frame_head(Msg& m, const char (&tag)[N], const u64* did) {   // frame || u32be(len tag) || tag || did's part
-  msg_init(m);
-  put_str(m, SXR_FRAME, true);
-  put(m, N - 1, 4);
-  put_str(m, tag, false);
-  put_digest(m, did);
-}
-
-// --- a block built in registers: Msg's offsets are run-time values, so the device keeps a Msg in local memory ------------
-
-// w[0, NW) |= the NV words v at byte offset off (off >> 3 <= MAXQ, off + 8 NV <= 8 NW). Every index is a constant (the word
-// offset is selected, not indexed), so w and v stay in registers.
-template <int NW, int NV, int MAXQ>
-SX_HD void place(u64* w, const u64* v, u32 off) {
-  const u32 qw = off >> 3, sh = 8 * (off & 7);
-  u64 u[NV + 1];
-#pragma unroll
-  for (int k = 0; k <= NV; ++k) u[k] = (k < NV ? v[k] >> sh : 0) | ((k > 0 && sh) ? v[k - 1] << (64 - sh) : 0);
-#pragma unroll
-  for (int i = 0; i < NW; ++i) {
-#pragma unroll
-    for (int j = 0; j <= MAXQ; ++j)
-      if (i - j >= 0 && i - j <= NV && qw == (u32)j) w[i] |= u[i - j];
-  }
-}
-
 // --- sha512/row/v2 -------------------------------------------------------------------------------------------------------
 
 // whether an n-byte row's last block is its padding alone (0x80 and the length, or the length): n mod 128 is 0 or at least
@@ -170,12 +84,11 @@ SX_HD bool pad_alone(u32 n) { return n % 128 == 0 || n % 128 >= 112; }
 // and with pad_alone, the last block's K[t] + W[t]
 template <class C>
 SX_HD void row_setup(RowSpec& r) {
-  Msg m;
-  msg_init(m);
-  put_str(m, "verity/sha512-row/v2", true);
-  put(m, 8 * (u64)r.nbytes, 8);
-  sx::iv(r.mid);
-  C::run(r.mid, m.w);
+  const char tag[] = "verity/sha512-row/v2";
+  uint8_t b[128] = {};
+  for (int i = 0; i < (int)sizeof tag; ++i) b[i] = (uint8_t)tag[i];
+  rc::be_put(b + sizeof tag, 8 * (u64)r.nbytes, 8);
+  rc::midstate<C>(b, r.mid);
   if (pad_alone(r.nbytes)) {
     u64 w[16] = {};
     w[0] = r.nbytes % 128 == 0 ? 0x8000000000000000ull : 0;
@@ -216,7 +129,7 @@ SX_HD void row_digest(const RowSpec& r, u64 s, u64* x) {
       w[2 * i] = sx::be64(u.x, u.y);
       w[2 * i + 1] = sx::be64(u.z, u.w);
     }
-    C::run(x, w);
+    C::compress(x, w);
   }
 #ifdef __CUDA_ARCH__
 #pragma unroll 1
@@ -225,9 +138,9 @@ SX_HD void row_digest(const RowSpec& r, u64 s, u64* x) {
 #pragma unroll
     for (int i = 0; i < 16; ++i) w[i] = row_word(a, r.a_len, b, n, 128 * k + 8 * i);
     if (k + 1 == blocks) w[15] = 8 * (128 + (u64)n);
-    C::run(x, w);
+    C::compress(x, w);
   }
-  if (last < blocks) C::kw(x, r.kw);
+  if (last < blocks) C::compress_kw(x, r.kw);
 }
 
 // --- hm96-sha512 under hiding leaves, then the frame-v3-sha512 leaf ------------------------------------------------------
@@ -285,20 +198,17 @@ struct LeafArgs {
   u32 units, pad2_;
 };
 
-// leaf_setup: the leaf prefix (merkle.CommitmentDomain.leaf_prefix(rank, position, schema, 64)), its first block compressed
+// a domain id's 64 bytes from its words
+SX_HD void did_bytes(const u64* w, uint8_t* b) {
+  for (int i = 0; i < 8; ++i) rc::be_put(b + 8 * i, w[i], 8);
+}
+
+// leaf_setup: the leaf prefix (merkle.CommitmentDomain.leaf_prefix(rank, position, schema, 64)) as its head (rc::leaf_head)
 template <class C>
 SX_HD void leaf_setup(LeafRow& r, const u64* dids, const uint8_t* schema, u32 schema_len) {
-  Msg m;
-  frame_head(m, "leaf", dids + 8 * (u64)r.did);
-  put_uint(m, r.rank);
-  put_uint(m, r.position);
-  put(m, schema_len, 8);
-  for (u32 k = 0; k < schema_len; ++k) put(m, schema[k], 1);
-  put(m, 64, 8);
-  sx::iv(r.mid);
-  C::run(r.mid, m.w);
-  r.q = m.n - 128;
-  for (int i = 0; i < 16; ++i) r.tail[i] = m.w[16 + i];
+  uint8_t did[64];
+  did_bytes(dids + 8 * (u64)r.did, did);
+  r.q = (u32)rc::leaf_head<C>(did, r.rank, r.position, schema, (int)schema_len, r.mid, r.tail);
 }
 
 // frame_setup: a unit's slot-tree leaf (rank, rank, schema) in domain did, as leaf_setup sets up a row's
@@ -309,32 +219,10 @@ SX_HD void frame_setup(LeafRow& r, u64 rank, const u64* did, const uint8_t* sche
   leaf_setup<C>(r, did, schema, schema_len);
 }
 
-// the frame leaf of the 64-byte value v under r's prefix (out may be v): one compression from r.mid when the rest of the
-// prefix and v fit one block (q <= 47: ranks and positions of at most 6 bytes together, as a row's; a unit's below 2^24), in
-// registers; else Msg's two
+// the frame leaf of the 64-byte value v under r's head (out may be v)
 template <class C>
 SX_HD void frame_tail(const LeafRow& r, const u64* v, u64* out) {
-  const u32 q = r.q;
-  if (q <= 47) {
-    u64 w[16], vm[9];
-#pragma unroll
-    for (int i = 0; i < 16; ++i) w[i] = i < 6 ? r.tail[i] : 0;
-#pragma unroll
-    for (int i = 0; i < 8; ++i) vm[i] = v[i];
-    vm[8] = 0x8000000000000000ull;
-    place<16, 9, 5>(w, vm, q);
-    w[15] = 8 * (128 + 64 + (u64)q);
-#pragma unroll
-    for (int i = 0; i < 8; ++i) out[i] = r.mid[i];
-    C::run(out, w);
-    return;
-  }
-  Msg m;
-  msg_init(m);
-  put_words(m, r.tail, (int)q);
-  for (int i = 0; i < 8; ++i) put(m, v[i], 8);
-  for (int i = 0; i < 8; ++i) out[i] = r.mid[i];
-  msg_hash<C>(m, 128, out);
+  rc::leaf_tail<C>(r.mid, r.tail, r.q, v, out);
 }
 
 // the 16-byte column q a lane l (0-7) takes at step k (0-11) of each r. A 16-byte load from T_v's column q, unit i, is in
@@ -346,41 +234,11 @@ SX_HD u32 mask_column(int k, u32 l) {
   const u32 base = k >= 8 ? 0 : ((k >> 2) ^ (l >> 2)) ? 4 : 8;
   return base + ((k + l) & 3);
 }
-
-// M_key y as 16 little-endian u32 (mask byte 4w + k is byte k of m[w]), from T (rows 256 bytes apart) and y (SALT_U32 words,
-// word w at y[w ys]), the column order lane l's. Bytes [p, p + 64) of T_v are byte_tables(key)[p][v], so for salt bytes
-// p = 16 q + r the 80 bytes [16 q, 16 q + 80) of T_{y_p} are xored into A_r, and A_r shifted down r bytes into m (commit_gpu's
-// hm96_mask, benchmarks/pouw/commit_gpu/commit_gpu.cuh, with its columns in lane l's order).
-SX_HD void mask(const uint8_t* T, const u32* y, u32 ys, u32 l, u32* m) {
-#pragma unroll
-  for (int w = 0; w < 16; ++w) m[w] = 0;
-#pragma unroll
-  for (int a = 0; a < 4; ++a) {   // r = 4 a .. 4 a + 3: bytes of the words 4 q + a
-    u32 yw[12];
-#pragma unroll
-    for (int k = 0; k < 12; ++k) yw[k] = y[(4 * mask_column(k, l) + a) * ys];
-#pragma unroll
-    for (int rr = 0; rr < 4; ++rr) {
-      const int r = 4 * a + rr;
-      u32 A[20];
-#pragma unroll
-      for (int i = 0; i < 20; ++i) A[i] = 0;
-#pragma unroll
-      for (int k = 0; k < 12; ++k) {
-        const u32 v = (yw[k] >> (8 * rr)) & 0xFFu;
-        const uint8_t* t = T + 256 * v + 16 * mask_column(k, l);
-#pragma unroll
-        for (int i = 0; i < 5; ++i) {
-          const uint4 u = ld16_any(t + 16 * i);
-          A[4 * i] ^= u.x; A[4 * i + 1] ^= u.y; A[4 * i + 2] ^= u.z; A[4 * i + 3] ^= u.w;
-        }
-      }
-      const int sw = r >> 2, sh = 8 * (r & 3);
-#pragma unroll
-      for (int w = 0; w < 16; ++w) m[w] ^= sh ? (A[w + sw] >> sh | A[w + sw + 1] << (32 - sh)) : A[w + sw];
-    }
-  }
-}
+// lane l's column order, for rc::mask_lanes
+struct LaneColumns {
+  u32 l;
+  SX_HD u32 operator()(int k) const { return mask_column(k, l); }
+};
 
 // row g's leaf in slot s: b = x ^ M y, c = SHA-512(salt_prefix || y), h = SHA-512(leaf_prefix(key) || b || c), then the frame
 // leaf SHA-512(leaf prefix || h), and with A.frames, for a unit of this row alone, its slot-tree leaf over that (the unit's
@@ -405,24 +263,14 @@ SX_HD void leaf(const LeafArgs& A, const uint8_t* T, u32* y, u32 ys, u32 l, u32 
   u64 bc[16];
   {
     u32 m[16];
-    mask(T, y, ys, l, m);
-    for (int i = 0; i < 8; ++i) bc[i] = ld8(A.x + 8 * gs + i) ^ ((u64)sx::bswap32(m[2 * i]) << 32 | sx::bswap32(m[2 * i + 1]));
+    u64 my[8];
+    rc::mask_lanes(rc::ByteTab<256, false>{T}, y, ys, LaneColumns{l}, m);
+    rc::mask_words(m, my);
+    for (int i = 0; i < 8; ++i) bc[i] = ld8(A.x + 8 * gs + i) ^ my[i];
   }
-  u64 w[16];
-  u64* c = bc + 8;
-  for (int i = 0; i < 8; ++i) c[i] = A.ms_salt[i];
-  for (int i = 0; i < 16; ++i) w[i] = sx::be64(y[2 * i * ys], y[(2 * i + 1) * ys]);
-  C::run(c, w);
-  for (int i = 0; i < 8; ++i) w[i] = sx::be64(y[(32 + 2 * i) * ys], y[(33 + 2 * i) * ys]);
-  w[8] = 0x8000000000000000ull;
-  for (int i = 9; i < 15; ++i) w[i] = 0;
-  w[15] = (128 + 192) * 8;
-  C::run(c, w);
+  rc::salt_digest<C>(A.ms_salt, rc::SaltU32{y, ys}, bc + 8);
   u64 h[8];
-  for (int i = 0; i < 8; ++i) h[i] = A.ms_leaf[i];
-  for (int i = 0; i < 16; ++i) w[i] = bc[i];
-  C::run(h, w);
-  C::kw(h, sx::kw_pad256());
+  rc::hm96_value<C>(A.ms_leaf, sx::kw_pad256(), bc, h);
   const LeafRow* unit = nullptr;
   u64* dst = A.out + 8 * gs;
   if (A.frames) {
@@ -442,68 +290,32 @@ SX_HD void leaf(const LeafArgs& A, const uint8_t* T, u32* y, u32 ys, u32 l, u32 
   for (int i = 0; i < 8; ++i) dst[i] = h[i];
 }
 
-// --- frame-v3-sha512 leaves of digests, nodes and pads -------------------------------------------------------------------
+// --- frame-v3-sha512 leaves of digests, node midstates and pads ----------------------------------------------------------
 
 // CommitmentDomain.leaf(rank, rank, schema, value) of a 64-byte value
 template <class C>
 SX_HD void frame_leaf(const u64* did, u64 rank, const uint8_t* schema, u32 schema_len, const u64* value, u64* out) {
-  Msg m;
-  frame_head(m, "leaf", did);
-  put_uint(m, rank);
-  put_uint(m, rank);
-  put(m, schema_len, 8);
-  for (u32 k = 0; k < schema_len; ++k) put(m, schema[k], 1);
-  put_digest(m, value);
-  sx::iv(out);
-  msg_hash<C>(m, 0, out);
+  uint8_t d[64];
+  u64 mid[8], tail[16];
+  did_bytes(did, d);
+  const int q = rc::leaf_head<C>(d, rank, rank, schema, (int)schema_len, mid, tail);
+  rc::leaf_tail<C>(mid, tail, (u32)q, value, out);
 }
 
-// node_mid: a node's first block at `level` (< 256), whose bytes after the domain id are u64be(1), level and the first
-// six bytes of u64be(len uint(index)), all zero
+// a node's chaining value after its first block at `level` (< 256), from which rc::node_at hashes the node
 template <class C>
 SX_HD void node_mid(const u64* did, u32 level, u64* mid) {
-  Msg m;
-  frame_head(m, "node", did);
-  put(m, 1, 8);
-  put(m, level, 1);
-  sx::iv(mid);
-  C::run(mid, m.w);
-}
-
-// CommitmentDomain.node(level, index, left, right), from node_mid's chaining value: the 146 + n bytes after its first block
-// (u64be(n)'s last two, index's n, then u64be(64) || left || u64be(64) || right) and the padding are two blocks, built in
-// registers
-template <class C>
-SX_HD void node(const u64* mid, u64 index, const u64* left, const u64* right, u64* out) {
-  const u32 n = (u32)uint_len(index);
-  u64 w[32], v[19];
-#pragma unroll
-  for (int i = 0; i < 32; ++i) w[i] = 0;
-  w[0] = (u64)n << 48;
-  const u64 ix = n == 8 ? index : index << (64 - 8 * n);
-  place<32, 1, 0>(w, &ix, 2);
-  v[0] = v[9] = 64;
-#pragma unroll
-  for (int i = 0; i < 8; ++i) {
-    v[1 + i] = left[i];
-    v[10 + i] = right[i];
-  }
-  v[18] = 0x8000000000000000ull;
-  place<32, 19, 1>(w, v, 2 + n);
-  w[31] = 8 * (128 + 146 + (u64)n);
-  for (int i = 0; i < 8; ++i) out[i] = mid[i];
-  C::run(out, w);
-  C::run(out, w + 16);
+  uint8_t d[64];
+  did_bytes(did, d);
+  rc::node_mid<C>(d, (int)level, mid);
 }
 
 // CommitmentDomain.pad(rank)
 template <class C>
 SX_HD void pad(const u64* did, u64 rank, u64* out) {
-  Msg m;
-  frame_head(m, "pad", did);
-  put_uint(m, rank);
-  sx::iv(out);
-  msg_hash<C>(m, 0, out);
+  uint8_t d[64];
+  did_bytes(did, d);
+  rc::pad_of<C>(d, rank, out);
 }
 
 }  // namespace sxr

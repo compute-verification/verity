@@ -465,6 +465,12 @@ def closure(suite: Suite, pkgs: dict[str, str]) -> list[str]:
     return sorted(s for p in seen.values() if p != suite.path for s in shipped(p))
 
 
+#: what `git add -A` says of a path another check step changes while git reads the tree: a file deleted between git listing and
+#: opening it, and a repository whose clone hasn't checked out a commit yet. Either is left out of the tree; any other error is git's.
+_IN_FLIGHT = re.compile(r"^error: (open\(\".*\"\): No such file or directory|unable to index file '.*'|'.*' does not have a commit "
+                        r"checked out)$")
+
+
 def worktree() -> str:
     """The tree git would commit now: tracked files as they are on disk, plus untracked files that aren't ignored."""
     with tempfile.TemporaryDirectory() as tmp:
@@ -473,7 +479,11 @@ def worktree() -> str:
         if real.exists():
             shutil.copy2(real, index)          # its mtime too: git re-reads an entry as recent as the index (racy git)
         env = dict(os.environ, GIT_INDEX_FILE=str(index))
-        _git("add", "-A", env=env)
+        add = subprocess.run(["git", "add", "-A", "--ignore-errors"], cwd=ROOT, env=env, capture_output=True, text=True,
+                             errors="surrogateescape")
+        errors = [line for line in add.stderr.splitlines() if not line.startswith(("warning:", "hint:"))]
+        if add.returncode and not (errors and all(_IN_FLIGHT.match(line) for line in errors)):
+            raise RuntimeError(f"`git add -A` into a scratch index failed ({add.returncode}):\n{add.stderr.strip()}")
         return _git("write-tree", env=env).strip()
 
 
@@ -1003,6 +1013,13 @@ def per_test_dir(suite: Suite) -> Path:
     return CACHE / PER_TEST / suite.name.replace("/", "_")
 
 
+def _out_of_space(log: Path | None) -> bool:
+    """Whether a suite's log shows a full disk (ENOSPC), which fails tests whatever their inputs."""
+    if log is None or not log.is_file():
+        return False
+    return "[Errno 28]" in log.read_text(errors="replace")
+
+
 class PerTest:
     """One suite's per-test verdicts for one run: which passes it may reuse (`reusable`), and keeping the passes it earns (`keep`)."""
 
@@ -1151,8 +1168,8 @@ class PerTest:
     def keep(self, r: "Result", head: str, used_now: dict, min_s: float) -> int:
         """Record the outcomes of a run the guard vouches for (a report, no read outside the inputs, every worker's record), each
         under its module's key, beside those recorded before under the same key and reads: every failure, and every pass of at
-        least ``min_s`` seconds. A test with both under one key is `nondeterministic`: its inputs were identical. The number of
-        passes kept."""
+        least ``min_s`` seconds. A test with both under one key is `nondeterministic`: its inputs were identical. A run whose
+        log shows a full disk keeps no failure, since the machine failed them, not their inputs. The number of passes kept."""
         if not r.reported or r.outside or r.unguarded or not (r.passed or r.failed_tests):
             return 0
         base = "" if self.suite.path == "." else self.suite.path + "/"
@@ -1161,7 +1178,7 @@ class PerTest:
         for node, s in (r.passed or {}).items():
             if s >= min_s:
                 by_module.setdefault(base + node.split("::", 1)[0], ({}, {}))[0][node] = s
-        for node in r.failed_tests or []:
+        for node in [] if _out_of_space(r.log) else r.failed_tests or []:
             by_module.setdefault(base + node.split("::", 1)[0], ({}, {}))[1][node] = when
         self.dir.mkdir(parents=True, exist_ok=True)
         n = 0

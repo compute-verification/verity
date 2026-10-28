@@ -1,7 +1,7 @@
-"""KeyBinding's game against the audit's order of appends and passes, the red team's KB-1: a KV page appended after
-a pass's seed can hold that pass's sketches of other blocks, 64 bytes a block at 16 rows, and their receipts follow
-from the page's bytes without reading them.  A pass's seed binds every append received before its root (`audit.chained`), so no block in its plan was
-appended after its seed, and such a page would be a fixed point of SHA-512."""
+"""KeyBinding's game against the audit's order of appends and passes: a KV page appended after a pass's seed can hold
+that pass's sketches of other blocks, 64 bytes a block at 16 rows, and their receipts follow from the page's bytes
+without reading them.  A pass's seed binds every append received before its root (`audit.chained`), so no block in its
+plan was appended after its seed, and such a page would be a fixed point of SHA-512."""
 
 from __future__ import annotations
 
@@ -10,7 +10,8 @@ import hashlib
 
 import pytest
 
-from test_appends import N, Entropy, Run, pages, salts, store
+from remote_bandwidth_fakes import Entropy
+from test_appends import N, Run, pages, salts, store
 from verity.core.protocols.remote_bandwidth import audit, codec, coins, receipts
 from verity.core.protocols.remote_bandwidth.receipts import Plan
 
@@ -45,11 +46,11 @@ def relay(r: Run, page_seed: bytes, plan: Plan) -> audit.Pass:
 
 
 def test_a_page_appended_after_a_pass_s_seed_relays_none_of_its_receipts() -> None:
-    """The red team's order: pass 0 over the registered store, then a page holding pass 1's sketches of the
-    registered blocks under pass 1's seed as it was before this rule, H(σ_0, 1, root_(0,0)), appended at N, then pass 1
-    over all N + 1 blocks.  Under that seed the page relays all N registered receipts (the attack the red team measured,
-    which the session accepted before this rule).  Pass 1's seed binds the page, so the relayed receipts are none of
-    the pass's, a pass sent under the old seed fails its receipts' paths, and the honest pass over the page is accepted."""
+    """The attack's order: pass 0 over the registered store, then a page holding pass 1's sketches of the registered
+    blocks under a pass-1 seed that binds no append, H(σ_0, 1, root_(0,0)), appended at N, then pass 1 over all N + 1
+    blocks.  Under that seed the page relays all N registered receipts, which a session whose seeds didn't bind its
+    appends would accept.  Pass 1's seed binds the page, so the relayed receipts are none of the pass's, a pass sent
+    under the unbound seed fails its receipts' paths, and the honest pass over the page is accepted."""
     r = Run(store(), windows=1)
     assert r.run() is None
     root0, coin = r.passes[0, 0].root, coins.coin(r.challenges[0])

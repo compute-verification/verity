@@ -6,7 +6,7 @@ what it costs).  Conformance vectors: ``vectors.json`` (SHA-256) and ``vectors_s
 their producers and match its bytes.
 
 A leaf commits a value under an *inner* layout, any :class:`~verity.ml.commitments.scheme.LeafLayout` with the instance's hash:
-the unsalted leaf digest the port already defines (a vllm-v1 position leaf, a ``sha256/row/v1`` or ``sha512/row/v1`` row
+the unsalted leaf digest the port already defines (a position leaf, a ``sha256/row/v1`` or ``sha512/row/v1`` row
 digest).  With H the instance's hash, n its output bits and l = n + n + 512 the salt bits::
 
     x    = H(inner.prefix || value || inner.suffix)             the unsalted digest; private
@@ -32,24 +32,19 @@ from __future__ import annotations
 import functools
 import math
 import os
-from collections.abc import Sequence
 from dataclasses import dataclass
 
 from verity.errors import InvalidArtifact
 
 from ..identity import identity_digest, identity_digest_sha512
 from ..scheme import DIGEST_BYTES as _DIGEST_BYTES
-from ..scheme import LeafLayout, Path, sha
-from ..vllm_v1 import VllmV1
+from ..scheme import LeafLayout, sha
 
 __all__ = [
     "COLS",
     "DEFAULT_KEY",
     "DIGEST_BYTES",
     "HidingLayout",
-    "Hm96",
-    "Hm96Sha256",
-    "Hm96Sha512",
     "Instance",
     "KEY_BITS",
     "KEY_BYTES",
@@ -287,7 +282,7 @@ SHA512 = Instance("hm96-sha512/v1", "sha512", 192, b"verity/hm96-sha512/salt/v1\
                   b"verity/hm96-sha512/key/v1\0", "verity/hm96-sha512/scheme/v1")
 INSTANCES = {i.name: i for i in (SHA256, SHA512)}
 
-# hm96-sha256/v1's names, as PR #88 published them.
+# hm96-sha256/v1's names, as first published.
 NAME = SHA256.name
 DIGEST_BYTES = SHA256.digest_bytes
 ROWS = SHA256.rows
@@ -319,7 +314,7 @@ xor_count = SHA256.xor_count
 statistical_distance_log2 = SHA256.statistical_distance_log2
 
 
-# --- the layout a backend proves, and the configured schemes -----------------------------------------------------
+# --- the layout a backend proves ---------------------------------------------------------------------------------
 
 
 @dataclass(frozen=True, slots=True)
@@ -353,55 +348,3 @@ class HidingLayout:
     def leaf(self, value: bytes, salt: bytes) -> bytes:
         return self.tree_leaf(self.commit(value, salt))
 
-
-class Hm96:
-    """hm96 leaves over a ``vllm-v1`` configuration of the same hash (``vllm-v1`` for SHA-256, ``vllm-v1-sha512`` for SHA-512): its
-    ports, domains, trees and root bindings, with each position's unsalted leaf layout wrapped in a :class:`HidingLayout`.
-
-    ``leaf_layout`` returns a :class:`HidingLayout` (the proven digest is ``b || c``) and ``tree_leaf`` takes it.  The key must be
-    bound where the verifier reads the roots from: :meth:`Instance.scheme_digest` names it, and every leaf binds its digest too.
-    """
-
-    def __init__(self, base: VllmV1, key: bytes | None = None, instance: Instance = SHA256) -> None:
-        if not isinstance(base, VllmV1):
-            raise TypeError(f"{instance.name} wraps a vllm-v1 configuration, whose tree leaf is the leaf digest itself")
-        if base.hash != instance.hash:
-            raise TypeError(f"{instance.name} wraps a {instance.hash} vllm-v1 configuration, not {base.name}")
-        self.base = base
-        self.instance = instance
-        self.key = instance.check_key(instance.default_key if key is None else key)
-        self.name = instance.name
-        self.hashes = (instance.hash,)
-
-    @property
-    def digest(self) -> bytes:
-        return self.instance.scheme_digest(self.key)
-
-    def leaf_layout(self, port: str, position: int) -> HidingLayout:
-        return HidingLayout(self.base.leaf_layout(port, position), self.key, self.instance)
-
-    def tree_leaf(self, port: str, position: int, digest: bytes) -> bytes:
-        return self.base.tree_leaf(port, position, self.instance.tree_leaf(self.key, digest))
-
-    def root(self, port: str, leaves: Sequence[bytes]) -> bytes:
-        return self.base.root(port, leaves)
-
-    def path(self, port: str, leaves: Sequence[bytes], index: int) -> Path:
-        return self.base.path(port, leaves, index)
-
-    def verify_path(self, port: str, root: bytes, leaf_count: int, index: int, leaf: bytes, path: Sequence[bytes | None]) -> bool:
-        return self.base.verify_path(port, root, leaf_count, index, leaf, path)
-
-
-class Hm96Sha256(Hm96):
-    """``hm96-sha256/v1`` over a ``vllm-v1`` configuration."""
-
-    def __init__(self, base: VllmV1, key: bytes = DEFAULT_KEY) -> None:
-        super().__init__(base, key, SHA256)
-
-
-class Hm96Sha512(Hm96):
-    """``hm96-sha512/v1`` over a ``vllm-v1-sha512`` configuration."""
-
-    def __init__(self, base: VllmV1, key: bytes | None = None) -> None:
-        super().__init__(base, key, SHA512)

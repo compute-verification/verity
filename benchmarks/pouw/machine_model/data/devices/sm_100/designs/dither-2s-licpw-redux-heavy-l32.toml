@@ -1,4 +1,4 @@
-# LI-CP-W with the checkpoint reduced across the warp by ONE redux.sync.xor.b32 a segment (DC EPS1 r9's measurement),
+# LI-CP-W with the checkpoint reduced across the warp by ONE redux.sync.xor.b32 a segment (measured),
 # in place of dither-2s-licpw-heavy-l32's 5-shuffle fallback: measured +7.1% honest cycles against the bare LI loop,
 # where the 5-shuffle costs +40.6%. One 4-byte word a warp a segment still leaves the SM. Dither-2S at L = 32 on the
 # B200 with dither-2s-licp-fill-l32's 3/4 lane instruction a word of filler moved into the fold as extra keyed rounds
@@ -30,23 +30,23 @@ SHFL = 0.0234375
 [skip.served]
 eps = 0.004687
 at = { "DC-100-ri" = 0.004687, "DS-100" = 0.004063 }
-source = "eps_budget.py (benchmarks/pouw, `design_skip`, `floor_skip`): Corollary D3's ε_skip, the skippable work at its issue-model price over the floor program's bound B_♭ (SPEC §2.9), ♭ 7.254 SMSP-cycles a 4096-MAC MMA on DC-100 (this design's own, decision 90) (the LDTM and the LI-CP fold with its extra rounds); the most over Llama-3.1-8B and 70B at 2K, 8K and 32K, prefill and decode (decode's ♭ its compute alone), every served output free. At 8B 2K prefill: P·V's peel 0.469%, its sums at vfold's 0.7265 warp instructions an entry. With P·V's served output checked it is 0.372% (8B) / 0.145% (70B) there. Skip terms: the peel's tail at the larger of 1.57 of ♭'s MACs a strip product and Π's price of BC-KERNEL r2's tail instructions (4 mma.sync m16n8k32, 4 IMAD, 11.5 other), its sums and served epilogue at one an issue cycle, on sm_120's instruction counts for the same kernel source, on this device's Π (note:20261017T0320Z-draft-eps1-calc Round 9, EPS1 DC r6). On DC-100-ri (`at`) ♭ is DC-100's; on DS-100, ♭ 7.254 with the tail at DS-100's price: 0.406% (Round 11)"
+source = "eps_budget.py (benchmarks/pouw, `design_skip`, `floor_skip`): Corollary D3's ε_skip, the skippable work at its issue-model price over the floor program's bound B_♭ (SPEC §2.9), ♭ 7.254 SMSP-cycles a 4096-MAC MMA on DC-100 (this design's own) (the LDTM and the LI-CP fold with its extra rounds); the most over Llama-3.1-8B and 70B at 2K, 8K and 32K, prefill and decode (decode's ♭ its compute alone), every served output free. At 8B 2K prefill: P·V's peel 0.469%, its sums at vfold's 0.7265 warp instructions an entry. With P·V's served output checked it is 0.372% (8B) / 0.145% (70B) there. Skip terms: the peel's tail at the larger of 1.57 of ♭'s MACs a strip product and Π's price of BC-KERNEL r2's tail instructions (4 mma.sync m16n8k32, 4 IMAD, 11.5 other), its sums and served epilogue at one an issue cycle, on sm_120's instruction counts for the same kernel source, on this device's Π (EPS1 DC r6). On DC-100-ri (`at`) ♭ is DC-100's; on DS-100, ♭ 7.254 with the tail at DS-100's price: 0.406% (Round 11)"
 
 [mand.fold]
 eps = 0.0
-source = "named assumption: LI-CP with its extra keyed rounds, at its lane instructions a word, is the cheapest implementation of the fold (FOLD-OPT); there is no filler, so FILL-OPT is not read. With every absorbed word pinned (PIN), the receipt's luck is 0 for a skip that lands on one word of a segment: a checkpoint is injective in each word it absorbed (Lean Pouw.SecurityProofs.Receipt.LiCheckpointWordInjective, odd multipliers only); KLI₂₄, (RT), (G₃) and (HO_U) are not read (note:LI-ALT)"
+source = "named assumption: LI-CP with its extra keyed rounds, at its lane instructions a word, is the cheapest implementation of the fold (FOLD-OPT); there is no filler, so FILL-OPT is not read. With every absorbed word pinned (PIN), the receipt's luck is 0 for a skip that lands on one word of a segment: a checkpoint is injective in each word it absorbed (Lean Pouw.SecurityProofs.Receipt.LiCheckpointWordInjective, odd multipliers only); KLI₂₄, (RT), (G₃) and (HO_U) are not read"
 
 [clock]
 eps = 0.0
-source = "f_H unmeasured on the B200 (EPS1 DC measured f_max = 1965 MHz at default clocks, 06:01Z): 0 here, so γ with the clock gap is γ, a lower bound"
+source = "f_H unmeasured on the B200 (EPS1 DC measured f_max = 1965 MHz at default clocks): 0 here, so γ with the clock gap is γ, a lower bound"
 
 [luck]
 delta = 4.547473508864641e-13
 p = 0.75
 checks = 48000
-source = "SPEC §5 (note:20261017T0324Z-draft-eps1-spec): Theorem S at p = 3/4 over one week of 12.6 s rounds, δ′ = 2^-41 (note:20261016T0005Z-draft-luck-loss-round4 §1)"
+source = "SPEC §5: Theorem S at p = 3/4 over one week of 12.6 s rounds, δ′ = 2^-41"
 
-[baseline]          # honest's own lane program: its words belong to the baseline, not to ε (the brief §2)
+[baseline]          # honest's own lane program: its words belong to the baseline, not to ε
 name = "dp4a"
 program = { IMAD = 8 }
 source = "dp4a at 8 IDP4A a word at L = 32, on IMAD's class as sm_120 prices it (no IDP4A kind in EPS1 DC's census); no LDS kind either, so its loads are unpriced"

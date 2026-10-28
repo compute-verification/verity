@@ -476,8 +476,8 @@ def choose(names: list[str], docs: dict[str, dict | str], priority: bool = False
 
 #: the checks `--on auto` or `--on M1,M2` placed from this launcher and hasn't yet seen in their machine's check line, by commit:
 #: until one shows there (or PLACED_S passes: train.sh's wait for a launch), it counts as a priority waiter on its machine, so
-#: checks placed at once go to different machines (23 Oct 13:04Z: drive's four parallel launches all read cpu-1's one free
-#: slot as theirs, and three queued there for an hour while cpu-4's stood free)
+#: checks placed at once go to different machines (without it, parallel launches all read one machine's one free slot as
+#: theirs, and queued there while another machine's slot stood free)
 PLACED = Path(tempfile.gettempdir()) / "verity-check-placed.json"
 PLACED_S = 1800
 
@@ -719,8 +719,8 @@ def memory_gb(root: Path = Path("/")) -> int:
     """The memory this process may use: the least of MemAvailable and what each cgroup limit over it leaves, v2 or v1 (a pod's
 /proc/meminfo is the host's; on a VM the limits are on its own cgroup's ancestors, such as a run's session scope). A v2
 cgroup's page cache (active_file and inactive_file in its memory.stat) is in its memory.current, but the kernel reclaims it at
-the limit, so it counts as left, as in slot.py's `memory_gb`: 27 Oct 00:48Z, vy-nebius-cpu-1's user slice held 336 GB of
-cache in its 691 of 700 GB, and main's after-landing lean-agreement refused to run with "0 GB"."""
+the limit, so it counts as left, as in slot.py's `memory_gb`: a user slice can hold hundreds of GB of cache near its limit,
+and counted as used it leaves a step refusing to run with "0 GB"."""
     def read(p: Path) -> str | None:
         try:
             return p.read_text().strip()
@@ -750,7 +750,6 @@ cache in its 691 of 700 GB, and main's after-landing lean-agreement refused to r
 
 #: the share of this process's memory the agreement's verifier processes may count on: lean-suites (and, unsharded, the
 #: suites and circuit-check) run beside it, and on a 128 GB pod the whole budget for the agreement OOM-killed 36 of them
-#: (tip 38's shard 2/3, 6 Oct)
 AGREEMENT_MEMORY_SHARE = 2
 
 
@@ -771,7 +770,9 @@ def _version(v: str) -> tuple[int, ...]:
 
 def upstream_smoke(w: Path) -> list[tuple[str, list[str], dict]]:
     """One real replay per upstream binary that `vectors.json` gives a stored honest session (a set without lookup tables):
-    (its pinned commit, the command `agree.py` would run, the verdict expected), over the unpacked build and inputs in ``w``."""
+    (its pinned commit, the command `agree.py` would run, upstream's expected verdict), over the unpacked build and inputs in
+    ``w``. Upstream's verdict is the case's `upstream_accepted` where it records an intended divergence (`agree.py`), as set
+    16's honest session does: Lean refuses it for completeness, upstream accepts it."""
     import argparse
 
     spec = importlib.util.spec_from_file_location("check_flock_agree", FLOCK_VERIFIER / "agree.py")
@@ -793,7 +794,9 @@ def upstream_smoke(w: Path) -> list[tuple[str, list[str], dict]]:
                                circuit=str(fetch(st["circuit"])), tables=None)
         public = honest / "pub.bin" if (honest / "pub.bin").exists() else fetch(st["public"])
         extra = ["--drawn-only"] if agree.drawn(str(honest)) else []
-        out[s["pr83"]] = (s["pr83"], [*agree.upstream_cmd(a, str(public), extra), str(honest)], s["sessions"][0]["expect"])
+        e = s["sessions"][0]["expect"]
+        out[s["pr83"]] = (s["pr83"], [*agree.upstream_cmd(a, str(public), extra), str(honest)],
+                          {"accepted": e.get("upstream_accepted", e["accepted"])})
     return list(out.values())
 
 
@@ -1152,8 +1155,8 @@ def verdicts_in(pack: Path, run_dir: Path | None, only: str | None = None) -> di
 AFTER_LEAN = SUITES.AFTER_LEAN
 
 
-#: what pytest and the Lean steps hold beside circuit-check in one run, in GiB: in r20261012-155204-6475, pytest and lean-audit
-#: held 160 to 350 between them, and circuit-check, given the slot's whole mem=, took the run's scope to its cap (an OOM kill)
+#: what pytest and the Lean steps hold beside circuit-check in one run, in GiB: pytest and lean-audit have held 160 to 350
+#: between them, and circuit-check, given the slot's whole mem=, took the run's scope to its cap (an OOM kill)
 SIBLINGS_GB = 350
 
 
@@ -1477,10 +1480,10 @@ ON_NODE = ("preflight-fixtures",)
 def fetchable_fixtures(root: Path = ROOT, url: str | None = None, head=None, store=None) -> tuple[dict[str, str], list[str]]:
     """({id: where}, [id]): where each fetched fixture (a `fixtures/artifacts.json` entry whose path git doesn't hold) can come
     from on this machine, and those that can come from nowhere: the public export, asked for its manifest only (one HEAD, no
-    blob), else the tree already holding its bytes, else this machine's store holding its manifest and every blob.  The closing
-    train's check (cb20, 10 Oct) failed `lean-suites` after its launch on #1716's rec-coins fixture, preserved privately and
-    never exported: node 1 fetches from the public export and its own store, and had it in neither.  A copy put in the node's
-    store keeps a train moving before the export.  Raises when the public export is needed and there is none."""
+    blob), else the tree already holding its bytes, else this machine's store holding its manifest and every blob.  A fixture
+    preserved privately and never exported is in neither the public export nor a node's own store, so a check there fails
+    after its launch; a copy put in the node's store keeps a train moving before the export.  Raises when the public export
+    is needed and there is none."""
     from concurrent.futures import ThreadPoolExecutor
 
     from research.store.fetchset import public_url
@@ -1587,9 +1590,9 @@ def _kill_after_grace(p: subprocess.Popen) -> None:
 
 
 #: a running step none of whose outputs (`outputs`) has changed for this long is hung. pytest sat 23-24 h on one hung test after
-#: lean-suites failed, holding its train slot, and circuit-check beside it its share of memory (r20261025-021824-ba9f,
-#: r20261025-023312-fa65); a passing step's longest quiet stretch is about an hour (circuit-check's plan before its first target,
-#: one 35-minute target, a cold Lean package's build)
+#: lean-suites failed, holding its train slot, and circuit-check beside it its share of memory; a passing step's longest
+#: quiet stretch is about an hour (circuit-check's plan before its first target, one 35-minute target, a cold Lean package's
+#: build)
 IDLE_S = 3 * 3600
 #: and one still running after this long is over its budget, whatever it writes (the longest steps passed in 3-4 h)
 STEP_BUDGET_S = 12 * 3600
@@ -1886,7 +1889,7 @@ def _step(name: str, argv: list[str] | str, cwd: Path, out: Path, cache: bool, s
             rec = {"step": name, "status": "failed", "rc": rc, "log": log.name, "detail": hung}
         elif rc == -signal.SIGTERM:
             # a cancel (`research cancel`) signals the run's whole process group, so a step can die of it before this check's
-            # handler marks it stopped: it found nothing (lean-agreement "failed" with an empty log, r20261026-062546-11fc)
+            # handler marks it stopped: it found nothing (it would otherwise read as "failed" with an empty log)
             rec = {"step": name, "status": "stopped", "rc": rc, "log": log.name,
                    "detail": "stopped: killed by a SIGTERM this check did not send (a cancel of the run)"}
         elif rc == 0 and name == "lean-audit" and (why := lean_fast(out)):

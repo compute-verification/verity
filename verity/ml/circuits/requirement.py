@@ -8,7 +8,7 @@ circuit (small Programs, `layout.Circuit`'s explicit limit), which the Lean defi
 
 A gate's operands are `layout.Circuit.gate(i).operands`. It uses all of them, except that a primitive with an
 `evaluate_lazy` (a gather: its index and the word it selects) uses the operands its evaluator fetches, which takes the
-run's values (`inputs`, as `evaluate.py`'s trace holds them). Without them `requirement` refuses a gather, and
+run's values (`inputs`, as the reference's `Trace` holds them). Without them `requirement` refuses a gather, and
 `upper_bound` counts its whole column: an upper bound on what a step reads, which over-counts reads, so it is never
 credited as the requirement. `live(t)` is `boundary.py`'s `out(S_<t) ∩ in(S_≥t)` for `S_<t` the gates of the steps
 before `t`, and `upper_bound`'s `reads(t)` is `in(S_t)` less the run inputs that arrive at `t`;
@@ -37,19 +37,20 @@ the census's steps), or a WorkloadProgram's request calls, request r's step s (i
 request's executed prefix. A registered input is there before step 0, and a run input arrives at the first step whose
 gates read it.
 
-A block is complete when step `t` begins once every value a layout places in it was produced before `t` and `t` is at
-or after its first encoded read (`Layout.encoded`, `incomplete`), and the audit credits the live values in complete
-blocks (`credited`, `credited_reads`): memory-map/v1 writes a block once, complete and encoded, in the record of the
-step before its first encoded read (deferred residency), so a KV block later steps fill, or one whose append's coin is
-still out, is in no record yet. A block's values are credited from its first encoded read to their last structural
-reader, and a block whose values are dead before then is credited at no step. `store_matches` asks for the blocks of
-the credited values resident, and `plan_matches` for the complete blocks a step reads planned. Other blocks may be
-resident or planned (filler, dead or another workload's): they hold none of the credited values.
+A block is complete when step `t` begins once every value a store placement (`Store.Placement`) puts in it was produced
+before `t` and `t` is at or after its first encoded read (`Store.Placement.encoded`, `incomplete`), and the audit
+credits the live values in complete blocks (`credited`, `credited_reads`): memory-map/v1 writes a block once, complete
+and encoded, in the record of the step before its first encoded read (deferred residency), so a KV block later steps
+fill, or one whose append's coin is still out, is in no record yet. A block's values are credited from its first
+encoded read to their last structural reader, and a block whose values are dead before then is credited at no step.
+`store_matches` asks for the blocks of the credited values resident, and `plan_matches` for the complete blocks a step
+reads planned. Other blocks may be resident or planned (filler, dead or another workload's): they hold none of the
+credited values.
 
 `pack` places the values that are ever live in blocks of `block_bits`: the registered ones in canonical order from store
 index 0 (the registered store), then each step's newly live values in fresh blocks after them (the memory map's appends),
 each block written at its values' step and freed at their last structural reader. Each block is complete and encoded at
-its values' step (no deferral, `encoded` empty), so every live value is credited. That is the honest layout:
+its values' step (no deferral, `encoded` empty), so every live value is credited. That is the honest store placement:
 `store_matches` and `plan_matches` hold at every step.
 """
 
@@ -411,44 +412,45 @@ class Store:
         freed = {j for s, js in self.freed.items() if s < t for j in js}
         return frozenset((set(range(self.registered)) | written) - freed)
 
+    @dataclass(frozen=True)
+    class Placement:
+        """Values placed in the store, as `Accounting.Requirement.Store.Placement` holds them: each value's block (a store
+        index) and its bit offset there, and each block's first encoded read (`encoded`, the first step whose reads see it
+        under its append's coin: memory-map/v1's deferred residency), 0 for a block missing."""
 
-@dataclass(frozen=True)
-class Layout:
-    """Each value's block (a store index) and its bit offset there, and each block's first encoded read (`encoded`, the
-    first step whose reads see it under its append's coin: memory-map/v1's deferred residency), 0 for a block missing."""
+        block: Mapping[int, int]
+        offset: Mapping[int, int]
+        encoded: Mapping[int, int] = field(default_factory=dict)
 
-    block: Mapping[int, int]
-    offset: Mapping[int, int]
-    encoded: Mapping[int, int] = field(default_factory=dict)
+        def blocks(self, values) -> frozenset[int]:
+            return frozenset(self.block[v] for v in values)
 
-    def blocks(self, values) -> frozenset[int]:
-        return frozenset(self.block[v] for v in values)
+        def bits_in(self, req: Requirement, values, j: int) -> int:
+            return req.bits(v for v in values if self.block[v] == j)
 
-    def bits_in(self, req: Requirement, values, j: int) -> int:
-        return req.bits(v for v in values if self.block[v] == j)
+        def bits_at(self, req: Requirement, values, held) -> int:
+            return req.bits(v for v in values if self.block[v] in held)
 
-    def bits_at(self, req: Requirement, values, held) -> int:
-        return req.bits(v for v in values if self.block[v] in held)
+        def packs(self, req: Requirement, block_bits: int, values) -> bool:
+            """Each value lies within its block, and two in one block don't overlap."""
+            by_block: dict[int, list[tuple[int, int]]] = {}
+            for v in values:
+                if self.offset[v] + req.width[v] > block_bits:
+                    return False
+                by_block.setdefault(self.block[v], []).append((self.offset[v], self.offset[v] + req.width[v]))
+            return all(a[1] <= b[0] for ivs in by_block.values() for a, b in zip(sorted(ivs), sorted(ivs)[1:]))
 
-    def packs(self, req: Requirement, block_bits: int, values) -> bool:
-        """Each value lies within its block, and two in one block don't overlap."""
-        by_block: dict[int, list[tuple[int, int]]] = {}
-        for v in values:
-            if self.offset[v] + req.width[v] > block_bits:
-                return False
-            by_block.setdefault(self.block[v], []).append((self.offset[v], self.offset[v] + req.width[v]))
-        return all(a[1] <= b[0] for ivs in by_block.values() for a, b in zip(sorted(ivs), sorted(ivs)[1:]))
-
-    def carries(self, req: Requirement, store: Store, values) -> bool:
-        """Each value is its block's payload at its offset (a block with no payload is zeros, as `Store.payload` reads)."""
-        return all((store.payload.get(self.block[v], 0) >> self.offset[v]) % (1 << req.width[v]) == req.values[v]
-                   for v in values)
+        def carries(self, req: Requirement, store: Store, values) -> bool:
+            """Each value is its block's payload at its offset (a block with no payload is zeros, as `Store.payload`
+            reads)."""
+            return all((store.payload.get(self.block[v], 0) >> self.offset[v]) % (1 << req.width[v]) == req.values[v]
+                       for v in values)
 
 
-def pack(req: Requirement, block_bits: int = BLOCK_BITS) -> tuple[Layout, Store]:
-    """The honest layout and the store it implies: the registered values that are ever live packed from store index 0, then
-    each step's newly live values in fresh blocks, each block written at its values' step and freed at their last
-    structural reader."""
+def pack(req: Requirement, block_bits: int = BLOCK_BITS) -> tuple[Store.Placement, Store]:
+    """The honest store placement and the store it implies: the registered values that are ever live packed from store
+    index 0, then each step's newly live values in fresh blocks, each block written at its values' step and freed at their
+    last structural reader."""
     block: dict[int, int] = {}
     offset: dict[int, int] = {}
     groups = [sorted(v for v in req.registered if v in req.last)]
@@ -473,18 +475,19 @@ def pack(req: Requirement, block_bits: int = BLOCK_BITS) -> tuple[Layout, Store]
     for j in set(block.values()):
         f = max(req.last[v] for v, k in block.items() if k == j)
         freed.setdefault(f, set()).add(j)
-    return Layout(block, offset), Store(n_registered, written, {s: frozenset(js) for s, js in freed.items()}, payload)
+    return (Store.Placement(block, offset),
+            Store(n_registered, written, {s: frozenset(js) for s, js in freed.items()}, payload))
 
 
-def live_blocks(req: Requirement, layout: Layout, t: int) -> frozenset[int]:
+def live_blocks(req: Requirement, layout: Store.Placement, t: int) -> frozenset[int]:
     return layout.blocks(req.live(t))
 
 
-def read_blocks(req: Requirement, layout: Layout, t: int) -> frozenset[int]:
+def read_blocks(req: Requirement, layout: Store.Placement, t: int) -> frozenset[int]:
     return layout.blocks(req.reads(t))
 
 
-def incomplete(req: Requirement, layout: Layout, t: int) -> frozenset[int]:
+def incomplete(req: Requirement, layout: Store.Placement, t: int) -> frozenset[int]:
     """The blocks incomplete when step `t` begins, as `incomplete` defines them: those holding a value, not registered,
     produced at `t` or later or whose block's first encoded read is after `t`. A value `layout` doesn't place is in no
     block."""
@@ -493,19 +496,19 @@ def incomplete(req: Requirement, layout: Layout, t: int) -> frozenset[int]:
                      and (b >= t or layout.encoded.get(layout.block[v], 0) > t))
 
 
-def credited(req: Requirement, layout: Layout, t: int) -> frozenset[int]:
+def credited(req: Requirement, layout: Store.Placement, t: int) -> frozenset[int]:
     """The live values the audit credits when step `t` begins: those in complete blocks."""
     open_ = incomplete(req, layout, t)
     return frozenset(v for v in req.live(t) if layout.block[v] not in open_)
 
 
-def credited_reads(req: Requirement, layout: Layout, t: int) -> frozenset[int]:
+def credited_reads(req: Requirement, layout: Store.Placement, t: int) -> frozenset[int]:
     """The values step `t` reads from complete blocks."""
     open_ = incomplete(req, layout, t)
     return frozenset(v for v in req.reads(t) if layout.block[v] not in open_)
 
 
-def store_matches(req: Requirement, layout: Layout, store: Store, block_bits: int, t: int) -> bool:
+def store_matches(req: Requirement, layout: Store.Placement, store: Store, block_bits: int, t: int) -> bool:
     """`StoreMatches`: the credited values' blocks are resident (other blocks may be: filler, dead, another workload's),
     the live values are packed, and each credited value is in its block's payload (checked where the values are known)."""
     live, cred = req.live(t), credited(req, layout, t)
@@ -513,7 +516,7 @@ def store_matches(req: Requirement, layout: Layout, store: Store, block_bits: in
             and (not req.values or layout.carries(req, store, cred)))
 
 
-def plan_matches(req: Requirement, layout: Layout, plan, block_bits: int, t: int) -> bool:
+def plan_matches(req: Requirement, layout: Store.Placement, plan, block_bits: int, t: int) -> bool:
     """`PlanMatches`: the plan holds the complete blocks step `t` reads (and may hold filler), and the values read are
     packed."""
     return (layout.blocks(credited_reads(req, layout, t)) <= frozenset(plan)

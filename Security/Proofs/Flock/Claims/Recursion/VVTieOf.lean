@@ -6,7 +6,7 @@ import Proofs.Flock.C3.RegLevels.VRows
 import Proofs.Flock.VBridge.Family.Join
 
 /-!
-# `VVTie` at RECR's verifier values
+# `VVTie` at `Rows.resVRead`'s verifier values
 
 `vvTie_of`: at a dense compiled statement, `ResLower.VVTie` at `vvAt := Rows.resVRead`, wherever the staged
 `rec-residuals` statements are plain (`holoOf … = .ok false`). Check 5 (`checkResiduals`) loads the inner session and
@@ -197,7 +197,7 @@ theorem append_cancel_right' {a a' z : Array _root_.Flock.F128} (h : a ++ z = a'
 
 /-! ## The tie -/
 
-/-- **`VVTie` at RECR's verifier values** (`Rows.resVRead`), at a dense compiled statement whose coins run to at least
+/-- **`VVTie` at the read verifier values** (`Rows.resVRead`), at a dense compiled statement whose coins run to at least
 the deployed plain verifier's inner rounds, wherever its staged `rec-residuals` statements are plain. -/
 theorem vvTie_of {b : Brings} {Bk : Msg → ℕ} {s : ℕ} {x : Msg} {c : ℕ → Coin} {st0 : Claims.Recursion.CompiledStatement}
     (hst : parse x = some st0) (hd : Claims.Recursion.Form.Dense st0.form) (hB : RestRead.kI x ≤ Bk (xIOf x))
@@ -338,7 +338,7 @@ theorem staged_plain {untr : TrReader} {b : Brings} {s : ℕ} {x : Msg} {c : ℕ
   cases hr'
   exact FlockSoundness.Discharge.Recursion.checkCircuit_plain hc hd.1
 
-/-- **`VVTie` at RECR's verifier values, from the verifier's checks**: `vvTie_of`, its plain tables by
+/-- **`VVTie` at `Rows.resVRead`'s verifier values, from the verifier's checks**: `vvTie_of`, its plain tables by
 `staged_plain`. -/
 theorem vvTie_dense {b : Brings} {Bk : Msg → ℕ} {s : ℕ} {x : Msg} {c : ℕ → Coin} {st0 : Claims.Recursion.CompiledStatement}
     (hst : parse x = some st0) (hd : Claims.Recursion.Form.Dense st0.form) (hB : RestRead.kI x ≤ Bk (xIOf x)) :

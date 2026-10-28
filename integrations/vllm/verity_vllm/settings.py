@@ -1,136 +1,38 @@
-"""Every environment variable the integration reads, declared once: vLLM's ``vllm/envs.py``, for ``verity_vllm``.
+"""Every environment variable the integration reads, declared once: vLLM's ``vllm/envs.py``, for ``verity_vllm``.  `REGISTRY` is
+a `Registry` of ``verity/settings.py``, the machinery every registry in the tree is built on, which says what a `Setting` is,
+what its roles (`VALUE`, `WHERE`, `DEBUG`) mean and how a read parses; this module holds the integration's declarations and
+forwards its names to `REGISTRY`.
 
-A `Setting` has a name, a type (the parser of the variable's string), a default, a role and a doc.  The role says what the
-setting can change:
+A setting is ``value`` unless it is ``where`` (only where and how long things run: paths, devices, hosts, interpreters, run ids
+and liveness bounds) or ``debug`` (diagnostics that change nothing a run computes: dumps, traces, profiles, injected delays).
+`record` carries every value setting in force, and the value families (`FAMILIES`), so a value setting can't stay out of a run's
+record.  A credential's value never enters a record: `record` names it with `REDACTED` in place of its value, and so does
+`redact`, through which every other record that copies the environment by family passes it.
 
-* ``value`` (`VALUE`): what is computed or committed.  `record` carries every value setting in force, and the value families
-  (`FAMILIES`), so a value setting can't stay out of a run's record.  A setting is ``value`` unless it is one of the other two.
-  A credential's value never enters a record: `record` names it with `REDACTED` in place of its value, and so does `redact`,
-  through which every other record that copies the environment by family passes it.  A credential is a setting declared
-  ``secret``, or any variable whose name holds one of `SECRET_WORDS`, declared or not.
-* ``where`` (`WHERE`): only where and how long things run: paths, devices, hosts, interpreters, run ids and liveness bounds.
-* ``debug`` (`DEBUG`): diagnostics that change nothing a run computes: dumps, traces, profiles, injected delays.
-
-Read a setting as an attribute, ``settings.VERITY_WINDOW_MB`` (or `get` by name): its value parsed from the process environment
-at that read, never cached, or its default when the variable is unset or empty (`Setting.empty` keeps an empty string).  An
-undeclared name is an AttributeError.  A string that doesn't parse is a ValueError naming the variable.  A flag (`flag`)
-reads ``1``/``true``/``yes``/``on`` and ``0``/``false``/``no``/``off``, in any case, and refuses anything else.  `put`,
-`setdefault` and `unset` write a declared variable, for the processes this one starts and the libraries it loads.  `environ` is a
-copy of the whole environment, for code that passes it on.
+Read a setting as an attribute, ``settings.VERITY_WINDOW_MB`` (or `get` by name), and write one with `put`, `setdefault` and
+`unset`; `environ` is a copy of the whole environment, for code that passes it on.  `is_set` here counts an empty string as
+set, which `Registry.is_set` does only for a setting that keeps it (`Setting.empty`).
 
 `validate_environ` refuses a ``VERITY_*`` variable that neither this registry nor the rest of the tree reads (`ELSEWHERE`), naming
 it: ``verity-vllm`` runs it at startup, so a misspelt or retired setting fails the run instead of being ignored.
 
-The library reads and writes ``os.environ`` here and nowhere else (P7's ``environ`` kind, ``tests/lint/test_p07_declared_inputs.py``,
-whose allowlist holds the sites not yet moved here).  Stdlib only, and nothing from ``verity_vllm``: every layer may import it.
+The library reads and writes ``os.environ`` here, through `REGISTRY`, and nowhere else (P7's ``environ`` kind,
+``tests/lint/test_p07_declared_inputs.py``, whose allowlist holds the sites not yet moved here).  Nothing from ``verity_vllm``:
+every layer may import it.
 """
 from __future__ import annotations
 
-import hashlib
-import json
-import os
-from collections.abc import Callable, Iterable, Mapping
-from dataclasses import dataclass
+from collections.abc import Mapping
 from typing import Any
 
-VALUE, WHERE, DEBUG = "value", "where", "debug"
-ROLES = (VALUE, WHERE, DEBUG)
+from verity.settings import (DEBUG, VALUE, WHERE, Registry, Setting, csv, flag, int_or_zero, lowered, not_off, not_zero, number,
+                             one, paths, present, stripped, yes)
+from verity.settings import REDACTED as REDACTED, ROLES as ROLES, SECRET_WORDS as SECRET_WORDS, UnknownSetting as UnknownSetting
+
 RECORD_SCHEMA = "verity-vllm/settings/v1"
 
-_TRUE = ("1", "true", "yes", "on")
-_FALSE = ("0", "false", "no", "off")
-
-
-def flag(raw: str) -> bool:
-    v = raw.strip().lower()
-    if v in _TRUE:
-        return True
-    if v in _FALSE:
-        return False
-    raise ValueError(f"not a flag: one of {', '.join(_TRUE)} or {', '.join(_FALSE)}")
-
-
-def csv(raw: str) -> tuple[str, ...]:
-    """A comma-separated list, in order; empty items are dropped."""
-    return tuple(x for x in raw.split(",") if x)
-
-
-def paths(raw: str) -> tuple[str, ...]:
-    """A list of paths separated by ``os.pathsep``, as ``PATH`` is, in order; empty items are dropped."""
-    return tuple(x for x in raw.split(os.pathsep) if x)
-
-
-def stripped(raw: str) -> str:
-    return raw.strip()
-
-
-def lowered(raw: str) -> str:
-    return raw.strip().lower()
-
-
-def one(raw: str) -> bool:
-    """On exactly when the string is ``1``."""
-    return raw == "1"
-
-
-def yes(raw: str) -> bool | None:
-    """On when the stripped string is ``1``, ``true`` or ``yes``, off for anything else (``on`` and ``TRUE`` included); blank,
-    None (the reader's own default)."""
-    v = raw.strip()
-    return v in ("1", "true", "yes") if v else None
-
-
-def not_zero(raw: str) -> bool:
-    """On unless the stripped string is ``0`` (an A/B switch that reads ``false`` as on)."""
-    return raw.strip() != "0"
-
-
-def not_off(raw: str) -> bool:
-    """On unless the stripped string is ``0``, ``false`` or ``no``."""
-    return raw.strip() not in ("0", "false", "no")
-
-
-def present(raw: str) -> bool:
-    """On when set to anything non-empty, ``0`` included."""
-    return True
-
-
-def number(raw: str) -> float | None:
-    """A float; blank, None (the reader's own default)."""
-    return float(raw) if raw.strip() else None
-
-
-def int_or_zero(raw: str) -> int:
-    """An integer; blank, 0."""
-    return int(raw.strip() or 0)
-
-
-@dataclass(frozen=True)
-class Setting:
-    name: str
-    type: Callable[[str], Any]
-    default: Any
-    role: str
-    doc: str
-    #: an empty string is a value (``CUDA_VISIBLE_DEVICES=""`` hides every device), not unset
-    empty: bool = False
-    #: a credential, whatever its name says: `record` names it and never holds its value
-    secret: bool = False
-
-
-def _declare(*settings: Setting) -> dict[str, Setting]:
-    out: dict[str, Setting] = {}
-    for s in settings:
-        if s.name in out:
-            raise ValueError(f"{s.name} is declared twice")
-        if s.role not in ROLES:
-            raise ValueError(f"{s.name}: role {s.role!r} is not one of {ROLES}")
-        out[s.name] = s
-    return out
-
-
 S = Setting
-SETTINGS: dict[str, Setting] = _declare(
+_DECLARED = (
     # ---- the Commit's committers (commit/committer/)
     S("VERITY_ABL", csv, (), VALUE, "parts of the host committer turned off, comma-separated (an A/B ablation)"),
     S("VERITY_ARENA_GROW", yes, False, VALUE, "the host arena may grow when no block can ever fit a step (else it waits)"),
@@ -189,7 +91,11 @@ SETTINGS: dict[str, Setting] = _declare(
     # ---- the engine (engine/)
     S("VERITY_INDUCTOR_DIR_PER_PROCESS", flag, False, WHERE, "TORCHINDUCTOR_CACHE_DIR is this process's own (`engine.env.INDUCTOR_DIR_MARK`)"),
     S("VERITY_INT8_CREDITED_READ", str, None, VALUE, "MODE:PAGED_SO, the int8 attention's credited read every engine installs"),
+    S("VERITY_INT8_FUSED_PRODUCERS", flag, True, VALUE, "the int8 linears' norms and silu-and-mul quantize their outputs in the "
+      "same launch (`engine.int8_producers`)"),
     S("VERITY_INT8_PARTS", csv, (), VALUE, "the int8 parts a rank registers when it starts (`engine.int8_ranks`)"),
+    S("VERITY_ROPE_CACHE_FUSED", flag, True, VALUE, "the rope and the KV-cache write run as one launch a layer "
+      "(`engine.rope_cache`)"),
     S("VERITY_SPARSE_MLA_NUM_SPLITS", stripped, "0", VALUE, "FA3's sparse MLA splits: 1 pins one split, 0 leaves vLLM's heuristic; "
       "empty is refused", empty=True),
     # ---- Build, Match and the row (pipeline/, check/, query/)
@@ -302,57 +208,18 @@ VERITY_ROW_GUARD VERITY_TAP
 """.split())
 
 
-def setting(name: str) -> Setting:
-    s = SETTINGS.get(name)
-    if s is None:
-        raise AttributeError(f"{name} is not a declared setting (verity_vllm/settings.py)")
-    return s
+REGISTRY = Registry(__file__, ("VERITY_",), *_DECLARED, schema=RECORD_SCHEMA, families=FAMILIES, elsewhere=ELSEWHERE)
+SETTINGS = REGISTRY.settings
 
-
-def raw(name: str, environ: Mapping[str, str] | None = None) -> str | None:
-    """A declared setting's string as the environment holds it, None when unset."""
-    setting(name)
-    return (os.environ if environ is None else environ).get(name)
+setting, raw, get, put, unset, setdefault, environ = (REGISTRY.setting, REGISTRY.raw, REGISTRY.get, REGISTRY.put, REGISTRY.unset,
+                                                      REGISTRY.setdefault, REGISTRY.environ)
+role_of, is_secret, redact, record = REGISTRY.role_of, REGISTRY.is_secret, REGISTRY.redact, REGISTRY.record
+known, unknown, validate_environ = REGISTRY.known, REGISTRY.unknown, REGISTRY.validate_environ
 
 
 def is_set(name: str, environ: Mapping[str, str] | None = None) -> bool:
     """The variable is set (to anything, the empty string included)."""
     return raw(name, environ) is not None
-
-
-def get(name: str, environ: Mapping[str, str] | None = None) -> Any:
-    """A declared setting's value in ``environ`` (default the process environment)."""
-    s = setting(name)
-    v = (os.environ if environ is None else environ).get(name)
-    if v is None or (v == "" and not s.empty):
-        return s.default
-    try:
-        return s.type(v)
-    except ValueError as e:
-        raise ValueError(f"{name}={v!r}: {e}") from None
-
-
-def put(name: str, value: str) -> None:
-    """Set a declared variable in this process's environment, which the processes it starts inherit."""
-    setting(name)
-    os.environ[name] = value
-
-
-def unset(name: str) -> None:
-    setting(name)
-    os.environ.pop(name, None)
-
-
-def setdefault(name: str, value: str) -> str:
-    """Set a declared variable unless the environment holds it (empty included), as ``os.environ.setdefault``; its string."""
-    setting(name)
-    return os.environ.setdefault(name, value)
-
-
-def environ() -> dict[str, str]:
-    """A copy of the whole process environment, to pass on: a child process's environment, or an identity that keys on it.  Read
-    one variable through its declaration instead."""
-    return dict(os.environ)
 
 
 def __getattr__(name: str) -> Any:
@@ -363,63 +230,3 @@ def __getattr__(name: str) -> Any:
 
 def __dir__() -> list[str]:
     return sorted([*globals(), *SETTINGS])
-
-
-# ---------------------------------------------------------------------------------------------------------------- the record
-
-def role_of(name: str) -> str | None:
-    """A variable's role: its declaration's, else its family's; None for a variable the registry doesn't know."""
-    if name in SETTINGS:
-        return SETTINGS[name].role
-    return next((r for p, r in FAMILIES.items() if name.startswith(p)), None)
-
-
-#: A variable whose name holds one of these anywhere is a credential, declared or not (``VLLM_API_KEY``, ``HF_TOKEN``).
-SECRET_WORDS = ("KEY", "TOKEN", "SECRET", "PASSWORD", "CREDENTIAL")
-#: What `record` holds in place of a credential's value.
-REDACTED = "<redacted>"
-
-
-def is_secret(name: str) -> bool:
-    """A credential: declared ``secret``, or its name holds one of `SECRET_WORDS`."""
-    s = SETTINGS.get(name)
-    return bool(s and s.secret) or any(w in name.upper() for w in SECRET_WORDS)
-
-
-def redact(environ: Mapping[str, str]) -> dict[str, str]:
-    """``environ`` as a record holds it: each variable in its order, a credential (`is_secret`) by name, `REDACTED` in place of its
-    value.  `record` holds its values so, as does every record that copies a family of the environment
-    (``tests/test_record_credentials.py``)."""
-    return {k: REDACTED if is_secret(k) else v for k, v in environ.items()}
-
-
-def record(environ: Mapping[str, str] | None = None) -> dict[str, Any]:
-    """The value settings in force: every ``value`` variable that is set, as the environment holds it (a credential by name,
-    `REDACTED` in place of its value: `redact`), with the digest (SHA-512 of the canonical JSON of ``values``)."""
-    env = os.environ if environ is None else environ
-    values = redact({k: env[k] for k in sorted(env) if role_of(k) == VALUE})
-    blob = json.dumps(values, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode()
-    return {"schema": RECORD_SCHEMA, "values": values, "digest": hashlib.sha512(blob).hexdigest()}
-
-
-# ---------------------------------------------------------------------------------------------------------------- unknown names
-
-class UnknownSetting(ValueError):
-    """A ``VERITY_*`` variable nothing in the tree reads."""
-
-
-def known(name: str) -> bool:
-    return name in SETTINGS or name in ELSEWHERE or any(name.startswith(p) for p in ELSEWHERE if p.endswith("_"))
-
-
-def unknown(environ: Iterable[str] | None = None) -> list[str]:
-    return sorted(k for k in (os.environ if environ is None else environ) if k.startswith("VERITY_") and not known(k))
-
-
-def validate_environ(environ: Iterable[str] | None = None) -> None:
-    """Refuse the ``VERITY_*`` variables nothing in the tree reads, naming each."""
-    if bad := unknown(environ):
-        them = "them" if len(bad) > 1 else "it"
-        raise UnknownSetting(f"unknown setting{'s' * (len(bad) > 1)} {', '.join(bad)}: nothing in the tree reads {them}; unset "
-                             f"{them}, fix the name, or declare {them} in verity_vllm/settings.py (SETTINGS, or ELSEWHERE when "
-                             f"another part of the tree reads {them})")

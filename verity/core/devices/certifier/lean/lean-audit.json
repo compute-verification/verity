@@ -16,11 +16,11 @@
    "generate": ["python3", "scripts/difftest_vectors.py", "{repo}", "--out", "{out}"]
   },
   "CertifierDevice.IssuerDifftestMain": {
-   "why": "160 LMS keys (N = 64, W = 1 at height 1, and the toy N at W = 1, 2, 4) and calls to one issuer on each, in a certifier session of 32 bytes or of 31 or 33, on which Issuer.certify, threaded through the calls, does what the checkout's certificate.Issuer does, its coins giving each call's salt and its signer at the host's leaf: each parameters digest, the record head's encoding and digest, the salt, the certificate's fields and signature over the salted digest, verify under the key and after each tamper (a changed signature, field, deadline bit, salt, public key or session, and a changed link-window or key identifier signed again), the records it refuses (no head, a salt not 64 bytes, a leaf past 2^H, a session id not 32 bytes) and the reservations the host refuses, listed in refused; and Issuer.clock on the same issuer, under the salts its earlier signed clock certificates took, as certificate.Issuer.salted_clock, each egress link-window's clock certificate (the sync's clock digest salted by the coins' salt under the record certificate's message): the sync, reduced, the salt, the certificate's fields and signature, ClockCertificate.verify under the key and after each tamper (a changed sync, salt, signature, window, direction, digest, public key or session, refused, and a changed window, direction or key identifier signed again, of which only the re-signed window, a valid clock certificate of that window, verifies), a record certificate passed as a clock under its salt refused, and the salts, syncs and link-windows it refuses (a salt not 64 bytes or one an earlier signed clock certificate took, but not one only a record or a refused clock had, δ, p or q past a u64, a window past a u64, a leaf past 2^H)",
+   "why": "160 LMS keys (N = 64, W = 1 at height 1, and the toy N at W = 1, 2, 4) and calls to one issuer on each, in a certifier session of 32 bytes or of 31 or 33, on which Issuer.certify, threaded through the calls, does what the checkout's certificate.Issuer does, its coins giving each call's salt and its signer at the host's leaf: each parameters digest, the record head's encoding and digest, the salt, the certificate's fields and signature over the salted digest, verify under the key and after each tamper (a changed signature, field, deadline bit, salt, public key or session, and a changed link-window or key identifier signed again), the records it refuses (no head, a salt not 64 bytes, a leaf past 2^H, a session id not 32 bytes), and the records whose status isn't complete, which it signs nothing for, and the reservations the host refuses, listed in refused; and Issuer.clock on the same issuer, under the salts its earlier signed clock certificates took, as certificate.Issuer.salted_clock, each egress link-window's clock certificate (the sync's clock digest salted by the coins' salt under the record certificate's message): the sync, reduced, the salt, the certificate's fields and signature, ClockCertificate.verify under the key and after each tamper (a changed sync, salt, signature, window, direction, digest, public key or session, refused, and a changed window, direction or key identifier signed again, of which only the re-signed window, a valid clock certificate of that window, verifies), a record certificate passed as a clock under its salt refused, and the salts, syncs and link-windows it refuses (a salt not 64 bytes or one an earlier signed clock certificate took, but not one only a record or a refused clock had, δ, p or q past a u64, a window past a u64, a leaf past 2^H)",
    "args": ["{issuer/instances.jsonl}", "{issuer/python.jsonl}", "160"],
    "data": {
     "issuer/instances.jsonl": "07d587c9c83a21aca5a75831042b9ed7f6d8b1ae991ae7f95850fbc3b0d7d713",
-    "issuer/python.jsonl": "870052d6fff97bfa2815c014909ab45b99d292bc4e653175dd0ce7299cda872a"
+    "issuer/python.jsonl": "406b38efc88ead6a73ca6724efe6f4f6078e472d4a1924545342a786b675d1c6"
    },
    "generate": ["python3", "scripts/issuer_vectors.py", "{repo}", "--out", "{out}"]
   }
@@ -62,9 +62,9 @@
    "why": "the driver: the device over core_world's World, with Lean core's IO and channels, nothing of Security"
   },
   "CertifierDevice.Issuer": {
-   "imports": ["CertifierDevice.Driver", "Lms.Sign"],
+   "imports": ["CertifierDevice.Driver", "Lms.Sign", "NetworkCheck.Check"],
    "except": [],
-   "why": "the issuer is code: the driver's World and lms's signing, which reuses network_check's encodings; no Mathlib and nothing of Security"
+   "why": "the issuer is code: the driver's World, lms's signing and network_check's encodings and certificate; no Mathlib and nothing of Security"
   }
  },
  "dependencies": {

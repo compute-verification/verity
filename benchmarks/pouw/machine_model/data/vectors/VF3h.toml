@@ -1,8 +1,7 @@
-# VF3h: Every select-type and returning atomic or reduction family at 32 MACs a word written (RS-W′ round 7).
+# VF3h: Every select-type and returning atomic or reduction family at 32 MACs a word written.
 name = "VF3h"
 epoch = "VF3h"
-summary = "Every select-type and returning atomic or reduction family at 32 MACs a word written (RS-W′ round 7)."
-note = "note:20261016T1500Z-draft-rs-pi32-atomics"
+summary = "Every select-type and returning atomic or reduction family at 32 MACs a word written."
 rows = [
     "issue", "M", "R1", "F", "VMNX", "H", "I", "A",
     "F2FS", "XU", "R6r", "LDSi", "R6w", "LDG", "L2red", "UP",
@@ -28,9 +27,8 @@ credits = [
     ["REDAS64", 2048], ["SURED", 1024],
 ]
 
-[published]  # as the legacy scripts printed them: τ, τ at 600 W and U/F_low to 4 places, the margin to 3
+[published]  # as the legacy scripts printed them: τ and U/F_low to 4 places, the margin to 3
 tau = 0.1246
-tau_600w = 0.0975
 uf_low = 1.0938
 margin = 1.935
 

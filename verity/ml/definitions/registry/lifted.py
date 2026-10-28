@@ -1,50 +1,53 @@
 """The ⊥-lifted, fully padded Definitions — **lifted-padded**.
 
-Two rules hold for them:
-(a) total relation behaviour for noncanonical `1‖nonzero` words per operation class (PAD-01 CLOSED: `INV_w`, never normalized
-before commitment) and (b) TRUE widened widths (PAD-02 CLOSED: no activity/payload split, real widths in admissibility and summaries);
-and DP-pad-02 holds (PAD-05 CLOSED: `LAG` a declared specialization parameter, one rule with moe/GP-01, never inferred from a trace).
+Three rules hold for them:
+(a) the INV rule: every operation class is total on the noncanonical `1‖nonzero` words, any such operand gives `INV_w`,
+nothing is normalized before commitment, and an observable boundary rejects such a word by name; (b) widths are the TRUE widened widths: no activity/payload split, the real widths in admissibility
+and summaries; (c) `LAG` is a declared specialization parameter, read through the one rule the workload Program uses, never
+inferred from a trace.
 Nothing here edits a frozen Definition: every lifted Definition is registered under a **new** id (`Lifted[<id>]_v1`,
 `LSelect<w>_v1`, …) with its own spec string and digest; the originals are untouched and are what the lifted
 evaluators call for the payload arithmetic.  Every lifted result carries `LIFTED_RULES_VERSION`.
 
-Encodings (AGREED A3): a `w`-bit domain is represented in `w+1` bits, the tag is bit `w`:
+Encodings: a `w`-bit domain is represented in `w+1` bits, the tag is bit `w`:
 
     enc(Active(v)) = v          (tag 0, payload v)        v ∈ [0, 2^w)
     enc(⊥)         = 2^w        (tag 1, payload 0)
     valid_w(x)     = tag(x) = 0 ∨ payload(x) = 0          the 2^w + 1 canonical patterns
-    INV_w          = 2^w + 1    (tag 1, payload 0…01)     AGREED: the one noncanonical word every lifted
+    INV_w          = 2^w + 1    (tag 1, payload 0…01)     the one noncanonical word every lifted
                                                            primitive maps any noncanonical operand to; never an honest value
 
 Three classes of lifted primitive:
 
-* **strict** (§3.1, the default; AGREED A5 "ordinary arithmetic"): `lifted_prim(F)` wraps the frozen evaluator mechanically —
+* **strict** (the default, for ordinary arithmetic): `lifted_prim(F)` wraps the frozen evaluator mechanically —
   any invalid operand → `INV`, else any ⊥ operand → ⊥, else `0‖F(payloads)` bit for bit.  No hand-written semantics per primitive.
-* **specified** (§3.2, the closed list; AGREED A5 "selection, indexing, batching, state"): `LSelect<w>`, `LIsActive<w>`,
+* **specified** (the closed list, for selection, indexing, batching and state): `LSelect<w>`, `LIsActive<w>`,
   `LBot<w>`, `LGatherRow<w>x<N>`, `LStepLive<E>`, the Continuation_v1 members `LIsEOS<E>` / `LEmitNext[H]`  and
   `LFixedSelect<E>x<w>` (FixedSelect among computed slot outputs) — hand-authored relations below, each with
   the reason it is not strict.  Nothing else is lifted non-strictly (`test_lifted_tiny.py::test_specified_list_is_closed`).
-* **constants / inputs** (§2): `Const<w>[bits]` lifts to the existing `Const<w+1>[0‖bits]` (`b1.const(w+1, bits)`, tag 0 by
+* **constants / inputs**: `Const<w>[bits]` lifts to the existing `Const<w+1>[0‖bits]` (`b1.const(w+1, bits)`, tag 0 by
   construction); `Input<w>` lifts to `Input<w+1>` (the Program lowers it from the lifted parameter type); prescribed inputs are
   checked `tag = 0 ∧ valid` at the boundary (`check_boundary`).
 
-Composites (§3.3) are lifted by **node replay** (`lift_def`): the lifted body is the original body with every callee replaced by
+Composites are lifted by **node replay** (`lift_def`): the lifted body is the original body with every callee replaced by
 its lifted Definition and every type lifted — same node indices, same operand runs, same gate count, so canonical references
 are unchanged modulo spec ids (address stability holds by construction, and is tested).  The evaluator never
-shortcuts: it evaluates the denoted circuit gate by gate, so the §3.3 strictness/payload-agreement theorems are *measured* on
+shortcuts: it evaluates the denoted circuit gate by gate, so the strictness/payload-agreement theorems are *measured* on
 each lifted composite of the fixture rather than assumed.
 
-`LServe_v1` (§4) is the lifted padded serving Program on the `Serve_v2` skeleton: no live array; the activity guard sits on each
+`LServe_v1` is the lifted padded serving Program on the `Serve_v2` skeleton: no live array; the activity guard sits on each
 step's **input** token (`GUARD = "in"`: `tok_in_s = LSelect(LStepLive(out[s−1], eos_set), out[s−1], LBot<32>)`, `out[s] = y_s`) —
-DP-pad-01 option (a), a labelled candidate: the spec's letter (§4.2, output guard) leaves step `a_r` half-Active and contradicts its
-own §4.3/§6/§7; the cache append is unguarded (an inactive step's new K/V row is ⊥ by strictness).  The
+the input guard, a labelled candidate: a guard on the step's output would leave step `a_r` half-Active, against the served-prefix
+rule; the cache append is unguarded (an inactive step's new K/V row is ⊥ by strictness).  The
 guard is two root-body nodes per step (`s=<s>/live`, `s=<s>/tok_in`) plus one `LBot32` and `|EOS|` constants — extra nodes the
-unlifted skeleton does not have; how address stability reads across them is PAD-03, an open question, not a silent fix.
-`activity_prefix` / `served_count` / `check_served_prefix` / `assign_inactive` are §7's rule as pure functions on committed token
-arrays (AGREED of record).  Widths: `lifted_width_summary` / `lifted_width_admissibility` report
-the TRUE lifted width `Σ (w+1)` and run the untouched `partition.validate_width` at the lifted parameter `W_MAX_LIFTED`; the earlier
-`validate_width_lifted` (payload rule + `n_max`) is WITHDRAWN.  `LAG`: `lag_from_header` (the attestation) and
-`declared_lag_of_row` (the Build's declaration) both go through GP-01's one rule (`_lag_rule`); the lifted tool's R0 needs both, equal.
+unlifted skeleton does not have; how address stability reads across them (the original nodes' addresses modulo the guard nodes)
+is an open question, not a silent fix.
+`activity_prefix` / `served_count` / `check_served_prefix` / `assign_inactive` are the served-prefix rule as pure functions on
+committed token arrays.  Widths: `lifted_width_summary` / `lifted_width_admissibility` report
+the TRUE lifted width `Σ (w+1)` and run the untouched `partition.validate_width` at the lifted parameter `W_MAX_LIFTED`; there is
+no payload-only width rule (no `validate_width_lifted`, no `n_max`).  `LAG`: `lag_from_header` (the attestation) and
+`declared_lag_of_row` (the Build's declaration) both go through the workload Program's one rule (`_lag_rule`, in vLLM's
+`check/match/chronology.py`); the lifted tool's R0 needs both, equal.
 """
 
 from __future__ import annotations
@@ -56,24 +59,23 @@ from verity.ml.circuits.defs import (REGISTRY, Builder, CompositeDefinition, Fun
                     composite)
 from verity.ml.circuits.refs import Affine, Coll, Concat, Explicit, Refs, Strided, coll_concat, concat, tuple_of
 from verity.ml.circuits.types import Array, Record, Tuple, Type, Value
-from verity.ml.definitions.evidence import EVIDENCE
 from verity.ml.definitions.registry import b1, operand_widths
 
 LIFTING_VERSION = "v1"  # the `lifting: v1` the derive report names
-LABEL = "lifted-padded"  # every result of this lane is labelled so, never a panel / active-reference row
+LABEL = "lifted-padded"  # every result of this module is labelled so, never a panel / active-reference row
 
 # ---------------------------------------------------------------------------------------------------------
-# encodings (§2) and the PAD-01 candidate (§9a)
+# encodings and the INV rule
 # ---------------------------------------------------------------------------------------------------------
 
 
 def enc_bot(w: int) -> int:
-    """`enc(⊥)` at payload width `w`: `1‖0^w` = `2^w` (AGREED A3)."""
+    """`enc(⊥)` at payload width `w`: `1‖0^w` = `2^w`."""
     return 1 << w
 
 
 def inv(w: int) -> int:
-    """`INV_w = 1‖0^{w−1}‖1` = `2^w + 1` — CANDIDATE PAD-01: the single fixed total extension for invalid operands.  A name
+    """`INV_w = 1‖0^{w−1}‖1` = `2^w + 1` — the INV rule: the single fixed total extension for invalid operands.  A name
     for "error", never an honest encoding of anything."""
     return (1 << w) | 1
 
@@ -111,7 +113,7 @@ def enc_active(w: int, v: int) -> int:
 
 
 class BoundaryFailure(ValueError):
-    """A named rejection at an observable boundary (PAD-01 rule 1): `(what, w, x, reason)`."""
+    """A named rejection at an observable boundary (the INV rule's boundary half): `(what, w, x, reason)`."""
 
     def __init__(self, what: str, w: int, x: int, reason: str) -> None:
         super().__init__(f"{what}: {w + 1}-bit word {x:#x} rejected: {reason}")
@@ -119,7 +121,7 @@ class BoundaryFailure(ValueError):
 
 
 def check_boundary(w: int, x: int, *, what: str = "value", prescribed: bool = False, index_range: int | None = None) -> int:
-    """The validity check every observable boundary performs (PAD-01 rule 1): a `1‖nonzero` word is rejected by
+    """The validity check every observable boundary performs (the INV rule's boundary half): a `1‖nonzero` word is rejected by
     name; a **prescribed** input must additionally be Active; an index-valued input is range-checked here
     (range is a boundary fact).  Returns `x` unchanged when it passes."""
     if not in_width(w, x):
@@ -236,7 +238,7 @@ def _gather_families() -> dict[int, Callable[[int], PrimitiveDefinition]]:
 
 
 def _classify(ops: Sequence[int], widths: Iterable[int]) -> int:
-    """PAD-01 / §3.1 operand scan: 2 = some operand invalid (→ INV), 1 = all valid and some ⊥ (→ ⊥), 0 = all Active."""
+    """The strict operand scan: 2 = some operand invalid (→ INV), 1 = all valid and some ⊥ (→ ⊥), 0 = all Active."""
     saw_bot = False
     for x, w in zip(ops, widths):
         t = x >> w
@@ -334,7 +336,7 @@ def _enable_wrap(lp: PrimitiveDefinition, original_id: str, *, reason: str) -> P
         return _inv
 
     ep = PrimitiveDefinition(f"Lifted[{original_id}]", LIFT_VERSION, tuple(lp.params) + ((ENABLE_PARAM, ENABLE_T),), Value(wout + 1), ev,
-                             doc=f"enabled lift of {original_id} (LIFTING-SPEC v0.6 A9.3): enable=1 → {lp.id}'s relation; enable=0 → ⊥ whatever "
+                             doc=f"enabled lift of {original_id}: enable=1 → {lp.id}'s relation; enable=0 → ⊥ whatever "
                                  f"the operands; other enable words → INV. {reason}", conformance="protocol-defined", tables=lp.tables)
     ep.lifted_from = getattr(lp, "lifted_from", None) or lp  # type: ignore[attr-defined]
     ep.lift_class = getattr(lp, "lift_class", "strict")  # type: ignore[attr-defined]
@@ -394,8 +396,8 @@ def _register_specified(p: PrimitiveDefinition, reason: str) -> PrimitiveDefinit
 
 def l_select(w: int) -> PrimitiveDefinition:
     """`LSelect<w>_v1(c: Value<2>, a, b: Value<w+1>) -> Value<w+1>`: `c = Active(1) → a`; `c = Active(0) → b`; `c = ⊥ → ⊥`;
-    any invalid operand (including the **untaken** branch) → `INV_w` (PAD-01 rule 2, "untaken branch poisons" —
-    conservative).  Not strict because `Select(true, 7, ⊥) = 7` is the intended relation (AGREED A5)."""
+    any invalid operand (including the **untaken** branch) → `INV_w` (the INV rule: an INV operand anywhere gives INV, so the
+    untaken branch poisons — conservative).  Not strict because `Select(true, 7, ⊥) = 7` is the intended relation."""
     p = _SELECTS.get(w)
     if p is None:
         bot_w, inv_w = enc_bot(w), inv(w)
@@ -488,7 +490,7 @@ def l_gather_row(w: int, N: int, oor_payload: int | None = None) -> PrimitiveDef
     """`LGatherRow<w>x<N>_v1(idx: Value<33>, rows: Array<N, Value<w+1>>) -> Value<w+1>`: `idx` ⊥ → ⊥; `idx`
     Active (in range) → `rows[idx]` — which may itself be ⊥ (a read of an inactive row is that row's ⊥, not an error, and a ⊥
     row elsewhere does **not** poison the read: this is why it is not strict); any invalid operand anywhere (index or any
-    row, PAD-01 rule 2 taken literally) → `INV_w`.  Total extension on an Active **out-of-range** index: `0‖oor` — the
+    row, the INV rule taken literally) → `INV_w`.  Total extension on an Active **out-of-range** index: `0‖oor` — the
     original gather's registered total extension, **read from the original** (`GatherBf16x{N}`: 0x7FFF; `GatherF32x{N}`:
     0x7FC00000), lifted — never `INV` (range is a boundary fact, checked by `check_boundary(index_range=N)`; no
     valid operand maps to INV).  This id-only entry (the codec's lazy resolver, tests) constructs the registered original
@@ -532,7 +534,7 @@ def _l_gather_row(w: int, N: int, oor_payload: int, original_id: str) -> Primiti
             idx = get(0)
             if _classify((idx,), (32,)) == 2:
                 return _inv
-            for j in range(_N):  # PAD-01 rule 2, literally: an INV anywhere among the operands is INV (cost noted in PAD-01)
+            for j in range(_N):  # the INV rule, literally: an INV anywhere among the operands is INV, at the cost of reading every row
                 if _classify((get(1 + j),), (_w,)) == 2:
                     return _inv
             t = _index(idx)
@@ -553,8 +555,8 @@ _FIXED_SELECTS: dict[tuple[int, int], PrimitiveDefinition] = {}
 
 
 def l_fixed_select(E: int, w: int) -> PrimitiveDefinition:
-    """`LFixedSelect<E>x<w>_v1(r: Value<33>, z: Array<E, Value<w+1>>) -> Value<w+1>` — PADDING-DECISION §3 `FixedSelect(r_j, z_0..z_{E-1})`
-    : the fixed selection among **computed** lifted values (the E expert slots' outputs) by a
+    """`LFixedSelect<E>x<w>_v1(r: Value<33>, z: Array<E, Value<w+1>>) -> Value<w+1>` — `FixedSelect(r_j, z_0..z_{E-1})`,
+    the fixed selection among **computed** lifted values (the E expert slots' outputs) by a
     **computed** route id.  `r` ⊥ → ⊥ (an inactive token selects nothing); `r` Active with `0 ≤ r < E` → `z_r` bit for bit, INCLUDING `z_r = ⊥`
     (selecting an inactive slot yields that slot's ⊥ — the check that then fails is the slot's, not a wrap); an unselected ⊥ row has no
     effect (why it is not strict); `r` Active OUT OF RANGE → `INV_w`, a NAMED relation failure (never a silent wrap, never a default slot — unlike `LGatherRow`, which reads the ORIGINAL gather family's registered total extension
@@ -587,7 +589,7 @@ def l_fixed_select(E: int, w: int) -> PrimitiveDefinition:
             r = get(0)
             if _classify((r,), (32,)) == 2:
                 return _inv
-            for j in range(_E):  # PAD-01 rule 2: an INV anywhere among the operands is INV
+            for j in range(_E):  # the INV rule: an INV anywhere among the operands is INV
                 if _classify((get(1 + j),), (_w,)) == 2:
                     return _inv
             t = _route(r)
@@ -610,7 +612,7 @@ def l_step_live(E: int) -> PrimitiveDefinition:
     `tag(prev_tok) = 0 ∧ payload(prev_tok) ∉ eos_set`; `Active(0)` otherwise (including `prev_tok = ⊥`); never ⊥; any
     invalid operand → `INV_1`.  The continuation relation: activity of step `s+1` is a function of the **value** sampled at
     step `s`.  `eos_set` is a structural Const array (always Active in any Program built here); the total extension for a ⊥
-    member — it never matches — is a totality corner no honest Program reaches, recorded in LIFTING-STATUS §2 (note N1)."""
+    member — it never matches — is a totality corner no honest Program reaches."""
     p = _STEP_LIVE.get(E)
     if p is None:
         def ev(prev: int, *eos: int, _E=E) -> int:
@@ -742,17 +744,17 @@ class ContinuationChain:
         return Coll(Array(self.cap, Value(33)), concat([o.refs for o in self.outs]))
 
 
-# --- CANDIDATE PAD-04: the S-migration operand -----------------------------------------
+# --- CANDIDATE: the split count's operand -----------------------------------------
 
 SPLITS_MAX_BATCH = 64  # `topp_geometry.SPLIT_MAX_BATCH`: above it vLLM serves the sampler batch by the sort path (no `_apply_topp_split`)
-N_LIVE_BITS = 7  # the unlifted count `n_live_t ∈ [0, 64]` as a `Value<7>` (a CANDIDATE width — PAD-04)
+N_LIVE_BITS = 7  # the unlifted count `n_live_t ∈ [0, 64]` as a `Value<7>` (a candidate width, with `LSplitsForSMS`)
 SPLITS_BITS = 6  # stoch's `SPLITS_FOR_V1_WIDTH`: S ∈ {1, 2, 4, 8, 16, 32}
 _SPLITS_FOR: dict[int, PrimitiveDefinition] = {}
 _L_SPLITS_FOR: dict[int, PrimitiveDefinition] = {}
 
 
 def _splits_for_v1(n_live: int, num_sms: int) -> int:
-    """stoch's `SplitsFor_v1` (lane/r16-stoch c1ec0aea4 `topp_geometry.splits_for_v1`) when the tree has it; otherwise the same
+    """`SplitsFor_v1` (`topp_geometry.splits_for_v1`) when the tree has it; otherwise the same
     domain rule (verbatim) over the base tree's `splits_for` loop.  Refuses by name outside `1 ≤ n_live ≤ 64`, `num_SMs ≥ 1`."""
     from verity.ml.definitions.registry import topp_geometry
     f = getattr(topp_geometry, "splits_for_v1", None)
@@ -785,7 +787,7 @@ def splits_for_prim(num_sms: int) -> PrimitiveDefinition:
 
 
 def l_splits_for(num_sms: int) -> PrimitiveDefinition:
-    """CANDIDATE PAD-04 — `LSplitsForSMS<SMS>_v1(n_live: Value<8>) -> Value<7>`, proposed SIXTH member of the closed specified
+    """CANDIDATE — `LSplitsForSMS<SMS>_v1(n_live: Value<8>) -> Value<7>`, proposed SIXTH member of the closed specified
     class.  Rule: `INV` operand → `INV_6`; `⊥` operand → `⊥` (strictness; an honest Program never
     produces a ⊥ count — `n_live_t = Σ_r LIsActive(tok_in_{r,t})` is Active by construction); **`Active(0)` → `⊥`** — the
     specified exception and a new KIND of rule (an Active operand mapped to ⊥): no live row ⇒ no sampler launch ⇒ no sampling
@@ -817,7 +819,7 @@ def l_splits_for(num_sms: int) -> PrimitiveDefinition:
                                 doc=l_splits_for.__doc__ or "", conformance="protocol-defined")
         p.lifted_from = orig  # type: ignore[attr-defined]
         p.candidate = "PAD-04"  # type: ignore[attr-defined]
-        _L_SPLITS_FOR[int(num_sms)] = _register_specified(p, "state/batching: the empty sampler batch has no event (CANDIDATE PAD-04)")
+        _L_SPLITS_FOR[int(num_sms)] = _register_specified(p, "state/batching: the empty sampler batch has no event (a candidate)")
     return p
 
 
@@ -831,13 +833,13 @@ def assert_splits_domain(n_requests: int) -> int:
 
 
 def specified_ids() -> frozenset[str]:
-    """The closed list of specified-class primitive ids materialised so far (`LSplitsForSMS<SMS>_v1` is the PAD-04 candidate)."""
+    """The closed list of specified-class primitive ids materialised so far (`LSplitsForSMS<SMS>_v1` is a candidate member)."""
     return frozenset(_SPECIFIED_IDS)
 
 
 # ---------------------------------------------------------------------------------------------------------
-# G1 — the ORDINARY class (SCOPE-NOTE §6: "weights and other values that never become inactive keep
-# their ordinary representations"): a PRESCRIBED input of the Program (a weight, the prompt, the EOS set, an `Input<w>` gate -- a value
+# G1 — the ORDINARY class (weights and other values that never become inactive keep
+# their ordinary representations): a PRESCRIBED input of the Program (a weight, the prompt, the EOS set, an `Input<w>` gate -- a value
 # produced by no body) keeps `Value<w>`; every COMPUTED node of a padded Program is lifted (`Value<w+1>`; its tag is identically 0 when the
 # producing call is always enabled).  A lifted gate reads an ordinary operand through the SAME relation with that operand declared at its
 # ordinary type (`with_ordinary`: an ordinary word `v < 2^w` IS the Active word `0‖v` numerically -- the evaluators are class-agnostic).
@@ -905,7 +907,7 @@ def with_ordinary(p: PrimitiveDefinition, mask: int) -> PrimitiveDefinition:
         else:
             params.append((nm, t))
     op = _OrdinaryOperandsPrimitive(p.id, p.version, tuple(params), p.ret, p.evaluate,
-                                    doc=f"{p.id} with ordinary (unwidened) operands {mask:#x} (LIFTING-SPEC v0.7 A11 / G1): the same relation",
+                                    doc=f"{p.id} with ordinary (unwidened) operands {mask:#x} (the ORDINARY class): the same relation",
                                     conformance=p.conformance, register=False, tables=p.tables)
     op.ord = mask
     for attr in ("lifted_from", "lift_class", "lift_enabled", "lifted_v1", "lift_reason", "family"):
@@ -922,7 +924,7 @@ _ORD_KEY_RE = re.compile(r",?ORD=\d+")
 
 def unlifted_id(spec: str) -> str:
     """The unlifted spec id of a padded-v1 id: `Lifted[X_vN]_v2{K=1,ORD=2}` -> `X_vN{K=1}`, `Lifted[F_v1]_v2{ORD=1}` -> `F_v1`,
-    `LStepLive1_v1{ORD=2}` -> `LStepLive1_v1`; anything else unchanged (the one rule for `unlift`, PAD-03 and Lift(Q))."""
+    `LStepLive1_v1{ORD=2}` -> `LStepLive1_v1`; anything else unchanged (the one rule for `unlift`, address stability and Lift(Q))."""
     m = re.match(r"^Lifted\[(.+)\]_v\d+(\{.*)?$", spec, re.S)
     inner, rest = (m.group(1), m.group(2) or "") if m else (spec.split("{", 1)[0], ("{" + spec.split("{", 1)[1]) if "{" in spec else "")
     rest = _ORD_KEY_RE.sub("", rest)
@@ -1080,16 +1082,17 @@ _HAND_LIFTS: dict[str, CompositeDefinition] = {}  # unlifted composite id (Name_
 
 
 def register_hand_lift(original: CompositeDefinition, lifted: CompositeDefinition) -> CompositeDefinition:
-    """MOE-PAD route A: declare `lifted` as THE padded-v1 lift of the composite `original` — honoured on BOTH paths,
+    """The padded MoE's hand lift: declare `lifted` as THE padded-v1 lift of the composite `original` — honoured on BOTH paths,
     `lift_composite`/`lift_callee` (registry composites, the python-body path) and `_lift_decoded`/`lift_def` (descriptor-decoded
-    specializations: GP-01 `request_component`, `codec.decode_program`) — instead of the node replay `Lifted[original]_v2`.  Use: a fixed-slot
-    twin `MoeFfnFixed_v1{E,TOPK,VPT,H,I}` (router -> ALL E expert bodies -> select by the router ids -> MoeSum; value-equal to MOE-01 on Active
-    inputs) whose strict replay would be an all-Active Program, and whose padded meaning (the unselected slots DISABLED, bot by A9.3) is the
+    specializations: the workload's `request_component`, `codec.decode_program`) — instead of the node replay `Lifted[original]_v2`.  Use: a
+    fixed-slot twin `MoeFfnFixed_v1{E,TOPK,VPT,H,I}` (router -> ALL E expert bodies -> select by the router ids -> MoeSum; value-equal to the
+    indexed-read construction on Active inputs) whose strict replay would be an all-Active Program, and whose padded meaning (the unselected
+    slots DISABLED, ⊥ since a disabled call is ⊥) is the
     hand-authored `LMoeFfn_v1`.  SOUNDNESS, by name, at registration: same statics (names; a binding of the twin is a binding of the lift);
     neither is a `Lifted[...]` object; one lift per id (a second registration with a different object is refused).  Per BINDING, at
     `lift_def`/`lift_composite`-bind time (`_check_hand_lift`): the lift's signature == `lift_type` of the twin's params + `("enable",
     Value<2>)` LAST (B7) and `lift_type` of the twin's return — a lift whose interface is not the twin's lifted interface is refused by name
-    (it could not stand where `Lifted[twin]_v2` stands: PAD-03 correspondence, `Lift(Q)` id matching modulo the wrapper).  The lift's BODY
+    (it could not stand where `Lifted[twin]_v2` stands: address correspondence, `Lift(Q)` id matching modulo the wrapper).  The lift's BODY
     is the author's (the padded MoE's construction, with its N-pad negatives) — this hook does not check it."""
     if not isinstance(original, CompositeDefinition) or not isinstance(lifted, CompositeDefinition):
         raise TypeError(f"register_hand_lift: composites only ({type(original).__name__}, {type(lifted).__name__})")
@@ -1135,7 +1138,7 @@ def _check_hand_lift(lsp: SpecializedDefinition, params_u: Sequence[tuple[str, T
     if not ok:
         want = tuple((n, lift_type(t)) for n, t in params_u) + ((ENABLE_PARAM, ENABLE_T),)
         raise TypeError(f"hand lift {lsp.id} of {oid}: signature {params_l} -> {ret_l} is not the twin's lifted interface {want} -> "
-                        f"{lift_type(ret_u)} (LIFTING-SPEC v0.7 B7/A11: each param lifted or ordinary, ('enable', Value<2>) last)")
+                        f"{lift_type(ret_u)} (each param lifted or ordinary, ('enable', Value<2>) last)")
     if requested is not None:
         for (nm, _), c_hand, c_req in zip(params_u, classes, requested):
             if c_hand == ORDINARY and c_req == LIFTED:
@@ -1181,7 +1184,7 @@ def lift_composite(defn: CompositeDefinition) -> CompositeDefinition:
         return replay_lifted(B, tw.body, args[:-1], enable=args[-1], arg_classes=cls)
 
     ld = CompositeDefinition(f"Lifted[{defn.id}]", LIFT_VERSION, tuple(defn.statics) + (ORD_STATIC,), sig, body,
-                             doc=f"enabled ⊥-lift of {defn.id} (LIFTING-SPEC v0.7 A9/B7/A11): same body, every callee lifted, the call's enable "
+                             doc=f"enabled ⊥-lift of {defn.id}: same body, every callee lifted, the call's enable "
                                  f"threaded to every node it owns; ORD = the mask of its ordinary (unwidened) parameters", conformance="protocol-defined")
     ld.lifted_from = defn  # type: ignore[attr-defined]
     _LIFTED_COMPOSITES[defn.id] = ld
@@ -1194,7 +1197,7 @@ _LIFTED_DECODED_DEFS: dict[str, CompositeDefinition] = {}
 
 
 def _is_decoded(sp: SpecializedDefinition) -> bool:
-    """A specialization materialised by `codec.decode_program` (or GP-01's `request_component`): its definition has no python
+    """A specialization materialised by `codec.decode_program` (or the workload's `request_component`): its definition has no python
     signature/body (`lambda S: ((), None)`), everything is in the set body."""
     try:
         _, ret = sp.defn.signature(sp.S())
@@ -1216,7 +1219,7 @@ def _lift_decoded(sp: SpecializedDefinition, classes: Sequence[str] | None = Non
     ld = _LIFTED_DECODED_DEFS.get(sp.defn.id)
     if ld is None:
         ld = CompositeDefinition(f"Lifted[{sp.defn.id}]", LIFT_VERSION, tuple(sp.defn.statics) + (ORD_STATIC,), lambda S: ((), None), lambda *_: None,
-                                 doc=f"enabled ⊥-lift of the decoded {sp.defn.id} (LIFTING-SPEC v0.7 A9/B7/A11): the descriptor's body replayed, "
+                                 doc=f"enabled ⊥-lift of the decoded {sp.defn.id}: the descriptor's body replayed, "
                                      f"every callee lifted, the call's enable threaded; ORD = its ordinary parameters", conformance="protocol-defined",
                                  register=False)
         ld.lifted_from = sp.defn  # type: ignore[attr-defined]
@@ -1352,7 +1355,7 @@ def replay_lifted(B: Builder, body, args: Sequence[Coll], enable: Coll | Callabl
         largs = [Coll(class_type(a.type, c), _remap(a.refs, args, k0)) for a, c in zip(node.args, acls)]
         en = enable(k) if callable(enable) else enable
         if en is None and has_enable(lf):
-            raise TypeError(f"replay of {lf.id} needs an enable (LIFTING-SPEC v0.6 B7): every lifted computed gate is owned by an enable")
+            raise TypeError(f"replay of {lf.id} needs an enable: every lifted computed gate is owned by an enable")
         emit_lifted_node(B, node, lf, largs, en)
     return Coll(lift_type(body.ret_type), _remap(body.ret, args, k0))
 
@@ -1408,13 +1411,13 @@ def _lifted_weights_type(C: dict) -> Type:
     return lift_type(b1.weights_type(C))
 
 
-GUARD_IN = "in"  # DP-pad-01 option (a): the activity guard sits on the step's INPUT token — the implemented candidate
+GUARD_IN = "in"  # the input guard: the activity guard sits on the step's INPUT token — the implemented candidate
 GUARDS_IMPLEMENTED = (GUARD_IN,)
-LAGS_IMPLEMENTED = (0, 1)  # DP-pad-02: the engine's post-EOS placeholder rows (vLLM async scheduling: 1); a DECLARED static, no default
+LAGS_IMPLEMENTED = (0, 1)  # the engine's post-EOS placeholder rows (vLLM async scheduling: 1); a DECLARED static, no default
 
 
 def check_lag(lag: int) -> int:
-    """DP-pad-02: the serving profile's post-EOS lag is a declared static of the padded Program —
+    """The declared lag: the serving profile's post-EOS lag is a declared static of the padded Program —
     `LAG = 0` (the step after the EOS is never executed) or `LAG = 1` (vLLM async scheduling: the EOS-stopped request is fed forward
     once more on its EOS token, its sample discarded).  Neither is a default; anything else is refused by name."""
     if lag not in LAGS_IMPLEMENTED:
@@ -1422,7 +1425,7 @@ def check_lag(lag: int) -> int:
     return int(lag)
 
 
-DP_PAD_02 = f"DP-pad-02(b), RULED {EVIDENCE['lifted_post_eos_lag']['ruling']}"  # LAG is a declared specialization parameter, no default
+DP_PAD_02 = "DP-pad-02(b), RULED"  # LAG is a declared specialization parameter, no default
 
 
 def guard_gate_count(cap: int, n_eos: int, lag: int) -> int:
@@ -1441,8 +1444,8 @@ def lserve_validate(C: dict, LP: int, STEPS: int, eos: Sequence[int], guard: str
     """LServe_v1's validity, by name, callable BEFORE the (lazy) specialization is built (`lserve()` calls it eagerly;
     the body calls it again so a direct `bind(LServe, …)` is validated at `Program()` at the latest).  Returns the EOS tuple."""
     if guard not in GUARDS_IMPLEMENTED:
-        raise ValueError(f"LServe_v1: GUARD={guard!r} is not implemented — only {GUARD_IN!r} (DP-pad-01 option (a)) is; "
-                         "the output guard (option (b)) is a semantic choice recorded in DECISIONS-PENDING DP-pad-01, not code")
+        raise ValueError(f"LServe_v1: GUARD={guard!r} is not implemented — only {GUARD_IN!r} (the input guard) is; "
+                         "the output guard is an open semantic choice, not code")
     eos_ids = tuple(int(e) for e in eos)
     if not eos_ids:
         raise ValueError("LServe_v1 requires a non-empty declared EOS set")
@@ -1458,9 +1461,9 @@ def lserve_validate(C: dict, LP: int, STEPS: int, eos: Sequence[int], guard: str
            lambda S: ((("prompt", Array(S.LP, Value(32))), ("weights", b1.weights_type(S.C))), Array(S.STEPS + 1, Value(33))),
            conformance="protocol-defined")
 def LServe(B, S, prompt, weights):
-    """The ⊥-lifted padded serving Program (§5) for one request, **guard on the input** (`GUARD = "in"`, DP-pad-01
-    option (a) — the spec's §4.2 letter puts the guard on the event's output and is inconsistent with its own §4.3/§6/§7 at
-    step `a_r`; the choice is a labelled candidate, not a settled rule):
+    """The ⊥-lifted padded serving Program for one request, **guard on the input** (`GUARD = "in"` — a guard on the event's
+    output would leave step `a_r` half-Active, against the served-prefix rule; the choice is a labelled candidate, not a settled
+    rule):
     `Lifted[Prefill_v1]` emits `out[0]` unguarded (event 0 unconditionally live); for each of the `STEPS`
     structurally present decode steps `s ≥ 1` (`STEPS = cap − 1` under the Build's convention, as `Serve_v2{STEPS}`; the event
     population is `STEPS + 1 = cap = D_MAX_r`: the static is named for what it counts)
@@ -1470,7 +1473,7 @@ def LServe(B, S, prompt, weights):
         (y_s, k_s, v_s) = Lifted[StepBody_v1]{T = LP + s}(tok_in_s, kc, vc, weights)
         out[s]   = y_s                                       -- ⊥ by strictness when tok_in_s = ⊥ (no output guard)
 
-    where the gating token `g_s` is the profile's post-EOS lag (DP-pad-02, static `LAG`): `LAG = 0`: `g_s = out[s−1]`; `LAG = 1`
+    where the gating token `g_s` is the profile's post-EOS lag (the declared static `LAG`): `LAG = 0`: `g_s = out[s−1]`; `LAG = 1`
     (vLLM async scheduling: the step after the EOS is executed on the EOS token and its sample discarded): steps `1..LAG` are
     unguarded (`tok_in_1 = out[0]`) and `g_s = tok_in_{s−1}` for `s > LAG` — "the previous step ran on an Active non-EOS token" —
     so step `a_r` runs Active on the EOS (its `out[a_r]` is the committed, discarded sample) and step `a_r + 1` is the first ⊥
@@ -1521,7 +1524,7 @@ def lserve(C: dict, LP: int, STEPS: int, eos: Sequence[int], *, lag: int, gemm: 
     """`LServe_v1` bound for one profile (default: the Ampere eager profile, as `b1.serve_v2`), the input guard and the DECLARED
     post-EOS lag; validated EAGERLY: every refusal fires here, by name, before the lazy specialization exists."""
     eos_t = lserve_validate(C, LP, STEPS, eos, guard, lag)
-    # LAG is bound as a LABELLED candidate — `DP-pad-02(b), pending` — never rendered as an agreed baseline
+    # LAG is bound as a LABELLED candidate, never rendered as an agreed baseline
     return bind(LServe, C=C, LP=LP, STEPS=STEPS, EOS=eos_t, GUARD=guard, LAG=int(lag), GEMM=gemm if gemm is not None else b1.GEMM_AMPERE,
                 ATTENTION=attention if attention is not None else b1.ATTENTION_FA2, NORM=norm if norm is not None else b1.norm_bundle(C))
 
@@ -1571,7 +1574,7 @@ def expected_served(a_r: int, n_events: int, lag: int) -> int:
 
 
 def check_served_prefix(request: Any, n_r: int, a_r: int, *, lag: int, n_events: int | None = None) -> None:
-    """The two-directional rule `n_r = a_r + LAG` (under DP-pad-02): (i) `n_r >` expected → FAIL "execution past EOS";
+    """The two-directional rule `n_r = a_r + LAG` (under the declared lag): (i) `n_r >` expected → FAIL "execution past EOS";
     (ii) `n_r <` expected → FAIL "declared activity not executed" (under `LAG = 1` the placeholder step is declared activity)."""
     want = expected_served(a_r, n_events, lag) if n_events is not None else a_r + check_lag(lag)
     if n_r > want:
@@ -1581,7 +1584,7 @@ def check_served_prefix(request: Any, n_r: int, a_r: int, *, lag: int, n_events:
 
 
 def assign_inactive(request: Any, served: Sequence[int], eos_set: Sequence[int], n_events: int, *, lag: int, w: int = 32) -> list[int]:
-    """The pre-challenge ⊥ assignment rule (AGREED A7): from the **served** Active tokens `served[0..n_r−1]` (the
+    """The pre-challenge ⊥ assignment rule: from the **served** Active tokens `served[0..n_r−1]` (the
     prefill's event plus `n_r − 1` decode events), the full fixed `out[0..n_events−1]` is `0‖served[s]` for `s < n_r` and
     `enc(⊥)` for `s ≥ n_r` — admissible only if `n_r = a_r` with `a_r` derived from the served tokens themselves (the event
     after the committed EOS, or the cap).  A shortfall or excess is a named failure; nothing is filled with ⊥ silently."""
@@ -1597,7 +1600,7 @@ def assign_inactive(request: Any, served: Sequence[int], eos_set: Sequence[int],
 
 
 # ---------------------------------------------------------------------------------------------------------
-# TRUE widened widths (PAD-02 CLOSED): the width of a lifted proof-block set is Σ (w+1) over its escaping
+# TRUE widened widths: the width of a lifted proof-block set is Σ (w+1) over its escaping
 # leaves, nothing is split to fit 32 bits, and admissibility is the UNCHANGED validator at the lifted protocol parameter
 # ---------------------------------------------------------------------------------------------------------
 
@@ -1605,11 +1608,10 @@ LIFTED_RULES_VERSION = "lifted-v1"  # every lifted result carries its own rules 
 PADDED_RULES_VERSION = "padded-v1"  # a Program built with B7's enables (Lifted[.]_v2, LIFT_VERSION 2) and a record read by R4' (B9)
 USE_KIND_LIFTED = "vu-partition-lifted"  # the use.kind of a lifted admissibility document (G8 refuses it by name)
 W_MAX = 32  # the ACTIVE-REFERENCE protocol parameter of `partition.validate_width` (unchanged; not the lifted one)
-W_MAX_LIFTED = 2 * W_MAX  # (PROPOSED value, AGREED that the parameter exists — A4.3): the tight universal admitting value
-W_MAX_LIFTED_STATUS = ("accepted-revb-M-0042 (LIFTING-SPEC v0.5.1 B1: w_max_lifted = 2*w_max = 64, the declared constant of lifted-v1; the "
-                       "parameter's existence is AGREED, A4.3; B1's condition met on the first real-row lifted use document -- OLMoE B2 "
-                       "r17_1653 r0, out/gen/sweep/evidence/pad/olmoe-1b-7b__…b2…/r17_1653_lane9c1e1f79f_mech_lifted/use_document_r0: "
-                       "w_max_lifted 64, max_seen 33, n_out histogram (exact walk 50,000 sets = 1; structural bound complete over "
+W_MAX_LIFTED = 2 * W_MAX  # a proposed value of a parameter that exists by agreement: the tight universal admitting value
+W_MAX_LIFTED_STATUS = ("accepted-revb-M-0042 (w_max_lifted = 2*w_max = 64, the declared constant of lifted-v1; the "
+                       "parameter's existence is agreed; its acceptance condition met on the first real-row lifted use document "
+                       "(OLMoE B2): w_max_lifted 64, max_seen 33, n_out histogram (exact walk 50,000 sets = 1; structural bound complete over "
                        "7,004,686,199 sets <= 1); the constant's value itself is proposed, its confirmation pending)")
 
 
@@ -1632,7 +1634,7 @@ def lifted_width_summary(out_widths_payload: Sequence[int], *, w_max_lifted: int
         "ok": w_lifted <= int(w_max_lifted),
         "active_reference_rule_on_lifted_width_ok": w_lifted <= W_MAX,  # information: the 32-bit rule on the true width
         "violations": [f"w_out_lifted {w_lifted} > w_max_lifted {int(w_max_lifted)}"] if w_lifted > int(w_max_lifted) else [],
-        "rule": f"w_out_lifted = sum(w+1) over escaping leaves <= w_max_lifted ({EVIDENCE['lifted_width']['ruling']}; no activity/payload split; no n_max)",
+        "rule": "w_out_lifted = sum(w+1) over escaping leaves <= w_max_lifted (no activity/payload split; no n_max)",
     }
 
 
@@ -1794,7 +1796,7 @@ def commit_leaf(w: int, x: int) -> dict:
             "normalized": False}
 
 
-WORD_BITS = 32  # the machine word of the statement / leaf layout (PAD-02: a > 32-bit lifted leaf occupies ⌈(w+1)/32⌉ words)
+WORD_BITS = 32  # the machine word of the statement / leaf layout (true widths: a > 32-bit lifted leaf occupies ⌈(w+1)/32⌉ words)
 
 
 class LiftedLayoutError(ValueError):
@@ -1802,7 +1804,7 @@ class LiftedLayoutError(ValueError):
 
 
 def leaf_words(w: int) -> int:
-    """Machine words of one lifted leaf of payload width `w` (PAD-02 layout rule): `⌈(w+1)/32⌉` — 1 for `w ≤ 31`
+    """Machine words of one lifted leaf of payload width `w` (the true-width layout rule): `⌈(w+1)/32⌉` — 1 for `w ≤ 31`
     (bf16 → 17 bits, the activity bit → 2 bits), 2 for `w = 32` (an i32/f32 leaf needs its 33rd bit)."""
     if w < 1:
         raise ValueError(w)
@@ -1887,13 +1889,14 @@ def _lrequest_body(B, S, *args):
 
 
 _LREQUEST_DEF = CompositeDefinition("LiftedRequest", 2, ("program_digest", "program_fn", "EOS", "GUARD", "LAG"), _lrequest_sig, _lrequest_body,  # v2 = padded-v1 (B8)
-                                    doc="the ⊥-lift of a derived request Program component (GP-01 `WorkloadRequest_v1{program_digest, program_fn}`): "
+                                    doc="the ⊥-lift of a derived request Program component (the workload's "
+                                        "`WorkloadRequest_v1{program_digest, program_fn}`): "
                                         "its flat body replayed node for node with lifted callees, plus the activity guard (`LStepLive` + "
                                         "`LSelect` on the token entering each decode step) spliced in before each step's first reader; identity = "
                                         "the unlifted component's digest + program function + the declared EOS set + the guard placement",
                                     conformance="protocol-defined", register=False)
 _LREQUEST_CACHE: dict[tuple, SpecializedDefinition] = {}
-BOUNDARY_PREFIX = "TokenSelect_v1"  # the sampling event of the derived flat body (the step boundary; GP-01's X-09 segmentation)
+BOUNDARY_PREFIX = "TokenSelect_v1"  # the sampling event of the derived flat body (the step boundary the global Match segments by)
 
 
 def _reads(r: Refs) -> set[int]:
@@ -1954,33 +1957,33 @@ def _remap_nodes(r: Refs, args: Sequence[Coll], nidx: Sequence[int], redirect: d
 def request_boundaries(body, boundary_prefix: str = BOUNDARY_PREFIX) -> list[int]:
     """The sampling-event nodes of a flat request body: the nodes whose spec id starts with `boundary_prefix`, each a one-leaf
     `Value<32>` (the committed token of event `s`), in body order.  `cap = len(...)`."""
-    from verity.ml.circuits.codec import _spec_id
-    b = [k for k, n in enumerate(body.nodes) if _spec_id(n.fn).startswith(boundary_prefix)]
+    from verity.ml.circuits.codec import descriptor_id
+    b = [k for k, n in enumerate(body.nodes) if descriptor_id(n.fn).startswith(boundary_prefix)]
     for k in b:
         if body.nodes[k].out != Value(32):
-            raise ValueError(f"boundary node {k} ({_spec_id(body.nodes[k].fn)}) returns {body.nodes[k].out!r}, not one Value<32> token")
+            raise ValueError(f"boundary node {k} ({descriptor_id(body.nodes[k].fn)}) returns {body.nodes[k].out!r}, not one Value<32> token")
     return b
 
 
 def lift_request_component(fn: SpecializedDefinition, eos: Sequence[int], *, max_tokens: int, lag: int, guard: str = GUARD_IN,
                            boundary_prefix: str = BOUNDARY_PREFIX) -> SpecializedDefinition:
-    """The lifted fixed Program of ONE derived request: `fn` is GP-01's request component (`workload.request_component(
+    """The lifted fixed Program of ONE derived request: `fn` is the workload's request component (`workload.request_component(
     descriptor).fn` — the Build's derived flat body with the prescribed inputs as parameters, built from the manifest at `T = cap−1`),
     `eos` the declared EOS set.  Result: `LiftedRequest_v2{program_digest, program_fn, EOS, GUARD, LAG}` (v2 = padded-v1, B8) whose body is
 
         [eos[0..|E|), bot32] ++ replay of the original nodes with lifted callees, where immediately before the FIRST reader of the
         token of event `s−1` (for every `s ∈ 1..cap−1`) the guard `s=<s>/live = LStepLive(tok_{s−1}, eos_set)`,
         `s=<s>/tok_in = LSelect32(live, tok_{s−1}, bot32)` is spliced in and every node reader of `tok_{s−1}` is redirected to
-        `tok_in` (DP-pad-01 option (a), the INPUT guard); the returned `out[]` keeps reading the committed tokens themselves.
+        `tok_in` (the INPUT guard); the returned `out[]` keeps reading the committed tokens themselves.
 
-    PAD-03 (address stability modulo the guard nodes) holds by construction: original node `k` ↦ node `nidx[k]` with the same
+    Address stability modulo the guard nodes holds by construction: original node `k` ↦ node `nidx[k]` with the same
     gate count and operand runs; the other nodes are exactly the named guard nodes.  Nothing about a served length enters: the
     guards are placed by dataflow (who reads the token), and the component's boundary count MUST equal the manifest's declared
-    `max_tokens`: a component derived at a SERVED shape (`build_request_LP<lp>_T<served>`, the MOE-05
+    `max_tokens`: a component derived at a SERVED shape (`build_request_LP<lp>_T<served>`, the
     eos-truncated derivation) has fewer events than the declaration and is refused by name — it is the post-hoc deletion (A3)
     disguised as a Program of record, never the fixed population."""
     if guard != GUARD_IN:
-        raise ValueError(f"GUARD={guard!r}: only the input guard is implemented ({GUARDS_IMPLEMENTED}); the output guard (DP-pad-01 (b)) is refused by name")
+        raise ValueError(f"GUARD={guard!r}: only the input guard is implemented ({GUARDS_IMPLEMENTED}); the output guard is refused by name")
     eos_t = tuple(int(e) for e in eos)
     if not eos_t:
         raise ValueError("the declared EOS set is empty: the request could never stop before its cap — declare it, do not default it")
@@ -1998,7 +2001,7 @@ def lift_request_component(fn: SpecializedDefinition, eos: Sequence[int], *, max
         raise ValueError(f"no {boundary_prefix} node in the body: not a request Program")
     if int(max_tokens) != cap:
         raise ValueError(f"the component has {cap} sampling events but the manifest declares max_tokens={max_tokens}: a Program derived at a served "
-                         f"shape is not the fixed population ({EVIDENCE['lifted_served_shape']['finding']}; refuse, never lift the served length)")
+                         "shape is not the fixed population (refuse, never lift the served length)")
     cached = _LREQUEST_CACHE.get(key)
     if cached is not None:
         if tuple(cached.boundaries) != tuple(bounds):  # type: ignore[attr-defined]  # one identity, one segmentation
@@ -2076,7 +2079,7 @@ def lift_request_component(fn: SpecializedDefinition, eos: Sequence[int], *, max
     sp = SpecializedDefinition(_LREQUEST_DEF, {**bindings, "EOS": eos_t, "GUARD": guard, "LAG": lag}, key)
     sp.set_body(B.finish(ret))
     _LREQUEST_BODIES[key] = sp.body
-    sp.node_map = tuple(nidx)  # type: ignore[attr-defined]  # PAD-03: original node k ↦ lifted node nidx[k]
+    sp.node_map = tuple(nidx)  # type: ignore[attr-defined]  # address stability: original node k ↦ lifted node nidx[k]
     sp.param_classes = tuple(pcls)  # type: ignore[attr-defined]  # G1: the class of each prescribed input (ordinary unless the body needs it lifted)
     sp.guard_nodes = tuple(sorted(set(range(len(B.nodes))) - set(nidx)))  # type: ignore[attr-defined]
     sp.boundaries = tuple(bounds)  # type: ignore[attr-defined]
@@ -2092,7 +2095,7 @@ def lift_request_component(fn: SpecializedDefinition, eos: Sequence[int], *, max
 def address_map_modulo_guards(lifted: SpecializedDefinition) -> list[tuple[str, int, int]]:
     """PAD-03's deletion rule as a function: the lifted body's `(spec id, lo, hi)` rows with the guard rows deleted and the gates
     renumbered — equal to the unlifted component's rows modulo the `Lifted[…]` spec ids (tested)."""
-    from verity.ml.circuits.codec import _spec_id
+    from verity.ml.circuits.codec import descriptor_id
     b = lifted.body
     guards = set(lifted.guard_nodes)  # type: ignore[attr-defined]
     rows, g = [], 0
@@ -2100,7 +2103,7 @@ def address_map_modulo_guards(lifted: SpecializedDefinition) -> list[tuple[str, 
         if k in guards:
             continue
         w = b.offsets[k + 1] - b.offsets[k]
-        rows.append((_spec_id(n.fn), g, g + w))
+        rows.append((descriptor_id(n.fn), g, g + w))
         g += w
     return rows
 
@@ -2113,7 +2116,7 @@ def address_map_modulo_guards(lifted: SpecializedDefinition) -> list[tuple[str, 
 def lifted_request(C: dict, prompt_len: int, cap: int, eos: Sequence[int], *, lag: int, T: int | None = None, gemm: dict | None = None,
                    attention: dict | None = None, norm: dict | None = None) -> SpecializedDefinition:
     """The lifted padded serving Program of ONE declared request `(prompt_len, max_tokens = cap, eos_set)` under the Build's
-    `T = cap − 1` decode-step convention (REL-01/R-16: prefill emits `out[0]`, decode steps `1..cap−1` emit
+    `T = cap − 1` decode-step convention (prefill emits `out[0]`, decode steps `1..cap−1` emit
     `out[1..cap−1]`, so `STEPS = cap − 1` and the event population is exactly `cap = D_MAX_r`).  Inputs: the manifest's declared numbers
     and the registered Definitions — nothing from an execution.  `T`, when a caller passes one, must equal `cap − 1`: a builder
     fed a served length is refused by name (the unlifted `WorkloadProgram` rule, kept verbatim)."""
@@ -2126,7 +2129,7 @@ def lifted_request(C: dict, prompt_len: int, cap: int, eos: Sequence[int], *, la
 
 
 def _prefill_only(C, LP, eos, *, gemm, attention, norm):
-    raise NotImplementedError("max_tokens = 1 (prefill-only request): LServe_v1 needs STEPS >= 1; not built tonight (declare it, do not fake it)")
+    raise NotImplementedError("max_tokens = 1 (prefill-only request): LServe_v1 needs STEPS >= 1; not built yet (declare it, do not fake it)")
 
 
 def expected_bot_return_leaves(C: dict, cap: int, a_r: int, *, lag: int) -> int:
@@ -2138,7 +2141,7 @@ def expected_bot_return_leaves(C: dict, cap: int, a_r: int, *, lag: int) -> int:
 
 
 # ---------------------------------------------------------------------------------------------------------
-# MIXED BATCH — the lifted fixed WORKLOAD Program: GP-01's compose, verbatim, over lifted components
+# MIXED BATCH — the lifted fixed WORKLOAD Program: the workload Program's compose, verbatim, over lifted components
 # ---------------------------------------------------------------------------------------------------------
 
 
@@ -2148,7 +2151,7 @@ _LIVE_COUNT: dict[int, PrimitiveDefinition] = {}
 def live_count_prim(R: int) -> PrimitiveDefinition:
     """`LiveCount<R>_v1(live: Array<R, Value<1>>) → Value<7>`: the number of live rows among the `R` requests programmed for an engine step
     (a popcount).  The UNLIFTED count; its strict lift `Lifted[LiveCount<R>_v1]` (`Array<R, Value<2>>` → `Value<8>`) is the operand of
-    `LSplitsForSMS` (PAD-04).  `R ≤ 64`: the split pipeline's batch bound (`assert_splits_domain`)."""
+    `LSplitsForSMS` (a candidate).  `R ≤ 64`: the split pipeline's batch bound (`assert_splits_domain`)."""
     R = assert_splits_domain(R)
     p = _LIVE_COUNT.get(R)
     if p is None:
@@ -2160,14 +2163,14 @@ def live_count_prim(R: int) -> PrimitiveDefinition:
 
 def live_count_hook(B: Builder, outs: Sequence[Coll], arrivals: Sequence[int], cap: int | Sequence[int], eos_set: Coll, bot: Coll, lag: int, *,
                     num_sms: int | None = None, name: str = "S") -> tuple[list[Coll], list[Coll]]:
-    """P9's hook as Program nodes at the WORKLOAD root (CANDIDATE PAD-04 wiring): for every engine step
+    """The live-count hook as Program nodes at the WORKLOAD root (the candidate `LSplitsForSMS`'s wiring): for every engine step
     `t` of the programmed horizon, `n_live_t = LiveCount(live_{r,t} : r programmed for t)` where `live_{r,t}` is recomputed from request
     `r`'s committed tokens exactly as its own guard computes it — `LAG = 0`: `1` at `t = a_r`, `LStepLive(out_r[s−1], E)` for `s = t − a_r ≥ 1`;
     `LAG = 1`: `1` at `s ∈ {0, 1}`, `LStepLive(tok_in_{r,s−1}, E)` for `s ≥ 2` with `tok_in_{r,1} = out_r[0]`, `tok_in_{r,s} = LSelect(live_{r,s},
-    out_r[s−1], ⊥)` — so `n_live_t = Σ_r LIsActive(tok_in_{r,t})` (LIFTING-STATUS P9) as a value of the Program, never of an observation.
+    out_r[s−1], ⊥)` — so `n_live_t = Σ_r LIsActive(tok_in_{r,t})` as a value of the Program, never of an observation.
     With `num_sms` the split count `S_t = LSplitsForSMS<SMS>(n_live_t)` is appended (⊥ when no request is live: no sampler launch).
     Returns `(n_live[t], S[t])` per engine step (`S` empty without `num_sms`).  Rows outside a request's window are not members (structural).
-    `cap` is per request (GP-01's populations have UNEQUAL caps — its standard B2 fixture is cap 3 / cap 2): one int
+    `cap` is per request (the workload Program's populations have UNEQUAL caps — its standard B2 fixture is cap 3 / cap 2): one int
     for all or one per request; request `r` is a member of engine steps `a_r <= t < a_r + cap_r`, and `len(out_r) != cap_r` is refused by
     name (a served-length `out_r` is not the fixed population)."""
     check_lag(lag)
@@ -2182,7 +2185,7 @@ def live_count_hook(B: Builder, outs: Sequence[Coll], arrivals: Sequence[int], c
             raise ValueError(f"request {r}: cap {c} < 1")
         if out.type.leaves != c:
             raise ValueError(f"request {r}: out has {out.type.leaves} events but its declared cap is {c}: the hook takes the FIXED population "
-                             f"(cap_r events per request), never a served length ({EVIDENCE['lifted_per_request_cap']['finding']})")
+                             "(cap_r events per request), never a served length")
     assert_splits_domain(R)
     horizon = max(a + c for a, c in zip(arrivals, caps))
     live: list[list[Coll]] = [[] for _ in range(R)]

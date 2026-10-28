@@ -15,8 +15,8 @@ terms (ε) come from the soundness analysis, not from the run, so the run leaves
 
 The audit record carries the registration and its receipt, the draw, the proved proof blocks, the statement's digests and each
 verifier's verdict. A verdict is `{"accepted": true | false | null, ...}`; null means that verifier did not run, which leaves
-the record incomplete. The record is accepted, and the profiles are present, only when there is a verifier of record
-(`of_record`) and every one of them ran and accepted, every other verdict that ran accepted, and the draw, the proved
+the record incomplete. The record is accepted, and the profiles are present, only when there is a verdict of
+record (`of_record`) and every one of them ran and accepted, every other verdict that ran accepted, and the draw, the proved
 proof blocks, the served draw, the sessions' roots and, for registered values, the roots their reads were opened against passed
 their checks.
 """
@@ -28,7 +28,8 @@ from typing import Any, Mapping, Sequence
 
 from verity.ml.circuits.codec import canonical_json
 from verity.ml.circuits.partition import Level
-from verity.core.protocols.profile import Bernoulli, IntegrityProfile, Stratified, Stratum, Subset
+from verity.core.protocols.profile import (Bernoulli, IntegrityProfile, SamplingDesign, Stratified, Stratum, Subset, Work,
+                                          WorkStratum)
 
 from .draw import check_draw, check_proved, law_of
 from .registration import digest as registration_digest
@@ -69,6 +70,21 @@ def core_law(law: Mapping[str, Any], population: int) -> Stratified | None:
     return None
 
 
+def design(law: Mapping[str, Any]) -> SamplingDesign:
+    """The sampling design of a well-formed law or draw (`check_draw`'s), as the profile writes it (Lean
+    `Core.SamplingDesign.ofFlock`): each stratum named by its template, its size its ranges' total, and a work sampling design's
+    `Work` with its works and floors."""
+    if law["law"] == "subset":
+        return Subset(law["k"])
+    if law["law"] == "bernoulli":
+        return Bernoulli(Fraction(law["p"]))
+    sizes = [sum(hi - lo for lo, hi in s["units"]) for s in law["strata"]]
+    if law["law"] == "work":
+        return Work(law["k"], tuple(WorkStratum(s["template"], n, s["k"], s["work"], s["floor"])
+                                    for s, n in zip(law["strata"], sizes)))
+    return Stratified(tuple(Stratum(s["template"], n, s["k"]) for s, n in zip(law["strata"], sizes)))
+
+
 def wrong_units(registration: Mapping[str, Any], draw: Mapping[str, Any], delta: float) -> dict[str, Any]:
     """The profile's bounds on faulty proof blocks at delta, as the record states them: `bound`, and for `stratified` each
     template's own (`per_template`)."""
@@ -83,7 +99,7 @@ def wrong_units(registration: Mapping[str, Any], draw: Mapping[str, Any], delta:
 
 def integrity_profile(registration: Mapping[str, Any], receipt: Mapping[str, Any], draw: Mapping[str, Any],
                       sessions: Sequence[str], verdict: str | list[str] | None) -> dict[str, Any]:
-    """`verity/integrity-profile/v1`; `sessions` are the session records' SHA-512, `verdict` the verifier of record's (a list
+    """`verity/integrity-profile/v1`; `sessions` are the session records' SHA-512, `verdict` the verdicts of record (a list
     when the drawn proof blocks were proved in several sessions)."""
     return {"format": PROFILE, "protocol": registration["protocol"], "program": registration["program"],
             "query": registration["query"], "partition": registration["partition"], "population": registration["population"],
@@ -100,7 +116,7 @@ def integrity_profile(registration: Mapping[str, Any], receipt: Mapping[str, Any
 
 def session_registered(verdicts: Mapping[str, Mapping[str, Any]],
                        registration: Mapping[str, Any] | None = None) -> dict[str, str | None] | None:
-    """`audit_record`'s `session_registered` from the verdicts alone: the `{value: root}` that the verifiers of record report
+    """`audit_record`'s `session_registered` from the verdicts alone: the `{value: root}` that the verdicts of record report
     (the Lean verdict's `registered`, `{port: {"value", "root"}}`) on the sessions they accepted, a value two of them
     report under different roots mapped to None. None when no accepted verdict of record reports registered reads. With
     `registration`, only its own values (its roots' ports and its registered values)."""
@@ -123,8 +139,8 @@ def audit_record(registration: Mapping[str, Any], receipt: Mapping[str, Any], dr
                  session_registered: Mapping[str, str] | None = None) -> dict[str, Any]:
     """`draw` is the verifier's own draw. `served`: the proof blocks the sessions were served, when the draw was handed to them
     (each must serve exactly the draw). `session_roots`: `{registered port: root}` from the sessions' statements (each
-    must be the registered root). `session_registered`: `{value: root}`, the registered roots the verifier of record
-    opened the sessions' reads against (`session_registered(verdicts)`, never the registration's own); a registration with
+    must be the registered root). `session_registered`: `{value: root}`, the registered roots the verdicts of
+    record opened the sessions' reads against (`session_registered(verdicts)`, never the registration's own); a registration with
     registered values needs it, each the registered root."""
     checks = {"draw": check_draw(draw, registration, law).to_json(),
               "proved": check_proved(draw, proved_units, instances).to_json()}
@@ -168,5 +184,5 @@ def audit_record(registration: Mapping[str, Any], receipt: Mapping[str, Any], dr
     return rec
 
 
-__all__ = ["FORMAT", "LEVEL", "PROFILE", "audit_record", "core_law", "integrity_profile", "profile", "session_registered",
-           "wrong_units"]
+__all__ = ["FORMAT", "LEVEL", "PROFILE", "audit_record", "core_law", "design", "integrity_profile", "profile",
+           "session_registered", "wrong_units"]

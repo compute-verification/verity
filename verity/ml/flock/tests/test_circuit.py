@@ -1,4 +1,4 @@
-"""verity/flock-circuit's Python side (lane flock-circuit): the composite circuit, its instance files, and the tail pieces in
+"""verity/flock-circuit's Python side: the composite circuit, its instance files, and the tail pieces in
 the circuit. The Rust statement's own tests are ``flock-circuit selftest`` on a pod (every negative) and the crate's unit tests."""
 from __future__ import annotations
 
@@ -299,11 +299,11 @@ def test_public_input_ports_carry_the_verifiers_recomputation(tmp_path):
 def test_program_digests_are_keyed_by_descriptor_id(tmp_path):
     """META ``program_digests`` names the template by core's descriptor id (the canonical partition's and the verifier's), not
     its display id: RMSNorm's EPS is its f64 hex."""
-    from verity.ml.circuits.codec import _spec_id
+    from verity.ml.circuits.codec import descriptor_id
 
     s = _set("rmsnorm-triton/n2048-eps1e-05/bf16", 1, tmp_path)
     got = FC.program_digests(s.subcircuit, FC.set_statics(s))
-    assert list(got) == [_spec_id(s.subcircuit.definition(**FC.set_statics(s)))]
+    assert list(got) == [descriptor_id(s.subcircuit.definition(**FC.set_statics(s)))]
     assert '"f64":"0x1.4f8b588e368f1p-17"' in next(iter(got))
     assert list(got.values()) == list(s.subcircuit.program_digests([FC.set_statics(s)]).values())
 

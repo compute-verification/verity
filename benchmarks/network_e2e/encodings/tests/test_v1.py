@@ -1,11 +1,11 @@
 """Advice v1: `decode(encode(a)) == a` on the replay's step traces and a trace-corpus trace, under the uniform codebook
 and a fitted one; the engine's arrival order is sent as its deviations from the warden's release order and recovered
 from the advice's rows; the hits past the pool bound are sent and held to the replay's; the KV pool is the
-registration's, never the string's; each value is charged to A5's window, and the certifier's state chain carries
-the decisions charged before their step's window; the strings are prefix-free (so the charge
-meets LEAK-LEAN's `BitsCount`); and `decode` is total, refusing by name everything but a canonical string. REDTEAM's
-phase 7 probes of v1 (prefix-freeness on long strings, totality on adversarial frames, the pool field, what the book
-changes, a shortened shortfall) are among them."""
+registration's, never the string's; each value is charged to A5's window, and the certifier's state chain carries the
+decisions charged before their step's window; the strings are prefix-free (so the charge meets the sampled leak bound's
+`hAs`); and `decode` is total, refusing by name everything but a canonical string. REDTEAM's phase 7 probes of v1
+(prefix-freeness on long strings, totality on adversarial frames, the pool field, what the book changes, a shortened
+shortfall) are among them."""
 
 from __future__ import annotations
 
@@ -362,17 +362,17 @@ def _tiny(windows: int):
     e = R.Engine(max_num_seqs=2, max_num_batched_tokens=8, max_model_len=64, num_gpu_blocks=32, block_size=4)
     reqs = tuple(V.Request(f"u{k}", (10 + k,) * 6, 4, (5, 5, EOS), end, (end, end, end + 1))
                  for k, end in enumerate((0, 0, 3 * (windows - 1))))
-    history = [[CV.Window(arrived=bits)] * windows for n in range(4) for bits in product((False, True), repeat=n)]
+    history = [[CV.Advice(arrived=bits)] * windows for n in range(4) for bits in product((False, True), repeat=n)]
     caps = CV.Caps(arrived=7, hits=1, hit_units=1, resumes=1, order=1, order_len=1, gap=1, index=1, lag=1)
-    return V.Record(reqs), V.Registered(e, (EOS,), T=3, book=CV.fit_book(history, caps))
+    return V.CertifiedRequests(reqs), V.Registered(e, (EOS,), T=3, book=CV.fit_book(history, caps))
 
 
 @pytest.mark.parametrize("w", (1, 2))
 def test_the_strings_are_prefix_free(w):
     """Every bit string of up to 16 bits through `decode_bits`: no accepted one is a proper prefix of another, so
-    #{accepted strings of at most c bits} ≤ 2^c (Kraft), LEAK-LEAN's `BitsCount` for the charge `bits_by_window`; and
-    each accepted one is the encoding of the advice it decodes to, a well-formed I1 v0 (`advice.decode`'s refusals, which
-    ADV-SPEC's validity circuit makes)."""
+    #{accepted strings of at most c bits} ≤ 2^c (Kraft), the sampled leak bound's `hAs` for the charge
+    `bits_by_window`; and each accepted one is the encoding of the advice it decodes to, a well-formed I1 v0
+    (`advice.decode`'s refusals, which ADV-SPEC's validity circuit makes)."""
     rec, reg = _tiny(w)
     accepted = {}
     for n in range(17):

@@ -289,12 +289,12 @@ end Run
 
 /-- **An input reads the ingress the trace carries**: at step `t` before the horizon, on the ingress up to `t` and the
 trace's values as the other inputs, a gate in no later step's ingress reads the trace's value. -/
-theorem inputOf_eq {L K S : ℕ} {lay : Layout L S} {C : Prog} {ref : ℕ → Option Bool}
+theorem inputOf_eq {L K S : ℕ} {lay : BoundaryGates L S} {C : Prog} {ref : ℕ → Option Bool}
     {op : ℕ → List (Obs L K S) → List Bool} {k : ℕ} {o : List (Obs L K S)} {t : ℕ} (hcar : Carries lay C ref op k o)
     (ht : t < k) {g : ℕ} (hgd : ∀ t', t < t' → t' < k → g ∉ lay.ingress t') :
     lay.inputOf k (ingressUpTo op o t) (traceVal C ref) g = traceVal C ref g := by
   have hlen : (ingressUpTo op o t).length = t + 1 := by simp [ingressUpTo]
-  unfold Layout.inputOf
+  unfold BoundaryGates.inputOf
   split
   · rename_i i j h
     obtain ⟨i', hi', he⟩ := List.exists_of_findSome?_eq_some h
@@ -390,7 +390,7 @@ theorem correct_of_not_faulty (H : Msg → Msg) (Cm : Commitment Bool) (s : Audi
 partitions and the layout fits, with every unit outside `F` correct at some interior, the advice holding `F`'s
 committed gates at the trace's values and the other inputs at the trace's makes `Accepted` every observation sequence
 and operator the trace carries with every status complete. -/
-theorem accepted_of {L K S : ℕ} {C : Prog} {P : Partition} {lay : Layout L S} {k : ℕ} (hT : C.Topological)
+theorem accepted_of {L K S : ℕ} {C : Prog} {P : Partition} {lay : BoundaryGates L S} {k : ℕ} (hT : C.Topological)
     (hP : P.Partitions C) (hfit : lay.Fits C k) {ref : ℕ → Option Bool} {F : Finset ℕ} (ι : ℕ → ℕ → Bool)
     (hι : ∀ v u, P.blocks[v]? = some u → v ∉ F → C.Correct (C.refIn u ref (ι v)) u)
     {op : ℕ → List (Obs L K S) → List Bool} {o : List (Obs L K S)} (hcar : Carries lay C ref op k o)
@@ -422,7 +422,7 @@ theorem accepted_of {L K S : ℕ} {C : Prog} {P : Partition} {lay : Layout L S} 
 variable {Coin Col T : Type}
 
 /-- **On the audit's scope the sampling relation gives the audit's**: at `δ ≥ 0`, `R δ x w` gives `RAcc δ x w`. -/
-theorem rAcc_of_r (H : Msg → Msg) (D : Deploy Coin Col T) {L K S : ℕ} (lay : AuditStatement → Layout L S) (k : AuditStatement → ℕ)
+theorem rAcc_of_r (H : Msg → Msg) (D : Deploy Coin Col T) {L K S : ℕ} (lay : AuditStatement → BoundaryGates L S) (k : AuditStatement → ℕ)
     {δ : ℝ} (hδ : 0 ≤ δ) {x : Msg} (hx : ScopeAcc D lay k x) {w : Wit}
     (hR : R H D.commit D.parse D.partition δ x w) : RAcc H D.commit D.parse D.partition L K S lay k δ x w := by
   obtain ⟨s, P, hs, hP, hM⟩ := hR

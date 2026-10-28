@@ -4,15 +4,20 @@
   "CoreComposition.Product": {
    "imports": ["CoreProtocol.Protocol", "Flock.Hash"],
    "except": [],
-   "why": "the program is code: the core interface and C-Flock's Lean, no Mathlib and nothing of Security (Daniel's layout ruling, 5 Oct)"
+   "why": "the program is code: the core interface and C-Flock's Lean, no Mathlib and nothing of Security"
   },
   "CoreComposition.Stubs": {
    "imports": ["CoreProtocol.Example"],
+   "except": [],
+   "why": "the program is code: the core interface and C-Flock's Lean, no Mathlib and nothing of Security"
+  },
+  "CoreComposition.Same": {
+   "imports": ["CoreComposition.Product"],
    "except": [],
    "why": "the program is code: the core interface and C-Flock's Lean, no Mathlib and nothing of Security (Daniel's layout ruling, 5 Oct)"
   }
  },
  "dependencies": {
-  "toolchain": "1efe7aefd37af8682255d67bc7aeb32378d6650322729009305da53183dab0a0"
+  "toolchain": "9861e83df7e59cd690a56f1b1123a7d6cfeca7df65d05a986f3a0c9794f60079"
  }
 }

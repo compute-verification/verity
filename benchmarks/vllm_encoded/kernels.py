@@ -49,6 +49,10 @@ def _codec():
     return _load("wc_codec", "codec.py")
 
 
+def _cuda_lib():
+    return _load("wc_cuda_lib", "cuda_lib.py")
+
+
 def _wide():
     return _load("wc_wide", "wide.py")
 
@@ -73,22 +77,52 @@ def stream() -> int:
     return torch.cuda.current_stream().cuda_stream
 
 
+_v, _i, _q = ctypes.c_void_p, ctypes.c_int, ctypes.c_uint64
+VE = {   # ve.cu's functions (`cuda_lib.load`)
+    "wc_set_key": [_v, _i, _q],
+    "wc_encode": [_v, _v, _q, _q, _i, _i, _v],
+    "wc_decode": [_v, _v, _q, _q, _i, _v, _i, _v],
+    "ve_prepare": [_i, _i],
+    "ve_occupancy": [_i, _i, _i, _i, _i],
+    "ve_gemm": [_i, _i, _v, _v, _v, _i, _i, _i, _q, _i, _i, _i, _i, _v],
+    "ve_reduce": [_v, _i, _i, _i, _v, _i, _v, _v, _v],
+    "ve_constants": [_v],
+    "wc_spin": [ctypes.c_longlong, _v],
+}
+WIDE = {   # wide.cu's that `WideLib` calls
+    "ww_constants": [_v],
+    "ww_set_key": [_v, _i, _v, _v, _v, _v],
+    "ww_decode": [_v, _v, _q, _q, _i, _v, _i, _v],
+    "ww_encode": [_v, _v, _q, _q, _i, _i, _v],
+    "ww_gemm": [_i, _v, _v, _v, _i, _i, _i, _q, _i, _v, _v, _i, _v],
+    "ww_gemm_occupancy": [_i, _i, _i, _i],
+    "ww_gemm_sketch": [_i, _v, _v, _v, _i, _i, _i, _q, _i, _v, _v, _q, _v, _v, _i, _v],
+    "ww_workspace_bytes": ([_q], ctypes.c_size_t),
+    "ww_workspace_tags": ([_v, _q], _v),
+    "ww_sketch_commit": [_v, _q, _v, _v, _v],
+    "ww_sketch_leaves": [_v, _q, _v, _q, _q, _v, _v],
+    "ww_sketch_fold": [_v, _q, _q, _q, _v],
+    "ww_sketch_tree": [_v, _q, _i, _v, _v],
+}
+TENSOR = {   # wt.cu's that `TensorLib` calls
+    "wt_constants": [_v],
+    "wt_set_key": [_v, _i, _v, _v],
+    "wt_encode": [_v, _v, _q, _q, _i, _i, _v],
+    "wt_decode": [_v, _v, _q, _q, _i, _v, _i, _v],
+    "wt_fused_sketch": [_i, _v, _v, _v, _i, _i, _i, _q, _i, _i, _i, _i, _i, _v, _v, _q, _i, _v, _v, _i, _v, _v],
+    "wt_sketch_vectors": ([_i, _i, _i, _i], _q),
+    "wt_set_tag": [_v, _v],
+    "wt_tag_leaves": [_v, _q, _v, _v],
+    "wt_tag_tree": [_v, _q, _v, _v],
+}
+
+
 class Lib:
     """One build of `ve.cu`: its packing (`bits`) and largest k (`kmax`)."""
 
     def __init__(self, path: str | Path) -> None:
-        v, i, q = ctypes.c_void_p, ctypes.c_int, ctypes.c_uint64
         self.path = str(path)
-        so = self.so = ctypes.CDLL(self.path)
-        so.wc_set_key.argtypes = [v, i, q]
-        so.wc_encode.argtypes = [v, v, q, q, i, i, v]
-        so.wc_decode.argtypes = [v, v, q, q, i, v, i, v]
-        so.ve_prepare.argtypes = [i, i]
-        so.ve_occupancy.argtypes = [i, i, i, i, i]
-        so.ve_gemm.argtypes = [i, i, v, v, v, i, i, i, q, i, i, i, i, v]
-        so.ve_reduce.argtypes = [v, i, i, i, v, i, v, v, v]
-        so.ve_constants.argtypes = [v]
-        so.wc_spin.argtypes = [ctypes.c_longlong, v]
+        so = self.so = _cuda_lib().load(self.path, VE)
         cs = (ctypes.c_int * 8)()
         so.ve_constants(cs)
         self.constants = list(cs)
@@ -116,24 +150,8 @@ class WideLib:
     """One build of `wide.cu` (one field, `WW_BITS`): its key, its tag seed and the tag buffer its GEMMs write."""
 
     def __init__(self, path: str | Path) -> None:
-        v, i, q = ctypes.c_void_p, ctypes.c_int, ctypes.c_uint64
         self.path = str(path)
-        so = self.so = ctypes.CDLL(self.path)
-        so.ww_constants.argtypes = [v]
-        so.ww_set_key.argtypes = [v, i, v, v, v, v]
-        so.ww_decode.argtypes = [v, v, q, q, i, v, i, v]
-        so.ww_encode.argtypes = [v, v, q, q, i, i, v]
-        so.ww_gemm.argtypes = [i, v, v, v, i, i, i, q, i, v, v, i, v]
-        so.ww_gemm_occupancy.argtypes = [i, i, i, i]
-        so.ww_gemm_sketch.argtypes = [i, v, v, v, i, i, i, q, i, v, v, q, v, v, i, v]
-        so.ww_workspace_bytes.argtypes = [q]
-        so.ww_workspace_bytes.restype = ctypes.c_size_t
-        so.ww_workspace_tags.argtypes = [v, q]
-        so.ww_workspace_tags.restype = v
-        so.ww_sketch_commit.argtypes = [v, q, v, v, v]
-        so.ww_sketch_leaves.argtypes = [v, q, v, q, q, v, v]
-        so.ww_sketch_fold.argtypes = [v, q, q, q, v]
-        so.ww_sketch_tree.argtypes = [v, q, i, v, v]
+        so = self.so = _cuda_lib().load(self.path, WIDE)
         cs = (ctypes.c_int * 32)()
         so.ww_constants(cs)
         self.constants = list(cs[:21])
@@ -251,19 +269,8 @@ class TensorLib:
     GEMMs write, and each launch's tweak steps."""
 
     def __init__(self, path: str | Path) -> None:
-        v, i, q = ctypes.c_void_p, ctypes.c_int, ctypes.c_uint64
         self.path = str(path)
-        so = self.so = ctypes.CDLL(self.path)
-        so.wt_constants.argtypes = [v]
-        so.wt_set_key.argtypes = [v, i, v, v]
-        so.wt_encode.argtypes = [v, v, q, q, i, i, v]
-        so.wt_decode.argtypes = [v, v, q, q, i, v, i, v]
-        so.wt_fused_sketch.argtypes = [i, v, v, v, i, i, i, q, i, i, i, i, i, v, v, q, i, v, v, i, v, v]
-        so.wt_sketch_vectors.argtypes = [i, i, i, i]
-        so.wt_sketch_vectors.restype = q
-        so.wt_set_tag.argtypes = [v, v]
-        so.wt_tag_leaves.argtypes = [v, q, v, v]
-        so.wt_tag_tree.argtypes = [v, q, v, v]
+        so = self.so = _cuda_lib().load(self.path, TENSOR)
         cs = (ctypes.c_int * 15)()
         so.wt_constants(cs)
         self.constants = list(cs)

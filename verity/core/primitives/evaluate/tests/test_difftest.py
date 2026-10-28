@@ -2,7 +2,7 @@
 for refusal, on Programs encoded as descriptor v1 (`verity/ml/circuits/PROTOCOL.md`), through the difftest harness
 (`verity_difftest`: one server open per module, reject parity, Hypothesis drawing deterministically).
 
-The reference is `python_answer`: `codec.decode_program`, then `evaluate.evaluate_region` over each of the root's nodes that
+The reference is `python_answer`: `codec.decode_program`, then `reference.evaluate_region` over each of the root's nodes that
 is not an input node, with the inputs bound by runs (a registered table as `reference`'s `RegisteredTable`, read where a gate
 reads it), the gate-by-gate oracle that `reference.evaluate` runs on a target's one-call Program; for those Programs
 `reference.evaluate` itself is checked too. Two of the Lean evaluator's refusals are not the oracle's, so `python_answer`
@@ -26,6 +26,12 @@ E4's primitives (PoUW's and NCP's words, the sampler, MUFU, the reference kinds'
 run batched the same way, on their captures where the fixtures hold them; the tables they read are held to their pins; the
 registered tables are bound by name and read by the composites that take them; the lazy families run on their one-call
 Programs.
+
+The same server answers two readings of a decoded Program, which hold two Python classes to their Lean as mirrors: `gate`
+(`Evaluate.gateFn`, `Flock.Program.Gate`) against `layout.Circuit.gate`'s `layout.Gate`, on every gate of random composites
+and on gates past their last; and `partition` (`Evaluate.partitionFn`, `Flock.Extract.Partition`) against
+`partition_object.evaluate`'s `Partition` under `Q_word`, on the composites' one-call Programs and on their inlined ones, whose
+root batches and scans both refuse.
 """
 from __future__ import annotations
 
@@ -51,9 +57,9 @@ from verity_difftest import settings
 from verity.core.protocols.pouw.circuit import words as W
 from verity.ml.circuits import boolean as BL
 from verity.ml.circuits import codec
+from verity.ml.circuits import partition_object as PO
 from verity.ml.circuits.boolean.trace import word_of
 from verity.ml.circuits.defs import REGISTRY, CompositeDefinition, PrimitiveDefinition, bind
-from verity.ml.circuits.evaluate import evaluate_region
 from verity.ml.circuits.evaluation import reference
 from verity.ml.circuits.ops import fp32 as FP
 from verity.ml.circuits.ops import mufu as MU
@@ -138,8 +144,8 @@ REGISTERED_TABLES = {
 }
 
 
-def _bind(D, inputs: list) -> reference._Transcript:
-    """The transcript of the root's Input gates bound to `inputs` (`Evaluate.bind`): each argument a list of words, or
+def _bind(D, inputs: list) -> reference._TableTrace:
+    """The trace of the root's Input gates bound to `inputs` (`Evaluate.bind`): each argument a list of words, or
     `{"table": name}` binding as many consecutive `RegisteredInput16_v1` gates as the table has leaves, read on demand."""
     body = D.root.body
     runs = [(body.offsets[k], n.gates, *input_id(n.fn.id)[::-1]) for k, n in enumerate(body.nodes)
@@ -153,7 +159,7 @@ def _bind(D, inputs: list) -> reference._Transcript:
     total = sum(n for _, n, _, _ in runs)
     if given != total:
         raise ValueError(f"expected {total} input words, got {given}")
-    t = reference._Transcript()
+    t = reference._TableTrace()
     ri = ro = 0
     for p in inputs:
         if isinstance(p, list):
@@ -189,7 +195,7 @@ def python_answer(desc: dict, inputs: list) -> dict:
         body = D.root.body
         for k, n in enumerate(body.nodes):
             if not (isinstance(n.fn, PrimitiveDefinition) and input_id(n.fn.id)):
-                evaluate_region(D.circuit, D.circuit[body.offsets[k]:body.offsets[k] + n.gates], t)
+                reference.evaluate_region(D.circuit, D.circuit[body.offsets[k]:body.offsets[k] + n.gates], t)
         return {"output": [t[g] for g in D.circuit.root_outputs()]}
     except (ValueError, KeyError, TypeError, IndexError) as e:
         return {"reject": f"{type(e).__name__}: {e}"}
@@ -501,6 +507,125 @@ def test_a_malformed_input_is_rejected_and_the_next_request_answered(server):
         server.call("nope", {})
     kind, out = server.call("evaluate", request(v["descriptor"], [[1, 0], [1, 0]]))
     assert kind == "output" and _words(json.loads(out), [4]) == [1 + 1 + 8]
+
+
+# ---- the layout's gates and the partition: the Python mirrors of `Flock.Program.Gate` and `Flock.Extract.Partition` -----
+
+def _keys(D) -> dict[int, str]:
+    """Each decoded Definition's `definitions` key, by object: the key `Flock.Program.Defn.key` holds."""
+    return {id(f): k for k, f in D.defs.items()}
+
+
+def _scope(s, key: dict[int, str]) -> list[list]:
+    """An activation from the innermost up to the root, as `Evaluate.scopeJson` writes it."""
+    out = []
+    while s.parent is not None:
+        out.append([key[id(s.spec)], s.offset, s.node_idx, s.member])
+        s = s.parent
+    return out + [[key[id(s.spec)], s.offset]]
+
+
+def _decoded(value: dict, field: str):
+    if not (isinstance(value, dict) and set(value) == {"program", field} and isinstance(value["program"], dict)):
+        raise DT.Reject(f"input: a program object and {field}")
+    try:
+        return codec.decode_program(copy.deepcopy(value["program"]), REGISTRY)
+    except (ValueError, KeyError, TypeError, IndexError) as e:
+        raise DT.Reject(f"{type(e).__name__}: {e}") from None
+
+
+def gate_reference(value: dict) -> dict:
+    """`layout.Circuit.gate` on the decoded Program: the `layout.Gate` as `Evaluate.gateFn` answers it, its primitive by key."""
+    D, i = _decoded(value, "gate"), value["gate"]
+    if not (isinstance(i, int) and not isinstance(i, bool)):
+        raise DT.Reject(f"input: gate {i!r} is not a gate index")
+    try:
+        g = D.circuit.gate(i)
+    except IndexError as e:
+        raise DT.Reject(f"gate {e} outside the circuit") from None
+    key = _keys(D)
+    return {"index": g.index, "prim": key[id(g.prim)], "operands": list(g.operands), "scope": _scope(g.scope, key)}
+
+
+def partition_reference(value: dict) -> dict:
+    """`partition_object.evaluate` under `Q_word{X, 32}` on the decoded Program: the `Partition` as `Evaluate.partitionFn`
+    answers it, each Call `[root-body index, its Definition's key, units, owner]`."""
+    D = _decoded(value, "X")
+    try:
+        part = PO.evaluate(D, PO.query(value["X"], 32))
+    except (ValueError, KeyError, TypeError, IndexError) as e:
+        raise DT.Reject(f"{type(e).__name__}: {e}") from None
+    key = _keys(D)
+    return {"population": part.population, "calls": [[k, key[id(c.fn)], c.units, list(c.owner())] for k, c in part.calls]}
+
+
+@functools.cache
+def _layout_desc(seed: int, one_call: bool) -> tuple[str, int]:
+    """A random composite's Program, inlined into the root or as its one-call Program, and its gate count."""
+    program, main, _ = _random_program(seed)
+    if one_call:
+        program = reference.standalone_call(bind(main))[0]
+    return json.dumps(desc_of(program)), program.circuit.size
+
+
+@st.composite
+def gate_requests(draw) -> dict:
+    """A random composite's Program and one of its gates, or a gate past its last (about one draw in three: Hypothesis
+    draws an integer range's lower bound more often than its share)."""
+    text, size = _layout_desc(draw(st.integers(0, RANDOM_SEEDS - 1)), draw(st.booleans()))
+    g = draw(st.integers(size, size + 3)) if draw(st.integers(0, 7)) == 0 else draw(st.integers(0, size - 1))
+    return {"program": json.loads(text), "gate": g}
+
+
+@st.composite
+def partition_requests(draw) -> dict:
+    """A random composite's one-call Program, whose one Call `Q_word` cuts, or one draw in four its inlined Program, whose
+    root batches and scans `Q_word` refuses; at an X from 1 to 64."""
+    text, _ = _layout_desc(draw(st.integers(0, RANDOM_SEEDS - 1)), draw(st.integers(0, 3)) > 0)
+    return {"program": json.loads(text), "X": draw(st.sampled_from((1, 2, 3, 4, 8, 16, 64)))}
+
+
+GATE_PORT = DT.Port("verity-evaluate", "gate", reference=gate_reference, inputs=gate_requests(), package=PKG)
+PARTITION_PORT = DT.Port("verity-evaluate", "partition", reference=partition_reference, inputs=partition_requests(),
+                         package=PKG)
+
+
+@pytest.mark.slow
+def test_layout_gates_drawn(server):
+    stats = DT.run(GATE_PORT, examples=400, seed=0, server=server)
+    assert stats.outputs >= 200 and stats.rejects >= 20, stats
+
+
+def test_every_gate_of_some_programs(server):
+    """Every gate of eight random composites, inlined and as one-call Programs, and the first index past each."""
+    n = 0
+    for seed, one_call in itertools.product(range(8), (False, True)):
+        text, size = _layout_desc(seed, one_call)
+        desc = json.loads(text)
+        for g in range(size + 1):
+            assert DT.replay(GATE_PORT, {"program": desc, "gate": g}, server)[0] == ("output" if g < size else "reject")
+        n += size
+    assert n >= 200, n
+
+
+def test_partitions_drawn(server):
+    stats = DT.run(PARTITION_PORT, examples=300, seed=0, server=server)
+    assert stats.outputs >= 150 and stats.rejects >= 20, stats
+
+
+def test_layout_and_partition_refusals(server):
+    """A malformed request, an X outside 1..2^16 and an unordered program are refused by both sides."""
+    text, _ = _layout_desc(0, True)
+    desc = json.loads(text)
+    cases = [(GATE_PORT, {"program": desc, "gate": -1}), (GATE_PORT, {"program": desc, "gate": True}),
+             (GATE_PORT, {"program": desc}), (GATE_PORT, {"program": 3, "gate": 0}),
+             (PARTITION_PORT, {"program": desc, "X": 0}), (PARTITION_PORT, {"program": desc, "X": 65537}),
+             (PARTITION_PORT, {"program": desc, "X": True}), (PARTITION_PORT, {"program": desc})]
+    forward = json.loads(_random_desc(0)[0])
+    _forward(forward)
+    cases.append((PARTITION_PORT, {"program": forward, "X": 16}))
+    assert [DT.replay(port, c, server)[0] for port, c in cases] == ["reject"] * len(cases)
+    assert DT.replay(PARTITION_PORT, {"program": desc, "X": 65536}, server)[0] == "output"
 
 
 # ---- E1: the constants and the scalar primitives ------------------------------------------------------------------------

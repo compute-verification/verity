@@ -6,11 +6,12 @@
   "NciCheck.DifftestMain": "the difftest against the Python reference, under `runs`: compiled evaluation of NciCheck.Difftest.main, audited under NciCheck, a test and not a proof",
   "NciCheck.BaselineDifftestMain": "the provenance check's difftest, under `runs`: compiled evaluation of NciCheck.BaselineDifftest.main, audited under NciCheck, a test and not a proof",
   "NciCheck.DescLivenessMain": "the description-sized check's liveness test, under `runs`: compiled evaluation of NciCheck.DescLiveness.main, audited under NciCheck, a test and not a proof",
-  "NciCheck.DescFuzzMain": "the description-sized check's fuzz run, under `runs`: compiled evaluation of NciCheck.DescFuzz.main, audited under NciCheck, a test and not a proof"
+  "NciCheck.DescFuzzMain": "the description-sized check's fuzz run, under `runs`: compiled evaluation of NciCheck.DescFuzz.main, audited under NciCheck, a test and not a proof",
+  "NciCheck.ProtocolMain": "the inference-only executable's entry point, one line; its command is Core.Protocol.main of NciCheck.Protocol.protocol, audited under CoreProtocol and NciCheck"
  },
  "runs": {
   "NciCheck.DescDifftestMain": {
-   "why": "4,009 declarations divided into IUs of root nodes (3,000 random, a quarter of them read across their arrays' rows, 24 on each distinct descriptor of the circuits fixtures, 6 on a composite keyed with an input id, which is no input node, 2 on a gate reading a nested scan's carry, one of them past NciCheck.Desc.walkBound's limit, 4 on a scan of no iterations, the 3 whose carry is a value (read or not) refused by NciCheck.Desc.resolvable, 12 on whole members of a batch returning leaves of two arguments they share, each another node's, and 335 whose references name leaves of other widths than their types give them, E_REINTERPRET, which both sides refuse, or are their well-typed neighbours: the shapes on which PRF-151's first liveness test gave NciCheck mistyped Programs, arrays of up to 2^20 (V8, V16) pairs read whole, by leaf, shifted and as quads and 300 random declarations with one reference moved, then the unrolled difftest's two pinned ones) on which NciCheck.Desc.check gives what scripts/nci_reference.py's check_desc computes, and, on each one it gives a verdict on, what NciCheck.check gives on the instance expanded gate by gate: the description-sized check against the unrolled one",
+   "why": "4,009 declarations divided into IUs of root nodes (3,000 random, a quarter of them read across their arrays' rows, 24 on each distinct descriptor of the circuits fixtures, 6 on a composite keyed with an input id, which is no input node, 2 on a gate reading a nested scan's carry, one of them past NciCheck.Desc.walkBound's limit, 4 on a scan of no iterations, the 3 whose carry is a value (read or not) refused by NciCheck.Desc.resolvable, 12 on whole members of a batch returning leaves of two arguments they share, each another node's, and 335 whose references name leaves of other widths than their types give them, E_REINTERPRET, which both sides refuse, or are their well-typed neighbours: the shapes on which a draft of the liveness test gave NciCheck mistyped Programs, arrays of up to 2^20 (V8, V16) pairs read whole, by leaf, shifted and as quads and 300 random declarations with one reference moved, then the unrolled difftest's two pinned ones) on which NciCheck.Desc.check gives what scripts/nci_reference.py's check_desc computes, and, on each one it gives a verdict on, what NciCheck.check gives on the instance expanded gate by gate: the description-sized check against the unrolled one",
    "args": [
     "{desc_difftest/instances.jsonl}",
     "{desc_difftest/expanded.jsonl}",
@@ -57,7 +58,7 @@
    "generate": ["python3", "scripts/desc_liveness_vectors.py", "{repo}", "--out", "{out}"]
   },
   "NciCheck.DescFuzzMain": {
-   "why": "1,330 descriptor v1 Programs from fixed seeds: the 14 worked by hand; the lane's shared-members family (fuzz/gen/shared.py): the 6 declarations of the desc difftest's shared members (whole members of a batch returning leaves of arguments they share, each another root node's output, which NciCheck.Desc read as its first piece's node's alone before Seg.split) and 263 drawn after them (200 seeds and 63 mutants: two or three shared arguments, each a gate, a call, a batch member or the input itself; two to four members, with a mapped argument or none; their leaves in any order, with the member's own gate; read whole, by a run of members or a run cut inside them, directly or through composites), each with its IU assignments (1 to 12, 1,670 in all); 789 random (600 and 189), 183 of segment copies (150 and 33), 23 chains (20 and 3) and 52 big (40 and 12). On each one past NciCheck.Desc.evaluate's refusals NciCheck.DescFuzz.check decides the statements behind DescAgrees: OperandsResolve on primitive nodes, BodiesOk and ReadsExact, and DescAgrees itself, NciCheck.Desc.evaluate against NciCheck.evaluate on the instance expanded gate by gate, on the line's IU assignments and 4 instances of its own on each worked and seed one, 1 on the rest. About 60 s on one core, 15 s on four; NciCheck.Desc without Seg.split fails it on 122 of them, every one shared, in ReadsExact and DescAgrees",
+   "why": "1,330 descriptor v1 Programs from fixed seeds: the 14 worked by hand; the shared-members family (fuzz/gen/shared.py): the 6 declarations of the desc difftest's shared members (whole members of a batch returning leaves of arguments they share, each another root node's output, which NciCheck.Desc read as its first piece's node's alone before Seg.split) and 263 drawn after them (200 seeds and 63 mutants: two or three shared arguments, each a gate, a call, a batch member or the input itself; two to four members, with a mapped argument or none; their leaves in any order, with the member's own gate; read whole, by a run of members or a run cut inside them, directly or through composites), each with its IU assignments (1 to 12, 1,670 in all); 789 random (600 and 189), 183 of segment copies (150 and 33), 23 chains (20 and 3) and 52 big (40 and 12). On each one past NciCheck.Desc.evaluate's refusals NciCheck.DescFuzz.check decides the statements behind DescAgrees: OperandsResolve on primitive nodes, BodiesOk and ReadsExact, and DescAgrees itself, NciCheck.Desc.evaluate against NciCheck.evaluate on the instance expanded gate by gate, on the line's IU assignments and 4 instances of its own on each worked and seed one, 1 on the rest. About 60 s on one core, 15 s on four; NciCheck.Desc without Seg.split fails it on 122 of them, every one shared, in ReadsExact and DescAgrees",
    "args": ["{desc_fuzz/programs.jsonl}", "1330"],
    "data": {
     "desc_fuzz/programs.jsonl": "e8ae76049303e94b60e0aecf2a817afde9824ade5e3493a536817f1db1de7f02"
@@ -69,7 +70,7 @@
   "NciCheck.Check": {
    "imports": ["Std", "Flock.Program"],
    "except": [],
-   "why": "the check is code: Lean core and C-Flock's program decoder only, no Mathlib and nothing of Security (the coordinator's ruling for this port)"
+   "why": "the check is code: Lean core and C-Flock's program decoder only, no Mathlib and nothing of Security"
   },
   "NciCheck.Desc": {
    "imports": ["Std", "Flock.Program", "NciCheck.Check"],
@@ -77,9 +78,14 @@
    "why": "the description-sized check is code, as NciCheck.Check is: Lean core, C-Flock's program decoder and the check's instance format and verdict"
   },
   "NciCheck.Baseline": {
-   "imports": ["Std", "Flock.Program", "NciCheck.Check", "NciCheck.Desc"],
+   "imports": ["Std", "Flock.Program", "Flock.WindowRecord", "NciCheck.Check", "NciCheck.Desc"],
    "except": [],
-   "why": "θ's provenance check is code, as NciCheck.Desc is: Lean core, C-Flock's program decoder (with the canonical JSON and SHA-512 it imports) and the policy check it runs first"
+   "why": "θ's provenance check is code, as NciCheck.Desc is: Lean core, C-Flock's program decoder (with the canonical JSON and SHA-512 it imports), the window record's one digest and the policy check it runs first"
+  },
+  "NciCheck.Protocol": {
+   "imports": ["NciCheck.Baseline", "CoreProtocol.Protocol"],
+   "except": [],
+   "why": "the inference-only policy as a core protocol is code: the policy's check (NciCheck.Baseline) behind the core interface's decoders and outcome, no Mathlib and nothing of Security"
   }
  },
  "guarantees": {},

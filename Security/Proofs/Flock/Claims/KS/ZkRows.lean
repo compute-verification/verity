@@ -203,7 +203,7 @@ theorem zk_rep_rowsL {mPts : ℕ} {Sl : Type} (Hs : ZkLink.Hashes 𝔽 Dig Sl) (
 entries with each row whole (`zk_rep_rows`), rep 0's then rep 1's. -/
 theorem zk_table_rows₀Z {n mPts : ℕ} {Reg : Type} (T : Finset (Fin n) → Reg → ZkSession.TabZK 𝔽 mPts)
     (S : Finset (Fin n)) (R : Reg) (pts : Fin 2 → Fin mPts → 𝔽) (spec : SessionSpec) (st : Setup)
-    (sch : Flock.Schedule) (tPad : ℕ) (sess : Session) (i : ℕ) (b₀ b₁ c : ByteArray) (N : ℕ)
+    (sch : Flock.Schedule) (tPad : ℕ) (sess : RunRecord) (i : ℕ) (b₀ b₁ c : ByteArray) (N : ℕ)
     (hN : (Model.extraClaims (T S R).S (T S R).ptLocal mPts pts).length = N)
     (hsch : Zk.schedule st.m = .ok (sch, tPad)) (hseam : ZkTabSeam (T S R) st sch tPad)
     (hext : ExtraRealizes st (T S R).S sess.points (Model.extraClaims (T S R).S (T S R).ptLocal mPts pts))
@@ -259,7 +259,7 @@ theorem zk_table_rows₀Z {n mPts : ℕ} {Reg : Type} (T : Finset (Fin n) → Re
 rep 0's and rep 1's openings are their `zkLevelRowsOf` rows (`zk_rep_rowsL`). -/
 theorem zk_table_rowsLZ {n mPts : ℕ} {Reg : Type} (T : Finset (Fin n) → Reg → ZkSession.TabZK 𝔽 mPts)
     (S : Finset (Fin n)) (R : Reg) (pts : Fin 2 → Fin mPts → 𝔽) (spec : SessionSpec) (st : Setup)
-    (sch : Flock.Schedule) (tPad : ℕ) (sess : Session) (i : ℕ) (b₀ b₁ c : ByteArray) (N : ℕ)
+    (sch : Flock.Schedule) (tPad : ℕ) (sess : RunRecord) (i : ℕ) (b₀ b₁ c : ByteArray) (N : ℕ)
     (hN : (Model.extraClaims (T S R).S (T S R).ptLocal mPts pts).length = N)
     (hsch : Zk.schedule st.m = .ok (sch, tPad)) (hseam : ZkTabSeam (T S R) st sch tPad)
     (hext : ExtraRealizes st (T S R).S sess.points (Model.extraClaims (T S R).S (T S R).ptLocal mPts pts))
@@ -324,7 +324,7 @@ each rep's inner openings are its decoded inner proof's (`opnZ_pair`), and the p
 round's coins, through the table's `pos` (`zk_qpos_of_rep`, `ZkTabLay.hpos`). -/
 theorem zk_table_padsZ {n mPts : ℕ} {Reg : Type} (T : Finset (Fin n) → Reg → ZkSession.TabZK 𝔽 mPts)
     (S : Finset (Fin n)) (R : Reg) (pts : Fin 2 → Fin mPts → 𝔽) (spec : SessionSpec) (st : Setup)
-    (sch : Flock.Schedule) (tPad : ℕ) (sess : Session) (i : ℕ) (b₀ b₁ c : ByteArray) (N : ℕ)
+    (sch : Flock.Schedule) (tPad : ℕ) (sess : RunRecord) (i : ℕ) (b₀ b₁ c : ByteArray) (N : ℕ)
     (hN : (Model.extraClaims (T S R).S (T S R).ptLocal mPts pts).length = N)
     (hsch : Zk.schedule st.m = .ok (sch, tPad)) (hseam : ZkTabSeam (T S R) st sch tPad)
     (htab : ZkTabLay (T S R) st sch) (hfold : FoldRealizes st.fold (T S R).S)
@@ -381,7 +381,7 @@ pending's caps are its decoded proof's recursive caps, one per level past level 
 (`zk_rep_reqs`). -/
 theorem zk_table_capsZ {n mPts : ℕ} {Reg : Type} (T : Finset (Fin n) → Reg → ZkSession.TabZK 𝔽 mPts)
     (S : Finset (Fin n)) (R : Reg) (pts : Fin 2 → Fin mPts → 𝔽) (spec : SessionSpec) (st : Setup)
-    (sch : Flock.Schedule) (tPad : ℕ) (sess : Session) (i : ℕ) (b₀ b₁ c : ByteArray) (N : ℕ)
+    (sch : Flock.Schedule) (tPad : ℕ) (sess : RunRecord) (i : ℕ) (b₀ b₁ c : ByteArray) (N : ℕ)
     (hN : (Model.extraClaims (T S R).S (T S R).ptLocal mPts pts).length = N)
     (hsch : Zk.schedule st.m = .ok (sch, tPad)) (hseam : ZkTabSeam (T S R) st sch tPad)
     (hext : ExtraRealizes st (T S R).S sess.points (Model.extraClaims (T S R).S (T S R).ptLocal mPts pts))
@@ -441,7 +441,7 @@ claims on the streams' rounds and table `j`'s proof files; each rep's pads are i
 stream's query words (`PadsRep`); and each rep's recorded caps are its decoded proof file's recursive caps. -/
 def OpensRows (I : Inputs) (d : Lean.Json) (t : Exec.Transcript) (j : ℕ) (T : TabZK 𝔽 mPts)
     (out : OutZC 𝔽 Dig (List UInt8)) : Prop :=
-  ∃ (spec : SessionSpec) (sts : Array Flock.Stmt) (sess : Session) (sch : Flock.Schedule) (tPad : ℕ)
+  ∃ (spec : SessionSpec) (sts : Array Flock.Stmt) (sess : RunRecord) (sch : Flock.Schedule) (tPad : ℕ)
     (s₀ s₁ : StreamRec) (h : j < sts.size),
     FlockDeploy.KS.setupAt (zkInputs I) (some d) = .ok (spec, sts) ∧ Record.decode spec t.record = .ok sess ∧
     Zk.schedule sts[j].m = .ok (sch, tPad) ∧

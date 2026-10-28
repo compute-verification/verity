@@ -1,4 +1,4 @@
-"""The proof service's challenger in Lean (`SampledProofs.Challenger`, the verifier of record) against its Python mirror
+"""The proof system's challenger in Lean (`SampledProofs.Challenger`, the verifier of record) against its Python mirror
 (`verity.core.protocols.sampled_proofs.challenger`), through `sampled-proofs-difftest`'s challenger pieces: a coin
 commitment and an opening as `from_json` reads them, `live_reason` and `order_reason`; and the challenger's signed record
 (`SampledProofs.ChallengerRecord`): the verifier's key and a record as `from_json` reads them, with `record_message`, and
@@ -15,7 +15,7 @@ v1 session and inside a period of its lane, then a close, log or ledger entry ed
 another key, a ledger signed under its own key, one cut before the session's end, a second session for the window, a v1
 window, a v1 entry after a v2, a record leaf outside its session, an entry's or used twice, a period named twice, past
 its cap, committing no cap or circuit or closing with other windows, a record on another host or at another leaf, a log
-or refused hellos the ledger didn't seal, infra's published heads forked, each malformed form. The pins log's
+or refused hellos the ledger didn't seal, the ledger's published heads forked, each malformed form. The pins log's
 (`PINNED`) are a session whose open seals the host's pins log and pins its commit, then a commit off main or pinned
 after the open, no pins log, a malformed one or line, one cut or with a sealed line edited, and an open sealing
 none. A draw's coins (`READ`, `DRAW_COINS`: `read_reason` and `coins_reason`, `SampledProofs.ChallengerCoins`) are
@@ -360,7 +360,7 @@ PARAMS = [(1, 2), (2, 3), (4, 2), (8, 1)]
 #: those for a key that signs a ledger too: 32 leaves, room for a ledger's entries at increasing leaves on either side of
 #: its session's record
 LEDGER_PARAMS = [(1, 6), (2, 6), (4, 6)]
-HOSTS = ["vy-nebius-cpu-1", "auditor.example", "h", "A_1"]
+HOSTS = ["host-a", "auditor.example", "h", "A_1"]
 
 
 @functools.cache
@@ -656,9 +656,9 @@ CIRCUITS = ["ab" * 64, "0" * 128, "c" * 128]
 STARTS = ["2026-10-20T12:00:00Z", "2024-02-28T23:59:59Z", "2100-02-28T12:00:00Z", "2026-12-31T23:30:00Z",
           "0001-01-01T00:00:00Z", "9999-12-31T11:00:00Z"]
 PEERS = ["10.0.0.7", "vy-nebius-1", "::1"]
-#: a body's note, each written as `ledger_text` escapes it (none past the Basic Multilingual Plane, which it writes as a
-#: surrogate pair)
-NOTES = ["\u00e9", "a\"b\\c\n", "\x7f\x01", "\u2026"]
+#: a body's note, each written as `ledger_text` escapes it: ASCII without DEL, as the entry's signed digest (canonical
+#: JSON, which refuses any other) holds
+NOTES = ["~", "a\"b\\c\n", "\x01", "\x1f "]
 #: a key `_body` removes
 DROP = object()
 #: an open's `reserve` that `Ledger.lines` resolves to its session's reserve's seq
@@ -687,10 +687,11 @@ class Ledger:
     `lines` them chained and signed at drawn increasing leaves of `s`'s key, `s`'s record's leaf between its open's and
     its end's (or at `leaves`, or under `signer`, an `edit(i, entry)` applied to each entry before it is signed).  When
     `two_step` (drawn when `s`'s id is a reserved one, unless set), every v2 session is reserved before it is opened, its
-    open binding the reserve, and sometimes another reserve is never opened."""
+    open binding the reserve, and sometimes another reserve is never opened.  When `withheld`, `s`'s open marks it a
+    withheld session (`withheld: true`)."""
 
     def __init__(self, rng: random.Random, s: Session, closed: bool = True, period: str | None = None,
-                 two_step: bool | None = None) -> None:
+                 two_step: bool | None = None, withheld: bool = False) -> None:
         self.rng, self.s, self.window = rng, s, _window(rng)
         self.two_step = (Ch._RESERVED_SESSION.fullmatch(s.id) is not None
                          and (rng.random() < 0.8 if two_step is None else two_step))
@@ -702,13 +703,15 @@ class Ledger:
             files["serve.log"] = rng.randbytes(64).hex()
         self.lane = rng.choice(LANES)
         named, self.opened = self.session_events(s.id, self.window, s.host, self.lane)
+        if withheld:
+            self.opened["withheld"] = True
         self.ended = {"closed": closed, "commitment": s.ch.commitment.root.hex(), "complete": closed, "files": files,
                       "rc": 0 if closed else 1, "record_leaf": s.q, "refused_hellos": len(s.hellos)}
         named.append(("end", s.id, self.ended))
         queues = [named]
         for tag in ("o-1", "o-2")[:rng.randint(0, 2)]:
             sid, done = self.sid(tag), rng.random() < 0.8
-            events, _ = self.session_events(sid, _window(rng), f"vy-challenger-1.{sid}", rng.choice(LANES))
+            events, _ = self.session_events(sid, _window(rng), f"challenger-host.{sid}", rng.choice(LANES))
             queues.append(events + [("end", sid, {"closed": done, "complete": done and rng.random() < 0.8,
                                                   "files": {}, "rc": 0})])
         if self.two_step and rng.random() < 0.5:
@@ -719,7 +722,7 @@ class Ledger:
             self.events.append(q.pop(0))
         self.period_open = None
         if period is not None or rng.random() < 0.5:
-            self.period_open = {"by": "vy-admin", "cap": rng.randint(4, 8), "circuit": rng.choice(CIRCUITS),
+            self.period_open = {"by": "operator", "cap": rng.randint(4, 8), "circuit": rng.choice(CIRCUITS),
                                 "key_sha512": hashlib.sha512(s.pub).hexdigest(), "lane": self.lane,
                                 "period": rng.choice(PERIODS)}
             first = self.index("reserve" if self.two_step else "open", s.id)
@@ -730,7 +733,7 @@ class Ledger:
                 self.events.insert(at, ("period-close", None, self.close_body(self.events[:at])))
         if rng.random() < 0.3:
             old = {"commit": rng.randbytes(64).hex(), "period": rng.choice(PERIODS)}
-            self.v1 = [{"host": "vy-challenger-1", "key_sha512": hashlib.sha512(s.pub).hexdigest(),
+            self.v1 = [{"host": "challenger-host", "key_sha512": hashlib.sha512(s.pub).hexdigest(),
                         "pinned": rng.randbytes(20).hex(), "port": 7811, "window": old},
                        {"closed": True, "files": {}, "rc": 0}]
             self.events = [("open", "v1-0", self.v1[0]), ("end", "v1-0", self.v1[1])] + self.events
@@ -739,7 +742,7 @@ class Ledger:
         body = {"window": window, "host": host, "pinned": self.rng.randbytes(20).hex(),
                 "key_sha512": hashlib.sha512(self.s.pub if public is None else public).hexdigest(),
                 "port": self.rng.choice([7811, 7812])}
-        body.update(self.rng.choice([{"by": lane}, {"by": "vy-admin", "for": lane}, {"by": lane, "for": ""}]))
+        body.update(self.rng.choice([{"by": lane}, {"by": "operator", "for": lane}, {"by": lane, "for": ""}]))
         if self.rng.random() < 0.3:
             body["started_utc"] = "2026-10-20T09:45:48Z"
         if self.rng.random() < 0.2:
@@ -753,7 +756,7 @@ class Ledger:
     def reserve_body(self, lane: str) -> dict:
         rng = self.rng
         start, minutes = rng.choice(STARTS), rng.choice([1, 30, 720, rng.randint(1, 720)])
-        body = rng.choice([{"by": lane}, {"by": "vy-admin", "for": lane}])
+        body = rng.choice([{"by": lane}, {"by": "operator", "for": lane}])
         body.update(peer=rng.choice(PEERS), scheme=rng.choice(SCHEMES), epoch=rng.choice([0, 1, 7]),
                     families=[[rng.choice(LABELS), rng.randint(1, 4)]], minutes=minutes, started_utc=start,
                     expires_utc=Ch.later(start, minutes))
@@ -996,13 +999,15 @@ def ledger_case(rng: random.Random, name: str) -> Any:
             lines = lg.lines()
             j["ledger"] = lines[:i] + [json.dumps(json.loads(lines[i]))] + lines[i + 1:]
         case "unicode":
-            if rng.random() < 0.5:
-                lines = lg.lines(edit=_body_edit(o, note=rng.choice(["\U0001f600", "\\ud800", "\\udfff"])))
-                j["ledger"] = lines
+            note = rng.choice(["\U0001f600", "\\ud800", "\\udfff", "\u00e9", "\u00e9"])
+            if note.isascii():
+                j["ledger"] = lg.lines(edit=_body_edit(o, note=note))
             else:
-                lines = lg.lines(edit=_body_edit(o, note="\u00e9"))
-                j["ledger"] = lines[:o] + [json.dumps(json.loads(lines[o]), sort_keys=True, separators=(",", ":"),
-                                                      ensure_ascii=False)] + lines[o + 1:]
+                # no entry's signed digest (canonical JSON) holds a string past ASCII, so the note goes into the signed
+                # line's text: the emoji as `ledger_text` escapes it (a surrogate pair), é as itself (not canonical)
+                lines = lg.lines(edit=_body_edit(o, note="?"))
+                text = json.dumps(note, ensure_ascii=note != "\u00e9")
+                j["ledger"] = lines[:o] + [lines[o].replace('"note":"?"', '"note":' + text, 1)] + lines[o + 1:]
         case "torn":
             lines = lg.lines()
             j["ledger"] = lines[:i] + [lines[i][:rng.randrange(1, len(lines[i]))]] + lines[i + 1:]
@@ -1067,7 +1072,7 @@ def ledger_case(rng: random.Random, name: str) -> Any:
                               {"files": _body(files, **{rng.choice(Ch.SEALED_FILES): DROP})}])
             j["ledger"] = lg.lines(edit=_body_edit(end, **bad))
         case "second-open":
-            events.insert(rng.randint(0, len(events)), ("open", "s-other", lg.open_body(lg.window, "vy-challenger-1.x",
+            events.insert(rng.randint(0, len(events)), ("open", "s-other", lg.open_body(lg.window, "challenger-host.x",
                                                                                        "other")))
             j["ledger"] = lg.lines(events)
         case "reused-leaf":
@@ -1166,7 +1171,7 @@ def ledger_case(rng: random.Random, name: str) -> Any:
             j["ledger"] = lg.lines(edit=_body_edit(p, cap=rng.choice([0, -1, Ch.CAP[1] + 1, "4", True, None, [4]])))
         case "circuit":
             j["ledger"] = lg.lines(edit=_body_edit(p, circuit=rng.choice(["AB" * 64, "aB" * 64, "", "-x", "a b", 5,
-                                                                           "x" * 257, None, "\u00e9"])))
+                                                                           "x" * 257, None, "~"])))
         case "no-cap":
             j["ledger"] = lg.lines(edit=_body_edit(p, **rng.choice([{"cap": DROP, "circuit": DROP},
                                                                      {"cap": None, "circuit": None}])))
@@ -1211,7 +1216,7 @@ def ledger_case(rng: random.Random, name: str) -> Any:
                     other = {0: False, 1: True}.get(v, v + 1)
             j["ledger"] = lg.lines(edit=_body_edit(o, **{k: other}))
         case "opened-by":
-            j["ledger"] = lg.lines(edit=_body_edit(o, opened_by=rng.choice(["other", "", "vy-Admin", None, 5, ["x"],
+            j["ledger"] = lg.lines(edit=_body_edit(o, opened_by=rng.choice(["other", "", "Operator", None, 5, ["x"],
                                                                             DROP])))
         case "open-late":
             start, expiry = reserve["started_utc"], reserve["expires_utc"]
@@ -1315,7 +1320,7 @@ def session_case(rng: random.Random, name: str) -> Any:
             j["window"] = _window(rng)
         case "other-host":
             o = lg.index("open", s.id)
-            host = rng.choice([h for h in HOSTS if h != s.host] + [f"vy-challenger-1.{s.id}"])
+            host = rng.choice([h for h in HOSTS if h != s.host] + [f"challenger-host.{s.id}"])
             j["ledger"] = lg.lines(edit=_entry_edit(o, lambda e: e["body"].update(host=host)))
         case "unsealed-log":
             j["ledger"] = lg.lines(edit=_entry_edit(end, lambda e: e["body"]["files"].update(
@@ -1532,10 +1537,10 @@ class Drawn:
     (one read, or a read and a rerun's extension), between other roots: the other family's, `draw` coins opened before
     the commitment (at least one when `before`), and later ones. `ledger` opens the session for its window. `after` is
     the commitment (drawn, by default), and `reads` reads the coins (`reads(coins)`, the bytes read), by default in one
-    or two reads of drawn lengths."""
+    or two reads of drawn lengths.  The ledger opens the session withheld unless `withheld` is false."""
 
     def __init__(self, rng: random.Random, before: bool = False, after: bytes | None = None,
-                 reads: Callable[[Callable[[int], bytes]], bytes] | None = None) -> None:
+                 reads: Callable[[Callable[[int], bytes]], bytes] | None = None, withheld: bool = True) -> None:
         s = self.s = _ledger_session(rng)
         s.ch = _challenger(rng, [("other", 2), ("draw", 12)])
         s.ch.sign_record(s.host, s.pub, lambda m: lms.sign_at(s.k, s.q, m).encode())
@@ -1559,7 +1564,7 @@ class Drawn:
         for _ in range(rng.randint(0, 2)):
             self._step("draw", lambda: self.records["draw"].record(rng.randbytes(64)))
         s.close = s.signed(None)
-        self.ledger = Ledger(rng, s)
+        self.ledger = Ledger(rng, s, withheld=withheld)
         self.pins, self.main = _pinned(rng, self.ledger, "honest")
 
     def _step(self, label: str, f):
@@ -1671,12 +1676,12 @@ def read_case(rng: random.Random, name: str) -> Any:
 
 
 DRAW_COINS_NAMES = ["honest"] + DRAW_MUTATIONS + ["log-tampered", "other-window", "window-form", "key-form",
-                                                   "off-main", "no-pins", "coins-form", "request"]
+                                                   "off-main", "no-pins", "coins-form", "unwithheld", "request"]
 
 
 def draw_coins_case(rng: random.Random, name: str) -> Any:
     rng = _seeded(rng)
-    d = Drawn(rng, before=name == "before")
+    d = Drawn(rng, before=name == "before", withheld=name != "unwithheld")
     seg, read_, after = _mutated(rng, d, name)
     coins = d.evidence(seg)
     j = {"after": after.hex(), "coins": coins, "read": read_.hex(), "window": d.ledger.window["root"]}

@@ -3,6 +3,7 @@ import Proofs.Flock.Bridge.PortRoots
 import Proofs.Flock.Bridge.PopMatches
 import Proofs.Flock.Bridge.RightRegZc
 import Proofs.Flock.Soundness.Discharge.Layout.RowEnc
+import Proofs.Flock.Soundness.Assumptions.Finders
 
 /-!
 # The bridge's targets with canonical openings (targets, not proved)
@@ -86,7 +87,7 @@ def FaultyRightTargetC : Prop :=
       ∃ d : Claims.Msg, Cm.Opens H roots ⟨posOf C g, bit (val o) g, d⟩ = true) →
     (∀ g ∈ P.io u, ∀ b, κ g = some b → C.eval Xr g = b) →
     ∀ (kd : ℕ) (desc : Claims.Msg) (q : Claims.Sampling.Query),
-      u.val ∉ Claims.Sampling.faulty H Cm (stmtOf P κ kd desc q roots) (partOf P) (witDep C Cm H roots Xr)
+      u.val ∉ Claims.Sampling.faulty H Cm (stmtOf P κ kd desc q roots) (partOf P κ) (witDep C Cm H roots Xr)
 
 end Flock.Bridge
 
@@ -234,7 +235,12 @@ file whose ports are rows of `sha512/row/v1`, `sha512/row/v2` or `sha512/row-seg
 port's row message (`Bridge.rowDep`) framed at its port's schema (`Bridge.schemaOf`), with the registration's ports and roots distinct (`dupName`, and no colliding pair of ports, `PortRoots.rootsColl`, which
 `PortRoots.rootsColl_none_iff` reads as `PortRoots.RootFixesDomain`) and
 its descriptor `desc` and query `qr` evaluating to a population of `n` units in order (`Bridge.PopMatches`).
-`SampledKSLive` implies it (`sampledKSLiveV2_of`). -/
+The knowledge finders' budgets are their cost: the prover's per-run time `t'` (the one the link finders are charged,
+`LinkCRZC`) and one opening's verification `v`, so `2(t' + v)` for a rewinding finder (two runs after a commitment, two
+openings verified) and `t' + v` for the self-clash finder (one run, one verification). Its one bound on the prover is
+`t'`, where `SampledKSLive` takes the budgets `q_F`, `q_S` apart from it. It takes cr/sha-512 and ecr/sha-512 at those
+finders as the named assumptions `Assumptions.TableCRZAt` and `Assumptions.LinkCRZCAt`. `SampledKSLive` implies it
+(`sampledKSLiveV2_of`). -/
 def SampledKSLiveV2 : Prop :=
   ∀ (n : ℕ) (Reg : Type)
     (I : Inputs) (ht : I.tags.typed = false)
@@ -260,7 +266,8 @@ def SampledKSLiveV2 : Prop :=
     (k Rw M : ℕ) (_hk : 1 ≤ k) (_hRw : 1 ≤ Rw) (_hM : 1 ≤ M) (ρ : ℝ) (_hρ : ρ < 1)
     (_hr : ∀ S R j, rateZ (planZHJ (Reg := Reg) dj y₀ S R) j k ≤ ρ) (t' : ℝ) (_ht' : 0 ≤ t') (K₀ : ℕ) (_hK₀ : K₀ ≤ n)
     (τ : Strategy (auditLive (Law.execOS (n := n) src (.subset kd) n) Reg (liveOfZJ dg (planZHJ dj y₀) N wr)))
-    (qF qS : ℝ)
+    -- one opening's verification, in SHA-512 evaluations
+    (v : ℝ)
     -- what the sampling statement carries and `RelS` doesn't read
     (q : Claims.Sampling.Query),
     let L := Law.execOS (n := n) src (.subset kd) n
@@ -285,27 +292,29 @@ def SampledKSLiveV2 : Prop :=
     let Cd := Bridge.commitDep Cc rows D.unroll n roots
     -- the circuit's constants, public
     let κ : Fin Cc.N → Option Bool := fun g => Bridge.constsOf D.unroll hU n g
-    -- cr/sha-512 for the knowledge finders of each table the prover's session runs
-    (∀ ω j, TableCRZ execArith hs512 (planZHJ dj y₀ (L.draw ω) (reg σ)) j
-      (zcStrat execArith hs512 (planZHJ dj y₀) (cont σ ω)) qF qS) →
+    -- cr/sha-512 for the knowledge finders of each table the prover's session runs, at their cost: two runs of the
+    -- prover and two verifications for a rewinding finder, one of each for the self-clash finder
+    (∀ ω j, FlockSoundness.Assumptions.TableCRZAt execArith hs512 (planZHJ dj y₀ (L.draw ω) (reg σ)) j
+      (zcStrat execArith hs512 (planZHJ dj y₀) (cont σ ω)) (2 * (t' + v)) (t' + v)) →
     -- ecr/sha-512 for the prover's link finders
-    LinkCRZC execArith hs512 P (planZHJ dj y₀) (tabZHJ dj y₀) vb (reg σ) (cont σ) k Rw M t' →
+    FlockSoundness.Assumptions.LinkCRZCAt execArith hs512 P (planZHJ dj y₀) (tabZHJ dj y₀) vb (reg σ) (cont σ)
+      k Rw M t' →
     prob (fun o => LiveAcceptsZK I o ∧
-        ¬ Claims.Sampling.RelS Claims.Sampling.sha512Msg Cd δ (Bridge.stmtOf P κ kd desc q roots) (Bridge.partOf P)
+        ¬ Claims.Sampling.RelS Claims.Sampling.sha512Msg Cd δ (Bridge.stmtOf P κ kd desc q roots) (Bridge.partOf P κ)
           (Bridge.witDep Cc Cd Claims.Sampling.sha512Msg roots Xr))
         (auditLive L Reg (liveOfZJ dg (planZHJ dj y₀) N wr)) τ ≤
       ((n - K₀).choose kd : ℝ≥0∞) / (n.choose kd : ℝ≥0∞) +
-        ksAvgStrictZ (planZHJ dj y₀) L k qF qS (reg σ) +
+        ksAvgStrictZ (planZHJ dj y₀) L k (2 * (t' + v)) (t' + v) (reg σ) +
         ENNReal.ofReal ((∑ p : vb.Pos,
             (Fintype.card (ΩcZ execArith P (planZHJ dj y₀) (tabZHJ dj y₀) vb L p) : ℝ) / Fintype.card L.Ω) *
           (2 * (t' * (1 + k)) / 2 ^ (256 : ℝ) + 1 / (Real.exp 1 * M) + k / (Real.exp 1 * Rw)) / (1 - ρ))
 
-/-- `SampledKSLiveV2` is `SampledKSLive` with four more hypotheses. -/
+/-- `SampledKSLiveV2` is `SampledKSLive` with four more hypotheses, at the budgets `2(t' + v)` and `t' + v`. -/
 theorem sampledKSLiveV2_of (h : SampledKSLive) : SampledKSLiveV2 := by
   intro n Reg I ht D hD hU pub hpub hpt hscope _ _ _ desc _ _ kd hkd hdiv dj S₀ d₀ y₀ wr dg N Ω _ _ Lb src hA3 hTags
-    hCust k Rw M hk hRw hM ρ hρ hr t' ht' K₀ hK₀ τ qF qS q
+    hCust k Rw M hk hRw hM ρ hρ hr t' ht' K₀ hK₀ τ v q
   exact h n Reg I ht D hD hU pub hpub hpt hscope kd hkd hdiv dj S₀ d₀ y₀ wr dg N Ω Lb src hA3 hTags hCust k Rw M hk hRw
-    hM ρ hρ hr t' ht' K₀ hK₀ τ qF qS desc q
+    hM ρ hρ hr t' ht' K₀ hK₀ τ (2 * (t' + v)) (t' + v) desc q
 
 /-- **The assembly, with canonical openings**: canonical transport, M1's core over `RightRegZc`, the slot count and the
 count lemma turn `EndToEndHiddenC` into `SampledKSLive` at `RowsOk` circuit files (`SampledKSLiveV2`). -/

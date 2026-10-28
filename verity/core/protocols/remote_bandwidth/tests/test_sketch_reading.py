@@ -71,7 +71,7 @@ def test_the_bound_is_exact_at_two_rows(cols: int) -> None:
 
 def test_seeded_sampling_does_not_falsify_the_rank_tail() -> None:
     """Seeded sampling at small parameters against the formulas behind `Accounting.Assumptions.SketchRank`
-    (art:d3c891e4 evaluates the deployed 16 × 4096 number, out of any sampler's reach): 10,000 draws a check at seed
+    (the deployed 16 × 4096 number is out of any sampler's reach): 10,000 draws a check at seed
     20261014.  The F2 law is exact, so the empirical CDF matches it two-sided; the ±1 bound and the union bound over
     sectors (the assumption's `∃ u` event) are upper bounds that sampling sits below, up to noise, and they are tight
     here (at 4 × 5 the bound on rank ≤ 2 is exactly 0.02588 by enumeration), so a wrong formula shows as systematic
@@ -141,7 +141,7 @@ def test_the_readings_and_thresholds_the_protocol_states() -> None:
 
 
 def test_the_outside_factor_multiplies_the_queries_the_bound_charges() -> None:
-    """RD-5: grinding reads no block, so `sketch_failure` charges Q = F·C, C the node's compressions and F the
+    """Grinding reads no block, so `sketch_failure` charges Q = F·C, C the node's compressions and F the
     outside-compute factor, 2^20 by default.  At gate run 8's session 0 (C = 12,708,215,084,432 over 226.9 s, P = 2,118,
     N = 97,517,568, its recorded δs 2^-51.59 at F = 1) F = 2^10 gives 2^-41.59, the red team's reading, and 2^20 gives
     2^-31.59; δs < 2^-50 at F = 2^20 takes 64 rows.  The line's δ there, 2^-40 of profile δ plus AuditRO's 2^-41 a pass
@@ -163,7 +163,7 @@ def test_the_outside_factor_multiplies_the_queries_the_bound_charges() -> None:
 
 
 def test_the_keys_distance_from_uniform_is_charged() -> None:
-    """RD-13: two of the `Q + P` candidate seeds whose 256-bit sign keys collide share their signs, so the keys are
+    """Two of the `Q + P` candidate seeds whose 256-bit sign keys collide share their signs, so the keys are
     within `(Q + P)²/2^257` of uniform, not uniform (`SketchHashRandom`'s ε), and `sketch_failure` charges it.  At gate
     run 8's session 0 it is 2^-129.94 at F = 2^20 (2^-169.94 at F = 1), and moves none of its δs's digits."""
     c, p, n = 12_708_215_084_432, 2118, 97_517_568

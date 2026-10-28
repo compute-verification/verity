@@ -23,6 +23,9 @@ ALLOWED: dict[str, str] = {
     "verity/core/protocols/network/nci/lean/NciCheck/Check.lean":
         "NciCheck.check, the gate-by-gate reference NciCheck.Desc is difftested against (runs NciCheck.DescDifftestMain); "
         "`nci-check` runs it only with --unrolled",
+    "verity/core/service/flock/Flock/AnnotExpand.lean":
+        "Annot.sets, expand and reference, an annotation laid out gate by gate: the reference Annot.check is held to "
+        "(Flock.Test.Annot, annot-difftest's annot.reference, Properties.Annot.CheckAgrees); no verifier runs it",
     "verity/core/service/flock/Flock/Extract.lean":
         "open (PRF-72): Q_word v1 owns every computing gate, so its CallGraph lays out one activation of each distinct "
         "Call's Definition, batch members and scan iterations unrolled; no served window names Q_word (they name "
@@ -44,6 +47,9 @@ ALLOWED: dict[str, str] = {
     "verity/core/service/flock/Flock/TmplFold.lean":
         "Tmpl.foldRef, the fold over the unrolled rows: the reference Tmpl.foldUnit is difftested against "
         "(Flock.Test.TmplFold) and proved equal to (foldUnit_eq_project)",
+    "verity/core/service/flock/Flock/Gate.lean":
+        "Prog.gateAt, one gate's location as Flock.Program.Gate: verity-evaluate's `gate` serves it so the difftest holds "
+        "layout.Gate to it; no verifier calls it",
 }
 
 FIX = ("a verifier of record does work proportional to the description, never to the unrolled circuit (AGENTS.md "

@@ -1,30 +1,31 @@
 #!/usr/bin/env bash
-# A gate run's steps through the two auditor hosts' gates under the lane's gate key (GATE_KEY), inside a `research run` on
-# the machine that holds it, cwd = a clone (`--cwd clone`) of COMMIT, the commit vy-auditor-1's verifier is pinned at.
+# A gate run's steps through the two auditor hosts' gates under the lane's gate key (GATE_KEY), as a job on the machine
+# that holds it, cwd = a clone of COMMIT, the commit the verifier host's verifier is pinned at.
 # `gate_run.sh` launches it; one VERB a run, everything into $OUT:
 #
-#   probe  read-only requests: vy-challenger-1's `pubkey` (its public key's SHA-512 must be PIN), `pins` and `ledger`
-#          (PERIOD unused, no period of LANE open), and vy-auditor-1's `status` (pinned at COMMIT, no unit running);
+#   probe  read-only requests: the challenger host's `pubkey` (its public key's SHA-512 must be PIN), `pins` and `ledger`
+#          (PERIOD unused, no period of LANE open), and the verifier host's `status` (pinned at COMMIT, no unit running);
 #          the circuit, `verity/remote-bandwidth/v0 verifier tree <tree>` of COMMIT's remote_bandwidth tree (auditor_line's
-#          `descriptor`). COMMIT, and so vy-auditor-1's pin, must be on origin/main's first-parent line, fetched as
+#          `descriptor`). COMMIT, and so the verifier host's pin, must be on origin/main's first-parent line, fetched as
 #          auditor.sh does (main.probe.txt; a fetch that fails refuses), since a session credits only under a verifier
 #          there. Writes probe.json; exit 3 on any mismatch, before anything is written to either host.
 #   open   `period-open --name PERIOD --cap CAP --circuit CIRCUIT --model MODEL`, the ledger read before and after.
-#   host   `vy-verifier-gate run`, gate run 7's request (PROVER_NODE as its peer, PORT, PERIOD, PIN, PACED at
+#   host   the verifier gate's `run`, gate run 7's request (PROVER_NODE as its peer, PORT, PERIOD, PIN, PACED at
 #          PACE_PASS_MS, MINUTES, JITTER_MS, QUANTILE, MODEL with ENGINES arenas of ARENA_BLOCKS); its `status` every 30 s
 #          until it ends, then the run's directory without its transcripts (`fetch`) into host/RUN. Exits with the run's rc.
+#          PACED defaults to two 60 s sessions at the clone's `audit.SAMPLES` openings and two 1 s ones at 2,773.
 #   close  `period-close --name PERIOD`, then the closed ledger.
 #   audit  `auditor.sh` over the host run HOST_RUN (default the one `host` fetched), into $OUT itself: ledger.jsonl,
 #          pins.jsonl, auditor_line.json, credit.md, which `gate_whatif.sh` reads.
 #   fire   wait until PROVER_RUN holds ENGINES GPUs on PROVER_NODE (its `gpu-lease status`, over that node's line of
 #          /etc/vy/peers, or PROVER_SSH's ssh arguments where that line's private address doesn't route, as from
-#          vy-nebius-cpu-4 and -cpu-5), then probe, open, host, close and audit. A host run that fails leaves the
+#          a CPU node off the GPU node's network), then probe, open, host, close and audit. A host run that fails leaves the
 #          period open for a rerun in it and runs no auditor. With LEASE_BY (a UTC time) it opens nothing for a lease
 #          that began after LEASE_BY, and stops waiting 2 minutes after it.
 #
 # With DRY=1 no request reaches either gate: each is written to gate.requests and printed, the key need not exist, and
 # what doesn't need it runs (the circuit, main's first-parent line, the peers line to PROVER_NODE and its lease status,
-# vy-auditor-1's host key).
+# the verifier host's host key).
 set -u
 : "${OUT:?}"
 VERB=${1:?probe, open, host, close, audit or fire}
@@ -34,7 +35,7 @@ AUDITOR=${AUDITOR:-research@81.85.1.145}
 AUDITOR_FP=${AUDITOR_FP:-SHA256:s8UdOpJZGMXJR1DjgmOyTsWpTqQX7GDJq/yQCYhSJhs}
 LANE=${LANE:-memory-accounting} MODEL=${MODEL:-QWEN25_32B_BF16} ENGINES=${ENGINES:-8} ARENA_BLOCKS=${ARENA_BLOCKS:-16252928}
 PORT=${PORT:-7951} CAP=${CAP:-4} PACE_PASS_MS=${PACE_PASS_MS:-85} MINUTES=${MINUTES:-30}
-PACED=${PACED:-1:60000:33273:2 1:60000:33273:2 1:1000:2773:7 1:1000:2773:7}
+PACED=${PACED:-}
 JITTER_MS=${JITTER_MS:-50} QUANTILE=${QUANTILE:-max} PROVER_NODE=${PROVER_NODE:-vy-nebius-2}
 SSH=(ssh -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=accept-new -o ServerAliveInterval=15
   -i "$GATE_KEY")
@@ -81,16 +82,16 @@ probe() {
   if [ -n "${DRY:-}" ]; then
     [ -f "$GATE_KEY" ] && echo "DRY: the gate key $GATE_KEY is here" || echo "DRY: no gate key at $GATE_KEY"
     ssh-keygen -F "${AUDITOR#*@}" -l 2>&1 | grep -q -F "$AUDITOR_FP" \
-      && echo "DRY: vy-auditor-1's host key $AUDITOR_FP is known here" \
-      || echo "DRY: vy-auditor-1's host key isn't in known_hosts here; the first request accepts it and checks $AUDITOR_FP"
+      && echo "DRY: the verifier host's host key $AUDITOR_FP is known here" \
+      || echo "DRY: the verifier host's host key isn't in known_hosts here; the first request accepts it and checks $AUDITOR_FP"
   fi
   gate "$CHALLENGER" pubkey > "$OUT/challenger.pubkey.json" || { echo "pubkey failed"; exit 3; }
   gate "$CHALLENGER" pins > "$OUT/challenger.pins.jsonl" || { echo "pins failed"; exit 3; }
   gate "$CHALLENGER" ledger > "$OUT/ledger.probe.jsonl" || { echo "ledger failed"; exit 3; }
-  gate "$AUDITOR" status > "$OUT/host.status.json" || { echo "vy-auditor-1's status failed"; exit 3; }
+  gate "$AUDITOR" status > "$OUT/host.status.json" || { echo "the verifier host's status failed"; exit 3; }
   if [ -z "${DRY:-}" ]; then
     ssh-keygen -F "${AUDITOR#*@}" -l 2>&1 | tee -a "$OUT/hostkeys.txt" | grep -q -F "$AUDITOR_FP" \
-      || { echo "vy-auditor-1's host key isn't $AUDITOR_FP"; exit 3; }
+      || { echo "the verifier host's host key isn't $AUDITOR_FP"; exit 3; }
   fi
   [ -n "${DRY:-}" ] && { echo "{\"dry\": true, \"circuit\": \"$CIRCUIT\", \"commit\": \"$COMMIT\"}" > "$OUT/probe.json"; return 0; }
   python3 - "$OUT" "${PIN:?}" "${PERIOD:?}" "$LANE" "$COMMIT" "$CIRCUIT" <<'EOF' || exit 3
@@ -118,12 +119,12 @@ main = {x.strip() for x in open(f"{out}/main.probe.txt") if x.strip()}
 host = json.load(open(f"{out}/host.status.json"))
 pinned = host.get("pinned")
 if pinned != commit and pinned in main:
-    why.append(f"vy-auditor-1 is pinned at {pinned}, not COMMIT {commit}: rerun with COMMIT={pinned}")
+    why.append(f"the verifier host is pinned at {pinned}, not COMMIT {commit}: rerun with COMMIT={pinned}")
 elif pinned != commit:
-    why.append(f"vy-auditor-1 is pinned at {pinned}, off main's first-parent line, where no session credits: repin it at "
-               f"COMMIT {commit} (vy-verifier-pin) and rerun")
+    why.append(f"the verifier host is pinned at {pinned}, off main's first-parent line, where no session credits: "
+               f"repin it at COMMIT {commit} (vy-verifier-pin) and rerun")
 if host.get("busy"):
-    why.append(f"vy-auditor-1 runs {host['busy']}: one unit at a time")
+    why.append(f"the verifier host runs {host['busy']}: one unit at a time")
 doc = {"commit": commit, "circuit": circuit, "pin": pin, "period": period, "main_commits": len(main),
        "challenger_pin": pins[-1] if pins else None,
        "challenger_pinned_at_commit": bool(pins) and pins[-1].get("commit") == commit, "ledger_entries": len(entries),
@@ -132,8 +133,8 @@ doc = {"commit": commit, "circuit": circuit, "pin": pin, "period": period, "main
 json.dump(doc, open(f"{out}/probe.json", "w"), indent=1)
 print(json.dumps(doc, indent=1))
 if not doc["challenger_pinned_at_commit"]:
-    print(f"note: vy-challenger-1's last pin is {doc['challenger_pin']}, not COMMIT; pinned_session needs it on main's "
-          "first-parent line, which auditor.sh checks")
+    print(f"note: the challenger host's last pin is {doc['challenger_pin']}, not COMMIT; pinned_session needs it on "
+          "main's first-parent line, which auditor.sh checks")
 sys.exit(3 if why else 0)
 EOF
 }
@@ -151,7 +152,12 @@ open_period() {
 }
 
 host_run() {
-  local words r run
+  local words r run a=verity/core/protocols/remote_bandwidth/audit.py s
+  if [ -z "$PACED" ]; then
+    s=$(sed -n 's/^SAMPLES = \([0-9_]*\)$/\1/p' "$a" | tr -d _)
+    [ -n "$s" ] || { echo "no SAMPLES = N line in $a, so no default PACED: give PACED"; return 3; }
+    PACED="1:60000:$s:2 1:60000:$s:2 1:1000:2773:7 1:1000:2773:7"
+  fi
   read -ra words <<< "$PACED"
   gate "$AUDITOR" run --peer "$PROVER_NODE" --port "$PORT" --period "${PERIOD:?}" --pin "${PIN:?}" --paced "${words[@]}" \
     --pace-pass-ms "$PACE_PASS_MS" --minutes "$MINUTES" --jitter-ms "$JITTER_MS" --quantile "$QUANTILE" \
@@ -262,7 +268,7 @@ fire() {
 
 audit() {
   local run=${HOST_RUN:-$OUT/host/$(cat "$OUT/host-run.txt" 2> /dev/null || echo DRY)}
-  # PEER empty: the sessions' challenger peer is the host record's (vy-auditor-1), not the prover's node
+  # PEER empty: the sessions' challenger peer is the host record's (the verifier host), not the prover's node
   if [ -n "${DRY:-}" ]; then
     echo "DRY: PEER='' GATE=$CHALLENGER GATE_KEY=$GATE_KEY RUN=$run PERIOD=$PERIOD PIN=$PIN COMMIT=$COMMIT" \
       "bash benchmarks/remote_session/auditor.sh"

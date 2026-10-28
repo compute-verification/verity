@@ -55,7 +55,7 @@ theorem fv3LeafWith_sim (S : Sim M N) {hs : Flock.Hashes M} {hs' : Flock.Hashes 
 theorem fv3RootWith_sim (S : Sim M N) [LawfulMonad M] [LawfulMonad N] {hs : Flock.Hashes M} {hs' : Flock.Hashes N}
     (hh : S.Hashes hs hs') (dom : ByteArray) (leaves : Array ByteArray) :
     S.R (FV3.rootWith hs dom leaves) (FV3.rootWith hs' dom leaves) := by
-  unfold FV3.rootWith
+  unfold FV3.rootWith FV3.rootM
   sim_walk [fv3HashWith_sim S hh]
 
 theorem typeDigestWith_sim (S : Sim M N) {hs : Flock.Hashes M} {hs' : Flock.Hashes N} (hh : S.Hashes hs hs')
@@ -95,7 +95,7 @@ theorem readWith_sim (S : Sim M N) [LawfulMonad M] [LawfulMonad N] (tM : Throws 
 
 theorem descParseWith_sim (S : Sim M N) [LawfulMonad M] [LawfulMonad N] (tM : Throws M) (tN : Throws N)
     {hs : Flock.Hashes M} {hs' : Flock.Hashes N} (hh : S.Hashes hs hs') (bytes : ByteArray) :
-    S.R (TemplateQuery.Desc.parseWith hs bytes) (TemplateQuery.Desc.parseWith hs' bytes) := by
+    S.R (TemplateQuery.Desc.parseWith hs.sha512 bytes) (TemplateQuery.Desc.parseWith hs'.sha512 bytes) := by
   unfold TemplateQuery.Desc.parseWith
   simp -zeta only [tM.bind, tN.bind]
   sim_walk

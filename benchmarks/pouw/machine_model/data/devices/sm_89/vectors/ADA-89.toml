@@ -1,8 +1,7 @@
-# Π on the L40S: every row of EPS1 ADA's census (rows.csv). No price LP is solved on it, so it credits nothing.
+# Π on the L40S: every row of the measured census (rows.csv). No price LP is solved on it, so it credits nothing.
 name = "ADA-89"
 epoch = "ADA-89"
 summary = "the L40S (sm_89) census: the pipes, UP, the tensor pipe and joint issue row of every mma.sync form, IMMA16832 + X"
-note = "note:20261017T0605Z-draft-eps1-ada (r20261017-063302-c654, r20261017-063245-fc25, r20261017-100238-352e, r20261017-102743-9e4d)"
 rows = ["issue", "M", "JI89", "UP", "A", "I", "I4A", "H", "SHFL", "XU", "FLO", "LDSM_X1", "LDSM_X2", "LDSM_X4",
         "LDSM_X1T", "LDSM_X2T", "LDSM_X4T", "LDSi", "R6r", "R6w", "EIMAD0", "EIMAD1", "EIMAD2", "EIMAD3", "EIMAD4",
         "EHFMA20", "EHFMA21", "EHFMA22", "EHFMA23", "EALU0", "EALU1", "EALU2", "EALU3", "EALU4", "ESHFL0", "ESHFL1",

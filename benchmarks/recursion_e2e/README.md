@@ -2,9 +2,9 @@
 
 Recursive witness zero knowledge proves an inner statement with C-Flock's circuit prover, ZK off, against the inner phase's firewall. It then
 proves V*, the inner verifier written as C-Flock statements, with `--zk`, and the auditor's Lean verifier checks V*'s
-releases only. This is the one runner for that pipeline. It drives `verity/ml/flock/pod/85-rec-reprice.sh`'s steps as one
-recorded run, times each step on the smallest real input (K = 4096, N = 2), repeats what is cheap to repeat, and says
-whether the run was whole (every step of one recursive proof) and whether it was accepted. Speed work measures each cut
+releases only. This is the one runner for that pipeline. It drives the steps of the pod script,
+`verity/ml/flock/pod/85-rec-reprice.sh`, as one recorded run, times each step on the smallest real input (K = 4096,
+N = 2), repeats what is cheap to repeat, and says whether the run was whole (every step of one recursive proof) and whether it was accepted. Speed work measures each cut
 before and after with it.
 
 This pipeline hides the inner witness over a public circuit. The run that also hides the circuit, recursion with
@@ -24,7 +24,7 @@ POINT: --K 4096 --N 2 --steps S,.. --repeat 3 --modes firewall --oprove-runs 1 -
        --forge KINDS [--no-forge-after] --cpu --on MACHINE --cores 0-31 [--preemptible] --mem-gb G --cpus 32 --max-min M --env KEY=VALUE ...
 ~~~
 
-- **Where it runs.** A run with no GPU prove (firewalled, on 85's CPU prover, the default; or `--cpu`) is a plain run on a
+- **Where it runs.** A run with no GPU prove (firewalled, on the pod script's CPU prover, the default; or `--cpu`) is a plain run on a
   CPU node (`CPU_NODE` in `run.py`): `job.sh` with `GPU=0 FLOCK_WORK=/workspace/cache/rec-bench`, pinned to `--cores`
   (`taskset -c 0-31`), under `--mem-gb` and a timeout of `--max-min`; `run --dry-run` prints the launch. `--on` picks
   another of the CPU nodes that take plain runs (`PLAIN_CPU_NODES`), and `--cores` its cores. The nodes that take runs
@@ -34,12 +34,12 @@ POINT: --K 4096 --N 2 --steps S,.. --repeat 3 --modes firewall --oprove-runs 1 -
 
 - **Firewall on by default.** `--modes firewall`: AGENTS.md has outer proofs go through the firewall one at a time.
   `dev` and `host` are there to compare against, never the default. A run never proves two of its V* statements at once:
-  85 proves 4 at once by default, so `job.sh` sets its `OPROVE_JOBS=1` and records it in `params.txt` (the table's header
+  the pod script proves 4 at once by default, so `job.sh` sets its `OPROVE_JOBS=1` and records it in `params.txt` (the table's header
   says "V* statements 1 at a time").
 - **The lease, per statement.** A V* release at K = 4096 takes minutes, and its time is the Lean session
   loop's, not the prover's. Each statement's lease (`stmt_lease_min` in `run.py`, printed by `plan`) is 1.5 times its
   measured release on the CPU prover, one at a time, end to end (`FW_S` in `run.py`). No one ratio to the
-  dev run fits, so each statement has its own. 85 takes one `GPU_MAX_MIN` for every prove of an invocation, so
+  dev run fits, so each statement has its own. The pod script takes one `GPU_MAX_MIN` for every prove of an invocation, so
   `--lease-min` defaults to the largest lease among the statements `LEVELS` selects.
   `--max-min` defaults to the sum of those statements' leases, plus each other step's minutes per repeat and 5 minutes
   for the job's start and result. The leases are not preemptible (`job.sh`), because a preempted release is a lost
@@ -48,18 +48,18 @@ POINT: --K 4096 --N 2 --steps S,.. --repeat 3 --modes firewall --oprove-runs 1 -
   L0's release needs the most: the Lean session loop and the prover together.
 - **The CPU prover under the firewall** (`--oprove-gpu auto`, which is 0 with `--modes firewall`). A lease pool stops a
   lease whose GPU computes nothing for about 10 minutes, and the GPU computes nothing while the Lean session loop works. So V*'s statements are
-  proved by 85's CPU prover (`GPU=0`, built once beside the GPU one), and no lease is needed. The release's time is then
+  proved by the pod script's CPU prover (`GPU=0`, built once beside the GPU one), and no lease is needed. The release's time is then
   the firewall's, plus a CPU prove where a GPU prove would take about a second. `--oprove-gpu 1` puts the GPU prover back
   under `--lease-min`.
 - **`--e2e`**, the one-pass mode: build, inner, vstage, vcap, oprove, lean and negative once each, one
   run per prove and no warm one. With `--cpu` it is the CPU prover end to end (`GPU=0`, no lease), on a
   CPU node.
 - **The negative** (`negative`, on by default): the lean step again over a copy of the inner run with one coin of
-  rep 0 flipped (85's `NEG_INNER`, `rec_inner.py forge`), once per `--neg` coin. A flipped coin moves only the V*
+  rep 0 flipped (the pod script's `NEG_INNER`, `rec_inner.py forge`), once per `--neg` coin. A flipped coin moves only the V*
   statements that read it, so a coin counts as refused when Lean refuses it under at least one statement (exit 1, no
   VERDICT accepting) and every statement has a verdict over it. This is `lean_verdicts.py`'s rule. The row names the
   statements that refused it and those that rightly accepted it.
-- **Forgeries** (`--forge`, default none): 85's forged statements (`FORGE`, `rec_vstage --forge`: message, sum, comb,
+- **Forgeries** (`--forge`, default none): the pod script's forged statements (`FORGE`, `rec_vstage --forge`: message, sum, comb,
   top, top-salt, coef, dirs, filler), staged by vstage and proved by oprove one run each. A forgery is refused when
   one of its statements is, whether the firewall stopped it before release (`FIREWALL-REFUSED`) or Lean refused it, and
   a statement it leaves as the honest one is accepted (forged-message's alg-p1). This is `lean_verdicts.py`'s rule. Its
@@ -74,27 +74,32 @@ POINT: --K 4096 --N 2 --steps S,.. --repeat 3 --modes firewall --oprove-runs 1 -
 - **The verdict** (`headline` in the result, the table's first line): `complete` when every step that one recursive
   run needs ran (build, inner, vstage, vcap, oprove, lean). `ok` when, in addition, every invocation exited 0, every
   honest verdict accepted, every flipped coin and every forgery was refused. A merged table's verdict is only as whole as its runs.
-- **Data.** 85's staged statements and runs go under `$FLOCK_WORK/data/rb-<run id>` and are removed at the end unless
+- **Data.** the pod script's staged statements and runs go under `$FLOCK_WORK/data/rb-<run id>` and are removed at the end unless
   `--env KEEP_DATA=1`. A later run takes them with `--env TAG=rb-<run id> --env KEEP_DATA=1 --steps oprove,...`. Runs on
   one TAG must not overlap oprove and lean, because both use `data/$TAG/v-sess`.
-- `--env` passes anything on to `job.sh` and 85: `REPEAT_<STEP>=n` sets one step's repeats, plus `LEVELS=L0,cap`,
+- `--env` passes anything on to `job.sh` and the pod script: `REPEAT_<STEP>=n` sets one step's repeats, plus `LEVELS=L0,cap`,
   `LEAN_JOBS`, `PCPUS`, `WARM`, `RUNS` (the inner's runs) and the like.
 - **Settings.** `settings.py` declares every variable `job.sh` reads (and `run.py`'s and `forge_after.py`'s), each with its
   type, default, doc and role (`value`, `where` or `debug`). `REPEAT_` and `OPROVE_` are the job's own prefixes: `run.py`
   refuses an `--env` under one of them that nothing reads (`REPEAT_LAEN=1`), or a declared value that doesn't parse, before
   it launches, and `job.sh`'s first command refuses the same on the node. `job.sh` writes the value settings it was given to
-  `out/settings.json`, and `params.txt` (so the result's `params`) carries their SHA-512 digest as `settings`. 85's own
+  `out/settings.json`, and `params.txt` (so the result's `params`) carries their SHA-512 digest as `settings`. the pod script's own
   variables pass through undeclared.
+
+- **Another inner statement** (`stage.sh`, launched as `job.sh` is): `rec_inner.py stage --subcircuit` stages N seeded
+  draws of a census-style subcircuit into `data/$TAG/stage` (plain leaves) and `stage-zk` (hm96), or, with
+  `WINDOW=DIR`, `rec_inner.py stage-window` stages every unit of a served window's member from the window's own rows and
+  salts (`prove_path.py commit`'s window dir). It then runs `job.sh` with 85's `STAGE=0`, which proves what it finds.
 
 ## The pipeline (step map)
 
-Every step is a STEP of 85 (read as it is), run on one node with the big files under
+Every step is a STEP of the pod script (read as it is), run on one node with the big files under
 `$FLOCK_WORK/data/$TAG` for the next step. Each GPU step leases one RTX PRO 6000 per prover invocation (`on_gpu`), and
 everything else is CPU. The where column is a GPU run's: a CPU run (the default) runs every step on its CPU node
 with `GPU=0`. The inner statement is `N` instances of `GemmCoordinate_v2{K, DOT=HopperBF16WgmmaDot16_v1}`
 (`pod/rec_reprice.py`, the population program cut by `Q_template_instance`), with every proof block drawn.
 
-| # | step (STEP) | command (inside 85) | reads | writes | where |
+| # | step (STEP) | command (inside the pod script) | reads | writes | where |
 |---|---|---|---|---|---|
 | 0 | `build` | `60-circuit.sh MODE=build` (the prover), `lake build flock-verify` (Lean), `class_statement --stage-only` twice; `lake build flock-firewall` (the firewall's Lean session loop) from the same Lean sources | the tree | `stage/` (plain SHA-512 leaves: the recursive inner), `stage-zk/` (hm96 leaves: the non-recursive `--zk`, the baseline) | CPU |
 | 1 | `inner` | `flock-circuit prove --gpu` (ZK off, `FC_COINS=os`) against `python -m verity_flock.rec_live` (the inner firewall's proxy); then the non-recursive ZK-off and `--zk` statements on loopback (`INNER_LOOPBACK=1`) | `stage/`, `stage-zk/` | `inner/s<k>/` | GPU |
@@ -104,15 +109,15 @@ with `GPU=0`. The inner statement is `N` instances of `GemmCoordinate_v2{K, DOT=
 | 4 | `oprove` | per V* statement, one at a time: `flock-circuit serve --zk` (loopback) and `prove --zk --gpu` in each mode (`firewall`: `FC_FIREWALL=1`, the Lean session loop `flock-firewall`, live PROTOCOL.md §10.4) | `v/` | `v-sess/<stmt>/` | GPU |
 | 5 | `oreplay` | `flock-circuit replay --zk` of each V* release (upstream's verifier) | `v-sess/` | records only | CPU |
 | 6 | `lean` | `flock-verify verify --zk` on each V* release with V*'s own inputs (`--rec-inner-*`, `--rec-rows`, `--rec-bindings`), the inner run (`INNER_LEAN=1`), `flock-verify statement` on the inner statement; `lean_verdicts.py` fails closed | `v-sess/`, `stage/`, `inner/` | records only | CPU |
-| 6b | `forge-after` | `forge_after.py`: coef, dirs and message forged after proving on copies of the honest L0 and alg-p0 statements, each `flock-verify verify --zk` with step 6's flags beside its honest control (not a STEP of 85) | `v-sess/`, `v/`, step 6's `own-<stmt>.txt` | records only | CPU |
+| 6b | `forge-after` | `forge_after.py`: coef, dirs and message forged after proving on copies of the honest L0 and alg-p0 statements, each `flock-verify verify --zk` with step 6's flags beside its honest control (not a STEP of the pod script) | `v-sess/`, `v/`, step 6's `own-<stmt>.txt` | records only | CPU |
 | 7 | `negative` | step 6 with `NEG_INNER`: each V* release again over each flipped copy of the inner run | as 6 | records only | CPU |
 
-What the recursive audit has that 85 doesn't run, so no number here covers it:
+What the recursive audit has that the pod script doesn't run, so no number here covers it:
 
 - **The recursive run through the firewall's release side** (live PROTOCOL.md §10.5): `rec_live --firewall DIR --parts
   L0,…,alg` opening one recursive run per inner run, each outer proof released through `python -m verity_flock.firewall
   relay` or `flock-circuit prove --firewall-state DIR --session ID --part NAME`, one outer slot, statements in order. Only
-  the tests run it (`verity/ml/flock/tests/test_rec_live_firewall.py`). 85 proves each V* statement against its own `serve`.
+  the tests run it (`verity/ml/flock/tests/test_rec_live_firewall.py`). The pod script proves each V* statement against its own `serve`.
 - **One verdict over the whole recursive run.** STEP=lean verifies each V* release on its own, and the runner's
   `ok` is the conjunction of those verdicts. No one command takes the inner record and every V* release and answers once.
 
@@ -120,8 +125,8 @@ What the recursive audit has that 85 doesn't run, so no number here covers it:
 
 `job.sh` runs STEP `build` once, then each step of `--steps` in order. Every CPU step runs `--repeat` times (default 3).
 Each GPU step runs once, with its runs inside it: the inner's `WARM=1 RUNS=3`, each V* statement's
-`--oprove-warm 0 --oprove-runs 1`. Each invocation of 85 runs under its own `RESEARCH_RUN_DIR`
-(`out/steps/<step>/r<i>/`), so every record 85 writes is kept. `result` reads them into `out/recursion_e2e.json` and
+`--oprove-warm 0 --oprove-runs 1`. Each invocation of the pod script runs under its own `RESEARCH_RUN_DIR`
+(`out/steps/<step>/r<i>/`), so every record it writes is kept. `result` reads them into `out/recursion_e2e.json` and
 `out/table.md`. `job.sh` tries to write them on SIGTERM too, but cancelling the run ends its scope within a second,
 which leaves only the records. `table RUN` rebuilds the result from a fresh fetch of them, so a cancelled run's rows
 are still read.
@@ -130,7 +135,7 @@ are still read.
   line (both reps' `prove_s` summed). This covers the device's phases, not the host witness.
 - **Run e2e**: each timed run's `e2e_s`, from the run's start to its verdict. It includes the host witness
   and every wait on the live verifier. Median and [min, max] are over the timed runs, and warm runs are left out.
-- **Pace** (`session_s`, as 85's summary computes it): the time from the last warm run's verdict to the last timed
+- **Pace** (`session_s`, as the pod script's summary computes it): the time from the last warm run's verdict to the last timed
   one's, divided by the timed runs. It needs a warm run.
 - **Dominant phase**: the largest part of the median run's `e2e_s`. The candidates are the prover's own phase buckets
   (`t.*`), the host witness (`h.witness`) and `wait.verifier`, which is what is left of `e2e_s` (the run waiting on
@@ -141,7 +146,7 @@ are still read.
 - **Peak memory**: the prover process's peak RSS (`/usr/bin/time -v` over the invocation) and the leased GPU's memory in
   use, sampled every half second (`gpu-mib.txt`, a lower bound). For CPU steps, each tool's `/usr/bin/time -v` peak RSS.
 - **CPU steps** (`icheck`, `vstage`, `vcap`, `oreplay`, `lean`, `negative`): each tool's `/usr/bin/time -v` wall, median
-  and [min, max] over the repeats. Lean's verify also splits into `inputs`, `setup` and the verification's own checks. 85
+  and [min, max] over the repeats. Lean's verify also splits into `inputs`, `setup` and the verification's own checks. The pod script
   runs `vstage`'s statements and `lean`'s verifications `JOBS` at a time (4 here), so each one's wall is measured under its
   neighbours' load. The step's whole wall (`lean step`) is what an auditor waits, and it is what the pipeline sum adds.
   `stage <name>` rows carry what `rec_vstage` printed of each proof block (template, rows, lowering seconds, circuit bytes).

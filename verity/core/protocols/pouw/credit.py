@@ -38,7 +38,7 @@ returns the credit bits whatever the proofs' outcome, and `_a_link` trusts the r
   every K's template in one form.
 * **A unit's ok is the verifier's** (`registered_file`'s ``o1``): the statement's output row ``ok`` reads the window's
   ok rows ``<prefix>ok``, row u unit u's, the one word 1 under its public `core_check.ok_salt` (h1_prove's
-  registration, #3124), which credit registers itself and names at that known content. A unit that computed 0 opens no
+  registration), which credit registers itself and names at that known content. A unit that computed 0 opens no
   row of it, and a session that opened ok at another root is refused.
 
 * **The credited set is fixed before the draw** (`_credited`). Each row of the window's manifest (the serving process's
@@ -100,7 +100,7 @@ returns the credit bits whatever the proofs' outcome, and `_a_link` trusts the r
 * **The round log is the challenger's** (`core_check.rounds`): the round roots `window` reads are the ones the
   challenger's signed log shows it received, in order, each round's coin opened once after its root. A log the
   challenger never received is refused, however its draw root and A trees agree with it.
-* **A period counts only closed and complete** (`period`, RT4-INT-42): its windows are exactly those the auditor's
+* **A period counts only closed and complete** (`period`): its windows are exactly those the auditor's
   ledger lists in the period's close, in that order, each opened and ended complete. A period with no close, or with
   a window missing, out of order or not its own, earns nothing, so no window is chosen after the fact. Under
   `period_credit` each window's session must have run main's code and the window must prove the circuit the period's
@@ -193,17 +193,19 @@ from verity.core.protocols.pouw import verifier as V
 from verity.core.protocols.pouw import window as Wd
 from verity.core.protocols.pouw.circuit import live_reads as LR
 from verity.core.protocols.pouw.protocol import CALL_RANGE, tagged
-from verity.core.protocols.pouw.weights import CHUNK_ALIGN, CHUNK_MAX, chunks, leaf_words, weights_root
+from verity.core.protocols.pouw.weights import CHUNK_ALIGN, CHUNK_MAX, chunks, leaf_words, theta_root, weights_root
+from verity.core.protocols.profile import WINDOW_DELTA
 from verity.core.protocols.sampled_proofs import challenger as Ch
 from verity.core.protocols.sampled_proofs.one_stage import proofs as PF
 from verity.core.protocols.sampled_proofs.one_stage import registered as G
+from verity.ml.commitments import domains
 
 #: the verifier of record over a statement's proof files (`proofs.verify`)
 Run = Callable[..., tuple[list | None, tuple[str, str] | None]]
 
-CALLS_TAG = b"verity/pouw/h1/calls/v2\0"
-DRAW_TAG = "verity/pouw/h1/draw/v1"
-ROUND_TAG = "verity/pouw/h1/round-a/v1"
+CALLS_TAG = domains.POUW_H1_CALLS.encode() + b"\0"
+DRAW_TAG = domains.POUW_H1_SAMPLING
+ROUND_TAG = domains.POUW_H1_ROUND_A
 #: each manifest row's credit bit
 CREDIT = "credit"
 #: each manifest row's served rows m_s: its step's rows in slots 0 .. m_s - 1 of its call's M, the rest empty
@@ -222,7 +224,7 @@ _DIGEST = re.compile(r"[0-9a-f]{128}")
 _DIGITS = re.compile(r"[1-9][0-9]*")
 _A = re.compile(r"([1-9][0-9]*)(?:@([0-9]+))?")
 _HEX = re.compile(r"(?:[0-9a-f]{2})+")
-_FRAME = b"veritor/protocol/merkle/frame/v3\0"
+_FRAME = domains.FRAME_V3.encode() + b"\0"
 
 SALT_FORM = "the window's Program salt is not a SHA-512 digest (128 lowercase hex)"
 CALLS_FORM = "the window's manifest is not a list of call rows"
@@ -245,7 +247,7 @@ MAX_K = 1 << 24
 #: slot tables' leaves), committed before any draw; a window's A slot M is `h1window.slot` of it
 ROWS_FIELD = "rows"
 #: the δ the period's ε is reported at
-DELTA = Fraction(1, 1 << 40)
+DELTA = WINDOW_DELTA
 #: the period-open's field holding the weights' root (`weights_root` of each K's registered ``b/<K>``, the gate's
 #: ``--model``), signed before any window's salt
 WEIGHTS_FIELD = "weights_root"
@@ -263,12 +265,12 @@ MODEL_FIX = ("open the period with the gate's --model, which signs the auditor's
              "pins (models.json)")
 #: the period-open's field holding the commit it opened under (40 lowercase hex on main's first-parent line): every
 #: window of the period must be pinned within the freshness floor (`STALE_FIELD`) of it, counted in first-parent commits
-#: from this pin and never from main's head (`committed_pin`, `_pin_hygiene`, CMP74-FOLLOW). Optional: a period-open that
+#: from this pin and never from main's head (`committed_pin`, `_pin_hygiene`). Optional: a period-open that
 #: records none isn't held to it
 PERIOD_PIN_FIELD = "pinned"
 #: the period-open's field holding the freshness floor (a nonnegative integer): a window counts only when its pin is at
 #: most this many first-parent commits behind the period's open pin on main's line (`_pin_hygiene`, measured from that
-#: pin, never from main's head, so main moving on never refuses a window fresh at its open, CMP74-FOLLOW). Optional,
+#: pin, never from main's head, so main moving on never refuses a window fresh at its open). Optional,
 #: default 0 when the open pins but records no floor; infra sets it generously, about a day of first-parent commits
 STALE_FIELD = "pin_floor"
 #: the period-open's field holding the rows of record's fixed length: ``{max_tokens, stop}``,
@@ -312,7 +314,7 @@ _TEMPLATE = re.compile(r"k[1-9][0-9]*|live")
 DESCRIPTOR_HEX = ("the window's descriptor is not the bytes of the circuit its proofs were verified against in "
                   "lowercase hex (its canonical JSON without annotations, the bytes program_digest hashes)")
 #: the descriptor schema `layout_of` reads
-SCHEMA = "verity-ir/descriptor/v1"
+SCHEMA = domains.IR_DESCRIPTOR
 #: h1window's Program function, `h1window.PouwH1Window`, and its record's bindings in order
 WINDOW_FN = "PouwH1Window_v3"
 RECORD = ("TILES", "LINEARS", "CALLS", "M", "PREFIX")
@@ -345,9 +347,9 @@ LOG_FORM = "the round log is not a nonempty list"
 ENTRIES_FORM = "the window's registered entries are not a list of objects"
 NO_A = ("the window registers no A value (…/a/<K>, or a round's …/a/<K>@<s>), so nothing ties its units' A rows to "
         "the round roots: register the window's A values")
-COMMIT_TAG = b"verity/pouw/h1/commit/v1\0"
+COMMIT_TAG = domains.POUW_H1_COMMIT.encode() + b"\0"
 #: the served Commit's record: one-stage's registration record with registered values
-COMMIT_FORMAT = "verity/registration/v2"
+COMMIT_FORMAT = domains.REGISTRATION
 COMMIT_FORM = ("the window's Commit record is not the bytes in lowercase hex of a verity/registration/v2 record in "
                "canonical JSON whose registered values are a list of objects: the served Commit runs in the window's "
                "engine, and its record is bound under the window's calls_root before the draw coin")
@@ -365,7 +367,7 @@ PUB_PORT = "pub"
 OK_PORT, OK_VALUE = "o1", "ok"
 #: round 0's request root (``requests``, the one the window's open root binds): its request table's root with round 0's
 #: input-ids table's root inside (`requests_root`)
-REQUESTS_IDS_TAG = "verity/pouw/h1/requests/ids/v1"
+REQUESTS_IDS_TAG = domains.POUW_H1_REQUEST_IDS
 IDS_OUTSIDE = ("round 0's request root (requests, the one the window's open root binds) is not requests_root of its "
                "request table's root (request_table) and its input-ids table's root, so round 0's input ids are not "
                "fixed before the salt: commit round 0's input-ids table inside round 0's request table, under the "
@@ -818,7 +820,8 @@ def layout_of(descriptor: Any) -> tuple[dict | None, tuple[str, str] | None]:
     multiple of `TILE_K_STEP` below `TILE_K_LIMIT`, checked before K's template), and the root's nodes other than inputs
     are each call's (M/R)·(n/C) instances of its K's template, in the calls' order: a call one instance and a batch its
     members, as the template query counts units (`Q_template_instances`). Its cost is the descriptor's bytes, never the
-    gates its nodes unroll to."""
+    gates its nodes unroll to. The Lean reads the descriptor through C-Flock's decoder (`Credit.programOf`), so it also
+    refuses (`DESCRIPTOR_FORM`) a descriptor that decoder refuses; this checks only its form (`_parsed`)."""
     def no(why: str) -> tuple[None, tuple[str, str]]:
         return None, ("layout", why)
 
@@ -942,7 +945,7 @@ def _receipt_words(ret: Any) -> int:
 
 
 #: the partition object a window's statements are verified under: every instance of each K's template one unit
-PARTITION_FORMAT = "verity/partition/v1"
+PARTITION_FORMAT = domains.PARTITION
 QUERY = ("Q_template_instances", 0)
 
 
@@ -2318,7 +2321,7 @@ def _pin_hygiene(name: str, i: int, main: Any, pinned: str, period_pin: str | No
     open recorded (`period_pin`, `committed_pin`; `floor`, `committed_floor`, default 0 when the open pins but records no
     floor), measured from that pin and never from main's head, so main moving on never refuses a window fresh at its open;
     None when it is recent enough or the open records no pin.  The per-window pin and circuit are
-    `challenger.credited_session`'s; this is the period-level hygiene on top (CMP74-FOLLOW).  `unit` names what `i`
+    `challenger.credited_session`'s; this is the period-level hygiene on top.  `unit` names what `i`
     counts (``pass`` in a Pearl-C period, `pearl_c_period_credit`)."""
     if period_pin is None:
         return None
@@ -2574,7 +2577,7 @@ def _uint(n: int) -> bytes:
 
 
 def _frame(tag: bytes, *parts: bytes) -> bytes:
-    """frame-v3's SHA-512 hash (`verity.ml.commitments.merkle`'s ``_hash`` under ``sha512``)."""
+    """frame-v3's SHA-512 hash (`verity.ml.commitments.merkle.frame_hash`)."""
     return hashlib.sha512(_FRAME + len(tag).to_bytes(4, "big") + tag
                           + b"".join(len(p).to_bytes(8, "big") + p for p in parts)).digest()
 
@@ -2871,6 +2874,7 @@ def _weights(window: Any, layout: Any, entries: Any, requests: Any, session: Any
     if not (isinstance(entries, list) and all(isinstance(e, dict) for e in entries)):
         return no(ENTRIES_FORM)
     roots: dict[int, bytes] = {}
+    held: list[dict] = []
     for e in entries:
         v = e.get("value")
         if not is_held(v):
@@ -2889,11 +2893,12 @@ def _weights(window: Any, layout: Any, entries: Any, requests: Any, session: Any
                 and e["domain"] == G.domain(program, v, w, x * n).domain_id.hex()):
             return no(other_weights_entry(v, k, n))
         roots[k] = h
+        held.append(e)
     for k in sorted(rows):
         if k not in roots:
             return no(f"the window registers no weights {prefix}b/{k} of K = {k}: each K's B rows, their codes and s_w, "
                       "are registered under the weights' root its open root binds, before its salt")
-    w = weights_root(roots)
+    w = theta_root(held, prefix)
     if PS.window_open_root(w, t, session) != r:
         return no(OTHER_WEIGHTS)
     return w, None
@@ -2907,4 +2912,4 @@ __all__ = ["CALL_RANGE_CODE", "CALLS_TAG", "CIRCUIT_FILES", "COMMIT_FORMAT", "CO
            "credited_work", "domain_of", "draw_root", "drawn", "established", "a_value", "ids_step", "is_a", "is_held", "is_requests", "is_tied", "law", "layout_of", "live_of",
            "merkle_depth", "partition_of", "passes_distinct", "pearl_c_period_credit", "period", "period_credit", "registered_file", "requests_root", "round_root", "shape_of",
            "served_rows", "served_work", "slots_step", "step_row", "step_tables", "strata", "table_rows", "tree_root",
-           "window"]
+           "weights_root", "window"]

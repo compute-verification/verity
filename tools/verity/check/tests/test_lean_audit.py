@@ -273,11 +273,10 @@ def test_a_package_that_may_read_beyond_its_directory_is_keyed_by_its_path(tmp_p
 
 
 def test_the_controls_and_the_docs_are_no_input(tmp_path, monkeypatch):
-    """b201 (r20261004-150518-b201) audited all 8 packages again, 69 min, partly on edits to `tools/verity/lean/README.md` and
-    `tools/verity/lean/tests/`, which no audit reads, and so is the pin file `lean-deps.json` (preflight's, read before the
-    audit). So are the directory's other files that `NOT_READ` lists: 4 of the 19 landings under it in the week to 18 Oct
-    changed only `merge.py` or `lean_changed.py`, and each audited all 29 packages again on every node. They stay out of the
-    scratch tree too, so an audit that read one would fail."""
+    """No audit reads `tools/verity/lean/README.md`, `tools/verity/lean/tests/` or the pin file `lean-deps.json`
+    (preflight's, read before the audit), so an edit to them audits no package again. Nor the directory's other files that
+    `NOT_READ` lists, such as `merge.py` and `lean_changed.py`, which would otherwise audit every package again on every
+    node. They stay out of the scratch tree too, so an audit that read one would fail."""
     root = _tree(tmp_path, monkeypatch)
     (root / "pkg/b/lean-audit.json").write_text("{}")
     assert _run(tmp_path, 1)[0] == 0
@@ -390,8 +389,9 @@ def _bundle_of(tmp: Path, pkg: Path) -> tuple[Path, str]:
 
 
 def test_a_bundle_carries_the_module_versions_one_node_added_to_another_and_nothing_else(tmp_path):
-    """Kept builds and the artifact cache are per node, and the trains spread over three machines (infra, 12 Oct: share the
-    cache, don't pin). A node takes a recorded check's bundle once, checked against its sha256, and never replaces a file."""
+    """Kept builds and the artifact cache are per node, and the trains spread over several machines, which share the cache
+    rather than pin to one. A node takes a recorded check's bundle once, checked against its sha256, and never replaces a
+    file."""
     pkg = tmp_path / "pkg"
     pkg.mkdir()
     (pkg / "lake-manifest.json").write_text(json.dumps({"name": "p", "packages": []}))
@@ -472,9 +472,9 @@ DEFERRED = ["python3", "tools/verity/check/slot.py", "--priority", "--by", "ci",
 
 
 def test_a_slot_wrapped_check_is_a_recorded_check_whose_bundle_and_verdicts_are_taken(tmp_path, monkeypatch):
-    """Since checks run under `slot.py` (23 Oct) the store records drive's trains, Lean checks and after-landing runs with tool
-    `python3`, and `shared_bundles` and `gathered_packs` selected only tool `check`: no node took another's built modules or
-    replay verdicts, so most trains' `Security/Proofs` built cold (700 to 1,300 s) and replayed some 2,000 modules again."""
+    """Checks run under `slot.py`, so the store records drive's trains, Lean checks and after-landing runs with tool
+    `python3`; `shared_bundles` and `gathered_packs` selecting only tool `check` would leave each node without another's
+    built modules or replay verdicts, building `Security/Proofs` cold (700 to 1,300 s) and replaying some 2,000 modules."""
     index = _attempts(tmp_path, [("r-lean", "python3", "failed", DEFERRED), ("r-other", "python3", "done", ["python3", "x.py"]),
                                  ("r-lean-tool", "python3", "done", ["python3", "tools/verity/lean/check.py", "--build"]),
                                  ("r-check", "check", "done", ["check"]), ("r-running", "python3", "running", DEFERRED)])
@@ -551,9 +551,8 @@ def test_a_moved_package_takes_the_build_it_left(tmp_path, monkeypatch):
 
 
 def test_a_cache_reached_through_a_symlink_keeps_every_report(tmp_path, monkeypatch):
-    """check.py names each package by its resolved path. With the cache behind a symlink (node 1's `~/.cache/verity-check`),
-    the scratch tree's unresolved path matched no report, so a package that passed was failed as unreported
-    (r20261001-060430-71e3)."""
+    """check.py names each package by its resolved path. With the cache behind a symlink (a node's `~/.cache/verity-check`),
+    the scratch tree's unresolved path would match no report, and a package that passed would fail as unreported."""
     root = _tree(tmp_path, monkeypatch)
     (root / "pkg/b/lean-audit.json").write_text("{}")
     (root / "tools/verity/lean/check.py").write_text(FAKE_AUDIT.replace('"package": str(pkg)', '"package": str(pkg.resolve())'))
@@ -589,9 +588,9 @@ sys.exit(LA.main(sys.argv[4:]))
 
 
 def test_a_stopped_audit_removes_its_scratch_tree(tmp_path, monkeypatch):
-    """A manual stop (`research cancel`) sends SIGTERM to the check's whole process group. The audit died of it without
-    running its finally, and left its scratch tree, about 60 GB, in `~/.cache/verity-check`: two of them filled node 2's root
-    disk until a check refused to start (3 Oct, r20261003-055703-86e3 and r20261003-030801-94eb)."""
+    """A manual stop (`research cancel`) sends SIGTERM to the check's whole process group. An audit that dies of it without
+    running its finally leaves its scratch tree, about 60 GB, in `~/.cache/verity-check`, and two of them fill a node's root
+    disk until a check refuses to start."""
     root = _tree(tmp_path, monkeypatch)
     (root / "tools/verity/lean/check.py").write_text('import sys\nprint("auditing", flush=True)\nsys.stdin.read()\n')
     cache = tmp_path / "cache"
@@ -688,8 +687,7 @@ def test_the_dependencies_are_kept_by_manifest_and_toolchain(tmp_path, monkeypat
 
 def test_a_path_entry_changes_no_dependencies_key(tmp_path, monkeypatch):
     """`.lake/packages` holds only fetched packages, so requiring another package of the repository by path needs no new
-    bundle (#1499's trailing check was refused for want of one), while a changed fetched entry needs one; node 1's daily run
-    keeps its copies under the same key."""
+    bundle, while a changed fetched entry needs one; a node's daily run keeps its copies under the same key."""
     root = _tree(tmp_path, monkeypatch)
     m, k = root / "pkg/a/lake-manifest.json", LA.deps_key(root / "pkg/a")
     doc = json.loads(m.read_text())
@@ -723,8 +721,8 @@ def test_packages_of_one_manifest_and_toolchain_both_build_warm(tmp_path, monkey
 
 
 def test_kept_builds_past_the_cap_go_least_recently_used_first_and_a_held_one_stays(tmp_path):
-    """Every tree whose manifest or lakefile differs keeps a build of its own, and nothing removed them: infra found 71, 19 GB,
-    on a 200 GB disk (12 Oct). A build given back is the newest whatever its directory's mtime was; one whose lock a run
+    """Every tree whose manifest or lakefile differs keeps a build of its own, and unremoved they pile up (71 of them, 19 GB,
+    on a 200 GB disk). A build given back is the newest whatever its directory's mtime was; one whose lock a run
     holds stays."""
     import fcntl
 
@@ -745,8 +743,8 @@ def test_kept_builds_past_the_cap_go_least_recently_used_first_and_a_held_one_st
 
 
 def test_each_packages_newest_build_stays_past_the_cap(tmp_path):
-    """At 24 kept builds, fewer than the ~30 packages, every Lean check evicted some packages' only build and rebuilt them cold
-    (26 Oct: r20261026-040757-de32 built Flock cold for 1,094 s)."""
+    """At 24 kept builds, fewer than the ~30 packages, every Lean check would evict some packages' only build and rebuild them
+    cold (Flock alone takes about 1,100 s)."""
     store = tmp_path / "lean-builds"
     works = []
     for i, pkg in enumerate(["pkg/a", "pkg/b", "pkg/c"]):
@@ -1028,7 +1026,7 @@ def test_kept_dependencies_and_replays_past_their_caps_go_oldest_first(tmp_path)
 
 
 def test_records_trees_beyond_the_cap_go_least_recently_used_first_unless_a_run_holds_one(tmp_path):
-    """vy-nebius-cpu-2 reached 95% of its inodes with nine idle `lean-records` trees (21 Oct), about 490k files each.
+    """Nine idle `lean-records` trees, about 490k files each, take a node to 95% of its inodes.
     `prune_records` keeps the most recently used (by `.who`, `links.json`, `.lock`); an older one whose `.lock` a run holds
     stays; a link to a tree elsewhere goes with its target."""
     import fcntl
@@ -1053,8 +1051,8 @@ def test_records_trees_beyond_the_cap_go_least_recently_used_first_unless_a_run_
 
 
 def test_a_node_with_more_build_slots_than_records_kept_keeps_a_tree_per_slot_and_its_passes(tmp_path):
-    """vy-nebius-cpu-1, 26 Oct: four trees seeded for `build 8` kept their source's old `.who`, and the hourly prune, which
-    kept 3, took two of them, so a waiting run built Mathlib from scratch on the root disk. The slots' own trees stay, the
+    """Trees seeded for `build 8` keep their source's old `.who`, and an hourly prune that keeps 3 would take some of them,
+    so a waiting run would build Mathlib from scratch on the root disk. The slots' own trees stay, the
     ones a lowered cap left (`build-8`) go first whatever their use, and `passes/` is not a tree."""
     store = tmp_path / "lean-records"
     for i, name in enumerate(["build-8", *(f"build-{j}" for j in range(8)), "passes"]):

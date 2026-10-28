@@ -1,16 +1,16 @@
 """``rmsnorm.bf16.v1`` (Triton path) and ``rmsnorm.cuda.bf16.v1`` (``_C.rms_norm``) -- the *independent*
-relations for vLLM's residual-free RMSNorm nodes (W11).
+relations for vLLM's residual-free RMSNorm nodes.
 
 ``independent_rmsnorm(node, opened_inputs) -> bytes`` predicts the committed BF16 bytes of one normalised
 row from the opened input row ``x`` (BF16), the opened weight ``w`` (BF16) and the description constant
 ``eps``, with nothing from the runtime: the arithmetic is :mod:`rms_triton_model` (vLLM's batch-invariant
 ``_rms_norm_kernel`` as compiled for sm_89, instruction by instruction, on the CPU).  It applies to the
-nodes W1's adapter records as ``runtime_op == "verity.bi_rms_norm"`` (the Triton kernel: in the pinned
+nodes the capture adapter records as ``runtime_op == "verity.bi_rms_norm"`` (the Triton kernel: in the pinned
 Qwen2.5-1.5B profile only ``model.layers.0.input_layernorm``).
 
 ``independent_rmsnorm_cuda`` does the same for ``runtime_op == "_C.rms_norm"`` (``vllm::rms_norm_kernel<bf16, 8>``;
-never launched by the pinned engine, but W4b's third rms_norm variant and the kernel vLLM uses without
-batch invariance).  The residual-carrying nodes (``_C.fused_add_rms_norm``, W4b's model, not wired) are
+never launched by the pinned engine, but the third rms_norm variant and the kernel vLLM uses without
+batch invariance).  The residual-carrying nodes (``_C.fused_add_rms_norm``, modelled but not wired) are
 ``unresolved`` in both.
 
 Coverage (:func:`rms_triton_model.gate`): BF16 x / w / out, weighted, contiguous rows, ``n_cols`` divisible by 16
@@ -113,7 +113,7 @@ def coverage(node_or_inst: Any, inputs: Mapping[str, Any], kernel: str = "triton
         return {"covered": False, "reason": f"unresolved: runtime_op {op!r} is not {_KERNEL_NAMES[kernel]} ({_OPS[kernel]})"}
     xw, ww, eps, consts = operands(node_or_inst, inputs)
     x = inputs.get("x")
-    # numpy uint16 / int16 arrays and raw bytes are BF16 words by convention (_words); a W2 Value carries its dtype
+    # numpy uint16 / int16 arrays and raw bytes are BF16 words by convention (_words); a runner Value carries its dtype
     x_dtype = "bfloat16" if isinstance(x, (np.ndarray, bytes, bytearray, memoryview)) else str(getattr(x, "dtype", "bfloat16"))
     try:
         RM.gate(int(xw.size), x_dtype, True, True, eps, arch=consts.get("arch"), kernel=kernel)

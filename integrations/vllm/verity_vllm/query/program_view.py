@@ -1,9 +1,9 @@
-"""A `verity_vllm.query.units.Program` view of a derived Program.
+"""A `verity_vllm.query.units.CallGraph` view of a derived Program.
 
 Two readers of ONE flat body (`program.fn.body.nodes` of the derived request Program, in body order):
 
-* :func:`from_descriptor` -- the Program descriptor (`descriptor.json.gz`, `verity.ml.circuits.codec`): the `program_fn` definition's body
-  nodes give every Call's Definition, output type and operand references; `annotations["node_hints"]` gives its name.
+* :func:`from_descriptor` -- the Program descriptor (`descriptor.json.gz`) as `verity.ml.circuits.codec.decode_program` decodes it: the
+  program function's body nodes give every Call's Definition, output type and operand references; the annotations' `node_hints` its name.
 * :func:`from_instances` -- the Build's instance sequence (`instances.json.gz`, `derive_step._instance_sequence`): the same nodes
   written one row per Call (`i`, `spec`, `form`, `name`, `args` = operand runs) -- a projection of the descriptor body plus the
   name annotation, produced by the same derivation on meta tensors (nothing executed).  The output type is not in a row: it is
@@ -528,18 +528,6 @@ def ports_of_type(t) -> tuple[Port, ...]:
     return (one("out", 0, t),)
 
 
-def _registry():
-    """(REGISTRY, import errors) of the integration's registry, every module loaded (`verity.ml.definitions.registry.catalog.load`); a module that
-    fails to import is reported with the lookup that needed it, never treated as "not registered"."""
-    try:
-        from verity.ml.circuits.defs import REGISTRY  # noqa: F401
-    except Exception as e:  # the core package missing is an ENVIRONMENT fault, named (never a "not registered" answer)
-        from verity_vllm.query.manifest.format import RegistryUnavailable
-        raise RegistryUnavailable(e) from e
-    from verity.ml.definitions.registry.catalog import load
-    return load()
-
-
 _PORTS_CACHE: dict[str, tuple[Port, ...]] = {}
 
 
@@ -550,7 +538,8 @@ def definition_ports(spec: str) -> tuple[Port, ...]:
     if hit is not None:
         return hit
     from verity.ml.circuits.codec import lookup_primitive
-    reg, errors = _registry()
+    from verity.ml.definitions.registry.catalog import load
+    reg, errors = load()
     base = spec_base(spec)
     d = reg.defs.get(base)
     if d is None:
@@ -706,20 +695,22 @@ def from_instances(path_or_doc: str | dict[str, Any]) -> ProgramView:
 
 
 def from_descriptor(desc: dict[str, Any] | str, registry=None) -> ProgramView:
-    """A Program descriptor (dict, or a path to `descriptor.json[.gz]`) -> ProgramView of its `program_fn` body, or of the root's body
-    when the program function is inlined into the root (a request Build's descriptor).  Names from
-    `annotations["node_hints"]` (node index -> hint); ports from each node's own output type; outputs from the body's `ret`."""
+    """A Program descriptor (dict, or a path to `descriptor.json[.gz]`), decoded by `codec.decode_program` -> ProgramView of its
+    program function's body, or of the root's body when the program function is inlined into the root (a request Build's
+    descriptor).  Names from the decoded annotations' `node_hints` (node index -> hint); ports from each node's own output type;
+    outputs from the body's `ret`."""
     if isinstance(desc, str):
         with gzip.open(desc, "rt") if desc.endswith(".gz") else open(desc) as f:
             desc = json.load(f)
-    from verity.ml.circuits.codec import decode_program
+    from verity.ml.circuits.codec import decode_program, descriptor_id
     from verity.ml.circuits.refs import runs
     if registry is None:
-        registry, _errors = _registry()
+        from verity.ml.definitions.registry.catalog import load
+        registry, _errors = load()
     from verity.ml.circuits.program import is_input
     decoded = decode_program(desc, registry)
-    hints = {int(k): str(v) for k, v in (desc.get("annotations") or {}).get("node_hints", {}).items()}
-    fn = decoded.defs.get(desc["program_fn"])
+    hints = {int(k): str(v) for k, v in decoded.annotations.get("node_hints", {}).items()}
+    fn = decoded.defs.get(decoded.program_fn_id)
     if fn is not None:
         body = fn.body
         params = _params_view((n, t) for n, t in body.params)
@@ -736,13 +727,8 @@ def from_descriptor(desc: dict[str, Any] | str, registry=None) -> ProgramView:
         remap = lambda r: (("p", inputs[r[1]], *r[2:]) if r[1] in inputs else ("n", pos[r[1]], *r[2:])) if r[0] == "n" else r  # noqa: E731
     b = _Builder(params)
     for i, (k, n) in enumerate(rows):
-        b.add(i, _spec_id(n.fn), n.form, hints.get(k, getattr(n, "name", "") or ""), ports_of_type(n.out),
+        b.add(i, descriptor_id(n.fn), n.form, hints.get(k, getattr(n, "name", "") or ""), ports_of_type(n.out),
               ([remap(r) for r in runs(a.refs)] for a in n.args))
     outs = b.outputs([remap(r) for r in runs(body.ret)])
     from verity.ml.circuits.codec import program_digest
     return b.view(outs, program_digest(desc), "descriptor")
-
-
-def _spec_id(fn) -> str:
-    from verity.ml.circuits.codec import _spec_id as sid
-    return sid(fn)

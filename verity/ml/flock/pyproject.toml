@@ -29,6 +29,7 @@ inputs = [
     "Security/Proofs/Flock/Verifier.lean", "Security/Proofs/Flock/Verifier",
     # what Lake reads to load security_proofs, and security and security_properties, which it requires by path
     "Security/Proofs/lakefile.toml", "Security/Proofs/lake-manifest.json", "Security/Proofs/lean-toolchain",
+    "verity/core/protocols/record.py",
     "Security/lakefile.toml", "Security/lake-manifest.json", "Security/lean-toolchain",
     "Security/Properties/lakefile.toml", "Security/Properties/lake-manifest.json", "Security/Properties/lean-toolchain",
     # test_lean_verifier.py and test_audit_profile.py read the audit layer's files and its lifted statements
@@ -42,14 +43,14 @@ inputs = [
     "verity/core/protocols/sampled_proofs", "verity/core/primitives/randomness", "verity/ml/randomness/tests",
     # test_coin_schedule.py holds the prover's coin schedule to the Lean verifier's
     "verity/core/service/flock/Flock/Zk.lean",
-    # test_lean_rec_cap_guards.py builds Flock.Test.RecCap, which the Lean check no longer does; its imports reach it through
-    # the flock-verify artifact
-    "verity/core/service/flock/Flock/Test/RecCap.lean",
+    # test_lean_rec_cap_guards.py builds Flock.Test.RecCap, which the Lean check no longer does, and the RecCapSmall it imports;
+    # their other imports reach it through the flock-verify artifact
+    "verity/core/service/flock/Flock/Test/RecCap.lean", "verity/core/service/flock/Flock/Test/RecCapSmall.lean",
 ]
 parallel = true
-# an xdist worker peaked at 15.6 GB (16 Oct, vy-nebius-cpu-1: 38 of them OOM'd a 600 GiB check); `--mem-gb` divides by this
+# an xdist worker peaked at 15.6 GB (38 of them OOM'd a 600 GiB check); `--mem-gb` divides by this
 worker_gb = 16
-# 9,765 s on one worker beside a loaded check (r20261025-023312-fa65), past suites.py's SUITE_TIMEOUT_S
+# 9,765 s on one worker beside a loaded check, past suites.py's SUITE_TIMEOUT_S
 timeout_s = 14400
 # Build outputs the Lean tests run or skip on (`check` runs this suite after its Lean steps have built them).
 artifacts = ["verity/core/service/flock/.lake/build/bin/flock-verify",
@@ -57,4 +58,5 @@ artifacts = ["verity/core/service/flock/.lake/build/bin/flock-verify",
              "verity/core/service/flock/.lake/build/bin/flock-rec-sparse",
              "verity/core/service/flock/.lake/build/bin/flock-witness",
              "verity/core/service/flock/.lake/build/bin/flock-rec-opening",
+             "verity/core/service/flock/.lake/build/bin/flock-rec-links",
              "Security/.lake/packages/mathlib/.lake/build"]

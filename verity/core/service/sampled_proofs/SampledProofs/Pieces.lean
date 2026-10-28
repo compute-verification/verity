@@ -43,7 +43,7 @@ difftest against `one_stage`'s Python, beside the whole protocol (`sampled-proof
 * `challenger_close`, `challenger_released`, `challenger_ledger`, `challenger_head`, `challenger_session`,
   `challenger_credited`, `challenger_pinned`: the challenger's session (`ChallengerSession`): its close as `from_json`
   reads it, with `close_message`; `log_chain` and `released_roots_of`; `audited_session`, the auditor's ledger;
-  `ledger_head`, infra's published heads; `trusted_session_of` and `credited_session`, a window counted toward its
+  `ledger_head`, the ledger's published heads; `trusted_session_of` and `credited_session`, a window counted toward its
   period's circuit, each over `pinned_session`: a session from a commit the host's pins log records and the auditor's
   first-parent list of main holds.
 * `challenger_read`, `challenger_draw_coins`: a draw's coins from one challenger family (`ChallengerCoins`):
@@ -246,6 +246,13 @@ def select (j : Json) : V Json := do
   let rule ← Select.resolve rule p (getD j "query")
   let (draw, _, read) ← Select.select rule p (getD j "query") table cm (← Flock.unhex (← Flock.J.str j "source" "the select"))
   return Json.mkObj [("draw", draw), ("read", Lean.toJson read)]
+
+/-- `select`'s input to `{"design"}`: the sampling design (`Core.SamplingDesign.ofFlock`) of C-Flock's law of the challenger's
+draw, as the profile writes it (`Core.SamplingDesign.toJson`); refused where `select` is. -/
+def design (j : Json) : V Json := do
+  let d ← Flock.Draw.UnitDraw.ofJson (getD (← select j) "draw")
+  let some design := Core.SamplingDesign.ofFlock d.law | throw "the draw's law has no sampling design"
+  return Json.mkObj [("design", design.toJson)]
 
 /-- `select`'s input to `{"classes", "checked"}`: the claims' partition over the program under the query (`Slots.layout`),
 and the slots of the challenger's draw on the source's bytes, each as `[slot, 0]` (`Slots.checked`); refused where
@@ -565,8 +572,8 @@ def run (j : Json) : V Json := do
 def table : List (String × (Json → V Json)) :=
   [("decode", decode), ("partition", partition), ("committed_bits", committedBits), ("registration", registration),
    ("registered", registered),
-   ("domain", domain), ("produced", produced), ("known_port", knownPort), ("check_draw", checkDraw), ("draw", draw), ("select", select), ("slots", slots),
-   ("check_proved", checkProved),
+   ("domain", domain), ("produced", produced), ("known_port", knownPort), ("check_draw", checkDraw), ("draw", draw), ("select", select), ("design", design),
+   ("slots", slots), ("check_proved", checkProved),
    ("bound", bound), ("harm_bound", harmBound), ("max_harm", maxHarm), ("bernoulli_bound", bernoulliBound),
    ("hidden_offsets", hiddenOffsets), ("hidden_locate", hiddenLocate), ("hidden_witness", hiddenWitness),
    ("stream", stream), ("fleet", fleet), ("verdict", verdict), ("matches_public", matchesPublic),

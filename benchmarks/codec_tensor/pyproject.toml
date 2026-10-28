@@ -1,6 +1,7 @@
 # The tensor-core wide-word codec's benchmark and its tests. Not a package: `wt.cu` and `bench.py` run on a GPU node
 # (`run.sh`), and the byte-exact reference with the kernel's tensor-core decomposition and lane-by-lane carries (`wide.py`)
-# run here as a suite (`uv run tools/verity/check/suites.py benchmarks/codec_tensor`). Stdlib only.
+# run here as a suite (`uv run tools/verity/check/suites.py benchmarks/codec_tensor`), on the remote bandwidth audit's
+# codec (`wide.py`'s field, keys and rounds).
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
@@ -8,14 +9,16 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 [tool.verity.tests]
 # test_tagging checks the store's tags against the bandwidth audit's ro-blake3/v1 (tags.py and the stdlib modules it
 # imports); test_sketch_receipt and test_redteam_impl the GEMM's and attention's blocks under the remote bandwidth
-# driver's receipts (and its commitments); test_step_plan the step's pass (step.py, which imports word_codec's kv
-# modules) under the driver's block layout.
+# driver's receipts (and its commitments, whose canonical JSON is verity.ml.circuits' codec); test_step_plan the step's
+# pass (step.py, which imports word_codec's kv modules) under the driver's block layout.
 inputs = ["benchmarks/word_codec/kv.py", "benchmarks/word_codec/kv_bench.py", "benchmarks/word_codec/kv_exhaust.py",
+          "verity/core/protocols/record.py",
           "benchmarks/word_codec/kv_receipt.py", "benchmarks/word_codec/kv_twin.py",
+          "benchmarks/word_codec/cuda_lib.py",  # the loader step.py's kernels open through (bench.py, kv_bench.py)
           "verity/__init__.py", "verity/errors.py", "verity/core/__init__.py", "verity/core/protocols/__init__.py",
           "verity/core/protocols/bandwidth/__init__.py", "verity/core/protocols/bandwidth/tags.py",
           "verity/core/protocols/remote_bandwidth", "verity/core/protocols/sampled_proofs/__init__.py",
           "verity/core/claims/__init__.py",
           "verity/core/protocols/sampled_proofs/challenger.py", "verity/core/protocols/sampled_proofs/remote.py",
           "verity/ml/__init__.py", "verity/ml/crypto",
-          "verity/ml/commitments", "verity/ml/randomness"]
+          "verity/ml/circuits", "verity/ml/commitments", "verity/ml/randomness"]

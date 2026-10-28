@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import importlib.util
+import json
 import re
 from pathlib import Path
 
@@ -192,8 +193,8 @@ def test_custody_deletes_the_lean_dependency_urls_wherever_a_run_leaves_them():
 
 
 def test_the_agreement_leaves_memory_for_the_steps_beside_it(monkeypatch):
-    """vy-mig-check-21 (128 GB, 32 cores) gave the agreement 16 verifier processes at 8 GB each while lean-suites ran beside it,
-    and its cgroup OOM-killed 36 of them (6 Oct): the agreement counts on half."""
+    """A 128 GB, 32-core pod that gives the agreement 16 verifier processes at 8 GB each while lean-suites runs beside it has
+    its cgroup OOM-kill them: the agreement counts on half."""
     monkeypatch.setattr(CHECK, "memory_gb", lambda: 128)
     monkeypatch.setattr(CHECK, "cores", lambda: 32)
     assert CHECK.session_jobs() * 8 <= 128 // 2
@@ -328,8 +329,8 @@ def _repo(root: Path):
 
 
 def test_a_commit_lands_as_is_only_when_merging_it_into_main_leaves_its_own_tree(tmp_path, monkeypatch):
-    """The 1 Oct count: 15 of 16 checks of a PR's own head counted for nothing, since `research merge` takes a check only of the tree
-    that lands; `--record` warns before spending a slot on one."""
+    """A check of a PR's own head counts for nothing unless it is the tree that lands, since `research merge` takes a check only
+    of that tree; `--record` warns before spending a slot on one."""
     monkeypatch.setattr(CHECK, "ROOT", tmp_path)
     git, commit = _repo(tmp_path)
     assert not CHECK.landable("main")                                # main gained c.txt, which the PR lacks
@@ -486,8 +487,8 @@ def test_a_recorded_run_refuses_to_skip_the_store(monkeypatch):
     assert CHECK.main([]) == 2
 
 def test_circuit_check_has_the_whole_slot_only_when_neither_pytest_nor_lean_runs_beside_it(tmp_path, monkeypatch):
-    """12 Oct 17:41Z: an unsharded check (r20261012-155204-6475) gave circuit-check the slot's whole 560 GiB while pytest and
-    lean-audit held 160 to 350 GiB beside it, and the kernel OOM-killed a 141 GiB circuit-check worker."""
+    """An unsharded check that gives circuit-check the slot's whole 560 GiB while pytest and lean-audit hold 160 to 350 GiB
+    beside it gets a 141 GiB circuit-check worker OOM-killed."""
     monkeypatch.setattr(CHECK, "FLOCK_LEAN", tmp_path / "verifier-lean")
     monkeypatch.setattr(CHECK, "memory_gb", lambda: 2048)
     monkeypatch.setenv(CHECK.SLOT.SLOT_MEM_ENV, "560")
@@ -513,9 +514,9 @@ def test_a_cached_circuit_check_keeps_the_catalog_bindings_records_and_an_uncach
 
 
 def test_beside_pytest_alone_circuit_check_takes_the_share_lean_suites_would_have(tmp_path, monkeypatch):
-    """A post-landing run (`--deferred circuit-check,pytest`) runs no Lean step, yet circuit-check got 210 GiB of a 560 GiB slot
-    while pytest kept to its half of the rest, 175: lean-suites' 175 went unused, and the 147-167 GiB SHA-512 targets ran one at
-    a time (b103, r20261019-015150-b103: 4 of them, 5,318 s end to end).  Pytest's share is unchanged."""
+    """A post-landing run (`--deferred circuit-check,pytest`) runs no Lean step, so circuit-check getting 210 GiB of a 560 GiB
+    slot while pytest kept to its half of the rest, 175, would leave lean-suites' 175 unused and run the 147-167 GiB SHA-512
+    targets one at a time.  Pytest's share is unchanged."""
     monkeypatch.setattr(CHECK, "FLOCK_LEAN", tmp_path / "verifier-lean")
     monkeypatch.setattr(CHECK, "memory_gb", lambda: 2048)
     monkeypatch.setenv(CHECK.SLOT.SLOT_MEM_ENV, "560")
@@ -530,8 +531,8 @@ def test_beside_pytest_alone_circuit_check_takes_the_share_lean_suites_would_hav
 
 
 def test_circuit_check_is_granted_the_slot_once_every_step_beside_it_has_ended(tmp_path, monkeypatch):
-    """b103 (r20261019-015150-b103): pytest ended 83 minutes into circuit-check's 125, and circuit-check kept to the share it
-    had beside pytest to the end.  Beside other steps it gets ``--mem-gb-file``, which `run` writes the slot's mem= to once those
+    """pytest can end long before circuit-check does, which must not keep to the share it had beside pytest to the end.
+    Beside other steps it gets ``--mem-gb-file``, which `run` writes the slot's mem= to once those
     steps have ended (`grant_when_alone`), a stale grant removed first; alone in the slot it has all of it already."""
     import threading
 
@@ -624,11 +625,9 @@ def test_memory_is_what_the_tightest_cgroup_over_this_process_leaves(tmp_path):
 
 def test_the_suites_that_use_lean_run_after_the_verifier_is_built_and_beside_the_audit(tmp_path, monkeypatch):
     """Not beside `lake build`: whether their tests run or skip, and what `lake` finds built, must not depend on how far the
-    concurrent Lean group has got (verity-flock passed or failed on build order, r20260929-015410-5a20). The audit builds only
-    in scratch trees of its own, so it is a group of its own and nothing in the Lean group waits on it (r20261004-024819-11bc:
-    the audit's 3,238 s, then the suites' 979 s and the agreement's 515 s, one after another). The suites need only the
-    verifier lean-build built, so they wait on it alone and run beside the agreement (r20261004-150518-b201: 1,254 s, then
-    1,222 s)."""
+    concurrent Lean group has got (otherwise verity-flock passes or fails on build order). The audit builds only in scratch
+    trees of its own, so it is a group of its own and nothing in the Lean group waits on it. The suites need only the verifier
+    lean-build built, so they wait on it alone and run beside the agreement."""
     out, _ = _pinned(tmp_path, monkeypatch)
     gs = CHECK.groups(out, 8)
     (_, pytest, _), = gs[0]
@@ -746,6 +745,22 @@ def test_the_agreement_refuses_a_machine_it_cannot_run_on_in_seconds(tmp_path, m
     assert "may use 16 GB; the agreement needs 24" in CHECK.agreement_preflight({"upstream": {}}, [ok])
 
 
+def test_the_agreements_smoke_replay_expects_upstreams_own_verdict_where_a_case_records_a_divergence(tmp_path, monkeypatch):
+    """r20261027-131150-7678: set 16's honest session, which Lean refuses for completeness and upstream accepts
+    (`upstream_accepted`), failed the preflight because it was held to Lean's verdict. A case without the key expects its one
+    verdict of both."""
+    v = tmp_path / "verifier"
+    v.mkdir()
+    (v / "agree.py").write_text("def drawn(d):\n    return False\n\ndef upstream_cmd(a, public, extra):\n    return [a.upstream]\n")
+    sets = [{"pr83": c, "lean_statement": "s", "statement": {"circuit": f"art:{c}/c", "public": f"art:{c}/p"},
+             "sessions": [{"dir": f"art:{c}/honest", "expect": expect}]}
+            for c, expect in (("aa", {"accepted": False, "why": "setup: registered reads (complete): ", "upstream_accepted": True}),
+                              ("bb", {"accepted": True, "why": ""}))]
+    (v / "vectors.json").write_text(json.dumps({"replayable": {"sets": sets}}))
+    monkeypatch.setattr(CHECK, "FLOCK_VERIFIER", v)
+    assert {c: e for c, _, e in CHECK.upstream_smoke(tmp_path)} == {"aa": {"accepted": True}, "bb": {"accepted": True}}
+
+
 def _fake_run(monkeypatch, groups, pre=()):
     """`run` over the given groups and preflight, with nothing built first, no Lean URLs, and no plan of the real tree for
     the reused pack (`Reused.plan` reads every file, outside the suite's inputs)."""
@@ -809,8 +824,8 @@ def test_keep_going_runs_every_other_group_to_its_end(tmp_path, monkeypatch):
 
 
 def test_a_step_killed_by_a_sigterm_the_check_did_not_send_is_stopped_not_failed(tmp_path, monkeypatch):
-    """r20261026-062546-11fc: drive's `research cancel` signalled the run's whole process group, lean-agreement died of it before
-    check's own handler marked it stopped, and it was recorded failed with an empty log, a failure the agreement never found."""
+    """drive's `research cancel` signals the run's whole process group, and a step can die of it before check's own handler
+    marks it stopped; it is recorded stopped, not failed with an empty log, a failure the step never found."""
     ok = _py("pass")
     _fake_run(monkeypatch, [[("cancelled", _py("import os, signal\nos.kill(os.getpid(), signal.SIGTERM)"), tmp_path)],
                             [("a", ok, tmp_path)]])
@@ -834,11 +849,10 @@ def _gone(pid: int) -> None:
 
 
 def test_a_step_that_hangs_writing_nothing_is_stopped_and_fails_as_hung(tmp_path, monkeypatch):
-    """r20261025-021824-ba9f and r20261025-023312-fa65: under --keep-going lean-suites failed, and pytest's suites.py
-    sat 23-24 h on a test that never returned, writing nothing, while circuit-check waited on the grant pytest's end writes and
-    the run held its slot.  Here pytest's process waits on a child that never exits; once the watch's clock (injected) has passed
-    `IDLE_S` with pytest's outputs unchanged, the child and pytest are stopped, pytest fails as hung, the grant is written and the
-    run ends."""
+    """Under --keep-going after lean-suites fails, pytest's suites.py can sit for a day on a test that never returns, writing
+    nothing, while circuit-check waits on the grant pytest's end writes and the run holds its slot.  Here pytest's process
+    waits on a child that never exits; once the watch's clock (injected) has passed `IDLE_S` with pytest's outputs unchanged,
+    the child and pytest are stopped, pytest fails as hung, the grant is written and the run ends."""
     import json
     import os
 
@@ -937,8 +951,8 @@ def test_a_build_that_fails_without_compiling_does_not_halt(tmp_path, monkeypatc
 
 def test_a_cancelled_recorded_check_still_publishes_the_passes_its_steps_stored(tmp_path, monkeypatch):
     """`research cancel`'s SIGTERM while `slow` runs (the FIFO): `slow` is stopped, `after-slow` never starts, and the run still
-    writes its result, `not_run`, with the pack of the pass `passes` stored before it, and exits 143.  Before, the signal killed
-    check.py, and a cancelled check's passes (6f10's 26 minutes, 12 Oct) were run again."""
+    writes its result, `not_run`, with the pack of the pass `passes` stored before it, and exits 143, so a cancelled check's
+    passes are not run again."""
     import json
     import os
     import signal
@@ -1020,7 +1034,7 @@ def test_a_runs_pack_is_written_as_each_step_ends_and_on_sigterm_before_any_step
 
 def test_a_runs_reused_pack_holds_what_its_own_plan_found_here_before_its_steps_ran(tmp_path, monkeypatch):
     """A check's `verdicts.tar.gz` holds only what its steps stored, so a check reusing a pass no recent pack holds answered for
-    nothing a later plan could cite (19 Oct: the newest packs held no circuit-check target and no keyed step).  `Reused` packs
+    nothing a later plan could cite.  `Reused` packs
     the passes its plan of its own tree found in its own caches, of those here before its steps ran; with circuit-check's
     targets unkeyed (no task list yet) it plans again once that step ends."""
     import tarfile
@@ -1112,7 +1126,7 @@ def test_the_early_lean_build_is_a_group_of_its_own_beside_the_lean_steps(tmp_pa
 
 def test_circuit_cache_keeps_circuit_checks_reuse_alone_under_no_cache(tmp_path, monkeypatch):
     """Drive's after-landing run (`--no-cache --circuit-cache`): the suites and the Lean steps run cold, and circuit-check reuses
-    its per-target passes, since a cold `--all` (~4 h) outlasted every after-landing run from 24 Oct.  `--no-cache` alone (the
+    its per-target passes, since a cold `--all` (~4 h) outlasts every after-landing run.  `--no-cache` alone (the
     nightly `audit-main`) leaves circuit-check cold too."""
     out, _ = _pinned(tmp_path, monkeypatch)
 
@@ -1171,11 +1185,11 @@ def test_the_preflight_is_the_lockfile_and_the_repository_lints(monkeypatch):
 
 
 def test_the_preflight_refuses_a_fetched_fixture_that_neither_this_machine_nor_the_public_export_has(tmp_path, monkeypatch, capsys):
-    """The closing train's check (cb20, 10 Oct) failed `lean-suites` after its launch: #1716 registered rec-coins, preserved
-    privately and never exported, and node 1 had it neither in its store nor from the public export. A fixture the tree already
-    holds exactly or this machine's store holds whole needs no export (top, 10 Oct: infra's node-1 copies keep trains moving),
-    though the export is asked first (one HEAD per manifest, no blob), so the ones it lacks are named. A tracked fixture
-    and the `previous` history are not asked about, and with no public source to ask it refuses rather than pass."""
+    """A fixture registered, preserved privately and never exported is neither in a node's store nor in the public export, and
+    a check there would fail `lean-suites` after its launch. A fixture the tree already holds exactly or this machine's store
+    holds whole needs no export (a node's own copies keep trains moving), though the export is asked first (one HEAD per
+    manifest, no blob), so the ones it lacks are named. A tracked fixture and the `previous` history are not asked about,
+    and with no public source to ask it refuses rather than pass."""
     import json
     import subprocess
 
@@ -1224,8 +1238,8 @@ def test_the_preflight_refuses_a_fetched_fixture_that_neither_this_machine_nor_t
 
 
 def test_preflight_alone_only_reports_a_step_that_judges_the_node_the_check_runs_on(tmp_path, monkeypatch, capsys):
-    """A train's prep runs `--preflight` off the node its check is pinned to, so a fixture only that node's store holds (f1-gate
-    on node 1, 10 Oct) mustn't refuse the train there: the check's own preflight-fixtures judges the node, and refuses on it."""
+    """A train's prep runs `--preflight` off the node its check is pinned to, so a fixture only that node's store holds mustn't
+    refuse the train there: the check's own preflight-fixtures judges the node, and refuses on it."""
     fail = _py("raise SystemExit(1)")
     monkeypatch.setattr(CHECK, "preflight", lambda: [("preflight-fixtures", fail, tmp_path)])
     assert CHECK.main(["--preflight"]) == 0 and "not refused here" in capsys.readouterr().out
@@ -1342,7 +1356,7 @@ def test_a_change_to_the_lean_verifier_alone_needs_its_gates_and_misses_the_agre
 def test_every_file_the_agreement_reads_needs_the_agreement_to_merge():
     """The rule `check.py --record` sends the upstream build by, and the gate refuses by, covers each tracked file the agreement
     reads (`agreement_closure`: its scripts and the Lean package `flock-verify` is built from) but the docs, so a change to any
-    of them can't land on a check that skipped it (13 Oct: the rule was read as covering verity/ml/flock/ alone)."""
+    of them can't land on a check that skipped it, not only those under verity/ml/flock/."""
     from research.merge import rule_touches
 
     spec2 = importlib.util.spec_from_file_location("check_tool_reads", ROOT / "tools" / "verity" / "check" / "tool.py")
@@ -1510,7 +1524,7 @@ def _train_repo(tmp_path):
 
 
 def test_train_sh_refuses_an_empty_commit_and_one_origin_lacks(tmp_path):
-    """The hand-built launch of an empty commit (9 Oct) is what train.sh removes: it refuses, before launching anything, a commit
+    """train.sh refuses, before launching anything, a commit
     whose tree is its parent's, and one no branch of origin holds (the run ships what origin holds)."""
     git, train, argv = _train_repo(tmp_path)
     git("commit", "-q", "--allow-empty", "-m", "empty")
@@ -1569,8 +1583,8 @@ def test_train_sh_retries_a_failed_first_fetch_twice_with_a_backoff(tmp_path):
 
 
 def test_train_sh_takes_a_restack_by_merge_head_and_refuses_one_with_mains_tree(tmp_path):
-    """#1585's head 13df320192c2 merged main into a commit that already held main's change: its tree is its first parent's, yet
-    it differs from main, and train.sh refused it as empty (22:23Z, 9 Oct). Empty means the tree is main's, where it leaves main."""
+    """A head that merges main into a commit already holding main's change has its first parent's tree, yet differs from main,
+    and is not empty: empty means the tree is main's, where it leaves main."""
     git, train, argv = _train_repo(tmp_path)
     root = git("rev-parse", "HEAD")
     (tmp_path / "repo" / "m").write_text("m\n")
@@ -1598,8 +1612,8 @@ def test_train_sh_takes_a_restack_by_merge_head_and_refuses_one_with_mains_tree(
 
 
 def test_train_sh_stops_a_launcher_that_launched_nothing_in_the_wait(tmp_path):
-    """18 Oct: train.sh gave up on a check.py still gathering verdicts after its wait, and check.py launched its runs later. Drive
-    had no ids for them, so nothing cancelled them, and one held a check slot 3 h on a tree no longer on `next`."""
+    """A check.py still gathering verdicts after train.sh's wait would launch its runs later, with no ids for drive, so nothing
+    would cancel them, and one could hold a check slot for hours on a tree no longer on `next`."""
     import os
 
     git, train, _ = _train_repo(tmp_path)

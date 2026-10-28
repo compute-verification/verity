@@ -8,12 +8,12 @@ store's registration root, and its receipt leaf with its path to its pass's root
 **What the draw needs.**  Only that it is uniform over the committed receipts and independent of them, which drawing it
 after the last root from the verifier's own source gives.  The passes need no coins of their own: the sampling term
 counts the window's receipts that the prover never computed correctly, whichever pass they are in, so
-`Pr[accept ∧ fewer than (1 − ε)·M correct of M] ≤ (1 − ε)^s` for the window as for one pass (`window_error`).  The
-chain matters elsewhere: each pass's compression argument (`RateAudit` at that pass) needs the pass's oracle fresh
-when the pass starts, and in the random-oracle model `H(σ, j, root_{j−1})` is fresh for every pass once the pass
-index `j` is in its input, whatever roots the prover picks.  Without `j`, a prover that commits a garbage pass whose
-root repeats an earlier one replays that pass's seed, and the pass after it is the earlier pass's receipts again,
-correct and read once.
+`Pr[accept ∧ fewer than (1 − ε)·M correct of M] ≤ (1 − ε)^s` for the window as for one pass
+(`audit.sampling_error`).  The chain matters elsewhere: each pass's compression argument (`RateAudit` at that pass)
+needs the pass's oracle fresh when the pass starts, and in the random-oracle model `H(σ, j, root_{j−1})` is fresh for
+every pass once the pass index `j` is in its input, whatever roots the prover picks.  Without `j`, a prover that
+commits a garbage pass whose root repeats an earlier one replays that pass's seed, and the pass after it is the earlier
+pass's receipts again, correct and read once.
 
 **Across windows.**  With each window's sample drawn after that window's roots, the deficits `d_i` of `n` windows
 satisfy `Pr[all accepted ∧ mean d ≥ d̄] ≤ (1 − d̄)^(s·n)` however the prover adapts (`horizon_error_log2`): by
@@ -48,14 +48,18 @@ import math
 from collections.abc import Sequence
 from dataclasses import dataclass
 from enum import Enum
+from fractions import Fraction
 
 from verity.ml.randomness import Key
+from .tags import DIGEST_BYTES
+
+from . import audit
 
 DOMAIN = "verity/bandwidth/openings/v1"
 SHA512_BLOCK = 128
-NODE_BYTES = 64
+NODE_BYTES = DIGEST_BYTES
 ROW_PREFIX_BYTES = 128
-STORE_LEAF_BYTES = 1 + 32 + 2 + 64
+STORE_LEAF_BYTES = 1 + 32 + 2 + DIGEST_BYTES
 NODE_MESSAGE_BYTES = 1 + 2 * NODE_BYTES
 RECEIPT_PREFIX_BYTES = 128 + 8
 SLACK_ERROR_LOG2 = -41
@@ -80,20 +84,13 @@ def draw(key: Key, counts: Sequence[int], s: int) -> tuple[tuple[int, int], ...]
     return tuple(out)
 
 
-def window_error(receipts: int, epsilon: float, s: int) -> float:
-    """`((k − 1)/M)^s` with `k = ⌈(1 − ε)·M⌉`: the chance that `s` pooled openings all land on correct receipts while
-    fewer than `k` of the window's `M` are correct."""
-    k = math.ceil((1 - epsilon) * receipts)
-    if k <= 1:
-        return 0.0
-    return math.exp(s * math.log((k - 1) / receipts))
-
-
-def samples_for(epsilon: float, error_log2: float, receipts: int | None = None) -> int:
-    """The fewest openings with sampling error at most `2^error_log2` at deficit `ε` (`window_error`; at `M = ∞`
-    when `receipts` is None, which is `(1 − ε)^s` and at most one more opening)."""
-    ratio = 1 - epsilon if receipts is None else (math.ceil((1 - epsilon) * receipts) - 1) / receipts
-    return math.ceil(error_log2 * math.log(2) / math.log(ratio))
+def samples_for(epsilon: Fraction, error_log2: int, receipts: int | None = None) -> int:
+    """The fewest openings with sampling error at most `2^error_log2` at deficit `ε`: `audit.samples_for` over the
+    window's `M` receipts, and at `M = ∞` when `receipts` is None, where the error is `(1 − ε)^s` and the count is at
+    least any window's."""
+    if receipts is not None:
+        return audit.samples_for(receipts, error_log2, epsilon)
+    return math.ceil(error_log2 * math.log(2) / math.log(1 - epsilon))
 
 
 def horizon_error_log2(s: int, windows: int, deficit: float) -> float:
@@ -177,7 +174,7 @@ class Geometry:
     blocks: int
     passes: int
     block_bytes: int
-    receipt_bytes: int = 64
+    receipt_bytes: int = DIGEST_BYTES
     receipts_per_leaf: int = 1
     bound_bytes: int = 0
     sketch_rows: int = 16
@@ -404,5 +401,4 @@ __all__ = [
     "retention",
     "samples_for",
     "slack_bits",
-    "window_error",
 ]
