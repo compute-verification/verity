@@ -42,6 +42,7 @@
   "Proofs.Properties.Pous.Run",
   "Proofs.Properties.Pous.Setup",
   "Proofs.Properties.Pous.RunAt",
+  "Proofs.Properties.Pous.Wipe",
   "Proofs.Properties.Accounting.Requirement",
   "Proofs.Properties.RemoteAudit",
   "Proofs.Properties.RemoteAudit.Coins",
