@@ -192,7 +192,7 @@ theorem bound_eq_Lambda {c : Declaration} (T : Threading c) (S b_w : ℝ) (d e :
 `b_a |M| ≤ α Λ size(d)`, with `size(d) ≤ C`, is the dampener's `M_d ≤ C/ρ_T`. -/
 theorem declared_le_slots {Γ : ℕ} {α b_w b_a C : ℝ} {c d : Declaration} {T : Threading c} {σ : T.Slots} {dd e : ℕ}
     {Mc : Containment c.D d.D} (hα : 0 ≤ α) (hbw : 0 < b_w) (hba : 0 < b_a) (hdd : 0 < dd) (hcomp : Complies Γ α d)
-    (hB : Assumptions.BaselineRegistered c d (PartialContainment.ofContainment Mc))
+    (hB : Assumptions.ThetaRegistered c d (PartialContainment.ofContainment Mc))
     (hT : T.Threaded Γ (α * Γ) dd e) (hW : Assumptions.WeightsIncompressibleSlots c T σ Γ (α * Γ) b_w b_a)
     (hsize : (d.D.size d.D.computed : ℝ) ≤ C) :
     (T.M.card : ℝ) ≤ C / rhoT α b_a (T.bound (α * Γ) b_w dd e) := by
@@ -208,7 +208,7 @@ theorem declared_le_slots {Γ : ℕ} {α b_w b_a C : ℝ} {c d : Declaration} {T
 /-- **The declared computation at NCI's thread bound**: `declared_le_slots` at one slot per weight gate. -/
 theorem declared_le {Γ : ℕ} {α b_w b_a C : ℝ} {c d : Declaration} {T : Threading c} {dd e : ℕ}
     {Mc : Containment c.D d.D} (hα : 0 ≤ α) (hbw : 0 < b_w) (hba : 0 < b_a) (hdd : 0 < dd) (hcomp : Complies Γ α d)
-    (hB : Assumptions.BaselineRegistered c d (PartialContainment.ofContainment Mc)) (hT : T.Threaded Γ (α * Γ) dd e) (hW : Assumptions.WeightsIncompressible c T Γ (α * Γ) b_w b_a)
+    (hB : Assumptions.ThetaRegistered c d (PartialContainment.ofContainment Mc)) (hT : T.Threaded Γ (α * Γ) dd e) (hW : Assumptions.WeightsIncompressible c T Γ (α * Γ) b_w b_a)
     (hsize : (d.D.size d.D.computed : ℝ) ≤ C) :
     (T.M.card : ℝ) ≤ C / rhoT α b_a (T.bound (α * Γ) b_w dd e) :=
   declared_le_slots hα hbw hba hdd hcomp hB hT (weightsIncompressibleSlots_of (Fit.idSlots T) hbw.le hW) hsize
