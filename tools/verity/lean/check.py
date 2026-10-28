@@ -1064,8 +1064,7 @@ def renamed(name: str, moved: dict[str, str]) -> str:
 
 
 def renamed_witnesses(policy: dict, moved: dict[str, str]) -> dict:
-    """The policy's `witnesses`, `unwitnessed` and `shape.inline` with every guarantee and theorem they name `renamed` by
-    ``moved``."""
+    """The policy's `witnesses` and `unwitnessed` with every guarantee and theorem they name `renamed` by ``moved``."""
     out, ws, allow = {}, policy.get("witnesses"), policy.get("unwitnessed")
     if isinstance(ws, dict):
         out["witnesses"] = {renamed(g, moved): {k: [renamed(n, moved) if isinstance(n, str) else n for n in v]
@@ -1991,7 +1990,8 @@ def inline_failures(policy: dict, facts: dict) -> tuple[list[Failure], dict, dic
     the shape rule, which holds each hypothesis it takes to its acceptance, a premise or a shared field. A closed
     hypothesis of the statement as written is the hypotheses rule's. `--update` keeps an entry only while its premise
     still offends, and that of a guarantee the lock doesn't list yet (one a PR ahead on `next` brings), and adds none, so
-    the map only shrinks; its size is the formalization debt the AUDIT line prints."""
+    the map only shrinks; its size is the formalization debt the AUDIT line prints. `--moved` carries an entry to its
+    guarantee's new name (`renamed_witnesses`, which renames `shape.inline` with the witnesses)."""
     spec = policy.get("shape") or {}
     allow = spec.get("inline", {})
     if not isinstance(allow, dict) or not all(isinstance(v, dict) and v and all(isinstance(w, str) and w.strip()
