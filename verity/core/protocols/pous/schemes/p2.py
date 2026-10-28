@@ -507,7 +507,7 @@ def wide_certificate(params: P2Params) -> CapacityBound | None:
                          theorem="Pous.Period.SecurityProofs.periodHeldAt", segments=None, claims=WIDE_CLAIMS)
 
 
-def wide320_certificate(params: P2Params) -> Certificate | None:
+def wide320_certificate(params: P2Params) -> CapacityBound | None:
     """`Pous.SecurityProofs.ObligationWide320` for a v4 store at the registered width and prime of any block count in
     `CERT_WIDE_BLOCKS`, in any number of segments: a window of `CERT_K_WIDE320` reads at the store's snapshot, the state
     at most `⌊ρ·N·16448⌋` bits at each challenge, passes with probability at most `2^-20`, read at `N` = the store's
@@ -516,7 +516,7 @@ def wide320_certificate(params: P2Params) -> Certificate | None:
     lo, hi = CERT_WIDE_BLOCKS
     if (params.w, params.c0) != POINT[:2] or params.expander != SHA512_CTR or not lo <= params.blocks <= hi:
         return None
-    return Certificate(k=CERT_K_WIDE320, rounds=0, work=1 << 20, call_ns=ROOT_CALL_NS,
+    return CapacityBound(k=CERT_K_WIDE320, rounds=0, work=1 << 20, call_ns=ROOT_CALL_NS,
                        theorem="Pous.SecurityProofs.ObligationWide320",
                        delta=Fraction(1, 1 << 20) - Fraction(1, 1 << 128), segments=None, claims=WIDE_CLAIMS)
 
