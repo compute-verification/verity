@@ -15,8 +15,9 @@ reference the check is held to (`Flock.Test.Annot`, `Properties.Annot.CheckAgree
 The JSON codec is `verity.ml.circuits.query_codec`'s, one object per constructor, paths and selectors as their canonical
 strings (`query_ast.Path`, `NameSel`, `NodeSel`):
 
-* `instances`, `members` (`k` a positive integer), `nodes`, `zip`, `each`, `concat`, `rest`, `default`, `where` and
-  `root`, evaluated as `query_ast._Evaluator` evaluates them;
+* `instances`, `members` (`k` a positive integer, or `[r, c]`: the `r × c` rectangles of the selected node's members by
+  the members of the one batch node of its callee's body, row major), `nodes`, `zip`, `each`, `concat`, `rest`,
+  `default`, `where` and `root`, evaluated as `query_ast._Evaluator` evaluates them;
 * `{"op": "table", "path": P, "table": NAME}` (`"of": "nodes"`, the default, may be written; any other `of` is refused):
   in each body `P` selects (`.` the enclosing one), the table `NAME`'s rows for that body's Definition, one per body
   node, a label or `null`; set `v` of an activation is every node whose row is `v`, all its members. The labels a body's
@@ -34,11 +35,12 @@ strings (`query_ast.Path`, `NameSel`, `NodeSel`):
 writes it, and a full specialization id with the descriptor key.
 
 Refused by code (`Annot.Refusal`): `term` (a document the codec doesn't read, or a term this module doesn't evaluate:
-`override`, `frontier`, a two-axis `k`, a set-algebra family, a table of anything but nodes, `@name:` selectors, which
+`override`, `frontier`, a set-algebra family, a table of anything but nodes, `@name:` selectors, which
 name metadata outside the descriptor), `table` (rows missing, of another length or not dense), `plan` (what `query_ast`
 refuses at plan time: `zip` over unequal member counts, `each` over a set of several nodes, `instances('.')` inside a
 body, a label map on the root activation, `group` over a set of several nodes, a label table splitting a set, `where`
-over a table) and `fuel`.
+over a table or a grid, `each` over a grid, a two-axis `k` on a primitive node or one whose callee's body has no batch
+node or several) and `fuel`.
 
 ## Meanings
 
@@ -276,7 +278,8 @@ inductive LabelMap where
 
 inductive Term where
   | instances (p : Path)
-  | members (p : Path) (sel : NodeSel) (k : Nat)
+  /-- `k` adjacent members a set, or with `cols = some c` the `k × c` rectangles over two axes -/
+  | members (p : Path) (sel : NodeSel) (k : Nat) (cols : Option Nat := none)
   | nodes (p : Path) (sel : NodeSel)
   | zip (p : Path) (sels : Array NodeSel)
   | each (base inner : Term)
@@ -316,13 +319,15 @@ def Term.ofJson (fuel : Nat) (j : Json) : V Term := do
   match op with
   | "instances" => return .instances (← Path.parse (← strField j "path"))
   | "members" =>
-    let k ← match j.getObjVal? "k" with
-      | .error _ => pure 1
-      | .ok (.arr _) => refuse "term" "a two-axis members k awaits its agreed form"
+    let (k, c) ← match j.getObjVal? "k" with
+      | .error _ => pure (1, none)
+      | .ok (.arr #[r, c]) => match natJ? r, natJ? c with
+        | some r, some c => if r > 0 && c > 0 then pure (r, some c) else refuse "term" "members(..., k=(r, c)) needs two positive integers"
+        | _, _ => refuse "term" "members(..., k=(r, c)) needs two positive integers"
       | .ok x => match natJ? x with
-        | some k => if k > 0 then pure k else refuse "term" "members(...) needs a positive k"
-        | none => refuse "term" s!"members k {x.compress} is not a positive integer"
-    return .members (← Path.parse (← strField j "path")) (← NodeSel.parse (← strField j "sel")) k
+        | some k => if k > 0 then pure (k, none) else refuse "term" "members(...) needs a positive k"
+        | none => refuse "term" s!"members k {x.compress} is not a positive integer or two of them"
+    return .members (← Path.parse (← strField j "path")) (← NodeSel.parse (← strField j "sel")) k c
   | "nodes" => return .nodes (← Path.parse (← strField j "path")) (← NodeSel.parse (← strField j "sel"))
   | "zip" =>
     let .ok (.arr ss) := j.getObjVal? "sels" | refuse "term" "zip sels are a list"
@@ -391,7 +396,8 @@ def Pred.toJson (p : Pred) : Json :=
 /-- `query_codec.to_json`. -/
 def Term.toJson : Term → Json
   | .instances p => Json.mkObj [("op", "instances"), ("path", p.render)]
-  | .members p s k => Json.mkObj [("op", "members"), ("path", p.render), ("sel", s.render), ("k", Lean.toJson k)]
+  | .members p s k c => Json.mkObj [("op", "members"), ("path", p.render), ("sel", s.render),
+      ("k", match c with | some c => Lean.toJson #[k, c] | none => Lean.toJson k)]
   | .nodes p s => Json.mkObj [("op", "nodes"), ("path", p.render), ("sel", s.render)]
   | .zip p ss => Json.mkObj [("op", "zip"), ("path", p.render), ("sels", Json.arr (ss.map (Json.str ·.render)))]
   | .each b i => Json.mkObj [("op", "each"), ("base", b.toJson), ("inner", i.toJson)]
@@ -479,13 +485,16 @@ def NameSel.matches (s : NameSel) (f : Fn) : Bool :=
 
 /-- How a plan entry treats node `j`'s members `members`: `atomic` (`k` adjacent members a set), `whole` (all of them one
 set), `zip` (member `m` of every node of `nodes` one set), `table` (set `v` every node whose row is `v`, all members;
-`labels` sets) or `descend` (every member refined by plan `sub`). -/
+`labels` sets), `descend` (every member refined by plan `sub`) or `grid` (`members(..., k=(r, c))`: plan `sub` is the
+`c`-member sets of the one batch node of the callee's body, and set `(u, v)` is set `v` of `sub` in each of members
+`u·r, …, u·r + r - 1`, `u` major; it covers what a descend into `sub` covers). -/
 inductive Kind where
   | atomic (k : Nat)
   | whole
   | zip (nodes : Array Nat)
   | table (rows : Array (Option Nat)) (labels : Nat)
   | descend (sub : Nat)
+  | grid (r : Nat) (sub : Nat)
   deriving Inhabited, BEq
 
 structure Entry where
@@ -514,7 +523,12 @@ private def liftV {α} (x : V α) : M α := fun s => match x with
 
 def ceilDiv (a k : Nat) : Nat := (a + k - 1) / k
 
-/-- Sets one activation of an entry contributes; `subTotal` is a descend entry's sub plan's. -/
+/-- An entry's sub plan, of a descend or a grid. -/
+def Kind.sub? : Kind → Option Nat
+  | .descend s | .grid _ s => some s
+  | _ => none
+
+/-- Sets one activation of an entry contributes; `subTotal` is a descend or grid entry's sub plan's. -/
 def Entry.count (e : Entry) (subTotal : Nat) : Nat :=
   match e.kind with
   | .atomic k => e.members.foldl (fun s (a, b) => s + ceilDiv (b - a) k) 0
@@ -522,6 +536,7 @@ def Entry.count (e : Entry) (subTotal : Nat) : Nat :=
   | .zip _ => total e.members
   | .table _ l => l
   | .descend _ => total e.members * subTotal
+  | .grid r _ => ceilDiv (total e.members) r * subTotal
 
 /-- The nodes a non-descend entry holds members of, each with its member ranges. -/
 def Entry.direct (body : Body) (e : Entry) : Array (Nat × Array (Nat × Nat)) :=
@@ -529,14 +544,14 @@ def Entry.direct (body : Body) (e : Entry) : Array (Nat × Array (Nat × Nat)) :
   | .zip ns => ns.map (·, e.members)
   | .table rows _ => ((Array.range rows.size).filter fun j => rows[j]!.isSome).map fun j =>
       (j, full (body.nodes[j]!.members))
-  | .descend _ => #[]
+  | .descend _ | .grid _ _ => #[]
   | _ => #[(e.j, e.members)]
 
 def push (d : Nat) (es : Array Entry) : M Nat := do
   let s ← get
-  let tot := es.foldl (fun t e => t + e.count (match e.kind with
-    | .descend sub => (s.plans[sub]!).total
-    | _ => 0)) 0
+  let tot := es.foldl (fun t e => t + e.count (match e.kind.sub? with
+    | some sub => (s.plans[sub]!).total
+    | none => 0)) 0
   set { s with plans := s.plans.push { d, entries := es, total := tot } }
   return s.plans.size
 
@@ -564,14 +579,14 @@ def memberWidth (P : Prog) (d : Nat) : M Nat := do
 /-- What a path's last step applies in each body it reaches. -/
 inductive Leaf where
   | instances
-  | members (sel : NodeSel) (k : Nat)
+  | members (sel : NodeSel) (k : Nat) (cols : Option Nat)
   | nodes (sel : NodeSel)
   | zip (sels : Array NodeSel)
   | table (name : String)
 
 def Leaf.key : Leaf → String
   | .instances => "i"
-  | .members s k => s!"m{s.render}|{k}"
+  | .members s k c => s!"m{s.render}|{k}|{c}"
   | .nodes s => s!"n{s.render}"
   | .zip ss => s!"z{",".intercalate (ss.toList.map NodeSel.render)}"
   | .table t => s!"t{t}"
@@ -624,9 +639,24 @@ def selPlan (d : Nat) (leaf : Leaf) : M Nat := memo s!"{d}|sel|{leaf.key}" do
   let body := (P.defs[d]!).body
   let mut es : Array Entry := #[]
   match leaf with
-  | .members sel k =>
+  | .members sel k none =>
     for j in [0:body.nodes.size] do
       if ← liftV (nodeSelMatches P sel j body.nodes[j]!) then es := es.push { j, kind := .atomic k, members := full body.nodes[j]!.members }
+  | .members sel r (some c) =>
+    for j in [0:body.nodes.size] do
+      let node := body.nodes[j]!
+      if !(← liftV (nodeSelMatches P sel j node)) then continue
+      let callee := P.defs[node.fn]!
+      if callee.prim then
+        liftV (refuse "plan" s!"members(..., k=({r}, {c})) in {(P.defs[d]!).key}: node {j} calls the primitive {callee.key}, whose members are one axis")
+      let inner := (Array.range callee.body.nodes.size).filter fun i => callee.body.nodes[i]!.form == .batch
+      let some i := inner[0]? | liftV (refuse "plan" s!"members(..., k=({r}, {c})) in {(P.defs[d]!).key}: node {j}'s callee {callee.key} has no batch node")
+      if inner.size != 1 then
+        liftV (refuse "plan" s!"members(..., k=({r}, {c})) in {(P.defs[d]!).key}: node {j}'s callee {callee.key} has {inner.size} batch nodes")
+      let sub ← memo s!"{node.fn}|inner|{i}|{c}"
+        (push node.fn #[{ j := i, kind := .atomic c, members := full callee.body.nodes[i]!.members }])
+      let e : Entry := { j, kind := .grid r sub, members := full node.members }
+      if e.count (← planOf sub).total > 0 then es := es.push e
   | .nodes sel =>
     for j in [0:body.nodes.size] do
       if ← liftV (nodeSelMatches P sel j body.nodes[j]!) then es := es.push { j, kind := .whole, members := full body.nodes[j]!.members }
@@ -693,7 +723,7 @@ def complementOf : Nat → Nat → Array Nat → M Nat
     for p in ps do
       for e in (← planOf p).entries do
         match e.kind with
-        | .descend _ =>
+        | .descend _ | .grid _ _ =>
           covered := covered.insert e.j ((covered.getD e.j #[]) ++ e.members)
           descends := descends.insert e.j ((descends.getD e.j #[]).push e)
         | _ => for (j, rs) in e.direct body do covered := covered.insert j ((covered.getD j #[]) ++ rs)
@@ -706,7 +736,7 @@ def complementOf : Nat → Nat → Array Nat → M Nat
         let gaps := complement (norm rs) n
         if !gaps.isEmpty then es := es.push { j, kind := .atomic 1, members := gaps }
         for e in descends.getD j #[] do
-          let .descend s := e.kind | pure ()
+          let some s := e.kind.sub? | pure ()
           let sub ← memo s!"{s}|rest" (complementOf fuel (← planOf s).d #[s])
           if (← planOf sub).total > 0 then es := es.push { j, kind := .descend sub, members := e.members }
     push d es
@@ -741,7 +771,7 @@ def build : Nat → Nat → Term → M Nat
     | .instances p =>
       if p.isSelf then liftV (refuse "plan" "instances('.') inside a body is the body itself; use the enclosing family")
       else pathPlan P D fuel d p .instances
-    | .members p sel k => if p.isSelf then selPlan P D d (.members sel k) else pathPlan P D fuel d p (.members sel k)
+    | .members p sel k c => if p.isSelf then selPlan P D d (.members sel k c) else pathPlan P D fuel d p (.members sel k c)
     | .nodes p sel => if p.isSelf then selPlan P D d (.nodes sel) else pathPlan P D fuel d p (.nodes sel)
     | .zip p sels => if p.isSelf then selPlan P D d (.zip sels) else pathPlan P D fuel d p (.zip sels)
     | .table p name => if p.isSelf then selPlan P D d (.table name) else pathPlan P D fuel d p (.table name)
@@ -807,7 +837,7 @@ def applyWhere : Nat → Nat → Pred → M Nat
         let sub ← applyWhere fuel s pred
         if (← planOf sub).total > 0 then es := es.push { e with kind := .descend sub }
       | .zip ns => if ← ns.allM fun j => predOk P pred body.nodes[j]! 1 then es := es.push e
-      | .table _ _ => liftV (refuse "plan" s!"where(...) keeps a set by its node; a table set (in {(P.defs[pl.d]!).key}) spans nodes, so filter its base")
+      | .table _ _ | .grid _ _ => liftV (refuse "plan" s!"where(...) keeps a set by its node; a table or grid set (in {(P.defs[pl.d]!).key}) spans nodes or activations, so filter its base")
       | .atomic k => if ← predOk P pred body.nodes[e.j]! k then es := es.push e
       | .whole => if ← predOk P pred body.nodes[e.j]! body.nodes[e.j]!.members then es := es.push e
     push pl.d es
@@ -894,7 +924,7 @@ def planHolds : Array Bool := F.plans.foldl (init := #[]) fun acc pl =>
   let body := (P.defs[pl.d]!).body
   let g := fun (j : Nat) => memberGates P body.nodes[j]!
   acc.push (pl.entries.any fun e => match e.kind with
-    | .descend s => total e.members > 0 && acc[s]!
+    | .descend s | .grid _ s => total e.members > 0 && acc[s]!
     | .zip ns => total e.members > 0 && ns.any (g · > 0)
     | .table rows _ => (Array.range rows.size).any fun j => rows[j]!.isSome && body.nodes[j]!.members * g j > 0
     | _ => total e.members > 0 && g e.j > 0)
@@ -916,7 +946,7 @@ def tiles (K : Array (Bool × Bool)) (H : Array Bool) (exact : Bool) :
     for p in ps do
       for x in F.plans[p]!.entries do
         match x.kind with
-        | .descend s => if H[s]! then subs := subs.insert x.j ((subs.getD x.j #[]).push (x.members, s))
+        | .descend s | .grid _ s => if H[s]! then subs := subs.insert x.j ((subs.getD x.j #[]).push (x.members, s))
         | _ => for (j, rs) in x.direct body do direct := direct.insert j ((direct.getD j #[]) ++ rs)
     let mut out : Option String := none
     for j in [0:body.nodes.size] do
@@ -958,6 +988,7 @@ def Entry.maxSet (body : Body) (e : Entry) (subMax : Nat) : Nat :=
   | .table rows l => (List.range l).foldl (fun m v => max m ((Array.range rows.size).foldl (fun s j =>
       if rows[j]! == some v then s + body.nodes[j]!.members * g j else s) 0)) 0
   | .descend _ => if total e.members > 0 then subMax else 0
+  | .grid r _ => min r (total e.members) * subMax
 
 /-- All an entry's sets hold together, in gates, summed over its sets. -/
 def Entry.allGates (body : Body) (e : Entry) : Nat :=
@@ -965,15 +996,15 @@ def Entry.allGates (body : Body) (e : Entry) : Nat :=
   match e.kind with
   | .zip ns => ns.foldl (fun s j => s + total e.members * g j) 0
   | .table rows _ => (Array.range rows.size).foldl (fun s j => if rows[j]!.isSome then s + body.nodes[j]!.members * g j else s) 0
-  | .descend _ => 0
+  | .descend _ | .grid _ _ => 0
   | _ => total e.members * g e.j
 
 /-- Each plan's largest set, in plan order: a sub plan comes before every plan that descends into it. -/
 def maxSets : Array Nat := F.plans.foldl (init := #[]) fun acc pl =>
   let body := (P.defs[pl.d]!).body
-  acc.push (pl.entries.foldl (fun m e => max m (Entry.maxSet P body e (match e.kind with
-    | .descend s => acc[s]!
-    | _ => 0))) 0)
+  acc.push (pl.entries.foldl (fun m e => max m (Entry.maxSet P body e (match e.kind.sub? with
+    | some s => acc[s]!
+    | none => 0))) 0)
 
 /-- How many activations of each plan the family's outermost plan reaches. -/
 def activations : Array Nat := Id.run do
@@ -991,7 +1022,7 @@ def activations : Array Nat := Id.run do
 def sumSets : Array Nat := F.plans.foldl (init := #[]) fun acc pl =>
   let body := (P.defs[pl.d]!).body
   acc.push (pl.entries.foldl (fun s e => s + match e.kind with
-    | .descend sub => total e.members * acc[sub]!
+    | .descend sub | .grid _ sub => total e.members * acc[sub]!
     | _ => Entry.allGates P body e) 0)
 
 /-- A `group` key's value on Definition `d`. -/
@@ -1005,6 +1036,7 @@ def groupKey (key : Array KeyPart) (d : Defn) : Array String := key.map fun
 set is of several nodes. -/
 def groups (key : Array KeyPart) : V (Array (Array String × Nat)) := do
   let act := activations F
+  let sums := sumSets P F
   let mut keys : Array (Array String × Nat) := #[]
   let mut seen : Std.HashSet Nat := {}
   -- first appearance: plans in family order, each visited once
@@ -1031,9 +1063,11 @@ def groups (key : Array KeyPart) : V (Array (Array String × Nat)) := do
       | .descend _ => pure ()
       | .zip _ | .table _ _ => if e.count 0 > 0 then refuse "plan" "group over sets of several nodes"
       | _ =>
-        if e.count 0 == 0 then continue
+        if e.count ((e.kind.sub?.map (F.plans[·]!.total)).getD 0) == 0 then continue
         let k := groupKey key P.defs[body.nodes[e.j]!.fn]!
-        let w := Entry.allGates P body e * act[p]!
+        let w := (match e.kind with
+          | .grid _ s => total e.members * sums[s]!
+          | _ => Entry.allGates P body e) * act[p]!
         keys := match keys.findIdx? (·.1 == k) with
           | some i => keys.set! i (k, keys[i]!.2 + w)
           | none => keys.push (k, w)
@@ -1081,7 +1115,7 @@ def check (Φ : Meaning) (P : Prog) (D : Desc) : V Verdict := do
       for (e, l) in top.entries.zip ls do
         if let some l := l then
           w := w.modify l (· + match e.kind with
-            | .descend s => total e.members * sums[s]!
+            | .descend s | .grid _ s => total e.members * sums[s]!
             | _ => Entry.allGates P body e)
       pure (n, some (w.foldl max 0))
   let refused := fun (code : String) => (pure { accept := false, code, count } : V Verdict)
