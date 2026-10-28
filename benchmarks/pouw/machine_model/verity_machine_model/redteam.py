@@ -1,18 +1,18 @@
-"""Red-team audit of a headline PoUW design against the machine model (RT-DC).
+"""Red-team audit of a headline PoUW design against the machine model.
 
 ε is proved conditional on every facet of Π being a true ceiling (eps.py, facet_break/). This module reads, from a
 device's committed census alone, how much room an adversary has to beat one:
 
-- `audit` solves the cheater's LP at decision 89's reading (operands free, credit floor, q* = 1.22) and reports the
-  binding rows, the rows within `NEAR` of binding (the facets a silicon beat would unseat first), and the decision-76
+- `audit` solves the cheater's LP at the measured reading (operands free, credit floor, q* = 1.22) and reports the
+  binding rows, the rows within `NEAR` of binding (the facets a silicon beat would unseat first), and the margin
   sensitivity of each: how far a row's measured lane coefficient must move in the cheater's favour before the core ε
-  rises (`flip`). The `issue` ceiling (one warp instruction a SMSP-cycle, the hardware issue width, decision 73) is
+  rises (`flip`). The `issue` ceiling (one warp instruction a SMSP-cycle, the hardware issue width) is
   flagged: no silicon beats it.
-- `margin_audit` runs decision 76's joint margin (every near measured facet moved `m` in the cheater's favour at once,
+- `margin_audit` runs the joint margin (every near measured facet moved `m` in the cheater's favour at once,
   default 2%) and names the single row that drives it. A facet's *measured lane coefficient* is the one its CUDA lane
   classes share, so the move leaves the tensor-pipe MMA value alone; the issue slot and the exact operand floor are
   axioms, not measured rows, so they are left alone too. Moving a whole row's column (the MMA coefficient included)
-  mis-prices the tensor route and is not decision 76: round 1 moved it, and was retracted for it.
+  mis-prices the tensor route, so the margin never moves it.
 - `least_filler` finds the least verified filler a word (in a class mix) that holds a margin: the cheapest add-on that
   brings the joint margin's worst core back to the design's floor.
 - `uniform_gap` bounds a device whose census has no uniform datapath (no UNI class, as sm_80 has none). A cheater that
@@ -31,8 +31,8 @@ from pathlib import Path
 from verity_machine_model import eps as E
 
 NEAR = 0.90                        # a row within this fraction of binding is a near facet
-MARGIN_NEAR = 0.95                # decision 76's audit moves the rows this near
-ISSUE_CEILING = "issue"           # 1 warp instruction a SMSP-cycle: the hardware issue width (decision 73), not a facet
+MARGIN_NEAR = 0.95                # the margin audit moves the rows this near
+ISSUE_CEILING = "issue"           # 1 warp instruction a SMSP-cycle: the hardware issue width, not a facet
 
 
 @dataclass(frozen=True)
@@ -43,7 +43,7 @@ class Row:
     ceiling: bool                 # the issue ceiling: silicon cannot beat it
     flip_pct: float | None        # the move in the cheater's favour (per cent) at which core first rises; None: ≥ cap
     core_at_flip: float | None
-    core_at_2pct: float           # core with the row's lane coefficient 2 % in the cheater's favour (decision 76)
+    core_at_2pct: float           # core with the row's lane coefficient 2 % in the cheater's favour
 
 
 @dataclass(frozen=True)
@@ -66,7 +66,7 @@ class Margin:
     design: str
     m: float                      # the margin (fraction) each near facet moves in the cheater's favour
     base: float                   # the core as the design is built
-    worst: float                  # the core with every near facet's lane coefficient moved m at once (decision 76)
+    worst: float                  # the core with every near facet's lane coefficient moved m at once
     driver: str                   # the near row whose move alone raises the core most ("" if none does)
     rows: tuple[tuple[str, float], ...]   # each near row and the core with that one row moved m
 
@@ -86,7 +86,7 @@ UNIFORM = ("UNI", "UNI64")       # the uniform-datapath classes: a measured coef
 
 
 def _lane_coef(pi: E.Machine, row: str) -> tuple[float, tuple[str, ...]]:
-    """The small (lane) coefficient a row shares and the classes it moves. Decision 76 moves this one: a joint facet's
+    """The small (lane) coefficient a row shares and the classes it moves. The margin moves this one: a joint facet's
     small coefficient is its vector lane cost (the CUDA lane classes, `pi.cuda`); the large one is the saturated tensor
     pipe, which silicon cannot cheapen, so it is left alone. A uniform class's coefficient on the row is measured on its
     own (UNI on JI90_0: 0.965 on DC-90, 0.000186 beside the async wgmma on DC-90-ri), so it never stands for the lane
@@ -116,7 +116,7 @@ def _worst_single(core, pi: E.Machine, row: str, m: float) -> float:
 
 
 def _joint_worst(core, pi: E.Machine, near: list[str], m: float) -> float:
-    """Decision 76's joint worst core: every row in `near` moved m in the cheater's favour at once, each in the
+    """The margin's joint worst core: every row in `near` moved m in the cheater's favour at once, each in the
     direction that raises the core (greedy)."""
     cc = {k: dict(v) for k, v in pi.c.items()}
     for r in near:
@@ -171,12 +171,12 @@ def audit(design: str, data: Path, q: float = 1.22, operands: str = "free", cred
 
 def margin_audit(design: str, data: Path, m: float = 0.02, near_thr: float = MARGIN_NEAR, q: float = 1.22,
                  operands: str = "free", credit: str = "floor", vector: str = "") -> Margin:
-    """Decision 76's margin on `design`: move each near measured facet's lane coefficient m in the cheater's favour.
+    """The margin on `design`: move each near measured facet's lane coefficient m in the cheater's favour.
 
     Returns the core as built, the joint worst (every near facet moved at once), and the single row that drives it (the
     one whose move alone raises the core most). The small (lane) coefficient a facet shares moves, not its tensor-pipe
-    MMA value (`_lane_coef`); the issue slot (decision 73) and the
-    exact operand floor are axioms, not measured rows, so both are left alone."""
+    MMA value (`_lane_coef`); the issue slot and the exact
+    operand floor are axioms, not measured rows, so both are left alone."""
     pi = E.machine(vector, data)
     d = E.design(design, data)
     core = lambda p: E.eps(d, p, q, data, operands=operands, credit=credit).core()
@@ -191,7 +191,7 @@ def margin_audit(design: str, data: Path, m: float = 0.02, near_thr: float = MAR
 def least_filler(design: str, data: Path, mix: dict[str, float] | None = None, target: float | None = None,
                  m: float = 0.02, near_thr: float = MARGIN_NEAR, step: float = 0.005, cap: float = 0.30,
                  q: float = 1.22, operands: str = "free", credit: str = "floor", vector: str = "") -> LeastFill:
-    """The least verified filler a word, in class mix `mix` (default the design's), that holds decision 76's margin:
+    """The least verified filler a word, in class mix `mix` (default the design's), that holds the margin:
     its joint worst core is ≤ `target` (default the design's base core, the floor it sits at). The filler replaces the
     design's own and sweeps in `step` up to `cap`, checked as the design's filler is (its p and luck), or by a receipt
     the check recomputes (p = 0) when the design has none. Returns the per_word, the worst core there and honest's γ."""
@@ -226,7 +226,7 @@ def uniform_gap(design: str, data: Path, q: float = 1.22, issue_cost: float = 0.
     """Bound the ε a uniform datapath would open on a device whose census has none (no UNI class).
 
     A uniform instruction is credited `issue_cost` of an ALU's slot on every issue-type row (`issue` and the joint
-    issue rows, decision 73), `1 / pipe_rate` SMSP-cycles on a synthesised uniform-pipe row `UP`, and nothing on the
+    issue rows), `1 / pipe_rate` SMSP-cycles on a synthesised uniform-pipe row `UP`, and nothing on the
     other pipes (the cheater's best case). The defaults are sm_90's measured uniform datapath (UP 0.4999 instr a
     SMSP-cycle, 0.9838 of an issue slot). Returns (core as built, core with the route open, the cheater's binding);
     where the census already has a UNI class the route is measured and the two cores are equal."""
