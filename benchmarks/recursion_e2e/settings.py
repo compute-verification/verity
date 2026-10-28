@@ -20,8 +20,8 @@ import sys
 from pathlib import Path
 from typing import Any
 
-ROOT = Path(__file__).resolve().parents[2]
-sys.path[:0] = [str(ROOT / "benchmarks" / "harness"), str(ROOT / "tools" / "config")]
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "tools" / "config"))
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "harness"))
 
 from verity_bench.settings import check
 from verity_config.settings import VALUE, WHERE, Registry, Setting, csv
