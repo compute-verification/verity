@@ -96,9 +96,10 @@ class RetentionOptions:
                                      help="--retain device: the device pool's size, beside the engine and the window ring; it must hold "
                                           "every window awaiting its release and the open one, so at least --window-gb")
     release_after: str = option("--release-after", default="", metavar="PROTOCOLS",
-                                help="--retain device --seal: the subprotocols (comma-separated, e.g. sampled_proofs,pouw_h1) whose draw "
-                                     "of each window its release waits for; the union of the leaves their drawn blocks open is kept "
-                                     "(serve_release)")
+                                help="--retain device --seal: the subprotocols (comma-separated, e.g. pouw) whose draw of each "
+                                     "window its release waits for; the union of the leaves their drawn blocks open is kept "
+                                     "(serve_release); pouw is PoUW H1's, put by its arm (--protocols), the rest come in "
+                                     "through --draws-dir")
     draws_dir: str = option("--draws-dir", default="", metavar="DIR",
                             help="--release-after: where each draw comes in, w<k>.<protocol>.json (default OUT/draws)")
 
