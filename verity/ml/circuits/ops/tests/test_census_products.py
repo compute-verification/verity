@@ -61,7 +61,7 @@ def test_every_definition_with_a_rule_is_ruled_under_its_module():
 
 def test_an_s8_accumulator_performs_its_products_and_serves_none():
     """`GemmAccumulatorS8` (word and Boolean) has no committed words of its own, so Lean's `Accounting.Gates.roleOf` puts its
-    steps at `Site.other`: under a linear's coordinate its K/32 IMMA steps keep their k, and it serves none of their products."""
+    steps at `Place.other`: under a linear's coordinate its K/32 IMMA steps keep their k, and it serves none of their products."""
     K = 64
     for coord, steps in ((bind(G.ScaledMmS8Coordinate, K=K, **G.GEMM_SM120_S8), "BlackwellS8ImmaDot32_v1"),
                          (bind(BG.ScaledMmS8Coordinate, K=K, **BG.GEMM_SM120_S8), "BlackwellS8ImmaDot32_v2")):
