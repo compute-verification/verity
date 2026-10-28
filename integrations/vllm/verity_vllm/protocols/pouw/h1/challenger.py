@@ -291,9 +291,10 @@ def draw_reason(commits: Mapping[str, Any], trusted: LiveCommitment, received: S
 
 @dataclass(frozen=True)
 class Ledger:
-    """The auditor's ledger as core's check of record reads it under the verifier's challenger `key`: `lines`, the
-    longest of every head infra published, each checked and any two extending one another (`challenger.ledger_head`),
-    and that check's tables (`challenger.verify_ledger`, `challenger.verify_periods`): each window root to its one
+    """The auditor's ledger as core's check of record reads it under the verifier's challenger `key`
+    (`challenger.ledger_of`): `lines`, the longest of every head infra published, each checked and any two extending one
+    another (`challenger.ledger_head`), and that check's tables (`challenger.verify_ledger`,
+    `challenger.verify_periods`): each window root to its one
     session's ``reserve`` (None for a one-step open), ``open`` and ``end`` (None while it hasn't ended) entries, and each
     period's name to its ``lane``, ``open`` and ``close`` (None while it is open) entries, its ``windows`` (session ids,
     in order), its ``cap`` and its ``circuit``. `pins` is the host's pins log as infra published it (`pins_of`; None
@@ -313,18 +314,10 @@ class Ledger:
            pins: Sequence[Sequence[str]] | None = None, main: Sequence[str] | None = None) -> Ledger:
         """The ledger of `heads` (every published head, each its lines) and the pins log of `pins` (every published head
         of it, each its lines, `pins_of`), refused (`CoinError`) as core refuses them, its sessions held to `main`."""
-        lines = ledger_head([list(h) for h in heads], key, verify)
+        read = Ch.ledger_of([list(h) for h in heads], key, verify)
         log = pins_of(pins)
-        raw, I = [line.encode() for line in lines], key.public[:16]
-
-        def verifies(message: bytes, signature: bytes) -> bool:
-            try:
-                return verify(key, message, signature) is True
-            except ValueError:
-                return False
-
-        return cls(key, tuple(lines), Ch.verify_ledger(raw, I, verifies), Ch.verify_periods(raw, I, verifies),
-                   None if log is None else tuple(log), None if main is None else tuple(main))
+        return cls(key, tuple(read.lines), read.windows, read.periods, None if log is None else tuple(log),
+                   None if main is None else tuple(main))
 
     @classmethod
     def load(cls, heads: Sequence[str | Path], key: ChallengerKey, verify: Any = lms_verify,

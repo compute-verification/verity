@@ -53,6 +53,7 @@ from fractions import Fraction
 from pathlib import Path
 from typing import Any
 
+from verity.core.protocols import record as core_record
 from verity.ml.commitments.identity import canonical_json_bytes
 from verity.ml.crypto import lms
 from verity.ml.randomness import derive
@@ -397,7 +398,6 @@ def challenger(directory: str | os.PathLike, *, workers: int | None = None) -> m
 
 LEDGER_SCHEMAS = ("verity/challenger-auditor/v1", "verity/challenger-auditor/v2")
 """The schemas of the auditor's ledger entries (`sampled_proofs.challenger.LEDGER_TAGS`), whose copies `cite` cuts."""
-_ENTRY = ["body", "kind", "prev", "schema", "seq", "session", "sig"]
 _CLOSE = ["chain", "ended", "lines", "session", "signature"]
 
 
@@ -410,11 +410,15 @@ def _json(data: str | bytes) -> Any:
 
 
 def _entry(line: Any) -> dict | None:
-    """`line` as an entry of the auditor's ledger (`sampled_proofs.challenger.ledger_text`'s form), else None."""
+    """`line` as an entry of the auditor's ledger (`sampled_proofs.challenger.ledger_text`'s form): a record entry
+    (`record.of_json`) under one of its schemas, else None."""
     if type(line) is not str or not line.startswith('{"body":'):
         return None
-    e = _json(line)
-    return e if isinstance(e, dict) and sorted(e) == _ENTRY and e["schema"] in LEDGER_SCHEMAS else None
+    try:
+        e = core_record.of_json(_json(line))
+    except ValueError:
+        return None
+    return e if e["schema"] in LEDGER_SCHEMAS else None
 
 
 def _ledger(lines: Sequence[Any]) -> list[dict] | None:
