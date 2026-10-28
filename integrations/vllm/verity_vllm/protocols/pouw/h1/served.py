@@ -99,6 +99,7 @@ from verity.core.protocols.pouw import credit as CR
 from verity.core.protocols.pouw import salt as PS
 from verity.core.protocols.pouw import weights as Wt
 from verity.core.protocols.pouw.circuit import h1device as HD
+from verity.core.protocols.pouw.circuit import h1tile as HT
 from verity.core.protocols.pouw.circuit import h1window as HW
 from verity.core.protocols.sampled_proofs.one_stage import partition as P, registered as G
 from verity.ml.circuits.codec import canonical_json, descriptor_chunks, encode_program
@@ -108,7 +109,7 @@ from verity_vllm.protocols.pouw import h1 as PH
 from verity_vllm.protocols.pouw.h1 import live as LV
 from verity_vllm.protocols.pouw.h1 import registered as NR
 from verity_vllm.protocols.pouw.h1 import requests as RQ
-from verity_vllm.protocols.pouw.h1.served_files import FILE, Registration, file_name, reads_file, register, trees
+from verity_vllm.protocols.pouw.h1.served_files import FILE, WindowCommitmentEntries, file_name, reads_file, register, trees
 from verity_vllm.protocols.pouw.h1.words import (EMPTY_ID, chunk_words, ids_words, receipt_words, record_words,
                                                          row_words, zy_words)
 
@@ -179,6 +180,17 @@ def declared(shapes: Sequence[tuple[int, int]], modules: Mapping[int, str], rows
     return HW.program([tuple(x) for x in lay["linears"]], [tuple(x) for x in lay["calls"]], lay["m"], tile, prefix, unit)
 
 
+def unit_of(name: str | None, tile: tuple[int, int] = PH.TILE) -> Callable[[int], Any] | None:
+    """`declared`'s ``unit`` for the pouw setting ``unit`` ``name`` (`pouw_h1_settings.UNITS`): None for v1 (unset), the
+    default; for ``j10r`` `h1window.tile_unit` over J10-R's `h1tile.PouwH1Tile5`, one noise stream a call, the tile a
+    period's guarantee covers (core's `period_check.COVERED_TILE`)."""
+    if name in (None, "v1"):
+        return None
+    if name == "j10r":
+        return functools.partial(HW.tile_unit, tile=tuple(tile), definition=HT.PouwH1Tile5)
+    raise ValueError(f"no tile unit {name!r}: the pouw setting 'unit' is v1 or j10r")
+
+
 def descriptor(program: Program) -> bytes:
     """`program`'s descriptor as the period commits it: its canonical JSON without annotations, the bytes whose SHA-512
     is its `codec.program_digest` (the period-open's ``circuit``) and from which core's credit reads the window's
@@ -215,7 +227,7 @@ def declared_layout(shapes: Sequence[tuple[int, int]], modules: Mapping[int, str
                     tile: tuple[int, int] = PH.TILE, blocks: Sequence[int] | None = None) -> dict[str, Any]:
     """`declared`'s arguments to `h1window.program` as the window's layout, ``{calls: [[linear, A block], ...],
     linears: [[name, K, n], ...], m, tile}``: what core's `credit.layout_of` reads from `declared`'s `descriptor`, built
-    without the Program (the proof service sizes the period's K from it, `pouw_h1_challenger.draw_k`)."""
+    without the Program (the proof system sizes the period's K from it, `pouw_h1_challenger.draw_k`)."""
     mods = [modules.get(w, str(w)) for w in range(len(shapes))]
     calls = [(s, w) for s in range(steps) for w in range(len(shapes))]
     return {"calls": [[mods[w], b] for (_s, w), b in zip(calls, layout(shapes, calls, blocks))],
@@ -548,9 +560,10 @@ class Served:
             self.refused.append(f"call {call.index}: linear {call.layer}'s weight changed within the window")
 
     def commit(self, run: Any, call: Any, a: Any, s_a: Any, weight: Any, weight_scale: Any,
-               records: np.ndarray | None) -> dict[str, str]:
+               records: Any) -> dict[str, str]:
         """Register call ``call``'s z table (its z/y ``records`` over its T slots, `pouw_h1_records`', split back to z and
-        y and laid out in the Program's tile), add its A rows (its served rows ``a`` [m, K] and scales ``s_a`` [m]) to its
+        y and laid out in the Program's tile, or read where they are when that tile is theirs, `zy_words`), add its A
+        rows (its served rows ``a`` [m, K] and scales ``s_a`` [m]) to its
         step's A table of K at its rows in call order, registered whole once the step's calls of K are all in (in
         whichever order its forward ran them: its last call of K), and take ``b/<K>`` once K's linears' weights are all
         held (`_take_b`); with ``receipts``, at the step's last call of K, each of the step's calls of K's receipt
@@ -763,7 +776,8 @@ def digest_of(entries: Sequence[Mapping[str, Any]], refused: Sequence[str]) -> b
     return hashlib.sha512(DIGEST_TAG + canonical_json({"entries": list(entries), "refused": list(refused)})).digest()
 
 
-__all__ = ["B_NONCE", "EMPTY_ID", "FILE", "IDS_NONCE", "LOCAL_SESSION", "ModelKey", "NONCE", "PREFIX", "Registration", "Served",
-           "V2", "Weights", "chunk_words", "declared", "declared_layout", "descriptor", "digest_of", "file_name", "ids_words", "layout",
+__all__ = ["B_NONCE", "EMPTY_ID", "FILE", "IDS_NONCE", "LOCAL_SESSION", "ModelKey", "NONCE", "PREFIX", "Served",
+           "unit_of",
+           "V2", "Weights", "WindowCommitmentEntries", "chunk_words", "declared", "declared_layout", "descriptor", "digest_of", "file_name", "ids_words", "layout",
            "model_key", "nonce", "RECEIPT_NONCE", "reads_file", "receipt_words", "record_words", "register", "register_weights", "row_words", "trees",
            "weights_of", "write_program"]

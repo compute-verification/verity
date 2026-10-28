@@ -859,6 +859,25 @@ def test_the_period_opens_on_the_served_programs_digest_and_files_as_cores_credi
     assert kinds[-1] == "period-close" and json.loads((d / S.PERIOD).read_text())["close"]["body"]["windows"] == []
 
 
+def test_a_period_opens_before_serving_and_holds_the_served_program_to_it(tmp_path, monkeypatch, capsys):
+    """Before serve-openai starts (no serve.json; its startup reserves window 0's session, which joins only an open
+    period) the open goes out on the offline Program (`program`'s); ``period served`` then holds the Program
+    serve-openai declared to the period's, refusing another, whose windows credit nothing."""
+    d, c, _ = _declared(tmp_path)
+    served = (d / "serve.json").read_text()
+    (d / "serve.json").unlink()
+    monkeypatch.setattr(S, "_gate_out", lambda gate, *words: json.dumps({"body": {"period": words[2]}}).encode())
+    assert S.main(["period", "open", str(d), "--gate", GATE, "--name", "p", "--circuits", str(c), "--slots", "4",
+                   "--max-tokens", "8"]) == 0
+    assert json.loads((d / S.PERIOD).read_text())["circuit"] == DIGEST
+    (d / "serve.json").write_text(served)
+    assert S.main(["period", "served", str(d)]) == 0
+    assert f"PERIOD served p: serve-openai declared its Program {DIGEST[:16]}" in capsys.readouterr().out
+    (d / "serve.json").write_text(json.dumps({"protocols": {"program": "6f" * 64}}))
+    assert S.main(["period", "served", str(d)]) == 1
+    assert "its windows credit nothing" in capsys.readouterr().out
+
+
 @pytest.mark.parametrize("case", ["other program", "other live T,S", "no live", "no meta", "no manifest"])
 def test_a_period_open_is_refused_on_files_that_are_not_the_served_programs(tmp_path, case):
     """Circuit files of another Program, a live file for another T or S, none for the live template, a serve dir with no
@@ -887,7 +906,8 @@ def test_the_program_is_built_off_the_server_as_serve_openai_declares_and_writes
     from verity_vllm.protocols.pouw.h1 import served as SV
 
     seen = []
-    monkeypatch.setattr(SV, "declared", lambda shapes, modules, rows, steps: ("program", shapes, modules, rows, steps))
+    monkeypatch.setattr(SV, "declared", lambda shapes, modules, rows, steps, unit=None: ("program", shapes, modules, rows,
+                                                                                           steps))
     monkeypatch.setattr(SV, "declared_layout", lambda shapes, modules, rows, steps: {"tile": [32, 32]})
 
     def write(prog, layout, out, *, rows, steps):
@@ -914,6 +934,97 @@ def test_the_program_is_built_off_the_server_as_serve_openai_declares_and_writes
         S.program(tmp_path / "like", "x", 0, 0, like=run)
     with pytest.raises(ValueError, match="no declared linears for 'other'"):
         S.program(tmp_path / "other", "other", 512, 16)
+
+
+def _llama(torch, model: str):
+    """`DECLARED`'s model as serve-openai's H1 arm finds it: its int8 linears on the meta device under vLLM's module names,
+    each on a stand-in of the int8_exact plain arm."""
+    from types import SimpleNamespace
+
+    class Linear(torch.nn.Module):
+        def __init__(self, n, k):
+            super().__init__()
+            self.weight = torch.empty(n, k, dtype=torch.int8, device="meta")
+            self.weight_scale = torch.empty(n, 1, device="meta")
+            self.quant_method = SimpleNamespace(int8_arm="plain", observe=lambda *a: None)
+
+    layers, linears = S.DECLARED[model]
+    root = torch.nn.Module()
+    root.model = torch.nn.Module()
+    root.model.layers = torch.nn.ModuleList()
+    for _ in range(layers):
+        layer = torch.nn.Module()
+        for name, n, k in linears:
+            parent, leaf = name.split(".")
+            if not hasattr(layer, parent):
+                layer.add_module(parent, torch.nn.Module())
+            getattr(layer, parent).add_module(leaf, Linear(n, k))
+        root.model.layers.append(layer)
+    return root, Linear
+
+
+def test_the_offline_program_is_the_one_serve_openai_declares_under_the_same_protocols_config(tmp_path, monkeypatch):
+    """``program --protocols-config C`` declares what serve-openai's H1 arm (`serve_h1.H1Windows`) declares under
+    ``--protocols-config C`` over the served model: under ``{"pouw": {"unit": "j10r", "ks": [2048]}}`` the same linears
+    at K 2,048 alone, named alike, over the same J10-R tile unit (`served.unit_of`), at the same T and S, so ``period
+    served`` finds the Program the period opened on; ``--like`` takes C from the run (serve.json's ``protocols.config``).
+    Unset on both sides it is v1's over every linear, another Program, and ``--like`` refuses a run whose Program is not
+    the one its recorded config declares. The declaration is a stand-in that records what it was given (a real one takes
+    minutes)."""
+    from types import SimpleNamespace
+
+    torch = pytest.importorskip("torch")
+    from verity.core.protocols.pouw.circuit import h1tile as HT, h1window as HW
+    from verity_vllm.pipeline import serve_h1 as SH
+    from verity_vllm.protocols import pouw
+    from verity_vllm.protocols.pouw import h1 as PH
+    from verity_vllm.protocols.pouw.h1 import served as SV
+
+    model, j10r = "verity-int8/Llama-3.2-1B-INT8", {"pouw": {"unit": "j10r", "ks": [2048]}}
+    llama, linear = _llama(torch, model)
+    monkeypatch.setattr(pouw, "linear_types", lambda: (linear,))
+    monkeypatch.setattr(SV, "weights_of", lambda layers: None)
+    monkeypatch.setattr(SV, "register_weights", lambda *a, **k: SimpleNamespace(root=lambda: bytes(64)))
+    monkeypatch.setattr(SV, "declared", lambda shapes, modules, rows, steps, unit=None: (
+        [tuple(s) for s in shapes], dict(modules), rows, steps,
+        None if unit is None else (unit.func, unit.args, unit.keywords)))
+    programs = []
+
+    def write(prog, layout, out, *, rows, steps):
+        if (prog, layout) not in programs:
+            programs.append((prog, layout))
+        digest = f"{programs.index((prog, layout)):0128x}"
+        out.mkdir(parents=True, exist_ok=True)
+        (out / PH.PROGRAM_META).write_text(json.dumps({"program_digest": digest, "rows": rows, "steps": steps, "bytes": 0}))
+        return digest
+    monkeypatch.setattr(SV, "write_program", write)
+
+    def served(config):
+        arm = SH.H1Windows(llama, None, 512, 16, engine=object(), out=tmp_path / f"serve{len(programs)}", config=config)
+        run = tmp_path / f"run{len(programs)}"
+        run.mkdir()
+        (run / "serve.json").write_text(json.dumps({"served_model_name": model, "protocols": arm.describe()}))
+        return arm, run
+
+    arm, run = served(j10r)
+    meta = S.program(tmp_path / "offline", model, 512, 16, config=json.dumps(j10r))
+    assert meta["program_digest"] == arm.digest and len(programs) == 1
+    shapes, modules, _r, _s, unit = programs[0][0]
+    assert len(shapes) == 48 and {k for _n, k in shapes} == {2048} and modules[0] == "model.layers.0.self_attn.qkv_proj"
+    assert unit[0] is HW.tile_unit and unit[2]["definition"] is HT.PouwH1Tile5
+    assert S.main(["program", str(tmp_path / "like"), "--like", str(run)]) == 0 and len(programs) == 1
+    assert S.main(["program", str(tmp_path / "flag"), "--rows", "512", "--steps", "16", "--protocols-config",
+                   json.dumps(j10r)]) == 0 and len(programs) == 1
+
+    v1, v1_run = served(None)
+    assert S.program(tmp_path / "v1", model, 512, 16)["program_digest"] == v1.digest != arm.digest
+    assert len(programs[1][0][0]) == 64 and programs[1][0][4] is None
+    (v1_run / "serve.json").write_text(json.dumps({"served_model_name": model,
+                                                   "protocols": {**v1.describe(), "program": arm.digest}}))
+    with pytest.raises(ValueError, match="DECLARED's linears aren't the ones that run served"):
+        S.program(tmp_path / "mixed", model, 0, 0, like=v1_run)
+    with pytest.raises(ValueError, match=r"no linear at K \[4096\]"):
+        S.program(tmp_path / "none", model, 512, 16, config=json.dumps({"pouw": {"ks": [4096]}}))
 
 
 
