@@ -71,7 +71,7 @@
  },
  "runs": {
   "Proofs.Pouw.Bulk": {
-   "why": "every generated FP8 step and FP32 add, with red-team R1's 166,000 differential steps: the vectors that left the kernel when Pouw.Fp8Atom.Proofs.conformance and addConformance were narrowed to covers (29 Sep 01:10Z, granted by R1)",
+   "why": "every generated FP8 step and FP32 add, with the red team's 166,000 differential steps: the vectors that left the kernel when Pouw.Fp8Atom.Proofs.conformance and addConformance were narrowed to covers (granted by the red team)",
    "args": ["{conformance/steps.txt}", "176549", "{conformance/adds.txt}", "5000"],
    "data": {
     "conformance/adds.txt": "517e190bae67fd64ae9273eba6e52be524038f17cdcc1821b759311ca72b8a6b",
