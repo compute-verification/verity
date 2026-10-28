@@ -242,7 +242,8 @@ def test_a_store_drawn_from_the_registration_log_is_the_registration_of_record(s
     case, _ = M.recorded(name)
     reg = M.registration_of(case["registration"])
     v = recorded(name)
-    stored = {"op": "register_stored", "nonce": ZERO, **M.store_log(reg.node, reg.blocks, reg.payload_root)} | {
+    stored = {"op": "register_stored", "nonce": ZERO, "store": M.STORE,
+              **M.store_log(reg.node, reg.blocks, reg.payload_root)} | {
         k: case["registration"][k] for k in ("codec", "receipt", "bind", "layout", "rows")}
     v["ops"] = [stored, *v["ops"][1:]]
     assert json.loads(D.replay(PORT, v, server)[1]) == json.loads(D.replay(PORT, recorded(name), server)[1])
