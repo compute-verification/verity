@@ -28,6 +28,7 @@ from verity.core.protocols.pous import protocol, setup, verifier  # noqa: E402
 from verity.core.protocols.pous.layout import TensorLayout, decode_tensor  # noqa: E402
 from verity.core.protocols.pous.schemes.p2 import P2, P2Params, decode_segment, encode_segment, expand_prefix  # noqa: E402
 from verity.core.protocols.pous.verifier import VerifierKey  # noqa: E402
+from verity.ml.circuits import requirement  # noqa: E402
 
 TOY = json.loads((S.TOY_DIR / "toy.json").read_text())
 SPOT = json.loads((S.TOY_DIR / "spot.json").read_text())
@@ -103,6 +104,14 @@ def test_toy_decode():
     seg = STORE.params.segment_bytes
     for s, blocks in enumerate(_segments()):
         assert decode_segment(STORE.params, None, SALT, s, blocks) == W[s * seg:(s + 1) * seg]
+
+
+def test_the_layout_reads_as_the_audits_store():
+    """`StoreLayout.store` is the toy's `C*` as `requirement.Store`: every block registered and resident at every step,
+    since nothing is written or freed after setup, and no payloads."""
+    held = STORE.store
+    assert held == requirement.Store(STORE.params.blocks, {}, {}, {})
+    assert held.resident(0) == held.resident(STORE.params.blocks) == frozenset(range(len(C_STAR) // NB))
 
 
 def test_toy_public_setup():
