@@ -224,7 +224,7 @@ class Prover:
 
 
 def _challenger() -> Challenger:
-    from . import period  # noqa: PLC0415  (period imports this module)
+    from . import period  # period imports this module
 
     return Challenger(period.SESSION_DOMAIN)
 
