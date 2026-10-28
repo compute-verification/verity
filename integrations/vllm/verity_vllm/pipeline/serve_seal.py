@@ -93,12 +93,19 @@ class RetentionOptions:
     retain_device_gb: float = option("--retain-device-gb", type=float, default=32.0, metavar="GB",
                                      help="--retain device: the device pool's size, beside the engine and the window ring; it must hold "
                                           "every window awaiting its release and the open one, so at least --window-gb")
+    release_after: str = option("--release-after", default="", metavar="PROTOCOLS",
+                                help="--retain device --seal: the subprotocols (comma-separated, e.g. sampled_proofs,pouw_h1) whose draw "
+                                     "of each window its release waits for; the union of the leaves their drawn blocks open is kept "
+                                     "(serve_release)")
+    draws_dir: str = option("--draws-dir", default="", metavar="DIR",
+                            help="--release-after: where each draw comes in, w<k>.<protocol>.json (default OUT/draws)")
 
 
 def retention_record(opts: Any, com: Any) -> dict[str, Any]:
     """serve.json's record of ``opts.retention``: the families left unretained, where values wait for their draws, and the pool."""
-    return {"retain_exclude": opts.retention.retain_exclude or None, "retain": opts.retention.retain,
-            "device_pool": getattr(com, "device_pool_record", None)}
+    r = opts.retention
+    return {"retain_exclude": r.retain_exclude or None, "retain": r.retain, "device_pool": getattr(com, "device_pool_record", None),
+            "release_after": r.release_after or None, "draws_dir": (r.draws_dir or "OUT/draws") if r.release_after else None}
 
 
 def retention_refusal(opts: Any) -> str | None:
@@ -112,6 +119,17 @@ def retention_refusal(opts: Any) -> str | None:
         if r.retain_device_gb < float(getattr(opts, "window_gb", 0) or 0):
             return (f"--retain-device-gb {r.retain_device_gb:g} is under --window-gb {opts.window_gb:g}: the pool must hold the open window "
                     "beside those awaiting their release")
+        if getattr(opts, "seal", False) and not getattr(r, "release_after", ""):
+            return ("--retain device --seal: a window is sealed only after its draw-gated release, so name the subprotocols whose draws "
+                    "it waits for (--release-after)")
+    if getattr(r, "release_after", ""):
+        if r.retain != "device" or not getattr(opts, "seal", False):
+            return "--release-after gates the release of device-held values before each seal: it needs --retain device and --seal"
+        from verity_vllm.pipeline.serve_release import protocols_of
+        try:
+            protocols_of(r.release_after)
+        except ValueError as e:
+            return str(e)
     spec = r.retain_exclude
     if not spec:
         return None
