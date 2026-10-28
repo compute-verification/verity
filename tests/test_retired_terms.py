@@ -175,10 +175,7 @@ PENDING: dict[str, str] = {
     "verity/ml/flock/live/PROTOCOL.md": "queued PRs on next rewrite lines the protocol vocabulary's rename touches; it follows them",
     "verity/ml/flock/verifier/PROTOCOL.md": "queued PRs on next rewrite lines the protocol vocabulary's rename touches; it follows them",
     "verity/ml/flock/verifier/README.md": "queued PRs on next rewrite lines the protocol vocabulary's rename touches; it follows them",
-    "verity/core/protocols/pouw/README.md": "a landing above this stack's base rewrites the lines beside its retired words; "
-                                            "the rename follows on the next base",
-    "verity/ml/flock/README.md": "a landing above this stack's base rewrites the lines beside its unit classes; the rename "
-                                 "follows on the next base",
+    "verity/ml/flock/README.md": "a PR on next rewrites the lines beside its unit classes; the rename follows it",
 }
 
 
