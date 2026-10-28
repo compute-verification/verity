@@ -188,9 +188,9 @@ A spec-level reference for network accounting's timing channel:
   (the load relayed and committed as it crosses, `benchmarks/network_traces/load_relay.py`);
 - the class circuit's check (`blocks`): a circuit record is one host's class window circuit, and which host runs which
   units, and which request occupies which slot and step, are private, placed by the scan inside the zero-knowledge
-  proof; the class circuit and its padded counts (proof blocks per host, bits per link) are public. `check` refuses a
-  record whose ``blocks`` state a server, server time or transfers (`PRIVATE`), an ``ingress`` declaration, a
-  registered read or table of no registered parameter, a load (every registered parameter but the scan's state) read
+  proof; the class circuit and its padded counts (proof blocks per host, bits per link) are public, and its ``blocks``
+  state no placement (the window interface's `Blocks`). `check` refuses an ``ingress`` declaration, a registered read
+  or table of no registered parameter, a load (every registered parameter but the scan's state) read
   in other than whole rows of one width, by no unit, at an external port or by a table over part of it, and an external
   input port whose rows aren't each read exactly once from the scan's state (`ingress_scan.SCAN_STATE`), the host's one
   ingress. `pins` gives the verifier's pinned roots of the loads from their certificates alone (`certified`: each

@@ -1,9 +1,8 @@
 """A circuit's blocks (`verity.ml.windows.interface.Blocks`, ``verity/blocks/v1``) and output-row reads: the inference entries
 tile each template's units into (slot, step) exactly once at the class's S and T, the proof block is the record's partition,
-network accounting's keys are carried as given and its servers' unit ranges cut the members, and an output-row `Read` names
-the leaves a unit's output row is of a value without filling an input row. Pinned on `test_interface`'s two-request chain
-and on a class circuit (`cmp92`: S = 4 slots, NP = 8 prompt bytes, O = 24 outputs, T = 31 steps) on one server, and on its
-split across two (layer 0 | layer 1 and the head)."""
+the blocks state no placement, and an output-row `Read` names the leaves a unit's output row is of a value without filling an
+input row. Pinned on `test_interface`'s two-request chain and on a class circuit (`cmp92`: S = 4 slots, NP = 8 prompt bytes,
+O = 24 outputs, T = 31 steps)."""
 from __future__ import annotations
 
 import json
@@ -63,7 +62,7 @@ def test_the_blocks_ride_in_the_circuit_record_and_the_verifier_holds_their_proo
                      ({**b, "format": "x"}, I.BLOCKS), ({**b, "other": 0}, I.BLOCKS),
                      ({**b, "inference": {**b["inference"], "entries": {}}}, "its entries a list"),
                      ({**b, "inference": {**b["inference"], "slots": 3}}, "the class's 3 slots"),
-                     ({**b, "server": []}, "all of them")]:
+                     ({**b, "server": []}, "which host runs which units is private")]:
         with pytest.raises(ValueError, match=why):
             I.window_of_record({**doc, "blocks": bad}, TI.LAW, by_id)
     listed = json.loads(I.circuit_bytes(I.circuit_record(win.window, "chain", [(GID, 8)])))
@@ -102,39 +101,9 @@ def test_the_inference_entries_tile_each_templates_units_exactly_once_at_the_cla
         replace(TI.chain(), blocks=chain_blocks().doc(8, "00" * 64))
 
 
-def test_members_are_cut_where_a_servers_units_begin_or_end():
-    """Network accounting's keys are carried as given; the members read only the servers' unit ranges, cutting a template's
-    units where one begins or ends as at a wire's ends, so every statement's units sit on one server. A range outside its
-    template's units, or servers without units, are refused; that the servers partition the units, and run each inference
-    block on one, is network accounting's check."""
-    net = {"server": [{"name": "a", "uplink": "l0", "units": [[GID, 0, 3]]}, {"name": "b", "uplink": "l1", "units": [[GID, 3, 5]]}],
-           "server_time": [{"server": s, "steps": [0, TI.STEPS]} for s in "ab"], "transfers": []}
-    plain, split = I.Window(TI.chain(), RUN, TI.LAW, 8), I.Window(blocked(chain_blocks(network=net)), RUN, TI.LAW, 8)
-    assert [(m.base, m.n) for m in plain.window.members] == [(0, 2), (2, 2), (4, 4)]
-    assert [(m.base, m.n) for m in split.window.members] == [(0, 2), (2, 1), (3, 1), (4, 4)]
-    assert split.circuit.server_ends() == {GID: (0, 3, 8)}
-    doc = json.loads(I.circuit_bytes(split.circuit_record()))
-    assert {k: doc["blocks"][k] for k in I.NETWORK} == net
-    assert I.window_of_record(doc, TI.LAW, {GID: TI.GEMM}.__getitem__).members == split.window.members
-    one = {**net, "server": [{"name": "a", "uplink": "l0", "units": "all"}]}
-    assert [(m.base, m.n) for m in I.Window(blocked(chain_blocks(network=one)), RUN, TI.LAW, 8).window.members] == \
-        [(0, 2), (2, 2), (4, 4)]
-    for server, why in [([{"name": "a", "units": [[GID, 6, 3]]}], "among a template's units"),
-                        ([{"name": "a", "units": [["Gemm_v2{}", 0, 1]]}], "among a template's units"),
-                        ([{"name": "a", "units": [[GID, 0, 0]]}], "among a template's units"),
-                        ([{"name": "a", "units": "some"}], r"\"all\" or \[template, at, n\]"),
-                        ([{"name": "a"}], "objects with their units"), ([], "at least one")]:
-        with pytest.raises(ValueError, match=why):
-            blocked(chain_blocks(network={**net, "server": server}))
-    with pytest.raises(ValueError, match="are lists"):
-        chain_blocks(network={**net, "transfers": {}})
-    with pytest.raises(ValueError, match="all of them"):
-        chain_blocks(network={"server": net["server"]})
-
-
 def test_an_output_row_read_names_a_values_leaves_and_fills_no_input_row():
     """An output-row `Read` (on ``o<j>``) states that the reader unit's output row is the parameter's leaves at its pattern's
-    positions: a value a server sends out. It is held to its template's units and its parameter's leaves, uncut, may sit on a
+    positions: a value the circuit sends out. It is held to its template's units and its parameter's leaves, uncut, may sit on a
     row wires read, and counts in no input; a second read of the row is refused, since the row opens against one pinned
     root."""
     reg = TI.declared().registered
@@ -158,12 +127,9 @@ QKV = bind(G.Gemm, K=H, N=H, **G.GEMM_HOPPER)
 QK, OUT = (bind(G.GemmCoordinate, K=k, **G.GEMM_HOPPER) for k in (H, 2 * H))
 EID, QID, KID, OID, HID = map(descriptor_id, (EMB, QKV, QK, OUT, HEAD))
 QK_LAYER = S * T * (T + 1)
-#: each server's units: s0 the embedding and layer 0, s1 layer 1 and the head
-SPLIT = {"s0": [[EID, 0, H * T * S], [QID, 0, 6 * T * S], [KID, 0, QK_LAYER], [OID, 0, H * T * S]],
-         "s1": [[QID, 6 * T * S, 6 * T * S], [KID, QK_LAYER, QK_LAYER], [OID, H * T * S, H * T * S], [HID, 0, O * S]]}
 
 
-def cmp92(servers: int) -> I.Circuit:
+def cmp92() -> I.Circuit:
     """The class circuit (S slots, NP prompt bytes, O outputs, T = NP + O − 1 steps) at its block layout and width
     H = 16, its row ops stood in by catalog units, rows gathered by the wire cut. At step p,
     slot j: the token's embedding as H ``Bf16Add`` coordinates (the token and the position's weight, units (p·S + j)·H + c);
@@ -172,108 +138,70 @@ def cmp92(servers: int) -> I.Circuit:
     S·p(p+1), the KV cache wired across steps), and the layer's H coordinates (``GemmCoordinate_v2{32}``, its ``x`` the two
     v rows); at the O logit steps p = NP − 1 + k the next token (``Gemm_v2{16, 1}``). Byte k of slot j enters at step k
     from the request row's leaf j(1 + NP) + 1 + k (the length, then the bytes as u16) and leaves at step NP − 1 + k as the
-    response's leaf j·O + k. With two servers, the rows crossing between them are wire transfers: layer 0's coordinates into
-    layer 1 an output-row read on the writer and a read on the reader (``x1``), and the token back into the embedding a read
-    of the response's leaves on the reader, the head's output row being read once, as the response; each server loads its
-    own weights. That split puts every inference block (slot, step) on both servers, the form network accounting forbids: it is the
-    negative of network accounting's check (`test_cmp92s_split_across_two_servers_is_refused`)."""
-    two = servers == 2
-    w0, w1 = ("weights0", "weights1") if two else ("weights", "weights")
+    response's leaf j·O + k, the head's output row read once, as the response."""
     pos, layer = T * H, 8 * H * H
-    qw = {0: pos, 1: 0 if two else pos + layer}
+    qw = {0: pos, 1: pos + layer}
     ow = {k: qw[k] + 6 * H * H for k in (0, 1)}
     wires = [I.Wire(QID, "x", EID, "o0", at=0, radix=(T * S, 6, H), base=0, step=(H, 0, 1), cut=(0, H)),
              I.Wire(OID, "x", QID, "o0", at=0, radix=(LAYERS * T * S, H, 2), base=4, step=(6, 0, 1), cut=(0, 2)),
-             I.Wire(HID, "x", OID, "o0", at=0, radix=(O * S, H), base=H * (T + NP - 1) * S, step=(H, 1), cut=(0, H))]
+             I.Wire(HID, "x", OID, "o0", at=0, radix=(O * S, H), base=H * (T + NP - 1) * S, step=(H, 1), cut=(0, H)),
+             I.Wire(QID, "x", OID, "o0", at=6 * T * S, radix=(T * S, 6, H), base=0, step=(H, 0, 1), cut=(0, H)),
+             I.Wire(EID, "a", HID, "o0", at=NP * S * H, radix=((T - NP) * S, H), base=0, step=(1, 0))]
     for k in range(LAYERS):
         for p in range(T):
             at = k * QK_LAYER + S * p * (p + 1)
             wires += [I.Wire(KID, "x", QID, "o0", at=at, radix=(2, p + 1, S), base=6 * (k * T + p) * S, step=(1, 0, 6)),
                       I.Wire(KID, "wrow", QID, "o0", at=at, radix=(2, p + 1, S), base=6 * k * T * S + 2, step=(1, 6 * S, 6))]
     reads = [I.Read(EID, "a", "request", at=0, radix=(NP, S, H), base=1, step=(1, 1 + NP, 0)),
-             I.Read(EID, "b", w0, at=0, radix=(T, S, H), base=0, step=(H, 0, 1)),
+             I.Read(EID, "b", "weights", at=0, radix=(T, S, H), base=0, step=(H, 0, 1)),
              I.Read(HID, "o0", "response", at=0, radix=(O, S), base=0, step=(1, O)),
-             *(I.Read(QID, "w", (w0, w1)[k], at=k * 6 * T * S, radix=(T * S, 6), base=qw[k], step=(0, H * H)) for k in (0, 1)),
-             *(I.Read(OID, "wrow", (w0, w1)[k], at=k * H * T * S, radix=(T * S, H), base=ow[k], step=(0, 2 * H)) for k in (0, 1)),
-             I.Read(HID, "w", w1, at=0, radix=(O * S,), base=ow[1] + 2 * H * H, step=(0,))]
-    params = {"request": S * (1 + NP), "response": S * O}
-    if two:
-        params |= {"weights0": pos + layer, "weights1": layer + H, "x1": H * T * S}
-        reads += [I.Read(OID, "o0", "x1", at=0, radix=(H * T * S,), base=0, step=(1,)),
-                  I.Read(QID, "x", "x1", at=6 * T * S, radix=(T * S, 6, H), base=0, step=(H, 0, 1), cut=(0, H)),
-                  I.Read(EID, "a", "response", at=NP * S * H, radix=(T - NP, S, H), base=0, step=(1, O, 0))]
-    else:
-        params["weights"] = pos + 2 * layer + H
-        wires += [I.Wire(QID, "x", OID, "o0", at=6 * T * S, radix=(T * S, 6, H), base=0, step=(H, 0, 1), cut=(0, H)),
-                  I.Wire(EID, "a", HID, "o0", at=NP * S * H, radix=((T - NP) * S, H), base=0, step=(1, 0))]
+             *(I.Read(QID, "w", "weights", at=k * 6 * T * S, radix=(T * S, 6), base=qw[k], step=(0, H * H)) for k in (0, 1)),
+             *(I.Read(OID, "wrow", "weights", at=k * H * T * S, radix=(T * S, H), base=ow[k], step=(0, 2 * H)) for k in (0, 1)),
+             I.Read(HID, "w", "weights", at=0, radix=(O * S,), base=ow[1] + 2 * H * H, step=(0,))]
+    params = {"request": S * (1 + NP), "response": S * O, "weights": pos + 2 * layer + H}
     inference = (I.InferenceEntry(EID, 0, (T, S, H), ("step", "slot", "-"), 0),
                  I.InferenceEntry(QID, 0, (LAYERS, T, S, 6), ("-", "step", "slot", "-"), 0),
                  *(I.InferenceEntry(KID, k * QK_LAYER + S * p * (p + 1), (2, p + 1, S), ("-", "-", "slot"), p)
                    for k in range(LAYERS) for p in range(T)),
                  I.InferenceEntry(OID, 0, (LAYERS, T, S, H), ("-", "step", "slot", "-"), 0),
                  I.InferenceEntry(HID, 0, (O, S), ("step", "slot"), NP - 1))
-    names = sorted(SPLIT) if two else ["s0"]
-    rows = {"request": {"base": 0, "radix": [NP, S], "step": [1, 0]}, "response": {"base": NP - 1, "radix": [O, S], "step": [1, 0]},
-            "x1": {"base": 0, "radix": [T, S], "step": [1, 0]}, "tok": {"base": NP - 1, "radix": [O - 1, S], "step": [1, 0]}}
-
-    def transfer(server: str, direction: str, kind: str, value: str, t: str | None = None) -> dict:
-        return {"server": server, "direction": direction, "kind": kind, "value": value, "t": rows.get(t or value)}
-
-    transfers = [transfer("s0", "in", "request", "request"), transfer(names[-1], "out", "response", "response"),
-                 *(transfer(s, "in", "load", w) for s, w in zip(names, (w0, w1)))]
-    if two:
-        transfers += [transfer("s0", "out", "wire", "x1"), transfer("s1", "in", "wire", "x1"),
-                      transfer("s1", "out", "wire", "response", "tok"), transfer("s0", "in", "wire", "response", "tok")]
-    network = {"server": [{"name": s, "uplink": f"link-{s}", "units": SPLIT[s] if two else "all"} for s in names],
-               "server_time": [{"server": s, "steps": [0, T]} for s in names], "transfers": transfers}
-    return I.Circuit(f"cmp92-{servers}", ((EMB, H * T * S), (QKV, LAYERS * 6 * T * S), (QK, LAYERS * QK_LAYER),
-                                          (OUT, LAYERS * H * T * S), (HEAD, O * S)),
+    return I.Circuit("cmp92", ((EMB, H * T * S), (QKV, LAYERS * 6 * T * S), (QK, LAYERS * QK_LAYER),
+                               (OUT, LAYERS * H * T * S), (HEAD, O * S)),
                      external=(f"{EID}/a", f"{HID}/o0"), wires=tuple(wires), cuts={QID: {"x": H}, OID: {"x": 2}, HID: {"x": H}},
-                     registered=I.Registered(params, (), tuple(reads)), blocks=I.Blocks(S, T, inference, network))
+                     registered=I.Registered(params, (), tuple(reads)), blocks=I.Blocks(S, T, inference))
 
 
 @pytest.fixture(scope="module")
-def circuits() -> dict[int, I.Circuit]:
-    return {n: cmp92(n) for n in (1, 2)}
+def circuit() -> I.Circuit:
+    return cmp92()
 
 
-def test_cmp92s_class_circuit_on_one_server_has_one_inference_and_nothing_free(circuits):
+def test_cmp92s_class_circuit_has_one_inference_and_nothing_free(circuit):
     """The class circuit's units with one inference block, the plan's QKᵀ entry at step p
     ``{at: S·p(p+1), radix: [2, p+1, S], axes: [-, -, slot], step: p}`` among them; with the verifier's pins (the weights
     and the request) no input row is free, the response on its writer being an output-row read that fills none."""
-    one = circuits[1]
-    assert list(one.units.values()) == [H * T * S, 12 * T * S, 2 * QK_LAYER, 2 * H * T * S, O * S]
+    assert list(circuit.units.values()) == [H * T * S, 12 * T * S, 2 * QK_LAYER, 2 * H * T * S, O * S]
     assert {"template": KID, "at": S * 5 * 6, "radix": [2, 6, S], "axes": ["-", "-", "slot"], "step": 5} in \
-        [e.doc() for e in one.blocks.inference]
-    count = I.input_count(json.loads(json.dumps(one.description())), **held("weights", "request"))
+        [e.doc() for e in circuit.blocks.inference]
+    count = I.input_count(json.loads(json.dumps(circuit.description())), **held("weights", "request"))
     assert count["free"] == 0 and count["ingress"] == 0, count
-    assert one.blocks_record()["proof"] == {"units": 15472, "partition": I.descriptor_record(one, 1 << 20)["partition"]}
+    assert circuit.blocks_record()["proof"] == {"units": 15472,
+                                                "partition": I.descriptor_record(circuit, 1 << 20)["partition"]}
 
 
-def test_cmp92s_two_server_split_cuts_every_template_at_the_server_boundary(circuits):
-    """With one server the layer row units are one statement (their one wire covers both layers); with two, each template is
-    cut where s0's units end, so no statement's units span both servers, and the verifier derives the same members from the
-    descriptor record. The window's blocks are byte-identical under any run. The members are the circuits' without their
-    registered reads: `members` fills tables for uncut reads of whole registered rows over whole members only, and the class
-    circuit's weight reads start mid-row and its two-server ``x1`` read is cut. The cut is the interface's alone: network accounting
-    refuses this split (`test_cmp92s_split_across_two_servers_is_refused`)."""
+def test_cmp92s_members_come_from_its_record_and_its_blocks_are_the_same_under_any_run(circuit):
+    """The layer row units are one statement (their one wire covers both layers), and the verifier derives the same members
+    from the descriptor record; the window's blocks are byte-identical under any run. The members are the circuit's without
+    its registered reads: `members` fills tables for uncut reads of whole registered rows over whole members only, and the
+    class circuit's weight reads start mid-row."""
     cap = 1 << 20
     with pytest.raises(ValueError, match="whole registered rows"):
-        I.members(circuits[1], cap)
-    circuits = {n: replace(c, registered=None) for n, c in circuits.items()}
-    by_template = {n: {} for n in circuits}
-    for n, c in circuits.items():
-        for m in I.members(c, cap):
-            by_template[n].setdefault(m.template, []).append((m.base, m.n))
-    base = {t: lo for _k, t, lo, _n in CS.template_partition(*circuits[2].program()).ranges}
-    assert by_template[1][OID] == [(base[OID], 2 * H * T * S)]
-    assert by_template[2][OID] == [(base[OID], H * T * S), (base[OID] + H * T * S, H * T * S)]
-    for t, at, n in SPLIT["s0"]:
-        if at + n < circuits[2].units[t]:
-            starts = [(lo - base[t], k) for lo, k in by_template[2][t]]
-            assert at + n in {lo for lo, _ in starts} and not any(lo < at + n < lo + k for lo, k in starts)
-    rec = I.descriptor_record(circuits[2], cap)
+        I.members(circuit, cap)
+    plain = replace(circuit, registered=None)
+    base = {t: lo for _k, t, lo, _n in CS.template_partition(*plain.program()).ranges}
+    assert [(m.base, m.n) for m in I.members(plain, cap) if m.template == OID] == [(base[OID], 2 * H * T * S)]
+    rec = I.descriptor_record(plain, cap)
     for run in ("ab" * 64, "cd" * 64):
         w = I.window_of_record({**rec, "run": run, "context": ""}, TI.LAW, I.resolve)
-        assert w.members == I.members(circuits[2], cap)
-    assert I.circuit_bytes(rec["blocks"]) == I.circuit_bytes(circuits[2].blocks_record())
+        assert w.members == I.members(plain, cap)
+    assert I.circuit_bytes(rec["blocks"]) == I.circuit_bytes(plain.blocks_record())
