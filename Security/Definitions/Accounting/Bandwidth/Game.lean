@@ -1,5 +1,4 @@
 import Definitions.Pous.Game.Prob
-import Definitions.Accounting.Payloads
 
 /-!
 # The bandwidth audit v0 in the random-oracle model
