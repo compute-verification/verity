@@ -78,8 +78,7 @@ from typing import Any, Callable, Mapping, Sequence
 
 import numpy as np
 from verity.core.protocols.pouw.audit import HM96_WEIGHTS, weight_binding
-from verity.core.protocols.pouw.circuit import compile as C
-from verity.core.protocols.pouw.circuit import h1tile as H
+from verity.core.protocols.pouw.circuit import compile as C, h1tile as H
 from verity.core.protocols.pouw import credit as CR
 from verity.core.protocols.pouw.credit import CREDIT
 from verity.core.protocols.sampled_proofs.challenger import CoinError
@@ -91,12 +90,9 @@ from verity.ml.circuits.refs import Affine, Coll, Refs, Strided, concat
 from verity.ml.circuits.types import Array
 
 from verity_vllm.protocols.pouw import credit_gate as CG
-from verity_vllm.protocols.pouw.h1 import commit as CT
+from verity_vllm.protocols.pouw.h1 import (commit as CT, prover as PV, records as ZR, requests as RQ,
+                                             tables_device as TD)
 from verity_vllm.protocols.pouw.h1.commit import calls_root
-from verity_vllm.protocols.pouw.h1 import prover as PV
-from verity_vllm.protocols.pouw.h1 import records as ZR
-from verity_vllm.protocols.pouw.h1 import requests as RQ
-from verity_vllm.protocols.pouw.h1 import tables_device as TD
 from verity_vllm.protocols.pouw.h1.requests import TABLE_NONCES, TABLE_TAGS, table_leaves
 from verity_vllm.protocols.pouw.h1.static import FILL, Static, bind_all, graph_pad, utilization
 
