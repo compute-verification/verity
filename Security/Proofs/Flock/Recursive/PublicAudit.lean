@@ -106,7 +106,7 @@ with probability at most `4·hidingGap` (`VacuityProbes.Hm96Opens.opens_to_any_r
 cursor/vacuity-sweep-c7a9). For any cheater the event is then nearly empty, and (i) bounds it, not a wrong computation.
 The fix is the knowledge form the claims API states recursion in; `EndToEndHidden` avoids this by extraction. The
 knowledge form, `Claims.Recursion.KS`, is at the recursion's level `Claims.Recursion.lam`: about 65 bits
-per SHA-512 call at the deployed shape, below the 100-bit floor and the `2^-128` target under every weight (ASK-73).
+per SHA-512 call at the deployed shape, below the 100-bit floor and the `2^-128` target under every weight.
 Route 2C's bound λ₂ (`lamLin2`) evaluates to at least 100 at the deployed records (`RecDeploy.lamLin2_deployed_ge_dep`),
 but `KSLin2` at the deployment's dense statements (`KSLin2On` at `RecDeploy.DenseAt`) only follows from premises still
 open (`RecDeploy.ksLin2_deployed_open`), Holo statements being candidate 3's own model, and `BitsLin2` at those

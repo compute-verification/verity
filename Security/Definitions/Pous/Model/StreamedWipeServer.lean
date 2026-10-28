@@ -74,8 +74,8 @@ structure Deployment where
 /-- `R = M_s − 512·n`: every bit of the deployment's capacity outside the fill. -/
 def Deployment.R (d : Deployment) : ℕ := d.Ms - 512 * d.n
 
-/-- **One H200 on vy-dc-h200-2, as measured.** Run r20261026-003454-bfd2 (its record `art:213936fe824d1f844fe4bb0cbc4749fcc364e0dc38757c9fa73848a7872bfaa4`,
-an honest wipe accepted on the whole card) measured both numbers. The card (NVIDIA H200, GPU-7d104033) holds
+/-- **The deployed H200, as measured.** One run, an honest wipe accepted on the whole card (its record in the
+evidence store), measured both numbers. The card (an NVIDIA H200) holds
 143,771 MiB, its `gpu.txt`: `M_s = 143,771 · 2^20 · 8 = 1,206,038,560,768` bits. The fill was 4,425 segments of
 32 MiB, `n = 2,319,974,400` labels (148,478,361,600 bytes, its streamer's `labels`). So `R` is
 18,211,667,968 bits (2.276 GB), the driver's reserve and every context included. The read count is the deployed

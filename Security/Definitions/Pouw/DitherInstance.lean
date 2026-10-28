@@ -190,7 +190,7 @@ def shaUnits (a m i : ℚ≥0) : Verity.Accel.Res → ℚ≥0
   | _ => 0
 
 /-- **D5 v2's named public matmul programs on the H200**
-(`art:4eb6719838c94485978f03fe075cb004e7693a318c6c5b980590f4b3d2f01263`): protocol v3's
+(their record in the evidence store): protocol v3's
 round at A = B = 0, the frozen qkv shape (K 16384, n 16512) at the protocol's caps (t 2, L' 512), the hull of every
 route in D5 v2's menu (the tile route, PD2-1's O-route, the zero-high-digit peel, Strassen's orbit, the integral
 catalogue, every route beside the MMA) priced at the honest period's duals μ° without the hashing. Served (μ° on `alu`
