@@ -4,8 +4,8 @@ The vLLM integration (`verity_vllm`), Verity's frontend for vLLM. It pins one vL
 serves to its circuit, commits the values of that circuit the proofs need while vLLM serves, and installs the subprotocols'
 hooks on the engine. Verity itself knows nothing of vLLM.
 
-The one entry point is `examples/vllm/run.sh` (`verity example vllm`), which serves a workload on a GPU node and audits it
-through every subprotocol (`examples/vllm/README.md`).
+The one entry point is `demos/vllm/run.sh` (`verity example vllm`), which serves a workload on a GPU node and audits it
+through every subprotocol (`demos/vllm/README.md`).
 
 ## What it does
 
