@@ -25,7 +25,9 @@
 # Env: ARM, T (8192), N (64), WARM (2·T/1024), GPU_HZ (10000), LEASE_MIN (90), EXTRA (more serve-openai arguments, split
 # on spaces), PROTOCOLS_CONFIG (one --protocols-config argument), PYSAMPLE=1 (Nsight Systems' Python backtrace sampling at
 # PYHZ, 1000, for the host gaps; its sqlite export keeps none of the Python frames), PHASES=1 (NVTX ranges on the serving
-# thread's phases of a step, `phase_nvtx.py`, which `host_gaps.py` splits the GPU's idle time by), PYSPY=1 (py-spy 0.4.2, installed under
+# thread's phases of a step, `phase_nvtx.py`, which `host_gaps.py` splits the GPU's idle time by), CTXSW=1 (Nsight's thread
+# scheduling trace, with which `host_gaps.py` says how much of each phase the serving thread spent off the CPU: waiting for
+# the GIL or another lock), PYSPY=1 (py-spy 0.4.2, installed under
 # UTIL_ROOT/tools/pyspy, launches the server under the session, since the node's ptrace_scope 1 lets it read only its own
 # children, and records it and its subprocesses at PYSPY_HZ, 20, without pausing them (blocking samples at 250 Hz doubled a
 # 26 ms step), as a Chrome trace in the scratch, which `pyspy_steps.py`
@@ -154,8 +156,9 @@ if [ "${PYSPY:-0}" = 1 ]; then
   date -u +%s.%N > "$SCR/pyspy.t0"
 fi
 SESS=util80-${RESEARCH_RUN_ID:-local}
-pysample=(); sample=none
+pysample=(); sample=none; ctxsw=none
 [ "${PYSAMPLE:-0}" = 1 ] && { pysample=(--python-sampling=true --python-sampling-frequency="${PYHZ:-1000}"); sample=process-tree; }
+[ "${CTXSW:-0}" = 1 ] && { sample=process-tree; ctxsw=process-tree; }
 cd "$TREE/integrations/vllm" || exit 9
 # shellcheck disable=SC2086
 "$NSYS" launch --session-new="$SESS" --trace=cuda,nvtx --cuda-graph-trace=node "${pysample[@]}" \
@@ -217,7 +220,7 @@ load() {  # $1 requests, $2 seed, $3 name
     --max-tokens 1 --rate 1000 --seed "$2" --out "$SCR/$3.jsonl" > "$SCR/$3.log" 2>&1
 }
 load "$WARM" 7 warm; say "WARM $WARM requests (exit $?)"
-"$NSYS" start --session="$SESS" -o "$SCR/prof" --force-overwrite=true --sample="$sample" --cpuctxsw=none \
+"$NSYS" start --session="$SESS" -o "$SCR/prof" --force-overwrite=true --sample="$sample" --cpuctxsw="$ctxsw" \
   --gpu-metrics-devices=cuda-visible --gpu-metrics-frequency="${GPU_HZ:-10000}" --gpu-metrics-set=gh100 > "$OUT/nsys_start.txt" 2>&1
 say "CAPTURE start (exit $?)"
 load "$N" 1 main; lrc=$?

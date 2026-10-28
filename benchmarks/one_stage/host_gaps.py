@@ -68,6 +68,36 @@ def innermost(rs: list[tuple[int, int, str]], lo: int, hi: int) -> list[tuple[in
     return out
 
 
+def off_cpu(db: sqlite3.Connection, tid: int, lo: int, hi: int) -> list[tuple[int, int]] | None:
+    """The intervals in [lo, hi] thread ``tid`` was scheduled out (CTXSW=1's ``SCHED_EVENTS``), None without them."""
+    if not su._has(db, "SCHED_EVENTS"):
+        return None
+    out, since = [], None
+    for t, sched_in in db.execute("SELECT start, isSchedIn FROM SCHED_EVENTS WHERE globalTid = ? ORDER BY start", (tid,)):
+        if not sched_in:
+            since = int(t)
+        elif since is not None:
+            a, b = max(since, lo), min(int(t), hi)
+            if b > a:
+                out.append((a, b))
+            since = None
+    return out
+
+
+def intersect(xs: list[tuple[int, int]], ys: list[tuple[int, int]]) -> list[tuple[int, int]]:
+    """The intersection of two sorted lists of disjoint intervals."""
+    out, i, j = [], 0, 0
+    while i < len(xs) and j < len(ys):
+        a, b = max(xs[i][0], ys[j][0]), min(xs[i][1], ys[j][1])
+        if b > a:
+            out.append((a, b))
+        if xs[i][1] < ys[j][1]:
+            i += 1
+        else:
+            j += 1
+    return out
+
+
 def overlap(segs: list[tuple[int, int, str]], ivs: list[tuple[int, int]]) -> Counter:
     """ns of the intervals ``ivs`` (sorted, disjoint) under each segment's label."""
     got: Counter = Counter()
@@ -115,11 +145,12 @@ def main() -> None:
     sc = sorted(calls[serving])
     starts = [x for x, _, _ in sc]
     rs = ranges(db, serving, lo, hi)
+    offs = off_cpu(db, serving, lo, hi)
     print(f"HOSTGAP {n} steady steps (median wall {med / 1e6:.2f} ms), serving tid {serving} ({why}; {launches[serving]} "
           f"launches; the others {[c for t, c in launches.most_common(4) if t != serving]}), {len(rs)} NVTX ranges on it")
     per = defaultdict(list)
     by_call, pairs = Counter(), defaultdict(lambda: [0, 0, 0.0])
-    wall_by, idle_by, gap_by, incl = Counter(), Counter(), Counter(), Counter()
+    wall_by, idle_by, gap_by, incl, off_by, idle_off_by = Counter(), Counter(), Counter(), Counter(), Counter(), Counter()
     kstart = [x for x, _, _ in ks]
     min_gap = a.min_gap_us * 1000
     for x0, x1 in spans:
@@ -154,6 +185,12 @@ def main() -> None:
                 wall_by[lab] += s1 - s0
             idle_by.update(overlap(segs, idle))
             gap_by.update(overlap(segs, gaps))
+            if offs is not None:
+                mine_off = intersect(offs, [(x0, x1)])
+                off_by.update(overlap(segs, mine_off))
+                idle_off_by.update(overlap(segs, intersect(idle, mine_off)))
+                per["off_cpu"].append(sum(y - x for x, y in mine_off) / 1e6)
+                per["idle_off_cpu"].append(sum(y - x for x, y in intersect(idle, mine_off)) / 1e6)
             for r0, r1, lab in mine:
                 incl[lab] += min(r1, x1) - max(r0, x0)
     for k, v in per.items():
@@ -169,9 +206,12 @@ def main() -> None:
     print("  the serving thread's ranges, inclusive (ms a step):")
     for lab, ns in incl.most_common(a.top):
         print(f"    {ns / 1e6 / n:8.2f}  {lab}")
-    print(f"  by the serving thread's innermost range (ms a step): its own time, the GPU idle under it, idle in gaps >= {a.min_gap_us} us")
+    off = offs is not None
+    print(f"  by the serving thread's innermost range (ms a step): its own time, the GPU idle under it, idle in gaps >= {a.min_gap_us} us"
+          + (", the thread off the CPU, the GPU idle with the thread off the CPU" if off else ""))
     for lab, ns in sorted(wall_by.items(), key=lambda kv: -idle_by[kv[0]])[:a.top]:
-        print(f"    {ns / 1e6 / n:8.2f} {idle_by[lab] / 1e6 / n:8.2f} {gap_by[lab] / 1e6 / n:8.2f}  {lab or '(no range)'}")
+        extra = f" {off_by[lab] / 1e6 / n:8.2f} {idle_off_by[lab] / 1e6 / n:8.2f}" if off else ""
+        print(f"    {ns / 1e6 / n:8.2f} {idle_by[lab] / 1e6 / n:8.2f} {gap_by[lab] / 1e6 / n:8.2f}{extra}  {lab or '(no range)'}")
 
 
 if __name__ == "__main__":
