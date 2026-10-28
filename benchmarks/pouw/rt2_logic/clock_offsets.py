@@ -1,4 +1,4 @@
-"""RT2-LOGIC-7 probe: the SM clocks the driver reports and the clock offsets it allows, read-only.
+"""A probe of the SM clocks the driver reports and the clock offsets it allows, read-only.
 
 Every call is an NVML or nvidia-smi query (no setter), so it runs beside other work. Writes `clock.json` to `$OUT`.
 """

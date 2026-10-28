@@ -17,7 +17,8 @@ The remote protocol composes three subprotocols, tied to one record, and accepts
 
 PoUW's verdict on the served run credits nothing. The challenger's gate holds a development key, so every served PoUW
 run is a development run. And an H1 commitment's served execution blocks aren't yet a `verity/pouw/v1` case, the form
-remote's PoUW component reads. So the remote verdict can't accept on this run yet, and the run's record stays `pending`.
+remote's PoUW component reads. So the remote verdict can't accept on this run yet, and the window's verdict stays
+`undecided`.
 
 `example.toml` records what the demo establishes. Its run is `moved`: it has no passing run of record. Its proof level
 is none. Sampled proofs' guarantee, `Flock.Guarantees.SampledKSLiveV3`, is proved: when the verifier accepts a `--zk`
@@ -44,7 +45,9 @@ it serves (`--scheme rows-sha512`), and every closed sampling block is sealed. T
    at each class, and the records audit (C-Flock `--zk` on the sampled proof blocks behind the Lean firewall, and the
    Lean verifier's verdict);
 4. PoUW's piece, and each onsite subprotocol's piece where it has one;
-5. one record of every piece's verdict (`$OUT/record/verdicts.json`), `pending` while any subprotocol is missing.
+5. one record of every piece's verdict (`$OUT/record/verdicts.json`, every row a core answer), whose verdict is
+   onsite's or remote's Lean verdict (`composite.py`) when the pieces' cases make one up, else `undecided` naming what
+   each lacks.
 
 Each step's verdict line is in `$OUT/verdicts.txt`. What attaches Verity to vLLM is `integrations/vllm/`; this
 directory holds what is the demo's own: its placement and its commands.
@@ -52,10 +55,9 @@ directory holds what is the demo's own: its placement and its commands.
 ## The onsite protocol on the same run
 
 Onsite (`verity/onsite/v0`, in `verity/core/protocols/onsite/`) is remote's superset: it adds PoUS, PoUB
-(`verity/remote-bandwidth/v0`) and network certification. The memory wipe has its piece on the same run too, and
-isn't yet a subprotocol of either composite. Each runs on the served run as its piece where `served_verdicts.sh` names
-its command (`POUS_CMD`, `BANDWIDTH_CMD`, `CERTIFIER_CMD`, `WIPE_CMD`). A piece that doesn't run is named `MISSING` and
-gets no verdict.
+(`verity/remote-bandwidth/v0`), network certification and the memory wipe. Each runs on the served run as its piece
+where `served_verdicts.sh` names its command (`POUS_CMD`, `BANDWIDTH_CMD`, `CERTIFIER_CMD`, `WIPE_CMD`). A piece that
+doesn't run is `undecided`, `not run`, naming the command it lacks.
 
 ## The auditor's parties
 

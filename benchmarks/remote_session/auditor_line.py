@@ -39,8 +39,8 @@ The ledger check: its longest head verified under the pinned key (`ledger_head`,
 the period's lane, cap and circuit, and that it closed; each session reserved and opened by the lane for the peer under
 the pin at epoch k, opened at its window root R_k, ended closed with no refused hello, inside the period; σ_0 asked
 after R_k, and each coin released after its root's receipt. The peer is the verifier machine's name at the challenger
-host, as the run's own record gives it (`peer_of`): vy-nebius-1 for a verifier there, vy-auditor-1 for a host run.
-`--peer` overrides it, and a gate run whose record names none is refused. A session served by `--challenger serve`
+host, as the run's own record gives it (`peer_of`): the node's own name for a verifier on a node, the verifier host's
+for a host run. `--peer` overrides it, and a gate run whose record names none is refused. A session served by `--challenger serve`
 (the verifier's machine) has no ledger: its log is read under the key its run wrote (`session_of`) and its line is not
 the auditor's.
 
@@ -91,13 +91,14 @@ prf/sha-512), which have no number and are in no total. The line at each T, and 
 (`credit`'s `error`), fail with at most the sum of their credited sessions' totals: the least share is read off
 whichever session the run made least, so the union bound holds where a maximum wouldn't.
 
-**Conditional on** (`conditional_on`, `CONDITIONAL_ON`). The line's statement (`LineHeld`) takes `NoOutsideCompute`,
-statement C in full, as a premise that no record of the run discharges, so a line says it is conditional on it, until
-certifiers cover the gate node's boundary. A relay prover, a thin node forwarding each coin to a helper that holds
+**Conditional on** (`conditional_on`, `CONDITIONAL_ON`). The line's statement (`LineHeld`) reads statement C in full
+from the network certifiers' record of the node's ingress (`Covered`, `IngressCounted`), which this line doesn't
+check, so a line says it is conditional on C (`NoOutsideCompute`, the label's name for it), until certifiers cover
+the gate node's boundary. A relay prover, a thin node forwarding each coin to a helper that holds
 the store and computes the receipts, breaks that premise alone. The error's binding term takes the gap `binding-split`
 as closed (split_t = 0), which the deployed protocol doesn't yet ensure, so every line is conditional on that too,
 grounded or not. The `memory-line-of-record` label names what the file names (`line_label`: `lean conditional on
-NoOutsideCompute, binding-split`), and `research data label` refuses one that doesn't.
+NoOutsideCompute, binding-split`), and the evidence store's labeller refuses one that doesn't.
 
 **The lockdown** (`--lockdown FILE`, `read_lockdown`, `lockdown_check`). Infra's record of the provider's lockdown of
 the gate node: the security group's allow list, each interval it was applied, with infra's records, and whether the
@@ -185,16 +186,17 @@ NAMED_TERMS = {"prf_advantage": {"claim": ledger.PRF_CLAIM, "term": "Σ_t Adv(pr
 """`LineHeld`'s error beyond δ: each window's PRF advantage, one oracle-access distinguisher a window, which its claim
 prices and no number here does. Every error records it by name, outside its total."""
 CONDITIONAL_ON = {"NoOutsideCompute": (
-    "statement C in full (Accounting.Remote.Held.Assumptions.NoOutsideCompute, a premise of LineHeld): no device "
-    "outside the node computes on a registered block or a receipt during the session; assumed until certifiers cover "
-    "the gate node's boundary (certifier-coverage) and certify that nothing but the verifier's messages entered it over "
-    "the credited span"),
+    "statement C in full: no device outside the node computes for it during the session. LineHeld reads it from the "
+    "network certifiers' record (no counted ingress over the credited passes, Accounting.Remote.Held.Assumptions."
+    "Covered under certifier-coverage and IngressCounted at δ_net under trusted-host), which this line didn't check; "
+    "assumed until certifiers cover the gate node's boundary and certify that nothing but the verifier's messages "
+    "entered it over the credited span"),
     "binding-split": (
     "the receipts' binding term (ledger.binding, Accounting.Guarantees.Remote.ReceiptsBindingOfCR) is charged with "
     "split_t, the chance that two runs of the prover from window t's cut on independent openings coins root the window "
-    "differently, taken as 0; the deployed prover holds the coin commitment and may compute a window's roots from it, "
-    "so that holds only once the verifier sends it no commitment to a window's openings coin before its roots "
-    "(PROTOCOL.md §8)")}
+    "differently, taken as 0; the prover is sent no coin commitment before the session's end (coins.Released, "
+    "audit.Session.disclose), so its roots can't depend on an openings coin before it is released, and what remains "
+    "is the statement that the play fixes each window's receipts by its cut (PROTOCOL.md §8)")}
 """What the line's error rests on that no record of the run discharges, each with what it says: the premises of its
 statement and the gaps in its charge (`GAPS`). A line (`auditor_line.json`'s `conditional_on`, `credit.md`) is
 conditional on them, `NoOutsideCompute` unless a lockdown grounds it (`GROUNDED`), and the `memory-line-of-record`
@@ -203,12 +205,12 @@ GAPS = ("binding-split",)
 """The gaps in the line's charge (`CONDITIONAL_ON`'s), which every line is conditional on, grounded or not."""
 LOCKDOWN = "ProviderLockdown"
 GROUNDED = {LOCKDOWN: (
-    "the provider's lockdown of the gate node (Accounting.Remote.Held.Assumptions.ProviderLockdown, under "
-    "trusted-host): while infra's records show it applied, no device outside the node computes on a registered "
-    "block or a receipt, which gives NoOutsideCompute for a session whose signed span lies inside an applied interval "
-    "(noOutsideCompute_of_lockdown); it assumes what the security group doesn't close: the provider's resolver, flows "
-    "opened before it was applied, and the provider's own paths (metadata, management plane, a cluster's fabric, a "
-    "shared filesystem)")}
+    "the provider's lockdown of the gate node, under trusted-host: while infra's records show it applied, no device "
+    "outside the node computes for it, which gives statement C for a session whose signed span lies inside an applied "
+    "interval; it assumes what the security group doesn't close: the provider's resolver, flows opened before it was "
+    "applied, and the provider's own paths (metadata, management plane, a cluster's fabric, a shared filesystem). "
+    "LineHeld no longer takes it: its Accounting.Remote.Held.Assumptions.Covered (certifier-coverage) is what it "
+    "became, with the certifiers in its place")}
 """What grounds `NoOutsideCompute` for a session (`lockdown_check`), each with what it says: a line whose sessions are
 all grounded is conditional on it in its place."""
 BOUNDARY = "boundary"
@@ -724,7 +726,7 @@ def conditional_on(rows: list[dict]) -> dict:
 
 def line_label(doc: dict) -> str:
     """The `memory-line-of-record` value naming the doc's line: who computed it and what it is conditional on, as
-    `research data label` holds it to this file (`vocab.check_line_of_record`)."""
+    the evidence store's labeller holds it to this file (`vocab.check_line_of_record`)."""
     return f"{doc['line_by']} conditional on {', '.join(doc['conditional_on'])}"
 
 

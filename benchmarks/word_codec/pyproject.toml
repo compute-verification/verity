@@ -1,16 +1,17 @@
 # The word codec's benchmark and its tests. Not a package: `wc.cu` and `bench.py` run on a GPU node (`run.sh`), and the
 # byte-exact reference (`codec.py`) with the kernel's arithmetic twin (`twin.py`), and the rate audit's γ bound as
 # arithmetic (`model/gamma.py`) with its frontier at the squaring floor (`model/frontier.py`), run here as a suite
-# (`uv run tools/verity/check/suites.py benchmarks/word_codec`). Stdlib only, but for the tag's check against the
-# bandwidth audit's ro-blake3/v1.
+# (`uv run tools/verity/check/suites.py benchmarks/word_codec`). The references take the remote bandwidth audit's codec.
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 
 [tool.verity.tests]
 # tests/ imports the bandwidth audit's tags, which import the BLAKE3 reference and the framing; the wide codec's tests
-# check it against PoUS's reference codec (verity.core.protocols.pous), which reads verity.errors and verity.ml.commitments.
+# check it against PoUS's reference codec (verity.core.protocols.pous), which reads verity.errors and verity.ml.commitments;
+# kv.py, codec.py and wide.py take the remote bandwidth audit's codec, on verity.ml.commitments.
 # PoUW's, PoUS's and the bandwidth audit's Python verifiers answer through Core.Answer's Python (`answer.py`).
 inputs = ["verity/core/protocols/answer.py", "verity/__init__.py", "verity/errors.py", "verity/core/__init__.py", "verity/core/protocols/__init__.py",
-          "verity/core/protocols/bandwidth", "verity/core/protocols/pous", "verity/ml/__init__.py", "verity/ml/commitments",
-          "verity/ml/crypto", "verity/ml/randomness"]
+          "verity/core/protocols/bandwidth", "verity/core/protocols/pous",
+          "verity/core/protocols/remote_bandwidth/__init__.py", "verity/core/protocols/remote_bandwidth/codec.py",
+          "verity/ml/__init__.py", "verity/ml/commitments", "verity/ml/crypto", "verity/ml/randomness"]

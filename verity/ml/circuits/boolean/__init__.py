@@ -14,8 +14,8 @@ leaves and every primitive it reaches is one of them, an `Input1_v1` or a `Regis
 **Elements and the word view.** A Boolean Definition's ports carry bits; an *element* of a port is an innermost
 `Array<w, Value<1>>` (one w-bit element, bit j = leaf j, least significant first) or a lone `Value<1>`. `word_type` replaces
 each element by `Value<w>`: the word view of a Boolean Definition is the signature of the word Definition it computes, and
-`verity.ml.circuits.evaluation` evaluates it on words through that view. A port's format (BF16, E4M3, ...) is an annotation
-(`verity.ml.circuits.annotations`), outside every digest; the word view never reads it.
+`verity.ml.circuits.evaluation` evaluates it on words through that view. A port's format (BF16, E4M3, ...) is metadata
+(`verity.ml.circuits.metadata`), outside every digest; the word view never reads it.
 """
 from __future__ import annotations
 

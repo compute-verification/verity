@@ -2,7 +2,8 @@
 the active warden in front of serve-openai there (its ``CERTIFIER_FRONT``).
 
     python certifier_piece.py front PORT SERVE_DIR OUT [--gate USER@HOST | --gate local] [--key KEY] [--peer NAME]
-        [--prompts 4] [--prompt-ids 24] [--tokens 4] [--vocab 128000] [--height 10] [--minutes M]
+        [--prompts 4] [--prompt-ids 24] [--tokens 4] [--vocab 128000] [--height 10] [--minutes M] [--bucket-ms MS]
+        [--warmup N]
     python certifier_piece.py piece SERVE_DIR WINDOW DIR [--eos-ids IDS] [--lean EXE] [--draw K] [--chain-cmd CMD]
         [CR_K=V ...]
     python certifier_piece.py relay --listen PORT --to PORT
@@ -14,15 +15,30 @@ the active warden in front of serve-openai there (its ``CERTIFIER_FRONT``).
   its cells are link-window 0's alone (``--tokens`` at most 4 keeps the group in one link-window), so the engine admits
   the group together and closes it into one Commit window, the run's earliest: the window the run audits (with
   ``REQUESTS=1`` the requests after it make a smaller window, which `served_verdicts.py window` passes over). The
-  defaults are the window circuit's class 4,32,4 (4 slots, prompts of at most 32 ids, 4 outputs). The gate's fetch,
+  defaults are the window circuit's class 4,32,4 (4 slots, prompts of at most 32 ids, 4 outputs). The scan's schedule
+  gives a request D·τ from its admission to its first egress cell, by which a short answer must be whole, and an
+  endpoint slower than that fails each request late: 2.7 s at the scan's tick τ of 100 ms. ``--bucket-ms MS`` runs
+  the scan at the tick MS instead (the gate's `auditor.SCAN_BUCKET_MS`, 100 to 4000: D·τ = 108 s at 4000), each
+  sampling block T·τ long, and the minutes are counted there. ``--warmup N`` (none by default: an endpoint that
+  readies its first window before it listens needs none) first sends N plain completions straight to PORT (`warmup`:
+  no warden, no release header), one at a time, each of the group's shape and awaited, so the endpoint's first window
+  (H1's first reservation, the kernels' first compile) is behind it; it then waits until serve-openai records each in
+  `served_session.USERS`, which it does only once the request's window has closed. So each warm-up is a window of one
+  request, closed before the gate is asked, which the pick passes over for the group's whenever the group's window
+  holds two or more; one that fails or isn't recorded within `WARMUP_CLOSE_S` refuses the front. A warm-up doesn't
+  make a slow endpoint pass; a tick whose D·τ covers its answer does. The gate's fetch,
   ``witness/`` with it, is kept under SERVE_DIR/`PRIVATE`/RUN/fetch.tar.gz (0700, the serve dir stays on the node);
-  OUT gets ``session.json`` and ``bundle.tgz``, the public outcome. ``--gate local`` is the dry run's (this tree's gate in this process, a
-  `relay` to PORT its tunnel): a warden on the prover's node is no auditor's device, so it never stands for the gate.
+  OUT gets ``session.json`` and ``bundle.tgz``, the public outcome, and the run's kept directory a copy of
+  ``session.json`` (`SESSION`), whose gate the piece's placement names. ``--gate local`` is the dry run's (this
+  tree's gate in this process, a `relay` to PORT its tunnel): a warden on the prover's node is no auditor's device,
+  so it never stands for the gate.
   Exit as `served_session.session`'s.
 * **piece** writes window WINDOW's core answer to DIR/answer.json (`verity/certifier/v0`, `NetworkCheck.Period`'s rows
   form): accept only when the chain accepted and ``network-period check`` accepted the period, whose answer it then is.
-  1. The kept warden run: exactly one fetch under SERVE_DIR/`PRIVATE`. With none the run's load didn't go through the
-     front (it wasn't set, or the gate, its tunnel or ssh failed).
+  1. The kept warden run: exactly one fetch under SERVE_DIR/`PRIVATE`, whose rehearsal the gate's check passed (its
+     ``end.json``: exit 0 and accepted, as the front's exit reads it). With none the run's load didn't go through the
+     front (it wasn't set, or the gate, its tunnel or ssh failed); a rehearsal that failed (each request late past the
+     warden's D·τ, or cut) certified no served answer, so there is none for the protocol to reject (`rehearsed`).
   2. The window's requests are certified ones: each window request's user names one of the warden's certified
      requests (`warden_chain.io`), with the same prompt and streamed ids; else reject.
   3. The chain (`served_session.py chain`: chain_record.sh's warden path, certs, endpoint, N2, tie and scan) on the
@@ -33,12 +49,19 @@ the active warden in front of serve-openai there (its ``CERTIFIER_FRONT``).
   4. The period's link-window is the scan's (``answers.json``'s one window): every window request's release and
      streamed ids lie in it, else reject.
   5. The period check: `scan_period.rows_case` of the warden run and the chain's scan, checked by ``network-period``
-     (``--lean``, else built in verity/core/protocols/network/lean); its answer is the piece's.
-  DIR also gets the chain's public report, job and leak-guard files and the check's three input files in DIR/period,
-  the case's only copy (its params alone run to tens of megabytes on a served window); the record's leak guard
-  (`leak_guard.py`) then reads DIR against the warden run's witness. Only the protocol rejects: a step that can't run
-  (no kept run, a build, a tool or the chain failing without a report, an input missing, the leak guard failing, or
-  SIGTERM from the piece's time limit) is `NotRun`, and the piece then refuses: DIR keeps only its log and gets
+     (``--lean``, else built in verity/core/protocols/network/lean); its answer is the piece's, an accept's profile
+     with its ``placement`` (`placement`): the certifier on the gate's host, and the chain, the period check and
+     their proofs' coins in this piece on the prover's node, so `trusted-host` is assumed with the auditor's devices
+     not placed.
+  DIR also gets the chain's public files (`PUBLISHED`) and the check's three input files in DIR/period; the record's
+  leak guard (`leak_guard.py`) then reads DIR against the warden run's witness, and the period files it
+  leaves become DIR/`CASE` (`write_case`), the case as `composite.py` reads a piece's: ``{"commitment", "evidence",
+  "params"}``, the commitment and evidence hex and the params ``params.json``'s canonical JSON, all inline, since
+  certifier/v0 reads no blob (about 83 MB on a served window, nearly all of it the params). DIR/period then goes, so
+  the case has one copy; the guard reads the files before they are hex, which it searches only for a binary witness
+  file's pieces. Only the protocol rejects: a step that can't run (no kept run, a rehearsal the gate's check didn't
+  pass, a build, a tool or the chain failing without a report, an input missing, the leak guard failing, or SIGTERM
+  from the piece's time limit) is `NotRun`, and the piece then refuses: DIR keeps only its log and gets
   DIR/`REFUSED` naming why, with no answer, which `served_verdicts.py` reads as the certifier undecided, "not run". ``--draw K`` is the scan's K drawn units (every
   unit by default); a CR_K=V goes to the chain; ``--chain-cmd`` replaces the chain (a test's, which writes the report
   and the scan's answers under RESEARCH_RUN_DIR/out).
@@ -58,7 +81,9 @@ import sys
 import tarfile
 import tempfile
 import threading
+import time
 import traceback
+import urllib.request
 from collections.abc import Callable
 from pathlib import Path
 
@@ -72,12 +97,25 @@ PRIVATE = Path("private") / "certifier"
 #: the endpoint's records the chain reads (network_e2e `chain.ENDPOINT`)
 ENDPOINT = ("advice_trace.jsonl", "requests.jsonl", "windows.jsonl", "serve.json")
 PROTOCOL = "verity/certifier/v0"
+#: the named assumption the certifier's guarantee reads (`NetworkCheck.Period`): the certifier is the auditor's device
+PREMISE = "trusted-host"
+#: the front's public outcome, copied beside the kept fetch
+SESSION = "session.json"
+#: the chain's files the piece publishes; never endpoint/report.json, whose Commit-window rows give each window's
+#: request, carried and output counts and its opening time, of which only a padded count may be public
+PUBLISHED = ("report/report.json", "report/report.md", "job.json", "leak-guard.json", "certs.json", "scan/summary.json",
+             "scan/answers.json", "n2/summary.json", "tie/summary.json")
 #: a piece's refusal to run, which `served_verdicts.py` reads as the subprotocol undecided, "not run"
 REFUSED = "refused.txt"
+#: the piece's case, as `composite.py` reads it
+CASE = "case.json"
 LEAN_DIR = TREE / "verity" / "core" / "protocols" / "network" / "lean"
 #: the window circuit's class (4 slots, prompts of at most 32 ids, 4 outputs) and the scan's lanes
 PROMPTS, PROMPT_IDS, TOKENS = 4, 24, 4
 HEIGHT = 10
+#: how long a warm-up request may take, and how long the front waits for serve-openai to record the warm-ups'
+#: windows closed
+WARMUP_REQUEST_S, WARMUP_CLOSE_S = 600, 600
 
 
 def answer(verdict: str, reason: str) -> dict:
@@ -102,7 +140,8 @@ def front(a: argparse.Namespace) -> int:
     a.requests = a.prompts
     a.keep, a.out, a.at, a.window_per_group = keep, out, None, True
     if a.minutes is None:
-        a.minutes = SS.A.warden_group_minutes(1, a.tokens, a.height) + SS.MARGIN
+        tick = a.bucket_ms or SS.A.SCAN["--bucket-ms"]
+        a.minutes = SS.A.warden_group_minutes(1, a.tokens, a.height, tick) + SS.MARGIN
     if a.gate == "local":
         a.tunnel = lambda ssh, port: [sys.executable, str(Path(__file__).resolve()), "relay", "--listen", str(port),
                                       "--to", str(a.port)]
@@ -111,14 +150,49 @@ def front(a: argparse.Namespace) -> int:
             raise SS.Refused(f"--prompts {a.prompts}: one group, at most the scan's {SS.A.SCAN['--lanes']} lanes")
         if SS.A.scan_group_windows(a.tokens) != 1:
             raise SS.Refused(f"--tokens {a.tokens}: a group past one link-window, which the period's rows form refuses")
+        if a.warmup < 0:
+            raise SS.Refused(f"--warmup {a.warmup}: a count of requests, 0 for none")
         ps = SS.prompts(a.prompts, a.prompt_ids, a.vocab, secrets.token_bytes(32))
         data = json.dumps(ps, separators=(",", ":")).encode()
         SS.check(a, data)
-        return SS.session(a, data, ps)
+        if a.warmup:
+            warm = warmup(a, serve_dir)
+            (out / "warmup.json").write_text(json.dumps({"requests": warm}, indent=1) + "\n")
+        rc = SS.session(a, data, ps)
+        if (doc := out / "session.json").is_file():
+            shutil.copyfile(doc, keep / json.loads(doc.read_text())["run"] / SESSION)
+        return rc
     except SS.Refused as e:
         (out / "session.json").write_text(json.dumps({"refused": str(e)}, indent=1) + "\n")
         print(f"refused: {e}", file=sys.stderr)
         return e.code
+
+
+def warmup(a: argparse.Namespace, serve_dir: Path, *, clock: Callable[[], float] = time.monotonic,
+           sleep: Callable[[float], object] = time.sleep) -> list[dict]:
+    """``--warmup``'s requests (the module docstring), each its user, finish and seconds; `served_session.Refused`
+    when one fails or serve-openai hasn't recorded every one's window closed within `WARMUP_CLOSE_S`."""
+    tag, done = secrets.token_hex(4), []
+    for i, p in enumerate(SS.prompts(a.warmup, a.prompt_ids, a.vocab, secrets.token_bytes(32))):
+        body = {"user": f"warmup-{tag}-{i}", "prompt": p, "max_tokens": a.tokens, "temperature": 0.0, "top_p": 1.0}
+        req = urllib.request.Request(f"http://127.0.0.1:{a.port}/v1/completions", json.dumps(body).encode(),
+                                     {"content-type": "application/json"})
+        t = clock()
+        try:
+            with urllib.request.urlopen(req, timeout=WARMUP_REQUEST_S) as r:  # noqa: S310
+                got = json.loads(r.read())
+        except (OSError, ValueError) as e:
+            raise SS.Refused(f"--warmup: request {i}: {type(e).__name__}: {e}") from None
+        done.append({"user": body["user"], "finish_reason": ((got.get("choices") or [{}])[0]).get("finish_reason"),
+                     "seconds": round(clock() - t, 3)})
+        print(f"warm-up {i + 1}/{a.warmup}: {done[-1]}", flush=True)
+    users, until = {d["user"] for d in done}, clock() + WARMUP_CLOSE_S
+    while left := users - {r.get("user") for r in _lines(serve_dir / SS.USERS)}:
+        if clock() > until:
+            raise SS.Refused(f"--warmup: serve-openai recorded no closed window of {sorted(left)} in "
+                             f"{serve_dir / SS.USERS} within {WARMUP_CLOSE_S} s")
+        sleep(1)
+    return done
 
 
 def relay(listen: int, to: int, *, ready: Callable[[], None] = lambda: None) -> None:
@@ -167,6 +241,34 @@ def kept_run(serve_dir: Path) -> str:
     return runs[0]
 
 
+def placement(serve_dir: Path, run: str) -> dict:
+    """Which host ran each party, and what `trusted-host`'s premise rests on: the network certifier ran on the gate's
+    host (the kept `SESSION`'s ``gate``; ``local`` is the prover's node), and the chain's checks and draws, the period
+    check and their proofs' coins ran in this piece on the prover's node, the kept run's peer. No device of the
+    auditor's is on the node's links, so the premise is assumed of both hosts; ``links`` are the node's to the gate,
+    and K counts the certified one alone."""
+    kept = serve_dir / PRIVATE / run
+    if not (kept / SESSION).is_file():
+        raise NotRun(f"{kept} has no {SESSION}, which names the gate the certifier ran on: keep the run with this "
+                     "tree's front")
+    gate = json.loads((kept / SESSION).read_text())["gate"]
+    node = SS.served_peer(kept / "fetch.tar.gz") or socket.gethostname()
+    if gate == "local":
+        return {"kind": "prover-node", "parties": {"network_certifier": node, "prover": node, "verifier": node},
+                PREMISE: f"unmet: the network certifier ran on the prover's node {node} (the front's --gate local)",
+                "links": [], "uncounted": f"every link of {node}'s"}
+    host = gate.rpartition("@")[2]
+    return {"kind": "not-placed", "parties": {"network_certifier": host, "prover": node, "verifier": node},
+            PREMISE: (f"assumed, the auditor's devices not placed: the network certifier ran on {host}, not the "
+                      f"prover's {node}, but the chain's checks and draws, the period check and their proofs' coins "
+                      f"ran on {node}, and no device of the auditor's is on {node}'s links"),
+            "links": [{"name": "certified", "from": host, "to": node, "counted": True,
+                       "via": "the warden's tunnel to the endpoint's port"},
+                      {"name": "gate", "from": node, "to": host, "counted": False,
+                       "via": "ssh, both ways: the session's request and prompts, its status and its fetch"}],
+            "uncounted": f"every link of {node}'s but the certified one"}
+
+
 def window_requests(serve_dir: Path, window: int) -> list[dict]:
     reqs = [r for r in _lines(serve_dir / "requests.jsonl") if window in (r.get("windows") or ())]
     if not reqs:
@@ -189,6 +291,20 @@ def unpack(fetch: Path) -> tuple[Path, Path]:
         rm(d)
         raise NotRun(f"{fetch}: no warden run (a certified.jsonl) in the fetch")
     return d, run
+
+
+def rehearsed(run: Path) -> None:
+    """`NotRun` unless the gate's check passed the kept rehearsal (its ``end.json``): a failed one, late or otherwise,
+    is an infrastructure failure, like a busy gate."""
+    try:
+        end = json.loads((run / "end.json").read_text())
+    except (OSError, ValueError) as e:
+        raise NotRun(f"the kept run's end.json: {type(e).__name__}: {e}") from None
+    v = end.get("verdict") or {}
+    if end.get("rc") != 0 or v.get("accepted") is not True:
+        raise NotRun(f"the gate's rehearsal didn't pass, so it certified no served answer: exit {end.get('rc')}, "
+                     f"{end.get('ended')}; its check accepted {v.get('accepted')} with {v.get('problems')} problems, "
+                     f"failed {v.get('failed')}")
 
 
 def bind(reqs: list[dict], io: dict) -> dict[str, dict]:
@@ -277,8 +393,7 @@ def case_of(warden: Path, scan: Path) -> dict:
 
 
 def publish(chain_out: Path, d: Path) -> None:
-    for rel in ("report/report.json", "report/report.md", "job.json", "leak-guard.json", "certs.json",
-                "endpoint/report.json", "scan/summary.json", "scan/answers.json", "n2/summary.json", "tie/summary.json"):
+    for rel in PUBLISHED:
         if (chain_out / rel).is_file():
             (d / "chain" / rel).parent.mkdir(parents=True, exist_ok=True)
             shutil.copyfile(chain_out / rel, d / "chain" / rel)
@@ -295,6 +410,7 @@ def decide(serve_dir: Path, window: int, d: Path, *, chain: Callable[[Path, str,
     unpacked = None
     try:
         unpacked, warden = unpack(keep / run / "fetch.tar.gz")
+        rehearsed(warden)
         try:
             io = WC.io(warden)
             dep, params = WC.deployment(warden)
@@ -340,6 +456,21 @@ def guard(d: Path, unpacked: Path | None, quarantine: Path) -> int:
     return got.returncode
 
 
+def write_case(d: Path) -> None:
+    """DIR/`CASE` from DIR/period's three files, when the leak guard left all three, and DIR/period gone."""
+    p = d / "period"
+    commitment, evidence, params = p / "commitment.bin", p / "evidence.json", p / "params.json"
+    if not all(f.is_file() for f in (commitment, evidence, params)):
+        return
+    with open(d / CASE, "wb") as out, open(params, "rb") as src:
+        out.write(b'{"commitment":"%s","evidence":"%s","params":' % (commitment.read_bytes().hex().encode(),
+                                                                     evidence.read_bytes().hex().encode()))
+        shutil.copyfileobj(src, out, 1 << 24)
+        out.write(b"}\n")
+    rm(p)
+    print(f"case: {CASE}, {(d / CASE).stat().st_size} bytes", flush=True)
+
+
 def rm(*paths: Path) -> None:
     """``rm -rf`` as a child process: the suites' read guard misreads `shutil.rmtree`'s fd-relative walk."""
     if paths:
@@ -347,7 +478,7 @@ def rm(*paths: Path) -> None:
 
 
 def refuse(d: Path, why: str) -> int:
-    """DIR emptied but for its log, and DIR/`REFUSED` naming why: no answer, so the certifier reads missing."""
+    """DIR emptied but for its log, and DIR/`REFUSED` naming why: no answer, so the certifier reads undecided, "not run"."""
     signal.signal(signal.SIGTERM, signal.SIG_IGN)
     rm(*(p for p in d.iterdir() if p.name != "piece.log"))
     (d / REFUSED).write_text(why + "\n")
@@ -375,10 +506,13 @@ def piece(a: argparse.Namespace) -> int:
         chain = lambda keep, run, ep, n: run_chain(keep, run, ep, a.eos_ids, a.draw, sized(n, a.set),  # noqa: E731
                                                    a.chain_cmd)
         got, unpacked = decide(serve_dir, a.window, d, chain=chain, check=lambda c, p: period_check(exe, c, p))
+        if isinstance(got.get("profile"), dict):
+            got = got | {"profile": got["profile"] | {"placement": placement(serve_dir, kept_run(serve_dir))}}
         (d / "answer.json").write_text(json.dumps(got, indent=1, sort_keys=True) + "\n")
         g = guard(d, unpacked, serve_dir / PRIVATE / "quarantine")
         if g not in (0, 3) or not (d / "answer.json").is_file():
             raise NotRun(f"the leak guard failed (exit {g}): DIR withheld")
+        write_case(d)
     except NotRun as e:
         return refuse(d, str(e))
     except (OSError, ValueError, tarfile.TarError) as e:
@@ -409,6 +543,11 @@ def parser() -> argparse.ArgumentParser:
     f.add_argument("--vocab", type=int, default=SS.VOCAB)
     f.add_argument("--height", type=int, default=HEIGHT)
     f.add_argument("--minutes", type=int)
+    f.add_argument("--bucket-ms", type=int, metavar="MS",
+                   help="the scan's tick, the gate's 100 to 4000 (the scan's 100 when not given)")
+    f.add_argument("--warmup", type=int, default=0, metavar="N",
+                   help="plain requests of the group's shape straight to PORT first, each in a window of its own "
+                        "(none by default)")
     q = sub.add_parser("piece")
     q.add_argument("serve_dir", type=Path)
     q.add_argument("window", type=int)

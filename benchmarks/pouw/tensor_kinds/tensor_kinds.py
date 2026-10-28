@@ -1,4 +1,4 @@
-"""M1 of EPS1 TENSOR: fit each MMA form's joint issue coefficient from a tensor_kinds run (sm_120, or sm_89 with
+"""Fit each MMA form's joint issue coefficient from a tensor_kinds run (sm_120, or sm_89 with
 TK_ARCH=89 or sm_100 with TK_ARCH=100: there each form also has an alone4 point, and JI3e, sm_120's rows, isn't
 loaded). A spec point whose run recorded each role's own cycles also gets the exact co-run reading: the MMA warps'
 SMSP-cycles a MMA and the lane warps' instructions a SMSP-cycle, each over its own time.
@@ -42,13 +42,13 @@ NOISE = 0.02
 LANE_MIN = 0.9
 LANES = ("iadd3", "ffma", "iadd3_ffma")
 MIXED_LANE = "iadd3_ffma"
-#: VF3e's joint issue rows (note:20261016T0751Z-draft-rs-vf3e) as the machine model's census holds them, fitted beside
+#: VF3e's joint issue rows as the machine model's census holds them, fitted beside
 #: IMMA s8 m16n8k32 and OMMA: SMSP-cycles a MMA and a other instruction. Every program of every form must load each at
 #: most 1 - NOISE.
 JI3E = {"JI3e_0": (8.115163161, 1.0), "JI3e_1": (4510.17215313632 / 300.08, 0.317063107),
         "JI3e_2": (4662.85212194032 / 300.08, 0.171692378)}
 #: The schedule spread `refit` covers: one program's time varied up to 6.91% between builds (M1, programs within 5% of a
-#: JI3e facet: r20261017-040022-5e4d against r20261017-041103-d35d and r20261017-041754-7630).
+#: JI3e facet, across three builds).
 SCHED = 1.07
 #: Each form's kind in the machine model (VF3n-16): one a SASS form.
 KIND = {"imma_s8_m16n8k32": "IMMA16832", "imma_u8s8_m16n8k32": "IMMA16832", "imma_s8_m16n8k32_sat": "IMMA16832",

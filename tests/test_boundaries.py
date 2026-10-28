@@ -1,6 +1,6 @@
 """The dependency rules (AGENTS.md "Map and commands") as import-boundary checks over ``verity/``, and the one over ``infra/``.
 
-    ml.circuits <- ml.commitments -> ml.crypto;  ml.randomness, ml.crypto and core.claims import no unit;  the
+    ml.circuits <- ml.commitments -> ml.crypto;  ml.randomness, ml.crypto, core.claims and hardware import no unit;  the
     catalog (ml.circuits.ops, .silicon, .targets) and the kernels (ml.kernels) build on ml.circuits, and the served
     workloads' Definitions (ml.definitions) on the catalog and the kernels;
     ml.circuits <- core.protocols.profile;  each protocol imports ml, the profile and the protocols it names in
@@ -46,6 +46,8 @@ ALLOWED = {
     "ml.circuits": set(),
     "ml.randomness": set(),
     "ml.crypto": set(),
+    # the card files, one TOML a SKU, and their loader: the one source of each card's numbers
+    "hardware": set(),
     "ml.commitments": {"ml.circuits", "ml.crypto"},
     # the catalog and the kernels, distributions of their own before the platform layout
     "ml.circuits.silicon": {"ml.circuits"},
@@ -60,12 +62,18 @@ ALLOWED = {
     # records come from the caller. Its catalog of templates is Verity's Definitions (`ml.circuits.ops`).
     "ml.windows": {"ml.circuits", "ml.circuits.ops", "ml.commitments"},
     "core.claims": set(),
+    # An auditor party's signed period roots and liveness records,
+    # stdlib only (its frame-v3-sha512 tree held to `ml.commitments.merkle` by its test), the signer injected.
+    "core.attest": set(),
     # 2026-10-27 (memory accounting, the deployment API v3, note:memory-accounting/20261026T2305Z-draft-deployment-api-v3):
     # the wire is what both sides parse with, stdlib only; the deployment layer is protocol-agnostic and reads frames with
     # it, signs and verifies only through keys its caller hands it, and checks a configuration against what a protocol and
     # a workload declare to it, so neither gains an ml edge.
     "core.wire": set(),
     "core.deploy": {"core.wire"},
+    # The registration log every subprotocol and both composites read, the Python of `Core.Registration`: canonical JSON
+    # and SHA-512 only, so it reaches no ml.
+    "core.protocols.registration": {"core.wire"},
     "core.protocols.profile": {"ml.circuits"},
     # `Core.Answer`, the outcome every core protocol gives, and its JSON: what a Python verifier answers with and a reader
     # of another protocol's answer decodes, stdlib only.
@@ -77,9 +85,10 @@ ALLOWED = {
     "core.protocols.sampled_proofs": {"core.claims", "core.wire", "core.deploy", "ml.circuits", "ml.commitments",
                                       "ml.randomness", "core.protocols.profile"},
     # 2026-10-27 (memory accounting, the deployment API v3): the wipe's memory challenger and prover are parties of the
-    # deployment layer (`wipe_parties`), their messages the wire's.
-    "core.protocols.pous": {"core.claims", "core.wire", "core.deploy", "ml.circuits", "ml.commitments", "ml.crypto",
-                            "ml.randomness", "core.protocols.answer"},
+    # deployment layer (`wipe_parties`), their messages the wire's. The
+    # memory challenger reports its sessions under its party's per-period root (`core.attest`).
+    "core.protocols.pous": {"core.claims", "core.attest", "core.wire", "core.deploy", "ml.circuits", "ml.commitments",
+                            "ml.crypto", "ml.randomness", "core.protocols.answer"},
     # 2026-10-11 (Daniel, decision 7 of the resource-accounting agenda): the bandwidth audit's store is PoUS's `C*`,
     # under its setup and `vk`, reused as they are.
     "core.protocols.bandwidth": {"ml.crypto", "ml.randomness", "core.protocols.pous"},
@@ -88,6 +97,7 @@ ALLOWED = {
     # trees, draws from the verifier's secret, and records its openings as an integrity profile.  Its coins are the
     # proof system's one challenger's (`sampled_proofs.challenger`).
     # The remote bandwidth audit is over the P2-encoded weights store, and a P2 store is PoUS's `C*`, under its setup and `vk`, reused as they are (`p2.py`).
+    # The session's verifier and prover are parties of the deployment layer (`session_parties`), their messages the wire's.
     "core.protocols.remote_bandwidth": {"ml.commitments", "ml.randomness", "core.protocols.profile",
                                         "core.protocols.sampled_proofs", "core.protocols.pous", "core.wire",
                                         "core.deploy", "core.protocols.answer"},
@@ -115,7 +125,7 @@ DEPENDENCIES = {"numpy"}
 #: which holds it to the wire's Python reference through ``verity_difftest``.
 SEPARATE = ("ml/flock", "core/difftest", "core/protocols/pous/check")
 #: Source subtrees that must stay stdlib-only, the scalar references, and within them what may use numpy.
-NUMPY_FREE = ("ml/circuits", "ml/randomness", "core/claims")
+NUMPY_FREE = ("ml/circuits", "ml/randomness", "core/claims", "hardware")
 NUMPY_USERS = ("ml/circuits/evaluation", "ml/circuits/boolean/forms.py", "ml/circuits/ops")
 #: ml builds on no verifier: core's frozen edges into ml (``CORE_ML_EDGES``) never run the other way.  The files of
 #: ``verity/ml/`` that import core anyway
@@ -174,7 +184,7 @@ INFRA_IMPORTERS = {
 #: uses it.  It only shrinks.
 BENCHMARKS_IMPORTERS = {
     # the H200 example: its runner loads benchmark code by path
-    "examples/h200/e2e_h200/attention.py": "compute-accounting: kernels' attn_ref (`benchmarks/torch_gpu/attn_ref`)",
+    "examples/h200/e2e_h200/attention.py": "compute-accounting: attn_bf16's reference kernels (`benchmarks/torch_gpu/attn_bf16`)",
     "examples/h200/e2e_h200/commit.py": "compute-accounting: kernels' commit_slots (`benchmarks/torch_gpu/commit_slots`)",
     "examples/h200/e2e_h200/percall.py": "compute-accounting: J10-R's sm_90 build (`benchmarks/torch_gpu/j10r_sm90`)",
     "examples/h200/e2e_h200/store.py": "compute-accounting: P2's store (`benchmarks/pous`) and the s8 decode linear "

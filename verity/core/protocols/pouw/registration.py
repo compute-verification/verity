@@ -12,6 +12,7 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 
+from verity.ml.commitments import domains
 from verity.ml.randomness import derive
 
 from .audit import Epoch, salt_of
@@ -36,7 +37,7 @@ REGISTRATION_STACKS = ((ROTATION_8,), (ROTATION_8, LATENT_ROTATION), (ROTATION_8
                        (ROTATION_8, VO_ROTATION, HEAD_INTERLEAVE, LATENT_ROTATION))
 #: The stacks of an unrotated checkpoint, which must be curated
 UNROTATED_STACKS = ((), (GAMMA_FOLD,))
-ROTATION_KEY_DOMAIN = "verity/pouw/rotation-key/v1"
+ROTATION_KEY_DOMAIN = domains.POUW_ROTATION_KEY
 #: Where a linear sits against the streams the rotations mix: it reads the residual stream (its columns take the keyed
 #: 8-block rotation), writes it (its rows take it), reads an MLA latent behind that latent's own RMSNorm (MLA's q_b and
 #: kv_b, the DSA indexer's wq_b: only the latent rotation reaches them), or none of these.
