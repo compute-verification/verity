@@ -1,4 +1,4 @@
-"""P2 (`verity/core/protocols/pous/p2/PROTOCOL.md`, specification v4) in the POUS-only harness.
+"""P2 v4 (`verity/core/protocols/pous/README.md`, "P2") in the POUS-only harness.
 
 - `reference.py`: the scheme on the CPU, pinned by `vectors.json`.
 - `wire.py`: `p2-audit-wire/v4`'s frames and its reference verifier, pinned by `audit-vectors.json` and

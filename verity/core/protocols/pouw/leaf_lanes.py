@@ -27,9 +27,9 @@ words at K = 4096. The combine checks that the rows' XOR, word by word, is the l
 
 Every port of every statement, its output row included, is a port of the verifier's own registered reads (`own`,
 `registered_file`), never a row the public file states: a port the verifier doesn't register is free in the relation it
-checks. The file says so (``complete``), and the Lean verifier then refuses a statement any port of whose circuit, an
-input its ok's cone reads (the lane index's ``pub`` among them) or an output row, is not one of the file's ports
-(Flock's `Registered.checkComplete`, `checkComplete_ok`).
+checks. The Lean verifier refuses a statement any port of whose circuit, an input its ok's cone reads (the lane
+index's ``pub`` among them) or an output row, is not one of its ``--registered`` file's ports (Flock's
+`Registered.checkComplete`, `checkComplete_ok`, run on every statement whenever the file is given).
 
 * **The reads** (`reads`) open the registration's and the produced record's roots at the rows the verifier states here, so
   a partial swapped between rows opens at no read's position, and one from another leaf's tree opens under no root the
@@ -76,6 +76,7 @@ from verity.core.protocols.pouw.weights import chunks
 from verity.core.protocols.sampled_proofs.one_stage import produced as PR
 from verity.core.protocols.sampled_proofs.one_stage import registered as G
 from verity.core.protocols.sampled_proofs.one_stage import registration as R
+from verity.ml.commitments.scheme import DIGEST_BYTES
 
 PARTIALS = "partials"
 A, B, ADMIT, ZY, RECEIPT = "a", "b", "admit", "zy", "receipt"
@@ -86,8 +87,6 @@ PUBLIC_BITS = (512, 64, 1024, 16)
 PUB, OK = "pub", "o0"
 #: every statement's ``o0`` row: ok = 1
 OK_ROW = (1,)
-#: the ``--registered`` file's key that its ports are every port of the statement (Flock's `Registered.COMPLETE_KEY`)
-COMPLETE = "complete"
 #: a ``--registered`` port's key that the statement reads its row in full (Flock's `KnownRead.READ_KEY`)
 READ_IN_FULL = "read_in_full"
 #: a J10-R lane's public row's fields (`h1zy.PUBLIC_J10R`): the unit's call and blocks after its roots
@@ -252,7 +251,8 @@ def pub_words(salt: bytes, position: int, roots: Sequence[bytes], ln: int, *, ca
     (`seeds.leaves`, `seeds.position_leaves`: big-endian 32-bit halves, each least significant bit first), 100 words, then
     ln as the 101st. A J10-R lane's (`PUBLIC_J10R`) has the unit's ``call`` and its two ``blocks`` (each a u64 as the
     position's leaves) after the roots, 112 words, then ln as the 113th."""
-    if len(salt) != 64 or len(roots) != 2 or any(len(x) != 64 for x in roots):
+    n = DIGEST_BYTES["sha512"]
+    if len(salt) != n or len(roots) != 2 or any(len(x) != n for x in roots):
         raise ValueError("the salt and the two roots are 64-byte digests")
     if not 0 <= int(ln) < 1 << 16:
         raise ValueError(f"the lane index is a u16 word, not {ln!r}")
@@ -323,16 +323,15 @@ def verifier_entries(registration: Mapping[str, Any], produced: Mapping[str, Any
 
 def registered_file(ports: Mapping[str, tuple[str, int]], entries: Mapping[str, Mapping[str, Any]],
                     roots: Mapping[str, str], schemas: Mapping[str, str] | None = None,
-                    known_ports: Mapping[str, Mapping[str, Any]] | None = None, complete: bool = True,
+                    known_ports: Mapping[str, Mapping[str, Any]] | None = None,
                     place: Mapping[str, tuple[str, int]] | None = None) -> dict[str, Any]:
     """The Lean verifier's ``--registered`` file of one statement (one unit) from its `reads`: each port's value's entry
     (a registered value's from the accepted registration, or ``partials``' from `produced.entry`) and root (the accepted
     registration's, or the accepted produced record's), and its `known` ports' (`produced.known_port`'s). ``place``: the
     unit's placement, ``{value: (table, base)}``: port ``(value, row)`` reads row ``base + row`` of ``table``, whose
     entry, root and schema it takes (Lean's `PouwWindow.Lanes.ownOf`); a value it doesn't name is its own table from row 0
-    (`selfPlace`), every value so where it is None. ``complete``:
-    the ports are every port of the statement (`own`), which the verifier then holds the circuit to
-    (`Registered.checkComplete`). A port of an A row, a B row or a partials row (`FULL`: lane l's ``a<s>``, ``b<t>``
+    (`selfPlace`), every value so where it is None. The ports are every port of the statement (`own`), which the
+    verifier holds the circuit to (`Registered.checkComplete`). A port of an A row, a B row or a partials row (`FULL`: lane l's ``a<s>``, ``b<t>``
     and ``partials``, the combine's ``p<x>``, by the value it reads, whatever table that is placed in) is marked
     ``read_in_full`` (`READ_IN_FULL`): the verifier holds it to one row of the registered row's words, every bit of
     which the statement reads (Flock's `KnownRead.fullRows`), so the statements that read one row (four lanes an A row,
@@ -349,7 +348,7 @@ def registered_file(ports: Mapping[str, tuple[str, int]], entries: Mapping[str, 
             out[port][READ_IN_FULL] = True
     if set(out) & set(known_ports or {}):
         raise ValueError(f"ports {sorted(set(out) & set(known_ports or {}))} are both reads and known")
-    return {"format": G.READS, "ports": {**out, **(known_ports or {})}, **({COMPLETE: True} if complete else {})}
+    return {"format": G.READS, "ports": {**out, **(known_ports or {})}}
 
 
 __all__ = [
@@ -357,7 +356,6 @@ __all__ = [
     "CARRY",
     "CHUNK",
     "COMBINE",
-    "COMPLETE",
     "FULL",
     "LANE",
     "LANE_COLS",

@@ -1,7 +1,7 @@
 """Where the weights' decoders spend their time, under Nsight Compute: one launch each of the fused GEMM's untagged
 kernel (one linear at M, at a DECODERSxSTAGES config), wt.cu's decode_kernel and kv.cu's over the same bytes, then
-the sketched kernel with two sketch warps at each `--sketch` ROWS:DxS (the build's receipt at k_s = ROWS, its tags
-written), at each k, with the occupancy, scheduler, warp-state, instruction and source sections. Writes
+the sketched kernel with two sketch warps at each `--sketch` ROWS:DxS (a WT_RECEIPT build's sketch-sha512 receipts
+at k_s = ROWS, written), at each k, with the occupancy, scheduler, warp-state, instruction and source sections. Writes
 OUT/decode-ncu.ncu-rep, its details page (decode-ncu.txt), its SASS source page with the stall reasons an
 instruction (decode-ncu-sass.csv) and, from a build with -lineinfo (step.sh's NVFLAGS), the same by CUDA source line
 (decode-ncu-cuda.csv) and correlated (decode-ncu-cuda-sass.csv). The launches' order is the DECODE-NCU line's.
@@ -24,7 +24,7 @@ import numpy as np
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 
-import bench as BW  # noqa: E402  (before kv_bench, as in step.py)
+import bench as BW  # noqa: E402
 
 sys.path.insert(0, str(HERE.parent / "word_codec"))
 import kv_bench as KB  # noqa: E402
@@ -51,7 +51,6 @@ def launches(a) -> list[dict]:
     kv = KB.Lib(wt.field.name, a.kv_lib)
     n, kd = BW.MODELS[a.model][1][a.linear]
     st, sms = BW.stream(torch), torch.cuda.get_device_properties(0).multi_processor_count
-    BW.set_sketch_tag(wt)
     store = torch.empty(n * kd // wt.pb * wt.s, dtype=torch.uint8, device="cuda").random_(0, 256)
     x = torch.randn(a.m, kd, device="cuda").to(torch.float8_e4m3fn)
     y = torch.zeros(a.m, n, dtype=torch.float32, device="cuda")
@@ -59,12 +58,15 @@ def launches(a) -> list[dict]:
     d, s = map(int, a.fused.split("x"))
     words = store.numel() // wt.s
     nch, sketched, frags = kd // 512, sketch_specs(a.sketch), {}
+    if sketched:
+        BW.set_sketch_tag(wt)
     for rows in sorted({r for r, _, _ in sketched}):
         BW.set_pass(wt, 8, rows=rows)
         bits = BW.sketch_bits(wt, BW.window_seed(wt), rows, BW.SKT.vector_bytes(wt.sb, 8))
         signs = torch.from_numpy(BW.pass_signs(wt, bits, 8).view(np.int32)).cuda()
         frags[rows] = BW.sign_frags(wt, torch, signs, 8, st)
-    BW.set_sketch_tag(wt)
+    if sketched:
+        BW.set_sketch_tag(wt)
     out = []
     for k in map(int, a.ks.split(",")):
         key = BW.lib_key(wt, k)
@@ -76,7 +78,7 @@ def launches(a) -> list[dict]:
         gr = launched.value // (kd // 512)
         steps = BW.tsteps(wt, torch, key, d, gr, kd // 512)
         wt.call("wt_fused_sketch", k, BW.ptr(store), BW.ptr(x.view(torch.uint8)), BW.ptr(y), a.m, n, kd, 0, 0, d, s,
-                gr, 0, BW.ptr(steps), None, BW.TAG_BASE, 0, None, None, 8, 0, None, st)
+                gr, 0, BW.ptr(steps), None, wt.jbase, 0, None, None, 8, 0, None, st)
         wt.call("wt_decode", BW.ptr(store), None, words, 0, k, BW.ptr(xr), sms * a.grid_mult, st)
         kv.call("kv_decode", BW.ptr(store), None, words, 0, k, sms * a.grid_mult, BW.ptr(xr), st)
         order = [f"fused_k{k}_d{d}s{s}", "wt_decode", "kv_decode"]
@@ -109,8 +111,8 @@ def main() -> int:
     ap.add_argument("--fused", default="10x6", help="the untagged fused kernel's DECODERSxSTAGES")
     ap.add_argument("--ks", default="2,3")
     ap.add_argument("--grid-mult", type=int, default=8, help="the decoders' CTAs an SM in the grid")
-    ap.add_argument("--sketch", default="", help="sketched kernels with two sketch warps, ROWS:DxS,... (k_s 64 wants a "
-                                                 "WT_RECEIPT build)")
+    ap.add_argument("--sketch", default="", help="sketched kernels with two sketch warps, ROWS:DxS,... (a WT_RECEIPT "
+                                                 "build)")
     ap.add_argument("--child", action="store_true")
     a = ap.parse_args()
     if a.child:
