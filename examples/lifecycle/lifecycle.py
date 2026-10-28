@@ -17,8 +17,9 @@ The phases, each a function here:
    declaration block to the declared circuit C = B(a_1 || ... || a_k) (`Builder.grow`: B is prefix-extending, so the
    blocks before are unchanged) and places it (`placement`: its units on device leaves, theta on a memory leaf, naming
    the layout's head); the block's values are committed; and its record binds the previous record and that placement.
-5. **Audit of declaration k** (`draw`, `prove`, `verify`, `pouw_window`): live coins after the commitment, sampled
-   proofs' draw at PoUW's size K', each drawn unit proved behind the firewall and checked by the verifier.
+5. **Audit of declaration k** (`draw`, `prove`, `verify`, `pouw_window`, `inference_only`): live coins after the
+   commitment, sampled proofs' draw at PoUW's size K', each drawn unit proved behind the firewall and checked by the
+   verifier; and the inference-only policy's check of the declaration block, which reads no coins.
 6. **Accounting** (`compose`, `account`): each declaration's composite verdict by the composition's rule, the monitoring
    period's, its pooled bound, and its credit against the compute the layout holds: each subprotocol's accounting is a
    projection of the layout (`Layout.accounting`).
@@ -156,10 +157,16 @@ def unit_ands() -> int:
 
 
 @cache
+def block_program(n: int) -> str:
+    """A declaration block's Program, as descriptor text (`verity.ml.circuits.codec`): its input state wires are the
+    previous block's output state wires, and theta is a registered input."""
+    return json.dumps(codec.encode_program(Program(bind(BLOCK, N=n), registered=("w1", "w2"), theta=("w1", "w2"))))
+
+
+@cache
 def block_digest(n: int) -> str:
-    """A declaration block's Program digest (`verity.ml.circuits.codec`): its input state wires are the previous block's
-    output state wires, and theta is a registered input."""
-    return codec.program_digest(codec.encode_program(Program(bind(BLOCK, N=n), registered=("w1", "w2"), theta=("w1", "w2"))))
+    """A declaration block's Program digest."""
+    return codec.program_digest(json.loads(block_program(n)))
 
 
 def s8(v: int) -> int:
@@ -910,6 +917,57 @@ def pouw_window(sp: Mapping[str, Any], blk: Block) -> dict[str, Any]:
                                                                    "eps": str(EPS), "delta": str(DELTA)})
 
 
+GAMMA, ALPHA = 1 << 15, Fraction(1, 256)
+"""The inference-only policy's budgets, the verifier's own params: inference blocks of at most Γ gates, each reading at
+most α bits of fresh input per gate. One request is 19,620 gates reading 48 bits of fresh input (its input and the state
+word), theta being registered."""
+
+
+def _nci() -> Any:
+    """The inference-only policy's Python check (`verity/core/protocols/network/nci/lean/scripts/nci_reference.py`), the
+    reference its Lean check, `NciCheck`, is held to."""
+    name = "lifecycle_nci_reference"
+    if name not in sys.modules:
+        spec = importlib.util.spec_from_file_location(
+            name, ROOT / "verity/core/protocols/network/nci/lean/scripts/nci_reference.py")
+        m = importlib.util.module_from_spec(spec)
+        sys.modules[name] = m
+        spec.loader.exec_module(m)
+    return sys.modules[name]
+
+
+@cache
+def policy(n: int, gamma: int, alpha: tuple[int, int]) -> dict[str, Any]:
+    """The policy's check (`check_desc`) on an n-unit declaration block: theta the root's registered input nodes (w1 and
+    w2), and the division B makes, each unit (one request) an inference block of its own."""
+    nci, text = _nci(), block_program(n)
+    inputs, registered, _ = nci.root_nodes(text)
+    owner, u = [], 0
+    for i in inputs:
+        owner.append("input" if i else u)
+        u += not i
+    theta = [k for k, (i, r) in enumerate(zip(inputs, registered)) if i and r]
+    return nci.check_desc({"program": text, "theta": theta, "owner": owner, "gamma": gamma, "alpha": list(alpha)})
+
+
+def inference_only(d: Declaration, blk: Block) -> dict[str, Any]:
+    """The inference-only policy's answer for the declaration (`verity/inference-only/v0`, `NciCheck.Protocol`): the
+    record, the one sampled proofs' answer commits to, names the block's Program, and the policy's check finds that the
+    block's division into inference blocks complies. It has no rounds and reads no coins. Theta's provenance is the
+    registration's check (`check_baseline`: theta committed under the registered builder)."""
+    if d.record.get("circuit") != blk.program:
+        return answer(IDS["inference-only"], "reject", d.digest, "the record does not name the declared circuit")
+    out = policy(blk.n, GAMMA, (ALPHA.numerator, ALPHA.denominator))
+    if "error" in out:
+        return answer(IDS["inference-only"], "reject", d.digest, out["error"])
+    if not out["complies"]:
+        u, rule = out["failure"]
+        over = "has more than Γ gates" if rule == "size" else "reads more than α bits of fresh input per gate"
+        return answer(IDS["inference-only"], "reject", d.digest, f"the division does not comply: inference block {u} {over}")
+    return answer(IDS["inference-only"], "accept", d.digest, public={},
+                  profile={"blocks": out["ius"], "gates": out["gates"]})
+
+
 # --- 6. accounting -----------------------------------------------------------------------------------------------------
 
 def _reference() -> Any:
@@ -1296,8 +1354,8 @@ class Verifier:
         return "proofs" in self.parts[k]
 
     def answers(self, k: int, checks: Mapping[int, Mapping[str, Any]]) -> dict[str, dict[str, Any]]:
-        """The subprotocols' answers for declaration k beyond sampled proofs and PoUW (onsite: the certifier, PoUS and the
-        bandwidth audit)."""
+        """The subprotocols' answers for declaration k beyond sampled proofs, PoUW and the inference-only policy (onsite:
+        the certifier, PoUS and the bandwidth audit)."""
         return {}
 
     def _advance(self) -> list[Any]:
@@ -1312,8 +1370,10 @@ class Verifier:
     def _decide(self, k: int) -> list[Any]:
         d, blk, proofs = self.declarations[k - 1], self.circuit[k - 1], self.parts[k]["proofs"]
         checks = {u: verify(self.statement(k, u), proofs.get(str(u), {})) for u in self.draws[k]}
-        sp = sampled_proofs(Declaration(k, d["advice"], d["record"]), blk, self.draws[k], checks)
-        answers = {sp["protocol"]: sp, IDS["pouw"]: pouw_window(sp, blk), **self.answers(k, checks)}
+        dk = Declaration(k, d["advice"], d["record"])
+        sp = sampled_proofs(dk, blk, self.draws[k], checks)
+        answers = {sp["protocol"]: sp, IDS["pouw"]: pouw_window(sp, blk), IDS["inference-only"]: inference_only(dk, blk),
+                   **self.answers(k, checks)}
         line = {"k": k, "record": d["digest"], "advice": d["advice"], "advice_bits": len(d["advice"]),
                 "layout": d["record"]["placement"]["layout"], "placement": d["record"]["placement"]["units"],
                 "theta_leaf": d["record"]["placement"]["theta"],

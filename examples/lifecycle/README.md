@@ -70,8 +70,12 @@ chained through the state wire. The monitoring period is three declaration perio
    count and the frame commitments each drawn unit's I/O gates are held to; the memory challenger's round (`Open`,
    `Challenge`, `Answer`, `Report`) picks 2 theta rows on its own coins and times the answer on its own clock. PoUS holds
    the openings to theta's root; the bandwidth audit holds the time to twice the challenger's link latency plus the rows'
-   bits at the rate of the device theta is placed on, both read from the layout (`theta_reach`). Each subprotocol answers
-   in `Core.Protocol`'s shape, and the composite is the composition's rule and binding over exactly its subprotocols.
+   bits at the rate of the device theta is placed on, both read from the layout (`theta_reach`). Both composites run the
+   inference-only policy's check (`inference_only`), which reads no coins: the record names the block's Program, and the
+   policy's Python check (`nci_reference.check_desc`, the reference `NciCheck` is held to) finds that the block divides
+   into inference blocks, one per request (19,620 gates reading 48 bits of fresh input: its input and the state word),
+   within Γ = 2^15 gates and α = 1/256 fresh-input bits per gate, with theta registered. Each subprotocol answers in
+   `Core.Protocol`'s shape, and the composite is the composition's rule and binding over exactly its subprotocols.
 6. **Accounting** (`account`). The chain from the registration through every record, each declaration's composite, the
    period's verdict by the same rule, the credited AND gates (PoUW's grid point at or below the real units, fillers
    credited nothing) against the compute the layout held in each declaration period, the advice bits charged as leakage,
@@ -93,6 +97,7 @@ declaration 1
   5 audit      drew subset:3 of 4: units [0, 2, 3]
                verity/sampled-proofs/one-stage/v1       accept
                verity/pouw/v1                           accept
+               verity/inference-only/v0                 accept
                verity/certifier/v0                      accept
                verity/pous/p2/v4/run                    accept
                verity/remote-bandwidth/v0               accept
@@ -145,7 +150,7 @@ The deviations, one or more a phase, each refused or rejected (`tests/test_lifec
 | `draw(coins, block)`, `draw_size` | verifier | live coins | the drawn proof blocks | `verity/core/protocols/sampled_proofs/coins.py` (`draw_first`), `verity/core/protocols/pouw/window.py` (`bucket`, `k_prime`) |
 | `prove(statement, witness)` | firewall | a `Statement`, the openings | a proof | STAND-IN for C-Flock |
 | `verify(statement, proof)` | verifier | a `Statement`, a proof | each check's reason, or none | STAND-IN for C-Flock's verifier |
-| `sampled_proofs`, `pouw_window`, `OnsiteVerifier.answers` | verifier | one declaration's checks, view, report | `Core.Protocol` outcomes | missing as per-declaration functions: written in the example |
+| `sampled_proofs`, `pouw_window`, `inference_only`, `OnsiteVerifier.answers` | verifier | one declaration's checks, view, report | `Core.Protocol` outcomes | missing as per-declaration functions: written in the example |
 | `compose(protocol, answers)` | verifier | the subprotocols' outcomes | the composite verdict and binding | `verity/core/protocols/composition/tests/reference.py` (`verdict`, `bind`, `ONSITE`, `REMOTE`) |
 | `account(baseline, declarations, lines, layout)` | verifier | the period's records and verdicts | period verdict, credit, bound, projections, scaling | missing: written in the example |
 | `Certifier`, `certified(I, view, direction)` | network certifier | frames seen | a signed view | `verity/ml/crypto/lms.py` (`certificate_message`, `sign_at`, `verify`) |
