@@ -247,8 +247,8 @@ class Traced:
 
 
 CAPPED = "verity/prove-path/capped-compiler/v0"
-#: ℓ when a registration names none, the public cap on the advice's encoding in bits: 1 MiB, far above a session's few hundred
-#: requests (I1 spends tens of bits a row)
+#: ℓ, the public cap on the advice's encoding in bits: 1 MiB, far above a session's few hundred requests (I1 spends tens of bits a
+#: row). Every other reader of ℓ's default imports it from here.
 CAP_BITS = 1 << 23
 
 

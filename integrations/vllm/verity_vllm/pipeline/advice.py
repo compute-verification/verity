@@ -81,6 +81,7 @@ COMPILER = "verity_vllm.program.predict.steps.compile_steps"
 PENDING = 3
 
 
+#: ℓ when the registration names none (`advice_windows.CAP_BITS`: 1 MiB of advice)
 CAP_BITS = AW.CAP_BITS
 
 
