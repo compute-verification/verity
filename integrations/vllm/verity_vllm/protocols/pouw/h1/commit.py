@@ -124,6 +124,8 @@ class CommitTap:
     own: int = 0
     #: each round's input ids as the Commit acquired them
     round_ids: dict[int, list[int]] = field(default_factory=dict)
+    #: (engine step, site, ``0`` x_q or ``1`` s_a) -> the member name the Commit acquired it under, which its store keys
+    acquired: dict[tuple[int, str, str], str] = field(default_factory=dict)
     #: site -> [engine step, x_q, s_a] the Commit acquired last; engine step -> its ids, the port's cut to the step's
     #: scheduled tokens; H1 step -> engine step
     _x: dict[str, list[Any]] = field(default_factory=dict)
@@ -175,6 +177,7 @@ class CommitTap:
             return
         if not op.endswith("/row_quant") or port not in ("0", "1"):
             return
+        self.acquired[(step, op, port)] = name
         if port == "0":
             x = _host(t)
             self._x[op] = [step, x.reshape(len(x), int(np.prod(x.shape[1:]))).astype(np.int8), None]
