@@ -22,8 +22,9 @@ The one-stage verifier fills the salt, the positions and the roots itself, so th
 docstring, `sampled_proofs.one_stage.registered.supplied_rows`).
 
 **J10-R**, a second noise form beside the
-one above, which no unit takes by default (`h1tile.PouwH1Tile5`, `h1tile.PouwH1Tile6`): one noise seed a call, one stream
-per call row and per call column, and σ_R still the unit's own.
+one above, which no unit takes by default (`h1tile.PouwH1Tile5`, `h1tile.PouwH1Tile6`, and under J10-R v2's longer
+column streams `h1tile.PouwH1Tile7`, `h1tile.PouwH1Tile8`): one noise seed a call, one stream per call row and per call
+column, and σ_R still the unit's own.
 
     seed_c  = SHA-512(u64(c) ‖ (CALL_SEED_TAG ‖ salt ‖ root(A) ‖ root(B)) ⊕ u64(c)*)       `PouwCallSeeds`, with σ_R
     block_t = SHA-512(NOISE_TAG ‖ seed_c ‖ u64(t))                                          `PouwNoiseBlock`, t from `PouwAdd64`

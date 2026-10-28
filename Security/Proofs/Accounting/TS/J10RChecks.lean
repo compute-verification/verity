@@ -11,6 +11,9 @@ import Definitions.Accounting.TS.J10R
   `(5i + 1) mod 256` (B), evaluated by the kernel. `test_j10r_lean_vectors.py` recomputes each.
 - `layout_4096` … `prefill_k14336`: RB and CB, today's 612 compressions a unit at a warp and `K = 4096`, and J10-R's over a
   call at decode (32 × 4096: 41,506 over 128 units, 324.27 a unit) and prefill.
+- J10-R v2: `j10r_rows_v2`, `j10r_cols_v2` as above; `unitBlocksV2_vec`, `rowV2_vec`, `colV2_vec` against
+  `h1tile.py` at `v = 2` on the same unit (its column's `U` bytes 0..7 and 32..39, which v1 would repeat); `layout_v2_2048`
+  and `calls_1b_v2`, the blocks of the 1B window's K-2048 calls under both versions.
 -/
 
 namespace Accounting.TS.J10RChecks
@@ -78,5 +81,45 @@ theorem prefill_4096 : callCompressionsNum 256 4096 4096 32 32 = 73986 ∧ units
 
 theorem prefill_k14336 : rb 14336 = 29 ∧ cb 14336 = 29 ∧ unitCompressions ⟨32, 32, 14336⟩ = 1892 ∧
     callCompressionsNum 256 4096 14336 32 32 = 161026 := by decide +kernel
+
+/-! ## J10-R v2 -/
+
+theorem unit_row_is_call_row_v2 (s : List ℕ) (M N k R C I J i : ℕ) :
+    rowAtV2 s k ((unitBlocksV2 M k R C I J).1 + i * rbV2 k) = rowAtV2 s k ((Layout.mk M N k).rowV2 (R * I + i)) := by
+  simp only [unitBlocksV2, Layout.rowV2, Nat.add_mul]
+
+theorem unit_col_is_call_col_v2 (s : List ℕ) (M N k R C I J j : ℕ) :
+    colAtV2 s k ((unitBlocksV2 M k R C I J).2 + j * cbV2 k) = colAtV2 s k ((Layout.mk M N k).colV2 (C * J + j)) := by
+  simp only [unitBlocksV2, Layout.colV2, Nat.add_mul, Nat.add_assoc]
+
+/-- A unit's rows under v2 are the call-scale rows `R I .. R I + R - 1`. -/
+theorem j10r_rows_v2 (s : List ℕ) (M N k R C I J : ℕ) :
+    (j10rNoiseV2 s ⟨R, C, k⟩ (unitBlocksV2 M k R C I J)).1 =
+      (List.range R).map fun i => rowAtV2 s k ((Layout.mk M N k).rowV2 (R * I + i)) := by
+  unfold j10rNoiseV2
+  exact List.map_congr_left fun i _ => unit_row_is_call_row_v2 s M N k R C I J i
+
+/-- A unit's columns under v2 are the call-scale columns `C J .. C J + C - 1`. -/
+theorem j10r_cols_v2 (s : List ℕ) (M N k R C I J : ℕ) :
+    (j10rNoiseV2 s ⟨R, C, k⟩ (unitBlocksV2 M k R C I J)).2 =
+      (List.range C).map fun j => colAtV2 s k ((Layout.mk M N k).colV2 (C * J + j)) := by
+  unfold j10rNoiseV2
+  exact List.map_congr_left fun j _ => unit_col_is_call_col_v2 s M N k R C I J j
+
+theorem unitBlocksV2_vec : unitBlocksV2 8 64 4 8 1 2 = (4, 40) := by decide +kernel
+
+theorem rowV2_vec : ((unitNoiseV2 vSalt vRootA vRootB 40 ⟨4, 8, 64⟩ (4, 40)).1.take 1).map (fun r => (value (r.1.take 32), r.2.map value)) = [(3463785772, [])] := by decide +kernel
+
+theorem colV2_vec : (((unitNoiseV2 vSalt vRootA vRootB 40 ⟨4, 8, 64⟩ (4, 40)).2.drop 3).take 1).map (fun c => (value (c.1.take 32), c.2.take 8, (c.2.drop 32).take 8)) = [(3673357489, [209, 235, 216, 18, 45, 58, 27, 217], [235, 48, 18, 194, 52, 13, 245, 206])] := by decide +kernel
+
+/-- At `K = 2048` a v2 column takes 36 blocks against v1's 5, a row 4 against 5: the 1B window's K-2048 calls at a
+512-row slot (qkv 3072, o 2048, gate_up 16384 columns) take 94,720, 62,976 and 507,392 more blocks a call. -/
+theorem layout_v2_2048 : rbV2 2048 = 4 ∧ cbV2 2048 = 36 ∧ rb 2048 = 5 ∧ cb 2048 = 5 ∧
+    (Layout.mk 32 32 2048).blocksV2 = 1280 := by decide +kernel
+
+theorem calls_1b_v2 : callCompressionsNumV2 512 3072 2048 32 32 = 164866 ∧ callCompressionsNum 512 3072 2048 32 32 = 70146 ∧
+    callCompressionsNumV2 512 2048 2048 32 32 = 110594 ∧ callCompressionsNum 512 2048 2048 32 32 = 47618 ∧
+    callCompressionsNumV2 512 16384 2048 32 32 = 870402 ∧ callCompressionsNum 512 16384 2048 32 32 = 363010 := by
+  decide +kernel
 
 end Accounting.TS.J10RChecks

@@ -27,6 +27,8 @@ scheme replaces.
 - `unitCompressions L`: SHA-512 compressions today's unit takes (its blocks, a key block a lane, two seeds of two each).
   `callCompressionsNum M N k R C` is J10-R's over the call's `units M N R C` units when each block is derived once a
   call: the call's blocks and seed_c's two, and each unit's σ_R (two) and its lanes' key blocks.
+- J10-R v2 (`…V2`, the units `PouwH1Tile_v7` and `_v8`): `U` fresh at every entry of `K`, a column's `k` bytes of it
+  after its coin bits (`colBitsV2 k = 9 k`), and a row's noise its dither bits alone (`rowBitsV2 k = k`); the rest is v1's.
 -/
 
 namespace Accounting.TS.J10R
@@ -169,5 +171,66 @@ def units (M N R C : ℕ) : ℕ := M / R * (N / C)
 seed_c's two, and each unit's σ_R (two) and its lanes' key blocks. A unit's share is this over `units M N R C`. -/
 def callCompressionsNum (M N k R C : ℕ) : ℕ :=
   (Layout.mk M N k).blocks + 2 + units M N R C * (2 + (Layout.mk R C k).lanes)
+
+/-! ## J10-R v2: `U` fresh at every entry of `K`
+
+Noise version 2 (`h1tile.Layout` at `v = 2`; the units `PouwH1Tile_v7` and `_v8`): a column's stream is its `k` coin bits
+then `k` bytes of `U`, entry `t` reading byte `t` (v1 draws 32 and reads byte `t % 32`), and a row's is its `k` dither
+bits alone: `X Uᵀ` has no fold, so there are no digits to coin. Seeds, block counters and fold keys are v1's. -/
+
+/-- A row's noise bits under v2: its `k` dither bits. -/
+def rowBitsV2 (k : ℕ) : ℕ := k
+
+/-- A column's noise bits under v2: `k` coin bits, then `U`'s `k` bytes. -/
+def colBitsV2 (k : ℕ) : ℕ := k + 8 * k
+
+/-- A row's blocks under v2. -/
+def rbV2 (k : ℕ) : ℕ := (rowBitsV2 k + 511) / 512
+
+/-- A column's blocks under v2. -/
+def cbV2 (k : ℕ) : ℕ := (colBitsV2 k + 511) / 512
+
+/-- A row's noise under v2 from block `first` of `s`'s stream: (its `k` dither bits, no digit coins). -/
+def rowAtV2 (s : List ℕ) (k first : ℕ) : List ℕ × List (List ℕ) := (stream s first (rowBitsV2 k), [])
+
+/-- A column's noise under v2 from block `first`: (its `k` coin bits, `U`'s `k` int8 codes, one an entry of `K`). -/
+def colAtV2 (s : List ℕ) (k first : ℕ) : List ℕ × List ℕ :=
+  let z := stream s first (colBitsV2 k)
+  (z.take k, (List.range k).map fun t => u129 (value ((z.drop (k + 8 * t)).take 8)))
+
+namespace Layout
+
+/-- Row `i`'s first block under v2. -/
+def rowV2 (L : Layout) (i : ℕ) : ℕ := i * rbV2 L.k
+
+/-- Column `j`'s first block under v2, after every row's. -/
+def colV2 (L : Layout) (j : ℕ) : ℕ := L.r * rbV2 L.k + j * cbV2 L.k
+
+/-- The noise blocks under v2: the rows' and the columns'. -/
+def blocksV2 (L : Layout) : ℕ := L.r * rbV2 L.k + L.c * cbV2 L.k
+
+end Layout
+
+/-- The noise of layout `L` from seed `s` under v2, rows then columns: at a call's layout, the call-scale noise. -/
+def noiseV2 (s : List ℕ) (L : Layout) : List (List ℕ × List (List ℕ)) × List (List ℕ × List ℕ) :=
+  ((List.range L.r).map fun i => rowAtV2 s L.k (L.rowV2 i), (List.range L.c).map fun j => colAtV2 s L.k (L.colV2 j))
+
+/-- Unit `(I, J)`'s public block bases under v2 (`h1tile.j10r_blocks` at `v = 2`). -/
+def unitBlocksV2 (M k R C I J : ℕ) : ℕ × ℕ := ((Layout.mk M C k).rowV2 (R * I), (Layout.mk M C k).colV2 (C * J))
+
+/-- A unit's noise under v2 from seed `s` at bases `b`: row `i` from block `b.1 + i RB`, column `j` from `b.2 + j CB`. -/
+def j10rNoiseV2 (s : List ℕ) (L : Layout) (b : ℕ × ℕ) : List (List ℕ × List (List ℕ)) × List (List ℕ × List ℕ) :=
+  ((List.range L.r).map fun i => rowAtV2 s L.k (b.1 + i * rbV2 L.k),
+    (List.range L.c).map fun j => colAtV2 s L.k (b.2 + j * cbV2 L.k))
+
+/-- **A unit's noise under J10-R v2**: seed_c of its call (first unit at `call`) at its bases `b`. -/
+def unitNoiseV2 (salt rootA rootB : List ℕ) (call : ℕ) (L : Layout) (b : ℕ × ℕ) :
+    List (List ℕ × List (List ℕ)) × List (List ℕ × List ℕ) :=
+  j10rNoiseV2 (callSeed salt call rootA rootB) L b
+
+/-- `callCompressionsNum` under v2: the call's v2 blocks and seed_c's two, and each unit's σ_R (two) and its lanes' key
+blocks. -/
+def callCompressionsNumV2 (M N k R C : ℕ) : ℕ :=
+  (Layout.mk M N k).blocksV2 + 2 + units M N R C * (2 + (Layout.mk R C k).lanes)
 
 end Accounting.TS.J10R

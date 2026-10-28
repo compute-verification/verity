@@ -12,7 +12,9 @@ def _pouw_roots() -> list[Any]:
     `PouwWrapBits`, then two `PouwPeelSeg` of its row's X, dither bits and `PouwXWrap` bits and its column's B and coin bits;
     v4: v3, then three `PouwOrBit` over its 4 admit bits and a `PouwMask32` of each of its 8 receipt words by their OR), and
     J10-R's `PouwH1Tile_v5` and `PouwH1Tile_v6`, v1 and v3 with seed_c and σ_R from one `PouwCallSeeds` and each of the 12
-    noise blocks' counter a `PouwAdd64` of its ``blocks`` base. They
+    noise blocks' counter a `PouwAdd64` of its ``blocks`` base, and J10-R v2's `PouwH1Tile_v7` and `PouwH1Tile_v8`, v5
+    and v6 under noise version 2: 20 noise blocks (a column's two, its 64 bytes of U), three sets (O' over both
+    segments, no digit), z v8's O' with no recombination. They
     grow linearly in lanes and in KS. None where `circuit.segment` (E2E-120) is not on the tree, which is where `PouwH1Tile`
     is registered. `PouwU129`, the one-stream recombinations, the wrap pieces, the peel pieces, `PouwOrBit` and `PouwMask32`
     are catalog roots (primitives and static-free composites). Then `TemplateInstances_v1` of `PouwH1Tile_v1` at N = 2
@@ -28,5 +30,6 @@ def _pouw_roots() -> list[Any]:
     exact = bind(BG.GemmAccumulatorS8, K=64, **BG.GEMM_SM120_S8)
     pairs = tuple((i, j) for i in range(4) for j in range(8))
     tiles = [bind(d, EXACT=exact, R=4, C=8, PAIRS=pairs)
-             for d in (H.PouwH1Tile, H.PouwH1Tile3, H.PouwH1Tile4, H.PouwH1Tile5, H.PouwH1Tile6)]
+             for d in (H.PouwH1Tile, H.PouwH1Tile3, H.PouwH1Tile4, H.PouwH1Tile5, H.PouwH1Tile6, H.PouwH1Tile7,
+                       H.PouwH1Tile8)]
     return [*tiles, population_program(tiles[0], 2).fn]
