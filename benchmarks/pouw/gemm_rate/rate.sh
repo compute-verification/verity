@@ -2,7 +2,7 @@
 # int8 GEMMs' MACs per SM clock on the H200, against 4,096, in sustained windows on uniform operands (cwd: the root of a
 # source tree whose accel_v31 fill-bench has the V31_GEN and V31_WINDOW_* knobs), under `research run`:
 #
-#   research run --on vy-dc-h200-3 --project verity --campaign CAMPAIGN --source . --cwd source --timeout 60m \
+#   research run --on MACHINE --project verity --campaign CAMPAIGN --source . --cwd source --timeout 60m \
 #     --env GPU_LEASE_WHO=LANE -- bash benchmarks/pouw/gemm_rate/rate.sh
 #
 # Outside the lease: v31.cu's H200 build (and one a VARIANTS entry whose knobs need their own), stamp.cu's cubin,

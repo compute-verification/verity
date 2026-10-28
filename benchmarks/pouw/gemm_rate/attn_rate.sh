@@ -2,7 +2,7 @@
 # Prefill attention's MACs per SM clock on the H200 against bf16's 2,048, with the served int8 linears beside it
 # (attn_rate.py), under `research run` (cwd: the root of a source tree):
 #
-#   research run --on vy-dc-h200-3 --project verity --campaign CAMPAIGN --source . --cwd source --timeout 90m \
+#   research run --on MACHINE --project verity --campaign CAMPAIGN --source . --cwd source --timeout 90m \
 #     --env GPU_LEASE_WHO=LANE -- bash benchmarks/pouw/gemm_rate/attn_rate.sh
 #
 # Outside the lease: stamp.cu's cubin and attn_bf16's (build.sh, CUBIN_ONLY), and, unless PY names a Python with the served
