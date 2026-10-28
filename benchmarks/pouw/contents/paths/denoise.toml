@@ -1,0 +1,4 @@
+order = 367
+path = "`denoise/`"
+runs_on = "H200"
+what = "The honest Dither call's noise costs beside cuBLASLt's plain int8 GEMM, on accel_v31's kernels: the coins, X and W′, the noised GEMM, the periodic de-noise at L′ 32, 128 and 512 (as more K, unfused, Z_X and the wrap correction), T_s through a library GEMM, and fresh noise's plain recompute; Llama-3.2-1B's linears at m 64, 512 and 8,192 (`denoise.cu`, `table.py`), and v31's own fused peel beside it (`v31_peel.sh`)"
