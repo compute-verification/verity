@@ -404,17 +404,24 @@ class DriveFlags:
     stale_keep: tuple[int, ...] = ()
 
     @classmethod
-    def parse(cls, text: str, source: str = "drive.toml") -> "DriveFlags":
+    def parse(cls, text: str, source: str = "drive.toml", strict: bool = False) -> "DriveFlags":
+        """``text``'s flags. ``strict`` (drive loading its own flags): any key this code doesn't read refuses, so a drive that
+        lags `main` stops rather than run without a guard `main` added. Otherwise (a client reading `main`'s flags) such a
+        key is ignored with a note, so a client older than `main` keeps working; `tests/test_drive_toml.py` holds `main`'s
+        drive.toml to the strict parse, which is where a typo is caught."""
         try:
             doc = tomllib.loads(text)
         except tomllib.TOMLDecodeError as e:
             raise QueueError(f"{source}: not TOML: {e}") from None
         keys = [f.name for f in dataclasses.fields(cls)]
-        for k in doc:
+        for k in list(doc):
             if k not in keys:
                 near = difflib.get_close_matches(k, keys, n=1)
-                raise QueueError(f"{source}: unknown key {k!r}{f' (did you mean {near[0]!r}?)' if near else ''}: drive reads "
-                                 f"only {', '.join(keys)}; rename or remove it")
+                if strict:
+                    raise QueueError(f"{source}: unknown key {k!r}{f' (did you mean {near[0]!r}?)' if near else ''}: drive "
+                                     f"reads only {', '.join(keys)}; rename or remove it, or update this research")
+                print(f"{source}: ignoring key {k!r}, which this research doesn't read (a newer one may)", file=sys.stderr)
+                del doc[k]
 
         def bad(k: str, want: str) -> QueueError:
             return QueueError(f"{source}: {k} = {doc[k]!r}: {want}")
@@ -496,7 +503,7 @@ def drive_flags(path: str, clone: Path | None) -> tuple[DriveFlags, str]:
     (`--config-from-tree`); with where they came from."""
     if clone is None:
         try:
-            return DriveFlags.parse(Path(path).read_text(), path), path
+            return DriveFlags.parse(Path(path).read_text(), path, strict=True), path
         except OSError as e:
             raise QueueError(f"--config {path}: {e.strerror}") from None
     if Path(path).is_absolute() or path.startswith(".."):
@@ -506,7 +513,7 @@ def drive_flags(path: str, clone: Path | None) -> tuple[DriveFlags, str]:
     if r.returncode:
         raise QueueError(f"--config {path}: `main` ({sha[:12]}) has no such file: land it first, or pass --config-from-tree")
     where = f"{path} at main {sha[:12]}"
-    return DriveFlags.parse(r.stdout, where), where
+    return DriveFlags.parse(r.stdout, where, strict=True), where
 
 
 #: how long a landing gate may run before it counts as unable to judge (`run_gate`)
