@@ -244,7 +244,11 @@ from verity.core.protocols.sampled_proofs.costfit import fit
   `Commitment`s, replay) and an `Objective` (harm per proof block at δ), `frontier` is the certified Pareto frontier of total
   cost against harm. `for_budget` and `for_target` query it, `weigh` weights weight classes, `overlaps` prices repeated
   commitments, `certify` recomputes a plan's `Certificate`, `sensitivity` and `needs_benchmark` name what moves it,
-  and `work_law` registers it as `work:1`.
+  and `work_law` registers it as `work:1`. Two modes: `CostModel.commit_weight` is 0 (`PROVING_ONLY`, Lean's
+  `GranularityOptimum`) or w on the serve-time commitment, paid on every proof block, drawn or not. `Grain`,
+  `grain_costs` and `grain_optimum` price n equal proof blocks under the free-compute law (`Achievability`) or the
+  exfiltration law (`ExfiltrationOptimum`, `leak_count`, `loc_bits`) with the commitment term n·b·h, and `sqrt_grain`
+  is the work target's optimum √(wβhC/(oΛ)).
 - `candidates`: `cuts` derives the `Candidate`s from a Definition DAG of `Shape`s by a DP, each proof block's outputs
   in a public size class (`one_stage.partition.unit_class`); `pressure` gives the developer hints.
 - `costfit`: C-Flock's cost model fitted from measurements, as a cost-model/v1 record.
