@@ -1,5 +1,5 @@
 """The streamed wipe as two parties of the deployment layer (`verity.core.deploy`): the memory challenger
-(`Challenger`) and the prover (`Prover`), the protocol `wipe_party` speaks as a byte stream, in messages.
+(`MemoryChallengerParty`) and the prover (`Prover`), the protocol `wipe_party` speaks as a byte stream, in messages.
 
 ~~~text
 memory-challenger -> prover   Fill {first, count} + labels (private) ... FillDone; then per batch Read {indices} (coins); End
@@ -59,7 +59,7 @@ def _read() -> Send:
     return Send("clock", Message("ClockRead"))
 
 
-class Challenger:
+class MemoryChallengerParty:
     """The memory challenger: one wipe, on its clock and coins (module docstring). `chunk` labels a fill frame."""
 
     def __init__(self, chunk: int = WP.CHUNK) -> None:
@@ -199,7 +199,7 @@ class Prover:
         return [Finish({"answered": self.answered})]
 
 
-PROTOCOL = ProtocolDef(MANIFEST, {CHALLENGER: Challenger, PROVER: Prover})
+PROTOCOL = ProtocolDef(MANIFEST, {CHALLENGER: MemoryChallengerParty, PROVER: Prover})
 
 
-__all__ = ["CHALLENGER", "ID", "MANIFEST", "PROTOCOL", "PROVER", "VERSION", "WINDOW", "Challenger", "Prover"]
+__all__ = ["CHALLENGER", "ID", "MANIFEST", "PROTOCOL", "PROVER", "VERSION", "WINDOW", "MemoryChallengerParty", "Prover"]

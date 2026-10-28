@@ -82,7 +82,7 @@ def challenger_caps(secret: bytes, params: sw.WipeParams) -> dict:
 def wipe(params: sw.WipeParams, secret: bytes, *, mode: str = "live", chunk: int = WP.CHUNK, store=sw.Prover,
          prover=WPS.Prover, state=None, request=None):
     caps = {C: challenger_caps(secret, params), P: {"store": store}}
-    protocol = ProtocolDef(WPS.MANIFEST, {C: lambda: WPS.Challenger(chunk), P: prover})
+    protocol = ProtocolDef(WPS.MANIFEST, {C: lambda: WPS.MemoryChallengerParty(chunk), P: prover})
     given = {} if mode == "simulated" else {
         "sources": {C: {"clock": S.VirtualClock(S.VirtualTime(T0), STEP), "coins": S.SeededCoins(SEED)}}}
     return run({"protocol": WPS.ID, "params": request or WP.request_of("n0", params)}, BOTH, mode, state,
@@ -159,7 +159,7 @@ def test_large_fill_frames_are_kept_as_digests_and_the_challenger_replays(tmp_pa
     assert [(e.elided, len(e.data)) for e in fills] == [(True, 64), (True, 64)]
     assert all(e.kind != "private" for e in t.public())
     caps = {C: challenger_caps(b"replay", params)}
-    protocol = ProtocolDef(WPS.MANIFEST, {C: lambda: WPS.Challenger(1 << 11), P: WPS.Prover})
+    protocol = ProtocolDef(WPS.MANIFEST, {C: lambda: WPS.MemoryChallengerParty(1 << 11), P: WPS.Prover})
     again = run({"protocol": WPS.ID, "params": WP.request_of("n0", params)}, [C], "replay", None,
                 protocols={WPS.ID: protocol}, capabilities=caps, replay_dir=tmp_path / "runs/1")
     assert (again.status, again.divergence) == ("completed", None)
