@@ -31,3 +31,6 @@ main moved to d40fe21d26. #5610 and #5722 are refused on a comment-line conflict
 
 ## 17:31Z
 Post Linear comments only with `research msg linear comment ISSUE "text" --as soundness`, never the Linear MCP connector. The connector posts as Daniel.
+
+## 17:36Z
+lean on reads_exempt: keep the exemption of CoreComposition.Blobs and CoreProtocol.Blobs in #5233 now. Its reason must name the follow-up: "after V3, soundness moves Blobs into the composition and interface locks' spec layers, once what CoreProtocol.Blobs needs leaves CoreProtocol.Cli (not spec); lean reviews". Then mark as planned.
