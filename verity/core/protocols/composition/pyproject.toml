@@ -36,4 +36,7 @@ inputs = ["verity/__init__.py", "verity/errors.py", "verity/ml", "verity/core/__
           "verity/core/protocols/pous", "verity/core/protocols/remote_bandwidth",
           "verity/core/devices/memory_challenger/lean",
           "verity/core/service/sampled_proofs", "verity/core/service/flock", "verity/core/primitives/lms/lean",
-          "verity/core/primitives/identity", "verity/core/primitives/randomness"]
+          "verity/core/primitives/identity", "verity/core/primitives/randomness",
+          # the deployment layer and its wire, which space's and bandwidth's challenger-host sides are started through
+          # (`deploy.stream.Side`)
+          "verity/core/deploy", "verity/core/wire"]
