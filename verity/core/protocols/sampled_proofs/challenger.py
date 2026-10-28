@@ -80,9 +80,9 @@ more entries, its `period-open` and `period-close`:
     end     = body {closed, files, record_leaf, commitment, refused_hellos, complete, ...}    files: each file's SHA-512
     period  = body {period, lane, ...} (session null); a close lists its windows as {root, session, complete}, root
               null for a reserve never opened
-    message = SHA-512([LEDGER_ROLE] || I || [identity_digest_sha512(LEDGER_TAGS[schema], entry without sig)])
+    message = SHA-512([LEDGER_ROLE] || I || [tagged_sha512(LEDGER_TAGS[schema], ledger_text(entry without sig))])
 
-each line as the auditor writes it (`ledger_text`).  The window is `{root}`, the served Commit's root, its prover the
+each line as the auditor writes it (`ledger_text`, every character past ASCII escaped).  The window is `{root}`, the served Commit's root, its prover the
 open's `for`, else its `by` (`lane_of`).  The verifier pins the challenger key from outside the ledger (the window's
 deployment; `key_of_record` reads the operator's published pin), and refuses any open or period-open naming another
 key's
@@ -152,7 +152,7 @@ from verity.core import claims
 from verity.ml.commitments import (Commitment, CommitmentDomain, MerkleTree, Opening, RangeIndexedDomain,
                                    VerificationLimits, verify_opening)
 from verity.ml.commitments import hm96
-from verity.ml.commitments.identity import canonical_json_text, identity_digest_sha512
+from verity.ml.commitments.identity import canonical_json_text, identity_digest_sha512, tagged_sha512
 
 BINDING = "verity/challenger/coins/v1"
 COIN_BYTES = 64
@@ -721,17 +721,30 @@ def _window(doc: Any) -> bool:
     return isinstance(doc, dict) and sorted(doc) == ["root"] and _digest_hex(doc["root"])
 
 
+def _hexed(v: Any) -> Any:
+    """`v` with every string, keys included, as its UTF-8 in hex: what `canonical_json_text` takes to check `v`'s numbers
+    and keys alone, since a string past ASCII is canonical as the ledger writes it, escaped."""
+    if isinstance(v, str):
+        return v.encode().hex()
+    if isinstance(v, dict):
+        return {_hexed(k): _hexed(x) for k, x in v.items()}
+    return [_hexed(x) for x in v] if isinstance(v, (list, tuple)) else v
+
+
 def ledger_message(I: bytes, entry: dict) -> bytes:
-    """What an entry's `sig` signs: SHA-512([ROLE] || I || [identity_digest_sha512(TAG, entry without sig)]), each [x] x
+    """What an entry's `sig` signs: SHA-512([ROLE] || I || [tagged_sha512(TAG, ledger_text(entry without sig))]), each [x] x
     prefixed with its length (u64), as `challenger.record_message` frames the challenger's record under its own role; TAG is
-    the entry's schema's (`TAGS`)."""
+    the entry's schema's (`TAGS`). The text is canonical JSON with every character past ASCII escaped, the bytes of the
+    entry's own line, so an entry whose strings are ASCII signs `identity_digest_sha512(TAG, entry without sig)`."""
     if len(I) != 16:
         raise ValueError(f"an LMS identifier is 16 bytes, not {len(I)}")
     tag = LEDGER_TAGS.get(entry.get("schema"))
     if tag is None:
         raise ValueError(f"schema {entry.get('schema')!r} is none of {sorted(LEDGER_TAGS)}")
     body = {k: v for k, v in entry.items() if k != "sig"}
-    return hashlib.sha512(_field(LEDGER_ROLE.encode()) + I + _field(identity_digest_sha512(tag, body))).digest()
+    canonical_json_text(_hexed(body))
+    digest = tagged_sha512(tag, ledger_text(body).encode())
+    return hashlib.sha512(_field(LEDGER_ROLE.encode()) + I + _field(digest)).digest()
 
 
 def leaf_of(sig: Any) -> int:
@@ -983,7 +996,7 @@ def _ledger_entry(line: Any) -> dict | None:
         e = json.loads(line) if type(line) is str and len(line) <= MAX_LEDGER_LINE else None
         if e is None or ledger_text(e) != line or any(f"\\ud{c}" in line for c in "89abcdef"):
             return None
-        canonical_json_text(e).encode()
+        canonical_json_text(_hexed(e))
     except (ValueError, TypeError, RecursionError):
         return None
     if not (isinstance(e, dict) and sorted(e) == ["body", "kind", "prev", "schema", "seq", "session", "sig"]
