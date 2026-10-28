@@ -1,7 +1,7 @@
 """Where the H1 unit's flat lowering holds its memory, at one shape: each phase's peak RSS and wall time, a census of the
 live objects by type, and (with ``--frames``) the allocation sites holding the bytes, at the two points the peak can be.
 
-    python profile.py --k K --tile R,C --scratch DIR --out DIR [--frames N]
+    python mem_profile.py --k K --tile R,C --scratch DIR --out DIR [--frames N]
 
 It runs `pouw_h1_circuits._lower`'s build in this process, `fast_stage` installed as `run.py`'s child installs it, with
 `PHASES` wrapped. A phase's peak is the process's VmHWM over the phase, reset at each phase's start (``/proc/self/clear_refs``),
