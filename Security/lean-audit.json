@@ -2010,6 +2010,9 @@
    "owner": "@compute-research",
    "digest": "9970d9795fc5080b384ca0a894a62c36113f13acf26cfa0dafbdd94f9ca82be9"
   },
+  "Verity.Assumptions.DeviceWithinDeclaration": {
+   "owner": "@soundness"
+  },
   "Verity.Assumptions.GemmAmpereStep": {
    "owner": "@proofs",
    "digest": "02e4cb87864bcee487dafdb2047e70b7e521b0c0e9d0d8cb824ff3854abe00e1"
@@ -10979,6 +10982,9 @@
    "signature": ["Verity.SecurityProofs.AmpereUnitSoundZero : Verity.Guarantees.AmpereUnitSoundZero"],
    "assumptions": [],
    "type_hash": "cf6ae741ac5e875201f2ca2733ffda1969bd047946b299c8af7546edd595eaf8"
+  },
+  "Verity.SecurityProofs.CapacityWithinEstimate": {
+   "owner": "@soundness"
   },
   "Verity.SecurityProofs.Compose": {
    "owner": "@proofs",
