@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
-# EPS1's clock and power run on the L40S (sm_89): probes/power.cu built for sm_89 and gated, then under one gpu-lease
+# The clock and power run on the L40S (sm_89): probes/power.cu built for sm_89 and gated, then under one gpu-lease
 # the GPU's clocks reset to the defaults (sudo nvidia-smi -rgc) and every kernel sustained at the power limit as found,
 # then at the board's default power limit (sudo nvidia-smi -pl, the found limit restored on exit). From a pushed commit:
 #
-#   research run --on vy-dc-l40s --project verity --campaign cmp-13 --source <tree> --cwd source --custody-ttl 12h \
-#     --timeout 40m --env GPU_LEASE_WHO=<lane> -- bash benchmarks/pouw/opcode_probe/sm89/clock.sh
+#   research run --on vy-dc-l40s --project verity --source <tree> --cwd source --custody-ttl 12h \
+#     --timeout 40m --env GPU_LEASE_WHO=LANE -- bash benchmarks/pouw/opcode_probe/sm89/clock.sh
 #
 # $OUT gets sustain.jsonl (a line a launch, `phase` found or default-pl), smi_trace.csv (nvidia-smi every 100 ms),
 # phases.jsonl, the nvidia-smi -q snapshots and clock.txt (eps1.py clock). POWER_SECS (20) is each kernel's time.

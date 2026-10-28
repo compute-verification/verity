@@ -1,8 +1,7 @@
-# VF2: VF with the uniform datapath priced as a kind of its own and JI refitted on ISSUE round 3 (§13).
+# VF2: VF with the uniform datapath priced as a kind of its own and JI refitted on the measured issue rows.
 name = "VF2"
 epoch = "VF2"
-summary = "VF with the uniform datapath priced as a kind of its own and JI refitted on ISSUE round 3 (§13)."
-note = "note:20261016T0354Z-draft-issue-ceiling-r3"
+summary = "VF with the uniform datapath priced as a kind of its own and JI refitted on the measured issue rows."
 rows = [
     "issue", "M", "R1", "F", "VMNX", "H", "I", "A",
     "F2FS", "XU", "R6r", "LDSi", "R6w", "LDG", "L2red", "JI3_0",
@@ -18,7 +17,7 @@ credits = [
     ["UNI", 32],
 ]
 
-[published]  # as the legacy scripts printed them: τ, τ at 600 W and U/F_low to 4 places, the margin to 3
+[published]  # as the legacy scripts printed them: τ and U/F_low to 4 places, the margin to 3
 tau = 0.2447
 uf_low = 1.0938
 margin = 1.935
