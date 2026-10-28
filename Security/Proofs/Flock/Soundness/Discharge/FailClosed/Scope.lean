@@ -85,21 +85,24 @@ theorem portReadsB_eq (net : Net) : ProvedScope.portReadsB net = Layout.portRead
 
 /-- **The executable's `scopeOk` is `Layout.scopeOk`.** -/
 theorem scopeOk_eq (c : Circuit) : ProvedScope.scopeOk c = Layout.scopeOk c := by
-  simp only [ProvedScope.scopeOk, Layout.scopeOk, portReadsB_eq, ProvedScope.v1Ports, Layout.v1Ports]
+  simp only [ProvedScope.scopeOk, Layout.scopeOk, portReadsB_eq, ProvedScope.v1Ports, Layout.v1Ports,
+    ProvedScope.v1Rows, Layout.v1Rows, ProvedScope.unpinned, Layout.unpinned]
 
 /-- **The executable's `scopeOkH` is `Layout.scopeOkH`.** -/
 theorem scopeOkH_eq (c : Circuit) : ProvedScope.scopeOkH c = Layout.scopeOkH c := by
   have e : ProvedScope.v2Row = Layout.v2Row := rfl
   have e' : ProvedScope.segRow = Layout.segRow := rfl
   simp only [ProvedScope.scopeOkH, Layout.scopeOkH, portReadsB_eq, ProvedScope.v1Ports, Layout.v1Ports,
-    ProvedScope.bitRows, Layout.bitRows, e, e']
+    ProvedScope.v1Rows, Layout.v1Rows, ProvedScope.unpinned, Layout.unpinned,
+    ProvedScope.bitRows, Layout.bitRows, ProvedScope.bitRowsU, Layout.bitRowsU, e, e']
 
 /-- **The executable's `scopeOkI` is `Layout.scopeOkI`.** -/
 theorem scopeOkI_eq (c : Circuit) : ProvedScope.scopeOkI c = Layout.scopeOkI c := by
   have e : ProvedScope.v2Row = Layout.v2Row := rfl
   have e' : ProvedScope.segRow = Layout.segRow := rfl
   simp only [ProvedScope.scopeOkI, Layout.scopeOkI, portReadsB_eq, ProvedScope.v1Ports, Layout.v1Ports,
-    ProvedScope.bitRows, Layout.bitRows, e, e']
+    ProvedScope.v1Rows, Layout.v1Rows, ProvedScope.unpinned, Layout.unpinned,
+    ProvedScope.bitRows, Layout.bitRows, ProvedScope.bitRowsU, Layout.bitRowsU, e, e']
 
 /-! ## The check, and what it gives -/
 
