@@ -12,7 +12,9 @@ a proof.
   warp of every SM, so an instruction peak rather than a GEMM; a cuBLASLt NVFP4 GEMM is attempted beside it.
 
 Each size runs warm-up GEMMs, then a sustained phase so that clocks and power settle (sampled by `nvidia-smi`), then timed
-repetitions; the rate is 2n³ over their median. A sub-block of every timed product is checked against an FP32 reference.
+repetitions; the rate is 2n³ over their median. For `bf16` and `e4m3` a sub-block of every timed product is checked against
+an FP32 reference. `nvfp4`'s check compares no reference (determinism + SASS only): its outputs are finite and bit-identical
+across two launches and the kernel's SASS holds the expected E2M1 MMAs, and it records `max_rel_err` and `tolerance` as null.
 
 On a CUDA machine with this package's `torch` extra (and nvcc for `nvfp4`), from the repository root:
 
