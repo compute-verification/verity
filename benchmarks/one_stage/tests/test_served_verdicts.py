@@ -9,11 +9,10 @@ development piece checks the window's gate session and credits nothing, and the 
 open. The period the served windows join opens, through infra's own gate, on the Program serve-openai declared and
 the circuit files built for it, as core's credit reads them, and is refused on files of anything else.
 `served_verdicts.sh`'s window circuits gate on every class of CLASSES, and the class of record's count after them
-gates nothing; its endpoint gets one token budget, T, with or without H1. Its preflight refuses a flag the tree's
-certifier front doesn't take, a front whose endpoint isn't on the warden's id form, and a front load with no front; its
-composite step publishes each case's and each product's verdict lines and nothing else. Its load,
-`serve_load.py --varied`, writes each request's send, first-token and done times beside its
-record, on an injected clock and a stand-in endpoint."""
+gates nothing; its endpoint gets one token budget, T, with or without H1. Its preflight refuses a flag the tree's certifier
+front doesn't take, a front whose endpoint isn't on the warden's id form, and a front load with no front; its composite
+step publishes each case's and each product's verdict lines and nothing else. Its load, `serve_load.py --varied`, writes
+each request's send, first-token and done times beside its record, on an injected clock and a stand-in endpoint."""
 from __future__ import annotations
 
 import argparse
@@ -24,6 +23,7 @@ import itertools
 import json
 import os
 import shlex
+import shutil
 import subprocess
 import sys
 import tarfile
@@ -77,6 +77,43 @@ def test_the_published_window_counts_none_of_its_requests(tmp_path):
     with contextlib.redirect_stdout(out):
         assert S.main(["window", str(tmp_path), "--slots", "4"]) == 0
     assert json.loads(out.getvalue()) == S.public_pick(got, 4)
+
+
+REGISTRATION = {"schema": "verity-vllm/advice-registration/v1", "row_bits": 256, "rows": 2, "T": 600,
+                "binding": {"compiler": {"name": "c", "digest": "d"}, "advice": {"root": "ab" * 64, "bits": 392}},
+                "compiler": {"name": "c", "digest": "d", "cap_bits": 8388608}, "bits_by_window": {"0": 392, "1": 7},
+                "registered_roots": {"weights/w@16": "cd" * 64}, "requests": 3, "refused": {"q0": "2 of its 3 tokens"}}
+
+
+def test_the_published_registration_pads_the_advices_length_to_the_cap(tmp_path, capsys):
+    """The advice registration's public form states no length of the advice but its compiler's cap, counts and refuses
+    none of its requests, and keeps its roots, compiler and binding's root."""
+    got = S.public_registration(REGISTRATION)
+    assert got["binding"]["advice"] == {"root": "ab" * 64, "bits": 8388608} and got["rows"] == 32768
+    assert got["bits_by_window"] == {"0": 8388608, "1": 8388608} and got["padded"] == list(S.PADDED)
+    assert not {"requests", "compiled", "refused"} & set(got) and "392" not in json.dumps(got)
+    assert {k: got[k] for k in ("registered_roots", "compiler", "T", "schema")} == {
+        k: REGISTRATION[k] for k in ("registered_roots", "compiler", "T", "schema")}
+    (tmp_path / "r.json").write_text(json.dumps(REGISTRATION))
+    assert S.main(["public-registration", str(tmp_path / "r.json")]) == 0
+    assert json.loads(capsys.readouterr().out) == got
+
+
+def test_the_sampled_proofs_line_names_the_partition_and_its_draw_and_no_advice_length(tmp_path, capsys):
+    row = {"ok": True, "accepted": True, "draw": [0, 2], "population": 3,
+           "leak": {"advice_bits": 832, "bound": "vacuous", "other_inputs": 786432, "registered": 0}}
+    part = {"templates": ["SiluMul_v2{I=8192}"], "law": "subset:2",
+            "scope": {"op_path_prefix": "model.layers.0.mlp.", "steps": [0, 1]}}
+    line = S.sampled_line(row, part)
+    head, _, rec = line.partition(": RECORDS ")
+    assert head == "over SiluMul_v2{I=8192} at model.layers.0.mlp. steps [0, 1] (law subset:2), drawn members [0, 2] of 3"
+    assert json.loads(rec)["leak"] == {"bound": "vacuous", "other_inputs": 786432, "registered": 0} and "832" not in line
+    (tmp_path / "log").write_text("+ set -x\nRECORDS " + json.dumps(row) + "\n")
+    (tmp_path / "p.json").write_text(json.dumps(part))
+    assert S.main(["sampled-line", str(tmp_path / "log"), "--partition", str(tmp_path / "p.json")]) == 0
+    assert capsys.readouterr().out == line + "\n"
+    (tmp_path / "log").write_text("refused\n")
+    assert S.main(["sampled-line", str(tmp_path / "log")]) == 1
 
 
 def test_one_piece_runs_alone_or_all_but_it(tmp_path, capsys):
@@ -219,6 +256,23 @@ def test_an_accepted_pous_answer_says_when_its_weights_were_held_their_share_and
                              "it except with 1/100 + 2^-128)")
     assert line["reason"] == report["composed"]["reason"] == rec["composed"]["onsite"]["reason"]
     assert line["reason"].startswith("sampled proofs: accept; ")
+
+
+def test_an_accepted_certifier_answer_says_what_its_trusted_host_premise_rests_on(tmp_path):
+    """The network certifier's answer as its piece writes it when the warden ran on the gate's host and its checks, draws
+    and coins on the served node: its accept's clause says the premise is assumed and why, so the ``RECORD`` line's
+    accept isn't read as the auditor's devices having placed it."""
+    premise = ("assumed, the auditor's devices not placed: the network certifier ran on 204.12.178.84, not the prover's "
+               "vy-dc-h200, but the chain's checks and draws, the period check and their proofs' coins ran on vy-dc-h200")
+    (d := tmp_path / "certifier").mkdir()
+    (d / "answer.json").write_text(json.dumps({
+        "protocol": "verity/certifier/v0", "verdict": "accept", "reason": None, "commitment": "cd" * 64,
+        "public": {"K": 15764, "eps": "1/100", "windows": 1},
+        "profile": {"placement": {"kind": "not-placed", "trusted-host": premise}}}))
+    (d / S.RAN).write_text(json.dumps({"server": "vy-dc-h200", "rc": 0, "limit": "60m"}))
+    _report, _rec, line = S.record(_rows(_accepted(), tmp_path), window=1, steps=(5, 11), node="vy-dc-h200", run="r1",
+                                   servers={k: S.piece_server(k, tmp_path) for k in [*S.PIECES, "wipe"]})
+    assert line["reason"].split("; the network certifier: ", 1)[1].startswith(f"accept (trusted-host {premise}; ")
 
 
 def test_an_audit_that_wrote_nothing_composes_to_reject_with_no_block_record(tmp_path):
@@ -553,6 +607,9 @@ def test_the_class_of_record_is_measured_after_the_gating_classes_and_its_timeou
     assert lines[0].startswith("WINDOW-CIRCUIT class 4,32,4: registered 7 bits, free 3 bits of 10 input bits at the "
                                "weights registration's pins; ")
     assert lines[1:] == ["WINDOW-CIRCUIT class record (measurement) timed out after WC_RECORD_TIMEOUT=45m (exit 124): no count"]
+    published = json.loads((tmp_path / "out" / "window-circuit-4-32-4.json").read_text())
+    kept = json.loads((tmp_path / "serve" / "window-circuit-4-32-4.count.json").read_text())
+    assert "bits" not in published and '"bits"' not in lines[0] and kept["bits"] == 772 and published["count"] == kept["count"]
 
 
 @pytest.mark.parametrize("classes, answers, refused", [
@@ -609,11 +666,13 @@ def test_the_preflight_refuses_a_front_flag_the_trees_front_does_not_take_and_a_
 
 FAKE_COMPOSITE = '''import json, sys
 from pathlib import Path
-COMPONENTS = {"onsite": ("verity/pous/p2/v4/run", "verity/wipe/v0"), "remote": ("verity/pouw/v1",)}
-REGISTRATION = "verity/nci/v1"
+COMPONENTS = {"onsite": ("verity/pous/p2/v4/run", "verity/wipe/v0"),
+              "remote": ("verity/pouw/v1", "verity/sampled-proofs/one-stage/v2")}
 if __name__ == "__main__":
     a = sys.argv[1:]
     Path(a[a.index("--private-out") + 1]).mkdir(parents=True)
+    Path(a[a.index("--public-out") + 1]).mkdir(parents=True)
+    Path(a[a.index("--public-out") + 1], "composite.json").write_text(json.dumps({"product": a[0]}))
     cases = [a[i + 1] for i, x in enumerate(a) if x == "--cases"]
     Path(a[a.index("--private-out") + 1], "argv.json").write_text(json.dumps(cases))
     print("PIECE verity/pous/p2/v4/run accept 0123456789abcdef0123")
@@ -624,10 +683,12 @@ if __name__ == "__main__":
 
 
 def test_the_composite_step_publishes_only_each_cases_verdict_and_each_products_lean_verdict(tmp_path):
-    """served_composite.sh with a stand-in lake, served_case.sh and composite.py: PoUS's case is written under the serve
-    dir's private dir with both Lean answers built and passed; onsite gets the cases of its own subprotocols and remote
-    none of them; OUT/verdicts.txt gets the CASE line's protocol and verdict and each product's NOT_ESTABLISHED and VERDICT
-    lines, never a PIECE line, a log or a path; and without composite.py in the tree it does nothing."""
+    """served_composite.sh with a stand-in lake, served_case.sh, served_cases.py and composite.py: PoUS's case is written
+    under the serve dir's private dir with both Lean answers built and passed, and served_cases.py's under it, given no α
+    or Γ while ALPHA and GAMMA are unset; each product gets the cases of its own subprotocols; OUT/verdicts.txt gets each
+    CASE line's protocol and verdict, each case not written by its protocol, and each product's NOT_ESTABLISHED and
+    VERDICT lines, never a PIECE line, a reason, a log or a path; each product's public output is OUT/composite/PRODUCT;
+    and without composite.py in the tree it says so and fails, since no Lean answered."""
     tree, bin_, d, out = tmp_path / "tree", tmp_path / "bin", tmp_path / "serve", tmp_path / "out"
     out.mkdir()
     _script(bin_ / "lake", 'mkdir -p .lake/build/bin && touch ".lake/build/bin/$2"')
@@ -643,6 +704,18 @@ echo 'CASE {{"piece": "{d}/private/pous/w0", "protocol": "verity/pous/p2/v4/run"
         (tree / "verity" / "core" / pkg).mkdir(parents=True)
     (tree / "benchmarks" / "one_stage").mkdir(parents=True)
     (tree / "benchmarks" / "one_stage" / "composite.py").write_text(FAKE_COMPOSITE)
+    v2 = d / "private" / "sampled-proofs-v2"
+    (tree / "benchmarks" / "one_stage" / "served_cases.py").write_text(f'''import json, sys
+from pathlib import Path
+assert sys.argv[1:] == ["--serve-dir", "{d}", "--private", "{d}/private", "--from-division"], sys.argv
+Path("{v2}").mkdir(parents=True)
+Path("{v2}", "case.json").write_text(json.dumps({{"evidence": "beef"}}))
+Path("{v2}", "answer.json").write_text(json.dumps({{"protocol": "verity/sampled-proofs/one-stage/v2", "verdict": "accept"}}))
+print("CASE " + json.dumps({{"protocol": "verity/sampled-proofs/one-stage/v2", "verdict": "accept", "dir": "{v2}"}}))
+print("CASE " + json.dumps({{"protocol": "verity/registration/v0", "verdict": "accept", "dir": "{d}/private/reg", "alpha_gamma": "235330880/1544757928"}}))
+print("NOT_WRITTEN " + json.dumps({{"protocol": "verity/inference-only/v0", "reason": "no alpha 0123456789abcdef"}}))
+sys.exit(1)
+''')
     env = {"PATH": f"{bin_}:{os.defpath}", "HOME": str(tmp_path), "PY": sys.executable, "TPY": sys.executable}
     run = lambda: subprocess.run(["bash", str(HERE.parent / "served_composite.sh"), str(d), str(out)], cwd=tree, env=env,  # noqa: E731
                                  check=False, capture_output=True, text=True)
@@ -650,15 +723,23 @@ echo 'CASE {{"piece": "{d}/private/pous/w0", "protocol": "verity/pous/p2/v4/run"
     assert r.returncode == 0, r.stderr
     assert (out / "verdicts.txt").read_text().splitlines() == [
         "COMPOSITE CASE verity/pous/p2/v4/run accept", "COMPOSITE CASES: served_case.sh exit 0",
+        "COMPOSITE CASE verity/sampled-proofs/one-stage/v2 accept",
+        "COMPOSITE CASE verity/registration/v0 accept",
+        "COMPOSITE NOT_WRITTEN verity/inference-only/v0",
+        "COMPOSITE CASES: served_cases.py exit 1, its log on the node",
         "COMPOSITE remote: NOT_ESTABLISHED missing verity/wipe/v0", "COMPOSITE remote: VERDICT verity/remote/v0 reject components",
         "COMPOSITE onsite: NOT_ESTABLISHED missing verity/wipe/v0", "COMPOSITE onsite: VERDICT verity/onsite/v0 reject components"]
     p = d / "private" / "composite"
-    assert json.loads((p / "remote" / "private" / "argv.json").read_text()) == []
+    assert json.loads((p / "remote" / "private" / "argv.json").read_text()) == [str(v2)]
     assert json.loads((p / "onsite" / "private" / "argv.json").read_text()) == [str(d / "private" / "pous" / "w0")]
-    assert oct((d / "private").stat().st_mode & 0o777) == "0o700" and list(out.iterdir()) == [out / "verdicts.txt"]
+    assert oct((d / "private").stat().st_mode & 0o777) == "0o700"
+    assert sorted(out.iterdir()) == [out / "composite", out / "verdicts.txt"]
+    assert sorted(f.relative_to(out).as_posix() for f in (out / "composite").rglob("*") if f.is_file()) == [
+        "composite/onsite/composite.json", "composite/remote/composite.json"]
     (tree / "benchmarks" / "one_stage" / "composite.py").unlink()
     (out / "verdicts.txt").unlink()
-    assert run().returncode == 0
+    shutil.rmtree(out / "composite")
+    assert run().returncode == 1
     assert (out / "verdicts.txt").read_text() == "COMPOSITE: not run, this tree has no benchmarks/one_stage/composite.py\n"
 
 

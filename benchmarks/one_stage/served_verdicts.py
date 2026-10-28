@@ -11,6 +11,12 @@ sampled proofs, and the one record of every verdict (the block record).
     served_verdicts.py pouw SERVE_DIR WINDOW DIR [--gate CMD] [--key-sha512 HEX] [--main FILE] [--python PY]
                                 [--statements FILE] [--live-evidence FILE]
     served_verdicts.py record --serve-run DIR --window K --sampled-proofs DIR --pieces DIR --out DIR [--node NAME]
+    served_verdicts.py public-registration REGISTRATION
+    served_verdicts.py sampled-line LOG [--partition FILE]
+
+``public-registration`` prints what the run publishes of a window's advice registration (`public_registration`: the
+advice's length padded to its compiler's cap), and ``sampled-line`` the SAMPLED-PROOFS line from the records audit's log
+(`sampled_line`: the partition the draw was over, the members it drew, and no length of the advice).
 
 ``window``: the sealed window to audit, from a serve-openai run's ``seals.jsonl``, ``windows.jsonl`` and ``requests.jsonl``
 (`pick`): sealed without error, its Commit passed, each of its requests checked and in no other window (V3b's window
@@ -221,6 +227,37 @@ def public_pick(got: Mapping[str, Any], slots: int) -> dict[str, Any]:
     lo, hi = got["steps"]
     return {"window": got["window"], "steps": [lo, hi], "engine_steps": hi - lo, "slots": slots,
             "every_slot": got["requests"] == slots, "refused": sorted(int(j) for j in got["refused"])}
+
+
+#: The advice registration's fields that state the advice's own length, which `public_registration` pads to the cap.
+PADDED = ("binding.advice.bits", "rows", "bits_by_window")
+
+
+def public_registration(reg: Mapping[str, Any]) -> dict[str, Any]:
+    """What the run publishes of a window's advice registration: the advice's length (`PADDED`) at its compiler's
+    ``cap_bits``, the one length the class declares (its rows at ``row_bits`` each, every window's bits the cap), no count
+    or refusal of its requests, and the rest as registered. ``padded`` names the fields padded."""
+    cap, row_bits = int(reg["compiler"]["cap_bits"]), int(reg["row_bits"])
+    out = {k: v for k, v in reg.items() if k not in ("requests", "compiled", "refused")}
+    out["binding"] = {**reg["binding"], "advice": {**reg["binding"]["advice"], "bits": cap}}
+    out["rows"] = -(-cap // row_bits)
+    out["bits_by_window"] = {w: cap for w in reg.get("bits_by_window") or {}}
+    return {**out, "padded": list(PADDED)}
+
+
+def sampled_line(records: Mapping[str, Any], partition: Mapping[str, Any] | None) -> str:
+    """The SAMPLED-PROOFS line's account of the records audit's ``RECORDS`` row: what the draw was over (the partition's
+    templates, scope and law), which members it drew of how many, and the row with no length of the advice
+    (``leak.advice_bits``)."""
+    row = dict(records)
+    if isinstance(row.get("leak"), Mapping):
+        row["leak"] = {k: v for k, v in row["leak"].items() if k != "advice_bits"}
+    part = partition or {}
+    scope = part.get("scope") or {}
+    over = (f"over {', '.join(part.get('templates') or ['?'])} at {scope.get('op_path_prefix', '?')} steps "
+            f"{scope.get('steps', '?')} (law {part.get('law', '?')})")
+    drawn = f"drawn members {row.get('draw')} of {row.get('population')}" if row.get("draw") is not None else "no draw"
+    return f"{over}, {drawn}: RECORDS {json.dumps(row, sort_keys=True)}"
 
 
 def _unset(comp: str, what: str) -> str:
@@ -634,10 +671,13 @@ def _ratio(e: Fraction, deltas: Sequence[Fraction]) -> str:
 
 def terms(r: Mapping[str, Any], leg: Mapping[str, Any] | None) -> list[str]:
     """What an accepted answer holds beyond its verdict: where its profile says when its weights were held and what share
-    of the checkpoint they are, those; and each δ of the block record's at which its leg's quantity is not established."""
+    of the checkpoint they are, those; where it says which host ran each party, what its `trusted-host` premise rests on
+    (the network certifier's ``placement``); and each δ of the block record's at which its leg's quantity is not
+    established."""
     profile = (r.get("answer") or {}).get("profile")
     w = profile.get("weights") if isinstance(profile, Mapping) else None
-    out = []
+    place = profile.get("placement") if isinstance(profile, Mapping) else None
+    out = [f"trusted-host {place['trusted-host']}"] if isinstance(place, Mapping) and place.get("trusted-host") else []
     if isinstance(w, Mapping) and w.get("held"):
         out.append(f"its weights {w['held']}, not concurrently with the block")
     if isinstance(w, Mapping) and w.get("share"):
@@ -762,6 +802,11 @@ def main(argv: Sequence[str] | None = None) -> int:
     o.add_argument("--python", default=os.environ.get("PY") or sys.executable)
     o.add_argument("--statements", type=Path)
     o.add_argument("--live-evidence", type=Path)
+    rg = sub.add_parser("public-registration")
+    rg.add_argument("registration", type=Path)
+    sl = sub.add_parser("sampled-line")
+    sl.add_argument("log", type=Path)
+    sl.add_argument("--partition", type=Path)
     p = sub.add_parser("pieces")
     r = sub.add_parser("record")
     for q in (p, r):
@@ -776,6 +821,16 @@ def main(argv: Sequence[str] | None = None) -> int:
     for q in (p, r):
         q.add_argument("--node", default=socket.gethostname())
     a = ap.parse_args(argv)
+    if a.cmd == "public-registration":
+        print(json.dumps(public_registration(json.loads(a.registration.read_text())), indent=1, sort_keys=True))
+        return 0
+    if a.cmd == "sampled-line":
+        rows = [x[len("RECORDS "):] for x in a.log.read_text().splitlines() if x.startswith("RECORDS ")]
+        if not rows:
+            print("no RECORDS line")
+            return 1
+        print(sampled_line(json.loads(rows[0]), json.loads(a.partition.read_text()) if a.partition else None))
+        return 0
     if a.cmd == "window":
         try:
             print(json.dumps(public_pick(pick(a.serve_dir, a.slots, a.window), a.slots), sort_keys=True))
