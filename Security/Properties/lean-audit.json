@@ -10907,16 +10907,16 @@
    ]
   },
   "MemoryChallenger.Judge": {
-   "digest": "cc006620e0f5c9c789694c2b7c9be55ea08f26aed72c4342b42b09af62a14ded",
+   "digest": "43c13a5bb22cdfd478ee4cefc481a5879828cf68d12d9bb65143a3c5baf1fa27",
    "definitions": {
-    "MemoryChallenger.Judge.Record": "0a19c4fba53935be9485b197fbdb0d50b2fee2caa36959c8896d271233162eab",
-    "MemoryChallenger.Judge.Record.commitment": "73ccfbc5dd8efc869a979960e3cf0e12abaea2150398c5c5ab117ed098f4728f",
-    "MemoryChallenger.Judge.Record.expected": "cc0add9d1a8829f4ba29bdf9ede6804e57665dfa6d648d73defbc98d29359a75",
-    "MemoryChallenger.Judge.Record.openings": "890e1e0ca9e44f11de2d2ea9295ed2db9d6083d36cf39ff9413c2e18615bda1b",
-    "MemoryChallenger.Judge.Record.schemes": "470e367a165b26b9bf6fcad980013c2506d6e8a5c0f718ce4c0b6b66c449d929",
-    "MemoryChallenger.Judge.Record.signed": "b9d4b6f1b8d0ad277350e99913f59ae1b76c07933972ce0a91accf51b1ac0bba",
-    "MemoryChallenger.Judge.Record.trusted": "76ef258801dc672850681e89f3fd5dcd343f5a3eaf36a4ce1e6807b06e60ff76",
-    "MemoryChallenger.Judge.judge": "f0927552e20209c6f8a5bf374b3bb5bbeb72ccebb097c79ed2cd6247df29b449",
+    "MemoryChallenger.Judge.JudgeInputs": "c2059a3f6d1f092aea675af67c5797bcbe8bba357fa09b59b1b7d310625876fd",
+    "MemoryChallenger.Judge.JudgeInputs.commitment": "3f1d6fd4e2958b16cbc8b9c78c95fca0283030ff48f4ff007036ee0ab5790906",
+    "MemoryChallenger.Judge.JudgeInputs.expected": "d27d5523457961412a7d8d7d6c74bfc3a43884e644e04bd998229e10e7d7f1d7",
+    "MemoryChallenger.Judge.JudgeInputs.openings": "8830c8429c0b6bf713cbe3dff38b45152e2657289f1baa675ba84b4fe2931b4f",
+    "MemoryChallenger.Judge.JudgeInputs.schemes": "bc2cf183cee8d68b3dfc759c9b0e68fbd74e664cbc435d93971b6ee43e6e8a32",
+    "MemoryChallenger.Judge.JudgeInputs.signed": "b07c58815827d611b1555fe1814b88e77fe7cff5459b5221331a531dac394290",
+    "MemoryChallenger.Judge.JudgeInputs.trusted": "09d36ce9dff3bff0b02e3f98bf0f1fc814815580c1c99d9ea384f5fb93722fac",
+    "MemoryChallenger.Judge.judge": "06fcd8d9b09d0a36ff08a56cae96807dfca3bb0db4ebdab6493bbc4309c3871a",
     "MemoryChallenger.Judge.schemesOf": "e99d04e5824a438b1d44ba798bf3b5ccf93fa65d63fa1e3f46c1605725124dbe"
    },
    "guarantees": [
@@ -14933,13 +14933,13 @@
    ]
   },
   "Properties.Pous.MemoryChallenger": {
-   "digest": "7ab2387564d85203baa2360ee6e621e017acc8efaad5a9e4581f071c374f793c",
+   "digest": "93d9486592611a4fe2a272c7e997ca9a3a39e6cb9c0a3ba0a5bf28f16fa699ce",
    "definitions": {
     "MemoryChallenger.Properties.Accepted": "812d273231ae986d14633bee1380b0e4876b7c6f00ee1a7ac3fb1d49ec5b9d45",
     "MemoryChallenger.Properties.Device": "ed4511488da53c85b9b883e3e5507cc6d495c8c85a88bed7b19b97e66c8bc6e8",
     "MemoryChallenger.Properties.Device.sessions": "79e61bbfcb11a1b967607c821966405ff319e0037424cfee3617598cc179471c",
-    "MemoryChallenger.Properties.JudgeAccepts": "67300e3972fb4581e501c35c0736cfe629abaa613ef4db5884c5d595e124ae8c",
-    "MemoryChallenger.Properties.JudgeSigned": "c2ebdd93b8bbc2d6c3bed179d1ca1c63e2885f07895993a5dfcf2fd6271f79d0",
+    "MemoryChallenger.Properties.JudgeAccepts": "d632cad4a2cae8a2bd09d1c9749b3fe87384725a63e39e84a4302dac291b3c97",
+    "MemoryChallenger.Properties.JudgeSigned": "230acde7396dc6f3f9c2f5b6e395245d61391ade998e6d594ddc28f200fd11f0",
     "MemoryChallenger.Properties.LmsVerifies": "f15c2a044fa38b89f26d9b48e279cb9807ae56e9ef2c70e7940ad8b4aa6708ad",
     "MemoryChallenger.Properties.Observed": "10303cd6d51df7470447678f4a1666c381447357c30894f37b0ec296d5cdfbcc",
     "MemoryChallenger.Properties.Observed.block": "9ce627be027a2092cbb6f5e3f33ca2e3dadfe8236b7a83c2b948f0bda6b42f15",
