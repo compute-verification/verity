@@ -12,7 +12,7 @@ reasons on stderr):
   immediates (HFMA2.MMA on sm_90a), the compiler's way of loading a constant, and the compiler's unsigned integer
   division (`DIVISION`), exact by its correction steps, which sm_120a's ptxas uses for units_relu's unrolled trip count.
 Each kernel's registers and its floating-point opcodes with their counts are recorded. ptxas's report and the SASS listing
-are read by s8_linear's sass_gate.py (`ptxas_report`, `sass_functions`).
+are read by the harness's build gate (benchmarks/pouw/harness/sass_gate.py's `ptxas_report`, `sass_functions`).
 
   python3 build_check.py PTXAS_TXT SASS_TXT OUT_JSON [ARCH]   (ARCH sm_90a or sm_120a, default sm_90a)
 """
@@ -25,9 +25,17 @@ import sys
 from collections import Counter
 from pathlib import Path
 
-_spec = importlib.util.spec_from_file_location("s8_sass_gate", Path(__file__).resolve().parents[1] / "s8_linear" / "sass_gate.py")
-SG = importlib.util.module_from_spec(_spec)
-_spec.loader.exec_module(SG)
+
+def _harness():
+    name = "pouw_harness_sass_gate"
+    if name not in sys.modules:
+        spec = importlib.util.spec_from_file_location(name, Path(__file__).resolve().parents[2] / "pouw" / "harness" / "sass_gate.py")
+        sys.modules[name] = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(sys.modules[name])
+    return sys.modules[name]
+
+
+H = _harness()
 
 BASE = ("units_rmsnorm", "units_quant", "units_quant4", "units_softmax", "units_argmax", "units_relu", "units_add",
         "units_sweep")
@@ -45,15 +53,15 @@ DIVISION = {"I2F.U32.RP", "I2F.U64.RP", "MUFU.RCP", "F2I.FTZ.U32.TRUNC.NTZ", "F2
 
 def check(ptxas: str, sass: str, arch: str = "sm_90a") -> tuple[dict, list[str]]:
     kernels = KERNELS[arch]
-    funcs, problems = SG.ptxas_report(ptxas, arch)
+    funcs, problems = H.ptxas_report(ptxas, arch)
     ops: dict[str, Counter] = {}
-    for cur, lines in SG.sass_functions(sass).items():
+    for cur, lines in H.sass_functions(sass).items():
         r = funcs.setdefault(cur, {})
         r.update({"local": 0, "mma": []})
         ops[cur] = Counter()
         for line in lines:
             r["local"] += bool(re.search(r"\b(LDL|STL)\b", line))
-            r["mma"] += [mm.group(0) for mm in SG.MMA.finditer(line) if not CONSTANT.search(line)]
+            r["mma"] += [mm.group(0) for mm in H.MMA.finditer(line) if not CONSTANT.search(line)]
             for fl in FLOAT.finditer(line):
                 if not CONSTANT.search(line):
                     ops[cur][fl.group(0)] += 1
