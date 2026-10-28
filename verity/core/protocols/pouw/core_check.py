@@ -83,8 +83,9 @@ from typing import Any, NamedTuple
 from verity.core.protocols.pouw import coins as Co
 from verity.core.protocols.pouw import salt as PS
 from verity.core.protocols.pouw import window as Wd
+from verity.core.protocols.sampled_proofs.one_stage import registration as R
 from verity.core.protocols.sampled_proofs import challenger as Ch
-from verity.core.protocols.sampled_proofs.one_stage import registered as G, registration as R
+from verity.core.protocols.sampled_proofs.one_stage import registered as G
 from verity.core.protocols.pouw.audit import EPOCH_SALT_DOMAIN, SALT_DOMAIN
 from verity.core.protocols.pouw.protocol import U64, tagged
 from verity.ml.commitments import Commitment, Opening, VerificationLimits, verify_opening
@@ -96,9 +97,9 @@ from verity.ml.crypto import lms
 from verity.ml.randomness import derive, frame
 
 ID = "verity/pouw/v1"
-ONE_STAGE = R.PROTOCOL
+ONE_STAGE = "verity/sampled-proofs/one-stage/v1"
 SCHEME = "frame-v3-sha512/hm96-sha512"
-FORMATS = (R.FORMAT, R.FORMAT_V2)
+FORMATS = ("verity/registration/v1", "verity/registration/v2")
 LEVEL = "unit"
 PARAMS_KEYS = ("check", "context", "delta", "eps", "grid_bits", "length", "query", "range")
 LENGTH_PARAM_KEYS = ("max_tokens", "stop")
