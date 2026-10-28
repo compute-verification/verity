@@ -324,7 +324,7 @@ reaches the target with probability above η, and **fleet-time** elapsed time ti
 the plain count). The good blocks do at most Σ_I q_I (part 2), and the remainder at most Q_rem (part 3). Replacing the
 sum by (q/c)·Φ_D·|J| needs the accounting to show that the qualifying blocks have exactly c gates and correspond one to
 one to credited actual computation; until that is proved, Σ_I q_I is the safer form. With that conversion and a uniform
-cap q, and f = 1 − Φ_D/Φ the share of capacity outside correct credited declared work,
+cap q, and f = 1 − Φ_D/Φ the share of capacity outside correct credited work of the registered circuit,
 
 $$ \Omega_* \;\le\; \Big(\frac{q}{c}\,\Phi_D + \bar\zeta\,(\Phi - \Phi_D)\Big)\,|J|
    \quad\Longrightarrow\quad
@@ -461,9 +461,9 @@ PoUW has other guarantees, outside protocol soundness.
 
 Remote (`verity/core/protocols/remote`, `Core.Remote.protocol`) is the composite for an auditor with no devices at the
 site. It composes three subprotocols, sampled proofs' one-stage audit on the proofs themselves (v2), PoUW's window
-check and the inference-only policy's check (`NciCheck.Protocol`), and accepts only when all three accept and the
-commitment binds them (`Properties.Composition`, proved), and only when all three commit to one record
-(`Core.Composition.same`). Onsite adds PoUS, PoUB, network certification and memory wipes.
+check and the inference-only policy's check (`NciCheck.Protocol`), and accepts only when all three accept, the
+commitment binds them and all three commit to one registration. Its rule is `checkSame` (`Core.Composition.same`), which
+no property covers yet: `Properties.Composition.AcceptMeans`, proved, covers only the product rule `check`. Onsite adds PoUS, PoUB, network certification and memory wipes.
 
 - **Guarantees:** the table's sampled-proofs and PoUW rows, both proved. The composed statement, `Verity.Soundness`, is
   not in Lean yet (above), so the two compose by hand. Remote's sampled-proofs component is one-stage v2, which runs
