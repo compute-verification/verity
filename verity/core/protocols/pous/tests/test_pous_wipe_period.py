@@ -87,8 +87,8 @@ def test_a_prover_keeping_one_label_past_the_threshold_is_rejected() -> None:
 
 def test_the_certificate_at_the_challengers_reads() -> None:
     """`ratio(k)` is the largest `r` with `(r − 1)^k · 2^129 ≤ r^k`, and `certify` publishes the threshold at it: one
-    segment at `k = 2152` and at `k = 5231`, and `StreamedWipeMeetsH200`'s H200 (NVML's total filled whole, `R = 0`)
-    at its `38,902,167,181` bits; past `MAX_READS` the certificate is vacuous."""
+    segment at `k = 2152` and at `k = 5231`, and `StreamedWipeMeetsH200`'s H200 (141 GiB filled whole, `R = 0`)
+    at its `39,068,035,213` bits; past `MAX_READS` the certificate is vacuous."""
     assert [W.ratio(k) for k in (1, 90, 91, 2151, 2152, 2905, 2906, 5230, 5231, 74_000)] == [
         1, 1, 1, 24, 24, 32, 33, 58, 59, 828]
     for k in (1, 91, 400, 2152, 2906, 5231, 10_000, W.MAX_READS):
@@ -96,11 +96,11 @@ def test_the_certificate_at_the_challengers_reads() -> None:
         assert (r - 1) ** k << 129 <= r ** k and r ** k << 129 > (r + 1) ** k, k
     assert (W.certify(W.params_for(), 0)["foreign_bits"], W.certify(W.params_for(k=5231), 0)["foreign_bits"]) == (
         SEGMENT_2152, 5_074_062)
-    h200 = sw.WipeParams(2_355_544_064, 2906, 1, W.LIMIT_NS, (("gpu-hbm", 150_754_820_096),))
+    h200 = sw.WipeParams(2_365_587_456, 2906, 1, W.LIMIT_NS, (("gpu-hbm", 151_397_597_184),))
     assert h200.outside_bits == 0
     assert W.certify(h200, 2) == {"certified": True, "egress_mib": 2, "eps": f"1/{2 ** 128}",
-                                  "foreign_bits": 38_902_167_181 + 2 * sw.EGRESS_UNIT_BITS, "k": 2906,
-                                  "memory_bits": 1_206_038_560_768, "r": 33}
+                                  "foreign_bits": 39_068_035_213 + 2 * sw.EGRESS_UNIT_BITS, "k": 2906,
+                                  "memory_bits": 1_211_180_777_472, "r": 33}
     past = W.params_for(k=W.MAX_READS + 1)
     assert W.certify(past, 0) == {"certified": False, "egress_mib": 0, "eps": "0", "foreign_bits": M,
                                   "k": W.MAX_READS + 1, "memory_bits": M, "r": 0}

@@ -229,16 +229,15 @@ def least_reads(r: int) -> int:
 
 
 def test_h200_at_5GB() -> None:
-    """`StreamedWipeMeetsH200`: the H200's 150,754,820,096 bytes (NVML's total, the driver's reserve included) filled
-    whole, `R = 0`: `r = 33` is the least ratio whose threshold is at most 5 GB, `k = 2906` the least read count for it,
-    and the threshold `38,902,167,181` bits; the family's own point, `r = 24` and `k = 2152`, is
-    `512·(⌈n/24⌉ − 1) + n + 141`."""
-    device, cap = 150_754_820_096, 5 * 10**9 * 8
+    """`StreamedWipeMeetsH200`: an H200 of 141 GiB (151,397,597,184 bytes) filled whole, `R = 0`: `r = 33` is the least
+    ratio whose threshold is at most 5 GB, `k = 2906` the least read count for it, and the threshold `39,068,035,213`
+    bits; the family's own point, `r = 24` and `k = 2152`, is `512·(⌈n/24⌉ − 1) + n + 141`."""
+    device, cap = 141 << 30, 5 * 10**9 * 8
     n = device // sw.LABEL_BYTES
-    assert n * sw.LABEL_BYTES == device and n == 2_355_544_064
+    assert device == 151_397_597_184 and n * sw.LABEL_BYTES == device and n == 2_365_587_456
     assert least_reads(33) == 2906 and least_reads(32) == 2817 and least_reads(24) == 2101
-    assert reads_threshold(n, 33, 2906) == 38_902_167_181 <= cap
-    assert reads_threshold(n, 32, least_reads(32)) == 40_044_248_717 > cap
+    assert reads_threshold(n, 33, 2906) == 39_068_035_213 <= cap
+    assert reads_threshold(n, 32, least_reads(32)) == 40_214_986_381 > cap
     assert reads_threshold(n, 24, 2152) == sw.LABEL_BITS * (-(-n // 24) - 1) + n + 141
     q, _ = sw.retained_bits(n, 2906, n * sw.LABEL_BITS, 0, -128)
     assert q <= reads_threshold(n, 33, 2906)  # the exact count needs less
