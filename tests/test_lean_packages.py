@@ -49,6 +49,23 @@ def test_one_mathlib():
     assert revs and len(set(revs.values())) == 1, revs
 
 
+#: the size of each lock's `unwitnessed`: the guarantees stating what an acceptance means, or an exclusion's bound, that
+#: had no `honest` and `nontrivial` witnesses when the witness rule came (`check.py`'s `witness_failures`), with those the
+#: PRs on `next` then brought
+UNWITNESSED = {"Security": 354, "Security/Properties": 176, "verity/core/service/flock": 7}
+
+
+def test_the_unwitnessed_list_only_shrinks():
+    """A lock's `unwitnessed` never grows. A new guarantee of what an acceptance means, and one whose statement
+    changed, carries its witnesses instead; when a guarantee gets them, its entry goes, and its lock's number here may
+    come down with it."""
+    got = {str(p.relative_to(ROOT)): len(json.loads((p / "lean-audit.json").read_text()).get("unwitnessed", {}))
+           for p in lake_packages()}
+    grown = {p: f"{n} > {UNWITNESSED.get(p, 0)}" for p, n in got.items() if n > UNWITNESSED.get(p, 0)}
+    assert not grown, (f"`unwitnessed` grew in {grown}: it only shrinks (LEAN-66); give the guarantee you added its "
+                       f"`honest` and `nontrivial` witnesses under `witnesses` (check.py's failure names both) instead")
+
+
 def test_the_randomness_assumption_cites_this_toolchain():
     """A3 (C-Flock soundness's `ASSUMPTIONS.md`, `Assumptions.UniformRandomBytes`) cites what the toolchain's runtime reads
     for `IO.getRandomBytes` (`lean_io_get_random_bytes`), so a toolchain bump fails here until someone re-reads it and
@@ -185,3 +202,21 @@ def test_every_open_conjecture_names_a_test_that_exists():
             if not (ROOT / path).is_file() or not re.search(rf"^def {re.escape(node)}\(", (ROOT / path).read_text(), re.M):
                 bad.append(f"{p.relative_to(ROOT)}: {name}'s test {c.get('test')!r} is not PATH::NAME of a test in the tree")
     assert not bad, bad
+
+
+#: the size of each lock's `shape.inline`, in premises: the inline hypotheses lock-listed guarantees took that are neither
+#: a named assumption, another listed guarantee's statement nor a plain range when the inline rule came (`check.py`'s
+#: `inline_failures`); a renamed or restated premise counts twice, under both texts, until `--update` drops the one no
+#: tree prints
+INLINE = {"Security": 1386, "Security/Properties": 121, "verity/core/service/flock": 6}
+
+
+def test_the_inline_list_only_shrinks():
+    """A lock's `shape.inline` never grows: a guarantee's new inline hypothesis is named as an assumption or stated as
+    another listed guarantee's conclusion instead; when a grandfathered one is named, or a renamed one's old text is no
+    longer printed, `--update` drops its entry, and its lock's number here may come down with it."""
+    got = {str(p.relative_to(ROOT)): sum(map(len, json.loads((p / "lean-audit.json").read_text()).get("shape", {})
+                                             .get("inline", {}).values())) for p in lake_packages()}
+    grown = {p: f"{n} > {INLINE.get(p, 0)}" for p, n in got.items() if n > INLINE.get(p, 0)}
+    assert not grown, (f"`shape.inline` grew in {grown}: it only shrinks; name the hypothesis as a Prop in an "
+                       f"Assumptions module and list it in the lock, or state it as a lock-listed guarantee's conclusion")
