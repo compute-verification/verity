@@ -36,7 +36,7 @@ Four constraints read what the circuit doesn't carry, taken as parameters: which
 location of the ring's multiplications modulo `p` (`ring`), the certifiers' leaves (`cert`) and record cells
 (`record`, v2.6: a certifier's record is its gates in them, `Actual.Run.record`), the trusted devices' leaves (`𝒱`) with
 what the protocol says each of their gates does (`Spec`), and the buckets of ticks over which a certifier's jitter is
-counted. `Hardware` bundles the parameters that don't depend on `A`, and `Annotation A` those of the constraints on one
+counted. `Hardware` bundles the parameters that don't depend on `A`, and `Usage A` those of the constraints on one
 run that name its gates; `TrustedUnits` takes each run's `Spec`.
 -/
 
@@ -217,16 +217,16 @@ structure Hardware (L : Type*) (E : Type*) where
 def Hardware.SpatialUnit {L E : Type*} [Fintype E] (H : Hardware L E) (X : Finset L) : Prop :=
   X ∈ H.units ∧ uncertifiedCapacity H.ends H.β H.cert X = 0
 
-/-- What the physical assumptions on one run read about `A` that its gates don't carry: the pricing `π` and which link
-each wire runs on. -/
-structure Annotation {L : Type*} (A : Placed L) (E : Type*) where
+/-- **A run's usage**: what the physical assumptions on one run read about `A` that its gates don't carry, what each
+gate uses of its location's compute (`π`, its work) and the link each wire uses (`link`). -/
+structure Usage {L : Type*} (A : Placed L) (E : Type*) where
   π : Fin A.N → ℕ
   link : Fin A.N → Fin A.N → E
 
-/-- **The feasible set**: `A` meets every physical assumption on one run on the hardware `H`, read with `ann`.
+/-- **The feasible set**: `A` meets every physical assumption on one run on the hardware `H`, read with `usage`.
 `TrustedUnits`, on a strategy, is taken beside it. -/
-def Feasible {L E : Type*} (H : Hardware L E) (A : Placed L) (ann : Annotation A E) : Prop :=
-  A.Causal H.ℓ ∧ A.ComputeRate H.units ann.π H.compute ∧ A.SequentialSpeed H.ring H.D H.span ∧
-    A.Memory H.units H.M ∧ A.Links H.ends H.β ann.link
+def Feasible {L E : Type*} (H : Hardware L E) (A : Placed L) (usage : Usage A E) : Prop :=
+  A.Causal H.ℓ ∧ A.ComputeRate H.units usage.π H.compute ∧ A.SequentialSpeed H.ring H.D H.span ∧
+    A.Memory H.units H.M ∧ A.Links H.ends H.β usage.link
 
 end Accounting
