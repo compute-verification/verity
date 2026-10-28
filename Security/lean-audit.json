@@ -14449,9 +14449,9 @@
    "guarantees": ["Accounting.SecurityProofs.Bridge.BandwidthOfAuditPerRunPeriod"]
   },
   "Definitions.Accounting.Guarantees.JointBridge.CommOfPeriodLeakAccepted": {
-   "digest": "245548650c2f937dfea87674ed74416ac68ae16575ee74c5da24c3613b04c31e",
+   "digest": "13a874f8562f2b307da0368f6cac274ba1ce6262024bc259174bb430d47de48f",
    "definitions": {
-    "Accounting.Guarantees.Bridge.CommOfPeriodLeakAccepted": "d75c58054ee1081441bab53a5ff718e93a7fa4da581c2dbee0003c016a73b95c"
+    "Accounting.Guarantees.Bridge.CommOfPeriodLeakAccepted": "4686e01329e29e2a152b22e2d59df351c0c86912b55ed4526612fe4ffa934901"
    },
    "guarantees": ["Accounting.SecurityProofs.Bridge.CommOfPeriodLeakAccepted"]
   },
@@ -18091,7 +18091,7 @@
    ]
   },
   "Definitions.Claims.Sampling": {
-   "digest": "487604597f5315fcb439e8bf99fef47b1aad65512add9505fcdc5e55d3844d56",
+   "digest": "148863bea060f82507ae7e594edb6335c2e74707f9afd323fb31fbf5dce2a29c",
    "definitions": {
     "Claims.Sampling.AuditStatement": "14dca2945e169db647822bc5ada687c2bc9d3c764e14fe1a86a63ed6862061f8",
     "Claims.Sampling.AuditStatement.design": "91e2b9592fce2faa8cd2c622f9b00f2a3a45f4a39d15b8793549795948ce108d",
@@ -18113,11 +18113,6 @@
     "Claims.Sampling.Bits": "32127d04d1abb75b3b4b6338f14750f5b6108b2f69d3cbd8b969c35e07cfed91",
     "Claims.Sampling.BitsLin": "12104e21f4e2f56bfd5155466aa311b5bb32a85e1a8487d7f7dcabd2598f5e16",
     "Claims.Sampling.BoundaryFaulty": "bff94a13767d974f1863bd2848e7b6f489e0420fe818917ad2d5603d765242b9",
-    "Claims.Sampling.Commitment": "6f21adfbc654f6e71de5b6f338e836ed805fcb50b98a77646b11e96fbc01b65f",
-    "Claims.Sampling.Commitment.Binds": "3d281bc90d41540bc59fac317c7704f40034ecf5b92268542b66de988a289858",
-    "Claims.Sampling.Commitment.Opens": "d445c3c389bf6e8aad46d821e19d02acff142e9e7ca5d1b457f5e0d8768e244f",
-    "Claims.Sampling.Commitment.layer": "d6b245b1ec78281aefaae67140ea4d43c558780cbbd0c54cd970c0b5f2fbc245",
-    "Claims.Sampling.Commitment.opens": "4fa5f1a179e73f004f5acf449ab4c25238c113570de24c46450c1f847e57c393",
     "Claims.Sampling.CommitmentScheme": "f16d42f6cd8b9ee922f24a2204f69509e7537e3892abff5873b1e225db7fd5f2",
     "Claims.Sampling.CommitmentScheme.Binds": "3721109897c7352486ba0cc4c2d6a6c330af86f384b982fe0bb34b397ca8e748",
     "Claims.Sampling.CommitmentScheme.Opens": "cb6c70071ce8f35ef6b9d2772bd372dafc39c7a1400526e7986f32af3248ed3d",
@@ -18169,13 +18164,6 @@
     "Claims.Sampling.KSCount": "2efbb9432a8bc328bb911364ff9eceba711c48f28c6a06625967f2ae42354688",
     "Claims.Sampling.KSLinOn": "3cd3242c014dcfc2396edb1804401628881a6073f98b1da31842b3655b58e08b",
     "Claims.Sampling.LogColl": "556b27152133c315374dc4629cb20ba9925e4044187c7529eb9fb9c86de3ce30",
-    "Claims.Sampling.Netlist": "a5715809f46a4bb1974daf0b51e94642c1eb1b849c47def7d144b613e20c7af7",
-    "Claims.Sampling.Netlist.Fits": "459dc5d554c6c82dd0dac7534ecd4a6b485ebaa8f5f67a340674b4b37812a8a7",
-    "Claims.Sampling.Netlist.args": "f7e955d38bdbd5252ce99cdb56bb8dfbdddebd283a3d827e7fefdd3db3ee78a0",
-    "Claims.Sampling.Netlist.eval": "38bb58b607cf9cd2848aa46095e50061127dbf774fc6e1a0d4c5bf0845b7b7a1",
-    "Claims.Sampling.Netlist.gates": "b6c4f6a11e62c9e2a345b9386b1dbd99a1a6fc1c18945494d3840124ac3a18bd",
-    "Claims.Sampling.Netlist.nIn": "2c5a6e8598a69b21e15f28dd6a79a2624503263b4058f1e3c242136f14b097fd",
-    "Claims.Sampling.Netlist.outs": "ef33629e00cb854dc4ea52bd7de952916683ae96afa64e7349283de0b5cafcd4",
     "Claims.Sampling.Nontrivial": "30b73ab94434bb5e9f1c61616ff8de2b50587ca519a8a182ccede96b9c9ce759",
     "Claims.Sampling.OneStage": "cb6f56d99cbeb7b90e49aad0236a7e95d8bced32274eddffb6f4d26787814637",
     "Claims.Sampling.OneStage.Pa": "95b64751bb03cee2fbc0a999b82c0002e34f83f6ba13ba49ce3c651333ee1cb4",
@@ -24172,9 +24160,9 @@
    "guarantees": ["NetTiming.SecurityProofs.HorizonLeakAccepted"]
   },
   "Definitions.NetworkCertifier.Guarantees.Period": {
-   "digest": "796e66ac22b07073488aa4f9756509802787b306e5ba1a993a57c291ba8963c9",
+   "digest": "576d98dd5cc44148562b5beaef2aa889046022c345435a31dc9ce41cf98d86e2",
    "definitions": {
-    "NetTiming.Guarantees.PeriodLeakAccepted": "abde7e9399164a1cfeccf814f22605dacd6e5f7c25a4a3bca78ac01ec153c9ac"
+    "NetTiming.Guarantees.PeriodLeakAccepted": "0db3f3a734d201ea45375c21d5f216e32657736e057303e8cb3291e0732a3531"
    },
    "guarantees": ["NetTiming.SecurityProofs.PeriodLeakAccepted"]
   },
@@ -24190,11 +24178,11 @@
    ]
   },
   "Definitions.NetworkCertifier.Guarantees.SampledCharge": {
-   "digest": "5118b588a25b29d6b23aed200bf6cc46c2f7e5ee057f6d52b1be87afe0cd999a",
+   "digest": "c343b6c4858a01b7d15add0575f0f6c17f0d6ccb304092a3af852617156dbc32",
    "definitions": {
     "NetTiming.Guarantees.EncardAccSeqsSampledLe": "6a0c10f472ffc975c011a4bf4ddadd694e54802b89ca8085dc019ac9fe3ea567",
     "NetTiming.Guarantees.SampledLeakAccepted": "24f0129e771739e616882539563c17f2e758415b4eff9cbd1eb4c3f371fc06e7",
-    "NetTiming.Guarantees.SampledLeakRegistered": "a1b2b4b58da6a15e7a1a05c286a13829ee735ccc81b995675b44c0bb3d85ff6c"
+    "NetTiming.Guarantees.SampledLeakRegistered": "03e4e97e0f5a04afca5d02ab39464e584162e80a6273f36d67172aeedabf9578"
    },
    "guarantees": [
     "NetTiming.SecurityProofs.EncardAccSeqsSampledLe",
@@ -24342,7 +24330,7 @@
    ]
   },
   "Definitions.NetworkCertifier.SampledAudit": {
-   "digest": "d714ada41b4cc5227c1f6c86a117aa662223ca7adc2a153db30f846cb29c2ec9",
+   "digest": "55b783467ba87b6e36166a1807d83415b7ea57d028700aafbd6e280bf7574300",
    "definitions": {
     "NetTiming.BoundaryGates": "fa62e710a7aac7d4f76bb7c7c2a4400f4d483ad59c9d5d7adf193c0ece654d55",
     "NetTiming.BoundaryGates.Fits": "ebd05c19dd122a05cfe405333069c75efe8856277437c8e6766d9f1f6f2c233b",
@@ -24354,12 +24342,7 @@
     "NetTiming.Depends": "f211d957c793800d99efe76d3fbd2afc44b357018a916000b6358941e750ac83",
     "NetTiming.FaultyGate": "4f48cf5bca92bba73ee756048da872f5f53491ed43fbc79654bdcb5264cc7f62",
     "NetTiming.KSAccepted": "f632a6201349aced4bbba77f283dd73b64c818f5afdd10c7ce2f109584ad58da",
-    "NetTiming.Layout": "26a9ae100864386a6350d51b5b6511ead4b61a09a5355752b75f28b2f03e9181",
-    "NetTiming.Layout.Fits": "3e19dedcd745f707786efa5ede31d98e6458c9a71ecea1999d70c3219b95b3eb",
-    "NetTiming.Layout.egress": "a0e95168b97f01529a65a69348753486689a46062a932d1f2dbbd90c62369a03",
-    "NetTiming.Layout.ingress": "1447b138bfb81ed0a928b0541b290f051e19d9e543e1eb3a2789041608cb6a45",
-    "NetTiming.Layout.inputOf": "7a78045a4090690a8548b0d4877ead2d00470b9b2a523ac287fbc6476c5c6cba",
-    "NetTiming.RAcc": "9f6495e8dec2953eb98f1fdb708ebca4508692fc452dffb098d47857d4debd92",
+    "NetTiming.RAcc": "ef24da1ebc3faf8fea32104989f6292e5a5c5264021902e0873103b280b95545",
     "NetTiming.ScopeAcc": "c7fd760721042dfff5fa8908b38893d3749f30682f2cda072d1b29a9550d03f5",
     "NetTiming.allSlots": "1eb924389e5ffa3b1cce62cd754f9ed3b413f91286b038c394ab98209c426b56",
     "NetTiming.allSlotsFrom": "f33b54b2f78e58e5b6c598b33e8e12f59e362b1e4a555dfe36ab7f2e9af3782b",
@@ -24382,12 +24365,12 @@
    ]
   },
   "Definitions.NetworkCertifier.SampledCharge": {
-   "digest": "0c15caf49e3030369cd76e6a8549d4545210be949b20c91c1a6da4bbe7ab5ddc",
+   "digest": "0584e646f0963b551a04e821a4412448c5e05c653922fe3c7abdad3bba192519",
    "definitions": {
     "NetTiming.AccSeqsSampled": "ad626b8423fb6d1b02f0a19e7b7bf3cc40e451d1d1fb01e9ceeedd2c65e09e80",
     "NetTiming.AcceptedFaulty": "ebfd078ac94cee1cb354ad8287355b63d6744527774706f89341de50c27c2798",
     "NetTiming.AsReg": "bb15096ae290f08ec5e8a81febfa00b335c2113975b212967b2afe09e9d046f4",
-    "NetTiming.RLeak": "4a7c0181cfd7ef5345ac0911d549f9b2fac522327910961f3a14ca0d1c88205f",
+    "NetTiming.RLeak": "962130822d4deb3d4ac96574835a2a69a5ba3f6c63a719008a6bc92a3423ab13",
     "NetTiming.faultyBits": "8cbcfcedec4b99e4491bff7587994f46bb7b20e10acb4a4bf584da5d0f299f7f",
     "NetTiming.faultySets": "32b6dfd30c42f80810aa5181d9d53975b1587fe9ade5d884d45e1f40240e4276",
     "NetTiming.freeInputs": "62e0ab9f2ca47b3d0b1c71f23e09e6ad8eb94741bd83a58b57de638b1ac62bdb"
@@ -24469,11 +24452,11 @@
    ]
   },
   "Definitions.NetworkCertifier.TapRows": {
-   "digest": "adc1160198f16a10cc6fd5791dedf86a2249a5b7c9d650b3f5452970d308b34f",
+   "digest": "85daf67c468efb82808121df443eaa93d2cf27b6a84f7f0e13aaf7d2bcbddbeb",
    "definitions": {
     "NetTiming.Btap": "d8b958b71daf7e072788f243dd993a58547afb59d9b7b6aaf46d53ec95bc80a2",
-    "NetTiming.RLeakTap": "9e3fd2959e3b9caac8ed582e10e2f3888b61a66ccbfd599b88052e3218f33267",
-    "NetTiming.TapOpens": "6f9a45e0b7badd094f5abe51cde6c23dbd2c090eea22c8529f8207fd51fe3f7b",
+    "NetTiming.RLeakTap": "b0abfa60c8f725e24553c7a5dea9859199407bc30d754441110168de1ef0d10b",
+    "NetTiming.TapOpens": "c255ee50b3f647891674ae16946a2b432a7c5e50b3c4c83d5be987e2e98ee44d",
     "NetTiming.tapLog": "aa58aab8c64b95aa05aea03e54b8338a3a19a3938fdba15b4e4840dba8eb1a14",
     "NetTiming.tapVal": "820beef45fb779042d495c23e9f9c0fc0d2cd98f2ef0a17beaed6f9e7c550aa8"
    },
