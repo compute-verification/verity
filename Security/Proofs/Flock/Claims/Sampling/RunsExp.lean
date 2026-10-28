@@ -203,7 +203,7 @@ theorem outerG_nonneg (D : Deploy Coin Col T) (x : Msg) (run' : (Fin (D.V.k x) �
 omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [DecidableEq Col] [Zero Col] in
 /-- A checked unit's extraction reruns as its waits do: Flock's `m′` waits on its session, at most. -/
 theorem unitExt_runs_le_waits (H : Msg → Msg) (D : Deploy Coin Col T) (decode : List (ℕ × Col) → List T) (x : Msg)
-    (s : Stmt) (u : ℕ × ℕ) (r : Fin (D.V.k x) → Coin) (v : Seen) (ρ : D.UnitCoins x)
+    (s : AuditStatement) (u : ℕ × ℕ) (r : Fin (D.V.k x) → Coin) (v : Seen) (ρ : D.UnitCoins x)
     (run' : (Fin (D.V.k x) → Coin) → Trace) :
     (((unitExt D decode x s u r v ρ).eval H run').2.2 : ℝ) ≤ unitWaits D x run' u r ρ := by
   unfold unitExt
@@ -235,7 +235,7 @@ theorem unitExt_runs_le_waits (H : Msg → Msg) (D : Deploy Coin Col T) (decode 
 omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [DecidableEq Col] [Zero Col] in
 /-- At an accepted inner run `li`, every checked unit's extraction reruns at most its position's waits. -/
 theorem innerBody_runs_le_waits (H : Msg → Msg) (D : Deploy Coin Col T) (decode : List (ℕ × Col) → List T) (x : Msg)
-    (s : Stmt) (c : ECoins D x) (j : Fin (D.k x)) (li : Fin (D.k x) × ((Fin (D.V.k x) → Coin) × Seen))
+    (s : AuditStatement) (c : ECoins D x) (j : Fin (D.k x)) (li : Fin (D.k x) × ((Fin (D.V.k x) → Coin) × Seen))
     (run' : (Fin (D.V.k x) → Coin) → Trace) :
     (((innerBody D decode x s c j li).eval H run').2.2 : ℝ) ≤ ∑ i, posWaits D x run' i li.2.1 (c.2.2 (j, li.1, i)) := by
   unfold innerBody
@@ -245,7 +245,7 @@ theorem innerBody_runs_le_waits (H : Msg → Msg) (D : Deploy Coin Col T) (decod
 
 omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [DecidableEq Col] [Zero Col] in
 theorem outerBody_runs_le_innerB (H : Msg → Msg) (D : Deploy Coin Col T) (decode : List (ℕ × Col) → List T) (x : Msg)
-    (s : Stmt) (c : ECoins D x) (jo : Fin (D.k x) × ((Fin (D.V.k x) → Coin) × Seen))
+    (s : AuditStatement) (c : ECoins D x) (jo : Fin (D.k x) × ((Fin (D.V.k x) → Coin) × Seen))
     (run' : (Fin (D.V.k x) → Coin) → Trace) :
     (((outerBody D decode x s c jo).eval H run').2.2 : ℝ) ≤ innerB H D x run' jo.1 jo.2.1 (c.2.1 jo.1) c.2.2 := by
   unfold outerBody innerB
@@ -357,7 +357,7 @@ omit [Inhabited Coin] [DecidableEq Col] [Zero Col] in
 /-- The extractor's reruns at a statement that parses: the replay, and at an accepted judged run the outer wait and
 each kept run's body bound. -/
 theorem E_runs_le_outer (H : Msg → Msg) (D : Deploy Coin Col T) (decode : List (ℕ × Col) → List T) {x : Msg}
-    {s : Stmt} (hs : D.parse x = some s) (run' : (Fin (D.V.k x) → Coin) → Trace) (r₀ : Fin (D.V.k x) → Coin)
+    {s : AuditStatement} (hs : D.parse x = some s) (run' : (Fin (D.V.k x) → Coin) → Trace) (r₀ : Fin (D.V.k x) → Coin)
     (c : (E D decode).C x) :
     ((((E D decode).ext x r₀ c).eval H run').2.2 : ℝ) ≤
       1 + (if (run' r₀).out = .acc then (1 : ℝ) else 0) *

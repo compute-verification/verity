@@ -322,7 +322,7 @@ A fixed round's pieces would be read by the parts' checks (`PartChecksB`) but no
 statement's message), and a holder of the last round has no commit string to agree on (`PartOpensB`). Either would let a
 part's check hold only off the readers' messages, which leaves `DecompB` empty. -/
 def HeldB (D : Deploy Coin) (I : Inner Coin W) (L : LayoutB) (shape : Form → Prop) : Prop :=
-  ∀ (x : Msg) (st : Stmt), D.parse x = some st → shape st.form →
+  ∀ (x : Msg) (st : CompiledStatement), D.parse x = some st → shape st.form →
     I.V.k (xI D x) = L.rounds x ∧ (∀ i < I.V.k (xI D x),
       ((L.fixedAt x i).isSome ∨ (∃ s < D.nS x, (L.msgAt x s i).isSome) ∨
         (L.pieceAt x i ≠ [] ∧ ∀ p ∈ L.pieceAt x i, p.1 < D.nS x)) ∧
@@ -358,7 +358,7 @@ shared row it reads off its own witness is the one the messages carry. Or two of
 def PartChecksB (H : Msg → Msg) (D : Deploy Coin) (DO : Flock.Deploy Coin Col T) (L : LayoutB)
     (shape : Form → Prop) (shows : ℕ → Msg → Msg → (ℕ → Coin) → Prop) (cmt : Msg → ℕ → Msg → Msg)
     (chk : ℕ → Msg → (ℕ → Coin) → List Msg → Prop) (s : ℕ) : Prop :=
-  ∀ (x : Msg) (st : Stmt), D.parse x = some st → shape st.form → ∀ (xO : Msg) (w : Flock.Wit),
+  ∀ (x : Msg) (st : CompiledStatement), D.parse x = some st → shape st.form → ∀ (xO : Msg) (w : Flock.Wit),
     Flock.check DO.parse xO w = true → (∀ e ∈ L.calls x s w, H e.1 = e.2) →
     (∀ (c : ℕ → Coin), shows s x xO c → ∀ ms : List Msg,
       (∀ i < L.rounds x, ∀ m, L.held x s w i = some m → ms.getD i [] = m) →
@@ -374,7 +374,7 @@ commits is then the row the verifier recomputes the commitment of (`row_tie`). -
 def PartChecksBV (H : Msg → Msg) (D : Deploy Coin) (DO : Flock.Deploy Coin Col T) (L : LayoutB)
     (shape : Form → Prop) (shows : ℕ → Msg → Msg → (ℕ → Coin) → Prop) (cmt : Msg → ℕ → Msg → Msg)
     (chk : ℕ → Msg → (ℕ → Coin) → List Msg → Prop) (s : ℕ) : Prop :=
-  ∀ (x : Msg) (st : Stmt), D.parse x = some st → shape st.form → ∀ (xO : Msg) (w : Flock.Wit),
+  ∀ (x : Msg) (st : CompiledStatement), D.parse x = some st → shape st.form → ∀ (xO : Msg) (w : Flock.Wit),
     Flock.check DO.parse xO w = true → (∀ e ∈ L.calls x s w, H e.1 = e.2) →
     (∀ (c : ℕ → Coin), shows s x xO c → ∀ ms : List Msg,
       (∀ i < L.rounds x, ∀ m, L.held x s w i = some m → ms.getD i [] = m) →
@@ -403,7 +403,7 @@ piece's offset: a piece is a commit string the part's gadgets compute, one of th
 of its recorded calls collide. -/
 def PartOpensB (H : Msg → Msg) (D : Deploy Coin) (DO : Flock.Deploy Coin Col T) (L : LayoutB)
     (shape : Form → Prop) (shows : ℕ → Msg → Msg → (ℕ → Coin) → Prop) (cmt : Msg → ℕ → Msg → Msg) (s : ℕ) : Prop :=
-  ∀ (x : Msg) (st : Stmt), D.parse x = some st → shape st.form → ∀ (xO : Msg) (w : Flock.Wit),
+  ∀ (x : Msg) (st : CompiledStatement), D.parse x = some st → shape st.form → ∀ (xO : Msg) (w : Flock.Wit),
     Flock.check DO.parse xO w = true → (∀ e ∈ L.calls x s w, H e.1 = e.2) →
     (∀ (c : ℕ → Coin), shows s x xO c → ∀ i, i + 1 < L.rounds x →
       (∀ m, L.held x s w i = some m → m = cmt x i xO) ∧
@@ -419,7 +419,7 @@ is never sent in the run (`ReadersRunPlayed`), so no commit string is asked of i
 `cmt` to the run: at an accepted run each part's statement shows the run's coins and the run's commit strings. -/
 def VstarShowsB (D : Deploy Coin) (I : Inner Coin W) (L : LayoutB) (shape : Form → Prop) (decC : Msg → Msg → Coin)
     (shows : ℕ → Msg → Msg → (ℕ → Coin) → Prop) (cmt : Msg → ℕ → Msg → Msg) : Prop :=
-  ∀ (x : Msg) (st : Stmt), D.parse x = some st → shape st.form → ∀ ps : List (Msg × Out),
+  ∀ (x : Msg) (st : CompiledStatement), D.parse x = some st → shape st.form → ∀ ps : List (Msg × Out),
     ps.length = I.V.k (xI D x) + D.kS x → ∀ c : ℕ → Coin,
       (∀ i < ps.length, ∃ m, (ps.getD i ([], .rej)).2 = .msg m ∧ decC x m = c i) →
         ∀ s < D.nS x, shows s x ((D.vstar x ps).getD s []) c ∧
@@ -434,7 +434,7 @@ message, and a holder that opens the string otherwise shows a collision among th
 last round are the parts', not free. -/
 def DecompB (H : Msg → Msg) (D : Deploy Coin) (IV : Verifier Coin) (L : LayoutB) (shape : Form → Prop)
     (chk : ℕ → Msg → (ℕ → Coin) → List Msg → Prop) : Prop :=
-  ∀ (x : Msg) (st : Stmt), D.parse x = some st → shape st.form → ∀ (c : ℕ → Coin) (ws : List Flock.Wit),
+  ∀ (x : Msg) (st : CompiledStatement), D.parse x = some st → shape st.form → ∀ (c : ℕ → Coin) (ws : List Flock.Wit),
     ws.length = D.nS x → (∀ e ∈ L.allCalls x ws, H e.1 = e.2) → (∀ s < D.nS x, chk s x c (L.msgs x ws)) →
       (run H (replay (L.msgs x ws)) IV (xI D x) () fun i => c i.val).out = .acc ∨
         (findColl (L.allCalls x ws)).isSome

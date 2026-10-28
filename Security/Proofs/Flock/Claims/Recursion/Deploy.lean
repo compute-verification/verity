@@ -313,14 +313,14 @@ def decodeR (x : Claims.Msg) : Option RecScope.Read := (readX x).map readOf
 inner shape (`RecScope.accepts`), the inner statement's bytes, its dimensions as check 5 sets it up, no circuit
 commitment, the form off the verifier's own inner shape, and no draw (the V* records are run messages; their draws are
 refused at the run, `DeployScope`). -/
-def parse (x : Claims.Msg) : Option Claims.Recursion.Stmt := RecScope.parseOf decodeR x
+def parse (x : Claims.Msg) : Option Claims.Recursion.CompiledStatement := RecScope.parseOf decodeR x
 
 /-- **The claims' scope check**: the deployed one (`RecScope.scopeCheckOf`) at `decodeR`, which reads only what the
 statement carries: the setup's checks accept its inner shape and the inner scope check takes its inner statement. -/
 def scopeCheck (ivScope : Claims.Msg → Bool) (x : Claims.Msg) : Bool := RecScope.scopeCheckOf ivScope decodeR x
 
 /-- The inner statement's bytes. -/
-def xIOf (x : Claims.Msg) : Claims.Msg := ((parse x).map Claims.Recursion.Stmt.inner).getD []
+def xIOf (x : Claims.Msg) : Claims.Msg := ((parse x).map Claims.Recursion.CompiledStatement.inner).getD []
 
 /-- The V* parts' count. -/
 def nS (x : Claims.Msg) : ℕ :=

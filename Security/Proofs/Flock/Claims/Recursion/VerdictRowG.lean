@@ -121,7 +121,7 @@ theorem folds_ofCircuit {S : Setup} {s : Stmt} (hS : S = Setup.ofCircuit s) (hwf
 verifier sets the inner statement up as one table (`innerSetup_files`), at the files' tags, and that table's `m` is the
 inner shape's (`checkShape_files`), whose plain schedule the verifier's list holds (`repSched_of_statements`), so it
 has a `fast100` schedule (`repRounds_size`). -/
-theorem dense_inner {xo : Claims.Msg} {sto : Claims.Recursion.Stmt} (hst : parse xo = some sto)
+theorem dense_inner {xo : Claims.Msg} {sto : Claims.Recursion.CompiledStatement} (hst : parse xo = some sto)
     (hf : Claims.Recursion.Form.Dense sto.form) :
     ∃ s spec st sch, FlockDeploy.setupOf false (xIOf xo) = some (s, spec, #[st]) ∧
       s.read.tags = RecCoins.innerTags ∧ s.read.publicInputs = none ∧ fast100 st.m = some sch := by
@@ -235,7 +235,7 @@ theorem kLog_le_of_tags (hT : D.d.s.read.tags = RecVStar.innerTags ∧ D.d.s.rea
 read is at the files' tags and its one table has a `fast100` schedule (`dense_inner`), so every table is a hidden-output
 table at untyped plain leaves (`sts_hidden`), whose regions carry their free bits (`setupHidden_regionBytes`), whose
 ranges fold (`slotOk_of_hidden`) and which is well formed (`setupHidden_wf`). -/
-theorem rowG (acc : ℕ → Array F128) {xo : Claims.Msg} {sto : Claims.Recursion.Stmt} (hst : parse xo = some sto)
+theorem rowG (acc : ℕ → Array F128) {xo : Claims.Msg} {sto : Claims.Recursion.CompiledStatement} (hst : parse xo = some sto)
     (hf : Claims.Recursion.Form.Dense sto.form) (hx : x = xIOf xo) {i : ℕ} (hi : i < D.sts.size) :
     RowG D cls acc i := by
   obtain ⟨s, spec, st, sch, hset, htags, hpi, hsch⟩ := dense_inner hst hf

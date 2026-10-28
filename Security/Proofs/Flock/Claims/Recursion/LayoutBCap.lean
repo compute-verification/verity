@@ -268,7 +268,7 @@ last (it is a stream round), so it has no pieces. Each rep's level-0 round commi
 theorem not_heldB_layoutBCap_none {W : Type} (IV : Claims.Verifier Coin) (ivScope : Msg → Bool) (b : Brings)
     (I : Claims.Recursion.Inner Coin W) (hk : ∀ x, I.V.k x = (FlockDeploy.V false).k x)
     (fin : Msg → List (ℕ × List (Msg × List HmNets.Lin))) (shape : Claims.Recursion.Form → Prop)
-    (hM : SchedMatches shape) {x : Msg} {st : Claims.Recursion.Stmt} (hst : parse x = some st) (hf : shape st.form)
+    (hM : SchedMatches shape) {x : Msg} {st : Claims.Recursion.CompiledStatement} (hst : parse x = some st) (hf : shape st.form)
     {j : ℕ} {sr : RecVStar.SchedRound} (hs : streamRound x j = some sr) (ht : sr.2.1.isEmpty = false) :
     ¬ Claims.Recursion.VStarB.HeldB (deployRec IV ivScope b) I (layoutBCap (fun _ _ _ => none) fin) shape := by
   intro hH

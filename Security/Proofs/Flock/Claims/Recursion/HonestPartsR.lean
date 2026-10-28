@@ -34,7 +34,7 @@ recorded calls are true and collide neither with each other nor with the compile
 agrees with `ms` where it holds rounds, pieces and shared rows. -/
 theorem partAccepts_of_run {H : Msg → Msg} {D : Deploy Coin} {I : Inner Coin W} {DO : Flock.Deploy Coin Col T}
     {L : LayoutB} {shape : Form → Prop} {shows : ℕ → Msg → Msg → (ℕ → Coin) → Prop} {cmt : Msg → ℕ → Msg → Msg}
-    (hSt : StagedB H D I L shape shows cmt) {x : Msg} {st : Stmt} (hx : D.parse x = some st) (hf : shape st.form)
+    (hSt : StagedB H D I L shape shows cmt) {x : Msg} {st : CompiledStatement} (hx : D.parse x = some st) (hf : shape st.form)
     {Ω : Type} {P : Prover Ω} {ω : Ω} {r : Fin (D.V.k x) → Coin} (hacc : (run H P D.V x ω r).out = .acc)
     {s : ℕ} (hs : s < D.nS x) {w : Flock.Wit} {ms : List Msg}
     (hms : ∀ i, i + 1 < L.rounds x → ms.getD i [] = ((run H P D.V x ω r).msgs.map Prod.fst).getD i [])
@@ -64,7 +64,7 @@ theorem partAccepts_run_deployRec {W Col T : Type} (H : Msg → Msg) (I : Claims
     (ivScope : Msg → Bool) (b : Brings) (untr : TrReader) (DO : Claims.Flock.Deploy Coin Col T)
     (L : Claims.Recursion.VStarB.LayoutB) (shape : Claims.Recursion.Form → Prop)
     (hrb : ReadsBackB H I.V b shape untr) (hHeld : Claims.Recursion.VStarB.HeldB (deployRec I.V ivScope b) I L shape)
-    {x : Msg} {st : Claims.Recursion.Stmt} (hx : (deployRec I.V ivScope b).parse x = some st) (hf : shape st.form)
+    {x : Msg} {st : Claims.Recursion.CompiledStatement} (hx : (deployRec I.V ivScope b).parse x = some st) (hf : shape st.form)
     {Ω : Type} {P : Claims.Prover Ω} {ω : Ω} {r : Fin ((deployRec I.V ivScope b).V.k x) → Coin}
     (hacc : (Claims.run H P (deployRec I.V ivScope b).V x ω r).out = .acc) {s : ℕ}
     (hs : s < (deployRec I.V ivScope b).nS x) {w : Claims.Flock.Wit} {ms : List Msg}

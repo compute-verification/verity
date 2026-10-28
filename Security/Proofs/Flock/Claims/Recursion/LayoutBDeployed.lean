@@ -171,7 +171,7 @@ there are no pieces. -/
 theorem heldB_layoutBDeployed_iff {W : Type} (D : Claims.Recursion.Deploy Coin) (I : Claims.Recursion.Inner Coin W)
     (shape : Claims.Recursion.Form → Prop) :
     Claims.Recursion.VStarB.HeldB D I layoutBDeployed shape ↔
-      ∀ (x : Msg) (st : Claims.Recursion.Stmt), D.parse x = some st → ¬ shape st.form := by
+      ∀ (x : Msg) (st : Claims.Recursion.CompiledStatement), D.parse x = some st → ¬ shape st.form := by
   constructor
   · intro h x st hst hf
     obtain ⟨hK, hcl, -⟩ := h x st hst hf

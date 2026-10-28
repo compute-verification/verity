@@ -32,10 +32,10 @@ def toyQuery : Query := ⟨"", 0, []⟩
 def toyPart : Partition := ⟨[[[[[0]], [[1]]]]]⟩
 
 /-- The program, drawn `subset 1`: in scope. -/
-def toyStmt : Stmt := ⟨[], toyProg, toyQuery, ⟨[⟨.subset 1, none⟩]⟩, []⟩
+def toyStmt : AuditStatement := ⟨[], toyProg, toyQuery, ⟨[⟨.subset 1, none⟩]⟩, []⟩
 
 /-- The program, drawn `subset 3` from two units: out of scope. -/
-def holeStmt : Stmt := ⟨[], toyProg, toyQuery, ⟨[⟨.subset 3, none⟩]⟩, []⟩
+def holeStmt : AuditStatement := ⟨[], toyProg, toyQuery, ⟨[⟨.subset 3, none⟩]⟩, []⟩
 
 theorem toyPart_rus : toyPart.rus = [[[0]], [[1]]] := rfl
 

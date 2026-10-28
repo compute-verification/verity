@@ -125,7 +125,7 @@ theorem runIn_localEval (hG : GatesAgree C p) {val : ℕ → Option Bool} {Xt : 
 /-- **A unit correct in the transcript is not faulty**, at a one-stage statement whose program, partition and openings
 are the game's circuit, partition and transcript. -/
 theorem not_faulty_of_correct {H : _root_.Claims.Msg → _root_.Claims.Msg} {Cm : _root_.Claims.Sampling.Commitment Bool}
-    {s : _root_.Claims.Sampling.Stmt} {Q : _root_.Claims.Sampling.Partition} {w : _root_.Claims.Sampling.Wit}
+    {s : _root_.Claims.Sampling.AuditStatement} {Q : _root_.Claims.Sampling.Partition} {w : _root_.Claims.Sampling.Wit}
     {Xt : Fin C.N → Bool} (hG : GatesAgree C s.prog) (hU : UnitsAgree P Q) (hO : OpensOn P (w.val H Cm s) Xt)
     {u : Fin n} (hc : P.Correct Xt u) : ¬ _root_.Claims.Sampling.Faulty H Cm s Q w u.val := by
   obtain ⟨l, hQ, hl⟩ := hU.2 u
@@ -175,7 +175,7 @@ theorem not_faulty_of_correct {H : _root_.Claims.Msg → _root_.Claims.Msg} {Cm 
 
 /-- **A faulty slot is a wrong unit** of the transcript. -/
 theorem wrong_of_faulty {H : _root_.Claims.Msg → _root_.Claims.Msg} {Cm : _root_.Claims.Sampling.Commitment Bool}
-    {s : _root_.Claims.Sampling.Stmt} {Q : _root_.Claims.Sampling.Partition} {w : _root_.Claims.Sampling.Wit}
+    {s : _root_.Claims.Sampling.AuditStatement} {Q : _root_.Claims.Sampling.Partition} {w : _root_.Claims.Sampling.Wit}
     {Xt : Fin C.N → Bool} (hG : GatesAgree C s.prog) (hU : UnitsAgree P Q) (hO : OpensOn P (w.val H Cm s) Xt)
     {u : Fin n} (hF : _root_.Claims.Sampling.Faulty H Cm s Q w u.val) : u ∈ P.wrong Xt :=
   P.mem_wrong.2 fun hc => not_faulty_of_correct hG hU hO hc hF
@@ -195,7 +195,7 @@ omit [Fintype K] [DecidableEq K] in
 /-- **A faulty slot is a unit wrong on the registration** `R` at the transcript `Xt`, at a one-stage statement whose
 program, partition and openings are the game's circuit, partition and `Xt`. -/
 theorem wrongRegZ_of_faulty {H : _root_.Claims.Msg → _root_.Claims.Msg} {Cm : _root_.Claims.Sampling.Commitment Bool}
-    {s : _root_.Claims.Sampling.Stmt} {Q : _root_.Claims.Sampling.Partition} {w : _root_.Claims.Sampling.Wit}
+    {s : _root_.Claims.Sampling.AuditStatement} {Q : _root_.Claims.Sampling.Partition} {w : _root_.Claims.Sampling.Wit}
     {Xt : Fin C.N → Bool} (hG : GatesAgree C s.prog) (hU : UnitsAgree P Q) (hO : OpensOn P (w.val H Cm s) Xt)
     (R : Reg) {u : Fin n} (hF : _root_.Claims.Sampling.Faulty H Cm s Q w u.val) :
     u ∈ wrongRegZ A P planZ tab vb R Xt :=
@@ -205,7 +205,7 @@ omit [Fintype K] [DecidableEq K] in
 /-- **At most as many faulty slots as units wrong on the registration** `R` at the transcript `Xt`: so the game's bound
 on `K₀ ≤ #wrongRegZ` bounds the claims' `K₀ ≤ #faulty`. -/
 theorem card_faulty_le_card_wrongRegZ {H : _root_.Claims.Msg → _root_.Claims.Msg} {Cm : _root_.Claims.Sampling.Commitment Bool}
-    {s : _root_.Claims.Sampling.Stmt} {Q : _root_.Claims.Sampling.Partition} {w : _root_.Claims.Sampling.Wit}
+    {s : _root_.Claims.Sampling.AuditStatement} {Q : _root_.Claims.Sampling.Partition} {w : _root_.Claims.Sampling.Wit}
     {Xt : Fin C.N → Bool} (hG : GatesAgree C s.prog) (hU : UnitsAgree P Q) (hO : OpensOn P (w.val H Cm s) Xt)
     (R : Reg) : (_root_.Claims.Sampling.faulty H Cm s Q w).card ≤ (wrongRegZ A P planZ tab vb R Xt).card := by
   classical
