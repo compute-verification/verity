@@ -11,8 +11,10 @@ commands. What attaches Verity to vLLM is `integrations/vllm/`, and the chain an
 - The one workload `workloads/SHA256SUMS` lists: its requests, its model and revision, and its pinned engine. Its bytes are
   a fixture in the evidence store (registered in `fixtures/artifacts.json`, gitignored here), fetched and checked against
   that digest by `run.sh` and by the integration (`verity_vllm.config.workload_file`). The integration finds it only
-  through `VERITY_WORKLOADS`, which `commit.sh` sets (`verity_vllm.config.row_file`); its Build's manifest is what the
-  endpoint commits under.
+  through `VERITY_WORKLOADS`, which `run.sh` passes and `commit.sh` and `serve.sh` set (`verity_vllm.config.row_file`). The
+  endpoint commits under its Build of record, which `verity-vllm predict row` writes from the workload alone before serving.
+  The Commit of record's traced Build is its cross-check (`predict compare --predicted`), and the endpoint serves only when
+  they agree.
 - The load, `serve_load.py`: `served_verdicts.sh`'s one sampling period of varied requests (`--varied`), or `serve.sh`'s
   `BURSTS` bursts of `PER_BURST` requests, each burst sealed on its own (8 and 4 by default), or with `VARIED=N` and
   `ADMIT=release-order` network accounting's varied traffic.
@@ -33,11 +35,11 @@ checks on it). FLAGs go to `research run`; `--dry-run` prints the command.
 
 1. `verity example vllm commit`, once per workload: `commit.sh`, the workload's Build and Match of record and a Commit that
    seals its replay bundle, kept on the node and put in the evidence store. `placement.toml`'s `COMMIT_RUN` names the
-   Commit the endpoint commits under.
-2. `verity example vllm`: `served_verdicts.sh`, the endpoint committing under that Commit, its requests, every closed
-   sampling period sealed, then the sampled proofs (C-Flock `--zk` behind the Lean firewall, and the Lean verifier's
-   verdict), PoUW, the bandwidth audit, PoUS and the network certifier where each has its piece, with one record of every
-   verdict in `$OUT/verdicts.txt`.
+   Commit whose traced Build the endpoint's Build of record is held to.
+2. `verity example vllm`: `served_verdicts.sh`, the endpoint committing under the row's Build of record, its requests,
+   every closed sampling period sealed, then the sampled proofs (C-Flock `--zk` behind the Lean firewall, and the Lean
+   verifier's verdict), PoUW, the bandwidth audit, PoUS and the network certifier where each has its piece, with one record
+   of every verdict in `$OUT/verdicts.txt`.
 3. `verity example vllm serve`: the endpoint alone, `serve.sh`, serving until `UNTIL` and sealing each closed sampling
    period in the serve dir, for an audit of one later (`benchmarks/prove_path/run.sh` with `PP_SERVE_RUN`, `PP_WINDOW` and
    `PP_SERVE_ROWS`).

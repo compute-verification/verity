@@ -7,7 +7,8 @@
 VENV = "/workspace/jobs/venv312"
 CUDA_HOME = "/workspace/jobs/cuda-12.9"
 HF_HOME = "/workspace/hf"
-# commit.sh's row dirs, LLAMA_ROOT/<commit run>/<row>; COMMIT_RUN is the Commit of record the endpoint commits under
+# commit.sh's row dirs, LLAMA_ROOT/<commit run>/<row>; COMMIT_RUN is the Commit of record whose traced row the endpoint's
+# Build of record (`predict row`) is held to
 LLAMA_ROOT = "/workspace/research/vllm-llama1b-commit"
 COMMIT_RUN = "r20261024-055630-5377"
 # top's rule for n1: no endpoint serves with less free on its serve dir's filesystem
