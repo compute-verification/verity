@@ -335,7 +335,7 @@ PoUW, as `H1CheckedCreditPeriod` takes them (the general `CheckedCreditPeriod` t
 `StagedPins`):
 
 - `Properties.Pouw.Period.ServiceSound`: the proof service is sound at δ_ks against PoUW's check, which is C-Flock's
-  soundness at each drawn unit (`Flock.Guarantees.EndToEndRegisteredRows`, part 1). It is a named assumption: no
+  soundness at each drawn unit (`Flock.Guarantees.EndToEndRegisteredRows` for one session). It is a named assumption: no
   theorem discharges it yet.
 - `Properties.Pouw.Period.DrawIsCoin`: the units the check publishes as drawn are the model's draw at the period's live
   coin. A protocol-code fact still to prove.
@@ -409,7 +409,8 @@ gives the overhead lower bound for monitoring periods of a week, a month and a y
 
 ## The demo
 
-**No example runs the remote verifier yet:** no recorded run of `remote check` exists. Lifecycle is the only example that steps through the whole remote composite, with a stand-in prover; h200
+**No example runs the remote verifier yet:** `remote check` has no run of record; its first is due Wed 28 Oct, 11 AM
+PDT (D3). Lifecycle is the only example that steps through the whole remote composite, with a stand-in prover; h200
 and vllm each run remote's sampled-proofs half for real:
 
 - `verity example lifecycle` (`examples/lifecycle/README.md`): the remote composite stepped through one monitoring period
@@ -420,16 +421,16 @@ and vllm each run remote's sampled-proofs half for real:
 
 - `verity example h200` (`examples/h200/README.md`): a fixed attention shape committed on one H200. Eight proof blocks
   are drawn by one live coin, each is proved by C-Flock `--zk` and accepted by the Lean verifier, and a flipped bit is
-  refused. At an 8-block draw, that allows at most 43.77% faulty proof blocks at δ = 1%. It runs, but no proved
-  guarantee covers it end to end, and it isn't placed: its Lean verifier ran beside the prover. On a CPU at a small shape, run
+  refused. At an 8-block draw, that allows at most 43.77% faulty proof blocks at δ = 1%. It runs, at proof level
+  none, and isn't placed: its Lean verifier ran beside the prover. On a CPU at a small shape, run
   `uv run python examples/h200/run.py --out /tmp/e2e` (`--tamper l1.wup` must exit 3).
-- `verity example vllm` (`examples/vllm/README.md`): Llama-3.2-1B in bf16 served by vLLM on one RTX PRO 6000 (its
-  recorded run), its values committed while serving, and a sampling period's proof blocks drawn by live coins, proved by
-  C-Flock `--zk` and checked by the Lean verifier. It runs, but no proved guarantee covers it end to end: no remote
-  guarantee exists for those verdicts to reach (the open gap, above). The int8 served run on an H200 is
-  `benchmarks/one_stage/served_verdicts.sh`'s default.
+- `verity example vllm` (`examples/vllm/README.md`): Llama-3.2-1B in bf16 served by vLLM on one RTX PRO 6000 (its run
+  of record), its values committed while serving, and a sampling period's proof blocks drawn by live coins, proved by
+  C-Flock `--zk` and checked by the Lean verifier. It runs, at proof level none: no remote guarantee exists for those
+  verdicts to reach (the open gap, above). The int8 served run on an H200 (`benchmarks/one_stage/served_verdicts.sh`'s
+  default) is tonight's, Tue 27 Oct, 6 PM PDT.
 
-PoUW's half has no runner. `examples/dither_full_util/README.md` has no runner and no recorded run. What of PoUW runs
+PoUW's half has no runner. `examples/dither_full_util/README.md` has no runner and no run of record. What of PoUW runs
 is its Lean check, through its difftest against the Python (`lake exe pouw-check`, the suite
 `verity-pouw-check-difftest`; `verity/core/protocols/pouw/lean/check/README.md`), and the composite's difftest
 (`verity/core/protocols/composition/tests`).
