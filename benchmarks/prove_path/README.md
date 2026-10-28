@@ -1,7 +1,7 @@
 # Prove path
 
 Network accounting under arbitrary vLLM usage proves a served run's step units after the fact: a precommitted compiler turns
-the run's advice into each step's Programs, the committing vLLM has recorded each step's values, and the proof service draws
+the run's advice into each step's Programs, the committing vLLM has recorded each step's values, and the proof system draws
 units on live coins, proves them with C-Flock `--zk` behind the Lean firewall, and the Lean verifier accepts or refuses them.
 `prove_path.py` is that path on a committed run, a TP Commit (`--tp-commit`), a single-GPU one (`--bundle`, TP1) or a closed
 Commit window of a `verity-vllm serve-openai` run (`--serve-run`, TP1): the prover commits the advice under hiding rows (a

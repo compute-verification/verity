@@ -153,13 +153,13 @@ Sampled proofs (`benchmarks/prove_path/README.md`, "What an accepted audit means
 
 PoUW, as `H1J10RCheckedCreditPeriod` takes them (`Security/Properties/Pouw/PeriodJ10R.lean`):
 
-- `Properties.Pouw.PeriodJ10R.TileServiceSound`: the proof service is sound against `Credit.window` at each drawn unit,
+- `Properties.Pouw.PeriodJ10R.TileServiceSound`: the proof system is sound against `Credit.window` at each drawn unit,
   C-Flock's soundness under live coins. A fact to prove: no theorem discharges it yet.
 - `Properties.Pouw.PeriodJ10R.TileDrawIsCoin`: on every accepted window, the units the check demands proofs of are the
   tile stratum's draw at the window's draw coin. A protocol-code fact still to prove.
 - `Properties.Pouw.PeriodJ10R.RegisteredBeforeDraw`: each window's registration is fixed before its draw coin. It
   states the order only, and the binding it is used for also needs the rows committed by the registration, which the
-  deployed path doesn't do yet.
+  deployed path doesn't do yet: its registered roots are tags, with no row committed (`anchors []`).
 - `Properties.Pouw.Period.SaltIsLiveCoin`: each window's salt is its round's live coin. The deployed path doesn't meet
   it: the loop is given its salt before it serves, and nothing in the record binds the salt to a live coin (`Security/Properties/Pouw/Period.lean`,
   `SaltIsLiveCoin`'s docstring).
