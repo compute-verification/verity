@@ -1,6 +1,6 @@
-# The vLLM example: the remote protocol's demo
+# The vLLM example: the remote protocol's sampled-proofs half
 
-This example is the runnable half of the **remote protocol** (`verity/remote/v0`, in `verity/core/protocols/remote/`):
+This example runs one half of the **remote protocol** (`verity/remote/v0`, in `verity/core/protocols/remote/`):
 what a verifier with no hardware at the site establishes about a datacenter serving a model. The remote protocol composes
 two subprotocols and accepts only when both accept:
 
@@ -16,14 +16,20 @@ development run, which credits nothing.
 
 `example.toml` records what the example establishes. Sampled proofs' guarantee, `Flock.Guarantees.SampledKSLiveV3`, is
 proved: when the verifier accepts a `--zk` session, the committed transcript is outside the sampling relation with
-probability at most δ plus the proof system's errors. The example's proof level is still none, because no theorem yet
-carries that guarantee to the audit-level claim `Claims.Sampling.KS`, which the audit's property
-`NetTiming.Guarantees.SampledAuditAccepted` takes as a hypothesis (`benchmarks/prove_path/README.md`).
+probability at most δ plus the proof system's errors. The example's proof level is still none, because the remote
+protocol it is half of has no guarantee in Lean for it to instantiate: `Verity.Soundness` is not in Lean yet, and remote's
+verifier reads one-stage v1, which takes the sessions' verdicts as evidence (`verity/core/protocols/remote/README.md`,
+"The open gap"). Onsite's chain has a gap of its own: network certification's `NetTiming.Guarantees.SampledAuditAccepted`
+takes `Claims.Sampling.KS` as a hypothesis, and the theorem that gives it at the deployed record,
+`Claims.Sampling.sampling_assembled`, is not a lock guarantee and takes the verifier's own facts as hypotheses
+(`benchmarks/prove_path/e2e_chains/README.md`).
 
 ## What runs
 
 Llama-3.2-1B (`unsloth/Llama-3.2-1B` at `9535bd9b1d1dea6acafbdc4813b728796aeb28da`), bf16, batch-invariant eager, served
-by vLLM on one RTX PRO 6000 through `verity_vllm`'s committing OpenAI endpoint. Each closed sampling period is sealed, its
+by vLLM on one RTX PRO 6000 through `verity_vllm`'s committing OpenAI endpoint: this is today's run of record, and
+`run.sh` passes the workload's own model and precision (`--precision pin`). `served_verdicts.sh`'s own default, int8 on an
+H200, is tonight's served run, Tue 27 Oct, 6 PM PDT. Each closed sampling period is sealed, its
 values committed as the serving runs, and one sampling period is audited by sampled proofs. What attaches Verity to vLLM is
 `integrations/vllm/`, and the chain an audit runs is `benchmarks/one_stage/served_verdicts.sh`'s. This directory holds
 what is the example's own: its workload, its placement and its commands.
@@ -58,8 +64,10 @@ recorder; `--dry-run` prints the command.
    Commit the endpoint commits under.
 2. `verity example vllm`: `served_verdicts.sh`, the endpoint committing under that Commit, its requests, every closed
    sampling period sealed, then the sampled proofs (C-Flock `--zk` behind the Lean firewall, and the Lean verifier's
-   verdict), with one record of every verdict in `$OUT/verdicts.txt`. The chain also runs the other subprotocols where each
-   has its piece (PoUW, PoUB, PoUS, memory wipes and network certification), and names each one missing otherwise.
+   verdict), with one record of every verdict in `$OUT/verdicts.txt`. The other subprotocols (PoUW, PoUB, PoUS, memory
+   wipes and network certification) run only when their commands are set (`POUW_CMD`, `BANDWIDTH_CMD`, `POUS_CMD`,
+   `CERTIFIER_CMD`, `WIPE_CMD`); each one unset prints a `MISSING` line, and the record stays `pending`. The example's
+   runs of record (`example.toml`'s `runs`) ran sampled proofs alone.
 3. `verity example vllm serve`: the endpoint alone, `serve.sh`, serving until `UNTIL` and sealing each closed sampling
    period in the serve dir, for an audit of one later (`benchmarks/prove_path/run.sh` with `PP_SERVE_RUN`, `PP_WINDOW` and
    `PP_SERVE_ROWS`).

@@ -177,7 +177,7 @@ def test_the_doc_scan_reads_each_form():
         "b.md": 'The `legs/pous.py` file and `wipe_period.leg(dir)`; ``a `leg` key``; "leg" is retired.\n'
                 "```sh\nLEGS=A,B ./run.sh  # each leg\n```\n~~~\na leg\n~~~\nA thread block after the fences.\n",
         "c.py": '"""A wrong unit and a leg stay in code until PR 2."""',
-        "benchmarks/numerical/CHANGELOG.md": "a leg",
+        "benchmarks/pouw/CHANGELOG.md": "a leg",
         "verity/README.md": "a leg",
         GLOSSARY: '| "leg"; a physical block | subprotocol |\nA leg outside the table.\n',
     }
