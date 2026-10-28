@@ -62,7 +62,7 @@ judged through the proof system (`sampled_proofs.service`, P1: a `Stream`'s `reg
   Python's.
 - **The coins** are the epoch's (`pouw.coins`): the challenger process that holds the Streams holds the epoch's coin
   challenger.  When the process starts, before it reads a request, that challenger draws the epoch's salt and draw coins
-  and their hm96 salts from the Lean verifier of record (`pouw.verifier.coins`: `pouw-check-difftest`'s ``coins``,
+  and their hm96 salts from the Lean verifier (`pouw.verifier.coins`: `pouw-check-difftest`'s ``coins``,
   `IO.getRandomBytes`, A3) and commits to them, and the process publishes the commitment (``LOG/coins.json``) before
   any request; with ``--state`` the entropy is instead the file the serving controller wrote from the same Lean coins
   before it served the pass (`e2e.state_entropy`), so the pass's salt coin is one it opens.  No coin is read from
@@ -89,7 +89,7 @@ judged through the proof system (`sampled_proofs.service`, P1: a `Stream`'s `reg
   failing closed (``certifier``), each through the certifier's client (`RemoteCertifier`: a signed request, a signed
   answer it verifies): the certifier gives p's salt once, within its reveal deadline on its own clock, so its
   parameters carry no ``registration_deadline``.  The window registers once per PoUW window, stream and prover
-  (`salt.Registrations`, ``reregistered``), and its draw coin is a live epoch's ``pouw/draw`` coin 0, checked against
+  (`salt.WindowOpens`, ``reregistered``), and its draw coin is a live epoch's ``pouw/draw`` coin 0, checked against
   the commitment the challenger reads from its challenger's signed record (`challenger.trusted_commitment`), which the
   draw's check of record verifies again, both under the challenger key the window's deployment pins (`Deployment`,
   beside the certifier's key and run id; `Deployment.pinned` reads it from infra's published pin, `CHALLENGER_KEY_PIN`,
@@ -298,7 +298,7 @@ def certifier_run(certifier: Any) -> dict[str, str]:
 
 DEPLOYMENT_FORM = ("a certified window's deployment is the network certifier's public key, its run's "
                    f"{RUN_ID_BYTES}-byte id and the verifier's challenger key (`challenger.ChallengerKey`)")
-#: infra's published challenger key, vy-challenger-1's from 2026-10-20T09:45:24Z: a challenger-key/v1 record
+#: the published challenger key, vy-challenger-1's: a challenger-key/v1 record
 CHALLENGER_KEY_PIN = "art:d12f85becc22388f3e9834d3894cbb99eb655bc19484b0bc3abe9b080689a657"
 #: the SHA-512 of the public key `CHALLENGER_KEY_PIN` publishes; a record of any other key is refused, whatever it names
 CHALLENGER_KEY_SHA512 = "27271eaf917d1a817198cbcfe7684debd9bdb11b9e386460948bb981642fab3ae065c0a877330a0da68ae76969550eb786dc172319876aaca21fd116e5a193bc"
@@ -341,7 +341,7 @@ class Deployment:
     coin record and the draw's check of record verifies it (`core_check.draw`, ``coin-key``), so no record a prover
     signs over coins it holds is read.  `pinned` takes the challenger key from infra's published pin."""
 
-    # TODO(NET-50): the auditor's deployment record is to give the certifier's key and run id; nothing writes it yet, so
+    # TODO: the auditor's deployment record is to give the certifier's key and run id; nothing writes it yet, so
     # the caller does.
     certifier_key: Any
     run_id: bytes
@@ -363,7 +363,7 @@ class Deployment:
 def stream_id(params: dict, stream: str, certifier: Mapping[str, str]) -> bytes:
     """A certified window's stream as the PoUW salt binds it (`salt.pouw_salt`), 64 bytes: the tagged SHA-512 of the
     deployment, the stream's challenger name and the certifier's run (`certifier_run`), so one stream behind two
-    certifier links, or two runs of one, is two streams, and the once-only ledger (`salt.Registrations`), keyed on it,
+    certifier links, or two runs of one, is two streams, and the once-only ledger (`salt.WindowOpens`), keyed on it,
     is keyed on the certifier run. `Stream.digest` can't be the one bound: its Spec reads the window's context, which
     names the pass's manifest and so its salt, and the registered level, which the traffic fixes."""
     return tagged_sha512(STREAM_ID, canonical_json({"certifier": dict(certifier), "challenger": f"{CHALLENGER}/{stream}",
@@ -702,7 +702,7 @@ def lean_verdict(path_: Path) -> dict:
 
 
 def rust_verdict(path_: Path | None) -> dict | None:
-    """The Rust prover-side verifier's verdict of the --zk session (`LIVE\\t{…}` lines), beside the verifier of record."""
+    """The Rust prover-side verifier's verdict of the --zk session (`LIVE\\t{…}` lines), beside the Lean verifier."""
     if path_ is None:
         return None
     try:
@@ -852,7 +852,7 @@ class Challenger:
     certifier's key and run id, which `certifier` must be the client for, and its challenger's key, under which the
     challenger reads its trusted commitment itself (`challenger.trusted_commitment`).  Every opening is checked against
     it, and the draw's check of record verifies the record again under the key the deployment pins, not the one the
-    record's coins name (``coin-key``).  `registrations` is the deployment's `salt.Registrations`,
+    record's coins name (``coin-key``).  `opens` is the deployment's `salt.WindowOpens`,
     shared by its challengers.  Each registered window's salt, the one its pass was checked against, is held
     (`salts`), and `check` opens its drawn units under it."""
 
@@ -860,12 +860,12 @@ class Challenger:
                  clock: Callable[[], float] | None = None, record: OR.Record | None = None,
                  predates_deadline: bool = False, certifier: Any = None, prover: bytes | None = None,
                  coin_record: str | os.PathLike | None = None, deployment: Deployment | None = None,
-                 registrations: PS.Registrations | None = None) -> None:
+                 opens: PS.WindowOpens | None = None) -> None:
         self.trusted: Ch.LiveCommitment | None = None
         self.signed: dict | None = None
         self.deployment: Deployment | None = None
         if certifier is not None:
-            # TODO(RT4-INT-7): no Lean statement covers a certified window's timing, and no run measures the commit
+            # TODO: no Lean statement covers a certified window's timing, and no run measures the commit
             # pipeline the certifier's reveal deadline must be sized against.
             if params.get("registration_deadline") is not None or predates_deadline:
                 raise ValueError(CERTIFIED_DEADLINE)
@@ -891,7 +891,7 @@ class Challenger:
                              "without one")
         self.predates_deadline = predates_deadline
         self.certifier, self.prover = certifier, prover
-        self.registrations = PS.Registrations() if registrations is None else registrations
+        self.opens = PS.WindowOpens() if opens is None else opens
         self.salts: dict[str, bytes] = {}
         self.params, self.coins, self.sampler, self.budget = params, coins, sampler, budget
         self.record = OR.Record() if record is None else record
@@ -1092,8 +1092,8 @@ class Challenger:
         salt = CC.certified_salt(manifest, self.params["context"], reveal, committed, sid, self.prover)
         self._distinct(name, manifest)
         try:
-            self.registrations.admit(p, sid, self.prover, reg.digest)
-        except PS.Reregistered as e:
+            self.opens.admit(p, sid, self.prover, reg.digest)
+        except PS.Reopened as e:
             raise _refused("reregistered", str(e)) from None
         self.regs[name] = (st, reg)
         self.recorded[name] = False
@@ -1431,7 +1431,7 @@ def answer(ch: Challenger, line: str) -> str | None:
 
 
 def cmd_challenger(a) -> int:
-    """The challenger's process: the epoch's coins, drawn now from the Lean verifier of record (`pouw.verifier.coins`) or
+    """The challenger's process: the epoch's coins, drawn now from the Lean verifier (`pouw.verifier.coins`) or
     read from ``--state``, their commitment published to LOG/coins.json before any request; then
     one JSON request a line on stdin (`handle`), one ``WORD {json}`` reply a line on stdout, each also appended to
     LOG/requests.jsonl, each coin it opened to LOG/openings.jsonl, and each request's verdicts of record, Lean's and

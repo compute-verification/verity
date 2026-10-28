@@ -7,7 +7,7 @@ import Definitions.Pouw.PearlC.DeviceFp4
 `pc8Sem ops p noise` and `pc4Sem ops lines` are Pearl-C's and Pearl-C4's semantics (`PearlCSem`, `Fp4Sem`) at the
 Programs' own row arithmetic: `α`, `β`, the noise floor and (for `pc8`) the forming are word formulas on core's
 primitives (`RowOps`, each primitive reduced to its width as a gate computes it, `Prim.eval`), in the order
-`verity.protocols.accounting.work.pouw.circuit.pc8`'s and `pc4`'s `_stats`, `_alpha` and `_form` compute them and `PROTOCOL.md` fixes. They are
+`verity.protocols.accounting.work.pouw.circuit.pc8`'s and `pc4`'s `_stats`, `_alpha` and `_form` compute them. They are
 not read off the gate tables: `SecurityProofs.PearlC.RowCircuit` proves that the tables compute them.
 
 On a row of `K` FP32 words `x_0, …, x_{K−1}` (`pc4`: BF16 words, widened):

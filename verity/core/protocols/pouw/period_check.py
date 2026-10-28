@@ -2,33 +2,52 @@
 PoUW's verifier of record for a period and onsite's work component) is held to by ``lean/check/tests/test_period_difftest.py``.
 
 Its parameters are the verifier's own, ``{key, main, name}``: the challenger key it pins, its copy of main's
-first-parent history and the period it credits. Its commitment is the auditor's ledger (the lines the challenger signed),
-its digest SHA-512(`COMMITMENT_TAG` ‖ 0 ‖ its bytes). Its evidence is ``{pins, windows}``: the challenger host's pins log
-and each window's evidence in the close's order (`credit.PROVED_KEYS`). The check first refuses, by name (``form``),
-every window in a form the period's proved guarantee (`GUARANTEE`) doesn't cover: a Pearl-C pass, a circuit that is not
-an H1 window, a template over per-unit noise (``PouwH1Tile`` v1, v3 or v4), a J10-R unit over a tile other than
-``PouwH1Tile_v5`` (v6), or units at more than one K. Then it is `credit._period_outcomes`, all or nothing: it accepts with the period's credit (``{windows, work, k, delta, eps}``) and the profile ``{period, windows}``,
-or rejects with the first refusal, ``code: why``. Each drawn unit's and each round's proof outcome is the verifier of
-record's verdict, which the evidence carries."""
+first-parent history and the period it credits; optionally ``capacity``, the period's monitored capacity in MACs.
+It carries no policy parameter: the period surfaces what its draw established, and whoever reads it decides whether it
+was idle. Its commitment is the auditor's ledger (the lines the challenger signed), its digest
+SHA-512(`COMMITMENT_TAG` ‖ 0 ‖ its bytes). Its evidence is ``{pins, windows}``: the challenger host's pins log and each
+window's evidence in the close's order (`credit.PROVED_KEYS`), or ``{fills, pins, windows}`` with the filler windows of
+the period's fill period too (`fill`, `fill.FILL_KEYS`). The check first refuses, by name (``form``), every served window
+in a form the period's proved guarantee (`GUARANTEE`) doesn't cover: a Pearl-C pass, a circuit that is not an H1 window, a
+template over per-unit noise (``PouwH1Tile`` v1, v3 or v4), a J10-R unit over a tile other than ``PouwH1Tile_v5`` (v6),
+or units at more than one K. Then it is `credit._period_outcomes`, all or nothing: it accepts with the period's credit
+(``{windows, work, k, delta, eps}``) and the profile ``{period, windows}``, or rejects with the first refusal,
+``code: why``. With filler windows it is `fill.period_fill` too, also all or nothing, and reported, never decided on:
+the credit gains ``fill``, ``{work, k, delta, eps}`` with the profile ``fills``, or ``{refused: "code: why"}``, and the
+verdict and the served credit are the same with or without them, since no guarantee covers the fill yet (the verifier
+gains no form ahead of its proof); with a ``fill`` the credit carries ``gaps`` (`GAPS`), so no reader takes the fill as
+proved. With a capacity C the credit gains ``utilization`` (``{capacity, certified, share}``): C, the certified work,
+the served work alone, the work `GUARANTEE` covers, and its share of C. Nothing named certified holds the fill. Each
+drawn unit's and each round's proof outcome is the verifier of record's verdict, which the evidence carries."""
 from __future__ import annotations
 
 import hashlib
+from fractions import Fraction
 from typing import Any
 
 from verity.core.protocols.pouw import core_check as CC
 from verity.core.protocols.pouw import credit as Cr
+from verity.core.protocols.pouw import fill as F
 
 ID = "verity/pouw/period/v1"
 COMMITMENT_TAG = "verity/pouw/period/ledger/v1"
 PARAMS_KEYS = ("key", "main", "name")
+#: the parameters of a verifier that reads the period's utilization: its monitored capacity
+CAPACITY_KEYS = ("capacity", "key", "main", "name")
 EVIDENCE_KEYS = ("pins", "windows")
+#: the evidence of a period that presents its filler windows too (`fill`)
+FILL_EVIDENCE_KEYS = ("fills", "pins", "windows")
+#: what a period with a ``fill`` doesn't establish
+GAPS = ["fill: no guarantee covers the fill yet, so its work is reported and not certified"]
 
 
 def params(j: Any) -> dict:
-    if not isinstance(j, dict) or sorted(j) != list(PARAMS_KEYS):
-        raise CC.Refused(f"keys are not {', '.join(PARAMS_KEYS)}")
+    if not isinstance(j, dict) or sorted(j) not in (list(PARAMS_KEYS), list(CAPACITY_KEYS)):
+        raise CC.Refused(f"keys are not {', '.join(PARAMS_KEYS)}, with capacity optional")
     if not isinstance(j["name"], str):
         raise CC.Refused("name is not a string")
+    if "capacity" in j and not (type(j["capacity"]) is int and j["capacity"] >= 1):
+        raise CC.Refused("capacity is not a positive integer, the period's monitored capacity in MACs")
     return j
 
 
@@ -45,7 +64,7 @@ def digest(c: dict) -> bytes:
 
 def evidence(b: bytes) -> dict:
     j = CC.canonical(b)
-    if not isinstance(j, dict) or sorted(j) != list(EVIDENCE_KEYS):
+    if not isinstance(j, dict) or sorted(j) not in (list(EVIDENCE_KEYS), list(FILL_EVIDENCE_KEYS)):
         raise CC.Refused(f"keys are not {', '.join(EVIDENCE_KEYS)}")
     return j
 
@@ -123,15 +142,27 @@ def form(nm: str, windows: Any) -> str | None:
 
 
 def check(p: dict, c: dict, e: dict) -> tuple[str, str | None, tuple[Any, Any] | None]:
-    """`PouwCheck.Period.check`: the first window in a form the period's guarantee doesn't cover (``form``), else the
-    period's credit and profile, or the first refusal."""
+    """`PouwCheck.Period.check`: the first served window in a form the period's guarantee doesn't cover (``form``),
+    else the period's credit and profile, or the first refusal. The fill is reported and read by no decision."""
     if (why := form(p["name"], e["windows"])) is not None:
         return "reject", f"form: {why}", None
     got, refused = Cr._period_outcomes(p["key"], c["ledger"], e["pins"], p["main"], p["name"], e["windows"],
                                        CC.lms_verify)
     if refused is not None:
         return "reject", f"{refused[0]}: {refused[1]}", None
-    return "accept", None, (got, {"period": p["name"], "windows": len(got["windows"])})
+    profile = {"period": p["name"], "windows": len(got["windows"])}
+    if "fills" in e:
+        fill, refused = F.period_fill(p["key"], c["ledger"], e["pins"], p["main"], p["name"], e["fills"],
+                                      CC.lms_verify)
+        if refused is not None:
+            got = {**got, "fill": {"refused": f"{refused[0]}: {refused[1]}"}}
+        else:
+            got, profile = {**got, "fill": fill}, {**profile, "fills": len(fill["work"])}
+        got["gaps"] = GAPS
+    if "capacity" in p:
+        cap, certified = p["capacity"], sum(got["work"])
+        got = {**got, "utilization": {"capacity": cap, "certified": certified, "share": str(Fraction(certified, cap))}}
+    return "accept", None, (got, profile)
 
 
 def answer(params_b: bytes, commitment_b: bytes, evidence_b: bytes) -> dict:
@@ -170,5 +201,5 @@ def case(j: Any) -> dict:
     return answer(params_b, bytes.fromhex(c), bytes.fromhex(e))
 
 
-__all__ = ["COMMITMENT_TAG", "COVERED_TILE", "EVIDENCE_KEYS", "GUARANTEE", "ID", "PARAMS_KEYS", "answer", "case", "check",
-           "commitment", "digest", "evidence", "form", "params"]
+__all__ = ["CAPACITY_KEYS", "COMMITMENT_TAG", "COVERED_TILE", "EVIDENCE_KEYS", "GAPS", "GUARANTEE", "ID",
+           "PARAMS_KEYS", "answer", "case", "check", "commitment", "digest", "evidence", "form", "params"]

@@ -109,7 +109,7 @@ def markdown(table: dict) -> str:
               f"weighs an input's tiles by their area |rows|·|cols|, which within one input (one shape) is proportional to "
               f"`TR.Wref` (`pearlCTilesDevRev1K`: `tileShare` on the tile's rows, not its passing rows). So ε is a rate "
               f"under Lean's draw, not under the deployed audit's, whose `tile_weight` counts credited cells only and so "
-              f"differs on tiles with filler, excluded or voluntary rows (PROTOCOL.md, \"Not here yet\")."]
+              f"differs on tiles with filler, excluded or voluntary rows."]
     quality = [r for r in table["models"] if "quality" in r]
     if quality:
         lines += ["", "| model | quality run | mode | scheme | WikiText-2 perplexity | top-1 vs bf16 | greedy tokens vs bf16 |",

@@ -16,8 +16,8 @@ verdict at the code `Vocab.Coupling.verdict` among them):
 
 | step | content | state |
 | --- | --- | --- |
-| S1 | an accepted period accepted every link-window (`periodAcceptMeans`) | proved |
-| S2 | Period runs one-stage v2 on each window's case (`PeriodRunsV2`) | open |
+| S1 | an accepted period accepted every link-window, v2 on the blobs among it (`periodAcceptMeans`) | restated, its proof open |
+| S2 | Period runs one-stage v2 on each window's case (`PeriodRunsV2`) | from S1 in the clock form (`periodRunsV2_of_clock`) |
 | S4 | the sessions' coins are the live coins (`WindowCoinsLive`) | open |
 | S5 | v2's acceptance is an accepting sampled run, under a guard (`SessionIsSampledRun`) | open |
 | S6 | the realization is the compiled run's (`NetworkCouples`) | open |
@@ -56,7 +56,8 @@ abbrev Rlt (R : RealizesCommOfPeriodLeakAccepted r K H D L Kₒ S lay k δ decod
 /-- **The network audit's runs at each window**: what the named steps read of the deployed run at a realization `R`,
 beyond its fields.
 
-* `v2 ξ i`: one-stage v2 accepts window `i`'s case at the coins `ξ` (S2's conclusion, S5's and S8's hypothesis);
+* `v2 ξ i`: one-stage v2 accepts window `i`'s case at the coins `ξ` (S2's conclusion, S5's and S8's hypothesis;
+  `NetworkV2` is the period check's own);
 * `coins ξ i x`: the tape of window `i`'s prover and the sampled verifier's coins that the network audit's own coin `x`
   gives, at the other coins `ξ` (S4, S5);
 * `sched ξ`, `srv ξ`: the network certifier's schedule and the server's state at `ξ`, which its device runs on (S6). -/
@@ -75,13 +76,35 @@ def WindowRuns.record (W : WindowRuns R) (ξ : (i : I) → Ω i) (i : Fin n) : L
 
 /-! ## The named steps -/
 
-/-- **S2 (open): the period check runs one-stage v2 on each window's case.** Where onsite's
-network component accepts at `ξ`, one-stage v2 accepted window `i`'s case. Today's `NetworkCheck.Period` reads each
-window's one-stage answer from the evidence the prover sends (`PeriodWindowProved`, `PeriodRowsProved`) and runs no
-verifier on it, so this needs Period to run `OneStageZk.checkBlobs` on each window's case, over the core interface's
-blobs and the blob product. -/
+/-- **S2: the period check runs one-stage v2 on each window's case.** Where onsite's network component
+accepts at `ξ`, one-stage v2 accepted window `i`'s case. In the clock form `NetworkCheck.Period` runs
+`OneStageZk.checkBlobs` on each window's case over the blobs the prover sent, so S2 is S1's `PeriodWindowV2` there
+(`periodRunsV2_of_clock`); the rows form reads the window's one-stage answer from the evidence (`PeriodRowsProved`) and
+runs no verifier on it. -/
 def PeriodRunsV2 (W : WindowRuns R) (s : ((i : I) → Ω i) → Sent) : Prop :=
   ∀ ξ i, ComponentAccepts .onsite .network (s ξ) → W.v2 ξ i
+
+/-- **One-stage v2 accepted window `i`'s case at the period onsite's network case decodes to**: the period is in the
+clock form on a link `l`, and window `i`'s registration and evidence pass one-stage v2 on the blobs the prover sent
+(S1's `PeriodWindowV2`). -/
+def NetworkV2 (s : Sent) (i : ℕ) : Prop :=
+  ∃ p c e l reg x, NetworkPeriod .onsite s p c e ∧ p.form = .clock l ∧ c.windows[i]? = some reg ∧
+    e.windows[i]? = some x ∧ PeriodWindowV2 p l (c.windows.extract 0 i) (p.first + i) reg x (Core.Blobs.ofArray s.blobs)
+
+/-- **S2 in the clock form, from S1**: where onsite's network component accepts `s`, every period it decodes to is in
+the clock form and `i` is below each one's window count, one-stage v2 accepted window `i`'s case (`NetworkV2`). -/
+theorem networkV2_of_accepts {s : Sent} (h : ComponentAccepts .onsite .network s)
+    (hclock : ∀ p c e, NetworkPeriod .onsite s p c e → ∃ l, p.form = .clock l) {i : ℕ}
+    (hi : ∀ p c e, NetworkPeriod .onsite s p c e → i < p.windows) : NetworkV2 s i := by
+  obtain ⟨p, c, e, hn, hc, he, hall⟩ := componentAccepts_network_windows periodAcceptMeans h
+  obtain ⟨l, hl⟩ := hclock p c e hn
+  have hi' := hi p c e hn
+  have hc' : i < c.windows.size := by omega
+  have he' : i < e.windows.size := by omega
+  have hw := hall i c.windows[i] e.windows[i] (Array.getElem?_eq_getElem hc') (Array.getElem?_eq_getElem he')
+  rw [hl] at hw
+  exact ⟨p, c, e, l, c.windows[i], e.windows[i], hn, hl, Array.getElem?_eq_getElem hc',
+    Array.getElem?_eq_getElem he', hw.2.2.2.1⟩
 
 /-- **S4: the sessions' coins are the challenger's live coins.** At each window and each value
 of the other coins, the network audit's own uniform coin gives the prover's tape and the sampled verifier's coins
@@ -115,6 +138,16 @@ structure NetworkCouples (R : RealizesCommOfPeriodLeakAccepted r K H D L Kₒ S 
   wit : ∀ ξ i, (∃ w, Rlt R (R.stmt ξ i) w) → Rlt R (R.stmt ξ i) (R.wit ξ i)
   obs : ∀ ξ, R.obs ξ = (R.run R.device (W.sched ξ, W.srv ξ)).2
   windows : ∀ ξ p c e, NetworkPeriod .onsite (s ξ) p c e → n ≤ p.windows
+
+/-- **S2 from S1 in the clock form**: where `W.v2` holds wherever one-stage v2 accepted window `i`'s case at the
+decoded period (`hv`; `W.v2 := fun ξ i => NetworkV2 (s ξ) i` meets it) and every period onsite's network case decodes
+to is in the clock form (`hclock`), the period check's acceptance gives `W.v2` at every window, below S6's window
+count. -/
+theorem periodRunsV2_of_clock (W : WindowRuns R) {s : ((i : I) → Ω i) → Sent} (h6 : NetworkCouples R s W)
+    (hv : ∀ ξ (i : Fin n), NetworkV2 (s ξ) i.val → W.v2 ξ i)
+    (hclock : ∀ ξ p c e, NetworkPeriod .onsite (s ξ) p c e → ∃ l, p.form = .clock l) : PeriodRunsV2 W s :=
+  fun ξ i hca => hv ξ i (networkV2_of_accepts hca (hclock ξ) fun p c e hn =>
+    lt_of_lt_of_le i.isLt (h6.windows ξ p c e hn))
 
 /-- **The ρ gap (open): the trace holds the registered values at the registered
 inputs.** Where onsite's network component accepts at `ξ` and the realization's witness is in the leak relation, the
@@ -160,7 +193,8 @@ def RecordCovers (W : WindowRuns R) (s : ((i : I) → Ω i) → Sent) : Prop :=
 
 /-- An accepted period's link-window `i < p.windows` is registered, under a registration naming the period's Program. -/
 theorem windowProgram_of_accepted {p : NetworkCheck.Period.Params} {c : NetworkCheck.Period.Commitment}
-    {e : NetworkCheck.Period.Evidence} (h : PeriodWindowsAccepted p c e) {i : ℕ} (hi : i < p.windows) :
+    {e : NetworkCheck.Period.Evidence} {bs : Core.Blobs} (h : PeriodWindowsAccepted p c e bs) {i : ℕ}
+    (hi : i < p.windows) :
     ∃ rg, c.windows[i]? = some rg ∧ PeriodWindowProgram p rg := by
   obtain ⟨hc, he, hall⟩ := h
   have hc' : i < c.windows.size := by omega
@@ -362,10 +396,11 @@ theorem pr_le_add_off {α : Type} [Fintype α] {A B : α → Prop} {b : ℝ} (h 
 
 /-- **The network certifier's per-window bound at its compiled component**
 (`Verity.Subprotocol.NetworkWindowLe`, unfolded, at the component's acceptance), from S2, S4–S6, the ρ gap and S8's
-two premises, with S1, S7 and S8 proved here. At each window and each value of the other coins, an accepted run of the
-network audit under S5's guard `G` with window `i` not good maps, through the live coin map (S4), to an accepting run
-of the sampled verifier (S2, S5) at whose every extractor coin the extraction fails the leak relation: an extracted
-witness would make the realization's witness one (S6), and with the component's acceptance, window `i` good (S8). -/
+two premises, with S7 and S8 proved here and S1 the period check's (`periodAcceptMeans`). At each window and each
+value of the other coins, an accepted run of the network audit under S5's guard `G` with window `i` not good maps,
+through the live coin map (S4), to an accepting run of the sampled verifier (S2, S5) at whose every extractor coin the
+extraction fails the leak relation: an extracted witness would make the realization's witness one (S6), and with the
+component's acceptance, window `i` good (S8). -/
 theorem windowLe (W : WindowRuns R) {s : ((i : I) → Ω i) → Sent} {G : ((i : I) → Ω i) → Prop}
     (h2 : PeriodRunsV2 W s) (h4 : WindowCoinsLive W) (h5 : SessionIsSampledRun W G) (h6 : NetworkCouples R s W)
     (hρ : WindowValuesRegistered R s) (hreg : WindowRegistersAs W s G)

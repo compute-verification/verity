@@ -72,7 +72,7 @@ pub struct Tags {
 pub const TAGS: Tags = Tags { statement: STATEMENT, sigma: "verity/flock-circuit/sigma", domain: "flock-circuit/fast100x2/rep" };
 pub const TYPED_TAGS: Tags =
     Tags { statement: crate::typed::STATEMENT, sigma: "verity/flock-circuit/types/sigma", domain: "flock-circuit-types/fast100x2/rep" };
-/// A templated statement (PRF-133, the Lean `Tags.circuitTmpl`): META `template` and `layout` in place of the unit's rows,
+/// A templated statement (the Lean `Tags.circuitTmpl`): META `template` and `layout` in place of the unit's rows,
 /// which the prover reads from `flock-tmpl-unit`'s file, the unit committed at the layout's positions.
 pub const TMPL_FORMAT: &str = "flock-circuit/tmpl";
 pub const TMPL_STATEMENT: &str = "verity/flock-circuit/tmpl";
@@ -3830,7 +3830,7 @@ mod tests {
         assert!(err.contains("vus_per_block is not a power of two"), "{err}");
     }
 
-    /// A writer with no output row (CMP-149's form B): one 1024-bit `sha512/row/v2` input row `x`, read as one 16-bit leaf,
+    /// A writer with no output row (pinned outputs' form B): one 1024-bit `sha512/row/v2` input row `x`, read as one 16-bit leaf,
     /// and one pinned output word `d = x XOR (x rotated by one)`, each bit a linear row (B the constant alone).
     fn pinned_statement(edit: &dyn Fn(&mut Value)) -> String {
         let x = Port { name: "x".into(), words: 64, comps: 1, bits: 1024, v2: true, segs: None };
@@ -3900,7 +3900,7 @@ mod tests {
 
     #[test]
     fn hm96_sha512_default_key_is_core_s() {
-        // hashlib.sha512(verity.ml.commitments.hm96.SHA512.default_key).hexdigest() (PR #93)
+        // hashlib.sha512(verity.ml.commitments.hm96.SHA512.default_key).hexdigest()
         assert_eq!(super::leaf_scheme()["key_sha512"],
                    "afc5a60c85d8aa75cb4c7f726588d299a1712e1c6a621f09ca64809a5fedd744a0f6b0201d05e82b29cd5b274e6c29670cd4e4ab10831911fb1f9e0c7019df22");
     }
