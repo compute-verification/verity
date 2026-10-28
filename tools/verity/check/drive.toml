@@ -3,7 +3,7 @@
 # restart. A flag given on the command line overrides its key here. ci owns this file; infra runs drive from it on the control pod.
 
 # the machines train.sh launches drive's Lean checks and its after-landing run on (a machine, or `auto`)
-on = ["vy-nebius-2", "vy-nebius-cpu-1", "vy-nebius-cpu-2", "vy-nebius-cpu-4", "vy-nebius-cpu-5"]
+on = ["vy-nebius-cpu-3", "vy-nebius-cpu-1", "vy-nebius-cpu-2", "vy-nebius-cpu-4", "vy-nebius-cpu-5"]
 # ready marks written before this don't count: drive's cutoff, 12 Oct
 marked_after = "2026-10-12T06:00:00Z"
 # land a prefix whose Lean check passed by committing the lock records it regenerated on top (CI-64)
