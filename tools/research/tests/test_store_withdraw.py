@@ -10,7 +10,7 @@ from test_store_gc import artifact, blob, env, label, present  # noqa: F401  (en
 
 
 def test_a_cited_artifact_holding_private_values_loses_its_blobs_and_keeps_its_manifest(env):
-    """VLLM-148: three cited arts held the sealed bundle and the weights key; gc keeps cited arts, so only withdraw removes them."""
+    """Three cited arts held the sealed bundle and the weights key; gc keeps cited arts, so only withdraw removes them."""
     b, _, cache, _ = env
     secret, public = blob(b, b"weights key"), blob(b, b"a README both trees ship")
     leaked = artifact(b, "evidence/v1", secret, public)

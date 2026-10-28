@@ -1,8 +1,8 @@
 """Withdraw artifacts from the shared store (`research data withdraw`, README §7.4): delete the blobs of artifacts that hold values
 which must never be shared, whatever cites them, and leave a `withdrawn` label on each as its tombstone.
 
-`gc` never deletes a cited artifact's blobs, and private values that were published by mistake are often cited (VLLM-148: the
-sealed bundle and the weights key in three cited arts).  The manifest, the attempts and the labels stay, so a citation still
+`gc` never deletes a cited artifact's blobs, and private values that were published by mistake are often cited (the
+sealed bundle and the weights key of a served run, in three cited arts).  The manifest, the attempts and the labels stay, so a citation still
 resolves and `fetch` reports the payload absent; the label says why.  A blob that an artifact outside the withdrawn set also holds
 is not deleted: deleting it would break that artifact, and holding the same bytes it holds the same values, so the plan names it
 and the caller withdraws it too or decides otherwise.  Every manifest is read (through gc's cache) to find those holders.

@@ -1368,7 +1368,7 @@ def cmd_gc(argv: list[str]) -> int:
 def cmd_withdraw(argv: list[str]) -> int:
     """README §7.4 (`withdraw.py`): delete the blobs of artifacts holding values that must never be shared, cited or not, and label
     each `withdrawn` with the reason.  A blob another artifact also holds is kept and named.  Read-only without `--apply`."""
-    from . import gc, withdraw  # noqa: PLC0415
+    from . import gc, withdraw
 
     ap = _ap("withdraw")
     ap.add_argument("arts", nargs="+", metavar="ART", help="full art: ids")
