@@ -327,7 +327,7 @@ theorem stmt_of_one (S : JsonSpec) {x : Claims.Msg} {s : Ins} {spec : SessionSpe
         m.get? "coins" = some (.obj kvs) ∧ Good (helloJ (.obj m)) ∧ Ascii (helloJ (.obj m)) ∧
         ∀ ct, spec.coinTree = some ct → Ascii ct.toJson := by
   obtain ⟨st, -, hspec, hst⟩ := setupOne_of hsc hs h1
-  obtain ⟨⟨c, pop, hl, hd⟩, hinst, hsig, hhello, hct0⟩ := setupOne_stmt hst
+  obtain ⟨⟨c, pop, hl, hd⟩, hinst, hsig, hhello, hct0⟩ := FlockComplete.JsonRT.setupOne_stmt hst
   have hzk : s.read.zk = true := readOf_zk (x := x) (by
     unfold readOf
     rw [(setupOf_some hs).1]
