@@ -28,8 +28,8 @@ JSON codec in `verity.ml.circuits.query_codec`):
     table(path, name, of)         inside each matched activation: one set per label of the private table `name`, which
                                   labels the body's nodes (of="nodes") or the activation's gates (of="gates"); the rows are
                                   `evaluate(..., tables=...)`'s, one per distinct Definition, never one per copy
-    group(F, key)                 F's sets in classes of a key of their node's Definition (`def`, `spec`, `static:K`), one
-                                  set per class in first-seen order
+    group(F, key)                 F's sets in classes of a key of their node's Definition (`definition`, `name`, `base`,
+                                  `static:K`), one set per class in first-seen order
     union(F, G) | minus | inter   GateSet algebra lifted elementwise (or broadcast from a one-set family); root()
 
 A table or group set may span nodes and nested activations: `each` and `where` refuse it, `rest` complements only a nodes
@@ -50,6 +50,7 @@ from dataclasses import dataclass
 from functools import cached_property
 from typing import TYPE_CHECKING, Iterator, Mapping, Protocol, Sequence
 
+from .codec import _split_record, descriptor_id
 from .defs import PrimitiveDefinition, SpecializedDefinition, _fmt_static
 from .intervals import complement, norm, total
 from .layout import Scope
@@ -624,20 +625,22 @@ TABLE_OF = ("nodes", "gates")
 class Table(Query):
     """Inside each activation `path` matches, the sets of the table `name` labels: label l's set is the body nodes (`of="nodes"`,
     each node whole) or the gates of the activation (`of="gates"`, in layout order) the table gives label l.  The term names
-    the table; its rows are evaluation input (`evaluate(..., tables=...)`), one per distinct Definition."""
+    the table; its rows are evaluation input (`evaluate(..., tables=...)`), one per distinct Definition, keyed by its
+    descriptor id (`codec.descriptor_id`)."""
     path: Path
     name: str
     of: str = "nodes"
 
 
-_KEY_PARTS = ("def", "spec")
+_KEY_PARTS = ("definition", "name", "base")
 
 
 @dataclass(frozen=True)
 class Group(Query):
-    """The sets of `base` in classes of `key`, a tuple of parts of each set's node's Definition: `def` (`Name_vN`, a
-    primitive's id), `spec` (the specialization's id with its statics), `static:K` (static K as `spec` renders it, "" when
-    the Definition has none).  One set per class, in first-seen order of `base`; the empty key is one class."""
+    """The sets of `base` in classes of `key`, a tuple of parts of each set's node's Definition: `definition` (its descriptor
+    id, statics included), `name` (`Name`, every version and specialization), `base` (`Name_vN`), `static:K` (static K's
+    canonical JSON as the descriptor id writes it, "" when the Definition has none).  One set per class, in first-seen order
+    of `base`; the empty key is one class."""
     base: Query
     key: tuple[str, ...]
 
@@ -716,6 +719,12 @@ def table(path, name: str, of: str = "nodes") -> Table:
     if of not in TABLE_OF:
         raise QueryError(f"table(...): of must be one of {TABLE_OF}, got {of!r}")
     return Table(_path(path), name, of)
+
+
+def _base_name(base_id: str) -> str:
+    """`Name` of `Name_vN`: the id without its last `_v<digits>`, or the id itself when it has none."""
+    head, sep, version = base_id.rpartition("_v")
+    return head if sep and all(c in "0123456789" for c in version) else base_id
 
 
 def _key(key) -> tuple[str, ...]:
@@ -870,7 +879,7 @@ def _full(node) -> tuple[tuple[int, int], ...]:
 class _Evaluator:
     """Builds plans for one Program; memoised by (spec id, query) and by (plan key, transformation)."""
 
-    def __init__(self, program: "Program", tables: Mapping[str, Mapping[str, Sequence[int]]] | None = None) -> None:
+    def __init__(self, program: "Program", tables: Mapping[str, Mapping[str, Sequence[int | None]]] | None = None) -> None:
         self.root: SpecializedDefinition = program.root  # (no strong reference to the Program itself: see `evaluator`)
         self.root_scope: Scope = program.circuit.root_scope
         self.tables = dict(tables or {})
@@ -1057,34 +1066,40 @@ class _Evaluator:
 
     # -- table -----------------------------------------------------------------------------------------------------
 
-    def _table_row(self, spec: SpecializedDefinition, name: str, of: str) -> Sequence[int]:
+    def _table_row(self, spec: SpecializedDefinition, name: str, of: str) -> tuple[Sequence[int | None], int]:
+        """The row of table `name` for `spec` and its label count L: labels are None (no set) or 0..L-1, each used."""
         rows = self.tables.get(name)
+        key = descriptor_id(spec)
         if rows is None:
-            raise QueryError(f"table {name!r} is not given: evaluate(program, query, tables={{{name!r}: {{spec id: labels}}}})")
+            raise QueryError(f"table {name!r} is not given: evaluate(program, query, tables={{{name!r}: {{descriptor id: labels}}}})")
         if not isinstance(rows, Mapping):
-            raise QueryError(f"table {name!r}: rows are a mapping from a specialization's id to its labels, got {type(rows).__name__}")
-        row = rows.get(spec.id)
+            raise QueryError(f"table {name!r}: rows are a mapping from a Definition's descriptor id to its labels, got {type(rows).__name__}")
+        row = rows.get(key)
         if row is None:
-            raise QueryError(f"table {name!r} has no row for {spec.id}")
+            raise QueryError(f"table {name!r} has no row for {key}")
         n = len(spec.body.nodes) if of == "nodes" else spec.gates
         if len(row) != n:
-            raise QueryError(f"table {name!r}: {spec.id} has {n} {of}, its row {len(row)} labels")
+            raise QueryError(f"table {name!r}: {key} has {n} {of}, its row {len(row)} labels")
         for x in row:
-            if isinstance(x, bool) or not isinstance(x, int) or x < -1:
-                raise QueryError(f"table {name!r}: a label is an int >= 0, or -1 for none, got {x!r} in {spec.id}'s row")
-        return row
+            if x is not None and (isinstance(x, bool) or not isinstance(x, int) or x < 0):
+                raise QueryError(f"table {name!r}: a label is an int >= 0, or None for none, got {x!r} in {key}'s row")
+        used = {x for x in row if x is not None}
+        n_labels = max(used, default=-1) + 1
+        if len(used) != n_labels:
+            raise QueryError(f"table {name!r}: {key}'s labels are not 0..{n_labels - 1}, each used: "
+                             f"{sorted(set(range(n_labels)) - used)[:4]} unused")
+        return row, n_labels
 
     def _table_entries(self, spec: SpecializedDefinition, name: str, of: str) -> list[Entry]:
-        """One `table` entry with a set per label 0..max: a nodes row labels each body node whole; a gates row labels each gate
+        """One `table` entry with a set per label: a nodes row labels each body node whole; a gates row labels each gate
         of the activation, resolved to the (chain, item) of the primitive member that is the gate."""
-        row = self._table_row(spec, name, of)
-        n_labels = max(row, default=-1) + 1
+        row, n_labels = self._table_row(spec, name, of)
         if not n_labels:
             return []
         by_label: list[dict[Chain, set[Item]]] = [{} for _ in range(n_labels)]
         if of == "nodes":
             for j, node in enumerate(spec.body.nodes):
-                if row[j] >= 0 and n_members(node):
+                if row[j] is not None and n_members(node):
                     by_label[row[j]].setdefault((), set()).update((j, m) for m in range(n_members(node)))
         else:
             def walk(s: SpecializedDefinition, base: int, chain: Chain) -> None:
@@ -1094,7 +1109,7 @@ class _Evaluator:
                     for m in range(n_members(node)):
                         at = base + body.offsets[j] + m * w
                         if isinstance(node.fn, PrimitiveDefinition):
-                            if row[at] >= 0:
+                            if row[at] is not None:
                                 by_label[row[at]].setdefault(chain, set()).add((j, m))
                         else:
                             walk(node.fn, at, chain + ((j, m),))
@@ -1108,15 +1123,15 @@ class _Evaluator:
     @staticmethod
     def _set_key(fn, key: tuple[str, ...]) -> tuple[str, ...]:
         out: list[str] = []
+        did = descriptor_id(fn)
         for part in key:
-            if part == "def":
-                out.append(fn.id if isinstance(fn, PrimitiveDefinition) else fn.base_id)
-            elif part == "spec":
-                out.append(fn.id)
+            if part == "definition":
+                out.append(did)
+            elif part in ("name", "base"):
+                base = fn.id if isinstance(fn, PrimitiveDefinition) else fn.base_id
+                out.append(_base_name(base) if part == "name" else base)
             else:
-                st = fn.statics
-                name = part[7:]
-                out.append(_fmt_static(st[name]) if name in st else "")
+                out.append(dict(_split_record(did)).get(part[7:], ""))
         return tuple(out)
 
     def _keys_of(self, plan: Plan, key: tuple[str, ...]) -> tuple[tuple[str, ...], ...]:
@@ -1670,10 +1685,11 @@ def evaluator(program: "Program") -> _Evaluator:
     return ev
 
 
-def evaluate(program: "Program", query, tables: Mapping[str, Mapping[str, Sequence[int]]] | None = None) -> Family:
+def evaluate(program: "Program", query, tables: Mapping[str, Mapping[str, Sequence[int | None]]] | None = None) -> Family:
     """Evaluate `query` (a Query or its string form) against `program`; the root body is the top-level context.  `tables`
-    gives the rows of the query's `table` terms: table name -> specialization id -> one label per body node (`of="nodes"`)
-    or per gate of an activation (`of="gates"`), -1 for none.  Plans read the tables, so they are memoised per call."""
+    gives the rows of the query's `table` terms: table name -> descriptor id -> one label per body node (`of="nodes"`)
+    or per gate of an activation (`of="gates"`), None for none, the labels 0..L-1 each used (`Flock.Annot`'s tables).
+    Plans read the tables, so they are memoised per call."""
     from .query import parse  # string sugar lives with the legacy syntax
     q = parse(query) if isinstance(query, str) else query
     if not isinstance(q, Query):
