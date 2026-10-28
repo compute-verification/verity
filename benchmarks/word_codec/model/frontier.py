@@ -18,32 +18,32 @@ from dataclasses import replace
 
 from model import gamma as g
 
-# The step outside E's reads, in passes of E: 70B from ra-vllm-encoded's certified 70B step at batch 1, d − y = 0.19
+# The step outside E's reads, in passes of E: 70B from `benchmarks/vllm_encoded`'s certified 70B step at batch 1, d − y = 0.19
 # less the KV read [measured]; the red team's F24 brackets it at 0.17-0.27.
 IDLE = {"Llama-3.1-8B": 0.37, "Mistral-Small-24B": 0.15, "Llama-3.1-70B": 0.17}
 SHAPES = {"70": g.LLAMA_70B, "24": g.MISTRAL_24B, "8": g.LLAMA_8B}
 OUT_TOKENS = 512
-TAG = 0.227  # ra-sketch-tag's sketch (0.117) and its layer sequence (0.11), on top of the fused decode
-# ra-codec-tensor's decodes fused into the 70B layer at k = 1 (r20261012-095837-c1eb), tag not included, batch 1 / 32:
+TAG = 0.227  # the sketch tag's sketch (0.117) and its layer sequence (0.11), on top of the fused decode
+# The tensor-core codec's decodes fused into the 70B layer at k = 1, tag not included, batch 1 / 32:
 # 2^768 − 825 1.159 / 1.386, 2^512 − 569 1.051 / 1.445, 2^1023 − 361 2.025 / 1.961 (thread-per-word throughout).
 FUSED_768_Y = 1.159
 FUSED_768_Y32 = 1.386
 FUSED_512_Y = 1.051
 FUSED_1023_Y = 2.025
-# The point's codec as ra-codec-tensor built it: 2^1536 − 3453 fused at k = 1 on 12 warps (1c03b4778,
-# r20261012-132420-9a2f; 6 decoder warps measured 1.96 / 1.92 and 2.403 / 2.421, b886), batch 1 / 32, untagged and with
+# The point's codec as the tensor-core codec built it: 2^1536 − 3453 fused at k = 1 on 12 warps (1c03b4778; 6 decoder
+# warps measured 1.96 / 1.92 and 2.403 / 2.421), batch 1 / 32, untagged and with
 # the k_s = 16 sketch tag (T = 32) and the commit [measured].
 FUSED_1536_Y = (1.758, 1.817)
 SKETCH_1536_Y = (2.155, 2.415)
-# Standalone squarings in passes of the words squared, locked clock [measured]: 768 bits ra-word-codec's 2.81e10/s,
-# 1,536 and 2,048 the red team's F22 (r20261012-102430-ee3a: 8.3e9/s, 5.05e9/s with one level of Karatsuba).
+# Standalone squarings in passes of the words squared, locked clock [measured]: 768 bits the word codec's 2.81e10/s,
+# 1,536 and 2,048 the red team's F22 (8.3e9/s, 5.05e9/s with one level of Karatsuba).
 SQUARING = {768: g.R_READ / (96 * 2.81e10), 1536: 0.93, 2048: g.R_READ / (256 * 5.05e9)}
 # The 1,536-bit squaring (252 registers) beside a streaming read: at two blocks an SM it leaves the read no registers
 # and runs serially with it; at one it overlaps the read fully at 6.72e9/s, 81% of its rate alone [measured, the red
-# team's F24, r20261012-111728-cc57]. Taken at 2,048 bits too [estimate].
+# team's F24]. Taken at 2,048 bits too [estimate].
 SHARED = 6.72e9 / 8.28e9
 KAPPA = g.CLOCK_MAX_MHZ / g.CLOCK_LOCKED_MHZ  # Φ_cores is declared at the max clock
-# F27, the red team's (r20261012-131252-f431, -132841-565e): at one round a known payload's word gives up its bottom
+# F27, the red team's: at one round a known payload's word gives up its bottom
 # third to a lattice from the top two-thirds, at 0.094 of a root at 1,536 bits and 0.059 at 2,048; at 768 bits it
 # costs a root, so nothing [measured]. Coppersmith's bound for c^(2^k) = m is p^(1/2^k) [standard]; k >= 2 is left out.
 PARTIAL = {1536: (1 / 3, 0.094), 2048: (1 / 3, 0.059)}
@@ -67,7 +67,7 @@ def issue_count(bits: int) -> int:
     return _square(limbs) + 3 * limbs
 
 
-# Lanes an SM retires a clock on sm_120 [measured, r20261012-111055-77a2]: IMAD.WIDE on the FMA pipe at a quarter of
+# Lanes an SM retires a clock on sm_120 [measured]: IMAD.WIDE on the FMA pipe at a quarter of
 # the issue rate, IMAD on the same pipe and IADD3 on the ALU pipe at a half.
 IMAD_WIDE, IMAD, IADD3 = 31.1, 63.1, 64.0
 
@@ -167,8 +167,8 @@ def e_codec(bits: int, batch: int, off: float, clock_mhz: float = g.CLOCK_LOCKED
 
 
 def kv_attn(k: int) -> float:
-    """What a KV pass takes past the model's step with its decode in place of E's: ra-word-codec's decode inside
-    70B attention costs (1.0k − 0.32) of the plain KV read at 2^768 − 825 [measured, r20261012-110925-e561], about
+    """What a KV pass takes past the model's step with its decode in place of E's: the word codec's decode inside
+    70B attention costs (1.0k − 0.32) of the plain KV read at 2^768 − 825 [measured], about
     half a pass more than the fused GEMM's 0.159 and k − 1 standalone decodes; taken at every KV prime [estimate]."""
     return k - 0.32 - (FUSED_768_Y - 1) - (k - 1) * g.WIDE["p767"].eps
 
