@@ -5,12 +5,14 @@ answer for it (`scan_zk.py prove --group 1`'s ``answers.json``), checked by the 
         NAME=WARDEN_RUN,SCAN_OUT[,tampered|chain|forged] ...
 
 * **The case** (`rows_case`) of link-window W: the parameters the warden run's ``deployment.json`` (its key, session
-  and one schedule), the link `warden_serve.LINK`, the Program the scan's registration's, no compute audit, jitter
-  bound 1 (K's jitter term 0, assumed (J), not met at 1), and the scan that Program's
-  descriptor (``joint/program.json``), off which the period check reads the scan's terms; the commitment the scan's
-  registration; the evidence the scan's answer, the certificates of W's three records (``certified.jsonl``:
-  requests, responses, fails) and W's two row registrations (``cells.jsonl``, as ``answers.json`` carries them).
-  The rows form reads a registration of one link-window's 2T units, so a group of more is refused.
+  and one schedule), the link `warden_serve.LINK`, the Program the scan's registration's, the compute audits
+  ``answers.json`` carries (the block round's, whose o1 is the scan's `prog`: its descriptor, free inputs and steps),
+  jitter bound 1 (K's jitter term 0, assumed (J), not met at 1), and the scan that Program's
+  descriptor (``joint/program.json``), off which the period check reads the scan's terms; the commitment the audits'
+  registrations and the scan's; the evidence the audits' answers, then the scan's answer, the certificates of W's
+  three records (``certified.jsonl``: requests, responses, fails) and W's two row registrations (``cells.jsonl``, as
+  ``answers.json`` carries them). The rows form reads a registration of one link-window's 2T units, so a group of
+  more is refused, and the scan's `prog` must be an audit's output.
 * **tampered** and **chain**: the same rows and certificates with that round's registration
   (``<round>/registration.json``) and its refusal as the answer: tampered's an egress-only Program's, a prover's answer
   for another statement than the link's Program; chain's the link's Program's, refused.
@@ -77,12 +79,14 @@ def rows_case(run: Path, scan: Path, round_: str = "honest") -> dict:
         sig = certs[1]["signature"]
         certs[1]["signature"] = sig[:-1] + ("1" if sig[-1] == "0" else "0")
     N, W, H = dep["key"]["params"]
-    params = {"audits": [], "cells": [], "first": x["window"], "jitter": 1, "key": dep["key"]["public"],
-              "link": WS.LINK, "lms": {"H": H, "N": N, "W": W, "toy": False}, "program": doc["registration"]["program"],
+    audits = doc.get("audits", [])
+    params = {"audits": [{k: a[k] for k in ("free", "program", "steps")} for a in audits], "cells": [],
+              "first": x["window"], "jitter": 1, "key": dep["key"]["public"], "link": WS.LINK,
+              "lms": {"H": H, "N": N, "W": W, "toy": False}, "program": doc["registration"]["program"],
               "scan": json.loads((scan / "joint" / "program.json").read_text()), "schedule": dict(dep["params"]),
               "session": dep["session"], "windows": 1}
-    commitment = canonical_json({"audits": [], "windows": [reg]})
-    evidence = canonical_json({"audits": [], "windows": [
+    commitment = canonical_json({"audits": [a["registration"] for a in audits], "windows": [reg]})
+    evidence = canonical_json({"audits": [a["answer"] for a in audits], "windows": [
         {"answer": answer, "certificates": certs, "registrations": x["registrations"]}]})
     return {"commitment": commitment.hex(), "evidence": evidence.hex(), "params": params}
 
