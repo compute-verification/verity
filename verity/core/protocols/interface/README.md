@@ -1,8 +1,9 @@
 # core_protocol: the interface every core protocol implements
 
 This is a Lake package (`CoreProtocol`, namespace `Core`). It requires C-Flock's verifier by path for canonical JSON,
-bytes and hashes, and nothing else: no Mathlib. A protocol's port is its own package. It requires this one by path,
-defines one `Core.Protocol` value, and makes its executable `def main (args) := myProtocol.main args`.
+bytes and hashes, and the difftest harness's Lean for its periods' port, and nothing else: no Mathlib. A protocol's port
+is its own package. It requires this one by path, defines one `Core.Protocol` value, and makes its executable
+`def main (args) := myProtocol.main args`.
 
 ## The interface (`CoreProtocol/Protocol.lean`)
 
@@ -72,6 +73,17 @@ the toy protocol whose guards cover both.
 `{"law":"stratified","strata":[...]}`), `delta` and `drawn`. The one change is that δ is an exact ratio, not a float. A
 protocol whose acceptance isn't a sampling design over proof blocks (a timed storage audit, a certificate check) declares its
 own profile type and JSON.
+
+## Periods (`CoreProtocol/Period.lean`)
+
+The code's copy of the spec's ticks, spans and monitoring period (`Security/Definitions/Core/Period.lean`), so a
+verifier reads them without requiring `Security/`. A `Core.TickSpan` is the ticks `[start, start + len)` on the one
+clock (`OneClock`). A `Core.MonitoringPeriod` is a span with the boundaries that cut it into its execution blocks'
+spans, and for each execution block the boundaries that cut its span into its sampling blocks' spans; `valid` holds
+when each is a cut. The codec reads and writes `{"len":n,"start":t}` and
+`{"execution":[t,...],"sampling":[[t,...],...],"span":{...}}`, refuses any other key, and refuses a monitoring period
+that isn't valid. `Properties.Core` states that the copy is the spec's. `verity.core.periods` mirrors it in Python, and
+`core-periods-difftest` (`CoreProtocol/PeriodDifftest.lean`) holds the two together through the difftest harness.
 
 ## Properties
 
