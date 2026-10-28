@@ -19,7 +19,7 @@ binary-field proof with upstream Flock (`succinctlabs/flock` at `b684b12`, patch
   - M0: `circuit.py` (`verity/flock-circuit`), a lowered template proved with its serving rows committed in the circuit,
     the rows' SHA-512 and the template's tail in the circuit too (`sha512_circuit.py`, `tail.py`), or with `layout=MODE`
     the templated statement (`verity/flock-circuit/tmpl`: the unit as `tmpl.py`'s template, its slot from `tmpl.layout`,
-    Lean's `Tmpl.layoutM`), which the verifier refuses until its proof lands; `tables.py`
+    Lean's `Tmpl.layoutM`), which the verifier covers only in the form `ProvedScope.scopeOkT` states; `tables.py`
     (`verity/flock-tables`), several tables in one commitment with private glue; `class_statement.py`, a unit class of
     any partition as an M0 statement (`UnitStager(..., layout=MODE, structural=True)`: the unit as `struct_lower.py`'s
     template, the flat unit never built, its outputs from the template, `tmpl.evaluate`), and `class_sweep.py`, the

@@ -1,5 +1,5 @@
 // The pipes of sm_120's lane opcodes that the coverage table places on a pipe no run had placed them on
-// (machine_model/data/cover/rows.toml, CMP-166). Joint points: rows.jsonl only, no census line; pipes_verdict.py reads
+// (machine_model/data/cover/rows.toml). Joint points: rows.jsonl only, no census line; pipes_verdict.py reads
 // them. Each warp runs 8 independent chains of the opcode, alone and beside a partner on the pipe the table puts it on,
 // on chains of their own:
 //   lop3, mufu                       the partners alone: LOP3 on the ALU pipe (2 warp instructions a SM-clock), MUFU.EX2

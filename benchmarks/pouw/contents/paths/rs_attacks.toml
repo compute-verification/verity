@@ -1,4 +1,0 @@
-order = 96
-path = "`rs_attacks/`"
-runs_on = "CPU (`attacks.py check|table`); `prefix.sh`: one RTX PRO 6000"
-what = "RS-D2A's exact attack routes for the committed prefix targets of (A + UVᵀ)(B + WZᵀ) (note:20261015T1815Z-draft-rs-d2-attacks): `attacks.py` checks every route bit for bit on small instances and prices it a committed word a block; `prefix.sh` times the honest m16n8k32 int8 step against the CUDA-core routes (`prefix.cu`, each checked against the host's replay) in SM clocks"

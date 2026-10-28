@@ -1,4 +1,0 @@
-order = 80
-path = "`fp_exact/`"
-runs_on = "RTX PRO 6000"
-what = "Whether FP8 E4M3 and FP4 (MXFP4, NVFP4, 2:4-sparse) MMA chains on restricted grids are exact integer arithmetic: every output against an exact int64 sum, over three accumulation orders, replayed through the silicon models, beside the MMAs' rates against IMMA (`run.sh`)"

@@ -5,6 +5,7 @@
   "Flock.Test.Full",
   "Flock.Test.Labels",
   "Flock.Test.PortRoots",
+  "Flock.Test.KsScope",
   "Flock.Test.FullDraw",
   "Flock.Test.OneFull",
   "Flock.Test.RegBudget",
@@ -29,6 +30,7 @@
   "Flock.Test.TopReads",
   "Flock.Test.SharedRows",
   "Flock.Test.SharedReads",
+  "Flock.Test.DerivedPos",
   "Flock.Test.RecCompose",
   "Flock.Test.RegFormats",
   "Flock.Test.RegComplete",
@@ -69,12 +71,12 @@
   "VStar"
  ],
  "exempt": {
+  "Flock.Test.RecCap": "a test, not a proof: its #guards evaluate whole V* lists in the interpreter, 1,097-1,246 s to build on every check node (26 Oct), so it gated every Flock-touching Lean check by about 18 min; built right after landing by verity/ml/flock/tests/test_lean_rec_cap_guards.py instead (top 06:18Z 26 Oct, Daniel's 11 Oct tier for parts whose cold run is over 10 min; proofs' PRF-190 adds a small-shape guard back to the roots)",
   "FlockFirewall": "the flock-firewall executable's entry point; its commands are Flock.Firewall.cmd, (`contract`) Flock.Firewall.Contract.cmd, (`frame`, `tap`) Flock.Firewall.Frame.cmd and tapCmd, (`coins`) Flock.Firewall.Coins.cmd, (`hello`) Flock.Firewall.Hello.cmd, (`session`) Flock.Firewall.Session.cmd and (`finish`) Flock.Firewall.Finish.cmd, audited under Flock",
   "FlockRows": "the flock-rows executable's entry point, one line; its command is Flock.Rows.cmd, audited under Flock",
   "FlockWitness": "the flock-witness executable's entry point, one line; its command is Flock.Witness.cmd, audited under Flock",
   "FlockRecSparse": "the flock-rec-sparse executable's entry point, one line; its command is Flock.RecSparseCmd.cmd, audited under Flock",
-  "FlockRecOpening": "the flock-rec-opening executable's entry point, one line; its command is Flock.RecOpeningCmd.cmd, audited under Flock",
-  "Flock.Test.RecCap": "a test, not a proof: its #guards evaluate whole V* lists in the interpreter, 1,097-1,246 s to build on every check node (26 Oct), so it gated every Flock-touching Lean check by about 18 min; built right after landing by verity/ml/flock/tests/test_lean_rec_cap_guards.py instead (top 06:18Z 26 Oct, Daniel's 11 Oct tier for parts whose cold run is over 10 min; proofs' PRF-190 adds a small-shape guard back to the roots)"
+  "FlockRecOpening": "the flock-rec-opening executable's entry point, one line; its command is Flock.RecOpeningCmd.cmd, audited under Flock"
  },
  "assumptions": {
   "Flock.Firewall.Contract.FirewallComputes": {
@@ -297,11 +299,11 @@
   "VStar": {
    "imports": ["Lean", "Std", "Flock", "VStar"],
    "except": [],
-   "why": "V*'s circuit is code: Lean core and its Std, and C-Flock's verifier (its builder, layout, rows and hashes), no Mathlib and nothing of Security (Daniel's layout ruling, 5 Oct)"
+   "why": "V*'s circuit is code: Lean core and its Std, and C-Flock's verifier (its builder, layout, rows and hashes), no Mathlib and nothing of Security (the layout rule: Lean code never requires Security)"
   }
  },
  "reads_exempt": {
-  "Flock": "C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)"
+  "Flock": "C-Flock is excepted until its spec is extracted"
  },
  "guarantees": {
   "Flock.Firewall.Contract.commitLeaf_eq": {
