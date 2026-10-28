@@ -10,7 +10,9 @@
 # CASE_LEASE_MIN minutes (default 60) and CASE_MEM_GB GiB of host memory (default 170: its Python and its Lean each hold
 # the whole re-encoded store), all within CASE_TIMEOUT (default 90m). Then, where the tree has `served_cases.py`,
 # sampled proofs' v2 case and the registration case from the window's records audit (SERVE_DIR/v3c-w*/audit), the latter
-# only with ALPHA and GAMMA, the policy's α and Γ, each under SERVE_DIR/private. Then `composite.py` remote and onsite,
+# with the policy's α and Γ read off the case's own division (`--from-division`), or ALPHA and GAMMA where both are set,
+# each under SERVE_DIR/private; each CASE line's protocol, verdict and `alpha_gamma` go to OUT/verdicts.txt. Then
+# `composite.py` remote and onsite,
 # each with `--exe` its product's Lean (`remote`, `onsite`, built here), over the directories under SERVE_DIR/private
 # that hold a case.json and an answer.json whose protocol is one of that product's subprotocols (composite.py's
 # COMPONENTS), each within COMPOSITE_TIMEOUT (default 60m) and, where a systemd user scope is available,
@@ -59,15 +61,17 @@ for line in sys.stdin:
 fi
 
 if [ -f benchmarks/one_stage/served_cases.py ]; then
-  "$TPY" benchmarks/one_stage/served_cases.py --serve-dir "$D" --private "$D/private" ${ALPHA:+--alpha "$ALPHA"} \
-    ${GAMMA:+--gamma "$GAMMA"} > "$P/served_cases.log" 2>&1
+  ag=(--from-division)
+  [ -n "${ALPHA:-}" ] && [ -n "${GAMMA:-}" ] && ag=(--alpha "$ALPHA" --gamma "$GAMMA")
+  "$TPY" benchmarks/one_stage/served_cases.py --serve-dir "$D" --private "$D/private" "${ag[@]}" > "$P/served_cases.log" 2>&1
   rc=$?
   grep -hE '^(CASE|NOT_WRITTEN) \{' "$P/served_cases.log" | "$PY" -c '
 import json, sys
 for line in sys.stdin:
     head, _, body = line.partition(" ")
     c = json.loads(body)
-    print("COMPOSITE", head, c["protocol"], *([c["verdict"]] if head == "CASE" else []))' \
+    print("COMPOSITE", head, c["protocol"], *([c["verdict"]] if head == "CASE" else []),
+          *(["(alpha_gamma " + str(c["alpha_gamma"]) + ")"] if c.get("alpha_gamma") else []))' \
     | tee -a "$OUT/verdicts.txt"
   say "COMPOSITE CASES: served_cases.py exit $rc$([ "$rc" = 0 ] || echo ', its log on the node')"
 fi
