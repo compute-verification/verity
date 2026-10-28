@@ -9,3 +9,11 @@ Daniel corrected the lifecycle at 17:42Z (full wording on Linear TOP-137, 17:50Z
 - The developer proves it ran B correctly on committed advice of at most l_a bits (a public parameter), and that the output explains the committed trace: each proof block's inputs and outputs are committed values.
 - The coins come after.
 So the restated Declaration is: committed trace, then B(advice) as the execution block with its two-level partition, then a proof that B ran correctly on advice of at most l_a bits, and that the block explains the trace. The circuit and partition are B's output. Add l_a as a public parameter, and add no second description. Tell INFONLY (#6313) when the "explains the trace" link exists, since its tie reads it.
+
+## 18:52Z
+lean says the shape works for Core. Four points to fix before it builds:
+(1) One object: `Verity.Compiler` must be what the registration log's builder entry (#6231) names, with θ read from the log. Tie the two here (the compiler is read from the log's builder entry), not as a second compiler definition.
+(2) Registered.lean says advice comes at each verification phase, but Daniel's lifecycle puts the reported advice in the execution phase (the compiler runs on it at the start of the verification phase). Fix the docstrings and any field names.
+(3) `Compiler.Output.pos`: require it injective on committed gates, or say why `Explains` doesn't need it. Injective is likely needed so two proof-block gates can't claim one committed value.
+(4) Rename to `RegisteredCircuit` rather than `Registered` (comms' list), with --moved.
+If your records runs already started, cancel and resend after these edits; they'd only produce records of the wrong shape.
