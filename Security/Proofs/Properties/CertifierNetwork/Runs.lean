@@ -57,7 +57,7 @@ theorem certify_some {i i' : Issuer} {salt : ByteArray} {leaf : Except String Na
     exact ⟨hh, ⟨R, hR, hdg⟩, rfl, rfl, rfl⟩
 
 /-- Each certificate the code issues is of a record it was given: the head `record_head` makes of it under its grid's
-parameters digest, signing that head's digest under the certificate's salt and naming the record's sampling block. -/
+parameters digest, signing that head's digest under the certificate's salt and naming the record's link-window. -/
 theorem issued_spec {c : Config} : ∀ {i : Issuer} {next : Nat} {salts : Nat → ByteArray} {rs : List Record}
     {cr : CertifiedRecord},
     cr ∈ issued c i next salts rs → ∃ rec ∈ rs, ∃ pd, parameters (gridOf c rec) (syncSetOf c rec) = .ok pd ∧
@@ -112,7 +112,7 @@ theorem nodup_windows {l : String} {P : List Record} {n : Nat} (h : windowsOn l 
   exact List.inj_on_of_nodup_map hnd (List.mem_filter.mpr ⟨hr, by simpa using hl⟩)
     (List.mem_filter.mpr ⟨hr', by simpa using hl'⟩) hw
 
-/-- With two links, the device publishes at most one record of each sampling block on each. -/
+/-- With two links, the device publishes at most one record of each link-window on each. -/
 theorem unique {c : Config} {tr : List Event} (hd : Distinct c) {r r' : Record} (hr : r ∈ published c tr)
     (hr' : r' ∈ published c tr) (hl : r.link = r'.link) (hlk : r.link ∈ [c.egressLink, c.ingressLink])
     (hw : r.window = r'.window) : r = r' := by

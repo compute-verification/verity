@@ -304,7 +304,7 @@ theorem verdictDigest_ok (c : Case) : ∃ d, verdictDigest c true (acceptedOutpu
   simp only [ht, bind, Except.bind, pure, Except.pure]
   exact ⟨_, rfl⟩
 
-/-- **A sampling block proved, opened, certified and synced is accepted** (the honest lemma of `LinkWindowAcceptMeans`,
+/-- **A link-window proved, opened, certified and synced is accepted** (the honest lemma of `LinkWindowAcceptMeans`,
 its converse): the verdict accepts it, with the outputs and digest the property states. -/
 theorem linkWindowAcceptMeans_honest :
     ∀ c : Case, WindowAccepted c → (verdict c).map Verdict.accepted = .ok true ∧ WindowVerdict c := by

@@ -7,7 +7,7 @@ import Lms.Sign
 The executable form of `certificate.py`'s `Issuer`, `Certificate` and `CertifiedRecord`: a record's head (`recordHead`,
 under the grid's `parameters_digest`) and digest, that digest hidden under `salt_c`, 64 bytes of the certifier's own
 coins drawn for the record (`certificateDigest`), the message that binds the hidden digest to the key, the certifier
-session and the sampling block (`certificateMessage`), and its LMS signature at a reserved leaf (`Lms.signAt`). The
+session and the link-window (`certificateMessage`), and its LMS signature at a reserved leaf (`Lms.signAt`). The
 encodings are `NetworkCheck`'s and the signature `Lms`'s.
 
 Which leaf signs, and which session ids the key has started, is the signer's state (`lms.LeafState.reserve` and
