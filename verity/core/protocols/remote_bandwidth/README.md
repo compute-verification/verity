@@ -121,7 +121,8 @@ A transcript written before it named its session's pace (20 Oct) replays only wi
   `Binding.hold` decides a hello against it, the reference beside `lean/RemoteAudit/Store.lean`'s `bind` and `hold`,
   which decide it in the verifier.
   `benchmarks/remote_session/store_layout.py` writes pins and synthetic checkpoints.
-- `timing.py`: the honest schedule, the stated claim read through the ledger, and the sketch's rank bound.
+- `timing.py`: the honest schedule, the stated claim read through the ledger, and the sketch's rank bound. It holds
+  no hardware figure: each takes the node's (`verity.hardware.node`, the Site's `node h`), read off its cards.
 - `monitoring.py`: one accepted session's `q_bytes` and `eps` over a week, a month and a year of a deployment's
   sessions, at δ = 1% and 10⁻⁶: pooled by the count bound (all but M − 1 sessions certify), with each session at
   δ/T beside it. The deployment's machines and window are parameters.

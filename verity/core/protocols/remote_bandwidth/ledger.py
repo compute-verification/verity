@@ -33,8 +33,9 @@ from dataclasses import dataclass
 from types import MappingProxyType
 
 from verity.core.protocols.profile import IntegrityProfile
+from verity.hardware import node as hardware
 
-from . import audit, coins, receipts, timing
+from . import audit, coins, line, receipts, timing
 
 SNAPSHOT, TIME_HELD, LINK_CHARGED = "snapshot", "time-held", "link-charged"
 FORMS = (SNAPSHOT, TIME_HELD, LINK_CHARGED)
@@ -68,21 +69,21 @@ class Node:
     maximal rebuild batch, one maximal disk read and one link window.  A burst of 0 states the rate down to one
     nanosecond, which no device with a nonzero rate meets.  Beside the read ceilings are the write ceilings, one GPU's
     and the host DRAM's (bytes a second), how fast a fill can write labels into each tier, which a wipe's timing reads;
-    the node states no DPU's (`timing.HOST_WRITE_BYTES_PER_S`).  `stated` takes `timing`'s, which a reported read rate
-    can only raise."""
+    the node states no DPU's.  `stated` takes the Site's figures for the node (`verity.hardware.node`), which a
+    reported read rate can only raise."""
 
     spec_bytes_per_s: float
     read_bytes_per_s: float
     chip_bytes: int
     squarings_per_s: Mapping[str, float]
-    sha512_per_s: float = timing.SHA512_PER_S
+    sha512_per_s: float
+    gpu_write_bytes_per_s: float
+    host_write_bytes_per_s: float
     disk_bytes_per_s: float = 0.0
     link_bytes_per_s: float = 0.0
     rebuild_burst_bytes: float = 0.0
     disk_burst_bytes: float = 0.0
     link_burst_bytes: float = 0.0
-    gpu_write_bytes_per_s: float = timing.GPU_WRITE_BYTES_PER_S
-    host_write_bytes_per_s: float = timing.HOST_WRITE_BYTES_PER_S
     sketch_outside: int = timing.SKETCH_OUTSIDE
 
     def __post_init__(self) -> None:
@@ -102,26 +103,34 @@ class Node:
         object.__setattr__(self, "squarings_per_s", MappingProxyType(squarings))
 
     @classmethod
-    def stated(cls, *, reported_read_bytes_per_s: float = 0.0, disk_bytes_per_s: float = 0.0,
+    def stated(cls, figures: hardware.Node, *, reported_read_bytes_per_s: float = 0.0, disk_bytes_per_s: float = 0.0,
                link_bytes_per_s: float = 0.0, disk_burst_bytes: float | None = None,
                link_burst_bytes: float | None = None, sketch_outside: int = timing.SKETCH_OUTSIDE) -> Node:
-        """`timing`'s node: R measured is the larger of `timing.READ_BYTES_PER_S` and the prover's reported read, R
-        at spec the larger of `timing.SPEC_BYTES_PER_S` and that, so a prover reporting a slower read can't shrink
-        a term (MEM-24).  Its rebuild burst is S_chip, what a batch in flight holds on the chips; its disk burst one
-        second at the disks' ceiling, which is a one-second peak; its link burst `timing.LINK_WINDOW_BYTES` when the
-        links are charged."""
-        measured = max(timing.READ_BYTES_PER_S, _rate(reported_read_bytes_per_s, "a reported read"))
+        """The node of the Site's `figures` (`Site.node h`): R measured is the larger of its devices' and host DRAM's
+        measured reads and the prover's reported read, R at spec the larger of their ceilings and that, so a prover
+        reporting a slower read can't shrink a term (MEM-24).  Its rebuild burst is S_chip, what a batch in flight
+        holds on the chips; its disk burst one second at the disks' ceiling, which is a one-second peak; its link
+        burst the host's link window when the links are charged."""
+        measured = max(figures.read_bytes_per_s, _rate(reported_read_bytes_per_s, "a reported read"))
         disk = disk_bytes_per_s if disk_burst_bytes is None else disk_burst_bytes
-        link = (timing.LINK_WINDOW_BYTES if link_bytes_per_s else 0.0) if link_burst_bytes is None else link_burst_bytes
-        return cls(max(timing.SPEC_BYTES_PER_S, measured), measured, timing.CHIP_BYTES, timing.SQUARINGS_PER_S,
-                   timing.SHA512_PER_S, disk_bytes_per_s, link_bytes_per_s, float(timing.CHIP_BYTES), disk, link,
-                   timing.GPU_WRITE_BYTES_PER_S, timing.HOST_WRITE_BYTES_PER_S, sketch_outside)
+        window = float(figures.host.link_window_bytes)
+        link = (window if link_bytes_per_s else 0.0) if link_burst_bytes is None else link_burst_bytes
+        return cls(max(figures.spec_bytes_per_s, measured), measured, figures.chip_bytes, figures.squarings_per_s,
+                   figures.sha512_per_s, figures.device_write_bytes_per_s, figures.host_write_bytes_per_s,
+                   disk_bytes_per_s, link_bytes_per_s, float(figures.chip_bytes), disk, link, sketch_outside)
 
     def rebuild(self, codec: audit.Codec) -> audit.Rebuild:
         """μ_rebuild's model at the record's codec: the node's squaring ceiling at its width."""
         if codec.field.name not in self.squarings_per_s:
             raise ValueError(f"the node states no squaring ceiling at {codec.field.name}, the record's codec's width")
         return audit.Rebuild(codec, self.squarings_per_s[codec.field.name])
+
+    def rates(self, codec: audit.Codec) -> line.Rates:
+        """The node's ways back into its memory as the line reads them (`line.Rates`): its squaring ceiling at the
+        codec's width over the codec's encode, and its disks' and links' ceilings and bursts."""
+        return line.Rates(self.rebuild(codec).squarings_per_s, codec.encode_squarings, self.disk_bytes_per_s,
+                          self.link_bytes_per_s, self.rebuild_burst_bytes, self.disk_burst_bytes,
+                          self.link_burst_bytes)
 
     def to_json(self) -> dict:
         return {"chip_bytes": self.chip_bytes, "disk_burst_bytes": self.disk_burst_bytes,

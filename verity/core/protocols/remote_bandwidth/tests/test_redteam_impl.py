@@ -7,7 +7,7 @@ from __future__ import annotations
 
 import pytest
 
-from test_remote_bandwidth import N, SCHEDULE, Clock, Entropy, drive, finish, params, store  # noqa: F401
+from test_remote_bandwidth import N, RTX, SCHEDULE, Clock, Entropy, drive, finish, params, store  # noqa: F401
 from verity.core.protocols.remote_bandwidth import audit, codec, coins, receipts, timing
 from verity.core.protocols.remote_bandwidth.audit import Session
 
@@ -54,7 +54,7 @@ def test_rb2_the_record_names_its_codec(store) -> None:  # noqa: F811
     assert store.registration.codec.name == "p1024/k2/masked"
     assert store.registration.codec.name in s.record().public().values()
     assert s.record().public()["codec_params"] == {"c": 105, "field": "p1024", "masked": True, "n": 1024, "rounds": 2}
-    stated = timing.SQUARINGS_PER_S["p1024"]
+    stated = RTX.squarings_per_s["p1024"]
     with pytest.raises(ValueError, match="record's codec p1024/k2/masked"):
         audit.ledger(s.record(), capacity_bytes_per_s=CAPACITY, chip_bytes=0,
                      rebuild=audit.Rebuild(codec.DEFAULT, stated))

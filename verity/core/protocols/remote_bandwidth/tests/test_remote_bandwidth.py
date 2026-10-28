@@ -3,12 +3,10 @@ and recorded, and each way a session goes wrong is rejected with its failure."""
 
 from __future__ import annotations
 
-import ast
 import copy
 import dataclasses
 import hashlib
 import math
-from pathlib import Path
 
 import numpy as np
 import pytest
@@ -16,11 +14,14 @@ import pytest
 from verity.core.protocols.profile import IntegrityProfile, Subset
 from verity.core.protocols.remote_bandwidth import audit, codec, coins, receipts, timing
 from verity.core.protocols.remote_bandwidth.audit import Params, Session, SessionError
+from verity.hardware import load
+from verity.hardware import node as hardware
 from verity.ml.randomness import frame
 
 N = 20
 NODE = b"node-under-test"
 SOURCE = b"the verifier's secret"
+RTX = hardware.node(*hardware.VY_NEBIUS)
 SCHEDULE = timing.honest(1000, 3, 300, gap_ns=10, down_ns=20, up_ns=30, jitter_ns=5)
 A = 20 + 30 + 2 * 5 + 300 + 10
 APPENDS = 8
@@ -332,7 +333,7 @@ def test_the_ledger_counts_every_gamma_term(store) -> None:
     finish(s, prover, passes, clock)
     r = s.record()
     capacity = N * 4096 / 300e-9
-    rebuild = audit.Rebuild(r.codec, timing.SQUARINGS_PER_S["p1024"])
+    rebuild = audit.Rebuild(r.codec, RTX.squarings_per_s["p1024"])
     g = audit.ledger(r, capacity_bytes_per_s=capacity, chip_bytes=4096, rebuild=rebuild, host=0.002)
     whole = capacity * r.span_ns / 1e9
     assert r.span_ns == 3000 + A and r.passes == 10
@@ -343,7 +344,7 @@ def test_the_ledger_counts_every_gamma_term(store) -> None:
     assert g.counting == pytest.approx(sum(named) / 8 / whole) and r.receipts == r.passes * N
     assert sum(named) == r.passes * (audit.named_bits(N) + audit.SLACK_LOG2)
     assert sum(named) < 64 * r.receipts + audit.SLACK_LOG2 * r.passes
-    assert g.rebuild == pytest.approx(timing.SQUARINGS_PER_S["p1024"] * 4096 / (65_344 * capacity))
+    assert g.rebuild == pytest.approx(RTX.squarings_per_s["p1024"] * 4096 / (65_344 * capacity))
     assert g.gamma == pytest.approx(g.timing + g.chip + g.counting + g.rebuild + 0.002)
     assert g.horizon == g.floor == 0 and g.gamma_horizon == pytest.approx(g.gamma)
     assert set(g.to_json()["terms"]) == set(audit.LEDGER_SOURCES) and "overlap" not in audit.LEDGER_SOURCES
@@ -377,12 +378,12 @@ def test_the_rebuild_term_is_the_record_s_codec_at_the_stated_ceiling() -> None:
     assert [c.encode_squarings for c in (codec.DEFAULT, codec.FALLBACK, p512)] == [98_016, 65_344, 65_152]
     for c in (codec.DEFAULT, p512):
         assert ((c.field.p + 1) // 4).bit_length() - 1 == c.field.n - 3
-    fractions = [audit.Rebuild(c, timing.SQUARINGS_PER_S[c.field.name]).fraction(timing.READ_BYTES_PER_S)
+    fractions = [audit.Rebuild(c, RTX.squarings_per_s[c.field.name]).fraction(RTX.read_bytes_per_s)
                  for c in (codec.DEFAULT, codec.FALLBACK, p512)]
     assert fractions == pytest.approx([6.4781e-4, 9.7172e-4, 3.1296e-3], rel=1e-4)
     r = synthetic((100, 100, 60), 5, 1e-6)
     assert r.codec == codec.DEFAULT
-    rebuild = audit.Rebuild(codec.DEFAULT, timing.SQUARINGS_PER_S["p1024"])
+    rebuild = audit.Rebuild(codec.DEFAULT, RTX.squarings_per_s["p1024"])
     g = audit.ledger(r, capacity_bytes_per_s=100 * 4096, chip_bytes=0, rebuild=rebuild)
     assert g.rebuild == rebuild.fraction(100 * 4096) and {w.rebuild for w in g.windows} == {g.rebuild}
     with pytest.raises(ValueError, match="p1024/k2/masked .* the record's codec p1024/k3/masked"):
@@ -1028,65 +1029,67 @@ def test_the_stated_claim_holds_in_every_window_and_for_the_horizons_sampling_te
     GPU's HBM and host DRAM's share, at the node's R, S_chip and squaring ceiling.  At the stated T = 60 s and 33,273
     openings a window (555 a second), a 10 min session's worst window has its whole γ_t at 0.896–0.927%; over the
     horizon the pooled μ_sample is under 0.01% and the whole γ about 0.67%, over 0.15%, which μ_chip exceeds alone and
-    λ (0.116%) with μ_rebuild.  At spec every reading is `1 − (1 − γ)·R/R_spec`, 5.8%: R cancels in what is certified.
+    λ (0.116%) with μ_rebuild.  At spec every reading is `1 − (1 − γ)·R/R_spec`, 5.9%: R cancels in what is certified.
     The same 94 GB a GPU in HBM alone leaves host DRAM's 4.7% of R idle, 5.57–5.60%.  The 20 s option at 11,091
     openings has μ_sample under 0.25% and a whole γ_t over 1%, and the 1 s option's μ_sample alone is under 1%, at
     2,773."""
-    s, store = audit.SAMPLES, timing.spanning(94 * 10 ** 9)
+    s, store = audit.SAMPLES, timing.spanning(RTX, 94 * 10 ** 9)
     assert 789.0e9 < store < 789.1e9
     assert (timing.samples_for(0.0025, audit.DELTA), timing.samples_for(0.01, audit.DELTA)) == (11_091, 2_773)
     assert s == 3 * 11_091 and audit.WINDOW_NS == 60 * timing.S
-    idle = timing.HOST_READ_BYTES_PER_S / timing.READ_BYTES_PER_S
+    idle = RTX.host.read_bytes_per_s / RTX.read_bytes_per_s
     for rtt in (1, 20):
-        g = timing.stated(store, audit.WINDOW_NS, 10, rtt_ns=rtt * timing.MS, samples=s)
+        g = timing.stated(RTX, store, audit.WINDOW_NS, 10, rtt_ns=rtt * timing.MS, samples=s)
         assert g.worst.sample < 0.001 and 0.00895 < g.worst.gamma < 0.00928
         assert 0.00115 < g.counting < 0.00116 and g.counting + g.rebuild > 0.0015 and g.chip > 0.0015
         assert g.horizon < 1e-4 and 0.0066 < g.gamma_horizon < 0.0068
-        spec = timing.stated(store, audit.WINDOW_NS, 10, rtt_ns=rtt * timing.MS, samples=s,
-                             capacity_bytes_per_s=timing.SPEC_BYTES_PER_S).worst
-        assert spec.gamma == pytest.approx(1 - (1 - g.worst.gamma) * timing.READ_BYTES_PER_S / timing.SPEC_BYTES_PER_S)
-        assert 0.058 < spec.gamma < 0.0586
-        hbm = timing.stated(timing.GPUS * 94 * 10 ** 9, audit.WINDOW_NS, 10, rtt_ns=rtt * timing.MS, samples=s,
-                            read_bytes_per_s=timing.GPUS * timing.GPU_READ_BYTES_PER_S).worst
+        spec = timing.stated(RTX, store, audit.WINDOW_NS, 10, rtt_ns=rtt * timing.MS, samples=s,
+                             capacity_bytes_per_s=RTX.spec_bytes_per_s).worst
+        assert spec.gamma == pytest.approx(1 - (1 - g.worst.gamma) * RTX.read_bytes_per_s / RTX.spec_bytes_per_s)
+        assert 0.0585 < spec.gamma < 0.0589
+        hbm = timing.stated(RTX, 8 * 94 * 10 ** 9, audit.WINDOW_NS, 10, rtt_ns=rtt * timing.MS, samples=s,
+                            read_bytes_per_s=RTX.device_read_bytes_per_s).worst
         assert hbm.timing > idle and 0.0557 < hbm.gamma < 0.0561
-        twenty = timing.stated(store, 20 * timing.S, 30, rtt_ns=rtt * timing.MS, samples=11_091).worst
+        twenty = timing.stated(RTX, store, 20 * timing.S, 30, rtt_ns=rtt * timing.MS, samples=11_091).worst
         assert twenty.sample < 0.0025 and 0.012 < twenty.gamma < 0.0137
-        one = timing.stated(store, timing.S, 600, rtt_ns=rtt * timing.MS, samples=2_773).worst
+        one = timing.stated(RTX, store, timing.S, 600, rtt_ns=rtt * timing.MS, samples=2_773).worst
         assert one.sample < 0.01 < 0.09 < one.gamma
 
 
-def test_the_node_constants_are_the_sums_over_its_devices() -> None:
+def test_the_node_figures_are_the_sums_over_its_devices() -> None:
     """R, S_chip, the squaring ceiling and the SHA-512 rate are the node's (MEM-26): its 8 GPUs' and its host's, every
-    tier, each GPU's value kept apart for the benches that read one GPU."""
-    assert timing.GPUS == 8
-    assert timing.READ_BYTES_PER_S == 8 * 1.539e12 + 606.8e9 and timing.SPEC_BYTES_PER_S == 8 * 1.597e12 + 819.2e9
-    assert timing.CHIP_BYTES == 8 * 263_163_904 + 1_000_341_504 == 3_105_652_736
-    assert timing.HOST_CHIP_BYTES == 2 * (336 * 2 ** 20 + 2 * 2 ** 20 + 64 * (2 * 2 ** 20 + (48 + 64 + 64) * 2 ** 10))
-    assert timing.SQUARINGS_PER_S == {w: 8 * r for w, r in timing.GPU_SQUARINGS_PER_S.items()}
-    assert timing.SHA512_PER_S == 8 * timing.GPU_SHA512_PER_S
-    gpu = 94 * 10 ** 9
-    host = timing.spanning(gpu) - 8 * gpu
-    assert host / timing.HOST_READ_BYTES_PER_S == pytest.approx(gpu / timing.GPU_READ_BYTES_PER_S)
+    tier, read off their cards, each GPU's value kept apart for the benches that read one GPU.  R measured, S_chip, the
+    squaring ceiling and the SHA-512 rate are the figures this module held before the cards did, to the bit; R at spec
+    reads the card's memory bandwidth, 1,597.568 GB/s, where it held the product page's 1,597."""
+    gpu, host = RTX.devices[0], RTX.host
+    assert len(RTX.devices) == 8 and all(d == gpu for d in RTX.devices)
+    assert RTX.read_bytes_per_s == 8 * 1.539e12 + 606.8e9 and RTX.spec_bytes_per_s == 8 * 1.597568e12 + 819.2e9
+    assert RTX.chip_bytes == 8 * 263_163_904 + 1_000_341_504 == 3_105_652_736
+    assert host.chip_bytes == 2 * (336 * 2 ** 20 + 2 * 2 ** 20 + 64 * (2 * 2 ** 20 + (48 + 64 + 64) * 2 ** 10))
+    assert dict(RTX.squarings_per_s) == {w: 8 * r for w, r in {"p1024": 1.67 * 1.499e10, "p512": 1.567 * 5.13e10}.items()}
+    assert RTX.sha512_per_s == 8 * gpu.sha512_per_s == 8 * 7.0e9
+    assert host.link_window_bytes == 6_291_456
+    held = 94 * 10 ** 9
+    on_host = timing.spanning(RTX, held) - 8 * held
+    assert on_host / host.read_bytes_per_s == pytest.approx(held / gpu.read_bytes_per_s)
 
 
 def test_the_write_ceilings_are_the_sheets_above_every_write_measured() -> None:
-    """One GPU's and the host DRAM's write ceilings (MEM-45) are their data sheets' rates, which bound every prover
-    where a measurement bounds only the kernels tried, each above every write its run measured: the card's 1,528.98
-    GB/s on the device and 56.39 streamed in (r20261020-211937-b9c0), the host's 207.69 (r20261020-212232-6ba5).  Each
-    docstring names its runs; a fill of derived codec labels is bounded by the labeller, about 1.05 GB/s a GPU under
-    the default codec, and no DPU's is stated."""
-    assert timing.GPU_WRITE_BYTES_PER_S == timing.GPU_SPEC_BYTES_PER_S == 1.597e12 > 1528.98e9 > 56.39e9
-    assert timing.HOST_WRITE_BYTES_PER_S == timing.HOST_SPEC_BYTES_PER_S == 819.2e9 > 207.69e9
-    body = ast.parse(Path(timing.__file__).read_text()).body
-    docs = {a.targets[0].id: b.value.value for a, b in zip(body, body[1:])
-            if isinstance(a, ast.Assign) and isinstance(a.targets[0], ast.Name) and isinstance(b, ast.Expr)
-            and isinstance(b.value, ast.Constant)}
-    gpu, host = docs["GPU_WRITE_BYTES_PER_S"], docs["HOST_WRITE_BYTES_PER_S"]
-    assert "r20261020-211937-b9c0" in gpu and "SQUARINGS_PER_S[width]" in gpu
-    assert "r20261020-212232-6ba5" in host and "r20261020-211937-b9c0" in host and "No DPU" in host
-    labels = timing.GPU_SQUARINGS_PER_S[codec.DEFAULT.field.name] * codec.BLOCK_BYTES / codec.DEFAULT.encode_squarings
+    """One GPU's and the host DRAM's write ceilings (MEM-45) are their cards' bandwidth ceilings, which bound every
+    prover where a measurement bounds only the kernels tried, each above every write its run measured: the card's
+    1,528.98 GB/s on the device and 56.39 streamed in (r20261020-211937-b9c0), the host's 207.69
+    (r20261020-212232-6ba5).  The card files' sources name the runs; a fill of derived codec labels is bounded by the
+    labeller, about 1.05 GB/s a GPU under the default codec, and no DPU's is stated."""
+    assert RTX.device_write_bytes_per_s == RTX.devices[0].spec_bytes_per_s == 1.597568e12 > 1528.98e9 > 56.39e9
+    assert RTX.host_write_bytes_per_s == RTX.host.spec_bytes_per_s == 819.2e9 > 207.69e9
+    card = load("rtx-pro-6000-server")
+    assert "r20261020-211937-b9c0" in card["memory"]["read"]["source"]
+    assert "r20261020-212232-6ba5" in card["host"]["dram_bandwidth"]["source"]
+    assert {card["memory"]["bandwidth"]["mark"], card["host"]["dram_bandwidth"]["mark"]} == {"ceiling"}
+    gpu = RTX.devices[0].squarings_per_s[codec.DEFAULT.field.name]
+    labels = gpu * codec.BLOCK_BYTES / codec.DEFAULT.encode_squarings
     assert labels == pytest.approx(1.05e9, rel=0.01)
-    assert not [name for name in vars(timing) if name.startswith("DPU_")]
+    assert not [f for f in ("dpu_write_bytes_per_s",) if hasattr(RTX, f)]
 
 
 def test_the_ledgers_count_bounds_auditros_binomial() -> None:
@@ -1108,7 +1111,7 @@ def test_the_ledgers_count_bounds_auditros_binomial() -> None:
         assert timing._named_bits(k, q_log2, True) == named and timing._named_bits(k, q_log2, False) == k * q_log2
     k = 94 * 10 ** 9 // codec.BLOCK_BYTES
     assert 40.98 < audit.named_bits(k) / k < 41.0 and audit.named_bits(k) < 64 * k
-    k = timing.spanning(94 * 10 ** 9) // codec.BLOCK_BYTES
+    k = timing.spanning(RTX, 94 * 10 ** 9) // codec.BLOCK_BYTES
     assert 37.92 < audit.named_bits(k) / k < 37.93
     for bad in (-1, 1.0, True):
         with pytest.raises(ValueError, match="nonnegative integers"):
@@ -1119,9 +1122,9 @@ def test_the_ledgers_count_bounds_auditros_binomial() -> None:
 
 def test_auditros_slack_adds_at_most_2_to_the_minus_50_over_an_hour_of_the_fastest_passes() -> None:
     """`SLACK_LOG2`'s reason: an hour of the node's passes over gate runs 8 and 9's store, 130,023,424 blocks read at
-    `timing.READ_BYTES_PER_S`, is under 2^17 passes, and their slack adds at most 2^-50 to γ's error and the memory
+    R measured, is under 2^17 passes, and their slack adds at most 2^-50 to γ's error and the memory
     line's δ, 2^-10 of `DELTA`."""
-    pass_s = 130_023_424 * codec.BLOCK_BYTES / timing.READ_BYTES_PER_S
+    pass_s = 130_023_424 * codec.BLOCK_BYTES / RTX.read_bytes_per_s
     passes = math.ceil(3600 / pass_s)
     assert 41.2e-3 < pass_s < 41.3e-3 and passes == 87_326 < 2 ** 17
     assert 2 ** 17 * 2.0 ** -audit.SLACK_LOG2 <= 2.0 ** -50 == audit.DELTA / 2 ** 10
@@ -1131,9 +1134,9 @@ def test_below_the_store_floor_no_window_meets_one_percent() -> None:
     """`store_floor`'s closed form against the ledger: a single 20 min window at 555 openings a second, whose μ_sample
     and ends are under 0.01%, is over 1% just below the floor at g = 50 µs and under it just above.  At g = 0 the floor
     is μ_chip, λ and μ_rebuild alone, about 380 GB over the node's every tier."""
-    assert 380.4e9 < timing.store_floor() < 380.6e9 and 458.3e9 < timing.store_floor(50 * timing.US) < 458.5e9
+    assert 380.4e9 < timing.store_floor(RTX) < 380.6e9 and 458.3e9 < timing.store_floor(RTX, 50 * timing.US) < 458.5e9
     for scale, over in ((0.98, True), (1.02, False)):
-        g = timing.stated(round(scale * timing.store_floor(50 * timing.US)), 1200 * timing.S, 1, rtt_ns=timing.MS,
+        g = timing.stated(RTX, round(scale * timing.store_floor(RTX, 50 * timing.US)), 1200 * timing.S, 1, rtt_ns=timing.MS,
                           samples=555 * 1200)
         assert (g.worst.gamma > 0.01) is over
 

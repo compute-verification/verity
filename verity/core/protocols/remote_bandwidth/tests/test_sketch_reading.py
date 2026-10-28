@@ -13,6 +13,7 @@ from fractions import Fraction
 import pytest
 
 from verity.core.protocols.remote_bandwidth import receipts, timing
+from verity.hardware import node as hardware
 from verity.ml.commitments import MerkleTree, scheme
 from verity.ml.randomness import derive
 
@@ -128,7 +129,7 @@ def test_the_readings_and_thresholds_the_protocol_states() -> None:
             assert round(math.log2(c), 2) == want
             assert (c == math.floor(Fraction(1, 2 ** bits) / f)) == (rows == 16), "64 rows: the keys' birthday binds"
     assert timing.sketch_rate(16, 11) == Fraction(1, 2 ** 88) + 128 * timing.sign_rank_at_most(16, 10)
-    node_day, passes = round(timing.SHA512_PER_S * 86400), 86400 * 50
+    node_day, passes = round(hardware.node(*hardware.VY_NEBIUS).sha512_per_s * 86400), 86400 * 50
     assert (timing.sketch_failure(node_day, passes, outside=1)
             == timing.sketch_failure(node_day, passes, r=12, outside=1))
     assert lg(timing.sketch_failure(node_day, passes, outside=1)) == -43.02
