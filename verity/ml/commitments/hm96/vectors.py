@@ -16,12 +16,14 @@ import sys
 from pathlib import Path
 from typing import Any
 
-from .. import vllm_v1
 from ..rowleaf import ROLE_X, sha256_row_layout, sha512_row_layout
-from . import SHA256, SHA512, HidingLayout, Hm96, Instance
+from ..scheme import LeafLayout
+from . import SHA256, SHA512, HidingLayout, Instance
 
 VECTORS = {SHA256: Path(__file__).with_name("vectors.json"), SHA512: Path(__file__).with_name("vectors_sha512.json")}
 _ROW = {"sha256": ("sha256/row/v1", sha256_row_layout), "sha512": ("sha512/row/v1", sha512_row_layout)}
+#: The position leaf's prefix before ``u64be(len(value))``: ``H("verity/pos-leaf/v0" || u64be(n) || value)``.
+POS_LEAF_TAG = b"verity/pos-leaf/v0"
 
 
 def expand(label: str, n: int) -> bytes:
@@ -57,7 +59,7 @@ def _mask_vectors(inst: Instance) -> list[dict[str, Any]]:
 def _leaf_vectors(inst: Instance) -> list[dict[str, Any]]:
     out = []
     row_name, row_layout = _ROW[inst.hash]
-    cases = [("pos-leaf", n, vllm_v1.pos_leaf_layout(n, inst.hash)) for n in (0, 1, 4, 26, 256, 4096)]
+    cases = [("pos-leaf", n, LeafLayout(inst.hash, POS_LEAF_TAG + n.to_bytes(8, "big"), n)) for n in (0, 1, 4, 26, 256, 4096)]
     cases += [(row_name, n, row_layout(ROLE_X, 16, n // 2)) for n in (2, 3072)]
     key = inst.default_key
     for inner_name, n, inner in cases:
@@ -70,24 +72,6 @@ def _leaf_vectors(inst: Instance) -> list[dict[str, Any]]:
                     "inner_digest": x.hex(), "salt": salt.hex(), "b": proven[:inst.digest_bytes].hex(), "c": proven[inst.digest_bytes:].hex(),
                     "leaf": inst.tree_leaf(key, proven).hex()})
         assert proven == inst.commit_string(key, x, salt)
-    return out
-
-
-def _tree_vectors(inst: Instance) -> list[dict[str, Any]]:
-    out = []
-    digest = hashlib.sha256(b"hm96/vectors/step").digest()
-    for n in (1, 2, 5):
-        base = vllm_v1.VllmV1({"v": vllm_v1.StepDomain(digest, digest, digest, digest, n, hash=inst.hash)}, value_nbytes={"v": lambda _i: 40})
-        scheme = Hm96(base, instance=inst)
-        values = [expand(_label(inst, f"tree/{n}/{i}/value"), 40) for i in range(n)]
-        salts = [expand(_label(inst, f"tree/{n}/{i}/salt"), inst.salt_bytes) for i in range(n)]
-        proven = [scheme.leaf_layout("v", i).commit(v, s) for i, (v, s) in enumerate(zip(values, salts))]
-        leaves = [scheme.tree_leaf("v", i, p) for i, p in enumerate(proven)]
-        out.append({"domain": {"kind": "step", "program": digest.hex(), "ctx": digest.hex(), "geo": digest.hex(), "layout": digest.hex(),
-                               "leaf_count": n, **({} if inst is SHA256 else {"hash": inst.hash})},
-                    "values": [v.hex() for v in values], "salts": [s.hex() for s in salts],
-                    "proven": [p.hex() for p in proven], "leaves": [x.hex() for x in leaves], "root": scheme.root("v", leaves).hex(),
-                    "paths": [[None if p is None else p.hex() for p in scheme.path("v", leaves, i)] for i in range(n)]})
     return out
 
 
@@ -110,7 +94,6 @@ def build(inst: Instance = SHA256) -> dict[str, Any]:
         "scheme_digest_default_key": inst.scheme_digest(key).hex(),
         "masks": _mask_vectors(inst),
         "leaves": _leaf_vectors(inst),
-        "trees": _tree_vectors(inst),
     }
 
 
