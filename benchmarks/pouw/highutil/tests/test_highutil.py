@@ -61,9 +61,49 @@ def test_the_card_s_share_and_the_terms_of_the_rest_sum_to_one():
     assert math.isclose(s["certified_share"]["card"], macs / (P.theta(card) * 0.02))
     assert math.isclose(s["certified_share"]["run_clock"], s["certified_share"]["card"] * 2000 / 1500)
     t = terms.terms(s, {"busy_share": 0.9, "gemm_share": 0.7})
-    assert math.isclose(t["sum"], 1) and math.isclose(t["terms"]["clock"], 0.25)
-    assert math.isclose(t["terms"]["certified"], s["certified_share"]["card"])
-    assert math.isclose(t["eps"], 0.07 + 1 - t["terms"]["certified"])
+    r = t["readings"]["card"]
+    assert list(t["readings"]) == ["card"] and math.isclose(r["sum"], 1)
+    assert math.isclose(r["terms"]["accounted"], s["certified_share"]["card"])
+    assert math.isclose(r["eps"], 0.07 + 1 - r["terms"]["accounted"])
+    assert math.isclose(r["terms"]["the plain GEMM's floor"], (11e-4 - P.step_macs() / P.theta(card)) / 2e-3)
+    assert math.isclose(r["terms"]["host between blocks"], 0.1)
+    assert "credits nothing the protocol does" in t["credited"] and "not credited" in t["credited"]
+
+
+def test_the_h200_s_terms_are_at_both_clocks_and_the_certified_macs_apart():
+    P.configure({"layers": [["a", 256, 512], ["b", 128, 1024]], "m": 1024, "nb": 4, "lp": 128, "L": 512})
+    card = {"sku": "h200-sxm-141gb", "clock": {"sm": {"value": 1980, "source": "s"}},
+            "rate": {"tensor": {"value": 4096, "source": "s"}}, "sm": {"count": {"value": 132}}}
+    steps, macs = 10, 10 * P.step_macs()
+    blocks = lambda gpu_ms: [{"gpu_ms": gpu_ms, "sm_mhz": 1980}]  # noqa: E731
+    results = [{"arm": "proto", "cheat": "none", "credited_macs": macs, "macs": macs, "wall_s": 0.02, "steps": steps,
+                "blocks": blocks(18.0), "gaps_s": [], "session_open_s": 1.0, "q": 64, "eps_skip": 0.07, "accepted": True,
+                "verdict": "ACCEPT"},
+               {"arm": "plain", "cheat": "none", "macs": macs, "wall_s": 0.012, "steps": steps, "blocks": blocks(11.0)}]
+    s = P.summarize(results, P.Plan(1, steps, 64), card=card)
+    t = terms.terms(s, {"busy_share": 0.9, "gemm_share": 0.7})
+    lo, hi = t["readings"]["tensor"], t["readings"]["boost"]
+    assert (lo["clock_mhz"], hi["clock_mhz"]) == (1830, 1980) and math.isclose(lo["theta_macs_s"], 989.4e12, rel_tol=1e-4)
+    assert math.isclose(lo["terms"]["accounted"] / hi["terms"]["accounted"], 1980 / 1830)
+    assert math.isclose(hi["terms"]["accounted"], s["certified_share"]["card"])
+    for r in (lo, hi):
+        assert math.isclose(r["sum"], 1) and math.isclose(r["terms"]["the protocol"], sum(r["protocol"].values()))
+    m = t["macs_per_step"]
+    assert m["declared"] == P.step_macs() and m["peels"] == 2 * 1024 * (256 + 128) * 128
+    assert math.isclose(lo["certified_share"] / lo["terms"]["accounted"], m["certified_over_declared"])
+
+
+def test_each_period_s_clock_is_nvidia_smi_s_over_its_pinned_window():
+    periods = [{"period": 0, "arm": "plain", "wall_s": 4.0, "blocks": [{"sm_mhz": 1830}]},
+               {"period": 1, "arm": "proto", "wall_s": 6.0, "session_open_s": 2.0, "blocks": [{"sm_mhz": 1700}, {"sm_mhz": 1800}],
+                "coins": {"session": "s20261027T120010Z-abc"}}]
+    head = "timestamp, clocks.current.sm [MHz], clocks.current.graphics [MHz]"
+    rows = [f"2026/10/27 12:00:{sec:02d}.000, {mhz} MHz, {mhz} MHz" for sec, mhz in
+            [(6, 1500), (7, 1980), (8, 1980), (9, 1980), (13, 1755), (14, 1785), (16, 1770), (18, 1500)]]
+    cp = terms.clocks(periods, terms.smi_samples("\n".join([head, *rows])))
+    assert [c["blocks_sm_mhz_median"] for c in cp] == [1830, 1750]
+    assert cp[0]["smi"] == {"samples": 3, "clocks_sm_mhz": 1980}
+    assert cp[1]["smi"] == {"samples": 3, "clocks_sm_mhz": 1770}
 
 
 def test_gamma_is_against_the_first_baseline_timed_and_each_baseline_has_its_own():
