@@ -65,7 +65,6 @@ same token ids as the first policy's (`token_gate` in each run; a mismatch refus
 from __future__ import annotations
 
 import argparse
-import ctypes
 import json
 import os
 import random
@@ -383,8 +382,6 @@ def main() -> int:
             save()
             return 7
     sq = Seq(tu)
-    tu.so.tu_pause.argtypes = [ctypes.c_int]
-    tu.so.tu_throttle.argtypes = [ctypes.c_int]
     least, greatest = torch.cuda.Stream.priority_range()
     least, greatest = max(least, greatest), min(least, greatest)
     eside = torch.cuda.Stream(priority=least)

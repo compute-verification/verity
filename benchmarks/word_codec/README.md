@@ -5,7 +5,9 @@ word codec (`codec.py`, `wc.cu`, `twin.py`; Sloth in one 61-bit word, which `ben
 cache's codec `verity/word-codec/kv/v0` (`kv.py`, `kv.cu`, `kv_twin.py`, and `kv_bench.py` its benchmark), which the
 bandwidth audit (PoUB, `verity/core/protocols/remote_bandwidth`) mirrors in its `codec.py`, and the wide codecs
 (`wide.py`, `wide.cu`). `encode_rate.py` times `kv.cu`'s encode against the stated squaring ceiling, and
-`model/gamma.py` is the rate audit's γ as arithmetic.
+`model/gamma.py` is the rate audit's γ as arithmetic. `cuda_lib.py` is how memory accounting's benchmarks
+(`codec_tensor`, `kv_filler`, `pous`, `remote_session`, `vllm_encoded` and this one) open a built CUDA library and bind
+its functions' types; each library's table of them sits beside the script that loads it.
 
 **Status: active.** `kv.cu` is the store's encode on the GPU: `benchmarks/remote_session/run.sh` builds it, the vLLM
 integration calls it (`integrations/vllm/verity_vllm/protocols/remote_bandwidth/remote.py`), and `benchmarks/vllm_encoded`

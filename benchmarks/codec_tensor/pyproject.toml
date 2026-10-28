@@ -13,6 +13,7 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 # modules) under the driver's block layout.
 inputs = ["benchmarks/word_codec/kv.py", "benchmarks/word_codec/kv_bench.py", "benchmarks/word_codec/kv_exhaust.py",
           "benchmarks/word_codec/kv_twin.py",
+          "benchmarks/word_codec/cuda_lib.py",  # the loader step.py's kernels open through (bench.py, kv_bench.py)
           "verity/__init__.py", "verity/errors.py", "verity/core/__init__.py", "verity/core/protocols/__init__.py",
           "verity/core/protocols/remote_bandwidth", "verity/core/protocols/sampled_proofs/__init__.py",
           "verity/core/claims/__init__.py",

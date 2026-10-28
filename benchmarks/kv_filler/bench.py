@@ -35,6 +35,7 @@ HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[1]
 sys.path.insert(0, str(ROOT / "benchmarks/word_codec"))
 
+import cuda_lib  # noqa: E402
 import kv as K  # noqa: E402
 
 RUN_SEED = hashlib.sha256(b"verity/kv-filler/bench/seed").digest()
@@ -55,23 +56,39 @@ KV_GATE_BASES = (77, (1 << 32) - 20)
 ENCODE_K = (2, 3)  # the codec's rounds: k = 3 is the stated guarantee's, k = 2 the upgrade behind the same parameter
 
 
+_v, _i, _q, _d = ctypes.c_void_p, ctypes.c_int, ctypes.c_uint64, ctypes.c_double
+TOPUP = {   # topup.cu's functions (`cuda_lib.load`): the top-up thread's (tu_*) and fill-sk16/v2's (sq_*, `Seq`)
+    "tu_start": [_i, _v, _v, _i, _i, _q, _q, _i, _i, _v, _i],
+    "tu_pause": [_i],
+    "tu_throttle": [_i],
+    "tu_gate": [_i, _i],
+    "tu_gate_step": [_i, _v],
+    "tu_now_ms": ([_v], _d),
+    "tu_progress": [_v],
+    "tu_log": [_q, _v, _i],
+    "tu_read": [_v, _q, _q, _v, _v],
+    "tu_fill_units": [_v, _v, _i, _q, _q, _v, _v, _i, _v],
+    "tu_fill_signs": [_v, _v],
+    "rd_read_reps": [_i, _i, _v, _q, ctypes.c_uint32, _i, _v, _v],
+    "tu_page_read": [_v, _q, _q, _q, _q, _i, _q, _i, _v, _v],
+    "sq_start": [_i, _v, _v, _i, _v, _i, _i, _q, _i, _i, _i],
+    "sq_idle": [_i, _q],
+    "sq_step_begin": [_i, _v],
+    "sq_step_end": [_v],
+    "sq_step_begin_phase": [_i, _i, _i, _v],
+    "sq_step_end_phase": [_i, _v],
+    "sq_progress": [_v],
+    "sq_prefill_reader": [_i],
+    "sq_probe": [_i],
+    "sq_shape": [_i, _i],
+    "sq_now_ms": ([_v], _d),
+}
+CODEC = {"kv_set_key": [_v, _i, _v], "kv_encode": [_v, _v, _q, _q, _i, _i, _v], "kv_encode_carveout": [_i]}   # kv.cu's
+
+
 class Topup:
     def __init__(self, path: str) -> None:
-        v, i, q, d = ctypes.c_void_p, ctypes.c_int, ctypes.c_uint64, ctypes.c_double
-        so = self.so = ctypes.CDLL(str(Path(path).resolve()))
-        so.tu_start.argtypes = [i, v, v, i, i, q, q, i, i, v, i]
-        so.tu_pause.argtypes = [i]
-        so.tu_gate.argtypes = [i, i]
-        so.tu_gate_step.argtypes = [i, v]
-        so.tu_now_ms.argtypes = [v]
-        so.tu_now_ms.restype = d
-        so.tu_progress.argtypes = [v]
-        so.tu_log.argtypes = [q, v, i]
-        so.tu_read.argtypes = [v, q, q, v, v]
-        so.tu_fill_units.argtypes = [v, v, i, q, q, v, v, i, v]
-        so.tu_fill_signs.argtypes = [v, v]
-        so.rd_read_reps.argtypes = [i, i, v, q, ctypes.c_uint32, i, v, v]
-        so.tu_page_read.argtypes = [v, q, q, q, q, i, q, i, v, v]
+        self.so = cuda_lib.load(Path(path).resolve(), TOPUP)
 
     def fill_units(self, regions, unit0: int, units: int, seed: bytes, sign_seed: bytes, ctas: int):
         ptrs = (ctypes.c_uint64 * len(regions))(*[p for p, _ in regions])
@@ -120,21 +137,7 @@ class Seq:
     ring slot where a chunk's region is)."""
 
     def __init__(self, tu: Topup) -> None:
-        v, i, q, d = ctypes.c_void_p, ctypes.c_int, ctypes.c_uint64, ctypes.c_double
-        so = self.so = tu.so
-        self.tu = tu
-        so.sq_start.argtypes = [i, v, v, i, v, i, i, q, i, i, i]
-        so.sq_idle.argtypes = [i, q]
-        so.sq_step_begin.argtypes = [i, v]
-        so.sq_step_end.argtypes = [v]
-        so.sq_step_begin_phase.argtypes = [i, i, i, v]
-        so.sq_step_end_phase.argtypes = [i, v]
-        so.sq_progress.argtypes = [v]
-        so.sq_prefill_reader.argtypes = [i]
-        so.sq_probe.argtypes = [i]
-        so.sq_shape.argtypes = [i, i]
-        so.sq_now_ms.argtypes = [v]
-        so.sq_now_ms.restype = d
+        self.so, self.tu = tu.so, tu
 
     def start(self, regions, seed: bytes, base_ctas: int, warps: int = 4, base_budget: int = 0, shift: int = 8,
               priority: int = 0, step_priority: int | None = None, device: int = 0) -> None:
@@ -171,11 +174,7 @@ class Seq:
 
 class Codec:
     def __init__(self, path: str) -> None:
-        v, i, q = ctypes.c_void_p, ctypes.c_int, ctypes.c_uint64
-        so = self.so = ctypes.CDLL(str(Path(path).resolve()))
-        so.kv_set_key.argtypes = [v, i, v]
-        so.kv_encode.argtypes = [v, v, q, q, i, i, v]
-        so.kv_encode_carveout.argtypes = [i]
+        so = self.so = cuda_lib.load(Path(path).resolve(), CODEC)
         if so.kv_bits() != 512:
             raise RuntimeError("the codec library is not p512")
         self.field = K.field("p512")
