@@ -1985,7 +1985,9 @@ def registered_values(draw) -> dict:
 REGISTERED_ENTRIES = D.Port(PIECES, "registered", registered, st.one_of(
     registered_values(), changed_audits([WINDOWS], 1, 0, REGISTERED_SETUPS).map(lambda a: {"params": a["params"]}),
     _audit_inputs(lambda a: {"params": a["params"]}, [PARAMS]), JSON), package=PACKAGE)
-TEXT = st.text(max_size=4) | st.sampled_from(["W", "x", "é", "\x00", "\U0001f600", '"'])
+#: A domain's program or value: a string of ASCII without DEL, as its binding (identity's canonical JSON, which refuses
+#: any other) holds; `Flock.canon` would write any other as UTF-8.
+TEXT = st.text(st.characters(max_codepoint=0x7e), max_size=4) | st.sampled_from(["W", "x", "\x00", '"', "\\"])
 def _domains(widths):
     return st.builds(lambda program, value, words, leaves, b: {"leaves": leaves, "program": program, "value": value,
                                                                "word_bits": b, "words": words},
@@ -2104,7 +2106,7 @@ PRODUCED_CHANGES = [
     ("no verdict reports", lambda c, x: c.update(opened=None), "P-opened"),
     ("another value opened too", lambda c, x: c["opened"].update(other=PRODUCED_OTHER), None),
 ]
-PRODUCED_NAMES = ["partial", "PouwUnitSeeds_v2", "s", "é"]
+PRODUCED_NAMES = ["partial", "PouwUnitSeeds_v2", "s", "a b"]
 
 
 @st.composite
