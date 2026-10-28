@@ -96,7 +96,7 @@ class ServingBlock:
 
 
 @dataclass(frozen=True)
-class Partition:
+class ServingSplit:
     """The actual circuit as serving blocks, and the dark leaves: `eps_dark` of the inventory's capacity, of which a
     construction uses `dark_mfu`."""
 
@@ -145,7 +145,7 @@ def local(block: ServingBlock, cap: Cap, w: float, side: Side = "bound", u: floa
     return best
 
 
-def aggregate(partition: Partition, cap: Cap, w: float, u: float | None = None) -> dict[str, Share]:
+def aggregate(partition: ServingSplit, cap: Cap, w: float, u: float | None = None) -> dict[str, Share]:
     """The minimum of the global bounds: each cut name's terms summed over every serving block (a block without that
     cut, or whose cut holds more than its capacity, at its capacity), the least of those sums, as each block's share."""
     u = w if u is None else u
@@ -189,7 +189,7 @@ class Overhead:
         return (1 - self.eps_dark) * self.g / rate if rate > 0 else 0.0
 
 
-def overhead(partition: Partition, cap: Cap, w: float, efficiency: float = 1.0, side: Side = "bound",
+def overhead(partition: ServingSplit, cap: Cap, w: float, efficiency: float = 1.0, side: Side = "bound",
              aggregate_only: bool = False, u: float | None = None) -> Overhead:
     """The overhead from the serving-block bound: each serving block's local minimum (or, with `aggregate_only`, the
     minimum of the global sums), and the dark leaves. `w` is the reference's weight per gate, `u` the most a gate holds

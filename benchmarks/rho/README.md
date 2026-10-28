@@ -70,7 +70,7 @@ A bound is argued in three parts, as the Notation states it, and each module's d
 | Notation | here |
 |---|---|
 | `\|A[X,J]\| ≤ Φ_X \|J\|`, `M_s` | `Location.phi`, `Location.server_memory` |
-| `ε_dark`, `L_dark` | `fleet.<name>.eps_dark`, `Partition.eps_dark` |
+| `ε_dark`, `L_dark` | `fleet.<name>.eps_dark`, `ServingSplit.eps_dark` |
 | inference block `(c, k)` | `Blocks("inference")`, `Policy`, `Budget(gates, inputs)` |
 | serving block `S`, `(c_S, k_S)`, `n_S` | `ServingBlock`, `Onsite.budget`, the inference cut's `Blocks.count` |
 | `q_T(c, k)` | `Cap`, from a class's `Allowance` by `classes.per_block` |
@@ -99,13 +99,13 @@ implementation, or different numbers in `data/`, never an edit to the modules ar
 
 | module | interface |
 |---|---|
-| `theorem.py` | `Budget`, `Blocks`, `Cut`, `ServingBlock`, `Partition`; `Cap`; `local`, `aggregate`, `overhead` |
+| `theorem.py` | `Budget`, `Blocks`, `Cut`, `ServingBlock`, `ServingSplit`; `Cap`; `local`, `aggregate`, `overhead` |
 | `classes.py` | `Argument.allowance(Profile) → Allowance`, raising `Outside`; `per_block`, `weight_per_gate`; `premise_status`; `Structure` |
 | `attacks.py` | the same `Argument`, side `attack`, on a serving block's layout |
 | `profile.py` | `Profile`: every field a class reads, named as in Lean |
 | `families.py` | `Family.profile(Model, Run) → Profile`, for each algorithm family and any `benchmarks/nci` algorithm by its traits |
 | `instances.py` | `Model`, `Run` (a target and its kind) |
-| `circuits.py` | `Circuit` (a measured training step), `compare → Comparison` with the FLOP model, `in_place` |
+| `circuits.py` | `MeasuredStep` (a training step measured as a Boolean circuit), `compare → Comparison` with the FLOP model, `in_place` |
 | `hardware.py` | `Units`, `Location`, `Fleet`, `Horizon` |
 | `envelopes.py` | `Pouw`, `Detection`, `Wipe`, `Certifier`; `Regime.partition`, `Regime.delta`; `Policy` |
 | `params.py` | `Registry`: dotted keys over `data/*.toml`, `override`, `fields` |

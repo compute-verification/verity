@@ -248,8 +248,9 @@ def requested_pin(out: Path) -> str | None:
 
 def peer_of(out: Path, v: dict) -> str:
     """The challenger peer the verifier ran as (`verifier.py --challenger-peer`), from the run's record: each gate
-    session's in `v` (verifier.json's `challenger.peer`, `challengers.Gate.finish`), and a host run's `request.json`
-    beside `out` (its `argv`; its `peer` is the audited node). Refused unless the record names exactly one."""
+    session's in `v` (verifier.json's `challenger.peer`, `challengers.GateClient.finish`), and a host run's
+    `request.json` beside `out` (its `argv`; its `peer` is the audited node). Refused unless the record names exactly
+    one."""
     named = {(s.get("challenger") or {}).get("peer") for s in v["sessions"]
              if (s.get("challenger") or {}).get("challenger") == "gate"}
     req = out.parent / "request.json"
