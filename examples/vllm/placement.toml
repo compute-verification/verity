@@ -24,8 +24,9 @@ HIDDEN_SO = "/workspace/research/vllm-composed-h200int8/fa2/build/fa3_matReqG/ve
 NORM_TAP_SO = "/workspace/research/vllm-composed-h200int8/norm_tap/build/verity_norm_tap.so"
 
 [run.window]
-# one served sampling period through every subprotocol (served_verdicts.sh, which leases the GPU itself); the prover and the
-# Lean verifier run on the serving node after the lease ends. The endpoint serves PoUW's H1 with each sampling period's coins
+# one sampling block of the served execution blocks through every subprotocol (served_verdicts.sh, which leases the GPU
+# itself); the prover and the Lean verifier run on the serving node after the lease ends. The endpoint serves PoUW's H1 with
+# each sampling block's coins
 # from a session of its own on vy-challenger-1's gate (H1_GATE, the gate key of the node's research user; H1_PEER the node);
 # `--env MAIN_SHA=SHA` also holds the gate's pins to main's first-parent line from SHA. The sampled proofs' coins are the Lean
 # verifier's own unless PP_CHALLENGER names the live challenger (`--env PP_CHALLENGER=gate:USER@HOST` with PP_PEER,
