@@ -1,7 +1,7 @@
 """What each SASS base opcode does, as RT-ISA classifies it against A7's menu: can it form a multiply (head a fresh
 product), does it write a word, and which menu route (if any) prices it.
 
-A7 (`SheetSemantics`) says no unit outside the menu heads a fresh committed word (NoSum) and a side unit costs at least
+A7 (`SheetSemantics`, retired from Lean with the TS facet model) says no unit outside the menu heads a fresh committed word (NoSum) and a side unit costs at least
 its per-word vector (SideUnits). A committed word is a fresh s32: the running sum of 32 int8 products of noised operands.
 So the question for each opcode is: can it form an int8 (or FP8/FP4) product at all (`mul`), and if it only writes a word
 without multiplying (`word`, not `mul`), is that word a sum/copy/select of words that already exist (NoSum). The menu's

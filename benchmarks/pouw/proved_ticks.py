@@ -15,16 +15,17 @@ reads W off a block where the datacenter places a Program `SCHEME` or its one st
   `eps_budget.floor_skip` counts them.
 - B_♭, the floor program ♭'s bound a unit in SMSP-cycles on the sheet's machine: `eps_budget.prices`' ♭ (the tensor
   route at the operand floor φ_del and the fold, no filler) with ε_skip's skippable work in it, B_♭ = B/(1 − ε_skip),
-  ε_skip `eps_budget.design_skip` at the sheet's vector, as Lean's ♭ (`Accounting.TS.Headline.Sm120.flat`, #2482) is.
+  ε_skip `eps_budget.design_skip` at the sheet's vector, as the retired TS model's Lean ♭ was.
   For H1 + fx1 on DS-120, ♭ binds DS_issue alone: an IMMA.16832, 0.025641 LDSM_X4 and fx1's 8 ALU and 8 IMAD warp
   instructions, 17.025641, and 0.4207% skippable, so B_♭ = 17.097571.
-- 4 · SMs · f_max: the credit is T_cred = B_♭/f_max a unit on one SMSP (`Accounting.TS.Model.credit`), and a GPU's
+- 4 · SMs · f_max: the credit is T_cred = B_♭/f_max a unit on one SMSP, and a GPU's
   4 · SMs SMSPs share the window's units. SMs is data/table.toml's (188 on sm_120), f_max the sheet's (`FMAX_MHZ`).
 - ε, PoUW's headline at the sheet: outside δ = 2^-40, an accepted window takes at least (1 − ε) · T_cred a unit over
   every route. ε (Corollary D3's) is what any other route, skipped work and luck can save against ♭, so the figure
-  is (1 − ε) of ♭'s block-ticks, not ♭'s. `SHEET_EPS` is 5.860%, `Sm120SheetHeadline`'s (#2924's A5b on #2791, not on
-  main yet: receipt luck ½ named, operand luck ¾, p = 7/8, fold skippers charged): its π* puts 197/3761 on DS_smem so
-  that a fold on the bulk engine (RT4-SHEET-1) costs at least φ*, which lowers N_w(w* + φ*) to 16.1095 against B_♭.
+  is (1 − ε) of ♭'s block-ticks, not ♭'s. `SHEET_EPS` is 5.860%, the figure the TS model's sm_120 data-sheet headline
+  proved before its retirement (A5b, receipt luck ½ named, operand luck ¾, p = 7/8, fold skippers charged): its π*
+  puts 197/3761 on DS_smem so that a fold on the bulk engine (RT4-SHEET-1) costs at least φ*, which lowers
+  N_w(w* + φ*) to 16.1095 against B_♭.
   main's machine model reads 0.585% at p = ¾ (`machine-model headline`), with no bulk route; the measured reading,
   0.591% on VF3s-16, is at measured rates, not the sheet's.
 
@@ -35,14 +36,14 @@ W's is an LP over their union and not this sum, so `units` refuses it.
 
 What it rests on:
 
-- the TS model on the data-sheet machine and its named assumptions A1–A7 (`Accounting.Assumptions.Sheet`): A1 the SM
-  clock at most f_max, A2 and A2u dispatch (a uniform instruction takes an issue slot), A3 the tensor peak, A4 the
-  pipes, A5 shared memory, A6 words written, A7 semantics;
-- FOLD-OPT at π* (`Accounting.Assumptions.TS.FoldOptFoldedAt`): fx1 at 4 lane instructions a word is the cheapest fold
-  at the words a run folds, checked within a stated menu (`Sm120SheetHeadline`'s docstring); a run that skips a fold is
-  charged at the whole-unit luck ½;
-- A5b (`Accounting.Assumptions.TS.SheetSmem`): a bulk or TMA instruction holds the shared-memory bytes it moves in the
-  banks at A5's rate, a reading no vendor document states;
+- the TS model on the data-sheet machine and its assumptions A1–A7: A1 the SM clock at most f_max, A2 and A2u dispatch
+  (a uniform instruction takes an issue slot), A3 the tensor peak, A4 the pipes, A5 shared memory, A6 words written, A7
+  semantics. The TS facet model, its data-sheet machine, A1–A7 and its headlines are retired from Lean, so no Lean
+  statement on main proves `SHEET_EPS` now;
+- FOLD-OPT at π*: fx1 at 4 lane instructions a word is the cheapest fold at the words a run folds, checked within a
+  stated menu; a run that skips a fold is charged at the whole-unit luck ½;
+- A5b: a bulk or TMA instruction holds the shared-memory bytes it moves in the banks at A5's rate, a reading no vendor
+  document states;
 - ε's source above, on the full-checking layer: ε_sample and the Fiat–Shamir premium are separate lines;
 - the node's work, in its G GPUs' ticks: the headline is per node (ASK-65 = A), the work of its GPUs, host CPU and
   peer GPUs together, priced on the GPUs' sheet (A1–A7 price none of its other devices: its CPUs, its DPU). Read as
@@ -67,10 +68,9 @@ from verity_machine_model.eps import PRODUCTS, design, honest, table
 from verity_machine_model.model import device
 
 SMSPS = 4                          # SMSPs an SM
-#: each family's f_max, the sheet's highest SM clock (A1): SPEC's P1, the hardware's 2,430 MHz on sm_120 (Lean's
-#: `Accounting.TS.Headline.Sm120.ds120.fmax`, #2482)
+#: each family's f_max, the sheet's highest SM clock (A1): SPEC's P1, the hardware's 2,430 MHz on sm_120
 FMAX_MHZ = {"sm_120": 2430}
-#: PoUW's headline ε at the data sheet, H1 + fx1 on DS-120: `Accounting.SecurityProofs.TS.Sm120SheetHeadline`
+#: PoUW's headline ε at the data sheet, H1 + fx1 on DS-120: the retired TS model's sm_120 data-sheet headline's
 SHEET_EPS = 5860 / 100000
 KINDS = tuple(f"mac:{p}" for p in PRODUCTS)
 #: PoUW's compile pass for H1 + fx1 on sm_120 (`verity.core.protocols.pouw.circuit.h1tile.SCHEME`)

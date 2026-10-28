@@ -86,7 +86,7 @@ HOST_OPS = 128 * 2048 * 3.6e9
 #: 1 - ((1 - phi)/q_sched + phi)/q_clock = 0.323: honest kernels run 1.72x the floor at the nodes' locked clock,
 #: diluted by the training window's filler (the C7 dossier, whose 0.326 also takes its
 #: eps = 0.54% off the credited time, which eps_w charges here instead; 0.213 with an attested clock; 1% needs eight
-#: conditions; today nothing in a training window is credited); PoUW's deficit eps_W = 0.744% (CircuitCredit);
+#: conditions; today nothing in a training window is credited); PoUW's deficit eps_W = 0.744% (the retired CircuitCredit's);
 #: the GPU clock above what PoUW credits, 0: PoUW credits 2,430 MHz, the card table's ceiling, which every
 #: card on vy-nebius-1 reports as its maximum, application, default and boost SM clock;
 #: the host CPUs at their INT8 AMX datasheet peak (``HOST_OPS``: 12.6% of the GPUs' FP8 rate at
@@ -122,7 +122,7 @@ SPEC = [
     {"key": "unmonitored", "main": True, "label": "Unmonitored compute share", "unit": "", "min": 1e-12, "max": 0.5, "log": True, "zero": True},
     {"key": "g", "main": True, "label": "Compute amplifier g: the developer's algorithmic advantage over the reference recipe (1 against the best known recipe)", "unit": "x", "min": 1, "max": 100, "log": True},
     {"key": "residual", "main": True, "label": "Monitored compute residual r-hat on the GPUs, their share outside the certificate (floor credit at the locked clock 0.323, with an attested clock 0.213; best plausible design 0.01; nothing credited today: 1)", "unit": "", "min": 1e-12, "max": 1, "log": True, "zero": True},
-    {"key": "eps_w", "label": "PoUW's deficit eps_W: the share of certified work a certificate that isn't wrong may credit without its running, which charges eps_W W_cert/C to r (CircuitCredit 0.744%; best plausible design 0.06-0.25%)", "unit": "", "min": 1e-4, "max": 0.1, "log": True, "zero": True},
+    {"key": "eps_w", "label": "PoUW's deficit eps_W: the share of certified work a certificate that isn't wrong may credit without its running, which charges eps_W W_cert/C to r (the retired CircuitCredit's 0.744%; best plausible design 0.06-0.25%)", "unit": "", "min": 1e-4, "max": 0.1, "log": True, "zero": True},
     {"key": "eps_agg", "label": "Aggregation slack eps': the share of capacity whose PoUW certificates may be wrong, which Markov's inequality over the windows charges to r (1e-4 with per-window failure 3 x 2^-40 gives the theorem's delta of 2.7e-8; each halving costs about 4e-5 of PoUW's deficit)", "unit": "", "min": 1e-8, "max": 1e-2, "log": True, "zero": True},
     {"key": "clock_share", "label": "GPU capacity above the clock PoUW credits (0: PoUW credits 2,430 MHz, the card table's ceiling and the SKU's maximum, CMP-165; above 0 only on a card whose SKU or firmware reaches past its table)", "unit": "", "min": 1e-4, "max": 0.3, "log": True, "zero": True},
     {"key": "host_share", "main": True, "label": "Host CPUs at datasheet peak, as a share of server compute at the card table's peak (Xeon 6776P INT8 AMX 12.6%; hosts without matrix units, two EPYC 9015s, 0.22%)", "unit": "", "min": 1e-6, "max": 0.5, "log": True, "zero": True},
@@ -192,7 +192,7 @@ STATUS = [
     ("Declared computation, partial-sum law", "Off by default (kappa_chain = 0): ContainedTraining and PS' rest on "
      "PartialSumsSupport and ActivationsSupport, which NCI-FALSIFY reproduced as false."),
     ("Monitored compute residual", "r = r-hat + epsilon_W W_cert/C + eps', as Nci.Guarantees.DampenerRemote states it "
-     "(#3646). PoUW's deficit epsilon_W = 0.744% (CircuitCredit, draft #2638) is a share of credited work, evaluated "
+     "(#3646). PoUW's deficit epsilon_W = 0.744% (the retired CircuitCredit's, draft #2638) is a share of credited work, evaluated "
      "with its premises granted. Under the floor credit r-hat = 0.449: GPU floor time 0.323 (honest kernels at 1.72 "
      "times the floor; run r20261017-123922-e558 has no published outputs), the clock 0 (PoUW credits the card "
      "table's 2,430 MHz, the SKU's maximum, CMP-165; the premise that a node's cards are that SKU and firmware is "

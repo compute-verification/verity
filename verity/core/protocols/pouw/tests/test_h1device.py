@@ -22,7 +22,7 @@ from verity.core.protocols.sampled_proofs.one_stage import partition as P
 
 ROOT = Path(__file__).resolve().parents[5]
 SHEET_90 = ROOT / "benchmarks" / "pouw" / "machine_model" / "data" / "devices" / "sm_90" / "sheet.toml"
-SM120_LEAN = ROOT / "Security" / "Definitions" / "Accounting" / "Headline" / "Sm120.lean"
+THETA_120 = ROOT / "benchmarks" / "pouw" / "machine_model" / "data" / "theta.toml"
 
 #: sha512 of the template descriptor of `HW.template(K, HW.tile_unit(K, (32, 32), definition))`, recorded before `h1_tile`
 #: took an architecture: (PouwH1Tile v1's, v3's) at each K
@@ -105,7 +105,8 @@ def test_the_sm90_record_is_its_data_sheet() -> None:
 
 
 def test_the_sm120_record_is_ds120() -> None:
-    """f_max and the IMMA16832 MACs are `Accounting.TS.Headline.Sm120.ds120`'s."""
-    lean = SM120_LEAN.read_text()
-    assert re.search(r"def ds120 : SheetData Pipe where\n  fmax := 2430\n", lean)
+    """SMs, f_max and the IMMA16832 MACs are sm_120's θ's, the clock DS-120 quotes every peak at being f_max."""
+    theta = tomllib.loads(THETA_120.read_text())
+    s8 = next(r for r in theta["rate"] if r["key"] == "tensor.s8.k32")
+    assert (D.SM120.sms, D.SM120.fmax_mhz, D.SM120.s8_macs) == (theta["sms"], theta["clocks"]["fmax"]["mhz"], s8["sheet"])
     assert (D.SM120.fmax_mhz, D.SM120.tensor_mhz, D.SM120.s8_macs, D.SM120.sheet_s8_tops) == (2430, 2430, 1024, None)

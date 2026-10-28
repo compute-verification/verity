@@ -211,7 +211,7 @@ def symbols() -> list[dict]:
         ("r̂ GPU", "the GPUs' residual at the locked clock", p["residual"]),
         ("r̂ clock", "GPU capacity above the credited clock", p["clock_share"]),
         ("r̂ host", "host CPUs at INT8 AMX peak", p["host_share"]),
-        ("ε_W", "PoUW's deficit, a share of certified work (CircuitCredit)", p["eps_w"]),
+        ("ε_W", "PoUW's deficit, a share of certified work (the retired CircuitCredit's)", p["eps_w"]),
         ("ε_W W_cert/C", "the deficit's share of capacity under the floor credit, ε_W (1 − r̂)", p["eps_w"] * (1 - r)),
         ("ε_W", "at the best plausible PoUW design", (p | BEST)["eps_w"]),
         ("ε′", "aggregation slack (δ_win / ε′ = 2.7e-8 at δ_win = 3·2^-40)", p["eps_agg"]),
