@@ -81,6 +81,13 @@ def test_words_in_hold_only_in_their_files():
     assert WORDS.sub(harness, "benchmarks/other/harness.py") == harness
 
 
+def test_a_map_of_words_in_alone_leaves_every_other_file():
+    words = M.Words({"words": {}, "words_in": [{"files": ["cli/*.py"], "words": {'"examples"': '"demos"'}}]})
+    assert words.sub('ROOT / "examples"\n', "cli/run.py") == 'ROOT / "demos"\n'
+    assert words.sub('ROOT / "examples"\n', "other/run.py") == 'ROOT / "examples"\n'
+    assert words.path("examples/run.py") == "examples/run.py"
+
+
 def test_the_certifiers_program_is_network_certifier_where_it_stands():
     lean = "verity/protocols/accounting/communication/warden/lean"
     assert WORDS.path(f"{lean}/Warden/Grid.lean") == \

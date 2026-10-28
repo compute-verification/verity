@@ -3,7 +3,7 @@ name: asking-daniel
 description: >
   How to ask Daniel for a decision in Verity: one short Notion page per ask in the Asks for Daniel database, written to a
   fixed template with LaTeX for the math, plus a card in #ask-daniel that notifies him and links the page. Covers what
-  needs Daniel (keys, access, and what a guarantee says or rests on), the page template, `research msg ask-daniel --page
+  needs Daniel (what a guarantee says or rests on, and what only his own accounts can do), the page template, `research msg ask-daniel --page
   FILE.md` (or a page made with the Notion MCP and `--link`), iterating on his page comments, `research msg ask-daniel
   pages` to see his decisions and comments, recording a decision (`resolve`, the page's Status, the friction skill's
   rulings), and when a default may apply. Use when a lane needs Daniel's decision, writes or revises an ask, is woken by
@@ -19,11 +19,12 @@ a card: a decision waiting in a note or a thread waits forever.
 
 ## Before asking
 
-Only keys and claims need him (AGENTS.md "Working principles"), and a recorded ruling that covers the case (AGENTS.md, the
+Only claims and his own clicks need him (the team skill's "Working principles"): keys and access between our own
+machines and accounts are the lanes' call. A recorded ruling that covers the case (AGENTS.md, the
 skills, the friction skill's "Standing rulings") stands until he reverses it. A question the system already answers isn't
 an ask (which circuit a templated unit's theorem names: the one its template unrolls to).
 
-An ask that isn't keys or access goes on its page decided: Status *Decided by lane*, Choose your pick, Decision
+An ask that isn't a click only he can make goes on its page decided: Status *Decided by lane*, Choose your pick, Decision
 "Provisionally accepted (standing rule): <option>. Re-check: <why it holds>". Resolve its card with
 that option and `--provisional` (implied by a `--note` starting "Provisionally accepted"), so it says your lane decided,
 and act on it; he reviews these in the "Provisional, to review" view and can reverse any. A page that waits on him leaves
@@ -96,8 +97,8 @@ Lane (your handle), Kind, Area, Recommendation, If no answer, Deadline, Lane che
 Slack card from its output. If the card route fails, `research msg send --as <you> --to @daniel --text '... <page url>'`
 mentions him too.
 
-The card's question is one line and its why a sentence or two. **Blocking** is for access and keys: nothing happens
-until he decides. **Default** applies at the deadline unless he comments or decides.
+The card's question is one line and its why a sentence or two. **Blocking** is for a click only he can make: nothing
+happens until he makes it. **Default** applies at the deadline unless he comments or decides.
 
 ## Iterate and record
 

@@ -21,7 +21,7 @@ engine without the committer. Both stamp the tokens each engine step adds when t
 stall). Their monitor runs in a child process, so that the engine's own pauses stay in the trace. Before the replay,
 with the schedule and every other input built, the recorder freezes its heap (`gc.freeze()`, `gc` in `meta.json`), so
 that full collections don't walk the whole run's requests, which a served engine never holds at once. Offline traces
-recorded without `gc` were taken on a higher GC floor (a 42 ms full collection before t0 in `art:ef0c3e05`) and compare
+recorded without `gc` were taken on a higher GC floor (a full collection before t0) and compare
 against a different floor than later ones. A step or a finalization that takes `STALL_S` is hung: every thread's stack
 goes to stderr and the job exits, rather than holding its GPU to the lease's end.
 
@@ -41,9 +41,8 @@ the chunk rather than counting it done.
 **`convert`** rebuilds `trace.json` from those files, and drops what isn't honest timing of an idle GPU:
 - a heartbeat or event-loop stall longer than `--freeze-ms` (SIGSTOP, a paused scope, a saturated host) drops the
   windows it overlaps and the next one, where the backlog it left drains; a stall longer than `--freeze-rest-ms` drops
-  every window from its first to the chunk's end. On node 1's chunks (`art:bd8f7261`) Llama-8B's next window after a
-  stall had TTFT p99 6.5 s, and the first window kept after one had TTFT p50/p99 93.7/798 ms against quiet windows'
-  92.7/797; the stalls followed by a kept window were 1.2-3.3 s long, so nothing shows a longer one drains as fast.
+  every window from its first to the chunk's end, since nothing shows a longer stall's backlog drains as fast as a short
+  one's.
   `--freeze-scope chunk` is the old rule, for sensitivity: any such stall voids the whole chunk;
 - a window is dropped when another process computed on our GPU, when the rest of the NUMA node kept more than
   `--max-others-busy` of its CPUs busy or co-tenants more than `--max-cotenant-busy` of the job's own (its cpuset's
