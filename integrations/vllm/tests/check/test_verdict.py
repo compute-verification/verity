@@ -127,7 +127,7 @@ def test_schema_round_trip_and_closed_vocabularies(tmp_path):
                 summary={"rc": 0, "pass": True}, manifest_verify={"ok": True}, row="unit")
     assert v.schema == "vllm-verdict/v1" and v.outcome == V.PASS and v.program_digest == "ab" * 32 and v.manifest_digest == "cd" * 32 and v.query_id == "Q_module_v1"
     p = v.write(tmp_path / "verdict.json")
-    back = V.Verdict.load(p)
+    back = V.CommitChecks.load(p)
     assert back.to_dict() == v.to_dict()
     assert json.loads(p.read_text())["schema"] == "vllm-verdict/v1"
     assert set(V.GROUPS) == {"runtime_match", "local_replay", "boundary_linkage", "checkpoint_binding", "execution_extent", "required_value_coverage", "program_source_identity"}
@@ -138,9 +138,9 @@ def test_schema_round_trip_and_closed_vocabularies(tmp_path):
     with pytest.raises(ValueError):
         CheckResult.from_dict({"name": "runtime_match/x", "claim": "c", "outcome": "MAYBE"})
     with pytest.raises(ValueError):
-        V.Verdict(checks=[CheckResult(name="weights_pin/x", code=VC.ACCEPTED)], outcome=V.PASS)          # the OLD name is not a group
+        V.CommitChecks(checks=[CheckResult(name="weights_pin/x", code=VC.ACCEPTED)], outcome=V.PASS)          # the OLD name is not a group
     with pytest.raises(ValueError):
-        V.Verdict.from_dict({"schema": "something-else/v9", "checks": [], "outcome": V.PASS})
+        V.CommitChecks.from_dict({"schema": "something-else/v9", "checks": [], "outcome": V.PASS})
 
 
 def test_worst_orders_fail_over_insufficient_over_not_run():
@@ -176,7 +176,7 @@ def test_mapping_old_to_new_is_complete_with_no_loss():
     # every compat field a check names is a documented old fact ...
     missing_doc = sorted(f for f in emitted_compat if not documented(f))
     assert not missing_doc, f"compat fields not in OLD_TO_NEW: {missing_doc}"
-    # ... and every documented old fact lands on a check / group / Verdict field that exists
+    # ... and every documented old fact lands on a check / group / CommitChecks field that exists
     targets = {m["new"].split(" ")[0].strip("`").rstrip(";,") for m in OLD_TO_NEW}
     unknown = []
     for t in targets:
@@ -188,7 +188,7 @@ def test_mapping_old_to_new_is_complete_with_no_loss():
             continue
         elif t.startswith(("verdict.", "compat.")):
             fld = t.split(".")[1] if t.startswith("verdict.") else "compat"
-            if fld not in V.Verdict.__dataclass_fields__:
+            if fld not in V.CommitChecks.__dataclass_fields__:
                 unknown.append(t)
         else:
             unknown.append(t)
@@ -462,7 +462,7 @@ def test_from_record_pass_row_reads_its_own_execution_configuration(tmp_path):
     assert v.runs == {"instrumented": 1, "failed": 0, "control": 1, "not_pass_by_reconstruction": 0, "pairs": [0]}
     assert v.execution["engine_settings"]["openings"] == 64 and v.execution["committer"] == "native_collect_v2b"
     out = cli.main(["verdict", "from-record", str(d), "--rc", "0", "--stage-ok", "PASS", "--quiet"])
-    assert out == 0 and V.Verdict.load(d / "verdict.json").outcome == V.PASS
+    assert out == 0 and V.CommitChecks.load(d / "verdict.json").outcome == V.PASS
 
 
 def test_from_record_pre_p5_row_takes_rc_and_execution_from_its_commit_summary(tmp_path):
@@ -516,7 +516,7 @@ def test_correspondence_digest_is_the_builds_own_or_absent(tmp_path):
     assert v.correspondence_digest == step and v.correspondence_digest_source == "build_summary.json:step"
     assert v.correspondence_digests == {"build_request_LP9_T1": shape, "request": req, "step": step}
     assert v.inputs["build_summary.json"] and v.correspondence_digest != v.inputs["global_match.json"]
-    assert V.Verdict.from_dict(json.loads(v.dumps())).correspondence_digest == step
+    assert V.CommitChecks.from_dict(json.loads(v.dumps())).correspondence_digest == step
     # a build_summary.json of a v1-frontend Build (no correspondence_digest per wrapper): absent, null
     (d / "build_summary.json").write_text(json.dumps({"step": {"ok": True, "program_digest": "p1" * 32, "correspondence_digest": None}, "request": {"ok": True, "program_digest": "p2" * 32}}))
     v = V.from_record(d, rc=0, stage_ok="PASS")
@@ -558,7 +558,7 @@ def test_from_record_cites_property_records_by_digest(tmp_path):
         assert c["name"] in REGISTRY and c["schema"] == REGISTRY[c["name"]].schema
         assert digest_of(json.loads((d / c["source"]).read_text())) == c["digest"]
     assert v.notes == ["property census (properties/census.json): does not hold"]
-    assert V.Verdict.from_dict(json.loads(v.dumps())).properties == v.properties
+    assert V.CommitChecks.from_dict(json.loads(v.dumps())).properties == v.properties
     doc = json.loads((d / "properties" / "noninterference.json").read_text())
     (d / "properties" / "noninterference.json").write_text(json.dumps({**doc, "world": 2}))
     (d / "properties" / "junk.json").write_text("{not json")
