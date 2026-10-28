@@ -3,12 +3,14 @@
 (`hm96_salt`, `commit_string`, `registered.leaf`, `tree_levels`), for any chunking and any `workers`."""
 from __future__ import annotations
 
+import json
 import random
 import struct
 
 import numpy as np
 import pytest
 
+from verity.core.protocols import registration as Reg
 from verity.core.protocols.pouw import weights as Wt
 from verity.core.protocols.pouw.audit import chacha20_block, hm96_salt
 from verity.core.protocols.sampled_proofs.one_stage import registered as G
@@ -77,6 +79,25 @@ def test_weights_root_folds_by_ascending_k():
     roots = Wt.weights_roots(CIRCUIT, PREFIX, shapes, lambda w: rows[w], KEY)
     assert Wt.weights_root(roots) == Wt.weights_root(dict(reversed(list(roots.items()))))
     assert Wt.weights_root(roots) != Wt.weights_root({**roots, 8: roots[12]})
+
+
+def test_the_weights_root_is_pouws_view_of_theta():
+    """Each K's ``b/<K>`` registered as a θ item of the registration log, read back from the accepted log's view: its
+    `theta_root` is `weights_root` of the roots, whatever else θ lists; a second ``b/<K>`` is the log's refusal."""
+    shapes, rows = model()
+    roots = Wt.weights_roots(CIRCUIT, PREFIX, shapes, lambda w: rows[w], KEY)
+    n = {k: sum(m for m, kw in shapes if kw == k) for k in roots}
+    items = [Wt.theta_item(CIRCUIT, PREFIX, k, n[k], roots[k]) for k in reversed(sorted(roots))]
+    other = [{**items[0], "value": v} for v in ("other/b/8", f"{PREFIX}b/08", f"{PREFIX}a/8", f"{PREFIX}b/8x")]
+    log = Reg.chain("onsite", [Reg.Information(tuple(items[:1] + other)), Reg.Information(tuple(items[1:]))])
+    composite, read = Reg.log_of(json.loads(Reg.committed("onsite", log)))
+    view = Reg.check(Reg.Auditor(), composite, read).view()
+    assert [t["value"] for t in view.theta][:1] == [Wt.value(PREFIX, max(roots))]
+    assert Wt.theta_roots(view.theta, PREFIX) == roots
+    assert Wt.theta_root(view.theta, PREFIX) == Wt.weights_root(roots)
+    with pytest.raises(Reg.Refused, match="duplicate-information"):
+        Reg.check(Reg.Auditor(), "onsite", Reg.chain("onsite", [Reg.Information(tuple(items)),
+                                                                Reg.Information(tuple(items[:1]))]))
 
 
 def test_a_changed_code_scale_or_key_moves_the_root():
