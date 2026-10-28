@@ -123,7 +123,7 @@ against, is SHA-512 too (`weights_sha512`: rows-sha512's registration, `step_row
   (`ml.windows.rows.commit`'s ``salts_of``), is verified with the verifier's own reads of it (``--registered``, the port at
   the root the warden signed, which the caller read under the warden's key), the same reads, record and negatives as a row
   table's (below). `a5_warden.py` is their stand-in.
-* **Row tables** (`ml.windows.rows.Window.row_tables`): a window whose `ScaledMmS8Coordinate` chunks read their ``x``
+* **Row tables** (`ml.windows.rows.Binding.row_tables`): a window whose `ScaledMmS8Coordinate` chunks read their ``x``
   rows from one row table per engine step and linear (`pipeline.serving_rows.with_row_tables`) registers one port more,
   ``row-table``, the tree over its steps' roots, which the Spec declares a tree over roots of row-seg leaves
   (`service.ROOTS`, ``over``). Each chunk's public file is a shared-row file, its header's ``shared_rows`` held to the
@@ -225,7 +225,7 @@ CHALLENGER = "a5.py on the auditor's challenger's coins"
 VERIFIER = "a5.py on the verifier's own coins (the Lean's IO.getRandomBytes)"
 
 
-def stream_of(a: argparse.Namespace, mine: CS.Window, members: list[dict], want: dict, leaf_layer: str | None,
+def stream_of(a: argparse.Namespace, mine: CS.Binding, members: list[dict], want: dict, leaf_layer: str | None,
               coins: Callable[[int], bytes]) -> tuple[S.Stream, dict | None]:
     """The rank's `service.Stream` on ``coins`` (the challenger's, a `ChallengerCoins`, or the verifier's own, its
     `challenger` naming which): its unit the window's templates in their order (the one
@@ -275,7 +275,7 @@ def output_closure(a: argparse.Namespace, population: int) -> dict[int, list[int
     return {u: outs for u in range(population)} if outs else None
 
 
-def output_refusal(a: argparse.Namespace, mine: CS.Window, drawn_law: dict) -> dict | None:
+def output_refusal(a: argparse.Namespace, mine: CS.Binding, drawn_law: dict) -> dict | None:
     """Why the window's output class can't be proved at rate 1 by `output_closure`, or None: it needs a streamed work
     draw (only a work draw carries a closure), units inside the population, and no member mixing output units with
     others, so each member's session is a subset of all its units or a subset of its drawn ones (SampledKSLiveV2's
@@ -291,7 +291,7 @@ def output_refusal(a: argparse.Namespace, mine: CS.Window, drawn_law: dict) -> d
     return {"output-class-mixes-a-member": mixed} if mixed else None
 
 
-def port_refusal(mine: CS.Window, draw: dict, port: int, ports: int | None) -> dict | None:
+def port_refusal(mine: CS.Binding, draw: dict, port: int, ports: int | None) -> dict | None:
     """Why the draw's sessions can't all listen inside the ``ports`` reserved from ``port``, or None (and None for
     ``ports`` None, the caller's own ports): each member with a proved unit (`draw.proved`, its closure included) listens
     on the next port from ``port``, so a session past the reservation could reach another audit's verifier."""
@@ -302,7 +302,7 @@ def port_refusal(mine: CS.Window, draw: dict, port: int, ports: int | None) -> d
     return {"sessions-past-the-reserved-ports": {"sessions": need, "ports": ports, "from": port}} if need > ports else None
 
 
-def coins_draw(a: argparse.Namespace, rank: int, rec: dict, mine: CS.Window, members: list[dict], want: dict,
+def coins_draw(a: argparse.Namespace, rank: int, rec: dict, mine: CS.Binding, members: list[dict], want: dict,
                leaf_layer: str | None) -> tuple[S.Stream | None, S.Draw | None, dict | None, Callable[[int], bytes],
                                                 dict | None, dict | None, int | None]:
     """Rank ``rank``'s draw of record (`stream_of`): the stream registers the window under the TP run root (`register`, at
@@ -334,7 +334,7 @@ def coins_draw(a: argparse.Namespace, rank: int, rec: dict, mine: CS.Window, mem
 
 
 def verifier_outcome(a: argparse.Namespace, stream: S.Stream, draw: S.Draw, counts: dict | None, coins: AC.VerifierCoins,
-                     rec: dict, mine: CS.Window, members: list[dict], want: dict, leaf_layer: str | None,
+                     rec: dict, mine: CS.Binding, members: list[dict], want: dict, leaf_layer: str | None,
                      sessions: list[str], verdicts: dict, statement: dict, given: dict) -> tuple[dict | None, dict, dict]:
     """The draw's outcome of record on the verifier's own coins: its proof delivered (`Stream.deliver`) and its outcome
     (`Stream.outcome`, ``given`` its proved units, instances, served units and session roots) with no coins' evidence,
@@ -361,7 +361,7 @@ def verifier_outcome(a: argparse.Namespace, stream: S.Stream, draw: S.Draw, coun
     return result, neg, record
 
 
-def coins_outcome(a: argparse.Namespace, stream: S.Stream, draw: S.Draw, counts: dict | None, rec: dict, mine: CS.Window,
+def coins_outcome(a: argparse.Namespace, stream: S.Stream, draw: S.Draw, counts: dict | None, rec: dict, mine: CS.Binding,
                   members: list[dict], want: dict, leaf_layer: str | None, read: bytes, segment: dict, sessions: list[str],
                   verdicts: dict, statement: dict, given: dict) -> tuple[dict | None, dict, dict]:
     """The draw's outcome of record once the challenger's session has ended (`a5_coins.Draws.evidence`): its proof delivered
@@ -509,7 +509,7 @@ def stage(served: Path, mm: dict, files: tuple[dict, dict]) -> None:
             raise RuntimeError(f"member {mm['k']}'s prover's file is not under the header its public file was held to")
 
 
-def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Window, served: Path, source: Callable[[dict], dict], port: int,
+def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served: Path, source: Callable[[dict], dict], port: int,
           summary: dict, more_negatives: dict | None = None, rank: int | None = None,
           step_roots: dict[int, bytes] | None = None, registered: dict[str, dict] | None = None,
           ports: int | None = None) -> tuple[dict, bool]:
@@ -876,7 +876,7 @@ def output_negatives(a: argparse.Namespace, draw: dict, proved: list[int]) -> di
     return neg
 
 
-def transfer_gate_negatives(transfer_gates: Sequence[str], rec: dict, mine: CS.Window, want: dict, leaf_layer: str, draw: dict,
+def transfer_gate_negatives(transfer_gates: Sequence[str], rec: dict, mine: CS.Binding, want: dict, leaf_layer: str, draw: dict,
                             drawn_law: dict, proved: list[int]) -> dict[str, dict]:
     """A window whose registered compiler lists ``transfer_gates`` (`advice_windows`: every unit of theirs proved, an All stratum of
     the work law beside the drawn rest): each way a transfer-gate unit is left out of the proved set, refused. The proved set less
@@ -944,7 +944,7 @@ def plain(a: argparse.Namespace) -> bool:
     return bool(getattr(a, "plain", False))
 
 
-def plain_refusal(a: argparse.Namespace, mine: CS.Window, registered: dict | None) -> str | None:
+def plain_refusal(a: argparse.Namespace, mine: CS.Binding, registered: dict | None) -> str | None:
     """Why a plain audit (``a.plain``) of ``mine`` is outside `PLAIN_SCOPE`, refused before the draw; None inside it (and for
     a `--zk` audit)."""
     if not plain(a):
@@ -987,7 +987,7 @@ def deferred(a: argparse.Namespace, sets: dict, out: Path) -> bool:
     return ok
 
 
-def advice_negatives(a: argparse.Namespace, r: int, compiler: AW.Traced, mine: CS.Window, held: dict, served: Path,
+def advice_negatives(a: argparse.Namespace, r: int, compiler: AW.Traced, mine: CS.Binding, held: dict, served: Path,
                      opening: dict) -> dict[str, dict]:
     """An advice window's refusals, each before the draw: its registration's window naming another compiler or another advice
     root (`source`); the advice's opening under another salt, which opens no registered root (`source`); the verifier opening other
