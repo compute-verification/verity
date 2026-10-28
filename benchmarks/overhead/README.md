@@ -27,10 +27,10 @@ adversary may use, and the bounds and attacks applied. For each one the package 
 ## Run
 
 ~~~sh
-research run -- verity bench rho    # every scenario; writes rho.md, rho.json and figures/ to $OUT and publishes them
+research run -- verity bench overhead    # every scenario; writes rho.md, rho.json and figures/ to $OUT and publishes them
 ~~~
 
-`verity bench rho` runs `run.py`, which prints Markdown and, with `$OUT` set (as `research run` sets it), writes
+`verity bench overhead` runs `run.py`, which prints Markdown and, with `$OUT` set (as `research run` sets it), writes
 `rho.md`, `rho.json` and `figures/` there. `research run` publishes them to the evidence store as an Attempt. `run.py`
 takes `--scenario NAME` (repeatable), `--target X` and `--set KEY=VALUE` (any registry key, for the whole run).
 `periods.py` gives the same per monitoring period, over one datacenter and over the world's compute, with each scenario's
@@ -124,7 +124,7 @@ uncertified or dark gates at a structure whose `s_×` is above 1, with the struc
 
 ## Names
 
-The package, its command and its outputs (`benchmarks/overhead`, `verity bench rho`, `rho.md`, `rho.json`) and the
+The package, its command and its outputs (`benchmarks/overhead`, `verity bench overhead`, `rho.md`, `rho.json`) and the
 identifiers `Overhead.rho`, `Estimate.rho`, `rho_worst`, `Corner.rho` and the JSON's `rho` all name the overhead;
 `Result.lo`, `FamilyResult.lo` and `Point.lo` name its lower bound. Lean's `Nci.Guarantees.DampenerRemote` and
 `tiers.py`'s `dampener` are their owners' names for the remote composition's overhead. The glossary's `ρ` is the ACCEL
