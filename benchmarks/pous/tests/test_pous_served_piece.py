@@ -10,6 +10,7 @@ over a socket pair, as `challenger_party.session` would across hosts. The answer
 from __future__ import annotations
 
 import dataclasses
+import functools
 import hashlib
 import importlib.util
 import itertools
@@ -118,11 +119,35 @@ def _ticks(step: int = 1_000):
     return lambda: next(counter)
 
 
+def _in_process_party(signer, log):
+    """`challenger_party.session` with the challenger's side in a thread of this process (`challenger_party.serve`, the
+    test signer, a counter clock) and the prover's over a socket pair (`challenger_party.answer`)."""
+    calls = []
+
+    def session(party, request, respond):
+        a, b = socket.socketpair()
+
+        def challenger():
+            with b, b.makefile("rwb") as f:
+                return CP.serve(f, request, signer=signer, log=log, coins=COINS, domain=period.SESSION_DOMAIN,
+                                clock=_ticks())
+        with futures.ThreadPoolExecutor(1) as pool:
+            served_side = pool.submit(challenger)
+            try:
+                with a, a.makefile("rwb") as f:
+                    rounds = CP.answer(f, request["block_bytes"], respond)
+            finally:
+                sid, signed = served_side.result()
+        calls.append((party, request))
+        return CP.report(sid, signed, signer.public_key) | {"host": party.host, "rounds": rounds - CP.WARMUPS}
+    return session, calls
+
+
 class Auditor:
     """The memory challenger's side in this process, as `challenger_party.main` serves it, on one device (a salt log and
     a session log) across a test's runs: a salt request answered by `challenger_party.give_salt`, a session refused
-    before it listens as `designate` refuses it (the `RuntimeError` `Side.talk` raises), then served in a thread
-    (`challenger_party.serve`, the test signer, a counter clock) to the prover over a socket pair. With ``forget``, it
+    before it listens as `designate` refuses it (the `RuntimeError` `Side.talk` raises), then served by
+    `_in_process_party` with the device's salt log, which `_run` binds into `challenger_party.serve`. With ``forget``, it
     serves the request without its audit, under an id of its coins; with ``claim`` too, it reports the audit's id."""
 
     def __init__(self, tmp_path: Path, forget: bool = False, claim: bool = False) -> None:
@@ -131,7 +156,8 @@ class Auditor:
         mc.SaltLog.create(device / "salts")
         self.salts, self.log = mc.SaltLog(device / "salts"), ts.session_log(tmp_path)
         self.forget, self.claim = forget, claim
-        self.calls, self.sources = [], []
+        self.serve, self.calls = _in_process_party(self.signer, self.log)
+        self.sources = []
 
     def salt(self, party, audit, commitment):
         try:
@@ -146,32 +172,21 @@ class Auditor:
             CP.designate(request, self.salts, self.log)
         except CP.Refusal as e:
             raise RuntimeError(f"the side on {party.host} refused: {e}") from None
-        served = {k: v for k, v in request.items() if k not in ("audit", "published")} if self.forget else request
-        a, b = socket.socketpair()
-
-        def challenger():
-            with b, b.makefile("rwb") as f:
-                return CP.serve(f, served, signer=self.signer, log=self.log, salts=self.salts, coins=COINS,
-                                domain=period.SESSION_DOMAIN, clock=_ticks())
-        with futures.ThreadPoolExecutor(1) as pool:
-            served_side = pool.submit(challenger)
-            try:
-                with a, a.makefile("rwb") as f:
-                    rounds = CP.answer(f, request["block_bytes"], respond)
-            finally:
-                sid, signed = served_side.result()
-        self.calls.append((party, request))
-        if self.claim:
-            pub = request["published"]
-            sid = CP.session_id(bytes.fromhex(request["audit"]), bytes.fromhex(pub["commitment"]),
-                                bytes.fromhex(pub["salt"]))
-        return CP.report(sid, signed, self.signer.public_key) | {"host": party.host, "rounds": rounds - CP.WARMUPS}
+        if not self.forget:
+            return self.serve(party, request, respond)
+        report = self.serve(party, {k: v for k, v in request.items() if k not in ("audit", "published")}, respond)
+        if not self.claim:
+            return report
+        pub = request["published"]
+        sid = CP.session_id(bytes.fromhex(request["audit"]), bytes.fromhex(pub["commitment"]), bytes.fromhex(pub["salt"]))
+        return report | {"session_id": sid.hex()}
 
 
 def _run(s: Served, tmp_path, monkeypatch, auditor: Auditor | None = None, **kw):
     auditor = auditor or Auditor(tmp_path)
     monkeypatch.setattr(CP, "salt", auditor.salt)
     monkeypatch.setattr(CP, "session", auditor.session)
+    monkeypatch.setattr(CP, "serve", functools.partial(CP.serve, salts=auditor.salts))
     kw.setdefault("trusted_sha512", hashlib.sha512(auditor.signer.public_key).hexdigest())
     answer = SP.run(s.serve, 3, s.out, hf_home=s.hf, device="cpu", node=NODE,
                     party=Side(AUDITOR, ("ssh", AUDITOR, "challenger_party"), ("192.0.2.36", 47610)),
