@@ -311,5 +311,5 @@ the link makes the readings agree.
 
 The compiled layer's named hypotheses are stated there too.
 
-**Not yet:** the serving-tree term when the leaf layer is not registered; `ValueBinding` and `Placement` for the
+**Not yet:** the serving-tree term when the leaf layer is not registered; `ValueBinding` and `BlockRows` for the
 executable's statements.
