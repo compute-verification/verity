@@ -1564,9 +1564,9 @@ LEGACY = {"flock-pure-block": ["verity/flock-pure-block/v2"],
 
 def test_every_honest_cell_is_a_statement_the_lean_verifier_refuses():
     """`vectors.json`'s honest cells are upstream's: each is a legacy statement, or the netlist one before hm96-sha512 rows,
-    and none is a vector the Lean verifier accepts (`honest_lean`)."""
+    and none is a vector the Lean verifier accepts (`honest_upstream_only`)."""
     v = json.loads((VERIFIER / "vectors.json").read_text())
-    assert "refuses each" in v["honest_lean"]
+    assert "the Lean verifier refuses each" in v["honest_upstream_only"]
     for c in v["honest"]:
         assert c["statement"] in LEGACY or "verity/flock-netlist/v1" in c["detail"], c["cell"]
 

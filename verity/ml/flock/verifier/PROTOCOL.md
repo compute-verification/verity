@@ -2113,9 +2113,10 @@ allows only `propext`, `Classical.choice` and `Quot.sound`):
 `verity/ml/flock/verifier/vectors.json` (`flock-verifier-vectors/v1`) lists them; the bytes stay in the evidence store
 (`research data fetch <record> --path <path>`).
 
-- **Honest sessions** (`honest`, upstream's verdict accept; the Lean verifier refuses each, `honest_lean`): pure-block,
-  IR frame v2 and v3, IR sampling (legacy L-SAMPLE) and vllm-block cells, and the PR #83 circuit statement, each with its record, verifier run and commit, public input files,
-  `Hello` and statement digest. The earliest pure-block sets are pre-G2 records (§5.1).
+- **Honest sessions** (`honest`, upstream-only: upstream accepts each and the Lean verifier refuses each,
+  `honest_upstream_only`): pure-block, IR frame v2 and v3, IR sampling (legacy L-SAMPLE) and vllm-block cells, and the
+  PR #83 circuit statement, each with its record, verifier run and commit, public input files, `Hello` and statement
+  digest. The earliest pure-block sets are pre-G2 records (§5.1).
 - **Record-level negatives** (`file_negatives`): recipes applied to an honest session, each with its expected verdict. The
   required acceptance is `unused_high_bits_of_query_coin`: flipping bit 127 of a query coin must not change the verdict
   (§13.5). Two informational cases, accepted on honest proofs, are §19's A1 and A2.
