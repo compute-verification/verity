@@ -1,8 +1,7 @@
 /-
 PROTOCOL.md §16.10: the template-instance partition queries (`verity.ir.partition_object.TemplatePartition`, PR #131) over the
 verifier's own copy of the program, decoded from its descriptor bytes (`verity-ir/descriptor/v1`, PR #120) as far as they need:
-the callees, each definition's form and nodes (form, callee, members), and the root body. `Desc.parse` reads them from the
-bytes; `Desc.ofProg` takes them from the program `Program.decode` decoded.
+the callees, each definition's form and nodes (form, callee, members), and the root body.
 
 `Q_template_instance` v0 (`{template}`) and `Q_template_instances` v0 (`{templates}`): every root node other than an input must
 be a `call` or `batch` of a listed template (matched by the descriptor id written in the program's bytes); each call is one unit
