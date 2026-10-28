@@ -816,6 +816,10 @@ theorem verifyOpening_zeroRoot (d : Flock.FV3.Sha512.Domain) (pos : ℕ) (v : By
   rw [hall]
   simp [zeroRoot, climb_size, hlen, hs, hp]
 
+/- The honest instances below match a `zeroRoot` against the field that holds it. `Scheme.climbL` recurses on the path,
+so unfolding `zeroRoot` there would evaluate the climb's SHA-512 instead of reading the field. -/
+attribute [local irreducible] zeroRoot
+
 theorem leafReceipt_first {R : ByteArray} (hR : R.size = 64) : leafReceipt (R ++ zeros 960) 0 130023424 = some R := by
   have hs : (R ++ zeros 960).size = 1024 := by rw [ByteArray.size_append, hR, zeros_size]
   unfold leafReceipt
