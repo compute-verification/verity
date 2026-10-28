@@ -22,7 +22,7 @@ the deployed sampled verifier, each a hypothesis to discharge there.
   only its first `m` rounds' coins (`run_msgs_take`), so interior roots read off the messages before the second stage
   are kept by fresh second-stage coins.
 * `split`: **the deterministic half**. At an accepted run whose extraction fails, the failure event `Fails` holds or
-  the extractor's own calls collide (`Commitment.Binds`).
+  the extractor's own calls collide (`CommitmentScheme.Binds`).
 * `inner_bad_le`, `outer_bad_le`, `Pr_fails_le`: **the probabilistic half**. Each wait's truncation and union bound
   (`wait_bad_le`), its union's size against the slack `c` (`k = 2^40·(n_RU + n_PU + 1)`), the draw law and Flock's
   error at the inner wait, averaged over the first stage and the tapes: `Pr[Fails] ≤ κ(δ) + √(γ·Pr[B])`.
@@ -49,30 +49,30 @@ theorem mem_zip_finRange {S : Type} {k : ℕ} {l : List S} {j : Fin k} {a : S} (
   rw [List.mem_iff_getElem?]
   exact ⟨j.val, List.getElem?_zip_eq_some.2 ⟨by simp, h⟩⟩
 
-theorem mem_checkRevealed {R : Type} (H : Msg → Msg) (run : R → Trace) (Cm : Commitment Bool)
+theorem mem_checkRevealed {R : Type} (H : Msg → Msg) (run : R → Trace) (Cm : CommitmentScheme Bool)
     {rs : List (List Msg × Opening Bool)} {p : List Msg × Opening Bool} (hp : p ∈ rs)
     (hok : Cm.Opens H p.1 p.2 = true) : p ∈ ((checkRevealed (R := R) Cm rs).eval H run).1 := by
   unfold checkRevealed
   rw [flatMapRP_eval]
   refine List.mem_flatMap.2 ⟨p, hp, ?_⟩
   rw [(RP.eval_bind H run _ _).1, eval_ofOC]
-  unfold Commitment.Opens at hok
+  unfold CommitmentScheme.Opens at hok
   rw [hok]
   simp [RP.eval]
 
 /-! ## Kept openings pass their checks -/
 
 /-- Everything `p` returns passes its opening check, with that check's calls among `p`'s own. -/
-def Passes {R : Type} (H : Msg → Msg) (run : R → Trace) (Cm : Commitment Bool)
+def Passes {R : Type} (H : Msg → Msg) (run : R → Trace) (Cm : CommitmentScheme Bool)
     (p : RP R (List (List Msg × Opening Bool))) : Prop :=
   ∀ q ∈ (p.eval H run).1, Cm.Opens H q.1 q.2 = true ∧ ∀ t ∈ ((Cm.opens q.1 q.2).eval H).2, t ∈ ownLog H run p
 
-theorem Passes.ret_nil {R : Type} (H : Msg → Msg) (run : R → Trace) (Cm : Commitment Bool) :
+theorem Passes.ret_nil {R : Type} (H : Msg → Msg) (run : R → Trace) (Cm : CommitmentScheme Bool) :
     Passes H run Cm (.ret []) := by
   intro q hq
   simp [RP.eval] at hq
 
-theorem Passes.bind {R α : Type} {H : Msg → Msg} {run : R → Trace} {Cm : Commitment Bool} (p : RP R α)
+theorem Passes.bind {R α : Type} {H : Msg → Msg} {run : R → Trace} {Cm : CommitmentScheme Bool} (p : RP R α)
     {f : α → RP R (List (List Msg × Opening Bool))} (hf : ∀ a, Passes H run Cm (f a)) :
     Passes H run Cm (p.bind f) := by
   intro q hq
@@ -82,7 +82,7 @@ theorem Passes.bind {R α : Type} {H : Msg → Msg} {run : R → Trace} {Cm : Co
   rw [ownLog_bind]
   exact List.mem_append_right _ (h2 t ht)
 
-theorem Passes.flatMapRP {R β : Type} {H : Msg → Msg} {run : R → Trace} {Cm : Commitment Bool}
+theorem Passes.flatMapRP {R β : Type} {H : Msg → Msg} {run : R → Trace} {Cm : CommitmentScheme Bool}
     {f : β → RP R (List (List Msg × Opening Bool))} {l : List β} (hf : ∀ b ∈ l, Passes H run Cm (f b)) :
     Passes H run Cm (Sampling.flatMapRP f l) := by
   intro q hq
@@ -90,14 +90,14 @@ theorem Passes.flatMapRP {R β : Type} {H : Msg → Msg} {run : R → Trace} {Cm
   obtain ⟨h1, h2⟩ := hf b hb q hq'
   exact ⟨h1, fun t ht => hlog t (h2 t ht)⟩
 
-theorem Passes.checkRevealed {R : Type} (H : Msg → Msg) (run : R → Trace) (Cm : Commitment Bool)
+theorem Passes.checkRevealed {R : Type} (H : Msg → Msg) (run : R → Trace) (Cm : CommitmentScheme Bool)
     (rs : List (List Msg × Opening Bool)) : Passes H run Cm (Sampling.checkRevealed (R := R) Cm rs) := by
   intro q hq
   obtain ⟨-, h1, h2⟩ := checkRevealed_mem H run Cm rs q hq
   exact ⟨h1, h2⟩
 
 /-- Two kept openings under one roots at one position agree, unless the calls that checked them collide. -/
-theorem agree_of_passes {H : Msg → Msg} {Cm : Commitment Bool} (hb : Cm.Binds H) {l : List (List Msg × Opening Bool)}
+theorem agree_of_passes {H : Msg → Msg} {Cm : CommitmentScheme Bool} (hb : Cm.Binds H) {l : List (List Msg × Opening Bool)}
     {L : List (Msg × Msg)}
     (hp : ∀ q ∈ l, Cm.Opens H q.1 q.2 = true ∧ ∀ t ∈ ((Cm.opens q.1 q.2).eval H).2, t ∈ L) (hL : ¬ LogColl L)
     {q q' : List Msg × Opening Bool} (hq : q ∈ l) (hq' : q' ∈ l) (h1 : q.1 = q'.1) (h2 : q.2.pos = q'.2.pos) :
@@ -113,7 +113,7 @@ theorem agree_of_passes {H : Msg → Msg} {Cm : Commitment Bool} (hb : Cm.Binds 
 
 /-- A kept opening under the statement's roots is what the assembled witness opens there, when the kept openings
 agree. -/
-theorem val_assemble {H : Msg → Msg} {Cm : Commitment Bool} {s : AuditStatement} {found : List (List Msg × Opening Bool)}
+theorem val_assemble {H : Msg → Msg} {Cm : CommitmentScheme Bool} {s : AuditStatement} {found : List (List Msg × Opening Bool)}
     (hagree : ∀ q ∈ found, ∀ q' ∈ found, q.1 = q'.1 → q.2.pos = q'.2.pos → q.2.val = q'.2.val)
     {q : List Msg × Opening Bool} (hq : q ∈ found) (hr : q.1 = s.roots) (hok : Cm.Opens H s.roots q.2 = true) :
     (assemble s found).val H Cm s q.2.pos = some q.2.val := by
@@ -325,7 +325,7 @@ end Extractor
 
 /-- **A faulty unit has a wrong proof unit at any interior values**: at slot `v` of the faulty set, whatever interior
 values `ι`, some proof unit `ab` of its replay unit, at index `i`, is not correct on `ref_ι`. -/
-theorem faulty_choice {H : Msg → Msg} {Cm : Commitment Bool} {s : AuditStatement} {P : Partition} {w : Wit} {v : ℕ}
+theorem faulty_choice {H : Msg → Msg} {Cm : CommitmentScheme Bool} {s : AuditStatement} {P : Partition} {w : Wit} {v : ℕ}
     (hv : v ∈ faulty H Cm s P w) (ι : ℕ → Bool) :
     ∃ rv, P.rus[v]? = some rv ∧ ∃ i : Fin (P.sizes.getD v 0), ∃ ab, rv[i.val]? = some ab ∧
       ¬ s.prog.Correct (RU.ref s.prog rv (w.val H Cm s) ι) ab := by

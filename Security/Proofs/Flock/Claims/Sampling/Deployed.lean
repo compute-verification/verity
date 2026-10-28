@@ -113,7 +113,7 @@ theorem row_places (place : ℕ → (w : ℕ) × Fin w) (bits : Msg → ℕ → 
   simpa using congrFun (List.ofFn_inj.1 hb) (place p).2
 
 /-- **The deployed trace commitment**: hm96 leaves of the rows under the verifier's own registered path check. -/
-def commit (c : Code) : Commitment Bool :=
+def commit (c : Code) : CommitmentScheme Bool :=
   pathCommit c.at_ (hm96Leaf (row c.place c.bits) c.salt) c.π (regPath c.own) c.layer
 
 /-- The deepest registered port's levels. -/
