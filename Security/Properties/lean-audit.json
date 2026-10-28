@@ -64,7 +64,8 @@
   "Properties.Core.Site",
   "Properties.Challenger",
   "Properties.Pous.WipeSigned",
-  "Properties.Flock.Circuit"
+  "Properties.Flock.Circuit",
+  "Properties.Remote"
  ],
  "proved_in": ["../Proofs"],
  "assumptions": {
@@ -390,7 +391,10 @@
   "Properties.Core",
   "CoreProtocol.Site",
   "Definitions.Pouw.Dither",
-  "Definitions.Pouw.Assumptions.ServedWork"
+  "Definitions.Pouw.Assumptions.ServedWork",
+  "Properties.Remote",
+  "CoreRemote",
+  "NciCheck.Protocol"
  ],
  "claims": {
   "modules": ["Properties.RemoteAudit.Component"],
@@ -633,6 +637,7 @@
   "Properties.Pouw.ServedValues.SecurityProofs.rightValues": "7d4c471713d37a6d31db1e6c5edf681d9307b72177d18ecd4e657b9726c9f0cb"
  },
  "layers": {
+  "Properties.Remote": {"imports": ["Definitions.Core", "CoreRemote", "Properties.Composition", "Properties.Nci", "Properties.NciDesc"], "except": [], "why": "remote's acceptance is stated over the composite's own function (CoreRemote), the composition's properties, the shared definitions and the policy's properties it reads, never over a proof"},
   "Properties.Pouw": {
    "imports": ["PouwWindow", "PouwCheck", "PouwCommit"],
    "except": [
@@ -940,6 +945,8 @@
   "PouwCheck.Rounds": "PoUW check's rounds code, read by `Credit.window` through `roundsCheck` in `Properties.Pouw.PeriodJ10R.WindowAccepts`: the window's round coins read through the challenger's session; PouwCheck's lock declares no spec layer for `PouwCheck.Rounds`, so its definitions are recorded here as read rather than as a spec (CMP-127)"
  },
  "guarantees": {
+  "Properties.Remote.SecurityProofs.acceptInferenceOnly": {"owner": "@soundness"},
+  "Properties.Remote.SecurityProofs.acceptComplies": {"owner": "@soundness"},
   "Accounting.SecurityProofs.Bridge.SpaceOfPeriodHeld": {
    "owner": "@lean",
    "signature": ["Accounting.SecurityProofs.Bridge.SpaceOfPeriodHeld : Accounting.Bridge.SpaceOfPeriodHeld"],
@@ -3653,6 +3660,8 @@
   ],
   "statements": ["Properties"],
   "properties": {
+   "Properties.Remote.SecurityProofs.acceptInferenceOnly": {"function": "Core.Remote.protocol", "outcome": "accept"},
+   "Properties.Remote.SecurityProofs.acceptComplies": {"function": "Core.Remote.protocol", "outcome": "accept"},
    "MemoryChallenger.Properties.SecurityProofs.judgeAccepts": {
     "function": "MemoryChallenger.Judge.judge",
     "outcome": "accept"
