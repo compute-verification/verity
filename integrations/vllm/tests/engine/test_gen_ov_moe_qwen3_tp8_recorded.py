@@ -16,7 +16,7 @@ checkpoint's config.json at the recorded revision (its sha256 is the header's `c
     how a rank Program reading one `peers_<k>` Input per peer reads it, and the two compare equal; without the split at field boundaries
     the one-row reads do not.
 Not covered: the Build's TP8 rank Program itself (here a Program of that form over the same fields), the collective ordinals of a whole
-step (the cut numbers only its own collectives), and the cross-rank leg.
+step (the cut numbers only its own collectives), and the cross-rank check.
 """
 from __future__ import annotations
 
