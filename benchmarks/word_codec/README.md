@@ -5,12 +5,14 @@ benchmark: the word codec (`codec.py`, `wc.cu`, `twin.py`, `bench.py`; Sloth in 
 `verity/word-codec/kv/v0` (`kv.py`, `kv.cu`, `kv_twin.py`, `kv_bench.py`, `kv_receipt.py`), which the bandwidth audit
 (PoUB, `verity/core/protocols/remote_bandwidth`) mirrors in its `codec.py`, and the wide codecs (`wide.py`, `wide.cu`).
 `encode_rate.py` times `kv.cu`'s encode against the stated squaring ceiling, and `model/gamma.py` is the rate audit's γ
-as arithmetic.
+as arithmetic. `cuda_lib.py` is how memory accounting's benchmarks open a built CUDA library and bind its functions'
+types; each library's table of them sits beside the script that loads it.
 
 **Status: active.** `kv.cu` is the store's encode on the GPU: `benchmarks/remote_session/run.sh` builds it, the vLLM
 integration calls it (`integrations/vllm/verity_vllm/protocols/remote_bandwidth/remote.py`), and `benchmarks/vllm_encoded`
 and `benchmarks/kv_filler` build it. The `codec_tensor`, `kv_filler`, `serve_bandwidth` and `vllm_encoded` suites read
-its Python as inputs. Decided by `rg word_codec` over `verity/`, `benchmarks/`, `examples/`, `tests/` and `integrations/`.
+its Python as inputs, and `codec_tensor`, `kv_filler`, `pous`, `remote_session` and `vllm_encoded` load their kernels
+through `cuda_lib.py`. Decided by `rg word_codec` over `verity/`, `benchmarks/`, `examples/`, `tests/` and `integrations/`.
 
 **Run:** `uv run tools/verity/check/suites.py benchmarks/word_codec` checks the references against their vectors
 (`tests/vectors.json`, `tests/kv_vectors.json`, `tests/wide_vectors.json`) and the twins against the references, on the
