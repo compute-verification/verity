@@ -768,7 +768,7 @@ theorem pr_pass_le {d : ℕ} (A : SketchDeployedWindow P N m ρ h S L q ks G) (r
   · calc _ ≤ pr (fun _ : SketchStore N m × (Fin P → SketchPassCoins N ρ h ks G) => False) :=
           pr_mono fun _ hz => hr hz.1
       _ ≤ _ := by
-          rw [Rate.Horizon.pr_false]
+          rw [Rate.Pooled.pr_false]
           exact bot_le
 
 end SketchDeployedWindow
@@ -909,8 +909,8 @@ theorem pr_draws_causal_le {Ω : Type} [Fintype Ω]
     exact ht
   have hcard : ∀ ω w, (Gs w ω).card = (cor o (e.symm ω) w).card := fun ω w => Finset.card_map _
   refine (pr_mono fun ω hω => ?_).trans ((pr_or_le _ _).trans (add_le_add
-    ((Rate.Horizon.pr_causal_le' n (P * N) (d * K) X (fun _ => d) Gs hG).trans (le_of_eq ?_))
-    ((Rate.Horizon.pr_floor_le n (P * N) Kw d X Gs hG).trans (le_of_eq ?_))))
+    ((Rate.Pooled.pr_causal_le' n (P * N) (d * K) X (fun _ => d) Gs hG).trans (le_of_eq ?_))
+    ((Rate.Pooled.pr_floor_le n (P * N) Kw d X Gs hG).trans (le_of_eq ?_))))
   · obtain ⟨hall, hK | ⟨w, hw⟩⟩ := hω
     · refine Or.inl ⟨fun w t => hmem ω w t (hall w t), ?_⟩
       show ∑ i, d * (Gs i ω).card ≤ d * K
@@ -1007,7 +1007,7 @@ theorem pr_conservation_of_unpaid_causal {Ω : Type} [Fintype Ω]
     rw [e1, e2]
     refine add_le_add (add_le_add ?_ ?_) le_rfl
     · rw [show ((n : ℝ≥0∞) * P * N) = ((n * P * N : ℕ) : ℝ≥0∞) by push_cast; ring]
-      exact Rate.Deployed.horizon_le dbar (n * P * N) (d * n) (by positivity)
+      exact Rate.Deployed.pooled_le dbar (n * P * N) (d * n) (by positivity)
     · rw [show ((n : ℝ≥0∞) * P * N) = (n : ℝ≥0∞) * ((P * N : ℕ) : ℝ≥0∞) by push_cast; ring]
       exact Rate.Deployed.window_le dw n (P * N) (d * n) hn (by positivity) hdw
 
@@ -1031,7 +1031,7 @@ theorem pr_deployed_of_unpaid_causal {Ω : Type} [Fintype Ω]
   rw [show (2 : ℝ≥0∞) / 2 ^ 40 = 1 / 2 ^ 40 + 1 / 2 ^ 40 by
     rw [ENNReal.div_add_div_same]; norm_num]
   gcongr
-  · exact Rate.Deployed.horizon_deployed n hn
+  · exact Rate.Deployed.pooled_deployed n hn
   · exact Rate.Deployed.window_deployed n (by omega)
 
 end SketchDeployedSession
