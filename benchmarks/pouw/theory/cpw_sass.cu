@@ -1,4 +1,4 @@
-// The served sm_120 unit with its CP-W checkpoint (decision 104, `PouwWarpCheck_v2` at FOLD fx1), for what each route
+// The served sm_120 unit with its CP-W checkpoint (`PouwWarpCheck_v2` at fold fx1), for what each route
 // to the checkpoint costs in SASS and on the device. A unit is one IMMA.16832 (128 words a warp, 4 a lane) and fx1's
 // absorb of its words (`segment._fx1_absorb`: d = p fx1_key(q), u = y ^ d ^ KK[t], y = u KA[t] + z, z = rotl(u, ROT[t])
 // + y, chain 4 (t % 2) + e); a set is 8 units (32 words a lane), and after every set the warp's checkpoint is two words,
