@@ -140,8 +140,8 @@ PARTIES = {"wipe_party": ("wipe", "verity.core.protocols.pous.wipe_party", 47611
            "challenger_party": ("pous", "verity.core.protocols.pous.challenger_party", 47610),
            "bw_party": ("bw", "verity.core.protocols.remote_bandwidth.p2_party", 47612)}
 PARTY_FIXED = {"bw_party": ["--registration", "benchmarks/pous/p2_v1/bandwidth-mem69-v2.json"]}
-"""Arguments the host adds to a party's command, never a lane's: the bandwidth session's registration in the pinned tree
-(memory-accounting, 26 Oct 19:30Z, Demo B)."""
+"""Arguments the host adds to a party's command, never a caller's: the bandwidth session's registration in the pinned
+tree."""
 PARTY_INTS = {"--reads": (1, 1 << 20), "--threads": (1, 256)}
 PARTY_MINUTES = (1, 180)
 """A party session's limit (`--minutes M`, 60 by default): the gate kills the party then, so one no prover joined, or whose ssh
