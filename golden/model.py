@@ -52,6 +52,7 @@ from pathlib import Path
 
 B57F, B921, A1FC = "r20261028-080559-b57f", "r20261028-084012-b921", "r20261028-084022-a1fc"
 C2CD6, T966F, TF746 = "r20261028-075211-2cd6", "r20261028-080609-966f", "r20261028-080612-f746"
+MAIN_ASYNC = "r20261028-080545-d0a8"
 H1POST, H1POST6192 = "r20261028-164426-5430", "r20261028-164438-65ca"
 EEB0 = "r20261028-112958-eeb0 (tensor_util --steady re-read of b57f, 2cd6, b921, a1fc)"
 COMMIT_BYTES = "note:compute-research/20261028T1600Z-finding-commit-bytes"
@@ -215,6 +216,11 @@ INPUTS: dict[str, tuple[float, str, str]] = {
                       "dominate (Gemm_v2{2048,16}: 16.9 M ANDs at k_log 27; AttnBlock_v5 9.3 M at 26; SiluMul 11.3 M "
                       "at 26). The struct worker's 'a lane fits 2^27 to K about 5,041' (~57 M ANDs) is 1; the "
                       "inbox's '2^27 ANDs' (top, 19:16Z) is 0"),
+    "k_pad_rows": (1, "M", "k_pad of a block whose row openings are at least half its ANDs: GD-PROVER's composed s8 "
+                           "blocks, 88-93% openings (note:compute-research/20261028T1955Z-report-gd-prover: K 1,024's "
+                           "1.94 M ANDs at k_log 22, K 65,536's 69.0 M at 27, counted at 58,120 a compression), need at "
+                           "most 0.66 and 0.53 bits past log2 of their ANDs counted at 81,402, which already holds most "
+                           "of SHA-512's 1.50 bits an AND"),
     "k_pad_h1_lane": (1, "E", "k_pad of an H1 lane or combine block: the struct worker's 'a lane fits 2^27 to K about "
                               "5,041' (h1unit.stager; note:top/20261028T1845Z-report-lowering-struct)"),
     "h1_ands_per_mac": (300, "E", "J10-R's H1 leaf, ANDs a MAC before its openings (inbox 19:32Z: 'about 300 ANDs a "
@@ -238,6 +244,11 @@ INPUTS: dict[str, tuple[float, str, str]] = {
     "dma_hbm_cost": (0.07, "M", "a DMA'd stream costs 7% of HBM read (1,531 to 1,423 GB/s), r20261012-070151-be14; "
                                 "charged on the step's time the copy overlaps (estimate: as if the step were all "
                                 "memory-bound)"),
+    "main_async_vs_2cd6": (28.41 / 21.60, "M", "main's async stock over 2cd6's at T 8,192, 2,048 requests: "
+                                               "stock-async-n2048 r20261028-080545-d0a8 (vllm's 227-step record) "
+                                               "28.41 ms against r20261028-075211-2cd6's 21.60 (BENCH-34, art:a5ea06dd"
+                                               "…); 1.38 and 1.36 at T 16,384 and 32,768. Taken at every T, an "
+                                               "estimate below 8,192"),
     "partial_words_per_ks": (2, "M", "leaf_lanes: a lane partial is 2 (KS + m) u32, KS = K / 32 segments"),
     "cpu_s_in_gpu_s": (1 / 55, "M", "benchmarks/sampling_plan/inputs.py: vCPU $0.033/h against sm_120 $1.80/h"),
 }
@@ -473,8 +484,9 @@ SCHEMA = {
         "k_max": (None, "the block cap's k_log (None: 27, compose's K_MAX; 28-30 with a fast100 schedule and an "
                         "extended Stmt.InRange, each bit past 27 at cap_cost_per_bit and prover memory 2^k_log x "
                         "prover_bytes_per_row against prover_mem_GB)"),
-        "k_pad": (None, "bits past ceil(log2 ANDs) a block's k_log takes (None: INPUTS k_pad, 2 from class_size's "
-                        "staged units; 0: the inbox's 2^27 ANDs a block)"),
+        "k_pad": (None, "bits past log2 ANDs a block's k_log takes, k_log = ceil(log2 ANDs + k_pad) (None: INPUTS "
+                        "k_pad_rows, 1, where openings are at least half the block, else k_pad, 2, from class_size's "
+                        "gate-dominated staged units; 0: the inbox's 2^27 ANDs a block)"),
         "shared": (True, "statements hold only the drawn blocks (IntegrityPeriod's hidden window)"),
         "stmt": ("template", "template (a statement a block class) | universal (private_circuits' universal unit: each "
                              "block at its power-of-two size class, statements shared by a size class; no universal "
@@ -494,16 +506,20 @@ SCHEMA = {
     "price": {
         "cpu_s_in_gpu_s": (None, "GPU-s a CPU-second (None: 1/55)"),
         "cpu_in_J": (True, "count lowering and staging CPU at the price ratio in J's proving term"),
-        "baseline": ("same", "t_stock: same (the stock forward at the design's point and scheduler: b57f's sync "
-                             "stack, or 2cd6's if point.async, so the serve term is verification's overhead alone) | "
-                             "fastest (the async stock, 2cd6's stack: the fastest unverified arm measured)"),
+        "baseline": ("main", "t_stock: main (the fastest unverified arm measured on main's stack with the served "
+                             "engine options, stock-async-n2048: the async stock at the design's point times "
+                             "main_async_vs_2cd6; the coordinator, 20:22Z) | same (the stock forward at the design's "
+                             "point and scheduler: b57f's sync stack, or 2cd6's if point.async, both on next) | "
+                             "fastest (the async stock, 2cd6's stack on next)"),
     },
 }
 
 PRESETS = {
     "throughput": {},
     # served_verdicts.sh: 4 requests of 16 to 24 prompt ids and 4 outputs, so a prefill step and 3 decode steps
-    "demo": {"point": {"T": 512, "real_tokens": 64, "seqs": 4, "decode_steps": 3, "window_class": "4,32,4"}},
+    # values are proved over the class circuit's census (its caps: 4 x 32 prompt rows and 4 x 3 decode rows)
+    "demo": {"point": {"T": 512, "real_tokens": 64, "seqs": 4, "decode_steps": 3, "window_class": "4,32,4"},
+             "partition": {"census": "b4"}},
 }
 
 
@@ -1119,7 +1135,6 @@ def proving(d: dict, units: list, label: str) -> dict:
         out["strata"] = strata
     elif s["law"] != "achievability":
         raise ValueError(f"sampling.law {s['law']!r}")
-    k_pad = round(pv["k_pad"] if pv["k_pad"] is not None else I("k_pad"))
     universal = pv["stmt"] == "universal"
     if pv["stmt"] not in ("template", "universal"):
         raise ValueError(f"prover.stmt {pv['stmt']!r}")
@@ -1139,14 +1154,17 @@ def proving(d: dict, units: list, label: str) -> dict:
             qc = min(1.0, lam * u["credit_work"] / (s["eps"] * W_cred))
             out["draws_compute"] += n * qc
             q = max(q, qc)
-        own = u["work"] + u["extra_ands"] + sum(row_ands(r) for r in u["open_rows"])
+        opened_ands = sum(row_ands(r) for r in u["open_rows"])
+        own = u["work"] + u["extra_ands"] + opened_ands
+        k_pad = (pv["k_pad"] if pv["k_pad"] is not None else
+                 I("k_pad_rows") if opened_ands >= own / 2 else I("k_pad"))
         blocks = []
         whole = {"name": u["name"], "count": 1, "ands": own, **({"k_pad": u["k_pad"]} if "k_pad" in u else {})}
         for b in u.get("blocks") or [whole]:
             ands = b["ands"]
             if universal:
                 ands = 2.0 ** math.ceil(math.log2(max(ands, 2)))
-            k_log = math.ceil(math.log2(max(ands, 2))) + (round(b["k_pad"]) if "k_pad" in b else k_pad)
+            k_log = math.ceil(math.log2(max(ands, 2)) + b.get("k_pad", k_pad) - 1e-9)
             blocks.append({**b, "ands": ands, "k_log": k_log, "cap": 1 << max(0, pv["m_max"] - k_log),
                            "nb": n * q * b["count"]})
         plan.append((u, n, q, own, blocks))
@@ -1253,9 +1271,13 @@ def sessions(k: float, cap: int, fixed: float, per: float) -> tuple[float, float
 def _step(d: dict, units: list) -> tuple:
     """One engine step of d: (stock parts, t_stock, its anchor, remote parts, Commit info, PoUW info)."""
     stock = stock_parts(d)
-    if d["price"]["baseline"] == "fastest":
+    if d["price"]["baseline"] in ("main", "fastest"):
         t_stock = sum(stock_parts(normalize({**d, "point": {**d["point"], "async": True}})).values())
-        anchor = f"async stock at the design's point (2cd6's stack, {C2CD6})"
+        anchor = f"async stock at the design's point (2cd6's stack on next, {C2CD6})"
+        if d["price"]["baseline"] == "main":
+            t_stock *= I("main_async_vs_2cd6")
+            anchor = (f"main's async stock at the design's point (stock-async-n2048, {MAIN_ASYNC}: 2cd6's modelled "
+                      f"async stock x {I('main_async_vs_2cd6'):.3f})")
     elif d["price"]["baseline"] == "same":
         t_stock = sum(stock.values())
         anchor = (f"async stock (2cd6's stack, {C2CD6})" if d["point"]["async"] else
@@ -1325,10 +1347,15 @@ def J(dsg: dict | None = None) -> dict:
     if d["pouw"]["scheme"] == "dither" and 1 < d["pouw"]["agg"] < 8:
         infeasible.append(f"pouw.agg {d['pouw']['agg']}: an aggregate word under 8 cells loses the floor to the "
                           f"attacks GD-AGG measured (safe from 8 with mix4)")
+    cr = pouw_credit(d)
+    linears_gpu_s = INT8_MACS_PER_TOKEN * window_tokens(d) / (theta(I("gemm_mhz")) * I("gemm_eff_per_clock")) / 1e3
+    forced_gpu_s = linears_gpu_s * cr["forced_share_at_best_attack"]
     return {
         "J": serve_term + prove_term,
         "serve_term": serve_term,
         "prove_term": prove_term,
+        "credited_gpu_s": forced_gpu_s if cr["earns_credit"] else 0.0,
+        "forced_gpu_s": forced_gpu_s,
         "t_stock_ms": t_stock,
         "t_stock_anchor": anchor,
         "window_class": d["point"]["window_class"],

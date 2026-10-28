@@ -186,12 +186,13 @@ def test_host_retention_holds_more_and_pays_the_copy():
 
 def test_the_census_adds_the_served_templates():
     """GD-PLANNER's 4,32,4 census: 60 templates beside the 4 linear tiles (26 with attention padded into one)."""
-    base = model.J(model.design("demo"))["proving"]["values"]
-    b4, bk = (model.J(model.design("demo", partition={"census": c}, prover={"k_pad": 1}))["proving"]["values"]
-              for c in ("b4", "b4-buckets"))
+    base = model.J(model.design("demo", partition={"census": None}))["proving"]["values"]
+    b4, bk = (model.J(model.design("demo", partition={"census": c}))["proving"]["values"] for c in ("b4", "b4-buckets"))
     assert (len(base["classes"]), len(b4["classes"]), len(bk["classes"])) == (6, 64, 30)
     assert b4["statements"] > bk["statements"] > base["statements"] and b4["gpu_s"] > bk["gpu_s"]
-    assert not b4["infeasible"] and b4["draws"] == pytest.approx(base["draws"], rel=0.01)
+    assert b4["draws"] == pytest.approx(base["draws"], rel=0.01)
+    assert [m.split(" (census)")[0] for m in b4["infeasible"]] == ["Int8RowQuant_v3{K=8192,R=4}"]   # 48 M, gates
+    assert not model.J(model.design("demo", prover={"k_max": 28}))["infeasible"]
     with pytest.raises(ValueError):
         model.J(model.design("throughput", partition={"census": "b4"}))
 

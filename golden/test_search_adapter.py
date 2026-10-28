@@ -11,9 +11,12 @@ KEYS = {"J", "serve", "prove_ratio", "prove_gpu_s", "verify_cpu_s", "feasible", 
 
 @pytest.mark.parametrize("point", ["t8192", "t512"])
 def test_evaluate_returns_the_search_keys(point):
-    r = A.evaluate(GOOD, {k: i.value for k, i in A.INPUTS.items()}, point)
+    """At t512 the census's Int8RowQuant_v3 at K 8,192 (48 M ANDs, gate-dominated) needs k_log 28."""
+    knobs = {**GOOD, "kmax": 28} if point == "t512" else GOOD
+    r = A.evaluate(knobs, {k: i.value for k, i in A.INPUTS.items()}, point)
     assert KEYS <= set(r) and r["feasible"], r["reasons"]
     assert r["J"] == pytest.approx(r["serve"] + r["prove_ratio"])
+    assert A.evaluate(GOOD, point="t512")["reasons"] == ["k_log"]
 
 
 def test_knobs_reach_the_design():
