@@ -1,7 +1,7 @@
 """The prover's process: registers a store with the verifier, then runs chained passes over it in each session, sends
 every root as its pass ends, and opens what the verifier draws.
 
-A backend holds the store and makes the passes: `device.Device` on the GPUs (the store sharded across them, each pass
+A backend holds the store and makes the passes: `device.GpuBackend` on the GPUs (the store sharded across them, each pass
 every shard's sketch-sha512 receipts and the one tree over the whole store), or `CpuBackend`, the driver's own
 reference (`audit.Store`, `receipts`), which the suite runs over a loopback. Either queues a pass (`launch`, chained
 from an earlier pass's ticket) before the one ahead of it is awaited (`wait`), so the device never idles between
