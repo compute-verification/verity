@@ -430,10 +430,14 @@ def word_view(t: Any, opts: Options, F: Findings) -> dict | None:
 
 def redundant_ands(C: Any, owner: Callable[[int], str] | None = None) -> tuple[int, Counter]:
     """Live ANDs of the `gf2.Circuit` ``C`` whose operands, with earlier duplicates replaced by their first copy, are those of an
-    earlier AND (in either order), are equal, or are constant: values computed again.  Returns (count, count by ``owner(bit)``)."""
+    earlier AND (in either order), are equal, or are constant: values computed again.  A commit (``A = form, B = 1``,
+    `forms.Circuit.commit`'s row, which keeps a carried form from growing) is a copy, not a product: it counts only when
+    its form, so replaced, is a constant or one bit (free as a form) or was committed before.  Returns (count, count by
+    ``owner(bit)``)."""
     live = C.live()
     rep: dict[int, int] = {}
     seen: dict[tuple, int] = {}
+    copies: dict[tuple, int] = {}
     by: Counter = Counter()
 
     def canon(f):
@@ -448,7 +452,19 @@ def redundant_ands(C: Any, owner: Callable[[int], str] | None = None) -> tuple[i
         if kind != "and" or v not in live:
             continue
         a, b = C.data[v]
-        ka, kb = canon(a), canon(b)
+        ka = canon(a)
+        if not b.s and b.c:
+            if len(ka[0]) > 1 and ka not in copies:
+                copies[ka] = v
+                continue
+            if ka in copies:
+                rep[v] = copies[ka]
+            elif len(ka[0]) == 1 and not ka[1]:
+                rep[v] = ka[0][0]
+            n += 1
+            by[owner(v) if owner else "circuit"] += 1
+            continue
+        kb = canon(b)
         if not ka[0] or not kb[0] or ka[0] == kb[0]:
             n += 1
             by[owner(v) if owner else "circuit"] += 1
