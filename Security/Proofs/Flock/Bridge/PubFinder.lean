@@ -56,7 +56,7 @@ theorem isColl_sha512 :
     (fun b : StrictCR.Pair => ∃ u v, (id : StrictCR.Pair → Option (Claims.Msg × Claims.Msg)) b = some (u, v) ∧
       Claims.Collision Claims.Sampling.sha512Msg u v) = StrictCR.IsColl H512 := by
   funext b
-  simp only [StrictCR.IsColl, Claims.Collision, H512_eq_iff, id]
+  simp only [StrictCR.IsColl, Claims.Collision, Hash.Collision, H512_eq_iff, id]
 
 /-- **A strict-time finder succeeds as its tape finder does**: its probability of outputting a collision of `H512` is
 its tape finder's of outputting a SHA-512 collision. -/
@@ -249,7 +249,7 @@ theorem linkFinderPrZC_le_mix (k Rw M : ℕ) (qF qS t' : ℝ) (R : Reg)
   · have h : (linkComp dj y₀ P vb k Rw M t' R τ ⟨c, hc⟩).Pr Claims.Sampling.sha512Msg ≤ p :=
       hfam (some (.inr ⟨c, hc⟩))
     rw [linkComp, Game.tapeFinder_Pr] at h
-    simpa only [Claims.Collision, H512_eq_iff] using h
+    simpa only [Claims.Collision, Hash.Collision, H512_eq_iff] using h
   · exact hp
 
 end Family

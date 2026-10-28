@@ -121,7 +121,7 @@ theorem rowsFinderPrZC_le_mix (wo : vb.Pos → vb.Opening) (k Rw M : ℕ) (qF qS
   · have h : (rowsComp dj y₀ P vb wo k Rw t' R τ ⟨c, hc⟩).Pr Claims.Sampling.sha512Msg ≤ p :=
       hfam (some (.inr (.inr (.inl ⟨c, hc⟩))))
     rw [rowsComp, Game.tapeFinder_Pr] at h
-    simpa only [Claims.Collision, H512_eq_iff] using h
+    simpa only [Claims.Collision, Hash.Collision, H512_eq_iff] using h
   · exact hp
 
 end FamilyRows
