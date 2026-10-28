@@ -1,3 +1,5 @@
+import Definitions.NetworkCertifier.SampledReg
+import Mathlib.Analysis.Real.Sqrt
 import Proofs.Properties.Verity.Network.Legs
 
 /-!
@@ -11,13 +13,17 @@ from the play, not what the code checks, so they hold by construction at a reali
   blocks of `m` challenger's coins, one block a window (`OwnCoins`), window `i`'s coins are the first `D.V.k` of its
   block and its prover's tape the rest of the own coin (`OwnTape`, `splitOwn`, `windowCoinsLive_split`).
 * **S6's `stmt`, fixed before the own coin**: window `i`'s statement is the one its decoding most often gives over the
-  network audit's own coin among accepted plays (`coinMode`) where that is in the sampled audit's scope, else a fixed
-  in-scope one (`stmtOf`). It reads the coins only off the other coordinates (`stmtOf_update`, `couples_stmt`) and is
-  in scope at every coin (`stmtOf_scope`), so `R.scope` holds as stated. The commitment the game's `c` binds holds the
-  network's only by digest, so an accepted play may decode to another statement; where every accepted play's is in
-  scope, that event's probability is at most the square root of two independent own coins' accepted plays decoding to
-  different statements (`stmtOf_collision`, from `coinMode_collision`): two preimages of one binding digest, which the
-  coupling's break answers for.
+  network audit's own coin among accepted plays with an admissible statement (`modeOf`, by `coinMode`) where that is
+  admissible, else a fixed admissible one (`stmtOf`). It reads the coins only off the other coordinates
+  (`stmtOf_update`, `couples_stmt`) and is admissible at every coin (`stmtOf_mem`). Admissible is in the sampled
+  audit's scope with a registration that opens its registered inputs to the window's registered values (`OpensAs`),
+  so the realization's scope and registered openings hold at every coin (`couples_registered`); a statement that
+  registers no inputs opens with no openings (`opensAs_nil`). The commitment the game's `c` binds holds the
+  network's only by digest, so an accepted play may decode to another statement. Its probability is at most that of
+  an accepted play decoding to an inadmissible one, which names a root the network certifier didn't sign for the
+  window or opens one root two ways, plus the square root of two independent own coins' accepted plays decoding to
+  different admissible statements (`stmtOf_break`, from `stmtOf_collision` and `coinMode_collision`): two preimages of
+  one binding digest. The coupling's break answers for all three.
 * **S6's `wit`**: a witness in the leak relation wherever the statement has one (`witOf`, `couples_wit`).
 * **The run's verdicts**: a coupling's guarantee (`Vocab.Coupling.bound`) reads its run only through the run at the
   code, which sets the verdicts itself, and `BreakBound`, which reads none: `Vocab.Coupling.atCode_withAccepts` and
@@ -170,70 +176,131 @@ theorem coinMode_collision (A : β → Prop) (g : β → γ) :
 
 end Mode
 
+/-- **The statement the coordinate `o` most often gives**: among the plays `acc` accepts whose decoded statement is
+admissible (`P`), the one `dec` most often gives over `o`, at the other coordinates of `ξ`. -/
+noncomputable def modeOf (P : Msg → Prop) (o : I) [Nonempty (Ω o)] (acc : ((i : I) → Ω i) → Prop)
+    (dec : ((i : I) → Ω i) → Msg) (ξ : (i : I) → Ω i) : Msg :=
+  coinMode (fun x => acc (Function.update ξ o x) ∧ P (dec (Function.update ξ o x))) fun x => dec (Function.update ξ o x)
+
 open Classical in
-/-- **A statement fixed before the coordinate `o`**: the one `dec` most often gives over `o` where `acc` holds, at the
-other coordinates of `ξ`, where that is in the sampled audit's scope at `D`, `lay` and `k`, else `s₀`. -/
-noncomputable def stmtOf (D : Deploy Coin Col T) (lay : Stmt → Layout L S) (k : Stmt → ℕ) (s₀ : Msg) (o : I)
-    [Nonempty (Ω o)] (acc : ((i : I) → Ω i) → Prop) (dec : ((i : I) → Ω i) → Msg) (ξ : (i : I) → Ω i) : Msg :=
-  if ScopeAcc D lay k (coinMode (fun x => acc (Function.update ξ o x)) fun x => dec (Function.update ξ o x)) then
-    (coinMode (fun x => acc (Function.update ξ o x)) fun x => dec (Function.update ξ o x))
-  else s₀
+/-- **A statement fixed before the coordinate `o`**: `modeOf`'s where that is admissible (`P`), else `s₀`. -/
+noncomputable def stmtOf (P : Msg → Prop) (s₀ : Msg) (o : I) [Nonempty (Ω o)] (acc : ((i : I) → Ω i) → Prop)
+    (dec : ((i : I) → Ω i) → Msg) (ξ : (i : I) → Ω i) : Msg :=
+  if P (modeOf P o acc dec ξ) then modeOf P o acc dec ξ else s₀
+
+section Stmt
+
+variable (P : Msg → Prop) (s₀ : Msg) (o : I) [Nonempty (Ω o)] (acc : ((i : I) → Ω i) → Prop)
+  (dec : ((i : I) → Ω i) → Msg) (ξ : (i : I) → Ω i)
+
+theorem modeOf_update (x : Ω o) : modeOf P o acc dec (Function.update ξ o x) = modeOf P o acc dec ξ := by
+  simp only [modeOf, Function.update_idem]
 
 /-- `stmtOf` doesn't read the coordinate `o`. -/
-theorem stmtOf_update (s₀ : Msg) (o : I) [Nonempty (Ω o)] (acc : ((i : I) → Ω i) → Prop)
-    (dec : ((i : I) → Ω i) → Msg) (ξ : (i : I) → Ω i) (x : Ω o) :
-    stmtOf D lay k s₀ o acc dec (Function.update ξ o x) = stmtOf D lay k s₀ o acc dec ξ := by
-  simp only [stmtOf, Function.update_idem]
+theorem stmtOf_update (x : Ω o) : stmtOf P s₀ o acc dec (Function.update ξ o x) = stmtOf P s₀ o acc dec ξ := by
+  unfold stmtOf
+  rw [modeOf_update]
 
-/-- `stmtOf` is in the sampled audit's scope where `s₀` is. -/
-theorem stmtOf_scope {s₀ : Msg} (h₀ : ScopeAcc D lay k s₀) (o : I) [Nonempty (Ω o)] (acc : ((i : I) → Ω i) → Prop)
-    (dec : ((i : I) → Ω i) → Msg) (ξ : (i : I) → Ω i) : ScopeAcc D lay k (stmtOf D lay k s₀ o acc dec ξ) := by
+/-- `stmtOf` is admissible where `s₀` is. -/
+theorem stmtOf_mem (h₀ : P s₀) : P (stmtOf P s₀ o acc dec ξ) := by
   unfold stmtOf
   split_ifs with h
   exacts [h, h₀]
 
-/-- Where every play `acc` accepts decodes to a statement in scope, `stmtOf` is the mode wherever some value of `o`
-is accepted. -/
-theorem stmtOf_eq_coinMode {acc : ((i : I) → Ω i) → Prop} {dec : ((i : I) → Ω i) → Msg}
-    (h : ∀ ξ, acc ξ → ScopeAcc D lay k (dec ξ)) (s₀ : Msg) (o : I) [Nonempty (Ω o)] (ξ : (i : I) → Ω i) (x : Ω o)
-    (hx : acc (Function.update ξ o x)) :
-    stmtOf D lay k s₀ o acc dec ξ =
-      coinMode (fun x => acc (Function.update ξ o x)) fun x => dec (Function.update ξ o x) := by
-  obtain ⟨y, hy, he⟩ := coinMode_attained (A := fun x => acc (Function.update ξ o x))
+/-- Wherever some value of `o` gives an accepted play with an admissible statement, `stmtOf` is the mode. -/
+theorem stmtOf_eq_modeOf (x : Ω o) (hx : acc (Function.update ξ o x) ∧ P (dec (Function.update ξ o x))) :
+    stmtOf P s₀ o acc dec ξ = modeOf P o acc dec ξ := by
+  obtain ⟨y, hy, he⟩ := coinMode_attained (A := fun x => acc (Function.update ξ o x) ∧ P (dec (Function.update ξ o x)))
     (fun x => dec (Function.update ξ o x)) hx
-  have hs : ScopeAcc D lay k
-      (coinMode (fun x => acc (Function.update ξ o x)) fun x => dec (Function.update ξ o x)) := by
+  have hs : P (modeOf P o acc dec ξ) := by
+    unfold modeOf
     rw [← he]
-    exact h _ hy
+    exact hy.2
   unfold stmtOf
   rw [if_pos hs]
 
-/-- **The break `stmtOf` leaves, at the square root of a collision**: where every accepted play decodes to a
-statement in scope, the probability over `o` that a play is accepted while its decoded statement isn't `stmtOf`'s,
-squared, is at most the probability over two independent values of `o` that both plays are accepted with different
-decoded statements. Two statements under one binding digest are a collision, which a finder that runs the play at both
-outputs. -/
-theorem stmtOf_collision {acc : ((i : I) → Ω i) → Prop} {dec : ((i : I) → Ω i) → Msg}
-    (h : ∀ ξ, acc ξ → ScopeAcc D lay k (dec ξ)) (s₀ : Msg) (o : I) [Nonempty (Ω o)] (ξ : (i : I) → Ω i) :
-    Pouw.pr (fun x : Ω o => acc (Function.update ξ o x) ∧ dec (Function.update ξ o x) ≠ stmtOf D lay k s₀ o acc dec ξ)
-        ^ 2 ≤
-      Pouw.pr (fun z : Ω o × Ω o => (acc (Function.update ξ o z.1) ∧ acc (Function.update ξ o z.2)) ∧
+/-- **The admissible part of the break `stmtOf` leaves, at the square root of a collision**: the probability over `o`
+that a play is accepted with an admissible decoded statement other than `stmtOf`'s, squared, is at most the
+probability over two independent values of `o` that both plays are, with different decoded statements. Two statements
+under one binding digest are a collision, which a finder that runs the play at both outputs. -/
+theorem stmtOf_collision :
+    Pouw.pr (fun x : Ω o => (acc (Function.update ξ o x) ∧ P (dec (Function.update ξ o x))) ∧
+        dec (Function.update ξ o x) ≠ stmtOf P s₀ o acc dec ξ) ^ 2 ≤
+      Pouw.pr (fun z : Ω o × Ω o =>
+        ((acc (Function.update ξ o z.1) ∧ P (dec (Function.update ξ o z.1))) ∧
+          (acc (Function.update ξ o z.2) ∧ P (dec (Function.update ξ o z.2)))) ∧
         dec (Function.update ξ o z.1) ≠ dec (Function.update ξ o z.2)) := by
-  by_cases ha : ∃ x, acc (Function.update ξ o x)
+  by_cases ha : ∃ x, acc (Function.update ξ o x) ∧ P (dec (Function.update ξ o x))
   · obtain ⟨x, hx⟩ := ha
-    rw [stmtOf_eq_coinMode h s₀ o ξ x hx]
-    exact coinMode_collision (fun x => acc (Function.update ξ o x)) fun x => dec (Function.update ξ o x)
-  · rw [Pouw.pr_eq_zero (P := fun x : Ω o => acc (Function.update ξ o x) ∧
-      dec (Function.update ξ o x) ≠ stmtOf D lay k s₀ o acc dec ξ) fun x hx => ha ⟨x, hx.1⟩]
+    rw [stmtOf_eq_modeOf P s₀ o acc dec ξ x hx]
+    exact coinMode_collision (fun x => acc (Function.update ξ o x) ∧ P (dec (Function.update ξ o x)))
+      fun x => dec (Function.update ξ o x)
+  · have h0 : ∀ x : Ω o, ¬ ((acc (Function.update ξ o x) ∧ P (dec (Function.update ξ o x))) ∧
+        dec (Function.update ξ o x) ≠ stmtOf P s₀ o acc dec ξ) := fun x hx => ha ⟨x, hx.1⟩
+    rw [Pouw.pr_eq_zero h0]
     calc (0 : ℝ) ^ 2 = 0 := by norm_num
       _ ≤ _ := Pouw.pr_nonneg _
 
+/-- **The break `stmtOf` leaves**: an accepted play whose decoded statement isn't `stmtOf`'s either decodes to an
+inadmissible one, or to an admissible one off the mode, at most the square root of a collision (`stmtOf_collision`). -/
+theorem stmtOf_break :
+    Pouw.pr (fun x : Ω o => acc (Function.update ξ o x) ∧ dec (Function.update ξ o x) ≠ stmtOf P s₀ o acc dec ξ) ≤
+      Pouw.pr (fun x : Ω o => acc (Function.update ξ o x) ∧ ¬ P (dec (Function.update ξ o x))) +
+        Real.sqrt (Pouw.pr (fun z : Ω o × Ω o =>
+          ((acc (Function.update ξ o z.1) ∧ P (dec (Function.update ξ o z.1))) ∧
+            (acc (Function.update ξ o z.2) ∧ P (dec (Function.update ξ o z.2)))) ∧
+          dec (Function.update ξ o z.1) ≠ dec (Function.update ξ o z.2))) := by
+  have hroot := (Real.sqrt_sq (Pouw.pr_nonneg _)).symm.le.trans
+    (Real.sqrt_le_sqrt (stmtOf_collision P s₀ o acc dec ξ))
+  calc Pouw.pr (fun x : Ω o => acc (Function.update ξ o x) ∧ dec (Function.update ξ o x) ≠ stmtOf P s₀ o acc dec ξ)
+      ≤ Pouw.pr (fun x : Ω o => (acc (Function.update ξ o x) ∧ ¬ P (dec (Function.update ξ o x))) ∨
+          ((acc (Function.update ξ o x) ∧ P (dec (Function.update ξ o x))) ∧
+            dec (Function.update ξ o x) ≠ stmtOf P s₀ o acc dec ξ)) :=
+        Pouw.pr_mono fun x hx => by
+          by_cases hp : P (dec (Function.update ξ o x))
+          · exact Or.inr ⟨⟨hx.1, hp⟩, hx.2⟩
+          · exact Or.inl ⟨hx.1, hp⟩
+    _ ≤ _ + _ := Pouw.pr_or_le _ _
+    _ ≤ _ := add_le_add le_rfl hroot
+
+end Stmt
+
+/-- **A statement whose registration opens to `ρ`**: at its parse, the registration's openings `rops` pass under the
+statement's roots at every registered input (`RegOpens`), to the values `ρ`. -/
+def OpensAs (H : Msg → Msg) (D : Deploy Coin Col T) (reg : Stmt → Finset ℕ) (rops : Stmt → List (Opening Bool))
+    (ρ : ℕ → Bool) (x : Msg) : Prop :=
+  ∀ st, D.parse x = some st → RegOpens H D.commit st (reg st) (rops st) ∧ ∀ g ∈ reg st, regVal (rops st) g = ρ g
+
+/-- A statement that registers no inputs opens to any values with no openings. -/
+theorem opensAs_nil {ρ : ℕ → Bool} {x : Msg} (h : ∀ st, D.parse x = some st → reg st = ∅) :
+    OpensAs H D reg (fun _ => []) ρ x := fun st hs => by
+  simp [RegOpens, h st hs]
+
 /-- **S6's `stmt` by construction**: a realization whose window statements are `stmtOf`'s at the network audit's own
 coin reads the coins only off the other coordinates. -/
-theorem couples_stmt [Nonempty (Ω (r.own .network))] (s₀ : Msg) (acc : ((i : I) → Ω i) → Prop)
-    (dec : Fin n → ((i : I) → Ω i) → Msg) (h : ∀ ξ i, R.stmt ξ i = stmtOf D lay k s₀ (r.own .network) acc (dec i) ξ) :
+theorem couples_stmt [Nonempty (Ω (r.own .network))] (P : Fin n → Msg → Prop) (s₀ : Fin n → Msg)
+    (acc : ((i : I) → Ω i) → Prop) (dec : Fin n → ((i : I) → Ω i) → Msg)
+    (h : ∀ ξ i, R.stmt ξ i = stmtOf (P i) (s₀ i) (r.own .network) acc (dec i) ξ) :
     ∀ ξ i x, R.stmt (Function.update ξ (r.own .network) x) i = R.stmt ξ i := fun ξ i x =>
-  (h _ i).trans ((stmtOf_update s₀ _ acc (dec i) ξ x).trans (h ξ i).symm)
+  (h _ i).trans ((stmtOf_update (P i) (s₀ i) _ acc (dec i) ξ x).trans (h ξ i).symm)
+
+/-- **The window statements' scope and registered openings by construction**: where window `i`'s statement is
+`stmtOf`'s among statements in scope whose registration opens to `R.ρ i` (`OpensAs`), with such a fallback, every
+window's statement is in scope and its registration opens its registered inputs to the window's registered values,
+at every coin. -/
+theorem couples_registered [Nonempty (Ω (r.own .network))] (rops : Stmt → List (Opening Bool)) (s₀ : Fin n → Msg)
+    (h₀ : ∀ i, ScopeAcc D lay k (s₀ i) ∧ OpensAs H D reg rops (R.ρ i) (s₀ i))
+    (acc : ((i : I) → Ω i) → Prop) (dec : Fin n → ((i : I) → Ω i) → Msg)
+    (h : ∀ ξ i, R.stmt ξ i = stmtOf (fun x => ScopeAcc D lay k x ∧ OpensAs H D reg rops (R.ρ i) x)
+      (s₀ i) (r.own .network) acc (dec i) ξ) :
+    (∀ ξ i, ScopeAcc D lay k (R.stmt ξ i)) ∧
+      (∀ ξ i st, D.parse (R.stmt ξ i) = some st → RegOpens H D.commit st (reg st) (rops st)) ∧
+      ∀ ξ i st, D.parse (R.stmt ξ i) = some st → ∀ g ∈ reg st, regVal (rops st) g = R.ρ i g := by
+  have hm : ∀ ξ i, ScopeAcc D lay k (R.stmt ξ i) ∧ OpensAs H D reg rops (R.ρ i) (R.stmt ξ i) := fun ξ i => by
+    rw [h ξ i]
+    exact stmtOf_mem (fun x => ScopeAcc D lay k x ∧ OpensAs H D reg rops (R.ρ i) x) (s₀ i) (r.own .network) acc
+      (dec i) ξ (h₀ i)
+  exact ⟨fun ξ i => (hm ξ i).1, fun ξ i st hs => ((hm ξ i).2 st hs).1, fun ξ i st hs => ((hm ξ i).2 st hs).2⟩
 
 open Classical in
 /-- **A witness in `Rl` at `x`** wherever there is one. -/
