@@ -9,8 +9,9 @@ import Lean.Data.Json
 `Audit.check_link`, `Audit.check_ingress_link`). `NetworkCertifier/DifftestMain.lean` reads both files and fails unless `evaluate`,
 which computes the same results from the program's definitions (`NetworkCertifier`), gives every one of them. The Lean
 audit runs it (`runs` in `lean-audit.json`): compiled evaluation, a test and not a proof. `Proofs.NetworkCertifier.Code`
-(`security_proofs`) proves what it evaluates (`expectedRow`, `Accepted` of `constantRate`, `StatusComplete`, membership
-in `Σ_sync`) equal to the reference definitions in `Security/Definitions/NetworkCertifier/`, which the guarantees read.
+(`security_proofs`) proves what it evaluates (`expectedRow`, `Accepted` of `constantRate`, `StatusComplete`) equal to
+the reference definitions in `Security/Definitions/NetworkCertifier/`, which the guarantees read: the program's windows
+as one execution block, its frames sent at the hand ticks it computes from the syncs.
 
 An instance is `L` egress links and `K ≥ L` boundary links (the egress links first), windows of `T` buckets, `W` of
 them with advice, the allocation `S`, the sync set `Σ_sync`, and per egress link its frames in canonical order and the

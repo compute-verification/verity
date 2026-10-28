@@ -61,12 +61,12 @@ Lemmas.lean     the statements that are only steps of the guarantees' proofs, Th
 ../NetworkCertifier.lean  proved: `SecurityProofs.G : Guarantees.G` for each guarantee and lemma, from the modules below
 Occupancy.lean  Proposition 2 (the occupancy counts, fill, and the FIFO certifier's tightness)
 Counting.lean   Theorem 1(b) (the tree lemma on accepted runs, zero error, W6 on accepted runs)
-Advice.lean     Theorem 3 (the 2^A cap, one clock-sync value per window, the fixed clock)
-Schedule.lean   Theorem 3 for the constant-rate Program (the advice cap, causality, seven bits
-                                         per window opened, the composed statement) and its witness
+Advice.lean     Theorem 3 (the 2^A cap)
+Schedule.lean   Theorem 3 for the constant-rate Program (the advice cap of k bits per execution block,
+                                         causality, the blocks opened, the composed statement) and its witness
 Ingress.lean    the ingress bound (the occupancy of the ingress grid, read from inside X)
-PerWindow.lean  the last two over the run's first `m` whole windows: the factor per window and
-                                         per link-window
+PerWindow.lean  the last two over the run's first `m` whole execution blocks, and the ingress bound
+                                         over the first `m` whole windows: the factor per block and per link-window
 Warden.lean     the warden's code is the client view: its lane is the client view of its first late
                                          cell (wardenLane_eq), and so are its code's cells (wardenCode_eq), which
                                          Tap reads the network certifier's cells from
@@ -109,7 +109,7 @@ Witnesses.lean  each acceptance guarantee's two lemmas: `G_honest`, its hypothes
                                          record, and `G_nontrivial`, its conclusion false at a verifier
                                          that accepts everything
 Code.lean       the certifier program (`certifier_program`, `NetworkCertifier`), which the difftests run, equal to the
-                               definitions above: six theorems, not guarantees (below)
+                               definitions above: five theorems, not guarantees (below)
 Accepted.lean   an accepted run of the network certificate check is a run of the constant-rate Program
                                (`security_properties`' `AcceptedRunsAreProgramRuns`, through Code.lean), and
                                Theorem 3's count of what accepted runs can carry (`EncardAcceptedObservationsLe`),
@@ -199,16 +199,16 @@ that bound exactly, below the 27 of `r = S` (`allocated_witness_tight`), so `All
 
 ## The records
 
-The lock (`lean-audit.json`'s `guarantees`) holds the 20 statements of `Guarantees.lean`, the sampled audit's charge
+The lock (`lean-audit.json`'s `guarantees`) holds the 17 statements of `Guarantees.lean`, the sampled audit's charge
 (`../../Definitions/NetworkCertifier/Guarantees/SampledCharge.lean`), the monitoring period's leak through the network certifier
 (`Guarantees/Period.lean`), the horizon's wrong units (`../../Definitions/NetworkCertifier/Guarantees/Horizon.lean`)
 and the leak over a monitoring period (`../../Definitions/NetworkCertifier/Guarantees/HorizonLeak.lean`), each listed as
 `NetTiming.SecurityProofs.G` and proved by the lemma of the same statement whose name it spells in UpperCamelCase (the
-last two by `horizonWrongUnits` and `horizonLeak`). All 27 are under `shape.frozen` as
+last two by `horizonWrongUnits` and `horizonLeak`). All 24 are under `shape.frozen` as
 `frozen (no-function)`: each is stated over the model (an arbitrary `Interaction`, an abstract `Program`'s `AccSeqs`,
 `expectedRow`, or the grids themselves; the sampled charge over the sequences the circuit's Program accepts with a
 possible faulty set; the period's also over the network certifier's code as `Definitions` states it, which no compiled
-program implements yet), not over the network check's code, and an accepted run reaches the first 20 through
+program implements yet), not over the network check's code, and an accepted run reaches the first 17 through
 `AcceptedRunsAreProgramRuns`. Four are the
 theorems whose bounds the calibration reports (`verity.core.protocols.certifier.calibration`, `PROTOCOL.md`'s
 "Capacity"):
@@ -218,14 +218,15 @@ theorems whose bounds the calibration reports (`verity.core.protocols.certifier.
 - ingress, the K charge (`NetTiming.SecurityProofs.Ingress`, `NetTiming.SecurityProofs.PerWindow`):
   `EncardIngressObsDecodableLe` and `EncardIngressObsDecodableLePerWindow`.
 
-The other 23 are the rest of the Capacity table's bounds and the schedule's causality rule:
+The other 20 are the rest of the Capacity table's bounds and the schedule's causality rule:
 
 - **Proposition 2** (`NetTiming.SecurityProofs.Occupancy`): `CardFree`, `CardLeftPacked`, `CardCountsEqLe`,
   `EncardFifoGridsLeOfAvailable`, `EncardFifoGrids`.
-- **Theorem 3** (`NetTiming.SecurityProofs.Advice`): `EncardAccSeqsLeSync`, `EncardAccSeqsLeFixedClock`.
-- **Theorem 3 for the constant-rate Program** (`NetTiming.SecurityProofs.Schedule`, `NetTiming.SecurityProofs.PerWindow`):
-  `EncardAccSeqsLeConstantRate`, `EncardAccSeqsLeConstantRateFixedClock`, `ExpectedRowCausal`,
-  `EncardAccSeqsLeConstantRateWindows`, `EncardAccSeqsLeConstantRatePerWindow`.
+- **Theorem 3 for the constant-rate Program** (`NetTiming.SecurityProofs.Schedule`,
+  `NetTiming.SecurityProofs.PerWindow`), `k` advice bits per execution block: `EncardAccSeqsLeConstantRate`,
+  `ExpectedRowCausal`, `EncardAccSeqsLeConstantRateWindows`, `EncardAccSeqsLeConstantRatePerWindow`. Advice of any
+  finite type is `EncardAccSeqsLeAdvice` (`Lemmas.lean`), which the check's count (`EncardAcceptedObservationsLe`) reads
+  at its clock syncs.
 - **The ingress bound** (`NetTiming.SecurityProofs.Ingress`, `NetTiming.SecurityProofs.PerWindow`):
   `EncardIngressDecodableLe`, `EncardIngressObsDecodableLeContents`, `EncardIngressDecodableLeContents`,
   `EncardIngressObsDecodableLeContentsPerWindow`.
@@ -293,21 +294,22 @@ The other 23 are the rest of the Capacity table's bounds and the schedule's caus
   inputs are `Flock.Guarantees.SampledKSLive` at each window's history and the live `SampledLeakAccepted` (P2),
   neither discharged, so it is not the deployed system's bound over a monitoring period until they are.
 
-**The program's agreements, proved and audited, not guarantees.** Six theorems tie the difftests to these definitions
+**The program's agreements, proved and audited, not guarantees.** Five theorems tie the difftests to these definitions
 (`NetTiming.SecurityProofs.Code`): the difftests hold the Python audit and advice v1's charge references
 to the certifier program (`verity/core/protocols/certifier/lean/`, Lean core only, `NetworkCertifier`), and
 these say the program computes what the definitions above define. Each is stated in `Code.lean` over both sides'
 definitions, relating them by their fields, since `security` requires nothing but Mathlib
 (`tests/test_lean_packages.py`) and so `Definitions/` cannot name the program:
 
-- `CodeExpectedRow`: `NetworkCertifier.expectedRow` is `expectedRow` for clock syncs with the same δ and ρ and frames with the same
-  payloads, anchors and logical indices (the difftest's `rows`, `diff` and `mismatch`);
-- `CodeAcceptedConstantRate`: `NetworkCertifier.Accepted` of `NetworkCertifier.constantRate` is `Accepted` of `constantRate` for observations
-  with the same rows and complete statuses, operators giving the same ingress on them, related frames and advice naming
-  the same values (`accepted`);
+- `CodeExpectedRow`: `NetworkCertifier.expectedRow` over its `W` windows is `expectedRow` of one execution block of
+  them, for frames with the same payloads sent at the program's hand ticks (`NetworkCertifier.handingBuckets`) under
+  its syncs (the difftest's `rows`, `diff` and `mismatch`);
+- `CodeAcceptedConstantRate`: `NetworkCertifier.Accepted` of `NetworkCertifier.constantRate` is `Accepted` of
+  `constantRate` with one execution block of the `W` windows, for observations with the same rows and complete
+  statuses, operators giving the same ingress on them, and frames with the same payloads sent at the program's hand
+  ticks under the syncs the advice names (`accepted`);
 - `CodeStatusComplete`: `NetworkCertifier.StatusComplete` is `StatusComplete` for observations with the same complete statuses
   (`complete`);
-- `CodeSyncSet`: every sync set of the program has a reference sync set with the same values and conversely (`advice`);
 - `CodeChargesV1`: `NetworkCertifier.AdviceV1.charges` of the windows' decision streams is `AdviceV1.charges` for books
   with the same fields (the charge difftest's `charges`);
 - `CodeChargesWhole`: `NetworkCertifier.WindowCharge.charges` of the windows is `WindowCharge.charges` for books with
@@ -396,19 +398,22 @@ The ingress bound adds these:
 
 The constant-rate Program adds these:
 
-13. **Exactly `schedule.py`.** Each definition in `NetTiming.Protocol.Schedule` names the Python it mirrors, and computes
-    the same rows: δ is a `ℕ`, ρ a positive `Rat`, `⌊λ/ρ⌋` is Python's `(λ · den) // num`, a frame anchored past the last
-    window with advice is handed at `max(last, W·T, anchor)`, and frames handed at or after the horizon `W·T` are never
-    enqueued. Past the horizon, where Python has no grid, the queue drains with nothing enqueued. The audit checks `W`
-    windows, so the four counts take `n ≤ W·T` (`hn`): every step they count is a step the audit checks.
-14. **The frames are the Program's computation, left abstract.** `frames ins c ℓ` gives link `ℓ`'s frames in canonical
-    order, with their content, anchors and logical indices, from the ingress and the content advice `c`. Every guarantee
-    holds for every such function, so it covers any way the Program fixes anchors (the recorded bucket of the request a
-    frame answers) and indices. Content advice that moves anchors is counted in `#Ac`.
+13. **Send ticks, one FIFO per execution block.** `NetTiming.Protocol.Schedule` takes each frame's send tick as the
+    Program gives it: a frame is handed at `max(send, last)`, so hand ticks only rise in canonical order, and the FIFO
+    starts empty at each execution block's first bucket, a frame handed at or after its span's end never enqueued. The
+    certifier program (`NetworkCertifier.Schedule`, `schedule.py`) still computes its hand ticks from a declared clock
+    sync per window, and over its `W` windows it is one execution block (`CodeExpectedRow`). The audit checks `E`
+    execution blocks, so the counts take `n ≤ E·g·T` (`hn`): every step they count is a step the audit checks.
+14. **The frames are the Program's computation, left abstract.** `frames ins e v ℓ` gives link `ℓ`'s frames of
+    execution block `e` in canonical order, with their content and send ticks, from the ingress and `e`'s advice `v`.
+    Every guarantee holds for every such function, so it covers any way the Program fixes send ticks. Advice that moves
+    a send tick is counted in its block's `k` bits.
 15. **One clock per spatial unit.** Every egress link reads the same window's sync (decision A's default), and the
     audit enforces it (danielreuter/verity#956). A clock per link is a different advice type, covered by
     `EncardAccSeqsLeAdvice` directly.
 16. **The allocation is the slot count `S`** on every egress link, as in Python, where a row has `allocation` slots.
-17. **In-set advice.** The advice ranges over `ss.Elem`, the values of Σ_sync: a run whose declared sync is outside the
-    set is an `advice` violation and rejected, so its advice is never counted. `ExpectedRowCausal` takes any clock-sync
-    values, in the set or not, which is what the audit's verdicts on earlier windows rely on.
+17. **In-set advice.** The check's advice ranges over `SyncValue`, the values of Σ_sync: a run whose declared sync is
+    outside the set is an `advice` violation and rejected, so its advice is never counted. That an earlier window's
+    verdict doesn't depend on a later window's sync, in the set or not, is the Python's (`expected_grids`, held by
+    `test_network_certifier_capacity.py`), not a Lean statement: `ExpectedRowCausal` says an execution block's rows read
+    only its own advice.

@@ -139,13 +139,21 @@ def AcceptedRowsAreProgramRows : Prop :=
 
 /-! ## (5b) An accepted run is a run of the certifier program -/
 
-/-- Σ_sync as the reference's sync set: its lists as `Finset`s. -/
-def refSyncSet (ss : NetworkCertifier.SyncSet) : NetTiming.SyncSet where
-  deltas := ss.deltas.toFinset
-  rhos := ss.rhos.toFinset
-  deltas_nonempty := List.toFinset_nonempty_iff _ |>.mpr ss.deltas_nonempty
-  rhos_nonempty := List.toFinset_nonempty_iff _ |>.mpr ss.rhos_nonempty
-  rhos_pos ρ h := ss.rhos_pos ρ (List.mem_toFinset.mp h)
+/-- A value of Σ_sync: a δ of its list and a ρ of its list. -/
+abbrev SyncValue (ss : NetworkCertifier.SyncSet) : Type := {d // d ∈ ss.deltas.toFinset} × {ρ // ρ ∈ ss.rhos.toFinset}
+
+/-- The clock sync a value of Σ_sync names. -/
+def SyncValue.sync {ss : NetworkCertifier.SyncSet} (v : SyncValue ss) : ClockSync :=
+  ⟨v.1.1, v.2.1, ss.rhos_pos _ (List.mem_toFinset.mp v.2.2)⟩
+
+/-- The reference's frames of the unit's one execution block, its `W` windows, under the advice `(a, σ)`: the frames
+`frames` opens from the ingress and the content advice `a`, in order, each sent at the program's hand tick
+(`NetworkCertifier.handingBuckets`) under the syncs `σ` names. -/
+def programFrames (cfg : Config) {In Ac : Type} (frames : List In → Ac → Fin 1 → List NetworkCertifier.LogicalFrame) :
+    List In → Fin 1 → Ac × (Fin cfg.windows → SyncValue cfg.syncSet) → Fin 1 → List NetTiming.LogicalFrame :=
+  fun ins _ v ℓ =>
+    ((frames ins v.1 ℓ).zip (NetworkCertifier.handingBuckets cfg.egress.buckets cfg.windows (fun w => (v.2 w).sync)
+      (frames ins v.1 ℓ))).map fun p => ⟨p.1.payload, p.2⟩
 
 /-- `o` is read off the device's records: at each bucket `t`, the egress row is the device's (row `t % T` of its record
 of window `t / T` on its egress link, each slot's bytes as bits), and boundary link `κ`'s status is complete exactly
@@ -158,32 +166,33 @@ def Observes (cfg : Config) (out : DeviceOutput) {K : Nat} (linkOf : Fin K → S
     (o[t].status κ = .complete ↔ r.status = .complete)
 
 /-- The frames `frames` opens from the operator's ingress up to each bucket `t < W·T` and the content advice `a` are
-the ones `e` opens on the device's egress link: the same payloads, anchors and indices. -/
+the ones `e` opens on the device's egress link. -/
 def OpensFrames (cfg : Config) (e : Evidence) {K : Nat} {In Ac : Type}
-    (frames : List In → Ac → Fin 1 → List NetTiming.LogicalFrame) (a : Ac)
+    (frames : List In → Ac → Fin 1 → List NetworkCertifier.LogicalFrame) (a : Ac)
     (op : Nat → List (NetTiming.Obs 1 K cfg.egress.allocation) → In)
     (o : List (NetTiming.Obs 1 K cfg.egress.allocation)) : Prop :=
   ∀ t < cfg.windows * cfg.egress.buckets, ∀ link, e.links[0]? = some link →
-    (frames (NetTiming.ingressUpTo op o t) a 0).map (fun f => (f.payload, f.anchor, f.index)) =
-      link.frames.map (fun f => (f.payload, f.anchor, f.index))
+    frames (NetTiming.ingressUpTo op o t) a 0 = link.frames
 
 /-- Every observation sequence read off the run is the reference's: for boundary links `linkOf`, each one of the
 device's two, and a sequence `o` of the `W·T` buckets that `Observes` the device's records and whose opened frames
 (`frames` of the operator's ingress and content advice `a`) are the ones `e` opens, the reference `Accepted` holds of
-`o` for the constant-rate Program with advice `(a, σ)`, `σ` the syncs `e` declares (so Theorems 1(b) and 3,
-`EncardAccSeqsLeConstantRate` and the rest, count `o`). -/
+`o` for the constant-rate Program of one execution block of the `W` windows, with advice `(a, σ)`, `σ` the syncs `e`
+declares, and the frames sent at the program's hand ticks under them (`programFrames`; so Theorems 1(b) and 3 count
+`o`). -/
 def RunIsProgramRun (x : DeviceInput) (out : DeviceOutput) (e : Evidence) : Prop :=
-  ∀ {K : Nat} {In Ac : Type} (frames : List In → Ac → Fin 1 → List NetTiming.LogicalFrame) (a : Ac)
+  ∀ {K : Nat} {In Ac : Type} (frames : List In → Ac → Fin 1 → List NetworkCertifier.LogicalFrame) (a : Ac)
     (op : Nat → List (NetTiming.Obs 1 K x.config.egress.allocation) → In)
     (o : List (NetTiming.Obs 1 K x.config.egress.allocation)) (linkOf : Fin K → String),
     (∀ κ, linkOf κ ∈ [x.config.egressLink, x.config.ingressLink]) →
     o.length = x.config.windows * x.config.egress.buckets → Observes x.config out linkOf o →
     OpensFrames x.config e frames a op o →
-    ∃ σ : Fin x.config.windows → (refSyncSet x.config.syncSet).Elem,
+    ∃ σ : Fin x.config.windows → SyncValue x.config.syncSet,
       (∀ (w : Fin x.config.windows) link, e.links[0]? = some link →
         ∃ s, link.syncs[w.1]? = some s ∧ (σ w).1.1 = s.delta ∧ (σ w).2.1 = s.rho) ∧
       NetTiming.Accepted (NetTiming.constantRate (S := x.config.egress.allocation) x.config.egress.buckets
-        x.config.windows (refSyncSet x.config.syncSet) frames) op (x.config.windows * x.config.egress.buckets) o (a, σ)
+        x.config.windows 1 (programFrames x.config frames)) op (x.config.windows * x.config.egress.buckets) o
+        (fun _ => (a, σ))
 
 /-- **An accepted run is a run of the certifier program under the declared advice (5b).** For every input of the device
 and every commitment and evidence the check accepts under the device's parameters, if the device runs as built, every
@@ -204,7 +213,7 @@ def AcceptedRunsAreProgramRuns : Prop :=
 boundary links `linkOf` are the device's, `o` `Observes` the device's records, and its opened frames are the ones `e`
 opens. -/
 def AcceptedRun (cfg : Config) (key : Lms.PrivateKey) (device : DeviceInput → DeviceOutput) {K : Nat} {In Ac : Type}
-    (frames : List In → Ac → Fin 1 → List NetTiming.LogicalFrame)
+    (frames : List In → Ac → Fin 1 → List NetworkCertifier.LogicalFrame)
     (op : Nat → List (NetTiming.Obs 1 K cfg.egress.allocation) → In) (linkOf : Fin K → String)
     (o : List (NetTiming.Obs 1 K cfg.egress.allocation)) (x : DeviceInput) (c : Commitment) (e : Evidence) (a : Ac) :
     Prop :=
@@ -214,22 +223,22 @@ def AcceptedRun (cfg : Config) (key : Lms.PrivateKey) (device : DeviceInput → 
 
 /-- The observation sequences of accepted runs, of the `W·T` buckets with jitter classes below `D`. -/
 def AcceptedObservations (cfg : Config) (key : Lms.PrivateKey) (device : DeviceInput → DeviceOutput) {K : Nat}
-    {In Ac : Type} (frames : List In → Ac → Fin 1 → List NetTiming.LogicalFrame)
+    {In Ac : Type} (frames : List In → Ac → Fin 1 → List NetworkCertifier.LogicalFrame)
     (op : Nat → List (NetTiming.Obs 1 K cfg.egress.allocation) → In) (linkOf : Fin K → String) (D : Nat) :
     Set (List (NetTiming.Obs 1 K cfg.egress.allocation)) :=
   {o | o.length = cfg.windows * cfg.egress.buckets ∧ (∀ y ∈ o, y.jitter < D) ∧
     ∃ (x : DeviceInput) (c : Commitment) (e : Evidence) (a : Ac), AcceptedRun cfg key device frames op linkOf o x c e a}
 
-/-- The accepted observation sequences number at most `#Ac · |Σ_sync|^W · D^(W·T)`, or some accepted run carries a
-break: two distinct strings it hashes with one SHA-512 digest, or a certificate that verifies under the device's key
-over its message in the run's session, which the device never signed in that run (the module docstring reads it
-across the key's runs). -/
+/-- The accepted observation sequences number at most `#Ac · |Σ_sync|^W · D^(W·T)`, `|Σ_sync|` the count of its δs
+times the count of its ρs, or some accepted run carries a break: two distinct strings it hashes with one SHA-512
+digest, or a certificate that verifies under the device's key over its message in the run's session, which the device
+never signed in that run (the module docstring reads it across the key's runs). -/
 def ObservationsBounded (cfg : Config) (key : Lms.PrivateKey) (device : DeviceInput → DeviceOutput) {K : Nat}
-    {In Ac : Type} [Fintype Ac] (frames : List In → Ac → Fin 1 → List NetTiming.LogicalFrame)
+    {In Ac : Type} [Fintype Ac] (frames : List In → Ac → Fin 1 → List NetworkCertifier.LogicalFrame)
     (op : Nat → List (NetTiming.Obs 1 K cfg.egress.allocation) → In) (linkOf : Fin K → String) (D : Nat) : Prop :=
   (AcceptedObservations cfg key device frames op linkOf D).encard ≤
-    ((Fintype.card Ac * (refSyncSet cfg.syncSet).size ^ cfg.windows * D ^ (cfg.windows * cfg.egress.buckets) : ℕ) :
-      ℕ∞) ∨
+    ((Fintype.card Ac * (cfg.syncSet.deltas.length * cfg.syncSet.rhos.length) ^ cfg.windows *
+      D ^ (cfg.windows * cfg.egress.buckets) : ℕ) : ℕ∞) ∨
   ∃ o x c e a, AcceptedRun cfg key device frames op linkOf o x c e a ∧
     ((∃ y ∈ runStrings x (device x) c e, ∃ z ∈ runStrings x (device x) c e, y ≠ z ∧
         Flock.Sha512.hash y = Flock.Sha512.hash z) ∨
@@ -238,11 +247,12 @@ def ObservationsBounded (cfg : Config) (key : Lms.PrivateKey) (device : DeviceIn
 
 /-- **What accepted runs can carry (Theorem 3 for the check).** For a device that runs as built, of every configuration
 and key, the observation sequences of its accepted runs number at most `#Ac · |Σ_sync|^W · D^(W·T)`
-(`NetTiming.Guarantees.EncardAccSeqsLeConstantRate` with `n = W·T`), or some accepted run carries a break
+(Theorem 3's `2^A` cap, `NetTiming.Guarantees.EncardAccSeqsLeAdvice`, at the constant-rate Program of one execution
+block, whose advice is `Ac × (Fin W → Σ_sync)`, with `n = W·T`), or some accepted run carries a break
 (`ObservationsBounded`). -/
 def EncardAcceptedObservationsLe : Prop :=
   ∀ (device : DeviceInput → DeviceOutput) (cfg : Config) (key : Lms.PrivateKey) {K : Nat} {In Ac : Type} [Fintype Ac]
-    (frames : List In → Ac → Fin 1 → List NetTiming.LogicalFrame)
+    (frames : List In → Ac → Fin 1 → List NetworkCertifier.LogicalFrame)
     (op : Nat → List (NetTiming.Obs 1 K cfg.egress.allocation) → In) (linkOf : Fin K → String) (D : Nat),
     NetTiming.DeviceIntact device deviceCode → ObservationsBounded cfg key device frames op linkOf D
 
