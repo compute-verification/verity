@@ -2,8 +2,10 @@
 certifier-serve run's records, clock certificates and the client's kept copies (`n2_zk.virtual`, fresh keys, each
 window's declared sync signed), refuses the window of a record whose signature is changed, every window from a clock
 certificate's, a kept certificate whose signature is changed, and a key under `lms.DEPLOYED`'s height with --deployed;
-each record's verdict is the Lean audit's, which refuses the changed one beside a reference that accepts it, and each
-kept certificate's the Lean check's, which refuses the changed one's window beside a reference that keeps it;
+each record's verdict is the Lean audit's, which refuses the changed one beside a reference that accepts it, each
+kept certificate's the Lean check's, which refuses the changed one's window beside a reference that keeps it, and each
+window's sync the Lean's read of the clock openings, which leaves no window one beside a reference that signs a changed
+clock certificate;
 the report needs the endpoint's step on the advice profile and never accepts a stand-in, merges N2's members proved in
 several runs, and counts a negative that escaped a sampled draw within the draw's bound but never one whose faulty
 window was drawn; the draw's bound at δ is C(n − b − 1, k) / C(n, k)'s; leak counts the scan's widths and terms on a
@@ -106,6 +108,7 @@ def test_certs_accepts_the_kept_files(honest):
     assert got["certified_windows"] == got["windows"] == got["clocks_signed"]
     assert all(r["by"] == "lean" and r["reference"] is True for r in got["rows"])
     assert got["client_check"]["by"] == "lean" and not got["client_check"]["refused"]
+    assert got["clocks_by"] == "lean" and got["clocks_refused"] == 0
     assert got["client_check"]["records_are_the_clients"] and got["client_check"]["clocks_are_the_clients"]
     assert got["signed_are_declared"] and not got["key"]["deployed"]
     assert cr.certs(honest, honest / "client", deployed=True)["verdict"] == "refused"
@@ -120,6 +123,7 @@ def test_certs_refuses_a_changed_signature(honest, tmp_path):
     _corrupt(honest, tmp_path / "clk", "clocks.jsonl", 0)
     got = cr.certs(tmp_path / "clk", tmp_path / "clk" / "client")
     assert got["verdict"] == "refused" and got["clocks_signed"] == 0 and got["certified_windows"] == 0
+    assert got["clocks_refused"] == 1
     _corrupt(honest, tmp_path / "kept", "client/certificates.jsonl", 0)
     got = cr.certs(tmp_path / "kept", tmp_path / "kept" / "client")
     assert got["verdict"] == "refused" and got["certified_windows"] == got["windows"]
@@ -160,6 +164,30 @@ def test_a_kept_certificate_is_the_lean_checks_and_a_reference_that_keeps_it_doe
     cc = got["client_check"]
     assert cc["by"] == "lean" and len(cc["refused"]) == 3 and all("disagree" in r for r in cc["refused"])
     assert cc["certificates"] == 2 * got["windows"] - 2 and got["verdict"] == "refused"
+
+
+class _SigningAll:
+    """A reference clock source that takes every opening's sync, refusing none."""
+
+    def __init__(self, key, session, openings):
+        self.refused, self.openings = (), openings
+
+    def syncs(self, link):
+        return tuple(o.sync for o in sorted(self.openings, key=lambda o: o.window))
+
+
+def test_a_windows_sync_is_the_lean_openings_and_a_reference_that_signs_a_forged_one_doesnt_sign_it(honest, tmp_path,
+                                                                                                   monkeypatch):
+    """Each window's sync is the Lean's read of the clock openings (`NetworkCheck.Period.signedSyncs`): beside a
+    reference that takes every opening's sync, a run whose window-0 clock signature is changed has no sync, every
+    window is refused as the two's disagreement, and the step refuses."""
+    monkeypatch.setattr(lean_audit, "SignedClocks", _SigningAll)
+    assert cr.certs(honest, honest / "client")["verdict"] == "accepted"
+    _corrupt(honest, tmp_path / "clk", "clocks.jsonl", 0)
+    got = cr.certs(tmp_path / "clk", tmp_path / "clk" / "client")
+    assert got["clocks_by"] == "lean" and got["clocks_signed"] == 0 and got["certified_windows"] == 0
+    assert got["clocks_refused"] == got["clock_certificates"] and all("disagree" in r["why"] for r in got["rows"])
+    assert got["verdict"] == "refused"
 
 
 def test_certs_refuses_a_client_without_clocks(honest, tmp_path):
