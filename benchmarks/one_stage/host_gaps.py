@@ -124,7 +124,10 @@ def main() -> None:
     db = sqlite3.connect(a.sqlite)
     st = su.steps(a.trace)
     z = su.utc0_ns(db)
-    at = lambda s: int(s * 1e9) - z
+
+    def at(s: float) -> int:
+        return int(s * 1e9) - z
+
     ks = su.kernels(db)
     names = dict(db.execute("SELECT id, value FROM StringIds"))
     idx = su.steady(st, a.T, float("-inf"), float("inf"), after_s=su.last_send(a.timings))
