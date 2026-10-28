@@ -55,7 +55,7 @@ roots = ["Proofs.Core", "Proofs.Nci", "Proofs.Pous", "Proofs.Pouw", "Proofs.Netw
   "Proofs.Properties.Nci.Baseline", "Proofs.Properties.Nci.OperandsResolve", "Proofs.Properties.Nci.Agrees",
   "Proofs.Properties.SampledProofs", "Proofs.Properties.SampledProofs.Halt", "Proofs.Properties.Evaluate",
   "Proofs.Properties.NetworkRecords", "Proofs.Properties.NetworkPeriod", "Proofs.Properties.Accounting.Requirement",
-  "Proofs.Properties.RemoteAudit",
+  "Proofs.Properties.NetworkScan", "Proofs.Properties.RemoteAudit",
   "Proofs.Properties.RemoteAudit.Coins", "Proofs.Properties.RemoteAudit.Frozen", "Proofs.Properties.RemoteAudit.Order",
   "Proofs.Properties.RemoteAudit.Pooled", "Proofs.Properties.Accounting.Served", "Proofs.Properties.RemoteAudit.Line",
   "Proofs.Properties.RemoteAudit.Schedule", "Proofs.Properties.RemoteAudit.Shared",
