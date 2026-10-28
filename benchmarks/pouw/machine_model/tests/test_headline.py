@@ -131,8 +131,7 @@ def test_a_p1_sibling_is_its_design_with_every_filler_at_p_1():
 
 
 def test_sm120s_measured_row_names_how_it_differs_from_its_lean_statement():
-    """The row reads VF3r-16 at the reading's 1.22 while the retired `Sm120MeasuredHeadline` reads VF3s-16 at 9/8
-    (RT3-LOGIC-4)."""
+    """The row reads VF3r-16 at the reading's 1.22 while `Sm120MeasuredHeadline` reads VF3s-16 at 9/8 (RT3-LOGIC-4)."""
     x = next(x for x in H.rows("measured") if x.family == "sm_120")
     assert x.vector == "VF3r-16" and x.q == 1.22
     assert any("Sm120MeasuredHeadline reads VF3s-16 at q = q_T = 9/8" in c for c in x.conditions)

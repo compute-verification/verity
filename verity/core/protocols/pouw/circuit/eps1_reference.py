@@ -48,7 +48,7 @@ verifier's and every absorbed word is recomputed in the unit's own proof (ncp-v2
 closures, do not arise).
 
 **The conjecture.** Correct checked values become work through the TS model (`Accounting.Guarantees.TS.*`, the EPS1
-designs' conjecture; H1's receipt's compiler lemma, `CompilerC`, is retired with the TS facet model).  Its link to `Pouw.Guarantees.EndToEnd` is open and owned by proofs
+designs' conjecture; `CompilerC` for H1's receipt).  Its link to `Pouw.Guarantees.EndToEnd` is open and owned by proofs
 with compute accounting writing the statement (POUW-SPEC §5 item 3; `LINK_OPEN`).  This module states the scheme's
 circuit; it asserts no guarantee.
 

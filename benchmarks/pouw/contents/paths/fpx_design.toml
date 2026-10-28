@@ -1,4 +1,0 @@
-order = 91
-path = "`fpx_design/`"
-runs_on = "CPU (the machine model's environment)"
-what = "FPX-DESIGN's candidate FP8 and FP4 designs on the machine model: each device's int8 record design with what an FP route adds (C1's limb products, the peel designs' served GEMM, the FP32 word's extraction), priced with `machine-model eps --table` on sm_120, sm_90 and sm_100 (`fpx_eps.py OUT`); FPX-G1H's g1 on H1, its served correction priced as a skip term in the tensor-scalar model and its γ against FP8 and NVFP4 (`g1h_eps.py OUT`), and g1's operands through H1's own transcript construction (`g1h_check.py`); H1's ε with co32c's recombination priced as its receipts have it (O free) beside the record's TS_EPS (O committed), and g1's unchecked correction on the H200's and B200's Dither-2S rows with the fix that commits the centred served word (`h1_o_free.py OUT`)"

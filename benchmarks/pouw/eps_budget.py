@@ -34,8 +34,7 @@ Two pieces of served-only work that the cheater skips are not priced as skippabl
 - g1's centring correction (fpx_design's g1 arms), which nothing here prices.
 
 Honest runs both. Under the floor credit, ♭'s credit B_♭ leaves them out, which is sound for any program. Counting
-either as skippable would raise B_♭ and ε_skip together and leave the floor (1 − ε_skip)·B_♭ the same
-(`benchmarks/pouw/fpx_design/h1_o_free.py`). Against honest's time (`summary`'s honest credit) they are skippable work
+either as skippable would raise B_♭ and ε_skip together and leave the floor (1 − ε_skip)·B_♭ the same. Against honest's time (`summary`'s honest credit) they are skippable work
 these shares omit, so there ε_skip is short of them.
 """
 

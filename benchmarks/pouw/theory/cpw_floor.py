@@ -1,9 +1,9 @@
-"""The sm_120 unit's floor under CP-W, against the sm_120 headline: the retired Lean bound's break line, and what the
+"""The sm_120 unit's floor under CP-W, against the sm_120 headline: the Lean bound's break line, and what the
 per-set checkpoint adds to the floor of every program `PouwWarpCheck_v2` accepts at fold fx1.
 
-The bound (the sm_120 headline's branches in `Definitions/Accounting/Headline/Sm120.lean` at a495f9c5dd, which the TS
-facet model's retirement removed) reads a cheater's floor a unit as N_w (w* + φ*) = 17: an IMMA.16832 writes 128 words
-a slot, and fx1's fold is 8 ALU + 8 IMAD lane instructions a unit. ♭'s bound B adds the operand floor (LDSM_X4 a 39th of a unit) and ε_skip's NOROW. The bound takes
+The bound (`lean_headline.branches` on `Definitions/Accounting/Headline/Sm120.lean` at a495f9c5dd) reads a cheater's
+floor a unit as N_w (w* + φ*) = 17: an IMMA.16832 writes 128 words a slot, and fx1's fold is 8 ALU + 8 IMAD lane
+instructions a unit. ♭'s bound B adds the operand floor (LDSM_X4 a 39th of a unit) and ε_skip's NOROW. The bound takes
 its unfolded branch 1 − Y (1 − 41/S), Y = 17 / B, rounded up to 656/100,000, so it fails for a floor below
 B (1 − ε) / (1 − 41/S), a hair under 17.
 
@@ -50,7 +50,7 @@ CHECKS = 48000
 #: the statement's ε and the stated break line (1 − 0.599%) B
 EPS = Fraction(656, 100000)
 BRIEF_BREAK = Fraction(16995, 1000)
-#: the sm_120 headline's w* (an IMMA.16832's slot over its 128 words) and φ* (fx1's 4 lane instructions a word over 32 lanes)
+#: lean_headline's w* (an IMMA.16832's slot over its 128 words) and φ* (fx1's 4 lane instructions a word over 32 lanes)
 W_STAR, PHI_STAR = Fraction(1, 128), Fraction(1, 8)
 LN2 = Fraction(6931471808, 10**10)
 LN_P = Fraction(1, 8)

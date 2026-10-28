@@ -171,13 +171,17 @@ PoUW, as `H1CheckedCreditPeriod` takes them (the general `CheckedCreditPeriod` t
   skip. It stays an assumption until those words are defined from the committed values.
 - `Accounting.Assumptions.TS.AcceptedLive`, the proof layer's (`SessionSoundAt`'s), not the period credit's: an
   accepted proof's check words are `1` as `flock-verify --zk --registered` reads them. No served path meets it yet.
+- The data sheet: `Accounting.Assumptions.TS.SheetClock`, `SheetDispatch`, `SheetTensor`, `SheetPipe`, `SheetSmem`,
+  `SheetWords`, `SheetSemantics`, `FoldOpt`, `FoldOptFoldedAt` and `FillOpt`: the GPU's clock, rates and semantics are
+  the data sheet's, and the folds are optimal. The live-words credit over a monitoring period (`CircuitCreditPeriod`,
+  `H1CheckedCreditPeriod`) doesn't read them. The time credit `Accounting.Guarantees.Compose.CircuitCredit` does, and it
+  is what backs the overhead bound's `PouwSound` (below), so the overhead over remote rests on the data sheet.
 
 The overhead, `DampenerRemote`:
 
 - In `Security/Definitions/Nci/Assumptions/Remote.lean`, three:
   - `Nci.Assumptions.PouwSound`: each PoUW period's certificate is wrong with probability at most p. What backs p is
-    `CircuitCreditPeriod`'s error at one window, which reads no data sheet; it credits live words, not time, and no
-    guarantee states a time credit, so no PoUW guarantee instantiates it yet.
+    the time credit `CircuitCredit`, which reads the data sheet; no PoUW guarantee instantiates it yet.
   - `Nci.Assumptions.SampledDetection`: sampled proofs catch each faulty proof block with probability at least q,
     whatever came before.
   - `Nci.Assumptions.TerminalDetection`: a detected cheat ends its identity and takes its hardware out of use within Δ.
