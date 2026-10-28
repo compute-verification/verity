@@ -165,8 +165,8 @@ negatives.
   token, time to first token and tokens per second as composed over stock, the composed run's window open and close on
   the engine loop, and `verity-bench served-table`'s single-protocol rows beside them.
 - `served_composite.sh`: `served_verdicts.sh`'s step after its record. It writes PoUS's and the wipe's composite cases
-  (`benchmarks/pous/served_case.sh`), then gets remote's and onsite's Lean verdicts on the run's cases (`composite.py`), all
-  on the node. Only the verdict lines reach the run's `verdicts.txt`.
+  (PoUS's `served_case.sh`), then gets remote's and onsite's Lean verdicts on the run's cases (`composite.py`), all on the
+  node. Only the verdict lines reach the run's `verdicts.txt`, and a tree without those two scripts skips the step.
 
 C-Flock's circuit prover (M0, `verity_flock.circuit`) is on `main`, but a run does not take it from its checkout:
 `pod.sh` takes `git archive`s of M0's tree and the Lean verifier's tree at pinned commits, and a captured input set, as
