@@ -44,7 +44,7 @@ def Lowers (Cp : Claims.Sampling.Prog) (b : List ℕ) (φ : ℕ → Fin C.N) (Xv
 /-- **The witness's openings agree with the registration's** at game unit `u`: every opening family that opens `u`'s
 registered commit strings on its committed wires has, at each non-constant gate of `need` that `b` reads from outside or
 commits, a wire of `P.io u` whose opened bit is the witness's opened value. -/
-def Binds (H : Claims.Msg → Claims.Msg) (Cm : Claims.Sampling.Commitment Bool) (s : Claims.Sampling.Stmt)
+def Binds (H : Claims.Msg → Claims.Msg) (Cm : Claims.Sampling.Commitment Bool) (s : Claims.Sampling.AuditStatement)
     (w : Claims.Sampling.Wit) (b : List ℕ)
     (φ : ℕ → Fin C.N) (R : Reg) (u : Fin n) : Prop :=
   ∀ op : vb.Pos → vb.Opening, (∀ g ∈ P.io u, vb.com (op (vb.pos g)) = vb.cs R (vb.pos g)) →
@@ -56,7 +56,7 @@ variable {A P planZ tab vb}
 
 /-- **A unit right on the registration has its slot not faulty**, at the interior that is the circuit's evaluation. -/
 theorem not_faulty_of_rightRegZ {H : Claims.Msg → Claims.Msg} {Cm : Claims.Sampling.Commitment Bool}
-    {s : Claims.Sampling.Stmt}
+    {s : Claims.Sampling.AuditStatement}
     {Pc : Claims.Sampling.Partition} {w : Claims.Sampling.Wit} {R : Reg} {Xv : Fin C.N → Bool} {u : Fin n} {v : ℕ}
     {b : List ℕ} {φ : ℕ → Fin C.N}
     (hr : Pc.blocks[v]? = some b) (hlow : Lowers s.prog b φ Xv) (hbind : Binds A P planZ tab vb H Cm s w b φ R u)
@@ -78,7 +78,7 @@ theorem not_faulty_of_rightRegZ {H : Claims.Msg → Claims.Msg} {Cm : Claims.Sam
 (`slot`), and at each unit its slot's proof block lowers to it (`Lowers`) and the witness's openings agree with the
 registration's (`Binds`). -/
 theorem faulty_card_le_wrongRegZ (H : Claims.Msg → Claims.Msg) (Cm : Claims.Sampling.Commitment Bool)
-    (s : Claims.Sampling.Stmt)
+    (s : Claims.Sampling.AuditStatement)
     (Pc : Claims.Sampling.Partition) (w : Claims.Sampling.Wit) (R : Reg) (Xv : Fin C.N → Bool) (slot : Fin n → ℕ)
     (b : Fin n → List ℕ) (φ : ℕ → Fin C.N)
     (hcov : ∀ v < Pc.blocks.length, ∃ u, slot u = v) (hr : ∀ u, Pc.blocks[slot u]? = some (b u))

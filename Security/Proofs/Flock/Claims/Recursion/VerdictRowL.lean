@@ -230,7 +230,7 @@ theorem rootB_link
 
 /-- **Row L where the rows are asked**: at a dense inner statement's table, from the decision's points, the proof's
 index and shape, the `after` check and the stream's round-2 coin being the live one (`hz`). -/
-theorem rowL_at {xo : Claims.Msg} {sto : Claims.Recursion.Stmt} (hst : parse xo = some sto)
+theorem rowL_at {xo : Claims.Msg} {sto : Claims.Recursion.CompiledStatement} (hst : parse xo = some sto)
     (hf : Claims.Recursion.Form.Dense sto.form) (hx : x = xIOf xo) (hi : i < D.sts.size)
     (hti : i < D.spec.tables.size) (hpts : D.sess.points = pointsOf D.spec D.d.c₁) (hk : 2 * i + r < D.d.f.ps.size)
     (hsh : ProofShaped (shapeAt (tabsOf D.sts) (pointsOf D.spec D.d.c₁) (2 * i + r)) (D.d.f.ps[2 * i + r]'hk))
@@ -242,7 +242,7 @@ theorem rowL_at {xo : Claims.Msg} {sto : Claims.Recursion.Stmt} (hst : parse xo 
 
 /-- **Table `i`'s reps run at the decision**, as `runs_assembled`, with row L from `rowL_at`: in place of `hL`, the
 `after` check passes (`ha`) and each rep stream's round-2 coin is the live one the reader takes `z` from (`hz`). -/
-theorem runs_assembled_L {xo : Claims.Msg} {sto : Claims.Recursion.Stmt} (hst : parse xo = some sto)
+theorem runs_assembled_L {xo : Claims.Msg} {sto : Claims.Recursion.CompiledStatement} (hst : parse xo = some sto)
     (hf : Claims.Recursion.Form.Dense sto.form) (hx : x = xIOf xo) {i : ℕ} (hi : i < D.sts.size)
     (hti : i < D.spec.tables.size)
     (hframed : ∀ r : Fin 2, FramedAt ((D.files cls i).stream r).rounds 0 (repFrames (D.files cls i).st

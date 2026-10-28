@@ -82,7 +82,7 @@ def rejCm : Commitment Bool := ⟨fun _ _ => .ret false, fun _ _ _ => []⟩
 def toyProg : Prog := ⟨[.input], [0]⟩
 
 /-- The program, drawn `all`. -/
-def toyStmt : Stmt := ⟨[], toyProg, ⟨"", 0, []⟩, ⟨[.all]⟩, []⟩
+def toyStmt : AuditStatement := ⟨[], toyProg, ⟨"", 0, []⟩, ⟨[.all]⟩, []⟩
 
 /-- One class of one stratum of one proof block, `{0}`. -/
 def toyPart : Partition := ⟨[[[[0]]]]⟩

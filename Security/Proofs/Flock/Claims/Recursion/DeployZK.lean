@@ -115,7 +115,7 @@ theorem nums_εzk (IV : Claims.Verifier Coin) (ivScope : Claims.Msg → Bool) (b
 /-! ## The private variant -/
 
 /-- **`parse` reads no circuit commitment** (`RecScope.toStmt`). -/
-theorem parse_circ {x : Claims.Msg} {s : Claims.Recursion.Stmt} (h : parse x = some s) : s.circ = none := by
+theorem parse_circ {x : Claims.Msg} {s : Claims.Recursion.CompiledStatement} (h : parse x = some s) : s.circ = none := by
   simp only [parse, RecScope.parseOf, Option.map_eq_some_iff] at h
   obtain ⟨r, -, rfl⟩ := h
   rfl

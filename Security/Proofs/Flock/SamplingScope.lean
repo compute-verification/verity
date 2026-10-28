@@ -32,10 +32,10 @@ def toyQuery : Query := ⟨"", 0, []⟩
 def toyPart : Partition := ⟨[[[[0], [1]]]]⟩
 
 /-- The program, drawn `subset 1`: in scope. -/
-def toyStmt : Stmt := ⟨[], toyProg, toyQuery, ⟨[.subset 1]⟩, []⟩
+def toyStmt : AuditStatement := ⟨[], toyProg, toyQuery, ⟨[.subset 1]⟩, []⟩
 
 /-- The program, drawn `subset 3` from two units: out of scope. -/
-def holeStmt : Stmt := ⟨[], toyProg, toyQuery, ⟨[.subset 3]⟩, []⟩
+def holeStmt : AuditStatement := ⟨[], toyProg, toyQuery, ⟨[.subset 3]⟩, []⟩
 
 /-- A `K`-subset of fewer than `K` members misses every set with probability `0`. -/
 theorem Pa_subset_gt {ns : List ℕ} {K : ℕ} (h : ns.sum < K) (B : Finset ℕ) : OneStage.Pa ns (.subset K) B = 0 := by

@@ -27,8 +27,8 @@ def CommOfPeriodLeakAccepted : Prop :=
   ∀ {ι : Type} {d : Device ι} {α : Type} [Fintype α] {C : Verity.Circuit} {I : Type} {Ω : I → Type}
     [DecidableEq I] [∀ i, Fintype (Ω i)] {Coin Col T : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin]
     [DecidableEq Col] [Zero Col] {r : PeriodRun d α C Ω} (c : Certificates) (p : Price) {H : Msg → Msg}
-    {D : Deploy Coin Col T} {L Kₒ S : ℕ} {lay : Stmt → Layout L S} {k : Stmt → ℕ} {δ : ℝ}
-    {decode : List (ℕ × Col) → List T} {reg : Stmt → Finset ℕ} {Dj n : ℕ}
+    {D : Deploy Coin Col T} {L Kₒ S : ℕ} {lay : AuditStatement → Layout L S} {k : AuditStatement → ℕ} {δ : ℝ}
+    {decode : List (ℕ × Col) → List T} {reg : AuditStatement → Finset ℕ} {Dj n : ℕ}
     (R : RealizesCommOfPeriodLeakAccepted r c.K H D L Kₒ S lay k δ decode reg Dj n) (hks : KS H D)
     (hb : D.commit.Binds H) (hδ : 0 ≤ δ) (hdec : Claims.Flock.ListWithin D.flock.len D.flock.enc D.flock.θ decode)
     (εks εbind εtap : ℝ)
