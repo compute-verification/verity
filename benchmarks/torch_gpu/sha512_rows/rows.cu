@@ -34,12 +34,12 @@ namespace {
 
 template <int V, int ROLL>
 struct Sx {
-  static __host__ __device__ __forceinline__ void run(u64* st, u64* w) { sx::compress<V, ROLL>(st, w); }
-  static __host__ __device__ __forceinline__ void kw(u64* st, const u64* kw) { sx::compress_kw<V, ROLL>(st, kw); }
+  static __host__ __device__ __forceinline__ void compress(u64* st, u64* w) { sx::compress<V, ROLL>(st, w); }
+  static __host__ __device__ __forceinline__ void compress_kw(u64* st, const u64* kw) { sx::compress_kw<V, ROLL>(st, kw); }
 };
 struct Pouw {
-  static __host__ __device__ __forceinline__ void run(u64* st, u64* w) { sha::compress(st, w); }
-  static __host__ __device__ __forceinline__ void kw(u64* st, const u64* kw) {   // the block is K + W's first 16, less K
+  static __host__ __device__ __forceinline__ void compress(u64* st, u64* w) { sha::compress(st, w); }
+  static __host__ __device__ __forceinline__ void compress_kw(u64* st, const u64* kw) {   // the block is K + W's first 16, less K
     u64 w[16];
 #pragma unroll
     for (int i = 0; i < 16; ++i) w[i] = kw[i] - sx::kconst()[i];
@@ -159,7 +159,7 @@ __global__ void __launch_bounds__(SXR_THREADS) k_level(const u64* mids, u32 D_, 
   const u64* kids = in + tree * in_stride;
   const u64* l = !pre ? kids + 8 * j : j ? kids + 8 * (j - 1) : pre + tree * pre_stride;
   const u64* r = kids + 8 * (pre ? j : j + 1);
-  node<D>(mids + 8 * (D_ == 1 ? 0 : tree), first + i, l, r, out + 8 * t);
+  rc::node_at<D>(mids + 8 * (D_ == 1 ? 0 : tree), first + i, l, r, out + 8 * t);
 }
 
 __global__ void __launch_bounds__(SXR_THREADS) k_pads(const u64* dids, u32 D_, u32 T, u64 first, u32 n, u64* out) {
