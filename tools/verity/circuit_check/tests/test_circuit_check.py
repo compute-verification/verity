@@ -933,17 +933,70 @@ def test_redundant_ands_are_counted():
 
 
 def test_a_commit_is_a_copy_not_a_redundant_and():
+    """A commit row (``A = form, B = 1``) is never a redundant AND, whatever it copies; an AND that reads one reads its form."""
     from verity_flock import gf2
 
     C = gf2.Circuit()
     a, b, c = C.input("a", 3)
-    (x,) = C.commit([a ^ b])              # a carried form committed once: a row, no value computed again
-    C.output("o", [C.AND(x, c)])
-    assert CK.redundant_ands(C)[0] == 0
-    (y,) = C.commit([a ^ b])              # the same form committed again
-    (n,) = C.commit([c.inv()])            # a copy of one bit, which a NOT gives free
-    C.output("p", [y, n, C.AND(x ^ c, y ^ c)])   # equal operands once y is x
-    assert CK.redundant_ands(C)[0] == 3
+    (x,) = C.commit([a ^ b])              # a carried form committed: a row, no product
+    (y,) = C.commit([a ^ b])              # the same form again, and one bit's NOT: copies too
+    (n,) = C.commit([c.inv()])
+    C.output("o", [x, y, n, C.AND(x, c)])
+    assert CK.redundant_ands(C)[0] == 0 and sum(CK.is_commit(C, v) for v in C.live()) == 3
+    C.output("p", [C.AND(y, c), C.AND(n, c)])   # AND(x, c) again once y is x, and c AND NOT c
+    assert CK.redundant_ands(C)[0] == 2
+
+
+def test_a_genuine_and_with_one_is_a_redundant_and():
+    """An AND whose operand is the constant 1 once a duplicate is replaced is a product computed for nothing, not a commit."""
+    from verity_flock import gf2
+
+    C = gf2.Circuit()
+    a, b, c = C.input("a", 3)
+    p, q = C.AND(a, b), C.AND(a, b)       # one product twice
+    g = C.AND(c, p ^ q ^ gf2.ONE)         # c AND 1 once q is p
+    C.output("o", [g])
+    (gv,), (qv,) = g.s, q.s
+    assert not CK.is_commit(C, gv)
+    assert CK.redundant_ands(C, owner=str) == (2, {str(qv): 1, str(gv): 1})
+
+
+def _whole_boolean(name, build):
+    """`checks.whole_lowering` of the Boolean Definition of three bits that ``build`` computes: its record and findings."""
+    from verity.ml.circuits.boolean.trace import definition
+    from verity.ml.circuits.defs import bind
+    from verity.ml.circuits.evaluation.reference import resolve, signature_of
+    from verity.ml.circuits.ops.boolean import scalar as SB
+
+    t = resolve(bind(definition(name, 1, build, (("a", SB.BIT), ("b", SB.BIT), ("c", SB.BIT)), SB.BIT, register=False)))
+    F = CK.Findings()
+    _corr, arrays, ref = CK.correspondence(t, OPTS, F)
+    return CK.whole_lowering(t, signature_of(t)[0], arrays, ref, OPTS, F, PINS), F
+
+
+def test_a_builders_commit_is_a_row_of_its_lowering_and_no_redundant_gate():
+    """A builder that commits a carried form (`forms.Circuit.commit`, as `ChargeCount_v1` commits its carries) lowers to a
+    commit row, counted under ``commits``, and no redundant-gates warning.  One that commits a form twice and ANDs c with
+    their sum plus one writes a genuine AND(c, 1), no commit: that warns, and is an AND its Definition doesn't have."""
+    from verity_flock.gf2 import ONE
+
+    def once(C, a, b, c):
+        (x,) = C.commit([a[0] ^ b[0]])
+        return [C.AND(x, c[0])]
+
+    def twice(C, a, b, c):
+        (x,), (y,) = C.commit([a[0] ^ b[0]]), C.commit([a[0] ^ b[0]])
+        return [C.AND(c[0], x ^ y ^ ONE) ^ C.AND(a[0], b[0])]
+
+    def redundant(F):
+        return [w["count"] for w in F.warnings if (w["check"], w["code"]) == ("redundant-gates", "boolean")]
+
+    rec, F = _whole_boolean("CircuitCheckCommitOnce", once)
+    assert (rec["mismatches"], rec["ands"], rec["commits"], rec["definition_ands"], rec["redundant_ands"]) == (0, 2, 1, 1, 0)
+    assert redundant(F) == [] and F.failures == []
+    rec, F = _whole_boolean("CircuitCheckCommitTwice", twice)
+    assert (rec["mismatches"], rec["ands"], rec["commits"], rec["definition_ands"], rec["redundant_ands"]) == (0, 4, 2, 1, 1)
+    assert redundant(F) == [1] and [f["code"] for f in F.failures] == ["ands-added"]
 
 
 @pytest.mark.slow
