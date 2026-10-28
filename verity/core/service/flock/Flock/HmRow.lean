@@ -1280,8 +1280,8 @@ def qwordFinding (c : Circuit) (pub : Public) (obj : Json) (program : ByteArray)
 
 /-- The circuit's partition binding against the verifier's own copy of the partition object: a `verity/partition/v1` binding
 must be the tagged digest of that object (any query name), over META's `program_sha512`; the provisional unit cover takes
-none. Units are derived only for a query the verifier evaluates, from the program's Call graphs, which it does not decode yet:
-today every finding says the units were taken as stated, and why. -/
+none. Units are derived only for a query the verifier evaluates, from the program's Call graphs, which it does not decode yet,
+so every finding says the units were taken as stated, and why. -/
 def checkPartition (c : Circuit) (obj : Option Json) : V PartitionFinding := do
   let part := (c.metaJ.getObjVal? "partition").toOption.getD Json.null
   let rule := (part.getObjValAs? String "rule").toOption.getD ""
