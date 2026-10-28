@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # coresident.cu on one leased H200, cwd = the source tree's root under `research run --cwd source`: the build outside the
 # lease (ptxas's registers and spills to build.log), then under it the GPU's clock and power sampled beside
-# `coresident REPS KTILES HREPS ITEM_MS` (coresident.jsonl; defaults 5 4096 2048 2000), and the tables (table.md).
+# `coresident REPS KTILES HREPS ITEM_MS KDIM` (coresident.jsonl; defaults 5 4096 2048 2000 4096), and the tables
+# (table.md). CFGS (optional): the configurations to run, comma-separated name prefixes (coresident.cu's CFGS).
 #   research run --on vy-dc-h200-3 --project verity --campaign C --source . --cwd source --env GPU_LEASE_WHO=LANE -- \
 #     bash benchmarks/pouw/accel_v31/coresident.sh
 # PROBE (a directory, optional): another probe's sources, built (nvcc -O3 PROBE/PROBE_MAIN) and run first under the same
@@ -23,13 +24,13 @@ if [ -n "${PROBE:-}" ]; then
   (cd "$PROBE" && nvcc $G -o "$O/probe" "${PROBE_MAIN:-coissue.cu}") > "$O/build-probe.log" 2>&1
   echo "build probe rc $?" >> "$O/rc.txt"
 fi
-export REPS=${REPS:-5} KTILES=${KTILES:-4096} HREPS=${HREPS:-2048} ITEM_MS=${ITEM_MS:-2000}
+export REPS=${REPS:-5} KTILES=${KTILES:-4096} HREPS=${HREPS:-2048} ITEM_MS=${ITEM_MS:-2000} KDIM=${KDIM:-4096}
 ${LEASE-gpu-lease 1 --wait --max-min 15 --} bash -c '
   nvidia-smi --query-gpu=index,uuid,name,driver_version,clocks.sm,clocks.max.sm,power.limit --format=csv > "$O/gpu.txt" 2>&1
   nvidia-smi --query-gpu=timestamp,clocks.sm,power.draw,temperature.gpu,utilization.gpu --format=csv -lms 200 > "$O/smi.csv" 2>&1 &
   smi=$!
   if [ -x "$O/probe" ]; then "$O/probe" ${PROBE_ARGS:-1 2048} > "$O/probe.jsonl" 2> "$O/probe.err"; echo "probe rc $?" >> "$O/rc.txt"; fi
-  "$O/coresident" "$REPS" "$KTILES" "$HREPS" "$ITEM_MS" > "$O/coresident.jsonl" 2> "$O/coresident.err"
+  "$O/coresident" "$REPS" "$KTILES" "$HREPS" "$ITEM_MS" "$KDIM" > "$O/coresident.jsonl" 2> "$O/coresident.err"
   echo "coresident rc $?" >> "$O/rc.txt"
   kill $smi
 '
