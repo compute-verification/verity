@@ -135,6 +135,21 @@ Sanity.lean     a satisfiability witness for every named hypothesis, the joint w
 Witnesses.lean  each acceptance guarantee's two lemmas: `G_honest`, its hypotheses at the deployed
                                          record, and `G_nontrivial`, its conclusion false at a verifier
                                          that accepts everything
+WitnessToys.lean  the instances the count and period witnesses are stated at, each built by hand at a positive
+                                         instance (the honest certifier at a Program, the shipped schedule over two
+                                         windows of two buckets and two sync values, the verifier and the sender that
+                                         accept and leak everything, a sampled audit with a possible faulty unit, the
+                                         accepting verifier `tapD`, the rows format of the Python fixture `fxQueue`)
+CountWitnesses.lean  the fifteen counts' pairs: nine egress (six over `AccSeqs`, one under a sampled
+                                         audit, two through the wire) and six ingress. The honest run is
+                                         accepted at the shipped schedule (`fxRate`) or at `sampProg`, or has every
+                                         status complete, and each bound is false at the verifier that accepts
+                                         everything (`acceptAll`), in the lock's `witnesses`
+PeriodWitnesses.lean  the monitoring period's two pairs (PeriodLeakAccepted, HorizonLeakAccepted), in the
+                                         lock's `witnesses`: no binder over the instance, the sampled verifier's
+                                         code the one named assumption (Assumptions/SampledCode.lean)
+Assumptions/SampledCode.lean  `NetTiming.Assumptions.SampledCodeRuns`: the sampled verifier the service runs
+                                         is a `SamplingDeploy.Code` whose run meets the record's facts
 Code.lean       the certifier program (`certifier_program`, `NetworkCertifier`), which the difftests run, equal to the
                                definitions above: six theorems, not guarantees (below)
 Accepted.lean   an accepted run of the network certificate check is a run of the constant-rate Program

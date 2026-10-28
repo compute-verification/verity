@@ -1422,6 +1422,9 @@
    "owner": "@network-accounting",
    "digest": "a414edcfc0295b87863d6548e751f60b429bf55d55cdcd9791ef92d93c02ea94"
   },
+  "NetTiming.Assumptions.SampledCodeRuns": {
+   "owner": "@network-accounting"
+  },
   "NetTiming.BitsCount": {
    "owner": "@network-accounting",
    "digest": "d4e0da6a318e51d835db13cda094605ffcd9569955bbc4a27f01e021375f1f5b"
@@ -2791,7 +2794,11 @@
    "Proofs.Flock.Bridge": "C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
    "Proofs.Properties.NetworkCertifier.Bytes": "the byte conversion `bs`, which the deployed sampling commitment's SHA-512 (`Claims.Sampling.Path.sha512Msg`) and registration roots read in SampledKSLive; C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
    "Proofs.Accounting.JointBridge.Guarantees.IntegrityOfIntegrityPeriod": "the integrity bridge's realization reads C-Flock's integrity audit over a period (Flock.Guarantees.IntegrityHorizon, its SamplingBlock and Period.run), which is in Proofs; C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
-   "Proofs.Accounting.JointBridge.Guarantees.IntegrityOfIntegrityBlock": "the block integrity bridge's realization reads C-Flock's integrity audit of a server-time block (Flock.Guarantees.IntegrityBlock, its ServerBlocks, SamplingBlock and ServerBlocks.run), which is in Proofs; C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)"
+   "Proofs.Accounting.JointBridge.Guarantees.IntegrityOfIntegrityBlock": "the block integrity bridge's realization reads C-Flock's integrity audit of a server-time block (Flock.Guarantees.IntegrityBlock, its ServerBlocks, SamplingBlock and ServerBlocks.run), which is in Proofs; C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
+   "Proofs.NetworkCertifier.Witnesses": "the toy audit at the negation (`notStmt`, `notProg`, `notPart`, `notLay`, `obs0`) and the accepting verifier `leakD`, at which the count and period witnesses are stated; read only by the witnesses",
+   "Proofs.NetworkCertifier.WitnessToys": "the instances the count and period witnesses are stated at: the honest certifier (`honestI`), the shipped schedule over two windows (`fxRate`, `fxFixed`, `fxRate1`), the verifier and the sender that accept and leak everything (`AccSeqsAt acceptAll`, `fxLeakI`), the ingress certifier `inI`, the sampled audit `sampProg`, the accepting tap verifier `tapD` and the Python certifier's fixture rows (`fxRows`); read only by the witnesses",
+   "Proofs.NetworkCertifier.RecordRows": "the tap record of a rows format (`RowsFormat.tapRecord`) and the Python certifier's fixture schedule (`fxQueueSched`), at which the `honest` witnesses state that the fixture's schedule fits; read only by the witnesses",
+   "Proofs.NetworkCertifier.Assumptions": "the named assumption on the sampled verifier's deployed code (`NetTiming.Assumptions.SampledCodeRuns`, over `SamplingDeploy.Code`), which the `honest` witnesses take; it reads the deployed sampling record, still in Proofs under C-Flock's exception"
   }
  },
  "four_names": ["Nci", "NetTiming", "Accounting", "Hash"],
@@ -9004,6 +9011,81 @@
    "signature": ["NetTiming.SecurityProofs.WardenViewEqClientView : NetTiming.Guarantees.WardenViewEqClientView"],
    "assumptions": [],
    "type_hash": "b6f79294b8555ef604979d0178cb818abc5d0cc785b14c56841ad73ce13321f6"
+  },
+  "NetTiming.Witness.ConstantRateFixedClock_honest": {
+   "owner": "@network-accounting"
+  },
+  "NetTiming.Witness.ConstantRate_honest": {
+   "owner": "@network-accounting"
+  },
+  "NetTiming.Witness.DecodableConstantRate_honest": {
+   "owner": "@network-accounting"
+  },
+  "NetTiming.Witness.EncardAccSeqsLeConstantRateFixedClock_nontrivial": {
+   "owner": "@network-accounting"
+  },
+  "NetTiming.Witness.EncardAccSeqsLeConstantRatePerWindow_nontrivial": {
+   "owner": "@network-accounting"
+  },
+  "NetTiming.Witness.EncardAccSeqsLeConstantRateWindows_nontrivial": {
+   "owner": "@network-accounting"
+  },
+  "NetTiming.Witness.EncardAccSeqsLeConstantRate_nontrivial": {
+   "owner": "@network-accounting"
+  },
+  "NetTiming.Witness.EncardAccSeqsLeFixedClock_nontrivial": {
+   "owner": "@network-accounting"
+  },
+  "NetTiming.Witness.EncardAccSeqsLeSync_nontrivial": {
+   "owner": "@network-accounting"
+  },
+  "NetTiming.Witness.EncardAccSeqsSampledLe_honest": {
+   "owner": "@network-accounting"
+  },
+  "NetTiming.Witness.EncardAccSeqsSampledLe_nontrivial": {
+   "owner": "@network-accounting"
+  },
+  "NetTiming.Witness.EncardDecodableLeConstantRatePerWindow_nontrivial": {
+   "owner": "@network-accounting"
+  },
+  "NetTiming.Witness.EncardDecodableLeConstantRate_nontrivial": {
+   "owner": "@network-accounting"
+  },
+  "NetTiming.Witness.EncardIngressDecodableLeContents_nontrivial": {
+   "owner": "@network-accounting"
+  },
+  "NetTiming.Witness.EncardIngressDecodableLe_nontrivial": {
+   "owner": "@network-accounting"
+  },
+  "NetTiming.Witness.EncardIngressObsDecodableLeContentsPerWindow_nontrivial": {
+   "owner": "@network-accounting"
+  },
+  "NetTiming.Witness.EncardIngressObsDecodableLeContents_nontrivial": {
+   "owner": "@network-accounting"
+  },
+  "NetTiming.Witness.EncardIngressObsDecodableLePerWindow_nontrivial": {
+   "owner": "@network-accounting"
+  },
+  "NetTiming.Witness.EncardIngressObsDecodableLe_nontrivial": {
+   "owner": "@network-accounting"
+  },
+  "NetTiming.Witness.FixedClock_honest": {
+   "owner": "@network-accounting"
+  },
+  "NetTiming.Witness.HorizonLeakAccepted_honest": {
+   "owner": "@network-accounting"
+  },
+  "NetTiming.Witness.HorizonLeakAccepted_nontrivial": {
+   "owner": "@network-accounting"
+  },
+  "NetTiming.Witness.Ingress_honest": {
+   "owner": "@network-accounting"
+  },
+  "NetTiming.Witness.PeriodLeakAccepted_honest": {
+   "owner": "@network-accounting"
+  },
+  "NetTiming.Witness.PeriodLeakAccepted_nontrivial": {
+   "owner": "@network-accounting"
   },
   "Pous.Claims.StreamedWipeMeetsDisk_fails": {
    "owner": "@memory-accounting",
@@ -59551,6 +59633,80 @@
   "Flock.SecurityProofs.RecursiveKS": {
    "honest": ["RecDeploy.HonestHalfFixture.honest_half_fixture"],
    "nontrivial": "Flock.Guarantees.recursiveKS_nontrivial"
+  },
+  "NetTiming.SecurityProofs.EncardAccSeqsLeConstantRate": {
+   "honest": ["NetTiming.Witness.ConstantRate_honest"],
+   "nontrivial": "NetTiming.Witness.EncardAccSeqsLeConstantRate_nontrivial"
+  },
+  "NetTiming.SecurityProofs.EncardAccSeqsLeConstantRateFixedClock": {
+   "honest": ["NetTiming.Witness.ConstantRateFixedClock_honest"],
+   "nontrivial": "NetTiming.Witness.EncardAccSeqsLeConstantRateFixedClock_nontrivial"
+  },
+  "NetTiming.SecurityProofs.EncardAccSeqsLeConstantRatePerWindow": {
+   "honest": ["NetTiming.Witness.ConstantRate_honest"],
+   "nontrivial": "NetTiming.Witness.EncardAccSeqsLeConstantRatePerWindow_nontrivial"
+  },
+  "NetTiming.SecurityProofs.EncardAccSeqsLeConstantRateWindows": {
+   "honest": ["NetTiming.Witness.ConstantRate_honest"],
+   "nontrivial": "NetTiming.Witness.EncardAccSeqsLeConstantRateWindows_nontrivial"
+  },
+  "NetTiming.SecurityProofs.EncardAccSeqsLeFixedClock": {
+   "honest": ["NetTiming.Witness.FixedClock_honest"],
+   "nontrivial": "NetTiming.Witness.EncardAccSeqsLeFixedClock_nontrivial"
+  },
+  "NetTiming.SecurityProofs.EncardAccSeqsLeSync": {
+   "honest": ["NetTiming.Witness.ConstantRate_honest"],
+   "nontrivial": "NetTiming.Witness.EncardAccSeqsLeSync_nontrivial"
+  },
+  "NetTiming.SecurityProofs.EncardAccSeqsSampledLe": {
+   "honest": ["NetTiming.Witness.EncardAccSeqsSampledLe_honest"],
+   "nontrivial": "NetTiming.Witness.EncardAccSeqsSampledLe_nontrivial"
+  },
+  "NetTiming.SecurityProofs.EncardDecodableLeConstantRate": {
+   "honest": ["NetTiming.Witness.DecodableConstantRate_honest"],
+   "nontrivial": "NetTiming.Witness.EncardDecodableLeConstantRate_nontrivial"
+  },
+  "NetTiming.SecurityProofs.EncardDecodableLeConstantRatePerWindow": {
+   "honest": ["NetTiming.Witness.DecodableConstantRate_honest"],
+   "nontrivial": "NetTiming.Witness.EncardDecodableLeConstantRatePerWindow_nontrivial"
+  },
+  "NetTiming.SecurityProofs.EncardIngressDecodableLe": {
+   "honest": ["NetTiming.Witness.Ingress_honest"],
+   "nontrivial": "NetTiming.Witness.EncardIngressDecodableLe_nontrivial",
+   "kind": "acceptance"
+  },
+  "NetTiming.SecurityProofs.EncardIngressDecodableLeContents": {
+   "honest": ["NetTiming.Witness.Ingress_honest"],
+   "nontrivial": "NetTiming.Witness.EncardIngressDecodableLeContents_nontrivial",
+   "kind": "acceptance"
+  },
+  "NetTiming.SecurityProofs.EncardIngressObsDecodableLe": {
+   "honest": ["NetTiming.Witness.Ingress_honest"],
+   "nontrivial": "NetTiming.Witness.EncardIngressObsDecodableLe_nontrivial",
+   "kind": "acceptance"
+  },
+  "NetTiming.SecurityProofs.EncardIngressObsDecodableLeContents": {
+   "honest": ["NetTiming.Witness.Ingress_honest"],
+   "nontrivial": "NetTiming.Witness.EncardIngressObsDecodableLeContents_nontrivial",
+   "kind": "acceptance"
+  },
+  "NetTiming.SecurityProofs.EncardIngressObsDecodableLeContentsPerWindow": {
+   "honest": ["NetTiming.Witness.Ingress_honest"],
+   "nontrivial": "NetTiming.Witness.EncardIngressObsDecodableLeContentsPerWindow_nontrivial",
+   "kind": "acceptance"
+  },
+  "NetTiming.SecurityProofs.EncardIngressObsDecodableLePerWindow": {
+   "honest": ["NetTiming.Witness.Ingress_honest"],
+   "nontrivial": "NetTiming.Witness.EncardIngressObsDecodableLePerWindow_nontrivial",
+   "kind": "acceptance"
+  },
+  "NetTiming.SecurityProofs.HorizonLeakAccepted": {
+   "honest": ["NetTiming.Witness.HorizonLeakAccepted_honest"],
+   "nontrivial": "NetTiming.Witness.HorizonLeakAccepted_nontrivial"
+  },
+  "NetTiming.SecurityProofs.PeriodLeakAccepted": {
+   "honest": ["NetTiming.Witness.PeriodLeakAccepted_honest"],
+   "nontrivial": "NetTiming.Witness.PeriodLeakAccepted_nontrivial"
   }
  },
  "unwitnessed": {
