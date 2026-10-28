@@ -72,7 +72,7 @@ UNITS = "/etc/systemd/system/"  # a changed unit here takes effect only after `s
 USER_UNITS = "/home/research/.config/systemd/user/"     # ... after `systemctl --user daemon-reload`
 ENVS = "/etc/vy/env/"          # units' EnvironmentFile=, read only when the unit starts
 CERTS = "/etc/ssl/certs"       # the system trust store, which Python, git, gh and the Nebius CLI read
-# CA roots no node may trust: each cross-signed the compromised eMudhra intermediates (USN-8944-1; INF-314). ca-certificates
+# CA roots no node may trust: each cross-signed the compromised eMudhra intermediates (USN-8944-1). ca-certificates
 # 20260816 removes them, and the Nebius images ship with apt's daily timers off, so nothing on a node upgrades it unasked.
 DISTRUSTED_ROOTS = ("emSign_ECC_Root_CA_-_G3", "Comodo_AAA_Services_root")
 TRUST_FIX = "sudo apt-get update && sudo apt-get install -y --only-upgrade ca-certificates 'libnss3*'"
