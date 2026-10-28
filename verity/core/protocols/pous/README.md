@@ -20,7 +20,7 @@ slow by design: a 32 MiB band segment decodes in about 25 s on one core, a dense
 the prose spec and this code differ.
 
 ~~~python
-from verity.core.protocols.pous import audit, band, codec, setup
+from verity.core.protocols.pous import band, codec, setup
 from verity.core.protocols.pous.layout import Layout, decode_tensor
 
 layout = Layout.of(band.SECURE_FIRST, [("w1", n1), ("w2", n2)])       # tensors -> segments of W
@@ -33,18 +33,16 @@ C = [params.codec.encode_segment(params, prims, salt, s, g)             # server
 vk = setup.verifier_setup(params, prims, commitment, salt, encoded=C)   # verifier: decodes C*, checks the commitment
 blocks = [b for seg in C for b in seg]
 w1 = decode_tensor(layout, prims, salt, "w1", blocks.__getitem__)      # decode one tensor
-v = audit.UnsignedRounds(vk, audit.challenge_key(audit_secret, vk))     # k = 111, Δ = 0.5 ms (+ rtt_allowance_ns)
-result = audit.run_timed(v, blocks.__getitem__)
 ~~~
 
 For dense, use `dense.POINT_64K` and `dense.reference`; for P3, `params.OPERATING_POINT` and `primitives.reference`.
-Everything else is the same.
+Everything else is the same. The audit is the memory challenger's session, below.
 
 The same lifecycle through the generic protocol. A scheme implements only `encode_segment` and `decode_segment`, and
 the memory challenger refuses any `k` or deadline its certificate doesn't cover:
 
 ~~~python
-from verity.core.protocols.pous import protocol, schemes
+from verity.core.protocols.pous import memory_challenger as mc, protocol, schemes
 
 scheme = schemes.get("band-chain/d12/v1", segments=layout.params.segments)   # or schemes.Band(layout.params)
 commitment = protocol.commit(scheme, w)
@@ -52,9 +50,9 @@ salt = protocol.draw_salt(verifier_secret, commitment)
 C = protocol.encode(scheme, w, salt)                                           # server
 vk = protocol.verifier_key(scheme, commitment, salt, w=w)                      # PRIVATE: the verifier encodes
 # vk = protocol.verifier_key(scheme, commitment, salt, mode=protocol.PUBLIC, encoded=C)   # the same guarantee
-v = protocol.TimedAudit(scheme, vk, protocol.challenge_key(audit_secret, vk), rtt_allowance_ns=rtt)
-v.run(protocol.responder(scheme, blocks.__getitem__))
-print(v.profile().statement())                                                 # Pous.SecurityProofs.BandMultiMeetsFamily
+cert = mc.covering_certificate(scheme, scheme.certificate.k, 500_000 + rtt)    # refuses a k or limit none covers
+print(cert.theorem)                                                            # Pous.SecurityProofs.BandMultiMeetsFamily
+respond = protocol.responder(scheme, blocks.__getitem__)                       # the session's answers, below
 ~~~
 
 On the deployed path the timed rounds run on the memory challenger (`memory_challenger`), an auditor-trusted device

@@ -7,9 +7,9 @@ Two restatements of one set of rules:
   definition, which is its docstring after the first line, and `test_the_oracle_transcribes_the_lean_model` finds that
   text verbatim in the Lean file the first line names. A responder is a `ContMachine` (`rest`, `step`) whose `W`, `pp`,
   `C` and `ω` are fixed for a run and so closed over, and `f` is the primitive that answers its queries.
-* **On the memory challenger's clock** (`ClockOracle`): the same rules on what `audit.UnsignedRounds` observes,
-  nanoseconds on its own clock. `(D, Q)` becomes `limit = Δ + RTT` and `(D_late, Q_late)` becomes
-  `late_limit = Δ_late + RTT`, or `None` for a memory challenger without a hard deadline, which waits for every answer.
+* **On the memory challenger's clock** (`ClockOracle`): the same rules on what `continuous.ContinuousMemoryChallenger`
+  observes, nanoseconds on its own clock. `(D, Q)` becomes `limit = Δ + RTT` and `(D_late, Q_late)` becomes
+  `late_limit = Δ_late + RTT`.
 
   1. Challenge `j` is sent no earlier than round `j − 1` closed (`contSend`).
   2. An answer's delay runs from the memory challenger's own send of its challenge (`contProg`).
@@ -265,10 +265,10 @@ def cont_accepts(f0: float, rs: Sequence[ContRecord]) -> bool:
     return len([r for r in rs if r.verdict != HIT]) <= f0
 
 
-UNANSWERED, ALL_SENT, NONE_OPEN, CLOSED, NOT_REVEALED, WITHIN, NO_HARD_DEADLINE = (
+UNANSWERED, ALL_SENT, NONE_OPEN, CLOSED, NOT_REVEALED, WITHIN = (
     "a round is open within its hard deadline", "all n challenges are sent", "no challenge is open",
     "the named challenge is closed", "the named challenge is not revealed",
-    "the open round is within its hard deadline", "no hard deadline")
+    "the open round is within its hard deadline")
 """Why `ClockOracle` refuses an action."""
 
 
@@ -289,16 +289,14 @@ class Record:
 
 class ClockOracle:
     """The memory challenger on its own clock (the module docstring, "On the memory challenger's clock"): `n`
-    challenges, the `j`th asking for label `index(j)` of `C`. `named` is a memory challenger whose answers name their
-    challenge (`ContinuousMemoryChallenger.respond(j, …)`); an unnamed one credits every answer to the open challenge.
-    Each action takes the clock reading `t` and returns what the memory challenger must do: the `(j, index)` it reveals,
-    the `Record` it closes, or a `Refused`."""
+    challenges, the `j`th asking for label `index(j)` of `C`, each answer naming its challenge
+    (`ContinuousMemoryChallenger.respond(j, …)`). Each action takes the clock reading `t` and returns what the memory
+    challenger must do: the `(j, index)` it reveals, the `Record` it closes, or a `Refused`."""
 
-    def __init__(self, n: int, index: Callable[[int], int], C: Sequence[bytes], limit: int, late_limit: int | None,
-                 named: bool) -> None:
-        if late_limit is not None and late_limit < limit:
+    def __init__(self, n: int, index: Callable[[int], int], C: Sequence[bytes], limit: int, late_limit: int) -> None:
+        if late_limit < limit:
             raise ValueError("the hard deadline is at least the deadline")
-        self.n, self.index, self.C, self.limit, self.late_limit, self.named = n, index, C, limit, late_limit, named
+        self.n, self.index, self.C, self.limit, self.late_limit = n, index, C, limit, late_limit
         self.records: list[Record] = []
         self.sends: list[int] = []
         self.open: tuple[int, int, int] | None = None
@@ -324,7 +322,7 @@ class ClockOracle:
         return self.done and self.misses <= f0
 
     def _past_hard_deadline(self, t: int) -> bool:
-        return self.late_limit is not None and t - self.open[2] > self.late_limit
+        return t - self.open[2] > self.late_limit
 
     def _close(self, t: int, verdict: str) -> Record:
         j, i, send = self.open
@@ -345,12 +343,10 @@ class ClockOracle:
         return j, self.open[1]
 
     def respond(self, t: int, j: int, block: bytes) -> Record | Refused:
-        if self.named and j != self.pending:
+        if j != self.pending:
             return Refused(CLOSED if j < len(self.records) else NOT_REVEALED)
-        if self.open is None:
-            return Refused(NONE_OPEN)
         elapsed = t - self.open[2]
-        if self.late_limit is not None and elapsed > self.late_limit:
+        if elapsed > self.late_limit:
             return self._close(t, REJECT)
         if elapsed > self.limit:
             return self._close(t, LATE)
@@ -359,8 +355,6 @@ class ClockOracle:
     def expire(self, t: int) -> Record | Refused:
         if self.open is None:
             return Refused(NONE_OPEN)
-        if self.late_limit is None:
-            return Refused(NO_HARD_DEADLINE)
         if not self._past_hard_deadline(t):
             return Refused(WITHIN)
         return self._close(t, REJECT)

@@ -8,11 +8,14 @@ which the check removes when the suite ends.  With neither they refuse, since no
 from __future__ import annotations
 
 import hashlib
+import itertools
 import tempfile
+from collections.abc import Callable, Sequence
 from pathlib import Path
 
 from verity.ml.crypto import lms
 from verity.core.protocols.pous import memory_challenger as mc
+from verity.core.protocols.pous.audit import DEADLINE_NS
 
 HEIGHTS = range(1, 11)
 DIR: Path | None = None
@@ -61,3 +64,29 @@ def session_log(directory: str | Path | None = None) -> mc.SessionLog:
 
 SCHEMES: dict[str, mc.Verify] = {scheme(h): mc.lms_verify(lms.Params(64, 1, h)) for h in HEIGHTS}
 """The mapping a test passes to `memory_challenger.verdict`: the test signers accepted, in that test alone."""
+
+COIN_KEY = mc.HM96.key_from_label(b"pous test coin key")
+
+
+def one_coin_key(monkeypatch) -> None:
+    """Draw every coin tree under `COIN_KEY` unless the caller names a key, so hm96 builds its tables once rather than
+    once a session (about 15 ms each).  The key only hides the coins, which a test of the rounds' timing and verdicts
+    never reads."""
+    draw = mc.CoinTree.draw.__func__
+    monkeypatch.setattr(mc.CoinTree, "draw",
+                        classmethod(lambda cls, *a, **kw: draw(cls, *a, **({"key": COIN_KEY} | kw))))
+
+
+def audit(blocks: Sequence[bytes], binding: bytes, k: int, respond: Callable[[int], bytes] | None = None, *,
+          limit_ns: int = DEADLINE_NS, step_ns: int = 1_000, source: bytes = b"audit",
+          session: bytes = bytes(32)) -> mc.Verdict:
+    """One memory challenger session of `k` rounds over `blocks` (the `C*` whose setup root is `binding`), answered by
+    `respond(index)` (the stored block by default) on a clock that ticks `step_ns` a reading, signed by a test signer
+    and judged by `memory_challenger.verdict` against the blocks' own digests."""
+    signer = TestSigner(source, height=1)
+    c = mc.MemoryChallenger(mc.CoinTree.draw(source, session, len(blocks), k), signer, log=session_log(),
+                            limit_ns=limit_ns, block_bytes=len(blocks[0]), binding=binding,
+                            clock=itertools.count(0, step_ns).__next__)
+    signed = c.run(respond or blocks.__getitem__)
+    return mc.verdict(signed, c.commitment, c.openings(), lambda i: mc.block_digest(blocks[i]),
+                      trusted={signer.public_key}, schemes=SCHEMES)

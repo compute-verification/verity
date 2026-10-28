@@ -2,14 +2,13 @@
 
 from __future__ import annotations
 
-import itertools
 import random
 
 import pytest
 from verity.ml.commitments.identity import canonical_json_bytes, tagged_sha512
 
+import pous_test_signer as ts
 from verity.core.protocols.pous import setup
-from verity.core.protocols.pous.audit import HonestResponder, UnsignedRounds, challenge_key, run_timed
 from verity.core.protocols.pous.codec import Codec, encode_segments, split
 from verity.core.protocols.pous.layout import Layout, decode_tensor
 from verity.core.protocols.pous.memory_challenger import block_digest
@@ -81,15 +80,6 @@ def test_layout_of_ranges():
         Layout.of_ranges(PARAMS, [("x", 0, 10), ("y", 5, 10)])
 
 
-def test_responder_reports_ride_on_answers():
-    enc = encode(PARAMS, PRIMS, W, SALT)
-    vk = VerifierKey.build(enc)
-    responder = HonestResponder(enc)
-    result = run_timed(UnsignedRounds(vk, challenge_key(b"audit", vk), k=5, clock=itertools.count(0, 1000).__next__),
-                       lambda i: (responder.block(i), {"index": i, "device_ns": 7}))
-    assert result.accepted and all(a.report == {"index": a.index, "device_ns": 7} for a in result.answers)
-
-
 def _xor_encode(params, prims, salt, s, w_seg):
     mb = params.block_bytes
     pad = (salt * (mb // len(salt) + 1))[:mb]
@@ -101,8 +91,8 @@ def _xor_decode(params, prims, salt, s, blocks):
 
 
 def test_a_second_codec_plugs_in():
-    """A toy one-layer codec (not a scheme) through setup, per-tensor decode and the timed audit: nothing above the
-    codec reads P3's structure."""
+    """A toy one-layer codec (not a scheme) through setup, per-tensor decode and the memory challenger's audit: nothing
+    above the codec reads P3's structure."""
     toy = Codec("toy-xor", _xor_encode, _xor_decode)
     layout = Layout.of(Params(8, 64, 3), [("t", 700), ("u", 900)])
     params = layout.params
@@ -112,4 +102,4 @@ def test_a_second_codec_plugs_in():
     vk = setup.verifier_key(params, None, w, commitment, SALT, codec=toy)
     blocks = [b for seg in encode_segments(toy, params, None, w, SALT) for b in seg]
     assert all(decode_tensor(layout, None, SALT, name, blocks.__getitem__, codec=toy) == data[name] for name in data)
-    assert run_timed(UnsignedRounds(vk, challenge_key(b"audit", vk), k=10, clock=itertools.count(0, 1000).__next__), blocks.__getitem__).accepted
+    assert ts.audit(blocks, vk.root, 10).accepted

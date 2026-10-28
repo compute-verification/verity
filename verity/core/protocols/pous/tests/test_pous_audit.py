@@ -1,17 +1,17 @@
-"""Setup (commit, the verifier's salt, `vk` from its own encoding), the Merkle `vk`, and the timed audits."""
+"""Setup (commit, the verifier's salt, `vk` from its own encoding), the Merkle `vk`, the audit in the oracle model and
+the memory challenger's over the same `C*`."""
 
 from __future__ import annotations
 
 import hashlib
-import itertools
 import random
 
 import pytest
 
+import pous_test_signer as ts
 from verity.ml.commitments.rowleaf import sha512_row_v2_digest, sha512_row_v2_prefix
 from verity.core.protocols.pous import setup
-from verity.core.protocols.pous.audit import (DEADLINE_NS, HonestResponder, UnsignedRounds, challenge_key, deadline_rounds, run_timed,
-                               simulate)
+from verity.core.protocols.pous.audit import DEADLINE_NS, HonestResponder, challenge_key, deadline_rounds, simulate
 from verity.core.protocols.pous.oracle import PQuery, Tweak, pure
 from verity.core.protocols.pous.params import Params
 from verity.core.protocols.pous.primitives import reference
@@ -111,39 +111,18 @@ def test_simulated_audit(world):
     assert not simulate(vk, Wrong(), PRIMS, key, k=3).accepted
 
 
-class FakeClock:
-    def __init__(self):
-        self.now = 0
-
-    def __call__(self):
-        return self.now
-
-
 def test_memory_challenger(world):
+    """The memory challenger's session over this `C*` (`test_pous_memory_challenger.py` tests the session itself): the
+    stored blocks pass, within `Δ + RTT` to the ns, and an answer a ns past it or a wrong block fails."""
     _, _, enc, vk = world
-    key = challenge_key(b"audit", vk)
-    responder = HonestResponder(enc, tree(enc))
-    assert run_timed(UnsignedRounds(vk, key, k=30, clock=itertools.count(0, 1000).__next__), responder.block).accepted
-    assert run_timed(UnsignedRounds(vk, key, k=30, root_only=True, clock=itertools.count(0, 1000).__next__), responder.block, responder.path).accepted
-
+    blocks = [enc.block(i) for i in range(PARAMS.blocks)]
     assert DEADLINE_NS == 500_000
-    clock = FakeClock()
-    v = UnsignedRounds(vk, key, k=3, rtt_allowance_ns=40_000, clock=clock)
-    assert v.limit_ns == 540_000
-    i = v.challenge()
-    with pytest.raises(RuntimeError):
-        v.challenge()
-    clock.now += 540_000
-    assert v.respond(enc.block(i)).on_time
-    i = v.challenge()
-    clock.now += 540_001
-    late = v.respond(enc.block(i))
-    assert late.correct and not late.on_time
-    i = v.challenge()
-    assert not v.respond(enc.block((i + 1) % PARAMS.blocks)).correct
-    assert v.done and not v.accepted
-    with pytest.raises(RuntimeError):
-        v.challenge()
+    assert ts.audit(blocks, vk.root, 30).accepted
+    assert ts.audit(blocks, vk.root, 3, limit_ns=540_000, step_ns=540_000).accepted
+    late = ts.audit(blocks, vk.root, 3, limit_ns=540_000, step_ns=540_001)
+    assert not late.accepted and (late.late, late.wrong) == (1, 0)
+    wrong = ts.audit(blocks, vk.root, 3, lambda i: blocks[(i + 1) % PARAMS.blocks])
+    assert not wrong.accepted and wrong.wrong == 3
 
 
 def test_challenges_are_bound(world):

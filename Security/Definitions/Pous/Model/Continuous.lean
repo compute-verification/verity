@@ -26,16 +26,17 @@ deadline `Δ_late` plus the round trip. The memory challenger's arrival times `a
   primitive only through queries.
 
 **The memory challenger.** For `j = 0, 1, …` (with the names of
-`verity.protocols.accounting.space.pous.continuous.ContinuousMemoryChallenger`, which enforces the same rules on
-`audit.UnsignedRounds`):
+`verity.core.protocols.pous.continuous.ContinuousMemoryChallenger`, which enforces the same rules, each challenge a
+one-round session of `memory_challenger.MemoryChallenger`):
 
 1. It sends index `i_j` at `max(arr j, c_{j−1})` (`contSend`), where `arr j` is challenge `j`'s arrival
    (`run_continuous`'s `wait(j)`), `c_{j−1}` is the time round `j − 1` closed and `c_{−1} = 0`. A challenge is never
-   outstanding when the next is sent: `UnsignedRounds.challenge()` refuses while one is open within its hard deadline.
+   outstanding when the next is sent: `ContinuousMemoryChallenger.challenge()` refuses while one is open within its hard
+   deadline.
 2. It times the answer from its own send time. The answer's delay is the number of units the machine took, the depth
-   of the round's program (`contProg`), as `UnsignedRounds.respond()` measures `stop − start` from `challenge()`. A
-   round's answer is the answer to its own index, as `ContinuousMemoryChallenger.respond(j, …)` refuses an answer to any
-   challenge but the open one and `run_continuous` drops a reply naming any other.
+   of the round's program (`contProg`), as the session's `receive()` measures its receipt time less the send time
+   `challenge()` read. A round's answer is the answer to its own index, as `ContinuousMemoryChallenger.respond(j, …)`
+   refuses an answer to any challenge but the open one and `run_continuous` drops a reply naming any other.
 3. It waits at most `D_late` units. The round closes at the answer, or after `D_late` units with no answer
    (`contNext`). A round with no answer by then, or whose answer took more than `Q_late` queries, is **rejected**
    (`contVerdict`): past the hard deadline, its block never checked (`Answer.rejected`, past `Δ_late + RTT`, closed by

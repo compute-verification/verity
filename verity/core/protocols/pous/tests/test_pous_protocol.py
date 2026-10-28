@@ -13,8 +13,11 @@ from pathlib import Path
 
 import pytest
 
+import pous_test_signer as ts
 from verity.core.claims import get as core_claim
 from verity.core.protocols.pous import band, dense, primitives, protocol, schemes
+from verity.core.protocols.pous import memory_challenger as mc
+from verity.core.protocols.pous.audit import DEADLINE_NS
 from verity.core.protocols.pous.codec import Geometry
 from verity.core.protocols.pous.layout import Layout
 from verity.core.protocols.pous.params import Params
@@ -57,11 +60,6 @@ def _w(params: Geometry, seed: int) -> bytes:
     return random.Random(seed).randbytes(params.w_bytes)
 
 
-def _ticks(step: int = 1_000):
-    counter = itertools.count(0, step)
-    return lambda: next(counter)
-
-
 def _lifecycle(sch: protocol.Scheme, seed: int = 1):
     w = _w(sch.params, seed)
     com = protocol.commit(sch, w)
@@ -101,17 +99,13 @@ def test_audit_through_the_interface(name):
     w, com, salt, c = _lifecycle(sch)
     vk = protocol.verifier_key(sch, com, salt, mode=protocol.PUBLIC, encoded=c)
     blocks = [b for seg in c for b in seg]
-    key = protocol.challenge_key(b"audit secret", vk)
-    with pytest.raises(ValueError, match="no certificate"):
-        protocol.TimedAudit(sch, vk, key, k=20, experimental=True)
-    v = protocol.TimedAudit(sch, vk, key, k=20, research=True, experimental=True, clock=_ticks())
-    assert v.run(protocol.responder(sch, blocks.__getitem__)).accepted
-    profile = v.profile()
+    with pytest.raises(ValueError, match="no certificate") as refused:
+        mc.covering_certificate(sch, 20, DEADLINE_NS, experimental=True)
+    assert ts.audit(blocks, vk.root, 20, protocol.responder(sch, blocks.__getitem__)).accepted
+    p = sch.params
+    profile = protocol.StorageProfile(sch.name, p.manifest(), p.blocks, p.m, 20, DEADLINE_NS, None, (str(refused.value),))
     assert not profile.certified and profile.state_bound_bits is None and "no certificate" in profile.statement()
-    wrong = protocol.TimedAudit(sch, vk, key, k=20, research=True, experimental=True, clock=_ticks())
-    assert not wrong.run(lambda i: bytes(len(blocks[i]))).accepted
-    with pytest.raises(ValueError, match="accepted"):
-        wrong.profile()
+    assert not ts.audit(blocks, vk.root, 20, lambda i: bytes(len(blocks[i]))).accepted
 
 
 @pytest.mark.parametrize("name", ["band", "dense", "p3", "p2", "p2v2"])
@@ -227,14 +221,10 @@ def test_a_shared_domain_breaks_the_audit(name):
     shared = [sch.encode_segment(SALT, 0, seg) for _ in range(3)]
     vk_shared = VerifierKey.from_segments(sch.params, SALT, shared)
     held = shared[0]
-    v = protocol.TimedAudit(sch, vk_shared, protocol.challenge_key(b"audit", vk_shared), k=40, research=True,
-                          experimental=True, clock=_ticks())
-    assert v.run(lambda i: held[i % b]).accepted
+    assert ts.audit([x for s in shared for x in s], vk_shared.root, 40, lambda i: held[i % b]).accepted
     own = protocol.encode(sch, seg * 3, SALT)
     vk = VerifierKey.from_segments(sch.params, SALT, own)
-    v = protocol.TimedAudit(sch, vk, protocol.challenge_key(b"audit", vk), k=40, research=True, experimental=True,
-                          clock=_ticks())
-    assert not v.run(lambda i: own[0][i % b]).accepted
+    assert not ts.audit([x for s in own for x in s], vk.root, 40, lambda i: own[0][i % b]).accepted
 
 
 def test_the_band_certificate_covers_every_segment_count():
@@ -253,14 +243,11 @@ def test_the_band_certificate_covers_every_segment_count():
 def test_the_14_gb_certificate():
     """448 segments (14 GB, where the family is also `BandMultiMeets14`) and 30 segments are certified, with no gap."""
     sch = schemes.get(segments=448)
-    vk = VerifierKey.from_leaves(sch.params, SALT, [bytes(64)] * sch.params.blocks)
-    v = protocol.TimedAudit(sch, vk, protocol.challenge_key(b"\x00" * 32, vk))
-    assert v.gaps == ()
+    assert mc.covering_certificate(sch, 111, DEADLINE_NS) == sch.certificate and sch.certificate.segments == 448
     p = protocol.StorageProfile(sch.name, sch.params.manifest(), sch.params.blocks, sch.params.m, 111, 536_800,
                                 sch.certificate)
     assert p.certified and p.state_bound_bits == 113_929_658_799
-    s30 = schemes.get(segments=30)
-    assert protocol.TimedAudit(s30, _fake_vk(s30), protocol.challenge_key(b"\x00" * 32, vk)).gaps == ()
+    assert mc.covering_certificate(schemes.get(segments=30), 111, DEADLINE_NS).segments == 30
 
 
 def test_the_family_certificate_covers_a_70_gb_store():
@@ -325,11 +312,6 @@ def test_p3_has_no_certificate_because_its_chain_does_not_start_from_leans():
     assert sch.certificate is None
 
 
-def _fake_vk(sch: protocol.Scheme) -> VerifierKey:
-    return VerifierKey.from_leaves(sch.params, SALT, [hashlib.sha512(bytes([i % 251])).digest()
-                                                     for i in range(sch.params.blocks)])
-
-
 def test_the_call_floor_is_the_streamed_chain_count():
     """A 64 KiB `Π₂` call in a chain is 10 rounds of one absorb each: the prefix and a 65,568-byte half are 65,570
     bytes, 483 SHAKE256 blocks, so 4,830 Keccak-f, 241,500 ns at 50 ns.  Counting every round's 482 further squeeze
@@ -350,33 +332,26 @@ def test_the_call_floor_is_the_streamed_chain_count():
 def test_a_two_ms_deadline_is_refused_for_five_rounds():
     """Δ + RTT = 2.0 ms fits 8 calls of 241.5 µs, past the certificate's D = 5 (under the old 483 µs it fit 4)."""
     sch = schemes.get()
-    vk = _fake_vk(sch)
-    k = protocol.challenge_key(b"\x00" * 32, vk)
     with pytest.raises(ValueError, match="fits 8 calls of 241500 ns; the certificate covers 5"):
-        protocol.TimedAudit(sch, vk, k, deadline_ns=500_000, rtt_allowance_ns=1_500_000)
-    research = protocol.TimedAudit(sch, vk, k, deadline_ns=500_000, rtt_allowance_ns=1_500_000, research=True)
-    assert any("covers 5" in g for g in research.gaps) and research.certificate.effective_rounds(research.limit_ns) == 8
+        mc.covering_certificate(sch, 111, 2_000_000)
+    cert = sch.certificate
+    assert any("covers 5" in r for r in cert.refusals(111, 2_000_000)) and cert.effective_rounds(2_000_000) == 8
 
 
 def test_the_memory_challenger_enforces_the_certificate():
     """k = 111 is certified only for D = 5 calls of 241.5 µs: Δ + RTT < 1.449 ms, inside the cliff at 3.1395 ms.  A
     smaller k needs a deadline the `D = 2` certificate covers (`k ≥ 97`, under 724.5 µs)."""
     sch = schemes.get()
-    vk, key = _fake_vk(sch), b"\x00" * 32
-    k = protocol.challenge_key(key, vk)
-    assert protocol.TimedAudit(sch, vk, k, rtt_allowance_ns=36_800).k == 111
-    assert protocol.TimedAudit(sch, vk, k, rtt_allowance_ns=948_999).gaps == ()
+    certs = sch.certificates
+    assert mc.covering_certificate(sch, 111, 536_800) == mc.covering_certificate(sch, 111, 1_448_999) == certs[0]
     with pytest.raises(ValueError, match="covers 5"):
-        protocol.TimedAudit(sch, vk, k, rtt_allowance_ns=949_000)
+        mc.covering_certificate(sch, 111, 1_449_000)
     with pytest.raises(ValueError, match="below"):
-        protocol.TimedAudit(sch, vk, k, k=110, rtt_allowance_ns=224_500)
-    assert protocol.TimedAudit(sch, vk, k, k=110).certificate.theorem == "Pous.SecurityProofs.BandMultiMeetsFamilyD2"
-    uncertified = protocol.TimedAudit(sch, vk, k, rtt_allowance_ns=2_639_499, research=True)
-    assert any("covers 5" in g for g in uncertified.gaps)
+        mc.covering_certificate(sch, 110, 724_500)
+    assert mc.covering_certificate(sch, 110, DEADLINE_NS).theorem == "Pous.SecurityProofs.BandMultiMeetsFamilyD2"
+    assert any("covers 5" in r for r in certs[0].refusals(111, 3_139_499))
     with pytest.raises(ValueError, match="cliff"):
-        protocol.TimedAudit(sch, vk, k, rtt_allowance_ns=2_639_500, research=True)
-    with pytest.raises(ValueError, match="parameters"):
-        protocol.TimedAudit(schemes.get(segments=2), vk, k)
+        mc.covering_certificate(sch, 111, 3_139_500)
 
 
 def test_the_band_has_certificates_at_fewer_rounds():
@@ -405,36 +380,31 @@ def test_the_band_has_certificates_at_fewer_rounds():
 
 
 def test_the_memory_challenger_audits_at_two_or_one_rounds_when_asked():
-    """With `k` unset the memory challenger stays at `k = 111` (`D = 5`), even under a deadline that fits fewer rounds.
-    Asked for `k = 97` it audits under `BandMultiMeetsFamilyD2` within 724.5 µs, and for `k = 93` under
+    """At `k = 111` the memory challenger audits under the default (`D = 5`), even under a deadline that fits fewer
+    rounds.  Asked for `k = 97` it audits under `BandMultiMeetsFamilyD2` within 724.5 µs, and for `k = 93` under
     `BandMultiMeetsFamilyD1` within 483 µs, which the default 500 µs deadline overruns.  A band of in-degree 2 or 1,
-    which has no `D = 5` certificate, defaults to its own."""
+    which has no `D = 5` certificate, audits at its own first certificate's `k`."""
     sch = schemes.get()
-    vk = _fake_vk(sch)
-    key = protocol.challenge_key(b"\x00" * 32, vk)
-    assert protocol.TimedAudit(sch, vk, key).certificate.theorem == "Pous.SecurityProofs.BandMultiMeetsFamily"
-    assert protocol.TimedAudit(sch, vk, key, deadline_ns=300_000).k == 111
-    two = protocol.TimedAudit(sch, vk, key, k=97)
-    assert (two.k, two.certificate.theorem, two.gaps) == (97, "Pous.SecurityProofs.BandMultiMeetsFamilyD2", ())
-    assert protocol.TimedAudit(sch, vk, key, k=100, rtt_allowance_ns=224_499).certificate.rounds == 2
-    with pytest.raises(ValueError, match="below the certificate's 111; under Pous.SecurityProofs.BandMultiMeetsFamilyD2"
+    assert mc.covering_certificate(sch, 111, DEADLINE_NS).theorem == "Pous.SecurityProofs.BandMultiMeetsFamily"
+    assert mc.covering_certificate(sch, 111, 300_000) == sch.certificates[0]
+    assert mc.covering_certificate(sch, 97, DEADLINE_NS).theorem == "Pous.SecurityProofs.BandMultiMeetsFamilyD2"
+    assert mc.covering_certificate(sch, 100, 724_499).rounds == 2
+    with pytest.raises(ValueError, match="below the certificate's 111; Pous.SecurityProofs.BandMultiMeetsFamilyD2"
                                          ": .* fits 3 calls of 241500 ns; the certificate covers 2"):
-        protocol.TimedAudit(sch, vk, key, k=97, rtt_allowance_ns=224_500)
+        mc.covering_certificate(sch, 97, 724_500)
     with pytest.raises(ValueError, match="covers 1, so Δ \\+ RTT must stay under 483000 ns"):
-        protocol.TimedAudit(sch, vk, key, k=93)
-    one = protocol.TimedAudit(sch, vk, key, k=93, deadline_ns=482_999)
-    assert (one.k, one.certificate.theorem, one.gaps) == (93, "Pous.SecurityProofs.BandMultiMeetsFamilyD1", ())
+        mc.covering_certificate(sch, 93, DEADLINE_NS)
+    assert mc.covering_certificate(sch, 93, 482_999).theorem == "Pous.SecurityProofs.BandMultiMeetsFamilyD1"
     with pytest.raises(ValueError, match="below the certificate's 93"):
-        protocol.TimedAudit(sch, vk, key, k=92, deadline_ns=482_999)
-    research = protocol.TimedAudit(sch, vk, key, k=92, deadline_ns=482_999, research=True)
-    assert research.certificate.rounds == 5 and research.gaps == ("k = 92 is below the certificate's 111",)
+        mc.covering_certificate(sch, 92, 482_999)
+    assert sch.certificates[0].refusals(92, 482_999) == ("k = 92 is below the certificate's 111",)
     for d, k, deadline in ((4, 97, 500_000), (2, 97, 500_000), (1, 93, 482_999)):
         b = schemes.Band(band.BandParams(512, 524_288, d))
-        v = protocol.TimedAudit(b, _fake_vk(b), key, deadline_ns=deadline)
-        assert (v.k, v.gaps, v.certificate.cliff) == (k, (), d)
+        cert = mc.covering_certificate(b, b.certificates[0].k, deadline)
+        assert (cert.k, cert.cliff) == (k, d)
     b1 = schemes.Band(band.BandParams(512, 524_288, 1))
     with pytest.raises(ValueError, match="past the cliff at 1"):
-        protocol.TimedAudit(b1, _fake_vk(b1), key)
+        mc.covering_certificate(b1, b1.certificates[0].k, DEADLINE_NS)
 
 
 def test_a_two_round_audit_gives_its_profile():
@@ -443,10 +413,9 @@ def test_a_two_round_audit_gives_its_profile():
     sch = schemes.get()
     blocks = [bytes(sch.params.block_bytes)] * sch.params.blocks
     vk = VerifierKey.from_segments(sch.params, SALT, [blocks])
-    v = protocol.TimedAudit(sch, vk, protocol.challenge_key(b"audit secret", vk), k=97, rtt_allowance_ns=224_499,
-                          clock=_ticks())
-    assert v.run(protocol.responder(sch, blocks.__getitem__)).accepted
-    p = v.profile()
+    assert ts.audit(blocks, vk.root, 97, protocol.responder(sch, blocks.__getitem__), limit_ns=724_499).accepted
+    p = protocol.StorageProfile(sch.name, sch.params.manifest(), sch.params.blocks, sch.params.m, 97, 724_499,
+                                mc.covering_certificate(sch, 97, 724_499))
     assert p.certified and p.k == 97 and p.effective_rounds == 2 and p.state_bound_bits == 254_307_274
     assert "passes 97 challenges within 724,499 ns" in p.statement()
     assert "(Pous.SecurityProofs.BandMultiMeetsFamilyD2; under ideal-permutation, " in p.statement()
@@ -455,12 +424,9 @@ def test_a_two_round_audit_gives_its_profile():
 
 def test_the_dense_certificate_has_no_cliff_but_the_same_rounds():
     sch = schemes.get("dense-chain/v1")
-    vk = _fake_vk(sch)
-    k = protocol.challenge_key(b"\x00" * 32, vk)
     with pytest.raises(ValueError, match="covers 5"):
-        protocol.TimedAudit(sch, vk, k, rtt_allowance_ns=949_000)
-    far = protocol.TimedAudit(sch, vk, k, rtt_allowance_ns=10_000_000, research=True)
-    assert not any("cliff" in g for g in far.gaps)
+        mc.covering_certificate(sch, 111, 1_449_000)
+    assert not any("cliff" in r for r in sch.certificate.refusals(111, 10_500_000))
 
 
 def test_certified_profile_of_one_band12_segment():
@@ -470,28 +436,27 @@ def test_certified_profile_of_one_band12_segment():
     rng = random.Random(7)
     blocks = [rng.randbytes(sch.params.block_bytes) for _ in range(sch.params.blocks)]
     vk = VerifierKey.from_segments(sch.params, SALT, [blocks])
-    v = protocol.TimedAudit(sch, vk, protocol.challenge_key(b"audit secret", vk), rtt_allowance_ns=36_800, clock=_ticks())
-    assert v.run(protocol.responder(sch, blocks.__getitem__)).accepted
-    p = v.profile()
+    assert ts.audit(blocks, vk.root, 111, protocol.responder(sch, blocks.__getitem__), limit_ns=536_800).accepted
+    p = protocol.StorageProfile(sch.name, sch.params.manifest(), sch.params.blocks, sch.params.m, 111, 536_800,
+                                mc.covering_certificate(sch, 111, 536_800))
     assert p.certified and p.gaps == () and p.effective_rounds == 2
     assert p.state_bound_bits == 254_307_274 == (512 * 524_288 * 18) // 19
     assert "(Pous.SecurityProofs.BandMultiMeetsFamily; under ideal-permutation, " in p.statement()
     assert "given" not in p.statement()
     j = p.to_json()
     assert j["schema"] == "verity-pous/storage-profile/v1" and j["certified"] and j["certificate"]["k"] == 111
-    late = protocol.TimedAudit(sch, vk, protocol.challenge_key(b"audit secret", vk), clock=_ticks(600_000))
-    assert not late.run(protocol.responder(sch, blocks.__getitem__)).accepted
+    late = ts.audit(blocks, vk.root, 111, protocol.responder(sch, blocks.__getitem__), step_ns=600_000)
+    assert not late.accepted and late.late == 1
 
 
 def test_many_segments_are_a_gap_not_a_refusal():
     """A segment count its certificate doesn't state is a gap, not a refusal: `ChainDenseMeets64` is about one segment,
-    and no guarantee covers the dense chain scheme at more.  The band's family pin covers every count, so two
-    band segments have none."""
+    and no guarantee covers the dense chain scheme at more, yet the memory challenger audits under it.  The band's
+    family pin covers every count, so two band segments have none."""
     band2 = schemes.get(segments=2)
-    assert protocol.TimedAudit(band2, _fake_vk(band2), protocol.challenge_key(b"\x00" * 32, _fake_vk(band2))).gaps == ()
+    assert mc.covering_certificate(band2, 111, DEADLINE_NS).segments == 2
     sch = schemes.get("dense-chain/v1", segments=2)
-    v = protocol.TimedAudit(sch, _fake_vk(sch), protocol.challenge_key(b"\x00" * 32, _fake_vk(sch)))
-    assert v.gaps == ("W has 2 segments; Pous.SecurityProofs.ChainDenseMeets64 is about 1",)
+    assert mc.covering_certificate(sch, 111, DEADLINE_NS) == sch.certificate and sch.certificate.segments == 1
 
 
 def test_claims_resolve_and_local_ones_are_not_in_core():
@@ -525,17 +490,14 @@ def test_p2_is_experimental_and_says_so():
         assert {"m1-ideal-permutations", "sms-m1-instantiation", "seq-root", "cr/sha-512", "trusted-host"} <= set(
             cert.claims) and not any("sha-256" in c for c in cert.claims)
         one = schemes.get(name)
-        vk = VerifierKey.from_leaves(one.params, SALT, [bytes(64)] * one.params.blocks)
-        key = protocol.challenge_key(b"\x00" * 32, vk)
         with pytest.raises(ValueError, match="experimental"):
-            protocol.TimedAudit(one, vk, key)
-        v = protocol.TimedAudit(one, vk, key, experimental=True, rtt_allowance_ns=36_800)
-        assert v.k == 105 and v.gaps == ("W has 1 segments; Pous.SecurityProofs.P2SlackFamilyUncond is about 8",)
-        capped = protocol.TimedAudit(one, vk, key, experimental=True, rtt_allowance_ns=RTT_ALLOWANCE_CAP_NS)
-        assert capped.limit_ns == 854_000 and capped.k == 105 and capped.certificate == cert
+            mc.covering_certificate(one, 105, 536_800)
+        assert mc.covering_certificate(one, 105, 536_800, experimental=True) == cert
+        assert cert.segments == 8 != one.params.segments
+        assert mc.covering_certificate(one, 105, DEADLINE_NS + RTT_ALLOWANCE_CAP_NS, experimental=True) == cert
         for rtt in (RTT_ALLOWANCE_CAP_NS + 1_000, 1_000_000):
             with pytest.raises(ValueError, match="covers 0, so Δ \\+ RTT must stay under 854029 ns"):
-                protocol.TimedAudit(one, vk, key, experimental=True, rtt_allowance_ns=rtt)
+                mc.covering_certificate(one, 105, DEADLINE_NS + rtt, experimental=True)
         p = protocol.StorageProfile(sch.name, sch.params.manifest(), sch.params.blocks, sch.params.m, 105, 536_800, cert,
                                     experimental=sch.experimental)
         assert p.certified and p.statement().startswith(f"EXPERIMENTAL ({sch.experimental}). ")
@@ -650,34 +612,13 @@ def test_p2_call_is_half_the_cooperating_floor_root_and_the_cap_the_largest_us_u
     delta = 500_000
     assert RTT_ALLOWANCE_CAP_NS == max(us * 1_000 for us in range(1_000) if delta + us * 1_000 < ROOT_CALL_NS) == 354_000
     one = schemes.get("p2-16448/v4")
-    vk = VerifierKey.from_leaves(one.params, SALT, [bytes(64)] * one.params.blocks)
-    key = protocol.challenge_key(b"\x00" * 32, vk)
     edge = ROOT_CALL_NS - 1 - delta
     assert edge - RTT_ALLOWANCE_CAP_NS == 28
     assert one.certificate.refusals(105, delta + edge) == ()
     with pytest.raises(ValueError, match="must stay under 854029 ns"):
-        protocol.TimedAudit(one, vk, key, deadline_ns=delta, experimental=True, rtt_allowance_ns=edge + 1)
+        mc.covering_certificate(one, 105, delta + edge + 1, experimental=True)
     cooperating_root = 2 * half
     assert cooperating_root / (delta + RTT_ALLOWANCE_CAP_NS) >= 2 > cooperating_root / (delta + RTT_ALLOWANCE_CAP_NS + 1_000)
-
-
-def test_p2_refuses_an_rtt_past_the_cap_or_a_delta_other_than_the_spec_s_even_inside_the_certificate():
-    """Spec v1.1 sets Δ = 0.5 ms and caps the measured RTT allowance at 354 µs ("Sequential reveal and deadlines", §6).
-    The certificate reads only `Δ + RTT`, so Δ = 0 with RTT = 854,028 ns, the certificate's edge 28 ns past the cap, or
-    a Δ above 0.5 ms are inside it; the verifier refuses each, and `research=True` runs one with the refusal as a gap."""
-    one = schemes.get("p2-16448/v4")
-    vk = VerifierKey.from_leaves(one.params, SALT, [bytes(64)] * one.params.blocks)
-    key = protocol.challenge_key(b"\x00" * 32, vk)
-    for delta, rtt, why in ((0, ROOT_CALL_NS - 1, "Δ = 500000 ns, not 0"),
-                            (500_000, ROOT_CALL_NS - 1 - 500_000, "354028 ns is past the spec's cap of 354000 ns"),
-                            (500_028, RTT_ALLOWANCE_CAP_NS, "Δ = 500000 ns, not 500028")):
-        assert one.certificate.refusals(105, delta + rtt) == ()
-        with pytest.raises(ValueError, match=re.escape(why)):
-            protocol.TimedAudit(one, vk, key, deadline_ns=delta, rtt_allowance_ns=rtt, experimental=True)
-    research = protocol.TimedAudit(one, vk, key, deadline_ns=0, rtt_allowance_ns=ROOT_CALL_NS - 1, research=True,
-                                         experimental=True)
-    assert research.gaps[0] == "the spec's operating point sets Δ = 500000 ns, not 0"
-    assert protocol.TimedAudit(one, vk, key, rtt_allowance_ns=RTT_ALLOWANCE_CAP_NS, experimental=True).limit_ns == 854_000
 
 
 def test_p2_v4_keys_are_the_specs():

@@ -6,15 +6,14 @@ controls, the setup flag, and the codec-generic path."""
 from __future__ import annotations
 
 import inspect
-import itertools
 import json
 import random
 from pathlib import Path
 
 import pytest
 
+import pous_test_signer as ts
 from verity.core.protocols.pous import band, dense, setup
-from verity.core.protocols.pous.audit import UnsignedRounds, challenge_key, run_timed
 from verity.core.protocols.pous.codec import Codec, split
 from verity.core.protocols.pous.labels import salt_value, tag
 from verity.core.protocols.pous.oracle import KeyQuery, run
@@ -69,7 +68,7 @@ def test_1_honest(scheme):
     reference_vk = setup.verifier_key(x.params, x.prims, x.w, x.commitment, x.salt)
     assert vk == reference_vk and vk.root == reference_vk.root
     blocks = [b for seg in x.honest for b in seg]
-    assert run_timed(UnsignedRounds(vk, challenge_key(b"audit", vk), clock=itertools.count(0, 1000).__next__), blocks.__getitem__).accepted
+    assert ts.audit(blocks, vk.root, vk.params.challenges).accepted
 
 
 def test_1_honest_details():
@@ -79,7 +78,7 @@ def test_1_honest_details():
     assert setup.check_server_root(vk, MerkleTree([x for s, seg in enumerate(HONEST)
                                                    for x in segment_leaves(PARAMS, SALT, s, seg)]).root)
     blocks = [b for seg in HONEST for b in seg]
-    assert run_timed(UnsignedRounds(vk, challenge_key(b"audit", vk), clock=itertools.count(0, 1000).__next__), blocks.__getitem__).accepted
+    assert ts.audit(blocks, vk.root, vk.params.challenges).accepted
 
 
 @pytest.mark.parametrize("scheme", SCHEMES)

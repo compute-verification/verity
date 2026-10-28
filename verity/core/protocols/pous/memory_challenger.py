@@ -1,7 +1,6 @@
 """The memory challenger: PoUS's timed rounds, run by an auditor-trusted device beside the network certifier, which signs
 its rounds.  It is the auditor's hardware, on a machine the prover doesn't control at the prover's site (the auditor's
-own VM or box, under the auditor's account), never a process on the prover's node.  On the deployed path it replaces
-`audit.UnsignedRounds`, the same rounds unsigned.
+own VM or box, under the auditor's account), never a process on the prover's node.
 
 A session has four steps:
 
@@ -363,8 +362,8 @@ class SignedSession:
 
 
 def covering_certificate(scheme: Scheme, k: int, limit_ns: int, *, experimental: bool = False) -> Certificate:
-    """The first of `scheme`'s certificates that covers `k` rounds within `limit_ns`, as `protocol.TimedAudit` picks it;
-    `ValueError` when none does, or when the scheme is experimental and `experimental` is not set."""
+    """The first of `scheme`'s certificates that covers `k` rounds within `limit_ns`; `ValueError` when none does, or
+    when the scheme is experimental and `experimental` is not set."""
     if scheme.experimental and not experimental:
         raise ValueError(f"{scheme.name} is experimental ({scheme.experimental}): pass experimental=True to audit it")
     for cert in scheme.certificates:

@@ -113,8 +113,10 @@ without completing a call, rebuilding a label from 1.53% of `C` in 481 Keccak-f 
   `D′ = d + 1` the gap attack (`band_gap_attack`, `band_cliff_d12`) holds every block but each `(d + 1)`-th: every
   dropped row has all its parents held, and the audit accepts with probability 1. At 241.5 µs per call, `d = 12`
   holds while `Δ + RTT < 13 × 241.5 µs ≈ 3.14` ms, in the ideal-permutation model (at the reference `Π₂` a prover
-  answers in 24 µs from 1.53% of `C`, inside every deployed deadline: "Main caveat"). `audit.UnsignedRounds` refuses
-  a deadline past it (`band.check_deployment`), and `test_gap_attack_at_the_cliff` replays the attack on real labels.
+  answers in 24 µs from 1.53% of `C`, inside every deployed deadline: "Main caveat"). `band.check_deployment` refuses
+  a deadline past it (the continuous audit runs it on both of its deadlines), `memory_challenger.covering_certificate`
+  refuses any limit its certificate doesn't cover, well inside it, and `test_gap_attack_at_the_cliff` replays the
+  attack on real labels.
 - `band.codec_for(d)` gives the codec for any in-degree; with `d ≥ B − 1` the band is the complete DAG, dense.
 
 ## The dense scheme (selectable)
@@ -206,10 +208,11 @@ are about Lean's `H`, so they do not certify the code's (`DISCREPANCIES.md` P3 i
    The encoder is deterministic and public, so the server running it changes nothing in the timed game. A
    server-chosen or predictable salt would break the model's "`W` before coins" order.
 4. **Serve.** `layout.decode_tensor` decodes one tensor from the segments it overlaps.
-5. **Audit.** The memory challenger reveals `k` indices one at a time (`audit.UnsignedRounds`, uniform with replacement,
-   keyed by `audit.challenge_key` and bound to `vk`'s root). The challenge key is the memory challenger's own secret,
-   kept secret until the audit starts (never a public beacon): a public key makes every challenged index computable in
-   advance, so a prover holding little of `C` could rebuild only the challenged blocks within the deadline and pass.
+5. **Audit.** The memory challenger reveals `k` indices one at a time (`memory_challenger.MemoryChallenger`, uniform
+   with replacement, from the session's coin tree, committed before the session and bound to `vk`'s root). The coins
+   come from the memory challenger's own secret, kept secret until the audit starts (never a public beacon): public
+   coins make every challenged index computable in advance, so a prover holding little of `C` could rebuild only the
+   challenged blocks within the deadline and pass.
    Each block must arrive within `Δ = 0.5 ms` plus
    `rtt_allowance_ns`, and must match `vk`. The audit accepts only if every answer is correct and on time. At 300 µs
    about 1.5% of honest 132-answer audits fail on the host clock (POUS `docs/p3-gpu-measurements.md`). The network
@@ -315,13 +318,14 @@ The lifecycle above is written once, in `protocol`, for any `protocol.Scheme`.
 
   P3 has no certificate: the concrete-`H` guarantees have its parameters, but their chain starts from a different `h_0`
   ("P3 (research)").
-- **`protocol.TimedAudit`** is `audit.UnsignedRounds` at the certificate's `k`. It refuses:
+- **`memory_challenger.covering_certificate(scheme, k, limit_ns)`** is the certificate the memory challenger audits
+  under. It refuses (`Certificate.refusals`, with every certificate's reasons in its `ValueError`):
   - a `k` below the certificate's;
-  - a deadline whose effective D (calls of `call_ns` within `Δ + RTT`) exceeds the certificate's `rounds`: for the
-    band and dense, `Δ + RTT` must stay under 1.449 ms (a model-level bound: at the reference `Π₂` a prover answers
-    from 1.53% of `C` well inside it, "Main caveat"). `UnsignedRounds` alone refuses only past the band's cliff, at
+  - a limit whose effective D (calls of `call_ns` within `Δ + RTT`) exceeds the certificate's `rounds`: for the band
+    and dense, `Δ + RTT` must stay under 1.449 ms (a model-level bound: at the reference `Π₂` a prover answers from
+    1.53% of `C` well inside it, "Main caveat"). `band.check_deployment` alone refuses only past the band's cliff, at
     about 3.14 ms (3,139,500 ns at `d = 12`);
-  - a scheme with no certificate at its parameters.
+  - a scheme with no certificate at its parameters, and an experimental scheme unless `experimental=True`.
 
   A scheme may have several certificates (`Scheme.certificates`), and the memory challenger audits under the first
   that covers its `k` and deadline. The band's are `BandMultiMeetsFamily` (`k = 111` at `D = 5`, the default), then
@@ -330,18 +334,19 @@ The lifecycle above is written once, in `protocol`, for any `protocol.Scheme`.
   `d`). An unset `k` stays at the first certificate's, so the default audit is unchanged; the three smaller `k`s are
   used only when asked for. A band with `d < 5` has only the certificates with `D ≤ d`.
 
-  `research=True` runs a refused audit anyway, except past the cliff, with the first certificate's refusals as gaps.
+  The benchmarks (`benchmarks/pous`) run a refused audit anyway, for research, with the first certificate's
+  refusals as the profile's gaps.
 - **`protocol.StorageProfile`** is what an accepted audit establishes: a server whose state held fewer than
   `⌊rho · |C|⌋` bits passes with probability at most `delta + 2^eps_log2`, by the certificate. It also lists the
-  `gaps`, where the certificate does not cover the audit: a refusal run with `research=True`, or a segment count of `W`
+  `gaps`, where the certificate does not cover the audit: a refusal the benchmarks ran anyway, or a segment count of `W`
   other than the theorem's. The band's certificate covers every segment count from 1 to 2^64, and dense's one segment.
   `to_json` writes `verity-pous/storage-profile/v1`.
 - **The rest:**
   - `protocol.verifier_key(scheme, commitment, salt, mode=PRIVATE or PUBLIC, w=..., encoded=...)` builds `vk`
     either way;
-  - `commit`, `draw_salt`, `encode`, `decode`, `decode_tensor`, `challenge_key` and `responder` wrap the modules
-    below;
-  - every coin comes from `verity.ml.randomness` through `setup` and `audit`, and a scheme draws none.
+  - `commit`, `draw_salt`, `encode`, `decode`, `decode_tensor` and `responder` wrap the modules below;
+  - every coin comes from `verity.ml.randomness` through `setup`, `audit` (`simulate`'s) and the memory challenger's
+    coin tree, and a scheme draws none.
 - **Segment tags must be injective across all segments.** This is a hard requirement of every implementation:
   segment `s` is keyed by `tag_s = salt ‖ u64 s` (`labels.tag`), or by one salt with global indices.
   - With a shared domain, identical segments get identical labels. An adversary storing one of them then answers every
@@ -362,12 +367,15 @@ The lifecycle above is written once, in `protocol`, for any `protocol.Scheme`.
 
 ## The continuous audit's memory challenger (`continuous`)
 
-`continuous.ContinuousMemoryChallenger(vk, key, n, late_deadline_ns=Δ_late, max_misses=f₀)` is the memory challenger
-of the continuous audit's model, `Security/Definitions/Pous/Model/Continuous.lean`, with the guarantee
-`Pous.SecurityProofs.ContinuousAudit`: `n` challenges over time, drawn as the timed audit's indices, accepted
-when at most `f₀` answers miss. A miss is an answer that is wrong or later than `Δ + RTT`. `n` is fixed before the
-stream, so the stream is never stopped or extended on misses, though it may reject early (`exceeded`). It is one
-`audit.UnsignedRounds` over the stream with a hard deadline, and it enforces the three requirements that
+`continuous.ContinuousMemoryChallenger(params, source, sessions, signer, log=, digests=, binding=,
+late_deadline_ns=Δ_late, max_misses=f₀)` is the memory challenger of the continuous audit's model,
+`Security/Definitions/Pous/Model/Continuous.lean`, with the guarantee `Pous.SecurityProofs.ContinuousAudit`:
+`n = len(sessions)` challenges over time, accepted when at most `f₀` answers miss. A miss is an answer that is wrong or
+later than `Δ + RTT`. `n` is fixed before the stream, so the stream is never stopped or extended on misses, though it
+may reject early (`exceeded`). Each challenge is a one-round `memory_challenger.MemoryChallenger` session under its
+own id: its index from that session's coin tree (drawn from `source`, the memory challenger's own secret), its
+answer signed by `signer` and judged by `memory_challenger.verdict` against `digests`. A stream goes on past a miss,
+where a session ends at its first late round. It enforces the three requirements that
 `Security/Proofs/Pous/Continuous/Verifier.lean` proves of the model's memory challenger:
 
 1. **No pipelining.** `challenge()` reveals index `j + 1` only once answer `j` is in or `Δ_late + RTT` has passed since
@@ -377,9 +385,10 @@ stream, so the stream is never stopped or extended on misses, though it may reje
    An answer names its challenge (`respond(j, block)`), and an answer to any challenge but the open one is refused,
    whether that challenge is closed or not yet revealed. So a stale answer is never credited to the next challenge,
    even when both ask for the same block.
-2. **A hard deadline.** An answer past `Δ_late + RTT` is rejected without its block being checked (`Answer.rejected`).
-   So is a challenge still unanswered by then, closed by `expire()` or by the next `challenge()`. `UnsignedRounds`
-   refuses a `Δ_late` below `Δ`, and one whose `D_late` exceeds `audit.LATE_ROUNDS = 12` or the band's `d`, where
+2. **A hard deadline.** An answer past `Δ_late + RTT` is rejected without its block being checked (`Answer.rejected`),
+   and its session is left unsigned. So is a challenge still unanswered by then, closed by `expire()` or by the next
+   `challenge()`. `ContinuousMemoryChallenger` refuses a `Δ_late` below `Δ`, and one whose `D_late` exceeds
+   `audit.LATE_ROUNDS = 12` or the band's `d`, where
    `D_late` is the number of 241.5 µs calls that fit in `Δ_late + RTT`; at `d = 12`, `Δ_late + RTT` must be under
    3,139,500 ns. That cap is the graded audit's; `ContinuousAudit` holds at every `D_late`, so for it the cap is only
    conservative. `ContinuousMemoryChallenger` refuses to run without a hard deadline.
@@ -387,15 +396,13 @@ stream, so the stream is never stopped or extended on misses, though it may reje
    or expired. `AuditResult.misses` counts every wrong or late answer, and `AuditResult.late` every answer past
    `Δ + RTT`, rejected ones included.
 
-Run the continuous audit only on `ContinuousMemoryChallenger`, never on a bare `UnsignedRounds` with `late_deadline_ns`. Its
-`respond(block)` names no challenge, so once challenge `j` expires, an answer to `j` still in flight is credited to
-`j + 1`, a hit when both ask for the same block. That block was on the wire, not in the memory the model measures at
-the send time, so the audit would credit storage the responder does not hold, as the red team found.
+An answer names its challenge because, once challenge `j` expires, an answer to `j` still in flight would otherwise be
+credited to `j + 1`, a hit when both ask for the same block. That block was on the wire, not in the memory the model
+measures at the send time, so the audit would credit storage the responder does not hold, as the red team found.
 
 **The audit's duration cap.** `audit.AUDIT_CAP = 1,505` (`Pous.Rebuild.auditCap`) is the cap on a graded audit's
 window that `Pous.SecurityProofs.BackgroundRebuildExcluded` requires the memory challenger to enforce.
-`UnsignedRounds(..., audit_cap=...)` and `ContinuousMemoryChallenger(..., audit_cap=...)` enforce it on the memory
-challenger's clock, counted in calls of the parameters' `call_ns` as `D` and `D_late` are, so the limit is 1,505 × 241.5
+`ContinuousMemoryChallenger(..., audit_cap=...)` enforces it on the memory challenger's clock, counted in calls of the parameters' `call_ns` as `D` and `D_late` are, so the limit is 1,505 × 241.5
 µs ≈ 363.5 ms.
 - An answer received more than `audit_cap · call_ns` after the first challenge's send is rejected unchecked and aborts
   the audit (`ends_at`). So does a challenge closed after that time by `expire()` or the next `challenge()`.
@@ -410,15 +417,16 @@ and its model's memory challenger has none. Under the cap, a stream whose arriva
 aborts.
 
 `run_continuous(challenger, send, receive, wait=...)` drives the stream over a transport. `wait(j)` returns at arrival
-`j`, `send(j, i)` sends challenge `j`, and `receive(until)` returns the next `Reply(j, block, path, report)`, or None
+`j`, `send(j, i)` sends challenge `j`, and `receive(until)` returns the next `Reply(j, block, report)`, or None
 once the memory challenger's clock is past `until`, the open challenge's `closes_at` (its send time plus
-`Δ_late + RTT`). A reply naming any challenge but the open one is dropped. Once the hard deadline has passed, the driver
+`Δ_late + RTT`). A reply naming any challenge but the open one, or holding less or more than a whole block, is
+dropped. Once the hard deadline has passed, the driver
 closes the open challenge with `expire()`, the last one too, so a silent or slow responder cannot hold the stream open.
 A transport that returns None before the deadline makes `expire()` refuse, and the audit stops with the challenge open.
 The caller chooses the arrival times and `n`, and nothing here draws or checks them. The game needs both to be the
-memory challenger's own randomness, independent of the setup, the indices and the answers. Without `late_deadline_ns`,
-`UnsignedRounds` is unchanged, the single audit's memory challenger. `tests/test_pous_continuous.py` tests each
-requirement.
+memory challenger's own randomness, independent of the setup, the indices and the answers.
+`tests/test_pous_continuous.py` tests each requirement, and `tests/test_pous_continuous_difftest.py` checks the
+memory challenger action for action against the Lean model.
 
 ## The streamed-label wipe (experimental, `streamed_wipe`)
 
@@ -597,12 +605,12 @@ which was not measured. The node's load average was about 930 during the run, wh
 | `layout` | `Layout.of(params, [(name, size)], align)`, `Layout.of_ranges(params, [(name, offset, size)])`, `pack`, `decode_tensor(..., codec=params.codec)` |
 | `setup` | `commit` (streamed over segments), `draw_salt`; `verifier_setup(params, prims, commitment, salt, encoded=C*, w=None, public_encoder=PUBLIC_ENCODER)`, which picks `verifier_key_from_encoding(params, prims, commitment, salt, C*, codec=params.codec)` (public encoder, the default) or `verifier_key(params, prims, W or its segments, commitment, salt, encoded=None, codec=params.codec)` (the verifier encodes); `server_root`, `check_server_root` |
 | `verifier` | `VerifierKey` (`root` and leaf digests; `build`, `from_leaves`, `from_segments`, `from_row_digests`), `leaf_hash` (whole or chunked blocks), `row_leaf` (from a block's row digest), `segment_leaves`, `MerkleTree` (audit paths), `verify_path` |
-| `audit` | `challenge_key`, `HonestResponder`, `UnsignedRounds` and `run_timed` (wall clock; `respond` may return `(block, report)`, kept in `Answer.report`), `simulate` (oracle rounds); `k` and the adversary's call time default to the parameters' own (band and dense: 111 and 241.5 µs); `UnsignedRounds` refuses a band deadline past the cliff |
-| `memory_challenger` | the memory challenger, which signs its rounds and on the deployed path replaces `audit.UnsignedRounds`: `CoinTree` (its `k` indices from its own secret, committed before the session; `CoinOpening`, `verify_coin`), `MemoryChallenger(coins, signer, log=, limit_ns=, block_bytes=, binding=)` with its `SessionCommitment` (`binding` the setup's 64-byte root of `C*`, required; `session` the auditor's id for the audit, which `log`, a `SessionLog`, records as used before the first challenge and refuses again), `challenge()`, `receive(block)` (one `Round` each: index, send and receipt times, `H(block)`; the first late round ends the session), `close()` (one signature, `SignedSession`) and `openings()`; `LmsSigner`, `register`; `verdict` (what the prover will prove of a signed session, checked in the clear; its public output is `Verdict.public`); `covering_certificate` |
+| `audit` | `challenge_key`, `HonestResponder`, `simulate` (oracle rounds); `Answer` and `AuditResult`, the rounds' outcomes `simulate` and the continuous audit return; the deadlines and `deadline_rounds`; `k` and the adversary's call time default to the parameters' own (band and dense: 111 and 241.5 µs) |
+| `memory_challenger` | the memory challenger, which runs PoUS's timed rounds and signs them: `CoinTree` (its `k` indices from its own secret, committed before the session; `CoinOpening`, `verify_coin`), `MemoryChallenger(coins, signer, log=, limit_ns=, block_bytes=, binding=)` with its `SessionCommitment` (`binding` the setup's 64-byte root of `C*`, required; `session` the auditor's id for the audit, which `log`, a `SessionLog`, records as used before the first challenge and refuses again), `challenge()`, `receive(block)` (one `Round` each: index, send and receipt times, `H(block)`; the first late round ends the session), `close()` (one signature, `SignedSession`) and `openings()`; `LmsSigner`, `register`; `verdict` (what the prover will prove of a signed session, checked in the clear; its public output is `Verdict.public`); `covering_certificate` (the first certificate that covers the session's `k` and limit, refusing what none covers) |
 | `streamed_wipe` | the streamed-label wipe (experimental): `wipe_key`, `label`, `labels`, `draw_indices`; `WipeParams(labels, k, batch, limit_ns, tiers)` (`covered`: batch 1, the only size `verdict` accepts), `WipeCommitment`; `Challenger(secret, server, session, params, signer, log=)` with `fill(chunk)`, `challenge()`, `receive(answers)`, `run`, `close(egress_bits)` (one signature, `SignedWipe`) and `coins()`; `Prover`, the honest server; `verdict` (its public output `Verdict.public`: the verdict and `egress_mib`), the reference of the Lean verdict that decides it (`MemoryChallenger.StreamedWipe`, `wipe_verdict.judge`), with `to_json` on the records it reads; the bound, `log2_error`, `retained_bits`, `challenges_for` |
 | `run` | the composed check of a recorded run: `check(trusted, setup, digests, session, session_id)` over the verifier's list of memory-challenger keys (never the run's record), the setup's public outputs (`Setup`), the memory challenger's table of `C*`'s row digests, one `Session` (signed session, commitment, openings) and the id the auditor designated for the session, at P2's deployed point (`DEPLOYED`) under `memory_challenger.SCHEMES`, raising `Refused` with the first reason; `check_at` at another `Point`; `PousCheck.Run.check` (`pous-run`) in Lean |
 | `adversary` | holdings (Lean `ColState`), `schedule`, `answer_prog`, strategies, `measure`; `col_round` is Lean's `colRound` |
-| `protocol` | the generic protocol: `Scheme` (abstract), `Certificate`, `TimedAudit` (refuses what none of its certificates covers), `StorageProfile`, `PRIVATE`/`PUBLIC`, `verifier_key`, `commit`, `draw_salt`, `encode`, `decode`, `decode_tensor`, `challenge_key`, `responder`, `claim`, `LOCAL_CLAIMS` |
+| `protocol` | the generic protocol: `Scheme` (abstract), `Certificate`, `StorageProfile`, `PRIVATE`/`PUBLIC`, `verifier_key`, `commit`, `draw_salt`, `encode`, `decode`, `decode_tensor`, `responder`, `claim`, `LOCAL_CLAIMS` |
 | `schemes` | `band.Band`, `dense.Dense`, `p3.P3`, `p2.P2` (experimental; one module each) as `protocol.Scheme`s with their certificates; `REGISTRY`, `DEFAULT` (`band-chain/d12/v1`), `get(name, segments, params)` |
 
 **Large `W`.** Nothing above the codec holds `W` as one integer: encode each segment with `scheme.encode_segment` (the
@@ -807,8 +815,8 @@ and the cap's conversion into wall-clock time, count whole `Π₂` calls and so 
 at the reference Feistel-SHAKE256 `Π₂` a prover re-encodes nothing, answering each challenge from 1.53% of `C` in 481
 Keccak-f, less than one call ("Main caveat").
 
-No graded memory challenger exists yet: `audit.UnsignedRounds` and `protocol.TimedAudit` accept only when every answer
-is correct and on time, the `t = 0` rule (`DISCREPANCIES.md` B5).
+No graded memory challenger exists yet: `memory_challenger.verdict` accepts a session only when every answer is
+correct and on time, the `t = 0` rule (`DISCREPANCIES.md` B5).
 
 ### The dense scheme
 
@@ -858,8 +866,8 @@ category. The lemmas (`KFloor`, Theorem 1, Track A, the pebbling and sampled-aud
 transfer, the column game's rows, the secure-erasure digest, `PerAnswer`, `ContinuousTimeAverage`, and the falsified
 `InvExPostFactoTwoLayer` beside `N10Refuted`) are stated under the same `Pous.Guarantees` names in
 `Security/Proofs/Pous/Statements.lean`, and `ContinuousComplete`, the memory challenger's completeness, with them.
-The properties of the Lean verdicts `PousCheck.TimedAudit` and `MemoryChallenger.verdict`, and of the composed check
-`PousCheck.Run.check`, are in `Security/Properties/Pous/`.
+The properties of the Lean verdict `MemoryChallenger.verdict`, and of the composed check `PousCheck.Run.check`, are in
+`Security/Properties/Pous/`.
 
 | Statements | What | Status |
 |---|---|---|

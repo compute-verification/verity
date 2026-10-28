@@ -10,17 +10,17 @@ honest answer is more than the stored label.  Everything else is written once, h
    encoding `W` itself (`PRIVATE`) or by decoding the server's `C*` and checking `Dec(C*)` against the commitment
    (`PUBLIC`).  The two give the same guarantee (Lean `pubAuditSecure_exact_iff`).
 4. **Serve.** `decode` of a segment, and `decode_tensor` of one tensor of a `layout.Layout`.
-5. **Audit.** `TimedAudit` reveals `k` indices one at a time.  Each answer must arrive within `Δ + RTT` and match `vk`.
-   The memory challenger refuses any `k` or deadline that none of the scheme's certificates covers.  An accepted audit
-   gives a `StorageProfile`: what the certificate says about the server, and what that rests on.
+5. **Audit.** The memory challenger (`memory_challenger.MemoryChallenger`) reveals `k` indices one at a time and signs
+   its rounds.  Each answer must arrive within `Δ + RTT` and match `vk`.  It audits under the first of the scheme's
+   certificates that covers `k` and the deadline (`memory_challenger.covering_certificate`) and refuses any other.  An
+   accepted audit gives a `StorageProfile`: what the certificate says about the server, and what that rests on.
 
-Every coin is drawn here through `verity.ml.randomness` (`setup.SALT_DOMAIN`, `audit.CHALLENGE_DOMAIN`), and a scheme draws
-none.  The claims a certificate rests on are ids in `verity.core.claims`' format (`claim`).
+Every coin is drawn through `verity.ml.randomness` (`setup.SALT_DOMAIN` here, `memory_challenger.COIN_DOMAIN` for the
+audit), and a scheme draws none.  The claims a certificate rests on are ids in `verity.core.claims`' format (`claim`).
 """
 
 from __future__ import annotations
 
-import time
 from abc import ABC, abstractmethod
 from collections.abc import Callable, Iterable, Sequence
 from dataclasses import dataclass, field
@@ -29,9 +29,8 @@ from typing import Any, ClassVar
 
 from verity.core.claims import Entry
 from verity.core.claims import get as core_claim
-from verity.ml.randomness import Key
 
-from . import audit, setup
+from . import setup
 from .codec import Codec, Geometry, split
 from .layout import Layout
 from .layout import decode_tensor as _decode_tensor
@@ -174,7 +173,8 @@ class Scheme(ABC):
     name: ClassVar[str] = ""
     experimental: ClassVar[str | None] = None
     """Why the scheme is experimental, or None.  An experimental scheme is never the default; the memory challenger
-    audits it only when asked to (`TimedAudit(..., experimental=True)`), and its profile states the reason."""
+    audits it only when asked to (`memory_challenger.covering_certificate(..., experimental=True)`), and its profile
+    states the reason."""
     backend: ClassVar[Callable[[Any], Primitives]]
 
     def __init__(self, params: Geometry, prims: Primitives | None = None) -> None:
@@ -192,11 +192,6 @@ class Scheme(ABC):
         guarantees at several round budgets lists them all; the memory challenger audits under the first that covers its
         `k` and deadline."""
         return () if self.certificate is None else (self.certificate,)
-
-    def deadline_refusals(self, deadline_ns: int, rtt_allowance_ns: int) -> tuple[str, ...]:
-        """Why the scheme's spec refuses this `Δ` and RTT allowance apart, beyond what its certificates read from their
-        sum (empty: it does not)."""
-        return ()
 
     @abstractmethod
     def encode_segment(self, salt: bytes, s: int, w_seg: bytes) -> list[bytes]:
@@ -277,13 +272,6 @@ def verifier_key(scheme: Scheme, commitment: bytes, salt: bytes, *, mode: str = 
     raise ValueError(f"the setup mode is {PRIVATE!r} or {PUBLIC!r}, not {mode!r}")
 
 
-def challenge_key(source: bytes, vk: VerifierKey) -> Key:
-    """The audit's key, bound to `vk`'s root and salt; `source` is the memory challenger's own secret, kept secret until
-    the audit starts, never a public beacon or the prover's (`audit.challenge_key`). A public source lets a prover
-    compute the challenged indices before the audit and rebuild only those labels within the deadline."""
-    return audit.challenge_key(source, vk)
-
-
 def responder(scheme: Scheme, block: Callable[[int], bytes]) -> Callable[[int], bytes]:
     """The honest responder: challenge `i` answered by `scheme.respond` from the stored labels."""
     return lambda i: scheme.respond(block, i)
@@ -342,83 +330,5 @@ class StorageProfile:
                 "gaps": list(self.gaps), "certified": self.certified, "experimental": self.experimental}
 
 
-class TimedAudit:
-    """The timed audit of a scheme: `audit.UnsignedRounds` at the certificate's `k`, with sequential reveal and a strict
-    deadline per answer.
-
-    It audits under the first of the scheme's `certificates` that covers `k` and the deadline (with `k` unset, each at
-    its own `k`), so the default `k` is the first certificate's: the band's `k = 111` at `D = 5`, and `k = 97` at
-    `D = 2` or `k = 93` at `D = 1` only when asked for.  It refuses an audit that none covers, one whose `Δ` or RTT
-    allowance the scheme refuses (`Scheme.deadline_refusals`), and a scheme with no certificate at its parameters.  `research=True` runs such an audit anyway, and its profile lists the first
-    certificate's refusals as gaps.  An experimental scheme is refused unless `experimental=True`.  The band's cliff is
-    refused regardless (`band.check_deployment`); the attack past it is replayed with `audit.simulate`."""
-
-    def __init__(self, scheme: Scheme, vk: VerifierKey, key: Key, *, k: int | None = None,
-                 deadline_ns: int = audit.DEADLINE_NS, rtt_allowance_ns: int = audit.RTT_ALLOWANCE_NS,
-                 clock: Callable[[], int] = time.perf_counter_ns, root_only: bool = False,
-                 research: bool = False, experimental: bool = False) -> None:
-        if vk.params != scheme.params:
-            raise ValueError("vk was built for other parameters than the scheme's")
-        if scheme.experimental and not experimental:
-            raise ValueError(f"{scheme.name} is experimental ({scheme.experimental}): pass experimental=True to audit it")
-        certs, limit = scheme.certificates, deadline_ns + rtt_allowance_ns
-        cert = next((c for c in certs if not c.refusals(c.k if k is None else k, limit)), certs[0] if certs else None)
-        uncovered: tuple[str, ...] = ()
-        if cert is None:
-            if k is None:
-                raise ValueError(f"{scheme.name} has no certificate at these parameters: pass k")
-            refused = (f"{scheme.name} has no certificate at {scheme.params.manifest()}",)
-        else:
-            k = cert.k if k is None else k
-            refused = cert.refusals(k, limit)
-            if cert.segments is not None and scheme.params.segments != cert.segments:
-                uncovered = (f"W has {scheme.params.segments} segments; {cert.theorem} is about {cert.segments}",)
-        refused += scheme.deadline_refusals(deadline_ns, rtt_allowance_ns)
-        if refused and not research:
-            others = "".join(f"; under {c.theorem}: {'; '.join(c.refusals(k, limit))}" for c in certs if c is not cert)
-            raise ValueError(f"the audit is outside the certificate: {'; '.join(refused)}{others} "
-                             "(research=True runs it anyway)")
-        self.scheme, self.certificate, self.gaps = scheme, cert, refused + uncovered
-        self.timed = audit.UnsignedRounds(vk, key, k, deadline_ns, rtt_allowance_ns, clock, root_only=root_only)
-
-    @property
-    def k(self) -> int:
-        return self.timed.k
-
-    @property
-    def limit_ns(self) -> int:
-        return self.timed.limit_ns
-
-    @property
-    def done(self) -> bool:
-        return self.timed.done
-
-    @property
-    def accepted(self) -> bool:
-        return self.timed.accepted
-
-    def challenge(self) -> int:
-        return self.timed.challenge()
-
-    def respond(self, block: bytes, path: tuple[bytes, ...] | None = None, report: object = None) -> audit.Answer:
-        return self.timed.respond(block, path, report)
-
-    def result(self) -> audit.AuditResult:
-        return self.timed.result()
-
-    def run(self, respond: Callable[[int], bytes | tuple[bytes, object]],
-            path: Callable[[int], tuple[bytes, ...]] | None = None) -> audit.AuditResult:
-        """Drive the audit against `respond(index)` until all `k` are answered."""
-        return audit.run_timed(self.timed, respond, path)
-
-    def profile(self) -> StorageProfile:
-        """The storage profile of the accepted audit."""
-        if not self.accepted:
-            raise ValueError("only an accepted audit has a storage profile")
-        p = self.scheme.params
-        return StorageProfile(self.scheme.name, p.manifest(), p.blocks, p.m, self.k, self.limit_ns, self.certificate,
-                              self.gaps, self.scheme.experimental)
-
-
-__all__ = ["LOCAL_CLAIMS", "PRIVATE", "PUBLIC", "Certificate", "Scheme", "StorageProfile", "TimedAudit", "challenge_key",
-           "claim", "commit", "decode", "decode_tensor", "draw_salt", "encode", "responder", "verifier_key"]
+__all__ = ["LOCAL_CLAIMS", "PRIVATE", "PUBLIC", "Certificate", "Scheme", "StorageProfile", "claim", "commit", "decode",
+           "decode_tensor", "draw_salt", "encode", "responder", "verifier_key"]

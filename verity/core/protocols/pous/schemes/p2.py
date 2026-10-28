@@ -141,8 +141,8 @@ DELTA_NS = 500_000
 RTT_ALLOWANCE_CAP_NS = 354_000
 """The cap on the measured RTT allowance in spec v1.1 (`p2/PROTOCOL.md` §12): the
 largest whole µs with `Δ + cap < ROOT_CALL_NS`, so `Δ + RTT ≤ 854 µs`.  The certificate refuses every whole µs past
-it, and the verifier any RTT past it or any Δ but `DELTA_NS` (`P2.deadline_refusals`), which the certificate's sum
-alone admits up to `ROOT_CALL_NS − 1`."""
+it; its sum alone admits up to `ROOT_CALL_NS − 1`, so the deployed point fixes `Δ + RTT` at `DELTA_NS +
+RTT_ALLOWANCE_CAP_NS` (`run.DEPLOYED`)."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -449,14 +449,6 @@ class P2(Scheme):
         return Certificate(k=CERT_K, rounds=0, work=1 << 20, call_ns=ROOT_CALL_NS,
                            theorem="Pous.SecurityProofs.P2SlackFamilyUncond", segments=CERT_BLOCKS // POINT[2],
                            claims=P2_CLAIMS)
-
-    def deadline_refusals(self, deadline_ns: int, rtt_allowance_ns: int) -> tuple[str, ...]:
-        out = []
-        if deadline_ns != DELTA_NS:
-            out.append(f"the spec's operating point sets Δ = {DELTA_NS} ns, not {deadline_ns}")
-        if rtt_allowance_ns > RTT_ALLOWANCE_CAP_NS:
-            out.append(f"the RTT allowance of {rtt_allowance_ns} ns is past the spec's cap of {RTT_ALLOWANCE_CAP_NS} ns")
-        return tuple(out)
 
     def encode_segment(self, salt: bytes, s: int, w_seg: bytes) -> list[bytes]:
         return encode_segment(self.params, self.prims, salt, s, w_seg)

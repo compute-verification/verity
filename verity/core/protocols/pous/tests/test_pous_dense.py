@@ -1,10 +1,9 @@
 """The dense scheme (`verity.core.protocols.pous.dense`, Lean's `chainDense`): round trips, the construction recomputed from the Lean
 definitions' text, its costs, the secure-first parameters, and the whole flow through setup, per-tensor decode and the
-timed audit with the parameters' own codec."""
+memory challenger's audit with the parameters' own codec."""
 
 from __future__ import annotations
 
-import itertools
 import json
 import random
 from dataclasses import dataclass
@@ -12,8 +11,9 @@ from pathlib import Path
 
 import pytest
 
+import pous_test_signer as ts
 from verity.core.protocols.pous import dense, setup
-from verity.core.protocols.pous.audit import HonestResponder, UnsignedRounds, challenge_key, run_timed, simulate
+from verity.core.protocols.pous.audit import HonestResponder, challenge_key, simulate
 from verity.core.protocols.pous.codec import encode_segments, split
 from verity.core.protocols.pous.labels import salt_value, tag
 from verity.core.protocols.pous.layout import Layout, decode_tensor
@@ -84,7 +84,7 @@ def test_secure_first_parameters():
 
 
 def test_end_to_end_with_the_parameters_codec():
-    """Setup, per-tensor decode, the timed audit and the simulator, every codec taken from the parameters."""
+    """Setup, per-tensor decode, the memory challenger's audit and the simulator, every codec taken from the parameters."""
     base = dense.DenseParams(8, 64)
     sizes = [("embed", 100), ("norm", 3), ("proj", 150)]
     layout = Layout.of(base, sizes)
@@ -101,11 +101,9 @@ def test_end_to_end_with_the_parameters_codec():
     blocks = [b for seg in server for b in seg]
     assert all(decode_tensor(layout, prims, salt, name, blocks.__getitem__) == data[name] for name in data)
     key = challenge_key(b"audit", vk)
-    timed = UnsignedRounds(vk, key, clock=itertools.count(0, 1000).__next__)
-    assert timed.k == 111
-    assert run_timed(timed, blocks.__getitem__).accepted
-    wrong = run_timed(UnsignedRounds(vk, key, k=5, clock=itertools.count(0, 1000).__next__), lambda i: blocks[(i + 1) % len(blocks)])
-    assert not wrong.accepted
+    assert params.challenges == 111
+    assert ts.audit(blocks, vk.root, 111).accepted
+    assert not ts.audit(blocks, vk.root, 5, lambda i: blocks[(i + 1) % len(blocks)]).accepted
     from verity.core.protocols.pous.scheme import Encoding
 
     enc = Encoding(params, salt, tuple(int.from_bytes(b, "little") for b in blocks))

@@ -1,18 +1,18 @@
 """The band scheme (`verity.core.protocols.pous.band`, Lean's `chainBand`): round trips, the construction recomputed from the Lean
 definitions' text, its costs, the secure-first parameters, the cliff, and the whole flow through setup, per-tensor
-decode and the timed audit with the parameters' own codec."""
+decode and the memory challenger's audit with the parameters' own codec."""
 
 from __future__ import annotations
 
-import itertools
 import json
 import random
 from pathlib import Path
 
 import pytest
 
+import pous_test_signer as ts
 from verity.core.protocols.pous import band, dense, setup
-from verity.core.protocols.pous.audit import HonestResponder, UnsignedRounds, challenge_key, run_timed, simulate
+from verity.core.protocols.pous.audit import DEADLINE_NS, HonestResponder, challenge_key, simulate
 from verity.core.protocols.pous.codec import encode_segments, split
 from verity.core.protocols.pous.labels import salt_value, tag
 from verity.core.protocols.pous.layout import Layout, decode_tensor
@@ -92,13 +92,11 @@ def test_secure_first_parameters():
 def test_cliff_is_enforced():
     """The effective D (calls of at least 241.5 µs within Δ + RTT) must not exceed d; 13 calls need 3.1395 ms."""
     p = band.SECURE_FIRST
-    vk = VerifierKey(p, SALT, bytes(32), (bytes(32),) * p.blocks)
-    key = challenge_key(b"audit", vk)
-    UnsignedRounds(vk, key, deadline_ns=500_000, rtt_allowance_ns=2_639_499)
+    band.check_deployment(p, 500_000, 2_639_499)
     assert band.effective_rounds(p, 500_000, 2_639_499) == 12 and band.effective_rounds(p, 500_000, 2_639_500) == 13
     with pytest.raises(ValueError, match="cliff"):
-        UnsignedRounds(vk, key, deadline_ns=500_000, rtt_allowance_ns=2_639_500)
-    UnsignedRounds(VerifierKey(dense.POINT_64K, SALT, bytes(32), (bytes(32),) * 512), key, rtt_allowance_ns=10 ** 9)
+        band.check_deployment(p, 500_000, 2_639_500)
+    band.check_deployment(dense.POINT_64K, DEADLINE_NS, 10 ** 9)
 
 
 class GapResponder:
@@ -150,8 +148,7 @@ def test_end_to_end_with_the_parameters_codec():
     blocks = [b for seg in server for b in seg]
     assert all(decode_tensor(layout, prims, salt, name, blocks.__getitem__) == data[name] for name in data)
     key = challenge_key(b"audit", vk)
-    timed = UnsignedRounds(vk, key, clock=itertools.count(0, 1000).__next__)
-    assert timed.k == 111 and run_timed(timed, blocks.__getitem__).accepted
+    assert params.challenges == 111 and ts.audit(blocks, vk.root, 111).accepted
     enc = Encoding(params, salt, tuple(int.from_bytes(b, "little") for b in blocks))
     assert simulate(vk, HonestResponder(enc), prims, key).accepted
 
