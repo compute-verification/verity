@@ -1,6 +1,5 @@
-"""The deployment configuration (`note:memory-accounting/20261026T2305Z-draft-deployment-api-v3`, addenda 23:46Z to
-00:30Z): the public file a run starts from (`verity run CONFIG`), which `verity config new | check | hash` writes, checks
-and hashes.
+"""The deployment configuration: the public file a run starts from (`verity run CONFIG`), which
+`verity config new | check | hash` writes, checks and hashes.
 
     format = "verity/config/v0"
     protocols = ["sampled-proofs", "pouw"]           the subprotocols, by the six subprotocols' names
@@ -20,12 +19,12 @@ composite's (`COMPOSITES`): onsite's, or remote's (sampled proofs and PoUW). Pro
 composites and no other, so `check` refuses any other set (``composite``).
 
 What a protocol declares (`Component`: its id, the workload hooks it needs, the subprotocols it requires, its parties and
-their principals, its channels and messages, the parties that must share a machine, its parameters' schema and the
-service laws it runs under) and what a workload declares (`Workload`: the hooks it provides, its parties, its parameters'
-schema) are handed in by the caller: this module imports no protocol and no workload. `check` refuses by name
-(`Refused`) an unknown key or version, a subprotocol whose requirements aren't listed or whose needs the workload doesn't
-provide, a set of subprotocols that is no composite's, a party or channel other than the declared ones, and a placement
-the declarations forbid.
+channels as its manifest's `Role`s and `Channel`s, the parties that must share a machine, its parameters' schema and the
+service laws it runs under) and what a workload declares (`Workload`: the hooks it provides, its parties as `Role`s, its
+parameters' schema) are handed in by the caller: this module imports no protocol and no workload. `check` refuses by
+name (`verity.core.wire.Refused`) an unknown key or version, a subprotocol whose requirements aren't listed or whose
+needs the workload doesn't provide, a set of subprotocols that is no composite's, a party or channel other than the
+declared ones, and a placement the declarations forbid.
 
 The canonical form is canonical JSON of the checked configuration (sorted keys, no whitespace, strings ASCII without
 DEL, no float), and its hash is SHA-512 of that form without the transport-only fields (`TRANSPORT`: a party's address
@@ -39,11 +38,13 @@ import json
 import re
 import tomllib
 from collections.abc import Callable, Iterable, Mapping, Sequence
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from typing import Any
 
+from verity.core.deploy.manifest import Channel, Role
+from verity.core.wire import Refused
+
 FORMAT = "verity/config/v0"
-PRINCIPALS = ("developer", "auditor", "anyone")
 #: the transport-only fields, by table: hashed out, so that they can change without changing the configuration
 TRANSPORT = {"party": ("address", "listen"), "channel": ("dial",)}
 TOP = ("channel", "format", "params", "party", "program", "protocols", "service", "workload")
@@ -51,32 +52,12 @@ TOP = ("channel", "format", "params", "party", "program", "protocols", "service"
 REQUIRED = ("channel", "format", "party", "program", "protocols", "service", "workload")
 PARTY = ("machine", "name", "principal", *TRANSPORT["party"])
 CHANNEL = ("after", "from", "messages", "to", *TRANSPORT["channel"])
-#: a message's kind: public (the record keeps it), private (witness, kept in transcripts only), coins (a source's)
-KINDS = ("public", "private", "coins")
 LOCAL = "local"
 #: the composites, by id: the subprotocols each composes, by name (`Core.Composites.ofIds`)
 COMPOSITES = {"verity/onsite/v0": ("bandwidth", "certifier", "pous", "pouw", "sampled-proofs"),
               "verity/remote/v0": ("pouw", "sampled-proofs")}
 _COMMIT = re.compile(r"[0-9a-f]{40}")
 _NAME = re.compile(r"[a-z][a-z0-9-]*")
-
-
-class Refused(ValueError):
-    """A configuration refused, by the name of the rule it breaks."""
-
-    def __init__(self, name: str, detail: str) -> None:
-        super().__init__(f"{name}: {detail}")
-        self.name, self.detail = name, detail
-
-
-@dataclass(frozen=True)
-class Channel:
-    """A declared channel: who may send which messages to whom, and the messages sent before them (`after`)."""
-
-    source: str
-    to: str
-    messages: tuple[str, ...]
-    after: tuple[str, ...] = ()
 
 
 def _no_params(params: Mapping[str, Any]) -> dict[str, Any]:
@@ -93,8 +74,7 @@ class Component:
 
     name: str
     id: str
-    parties: Mapping[str, str]
-    messages: Mapping[str, str]
+    parties: tuple[Role, ...]
     channels: tuple[Channel, ...] = ()
     needs: frozenset[str] = frozenset()
     requires: tuple[str, ...] = ()
@@ -108,12 +88,12 @@ class Component:
 
 @dataclass(frozen=True)
 class Workload:
-    """What a workload declares: the hooks it provides protocols (``windows``, ``ingress-relay``, ...), its parties and
-    their principals, and its parameters' schema (``params`` over ``default_params``, as for `Component`)."""
+    """What a workload declares: the hooks it provides protocols (``windows``, ``ingress-relay``, ...), its parties, and
+    its parameters' schema (``params`` over ``default_params``, as for `Component`)."""
 
     name: str
     provides: frozenset[str]
-    parties: Mapping[str, str]
+    parties: tuple[Role, ...]
     params: Callable[[Mapping[str, Any]], dict[str, Any]]
     default_params: Mapping[str, Any] = field(default_factory=dict)
 
@@ -178,29 +158,36 @@ def _plain(where: str, v: Any) -> None:
         raise Refused("type", f"{where} = {v!r}: not a string, integer, boolean, list or table")
 
 
-def declared(components: Sequence[Component], workload: Workload) -> tuple[dict, dict, dict]:
-    """The parties (name -> principal), messages (name -> kind) and channels ((from, to) -> `Channel`) that ``components``
-    and ``workload`` declare between them. Two declarations of one party or message must agree, and two of one channel
-    are its union."""
-    parties, messages, channels = dict(workload.parties), {}, {}
+def declared(components: Sequence[Component],
+             workload: Workload) -> tuple[dict[str, Role], dict[tuple[str, str], Channel]]:
+    """The parties (name -> `Role`) and channels ((sender, receiver) -> `Channel`) that ``components`` and ``workload``
+    declare between them. Two declarations of one party must agree on its principal and cardinality, and it needs what
+    either needs; two of one channel are its union, under the tighter latency bound."""
+    parties: dict[str, Role] = {}
+    channels: dict[tuple[str, str], Channel] = {}
+    for who, roles in ((workload.name, workload.parties), *((c.name, c.parties) for c in components)):
+        for r in roles:
+            if (old := parties.get(r.name)) is not None:
+                if (old.principal, old.per) != (r.principal, r.per):
+                    raise ValueError(f"{who} declares party {r.name} as {r.principal} per {r.per}, another declaration "
+                                     f"as {old.principal} per {old.per}")
+                r = replace(old, needs=tuple(dict.fromkeys(old.needs + r.needs)))
+            parties[r.name] = r
     for c in components:
-        for p, principal in c.parties.items():
-            if principal not in PRINCIPALS or parties.setdefault(p, principal) != principal:
-                raise ValueError(f"{c.name} declares party {p} as {principal}, another declaration as {parties[p]}")
-        for m, kind in c.messages.items():
-            if kind not in KINDS or messages.setdefault(m, kind) != kind:
-                raise ValueError(f"{c.name} declares message {m} as {kind}, not one of {KINDS} or as declared elsewhere")
         for ch in c.channels:
-            if (old := channels.get((ch.source, ch.to))) is not None and old != ch:
-                ch = Channel(ch.source, ch.to, tuple(dict.fromkeys(old.messages + ch.messages)),
-                             tuple(dict.fromkeys(old.after + ch.after)))
-            channels[ch.source, ch.to] = ch
+            if (old := channels.get((ch.sender, ch.receiver))) is not None:
+                bounds = [b for b in (old.latency_ms, ch.latency_ms) if b is not None]
+                ch = replace(old, messages=tuple(dict.fromkeys(old.messages + ch.messages)),
+                             after=tuple(dict.fromkeys(old.after + ch.after)), latency_ms=min(bounds, default=None),
+                             carries_coins=old.carries_coins or ch.carries_coins)
+            channels[ch.sender, ch.receiver] = ch
+    carried = {m for ch in channels.values() for m in ch.messages}
     for ch in channels.values():
-        if unknown := [m for m in (*ch.messages, *ch.after) if m not in messages]:
-            raise ValueError(f"channel {ch.source} -> {ch.to} names undeclared messages {unknown}")
-        if unknown := [p for p in (ch.source, ch.to) if p not in parties]:
-            raise ValueError(f"channel {ch.source} -> {ch.to} names undeclared parties {unknown}")
-    return parties, messages, channels
+        if unknown := [m for m in ch.after if m not in carried]:
+            raise ValueError(f"channel {ch.sender} -> {ch.receiver} is after {unknown}, which no channel carries")
+        if unknown := [p for p in (ch.sender, ch.receiver) if p not in parties]:
+            raise ValueError(f"channel {ch.sender} -> {ch.receiver} names undeclared parties {unknown}")
+    return parties, channels
 
 
 def check(cfg: Mapping[str, Any], components: Mapping[str, Component],
@@ -250,7 +237,7 @@ def check(cfg: Mapping[str, Any], components: Mapping[str, Component],
     if not _COMMIT.fullmatch(str(cfg["program"]["commit"])):
         raise Refused("commit", f"[program] commit is a 40-hex git commit, not {cfg['program']['commit']!r}")
     try:
-        parties, _, channels = declared(listed, workload)
+        parties, channels = declared(listed, workload)
     except ValueError as e:
         raise Refused("declaration", str(e)) from None
     got = _parties(cfg["party"], parties)
@@ -281,7 +268,7 @@ def _table(where: str, v: Any) -> dict[str, Any]:
     return dict(v)
 
 
-def _parties(entries: Any, declared_parties: Mapping[str, str]) -> dict[str, dict]:
+def _parties(entries: Any, declared_parties: Mapping[str, Role]) -> dict[str, dict]:
     if not isinstance(entries, list):
         raise Refused("type", "[[party]] is an array of tables")
     got: dict[str, dict] = {}
@@ -293,8 +280,8 @@ def _parties(entries: Any, declared_parties: Mapping[str, str]) -> dict[str, dic
         if name not in declared_parties:
             raise Refused("unknown-party", f"{name}: no listed subprotocol or the workload declares it (declared: "
                                            f"{', '.join(sorted(declared_parties))})")
-        if p["principal"] != declared_parties[name]:
-            raise Refused("principal", f"{name} is the {declared_parties[name]}'s, not the {p['principal']}'s")
+        if p["principal"] != (principal := declared_parties[name].principal):
+            raise Refused("principal", f"{name} is the {principal}'s, not the {p['principal']}'s")
         if not _NAME.fullmatch(_str(f"party {name} machine", p["machine"])):
             raise Refused("machine", f"party {name}: machine {p['machine']!r} is {LOCAL!r} or a lowercase name")
         if "listen" in p and (type(p["listen"]) is not int or not 0 < p["listen"] < 65536):
@@ -366,14 +353,14 @@ def new(workload: str, protocols: Sequence[str], components: Mapping[str, Compon
     listed = [components[n] for n in protocols]
     w = workloads[workload]
     try:
-        parties, _, channels = declared(listed, w)
+        parties, channels = declared(listed, w)
     except ValueError as e:
         raise Refused("declaration", str(e)) from None
     law = next((d for d in (c.default_law for c in listed) if d and _runs_under(d, listed)), "")
     cfg = {"format": FORMAT, "protocols": list(protocols), "workload": {"name": workload},
            "service": {"law": law}, "program": {"commit": commit},
-           "party": [{"name": p, "machine": machine, "principal": principal} for p, principal in parties.items()],
-           "channel": [{"from": c.source, "to": c.to, "messages": list(c.messages),
+           "party": [{"name": p, "machine": machine, "principal": r.principal} for p, r in parties.items()],
+           "channel": [{"from": c.sender, "to": c.receiver, "messages": list(c.messages),
                         **({"after": list(c.after)} if c.after else {})} for c in channels.values()]}
     check(cfg, components, workloads)
     return cfg
@@ -427,6 +414,5 @@ def render(cfg: Mapping[str, Any], header: Sequence[str] = ()) -> str:
     return "\n".join(lines) + "\n"
 
 
-__all__ = ["CHANNEL", "COMPOSITES", "FORMAT", "KINDS", "LOCAL", "PARTY", "PRINCIPALS", "REQUIRED", "TOP", "TRANSPORT",
-           "Channel", "Component", "Refused", "Workload", "canonical", "check", "composite", "declared", "digest",
-           "hashed", "new", "parse", "render"]
+__all__ = ["CHANNEL", "COMPOSITES", "FORMAT", "LOCAL", "PARTY", "REQUIRED", "TOP", "TRANSPORT", "Component", "Workload",
+           "canonical", "check", "composite", "declared", "digest", "hashed", "new", "parse", "render"]

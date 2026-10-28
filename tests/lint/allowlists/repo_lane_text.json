@@ -1374,8 +1374,6 @@
     {"file": "verity/core/claims/__init__.py", "count": 7},
     {"file": "verity/core/deploy/__init__.py", "count": 1},
     {"file": "verity/core/deploy/channels.py", "count": 1},
-    {"file": "verity/core/deploy/config.py", "count": 1},
-    {"file": "verity/core/deploy/manifest.py", "count": 1},
     {"file": "verity/core/deploy/party.py", "count": 1},
     {"file": "verity/core/deploy/process.py", "count": 1},
     {"file": "verity/core/deploy/runtime.py", "count": 1},
