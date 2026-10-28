@@ -1,7 +1,7 @@
 """H1's hooks on the served engine (`pouw.install`): the linear layers it records (`layers`) and their weights' roots
 (`weight_roots`), each layer's ``observe`` (`observer`) and ``apply`` under the credit gate's trace (`traced`), and the
 model runner's ``execute_model``, which hands each step's admissions to the window (`admitting`), all wired at install by
-`wire`."""
+`wire`; and the z/y kernels a committing run's calls compile, compiled ahead (`warm_zy`)."""
 from __future__ import annotations
 
 import weakref
@@ -129,8 +129,44 @@ def wire(run: PH.H1Run, hooks: Any, layers: list[Any], runner: Any, rows: int) -
     for w, layer in enumerate(layers):
         hooks.wrap(layer.quant_method, "observe", lambda orig, w=w: observer(run, w, orig))
         hooks.wrap(layer.quant_method, "apply", lambda orig, w=w: traced(run, w, orig))
-        if run.commit and hasattr(type(layer.quant_method), "zy_rows") and layer.weight.shape[0] % PH.TILE[1] == 0:
+        if run.commit and serves_zy(layer):
             hooks.patch(layer.quant_method, "zy_rows", rows)
 
 
-__all__ = ["admitting", "layers", "observer", "traced", "weight_roots", "wire"]
+def serves_zy(layer: Any) -> bool:
+    """Whether a committing run's calls on ``layer`` serve z/y records (`wire`): its arm has ``zy_rows`` and its N is whole
+    tile columns."""
+    return hasattr(type(layer.quant_method), "zy_rows") and layer.weight.shape[0] % PH.TILE[1] == 0
+
+
+def warm_zy(layers: list[Any], rows: int, *, pick: Any = None, call: Any = None) -> int:
+    """Every kernel a committing run's z/y calls of 1..``rows`` rows on ``layers`` (`serves_zy`) would compile, compiled now
+    by one call each on zero activations (``call``, `int8_ops.linear_zy`), so serving compiles none; the calls made, none
+    off CUDA. A weight shape compiles one kernel for each config M picks (``pick``, `int8_fused.pick`) and each of the two
+    facts about M Triton specializes an integer argument on (M = 1, 16 | M): the call's other integers are the shape's
+    and T, the same at every M."""
+    import torch
+
+    if pick is None:
+        if not torch.cuda.is_available():
+            return 0
+        from verity_vllm.engine import int8_fused, int8_ops
+        pick, call = int8_fused.pick, int8_ops.linear_zy
+    shapes: dict[tuple, Any] = {}
+    for layer in layers:
+        if serves_zy(layer):
+            shapes.setdefault((*map(int, layer.weight.shape), str(layer.weight.device)), layer)
+    seen = set()
+    for (n, k, device), layer in shapes.items():
+        for m in range(1, int(rows) + 1):
+            key = (n, k, device, tuple(pick(m, n, k)), m == 1, m % 16 == 0)
+            if key not in seen:
+                seen.add(key)
+                call(torch.zeros((m, k), dtype=torch.bfloat16, device=layer.weight.device), layer.weight,
+                     layer.weight_scale, int(rows))
+    if seen and torch.cuda.is_available():
+        torch.cuda.synchronize()
+    return len(seen)
+
+
+__all__ = ["admitting", "layers", "observer", "serves_zy", "traced", "warm_zy", "weight_roots", "wire"]
