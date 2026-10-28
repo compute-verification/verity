@@ -4,8 +4,8 @@
 (the measured ceilings: a pipe, a port, or a joint frontier of several classes), the census that places every warp
 instruction class on them, the attack families and the designs. From them it solves the price vectors and reports a
 design's ε. Capacity is the peak rate per operand class, read at the card's clock: a row is a ceiling no program beats,
-and the model has no power or energy term. The directory and the command keep the name "machine model"; everywhere else 𝓜 is the ACCEL model
-(`GLOSSARY.md`).
+and the model has no power or energy term. The directory and the command keep the name "machine model"; everywhere
+else 𝓜 is the ACCEL model (`GLOSSARY.md`).
 
 What it computes:
 
@@ -69,8 +69,9 @@ the vector fails its check or doesn't reproduce a published number.
   instructions/SM/clk, derated by `noise`), the SMSP-cycles it holds the row, or a derived u, with `since`, `until` and
   its runs. `data/census/runs.toml` and `data/census/kinds.toml` hold the run and kind lists many lines share, cited as
   `@NAME`.
-- `data/vectors/NAME.toml`: a named vector: its epoch, its rows and credits in LP order, its summary and note, and the
-  numbers it was published with (`[published]`).
+- `data/vectors/NAME.toml`: a named vector: its epoch, its rows and credits in LP order, its summary and note, the
+  numbers it was published with (`[published]`) and, for the oldest vectors, the full-precision values the tests hold
+  them to (`[legacy]`).
 - `data/attacks/FAMILY.jsonl`: an attack family: one program a line, its design, and the epochs it holds.
 - `data/floors.csv`: what the claims read, a kind a line ("The check and the claims").
 - `data/honest/NAME.toml`: an honest kernel's instruction profile a MMA, the least operand delivery any program pays a
@@ -217,7 +218,7 @@ A new measurement is lines of data and a vector file, not a script:
    in the old line's file, and adds the new value to the new epoch's file.
 3. **The epoch**: append the new vector's name to `epochs` in `data/model.toml`.
 4. **The vector**: copy the vector it builds on to `data/vectors/NAME.toml`, set `name` and `epoch`, add the row to
-   `rows` (and any credit to `credits`), and drop `[published]`.
+   `rows` (and any credit to `credits`), and drop `[published]` and `[legacy]`.
 5. `uv run machine-model solve NAME`: it prints τ, U/F_low and the margin, and checks every price, credit and attack.
    Record the printed numbers under `[published]` once you publish them; the tests then hold the vector to them.
 
