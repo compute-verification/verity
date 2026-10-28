@@ -2530,6 +2530,7 @@
   "Accounting.SecurityProofs.RateOfAuditPartialPasses": "9abe9abbcf76b2f2a32e235ec9a686d2d04d48d59a48d9d4d875eb95580e15ac",
   "Accounting.SecurityProofs.RatePartialHonest": "89076e3adea744a3cd5933e2575b87b47f88a3c0324183258878023b87f9cd53",
   "Accounting.SecurityProofs.RateSketchHonest": "4ec1755f734a0d74b944bba77f1618fb545e84a650aed6fc930c599cb6a229ff",
+  "Accounting.SecurityProofs.Remote.AuditRO": "742a3c4f0cba3aa06f167857be9f51ee5663b4e55a29f62d7b09e68c5cb4bdc5",
   "Accounting.SecurityProofs.Remote.Held": "156e45cf5c184510b4e81f318c0b50e17b6cab0af1582be40fc592c055f0eac2",
   "Accounting.SecurityProofs.Remote.HeldDrawn": "685e5bd206b6879fbbfd5669afd9a917561e573683bb6c36ff5e4fde00e1cd2d",
   "Accounting.SecurityProofs.Remote.HeldOverTime": "78904f53bd36d6f11d5a17e9f1a3a28d63a1f716e2b228a43538ae06c43b112c",
@@ -2577,7 +2578,6 @@
   "Bandwidth.SecurityProofs.AuditInteractive": "e84d0ec0ef60a9cd526409b8f0d28c9387b2bff7fede93929c3b8ced09e11609",
   "Bandwidth.SecurityProofs.AuditInteractiveRO": "773fffc72e9e6aec423289610c8d2f368e2cf0ba69e5815cab71804d2d9c1077",
   "Bandwidth.SecurityProofs.AuditJoint": "2fd703e87c9dd8656f589273f5e3105b34eefdf94bc6223dceb6625d95507a1b",
-  "Bandwidth.SecurityProofs.AuditRO": "dbe5fade7cf30f05e73d4385c923b22d8c58b01feeff6b334ef879ea207761f6",
   "Bandwidth.SecurityProofs.AuditRelay": "0fe66fd603e783a1c5e889f218ec0a4acaee1afc91e09411b7939048763df73e",
   "Bandwidth.SecurityProofs.HonestPasses": "49bc1714ad2ff09df8968490d1fdbbb60cb38a219cc689e27206f0eac7c207e9",
   "Flock.SecurityProofs.ClaimsStated": "f6d2860cab7c3a1fa7ef9c5606fb73022c00cb5014777733e04e9bf2cad48007",
@@ -4345,6 +4345,12 @@
    "assumptions": [],
    "type_hash": "6f9da408630883d8770f358eaddf47063f1b76099677faea7bdb35c5e45d777a"
   },
+  "Accounting.SecurityProofs.Remote.AuditRO": {
+   "owner": "@memory-accounting",
+   "signature": ["Accounting.SecurityProofs.Remote.AuditRO : Accounting.Guarantees.Remote.AuditRO"],
+   "assumptions": [],
+   "type_hash": "742a3c4f0cba3aa06f167857be9f51ee5663b4e55a29f62d7b09e68c5cb4bdc5"
+  },
   "Accounting.SecurityProofs.Remote.Held": {
    "owner": "@memory-accounting",
    "signature": ["Accounting.SecurityProofs.Remote.Held : Accounting.Guarantees.Remote.Held"],
@@ -5234,12 +5240,6 @@
    "signature": ["Bandwidth.SecurityProofs.AuditJoint : Bandwidth.Guarantees.AuditJoint"],
    "assumptions": [],
    "type_hash": "2fd703e87c9dd8656f589273f5e3105b34eefdf94bc6223dceb6625d95507a1b"
-  },
-  "Bandwidth.SecurityProofs.AuditRO": {
-   "owner": "@memory-accounting",
-   "signature": ["Bandwidth.SecurityProofs.AuditRO : Bandwidth.Guarantees.AuditRO"],
-   "assumptions": [],
-   "type_hash": "dbe5fade7cf30f05e73d4385c923b22d8c58b01feeff6b334ef879ea207761f6"
   },
   "Bandwidth.SecurityProofs.AuditRelay": {
    "owner": "@memory-accounting",
@@ -15793,10 +15793,10 @@
     "Accounting.SecurityProofs.BandwidthOfAudit",
     "Accounting.SecurityProofs.BandwidthOfAuditPerRun",
     "Accounting.SecurityProofs.Bridge.BandwidthOfAuditPerRunPeriod",
+    "Accounting.SecurityProofs.Remote.AuditRO",
     "Bandwidth.SecurityProofs.AuditInteractive",
     "Bandwidth.SecurityProofs.AuditInteractiveRO",
     "Bandwidth.SecurityProofs.AuditJoint",
-    "Bandwidth.SecurityProofs.AuditRO",
     "Bandwidth.SecurityProofs.AuditRelay",
     "Bandwidth.SecurityProofs.B3",
     "Bandwidth.SecurityProofs.B3Capacity",
@@ -16866,20 +16866,18 @@
    ]
   },
   "Definitions.Accounting.Guarantees.Bandwidth": {
-   "digest": "71fb78cd62c87a3e6762f035dfab04f030ac6c761371e26bb809172c897d7fb0",
+   "digest": "6c1c75ddbe1763710d0b9bd4f8025c0610684cc46fb93a5566ff59a129649c2a",
    "definitions": {
-    "Bandwidth.Guarantees.AuditInteractive": "88c232fe1a99541d794dbda074c79d85e02793e42882609a11f3dfcfecac6573",
-    "Bandwidth.Guarantees.AuditInteractiveRO": "0adfab2ceb5337aeca9609347520057420daa4fb968411e0bb30f78818282a9d",
-    "Bandwidth.Guarantees.AuditJoint": "fb08920344c3579785fb15cff191687b1480334351ea3f19a50436a485808d3d",
-    "Bandwidth.Guarantees.AuditRO": "a0e22d8455ef8a7064dfc16c8e7301e0dcaec1d6ff1838f2a1c937e810282f20",
-    "Bandwidth.Guarantees.AuditRelay": "d79eb32b815f2d9722200c33e7a91ea3372fa9dc0133873016ea7e2a1750fe37",
+    "Bandwidth.Guarantees.AuditInteractive": "4ebca6ada8737a1aa61b499ef8d53982306fe7d2b90e96e41a596165ad1614da",
+    "Bandwidth.Guarantees.AuditInteractiveRO": "d4137be1adb4c89630cf81cbc4fdf0ba37da38638a42fa600fa5458ff2c9b365",
+    "Bandwidth.Guarantees.AuditJoint": "cabac35b9cad7283ccfdeff4ec0388043ace582ee5568bb78546877e3f6c5298",
+    "Bandwidth.Guarantees.AuditRelay": "aa8b1f58c667d463ac59996a696c7374b63c8fc580b408e2000e99a19df1b3bc",
     "Bandwidth.Guarantees.HonestPasses": "ea463a38fea8188b52f9b1c359364c3adc9256df140c00493c7e612ffe2f8f2d"
    },
    "guarantees": [
     "Bandwidth.SecurityProofs.AuditInteractive",
     "Bandwidth.SecurityProofs.AuditInteractiveRO",
     "Bandwidth.SecurityProofs.AuditJoint",
-    "Bandwidth.SecurityProofs.AuditRO",
     "Bandwidth.SecurityProofs.AuditRelay",
     "Bandwidth.SecurityProofs.HonestPasses"
    ]
@@ -17514,6 +17512,13 @@
     "Accounting.SecurityProofs.Remote.HeldOverTime",
     "Accounting.SecurityProofs.Remote.HeldOverTimeLinks"
    ]
+  },
+  "Definitions.Accounting.Guarantees.RemotePass": {
+   "digest": "8e711cba454ab06d62b6359fdf6c16cfa5fbbf6bee514157820b6cdea38c1004",
+   "definitions": {
+    "Accounting.Guarantees.Remote.AuditRO": "cf27b440ac2129f487e4f07608b2277deb36cee0ef2f65decb29201f3e8b3ad7"
+   },
+   "guarantees": ["Accounting.SecurityProofs.Remote.AuditRO"]
   },
   "Definitions.Accounting.Guarantees.RemoteSketch": {
    "digest": "c60362ffb59d956be55efcc71f5b9108e9025bc59343c7877a6ba334a0e7c520",
@@ -27679,6 +27684,7 @@
     "Accounting.SecurityProofs.RateSketchTable",
     "Accounting.SecurityProofs.RateTensorSketchTable",
     "Accounting.SecurityProofs.RateWindowDraw",
+    "Accounting.SecurityProofs.Remote.AuditRO",
     "Accounting.SecurityProofs.Remote.HeldDrawn",
     "Accounting.SecurityProofs.Remote.HeldOverTimeDrawn",
     "Accounting.SecurityProofs.Remote.HeldOverTimeLinksDrawn",
@@ -27707,7 +27713,6 @@
     "Bandwidth.SecurityProofs.AuditInteractive",
     "Bandwidth.SecurityProofs.AuditInteractiveRO",
     "Bandwidth.SecurityProofs.AuditJoint",
-    "Bandwidth.SecurityProofs.AuditRO",
     "Bandwidth.SecurityProofs.AuditRelay",
     "Bandwidth.SecurityProofs.B3",
     "Bandwidth.SecurityProofs.B3Capacity",
