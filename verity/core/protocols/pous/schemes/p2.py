@@ -524,5 +524,4 @@ def wide320_certificate(params: P2Params) -> Certificate | None:
 __all__ = ["CERT_BLOCKS", "CERT_FAMILY_BLOCKS", "CERT_K", "CERT_K_WIDE320", "CERT_WIDE_BLOCKS", "CHACHA8", "CHACHA8_NONCONFORMING", "DELTA_NS", "EXPERIMENTAL", "KEYS_TAG", "P2_CLAIMS",
            "POINT", "PROTOCOL_ID", "ROOT_CALL_NS", "RTT_ALLOWANCE_CAP_NS", "SEED_DOMAIN", "SHA512_CTR", "WIDE_CLAIMS", "P2", "P2ChaCha", "P2Params",
            "below", "block_keys", "chacha_block", "chacha_keys", "decode_segment", "encode_blocks", "encode_segment",
-           "expand_prefix", "family_certificate", "segment_keys", "segment_seed", "sha512_keys", "stream", "wide320_certificate",
-           "wide_certificate"]
+           "expand_prefix", "family_certificate", "segment_keys", "segment_seed", "sha512_keys", "stream", "wide_certificate"]
