@@ -184,7 +184,7 @@ theorem checksAtJ_leafL {s : Ins} {spec : SessionSpec} {x : Claims.Msg} {link : 
 /-- `verifyWithMK_tables` at a parsed value. -/
 theorem verifyJWithMK_tables (keep : Bool → Bool) (hs : Hashes Flock.V) {spec : SessionSpec} {tabs : Array Setup}
     {j : Json} {proofs : Array ByteArray} (h : verifyJWithMK keep hs spec tabs j proofs = .ok ()) :
-    ∃ (sess : Session) (schs : Array Schedule), Record.decodeJWithK keep hs spec j = .ok sess ∧
+    ∃ (sess : RunRecord) (schs : Array Schedule), Record.decodeJWithK keep hs spec j = .ok sess ∧
       tabs.size = spec.tables.size ∧ schs.size = tabs.size ∧
       ∀ (i : ℕ) (hi : i < tabs.size), ∃ (hs' : i < schs.size) (c₀ c₁ : ByteArray),
         fast100 tabs[i].m = some schs[i] ∧
@@ -202,7 +202,7 @@ theorem forall₂_swap {α β : Type} {R : α → β → Prop} {S : β → α �
 
 /-- `liveOf_decodeWithK` at a parsed value. -/
 theorem liveOfJ_decodeJWithK (keep : Bool → Bool) (hs : Hashes Flock.V) {spec : SessionSpec} {j : Json}
-    {lv : Live} {sess : Session} (hl : FlockDeploy.liveOfJ spec j = .ok lv)
+    {lv : Live} {sess : RunRecord} (hl : FlockDeploy.liveOfJ spec j = .ok lv)
     (hd : Record.decodeJWithK keep hs spec j = .ok sess) :
     lv.points = sess.points ∧ sess.points.size = spec.points ∧ lv.streams.size = spec.repStreams.size ∧
       ∀ (k : ℕ) (hk : k < spec.repStreams.size) (hk' : k < lv.streams.size), ∃ stream : StreamRec,
@@ -219,7 +219,7 @@ theorem rep_plainJK (keep : Bool → Bool) (hs : Hashes Flock.V) {spec : Session
     {j : Json} {proofs : Array ByteArray} {lv : Live}
     (hv : verifyJWithMK keep hs spec (tabsOf sts) j proofs = .ok ()) (hl : FlockDeploy.liveOfJ spec j = .ok lv) :
     lv.streams.size = 2 * sts.size ∧ ∀ (k : ℕ) (hk : k < lv.streams.size),
-      ∃ (sess : Session) (sch : Schedule) (stream : StreamRec) (c : ByteArray),
+      ∃ (sess : RunRecord) (sch : Schedule) (stream : StreamRec) (c : ByteArray),
         sess.points = lv.points ∧ sess.points.size = spec.points ∧ fast100 sts[k / 2]!.m = some sch ∧
         verifyRepWith hs spec (Setup.ofCircuit sts[k / 2]!) sch sess (k / 2) (k % 2) proofs[k]! = .ok c ∧
         sess.streams.find? (fun x => x.name == s!"{spec.tables[k / 2]!}/rep{k % 2}") = some stream ∧
@@ -318,7 +318,7 @@ retained. -/
 theorem sess_rounds_eqJK (keep keep' : Bool → Bool) (hs hs' : Hashes Flock.V) {spec : SessionSpec}
     {sts : Array Stmt} {j j' : Json} {proofs proofs' : Array ByteArray} {lv lv' : Live}
     {link link' : List ByteArray × List ByteArray} {c₁ c₁' : Coin} {mids : List (Claims.Msg × Coin)}
-    {sess sess' : Session}
+    {sess sess' : RunRecord}
     (hv : verifyJWithMK keep hs spec (tabsOf sts) j proofs = .ok ()) (hl : FlockDeploy.liveOfJ spec j = .ok lv)
     (hv' : verifyJWithMK keep' hs' spec (tabsOf sts) j' proofs' = .ok ())
     (hl' : FlockDeploy.liveOfJ spec j' = .ok lv')
@@ -378,7 +378,7 @@ theorem verifyJWithMK_proofs_size (keep : Bool → Bool) (hs : Hashes Flock.V) {
 decoder reads. -/
 theorem verifyJWithMK_rep (keep : Bool → Bool) (hs : Hashes Flock.V) {spec : SessionSpec} {tabs : Array Setup}
     {j : Json} {proofs : Array ByteArray} (h : verifyJWithMK keep hs spec tabs j proofs = .ok ()) :
-    ∃ (sess : Session) (schs : Array Schedule), Record.decodeJWithK keep hs spec j = .ok sess ∧
+    ∃ (sess : RunRecord) (schs : Array Schedule), Record.decodeJWithK keep hs spec j = .ok sess ∧
       tabs.size = spec.tables.size ∧
       ∀ (k : ℕ) (hk : k / 2 < tabs.size), fast100 tabs[k / 2].m = some schs[k / 2]! ∧
         ∃ c, verifyRepWith hs spec tabs[k / 2] schs[k / 2]! sess (k / 2) (k % 2) proofs[k]! = .ok c := by

@@ -164,7 +164,7 @@ def repFrames (st : Setup) (sch : Flock.Schedule) (domain : ByteArray) (n : ℕ)
 /-- **Every round of a verified rep's stream retained its frames** (PROTOCOL.md §6, §9–§13). When `verifyRep` accepts
 rep `r` of table `i`, its stream and proof decode, and on a stream whose rounds all retained their bytes, round `j`
 retained the bytes of the `j`-th chunk of the rep's frames, and there is one chunk per round. -/
-theorem rep_rounds (spec : SessionSpec) (st : Setup) (sch : Flock.Schedule) (sess : Session) (i r : ℕ)
+theorem rep_rounds (spec : SessionSpec) (st : Setup) (sch : Flock.Schedule) (sess : RunRecord) (i r : ℕ)
     (bytes cap : ByteArray) (hm : 14 ≤ st.m) (hdim : DimSeam sch)
     (hlv : ∀ i < sch.levels.size, LevelSeam (sch.levels.getD i default))
     (h : verifyRep spec st sch sess i r bytes = .ok cap) :

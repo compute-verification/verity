@@ -148,7 +148,7 @@ theorem rounds_eq_of_keys {spec : SessionSpec} : ∀ {a b c d : List Round},
 rounds on every rep stream**, all retained. -/
 theorem sess_rounds_eq (hs hs' : Hashes Flock.V) {spec : SessionSpec} {sts : Array Stmt} {record record' : String}
     {proofs proofs' : Array ByteArray} {lv lv' : Live} {link link' : List ByteArray × List ByteArray} {c₁ c₁' : Coin}
-    {mids : List (Claims.Msg × Coin)} {sess sess' : Session}
+    {mids : List (Claims.Msg × Coin)} {sess sess' : RunRecord}
     (hv : verifyWithM hs spec (tabsOf sts) record proofs = .ok ()) (hl : liveOf spec record = .ok lv)
     (hv' : verifyWithM hs' spec (tabsOf sts) record' proofs' = .ok ()) (hl' : liveOf spec record' = .ok lv')
     (hc : custody spec lv link c₁ mids = .ok ()) (hc' : custody spec lv' link' c₁' mids = .ok ())
@@ -171,7 +171,7 @@ theorem sess_rounds_eq (hs hs' : Hashes Flock.V) {spec : SessionSpec} {sts : Arr
 /-! ## One rep on two sessions with one stream -/
 
 /-- **A rep reads its session only through its stream's rounds, the points and its table's `root_B`.** -/
-theorem verifyRep_congr {spec : SessionSpec} {st : Setup} {sch : Flock.Schedule} {sess sess' : Session} {i r : ℕ}
+theorem verifyRep_congr {spec : SessionSpec} {st : Setup} {sch : Flock.Schedule} {sess sess' : RunRecord} {i r : ℕ}
     (bytes : ByteArray) {y y' : StreamRec}
     (hy : sess.streams.find? (fun x => x.name == s!"{spec.tables[i]!}/rep{r}") = some y)
     (hy' : sess'.streams.find? (fun x => x.name == s!"{spec.tables[i]!}/rep{r}") = some y')
@@ -188,7 +188,7 @@ theorem verifyRep_congr {spec : SessionSpec} {st : Setup} {sch : Flock.Schedule}
 /-- **An accepted plain rep passed every level's Merkle check through the oracle `hs`**: `rep_levels_check` before
 the oracle is replaced. -/
 theorem rep_levels_checkWith (hs : Hashes Flock.V) {spec : SessionSpec} {st : Setup} {sch : Flock.Schedule}
-    {sess : Session} {i r : ℕ} {bytes cap : ByteArray} (hsch : fast100 st.m = some sch)
+    {sess : RunRecord} {i r : ℕ} {bytes cap : ByteArray} (hsch : fast100 st.m = some sch)
     (hf : ∀ a b lw rho ts v, st.fold.folded a b lw rho ts = .ok v → rho.size + 6 = st.fold.kLog)
     (hkl : st.fold.kLog = st.kLog) (h : verifyRepWith hs spec st sch sess i r bytes = .ok cap) :
     ∃ (stream : StreamRec) (extras : Array Flock.Claim) (p : Proof),
@@ -226,7 +226,7 @@ theorem rep_levels_checkWith (hs : Hashes Flock.V) {spec : SessionSpec} {st : Se
 /-- **Every SHA-512 input of an accepted plain rep's openings is among the calls `L`**, when the rep ran with SHA-512
 answered only within `L`: at every level `ℓ` and query `j`, the inputs of the proof's opening (`levelIns`). -/
 theorem rep_level_logs {L : List Claims.Msg} {spec : SessionSpec} {st : Setup} {sch : Flock.Schedule}
-    {sess : Session} {i r : ℕ} {bytes cap : ByteArray} (hsch : fast100 st.m = some sch)
+    {sess : RunRecord} {i r : ℕ} {bytes cap : ByteArray} (hsch : fast100 st.m = some sch)
     (hf : ∀ a b lw rho ts v, st.fold.folded a b lw rho ts = .ok v → rho.size + 6 = st.fold.kLog)
     (hkl : st.fold.kLog = st.kLog)
     (hms : st.merkle = MerkleScheme.hm96Sha512 ∨ st.merkle = MerkleScheme.sha512 "flock-leaf/sha512-unsalted")
@@ -264,7 +264,7 @@ theorem verifyWithM_proofs_size (hs : Hashes Flock.V) {spec : SessionSpec} {tabs
 /-- **Rep `k` of an accepted plain verdict**: table `k / 2`'s rep `k % 2` passes on proof file `k`. -/
 theorem verifyWithM_rep (hs : Hashes Flock.V) {spec : SessionSpec} {tabs : Array Setup} {record : String}
     {proofs : Array ByteArray} (h : verifyWithM hs spec tabs record proofs = .ok ()) :
-    ∃ (sess : Session) (schs : Array Schedule), Record.decodeWith hs spec record = .ok sess ∧
+    ∃ (sess : RunRecord) (schs : Array Schedule), Record.decodeWith hs spec record = .ok sess ∧
       tabs.size = spec.tables.size ∧
       ∀ (k : ℕ) (hk : k / 2 < tabs.size), fast100 tabs[k / 2].m = some schs[k / 2]! ∧
         ∃ c, verifyRepWith hs spec tabs[k / 2] schs[k / 2]! sess (k / 2) (k % 2) proofs[k]! = .ok c := by
@@ -389,7 +389,7 @@ theorem plain_calls_tied {x : Claims.Msg} {ms : List Claims.Msg} {l l' : Claims.
   have hB : sess.rootB = sess'.rootB := by
     rw [hrB, hrB']
     exact Array.ext' (hlB.trans hlB'.symm)
-  have hpure : ∀ {L : List Claims.Msg} {sess₀ : Session} {bs c₀ : ByteArray},
+  have hpure : ∀ {L : List Claims.Msg} {sess₀ : RunRecord} {bs c₀ : ByteArray},
       verifyRepWith (hashesIn L) spec st sch sess₀ (k / 2) (k % 2) bs = .ok c₀ →
         verifyRep spec st sch sess₀ (k / 2) (k % 2) bs = .ok c₀ := by
     intro L sess₀ bs c₀ h

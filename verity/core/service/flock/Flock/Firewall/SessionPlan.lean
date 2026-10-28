@@ -9,7 +9,7 @@ the setup's own Lean values, never a parse of the `Hello` text.
 * `planOf`: the openings after the session stream's, rep stream by rep stream in `SessionSpec.repStreams` order, by the
   stream's index there, as the coin layer's schedule places them (`Claims.ZKMal.CoinLayer.slot`).
 * `streamsOk`: the coin tree's streams are the session's own (`session`, then the rep streams, all distinct, two a table),
-  so that a stream's round, which the coin check counts by the stream's index in the tree (`Coins.Session.open`), is its
+  so that a stream's round, which the coin check counts by the stream's index in the tree (`Coins.Release.open`), is its
   own.
 * `helloOf`: what the coin check reads of the session's `Hello`, the tree (`SessionSpec.coinTree`), the session stream's
   coin count (`points · m_pts`) and the nonce; none where the tree's streams are not the session's.
@@ -78,7 +78,7 @@ def reqAt (plan : Array (String × Nat)) (links j : Nat) : String × Nat :=
 
 /-- **The coin tree's streams are the session's own**: the `session` stream, then each rep stream in `SessionSpec.repStreams`
 order, all distinct, two a table statement (`Zk.coinSpec`'s layout). The coin check counts a stream's rounds by its index in
-the tree (`Coins.Session.open`), so only then is each stream's round its own. -/
+the tree (`Coins.Release.open`), so only then is each stream's round its own. -/
 def streamsOk (spec : SessionSpec) (sts : Array Stmt) (ct : CoinTree.Spec) : Bool :=
   ct.streams.toList == Coins.SESSION :: spec.repStreams.toList.map (·.2.2) && decide ct.streams.toList.Nodup &&
     spec.repStreams.size == 2 * sts.size

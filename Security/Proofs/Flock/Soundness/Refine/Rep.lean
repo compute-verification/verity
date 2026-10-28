@@ -106,7 +106,7 @@ coins of every round of the stream, accepts. Its caps are the proof's, and its r
 checks. -/
 theorem rep_refines {D : Type} (spec : SessionSpec) (st : Setup) (S : Model.Statement) (hm : 13 ≤ S.m) (h15 : 15 ≤ S.m)
     (sch : Flock.Schedule) (hmS : st.m = S.m) (hkS : st.kLog = S.kLog) (hfold : FoldRealizes st.fold S)
-    (extra : List (Model.Claim 𝔽 S.m)) (sess : Session) (hext : ExtraRealizes st S sess.points extra)
+    (extra : List (Model.Claim 𝔽 S.m)) (sess : RunRecord) (hext : ExtraRealizes st S sess.points extra)
     (hdim : DimSeam sch) (hlv : ∀ i < sch.levels.size, LevelSeam (sch.levels.getD i default))
     (hα1 : ∀ i < sch.levels.size, ceilLog2 (sch.levels.getD i default).q ≠ 1) (hschm : sch.m = S.m)
     (hwf : ∀ s ∈ sess.streams.toList, RoundsWF s.rounds) (i r : ℕ) (bytes cap : ByteArray)

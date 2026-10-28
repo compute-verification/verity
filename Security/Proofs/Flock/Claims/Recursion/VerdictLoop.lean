@@ -31,7 +31,7 @@ open FlockSoundness.Discharge.Recursion (HClass)
 
 /-- **The verdict on the decoded proofs accepts** when each of its checks passes. -/
 theorem verifyJPWith_ok (hs : Flock.Hashes Flock.V) (spec : SessionSpec) (tabs : Array Setup) (j : Lean.Json)
-    (ps : Array Proof) {sess : Session}
+    (ps : Array Proof) {sess : RunRecord}
     (hT : (tabs.size != spec.tables.size || tabs.size == 0) = false)
     (hD : Record.decodeJWith hs spec j = .ok sess)
     (hU : ∀ q ∈ (tabs.zip sess.publics).toList, q.1.publics q.2 = .ok ())

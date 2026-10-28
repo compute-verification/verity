@@ -55,7 +55,7 @@ def RecordsLiveAtDJK (keep : Bool → Bool) (I : Exec.Inputs) (d : Json) {J mPts
 /-- **`TxNoOffAtK` at the parsed value**: no column off `C` at the session `t.j` decodes to through `keep`. -/
 def TxNoOffAtJK (keep : Bool → Bool) (I : Exec.Inputs) (d : Json) {N : ℕ} (C : Fin N → List 𝔽) (t : TranscriptJ) :
     Prop :=
-  ∀ (spec : SessionSpec) (st : _root_.Flock.Stmt) (sess : Session) (sch : _root_.Flock.Schedule) (s₀ s₁ : StreamRec),
+  ∀ (spec : SessionSpec) (st : _root_.Flock.Stmt) (sess : RunRecord) (sch : _root_.Flock.Schedule) (s₀ s₁ : StreamRec),
     setupAtD I (some d) = .ok (spec, #[st]) → Record.decodeJWithK keep With.std spec t.j = .ok sess →
     _root_.Flock.fast100 st.m = some sch →
     sess.streams.find? (fun x => x.name == toString spec.tables[0]! ++ toString "/rep" ++ toString 0) = some s₀ →

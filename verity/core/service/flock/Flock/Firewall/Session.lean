@@ -192,7 +192,7 @@ structure State where
   /-- the session's Σ and its link points, a table's -/
   sigma : ByteArray := .empty
   points : Nat := 0
-  session : Option Coins.Session := none
+  session : Option Coins.Release := none
   stop : Option String := none
 
 /-- The session stopped by `why`, and what the prover receives: `Resp::Refused(why)`. -/
@@ -264,7 +264,7 @@ def State.answer (S : State) (k : Kind) (a : ByteArray) : State × ByteArray :=
       if S.sent then
         S.refuse s!"{Coins.STOP}the session has no coin tree of its own streams (session, then each table's rep0 and rep1, distinct)"
       else S.refuse s!"{Coins.STOP}Hello's answer before the Hello"
-    | none, some h => match Coins.Session.start h a.data.toList with
+    | none, some h => match Coins.Release.start h a.data.toList with
       | .ok C => ({ S with session := some C }, a)
       | .error e => S.refuse e
   | .commit, some 2 => S.coins a

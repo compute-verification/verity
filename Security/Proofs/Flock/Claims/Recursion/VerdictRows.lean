@@ -48,7 +48,7 @@ structure DecAt (rd : Claims.Msg → Option FinalP) (x : Claims.Msg) (ms : List 
   spec : SessionSpec
   sts : Array Stmt
   setup : setupWith (Claims.hOf FlockDeploy.sha512) d.s.read = .ok (spec, sts)
-  sess : Session
+  sess : RunRecord
   decode : Record.decodeJWith (Flock.Hashes.ofSha512 (Claims.hOf FlockDeploy.sha512) : Flock.Hashes Flock.V) spec
     (jAt FlockDeploy.sha512 spec sts d.c₁ d.mids d.f) = .ok sess
 
