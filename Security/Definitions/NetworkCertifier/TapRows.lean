@@ -37,7 +37,7 @@ ingress gate has an opening, and at an egress gate the program holds constant th
 step's record exists, its egress rows are the rows the openings hold at the egress gates, and the operator's move on the
 records before it is the ingress they hold at the ingress gates. -/
 def TapOpens {L K S : ℕ} (H : Msg → Msg) (Cm : Commitment Bool) (lay : Layout L S) (k : ℕ)
-    (op : ℕ → List (Obs L K S) → List Bool) (s : Stmt) (ops : List (Opening Bool)) (o : List (Obs L K S)) : Prop :=
+    (op : ℕ → List (Obs L K S) → List Bool) (s : AuditStatement) (ops : List (Opening Bool)) (o : List (Obs L K S)) : Prop :=
   (∀ q ∈ ops, Cm.Opens H s.roots q = true) ∧
     ∀ t (_ : t < k),
       (∀ ℓ σ, ∀ g ∈ slotGates (lay.egress t ℓ σ),
@@ -50,9 +50,9 @@ def TapOpens {L K S : ℕ} (H : Msg → Msg) (Cm : Commitment Bool) (lay : Layou
 a partition, and every observation sequence of length `k` with jitter below `Dj` that the network certifier registers
 (`TapOpens`, its openings `tops s`) with every status complete is among the sequences `AccSeqsSampled` counts at the
 inputs `As s ρ`, `ρ` the trace's committed values. -/
-def RLeakTap (H : Msg → Msg) (Cm : Commitment Bool) (parse : Msg → Option Stmt) (partition : Stmt → Option Partition)
-    (L K S : ℕ) (lay : Stmt → Layout L S) (k : Stmt → ℕ) (δ : ℝ) (As : Stmt → (ℕ → Bool) → Set (ℕ → Bool)) (Dj : ℕ)
-    (tops : Stmt → List (Opening Bool)) : Rel Wit :=
+def RLeakTap (H : Msg → Msg) (Cm : Commitment Bool) (parse : Msg → Option AuditStatement) (partition : AuditStatement → Option Partition)
+    (L K S : ℕ) (lay : AuditStatement → Layout L S) (k : AuditStatement → ℕ) (δ : ℝ) (As : AuditStatement → (ℕ → Bool) → Set (ℕ → Bool)) (Dj : ℕ)
+    (tops : AuditStatement → List (Opening Bool)) : Rel Wit :=
   fun x w => ∃ s P, parse x = some s ∧ partition s = some P ∧
     ∀ (op : ℕ → List (Obs L K S) → List Bool) (o : List (Obs L K S)),
       TapOpens H Cm (lay s) (k s) op s (tops s) o → Covered (k s) o → o.length = k s → (∀ y ∈ o, y.jitter < Dj) →
@@ -71,7 +71,7 @@ the extractor's coins, the extractor run, and the first collision among its own 
 network certifier's openings `tops s` under the statement's roots. Its cost is the extraction's SHA-512 calls, its
 reruns' included, and the checks'. -/
 noncomputable def Btap (H : Msg → Msg) (V : Verifier Coin) (E : Extractor Coin W V) (Cm : Commitment Bool)
-    (parse : Msg → Option Stmt) (tops : Stmt → List (Opening Bool)) : FinderFamily :=
+    (parse : Msg → Option AuditStatement) (tops : AuditStatement → List (Opening Bool)) : FinderFamily :=
   fun Ω _ _ P x =>
     let tl := ((parse x).map fun s => tapLog H Cm s.roots (tops s)).getD []
     { S := Ω × (Fin (V.k x) → Coin) × E.C x
