@@ -13,11 +13,11 @@ each bound's premises holding together, and its conclusion failing where a premi
 * `2` and `3`, each `0 ∧ 1`: the product, and a second gate computing it again.
 
 The registration `R1` puts the computed gates in one proof block, a `(2, 1)`-partition (two gates, the token its one
-unregistered input bit); `R2` puts each in its own. One counted product (`B`) multiplies the weight (`W`, its slot) by the
-token (`O`, its operand) at gate `2`; its use is the one consumer of `K`, whose region and required gate are the token. The
-item `Y p` is the product's value priced `p`. The decoder `M` reads only programs of two bits: a tag, then one bit it
-outputs when the tag is set; every description it gives is two bits long. The run distribution `μ` draws the token
-uniformly.
+unregistered input bit); `R2` puts each in its own. One counted product (`B`) multiplies the weight (`W`, its slot) by
+the token (`O`, its operand) at gate `2`; its use is the one consumer of `K`, whose region and required gate are the
+token. The item `Y p` is the product's value at gate `2` priced `p`, and `Y2 p` its value at both gates `2` and `3`.
+The decoder `M` has programs of four lengths, and compresses: it describes `11`, the value of gates `2` and `3` when the
+token is set, in one bit, and every other two-bit string in three. The run distribution `μ` draws the token uniformly.
 -/
 
 namespace Nci.Capability.Toy
@@ -133,20 +133,48 @@ def K2 : Consumers D (Fin 1) where
   G_sub := fun _ => subset_refl _
   A_θ := fun _ => by decide
 
-/-- The decoder: on a program of two bits it outputs the second when the first is set, and nothing otherwise; it reads
-no other program, so every description it gives is two bits long. -/
+/-- The product's value at both gates computing it, priced `p` bits. -/
+def Y2 (p : ℕ) : Items C (Fin 1) where
+  cells := fun _ => {{2, 3}}
+  price := fun _ => p
+  price_nonneg := fun _ => Nat.cast_nonneg p
+
+/-- The decoder's programs, of lengths 1, 3, 4 and 5:
+
+* `[0]` outputs `11`, a two-bit string in one bit;
+* `[1, 0, b]` outputs `bb`, the toy's block evaluated on its token `b`;
+* `[1, 1, 0, b]` outputs nothing, the empty selection;
+* `[1, 1, 1, b, x]` outputs `bb` when `x` is set and `b(¬b)` otherwise: the block's value, then one bit picking the
+  source among the two strings that start with it. -/
+def decode : List Bool → Option (List Bool)
+  | [false] => some [true, true]
+  | [true, false, b] => some [b, b]
+  | [true, true, false, _] => some []
+  | [true, true, true, b, x] => some (if x then [b, b] else [b, !b])
+  | _ => none
+
+/-- The decoder: `decode`, at every time allowance. It compresses: `11` has a one-bit description, every other
+two-bit string only three-bit ones. -/
 def M : Decoder Unit where
-  run := fun _ p _ => if p.length = 2 then some (if p.head? = some true then p.tail else []) else none
+  run := fun _ p _ => decode p
   mono := fun _ _ _ _ _ _ h => h
   prefixFree := by
     intro r t p p' y y' h h' hp
-    have h1 : p.length = 2 := by
-      by_contra hc
-      simp [hc] at h
-    have h2 : p'.length = 2 := by
-      by_contra hc
-      simp [hc] at h'
-    exact hp.eq_of_length (h1.trans h2.symm)
+    have mem : ∀ q y, decode q = some y → q ∈ [[false], [true, false, false], [true, false, true],
+        [true, true, false, false], [true, true, false, true], [true, true, true, false, false],
+        [true, true, true, false, true], [true, true, true, true, false], [true, true, true, true, true]] := by
+      intro q y hq
+      rcases q with _ | ⟨a, _ | ⟨b, _ | ⟨c, _ | ⟨d, _ | ⟨e, _ | ⟨f, q⟩⟩⟩⟩⟩⟩ <;>
+        (try cases a) <;> (try cases b) <;> (try cases c) <;> (try cases d) <;> (try cases e) <;>
+        simp [decode] at hq ⊢
+    have free : ∀ q ∈ [[false], [true, false, false], [true, false, true],
+        [true, true, false, false], [true, true, false, true], [true, true, true, false, false],
+        [true, true, true, false, true], [true, true, true, true, false], [true, true, true, true, true]],
+        ∀ q' ∈ [[false], [true, false, false], [true, false, true],
+        [true, true, false, false], [true, true, false, true], [true, true, true, false, false],
+        [true, true, true, false, true], [true, true, true, true, false], [true, true, true, true, true]],
+        q <+: q' → q = q' := by decide
+    exact free p (mem p y h) p' (mem p' y' h') hp
 
 /-- The inputs with the token `b` and every other gate `1`. -/
 def tok (b : Bool) : C.Transcript := fun g => if g = 1 then BitVec.ofBool b else 1
@@ -154,7 +182,7 @@ def tok (b : Bool) : C.Transcript := fun g => if g = 1 then BitVec.ofBool b else
 /-- The run distribution: the token drawn uniformly. -/
 noncomputable def μ : PMF C.Transcript := (PMF.uniformOfFintype Bool).map tok
 
-/-- The token's bit, the source the toy recovers. -/
-def z (T : C.Transcript) : List Bool := [(T 1).getLsbD 0]
+/-- The product's value at both gates computing it, the source the toy recovers. -/
+def z (T : C.Transcript) : List Bool := [(T 2).getLsbD 0, (T 3).getLsbD 0]
 
 end Nci.Capability.Toy

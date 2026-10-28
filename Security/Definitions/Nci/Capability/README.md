@@ -144,11 +144,12 @@ when no block holds anything.
 Each bound has two witnesses, listed under the lock's `witnesses` and proved: an honest one, its premises holding
 together, and a nontrivial one, its conclusion failing where a premise is dropped. They are stated at the toy circuit
 `Nci.Capability.Toy` (four one-bit gates, one counted product; `Guarantees/Capability/Witnesses.lean`), and
-`CapabilityFloor`'s at the toy task `Accounting.Overhead.Toy`. The structural premises are proved there. Of the
-information premises, `MinEntropyHard` holds without degeneracy (the product's value is a uniform bit), while
-`DescriptionHard`, `SourceHard` and `Recovers` hold at deficit 0 only because the toy decoder reads programs of exactly
-two bits and compresses nothing. Coverage holds at η = 0 only because every computation there has the covered
-structure.
+`CapabilityFloor`'s at the toy task `Accounting.Overhead.Toy`. The structural premises are proved there, and so are the
+information premises, none degenerately. `MinEntropyHard` holds at Λ = 0 for the product's value, a uniform bit. The toy
+decoder compresses: it describes `11`, the value of gates 2 and 3 in an honest run, in one bit, and every other two-bit
+string in three. Against it `DescriptionHard` holds at Λ = 1, `SourceHard` at δ = 1 and `Recovers` at amb = 1, and each
+witness also proves its parameter spent: at 0 the premise fails. Coverage holds at η = 1/2 and fails at η = 0: the
+covered structure is two gates, and a one-gate guess lacks it and reaches the target on half the coins.
 
 ## Standard assemblies
 
