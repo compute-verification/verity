@@ -9,6 +9,8 @@ h is in MAC-times a committed byte (hash_cost_h.py). For each T and row size rb:
                floored at 0 (a point inside the noise) and capped at h_x (past that the bytes go exclusive); h_b_hi adds twice the
                A/A noise floor where an A-B-A run measured it
   h(rb, σ; B) = σ h_b(rb, σ B) + (1 - σ) h_x(rb), for B committed bytes a forward, σ of them hashed beside the GEMM
+  G(rb)        the free room: the most bytes a forward a measured point saves outright, max over points of b (1 - h_b / h_x).
+               Hashing that point's b beside and the rest exclusive gives h(rb, B) = h_x (1 - G / B), for B at least b
   h_b median   the robust beside figure: the median h_beside of the A-B-A points at the phases whose median is least
   h_cycles     the same with the clock's fall beside the hash taken out (NVML in each leg), the per-clock figure
 A point's phases and cap are its kernel configuration: VERITY_ROWS_PHASES (data launches a leaf batch) and CTAs a launch. Each loop
@@ -26,6 +28,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from hash_cost_h import analyze
 
 GRID_MB = (10, 25, 50, 100, 200, 400, 800, 1600, 3200, 6400, 12800)
+B921 = 13.6e9                                                  # b921's committed bytes a forward, where main() prints h(rb, B)
 SERVED = ("t256", "4", "split")                                # native_rows.cu as served: 256 threads, 4 data phases, split leaves
 
 
@@ -111,8 +114,13 @@ def model(by: dict) -> dict:
                       "h_b_quartiles": [round(x, 1) for x in statistics.quantiles(hs, n=4)] if len(hs) >= 2 else None,
                       "share_of_h_x": round(statistics.median(hs) / h_x, 3) if hs else None,
                       "max_gbps": max((p["beside_gbps"] for p in sel), default=None)}
+            room = max(use, key=lambda p: p["bytes_per_fwd"] * (1 - val(p, False) / h_x), default=None)
+            g = room["bytes_per_fwd"] * (1 - val(room, False) / h_x) if room else 0.0
+            free = {"bytes": round(max(g, 0.0)), "at": room and {k: room[k] for k in ("run", "arm", "phases", "cap", "bytes_per_fwd",
+                                                                                      "h_beside", "h_noise")},
+                    "h_at_b921": round(h_x * (1 - max(g, 0.0) / B921), 1) if room and room["bytes_per_fwd"] <= B921 else None}
             out.setdefault(T, {})[rb] = {"h_x": round(h_x, 1), "h_b": robust, "h_leaf": best["h_leaf"], "h_tree": trees.get(rb),
-                                         "alone_at": best,
+                                         "alone_at": best, "free": free,
                                          "h_b_by_mb_per_fwd": env, "points": pts}
     return out
 
@@ -124,10 +132,13 @@ def main() -> None:
         for rb, m in sorted(rows.items(), key=lambda kv: int(kv[0])):
             env = "  ".join(f"{x['mb_per_fwd']}MB:{x['h_b']:.0f}" + (f"/{x['h_b_hi']:.0f}" if x["h_b_hi"] != x["h_b"] else "")
                             for x in m["h_b_by_mb_per_fwd"])
-            r = m["h_b"]
+            r, fr = m["h_b"], m["free"]
+            at = fr["at"] and (f"{fr['at']['arm']} cap {fr['at']['cap']} P{fr['at']['phases']} at {fr['at']['bytes_per_fwd'] / 1e9:.2f} GB, "
+                               f"h_b {fr['at']['h_beside']:.0f} ± {fr['at']['h_noise'] or 0:.0f}")
             print(f"T {T:>5} rows {int(rb) // 1024:>2} KiB  h_x {m['h_x']:7.1f} (leaf {m['h_leaf']}, tree {m['h_tree']})  h_b median "
                   f"{r['h_b_median']} quartiles {r['h_b_quartiles']} ({r['share_of_h_x']} of h_x; per clock {r['h_cycles_median']}; "
-                  f"phases {r['phases']}, {r['n']} points, paired {r['paired']})\n      envelope: {env}")
+                  f"phases {r['phases']}, {r['n']} points, paired {r['paired']})\n      envelope: {env}\n"
+                  f"      free room G {fr['bytes'] / 1e9:.2f} GB a forward ({at}); h at {B921 / 1e9} GB a forward {fr['h_at_b921']}")
 
 
 if __name__ == "__main__":
