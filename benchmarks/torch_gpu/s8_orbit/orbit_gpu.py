@@ -16,7 +16,7 @@ from pathlib import Path
 import torch
 
 TILES = (96, 80, 64)
-BK, TM, XCH, MAX_STAGES, SMEM_LIMIT, NT = 32, 64, 8, 8, 232448, 288
+BK, TM, XCH, MAX_STAGES, SMEM_LIMIT, NT = 32, 64, 8, 8, 232448, 256
 #: CUtensorMapDataType UINT8, CUtensorMapSwizzle 32B, CUtensorMapL2promotion 128B; CUfunction_attribute
 #: MAX_DYNAMIC_SHARED_SIZE_BYTES; CUdevice_attribute MULTIPROCESSOR_COUNT
 TMAP_UINT8, TMAP_SWIZZLE_32B, TMAP_L2_128B, MAX_DYN_SMEM, SM_COUNT = 0, 1, 2, 8, 16

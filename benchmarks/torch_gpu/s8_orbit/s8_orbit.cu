@@ -13,8 +13,8 @@
 //
 // Persistent, one CTA an SM: CTA c takes tiles c, c + gridDim.x, ... of the (M/2 / 64) x (N/2 / BN) quadrant tiles
 // (`raster`).  Warpgroup 0 holds products M1, M2, M3, M6 and warpgroup 1 holds M4, M5, M7 (BN / 2 accumulators a product a
-// thread); warp 8's first lane issues every TMA (one 4-D box of X's four blocks, one 3-D box of B's seven forms a stage).
-// 288 threads: ptxas sizes the registers by 65536 / threads, so a full warpgroup of producers would leave the consumers 170.
+// thread).  Warpgroup 1's first thread also issues every TMA (one 4-D box of X's four blocks, one 3-D box of B's seven forms
+// a stage), up to STAGES stages ahead of the consumers, blocking only when the stage it is about to consume isn't issued.
 // In the epilogue warpgroup 0 hands M1, M2, M3 to warpgroup 1 through shared memory, XCH accumulators a thread at a time:
 // warpgroup 0 stores C22 = M1 - M2 + M3 + M6, warpgroup 1 C11 = M1 + M4 - M5 + M7, C12 = M3 + M5, C21 = M2 + M4.
 #include <cstddef>
@@ -52,6 +52,14 @@ DEV void mbar_wait(uint32_t bar, uint32_t parity) {
       "{\n .reg .pred p;\n WAIT:\n mbarrier.try_wait.parity.shared::cta.b64 p, [%0], %1;\n @!p bra WAIT;\n}\n" ::"r"(bar),
       "r"(parity)
       : "memory");
+}
+DEV bool mbar_test(uint32_t bar, uint32_t parity) {
+  uint32_t ok;
+  asm volatile("{\n .reg .pred p;\n mbarrier.test_wait.parity.shared::cta.b64 p, [%1], %2;\n selp.u32 %0, 1, 0, p;\n}"
+               : "=r"(ok)
+               : "r"(bar), "r"(parity)
+               : "memory");
+  return ok;
 }
 DEV void tma_prefetch(const void* map) { asm volatile("prefetch.tensormap [%0];" ::"l"(map) : "memory"); }
 DEV void tma_load4(uint32_t dst, const void* map, uint32_t bar, int c0, int c1) {
@@ -141,7 +149,7 @@ DEV uint32_t words(int32_t a, int32_t b, float sr, float c0, float c1) {
 }
 
 // ---------------------------------------------------------------- the orbit
-constexpr int BK = 32, TM = 64, XCH = 8, MAX_STAGES = 8, SMEM_LIMIT = 232448, NT = 288;
+constexpr int BK = 32, TM = 64, XCH = 8, MAX_STAGES = 8, SMEM_LIMIT = 232448, NT = 256;
 constexpr uint32_t BLK = TM * BK;  // one 64 x 32 block of A
 
 template <int BN> struct Orbit {
@@ -214,11 +222,39 @@ template <int BN, int WG> DEV void consumer(const Params& p, uint32_t base, uint
   int s = 0;
   uint32_t ph = 0, ov = 0;
   int32_t d[NP][NA];
+
+  // the loads, in the consumers' order of stages; `load` issues the next one once its slot is empty
+  const bool loads = WG == 1 && x == 0;
+  int lt = blockIdx.x, lkb = 0, ls = 0, issued = 0, consumed = 0;
+  uint32_t lph = 0;
+  auto load = [&](bool block) {
+    if (lt >= total) return false;
+    const uint32_t full = bars + 8 * ls, empty = bars + 8 * (STAGES + ls);
+    if (block)
+      mbar_wait(empty, lph ^ 1);
+    else if (!mbar_test(empty, lph ^ 1))
+      return false;
+    int ltm, ltn;
+    raster(lt, tiles_m, tiles_n, p.group, ltm, ltn);
+    const uint32_t st = base + ls * O::STAGE;
+    mbar_expect_tx(full, O::TX);
+    tma_load4(st, &p.a, full, lkb * BK, ltm * TM);
+    tma_load3(st + O::SRC, &p.b, full, lkb * BK, ltn * BN);
+    if (++ls == STAGES) { ls = 0; lph ^= 1; }
+    if (++lkb == KB) { lkb = 0; lt += gridDim.x; }
+    issued++;
+    return true;
+  };
+  if (loads)
+    while (load(false)) {}
+
   for (int t = blockIdx.x; t < total; t += gridDim.x) {
     int tm, tn;
     raster(t, tiles_m, tiles_n, p.group, tm, tn);
     for (int kb = 0; kb < KB; kb++) {
       const uint32_t st = base + s * O::STAGE;
+      if (loads)
+        while (issued <= consumed) load(true);
       mbar_wait(bars + 8 * s, ph);
       form<BN, WG>(st, x, ov);
       fence_async();
@@ -231,6 +267,9 @@ template <int BN, int WG> DEV void consumer(const Params& p, uint32_t base, uint
       WG_WAIT(1);
       if (kb > 0 && lane == 0) mbar_arrive(bars + 8 * (STAGES + (s == 0 ? STAGES - 1 : s - 1)));
       if (++s == STAGES) { s = 0; ph ^= 1; }
+      consumed++;
+      if (loads)
+        while (load(false)) {}
     }
     WG_WAIT(0);
 #pragma unroll
@@ -249,6 +288,8 @@ template <int BN, int WG> DEV void consumer(const Params& p, uint32_t base, uint
         }
       }
       bar_sync(3, 256);
+      if (loads && e0 == 0)
+        while (load(false)) {}
 #pragma unroll
       for (int e = 0; e < XCH; e += 2) {
         const int i = e0 + e, r = r0 + 8 * ((i / 2) % 2), c = c0 + 8 * (i / 4);
@@ -283,30 +324,11 @@ template <int BN> DEV void body(const Params& p) {
     asm volatile("fence.mbarrier_init.release.cluster;" ::: "memory");
     if (p.clk) { p.clk[4 * blockIdx.x] = clock64(); p.clk[4 * blockIdx.x + 1] = globaltimer(); }
   }
-  __syncthreads();
-  if (tid >= 256) {
-    if (tid == 256) {
-      tma_prefetch(&p.a);
-      tma_prefetch(&p.b);
-      const int hm = p.M / 2, hn = p.N / 2, KB = (p.K / 2 + BK - 1) / BK;
-      const int tiles_m = (hm + TM - 1) / TM, tiles_n = (hn + BN - 1) / BN, total = tiles_m * tiles_n;
-      int s = 0;
-      uint32_t ph = 0;
-      for (int t = blockIdx.x; t < total; t += gridDim.x) {
-        int tm, tn;
-        raster(t, tiles_m, tiles_n, p.group, tm, tn);
-        for (int kb = 0; kb < KB; kb++) {
-          const uint32_t st = base + s * O::STAGE, full = bars + 8 * s;
-          mbar_wait(bars + 8 * (STAGES + s), ph ^ 1);
-          mbar_expect_tx(full, O::TX);
-          tma_load4(st, &p.a, full, kb * BK, tm * TM);
-          tma_load3(st + O::SRC, &p.b, full, kb * BK, tn * BN);
-          if (++s == STAGES) { s = 0; ph ^= 1; }
-        }
-      }
-    }
-    return;
+  if (tid == 128) {
+    tma_prefetch(&p.a);
+    tma_prefetch(&p.b);
   }
+  __syncthreads();
   int32_t* xs = reinterpret_cast<int32_t*>(smem + (xb - smem_at(smem)));
   if (tid < 128)
     consumer<BN, 0>(p, base, bars, xs);
@@ -315,6 +337,8 @@ template <int BN> DEV void body(const Params& p) {
   if (tid == 0 && p.clk) { p.clk[4 * blockIdx.x + 2] = clock64(); p.clk[4 * blockIdx.x + 3] = globaltimer(); }
 }
 
+// 256 threads and no producer warp: the register file is split over the SM's four sub-partitions, so a ninth warp would put
+// three on one of them and cap every thread at 168 registers
 #define ORBIT(BN) \
   extern "C" __global__ void __launch_bounds__(NT, 1) s8orbit_##BN(const __grid_constant__ Params p) { body<BN>(p); }
 ORBIT(96)
