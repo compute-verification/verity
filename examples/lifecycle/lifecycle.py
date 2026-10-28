@@ -44,6 +44,7 @@ from typing import Any
 import numpy as np
 
 from verity.core.deploy.party import Finish, Identity, Received, Record, Send, Timer
+from verity.core.protocols.pous import wipe_monitoring
 from verity.core.protocols.pouw import window as pouw_window_rules
 from verity.core.protocols.sampled_proofs.coins import OwnRandomness, draw_first
 from verity.core.protocols.sampled_proofs.one_stage import registered as R
@@ -953,7 +954,7 @@ DECLARATION_SECONDS = 60
 """A stated parameter: a declaration period's length in a deployment, which scales a monitoring period's declarations and
 the layout's capacity in each."""
 TICKS_PER_SECOND = 10 ** 9
-PERIODS = {"week": 7 * 24 * 3600, "month": 30 * 24 * 3600, "year": 365 * 24 * 3600}
+PERIODS = dict(wipe_monitoring.PERIODS)
 
 
 def pooled(lines: Sequence[Mapping[str, Any]]) -> tuple[Fraction, int, int]:
