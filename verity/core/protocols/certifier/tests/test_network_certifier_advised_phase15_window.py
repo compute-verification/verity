@@ -82,7 +82,7 @@ def test_a_window_declaring_off_its_certified_sync_is_refused_alone():
 
 
 def test_the_verifier_of_record_refuses_only_the_window_run_off_its_declaration(tmp_path):
-    """Through the proof service (stand-in proofs) on simulated serving: the clock source says the certifier ran window
+    """Through the proof system (stand-in proofs) on simulated serving: the clock source says the certifier ran window
     2 at δ = 1, one of Σ_sync, where the prover declared δ = 2. Window 2 is refused and the rest accepted on the floors
     of the syncs the certifier ran, so the network verdict refuses the link (`Run.link` holds it to the AND)."""
     ran = list(SYNCS)

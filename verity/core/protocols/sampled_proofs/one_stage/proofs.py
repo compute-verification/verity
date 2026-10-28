@@ -1,5 +1,5 @@
 """A statement's proof files, verified by C-Flock's Lean verifier (`flock-verify verify --zk`, the Lake package
-`verity/core/service/flock`, built with `lake` on first use): the proof service's own run of the verifier, so a protocol
+`verity/core/service/flock`, built with `lake` on first use): the proof system's own run of the verifier, so a protocol
 reads each session's verdict from that run, never from a verdict record the prover hands in.
 
 `verify` takes a statement's files as the prover delivered them (`Proof`: the circuit file, the public file and the
