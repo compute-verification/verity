@@ -1,5 +1,6 @@
 import Proofs.Pouw.PearlC.TileCheck8
-import Proofs.Pouw.PearlC.TileProtocol
+import Proofs.Pouw.PearlC.TileValues
+import Proofs.Pouw.PearlC.Tile4Circuit
 import Proofs.Pouw.PearlC.TileGamma
 
 /-!
