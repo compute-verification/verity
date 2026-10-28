@@ -518,9 +518,9 @@ def run(specs: list[str], opts: CK.Options, *, everything: bool = False, as_call
     (`granted_gb`: check.py writes its slot's mem= there when every step beside circuit-check has ended), that number takes
     ``mem_gb``'s place for the targets not yet started.
 
-    The task list (each target and its key) is a cache entry too, under the catalog's own key: while everything its build
-    could depend on is unchanged (`cache.task_list_reads`), a run whose every target is reused as it was recorded builds no
-    Definition. Any other run builds the list; with ``units``, from the catalog bindings' records (`circuit_check.units`),
+    The task list (each target and its key) is a cache entry too, under the catalog's own key, which holds the pinned ids
+    (`targets.pinned`: a pin keeps its target): while everything its build could depend on is unchanged
+    (`cache.task_list_reads`), a run whose every target is reused as it was recorded builds no Definition. Any other run builds the list; with ``units``, from the catalog bindings' records (`circuit_check.units`),
     building only the bindings whose record misses, and a full build stores them."""
     tracing = cache is not None and CC.tracing()
     isolated = jobs > 1 if isolate is None else isolate
@@ -528,7 +528,7 @@ def run(specs: list[str], opts: CK.Options, *, everything: bool = False, as_call
     if tracing and everything and not specs:
         TG.load_registries()
         listed = CC.key({"target": ["task-list", "--all"], "as_call": as_call,
-                         "options": {k: getattr(opts, k) for k in opts.__dataclass_fields__}})
+                         "options": {k: getattr(opts, k) for k in opts.__dataclass_fields__}, "pinned": sorted(TG.pinned())})
         if (hit := CC.lookup(cache, listed, REPO, moved=False)) is not None:
             got = [CC.lookup(cache, k, REPO, moved=False) for k in hit[0]["keys"]]
             if all(g is not None and not _errored(g[0]) for g in got):
