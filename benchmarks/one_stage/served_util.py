@@ -319,6 +319,9 @@ def main() -> int:
         doc["load"] = {"requests": len(reqs), "ok": sum(1 for r in reqs if r.get("ok")), "span_s": round(max(done), 3) if done else None,
                        "last_send_s": round(max(sent), 3) if sent else None}
     a.out.write_text(json.dumps(doc, indent=1))
+    if rows := doc.get("serve", {}).get("windows"):
+        print(f"WINDOWS {len(rows)} closed, {sum(1 for r in rows if r.get('passed'))} passed, committed GB a window "
+              f"{doc['serve'].get('committed_GB_per_window')}, seconds {doc['serve'].get('window_seconds')}")
     for key in ("queued", "all"):
         w = doc.get(key)
         if not isinstance(w, dict) or "tensor_active_pct" not in w:

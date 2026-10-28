@@ -15,6 +15,8 @@
 #   h1      the Commit (sealed iff H1_SEAL=1) and PoUW H1 at T and S 1 with the epoch's in-process coins (no challenger
 #           gate: it credits nothing; the gate's own costs are not in this run)
 # Env: ARM, T (8192), N (64), WARM (2·T/1024), GPU_HZ (10000), LEASE_MIN (90), EXTRA (more serve-openai arguments).
+# A Commit arm at T 8,192 needs VERITY_LEARN_HOST_BUDGET_MB above its step's committed bytes (the default 4,096 MiB fails
+# every step closed: "bounded staging: learning step 0 exceeds the transient host budget").
 # Published ($OUT): util.json and util.txt, the profile (prof.nsys-rep), serve.json, summary.json, windows.jsonl's timings
 # and sizes (in util.json), the step trace, the loads' timings files (times and token counts), steps.txt. Request
 # bodies, outputs, sealed windows (deleted once measured) and the H1 transcripts stay in UTIL_ROOT/scratch/<run id>.
@@ -44,7 +46,8 @@ if [ "${1:-}" != leased ]; then
   mkdir -p "$D"
   research keep "$ROOT/scratch" --owner @vllm --expires 3d --priority normal \
     --why "vllm-util80 (VLLM-33): serve dirs of the utilization runs (request bodies, outputs, H1 transcripts)" > /dev/null 2>&1
-  say "ARM $ARM T $T N $N WARM $WARM row $(basename "$ROW") tree $(git -C "$TREE" rev-parse --short HEAD 2>/dev/null)"
+  say "ARM $ARM T $T N $N WARM $WARM row $(basename "$ROW") tree $(git -C "$TREE" rev-parse --short HEAD 2>/dev/null)" \
+    "learn budget ${VERITY_LEARN_HOST_BUDGET_MB:-4096} MiB"
   GPU_LEASE_WHO=vllm-util80 gpu-lease 1 --wait --max-min "${LEASE_MIN:-90}" -- bash "$TREE/benchmarks/one_stage/served_util.sh" leased
   rc=$?
   say "LEASED PART rc=$rc"
