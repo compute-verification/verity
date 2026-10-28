@@ -15,14 +15,14 @@ from __future__ import annotations
 from verity.ml.circuits.refs import tuple_of
 from verity.ml.circuits.types import Tuple
 
-from . import (SALT_CUSTODY, Challenge, Deviation, Interval, Plan, Port, ReadWindow, Store, Wipe, account, audit,
+from . import (SALT_CUSTODY, Challenge, Deviation, Interval, Plan, Port, ReadWindow, StoreEntry, Wipe, account, audit,
                occupancy, place, register, run)
 from .examples import GB, rack
 from .models import DOT, LINEAR, MAT, VEC, WEIGHTS, X, program, word, words
 
 IMAGE = words("image", 32)
 S0, S1 = words("salt0", 32), words("salt1", 32)
-KV = Store("kv", 1 * GB, "n1.gpu0")
+KV = StoreEntry("kv", 1 * GB, "n1.gpu0")
 
 
 def model(B, x, w1, w2, image, temperature, s0, s1):
