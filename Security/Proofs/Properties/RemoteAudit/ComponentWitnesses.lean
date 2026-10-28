@@ -718,11 +718,11 @@ theorem publishedEps_nontrivial : ¬ PublishedEpsFor (fun p _ e => match RemoteA
     positivity
   rcases hd with ⟨-, hq⟩ | hn
   · exact absurd hq (by decide)
-  · have he := hn { Toy.node with params := params, groupsPerCoin := g,
-      delta := ⟨RemoteAudit.Protocol.DELTA, hpos.le⟩ } rfl rfl rfl
-    have hr := drawTerm_pos { Toy.node with params := params, groupsPerCoin := g,
-      delta := ⟨RemoteAudit.Protocol.DELTA, hpos.le⟩ } hpos
-    have h0 := lt_of_lt_of_eq hr he.symm
+  · obtain ⟨node, hp, hg, hδ⟩ : ∃ node : Node, node.params = params ∧ node.groupsPerCoin = g ∧
+        (node.delta : ℚ) = RemoteAudit.Protocol.DELTA :=
+      ⟨{ Toy.node with params := params, groupsPerCoin := g, delta := ⟨RemoteAudit.Protocol.DELTA, hpos.le⟩ },
+        rfl, rfl, rfl⟩
+    have h0 := lt_of_lt_of_eq (drawTerm_pos node (by rw [hδ]; exact hpos)) (hn node hp hg hδ).symm
     norm_num at h0
 
 end Properties.RemoteAudit.Component
