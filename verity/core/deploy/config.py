@@ -5,7 +5,7 @@ and hashes.
     format = "verity/config/v0"
     protocols = ["sampled-proofs", "pouw"]           the subprotocols, by the six subprotocols' names
     [workload]  name, params                         the computation audited, and its public shape
-    [service]   law                                  the proof service's selection law (no ε, δ or threshold)
+    [service]   law                                  the proof system's selection law (no ε, δ or threshold)
     [program]   commit                               the commit of the auditor-trusted code the parties run
     [params."<id>"]                                  a listed subprotocol's public structural parameters
     [[party]]   name, machine, principal             machine: `local`, or a name `verity run --on` gives
