@@ -1,5 +1,5 @@
 import Mathlib.Tactic.Ring
-import Properties.Flock.Circuit.Prog
+import Definitions.Flock.Lowering
 import Flock.Net
 
 /-!
