@@ -12,19 +12,14 @@ after its operands are committed, one coin a round. The service then draws one u
 window's grid-padded tiles, one a proof unit, and proves each drawn tile with the generation of its own noise.
 
 Each round's coin is `live` (the verifier's, released after the round's served values are committed) or `seeded`
-(a seed: SHA-512 of the window's salt, the unit's position and its operands' roots, Fiat–Shamir). The live statements
-(`CircuitWork`, `CircuitCredit`) describe the designed protocol: PoUW's code today has one salt a window and derives
-the noise in the scheme (`verity/core/protocols/pouw/coins.py`'s `LABELS`, `PROTOCOL.md`), so every window it runs is
-seeded, and its credit is the seeded statements' (`CircuitWorkSeeded`, `CircuitCreditSeeded`), at a grinding premium
-per seed group (GRIND, one seed a call), once its seeds name what each round reads (`SeedNamed`, which
-today's code doesn't meet).
+(a seed: SHA-512 of the window's salt, the unit's position and its operands' roots, Fiat–Shamir). The live statement
+(`CircuitWork`) describes the designed protocol: PoUW's code today has one salt a window and derives the noise in the
+scheme (`verity/core/protocols/pouw/coins.py`'s `LABELS`, `PROTOCOL.md`), so every window it runs is seeded, and its
+work is the seeded statement's (`CircuitWorkSeeded`), at a grinding premium per seed group (GRIND, one seed a call),
+once its seeds name what each round reads (`SeedNamed`, which today's code doesn't meet).
 
-It has two layers. The logical layer, from `Declared` to `WorkAt`, is the circuit, its rounds, its
-proof units, the templates' luck, the service's draw and what an accepted window establishes about the run's committed
-words; it reads no machine model. The physical layer, from `creditOf` to `certOf`, is the tensor–scalar model on a
-data sheet, which prices those words as time on a declared device.
-
-The logical layer:
+It is the logical layer, from `Declared` to `WorkAt`: the circuit, its rounds, its proof units, the templates' luck,
+the service's draw and what an accepted window establishes about the run's committed words. It reads no machine model.
 
 * `CoinMode`, `Declared`: the circuit as the IR gives it, a `Accounting.Gates.Dag` (memory accounting's form, with its
   wiring), each gate's Definition call site, each call site's round (the coin its noise reads: one coin a round),
@@ -112,19 +107,6 @@ The logical layer:
   weight and grinding premium `π* = ln(T_q/δ_g)/θ` from the IR, and the seeded logical bound
   `max(5a, (1 + κ₀)·b)·ln(1/δ_s)/(ρ·K) + a·Π_F + b·Π_0 + min(a, b)·D₀`, the whole skips' premium `Π_0` at their own
   rate.
-
-The physical layer:
-
-* `creditOf`, `epsFlat`, `epsMu`, `aOf`, `bOf`, `epsOf`: `T_cred = B(♭)/f_max`, NOTATION's `ε_♭` and `ε_μ` at the
-  circuit's floor, the time a folded and a whole share of `1` cost (`κ`, and `κ + (1 − μ_f)·N_w·φ*/B_♭`), and
-  `ε = ε_♭ + ε_μ + r` at the logical layer's bound `r`.
-* `Fits`, `ModelScope`: the model is the circuit's on the data sheet; the model's ranges.
-* `Certificate`, `Certificate.Holds`, `certOf`: the interface the physical layer's ledger consumes:
-  work of each kind in a device window (`Accounting.Window`, its ticks), its credit, `ε`, `δ`, `γ_♭ = T(H)/T_cred`
-  (W1: `♭` reported, not pinned) and the coin mode `ε` is for (`live` from `CircuitCredit`, `seeded` from
-  `CircuitCreditSeeded`), so the issuer of composed certificates, which doesn't exist yet, can refuse the live `ε`
-  for a seeded window. The ledger, not this statement, decides how much of a device's time the certificates it
-  admits may claim.
 -/
 
 namespace Accounting.Compose
@@ -902,87 +884,5 @@ into the folded units' `d_F` and the whole units' `d₀` (B1), with `a·d_F + b�
 words fixed right are more than a share `1 − r` of the work. -/
 def WorkAt (Nw a b r fixed folded : ℝ) : Prop :=
   ∃ dF d0 : ℝ, 0 ≤ dF ∧ 0 ≤ d0 ∧ (1 - (dF + d0)) * Nw ≤ fixed ∧ (1 - d0) * Nw ≤ folded ∧ a * dF + b * d0 < r
-
-/-! ## The physical layer: the tensor–scalar model on a data sheet -/
-
-section Credit
-
-variable {ι K R T L U F X : Type} [Fintype K] [Fintype R] [Fintype T] [Fintype L] [Fintype U] [Fintype F]
-  [Fintype X]
-
-/-- **The credit**: `T_cred = B(♭)/f_max`, the circuit's floor on the model's machine. -/
-noncomputable def creditOf (Sc : Scheme K) (Cd : Declared ι) (Z : Model K R T L U F X) : ℝ := Z.credit (floorOf Sc Cd)
-
-/-- `ε_♭ = ε_skip + ε_cert + ε_route` at the circuit's floor. -/
-noncomputable def epsFlat (Sc : Scheme K) (Cd : Declared ι) (Z : Model K R T L U F X) (lam : R → ℝ) : ℝ :=
-  Z.epsSkip (floorOf Sc Cd) lam + Z.epsCert (floorOf Sc Cd) lam + Z.epsRoute (floorOf Sc Cd) lam
-
-/-- `ε_μ = ε_mand` at the circuit's floor. -/
-noncomputable def epsMu (Sc : Scheme K) (Cd : Declared ι) (Z : Model K R T L U F X) (lam : R → ℝ) : ℝ :=
-  Z.epsMand (floorOf Sc Cd) lam
-
-/-- **A folded share's time**, per unit of share: `κ(π) = N_w·w*(π)/B_♭`, the words it skips. -/
-noncomputable def aOf (Sc : Scheme K) (Cd : Declared ι) (Z : Model K R T L U F X) (lam : R → ℝ) : ℝ :=
-  Z.kappa (floorOf Sc Cd) lam
-
-/-- **A whole share's time**, per unit of share: `κ(π) + (1 − μ_f)·N_w·φ*(π)/B_♭`, its words and its fold. -/
-noncomputable def bOf (Sc : Scheme K) (Cd : Declared ι) (Z : Model K R T L U F X) (lam : R → ℝ) : ℝ :=
-  aOf Sc Cd Z lam + (1 - Z.muF) * Z.Nw * Z.phiStar lam / Z.bnd (floorOf Sc Cd)
-
-/-- **The circuit's `ε`** at the logical layer's bound `r`: `ε_♭ + ε_μ + r`. For a live window,
-`r = Λ·ln(1/δ_s) + min(a, b)·D₀` (`rOf`), where `Λ` bounds its time saved per unit of detection (`ServiceBudget`). -/
-noncomputable def epsOf (Sc : Scheme K) (Cd : Declared ι) (Z : Model K R T L U F X) (lam : R → ℝ) (r : ℝ) : ℝ :=
-  epsFlat Sc Cd Z lam + epsMu Sc Cd Z lam + r
-
-/-- **The model is the circuit's on sheet `Sh`**: its machine is the sheet's, and its committed words are the circuit's
-(`N_w = wordsOf`). -/
-def Fits {P : Type} [DecidableEq P] (Sc : Scheme K) (Cd : Declared ι) (Sh : Sheet K P)
-    (Z : Model K (SheetRow P) T L U F X) : Prop :=
-  Z.G = Sh.machine ∧ Z.Nw = (wordsOf Sc Cd : ℝ)
-
-/-- **The model's ranges**: `π` a certificate, the model well formed at the circuit's floor, and SCALAR-ROUTE's floors
-at the ½ the data sheet gives (`q, q_T ≤ ½`, `b_T ≤ 0`). -/
-def ModelScope (Sc : Scheme K) (Cd : Declared ι) (Z : Model K R T L U F X) (lam : R → ℝ) : Prop :=
-  IsCert lam ∧ Z.Wf (floorOf Sc Cd) ∧ Z.q ≤ 1 / 2 ∧ Z.qT ≤ 1 / 2 ∧ Z.bT ≤ 0
-
-end Credit
-
-/-- **A credit certificate** (the interface the physical layer's ledger consumes): the prover system
-did work `units k` of each kind `k` in the device window `window` (`Accounting.Window`: `len` ticks from `start`),
-worth `credit` seconds on the declared machine, short by at most `eps` of it except with probability `delta`; `gamma` is
-honest's time over the credit, `γ_♭ = T(H)/T_cred`, which says what the floor `♭` is against the honest kernel (W1);
-`coins` is the coin mode `eps` is for: `live` from `CircuitCredit`, every round holding a credited tile live, and
-`seeded` from `CircuitCreditSeeded`, with its grinding premium. The issuer of composed certificates, which doesn't exist
-yet, refuses a live `eps` for a seeded window.
-It is what the physical layer's ledger consumes, never a credit by itself: the ledger admits a set of certificates on
-one device only if the credit inside every interval of its ticks fits in it, so one device's time is credited once. -/
-structure Certificate where
-  window : Accounting.Window
-  units : Kind → ℕ
-  credit : ℝ
-  eps : ℝ
-  delta : ℝ
-  gamma : ℝ
-  coins : CoinMode
-
-/-- **The certificate holds for a play**: its accepted runs take less than `(1 − eps)·credit` with probability at
-most `delta`. -/
-def Certificate.Holds {Ω : Type} [Fintype Ω] {S : ℕ} {K T L U : Type} (c : Certificate) (P : Play Ω S K T L U) :
-    Prop :=
-  prob (fun x => P.accepts x ∧ (P.run x).run.time < (1 - c.eps) * c.credit) ≤ c.delta
-
-/-- **The circuit's certificate** in device window `win`: its words per kind, `T_cred`, `ε` at the logical layer's
-bound `r`, the given `δ`, `γ_♭` against honest kernel `H`, and the coin mode it is issued for (`.live` in
-`CircuitCredit`, `.seeded` in `CircuitCreditSeeded`). -/
-noncomputable def certOf {ι K R T L U F X : Type} [Fintype K] [Fintype R] [Fintype T] [Fintype L] [Fintype U]
-    [Fintype F] [Fintype X] (Sc : Scheme K) (Cd : Declared ι) (Z : Model K R T L U F X) (H : Honest K)
-    (lam : R → ℝ) (r δ : ℝ) (win : Accounting.Window) (coins : CoinMode) : Certificate where
-  window := win
-  units := kindCount Cd
-  credit := creditOf Sc Cd Z
-  eps := epsOf Sc Cd Z lam r
-  delta := δ
-  gamma := Z.gammaFloor H (floorOf Sc Cd)
-  coins := coins
 
 end Accounting.Compose

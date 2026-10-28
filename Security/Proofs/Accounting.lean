@@ -4,9 +4,6 @@ import Proofs.Accounting.MemoryShare
 import Proofs.Accounting.Device
 import Proofs.Accounting.Gates
 import Proofs.Accounting.FillerLuck
-import Proofs.Accounting.Headline
-import Proofs.Accounting.HeadlineDc
-import Proofs.Accounting.HeadlineDc.Meets
 import Proofs.Accounting.Gates.Rows
 import Proofs.Accounting.Gates.Bitwise
 import Proofs.Accounting.Bandwidth

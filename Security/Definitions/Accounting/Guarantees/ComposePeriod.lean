@@ -9,13 +9,11 @@ coins and its own draw, its words counted on its live tiles only. It changes wha
 quoted per monitoring period, and credited on live tiles up to the first refused window. Its credit in live words is
 `CircuitCreditPeriod`.
 
-Both live lines are quoted at 48,000 equal live rounds, and each has its own round floor for `ε < 1%`: on Compose's
-line (`CircuitWork`, 0.744%, `a = 0.218`, `b = 0.998`) at least 10,552 equal live rounds a window, under marginal
-per-tile luck, and on the headlines' sm_120 bound (0.656% sheet, 0.591% measured) 9,496 rounds (sheet) and 9,652
-(measured). A window has far fewer (the served H1 window has 18), but over a period the rounds are the period's,
-`n·M`, so windows reach the floor by being many. Compose's line is a time credit, which no statement here gives over
-a period: the numbers below are the proved word credit's (`CircuitCreditPeriod` at `a = b = 1`), and Compose's time
-line, where quoted, is labeled unstated.
+Compose's live line (`CircuitWork`, 0.744% at 48,000 equal live rounds, `a = 0.218`, `b = 0.998`) has its own round
+floor for `ε < 1%`: at least 10,552 equal live rounds a window, under marginal per-tile luck. A window has far fewer
+(the served H1 window has 18), but over a period the rounds are the period's, `n·M`, so windows reach the floor by
+being many. Compose's line is a time credit, which no statement gives: the numbers below are the proved word credit's
+(`CircuitCreditPeriod` at `a = b = 1`), and Compose's time line, where quoted, is labeled unstated.
 
 On a masked tile Definition a dead tile has the canonical empty receipt at every coin, so its whole skip always passes
 and no guess bound holds of it. So each window names its live tiles (`Period`), the per-tile claims are asked of live
@@ -43,7 +41,7 @@ at it (`PeriodTailMax`).
   `periodCovers` in `Proofs.Accounting.ComposePeriod.Covers`) and `UnitFixed`'s sums.
 * `CircuitCreditPeriod`: (L)'s credit in live words, `(1 − ε(j))₊` of the accepted prefix's live words with `ε` at the
   realized prefix `j` (`creditPrefix`). Proved (`Proofs.Accounting.ComposePeriod`) from `CircuitWorkPeriod`'s
-  assembly at `a, b > 0`. Not the time credit (`CircuitCredit`'s `(1 − ε)·T_cred`), which no statement here gives.
+  assembly at `a, b > 0`. Not a time credit (`(1 − ε)·T_cred`), which no statement gives.
 -/
 
 namespace Accounting.Guarantees.ComposePeriod
@@ -113,8 +111,7 @@ not the period. The prefix ends at a stopping time the cheater may steer, which 
 once, whatever `j` is, so ending a period early only shortens what the budget is spread over. It states work, not
 credit. The credit in live words is `CircuitCreditPeriod`'s, `(1 − ε(j))₊` of the prefix's live words at the realized
 `j`, never at the cap: undiscounted, an all-skip window that passes with `p0^K_d = 2^-8` earns 1.95 times an honest
-stream's credit per unit of work. The time credit `(1 − ε)·j·T_cred` would be `CircuitCredit` over the period, whose
-sheet premises read one window's run, not a prefix's total: not stated.
+stream's credit per unit of work. A time credit `(1 − ε)·j·T_cred` is not stated.
 
 *Live tiles on the served gate.* `live` must be the tiles live in-circuit, and whether the gate's admit bits are those
 depends on the tile Definition. `PouwQueueAdmit_v3` admits a slot iff the request queue, committed before the
@@ -273,8 +270,8 @@ live, 180 at the measured served load's live words (17/36 of tiles) and 824 of t
 and `ε(j) < 1%` from 8,513, 18,026 and 82,403 windows: the proved line. Compose's line is the time credit, at the
 physical costs `a = 0.218`, `b = 0.998` with `ε_♭ = 0.571%`, where `ε(j) ≥ 1` up to 20, 43 and 201 windows and
 `ε(j) < 1%` from 4,815, 10,195 and 46,604: that credit, `(1 − ε_♭ − ε_μ − r(j)·N_w/N_live)₊` of the prefix's live
-words' `T_cred`, needs `CreditOfWork` on each credited window's run, which the period's one `Pl.run` doesn't give, and
-is not stated. Everything `CircuitWorkPeriod` doesn't say, this doesn't either. -/
+words' `T_cred`, would need a machine model of each credited window's run, which the period's one `Pl.run` doesn't
+give, and is not stated. Everything `CircuitWorkPeriod` doesn't say, this doesn't either. -/
 def CircuitCreditPeriod : Prop :=
   ∀ {ι K T L U C Ξ V : Type} [Fintype K] [Fintype T] [Fintype L] [Fintype U] [Fintype C] [Fintype Ξ]
     [Nonempty V] (Sc : Scheme K) (Cd : Declared ι) {n Np Kd : ℕ} (_hn : 0 < n) (_hN : Cd.units ≤ Np)

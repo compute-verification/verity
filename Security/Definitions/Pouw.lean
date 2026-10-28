@@ -147,8 +147,6 @@ assumption `TTH1T` (`H1TTileAssumptions`), and its two form checks (`H1TTileProo
 The encodings (`Encoding`): E4M3's integer grid to a bound, the doubled E2M1 grid, round to nearest onto a grid, the
 coin, an operand entry and a device's g1 grids. The int8 GEMM, the coin's rank-one terms and the epilogue (`Gemm`).
 g1 on sm_120's record H1: its grids and a round's operand leaves (`H1`). `Proofs.Pouw.FpG1` proves the arithmetic.
-`Definitions.Accounting.Guarantees.FpG1`'s headlines read H1's leaves; they are the record's bound at g1's windows, which
-the record's headlines already cover by their own quantifier over committed values.
 
 ## `H1Zy`: H1's drawn-leaf statements on words
 

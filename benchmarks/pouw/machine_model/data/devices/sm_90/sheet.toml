@@ -1,5 +1,5 @@
-# DS-90 as a data sheet (note:20261019T0511Z-draft-mm-sheets, G1): each constant the data-sheet machine
-# (`Accounting.TS.Sheet.machine`) reads on the H200, its value, the vendor document that states it and its grade, and
+# DS-90 as a data sheet (note:20261019T0511Z-draft-mm-sheets, G1): each constant of the data sheet
+# (`Accounting.TS.Sheet`) on the H200, its value, the vendor document that states it and its grade, and
 # each DS-90 class's tensor form or pipe. `machine-model sheet --device sm_90` derives every DS-90 line from it and
 # checks them against census/DS-90.csv; `--lean` prints the Lean module `lean` names, which the tests hold to it.
 # Scope: one GPU's own SMs. A peer GPU's work over NVLink or NVSwitch is outside the sheet, and Device.lean's side
@@ -20,8 +20,7 @@ grade = "whitepaper (H100 SXM5), and measured"
 source = "H100 whitepaper V1.04, Table 3, H100 SXM5: 'SMs 132'; the H200 data sheet states none (its peaks equal H100 SXM5's); the device reports 132"
 
 # A2: a SMSP issues at most one warp instruction a SMSP-cycle, so every class holds DS_issue for 1. A2u: a uniform
-# datapath instruction (UNI) takes that slot as a lane instruction does. `slots` is 1 for both, as `Sheet.machine`'s issue
-# row is.
+# datapath instruction (UNI) takes that slot as a lane instruction does. `slots` is 1 for both.
 [issue]
 slots = 1
 grade = "Programming Guide"

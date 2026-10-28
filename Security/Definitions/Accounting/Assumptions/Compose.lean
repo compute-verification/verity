@@ -4,8 +4,8 @@ import Definitions.Accounting.Assumptions.TS
 /-!
 # The compiled circuit's named assumptions (trusted)
 
-The premises the composed theorem (`Definitions.Accounting.Guarantees.Compose`) adds to the tensor–scalar model's, the
-data sheet's, sampled (I8)'s and the headlines', each a `Prop` taken as a hypothesis, never an `axiom`. Under live coins
+The premises the composed theorem (`Definitions.Accounting.Guarantees.Compose`) adds to the tensor–scalar model's,
+sampled (I8)'s and the headlines', each a `Prop` taken as a hypothesis, never an `axiom`. Under live coins
 none is about a hash: binding is charged to `δ_bind` per committed position, a per-play term. Under seeded coins the
 window's coins are SHA-512's answers to the cheater's queries for its seeds, read as one uniform oracle, and that
 reading is one named premise, `SeedExtractedAt` (`random-oracle`), taken once for the window beside GRIND's premise
@@ -28,7 +28,7 @@ The service's commit order (`Accounting.Compose.LayerCommitted`) is protocol str
 and lives in the live statements' `Scope`, not here: today's code doesn't meet it, so a live window it serves is out of
 scope.
 
-The seeded statements (`CircuitWorkSeeded`, `CircuitCreditSeeded`) take GRIND's premise in place of the four claims'
+The seeded statement (`CircuitWorkSeeded`) takes GRIND's premise in place of the four claims'
 luck halves, over the whole window's oracle answers (a `JointRun`, no stage order: a cheater may choose round `r`'s
 operands and skips after querying later rounds' seeds):
 
@@ -45,13 +45,6 @@ operands and skips after querying later rounds' seeds):
   checked values with probability at most `e^{−h}` per seed query, jointly over the round's whole tiles, given the
   cheater's view. At `h = 64·ln 2` it gives `SeedLuckAt`'s whole half at the guess bound's rate; at `K/8` nats it would
   give it at the folded rate.
-
-The physical layer's (`CreditOfWork`):
-
-* `Accounting.Assumptions.TS.FoldOptFoldedAt`: FOLD-OPT per word folded at one certificate, the headlines' premise,
-  asked at the certificate `lam` each credit statement prices at. `FoldOptFolded` is it at every certificate, which a
-  bit-exact fold falsifies, and `FoldOpt` is it at `N_w` words, which a sampled cheater that skips whole units
-  falsifies.
 -/
 
 namespace Accounting.Assumptions.Compose

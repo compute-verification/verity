@@ -18,9 +18,9 @@ can do outside it:
   probability at most `J ((1 − q)/q) B/(θ C)`, each faulty block with no earlier detection of its identity
   (`noDetectionBefore`) being detected with probability at least `q`.
 
-PoUW's deficit `ε_W` (`CircuitCredit`'s `ε`) adds one more: a certificate that isn't wrong may still credit up to `ε_W`
-of its credited work that did not run, so the work certified correctly and run is at least `(1 − ε_W) W_cert`, and the
-residual read there is `r̂ + ε_W W_cert/C`.
+PoUW's deficit `ε_W` (`CircuitCreditPeriod`'s `ε(j)`) adds one more: a certificate that isn't wrong may still credit up
+to `ε_W` of its credited work that did not run, so the work certified correctly and run is at least `(1 − ε_W) W_cert`,
+and the residual read there is `r̂ + ε_W W_cert/C`.
 
 `remoteDampener` is the hardware multiple the bound gives, as `tiers.evaluate` computes `dampener` and `fit.dampener`
 computes it at `s = 0`; `hardwareMultiple` is the one a developer needs.

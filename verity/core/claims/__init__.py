@@ -277,40 +277,6 @@ ENTRIES: dict[str, Entry] = {e.id: e for e in (
           "prover can slow, a receipt it can backdate), or if the cost model charges that computation less than the run "
           "spent on it. The PoUW form is proved on the actual model's clock (Accounting.SecurityProofs.Actual."
           "honestClock); the Pearl-C form is not proved", "Honest clock", "standard"),
-    # EPS1's tensor–scalar model (Security/Definitions/Accounting/Assumptions/TS.lean, note:20261017T0324Z-draft-eps1-spec):
-    # the named assumptions Theorem D-ideal (I1)–(I8) and the compiler lemma rest on, and the compiler's per-stage form
-    # (Security/Definitions/Accounting/Assumptions/Stages.lean)
-    Entry("accounting-ts-facet-ceilings", "assumption",
-          "Measured facets are ceilings for the stated device on the measured vector its statement names (sm_120 RTX "
-          "PRO 6000: VF3s-16, the measured headline's (I1)): on every run the counts and cycles are nonnegative and the "
-          "SM clock is in (0, f_max], each SM-clocked facet's load is at most the run's cycles, and each fixed-clock "
-          "facet's load is at most f_max times its time", "TS facet ceilings", "measured"),
-    Entry("accounting-ts-words-written", "assumption",
-          "The owned right fixed words a writer kind heads are at most its ω times the instructions of its class the "
-          "labelling gives them, ω the model's: an MMA form's m·n on a data sheet (128 for m16n8, 64 for m8n8k16), and "
-          "on a measured vector the committed words an instruction of the form writes, m·n·k_dense/(32·split) rounded "
-          "up (sm_120's VF3s-16: 128 for IMMA.16832, 32 for IMMA.8816); 1 for a uniform instruction (UNI) and 2 for a "
-          "64-bit one (UNI64, on DS-120's model only)", "TS words per instruction", "measured"),
-    Entry("accounting-ts-scalar-route", "assumption",
-          "SCALAR-ROUTE at a per-instruction cap κ (every ALU instruction creates at most κ incidences): every right "
-          "fresh gather-free vector-headed committed word costs at least 2.03 lane-instructions net of the fold and of "
-          "operand delivery (for κ < 27.2 a slot), and one whose production reads a data-dependent load at least 1.22 "
-          "lane-instructions (for κ ≤ 128) and 32(28 − 1.03κ)/(c_L − κ) bytes read from its memory level, 3.0 at κ = 8 "
-          "(QSTAR's joint statement, from class P and the cap κ; no cap is proved, and ISA-CAP's 32/7 is false). "
-          "sm_120's measured headline takes it at q = q_T = 9/8, ClassPSlots' slots once writers create at most 15 "
-          "incidences, a cap nothing proves: its 0.591% rests on that. At A6's ½ floor, which Lean proves from A6 "
-          "(SheetScalarRouteHalf), the same bound is 7.791% (10.24% on VF3r-16; r20261019-172339-a93b). The H200's "
-          "twin headline on DC-90-ri (Sm90MeasuredI3Headline) takes it at q = q_T = 3/5, beside the proved ½ floor "
-          "(Sm90MeasuredHeadline), not in its place: ClassPSlots counts a slot a word but takes a writer's slot as "
-          "writing nothing else, which a 64-bit head writing two words a lane (IMAD.WIDE, DFMA) breaks. Both are "
-          "over 1%. Cite it with its premise: DC-90-ri 1.086% under (I3) at 3/5; 1.412% at the proved ½ floor; "
-          "credit against the built ♭, the cheater priced at every known fold, counted ones included",
-          "SCALAR-ROUTE", "conjectured"),
-    Entry("accounting-ts-side-units", "assumption",
-          "A side unit's committed words cost at least its measured per-word vector", "TS side units", "measured"),
-    Entry("accounting-ts-nosum", "assumption",
-          "NOSUM: on the stated device no unit outside the route menu heads a fresh committed word", "NOSUM",
-          "measured"),
     # What the declared capacity Π rests on, per node and per window (ASK-74 = A; note:20261019T0455Z-draft-rt-scope,
     # "Device identity and clock"): ε is relative to Π (decision 100), and ASK-65 = A made the floor the node's. Its
     # trust is the auditor's inventory of the node, as certifier-coverage's is the auditor's placement; nothing checks
@@ -321,57 +287,9 @@ ENTRIES: dict[str, Entry] = {e.id: e for e in (
           "declared board and vBIOS, and no SM clock exceeds f_max, the top of that vBIOS's clock table (MIG and MPS "
           "need no clause: they can't raise the node's capacity). Trust: the auditor's inventory of the node, onsite "
           "or the host provider's instance record", "Declared device", "standard"),
-    # The data-sheet axioms A1–A7 (Security/Definitions/Accounting/Assumptions/Sheet.lean, note:20261017T1818Z-draft-axioms):
-    # vendor statements that build the data-sheet machine and give (I1)–(I5) at the ½ floor
-    Entry("accounting-sheet-clock", "assumption",
-          "A1 CLOCK: the SM clock never exceeds the device's f_max, from the device's own source. Assumed: sm_120's "
-          "2430 MHz, like the B200's f_max, is the maximum SM clock its driver reports (nvidia-smi), not a data "
-          "sheet's, the H200's 1980 MHz is EPS1 DC's measured f_max at default clocks (its sheet quotes TOPS at "
-          "1830 MHz), and nothing checks a clock offset at run time; our nodes' driver allows none (NVML's offset range "
-          "[0, 0], r20261019-121222-faa3)", "A1 clock (assumed)", "measured"),
-    Entry("accounting-sheet-dispatch", "assumption",
-          "A2 DISPATCH: each SMSP issues at most one warp instruction a cycle, whatever its pipe, uniform-datapath "
-          "instructions included (A2u, which no vendor document states), and every warp instruction takes at least one "
-          "issue slot whether or not its class is listed: one no other class names counts in the device's catch-all "
-          "class at its issue slot (NOROW on sm_120 and on the H200's and B200's sheets, UNLISTED on the measured issue "
-          "row on their measured readings, and on DC-90-ri the JI90 lines too, its instructions timed beside the "
-          "IGMMA, r20261021-070616-d06c); a reading whose classes have none (sm_120's measured "
-          "reading) leaves it free. A bulk or TMA instruction of size S counts S/99 KB in sm_120's UTMABIG, at most "
-          "its one slot (A5b's count)",
-          "A2 dispatch (whitepapers)", "measured"),
-    Entry("accounting-sheet-tensor", "assumption",
-          "A3 TENSOR: the tensor cores do at most the data sheet's dense MACs per SM clock for each operand type",
-          "A3 tensor (data sheet)", "measured"),
-    Entry("accounting-sheet-pipe", "assumption",
-          "A4 PIPE: the instruction classes Nsight Compute puts on one pipe share that pipe's CUDA Programming Guide "
-          "throughput", "A4 pipe (Programming Guide)", "measured"),
-    Entry("accounting-sheet-smem", "assumption",
-          "A5 SMEM: shared memory serves one request per SM clock, its distinct banks together (32 banks × 4 B = 128 "
-          "B), loads and stores together, so each shared-memory instruction holds one request whatever its width; "
-          "A5b, which no vendor document states: a bulk or TMA instruction holds its size S of bank bytes at that "
-          "rate, what it reads or writes on one side of a block's shared memory (RT4-SHEET-1's fold on the bulk engine)",
-          "A5 shared memory (Programming Guide)", "measured"),
-    Entry("accounting-sheet-words", "assumption",
-          "A6 WORDS: an instruction writes at most its destination registers' 32-bit words (its PTX fragment; two a "
-          "lane for a lane instruction)", "A6 words (PTX ISA)", "measured"),
-    Entry("accounting-sheet-semantics", "assumption",
-          "A7 SEMANTICS: each instruction computes the function its ISA defines and writes nothing else, so no unit "
-          "outside the route menu heads a fresh committed word and a side unit's words cost its per-word vector",
-          "A7 semantics (PTX ISA)", "measured"),
-    Entry("accounting-ts-fold-opt", "assumption",
-          "FOLD-OPT: no program folds N committed words at a certificate's price below (1 − μ_f)·N·φ*(π). The TS "
-          "statements ask it at every certificate π (FoldOpt), where a bit-exact fold falsifies it on DS-120 "
-          "(RT2-LOGIC-1's IMAD rotate) and an ALU fold of ♭'s IMADs on the H200's and B200's readings (RT3-LOGIC-6); "
-          "the headlines (sm_120's, the H200's and the B200's) ask it only at their own certificate π*, N the words "
-          "the run folds (FoldOptFoldedAt), an open conjecture checked within a stated menu by test_lean_headline.py "
-          "(the Lean menu, the bit-exact lane folds, the bulk-reduction floors and fold_bulk.cu's whole-block folds) "
-          "and on bit-exact folds by test_lean_headline_dc.py; at DC-90-ri's π* the counted, unbuilt memory "
-          "round-trip folds mixed with IMAD.WIDE (RT4-SHEET-13, -14) price at 1.0245 φ* or more, their classes on "
-          "the JI90 lines the H200 measured beside the IGMMA (r20261021-070616-d06c, r20261021-074303-da7f)",
-          "FOLD-OPT", "conjectured"),
-    Entry("accounting-ts-fill-opt", "assumption",
-          "FILL-OPT: no program runs the verified filler at a certificate's price below (1 − μ_x)·χ*(π), for every "
-          "certificate π", "FILL-OPT", "conjectured"),
+    # EPS1's tensor–scalar model (Security/Definitions/Accounting/Assumptions/TS.lean, note:20261017T0324Z-draft-eps1-spec):
+    # the named assumptions its statements rest on, and the compiler's per-stage form
+    # (Security/Definitions/Accounting/Assumptions/Stages.lean)
     Entry("accounting-ts-fan-in", "assumption",
           "An instruction merges at most m_k components, Σ(sources − 1) over its nodes, for every SASS form on sm_80, "
           "sm_89, sm_90, sm_100 and sm_120, counted by dependence: every register, uniform-register and predicate "
@@ -395,7 +313,7 @@ ENTRIES: dict[str, Entry] = {e.id: e for e in (
           "TS receipt luck at pr", "conjectured"),
     Entry("accounting-ts-operand-h-mu", "assumption",
           "(H-μ) at the receipt's operands: given the past, a round's deficient words take any one value with "
-          "probability at most μ given a view of the cheater that decides the round's share (¾ in the headlines)",
+          "probability at most μ given a view of the cheater that decides the round's share",
           "TS operand H-μ at μ", "conjectured"),
     Entry("accounting-ts-proofs-sound", "assumption",
           "Binding at δ_bind and proof soundness at δ_ZK, over a window of S rounds of n_π proofs whose leaves are each "
@@ -403,7 +321,7 @@ ENTRIES: dict[str, Entry] = {e.id: e for e in (
           "order, pinning (accounting-ts-proofs-pin) and E1(c) (accounting-ts-right-fixed), ProofsSound: outside an "
           "event of probability at most S·(δ_bind + n_π·δ_ZK), an accepted window is accepted by the ideal game and its "
           "owned right fixed words per unit are at least (1 − Σ_w d_w/S)·N_w, rightness read on the path's coins. The "
-          "headlines (sm_120's, the H200's and the B200's) take the two alone as named premises: binding in its fork "
+          "two are also named alone: binding in its fork "
           "form at δ_fork (BindingForkAt: at every round w, on a run and on its continuation from w on fresh coins, "
           "which share w's commitment, every proof of round w is accepted and some proof opens w's leaves differently, "
           "with probability at most δ_fork), read at δ_bind = √δ_fork through BindingOfFork; and each proof's "

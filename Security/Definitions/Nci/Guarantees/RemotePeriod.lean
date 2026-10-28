@@ -11,11 +11,11 @@ leg is stated as `Proofs.Flock.Soundness.Audit.Periods` states a period's bound:
 coins, over window `t`'s own (`∀ ξ, P_a[E_t(ξ[t ↦ a])] ≤ p`).
 
 * **PoUW** (in place of `PouwSound`): window `t`'s certificate is wrong (`wrong t`: accepted with the window's time
-  below `(1 − ε)·T_cred`) with probability at most `p` over its coins. That is
-  `Accounting.SecurityProofs.Compose.CircuitCredit`'s conclusion, `p = δ_s + δ_bind + δ_ks = 3 · 2⁻⁴⁰`, at window `t`'s
-  play, for a run whose window `t` at each value of the other windows' coins is a play meeting `CircuitCredit`'s
-  premises; that bridge is not stated. `ComposePeriod.CircuitCreditPeriod` credits live words over a period's
-  accepted prefix, not time, so it does not give `wrong`'s form.
+  below `(1 − ε)·T_cred`) with probability at most `p` over its coins. What backs `p` is
+  `Accounting.Guarantees.ComposePeriod.CircuitCreditPeriod`'s error, `δ_s + n·(δ_bind + δ_ks)`, which at one window
+  (`n = 1`) is `p = δ_s + δ_bind + δ_ks = 3 · 2⁻⁴⁰`. It credits `(1 − ε(j))₊` of a period's accepted prefix's live
+  words, not time, so it does not give `wrong`'s form, and no guarantee states a time credit: the bridge from it to
+  window `t`'s play, at each value of the other windows' coins, is not stated.
 * **Sampled proofs** (in place of `SampledDetection`): a window's faulty blocks are fixed before its coins (its wrong
   units at registration, `wrongRegZ`), and its draw and verdict read its coins and the past. Two per-window bounds,
   each of which a window of `Flock.Guarantees.IntegrityPeriod` has at the strategy that plays it: the draw misses all
@@ -63,7 +63,7 @@ window, or a finer cut of it where its PoUW and sampled-proofs coins are drawn a
 window holds at any value `ξ` of the other windows' coins, over its own (`ξ[t ↦ a]`, `a` uniform on `Ω t`).
 
 * PoUW certifies window `t` at capacity `c_t ≥ 0`, `∑ c_t ≤ C`, its certificate wrong (`wrong t`) with probability at
-  most `p ≥ 0`: `CircuitCredit`'s conclusion at window `t`'s play.
+  most `p ≥ 0`: `CircuitCreditPeriod`'s error at one window, for window `t`'s play (not stated).
 * Sampled proofs: the developer's faulty proof blocks `bad ξ` (block `b` in window `win b`, skipping `0 ≤ w_b ≤ B` of
   declared work) are fixed before their window's coins; the units the window draws (`drawn`) and the faulty blocks it
   detects (`detected`, those of a window flock-verify rejects) read only its coins and the earlier windows'. The draw

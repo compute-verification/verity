@@ -1,5 +1,5 @@
-# DS-100 as a data sheet (note:20261019T0511Z-draft-mm-sheets, G1): each constant the data-sheet machine
-# (`Accounting.TS.Sheet.machine`) reads on the B200, its value, the document that states it and its grade, and each
+# DS-100 as a data sheet (note:20261019T0511Z-draft-mm-sheets, G1): each constant of the data sheet
+# (`Accounting.TS.Sheet`) on the B200, its value, the document that states it and its grade, and each
 # DS-100 class's tensor form or pipe. `machine-model sheet --device sm_100` derives every DS-100 line from it and checks
 # them against census/DS-100.csv; `--lean` prints the Lean module `lean` names, which the tests hold to it.
 # Scope: one GPU's own SMs. A peer GPU's work over NVLink or NVSwitch is outside the sheet, and Device.lean's side
@@ -20,8 +20,7 @@ grade = "measured only"
 source = "no NVIDIA document read gives the B200's SM count (Technical Brief V2.1 Table 3 says only '16 Blackwell Die for 8 GPUs'); the device reports 148 (sm_100/table.toml)"
 
 # A2: a SMSP issues at most one warp instruction a SMSP-cycle, so every class holds DS_issue for 1. A2u: a uniform
-# datapath instruction (UNI) takes that slot as a lane instruction does. `slots` is 1 for both, as `Sheet.machine`'s issue
-# row is.
+# datapath instruction (UNI) takes that slot as a lane instruction does. `slots` is 1 for both.
 [issue]
 slots = 1
 grade = "Programming Guide"

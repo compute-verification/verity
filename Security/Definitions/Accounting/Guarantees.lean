@@ -13,13 +13,10 @@ import Definitions.Accounting.Guarantees.Compose
 import Definitions.Accounting.Guarantees.ComposePeriod
 import Definitions.Accounting.Guarantees.Confidence
 import Definitions.Accounting.Guarantees.FillerLuck
-import Definitions.Accounting.Guarantees.FpG1
 import Definitions.Accounting.Guarantees.HMu
 import Definitions.Accounting.Guarantees.DeclaredCircuit
 import Definitions.Accounting.Guarantees.Gates
 import Definitions.Accounting.Guarantees.GatesBitwise
-import Definitions.Accounting.Guarantees.Headline
-import Definitions.Accounting.Guarantees.HeadlineDc
 import Definitions.Accounting.Guarantees.Joint
 import Definitions.Accounting.Guarantees.JointLive
 import Definitions.Accounting.Guarantees.JointBridge.BandwidthOfAuditPerRunPeriod
@@ -49,7 +46,6 @@ import Definitions.Accounting.Guarantees.Sketch
 import Definitions.Accounting.Guarantees.Stacking
 import Definitions.Accounting.Guarantees.Tag
 import Definitions.Accounting.Guarantees.TS
-import Definitions.Accounting.Guarantees.Sheet
 import Definitions.Accounting.Guarantees.TS.Receipt
 import Definitions.Accounting.Guarantees.TS.Grind
 import Definitions.Accounting.Guarantees.TS.SharedNoise
@@ -62,9 +58,8 @@ import Definitions.Accounting.Guarantees.TS.Fixed
 /-! Resource accounting's guarantee statements: the joint guarantee and its covert residual, the joint guarantee over
 a period audited by every protocol, over a horizon of periods and over a horizon of server-time blocks and the
 wipes between them, PoUW's and the bandwidth
-audit's guarantees as a joint run's compute and bandwidth guarantees, each family's headline `ε` on its exact data,
-the filler's per-check luck, a state-bounded game's soundness as its capacity
-guarantee, derived state's share of the capacity residual, the rate audit's residency and bandwidth with the rebuild
+audit's guarantees as a joint run's compute and bandwidth guarantees, the filler's per-check luck, a state-bounded
+game's soundness as its capacity guarantee, derived state's share of the capacity residual, the rate audit's residency and bandwidth with the rebuild
 charged as compute, with partial completion and with a sketch-then-hash tag, the remote rate audit's conservation over
 tiers and chained passes, the causal horizon bound on its samples and its conservation with named words, the one
 composed guarantee for the remote bandwidth audit as deployed and its deployed instance, the remote

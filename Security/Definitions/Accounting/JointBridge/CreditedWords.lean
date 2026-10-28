@@ -29,9 +29,9 @@ words of the windows before the check's first refusal). The two differ in their 
   inputs are seed-derived goes out whole in about a kilobit (its seed out, its root in), however many words it has.
 
 So the bridge prices the credit less the multiply-adds of the units the network certifier's bits could have carried
-out, `W ≤ m·p(tc)·credit − u·p(tc)·K/b_unit` with `u` a unit's, at every price `p`. It needs no time credit: Compose's
-time line (`(1 − ε)·T_cred`, `CreditOfWork`), which no period statement gives, would credit device
-time, and the joint period's PoUW claim is priced ops.
+out, `W ≤ m·p(tc)·credit − u·p(tc)·K/b_unit` with `u` a unit's, at every price `p`. It needs no time credit: a time
+credit (`(1 − ε)·T_cred`), which no statement gives, would credit device time, and the joint period's PoUW claim is
+priced ops.
 
 * `Certificates.helpUnits`: the units the network certifier's `K` bits can carry, at `b_unit` bits a unit.
 * `RealizesCreditedWords`: a period whose PoUW audit is a source game's on PoUW's coordinate of the coins, with the work

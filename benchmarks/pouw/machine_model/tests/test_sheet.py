@@ -38,7 +38,7 @@ def test_a_clock_above_fmax_is_refused(tmp_path):
 
 @pytest.mark.parametrize("name", SHEETS)
 def test_omega_is_a6s(name):
-    """Each tensor class's ω is its accumulator fragment's words, as A6 (`SheetWords`) lists them: mma.sync m16n8k32
+    """Each tensor class's ω is its accumulator fragment's words, as A6 lists them: mma.sync m16n8k32
     s32 128, wgmma m64n256k32 4096 a warp, tcgen05.mma 128 × 256 32768, and DMMA's two registers an f64 element, 128
     at m8n8k4 and 256 at m16n8k16 (A6-WIDE)."""
     w = omega(sheet(DEVICES / name))
@@ -50,7 +50,7 @@ def test_omega_is_a6s(name):
 @pytest.mark.parametrize("name", SHEETS)
 def test_sheet_prices_the_headline(name):
     """The headline's sheet reading of the device is the sheet's: its design priced on lines derived from sheet.toml
-    is headline.py's ε, exactly. A3 is read per clock at the clock each figure is quoted at (`SheetTensor`); the
+    is headline.py's ε, exactly. A3 is read per clock at the clock each figure is quoted at; the
     reading per second at f_max is a bound `sheet --eps` prints beside it, which the headline doesn't rest on."""
     r = reading(sheet(DEVICES / name), DEVICES / name)
     assert r.sheet == r.headline

@@ -4,7 +4,7 @@ import Proofs.Pouw.FpG1
 /-!
 # FP8-g1 and W4A8-g1 on H1: g1's leaves are H1's
 
-The arithmetic behind `Definitions.Pouw.FpG1.H1`, which `Proofs.Accounting.Headline.FpG1`'s honest windows read:
+The arithmetic behind `Definitions.Pouw.FpG1.H1`:
 
 * g1's leaves on H1's grids are in H1's committed ranges (`Leaves.fp8_inH1`, `Leaves.w4a8_inH1`): E4M3's integers to
   120 and to 104 lie in `[−126, 126]` and `[−110, 110]`, and a block scale to 9 times a doubled E2M1 level is at most

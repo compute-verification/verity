@@ -354,25 +354,4 @@ theorem StageBudget : Accounting.Guarantees.TS.StageBudget := by
     rw [StageWindow.game]
     exact ⟨fun a => share_nonneg stg w hw0 T a.1, key, fun a => ih a (hLn a)⟩
 
-theorem CompilerStage : Accounting.Guarantees.TS.CompilerStage := by
-  intro K R T L U F X _ _ _ _ _ _ _ _ _ _ C V D _ _ _ M s Z H S P W stg tk w lam p r δ δbind δzk nπ hcert hwf hCH hfH
-    hS hs hp0 hp1 hr hδ hsplit hfc hww hsr hsu hns hfo hfi hG hw0 hw hL hPS
-  have hp : 0 < p := (Real.exp_pos _).trans_le hp0
-  have hL0 : 0 < Real.log (1 / p) := Real.log_pos (by rw [lt_div_iff₀ hp]; linarith)
-  have hB : RoundGame.BudgetAt (r / Real.log (1 / p)) P.game := by
-    rw [hG]
-    exact StageBudget W stg tk w p r hs hp0 hp1 hr hw0 hw hL
-  exact CompilerC Z H (Paths C M × (Fin s → D)) S P lam (r / Real.log (1 / p)) p δ δbind δzk nπ hcert hwf hCH hfH
-    hS hp hp1 (div_pos hr hL0) hδ hsplit hfc hww hsr hsu hns hfo hfi hB hPS
-
-theorem StageIdeal : Accounting.Guarantees.TS.StageIdeal := by
-  intro K R T L U F X _ _ _ _ _ _ _ _ _ _ C V D _ _ _ M s Z H S P W stg tk w lam p δ δbind δzk nπ hcert hwf hCH hfH
-    hS hs hp0 hp1 hδ hsplit hfc hww hsr hsu hns hfo hfi hG hw0 hw hL hPS
-  have h := CompilerStage Z H S P W stg tk w lam p 1 δ δbind δzk nπ hcert hwf hCH hfH hS hs hp0 hp1 one_pos hδ
-    hsplit hfc hww hsr hsu hns hfo hfi hG hw0 (fun u => by rw [one_mul]; exact hw u) hL hPS
-  have h0 : Z.epsSample H.prog lam (1 / Real.log (1 / p)) p (δ - S * (δbind + nπ * δzk)) S = 0 := by
-    unfold Model.epsSample
-    rw [sub_self, zero_mul, zero_mul]
-  rwa [h0, sub_zero] at h
-
 end Accounting.SecurityProofs.TS

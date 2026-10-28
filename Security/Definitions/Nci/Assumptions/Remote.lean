@@ -13,16 +13,17 @@ namespace Nci.Assumptions
 
 open Nci.Dampener
 
-/-- **PoUW's certificates are sound** ([POUW-SOUND]; PoUW's `CircuitCredit`): over the outcomes `Ω` of a
+/-- **PoUW's certificates are sound** ([POUW-SOUND]; PoUW's `CircuitCreditPeriod`): over the outcomes `Ω` of a
 deployment, drawn from `μ` (the verifier's coins, the developer's strategy fixed), the certificate of each of the `N`
 windows is wrong (`wrong ω i`: it credits more of that window's work than ran, beyond its deficit `ε`) with probability
 at most `p`, `3 · 2⁻⁴⁰` per window. It bounds each window's marginal only: it says nothing about how windows depend on
 one another.
 
-What backs `p` is `Accounting.Guarantees.Compose.CircuitCredit`: a certificate is accepted with the window's time below
-`(1 − ε)·T_cred` with probability at most `δ_s + δ_bind + δ_ks`, `3 · 2⁻⁴⁰` at `2⁻⁴⁰` each, `ε` being 0.744%. Nothing
-bounds how likely a certificate is to credit up to `ε` of its window that did not run, so that share is not `wrong`
-and belongs in the residual, through the certified work `W`. -/
+What backs `p` is `Accounting.Guarantees.ComposePeriod.CircuitCreditPeriod`: an accepted period has fewer of its
+accepted prefix's live words fixed right than its credit `(1 − ε(j))₊·N_live` with probability at most
+`δ_s + n·(δ_bind + δ_ks)`, `3 · 2⁻⁴⁰` at one window (`n = 1`) at `2⁻⁴⁰` each. It credits words, not time: that it
+bounds `wrong` as a window's time is not stated. Nothing bounds how likely a certificate is to credit up to `ε` of its
+window that did not run, so that share is not `wrong` and belongs in the residual, through the certified work `W`. -/
 def PouwSound {Ω : Type} [Fintype Ω] (μ : PMF Ω) {N : ℕ} (wrong : Ω → Fin N → Prop) (p : ℝ) : Prop :=
   ∀ i, prob μ (fun ω => wrong ω i) ≤ p
 

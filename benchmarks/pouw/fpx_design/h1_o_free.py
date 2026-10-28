@@ -1,8 +1,7 @@
 """FPX-G1H-2 and FPX-G1H-1 on the data-centre rows: the served words H1's and Dither-2S's receipts leave unread, priced.
 
     uv run --project benchmarks/pouw/machine_model --with python-sat --with-editable benchmarks/pouw/exact_kit \
-      python benchmarks/pouw/fpx_design/h1_o_free.py OUT [--lean-headline benchmarks/pouw/lean_headline.py] \
-      [--lean-headline-dc benchmarks/pouw/lean_headline_dc.py]
+      python benchmarks/pouw/fpx_design/h1_o_free.py OUT
 
 Run from a tree's root: it reads that tree's benchmarks/pouw, so a copy of this file runs on another branch's tree.
 
@@ -16,11 +15,7 @@ together, and the floor (1 - bound) B_♭ the Lean builders give is the same eit
 unless the committed case reproduces TS_EPS, and gives sm_120's ε_skip (`design_skip`) and ε (`verity_machine_model`'s
 eps of the design, floor credit, operands free, its skip moved by ε_skip's change, so `core` is exact) at the sheet
 (DS-120, q 1/2), the measured reading (VF3r-16, 1.22), the measured vector at 1/2, and the Lean measured instance's
-(VF3s-16, 9/8). With --lean-headline it runs that file's `instance()` and `measured()` (its headline checks lifted) on
-TS_EPS as written, which must reproduce 5.860% and 0.591%, and on each pricing, and gives the literal each guarantee
-would need. With --lean-headline-dc it runs that file's `reading` on the H200's and B200's sheet and measured vectors
-under each pricing: their designs are two-sided on every TS component, so each must come out the same, at or under
-the literal `Security/Definitions/Accounting/Guarantees/HeadlineDc.lean` states.
+(VF3s-16, 9/8).
 
 g1 on H1 serves 4 O - 2 sum X - 2 sum P^ + k (`g1h_eps.py`), so its correction is free beside O. The fix commits that
 centred word S as one more receipted word beside O' and the D_d: the cheater then computes S, through the recombination
@@ -40,12 +35,9 @@ Writes OUT/h1_o_free.json and OUT/h1_o_free.md; exit 1 if a check fails."""
 import argparse
 import importlib.util
 import json
-import math
-import re
 import sys
 import tomllib
 from dataclasses import replace
-from fractions import Fraction
 from pathlib import Path
 
 POUW = Path.cwd() / "benchmarks" / "pouw"
@@ -153,65 +145,7 @@ def dc_skip(d, data, vec, per_cell, parts) -> dict:
     return best
 
 
-def literal(bound: Fraction, strict: bool) -> str:
-    """The least headline k/100000 the bound meets (strict: below it, the measured guarantee's form)."""
-    k = math.floor(bound * 100000) + 1 if strict else math.ceil(bound * 100000)
-    return f"{k}/100000 ({k / 1000:.3f}%)"
-
-
-def lean(path: Path, pricings: dict) -> dict:
-    LH = _load("lean_headline_probe", path)
-    LH._eps_budget = lambda: eb
-    LH.EPS_M = Fraction(1)
-    fam = replace(LH.SM120, eps=Fraction(1))
-    out = {}
-    for title, ts in pricings.items():
-        eb.TS_EPS["co32c"] = ts
-        row = {}
-        try:
-            i = LH.instance(fam)
-            row["sheet"] = {"eps_skip": float(i.eps_skip), "B": float(i.B), "folded": float(i.folded),
-                            "unfolded": float(i.unfolded), "bound": float(i.bound), "pistar": i.pistar,
-                            "literal": literal(i.bound, False), "exact_logs": LH.exact_logs(i)}
-            m = LH.measured(i)
-            row["measured"] = {"eps_skip": float(m.eps_skip), "B": float(m.B), "folded": float(m.folded),
-                               "unfolded": float(m.unfolded), "bound": float(m.bound), "pistar": m.pistar,
-                               "literal": literal(m.bound, True), "exact_logs": LH.exact_logs(m)}
-        except SystemExit as e:
-            row["refused"] = str(e)
-        out[title] = row
-    return out
-
-
-DC_STATED = re.compile(r"run\.time / (\w+)\.model\.credit \1\.flat < 1 - (\d+) / 100000")
-
-
-def lean_dc(path: Path, pricings: dict) -> dict:
-    """`lean_headline_dc.reading` on each family's two vectors under each pricing: ε_skip, the exact bound, the literal
-    it needs (each HeadlineDc statement is `1 − k/100000 ≤` its bound's complement, so not strict) and the one stated."""
-    DC_ = _load("lean_headline_dc_probe", path)
-    DC_.LH._eps_budget = lambda: eb
-    stated = {ns: int(k) for ns, k in DC_STATED.findall(
-        (Path.cwd() / "Security" / "Definitions" / "Accounting" / "Guarantees" / "HeadlineDc.lean").read_text())}
-    out = {}
-    for title, ts in pricings.items():
-        eb.TS_EPS["co32c"] = ts
-        row = {}
-        for fam in DC_.FAMILIES:
-            for vec in (fam.sheet, fam.measured):
-                ns = fam.ns + ("" if vec == fam.sheet else "Measured")
-                try:
-                    r = DC_.reading(fam, vec)
-                    row[ns] = {"vector": vec, "design": fam.design, "eps_skip": r.eps_skip, "bound": r.bound,
-                               "bound_exact": str(r.data.bound), "literal": literal(r.data.bound, False),
-                               "stated": stated.get(ns)}
-                except SystemExit as e:
-                    row[ns] = {"vector": vec, "refused": str(e)}
-        out[title] = row
-    return out
-
-
-def main(out: Path, lean_path: Path | None, dc_path: Path | None = None) -> int:
+def main(out: Path) -> int:
     out.mkdir(parents=True, exist_ok=True)
     rc, lines = 0, []
     saved = {m: dict(v) for m, v in eb.TS_EPS["co32c"].items()}
@@ -267,63 +201,6 @@ def main(out: Path, lean_path: Path | None, dc_path: Path | None = None) -> int:
     lines += ["", "h1tile's receipt a unit, bits, as built and with S one more receipted word: " + "; ".join(
         f"K {K}: {a} -> {b} (+{100 * (b / a - 1):.2f}%)" for K, (a, b) in rb.items())]
 
-    lean_out = None
-    if lean_path is not None:
-        lean_out = lean(lean_path, pricings)
-        eb.TS_EPS["co32c"] = saved
-        lines += ["", f"## The Lean headlines' builders ({lean_path}) on each pricing", "",
-                  "| pricing | sheet ε_skip | sheet bound (folded, unfolded) | sheet literal needed | measured ε_skip | "
-                  "measured bound (folded, unfolded) | measured literal needed (strict) |",
-                  "|---|---:|---:|---|---:|---:|---|"]
-        for title, row in lean_out.items():
-            if "refused" in row:
-                lines.append(f"| {title} | refused: {row['refused']} | | | | | |")
-                rc = 1
-                continue
-            sh, me = row["sheet"], row["measured"]
-            lines.append(f"| {title} | {100 * sh['eps_skip']:.6f}% | **{100 * sh['bound']:.5f}%** "
-                         f"({100 * sh['folded']:.5f}%, {100 * sh['unfolded']:.5f}%) | {sh['literal']} | "
-                         f"{100 * me['eps_skip']:.6f}% | **{100 * me['bound']:.5f}%** ({100 * me['folded']:.5f}%, "
-                         f"{100 * me['unfolded']:.5f}%) | {me['literal']} |")
-        rec = next(iter(lean_out.values()))
-        if "sheet" in rec and not (rec["sheet"]["bound"] <= 5860e-5 and rec["measured"]["bound"] < 591e-5):
-            print("TS_EPS as written doesn't reproduce the Lean headlines' 5.860% and 0.591%", file=sys.stderr)
-            rc = 1
-
-    dc_lean = None
-    if dc_path is not None:
-        dc_lean = lean_dc(dc_path, pricings)
-        eb.TS_EPS["co32c"] = saved
-        lines += ["", f"## The data-centre Lean headlines' builder ({dc_path}) on each pricing", "",
-                  "Their designs' linears, lm_head and QKᵀ are two-sided and P·V a peel: floor_skip reads TS_EPS only "
-                  "for a co32c or cohalf leaf, so each reading must be the same under every pricing.", "",
-                  "| pricing | " + " | ".join(f"{ns} ({x['vector']}) ε_skip / bound / literal needed (stated)"
-                                             for ns, x in next(iter(dc_lean.values())).items()) + " |",
-                  "|---|" + "---:|" * len(next(iter(dc_lean.values())))]
-        for title, row in dc_lean.items():
-            cells = []
-            for ns, x in row.items():
-                if "refused" in x:
-                    cells.append(f"refused: {x['refused']}")
-                    rc = 1
-                    continue
-                cells.append(f"{100 * x['eps_skip']:.6f}% / **{100 * x['bound']:.5f}%** / {x['literal']} "
-                             f"({x['stated']}/100000)")
-            lines.append(f"| {title} | " + " | ".join(cells) + " |")
-        rec = next(iter(dc_lean.values()))
-        for title, row in dc_lean.items():
-            for ns, x in row.items():
-                if "refused" in x or "refused" in rec[ns]:
-                    continue
-                if (x["eps_skip"], x["bound_exact"]) != (rec[ns]["eps_skip"], rec[ns]["bound_exact"]):
-                    print(f"{ns} under {title}: ε_skip {x['eps_skip']}, bound {x['bound_exact']}, where TS_EPS as "
-                          f"written gives {rec[ns]['eps_skip']}, {rec[ns]['bound_exact']}", file=sys.stderr)
-                    rc = 1
-        for ns, x in rec.items():
-            if "refused" not in x and (x["stated"] is None or Fraction(x["bound_exact"]) > Fraction(x["stated"], 100000)):
-                print(f"{ns}: the bound {x['bound_exact']} is over its stated {x['stated']}/100000", file=sys.stderr)
-                rc = 1
-
     dc = {}
     lines += ["", "## Data-centre g1 rows (#2710's fpx-g1s-i8, the Dither-2S records on R + b): g1's correction", ""]
     for dev, (gpu, name) in DC.items():
@@ -363,7 +240,7 @@ def main(out: Path, lean_path: Path | None, dc_path: Path | None = None) -> int:
     (out / "h1_o_free.json").write_text(json.dumps({
         "design": DESIGN, "readings": readings, "ts_eps_record": saved, "cases": cases,
         "record": {r: {"skip": e.skip, "core": e.core(), "terms": e.terms()} for r, e in record.items()},
-        "receipt_bits": {str(K): v for K, v in rb.items()}, "lean": lean_out, "lean_dc": dc_lean, "dc": dc}, indent=1,
+        "receipt_bits": {str(K): v for K, v in rb.items()}, "dc": dc}, indent=1,
         default=str) + "\n")
     print("\n".join(lines))
     return rc
@@ -372,7 +249,5 @@ def main(out: Path, lean_path: Path | None, dc_path: Path | None = None) -> int:
 if __name__ == "__main__":
     ap = argparse.ArgumentParser()
     ap.add_argument("out", type=Path)
-    ap.add_argument("--lean-headline", type=Path, default=None)
-    ap.add_argument("--lean-headline-dc", type=Path, default=None)
     a = ap.parse_args()
-    sys.exit(main(a.out, a.lean_headline, a.lean_headline_dc))
+    sys.exit(main(a.out))

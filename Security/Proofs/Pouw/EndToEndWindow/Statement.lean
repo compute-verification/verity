@@ -53,8 +53,8 @@ layout, are no instances of it. `WindowWork.tileWork_metered` exhibits one: the 
 device that pays `(1 − γ)·W_ref(u)` for every coordinate it commits, satisfies `TileWork` at `γ_u = γ` with error `0`,
 for every protocol and every `γ ≤ 1`, on a domain that holds a workload (`coordDomain_inhabited`). Its programs reach
 the oracle only through counted queries (`meteredModel_queries`). The deployed device's instance is EPS1's: compute
-accounting's per-unit credit at its `ε` (`Accounting.Guarantees.Compose.CircuitCredit`, on `cursor/compose-stmt-ea24`, not
-on main), through a bridge from its play to PoUW's cost model, which is PoUW's gap (3) and is stated when that module
+accounting's credit at its `ε(j)` (`Accounting.Guarantees.ComposePeriod.CircuitCreditPeriod`, which credits words, not
+time), through a bridge from its play to PoUW's cost model, which is PoUW's gap (3) and is stated when that module
 lands.
 
 **The window's law** is the service's (decision 102, `window.py`): one uniform `K′`-subset of the `n` padded units
@@ -106,7 +106,7 @@ the gap multiplied out, so it needs no `γ_u < 1`: at `γ_u ≥ 1` its event is 
 It is stated at coordinates only, so no tile-unit premise (TT, TT_NCP) instantiates it: none of their carded domains
 holds a coordinate layout. Its instance in Lean is the metered model (`tileWork_metered`, at `γ_u = γ` with error `0`,
 on a domain that holds a workload, `coordDomain_inhabited`). The deployed device's is EPS1's, from compute accounting's
-per-unit credit (`Accounting.Guarantees.Compose.CircuitCredit`) through gap (3)'s bridge to PoUW's cost model. -/
+credit (`Accounting.Guarantees.ComposePeriod.CircuitCreditPeriod`) through gap (3)'s bridge to PoUW's cost model. -/
 def TileWork [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (CM : CostModel Q R S)
     (P : Protocol Q R S) (γu : ℝ) (η : ℕ → ℕ → ℝ) : Prop :=
   ∀ U : Workload, U.InDomain coordDomain → ∀ T : ℝ, 0 ≤ T → ∀ q : ℕ, q ≤ 2 ^ 64 → ∀ A : Adversary CM,

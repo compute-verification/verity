@@ -1,14 +1,13 @@
-"""A device's data sheet (`sheet.toml` in its directory): each constant the data-sheet machine (`Accounting.TS.Sheet`)
-reads, its value, the document that states it and its grade, and each class of its DS vector's epoch with its tensor
-form or its pipe.
+"""A device's data sheet (`sheet.toml` in its directory): each constant of the data sheet (`Accounting.TS.Sheet`), its
+value, the document that states it and its grade, and each class of its DS vector's epoch with its tensor form or its
+pipe.
 
 `lines` derives the DS lines from it, exactly: issue 1 for every class (A2, and A2u for the uniform datapath's), a tensor
 form's MACs a warp instruction over a quarter of its type's peak (A3), 128 over its pipe's width (A4; the uniform pipe's
 is the measured UP line, which no document states), and `omega` each tensor class's A6 ω, its accumulator's words a
 warp instruction. `differences` holds the lines to the census file of the DS epoch, `figures` holds each per-clock
 peak to the figure the document prints at the clock it names, and `lean` prints the Lean module that states it all
-(`lean` in sheet.toml), with `machine_eq_census`, the machine is the census line for line, and a lemma for each figure
-and each clock. `reading` prices the headline design (headline.toml) on the sheet's lines, beside
+(`lean` in sheet.toml), with a lemma for each figure and each clock. `reading` prices the headline design (headline.toml) on the sheet's lines, beside
 headline.py's ε and with A3 read per second at f_max, `moves` finds how much slower the tensor pipe can be before
 that ε moves, and `uni` prices it with a uniform instruction at a given share of an issue slot (A2u).
 """
@@ -27,7 +26,6 @@ from verity_machine_model.model import model, vector
 
 ROOT = Path(__file__).resolve().parents[4]
 SHEET = "sheet.toml"
-ROWS = ("issue", "tensor", "pipe", "smem")   # Accounting.TS.SheetRow's order
 
 
 @dataclass(frozen=True)
@@ -118,7 +116,7 @@ def sheet(data: Path) -> Sheet:
               pipes={q: _const(v, "width") for q, v in t["pipes"].items()}, kinds=kinds,
               omega=(t["omega"]["grade"], t["omega"]["source"]))
     if s.issue.value != 1 or s.uniform_issue.value != 1:
-        raise SystemExit(f"{p}: [issue] and [uniform_issue] take 1 slot, as Sheet.machine's issue row does; price A2u "
+        raise SystemExit(f"{p}: [issue] and [uniform_issue] take 1 slot, as `lines`' issue row does; price A2u "
                          f"at another share with `sheet --eps --uni`")
     for c, v in s.clocks.items():
         if v.value > s.fmax.value:
@@ -323,31 +321,22 @@ def _rel(s: Sheet) -> str:
     return f"benchmarks/pouw/machine_model/data/devices/sm_{s.vector.split('-')[1]}/{SHEET}"
 
 
-def _simp(head: str, names: list[str]) -> list[str]:
-    """`head [n₁, n₂, …]`, wrapped under the tactic's indent."""
-    return _wrap(f"{head} [{', '.join(names)}]", "  ", "      ")
-
-
 def lean(s: Sheet, data: Path) -> str:
-    """The Lean module `s.lean`: the sheet's constants with their sources, `sheet : Sheet Kind Pipe`, the DS census, the
-    theorem that the sheet's machine is that census, and the figures' lemmas."""
+    """The Lean module `s.lean`: the sheet's constants with their sources, `sheet : Sheet Kind Pipe` and the figures'
+    lemmas."""
     epoch = vector(s.vector, data).epoch
-    census = census_lines(s, data)
-    if not all(census.get(k, {}).get(row("issue")) == 1 for k in s.kinds):
-        raise SystemExit(f"census/{epoch}.csv: a class without DS_issue 1")
     kinds, pipes, types = sorted(s.kinds), list(s.pipes), list(s.peaks)
     device = f"sm_{s.vector.split('-')[1]}"
     peak = {ty: f"peak{_camel(ty)}" for ty in types}
     width = {q: f"width{_camel(q)}" for q in pipes}
     clock = {c: f"{c}MHz" for c in s.clocks}
     out = ["import Definitions.Accounting.TS.Sheet", "", "/-!", f"# The {s.name}'s data sheet (generated)", ""]
-    out += _wrap(f"The data-sheet machine (`Accounting.TS.Sheet.machine`) at the {s.gpu}'s vendor values: each constant "
-                 "with the axiom that reads it, its value, its grade and its source, and the census of the machine "
-                 f"model's `{s.vector}` vector, which `machine_eq_census` proves the machine is, line for line. Each "
-                 "tensor peak has a lemma that the per-clock peak reproduces the document's per-second figure at the "
-                 "clock that figure is quoted at. A3 reads `Run.n` as device totals over the SMSPs, so a warpgroup's "
-                 "`wgmma` or a single-thread `tcgen05.mma` counts its MACs once, spread over the SM's four SMSPs.", "")
-    out += [""] + _wrap("Scope: the machine is one GPU's own SMs. Work a peer GPU on the node does over NVLink or "
+    out += _wrap(f"The data sheet (`Accounting.TS.Sheet`) at the {s.gpu}'s vendor values: each constant with its "
+                 "label (A1–A6), its value, its grade and its source. Each tensor peak has a lemma that the per-clock "
+                 "peak reproduces the document's per-second figure at the clock that figure is quoted at. A3's MACs "
+                 "are device totals over the SMSPs, so a warpgroup's `wgmma` or a single-thread `tcgen05.mma` counts "
+                 "its MACs once, spread over the SM's four SMSPs.", "")
+    out += [""] + _wrap("Scope: the sheet is one GPU's own SMs. Work a peer GPU on the node does over NVLink or "
                         "NVSwitch and sends back (whole tiles as 64-byte digests) is outside it: the sheet bounds what "
                         "the credited GPU's SMs compute, not which GPU computed a tile, and `Device.lean`'s side "
                         "channels don't list NVLink peer offload.", "")
@@ -402,7 +391,7 @@ def lean(s: Sheet, data: Path) -> str:
     for k in kinds:
         q = s.kinds[k].pipe
         out.append(f"  | .{k} => " + (f"some .{q}" if q else "none"))
-    out += ["", *_doc("A6's ω for each tensor class (`SheetWords`, `accounting-sheet-words`): the 32-bit words a warp "
+    out += ["", *_doc("A6's ω for each tensor class: the 32-bit words a warp "
                       "instruction's accumulator fragment takes, m · n elements over the warps that issue one MMA, an "
                       "element one register and an f64 element two (DMMA, `mma.sync .f64`), a 2:4 sparse form's as "
                       "its dense twin's; `none` off the tensor pipe. Grade: "
@@ -414,8 +403,8 @@ def lean(s: Sheet, data: Path) -> str:
                                        else "none"))
     shared = [k for k in kinds if k.startswith(("LDS", "STS", "ATOMS"))]
     smem = (f"no class on the shared-memory row (the census's shared-memory classes, {', '.join(shared)}, are issue "
-            "only, so A5 bounds nothing here)" if shared else
-            "no shared-memory class (no LDS kind in the census, so A5 bounds nothing here)")
+            "only, so A5 is 0 for each)" if shared else
+            "no shared-memory class (no LDS kind in the census, so A5 is 0 for each class)")
     out += ["", *_doc(f"**The {s.name}'s data sheet**: f_max in Hz, each class's MACs and its type's peak (`0` off the "
                       f"tensor pipe), its pipe, each pipe's width, and {smem}."),
             "def sheet : Sheet Kind Pipe where",
@@ -429,56 +418,6 @@ def lean(s: Sheet, data: Path) -> str:
             "  pipe := Kind.pipe",
             "  width := Pipe.width",
             "  smem _ := 0",
-            ""]
-    # Every class has an arm and none is a wildcard, whose equation lemmas carry side conditions `simp` must discharge.
-    line = lambda r, k: _num(census.get(k, {}).get(row(r), Fraction(0)))
-    out += [*_doc(f"`census/{epoch}.csv`'s `DS_tensor` lines, SMSP-cycles a warp instruction; 0 for a class with "
-                  "none."), "def tensorLine : Kind → ℝ", *(f"  | .{k} => {line('tensor', k)}" for k in kinds), ""]
-    for q in pipes:
-        out += [*_doc(f"`census/{epoch}.csv`'s `DS_{q}` lines, SMSP-cycles a warp instruction; 0 for a class with "
-                      "none."), f"def {q}Line : Kind → ℝ", *(f"  | .{k} => {line(q, k)}" for k in kinds), ""]
-    out += [*_doc(f"**`{s.vector}`'s census** (`census/{epoch}.csv`): SMSP-cycles a warp instruction of each class "
-                  "holds each row; every class holds issue for 1, and a class with no line on a row holds it not at "
-                  "all."),
-            "def census : SheetRow Pipe → Kind → ℝ",
-            "  | .issue, _ => 1",
-            "  | .tensor, k => tensorLine k",
-            *(f"  | .pipe .{q}, k => {q}Line k" for q in pipes),
-            "  | .smem, _ => 0",
-            ""]
-    # One lemma a row, so that each row's case split has a declaration's heartbeats to itself: the whole census in one
-    # proof ran out of them (r20261019-053835-0e45).
-    unfold = ["Sheet.machine", "sheet", "census"]
-    out += [*_doc(f"The issue row: every class holds it for 1, on the sheet as in the census. A2 (a SMSP issues one warp "
-                  f"instruction a SMSP-cycle). Grade: {s.issue.grade}. Source: {s.issue.source}. A2u (a uniform "
-                  f"instruction, `UNI`, takes that slot too). Grade: {s.uniform_issue.grade}. Source: "
-                  f"{s.uniform_issue.source}."),
-            "theorem machine_issue (k : Kind) : sheet.machine.a .issue k = census .issue k := by",
-            "  simp [Sheet.machine, census]", ""]
-    # The tensor row's case split unfolds `Kind.form` in every class's case, so its cost grows with the square of the
-    # class count: 200000 ran out at 50 classes on sm_90 and 52 on sm_100 (r20261020-053329-30da).
-    out += ["-- the case split unfolds `Kind.form` in every class's case: its cost grows with the square of the class "
-            "count",
-            "set_option maxHeartbeats 1000000 in",
-            *_doc("The tensor row: each class's MACs over a quarter of its type's peak is its census line."),
-            "theorem machine_tensor (k : Kind) : sheet.machine.a .tensor k = census .tensor k := by",
-            *_simp("cases k <;> norm_num", [*unfold, "tensorLine", "Kind.form", "Ty.peak", *peak.values()]), ""]
-    for q in pipes:
-        out += [*_doc(f"The {q} pipe's row: 128 over its width for each class on it, and 0 for the rest."),
-                f"theorem machine_{q} (k : Kind) : sheet.machine.a (.pipe .{q}) k = census (.pipe .{q}) k := by",
-                *_simp("cases k <;> norm_num",
-                       [*unfold, f"{q}Line", "Kind.pipe", "Pipe.width", width[q]]), ""]
-    out += [*_doc("The shared-memory row: no class holds it."),
-            "theorem machine_smem (k : Kind) : sheet.machine.a .smem k = census .smem k := by",
-            "  simp [Sheet.machine, sheet, census]", ""]
-    out += [*_doc(f"The sheet's machine is `{s.vector}`'s census, line for line."),
-            "theorem machine_eq_census : sheet.machine.a = census := by",
-            "  funext r k",
-            "  match r with",
-            "  | .issue => exact machine_issue k",
-            "  | .tensor => exact machine_tensor k",
-            *(f"  | .pipe .{q} => exact machine_{q} k" for q in pipes),
-            "  | .smem => exact machine_smem k",
             ""]
     for c, v in s.clocks.items():
         under = v.value < s.fmax.value

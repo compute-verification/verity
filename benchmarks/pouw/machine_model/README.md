@@ -363,9 +363,7 @@ The other options:
 
 ## The headline is per node
 
-`machine-model headline`'s ε, and the Lean headline guarantees exported from this data
-(`Accounting.Guarantees.TS.Sm120SheetHeadline` and `Sm120MeasuredHeadline`), bound work done by the node (ASK-65 = A,
-19 Oct): an accepted window's node, its GPUs, host CPU and peer GPUs together, performed at least (1 − ε) of the
+`machine-model headline`'s ε bounds work done by the node (ASK-65 = A, 19 Oct): an accepted window's node, its GPUs, host CPU and peer GPUs together, performed at least (1 − ε) of the
 work the window credits. The device that did it is left to the attribution layer. The floor argument places no work: every
 credited word is a fresh function of the post-coin noise, so it was computed after the coin, but nothing ties a
 committed tile to the GPU that computed it. The transcript is a Merkle root over tile digests, so a helper holding the
@@ -483,8 +481,7 @@ uniform datapath's rate, so the sheet's uniform pipe is the census's UP line. Th
 states each one and its grade (note:20261019T0511Z-draft-mm-sheets): `machine-model --device sm_90 sheet` derives every
 DS line from it, checks it against the census file and checks each per-clock peak against the figure its document prints
 at the clock it's quoted at. `sheet --lean` prints the Lean module `sheet.toml` names
-(`Security/Definitions/Accounting/Sheets/`), which the tests hold to that output and whose `machine_eq_census` proves
-the machine is the census; its `Kind.omega` is each tensor class's A6 ω, its accumulator's words (an f64 element, a
+(`Security/Definitions/Accounting/Sheets/`), which the tests hold to that output; its `Kind.omega` is each tensor class's A6 ω, its accumulator's words (an f64 element, a
 DMMA's, two: each type's `element_words`). `sheet --eps` prices the headline design's sheet reading on the sheet's own lines (the
 headline's ε, exactly), with A3 read per second at f_max instead (each peak its figure over SMs and f_max), and finds
 how much slower every tensor line can be before that ε moves. `sheet --eps --uni C …` prices it with a uniform

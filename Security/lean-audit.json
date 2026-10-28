@@ -102,25 +102,9 @@
    "owner": "@compute-accounting",
    "digest": "f70a1fa98f6c8dbc527b0667187fae860c0494ef903c54d0b857f385220270c3"
   },
-  "Accounting.Assumptions.TS.FacetCeilings": {
-   "owner": "@compute-accounting",
-   "digest": "fa76dfe63e705d955b2dec4c6d8e3b6826c2bf36058b476ef8f1b7a8bb7c0d3b"
-  },
   "Accounting.Assumptions.TS.FanIn": {
    "owner": "@compute-accounting",
    "digest": "58d244d68b77d25572471c47056a7c4eac1f9e128db1d335c3cf3fc9a8414b71"
-  },
-  "Accounting.Assumptions.TS.FillOpt": {
-   "owner": "@compute-accounting",
-   "digest": "32e6f1ad9b1cd5704affa13c87dae03fad67a20aa3acd62efdde326a1702a503"
-  },
-  "Accounting.Assumptions.TS.FoldOpt": {
-   "owner": "@compute-accounting",
-   "digest": "68ce0cf852f288923e7ba2879c1a6ecb92a012defbe6b431c1b6ebb6ffbbe3b3"
-  },
-  "Accounting.Assumptions.TS.FoldOptFoldedAt": {
-   "owner": "@compute-accounting",
-   "digest": "91fb9f38e574977bdd9de6b21e14a5de470d977e53a8f9cb881a4709d8404edb"
   },
   "Accounting.Assumptions.TS.LinSteer": {
    "owner": "@compute-accounting",
@@ -133,10 +117,6 @@
   "Accounting.Assumptions.TS.ModesRun": {
    "owner": "@compute-accounting",
    "digest": "1dd8096f404cb332474ed4919a8171d4dfe7cf3f2ad76a846dc1283b73e437f3"
-  },
-  "Accounting.Assumptions.TS.NoSum": {
-   "owner": "@compute-accounting",
-   "digest": "b15287f80f20515d6d017205278b5209546abfab825e4f5e01da4875e74b2fda"
   },
   "Accounting.Assumptions.TS.OkRealizes": {
    "owner": "@proofs",
@@ -166,10 +146,6 @@
    "owner": "@compute-accounting",
    "digest": "0bb42a1edd93a51a2123ec06ceec56b614dfb5c73b386c15ed6651da5f2b0561"
   },
-  "Accounting.Assumptions.TS.ScalarRoute": {
-   "owner": "@compute-accounting",
-   "digest": "414a164b2927884959719a19f4157ef08125017896884da53459996b1212b5bd"
-  },
   "Accounting.Assumptions.TS.ServedChecksHold": {
    "owner": "@compute-accounting",
    "digest": "f4b0aa6ff8b0acf613569d3307bce95dab7b081ffc4c90273f27810a943f9b8c"
@@ -177,38 +153,6 @@
   "Accounting.Assumptions.TS.ServedRootsLinked": {
    "owner": "@proofs",
    "digest": "c713909d80e2cd61ef91c69616daf1e165c148473835f104820f95b9835543cb"
-  },
-  "Accounting.Assumptions.TS.SheetClock": {
-   "owner": "@compute-accounting",
-   "digest": "c27bc92a531574e652f708a8b56724dee41b9f5ac2ddf6a99041454ba111f4ad"
-  },
-  "Accounting.Assumptions.TS.SheetDispatch": {
-   "owner": "@compute-accounting",
-   "digest": "f9634f4244e50365a3d6e8b7819892b9e6b1078e1d48153821f641e7086e5dc8"
-  },
-  "Accounting.Assumptions.TS.SheetPipe": {
-   "owner": "@compute-accounting",
-   "digest": "37651d89ede633ff5ef4bf579cbb463627ca2653e8dcd615665c09a04cf948a3"
-  },
-  "Accounting.Assumptions.TS.SheetSemantics": {
-   "owner": "@compute-accounting",
-   "digest": "3b3d03419951bbb4b2a714f059b4e4edd8420ca7bfb145c8ac4f6dd49f72f425"
-  },
-  "Accounting.Assumptions.TS.SheetSmem": {
-   "owner": "@compute-accounting",
-   "digest": "7fd5d664da6fd8bbe5347c3767cf9a22f3c9cbbd05e7010c0076abf6e89d76ac"
-  },
-  "Accounting.Assumptions.TS.SheetTensor": {
-   "owner": "@compute-accounting",
-   "digest": "f6ecb9bffb0d12d13ecc2daeabcc41ef4cdff64ba928a8485b973207955e01cb"
-  },
-  "Accounting.Assumptions.TS.SheetWords": {
-   "owner": "@compute-accounting",
-   "digest": "318d32c829f132eecfda9d7e485bf9b6051ca679d424dca3f8787d33e605e8e1"
-  },
-  "Accounting.Assumptions.TS.SideUnits": {
-   "owner": "@compute-accounting",
-   "digest": "36404ba2e20a614ee48738159240c66e7f023670dba8cf261be8b3b73921e179"
   },
   "Accounting.Assumptions.TS.StageLuck": {
    "owner": "@compute-accounting",
@@ -225,10 +169,6 @@
   "Accounting.Assumptions.TS.WindowLaw": {
    "owner": "@compute-accounting",
    "digest": "22e490ac99b292ba1ef0e90c633e3e601e3da5074c218caa25130c5d7ec50b0f"
-  },
-  "Accounting.Assumptions.TS.WordsWritten": {
-   "owner": "@compute-accounting",
-   "digest": "f25002293156695a436d17dbd4ddccf594544b7187a569385947d7dc90dcecf7"
   },
   "Accounting.Assumptions.WorkHardness": {
    "owner": "@memory-accounting",
@@ -669,14 +609,6 @@
   "Accounting.TS.LiUnits.same": {
    "owner": "@compute-accounting",
    "digest": "5927b5e65e850cafe10034645ae1177813a5c245c0e2c5b63c0c8d10187f6a2d"
-  },
-  "Accounting.TS.Model.RouteDominated": {
-   "owner": "@compute-accounting",
-   "digest": "c43c3ef66cba3fd2b0af7274ddb89c4f4d51b94e088417a4fe85c136bcc9d588"
-  },
-  "Accounting.TS.Model.Wf": {
-   "owner": "@compute-accounting",
-   "digest": "e8b70e175080b78a3d162ea19115c49f185439b11cd4d765fa55f65f52a71c73"
   },
   "Accounting.TS.ProofLayer.BindingAt": {
    "owner": "@compute-accounting",
@@ -3065,20 +2997,6 @@
    "assumptions": [],
    "type_hash": "be0853f797f6f4c7ed1d6d3deea00713cf44475193505020a3f58ad089df125b"
   },
-  "Accounting.SecurityProofs.Compose.CircuitCredit": {
-   "owner": "@compute-accounting",
-   "signature": ["Accounting.SecurityProofs.Compose.CircuitCredit : Accounting.Guarantees.Compose.CircuitCredit"],
-   "assumptions": [],
-   "type_hash": "5b43ea7add7e18ec16cfa2f824e6c5e94892f3b787641a39b8ad3d9ef890f284"
-  },
-  "Accounting.SecurityProofs.Compose.CircuitCreditSeeded": {
-   "owner": "@compute-accounting",
-   "signature": [
-    "Accounting.SecurityProofs.Compose.CircuitCreditSeeded : Accounting.Guarantees.Compose.CircuitCreditSeeded"
-   ],
-   "assumptions": [],
-   "type_hash": "c1e8d2f053bcfb1c50f9c954580865f798893ea491fce93cdf1aa57ba6cf6906"
-  },
   "Accounting.SecurityProofs.Compose.CircuitWork": {
    "owner": "@compute-accounting",
    "signature": ["Accounting.SecurityProofs.Compose.CircuitWork : Accounting.Guarantees.Compose.CircuitWork"],
@@ -3090,12 +3008,6 @@
    "signature": ["Accounting.SecurityProofs.Compose.CircuitWorkSeeded : Accounting.Guarantees.Compose.CircuitWorkSeeded"],
    "assumptions": [],
    "type_hash": "adf77051204e654f79116b466bf8b2901ce4f9c35a882047988058a6bbdbb00a"
-  },
-  "Accounting.SecurityProofs.Compose.CreditOfWork": {
-   "owner": "@compute-accounting",
-   "signature": ["Accounting.SecurityProofs.Compose.CreditOfWork : Accounting.Guarantees.Compose.CreditOfWork"],
-   "assumptions": [],
-   "type_hash": "e8b400450d3c19980f643db98a5972b9ea9e23db7e3226f5ae4d682ff5da96c4"
   },
   "Accounting.SecurityProofs.Compose.ServiceBudget": {
    "owner": "@compute-accounting",
@@ -3304,38 +3216,6 @@
    "signature": ["Accounting.SecurityProofs.Fit.{u_1} : Accounting.Guarantees.Fit"],
    "assumptions": [],
    "type_hash": "7a94747611d0047831949e30d92a30156cb3773cfefb2fba15f03b7f71b3df88"
-  },
-  "Accounting.SecurityProofs.FpG1.Sm120FpG1MeasuredHeadline": {
-   "owner": "@compute-accounting",
-   "signature": [
-    "Accounting.SecurityProofs.FpG1.Sm120FpG1MeasuredHeadline : Accounting.Guarantees.FpG1.Sm120FpG1MeasuredHeadline"
-   ],
-   "assumptions": [],
-   "type_hash": "510443f144524d82ec1b720a21e2e37297f8437f24dce77bfb35365b2ff8e300"
-  },
-  "Accounting.SecurityProofs.FpG1.Sm120FpG1SheetHeadline": {
-   "owner": "@compute-accounting",
-   "signature": [
-    "Accounting.SecurityProofs.FpG1.Sm120FpG1SheetHeadline : Accounting.Guarantees.FpG1.Sm120FpG1SheetHeadline"
-   ],
-   "assumptions": [],
-   "type_hash": "9bf83cdf3cfbd6f55a855ddf9851c188eff696b8cae663149595ba04195c05b3"
-  },
-  "Accounting.SecurityProofs.FpG1.Sm120W4a8G1MeasuredHeadline": {
-   "owner": "@compute-accounting",
-   "signature": [
-    "Accounting.SecurityProofs.FpG1.Sm120W4a8G1MeasuredHeadline : Accounting.Guarantees.FpG1.Sm120W4a8G1MeasuredHeadline"
-   ],
-   "assumptions": [],
-   "type_hash": "7262035bfa980cd0821ae8935cce8e648e64ea13f9f5680359fbf229e17906dc"
-  },
-  "Accounting.SecurityProofs.FpG1.Sm120W4a8G1SheetHeadline": {
-   "owner": "@compute-accounting",
-   "signature": [
-    "Accounting.SecurityProofs.FpG1.Sm120W4a8G1SheetHeadline : Accounting.Guarantees.FpG1.Sm120W4a8G1SheetHeadline"
-   ],
-   "assumptions": [],
-   "type_hash": "6c06bedfd43b7247cad9f07acdb7000a59c322e75e2f825d7e4f100a8adc4f85"
   },
   "Accounting.SecurityProofs.Gates.Bf16ToF32Affine": {
    "owner": "@memory-accounting",
@@ -4313,12 +4193,6 @@
    "assumptions": [],
    "type_hash": "07df6f85c37128f9bb90686a6cd381d38849912acd984c59a901f78fe55828ca"
   },
-  "Accounting.SecurityProofs.TS.BindingFacetD1": {
-   "owner": "@compute-accounting",
-   "signature": ["Accounting.SecurityProofs.TS.BindingFacetD1 : Accounting.Guarantees.TS.BindingFacetD1"],
-   "assumptions": [],
-   "type_hash": "12199d162077ce4fc6f237428b788d29d10f95ece558031db6fed753c245cb9f"
-  },
   "Accounting.SecurityProofs.TS.BindingOfFork": {
    "owner": "@compute-accounting",
    "signature": ["Accounting.SecurityProofs.TS.BindingOfFork : Accounting.Guarantees.TS.BindingOfFork"],
@@ -4331,18 +4205,6 @@
    "assumptions": [],
    "type_hash": "59ccc77bbee7f21805538ad51557c48a566d9c08401de5ff9bc988fff15c13ad"
   },
-  "Accounting.SecurityProofs.TS.CompilerC": {
-   "owner": "@compute-accounting",
-   "signature": ["Accounting.SecurityProofs.TS.CompilerC : Accounting.Guarantees.TS.CompilerC"],
-   "assumptions": [],
-   "type_hash": "f8f31da297111b76e4862ce41a465eb34033eeb5c592566986c27c0a4ac44757"
-  },
-  "Accounting.SecurityProofs.TS.CompilerStage": {
-   "owner": "@compute-accounting",
-   "signature": ["Accounting.SecurityProofs.TS.CompilerStage : Accounting.Guarantees.TS.CompilerStage"],
-   "assumptions": [],
-   "type_hash": "02bd3db81d5d22dbabc01b1ffa131e1b3e20419216342f5d9b23aae834605aa9"
-  },
   "Accounting.SecurityProofs.TS.CondReceiptLuckMarginal": {
    "owner": "@compute-accounting",
    "signature": [
@@ -4350,24 +4212,6 @@
    ],
    "assumptions": [],
    "type_hash": "51416f47075f6f8230002dfc49b39536ff552b03278ee1643401e778a657bc6c"
-  },
-  "Accounting.SecurityProofs.TS.DIdeal": {
-   "owner": "@compute-accounting",
-   "signature": ["Accounting.SecurityProofs.TS.DIdeal : Accounting.Guarantees.TS.DIdeal"],
-   "assumptions": [],
-   "type_hash": "3cfc5e82c92e91a1d795207b39a123d93a059cb88f4ed180f72fb3c80630003c"
-  },
-  "Accounting.SecurityProofs.TS.DIdealFloor": {
-   "owner": "@compute-accounting",
-   "signature": ["Accounting.SecurityProofs.TS.DIdealFloor : Accounting.Guarantees.TS.DIdealFloor"],
-   "assumptions": [],
-   "type_hash": "39fea985b04e7d6073c262aa44e04bbc170cb7b7109a7537164cb277fb91819a"
-  },
-  "Accounting.SecurityProofs.TS.DecompositionD": {
-   "owner": "@compute-accounting",
-   "signature": ["Accounting.SecurityProofs.TS.DecompositionD : Accounting.Guarantees.TS.DecompositionD"],
-   "assumptions": [],
-   "type_hash": "5cd9789694c0df8e5c5a09cd026a4f45b7c72ae8be8393f286cb479d9cac04d0"
   },
   "Accounting.SecurityProofs.TS.DrawnBindingOfFork": {
    "owner": "@compute-accounting",
@@ -4405,29 +4249,11 @@
    "assumptions": [],
    "type_hash": "3e1d5374cd0bc66c2c0b2ce69691138ba42b473ae7dad89b19127743e29d0b40"
   },
-  "Accounting.SecurityProofs.TS.FillOptOfFanIn": {
-   "owner": "@compute-accounting",
-   "signature": ["Accounting.SecurityProofs.TS.FillOptOfFanIn : Accounting.Guarantees.TS.FillOptOfFanIn"],
-   "assumptions": [],
-   "type_hash": "568832759779f6343aa4730d2aa7371196de435e23c850b7fd3fb9757ff039f3"
-  },
-  "Accounting.SecurityProofs.TS.FloorCreditD3": {
-   "owner": "@compute-accounting",
-   "signature": ["Accounting.SecurityProofs.TS.FloorCreditD3 : Accounting.Guarantees.TS.FloorCreditD3"],
-   "assumptions": [],
-   "type_hash": "010375a4f71170b4f5bce6e609521eeb3513178b58fb0ab590c0230ab29fee8f"
-  },
   "Accounting.SecurityProofs.TS.FoldFanIn": {
    "owner": "@compute-accounting",
    "signature": ["Accounting.SecurityProofs.TS.FoldFanIn : Accounting.Guarantees.TS.FoldFanIn"],
    "assumptions": [],
    "type_hash": "d750f908348617364ef047b2d98633d47ae3a338fc98196c54a7ce80906cb58a"
-  },
-  "Accounting.SecurityProofs.TS.FoldOptOfFanIn": {
-   "owner": "@compute-accounting",
-   "signature": ["Accounting.SecurityProofs.TS.FoldOptOfFanIn : Accounting.Guarantees.TS.FoldOptOfFanIn"],
-   "assumptions": [],
-   "type_hash": "22e2320fa4db7ad6c4182cab5d22d9df1ef0ede2c031c256c59be0e9997c4a1e"
   },
   "Accounting.SecurityProofs.TS.Fx1FoldFanIn": {
    "owner": "@compute-accounting",
@@ -4603,12 +4429,6 @@
    "assumptions": [],
    "type_hash": "4a9bafd0d213eaea7432547a51b90ce8048911b72b1db0096f54927529a3ef0d"
   },
-  "Accounting.SecurityProofs.TS.RoutesOffD2": {
-   "owner": "@compute-accounting",
-   "signature": ["Accounting.SecurityProofs.TS.RoutesOffD2 : Accounting.Guarantees.TS.RoutesOffD2"],
-   "assumptions": [],
-   "type_hash": "910ce6a26665e311102a94c12eaccac326387b0accd53002a814c6795e97b5fc"
-  },
   "Accounting.SecurityProofs.TS.SampledBudget": {
    "owner": "@compute-accounting",
    "signature": ["Accounting.SecurityProofs.TS.SampledBudget : Accounting.Guarantees.TS.SampledBudget"],
@@ -4633,77 +4453,11 @@
    "assumptions": [],
    "type_hash": "79537cec4ebc755df1d81e2effe7dccdc15479d448d2605056820565e4938491"
   },
-  "Accounting.SecurityProofs.TS.SheetDIdealFloor": {
-   "owner": "@compute-accounting",
-   "signature": ["Accounting.SecurityProofs.TS.SheetDIdealFloor : Accounting.Guarantees.TS.SheetDIdealFloor"],
-   "assumptions": [],
-   "type_hash": "d29cef4e0069f10471c37f5b26c752d5c38ac5d170bd76911d94e0f497fb1dc3"
-  },
-  "Accounting.SecurityProofs.TS.SheetFacetCeilings": {
-   "owner": "@compute-accounting",
-   "signature": ["Accounting.SecurityProofs.TS.SheetFacetCeilings : Accounting.Guarantees.TS.SheetFacetCeilings"],
-   "assumptions": [],
-   "type_hash": "908b00b3111acd08a19e35369360c096e6d4b6067dd3933a4a0d6d0e12ef8ea2"
-  },
-  "Accounting.SecurityProofs.TS.SheetScalarRouteHalf": {
-   "owner": "@compute-accounting",
-   "signature": ["Accounting.SecurityProofs.TS.SheetScalarRouteHalf : Accounting.Guarantees.TS.SheetScalarRouteHalf"],
-   "assumptions": [],
-   "type_hash": "cac0d5f86541bd5206eb1febfe2492aedfd31678311825bd6371970062c982f2"
-  },
-  "Accounting.SecurityProofs.TS.Sm100MeasuredHeadline": {
-   "owner": "@compute-accounting",
-   "signature": ["Accounting.SecurityProofs.TS.Sm100MeasuredHeadline : Accounting.Guarantees.TS.Sm100MeasuredHeadline"],
-   "assumptions": [],
-   "type_hash": "1566b38a672d5921b6ec9b17c8323c909769be68211fcefb495ddd6d43ad7f2a"
-  },
-  "Accounting.SecurityProofs.TS.Sm100SheetHeadline": {
-   "owner": "@compute-accounting",
-   "signature": ["Accounting.SecurityProofs.TS.Sm100SheetHeadline : Accounting.Guarantees.TS.Sm100SheetHeadline"],
-   "assumptions": [],
-   "type_hash": "68c898355ef65b6d02ae11f2a197ddd63c3ce5e1cfdd3fcb58c8492091169f75"
-  },
-  "Accounting.SecurityProofs.TS.Sm120MeasuredHeadline": {
-   "owner": "@compute-accounting",
-   "signature": ["Accounting.SecurityProofs.TS.Sm120MeasuredHeadline : Accounting.Guarantees.TS.Sm120MeasuredHeadline"],
-   "assumptions": [],
-   "type_hash": "f1c79fa1a2296647966ae2763703bb07c5e9d15bdb71b6b0e83f6228938c4dc5"
-  },
-  "Accounting.SecurityProofs.TS.Sm120SheetHeadline": {
-   "owner": "@compute-accounting",
-   "signature": ["Accounting.SecurityProofs.TS.Sm120SheetHeadline : Accounting.Guarantees.TS.Sm120SheetHeadline"],
-   "assumptions": [],
-   "type_hash": "0707af8f7ef0f1b38f84f251088d19dcca4fd9e8a5e66a965e0d71629a781ef6"
-  },
-  "Accounting.SecurityProofs.TS.Sm90MeasuredHeadline": {
-   "owner": "@compute-accounting",
-   "signature": ["Accounting.SecurityProofs.TS.Sm90MeasuredHeadline : Accounting.Guarantees.TS.Sm90MeasuredHeadline"],
-   "assumptions": [],
-   "type_hash": "4a3b2ce6b702162dd24e785c62bd38d5b41382f1c34214f34bad1ed258d58fde"
-  },
-  "Accounting.SecurityProofs.TS.Sm90MeasuredI3Headline": {
-   "owner": "@compute-accounting",
-   "signature": ["Accounting.SecurityProofs.TS.Sm90MeasuredI3Headline : Accounting.Guarantees.TS.Sm90MeasuredI3Headline"],
-   "assumptions": [],
-   "type_hash": "286945b70fb7a42e185053507b700ce4e9581b27c478db598684e55fe806da20"
-  },
-  "Accounting.SecurityProofs.TS.Sm90SheetHeadline": {
-   "owner": "@compute-accounting",
-   "signature": ["Accounting.SecurityProofs.TS.Sm90SheetHeadline : Accounting.Guarantees.TS.Sm90SheetHeadline"],
-   "assumptions": [],
-   "type_hash": "a221d8c2874d0328ee82da4d0639ebcbf4453ab9e58a9c412ef4f62f0bfa6d37"
-  },
   "Accounting.SecurityProofs.TS.StageBudget": {
    "owner": "@compute-accounting",
    "signature": ["Accounting.SecurityProofs.TS.StageBudget : Accounting.Guarantees.TS.StageBudget"],
    "assumptions": [],
    "type_hash": "09a445694d066ae7436e013ff484b68da43e5a84a110a06f4b84173abfad265d"
-  },
-  "Accounting.SecurityProofs.TS.StageIdeal": {
-   "owner": "@compute-accounting",
-   "signature": ["Accounting.SecurityProofs.TS.StageIdeal : Accounting.Guarantees.TS.StageIdeal"],
-   "assumptions": [],
-   "type_hash": "cf90a0e397cda2bd9e72f3ddbb0d555d41eb4fc9a0334201d6c881cddd44df0c"
   },
   "Accounting.SecurityProofs.TS.SteerUnion": {
    "owner": "@compute-accounting",
@@ -4753,23 +4507,11 @@
    "assumptions": [],
    "type_hash": "9eafccfc82d9a72e311cbd132727750360cc8ac8490817c9e672634b61f7aca9"
   },
-  "Accounting.SecurityProofs.TS.TimeBound": {
-   "owner": "@compute-accounting",
-   "signature": ["Accounting.SecurityProofs.TS.TimeBound : Accounting.Guarantees.TS.TimeBound"],
-   "assumptions": [],
-   "type_hash": "c90c867363721f3be047ec0675dcd35abb8cf05a2a17d3b02c05749fb33d6f81"
-  },
   "Accounting.SecurityProofs.TS.UnitFixedOfWords": {
    "owner": "@compute-accounting",
    "signature": ["Accounting.SecurityProofs.TS.UnitFixedOfWords : Accounting.Guarantees.TS.UnitFixedOfWords"],
    "assumptions": [],
    "type_hash": "dba83caa3db7c9598fe868bcc71b0b44a916cf392c6f6879d371d46370eb0895"
-  },
-  "Accounting.SecurityProofs.TS.VectorThresholdD1": {
-   "owner": "@compute-accounting",
-   "signature": ["Accounting.SecurityProofs.TS.VectorThresholdD1 : Accounting.Guarantees.TS.VectorThresholdD1"],
-   "assumptions": [],
-   "type_hash": "4b3705f7c9d934476bfbfe80b1283b6673f79dba26c272b05d129d8fe7b3cd5f"
   },
   "Accounting.SecurityProofs.Tag.DigestNonCollision": {
    "owner": "@memory-accounting",
@@ -12097,15 +11839,6 @@
    "Pouw.SecurityProofs.RelativeSecurity.StagedFloorKOneSided": "frozen (no-function,world-unlisted,scope): It is stated over an arbitrary Machine and Service and an analysis map (RunMap), not the service's code, and takes three premises about that map: ServiceSoundStaged (live coins, and the proof layer's binding and zero knowledge, with the seed identified with the staged window's coins), KScopeOneSided (Theorem K's proved one-sided scope, a sibling of the ledger's K1: products one-sided of any form, charging purity mod 2 (odd coefficients) at the cell-blocks' frames in place of row purity, and E3, which no check of the service refuses a run outside of) and ChargeVF3j16 (the active vector VF3j-16's prices with B_theta complete, for stages that don't overlap). It is a floor of record (Daniel, decision 53): c = 1 on K's proved one-sided scope; K1 is not claimed outside the two proved scopes, and the verifier can't observe which case applies.",
    "Pouw.SecurityProofs.RelativeSecurity.OverlapFloorKOneSided": "frozen (no-function,world-unlisted,scope): It is stated over an arbitrary Machine and Service and an analysis map (ORunMap), not the service's code, and takes three premises about that map: ServiceSoundOverlap (live coins, and the proof layer's binding and zero knowledge, with the seed identified with the overlapped window's coins, the check's cell-block uniform among every stage's, and each round's run fixed before its first draw, E3), KScopeOverlapOneSided (Theorem K's scope across draws for one-sided operands of any form per draw at every bit point of the other draws' (OneSidedAt), charging purity across draws (odd coefficients) in place of row purity, and E3, which no check of the service refuses a run outside of) and ChargeVF3j16Overlap (the active vector VF3j-16's prices with B_theta complete, each product counted once). It is a floor of record (Daniel, decision 53): c = 1 on K's proved one-sided scope; K1 is not claimed outside the two proved scopes, and the verifier can't observe which case applies.",
    "Flock.SecurityProofs.SamplingClaimsStated": "frozen (no-function): It states no property of the verifier: it reads each claim of Security/Definitions/Claims/Sampling.lean, so the lock records their text, and a claim leaves it when a guarantee states that claim at the deployed sampled verifier.",
-   "Accounting.SecurityProofs.TS.TimeBound": "frozen (no-function,world-unlisted): Lemma 1 of EPS1-SPEC over any TS machine and run, not a Lean function; its premise FacetCeilings (Definitions.Accounting.Assumptions.TS, measured, scoped to the stated device) is not on the premises list.",
-   "Accounting.SecurityProofs.TS.DecompositionD": "lemma: Theorem D(a) of EPS1-SPEC, the master inequality from (Pi), (RD) and (Lk) taken as hypotheses (RD and Lk are definitions, not named assumptions); DIdeal, DIdealFloor, CompilerC and FloorCreditD3 are what it is for.",
-   "Accounting.SecurityProofs.TS.DIdeal": "frozen (no-function,world-unlisted): Theorem D-ideal (2.7) of EPS1-SPEC over every full-checking play (Accounting.TS.Play) and labelled run, not a Lean function: the service's full check has no Lean code yet. Its premises (I1)-(I8) are the named assumptions of Definitions.Accounting.Assumptions.TS, not on the premises list, and it takes definitional side conditions (a well-formed model, a split labelling, 0 < p < 1, delta' > 0).",
-   "Accounting.SecurityProofs.TS.DIdealFloor": "frozen (no-function,world-unlisted): Theorem D-ideal (2.7-flat) of EPS1-SPEC under the floor credit, over every full-checking play and labelled program, not a Lean function; premises and side conditions as DIdeal's.",
-   "Accounting.SecurityProofs.TS.CompilerC": "frozen (no-function,world-unlisted): Lemma C (the compiler) of EPS1-SPEC over every sampled play, not a Lean function; its premises are DIdeal's but (L), with (C1)-(C3) in ProofsSound, and it takes Lambda's definition (Accounting.TS.RoundGame.BudgetAt) as a hypothesis.",
-   "Accounting.SecurityProofs.TS.FloorCreditD3": "lemma: Corollary D3 of EPS1-SPEC, from (Pi), (RD) and (Lk) as hypotheses like DecompositionD, with the terms' signs on a floor program on the known menu and T(H) = gamma_flat T_cred.",
-   "Accounting.SecurityProofs.TS.BindingFacetD1": "lemma: Corollary D1 of EPS1-SPEC, epsilon_machine at a binding facet is 0 when every menu costs at least honest's there; arithmetic over the terms' definitions.",
-   "Accounting.SecurityProofs.TS.VectorThresholdD1": "lemma: Corollary D1's threshold, S_V(q) costs at least T_kappa with delivery iff q >= 32(alpha + beta phi_del)/(beta omega); arithmetic over the route demands.",
-   "Accounting.SecurityProofs.TS.RoutesOffD2": "lemma: Corollary D2 of EPS1-SPEC, B(M) >= B0/(1 + sum kappa_u s_u) from its two hypotheses on the run's loads.",
    "Accounting.SecurityProofs.TS.TensorSlotCount": "frozen (no-function): T1 of EPS1-TENSOR over any tensor run's slot writes, injective by freshness (a hypothesis), not a Lean function.",
    "Accounting.SecurityProofs.TS.TensorSlotTight": "lemma: T1's tightness criterion (epsilon_tensor = 0 iff L = d_H and rho_H = rho_T), arithmetic.",
    "Accounting.SecurityProofs.TS.OutputCount": "frozen (no-function): Lemma 2's count over any straight-line program's head writes, the copy tracing given as the head map, not a Lean function.",
@@ -12123,8 +11856,6 @@
    "Accounting.SecurityProofs.TS.FanInCount": "frozen (no-function): the fan-in count over any straight-line dataflow whose outputs see its inputs, not a Lean function.",
    "Accounting.SecurityProofs.TS.SeesOfInjective": "lemma: a receipt injective in each input sees it, over any dataflow and receipt map.",
    "Accounting.SecurityProofs.TS.ThinFoldInjective": "lemma: the thin fold's state is injective in each absorbed word and in its start, BitVec arithmetic.",
-   "Accounting.SecurityProofs.TS.FoldOptOfFanIn": "frozen (no-function): FOLD-OPT from FanIn for any fold given as a straight-line dataflow over the committed words, not a Lean function.",
-   "Accounting.SecurityProofs.TS.FillOptOfFanIn": "frozen (no-function): FILL-OPT from FanIn for any filler given as a straight-line dataflow over its fresh inputs, not a Lean function.",
    "Accounting.SecurityProofs.RequirementHeld": "frozen (no-function): A counting bound over a declared circuit's wiring, its execution and the audit's store (Security/Definitions/Accounting/Requirement.lean): once the store holds W's credited blocks, filler allowed (StoreMatches), held blocks hold all of W's credited live bits (those in complete blocks) but b per resident block not held; about no function of the code.",
    "Accounting.SecurityProofs.RequirementDense": "frozen (no-function): A counting bound over a declared circuit's wiring, its execution and the audit's store (Security/Definitions/Accounting/Requirement.lean): once the store holds W's credited blocks (StoreMatches), resident blocks holding at least D credited live bits each number at most creditedBits / D; about no function of the code.",
    "Accounting.SecurityProofs.RequirementMoved": "frozen (no-function): A counting bound over a declared circuit's wiring, its execution and a pass's plan (Security/Definitions/Accounting/Requirement.lean): once the plan covers the complete blocks W reads at the step, filler allowed (PlanMatches), moved blocks carry all of the bits W reads from complete blocks but b per planned block not moved; about no function of the code.",
@@ -12151,9 +11882,6 @@
    "Accounting.SecurityProofs.FillerLuck.FillerBlocksDeficit": "frozen (no-function): Theorem S with each block at its own p over every window of another block's one-draw check beside the filler's spot check (Accounting.Filler.FillBlocks), not a Lean function: the service's check has no Lean code yet; the other block's pass bound is part of each round's shape, and the column's uniform parity a hypothesis.",
    "Accounting.SecurityProofs.TS.ProofsSoundOfPinned": "lemma: (I8) ProofsSound of EPS1-SPEC from its pieces over every play and window of proofs (Accounting.TS.ProofLayer), not a Lean function: binding at delta_bind and proof soundness at delta_ZK as probability hypotheses, the Definitions' pinning (ProofLayer.Pins) and the play being its proofs' (ProofLayer.Of) as definitional hypotheses, and E1(c) as the named assumption RightFixed, not on the premises list; DIdeal and CompilerC, which take ProofsSound, are what it is for.",
    "Accounting.SecurityProofs.TS.BindingOfFork": "lemma: the rewinding step behind (I8)'s delta_bind over every window of proofs (Accounting.TS.ProofLayer), not a Lean function: binding's failure at a round, squared, is at most its fork form's (two runs off one commitment, both accepted, opening it differently), so a bound on the fork form is binding at its square root; ProofsSoundOfPinned, which takes binding at delta_bind, is what it is for.",
-   "Accounting.SecurityProofs.TS.SheetFacetCeilings": "lemma: (I1) FacetCeilings on the data-sheet machine from A1-A5 (Definitions.Accounting.Assumptions.Sheet), over any sheet and run with counts >= 0; arithmetic over the machine's rows, not a Lean function.",
-   "Accounting.SecurityProofs.TS.SheetScalarRouteHalf": "lemma: (I3) ScalarRoute at q, q_T <= 1/2 and b_T <= 0 from A6 (two words a lane) and the labelling's split; arithmetic, not a Lean function.",
-   "Accounting.SecurityProofs.TS.SheetDIdealFloor": "frozen (no-function,world-unlisted): Theorem D-ideal (2.7-flat) of EPS1-SPEC on the data-sheet machine, DIdealFloor with (I1)-(I5) replaced by A1-A7 at the 1/2 floor, over every full-checking play and labelled program, not a Lean function; A1-A7 and (I6)-(I8) are not on the premises list.",
    "Pouw.SecurityProofs.Receipt.DuoReceiptNotInjective": "lemma: the counterexample to the served receipt's binding at a state (two words, one receipt y ⊕ rotl(z, 16) at the served word 0's keys); a statement about one concrete step, not a property of a Lean function.",
    "Accounting.SecurityProofs.TS.DuoSegmentsBind": "lemma: Lemma B for duo checkpoint units (a definition: a warp's window, a full-state checkpoint a segment, one deficient word a segment), from DuoRunWordInjective segment by segment; not a property of a Lean function.",
    "Accounting.SecurityProofs.TS.Fx1SegmentsBind": "lemma: Lemma B for fx1 checkpoint units (a definition: duo checkpoint units on the words times odd IMAD multipliers), from DuoSegmentsBind's segment lemma and the odd multiplier's injectivity; not a property of a Lean function.",
@@ -12163,8 +11891,6 @@
    "Accounting.SecurityProofs.RequirementHeldLive": "frozen (no-function): A counting identity over a declared circuit's wiring, its execution and the audit's store (Security/Definitions/Accounting/Requirement.lean): once the store holds W's credited blocks, filler allowed (StoreMatches), W's credited live bits (those in complete blocks) are those in the held blocks plus the credited live bits of each resident block not held; about no function of the code.",
    "Accounting.SecurityProofs.TS.SampledBudget": "lemma: the sampled budget over every sampled window (Accounting.TS.SampledWindow), Lambda = r/ln(1/p) at s >= 2 draws a round, from its pricing and its draws' luck at p in [1/e, 1) taken as hypotheses (definitions, not named assumptions); not a property of a Lean function.",
    "Accounting.SecurityProofs.TS.StageBudget": "frozen (no-function,world-unlisted): the budget under per-stage coins over every stage window (Accounting.TS.StageWindow), Lambda = r/ln(1/p), not a Lean function: per-stage coins have no service code yet. Its premise StageLuck (Definitions.Accounting.Assumptions.Stages) is not on the premises list.",
-   "Accounting.SecurityProofs.TS.CompilerStage": "frozen (no-function,world-unlisted): Lemma C of EPS1-SPEC under per-stage coins, over every sampled play whose ideal game is a stage window's, not a Lean function; its premises are CompilerC's with StageLuck in place of (L), not on the premises list.",
-   "Accounting.SecurityProofs.TS.StageIdeal": "frozen (no-function,world-unlisted): D-ideal's bound (2.7) under per-stage coins with work-weighted draws (epsilon_sample = 0), over every such play, not a Lean function; premises and side conditions as CompilerStage's.",
    "Accounting.SecurityProofs.TS.LinSteerSegments": "lemma: LIN-STEER holds for a segmented consumer (a definition) exactly when its noise-active segments carry equal counts, counting; it refutes LinSteer, which shape.conjectures marks falsified.",
    "Accounting.SecurityProofs.TS.LinSteerFalse": "lemma: a segmented consumer of three coordinates in two segments violates LinSteer, the counterexample shape.conjectures cites.",
    "Accounting.SecurityProofs.TS.SegmentSteer": "lemma: the segment bound, zeroing Z saves at most |Z|/a segments when every noise-active segment holds at least a noise-active coordinates; counting over a definition.",
@@ -12211,8 +11937,6 @@
    "Accounting.SecurityProofs.StackedRequirementRelay": "frozen (no-function,hash): It is Accounting.SecurityProofs.StackedSessionConservationRelay with its shortfall read against a declared circuit's requirement (Requirement.creditedBits and Requirement.creditedReadBits, Security/Definitions/Accounting/Requirement.lean): when the memory map and each pass's plan hold W's credited blocks (one-sided: other blocks may be resident or planned) at the at most n*P steps the passes are bound to (StoreMatches, PlanMatches, at most N blocks each), W's credited live and read bits are at most the store's n*P*N*b by RequirementHeld and RequirementMoved; abstract pass devices in the random-oracle and ideal encoding models under the named assumptions Accounting.Assumptions.WorkHardness, SquaringCeiling, SquaringFloor, ChainSum and KeyBinding (the writers' choices fixed before each append's coin), not the rate audit's code. Encodes are charged at the gate model's cost (encodeBitsCost: the fewest nonlinear units, budgeted units and data products, of Gates.encodeCosts, ⊤ where there is none).",
    "Pous.SecurityProofs.StreamedWipe": "frozen (no-function): A bound in the streamed-label wipe's game (Security/Definitions/Pous/Model/StreamedWipe.lean), whose acceptance is the model's Accepts over an arbitrary prover, not a run of streamed_wipe.verdict or any Lean function; it fits once the memory challenger's check has a Lean function to state it against.",
    "Pous.SecurityProofs.StreamedWipeMeets2600GB": "frozen (no-function): A bound in the streamed-label wipe's game (Security/Definitions/Pous/Model/StreamedWipe.lean), whose acceptance is the model's Accepts over an arbitrary prover, not a run of streamed_wipe.verdict or any Lean function; it fits once the memory challenger's check has a Lean function to state it against.",
-   "Accounting.SecurityProofs.TS.Sm120SheetHeadline": "frozen (conjecture,no-function,world-unlisted): sm_120's headline at 5.860%, under full checking with live coins (epsilon_sample and the Fiat-Shamir premium are separate lines), Whole.sheetDIdealFloor_whole at the exact data of DS-120 and H1 + fx1 (Definitions.Accounting.Headline.Sm120) with pi* 3564/3761 on issue and 197/3761 on shared memory (the least weight there at which the bulk-reduction floors cost N_w phi*, RT4-SHEET-1), p = 7/8, p0 = 1/2, Lambda = max(kappa/ln(8/7), (kappa + f)/ln 2), S = 48,000 and delta = 2^-40, over every play of 48,000 equal live rounds (the window's shape: with S rounds its two branches never give epsilon < 5.779% and give under 6% only from 17,460; Compose's live line is under 1% only from 10,552, RT-INT-1) and window of proofs on any finite coins and every unfolded share, not a Lean function, the unfolded branch binding (5.859%; the folded one gives 5.805%); A1-A7 (A2 with A2u, a uniform-datapath instruction an issue slot, which no vendor document states and which alone holds this epsilon: RT-MACHINE-4; measured to hold at saturation, r20261019-120714-132b, RT2-120-4; A5 with A5b, a bulk or TMA instruction holding its size of bank bytes, which no vendor document states either and without which a fold on the bulk engine costs less than the menu's: RT4-SHEET-1), FOLD-OPT per word folded at pi* (FoldOptFoldedAt at pi* and the run's unfolded share, ASK-6 = A; an open conjecture under shape.conjectures, RT2-LOGIC-1, checked within a stated menu: the Lean menu, the bit-exact lane folds, the bulk-reduction floors and fold_bulk.cu's whole-block folds), so fold skippers are charged, the receipt split (the play's ideal game a ReceiptGame's and Pinned, with two luck premises: OperandHMu at 3/4, H-mu at the deficient words, the first, and ReceiptLuckAt at 1/2, HMU's B' case, the second, which give p = 7/8 by LemmaB at fibre 1 and LuckOfReceipt), WholeLuckAt at 1/2 (B' at a unit whose fold the run skips, ASK-9 = A at p0 = 1/2 for live coins only; the whole-unit guess bound 2^-64 is not granted), binding in its fork form at delta_fork (BindingForkAt, binding at sqrt(delta_fork) by BindingOfFork, so the budget asks delta_fork <= (2^-41/48,000)^2), proof soundness at delta_ZK (ProofSoundAt, which C-Flock's bound doesn't discharge until it states the rows link) and the Definitions' pinning (ProofsPin, which no Lean checks of the served relations: PouwSegCheck_v2 lacks it, PIN's checks of #2417 recompute every word they absorb; RT3-LOGIC-3), named assumptions of Definitions.Accounting.Assumptions.TS (RT2-LOGIC-2), RightFixed, and the play being its proofs' (ProofLayer.Of) and the receipt game's openings pinned (ReceiptGame.Pinned), hypotheses over Definitions, are not on the premises list.",
-   "Accounting.SecurityProofs.TS.Sm120MeasuredHeadline": "frozen (conjecture,no-function,world-unlisted): sm_120's headline on its measured vector at 0.591%, under full checking with live coins (epsilon_sample and the Fiat-Shamir premium are separate lines), Whole.dIdealFloor_whole at the exact data of VF3s-16 and H1 + fx1 (Definitions.Accounting.Headline.Sm120Measured) with pi* JI3t_0, q = q_T = 9/8, p = 7/8, p0 = 1/2, Lambda = max(kappa/ln(8/7), (kappa + f)/ln 2), S = 48,000 and delta = 2^-40, over every play of 48,000 equal live rounds (the window's shape: with S rounds its two branches give epsilon < 1% only from 8,320, Compose's live line only from 10,552, RT-INT-1) and window of proofs on any finite coins and every unfolded share, not a Lean function, the folded branch binding (0.591%, 0.588% at the data with ln(8/7) >= 2/15; the unfolded one gives 0.587%); FacetCeilings on VF3s-16's rows (RT-FACET's refit of VF3r-16, whose JI3s_0 bit-exact census programs load at up to 1.0383: RT2-LOGIC-9), WordsWritten at the forms' omega, ScalarRoute at 9/8 (assumed: ClassPSlots once writers create at most 15 incidences, a cap nothing proves; at A6's proved 1/2 floor the same bound is 7.791%, r20261019-172339-a93b, RT3-LOGIC-2), NoSum, FOLD-OPT per word folded at pi* (FoldOptFoldedAt at JI3t_0 and the run's unfolded share, ASK-6 = A; an open conjecture under shape.conjectures, RT2-LOGIC-1), so fold skippers are charged, the receipt split (the play's ideal game a ReceiptGame's and Pinned, with two luck premises: OperandHMu at 3/4, H-mu at the deficient words, the first, and ReceiptLuckAt at 1/2, HMU's B' case, the second, which give p = 7/8 by LemmaB at fibre 1 and LuckOfReceipt), WholeLuckAt at 1/2 (B' at a unit whose fold the run skips, ASK-9 = A at p0 = 1/2 for live coins only; the whole-unit guess bound 2^-64 is not granted), binding in its fork form at delta_fork (BindingForkAt, binding at sqrt(delta_fork) by BindingOfFork, so the budget asks delta_fork <= (2^-41/48,000)^2), proof soundness at delta_ZK (ProofSoundAt, which C-Flock's bound doesn't discharge until it states the rows link) and the Definitions' pinning (ProofsPin, which no Lean checks of the served relations: PouwSegCheck_v2 lacks it, PIN's checks of #2417 recompute every word they absorb; RT3-LOGIC-3), named assumptions of Definitions.Accounting.Assumptions.TS (RT2-LOGIC-2), RightFixed, and the play being its proofs' (ProofLayer.Of) and the receipt game's openings pinned (ReceiptGame.Pinned), hypotheses over Definitions, are not on the premises list.",
    "Flock.SecurityProofs.recursiveZK_os_gap": "frozen (obligation,no-function,world-unlisted): RecursiveZK at the operating system's salts. It takes the outer proof's zero knowledge as an open obligation, as a simulation statement it has no acceptance of a function to take, and it takes A3 per test (UniformRandomBytesTest, slack eta) at the one event it bounds, a premise that isn't on the list.",
    "Flock.SecurityProofs.MaskedKS": "frozen (no-function): Claims.Flock.KS at the deployed masked record (deployZk at the deployed relation, SHA-512): a knowledge-soundness bound for every prover against the record's interaction, with no acceptance of a Lean function to take; it takes no premise, since the claim's collision finder is in its bound.",
    "Flock.SecurityProofs.MaskedZK": "frozen (no-function): Claims.Flock.ZK at the deployed masked record (zkDeployed at the deployed plan, SHA-512): as a simulation statement against every malicious verifier it has no acceptance of a function to take; stated at the hm96 hiding gap, it takes no premise beyond 0 < t.",
@@ -12291,34 +12015,23 @@
    "Accounting.SecurityProofs.Compose.SplitRateMerged": "lemma: Accounting.Compose.SplitRate at b(1 + K rho w_max)/(rho K (1 - q)) for luck at most q, every skip priced whole; real arithmetic, not a Lean function.",
    "Accounting.SecurityProofs.Compose.ServiceBudget": "lemma: the window budget RoundGame.BudgetAt Lambda of the service's one draw (Accounting.Compose.serviceGame), from per-stage luck and the stage-share bound with folded and whole shares priced apart, as StageBudget is for staged draws, over every split-stage window; not a Lean function.",
    "Accounting.SecurityProofs.Compose.CircuitWork": "frozen (no-function,world-unlisted): decision 113's logical layer under live coins, over every declared circuit (Accounting.Compose.Declared, with its rounds, their coin modes, the service's commit coins and its proof units, in Scope every round holding a credited tile live, Declared.Live, and every value committed by its IR cut or, a computed value only its own unit reads (a receipt), by the draw, Accounting.Compose.LayerCommitted) run as one sampled window (serviceGame at the tiles' late cones from the IR, tileCone, its rate at shareCone, drawOf) and its proofs on the layer from the IR (Accounting.Compose.Declared.layer, only its run-dependent half ProofRun a parameter): an accepted run has its committed words fixed right but for a share at cost Lambda ln(1/delta_s) + min(a, b) D0 (WorkAt at rOf), except with probability delta_s + delta_bind + delta_ks, delta_bind per prover (BindingOfECR reads it); not a Lean function, an Accounting.TS.prob event that shape.events does not list, and the four claims (OperandHMu and ReceiptLuckAt per tile folded, GuessLuckAt per tile whole, Accounting.Assumptions.TS.UnitFixed at the run's modes, tileMode) are taken per tile under PerTile's binders or at the window's modes, not on the premises list. LayerCommitted is a protocol fact of the declared circuit, a Definition in Scope, not a premise about the cheater. A seeded window doesn't meet it (one salt a window and the draw), so Scope fails there and nothing is credited. A live window has a salt after its window-open root, a coin a round and the draw (#2941, #2950), and its declared circuit meets it when it is tied (Accounting.Served.Tie, Properties.Served.TieCommits). Its luck line is the live claims' point lucks, p = 7/8 folded and p0 = 1/2 whole (ASK-9, card 8b00536a: the guess bound at B-prime's 1/2, 2^-64 not granted), where the whole branch binds: 0.173% at r = 1 closed, 0.110% sharp. The seeded pair's folded branch reads GRIND's stronger TemplateMoment, but its whole skips are priced at a rate no granted premise sets (Scheme.wholeRate), so the seeded line is conditional: 56.1% at Llama-3.1-8B decode, r = 1, at 1/2 a query, 1.120% under GuessLuckAt at 2^-64, and below this one (0.101%) only under Accounting.Assumptions.Compose.WholeEntropyAt at K/8 nats a tile. The declared circuit is the served Program's only through Properties.Compose.UnitsOfLayout (unproved: its units, commit coins, seed preimages and draw) and an extractor that doesn't exist yet: until both exist, the guarantee speaks of the declared circuit, not of a served workload.",
-   "Accounting.SecurityProofs.Compose.CreditOfWork": "frozen (no-function,world-unlisted): decision 113's physical step, the tensor-scalar model on a data sheet: a run with WorkAt's work that meets A1-A7, FoldOptFolded and FillOpt takes at least (1 - eps) T_cred (SheetDIdealFloor's chain on one run), over every model and anatomy, not a Lean function; A1-A7, FoldOptFolded and FillOpt are not on the premises list.",
-   "Accounting.SecurityProofs.Compose.CircuitCredit": "frozen (no-function,world-unlisted): the composed credit CreditOfWork after CircuitWork (decision 113) under live coins, Accounting.Compose.Certificate.Holds for every declared circuit's sampled window on a data sheet, in a device window the physical layer's ledger consumes, issued at coins = live, an Accounting.TS.prob event that shape.events does not list, not a Lean function; OperandHMu, ReceiptLuckAt and GuessLuckAt per tile, UnitFixed at the run's modes, A1-A7, FoldOptFolded and FillOpt are not on the premises list. Its Scope holds Accounting.Compose.LayerCommitted, the service's commit order, a protocol fact (a Definition) that a seeded window doesn't meet (one salt a window and the draw). A live window has a salt after its window-open root, a coin a round and the draw (#2941, #2950), and its declared circuit meets it when it is tied (Accounting.Served.Tie, Properties.Served.TieCommits). Its eps at eps_flat = 0.571% and eps_mu = 0, with whole units at p0 = 1/2 (ASK-9), is 0.744% at r = 1 closed (0.681% sharp), below EPS1's 1%, with every premise it reads granted or #2466's. The declared circuit is the served Program's only through Properties.Compose.UnitsOfLayout (unproved: its units, commit coins, seed preimages and draw) and an extractor that doesn't exist yet: until both exist, the guarantee speaks of the declared circuit, not of a served workload.",
    "Accounting.SecurityProofs.Compose.ServiceCovers": "lemma: the service's share (Accounting.Compose.jointGame at 1 1 on any joint run of the rounds' coins, serviceGame its split-stage case, each skipped tile charged its late cone from the IR, tileCone) covers every tile that isn't good (Accounting.TS.DrawnLayer.Covers at the run's modes, jointMode) on the window's proofs' layer from the IR (Accounting.Compose.Declared.layer: its slots, writers, cuts, coins and draw defined from the circuit, so StageCuts at each value committed by its IR cut, StageCoins and StageSlots are its lemmas), over every declared circuit's window committed as the layer says (Accounting.Compose.LayerCommitted: by its IR cut, or a computed value only its own unit reads by the draw, whose layer late edges stay in its unit; Declared.atIR always meets it), from DrawnLayer.covers_of_cone; not a property of a Lean function.",
    "Accounting.SecurityProofs.Compose.BindingOfECR": "lemma: a prover's delta_bind on a sampled window's proofs (Accounting.TS.DrawnLayer.MovedIn in a round whose slots lie in L) is at most delta' + |L|^2/(4 delta') (ecr(F) + kappa) for every delta' > 0, where F is a SHA-512 collision finder whose collisions bound the fork event (DrawnLayer.Forked) up to kappa and ecr(F) is E[cost F]/2^256 if F meets ecr/sha-512 (Definitions.Claims' ExpectedCR) and top if it doesn't (RT-DELTA r2): DrawnBindingOfFork with AM-GM, assuming no hash, so it is the per-prover reading of delta_bind and of SeedLuckAt's delta_b; ENNReal arithmetic over events, not a Lean function.",
    "Accounting.SecurityProofs.Compose.WholeLuckOfEntropy": "lemma: SeedLuckAt for whole tiles at kappa0 and rate theta (Accounting.Assumptions.Compose.SeedLuckAt) from Accounting.Assumptions.Compose.WholeEntropyAt at entropy h (each round's whole tiles fixed before the query's own answer, and all of a set S of them lucky on at most a share e^(-sum_S h) of its answers), wherever every tile's moment e^(-h) e^(theta w) + (1 - e^(-h)) e^(-kappa0 theta w) is at most 1: the gain's exponential expands over the subsets of the whole tiles with nonnegative coefficients; real arithmetic over finite sums, not a property of a Lean function.",
    "Accounting.SecurityProofs.Compose.SplitRateExp": "lemma: Accounting.Compose.SplitRateAt at the sharp Lambda = max(a w_max/-ln(p + (1 - p) e^(-K rho w_max)), b w_max/-ln(p0 + (1 - p0) e^(-K rho w_max))) with nu = (e^(a w_max/Lambda) - 1)/((1 - p) w_max) and nu0 the same at b, p0 (RT-COMPOSE r4's check 3), so a rate quoted at the sharp Lambda is proved with its witness as a term; real arithmetic, not a Lean function.",
    "Accounting.SecurityProofs.Compose.CircuitWorkSeeded": "frozen (no-function,world-unlisted): decision 113's logical layer under seeded coins (decision 122's one seed a call), stated in the random-oracle model, over every declared circuit with every round holding a credited tile seeded, one call site a round and every value a seeded round reads by its IR cut named by the round's seed preimage or registered (Accounting.Compose.ScopeSeeded: H1's attention uncredited by Scheme.SeedPriced, and Accounting.Compose.SeedNamed, a protocol fact of the declared circuit that today's code doesn't meet, so on today's code ScopeSeeded fails and nothing is credited), its rounds' coins the oracle's answers to T_q queries a round and its run any joint run of every round's answers (Accounting.Compose.JointRun, jointGame, jointMode: no stage order), its binding pieces (Of, MovedIn at delta_bind, JointSound, Pins) on the proofs' layer cut at the draw (Accounting.Compose.Declared.atDraw: a seeded coin is a hash the cheater can evaluate before it commits, so operands and receipts are bound only at the draw) and UnitFixed on the layer cut at the IR (Declared.atIR, which reads no committed value): an accepted run has its committed words fixed right but for a share at cost max(5a, (1 + kappa0) b) ln(1/delta_s)/(rho K_d) + a Pi_F + b Pi_0 + min(a, b) D0 (WorkAt at rOfSeeded, Pi_F and Pi_0 the seed groups' premiums ln(T_q/delta_g)/theta from the IR at the folded rate, seedTheta, and at the whole skips' own rate, wholeTheta, premiumOf), except with probability delta_s + delta_bind + delta_ks + eps_id(T, |J|) + 2 rounds (delta_g + delta_b), T the window's SHA-512 calls and |J| the seeds the proofs name, eps_id, delta_b and delta_bind per prover at one prover budget; not a Lean function, an Accounting.TS.prob event that shape.events does not list, and the random-oracle premise (Accounting.Assumptions.Compose.SeedExtractedAt, once a window, over the seed answers only, card 9cd57182), GRIND's premise per round (Accounting.Assumptions.Compose.SeedLuckAt, at kappa = 4 and the folded rate for folded tiles and at kappa0 and the whole rate for whole ones, each query's moment over its own answer with the window's other answers fixed, off a binding event at delta_b read through ecr/sha-512) and UnitFixed at the run's modes are not on the premises list. No ruling grants a whole-tile luck per seed query (ASK-9 decides 1/2 for the live line only), so its luck line at T_q = 2^128 and delta_g = 2^-40/(2 rounds), r = 1, Llama-3.1-8B decode at batch up to 32, is conditional on the premise wholeTheta reads: at 1/2 a query (kappa0 > 1, x0 < ln 2, about 177 tiles a seed group) 56.1%, so with only granted premises it is vacuous at small-batch decode; under GuessLuckAt at 2^-64 (not granted) 1.120% (0.168% at batch 256, 0.048% at prefill); under Accounting.Assumptions.Compose.WholeEntropyAt at K/8 nats a tile (not granted) 0.101%, below the live pair's 0.173% closed. The declared circuit is the served Program's only through Properties.Compose.UnitsOfLayout (unproved: its units, commit coins, seed preimages and draw) and an extractor that doesn't exist yet: until both exist, the guarantee speaks of the declared circuit, not of a served workload.",
-   "Accounting.SecurityProofs.Compose.CircuitCreditSeeded": "frozen (no-function,world-unlisted): the composed credit CreditOfWork after CircuitWorkSeeded (decision 113) under seeded coins, in the random-oracle model, Accounting.Compose.Certificate.Holds for every declared circuit's sampled window on a data sheet, in a device window the physical layer's ledger consumes, issued at coins = seeded with its grinding premiums (folded and whole, each at its own rate), the oracle's eps_id(T, |J|) once a window and 2 rounds (delta_g + delta_b), on a joint run with its binding at the draw (Declared.atDraw) and its cones at the IR (Declared.atIR), in ScopeSeeded with Accounting.Compose.SeedNamed (a protocol fact today's code doesn't meet), an Accounting.TS.prob event that shape.events does not list, not a Lean function; SeedExtractedAt (random-oracle), SeedLuckAt per round, UnitFixed at the run's modes, A1-A7, FoldOptFolded and FillOpt are not on the premises list. Its eps at r = 1, eps_flat = 0.571% and eps_mu = 0 is conditional on the whole-tile luck a query its wholeTheta reads, which no ruling grants: at 1/2 a query 56.6% for Llama-3.1-8B decode at batch up to 32 and 1.85% at prefill; under GuessLuckAt at 2^-64 1.691% (0.738% at batch 256, about 0.62% at prefill); under WholeEntropyAt at K/8 nats at most 0.672%; against EPS1's 1% and the live pair's 0.744%. The declared circuit is the served Program's only through Properties.Compose.UnitsOfLayout (unproved: its units, commit coins, seed preimages and draw) and an extractor that doesn't exist yet: until both exist, the guarantee speaks of the declared circuit, not of a served workload.",
    "Accounting.SecurityProofs.ComposePeriod.PeriodBudget": "lemma: the composition of resource accounting's window budgets over an accounting period: if every window's Accounting.Compose.serviceGame has RoundGame.BudgetAt Lambda whatever the earlier windows did, so has the period's game (Accounting.Compose.periodGame, each window one round, its play any function of the earlier windows' coins, Accounting.Compose.Period); by induction on the period, not a Lean function.",
    "Accounting.SecurityProofs.ComposePeriod.PeriodTailMax": "lemma: budget_tail at every prefix at once (Ville's inequality, finite form): when RoundGame.BudgetAt Lambda bounds a play, some prefix of its rounds passes (Accounting.Compose.RoundGame.acceptsUpTo) with share at least Lambda t (Accounting.Compose.RoundGame.deficiencyUpTo) with probability at most e^(-t), so a period credited up to its first failed window, a stopping time the cheater may steer, pays ln(1/delta_s) once; by induction on the play for every threshold, conditioning on the first round's coins, not a Lean function.",
    "Accounting.SecurityProofs.ComposePeriod.CircuitWorkPeriod": "frozen (no-function,world-unlisted): INT-PERIOD's restatement of CircuitWork over an accounting period of at most n windows of one declared circuit (Accounting.Compose.Period, each window with its own live coins and draw), credited up to its first window with a refused proof (Accounting.Compose.PeriodRun.Credited, RT3-INT-7) and its words counted on each credited window's live tiles only (RT-INT's fix (c) with RT2-INT-1's), which Daniel took (ASK-64 = A, 19 Oct): an accepted period has its accepted prefix's live words fixed right but for a share at cost Lambda ln(1/delta_s) + j min(a, b) D0 at the realized prefix j (LiveWorkAt at rOfPrefix), except with probability delta_s + n (delta_bind + delta_ks); not a Lean function, an Accounting.TS.prob event that shape.events does not list, and its claims (OperandHMu, ReceiptLuckAt and GuessLuckAt per live tile under PerLiveTile, UnitFixed at the period's modes) are not on the premises list. Proved from CircuitWork's lemmas at n rounds: ServiceBudget per window at the live weights, PeriodBudget, PeriodTailMax once at the accepted prefix, DrawnRightOff at n rounds with PrefixOf, the period layer's covers (Accounting.SecurityProofs.ComposePeriod.periodCovers: Declared.periodLayer's writers are in their own window by its definition) and UnitFixed's sums. Its Scope holds LayerCommitted (each value the prover writes committed by its IR cut, or a computed value only its own unit reads by the draw, on which a late edge's cone lying in the IR's rests), which today's code doesn't meet, so a live window it serves is out of scope; and the period's record (cap and circuit committed before window 0's first coin, each window's first coin after the previous window's draw, closed at the first refused window) is protocol structure today's code doesn't meet either: the served Credits registers a window when it is received. Its live tiles are the ones live in-circuit: under #2731's tile (#2639's PouwH1Tile_v2) the served gate's admit bits admit a scale_only row block whose tile is dead (RT4-LOGIC-4), and under #2902's PouwH1Tile_v4 a tile's live bit is its admit bits' OR (RT4-LOGIC-20). Its quoted numbers take D0 = 0, which nothing computes for the served circuit, and at D0 > 0 DeadConeDead can fail, so that the statement says nothing (RT4-LOGIC-18). Its numbers are for live windows, which no served path runs yet, and the declared circuit is the served Program's only through Properties.Compose.UnitsOfLayout and an extractor that doesn't exist yet.",
    "Accounting.SecurityProofs.ComposePeriod.CircuitCreditPeriod": "frozen (no-function,world-unlisted): CircuitWorkPeriod's credit in live words (RT4-INT-8): under its premises at a, b > 0, an accepted period has at least (1 - eps(j))+ of its accepted prefix's live words fixed right (Accounting.Compose.creditPrefix), eps(j) = r(j) N_w/(min(a, b) N_live) at the realized prefix j = PeriodRun.prefixLen (Accounting.Compose.epsPrefix), never at the cap n, except with probability delta_s + n (delta_bind + delta_ks), so a prefix whose eps is at least 1 earns nothing; not a Lean function, an Accounting.TS.prob event that shape.events does not list, with CircuitWorkPeriod's claims off the premises list. Proved from CircuitWorkPeriod's assembly (creditPrefix_le, with UnitFixed keeping an accepted run's fixed words nonnegative). A credit of words, not of time: the headline's time credit needs CreditOfWork on each credited window's run and is not stated.",
    "Accounting.SecurityProofs.TS.SessionSoundAt": "frozen (no-function,world-unlisted): #2909's SoundAt bridge on #2855's proof layer through its C-Flock sessions, over every window of sessions, not a Lean function; it takes EndToEndRegisteredRows' collision bounds at every session (RowsSession.CR) as hypotheses, and its premises AcceptedLive, WindowLaw, ServedChecksHold and ServedRootsLinked (Proofs.Accounting.TS.Session.Assumptions) are not on the premises list.",
-   "Accounting.SecurityProofs.FpG1.Sm120FpG1SheetHeadline": "frozen (conjecture,no-function,world-unlisted): FP8-g1's headline on sm_120 at 5.860%, Accounting.SecurityProofs.TS.Sm120SheetHeadline (whose reason is this one's) at proof layers whose values are a round's operand leaves beside any other values (Leaves x W) with n_pi + 1 proofs a round, with binding at delta_bind (ProofLayer.BindingAt, #2855's form, which ProofsSoundOfPinned takes) in place of the record's fork form at delta_fork (BindingForkAt, read at sqrt(delta_fork) by BindingOfFork), so the budget reads delta_bind where the record's reads sqrt(delta_fork) and no number moves, and one hypothesis more over Definitions, every committed leaf FP8-g1's on H1's grids (Pouw.FpG1.Leaves.Fp8 at Pouw.FpG1.Grids.h1: E4M3's integers to 120 and to 104), which is not on the premises list; its conclusion reads no operand value, so the bound is the record's at g1's windows.",
-   "Accounting.SecurityProofs.FpG1.Sm120W4a8G1SheetHeadline": "frozen (conjecture,no-function,world-unlisted): W4A8-g1's headline on sm_120 at 5.860%, Accounting.SecurityProofs.TS.Sm120SheetHeadline (whose reason is this one's) at proof layers whose values are a round's operand leaves beside any other values (Leaves x W) with n_pi + 1 proofs a round, with binding at delta_bind (ProofLayer.BindingAt, #2855's form, which ProofsSoundOfPinned takes) in place of the record's fork form at delta_fork (BindingForkAt, read at sqrt(delta_fork) by BindingOfFork), so the budget reads delta_bind where the record's reads sqrt(delta_fork) and no number moves, and one hypothesis more over Definitions, every committed leaf W4A8-g1's on H1's grids (Pouw.FpG1.Leaves.W4a8 at Pouw.FpG1.Grids.h1: int8 activations in [-126, 126], doubled E2M1 weights under block scales to 9), which is not on the premises list; its conclusion reads no operand value, so the bound is the record's at g1's windows.",
    "Accounting.SecurityProofs.Remote.HeldOverTime": "frozen (no-function): It is about a trace of where the node's registered blocks are (Accounting.Remote.Held.Trace), not the verifier's code (RemoteAudit); its premise SketchBound is stated on the trace and derived on a model of the receipts' sketch (Accounting.Remote.Sketch) by Accounting.SecurityProofs.Remote.SketchBoundDeployed, whose premises Receipted and Present tie that model to the trace and whose random-oracle step is the named premise Accounting.Assumptions.SketchHashRandom at ε_ro = (Q + P)^2/2^257, added to δs (note:20261024T0839Z-report-sketchbound, note:20261024T1350Z-report-sketch-named, note:20261024T1817Z-report-rt4-fixes), and its premise LiveCoins is derived from the deployed opening draw (Key.subset on the SHA-512 first words of each window's coin, the fallbacks free, at the advantage of each window's distinguisher, one a window and fixed by the session), not from the verifier's code's acceptance, by Accounting.SecurityProofs.Remote.LiveCoinsDrawn (note:20261018T2000Z-report-held-guarantee, note:20261024T0920Z-report-draw-exact, note:20261024T1346Z-report-draw-oracle)",
    "Accounting.SecurityProofs.Remote.HeldOverTimeLinks": "frozen (no-function): It is about a trace of where the node's registered blocks are (Accounting.Remote.Held.Trace), not the verifier's code (RemoteAudit); its premise SketchBound is stated on the trace and derived on a model of the receipts' sketch (Accounting.Remote.Sketch) by Accounting.SecurityProofs.Remote.SketchBoundDeployed, whose premises Receipted and Present tie that model to the trace and whose random-oracle step is the named premise Accounting.Assumptions.SketchHashRandom at ε_ro = (Q + P)^2/2^257, added to δs (note:20261024T0839Z-report-sketchbound, note:20261024T1350Z-report-sketch-named, note:20261024T1817Z-report-rt4-fixes), and its premise LiveCoins is derived from the deployed opening draw (Key.subset on the SHA-512 first words of each window's coin, the fallbacks free, at the advantage of each window's distinguisher, one a window and fixed by the session), not from the verifier's code's acceptance, by Accounting.SecurityProofs.Remote.LiveCoinsDrawn (note:20261018T2000Z-report-held-guarantee, note:20261024T0920Z-report-draw-exact, note:20261024T1346Z-report-draw-oracle)",
    "Nci.SecurityProofs.PackedContainedFanOutOn": "frozen (no-function): It is about an arbitrary reference circuit, a packed chain it runs (a PackedChain, at most k products to a gate, Security/Definitions/Nci/Packed.lean) and a declaration that contains part of it (a PartialContainment, Security/Definitions/Nci/Dark.lean), under the named PackedActivationsIncompressible on the reference circuit (Security/Definitions/Nci/Assumptions/Packed.lean), not about the NCI check's code; joining it to NciCheck.Properties.Witnesses is what would give it an acceptance.",
    "Nci.SecurityProofs.PackedIncompressibleContainedMatMulOn": "frozen (no-function): It is about an arbitrary reference circuit, a packed chain (a PackedChain, at most k products to a gate, Security/Definitions/Nci/Packed.lean) and a threading of it and a declaration that contains part of it (a PartialContainment, Security/Definitions/Nci/Dark.lean), under the named PackedTrainingIncompressible (Security/Definitions/Nci/Assumptions/PackedTraining.lean), not about the NCI check's code; joining it to NciCheck.Properties.Witnesses is what would give it an acceptance.",
    "Nci.SecurityProofs.PackedIncompressibleContainedTrainingOn": "frozen (no-function): It is about an arbitrary reference circuit, a packed chain (a PackedChain, at most k products to a gate, Security/Definitions/Nci/Packed.lean) and a threading of it and a declaration that contains part of it (a PartialContainment, Security/Definitions/Nci/Dark.lean), under the named PackedTrainingIncompressible (Security/Definitions/Nci/Assumptions/PackedTraining.lean), not about the NCI check's code; joining it to NciCheck.Properties.Witnesses is what would give it an acceptance.",
-   "Accounting.SecurityProofs.TS.Sm100SheetHeadline": "frozen (conjecture,no-function,world-unlisted): the B200's headline at DS-100 at 0.783%, under full checking with live coins (epsilon_sample and the Fiat-Shamir premium are separate lines), Whole.sheetDIdealFloor_whole at the exact data of DS-100 and dither-2s-licpw-redux-ldtm0-l32, crediting no tcgen05.ld (Definitions.Accounting.HeadlineDc.Sm100: 52 classes, 27 writer kinds (every MMA form the sheet rates, and UNI), the uniform pipe at the census's measured UP line (SheetDataQ), A2's catch-all NOROW at one issue slot, 14 fold routes with the generic-address checkpoint routes), with pi* DS_issue 666666667/1000000000 + DS_alu 333333333/1000000000, p = 7/8, p0 = 1/2, Lambda = max(kappa/ln(8/7), (kappa + f)/ln 2), S = 48,000 and delta = 2^-40, over every play and window of proofs on any finite coins and every unfolded share, not a Lean function, the unfolded branch binding (0.78288%; the folded one gives 0.69835%); A1-A7, FOLD-OPT per word folded at pi* (FoldOptFoldedAt at that pi* and the run's unfolded share: there a LOP3 costs 4/3 and an IMAD or FFMA 2/3, so it also says li's two-word XOR has no IMAD- or FP-pipe program of 1 instruction, checked for programs of 1 or 2 instructions within a modelled menu, FOLD-XOR #2778 and #2850, not over the B200's whole instruction set; ASK-6 = A; an open conjecture under shape.conjectures, RT2-LOGIC-1, false at every certificate on the B200's readings, RT3-LOGIC-6), so fold skippers are charged, the receipt split (the play's ideal game a ReceiptGame's and Pinned, with two luck premises: OperandHMu at 3/4, H-mu at the deficient words, the first, and ReceiptLuckAt at 1/2, HMU's B' case, the second, which give p = 7/8 by LemmaB at fibre 1 and LuckOfReceipt), WholeLuckAt at 1/2 (B' at a unit whose fold the run skips, ASK-9 = A at p0 = 1/2 for live coins only; the whole-unit guess bound 2^-64 is not granted), binding in its fork form at delta_fork (BindingForkAt, binding at sqrt(delta_fork) by BindingOfFork, so the budget asks delta_fork <= (2^-41/48,000)^2), proof soundness at delta_ZK (ProofSoundAt, which C-Flock's bound doesn't discharge until it states the rows link) and the Definitions' pinning (ProofsPin, which no Lean checks of the served relations: PouwSegCheck_v2 lacks it, PIN's checks of #2417 recompute every word they absorb; RT3-LOGIC-3), named assumptions of Definitions.Accounting.Assumptions.TS (RT2-LOGIC-2), RightFixed, and the play being its proofs' (ProofLayer.Of) and the receipt game's openings pinned (ReceiptGame.Pinned), hypotheses over Definitions, are not on the premises list.",
-   "Accounting.SecurityProofs.TS.Sm100MeasuredHeadline": "frozen (conjecture,no-function,world-unlisted): the B200's headline on its measured vector DC-100-ri at 0.900%, under full checking with live coins (epsilon_sample and the Fiat-Shamir premium are separate lines), Whole.dIdealFloor_whole at the exact data of DC-100-ri and dither-2s-licpw-redux-ldtm0-l32 (Definitions.Accounting.HeadlineDc.Sm100Measured: 52 classes, 9 rows, A2's catch-all UNLISTED at the measured issue slot alone, DC-CENSUS-13, 14 fold routes; flat's fold the global CP_RED2, an exact tie at pi* with its generic twin) with pi* the issue row, q = q_T = 1/2, p = 7/8, p0 = 1/2, Lambda = max(kappa/ln(8/7), (kappa + f)/ln 2), S = 48,000 and delta = 2^-40, over every play and window of proofs on any finite coins and every unfolded share, not a Lean function, the unfolded branch binding (0.89918%; the folded one gives 0.81490%); FacetCeilings on DC-100-ri's rows, SheetWords (A6, which gives WordsWritten and ScalarRoute at 1/2), NoSum, FOLD-OPT per word folded at pi* (FoldOptFoldedAt at the issue row and the run's unfolded share, ASK-6 = A; an open conjecture under shape.conjectures, RT2-LOGIC-1, false at every certificate on the B200's readings, RT3-LOGIC-6), so fold skippers are charged, the receipt split (the play's ideal game a ReceiptGame's and Pinned, with two luck premises: OperandHMu at 3/4, H-mu at the deficient words, the first, and ReceiptLuckAt at 1/2, HMU's B' case, the second, which give p = 7/8 by LemmaB at fibre 1 and LuckOfReceipt), WholeLuckAt at 1/2 (B' at a unit whose fold the run skips, ASK-9 = A at p0 = 1/2 for live coins only; the whole-unit guess bound 2^-64 is not granted), binding in its fork form at delta_fork (BindingForkAt, binding at sqrt(delta_fork) by BindingOfFork, so the budget asks delta_fork <= (2^-41/48,000)^2), proof soundness at delta_ZK (ProofSoundAt, which C-Flock's bound doesn't discharge until it states the rows link) and the Definitions' pinning (ProofsPin, which no Lean checks of the served relations: PouwSegCheck_v2 lacks it, PIN's checks of #2417 recompute every word they absorb; RT3-LOGIC-3), named assumptions of Definitions.Accounting.Assumptions.TS (RT2-LOGIC-2), RightFixed, and the play being its proofs' (ProofLayer.Of) and the receipt game's openings pinned (ReceiptGame.Pinned), hypotheses over Definitions, are not on the premises list.",
-   "Accounting.SecurityProofs.TS.Sm90SheetHeadline": "frozen (conjecture,no-function,world-unlisted): the H200's headline at DS-90 at 0.944%, under full checking with live coins (epsilon_sample and the Fiat-Shamir premium are separate lines), Whole.sheetDIdealFloor_whole at the exact data of DS-90 and dither-2s-licpw-redux-p1-l32 with ffill at p = 1 and no filler credited (Definitions.Accounting.HeadlineDc.Sm90: 50 classes, 34 writer kinds (every MMA form the sheet rates, and UNI), the uniform pipe at the census's measured UP line (SheetDataQ), A2's catch-all NOROW at one issue slot, 56 fold routes: the bit-exact loops with the generic-address checkpoint routes, and every counted fold known to come near them, none built, RT4-SHEET-13's and -14's moves of LI on li and each loop and li-bulk with its counted members, RT4-SHEET-17 and -22), with pi* DS_issue alone, p = 7/8, p0 = 1/2, Lambda = max(kappa/ln(8/7), (kappa + f)/ln 2), S = 48,000 and delta = 2^-40, over every play and window of proofs on any finite coins and every unfolded share, not a Lean function, the unfolded branch binding (0.94302%; the folded one gives 0.86184%); A1-A7, FOLD-OPT per word folded at pi* (FoldOptFoldedAt at DS_issue and the run's unfolded share: at one issue slot an instruction it is an instruction count, with no pipe premise; ASK-6 = A; an open conjecture under shape.conjectures, RT2-LOGIC-1, false at every certificate on the B200's readings, RT3-LOGIC-6, where on the H200's the fold that shows it is at least an IMAD.WIDE route of the menu on every row), so fold skippers are charged, the receipt split (the play's ideal game a ReceiptGame's and Pinned, with two luck premises: OperandHMu at 3/4, H-mu at the deficient words, the first, and ReceiptLuckAt at 1/2, HMU's B' case, the second, which give p = 7/8 by LemmaB at fibre 1 and LuckOfReceipt), WholeLuckAt at 1/2 (B' at a unit whose fold the run skips, ASK-9 = A at p0 = 1/2 for live coins only; the whole-unit guess bound 2^-64 is not granted), binding in its fork form at delta_fork (BindingForkAt, binding at sqrt(delta_fork) by BindingOfFork, so the budget asks delta_fork <= (2^-41/48,000)^2), proof soundness at delta_ZK (ProofSoundAt, which C-Flock's bound doesn't discharge until it states the rows link) and the Definitions' pinning (ProofsPin, which no Lean checks of the served relations: PouwSegCheck_v2 lacks it, PIN's checks of #2417 recompute every word they absorb; RT3-LOGIC-3), named assumptions of Definitions.Accounting.Assumptions.TS (RT2-LOGIC-2), RightFixed, and the play being its proofs' (ProofLayer.Of) and the receipt game's openings pinned (ReceiptGame.Pinned), hypotheses over Definitions, are not on the premises list.",
-   "Accounting.SecurityProofs.TS.Sm90MeasuredHeadline": "frozen (conjecture,no-function,world-unlisted): the H200's headline on its measured vector DC-90-ri at 1.412%, over 1% (no check reads ffill's chains, so no filler is credited, its flat is setup's floor and it folds by built routes alone), at A6's proved 1/2 floor (its twin under (I3) ScalarRoute at 3/5, Sm90MeasuredI3Headline, is 1.086%, over 1% too), under full checking with live coins (epsilon_sample and the Fiat-Shamir premium are separate lines), Whole.dIdealFloor_whole at the exact data of DC-90-ri and dither-2s-licpw-redux-p1-l32 (Definitions.Accounting.HeadlineDc.Sm90Measured: 50 classes, 15 rows, A2's catch-all UNLISTED at the measured issue slot and the JI90 lines, its LD.E and IMAD.WIDE timed beside the IGMMA as ATOM.E, ATOMS, REDG, LDS.128 and REDUX were, r20261021-070616-d06c and r20261021-074303-da7f, DC-CENSUS-13, and the stores and ISETP, r20261021-161119-62ac, RT4-SHEET-23; 56 fold routes on the cheater's menu: the design's fold, the 12 bit-exact loops and li-bulk at its measured cost, RT4-SHEET-17, the built routes, which flat alone folds by, and every counted fold known to come near them, none built, RT4-SHEET-13's and -14's moves of LI on li and each loop and li-bulk's counted BT1024 and trimmed infinite-W members, RT4-SHEET-22, the two-slot round trip left off since li's XOR has three inputs a half step and one ATOM.E.XOR and one LD.E carry two; flat's words all on the IGMMA, its fold the generic CP_RED2 and CP_RED8, both built, B_flat 195.30 on JPA90_0) with pi* issue 224871/62500000 + JI90_0 483349359/500000000 + JI90_1 14851673/500000000, q = q_T = 1/2, p = 7/8, p0 = 1/2, Lambda = max(kappa/ln(8/7), (kappa + f)/ln 2), S = 48,000 and delta = 2^-40, over every play and window of proofs on any finite coins and every unfolded share, not a Lean function, the folded branch binding (1.41109%, with ln(8/7) >= 2/15; the unfolded one gives 1.35299%); FacetCeilings on DC-90-ri's rows, SheetWords (A6, which gives WordsWritten and ScalarRoute at 1/2), NoSum (which carries the tensor forms DC-90-ri prices at the scalar coefficient off the menu), FOLD-OPT per word folded at pi* (FoldOptFoldedAt at that pi* and the run's unfolded share, ASK-6 = A; a conjecture under shape.conjectures, RT2-LOGIC-1, open at all five readings' pi* and here a premise only about folds off the cheater's menu: phi* is CP_RED's and CP_RED2's price, their generic and IMAD.WIDE members tying, every class a fold route issues prices above 0 at pi*, and the two-slot round trip, off the menu, prices at 1.50 phi*; flat's fold prices at 1.0076 phi* and flat's fold with each IMAD as 32 ALU shift-adds at 15.92 N_w phi*, and that fold, which makes it false at every certificate on the B200's readings, RT3-LOGIC-6, is at least an IMAD.WIDE route of the menu on every row here), so fold skippers are charged, the receipt split (the play's ideal game a ReceiptGame's and Pinned, with two luck premises: OperandHMu at 3/4, H-mu at the deficient words, the first, and ReceiptLuckAt at 1/2, HMU's B' case, the second, which give p = 7/8 by LemmaB at fibre 1 and LuckOfReceipt), WholeLuckAt at 1/2 (B' at a unit whose fold the run skips, ASK-9 = A at p0 = 1/2 for live coins only; the whole-unit guess bound 2^-64 is not granted), binding in its fork form at delta_fork (BindingForkAt, binding at sqrt(delta_fork) by BindingOfFork, so the budget asks delta_fork <= (2^-41/48,000)^2), proof soundness at delta_ZK (ProofSoundAt, which C-Flock's bound doesn't discharge until it states the rows link) and the Definitions' pinning (ProofsPin, which no Lean checks of the served relations: PouwSegCheck_v2 lacks it, PIN's checks of #2417 recompute every word they absorb; RT3-LOGIC-3), named assumptions of Definitions.Accounting.Assumptions.TS (RT2-LOGIC-2), RightFixed, and the play being its proofs' (ProofLayer.Of) and the receipt game's openings pinned (ReceiptGame.Pinned), hypotheses over Definitions, are not on the premises list.",
    "RecDeploy.lamLin2_deployed_ge": "lemma: route 2C's bound lamLin2 is at least 100 at the deployed records, a bound on a number (an inequality of reals at the deployed numbers), not a property of a Lean function",
    "RecDeploy.lamLin2_deployed_ge_dep": "lemma: route 2C's bound lamLin2 is at least 100 at the deployed records and caps, a bound on a number (an inequality of reals at the deployed numbers), not a property of a Lean function",
-   "Accounting.SecurityProofs.FpG1.Sm120FpG1MeasuredHeadline": "frozen (conjecture,no-function,world-unlisted): FP8-g1's headline on sm_120's measured vector (VF3s-16) at 0.591%, Accounting.SecurityProofs.TS.Sm120MeasuredHeadline (whose reason is this one's) at proof layers whose values are a round's operand leaves beside any other values (Leaves x W) with n_pi + 1 proofs a round, with binding at delta_bind (ProofLayer.BindingAt, #2855's form, which ProofsSoundOfPinned takes) in place of the record's fork form at delta_fork (BindingForkAt, read at sqrt(delta_fork) by BindingOfFork), so the budget reads delta_bind where the record's reads sqrt(delta_fork) and no number moves, and one hypothesis more over Definitions, every committed leaf FP8-g1's on H1's grids (Pouw.FpG1.Leaves.Fp8 at Pouw.FpG1.Grids.h1: E4M3's integers to 120 and to 104), which is not on the premises list; its conclusion reads no operand value, so the bound is the record's at g1's windows. The 0.591% rests on the measured record's premises, ScalarRoute at 9/8 among them, assumed as it is for the int8 measured headline: at A6's proved 1/2 floor the same bound is 7.791% (r20261019-172339-a93b, RT3-LOGIC-2). Beside the g1 premise, which narrows the windows covered and does no work in the bound, it takes no premise the measured record doesn't: binding at delta_bind is what the record's fork form gives at sqrt(delta_fork).",
-   "Accounting.SecurityProofs.FpG1.Sm120W4a8G1MeasuredHeadline": "frozen (conjecture,no-function,world-unlisted): W4A8-g1's headline on sm_120's measured vector (VF3s-16) at 0.591%, Accounting.SecurityProofs.TS.Sm120MeasuredHeadline (whose reason is this one's) at proof layers whose values are a round's operand leaves beside any other values (Leaves x W) with n_pi + 1 proofs a round, with binding at delta_bind (ProofLayer.BindingAt, #2855's form, which ProofsSoundOfPinned takes) in place of the record's fork form at delta_fork (BindingForkAt, read at sqrt(delta_fork) by BindingOfFork), so the budget reads delta_bind where the record's reads sqrt(delta_fork) and no number moves, and one hypothesis more over Definitions, every committed leaf W4A8-g1's on H1's grids (Pouw.FpG1.Leaves.W4a8 at Pouw.FpG1.Grids.h1: int8 activations in [-126, 126], doubled E2M1 weights under block scales to 9), which is not on the premises list; its conclusion reads no operand value, so the bound is the record's at g1's windows. The 0.591% rests on the measured record's premises, ScalarRoute at 9/8 among them, assumed as it is for the int8 measured headline: at A6's proved 1/2 floor the same bound is 7.791% (r20261019-172339-a93b, RT3-LOGIC-2). Beside the g1 premise, which narrows the windows covered and does no work in the bound, it takes no premise the measured record doesn't: binding at delta_bind is what the record's fork form gives at sqrt(delta_fork).",
    "Flock.SecurityProofs.EndToEndHiddenFlat": "frozen (hash,world-unlisted,scope): It takes the table and link finders' collision bounds (TableCRZ, LinkCRZC) as hypotheses instead of a collision disjunct tied to the run, and two premises that aren't on the list: A3 (the verifier's IO.getRandomBytes is uniform) and live-verifier custody (RecordCustodyZKJ). It also takes hscope (scopeOk), which flock_verify_sound now derives from acceptance.",
    "Flock.SecurityProofs.EndToEndHiddenDrawnFlat": "frozen (hash,world-unlisted,scope): It takes the table and link finders' collision bounds (TableCRZ, LinkCRZC) as hypotheses instead of a collision disjunct tied to the run, and live-verifier custody (RecordCustodyZKJ), a premise that isn't on the list; it also takes hscope (scopeOk), which flock_verify_sound now derives from acceptance.",
    "Flock.SecurityProofs.EndToEndRegisteredFlat": "frozen (hash,world-unlisted,scope): It takes the table and link finders' collision bounds (TableCRZ, LinkCRZC) as hypotheses instead of a collision disjunct tied to the run, and two premises that aren't on the list: A3 (the verifier's IO.getRandomBytes is uniform) and live-verifier custody (RecordCustodyZKJ). It also takes hscope (scopeOk), which flock_verify_sound now derives from acceptance.",
@@ -12326,7 +12039,6 @@
    "Flock.SecurityProofs.EndToEndRegisteredRowsFlat": "frozen (hash,world-unlisted,scope): It takes the table, link and rows finders' collision bounds (TableCRZ, LinkCRZC, RowsCRZC) as hypotheses instead of a collision disjunct tied to the run, and live-verifier custody (RecordCustodyZKJ), a premise that isn't on the list; it also takes hscope (scopeOk), which flock_verify_sound now derives from acceptance.",
    "Accounting.SecurityProofs.TS.CheckedSessionSound": "frozen (no-function,world-unlisted): SessionSoundAt realized at the checked layer (checkedLayer, PouwH1TileZy_v1 with its ok port registered) over every window of fully checked C-Flock sessions, not a Lean function; it takes EndToEndRegisteredRows' collision bounds at every session (RowsSession.CR), the window's law (WindowLaw) and RowsSession.ServedRegistered as hypotheses, which are not on the premises list, and proves SessionSoundAt's AcceptedLive, ServedChecksHold and ServedRootsLinked (at 0) of the layer.",
    "Accounting.SecurityProofs.TS.HeldSessionSound": "frozen (no-function,world-unlisted): CheckedSessionSound at the held layer (heldLayer: flock-verify --zk --registered with its known-content check, Registered.checkKnownAll), whose relation concludes Accounting.Served.Held of the declared circuit at every drawn unit, not a Lean function; it takes CheckedSessionSound's hypotheses, the registered file's known ok rows each the word 1, and Accounting.Assumptions.TS.OkRealizes (the key program's ok wires carry the declared unit's checks) as hypotheses, which are not on the premises list, and proves the ok rows from the verifier's refusal (FlockC3.RegLevels.knownColl_spec).",
-   "Accounting.SecurityProofs.TS.Sm90MeasuredI3Headline": "frozen (conjecture,no-function,world-unlisted): the H200's headline on its measured vector DC-90-ri under (I3) ScalarRoute at q = q_T = 3/5 at 1.086%, over 1%, the twin of Sm90MeasuredHeadline (the same reading at A6's proved 1/2 floor, 1.412%) beside it, not in its place, so it is cited with its premise (DC-90-ri 1.086% under (I3) at 3/5; 1.412% at the proved 1/2 floor; credit against the built flat, the cheater priced at every known fold, counted ones included), under full checking with live coins (epsilon_sample and the Fiat-Shamir premium are separate lines), Whole.dIdealFloor_whole at the exact data of DC-90-ri and dither-2s-licpw-redux-p1-l32 (Definitions.Accounting.HeadlineDc.Sm90MeasuredI3: Sm90Measured's machine, writer kinds, vector classes, fold routes and flat, none of which reads q, at q = q_T = 3/5 and b_T = 0, B_flat 195.30 on JPA90_0) with pi* JI90_0 12809871/15625000 + JI90_1 16889149/500000000 + JPA90_0 73194979/500000000, q = q_T = 3/5, p = 7/8, p0 = 1/2, Lambda = max(kappa/ln(8/7), (kappa + f)/ln 2), S = 48,000 and delta = 2^-40, over every play and window of proofs on any finite coins and every unfolded share, not a Lean function, the folded branch binding (1.08582%, with ln(8/7) >= 2/15; the unfolded one gives 1.02745%); FacetCeilings on DC-90-ri's rows, WordsWritten at the forms' omega, ScalarRoute at 3/5 (assumed: ClassPSlots counts a slot a word but takes a writer's slot as writing nothing else, which a 64-bit head writing two words a lane, IMAD.WIDE or DFMA, breaks; A6's SheetWords gives it at 1/2 only, SheetScalarRouteHalf, where the lane route ties the IGMMA's word rate on JI90_0, 65.28 to 65.27 words a cycle; the bound is at its floor from about 0.5884 and under 1% at no q, and 3/5 is the least floor of denominator at most 5 there), NoSum (which carries the tensor forms DC-90-ri prices at the scalar coefficient off the menu), FOLD-OPT per word folded at pi* (FoldOptFoldedAt at the twin's pi* and the run's unfolded share, ASK-6 = A; a conjecture under shape.conjectures, RT2-LOGIC-1, open at the twin's pi* and a premise only about folds off the cheater's menu, which holds every counted fold known (Sm90MeasuredHeadline's); not implied by FOLD-OPT at 1/2's pi* (HB-PROOF's M1), since its JPA90_0 weight prices ALU and the IGMMA alone; every class a fold route issues prices above 0 there (a free class would make it harder to meet, not easier); phi* is li-bulk's trimmed infinite-W member, counted, not built, with the built CP_RED2 4.6e-10 of it above; M1's tie, the two-slot round trip on cp-red8 at phi*·(1 - 3.32e-10) at the twin's earlier pi*, is off the menu since li's XOR has three inputs a half step and one ATOM.E.XOR and one LD.E carry two, and at this pi* prices at 1.28 phi*; flat's fold, by built routes alone, prices at 1.0042 phi* and flat's fold with each IMAD as 32 ALU shift-adds at 18.26 N_w phi*, and that fold, which makes it false at every certificate on the B200's readings, RT3-LOGIC-6, is at least an IMAD.WIDE route of the menu on every row here), so fold skippers are charged, the receipt split (the play's ideal game a ReceiptGame's and Pinned, with two luck premises: OperandHMu at 3/4, H-mu at the deficient words, the first, and ReceiptLuckAt at 1/2, HMU's B' case, the second, which give p = 7/8 by LemmaB at fibre 1 and LuckOfReceipt), WholeLuckAt at 1/2 (B' at a unit whose fold the run skips, ASK-9 = A at p0 = 1/2 for live coins only; the whole-unit guess bound 2^-64 is not granted), binding in its fork form at delta_fork (BindingForkAt, binding at sqrt(delta_fork) by BindingOfFork, so the budget asks delta_fork <= (2^-41/48,000)^2), proof soundness at delta_ZK (ProofSoundAt, which C-Flock's bound doesn't discharge until it states the rows link) and the Definitions' pinning (ProofsPin, which no Lean checks of the served relations: PouwSegCheck_v2 lacks it, PIN's checks of #2417 recompute every word they absorb; RT3-LOGIC-3), named assumptions of Definitions.Accounting.Assumptions.TS (RT2-LOGIC-2), RightFixed, and the play being its proofs' (ProofLayer.Of) and the receipt game's openings pinned (ReceiptGame.Pinned), hypotheses over Definitions, are not on the premises list.",
    "Nci.SecurityProofs.CoveringBound": "frozen (no-function): It is about an arbitrary declaration, its multiplication blocks and token computations (Nci.Covering.MulBlocks) and a covering by inference blocks (Nci.Covering.Covers, Security/Definitions/Nci/Covering.lean), under the named ParameterHard and with ActivationChained read in its statement (Security/Definitions/Nci/Assumptions/Covering.lean), not about the NCI check's code; joining it to NciCheck.Properties.Witnesses is what would give it an acceptance.",
    "Accounting.SecurityProofs.TS.LeafLanesSound": "frozen (no-function,world-unlisted): option A's 33 linked statements (h1zy.PouwH1LaneZy_v1's 32 lanes and PouwH1Combine_v1) realize one unit's proof layer (leafLayer, accepted where flock-verify accepts all 33 sessions with their known-content, complete and known-read checks, Flock.Registered.checkKnownAll, checkComplete and Flock.KnownRead.check; its relation the unit's served checks on the leaf's 32 x 32 cells: z = A·Bᵀ, y = dq(z) and the receipt the XOR of its lanes' honest partials) over every window of fully checked C-Flock sessions, not a Lean function; it takes CheckedSessionSound's hypotheses at each of the 33 sessions (RowsSession.CR, WindowLaw, RowsSession.ServedRegistered), which are not on the premises list, and its premise LeafChecks (the circuits at their port rows, registered or not; Proofs.Accounting.TS.Session.Lanes.Assumptions) is not on it either. The leaf it opens and the receipt it checks are the ones the sessions' committed rows decode to (leafOf, receiptOf), so nothing is assumed of the rows; the lanes that read one A or B row read it in full at one registered tree (readFull, read_bits). Its relation admits LeafColl, a clash of two of the sessions' registrants' records (an explicit SHA-512 collision, both inputs in hand), so the registrants' rows agreeing across the 33 sessions is proved (rowsAgree_or_leafColl, from registrants_eq_or_collides), not assumed; and LeafKnownColl, a collision of a session's known-content tie, so the known rows holding is proved too (knownHeld_or_coll). The leaf is one declared unit and its partials are proof-layer values (RT4-LOGIC-30). Proved from CheckedSessionSound's SoundAt at each session, the complete check's registration of every port row (RowsSession.rowsReg_eq_portRead), the lanes' cover of the leaf and a union bound, at 33 delta.",
    "Accounting.SecurityProofs.TS.TileSessionSound": "frozen (no-function,world-unlisted): CheckedSessionSound at the tile layer (tileLayer: flock-verify --zk --registered with its known-content check, its relation CheckedRel and every drawn unit's decoded cells meeting PouwH1TileZy_v1's Definition, z = A·Bᵀ and y = dq(z), or OkColl) over every window of fully checked C-Flock sessions, not a Lean function; it takes CheckedSessionSound's hypotheses, which are not on the premises list, every circuit port a port of own (what Flock.Registered.checkComplete establishes), and its premise TileChecks (Proofs.Accounting.TS.Session.Tile.Assumptions), which is not on it either. Proved as HeldSessionSound is, from CheckedSessionSound's SoundAt and the ok tie (tie_ok), at delta.",
@@ -12581,11 +12293,6 @@
    "Nci.Assumptions.ActivationsSupport": {
     "status": "falsified",
     "why": "ActivationsIncompressible in support form; false at FP4 for every chain, updated or not (19 Oct 2026, note:compute-accounting/20261019T0725Z-finding-nci-falsify, art:d2cc129951081405e9b3f465d03ecc6f2760ce4dec82768125fce5b8052c4c32): T one first-multiplication product gate holding an E2M1 x E2M1 product is charged b_w + b_a and takes at most 37 values, so it fails at every cap >= b_w + b_a once b_w + b_a > log2 37 = 5.21 (the calculator's 2.5 + 4 = 6.5). Nci.SecurityProofs.IuReads rests on it, and so do Nci.SecurityProofs.ContainedMatMul and ContainedTraining."
-   },
-   "Accounting.Assumptions.TS.FoldOptFoldedAt": {
-    "status": "open",
-    "test": "benchmarks/pouw/tests/test_lean_headline.py::test_bit_exact_folds_meet_fold_opt_at_pi_star",
-    "why": "FOLD-OPT per word folded at the one certificate a headline prices at: at pi*, no run folds its words at a price below (1 - mu_f)·folded·phi*(pi*). Open; at every certificate (FoldOptFolded) it is false: the IMAD rotate, a bit-exact fold of LOP3 and four IMAD-pipe instructions a word, costs 14 to the menu's 16 halfway between DS-120's issue and LOP rows (RT2-LOGIC-1). Its test prices each bit-exact fold we know (the menu's, the funnel, shift, IMAD and wide rotates, the wide multiplies) at both sm_120 headlines' pi* against phi*. On the B200's two readings it is false at every certificate too (RT3-LOGIC-6: ♭'s fold with each IMAD as 32 ALU shift-adds); on the H200's three (DC-90-ri's at 1/2 and its (I3) twin at 3/5 among them) that fold breaks it at no certificate, since the H200's menu holds each route with LI's multiplies as IMAD.WIDE and N_w times one of those prices at most that fold on every row. benchmarks/pouw/tests/test_lean_headline_dc.py::test_folds_meet_fold_opt_at_pi_star prices ♭'s fold and that one at each of the five pi* and checks both facts. At those pi* it is open on all five, and every class a fold route issues prices above 0 at each (a free class would make it harder to meet, not easier: HB-PROOF's M1). On the H200 the cheater's menu holds every counted fold known to come near the bit-exact loops, none built: RT4-SHEET-13's and -14's moves of LI on li and each loop (its XORs as a memory round trip of three issue slots, its multiplies as IMAD.WIDE, or both), their classes at the JI90 lines the H200 measured beside the IGMMA (r20261021-070616-d06c, r20261021-074303-da7f, r20261021-161119-62ac), and li-bulk at its measured cost (r20261021-161119-62ac) with its counted BT1024 and trimmed infinite-W members (RT4-SHEET-17, -22), so there it is a premise only about folds off the cheater's menu, and a counted fold priced below what it would cost built only lowers the proved credit (1 - epsilon)·B_flat, which reads w* and phi* at pi* and not B_flat (RT4-SHEET-27); B_flat doesn't move with it, since flat folds by the built routes alone. The two-slot round trip is off the menu: li's XOR has three inputs a half step and one ATOM.E.XOR and one LD.E carry two. At the (I3) twin's pi* it doesn't follow from FOLD-OPT at 1/2's (HB-PROOF's M1), and phi* there is li-bulk's trimmed member."
    },
    "Nci.Assumptions.PartialSumsSupport": {
     "status": "falsified",

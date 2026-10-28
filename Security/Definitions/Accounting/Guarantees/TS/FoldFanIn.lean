@@ -25,7 +25,7 @@ which keeps its 128 registers on 32 lanes under one uniform guard, 4099 (`Accoun
 
 No count of this kind gives more than `1/(f − 1)` a word. A tree of `f`-input XORs sees `N` words with
 `⌈(N − 1)/(f − 1)⌉` nodes. A duo run is a dataflow of two 3-source nodes a word, since `y′` and `z′` are each a
-function of `y`, `z` and the word. So duo's 3 instructions a word (`FoldOpt`) are out of reach of any such count.
+function of `y`, `z` and the word. So duo's 3 instructions a word are out of reach of any such count.
 -/
 
 namespace Accounting.Guarantees.TS

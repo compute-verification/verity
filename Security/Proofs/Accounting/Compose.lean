@@ -10,12 +10,11 @@ import Proofs.Accounting.Compose.CircuitWorkSeeded
 import Proofs.Pouw.RelativeSecurity
 
 /-!
-# PoUW's credit on an arbitrary declared circuit: proofs
+# PoUW's work on an arbitrary declared circuit: proofs
 
 Every guarantee here is proved: the three rates, `ServiceBudget`, `ServiceCovers`, `CircuitWork`, `CircuitWorkSeeded`,
-`BindingOfECR` and `WholeLuckOfEntropy` (steps 1–6, 9, 11 and 12, each in its own file under
-`Proofs/Accounting/Compose/`), and `CreditOfWork` (step 7), `CircuitCredit` (step 8) and `CircuitCreditSeeded`
-(step 10) below. What the window's proofs' layer meets is proved: its static half is defined from the IR
+`BindingOfECR` and `WholeLuckOfEntropy` (steps 1–9, each in its own file under `Proofs/Accounting/Compose/`). What the
+window's proofs' layer meets is proved: its static half is defined from the IR
 (`Declared.layer`), so `StageCuts` (at every value committed by its IR cut, which every one is at `Declared.atIR`),
 `StageCoins` (under `Declared.Wf`), `StageSlots`, `WriterReads` and `StageComplete` (under `Declared.Wf` and
 `units ≤ N_p`) are lemmas below, not premises, as are the draw cut of `Declared.atDraw`'s layer and `serviceGame`,
@@ -54,7 +53,7 @@ Every guarantee here is proved: the three rates, `ServiceBudget`, `ServiceCovers
    `Scheme.LuckProved`), and `GuessLuckAt` on `tileGame … .whole` gives `Pr[whole ∧ same] ≤ guess·Pr[whole]`; a tile of
    no credited kind is held to `1`; so `SplitStages.LuckAt (tileLuck …) (tileLuck0 …)`. `LuckAt` and the per-stage
    games read the stages' coins as `SplitStages`' uniform ones; `Scope`'s `Declared.Live` is read by no step: it is the
-   protocol fact under which those are the service's coins, as `SeedNamed` is in step 9. Under `LayerCommitted` an
+   protocol fact under which those are the service's coins, as `SeedNamed` is in step 7. Under `LayerCommitted` an
    input's layer cut is its IR cut (`layer_stageCuts`: an input has no second case), so a run input is bound before its
    first reader's coin. Then
    `Accounting.SecurityProofs.TS.DrawnRightOff` at `S = 1` (its draw the layer's, `drawOf`) gives one event of
@@ -71,15 +70,7 @@ Every guarantee here is proved: the three rates, `ServiceBudget`, `ServiceCovers
    cheaper share: for `a ≤ b`, `d_F = S_F + Z_F + Z_0` and `d₀ = S_0`; for `b < a`, `d_F = S_F` and
    `d₀ = S_0 + Z_F + Z_0`. Either keeps `d_F + d₀ = c_F + c₀` and `d₀ ≥ S_0`, so `WorkAt` at
    `a·d_F + b·d₀ < Λ·ln(1/δ_s) + min(a, b)·D₀`.
-7. `CreditOfWork` (proved): `SheetDIdealFloor`'s reduction of (I1)–(I5) to A1–A7 on the one run
-   (`facetCeilings_of_sheet`, `scalarRoute_half`), `price_of_parts` with FOLD-OPT at the folded words and `lam`
-   (`price_of_parts_folded`, from `FoldOptFoldedAt`), `price_le_time`, and `identity` at `d̄ = ā = 0`; the deficit,
-   `(d_F + d₀)·N_w·w* + d₀·(1 − μ_f)·N_w·φ*`, is `(a·d_F + b·d₀)·B_♭ < r·B_♭`, and `f_max > 0` (`Model.Wf`) clears
-   the division.
-8. `CircuitCredit` (proved): step 6 at `a = aOf`, `b = bOf` (`≥ 0` by `costs_nonneg`,
-   from `stars_nonneg` and `Model.Wf`), and step 7 on each run off its event at `r = rOf`; the certificate is issued at
-   `.live`.
-9. `CircuitWorkSeeded` (proved, `Compose/CircuitWorkSeeded.lean`): `SeedExtractedAt` gives one event `Off` of
+7. `CircuitWorkSeeded` (proved, `Compose/CircuitWorkSeeded.lean`): `SeedExtractedAt` gives one event `Off` of
    probability at most `ε_id(T, |J|)` off which every round's `sq a r` is a query. Per round `r` and mode,
    `SeedLuckAt` gives the queries' gains `g` and `Break`; off `Off` and `Break` round `r`'s gain is at most
    `g (sq a r)`, so at most `max_q g q`. Where `θ_r > 0` (`seedTheta r` folded, `wholeTheta r` whole), GRIND's
@@ -102,14 +93,12 @@ Every guarantee here is proved: the three rates, `ServiceBudget`, `ServiceCovers
    strictly below `rOfSeeded`'s first three terms (`a > 0`), with `D₀` as in step 6. `SeedNamed` (in `ScopeSeeded`)
    is read by no step: it is the protocol fact under which the `UnitFixed` premise on `Declared.atIR`'s layer can
    hold, as `LayerCommitted` is for the live pair.
-10. `CircuitCreditSeeded` (proved): step 9 at `a = aOf`, `b = bOf`, and step 7 on each run off its event at
-   `r = rOfSeeded`; the certificate is issued at `.seeded`.
-11. `BindingOfECR` (proved, `Compose/BindingOfECR.lean`): `Accounting.SecurityProofs.TS.DrawnBindingOfFork` gives
+8. `BindingOfECR` (proved, `Compose/BindingOfECR.lean`): `Accounting.SecurityProofs.TS.DrawnBindingOfFork` gives
    `Pr[MovedIn] ≤ |L|·√Pr[fork]`; AM–GM, `|L|·√x ≤ δ' + |L|²·x/(4δ')`; then `Pr[fork] ≤ F.Pr H + κ` and, where
    `Claims.ExpectedCR H F` holds, `F.Pr H ≤ E[cost]/2^256`, through `ENNReal.ofReal`'s monotonicity and
    `ofReal_add_le`; where it fails, the right side is `⊤` unless `L` is empty, where `MovedIn` can't hold (no slot to
    move).
-12. `WholeLuckOfEntropy` (proved, `Compose/WholeLuckOfEntropy.lean`): per round take `WholeEntropyAt`'s `Wh`, `Lk`
+9. `WholeLuckOfEntropy` (proved, `Compose/WholeLuckOfEntropy.lean`): per round take `WholeEntropyAt`'s `Wh`, `Lk`
    and `Break`, and `g q a = Σ_{v ∈ Wh q a} w_v·((1 + κ₀)·[v ∈ Lk q a] − κ₀)`. Off `Break` at `sq a r = some q` the
    round's whole tiles are `Wh q a` and `same` lands in `Lk q a`, so `roundGain ≤ g q a` (`w ≥ 0`, `1 + κ₀ ≥ 0`).
    `Wh q` doesn't read `q`'s answer, so on `redraw a r q b` the sum is over one set `W`, and with `x_v = θ_r·w_v`
@@ -250,81 +239,7 @@ theorem WholeLuckOfEntropy : Accounting.Guarantees.Compose.WholeLuckOfEntropy :=
 theorem CircuitWork : Accounting.Guarantees.Compose.CircuitWork := by
   exact WorkProof.circuitWork
 
-theorem CreditOfWork : Accounting.Guarantees.Compose.CreditOfWork := by
-  intro ι K P T L U F X _ _ _ _ _ _ _ _ _ _ Sc Cd Sh Z A folded lam r hFits hMS hA hClock hDisp hTen hPipe hSmem
-    hWords hSem hFold hFill hwork
-  obtain ⟨h, hZ, hq, hqT, hb⟩ := hMS
-  obtain ⟨-, hf, -, hB, -, -, -, -, -, -, -, -, hmu1, -⟩ := id hZ
-  obtain ⟨-, hw0, hphi0, -⟩ := Accounting.SecurityProofs.TS.stars_nonneg Z (floorOf Sc Cd) lam hZ h
-  obtain ⟨dF, d0, -, -, hfix, hfold, hlt⟩ := hwork
-  rw [← hFits.2] at hfix hfold
-  have hM : Accounting.Assumptions.TS.FacetCeilings Z.G A.run := by
-    rw [hFits.1]
-    exact Accounting.SecurityProofs.TS.facetCeilings_of_sheet Sh _
-      (Accounting.SecurityProofs.TS.run_nonneg_of_split hA) hClock hDisp hTen hPipe hSmem
-  have hΦ := (Accounting.SecurityProofs.TS.price_of_parts_folded Z (floorOf Sc Cd) A lam folded h hZ hA hWords.1
-    (Accounting.SecurityProofs.TS.scalarRoute_half Z A hA hWords hq hqT hb) hSem.2 hSem.1 hFold hFill).trans
-    (Accounting.SecurityProofs.TS.price_le_time Z.G lam A.run h hf hM)
-  have hid := (div_eq_iff hB.ne').mp (Accounting.SecurityProofs.TS.identity Z (floorOf Sc Cd) lam 0 0 hZ)
-  simp only [Accounting.TS.Model.epsLuck, Accounting.TS.Model.epsAdapt, zero_mul, sub_zero] at hid
-  have h1 := mul_le_mul_of_nonneg_right hfix hw0
-  have h2 := mul_le_mul_of_nonneg_right (mul_le_mul_of_nonneg_left hfold (sub_nonneg.mpr hmu1)) hphi0
-  have hNW : Z.Nw * Z.wStar lam / Z.bnd (floorOf Sc Cd) * Z.bnd (floorOf Sc Cd) = Z.Nw * Z.wStar lam :=
-    div_mul_cancel₀ _ hB.ne'
-  have hc : (1 - Z.muF) * Z.Nw * Z.phiStar lam / Z.bnd (floorOf Sc Cd) * Z.bnd (floorOf Sc Cd) =
-      (1 - Z.muF) * Z.Nw * Z.phiStar lam := div_mul_cancel₀ _ hB.ne'
-  have hab : (aOf Sc Cd Z lam * dF + bOf Sc Cd Z lam * d0) * Z.bnd (floorOf Sc Cd) =
-      (dF + d0) * (Z.Nw * Z.wStar lam) + d0 * ((1 - Z.muF) * Z.Nw * Z.phiStar lam) := by
-    show (Z.Nw * Z.wStar lam / Z.bnd (floorOf Sc Cd) * dF + (Z.Nw * Z.wStar lam / Z.bnd (floorOf Sc Cd) +
-      (1 - Z.muF) * Z.Nw * Z.phiStar lam / Z.bnd (floorOf Sc Cd)) * d0) * Z.bnd (floorOf Sc Cd) = _
-    linear_combination (dF + d0) * hNW + d0 * hc
-  have hrB := mul_lt_mul_of_pos_right hlt hB
-  show (1 - (Z.epsSkip (floorOf Sc Cd) lam + Z.epsCert (floorOf Sc Cd) lam + Z.epsRoute (floorOf Sc Cd) lam +
-    Z.epsMand (floorOf Sc Cd) lam + r)) * (Z.bnd (floorOf Sc Cd) / Z.G.fmax) ≤ A.run.time
-  rw [← mul_div_assoc, div_le_iff₀ hf]
-  linarith
-
-/-- The circuit's costs `aOf` and `bOf` are `≥ 0` in the model's ranges. -/
-theorem costs_nonneg {ι K R T L U F X : Type} [Fintype K] [Fintype R] [Fintype T] [Fintype L] [Fintype U]
-    [Fintype F] [Fintype X] [Nonempty F] [Nonempty X] (Sc : Scheme K) (Cd : Declared ι)
-    (Z : Accounting.TS.Model K R T L U F X) (lam : R → ℝ) (h : ModelScope Sc Cd Z lam) :
-    0 ≤ aOf Sc Cd Z lam ∧ 0 ≤ bOf Sc Cd Z lam := by
-  have hst := Accounting.SecurityProofs.TS.stars_nonneg Z (floorOf Sc Cd) lam h.2.1 h.1
-  obtain ⟨-, -, hNw, hbnd, -, -, -, -, -, -, -, -, hmu, -⟩ := h.2.1
-  have ha : 0 ≤ aOf Sc Cd Z lam := by
-    show 0 ≤ Z.Nw * Z.wStar lam / Z.bnd (floorOf Sc Cd)
-    exact div_nonneg (mul_nonneg hNw.le hst.2.1) hbnd.le
-  refine ⟨ha, ?_⟩
-  show 0 ≤ aOf Sc Cd Z lam + (1 - Z.muF) * Z.Nw * Z.phiStar lam / Z.bnd (floorOf Sc Cd)
-  exact add_nonneg ha (div_nonneg (mul_nonneg (mul_nonneg (sub_nonneg.mpr hmu) hNw.le) hst.2.2.1) hbnd.le)
-
-theorem CircuitCredit : Accounting.Guarantees.Compose.CircuitCredit := by
-  intro ι K P T L U F X C Ξ V _ _ _ _ _ _ _ _ _ _ _ _ _ Sc Cd Sh Z H Np Kd hN hr hK W Pl pr folded lam
-    ρ p p0 wmax Λ δs δbind δks win hS hρ hρN hw hlk hΛ hSR hgame hOf hMoved hJS hPins hMu hRB hG hUF hFits hMS
-    hSplit hClock hDisp hTen hPipe hSmem hWords hSem hFold hFill
-  obtain ⟨ha, hb⟩ := costs_nonneg Sc Cd Z lam hMS
-  unfold Certificate.Holds
-  refine le_trans (Pouw.RelativeSecurity.prob_mono ?_)
-    (CircuitWork Sc Cd hN hr hK W Pl pr folded ρ p p0 _ _ wmax Λ δs δbind δks hS hρ hρN hw hlk ha hb hΛ hSR
-      hgame hOf hMoved hJS hPins hMu hRB hG hUF)
-  rintro x ⟨hacc, htime⟩
-  exact ⟨hacc, fun hwork => (not_le.mpr htime) (CreditOfWork Sc Cd Sh Z (Pl.run x) (folded x) lam _ hFits hMS
-    (hSplit x) (hClock x) (hDisp x) (hTen x) (hPipe x) (hSmem x) (hWords x) (hSem x) (hFold x) (hFill x) hwork)⟩
-
 theorem CircuitWorkSeeded : Accounting.Guarantees.Compose.CircuitWorkSeeded := by
   exact Seeded.circuitWorkSeeded
-
-theorem CircuitCreditSeeded : Accounting.Guarantees.Compose.CircuitCreditSeeded := by
-  intro ι K P T L U F X B Ξ V _ _ _ _ _ _ _ _ _ _ _ _ _ Tq Sc Cd Sh Z H Np Kd hN hr hK R Pl pr folded lam sq εid
-    T J ρ κ0 δs δg δb δbind δks win hS hδg hKd hρ hρN ha hκ hgame hOf hMoved hJS hPins hSE hSLF hSLW hUF hFits hMS
-    hSplit hClock hDisp hTen hPipe hSmem hWords hSem hFold hFill
-  have hb := (costs_nonneg Sc Cd Z lam hMS).2
-  unfold Certificate.Holds
-  refine le_trans (Pouw.RelativeSecurity.prob_mono ?_)
-    (CircuitWorkSeeded Sc Cd hN hr hK R Pl pr folded sq εid T J ρ _ _ κ0 δs δg δb δbind δks hS hδg hKd hρ hρN ha hb
-      hκ hgame hOf hMoved hJS hPins hSE hSLF hSLW hUF)
-  rintro x ⟨hacc, htime⟩
-  exact ⟨hacc, fun hwork => (not_le.mpr htime) (CreditOfWork Sc Cd Sh Z (Pl.run x) (folded x) lam _ hFits hMS
-    (hSplit x) (hClock x) (hDisp x) (hTen x) (hPipe x) (hSmem x) (hWords x) (hSem x) (hFold x) (hFill x) hwork)⟩
 
 end Accounting.SecurityProofs.Compose

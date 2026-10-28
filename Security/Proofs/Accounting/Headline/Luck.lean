@@ -2,7 +2,7 @@ import Proofs.Accounting.TS
 import Proofs.Accounting.HMu
 
 /-!
-# The headlines' luck from the receipt
+# The luck from the receipt
 
 * `operandLuck_of_pointMass`: (H-μ) at the operands (`ReceiptGame.OperandPointMass μ`) gives the operand luck at `μ`.
   Each round is a word-level `SkipRound` whose honest receipt is the skipped value itself, so (Inj) holds with fibre 1,

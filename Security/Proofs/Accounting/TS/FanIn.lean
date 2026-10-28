@@ -1,7 +1,7 @@
-import Proofs.Accounting.TS.Price
+import Definitions.Accounting.Guarantees.TS
 
 /-!
-# The fan-in count, and FOLD-OPT and FILL-OPT from it
+# The fan-in count
 
 * `FanInCount`: every input an output sees feeds it (`feeds_of_sees`: two runs that differ in one input agree on every
   vertex it doesn't feed, `eq_of_not_feeds`, and every input has a run, `runs_eval`). The inputs a set `S` of vertices
@@ -10,8 +10,6 @@ import Proofs.Accounting.TS.Price
 * `SeesOfInjective`: a run's outputs are `f` of its inputs, and `f` moves with each input.
 * `ThinFoldInjective`: each step is a bijection of the state and of each word (`thinStep_inj_state`,
   `thinStep_inj_left`, `thinStep_inj_right`), and a prefix only moves the state (`thinFold_append`).
-* `FoldOptOfFanIn` and `FillOptOfFanIn`: `|ι| ≤ |O| + Σ_k m_k n_k` (`card_le_issued`), and the menu's fan-in routes
-  make `m_k·s ≤ π·a_k` for `s = φ*` (`χ*/N_x`), so `(|ι| − |O|)·s ≤ Σ_k n_k π·a_k = π·n` (`price_of_fanIn`).
 -/
 
 namespace Accounting.SecurityProofs.TS
@@ -195,94 +193,5 @@ theorem ThinFoldInjective : Accounting.Guarantees.TS.ThinFoldInjective := by
     exact thinStep_inj_left (thinFold_inj_state post _ _ _ e)
   · rw [h, h] at e
     exact thinStep_inj_right (thinFold_inj_state post _ _ _ e)
-
-section Price
-
-variable {K R : Type} [Fintype K] [Fintype R]
-
-theorem price_eq_sum (G : Machine K R) (lam : R → ℝ) (n : K → ℝ) :
-    G.price lam n = ∑ k, n k * ∑ r, lam r * G.a r k := by
-  unfold Machine.price Machine.load
-  simp_rw [mul_sum]
-  rw [sum_comm]
-  exact sum_congr rfl fun k _ => sum_congr rfl fun r _ => by ring
-
-/-- `c ≤ Σ_k m_k n_k` merges, and `m_k·s ≤ π·a_k` a class: `c·s ≤ π·n`. -/
-theorem price_of_fanIn (G : Machine K R) (lam : R → ℝ) (m n : K → ℝ) (c s : ℝ) (hs : 0 ≤ s)
-    (hn : ∀ k, 0 ≤ n k) (hc : c ≤ ∑ k, m k * n k) (hk : ∀ k, m k * s ≤ ∑ r, lam r * G.a r k) :
-    c * s ≤ G.price lam n := by
-  rw [price_eq_sum]
-  calc c * s ≤ (∑ k, m k * n k) * s := mul_le_mul_of_nonneg_right hc hs
-    _ = ∑ k, n k * (m k * s) := by rw [sum_mul]; exact sum_congr rfl fun k _ => by ring
-    _ ≤ ∑ k, n k * ∑ r, lam r * G.a r k := sum_le_sum fun k _ => mul_le_mul_of_nonneg_left (hk k) (hn k)
-
-end Price
-
-/-- The fan-in count read through `FanIn`: `|ι| ≤ |O| + Σ_k m_k n_k` for any `n` above the class counts. -/
-theorem card_le_issued {K : Type} [Fintype K] [DecidableEq K] {ι W J : Type} [Fintype ι] [Nontrivial W]
-    [Inhabited W] [Fintype J] [DecidableEq J] (D : Dataflow ι W) (O : Finset (ι ⊕ Fin D.n)) (ins : Fin D.n → J)
-    (cls : J → K) (m n : K → ℝ) (hO : D.Sees O) (hF : FanIn D ins cls m) (hm : ∀ k, 0 ≤ m k)
-    (hn : ∀ k, ((univ.filter fun j => cls j = k).card : ℝ) ≤ n k) :
-    (Fintype.card ι : ℝ) ≤ O.card + ∑ k, m k * n k := by
-  have h1 : (Fintype.card ι : ℝ) ≤ O.card + ∑ i, (D.merges i : ℝ) := by
-    exact_mod_cast FanInCount D O hO
-  have h2 : ∑ i, (D.merges i : ℝ) = ∑ j, (D.issued ins j : ℝ) := by
-    unfold Dataflow.issued
-    push_cast
-    exact (sum_fiberwise univ ins fun i => (D.merges i : ℝ)).symm
-  have h3 : ∑ j, (D.issued ins j : ℝ) ≤ ∑ j, m (cls j) := sum_le_sum fun j _ => hF j
-  have h4 : ∑ j, m (cls j) = ∑ k, ((univ.filter fun j => cls j = k).card : ℝ) * m k := by
-    rw [← sum_fiberwise univ cls fun j => m (cls j)]
-    refine sum_congr rfl fun k _ => ?_
-    rw [sum_congr rfl fun j hj => by rw [(mem_filter.1 hj).2], sum_const, nsmul_eq_mul]
-  have h5 : ∑ k, ((univ.filter fun j => cls j = k).card : ℝ) * m k ≤ ∑ k, m k * n k :=
-    sum_le_sum fun k _ => by rw [mul_comm]; exact mul_le_mul_of_nonneg_left (hn k) (hm k)
-  linarith
-
-/-- A route at `a_k/m_k` a word prices `m_k·s ≤ π·a_k` for any `s` it bounds; `m_k = 0` needs only `a, λ ≥ 0`. -/
-theorem class_bound {K R : Type} [Fintype R] (G : Machine K R) (lam : R → ℝ) (hl : ∀ r, 0 ≤ lam r)
-    (ha : ∀ r k, 0 ≤ G.a r k) (m : K → ℝ) (hm : ∀ k, 0 ≤ m k) (s : ℝ)
-    (hs : ∀ k, 0 < m k → s ≤ (∑ r, lam r * G.a r k) / m k) (k : K) : m k * s ≤ ∑ r, lam r * G.a r k := by
-  rcases (hm k).lt_or_eq with hk | hk
-  · rw [mul_comm, ← le_div_iff₀ hk]
-    exact hs k hk
-  · rw [← hk, zero_mul]
-    exact sum_nonneg fun r _ => mul_nonneg (hl r) (ha r k)
-
-theorem FoldOptOfFanIn : Accounting.Guarantees.TS.FoldOptOfFanIn := by
-  intro K R T L U F X _ _ _ _ _ _ _ _ _ ι W J _ _ _ _ _ _ Z P A D O ins cls m hZ hO hF hm hn hN hOμ hroute lam hlam
-  have ha : ∀ r k, 0 ≤ Z.G.a r k := hZ.1
-  have hphi := (stars_nonneg Z P lam hZ hlam).2.2.1
-  have hc := card_le_issued D O ins cls m A.nfold hO hF hm hn
-  refine price_of_fanIn Z.G lam m A.nfold _ _ hphi
-    (fun k => le_trans (Nat.cast_nonneg _) (hn k)) (by linarith) ?_
-  refine class_bound Z.G lam hlam.1 ha m hm _ (fun k hk => ?_)
-  obtain ⟨φ, hφ⟩ := hroute k hk
-  calc Z.phiStar lam ≤ demandPrice lam (Z.fold φ) :=
-        ciInf_le (Set.finite_range fun φ => demandPrice lam (Z.fold φ)).bddBelow φ
-    _ ≤ ∑ r, lam r * (Z.G.a r k / m k) := sum_le_sum fun r _ => mul_le_mul_of_nonneg_left (hφ r) (hlam.1 r)
-    _ = (∑ r, lam r * Z.G.a r k) / m k := by rw [sum_div]; exact sum_congr rfl fun r _ => by ring
-
-theorem FillOptOfFanIn : Accounting.Guarantees.TS.FillOptOfFanIn := by
-  intro K R T L U F X _ _ _ _ _ _ _ _ _ ι W J _ _ _ _ _ _ _ Z P A D O ins cls m hZ hO hF hm hn hOμ hroute lam hlam
-  have ha : ∀ r k, 0 ≤ Z.G.a r k := hZ.1
-  have hchi := (stars_nonneg Z P lam hZ hlam).2.2.2
-  have hc := card_le_issued D O ins cls m A.nfill hO hF hm hn
-  have hNx : (0 : ℝ) < Fintype.card ι := Nat.cast_pos.2 Fintype.card_pos
-  have hk : ∀ k, m k * (Z.chiStar lam / Fintype.card ι) ≤ ∑ r, lam r * Z.G.a r k := by
-    refine class_bound Z.G lam hlam.1 ha m hm _ (fun k hk => ?_)
-    obtain ⟨ψ, hψ⟩ := hroute k hk
-    rw [div_le_iff₀ hNx]
-    calc Z.chiStar lam ≤ demandPrice lam (Z.fill ψ) :=
-          ciInf_le (Set.finite_range fun ψ => demandPrice lam (Z.fill ψ)).bddBelow ψ
-      _ ≤ ∑ r, lam r * (Fintype.card ι * Z.G.a r k / m k) :=
-          sum_le_sum fun r _ => mul_le_mul_of_nonneg_left (hψ r) (hlam.1 r)
-      _ = (∑ r, lam r * Z.G.a r k) / m k * Fintype.card ι := by
-          rw [div_mul_eq_mul_div, sum_mul, sum_div]; exact sum_congr rfl fun r _ => by ring
-  have key := price_of_fanIn Z.G lam m A.nfill ((1 - Z.muX) * Fintype.card ι) (Z.chiStar lam / Fintype.card ι)
-    (div_nonneg hchi hNx.le) (fun k => le_trans (Nat.cast_nonneg _) (hn k)) (by linarith) hk
-  calc (1 - Z.muX) * Z.chiStar lam = (1 - Z.muX) * Fintype.card ι * (Z.chiStar lam / Fintype.card ι) := by
-        field_simp
-    _ ≤ _ := key
 
 end Accounting.SecurityProofs.TS

@@ -75,43 +75,19 @@ def test_pous_end_to_end_rings_claims_are_cited_separately() -> None:
     assert get("prf/sha-512").kind == "assumption"
 
 
-def test_the_sm120_headlines_claims_name_what_their_statements_assume() -> None:
-    """HEADLINE-R2's restatement: FOLD-OPT at π*, binding's fork form, A2's catch-all and A1 assumed at the driver's
-    report."""
-    fold = get("accounting-ts-fold-opt").name
-    assert "FoldOptFoldedAt" in fold and "only at their own certificate π*" in fold
+def test_the_proofs_sound_claim_names_binding_in_its_fork_form() -> None:
+    """HEADLINE-R2's restatement: binding's fork form, read at √δ_fork, and each proof's soundness, named alone."""
     proofs = get("accounting-ts-proofs-sound").name
     assert all(s in proofs for s in ("BindingForkAt", "√δ_fork", "BindingOfFork", "ProofSoundAt", "accounting-ts-proofs-pin"))
     assert "every proof of round w is accepted" in proofs and "both accepted" not in proofs and "ProofsPin" not in proofs
     assert "is not stated there" in proofs
-    assert "catch-all" in get("accounting-sheet-dispatch").name and "NOROW" in get("accounting-sheet-dispatch").name
-    clock = get("accounting-sheet-clock")
-    assert "nvidia-smi" in clock.name and "data sheet's maximum" not in clock.name
-    assert clock.label == "A1 clock (assumed)"
 
 
-def test_the_sm120_headlines_claims_match_their_lean_after_round_3() -> None:
-    """RT3's claim-text findings: (I1)'s vector, the writers' ω, the ½-floor reading of 0.591%, and pinning graded on
-    its own."""
-    facet = get("accounting-ts-facet-ceilings").name
-    assert "VF3s-16" in facet and "VF3p-16" not in facet and "(0, f_max]" in facet
-    words = get("accounting-ts-words-written").name
-    assert "UNI64" in words and "32 for IMMA.8816" in words
-    scalar = get("accounting-ts-scalar-route").name
-    assert all(s in scalar for s in ("9/8", "0.591%", "7.791%", "10.24% on VF3r-16", "SheetScalarRouteHalf"))
+def test_pinning_is_graded_on_its_own() -> None:
+    """RT3's claim-text finding: pinning graded on its own."""
     pin = get("accounting-ts-proofs-pin")
     assert (pin.kind, pin.standing) == ("assumption", "conjectured") and get("accounting-ts-proofs-sound").standing == "standard"
     assert all(s in pin.name for s in ("ProofsPin", "PouwSegCheck_v2 lacks it", "PouwSegCheck_v3", "#2417"))
-
-
-def test_the_scalar_route_claim_names_the_h200_twin_with_its_premise() -> None:
-    """DC-90-ri's (I3) twin takes SCALAR-ROUTE at 3/5 beside sm_120's 9/8, and its citation names the premise, the
-    proved ½ floor beside it and the fold menus the credit and the cheater read."""
-    scalar = get("accounting-ts-scalar-route").name
-    assert all(s in scalar for s in ("Sm90MeasuredI3Headline", "Sm90MeasuredHeadline", "q = q_T = 3/5", "9/8",
-                                     "Both are over 1%",
-                                     "DC-90-ri 1.086% under (I3) at 3/5; 1.412% at the proved ½ floor; credit against "
-                                     "the built ♭, the cheater priced at every known fold, counted ones included"))
 
 
 def test_the_honest_clock_says_which_form_is_proved() -> None:
@@ -139,14 +115,6 @@ def test_pouw_gamma_per_coin_is_a_conjecture_at_w1_priced() -> None:
 def test_option_a_counts_fixed_is_a_conjecture_and_modes_run_standard() -> None:
     assert (get("accounting-ts-counts-fixed").kind, get("accounting-ts-counts-fixed").standing) == ("assumption", "conjectured")
     assert (get("accounting-ts-modes-run").kind, get("accounting-ts-modes-run").standing) == ("assumption", "standard")
-
-
-def test_the_dc_headlines_claims_name_what_their_statements_assume() -> None:
-    """RT3-LOGIC-6's restatement of the H200's and B200's headlines: FOLD-OPT at π* and the proof service's named
-    premises, as sm_120's."""
-    for e in ("accounting-ts-fold-opt", "accounting-ts-proofs-sound"):
-        assert "the H200's and the B200's" in get(e).name, e
-    assert "RT3-LOGIC-6" in get("accounting-ts-fold-opt").name
 
 
 def test_the_sites_nine_assumptions_resolve_and_the_retired_ones_do_not() -> None:

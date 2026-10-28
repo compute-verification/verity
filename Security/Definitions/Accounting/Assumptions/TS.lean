@@ -3,37 +3,15 @@ import Definitions.Accounting.TS
 /-!
 # The tensor–scalar model's named assumptions (trusted)
 
-The premises of EPS1-SPEC's Theorem D-ideal ((I1)–(I8), §2.7) and of the compiler lemma (Lemma C), each a `Prop` over
+The premises of EPS1-SPEC's luck and proof-soundness steps ((I7) and (I8), §2.7), each a `Prop` over
 `Accounting.TS`'s vocabulary, taken as a hypothesis, never an `axiom`. Each docstring opens with its claim id
-(`verity.core.claims`). An assumption over an `Anatomy` is claimed at §0.4's and §1.3's labelling of the cheater's
-instructions (heads, ownership, copies); an assumption over a run is claimed for the stated device.
+(`verity.core.claims`). An assumption over a play is claimed at §0.4's and §1.3's labelling of the cheater's
+instructions (heads, ownership, copies).
 
 Which form each takes:
 
-* (I1) `FacetCeilings`: a device-model assumption, scoped by device (sm_120 RTX PRO 6000, on the rows of the vector
-  its statement names), checked by measurement: a corpus program that runs faster than a facet
-  falsifies it.
-* (I2) and the uniform part of (I4): `WordsWritten`, the ISA's `ω` (P12). Lemma 2 (`Accounting.Guarantees.TS.OutputCount`)
-  is its counting; the ISA fact that an instruction writes at most `ω` words is the assumption.
-* (I3) `ScalarRoute`: SCALAR-ROUTE at its floors `(q, q_T, b_T)`. QSTAR's joint statement, which gave them from
-  class P and a per-instruction cap `κ` (`q = 2.03`, `q_T = 1.22`, `b_T` from `κ`), rests on Theorem C, which is
-  false as stated. The proved count is `Pouw.Guarantees.Eps1.ClassPSlots`: a class-P
-  program whose writers each create at most `w` incidences costs at least `1 + (32 − w)/(65·d)` issue slots a word,
-  `d` words a slot (`1.185` at `w = 8`, `d = 2`). No cap on `w` is proved, class P is a modeling restriction, and a
-  table route lies outside `ClassPSlots`, so the floors stay an assumption; they are the model's parameters, so every
-  statement here holds at every floor. ISA-CAP (`κ = 32/7`) is false (REFEREE Q4: an IDP.4A writes 5 incidences into
-  one word, a signed IMAD.WIDE 8) and is no premise.
-* (I5) `SideUnits` (measured per-word vectors, P11) and `NoSum` (NOSUM, P13), a measured statement: no unit outside
-  the menu heads a fresh word.
-* (I6) `FoldOpt` and `FillOpt` in the price form D-ideal's proof reads. FOLD-OPT's per-word kernel (the duo step
-  `u = y ⊕ d ⊕ k`, `y' = u·a + z`, `z' = rotl(u, r) + y'` needs three instructions over the modeled ISA,
-  `benchmarks/pouw/theory/fold_opt.py`) is a mechanical fact; the multi-round residual, that no program folds below the
-  menu's price across rounds, is what stays assumed. `FanIn`, the sources the ISA lets an instruction read (every form,
-  guarded), gives both at the fan-in menu's price (`Accounting.Guarantees.TS.FoldOptOfFanIn`, `FillOptOfFanIn`): for a
-  fold or filler presented as a straight-line dataflow over the words it absorbs, priced at least the menu's routes of
-  `a_k/m_k` a word. `FoldOptFolded` is FOLD-OPT per word folded: the fold priced at the words the run folds, `FoldOpt`
-  its case at `N_w`. `FoldOptFoldedAt` is it at one certificate, the one D-ideal prices at; the headlines take it at
-  their `π*`, so a run that skips folds is charged through `WholeLuckAt`.
+* `FanIn`: the sources the ISA lets an instruction read (every form, guarded), measured. No guarantee takes it as a
+  premise: it gives the `f` that `Accounting.Guarantees.TS.FoldFanIn` reads.
 * (I7) `LuckAt`: (L) at `p` with freshness (F1)–(F2), one bet a round. Split at the receipt
   (`Accounting.Guarantees.TS.LuckOfReceipt`), it is two luck premises:
   * the operand luck, which `OperandHMu` gives: (H-μ) at the deficient words, through Lemma B at fibre 1;
@@ -63,8 +41,6 @@ Which form each takes:
   so goodness reads the run's modes, not rightness.
 * `LinSteer`: SAMPLING's LIN-STEER, for the compiler's closure.
 
-The joint-luck premise JL is not used: D-ideal keeps the proved `ε_jl`.
-
 `LinSteer` is false (`Accounting.Guarantees.TS.LinSteerSegments`: a segmented consumer satisfies it only when its
 noise-active segments carry equal counts), and no guarantee rests on it; `Accounting.Guarantees.TS.SegmentSteer` is the
 bound that holds.
@@ -74,71 +50,7 @@ namespace Accounting.Assumptions.TS
 
 open Accounting.TS Pouw.RelativeSecurity
 
-variable {K R T L U F X : Type} [Fintype K] [Fintype R] [Fintype T] [Fintype L] [Fintype U] [Fintype F]
-  [Fintype X]
-
-/-- `accounting-ts-facet-ceilings` (measured, device-scoped). **The measured facets are ceilings** for the run `P` on
-the stated device (sm_120 RTX PRO 6000; `G` the measured vector its statement names, VF3s-16 for the measured headline):
-the run's counts and cycles are `≥ 0` and its clock is in `(0, f_max]`, every SM-clocked facet's load is at most the
-run's cycles (S_r), and every fixed-clock facet's load, priced at `f_max`, is at most `f_max` times the run's time. Rows
-take the best configuration measured plus a 2% margin; a joint row is a facet on the mixes measured, and beyond them it
-is untested. -/
-def FacetCeilings (G : Machine K R) (P : Run K) : Prop :=
-  (∀ k, 0 ≤ P.n k) ∧ 0 ≤ P.cycles ∧ 0 < P.clock ∧ P.clock ≤ G.fmax ∧
-    ∀ r, (G.smClocked r = true → G.load P.n r ≤ P.cycles) ∧
-      (G.smClocked r = false → G.load P.n r ≤ G.fmax * P.time)
-
-/-- `accounting-ts-words-written` (ISA, P12). **An instruction writes at most `ω` words**: the owned right fixed words
-headed by writer kind `t` are at most `ω_t` times the instructions of `t`'s class the labelling gives them. An MMA
-kind's `ω_t` counts one committed word a slot: design A's packed `T_1` words, two a s32 slot through int8 B entries
-`s_j + 64·s_j′` (REFEREE S14), fit no route at the stated `ω` and floors (as writer words they exceed `ω`, as vector
-words their ½–1 op of extraction is below `q`) and need their own (a side unit) or 2-bit entries. -/
-def WordsWritten (Z : Model K R T L U F X) (A : Anatomy K T L U) : Prop :=
-  ∀ t, A.words (.writer t) ≤ Z.omega t * A.nword (.writer t) (Z.cls t)
-
-/-- `accounting-ts-scalar-route` (assumed; QSTAR's joint statement, from class P and a per-instruction cap `κ`).
-**SCALAR-ROUTE**, in §0.6's units (lane-instructions a word, net of the mandatory fold and of operand delivery): the
-gather-free vector-headed words cost at least `q` lane-instructions each (2.03, for `κ < 27.2` a slot), and the table
-words served from level `l` at least `q_T` lane-instructions (1.22, for `κ ≤ 128`) and `b_T` bytes read from `l` each
-(`32(28 − 1.03κ)/(c_L − κ)`, 3.0 at `κ = 8`). -/
-def ScalarRoute (Z : Model K R T L U F X) (A : Anatomy K T L U) : Prop :=
-  Z.q * A.words .vector ≤ 32 * ∑ k ∈ Z.vec, A.nword .vector k ∧
-    ∀ l, Z.qT * A.words (.table l) ≤ 32 * ∑ k ∈ Z.vec, A.nword (.table l) k ∧
-      Z.bT * A.words (.table l) ≤ A.nword (.table l) (Z.bytes l)
-
-/-- `accounting-ts-side-units` (measured, P11). **A side unit's words cost its per-word vector**: the instructions the
-labelling gives side unit `u`'s words are at least its per-word vector times its words, class by class. -/
-def SideUnits (Z : Model K R T L U F X) (A : Anatomy K T L U) : Prop :=
-  ∀ u k, A.words (.side u) * Z.side u k ≤ A.nword (.side u) k
-
-/-- `accounting-ts-nosum` (measured, P13). **NOSUM**: no unit outside the menu heads a fresh committed word, so every
-owned right fixed word has a head of the menu. -/
-def NoSum (A : Anatomy K T L U) : Prop := A.fixed ≤ ∑ h, A.words h
-
-/-- `accounting-ts-fold-opt` (assumed; its per-word kernel a mechanical fact). **FOLD-OPT_μ**: at every certificate,
-the run's fold is priced at least `(1 − μ_f)·N_w·φ*(π)`. -/
-def FoldOpt (Z : Model K R T L U F X) (A : Anatomy K T L U) : Prop :=
-  ∀ lam : R → ℝ, IsCert lam → (1 - Z.muF) * Z.Nw * Z.phiStar lam ≤ Z.G.price lam A.nfold
-
-/-- `accounting-ts-fold-opt` (assumed; FOLD-OPT per word folded). **FOLD-OPT_μ per word folded**: at every
-certificate, the run's fold is priced at least `(1 − μ_f)·folded·φ*(π)`, `folded` the words it folds a unit. `FoldOpt`
-is its case at `N_w`. -/
-def FoldOptFolded (Z : Model K R T L U F X) (A : Anatomy K T L U) (folded : ℝ) : Prop :=
-  ∀ lam : R → ℝ, IsCert lam → (1 - Z.muF) * folded * Z.phiStar lam ≤ Z.G.price lam A.nfold
-
-/-- `accounting-ts-fold-opt` (conjectured at the certificate a headline prices at). **FOLD-OPT_μ per word folded at
-`π`**: at the one certificate `π`, the run's fold is priced at least `(1 − μ_f)·folded·φ*(π)`. `FoldOptFolded` is it at
-every certificate, and a bit-exact fold of other instructions falsifies that while meeting it at `π` (the IMAD rotate,
-`z = ⌊u·2^r/2^32⌋ + u·2^r + y'`: LOP3 and four IMAD-pipe instructions a word, 20 a unit against the menu's 16 at
-DS-120's issue facet, 14 against 16 halfway between issue and the LOP pipe). D-ideal's proof reads FOLD-OPT only at the
-certificate it prices, so a headline asks for it there. -/
-def FoldOptFoldedAt (Z : Model K R T L U F X) (A : Anatomy K T L U) (folded : ℝ) (lam : R → ℝ) : Prop :=
-  (1 - Z.muF) * folded * Z.phiStar lam ≤ Z.G.price lam A.nfold
-
-/-- `accounting-ts-fill-opt` (assumed). **FILL-OPT_μ**: at every certificate, the run's filler is priced at least
-`(1 − μ_x)·χ*(π)`. -/
-def FillOpt (Z : Model K R T L U F X) (A : Anatomy K T L U) : Prop :=
-  ∀ lam : R → ℝ, IsCert lam → (1 - Z.muX) * Z.chiStar lam ≤ Z.G.price lam A.nfill
+variable {K T L U : Type} [Fintype K] [Fintype T] [Fintype L] [Fintype U]
 
 /-- `accounting-ts-fan-in` (ISA; every form nvdisasm decodes on sm_80, sm_89, sm_90, sm_100 and sm_120, counted by
 dependence). **An instruction merges at most `m` components**: the nodes a straight-line dataflow issues as instruction

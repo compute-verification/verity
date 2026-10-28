@@ -3,14 +3,12 @@ import Definitions.Accounting.TS.Sheet
 /-!
 # The H200's data sheet (generated)
 
-The data-sheet machine (`Accounting.TS.Sheet.machine`) at the H200 SXM (sm_90a)'s vendor values: each constant with the
-axiom that reads it, its value, its grade and its source, and the census of the machine model's `DS-90` vector, which
-`machine_eq_census` proves the machine is, line for line. Each tensor peak has a lemma that the per-clock peak
-reproduces the document's per-second figure at the clock that figure is quoted at. A3 reads `Run.n` as device totals
-over the SMSPs, so a warpgroup's `wgmma` or a single-thread `tcgen05.mma` counts its MACs once, spread over the SM's
-four SMSPs.
+The data sheet (`Accounting.TS.Sheet`) at the H200 SXM (sm_90a)'s vendor values: each constant with its label (A1–A6),
+its value, its grade and its source. Each tensor peak has a lemma that the per-clock peak reproduces the document's
+per-second figure at the clock that figure is quoted at. A3's MACs are device totals over the SMSPs, so a warpgroup's
+`wgmma` or a single-thread `tcgen05.mma` counts its MACs once, spread over the SM's four SMSPs.
 
-Scope: the machine is one GPU's own SMs. Work a peer GPU on the node does over NVLink or NVSwitch and sends back (whole
+Scope: the sheet is one GPU's own SMs. Work a peer GPU on the node does over NVLink or NVSwitch and sends back (whole
 tiles as 64-byte digests) is outside it: the sheet bounds what the credited GPU's SMs compute, not which GPU computed a
 tile, and `Device.lean`'s side channels don't list NVLink peer offload.
 
@@ -320,12 +318,12 @@ def Kind.pipe : Kind → Option Pipe
   | .UNI => some .uniform
   | .UNLISTED => none
 
-/-- A6's ω for each tensor class (`SheetWords`, `accounting-sheet-words`): the 32-bit words a warp instruction's
-accumulator fragment takes, m · n elements over the warps that issue one MMA, an element one register and an f64 element
-two (DMMA, `mma.sync .f64`), a 2:4 sparse form's as its dense twin's; `none` off the tensor pipe. Grade: PTX ISA.
-Source: PTX ISA 9.4, the accumulator (D) fragments: mma.sync m16n8k32 .s32 four registers a lane (128 a warp
-instruction), m16n8k16 .f32 the same, .f64 m8n8k4 two f64 a lane (four registers, 128) and m16n8k4, k8 and k16 four
-(eight, 256); wgmma m64nNk32 .s32 N/2 registers a thread of its warpgroup (4,096 a warp at N256). -/
+/-- A6's ω for each tensor class: the 32-bit words a warp instruction's accumulator fragment takes, m · n elements over
+the warps that issue one MMA, an element one register and an f64 element two (DMMA, `mma.sync .f64`), a 2:4 sparse
+form's as its dense twin's; `none` off the tensor pipe. Grade: PTX ISA. Source: PTX ISA 9.4, the accumulator (D)
+fragments: mma.sync m16n8k32 .s32 four registers a lane (128 a warp instruction), m16n8k16 .f32 the same, .f64 m8n8k4
+two f64 a lane (four registers, 128) and m16n8k4, k8 and k16 four (eight, 256); wgmma m64nNk32 .s32 N/2 registers a
+thread of its warpgroup (4,096 a warp at N256). -/
 def Kind.omega : Kind → Option ℝ
   | .ALU => none
   | .ATOME32 => none
@@ -380,7 +378,7 @@ def Kind.omega : Kind → Option ℝ
 
 /-- **The H200's data sheet**: f_max in Hz, each class's MACs and its type's peak (`0` off the tensor pipe), its pipe,
 each pipe's width, and no class on the shared-memory row (the census's shared-memory classes, ATOMS32, LDS128, STS128,
-STS32, are issue only, so A5 bounds nothing here). -/
+STS32, are issue only, so A5 is 0 for each). -/
 def sheet : Sheet Kind Pipe where
   fmax := fmaxMHz * 10 ^ 6
   macs k := match k.form with
@@ -392,332 +390,6 @@ def sheet : Sheet Kind Pipe where
   pipe := Kind.pipe
   width := Pipe.width
   smem _ := 0
-
-/-- `census/DS-90.csv`'s `DS_tensor` lines, SMSP-cycles a warp instruction; 0 for a class with none. -/
-def tensorLine : Kind → ℝ
-  | .ALU => 0
-  | .ATOME32 => 0
-  | .ATOMS32 => 0
-  | .BGMMA_B1_N256 => 0
-  | .BMMA168256_B1 => 0
-  | .DMMA16816 => 64
-  | .DMMA1684 => 16
-  | .DMMA1688 => 32
-  | .DMMA884 => 8
-  | .FFMA => 0
-  | .HGMMA_BF16_N128 => 64
-  | .HGMMA_BF16_N256 => 128
-  | .HGMMA_BF16_N256_SP => 128
-  | .HGMMA_F16_N256 => 128
-  | .HGMMA_F16_N256_SP => 128
-  | .HGMMA_TF32_N256 => 128
-  | .HGMMA_TF32_N256_SP => 128
-  | .HMMA16816_BF16 => 4
-  | .HMMA16816_F16 => 4
-  | .HMMA1688_TF32 => 4
-  | .IGMMA_S8_N128 => 64
-  | .IGMMA_S8_N16 => 8
-  | .IGMMA_S8_N192 => 96
-  | .IGMMA_S8_N256 => 128
-  | .IGMMA_S8_N256_RS => 128
-  | .IGMMA_S8_N256_SP => 128
-  | .IGMMA_S8_N32 => 16
-  | .IGMMA_S8_N64 => 32
-  | .IGMMA_S8_N8 => 4
-  | .IGMMA_U8S8_N256 => 128
-  | .IMAD => 0
-  | .IMMA16816_S8 => 2
-  | .IMMA16832_S8 => 4
-  | .ISETP => 0
-  | .LDS128 => 0
-  | .NOROW => 0
-  | .QGMMA_E4M3_N128 => 64
-  | .QGMMA_E4M3_N256 => 128
-  | .QGMMA_E4M3_N256_SP => 128
-  | .QGMMA_E5M2_N256 => 128
-  | .QGMMA_E5M2_N256_SP => 128
-  | .REDG32 => 0
-  | .REDUX => 0
-  | .SHFL => 0
-  | .STG128 => 0
-  | .STG32 => 0
-  | .STS128 => 0
-  | .STS32 => 0
-  | .UNI => 0
-  | .UNLISTED => 0
-
-/-- `census/DS-90.csv`'s `DS_alu` lines, SMSP-cycles a warp instruction; 0 for a class with none. -/
-def aluLine : Kind → ℝ
-  | .ALU => 2
-  | .ATOME32 => 0
-  | .ATOMS32 => 0
-  | .BGMMA_B1_N256 => 0
-  | .BMMA168256_B1 => 0
-  | .DMMA16816 => 0
-  | .DMMA1684 => 0
-  | .DMMA1688 => 0
-  | .DMMA884 => 0
-  | .FFMA => 0
-  | .HGMMA_BF16_N128 => 0
-  | .HGMMA_BF16_N256 => 0
-  | .HGMMA_BF16_N256_SP => 0
-  | .HGMMA_F16_N256 => 0
-  | .HGMMA_F16_N256_SP => 0
-  | .HGMMA_TF32_N256 => 0
-  | .HGMMA_TF32_N256_SP => 0
-  | .HMMA16816_BF16 => 0
-  | .HMMA16816_F16 => 0
-  | .HMMA1688_TF32 => 0
-  | .IGMMA_S8_N128 => 0
-  | .IGMMA_S8_N16 => 0
-  | .IGMMA_S8_N192 => 0
-  | .IGMMA_S8_N256 => 0
-  | .IGMMA_S8_N256_RS => 0
-  | .IGMMA_S8_N256_SP => 0
-  | .IGMMA_S8_N32 => 0
-  | .IGMMA_S8_N64 => 0
-  | .IGMMA_S8_N8 => 0
-  | .IGMMA_U8S8_N256 => 0
-  | .IMAD => 0
-  | .IMMA16816_S8 => 0
-  | .IMMA16832_S8 => 0
-  | .ISETP => 0
-  | .LDS128 => 0
-  | .NOROW => 0
-  | .QGMMA_E4M3_N128 => 0
-  | .QGMMA_E4M3_N256 => 0
-  | .QGMMA_E4M3_N256_SP => 0
-  | .QGMMA_E5M2_N256 => 0
-  | .QGMMA_E5M2_N256_SP => 0
-  | .REDG32 => 0
-  | .REDUX => 0
-  | .SHFL => 0
-  | .STG128 => 0
-  | .STG32 => 0
-  | .STS128 => 0
-  | .STS32 => 0
-  | .UNI => 0
-  | .UNLISTED => 0
-
-/-- `census/DS-90.csv`'s `DS_imad` lines, SMSP-cycles a warp instruction; 0 for a class with none. -/
-def imadLine : Kind → ℝ
-  | .ALU => 0
-  | .ATOME32 => 0
-  | .ATOMS32 => 0
-  | .BGMMA_B1_N256 => 0
-  | .BMMA168256_B1 => 0
-  | .DMMA16816 => 0
-  | .DMMA1684 => 0
-  | .DMMA1688 => 0
-  | .DMMA884 => 0
-  | .FFMA => 0
-  | .HGMMA_BF16_N128 => 0
-  | .HGMMA_BF16_N256 => 0
-  | .HGMMA_BF16_N256_SP => 0
-  | .HGMMA_F16_N256 => 0
-  | .HGMMA_F16_N256_SP => 0
-  | .HGMMA_TF32_N256 => 0
-  | .HGMMA_TF32_N256_SP => 0
-  | .HMMA16816_BF16 => 0
-  | .HMMA16816_F16 => 0
-  | .HMMA1688_TF32 => 0
-  | .IGMMA_S8_N128 => 0
-  | .IGMMA_S8_N16 => 0
-  | .IGMMA_S8_N192 => 0
-  | .IGMMA_S8_N256 => 0
-  | .IGMMA_S8_N256_RS => 0
-  | .IGMMA_S8_N256_SP => 0
-  | .IGMMA_S8_N32 => 0
-  | .IGMMA_S8_N64 => 0
-  | .IGMMA_S8_N8 => 0
-  | .IGMMA_U8S8_N256 => 0
-  | .IMAD => 2
-  | .IMMA16816_S8 => 0
-  | .IMMA16832_S8 => 0
-  | .ISETP => 0
-  | .LDS128 => 0
-  | .NOROW => 0
-  | .QGMMA_E4M3_N128 => 0
-  | .QGMMA_E4M3_N256 => 0
-  | .QGMMA_E4M3_N256_SP => 0
-  | .QGMMA_E5M2_N256 => 0
-  | .QGMMA_E5M2_N256_SP => 0
-  | .REDG32 => 0
-  | .REDUX => 0
-  | .SHFL => 0
-  | .STG128 => 0
-  | .STG32 => 0
-  | .STS128 => 0
-  | .STS32 => 0
-  | .UNI => 0
-  | .UNLISTED => 0
-
-/-- `census/DS-90.csv`'s `DS_shfl` lines, SMSP-cycles a warp instruction; 0 for a class with none. -/
-def shflLine : Kind → ℝ
-  | .ALU => 0
-  | .ATOME32 => 0
-  | .ATOMS32 => 0
-  | .BGMMA_B1_N256 => 0
-  | .BMMA168256_B1 => 0
-  | .DMMA16816 => 0
-  | .DMMA1684 => 0
-  | .DMMA1688 => 0
-  | .DMMA884 => 0
-  | .FFMA => 0
-  | .HGMMA_BF16_N128 => 0
-  | .HGMMA_BF16_N256 => 0
-  | .HGMMA_BF16_N256_SP => 0
-  | .HGMMA_F16_N256 => 0
-  | .HGMMA_F16_N256_SP => 0
-  | .HGMMA_TF32_N256 => 0
-  | .HGMMA_TF32_N256_SP => 0
-  | .HMMA16816_BF16 => 0
-  | .HMMA16816_F16 => 0
-  | .HMMA1688_TF32 => 0
-  | .IGMMA_S8_N128 => 0
-  | .IGMMA_S8_N16 => 0
-  | .IGMMA_S8_N192 => 0
-  | .IGMMA_S8_N256 => 0
-  | .IGMMA_S8_N256_RS => 0
-  | .IGMMA_S8_N256_SP => 0
-  | .IGMMA_S8_N32 => 0
-  | .IGMMA_S8_N64 => 0
-  | .IGMMA_S8_N8 => 0
-  | .IGMMA_U8S8_N256 => 0
-  | .IMAD => 0
-  | .IMMA16816_S8 => 0
-  | .IMMA16832_S8 => 0
-  | .ISETP => 0
-  | .LDS128 => 0
-  | .NOROW => 0
-  | .QGMMA_E4M3_N128 => 0
-  | .QGMMA_E4M3_N256 => 0
-  | .QGMMA_E4M3_N256_SP => 0
-  | .QGMMA_E5M2_N256 => 0
-  | .QGMMA_E5M2_N256_SP => 0
-  | .REDG32 => 0
-  | .REDUX => 0
-  | .SHFL => 4
-  | .STG128 => 0
-  | .STG32 => 0
-  | .STS128 => 0
-  | .STS32 => 0
-  | .UNI => 0
-  | .UNLISTED => 0
-
-/-- `census/DS-90.csv`'s `DS_uniform` lines, SMSP-cycles a warp instruction; 0 for a class with none. -/
-def uniformLine : Kind → ℝ
-  | .ALU => 0
-  | .ATOME32 => 0
-  | .ATOMS32 => 0
-  | .BGMMA_B1_N256 => 0
-  | .BMMA168256_B1 => 0
-  | .DMMA16816 => 0
-  | .DMMA1684 => 0
-  | .DMMA1688 => 0
-  | .DMMA884 => 0
-  | .FFMA => 0
-  | .HGMMA_BF16_N128 => 0
-  | .HGMMA_BF16_N256 => 0
-  | .HGMMA_BF16_N256_SP => 0
-  | .HGMMA_F16_N256 => 0
-  | .HGMMA_F16_N256_SP => 0
-  | .HGMMA_TF32_N256 => 0
-  | .HGMMA_TF32_N256_SP => 0
-  | .HMMA16816_BF16 => 0
-  | .HMMA16816_F16 => 0
-  | .HMMA1688_TF32 => 0
-  | .IGMMA_S8_N128 => 0
-  | .IGMMA_S8_N16 => 0
-  | .IGMMA_S8_N192 => 0
-  | .IGMMA_S8_N256 => 0
-  | .IGMMA_S8_N256_RS => 0
-  | .IGMMA_S8_N256_SP => 0
-  | .IGMMA_S8_N32 => 0
-  | .IGMMA_S8_N64 => 0
-  | .IGMMA_S8_N8 => 0
-  | .IGMMA_U8S8_N256 => 0
-  | .IMAD => 0
-  | .IMMA16816_S8 => 0
-  | .IMMA16832_S8 => 0
-  | .ISETP => 0
-  | .LDS128 => 0
-  | .NOROW => 0
-  | .QGMMA_E4M3_N128 => 0
-  | .QGMMA_E4M3_N256 => 0
-  | .QGMMA_E4M3_N256_SP => 0
-  | .QGMMA_E5M2_N256 => 0
-  | .QGMMA_E5M2_N256_SP => 0
-  | .REDG32 => 0
-  | .REDUX => 0
-  | .SHFL => 0
-  | .STG128 => 0
-  | .STG32 => 0
-  | .STS128 => 0
-  | .STS32 => 0
-  | .UNI => 49027679 / 25000000
-  | .UNLISTED => 0
-
-/-- **`DS-90`'s census** (`census/DS-90.csv`): SMSP-cycles a warp instruction of each class holds each row; every class
-holds issue for 1, and a class with no line on a row holds it not at all. -/
-def census : SheetRow Pipe → Kind → ℝ
-  | .issue, _ => 1
-  | .tensor, k => tensorLine k
-  | .pipe .alu, k => aluLine k
-  | .pipe .imad, k => imadLine k
-  | .pipe .shfl, k => shflLine k
-  | .pipe .uniform, k => uniformLine k
-  | .smem, _ => 0
-
-/-- The issue row: every class holds it for 1, on the sheet as in the census. A2 (a SMSP issues one warp instruction a
-SMSP-cycle). Grade: Programming Guide. Source: CUDA C++ Programming Guide 12.9 §18.8.1 (CC 9.0): '4 warp schedulers ...
-at every instruction issue time, each scheduler issues one instruction for one of its assigned warps'. A2u (a uniform
-instruction, `UNI`, takes that slot too). Grade: measured only (no vendor document states it). Source: no vendor
-document gives a uniform instruction's issue cost: Nsight Compute §2.3.6 defines the uniform pipe with no rate, and CUDA
-Binary Utilities §4.3 lists the Hopper uniform opcodes (integer only); measured at saturation beside an async wgmma:
-each uniform instruction costs 1.08 to 1.19 SMSP-cycles at issue 0.87 with no dual issue (dc/probes/sm90_emp.cu
-emp_pack3), and 0.984 of a slot beside a saturated lane stream (the census's UNI issue line, DC-90). -/
-theorem machine_issue (k : Kind) : sheet.machine.a .issue k = census .issue k := by
-  simp [Sheet.machine, census]
-
--- the case split unfolds `Kind.form` in every class's case: its cost grows with the square of the class count
-set_option maxHeartbeats 1000000 in
-/-- The tensor row: each class's MACs over a quarter of its type's peak is its census line. -/
-theorem machine_tensor (k : Kind) : sheet.machine.a .tensor k = census .tensor k := by
-  cases k <;> norm_num [Sheet.machine, sheet, census, tensorLine, Kind.form, Ty.peak, peakS8, peakE4m3, peakE5m2,
-      peakF16, peakBf16, peakTf32, peakF64]
-
-/-- The alu pipe's row: 128 over its width for each class on it, and 0 for the rest. -/
-theorem machine_alu (k : Kind) : sheet.machine.a (.pipe .alu) k = census (.pipe .alu) k := by
-  cases k <;> norm_num [Sheet.machine, sheet, census, aluLine, Kind.pipe, Pipe.width, widthAlu]
-
-/-- The imad pipe's row: 128 over its width for each class on it, and 0 for the rest. -/
-theorem machine_imad (k : Kind) : sheet.machine.a (.pipe .imad) k = census (.pipe .imad) k := by
-  cases k <;> norm_num [Sheet.machine, sheet, census, imadLine, Kind.pipe, Pipe.width, widthImad]
-
-/-- The shfl pipe's row: 128 over its width for each class on it, and 0 for the rest. -/
-theorem machine_shfl (k : Kind) : sheet.machine.a (.pipe .shfl) k = census (.pipe .shfl) k := by
-  cases k <;> norm_num [Sheet.machine, sheet, census, shflLine, Kind.pipe, Pipe.width, widthShfl]
-
-/-- The uniform pipe's row: 128 over its width for each class on it, and 0 for the rest. -/
-theorem machine_uniform (k : Kind) : sheet.machine.a (.pipe .uniform) k = census (.pipe .uniform) k := by
-  cases k <;> norm_num [Sheet.machine, sheet, census, uniformLine, Kind.pipe, Pipe.width, widthUniform]
-
-/-- The shared-memory row: no class holds it. -/
-theorem machine_smem (k : Kind) : sheet.machine.a .smem k = census .smem k := by
-  simp [Sheet.machine, sheet, census]
-
-/-- The sheet's machine is `DS-90`'s census, line for line. -/
-theorem machine_eq_census : sheet.machine.a = census := by
-  funext r k
-  match r with
-  | .issue => exact machine_issue k
-  | .tensor => exact machine_tensor k
-  | .pipe .alu => exact machine_alu k
-  | .pipe .imad => exact machine_imad k
-  | .pipe .shfl => exact machine_shfl k
-  | .pipe .uniform => exact machine_uniform k
-  | .smem => exact machine_smem k
 
 /-- The tensor boost clock is under f_max. -/
 theorem tensorMHz_lt_fmaxMHz : tensorMHz < fmaxMHz := by
