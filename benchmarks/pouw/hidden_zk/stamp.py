@@ -37,7 +37,7 @@ W = IL.WORD
 #: live ANDs per rendering task (a call is never split): a task's text is about this many rows
 TASK_ANDS = 1 << 16
 #: rendered tasks held ahead of the writer, per worker
-AHEAD = 4
+AHEAD = 2
 
 
 class Unstampable(Exception):
