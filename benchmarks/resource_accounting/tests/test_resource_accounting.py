@@ -127,8 +127,8 @@ def test_the_table_derives_every_column_from_the_run_and_the_code():
     assert ("not a per-run covert bound: a per-run compute residual holds only conditional on BudgetAbort for the deployed "
             "cost model (CovertResidualPerRun; BudgetAbort holds for constant-cost models") in md
     assert "Note: first fetches are charged to the bandwidth account, not compute; a priced-sum column" in md
-    assert ("larger FP32 price at the point's (n, k) (#1809): cube8192 (8192, 8192) 0.36949%; llama31_8b's layout, the max "
-            "over its linears, 0.38912%.") in md
+    assert ("larger FP32 price at the point's (n, k) (pearlCDomainDevNK, pearlCDomainDevShapes): cube8192 (8192, 8192) "
+            "0.36949%; llama31_8b's layout, the max over its linears, 0.38912%.") in md
     assert "sidecar" not in md
     assert ("Every arm ran beside a sidecar, an idle CUDA context in a second process held through the run (ready in 2.0 s)"
             in R.markdown({**_doc(), "sidecar": {"pid": 7, "ready_s": 2.04, "rc": 0}}, {}, "fixture"))
@@ -334,8 +334,8 @@ def test_the_pous_arm_reports_its_audit_s_cert_and_the_chain_beside_it():
     md = R.markdown(doc, {}, "fixture", _pous_result())
     assert "19 of 20 audits accepted" in md and "limit 854 µs" in md and "S_cert 1.021 GB" in md
     assert ("S_cert's basis: Pous.SecurityProofs.P2SlackFamilyUncond; P2 is experimental, and the deployed ring's theorem "
-            "(EndToEndRing, #1790) is held.") in md
-    assert "The deployed store is 2^19 blocks, |C| = 1.078 GB of the card's 103 GB (M); lane ra-pous-scale" in md
+            "(EndToEndRing) is held.") in md
+    assert "The deployed store is 2^19 blocks, |C| = 1.078 GB of the card's 103 GB (M); the store is not yet sized" in md
     assert f"Capacity {C.RESIDUAL}: M − S_cert = " in md
     assert "| 0.400 | 0.600 | 0.500 | +50.0% | +20.0% | 2 |" in md
     assert "gates failed: timed_audit" in md and R.pous(_doc(), None) is None
@@ -373,7 +373,7 @@ def test_the_hosted_harness_s_argv_has_its_out_replaced():
 
 
 def test_q_cert_is_the_granted_rate_and_t_holds_the_rtt_at_p2_s_cap_under_the_floor():
-    """An accepted window at the red team's grant certifies PROTOCOL.md §6's 741,353,308 bytes of a 2^19-block store at
+    """An accepted window at the red team's grant certifies PROTOCOL.md §1's 741,353,308 bytes of a 2^19-block store at
     the RTX PRO 6000's S_chip, error 2^-40.42; an uncertified tag has no Q_cert; a chain without windows certifies none;
     and the T a remote verifier would grant holds the RTT at P2's cap one ns under the rebuild floor."""
     from verity.core.protocols.bandwidth import audit

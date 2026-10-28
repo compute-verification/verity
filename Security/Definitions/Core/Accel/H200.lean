@@ -46,7 +46,7 @@ reports.
   Tensor)'); DMMA (`Op.dmma`) runs on the tensor cores (A100 whitepaper: the third-generation Tensor Cores accelerate
   'all data types including FP16, BF16, TF32, FP64, INT8'), 128 MACs an SM clock at 1980 MHz (whitepaper: FP64 Tensor
   Core 67 TFLOPS over 132 SMs at 1980 MHz is 128.2), so a DMMA MAC uses 32 units of `tensor` and of `tensorLong`, as
-  measured (ALGO-COST A18: DMMA at 1/32 of s8 a MAC beside a saturated `wgmma`, `benchmarks/pouw/sass_census/
+  measured (DMMA at 1/32 of s8 a MAC beside a saturated `wgmma`, `benchmarks/pouw/sass_census/
   diff_menu.py` ESCAPE), and DMMA beside the low-precision formats shares their one budget;
 * shared memory: 32 banks of one 32-bit word a clock an SM (Programming Guide, 'Shared Memory', CC 9.0), so 4224;
 * HBM: 4.8 TB/s (H200 data sheet, 'GPU Memory Bandwidth 4.8TB/s'), 4.8 · 10¹² / (4 · 1.98 · 10⁹) = 20000/33 words;
