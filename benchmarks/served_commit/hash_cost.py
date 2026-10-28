@@ -226,11 +226,15 @@ class Gemm:
     """One forward's int8 linears at T tokens: the served kernel (int8_fused.scaled_mm at _plan's config), 16 layers of distinct weights,
     captured once into a CUDA graph.  step: shaped like the served step instead, each layer's GEMMs between stand-ins sized to
     HASH-56's per-class times at T 8,192 (two bf16 passes a norm, a rope pass, torch's causal flash attention at 1,024-token sequences
-    and hd64, silu x mul), and gap_cycles of one spinning thread after each forward for the host gap between forwards."""
+    and hd64, silu x mul), and gap_cycles of one spinning thread after each forward for the host gap between forwards.
+    wgmma: each linear on int8_fused.pick_wgmma's persistent wgmma kernel instead (a tree with engine/int8_wgmma.py)."""
 
-    def __init__(self, T: int, step: bool = False, gap_cycles: int = 0) -> None:
+    def __init__(self, T: int, step: bool = False, gap_cycles: int = 0, wgmma: bool = False) -> None:
         from verity_vllm.engine import int8_fused as F
-        self.step, self.gap_cycles = step, gap_cycles
+        self.step, self.gap_cycles, self.wg = step, gap_cycles, None
+        if wgmma:
+            from verity_vllm.engine import int8_wgmma
+            self.wg = int8_wgmma
         dev = torch.device("cuda")
         g = torch.Generator(device=dev).manual_seed(7)
         self.T, self.calls, self.cfgs = T, [], {}
@@ -243,12 +247,15 @@ class Gemm:
                 w = torch.randint(-127, 128, (n, k), dtype=torch.int8, device=dev, generator=g)
                 sw = torch.rand(n, dtype=torch.float32, device=dev, generator=g) + 0.5
                 cfg, work = F._plan(T, n, k, dev)
+                if self.wg:
+                    cfg, work = F.pick_wgmma(T, n, k, dev.index or 0), None
+                    assert cfg is not None, f"no wgmma plan for M {T} N {n} K {k}"
                 self.cfgs[name] = str(cfg)
                 self.calls.append((acts[k][0], acts[k][1], w, sw, outs[n], cfg, work))
                 self.macs += T * n * k
         self.F = F
         for c in [*self.calls, self.calls[0]]:                # compile every config outside the capture; layer 0's qkv last
-            F.scaled_mm(*c[:5], c[5], c[6])
+            self.mm(c)
         torch.cuda.synchronize()
         xq, sa, w, sw, _, cfg, work = self.calls[0]
         ref = (xq[:64].float() @ w[:64].float().t()) * sa[:64, None] * sw[None, :64]
@@ -271,24 +278,29 @@ class Gemm:
             self.forward()
         torch.cuda.synchronize()
 
+    def mm(self, c: tuple) -> None:
+        if self.wg:
+            self.wg.scaled_mm(*c[:5], c[5])
+        else:
+            self.F.scaled_mm(*c[:5], c[5], c[6])
+
     def forward(self) -> None:
-        F = self.F
         for li in range(LAYERS):
             qkv, o, gate_up, down = self.calls[4 * li: 4 * li + 4]
             if self.step:
                 self.norm()
-            F.scaled_mm(*qkv[:5], qkv[5], qkv[6])
+            self.mm(qkv)
             if self.step:
                 torch.mul(self.q, self.rc, out=self.q2)
                 torch.nn.functional.scaled_dot_product_attention(self.q2, self.k, self.v, is_causal=True)
-            F.scaled_mm(*o[:5], o[5], o[6])
+            self.mm(o)
             if self.step:
                 self.norm()
-            F.scaled_mm(*gate_up[:5], gate_up[5], gate_up[6])
+            self.mm(gate_up)
             if self.step:
                 half = self.gu.shape[1] // 2
                 torch.mul(torch.nn.functional.silu(self.gu[:, :half]), self.gu[:, half:], out=self.act)
-            F.scaled_mm(*down[:5], down[5], down[6])
+            self.mm(down)
         if self.gap_cycles:
             torch.cuda._sleep(self.gap_cycles)
 
@@ -389,19 +401,21 @@ def main() -> None:
     gprio = int(os.environ.get("GPRIO", "-100"))
     step = os.environ.get("STEP", "0") == "1"
     gap_cycles = int(float(os.environ.get("GAP_CYCLES", "16.8e6" if step else "0")))   # HASH-56: 9.6 ms at 1,750 MHz
+    wgmma = os.environ.get("GEMM", "triton") == "wgmma"
     build_dir = Path(os.environ.get("BUILD_DIR") or tempfile.mkdtemp(prefix="hash-cost-"))
     prop = torch.cuda.get_device_properties(0)
     arch, sms = f"{prop.major}{prop.minor}", prop.multi_processor_count
     res: dict[str, Any] = {"device": prop.name, "sms": sms, "arch": arch, "total_bytes": total, "T": T,
                            "phases": os.environ.get("VERITY_ROWS_PHASES", "4"), "form": os.environ.get("VERITY_ROWS_FORM", "split"),
-                           "stride0": stride0, "gemm_priority": gprio, "step": step, "gap_cycles": gap_cycles, "cuda_cflags": list(CUDA_CFLAGS), "forms": {}, "clock_marks": []}
+                           "stride0": stride0, "gemm_priority": gprio, "step": step, "gap_cycles": gap_cycles,
+                           "gemm_kind": "wgmma" if wgmma else "triton", "cuda_cflags": list(CUDA_CFLAGS), "forms": {}, "clock_marks": []}
 
     def mark(tag: str) -> None:
         res["clock_marks"].append([tag, time.time()])
 
     hs, gs = torch.cuda.Stream(priority=0), torch.cuda.Stream(priority=gprio)   # -100: clamped to the highest
     mark("gemm_build")
-    G = Gemm(T, step, gap_cycles)
+    G = Gemm(T, step, gap_cycles, wgmma)
     clk = Clock()
     fwd_ms = timed(lambda s: G.replay(), max(reps, 9), gs)
     res["gemm"] = {"macs_per_forward": G.macs, "configs": G.cfgs, "spot_check_close": G.close, "forward_ms": round(fwd_ms, 4),

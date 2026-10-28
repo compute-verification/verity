@@ -99,7 +99,8 @@ def analyze(run: Path) -> dict:
             row["beside"] = pts
             out["rows"][f"{form}:{rb}"] = row
     out.update(phases=res.get("phases", "4"), form_kind=res.get("form", "split"), stride0=res.get("stride0", False),
-               gemm_priority=res.get("gemm_priority", -100), step=res.get("step", False), gap_cycles=res.get("gap_cycles", 0))
+               gemm_priority=res.get("gemm_priority", -100), step=res.get("step", False), gap_cycles=res.get("gap_cycles", 0),
+               gemm_kind=res.get("gemm_kind", "triton"))
     return out
 
 

@@ -15,6 +15,10 @@ if [ "${1:-}" != leased ]; then
   say "build $(git rev-parse --short=10 HEAD 2>/dev/null) python $VENV/bin/python into $BUILD_DIR"
   "$VENV/bin/python" benchmarks/served_commit/hash_cost.py build > "$OUT/build.log" 2>&1
   rc=$?; say "build rc $rc"; [ "$rc" = 0 ] || { tail -40 "$OUT/build.log"; exit 3; }
+  if [[ "+${ARMSET:-}+" == *"+wgmma+"* ]]; then
+    "$VENV/bin/python" -c "from verity_vllm.engine import int8_wgmma; print(int8_wgmma.lib())" >> "$OUT/build.log" 2>&1
+    rc=$?; say "int8_wgmma build rc $rc"; [ "$rc" = 0 ] || { tail -40 "$OUT/build.log"; exit 3; }
+  fi
   gpu-lease status 2>&1 | tee -a "$OUT/steps.txt"
   say "lease requested"
   gpu-lease 1 --wait --mem-gb 0 --max-min "${LEASE_MIN:-20}" -- bash "$0" leased
@@ -70,6 +74,15 @@ if has step; then
         s16k_nogap:$D,STEP=1,GAP_CYCLES=0,ROWS=16384,VERITY_ROWS_PHASES=64,CAPS=132+0
         g4k:$D,ROWS=4096,VERITY_ROWS_PHASES=33,CAPS=33+132+396+0
         g16k:$D,ROWS=16384,VERITY_ROWS_PHASES=64,CAPS=33+132+396+0"
+fi
+# ARMSET=wgmma: the same beside int8_fused's persistent wgmma GEMM (GEMM=wgmma; a source tree with engine/int8_wgmma.py), bare and step
+if has wgmma; then
+  D=THREADS=256,TREE=0,HASH_MS=60,GEMM=wgmma
+  ARMS="${ARMS:-} w4k:$D,ROWS=4096,VERITY_ROWS_PHASES=33,CAPS=33+132+396+0
+        w16k:$D,ROWS=16384,VERITY_ROWS_PHASES=64,CAPS=33+132+396+0
+        w64k:$D,ROWS=65536,VERITY_ROWS_PHASES=64,CAPS=16+66+264+0
+        ws16k:$D,STEP=1,ROWS=16384,VERITY_ROWS_PHASES=64,CAPS=33+132+396+0
+        ws16k_p4:$D,STEP=1,ROWS=16384,CAPS=132+0"
 fi
 say "leased CUDA_VISIBLE_DEVICES=${CUDA_VISIBLE_DEVICES-unset}"
 nvidia-smi --query-gpu=name,uuid,clocks.sm,clocks.max.sm,power.limit,memory.used --format=csv | tee -a "$OUT/steps.txt"
