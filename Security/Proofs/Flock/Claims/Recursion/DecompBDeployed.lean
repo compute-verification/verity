@@ -223,7 +223,7 @@ def RestLowR : Prop :=
 /-- **The residual groups' share at the parts' own messages** (`hlowP`'s `rec-residuals` kind): where every part
 accepts at the parts' own messages, each group `ownR` gives part `s` holds. -/
 def ResLowJ : Prop :=
-  ∀ (x : Msg) (st : Claims.Recursion.Stmt), parse x = some st → Claims.Recursion.Form.Dense st.form →
+  ∀ (x : Msg) (st : Claims.Recursion.CompiledStatement), parse x = some st → Claims.Recursion.Form.Dense st.form →
     ∀ (c : ℕ → Coin) (ws : List Claims.Flock.Wit),
       Joint FlockDeploy.sha512 (recL rd b aux nOf hd rest wE final w L) L
         (acceptsL rd b aux nOf hd rest wE final w L) x c ws →

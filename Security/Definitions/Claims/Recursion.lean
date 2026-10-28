@@ -11,7 +11,7 @@ eight items:
 1. **Statement format.** `x` is the canonical bytes of what the compiled verifier reads, parsed by its own parser
    (`Deploy.parse`) into the inner statement's bytes, the inner statement's dimensions as the verifier sets it up, the
    commitment to the circuit (the private-circuit variant only), the recursion's form, and each V* session's draw as
-   its record holds it, where the statement carries the records (`Stmt`, `Form`, `Draw`).
+   its record holds it, where the statement carries the records (`CompiledStatement`, `Form`, `DrawRecord`).
 2. **Witness.** The inner protocol's (`W`), in both variants. In the private-circuit one the circuit is in the inner
    witness, which the universal unit's relation reads, and its commitment is hm96 rows that unit outputs.
 3. **Relation (inherited).** `R(x, w) :⇔ x` parses, has no circuit commitment, and `R_I(x_I, w)` (`R`). The private
@@ -21,7 +21,7 @@ eight items:
    `k_log ≥ 6`, two claims and two per region, no circuit commitment; either no RecSparse phase and no R, or a valid
    RecSparse phase at `T_LOG = 0` with `6 ≤ ℓ ≤ k_log`, the inner statement's dimensions the form's and its unit range
    inside a block, and R at `table_m` with two claims. Every V* session draws every unit of its population
-   (`Draw.Full`). There is no recursion-level scope refusal: `ScopeMatches` states that this is the compiled
+   (`DrawRecord.Full`). There is no recursion-level scope refusal: `ScopeMatches` states that this is the compiled
    verifier's own scope check, its setup's checks of the inner shape, its refusal of a V* session whose draw is not
    every unit, and its refusal of a session over an inner session whose record holds no draw. Where the V* records are
    run messages, the statement carries no draws, and the compiled verifier refuses a session whose draw is not every
@@ -320,16 +320,16 @@ structure Form where
   stacked : Option (ℕ × ℕ)
   unitRangeInBlock : Bool
 
-/-- **A V* session's draw**, as its record holds it: its law's `k` when the law is `subset` (`none` for another law),
-its population, its units and its closure. -/
-structure Draw where
+/-- **A V* session's draw record**, the draw as its record holds it: its law's `k` when the law is `subset` (`none` for
+another law), its population, its units and its closure. -/
+structure DrawRecord where
   subset : Option ℕ
   population : ℕ
   units : List ℕ
   closure : List ℕ
 
 /-- **The full draw**: the `subset` draw of every unit of its population, `0, …, N − 1` in order, with no closure. -/
-def Draw.Full (d : Draw) : Prop :=
+def DrawRecord.Full (d : DrawRecord) : Prop :=
   d.subset = some d.population ∧ d.units = List.range d.population ∧ d.closure = []
 
 /-- **The recursion's statement**: the inner statement's bytes, its `(m, k_log, regions)` as the verifier sets it up
@@ -338,12 +338,12 @@ the form, each V* session's draw as its record holds it (`none` where it holds n
 where the records are run messages rather than the statement's), and the inner population's link table
 (`verity/rec-links/v1`) as its root `T` and row count `N`, where the statement carries one. Neither the relation nor
 the scope reads `links` yet: the compiled verifier refuses every statement that carries one. -/
-structure Stmt where
+structure CompiledStatement where
   inner : Msg
   innerDims : Option (ℕ × ℕ × ℕ)
   circ : Option Msg
   form : Form
-  draws : List (Option Draw)
+  draws : List (Option DrawRecord)
   links : Option (Msg × ℕ) := none
 
 /-- RecSparse's `P_LOG` at `ℓ`: the bit length of `2ℓ + 1`. -/
@@ -355,8 +355,8 @@ claims and two per region, its circuits public or private (`holo` either way); a
 (a dense or holo inner session), or a sparse phase: a RecSparse shape at `NU ≥ 1`, `6 ≤ ℓ ≤ k_log`,
 `T_LOG = 0`, the inner statement's `(m, k_log, regions)` the form's, its unit range's slots inside the block, and R at
 the phase's `table_m = max(22, NU + P_LOG)` with a fast100 schedule and the two reps' claims. Every V* session's
-record holds a draw, and it is the full draw (`Draw.Full`). -/
-def InScope (s : Stmt) : Prop :=
+record holds a draw, and it is the full draw (`DrawRecord.Full`). -/
+def InScope (s : CompiledStatement) : Prop :=
   s.circ = none ∧ 22 ≤ s.form.m ∧ s.form.m ≤ 35 ∧ 6 ≤ s.form.kLog ∧ s.form.claims = 2 + 2 * s.form.regions ∧
     (s.form.sparse = none ∧ s.form.stacked = none ∨
       ∃ nu ell sLog, s.form.sparse = some (nu, ell, sLog, 0) ∧ 1 ≤ nu ∧ 6 ≤ ell ∧ ell ≤ s.form.kLog ∧
@@ -421,7 +421,7 @@ and the run's coins (`innerCalls`, the compiled verifier's coins, whose first ar
 default. -/
 structure Deploy (Coin : Type) where
   V : Verifier Coin
-  parse : Msg → Option Stmt
+  parse : Msg → Option CompiledStatement
   scopeCheck : Msg → Bool
   kS : Msg → ℕ
   nC : Msg → ℕ
@@ -513,7 +513,7 @@ section Recursion
 variable {Coin W Col T : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [DecidableEq Col]
 
 /-- The inner statement's bytes. -/
-def xI (D : Deploy Coin) (x : Msg) : Msg := ((D.parse x).map Stmt.inner).getD []
+def xI (D : Deploy Coin) (x : Msg) : Msg := ((D.parse x).map CompiledStatement.inner).getD []
 
 /-- **The relation, inherited**: `x` parses, with no circuit commitment, and the inner relation holds at its inner
 statement. -/

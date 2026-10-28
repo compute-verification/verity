@@ -56,7 +56,7 @@ def rangeOk (sp : RecSparse.Shape) (st : Stmt) : Bool :=
   | .error _ => false
 
 /-- A draw, readable: its `subset` law's `k`, population, units and closure. -/
-def drawOf (D : Draw.UnitDraw) : Claims.Recursion.Draw where
+def drawOf (D : Draw.UnitDraw) : Claims.Recursion.DrawRecord where
   subset := match D.law with
     | .subset k => some k
     | _ => none
@@ -66,7 +66,7 @@ def drawOf (D : Draw.UnitDraw) : Claims.Recursion.Draw where
 
 /-- A V* session's draw as its record holds it, readable; `none` where the record holds none, or one that doesn't
 read. -/
-def recordDrawOf (record : String) : Option Claims.Recursion.Draw :=
+def recordDrawOf (record : String) : Option Claims.Recursion.DrawRecord :=
   (Witness.recordDraw record).bind fun d => match Draw.UnitDraw.ofJson d with
     | .ok D => some (drawOf D)
     | .error _ => none
@@ -74,7 +74,7 @@ def recordDrawOf (record : String) : Option Claims.Recursion.Draw :=
 /-- **The recursion's statement, readable**, from what the verifier reads: no circuit commitment (the compiled verifier
 has no private-circuit variant), the inner statement's dimensions as it sets it up, its inner shape as the form,
 each V* session's draw, and the link table's root and row count. -/
-def toStmt (r : Read) : Claims.Recursion.Stmt where
+def toStmt (r : Read) : Claims.Recursion.CompiledStatement where
   inner := r.inner
   innerDims := (innerStmt r.src).map fun st => (st.m, st.c.kLog, st.regions.size)
   circ := none
@@ -102,7 +102,7 @@ def accepts (r : Read) : Bool :=
 def parseBytes (decode : Claims.Msg → Option Read) (x : Claims.Msg) : Option Read := (decode x).filter accepts
 
 /-- **The deployed parser**: what the verifier reads where its setup accepts, readable. -/
-def parseOf (decode : Claims.Msg → Option Read) (x : Claims.Msg) : Option Claims.Recursion.Stmt :=
+def parseOf (decode : Claims.Msg → Option Read) (x : Claims.Msg) : Option Claims.Recursion.CompiledStatement :=
   (parseBytes decode x).map toStmt
 
 /-- **A V* session's draw passes the verdict's refusals** under the verifier's inner shape `i`: its record holds a draw
@@ -254,7 +254,7 @@ theorem fullDrawOk_iff (i : RecVStar.Inner) (record : String) :
   simp only [hD, Option.bind_some, Option.some.injEq, exists_eq_left', bind, Except.bind]
   unfold Witness.fullDraw
   simp only [hd, hD, bind, Except.bind]
-  unfold Claims.Recursion.Draw.Full drawOf
+  unfold Claims.Recursion.DrawRecord.Full drawOf
   rcases hl : D.law with k | _ | _ | _
   · simp only [Option.some.injEq, true_and]
     rw [← Array.toList_range, Array.toList_inj, Array.toList_eq_nil_iff]

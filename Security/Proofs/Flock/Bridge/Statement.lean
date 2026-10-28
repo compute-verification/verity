@@ -14,9 +14,12 @@ file's rows (`Bridge.rootsOf`), and at the deployed commitment `Bridge.commitDep
 off the circuit file (`HiddenExec.rowOfH`); nothing of the commitment, its roots or its hash is a free parameter. Its
 named assumptions are `EndToEndHidden`'s: A3, `live-verifier`, `cr/sha-512` and `ecr/sha-512`.
 
-**Inputs are outside this bound.** `Bridge.partOf` lays the input class after the population, as the deployed
-verifier does, but `Bridge.designOf` draws it at rate `0`: the deployed verifier checks every input slot on every run,
-and C-Flock's game, whose bound this is, checks no input unit.
+**Input rows.** `Bridge.partOf P κ` puts each input row in the slot of the unit that owns it, its first reader
+(`Bridge.slotOf`), and has no input class: that is what the deployed verifier checks, whose session (`HmRow.drawn`) opens
+only the rows its drawn units read, while registration opens none. So a unit whose owned input row doesn't open is a
+faulty slot, and `δ` bounds those slots with the rest. An input no unit reads is in no slot. The deployed
+`Slots.layout` still lays a separate input class, which the claims' design reads `all`, so `partOf` is not yet its
+partition.
 
 `SampledKSLiveStated` freezes the statement and the definitions it reads; no proof of `SampledKSLive` exists yet.
 `SampledKSLive` holds at `kd = 0` (`δ = 1`), and elsewhere follows from `EndToEndHidden` at
@@ -97,7 +100,7 @@ def SampledKSLive : Prop :=
     -- ecr/sha-512 for the prover's link finders
     LinkCRZC execArith hs512 P (planZHJ dj y₀) (tabZHJ dj y₀) vb (reg σ) (cont σ) k Rw M t' →
     prob (fun o => LiveAcceptsZK I o ∧
-        ¬ Claims.Sampling.RelS Claims.Sampling.sha512Msg Cd δ (Bridge.stmtOf P κ kd desc q roots) (Bridge.partOf P)
+        ¬ Claims.Sampling.RelS Claims.Sampling.sha512Msg Cd δ (Bridge.stmtOf P κ kd desc q roots) (Bridge.partOf P κ)
           (Bridge.witDep Cc Cd Claims.Sampling.sha512Msg roots Xr))
         (auditLive L Reg (liveOfZJ dg (planZHJ dj y₀) N wr)) τ ≤
       ((n - K₀).choose kd : ℝ≥0∞) / (n.choose kd : ℝ≥0∞) +
