@@ -528,7 +528,7 @@ def lattice_ideal(target_bits: np.ndarray, ref_bits: np.ndarray, base64: np.ndar
 
 
 def fit_lattice(target_bits: np.ndarray, ref_bits: np.ndarray, bases: list[np.ndarray], coef: np.ndarray,
-                group: np.ndarray, fmt: str, scales=(1.0, 0.5, 2.0, 0.25, 4.0),
+                group: np.ndarray, fmt: str, scales=(1.0, 0.5, 2.0),
                 sample: int = 1 << 22) -> tuple[np.ndarray, float] | None:
     """Coefficients and a step for `lattice_encode`. Each candidate step is one of `scales` times the median distance from
     the rounded affine prediction to the target where they differ; its step counts give a least-squares refit of the

@@ -39,7 +39,7 @@ counts.
   counts coded like the ulp symbols, and the residual coded by `ulp`. AdamW's first step moves nearly every weight by
   ±lr, which the ulp coder pays for in the low bits of every distance and the lattice pays for once per slot as a step
   count. The step is the cheapest of a few multiples of the typical distance, with the coefficients and step refit
-  together to the step counts.
+  together to the step counts. latticeM is fitted only for the largest M below N; for a smaller M it is predM.
 - **replay** (d): the run record (model and data revisions, seed, hyperparameters, N) and `train.py`, both xz-compressed,
   replayed for N steps. When R doesn't hold the data, the description also carries the tokens. They are coded either
   prequentially, by the model being trained at each step (the sum of the training losses in bits, the first token of
@@ -75,11 +75,11 @@ decoder would cut to well under one. predM and latticeM need M steps, and replay
 research run --on auto --cpus 16 --mem-gb 64 --max-min 600 --cwd source -- bash benchmarks/update_price/run.sh
 ~~~
 
-`run.sh` passes its arguments to `train.py`, whose defaults are the run of record: 1000 steps of 16×512 tokens, saves at
-steps 1, 10, 100, 300 and 1000, Adam moments at 1, 10 and 100, and `--replay 100`. For a trial on the machine, pass
+`run.sh` passes its arguments to `train.py`, whose defaults are the run of record: 300 steps of 16×512 tokens, saves at
+steps 1, 10, 100 and 300, Adam moments at 1, 10 and 100, and `--replay 100`. For a trial on the machine, pass
 `--steps 3 --save 1,3 --state 1 --replay 1`. `train.json`, `price.json` and `tables.md` go to `$OUT`. Checkpoints (about
-6.5 GB) stay in the run's scratch directory and are removed at exit. Reprice a kept checkpoint directory with
-`python price.py --ckpt DIR --train train.json --out OUT [--versions 10,1000] [--only REGEX]`.
+6 GB) stay in the run's scratch directory and are removed at exit. Reprice a kept checkpoint directory with
+`python price.py --ckpt DIR --train train.json --out OUT [--versions 10,300] [--only REGEX]`.
 
 The tests (`tests/`) check that every codec round-trips exactly (with pinned encodings) and run the pricing end to end
 on a toy checkpoint.

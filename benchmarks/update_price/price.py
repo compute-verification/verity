@@ -143,7 +143,8 @@ def tensor_task(job: dict) -> dict:
 
     theta64 = C.from_bits(r0, fmt).astype(np.float64)
     out["pred"], out["lattice"] = {}, {}
-    for m in [0, *[m for m in ms if m < n]]:
+    ms_n = [m for m in ms if m < n]
+    for m in [0, *ms_n]:
         bases = [theta64]
         if m:
             bases += [np.asarray(ck.x(m, name), dtype=np.float64).reshape(-1) - x0.astype(np.float64).reshape(-1),
@@ -159,7 +160,7 @@ def tensor_task(job: dict) -> dict:
         checked(t, back, f"{name} pred{m}")
         out["pred"][str(m)] = {"bits": 8 * len(enc), "dec_s": dec, "coef": coef.tolist(),
                                "kind": ("ls3", "direct", "ls2")[i] if m else "decay"}
-        fit = C.fit_lattice(t, r0, bases, coef, g, fmt)
+        fit = C.fit_lattice(t, r0, bases, coef, g, fmt) if m in (0, max(ms_n, default=0)) else None
         if fit is None:
             out["lattice"][str(m)] = {**out["pred"][str(m)], "step": None}
             continue
