@@ -731,6 +731,124 @@ pub fn prove_pure(
     (proof, commitment, phase)
 }
 
+/// verity/flock-vllm-block/v1 on the GPU: the host's packed witness (SHA-256 slots and units, any witness), the
+/// two-circuit lincheck fold with 2^15-bit compression slots, the region claims (points from `hook`) in the sparse ring
+/// switch. Same return shape as [`prove_chunk`].
+/// Where a flock-vllm-block rep's witness comes from.
+pub enum VllmSrc<'a> {
+    /// The whole packed (z, a, b), built on the host (any witness, a flipped z bit included).
+    Host { z: &'a [F128], a: &'a [F128], b: &'a [F128] },
+    /// Every SHA-256 compression's (h_in, message) and every unit's five input words: both witnessed on the device.
+    Device { comps: &'a [flock_prover::r1cs_hashes::sha2::Compression], units: &'a [F128] },
+}
+
+#[allow(clippy::too_many_arguments)]
+pub fn prove_vllm(
+    st: &crate::vllm_block::VllmStmt,
+    src: VllmSrc<'_>,
+    pcs: &PcsParams,
+    domain: &[u8],
+    mut hook: Hook<'_>,
+    ch: &mut LiveChallenger,
+) -> (R1csProofLigerito, Commitment, [f64; 8]) {
+    use crate::{pure_block as pb, vllm_block as vb};
+    let s = statics_for(vb::sha_comp(), &st.circuit.da, &st.circuit.db);
+    let (sc, cfg) = sched(pcs);
+    let m = pcs.m;
+    let params = prove_params(s, &sc, &cfg, pcs, &st.digest, domain, st.lay.k_log(), vb::PIN, Some(ch));
+    let n_comp = st.blocks() * st.lay.comp_slots();
+    let (mut cv, mut msg, mut zeros32, mut zeros64) = (Vec::new(), Vec::new(), Vec::new(), Vec::new());
+    let (mut hz, mut ha, mut hb, mut uin): (*const u64, *const u64, *const u64, *const u64) = (null(), null(), null(), null());
+    match &src {
+        VllmSrc::Host { z, a, b } => {
+            assert_eq!(z.len(), 1 << (m - 7));
+            (hz, ha, hb) = (z.as_ptr() as *const u64, a.as_ptr() as *const u64, b.as_ptr() as *const u64);
+        }
+        VllmSrc::Device { comps, units } => {
+            assert_eq!(comps.len(), n_comp);
+            assert_eq!(units.len(), 5 * st.blocks() * st.lay.units);
+            cv = comps.iter().flat_map(|c| c.0).collect();
+            msg = comps.iter().flat_map(|c| c.1).collect();
+            zeros32 = vec![0u32; n_comp];
+            zeros64 = vec![0u64; n_comp];
+            uin = units.as_ptr() as *const u64;
+        }
+    }
+    let device = !uin.is_null();
+    let (u_useful, u_const) = (st.net.useful as i32, st.net.const_pos as i32);
+    type U8 = (Vec<u32>, Vec<u32>, Vec<u32>, Vec<u32>, Vec<u32>, Vec<u32>, Vec<u32>, Vec<u32>);
+    static U: OnceLock<U8> = OnceLock::new();
+    let u = U.get_or_init(|| {
+        let k = 1usize << pb::UNIT_LOG;
+        let pad = |rows: &Vec<Vec<usize>>| {
+            let mut r = rows.clone();
+            r.resize(k, Vec::new());
+            SparseBinaryMatrix { num_rows: k, num_cols: k, rows: r.into() }
+        };
+        let (ca, cb) = (csc_from_rows(&pad(&st.net.a)), csc_from_rows(&pad(&st.net.b)));
+        let csr = |rows: &Vec<Vec<usize>>| {
+            let mut off = vec![0u32];
+            let mut col = Vec::new();
+            for r in rows {
+                col.extend(r.iter().map(|&c| c as u32));
+                off.push(col.len() as u32);
+            }
+            (off, col)
+        };
+        let (ao, ac) = csr(&st.net.a);
+        let (bo, bc) = csr(&st.net.b);
+        (ca.0, ca.1, cb.0, cb.1, ao, ac, bo, bc)
+    });
+    let n_claims = 2 + 2 * st.regions.len();
+    let og = pcs.opening_grinding();
+    let mut phase = [0f64; 8];
+    let chunk = ChunkParams {
+        delta_a: s.da.as_ptr(),
+        n_delta_a: (s.da.len() / 2) as i32,
+        delta_b: s.db.as_ptr(),
+        n_delta_b: (s.db.len() / 2) as i32,
+        sub_log: vb::SUB_LOG as i32,
+        link_cb: Some(link_cb),
+        link_ctx: &mut hook as *mut Hook<'_> as *mut c_void,
+        gamma_bits: if n_claims > 1 { og.claim_batch_bits as i32 } else { 0 },
+        phase_s: phase.as_mut_ptr(),
+        mode: 1,
+        comp_slots: st.lay.comp_slots() as i32,
+        units: st.lay.units as i32,
+        unit_log: pb::UNIT_LOG as i32,
+        unit_pos0: st.lay.unit_pos0() as i32,
+        u_a_col_ptr: u.0.as_ptr(),
+        u_a_rows: u.1.as_ptr(),
+        u_a_nnz: u.1.len() as u32,
+        u_b_col_ptr: u.2.as_ptr(),
+        u_b_rows: u.3.as_ptr(),
+        u_b_nnz: u.3.len() as u32,
+        blocks_real: st.vus as i32,
+        cv: if device { cv.as_ptr() } else { null() },
+        msg: if device { msg.as_ptr() } else { null() },
+        ctr: if device { zeros64.as_ptr() } else { null() },
+        blen: if device { zeros32.as_ptr() } else { null() },
+        flags: if device { zeros32.as_ptr() } else { null() },
+        u_a_off: u.4.as_ptr(),
+        u_a_col: u.5.as_ptr(),
+        u_b_off: u.6.as_ptr(),
+        u_b_col: u.7.as_ptr(),
+        u_useful,
+        u_const,
+        u_n_in: 544,
+        u_inputs: uin,
+        u_out_acc: st.net.out_cols[0] as i32,
+        u_out_y: -1,
+        host_z: hz,
+        host_a: ha,
+        host_b: hb,
+        sha256: device as i32,
+        ..ChunkParams::none()
+    };
+    let (proof, commitment) = run(&params, &chunk, pcs, m);
+    (proof, commitment, phase)
+}
+
 fn run(params: &ProveParams, chunk: &ChunkParams, pcs: &PcsParams, m: usize) -> (R1csProofLigerito, Commitment) {
     let mut out: *mut u8 = null_mut();
     let mut out_len: usize = 0;
