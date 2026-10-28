@@ -2,7 +2,7 @@
 (`check.replay.coverage`) and the identity rows as written, one per required Value.
 
 Its writers are `query.required.request_manifest` (a request Program), `query.compose` (the global composition and a TP workload's
-rank merge), `query.guarded_max.with_ms`, `acquire.compiled` and `acquire.served`; each writes every field typed here as
+rank merge), `acquire.compiled` and `acquire.served`; each writes every field typed here as
 required.  `commit.binding.load_required_manifest` checks the digests against the Program, and `query.manifest.format` holds the
 identity rows' encoding (`IDENTITY_KEY`, `manifest_digest`).
 

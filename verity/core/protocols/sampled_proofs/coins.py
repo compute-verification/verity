@@ -7,7 +7,7 @@ drawn proof block's outcome is final: nothing redraws.
 
 Each stream `draw_first` reads (one for `subset` and `bernoulli`, one per stratum for `stratified` and `work`) is
 `2 k · width(n) + 64` bytes (`2 n · width(den) + 64` for `bernoulli`), extended by as many again and rerun whenever it
-runs out (`OwnRandomness.stream`).  Nothing here derives a draw, the proof service's included: `service.Stream.select` is
+runs out (`OwnRandomness.stream`).  Nothing here derives a draw, the proof system's included: `service.Stream.select` is
 `draw_first` on the challenger's coins (`service.select_draw`), and its draw of record is Lean's `Select.select` on the
 bytes it read (`one_stage.verifier.select`).  A draw from the auditor's challenger reads its coins the same way
 (`ChallengerCoins`): one family's coins opened after the prover's commitment, concatenated in order, each checked against
@@ -102,7 +102,7 @@ def _on(src: bytes) -> Callable[[int], bytes]:
 
 class OwnRandomness:
     """The verifier's randomness, read directly: exact samplers over raw bytes from `source`, the caller's coins (the
-    proof service's are the Lean verifier's, `verifier.coins`; there is no default, so nothing here reads the operating
+    proof system's are the Lean verifier's, `verifier.coins`; there is no default, so nothing here reads the operating
     system), consumed in order, with no hash and no derivation.  They are the Lean verifier's `Flock.Draw` and
     `flock-circuit`'s `unit_draw` samplers: `uniform(n)` reads w = ceil((bitlen(n) + 64) / 8)-byte big-endian words and returns the
     first below the largest multiple of n, mod n; `bernoulli(a/b)`, a/b in lowest terms, is `uniform(b) < a` (p = 0 and

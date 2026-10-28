@@ -53,8 +53,10 @@
 * **When.** `Served.commit` registers call c's z table as `H1Run` records the call, step s's A table of K at its last
   call of K (salted from its first call's nonce), and puts the period's ``b/<K>`` in the call that completes K's weights
   (the last of K's linears in step 0), then, once both roots exist, each of the step's calls of K's ``pub@<c>``
-  (`Served._pubs`) and, with ``receipts``, its receipt table. Each root goes into that call's manifest row
-  (``tables.registered``), so its
+  (`Served._pubs`) and, with ``receipts``, its receipt table. A z table hashed on the GPU hashes there while the step's
+  later calls run, its place in `registered` taken when it's recorded and its tree and root put in once hashed
+  (`Served.settle`, at the latest when `H1Run.tables` reads the step's roots at its round's close). Each root goes into
+  that call's manifest row (``tables.registered``), so its
   round's root commits it before the round's coin, and round s's root also lists step s's A tables whole
   (`Served.segments`, `credit.round_root`). A weight is taken once, and one that changes within the window
   is refused. Without the period's `Weights` (an in-process window, which credits nothing) the window registers its own
@@ -83,9 +85,14 @@
 """
 from __future__ import annotations
 
+import collections
 import functools
+import gc
+import gzip
 import hashlib
+import json
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Any, Callable, Mapping, Sequence
 
 import numpy as np
@@ -95,16 +102,18 @@ from verity.core.protocols.pouw import credit as CR
 from verity.core.protocols.pouw import salt as PS
 from verity.core.protocols.pouw import weights as Wt
 from verity.core.protocols.pouw.circuit import h1device as HD
+from verity.core.protocols.pouw.circuit import h1tile as HT
 from verity.core.protocols.pouw.circuit import h1window as HW
 from verity.core.protocols.sampled_proofs.one_stage import partition as P, registered as G
-from verity.ml.circuits.codec import canonical_json, encode_program
+from verity.ml.circuits.codec import canonical_json, descriptor_chunks, encode_program
 from verity.ml.circuits.program import Program
 
 from verity_vllm.protocols.pouw import h1 as PH
 from verity_vllm.protocols.pouw.h1 import live as LV
 from verity_vllm.protocols.pouw.h1 import registered as NR
 from verity_vllm.protocols.pouw.h1 import requests as RQ
-from verity_vllm.protocols.pouw.h1.served_files import FILE, Registration, file_name, reads_file, register, trees
+from verity_vllm.protocols.pouw.h1.model_key import ModelKey, model_key
+from verity_vllm.protocols.pouw.h1.served_files import FILE, WindowCommitmentEntries, file_name, reads_file, register, trees
 from verity_vllm.protocols.pouw.h1.words import (EMPTY_ID, chunk_words, ids_words, receipt_words, record_words,
                                                          row_words, zy_words)
 
@@ -175,6 +184,17 @@ def declared(shapes: Sequence[tuple[int, int]], modules: Mapping[int, str], rows
     return HW.program([tuple(x) for x in lay["linears"]], [tuple(x) for x in lay["calls"]], lay["m"], tile, prefix, unit)
 
 
+def unit_of(name: str | None, tile: tuple[int, int] = PH.TILE) -> Callable[[int], Any] | None:
+    """`declared`'s ``unit`` for the pouw setting ``unit`` ``name`` (`pouw_h1_settings.UNITS`): None for v1 (unset), the
+    default; for ``j10r`` `h1window.tile_unit` over J10-R's `h1tile.PouwH1Tile5`, one noise stream a call, the tile a
+    period's guarantee covers (core's `period_check.COVERED_TILE`)."""
+    if name in (None, "v1"):
+        return None
+    if name == "j10r":
+        return functools.partial(HW.tile_unit, tile=tuple(tile), definition=HT.PouwH1Tile5)
+    raise ValueError(f"no tile unit {name!r}: the pouw setting 'unit' is v1 or j10r")
+
+
 def descriptor(program: Program) -> bytes:
     """`program`'s descriptor as the period commits it: its canonical JSON without annotations, the bytes whose SHA-512
     is its `codec.program_digest` (the period-open's ``circuit``) and from which core's credit reads the window's
@@ -182,11 +202,36 @@ def descriptor(program: Program) -> bytes:
     return canonical_json({k: v for k, v in encode_program(program).items() if k != "annotations"})
 
 
+def write_program(program: Program, layout: Mapping[str, Any], out: Path | str, *, rows: int, steps: int) -> str:
+    """`program`'s `codec.program_digest`, streamed once into ``out``'s `pouw_h1.PROGRAM` (its `descriptor`, gzipped) as it
+    is hashed, and its `pouw_h1.PROGRAM_META`: the digest, the descriptor's bytes, its `layout` (`declared_layout`, which
+    core's `credit.layout_of` reads from it), T ``rows`` and S ``steps``. A period-open commits the digest and the circuit
+    files built from these (``served_verdicts.py period``)."""
+    out = Path(out)
+    out.mkdir(parents=True, exist_ok=True)
+    h, size, on = hashlib.sha512(), 0, gc.isenabled()
+    gc.disable()
+    try:
+        with gzip.open(out / PH.PROGRAM, "wb", compresslevel=1) as f:
+            for chunk in descriptor_chunks(program):
+                h.update(chunk)
+                f.write(chunk)
+                size += len(chunk)
+    finally:
+        if on:
+            gc.enable()
+    digest = h.hexdigest()
+    meta = {"program_digest": digest, "file_sha512": digest, "bytes": size, "rows": int(rows), "steps": int(steps),
+            "layout": dict(layout)}
+    (out / PH.PROGRAM_META).write_text(json.dumps(meta, indent=1) + "\n")
+    return digest
+
+
 def declared_layout(shapes: Sequence[tuple[int, int]], modules: Mapping[int, str], rows: int, steps: int,
                     tile: tuple[int, int] = PH.TILE, blocks: Sequence[int] | None = None) -> dict[str, Any]:
     """`declared`'s arguments to `h1window.program` as the window's layout, ``{calls: [[linear, A block], ...],
     linears: [[name, K, n], ...], m, tile}``: what core's `credit.layout_of` reads from `declared`'s `descriptor`, built
-    without the Program (the proof service sizes the period's K from it, `pouw_h1_challenger.draw_k`)."""
+    without the Program (the proof system sizes the period's K from it, `pouw_h1_challenger.draw_k`)."""
     mods = [modules.get(w, str(w)) for w in range(len(shapes))]
     calls = [(s, w) for s in range(steps) for w in range(len(shapes))]
     return {"calls": [[mods[w], b] for (_s, w), b in zip(calls, layout(shapes, calls, blocks))],
@@ -254,38 +299,6 @@ def register_weights(circuit: str, shapes: Sequence[tuple[int, int]], weights: M
     return Weights(circuit, reg, at)
 
 
-@dataclass(frozen=True)
-class ModelKey:
-    """The auditor's registration of the served model under the period's circuit, as the gate's ``model-key --model M
-    --circuit C`` answers a lane's gate key: its role ``model``, ``circuit``, the weights' root ``weights_root`` (hex) that
-    ``period-open --model M`` signs, and ``key``, the 32-byte salt key its ``b/<K>`` rows were committed under."""
-
-    model: str
-    circuit: str
-    weights_root: str
-    key: bytes = field(repr=False)
-
-
-def _hex512(v: Any) -> bool:
-    return type(v) is str and len(v) == 128 and all(c in "0123456789abcdef" for c in v)
-
-
-def model_key(answer: Mapping[str, Any]) -> ModelKey:
-    """The gate's ``model-key`` answer as a `ModelKey`; ValueError on a refusal, or an answer whose key isn't 32 bytes
-    whose SHA-512 is its ``key_sha512``, or whose circuit or weights' root isn't a SHA-512 digest."""
-    if "refused" in answer:
-        raise ValueError(f"model-key: refused: {answer['refused']}")
-    try:
-        key = bytes.fromhex(answer["key"])
-    except (KeyError, TypeError, ValueError):
-        raise ValueError("model-key: the answer has no key in hex") from None
-    if len(key) != 32 or hashlib.sha512(key).hexdigest() != answer.get("key_sha512"):
-        raise ValueError("model-key: the key is not 32 bytes whose SHA-512 is the answer's key_sha512")
-    if not (type(answer.get("model")) is str and _hex512(answer.get("circuit")) and _hex512(answer.get("weights_root"))):
-        raise ValueError("model-key: the answer names no model, circuit and weights' root (SHA-512 digests in hex)")
-    return ModelKey(answer["model"], answer["circuit"], answer["weights_root"], key)
-
-
 @dataclass
 class Served:
     """How an `H1Run` commits its calls' tables and its weights as the window Program's registered values. ``tile``: the
@@ -341,6 +354,8 @@ class Served:
     #: each linear's weight, the tensor and its codes, taken once, and its scales
     _weights: dict[int, tuple[Any, np.ndarray]] = field(default_factory=dict)
     _scales: dict[int, np.ndarray] = field(default_factory=dict)
+    #: the z tables still hashing on the GPU (`_register_later`), in registration order, each with the ``out`` its root goes in
+    _later: collections.deque[tuple[str, dict[str, str | None]]] = field(default_factory=collections.deque)
 
     def key(self, commits: Mapping[str, Any]) -> bytes:
         if self.window is not None:
@@ -399,14 +414,33 @@ class Served:
                                 "each K's b/<K> under the period's declared Program")
 
     def _tree(self, run: Any, value: str, words: np.ndarray, first: int, window: str | None,
-              session: str | None = None, row_salts: bytes | None = None) -> G.Registered:
+              session: str | None = None, row_salts: bytes | None = None, later: bool = False) -> G.Registered | NR.Later:
         return NR.commit(self.program_digest, value, words, run._key, first, row_salts is not None, row_salts,
-                         window=window, session=session)
+                         later=later, window=window, session=session)
 
     def _register(self, run: Any, value: str, words: np.ndarray, first: int, window: str | None,
                   row_salts: bytes | None = None) -> str:
         reg = self.registered[value] = self._tree(run, value, words, first, window, row_salts=row_salts)
         return reg.root.hex()
+
+    def _register_later(self, run: Any, value: str, words: Any, first: int, out: dict[str, str | None]) -> None:
+        """`_register` of a call's z table into ``out``, its hash left running on the GPU where it hashes there
+        (`pouw_h1_registered.commit`'s ``later``): it takes its place in `registered` now, and `settle` puts its tree there
+        and its root in ``out``."""
+        got = self.registered[value] = self._tree(run, value, words, first, self.root, later=True)
+        if isinstance(got, NR.Later):
+            out[value] = None
+            self._later.append((value, out))
+        else:
+            out[value] = got.root.hex()
+
+    def settle(self, wait: bool = True) -> None:
+        """Record the z tables the GPU has hashed (`_register_later`), in registration order: all of them with ``wait``,
+        else the leading ones already done."""
+        while self._later and (wait or self.registered[self._later[0][0]].ready()):
+            value, out = self._later.popleft()
+            reg = self.registered[value] = self.registered[value].result()
+            out[value] = reg.root.hex()
 
     def a_words(self, call: Any, codes: np.ndarray, scales: np.ndarray) -> np.ndarray:
         """Call ``call``'s A table's words over the Program's M slots: its rows' int8 ``codes`` [m, K] and f32 ``scales``
@@ -519,14 +553,16 @@ class Served:
             self.refused.append(f"call {call.index}: linear {call.layer}'s weight changed within the window")
 
     def commit(self, run: Any, call: Any, a: Any, s_a: Any, weight: Any, weight_scale: Any,
-               records: np.ndarray | None) -> dict[str, str]:
+               records: Any) -> dict[str, str]:
         """Register call ``call``'s z table (its z/y ``records`` over its T slots, `pouw_h1_records`', split back to z and
-        y and laid out in the Program's tile), add its A rows (its served rows ``a`` [m, K] and scales ``s_a`` [m]) to its
+        y and laid out in the Program's tile, or read where they are when that tile is theirs, `zy_words`), add its A
+        rows (its served rows ``a`` [m, K] and scales ``s_a`` [m]) to its
         step's A table of K at its rows in call order, registered whole once the step's calls of K are all in (in
         whichever order its forward ran them: its last call of K), and take ``b/<K>`` once K's linears' weights are all
         held (`_take_b`); with ``receipts``, at the step's last call of K, each of the step's calls of K's receipt
         table, in call order (`_receipts` of the call's own codes and s_a): ``{value: root}``, what the call's manifest
-        row commits under its round's root. Nothing once the window is refused."""
+        row commits under its round's root, the z table's once `settle` has it. Nothing once the window is refused."""
+        self.settle(wait=False)
         if self.root is None and not self.refused:
             self.open(run)
         if not self.refused:
@@ -559,8 +595,7 @@ class Served:
         if len(rows) == len(mine):
             whole = np.concatenate([b for _c, b in sorted(self._a.pop(value).items())])
             out[value] = self._register(run, value, whole, nonce(mine[0], "a"), self.root)
-        zy = HW.table(self.program, "zy", call.index)
-        out[zy] = self._register(run, zy, zy_rows, nonce(call.index, "zy"), self.root)
+        self._register_later(run, HW.table(self.program, "zy", call.index), zy_rows, nonce(call.index, "zy"), out)
         if self.tap is not None:
             self.tap.arow(run, self, call, value, whole)
         b = self.program.fn.bindings["PREFIX"] + f"b/{call.k}"
@@ -679,6 +714,7 @@ class Served:
         """After the run's last round: refuse a window that isn't static, or that left a table its Program reads
         unregistered; else commit its ok rows (`ok`): row u proof block u's, `core_check.OK_ROW` under `core_check.ok_salt` of
         the open root and u, as credit's `registered_file` and Lean's ``registeredFile`` build them (`h1window.ok_table`)."""
+        self.settle()
         if self.refused:
             return
         if self.program is None:
@@ -705,9 +741,11 @@ class Served:
 
     def values(self) -> dict[str, int]:
         """Each registered value's words a row."""
+        self.settle()
         return {v: r.words for v, r in self.registered.items()}
 
     def roots(self) -> dict[str, str]:
+        self.settle()
         return {v: r.root.hex() for v, r in self.registered.items()}
 
     def ports(self) -> dict[str, str]:
@@ -717,6 +755,7 @@ class Served:
 
     def entries(self) -> list[dict[str, Any]]:
         """The Program's registered values' entries, then each round's input-ids table's, then the live tables'."""
+        self.settle()
         return ([r.entry() for r in self.registered.values()] + [self.ids[s].entry() for s in sorted(self.ids)]
                 + [r.entry() for r in self.live.values()])
 
@@ -734,7 +773,8 @@ def digest_of(entries: Sequence[Mapping[str, Any]], refused: Sequence[str]) -> b
     return hashlib.sha512(DIGEST_TAG + canonical_json({"entries": list(entries), "refused": list(refused)})).digest()
 
 
-__all__ = ["B_NONCE", "EMPTY_ID", "FILE", "IDS_NONCE", "LOCAL_SESSION", "ModelKey", "NONCE", "PREFIX", "Registration", "Served",
-           "V2", "Weights", "chunk_words", "declared", "declared_layout", "descriptor", "digest_of", "file_name", "ids_words", "layout",
+__all__ = ["B_NONCE", "EMPTY_ID", "FILE", "IDS_NONCE", "LOCAL_SESSION", "ModelKey", "NONCE", "PREFIX", "Served",
+           "unit_of",
+           "V2", "Weights", "WindowCommitmentEntries", "chunk_words", "declared", "declared_layout", "descriptor", "digest_of", "file_name", "ids_words", "layout",
            "model_key", "nonce", "RECEIPT_NONCE", "reads_file", "receipt_words", "record_words", "register", "register_weights", "row_words", "trees",
-           "weights_of"]
+           "weights_of", "write_program"]
