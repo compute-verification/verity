@@ -78,7 +78,7 @@ static_assert(TW * PB >= 8192 && (TW * S) % 16 == 0, "a task's words");
 constexpr int MAXK = 3;
 constexpr int TASK_BYTES = 8192;
 constexpr int SB = TW * S;                              // a task's stored bytes
-// WT_MASK=1: `wide.py`'s masked word, σ_K (kMask) between consecutive rounds. WT_FOLD6=1: sqr is ra-squaring-ceiling's
+// WT_MASK=1: `wide.py`'s masked word, σ_K (kMask) between consecutive rounds. WT_FOLD6=1: sqr is the squaring ceiling's
 // FOLD 6 (`benchmarks/word_codec/kv.cu`'s KV_FOLD6), its half squares ordered to fit the p1024 12-warp fused kernels;
 // 2: its half squares folded as they are made (sqr_fold6_lean).
 #ifndef WT_MASK
@@ -265,7 +265,7 @@ __device__ __forceinline__ void sqr_fold(const u32 (&a)[NL], u32 (&x)[NL]) {
   fold_top(x, c0, c1);
 }
 
-// WT_FOLD6=1: ra-squaring-ceiling's FOLD 6 (`benchmarks/rate_squaring/sq.cu`, as `benchmarks/word_codec/kv.cu`'s
+// WT_FOLD6=1: the squaring ceiling's FOLD 6 (`benchmarks/rate_squaring/sq.cu`, as `benchmarks/word_codec/kv.cu`'s
 // KV_FOLD6). sqr_dbl_n is its FOLD 5 square: the off-diagonal products column by column, each column's accumulator
 // starting at the previous one's carry, then y = 2 S + sum a_i^2 2^(64 i) in one carry chain.
 template <int N>
@@ -1895,7 +1895,7 @@ __global__ void __launch_bounds__(PASS_THREADS) pass_kernel(unsigned j, const u6
 
 // --- the fused decode GEMM --------------------------------------------------------------------------------------------
 //
-// The copy lane bulk-copies task i's TW stored words (SB bytes) into stage i mod stages; the D decoder warps decode
+// The copy lane copies task i's TW stored words (SB bytes) in bulk into stage i mod stages; the D decoder warps decode
 // them in place; warp D, the MMA warp, takes the tasks in order and runs the plain kernel's 16 tiles on each. The copy
 // lane is the MMA warp's lane 0, which copies task i + stages once the warp's loads of task i are behind `empty`, or
 // with two MMA warps, or a sketch, a producer warp's after them (fused_producers), which copies once `empty` lets it.

@@ -2,7 +2,7 @@
 # The KV cache's codec on one GPU (cwd = the source tree): kv.cu built at each width of KV_FIELDS (default 512 768; a
 # width tagged k1 squares by one level of Karatsuba, o1 builds at ptxas -O1, h32 at 32 query heads (8B's attention), t16
 # with the tensor-core attention's tiles of 16 tokens, p0 without the occupancy form's L2 prefetch, m with σ_K between
-# rounds (kv.py's masked word), f6 squaring by ra-squaring-ceiling's FOLD 6, as in 1536k1o1, 512h32, 512m or
+# rounds (kv.py's masked word), f6 squaring by the squaring ceiling's FOLD 6, as in 1536k1o1, 512h32, 512m or
 # 1024h32mf6), the tests, then, under one gpu-lease 1 --wait --max-min MAXMIN (default 25), KV_SCRIPT (default
 # kv_bench.py) with KV_ARGS. Results go to $RESEARCH_RUN_DIR/out.
 #

@@ -259,7 +259,7 @@ __device__ __forceinline__ void sqr_k1(const u32 (&a)[NL], u32 (&x)[NL]) {
   copy(x, y);
 }
 
-// KV_FOLD6=1: ra-squaring-ceiling's FOLD 6 (`benchmarks/rate_squaring/sq.cu`), the adversary's best squaring at 768 and
+// KV_FOLD6=1: the squaring ceiling's FOLD 6 (`benchmarks/rate_squaring/sq.cu`), the adversary's best squaring at 768 and
 // 1,024 bits. sqr_dbl_n is its FOLD 5 square: the off-diagonal products column by column, each column's accumulator
 // starting at the previous one's carry, then y = 2 S + sum a_i^2 2^(64 i) in one carry chain.
 template <int N>
