@@ -22,6 +22,10 @@
 #   async   stock eager with async scheduling on (UTIL_ENGINE_JSON's default {"async_scheduling": true}), without the bench
 #           row, as graphs: not the served stack either (the Commit and H1 refuse async scheduling), so util.json's
 #           served_stack is false for both
+# ASYNC=1 serves a Commit arm (noseal, seal, h1) with --async-scheduling, in a tree whose serve-openai takes it with the
+# Commit on (#6195). No bench row's Build declares async scheduling yet, so serve-openai's row check (`serve_row.of`) takes
+# the row whichever scheduler it declares, as `tests/pipeline/serve_async_commit_gpu.py` does: its records attest the row's
+# LAG 0 Programs, so the arm is <arm>-async and not the served stack. SEQS defaults to 2·T/1024, as for async.
 # Env: ARM, T (8192), N (64), WARM (2·T/1024), GPU_HZ (10000), LEASE_MIN (90), EXTRA (more serve-openai arguments, split
 # on spaces), PROTOCOLS_CONFIG (one --protocols-config argument), PYSAMPLE=1 (Nsight Systems' Python backtrace sampling at
 # PYHZ, 1000, for the host gaps), SEQS (--max-num-seqs and --window-requests, T/1024, 2·T/1024 for graphs and async; the
@@ -40,7 +44,8 @@ set -uo pipefail
 OUT=${OUT:-${RESEARCH_RUN_DIR:-.}/out}; mkdir -p "$OUT"
 TREE=${TREE:-$PWD}
 ARM=${ARM:?ARM is stock, noseal, seal, h1, graphs or async}; T=${T:-8192}; N=${N:-64}; SLOTS=$(( T / 1024 )); WARM=${WARM:-$(( 2 * SLOTS ))}
-case $ARM in graphs|async) SEQS=${SEQS:-$(( 2 * SLOTS ))} ;; *) SEQS=${SEQS:-$SLOTS} ;; esac
+case $ARM:${ASYNC:-0} in graphs:*|async:*|*:1) SEQS=${SEQS:-$(( 2 * SLOTS ))} ;; *) SEQS=${SEQS:-$SLOTS} ;; esac
+LABEL=$ARM; [ "${ASYNC:-0}" = 1 ] && LABEL=$ARM-async
 ROOT=${UTIL_ROOT:-/workspace/research/vllm-util80}
 VENV=${VENV:-/workspace/cp/venv312}; PY=$VENV/bin/python
 REPO=verity-int8/Llama-3.2-1B-INT8 REV=15b0976d400d796ee589e7737d03a919526bf800
@@ -50,11 +55,12 @@ NORM_TAP_SO=${NORM_TAP_SO:-$ROOT/norm_tap/build/verity_norm_tap.so}
 NSYS=${NSYS:-/usr/local/cuda-13.0/bin/nsys}
 SCR=$ROOT/scratch/${RESEARCH_RUN_ID:-local}; D=$SCR/serve
 PORT=${PORT:-18190}
-export TREE ARM T N SLOTS SEQS WARM ROOT VENV PY REPO REV ROW HIDDEN_SO NORM_TAP_SO NSYS SCR D PORT OUT
+export TREE ARM LABEL T N SLOTS SEQS WARM ROOT VENV PY REPO REV ROW HIDDEN_SO NORM_TAP_SO NSYS SCR D PORT OUT
 say() { echo "$(date -u +%H:%M:%SZ) $*" | tee -a "$OUT/steps.txt"; }
 
 if [ "${1:-}" != leased ]; then
   case $ARM in stock|noseal|seal|h1|graphs|async) ;; *) say "ARM $ARM: not stock, noseal, seal, h1, graphs or async"; exit 2 ;; esac
+  case $ARM:${ASYNC:-0} in *:0|noseal:1|seal:1|h1:1) ;; *) say "ASYNC=1 is for the Commit's arms (noseal, seal, h1): stock's is ARM=async"; exit 2 ;; esac
   { echo "tree $(git -C "$TREE" log -1 --format='%H parents %P' 2>/dev/null)"; for h in ${HEADS:-}; do echo "$h"; done; } > "$OUT/heads.txt"
   [ $(( T % 1024 )) = 0 ] || { say "T $T: not a multiple of 1,024"; exit 2; }
   [ -f "$ROW/manifest.json" ] || { say "no B4 row Build under $ROOT"; exit 3; }
@@ -72,13 +78,13 @@ if [ "${1:-}" != leased ]; then
   fi
   research keep "$ROOT/scratch" --owner @vllm --expires 3d --priority normal \
     --why "vllm-util80: serve dirs of the utilization runs (request bodies, outputs, H1 transcripts)" > /dev/null 2>&1
-  say "ARM $ARM T $T N $N WARM $WARM SEQS $SEQS row $(basename "$ROW") tree $(git -C "$TREE" rev-parse --short HEAD 2>/dev/null)" \
+  say "ARM $LABEL T $T N $N WARM $WARM SEQS $SEQS row $(basename "$ROW") tree $(git -C "$TREE" rev-parse --short HEAD 2>/dev/null)" \
     "learn budget ${VERITY_LEARN_HOST_BUDGET_MB:-4096} MiB heads ${HEADS:-}"
   GPU_LEASE_WHO=vllm-util80 gpu-lease 1 --wait --max-min "${LEASE_MIN:-90}" -- bash "$TREE/benchmarks/one_stage/served_util.sh" leased
   rc=$?
   say "LEASED PART rc=$rc"
   "$PY" "$TREE/benchmarks/one_stage/served_util.py" --sqlite "$SCR/prof.sqlite" --trace "$D/advice_trace.jsonl" \
-    --serve-dir "$D" --timings "$SCR/main.timings.json" --arm "$ARM" --T "$T" --N "$N" --out "$OUT/util.json" > "$OUT/util.txt" 2>&1
+    --serve-dir "$D" --timings "$SCR/main.timings.json" --arm "$LABEL" --T "$T" --N "$N" --out "$OUT/util.json" > "$OUT/util.txt" 2>&1
   say "ANALYSIS rc=$?"; cat "$OUT/util.txt"
   if [ -d "$D/windows" ]; then
     say "SEALED $(du -sh "$D/windows" | cut -f1), deleted"; rm -rf "$D/windows"
@@ -121,6 +127,21 @@ print("UTIL engine options overridden (not the served stack):", json.dumps(over)
 sys.exit(cli.main())' serve-openai)
     say "ENGINE $UTIL_ENGINE_JSON" ;;
 esac
+if [ "${ASYNC:-0}" = 1 ]; then
+  args+=(--async-scheduling)
+  serve=("$PY" -c 'import json, sys
+from pathlib import Path
+from verity_vllm.pipeline import cli, serve_row as RW, serve_seal as SS
+def of(opts):
+    if not opts.required_manifest:
+        return None
+    path = Path(SS.programs_root_of(opts)) / RW.WORKLOAD_PROGRAM
+    got = json.loads(path.read_text())["applicability"]["engine"]["async_scheduling"]
+    print(f"UTIL row scheduler check bypassed (not the served stack): the row declares async_scheduling {got}", flush=True)
+    return {"async_scheduling": got, "source": str(path)}
+RW.of = of
+sys.exit(cli.main())' serve-openai)
+fi
 SESS=util80-${RESEARCH_RUN_ID:-local}
 pysample=(); sample=none
 [ "${PYSAMPLE:-0}" = 1 ] && { pysample=(--python-sampling=true --python-sampling-frequency="${PYHZ:-1000}"); sample=process-tree; }
@@ -173,7 +194,7 @@ for _ in $(seq 1 1500); do
   kill -0 "$srv" 2>/dev/null || break
   sleep 2
 done
-log() { grep -aE "SERVE-OPENAI|UTIL engine|\[engine\]|H1|declare|Error|error|refus|Traceback" "$SCR/serve.log" | grep -av prompt | tail -${1:-40} > "$OUT/serve.log.txt"; }
+log() { grep -aE "SERVE-OPENAI|UTIL (engine|row)|\[engine\]|H1|declare|Error|error|refus|Traceback" "$SCR/serve.log" | grep -av prompt | tail -${1:-40} > "$OUT/serve.log.txt"; }
 if [ "$up" != 1 ]; then
   log 80; say "SERVE: not listening: $(grep -am1 -E 'UsageError|Error|refus' "$SCR/serve.log" | cut -c1-400)"
   "$NSYS" shutdown --session="$SESS" --kill=sigterm > /dev/null 2>&1; wait "$srv"; [ -n "$drawer" ] && kill "$drawer"; exit 10
