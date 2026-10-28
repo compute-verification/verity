@@ -53,6 +53,10 @@
   research data gc --cite DIR... --cache DIR [--apply --state FILE] [--report FILE] [--work DIR] [--jobs N]
                                                    the remote's blobs only uncited artifacts past their kind's TTL hold (gc.py, README §7.4);
                                                    --apply marks them and deletes those still candidates a grace after their mark
+  research data withdraw ART... --reason T --ref ISSUE --by WHO --cache DIR [--apply]
+                                                   delete the blobs of artifacts holding values that must never be shared, cited or
+                                                   not, and label each `withdrawn` (withdraw.py, README §7.4); a blob another
+                                                   artifact holds is kept and named
   research data reindex [--remote]                 rebuild the catalog (built aside, swapped in complete); --remote first pulls what the remote has
   research data index [--db F] [--from DIR] [--public [--public-db F]] [--full] [--jobs N] [--json]
                                                    the derived index (bucket_index.py): list the bucket, read the records the index lacks, write
@@ -1361,6 +1365,48 @@ def cmd_gc(argv: list[str]) -> int:
     return 1 if applied.get("error_count") or applied.get("lost_count") else 0
 
 
+def cmd_withdraw(argv: list[str]) -> int:
+    """README §7.4 (`withdraw.py`): delete the blobs of artifacts holding values that must never be shared, cited or not, and label
+    each `withdrawn` with the reason.  A blob another artifact also holds is kept and named.  Read-only without `--apply`."""
+    from . import gc, withdraw
+
+    ap = _ap("withdraw")
+    ap.add_argument("arts", nargs="+", metavar="ART", help="full art: ids")
+    ap.add_argument("--reason", required=True, help="why, in a few words: the `withdrawn` label's value")
+    ap.add_argument("--ref", required=True, help="the issue or ruling that asked for it (INF-333)")
+    ap.add_argument("--by", required=True)
+    ap.add_argument("--cache", required=True, metavar="DIR", help="where manifests read from the remote are kept (gc's cache works)")
+    ap.add_argument("--work", metavar="DIR", help="where the pass's blob table goes (default the temp dir)")
+    ap.add_argument("--apply", action="store_true", help="delete the blobs and write the labels")
+    ns = ap.parse_args(argv)
+    st = LocalStore(ns.store)
+    if st.remote is None:
+        print("research data withdraw: no remote configured", file=sys.stderr)
+        return 2
+    say = lambda s: print(s, file=sys.stderr, flush=True)  # noqa: E731
+    try:
+        p = withdraw.plan(st.remote, Path(ns.cache), ns.arts, work=Path(ns.work) if ns.work else None, log=say)
+        out: dict[str, Any] = {"remote": st.remote.describe(), **p.summary()}
+        if p.missing:
+            _dump(out)
+            print("research data withdraw: no manifest for some ids; nothing deleted", file=sys.stderr)
+            return 1
+        if ns.apply:
+            out["applied"] = withdraw.apply(st.remote, p, log=say)
+            lost = False
+            for art in p.arts:
+                st.add_label(art, vocab.WITHDRAWN, ns.reason, ns.by, ref=ns.ref)
+                said, bad = _label_write_through(st, art)
+                say(f"{art}: withdrawn label {said}")
+                lost |= bad
+            out["labels_lost"] = lost
+    except gc.GcError as e:
+        print(f"research data withdraw: nothing deleted: {e}", file=sys.stderr)
+        return 1
+    _dump(out)
+    return 1 if out.get("labels_lost") else 0
+
+
 _VERBATIM_AFTER = ("--meta", "--note")      # free text / JSON values: never rewritten
 _VERBATIM_COMMANDS = ("sql",)
 
@@ -1421,7 +1467,7 @@ COMMANDS: dict[str, Callable[[list[str]], int]] = {
     "vocab": cmd_vocab, "refresh-fixtures": cmd_refresh_fixtures, "fetch-fixtures": cmd_fetch_fixtures, "export": cmd_export,
     "doctor": cmd_doctor, "evict": cmd_evict, "labels-sync": cmd_labels_sync,
     "catalog": cmd_catalog, "vocab-check": cmd_vocab_check, "pending": cmd_pending, "refresh": cmd_refresh,
-    "parity": cmd_parity, "reconcile-attempts": cmd_reconcile_attempts, "gc": cmd_gc,
+    "parity": cmd_parity, "reconcile-attempts": cmd_reconcile_attempts, "gc": cmd_gc, "withdraw": cmd_withdraw,
 }
 
 

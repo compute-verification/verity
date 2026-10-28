@@ -32,7 +32,7 @@ the final word (or, in `DUMP` builds, every prefix word for the gate).
 | `run.sh` | The job: build and SASS-gate each arm's mainloop (IMMA 32 per stage; k3 48 and k4 64 QMMA per stage) outside the lease, then under one `gpu-lease` the gate and the Llama-3.1-8B shapes at M = 4096, then the recheck and the summary |
 
 ~~~text
-research run --on vy-nebius-2 --project verity --cwd source --env GPU_LEASE_WHO=compute-accounting -- \
+research run --on vy-nebius-2 --project verity --cwd source --env GPU_LEASE_WHO=LANE -- \
   bash benchmarks/pouw/emu8/run.sh [REPS]
 python benchmarks/pouw/emu8/accounting.py [--json OUT]   # CPU
 ~~~

@@ -35,12 +35,12 @@ __all__ = ["RoPE", "RoPEGptJ", "RoPEGptJV2", "RoPEHead", "RoPEHeadGptJ", "RoPEHe
 
 BF16 = Array(16, BL.BIT)
 _XYCS = (("x", BF16), ("y", BF16), ("c", BF16), ("s", BF16))
-_DIFFTEST = EVIDENCE["cc12_difftest"]["run"]
+_DIFFTEST = EVIDENCE["cc12_difftest"]["run_record"]
 GPTJ_CONFORMANCE = ("exact-model-tested; RoPEHeadGptJ_v2 on bits (test_boolean_rope.py), which matches vLLM d9105ea80's "
-                    f"`rotary_embedding(is_neox=False)` in 60 of 60 difftest cases (run {_DIFFTEST}); "
+                    f"`rotary_embedding(is_neox=False)` in 60 of 60 difftest cases ({_DIFFTEST}); "
                     "qualification: " + b1.COS_SIN_QUALIFICATION)
 GPTJ_V2_CONFORMANCE = ("exact-model-tested; 60 of 60 difftest cases (101,696 words) of vLLM d9105ea80's CUDA `rotary_embedding("
-                       f"is_neox=False)` (bf16 query, key and cache, run {_DIFFTEST}), q_pe/k_pe at GLM-4.7-Flash's "
+                       f"is_neox=False)` (bf16 query, key and cache, {_DIFFTEST}), q_pe/k_pe at GLM-4.7-Flash's "
                        "and GLM-5.3's shapes; qualification: " + b1.COS_SIN_QUALIFICATION)
 
 

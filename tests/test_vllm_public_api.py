@@ -112,6 +112,9 @@ KNOWN = frozenset({
     "verity_vllm.pipeline.cpu_replay",
     "verity_vllm.pipeline.deferred_rows",
     "verity_vllm.pipeline.replay_bundle",
+    "verity_vllm.pipeline.serve_admit",
+    "verity_vllm.pipeline.serve_openai",
+    "verity_vllm.pipeline.serve_protocol",
     "verity_vllm.pipeline.serving_rows",
     "verity_vllm.pipeline.slice_rows",
     "verity_vllm.pipeline.tp.capture",
@@ -179,8 +182,6 @@ KNOWN_PRIVATE = frozenset({
     ('verity_vllm.check.fold_compare', '_in_place'),
     ('verity_vllm.program.frontend.rules.family', '_field_intervals'),
     ('verity_vllm.protocols.remote_bandwidth.registry', '_page_blocks'),
-    ('verity_vllm.query.program_view', '_registry'),
-    ('verity_vllm.query.program_view', '_spec_id'),
 })
 
 

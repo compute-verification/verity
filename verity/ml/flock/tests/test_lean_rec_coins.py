@@ -1,10 +1,10 @@
 """V*'s verifier-registered values against the verifier's own coins (`Flock/RecCoins.lean`, `verify --rec-inner-*`): the
-smallest level of a recorded recursive session (`r20261009-111638-6720`, class (16,16,8) at 64 instances: level 3,
+smallest level of a recorded recursive session (class (16,16,8) at 64 instances: level 3,
 `rec-open/l16-h4`, 106 openings), restaged by `rec_vstage.stage` from the fetched fixture `rec-coins/16-16-8-n64`: the inner
 statement, the inner session's public record and the prover's, V*'s fold, points and running-sum salts, the level's
 recorded `pub.bin` and `registered.json`, and its recorded outer session. The level and its outer session were proved
-again at the current leaf scheme (`r20261010-040650-84a9`: the inner statement's leaves are unsalted, so the rest of the
-session is 6720's), before #1677's OS masks, as `verity/flock-circuit@cec3e347`. `verify` sets V*'s statements up only
+again at the current leaf scheme (the inner statement's leaves are unsalted, so the rest of the
+session is the first record's), before the OS masks, as `verity/flock-circuit@cec3e347`. `verify` sets V*'s statements up only
 as `verity/flock-circuit`, so the recorded outer session is refused at the record's first check (S2/R7) once every V*
 check has passed at setup. The honest level passes setup at the honest inner session and the coin server's transcript of
 it (`--rec-inner-transcript`), and is refused without either, at a transcript whose level-3 tops or link points are not
@@ -196,12 +196,18 @@ def _acc_rows(dst: Path, level: Path) -> Path:
 
 
 def test_the_honest_level_passes_setup_at_the_honest_inner_session(forged, shape, tmp_path):
-    """Its VERDICT names its part (`rec_part`) and the SHA-512 of the shared rows file it read (`rec_rows_sha512`), which
-    `rec-compose` holds every part to."""
+    """Its VERDICT names its part (`rec_part`), the SHA-512 of the shared rows file it read (`rec_rows_sha512`), of
+    the verifier's inner shape file (`rec_inner_sha512`), and of the inner session's record and the coin server's
+    transcript of it (`rec_inner_session_sha512`, `rec_inner_transcript_sha512`). `rec-compose` holds every part to
+    those inputs through `rec_shared` (`test_lean_rec_compose.py`)."""
     rows = _acc_rows(tmp_path / "rows.json", SET / "L3")
     v = _verify(forged, SET / "L3" / "pub.bin", SET / "L3" / "registered.json", shape, "inner-honest", rows=rows)
     assert (v["accepted"], v["why"]) == (False, S2_R7), v
-    assert v["rec_rows_sha512"] == hashlib.sha512(rows.read_bytes()).hexdigest(), v
+    sha = {k: hashlib.sha512(f.read_bytes()).hexdigest() for k, f in (
+        ("rec_rows_sha512", rows), ("rec_inner_sha512", shape),
+        ("rec_inner_session_sha512", SET / "inner-honest" / "session" / "session.json"),
+        ("rec_inner_transcript_sha512", shape.parent / "transcript.json"))}
+    assert {k: v.get(k) for k in sha} == sha, v
     assert str(v["rec_part"]) == _own(forged, shape)[1], v
 
 
@@ -497,7 +503,7 @@ def test_rec_cap_holds_every_node_of_level_0s_cap_at_the_level_0_registration(ca
 def test_rec_cap_is_refused_without_its_top_or_out_in_the_reads_file(cap, shape, undrawn, tmp_path):
     """`RecCoins.checkCap`'s reads: RecCap with `top` committed afresh (gone from its reads file and `pub.bin`'s registered
     rows) is refused, since its rows would then be the prover's alone; with its zero outputs `out` gone, likewise.
-    `Flock.Test.RecCap` guards the rest of `checkCap`'s refusals (a top at another value, size or reads)."""
+    `Flock.Test.RecCapSmall` guards the rest of `checkCap`'s refusals (a top at another value, size or reads)."""
     rows = tmp_path / "rows.json"
     rows.write_text(json.dumps(S.shared_rows([], (), [cap])))
     why = {}
@@ -609,7 +615,7 @@ def test_a_parts_row_ports_are_the_verifiers_shared_rows(algebra, shape, undrawn
 
     Each verify sets the part's statement up over its whole population before any V* check (about 9 minutes at one core and
     4 GB), and none can reuse another's: each runs the verifier on other files. So they run at once, the next test's beside
-    these (with the salted staging, the five took 49 minutes one after the other, `r20261010-121137-2b46`)."""
+    these (with the salted staging, the five took 49 minutes one after the other)."""
     a = next(p for p in sorted(algebra.iterdir()) if "acc0" in json.loads((p / "registered.json").read_text())["ports"])
     unit = _unit(a)
     with cf.ThreadPoolExecutor(max_workers=3) as ex:

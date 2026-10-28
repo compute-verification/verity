@@ -2,9 +2,9 @@
 # The stock control of served_verdicts.sh: its endpoint, engine and load with no protocol and no Commit, REPS times.
 # Each rep is one `verity-vllm serve-openai --no-commit` lifetime of served_verdicts.sh's model (REPO at REV, --precision PRECISION),
 # the bench row's scheduling (--required-manifest ROW/manifest.json, which sets only the engine's async_scheduling here),
-# --max-model-len MAX_MODEL_LEN, --max-num-batched-tokens MNBT (default 512, V2's H1_T), --admit release-order and --window-requests
+# --max-model-len MAX_MODEL_LEN, --max-num-batched-tokens MNBT (default 512, served_verdicts.sh's T), --admit release-order and --window-requests
 # SLOTS, under served_verdicts.sh's engine environment (VLLM_BATCH_INVARIANT=1, eager), then LOADS loads of
-# `examples/vllm/serve_load.py --varied` with served_verdicts.sh's REQUESTS, RATE, PROMPTS, MAX_TOKENS and SEED, each under a
+# `demos/vllm/serve_load.py --varied` with served_verdicts.sh's REQUESTS, RATE, PROMPTS, MAX_TOKENS and SEED, each under a
 # release run of its own. The first load is the composed run's one load after its endpoint listens; later ones are warm.
 # What the composed run has and this doesn't: the Commit (committer, taps, GPU tree, seal), H1, any SERVE_ARGS subprotocol, and
 # the weights registration before the load. $OUT/rep-<i>/ is that lifetime's --out: serve.json, advice_trace.jsonl (the
@@ -56,7 +56,7 @@ serve() {  # under the lease: lifetime $1's (rep-<i> or warm-<i>) endpoint, its 
   fi
   for j in $(seq 1 "$LOADS"); do
     release=$("$PY" -c 'import uuid; print(uuid.uuid4().hex)')
-    "$PY" "$TREE/examples/vllm/serve_load.py" --port "$PORT" --model "$REPO" --varied "$REQUESTS" --rate "$RATE" \
+    "$PY" "$TREE/demos/vllm/serve_load.py" --port "$PORT" --model "$REPO" --varied "$REQUESTS" --rate "$RATE" \
       --prompt-range "$PROMPTS" --max-tokens "$MAX_TOKENS" --release "$release" --seed "$SEED" --out "$D/load-$j.jsonl" \
       > "$D/load-$j.log" 2>&1 || rc=$?
     echo "$1 LOAD $j (exit $rc, release run $release): $(tail -1 "$D/load-$j.log" | cut -c1-300)" | tee -a "$OUT/stock.txt"

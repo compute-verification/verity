@@ -4,19 +4,21 @@ handshake binds a channel to its parties' keys, its protocol and its configurati
 from __future__ import annotations
 
 import hashlib
+import re
 
 import pytest
 
 from verity.core.wire import (HEADER, REFUSALS, Body, FrameReader, Hex, Int, List, Message, Phase, Refused, Registry, Schema,
                               Str, canonical, frame, frames, parse, split)
 from verity.core.wire import handshake as H
+from verity.ml.circuits import codec
 from verity.ml.commitments.identity import canonical_json_bytes
 from verity.ml.crypto import lms
 
 PING = Schema("Ping", 1, "structure", {"n": Int(0, 9), "who": Str(8), "ids": List(Hex(4), 3)}, Body(max=16, unit=2))
 PING2 = Schema("Ping", 2, "output", {"n": Int()})
 R = Registry([PING, PING2])
-OK = Message("Ping", {"n": 3, "who": "é", "ids": ["00ff00ff"]}, b"\x00\x01")
+OK = Message("Ping", {"n": 3, "who": "e\t~", "ids": ["00ff00ff"]}, b"\x00\x01")
 
 
 def refused(f, *a) -> str:
@@ -29,7 +31,7 @@ def refused(f, *a) -> str:
 def test_a_message_round_trips_and_its_head_is_the_commitments_canonical_json():
     data = R.encode(OK)
     head, body = split(data)
-    assert head == canonical_json_bytes(OK.head()) == canonical(OK.head())
+    assert head == canonical_json_bytes(OK.head()) == codec.canonical_json(OK.head()) == canonical(OK.head())
     assert body == b"\x00\x01" and data == frame(head, body)
     assert R.decode(data) == OK
     assert R.kind("Ping", 2) == "output"
@@ -61,7 +63,36 @@ def test_each_rule_broken_is_refused_by_its_name():
 def test_canonical_json_holds_no_float():
     with pytest.raises(TypeError):
         canonical({"x": 0.5})
-    assert parse(b'{"a":[1,"\xc3\xa9"]}') == {"a": [1, "é"]}
+
+
+#: values of every JSON kind but floats, control characters and every printable ASCII character among their strings
+ASCII = [{"b": 1, "a": [True, False, None], "": {"k": []}}, "q\"b\\s/t\b\f\n\r\t\x00\x1f~", [0, -1, (1 << 63) - 1],
+         {"s": "".join(map(chr, range(0x20, 0x7f)))}]
+
+
+def test_the_wire_copy_writes_the_circuits_codecs_bytes():
+    for v in ASCII:
+        assert canonical(v) == codec.canonical_json(v) == canonical_json_bytes(v)
+        assert parse(canonical(v)) == v
+
+
+@pytest.mark.parametrize("v,where", [("d\u00e9", "$"), ({"a": [1, "\u00e9"]}, "$.a[1]"), ({"k\u00e9y": 1}, "$.<key>"),
+                                     ({"k": "x\x7f"}, "$.k"), ({"k": "\U0001f600"}, "$.k")])
+def test_a_string_past_ascii_is_refused_as_the_codec_refuses_it(v, where):
+    with pytest.raises(ValueError, match=re.escape(f"{where}: string ")) as e:
+        canonical(v)
+    with pytest.raises(ValueError, match="is not ASCII without DEL") as c:
+        codec.canonical_json(v)
+    assert str(e.value) == str(c.value)
+
+
+def test_a_head_past_ascii_is_malformed_in_either_encoding():
+    assert refused(parse, b'{"a":[1,"\xc3\xa9"]}') == "malformed"
+    assert refused(parse, b'{"a":[1,"\\u00e9"]}') == "malformed"
+    assert refused(parse, b'{"a":"\x7f"}') == "malformed"
+    assert refused(R.decode, frame(b'{"ids":[],"n":1,"type":"Ping","v":1,"who":"\xc3\xa9"}')) == "malformed"
+    with pytest.raises(ValueError, match=re.escape("$.who: string 'd\u00e9' is not ASCII without DEL")):
+        R.encode(Message("Ping", {"n": 1, "who": "d\u00e9", "ids": []}))
 
 
 def test_a_stream_is_cut_into_frames_and_an_oversized_header_refused_before_its_body():

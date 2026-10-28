@@ -1,4 +1,4 @@
-"""The proof service's challenger: its live coins, the one live-coin source of every protocol (Lean of record:
+"""The proof system's challenger: its live coins, the one live-coin source of every protocol (Lean of record:
 `SampledProofs.Challenger`, `verity/core/service/sampled_proofs`, which `tests/test_difftest.py` there holds this to).
 
 Coins are indexed by label and index, and named by no protocol.  A layout is a scheme, an epoch (the client's session the
@@ -1263,7 +1263,7 @@ def pins_reason(session: str, opened: dict, pins: Any) -> str | None:
     n = seal["lines"]
     if len(pins) < n:
         return (f"the host's pins log has {len(pins)} lines, fewer than the {n} the open of session {session} sealed: "
-                "take infra's newest published pins log")
+                "take the auditor host's operator's newest published pins log")
     if log_digest(pins[:n]) != seal["sha512"]:
         return (f"the host's pins log is not the one the open of session {session} sealed: its first {n} lines were "
                 "edited or rewritten")

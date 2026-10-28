@@ -34,18 +34,18 @@ roots follow the step's real rows, so this window doesn't use them (the seeded m
 * **Receipts**: `h1tile`'s unit (`PouwH1Tile_v4`) on the GPU (`receipts.gated_receipts`) on every live unit, one with an
   admitted slot among its 32 rows, whatever their bytes: the tile's `admit` input is its rows' admit bits, bound by
   commitment equality to the admit-tree leaves the tally reads, so it is live exactly when the tally credits it
-  (RT4-LOGIC-4).  Seeds come from the salt, the position and the call's (root(A), root(B)), inside the unit.  A dead unit skips
+ .  Seeds come from the salt, the position and the call's (root(A), root(B)), inside the unit.  A dead unit skips
   the noise and the receipt: its leaf is the canonical empty receipt (zero words), so every receipt tree keeps its shape.
   There is one receipt tree per call.
 * **Coins** (``--coins``): seeded, the option's one salt, opened at install before serving; or live, a round a step from
-  the proof service's challenger (`coins.py`), whose salt coin opens first, against the registration root over the
+  the proof system's challenger (`coins.py`), whose salt coin opens first, against the registration root over the
   weights' root and the queue's root.  Step s's round root, over its A root and its admit root, is recorded before round
   s's coin opens (`sampled_proofs.challenger.LiveRecord`), and the step's units take the round's salt (`h1tile.live_salt`:
   `window.round_key(...).stream(0, 64)`), so every candidate and every selection a round's noise reads is committed before
   that noise's coin.  The gate's units come from the draw coin, opened after the window's receipts root (`receipts_root`).
-  This window has no gated session of its own (compute accounting, 21 Oct): the gated served window of record is vllm's
-  H1 path, `integrations/vllm/verity_vllm/protocols/pouw/h1/__init__.py` (#3053), which holds the salt, round-0 request
-  table, open root R, session S and requests_root rules (#2950, PRF-132), so ``--gate USER@HOST`` (or
+  This window has no gated session of its own: the gated served window of record is vllm's
+  H1 path, `integrations/vllm/verity_vllm/protocols/pouw/h1/__init__.py`, which holds the salt, round-0 request
+  table, open root R, session S and requests_root rules, so ``--gate USER@HOST`` (or
   ``$POUW_CHALLENGER_GATE``) is refused.  ``--challenger HOST:PORT`` and ``--session ID`` (or ``$POUW_CHALLENGER`` and
   ``$POUW_CHALLENGER_SESSION``, with ``$POUW_CHALLENGER_SECRET_FILE`` for a session that has a secret) take a session
   opened before the run, for development and timing only: its salt coin opens after the registration root, so a gate
@@ -53,7 +53,7 @@ roots follow the step's real rows, so this window doesn't use them (the seeded m
   (`coins.layout`) and the manifest records the session.  Without a session the challenger is `window.live_challenger`
   in this process, and the run is labelled ``coins=in-process (not certified)``, as is every seeded run.
 * **Credit**: only the admitted slots, a tile's iff `PouwH1Tile_v4`'s live bit (the OR of its admit bits) is set, an
-  admitted tile of zero-byte rows included (RT4-LOGIC-20) (`credit.tally`, in 16-bit limbs, committed and not proved until
+  admitted tile of zero-byte rows included (`credit.tally`, in 16-bit limbs, committed and not proved until
   a tally Definition exists): Cr = Σ admitted rows · N · K, and the published credit point(level(floor_point(Cr))) <= Cr.
   The padded compute (the non-admitted rows of live units, noised) is shown and not credited; dead units cost only their
   emptiness check.
@@ -81,7 +81,7 @@ In order, into OUT (`record.json` throughout, `manifest.json` at the end, the op
             words opened from the call's admit tree (receipt) and the
             served integer product (z); controls: the unit at the next position, a flipped receipt bit, root(A) rebuilt (and
             a tampered row, real or empty), the tile's 32 A rows opened against root(A) and the step's A root and A' = -b
-            (the tile's B rows negated) refused there, its re-commitment moving both roots (CMP-38), root(B) rebuilt, the
+            (the tile's B rows negated) refused there, its re-commitment moving both roots, root(B) rebuilt, the
             tile's 32 B rows opened against it and a tampered weight row refused, the admit root rebuilt from the queue, a
             dead unit's rows empty and its skipped noise real work, a junk row in a slot the queue leaves unassigned refused
             and not admitted, the canonical empty row in a slot the queue selects refused and not admitted, the tile's admit
@@ -89,7 +89,7 @@ In order, into OUT (`record.json` throughout, `manifest.json` at the end, the op
             zeroed under a nonzero scale still admitted, a live unit's receipt the ungated one
 
     cd integrations/vllm; PYTHONPATH=.:../..:../../tools/research/src:../../tools/config:../../benchmarks/pouw/served_h1
-    $PY ../../benchmarks/pouw/served_h1/serve.py --out OUT --cubin noise.cubin --at 2026-10-18T00:00:00Z --by compute-accounting \
+    $PY ../../benchmarks/pouw/served_h1/serve.py --out OUT --cubin noise.cubin --at <ISO time> --by LANE \
       --coins live --challenger 127.0.0.1:PORT --session ID
 """
 from __future__ import annotations
@@ -1069,7 +1069,7 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--workers", type=int, default=0)
     ap.add_argument("--skip-timing", action="store_true")
     ap.add_argument("--coins", default=None, choices=["seeded", "live"],
-                    help="live: a round a step, its coin opened after its A tables' root (the proof service's challenger); "
+                    help="live: a round a step, its coin opened after its A tables' root (the proof system's challenger); "
                          "default live with a challenger address, else seeded")
     ap.add_argument("--challenger", default=None, metavar="HOST:PORT",
                     help=f"live: the challenger off the node (default ${CO.CHALLENGER_ENV}); none: in-process, not certified")

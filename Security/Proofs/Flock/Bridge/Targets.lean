@@ -14,7 +14,8 @@ Each is a `def … : Prop` over `Bridge.Defs` and `Bridge.Deployed`, so a proof 
 * `PaTarget` (M4): `designOf kd`'s `P_a` on `partOf P` is the subset miss `C(n − |B|, kd)/C(n, kd)` at a set of
   population slots.
 * `CountTarget` (M4): outside `RelS` at `δ = C(n − K₀, kd)/C(n, kd)`, at least `min K₀ (n − kd + 1)` population slots
-  are faulty. The input class is drawn at rate `0`, so a faulty input slot is outside this bound.
+  are faulty. The input class is drawn at rate `0`, so a faulty input slot is outside this bound; the deployed verifier
+  opens an input row only through a drawn unit that reads it.
 * `AssemblyTarget` (M4): `TransportsLive`, those and `EndToEndHidden` give `SampledKSLive`.
 * `RelDeployTarget` (rel_deploy): at the deployed sampling record (`SamplingDeploy.deployOf`) of a verifier's code
   whose layout is `commitDep`'s (`LayoutIs`) and which parses the statement's bytes to `stmtOf` and partitions it to

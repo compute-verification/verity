@@ -72,9 +72,9 @@ It holds direct environment reads the same way, so that configuration is read in
 rule), against `tests/lint/allowlists/repo_env_reads.json` (`{"file", "count"}`, each file's largest count
 over `main`, `next` and the admitted PRs), and fails only when a file reads more than its entry allows. A settings registry
 is exempt: a module named `settings.py`, or one the list marks `{"file", "registry": true}`. The gate refuses a PR that adds
-a read to a file it changes, naming each, with the fix: read it through the area's settings registry (the template is
-`integrations/vllm/verity_vllm/settings.py`), or create one. A mark counts from the PR's base, so it lands before the reads
-it exempts, and a rename moves the file's entry (`python3 tests/lint/test_repo_env_reads.py --move OLD NEW`), as for ruff.
+a read to a file it changes, naming each, with the fix: read it through the area's settings registry (a `Registry` of
+`verity/settings.py`'s machinery; a distribution's, as `tools/config/verity_config/settings.py` says), or create one. A mark
+counts from the PR's base, so it lands before the reads it exempts, and a rename moves the file's entry (`python3 tests/lint/test_repo_env_reads.py --move OLD NEW`), as for ruff.
 It holds except handlers that swallow what they catch the same way, so that every outcome is recorded.
 `tests/lint/test_repo_silent_excepts.py` counts, in the same files, each handler, typed or broad, whose every statement is
 `pass`, `continue`, `break`, a bare constant, or a `return` or assignment of a default (nothing, `None`, a constant other than
@@ -85,16 +85,20 @@ expected case and let the rest raise (a narrower handler that still swallows sti
 (`python3 tests/lint/test_repo_silent_excepts.py --move OLD NEW`). A repository list (ruff's or a counted lint's) may
 raise a key, in any file, up to what its lint, as the PR's base has it, finds there in the base's tree: a list that records
 its base's findings adds none, so one left behind by PRs that were on `next` before its lint landed catches up, while growth
-past the base's findings is refused as before. A counted lint that comes to count more records its list in the same PR:
+past the base's findings is refused as before. A counted lint that comes to count more records its list in the same PR
+(the lane-text lint's `--record`, run on `main` and on `next`, raises entries and lowers none):
 the gate takes a rise at a file the PR leaves untouched (on `main`, or one a PR on `next` brings) from a PR that edits that
 lint's module, since the PR adds no text there, and the source check still holds each file a later PR touches. A rise at a
 file the PR edits is held as before.
 It holds lane text the same way, in every area, this integration's included: `tests/lint/test_repo_lane_text.py` counts, in
 the prose of each file it reads (comments and docstrings in code, Lean comments, every Markdown file; never a string literal
 or a data file), dated attributions and ISO dates, `note:` ids, Notion URLs, Linear ids, PR numbers, agent ids, Slack
-timestamps and worker codenames (board ids, rounds, lanes, handles), against `tests/lint/allowlists/repo_lane_text.json`.
-AGENTS.md, ARCHITECTURE.md, GLOSSARY.md and the skills hold none. The gate refuses a PR that adds one to a file it changes,
-naming each, with where the text goes: history to git, work to Linear, rulings to Notion, results to the store. It takes
+timestamps, worker codenames (board ids, rounds, lanes, handles), research run ids, red-team finding ids and host names,
+against `tests/lint/allowlists/repo_lane_text.json`.
+AGENTS.md, ARCHITECTURE.md, GLOSSARY.md and the skills hold none, though AGENTS.md and the skills may name a handle as an
+owner and the machine a step runs on. The gate refuses a PR that adds one to a file it changes,
+naming each, with where the text goes: history to git, work to Linear, rulings to Notion, results to the store, a
+finding's rule in place of its id, and a run or host a tool reads into a data file it declares. It takes
 over P11's docstring patterns (board ids, lane tags, rounds and dates) for the whole tree.
 Before marking, run `python3 integrations/vllm/tools/ratchet_gate.py origin/main HEAD`.
 

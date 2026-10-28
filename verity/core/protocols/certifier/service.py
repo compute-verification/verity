@@ -1,4 +1,4 @@
-"""One link-window's network certificates through the proof service (N2): the network `Spec`, the firewall's salted
+"""One link-window's network certificates through the proof system (N2): the network `Spec`, the firewall's salted
 commitment to the link-window's certified records, and the check's verifier of record.
 
 **What is committed.** One `Value`, `certificates`: four leaves under one salted root, the link-window's two certified
@@ -66,7 +66,7 @@ their public fields (`LinkWindows.certified`).
 
 In the unit's Program each head check is one gate that names the Definition and its circuit digest (`head_check.gate`,
 `Gate[NetworkHeadCheck_v2{L,T,COUNTS}@<digest>]_v2`), because the commitment gadgets' Boolean bodies encode to about
-140 MB and the proof service encodes the Program on every registration. The digest is core's `program_digest` of the
+140 MB and the proof system encodes the Program on every registration. The digest is core's `program_digest` of the
 Definition's Program (`head_check.circuit_digest`), the one a C-Flock statement names a template by, pinned in
 `head_check.circuit-check.json` and held to the Definition by circuit-check. So the Program's digest binds the head
 check's circuit, and the spec, the stream and each registration bind to it: a proof of another circuit with the same
@@ -79,7 +79,7 @@ The count check is the part of the egress grid check that needs no frame's bytes
 It runs on every link-window, as a structural check must. In a proof it is an equality of each head's 32·T count bits
 with the profile's row, 32·T − 1 ANDs a head (19,199 at T = 600), beside the head's opening (`head_check.size`).
 
-N3, the content check, a prototype in `benchmarks/network_sim` evaluated in the clear and in no proof-service Spec, is
+N3, the content check, a prototype in `benchmarks/network_sim` evaluated in the clear and in no proof-system Spec, is
 retired, superseded by the step-indexed scan (`ingress_scan`, `egress`), which `benchmarks/network_traces/scan_zk.py`
 proves in zero knowledge, outside this protocol.
 
@@ -149,7 +149,7 @@ syncs the certifier ran; the heads' counts stay witness. Its public items are `P
 verifier of record takes the delivered advice (`verify(advice=…)`) and the tie only from its own tie source
 (`LinkWindows.ties`, `advised.TieSource`: `advised.IoTieVerdict`, IoTieRequest's verdict from proofs it verified,
 naming the link and its ingress registrations), never beside the advice. That source is `tie_service.Ties`, on the
-ingress tie's stream of record (IoTieRequest in the proof service), and without one (`ties` None) every advised link
+ingress tie's stream of record (IoTieRequest in the proof system), and without one (`ties` None) every advised link
 is refused. Every floor is under the sync the certifier ran, which the verifier takes only from its own clock source
 (`LinkWindows.clock_source`: the certifier's salted clock certificates, each opened under the link's key and session,
 `advised.SignedClocks`; the openings are witness, the verifier's own read, never a public answer), since a δ below the
@@ -195,7 +195,7 @@ Lean takes as an input rather than checks:
   syncs), which is why an advised link's verdict of record stays this module's;
 - on a warden link, the warden's parameters digest (`WardenProfile.digest`, which the warden's deployment publishes
   as its schedule's, `warden.WardenParams.digest`), which neither derives;
-- what both take from the proof service and the lowering: the findings of the verifier's own run of C-Flock's Lean
+- what both take from the proof system and the lowering: the findings of the verifier's own run of C-Flock's Lean
   verifier (`proofs.verify`), the delivered sessions' SHA-512s, the registration and the draw, and the registered
   Program's and partition's digests and the gate ids (`P.partition`, `head_check.gate`), which the Lean holds the
   findings and pins to but doesn't derive.
@@ -422,7 +422,7 @@ PUBLIC = (
     S.Public(f"domain:{VALUE}", "structure", "the served domain, which binds the check, the link and the window"),
     S.Public(VALUE, "commitment", "the link-window's certified records under one salted root"),
     S.Public("parameters", "structure", "the parameters digests (W1) the certificates sign, fixed before the run"),
-    S.Public("charge", "structure", "log2 #Σ_sync bits per window, the clock-sync advice the accepted-runs bound charges"),
+    S.Public("charge", "structure", "log2 #sync_set bits per window, the clock-sync advice the accepted-runs bound charges"),
     S.Public("occupancy", "structure", "each end's frames per bucket in each window, the placement's occupancy profile, "
              "fixed before the run; none for an end the Program reads rather than predicts"),
     S.Public("verdict", "output", "the link-window's verdict, accept or reject; a violation's kind stays hidden"),
@@ -434,7 +434,7 @@ PUBLIC_SERVED = tuple(p for p in PUBLIC if p.item != "occupancy") + (
              "them, fixed before the run; none on egress, whose counts the unit derives"),
     S.Public("served", "structure", "frames a response (FIXLEN), frames a request, windows and the certifier's own "
              "frames a window (its salt's), fixed before the run"),
-    S.Public("sync", "output", "the window's declared clock sync, one of Σ_sync (fixed before the run): the advice "
+    S.Public("sync", "output", "the window's declared clock sync, one of sync_set (fixed before the run): the advice "
              "`charge` already counts, which the served counts read"),
 )
 #: an advised link's: no egress occupancy profile, its sizes, each window's declared sync, and the advice, whose window
@@ -443,8 +443,8 @@ PUBLIC_ADVISED = tuple(p for p in PUBLIC_SERVED if p.item not in ("served", "syn
     S.Public("advised", "structure",
              "windows, the link's framing (the ingress frames a request of each prompt length takes) and the "
              "certifier's own frames a window (its salt's), fixed before the run"),
-    S.Public("sync", "output", "each window's declared clock sync, one of Σ_sync (fixed before the run): the advice "
-             "`charge` already counts, whose δ and ρ the unit's ingress floor reads, refused outside Σ_sync"),
+    S.Public("sync", "output", "each window's declared clock sync, one of sync_set (fixed before the run): the advice "
+             "`charge` already counts, whose delta and rho the unit's ingress floor reads, refused outside sync_set"),
     S.Public("advice", "output", "the advice (`advised.LinkAdvice`, one per certifier session, after serving): I1's, "
              "charged by `advice.bits`, and its windows' received request frames, which the unit holds to the "
              "ingress heads. The unit reads its window view, `advised.view` of its kept outputs' release buckets, its "

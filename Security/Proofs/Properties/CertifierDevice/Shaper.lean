@@ -60,12 +60,12 @@ def finishStage (T : Nat) (s : Shaper) : Shaper × Slots × Option Record :=
     certifier := s.certifier.tick.1, queued := s.queued - min s.queued s.certifier.tick.1.params.allocation,
     t := s.t + 1 }
   if s1.t % T ≠ 0 then (s1, s.certifier.tick.2, none) else
-  let s2 : Shaper := { s1 with certifier := s1.certifier.closeWindow.1 }
+  let s2 : Shaper := { s1 with certifier := s1.certifier.closeSamplingBlock.1 }
   if s2.queued > 0 then
-    match Status.reason? s1.certifier.closeWindow.2.status with
-    | some r => ((s2.fault r).checkAdvice, s.certifier.tick.2, some s1.certifier.closeWindow.2)
-    | _ => (s2.checkAdvice, s.certifier.tick.2, some s1.certifier.closeWindow.2)
-  else (s2.checkAdvice, s.certifier.tick.2, some s1.certifier.closeWindow.2)
+    match Status.reason? s1.certifier.closeSamplingBlock.2.status with
+    | some r => ((s2.fault r).checkAdvice, s.certifier.tick.2, some s1.certifier.closeSamplingBlock.2)
+    | _ => (s2.checkAdvice, s.certifier.tick.2, some s1.certifier.closeSamplingBlock.2)
+  else (s2.checkAdvice, s.certifier.tick.2, some s1.certifier.closeSamplingBlock.2)
 
 theorem range_size (n : Nat) : [:n].size = n := by simp [Std.Legacy.Range.size]
 
@@ -216,9 +216,9 @@ theorem Shape.tick {c : Certifier} {link : String} {p : Params} (h : Shape c lin
       rwa [this] at hs
     simp [hs', h.dropped hs']
 
-theorem Shape.closeWindow {c : Certifier} {link : String} {p : Params} (h : Shape c link p) :
-    Shape c.closeWindow.1 link p :=
-  ⟨h.link, h.params, h.sizes, by simp [Certifier.closeWindow]⟩
+theorem Shape.closeSamplingBlock {c : Certifier} {link : String} {p : Params} (h : Shape c link p) :
+    Shape c.closeSamplingBlock.1 link p :=
+  ⟨h.link, h.params, h.sizes, by simp [Certifier.closeSamplingBlock]⟩
 
 theorem checkAdvice_rel (s : Shaper) : CertRel s.certifier s.checkAdvice.certifier ∧
     s.checkAdvice = { s with certifier := s.checkAdvice.certifier } := by
@@ -257,16 +257,17 @@ theorem finishStage_spec {link : String} {p : Params} (s : Shaper) (hs : ShGood 
   by_cases hc : (s.t + 1) % p.buckets = 0
   · simp only [hc, ne_eq, not_true_eq_false, ↓reduceIte]
     have hw := succ_div_of_mod hc
-    have key : ∀ s' : Shaper, CertRel s.certifier.tick.1.closeWindow.1 s'.certifier → s'.t = s.t + 1 →
+    have key : ∀ s' : Shaper, CertRel s.certifier.tick.1.closeSamplingBlock.1 s'.certifier → s'.t = s.t + 1 →
         ShGood link p s' := by
       intro s' hr ht
-      refine ⟨hr.shape hsh.closeWindow, ?_, ?_, ?_⟩
+      refine ⟨hr.shape hsh.closeSamplingBlock, ?_, ?_, ?_⟩
       · rw [hr.rows, ht, hc]; rfl
-      · rw [hr.window, ht, hw]; simp [Certifier.closeWindow, t3, hs.window]
-      · rw [hr.rows]; simp [Certifier.closeWindow]
-    have hrec : s.certifier.tick.1.closeWindow.2 = ⟨link, s.t / p.buckets, s.certifier.rows.push s.certifier.tick.2,
+      · rw [hr.window, ht, hw]; simp [Certifier.closeSamplingBlock, t3, hs.window]
+      · rw [hr.rows]; simp [Certifier.closeSamplingBlock]
+    have hrec : s.certifier.tick.1.closeSamplingBlock.2 = ⟨link, s.t / p.buckets,
+        s.certifier.rows.push s.certifier.tick.2,
         match s.certifier.fault with | none => .complete | some r => .notEstablished r⟩ := by
-      simp only [Certifier.closeWindow, t1, t3, t4, t5, hs.shape.link, hs.window]
+      simp only [Certifier.closeSamplingBlock, t1, t3, t4, t5, hs.shape.link, hs.window]
       rfl
     split
     · split

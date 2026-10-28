@@ -7,9 +7,9 @@ The egress certifier is a FIFO queue of the frames the shaper handed. A shaper t
 canonical positions (`handList`), enqueues them, and releases `min(queue, r)` from the queue's front (`fifo_tick`). Over a
 trace (`fifo_inv`), the shaper has handed `handed`'s frames, its `queued` count is the Program's queue (`NetworkCertifier.queue`)
 of the hand counts, and an unfaulted certifier's queue is the last `queued` frames handed. A complete record's window
-never faults (by `FailClosed`), so each of its rows is the FIFO's release, which is `NetworkCertifier.expectedRow` when
-each frame is handed at the bucket `NetworkCertifier.handingBuckets` gives it (`completeRows_honest`). `Complete` drops
-that condition: a frame handed late faults its window.
+never faults (by `FailClosed`), so each of its rows is the FIFO's release at the buckets that handed its frames
+(`Complete`), which is `NetworkCertifier.expectedRow` when each frame is handed at the bucket
+`NetworkCertifier.handingBuckets` gives it (`completeRows_honest`).
 -/
 
 namespace Properties.CertifierDevice.Proofs
@@ -151,8 +151,8 @@ theorem finishStage_fifo (T : Nat) (s : Shaper) :
   rw [t2]
   by_cases hc : (s.t + 1) % T = 0
   · simp only [hc, ne_eq, not_true_eq_false, ↓reduceIte, false_implies, true_implies, true_and]
-    have hcl : ∀ (s' : Shaper), CertRel s.certifier.tick.1.closeWindow.1 s'.certifier → s'.certifier.fault = none →
-        s'.certifier.queue = s.certifier.tick.1.queue := by
+    have hcl : ∀ (s' : Shaper), CertRel s.certifier.tick.1.closeSamplingBlock.1 s'.certifier →
+        s'.certifier.fault = none → s'.certifier.queue = s.certifier.tick.1.queue := by
       intro s' hr hf
       rw [hr.of_none hf]
       rfl
@@ -166,7 +166,7 @@ theorem finishStage_fifo (T : Nat) (s : Shaper) :
       · rename_i hr
         refine ⟨by rw [(checkAdvice_rel _).2], by rw [(checkAdvice_rel _).2], fun hf =>
           ⟨hcl _ (checkAdvice_rel _).1 hf, Or.inr ?_⟩⟩
-        simp only [Certifier.closeWindow, t5] at hr
+        simp only [Certifier.closeSamplingBlock, t5] at hr
         cases hfs : s.certifier.fault with
         | none => rfl
         | some r => rw [hfs] at hr; exact absurd rfl (hr r)

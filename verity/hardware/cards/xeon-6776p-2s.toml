@@ -1,0 +1,44 @@
+# Two Intel Xeon 6776P sockets, the RTX PRO 6000 node's host: the one source of its numbers (verity/hardware/README.md).
+# Each number is { value, unit, mark, source }. mark: "ceiling" (no program on this host and firmware exceeds it, what
+# the model's premises need), "measurement" (a measured value, so only a lower bound on the ceiling) or "placeholder"
+# (neither, open). A host card is the server's CPUs and DRAM; the GPUs it carries are their own cards.
+
+kind = "host"
+sku = "xeon-6776p-2s"
+name = "Two Intel Xeon 6776P (Granite Rapids) sockets"
+processor = "Intel Xeon 6776P"
+arch = "Granite Rapids (Redwood Cove cores), family 6 model 173 stepping 1"
+nodes = "vy-nebius-1, carrying eight rtx-pro-6000-server cards: its VM sees 2 x 48 of the 2 x 64 cores (lscpu, r20261020-212232-6ba5, r20261027-022153-5141)"
+
+[cpu]
+sockets = { value = 2, unit = "socket", mark = "ceiling", source = "the 6776P is a 2S part (Intel ARK 243691, Scalability 2S); lscpu on vy-nebius-1's VM shows 2 (r20261027-022153-5141)" }
+cores = { value = 64, unit = "core/socket", mark = "ceiling", source = "Intel ARK 243691 (Xeon 6776P: 64 cores); the VM sees 48 a socket" }
+priority_cores = { value = 8, unit = "core/socket", mark = "ceiling", source = "Intel ARK 243691: Priority Core Turbo on at most 8 cores a socket" }
+
+[clock]
+turbo = { value = 3.9, unit = "GHz", mark = "ceiling", source = "Intel ARK 243691: max turbo 3.9 GHz (all-core turbo 3.6); Intel publishes no AMX clock, so the ceiling takes max turbo on every core" }
+priority_turbo = { value = 4.6, unit = "GHz", mark = "ceiling", source = "Intel ARK 243691: Priority Core Turbo 4.6 GHz, which the operator may enable in the BIOS" }
+
+[rate]
+amx = { value = 1024, unit = "INT8 MAC/cycle/core", mark = "ceiling", source = "Intel Optimization Reference Manual 248966-049 section 20.3 Table 20-2 (TDPBSSD, 16,384 MACs, 16-cycle throughput); measured 1,024.1, r20261027-022153-5141" }
+ops = { value = 1.0452992e15, unit = "op/s", mark = "ceiling", source = "2 ops a MAC x rate.amx x cpu.sockets x (cpu.priority_cores x clock.priority_turbo + (cpu.cores - cpu.priority_cores) x clock.turbo), 1.0453e15 (1.0224e15 without Priority Core Turbo)" }
+
+# The host's DRAM: R's host tier (verity/core/protocols/remote_bandwidth/timing.py's HOST_ figures).
+[memory]
+channels = { value = 8, unit = "channel/socket", mark = "ceiling", source = "Intel ARK 243691: 8 memory channels" }
+speed = { value = 6400, unit = "MT/s", mark = "placeholder", source = "DDR5-6400, the part's DDR5 rate (Intel ARK 243691), which remote_bandwidth/timing.py takes for the node; the node's DIMMs are not on record (a guest can't read them), and the part also takes MRDIMMs (ARK 243691: 'MRDIMM(8800MT/s)', 'Maximum Memory Speed 8000 MT/s'), so the ceiling is up to 8800 MT/s, 1.1264e12 B/s over both sockets, until the installed DIMMs are read" }
+bus = { value = 64, unit = "bit/channel", mark = "ceiling", source = "a DDR5 channel's data width: two 32-bit subchannels (JEDEC JESD79-5), ECC bits apart" }
+bandwidth = { value = 8.192e11, unit = "B/s", mark = "placeholder", source = "cpu.sockets x memory.channels x memory.speed x memory.bus / 8: timing.py's HOST_SPEC_BYTES_PER_S, '16 channels of DDR5-6400'; a placeholder while memory.speed is" }
+read = { value = 6.068e11, unit = "B/s", mark = "measurement", source = "8 GPUs' pinned H2D and 56 CPU readers at once, 319.2 + 287.6 GB/s, the most any reader mix measured; DRAM caps the sum, not the root complex (r20261015-081037-5ecf, art:3250e5915dd8, note:20261015T0731Z-draft-model-constants; timing.py's HOST_READ_BYTES_PER_S)" }
+write = { value = 8.192e11, unit = "B/s", mark = "placeholder", source = "memory.bandwidth, as timing.py's HOST_WRITE_BYTES_PER_S takes it; above every write measured: 16 cores of one socket wrote 207.69 GB/s by non-temporal AVX-512 stores, 88.16 by rep stosb and 82.35 by cached stores (r20261020-212232-6ba5, benchmarks/bandwidth/write_host.c)" }
+
+# The host's on-chip storage at most, for the whole server whatever share of it the VM gets: the host's part of
+# S_chip (timing.py's HOST_CHIP_BYTES).
+[store]
+l3 = { value = 352321536, unit = "B/socket", mark = "ceiling", source = "336 MiB: the guest's CPUID, lscpu 'L3 cache: 672 MiB (2 instances)' (r20261020-212232-6ba5, r20261027-022153-5141); Intel ARK 243691 'Cache 336 MB'" }
+uncore = { value = 2097152, unit = "B/socket", mark = "ceiling", source = "an allowance, not an enumeration: the memory controllers', UPI's and PCIe's queues (red team, note:20261024T0330Z-report-redteam-night (f)4)" }
+l2 = { value = 2097152, unit = "B/core", mark = "ceiling", source = "2 MiB: lscpu 'L2 cache: 192 MiB (96 instances)' (r20261020-212232-6ba5, r20261027-022153-5141)" }
+l1d = { value = 49152, unit = "B/core", mark = "ceiling", source = "48 KiB: lscpu 'L1d cache: 4.5 MiB (96 instances)' (r20261020-212232-6ba5, r20261027-022153-5141)" }
+l1i = { value = 65536, unit = "B/core", mark = "ceiling", source = "64 KiB: lscpu 'L1i cache: 6 MiB (96 instances)' (r20261020-212232-6ba5, r20261027-022153-5141)" }
+core = { value = 65536, unit = "B/core", mark = "ceiling", source = "an allowance, not an enumeration: two threads' architectural state with AMX tiles (about 11 KiB each), the physical register files and the load, store and fill buffers (red team, note:20261024T0330Z-report-redteam-night (f)4)" }
+chip = { value = 1000341504, unit = "B", mark = "ceiling", source = "cpu.sockets x (store.l3 + store.uncore) + cpu.sockets x cpu.cores x (store.l2 + store.l1d + store.l1i + store.core): timing.py's HOST_CHIP_BYTES" }

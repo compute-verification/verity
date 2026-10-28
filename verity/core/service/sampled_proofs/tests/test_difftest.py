@@ -10,7 +10,7 @@ Lean reads them (`OneStage.paramsOfJson`, `commitmentOf`, `evidenceOf`), for the
 (`service.selection_law`, `draw.derive` and `service.select_draw` on fixed coins, with the bytes it read), for the
 `slots` piece that draw in the claims' slots, read off `partition.strata`, `partition.unit_gates` and the root's input
 nodes (`slots`), for the `hidden_offsets`, `hidden_locate` and `hidden_witness` pieces `hidden_draw` on honest and
-arbitrary calls tables, for `check_public` and `check_verdicts` the proof service's own (`service.check_public`,
+arbitrary calls tables, for `check_public` and `check_verdicts` the proof system's own (`service.check_public`,
 `service.check_verdicts`), and for the `run` piece (a registration's whole run, `Run.run`) those references in a
 `Stream`'s order. The `partition`, `select` and `slots` pieces also run on random partitions: mixed population
 programs of random members of three templates, and rarely of `FORK` and of `IDENTITY`, of no gate, which one-stage
@@ -830,6 +830,12 @@ def select(j):
     return {"draw": obj, "read": at}
 
 
+def design(j):
+    """`Pieces.design`: the sampling design of `select`'s draw (`audit.design`, Lean `Core.Draw.ofFlock`), C-Flock's law
+    held to core's `Core.Draw`, the work sampling design's among them."""
+    return {"design": _json(audit.design(select(j)["draw"]).to_json())}
+
+
 def slots(j):
     """`Slots.select`: the claims' partition over the select piece's program and query, two classes, and its draw's
     checked proof blocks. The population's strata are `partition.strata`'s, each unit a replay unit of one proof block, its
@@ -1014,7 +1020,7 @@ def check_public(j):
 
 
 def check_verdicts(j):
-    """The proof service's hold on an outcome's verdicts (`service.check_verdicts`) on `{"verdicts", "sessions",
+    """The proof system's hold on an outcome's verdicts (`service.check_verdicts`) on `{"verdicts", "sessions",
     "outputs"}`. Rejected where the Lean refuses: malformed verdicts, sessions or outputs, and, once none is pending, a
     verdict of record's sessions that are neither a list nor empty (whose characters or keys Python's `list` would read)."""
     j = _json(j)
@@ -1985,7 +1991,9 @@ def registered_values(draw) -> dict:
 REGISTERED_ENTRIES = D.Port(PIECES, "registered", registered, st.one_of(
     registered_values(), changed_audits([WINDOWS], 1, 0, REGISTERED_SETUPS).map(lambda a: {"params": a["params"]}),
     _audit_inputs(lambda a: {"params": a["params"]}, [PARAMS]), JSON), package=PACKAGE)
-TEXT = st.text(max_size=4) | st.sampled_from(["W", "x", "é", "\x00", "\U0001f600", '"'])
+#: A domain's program or value: a string of ASCII without DEL, as its binding (identity's canonical JSON, which refuses
+#: any other) holds; `Flock.canon` would write any other as UTF-8.
+TEXT = st.text(st.characters(max_codepoint=0x7e), max_size=4) | st.sampled_from(["W", "x", "\x00", '"', "\\"])
 def _domains(widths):
     return st.builds(lambda program, value, words, leaves, b: {"leaves": leaves, "program": program, "value": value,
                                                                "word_bits": b, "words": words},
@@ -2104,7 +2112,7 @@ PRODUCED_CHANGES = [
     ("no verdict reports", lambda c, x: c.update(opened=None), "P-opened"),
     ("another value opened too", lambda c, x: c["opened"].update(other=PRODUCED_OTHER), None),
 ]
-PRODUCED_NAMES = ["partial", "PouwUnitSeeds_v2", "s", "é"]
+PRODUCED_NAMES = ["partial", "PouwUnitSeeds_v2", "s", "a b"]
 
 
 @st.composite
@@ -2295,6 +2303,8 @@ def changed_selections(draw, most: int = 2) -> dict:
 
 SELECT = D.Port(PIECES, "select", select, st.one_of(selections(), selections(), changed_selections(1),
                                                      changed_selections(2), JSON), package=PACKAGE)
+DESIGN = D.Port(PIECES, "design", design, st.one_of(selections(), selections(), changed_selections(1), JSON),
+                package=PACKAGE)
 SLOTS = D.Port(PIECES, "slots", slots, st.one_of(selections(), selections(), changed_selections(1), JSON), package=PACKAGE)
 STRATA = st.lists(st.builds(lambda name, size, dk: {"k": max(0, size - dk), "name": name, "size": size},
                             st.sampled_from(["a", "b", "c", "unit"]), st.integers(0, 14), st.integers(0, 14)),
@@ -2707,7 +2717,7 @@ def _stream_state(s) -> dict:
 
 
 def stream(j):
-    """The proof service stream's rules (`service._step`) on `{"params", "state", "op"}`: the decision without its
+    """The proof system stream's rules (`service._step`) on `{"params", "state", "op"}`: the decision without its
     `detail`, which the Lean doesn't write, and the state after it as `canonical_json` writes it. Rejected where the Lean
     refuses: the params as `Stream.Params.ofJson` reads them, the state as `_stream_state`, and an op `_step` raises on."""
     j = _json(j)
@@ -2871,7 +2881,7 @@ def _fleet_state(s) -> dict:
 
 
 def fleet(j):
-    """The proof service fleet's rules (`service._fleet_step`) on `{"state", "op"}`: the decision without its `detail`
+    """The proof system fleet's rules (`service._fleet_step`) on `{"state", "op"}`: the decision without its `detail`
     and the state after it as `canonical_json` writes it. Rejected where the Lean refuses: the state as `_fleet_state`,
     and an op `_fleet_step` raises on."""
     j = _json(j)
@@ -2953,7 +2963,7 @@ pieces = D.server_fixture(DECODE)
 
 PIECE_RUNS = [(DECODE, 300), (PARTITION, 500), (COMMITTED_BITS, 300), (REGISTRATION, 700), (REGISTERED_ENTRIES, 300), (DOMAIN, 300),
               (PRODUCED, 500), (KNOWN_PORT, 300),
-              (CHECK_DRAW, 500), (DRAW, 500), (SELECT, 600), (SLOTS, 400), (CHECK_PROVED, 300), (BOUND, 500),
+              (CHECK_DRAW, 500), (DRAW, 500), (SELECT, 600), (DESIGN, 300), (SLOTS, 400), (CHECK_PROVED, 300), (BOUND, 500),
               (BERNOULLI_BOUND, 500), (HIDDEN_OFFSETS, 300), (HIDDEN_LOCATE, 400), (HIDDEN_WITNESS, 400), (VERDICT, 300),
               (MATCHES_PUBLIC, 400), (SESSION_REGISTERED, 400), (RECORD_PORT, 600), (CHECK_PUBLIC, 500), (CHECK_VERDICTS, 400),
               (RUN, 500), (HELLO, 500), (STREAM, 800), (FLEET, 400)]
@@ -3027,6 +3037,23 @@ def test_the_select_piece_draws_every_rule(pieces):
     assert service.RETIRED_TWO_STAGE in D.replay(SELECT, case, pieces)[1]
     with pytest.raises(D.Reject, match="two-stage sampling is retired"):
         select(case)
+
+
+def test_a_work_draws_design_is_cores(pieces):
+    """C-Flock's work law held to `Core.Draw`: a work draw's sampling design, Lean's (`Core.Draw.ofFlock`) the Python's
+    (`audit.design`), is the profile's `work` case with each stratum's works and floor, and its sample's design is the
+    stratified one at its k_s."""
+    desc = json.loads(_population(((0, 2), (1, 3), (0, 4), (2, 1))))
+    case = {"closure": None, "program": desc, "query": _json(P.template_instances_query([t.id for t in TEMPLATES])),
+            "rule": {"law": "work:4", "rule": "law"}, "source": hashlib.shake_256(b"design").hexdigest(1500),
+            "work_table": {PAIR.id: 2, TRIPLE.id: {"floor": 2, "work": 1}, QUAD.id: 0}}
+    out = design(copy.deepcopy(case))
+    assert D.replay(DESIGN, case, pieces) == ("output", D.canonical(out))
+    d = out["design"]
+    assert d["law"] == "work" and d["k"] == 4 and {s["name"] for s in d["strata"]} == {PAIR.id, TRIPLE.id, QUAD.id}
+    assert [s["floor"] for s in d["strata"] if s["name"] == TRIPLE.id] == [2]
+    work = audit.design(select(copy.deepcopy(case))["draw"])
+    assert work.stratified == Stratified(tuple(Stratum(s["name"], s["size"], s["k"]) for s in d["strata"]))
 
 
 def test_the_slots_follow_the_strata(pieces):
@@ -3236,7 +3263,7 @@ def test_a_tile_replayed_across_streams_in_one_window_is_refused(pieces):
 
 
 def test_a_second_window_registers_its_values_afresh_and_a_replay_is_refused(pieces):
-    """PRF-127, Lean and Python agreeing: a verifier naming its window's open root (`WROOT`) and holding W across windows
+    """Lean and Python agreeing: a verifier naming its window's open root (`WROOT`) and holding W across windows
     accepts a record whose D is a fresh commitment under its window's domain after a log that registered D under an
     earlier window's (`EARLIER_WROOT`) at another root, and W under the same root. The earlier window's D, replayed, is
     refused (`R7-domain`), and so is a W under another root (`R7-held`); a verifier that doesn't hold W takes it per

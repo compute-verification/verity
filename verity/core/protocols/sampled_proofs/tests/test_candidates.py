@@ -6,8 +6,8 @@ from __future__ import annotations
 import pytest
 
 from verity.core.protocols.sampled_proofs.candidates import Shape, _lams, _Program, cuts, pressure, shape_of
-from verity.core.protocols.sampled_proofs.one_stage.partition import UNIT_CLASS_MAX
 from verity.core.protocols.sampled_proofs.optimize import CostModel, Objective, frontier
+from verity.ml.circuits.partition_v2 import UNIT_CLASS_MAX
 
 STEP = Shape("Step", 4190, 32, 32, rows=(32, 32, 4, 4), commit_bits=32, cap=4096)
 CHUNK = Shape("Dot{K=256}", 8 * 4190, 256, 32, rows=(256, 256, 4, 4), commit_bits=32, cap=4096, parts=((STEP, 8),))

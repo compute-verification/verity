@@ -6,8 +6,8 @@
 # decided by Lean `verify --zk`. The negatives are the first session's one-bit proof edits, refused by Lean, and the
 # member of PB_TAMPERED (with the fixture, its tampered twin unless PB_TAMPERED= is given empty), stopped by the firewall
 # and refused by Lean without it. PB_LIVE=1 requires the bundle's draw to be live, with its receipt.
-#   research run --on vy-nebius-cpu-4 --pool proofs --as proofs --project verity --source . --cwd clone \
-#     -- bash benchmarks/one_stage/prove_bundle.sh [PB_BUNDLE=F PB_WINDOW=DIR [PB_TAMPERED=DIR]] [PB_MEMBERS=N] [PB_FLIPS=1] [PB_BINARIES=DIR] [PB_BUILD_ONLY=1]
+#   bash benchmarks/one_stage/prove_bundle.sh [PB_BUNDLE=F PB_WINDOW=DIR [PB_TAMPERED=DIR]] [PB_MEMBERS=N] [PB_FLIPS=1] [PB_BINARIES=DIR] [PB_BUILD_ONLY=1]
+#   (a job run from a clone of the tree)
 # PB_BUILD_ONLY=1 builds the three binaries, keeps them in $OUT/bin with the stamp of the trees they're built from
 # (verity/ml/flock and verity/core/service/flock), and stops. PB_BINARIES=DIR (on the node, e.g. that run's out/bin) uses them
 # when DIR's stamp is this source's, and otherwise builds here: M3 builds before its window, not in it.
@@ -55,7 +55,7 @@ if [ "${PB_BUILD_ONLY:-0}" = 1 ]; then
   log "build only: $O/bin, stamp $STAMP"
   exit 0
 fi
-export PYTHONPATH=$REPO:$REPO/verity/ml/flock/python:$REPO/examples/h200/interfaces:$REPO/benchmarks/numerical/python
+export PYTHONPATH=$REPO:$REPO/verity/ml/flock/python:$REPO/demos/h200/interfaces:$REPO/benchmarks/numerical/python
 export RAYON_NUM_THREADS=$(nproc)
 # flock-circuit's rayon pool keeps Rust's default 2 MiB thread stack, which a --zk prover can overflow on a many-core node
 # (prove_path/run.sh)

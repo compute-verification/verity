@@ -62,10 +62,11 @@ Implementations:
   - what re-derives every number: every rep, each audit's challenge source and each answer's time, the clocks, torch,
     CUDA and nvcc versions (`pod.sh` pins torch and records the CPU topology, the NVMe mount and the installed packages).
 
-- `p2-v1-gpu`: P2 v4, the specification (`verity/core/protocols/pous/p2/PROTOCOL.md`), in `p2_v1/`, with
+- `p2-v1-gpu`: P2 v4 (`verity/core/protocols/pous/README.md`, "P2"), in `p2_v1/`, with
   the same steps, controls and metrics as `band-gpu` so the two compare side by side (`side_by_side.py`):
-  - `reference.py`: the scheme on the CPU on `verity.ml.randomness` (the counter-mode SHA-512 keys, the maps, the RFC
-    6962 tree over v4 leaves, the mode-0 audit derivation), pinned by `vectors.json` (the file hash in the spec's §7);
+  - `reference.py`: the scheme on the CPU on `verity.ml.randomness` (the counter-mode SHA-512 keys, the maps, v4's
+    leaves, the mode-0 audit derivation; the RFC 6962 tree over the leaves is `verity.core.protocols.pous.verifier`'s),
+    pinned by `vectors.json` (`VECTORS_SHA512`);
     `wire.py` is `p2-audit-wire/v4` with its reference verifier, and `vectors.py` regenerates every vector file in one command;
   - `p2v1.cu`: decode with per-block keys on `p2_gpu/p2dec.cu`'s tuned squaring (keys expanded on the device just before
     use), and encode by two roots (an addition chain for `(p + 1)/4` on CGBN's generic squaring, reduced by `2^W ≡ c0`);
@@ -154,6 +155,14 @@ window is served on, before its engine loads, with the memory challenger on vy-a
 `WIPE_CMD='bash benchmarks/pous/streamed_wipe/served_wipe.sh "$1" "$2" "$3"'`. It refuses a card that isn't idle or a gate
 key that isn't on the node, and kills nothing. Its header lists the challenger's settings. `tests/test_pous_served_wipe.py`
 runs it on a CPU, with one segment in host memory.
+
+`served_case.py --window DIR` builds PoUS's or the wipe's piece for the one-stage composite (composite.py, beside
+served_verdicts.py) from what a served window kept: `case.json`, the component's case, and `answer.json`, its own answer
+on it, whose commitment is the digest the composite binds. Both go to the window's private directory (0700), never
+beside the public answer. `served_piece.py` and `streamed_wipe/served_wipe.sh` write that piece through it while they
+run; after a run, from the kept outputs alone, PoUS's `C*` is encoded again from the served snapshot at the kept salt, and
+each kept output is held to the others before anything is written. `served_case.sh PIECES` runs it on a served run's
+pieces, PoUS's under a lease of a card. `tests/test_pous_served_case.py` runs both on a CPU.
 
 `wipe_resume/` runs the red team's resume attack (art:7617c8017e80) on both wipes, on CPU. `pi2_state_attack.py` rebuilds
 band and dense blocks from the five odd rounds' SHAKE256 states (1,000 B a 64 KiB block) and times an answer against the

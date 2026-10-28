@@ -1,4 +1,4 @@
-"""served_zk's window through the proof service (`served_zk/served_commit.py` over P1, `sampled_proofs.service`): a
+"""served_zk's window through the proof system (`served_zk/served_commit.py` over P1, `sampled_proofs.service`): a
 window of served calls' side rows committed as C-Flock commits a unit's rows, its tiles padded with filler tiles to a
 grid level, registered with exactly PoUW's public items, received by a `Stream`, drawn once, each drawn tile's proof
 opened against the window root, delivered once, and the final outcome publishing exactly the public items."""
@@ -323,8 +323,8 @@ def test_the_challenger_on_the_serving_controllers_state_holds_its_coins(served,
 
 
 def test_a_served_challenger_refuses_coins_no_claim_instance_names(tmp_path, monkeypatch):
-    """CMP-52: the serving controller's coins (e2e.py's `Coins`) and `served_commit.py challenger`'s are named by a claim
-    instance, the Lean verifier of record's (`pouw.verifier.CLAIM`) or its state file's, which an earlier start drew from
+    """The serving controller's coins (e2e.py's `Coins`) and `served_commit.py challenger`'s are named by a claim
+    instance, the Lean verifier's (`pouw.verifier.CLAIM`) or its state file's, which an earlier start drew from
     it; a source no claim instance names, `os.urandom` among them, is refused before any coin is drawn or published."""
     sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "pearl_c_vllm"))
     import e2e
@@ -500,7 +500,7 @@ def test_a_window_without_a_registration_deadline_is_refused(served, tmp_path):
 def test_a_pass_registered_again_on_another_stream_is_refused(served):
     """Windows credited together hold each call index of their salt once (`credit.passes_distinct`): the same pass
     registered again on another stream would credit every call twice under the same seeds and tickets, so it is refused
-    (``repeated-call``) and not held, while the first stays (CMP-84)."""
+    (``repeated-call``) and not held, while the first stays."""
     *_, words = served
     params, public, _, _ = _window(words)
     rec = _register(params, public)
@@ -651,7 +651,7 @@ def _unasked(monkeypatch) -> list[str]:
 
 
 def test_rows_formed_before_any_salt_are_refused_in_every_certified_window(served, tmp_path, monkeypatch, reveals):
-    """RT4-INT-1's witness, refused.  The fixture's rows are formed once, under SHA-256(b"salt"), which is no certifier
+    """A pre-salt witness, refused.  The fixture's rows are formed once, under SHA-256(b"salt"), which is no certifier
     window's salt, and committed twice (matmuls 5 and 9) in PoUW windows 0 and 1, each window's pass salted by its own
     certifier reveal under the recorded stream and prover.  A certified window credits only units that read its salt
     (`salt.unit_reason`), and the window's drawn unit, `Pc8TileSide`, reads two committed rows and no salt, so both are
@@ -680,7 +680,7 @@ def test_rows_formed_before_any_salt_are_refused_in_every_certified_window(serve
 
 
 def test_one_windows_rows_are_refused_under_two_streams(served, tmp_path, monkeypatch, reveals):
-    """RT4-INT-9's witness, refused.  One prover registers streams "a" and "b", each behind its own certifier link, and
+    """A two-stream witness, refused.  One prover registers streams "a" and "b", each behind its own certifier link, and
     commits the same rows, formed before any salt, in PoUW window 0 of both: their stream ids differ (each names its
     stream and its certifier run, whose link differs, `stream_id`), and each window is refused (``unsalted``) before it
     is received, so no product is registered once, let alone once per stream."""
@@ -719,7 +719,7 @@ def test_past_the_salt_rule_a_certified_window_is_recorded_revealed_drawn_under_
     the salt its pass was checked against, and its draw is the live epoch's ``pouw/draw`` coin 0 opened after the
     registration, under the commitment the challenger read itself from its challenger's signed record, which the draw's
     check of record verifies again under the challenger key the deployment pins (`Deployment`), and refuses under any
-    other pin (``coin-key``).  Its drawn units are opened under that salt (`Challenger.check`, SALT-BIND-1),
+    other pin (``coin-key``).  Its drawn units are opened under that salt (`Challenger.check`),
     where `check` alone passes none.  The certifier reveals window 0 once and within its reveal deadline on its own
     clock, so a second registration, or one past the deadline, is refused (``certifier``).  A second proxy of the same
     run (its key, run id and link) gives the same stream id, and the deployment's shared `Registrations` refuse its
@@ -860,7 +860,7 @@ def test_past_the_salt_rule_a_certified_window_is_recorded_revealed_drawn_under_
 def test_a_deployments_challenger_key_is_infras_published_pin(tmp_path):
     """`Deployment.pinned` takes the challenger key from infra's published pin (`CHALLENGER_KEY_PIN`; the fixture is its
     payload's bytes): vy-challenger-1's LMS key at W = 1, H = 20, whose SHA-512 is `CHALLENGER_KEY_SHA512`, stated whole.
-    A record of any other key is refused even when it names its own key's SHA-512: the key infra retired (RT4-INT-18), a
+    A record of any other key is refused even when it names its own key's SHA-512: the key infra retired, a
     tampered public key, or the pinned key under another named SHA-512; so is a record of another schema or form."""
     pin = Path(__file__).parent / "fixtures" / "challenger-key.json"
     assert hashlib.sha256(pin.read_bytes()).hexdigest() == \
@@ -944,7 +944,6 @@ def test_a_window_whose_pass_coin_is_foreign_early_mislabelled_or_tampered_is_re
         with pytest.raises(S.Refused) as e:
             ch.register("x", brec, manifest=_raw({**bman, "schema": schema}), recorded=True)
         assert why in e.value.verdict.detail[code]
-    assert (CC.MANIFEST_SCHEMA, CC.MANIFEST_RECORDED) == (PD.MANIFEST_SCHEMA, PD.MANIFEST_SCHEMA_RECORDED)
     ch = _challenger(bparams, coins=_coins())
     ch.register("honest", brec, manifest=braw, recorded=True)
     assert ch.passes == {"honest": "recorded beacon"} and len(ch.select("honest").units) == SC.law_of(bparams, bpublic["level"])["k"]

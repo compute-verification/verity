@@ -78,7 +78,7 @@ def test_interface_and_names():
     assert cert.gamma == 1 - Fraction(199, 200) / Fraction(1608, 1600)   # gammaFromTTNCP_U_v1 at n0 = 1600: 0.995%
     assert cert.gamma < Fraction(1, 100)
     assert cert.conjecture == "tt-ncp-u" and cert.theorems[0] == "Pouw.SecurityProofs.NCP.GammaFromTTNCP_U_v1"
-    assert dict(cert.parameters) == {"beta": 128, "f": 24, "n0": 1600, "k_max": 1 << 16}    # red-team R13-4
+    assert dict(cert.parameters) == {"beta": 128, "f": 24, "n0": 1600, "k_max": 1 << 16}
     assert float(1 - Fraction(199, 200) / (1 + Fraction(24, 3 * 1024))) > 0.0127            # 1.27% at n = 1024: why n0 is recorded
     assert ncp.NCP(k_min=64, n_min=64).certificate.gamma is None                              # a test instance
     with pytest.raises(KeyError):

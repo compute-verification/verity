@@ -56,7 +56,7 @@ NORM_256, NORM_16 = 0x4600, 0x4400      # bf16(32 x the line norm): E's lines, a
 NT, BM, BM_D, RASTER = 256, 128, 64, 8
 #: a caller with more real rows than this (a prefill's) pads them to BM rather than BM_D, so the chain runs on the mainloop:
 #: a served prefill step's chains took 18.9 ms at 640 rows there against 31.7 ms at 656 rows on 64 x 64 tiles
-#: (r20261024-171936-c297); at fewer rows the mainloop's 128 x 128 tiles leave SMs idle
+#:; at fewer rows the mainloop's 128 x 128 tiles leave SMs idle
 MAINLOOP_ROWS = 512
 ML_NT = 384                  # mainloop_sm120.cuh's block: a TMA producer warpgroup and 8 consumer warps
 WK_WARPS, WK_CL = 16, 4      # words_k's block (warps) and cluster (blocks) per m16 x n8 tile (pearl_c_sm120.cu)
@@ -71,7 +71,7 @@ LIVE = os.environ.get("PEARLC_LIVE", "1") != "0"
 DEEP = os.environ.get("PEARLC_DEEP", "1") != "0"
 #: B~'s prefetch into L2 ahead of a decode call's chain (`Pipeline.prefetch_b`): prefetch_l2's form (PEARLC_PREFETCH_FORM: 0 a
 #: line a thread, 1 the same evict_last, 2 a 16 KiB bulk prefetch a thread, the default: served b8's whole step at an ITL p50
-#: of 20.61 ms against 21.42 in form 0 and 21.85 without it, r20261024-193651-3ef1), its blocks, and B~'s leading bytes it
+#: of 20.61 ms against 21.42 in form 0 and 21.85 without it), its blocks, and B~'s leading bytes it
 #: takes (PEARLC_PREFETCH_MB, 0 all of them)
 PREFETCH_FORM = int(os.environ.get("PEARLC_PREFETCH_FORM", "2"))
 PREFETCH_CTAS = int(os.environ.get("PEARLC_PREFETCH_CTAS", "64"))
@@ -342,8 +342,8 @@ PD_SERVED, PD_MAX_ROWS, PD_MAX_K, PD_PAIR_SMEM, PD_G, PD_WHOLE, PD_GROUP = (851,
 def pd_variant(m_real: int, n: int, k: int) -> int | None:
     """The pd variant a decode shape's tiles take (its pd_commit is that without PD_GROUP, `Pipeline.pd_commit`): 979
     (PD_GROUP's tiles, four a CTA) where the tile grid is wide (n at least 16,384)
-    or every row block is full, else 851, the fastest at Llama-3.1-8B's linears at m16 = 32 and 128 (runs
-    r20261018-225110-fbef and r20261018-230602-5632); None outside pd_commit's rows and k."""
+    or every row block is full, else 851, the fastest at Llama-3.1-8B's linears at m16 = 32 and 128; None outside
+    pd_commit's rows and k."""
     if m_real > PD_MAX_ROWS or k > PD_MAX_K:
         return None
     return 979 if n >= 16384 or m_real % TILE == 0 else 851
@@ -586,7 +586,7 @@ class Pipeline:
         i < m_real's under its own line key, the rest under line_a), its counter left zero.  Mode 1 (`rows_a`) stops after
         A's level 0 and the rows' lines, and `pd_tree` does the rest.  Every shape's on one kernel, the variant without
         PD_GROUP (a bit pd_commit doesn't read): the decode step's other commit kernel had its code fetched cold once a
-        layer (979's at gate_up, 110.3 µs against 851's 98.3 at qkv, r20261024-104625-7b57)."""
+        layer (979's at gate_up, 110.3 µs against 851's 98.3 at qkv)."""
         d, b, kk, v, s = self.dev, self.b, self.keys, self.pd & ~PD_GROUP, self.k // 256
         d.launch(f"pd_commit_{v}", self.m_real, 32 * (cdiv(s, 32) * 2 + 2), d.pd_smem[v],
                  p=(b["xa"], b["rowdig_a"], b["tree_a"], b["seeds_a"], b["lkeys_a"], kk["unit"], kk["dom_a"], kk["salt_key"],

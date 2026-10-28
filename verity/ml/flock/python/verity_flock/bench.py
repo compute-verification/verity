@@ -157,7 +157,7 @@ def _probe(addr: str, timeout: float = 1800) -> None:
     raise RuntimeError(f"no verifier at {addr}")
 
 
-PER_PROOF_LOG2 = -195.44   # flock-128-r2 whole-proof bound per proof (red-team-flock grant of flock-pure-block/v2)
+PER_PROOF_LOG2 = -195.44   # flock-128-r2 whole-proof bound per proof (flock-pure-block/v2's)
 
 
 def tcp_rtt(target: str, n: int = 30) -> dict | None:
@@ -236,7 +236,7 @@ def write_instances(a, path: Path, total: int, lo: int, hi: int) -> dict:
         return instances.write_set(path, a.relation, a.set, lo, hi, a.leaf, a.procs, a.y_model)
     if a.k:
         return instances.write_synth(path, a.relation, a.k, lo, hi, a.leaf, a.procs)
-    return instances.write(path, a.relation, total, a.procs, a.cache, lo, hi, scheme=a.scheme, leaf=a.leaf)
+    return instances.write(path, a.relation, total, a.procs, a.cache, lo, hi, leaf=a.leaf)
 
 
 def point(a, total: int, d: Path, net: Path) -> dict:
@@ -346,7 +346,7 @@ def result(a, p: dict, sweep: dict) -> dict:
                       "timed session commits its batch and builds its rows afresh",
         retention="retained", instances=p["header"]["instances"], N_subbatches=len(p["subbatches"]),
         batching={"total": n, "per_proof": a.per_proof, "in_flight": 1, "subbatches": [list(x) for x in p["subbatches"]]},
-        scheme=(f"frame-v3/{p['header']['schemas']['a']}" if a.scheme == "frame-v3" else backend.scheme), statement=first.get("statement") or "verity/flock-pure/v1", relation=a.relation,
+        scheme=f"frame-v3/{p['header']['schemas']['a']}", statement=first.get("statement") or "verity/flock-pure/v1", relation=a.relation,
         roots=first["roots"], sigma=first["sigma"], dense_m=first["dense_m"], units_per_vu=first["units"],
         n_blake3=first["n_blake3"], n_units=first["n_units"], **({"n_sha256": first["n_sha256"]} if first.get("n_sha256") else {}),
         **({"domain_digests": first["domain_digests"]} if first.get("domain_digests") else {}),
@@ -457,8 +457,6 @@ def main(argv=None) -> int:
     ap.add_argument("--operator", default="")
     ap.add_argument("--rtt-target", default="", help="host:port on the verifier pod to time TCP connects to (its sshd)")
     ap.add_argument("--loopback", action="store_true", help="after the sweep, a loopback probe at the plateau point")
-    ap.add_argument("--scheme", choices=["frame-v3", "vllm-v1"], default="frame-v3",
-                    help="the commitment scheme the instance files' roots are under (the binary must prove that statement)")
     ap.add_argument("--leaf", default="blake3", choices=sorted(instances.SCHEMES), help="frame-v3 row-leaf schema of trees a and b")
     ap.add_argument("--set", default="", help="a spine input set directory (x.u16 / w.u16 / y.u16); batches never exceed it")
     ap.add_argument("--y-model", action="store_true", help="with --set: y is the relation's chain output (a set captured on other silicon)")

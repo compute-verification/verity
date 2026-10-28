@@ -139,7 +139,7 @@ def test_the_root_exponent_splits_as_the_kernel_takes_it():
 
 
 def test_params_refuse_a_modulus_below_the_payload():
-    """Every payload is below p (spec §2, `m < 2^b < p`): a c0 past 2^w (a negative modulus, which is 3 mod 4 in Python's
+    """Every payload is below p (`m < 2^b < p`): a c0 past 2^w (a negative modulus, which is 3 mod 4 in Python's
     arithmetic), or one leaving p at or below the largest payload, is refused rather than rejecting every block."""
     R, _, _ = _p2()
     for c0 in ((1 << 32) + 5, (1 << 32) - 3, (1 << 32) - (1 << 24) + 1):
@@ -151,15 +151,17 @@ def test_params_refuse_a_modulus_below_the_payload():
 def test_the_tree_and_the_audit_derivation_are_the_specs():
     import hashlib
 
+    from verity.core.protocols.pous.verifier import MerkleTree
     from verity.ml.commitments.identity import tagged_sha512
     from verity.ml.commitments.rowleaf import sha512_row_v2_digest
     from verity.ml.randomness import frame
 
     R, _, _ = _p2()
     leaves = [bytes([i]) * 64 for i in range(3)]
+    tree = MerkleTree(leaves)
     node = lambda l, r: hashlib.sha512(b"\x01" + l + r).digest()  # noqa: E731
-    assert R.root(leaves) == node(node(leaves[0], leaves[1]), leaves[2])                    # RFC 6962: split at 2
-    assert R.path(leaves, 2) == [node(leaves[0], leaves[1])] and R.path(leaves, 0) == [leaves[1], leaves[2]]
+    assert tree.root == node(node(leaves[0], leaves[1]), leaves[2])                         # RFC 6962: split at 2
+    assert tree.path(2) == (node(leaves[0], leaves[1]),) and tree.path(0) == (leaves[1], leaves[2])
     block, salt = bytes(range(256)) * 8 + bytes(8), b"t" * 32
     leaf = R.leaf(salt, 3, 513, block)
     assert leaf == hashlib.sha512(b"\x00" + salt + (3).to_bytes(8, "big") + (513).to_bytes(2, "big")
@@ -182,7 +184,7 @@ def test_the_tree_and_the_audit_derivation_are_the_specs():
 
 
 def test_the_spec_rtt_cap_is_the_schemes():
-    """The arm's Δ and RTT cap are spec v1.1's, as `verity`'s P2 scheme states them, so `rtt_allowance_within_spec`
+    """The arm's Δ and RTT cap are the ones `verity`'s P2 scheme states them, so `rtt_allowance_within_spec`
     judges against the cap whose `Δ + RTT` the certificate admits."""
     from verity.core.protocols.pous import audit
     from verity.core.protocols.pous.schemes import p2
@@ -463,7 +465,7 @@ def _live_at_the_p2_point(tmp_path, limit_ns: int, clock=None):
 
 
 def test_protocol_memory_challenger_audits_p2_v3_at_the_rtt_cap_and_refuses_one_us_past_it(tmp_path):
-    """The end-to-end claim's memory challenger: `Δ + 354 µs` (spec v1.1's cap) is inside `P2SlackFamilyUncond`'s
+    """The end-to-end claim's memory challenger: `Δ + 354 µs` (the cap) is inside `P2SlackFamilyUncond`'s
     certificate, so 105 challenges run and are accepted; `Δ + 355 µs` fits one 854,029 ns root call, so the memory challenger
     refuses before sending any challenge."""
     from verity.core.protocols.pous.schemes import p2

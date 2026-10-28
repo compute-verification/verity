@@ -249,8 +249,8 @@ def _record_units(cache: Path, opts: CK.Options, tasks: list[tuple], keys: list[
 
 def _calls(specs: list[str]) -> None:
     """Whether each Definition target is a Call (`targets.is_call`), resolved once in the process the targets' processes fork
-    from, so one that needs the catalog builds it there once rather than in each.  A target that doesn't resolve is left to its
-    own check."""
+    from, so each takes the answer rather than working it out again.  A target that doesn't resolve, or that `is_call` can't
+    decide without the catalog (`targets.Undecided`), is left to its own check, which fails on it by name."""
     from verity.ml.circuits.evaluation.reference import resolve
 
     for s in specs:
@@ -898,8 +898,10 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--struct-max-gates", type=int, default=CK.Options.struct_max_gates,
                     help="realize a composite of at most this many IR gates by its structural lowering too "
                          "(c-flock:struct_lower: verity_flock.struct_lower's template, evaluated from the template; 0: none)")
-    ap.add_argument("--as-call", action="store_true", help="hold a Definition target to the partition invariant as a Call "
-                    "(default: when its family is a Call of a served Program)")
+    ap.add_argument("--as-call", action=argparse.BooleanOptionalAction, default=None,
+                    help="hold a Definition target to the partition invariant as a Call, or not (--no-as-call) (default: when its "
+                         "family is a Call of a served Program, `targets.is_call`, which refuses one it can't decide without "
+                         "building the whole catalog)")
     ap.add_argument("--strict", action="store_true", help="fail on the known failures too (circuit_check.known)")
     ap.add_argument("--fail-on-warnings", action="store_true")
     ap.add_argument("--update-pins", action="store_true", help="pin the lowering counts and circuit digests measured now (review the diff)")
@@ -945,7 +947,7 @@ def main(argv: list[str] | None = None) -> int:
     jobs = default_jobs(a.all) if a.jobs is None else a.jobs or auto_jobs()
     opts = _options(a)
     t0 = time.time()
-    rep = run(a.targets, opts, everything=a.all, as_call=True if a.as_call else None,
+    rep = run(a.targets, opts, everything=a.all, as_call=a.as_call,
               log=None if a.quiet else lambda s: print(s, flush=True), jobs=jobs, cache=cache,
               mem_gb=a.mem_gb, mem_file=a.mem_gb_file, isolate=True, fork=True, progress=a.out.with_name(a.out.name + ".progress.jsonl") if a.out else None,
               units=a.catalog_units)

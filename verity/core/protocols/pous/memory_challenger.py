@@ -5,12 +5,11 @@ own VM or box, under the auditor's account), never a process on the prover's nod
 
 A session has four steps:
 
-1. **Commit.** The session id is the auditor's, designated for one audit, and the memory challenger runs at most one
+1. **Draw.** The session id is the auditor's, designated for one audit, and the memory challenger runs at most one
    session under it: its `SessionLog` refuses an id already used and records the new one, fsynced, before the
    session's first challenge.  Before the session the memory challenger draws its `k` indices from its own secret
-   (`verity.ml.randomness`, `COIN_DOMAIN`) and commits to them in a coin tree.  It publishes the coin tree's
-   root and hm96 key together with the session's id and parameters and the root the setup published for the `C*` it
-   audits (`SessionCommitment`).
+   (`verity.ml.randomness`, `COIN_DOMAIN`) and commits to them in a coin tree, which it keeps: nothing that commits to
+   a coin not yet revealed leaves the device before the session's last answer is in.
 2. **Rounds.** Round `j` reveals index `j` (`challenge`), receives the whole answer block (`receive`), reads its clock
    for the receipt before it hashes anything, then hashes the received bytes itself (`block_digest`).  Its record is
    `(j, index, send time, receipt time, H(block))` (`Round`).  The first late round ends the session.  No round is
@@ -19,14 +18,17 @@ A session has four steps:
    the commitment's fields and how the session ended, and the records root is the frame-v3-sha512 root of the round
    records.  The records are witness: the prover proves things about them, and they never reach the auditor in the
    clear.
-4. **Open.** After the session the memory challenger opens every coin it revealed (`openings`).
+4. **Release.** Once the session is signed the memory challenger releases its commitment (`commitment`: the coin
+   tree's root and hm96 key, the session's id and parameters, and the root the setup published for the `C*` it audits,
+   `SessionCommitment`) and opens every coin it revealed (`openings`).  Both refuse before the signature.
 
 `verdict` is what the prover will prove about a signed session, here checked in the clear.  It checks the signature
 under a trusted key and an accepted scheme, the header against the commitment, every revealed index against its coin
 opening, every `H(block)` against the expected digest of that block of `C`, and every round on time within `Δ + RTT`.
 Its public output is the verdict alone (`Verdict.public`); the per-round on-time bits and the reasons stay in the
-signed record.  The guarantee of the sequential draw is the coin tree's: an index is fixed before the session
-(binding) and unknown to the server until its round reveals it (hiding).
+signed record.  The coin tree binds the challenger's revealed indices to what it signed; the indices' secrecy until
+their rounds is the device's (`pous-ring-device`), which releases nothing about a coin before its round reveals it, so
+no guarantee rests on the coin tree hiding.
 
 **Coin tree** (`COIN_TREE`): hm96-sha512/v1 hiding leaves in a frame-v3-sha512 tree, core's helpers
 (`verity.ml.commitments.hm96`, `.merkle`), with integers big-endian:
@@ -38,8 +40,9 @@ leaf_j  = frame leaf (rank j, position j, COIN_SCHEMA) of hm96.SHA512.tree_leaf(
 root    = frame-v3-sha512 root over leaf_0..leaf_{k-1}, domain (binding(COIN_BINDING, session), owner -1, range(k))
 ~~~
 
-An opening is `(j, index_j, y_j, path)`.  Binding is SHA-512's collision resistance; hiding is hm96's statistical
-bound, `k · 2^-256` under the fresh key.  The domain's 32-byte binding is the first 32 bytes of
+An opening is `(j, index_j, y_j, path)`.  Binding is SHA-512's collision resistance.  Hiding is hm96's statistical
+bound, `k · 2^-256` under the fresh key, and no guarantee reads it: the root leaves the device only after the session's
+last answer.  The domain's 32-byte binding is the first 32 bytes of
 `SHA-512(tag ‖ session)`, since a frame-v3 binding is 32 bytes until the identity re-baseline.
 
 **Round records** (`RECORDS_TREE`): record `j` is `u32 j ‖ u64 index ‖ u64 send_ns ‖ u64 receipt_ns ‖ H(block)` (92
@@ -164,9 +167,9 @@ class CoinOpening:
 
 
 class CoinTree:
-    """The session's `k` coins over `blocks` blocks, committed before the session (module docstring).  `draw` takes
-    the challenger's own secret, never a public beacon or the server's; the hm96 key and the salts are fresh from the OS
-    unless given (the tests)."""
+    """The session's `k` coins over `blocks` blocks, drawn and committed on the device before the session and released
+    after it (module docstring).  `draw` takes the challenger's own secret, never a public beacon or the server's; the
+    hm96 key and the salts are fresh from the OS unless given (the tests)."""
 
     def __init__(self, session: bytes, blocks: int, indices: Sequence[int], key: bytes, salts: Sequence[bytes]) -> None:
         if len(session) != 32:
@@ -210,10 +213,10 @@ def verify_coin(commitment: SessionCommitment, opening: CoinOpening) -> bool:
 
 @dataclass(frozen=True, slots=True)
 class SessionCommitment:
-    """What the memory challenger publishes before the session: the session id, the coin tree (root and hm96 key),
-    the number of blocks and rounds, the limit `Δ + RTT`, the answer's size, and `binding`, the root the setup published
-    for the `C*` the session audits (`verifier.VerifierKey.root`, the setup protocol's `root`).  Every field is in the
-    signed header."""
+    """What the memory challenger releases once the session is signed, never before its last answer: the session id,
+    the coin tree (root and hm96 key), the number of blocks and rounds, the limit `Δ + RTT`, the answer's size, and
+    `binding`, the root the setup published for the `C*` the session audits (`verifier.VerifierKey.root`, the setup
+    protocol's `root`).  Every field is in the signed header."""
 
     session: bytes
     coin_root: bytes
@@ -455,12 +458,27 @@ class SessionLog:
             os.close(fd)
 
 
+def coin_key(raw: bytes) -> bytes:
+    """A coin tree's hiding key from `HM96.key_bytes` uniform bytes `raw`, the bits above `HM96.key_bits` cleared as
+    `HM96.fresh_key` clears them."""
+    out = bytearray(raw)
+    if out:
+        out[-1] &= (1 << (HM96.key_bits - 8 * (HM96.key_bytes - 1))) - 1
+    return HM96.check_key(bytes(out))
+
+
+def resolution_of(clock: Callable[[], int]) -> float:
+    """How finely `clock` ticks, in ns: the monotonic clock's resolution for `time.perf_counter_ns`, else 1 (an injected
+    clock's readings are taken as given)."""
+    return time.clock_getres(time.CLOCK_MONOTONIC) * 1e9 if clock is time.perf_counter_ns else 1
+
+
 class MemoryChallenger:
     """One session of the memory challenger over `coins`, judged against `limit_ns`, signed by `signer`, bound to
     `binding`, the setup's root of the `C*` it audits (module docstring).  The session's id, `coins.session`, goes into
     `log` (`SessionLog.claim`) before anything else can happen: a used id is refused.  `challenge()` reveals the next
     index and reads the send time; `receive(block)` reads the receipt time first, then hashes the block.  A late round
-    ends the session; `close()` signs it once."""
+    ends the session; `close()` signs it once, and only then are `commitment` and `openings()` released."""
 
     def __init__(self, coins: CoinTree, signer: Signer, *, log: SessionLog, limit_ns: int, block_bytes: int,
                  binding: bytes, clock: Callable[[], int] = time.perf_counter_ns, resolution_ns: int | None = None) -> None:
@@ -469,13 +487,13 @@ class MemoryChallenger:
         if len(binding) != DIGEST_BYTES:
             raise ValueError(f"a session's binding is the setup's {DIGEST_BYTES}-byte root of C*, not {len(binding)} bytes")
         if resolution_ns is None:
-            resolution_ns = time.clock_getres(time.CLOCK_MONOTONIC) * 1e9 if clock is time.perf_counter_ns else 1
+            resolution_ns = resolution_of(clock)
         if resolution_ns > CLOCK_RESOLUTION_NS:
             raise ValueError(f"the clock ticks every {resolution_ns} ns, coarser than {CLOCK_RESOLUTION_NS} ns")
         log.claim(coins.session)
         self.coins, self.signer, self.clock = coins, signer, clock
-        self.commitment = SessionCommitment(coins.session, coins.root, coins.key, coins.blocks, coins.k, limit_ns,
-                                            block_bytes, binding)
+        self._commitment = SessionCommitment(coins.session, coins.root, coins.key, coins.blocks, coins.k, limit_ns,
+                                             block_bytes, binding)
         self.rounds: list[Round] = []
         self.ended: str | None = None
         self.signed: SignedSession | None = None
@@ -484,6 +502,14 @@ class MemoryChallenger:
     @property
     def done(self) -> bool:
         return self.ended is not None
+
+    @property
+    def commitment(self) -> SessionCommitment:
+        """The session's commitment, released once the session is signed: its coin root commits to coins no round has
+        revealed yet, so it never leaves the device before the last answer is in."""
+        if self.signed is None:
+            raise RuntimeError("the commitment is released after the session, once it is signed")
+        return self._commitment
 
     def challenge(self) -> int:
         """Reveal round `j`'s index and read its send time; refused with a round open or the session ended."""
@@ -501,13 +527,13 @@ class MemoryChallenger:
         receipt = self.clock()
         if self._open is None:
             raise RuntimeError("no round is open")
-        if len(block) != self.commitment.block_bytes:
-            raise ValueError(f"an answer is the whole {self.commitment.block_bytes}-byte block, not {len(block)} bytes")
+        if len(block) != self._commitment.block_bytes:
+            raise ValueError(f"an answer is the whole {self._commitment.block_bytes}-byte block, not {len(block)} bytes")
         j, i, send = self._open
         self._open = None
         r = Round(j, i, send, receipt, block_digest(block))
         self.rounds.append(r)
-        if not 0 <= r.elapsed_ns <= self.commitment.limit_ns:
+        if not 0 <= r.elapsed_ns <= self._commitment.limit_ns:
             self.ended = LATE
         elif len(self.rounds) == self.coins.k:
             self.ended = COMPLETE
@@ -527,8 +553,9 @@ class MemoryChallenger:
             raise RuntimeError("the session has not ended")
         if self.signed is None:
             rounds = tuple(self.rounds)
-            sig = self.signer.sign(self.commitment.session, message(self.commitment, self.ended, rounds))
-            self.signed = SignedSession(self.commitment, self.ended, rounds, self.signer.scheme, self.signer.public_key, sig)
+            sig = self.signer.sign(self._commitment.session, message(self._commitment, self.ended, rounds))
+            self.signed = SignedSession(self._commitment, self.ended, rounds, self.signer.scheme, self.signer.public_key,
+                                        sig)
         return self.signed
 
     def openings(self) -> tuple[CoinOpening, ...]:
@@ -569,7 +596,7 @@ class Verdict:
 def verdict(signed: SignedSession, commitment: SessionCommitment, openings: Sequence[CoinOpening],
             expected: Callable[[int], bytes], *, trusted: frozenset[bytes] | set[bytes],
             schemes: Mapping[str, Verify] = SCHEMES) -> Verdict:
-    """The check of a signed session against the commitment published before it (module docstring): `expected(i)` is
+    """The check of a signed session against the commitment released with it (module docstring): `expected(i)` is
     `block_digest` of block `i` of `C`, `trusted` the memory challengers' public keys, `schemes` the accepted signature schemes
     (S1's; a test's own mapping in tests).  It fails closed: an unknown scheme, an untrusted key or a bad signature
     rejects, whatever the rounds."""
@@ -610,6 +637,6 @@ def verdict(signed: SignedSession, commitment: SessionCommitment, openings: Sequ
 __all__ = ["CLOCK_RESOLUTION_NS", "COIN_DOMAIN", "COIN_SCHEMA", "COIN_TREE", "COMPLETE", "LATE", "LMS", "PROTOCOL",
            "RECORDS_TREE", "RECORD_SCHEMA", "SCHEMES", "SESSION_LOG", "TEST_PREFIX", "CoinOpening", "CoinTree", "LmsSigner",
            "MemoryChallenger", "Round", "SessionCommitment", "SessionLog", "SessionLogError", "SignedSession", "Signer",
-           "Verdict", "Verify", "block_digest", "coin_digest", "coin_leaf", "collector_paused", "covering_certificate",
-           "lms_verify", "message",
-           "records_root", "register", "verdict", "verify_coin"]
+           "Verdict", "Verify", "block_digest", "coin_digest", "coin_key", "coin_leaf", "collector_paused",
+           "covering_certificate", "lms_verify", "message", "records_root", "register", "resolution_of", "verdict",
+           "verify_coin"]

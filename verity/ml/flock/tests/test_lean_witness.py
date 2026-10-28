@@ -3,25 +3,25 @@
 predicate). What a recorded honest session meets is asserted; what none meets yet is asserted refused by name, so the
 change that closes it has to say so here. Two recorded sets, both fetched fixtures:
 
-* `rec-coins/16-16-8-n64` (`r20261009-111638-6720`'s inner statement and honest inner session, and level 3's `pub.bin`,
-  `registered.json` and outer session, proved again at the current leaf scheme by `r20261010-040650-84a9`), with level
+* `rec-coins/16-16-8-n64` (a recorded inner statement and honest inner session, and level 3's `pub.bin`,
+  `registered.json` and outer session, proved again at the current leaf scheme), with level
   3's statement restaged by `rec_vstage.stage` as `test_lean_rec_coins` restages it, and checked as
-  `verity/flock-circuit`; its outer session was proved before #1677 (art:225370f8… is the level proved again with
-  #1677's OS masks, by `r20261010-212517-4f68`, and accepted by today's verifier). The inner description is not
+  `verity/flock-circuit`; its outer session was proved before the OS masks (the level proved again with them, by
+  `r20261010-212517-4f68`, is accepted by today's verifier). The inner description is not
   registered (no staging runs `inner_registered register`). V*'s sessions hide their outputs, as `ZkOuterR.hTags`
   (`TagsOkZHJ`) takes them, and their shared-row public file passes `ScopeZR`, `Typable`'s statement check; the
   public-output one-table checks, `TagsOk` and `ScopeZ`, refuse them.
-* `f1-gate`, the F1 gate (`PublicAudit`, the recursive audit at public units): art:df3af922…, 85 at K = 4096, N = 2,
+* `f1-gate`, the F1 gate (`PublicAudit`, the recursive audit at public units): 85 at K = 4096, N = 2,
   built, proved and verified at b795ecbde by `r20261010-210008-003d` through `r20261010-214046-3e44` (the custody), V*'s
   statements staged with the inner program; the fixture holds the files these tests read, the circuits and V*'s
   programs xz-compressed, the inner transcript is tracked beside it (`f1-gate-transcript`), and each is checked against
   the art's own listing once decompressed; RecCap's statement and session were staged and proved over the gate's inner
-  session after it (`r20261020-002938-635a`, `85-rec-reprice.sh` STEP=vcap and STEP=oprove LEVELS=cap). Lean's verifier
+  session after it (`85-rec-reprice.sh` STEP=vcap and STEP=oprove LEVELS=cap). Lean's verifier
   builds the inner statement from its own partition object and program (`AcceptsPublic`), V*'s seven staged statements
   are the ones `outerStatementsAt` lists, each session is one of them byte for byte (`RecVStar.checkStmt`) and draws every unit,
-  and the rate is below 1 at `k = 2^23` (at `2^21` for these sessions). The sessions were proved with #1677's OS masks
+  and the rate is below 1 at `k = 2^23` (at `2^21` for these sessions). The sessions were proved with the OS masks
   in `verity/flock-circuit`'s `--zk` identity, and the verifier of record accepts them as `verity/flock-circuit`: the
-  gate is witnessed under today's identity. The event's last conjunct is shown in its executable form only: the honest
+  gate is witnessed under the current identity. The event's last conjunct is shown in its executable form only: the honest
   outputs are the circuit's, and a public file whose one output row is committed one bit off still sets up. That is
   the executable fact `¬ holds` is about, not that Lean's `holds` flips there: no Lean lemma links execution to
   `holds`, and the cheater's row not being the circuit's output is up to a SHA-512 second preimage for that row.
@@ -47,7 +47,7 @@ import numpy as np
 import pytest
 from test_lean_rec_coins import built, forged  # noqa: F401
 from verity.ml.circuits.defs import CompositeDefinition, bind
-from verity.ml.circuits.evaluate import evaluate_call
+from verity.ml.circuits.evaluation.reference import evaluate_call
 from verity.ml.circuits.ops import gemm as G
 from verity.ml.circuits.program import Program
 from verity_flock import circuit as C
@@ -61,20 +61,20 @@ BIN = LEAN / ".lake" / "build" / "bin" / "flock-witness"
 SET = HERE / "fixtures" / "rec-coins" / "16-16-8-n64"
 LEVEL = 3
 STATEMENT = "verity/flock-circuit"
-#: the statement rec-coins' level-3 session was proved as: `verity/flock-circuit` before #1677 put the OS's masks in its
+#: the statement rec-coins' level-3 session was proved as: `verity/flock-circuit` before the OS's masks were put in its
 #: identity
 PROVED = "verity/flock-circuit@cec3e347"
 #: `CoinTree.checkHello`'s refusal of a session whose Hello is not the verifier's own
 S2_R7 = "S2/R7: the session parameters are not the verifier's"
-PRF208 = "PRF-208: fixtures are re-proved after F1 (#5181) lands; this skip goes with that re-proof"
+STALE_FIXTURE = "the fixture is re-proved with the OS-masks prover; this skip goes with that re-proof"
 #: the recorded level's circuit (`v/L3/circuit.txt`), which its outer session proves (`test_lean_rec_coins`)
 CIRCUIT_SHA512 = ("885c04a867b23838a460033b3cfcbd8cad28bc5f994dd10e907724d293479cf7a525e331ed7152ab5e451bb27f39905f695af6295408db"
                   "459a42e2dda3e07463")
 
-#: art:df3af922…'s files the gate's tests read, a file `f` stored as `f.xz` when large, and `prover.sha256`: their lines of
+#: the gate run's files these tests read, a file `f` stored as `f.xz` when large, and `prover.sha256`: their lines of
 #: the art's own listing (`out/data.sha256`)
 F1 = HERE / "fixtures" / "f1-gate"
-#: the gate's inner transcript, the coin server's record of its inner session (art:df3af922…'s `inner/s1/public.json`,
+#: the gate's inner transcript, the coin server's record of its inner session (the gate run's `inner/s1/public.json`,
 #: xz-compressed, and its line of the art's listing), tracked: a check's pod fetches a registered fixture only once `main`
 #: registers it
 F1_TRANSCRIPT = HERE / "fixtures" / "f1-gate-transcript"
@@ -161,11 +161,11 @@ def test_the_recorded_level_meets(outer, check):
     assert outer[check]["ok"], outer[check].get("why")
 
 
-@pytest.mark.skip(reason=PRF208)
+@pytest.mark.skip(reason=STALE_FIXTURE)
 def test_the_recorded_level_was_proved_before_the_os_masks(outer, level):
     """`AcceptsZKR` refuses the level's session as `verity/flock-circuit` at its Hello (its re-record's prover,
-    505b9bfb1, lacked #1677's `osMasks`) and accepts it as `PROVED`. Holds as `verity/flock-circuit` once the fixture
-    takes the level proved again with the OS-masks prover (art:225370f8…)."""
+    505b9bfb1, lacked `osMasks`) and accepts it as `PROVED`. Holds as `verity/flock-circuit` once the fixture
+    takes the level proved again with the OS-masks prover."""
     assert (outer["accepts_zkr"]["ok"], outer["accepts_zkr"].get("why")) == (False, S2_R7)
     c = _witness("session", "--statement", PROVED, *level)["accepts_zkr"]
     assert c["ok"], c.get("why")
@@ -385,17 +385,17 @@ def test_f1_the_session_meets(f1, part):
     assert w["full_draw"]["population"] == F1_STATEMENTS[j][1]
 
 
-@pytest.mark.skip(reason=PRF208)
+@pytest.mark.skip(reason=STALE_FIXTURE)
 @pytest.mark.parametrize("part", F1_PARTS)
 def test_f1_the_session_is_accepted_as_the_verifiers_statement(f1, part):
     """`AcceptsZKR`, and so `AcceptsZKV`, accepts every gate session as `verity/flock-circuit`, the verifier of record's
-    `--zk` identity with #1677's OS masks, which the gate's prover had."""
+    `--zk` identity with the OS masks, which the gate's prover had."""
     w = f1[part, STATEMENT]
     for check in ("accepts_zkr", "accepts_zkv"):
         assert w[check]["ok"], (check, w[check].get("why"))
 
 
-@pytest.mark.skip(reason=PRF208)
+@pytest.mark.skip(reason=STALE_FIXTURE)
 @pytest.mark.parametrize("part", ["L3", "cap"])
 def test_f1_verify_refuses_the_session_only_for_its_undrawn_inner_session(built, f1_gate, f1, once, part):  # noqa: F811
     """`flock-verify verify --zk`, the verifier of record, passes level 3 (`rec-open/l16-h4`, 106 units, the smallest
@@ -404,7 +404,7 @@ def test_f1_verify_refuses_the_session_only_for_its_undrawn_inner_session(built,
     link points, level-3 tops and `root_B` the unit is held to (`RecVStar.checkTopRows`, `RecCoins.checkLink`), as
     `85-rec-reprice.sh`'s STEP=lean runs it, through every check and every refusal the verdict runs last (the form's, a
     draw-less session's, and a V* session's short of every unit, `RecSetup.fullDraw`) but the one after them: the gate's
-    inner session ran before the coin server drew it (#2468), so its record holds no draw, and a session over it is refused
+    inner session ran before the coin server drew it, so its record holds no draw, and a session over it is refused
     (`RecSetup.innerDrawn`), with that reason alone, and not as a private circuit's. The checks above are the model's
     predicates; this is the shipped verdict, so a refusal added to it that an honest V* session meets fails here and nowhere
     else. About two minutes, beside the gate's witness runs."""

@@ -8,7 +8,7 @@ probability δ, at most so many proof blocks are faulty, a proof block being fau
 applied to its committed inputs. The protocol is stated in Lean (see "Where things are"); this README outlines it,
 points to the code, and lists what the Lean does not state yet.
 
-Sampled proofs is a subprotocol of both composite protocols. Remote Verity (`verity/remote/v0`,
+Sampled proofs is a subprotocol of both composite protocols. The remote protocol (`verity/remote/v0`,
 `verity/core/protocols/remote/`) composes its one-stage audit (`verity/sampled-proofs/one-stage/v1`) with PoUW
 (`verity/pouw/v1`), and onsite (`verity/core/protocols/onsite/`) composes it with the other subprotocols. In each, the
 composite's verifier runs the one-stage audit's Lean check as a component, and the composite accepts only when every
@@ -30,6 +30,10 @@ rests on these named assumptions:
 - `TableCRZAt` (`cr/sha-512`; the statement reads it through its abbreviation `TableCRZ`) and `LinkCRZC`
   (`ecr/sha-512`): SHA-512's collision resistance, for the collision finders the proof builds from the prover.
 
+On `main`, both composites' sampled-proofs component is one-stage v1 (`verity/sampled-proofs/one-stage/v1`), which
+takes the sessions' verdicts as evidence: the verifier's run of `flock-verify --zk` produces them, and the link from a
+composite's acceptance to that run, and so to `SampledKSLiveV3`, comes with one-stage v2 (under "Where things are").
+
 The draw happens after the registration, so the prover fixes everything a drawn proof block's statement depends on
 before any coin. In the remote protocol the coins come from the auditor's challenger (or the verifier's own draw),
 which adds two premises about where it runs, `CoinsConfidential` and `OneClock` ("Where things are"). Both are prose
@@ -50,7 +54,7 @@ only: no `.lean` file defines either.
 6. The audit record keeps the registration, the receipt, the draw, the proved proof blocks, the statement's digests and every
    verdict, and, when everything accepted, the integrity profile.
 
-**The proof service** (`service`) runs these steps for a protocol, on the challenger's side. A protocol states a `Spec`:
+**The proof system** (`service`) runs these steps for a protocol, on the challenger's side. A protocol states a `Spec`:
 - what it commits;
 - its selection rule;
 - the check, as a public Program;
@@ -78,10 +82,10 @@ has at most `2^-40`. The proof system adds, per proof block, its knowledge-sound
 Applications weight the profile's faulty proof blocks by what each one costs them: exfiltration security by their output bits,
 plus a term for which proof blocks are faulty, and compute security by their work.
 
-Everything is committed at serve time: the proof service has no two-stage rule, and the Lean verifier refuses a
+Everything is committed at serve time: the proof system has no two-stage rule, and the Lean verifier refuses a
 registration that names one.
 Not built yet: the security function and its review, and composition checks such as PoUW's tiles
-per proof block matching this partition (the IR checks refinement, `verity.ml.circuits.partition.validate_refinement`).
+per proof block matching this partition (a tile family built with `each` over the proof blocks nests in them by construction).
 
 Serving's record is not yet the scheme the audit proves: the benchmark's first run (`benchmarks/one_stage/a0.py`)
 registers a stand-in, a fresh commitment to values captured from serving, and says so (`window.kind = "stand-in"`). Its
@@ -147,14 +151,13 @@ those roots to the vllm-v1 roots is the committer's opening, not proof. Rows the
     which the gate refuses to open without (`auditor.coin_ports`). It is not in Lean: no `.lean` file defines it.
     ACCEL's pooled guarantee `Pouw.Guarantees.Dither.FleetSound` builds a form of it into its statement instead (each
     unit's prover is a function of the other units' coins).
-  - `OneClock`, a spec premise that no Lean statement reads: the challenger's release times and the certifier's
+  - `OneClock`, a named premise under the trusted auditor host, with no Lean statement yet: the challenger's release times and the certifier's
     ingress and receipt times are read on one clock. Deployed, that is the auditor host's. A challenger on a device of its own would have to keep its clock within
     1.03 s of the certifier's, the offset ACCEL's timing allows.
 - **The Python.** `verity.core.protocols.sampled_proofs.one_stage` is the one-stage audit's reference: `registration`,
-  `draw` (the draw's checks, not a sampler), `partition`, `audit` and `verdict`. `consumers` reads its profile. `service` is the proof service over it, whose `Stream`
+  `draw` (the draw's checks, not a sampler), `partition`, `audit` and `verdict`. `consumers` reads its profile. `service` is the proof system over it, whose `Stream`
   draws from the challenger's own randomness as `coins.draw_first` does. `coins` is the verifier's randomness, and
-  `plan` holds verification plans over IR Programs. `optimize`, `candidates` and
-  `costfit` plan a sampling design (`benchmarks/sampling_plan`).
+  `optimize`, `candidates` and `costfit` plan a sampling design (`benchmarks/sampling_plan`).
 - **The Lean-generated vectors.** `tests/fixtures/exfiltration_lean.json` is `audit_exfiltration` and
   `stratified_miss_eq_greedy` evaluated by Lean (`tests/lean/ExfiltrationVectors.lean`, regenerated by
   `tests/lean/generate.sh`), and `tests/test_consumers.py` holds the consumers to it. `tests/test_coins.py` checks the
@@ -180,7 +183,6 @@ from verity.core.protocols.sampled_proofs import service
 from verity.core.protocols.sampled_proofs.one_stage import audit, draw, partition, registration
 from verity.core.protocols.sampled_proofs.coins import OwnRandomness, closure_of, draw_first
 from verity.core.protocols.sampled_proofs.consumers import compute_bound, exfiltration_bound, location_bits
-from verity.core.protocols.sampled_proofs.plan import VerificationPlan
 from verity.core.protocols.sampled_proofs.optimize import Candidate, CostModel, Objective, frontier, for_budget
 from verity.core.protocols.sampled_proofs.candidates import Shape, cuts
 from verity.core.protocols.sampled_proofs.costfit import fit
@@ -223,7 +225,7 @@ from verity.core.protocols.sampled_proofs.costfit import fit
 - `verifier`: the verifier: `check`, `matches_public`, `check_draw`, `check_proved`, `hello`, `audit_record`,
   `check_public`, `check_verdicts` (given the service's Python verdict), `stream` and `fleet`, by the Lean and the
   Python; `RECORD_VERDICT` names whose is the record's.
-- `proofs`: the proof service's own run of C-Flock's Lean verifier on a statement's proof files (`Proof`:
+- `proofs`: the proof system's own run of C-Flock's Lean verifier on a statement's proof files (`Proof`:
   circuit file, public file, sessions): `verify` refuses a circuit file other than the one the auditor committed, runs
   `flock-verify verify --zk --registered` against the verifier's own program, partition and `--registered` file, and
   returns each session's `Finding` (accepted, why, the program its verdict names, its registered finding, the proof blocks it
@@ -234,15 +236,13 @@ from verity.core.protocols.sampled_proofs.costfit import fit
 - `coins`: `OwnRandomness`, the challenger's own randomness; `draw_first`, a one-stage sampling design's draw from it,
   with `closure_of` for a work design's closure; `ChallengerCoins`, a draw's coins from one family of the auditor's
   challenger, and `challenger_stream`, `read_reason` and `coins_reason`, the verifier's replay of them from the record.
-- `plan`: `VerificationPlan` of `GateClass`es with its `UnconditionalObligation`s, `Obligation.of_call`, and
-  `weight_binding_plan`.
 - `optimize`: the untrusted planner. From `Candidate`s, a `CostModel` (per statement, per proof block, commitment, serve-time
   `Commitment`s, replay) and an `Objective` (harm per proof block at δ), `frontier` is the certified Pareto frontier of total
   cost against harm. `for_budget` and `for_target` query it, `weigh` weights weight classes, `overlaps` prices repeated
   commitments, `certify` recomputes a plan's `Certificate`, `sensitivity` and `needs_benchmark` name what moves it,
   and `work_law` registers it as `work:1`.
 - `candidates`: `cuts` derives the `Candidate`s from a Definition DAG of `Shape`s by a DP, each proof block's outputs
-  in a public size class (`one_stage.partition.unit_class`); `pressure` gives the developer hints.
+  in a public size class (`verity.ml.circuits.partition_v2.unit_class`); `pressure` gives the developer hints.
 - `costfit`: C-Flock's cost model fitted from measurements, as a cost-model/v1 record.
 
 ## Not yet in Lean
@@ -434,8 +434,12 @@ The audit record (`audit.audit_record`) is `{"format": "verity/one-stage/audit/v
   incomplete (`complete` is false).
 - The record is accepted only when there is a verifier whose verdict counts (`of_record`), every one of them ran and accepted, every
   other verdict that ran accepted, and every check passed. The profiles are present only then.
-- A session that proves one subcircuit's proof blocks is served that subcircuit's share as a `subset:k_s` draw over its `n_s` proof blocks,
-  in its own indices; the record keeps the union draw.
+- A zk session proves one member's proof blocks, the window's `[base, base + n)`, inside one subcircuit's stratum. It is
+  served the member's share of the proved blocks as a `subset:|share|` draw over its `n` proof blocks, in its own indices
+  (`sorted(u - base for u in proved(draw) if base <= u < base + n)`), and a member whose share is empty runs no session; a
+  plain session's one member is the whole window, served the draw itself. The record keeps the union draw. Under a
+  stratified draw a member's share has at most `k_s` units and, given its size, is the member's own uniform subset
+  (`Flock.Guarantees.WindowDraw`, `Security/Proofs/Flock/EndToEnd/WindowDraw/Statement.lean`).
 - `profile` is the profile's JSON, except that a stratified or work sampling design keeps the v0 form: its JSON with
   `delta` and the count drawn per subcircuit.
 - `wrong_units` is `{"delta", "of": population, "bound", "rule", ["per_template"]}`: `bound` is core's exact
@@ -467,7 +471,7 @@ delta, through its weighted bound `harm_bound`; each application counts delta on
 
 Pinned by `tests/test_consumers.py` and `tests/fixtures/exfiltration_lean.json`, whose recorded sha256 of the Lean files it came from fails `test_the_lean_vectors_were_generated_from_this_tree` until it is regenerated.
 
-### The proof service
+### The proof system
 
 `service.Stream` holds one protocol's registrations to its `Spec`, on the challenger's side:
 
@@ -500,7 +504,7 @@ log's history by `tests/test_service_history.py`, sessions by `tests/test_servic
 The draw of record is `coins.OwnRandomness` on the Lean verifier's coins (`one_stage.verifier.coins`:
 `IO.getRandomBytes`, under `UniformRandomBytes`; `service.Stream`'s default), read with the Lean verifier's samplers (`Flock.Draw`), with no
 hash, no derivation and no beacon, after the registration it follows. `draw_first` reads the bytes as
-`Flock.Draw.drawWith` does. Nothing derives a draw, the proof service's included, except vLLM's legacy replay challenge
+`Flock.Draw.drawWith` does. Nothing derives a draw, the proof system's included, except vLLM's legacy replay challenge
 until its re-baseline; `coins`' docstring has the byte layout. Pinned by `tests/test_coins.py`.
 
 A draw from the auditor's challenger (`remote.RemoteChallenger`, or `challenger.LiveChallenger` in process) passes
@@ -521,9 +525,3 @@ bytes the draw read are those coins, after the registration's digest. Missing ev
 window root are refused the same way, as is evidence for a draw from the verifier's own coins: the outcome is a reject
 failing `run`. Pinned by `tests/test_challenger_coins.py` and the difftest's `challenger_read`,
 `challenger_draw_coins` and `run`.
-
-### Verification plans
-
-`plan` builds obligations from a call's declared interface (`args`, `returns`), never from `FunctionCall.out`, which
-rescans the circuit on every call. A prescribed input is a sampled gate like any other, and an `UnconditionalObligation`
-is proved on every audit, outside the draw, so its gates are the profile's `covered` families. Pinned by `tests/test_plan.py`.

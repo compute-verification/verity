@@ -45,8 +45,8 @@ class Checks:
 
     def bounds(self, profiles) -> list[int | float]:
         """Each profile's `bound()`, exact, its stratified law's `count_bound` computed in the workers side by side (a
-        60 s window's 33273 draws from ~6e10 receipts take 25–75 s each in exact arithmetic); a law without strata in
-        this process."""
+        60 s window's `audit.SAMPLES` draws from ~6e10 receipts take 25–75 s each in exact arithmetic); a law without
+        strata in this process."""
         laws = [p.strata() for p in profiles]
         futures = [None if law is None else self.pool.submit(_count_bound, law, p.delta)
                    for p, law in zip(profiles, laws)]

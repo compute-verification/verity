@@ -5,7 +5,7 @@ and hashes.
     format = "verity/config/v0"
     protocols = ["sampled-proofs", "certifier"]      the components, by the six subprotocols' names
     [workload]  name, params                         the computation audited, and its public shape
-    [service]   law                                  the proof service's selection law (no ε, δ or threshold)
+    [service]   law                                  the proof system's selection law (no ε, δ or threshold)
     [program]   commit                               the commit of the auditor-trusted code the parties run
     [params."<id>"]                                  a listed component's public structural parameters
     [[party]]   name, machine, principal             machine: `local`, or a name `verity run --on` gives
@@ -22,9 +22,9 @@ schema) are handed in by the caller: this module imports no protocol and no work
 (`Refused`) an unknown key or version, a component whose requirements aren't listed or whose needs the workload doesn't
 provide, a party or channel other than the declared ones, and a placement the declarations forbid.
 
-The canonical form is canonical JSON of the checked configuration (sorted keys, no whitespace, UTF-8, no float), and its
-hash is SHA-512 of that form without the transport-only fields (`TRANSPORT`: a party's address and listen port, and
-which side of a channel dials), so moving a listener changes no hash.
+The canonical form is canonical JSON of the checked configuration (sorted keys, no whitespace, strings ASCII without
+DEL, no float), and its hash is SHA-512 of that form without the transport-only fields (`TRANSPORT`: a party's address
+and listen port, and which side of a channel dials), so moving a listener changes no hash.
 """
 
 from __future__ import annotations
@@ -143,9 +143,18 @@ def _names(where: str, v: Any) -> tuple[str, ...]:
     return tuple(v)
 
 
+def _ascii(where: str, s: str) -> None:
+    if not s.isascii() or "\x7f" in s:
+        raise Refused("ascii", f"{where}: string {s[:40]!r} is not ASCII without DEL, as canonical JSON's strings are")
+
+
 def _plain(where: str, v: Any) -> None:
-    """A value is a string, an integer, a boolean, a list or a table of them: never a float or a date."""
-    if isinstance(v, bool | int | str):
+    """A value is a string (ASCII without DEL), an integer, a boolean, a list or a table of them: never a float or a
+    date."""
+    if isinstance(v, str):
+        _ascii(where, v)
+        return
+    if isinstance(v, bool | int):
         return
     if isinstance(v, float):
         raise Refused("float", f"{where} = {v!r}: a configuration holds integers and exact ratios as strings, no float")
@@ -154,6 +163,8 @@ def _plain(where: str, v: Any) -> None:
             _plain(f"{where}[{i}]", x)
     elif isinstance(v, Mapping):
         for k, x in v.items():
+            if isinstance(k, str):
+                _ascii(f"{where} key", k)
             _plain(f"{where}.{k}", x)
     else:
         raise Refused("type", f"{where} = {v!r}: not a string, integer, boolean, list or table")
@@ -304,9 +315,10 @@ def _channels(entries: Any, declared_channels: Mapping[tuple[str, str], Channel]
 
 
 def canonical(value: Any) -> bytes:
-    """Canonical JSON: sorted keys, no whitespace, UTF-8; a float is refused (`_plain`)."""
+    """Canonical JSON: `verity.ml.circuits.codec.canonical_json`'s bytes, which this unit may not import; a float or a
+    string past ASCII without DEL is refused (`_plain`)."""
     _plain("the value", value)
-    return json.dumps(value, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode()
+    return json.dumps(value, sort_keys=True, separators=(",", ":")).encode()
 
 
 def hashed(cfg: Mapping[str, Any]) -> dict[str, Any]:

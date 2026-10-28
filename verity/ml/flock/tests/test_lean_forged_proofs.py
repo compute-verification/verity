@@ -14,8 +14,8 @@ It is the one test in `check` that hands the Lean verifier a proof of a false st
 `test_lean_zk.py`'s mutants edit an honest proof, whose statement is true. So it catches a verifier that accepts a proof
 whose transcript is consistent and whose witness is false, which those can't.
 
-The sessions are a fetched fixture (`fixtures/artifacts.json`), written by `benchmarks/one_stage/forged_proofs.sh` (run
-r20261027-022307-6c8f), which `suites.py` fetches before the suite runs, so a missing fixture fails these tests rather than
+The sessions are a fetched fixture (`fixtures/artifacts.json`), written by `benchmarks/one_stage/forged_proofs.sh`,
+which `suites.py` fetches before the suite runs, so a missing fixture fails these tests rather than
 skipping them."""
 from __future__ import annotations
 
@@ -33,7 +33,7 @@ LEAN = Path(__file__).resolve().parents[3] / "core" / "service" / "flock"
 VERIFIER = Path(__file__).resolve().parents[1] / "verifier"
 BIN = LEAN / ".lake" / "build" / "bin" / "flock-verify"
 #: ``stage/`` (circuit.txt, partition.json, program.json), per case ``<case>/pub-4.bin`` and ``<case>/session/``, and
-#: ``cases.json`` (each case's flips, the prover's LIVE line, M0's verdict and Lean's at generation): `art:31c671f6`
+#: ``cases.json`` (each case's flips, the prover's LIVE line, M0's verdict and Lean's at generation)
 FIXTURE = Path(__file__).resolve().parent / "fixtures" / "forged-proofs"
 STATEMENT = "verity/flock-circuit"
 N = 4

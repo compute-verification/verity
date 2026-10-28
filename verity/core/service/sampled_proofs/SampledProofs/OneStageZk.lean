@@ -14,7 +14,9 @@ v1 audit (`OneStage`) with the verdicts computed here, from the statement's file
   SHA-512 as `flock-verify --archive` finds them;
 * **check**: `flock-verify verify --zk --statement verity/flock-circuit` with `--circuit`, `--public`, `--partition`,
   `--program` and `--registered` the verifier's own and one `--session` a session, as `one_stage.proofs.verify` runs it
-  (`verdicts`, the C-Flock library calls `verifyCmd` makes on that path); then v1's `check` on those verdicts, one of
+  (`verdicts`, the C-Flock library calls `verifyCmd` makes on that path, its last the files' ports and roots,
+  `Flock.PortRoots.checkOf`, and the form `Flock.Guarantees.SampledKSLiveV4` covers, `Flock.KsScope.checkOf`); then v1's
+  `check` on those verdicts, one of
   record a session (`flock-verify/<name>`). A session accepted under another program than the partition object's, proved
   units other than the evidence's `proved_units`, or a circuit, public or record file no blob holds, rejects; a rep
   file no blob holds is that session's reject, as a file `flock-verify` can't read is.
@@ -243,6 +245,7 @@ def verdicts (p : Own) (pub : String) (sessions : Array Session) (provedUnits? :
           Flock.registeredOpenings sts registered)
     | .error e => Except.error s!"setup: {e}"
   let programSha := programDigest p.program
+  let ksFiles := Flock.PortRoots.checkOf parsed tags pubB
   let want := getD p.partition "program"
   let mut coinKeys : Array String := #[]
   let mut out : Array (String × Json) := #[]
@@ -278,6 +281,8 @@ def verdicts (p : Own) (pub : String) (sessions : Array Session) (provedUnits? :
       Flock.RecSetup.innerDrawn none
       Flock.ProvedScope.programHeld program
       Flock.RecordText.check record
+      ksFiles
+      Flock.KsScope.checkOf parsed tags pubB count draw
     if let some k := coinKey then coinKeys := coinKeys.push k
     let (ok, why) := match verdict with | .ok () => (true, "") | .error e => (false, e)
     all := all && ok

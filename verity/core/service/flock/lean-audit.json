@@ -5,6 +5,7 @@
   "Flock.Test.Full",
   "Flock.Test.Labels",
   "Flock.Test.PortRoots",
+  "Flock.Test.KsScope",
   "Flock.Test.FullDraw",
   "Flock.Test.OneFull",
   "Flock.Test.RegBudget",
@@ -29,6 +30,7 @@
   "Flock.Test.TopReads",
   "Flock.Test.SharedRows",
   "Flock.Test.SharedReads",
+  "Flock.Test.DerivedPos",
   "Flock.Test.RecCompose",
   "Flock.Test.RegFormats",
   "Flock.Test.RegComplete",
@@ -38,6 +40,7 @@
   "Flock.Test.KnownRead",
   "Flock.Test.RegRows",
   "Flock.Test.SpillRows",
+  "Flock.Test.RecCapSmall",
   "Flock.Test.PlainLeaves",
   "Flock.Test.PlainShared",
   "Flock.Test.Wires",
@@ -74,7 +77,7 @@
   "FlockWitness": "the flock-witness executable's entry point, one line; its command is Flock.Witness.cmd, audited under Flock",
   "FlockRecSparse": "the flock-rec-sparse executable's entry point, one line; its command is Flock.RecSparseCmd.cmd, audited under Flock",
   "FlockRecOpening": "the flock-rec-opening executable's entry point, one line; its command is Flock.RecOpeningCmd.cmd, audited under Flock",
-  "Flock.Test.RecCap": "a test, not a proof: its #guards evaluate whole V* lists in the interpreter, 1,097-1,246 s to build on every check node (26 Oct), so it gated every Flock-touching Lean check by about 18 min; built right after landing by verity/ml/flock/tests/test_lean_rec_cap_guards.py instead (top 06:18Z 26 Oct, Daniel's 11 Oct tier for parts whose cold run is over 10 min; proofs' PRF-190 adds a small-shape guard back to the roots)"
+  "Flock.Test.RecCap": "a test, not a proof: its one #guard builds V*'s whole list at the deployed inner shape (RecVStar.statements) in the interpreter, about 20 min on every check node, so it would gate every Flock-touching Lean check; built right after landing by verity/ml/flock/tests/test_lean_rec_cap_guards.py instead, the tier for parts whose cold run is over 10 min. Flock.Test.RecCapSmall, a root, holds RecCap's refusals and the checks statements runs on its list at m 22, in 25 s"
  },
  "assumptions": {
   "Flock.Firewall.Contract.FirewallComputes": {
@@ -283,6 +286,15 @@
    "repeatM"
   ]
  },
+ "unwitnessed": {
+  "Flock.Firewall.Contract.holds_coins": "f7c75fc8ff69fd14d2eb14fdf528503aa90514b4631c436a3973c0793267c6eb",
+  "Flock.Firewall.Contract.holds_coins_binding": "2f38b70ba9aae0ea55033e2810725f001faa26ae99c11c7b348a0a78f2c07c06",
+  "Flock.Firewall.Contract.holds_commit": "9e86b324d2e725880221dddee14f20fb05839f5e4ffff11ada6ddabd2f2b0361",
+  "Flock.Firewall.Contract.holds_computed": "9c0c81dfbc7167b19c682b77768e00765a7a0a77b778d97ca5f45f0eef5fd3a4",
+  "Flock.Firewall.Contract.holds_finish": "aa67703052894f171a7b02e9bb4cc0ac0b3da1a2da9592ca3ebf2c136a3accc5",
+  "Flock.Firewall.Contract.holds_fixed": "01861c4768c06289a8317df2c471999f9378506a0c7c59972ed9bab24531ec36",
+  "Flock.Firewall.Contract.holds_masked": "5e617dd64b1e2cd62d76d06af0007fbc6d7f698d153f042690fab45ac466a7de"
+ },
  "compile_time": {
   "Flock.With.ReturnsWalk": {
    "why": "returns_walk, a tactic macro (syntax and macro_rules only) that expands to core tactics (repeat', first, extract_lets, with_reducible apply/refine/exact, intro, assumption, split, conv whnf) and the Flock.With.Returns lemmas; it runs no IO and declares nothing a guarantee reads",
@@ -297,11 +309,11 @@
   "VStar": {
    "imports": ["Lean", "Std", "Flock", "VStar"],
    "except": [],
-   "why": "V*'s circuit is code: Lean core and its Std, and C-Flock's verifier (its builder, layout, rows and hashes), no Mathlib and nothing of Security (Daniel's layout ruling, 5 Oct)"
+   "why": "V*'s circuit is code: Lean core and its Std, and C-Flock's verifier (its builder, layout, rows and hashes), no Mathlib and nothing of Security (the layout rule: Lean code never requires Security)"
   }
  },
  "reads_exempt": {
-  "Flock": "C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)"
+  "Flock": "C-Flock is excepted until its spec is extracted"
  },
  "guarantees": {
   "Flock.Firewall.Contract.commitLeaf_eq": {

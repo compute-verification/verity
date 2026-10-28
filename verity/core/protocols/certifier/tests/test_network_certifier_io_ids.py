@@ -457,8 +457,7 @@ def test_the_unit_is_its_reference():
     args = [I.arguments(sh, i, r, s) for i, r, s in cases]
     out = evaluate_bits(fn, *[_bits([a[k] for a in args]) for k in range(len(args[0]))])
     assert [int(b) for b in np.asarray(out).reshape(-1)] == want + [0, 0]
-    memo = {}
-    a = lambda f: HC.ands(f, memo)  # noqa: E731
+    a = HC.ands
     rq = sh.request
     parts = (rq.N * (a(bind(Q.IoTieRequestFrame, B=sh.B)) + a(bind(Q.IoTieRequestStep)) + a(bind(I.IoTieIdsSlots, B=B)))
              + rq.L * a(bind(Q.IoTieRequestEnd))

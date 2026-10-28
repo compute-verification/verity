@@ -215,16 +215,36 @@ are about Lean's `H`, so they do not certify the code's (`DISCREPANCIES.md` P3 i
    about 1.5% of honest 132-answer audits fail on the host clock (POUS `docs/p3-gpu-measurements.md`). The network
    allowance defaults to 0 until the memory challenger's RTT is measured.
 
+   On the deployed path the memory challenger (`memory_challenger`, `challenger_party`) runs the session in this
+   order. Nothing that commits to a coin no round has revealed leaves the device before the last answer is in: the
+   server's commitment, `W` and `C*` under the setup's published root, is in before the first round, and the coin root
+   comes after the last.
+
+   | Step | From, to | What |
+   |---|---|---|
+   | draw | challenger | the session id, claimed in its `SessionLog`; the `k` indices from its own secret, committed in its coin tree (root and hm96 key), all kept on the device |
+   | warm-up | challenger, server | `WARMUPS` frames on the public `WARMUP_INDEX`, untimed and unrecorded |
+   | round `j` | challenger, server | index `j` alone (`u64be`); the send time is read |
+   | answer `j` | server, challenger | the whole block; the receipt time is read before it is hashed; the first late answer ends the session |
+   | end | challenger, server | `u64be 2^64 − 1` |
+   | sign | challenger | one LMS signature over the header (the `SessionCommitment`'s fields and how the session ended) and the round records' root |
+   | release | challenger, verifier | the `SessionCommitment` (the coin tree's root and key, the session id and parameters, the setup's root), the signed session and every revealed coin's opening; `commitment` and `openings()` refuse before the signature |
+
+   The verifier checks each round's index against its opening under the released root (`verdict`). The challenger is
+   bound to its coins by being an auditor-trusted device that runs its stated code (`pous-ring-device`,
+   `trusted-host`), not by an early commitment, so no guarantee reads the coin tree's hiding.
+
 ## Public outputs
 
-Under the proof service, an
+Under the proof system, an
 audit makes public its verdict and nothing about a single round:
 
 - the verdict;
 - the salted roots of `W` and of the encoding `C`;
 - the salt;
 - the setup draw and its profile;
-- the openings of the memory challenger's coin tree, once the session has closed.
+- the memory challenger's session commitment (its coin tree's root and key) and the openings of its coin tree, both
+  released once the session is signed.
 
 Everything else is witness. The per-round on-time bits stay in the memory challenger's signed record, so a server can't
 steer what the auditor sees round by round. The memory challenger reveals each index from its coin tree, receives the
@@ -373,19 +393,20 @@ stream, so the stream is never stopped or extended on misses, though it may reje
 1. **No pipelining.** `challenge()` reveals index `j + 1` only once answer `j` is in or `Δ_late + RTT` has passed since
    index `j` was revealed, and in that case it first closes challenge `j` as rejected; the close stands even when `j`
    was the last and `challenge()` then refuses (`run_continuous` closes it with `expire()`). Each deadline runs from the
-   memory challenger's own clock reading at the reveal; a latency the responder reports (`Answer.report`) is never read.
-   An answer names its challenge (`respond(j, block)`), and an answer to any challenge but the open one is refused,
-   whether that challenge is closed or not yet revealed. So a stale answer is never credited to the next challenge,
-   even when both ask for the same block.
-2. **A hard deadline.** An answer past `Δ_late + RTT` is rejected without its block being checked (`Answer.rejected`).
-   So is a challenge still unanswered by then, closed by `expire()` or by the next `challenge()`. `UnsignedRounds`
-   refuses a `Δ_late` below `Δ`, and one whose `D_late` exceeds `audit.LATE_ROUNDS = 12` or the band's `d`, where
+   memory challenger's own clock reading at the reveal; a latency the responder reports (`ChallengeReply.report`) is
+   never read. An answer names its challenge (`respond(j, block)`), and an answer to any challenge but the open one is
+   refused, whether that challenge is closed or not yet revealed. So a stale answer is never credited to the next
+   challenge, even when both ask for the same block.
+2. **A hard deadline.** An answer past `Δ_late + RTT` is rejected without its block being checked
+   (`ChallengeReply.rejected`). So is a challenge still unanswered by then, closed by `expire()` or by the next
+   `challenge()`. `UnsignedRounds` refuses a `Δ_late` below `Δ`, and one whose `D_late` exceeds `audit.LATE_ROUNDS = 12`
+   or the band's `d`, where
    `D_late` is the number of 241.5 µs calls that fit in `Δ_late + RTT`; at `d = 12`, `Δ_late + RTT` must be under
    3,139,500 ns. That cap is the graded audit's; `ContinuousAudit` holds at every `D_late`, so for it the cap is only
    conservative. `ContinuousMemoryChallenger` refuses to run without a hard deadline.
-3. **Every late answer counted.** Every challenge closes with exactly one `Answer`, whether it was answered, rejected
-   or expired. `AuditResult.misses` counts every wrong or late answer, and `AuditResult.late` every answer past
-   `Δ + RTT`, rejected ones included.
+3. **Every late answer counted.** Every challenge closes with exactly one `ChallengeReply`, whether it was answered,
+   rejected or expired. `AuditResult.misses` counts every wrong or late answer, and `AuditResult.late` every answer
+   past `Δ + RTT`, rejected ones included.
 
 Run the continuous audit only on `ContinuousMemoryChallenger`, never on a bare `UnsignedRounds` with `late_deadline_ns`. Its
 `respond(block)` names no challenge, so once challenge `j` expires, an answer to `j` still in flight is credited to
@@ -485,7 +506,7 @@ and the Python's alike, rejects such a session however it ran (`batch size B is 
 verdict and the certified egress in whole MiB, rounded up and saturating at `2^15 − 1` (`Verdict.public()`, the
 protocol's outputs, 16 bits in all), and the coins once the session is signed (`Challenger.coins()`, the verifier's draws). The
 signed session (its times, its batch records and the exact egress) is witness, as a memory-challenger session is: the
-prover proves `verdict` of it through the proof service, and only the verdict is published. The labels and `K` are the
+prover proves `verdict` of it through the proof system, and only the verdict is published. The labels and `K` are the
 auditor's; nothing of the prover's is committed, opened or read.
 
 **The bound.** For every prover of the sequential wipe, with `M` bits inside the boundary when the fill ends (every
@@ -534,7 +555,7 @@ about 4.965 GB). At `r = 58` the fill's share alone is 2.706 GB.
 
 `verity/wipe/v0` publishes this threshold at the session's `k`, which the memory challenger chooses (`wipe_party
 --reads`, 2152 by default) and its commitment names, at `r = ratio(k)`, the largest `r` the condition allows, with `R`
-every declared tier's bytes past the fill (`wipe_period.certify`, `MemoryChallenger.WipeProtocol.certify`; up to
+every declared tier's bytes past the fill (`wipe_period.certify`, `MemoryChallenger.WipeProtocol.certify`; from 1 to
 `MAX_READS = 2^17` reads). One 32 MiB segment at `k = 2152` (`r = 24`) is 11,709,069 bits plus the egress, under the
 family's `⌈M/19⌉ = 14,128,182`; the H200 at `k = 5231` is `StreamedWipeMeets141GB5`'s figure.
 
@@ -613,7 +634,7 @@ which was not measured. The node's load average was about 930 during the run, wh
   fetch from outside the boundary, neither measured.
 - **The guarantee isn't stated against the Lean verdict, and there is no Program.** `MemoryChallenger.StreamedWipe.verdict`
   decides the verdict, but the guarantees read the game's `Accepts`, not that function, so they stay frozen (no-function)
-  until restated against it. `verdict` has no circuit for the proof service, so it is not yet proved in zero knowledge.
+  until restated against it. `verdict` has no circuit for the proof system, so it is not yet proved in zero knowledge.
 
 ## API
 
@@ -631,7 +652,7 @@ which was not measured. The node's load average was about 930 during the run, wh
 | `setup` | `commit` (streamed over segments), `draw_salt`; `verifier_setup(params, prims, commitment, salt, encoded=C*, w=None, public_encoder=PUBLIC_ENCODER)`, which picks `verifier_key_from_encoding(params, prims, commitment, salt, C*, codec=params.codec)` (public encoder, the default) or `verifier_key(params, prims, W or its segments, commitment, salt, encoded=None, codec=params.codec)` (the verifier encodes); `server_root`, `check_server_root` |
 | `verifier` | `VerifierKey` (`root` and leaf digests; `build`, `from_leaves`, `from_segments`, `from_row_digests`), `leaf_hash` (whole or chunked blocks), `row_leaf` (from a block's row digest), `segment_leaves`, `MerkleTree` (audit paths), `verify_path` |
 | `audit` | `challenge_key`, `HonestResponder`, `UnsignedRounds` and `run_timed` (wall clock; `respond` may return `(block, report)`, kept in `Answer.report`), `simulate` (oracle rounds); `k` and the adversary's call time default to the parameters' own (band and dense: 111 and 241.5 µs); `UnsignedRounds` refuses a band deadline past the cliff |
-| `memory_challenger` | the memory challenger, which signs its rounds and on the deployed path replaces `audit.UnsignedRounds`: `CoinTree` (its `k` indices from its own secret, committed before the session; `CoinOpening`, `verify_coin`), `MemoryChallenger(coins, signer, log=, limit_ns=, block_bytes=, binding=)` with its `SessionCommitment` (`binding` the setup's 64-byte root of `C*`, required; `session` the auditor's id for the audit, which `log`, a `SessionLog`, records as used before the first challenge and refuses again), `challenge()`, `receive(block)` (one `Round` each: index, send and receipt times, `H(block)`; the first late round ends the session), `close()` (one signature, `SignedSession`) and `openings()`; `LmsSigner`, `register`; `verdict` (what the prover will prove of a signed session, checked in the clear; its public output is `Verdict.public`); `covering_certificate` |
+| `memory_challenger` | the memory challenger, which signs its rounds and on the deployed path replaces `audit.UnsignedRounds`: `CoinTree` (its `k` indices from its own secret, committed on the device before the session and released after it; `CoinOpening`, `verify_coin`), `MemoryChallenger(coins, signer, log=, limit_ns=, block_bytes=, binding=)` with its `SessionCommitment` (`commitment`, released once the session is signed; `binding` the setup's 64-byte root of `C*`, required; `session` the auditor's id for the audit, which `log`, a `SessionLog`, records as used before the first challenge and refuses again), `challenge()`, `receive(block)` (one `Round` each: index, send and receipt times, `H(block)`; the first late round ends the session), `close()` (one signature, `SignedSession`) and `openings()`; `LmsSigner`, `register`; `verdict` (what the prover will prove of a signed session, checked in the clear; its public output is `Verdict.public`); `covering_certificate` |
 | `streamed_wipe` | the streamed-label wipe (experimental): `wipe_key`, `label`, `labels`, `draw_indices`; `WipeParams(labels, k, batch, limit_ns, tiers)` (`covered`: batch 1, the only size `verdict` accepts), `WipeCommitment`; `Challenger(secret, server, session, params, signer, log=)` with `fill(chunk)`, `challenge()`, `receive(answers)`, `run`, `close(egress_bits)` (one signature, `SignedWipe`) and `coins()`; `Prover`, the honest server; `verdict` (its public output `Verdict.public`: the verdict and `egress_mib`), the reference of the Lean verdict that decides it (`MemoryChallenger.StreamedWipe`, `wipe_verdict.judge`), with `to_json` on the records it reads; the bound, `log2_error`, `retained_bits`, `challenges_for` |
 | `run` | the composed check of a recorded run: `check(trusted, setup, digests, session, session_id)` over the verifier's list of memory-challenger keys (never the run's record), the setup's public outputs (`Setup`), the memory challenger's table of `C*`'s row digests, one `Session` (signed session, commitment, openings) and the id the auditor designated for the session, at P2's deployed point (`DEPLOYED`) under `memory_challenger.SCHEMES`, raising `Refused` with the first reason; `check_at` at another `Point`; `PousCheck.Run.check` (`pous-run`) in Lean |
 | `adversary` | holdings (Lean `ColState`), `schedule`, `answer_prog`, strategies, `measure`; `col_round` is Lean's `colRound` |
@@ -729,7 +750,7 @@ column storage, whole lower labels as separators, meet in the middle through `P�
   `chainBand` and `chainDense`), encode-after-decode on arbitrary `C`, negative controls, and the flag;
 - the two-labels-from-one-item attacks (`test_pous_two_for_one.py`), bit-exact on real labels: they succeed on the XOR
   sponge and on Miyaguchi–Preneel over band rows, and fail on the overwrite chain. The designer's state game
-  (`pous_state_game.py`, from `internal/p3-instantiation/overwrite-state-game.py`) agrees on dense and band rows;
+  (`pous_state_game.py`) agrees on dense and band rows;
 - the continuous audit's memory challengers against the Lean model (`test_pous_continuous_difftest.py`).
   `pous_continuous_model.py` transcribes the memory challenger of
   `Security/Definitions/Pous/Model/Continuous.lean` definition by definition (a test finds each one word for word
@@ -948,12 +969,12 @@ Two kinds of statement at P2's deployed point, which nothing joins inside Lean:
   (`PousCheck.Properties.SecurityProofs.acceptsDecodes` and `publishesRoot`, guarantees), and `periodHeld` reads it; no
   guarantee states it alone (`unstated`).
 - `Pous.EndToEnd.EndToEndRing`, **in the ring model, with ω uniform**: a server holding at most `⌊ρ·|C|⌋` bits
-  between setup, the session and its rounds, each answer `(D, Q, L)`-bounded (`Server S D Q L`), shown the session
-  commitment the code builds, with the memory challenger's coins drawn online by the code's own sampler and coin tree,
-  passes with probability at most `1% + 2^-128`. It is proved (`Pous.EndToEnd.SecurityProofs.endToEndRing`) from two
-  named assumptions: `P2RingAuditSecure D Q L` (open), and `CoinCommitHides` at `2^-131` (`statistical-hiding`: the
-  coin tree's root and hm96 key hide the indices; the leftover-hash argument is in its docstring, and Lean has no
-  leftover hash lemma to prove it with). The budget is `2^-129 + 2^-130 + 2^-131 + ε_rs ≤ 2^-128`, with `ε_rs = 0`
+  between setup, the session and its rounds, each answer `(D, Q, L)`-bounded (`Server S D Q L`), shown each index as
+  its round opens and nothing else of the memory challenger's coins (the coin tree's root and key leave the device only
+  after the last answer), with the coins drawn online by the code's own sampler and committed in the code's coin tree,
+  passes with probability at most `1% + 2^-128`. It is proved (`Pous.EndToEnd.SecurityProofs.endToEndRing`) from one
+  named assumption, `P2RingAuditSecure D Q L` (open); it takes no hiding premise on the coin tree. The budget is
+  `2^-129 + 2^-130 + ε_rs ≤ 2^-128`, with `ε_rs = 0`
   proved (`DrawExact`: `uniformOn` reads 11 bytes at `2^19` blocks and `2^19` divides `2^88`, so no word is rejected).
   `EndToEndRingDeployed` is it at one root's depth, `D = 16,446`, about half of `RingTight`'s falsification at
   32,894, with `Q = 2^20` and `L = 2^64` (the truncation attack passes `k = 105` only at about `2^168`). In the ring
@@ -964,7 +985,11 @@ Two kinds of statement at P2's deployed point, which nothing joins inside Lean:
   cooperating squaring, 16,447 rounds take 1,704 µs, 1.995× `Δ + RTT`, and 1.64× and 1.25× under the red team's sync
   model. `HonestPassesRing` and
   `HonestPassesAccepts` prove that the honest full-state server passes P2's ring audit, and the end-to-end event, with
-  probability 1.
+  probability 1. Beside each ring-game and period guarantee sit its honest and nontrivial lemmas
+  (`endToEndRing_honest` and `endToEndRing_nontrivial`, likewise for `endToEndRingAt`, `periodHeld`, `periodHeldAt`,
+  `periodCapacity`, `obligationHeld` and `SpaceOfPeriodHeld`; `periodHeldHonest` and `periodHeldNontrivial` for
+  `periodHeldDeployed`): the first shows the premises hold at an instance, the second that the bound fails for a
+  verifier that accepts everything.
 
 `P2RingAuditSecure` is also derived from the per-round conjecture `P2RingRoundSecure p ε₀ D Q L`:
 at every block count from `2^19` to `2^25`, at a boundary where the server holds at most `⌊ρ·|C|⌋`
