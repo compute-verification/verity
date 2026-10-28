@@ -185,24 +185,17 @@ A spec-level reference for network accounting's timing channel:
   under the network certifier's own salts at the reading port's leaf width and row format, its root in a head the
   certifier signs for the link-window (`TransferHead`, `registration`). `check_registration` is the verifier's read of
   it for the transfer it expects, and `port` the verifier's own `--registered` port of the value at the signed root
-  (`benchmarks/network_traces/transfer_zk.py`; the load relayed and committed as it crosses,
-  `benchmarks/network_traces/load_relay.py`);
-- the blocks (`blocks`): the proof blocks each server runs, the steps the circuit spans and its transfer gates, schema
-  `verity/blocks/v1`, kept in this module until the window interface carries it in ``circuit.json``. `check` refuses
-  blocks whose servers don't partition the units, an inference block on two servers (below), a boundary row that is no
-  transfer's (an ``ingress``, a registered read no transfer brings in, a wire between servers, an external port's row
-  no transfer covers), a transfer's read or write that isn't whole rows of its value, an out value a row of which no
-  unit writes or two do, and a wire transfer not paired (one value, its out on one server and its in on another, of one
-  shape and one step a row). `pins` gives the verifier's pinned roots from the certificates alone, so the interface's
-  ``input_count`` under them has no free input, and `certified` refuses a wire whose two certifiers' roots differ (the
-  receiver's commits under the sender's salts, so the rows that arrived are the rows that left). An inference block
-  runs on a single server (NET-92, Daniel's ruling of 26 Oct): a server's ingress and egress carry only its inference
-  blocks' declared inputs and outputs, so which server may read an inference block's input bits is unambiguous. `check`
-  reads each unit's (slot, step) from the record's inference entries (``blocks.inference``) and refuses, by name, a
-  block whose units are on two servers, and two servers or more over a record that states no inference block;
-  `server_blocks` is that part alone. Which server runs which units is protocol structure, public like the
-  registration the inference-only policy checks and not a private partition, so it is checked in the clear with no
-  proof block;
+  (the load relayed and committed as it crosses, `benchmarks/network_traces/load_relay.py`);
+- the class circuit's check (`blocks`): a circuit record is one host's class window circuit, and which host runs which
+  units, and which request occupies which slot and step, are private, placed by the scan inside the zero-knowledge
+  proof; the class circuit and its padded counts (proof blocks per host, bits per link) are public, and its ``blocks``
+  state no placement (the window interface's `Blocks`). `check` refuses an ``ingress`` declaration, a registered read
+  or table of no registered parameter, a load (every registered parameter but the scan's state) read
+  in other than whole rows of one width, by no unit, at an external port or by a table over part of it, and an external
+  input port whose rows aren't each read exactly once from the scan's state (`ingress_scan.SCAN_STATE`), the host's one
+  ingress. `pins` gives the verifier's pinned roots of the loads from their certificates alone (`certified`: each
+  load's registration on the host's uplink, ingress, in the session's first execution phase, kind ``load``), so the
+  interface's ``input_count`` under them and the scan's state's root has no free input;
 - the scan's ingress side (`ingress_scan`): `IngressScanBucket`, one unit a certifier bucket, reads the bucket's
   warden ingress row, the slot state the bucket before carries and the Programs' row (registered reads), and computes
   the next state (each block to the slot holding its connection, a new connection to the lowest free slot, its prompt
@@ -324,7 +317,7 @@ uv run network-certifier-calibrate trace.json --ingress-bucket-ms 100
 
 Every protocol is to be zero-knowledge. The network audit's claim is counts only: N2 holds each window's per-bucket
 counts to the occupancy profile on every link-window (on a served link, to the ones its ingress counts derive under
-the declared sync), beside the proved timing bound (Daniel's provisional call on ASK-70, 19 Oct). N3, the content check,
+the declared sync), beside the proved timing bound (provisional). N3, the content check,
 is retired, superseded by the step-indexed scan (`ingress_scan`, `egress`).
 
 N2's verifier of record, `LinkWindows.verify`, decides each link-window on a `--zk` proof of N2's registered unit
