@@ -4,7 +4,9 @@
     python3 tools/move/cell_certifier.py              rename and move, then stage it all; prints what it changed
     python3 tools/move/cell_certifier.py --dry-run    print what it would change, and change nothing
     python3 tools/move/cell_certifier.py --avoid REF  leave each line REF changes as it was (and the line on either side),
-                                                      so REF merges after it without a conflict; prints what stands
+                                                      so REF merges after it without a conflict; prints what stands. A
+                                                      class name such a line still uses is bound by its file's import of
+                                                      the new name (`ALIASES`)
 
 What it does, on the tree as it is (so it reruns on a later main, and `restack.py --script tools/move/cell_certifier.py`
 carries a branch across it):
@@ -84,9 +86,12 @@ NAMES = [
     (r"network_certifier import warden" + _E, "network_certifier import cell_certifier"),
     (_B + r"warden as W" + _E, "cell_certifier as W"),
     (r"(?<![\w/.-])warden\.py\b", "cell_certifier.py"),
-    (_B + r"WardenParams" + _E, "CellCertifierParams"),
+    (r"(?<!\bas )" + _B + r"WardenParams" + _E, "CellCertifierParams"),
     (_B + r"warden\.Warden" + _E, "cell_certifier.CellCertifier"),
 ]
+#: Old class names a line `--avoid` leaves may still use in code, each bound by its file's import of the new name
+#: (`alias`), as the new name's.
+ALIASES = {"WardenParams": "CellCertifierParams"}
 #: The class, in Python files only.
 CLASS = [(_B + r"Warden" + _E, "CellCertifier")]
 #: Rules of one file, before `NAMES`: a file that binds the module to the name `warden` and uses it by that name, which
@@ -196,7 +201,8 @@ def sh_prose(src: str, counts: Counter) -> str:
 
 def avoided(root: Path, ref: str) -> dict[str, set[int]]:
     """For each path of HEAD's tree, the lines (from 1) that `ref` changes since its merge base with HEAD, and the line on
-    either side of each (git conflicts on adjacent changes), with a path HEAD has moved since then read at its place."""
+    either side of each (git conflicts on adjacent changes), with a path HEAD has moved since then read at its place. A
+    line HEAD itself changed since then is left out: HEAD and `ref` conflict there already, so rewriting it adds none."""
     base = git(root, "merge-base", "HEAD", ref).strip()
     moved = {}
     for line in git(root, "diff", "--name-status", "-M50%", base, "HEAD").splitlines():
@@ -212,7 +218,29 @@ def avoided(root: Path, ref: str) -> dict[str, set[int]]:
             m = re.match(r"@@ -(\d+)(?:,(\d+))? ", line)
             a, n = int(m[1]), int(m[2] if m[2] is not None else 1)
             out.setdefault(path, set()).update(range(max(1, a - 1), a + max(n, 1) + 1))
+    for line in git(root, "diff", "-U0", "-M50%", base, "HEAD").splitlines():
+        if line.startswith("+++ "):
+            path = None if line[4:] == "/dev/null" else line[6:]
+        elif line.startswith("@@") and path in out:
+            m = re.match(r"@@ -\S+ \+(\d+)(?:,(\d+))? ", line)
+            c, k = int(m[1]), int(m[2] if m[2] is not None else 1)
+            out[path] -= set(range(c, c + k))
     return out
+
+
+def alias(p: str, src: str) -> str:
+    """`src` with each old class name (`ALIASES`) that its code still uses bound by its import of the new name: ``import
+    New`` becomes ``import New as Old``, or ``import New, New as Old`` where the code uses New too."""
+    names = Counter(t.string for t in tokenize.generate_tokens(io.StringIO(src).readline) if t.type == tokenize.NAME)
+    for old, new in ALIASES.items():
+        if not names[old] or re.search(rf"\bas {old}\b", src):
+            continue
+        imp = re.compile(rf"^(from \S+ import [^(\n]*?){_B}{new}{_E}", re.M)
+        if len(imp.findall(src)) != 1:
+            raise SystemExit(f"{p}: a line left as it was uses {old}, and no one-line `from ... import {new}` binds it: "
+                             f"bind it by hand (`import {new} as {old}`) and add the file to `HELD`")
+        src = imp.sub(rf"\g<1>{new}{', ' + new if names[new] > 1 else ''} as {old}", src)
+    return src
 
 
 def record(root: Path, moves: dict[str, str]) -> str | None:
@@ -255,9 +283,13 @@ def main(argv: list[str] | None = None) -> int:
             before, after = old.splitlines(keepends=True), new.splitlines(keepends=True)
             for i in sorted(avoid[p]):
                 if i <= len(before) and before[i - 1] != after[i - 1]:
+                    if p.endswith(".py") and re.match(r"\s*(from|import)\s", before[i - 1]):
+                        raise SystemExit(f"{p}:{i} imports a moved name on a line {a.avoid} changes: move it after that lands")
                     after[i - 1] = before[i - 1]
                     standing[p, i] += 1
             new = "".join(after)
+            if p.endswith(".py"):
+                new = alias(p, new)
         if new != old:
             texts[p] = new
     if (t := record(root, moves)) is not None:
