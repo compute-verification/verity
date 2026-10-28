@@ -82,7 +82,7 @@ RATIO = 20.0
 EXACT = 1e-9
 SCHEMES = {"pearl-c-h100-v1-h3": C.PearlC(forming="v1", hashing="h3"),
            "pearl-c-sm120-v1-h3": C.PearlC(forming="v1", device=SM120, hashing="h3")}
-#: Pearl-C's admitted linears per the credit map (art:5f07f86d…), by this tool's names
+#: Pearl-C's admitted linears per the credit map, by this tool's names
 ADMITTED = ("qa", "kva", "qb", "o", "wqb", "gate", "up", "down", "router", "sgate", "sup", "egate", "eup", "eh", "lm")
 #: the linears that read the residual stream (columns take Q) and write it (rows take Qᵀ)
 READS = ("qa", "kva", "wk", "wp", "gate", "up", "router", "sgate", "sup", "egate", "eup", "lm")
