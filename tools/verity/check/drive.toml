@@ -14,8 +14,10 @@ first = []
 # its merge onto `next` at the sync, which leaves out what they refuse (a Markdown file over its cap); the
 # vLLM integration's lint ratchets don't grow, and a change to a lint is judged like source. A sync's TOP holds every PR
 # below it, so a gate is priced at a sync's N PRs, not one:
-# ratchet_gate caches each change's verdict and judges it once per `main` (uncached, one tick ran over 50 min)
-landing_gates = ["tools/verity/check/gates/markdown_caps.py", "integrations/vllm/tools/ratchet_gate.py"]
+# ratchet_gate caches each change's verdict and judges it once per `main` (uncached, one tick ran over 50 min).
+# It is left out while `main` moves only on a full check of a prefix of `next` (CI-239): that check runs the vLLM lints over the
+# whole tree, and each move of `main` re-judged every member cold (a 514-PR rebuild took 70 min, about 8 s a merge).
+landing_gates = ["tools/verity/check/gates/markdown_caps.py"]
 # how `next` lands: "review", each member on a reviewer's land verdict (`research queue review`), a Lean change once a Lean check
 # passed, and the full check after landing, which reverts what it fails; the only landing there is
 land = "review"
