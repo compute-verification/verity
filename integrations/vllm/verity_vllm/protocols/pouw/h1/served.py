@@ -87,7 +87,6 @@
 from __future__ import annotations
 
 import contextlib
-import functools
 import hashlib
 import weakref
 from collections import deque
@@ -100,24 +99,23 @@ from verity.core.protocols.pouw import core_check as CC
 from verity.core.protocols.pouw import credit as CR
 from verity.core.protocols.pouw import salt as PS
 from verity.core.protocols.pouw import weights as Wt
-from verity.core.protocols.pouw.circuit import h1device as HD
 from verity.core.protocols.pouw.circuit import h1window as HW
 from verity.core.protocols.sampled_proofs.one_stage import partition as P, registered as G
-from verity.ml.circuits.codec import canonical_json, encode_program
+from verity.ml.circuits.codec import canonical_json
 from verity.ml.circuits.program import Program
 
 from verity_vllm.protocols.pouw import h1 as PH
 from verity_vllm.protocols.pouw.h1 import live as LV
+from verity_vllm.protocols.pouw.h1.public_rows import PublicRows
 from verity_vllm.protocols.pouw.h1 import registered as NR
 from verity_vllm.protocols.pouw.h1 import requests as RQ
 from verity_vllm.protocols.pouw.h1.served_files import FILE, Registration, file_name, reads_file, register, trees
+from verity_vllm.protocols.pouw.h1.served_program import PREFIX, card_arch, declared, declared_layout, descriptor, layout
 from verity_vllm.protocols.pouw.h1.words import (EMPTY_ID, chunk_words, ids_words, receipt_words, record_words,
                                                          row_words, zy_words)
 
 #: the rows' format: the tile's port rows
 V2 = G.SCHEMA_V2
-#: the window Program's parameter prefix, the same for every window of a period
-PREFIX = "h1/"
 #: the hm96 salt stream's first nonce of the window's registered tables, past every round's and call's tables
 NONCE = RQ.REQUESTS_NONCE + (1 << 42)
 #: ``b/<K>``'s nonces, past every call's two tables: the auditor's registration's (`weights.B_NONCE`)
@@ -138,65 +136,6 @@ def nonce(call: int, table: str) -> int:
     """The salt nonce of call ``call``'s table ``table`` (`h1window.TABLES`): a step's A table of K takes its first call of
     K's ``a`` nonce, which no other table takes."""
     return NONCE + 2 * int(call) + HW.TABLES.index(table)
-
-
-def layout(shapes: Sequence[tuple[int, int]], calls: Sequence[tuple[int, int]],
-           blocks: Sequence[int] | None = None) -> list[int]:
-    """Each call's A block of its K, ``calls`` each call's (step, linear) and ``blocks`` each linear's input block within a
-    step (`Served`'s): call (s, w) reads block s·B_K + i, i the place of ``blocks[w]`` among the blocks K's linears read."""
-    per = list(blocks) if blocks is not None else list(range(len(shapes)))
-    if len(per) != len(shapes):
-        raise ValueError(f"blocks {per} are not one input block for each of the window's {len(shapes)} linears")
-    of_k: dict[int, list[int]] = {}
-    for w, (_n, k) in enumerate(shapes):
-        of_k.setdefault(k, [])
-        if per[w] not in of_k[k]:
-            of_k[k].append(per[w])
-    of_k = {k: sorted(b) for k, b in of_k.items()}
-    return [s * len(of_k[shapes[w][1]]) + of_k[shapes[w][1]].index(per[w]) for s, w in calls]
-
-
-def card_arch(device: Any = None) -> str:
-    """The architecture of the CUDA card ``device`` (the current one when None) as H1's device records name it
-    (`h1device.DEVICES`): an H100 or H200's, compute capability 9.0, or the RTX PRO 6000's, 12.0. ValueError on a card
-    with no record."""
-    import torch
-
-    major, minor = torch.cuda.get_device_capability(device)
-    return HD.device(f"sm_{major}{minor}").arch
-
-
-def declared(shapes: Sequence[tuple[int, int]], modules: Mapping[int, str], rows: int, steps: int,
-             tile: tuple[int, int] = PH.TILE, blocks: Sequence[int] | None = None, prefix: str = PREFIX,
-             unit: Callable[[int], Any] | None = None, arch: str | None = None) -> Program:
-    """The window Program a static window declares before it serves: ``steps`` steps, each calling every linear (``shapes``,
-    each ``(n, K)``, named by ``modules``) in order, laid out by `layout`, its A slot for ``rows`` token rows, its
-    parameters under ``prefix`` (`PREFIX`, which names no window): one Program for every window of the declaration, the
-    period's ``--circuit`` (its `program_digest`) and each window's `Served.program`. Without ``unit``, each K's tile
-    unit is `h1window.tile_unit`'s on ``arch`` (`card_arch`; sm_120 when None), which refuses a K outside that card's
-    record's domain (ValueError); sm_90's Program is sm_120's byte for byte."""
-    lay = declared_layout(shapes, modules, rows, steps, tile, blocks)
-    if unit is None and arch is not None:
-        unit = functools.partial(HW.tile_unit, tile=tuple(tile), arch=arch)
-    return HW.program([tuple(x) for x in lay["linears"]], [tuple(x) for x in lay["calls"]], lay["m"], tile, prefix, unit)
-
-
-def descriptor(program: Program) -> bytes:
-    """`program`'s descriptor as the period commits it: its canonical JSON without annotations, the bytes whose SHA-512
-    is its `codec.program_digest` (the period-open's ``circuit``) and from which core's credit reads the window's
-    layout (`credit.layout_of`)."""
-    return canonical_json({k: v for k, v in encode_program(program).items() if k != "annotations"})
-
-
-def declared_layout(shapes: Sequence[tuple[int, int]], modules: Mapping[int, str], rows: int, steps: int,
-                    tile: tuple[int, int] = PH.TILE, blocks: Sequence[int] | None = None) -> dict[str, Any]:
-    """`declared`'s arguments to `h1window.program` as the window's layout, ``{calls: [[linear, A block], ...],
-    linears: [[name, K, n], ...], m, tile}``: what core's `credit.layout_of` reads from `declared`'s `descriptor`, built
-    without the Program (the proof service sizes the period's K from it, `pouw_h1_challenger.draw_k`)."""
-    mods = [modules.get(w, str(w)) for w in range(len(shapes))]
-    calls = [(s, w) for s in range(steps) for w in range(len(shapes))]
-    return {"calls": [[mods[w], b] for (_s, w), b in zip(calls, layout(shapes, calls, blocks))],
-            "linears": [[mods[w], k, n] for w, (n, k) in enumerate(shapes)], "m": HW.slot(rows, tile), "tile": list(tile)}
 
 
 def weights_of(layers: Sequence[Any]) -> dict[int, tuple[np.ndarray, np.ndarray]]:
@@ -330,78 +269,6 @@ def model_key(answer: Mapping[str, Any]) -> ModelKey:
     if not (type(answer.get("model")) is str and _hex512(answer.get("circuit")) and _hex512(answer.get("weights_root"))):
         raise ValueError("model-key: the answer names no model, circuit and weights' root (SHA-512 digests in hex)")
     return ModelKey(answer["model"], answer["circuit"], answer["weights_root"], key)
-
-
-@dataclass(frozen=True)
-class PublicRows(Sequence):
-    """A call's public table's rows (`Served._pubs`), built again on read rather than held: row t `core_check.public_words`
-    of the window's Program ``salt``, position u0 + t and the call's two ``roots``, and with ``blocks`` ``(M, K, (R, C),
-    q)`` a J10-R call's u0 and unit t's blocks (`core_check.j10r_blocks` of unit (t // q, t % q), as
-    `h1window.call_blocks` lays them). Items as `pouw_h1_registered.Rows` gives them; `words` builds rows of a NumPy
-    array there, `tensor` every row on a torch device."""
-
-    salt: bytes
-    roots: tuple[bytes, bytes]
-    u0: int
-    n: int
-    blocks: tuple[int, int, tuple[int, int], int] | None = None
-
-    def __post_init__(self) -> None:
-        if any(len(x) % 4 for x in (self.salt, *self.roots)) or len(self._base()) * 32 != (
-                CC.PUBLIC_ROW_BITS if self.blocks is None else CC.PUBLIC_ROW_J10R_BITS):
-            raise ValueError(f"a public row is {CC.PUBLIC_ROW_BITS} bits, a J10-R unit's {CC.PUBLIC_ROW_J10R_BITS}, "
-                             "its position on a u32 word")
-
-    def __len__(self) -> int:
-        return self.n
-
-    def __getitem__(self, j: Any) -> Any:
-        if isinstance(j, slice):
-            return self.words(np.arange(self.n)[j])
-        if not -self.n <= j < self.n:
-            raise IndexError(j)
-        return tuple(int(v) for v in self.words(np.array([j % self.n]))[0])
-
-    def at(self, positions: Sequence[int] | np.ndarray) -> np.ndarray:
-        """Rows ``positions`` (each in [0, n)) as their words ``(·, W)`` u16."""
-        at = np.asarray(positions, dtype=np.int64)
-        if at.size and (int(at.min()) < 0 or int(at.max()) >= self.n):
-            raise IndexError(f"a position outside the table's {self.n} rows")
-        return self.words(at)
-
-    def words(self, t: np.ndarray) -> np.ndarray:
-        """Rows ``t`` (unit indices, int64) as ``(len(t), W)`` u16 words."""
-        out = self._fill(np.repeat(self._base()[None], len(t), axis=0), np.asarray(t, dtype=np.int64))
-        return out.astype("<u4").view("<u2").astype(np.uint16)
-
-    def tensor(self, device: Any) -> Any:
-        """Every row as an ``(n, W)`` u16 tensor on torch ``device``, written on its current stream; the only copy to it is
-        the one row of what's common to all of them, from pinned memory, so the host waits on nothing there."""
-        import torch
-
-        base = torch.from_numpy(self._base())
-        base = (base.pin_memory() if torch.device(device).type == "cuda" else base).to(device, non_blocking=True)
-        out = self._fill(base.expand(self.n, -1).clone(), torch.arange(self.n, dtype=torch.int64, device=device))
-        return out.view(torch.uint8).view(self.n, -1, 8)[:, :, :4].contiguous().view(torch.uint16).view(self.n, -1)
-
-    def _base(self) -> np.ndarray:
-        """The row's u32 words (`core_check.public_row`'s 4-byte groups, each big-endian) with the position, and a J10-R
-        call's u0 and blocks, zero; as int64."""
-        tail = bytes(24) if self.blocks is not None else b""
-        return np.frombuffer(self.salt + bytes(8) + self.roots[0] + self.roots[1] + tail, ">u4").astype(np.int64)
-
-    def _fill(self, out: Any, t: Any) -> Any:
-        """``out`` (rows ``t``'s `_base`, a NumPy array or a tensor) with each row's own: its position, and a J10-R call's
-        u0 and blocks, each u64 its high word then its low."""
-        cols = [(len(self.salt) // 4, self.u0 + t)]
-        if self.blocks is not None:
-            m, k, tile, q = self.blocks
-            b0, b1 = CC.j10r_blocks(m, k, tile, t // q, t % q)
-            at = (len(self.salt) + 8 + len(self.roots[0]) + len(self.roots[1])) // 4
-            cols += [(at, self.u0), (at + 2, b0), (at + 4, b1)]
-        for i, v in cols:
-            out[:, i], out[:, i + 1] = v >> 32, v & 0xFFFFFFFF
-        return out
 
 
 @dataclass
@@ -893,6 +760,6 @@ def digest_of(entries: Sequence[Mapping[str, Any]], refused: Sequence[str]) -> b
 
 
 __all__ = ["B_NONCE", "EMPTY_ID", "FILE", "IDS_NONCE", "LOCAL_SESSION", "ModelKey", "NONCE", "PREFIX", "PublicRows", "Registration", "Served",
-           "V2", "Weights", "chunk_words", "declared", "declared_layout", "descriptor", "digest_of", "file_name", "host_weight", "ids_words", "layout",
+           "V2", "Weights", "card_arch", "chunk_words", "declared", "declared_layout", "descriptor", "digest_of", "file_name", "host_weight", "ids_words", "layout",
            "model_key", "nonce", "RECEIPT_NONCE", "reads_file", "receipt_words", "record_words", "register", "register_weights", "row_words", "trees",
            "weights_of"]
