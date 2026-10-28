@@ -1,0 +1,101 @@
+# The network certifier's code identifiers in the Glossary's words (draw → sample, firewall → ZK server, unit → block,
+# wrong → incorrect): what `tools/move/rename.py --map tools/move/network_vocabulary_map.toml` renames. Each [[words_in]]
+# holds one declaration's names for the files that read it, renamed as whole words. A summary's field names, refusal
+# codes and format ids keep their spelling, since run records and other lanes' readers pin them ([keep]).
+
+[words]
+
+[keep]
+patterns = ['"advice_before_draw"', '"fixed_before_draw"']
+
+# the device's salts, taken from its own coins at each PoUW window
+[[words_in]]
+files = ["verity/core/devices/certifier/lean/CertifierDevice/Driver.lean"]
+[words_in.words]
+"drawSalts" = "freshSalts"
+
+[[words_in]]
+files = ["verity/core/protocols/certifier/active.py", "verity/core/devices/certifier/lean/CertifierDevice/Device.lean"]
+[words_in.words]
+"_draw_salt" = "_fresh_salt"
+
+# a uniform sample's hypotheses, satisfiable
+[[words_in]]
+files = ["Security/Proofs/NetworkCertifier/Horizon.lean"]
+[words_in.words]
+"drawUniform_val" = "sampleUniform_val"
+
+# a prover's environment behind the ZK server
+[[words_in]]
+files = ["benchmarks/network_traces/n2_zk.py", "benchmarks/network_traces/n2_tie_zk.py",
+         "benchmarks/network_traces/compile_slice_zk.py", "benchmarks/prove_path/served_statics_zk.py",
+         "benchmarks/prove_path/served_tie_zk.py"]
+[words_in.words]
+"def firewall" = "def zk_server_env"
+"N2.firewall" = "N2.zk_server_env"
+"Z.firewall" = "Z.zk_server_env"
+"firewall(M, sg)" = "zk_server_env(M, sg)"
+
+[[words_in]]
+files = ["benchmarks/network_traces/tests/test_n2_zk.py", "benchmarks/network_traces/tests/test_n2_tie_zk.py",
+         "benchmarks/network_traces/tests/test_n2_advised_zk.py"]
+[words_in.words]
+"test_jobs_is_one_firewalled_session_at_a_time" = "test_jobs_is_one_zk_server_session_at_a_time"
+
+# the advice's checks against the registration the sample followed
+[[words_in]]
+files = ["benchmarks/prove_path/prove_path.py", "benchmarks/prove_path/README.md",
+         "benchmarks/prove_path/tests/test_prove_path.py"]
+[words_in.words]
+"advice_before_draw" = "advice_before_sample"
+"advice_after_draw" = "advice_after_sample"
+
+[[words_in]]
+files = ["benchmarks/prove_path/records_audit.py", "benchmarks/prove_path/tests/test_records_audit.py"]
+[words_in.words]
+"fixed_before_draw" = "fixed_before_sample"
+
+# tests
+[[words_in]]
+files = ["benchmarks/prove_path/tests/test_prove_path.py"]
+[words_in.words]
+"test_the_advice_must_be_in_the_registration_the_draw_followed" = "test_the_advice_must_be_in_the_registration_the_sample_followed"
+"test_on_the_challengers_coins_the_advice_must_be_in_the_registration_the_challengers_stream_drew_after" = "test_on_the_challengers_coins_the_advice_must_be_in_the_registration_the_challengers_stream_sampled_after"
+"test_a_forged_rank_passes_only_when_lean_refuses_its_drawn_forged_unit" = "test_a_forged_rank_passes_only_when_lean_refuses_its_sampled_forged_block"
+"test_advice_committed_after_the_draw_passes_every_check_before_it_and_is_refused" = "test_advice_committed_after_the_sample_passes_every_check_before_it_and_is_refused"
+"test_a_forged_unit_passes_every_check_before_the_draw_and_differs_in_one_bit" = "test_a_forged_block_passes_every_check_before_the_sample_and_differs_in_one_bit"
+"test_a_plain_audit_takes_the_stand_ins_window_only_inside_one_table_under_a_stratified_draw" = "test_a_plain_audit_takes_the_stand_ins_window_only_inside_one_table_under_a_stratified_sample"
+"test_per_unit_timing_is_over_the_members_drawn_units_not_c_flocks_virtual_units" = "test_per_block_timing_is_over_the_members_sampled_blocks_not_flocks_virtual_units"
+
+[[words_in]]
+files = ["benchmarks/prove_path/tests/test_records_audit.py"]
+[words_in.words]
+"test_the_advice_is_fixed_before_the_draw_and_refused_re_committed_after_it" = "test_the_advice_is_fixed_before_the_sample_and_refused_re_committed_after_it"
+"test_the_audit_reserves_a_port_for_every_session_its_draw_can_open" = "test_the_audit_reserves_a_port_for_every_session_its_sample_can_open"
+
+[[words_in]]
+files = ["benchmarks/network_e2e/tests/test_chain.py"]
+[words_in.words]
+"test_the_prove_paths_time_is_per_drawn_unit_and_beside_the_endpoints_advice_it_is_the_fixed_workloads" = "test_the_prove_paths_time_is_per_sampled_block_and_beside_the_endpoints_advice_it_is_the_fixed_workloads"
+"test_at_serve_time_is_before_its_draw_and_no_later_than_the_next_windows_close" = "test_at_serve_time_is_before_its_sample_and_no_later_than_the_next_windows_close"
+
+[[words_in]]
+files = ["benchmarks/network_traces/tests/test_chain_record.py"]
+[words_in.words]
+"test_report_merges_runs_and_counts_a_negative_that_escaped_the_draw" = "test_report_merges_runs_and_counts_a_negative_that_escaped_the_sample"
+
+[[words_in]]
+files = ["verity/core/protocols/certifier/tests/test_network_certifier_io_tie_adversarial.py"]
+[words_in.words]
+"test_a_payload_in_m_cells_is_refused_and_the_draws_price_is_the_comparison" = "test_a_payload_in_m_cells_is_refused_and_the_samples_price_is_the_comparison"
+
+[[words_in]]
+files = ["verity/core/protocols/certifier/tests/test_network_certifier_period.py"]
+[words_in.words]
+"test_all_draws_every_window_and_reads_no_coin" = "test_all_samples_every_window_and_reads_no_coin"
+"test_a_sampled_link_is_accepted_on_its_drawn_windows_and_states_its_wrong_units_at_delta" = "test_a_sampled_link_is_accepted_on_its_sampled_windows_and_states_its_incorrect_blocks_at_delta"
+"test_a_lean_that_refuses_or_draws_otherwise_refuses_the_link_by_name" = "test_a_lean_that_refuses_or_samples_otherwise_refuses_the_link_by_name"
+"test_registration_follows_the_draw_and_the_committed_roots" = "test_registration_follows_the_sample_and_the_committed_roots"
+"test_a_rejected_drawn_window_rejects_the_link" = "test_a_rejected_sampled_window_rejects_the_link"
+"test_the_draw_is_held_to_this_stream_and_the_period_it_committed" = "test_the_sample_is_held_to_this_stream_and_the_period_it_committed"
+"test_a_drawn_window_missing_or_past_the_draw_refuses_a_sampled_link" = "test_a_sampled_window_missing_or_past_the_sample_refuses_a_sampled_link"
