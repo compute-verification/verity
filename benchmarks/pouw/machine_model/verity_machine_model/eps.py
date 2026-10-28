@@ -4,18 +4,18 @@ protocol with 100% checking, every word and operand verified, has the core ε, C
     1 − ε_core = (1 − ε_skip − ε_mand − ε_machine − ε_luck) · (1 − ε_sched) · (1 − ε_clock)
 
 ε_luck in it: every check is one draw, so an accepted cheater spends Theorem S's budget with every block checked
-(LEDGER; JL is not assumed). The sampling compiler adds ε_sample = ε_adapt, a function of the proof block and its
+(JL is not assumed). The sampling compiler adds ε_sample = ε_adapt, a function of the proof block and its
 selection rule, 0 at 100% sampling. Each term is a fraction of honest time.
 
 - **Π** is a named vector's rows at its epoch, as the price LP reads them: row r holds Σ_k c_kr·n_k SMSP-cycles for n_k warp
   instructions of class k, and a program takes at least its largest row.
-- **ε_machine** is one LP over Π (SPEC's §0.8). A program writes every committed
+- **ε_machine** is one LP over Π. A program writes every committed
   word, folds every word and does the filler, and takes T ≥ every row. A word is written on one of four routes: `tensor`
   (on any MMA form of data/forms.toml, L/(depth·words) of that form's instructions with honest's operand delivery a
   word, folded on lanes; honest writes on its own form), `lanes` (q lane instructions a word in any mix of the
   CUDA classes, NOROW's componentwise minimum among them, folded on lanes), `baseline` (the design's `[baseline]`
   program, dp4a, folded on lanes) or `uniform` (q_u uniform instructions a word, folded there too); the cheater may
-  have a fifth, `table` (QSTAR's register-indexed lookups, data/table.toml: q_T lane instructions from the lanes' pool
+  have a fifth, `table` (register-indexed lookups, data/table.toml: q_T lane instructions from the lanes' pool
   and 8 B of L2 a word against an L2 facet at the card's bandwidth, honest's L2 uncharged). Honest runs each filler on
   lanes (its class mix); the cheater may run it on the uniform datapath (one uniform instruction a lane instruction)
   when every class of its mix has a uniform form there (the device's `uniform_forms`; sm_90's datapath has no FFMA).
@@ -24,16 +24,16 @@ selection rule, 0 at 100% sampling. Each term is a fraction of honest time.
   `counted` routes, which no run has built, are the cheater's only), honest by the design's fold (its kernel's). The
   cheater minimizes
   T at q = q* over every route. Honest is the same LP with its own routes: the tensor route at its own operand cost, the
-  baseline program (whose words belong to the baseline, not to ε: the brief §2) and its filler where it runs it.
+  baseline program (whose words belong to the baseline, not to ε) and its filler where it runs it.
   ε_machine = 1 − T_cheat/T_honest, and against honest as built (the tensor route alone) beside it. The cheater's
-  operand delivery is priced 0 (`free`, SPEC's conservative default), at the noise's floor φ_del (`floor`: the
+  operand delivery is priced 0 (`free`, the conservative default), at the noise's floor φ_del (`floor`: the
   design's `[operands]`, else the profile's), or at honest's own (`honest`). The LP's duals are the certificate π*, at
   which ε_machine splits exactly into ε_cert (1 − π*·n(H)/B(H)) and ε_route. With the scalar routes closed it is
   ε_machine's floor, which no q* lowers; the threshold is the least q* at which ε_machine reaches it. q* is (I3)
-  ScalarRoute's floor: ½ is Lean's (SheetScalarRouteHalf, from A6), and 1.22, decision 89's reading, is the 1.22-slot
+  ScalarRoute's floor: ½ is Lean's (SheetScalarRouteHalf, from A6), and 1.22, the measured reading's, is the 1.22-slot
   issue floor (Theorem C, unproved in Lean).
-- **The credit** is honest's kernel (`H`, the master inequality), its model bound B(H)/f_max (`model`, PROFILE's
-  reading: ε_sched and ε_clock leave ε for γ), or the floor program ♭ (`floor`, SPEC §0.7a's Corollary D3): the same LP
+- **The credit** is honest's kernel (`H`, the master inequality), its model bound B(H)/f_max (`model`, under
+  which ε_sched and ε_clock leave ε for γ), or the floor program ♭ (`floor`, Corollary D3): the same LP
   restricted to honest's routes with the tensor route at φ_del and no overhead. Under ♭, ε_sched, ε_clock and honest's
   overhead above ♭ leave ε for γ, as the factor T_H/B_♭ · f_max/f_H (`credit_ratio`; f_max/f_H = 1/(1 − ε_clock)).
 - **ε_luck** is Theorem S inside the same LP: an accepted cheater writes (1 − d̄) of the words and folds them all, d̄ =
@@ -46,14 +46,14 @@ selection rule, 0 at 100% sampling. Each term is a fraction of honest time.
   Honest's time is measured when the design runs the profile's kernel; otherwise, when the profile is measured, the
   measured time plus the model's difference between the design and the profile's kernel, and else its fastest
   program's model time.
-- **ε_skip** is SKIP's calculator's number for the design's noise (benchmarks/pouw/eps_budget.py, `design_skip`), which
+- **ε_skip** is the ε_skip calculator's number for the design's noise (benchmarks/pouw/eps_budget.py, `design_skip`), which
   its `[skip.served]` records at the device's current vector, and at another vector V as `at = { V = … }` (♭ moves
   with Π); **ε_mand** and **ε_clock** are the design's accounting (data/designs/), each part with its source.
-- **ε_adapt** is the proof block's (data/adapt.toml, SPEC's Theorem D): what steering instances in unproved regions gains
+- **ε_adapt** is the proof block's (data/adapt.toml, Theorem D): what steering instances in unproved regions gains
   when σ is drawn after the commitment and before evaluation. A design names its unit (`unit`).
 
-A design is one file in data/designs/, read on top of its `base` and of data/designs.toml (`design`): its name (decision
-79's, with the names tonight's notes and data used as `aliases`), the noise on each product (`[noise]`, a leaf of
+A design is one file in data/designs/, read on top of its `base` and of data/designs.toml (`design`): its name (with
+the names it had before as `aliases`), the noise on each product (`[noise]`, a leaf of
 NOISE for each of PRODUCTS), the fold, the filler, the proof block, the coins and its perplexity arm (`ppl`, a spec in
 benchmarks/ppl/specs/), with the ε terms' accounting beside them.
 
@@ -88,13 +88,13 @@ NOISE = {                                          # how a product is noised and
     "two-sided": "both operands dithered with fresh bits, no U, the last checked word served: nothing unchecked",
     "co32c": "CO-Dither at r = 32, the residue sums' base-128 digits committed: every limb a checked word",
     "cohalf": "CO-Dither at r = k/2 with a 7-bit served side: the strip one checked limb",
-    "peel": "P's w64 peel with U: the strip unchecked, all of it free at a one-hot P row (CHECKED-STRIP Result 3)",
+    "peel": "P's w64 peel with U: the strip unchecked, all of it free at a one-hot P row",
     "pv": "P served with a fresh bit, V served, Ycum's base-128 digits committed: every product checked",
     "clean": "served plain, never proved",
 }
 SUMS = {                                           # the kernel forming a peel's sums DG, S and X(0) (eps_budget prices it)
-    "vsum": "BC-KERNEL r2's linear vsum, 35 per-thread instructions an entry",
-    "vfold": "D2S-KERNEL r3's vfold, the V producers in one pass: 0.69–0.73 warp instructions an entry",
+    "vsum": "the linear vsum, 35 per-thread instructions an entry",
+    "vfold": "the vfold, the V producers in one pass: 0.69–0.73 warp instructions an entry",
 }
 OWN = ("name", "title", "summary")                 # what a design file states itself, never from its base
 
@@ -195,8 +195,8 @@ class Filler:
     """Verified proof-of-work filler: `per_word` lane instructions a committed word in the class mix `mix`, run by
     honest on `route`; a deficient block of it passes its check with probability ≤ `p`, as the theorem `luck` names
     proves. Without one p is 1, no luck credit: the cheater leaves the filler undone at no cost to Theorem S's budget,
-    even with every block checked, and the floor program ♭ leaves it out too (decision 99: a filler's credit is the
-    theorem its check meets), while honest's time, γ, still counts it. A receipt the check recomputes and compares
+    even with every block checked, and the floor program ♭ leaves it out too (a filler's credit is the theorem its
+    check meets), while honest's time, γ, still counts it. A receipt the check recomputes and compares
     with the committed one has p = 0 (`PINNED`), pfill's cells 0.854 (`PFILL`)."""
     per_word: float = 0.0
     mix: dict[str, float] | None = None
@@ -247,8 +247,8 @@ class Design:
     q_uniform: float | None = None   # uniform instructions a word on the uniform datapath; None: q*
     index_bits: int = 1              # bits a noise entry on the operand a table route indexes (`[table] bits`, else
                                      # the coins')
-    title: str = ""              # decision 79's name
-    aliases: tuple[str, ...] = ()    # the names tonight's notes and data used
+    title: str = ""              # its display name (Dither-1S)
+    aliases: tuple[str, ...] = ()    # the names it had before
     base: str = ""               # the design this one varies
     ppl: str = ""                # its perplexity arm, benchmarks/ppl/specs/PPL.toml; "": none on main
     noise: dict[str, str] | None = None   # each of PRODUCTS: a leaf of NOISE
@@ -287,7 +287,7 @@ class Design:
 
     def table(self, t: Table | None) -> Table | None:
         """The table route against this design: b-bit entries on the indexed operand cost b times the 1-bit route's
-        lane instructions and bytes a word (QSTAR's b-bit count: ≥ 1.25·b and 8·b B, SPEC §4.2a)."""
+        lane instructions and bytes a word (at least 1.25·b and 8·b B)."""
         b = self.index_bits
         return t if t is None or b == 1 else replace(t, q=t.q * b, bytes=t.bytes * b)
 
@@ -457,7 +457,7 @@ def designs(data: Path = DATA) -> list[str]:
 
 
 def aliases(data: Path = DATA) -> dict[str, str]:
-    """Each alias, a name tonight's notes and data used, with the design it names."""
+    """Each alias, a name the design had before, with the design it names."""
     out: dict[str, str] = {}
     for n in designs(data):
         for a in tomllib.loads((data / "designs" / f"{n}.toml").read_text()).get("aliases", ()):
@@ -501,7 +501,7 @@ def machine(name: str = "", data: Path = DATA) -> Machine:
 
 
 def uniform_issue_charged(pi: Machine) -> bool:
-    """Whether Π's census already charges a uniform instruction on an issue row (VF3p-16 on, decision 73; a DS vector's
+    """Whether Π's census already charges a uniform instruction on an issue row (VF3p-16 on; a DS vector's
     `DS_issue`, A2u)."""
     return any(v > 0 and (r == "issue" or r.endswith("_issue") or r.startswith("JI")) for r, v in pi.c.get("UNI", {}).items())
 
@@ -764,7 +764,7 @@ def undominated(fs: list[Form], pi: Machine) -> tuple[Form, ...]:
 
 def setup(d: Design, pi: Machine, data: Path = DATA, operands: str = "free", credit: str = "H",
           table: Table | None = None) -> Setup:
-    """`credit` H and model compare the cheater with honest's kernel; floor with the floor program ♭ (SPEC §0.7a):
+    """`credit` H and model compare the cheater with honest's kernel; floor with the floor program ♭ (Corollary D3):
     the tensor route at the noise's φ_del, the fold at the cheapest mix of the design's fold and its built
     `fold_routes` on Π (the check reads the fold's result, not its program; a counted route is the cheater's alone),
     the fillers on their own routes and the baseline program,
@@ -831,7 +831,7 @@ class Eps:
     @property
     def credit_ratio(self) -> float:
         """Honest's time over the credited program's, the credit at f_max under the model and floor credits: the factor
-        by which ε_sched, ε_clock and honest's overhead leave ε for γ (SPEC's γ_♭)."""
+        by which ε_sched, ε_clock and honest's overhead leave ε for γ (γ_♭)."""
         r = self.T_honest / self.baseline.T
         return r if self.credit == "H" else r / (1 - self.design.clock.eps)
 
