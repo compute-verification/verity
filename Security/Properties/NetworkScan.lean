@@ -6,8 +6,8 @@ import Definitions.NetworkCertifier.SampledAudit
 
 The sampled audit's scope at a link-window's statement (`NetTiming.ScopeAcc`) has two halves: the sampling scope
 (`Claims.Sampling.Scope`, the sampled verifier's own, which `Claims.Sampling.ScopeMatches` equates with its scope
-check), and the statement's layout fitting its program over its horizon (`NetTiming.BoundaryGates.Fits`). The network check
-reads the second off the scan's Program (`scanOf`, the generator form); the first it doesn't read.
+check), and the statement's layout fitting its program over its horizon (`NetTiming.BoundaryGates.Fits`). The network
+check reads the second off the scan's Program (`scanOf`, the generator form); the first it doesn't read.
 
 **The layout** (`scanLayout`) is the generator form's, at the schedule's `S = lanes · slots` slots of `B` bytes and
 `T` buckets, over one egress link: at step `t`, slot `σ`'s presence gate is bit 0 of egress member `t`'s verdict (its
