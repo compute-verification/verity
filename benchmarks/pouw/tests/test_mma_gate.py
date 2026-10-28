@@ -25,12 +25,9 @@ VERDICTS = FIX / "mma_gate" / "verdicts.json"
 GATES = {"pearl_c_sm90": ("benchmarks/pouw/pearl_c_sm90/sass_gate.py", None),
          "pearl_c_sm120": ("benchmarks/pouw/pearl_c_sm120/sass_gate.py", None),
          "s8_linear": ("benchmarks/torch_gpu/s8_linear/sass_gate.py", None),
-         "s8_dec_linear": ("benchmarks/torch_gpu/s8_dec_linear/sass_gate.py", "sm_90a"),
          "attn_bf16": ("benchmarks/torch_gpu/attn_bf16/sass_gate.py", "sm_90a")}
 #: the arch each gate's real-listing cases are reported for
-REAL_ARCH = {"pearl_c_sm90": "sm_90a", "pearl_c_sm120": "sm_120a", "s8_linear": "sm_90a", "s8_dec_linear": "sm_90a",
-             "attn_bf16": "sm_120a"}
-KEYED, PLAIN = "_Z17p2st_keyed_kernelPKhPhPKjS3_ii", "_Z17p2st_plain_kernelPKhPhii"
+REAL_ARCH = {"pearl_c_sm90": "sm_90a", "pearl_c_sm120": "sm_120a", "s8_linear": "sm_90a", "attn_bf16": "sm_120a"}
 
 
 def _load(gate: str):
@@ -160,26 +157,6 @@ def s8_linear(arch: str, bad: bool) -> tuple[str, str]:
     return "".join(p), s.text()
 
 
-def s8_dec_linear(arch: str, bad: bool) -> tuple[str, str]:
-    p, s = [], Listing()
-    for name in (KEYED, PLAIN):
-        if not (bad and name == PLAIN):
-            p.append(entry(name, arch, regs=40, stack=8 if bad and name == KEYED else 0, smem=4096))
-        s.fn(name)
-        for ins, k in (("S2R R0, SR_TID.X", 1), ("IMAD.WIDE.U32 R2, R0, 0x4, R2", 3), ("IMAD.WIDE R4, R0, 0x4, R4", 1),
-                       ("IMAD.HI.U32 R6, R7, R8, RZ", 2), ("IMAD.MOV.U32 R9, RZ, RZ, R6", 1), ("IMAD R10, R11, R12, RZ", 4),
-                       ("IADD3 R5, R5, 0x1, RZ", 2), ("LOP3.LUT R4, R7, R11, RZ, 0xfc, !PT", 6), ("SHF.R.U32.HI R3, RZ, 0x3, R0", 3),
-                       ("PRMT R5, R2, 0x7650, R3", 2), ("LDG.E.128 R12, desc[UR4][R2.64]", 1), ("STS.128 [R3], R12", 1),
-                       ("BAR.SYNC.DEFER_BLOCKING 0x0", 1), ("LDS.128 R12, [R3]", 1), ("STG.E.128 desc[UR4][R4.64], R12", 1),
-                       ("WARPSYNC.ALL", 1), ("EXIT", 1)):
-            s.ins(ins, k)
-        if bad and name == KEYED:
-            s.ins("STL [R1], R2")
-    if bad:
-        p.append("ptxas warning : Stack size for entry function cannot be statically determined\n")
-    return "".join(p), s.text()
-
-
 def attn_bf16(arch: str, bad: bool) -> tuple[str, str]:
     G = _load("attn_bf16")
     p, s = [], Listing()
@@ -243,6 +220,12 @@ def test_the_gates_verdict_and_out_json_are_pinned(gate, case, tmp_path):
     got = run(gate, case, tmp_path)
     said = got.pop("_said")
     assert got == json.loads(VERDICTS.read_text())[gate][case], said
+
+
+def test_sass_functions_takes_each_functions_lines_and_a_repeated_header_starts_over():
+    H = _load("pearl_c_sm90").H
+    listing = "code for sm_90a\n  Function : a\n  /*0000*/ X ;\n  Function : b\n  /*0000*/ Y ;\n  Function : a\n  /*0000*/ Z ;\n"
+    assert H.sass_functions(listing) == {"a": ["  /*0000*/ Z ;"], "b": ["  /*0000*/ Y ;"]}
 
 
 def test_every_case_is_pinned_and_every_pin_is_a_case():

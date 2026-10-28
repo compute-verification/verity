@@ -83,38 +83,6 @@
    "stdout": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
   }
  },
- "s8_dec_linear": {
-  "fast_math": {
-   "out_json": "6380dfd51363e85b84f49f532678c97cd2e9e786ac0e7037085d8eb63fcca730",
-   "rc": 1,
-   "stderr": "e190575fbca3f9ae9f879ac7575d7c65f447a63d6f239c73bea8c40e888e68aa",
-   "stdout": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
-  },
-  "pass": {
-   "out_json": "822673976e6e30e2a178a27ebb6920aa1b95729b97523972b88776a7ed56c0e0",
-   "rc": 0,
-   "stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-   "stdout": "fe574b1ed0d9eb17b20b286c3192c58b9f92accfa385d2f181cbfea861d2e2e1"
-  },
-  "pass_sm120a": {
-   "out_json": "c38ca8544f1f3d4d8e32282b2c0b584ee6bd25ce0a279059b04ac98077a7e6ec",
-   "rc": 0,
-   "stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-   "stdout": "c866b317ec21912bb9ea5ceb7f56466cc4012377115c0ac497dfe6ec4ba349fa"
-  },
-  "plain": {
-   "out_json": "6380dfd51363e85b84f49f532678c97cd2e9e786ac0e7037085d8eb63fcca730",
-   "rc": 1,
-   "stderr": "e190575fbca3f9ae9f879ac7575d7c65f447a63d6f239c73bea8c40e888e68aa",
-   "stdout": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
-  },
-  "refused": {
-   "out_json": "aee4180741a5f4879fd32329437359371aa28137976d773b32cb0362dd67d994",
-   "rc": 1,
-   "stderr": "2eb57ee85f6acfcf8e28cc0900f9e61923243f673e467ecef408aeba5f0da1be",
-   "stdout": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
-  }
- },
  "s8_linear": {
   "fast_math": {
    "out_json": "d47f193106f80013b47f41d71f8607f2c42905d097205c8e0688e723ce771f0a",
