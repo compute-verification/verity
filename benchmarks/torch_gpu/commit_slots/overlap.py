@@ -75,8 +75,6 @@ from e2e_h200.weights import Weights
 MODES = ("serve", "commit", "serial", "low", "high", "equal", "low-thread", "high-thread")
 OVERLAPPED = ("low", "high", "equal", "low-thread", "high-thread")
 RUNS = ("serve", "commit:shared", "serial:shared", "low:shared", "high:shared", "equal:shared", "low:families:2")
-#: the target: the commit's share of the 3.78 s served step at 4,096 slots, at most 25%
-TARGET_S = 0.95
 #: an out-of-range priority: CUDA clamps it to the device's highest
 HIGH = -(1 << 20)
 SMI = ("clocks.sm", "power.draw.average", "power.draw.instant", "temperature.gpu", "memory.used",
@@ -453,12 +451,12 @@ def run_one(name: str, mode: str, steps: int, d: OverlapDriver, plan: G.Plan | N
     return r
 
 
-def derive(runs: list[dict], equal: dict[str, bool]) -> dict[str, Any]:
+def derive(runs: list[dict], equal: dict[str, bool], target_s: float) -> dict[str, Any]:
     """Per layout: the served step alone, the commit alone at each SMS, and the served loop and each overlapped run, with its
     hidden fraction (of the commit alone at its SMS, and of the commit alone on every SM) and its overhead a step against
-    `TARGET_S`; ``best``, the run of least overhead whose roots are its reference's."""
+    ``target_s``; ``best``, the run of least overhead whose roots are its reference's."""
     serve = next((r["step_s"] for r in runs if r["mode"] == "serve" and not r["sms"]), None)
-    out: dict[str, Any] = {"serve_s": serve, "target_s": TARGET_S, "layouts": {},
+    out: dict[str, Any] = {"serve_s": serve, "target_s": target_s, "layouts": {},
                            "serve_s_on_rest": {str(r["forward_sms"]): r["step_s"] for r in runs if r["mode"] == "serve" and r["sms"]}}
     for lay in sorted({r["layout"] for r in runs if r["layout"]}):
         rs = [r for r in runs if r["layout"] == lay]
@@ -471,7 +469,7 @@ def derive(runs: list[dict], equal: dict[str, bool]) -> dict[str, Any]:
             step, commit, full = r["step_s"], alone.get(r["sms"]), alone.get(0)
             e = {"commit_sms": r["commit_sms"], "forward_sms": r["forward_sms"], "step_s": step,
                  "overhead_s": round(step - serve, 4), "overhead_share": round((step - serve) / serve, 4),
-                 "ratio_to_target": round((step - serve) / TARGET_S, 3), "meets_target": step - serve <= TARGET_S,
+                 "ratio_to_target": round((step - serve) / target_s, 3), "meets_target": step - serve <= target_s,
                  "commit_s": commit}
             if commit:
                 e["hidden_s"] = round(serve + commit - step, 4)
@@ -539,13 +537,13 @@ def verdicts(doc: dict) -> list[str]:
                  f"commit alone on every SM)")
             lag = ", its host waiting on the reads" if r.get("host_lag") else ""
             out.append(f"VERDICT {name}: commit on {e['commit_sms']} SMs, forward on {e['forward_sms']}{lag}: step "
-                       f"{e['step_s']:.3f} s, overhead {e['overhead_s']:+.3f} s against <= {TARGET_S} s (ratio "
+                       f"{e['step_s']:.3f} s, overhead {e['overhead_s']:+.3f} s against <= {dv['target_s']} s (ratio "
                        f"{e['ratio_to_target']:.3f}, target met {e['meets_target']}){hid}{ref}; {_power(t, limits)}; HBM "
                        f"peak {r['hbm']['peak_gb']} GB")
     for lay, v in dv["layouts"].items():
         if v.get("best"):
             e = v["runs"][v["best"]]
-            out.append(f"VERDICT best on {lay}: {v['best']}, overhead {e['overhead_s']:+.3f} s against <= {TARGET_S} s "
+            out.append(f"VERDICT best on {lay}: {v['best']}, overhead {e['overhead_s']:+.3f} s against <= {dv['target_s']} s "
                        f"(ratio {e['ratio_to_target']:.3f}, target met {e['meets_target']})")
     return out
 
@@ -629,6 +627,9 @@ def main(argv: list[str] | None = None) -> int:
                     help="the fusions the forward serves (e2e_h200.plan.FUSIONS), the layout's")
     ap.add_argument("--uncommitted", nargs="*", default=[],
                     help="tables the forward writes and the layout doesn't hold (softmax: every layer's)")
+    ap.add_argument("--target-s", type=float, default=0.95,
+                    help="the commit's overhead a step's target at 4,096 slots, at most 25%% of the served step (default: a "
+                         "quarter of run r20261026-030611-8b64's, rounded up)")
     a = ap.parse_args(argv)
     a.fused, a.uncommitted = frozenset(a.fused), frozenset(a.uncommitted)
     a.out.mkdir(parents=True, exist_ok=True)
@@ -647,7 +648,7 @@ def main(argv: list[str] | None = None) -> int:
 
     def write() -> None:
         doc["roots_equal"] = roots_equal(doc["runs"])
-        doc["derived"] = derive(doc["runs"], doc["roots_equal"])
+        doc["derived"] = derive(doc["runs"], doc["roots_equal"], a.target_s)
         (a.out / "overlap.json").write_text(json.dumps(doc, indent=1) + "\n")
         (a.out / "summary.txt").write_text(summary(doc))
 
