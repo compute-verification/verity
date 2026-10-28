@@ -2,7 +2,8 @@
 # This directory's GPU job on one leased sm_90a GPU: build.sh's ship made first, in this run and off the lease; Llama 3.1
 # 8B's layer-0 int8 weights fetched into scratch (weights.py; SW_REAL=0 skips them, and a failed fetch only drops the
 # real-weight gate); then bench.py with this script's arguments under one gpu-lease of at most SW_MAX_MIN (20) minutes,
-# writing into $OUT/bench. VERITY_BENCH_VENV names the Python with torch; CUDA the toolkit (build.sh's default).
+# writing into $OUT/bench. VERITY_BENCH_VENV names the Python with torch (else the node's first known venv, else one made
+# under /workspace/cache/kernels-sw-orbit); CUDA the toolkit (build.sh's default).
 #   research run --on vy-dc-h200-3 --project verity --campaign hash --source . --cwd source --timeout 60m \
 #     --env GPU_LEASE_WHO=NAME -- bash benchmarks/torch_gpu/sw_orbit/run.sh [bench.py flags]
 set -uo pipefail
@@ -13,7 +14,18 @@ PY=${VERITY_BENCH_VENV:+$VERITY_BENCH_VENV/bin/python3}
 for v in /workspace/cache/kernels-j10r/venv312 /workspace/cp/venv312 /workspace/jobs/venv312; do
   [ -z "${PY:-}" ] && [ -x "$v/bin/python3" ] && PY=$v/bin/python3
 done
-[ -x "${PY:-}" ] || { echo "sw_orbit: no Python with torch (VERITY_BENCH_VENV)" >&2; exit 2; }
+if [ ! -x "${PY:-}" ]; then
+  V=/workspace/cache/kernels-sw-orbit/venv312
+  if [ ! -x "$V/bin/python3" ]; then
+    echo "sw_orbit: making $V at $(date -u +%H:%M:%SZ)"
+    { uv venv -q --python python3.12 "$V" && uv pip install -q --python "$V/bin/python3" numpy \
+        torch --index-url https://download.pytorch.org/whl/cu128 --extra-index-url https://pypi.org/simple; } \
+      > "$OUT/venv.log" 2>&1 || { tail -20 "$OUT/venv.log" >&2; rm -rf "$V"; exit 2; }
+    command -v research > /dev/null && research keep "$(dirname "$V")" --owner @kernels --expires 2026-11-30 \
+      --priority low --why "sw_orbit's torch venv" >> "$OUT/venv.log" 2>&1
+  fi
+  PY=$V/bin/python3
+fi
 echo "sw_orbit: build at $(date -u +%H:%M:%SZ)"
 bash "$HERE/build.sh" "$OUT/ship" > "$OUT/build.log" 2>&1 || { tail -40 "$OUT/build.log" >&2; exit 2; }
 "$PY" -c 'import torch; print(torch.__version__, torch.version.cuda)' > "$OUT/python.txt" 2>&1
@@ -28,7 +40,7 @@ MAX_MIN=${SW_MAX_MIN:-20}
 echo "sw_orbit: bench at $(date -u +%H:%M:%SZ)"
 # shellcheck disable=SC2016
 gpu-lease 1 --wait --max-min "$MAX_MIN" -- bash -c '
-  nvidia-smi -i "${GPU_LEASE_UUID:-0}" --query-gpu=index,uuid,name,driver_version,clocks.max.sm,power.limit --format=csv > "$0/gpus.txt" 2>&1
+  nvidia-smi -i "${GPU_LEASE_UUID:-0}" --query-gpu=index,uuid,name,driver_version,clocks.max.sm --format=csv > "$0/gpus.txt" 2>&1
   exec timeout $((60 * $1 - 30)) "$2" "$3/bench.py" --out "$0/bench" --lib "$0/ship/liborbit.so" --cubin "$0/ship/s8_wgmma.cubin" "${@:4}"' \
   "$OUT" "$MAX_MIN" "$PY" "$HERE" "${REAL[@]}" "$@" 2>&1 | tee "$OUT/bench.log"
 rc=${PIPESTATUS[0]}
