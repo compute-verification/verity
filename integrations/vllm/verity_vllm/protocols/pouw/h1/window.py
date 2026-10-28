@@ -193,7 +193,7 @@ def session(entry: str, at: str, steps: int, root: bytes,
 
 
 def gate_of(call: Callable[..., Mapping[str, Any]]) -> Gate:
-    """The `Gate` of infra's gate as words (`commit_coins.Gate.call`): ``open --session S --root R``, its ``commitment``
+    """The `Gate` of infra's gate as words (`commit_coins.ChallengerGate.call`): ``open --session S --root R``, its ``commitment``
     from ``status S`` when the open answers none, and only the fields a session's answer has (`pouw_h1_challenger.session_of`)."""
     def gate(sid: str, root: str) -> dict[str, Any]:
         answer = dict(call("open", "--session", sid, "--root", root))
