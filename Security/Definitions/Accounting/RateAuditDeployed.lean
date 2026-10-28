@@ -1,6 +1,6 @@
 import Definitions.Accounting.RateAuditInteractive
 import Definitions.Accounting.RateAuditRemote
-import Definitions.Accounting.RateAuditHorizon
+import Definitions.Accounting.RateAuditPooled
 
 /-!
 # The remote rate audit as deployed: one game (trusted)
@@ -19,14 +19,14 @@ pooled draw of `d` openings. It puts together what the pieces state separately:
 * **the window** (`DeployedWindow`) is `RateAuditRemote.lean`'s `GrindChain` of such devices: pass `j`'s root is one
   of `G` candidates the earlier passes' coins and the store fix, picked as any function of pass `j`'s whole oracle
   family, and pass `j`'s device may depend on the pick;
-* **the session** (`DeployedSession`) is `RateAuditHorizon.lean`'s `Session` of such windows: window `w`'s prover is
+* **the session** (`DeployedSession`) is `RateAuditPooled.lean`'s `Session` of such windows: window `w`'s prover is
   any function of the earlier windows' coins, their draws among them, and each window draws `d` of its `P·N`
   receipts after its last root (`WindowCoins`).
 
 A receipt is the oracle's tag `H(σ, R, j, E_j)` of the whole word; the deployed receipt hashes a 16-row sketch of it,
 which this game does not model (the PR's gap list). What the guarantee charges for each route to a word without
 reading it is a named term of `γ` (`muChip`, `muLink`, `muRebuild`, `muLambda`), each a fraction of a pass's `N·b`
-bits; the draw's shortfall is `d̄` over the horizon and `d_w` in a window.
+bits; the draw's shortfall is `d̄` over the monitoring period and `d_w` in a window.
 -/
 
 namespace Accounting.Rate
