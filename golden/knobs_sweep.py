@@ -1,6 +1,6 @@
 """GD-KNOBS: one-at-a-time sensitivity of J to each knob, on GD-MODEL's golden/model.py (an estimate, not a measurement).
 
-Run from the root of a checkout that has GD-MODEL's golden/ (cursor/compute-research-gd-model-6eb4 at e6ab8cbc31):
+Run from the root of a checkout that has GD-MODEL's golden/ (cursor/compute-research-gd-model-6eb4, merged at 1fa3c67b20):
 python3 -m golden.knobs_sweep [--json OUT] [--sha512 ROWS]
 
 --sha512 ROWS prices a SHA-512 compression at ROWS in circuit (and hm96's hiding part at twice that) instead of the
@@ -33,21 +33,23 @@ KNOBS = [
     ("C-Flock m_max", "prover", "m_max", [33, 35, 37, 40]),
     ("statements", "prover", "stmt", ["template", "universal"]),
     ("steps a window", "point", "steps_per_window", [1, 4, 16, 256]),
+    ("k_log cap (prover.k_max)", "prover", "k_max", [27, 28, 30]),
+    ("C-Flock range padding (prover.k_pad, bits past ceil(log2 ANDs))", "prover", "k_pad", [0, 1, 2]),
 ]
 
 #: INPUTS overrides: (knob, input, values)
 INPUT_KNOBS = [
     ("hiding part in circuit (hm96_ands; 0 ~ a PRF leaf whose salt fits the row's blocks)", "hm96_ands", [0, 58_120, 116_240]),
     ("Dither noise amplitude (noise_amp)", "noise_amp", [16, 40, 80, 127]),
-    ("k_log cap (k_max)", "k_max", [27, 28, 30]),
 ]
 
-H1_TILES = [32, 64, 128, 256, 512, 1024]  # cells a J10-R proof block: 4 x 8 (the scheme's least, 4 | r, 8 | c) ... 32 x 32 (H1's warp)
+#: a J10-R proof block's (R, C): 4 x 8 (the scheme's least, 4 | r, 8 | c) ... 32 x 32 (H1's warp)
+H1_TILES = [(4, 8), (8, 8), (8, 16), (16, 16), (16, 32), (32, 32)]
 
 
-def h1_tile(preset: str, form: str, cells: int) -> dict:
-    r = M.J(M.design(preset, pouw={"scheme": "j10r", "unit_cells": cells, "form": form}))
-    return {"value": [form, cells], "J": r["J"], "serve": r["serve_term"], "prove": r["prove_term"],
+def h1_tile(preset: str, form: str, tile: tuple[int, int]) -> dict:
+    r = M.J(M.design(preset, pouw={"scheme": "j10r", "tile": tile, "form": form}))
+    return {"value": [form, *tile], "J": r["J"], "serve": r["serve_term"], "prove": r["prove_term"],
             "infeasible": r.get("infeasible") or None}
 
 
