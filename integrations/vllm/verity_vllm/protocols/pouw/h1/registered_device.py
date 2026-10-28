@@ -6,7 +6,8 @@ computes (`registered.domain`).
 `device_commit` copies the rows to the device in chunks of at most `CHUNK_BYTES` (rows already there, as a call's z/y
 records are, it reads in place), hashes each row (its ``sha512/row/v2`` digest, salt, hm96-sha512 string, tree leaf and
 frame leaf) and then the pads and levels, on a stream of its own, and returns the strings and levels as `Registered`
-holds them (64-byte nodes, 128-byte strings, as bytes). `host_commit` runs
+holds them (64-byte nodes, 128-byte strings, as bytes). `device_hash` launches the same and returns at once, its
+`Hashing` reading them out once the stream is done. `host_commit` runs
 the same functions on the CPU (`registered_rows_host.cpp`, built with the system C++ compiler): the twin the CPU tests
 hold to `pouw_h1_registered.commit`'s NumPy path on machines without a GPU. Builds share the Commit's row-table builder
 (`row_tables_device._build`, keyed by sources, flags and compiler); nvcc is `pouw_device`'s (its `TOOLCHAIN`'s,
@@ -24,8 +25,8 @@ import numpy as np
 
 from verity_vllm.commit import row_tables_device as RTD
 
-__all__ = ["CHUNK_BYTES", "Pub", "Table", "available", "device_commit", "device_lib", "device_public_salts", "host_commit",
-           "host_lib", "host_public_salts", "nvcc", "pub", "table"]
+__all__ = ["CHUNK_BYTES", "Hashing", "Pub", "Table", "available", "device_commit", "device_hash", "device_lib",
+           "device_public_salts", "host_commit", "host_lib", "host_public_salts", "nvcc", "pub", "table"]
 
 DEVICE_SOURCES = ("ncp2.cuh", "row_table.cuh", "registered_rows.cuh", "registered_rows.cu")
 HOST_SOURCES = ("ncp2.cuh", "row_table.cuh", "registered_rows.cuh", "registered_rows_host.cpp")
@@ -211,11 +212,34 @@ def available() -> bool:
     return True
 
 
+class Hashing:
+    """A value's hash launched on the device's stream (`device_hash`): ``ready()`` without blocking, ``result()`` its
+    ``b || c`` strings and tree levels, waited for. It holds the rows, salts and scratch until read, so nothing the stream
+    still reads goes back to the allocator."""
+
+    def __init__(self, done: Any, bcs: Any, levels: Any, W: int, held: tuple[Any, ...]) -> None:
+        self.done, self.bcs, self.levels, self.W, self.held = done, bcs, levels, W, held
+
+    def ready(self) -> bool:
+        return bool(self.done.query())
+
+    def result(self) -> tuple[tuple[bytes, ...], tuple[tuple[bytes, ...], ...]]:
+        self.done.synchronize()
+        self.held = ()
+        return _out(self.bcs.numpy().view(np.uint64), self.levels.numpy().view(np.uint64), self.W)
+
+
 def device_commit(words: Any, key: bytes, nonce: int, row_salts: bytes | None,
                   domain_id: bytes) -> tuple[tuple[bytes, ...], tuple[tuple[bytes, ...], ...]]:
+    """`device_hash`'s strings and levels, waited for."""
+    return device_hash(words, key, nonce, row_salts, domain_id).result()
+
+
+def device_hash(words: Any, key: bytes, nonce: int, row_salts: bytes | None, domain_id: bytes) -> Hashing:
     """The ``b || c`` strings and tree levels of ``words`` ``(n, W)`` u16 hashed on the current CUDA device, on its own
-    stream, returned once done. ``words`` on the host are copied there; a u16 tensor on that device is read in place,
-    after everything its current stream has enqueued (the stream that wrote it), and is held until the hash is done."""
+    stream, nothing waiting on the host but a host ``words``' copy. ``words`` on the host are copied there; a u16 tensor
+    on that device is read in place, after everything its current stream has enqueued (the stream that wrote it), and is
+    held until the hash is done."""
     import torch
 
     d = _device(torch)
@@ -236,9 +260,11 @@ def device_commit(words: Any, key: bytes, nonce: int, row_salts: bytes | None,
         t.salts = 0 if salts is None else salts.data_ptr()
         bcs = torch.empty(16 * n, dtype=torch.int64, device=dev)
         levels = torch.empty(8 * (2 * t.W - 1), dtype=torch.int64, device=dev)
+        chunks = []
         for lo in range(0, n, per):
             hi = min(n, lo + per)
             chunk = rows[lo:hi] if held else torch.from_numpy(rows[lo:hi]).to(dev)
+            chunks.append(chunk)
             t.rows = chunk.data_ptr()
             rc = d.lib.rr_leaves(st.cuda_stream, ctypes.byref(t), lo, hi - lo, d.hm.data_ptr(), d.ms.data_ptr(),
                                  bcs.data_ptr(), levels.data_ptr())
@@ -247,8 +273,13 @@ def device_commit(words: Any, key: bytes, nonce: int, row_salts: bytes | None,
         rc = d.lib.rr_tree(st.cuda_stream, ctypes.byref(t), levels.data_ptr())
         if rc:
             raise RuntimeError(f"rr_tree: CUDA error {rc}")
-        got_bcs, got_levels = bcs.cpu().numpy().view(np.uint64), levels.cpu().numpy().view(np.uint64)
-    return _out(got_bcs, got_levels, t.W)
+        got_bcs = torch.empty(16 * n, dtype=torch.int64, pin_memory=True)
+        got_levels = torch.empty(8 * (2 * t.W - 1), dtype=torch.int64, pin_memory=True)
+        got_bcs.copy_(bcs, non_blocking=True)
+        got_levels.copy_(levels, non_blocking=True)
+        done = torch.cuda.Event()
+        done.record(st)
+    return Hashing(done, got_bcs, got_levels, t.W, (words, rows, salts, bcs, levels, chunks))
 
 
 def device_public_salts(head: bytes, first: int, n: int) -> bytes:
