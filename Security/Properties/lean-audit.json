@@ -122,45 +122,25 @@
    "owner": "@memory-accounting",
    "digest": "d1684ab2095265ddc42a1b96006579547569610dbf78f7dcd917e70c29cdbf5f"
   },
-  "Accounting.Remote.Held.Assumptions.ChipCeiling": {
+  "Accounting.Remote.Held.Assumptions.Covered": {
    "owner": "@memory-accounting",
-   "digest": "e127ae65fbdc438b47177e01b9ac74b58f7ea758327288ae293137cb8b6d8fae"
+   "digest": "5c608a83fe20d77e737b97d37087e1d392d1069ca7e67dd63e44bfdae48edbb0"
   },
   "Accounting.Remote.Held.Assumptions.Covers": {
    "owner": "@memory-accounting",
    "digest": "d438bfd7ed2af2553dfa811e2c17840502eab877926ee4d89aea953fba5cb040"
   },
-  "Accounting.Remote.Held.Assumptions.Disks": {
+  "Accounting.Remote.Held.Assumptions.IngressCounted": {
    "owner": "@memory-accounting",
-   "digest": "44674bd7d2f65c33576c0959754230e2c263738482a6424b37ebd0911c8a25ca"
-  },
-  "Accounting.Remote.Held.Assumptions.Identity": {
-   "owner": "@memory-accounting",
-   "digest": "22630221fb29250610dca86a4897d9f39909a8e8ca1c425fcb62e8dcf192a236"
-  },
-  "Accounting.Remote.Held.Assumptions.Links": {
-   "owner": "@memory-accounting",
-   "digest": "5eb7c975f82ed1718aea5d790325eb4b28c07b0d1fdbf2d2265375db54787a2a"
-  },
-  "Accounting.Remote.Held.Assumptions.NoOutsideCompute": {
-   "owner": "@memory-accounting",
-   "digest": "00299a3d3e2bb1d72b639c2ab816de31cd74beac5f5ff4436a57510b439cce33"
+   "digest": "7c04197d5b780f94be3bcc1dc1e3e8cc6eafc43158098fe3936eed3aa7f12c3e"
   },
   "Accounting.Remote.Held.Assumptions.Paced": {
    "owner": "@memory-accounting",
    "digest": "6e7b12b8bd7f835f54c0380b95c243db645f3cb1a6ae795f3645926f9dd9b62e"
   },
-  "Accounting.Remote.Held.Assumptions.Routed": {
-   "owner": "@memory-accounting",
-   "digest": "0c27bd1201f655e0bb779bc6b347727d6d0072e9aab93ae409391e18670eca7c"
-  },
   "Accounting.Remote.Held.Assumptions.SketchBoundAt": {
    "owner": "@memory-accounting",
    "digest": "8b630261ad87876a09caac09d0d2d22c41e3b9724fd6ef88f9782a3083b23020"
-  },
-  "Accounting.Remote.Held.Assumptions.SquaringCeiling": {
-   "owner": "@memory-accounting",
-   "digest": "ec84a74dad72a577c60f568cc9665016654feb62fad1857aef5f2f8a4bb9f098"
   },
   "Nci.Assumptions.ThetaRegistered": {
    "owner": "@compute-accounting",
@@ -389,14 +369,21 @@
      "Properties.RemoteAudit.Component.lineHeldAtComponent_honest",
      "Properties.RemoteAudit.Component.lineHeldAtComponent_bites"
     ]
+   },
+   "Properties.RemoteAudit.Component.LineHeldBy": {
+    "fails": "Properties.RemoteAudit.Component.lineHeld_nontrivial",
+    "meets": [
+     "Properties.RemoteAudit.Component.lineHeld_honest",
+     "Properties.RemoteAudit.Component.lineHeldAtComponent_honest"
+    ]
    }
   },
   "not": {
    "Properties.RemoteAudit.Component.AcceptIsVerified": "a closed statement: the `AcceptIsVerifiedFor` form at the deployed verifier (`Properties.RemoteAudit.Component.acceptIsVerified_iff`, `Iff.rfl`), whose witnesses are this statement's",
    "Properties.RemoteAudit.Component.LineHeldAtComponent": "a closed statement: the `LineHeldAtComponentBy` form at the deployed verifier (`Properties.RemoteAudit.Component.lineHeldAtComponent_iff`, `Iff.rfl`), whose witnesses are this statement's",
    "Properties.RemoteAudit.Component.Plays": "the component's acceptance of a record's bytes, which `LineHeldAtComponent` reads in its event: an event, no claim",
-   "Properties.RemoteAudit.Component.HeldBy": "the line's credit at a verifier's record, which `LineHeldAtComponentBy` reads in its event: an event, no claim",
-   "Properties.RemoteAudit.Component.HonestSchedule": "the honest instance's schedule, a hypothesis of `lineHeldAtComponent_honest`: the honest case, no claim"
+   "Properties.RemoteAudit.Component.HonestSchedule": "the honest instance's schedule, a hypothesis of `lineHeldAtComponent_honest`: the honest case, no claim",
+   "Properties.RemoteAudit.Component.ReadBy": "the line's bits-read claim at a verifier's record, which `LineHeldBy` and `LineHeldAtComponentBy` read in their event: an event, no claim"
   }
  },
  "layers": {
@@ -2343,19 +2330,37 @@
    "assumptions": [],
    "type_hash": "8e9dfd782e77a8b94dc1f78b72c420e5cd9509465517c640acbc67e59b8be63d"
   },
+  "Properties.RemoteAudit.Component.lineHeld_honest": {
+   "owner": "@memory-accounting",
+   "signature": [
+    "Properties.RemoteAudit.Component.lineHeld_honest (node : Properties.RemoteAudit.Line.Node) {Ω : Type} (passes : Nat)",
+    "  (tick : Ω → Nat → Nat) (rec : Ω → Properties.RemoteAudit.Line.Record)",
+    "  (htick : ∀ (ω : Ω) (p : Nat), instLTNat.lt (tick ω p) (tick ω (instHAdd.hAdd p 1))) (ω : Ω) :",
+    "  And",
+    "    (Accounting.Remote.Held.Quiet",
+    "      (Properties.RemoteAudit.Line.ofRecord (Properties.RemoteAudit.Component.honestTrace node passes tick) node rec)",
+    "      (Properties.RemoteAudit.Component.quietIngress Ω).counted ω)",
+    "    (Properties.RemoteAudit.Line.ReadAt",
+    "      (Properties.RemoteAudit.Line.ofRecord (Properties.RemoteAudit.Component.honestTrace node passes tick) node rec) ω",
+    "      node (rec ω))"
+   ],
+   "assumptions": [],
+   "type_hash": "87ba3d81078c3784f4d7772aadb06966b0635eb04f4e8d5dba3139fe02a59b44"
+  },
+  "Properties.RemoteAudit.Component.lineHeld_nontrivial": {
+   "owner": "@memory-accounting",
+   "signature": [
+    "Properties.RemoteAudit.Component.lineHeld_nontrivial :",
+    "  Exists fun sm => Not (Properties.RemoteAudit.Component.LineHeldBy (fun x x_1 => True) fun x x_1 => Option.some sm)"
+   ],
+   "assumptions": [],
+   "type_hash": "990c4c47d19df2f440fdc69fd16e30334c6e6657de1b6b6d75b2a5e29e6763d4"
+  },
   "Properties.RemoteAudit.Line.SecurityProofs.lineHeld": {
    "owner": "@memory-accounting",
    "signature": ["Properties.RemoteAudit.Line.SecurityProofs.lineHeld : Properties.RemoteAudit.Line.LineHeld"],
    "assumptions": [],
    "type_hash": "869ce854c6e28bbfab9afec70664c0ff52cb2e286516fc98f0886488f20e2951"
-  },
-  "Properties.RemoteAudit.Line.SecurityProofs.lineHeldIdentity": {
-   "owner": "@memory-accounting",
-   "signature": [
-    "Properties.RemoteAudit.Line.SecurityProofs.lineHeldIdentity : Properties.RemoteAudit.Line.LineHeldIdentity"
-   ],
-   "assumptions": [],
-   "type_hash": "32103c4822a99f98eae5a5aec862a2c834114c156876ace2daa1b364bb187a9f"
   },
   "Properties.RemoteAudit.Line.lineChecked": {
    "owner": "@memory-accounting",
@@ -3738,10 +3743,6 @@
     "function": "RemoteAudit.Shared.run",
     "outcome": "accept"
    },
-   "Properties.RemoteAudit.Line.SecurityProofs.lineHeldIdentity": {
-    "function": "RemoteAudit.Shared.run",
-    "outcome": "accept"
-   },
    "Properties.RemoteAudit.chunkedIsWhole": {
     "function": "RemoteAudit.checkWindowChunked",
     "outcome": "none"
@@ -4876,8 +4877,7 @@
    },
    "guarantees": [
     "Properties.RemoteAudit.Component.SecurityProofs.lineHeldAtComponent",
-    "Properties.RemoteAudit.Line.SecurityProofs.lineHeld",
-    "Properties.RemoteAudit.Line.SecurityProofs.lineHeldIdentity"
+    "Properties.RemoteAudit.Line.SecurityProofs.lineHeld"
    ]
   },
   "Definitions.Accounting.Assumptions.Compose": {
@@ -4929,8 +4929,8 @@
     "Properties.RemoteAudit.Component.SecurityProofs.lineHeldAtComponent",
     "Properties.RemoteAudit.Component.lineHeldAtComponent_honest",
     "Properties.RemoteAudit.Component.lineHeldAtComponent_nontrivial",
-    "Properties.RemoteAudit.Line.SecurityProofs.lineHeld",
-    "Properties.RemoteAudit.Line.SecurityProofs.lineHeldIdentity"
+    "Properties.RemoteAudit.Component.lineHeld_nontrivial",
+    "Properties.RemoteAudit.Line.SecurityProofs.lineHeld"
    ]
   },
   "Definitions.Accounting.Assumptions.RemoteHeld": {
@@ -4949,13 +4949,15 @@
     "Properties.RemoteAudit.Component.SecurityProofs.lineHeldAtComponent",
     "Properties.RemoteAudit.Component.lineHeldAtComponent_honest",
     "Properties.RemoteAudit.Component.lineHeldAtComponent_nontrivial",
-    "Properties.RemoteAudit.Line.SecurityProofs.lineHeld",
-    "Properties.RemoteAudit.Line.SecurityProofs.lineHeldIdentity"
+    "Properties.RemoteAudit.Component.lineHeld_nontrivial",
+    "Properties.RemoteAudit.Line.SecurityProofs.lineHeld"
    ]
   },
   "Definitions.Accounting.Assumptions.RemoteOutside": {
-   "digest": "377134bf84af8f6b7fb99258f0a023453ca57c668c6164b4c700481b2a3ccc52",
+   "digest": "0760a488e1a3f8f4ea0673b7fa7a7433652d40444ee173d376d5c77c80afa890",
    "definitions": {
+    "Accounting.Remote.Held.Assumptions.Covered": "5c608a83fe20d77e737b97d37087e1d392d1069ca7e67dd63e44bfdae48edbb0",
+    "Accounting.Remote.Held.Assumptions.IngressCounted": "7c04197d5b780f94be3bcc1dc1e3e8cc6eafc43158098fe3936eed3aa7f12c3e",
     "Accounting.Remote.Held.Assumptions.NoOutsideCompute": "00299a3d3e2bb1d72b639c2ab816de31cd74beac5f5ff4436a57510b439cce33",
     "Accounting.Remote.Held.Assumptions.SketchBoundAt": "8b630261ad87876a09caac09d0d2d22c41e3b9724fd6ef88f9782a3083b23020"
    },
@@ -4963,8 +4965,8 @@
     "Properties.RemoteAudit.Component.SecurityProofs.lineHeldAtComponent",
     "Properties.RemoteAudit.Component.lineHeldAtComponent_honest",
     "Properties.RemoteAudit.Component.lineHeldAtComponent_nontrivial",
-    "Properties.RemoteAudit.Line.SecurityProofs.lineHeld",
-    "Properties.RemoteAudit.Line.SecurityProofs.lineHeldIdentity"
+    "Properties.RemoteAudit.Component.lineHeld_nontrivial",
+    "Properties.RemoteAudit.Line.SecurityProofs.lineHeld"
    ]
   },
   "Definitions.Accounting.Assumptions.SquaringChain": {
@@ -5724,15 +5726,15 @@
     "Properties.RemoteAudit.Component.SecurityProofs.lineHeldAtComponent",
     "Properties.RemoteAudit.Component.lineHeldAtComponent_honest",
     "Properties.RemoteAudit.Component.lineHeldAtComponent_nontrivial",
+    "Properties.RemoteAudit.Component.lineHeld_nontrivial",
     "Properties.RemoteAudit.Line.SecurityProofs.lineHeld",
-    "Properties.RemoteAudit.Line.SecurityProofs.lineHeldIdentity",
     "Properties.RemoteAudit.lineCoversSession",
     "Properties.RemoteAudit.pooledCovers",
     "Properties.RemoteAudit.pooledCoversSession"
    ]
   },
   "Definitions.Accounting.Remote.Held": {
-   "digest": "44b4676dbd1f6785dc885061046febc566e090d6c121caaaf7accde1c6d175ad",
+   "digest": "9b0143b362fdc2565ab3d5d5e86a5b1ad4b2b783a991e00fdd275257bf8b7801",
    "definitions": {
     "Accounting.Remote.Held.Pace": "e909b0bf93b82569ba92de5d3018bce6f314fef752fc3c4c482d419286123ffa",
     "Accounting.Remote.Held.Pace.credited": "86160e5af5519c17bdf5720ba4f2aeab765ed0dd56e13c3ba4ba52f3d60f2307",
@@ -5758,6 +5760,8 @@
     "Accounting.Remote.Held.Trace.passes": "08914f6ed9585e2d336a51956fa3745cf387fb3238bada7d525e71a5282d2605",
     "Accounting.Remote.Held.Trace.plan": "402b4bea9c79e6989d09b1d3433f93d3080a7ef582b23d81f5c184556f44123e",
     "Accounting.Remote.Held.Trace.present": "413e4880d0952d49a65600bb74d91fca94bb03969ecb0326fb74470e1689fa54",
+    "Accounting.Remote.Held.Trace.read": "b08c48de2284a3f3ebcfb8217f4d986824deb6bafb39bf92403bc4bd8c572c82",
+    "Accounting.Remote.Held.Trace.reads": "b5986873f0bc10573eb6a7b780a3163a7e6bcf1140df05089f4cbb8bf04eb74f",
     "Accounting.Remote.Held.Trace.rebuilt": "f55bfe5e4294f237ac46e44fee93421f9e84ab2fc384bd0a54b6f3ebdb060438",
     "Accounting.Remote.Held.Trace.tick": "1a02eb2aadaf1f57869459a928f9a70ca73a75eb654f52cbf6b4d1a87ffc0511",
     "Accounting.Remote.Held.Trace.wrong": "66ce2491350791110ed2c59d50766f1b981e1aa4408d3acc2767af6201e430d9",
@@ -5768,24 +5772,30 @@
     "Properties.RemoteAudit.Component.lineHeldAtComponent_bites",
     "Properties.RemoteAudit.Component.lineHeldAtComponent_honest",
     "Properties.RemoteAudit.Component.lineHeldAtComponent_nontrivial",
+    "Properties.RemoteAudit.Component.lineHeld_honest",
+    "Properties.RemoteAudit.Component.lineHeld_nontrivial",
     "Properties.RemoteAudit.Line.SecurityProofs.lineHeld",
-    "Properties.RemoteAudit.Line.SecurityProofs.lineHeldIdentity",
     "Properties.RemoteAudit.Line.stretchBound"
    ]
   },
   "Definitions.Accounting.Remote.Outside": {
-   "digest": "1431ac2a2cb8db4c5c4071ab4c3c8d7b12c2ffe161d767e5274bb23c5bea215c",
+   "digest": "b87c85351ba0a77c340363754773e6aba79ca4ba1c3afcf4da300476c8843412",
    "definitions": {
+    "Accounting.Remote.Held.Ingress": "a8dc70e167e40cc8e67c20cb47d07eb6931d96a90d4f0d065712d992c72a0c74",
+    "Accounting.Remote.Held.Ingress.counted": "05aaab77b166feb41d50c5c61cc4e44e3ead62ffa514e9c635395162829f2c07",
+    "Accounting.Remote.Held.Ingress.entered": "73f25765ac5c589dbf840f7bf7b21a52053cb28a2455b11730bf2b0059046e47",
     "Accounting.Remote.Held.Outside": "994c368aee39be21b0d7a05927dd0f63d7e615b6af1759dcdc09c5c19e3bc7c9",
     "Accounting.Remote.Held.Outside.blocks": "3256ba91d8a27f06ec8822899ff829b5f711096bd051c3833adcc18d1c73ce27",
-    "Accounting.Remote.Held.Outside.receipts": "5a9d0d9332dc0855632e08296bbed45ca564d528b8431d8c2bf1b3661ce931fe"
+    "Accounting.Remote.Held.Outside.receipts": "5a9d0d9332dc0855632e08296bbed45ca564d528b8431d8c2bf1b3661ce931fe",
+    "Accounting.Remote.Held.Quiet": "2e96f4b25cf58c7a2df1937ea41d8b495a85869e748d528fee9dd271ce1ec6ff"
    },
    "guarantees": [
     "Properties.RemoteAudit.Component.SecurityProofs.lineHeldAtComponent",
     "Properties.RemoteAudit.Component.lineHeldAtComponent_honest",
     "Properties.RemoteAudit.Component.lineHeldAtComponent_nontrivial",
-    "Properties.RemoteAudit.Line.SecurityProofs.lineHeld",
-    "Properties.RemoteAudit.Line.SecurityProofs.lineHeldIdentity"
+    "Properties.RemoteAudit.Component.lineHeld_honest",
+    "Properties.RemoteAudit.Component.lineHeld_nontrivial",
+    "Properties.RemoteAudit.Line.SecurityProofs.lineHeld"
    ]
   },
   "Definitions.Accounting.Requirement": {
@@ -5926,8 +5936,8 @@
     "Properties.RemoteAudit.Component.SecurityProofs.lineHeldAtComponent",
     "Properties.RemoteAudit.Component.lineHeldAtComponent_honest",
     "Properties.RemoteAudit.Component.lineHeldAtComponent_nontrivial",
-    "Properties.RemoteAudit.Line.SecurityProofs.lineHeld",
-    "Properties.RemoteAudit.Line.SecurityProofs.lineHeldIdentity"
+    "Properties.RemoteAudit.Component.lineHeld_nontrivial",
+    "Properties.RemoteAudit.Line.SecurityProofs.lineHeld"
    ]
   },
   "Definitions.Accounting.TS.J10R": {
@@ -6124,6 +6134,7 @@
    "guarantees": [
     "Properties.RemoteAudit.Component.lineHeldAtComponent_honest",
     "Properties.RemoteAudit.Component.lineHeldAtComponent_nontrivial",
+    "Properties.RemoteAudit.Component.lineHeld_nontrivial",
     "Properties.SampledProofs.SecurityProofs.drawMisses"
    ]
   },
@@ -6241,8 +6252,7 @@
    },
    "guarantees": [
     "Properties.RemoteAudit.Component.SecurityProofs.lineHeldAtComponent",
-    "Properties.RemoteAudit.Line.SecurityProofs.lineHeld",
-    "Properties.RemoteAudit.Line.SecurityProofs.lineHeldIdentity"
+    "Properties.RemoteAudit.Line.SecurityProofs.lineHeld"
    ]
   },
   "Definitions.Core.Formalism": {
@@ -6540,8 +6550,8 @@
     "Properties.RemoteAudit.Component.SecurityProofs.lineHeldAtComponent",
     "Properties.RemoteAudit.Component.lineHeldAtComponent_honest",
     "Properties.RemoteAudit.Component.lineHeldAtComponent_nontrivial",
-    "Properties.RemoteAudit.Line.SecurityProofs.lineHeld",
-    "Properties.RemoteAudit.Line.SecurityProofs.lineHeldIdentity"
+    "Properties.RemoteAudit.Component.lineHeld_nontrivial",
+    "Properties.RemoteAudit.Line.SecurityProofs.lineHeld"
    ]
   },
   "Definitions.Hash.Hm96": {
@@ -6560,8 +6570,8 @@
     "Properties.RemoteAudit.Component.SecurityProofs.lineHeldAtComponent",
     "Properties.RemoteAudit.Component.lineHeldAtComponent_honest",
     "Properties.RemoteAudit.Component.lineHeldAtComponent_nontrivial",
-    "Properties.RemoteAudit.Line.SecurityProofs.lineHeld",
-    "Properties.RemoteAudit.Line.SecurityProofs.lineHeldIdentity"
+    "Properties.RemoteAudit.Component.lineHeld_nontrivial",
+    "Properties.RemoteAudit.Line.SecurityProofs.lineHeld"
    ]
   },
   "Definitions.Hash.RowLeaf": {
@@ -6589,8 +6599,8 @@
     "Properties.RemoteAudit.Component.SecurityProofs.lineHeldAtComponent",
     "Properties.RemoteAudit.Component.lineHeldAtComponent_honest",
     "Properties.RemoteAudit.Component.lineHeldAtComponent_nontrivial",
-    "Properties.RemoteAudit.Line.SecurityProofs.lineHeld",
-    "Properties.RemoteAudit.Line.SecurityProofs.lineHeldIdentity"
+    "Properties.RemoteAudit.Component.lineHeld_nontrivial",
+    "Properties.RemoteAudit.Line.SecurityProofs.lineHeld"
    ]
   },
   "Definitions.Hash.RowSeg": {
@@ -6613,8 +6623,8 @@
     "Properties.RemoteAudit.Component.SecurityProofs.lineHeldAtComponent",
     "Properties.RemoteAudit.Component.lineHeldAtComponent_honest",
     "Properties.RemoteAudit.Component.lineHeldAtComponent_nontrivial",
-    "Properties.RemoteAudit.Line.SecurityProofs.lineHeld",
-    "Properties.RemoteAudit.Line.SecurityProofs.lineHeldIdentity"
+    "Properties.RemoteAudit.Component.lineHeld_nontrivial",
+    "Properties.RemoteAudit.Line.SecurityProofs.lineHeld"
    ]
   },
   "Definitions.Hash.RowV2": {
@@ -6628,8 +6638,8 @@
     "Properties.RemoteAudit.Component.SecurityProofs.lineHeldAtComponent",
     "Properties.RemoteAudit.Component.lineHeldAtComponent_honest",
     "Properties.RemoteAudit.Component.lineHeldAtComponent_nontrivial",
-    "Properties.RemoteAudit.Line.SecurityProofs.lineHeld",
-    "Properties.RemoteAudit.Line.SecurityProofs.lineHeldIdentity"
+    "Properties.RemoteAudit.Component.lineHeld_nontrivial",
+    "Properties.RemoteAudit.Line.SecurityProofs.lineHeld"
    ]
   },
   "Definitions.Hash.Tree": {
@@ -6651,8 +6661,8 @@
     "Properties.RemoteAudit.Component.SecurityProofs.lineHeldAtComponent",
     "Properties.RemoteAudit.Component.lineHeldAtComponent_honest",
     "Properties.RemoteAudit.Component.lineHeldAtComponent_nontrivial",
-    "Properties.RemoteAudit.Line.SecurityProofs.lineHeld",
-    "Properties.RemoteAudit.Line.SecurityProofs.lineHeldIdentity"
+    "Properties.RemoteAudit.Component.lineHeld_nontrivial",
+    "Properties.RemoteAudit.Line.SecurityProofs.lineHeld"
    ]
   },
   "Definitions.Nci": {
@@ -7021,8 +7031,8 @@
     "Properties.RemoteAudit.Component.SecurityProofs.lineHeldAtComponent",
     "Properties.RemoteAudit.Component.lineHeldAtComponent_honest",
     "Properties.RemoteAudit.Component.lineHeldAtComponent_nontrivial",
+    "Properties.RemoteAudit.Component.lineHeld_nontrivial",
     "Properties.RemoteAudit.Line.SecurityProofs.lineHeld",
-    "Properties.RemoteAudit.Line.SecurityProofs.lineHeldIdentity",
     "Properties.RemoteAudit.lineCoversSession",
     "Properties.RemoteAudit.pooledCoversSession",
     "Properties.RemoteAudit.steered_of_checked"
@@ -7112,8 +7122,8 @@
     "Properties.RemoteAudit.Component.SecurityProofs.lineHeldAtComponent",
     "Properties.RemoteAudit.Component.lineHeldAtComponent_honest",
     "Properties.RemoteAudit.Component.lineHeldAtComponent_nontrivial",
-    "Properties.RemoteAudit.Line.SecurityProofs.lineHeld",
-    "Properties.RemoteAudit.Line.SecurityProofs.lineHeldIdentity"
+    "Properties.RemoteAudit.Component.lineHeld_nontrivial",
+    "Properties.RemoteAudit.Line.SecurityProofs.lineHeld"
    ]
   },
   "Definitions.Pous.Model.Scheme": {
@@ -7158,8 +7168,8 @@
     "Properties.RemoteAudit.Component.SecurityProofs.lineHeldAtComponent",
     "Properties.RemoteAudit.Component.lineHeldAtComponent_honest",
     "Properties.RemoteAudit.Component.lineHeldAtComponent_nontrivial",
-    "Properties.RemoteAudit.Line.SecurityProofs.lineHeld",
-    "Properties.RemoteAudit.Line.SecurityProofs.lineHeldIdentity"
+    "Properties.RemoteAudit.Component.lineHeld_nontrivial",
+    "Properties.RemoteAudit.Line.SecurityProofs.lineHeld"
    ]
   },
   "Definitions.Pous.P2.Cost": {
@@ -7284,8 +7294,8 @@
     "Properties.RemoteAudit.Component.SecurityProofs.lineHeldAtComponent",
     "Properties.RemoteAudit.Component.lineHeldAtComponent_honest",
     "Properties.RemoteAudit.Component.lineHeldAtComponent_nontrivial",
-    "Properties.RemoteAudit.Line.SecurityProofs.lineHeld",
-    "Properties.RemoteAudit.Line.SecurityProofs.lineHeldIdentity"
+    "Properties.RemoteAudit.Component.lineHeld_nontrivial",
+    "Properties.RemoteAudit.Line.SecurityProofs.lineHeld"
    ]
   },
   "Definitions.Pouw.Dither": {
@@ -7883,8 +7893,9 @@
     "Properties.RemoteAudit.Component.acceptIsVerified_nontrivial",
     "Properties.RemoteAudit.Component.lineHeldAtComponent_honest",
     "Properties.RemoteAudit.Component.lineHeldAtComponent_nontrivial",
+    "Properties.RemoteAudit.Component.lineHeld_honest",
+    "Properties.RemoteAudit.Component.lineHeld_nontrivial",
     "Properties.RemoteAudit.Line.SecurityProofs.lineHeld",
-    "Properties.RemoteAudit.Line.SecurityProofs.lineHeldIdentity",
     "Properties.RemoteAudit.Shared.acceptDrawsOpenable",
     "Properties.RemoteAudit.Shared.acceptedDrawsOpenable",
     "Properties.RemoteAudit.Shared.openingsUnreadUntilDrawn",
@@ -8320,8 +8331,9 @@
     "Properties.RemoteAudit.Component.acceptIsVerified_nontrivial",
     "Properties.RemoteAudit.Component.lineHeldAtComponent_honest",
     "Properties.RemoteAudit.Component.lineHeldAtComponent_nontrivial",
+    "Properties.RemoteAudit.Component.lineHeld_honest",
+    "Properties.RemoteAudit.Component.lineHeld_nontrivial",
     "Properties.RemoteAudit.Line.SecurityProofs.lineHeld",
-    "Properties.RemoteAudit.Line.SecurityProofs.lineHeldIdentity",
     "Properties.RemoteAudit.Line.lineRegistered",
     "Properties.RemoteAudit.Shared.acceptDrawsOpenable",
     "Properties.RemoteAudit.Shared.acceptedDrawsOpenable",
@@ -8446,8 +8458,9 @@
     "Properties.RemoteAudit.Component.acceptIsVerified_nontrivial",
     "Properties.RemoteAudit.Component.lineHeldAtComponent_honest",
     "Properties.RemoteAudit.Component.lineHeldAtComponent_nontrivial",
+    "Properties.RemoteAudit.Component.lineHeld_honest",
+    "Properties.RemoteAudit.Component.lineHeld_nontrivial",
     "Properties.RemoteAudit.Line.SecurityProofs.lineHeld",
-    "Properties.RemoteAudit.Line.SecurityProofs.lineHeldIdentity",
     "Properties.RemoteAudit.Shared.acceptDrawsOpenable",
     "Properties.RemoteAudit.Shared.acceptedDrawsOpenable",
     "Properties.RemoteAudit.Shared.openingsUnreadUntilDrawn",
@@ -13205,15 +13218,17 @@
    ]
   },
   "Properties.RemoteAudit.Component": {
-   "digest": "11c1d4a4aed05a295621439f60cc4056e9e1f93cda18739e7fe6dc664caae222",
+   "digest": "41ac554901ef07071ed09c6b7aea3ee04fec97021f268dc46eb16f6e6c68261a",
    "definitions": {
     "Properties.RemoteAudit.Component.AcceptIsVerified": "3d8cf07c5d4048e1fa199d06cf8967e8ffa7cee6ba894cb8399930f9253272c9",
     "Properties.RemoteAudit.Component.AcceptIsVerifiedFor": "48f18dab159c590a6c1e9617c6ffe7cacfc12b9ebcbddfccd8143ed6ff740bd3",
     "Properties.RemoteAudit.Component.HeldBy": "4f481122ba3905578a0668e9e6f0109dfa361be45c274b46a65834209653c4d7",
     "Properties.RemoteAudit.Component.HonestSchedule": "78b64c8ef4f8e96c69c8f809928e38b51f2acc08b6fd52b48f9f65e4c17b4aa9",
-    "Properties.RemoteAudit.Component.LineHeldAtComponent": "1ce3554e678e9ffa3b16a77c7315ca39f68c82c36c61d2c363c57bfa25b5e937",
+    "Properties.RemoteAudit.Component.LineHeldAtComponent": "6030763bf5f882f670fe7aa25c2bfe2839752285b84c2cc0e91ac64ea1f10b18",
     "Properties.RemoteAudit.Component.LineHeldAtComponentBy": "54aa5c9c09593417bc75decba3fd3028abf9be95b3abef629d07638c1584c127",
+    "Properties.RemoteAudit.Component.LineHeldBy": "af78dddf146ca9aaa29991c7fcbffd6d0d5a85e8716ffc556514476d0c881f99",
     "Properties.RemoteAudit.Component.Plays": "ee66d2cde65b5574f859694c368778d0d4024f07f62797dc30790d8884c50206",
+    "Properties.RemoteAudit.Component.ReadBy": "a69f62343d85088d345e2a4f852bc7bbbc1b912bfddf15b52a3cf5fdc5872924",
     "Properties.RemoteAudit.Component.groupsBy": "c422573c8504cb5d96410147effa3b08d13b6cf1fe738820e95d196be6ac3aed",
     "Properties.RemoteAudit.Component.honestEvidence": "21347928e2ccd4cff7a8a36ddfa234616064103b45c7160c03bbae7e42289a50",
     "Properties.RemoteAudit.Component.honestParams": "f7f7d7f6403bf63d3c308a026cbbd4ddee5c527af0d0c5e10446cad36483240d",
@@ -13221,6 +13236,7 @@
     "Properties.RemoteAudit.Component.lineBy": "ccec17dd63bb3aa57e90638332f7a29998242db76a9f213ac1361b60739bcc0f",
     "Properties.RemoteAudit.Component.noOutside": "f8d878bb2ce8ec8ab5cb844f5020baa0e4ceaf5495459af75d66c57ea328802e",
     "Properties.RemoteAudit.Component.paceBy": "31dce4163cfcff95c96f914a302db8e5d9c31d30fb40c5ab6ce9e37712433aad",
+    "Properties.RemoteAudit.Component.quietIngress": "a590d1aa2c72d01771c1d03a9c3d3a3556b0fa395968ae545b552b485ab91aff",
     "Properties.RemoteAudit.Component.traceBy": "4fc13f9a75ccbf7219be2a663d477537e0c260852796eea5be7a775317c53e23"
    },
    "guarantees": [
@@ -13230,26 +13246,29 @@
     "Properties.RemoteAudit.Component.acceptIsVerified_nontrivial",
     "Properties.RemoteAudit.Component.lineHeldAtComponent_bites",
     "Properties.RemoteAudit.Component.lineHeldAtComponent_honest",
-    "Properties.RemoteAudit.Component.lineHeldAtComponent_nontrivial"
+    "Properties.RemoteAudit.Component.lineHeldAtComponent_nontrivial",
+    "Properties.RemoteAudit.Component.lineHeld_honest",
+    "Properties.RemoteAudit.Component.lineHeld_nontrivial"
    ]
   },
   "Properties.RemoteAudit.Line": {
-   "digest": "9a0f665e6273e5dfaf8d9b960b91a1d39da8a825ffb7b5bf4095c154ad20c911",
+   "digest": "4c4d3a59576dafc0580c344a41c84284648381243680674ec31afbdc3b50e30a",
    "definitions": {
     "Properties.RemoteAudit.Line.Credits": "9eec9eb1330187d597bef59966923e5ccf2461e6b517b9ffe07fbd35fba6844d",
     "Properties.RemoteAudit.Line.HeldAt": "069a74d91e7fe3ad77f199f4f9967298c6eaeddaa9ff54415a5fe5aa20254a36",
     "Properties.RemoteAudit.Line.LineChecked": "1c5505e0b300c71854bafd0ede4feac0aea5016477e28030deb3bc4f7989742a",
-    "Properties.RemoteAudit.Line.LineHeld": "8fb59223755ad0a2b26ee556cfabad7618f54ce1ba31ef2e80c865d3d53c1a12",
+    "Properties.RemoteAudit.Line.LineHeld": "bb007d8cddb4727763aa9f4bbfff0b02dde4bff25f4f624d9f90dcacf135f4f2",
     "Properties.RemoteAudit.Line.LineHeldIdentity": "2b526e48cd1ee102c1a7309b454833adc9880ea1ccc564de9aef7c8645795a26",
     "Properties.RemoteAudit.Line.LineRegistered": "0a19ed5ecb3e46cc1cdec14b2943b045ca768feddbd06f60a7b96dc1543f79fc",
+    "Properties.RemoteAudit.Line.ReadAt": "4535720ca195dedf2c277f34ef9e6921ca5e4695a704dd34b41dc4074c2a4b7a",
     "Properties.RemoteAudit.Line.StretchBound": "81d15d41252aa8d919aeb78bacb4b616b3eadb2ce5f86146d0fad010ac89cc97"
    },
    "guarantees": [
     "Properties.RemoteAudit.Component.SecurityProofs.lineHeldAtComponent",
     "Properties.RemoteAudit.Component.lineHeldAtComponent_bites",
     "Properties.RemoteAudit.Component.lineHeldAtComponent_nontrivial",
+    "Properties.RemoteAudit.Component.lineHeld_honest",
     "Properties.RemoteAudit.Line.SecurityProofs.lineHeld",
-    "Properties.RemoteAudit.Line.SecurityProofs.lineHeldIdentity",
     "Properties.RemoteAudit.Line.lineChecked",
     "Properties.RemoteAudit.Line.lineRegistered",
     "Properties.RemoteAudit.Line.stretchBound"
@@ -13313,8 +13332,9 @@
     "Properties.RemoteAudit.Component.lineHeldAtComponent_bites",
     "Properties.RemoteAudit.Component.lineHeldAtComponent_honest",
     "Properties.RemoteAudit.Component.lineHeldAtComponent_nontrivial",
+    "Properties.RemoteAudit.Component.lineHeld_honest",
+    "Properties.RemoteAudit.Component.lineHeld_nontrivial",
     "Properties.RemoteAudit.Line.SecurityProofs.lineHeld",
-    "Properties.RemoteAudit.Line.SecurityProofs.lineHeldIdentity",
     "Properties.RemoteAudit.Line.stretchBound"
    ]
   },
@@ -13538,8 +13558,9 @@
     "Properties.RemoteAudit.Component.acceptIsVerified_nontrivial",
     "Properties.RemoteAudit.Component.lineHeldAtComponent_honest",
     "Properties.RemoteAudit.Component.lineHeldAtComponent_nontrivial",
+    "Properties.RemoteAudit.Component.lineHeld_honest",
+    "Properties.RemoteAudit.Component.lineHeld_nontrivial",
     "Properties.RemoteAudit.Line.SecurityProofs.lineHeld",
-    "Properties.RemoteAudit.Line.SecurityProofs.lineHeldIdentity",
     "Properties.RemoteAudit.Line.lineRegistered",
     "Properties.RemoteAudit.Shared.acceptDrawsOpenable",
     "Properties.RemoteAudit.Shared.acceptedDrawsOpenable",
@@ -13624,8 +13645,9 @@
     "Properties.RemoteAudit.Component.lineHeldAtComponent_bites",
     "Properties.RemoteAudit.Component.lineHeldAtComponent_honest",
     "Properties.RemoteAudit.Component.lineHeldAtComponent_nontrivial",
+    "Properties.RemoteAudit.Component.lineHeld_honest",
+    "Properties.RemoteAudit.Component.lineHeld_nontrivial",
     "Properties.RemoteAudit.Line.SecurityProofs.lineHeld",
-    "Properties.RemoteAudit.Line.SecurityProofs.lineHeldIdentity",
     "Properties.RemoteAudit.Line.lineRegistered",
     "Properties.RemoteAudit.Shared.acceptDrawsOpenable",
     "Properties.RemoteAudit.Shared.acceptedDrawsOpenable",
@@ -13769,8 +13791,9 @@
     "Properties.RemoteAudit.Component.lineHeldAtComponent_bites",
     "Properties.RemoteAudit.Component.lineHeldAtComponent_honest",
     "Properties.RemoteAudit.Component.lineHeldAtComponent_nontrivial",
+    "Properties.RemoteAudit.Component.lineHeld_honest",
+    "Properties.RemoteAudit.Component.lineHeld_nontrivial",
     "Properties.RemoteAudit.Line.SecurityProofs.lineHeld",
-    "Properties.RemoteAudit.Line.SecurityProofs.lineHeldIdentity",
     "Properties.RemoteAudit.Line.lineChecked",
     "Properties.RemoteAudit.Line.lineRegistered",
     "Properties.RemoteAudit.Line.stretchBound",
@@ -13808,8 +13831,9 @@
     "Properties.RemoteAudit.Component.acceptIsVerified_nontrivial",
     "Properties.RemoteAudit.Component.lineHeldAtComponent_honest",
     "Properties.RemoteAudit.Component.lineHeldAtComponent_nontrivial",
+    "Properties.RemoteAudit.Component.lineHeld_honest",
+    "Properties.RemoteAudit.Component.lineHeld_nontrivial",
     "Properties.RemoteAudit.Line.SecurityProofs.lineHeld",
-    "Properties.RemoteAudit.Line.SecurityProofs.lineHeldIdentity",
     "Properties.RemoteAudit.Shared.acceptDrawsOpenable",
     "Properties.RemoteAudit.Shared.acceptedDrawsOpenable",
     "Properties.RemoteAudit.Shared.drawIsSubset",
@@ -13864,8 +13888,9 @@
     "Properties.RemoteAudit.Component.acceptIsVerified_nontrivial",
     "Properties.RemoteAudit.Component.lineHeldAtComponent_bites",
     "Properties.RemoteAudit.Component.lineHeldAtComponent_nontrivial",
+    "Properties.RemoteAudit.Component.lineHeld_honest",
+    "Properties.RemoteAudit.Component.lineHeld_nontrivial",
     "Properties.RemoteAudit.Line.SecurityProofs.lineHeld",
-    "Properties.RemoteAudit.Line.SecurityProofs.lineHeldIdentity",
     "Properties.RemoteAudit.Line.lineChecked",
     "Properties.RemoteAudit.Line.lineRegistered",
     "Properties.RemoteAudit.Line.stretchBound",
@@ -13960,8 +13985,9 @@
     "Properties.RemoteAudit.Component.lineHeldAtComponent_bites",
     "Properties.RemoteAudit.Component.lineHeldAtComponent_honest",
     "Properties.RemoteAudit.Component.lineHeldAtComponent_nontrivial",
+    "Properties.RemoteAudit.Component.lineHeld_honest",
+    "Properties.RemoteAudit.Component.lineHeld_nontrivial",
     "Properties.RemoteAudit.Line.SecurityProofs.lineHeld",
-    "Properties.RemoteAudit.Line.SecurityProofs.lineHeldIdentity",
     "Properties.RemoteAudit.Line.lineRegistered",
     "Properties.RemoteAudit.Shared.acceptDrawsOpenable",
     "Properties.RemoteAudit.Shared.acceptedDrawsOpenable",
@@ -14140,8 +14166,9 @@
     "Properties.RemoteAudit.Component.lineHeldAtComponent_bites",
     "Properties.RemoteAudit.Component.lineHeldAtComponent_honest",
     "Properties.RemoteAudit.Component.lineHeldAtComponent_nontrivial",
+    "Properties.RemoteAudit.Component.lineHeld_honest",
+    "Properties.RemoteAudit.Component.lineHeld_nontrivial",
     "Properties.RemoteAudit.Line.SecurityProofs.lineHeld",
-    "Properties.RemoteAudit.Line.SecurityProofs.lineHeldIdentity",
     "Properties.RemoteAudit.Line.lineRegistered",
     "Properties.RemoteAudit.Shared.acceptedDrawsOpenable",
     "Properties.RemoteAudit.Shared.drawIsSubset",
@@ -14178,8 +14205,9 @@
     "Properties.RemoteAudit.Component.acceptIsVerified_nontrivial",
     "Properties.RemoteAudit.Component.lineHeldAtComponent_honest",
     "Properties.RemoteAudit.Component.lineHeldAtComponent_nontrivial",
+    "Properties.RemoteAudit.Component.lineHeld_honest",
+    "Properties.RemoteAudit.Component.lineHeld_nontrivial",
     "Properties.RemoteAudit.Line.SecurityProofs.lineHeld",
-    "Properties.RemoteAudit.Line.SecurityProofs.lineHeldIdentity",
     "Properties.RemoteAudit.Shared.acceptedDrawsOpenable",
     "Properties.RemoteAudit.Shared.drawIsSubset",
     "Properties.RemoteAudit.Shared.openingsUnreadUntilDrawn",
@@ -14307,8 +14335,9 @@
     "Properties.RemoteAudit.Component.lineHeldAtComponent_bites",
     "Properties.RemoteAudit.Component.lineHeldAtComponent_honest",
     "Properties.RemoteAudit.Component.lineHeldAtComponent_nontrivial",
+    "Properties.RemoteAudit.Component.lineHeld_honest",
+    "Properties.RemoteAudit.Component.lineHeld_nontrivial",
     "Properties.RemoteAudit.Line.SecurityProofs.lineHeld",
-    "Properties.RemoteAudit.Line.SecurityProofs.lineHeldIdentity",
     "Properties.RemoteAudit.Line.lineRegistered",
     "Properties.RemoteAudit.Shared.acceptDrawsOpenable",
     "Properties.RemoteAudit.Shared.acceptedDrawsOpenable",
