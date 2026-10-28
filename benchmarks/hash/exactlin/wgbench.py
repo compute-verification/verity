@@ -31,6 +31,7 @@ import argparse
 import ctypes
 import json
 import math
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -46,7 +47,7 @@ from verity_vllm.engine import int8_wgmma as W
 HERE = Path(__file__).resolve().parent
 THETA, F_REF, PER_CLK = 989.4e12, 1.83e9, 4096
 LINEARS = {"qkv": (3072, 2048), "o": (2048, 2048), "gate_up": (16384, 2048), "down": (2048, 8192)}
-TRITON = "128x128x128:w4:s3:k1:t1"  # #5981's sm_90 rows for Llama-3.2-1B's linears at M 8,192 to 32,768
+TRITON = "128x128x128:w4:s3:k1:t1"  # the tuned Triton tile for Llama-3.2-1B's linears on sm_90 at M 8,192 to 32,768
 EDGES = ((8193, 3072, 2048), (1000, 3000, 2064), (129, 136, 160), (8191, 2050, 8192), (300, 16384, 2048), (17, 256, 16))
 KINDS = ("served", "random", "extremes")
 
@@ -98,22 +99,19 @@ class Dmon:
 
     def __init__(self, gpu: int = 0):
         self.rows: list[tuple[float, float, float, float]] = []
-        try:
-            self.p = subprocess.Popen(["dcgmi", "dmon", "-i", str(gpu), "-e", "1004,100,155", "-d", "100"],
-                                      stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
-        except OSError:
-            self.p = None
+        self.p = None
+        if shutil.which("dcgmi") is None:  # items then carry no Tensor Active
             return
+        self.p = subprocess.Popen(["dcgmi", "dmon", "-i", str(gpu), "-e", "1004,100,155", "-d", "100"],
+                                  stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
         threading.Thread(target=self._read, daemon=True).start()
 
     def _read(self):
         for line in self.p.stdout:
             parts = line.split()
-            if len(parts) >= 5 and parts[0] == "GPU":
-                try:
-                    self.rows.append((time.time(), float(parts[2]), float(parts[3]), float(parts[4])))
-                except ValueError:
-                    continue
+            # a sample is "GPU <i> <tensor active> <MHz> <W>"; N/A fields leave it out
+            if len(parts) >= 5 and parts[0] == "GPU" and all(v.replace(".", "", 1).isdigit() for v in parts[2:5]):
+                self.rows.append((time.time(), float(parts[2]), float(parts[3]), float(parts[4])))
 
     def between(self, t0: float, t1: float) -> dict:
         got = [r for r in self.rows if t0 <= r[0] <= t1]

@@ -73,6 +73,8 @@ CONFIGS: dict[str, dict[tuple[int, int], list[tuple[int, str]]]] = {
 # m_min <= M taken (`int8_wgmma.row`); a shape with no row runs CONFIGS' Triton plan.  A config is `int8_wgmma.WgCfg`'s
 # text: kernel, raster group, CTAs.  `benchmarks/hash/exactlin/wgbench.py`'s gated winners against the Triton plan, by MACs a
 # SM clock at M 8,192, 16,384 and 32,768 (r20261028-052145-1ccf); below M 8,192 the Triton plan is unmeasured against it.
+# WGMMA_ARCH is the target `int8_wgmma.cu` is built for (wgmma and setmaxnreg are sm_90a's).
+WGMMA_ARCH = "sm_90a"
 WGMMA: dict[str, dict[tuple[int, int], list[tuple[int, str]]]] = {
     "sm_90": {  # H200, Llama-3.2-1B
         (3072, 2048): [(8192, "pp_128x128:g8"), (32768, "ppm2_128x128:g8")],

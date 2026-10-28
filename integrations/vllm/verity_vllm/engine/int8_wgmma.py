@@ -8,9 +8,10 @@ are kernel parameters, encoded on the host each call).  A config (`WgCfg`, text 
 ping-pong with a consumer tile of 128 x 128, or cooperative on 128 x 256; `m2` for clusters of two CTAs sharing W's boxes
 by multicast), the raster group (tile rows, or pairs of them, a group) and at most how many CTAs (0: one an SM).
 
-The library is built by the nvcc on the path (`-fmad=false`, no FTZ or fast-math flag) for sm_90a and kept under
-``~/.cache/verity/int8_wgmma``, keyed by its sources, flags and nvcc's version, as `commit.row_tables_device` builds its
-kernels.  `available()` says whether the current device can run it; `int8_fused.pick` takes it only then.
+The library is built by the nvcc on the path, else torch's CUDA_HOME's (`-fmad=false`, no FTZ or fast-math flag), for
+`int8_gemm_configs.WGMMA_ARCH`, and kept under ``~/.cache/verity/int8_wgmma``, keyed by its sources, flags and nvcc's
+version, as `commit.row_tables_device` builds its kernels.  `available()` says whether the current device can run it;
+`int8_fused.pick_wgmma` takes it only then.
 """
 from __future__ import annotations
 
@@ -24,12 +25,12 @@ from pathlib import Path
 
 import torch
 
-from verity_vllm.engine.profiles.int8_gemm_configs import WGMMA
+from verity_vllm.engine.profiles.int8_gemm_configs import WGMMA, WGMMA_ARCH
 
 HERE = Path(__file__).resolve().parent
 SOURCES = ("int8_wgmma_acc.h", "int8_wgmma.cu")
-NVCC_FLAGS = ("-O3", "-std=c++17", "-gencode", "arch=compute_90a,code=sm_90a", "-fmad=false", "-Xcompiler", "-fPIC",
-              "-shared", "-Xptxas", "-v")
+NVCC_FLAGS = ("-O3", "-std=c++17", "-gencode", f"arch=compute_{WGMMA_ARCH.removeprefix('sm_')},code={WGMMA_ARCH}",
+              "-fmad=false", "-Xcompiler", "-fPIC", "-shared", "-Xptxas", "-v")
 BUILD_DIR = Path.home() / ".cache" / "verity" / "int8_wgmma"
 #: the library's variants, in `int8_wgmma_layout`'s order: (tile rows, columns, cluster); `pp` ping-pong (each consumer
 #: its own tile), `co` cooperative (both consumers one tile, 64 rows each)
@@ -69,12 +70,14 @@ def row(m: int, n: int, k: int, sm: str) -> WgCfg | None:
 
 
 def nvcc() -> str | None:
-    """nvcc on the path, else the default toolkit's."""
+    """nvcc on the path, else the one under torch's CUDA_HOME."""
     found = shutil.which("nvcc")
     if found:
         return found
-    default = Path("/usr/local/cuda/bin/nvcc")
-    return str(default) if default.exists() else None
+    from torch.utils.cpp_extension import CUDA_HOME
+
+    home = Path(CUDA_HOME) / "bin" / "nvcc" if CUDA_HOME else None
+    return str(home) if home is not None and home.exists() else None
 
 
 def build(tool: str) -> Path:

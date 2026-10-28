@@ -57,7 +57,7 @@ def test_the_ptx_rounds_as_exactlin(tmp_path):
     Triton kernels)."""
     assert "-fmad=false" in W.NVCC_FLAGS and not {"--use_fast_math", "-ftz=true"} & set(W.NVCC_FLAGS)
     out = tmp_path / "int8_wgmma.ptx"
-    subprocess.run([W.nvcc(), "-ptx", "-O3", "-std=c++17", "-arch=sm_90a", "-fmad=false", "-o", str(out),
+    subprocess.run([W.nvcc(), "-ptx", "-O3", "-std=c++17", f"-arch={C.WGMMA_ARCH}", "-fmad=false", "-o", str(out),
                     str(W.HERE / "int8_wgmma.cu")], check=True)
     ptx = out.read_text()
     assert ptx.count(".ftz") == 0
