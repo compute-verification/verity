@@ -26265,6 +26265,13 @@
     "Pouw.SecurityProofs.WorkBetweenSaltAndDeadline"
    ]
   },
+  "Definitions.Pouw.Assumptions.GameStatements": {
+   "digest": "38854a85ff5d058257b9199911cfc35dafac65cb42bcf9962c87cc0d519ac3dc",
+   "definitions": {
+    "Pouw.GameStatements.GammaFromTT": "fec8097e8940ac2cbcfff888b4a39c23070491de72059ed277faa6ab0160e4c3"
+   },
+   "guarantees": ["Pouw.SecurityProofs.GammaFromTT"]
+  },
   "Definitions.Pouw.Assumptions.NCP.Assumptions": {
    "digest": "1648a0e4552adfbe6da437464897c0093495e0d86088a6ebfc7c64bef73378bc",
    "definitions": {
@@ -26569,13 +26576,6 @@
     "Pouw.SecurityProofs.PearlCSm120Rev1Cap1000ByDeadline_llama31_8b",
     "Pouw.SecurityProofs.PearlCSm120Rev1Cap1000ByDeadline_qwen3_8b"
    ]
-  },
-  "Definitions.Pouw.Assumptions.Pinned": {
-   "digest": "9b37d88eccda9d18de64e182a77fa23b7192c8ac9da61956be33a6a88a1f6aae",
-   "definitions": {
-    "Pouw.Pinned.GammaFromTT": "312ac8ad9b0bf9f9d7072ebe050022071a9e1e8b187c2c2d6f36e8c7fba46400"
-   },
-   "guarantees": ["Pouw.SecurityProofs.GammaFromTT"]
   },
   "Definitions.Pouw.Assumptions.RelativeSecurity": {
    "digest": "53df8f2a3a6de6a4c94c878cd97d00f9bc14fa5daab0bfc5813a7b41360bd302",
@@ -27970,10 +27970,10 @@
    ]
   },
   "Definitions.Pouw.Guarantees.Game": {
-   "digest": "064ea4e3db6eda646acb0c5d37b084297521cb4a0c034f43ba08118bb232db1a",
+   "digest": "aef5564d56caeb2c3ac9004db9c2e7accaaeb7aa27e9be0aefc6e4f8992bb2c3",
    "definitions": {
     "Pouw.Guarantees.EndToEnd": "c284f23d6e287932bcd39d62921ea35ab95296323b95d9b2b1090f8e75998063",
-    "Pouw.Guarantees.GammaFromTT": "56d36275732cf4f654751983c9fc3aa3e07f3b0e3ae461884c2d52018b5a2bd1",
+    "Pouw.Guarantees.GammaFromTT": "8a85d3d5a6e0bcb84e2e44aeac8b65a3389dfe5ba617b58ac25e2eb1277213aa",
     "Pouw.Guarantees.Theorem1": "d84099f4bd953907102ee6a29855d8a77bf368b5624b5bba929af6318015a15e",
     "Pouw.Guarantees.WorkWeightedSampling": "b37ef510928501da7b0e271322b75a66d815f22612540edfd6892d93d117e7f2"
    },
