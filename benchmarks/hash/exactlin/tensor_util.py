@@ -9,10 +9,13 @@ and the Commit's work, and the next forward's embedding and first norm).  Only s
 is also of that T count, so the warm-up and profile forwards, and a burst's last step, drop out.
 
 Wall time.  Every kernel, copy and memset on the device is clipped to the step and swept: each instant goes to the
-highest class in CLASSES' order that is running then (the tensor classes first), else to `host gap` (nothing on the
-device, so it waits on the host).  So a class's `exclusive` time is what it adds to the wall beside the classes before
-it, and the classes' exclusive times and the host gap sum to the step's wall.  Each class's `kernel` time (its kernels'
-summed durations, overlap counted) and `overlap` (its kernel time under a tensor class) are beside it.
+highest class in CLASSES' order that is running then (the tensor classes first), else to the host gap (nothing on the
+device, so it waits on the host).  The host gap before the end of the step's last int8 GEMM (its forward's last
+linear) is `launch gaps in the forward`; after it, `host gap between forwards` (the scheduler, input preparation and
+the host's side of sampling).  So a class's `exclusive` time is what it adds to the wall beside the classes before
+it, and the classes' exclusive times and the host gaps sum to the step's wall.  Each class's `kernel` time (its kernels'
+summed durations, overlap counted) and `overlap` (its kernel time under a tensor class) are beside it.  GPU metrics
+are sampled every `metric_period_us`, so a class whose kernels run shorter than that reads its neighbours' values too.
 
 Tensor utilization.  Declared MACs from the model's config (`--config`, an HF config.json) and the step's batch: the
 int8 linears' T * L * sum(N K); causal attention's 2 H d (q c - q (q - 1) / 2) a layer for a request of q query rows,
@@ -44,11 +47,13 @@ CONFIG = (Path(__file__).resolve().parents[3] / "integrations/vllm/verity_vllm/e
           / "LLAMA32_1B_INT8.config.json")
 THETA_INT8 = 4096 * 132 * 1830e6  # MAC/s: the H200's dense s8 MACs a SM-clock, its SMs, the clock its sheet quotes them at
 HOST_GAP = "host gap"
+GAP_IN, GAP_OUT = "launch gaps in the forward", "host gap between forwards"
 # (class, MAC kind or None, pattern on the demangled name), in priority order: an instant two classes share is the first's
 CLASSES = [
     ("int8 GEMM", "int8", r"exactlin_scaled_mm|scaled_mm_kernel|cutlass_scaled_mm|cutlass.*int8|imma|i8i8|s8s8|int8_gemm"),
-    ("attention", "attn", r"flash|fmha|FlashAttn|attn_fwd|attention|\bfa3|lut_rows|kv_rows"),
-    ("bf16 GEMM (LM head)", "head", r"nvjet|xmma_gemm|sm90_.*gemm|cutlass.*gemm|gemv|cublas|ampere_.*gemm|Kernel2|gemmSN"),
+    ("attention", "attn", r"flash::|FlashAttn|flash_fwd|flash_attn|fmha|attn_fwd|attention|\bfa3|lut_rows|kv_rows"),
+    ("bf16 GEMM (LM head)", "head", r"nvjet|xmma_gemm|sm90_.*gemm|cutlass.*gemm|gemv|cublas|ampere_.*gemm|Kernel2|gemmSN|"
+                                    r"matmul_kernel_persistent"),
     ("Commit hashing", None, r"rows_leaf|rows_level|chunk_leaves|tree_level|pos_leaves|sha512|hm96"),
     ("Commit gather and taps", None, r"gather_copy|native_collect|tap"),
     ("H1", None, r"\bkf?_(midstates|leaves|level|pads|public_salts|top|rows|segments|step|trees|tiles|strips|tree_key|"
@@ -116,7 +121,9 @@ def load(path: str) -> dict:
             key = next((k for k, p in METRICS.items() if p.search(str(name))), None)
             if key:
                 rows = q("SELECT timestamp, value FROM GPU_METRICS WHERE metricId = ? ORDER BY timestamp", mid)
-                metrics[key] = ([int(t) for t, _ in rows], [float(v) for _, v in rows])
+                # nsys stores the clocks in Hz under an "[MHz]" name
+                scale = 1e-6 if key == "clock_mhz" and rows and max(v for _, v in rows) > 1e5 else 1.0
+                metrics[key] = ([int(t) for t, _ in rows], [float(v) * scale for _, v in rows])
     return {"kernels": kern, "ops": ops, "metrics": metrics}
 
 
@@ -155,6 +162,20 @@ def sweep(iv: list[tuple], a: int, b: int, segments: list | None = None) -> dict
         if c is not None:
             live[c] += d
     return dict(out)
+
+
+def split_gaps(segments: list, cut: int) -> list:
+    """The host gap's stretches before `cut` as launch gaps in the forward, after it as the host gap between forwards."""
+    out = []
+    for s, e, c in segments:
+        if c != HOST_GAP:
+            out.append((s, e, c))
+            continue
+        if s < cut:
+            out.append((s, min(e, cut), GAP_IN))
+        if e > cut:
+            out.append((max(s, cut), e, GAP_OUT))
+    return out
 
 
 def overlap_with_tensor(iv: list[tuple], a: int, b: int) -> dict[str, int]:
@@ -211,7 +232,12 @@ def analyse(path: str, tokens: int, prompt: int, config: dict, theta: float, tar
     for a, b in picked:
         win = iv[bisect.bisect_left(end_max, a):bisect.bisect_left(starts, b)]
         seg: list = []
-        ex = sweep(win, a, b, seg)
+        sweep(win, a, b, seg)
+        body_end = max((min(e, b) for s, e, c, *_ in win if c == "int8 GEMM" and a <= s), default=a)
+        seg = split_gaps(seg, body_end)
+        ex: dict[str, int] = defaultdict(int)
+        for s, e, c in seg:
+            ex[c] += e - s
         steps.append({"start_ns": a, "wall_ms": (b - a) / 1e6, "util": sum(ideal.values()) / (b - a),
                       "exclusive_ms": {c: v / 1e6 for c, v in sorted(ex.items(), key=lambda kv: -kv[1])}})
         seg_starts = [x[0] for x in seg]
@@ -244,8 +270,10 @@ def analyse(path: str, tokens: int, prompt: int, config: dict, theta: float, tar
     ideal_all = sum(ideal.values())
     idle = wall - ideal_all
     mean = lambda key, c: samples[key][c][0] / samples[key][c][1] if key in samples and samples[key][c][1] else None  # noqa: E731
+    ts = next(iter(data["metrics"].values()), ([], []))[0]
+    period = sorted(y - x for x, y in zip(ts, ts[1:]))[(len(ts) - 1) // 2] / 1e3 if len(ts) > 1 else None
     rows = []
-    for c in [c for c, _, _ in CLASSES] + [HOST_GAP]:
+    for c in [c for c, _, _ in CLASSES] + [GAP_IN, GAP_OUT]:
         ex = tot_excl.get(c, 0.0) / n
         if not ex and not tot_kern.get(c):
             continue
@@ -270,7 +298,7 @@ def analyse(path: str, tokens: int, prompt: int, config: dict, theta: float, tar
             "steps": n, "wall_ms": wall / 1e6, "ideal_ms": ideal_all / 1e6, "util": ideal_all / wall,
             "wall_at_target_ms": ideal_all / target / 1e6, "over_target_ms": (wall - ideal_all / target) / 1e6,
             "tensor_idle_ms": idle / 1e6, "macs": macs, "tensor_active": mean("tensor_active", "step"),
-            "clock_mhz": mean("clock_mhz", "step")},
+            "clock_mhz": mean("clock_mhz", "step"), "metric_period_us": period},
         "classes": sorted(rows, key=lambda r: -r["loss_ms"]),
         "unclassified": sorted(([short(k), v[0] / n / 1e6, v[1] / n] for k, v in per_name.items()
                                 if cls_of[k] == "other kernels"), key=lambda r: -r[1])[:15]}
@@ -306,7 +334,11 @@ def table(doc: dict) -> str:
     gm = s.get("clock_mhz") is not None
     if gm:
         lines[-1] += (f" GPU metrics over the steps: SM clock {s['clock_mhz']:.0f} MHz, Tensor Active "
-                      f"{f(s['tensor_active'], '{:.1f}')}%.")
+                      f"{f(s['tensor_active'], '{:.1f}')}%")
+        if s.get("metric_period_us"):
+            lines[-1] += (f" (sampled every {s['metric_period_us']:.0f} µs, so a class of shorter kernels reads its "
+                          "neighbours' values too)")
+        lines[-1] += "."
     lines += [
         "",
         "| class | wall ms/step (exclusive) | share of wall | kernel ms/step | under a tensor kernel, ms | launches/step "
