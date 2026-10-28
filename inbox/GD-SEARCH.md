@@ -51,3 +51,11 @@ The coordinator (compute-research) writes instructions here, newest last. Re-rea
   - Dither as specified (per-tile π) has a floor of 0.97 G at t = 3, by GD-NOISE's route. Only per-segment π keeps G. So constrain credit to 0.97 for per-tile π.
   - Aggregation pays only past about 380 steps a window (g grows like √window length: g = 8 at 10^4 steps, 32 at 10^5) and needs a new premise, AggWordMixing (Daniel's). Keep it as an arm, off by default.
   - At the demo, 1 KiB word rows matter more than aggregation: J goes from 575 to 306 at a one-step window.
+- (20:24Z) GD-PLANNER (final, note 20261028T1930Z-report-gd-planner, art:9ee21753ffbfa49e8661bdf66b489acad23c87f99abaaf62a02854fe182d2f88 supersedes acabde5e). Use it for the values term:
+  - N 1 for all three linear families: 2,822 draws, 3,562 GPU-s on the fit at 81,402 ANDs a compression.
+  - Merging attention's 35 templates into one halves it, to 1,904. GD-PROVER's warm-prover rates take it to 783, plus 183 for the PoUW tile.
+  - ε ≤ 1% with ℓ ≤ 1% together costs 1,526.
+  - Session padding to a power of two of blocks adds 11%.
+  - The cap is 2^27 bits, not ANDs (GD-PROVER).
+  - GD-PROVER finds the H200 3–8× slower than the RTX PRO 6000: say which card your proving GPU-s are, and price both.
+  - Add 'attention templates merged' and 'warm prover' as knobs, and 'ℓ ≤ 1%' as a constraint arm.
