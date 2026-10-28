@@ -72,6 +72,15 @@ unforgeability is ``euf-cma/lms-sha512-n64``. The certifier's signing step (`Iss
 signer refuses (`SignerRefused`), and then the link-window has no certificate: it fails closed, as a `no-verdict`. So
 does a signer asked to start a session its state has already started (`Signer.start`): the issuer starts its session
 before its first signature, and a refused start leaves every link-window of the run without a certificate.
+
+**Channels.** The device certifies a channel (`Channel`): a kind, and an id within the kind. The network certifier's
+is the link (`Link`: a link's name and direction, kind ``link``), and everything above is that kind's. A kind brings
+its record, the record's digest R, and its certificate message, which binds the key, the session, the channel and the
+window to the signed digest under a tag no other kind's message has. The rest is the device's, one for every kind: its
+signer and key, its session, the salt it draws per record (`Issuer.draw_salt`), the signed digest that hides R under it
+(`certificate_digest`), the signing step (`Issuer.sign_on`) and the signature check (`ChannelCertificate.verify`). A
+link's certificate is `Certificate`, whose fields name the link; its message, digest, salt and signature are the bytes
+above.
 """
 
 from __future__ import annotations
@@ -84,7 +93,7 @@ from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
 from functools import lru_cache
 from pathlib import Path
-from typing import Protocol
+from typing import ClassVar, Protocol
 
 from verity.ml.commitments.identity import canonical_json_bytes, tagged_sha512
 from verity.ml.crypto import lms
@@ -294,6 +303,44 @@ def certificate_message(key_id: bytes, session: bytes, link: str, direction: Dir
     return lms.certificate_message(key_id, session, link, direction.value, window, digest)
 
 
+class Channel(Protocol):
+    """What a certifier device certifies: a channel of a kind (`kind`), named within the kind by `id`. `message` is the
+    kind's certificate message for the channel's window `window` and the 64-byte signed digest, under the kind's own tag,
+    refused (`ValueError`) where it has no encoding."""
+
+    kind: str
+
+    @property
+    def id(self) -> tuple[object, ...]: ...
+
+    def message(self, key_id: bytes, session: bytes, window: int, digest: bytes) -> bytes: ...
+
+
+@dataclass(frozen=True, slots=True)
+class Link:
+    """The network certifier's channel: one direction of a boundary link. Its message is `certificate_message`."""
+
+    name: str
+    direction: Direction
+
+    kind: ClassVar[str] = "link"
+
+    @property
+    def id(self) -> tuple[str, Direction]:
+        return self.name, self.direction
+
+    def message(self, key_id: bytes, session: bytes, window: int, digest: bytes) -> bytes:
+        return certificate_message(key_id, session, self.name, self.direction, window, digest)
+
+
+def channel_message(channel: Channel, key_id: bytes, session: bytes, window: int, digest: bytes) -> bytes:
+    """The message a certificate on `channel` signs, its kind's (`Channel.message`), refused unless the signed digest is
+    64 bytes."""
+    if len(digest) != DIGEST_BYTES:
+        raise ValueError("a signed digest is 64 bytes")
+    return channel.message(key_id, session, window, digest)
+
+
 def clock_digest(sync: ClockSync) -> bytes:
     """The digest a clock certificate signs: tagged_sha512("verity-network-certifier/clock/v1", u64be δ ‖ u64be p ‖
     u64be q) of the sync (δ, ρ = p/q in lowest terms)."""
@@ -406,8 +453,42 @@ class LmsSigner:
                 self._leaves = None
 
 
+def _verifies(certificate: Certificate | ChannelCertificate, key: PublicKey, session: bytes) -> bool:
+    if certificate.key_id != key.key_id:
+        return False
+    try:
+        message = certificate.message(session)
+    except ValueError:
+        return False
+    return key.verify(message, certificate.signature)
+
+
+@dataclass(frozen=True, slots=True)
+class ChannelCertificate:
+    """A certificate on a channel of any kind: the device's signature under key `key_id` over the channel's message for
+    `window` and the signed digest (`channel_message`)."""
+
+    key_id: bytes
+    channel: Channel
+    window: int
+    digest: bytes
+    signature: bytes
+
+    def message(self, session: bytes) -> bytes:
+        """The message the certificate signs in certifier session ``session``."""
+        return channel_message(self.channel, self.key_id, session, self.window, self.digest)
+
+    def verify(self, key: PublicKey, session: bytes) -> bool:
+        """The host's signature check: the certificate is `key`'s and its signature verifies over its message in
+        certifier session `session`. It reads the certificate's public fields and its signed digest, nothing of the
+        record."""
+        return _verifies(self, key, session)
+
+
 @dataclass(frozen=True, slots=True)
 class Certificate:
+    """A certificate on a link (`Link`), its fields naming the link: a `ChannelCertificate` of kind ``link``."""
+
     key_id: bytes
     link: str
     direction: Direction
@@ -415,21 +496,19 @@ class Certificate:
     digest: bytes
     signature: bytes
 
+    @property
+    def channel(self) -> Link:
+        return Link(self.link, self.direction)
+
     def message(self, session: bytes) -> bytes:
         """The message the certificate signs in certifier session ``session``."""
-        return certificate_message(self.key_id, session, self.link, self.direction, self.window, self.digest)
+        return channel_message(self.channel, self.key_id, session, self.window, self.digest)
 
     def verify(self, key: PublicKey, session: bytes) -> bool:
         """The host's signature check: the certificate is `key`'s and its signature verifies over its message in
         certifier session `session`. It reads the certificate's public fields and its signed digest, nothing of the
         head."""
-        if self.key_id != key.key_id:
-            return False
-        try:
-            message = self.message(session)
-        except ValueError:
-            return False
-        return key.verify(message, self.signature)
+        return _verifies(self, key, session)
 
 
 @dataclass(frozen=True, slots=True)
@@ -525,22 +604,30 @@ class Issuer:
     in certifier session `session`. Before its first signature it starts the session on its signer, which refuses a
     session its state has already started. A refusal, of the start or of a leaf, leaves the link-window without a
     certificate (fail-closed) and is listed in `refused`; a refused start is asked again at the next link-window, and
-    refused again. Each record's salt and each clock's is `SALT_BYTES` fresh bytes of `coins`, the certifier's own
-    randomness (the operating system's by default; a test injects its own), and `clock_salts` are those its signed
-    clock certificates have taken, none of which it takes again."""
+    refused again. Each record's salt and each clock's is `SALT_BYTES` fresh bytes of `coins` (`draw_salt`), the
+    certifier's own randomness (the operating system's by default; a test injects its own), and `clock_salts` are those
+    its signed clock certificates have taken, none of which it takes again. Its signing step, `sign_on`, signs on a
+    channel of any kind, and a refused channel-window is listed in `refused` as `(*channel.id, window)`, a link-window's
+    as `(link, direction, window)`."""
 
     signer: Signer
     session: bytes
-    refused: list[tuple[str, Direction, int]] = field(default_factory=list)
+    refused: list[tuple[object, ...]] = field(default_factory=list)
     started: bool = False
     coins: Callable[[int], bytes] = field(default=secrets.token_bytes, repr=False)
     clock_salts: set[bytes] = field(default_factory=set, repr=False)
 
-    def certify(self, record: Record, direction: Direction, params: GridParams, parameters: bytes, *,
-                deadline: bool = True) -> CertifiedRecord | None:
+    def draw_salt(self) -> bytes:
+        """`SALT_BYTES` fresh bytes of `coins`, the salt of one signed digest (`certificate_digest`); refused
+        (`ValueError`) when the coins give another length."""
         salt = self.coins(SALT_BYTES)
         if len(salt) != SALT_BYTES:
             raise ValueError(f"the certifier's coins gave {len(salt)} bytes for a {SALT_BYTES}-byte salt")
+        return salt
+
+    def certify(self, record: Record, direction: Direction, params: GridParams, parameters: bytes, *,
+                deadline: bool = True) -> CertifiedRecord | None:
+        salt = self.draw_salt()
         head = record_head(record.link, direction, record.window, record.grid, record.status, params, parameters,
                            deadline=deadline)
         certificate = self.sign(record.link, direction, record.window, certificate_digest(salt, head.digest()))
@@ -552,9 +639,7 @@ class Issuer:
         signer refuses. Raises `ValueError` on coins of another length and on a salt they gave an earlier signed clock
         certificate of this issuer, under which two windows of one sync would sign one digest. A salt is taken once
         signed under: a refused one signed nothing, so nothing public shares it."""
-        salt = self.coins(SALT_BYTES)
-        if len(salt) != SALT_BYTES:
-            raise ValueError(f"the certifier's coins gave {len(salt)} bytes for a {SALT_BYTES}-byte salt")
+        salt = self.draw_salt()
         if salt in self.clock_salts:
             raise ValueError("the certifier's coins gave an earlier clock certificate's salt again, under which two "
                              "windows of one sync would sign one digest, so it signs no clock under it")
@@ -569,13 +654,22 @@ class Issuer:
         (the link-window is then listed in `refused`). `certify` signs a record's salted digest with it,
         `salted_clock` a window's salted sync, and the warden's cell rows their head's digest (`warden_rows`)."""
         key_id = self.signer.key_id
-        message = certificate_message(key_id, self.session, link, direction, window, digest)
+        c = self.sign_on(Link(link, direction), window, digest)
+        return None if c is None else Certificate(key_id, link, direction, window, c.digest, c.signature)
+
+    def sign_on(self, channel: Channel, window: int, digest: bytes) -> ChannelCertificate | None:
+        """The device's signing step, one for every channel kind: a certificate of the 64-byte `digest` on `channel`
+        for `window` in this session, or None when the signer refuses (`(*channel.id, window)` is then listed in
+        `refused`). The message comes first (`channel_message`), so a digest or a channel-window with no message is
+        refused (`ValueError`) before the session starts or a leaf is spent."""
+        key_id = self.signer.key_id
+        message = channel_message(channel, key_id, self.session, window, digest)
         try:
             if not self.started:
                 self.signer.start(self.session)
                 self.started = True
             signature = self.signer.sign(message)
         except SignerRefused:
-            self.refused.append((link, direction, window))
+            self.refused.append((*channel.id, window))
             return None
-        return Certificate(key_id, link, direction, window, digest, signature)
+        return ChannelCertificate(key_id, channel, window, digest, signature)
