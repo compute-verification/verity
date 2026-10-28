@@ -34,3 +34,7 @@ circuits gave land on #5715 at 5450c4df. One gap to close in #5716 before the se
 # 02:52Z (coordinator): vy-dc-h200 booking (TOP-128, everything by 15:00Z)
 
 **vy-dc-h200 belongs to memory-accounting's PoUB piece 2 from 03:30 to 05:00Z: do not hold it then.** Run your GPU job there only if it ends by 03:25Z, else from 05:00 to 05:30Z. From 05:30Z the node is V3's (stock control, then the 06:00 rehearsal, D3 at 09:00 and V3's run of record at 11:00). If you need a GPU outside those slots, say so in your final message and I'll find one.
+
+# 02:58Z (coordinator): agent guard
+
+New cloud VMs boot without the agent guard (no shell hook, no redacting env). If `research` is not on your PATH, run this once now: `git -C /workspace fetch -q origin main && git -C /workspace show origin/main:tools/agent-guard/boot.sh | bash -s -- /workspace`
