@@ -7,17 +7,23 @@ import Proofs.Properties.RemoteAudit.Session
 import Proofs.Properties.RemoteAudit.Shared
 
 /-!
-# The memory line of record, proved (`Properties.RemoteAudit.Line`: `LineHeld`, `LineHeldIdentity`)
+# The memory line of record, proved (`Properties.RemoteAudit.Line`: `LineHeld`), and memory held from it
 
-At each outcome where the Lean verifier accepts the record's session (so the trace of record accepts, `ofRecord`), the
-receipts' sketch holds and the trace's wrong receipts are at most the session's pooled bound at the line's `δ`
-(`holdsAnd` of `SketchBound`, from `SketchBoundAt` and `NoOutsideCompute` by `sketchBound_of_noOutside`, and
-`Draw.pooledDraw` at the records read through the coin commitment, `recordCommitted`, so at most the W the line reads:
-`LineCoversSession` at the record's draws, whose receipts on an accepted record are `recordDraw`'s sizes,
-`receipts_of_line`, and the line's check of their draws, `wrong_le_line`), every stretch of the line read off the
-record credits what the trace held (`heldAt_of`), its groups one for each of the session's windows and its registered
-blocks the node's (`record_summary`: `Shared.run` at any windows a draw keeps the parameters and registration,
-`frame_run`, and an accepted state has its parameters' windows, `windows_of_accepted`):
+At each outcome where the Lean verifier accepts the record's session (so the trace of record accepts, `ofRecord`) and
+the certifiers observed nothing but the verifier's messages entering the node, the receipts' sketch holds and the
+trace's wrong receipts are at most the session's pooled bound at the line's `δ` (`holdsAnd` of the sketch bound, from
+`SketchBoundAt`, `Covered` and `IngressCounted` by `sketchBound_of_covered`, and `Draw.pooledDraw` at the records read
+through the coin commitment, `recordCommitted`, so at most the W the line reads: `LineCoversSession` at the record's
+draws, whose receipts on an accepted record are `recordDraw`'s sizes, `receipts_of_line`, and the line's check of their
+draws, `wrong_le_line`), and the line read off the record credits no more bits read than its groups' passes read
+(`readAt_of`): each pass reads every registered block but its wrong receipts (`read_card`), and the groups are one for
+each of the session's windows with the node's registered blocks (`record_summary`: `Shared.run` at any windows a draw
+keeps the parameters and registration, `frame_run`, and an accepted state has its parameters' windows,
+`windows_of_accepted`), their passes among the credited ones.
+
+Memory held follows from bits read under the device model (`heldAt_of_read`, over the outcomes `pr_held_le_read`): the
+blocks the passes read are the correct receipts of the trace of those passes alone, whose wrong receipts `ReadAt` holds
+to the line's W, and on it every stretch of the line credits what the trace held (`heldAt_of`):
 
 * the arithmetic link (`stretchBound`, `Proofs.Properties.RemoteAudit.Line`) bounds the stretch's credit by the left-hand
   side of `HeldOverTimeLinks` at its paced session `stretchPace`, over its span from `spanStart`;
@@ -451,9 +457,9 @@ theorem receiptMax_lt : receiptMax < 2 ^ 448 := by
 below the W every line of the record reads (`LineCoversSession`): the line reads each draw's receipts and draws off
 the record and refuses any draws but `min(s, U_c)`, the draw's at the session's `samples`, and the receipts are the
 draw's sizes (`receipts_of_line`). -/
-theorem wrong_le_line {node : Node} {κ : ℕ} {X : Type} {T : Trace (Coins node.draws κ X)}
-    {rec : Coins node.draws κ X → Record} {correct : Fin node.draws → Coins node.draws κ X → Finset ℕ}
-    {ω : Coins node.draws κ X} (hv : Verified node (rec ω))
+theorem wrong_le_line {node : Node} {κ : ℕ} {X : Type} {T : Trace (DrawCoins node.draws κ X)}
+    {rec : DrawCoins node.draws κ X → Record} {correct : Fin node.draws → DrawCoins node.draws κ X → Finset ℕ}
+    {ω : DrawCoins node.draws κ X} (hv : Verified node (rec ω))
     (hw : (T.wrong ω : ℝ) ≤ (recordDraw node rec correct).pooled node.delta ω) :
     ∀ l, lineOf node (rec ω) = .ok l → (T.wrong ω : ℝ) ≤ l.wrong := fun l hline => by
   obtain ⟨sm, gs, ws, hsm, hs, -, hl⟩ := lineOf_ok hline
@@ -475,38 +481,146 @@ theorem wrong_le_line {node : Node} {κ : ℕ} {X : Type} {T : Trace (Coins node
 /-- The node's `δ` is nonnegative, in the reals. -/
 theorem delta_nonneg (node : Node) : (0 : ℝ) ≤ (node.delta : ℝ) := NNRat.cast_nonneg _
 
+/-- On an accepting outcome of a trace whose passes plan every registered block, a credited pass's blocks read and its
+wrong receipts make up the registered blocks, where its correct receipts' blocks were on the node at a tick of it. -/
+theorem read_card {Ω : Type} {T : Trace Ω} (hcov : Covers T) {ω : Ω} (ha : T.accepts ω) {p : ℕ} (hp : p < T.passes)
+    (hk : ∀ j ∈ T.correct ω p, ∃ t, T.tick ω p ≤ t ∧ t < T.tick ω (p + 1) ∧ j ∈ T.present ω t) :
+    (T.read ω p).card + (T.plan ω p \ T.correct ω p).card = T.blocks := by
+  have hr : T.read ω p = T.plan ω p ∩ T.correct ω p := by
+    unfold Trace.read
+    refine Finset.inter_eq_left.2 fun j hj => ?_
+    obtain ⟨t, h1, h2, ht⟩ := hk j (Finset.mem_inter.1 hj).2
+    exact Finset.mem_biUnion.2 ⟨t, Finset.mem_Ico.2 ⟨h1, h2⟩, ht⟩
+  rw [hr, add_comm, Finset.card_sdiff_add_card_inter, hcov ω ha p hp, Finset.card_univ, Fintype.card_fin]
+
+/-- On an accepting outcome where the receipts' sketch holds and the trace's wrong receipts are at most the W the
+record's line reads, the line credits no more bits read than its groups' passes read: each of the `P` passes reads
+every registered block but its wrong receipts (`read_card`), and the passes are among the credited ones (`Paced`). -/
+theorem readAt_of {Ω : Type} {T : Trace Ω} {node : Node} {rec : Ω → Record} (hp : Paced T (recordPace node rec))
+    (hcov : Covers T) (hN : Registered T node) {ω : Ω} (ha : T.accepts ω) (hv : Verified node (rec ω))
+    (hk : ∀ p < T.passes, ∀ j ∈ T.correct ω p, ∃ t, T.tick ω p ≤ t ∧ t < T.tick ω (p + 1) ∧ j ∈ T.present ω t)
+    (hw : ∀ l, lineOf node (rec ω) = .ok l → (T.wrong ω : ℝ) ≤ l.wrong) :
+    ReadAt T ω node (rec ω) := by
+  intro l hline
+  obtain ⟨sm, gs, ws, hsm, hs, hgs, -⟩ := lineOf_ok hline
+  have hG : ((rec ω).groups node).size = node.windows := by
+    rw [hgs]; exact (ofSummaryAt_ok hs).1.trans (record_summary hv hsm).1
+  have hPle : firstPass ((rec ω).groups node) ((rec ω).groups node).size ≤ T.passes := by
+    obtain ⟨-, -, hfP, -⟩ := hp ω ha
+    refine le_trans (firstPass_mono ?_) hfP
+    show ((rec ω).groups node).size ≤ node.windows - 1 + 1
+    omega
+  set P := firstPass ((rec ω).groups node) ((rec ω).groups node).size with hP
+  have h1 : ∑ p ∈ range P, ((T.read ω p).card + (T.plan ω p \ T.correct ω p).card) = P * T.blocks := by
+    rw [Finset.sum_const_nat fun p hp' => read_card hcov ha (lt_of_lt_of_le (Finset.mem_range.1 hp') hPle)
+      (hk p (lt_of_lt_of_le (Finset.mem_range.1 hp') hPle)), Finset.card_range]
+  have h2 : ∑ p ∈ range P, (T.plan ω p \ T.correct ω p).card ≤ T.wrong ω :=
+    Finset.sum_le_sum_of_subset (Finset.range_subset_range.2 hPle)
+  have hsum : P * T.blocks ≤ T.reads ω P + T.wrong ω := by
+    rw [Finset.sum_add_distrib] at h1
+    unfold Trace.reads
+    rw [← h1]
+    exact Nat.add_le_add_left h2 _
+  have hNr : (T.blocks : ℝ) = node.blocks := by rw [hN]
+  have hsum' : (P : ℝ) * T.blocks ≤ T.reads ω P + T.wrong ω := by exact_mod_cast hsum
+  have hwl := hw l hline
+  have hb : (0 : ℝ) ≤ 8 * node.blockBytes := by positivity
+  refine mul_le_mul_of_nonneg_left ?_ hb
+  push_cast
+  rw [← hNr]
+  linarith
+
 /-- **The trace of record is over the registration's blocks**: `Registered` holds of it, with no premise. -/
 theorem registered_ofRecord {Ω : Type} (T : Trace Ω) (node : Node) (rec : Ω → Record) :
     Registered (ofRecord T node rec) node := rfl
 
-/-- **The memory line of record, link-charged** (`LineHeld`), proved. -/
+/-- **The memory line of record, in bits read** (`LineHeld`), proved. -/
 theorem lineHeld : LineHeld := by
-  intro node κ X Cm _ prf rest recs correct com T R δs r F O hl hsq hd hS hr hp hcov hk hO hL hR hC
+  intro node κ X Cm _ prf rest recs correct com T R δs δnet r F O I hp hcov hk hC hI hL hR hCnt
   have hN := registered_ofRecord T node r
-  have hH := holdsAnd (sketchBound_of_noOutside hk hO)
-    (Draw.pooledDraw prf rest F com (ofRecord T node r) R (delta_nonneg node) receiptMax_lt hL hR hC)
-  refine le_trans (Pouw.pr_mono fun ω hω => ⟨hω.1, fun h => hω.2 ?_⟩) hH
-  have ha : (ofRecord T node r).accepts ω := hω.1
-  have hc := charge_units node
-  refine heldAt_of 1 (by omega) ?_ hl ?_ ?_ hsq hd hS hr hp hcov hN ha hω.1 h.1
-    (wrong_le_line (correct := fun t ω => correct (com ω) t ω) hω.1 h.2)
-  · intro h0
-    simp only [Node.link, ns]
-    push_cast
-    positivity
-  · simpa using hc.2.2.1
-  · simpa using hc.2.2.2
+  have hH := holdsAnd (sketchBound_of_covered hk hC hI)
+    (Draw.pooledDraw prf rest F com (ofRecord T node r) R (delta_nonneg node) receiptMax_lt hL hR hCnt)
+  refine le_trans (Pouw.pr_mono fun ω hω => ⟨hω.1, fun h => hω.2 fun hq => ?_⟩) hH
+  exact readAt_of hp hcov hN hω.1 hω.1 (h.1 hq) (wrong_le_line (correct := fun t ω => correct (com ω) t ω) hω.1 h.2)
 
-/-- **The memory line of record, time-held, under Identity** (`LineHeldIdentity`), proved. -/
-theorem lineHeldIdentity : LineHeldIdentity := by
-  intro node κ X Cm _ prf rest recs correct com T R δs r F O hI hsq hd hS hr hp hcov hk hO hL hR hC
-  have hN := registered_ofRecord T node r
-  have hH := holdsAnd (sketchBound_of_noOutside hk hO)
-    (Draw.pooledDraw prf rest F com (ofRecord T node r) R (delta_nonneg node) receiptMax_lt hL hR hC)
-  refine le_trans (Pouw.pr_mono fun ω hω => ⟨hω.1, fun h => hω.2 ?_⟩) hH
-  have ha : (ofRecord T node r).accepts ω := hω.1
-  have hc := charge_units node
-  exact heldAt_of 0 (by omega) (fun _ => le_rfl) (links_of_identity hI) (by simpa using hc.1) (by simpa using hc.2.1) hsq hd
-    hS hr hp hcov hN ha hω.1 h.1 (wrong_le_line (correct := fun t ω => correct (com ω) t ω) hω.1 h.2)
+/-- **Memory held from bits read, under the device model**: on an accepting outcome where the record's line credits no
+more bits read than its groups' passes read (`ReadAt`), every stretch of form `i` credits what the trace held over its
+span, at the links' ceiling `Links` (`Identity` at `0`) and the rest of the device model. The blocks the passes read
+are the correct receipts of the trace of those passes alone, every block planned (`T'`), whose sketch holds by
+`Trace.read`'s definition and whose wrong receipts are at most the line's W by `ReadAt`, so `heldAt_of` applies to it;
+what a stretch credits reads only the trace's memory, which `T'` shares. -/
+theorem heldAt_of_read {Ω : Type} [Fintype Ω] {T : Trace Ω} {node : Node} {rec : Ω → Record} (i : ℕ) (hi : i < 2)
+    {βl Bl : ℝ} (hβl : 0 ≤ node.rates.linkBytesPerS → 0 ≤ βl) (hl : Links T βl Bl)
+    (hcr : (((if i = 0 then (charges node.rates node.blockBytes).1 else (charges node.rates node.blockBytes).2).rate
+      : ℚ) : ℝ) = node.squarings / node.encode + node.disk + βl)
+    (hcb : (((if i = 0 then (charges node.rates node.blockBytes).1 else (charges node.rates node.blockBytes).2).burst
+      : ℚ) : ℝ) = node.rebuildBurst + node.diskBurst + Bl)
+    (hsq : SquaringCeiling T node.squarings node.encode node.rebuildBurst) (hd : Disks T node.disk node.diskBurst)
+    (hS : ChipCeiling T node.chipBlocks) (hr : Routed T) (hp : Paced T (recordPace node rec))
+    (hN : Registered T node) {ω : Ω} (ha : T.accepts ω) (hv : Verified node (rec ω))
+    (hread : ReadAt T ω node (rec ω)) :
+    HeldAt T ω node (rec ω) i := by
+  intro l hline f hf x hx
+  obtain ⟨sm, gs, ws, hsm, hs, hgs, hln⟩ := lineOf_ok hline
+  obtain ⟨hb, -, -, -, -, -, -, -, -⟩ := lineChecked _ _ _ _ _ _ _ _ _ _ hln
+  have hhi := (stretchBound _ _ _ _ _ _ _ _ _ _ hln i hi f hf x hx).1
+  have hG : ((rec ω).groups node).size = node.windows := by
+    rw [hgs]; exact (ofSummaryAt_ok hs).1.trans (record_summary hv hsm).1
+  have h0 : 0 < gs.size := lt_of_le_of_lt (Nat.zero_le _) hhi
+  have hW : 1 ≤ node.windows := by rw [← hG, hgs]; omega
+  let P := firstPass ((rec ω).groups node) ((rec ω).groups node).size
+  let T' : Trace Ω :=
+    { T with accepts := fun ω' => ω' = ω, passes := P, plan := fun _ _ => Finset.univ,
+             correct := fun ω' p => T.read ω' p }
+  have hp' : Paced T' (recordPace node rec) := fun ω' (e : ω' = ω) => by
+    rw [e]
+    obtain ⟨hmono, hf0, -, hfg, hrel, hre, hpass⟩ := hp ω ha
+    refine ⟨hmono, hf0, ?_, hfg, hrel, hre, hpass⟩
+    show firstPass ((rec ω).groups node) (node.windows - 1 + 1) ≤
+      firstPass ((rec ω).groups node) ((rec ω).groups node).size
+    exact le_of_eq (by rw [hG, Nat.sub_add_cancel hW])
+  have hcov' : Covers T' := fun _ _ _ _ => rfl
+  have hk' : ∀ p < T'.passes, ∀ j ∈ T'.correct ω p,
+      ∃ t, T'.tick ω p ≤ t ∧ t < T'.tick ω (p + 1) ∧ j ∈ T'.present ω t := fun p _ j hj => by
+    have hj' : j ∈ T.read ω p := hj
+    unfold Trace.read at hj'
+    obtain ⟨t, ht, htj⟩ := Finset.mem_biUnion.1 (Finset.mem_inter.1 hj').2
+    exact ⟨t, (Finset.mem_Ico.1 ht).1, (Finset.mem_Ico.1 ht).2, htj⟩
+  have hNr : (T.blocks : ℝ) = node.blocks := by rw [hN]
+  have hw' : ∀ l, lineOf node (rec ω) = .ok l → (T'.wrong ω : ℝ) ≤ l.wrong := fun l' hline' => by
+    have h8 : (0 : ℝ) < 8 * node.blockBytes := by
+      have : (1 : ℝ) ≤ node.blockBytes := by exact_mod_cast hb
+      linarith
+    have hR : ((P * node.blocks : ℕ) : ℝ) - l'.wrong ≤ T.reads ω P :=
+      le_of_mul_le_mul_left (hread l' hline') h8
+    have hp1 : ∀ p ∈ range P, (univ \ T.read ω p).card + (T.read ω p).card = T.blocks := fun p _ => by
+      have := Finset.card_sdiff_add_card_inter (univ : Finset (Fin T.blocks)) (T.read ω p)
+      rwa [Finset.univ_inter, Finset.card_univ, Fintype.card_fin] at this
+    have hsum : T'.wrong ω + T.reads ω P = P * T.blocks := by
+      show ∑ p ∈ range P, (univ \ T.read ω p).card + ∑ p ∈ range P, (T.read ω p).card = P * T.blocks
+      rw [← Finset.sum_add_distrib, Finset.sum_const_nat hp1, Finset.card_range]
+    have hsumR : (T'.wrong ω : ℝ) + T.reads ω P = (P : ℝ) * node.blocks := by
+      rw [← hNr]; exact_mod_cast hsum
+    push_cast at hR
+    linarith
+  exact heldAt_of (T := T') i hi hβl hl hcr hcb hsq hd hS hr hp' hcov' hN rfl hv hk' hw' l hline f hf x hx
+
+/-- **Memory held from bits read, over the outcomes**: on the trace of record under the device model, the outcomes
+where the Lean verifier accepts, `Q` holds and a stretch of form `i` credits more than the trace held are among those
+where it accepts, `Q` holds and the line credits more bits read than the passes read (`heldAt_of_read`), so
+`LineHeld`'s bound, at `Q` the certifiers' observation, bounds them. -/
+theorem pr_held_le_read {Ω : Type} [Fintype Ω] {T : Trace Ω} {node : Node} {rec : Ω → Record} (i : ℕ) (hi : i < 2)
+    {βl Bl : ℝ} (hβl : 0 ≤ node.rates.linkBytesPerS → 0 ≤ βl) (hl : Links (ofRecord T node rec) βl Bl)
+    (hcr : (((if i = 0 then (charges node.rates node.blockBytes).1 else (charges node.rates node.blockBytes).2).rate
+      : ℚ) : ℝ) = node.squarings / node.encode + node.disk + βl)
+    (hcb : (((if i = 0 then (charges node.rates node.blockBytes).1 else (charges node.rates node.blockBytes).2).burst
+      : ℚ) : ℝ) = node.rebuildBurst + node.diskBurst + Bl)
+    (hsq : SquaringCeiling (ofRecord T node rec) node.squarings node.encode node.rebuildBurst)
+    (hd : Disks (ofRecord T node rec) node.disk node.diskBurst) (hS : ChipCeiling (ofRecord T node rec) node.chipBlocks)
+    (hr : Routed (ofRecord T node rec)) (hp : Paced (ofRecord T node rec) (recordPace node rec)) (Q : Ω → Prop) :
+    Pouw.pr (fun ω => Verified node (rec ω) ∧ ¬ (Q ω → HeldAt (ofRecord T node rec) ω node (rec ω) i)) ≤
+      Pouw.pr (fun ω => Verified node (rec ω) ∧ ¬ (Q ω → ReadAt (ofRecord T node rec) ω node (rec ω))) :=
+  Pouw.pr_mono fun _ hω => ⟨hω.1, fun h => hω.2 fun hq =>
+    heldAt_of_read i hi hβl hl hcr hcb hsq hd hS hr hp (registered_ofRecord T node rec) hω.1 hω.1 (h hq)⟩
 
 end Properties.RemoteAudit.Line.SecurityProofs
