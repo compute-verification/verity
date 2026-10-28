@@ -13,8 +13,8 @@ rows of the window Program's linears of that K, and `weights_root`, their fold, 
   chunks of at most `CHUNK_BYTES` (a power of two rows each), and each chunk's subtree root, pads past Σn included, is
   folded in order as `tree_levels` folds the leaves. The caller's process copies each row into one of ``2 * workers + 1``
   shared slots of a chunk each, which `workers` forked processes read in place, so the auditor's host holds about
-  ``(2 * workers + 1) * CHUNK_BYTES`` and `workers` processes: the default, `DEFAULT_WORKERS`, fits vy-challenger-1
-  (4 vCPU, 15 GB). A chunk's salts are ChaCha20's keystream in numpy (`verity.ml.crypto.chacha20`, the
+  ``(2 * workers + 1) * CHUNK_BYTES`` and `workers` processes: the default, `DEFAULT_WORKERS`, fits a challenger host
+  of 4 vCPU and 15 GB. A chunk's salts are ChaCha20's keystream in numpy (`verity.ml.crypto.chacha20`, the
   blocks `audit.hm96_salt` concatenates) and its hm96 leaves `verity.ml.commitments.hm96.batch`'s. Its roots are
   `Registered.commit`'s for any `workers`, and `entry` is the registration's entry (`Registered.entry`), which credit's
   `_weights` checks.
