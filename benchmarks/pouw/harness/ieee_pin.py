@@ -1,8 +1,8 @@
 """The SASS gate's numeric pin (`sass_gate.py`; each toolkit's ``numeric`` in `sass_pins.json`): builds `ieee_pin.cu` with
 every pinned toolkit, with each pinned flag set and with the negative controls, gates the builds, runs them on one leased
-GPU, and judges them.
+GPU of NODE (the RTX PRO 6000 node, or a node with a card of the toolkit's target), and judges them.
 
-  research run --on vy-nebius-2 --project verity --campaign pouw --source . --cwd source --env GPU_LEASE_WHO=<you> \
+  research run --on NODE --project verity --campaign pouw --source . --cwd source --env GPU_LEASE_WHO=<you> \
       -- python3 benchmarks/pouw/harness/ieee_pin.py [--toolkit NAME=CUDA_HOME ...]
 
 Toolkits: 12.9.1 from `jobs/toolkit.sh`, 13.0.1 at /usr/local/cuda, unless --toolkit names them; each must be a toolkit of

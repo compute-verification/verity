@@ -37,11 +37,11 @@ describe. Where there is no CUDA 12.9 (node 2 has 13.0), `. jobs/toolkit.sh` fir
 redistributable archives and the cuBLASLt wheel `env.sh` pins. `LT2_HOME` names a second cuBLAS install (node 2's
 `/usr/local/cuda`, whose `libcublasLt.so.13` is 13.1.1.3): `lt.cu` is built alone against it with the host compiler into
 `libpouw_lt2.so`, which a run loads beside the library (`RTLD_LOCAL`; `POUW_HARNESS_LT2` names another, or `none`), so every
-family also gets that cuBLASLt's candidates, named `lt<major>_…`. On node 2 the build is a CPU job, at `nice 19` on the fill
-queue's cores:
+family also gets that cuBLASLt's candidates, named `lt<major>_…`. On the RTX PRO 6000 node (`NODE`) the build is a CPU job,
+at `nice 19` on the fill queue's cores:
 
 ```bash
-research run --on vy-nebius-2 --project verity --campaign pouw --source . --cwd source -- bash -c \
+research run --on NODE --project verity --campaign pouw --source . --cwd source -- bash -c \
   '. benchmarks/pouw/harness/jobs/toolkit.sh && export POUW_HARNESS_BUILD=/workspace/pouw/harness/build JOBS=8 LT2_HOME=/usr/local/cuda &&
    L="$(nice -n 19 taskset -c 96-191 benchmarks/pouw/harness/native/build.sh)" &&
    cp "${L%/*}"/{libpouw_harness.so,libpouw_lt2.so,build.json} "$RESEARCH_RUN_DIR/"'
@@ -100,8 +100,8 @@ and SM clock of the arm's and the baseline's items, rep by rep), `sm_clock_arm` 
 `clock_gap` (medians more than 0.5% apart).
 
 Decode rows count on the panel only as a dependent chain, which needs a library with the derive kernel (`ph_derive`);
-`--decode-method independent` times the old independent graph with any library. An arm (`arm.BenchArm`, arm interface v0.6;
-`Arm` is its deprecated alias, since the vLLM API's `Arm` is a serving bench mode) gets the split when its calls expose
+`--decode-method independent` times the old independent graph with any library. An arm (`arm.BenchArm`, arm interface v0.6)
+gets the split when its calls expose
 `phases` named by the step groups the executor schedules, `arm.GROUPS` (`a_tree`, `forming`, `gemm`, `cleanup`,
 `tile_hash`, `screen`, as `verity.core.protocols.pouw.serving`'s): the chain times before (a_tree, forming), during (gemm, cleanup) and
 after (tile_hash, screen, the movable groups), and the report's `split_groups` names the groups each time covers. The
