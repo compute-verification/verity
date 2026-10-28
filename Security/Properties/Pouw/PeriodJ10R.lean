@@ -24,8 +24,8 @@ draw size is the block's `k s_T`, read from the block's draw, not chosen here.
   the per-stratum projection of the joint draw; `tileStratumEscape_eq_proj` joins the two). So the period's tile coin
   is the block's draw restricted to the tile stratum, and the bound below, about the period's game, which draws its
   permutation uniformly, needs no premise to be about that draw.
-* `Registered`, `Answered`, `WindowAccepts`, `CreditWindows`, `creditDrawn`: `Credit.window`'s 18 inputs, split into what
-  the window registers before its draw coin and the rest; its verdict, an accept being some credited calls; each
+* `PreDraw`, `Answered`, `WindowAccepts`, `CreditWindows`, `creditDrawn`: `Credit.window`'s 18 inputs, split into what
+  the window commits before its draw coin and the rest; its verdict, an accept being some credited calls; each
   window's inputs as functions of the period's coins; and the units its draw demands proofs of, as `windowLayout`
   draws them (`Credit.descriptorDrawn`: `Credit.windowDrawn` at the descriptor's strata and the draw coin).
 * `CreditWindows.AcceptedUpTo`, `CreditWindows.prefixLen`, `creditLive`: the prefix before the first refused window
@@ -35,8 +35,8 @@ draw size is the block's `k s_T`, read from the block's draw, not chosen here.
   the service's at its window unit (`unitOf` of the tile stratum's unit).
 * `TileDrawIsCoin`, `TileServiceSound`: on every accepted window, `creditDrawn` gives the units of the tile coordinate at
   the window's draw coin, `k s_T` of them; the service's soundness against `Credit.window`.
-* `RegisteredBeforeDraw`: each window's registration fixed before its draw coin, `Properties.Pouw.Period`'s form at
-  `Registered`. It keeps the window's round coins, so it doesn't order the anchors before the salt (its docstring).
+* `RegisteredBeforeDraw`: each window's commitment fixed before its draw coin, `Properties.Pouw.Period`'s form at
+  `PreDraw`. It keeps the window's round coins, so it doesn't order the anchors before the salt (its docstring).
 * `saltOf`, `Place`, `pinnedAt`, `j10rAtCoin`, `SharedNoiseLucks`, `j10rRate`: each window's salt as
   `Credit.window` reads it; a unit's place (its position, its call's first unit, the call's slot and `K`, its tile and
   tile coordinates, its call's roots) and the noise and fold keys J10-R derives there; the unit's relation, its one
@@ -149,10 +149,11 @@ abbrev Coin (C Ξ : Type) (m : ℕ) {nB mB : ℕ} (σ : Fin nB → Fin mB) (sT :
 
 /-! ## `Credit.window`'s inputs and verdict -/
 
-/-- **What a window registers before its draw coin**, of `Credit.window`'s inputs: its open root and registration
-(`window`), the circuit in hex (`descriptor`), its registered values (`entries`), its commit, its manifest (`calls`),
-its served rows (`served`), its salt, its period's committed `k` and its T table rows (`rows`). -/
-structure Registered where
+/-- **What a window commits before its draw coin**, of `Credit.window`'s inputs: its open root and window record
+(`window`), the circuit in hex (`descriptor`), its committed values (`entries`, θ's among them by reference), its commit,
+its manifest (`calls`), its served rows (`served`), its salt, its period's committed `k` and its T table rows (`rows`).
+Its pre-draw inputs: the window's commitment, not the registration log, whose θ and builder these only reference. -/
+structure PreDraw where
   window : Json
   descriptor : Json
   entries : Json
@@ -177,7 +178,7 @@ structure Answered where
   live : Json
 
 /-- **Served H1's verdict credits the window**: `Credit.window` on its inputs gives credited calls, not a refusal. -/
-def WindowAccepts (r : Registered) (e : Answered) : Prop :=
+def WindowAccepts (r : PreDraw) (e : Answered) : Prop :=
   ∃ got : List ℕ, PouwCheck.Credit.window e.key e.ledger e.pins e.main r.window e.session r.salt r.calls r.served
     r.commit e.rounds e.draw r.descriptor r.entries e.proofs e.live r.k r.rows = .ok got
 
@@ -185,13 +186,13 @@ def WindowAccepts (r : Registered) (e : Answered) : Prop :=
 (the draw `Credit.windowLayout` holds the proofs to) over the strata of the descriptor's layout, at the window's root,
 the draw's coin, root and receipts and the period's `k`. The `window-drawn` difftest holds it to the Python verifier's
 `credit._window_drawn`. -/
-def creditDrawn (r : Registered) (e : Answered) : PouwCheck.R (Array ℕ) :=
+def creditDrawn (r : PreDraw) (e : Answered) : PouwCheck.R (Array ℕ) :=
   PouwCheck.Credit.descriptorDrawn r.window e.draw r.descriptor r.k
 
 /-- **A period's windows as `Credit.window` reads them**: on the period's coins, window `w`'s registration and the
 rest of its inputs, each any function of the coins. -/
 structure CreditWindows (Ω : Type) (n : ℕ) where
-  reg : Paths Ω n → Fin n → Registered
+  reg : Paths Ω n → Fin n → PreDraw
   ev : Paths Ω n → Fin n → Answered
 
 namespace CreditWindows
@@ -269,9 +270,9 @@ def TileServiceSound {C Ξ V : Type} [Fintype C] [Fintype Ξ] {m nB mB n : ℕ} 
       ∃ t : Fin (tileCount σ sT), unitOf (tileAt σ sT t) ∈ d.toList ∧
         ¬ rel x w t (opened x w (unitOf (tileAt σ sT t)))) ≤ δks
 
-/-- **Each window's registration is fixed before its draw coin**: `Properties.Pouw.Period.RegisteredBeforeDraw` at
-`Credit.window`'s registered inputs (`Registered`). It keeps window `w`'s round coins, the salt among them, so it carries
-the registration before the draw coin and not the order binding needs: H1's anchors (`x`, `sx`, the weight rows, `sw`;
+/-- **Each window's commitment is fixed before its draw coin**: `Properties.Pouw.Period.RegisteredBeforeDraw` at
+`Credit.window`'s pre-draw inputs (`PreDraw`). It keeps window `w`'s round coins, the salt among them, so it carries
+the commitment before the draw coin and not the order binding needs: H1's anchors (`x`, `sx`, the weight rows, `sw`;
 J10-R's root(`a/<K>@<s>`) and root(`b/<K>`), which `seed_c` hashes with the salt) committed before the window's salt
 coin, which is released against their root. The check holds a live window to that order: its salt opens on
 `anchoredEpochRoot W X k`, `X` the root of the activations the window committed (`windowAnchors`), and the loop commits
