@@ -243,17 +243,15 @@ def check_desc(inst) -> dict:
 
 # θ's provenance (`NciCheck.Baseline`): after the policy check, each θ entry against the trusted input
 
-REGISTRATION_V1 = "verity/registration/v1"
-REGISTRATION_V2 = "verity/registration/v2"
 TRUSTED_KEYS = {"log", "run", "params"}
 REGISTERED_KEYS = {"kind", "registration", "value", "root"}
 
 
 def record_digest(rec: dict) -> str:
-    """`registration.digest`: SHA-512 of the record's own format (v1 or v2), a NUL and its canonical JSON."""
-    import hashlib
-    tag = REGISTRATION_V2 if rec.get("format") == REGISTRATION_V2 else REGISTRATION_V1
-    return hashlib.sha512(tag.encode() + b"\0" + codec.canonical_json(rec)).hexdigest()
+    """The window record's digest, `registration.digest`: SHA-512 of the record's own format (v1 or v2), a NUL and its
+    canonical JSON."""
+    from verity.core.protocols.sampled_proofs.one_stage.registration import digest
+    return digest(rec)
 
 
 def lower(t) -> list[tuple[int, int]]:
