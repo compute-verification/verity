@@ -16,7 +16,8 @@ CUDA=${CUDA:-/usr/local/cuda-13.0}
   || { echo "h1c: NVCC_FAIL"; grep -v "^ptxas info" "$OUT/build-h1c.log" | tail -30; exit 11; }
 grep -A2 "h1c_" "$OUT/build-h1c.log" | grep -i "registers\|spill" | head
 [ -n "${BUILD_ONLY:-}" ] && { echo "h1c: built (BUILD_ONLY)"; exit 0; }
-PY=${PY:-/workspace/jobs/venv312/bin/python3}
+[ -x /workspace/jobs/venv312/bin/python3 ] && PY=${PY:-/workspace/jobs/venv312/bin/python3}
+PY=${PY:-$(. benchmarks/harness/env.sh && echo "$VENV/bin/python3")} || exit 2
 export PYTHONPATH=$ROOT:$ROOT/tools/config:$ROOT/benchmarks/pouw/served_h1:$ROOT/benchmarks/hash/dither
 echo "h1c: asking for one GPU at $(date -u +%H:%M:%SZ)"
 gpu-lease 1 --wait --max-min 25 -- timeout 1450 "$PY" "benchmarks/hash/dither/${H1C_GATE:-h1cgate.py}" --lib "$S/libh1c.so" \
