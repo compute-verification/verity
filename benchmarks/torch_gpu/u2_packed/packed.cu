@@ -8,13 +8,14 @@
 // values, and (x >> 2i) & 0x03030303 is the bytes of values 16 w + 4i to 16 w + 4i + 3, in order: an unpacked 16-byte
 // chunk is four such words, two integer instructions each (one for i = 0).  The u8 form (x << (6 - 2i)) & 0xC0C0C0C0 is
 // the same values times 64, whose left shifts ptxas may issue as multiplies on the FMA pipe; the u8 MMA's sums are then
-// 4,096 times O's (exact while K < 58,254), and the epilogue shifts them back.
+// 4,096 times O's (exact while K <= 58,254), and the epilogue shifts them back.
 //
 // One CTA an SM, persistent, 256 threads in two consumer warpgroups, each 64 x 256 of a 128 x 256 tile, at most 168
 // registers each, so a 256-thread hash_k CTA fits beside them on the SM.  No producer warpgroup: thread 0 issues every TMA,
 // all 256 threads unpack, and one named barrier a k-block (128 deep) orders the two:
-//   k-block g: MMAs on unpacked slot g % SU; wait for this warpgroup's k-block g - 1; (a tile's last k-block: store it);
-//              barrier; refill; unpack k-block g + SU - 1 into slot (g - 1) % SU, which both warpgroups are done with.
+//   k-block g: MMAs on unpacked slot g % SU; wait for this warpgroup's k-block g - 1; barrier; refill; unpack k-block
+//              g + SU - 1 into slot (g - 1) % SU, which both warpgroups are done with
+// and after a tile's last k-block, wait for all of it and store it.
 // Arms (`pk_<arm>`):
 //   i8    W and A stored as int8 and streamed by TMA straight into the slots (SWIZZLE_128B), nothing to unpack: the same
 //         schedule on four times the bytes
@@ -147,14 +148,16 @@ DEV void raster(int t, int tiles_m, int tiles_n, int group, int& tm, int& tn) {
 template <bool U8> DEV void unpack(uint32_t src, uint32_t dst, int tid) {
   constexpr uint32_t M2 = 0x03030303u, H2 = 0xC0C0C0C0u;
   const int h = tid & 1, sw = (tid >> 1) & 7;
-#pragma unroll
-  for (int j = 0; j < 3; j++) {
-    const int r = (tid >> 1) + 128 * j;
-    const uint4 v = lds128(src + r * (BK / 4) + 16 * h);
-    const uint32_t row = dst + r * BK, w[4] = {v.x, v.y, v.z, v.w};
+  src += (tid >> 1) * (BK / 4) + 16 * h;
+  dst += (tid >> 1) * BK;
+  // one pass at a time: the 128 accumulators leave the unpacking about 40 registers
+#pragma unroll 1
+  for (int j = 0; j < 3; j++, src += 128 * (BK / 4), dst += 128 * BK) {
+    const uint4 v = lds128(src);
+    const uint32_t w[4] = {v.x, v.y, v.z, v.w};
 #pragma unroll
     for (int q = 0; q < 4; q++) {
-      const uint32_t x = w[q], at = row + (((4 * h + q) ^ sw) << 4);
+      const uint32_t x = w[q], at = dst + (((4 * h + q) ^ sw) << 4);
       if constexpr (U8)
         sts128(at, (x << 6) & H2, (x << 4) & H2, (x << 2) & H2, x & H2);
       else
@@ -176,16 +179,24 @@ template <bool SHIFT> DEV void store_tile(const Params& p, const int32_t* d, int
   }
 }
 
-DEV void stamp_start(const Params& p, unsigned long long& t0, unsigned long long& c0) {
+// the start half of the CTA's stamp goes out at once, so no register holds it through the GEMM
+DEV void stamp_start(const Params& p) {
   if (threadIdx.x == 0) {
-    t0 = gtimer();
-    c0 = clock64();
+    if (p.st) {
+      p.st[blockIdx.x].t0 = gtimer();
+      p.st[blockIdx.x].c0 = clock64();
+    }
     if (p.started) atomicAdd(p.started, 1u);
   }
 }
-DEV void stamp_end(const Params& p, unsigned long long t0, unsigned long long c0, int tiles) {
-  if (threadIdx.x == 0 && p.st)
-    p.st[blockIdx.x] = Stamp{t0, gtimer(), c0, (unsigned long long)clock64(), smid(), (unsigned long long)tiles};
+DEV void stamp_end(const Params& p, int tiles) {
+  if (threadIdx.x == 0 && p.st) {
+    Stamp& s = p.st[blockIdx.x];
+    s.t1 = gtimer();
+    s.c1 = clock64();
+    s.sm = smid();
+    s.tiles = (unsigned long long)tiles;
+  }
 }
 
 template <int LOAD, bool MMA, int SU, int SP> DEV void body(const Params& p) {
@@ -193,12 +204,10 @@ template <int LOAD, bool MMA, int SU, int SP> DEV void body(const Params& p) {
   constexpr bool U8 = LOAD == P2U, STREAM = LOAD == P2 || LOAD == P2U;
   constexpr int NP = SP > 0 ? SP : 1;  // the packed ring's modulus (i8 has none)
   extern __shared__ __align__(1024) uint8_t smem[];
-  unsigned long long t0 = 0, c0 = 0;
-  stamp_start(p, t0, c0);
+  stamp_start(p);
   const uint32_t ubase = (smem_at(smem) + 1023) & ~1023u, pbase = ubase + SU * U_STAGE, bars = pbase + SP * P_STAGE;
   const int KB = p.K / BK, tiles_m = p.M / TM, tiles_n = p.N / BN, units = tiles_m * tiles_n;
   const int tid = threadIdx.x;
-  [[maybe_unused]] const int wg = tid / 128, x = tid % 128;
   // this CTA's k-blocks in order, g = 0 .. G - 1: its units blockIdx.x, + gridDim.x, ..., KB k-blocks each
   const int G = ((int)blockIdx.x < units ? (units - 1 - (int)blockIdx.x) / (int)gridDim.x + 1 : 0) * KB;
   if (tid == 0) {
@@ -262,46 +271,43 @@ template <int LOAD, bool MMA, int SU, int SP> DEV void body(const Params& p) {
     }
   }
 
-  [[maybe_unused]] int32_t d[NA];
-  [[maybe_unused]] int j = 0;  // the unit of k-block g, for its tile's store
-  int kb = 0, tiles = 0;
-  for (int g = 0; g < G; g++) {
-    const int s = g % SU;
-    if constexpr (LOAD == I8) mbar_wait(bars + 8 * s, (g / SU) & 1);
-    if constexpr (MMA) {
-      const uint32_t a0 = ubase + s * U_STAGE + wg * 64 * BK, b0 = ubase + s * U_STAGE + A_BYTES;
-      WG_FENCE;
-      imma<U8>(d, desc_sw128(a0), desc_sw128(b0), kb > 0);
-      imma<U8>(d, desc_sw128(a0 + 32), desc_sw128(b0 + 32), 1);
-      imma<U8>(d, desc_sw128(a0 + 64), desc_sw128(b0 + 64), 1);
-      imma<U8>(d, desc_sw128(a0 + 96), desc_sw128(b0 + 96), 1);
-      WG_COMMIT;
-      WG_WAIT(1);
-      if (kb == KB - 1) {
-        WG_WAIT(0);
-        acc_fence<NA>(d);
-        int tm, tn;
-        raster(blockIdx.x + j * gridDim.x, tiles_m, tiles_n, p.group, tm, tn);
-        store_tile<U8>(p, d, tm, tn, wg, x);
+  int g = 0, tiles = 0;
+  for (int t = blockIdx.x; t < units; t += gridDim.x) {
+    [[maybe_unused]] int32_t d[NA];
+    for (int kb = 0; kb < KB; kb++, g++) {
+      const int s = g % SU;
+      if constexpr (LOAD == I8) mbar_wait(bars + 8 * s, (g / SU) & 1);
+      if constexpr (MMA) {
+        const uint32_t a0 = ubase + s * U_STAGE + (tid / 128) * 64 * BK, b0 = ubase + s * U_STAGE + A_BYTES;
+        WG_FENCE;
+        imma<U8>(d, desc_sw128(a0), desc_sw128(b0), kb > 0);
+        imma<U8>(d, desc_sw128(a0 + 32), desc_sw128(b0 + 32), 1);
+        imma<U8>(d, desc_sw128(a0 + 64), desc_sw128(b0 + 64), 1);
+        imma<U8>(d, desc_sw128(a0 + 96), desc_sw128(b0 + 96), 1);
+        WG_COMMIT;
+        WG_WAIT(1);
+      }
+      sync256();
+      if constexpr (LOAD == I8) {
+        if (tid == 0) load(g + SU - 1);
+      } else if constexpr (STREAM) {
+        // the packed slot of the k-block unpacked last iteration is free now; slot (g - 1) % SU is done in both warpgroups
+        if (tid == 0 && g > 0) load(g + SU - 2 + SP);
+        unpack_n(g + SU - 1);
+        fence_async();
       }
     }
-    if (kb == KB - 1) tiles++;
-    sync256();
-    if constexpr (LOAD == I8) {
-      if (tid == 0) load(g + SU - 1);
-    } else if constexpr (STREAM) {
-      // the packed slot of the k-block unpacked last iteration is free now; slot (g - 1) % SU is done in both warpgroups
-      if (tid == 0 && g > 0) load(g + SU - 2 + SP);
-      unpack_n(g + SU - 1);
-      fence_async();
+    if constexpr (MMA) {
+      WG_WAIT(0);
+      acc_fence<NA>(d);
+      int tm, tn;
+      raster(t, tiles_m, tiles_n, p.group, tm, tn);
+      store_tile<U8>(p, d, tm, tn, tid / 128, tid % 128);
     }
-    if (++kb == KB) {
-      kb = 0;
-      j++;
-    }
+    tiles++;
   }
   __syncthreads();
-  stamp_end(p, t0, c0, tiles);
+  stamp_end(p, tiles);
 }
 
 #define PK(NAME, LOAD, MMA, SU, SP) \
