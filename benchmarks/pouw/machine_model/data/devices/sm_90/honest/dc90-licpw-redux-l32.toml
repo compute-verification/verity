@@ -13,7 +13,7 @@
 # word a warp a segment leaves the SM.
 name = "dc90-licpw-redux-l32"
 status = "measured"
-source = "RT-HOPPER, wgli_db_w2 (spread ≤ 1.6e-4 over 10 reps): the honest LI loop folding its own accumulators runs the saturated wgmma at 0.4557 of its alone rate, so 128.01 SMSP-cycles a MMA over 0.4557 is 280.89 on the clock; LI is LOP3 and IMAD a pair of words, 128 committed words a lane a MMA at L = 32, plus the per-segment checkpoint reduced by one redux.sync.xor. wgli_redux (0.5993) doesn't fold the wgmma's accumulators (RT-HOPPER-8)"
+source = "wgli_db_w2 (@h200-wgli; spread ≤ 1.6e-4 over 10 reps): the honest LI loop folding its own accumulators runs the saturated wgmma at 0.4557 of its alone rate, so 128.01 SMSP-cycles a MMA over 0.4557 is 280.89 on the clock; LI is LOP3 and IMAD a pair of words, 128 committed words a lane a MMA at L = 32, plus the per-segment checkpoint reduced by one redux.sync.xor. wgli_redux (0.5993) doesn't fold the wgmma's accumulators"
 L = 32
 
 [mma]
@@ -30,7 +30,7 @@ SHFL = 3        # one redux.sync.xor at 2 SHFL and the store at 1
 
 [measured]
 cycles_per_mma = 280.89         # the lone wgmma's 128.01 SMSP-cycles a MMA over wgli_db_w2's measured tensor fraction 0.4557
-source = "RT-HOPPER-8 and -10: wgli_db_w2, the fastest loop that LI-folds the wgmma's own accumulators and reduces each segment by one redux.sync.xor, no filler, runs the saturated wgmma at 0.4557 of its alone IGMMA rate, so the lone wgmma's 128.01 SMSP-cycles a MMA (census IGMMA_S8_N256,M) over 0.4557 is 280.89 on the clock, 41.9% above the model's 197.96. The stand-in wgli_redux (0.5993, 213.6 on the clock) folds registers the wgmma never writes"
+source = "wgli_db_w2 (@h200-wgli), the fastest loop that LI-folds the wgmma's own accumulators and reduces each segment by one redux.sync.xor, no filler, runs the saturated wgmma at 0.4557 of its alone IGMMA rate, so the lone wgmma's 128.01 SMSP-cycles a MMA (census IGMMA_S8_N256,M) over 0.4557 is 280.89 on the clock, 41.9% above the model's 197.96. The stand-in wgli_redux (0.5993, 213.6 on the clock) folds registers the wgmma never writes"
 
 [operands]      # the least operand delivery any program pays a MMA when the design names none
 floor = { IGMMA_S8_N256 = 0.0 }
