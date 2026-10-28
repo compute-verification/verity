@@ -38,8 +38,8 @@ rank-one terms. The record's premises read at g1's values as they do at any othe
   alphabet, which don't carry to a subset of it.
 
 A3 sums the types' MACs as "the types sharing the pipe's time", and on sm_120 QMMA does share IMMA's tensor pipe: timed
-together, `QMMA.16832` E4M3 and `IMMA.16832` give `t + s = 1.0002` and `0.9994`, so a run that
-splits its words between them is charged in full, for g1 as for the record.
+together, `QMMA.16832` E4M3 and `IMMA.16832` give `t + s = 1.0002` and `0.9994`, so a run that splits its words
+between them is charged in full, for g1 as for the record.
 -/
 
 namespace Pouw.FpG1
