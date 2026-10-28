@@ -1,7 +1,7 @@
 """drawn.py: a served H1 window's drawn J10-R units staged as C-Flock statements, and the statements file core's credit
 verifies (``--statements``, `credit.STATEMENT_KEYS`), from the serve dir and the prover's own state.
 
-    python drawn.py stage SERVE_DIR WINDOW --circuits DIR --work W [--prover P] [--k K]
+    python drawn.py stage SERVE_DIR WINDOW --circuits DIR --work W [--prover P] [--k K] [--recompose]
                           [--weights-key FILE | --gate CMD --model ROLE] [--checkpoint DIR | --weights NPZ]
     python drawn.py statements --work W --out FILE
     python drawn.py check SERVE_DIR WINDOW --circuits DIR --statements FILE --lean FLOCK_VERIFY
@@ -27,10 +27,12 @@ records), or ``--prover``. DIR is `pouw_h1_circuits`' output, whose manifest bin
    ``model-key --model ROLE --circuit C``; a server with neither kept no key). Each must have credit's root
    and domain, else the stage is refused; ``pub@<c>`` and ``ok`` are credit's own (`credit.public_table`,
    `credit.ok_table`).
-4. K's statement (`h1unit.Shape` ``j10r``) is built bound to the manifest's bind; its circuit file must be the
-   manifest's ``k<K>`` byte for byte (the SHA-512 the period-open committed). Each call is staged on it as a shared-row
-   statement (`h1unit.statement_tables`), its outputs held to the word reference (`h1zy.reference` under J10-R) and
-   every unit's ok 1. W/c<call>/ gets inst.bin, pub.bin, pin.txt and circuit.txt; W/plan.json lists them.
+4. Each call is staged as a shared-row statement (`h1unit.statement_tables`) on --circuits' ``k<K>`` file, whose SHA-512
+   must be the manifest's (the one the period-open committed), read and never composed (`FileStager`: the K 2048 J10-R
+   composition takes hundreds of GB), each unit's outputs J10-R's word reference's (`h1zy.reference`) and its ok 1.
+   ``--recompose`` builds K's statement (`h1unit.Shape` ``j10r``, bound to the manifest's bind) instead, its lowered
+   outputs held to the word reference's. W/c<call>/ gets inst.bin, pub.bin, pin.txt and circuit.txt; W/plan.json lists
+   them.
 
 ``statements``: after each W/c<call>/ is proved (`hidden_zk/job.sh`'s ``session``: exactly one session, all its
 instances drawn), the statements file: each call's `pouw_h1_challenger.statement` (circuit, pub.bin, its session).
@@ -75,6 +77,7 @@ PROVER = "private/h1/w{w}"
 MANIFEST = "circuit-files.json"
 PLAN = "plan.json"
 MODELS = HERE.parents[1] / "live_challenger" / "models.py"
+_random = os.urandom
 
 
 class Refused(Exception):
@@ -279,18 +282,20 @@ def call_rows(win: dict, call: int, units: list[int], reg: dict, values: dict[st
         z[f"r_{port}"] = np.array(at, np.int64)
         z[f"v_{port}"] = np.array([e["value"]] * len(at))
         z[f"p_{port}"] = np.array([src.path(x).hex() for x in at])
-    z["s_o0"] = np.frombuffer(os.urandom(U.SALT_BYTES * len(units)), np.uint8).reshape(len(units), U.SALT_BYTES)
+    z["s_o0"] = np.frombuffer(_random(U.SALT_BYTES * len(units)), np.uint8).reshape(len(units), U.SALT_BYTES)
     z["u0"] = np.array(u0)
     return z
 
 
-def reference_check(z: dict, outs: dict, shape: U.Shape, win: dict, k: int, roots: tuple[bytes, bytes]) -> None:
-    """Each staged unit's receipt and ok are J10-R's word reference's (`h1zy.reference`, chunked by `chunks_reference`)
-    on its rows, the window's Program salt, its position, its call's roots and (u0, blocks); and its ok is 1."""
+def unit_outputs(z: dict, win: dict, k: int, roots: tuple[bytes, bytes]) -> dict[str, np.ndarray]:
+    """Each staged unit's outputs as J10-R's word reference computes them (`h1zy.reference`, chunked by
+    `chunks_reference`) on its rows, the window's Program salt, its position, its call's roots and (u0, blocks): ``o0``
+    its receipt's u16 words, ``o1`` its ok. Refused when a unit's ok is not 1 (its record is not its rows' product)."""
     from verity.core.protocols.pouw.circuit import h1zy as Z
     lay, (r, c), x = win["layout"], tuple(win["layout"]["tile"]), Wt.chunks(k)
     u0, salt = int(z["u0"]), bytes.fromhex(win["salt"])
     n = next(nn for name, kk, nn in lay["linears"] if name == lay["calls"][int(z["call"])][0])
+    o0, o1 = [], []
     for i, u in enumerate(int(v) for v in z["units"]):
         t = u - u0
         a = [U.split_row(z[f"w_a_k{k}_{q}"][i]) for q in range(x * r)]
@@ -299,12 +304,75 @@ def reference_check(z: dict, outs: dict, shape: U.Shape, win: dict, k: int, root
         args = ([v for v, _s in a], [v for v, _s in b], [s for _v, s in a], [s for _v, s in b],
                 U.split_record(z["w_zy"][i], r * c), salt, u, roots)
         rc, ok = (Z.reference(*args, j10r=j10r) if x == 1 else Z.chunks_reference(*args, x, j10r=j10r))
-        if ok != 1 or int(outs["o1"][i][0]) != 1:
-            raise Refused(f"unit {u}: its ok is {int(outs['o1'][i][0])} (the word reference's {ok}), not 1: its record is "
-                          "not its rows' product, so it is not proved")
-        if not np.array_equal(outs["o0"][i], U.receipt_words(rc)):
-            print(f"WARNING unit {u}: the lowered circuit's receipt is not the word reference's (no entry reads it)",
-                  flush=True)
+        if ok != 1:
+            raise Refused(f"unit {u}: the word reference's ok is {ok}, not 1: its record is not its rows' product, so it "
+                          "is not proved")
+        o0.append(U.receipt_words(rc))
+        o1.append(U.OK)
+    return {"o0": np.array(o0, np.uint16), "o1": np.array(o1, np.uint16)}
+
+
+def reference_check(z: dict, outs: dict, win: dict, k: int, roots: tuple[bytes, bytes]) -> None:
+    """The lowered circuit's outputs (``--recompose``) are the word reference's (`unit_outputs`), unit by unit."""
+    want = unit_outputs(z, win, k, roots)
+    for p in ("o0", "o1"):
+        bad = np.flatnonzero((np.asarray(outs[p], np.uint16) != want[p]).any(axis=1))
+        if bad.size:
+            raise Refused(f"unit {int(z['units'][bad[0]])}: the lowered circuit's {p} is not the word reference's")
+
+
+class FileStager:
+    """`UnitStager`'s ``stage`` on the circuit file `path` the period committed for `shape`'s K, read and never composed
+    (the K 2048 J10-R composition takes some hundreds of GB): its META (its second line), its pin and class digest
+    (`circuit.digest`, `circuit.class_digest`) streamed from the file, the statement's rows `UnitStager`'s for the
+    template (`h1window.statement_rows`), and each unit's outputs the word reference's (`unit_outputs`), which ``outs``
+    gives. `circuit.write` reads only these of a circuit; the files it writes are the recomposed stager's byte for byte."""
+
+    def __init__(self, shape: U.Shape, path: Path, name: str = NAME):
+        from verity.core.protocols.pouw.circuit import h1window as HW
+        from verity_flock import circuit as FC
+        from types import SimpleNamespace
+        template = shape.definition()
+        in_rows, out_rows = HW.statement_rows(template), HW.STATEMENT_OUT_ROWS
+        with open(path, "rb") as f:
+            first, second = f.readline(), f.readline()
+            meta = json.loads(second[5:])
+            head = {k: v for k, v in meta.items() if k not in FC.BINDING_KEYS}
+            h_pin = hashlib.sha512(first + second)
+            h_cls = hashlib.sha512(first + b"META " + "".join(FC._COMPACT.iterencode(head)).encode() + b"\n")
+            while b := f.read(1 << 26):
+                h_pin.update(b)
+                h_cls.update(b)
+        self.meta, self.pin, self.class_sha512 = meta, h_pin.hexdigest(), h_cls.hexdigest()
+        self.ports = FC._meta_ports(meta)
+        self.row_ports = [r for r, *_ in in_rows]
+        port = lambda nm: SimpleNamespace(name=nm, dtype="u16")  # noqa: E731
+        content = json.dumps([template.id, [list(r[:3]) + [list(r[3])] for r in in_rows],
+                              [[s, list(ps)] for s, ps in out_rows]]).encode()
+        outs = sorted({p for _s, ps in out_rows for p in ps})
+        self.sub = SimpleNamespace(id=name, template=SimpleNamespace(id="unit-class"), inputs=[port(r) for r in self.row_ports],
+                                   outputs=[port(f"o{j}") for j in outs])
+        self.iset = SimpleNamespace(subcircuit=self.sub, name=name.replace("/", "-"),
+                                    content_digest=hashlib.sha256(content).hexdigest())
+        self.outs = None
+
+    def stage(self, rows: dict, out_dir: Path, salt_key: bytes, salts: dict, indices, set_name: str, tables: dict,
+              refs: dict, registered: dict) -> dict:
+        from verity_flock import circuit as FC
+        from types import SimpleNamespace
+        iset = SimpleNamespace(**{**vars(self.iset), "name": set_name})
+        n = len(rows[self.row_ports[0]])
+        for r in self.row_ports:
+            if not np.array_equal(np.asarray(tables[r], np.uint16)[np.asarray(refs[r])], np.asarray(rows[r], np.uint16)):
+                raise ValueError(f"port {r}'s table rows at the instances' refs are not their rows")
+        table_rows = {p.name: len(tables[p.name]) if p.name in tables else n for p in self.ports}
+        salts = {**FC.stage_salts(iset, 0, n, self.ports, salt_key, table_rows), **salts}
+        out_dir.mkdir(parents=True, exist_ok=True)
+        FC.write("", iset, 0, n, out_dir / "inst.bin", out_dir / "pub.bin", salt_key,
+                 rows={r: np.asarray(rows[r], np.uint16) for r in self.row_ports}, outs=self.outs, salts=salts,
+                 public_words={}, digests=(self.pin, self.class_sha512), indices=[int(u) for u in indices],
+                 share_rows=True, tables=tables, refs=refs, registered=registered, meta=self.meta)
+        return {"meta": self.meta, "outs": self.outs, "salts": salts, "circuit_sha512": self.pin}
 
 
 def stage(a) -> int:
@@ -364,14 +432,18 @@ def stage(a) -> int:
             fast_stage.install(work / f".scratch-k{k}")
         from verity.core.protocols.sampled_proofs.one_stage import proofs as PF
         shape = U.Shape(k, *lay["tile"], j10r=True)
-        built = work / f"k{k}.circuit.txt"
-        stager = shape.stager(NAME, circuit=built, bind=manifest["bind"])
-        got = PF.file_sha512(built)
+        circuit = (Path(a.circuits) / f"k{k}.circuit.txt").resolve()
+        if a.recompose:
+            built = work / f"k{k}.circuit.txt"
+            stager = shape.stager(NAME, circuit=built, bind=manifest["bind"])
+            got = PF.file_sha512(built)
+            built.unlink()
+        else:
+            stager = FileStager(shape, circuit)
+            got = stager.pin
         if got != manifest["files"][f"k{k}"]:
             raise Refused(f"K = {k}'s statement circuit (SHA-512 {got[:16]}...) is not --circuits' k{k} file "
                           f"({manifest['files'][f'k{k}'][:16]}...), the one the period-open committed")
-        built.unlink()
-        circuit = (Path(a.circuits) / f"k{k}.circuit.txt").resolve()
         out_ports = [p.name for p in stager.ports if p.name not in stager.row_ports]
         for c in calls:
             reg, units = regs[c], drawn[c]
@@ -383,9 +455,12 @@ def stage(a) -> int:
             z["call"] = np.array(c)
             st = U.statement_tables(z, stager.row_ports, out_ports)
             roots = (bytes.fromhex(reg["ports"][f"a_k{k}_0"]["root"]), bytes.fromhex(reg["ports"][f"b_k{k}_0"]["root"]))
-            stager.reference_check = lambda _rows, outs, z=z, roots=roots: reference_check(z, outs, shape, win, k, roots)
+            if a.recompose:
+                stager.reference_check = lambda _rows, outs, z=z, roots=roots: reference_check(z, outs, win, k, roots)
+            else:
+                stager.outs = unit_outputs(z, win, k, roots)
             d = work / f"c{c}"
-            got = stager.stage({p: z[f"w_{p}"] for p in stager.row_ports}, d, os.urandom(32), salts=st["salts"],
+            got = stager.stage({p: z[f"w_{p}"] for p in stager.row_ports}, d, _random(32), salts=st["salts"],
                                indices=units, set_name=f"pouw-h1-w{a.window}-c{c}", tables=st["tables"], refs=st["refs"],
                                registered=st["registered"])
             (d / "pin.txt").write_text(stager.pin)
@@ -452,6 +527,7 @@ def main(argv=None) -> int:
     s.add_argument("--model")
     s.add_argument("--checkpoint")
     s.add_argument("--weights")
+    s.add_argument("--recompose", action="store_true")
     t = sub.add_parser("statements")
     t.add_argument("--work", required=True)
     t.add_argument("--out", required=True)

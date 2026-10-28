@@ -148,9 +148,15 @@ def _prove(plan: dict, d: Path) -> None:
             {"unit_draw": {"units": drew}, "proof": hashlib.sha512(bound + json.dumps(drew).encode()).hexdigest()}))
 
 
+def _seeded():
+    count = iter(range(1 << 30))
+    return lambda n: hashlib.shake_256(next(count).to_bytes(8, "little")).digest(n)
+
+
+@pytest.mark.slow
 def test_a_served_windows_drawn_calls_are_staged_proved_and_credits_proved_accepts_them(served, capsys):
     DR, d, tmp = served
-    assert _stage(DR, d, tmp, "--weights-key", str(tmp / "wkey")) == 0, capsys.readouterr().err
+    assert _stage(DR, d, tmp, "--weights-key", str(tmp / "wkey"), "--recompose") == 0, capsys.readouterr().err
     plan = json.loads((tmp / "work" / DR.PLAN).read_text())
     manifest = json.loads((tmp / "circuits" / PC.MANIFEST).read_text())
     assert plan["calls"] and all(x["circuit"] == str((tmp / "circuits" / PC.file_name(K)).resolve()) for x in plan["calls"])
@@ -175,6 +181,27 @@ def test_a_served_windows_drawn_calls_are_staged_proved_and_credits_proved_accep
     assert capsys.readouterr().out.startswith("REFUSED ")
 
 
+@pytest.mark.slow
+def test_staging_on_the_committed_file_writes_the_recomposed_statements_bytes(served, monkeypatch, capsys):
+    """`FileStager`, which reads K's committed circuit file and never composes it, writes the inst.bin and pub.bin the
+    recomposed `UnitStager` does on the same rows, salts and outputs (here the stand-in's lowered outputs)."""
+    DR, d, tmp = served
+    outs = {}
+    monkeypatch.setattr(DR, "reference_check", lambda z, o, *_a: outs.__setitem__(int(z["call"]), o))
+    monkeypatch.setattr(DR, "_random", _seeded())
+    assert _stage(DR, d, tmp, "--weights-key", str(tmp / "wkey"), "--recompose") == 0, capsys.readouterr().err
+    (tmp / "work").rename(tmp / "recomposed")
+    monkeypatch.setattr(DR, "unit_outputs", lambda z, *_a: outs[int(z["call"])])
+    monkeypatch.setattr(DR, "_random", _seeded())
+    assert _stage(DR, d, tmp, "--weights-key", str(tmp / "wkey")) == 0, capsys.readouterr().err
+    plan = json.loads((tmp / "work" / DR.PLAN).read_text())
+    assert plan["calls"] and sorted(outs) == [x["call"] for x in plan["calls"]]
+    for x in plan["calls"]:
+        for f in ("inst.bin", "pub.bin", "pin.txt"):
+            assert (Path(x["dir"]) / f).read_bytes() == (tmp / "recomposed" / f"c{x['call']}" / f).read_bytes(), f
+
+
+@pytest.mark.slow
 def test_a_prover_state_or_weights_key_other_than_the_served_ones_is_refused(served, capsys):
     DR, d, tmp = served
     assert _stage(DR, d, tmp) == 1 and "b/<K>'s salt key" in capsys.readouterr().err
