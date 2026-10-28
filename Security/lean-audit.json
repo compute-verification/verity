@@ -1990,7 +1990,7 @@
    "owner": "@compute-research",
    "digest": "9970d9795fc5080b384ca0a894a62c36113f13acf26cfa0dafbdd94f9ca82be9"
   },
-  "Verity.Assumptions.DeviceWithinDeclaration": {
+  "Verity.Assumptions.DeviceWithinRegisteredFigures": {
    "owner": "@soundness"
   },
   "Verity.Assumptions.GemmAmpereStep": {
