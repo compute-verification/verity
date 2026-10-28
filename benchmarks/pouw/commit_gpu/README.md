@@ -18,8 +18,10 @@ Files:
   the tile sweep and an nsys trace under one GPU lease). `summary.py`: one line a measurement, or (`table`) the Results
   table, (`tiles`) the R table, or (`formats`) the leaf-format table.
 
+On an RTX PRO 6000 node (MACHINE):
+
 ~~~text
-research run --on vy-nebius-2 --project verity --source . --cwd source --env GPU_LEASE_WHO=LANE \
+research run --on MACHINE --project verity --source . --cwd source --env GPU_LEASE_WHO=LANE \
   [--env BUILDS="a0r0l a0r0 a1r0 a0r3"] -- bash benchmarks/pouw/commit_gpu/gpu.sh
 ~~~
 
