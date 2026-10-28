@@ -1,7 +1,7 @@
 """The P2 session's party (`p2_party.py`): its registration, plan and openings round-trip their JSON, and a registration
 whose digest isn't its fields' or a plan that isn't one of its units is refused; its answer in the core interface's
 form is one `core_check` reads, and the prover reads a challenge in either form. Its sessions, decided by the Lean
-verifier of record with these books beside it, are `lean/tests/test_p2_party.py`'s, which run where Lake is."""
+verifier with these books beside it, are `lean/tests/test_p2_party.py`'s, which run where Lake is."""
 
 from __future__ import annotations
 
