@@ -13,7 +13,7 @@ Layout (two levels; a Call's record is the join): `occurrences[o]` is one lowere
 collective); `calls[k]` is Call k (= node k of the program function's body, the same index `instances.json.gz` rows carry)
 with its occurrence, return slots and argument slots.  `load_correspondence(descriptor)` joins them into `CallCorrespondence`
 records and answers `owning_module(call_id)`, `return_slot(call_id, port)`, `arg_slot(call_id, input_index)`, and the
-module-body partition `calls_of_module(path)` the query lane consumes.  Stdlib plus `verity.ml.circuits.codec`'s `canonical_json`:
+module-body partition `calls_of_module(path)` that `verity_vllm.query` consumes.  Stdlib plus `verity.ml.circuits.codec`'s `canonical_json`:
 imports without torch.
 """
 

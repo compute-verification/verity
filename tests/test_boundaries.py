@@ -46,6 +46,8 @@ ALLOWED = {
     "ml.circuits": set(),
     "ml.randomness": set(),
     "ml.crypto": set(),
+    # the card files, one TOML a SKU, and their loader: the one source of each card's numbers
+    "hardware": set(),
     "ml.commitments": {"ml.circuits", "ml.crypto"},
     # the catalog and the kernels, distributions of their own before the platform layout
     "ml.circuits.silicon": {"ml.circuits"},
@@ -60,8 +62,6 @@ ALLOWED = {
     # records come from the caller. Its catalog of templates is Verity's Definitions (`ml.circuits.ops`).
     "ml.windows": {"ml.circuits", "ml.circuits.ops", "ml.commitments"},
     "core.claims": set(),
-    # the card files, one TOML a SKU, and their loader: the one source of each card's numbers
-    "hardware": set(),
     # 2026-10-27 (memory accounting, the deployment API v3, note:memory-accounting/20261026T2305Z-draft-deployment-api-v3):
     # the wire is what both sides parse with, stdlib only; the deployment layer is protocol-agnostic and reads frames with
     # it, signs and verifies only through keys its caller hands it, and checks a configuration against what a protocol and
@@ -91,10 +91,8 @@ ALLOWED = {
     # PoUW's tile check is a sampled proof (`.agents/skills/friction/SKILL.md`).  Its schemes and
     # circuits are stated over the catalog's silicon models and Definitions (the tensor-core steps, FP32 and the casts its
     # verifier recomputes): the one edge into the catalog.
-    # The card files are the one hardware source: H1's device records take SMs, f_max and the s8 rate from them
-    # (`circuit.h1device`).
     "core.protocols.pouw": {"ml.circuits", "ml.circuits.ops", "ml.circuits.silicon", "ml.commitments", "ml.crypto",
-                            "ml.randomness", "core.protocols.profile", "core.protocols.sampled_proofs", "hardware"},
+                            "ml.randomness", "core.protocols.profile", "core.protocols.sampled_proofs"},
     # N2 of the proof-service plan: a link-window's network certificates are registered through the proof service; they
     # are LMS signatures (`ml.crypto.lms`).
     "core.protocols.certifier": {"ml.circuits", "ml.commitments", "ml.crypto", "core.protocols.sampled_proofs"},

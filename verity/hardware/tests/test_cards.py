@@ -56,8 +56,9 @@ def test_derived_numbers(sku: str) -> None:
     assert value(card, "host.ops") == 2 * value(card, "host.amx") * value(card, "host.sockets") * hz * 10 ** 9
 
 
-def test_the_numbers_quoted_to_other_lanes() -> None:
-    """The firmware ceilings and host peaks other code quotes."""
+def test_the_quoted_numbers() -> None:
+    """The firmware ceilings, host peaks and bandwidths already quoted outside this package, pinned so that a change to
+    one is deliberate."""
     server, h200 = load("rtx-pro-6000-server"), load("h200-sxm-141gb")
     assert [value(server, k) for k in ("clock.sm", "clock.memory", "power.limit")] == [2430, 12481, 600]
     assert [value(h200, k) for k in ("clock.sm", "clock.memory", "power.limit")] == [1980, 3201, 700]
