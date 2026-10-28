@@ -241,11 +241,14 @@ def correspondence(t: Any, opts: Options, F: Findings) -> tuple[dict, list[np.nd
         except ValueError as e:
             rec["realizations"].append({"via": f"kernel:{name}", "declines": str(e)[:200]})
             continue
-        rec["realizations"].append({"via": f"kernel:{name}", "compared": sc.n - sc.declined, "declined": sc.declined,
-                                    "mismatches": len(sc.mismatches)})
-        if sc.mismatches:
+        rec["realizations"].append({"via": f"kernel:{name}", "compared": sc.compared, "declined": sc.declined,
+                                    "mismatches": len(sc.mismatches), **({"fault": sc.fault} if sc.fault else {})})
+        if sc.fault == "mismatch":
             F.fail("correspondence", "kernel-mismatch", t.id, f"[{name}]: {len(sc.mismatches)} of {sc.n} vectors", via=f"kernel:{name}",
                    examples=[{"instance": i, "args": _short(a), "kernel": _short(k), "reference": _short(r)} for i, a, k, r in sc.mismatches[:_EXAMPLES]])
+        elif sc.fault:
+            F.fail("correspondence", f"kernel-{sc.fault}", t.id, f"[{name}]: declined {sc.declined} of {sc.n} vectors, "
+                   f"{sc.outside} outside the reference's domain", via=f"kernel:{name}")
     return rec, arrays, ref
 
 
