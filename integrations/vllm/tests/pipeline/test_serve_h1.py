@@ -316,7 +316,7 @@ def test_the_arm_is_ready_before_the_server_listens(tmp_path, monkeypatch):
     def gate(argv: list[str]) -> tuple[int, str]:
         calls.append(shlex.split(argv[-1])[0])
         return auditor.run(argv)
-    sessions = SH.GateSessions(CC.Gate(GATE, gate), PEER, STEPS, wait=auditor.settle, listens=lambda port: True,
+    sessions = SH.GateSessions(CC.ChallengerGate(GATE, gate), PEER, STEPS, wait=auditor.settle, listens=lambda port: True,
                                ahead=Now(), now=lambda: datetime(2026, 10, 20, 11, 8, tzinfo=UTC))
     weight_root, ticks = PH.weight_root, iter(range(1000))
     monkeypatch.setattr(SH, "sessions_of", lambda opts: sessions)
@@ -352,7 +352,7 @@ def test_a_reserve_at_startup_that_fails_leaves_window_0_s_to_its_open():
     def gate(argv: list[str]) -> tuple[int, str]:
         refusals.append(shlex.split(argv[-1])[0])
         return 3, json.dumps({"refused": "--peer 'x': one of []"})
-    sessions = SH.GateSessions(CC.Gate(GATE, gate), PEER, STEPS, ahead=Now())
+    sessions = SH.GateSessions(CC.ChallengerGate(GATE, gate), PEER, STEPS, ahead=Now())
     assert sessions.settled(0) is None and not refusals
     sessions.ahead_of(0)
     assert sessions.settled(0) is None and refusals == ["reserve"]
@@ -441,7 +441,7 @@ def test_a_served_window_under_release_after_pouw_releases_exactly_h1s_drawn_rea
     sessions = None
     if coins == "gate":
         auditor = _PeriodAuditor(tmp_path, monkeypatch)
-        sessions = SH.GateSessions(CC.Gate(GATE, auditor.run), PEER, STEPS, wait=auditor.settle, listens=lambda port: True)
+        sessions = SH.GateSessions(CC.ChallengerGate(GATE, auditor.run), PEER, STEPS, wait=auditor.settle, listens=lambda port: True)
         k = _PeriodAuditor.K
     else:
         monkeypatch.setattr(PHC, "draw_k", lambda layout: 1)
@@ -509,7 +509,7 @@ def test_a_window_with_no_draw_refuses_its_release_by_name(tmp_path, monkeypatch
     from verity_vllm.pipeline import serve_release as SL
 
     srv, auditor, draws = _Server(monkeypatch), _GateAuditor(tmp_path, monkeypatch), SL.Draws((SH.DRAWER,))
-    sessions = SH.GateSessions(CC.Gate(GATE, auditor.run), PEER, STEPS, wait=auditor.settle, listens=lambda port: True)
+    sessions = SH.GateSessions(CC.ChallengerGate(GATE, auditor.run), PEER, STEPS, wait=auditor.settle, listens=lambda port: True)
     arm = SH.H1Windows(srv.model, srv.com, ROWS, STEPS, engine=object(), out=tmp_path, unit=_unit(), sessions=sessions)
     arm.drawing(draws)
     assert arm.close(3) is None
