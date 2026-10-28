@@ -191,6 +191,7 @@ def evaluate(knobs: dict, v: dict | None = None, point: str = "t8192") -> dict:
         "prove_parts": {"values": pr["values"]["gpu_s"], "pouw": pr["pouw"]["gpu_s"], "cpu_in_gpu_s": pr["cpu_in_gpu_s"]},
         "commit_gb": r["commit"].get("step_bytes", 0.0) / 1e9, "words_gb": r["pouw"].get("value_bytes", 0.0) / 1e9,
         "retained_gb": r["retained_GB_per_window"], "floor_min": floor_min, "floors": fl, "credited": sorted(fl),
+        "credited_gpu_s": r["credited_gpu_s"], "forced_gpu_s": r["forced_gpu_s"],
         "max_ands": max_ands, "gates": gates, "lower_gib": lower_gib, "lower_gib_today": lower_gib_today,
         "lower_min": lower_min, "draws_values": r["draws"]["values"],
         "draws_compute": pr["pouw"]["draws"] + pr["values"].get("draws_compute", 0.0),

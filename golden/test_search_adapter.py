@@ -6,7 +6,7 @@ GOOD = {"tile": (1, 1), "kchunk": 2, "fuse": "dedupe", "bits": 8, "agg": 1, "noi
         "row": 1024, "drow": 1024, "sampling": "work", "joint": "separate", "stmt": "template", "credit": "k2048",
         "seal": "roots", "host": "fixed", "kernels": "bar", "overlap": "none", "akeys": 64}
 KEYS = {"J", "serve", "prove_ratio", "prove_gpu_s", "verify_cpu_s", "feasible", "reasons", "floor_min", "max_ands",
-        "lower_gib", "lower_min", "draws_values", "draws_compute"}
+        "lower_gib", "lower_min", "draws_values", "draws_compute", "credited_gpu_s", "forced_gpu_s"}
 
 
 @pytest.mark.parametrize("point", ["t8192", "t512"])
@@ -16,6 +16,7 @@ def test_evaluate_returns_the_search_keys(point):
     r = A.evaluate(knobs, {k: i.value for k, i in A.INPUTS.items()}, point)
     assert KEYS <= set(r) and r["feasible"], r["reasons"]
     assert r["J"] == pytest.approx(r["serve"] + r["prove_ratio"])
+    assert 0 < r["credited_gpu_s"] <= r["forced_gpu_s"]
     assert A.evaluate(GOOD, point="t512")["reasons"] == ["k_log"]
 
 
