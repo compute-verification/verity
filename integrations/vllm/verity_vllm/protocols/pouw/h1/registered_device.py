@@ -24,6 +24,7 @@ from __future__ import annotations
 
 import ctypes
 import shutil
+import subprocess
 import warnings
 from collections.abc import Iterator
 from contextlib import contextmanager
@@ -354,7 +355,7 @@ def zy_available() -> bool:
 
     try:
         _device(torch).zy(torch)
-    except Exception as e:  # noqa: BLE001 - a failed build leaves each table hashing its own records, said once
+    except (OSError, RuntimeError, AttributeError, subprocess.SubprocessError) as e:
         warnings.warn(f"H1's call z tables hash apart from their zy@<c> values: zy_commit.cu doesn't build here "
                       f"({type(e).__name__}: {e})", RuntimeWarning, stacklevel=2)
         return False
