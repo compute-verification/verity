@@ -12,7 +12,7 @@
 # helper (`credential_args`). gh is $DIR/ghw/gh, which sets GH_TOKEN the same way for each call before running /data/drive/bin/gh.
 # The token is an installation token (1 h, contents and pull requests write on verity; INF-133) from
 # /data/state/secrets/verity-drive.pem, reused for 45 min (`gh_app_token.sh --cached`): a tick can outlast one token, and the
-# push of next at the end of a 90-min tick failed with an expired one (INF-344, 28 Oct).
+# push of next at the end of a 90-min tick failed with an expired one.
 # r2.env (the store's parent key, which train.sh needs) and relay.env (SLACK_BOT_TOKEN for drive's posts) are sourced.
 # Drive posts as @ci, which `research msg` allows only ci's holder: RESEARCH_AGENT_URL is the caller's, else /data/drive/agent-url
 # (ci's coordinator URL, one line; ci rewrites it at a handover). The nodes are reached as `research run --on` reaches them: the notes clone's

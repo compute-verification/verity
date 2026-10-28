@@ -6,7 +6,7 @@
 #   gh_app_token.sh --cached   the token minted within the last 45 min, else a new one: kept in $GH_APP_CACHE (default
 #                              /dev/shm/verity-drive-token, memory only, root 0600), so a 90-min drive tick never holds one expired
 #   gh_app_token.sh git get    a git credential helper (`credential.helper=!/data/infra/gh_app_token.sh git`): username and the
-#                              --cached token, read when git needs it rather than once a tick (INF-344); store and erase do nothing
+#                              --cached token, read when git needs it rather than once a tick; store and erase do nothing
 #   GH_APP_ID (default verity-drive's 5385601), GH_APP_INSTALLATION (173153984), GH_APP_KEY (/data/state/secrets/verity-drive.pem)
 app=${GH_APP_ID:-5385601} inst=${GH_APP_INSTALLATION:-173153984} key=${GH_APP_KEY:-/data/state/secrets/verity-drive.pem}
 cache=${GH_APP_CACHE:-/dev/shm/verity-drive-token}
