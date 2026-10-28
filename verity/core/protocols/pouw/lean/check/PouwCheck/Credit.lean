@@ -1647,7 +1647,7 @@ def LENGTH_KEYS : List String := ["max_tokens", "stop"]
 def noFixedLength (name : String) : String :=
   s!"no-fixed-length: period {name}'s open commits no fixed length ({LENGTH_FIELD}, \{max_tokens, stop}), so " ++
   "its windows are not of record: a row of record serves each request's public max_tokens whatever it " ++
-  "samples (ignore_eos). Open the period with the row's max_tokens and stop " ++
+  "samples (ignore_eos; Daniel, 19 Oct, ASK-39). Open the period with the row's max_tokens and stop " ++
   STOP_FIXED
 
 def eosKeyedRow (name stop : String) : String :=
