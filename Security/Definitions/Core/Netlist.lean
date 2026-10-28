@@ -1,4 +1,4 @@
-import Mathlib.Data.Nat.Notation
+import Mathlib.Algebra.Group.Nat.Defs
 
 /-!
 # A private circuit's netlist and the universal unit's size classes
@@ -8,6 +8,9 @@ A private circuit's gates, as the universal unit (`verity.ml.private_circuits.un
 (`Netlist.eval`). A size class `(G, N_IN, N_OUT)` (`SizeClass`) fixes the netlists one universal unit runs
 (`Netlist.Fits`), and `Netlist.args` is a netlist as that unit's arguments. The sampling claims' `Universal` states that
 the universal unit of each class computes every netlist of it.
+
+The import is no narrower than `Mathlib.Algebra.Group.Nat.Defs` because there `2 ^ k` on `ℕ` elaborates through
+`Monoid.npow`, the term the claims' records hold for `Netlist.Fits`; with less, it elaborates through `Nat.pow`.
 -/
 
 namespace Verity
