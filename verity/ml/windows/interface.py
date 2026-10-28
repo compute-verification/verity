@@ -233,7 +233,7 @@ def _width(name: str, ty: Any, out: bool = False) -> int:
 
 
 @dataclass(frozen=True)
-class Layout:
+class RowLayout:
     """A template's bit rows: ``rows`` each parameter's ``(name, words)``, ``outs`` each return field's ``(o<j>, words)``,
     each one's element width, and each parameter's outer length (its outermost array's, 1 when it is not an array), which
     a cut divides."""
@@ -265,7 +265,7 @@ def row_name(port: str, j: int, k: int) -> str:
     return port if k == 1 else f"{port}#{j}"
 
 
-def layout(fn: Any) -> Layout:
+def layout(fn: Any) -> RowLayout:
     """``fn``'s bit rows (module docstring); refused when a port is not whole u16 words of one ``PACKED`` width."""
     params, ret = fn.signature()
     rows = tuple((name, _bits(ty) // 16) for name, ty in params)
@@ -274,7 +274,7 @@ def layout(fn: Any) -> Layout:
         raise ValueError(f"{fn.id}: a parameter is named like an output row {[p for p, _ in outs]}")
     widths = tuple(_width(f"{fn.id} {name}", ty) for name, ty in params) + tuple(
         _width(f"{fn.id} {p}", ty, out=True) for (p, _), ty in zip(outs, _fields(ret)))
-    return Layout(rows, outs, widths, tuple(ty.n if isinstance(ty, Array) else 1 for _, ty in params))
+    return RowLayout(rows, outs, widths, tuple(ty.n if isinstance(ty, Array) else 1 for _, ty in params))
 
 
 def unit_rows(fn: Any, cuts: Mapping[str, int] | None = None, seg: Sequence[str] = ()
@@ -623,7 +623,7 @@ class Ingress:
         return {"reader": self.reader, "port": self.port, "at": self.at, "units": self.units, "step": self.step}
 
 
-def check_wires(templates: Mapping[str, tuple[Layout, int]], wires: Sequence[Wire],
+def check_wires(templates: Mapping[str, tuple[RowLayout, int]], wires: Sequence[Wire],
                 cuts: Mapping[str, Mapping[str, int]] | None = None) -> None:
     """Refuse (ValueError) the circuit's cuts and wires as `SampledProofs.Wires.check` does, in its order (``templates``: by
     descriptor id, its layout and units): a cut naming no template's parameter or not dividing its outer length and words
@@ -683,7 +683,7 @@ def _disjoint(rects: Sequence[tuple[str, str, int, int, int, int, Any]], what: s
             live.append(x)
 
 
-def check_inputs(templates: Mapping[str, tuple[Layout, int]], cuts: Mapping[str, Mapping[str, int]], wires: Sequence[Wire],
+def check_inputs(templates: Mapping[str, tuple[RowLayout, int]], cuts: Mapping[str, Mapping[str, int]], wires: Sequence[Wire],
                  registered: Registered | None, ingress: Sequence[Ingress]) -> None:
     """Refuse (ValueError) a registered read, table read, opening or ingress that names no port of its template, reads
     outside its units, its parameter or its table, or whose rows are another's: every input row is wired, registered,
@@ -1006,7 +1006,7 @@ class Circuit:
     and of its own descriptor id; ``external``, the ports (``<descriptor id>/<port>``) that are the system's external I/O;
     ``wires``, the units whose input rows are other units' output rows (`Wire`, `check_wires`); ``boundary``, its I/O
     layout (the network certifier's, ``verity/boundary/v1``), a JSON object carried as given; ``cuts``, by template, the
-    ports read as several rows (`Layout.cut`); ``registered`` and ``ingress``, what fills its other inputs
+    ports read as several rows (`RowLayout.cut`); ``registered`` and ``ingress``, what fills its other inputs
     (`check_inputs`); ``blocks``, its proof, inference and server blocks (`Blocks`)."""
     name: str
     templates: tuple[tuple[Any, int], ...]
@@ -1069,7 +1069,7 @@ class Circuit:
         return tuple(descriptor_id(fn) for fn, _ in self.templates)
 
     @functools.cached_property
-    def _by_id(self) -> dict[str, tuple[Any, Layout, int]]:
+    def _by_id(self) -> dict[str, tuple[Any, RowLayout, int]]:
         """Each template, its layout and its units, by descriptor id, made once: a window looks one up a member."""
         return {tid: (fn, layout(fn), n) for (fn, n), tid in zip(self.templates, self._ids)}
 
@@ -1078,7 +1078,7 @@ class Circuit:
         return list(self._ids)
 
     @property
-    def layouts(self) -> dict[str, tuple[Layout, int]]:
+    def layouts(self) -> dict[str, tuple[RowLayout, int]]:
         """Each template's layout and units, by descriptor id."""
         return {tid: (lay, n) for tid, (_fn, lay, n) in self._by_id.items()}
 
@@ -1351,7 +1351,7 @@ def opened_advice(compiler: Mapping[str, str], doc: Any) -> tuple[bytes, str]:
         raise ValueError(f"an advice opening holds the advice and one salt a row, in hex: {e}") from e
 
 
-def circuit_record(w: CS.Window, name: str, templates: Sequence[tuple[str, int]],
+def circuit_record(w: CS.Binding, name: str, templates: Sequence[tuple[str, int]],
                    statements: Mapping[str, Mapping[str, Any]] | None = None, external: Sequence[str] = (), *,
                    cap: int | None = None, wires: Sequence[Wire] = (),
                    boundary: Mapping[str, Any] | None = None, declared: Mapping[str, Any] | None = None,
@@ -1390,7 +1390,7 @@ def _stated(cap: int, wires: Sequence[Wire], declared: Mapping[str, Any] | None)
     return {"cap": int(cap), "wires": [x.doc() for x in wires], **json.loads(json.dumps(dict(declared or {})))}
 
 
-def _listed(w: CS.Window, wires: Sequence[Wire]) -> dict[str, Any]:
+def _listed(w: CS.Binding, wires: Sequence[Wire]) -> dict[str, Any]:
     if wires:
         raise ValueError("a record that lists its members lists their wires with them; wires are stated with a cap")
     return {"members": [{"template": m.template, "name": m.name, "n": m.n, "base": m.base, "rows": [list(r) for r in m.rows],
@@ -1420,7 +1420,7 @@ def descriptor_record(circuit: Circuit, cap: int) -> dict[str, Any]:
     return circuit_of(json.loads(circuit_bytes(doc)))
 
 
-def templates_of(w: CS.Window) -> list[tuple[str, int]]:
+def templates_of(w: CS.Binding) -> list[tuple[str, int]]:
     """``w``'s templates in its program's order, each ``(descriptor id, units)``: `circuit_record`'s ``templates``."""
     return [(t, n) for _k, t, _lo, n in CS.template_partition(w.program, w.query).ranges]
 
@@ -1524,7 +1524,7 @@ def input_count(doc: Mapping[str, Any], resolve: Callable[[str], Any] = resolve,
             "free": inputs - wired - registered - ingress_bits}
 
 
-def registered_reads(doc: Mapping[str, Any], w: CS.Window, pins: Mapping[str, Mapping[str, Any]], *,
+def registered_reads(doc: Mapping[str, Any], w: CS.Binding, pins: Mapping[str, Mapping[str, Any]], *,
                      registered: Any) -> dict[str, dict[str, Any]]:
     """The Lean verifier's ``--registered`` file of each member reading a registered parameter (``registered-reads/v1``, in
     the format of ``registered``, core's ``one_stage.registered``, by member key), from the stated record ``doc`` and its
@@ -1569,7 +1569,7 @@ def _frozen(x: Any) -> Any:
     return tuple(_frozen(v) for v in x) if isinstance(x, list) else x
 
 
-def window_of_record(doc: Mapping[str, Any], law: Mapping[str, Any], resolve: Callable[[str], Any]) -> CS.Window:
+def window_of_record(doc: Mapping[str, Any], law: Mapping[str, Any], resolve: Callable[[str], Any]) -> CS.Binding:
     """The verifier's window from ``circuit.json``'s document under its own ``law``, each template's Definition by
     ``resolve`` (descriptor id -> Definition, the verifier's own catalog), its members the listed ones or, where the record
     states them, the ones its templates, ``cap``, wires and server blocks make (`members`); refused unless the population
@@ -1603,14 +1603,14 @@ def window_of_record(doc: Mapping[str, Any], law: Mapping[str, Any], resolve: Ca
                    for m in doc["members"])
     tables = tuple(CS.RowTable(t["segment"], t["name"], t["template"], t["words"], _frozen(t["keys"]),
                                tuple((k, _frozen(v)) for k, v in t["label"])) for t in doc["row_tables"])
-    w = CS.Window(program, query, dict(law), doc["run"], ms, tables, doc["context"], doc["work_table"])
+    w = CS.Binding(program, query, dict(law), doc["run"], ms, tables, doc["context"], doc["work_table"])
     got = {"query": dict(query), "program": w.partition["program"], "partition": w.partition_digest}
     if bad := sorted(k for k, v in got.items() if v != doc[k]):
         raise ValueError(f"the circuit record's {bad} are not the ones its templates make: {got}")
     return w
 
 
-def of_records(window_dir: str | Path, law: Mapping[str, Any], resolve: Callable[[str], Any]) -> tuple[CS.Window, dict[str, Any]]:
+def of_records(window_dir: str | Path, law: Mapping[str, Any], resolve: Callable[[str], Any]) -> tuple[CS.Binding, dict[str, Any]]:
     """The verifier's window from a window's records alone (`window_of_record` on its ``circuit.json``), refused unless the
     record is the one its registration binds (the window's ``circuit``) and names the registration's program, partition
     and run; -> (the window, the record)."""
@@ -1654,7 +1654,7 @@ class Window:
     registered: Mapping[str, Any] | None = None
     work_table: Mapping[str, Any] | None = None
     forms: tuple[str, ...] = ()
-    window: CS.Window = field(init=False)
+    window: CS.Binding = field(init=False)
     _recorded: dict[str, list[_Recorded]] = field(init=False, default_factory=dict)
     _entries: dict[str, dict[str, Any]] = field(init=False, default_factory=dict)
 
@@ -1673,7 +1673,7 @@ class Window:
                 raise ValueError(f"{r.param}: committed as {v.leaves} rows of {v.words} words, not the {params[r.param]} "
                                  f"leaves {r.port}'s rows of {words} words read")
         program, query = self.circuit.program()
-        self.window = CS.Window(program, query, dict(self.law), self.run, members(self.circuit, self.cap, (program, query)),
+        self.window = CS.Binding(program, query, dict(self.law), self.run, members(self.circuit, self.cap, (program, query)),
                                 work_table=None if self.work_table is None else dict(self.work_table))
         if self.advice is not None:
             self.advice = advice_binding(self.advice["compiler"], self.advice["advice"]["root"], self.advice["advice"]["bits"])
@@ -1794,7 +1794,7 @@ class Window:
             for g, (p, w) in enumerate(lay.rows):
                 k = int(kv.get(p, 1))
                 for j in range(k):
-                    # row j of a port cut k ways is its outer elements [j·n/k, (j+1)·n/k): its words' j-th k-th (`Layout.cut`)
+                    # row j of a port cut k ways is its outer elements [j·n/k, (j+1)·n/k): its words' j-th k-th (`RowLayout.cut`)
                     d["rows"][row_name(p, j, k)] = (None if ports[g] is None else ports[g][lo:lo + m.n] if k == 1 else
                                                     np.ascontiguousarray(ports[g][lo:lo + m.n, j * w // k:(j + 1) * w // k]))
             if reads:
