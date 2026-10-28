@@ -46,8 +46,10 @@ from typing import Any
 
 from verity import settings
 from verity.settings import WHERE, Setting, paths
-from verity.settings import (DEBUG, REDACTED, ROLES, SECRET_WORDS, VALUE, DebugOnRecord, UnknownSetting,  # noqa: F401  (this module's names)
-                             choice, csv, direct_reads, flag, ints, not_zero, one, present, stripped, words)
+from verity.settings import (DEBUG as DEBUG, REDACTED as REDACTED, ROLES as ROLES, SECRET_WORDS as SECRET_WORDS, VALUE as VALUE,
+                             DebugOnRecord as DebugOnRecord, UnknownSetting as UnknownSetting, choice as choice, csv as csv,
+                             direct_reads as direct_reads, flag as flag, ints as ints, not_zero as not_zero, one as one,
+                             present as present, stripped as stripped, words as words)
 
 RECORD_SCHEMA = "verity-config/settings/v1"
 #: a distribution's registry, beside its pyproject.toml

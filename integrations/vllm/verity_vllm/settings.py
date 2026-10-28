@@ -25,9 +25,9 @@ from __future__ import annotations
 from collections.abc import Mapping
 from typing import Any
 
-from verity.settings import (DEBUG, REDACTED, ROLES, SECRET_WORDS, VALUE, WHERE, Registry, Setting,  # noqa: F401  (this module's names)
-                             UnknownSetting, csv, flag, int_or_zero, lowered, not_off, not_zero, number, one, paths, present,
-                             stripped, yes)
+from verity.settings import (DEBUG, VALUE, WHERE, Registry, Setting, csv, flag, int_or_zero, lowered, not_off, not_zero, number,
+                             one, paths, present, stripped, yes)
+from verity.settings import REDACTED as REDACTED, ROLES as ROLES, SECRET_WORDS as SECRET_WORDS, UnknownSetting as UnknownSetting
 
 RECORD_SCHEMA = "verity-vllm/settings/v1"
 
