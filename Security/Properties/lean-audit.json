@@ -373,10 +373,12 @@
   "VStar.Compose",
   "VStar.Holo",
   "VStar.InnerRepCheck",
+  "VStar.Json",
   "VStar.Parts",
   "VStar.PyJson",
   "VStar.RecOpen",
   "VStar.Residuals",
+  "VStar.Sha",
   "VStar.Stage",
   "VStar.Stream",
   "VStar.Unit"
