@@ -1,6 +1,6 @@
 """The dependency rules (AGENTS.md "Map and commands") as import-boundary checks over ``verity/``, and the one over ``infra/``.
 
-    ml.circuits <- ml.commitments -> ml.crypto;  ml.randomness, ml.crypto and core.claims import no unit;  the
+    ml.circuits <- ml.commitments -> ml.crypto;  ml.randomness, ml.crypto, core.claims and hardware import no unit;  the
     catalog (ml.circuits.ops, .silicon, .targets) and the kernels (ml.kernels) build on ml.circuits, and the served
     workloads' Definitions (ml.definitions) on the catalog and the kernels;
     ml.circuits <- core.protocols.profile;  each protocol imports ml, the profile and the protocols it names in
@@ -48,6 +48,8 @@ ALLOWED = {
     "ml.circuits": set(),
     "ml.randomness": set(),
     "ml.crypto": set(),
+    # the card files, one TOML a SKU, and their loader: the one source of each card's numbers
+    "hardware": set(),
     "ml.commitments": {"ml.circuits", "ml.crypto"},
     # the catalog and the kernels, distributions of their own before the platform layout
     "ml.circuits.silicon": {"ml.circuits"},
@@ -118,7 +120,7 @@ DEPENDENCIES = {"numpy"}
 #: which holds it to the wire's Python reference through ``verity_difftest``.
 SEPARATE = ("ml/flock", "core/difftest", "core/protocols/pous/check")
 #: Source subtrees that must stay stdlib-only, the scalar references, and within them what may use numpy.
-NUMPY_FREE = ("ml/circuits", "ml/randomness", "core/claims")
+NUMPY_FREE = ("ml/circuits", "ml/randomness", "core/claims", "hardware")
 NUMPY_USERS = ("ml/circuits/evaluation", "ml/circuits/boolean/forms.py", "ml/circuits/ops")
 #: ml builds on no verifier: core's frozen edges into ml (``CORE_ML_EDGES``) never run the other way.  The files of
 #: ``verity/ml/`` that import core anyway
