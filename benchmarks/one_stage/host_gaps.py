@@ -1,5 +1,5 @@
 """Where a served_util run's steady steps leave the GPU idle: per step, its kernels' busy time and idle gaps, what the serving
-thread (the one with the most kernel launches) was in during them, by CUDA call and, with PHASES=1's ranges
+thread (the engine loop's, `serving_thread`) was in during them, by CUDA call and, with PHASES=1's ranges
 (`phase_nvtx.py`), by its innermost range, and the kernels before and after each gap of at least ``--min-gap-us``.
 
     python host_gaps.py --sqlite prof.sqlite --trace advice_trace.jsonl --timings main.timings.json --T 8192
@@ -14,6 +14,24 @@ from collections import Counter, defaultdict
 from pathlib import Path
 
 import served_util as su
+
+
+#: a kernel only the forward launches: its launching thread is the serving thread when no ranges name it
+FORWARD_KERNEL = "exactlin_scaled_mm%"
+
+
+def serving_thread(db: sqlite3.Connection, lo: int, hi: int) -> tuple[int, str]:
+    """The engine loop's thread: the one with the most NVTX ranges, else the one that launched the most `FORWARD_KERNEL`s."""
+    if su._has(db, "NVTX_EVENTS"):
+        row = db.execute("SELECT globalTid, COUNT(*) FROM NVTX_EVENTS WHERE eventType = 59 AND start < ? AND end > ? "
+                         "GROUP BY 1 ORDER BY 2 DESC LIMIT 1", (hi, lo)).fetchone()
+        if row:
+            return int(row[0]), f"{row[1]} NVTX ranges"
+    q = ("SELECT r.globalTid, COUNT(*) FROM CUPTI_ACTIVITY_KIND_KERNEL k JOIN StringIds s ON s.id = k.shortName "
+         "JOIN CUPTI_ACTIVITY_KIND_RUNTIME r ON r.correlationId = k.correlationId "
+         "WHERE s.value LIKE ? AND k.start < ? AND k.end > ? GROUP BY 1 ORDER BY 2 DESC LIMIT 1")
+    tid, c = db.execute(q, (FORWARD_KERNEL, hi, lo)).fetchone()
+    return int(tid), f"{c} {FORWARD_KERNEL.rstrip('%')} launches"
 
 
 def ranges(db: sqlite3.Connection, tid: int, lo: int, hi: int) -> list[tuple[int, int, str]]:
@@ -93,12 +111,12 @@ def main() -> None:
             for x, y, nm, tid in db.execute(f"SELECT start, end, nameId, globalTid FROM {table} WHERE end > ? AND start < ?", (lo, hi)):
                 calls[int(tid)].append((int(x), int(y), str(names.get(nm, nm))))
     launches = Counter({tid: sum(1 for _, _, nm in cs if nm.startswith("cudaLaunchKernel")) for tid, cs in calls.items()})
-    serving = launches.most_common(1)[0][0]
+    serving, why = serving_thread(db, lo, hi)
     sc = sorted(calls[serving])
     starts = [x for x, _, _ in sc]
     rs = ranges(db, serving, lo, hi)
-    print(f"HOSTGAP {n} steady steps (median wall {med / 1e6:.2f} ms), serving tid {serving} ({launches[serving]} launches), "
-          f"{len(rs)} NVTX ranges on it")
+    print(f"HOSTGAP {n} steady steps (median wall {med / 1e6:.2f} ms), serving tid {serving} ({why}; {launches[serving]} "
+          f"launches; the others {[c for t, c in launches.most_common(4) if t != serving]}), {len(rs)} NVTX ranges on it")
     per = defaultdict(list)
     by_call, pairs = Counter(), defaultdict(lambda: [0, 0, 0.0])
     wall_by, idle_by, gap_by, incl = Counter(), Counter(), Counter(), Counter()
