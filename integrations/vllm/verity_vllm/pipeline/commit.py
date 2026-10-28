@@ -74,7 +74,7 @@ import torch  # noqa: E402
 from verity_vllm.engine import arrivals as AR, served as SV, vllm_adapter as va  # noqa: E402
 from verity_vllm.pipeline.timeline import Timeline  # noqa: E402  (torch-free; VERITY_TIMELINE -> append-only JSONL, else a no-op sink)
 from verity_vllm.pipeline.commit_attach import attach_of_record, classes_of_record  # noqa: E402
-from verity_vllm.commit import challenge as CH, opened as OV, scheme as SCH, step_rows as SR  # noqa: E402
+from verity_vllm.commit import challenge as CH, opened as OV, step_rows as SR  # noqa: E402
 from verity_vllm.pipeline import boundary_plan as BP, c2_replay as C2, commit_plan as CP, gpu_lease as GL, group_reuse as GR, replay_bundle as RB  # noqa: E402
 from verity_vllm.pipeline.c2_replay import rss_kb  # noqa: E402
 from verity_vllm.pipeline.report import bootstrap_ci  # noqa: E402
@@ -1323,11 +1323,11 @@ def main(args: Options, argv: list[str] | None = None) -> None:
             if not hasattr(com, "_nc") or not hasattr(com, "attach_source"):
                 raise SystemExit(f"--compiled-taps kernels needs the native_collect committer (got {kind})")
             compiled_kernels.attach(com, required_manifest)
-            com.program_digest = SCH.program_field(required_manifest["program_digest"])   # P_compiled's digest binds the roots (manifest = P_compiled x query)
+            com.program_digest = SR.program_field(required_manifest["program_digest"])   # P_compiled's digest binds the roots (manifest = P_compiled x query)
             print(f"[delta] compiled kernel source attached -> committer {com.name}; program digest (P_compiled) {required_manifest['program_digest'][:16]}", flush=True)
         if served is not None:
             served.attach(com)                               # the committer wraps nothing: the source acquires every value of the Build
-            com.program_digest = SCH.program_field(required_manifest["program_digest"])   # the served Build's digest binds the roots
+            com.program_digest = SR.program_field(required_manifest["program_digest"])   # the served Build's digest binds the roots
         if compiled_src is not None:
             if not hasattr(com, "_nc") or not hasattr(com, "attach_source"):
                 raise SystemExit(f"--compiled-taps on needs the native_collect committer (got {kind})")

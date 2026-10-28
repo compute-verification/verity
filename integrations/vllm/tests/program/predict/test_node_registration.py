@@ -15,9 +15,8 @@ import pytest
 from verity.ml.circuits.codec import canonical_json
 from verity.ml.commitments import hm96
 from verity_vllm.commit import registered_rows as RR
-from verity_vllm.commit import scheme
+from verity_vllm.commit import step_rows
 from verity_vllm.config import UsageError
-from verity_vllm.pipeline import cpu_replay as CPU
 from verity_vllm.pipeline import registration_log as RL
 from verity_vllm.pipeline import replay_bundle as RB
 from verity_vllm.program.predict import aot as A
@@ -32,7 +31,7 @@ _spec = importlib.util.spec_from_file_location(
 REF = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(REF)
 
-WORLD, CHUNK, PREFIX = 2, 16, "inner.model."
+WORLD, PREFIX, GEO, WK = 2, "inner.model.", bytes(32), bytes(range(64))
 SHAPE = {"LP": 4, "T": 2}
 PHI = _phi(TINY, tp={"world": WORLD, "rank": 0})
 NODE = build_node_program(PHI, "request", **SHAPE)
@@ -88,14 +87,13 @@ def commit(tmp_path, monkeypatch):
         for i, (name, a) in enumerate(served[r].items() if r == 0 else reversed(served[r].items())):
             raw = np.ascontiguousarray(a).reshape(-1).view(np.uint8)
             names.append([name, DTYPE[a.dtype.itemsize * 8][0], list(a.shape), int(raw.size)])
-            troots.append(CPU.tensor_root(raw, CHUNK))
+            troots.append(step_rows.tensor_root(GEO, i, names[-1], raw, WK))
             if name not in CKPT:
                 extra[name] = i
                 raw.tofile(bdir / "weights" / "extra" / f"{i}.bin")
-        geo = bytes(32)
-        roots[r] = scheme.weights_root(geo, scheme.names_digest(names), troots).hex()
-        (bdir / "weights" / "tree.json").write_text(json.dumps({"names": names, "tensor_roots": [x.hex() for x in troots], "root": roots[r],
-                                                                "chunk": CHUNK, "geo_digest": geo.hex(), "extra": extra}))
+        tree = step_rows.weights_tree(GEO, names, step_rows.names_digest(names), troots, WK) | {"extra": extra}
+        roots[r] = tree["root"]
+        (bdir / "weights" / "tree.json").write_text(json.dumps(tree))
         (bdir / "context.json").write_text(json.dumps({"pair": 0, "tp": {"world": WORLD, "rank": r}, "replay": cfg}))
         bundles.append({"pair": 0, "rank": r, "manifest_sha256": _seal(bdir)})
     (out / "replay_deferred.json").write_text(json.dumps({"world": WORLD, "bundles": bundles}))
@@ -185,7 +183,7 @@ def _retree(d, rank, fn):
     p = RB.path(d["out"], 0, rank=rank) / "weights" / "tree.json"
     tree = json.loads(p.read_text())
     fn(tree["names"])
-    tree["root"] = scheme.weights_root(bytes(32), scheme.names_digest(tree["names"]), [bytes.fromhex(x) for x in tree["tensor_roots"]]).hex()
+    tree["root"] = step_rows.weights_root(GEO, step_rows.names_digest(tree["names"]), [bytes.fromhex(x) for x in tree["tensor_roots"]]).hex()
     p.write_text(json.dumps(tree))
     _reseal(d, rank)
     _runs(d, lambda c: c["per_rank"][str(rank)]["weight_registration"].update(root=tree["root"]))

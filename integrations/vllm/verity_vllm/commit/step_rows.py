@@ -36,6 +36,7 @@ private bundle: a published slim keep carries ``Ks_t`` of the tensors its replay
 from __future__ import annotations
 
 import hashlib
+import json
 from collections.abc import Sequence
 
 from verity.ml.commitments import hm96
@@ -47,7 +48,8 @@ from verity.ml.commitments.merkle import CommitmentDomain, merkle_depth, tree_le
 from verity.ml.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2, row_leaf, sha512_row_v2_digest, sha512_row_v2_prefix
 
 __all__ = ["DOMAIN_TAG", "INST", "KEY", "KEY_BYTES", "NAME", "OWNER", "ROOT_BYTES", "ROW_BYTES", "SALT_BYTES", "SCHEMA", "WEIGHTS_TAG", "binding",
-           "domain", "fold_path", "fold_range", "hiding_leaf", "keyed_tensor_root", "leaf", "levels", "path", "range_shape", "row_prefix", "run_root", "salt",
+           "domain", "fold_path", "fold_range", "hiding_leaf", "keyed_tensor_root", "leaf", "levels", "names_digest", "path", "program_field",
+           "range_shape", "row_prefix", "run_root", "salt",
            "step_root", "t_nibbles", "t_table", "tensor_hs", "tensor_key", "tensor_root", "weights_domain", "weights_root", "weights_tree"]
 
 NAME = "rows-sha512"
@@ -239,3 +241,17 @@ def t_nibbles(key: bytes = KEY) -> bytes:
                 src = 256 * (16 * u if hi else u) + 16 * c
                 out[4096 * hi + 256 * c + 16 * u:4096 * hi + 256 * c + 16 * u + 16] = t[src:src + 16]
     return bytes(out)
+
+
+def program_field(program_digest: str) -> bytes:
+    """The 32-byte ``program`` field the roots bind for a Program digest (hex): its first 32 bytes, so SHA-512 truncated to
+    256 bits for a Program digest (``codec.program_digest``), and the whole digest for a 32-byte one."""
+    d = bytes.fromhex(program_digest)
+    if len(d) < 32:
+        raise ValueError(f"a Program digest has at least 32 bytes, not {len(d)}")
+    return d[:32]
+
+
+def names_digest(names: Sequence[Sequence]) -> bytes:
+    """The weights root's names digest: SHA-256 of the compact JSON of ``[name, dtype, shape, nbytes]`` per tensor, in order."""
+    return hashlib.sha256(json.dumps(names, separators=(",", ":")).encode()).digest()

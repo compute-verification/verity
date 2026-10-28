@@ -19,7 +19,7 @@ from pathlib import Path
 import numpy as np
 
 from verity_vllm.check.replay.index import ProgramIndex
-from verity_vllm.commit import scheme, step_rows
+from verity_vllm.commit import step_rows
 from verity_vllm.pipeline import cpu_replay as CPU
 from verity_vllm.pipeline import replay_bundle as RB
 
@@ -75,7 +75,7 @@ def commit(root: Path, *, seed: int = 17, silu: str | None = None, I: int | None
         roots.append(step_rows.tensor_root(geo, i, names[-1], raw, wk))
         (p / "weights" / "extra" / f"{i}.bin").write_bytes(raw.tobytes())
         extra[name] = i
-    tree = step_rows.weights_tree(geo, names, scheme.names_digest(names), roots, wk)
+    tree = step_rows.weights_tree(geo, names, step_rows.names_digest(names), roots, wk)
     wroot = tree["root"]
     (p / "weights" / "tree.json").write_text(json.dumps(tree | {"extra": extra}))
     (out / "binding_map_p1.json").write_text(json.dumps(bmap))
