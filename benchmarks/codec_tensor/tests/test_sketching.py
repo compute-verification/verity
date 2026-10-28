@@ -10,8 +10,8 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-import sketch_receipt as SR  # noqa: E402
-import sketching as SK  # noqa: E402
+import sketch_receipt as SR
+import sketching as SK
 
 
 def _case(rows: int, n: int, k: int, seed: int = 1) -> tuple[np.ndarray, np.ndarray]:
