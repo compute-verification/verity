@@ -645,24 +645,23 @@ def test_attach_builds_a_rows_sha512_commit_whose_port_is_the_steps_one_copy_of_
 
 
 def test_h1s_commit_refuses_a_sha256_run_root(monkeypatch):
-    """vllm-v1's committer (SHA-256 rows, 32-byte roots) is no Commit of H1's. `h1_commit.attach` refuses one built under
-    it, closed before anything is put on the engine; and `pouw_h1_commit.committed`, what a run records of the Commit
-    (the GPU harness's ``committer`` and each rank's release), refuses vllm-v1's real 32-byte run root, and a
+    """A committer of another scheme (an old record's vllm-v1: SHA-256 rows, 32-byte roots) is no Commit of H1's.
+    `h1_commit.attach` refuses one, closed before anything is put on the engine; and `pouw_h1_commit.committed`, what a run
+    records of the Commit (the GPU harness's ``committer`` and each rank's release), refuses its 32-byte run root, and a
     rows-sha512 committer's root of any length but 64. The offline core's rows-sha512 run root passes."""
     from tests.check import opened as O
-    steps = {0: [("step.input/ids", bytes(range(64)))]}
-    sha512 = O.commit_steps(steps, commit_scheme=CT.SCHEME, run_id="h1-rows")
-    sha256 = O.commit_steps(steps, run_id="h1-v1")
+    sha512 = O.commit_steps({0: [("step.input/ids", bytes(range(64)))]}, run_id="h1-rows")
+    old = O.committer(run_id="h1-v1")
+    old.commit_scheme = "vllm-v1"
     assert (sha512[0].commit_scheme, len(sha512[1].run_root)) == (CT.SCHEME, CT.ROOT_BYTES)
-    assert (sha256[0].commit_scheme, len(sha256[1].run_root)) == ("vllm-v1", 32)
     assert CT.committed(*sha512) == {"run_root": sha512[1].run_root.hex(), "commit_scheme": CT.SCHEME,
                                      "name": sha512[0].name}
-    with pytest.raises(ValueError, match=f"committed under vllm-v1 to a 32-byte run root, not under {CT.SCHEME} to a 64-byte"):
-        CT.committed(*sha256)
     short = SimpleNamespace(run_root=bytes(32), extra={})
+    with pytest.raises(ValueError, match=f"committed under vllm-v1 to a 32-byte run root, not under {CT.SCHEME} to a 64-byte"):
+        CT.committed(old, short)
     with pytest.raises(ValueError, match=f"committed under {CT.SCHEME} to a 32-byte run root"):
         CT.committed(Committer(), short)
-    old, model = sha256[0], Model()
+    model = Model()
     closed = []
     monkeypatch.setattr(old, "close", lambda: closed.append(True))
     monkeypatch.setattr(HC, "committer", lambda engine, run_id: old)

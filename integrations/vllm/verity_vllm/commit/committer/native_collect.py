@@ -197,16 +197,13 @@ class NativeCollectCommitter(NativeHostCommitter):
         if not self.retain_levels and not self.windowed:
             raise ValueError("retain_levels=False is implemented on the windowed path only (--window-mb > 0)")
         # the commitment scheme, rows-sha512 (`step_rows`: every step_rows.ROW_BYTES (4 KiB) chunk an hm96-sha512 hiding leaf in a
-        # frame-v3-sha512 tree, 64-byte roots), the windowed worker's.  Each step's salt key is fresh (`row_keys`); a replay that must
-        # reproduce a run's trees takes that run's keys (`replay_row_keys`, set before the run and dropped by its finalize)
+        # frame-v3-sha512 tree, 64-byte roots), the windowed worker's; a row is a chunk of the step's stream (`chunk`): the layout's
+        # leaves, the windows' and the tree's.  Each step's salt key is fresh (`row_keys`); a replay that must reproduce a run's trees
+        # takes that run's keys (`replay_row_keys`, set before the run and dropped by its finalize)
         if (commit_scheme or step_rows.NAME) != step_rows.NAME:
             raise ValueError(f"unknown commit scheme {commit_scheme!r}: the collector commits {step_rows.NAME}")
-        if not self.windowed or self.hiding is not None:
-            raise ValueError(f"{step_rows.NAME} is implemented on the windowed worker (native worker + gather + --window-mb > 0) under "
-                             "its own hiding leaves only")
-        self.commit_scheme, self.rows = step_rows.NAME, True
-        self.chunk = step_rows.ROW_BYTES          # a row is a chunk of the step's stream: the layout's leaves, the windows' and the tree's
-        self.row_keys: dict[int, bytes] = {}
+        if not self.windowed:
+            raise ValueError(f"{step_rows.NAME} is implemented on the windowed worker (native worker + gather + --window-mb > 0)")
         self.replay_row_keys: dict[int, bytes] | None = None
         self._row_tn: Any | None = None
         self._row_consts = (step_rows.row_prefix(8 * step_rows.ROW_BYTES), step_rows.INST.salt_prefix,

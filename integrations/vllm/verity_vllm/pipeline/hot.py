@@ -398,7 +398,7 @@ def cold_run(argv: list[str], reason: str, log=print) -> int:
 # committer attributes that own device / pinned memory (native_collect window ring + scratch, the FA2/FA3 tap buffers of the hidden
 # sources, the staging arena, the pinned pool, the retained device store).  A cold process frees them at exit; the hot worker must drop them
 # explicitly after `close()` so the caching allocator can hand the memory to the next job (else +2.3 GiB stays allocated per hot job).
-DEVICE_ATTRS = ("win_tensors", "win_scratch", "arena", "pool", "_gpu_blocks", "_gpu_levels", "_levels", "_done", "_layouts", "_streams",
+DEVICE_ATTRS = ("win_tensors", "win_scratch", "arena", "pool", "_gpu_blocks", "_gpu_levels", "_done", "_layouts",
                 "_metas_cache", "_wrapped", "_handles", "_cur", "sources", "_nc", "_hi")
 
 

@@ -14,18 +14,17 @@ Construction (one-stage, binding, position-identified):
                 LogitsProcessor (logits), Sampler (sampled token ids)); tensors are taken as raw bytes (bf16/fp32/int) — no conversion
   movement      async D2H (`copy_(non_blocking=True)` on the compute stream, so the copy is stream-ordered right after the producer)
                 into pinned host blocks; one CUDA event per step marks "all of this step's bytes are on the host"
-  hashing       a worker thread waits on the event, then hashes CHUNK-byte position-identified leaves
-                leaf_i = SHA-256("verity/pos-leaf/v0" || u64 nbytes || bytes)   (C0 `pos_leaf`; the frame binds the length)
-                in tree order (tensor 0 chunks, tensor 1 chunks, …) with a thread pool (hashlib releases the GIL above 2 KB), then
-                folds with the production pairing/lift rule (`scheme.fold_levels`, same shape rule as `MerkleTree`)
-  root          step root R_s = SHA-256(ROOT_TAG || program_digest || ctx_digest(run, step) || geo_digest(model) || layout_digest(step)
-                || u64 N_s || merkle_root)   (`scheme.step_root`); the layout digest pins (name, dtype, shape, nbytes, chunk)
-                of every tensor in order, so a rank names exactly one (tensor, byte range); run root = fold(R_0 … R_{S-1}) bound with S
-  openings      (step, rank, value, path) with the path read from the retained levels; verified with the production core
-                (`verity_vllm.commit.merkle.path_shape` / `fold_path`) against the ORIGINAL R_s and the run root
+  hashing       a worker thread waits on the event, packs the step's tensors into one stream (4-byte aligned, in acquisition order)
+                and commits it under rows-sha512 (`step_rows`): every `step_rows.ROW_BYTES` row of the stream an hm96-sha512 hiding
+                leaf, salted from the step's fresh key (`row_keys`), in a frame-v3-sha512 tree
+  root          step root R_s = `step_rows.step_root`(program_digest, ctx_digest(run, step), geo_digest(model), layout_digest(step),
+                N_s, tree_root); the layout digest pins (name, dtype, shape, nbytes, chunk, stream offset) of every tensor in order,
+                so a row names exactly the (tensor, byte range)s it holds; run root = `step_rows.run_root` over R_0 … R_{S-1}
+  openings      (step, row, value, salt, path) with the path read from the retained levels; verified (`verify`) against the
+                ORIGINAL R_s and the run root
 
-What is retained after the run (persistent): the step roots, the layouts, the tree levels (32 B per leaf ≈ 0.8 % of the bytes at
-4 KB leaves) and — for opening generation in this benchmark — the pinned host copies of the values (a prover must keep or
+What is retained after the run (persistent): the step roots, the layouts, the tree levels (64 B a node, about two nodes a row: 3 %
+of the bytes at 4 KiB rows) and — for opening generation — the retained copy of the values (`retain`; a prover must keep or
 regenerate the values to answer a challenge; the bytes are reported as `values_retained_bytes`, not hidden).
 """
 
@@ -41,7 +40,6 @@ import gc
 import os
 import threading
 import time
-from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -51,7 +49,7 @@ except ImportError:                      # the offline core (tests, CPU cross-ch
     torch = None  # type: ignore[assignment]
 
 from verity_vllm import settings
-from verity_vllm.commit import leaf_rule, scheme, step_rows
+from verity_vllm.commit import step_rows
 from verity_vllm.commit.committer.input_classes import TOKEN_IDS_INPUT, weights_class
 from verity_vllm.commit.committer.pinned_pool import PINNED_EXACT, PinnedPool
 from verity_vllm.commit.committer import weights_rows
@@ -64,7 +62,6 @@ from verity_vllm.engine.profiles import layer_classes as LC
 from verity_vllm.pipeline.spans import Spans
 
 GPU_CHUNK_BYTES = 256
-DEFAULT_CHUNK = 4096
 
 # the construction-time selection: TP1 Commits replace it with the acquisition plan's (apply_plan_to_committer; compiled rows:
 # CompiledGraphSource.wrap_model); TP rank committers (pipeline/tp/rank_worker.py) have no plan yet and keep it
@@ -721,27 +718,29 @@ def memtrace(where: str, step: int | None = None) -> None:
           f"device-used {(total - free) / 2**30:6.2f} GiB", flush=True)
 
 
-class NativeHostCommitter(WindowViews, NativeRangeOpenings, leaf_rule.LeafSchemeRule):
+class NativeHostCommitter(WindowViews, NativeRangeOpenings):
     name = "native_host"
 
-    def __init__(self, engine: Any, *, program_digest: bytes | None = None, run_id: str = "run", chunk: int = DEFAULT_CHUNK,
+    def __init__(self, engine: Any, *, program_digest: bytes | None = None, run_id: str = "run",
                  hash_threads: int = 2, retain_values: bool = True, acquire_classes: set[str] | None = None, staging: str = "arena",
                  arena_bytes: int = 512 << 20, batch_copy: bool = False, fast_copy: bool = False, regen_row4: bool = False, gpu_tree: bool = False,
-                 geo_digest: bytes | None = None, leaf_scheme: str = scheme.NAME, populate_threads: int | None = None,
-                 commit_scheme: str | None = None) -> None:
-        """`engine=None` builds the OFFLINE core (hashing, roots, openings, verification; no hooks, no CUDA) for the security tests.  `leaf_scheme`: vllm-v1 position leaves (default) or hm96-sha256/v1 hiding leaves over them (`leaf_rule.LeafSchemeRule`).  `populate_threads`: the pinned pool's (`PinnedPool`).
-        `commit_scheme` rows-sha512: the offline core's GPU-tree steps (`commit_block_offline`) under `step_rows`, as the windowed collector
-        commits a served run's (`NativeCollectCommitter(commit_scheme=)`, which sets its own)."""
+                 geo_digest: bytes | None = None, populate_threads: int | None = None, commit_scheme: str | None = None) -> None:
+        """`engine=None` builds the OFFLINE core (hashing, roots, openings, verification; no hooks, no CUDA) for the security tests.  `populate_threads`: the pinned pool's (`PinnedPool`).
+        Every step is committed under rows-sha512 (`step_rows`), the one `commit_scheme`: the offline core's steps (`commit_offline`,
+        `commit_block_offline`) as the windowed collector commits a served run's (`NativeCollectCommitter`)."""
+        if (commit_scheme or step_rows.NAME) != step_rows.NAME:
+            raise ValueError(f"unknown commit scheme {commit_scheme!r}: the committer commits {step_rows.NAME}")
         self.engine = engine
         self.runner = getattr(engine, "runner", None)
         self.model = getattr(engine, "model", None)
-        self.chunk = int(chunk)
+        self.commit_scheme, self.rows, self.row_keys = step_rows.NAME, True, {}
+        self.chunk = step_rows.ROW_BYTES          # a row is a chunk of the step's packed stream
         self.hash_threads = int(hash_threads)
         self.retain_values = retain_values
         self.run_id = run_id
         self.program_digest = program_digest or hashlib.sha256(b"cmt-integ/no-program-digest/" + run_id.encode()).digest()
         self.acquire_classes = acquire_classes or ACQUIRE_CLASSES
-        self.spans = Spans(scheme.NAME)
+        self.spans = Spans(step_rows.NAME)
         self.gc_pauses = GcPauses()
         self.x03_expected = 0
         self.x03_committed = 0
@@ -758,16 +757,12 @@ class NativeHostCommitter(WindowViews, NativeRangeOpenings, leaf_rule.LeafScheme
         self._init_views()
         self._q: queue.Queue = queue.Queue()
         self._done: dict[int, StepCommitment] = {}
-        self._levels: dict[int, list[list[bytes]]] = {}
         self._layouts: dict[int, list[TensorMeta]] = {}
-        self._streams: dict[int, memoryview] = {}
         self.sources: list[Any] = []
         self._worker: threading.Thread | None = None
         # optional CPU pinning experiment (env VERITY_PIN=1): serving thread -> one core, worker + hash threads -> other cores
         self.pin = settings.VERITY_PIN and hasattr(os, "sched_setaffinity")
         self._cores = sorted(os.sched_getaffinity(0)) if self.pin else []
-        self._pool_exec = ThreadPoolExecutor(max_workers=self.hash_threads, thread_name_prefix="cmt-hash",
-                                             initializer=(lambda: self._pin_thread(2)) if self.pin else None)
         self._stop = object()
         self.installed = False
         self.weights: dict | None = None
@@ -785,27 +780,21 @@ class NativeHostCommitter(WindowViews, NativeRangeOpenings, leaf_rule.LeafScheme
             self._memcpy, self._memset = self._rt.cudaMemcpyAsync, self._rt.cudaMemsetAsync
             self.name = f"{self.name}_fast"
         self._dtype_names: dict = {}
-        # GPU-tree steps: each step's levels and retained bytes kept per step (`_gpu_levels`, `_gpu_blocks`), openings served lazily from
-        # them.  A served run's are the windowed collector's (`native_collect`, rows-sha512); offline (`commit_block_offline`) the same
-        # per-step state from the CPU reference, under rows-sha512 or vllm-v1's chunk leaves (256 B chunks, hidden-path chunk header)
+        # every step's tree levels and retained bytes kept per step (`_gpu_levels`, `_gpu_blocks`), openings served lazily from them.  A
+        # served run's are the windowed collector's (`native_collect`); the host path's and the offline core's (`commit_block_offline`)
+        # the same per-step state from `step_rows` on the CPU
         self.gpu_tree = bool(gpu_tree)
         self._gpu_levels: dict[int, list] = {}
         self._gpu_blocks: dict[int, tuple] = {}
         self._gpu_t: dict[str, float] = {"leaf_ms": 0.0, "tree_ms": 0.0}
         if gpu_tree:
             self.name = f"{self.name}_gputree"
-            self.chunk = GPU_CHUNK_BYTES
-        self._init_leaf_scheme(leaf_scheme, gpu_tree or type(self)._commit_step is not NativeHostCommitter._commit_step)
-        if commit_scheme not in (None, scheme.NAME):
-            if commit_scheme != step_rows.NAME or engine is not None or not gpu_tree or self.hiding is not None:
-                raise ValueError(f"commit_scheme {commit_scheme!r}: the offline core takes {step_rows.NAME} over GPU-tree steps with vllm-v1 "
-                                 "leaves (engine=None, gpu_tree=True); a served run's is the windowed collector's")
-            self.commit_scheme, self.rows, self.row_keys, self.chunk = step_rows.NAME, True, {}, step_rows.ROW_BYTES
-            self.name = f"{self.name}+{step_rows.NAME}"
-        # where absorbed raw bytes live (see RETAIN_MODES); `retain_values=False` (offline tests) maps to "none"
-        # host retention goes to pinned pool memory unless VERITY_RETAIN_PINNED=0 (pageable D2H is ~1 GB/s and synchronous)
+        self.name = f"{self.name}+{step_rows.NAME}"
+        # where absorbed raw bytes live (see RETAIN_MODES); `retain_values=False` (offline tests) maps to "none", and the offline core
+        # (no engine, no device) keeps them on host.  Host retention goes to pinned pool memory unless VERITY_RETAIN_PINNED=0 (pageable
+        # D2H is ~1 GB/s and synchronous)
         self.retain_pinned = settings.VERITY_RETAIN_PINNED
-        self.retain = r if (r := settings.VERITY_RETAIN) is not None else "device" if retain_values else "none"
+        self.retain = r if (r := settings.VERITY_RETAIN) is not None else ("device" if engine is not None else "host") if retain_values else "none"
         if self.retain not in RETAIN_MODES:
             raise ValueError(f"VERITY_RETAIN={self.retain!r}: expected one of {RETAIN_MODES}")
         self.retain_windows: set[tuple[int, int]] = set()   # retain=sample (windowed only): (step, window k) pairs whose raw bytes are kept
@@ -859,7 +848,7 @@ class NativeHostCommitter(WindowViews, NativeRangeOpenings, leaf_rule.LeafScheme
             hidden_m1 = any("Hidden" in type(s).__name__ for s in getattr(self, "sources", []))
         backend = "fa3" if any(type(s).__name__ in ("HiddenM1SourceFA3", "NativeHiddenM1SourceFA3") for s in getattr(self, "sources", [])) else "fa2"
         moe_src = next((s for s in getattr(self, "sources", []) if getattr(s, "short_name", "") == "moe"), None)
-        chunk = self.chunk if self.gpu_tree else GPU_CHUNK_BYTES
+        chunk = self.chunk
         rec = step_bound_bytes(self.model, self._modules, envelope, hidden_m1=bool(hidden_m1), attn_backend=backend,
                                moe_layers=(len(moe_src.layers) if moe_src is not None else 0), chunk=chunk)
         # sources that bind extra tensors per step (TP partial source) widen the bound: per token / per sequence / chunk padding
@@ -946,8 +935,9 @@ class NativeHostCommitter(WindowViews, NativeRangeOpenings, leaf_rule.LeafScheme
     # ------------------------------------------------------------------ offline core (tests; no engine, no CUDA)
 
     def commit_offline(self, steps: list[list[tuple]]) -> RunCommitment:
-        """Commit the given per-step tensors (name, raw bytes[, dtype, shape]; default uint8 of the byte length) synchronously — the exact
-        hashing / layout / root code the online path runs on the worker thread, minus hooks and D2H -- for the security tests and CPU cross-checks."""
+        """Commit the given per-step tensors (name, raw bytes[, dtype, shape]; default uint8 of the byte length) synchronously — packed
+        into the step stream and committed by the exact code the online host path runs on the worker thread (`_commit_step`), minus hooks
+        and D2H -- for the security tests and CPU cross-checks."""
         class _Ev:
             def synchronize(self) -> None:
                 return None
@@ -979,7 +969,7 @@ class NativeHostCommitter(WindowViews, NativeRangeOpenings, leaf_rule.LeafScheme
         return hashlib.sha256(json.dumps(doc, sort_keys=True, default=str).encode()).digest()
 
     def _ctx_digest(self, step: int) -> bytes:
-        return hashlib.sha256(f"{self.run_id}/step={step}".encode() + self._leaf_ctx(step)).digest()
+        return hashlib.sha256(f"{self.run_id}/step={step}".encode()).digest()
 
     def _select_modules(self) -> list[tuple[str, Any]]:
         out = []
@@ -1065,9 +1055,8 @@ class NativeHostCommitter(WindowViews, NativeRangeOpenings, leaf_rule.LeafScheme
     # ------------------------------------------------------------------ lifecycle
 
     def register_weights(self) -> dict:
-        """Registered input: every parameter + buffer hashed once (rows-sha512: `weights_rows`, SHA-512; the offline core's vllm-v1:
-        chunked pos_leaf leaves, per-tensor subtree, fold of subtree roots, SHA-256).  Timed and reported apart from steady state,
-        outside its denominator."""
+        """Registered input: every parameter + buffer hashed once (rows-sha512: `weights_rows`, SHA-512).  Timed and reported apart from
+        steady state, outside its denominator."""
         t0 = time.perf_counter()
         # host (default) | device | device-checked: device hashes rows-sha512's rows into the same per-tensor tree on the GPU, by
         # native_rows.cu (`weights_rows`); the weights tree over the tensor roots is built the same either way.  device-checked computes
@@ -1075,9 +1064,7 @@ class NativeHostCommitter(WindowViews, NativeRangeOpenings, leaf_rule.LeafScheme
         mode = settings.VERITY_WEIGHTS_HASH
         if mode not in ("host", "device", "device-checked"):
             raise ValueError(f"VERITY_WEIGHTS_HASH must be host | device | device-checked, got {mode!r}")
-        WR = weights_rows.WeightsRows(self._geo_digest, weights_rows.key(getattr(self, "weights_tree", None))) if self.rows else None
-        if mode != "host" and WR is None:
-            raise ValueError(f"VERITY_WEIGHTS_HASH={mode}: the weights hash on the device under {step_rows.NAME} only (`weights_rows`)")
+        WR = weights_rows.WeightsRows(self._geo_digest, weights_rows.key(getattr(self, "weights_tree", None)))
         roots, names, n_bytes, checked = [], [], 0, 0
         seen: set[int] = set()
         items = list(self.model.named_parameters()) + list(self.model.named_buffers())
@@ -1089,21 +1076,13 @@ class NativeHostCommitter(WindowViews, NativeRangeOpenings, leaf_rule.LeafScheme
             flat = src.view(torch.uint8) if src.dtype != torch.uint8 else src
             nb = int(flat.numel())
             entry = [name, _dtype_name(p), list(p.shape), nb]
-            if WR is not None:
-                r, c = WR.root(len(roots), entry, flat, mode)
-                checked += c
-            else:
-                host = flat.cpu()                    # blocking D2H, once
-                mv = memoryview(host.numpy()).cast("B")
-                leaves = self._hash_leaves(mv)
-                r = scheme.fold(leaves)
+            r, c = WR.root(len(roots), entry, flat, mode)
+            checked += c
             roots.append(r)
             n_bytes += nb
             names.append(entry)
         # the tree under the root, kept off the record: a deferred replay opens the weight fields it consumes against it (replay bundle)
-        self.weights_tree = WR.tree(names, roots) if WR is not None else {
-            "names": names, "tensor_roots": [r.hex() for r in roots], "root": scheme.weights_root(self._geo_digest, scheme.names_digest(names), roots).hex(),
-            "chunk": self.chunk, "geo_digest": self._geo_digest.hex()}
+        self.weights_tree = WR.tree(names, roots)
         self.weights = {"root": self.weights_tree["root"], "tensors": len(roots), "bytes": n_bytes, "wall_s": time.perf_counter() - t0,
                         "label": "measured; once per process, excluded from steady state", "hash": mode, "chunk": self.chunk,
                         "scheme": self.commit_scheme, **({"device_checked_tensors": checked} if mode == "device-checked" else {})}
@@ -1196,14 +1175,12 @@ class NativeHostCommitter(WindowViews, NativeRangeOpenings, leaf_rule.LeafScheme
         self.x03_expected = 0
         self.x03_committed = 0
         self._done = {}
-        self._levels = {}
         self._layouts = {}
-        self._streams = {}
-        self._salts = {}
         self._gpu_blocks = {}
         self._gpu_levels = {}
+        self.row_keys = {}
         self._step_index = 0
-        self.spans = Spans(scheme.NAME)
+        self.spans = Spans(step_rows.NAME)
         self.gc_pauses.pauses, self.gc_pauses.freeze_s = [], []
         self._reset_views()
         self.errors = []
@@ -1211,7 +1188,6 @@ class NativeHostCommitter(WindowViews, NativeRangeOpenings, leaf_rule.LeafScheme
     def close(self) -> None:
         self.uninstall()
         self._stop_worker()
-        self._pool_exec.shutdown(wait=True)
 
     # ------------------------------------------------------------------ acquisition (serving thread)
 
@@ -1262,76 +1238,47 @@ class NativeHostCommitter(WindowViews, NativeRangeOpenings, leaf_rule.LeafScheme
         self._q.put(job)
 
     ALIGN = 4
-    GPU_TREE_SRC = 0                       # hidden-path chunk header field `src_mask` (0: not an FA2 tap stream); the tag field carries the step index
 
     def commit_block_offline(self, step: int, stream: bytes | bytearray, metas: list[TensorMeta]) -> StepCommitment:
-        """CPU reference of the GPU chunk tree for ONE packed step block (tests; no CUDA): the same 256 B chunk leaves (hidden-path chunk header), the
-        same production fold, the same retention policy (`retain`), the same per-step state the worker leaves behind, so `open()`,
-        `release_staging()`, `verify()` and `finalize()` run unchanged on the result.  Under rows-sha512, `step_rows`'s tree over the
-        block's rows, salted from a fresh step key (`row_keys`), as the windowed worker commits it."""
+        """CPU reference of the windowed worker's commit of ONE packed step block (tests; no CUDA): `step_rows`'s tree over the block's
+        rows, salted from a fresh step key (`row_keys`), the same retention policy (`retain`), the same per-step state the worker leaves
+        behind, so `open()`, `release_staging()`, `verify()` and `finalize()` run unchanged on the result."""
+        for m in metas:
+            m.stream_off = m.dev_off
+        t = time.perf_counter()
+        self._done[step] = self._commit_rows(step, stream, metas, t)
+        self._step_index = max(self._step_index, step + 1)
+        return self._done[step]
+
+    def _commit_rows(self, step: int, stream: Any, metas: list[TensorMeta], t_step_end: float, backlog: int = 0) -> StepCommitment:
+        """Commit one packed step stream (its tensors at their `stream_off`): `step_rows`'s tree over its rows, salted from the step's
+        key, the levels and the retained copy (`retain`) kept per step (`_gpu_levels`, `_gpu_blocks`), and the step root."""
+        t0 = time.perf_counter()
         chunk = self.chunk
         used = len(stream)
         padded = -(-used // chunk) * chunk
         buf = bytes(stream) + b"\0" * (padded - used)
         n = padded // chunk
-        if self.rows:
-            dom = self._row_domain(step, n)
-            lv_bytes = step_rows.levels(dom, [buf[i * chunk:(i + 1) * chunk] for i in range(n)], self._row_key(step), 8 * chunk)
-            levels = [torch.frombuffer(bytearray(b"".join(lv)), dtype=torch.uint8).reshape(len(lv), step_rows.ROOT_BYTES).clone() for lv in lv_bytes]
-            mr = lv_bytes[-1][0] if lv_bytes else dom.empty_root()
-        else:
-            layout = self._gpu_layout(step, padded // 4)
-            leaves = [scheme.chunk_leaf(scheme.chunk_header(layout, step, i, chunk // 4, self.GPU_TREE_SRC), buf[i * chunk:(i + 1) * chunk]) for i in range(n)]
-            lv_bytes = scheme.fold_levels(leaves)
-            levels = [torch.frombuffer(bytearray(b"".join(lv)), dtype=torch.int32).reshape(len(lv), 8).clone() for lv in lv_bytes]
-            mr = lv_bytes[-1][0]
+        dom = self._row_domain(step, n)
+        lv_bytes = step_rows.levels(dom, [buf[i * chunk:(i + 1) * chunk] for i in range(n)], self._row_key(step), 8 * chunk)
+        levels = [torch.frombuffer(bytearray(b"".join(lv)), dtype=torch.uint8).reshape(len(lv), step_rows.ROOT_BYTES).clone() for lv in lv_bytes]
+        mr = lv_bytes[-1][0] if lv_bytes else dom.empty_root()
+        t1 = time.perf_counter()
         keep = torch.frombuffer(bytearray(buf), dtype=torch.uint8).clone() if self.retain != "none" else None
         if keep is not None and self.retain == "device":
             keep = keep.cuda()
             levels = [lv.cuda() for lv in levels]
-        for m in metas:
-            m.stream_off = m.dev_off
         nbytes = sum(m.nbytes for m in metas)
         layout_dig = self.layout_digest(metas)
-        root = (step_rows if self.rows else scheme).step_root(self.program_digest, self._ctx_digest(step), self._geo_digest, layout_dig, n, mr)
+        root = step_rows.step_root(self.program_digest, self._ctx_digest(step), self._geo_digest, layout_dig, n, mr)
+        t2 = time.perf_counter()
+        self.spans.add("hashing", t1 - t0, step=step, nbytes=nbytes, leaves=n)
+        self.spans.add("root_finalisation", t2 - t1, step=step)
         self._gpu_levels[step] = levels
         self._gpu_blocks[step] = (keep, used)
         self._layouts[step] = metas
-        t = time.perf_counter()
-        self._done[step] = StepCommitment(step, root, mr, n, nbytes, len(metas), layout_dig, t, t, 0)
-        self._step_index = max(self._step_index, step + 1)
-        return self._done[step]
-
-    def _retain_copy(self, arena: Any, padded: int, side: Any) -> Any:
-        """The raw bytes kept for openings after the block is absorbed: device copy, host copy (D2H on the side stream; the
-        arena block is recycled once the caller's done-event completes), or nothing (openings by replay).  Never touches the leaves."""
-        if self.retain == "device":
-            keep = torch.empty(padded, dtype=torch.uint8, device=arena.device)
-            keep.copy_(arena[:padded])
-            return keep
-        if self.retain == "host":
-            if self.retain_pinned:
-                keep = self.pool.take(padded)[:padded]           # pinned pool block -> async D2H at PCIe rate (the caller syncs its done-event)
-                keep.copy_(arena[:padded], non_blocking=True)
-                return keep
-            keep = torch.empty(padded, dtype=torch.uint8, device="cpu", pin_memory=False)
-            keep.copy_(arena[:padded], non_blocking=False)      # pageable D2H: completes on the calling stream before returning
-            return keep
-        return None
-
-    def _levels_to_host(self, levels: list) -> list:
-        """Move the tree levels (int32 [n, 8], leaves first) to ONE pinned host block with async copies on the current (side) stream; the
-        caller synchronises.  Same rows, same order, so `gpu_open` / `open_levels` read them unchanged."""
-        total = sum(int(lv.numel()) for lv in levels)
-        flat = self.pool.take(total * 4).view(torch.int32)
-        out, off = [], 0
-        for lv in levels:
-            n = int(lv.numel())
-            dst = flat[off:off + n]
-            dst.copy_(lv.reshape(-1), non_blocking=True)
-            out.append(dst.view(lv.shape))
-            off += n
-        return out
+        return StepCommitment(step, root, mr, n, nbytes, len(metas), layout_dig, t_step_end, t2, backlog, hashing_s=t1 - t0,
+                              root_finalisation_s=t2 - t1)
 
     def _footprint_absorbed(self, job: _StepJob, padded: int, levels: list, keep: Any) -> None:
         if self.footprint is None:
@@ -1368,12 +1315,6 @@ class NativeHostCommitter(WindowViews, NativeRangeOpenings, leaf_rule.LeafScheme
         if self.footprint is not None:
             self.footprint.event("release_staging", **freed, retained_device_total=self._retained_device_bytes())
         return freed
-
-    def _gpu_layout(self, step: int, words: int):
-        class _L:                                                 # duck-typed StreamLayout for the hidden-value chunk header: (HB, M, NB) = (step, words, 0)
-            HB, M, NB = step, words, 0
-
-        return _L
 
     # Tensors that vLLM (d9105ea80, Llama architecture) overwrites IN PLACE after the hook that exposes them -- these must be snapshotted at
     # hook time; everything else may be batched at step end (its buffer is kept alive by the held reference):
@@ -1602,26 +1543,8 @@ class NativeHostCommitter(WindowViews, NativeRangeOpenings, leaf_rule.LeafScheme
 
     # ------------------------------------------------------------------ hashing (worker thread)
 
-    def _hash_leaves(self, mv: memoryview) -> list[bytes]:
-        chunk = self.chunk
-        n = len(mv)
-        if n <= 4 * chunk or self.hash_threads <= 1:
-            return [scheme.pos_leaf(mv[o:o + chunk]) for o in range(0, n, chunk)]
-        # split into contiguous chunk-aligned ranges for the pool (hashlib releases the GIL for >2 KB updates)
-        per = max(chunk, ((n // self.hash_threads) // chunk) * chunk)
-        ranges = [(o, min(o + per, n)) for o in range(0, n, per)]
-
-        def part(r):
-            lo, hi = r
-            return [scheme.pos_leaf(mv[o:min(o + chunk, hi)]) for o in range(lo, hi, chunk)]
-
-        out: list[bytes] = []
-        for lst in self._pool_exec.map(part, ranges):
-            out.extend(lst)
-        return out
-
     def _pin_thread(self, group: int) -> None:
-        """group 0 = serving thread (one core), 1 = worker (one core), 2 = hash pool (the rest, up to 4 cores)."""
+        """group 0 = serving thread (one core), 1 = worker (one core)."""
         if not self.pin or len(self._cores) < 4:
             return
         c = self._cores
@@ -1675,8 +1598,18 @@ class NativeHostCommitter(WindowViews, NativeRangeOpenings, leaf_rule.LeafScheme
 
     # Ablations for the cost decomposition ONLY (env VERITY_ABL, comma list; none of them is a commitment):
     #   nocopy  : hooks + metadata + arena bookkeeping, no D2D snapshot launch      noworker: worker discards the step (no D2H, no hashing)
-    #   nohash  : worker does the D2H but skips hashing / roots
     ABL = frozenset(settings.VERITY_ABL)
+
+    def _pack(self, metas: list[TensorMeta]) -> memoryview:
+        """The packed step stream of per-tensor host copies (the direct staging path, `commit_offline`): each tensor at the next `ALIGN`
+        offset (its `stream_off`), in acquisition order, as the arena lays a step out."""
+        buf = bytearray()
+        for m in metas:
+            off = -(-len(buf) // self.ALIGN) * self.ALIGN
+            buf += b"\0" * (off - len(buf))
+            m.stream_off = off
+            buf += bytes(m.host)
+        return memoryview(bytes(buf))
 
     def _commit_step(self, job: _StepJob) -> None:
         if self.gpu_tree and job.arena is not None:
@@ -1695,42 +1628,10 @@ class NativeHostCommitter(WindowViews, NativeRangeOpenings, leaf_rule.LeafScheme
             self.spans.add("movement", mv_s, step=job.step, nbytes=0)
         else:
             job.event.synchronize()           # every direct D2H copy of this step has landed
-        t0 = time.perf_counter()
-        leaves: list[bytes] = []
-        if job.stream is not None:
-            # PACKED: leaves are fixed `chunk`-byte pieces of the step stream, spanning tensor boundaries (identity = byte range ->
-            # tensors via the layout); a decode step of ~700 KB is ~11 leaves at 64 KB instead of one per tensor
-            leaves = self._hash_leaves(job.stream) if (len(job.stream) and "nohash" not in self.ABL) else []
-            n_stream = len(job.stream)
-            for m in job.metas:
-                m.first_leaf, m.n_leaves = m.stream_off // self.chunk, ((m.stream_off + m.nbytes + self.chunk - 1) // self.chunk) - (m.stream_off // self.chunk)
-        elif len(job.metas) >= 2 and self.hash_threads > 1:
-            futs = [self._pool_exec.submit(self._hash_leaves_single, m.host) for m in job.metas]
-            for f in futs:
-                leaves.extend(f.result())
-        else:
-            for m in job.metas:
-                leaves.extend(self._hash_leaves(m.host))
-        leaves = self._salted(job.step, leaves)
-        levels = scheme.fold_levels(leaves) if leaves else [[scheme.empty_root()]]
-        t1 = time.perf_counter()
-        n = len(leaves)
-        nbytes = sum(m.nbytes for m in job.metas)
-        layout_dig = self.layout_digest(job.metas)
-        root = scheme.step_root(self.program_digest, self._ctx_digest(job.step), self._geo_digest, layout_dig, n, levels[-1][0])
-        t2 = time.perf_counter()
-        self.spans.add("hashing", t1 - t0, step=job.step, nbytes=nbytes, leaves=n)
-        self.spans.add("root_finalisation", t2 - t1, step=job.step)
-        self._levels[job.step] = levels
-        self._layouts[job.step] = job.metas
-        if job.stream is not None:
-            self._streams[job.step] = job.stream
-        self._done[job.step] = StepCommitment(job.step, root, levels[-1][0], n, nbytes, len(job.metas), layout_dig, job.t_step_end, t2,
-                                              job.backlog, hashing_s=t1 - t0, root_finalisation_s=t2 - t1)
-
-    def _hash_leaves_single(self, mv: memoryview) -> list[bytes]:
-        chunk = self.chunk
-        return [scheme.pos_leaf(mv[o:o + chunk]) for o in range(0, len(mv), chunk)]
+        stream = job.stream if job.stream is not None else self._pack(job.metas)
+        for m in job.metas:                   # a row of the stream spans tensor boundaries: identity = byte range -> tensors via the layout
+            m.first_leaf, m.n_leaves = m.stream_off // self.chunk, -(-(m.stream_off + m.nbytes) // self.chunk) - m.stream_off // self.chunk
+        self._done[job.step] = self._commit_rows(job.step, stream, job.metas, job.t_step_end, job.backlog)
 
     # ------------------------------------------------------------------ finalize / open / verify
 
@@ -1749,7 +1650,7 @@ class NativeHostCommitter(WindowViews, NativeRangeOpenings, leaf_rule.LeafScheme
         t2 = time.perf_counter()
         self.spans.add("root_finalisation", t2 - t1)
         last_end = max((s.t_step_end for s in steps), default=t0)
-        persistent = sum(32 * len(lv) for lvls in self._levels.values() for lv in lvls) + 32 * len(steps) + sum(map(len, self._salts.values())) + sum(
+        persistent = step_rows.ROOT_BYTES * len(steps) + sum(int(lv.nbytes) for lvls in self._gpu_levels.values() for lv in lvls) + sum(
             len(json.dumps(metas.summary() if hasattr(metas, "scan") else [[m.ordinal, m.name, m.dtype, list(m.shape), m.nbytes] for m in metas])) for metas in self._layouts.values())
         return RunCommitment(run_root=run_root, steps=steps, spans=self.spans.snapshot(), root_ready_delay_s=t2 - last_end,
                              t_finalize_s=t2 - t0, persistent_bytes=persistent, temporary_bytes_peak=self.pool.bytes_in_use,
@@ -1764,7 +1665,8 @@ class NativeHostCommitter(WindowViews, NativeRangeOpenings, leaf_rule.LeafScheme
                                     # reference integrity (Python acquisition path; the native collector overrides these in its finalize)
                                     "expected_tensors": self.x03_expected, "committed_tensors": self.x03_committed,
                                     "identity_check": self.identity_check() if self._layouts else None,
-                                    "hash_threads": self.hash_threads, "chunk": self.chunk, "modules_hooked": len(self._modules), **self._leaf_record(steps),
+                                    "hash_threads": self.hash_threads, "chunk": self.chunk, "modules_hooked": len(self._modules),
+                                    "commit_scheme": self.commit_scheme,
                                     "staging": self.staging, "fast_copy": self.cudart_path, "gpu_tree": self.gpu_tree, "gpu_tree_ms": dict(self._gpu_t),
                                     "gpu_tree_retained_bytes": self._retained_device_bytes(),
                                     "host_retained_bytes": sum(int(lv.nbytes) for lvls in self._gpu_levels.values() for lv in lvls if not lv.is_cuda)
@@ -1988,25 +1890,20 @@ class NativeHostCommitter(WindowViews, NativeRangeOpenings, leaf_rule.LeafScheme
         return out
 
     def identity_of(self, step: int, index: int) -> dict:
-        """Verifier-side: (step, rank) -> (tensor ordinal, name, dtype, shape, byte range) from the published layout."""
+        """Verifier-side: (step, row) -> the stream bytes [lo, hi) of the row and the (tensor ordinal, name, dtype, shape, byte range)s of
+        the tensors overlapping it, from the published layout."""
         metas = self._layouts[step]
-        if step in self._gpu_blocks or step in self._streams:      # packed: leaf = stream bytes [lo, hi); tensors overlapping it
-            n = self._gpu_blocks[step][1] if step in self._gpu_blocks else len(self._streams[step])
-            lo, hi = index * self.chunk, min((index + 1) * self.chunk, n)
-            if lo >= n:
-                raise IndexError((step, index))
-            over = [{"tensor": m.ordinal, "name": m.name, "dtype": m.dtype, "shape": list(m.shape),
-                     "first_byte": max(lo, m.stream_off) - lo, "last_byte": min(hi, m.stream_off + m.nbytes) - lo}
-                    for m in metas if m.stream_off < hi and m.stream_off + m.nbytes > lo]
-            return {"packed": True, "byte_lo": lo, "byte_hi": hi, "tensors": over,
-                    "tensor": over[0]["tensor"] if over else -1, "name": ";".join(o["name"] for o in over)}
-        for m in metas:
-            if m.first_leaf <= index < m.first_leaf + m.n_leaves:
-                k = index - m.first_leaf
-                lo = k * m.chunk
-                hi = min(lo + m.chunk, m.nbytes)
-                return {"tensor": m.ordinal, "name": m.name, "dtype": m.dtype, "shape": list(m.shape), "byte_lo": lo, "byte_hi": hi}
-        raise IndexError((step, index))
+        if step not in self._gpu_blocks:
+            raise IndexError((step, index))
+        n = self._gpu_blocks[step][1]
+        lo, hi = index * self.chunk, min((index + 1) * self.chunk, n)
+        if lo >= n:
+            raise IndexError((step, index))
+        over = [{"tensor": m.ordinal, "name": m.name, "dtype": m.dtype, "shape": list(m.shape),
+                 "first_byte": max(lo, m.stream_off) - lo, "last_byte": min(hi, m.stream_off + m.nbytes) - lo}
+                for m in metas if m.stream_off < hi and m.stream_off + m.nbytes > lo]
+        return {"packed": True, "byte_lo": lo, "byte_hi": hi, "tensors": over,
+                "tensor": over[0]["tensor"] if over else -1, "name": ";".join(o["name"] for o in over)}
 
     @staticmethod
     def _block_holds(blk: Any, lo: int, hi: int) -> bool:
@@ -2021,7 +1918,7 @@ class NativeHostCommitter(WindowViews, NativeRangeOpenings, leaf_rule.LeafScheme
         """True when leaf `index` of `step` opens from THIS committer's retained raw bytes; False when it must open by replay
         (raw bytes released / never kept / an excluded family's interior chunk)."""
         if step not in self._gpu_blocks:
-            return step in self._streams or bool(self._layouts.get(step))
+            return False
         blk, _used = self._gpu_blocks[step]
         lo = index * self.chunk
         return self._block_holds(blk, lo, lo + self.chunk)
@@ -2039,36 +1936,27 @@ class NativeHostCommitter(WindowViews, NativeRangeOpenings, leaf_rule.LeafScheme
             for step, index in sample:
                 metas = self._layouts[step]
                 ident = self.identity_of(step, index)
-                if step in self._gpu_blocks:
-                    blk, used = self._gpu_blocks[step]           # lazy D2H of the 256 B chunk (zero-padded past `used`) + level sibling path
-                    lo = index * self.chunk
-                    levels = self._gpu_levels.get(step)
-                    if not self._block_holds(blk, lo, lo + self.chunk) or (paths_from_replay and values_from is not None):
-                        if values_from is None or step not in values_from._gpu_blocks:
-                            raise RuntimeError(f"open({step}, {index}): raw bytes released / not retained (retain={self.retain}) and no replay source holds step {step}")
-                        rblk, rused = values_from._gpu_blocks[step]
-                        if not self._block_holds(rblk, lo, lo + self.chunk):
-                            raise RuntimeError(f"open({step}, {index}): the replay source does not hold the leaf's bytes either (retain={values_from.retain})")
-                        if rused != used or values_from.layout_digest(values_from._layouts[step]) != self.layout_digest(metas):
-                            raise RuntimeError(f"open({step}, {index}): replay layout differs from the committed layout")
-                        blk = rblk                                   # the regenerated bytes (the retained copy, if any, is not consulted)
-                        if paths_from_replay:
-                            if step not in values_from._gpu_levels:
-                                raise RuntimeError(f"open({step}, {index}): the replay source has no tree levels for step {step}")
-                            levels = values_from._gpu_levels[step]
-                    if levels is None:
-                        raise RuntimeError(f"open({step}, {index}): this run kept no tree levels (retain_levels=False): open with a replay "
-                                           "source and paths_from_replay=True")
-                    value = bytes(blk[lo:lo + self.chunk].cpu().numpy().tobytes())
-                    out.append(Opening(step, index, value, tuple(self._level_path(levels, index)), ident, self._gpu_salt(step, index)))
-                    continue
-                if ident.get("packed"):
-                    value = bytes(self._streams[step][ident["byte_lo"]:ident["byte_hi"]])
-                else:
-                    m = metas[ident["tensor"]]
-                    value = bytes(m.host[ident["byte_lo"]:ident["byte_hi"]])
-                path = scheme.path_in_levels(self._levels[step], index)
-                out.append(Opening(step, index, value, path, ident, self._salts_of(step, index, index + 1)))
+                blk, used = self._gpu_blocks[step]               # lazy D2H of the row (zero-padded past `used`) + level sibling path
+                lo = index * self.chunk
+                levels = self._gpu_levels.get(step)
+                if not self._block_holds(blk, lo, lo + self.chunk) or (paths_from_replay and values_from is not None):
+                    if values_from is None or step not in values_from._gpu_blocks:
+                        raise RuntimeError(f"open({step}, {index}): raw bytes released / not retained (retain={self.retain}) and no replay source holds step {step}")
+                    rblk, rused = values_from._gpu_blocks[step]
+                    if not self._block_holds(rblk, lo, lo + self.chunk):
+                        raise RuntimeError(f"open({step}, {index}): the replay source does not hold the leaf's bytes either (retain={values_from.retain})")
+                    if rused != used or values_from.layout_digest(values_from._layouts[step]) != self.layout_digest(metas):
+                        raise RuntimeError(f"open({step}, {index}): replay layout differs from the committed layout")
+                    blk = rblk                                   # the regenerated bytes (the retained copy, if any, is not consulted)
+                    if paths_from_replay:
+                        if step not in values_from._gpu_levels:
+                            raise RuntimeError(f"open({step}, {index}): the replay source has no tree levels for step {step}")
+                        levels = values_from._gpu_levels[step]
+                if levels is None:
+                    raise RuntimeError(f"open({step}, {index}): this run kept no tree levels (retain_levels=False): open with a replay "
+                                       "source and paths_from_replay=True")
+                value = bytes(blk[lo:lo + self.chunk].cpu().numpy().tobytes())
+                out.append(Opening(step, index, value, tuple(self._level_path(levels, index)), ident, self._gpu_salt(step, index)))
         return out
 
     def _level_path(self, levels: list, index: int) -> tuple:
@@ -2076,47 +1964,9 @@ class NativeHostCommitter(WindowViews, NativeRangeOpenings, leaf_rule.LeafScheme
         return tuple(open_levels(levels, index))
 
     def verify(self, run: RunCommitment, opening: Opening) -> bool:
-        """Production verifier core: shape rule + fold to the bare root, then the context binding to the ORIGINAL step root, then the
-        step root's membership in the run root."""
-        if self.rows:
-            return self._verify_rows(run, opening)
-        try:
-            sc = run.steps[opening.step]
-        except IndexError:
-            return False
-        if not 0 <= opening.index < sc.n_leaves:
-            return False
-        try:
-            shape = scheme.path_shape(sc.n_leaves, opening.index)
-        except Exception:  # noqa: BLE001
-            return False
-        if len(opening.path) != len(shape) or any((p is None) == has for p, has in zip(opening.path, shape, strict=True)):
-            return False
-        ident = self.identity_of(opening.step, opening.index)
-        if ident != opening.identity or (self.hiding is None and opening.salt) or self._unsalted(opening.step, sc.n_leaves):
-            return False
-        if opening.step in self._gpu_blocks:
-            used = self._gpu_blocks[opening.step][1]
-            if len(opening.value) != self.chunk:
-                return False
-            padded = -(-used // self.chunk) * self.chunk
-            leaf = scheme.chunk_leaf(scheme.chunk_header(self._gpu_layout(opening.step, padded // 4), opening.step, opening.index, self.chunk // 4,
-                                                        self.GPU_TREE_SRC), opening.value)
-            merkle = scheme.fold_path(leaf, opening.index, list(opening.path))
-        else:
-            leaves = self._leaf_rule([scheme.pos_leaf(opening.value)], opening.salt)
-            if leaves is None or len(opening.value) != ident["byte_hi"] - ident["byte_lo"]:
-                return False
-            merkle = scheme.fold_path(leaves[0], opening.index, list(opening.path))
-        root = scheme.step_root(self.program_digest, self._ctx_digest(opening.step), self._geo_digest,
-                             self.layout_digest(self._layouts[opening.step]), sc.n_leaves, merkle)
-        if root != sc.root:
-            return False
-        return len(run.run_root) == 32 and self._run_root(run) == run.run_root
-
-    def _leaf_record(self, steps: list) -> dict:
-        rec = super()._leaf_record(steps)
-        return {**rec, "commit_scheme": self.commit_scheme} if self.rows else rec
+        """Production verifier core (`_verify_rows`): the row and its salt give the hiding leaf, the path folds it to the tree root, which
+        binds into the ORIGINAL step root, which is in the run root."""
+        return self._verify_rows(run, opening)
 
     # ------------------------------------------------------------------ coverage
 
@@ -2173,7 +2023,7 @@ class NativeHostCommitter(WindowViews, NativeRangeOpenings, leaf_rule.LeafScheme
         for cls, d in by_class.items():
             classes.append({"class": cls, "how": "bound-as-leaf", "rule": None, "count": None, "bytes": d["bytes"], "tensors": d["tensors"],
                             "covers_families": sorted(d["families"]), "acquisitions": ["naturally-materialized", "registered-input"],
-                            "evidence": f"forward hooks on {sorted(d['modules'])}; pos_leaf chunk={self.chunk}; per-step bind_root; run root"})
+                            "evidence": f"forward hooks on {sorted(d['modules'])}; {self.commit_scheme} rows of {self.chunk} B; per-step bind_root; run root"})
         if self.weights:
             classes.append(weights_class(self.weights, getattr(self, "weights_tree", None)))
         # derived-from-bound classes whose SOURCE is a naturally-materialized word this committer binds (norm residual bf16 -> fp32 lift):
@@ -2216,4 +2066,4 @@ class NativeHostCommitter(WindowViews, NativeRangeOpenings, leaf_rule.LeafScheme
         notes = ["binds ONLY naturally materialised values (module outputs in HBM); FA2 interior (hidden-fa2) and norm kernel interiors "
                  "(hidden-vllm-kernel) are NOT bound by this committer — the hidden path (CMT-2) covers those classes",
                  "value identity = (step, tensor ordinal, byte range) via the published per-step layout whose digest is in the step root"]
-        return declaration(self.name, "native-host-sha256", classes, notes)
+        return declaration(self.name, f"native-host-{self.commit_scheme}", classes, notes)

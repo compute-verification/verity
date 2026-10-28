@@ -98,9 +98,12 @@ def _manifest(consumers: list[str], *, spec: str = "Bf16MulScalarTensor_v1", ext
 
 def _cpu_committer(model, *, acquire_classes: set[str], manifest: dict) -> tuple[NativeHostCommitter, dict]:
     """The committer armed the way `commit_delta` arms it from the manifest (binding.promoted_input_acquisition -> acquire_inputs), on a
-    CPU model: the worker thread and the CUDA arena are not started (the packed commit is driven directly)."""
-    c = NativeHostCommitter(_Engine(model), chunk=4096, hash_threads=1, program_digest=bytes.fromhex(PD), acquire_classes=acquire_classes,
-                            staging="direct", retain_values=False, geo_digest=hashlib.sha256(b"geo").digest())
+    CPU model: the worker thread and the CUDA arena are not started (the packed commit is driven directly), the step's bytes retained on
+    host."""
+    with pytest.MonkeyPatch.context() as mp:
+        mp.setenv("VERITY_RETAIN", "host")
+        c = NativeHostCommitter(_Engine(model), hash_threads=1, program_digest=bytes.fromhex(PD), acquire_classes=acquire_classes,
+                                staging="direct", geo_digest=hashlib.sha256(b"geo").digest())
     c._start_worker = lambda: None                                             # the worker hashes CUDA jobs; the test commits its step itself
     pia = B.promoted_input_acquisition(manifest)
     assert pia["problems"] == [], pia["problems"]
@@ -123,7 +126,7 @@ def _cpu_acquisition(c: NativeHostCommitter, job: _StepJob):
 
 
 def _commit_packed(c: NativeHostCommitter, job: _StepJob):
-    """The packed step stream (4-B aligned, the online layout) -> `_commit_step` (leaves, layout digest, step root) -> `finalize()`."""
+    """The packed step stream (4-B aligned, the online layout) -> `_commit_step` (rows, layout digest, step root) -> `finalize()`."""
     buf = bytearray()
     for m in job.metas:
         off = (len(buf) + 3) // 4 * 4
@@ -162,7 +165,8 @@ def _bytes_of(t) -> bytes:
 
 
 def _committed_bytes(c: NativeHostCommitter, e: dict) -> bytes:
-    return bytes(c._streams[int(e["identity"]["step"])][int(e["stream_offset"]):int(e["stream_offset"]) + int(e["width_bytes"])])
+    off = int(e["stream_offset"])
+    return bytes(c._gpu_blocks[int(e["identity"]["step"])][0][off:off + int(e["width_bytes"])].numpy())
 
 
 # ------------------------------------------------------------------------------------------------------------ the manifest -> acquisition table

@@ -1,5 +1,4 @@
-"""The offline core under ``rows-sha512`` (``NativeHostCommitter(None, gpu_tree=True, commit_scheme="rows-sha512")``,
-``commit_block_offline``) commits ``step_rows``'s tree over each packed step block, salted from a fresh 64-byte key per step, into
+"""The offline core (``NativeHostCommitter(None)``, ``commit_block_offline``) commits ``step_rows``'s tree over each packed step block, salted from a fresh 64-byte key per step, into
 64-byte step and run roots: the CPU stand-in of the windowed worker's rows-sha512 run (``test_windowed_rows_sha512`` holds that one to
 the same roots).  Its leaf and range openings carry their leaves' salts and verify against those roots, through ``OpenedReader`` as the
 value checks read them; a tampered row, salt, sibling or root does not verify."""
@@ -24,7 +23,7 @@ STEPS = {s: [(f"m{s}.{i}", RNG.randbytes(n)) for i, n in enumerate(sizes)]
 
 
 def committed():
-    return O.commit_steps(STEPS, commit_scheme=R.NAME, run_id="rows-offline")
+    return O.commit_steps(STEPS, run_id="rows-offline")
 
 
 def test_steps_commit_step_rows_trees_under_fresh_keys():
@@ -80,8 +79,8 @@ def test_range_openings_verify_through_the_opened_reader():
         OpenedReader(com, rc)(2, "m2.0", 0, 4)
 
 
-def test_what_the_offline_rows_core_refuses():
-    with pytest.raises(ValueError, match="commit_scheme 'rows-sha256'"):
-        NativeHostCommitter(None, gpu_tree=True, commit_scheme="rows-sha256")
-    with pytest.raises(ValueError, match="GPU-tree steps"):
-        NativeHostCommitter(None, commit_scheme=R.NAME)
+def test_the_offline_core_commits_rows_sha512_only():
+    assert NativeHostCommitter(None, commit_scheme=R.NAME).commit_scheme == NativeHostCommitter(None).commit_scheme == R.NAME
+    for other in ("rows-sha256", "vllm-v1"):
+        with pytest.raises(ValueError, match=f"unknown commit scheme '{other}'"):
+            NativeHostCommitter(None, commit_scheme=other)

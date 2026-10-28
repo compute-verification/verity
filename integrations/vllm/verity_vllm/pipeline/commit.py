@@ -436,12 +436,14 @@ def make_committer(kind: str, engine: va.Engine, args: Options, run_id: str):
             def _commit_step(self, job):
                 job.event.synchronize()
                 from verity_vllm.acquire.committer_api import StepCommitment
+                zero = b"\0" * SR.ROOT_BYTES
                 self._layouts[job.step] = []
-                self._levels[job.step] = [[b"\0" * 32]]
-                self._done[job.step] = StepCommitment(job.step, b"\0" * 32, b"\0" * 32, 0, 0, len(job.metas), b"\0" * 32, job.t_step_end,
+                self._done[job.step] = StepCommitment(job.step, zero, zero, 0, 0, len(job.metas), b"\0" * 32, job.t_step_end,
                                                       time.perf_counter(), job.backlog)
 
-        return HooksOnly(engine, run_id=run_id, chunk=args.chunk, hash_threads=args.hash_threads, staging="direct")   # no arena: nothing is copied
+        com = HooksOnly(engine, run_id=run_id, hash_threads=args.hash_threads, staging="direct")   # no arena: nothing is copied
+        com.chunk = args.chunk
+        return com
     if kind.startswith("plugin:"):
         # `plugin:<module>:<factory>` — an outside committer exposing the api.Committer interface: factory(engine, run_id=..., **kw)
         _, mod, fn = kind.split(":", 2)

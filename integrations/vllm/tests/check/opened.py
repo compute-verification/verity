@@ -3,14 +3,15 @@
 The value checks read committed bytes through `oracle_compare.OpenedReader`, which opens them from a committer and verifies every read
 against the run commitment.  A test world's tensors are therefore committed by the production CPU core and read back through that reader:
 
-  * `commit_steps` packs each step's tensors into one step block and commits it with the GPU-tree committer's CPU reference
-    (`NativeHostCommitter.commit_block_offline`: 256 B chunk leaves spanning tensor boundaries, the production fold, the `retain` policy) --
-    the layout the pod's collector produces.  Needs torch.
-  * `commit_host_steps` commits each tensor as its own leaves (`NativeHostCommitter.commit_offline`, the per-tensor host path; torch-free);
-    the retained copy of a tensor is the buffer passed in, so a test that passes a bytearray can change it after the commit.
+  * `commit_steps` packs each step's tensors into one step block and commits it with the committer's CPU reference
+    (`NativeHostCommitter.commit_block_offline`: `step_rows`'s rows spanning tensor boundaries, salted from a fresh step key in
+    `row_keys`, the `retain` policy) -- the layout the pod's collector produces.
+  * `commit_host_steps` commits each step through the direct staging path (`NativeHostCommitter.commit_offline`: the step's tensors packed
+    at 4-byte-aligned offsets, then the same rows).  Both need torch, and both retain the committer's own copy of each step
+    (`retained_block`), so a mutate-after-commit test writes there.
 
 A tensor is `(name, bytes[, ordinal[, dtype, shape]])`.  Ordinals are kept, so a shared module's `<name>#ord<k>` reads select the same meta
-they select on the pod (the per-tensor path numbers tensors by position, so an ordinal there must equal it).
+they select on the pod (the direct path numbers tensors by position, so an ordinal there must equal it).
 """
 from __future__ import annotations
 
@@ -42,8 +43,7 @@ def committer(retain: str = "host", run_id: str = "opened-test", commit_scheme: 
 
 def commit_steps(steps: dict[int, list[tuple]], *, retain: str = "host", run_id: str = "opened-test", commit_scheme: str | None = None):
     """Commit `steps[s]` (tensors in acquisition order) as packed step blocks -> (committer, run commitment).  Tensors sit at 4-byte-aligned
-    offsets of the step block; a step missing below the last one is a one-tensor placeholder (steps are numbered densely).  `commit_scheme`
-    rows-sha512: the step trees are `step_rows`'s (the committer's `row_keys` hold their salt keys)."""
+    offsets of the step block; a step missing below the last one is a one-tensor placeholder (steps are numbered densely)."""
     com = committer(retain, run_id, commit_scheme)
     C = com.chunk
     for s in range(max(steps) + 1 if steps else 0):
@@ -60,9 +60,9 @@ def commit_steps(steps: dict[int, list[tuple]], *, retain: str = "host", run_id:
     return com, com.finalize()
 
 
-def commit_host_steps(steps: dict[int, list[tuple]], *, run_id: str = "opened-test", chunk: int = 64):
-    """Commit `steps[s]` on the per-tensor host path -> (committer, run commitment); missing steps below the last are placeholders."""
-    com = NativeHostCommitter(None, run_id=run_id, chunk=chunk, hash_threads=1, program_digest=hashlib.sha256(b"program").digest())
+def commit_host_steps(steps: dict[int, list[tuple]], *, run_id: str = "opened-test"):
+    """Commit `steps[s]` on the direct staging path -> (committer, run commitment); missing steps below the last are placeholders."""
+    com = NativeHostCommitter(None, run_id=run_id, hash_threads=1, program_digest=hashlib.sha256(b"program").digest())
     stream = []
     for s in range(max(steps) + 1 if steps else 0):
         tensors = []
@@ -84,7 +84,8 @@ def commit_members(members: dict[tuple[int, str], bytes], **kw):
 
 
 def retained_block(com: NativeHostCommitter, step: int) -> Any:
-    """The committer's retained copy of packed `step` (a CPU uint8 tensor under retain=host): what a mutate-after-commit test writes to."""
+    """The committer's retained copy of packed `step` (a CPU uint8 tensor under retain=host, tensors at their `stream_off`): what a
+    mutate-after-commit test writes to."""
     return com._gpu_blocks[step][0]
 
 

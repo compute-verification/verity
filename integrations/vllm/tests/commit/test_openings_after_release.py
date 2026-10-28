@@ -4,11 +4,12 @@ The GPU-tree committer used to keep a compact DEVICE copy of every step's packed
 Llama prefill step that OOMs at B=2).  The retention policy (`VERITY_RETAIN=device|host|none`) moves that copy to host memory or drops it;
 `release_staging()` frees whatever raw copy is still on the device; `open(..., values_from=replay)` answers a challenge from a second
 deterministic execution, with the sibling path from the ORIGINAL levels and `verify()` against the ORIGINAL roots.  These tests run the
-CPU reference of the same chunk tree (`commit_block_offline`) so they need no CUDA:
+CPU reference of the same rows (`commit_block_offline`) so they need no CUDA; a replay that must reproduce the original roots takes the
+original run's salt keys (`replay_row_keys`):
 
   * host retention: release frees nothing raw on the device, 64 challenge openings + forced picks verify;
   * no retention: openings need a replay source; a byte-identical replay opens every position against the original root;
-  * a replay that differs in ONE byte fails exactly the opening whose chunk holds that byte -- the original root, not the replay, is the judge;
+  * a replay that differs in ONE byte fails exactly the opening whose row holds that byte -- the original root, not the replay, is the judge;
   * the run root of a replay equals the original (the check `commit_verdict` makes when the source is a replay);
   * `commit_verdict` fails closed when openings-after-release are short, unverified, from a non-matching replay, or bytes stayed on device.
 """
@@ -22,7 +23,10 @@ torch = pytest.importorskip("torch")
 
 from verity_vllm.check.verdict import commit_verdict  # noqa: E402
 from verity_vllm.commit.challenge import challenge_positions  # noqa: E402
-from verity_vllm.commit.committer.native_host import GPU_CHUNK_BYTES, NativeHostCommitter, TensorMeta, value_family  # noqa: E402
+from verity_vllm.commit import step_rows  # noqa: E402
+from verity_vllm.commit.committer.native_host import NativeHostCommitter, TensorMeta, value_family  # noqa: E402
+
+C = step_rows.ROW_BYTES
 
 
 def _metas(step: int, seed: int) -> tuple[list[TensorMeta], bytes]:
@@ -34,17 +38,15 @@ def _metas(step: int, seed: int) -> tuple[list[TensorMeta], bytes]:
             ("model.layers.0.self_attn.o_proj", "bfloat16", (4, 2048), 4 * 2048 * 2), ("model.layers.0.post_attention_layernorm", "bfloat16", (4, 2048), 4 * 2048 * 2),
             ("fa2.m1/L0/g1x64x1", "uint32", (64, 130), 64 * 130 * 4), ("model.layers.0.mlp.down_proj", "bfloat16", (4, 2048), 4 * 2048 * 2),
             ("logits", "float32", (1, 1000), 4000), ("runner.sampler/sampled_token_ids", "int64", (1, 1), 8)]
-    metas, off, first_leaf, buf = [], 0, 0, bytearray()
+    metas, off, buf = [], 0, bytearray()
     for i, (name, dt, shape, nbytes) in enumerate(plan):
-        n_leaves = -(-nbytes // GPU_CHUNK_BYTES)
-        m = TensorMeta(i, name, dt, shape, nbytes, GPU_CHUNK_BYTES, first_leaf, n_leaves)
+        m = TensorMeta(i, name, dt, shape, nbytes, C, off // C, -(-(off + nbytes) // C) - off // C)
         m.dev_off = off
         metas.append(m)
         buf += rnd.randbytes(nbytes)
         pad = (-nbytes) % 4
         buf += b"\0" * pad
         off += nbytes + pad
-        first_leaf += n_leaves
     return metas, bytes(buf)
 
 
@@ -90,6 +92,7 @@ def test_no_retention_needs_a_replay_and_the_replay_opens_against_the_original_r
     with pytest.raises(RuntimeError, match="raw bytes released"):
         orig.open(sample[:1])
     replay = _committer("host")                       # the replay keeps its values on host for the duration of the opening
+    replay.replay_row_keys = dict(orig.row_keys)
     rc2 = _run(replay)                                # same committed inputs -> same bytes (BI determinism stands in for re-execution here)
     assert rc2.run_root == rc.run_root
     ops = orig.open(sample, values_from=replay)
@@ -169,7 +172,7 @@ def _sparse(com: NativeHostCommitter, exclude: set[str]) -> dict[int, int]:
 
     out = {}
     for step, (blk, used) in list(com._gpu_blocks.items()):
-        ex = _excluded_chunk_ranges(com._layouts[step], exclude, GPU_CHUNK_BYTES)
+        ex = _excluded_chunk_ranges(com._layouts[step], exclude, com.chunk)
         ranges, pos, n = [], 0, int(blk.numel())
         for lo, hi, _fam in ex:
             if lo > pos:
@@ -177,7 +180,7 @@ def _sparse(com: NativeHostCommitter, exclude: set[str]) -> dict[int, int]:
             pos = hi
         if pos < n:
             ranges.append((pos, n, blk[pos:n].clone()))
-        com._gpu_blocks[step] = (_HostRanges(ranges, used, {f: sum(h - l for l, h, ff in ex if ff == f) for f in exclude}), used)
+        com._gpu_blocks[step] = (_HostRanges(ranges, used, {f: sum(h - l for l, h, ff in ex if ff == f) for f in exclude}, com.chunk), used)
         out[step] = sum(h - l for l, h, _f in ex)
     return out
 
@@ -187,13 +190,13 @@ def test_excluded_chunk_ranges_are_the_chunk_aligned_interior():
 
     metas, _ = _metas(0, 1)
     fa2 = next(m for m in metas if m.name.startswith("fa2.m1/"))
-    ex = _excluded_chunk_ranges(metas, {"fa2_hidden_m1"}, GPU_CHUNK_BYTES)
+    ex = _excluded_chunk_ranges(metas, {"fa2_hidden_m1"}, C)
     assert len(ex) == 1 and ex[0][2] == "fa2_hidden_m1"
     lo, hi, _ = ex[0]
-    assert lo % GPU_CHUNK_BYTES == 0 and hi % GPU_CHUNK_BYTES == 0
-    assert lo >= fa2.dev_off and hi <= fa2.dev_off + fa2.nbytes            # strictly inside the tensor: boundary chunks stay on host
-    assert lo - fa2.dev_off < GPU_CHUNK_BYTES and (fa2.dev_off + fa2.nbytes) - hi < GPU_CHUNK_BYTES
-    assert _excluded_chunk_ranges(metas, {"no_such_family"}, GPU_CHUNK_BYTES) == []
+    assert lo % C == 0 and hi % C == 0 and hi > lo
+    assert lo >= fa2.dev_off and hi <= fa2.dev_off + fa2.nbytes            # strictly inside the tensor: boundary rows stay on host
+    assert lo - fa2.dev_off < C and (fa2.dev_off + fa2.nbytes) - hi < C
+    assert _excluded_chunk_ranges(metas, {"no_such_family"}, C) == []
 
 
 def test_sparse_host_ranges_hold_exactly_the_retained_bytes():
@@ -205,14 +208,14 @@ def test_sparse_host_ranges_hold_exactly_the_retained_bytes():
     excl = _sparse(com, {"fa2_hidden_m1"})
     assert all(v > 0 for v in excl.values())
     for step, (blk, used) in com._gpu_blocks.items():
-        assert isinstance(blk, _HostRanges) and blk.numel() == -(-used // GPU_CHUNK_BYTES) * GPU_CHUNK_BYTES
+        assert isinstance(blk, _HostRanges) and blk.numel() == -(-used // C) * C
         assert blk.retained_bytes + excl[step] == blk.numel()
         fa2 = next(m for m in com._layouts[step] if m.name.startswith("fa2.m1/"))
         n_leaves = rc.steps[step].n_leaves
         held = [com.leaf_retained(step, i) for i in range(n_leaves)]
-        # the excluded leaves are exactly the interior chunks of the FA2 row; every other leaf (incl. its two boundary chunks) is held
+        # the excluded leaves are exactly the interior rows of the FA2 tensor; every other leaf (incl. its boundary rows) is held
         for i in range(n_leaves):
-            lo, hi = i * GPU_CHUNK_BYTES, (i + 1) * GPU_CHUNK_BYTES
+            lo, hi = i * C, (i + 1) * C
             interior = lo >= fa2.dev_off and hi <= fa2.dev_off + fa2.nbytes
             assert held[i] == (not interior), (step, i)
             if held[i]:
@@ -220,9 +223,9 @@ def test_sparse_host_ranges_hold_exactly_the_retained_bytes():
             else:
                 with pytest.raises(KeyError, match="open by replay"):
                     blk[lo:hi]
-        assert sum(1 for h in held if not h) == excl[step] // GPU_CHUNK_BYTES
+        assert sum(1 for h in held if not h) == excl[step] // C
         # a slice spanning a retained range boundary (two consecutive ranges) works; one touching the gap does not
-        assert bytes(blk[0:2 * GPU_CHUNK_BYTES].numpy().tobytes()) == full[step][0:2 * GPU_CHUNK_BYTES]
+        assert bytes(blk[0:2 * C].numpy().tobytes()) == full[step][0:2 * C]
 
 
 @pytest.mark.slow
@@ -245,6 +248,7 @@ def test_sparse_retention_opens_held_leaves_from_host_and_excluded_leaves_by_rep
         orig.open([(0, inside)])
     # a byte-identical replay: regenerated VALUES + regenerated AUTHENTICATION PATHS verify against the ORIGINAL roots
     replay = _committer("host")
+    replay.replay_row_keys = dict(orig.row_keys)
     rc2 = _run(replay)
     assert rc2.run_root == rc.run_root
     ops_r = orig.open(not_held, values_from=replay, paths_from_replay=True)
