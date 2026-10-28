@@ -3,6 +3,7 @@ import Mathlib.Algebra.Order.BigOperators.Group.Finset
 import Mathlib.Basic.ENNReal.BigOperators
 import Mathlib.Basic.ENNReal.Inv
 import Mathlib.Order.CompleteLattice.Basic
+import Definitions.Core.Game
 
 /-!
 # Public-coin interactions with live coins
@@ -84,14 +85,7 @@ noncomputable def value (p : α → Prop) : Game α → ℝ≥0∞
   | .send _ k => ⨆ m, value p (k m)
   | @Game.coin _ C iF _ k => ∑ c : C, (@Fintype.card C iF : ℝ≥0∞)⁻¹ * value p (k c)
 
-/-- The uniform average over a finite type. -/
-noncomputable def avg {C : Type} [Fintype C] (f : C → ℝ≥0∞) : ℝ≥0∞ :=
-  ∑ c : C, (Fintype.card C : ℝ≥0∞)⁻¹ * f c
-
-open Classical in
-/-- The probability that a uniform coin satisfies `p`, as an average of indicators. -/
-noncomputable def prCoin {C : Type} [Fintype C] (p : C → Prop) : ℝ≥0∞ :=
-  avg fun c => if p c then 1 else 0
+export Verity.Game (avg prCoin)
 
 end Game
 

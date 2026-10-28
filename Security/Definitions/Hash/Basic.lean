@@ -1,16 +1,19 @@
-import Definitions.Claims
+import Mathlib.Data.Nat.Size
+import Definitions.Core.Digest
 
 /-!
-# Messages, digests, collisions among a run's inputs, and the byte encodings (trusted)
+# Messages, digests, collisions, and the byte encodings (trusted)
 
-The vocabulary the hash area's statements share. A message is `Claims.Msg`, whole bytes as the deployed hashes read
-them. A digest is 64 bytes (`Digest`): SHA-512's whole output, and the width every digest has in the formats below
-(frame-v3-sha512's ids, leaves and nodes, hm96-sha512's `x`, `b` and `c`, `sha512/row-seg/v1`'s segment digests), so
-a concatenation of digests splits back into them.
+The hash vocabulary every area reads. A message is `Msg`, whole bytes as the deployed hashes read them. A digest is
+core's (`Verity.Digest`, re-exported here): 64 bytes, SHA-512's whole output, and the width every digest has in the
+formats below (frame-v3-sha512's ids, leaves and nodes, hm96-sha512's `x`, `b` and `c`, `sha512/row-seg/v1`'s segment
+digests), so a concatenation of digests splits back into them.
 
-A collision is `Claims.Collision`, read on a digest's bytes. A collision *among* a list of inputs (`CollisionIn`) has
-both inputs in the list: that is how a statement ties a break to the inputs a run itself hashed (Daniel, 8 Oct: every
-`∃` in a break is bounded by something the run carries).
+A collision of `H` is two different messages with one image (`Collision`), and `H` has one when some pair is
+(`HasCollision`). The claims (`Claims.Collision`) and C-Flock's Merkle trees (`FlockSoundness.Merkle.Collision`) read
+these. A collision *among* a list of inputs (`CollisionIn`) has both inputs in the list, read on a digest's bytes: that is
+how a statement ties a break to the inputs a run itself hashed (Daniel, 8 Oct: every `∃` in a break is bounded by
+something the run carries).
 
 The encodings are the formats' own: `be k n`, `n` big-endian in `k` bytes (u32be, u64be); `uint n`, `n` big-endian in
 the fewest bytes, one byte for 0 (`merkle.py`'s `uint`); `cstr s`, a tag's bytes and its terminating zero byte; and
@@ -19,18 +22,21 @@ the fewest bytes, one byte for 0 (`merkle.py`'s `uint`); `cstr s`, a tag's bytes
 
 namespace Hash
 
-/-- A message: whole bytes. -/
-abbrev Msg := Claims.Msg
+/-- `Msg = {0,1}^*` in whole bytes, as the deployed SHA-512 reads them: a padding convention for other lengths would
+make collisions that are not SHA-512's. -/
+abbrev Msg := List UInt8
 
-/-- A digest: 64 bytes. -/
-abbrev Digest := Fin 64 → UInt8
+export Verity (Digest)
 
-/-- A digest's 64 bytes, in order. -/
-def Digest.bytes (d : Digest) : Msg := List.ofFn d
+/-- A collision of `H`: two different messages with one image. -/
+def Collision {D : Type} (H : Msg → D) (u v : Msg) : Prop := u ≠ v ∧ H u = H v
+
+/-- `H` has a collision: some pair of messages is a `Collision`. -/
+def HasCollision {D : Type} (H : Msg → D) : Prop := ∃ u v, Collision H u v
 
 /-- A collision of `H` between two of the inputs `xs`: two different messages of `xs` with one digest. -/
 def CollisionIn (H : Msg → Digest) (xs : List Msg) : Prop :=
-  ∃ x ∈ xs, ∃ y ∈ xs, Claims.Collision (fun m => (H m).bytes) x y
+  ∃ x ∈ xs, ∃ y ∈ xs, Collision (fun m => (H m).bytes) x y
 
 /-- `n` big-endian in `k` bytes (`n mod 256^k`). -/
 def be (k n : ℕ) : Msg := (List.range k).map fun i => (n / 256 ^ (k - 1 - i) % 256).toUInt8

@@ -1,5 +1,5 @@
-"""M3 proper's drawn blocks (PRF-172, CMP-161): after the live coin, each drawn proof block of the registered H200 step as the
-tree DRAWPROVE's ``prove_bundle.py --step`` proves: ``blocks/<g>/window/`` (a one-member window of the block, registered
+"""M3 proper's drawn blocks: after the live coin, each drawn proof block of the registered H200 step as the
+tree ``prove_bundle.py --step`` proves: ``blocks/<g>/window/`` (a one-member window of the block, registered
 ``subset:1``) and ``blocks/<g>/bundle.{json,bin}`` (`replay_bundle` v2, one unit, its draw the step's live one).
 
     python examples/h200/m3bundle.py weights --state DIR --registration REG.json --draw DRAW.json --out OPEN.json
@@ -14,7 +14,7 @@ tree DRAWPROVE's ``prove_bundle.py --step`` proves: ``blocks/<g>/window/`` (a on
   written to ``summary.json``, and never redrawn. A norm's gain (one registered word a row) is a port of
   `RegisteredRead`\\ s, the embedding's token past the prompt the argmax its sequence committed a step before, and a PV
   block's V row past n a row of no reads (all zero).
-* **weights** (where CMP-160's witness is): every registered row a drawn block reads (`window.Window.locate`'s
+* **weights** (where the weights registration's witness is): every registered row a drawn block reads (`window.Window.locate`'s
   `Registered` pieces), opened from the commit's state (`weights_commit.State`): its bytes, salt, string and path,
   each checked against the registered root (``REG.verify_read``).
 * **replay** (the card's part): the run again under the prover's salt secret with kv_reads' `KeepingDriver` for the drawn
@@ -351,7 +351,7 @@ def bundle_block(blk: dict, st: dict, com: RB.Commitment, win: Window, weights: 
     run_root = hashlib.sha512(f"{LOOP}/{reg['run']}/{blk['g']}".encode()).hexdigest()
     iw = IF.Window(circuit, run_root, D.parse_law("subset:1"), 1)
     tid = circuit.ids[0]
-    iw._recorded[tid] = [IF._Recorded([], [], [*data["rows"].values(), *data["outs"].values()], c, 1)]
+    iw._recorded[tid] = [IF._Recorded([], [], [*data["rows"].values(), *data["outs"].values()], c, 1, 0)]
     (m,) = iw.window.members
     salts_of = {}
     for p, ans in answers.items():
@@ -458,7 +458,7 @@ def parser() -> argparse.ArgumentParser:
     ap.add_argument("--registration", required=True)
     ap.add_argument("--draw", required=True)
     ap.add_argument("--private", default="", help="replay, build: the prover's state between them (0700)")
-    ap.add_argument("--state", default="", help="weights: CMP-160's commit state")
+    ap.add_argument("--state", default="", help="weights: the weights registration's commit state")
     ap.add_argument("--secret", default="")
     ap.add_argument("--registered", default="", help="replay: m3draw commit's roots.json")
     ap.add_argument("--receipt", default="")

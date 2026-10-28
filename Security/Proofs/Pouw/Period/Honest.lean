@@ -8,12 +8,12 @@ import Proofs.Accounting.ComposePeriod.Honest
 The positive twin of `Properties.Pouw.Period.H1CheckedCreditPeriod`, as
 `Accounting.SecurityProofs.ComposePeriod.Honest` is of `CircuitWorkPeriod`: a period of `n ≥ 1` windows at H1's
 instance's own numbers, whose every window the deployed check (`PouwCheck.protocol.check`) accepts at the
-all-protocols leg's parameters (`Accept.h1Params`, #4351), and which meets every premise of the instance
+all-protocols leg's parameters (`Accept.h1Params`), and which meets every premise of the instance
 (`h1_meets`).
 
-The leg's first real verdict agrees with these numbers: in #4420's run r20261025-194214-ae66, `verity/pouw/v1`
-accepted the loop's honest window with 128 real tiles of `N = 144`, all 24 drawn tiles proved, at `ε = 1/2` and
-`δ = 10⁻⁶`. So the `N_p = 144` and `K_d = 24` that `DrawIsCoin` and this witness use are the leg's actual check's.
+The leg's check takes these numbers: `verity/pouw/v1` accepts the loop's honest window with 128 real tiles of `N = 144`,
+all 24 drawn tiles proved, at `ε = 1/2` and `δ = 10⁻⁶`. So the `N_p = 144` and `K_d = 24` that `DrawIsCoin` and this
+witness use are the leg's actual check's.
 
 * The circuit (`circuit`): 128 committed words, one a unit (H1's 128 real tiles a window), no operands, so no unit
   writes another late (`reaches_iff`) and each real tile's late cone is its own word; one round, live. The

@@ -437,7 +437,7 @@ theorem oneShot_drawn (L : Law n) (B : Finset (Fin n)) : (oneShot L B).Drawn (fu
 
 theorem oneShot_prEv (L : Law n) (B : Finset (Fin n)) :
     (oneShot L B).prEv (fun _ => 1) (fun acc x => acc = true ∧ (B.card : ℝ) ≤ x) 0 = L.escape B := by
-  rw [oneShot, prEv_round, Law.escape, ← avg_ite_eq_prCoin]
+  rw [oneShot, prEv_round, Verity.Law.escape, ← avg_ite_eq_prCoin]
   refine congrArg avg (funext fun ω => ?_)
   by_cases hd : Disjoint (L.draw ω) B
   · have hE : decide (Disjoint (L.draw ω) B) = true ∧ (B.card : ℝ) ≤ 0 + ∑ u ∈ B, (1 : ℝ) :=

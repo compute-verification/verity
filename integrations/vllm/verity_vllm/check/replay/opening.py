@@ -70,7 +70,7 @@ class CommittedStore:
                 continue
             key = (str(ident.get("request_id", "r0")), int(ident["step"]), str(ident.get("op_path")), str(ident.get("output_member")))
             self.idx.setdefault(key, []).append(e)
-        # [moe F-moe-r17-06] a shared module's invocations share ONE member name in the collector's layouts: the reader is asked for the
+        # a shared module's invocations share ONE member name in the collector's layouts: the reader is asked for the
         # entry's EXACT meta (`<name>#ord<tensor_ordinal>`, oracle_compare.entry_read_name) whenever more than one invocation is bound under
         # that name at the step -- by the bare name every layer read layer 0's words (the OLMoE mixedstop record: layers 1..15 unequal)
         self.name_inv: dict[tuple[int, str], int] = _same_name_invocations(bmap)
@@ -109,7 +109,7 @@ class CommittedStore:
         if len(cov) > 1:
             where = ", ".join(f"{x.get('name')}@{x.get('stream_offset')}" for x in cov[:4])
             return None, (f"ambiguous binding: {len(cov)} entries for ({rid}, step {step}, {op_path}/{member}) [invocation {inv_min}] cover "
-                          f"[{elo}, {ehi}) -- {where}; C1 requires one unambiguous binding per required identity (F-r16-08)")
+                          f"[{elo}, {ehi}) -- {where}; C1 requires one unambiguous binding per required identity")
         e = cov[0] if cov else es[0]
         ident = e.get("identity") or {}
         rng = ident.get("element_range") or [0, None]

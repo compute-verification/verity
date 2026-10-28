@@ -72,7 +72,7 @@ def within_step_order(run: MatchRun, att: Attribution, reqs: RequestFacts, by_st
     engine_step_of, dep_viol, perm_facts = reqs.engine_step_of, reqs.dep_viol, reqs.perm_facts
     c = NamedCheck(res, "G8", "within_step_order: each request's own instances in its component order inside every engine step; cross-request interleaving = recorded runtime batch layout"
                   if within_step == "sequence" else
-                  "within_step_order: emission order inside an engine step recorded as batch layout (canonical addresses are structural, DECISION M-0021); "
+                  "within_step_order: emission order inside an engine step recorded as batch layout (canonical addresses are structural); "
                   "dependency order is G3's (a consumer before its producer is DAG-unequal)")
     layout = []
     nonmono_steps = {}
@@ -158,7 +158,7 @@ def within_step_order(run: MatchRun, att: Attribution, reqs: RequestFacts, by_st
             statement = ("emission order of the request's instances inside this engine step differs from its component's canonical layout "
                          "(fold encoding: AttentionScope groups the batch's rows by distinct T in first-occurrence order); the instances, their "
                          "wiring and dependency order are the component's (Merkle-identical), each is addressed by its canonical component index; "
-                         "recorded as batch layout, not re-sorted (DECISION M-0021)" if same_dag else
+                         "recorded as batch layout, not re-sorted" if same_dag else
                          "NOT a permutation of the component's step (different DAG): reported by G3")
         perms.append({"request_id": rid, "local_step": s, "engine_step": es, "n": len(pi), "moved": len(moved), "same_dag_multiset": same_dag,
                       "unmatched": sum(1 for x in pi if x is None), "offset_histogram": dict(offs.most_common(6)),

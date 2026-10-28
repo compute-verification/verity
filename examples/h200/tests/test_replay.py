@@ -1,7 +1,7 @@
 """The CPU replay (`replay`): each template's function is circuits' semantics (a scalar composition of main's word
 primitives' own evaluators, and main's Definition wherever one is importable), every template keys and parses at the frozen
 shape's parameters, the draw is core's draw object from live coins, and a replay of seeded W8A8 coordinates, of a tiny instance
-of the frozen architecture (`cpu_step` on ALLP-IFACE's seeded weights) and of a bundle in IFACE-B's form matches unit for unit and
+of the frozen architecture (`cpu_step` on the seeded weights) and of a bundle in the drawn-unit bundle's form matches unit for unit and
 catches one flipped bit."""
 from __future__ import annotations
 
@@ -210,7 +210,7 @@ def test_softmax_and_rmsnorm_on_rows_with_nans_and_infinities() -> None:
 
 
 def test_each_importable_definition_is_its_reference() -> None:
-    """Wherever main has a template's Definition (today the W8A8 and BF16 coordinates and Bf16Add; circuits' CIR-100 ones as
+    """Wherever main has a template's Definition (today the W8A8 and BF16 coordinates and Bf16Add; circuits' quantizer ones as
     they land), the reference must be that Definition."""
     rng = np.random.default_rng(5)
     keys = [*SCALAR, "ScaledMmS8Coordinate_v1{K=32,DOT=BlackwellS8ImmaDot32_v1}", "GemmCoordinate_v2{K=16,DOT=HopperBF16WgmmaDot16_v1}"]
@@ -338,7 +338,7 @@ def test_a_malformed_unit_is_reported_not_replayed() -> None:
 
 
 def iface_b(units: list[dict]) -> tuple[dict, bytes]:
-    """``units`` as IFACE-B's drawn-unit bundle carries them (`verity/drawn-unit-bundle/v1`: per unit its template's name
+    """``units`` as the drawn-unit bundle carries them (`verity/drawn-unit-bundle/v1`: per unit its template's name
     and binding, each port's row as u16 words little-endian in the payload); openings left out, `units_of` doesn't read them."""
     payload, out = bytearray(), []
     for u in units:
@@ -378,7 +378,7 @@ TINY_FORMS = S.Forms(rms_chunk=16, rms_group=2, amax_chunk=16, part_fanin=2, pv_
 @pytest.fixture(scope="module")
 def tiny() -> S.Step:
     """Two sequences through a tiny MQA decoder of the frozen architecture (width 64, 2 layers, 4 query heads of 16, MLP
-    128, byte vocabulary, context 8, 16-code weight rows) on ALLP-IFACE's test-seeded weights: 6 positions, ~159k units."""
+    128, byte vocabulary, context 8, 16-code weight rows) on the test-seeded weights: 6 positions, ~159k units."""
     from e2e_h200 import served_weights as WG
     shape = WG.Shape("replay-tiny-mqa", 64, 2, 4, 16, 1, 128, 256, 8, 16)
     step = S.Step(shape, lambda n: WG.generate(shape, WG.TEST_SEED, n), batch=2, forms=TINY_FORMS)

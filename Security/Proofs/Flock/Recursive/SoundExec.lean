@@ -108,7 +108,7 @@ reaches has every session accepting, having read at some position a row other th
 and the developer's give a SHA-512 collision, `rowCommit`'s extractor's pair), or Lean's verifier accepts `st` and
 every session of V* while the registered private circuit's hidden statement fails with probability at most
 `RecursiveSoundExec`'s bound. It needs `VBridge` in full, which candidate 3 today doesn't give; its event is nearly
-empty as `RecursiveSound`'s is (LEAN-19). -/
+empty as `RecursiveSound`'s is. -/
 def RecursiveRanRegisteredExec : Prop :=
   ∀ {nT r : ℕ} (T : Fin nT → Type) (CT : Fin r → Type) [∀ k, Fintype (CT k)] [∀ k, Nonempty (CT k)]
     {n : ℕ} {L : Law n} {Reg Cm : Type} {S : ℕ} {Vs : Fin S → VStmt} {Reg' Reg₂ : Type}
