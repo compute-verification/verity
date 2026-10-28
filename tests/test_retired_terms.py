@@ -37,7 +37,7 @@ DOC_TERMS = {
     "physical block": "server-time block",
     "thread block": "CTA",
     "KV block": "KV page",
-    "leg": "the subprotocol's name (sampled proofs, PoUW, PoUS, PoUB, network certification, memory wipes), or run",
+    "leg": "the subprotocol's name (sampled proofs, PoUW, PoUS, the bandwidth audit, the network certifier, the wipe), or run",
 }
 _SPACE = r"(?:[ \t]+|-|[ \t]*\n[ \t]*)"
 _DOC_TERM = re.compile(rf"(?i:\b(?:(?:wrong|incorrect|isolation|replay){_SPACE}units?|(?:physical|thread|KV){_SPACE}blocks?"
