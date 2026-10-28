@@ -53,8 +53,10 @@
 * **When.** `Served.commit` registers call c's z table as `H1Run` records the call, step s's A table of K at its last
   call of K (salted from its first call's nonce), and puts the period's ``b/<K>`` in the call that completes K's weights
   (the last of K's linears in step 0), then, once both roots exist, each of the step's calls of K's ``pub@<c>``
-  (`Served._pubs`) and, with ``receipts``, its receipt table. Each root goes into that call's manifest row
-  (``tables.registered``), so its
+  (`Served._pubs`) and, with ``receipts``, its receipt table. A z table hashed on the GPU hashes there while the step's
+  later calls run, its place in `registered` taken when it's recorded and its tree and root put in once hashed
+  (`Served.settle`, at the latest when `H1Run.tables` reads the step's roots at its round's close). Each root goes into
+  that call's manifest row (``tables.registered``), so its
   round's root commits it before the round's coin, and round s's root also lists step s's A tables whole
   (`Served.segments`, `credit.round_root`). A weight is taken once, and one that changes within the window
   is refused. Without the period's `Weights` (an in-process window, which credits nothing) the window registers its own
@@ -83,6 +85,7 @@
 """
 from __future__ import annotations
 
+import collections
 import functools
 import hashlib
 from dataclasses import dataclass, field
@@ -341,6 +344,8 @@ class Served:
     #: each linear's weight, the tensor and its codes, taken once, and its scales
     _weights: dict[int, tuple[Any, np.ndarray]] = field(default_factory=dict)
     _scales: dict[int, np.ndarray] = field(default_factory=dict)
+    #: the z tables still hashing on the GPU (`_register_later`), in registration order, each with the ``out`` its root goes in
+    _later: collections.deque[tuple[str, dict[str, str | None]]] = field(default_factory=collections.deque)
 
     def key(self, commits: Mapping[str, Any]) -> bytes:
         if self.window is not None:
@@ -399,14 +404,33 @@ class Served:
                                 "each K's b/<K> under the period's declared Program")
 
     def _tree(self, run: Any, value: str, words: np.ndarray, first: int, window: str | None,
-              session: str | None = None, row_salts: bytes | None = None) -> G.Registered:
+              session: str | None = None, row_salts: bytes | None = None, later: bool = False) -> G.Registered | NR.Later:
         return NR.commit(self.program_digest, value, words, run._key, first, row_salts is not None, row_salts,
-                         window=window, session=session)
+                         later=later, window=window, session=session)
 
     def _register(self, run: Any, value: str, words: np.ndarray, first: int, window: str | None,
                   row_salts: bytes | None = None) -> str:
         reg = self.registered[value] = self._tree(run, value, words, first, window, row_salts=row_salts)
         return reg.root.hex()
+
+    def _register_later(self, run: Any, value: str, words: Any, first: int, out: dict[str, str | None]) -> None:
+        """`_register` of a call's z table into ``out``, its hash left running on the GPU where it hashes there
+        (`pouw_h1_registered.commit`'s ``later``): it takes its place in `registered` now, and `settle` puts its tree there
+        and its root in ``out``."""
+        got = self.registered[value] = self._tree(run, value, words, first, self.root, later=True)
+        if isinstance(got, NR.Later):
+            out[value] = None
+            self._later.append((value, out))
+        else:
+            out[value] = got.root.hex()
+
+    def settle(self, wait: bool = True) -> None:
+        """Record the z tables the GPU has hashed (`_register_later`), in registration order: all of them with ``wait``,
+        else the leading ones already done."""
+        while self._later and (wait or self.registered[self._later[0][0]].ready()):
+            value, out = self._later.popleft()
+            reg = self.registered[value] = self.registered[value].result()
+            out[value] = reg.root.hex()
 
     def a_words(self, call: Any, codes: np.ndarray, scales: np.ndarray) -> np.ndarray:
         """Call ``call``'s A table's words over the Program's M slots: its rows' int8 ``codes`` [m, K] and f32 ``scales``
@@ -519,14 +543,16 @@ class Served:
             self.refused.append(f"call {call.index}: linear {call.layer}'s weight changed within the window")
 
     def commit(self, run: Any, call: Any, a: Any, s_a: Any, weight: Any, weight_scale: Any,
-               records: np.ndarray | None) -> dict[str, str]:
+               records: Any) -> dict[str, str]:
         """Register call ``call``'s z table (its z/y ``records`` over its T slots, `pouw_h1_records`', split back to z and
-        y and laid out in the Program's tile), add its A rows (its served rows ``a`` [m, K] and scales ``s_a`` [m]) to its
+        y and laid out in the Program's tile, or read where they are when that tile is theirs, `zy_words`), add its A
+        rows (its served rows ``a`` [m, K] and scales ``s_a`` [m]) to its
         step's A table of K at its rows in call order, registered whole once the step's calls of K are all in (in
         whichever order its forward ran them: its last call of K), and take ``b/<K>`` once K's linears' weights are all
         held (`_take_b`); with ``receipts``, at the step's last call of K, each of the step's calls of K's receipt
         table, in call order (`_receipts` of the call's own codes and s_a): ``{value: root}``, what the call's manifest
-        row commits under its round's root. Nothing once the window is refused."""
+        row commits under its round's root, the z table's once `settle` has it. Nothing once the window is refused."""
+        self.settle(wait=False)
         if self.root is None and not self.refused:
             self.open(run)
         if not self.refused:
@@ -559,8 +585,7 @@ class Served:
         if len(rows) == len(mine):
             whole = np.concatenate([b for _c, b in sorted(self._a.pop(value).items())])
             out[value] = self._register(run, value, whole, nonce(mine[0], "a"), self.root)
-        zy = HW.table(self.program, "zy", call.index)
-        out[zy] = self._register(run, zy, zy_rows, nonce(call.index, "zy"), self.root)
+        self._register_later(run, HW.table(self.program, "zy", call.index), zy_rows, nonce(call.index, "zy"), out)
         if self.tap is not None:
             self.tap.arow(run, self, call, value, whole)
         b = self.program.fn.bindings["PREFIX"] + f"b/{call.k}"
@@ -679,6 +704,7 @@ class Served:
         """After the run's last round: refuse a window that isn't static, or that left a table its Program reads
         unregistered; else commit its ok rows (`ok`): row u proof block u's, `core_check.OK_ROW` under `core_check.ok_salt` of
         the open root and u, as credit's `registered_file` and Lean's ``registeredFile`` build them (`h1window.ok_table`)."""
+        self.settle()
         if self.refused:
             return
         if self.program is None:
@@ -705,9 +731,11 @@ class Served:
 
     def values(self) -> dict[str, int]:
         """Each registered value's words a row."""
+        self.settle()
         return {v: r.words for v, r in self.registered.items()}
 
     def roots(self) -> dict[str, str]:
+        self.settle()
         return {v: r.root.hex() for v, r in self.registered.items()}
 
     def ports(self) -> dict[str, str]:
@@ -717,6 +745,7 @@ class Served:
 
     def entries(self) -> list[dict[str, Any]]:
         """The Program's registered values' entries, then each round's input-ids table's, then the live tables'."""
+        self.settle()
         return ([r.entry() for r in self.registered.values()] + [self.ids[s].entry() for s in sorted(self.ids)]
                 + [r.entry() for r in self.live.values()])
 
