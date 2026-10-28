@@ -14,5 +14,5 @@ QUANT_PLANS: dict[str, dict[int, tuple[tuple[int, int, int], ...]]] = {
 # engine fuses only there (`int8_producers`).  At 8 or 16 warps the add-norm is three times slower than the two apart, at
 # 1 warp twice as fast.  The silu at I 14,336 (Llama-3.1-8B) is slower fused at every warps tried, so it isn't listed.
 PRODUCER_WARPS: dict[str, dict[str, dict[int, int]]] = {
-    "sm_90": {"norm": {2048: 1, 4096: 1}, "silu": {8192: 16}},
+    "sm_90": {"norm": {2048: 1, 4096: 1}, "silu": {8192: 8}},
 }
