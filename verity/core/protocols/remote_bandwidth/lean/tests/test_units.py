@@ -387,15 +387,15 @@ def test_registration_digest(server) -> None:
 
 
 def register(v) -> dict:
-    """`registerFn`: `audit.register` on the input's source and nonce, `bind` refused as the Lean refuses it."""
+    """`registerFn`: `audit.register`'s draw (`_draw`, of the node, N and payload root the log gives it) on the input's
+    source and nonce, `bind` refused as the Lean refuses it."""
     with M.decoding():
         source, node, root, nonce = (M.hex_(v, k) for k in ("source", "node", "payload_root", "nonce"))
         c, kind, layout = M.codec_of(M._get(v, "codec")), M._str(v, "receipt"), M._str(v, "layout")
         blocks, rows = M.nat(v, "blocks"), M.nat(v, "rows")
         if M._bool(v, "bind"):
             raise D.Reject("a registration that binds PoUW's tile outputs is not covered: the Lean refuses it")
-        r = audit.register(source, audit.site_log(node, blocks, root), audit.STORE, c, kind, layout=layout, rows=rows,
-                           nonce=nonce)
+        r = audit._draw(source, node, blocks, root, c, kind, layout=layout, rows=rows, nonce=nonce)
     return {"codec_seed": r.codec_seed.hex(), "digest": r.digest.hex()}
 
 
