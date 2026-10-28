@@ -32,6 +32,7 @@
   "Flock.Test.SharedReads",
   "Flock.Test.DerivedPos",
   "Flock.Test.RecCompose",
+  "Flock.Test.RecLinks",
   "Flock.Test.RegFormats",
   "Flock.Test.RegComplete",
   "Flock.Test.RegProgram",
@@ -82,7 +83,8 @@
   "FlockWitness": "the flock-witness executable's entry point, one line; its command is Flock.Witness.cmd, audited under Flock",
   "FlockRecSparse": "the flock-rec-sparse executable's entry point, one line; its command is Flock.RecSparseCmd.cmd, audited under Flock",
   "FlockRecOpening": "the flock-rec-opening executable's entry point, one line; its command is Flock.RecOpeningCmd.cmd, audited under Flock",
-  "Flock.Test.RecCap": "a test, not a proof: its one #guard builds V*'s whole list at the deployed inner shape (RecVStar.statements) in the interpreter, about 20 min on every check node, so it would gate every Flock-touching Lean check; built right after landing by verity/ml/flock/tests/test_lean_rec_cap_guards.py instead, the tier for parts whose cold run is over 10 min. Flock.Test.RecCapSmall, a root, holds RecCap's refusals and the checks statements runs on its list at m 22, in 25 s"
+  "Flock.Test.RecCap": "a test, not a proof: its one #guard builds V*'s whole list at the deployed inner shape (RecVStar.statements) in the interpreter, about 20 min on every check node, so it would gate every Flock-touching Lean check; built right after landing by verity/ml/flock/tests/test_lean_rec_cap_guards.py instead, the tier for parts whose cold run is over 10 min. Flock.Test.RecCapSmall, a root, holds RecCap's refusals and the checks statements runs on its list at m 22, in 25 s",
+  "FlockRecLinks": "the flock-rec-links executable's entry point, one line; its command is Flock.RecLinksCmd.cmd, audited under Flock"
  },
  "assumptions": {
   "Flock.Firewall.Contract.FirewallComputes": {
@@ -455,6 +457,26 @@
    ],
    "assumptions": [],
    "type_hash": "457708597f2841098fb5904b6f15316d8f12d995a46c791b11e033668cb118ce"
+  },
+  "Flock.RecLinks.check_sound": {
+   "owner": "@proofs",
+   "signature": [
+    "Flock.RecLinks.check_sound {sh : Flock.RecLinks.Shape} {inRow outRow : Nat → Nat → Array Nat} {rows : Array ByteArray}",
+    "  {L : Nat} (h : Eq (Flock.RecLinks.check sh inRow outRow rows) (Except.ok L)) :",
+    "  Exists fun ls =>",
+    "    And",
+    "      (Eq (Flock.RecLinks.decodeAll rows.toList)",
+    "        (Except.ok",
+    "          (instHAppendOfAppend.hAppend (List.map Option.some ls)",
+    "            (List.replicate (instHSub.hSub rows.size L) Option.none))))",
+    "      (And (Eq L ls.length)",
+    "        (And (instLTNat.lt 0 L)",
+    "          (And (Eq rows.size (Flock.RecLinks.grid L))",
+    "            (And (∀ (l : Flock.RecLinks.Link), List.instMembership.mem ls l → Flock.RecLinks.Holds sh inRow outRow l)",
+    "              (List.map (fun l => { fst := l.reader, snd := l.port }) ls).Nodup))))"
+   ],
+   "assumptions": [],
+   "type_hash": "5798bc5808809e9f728d09061afde55a0dcb498935b09a22455d695061437a91"
   }
  },
  "shape": {
@@ -462,6 +484,10 @@
   "properties": {
    "Flock.Firewall.Contract.holds_coins_binding": {
     "function": "Flock.Firewall.Contract.run",
+    "outcome": "accept"
+   },
+   "Flock.RecLinks.check_sound": {
+    "function": "Flock.RecLinks.check",
     "outcome": "accept"
    }
   },
@@ -726,6 +752,35 @@
     "Flock.Firewall.Contract.holds_fixed",
     "Flock.Firewall.Contract.holds_masked"
    ]
+  },
+  "Flock.RecLinks": {
+   "digest": "606008cd18db63613c06d6dddb82eaa0189acd336e1dc7ebee736dfc59f5e1cc",
+   "definitions": {
+    "Flock.RecLinks.FIELD_BYTES": "cd19ac2e7b0e432c174ce9b4250c8700af97d8327a63db3eb313b75bbc7e0354",
+    "Flock.RecLinks.GRID_BITS": "eeb2f0a6a105f79b698798e5aafcc13ebfc1e0cea562e1aa51c0ff7c5c71843a",
+    "Flock.RecLinks.Holds": "dcc127f7fa0c4272a7ae8fef7683f6aacbf22f4950d4ab4975040641f01af2e7",
+    "Flock.RecLinks.KIND_LINK": "9acc91def4ca1b9deb533adbe0b9d2f23533f1e30c80a72a1f8dc75886b58224",
+    "Flock.RecLinks.Link": "d9204963a781fe564f40f8e5d4849359e5bde586f469c29b3f9119d041683c70",
+    "Flock.RecLinks.Link.out": "feae40b58c503d1348536fa43d8ba237bae84ac66fa0b5ad206137271a584012",
+    "Flock.RecLinks.Link.port": "4cf8196cd58973d3e909822f5ca4c1fded35c0d15c4e7405592eb8a4442ae32d",
+    "Flock.RecLinks.Link.reader": "5763dcf92d93d600a41b74047ebae01055d245dbb94b75a0121a178dedccbc10",
+    "Flock.RecLinks.Link.writer": "287a5c0d5720cfd5fbdda8144f757fd84f9626ab4dab4ae174809f654292da21",
+    "Flock.RecLinks.ROW_BYTES": "8daa31911b82b78b22a2b186e7cdbc18c2d14d5c9a1d89cbeba5e0eea825549f",
+    "Flock.RecLinks.Shape": "1f2c94dddc7afe6bd50d701b0910de518e5b9617f8462818a113169408d30c62",
+    "Flock.RecLinks.Shape.ins": "56f1732fc788a155c1d00bdb0be88ffb601a31ab13ae38845196a6d7687a0d0a",
+    "Flock.RecLinks.Shape.outs": "06b20acc8baf4a631a03766d329618ab1c441d58e43c614d8d4984165a8a032a",
+    "Flock.RecLinks.Shape.units": "c4fe30365d7221516d4a2570a7619e2b04c64bbf43ef34e6eaa73ab2d0bbb1f2",
+    "Flock.RecLinks.bitLength": "d2251ac6476350195dbf64988e3267c58455ac01366aeb9764c8b0e582b18955",
+    "Flock.RecLinks.check": "b938e3c3227614c852eea854e01537537300361e879dd8b8acc4e3910ff1ec21",
+    "Flock.RecLinks.decode": "881b5c5583dee85c32fef19734c7b6a74b0b445002a9a19d32ec1870d9ee789e",
+    "Flock.RecLinks.decodeAll": "ea926248ffa0224ba8d0e07cae68bd65be91d35454d04ea8c147407477df8fea",
+    "Flock.RecLinks.grid": "9b1119f854b0c580347111b443022997ddbba432e0deddf3771b75b8f82b7748",
+    "Flock.RecLinks.linkErr": "955e824ff51d723546d4141114f856a4868496103219548a1c51bf1722e13c41",
+    "Flock.RecLinks.links": "c068e4583f385523a44b51db14b5abcbef25bb1c80100f5bd493d932d9b0b4f3",
+    "Flock.RecLinks.ordered": "10fe0c9c7b6d4647e22a46e13aa011d4223d6bcbe57ed966cd20241d264e1d83",
+    "Flock.RecLinks.u32At": "c1675f44eafac783a305179e813be310e7b341eaa28ee67706d1aa50d3aff4f6"
+   },
+   "guarantees": ["Flock.RecLinks.check_sound"]
   }
  },
  "dependencies": {
