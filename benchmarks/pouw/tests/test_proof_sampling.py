@@ -115,8 +115,8 @@ def test_the_early_token_attack_steers_every_layer_of_the_first_510_tokens():
 
 
 def test_the_cost_is_prf57s_and_bounds_the_draws_a_round():
-    """PRF-57's sessions; the recommended draw keeps up with 12.6 s rounds in a 2-round batch, while s = 64 never does,
-    because one prover a site sustains ≈ 77 whole DPs of length 4,096 a round."""
+    """The ZK sessions' costs (`ZK_SESSION`); the recommended draw keeps up with 12.6 s rounds in a 2-round batch, while
+    s = 64 never does, because one prover a site sustains ≈ 77 whole DPs of length 4,096 a round."""
     for dps, prove, wall in P.ZK_SESSION:
         assert P.session_s(dps) == pytest.approx((prove, wall))
     assert P.session_s(0)[1] == pytest.approx(12.13, abs=0.01)

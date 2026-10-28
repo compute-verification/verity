@@ -1,4 +1,4 @@
-"""HC-SCHED's arm-side runner (benchmarks/pouw/filler/psched_score.py) on synthetic out dirs: the locked `score.py report`
+"""psched's arm-side runner (benchmarks/pouw/filler/psched_score.py) on synthetic out dirs: the locked `score.py report`
 scores pscore's rows (the phase filler's work counted in FILL chunks) unchanged, the runner's two added gates (the phase
 filler's DRAM share against the same counter's control, and its receipts and tile counts) void the SCORE when they fail,
 and the arm (psched_arm.py) places a phase filler only beside a split, as a pure function of the point."""

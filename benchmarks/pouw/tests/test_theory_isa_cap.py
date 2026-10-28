@@ -1,4 +1,4 @@
-"""One IMAD writes 4 single-entry fields and one IMAD.WIDE 6, above QSTAR's "IMAD ≤ 3" and ISA-CAP's 32/7."""
+"""One IMAD writes 4 single-entry fields and one IMAD.WIDE 6, above qstar's "IMAD ≤ 3" and the ISA cap's 32/7."""
 from __future__ import annotations
 
 import sys
