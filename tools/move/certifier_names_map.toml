@@ -38,51 +38,53 @@ files = ["benchmarks/network_traces/n2_tie_zk.py", "verity/core/protocols/certif
 [words_in.words]
 "Q.Link" = "Q.ServedIngress"
 
-# egress: a slot's record
+# egress: a slot's occupancy
 [[words_in]]
 files = ["verity/core/protocols/certifier/egress.py"]
 [words_in.words]
-"Record" = "SlotRecord"
+"Record" = "Occupancy"
+"A slot's record:" = "A slot's occupancy:"
 
 [[words_in]]
 files = ["verity/core/protocols/certifier/tests/test_network_certifier_egress.py"]
 [words_in.words]
-"EG.Record" = "EG.SlotRecord"
+"EG.Record" = "EG.Occupancy"
 
-# service: the witness of one link-window's commitment
+# service: the firewall's hidden side of one link-window's commitment
 [[words_in]]
 files = ["verity/core/protocols/certifier/service.py"]
 [words_in.words]
-"Opening" = "LinkWindowWitness"
+"Opening" = "Hidden"
 
 [[words_in]]
 files = ["verity/core/protocols/certifier/tests/standin.py"]
 [words_in.words]
-"SVC.Opening" = "SVC.LinkWindowWitness"
+"SVC.Opening" = "SVC.Hidden"
 
 [[words_in]]
 files = ["verity/core/protocols/certifier/PROTOCOL.md"]
 [words_in.words]
-"(`Opening`)" = "(`LinkWindowWitness`)"
+"(`Opening`)" = "(`Hidden`)"
 
-# audit: one link-window's verdict, the Python of `NetworkCheck.Check.LinkWindow`
+# audit: one link-window's check, whose verdict is `Core.Verdict`'s
 [[words_in]]
 files = ["verity/core/protocols/certifier/audit.py", "verity/core/protocols/certifier/active.py",
          "verity/core/protocols/certifier/lean_audit.py",
          "verity/core/protocols/certifier/tests/test_network_certifier_active.py"]
 [words_in.words]
-"Verdict" = "LinkWindowVerdict"
+"Verdict" = "LinkWindowCheck"
 
 [[words_in]]
 files = ["verity/core/protocols/network/tests/test_lean_audit.py"]
 [words_in.words]
-"audit.Verdict" = "audit.LinkWindowVerdict"
+"audit.Verdict" = "audit.LinkWindowCheck"
+"[Verdict(link=" = "[LinkWindowCheck(link="
 
-# replay_chain: a window row, beside the state row (`Row`)
+# replay_chain: a window row, the queue of arrivals and decisions beside the state row (`Row`)
 [[words_in]]
 files = ["verity/core/protocols/certifier/replay_chain.py"]
 [words_in.words]
-"Window" = "WindowRow"
+"Window" = "QueueRow"
 
 [[words_in]]
 files = ["verity/core/protocols/certifier/compile_slice.py", "verity/core/protocols/certifier/compile_slice_v2.py",
@@ -90,7 +92,7 @@ files = ["verity/core/protocols/certifier/compile_slice.py", "verity/core/protoc
          "verity/core/protocols/certifier/tests/test_network_certifier_replay_chain.py",
          "benchmarks/network_e2e/encodings/tests/test_v1.py"]
 [words_in.words]
-"RC.Window" = "RC.WindowRow"
+"RC.Window" = "RC.QueueRow"
 
 [keep]
 # prose that starts a sentence with the window itself
