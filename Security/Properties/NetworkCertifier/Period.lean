@@ -4,19 +4,25 @@ import Lms.Sign
 /-!
 # The network certifier over a period: what its Lean code (`NetworkCheck.Period`) establishes of each link-window
 
-The property of `NetworkCheck.Period.protocol`'s check (`verity/certifier/v0`, onsite's `.network` component,
-`Verity.component .network`), stated against its functions as they run: if the check accepts, the commitment registers
-and the evidence answers exactly the period's `m` link-windows, and every link-window `i` (the session's window
-`w = first + i`) is accepted as the period's own per-window check of its form accepts it.
+The property of `NetworkCheck.Period.check`, `NetworkCheck.Period.protocol`'s check on blobs (`verity/certifier/v0`,
+onsite's `.network` component, `Verity.component .network`, a `Core.BlobProtocol`), stated against its functions as
+they run on the caller's blobs: if
+the check accepts, the commitment registers and the evidence answers exactly the period's `m` link-windows, and every
+link-window `i` (the session's window `w = first + i`) is accepted as the period's own per-window check of its form
+accepts it.
 
 In the clock form (`windowCheck`, `PeriodWindowAccepted`):
 
-* proved: one-stage's answer for its registration's digest accepted, with the profile of one unit drawn `subset:1`
-  (`PeriodWindowProved`), its registration naming the link's Program at `w` (`PeriodWindowRegistered`);
+* registered: its registration names the link's Program at `w` (`PeriodWindowRegistered`);
 * both ends certified: two certificates, egress then ingress, each the key's for its end of the link at `w`, verifying
   under LMS in the session (`PeriodWindowCertified`);
-* its clock synced: the key's egress clock certificate of the link at `w`, its digest neither a sync's unsalted
-  `clock_digest` nor an earlier link-window's in the period (`PeriodWindowClocked`).
+* its clock synced: the key's egress clock certificate of the link at `w`, its digest neither a sync of the link's
+  Σ_sync's unsalted `clock_digest` nor an earlier link-window's in the period (`PeriodWindowClocked`);
+* proved: one-stage v2 accepted its proof on the blobs (`SampledProofs.OneStageZk.checkBlobs`), under the auditor's
+  parameters with the link-window's own port and the period's earlier registrations in its log, with the profile of one
+  unit drawn `subset:1` (`PeriodWindowV2`);
+* opened: the proof's public row for the drawn unit opens under the delivered salt to the verifier's own, and its output
+  row to the word 3 (`PeriodWindowOpened`).
 
 In the rows form (`rowsWindowCheck`, `PeriodRowsWindowAccepted`):
 
@@ -26,23 +32,23 @@ In the rows form (`rowsWindowCheck`, `PeriodRowsWindowAccepted`):
 * its rows registered: the ingress then the egress rows, each `warden_rows.check_registration`'s (`PeriodRowsChecked`:
   the link-window's value, link, end and window, the bound schedule's digest and rows, the link-window's domain, and the
   key's certificate on the head), both held by the scan's registration (`PeriodRowsRegistered`);
-* proved: one-stage's answer for its registration's digest accepted, with one level of the scan's `2T` units drawn
-  `subset:k` or stratified and a `bound` (`PeriodRowsProved`).
+* proved: the one-stage answer it shows is for its registration's digest and accepted, with one level of the scan's
+  `2T` units drawn `subset:k` or stratified and a `bound` (`PeriodRowsProved`).
 
 The per-window predicate is the period check's own, not N2's link-window verdict (`NetworkCheck.LinkWindow.verdict`,
-`Properties.NetworkCertifier.LinkWindowAcceptMeans`): the period check never runs that verdict; it reads each
-link-window's one-stage answer, whose verifier of record is N2's (`LinkWindows.verify`) or the scan's. What the
-certifier signs about the clock is witness, so the clock is synced as the auditor's device certified it
-(`trusted-host`), not by a clear-text sync in Σ_sync.
+`Properties.NetworkCertifier.LinkWindowAcceptMeans`): the period check never runs that verdict. In the clock form it
+runs one-stage v2 on the link-window's proof itself and makes the verdict's opening beside it; in the rows form it reads
+the scan's one-stage answer. What the certifier signs about the clock is witness, so the clock is synced as the
+auditor's device certified it (`trusted-host`), not by a clear-text sync in Σ_sync.
 
 Comparisons the code makes with a `BEq` instance not known to be lawful (`Json`, `ByteArray`, `String`, the profile's
 levels) are stated as the code's `==` returning `true`.
 
 Beside the property, its two lemmas' objects: `PeriodAcceptMeansOf`, the property of any period check, and
-`acceptAllPeriod`, a check that accepts every period; and an honest period of one clock-form link-window
-(`honestParams`, `honestCommitment`, `honestEvidence`), its certificates signed with the certifier's key at the deployed
-LMS parameters, with the two named assumptions about code the kernel can't evaluate that its acceptance takes
-(`JsonStrBeq`, `HonestProfileReads`).
+`acceptAllPeriod`, a check that accepts every period; and an honest period of one clock-form link-window on a clock link
+`l` (`honestParams`, `honestCommitment`, `honestEvidence`), its certificates signed with the certifier's key at the
+deployed LMS parameters, with the named assumption its acceptance takes: that some clock link, registration and proof
+of that link-window pass v2 and open (`HonestWindowProved`), which no kernel evaluation makes.
 -/
 
 open NetworkCheck.Period
@@ -53,12 +59,12 @@ namespace Properties.NetworkCertifier
 
 /-- Link-window `w`'s registration names the period's Program: N2's for the link in the clock form, the scan's in the
 rows form. -/
-def PeriodWindowProgram (p : Params) (reg : Registration) : Prop :=
-  (reg.record.getObjValD "program" == .str p.program) = true
+def PeriodWindowProgram (p : Params) (reg : Json) : Prop :=
+  (reg.getObjValD "program" == .str p.program) = true
 
 /-- Link-window `w`'s registration names the link's Program and the provenance `{"kind": "served", "window": w}`. -/
-def PeriodWindowRegistered (p : Params) (w : Nat) (reg : Registration) : Prop :=
-  PeriodWindowProgram p reg ∧ canonText (reg.record.getObjValD "window") = canonText (served w)
+def PeriodWindowRegistered (p : Params) (w : Nat) (reg : Json) : Prop :=
+  PeriodWindowProgram p reg ∧ canonText (reg.getObjValD "window") = canonText (served w)
 
 /-- Both ends of link-window `w` certified: two certificates, egress then ingress, each the key's for its end of the
 link at `w`, its LMS signature verifying over `certificate_message` in the session (`certifies`). -/
@@ -66,29 +72,46 @@ def PeriodWindowCertified (p : Params) (w : Nat) (x : Window) : Prop :=
   ∃ eg ig, x.certificates = #[eg, ig] ∧ certifies p .egress w eg = true ∧ certifies p .ingress w ig = true
 
 /-- Link-window `w`'s clock synced as the certifier certified it: it shows a clock certificate, the key's egress
-certificate of the link at `w`, and the digest it signs is salted (no sync of Σ_sync `ss`'s `clock_digest` itself) and
-fresh (no earlier link-window's clock digest in the period, `earlier`). -/
-def PeriodWindowClocked (p : Params) (ss : NetworkCertifier.SyncSet) (earlier : Array ByteArray) (w : Nat)
-    (x : Window) : Prop :=
-  ∃ clock, x.shown = .clock clock ∧ certifies p .egress w clock = true ∧
-    (clearClocks ss).contains clock.digest = false ∧ earlier.contains clock.digest = false
+certificate of the link at `w`, and the digest it signs is salted (no sync of the clock link `l`'s Σ_sync's
+`clock_digest` itself) and fresh (no earlier link-window's clock digest in the period, `earlier`). -/
+def PeriodWindowClocked (p : Params) (l : ClockLink) (earlier : Array ByteArray) (w : Nat) (x : Window) : Prop :=
+  ∃ clock salts ev, x.shown = .clock clock salts ev ∧ certifies p .egress w clock = true ∧
+    (clearClocks l.syncSet).contains clock.digest = false ∧ earlier.contains clock.digest = false
 
-/-- The link-window was proved: its answer is one-stage's for the registration's digest and accepted, with a public
-output and a profile of one level of one unit drawn `subset:1`, that one unit drawn. -/
-def PeriodWindowProved (reg : Registration) (x : Window) : Prop :=
-  x.answer.protocol = oneStage ∧ (x.answer.digest == some reg.digest) = true ∧ x.answer.verdict = .accept ∧
-    ∃ pub prof i, x.answer.published = some pub ∧ x.answer.profile = some prof ∧ Core.Integrity.ofJson prof = .ok i ∧
-      (i.levels.map (fun l => (l.name, l.size, l.draw)) ==
-        #[(unitLevel, 1, some (Core.Draw.subset 1))]) = true ∧
-      (i.drawn == #[(unitLevel, 1)]) = true
+/-- **One-stage v2 accepted link-window `w`'s proof** on the blobs `bs`: under the auditor's parameters for the clock
+link `l` with the link-window's own port, its served domain, and the period's earlier link-windows' registrations `log`
+after the auditor's (`windowParams`), v2's check accepts the registration `reg` (under its window record digest) and
+the evidence the link-window shows, with a profile of one level of one unit drawn `subset:1`, that one unit drawn. -/
+def PeriodWindowV2 (p : Params) (l : ClockLink) (log : Array Json) (w : Nat) (reg : Json) (x : Window)
+    (bs : Core.Blobs) : Prop :=
+  ∃ clock salts ev, x.shown = .clock clock salts ev ∧
+    ∃ dom ps d pub prof, LinkWindow.domainId (linkCase p l w .empty #[] #[] none salts) = .ok dom ∧
+      windowParams l dom log = .ok ps ∧ Flock.WindowRecord.digest reg = .ok d ∧
+      SampledProofs.OneStageZk.checkBlobs ps ⟨reg, d⟩ ev bs = .accept pub prof ∧
+      (prof.levels.map (fun lv => (lv.name, lv.size, lv.draw)) ==
+        #[(unitLevel, 1, some (Core.SamplingDesign.subset 1))]) = true ∧
+      (prof.drawn == #[(unitLevel, 1)]) = true
 
-/-- Clock-form link-window `w` (registered as `reg`, answered by `x`, under Σ_sync `ss`, after the period's earlier
-clock digests `earlier`) is accepted: registered as the link's Program at `w`, both ends certified, its clock synced,
-and proved. -/
-def PeriodWindowAccepted (p : Params) (ss : NetworkCertifier.SyncSet) (earlier : Array ByteArray) (w : Nat)
-    (reg : Registration) (x : Window) : Prop :=
-  PeriodWindowRegistered p w reg ∧ PeriodWindowCertified p w x ∧ PeriodWindowClocked p ss earlier w x ∧
-    PeriodWindowProved reg x
+/-- **Link-window `w`'s proof opens to the verifier's own public row** (`opening`, N2's verdict of record's opening):
+the public file its v2 evidence names is a blob, its ``pub`` row commitment for the drawn unit opens under the
+delivered salt to the verifier's own public row of the link-window (`LinkWindow.pubRow` of `linkCase`: both
+certificates' signed digests, then each end's registered root, served domain, link, window, grid and profile row), and
+its ``o0`` row commitment to the word 3, verdict and deadline bits 1 (`LinkWindow.opened`). -/
+def PeriodWindowOpened (p : Params) (l : ClockLink) (w : Nat) (reg : Json) (x : Window) (bs : Core.Blobs) : Prop :=
+  ∃ clock salts ev, x.shown = .clock clock salts ev ∧ ∃ file row,
+    bs.get ev.pub "public file" = .ok file ∧
+    LinkWindow.pubRow (linkCase p l w (rootOf reg) x.certificates ev.base.provedUnits (some file) salts) =
+      .ok (some row) ∧
+    LinkWindow.opened (linkCase p l w (rootOf reg) x.certificates ev.base.provedUnits (some file) salts) (some row) =
+      some 3
+
+/-- Clock-form link-window `w` of the clock link `l` (registered as `reg`, answered by `x`, after the period's earlier
+clock digests `earlier` and registrations `log`, on the blobs `bs`) is accepted: registered as the link's Program at `w`,
+both ends certified, its clock synced, its proof accepted by one-stage v2, and opened. -/
+def PeriodWindowAccepted (p : Params) (l : ClockLink) (earlier : Array ByteArray) (log : Array Json) (w : Nat)
+    (reg : Json) (x : Window) (bs : Core.Blobs) : Prop :=
+  PeriodWindowRegistered p w reg ∧ PeriodWindowCertified p w x ∧ PeriodWindowClocked p l earlier w x ∧
+    PeriodWindowV2 p l log w reg x bs ∧ PeriodWindowOpened p l w reg x bs
 
 /-- Rows-form link-window `w`'s three records certified: the requests' (the link's ingress), the responses' (its
 egress) and the fails' (`<link>-fails`, egress), each the key's at `w` and verifying in the session (`certifiesOn`). -/
@@ -117,56 +140,61 @@ def PeriodRowsChecked (p : Params) (s : Schedule) (sd : ByteArray) (w : Nat) (d 
 /-- Rows-form link-window `w`'s rows registered: it shows two registrations, the ingress rows then the egress rows,
 each `PeriodRowsChecked`, and the scan's registration `reg` holds both (an entry of its `roots` or `registered` names
 each one's root and domain). -/
-def PeriodRowsRegistered (p : Params) (s : Schedule) (sd : ByteArray) (w : Nat) (reg : Registration) (x : Window) :
+def PeriodRowsRegistered (p : Params) (s : Schedule) (sd : ByteArray) (w : Nat) (reg : Json) (x : Window) :
     Prop :=
-  ∃ ri re, x.shown = .rows #[ri, re] ∧ PeriodRowsChecked p s sd w .ingress ri ∧
+  ∃ ri re a, x.shown = .rows #[ri, re] a ∧ PeriodRowsChecked p s sd w .ingress ri ∧
     PeriodRowsChecked p s sd w .egress re ∧ holds reg ri = true ∧ holds reg re = true
 
-/-- The rows-form link-window was proved: its answer is one-stage's for the registration's digest and accepted, with a
-public output holding a `bound` and a profile of one level drawn `subset:k` or stratified, of the scan's `2T` units
-under the schedule `s` (the ingress and the egress rows, `T` each). -/
-def PeriodRowsProved (s : Schedule) (reg : Registration) (x : Window) : Prop :=
-  x.answer.protocol = oneStage ∧ (x.answer.digest == some reg.digest) = true ∧ x.answer.verdict = .accept ∧
-    ∃ pub prof i l b, x.answer.published = some pub ∧ x.answer.profile = some prof ∧
+/-- The rows-form link-window was proved: the one-stage answer it shows is for the registration's window record digest
+and accepted, with a public output holding a `bound` and a profile of one level drawn `subset:k` or stratified, of the
+scan's `2T` units under the schedule `s` (the ingress and the egress rows, `T` each). -/
+def PeriodRowsProved (s : Schedule) (reg : Json) (x : Window) : Prop :=
+  ∃ rs a, x.shown = .rows rs a ∧ a.protocol = oneStage ∧
+    (∃ d, Flock.WindowRecord.digest reg = .ok d ∧ (a.digest == some d) = true) ∧ a.verdict = .accept ∧
+    ∃ pub prof i l b, a.published = some pub ∧ a.profile = some prof ∧
       Core.Integrity.ofJson prof = .ok i ∧ i.levels = #[l] ∧ l.size = 2 * s.window ∧
       ((∃ k, l.draw = some (.subset k)) ∨ ∃ ss, l.draw = some (.stratified ss)) ∧
       Flock.J.nat pub "bound" "public" = .ok b
 
 /-- Rows-form link-window `w` (registered as `reg`, answered by `x`, under the schedule `s` whose digest is `sd`) is
 accepted: registered as the scan's Program, its three records certified, its rows registered, and proved. -/
-def PeriodRowsWindowAccepted (p : Params) (s : Schedule) (sd : ByteArray) (w : Nat) (reg : Registration) (x : Window) :
+def PeriodRowsWindowAccepted (p : Params) (s : Schedule) (sd : ByteArray) (w : Nat) (reg : Json) (x : Window) :
     Prop :=
   PeriodWindowProgram p reg ∧ PeriodRowsCertified p w x ∧ PeriodRowsRegistered p s sd w reg x ∧
     PeriodRowsProved s reg x
 
 /-- The commitment registers and the evidence answers exactly the period's `p.windows` link-windows, and every one,
-the `i`-th being the session's window `p.first + i`, is accepted in the parameters' form: in the clock form after the
-clock digests of the period's link-windows before it. -/
-def PeriodWindowsAccepted (p : Params) (c : Commitment) (e : Evidence) : Prop :=
+the `i`-th being the session's window `p.first + i`, is accepted in the parameters' form on the blobs `bs`: in the clock
+form after the clock digests and the registrations of the period's link-windows before it. -/
+def PeriodWindowsAccepted (p : Params) (c : Commitment) (e : Evidence) (bs : Core.Blobs) : Prop :=
   c.windows.size = p.windows ∧ e.windows.size = p.windows ∧
-    ∀ (i : Nat) (reg : Registration) (x : Window), c.windows[i]? = some reg → e.windows[i]? = some x →
+    ∀ (i : Nat) (reg : Json) (x : Window), c.windows[i]? = some reg → e.windows[i]? = some x →
       match p.form with
-      | .clock ss => PeriodWindowAccepted p ss ((e.windows.extract 0 i).filterMap (·.clockDigest?)) (p.first + i) reg x
+      | .clock l =>
+        PeriodWindowAccepted p l ((e.windows.extract 0 i).filterMap (·.clockDigest?)) (c.windows.extract 0 i)
+          (p.first + i) reg x bs
       | .rows s sd _ => PeriodRowsWindowAccepted p s sd (p.first + i) reg x
 
-/-- **An accepted period accepted every link-window of it**: if the network certifier's period check accepts,
-every one of the period's link-windows passed its form's check: in the clock form proved, certified on both ends and
-its clock synced; in the rows form proved, its three records certified and its rows registered. -/
+/-- **An accepted period accepted every link-window of it**: if the network certifier's period check accepts on the
+caller's blobs, every one of the period's link-windows passed its form's check: in the clock form certified on both ends,
+its clock synced, its proof accepted by one-stage v2 on those blobs and opened; in the rows form proved, its three
+records certified and its rows registered. -/
 def PeriodAcceptMeans : Prop :=
-  ∀ (p : Params) (c : Commitment) (e : Evidence) (pub : Public) (prof : Profile),
-    protocol.check p c e = .accept pub prof → PeriodWindowsAccepted p c e
+  ∀ (p : Params) (c : Commitment) (e : Evidence) (bs : Core.Blobs) (pub : Public) (prof : Profile),
+    check p c e bs = .accept pub prof → PeriodWindowsAccepted p c e bs
 
 /-! ## Another period check in the check's place -/
 
-/-- `PeriodAcceptMeans` of a period check `check` in `protocol.check`'s place: whenever `check` accepts a period, every
-one of its link-windows was accepted. At `protocol.check` it is `PeriodAcceptMeans` itself. -/
-def PeriodAcceptMeansOf (check : Params → Commitment → Evidence → Core.Outcome Public Profile) : Prop :=
-  ∀ (p : Params) (c : Commitment) (e : Evidence) (pub : Public) (prof : Profile),
-    check p c e = .accept pub prof → PeriodWindowsAccepted p c e
+/-- `PeriodAcceptMeans` of a period check `check` in `NetworkCheck.Period.check`'s place: whenever `check` accepts a
+period on some blobs, every one of its link-windows was accepted on them. At `NetworkCheck.Period.check` it is
+`PeriodAcceptMeans` itself. -/
+def PeriodAcceptMeansOf (check : Params → Commitment → Evidence → Core.Blobs → Core.Outcome Public Profile) : Prop :=
+  ∀ (p : Params) (c : Commitment) (e : Evidence) (bs : Core.Blobs) (pub : Public) (prof : Profile),
+    check p c e bs = .accept pub prof → PeriodWindowsAccepted p c e bs
 
 /-- A period check that accepts every period, publishing the terms of a period with no audit: what
 `PeriodAcceptMeansOf` must fail at for `PeriodAcceptMeans` to say something. -/
-def acceptAllPeriod (p : Params) (_ : Commitment) (_ : Evidence) : Core.Outcome Public Profile :=
+def acceptAllPeriod (p : Params) (_ : Commitment) (_ : Evidence) (_ : Core.Blobs) : Core.Outcome Public Profile :=
   .accept (terms #[] #[] p.cells p.jitter 0 p.windows) { link := p.link, windows := p.windows }
 
 /-! ## An honest period: one clock-form link-window -/
@@ -200,9 +228,9 @@ def honestCert (d : NetworkCheck.Direction) (w q : Nat) (x : ByteArray) : Certif
     signature := (((NetworkCheck.certificateMessage honestI honestSession "link" d w x).bind
       (Lms.signAt honestKey q)).toOption.map Lms.Signature.encode).getD .empty }
 
-/-- The period's parameters: the link `link` under N2's Program `program`, one clock-form link-window from window 0, no
-audit, and the certifier's key at the deployed LMS parameters in its session. -/
-def honestParams : Params where
+/-- The period's parameters on the clock link `l`: the link `link` under N2's Program `program`, one clock-form
+link-window from window 0, no audit, and the certifier's key at the deployed LMS parameters in its session. -/
+def honestParams (l : ClockLink) : Params where
   audits := #[]
   cells := #[]
   first := 0
@@ -212,44 +240,29 @@ def honestParams : Params where
   key := honestKey.publicKey
   session := honestSession
   program := "program"
-  form := .clock honestSyncs
+  form := .clock l
   windows := 1
 
-/-- Link-window 0's registration: the link's Program served at window 0. -/
-def honestRegistration : Registration :=
-  ⟨Json.mkObj [("program", .str "program"), ("window", served 0)], ⟨Array.replicate 64 4⟩⟩
+/-- Link-window 0 as the evidence shows it: the certificates of both ends of the link at window 0 (egress then
+ingress) and the clock's, each on its own one-time key, with the delivered salts `s` and the v2 evidence `ev` of its
+proof. -/
+def honestWindow (s : Salts) (ev : SampledProofs.OneStageZk.Evidence) : Window :=
+  { certificates := #[honestCert .egress 0 0 ⟨Array.replicate 64 5⟩, honestCert .ingress 0 1 ⟨Array.replicate 64 6⟩],
+    shown := .clock (honestCert .egress 0 2 ⟨Array.replicate 64 7⟩) s ev }
 
-/-- One-stage's profile of the link-window's proof: one level of one unit drawn `subset:1`, that unit drawn. -/
-def honestIntegrity : Core.Integrity :=
-  { programs := #[], prescribed := #[], linked := true, covered := #[],
-    levels := #[{ name := unitLevel, query := none, size := 1, draw := some (.subset 1) }], delta := ⟨0, 1⟩,
-    drawn := #[(unitLevel, 1)] }
+def honestCommitment (reg : Json) : Commitment := ⟨#[], #[reg], .empty⟩
 
-/-- One-stage's acceptance of the registration, with that profile. -/
-def honestAnswer : Core.Answer :=
-  { protocol := oneStage, verdict := .accept, reason := none, digest := some honestRegistration.digest,
-    published := some (Json.mkObj []), profile := some honestIntegrity.toJson }
+def honestEvidence (s : Salts) (ev : SampledProofs.OneStageZk.Evidence) : Evidence := ⟨#[], #[honestWindow s ev]⟩
 
-/-- Link-window 0 as the evidence answers it: one-stage's acceptance, the certificates of both ends of the link at window
-0 (egress then ingress) and the clock's, each on its own one-time key. -/
-def honestWindow : Window :=
-  { answer := honestAnswer,
-    certificates := #[honestCert .egress 0 0 ⟨Array.replicate 64 5⟩, honestCert .ingress 0 1 ⟨Array.replicate 64 6⟩],
-    shown := .clock (honestCert .egress 0 2 ⟨Array.replicate 64 7⟩) }
-
-def honestCommitment : Commitment := ⟨#[], #[honestRegistration], .empty⟩
-
-def honestEvidence : Evidence := ⟨#[], #[honestWindow]⟩
-
-/-- **Named assumption: `Json`'s `==` is `String`'s on two strings.** Lean core's `Json` `==` is a `partial def`
-(`Json.beq'`), so no proof evaluates it; its case for two strings compares them with `String`'s `==`, as its source
-states. The period check compares a registration's Program with it (`windowCheck`, `rowsWindowCheck`, `auditCheck`); a
-check comparing the Program as a `String` needs no assumption. -/
-def JsonStrBeq : Prop := ∀ s : String, (Json.str s == Json.str s) = true
-
-/-- **Named assumption: the honest profile reads back.** `Core.Integrity.ofJson` reads `honestIntegrity`'s JSON back as
-it: true by evaluation, but `Core.Ratio.ofString` reads δ with `String.splitOn`, `String.all` and `String.toNat!`, which
-recurse well-founded over UTF-8 positions, so the kernel doesn't evaluate them. -/
-def HonestProfileReads : Prop := Core.Integrity.ofJson honestIntegrity.toJson = .ok honestIntegrity
+/-- **Named assumption: an honest link-window is proved.** Some clock link under Σ_sync `honestSyncs` (N2's declared
+ends and the auditor's one-stage v2 parameters for it), some registration of the link's Program at window 0, and some
+salts, v2 evidence and blobs of a proof of link-window 0 under the honest certificates pass one-stage v2 and open to
+the verifier's own public row: N2's completeness on that link-window, which needs a proof v2 accepts, and the kernel
+runs no prover. -/
+def HonestWindowProved : Prop :=
+  ∃ (l : ClockLink) (reg : Json) (s : Salts) (ev : SampledProofs.OneStageZk.Evidence) (bs : Core.Blobs),
+    l.syncSet = honestSyncs ∧ PeriodWindowRegistered (honestParams l) 0 reg ∧
+      PeriodWindowV2 (honestParams l) l #[] 0 reg (honestWindow s ev) bs ∧
+      PeriodWindowOpened (honestParams l) l 0 reg (honestWindow s ev) bs
 
 end Properties.NetworkCertifier
