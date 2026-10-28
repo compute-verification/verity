@@ -79,19 +79,13 @@ def SetupEvidence.toJson (s : SetupEvidence) : Json :=
   Json.mkObj [("commitment", hexJ (s.commitment.w ++ s.commitment.salt)),
     ("evidence", hexJ (SetupProtocol.encodeEvidence s.store))]
 
-/-- `hexField` for a field of any size, `C*`'s hex among them (`Core.Canonical.unhex`). -/
-def hexAt (j : Json) (k ctx : String) : V ByteArray := do
-  match Core.Canonical.unhex (← J.str j k ctx) with
-  | .ok b => pure b
-  | .error e => throw s!"{ctx}.{k}: {e}"
-
 /-- The setup's commitment and evidence, each read by `SetupProtocol`'s own decoder. -/
 def SetupEvidence.ofJson (j : Json) : V SetupEvidence := do
   let ctx := "evidence.setup"
-  let c ← match SetupProtocol.commitment (← hexAt j "commitment" ctx) with
+  let c ← match SetupProtocol.commitment (← hexField j "commitment" ctx) with
     | .ok c => pure c
     | .error e => throw s!"{ctx}.commitment: {e}"
-  let store ← match SetupProtocol.evidence (← hexAt j "evidence" ctx) with
+  let store ← match SetupProtocol.evidence (← hexField j "evidence" ctx) with
     | .ok s => pure s
     | .error e => throw s!"{ctx}.evidence: {e}"
   pure ⟨c, store⟩
@@ -104,15 +98,10 @@ structure Evidence where
 def Evidence.toJson (e : Evidence) : Json :=
   Json.mkObj [("digests", hexJ e.digests), ("session", e.session.toJson), ("setup", e.setup.toJson)]
 
-/-- `exactly` on `Core.canonicalJson b`, read in place (`Core.Canonical`): the evidence is gigabytes at a served store,
-`C*`'s hex inside it, so its text is kept to compare the evidence's encoding against rather than written again. -/
 def decodeEvidence (b : ByteArray) : V Evidence := do
-  let (j, s) ← Core.Canonical.read b
-  let e : Evidence := ⟨← hexAt j "digests" "evidence", ← Run.Session.ofJson (← J.get j "session" "evidence"),
-    ← SetupEvidence.ofJson (← J.get j "setup" "evidence")⟩
-  if !(← Core.Canonical.writes e.toJson s) then
-    throw "not the canonical JSON of what it holds (a field extra, or a constant not the protocol's)"
-  pure e
+  exactly (fun j => do pure ⟨← hexField j "digests" "evidence", ← Run.Session.ofJson (← J.get j "session" "evidence"),
+      ← SetupEvidence.ofJson (← J.get j "setup" "evidence")⟩)
+    Evidence.toJson (← Core.canonicalJson b)
 
 /-- SHA-512 of the setup's public outputs as canonical JSON, the bytes they decoded from. -/
 def digest (pub : SetupProtocol.Public) : ByteArray :=
