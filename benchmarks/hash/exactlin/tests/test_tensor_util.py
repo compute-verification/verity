@@ -120,7 +120,29 @@ def test_utilization_and_losses(doc):
     assert doc["classes"][0]["class"] == TU.GAP_OUT
     assert by[TU.GAP_OUT]["util_if_zero"] == pytest.approx(ideal / 5)
     assert by[TU.GAP_IN]["loss_ms"] == pytest.approx(0.1)
-    assert "**tensor utilization 11.0%**" in TU.table(doc)
+    assert "(11.0% at the data sheet's 1,830 MHz)" in TU.table(doc)
+
+
+def test_rates_are_per_clock_at_the_measured_clock_first(doc):
+    """The export's clock is 1,900 MHz against theta's 1,830: every rate scales by 1830 / 1900, and the table leads with
+    it, the sheet clock's beside it; without GPU metrics the sheet clock's figure is the headline, labelled."""
+    s, by, r = doc["summary"], {r["class"]: r for r in doc["classes"]}, 1830 / 1900
+    assert s["util_at_clock"] == pytest.approx(s["util"] * r)
+    assert by["int8 GEMM"]["class_util_at_clock"] == pytest.approx(0.5 * r)
+    assert s["wall_at_target_at_clock_ms"] == pytest.approx(s["ideal_ms"] * r / 0.8)
+    assert s["over_target_at_clock_ms"] == pytest.approx(10 - s["ideal_ms"] * r / 0.8)
+    assert by[TU.GAP_OUT]["util_if_zero_at_clock"] == pytest.approx(by[TU.GAP_OUT]["util_if_zero"] * r)
+    t = TU.table(doc)
+    assert "**tensor utilization 10.6% at the measured SM clock of 1,900 MHz** (11.0% at the data sheet's 1,830 MHz)" in t
+    assert "| class util at its SM clock (1,830 MHz) |" in t and "| 48.2% (50.0%) |" in t
+    older = {**doc, "summary": {k: v for k, v in s.items() if "at_clock" not in k},
+             "classes": [{k: v for k, v in c.items() if "at_clock" not in k} for c in doc["classes"]]}
+    assert TU.table(older) == t
+    bare = {**doc, "summary": {**s, "clock_mhz": None, "util_at_clock": None},
+            "classes": [{**c, "clock_mhz": None, "tensor_active": None} for c in doc["classes"]]}
+    t = TU.table(bare)
+    assert "**tensor utilization 11.0% at the data sheet's 1,830 MHz** (no measured clock)" in t
+    assert "| class util at 1,830 MHz |" in t and "| 50.0% |" in t
 
 
 def test_steady_drops_a_step_past_one_and_a_half_medians(tmp_path):
