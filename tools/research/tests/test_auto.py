@@ -46,6 +46,8 @@ def test_cpu_3s_research_pool_takes_a_job_while_cpu_1s_and_cpu_5s_are_full():
     full = pool(*(slot(f"r{i}", held=True) for i in range(8)), waiters=22)
     target, why = auto.choose({N2: share(waiters=5), CPU1: full, CPU5: full, cpu3: pool(slot("b4", cpus="0-15", mem=48))}, 4, 16)
     assert target == (cpu3, "research") and why.endswith("a slot is free there now")
+    target, _ = auto.choose({N2: share(waiters=5), CPU1: full, CPU5: full, cpu3: pool(slot("r0", cpus="0-15", mem=None))}, 4, 16)
+    assert target == (cpu3, "research"), "27 Oct 23:45Z: cpu-3's slots declare no mem=, which slot.py raises to the run's --mem-gb"
 
 
 def test_with_nothing_free_the_pool_with_the_shortest_line_per_fitting_slot_wins():
