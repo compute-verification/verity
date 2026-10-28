@@ -7,7 +7,7 @@ import Definitions.Accounting.Assumptions.RemoteOutside
 
 The memory line (`Properties.RemoteAudit.Line.LineHeld`) takes the receipts' sketch bound
 wherever computed, `SketchBoundAt T O δs`, as a premise on its trace over the session's coins
-(`Accounting.Remote.Draw.Coins n κ X`). `SketchBoundDeployed` derives the sketch bound on any trace over a session's
+(`Accounting.Remote.Draw.DrawCoins n κ X`). `SketchBoundDeployed` derives the sketch bound on any trace over a session's
 sketch outcomes (`Accounting.Remote.Sketch.Outcome`: the prover's own coins, the registered store, SHA-512's outputs),
 for every type of prover's coins. `SketchBoundLine` carries the one to the other: on the line's coins whose other coins
 are a sketch outcome (`X = Outcome β Hs N m`), the sketch bound on the line's trace read on the sketch outcomes
@@ -32,7 +32,7 @@ outcome and any record `O` of computation outside the node, the receipts' sketch
 outcomes (`T.sketch O`) at `δ` gives `SketchBoundAt T O δ`. -/
 def SketchBoundLine : Prop :=
   ∀ (β Hs : Type) [Fintype β] [Fintype Hs] (n κ N m : ℕ)
-    (T : Trace (Accounting.Remote.Draw.Coins n κ (Outcome β Hs N m))) (O : Outside T) (δ : ℝ),
+    (T : Trace (Accounting.Remote.Draw.DrawCoins n κ (Outcome β Hs N m))) (O : Outside T) (δ : ℝ),
     SketchBound (T.sketch O) δ → SketchBoundAt T O δ
 
 end Accounting.Guarantees.Remote
