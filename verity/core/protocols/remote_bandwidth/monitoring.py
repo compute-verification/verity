@@ -15,7 +15,7 @@ T = machines·⌊period/window_s⌋ sessions in a period, each on its own live c
   so that every one of the T sessions certifies that much at once, except with δ + T·S/2^64.
 
 Both leave out each session's coin PRF advantage and coin commitment's hiding, which are named assumptions, not
-numbers. What the session proves is its verdict and outputs, by the Lean verifier of record; what is scaled is the
+numbers. What the session proves is its verdict and outputs, by the Lean verifier; what is scaled is the
 number of sessions and that each is audited as this one was."""
 
 from __future__ import annotations
