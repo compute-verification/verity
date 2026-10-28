@@ -407,11 +407,15 @@ class DriveFlags:
         except tomllib.TOMLDecodeError as e:
             raise QueueError(f"{source}: not TOML: {e}") from None
         keys = [f.name for f in dataclasses.fields(cls)]
-        for k in doc:
+        for k in list(doc):
             if k not in keys:
                 near = difflib.get_close_matches(k, keys, n=1)
-                raise QueueError(f"{source}: unknown key {k!r}{f' (did you mean {near[0]!r}?)' if near else ''}: drive reads "
-                                 f"only {', '.join(keys)}; rename or remove it")
+                if near:
+                    raise QueueError(f"{source}: unknown key {k!r} (did you mean {near[0]!r}?): drive reads only "
+                                     f"{', '.join(keys)}; rename or remove it")
+                # a key a newer drive reads: an older client must still parse main's drive.toml
+                print(f"{source}: ignoring key {k!r}, which this research doesn't read (a newer one may)", file=sys.stderr)
+                del doc[k]
 
         def bad(k: str, want: str) -> QueueError:
             return QueueError(f"{source}: {k} = {doc[k]!r}: {want}")
