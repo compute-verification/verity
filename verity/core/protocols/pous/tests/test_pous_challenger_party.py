@@ -16,6 +16,7 @@ import threading
 import pytest
 
 import pous_test_signer as ts
+from pous_fakes import Clock
 from verity.core.protocols.pous import challenger_party as CP
 from verity.core.protocols.pous import memory_challenger as mc
 from verity.core.protocols.pous import period, run
@@ -25,20 +26,11 @@ COINS = hashlib.sha512(b"the period's live coins").digest()
 TEST_ID = mc.TEST_PREFIX + period.PROTOCOL
 
 
-class Clock:
-    def __init__(self) -> None:
-        self.now = 10 ** 9
-
-    def __call__(self) -> int:
-        self.now += 1_000
-        return self.now
-
-
 def _in_process() -> tuple[period.Period, run.Point, run.Setup, list[bytes], bytes]:
     """`period.run` in one process under a test signer at the small point: its period, point, published setup, `C*`'s
     labels and table."""
     point = period.point_for(len(STORE), period.W, period.C0)
-    p = period.run("n0", STORE, COINS, signer=ts.TestSigner(b"in process", 2), log=ts.session_log(), clock=Clock(),
+    p = period.run("n0", STORE, COINS, signer=ts.TestSigner(b"in process", 2), log=ts.session_log(), clock=Clock(10 ** 9, 1_000),
                    point=point, schemes=ts.SCHEMES, protocol=TEST_ID)
     published = run.Setup.from_json(json.loads(bytes.fromhex(p.case["commitment"])))
     _, _, encoded = period.setup_inputs(p.setup_case)
@@ -55,7 +47,7 @@ def _split(point: run.Point, root: bytes, respond, signer: mc.Signer,
     def side() -> None:
         with a, a.makefile("rwb") as f:
             got["session"] = CP.serve(f, CP.request_of("n0", point, root), signer=signer, log=ts.session_log(),
-                                      coins=COINS, domain=period.SESSION_DOMAIN, clock=Clock(), warmups=warmups)
+                                      coins=COINS, domain=period.SESSION_DOMAIN, clock=Clock(10 ** 9, 1_000), warmups=warmups)
 
     t = threading.Thread(target=side)
     t.start()
