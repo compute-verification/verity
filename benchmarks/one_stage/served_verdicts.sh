@@ -20,7 +20,8 @@
 #     block the one the run audits (a period that admits a single block, say), and the front's exit is the requests': a
 #     front that failed stops the endpoint at once, with no window to seal.
 #     CERTIFIER_FRONT runs within CERTIFIER_FRONT_TIMEOUT (default 20m), and a flag it passes to `certifier_piece.py front`
-#     that this tree's front doesn't take is refused before the lease. The
+#     that this tree's front doesn't take, or a front whose endpoint isn't on the warden's id form (SERVE_ARGS without
+#     `--protocol ids`), is refused before the lease. The
 #     lease ends once every closed window is sealed. Each request's
 #     send, first-token and done times (the load's timings file, `serve_load.py`'s docstring) go to $OUT/timings/; each
 #     committed step's end is $OUT/serve/step_trace.jsonl's t_end, on the clock of the timings' start_unix.
@@ -333,6 +334,9 @@ front_ok() {  # preflight: LOAD=front has a front, and each flag CERTIFIER_FRONT
   [ "$LOAD" != front ] || [ -n "${CERTIFIER_FRONT:-}" ] \
     || { say "PREFLIGHT: LOAD=front sends the front's group alone, and CERTIFIER_FRONT is unset"; return 3; }
   case ${CERTIFIER_FRONT:-} in *"certifier_piece.py front"*) ;; *) return 0 ;; esac
+  case " ${SERVE_ARGS:-} " in *" --protocol ids "*) ;; *)
+    say "PREFLIGHT: the certifier front's warden sends id-form requests, which serve-openai answers only under" \
+        "SERVE_ARGS='--protocol ids --id-payload 503'"; return 3 ;; esac
   local help f
   help=$(cd "$TREE" && "$PY" benchmarks/network_traces/certifier_piece.py front --help 2>&1) \
     || { say "PREFLIGHT: this tree's certifier front doesn't start: $(echo "$help" | tail -1 | cut -c1-300)"; return 3; }
