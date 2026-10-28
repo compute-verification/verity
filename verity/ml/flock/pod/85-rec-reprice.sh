@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # rec-reprice: recursive witness ZK priced at m = 35 on node 1's GPU prover, against today's --zk on the same statement (the
-# dense rollup's K = 4096 GEMM coordinate, r20261002-062836-96bb's shape 430e5aad). One step per job (research run --queue
+# dense rollup's K = 4096 GEMM coordinate, shape 430e5aad). One step per job (research run --queue
 # --cwd source); the big files stay under $FLOCK_WORK/data/$TAG for the next step, out/ gets the records:
 #   STEP=build   (CPU) the GPU prover (60-circuit.sh's build, keyed by its sources as 70-class-sweep.sh keys it), Lean's
 #                flock-verify (rec-env.sh's, keyed by its sources), and the inner statement staged (class_statement
@@ -736,7 +736,7 @@ oprove)
     return $rc
   }
   # oprove_gb: each statement's estimated peak GB, largest first. The fit to the CPU prover's peaks at K=64 N=64
-  # (r20261024-055050-962e: RecOpen 6.4 to 32.5, InnerRepCheck 22.3, RecCap 2.3) is linear in the circuit text's GB, 2^(k_log
+  # (RecOpen 6.4 to 32.5, InnerRepCheck 22.3, RecCap 2.3) is linear in the circuit text's GB, 2^(k_log
   # - 20) and the instances; with a quarter's margin, at least 2
   mapfile -t TODO < <(python3 - $V <<'EOF'
 import json, math, sys
@@ -801,8 +801,8 @@ oreplay)
 lean)
   [ -x $LEAN_BIN ] || lean_build > $O/build-lean.log 2>&1 || { tail -20 $O/build-lean.log; exit 1; }
   mkdir -p $O/lean
-  # LEAN_JOBS verifications at once, the largest circuit first: one core each, at most 4.3 GB at K=64 N=64
-  # (r20261024-055050-962e), so by default one per 5 GB of LEAN_MEM_GB, at most the job's cores
+  # LEAN_JOBS verifications at once, the largest circuit first: one core each, at most 4.3 GB at K=64 N=64,
+  # so by default one per 5 GB of LEAN_MEM_GB, at most the job's cores
   JOBS=${LEAN_JOBS:-$(( ${LEAN_MEM_GB:-48} / 5 < NC ? ${LEAN_MEM_GB:-48} / 5 : NC ))}
   # V*'s values against the verifier's own coins (verify --rec-inner-*, RecCoins.check): the inner statement and the inner
   # session STEP=vstage staged every statement from, a forgery's too, with the coin server's transcript of it, whose
