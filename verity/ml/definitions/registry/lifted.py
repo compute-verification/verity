@@ -1422,7 +1422,7 @@ def check_lag(lag: int) -> int:
     `LAG = 0` (the step after the EOS is never executed) or `LAG = 1` (vLLM async scheduling: the EOS-stopped request is fed forward
     once more on its EOS token, its sample discarded).  Neither is a default; anything else is refused by name."""
     if lag not in LAGS_IMPLEMENTED:
-        raise ValueError(f"LAG={lag!r}: the profile's post-EOS lag must be declared as one of {LAGS_IMPLEMENTED}; nothing is assumed")
+        raise ValueError(f"LAG={lag!r}: the profile's post-EOS lag must be declared as one of {LAGS_IMPLEMENTED} (DP-pad-02); nothing is assumed")
     return int(lag)
 
 
@@ -1992,7 +1992,7 @@ def lift_request_component(fn: SpecializedDefinition, eos: Sequence[int], *, max
         check_boundary(32, e, what="eos id", prescribed=True)
     bindings = dict(fn.bindings)
     if fn.defn.name != "WorkloadRequest":
-        raise TypeError(f"{fn.id} is not a workload request component (WorkloadRequest_v1{{program_digest, program_fn}})")
+        raise TypeError(f"{fn.id} is not a GP-01 request component (WorkloadRequest_v1{{program_digest, program_fn}})")
     lag = check_lag(lag)
     key = (("program_digest", bindings["program_digest"]), ("program_fn", bindings["program_fn"]), ("EOS", eos_t), ("GUARD", guard), ("LAG", lag))
     body = fn.body
