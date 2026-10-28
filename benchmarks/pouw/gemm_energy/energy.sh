@@ -76,7 +76,9 @@ LEASE=${LEASE-gpu-lease 1 --wait --max-min 25 --}
 # shellcheck disable=SC2016
 $LEASE bash -c '
   G=(); [ -n "${GPU_LEASE_UUID:-}" ] && G=(-i "$GPU_LEASE_UUID")
-  trap "sudo -n nvidia-smi ${G[*]} -rgc >> \"$O/clocks.txt\" 2>&1" EXIT
+  reset() { sudo -n nvidia-smi "${G[@]}" -rgc >> "$O/clocks.txt" 2>&1; }
+  trap reset EXIT
+  trap "exit 143" TERM INT HUP
   nvidia-smi "${G[@]}" --query-gpu=index,uuid,name,driver_version,clocks.sm,clocks.max.sm,power.limit,memory.used \
     --format=csv > "$O/gpu.txt" 2>&1
   nvidia-smi "${G[@]}" --query-gpu=timestamp,clocks.sm,power.draw,temperature.gpu,clocks_event_reasons.active \
