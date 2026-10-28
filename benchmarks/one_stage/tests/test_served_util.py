@@ -126,7 +126,8 @@ def test_the_steady_cut_drops_steps_over_one_and_a_half_medians(tmp_path):
     assert s["sm_clock_mhz"] is None
 
 
-@pytest.mark.parametrize("arm, served", [("stock", True), ("noseal", True), ("graphs", False), ("async", False)])
+@pytest.mark.parametrize("arm, served", [("stock", True), ("noseal", True), ("graphs", False), ("async", False),
+                                         ("seal-async", False)])
 def test_an_arm_off_the_served_stack_says_so(tmp_path, monkeypatch, capsys, arm, served):
     out = tmp_path / "util.json"
     monkeypatch.setattr(sys, "argv", ["served_util.py", "--sqlite", str(_report(tmp_path / "prof.sqlite")), "--trace",
