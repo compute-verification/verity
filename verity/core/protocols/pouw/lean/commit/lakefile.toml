@@ -1,8 +1,8 @@
 # PoUW's commitments as executable Lean: the epoch coins' check, the protocol's bindings, the roots of its row and tile
 # trees, and the salts and draw keys it derives (`verity.core.protocols.pouw`: `coins`, `protocol.tagged`, `audit`; the
 # clear audit's draws, `benchmarks/pouw/clear`), with the difftest against the Python. It is code, so it requires nothing
-# of `Security/`; it reads C-Flock's SHA-2 and hm96 leaves (`flock_verifier`), core's randomness (`core_randomness`) and core's tagged SHA-512
-# identity (`core_identity`).
+# of `Security/`; it reads C-Flock's SHA-2, frame-v3 trees and hm96 leaves (`flock_verifier`) and core's randomness
+# (`core_randomness`), and requires core's tagged SHA-512 identity (`core_identity`) for PoUW's window, which reads it.
 name = "pouw_commit"
 defaultTargets = ["PouwCommit", "pouw-commit-difftest"]
 

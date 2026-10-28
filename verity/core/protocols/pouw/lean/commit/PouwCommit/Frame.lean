@@ -1,18 +1,18 @@
 import Flock.Hash
 import Flock.Bytes
-import Identity.Tagged
+import Flock.FV3
 import PouwCommit.Tagged
 import Identity.Domains
 
 /-!
 # frame-v3 trees (`verity.ml.commitments.merkle`) over range positions
 
-A frame hashes `FRAME ‖ be32 |tag| ‖ tag ‖ Σ (be64 |part| ‖ part)` under the frame's hash: `sha256` (32-byte digests) or
-`sha512` (64). A domain over positions `0 … count-1` is `binding` (32 or 64 bytes), `owner ≥ -2`, and its id
+C-Flock's frame-v3 (`Flock.FV3`) under the frame's hash: `sha256` (`Flock.FV3.Sha256`, 32-byte digests) or `sha512`
+(`Flock.FV3.Sha512`, 64). A domain over positions `0 … count-1` is `binding` (32 or 64 bytes), `owner ≥ -2`, and its id
 `H("domain", binding, uint(owner + 2), identity, uint(count))`, `identity` the positions' range identity under the frame's
-tagged hash. A tree pads its leaves to a power of two with `H("pad", id, uint rank)`, nodes are
-`H("node", id, uint level, uint index, l, r)`, and an empty tree's root is `H("empty", id)`. Integers are minimal big-endian,
-any size (`natBytes`).
+tagged hash; its leaves, nodes, pads and empty root are `Flock.FV3.Domain`'s. What this module adds is what the Python
+refuses: a binding or owner `CommitmentDomain` refuses (`Domain.mk?`), a frame `merkle._frame` refuses (`frameHash?`), and
+`verify_opening`'s checks and limits (`Domain.verify`).
 -/
 
 namespace PouwCommit
@@ -27,33 +27,21 @@ inductive Hash where
 
 namespace Hash
 
-def run : Hash → ByteArray → ByteArray
-  | .sha256 => Sha256.hash
-  | .sha512 => Sha512.hash
+/-- The hash's frame-v3 scheme: its digest, its digests' size and its tagged hash. -/
+def scheme : Hash → FV3.Scheme
+  | .sha256 => FV3.Sha256.scheme
+  | .sha512 => FV3.Sha512.scheme
 
-def bytes : Hash → Nat
-  | .sha256 => 32
-  | .sha512 => 64
+def run (h : Hash) : ByteArray → ByteArray := h.scheme.H
 
-/-- `identity.tagged_sha256` / `tagged_sha512`: the hash of `prefix ‖ be32 |tag| ‖ tag ‖ be64 |payload| ‖ payload`. The
-SHA-512 one is core's `Identity.taggedSha512`, which refuses an empty tag and a payload of `2 ^ 64` bytes or more, as Python
-does; this hash is taken only of a range's manifest under a nonempty constant tag, which it never refuses short of a count of
-`2 ^ 64` decimal digits, so a refusal is the empty string and `tagged` stays total. -/
-def tagged (h : Hash) (tag : String) (payload : ByteArray) : ByteArray :=
-  match h with
-  | .sha256 => Sha256.hash ("veritor/tagged-sha256/v1".toUTF8.push 0 ++ be32 tag.toUTF8.size.toUInt32 ++ tag.toUTF8 ++
-      be8 payload.size ++ payload)
-  | .sha512 => (Identity.taggedSha512 tag payload).toOption.getD .empty
+def bytes (h : Hash) : Nat := h.scheme.bytes
 
 end Hash
 
-def FRAME : ByteArray := "veritor/protocol/merkle/frame/v3".toUTF8.push 0
-
 /-- The message a frame hashes: `FRAME ‖ be32 |tag| ‖ tag ‖ Σ (be64 |part| ‖ part)`. -/
-def frameBytes (tag : String) (parts : List ByteArray) : ByteArray :=
-  parts.foldl (fun acc p => acc ++ be8 p.size ++ p) (FRAME ++ be32 tag.toUTF8.size.toUInt32 ++ tag.toUTF8)
+def frameBytes (tag : String) (parts : List ByteArray) : ByteArray := FV3.input tag parts
 
-def frameHash (h : Hash) (tag : String) (parts : List ByteArray) : ByteArray := h.run (frameBytes tag parts)
+def frameHash (h : Hash) (tag : String) (parts : List ByteArray) : ByteArray := h.scheme.hash tag parts
 
 /-- `merkle._frame`'s hash, refusing what it refuses: a tag of `2 ^ 32` bytes or more, or a part of `2 ^ 64` or more, whose
 length overflows its field (Python's `int.to_bytes` raises `OverflowError`, where `frameBytes` wraps it). The trees' frames
@@ -66,8 +54,7 @@ def frameHash? (h : Hash) (tag : String) (parts : List ByteArray) : Except Strin
 
 /-- `RangeIndexedDomain(count)`'s identity: its canonical manifest `{"start":0,"step":1,"stop":count}` under the frame's
 tagged hash, tag `veritor/indexed-domain/range/v1`. -/
-def rangeIdentity (h : Hash) (count : Nat) : ByteArray :=
-  h.tagged "veritor/indexed-domain/range/v1" s!"\{\"start\":0,\"step\":1,\"stop\":{count}}".toUTF8
+def rangeIdentity (h : Hash) (count : Nat) : ByteArray := h.scheme.rangeIdentity 0 count
 
 /-- A frame-v3 domain over the positions `0 … count-1`, with its id. -/
 structure Domain where
@@ -80,20 +67,21 @@ def Domain.mk? (h : Hash) (binding : ByteArray) (owner : Int) (count : Nat) : Ex
   if binding.size != 32 && binding.size != 64 then
     throw "binding must be 64 bytes (a SHA-512 identity) or 32 (a SHA-256 one)"
   if owner < -2 then throw "owner must be -2 (weights), -1 (boundary) or a replay unit"
-  pure ⟨h, count, frameHash h "domain" [binding, natBytes (owner + 2).toNat, rangeIdentity h count, natBytes count]⟩
+  pure ⟨h, count, frameHash h "domain" [binding, FV3.uint (owner + 2).toNat, rangeIdentity h count, FV3.uint count]⟩
 
 namespace Domain
 
+/-- The domain as C-Flock's: positions start at 0. -/
+def fv3 (d : Domain) : FV3.Domain d.hash.scheme := { id := d.id, count := d.count }
+
 /-- The frame leaf over `value` at `rank` (its position too: positions are ranks), schema `schema`. -/
-def leaf (d : Domain) (rank : Nat) (schema : String) (value : ByteArray) : ByteArray :=
-  frameHash d.hash "leaf" [d.id, natBytes rank, natBytes rank, schema.toUTF8, value]
+def leaf (d : Domain) (rank : Nat) (schema : String) (value : ByteArray) : ByteArray := d.fv3.leaf rank rank schema value
 
-def node (d : Domain) (level index : Nat) (l r : ByteArray) : ByteArray :=
-  frameHash d.hash "node" [d.id, natBytes level, natBytes index, l, r]
+def node (d : Domain) (level index : Nat) (l r : ByteArray) : ByteArray := d.fv3.node level index l r
 
-def pad (d : Domain) (rank : Nat) : ByteArray := frameHash d.hash "pad" [d.id, natBytes rank]
+def pad (d : Domain) (rank : Nat) : ByteArray := d.fv3.pad rank
 
-def empty (d : Domain) : ByteArray := frameHash d.hash "empty" [d.id]
+def empty (d : Domain) : ByteArray := d.fv3.emptyRoot
 
 end Domain
 
@@ -101,13 +89,8 @@ end Domain
 def depth (count : Nat) : Nat := if count ≤ 1 then 0 else Nat.log2 (count - 1) + 1
 
 /-- The root over leaf digests in rank order (`MerkleTree.commitment.root`); `none` unless there are `count` of them. -/
-def Domain.root (d : Domain) (leaves : Array ByteArray) : Option ByteArray := Id.run do
-  if leaves.size != d.count then return none
-  if leaves.isEmpty then return some d.empty
-  let mut level := leaves ++ (Array.range (2 ^ depth d.count - d.count)).map fun k => d.pad (d.count + k)
-  for lv in [0:depth d.count] do
-    level := (Array.range (level.size / 2)).map fun i => d.node lv i level[2 * i]! level[2 * i + 1]!
-  return level[0]?
+def Domain.root (d : Domain) (leaves : Array ByteArray) : Option ByteArray :=
+  if leaves.size != d.count then none else some (d.fv3.root leaves)
 
 /-- `Commitment`'s constructor's refusal: a root of neither 32 nor 64 bytes. -/
 def checkRoot (root : ByteArray) : Except String Unit :=
