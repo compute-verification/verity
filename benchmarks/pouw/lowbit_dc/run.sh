@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# LOWBIT-DC's job on one GPU (B200 sm_100a, H200 sm_90a, or fpx alone on B300 sm_103a; the family is read from the
+# lowbit_dc's job on one GPU (B200 sm_100a, H200 sm_90a, or fpx alone on B300 sm_103a; the family is read from the
 # device).
 #   run.sh       fpx: build fpx.cu and dump its SASS; under one gpu-lease `fpx run` (records.jsonl, windows.jsonl,
 #                summary.json); then analyze.py's tables (analysis.md, analysis.json).

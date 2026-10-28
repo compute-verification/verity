@@ -6,7 +6,7 @@ A leaf at position ``pos`` of an n-leaf domain (rank = position) is ``rowleaf.ro
 salt)`` and ``x = rowleaf.sha512_row_v2_digest(row, n_bits)`` (in ``seg`` mode ``x = rowleaf.sha512_row_seg_digest(row,
 n_bits)`` under ``"hm96-sha512/row-seg/v1"``); the levels are ``merkle.tree_levels``.  The domain is the e2e
 slice's operand domain (benchmarks/e2e_slice/commit.py on cursor/e2e-slice-ea24): ``CommitmentDomain(identity_digest_sha512(
-BINDING_TAG, label), -1, RangeIndexedDomain(0, n), hash="sha512")``.  The tile modes (Decision 46) commit an m x k int8
+BINDING_TAG, label), -1, RangeIndexedDomain(0, n), hash="sha512")``.  The tile modes commit an m x k int8
 operand's :func:`permute` rows, leaf pos the block of r rows x 32 values at (pos % ceil(m/r), pos // ceil(m/r)), so the
 spot check's 128-row tile at one 32-step is the 128/r adjacent leaves :func:`tile_leaves` names.
 
@@ -112,7 +112,7 @@ def tile_count(m: int, k: int, r: int) -> int:
 
 
 def permute(a: bytes, m: int, k: int, r: int) -> bytes:
-    """The tile layout (Decision 46) of an m x k int8 operand (row-major, k a multiple of 32) as rows of 32 r bytes: leaf pos
+    """The tile layout of an m x k int8 operand (row-major, k a multiple of 32) as rows of 32 r bytes: leaf pos
     is block (pos % ceil(m/r), pos // ceil(m/r)) of r rows x 32 values, its bytes the block's in row-major order, rows past
     m zero.  commit_gpu's ``tile`` and ``tileseg`` modes read the operand in place in this order; the reference commits
     these rows as sha512/row/v2 or sha512/row-seg/v1 rows of 256 r bits."""
