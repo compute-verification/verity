@@ -480,7 +480,7 @@ def test_a_bit_leaf_ports_elements_are_its_bits_least_significant_first():
     state = [(2 - 4 - 2) & IO.M32, 2, 17, 3]
     bits = np.asarray(evaluate_batch(entry, np.array([[1]], np.uint32), np.array([state], np.uint32), kernel="reference"))
     words = _packed(bits.reshape(1, -1).astype(np.uint64), 16)[0].tolist()
-    assert words == IO.entry_reference(1, state, 2, 17, 4, ()) and words[:2] == [2, 0]
+    assert words == IO.entry_reference(1, state, 2, 17, 4, ()) and words[:3] == [1 | 2 << 1, 0, 17 << 1]
 
 
 @pytest.mark.slow

@@ -43,13 +43,15 @@ and its head (lp, max_tokens). `slots_reference` is each lane's fields and `scan
 outputs from position to position, (w, m, ids[0], …, ids[KO − 1]): w counts down from lp − 1, one a position, and while
 1 − KO ≤ w ≤ 0 (the KO positions from the prompt's last on) the position's output is shifted in at the end, so after the
 last position ids[i] is output i; m is ``max_tokens``. The first position's starts from the head. `SlotEntry_v1{KO, IDB,
-NP, STOP}` is the slot's entry of the Programs' row from the last position's state and the slot's occupancy word: n, the
-outputs served (up to ``max_tokens``, unsigned, and the first of the model's stop ids ``STOP``, that one included), as a
-u32, then output i's low IDB bits for i < n and zeros past it, all zero for an empty slot, zero-padded to whole words. An
-occupied slot whose request the class can't hold has n = KO + 1 and no ids: its prompt not 1 to NP ids (after a Program's
-NP + KO − 1 positions the state's w is lp − NP − KO) or its outputs not ending within KO (``max_tokens`` past KO and no
-stop id among them). The scan refuses a Program's n over KO at its anchor (`ingress_scan`), and the egress
-renders no output past KO − 1 (`egress.computed`), so such a record fails visibly.
+NP, STOP}` is the slot's entry of the Programs' row from the last position's state and the slot's occupancy word, in the
+scan's layout (`ingress_scan.entry_layout`): ``read``, the occupancy word's bit 0 (1 where the Program read an occupied
+slot), then n, the outputs served (up to ``max_tokens``, unsigned, and the first of the model's stop ids ``STOP``, that
+one included), as a u32, then output i's low IDB bits for i < n and zeros past it, all zero for an empty slot,
+zero-padded to whole words. A Program that reads an empty slot where the scan holds a request gives ``read`` 0, which
+the scan refuses. An occupied slot whose request the class can't hold has n = KO + 1 and no ids: its prompt not 1 to
+NP ids (after a Program's NP + KO − 1 positions the state's w is lp − NP − KO) or its outputs not ending within KO
+(``max_tokens`` past KO and no stop id among them). The scan refuses a Program's n over KO at its anchor
+(`ingress_scan`), and the egress renders no output past KO − 1 (`egress.computed`), so such a record fails visibly.
 
 A collector's rows and an entry's are a few i32s at a small KO, under the 112 bytes C-Flock's composer needs in some row
 of a proof block, so a window proves them inside its token select's combine: `SelectCollect_v1{V, C, KO, FIRST}` is
@@ -63,7 +65,7 @@ Registered functions:
   ScanSlots{NS,NP,...}       (state: NS u16 bits) -> (tok: i32 bits, slot: NP + 1 i32 bits, occ: i32 bits, head: 2 i32 bits)
                              a lane (`boolean_io_shell`)
   OutCollect{KO,FIRST}       (head: 2 i32 | state: KO + 2 i32, tok: i32) -> KO + 2 i32
-  SlotEntry{KO,IDB,NP,STOP}  (occ: i32, state: KO + 2 i32) -> ⌈(32 + KO·IDB) / 16⌉ u16 bits
+  SlotEntry{KO,IDB,NP,STOP}  (occ: i32, state: KO + 2 i32) -> ⌈(33 + KO·IDB) / 16⌉ u16 bits
   SelectCollect{V,C,KO,FIRST}
                              (x0: bf16, best: n bf16, idx: n i32, head | state) -> (tok: i32, state: KO + 2 i32)
   SelectEntry{V,C,KO,FIRST,IDB,NP,STOP}
@@ -379,8 +381,8 @@ def OutCollect(B, S, a, tok):
 
 
 def entry_words(KO: int, IDB: int) -> int:
-    """An entry's u16 words: n's 32 bits and KO ids of IDB bits, zero-padded."""
-    return -(-(32 + KO * IDB) // 16)
+    """An entry's u16 words: ``read``'s bit, n's 32 bits and KO ids of IDB bits, zero-padded."""
+    return -(-(33 + KO * IDB) // 16)
 
 
 def entry_refuse(S: dict) -> str | None:
@@ -409,7 +411,7 @@ def entry_reference(occ: int, state: list[int], KO: int, IDB: int, NP: int, STOP
         alive = k and x not in STOP
     if occ & 1 and not fits or alive and m >= KO + 1:
         n, keep = KO + 1, [False] * KO
-    bits = n | sum((x & (1 << IDB) - 1) << 32 + IDB * i for i, (x, k) in enumerate(zip(ids, keep)) if k)
+    bits = occ & 1 | n << 1 | sum((x & (1 << IDB) - 1) << 33 + IDB * i for i, (x, k) in enumerate(zip(ids, keep)) if k)
     return [bits >> 16 * k & 0xFFFF for k in range(entry_words(KO, IDB))]
 
 
@@ -417,9 +419,10 @@ def entry_reference(occ: int, state: list[int], KO: int, IDB: int, NP: int, STOP
            conformance="a request's output count and ids as vLLM served them: up to max_tokens and its first stop id, "
                        "KO + 1 where the class can't hold it")
 def SlotEntry(B, S, occ, state):
-    """A slot's entry of the network certifier's Programs' row (the module docstring): output i is kept while the slot is
-    occupied, its prompt 1 to NP ids, i < ``max_tokens`` (unsigned) and no earlier output is a stop id; n the kept outputs,
-    or KO + 1 and none kept where the prompt doesn't fit or the outputs don't end within KO."""
+    """A slot's entry of the network certifier's Programs' row (the module docstring): ``read`` the slot's occupancy
+    bit, then n and the kept outputs; output i is kept while the slot is occupied, its prompt 1 to NP ids, i <
+    ``max_tokens`` (unsigned) and no earlier output is a stop id; n the kept outputs, or KO + 1 and none kept where the
+    prompt doesn't fit or the outputs don't end within KO."""
     o, (_, ret) = word_ops(B), entry_sig(S)
 
     def either(a, b):
@@ -443,7 +446,7 @@ def SlotEntry(B, S, occ, state):
             alive = k
     over = either(o.band(occupied, o.bnot(fits)), o.band(alive, either(big, o.ile(o.word(S.KO + 1), m))))
     n, keep = o.isel(over, o.word(S.KO + 1), n), [o.band(k, o.bnot(over)) for k in keep]
-    bits = [B.call(bit_at(32), n, o.word(b)) for b in range(32)]
+    bits = [occupied, *[B.call(bit_at(32), n, o.word(b)) for b in range(32)]]
     bits += [o.band(k, B.call(bit_at(32), x, o.word(b))) for x, k in zip(ids, keep) for b in range(S.IDB)]
     pad = 16 * entry_words(S.KO, S.IDB) - len(bits)
     return Coll(ret, concat([b.refs for b in bits] + ([broadcast(*B.call(const(1, 0)).refs[0], pad)] if pad else [])))

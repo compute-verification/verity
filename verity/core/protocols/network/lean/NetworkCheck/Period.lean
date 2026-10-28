@@ -547,10 +547,10 @@ its circuit-check rows, `SlotEntry_v1{KO=2,IDB=17,NP=4,STOP=[]}` and `SlotEntry_
 another body has neither digest, so its entries are no slot entries (`wired`); a new binding or body of `SlotEntry_v1`
 is pinned here. -/
 def slotEntryPins : List String :=
-  ["0763102b5fd38583279471486ff8ce51b9caae1bc5dece3d7712ddcec456f1bb\
-    4e543343ed1399c0665043402d7100173a270cb6a8cc541b60bcdd29b37d7d0a",
-   "662360bfd2b31949f09447a32dec775c3e2e26e2d9132af8898609475e75a753\
-    4cb522ce4f794bc5fcce71a7f09ec5a2170e0b2406339cc4d9268ea8487e3361"]
+  ["8c8a033047ec49110114023204a9c265720ae9d1b63963c51a98e14f0314ebd3\
+    7b741b90d6a374aeb681a1a5fe364580b68ff60cf5514fdf57fdaff88b36de30",
+   "2559f1c8e260aac6e8755c317cde07f990fcd3619dd394010d367a3b78156c2f\
+    24b44567891a9ea2efb2f8a6830c9f9c957c14dc65041f8dd77bfd8d50c5b7ff"]
 
 #guard slotEntryPins.all (·.length == 128)
 

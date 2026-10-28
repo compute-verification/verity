@@ -1,8 +1,8 @@
 """`registry.io_shell` (ingress v0): the encoder's bytes in the layout, padded to whole SHA-512 blocks, `IngressPrompt_v1` as
 `reference` on bodies in the schema and on each way out of it (other padding among them), the statics it refuses, the
-Boolean Definition against its word, `TokenFeed_v1` down a class Program's positions, and the network
-certifier's scan state read (`ScanSlots_v2`), output collection (`OutCollect_v1`) and entry (`SlotEntry_v1`), and those
-two inside the token select's combine (`SelectCollect_v1`, `SelectEntry_v1`)."""
+Boolean Definition against its word, `TokenFeed_v1` down a class Program's positions, and the network certifier's scan
+state read (`ScanSlots_v2`), output collection (`OutCollect_v1`) and entry (`SlotEntry_v1`, the scan's entry bit for
+bit), and those two inside the token select's combine (`SelectCollect_v1`, `SelectEntry_v1`)."""
 from __future__ import annotations
 
 import json
@@ -10,6 +10,9 @@ from types import SimpleNamespace
 
 import numpy as np
 import pytest
+from verity_vllm.program.predict import scan_state as SS
+
+from verity.core.protocols.certifier import ingress_scan as IS
 from verity.ml.definitions import boolean as SW
 from verity.ml.definitions.registry import boolean_io_shell as BX
 from verity.ml.definitions.registry import io_shell as X
@@ -213,10 +216,10 @@ def test_the_output_collector_keeps_the_ko_samples_from_the_prompts_last_positio
 @pytest.mark.parametrize("KO, STOP", [(2, ()), (5, (103,)), (5, (102, 104))], ids=["no-stop", "one-stop", "two-stops"])
 def test_a_slots_entry_counts_its_outputs_cuts_its_ids_and_is_zero_when_empty(KO, STOP):
     """`SlotEntry_v1` against `entry_reference` at each occupancy word, ``max_tokens`` (2^31 and 2^32 − 1 unsigned) and
-    prompt length lp (the last state's w = lp − NP − KO): an empty slot's every word is zero; an occupied slot's n is
-    min(max_tokens, the first stop's index + 1) and its ids output i's low 17 bits for i < n, zeros past it (ids carry a bit
-    at 2^20 the cut drops), except that a request the class can't hold, its prompt not 1 to NP ids or that n past KO, has
-    n = KO + 1 and no ids."""
+    prompt length lp (the last state's w = lp − NP − KO): an empty slot's every word is zero; an occupied slot's read bit
+    is 1, its n min(max_tokens, the first stop's index + 1) and its ids output i's low 17 bits for i < n, zeros past it
+    (ids carry a bit at 2^20 the cut drops), except that a request the class can't hold, its prompt not 1 to NP ids or
+    that n past KO, has n = KO + 1 and no ids."""
     NP = 3
     e, ids = bind(X.SlotEntry, KO=KO, IDB=17, NP=NP, STOP=STOP), [100 + i for i in range(KO)]
     for occ in (0, 1, 2, 3):
@@ -229,11 +232,26 @@ def test_a_slots_entry_counts_its_outputs_cuts_its_ids_and_is_zero_when_empty(KO
                 n = min([m, *[i + 1 for i, x in enumerate(ids) if x in STOP]]) if 1 <= lp <= NP else KO + 1
                 n = 0 if not occ & 1 else n if n <= KO else KO + 1
                 packed = sum(w << 16 * k for k, w in enumerate(words))
-                assert packed == n | sum(x << 32 + 17 * i for i, x in enumerate(ids[:n] if n <= KO else ()))
-    assert X.entry_words(64, 17) == 70
+                assert packed == occ & 1 | n << 1 | sum(x << 33 + 17 * i for i, x in enumerate(ids[:n] if n <= KO else ()))
+    assert X.entry_words(64, 17) == 71 and X.entry_words(4, 17) == 7
     for bad in ({"STOP": (1, 1)}, {"NP": 0}):
         with pytest.raises(ValueError, match="refuses this binding"):
             bind(X.SlotEntry, **{"KO": 2, "IDB": 17, "NP": 4, "STOP": (), **bad})
+
+
+@pytest.mark.parametrize("KO, NP, STOP", [(2, 4, ()), (4, 32, (128001,)), (64, 1024, (128001,))],
+                         ids=["small", "ko4", "record"])
+def test_a_slots_entry_is_the_scans_entry_bit_for_bit(KO, NP, STOP):
+    """`SlotEntry_v1`'s row is the network certifier's entry at the scan's class of its KO (`ingress_scan.entry_encode`,
+    in `entry_layout`'s order: read, n, the ids), so the scan reads an honest slot as its Program wrote it: an empty
+    slot's entry is `NONE`, an occupied slot's read 1 with its n and ids, and a request the class can't hold read 1 and
+    n = KO + 1, which the scan refuses. At KO 4 a row without the read bit is as long, so only the bits tell them apart."""
+    cls, e, ids = SS.scan_class(4, KO, 16), bind(X.SlotEntry, KO=KO, IDB=17, NP=NP, STOP=STOP), [100 + i for i in range(KO)]
+    assert 16 * X.entry_words(KO, 17) == IS.entry_bits(cls)
+    for occ, lp, m, want in ((0, 1, KO, IS.NONE), (2, 1, KO, IS.NONE), (1, 1, 1, IS.entry(1, ids[:1])),
+                             (3, NP, KO, IS.entry(KO, ids)), (1, NP + 1, 1, (1, KO + 1, ())),
+                             (1, 1, KO + 1, (1, KO + 1, ()))):
+        assert _run(e, [occ], [(lp - NP - KO) & X.M32, m, *ids]) == IS.entry_encode(cls, want), (occ, lp, m)
 
 
 @pytest.mark.parametrize("first", [True, False], ids=["first", "later"])
