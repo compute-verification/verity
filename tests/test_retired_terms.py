@@ -35,10 +35,6 @@ DOC_TERMS = {
     "wrong unit, incorrect unit": "faulty proof block",
     "isolation unit, IU": "isolation block",
     "replay unit": "replay block",
-    "physical block": "server-time block",
-    "thread block": "CTA",
-    "KV block": "KV page",
-    "leg": "the subprotocol's name (sampled proofs, PoUW, PoUS, the bandwidth audit, the network certifier, the wipe), or run",
     "draw, drawn, redraw": "the sample, sampled proof block (verb: sample; coins are flipped)",
     "components, the composite's product": "subprotocols, composition",
     "firewall": "ZK server",
@@ -52,6 +48,10 @@ DOC_TERMS = {
     "hm96 rows, outside the commitments' docs": "hiding commitments",
     "that period's coins": "before any coins are flipped",
     "rejection dominates, reject dominance": "any rejection rejects the whole",
+    "physical block": "server-time block",
+    "thread block": "CTA",
+    "KV block": "KV page",
+    "leg": "the subprotocol's name (sampled proofs, PoUW, PoUS, the bandwidth audit, the network certifier, the wipe), or run",
 }
 _SPACE = r"(?:[ \t]+|-|[ \t]*\n[ \t]*)"
 _DOC_TERM = re.compile(rf"(?i:\b(?:(?:wrong|incorrect|isolation|replay){_SPACE}units?|(?:physical|thread|KV){_SPACE}blocks?"
