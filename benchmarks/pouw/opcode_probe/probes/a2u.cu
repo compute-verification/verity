@@ -1,6 +1,6 @@
-// A2u at saturated issue (note:20261019T0456Z-draft-rt-machine, RT-MACHINE-4): does a uniform-datapath instruction take
-// an SMSP issue slot when the lanes already issue at nearly one warp instruction a cycle? uniform.cu's fixed streams
-// never got there (their tensor and ALU pipes bind at 0.6-0.9 issue), so its K = 128 points can't tell an issue slot
+// A2u at saturated issue: does a uniform-datapath instruction take an SMSP issue slot when the lanes already issue at
+// nearly one warp instruction a cycle? uniform.cu's fixed streams never got there (their tensor and ALU pipes bind at
+// 0.6-0.9 issue), so its K = 128 points can't tell an issue slot
 // from interference. Here the vector stream spreads over four pipes so that issue binds, each a loop:
 //   a: 2 IMMA (16 SMSP-cycles each on the tensor pipe: 32), 64 FFMA reading the accumulators (FMA pipe: 64), 16 LOP3 and
 //      16 IMAD reading them (ALU and IMAD pipes: 32 each), about 100 warp instructions;
@@ -9,12 +9,12 @@
 // carried around the loop. ptxas places each chain pair on the uniform datapath or on lanes on its own; each probe's
 // expect pins what it placed, so the loop's V and U are exact. At 1024 threads (64 registers) with 3 or 4 pairs it moves
 // one pair to the uniform datapath and keeps the rest on lanes; with 1 or 2 pairs, or at 512 threads, it keeps every
-// pair on lanes (r20261019-052718-24a9, r20261019-053148-a07e). So each probe with a uniform pair has a 2-pair control
-// with the same chain instructions on lanes and none uniform:
+// pair on lanes. So each probe with a uniform pair has a 2-pair control with the same chain instructions on lanes and
+// none uniform:
 //   <s>8_<K>     4 pairs: K/4 uniform instructions and 3K/4 chain instructions on lanes;
 //   <s>8_<K>p3   3 pairs: K/3 uniform and 2K/3 on lanes;
 //   <s>8_<J>p2   2 pairs: J on lanes, no uniform instruction (J = 3K/4 or 2K/3 of a probe above).
-// The stream issues at about 0.8 (r20261019-053415-154f), so up to a fifth of the slots are idle and 16-32 uniform
+// The stream issues at about 0.8, so up to a fifth of the slots are idle and 16-32 uniform
 // instructions fit there either way (they added 4-14 SMSP-cycles). The 3-pair probes at K = 192-384 put 64-128 uniform
 // instructions beside 128-256 chain instructions on lanes, more than the idle slots: with A2u a probe's time exceeds its
 // control's by most of its uniform count; without it by about 0, the uniform datapath's own cap (0.68-0.77 a SMSP-cycle,

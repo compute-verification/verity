@@ -3,7 +3,7 @@
 #
 #   tar -C BUILD_RUN/out/ship -cf /tmp/ship.tar .
 #   research run --on vy-dc-h200 --project verity --campaign pouw --source . --cwd source --timeout 60m \
-#     --env GPU_LEASE_WHO=kernels-pc90 --send /tmp/ship.tar -- bash benchmarks/pouw/pearl_c_sm90/h200_profile.sh
+#     --env GPU_LEASE_WHO=LANE --send /tmp/ship.tar -- bash benchmarks/pouw/pearl_c_sm90/h200_profile.sh
 #
 # Under one lease of at most LEASE_MIN minutes (default 20): run.py's check at the fixture's shape (no diagnostic timing), and
 # only if it passed, each step whose switch is set:

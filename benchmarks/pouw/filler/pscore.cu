@@ -1,4 +1,4 @@
-// HC-SCHED's arm-side driver for the filler scorer (cmp-13; approach pouw/filler-sched): dscore.cu's `dscore` protocol and
+// The scheduled arm's driver for the filler scorer: dscore.cu's `dscore` protocol and
 // row, with one addition to the arm block, the phase filler (dcap.cu's dfill_p) forked into each layer's attention on the
 // step's own SMs beside FILL v1's split. filler-arm/v1's placements (none | split | co) can't name it, so this file and
 // psched_score.py carry it until the scorer adopts it; its rows are dscore rows, which the locked `score.py report` scores.
