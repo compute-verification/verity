@@ -188,7 +188,7 @@ files: its parameters (`deployment.json`), its traffic and the scan's class. The
 `NetTiming.Guarantees.PeriodLeakAccepted` (`Security/Definitions/NetworkCertifier/Guarantees/Period.lean`, proved in
 `Security/Proofs/NetworkCertifier.lean`), whose sampling blocks' failures `NetTiming.periodLeak_le_sum` sums by a union
 bound (`Security/Proofs/NetworkCertifier/PeriodSum.lean`); the pooled form is
-`NetTiming.Guarantees.HorizonLeakAccepted` (`Security/Definitions/NetworkCertifier/Guarantees/HorizonLeak.lean`). The
+`NetTiming.Guarantees.PooledLeakAccepted` (`Security/Definitions/NetworkCertifier/Guarantees/PooledLeak.lean`). The
 report's `d1` lists, per sampling block, whether its certificates, N2 and the scan accepted.
 
 **K per monitoring period** (`chain_record.py leak`), on the full-traffic relay run of record with its scan, every
@@ -212,11 +212,11 @@ The terms, in the generator reading of the scan's statement (each unit's registe
   (`warden.Warden(paced=…)`, `warden_serve.py --paced-ms`).
 
 The two forms:
-- The pooled form (`HorizonLeakAccepted`) adds Fmax = ⌈ln(1/δ)⌉ units of b = NS + NV = 154,480 bits, and
+- The pooled form (`PooledLeakAccepted`) adds Fmax = ⌈ln(1/δ)⌉ units of b = NS + NV = 154,480 bits, and
   Fmax·log2(N + 1). Fmax is 5 at δ = 1% and 14 at δ = 10⁻⁶. The form is conditional: `hesc` and `hleak` await
   `SampledKSLive` and P2.
 - The per-period form (`PeriodLeakAccepted`) has no δ term with every unit drawn.
-- Both are proved: `NetTiming.SecurityProofs.PeriodLeakAccepted` and `NetTiming.SecurityProofs.HorizonLeakAccepted`.
+- Both are proved: `NetTiming.SecurityProofs.PeriodLeakAccepted` and `NetTiming.SecurityProofs.PooledLeakAccepted`.
 
 The scale:
 - A week, a month and a year of one machine and of 1,000 machines: the census's convention, on the census's
@@ -267,4 +267,4 @@ K also rests on these conditions:
 - The compute audit's free inputs don't enter K: its δ goes into JointPeriodLive's sum.
 
 The report names what it stands on beyond the theorem (`chain_record.STUBBED`, `WARDEN_STUBBED` and
-`HORIZON_CONDITION`) and what the theorem doesn't cover (its `uncovered`).
+`POOLED_CONDITION`) and what the theorem doesn't cover (its `uncovered`).

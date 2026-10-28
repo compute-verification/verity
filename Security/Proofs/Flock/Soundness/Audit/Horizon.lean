@@ -29,7 +29,7 @@ adapted and its wrong set predictable (`Horizon.adapted_escapes`, `Horizon.predi
 weights `|W_t|` and `ρ = 1 − kd/N`.
 
 network-accounting composes `horizon_escape_log` with the per-period D1 into
-`K_horizon = (ln(1/δ)/q)·(16 + log2 unit index) + Σ_windows (ε_ks + δ_link)`: each window's error adds once per
+`K_pooled = (ln(1/δ)/q)·(16 + log2 unit index) + Σ_windows (ε_ks + δ_link)`: each window's error adds once per
 window, so the second term grows with the number of windows in the horizon. That composition is
 `PooledLeakAccepted`'s, not this file's.
 -/
