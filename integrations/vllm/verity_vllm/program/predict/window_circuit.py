@@ -41,17 +41,20 @@ the units, their feeds and weight reads, and wires them). Every unit reads its w
   ``x`` and scale ``sx`` whole. Words are laid out by each field's leaf width (`_spans`): a weight or node output whose leaves
   aren't one byte width filling whole u16 words, and a read that starts inside a word, are refused.
 - `RoPE_v1{NHEADS, D}` is its heads (`RoPEHead_v1{D}`), each reading its slice of ``x``.
-- `Attention_v18{T, NH, KVH, D, BN, ...}` is `Attention_v19`'s cut: each head's Calls (`AttentionHead_v19`'s
-  body, read once a T) are its units, its first visited key block `AttnBlockFirst_v1{D, NVIS}` (keys (nb - 1)·BN ... T - 1,
-  nb = ⌈T / BN⌉; `AttnBlockFirst_v2{..., VS}` where a key's value is rows of VS words, the value GEMM's slices), each full
-  block below it `AttnBlock_v5` and its end `AttnHeadEnd_v1{D}`, one unit a head a Call, each
-  block's running state its predecessor's rows. A block's keys and values a KV group are its keys' rows as their
-  writers hold them (a key's RoPE head's row, a value's GEMM slices), key by key, which its group's heads read. A layer's
-  cache is refused unless it is the keys its earlier positions' nodes read and one more.
-- FA3's `Attention_v4` (sm_90) is `Attention_v20`'s cut the same way: its first visited block
-  `AttnBlockFirst_v1` (FA3's first iteration is FA2's word for word), each full block below it
-  `AttnBlock_v4{FIRST=False, CHECK = b >= MASKED_FROM}` and its end `AttnHeadEnd_v1{D, INV=Fa3InvSum_v1}`. `CUTS` names
-  the versions cut by key block and the cut of each.
+- `Attention_v18{T, NH, KVH, D, BN, ...}` is `Attention_v21`'s cut: each head's Calls (`AttentionHead_v21`'s
+  body, read once a T) are its units, each key block its softmax step and its P·V groups of PK keys: the first visited
+  block (keys (nb - 1)·BN ... T - 1, nb = ⌈T / BN⌉) `AttnBlockSoftmax_v1{D, NVIS, FIRST=True, CHECK=True, PK}` and its
+  groups `AttnBlockPv_v1{D, N, VS}` (the first from +0), each full block below it `AttnBlockSoftmax_v1{FIRST=False,
+  CHECK = b >= MASKED_FROM}` and its BN / PK groups, and its end `AttnHeadEnd_v1{D}`, one unit a head a Call, each step's
+  running state its predecessors' rows. VS is the columns of the value GEMM's slices (a key's value its D / VS rows), PK
+  the most keys of whole k-steps of 16 that divide BN with a group within a proof block's rows (`group_keys`: 96 at D 64,
+  BN 192 and VS 32). A step's keys and values a KV group are its keys' rows as their writers hold them (a key's RoPE head's
+  row, a value's GEMM slices), key by key, which its group's heads read. A layer's cache is refused unless it is the keys
+  its earlier positions' nodes read and one more.
+- FA3's `Attention_v4` (sm_90) is `Attention_v22`'s cut the same way: its first visited block's softmax
+  `AttnBlockSoftmax_v1` (FA3's first iteration is FA2's word for word), each full block's below it
+  `AttnBlockSoftmax_v2{FIRST=False, CHECK = b >= MASKED_FROM}`, the same groups and its end `AttnHeadEnd_v1{D,
+  INV=Fa3InvSum_v1}`. `CUTS` names the versions cut by key block and the cut of each.
 - Any other attention version (`Attention_v2`, as `fa3_construction = "guard-every-block"` binds) is its heads, a unit
   each of its own head Definition (`AttentionHead_v2{T}`), reading its KV group's every key's rows.
 - `TokenSelect_v4{V}` is its function at groups of `GROUP` logits: V / C units `TokenSelectGroups_v1{C, GROUP}`, C =
@@ -123,8 +126,8 @@ from verity.ml.commitments.gates import embedding as E
 from verity.ml.definitions.registry import b1 as B1
 from verity.ml.definitions.registry import int8_exact as IX
 from verity.ml.definitions.registry import io_shell as IO
-from verity.ml.definitions.registry.dead_free import AttentionV19, AttnBlockFirstV2, TokenSelectGroupsV1
-from verity.ml.definitions.registry.fa3_check_inf import AttentionV20
+from verity.ml.definitions.registry.dead_free import AttentionV21, TokenSelectGroupsV1
+from verity.ml.definitions.registry.fa3_check_inf import AttentionV22
 from verity.ml.windows import interface as IF
 
 from . import scan_state as SS
@@ -135,9 +138,9 @@ from .window_builder import WEIGHTS, Grain, Row, _Builder, _spans, _step, _word,
 NAME = "verity-vllm/window"
 PROMPT = "prompt"
 GREEDY = {"kind": "greedy"}
-#: the `Attention` versions cut by key block, each by the version of its function whose heads' steps are Calls: FA2's v18
-#: by v19, FA3's v4 by v20
-CUTS = {18: AttentionV19, 19: AttentionV19, 4: AttentionV20, 20: AttentionV20}
+#: the `Attention` versions cut by key block, each by the version of its function whose heads' softmax steps and P·V groups
+#: are Calls (at the values' slice width VS and `group_keys`' PK): FA2's v18 (and v19) by v21, FA3's v4 (and v20) by v22
+CUTS = {18: AttentionV21, 19: AttentionV21, 4: AttentionV22, 20: AttentionV22}
 #: a token select's group of logits: a word of each `TokenSelectGroups_v1` unit's row of bests
 GROUP = 16
 
@@ -210,6 +213,16 @@ def _field(fn: Any, lo: int, hi: int) -> tuple[str, int]:
     if k is None or starts[k + 1] != hi:
         raise Unexpressible(f"{fn.id}: its return leaves [{lo}, {hi}) are not one of its output rows")
     return IF.layout(fn).outs[k]
+
+
+def group_keys(D: int, BN: int, VS: int, rows: int = IF.MAX_ROWS) -> int:
+    """PK: the most keys of whole k-steps of 16 that divide BN with a full group's `AttnBlockPv_v1` (its P row, its N·D / VS
+    value rows, its O and its output) within ``rows`` rows, refused where none is."""
+    pk = max((n for n in range(16, BN + 1, 16) if BN % n == 0 and n * D // VS + 3 <= rows), default=None)
+    if pk is None:
+        raise Unexpressible(f"a key block of {BN} keys has no P·V group of whole k-steps of 16 keys within {rows} rows at D {D} "
+                            f"and values of {VS} words a row")
+    return pk
 
 
 @dataclass
@@ -511,20 +524,25 @@ class _Program:
         self.b.read(tid, "cs", u, (H,), self.weight(cs.refs, D), (0,))
         self.outs[j] = [(0, H * D, Row(tid, u, "o0", D))]
 
-    def _plan(self, fn: Any, NH: int) -> list[tuple[Any, list[tuple[str, tuple[str, tuple[Any, ...]]]]]]:
-        """``fn``'s heads as its cut's (`CUTS`: `Attention_v19`'s or v20's), read once a Definition (`_Builder.plans`): each
-        Call of the cut's head's body in order with what each of its ports reads, ``("q", ())``, ``("k" | "v", (a, b))`` (keys
-        [a, b)) or ``("state", (i, out, words))`` (Call i's output row ``out``), the last Call's ``o0`` the head's output."""
-        key = descriptor_id(fn)
+    def _plan(self, fn: Any, VS: int, NH: int) -> list[tuple[Any, list[tuple[str, tuple[str, tuple[Any, ...]]]]]]:
+        """``fn``'s heads as its cut's (`CUTS`: `Attention_v21`'s or v22's at VS and `group_keys`' PK), read once a Definition
+        (`_Builder.plans`): each Call of the cut's head's body in order with what each of its ports reads, ``("q", ())``,
+        ``("k" | "v", (a, b))`` (keys [a, b)) or ``("state", (i, out, words))`` (Call i's output row ``out``), the last Call's
+        ``o0`` the head's output."""
+        D, BN = fn.bindings["D"], fn.bindings["BN"]
+        try:
+            cut = bind(CUTS[fn.version], **fn.bindings, VS=VS, PK=group_keys(D, BN, VS, self.b.grain.rows))
+        except (TypeError, ValueError) as e:
+            raise Unexpressible(f"{fn.id}: its values' rows of {VS} words don't bind its cut ({e})") from None
+        key = descriptor_id(cut)
         if key in self.b.plans:
             return self.b.plans[key]
-        cut = CUTS[fn.version]
         try:
-            head = self._heads(bind(cut, **fn.bindings), "AttentionHead", NH)
+            head = self._heads(cut, "AttentionHead", NH)
             body = head.body
         except (TypeError, ValueError, KeyError) as e:
             raise Unexpressible(f"{fn.id}: its heads are not `AttentionHead_v{cut.version}`'s ({e})") from None
-        params, D = [p for p, _ in head.signature()[0]], fn.bindings["D"]
+        params = [p for p, _ in head.signature()[0]]
         plan = []
         for i, n in enumerate(body.nodes):
             ports = []
@@ -576,12 +594,11 @@ class _Program:
         if node.fn.version not in CUTS:
             self._whole_heads(j, node)
             return
-        plan = self._plan(node.fn, NH)
         q, kc, vc = node.args
         keys = {"k": self._cache("k", kc, T, KVH), "v": self._cache("v", vc, T, KVH)}
+        plan = self._plan(node.fn, self._slice_width(node.fn, keys["v"], D), NH)
         qs = self._split(q.refs, NH)
         calls: list[tuple[str, int]] = []
-        plan = [(self._first(fn, ports, keys["v"]), ports) for fn, ports in plan]
         for fn, ports in plan:
             tid, u = self.b.unit(fn, NH)
             for port, (kind, x) in ports:
@@ -596,17 +613,14 @@ class _Program:
         self.outs[j] = [(0, NH * D, Row(tid, u, "o0", D))]
         self.heads[j] = (plan, tuple(calls))
 
-    def _first(self, fn: Any, ports: Any, vs: _Keys) -> Any:
-        """``fn``, or for `AttnBlockFirst_v1` whose keys' values are each several rows, `AttnBlockFirst_v2` at VS their
-        width, so its ``v`` is cut a row a value slice."""
-        if (fn.name, fn.version) != ("AttnBlockFirst", 1):
-            return fn
-        (a, b), = (x for _port, (kind, x) in ports if kind == "v")
-        if len(rows := self._block(vs, a, b)[0]) == b - a:
-            return fn
-        if len(width := {r.words for r in rows}) != 1:
-            raise Unexpressible(f"{fn.id}: its keys' values are rows of {sorted(width)} words, not one slice width")
-        return bind(AttnBlockFirstV2, **fn.bindings, VS=width.pop())
+    @staticmethod
+    def _slice_width(fn: Any, vs: _Keys, D: int) -> int:
+        """VS: the words of each row its keys' values are (a value's GEMM slices, D at a value of one row), refused unless its
+        newest value is rows of its first's one width, dividing D (each earlier attention of the layer held its newest)."""
+        width = {r.words for key in (vs.rows[0], vs.rows[-1]) for g in key for r in g}
+        if len(width) != 1 or D % min(width):
+            raise Unexpressible(f"{fn.id}: its keys' values are rows of {sorted(width)} words, not one slice width dividing {D}")
+        return width.pop()
 
     def _whole_heads(self, j: int, node: Any) -> None:
         """An attention whose version has no per-key-block cut (not in `CUTS`): a unit a head of its own head Definition,
@@ -779,4 +793,4 @@ def takes(compiled: Any, cls: WindowClass, placed: Sequence[tuple[int, int | Non
 
 
 __all__ = ["CLASS_OF_RECORD", "CUTS", "FAMILIES", "Grain", "Lowered", "NAME", "Row", "WindowClass", "class_circuit",
-           "class_program", "lower", "stop_ids", "takes", "window_circuit"]
+           "class_program", "group_keys", "lower", "stop_ids", "takes", "window_circuit"]
