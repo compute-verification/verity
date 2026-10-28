@@ -12,7 +12,7 @@ clock, of one kernel on every SM: resident and idle (`static`), `s8` `wgmma` on 
 random ones (`macDecl`), and SHA-512 compressions (`comp`). A row's clock is the highest in-kernel clock of the readings
 in its band, rounded up. A static row is the least idle reading at or above its band; a class row is the least, over its
 band's readings and the rows above it, of the reading's power less the static row at its clock, over its rate. Each is
-rounded down. They were read at 34 to 66 °C, on `s8` only for the tensor unit, and only at the clocks the rows name.
+rounded down. They were read at 33 to 69 °C, on `s8` only for the tensor unit, and only at the clocks the rows name.
 -/
 
 open scoped NNRat
@@ -23,7 +23,9 @@ namespace Verity.Accel.H200
 def power : Power where
   static := [
     (9039 * 10 ^ 5, 8078 / 100),
+    (12000 * 10 ^ 5, 8726 / 100),
     (15000 * 10 ^ 5, 10272 / 100),
+    (17550 * 10 ^ 5, 11743 / 100),
     (18300 * 10 ^ 5, 12017 / 100)]
   mac := [
     (9039 * 10 ^ 5, 8019 / 10 ^ 17),
@@ -32,6 +34,11 @@ def power : Power where
     (9039 * 10 ^ 5, 30803 / 10 ^ 17),
     (17240 * 10 ^ 5, 62979 / 10 ^ 17)]
   comp := [
+    (9039 * 10 ^ 5, 250056 / 10 ^ 13),
+    (12000 * 10 ^ 5, 295788 / 10 ^ 13),
+    (15000 * 10 ^ 5, 378814 / 10 ^ 13),
+    (17550 * 10 ^ 5, 501343 / 10 ^ 13),
+    (18300 * 10 ^ 5, 520811 / 10 ^ 13),
     (19800 * 10 ^ 5, 520811 / 10 ^ 13)]
 
 end Verity.Accel.H200

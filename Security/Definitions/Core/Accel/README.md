@@ -118,7 +118,7 @@ too, and is not stated yet.
   the H200 through L2 at its placeholder row. IDP.4A on `imad` does 4 MACs a lane. None of these is a public route, so
   `SAKMatmul` as written fails at a dual price that leaves their pipes cheap. The algorithmic premise that would carry
   them, `SAKResidual`, is not yet adopted.
-- **The energy floors.** The H200's rows were read on one card at 34 to 66 °C (a colder card leaks less), at the
+- **The energy floors.** The H200's rows were read on one card at 33 to 69 °C (a colder card leaks less), at the
   clocks the rows name, and the tensor unit's only in `s8`: the other formats' floors are open. Hidden work on the
   CUDA cores is not bounded by `PowerBound`, and the meter's placement (one feed for the machine, upstream of every
   card) is not yet built.
