@@ -22,7 +22,9 @@
                                                             dependency bundles; with --on, in a free check slot of M
                                                             (`tools/verity/check/slot.py`), the lock and cores the train checks take,
                                                             and in the run's own clone of the shipped tree (`--cwd clone`);
-                                                            --priority takes the next free slot ahead of waiting lane checks;
+                                                            --priority takes the next free slot ahead of waiting lane checks,
+                                                            and one of TRAIN_GB or more when it runs pytest or circuit-check
+                                                            (`train_gb`: a machine without one is skipped or refused, exit 75);
                                                             --agreement sends the upstream build whatever the commit changes
                                                             (a train that changes a guarantee elsewhere: `train.sh`);
                                                             a warning first when the commit can't land on REF as it is;
@@ -287,6 +289,19 @@ LEAN_DEPS_URLS_ENV = "CHECK_LEAN_DEPS_URLS"
 SHARD_PARTS = "check-shard-parts.json"
 #: what a `--record --on` check runs under on the machine: a free check slot's lock and cores (slot.py), from the shipped tree
 SLOT_WRAP = ["python3", "tools/verity/check/slot.py", "--"]
+#: the least slot memory a train check that runs pytest or circuit-check takes (slot.py's MIN_MEM_ENV): the train slots' mem=. In a
+#: lane slot every parallel suite gets one test worker and circuit-check one target at a time, about twice the wall time
+TRAIN_GB = 300
+#: the steps that need a train slot's memory
+TRAIN_STEPS = ("pytest", "circuit-check")
+
+
+def train_gb(priority: bool, pool: str | None, parts: list[str] | None, combining: bool) -> int | None:
+    """The slot memory a recorded check must have (`TRAIN_GB`): a train's (`--priority`, outside a pool) that runs pytest or
+    circuit-check, all of a check (``parts`` None) or a shard or post-landing run holding one; else None."""
+    if not priority or pool is not None or combining:
+        return None
+    return TRAIN_GB if parts is None or any(p.partition(":")[0] in TRAIN_STEPS for p in parts) else None
 
 
 def slot_wrap(priority: bool = False, twin: str | None = None) -> list[str]:
@@ -300,17 +315,18 @@ def slot_wrap(priority: bool = False, twin: str | None = None) -> list[str]:
             *(["--twin", twin] if twin else []), SLOT_WRAP[-1]]
 
 
-def twins(names: list[str], docs: dict[str, dict | str], home: str, priority: bool = False) -> list[str]:
+def twins(names: list[str], docs: dict[str, dict | str], home: str, priority: bool = False,
+          min_mem: int | None = None) -> list[str]:
     """The machines among ``names`` to launch twins of a check on (`slot.py --twin`), ``home`` first: every one a check can run
     on (`placement` refuses none) when ``home``, `choose`'s pick, has no slot free for it; else none, and it runs on ``home``."""
     def runs(name: str) -> bool:
         try:
-            placement(docs[name], priority)
+            placement(docs[name], priority, min_mem)
         except (ValueError, KeyError, TypeError, AttributeError):
             return False
         return True
 
-    if placement(docs[home], priority)[0]:
+    if placement(docs[home], priority, min_mem)[0]:
         return []
     out = [home, *(n for n in names if n != home and runs(n))]
     return out if len(out) > 1 else []
@@ -409,12 +425,13 @@ def read_slots(names: list[str], reach=reach, run=_ssh) -> dict[str, dict | str]
         return dict(zip(names, ex.map(one, names)))
 
 
-def placement(doc: dict, priority: bool = False) -> tuple[bool, int, str]:
+def placement(doc: dict, priority: bool = False, min_mem: int | None = None) -> tuple[bool, int, str]:
     """A check's prospects on a machine whose `read_slots` documents are ``doc``: whether a check slot and a Lean `check` slot
     are free for it (more free than live waiters ahead of it), how many live waiters are ahead of it in the check line (with
-    ``priority``, a train check's, only the priority ones), and the state in a few words. ValueError when no check can run
-    there: a document has an error, the slots file lists no slot, the Lean slots file grants check's lean-audit step none, or the
-    machine's deadline is nearer than FULL_CHECK_S."""
+    ``priority``, a train check's, only the priority ones), and the state in a few words; with ``min_mem`` (`train_gb`), only
+    the slots whose mem= holds it count. ValueError when no check can run there: a document has an error, the slots file lists
+    no slot (or none that holds ``min_mem``), the Lean slots file grants check's lean-audit step none, or the machine's deadline
+    is nearer than FULL_CHECK_S."""
     check, lean = doc["check"], doc["lean"]
     for d, what in ((check, "check slots"), (lean, "Lean audit slots")):
         if "error" in d:
@@ -432,6 +449,9 @@ def placement(doc: dict, priority: bool = False) -> tuple[bool, int, str]:
         if not mine:
             raise ValueError(f"every slot in {check['file']} is for train checks (only=trains). A PR lands on an eyeball review, "
                              "and no lane check is required; to run its tests anyway: " + LANE_RUN)
+        if min_mem and not (mine := [s for s in mine if s.get("mem") is None or s["mem"] >= min_mem]):
+            raise ValueError(f"no slot in {check['file']} holds this check's {min_mem} GB (" + ", ".join(
+                f"{s['name']} {s.get('mem')} GB" for s in check["slots"]) + "): it takes a train slot")
         free = [s for s in mine if s["holder"] is None and not s["blocked"]]
         room = len(free) > ahead
         why = "check slots: " + ", ".join(f"{s['name']} " + ("held" if s["holder"] else "blocked" if s["blocked"] else "free")
@@ -447,7 +467,8 @@ def placement(doc: dict, priority: bool = False) -> tuple[bool, int, str]:
     return room and free_lean > len(p["waiters"]), ahead, why
 
 
-def choose(names: list[str], docs: dict[str, dict | str], priority: bool = False) -> tuple[str | None, str, list[str]]:
+def choose(names: list[str], docs: dict[str, dict | str], priority: bool = False,
+           min_mem: int | None = None) -> tuple[str | None, str, list[str]]:
     """`--on auto`'s machine among ``names``, its reason, and each machine skipped with why. The first machine where a check slot
     with no window blocking it and a Lean `check` slot are free for this request (`placement`); else the one with the fewest
     live waiters ahead of it, the first listed among those tied. A machine whose documents can't be read is skipped; with none
@@ -458,7 +479,7 @@ def choose(names: list[str], docs: dict[str, dict | str], priority: bool = False
         try:
             if not isinstance(doc, dict):
                 raise ValueError(doc or "not read")
-            room, ahead, why = placement(doc, priority)
+            room, ahead, why = placement(doc, priority, min_mem)
         except ValueError as e:
             skipped.append(f"{name}: {e}")
             continue
@@ -491,7 +512,7 @@ def _trees(doc: dict) -> set[str]:
 
 
 def place(names: list[str], commit: str, priority: bool = False, read=None, path: Path | None = None,
-          now=time.time) -> tuple[dict[str, dict | str], str | None, str, list[str]]:
+          now=time.time, min_mem: int | None = None) -> tuple[dict[str, dict | str], str | None, str, list[str]]:
     """`read_slots` and `choose` for ``commit``, one launcher process at a time, with the other checks this launcher placed and
     no machine shows yet (PLACED) as waiters on theirs; ``commit`` is recorded on its pick."""
     import fcntl
@@ -511,7 +532,7 @@ def place(names: list[str], commit: str, priority: bool = False, read=None, path
             if isinstance(d := docs.get(p["on"]), dict) and isinstance((d.get("check") or {}).get("waiters"), list):
                 d["check"]["waiters"].append({"priority": True, "pid": 0, "since": time.strftime("%Y-%m-%dT%H:%MZ", time.gmtime(p["at"])),
                                               "minutes": int((t - p["at"]) // 60), "tree": c, "by": "a launch placed here"})
-        got, why, skipped = choose(names, docs, priority)
+        got, why, skipped = choose(names, docs, priority, min_mem)
         if got:
             placed[commit] = {"on": got, "at": t}
             path.write_text(json.dumps(placed))
@@ -954,25 +975,6 @@ def record(argv: list[str]) -> int:
     except ValueError as e:
         print(f"check: --pool {e}", file=sys.stderr)
         return 2
-    pair, both = None, []
-    if on == "auto" or (on and "," in on):
-        names = list(AUTO) if on == "auto" else on.split(",")
-        head = subprocess.run(["git", "rev-parse", "HEAD"], cwd=ROOT, capture_output=True, text=True).stdout.strip()
-        docs, got, why, skipped = place(names, head, priority)
-        for s in skipped:
-            print(f"check: --on {on}: skipping {s}", flush=True)
-        if got is None:
-            print(f"check: --on {on} refused: {why} ({', '.join(names)}); nothing launched", file=sys.stderr, flush=True)
-            return 2
-        print(f"check: --on {on}: {got}: {why}", flush=True)
-        on = got
-        if both := twins(names, docs, got, priority):
-            pair = f"{time.strftime('%Y%m%dT%H%M%SZ', time.gmtime())}-{os.urandom(2).hex()}"
-            print(f"check: --on: twins {pair} on {', '.join(both)}: the first to take a check slot runs, and the others leave "
-                  f"their line (exit {SLOT.NOT_STARTED}, not started)", flush=True)
-    spec = importlib.util.spec_from_file_location("check_tool", ROOT / "tools" / "verity" / "check" / "tool.py")
-    tool = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(tool)
     combining = rest[:1] == ["--combine"]
     parts = None
     deferred = rest[rest.index("--deferred") + 1] if "--deferred" in rest[:-1] else None
@@ -984,6 +986,26 @@ def record(argv: list[str]) -> int:
     except DECLARATION.DeclarationError as e:
         print(f"check: {e}", file=sys.stderr)
         return 2
+    min_mem = train_gb(priority, pool, parts, combining)
+    pair, both = None, []
+    if on == "auto" or (on and "," in on):
+        names = list(AUTO) if on == "auto" else on.split(",")
+        head = subprocess.run(["git", "rev-parse", "HEAD"], cwd=ROOT, capture_output=True, text=True).stdout.strip()
+        docs, got, why, skipped = place(names, head, priority, min_mem=min_mem)
+        for s in skipped:
+            print(f"check: --on {on}: skipping {s}", flush=True)
+        if got is None:
+            print(f"check: --on {on} refused: {why} ({', '.join(names)}); nothing launched", file=sys.stderr, flush=True)
+            return 2
+        print(f"check: --on {on}: {got}: {why}", flush=True)
+        on = got
+        if both := twins(names, docs, got, priority, min_mem):
+            pair = f"{time.strftime('%Y%m%dT%H%M%SZ', time.gmtime())}-{os.urandom(2).hex()}"
+            print(f"check: --on: twins {pair} on {', '.join(both)}: the first to take a check slot runs, and the others leave "
+                  f"their line (exit {SLOT.NOT_STARTED}, not started)", flush=True)
+    spec = importlib.util.spec_from_file_location("check_tool", ROOT / "tools" / "verity" / "check" / "tool.py")
+    tool = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(tool)
     if base is None:
         subprocess.run(["git", "fetch", "-q", "origin", "+refs/heads/main:refs/remotes/origin/main"], cwd=ROOT, capture_output=True)
         base = "origin/main"
@@ -1001,7 +1023,8 @@ def record(argv: list[str]) -> int:
     # every run of a commit shares the shipped tree <root>/src/<sha>, and two checks' Lake builds there broke each other's .lake,
     # so each runs in its own clone of it
     cmd = [sys.executable, "-m", "research", "run", *(["--tool", "check"] if deferred is None else []), "--project", "verity",
-           "--cwd", "clone" if on else "source", *(x for p in PACK_FILES for x in ("--declared-output", p)), *pooled]
+           "--cwd", "clone" if on else "source", *(x for p in PACK_FILES for x in ("--declared-output", p)), *pooled,
+           *(["--env", f"{SLOT.MIN_MEM_ENV}={min_mem}"] if on and min_mem else [])]
     env = dict(os.environ)
     if "lean-agreement" in need:
         from research.store.local import LocalStore

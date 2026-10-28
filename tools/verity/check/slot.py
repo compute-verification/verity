@@ -45,6 +45,12 @@ being taken: inside a `research run` (RESEARCH_RUN_DIR), the run's timeout, whic
 run so far plus SECONDS, through its harness's control file (research.telemetry.run's CONTROL_TIMEOUT). `research queue ready
 --on` sends both (#1344, #1282, #1314 timed out in node 1's line and were reported failed).
 
+`CHECK_MIN_MEM_GB=GB` (MIN_MEM_ENV) in the environment: only a slot whose mem= is at least GB (or that sets none) is taken; on
+a machine that lists no such slot the waiter exits NOT_STARTED at once, naming the slots it has. `check.py --record --priority`
+sets it (`research run --env`) for a check that runs pytest or circuit-check (its TRAIN_GB), so a train never runs in a lane
+slot: in one, every parallel suite gets one test worker and circuit-check one target at a time, about twice a train slot's wall
+time. It is the environment, not an option, so the run's command stays the one `research merge` reads; CMD doesn't inherit it.
+
 `--twin PAIR` / `--twin PAIR@HOME`: one of a check's twins, the same check launched on each machine it may run on when none had a
 free slot (`check.py --record --on auto`), so it takes the first slot that frees on any of them (9 Oct: four checks waited up to
 54 min on node 1 while a node 2 slot was free). Each waits in its own machine's line. The one holding a slot runs only if it
@@ -92,6 +98,8 @@ RUN_TIMEOUT = Path("control") / "timeout_s"
 RUN_SLOT = "slot.json"
 #: a slot's mem= as CMD sees it: the GiB its check may take, which check.py gives circuit-check as its --mem-gb
 SLOT_MEM_ENV = "CHECK_SLOT_MEM_GB"
+#: the least mem= a slot this waiter takes must have (the module docstring)
+MIN_MEM_ENV = "CHECK_MIN_MEM_GB"
 #: the check's own scope unit (a `scope=1` slot), which spans.py reads its memory from
 SCOPE_ENV = "CHECK_SCOPE_UNIT"
 #: the GB (10^9 bytes) a run asks of its slot (`research run --pool --mem-gb`): a slot whose mem= is smaller waits for and reserves
@@ -491,6 +499,24 @@ def options(opts: list[str]) -> tuple[bool, str | None, float | None, float | No
     return priority, vals.get("--by"), secs["--wait-max"], secs["--run-max"], twin, None if rank is None else int(rank)
 
 
+def min_mem_gb() -> int | None:
+    """MIN_MEM_ENV's GB, or None; SystemExit on a value that isn't a whole number above 0."""
+    v = os.environ.get(MIN_MEM_ENV, "")
+    if v and not re.fullmatch(r"[1-9]\d{0,5}", v):
+        sys.exit(f"slot: {MIN_MEM_ENV}={v!r} is not a whole number of GB above 0")
+    return int(v) if v else None
+
+
+def holds(slot: dict, min_mem: int | None) -> bool:
+    """Whether ``slot`` may take a check that needs ``min_mem`` GB: no need, a slot without mem=, or mem= at least that."""
+    return min_mem is None or slot.get("mem") is None or slot["mem"] >= min_mem
+
+
+def held_why(slot: dict, priority: bool, min_mem: int | None) -> str:
+    """Why an unblocked ``slot`` isn't this waiter's now: for train checks only, under its ``min_mem``, or busy."""
+    return "for train checks" if slot["trains"] and not priority else "busy" if holds(slot, min_mem) else f"under {min_mem} GB"
+
+
 def limit_run(run_max: float, slot: str, run_dir: str | None, mono=time.monotonic) -> str:
     """Make the `research run` in ``run_dir`` end ``run_max`` seconds from now: its timeout (from the run's start, its
     status.json's `started_mono` on this machine's monotonic clock) becomes the time run so far plus ``run_max``. What was done,
@@ -773,6 +799,7 @@ def main(argv: list[str], now=lambda: datetime.now(timezone.utc), sleep=time.sle
         return 0
     opts, cmd = (argv[:argv.index("--")], argv[argv.index("--") + 1:]) if "--" in argv else ([], argv)
     priority, by, wait_max, run_max, pair, rank = options(opts)
+    min_mem = min_mem_gb()
     if not cmd:
         sys.exit(USAGE)
     if not SLOTS.exists() and os.environ.get("CHECK_SLOTS"):
@@ -807,6 +834,12 @@ def main(argv: list[str], now=lambda: datetime.now(timezone.utc), sleep=time.sle
             if pools else "a lane check runs on another machine")
         sys.exit(f"slot: every slot in {SLOTS} is for train checks (only=trains); {where}. A PR lands "
                  f"on an eyeball review, and no lane check or quick tier is required; to run its tests anyway: {LANE_RUN}")
+    if not any(holds(s, min_mem) for s in slots if priority or not s["trains"]):
+        have = ", ".join(f"{s['name']} ({s['mem']} GB)" for s in slots)
+        print(f"slot: not started: this check needs a slot of at least {min_mem} GB, and {SLOTS} has {have}. Run it on a machine "
+              f"with a train slot (only=trains, mem={min_mem} or more: `check.py --slots` lists them); exit {NOT_STARTED}",
+              file=sys.stderr, flush=True)
+        return NOT_STARTED
     me = asker(by, pair)
     ticket, tfd = join(SLOTS.parent, priority=priority, who=me, rank=rank)
     told, joined, peeked = None, now(), None
@@ -829,7 +862,8 @@ def main(argv: list[str], now=lambda: datetime.now(timezone.utc), sleep=time.sle
             if state == "taken":
                 return gone(f"its twin took a slot first ({describe(info) or 'claimed'})")
         n = ahead(ticket)
-        got = None if n else take(slots if priority else [s for s in slots if not s["trains"]], SLOTS.parent, now(), priority)
+        got = None if n else take([s for s in slots if (priority or not s["trains"]) and holds(s, min_mem)], SLOTS.parent, now(),
+                                  priority)
         if got and pair:
             state, info = twin("claim", pair, {**me, "took": f"{now():%Y-%m-%dT%H:%MZ}"})
             if state != "claimed":
@@ -841,7 +875,7 @@ def main(argv: list[str], now=lambda: datetime.now(timezone.utc), sleep=time.sle
         if got:
             break
         why = f"{n} check(s) ahead in line" if n else \
-            "every check slot is taken (" + "; ".join(f"{s['name']}: {blocked(s, now(), priority) or ('for train checks' if s['trains'] and not priority else 'busy')}"
+            "every check slot is taken (" + "; ".join(f"{s['name']}: {blocked(s, now(), priority) or held_why(s, priority, min_mem)}"
                                                    for s in slots) + ")"
         if why != told:
             print(f"slot: {why}; retrying every {POLL_S} s", file=sys.stderr, flush=True)
@@ -862,7 +896,7 @@ def main(argv: list[str], now=lambda: datetime.now(timezone.utc), sleep=time.sle
     os.replace(tmp, who)
     os.set_inheritable(fd, True)
     os.sched_setaffinity(0, cpulist(slot["cpus"]))
-    env = {k: v for k, v in os.environ.items() if k not in ("LEASE_DIR", SLOT_MEM_ENV, SCOPE_ENV)}
+    env = {k: v for k, v in os.environ.items() if k not in ("LEASE_DIR", SLOT_MEM_ENV, SCOPE_ENV, MIN_MEM_ENV)}
     env.update(LEASE_DEADLINE_FILE="/nonexistent/research-deadline", CHECK_SLOT=slot["name"],
                VERITY_TEST_CACHE=str(Path.home() / ".cache" / "verity" / f"tests-slot-{slot['name']}"),
                **({SLOT_MEM_ENV: str(slot["mem"])} if slot.get("mem") else {}))

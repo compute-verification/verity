@@ -68,6 +68,7 @@ def outside_a_slot(monkeypatch):
     monkeypatch.delenv("CHECK_SLOT", raising=False)
     monkeypatch.delenv("CHECK_SLOTS", raising=False)
     monkeypatch.delenv(SLOT.RUN_MEM_ENV, raising=False)
+    monkeypatch.delenv(SLOT.MIN_MEM_ENV, raising=False)
 
 
 @pytest.fixture(autouse=True)
@@ -777,6 +778,41 @@ def test_a_trains_slot_is_taken_only_by_a_priority_waiter(tmp_path, monkeypatch,
         SLOT.main(["--", "check.py"], now=lambda: NOW, sleep=free)
 
 
+def test_a_check_that_needs_a_train_slots_memory_takes_only_a_slot_that_holds_it_and_refuses_a_machine_without_one(
+        tmp_path, monkeypatch, capsys):
+    """A train's full check in a lane slot ran its suites on one worker each and its circuit-check one target at a time: with
+    MIN_MEM_ENV a waiter skips a free slot under it, takes the one that holds it, never hands the variable to CMD, and on a
+    machine with no such slot exits NOT_STARTED before joining the line."""
+    (tmp_path / "slots").write_text("c 0 mem=64\nb 1 mem=300 only=trains\n")
+    monkeypatch.setattr(SLOT, "SLOTS", tmp_path / "slots")
+    monkeypatch.setattr(SLOT, "memory_gb", lambda root=None: 1000.0)
+    monkeypatch.setattr(SLOT, "reserved_gb", lambda proc=None, priority=False: 0)
+    monkeypatch.setattr(SLOT.os, "sched_setaffinity", lambda pid, cpus: None)
+    ran = {}
+
+    def execvpe(f, argv, env):
+        ran.update(slot=env["CHECK_SLOT"], inherited=SLOT.MIN_MEM_ENV in env)
+        raise Exec
+
+    monkeypatch.setattr(SLOT.os, "execvpe", execvpe)
+    monkeypatch.setenv(SLOT.MIN_MEM_ENV, "300")
+    with pytest.raises(Exec):
+        SLOT.main(["--priority", "--", "check.py"], now=lambda: NOW, sleep=lambda s: pytest.fail("waited"))
+    assert ran == {"slot": "b", "inherited": False}
+    (tmp_path / "slots").write_text("c 0 mem=64\nd 1 mem=64\n")
+    assert SLOT.main(["--priority", "--", "check.py"], now=lambda: NOW) == SLOT.NOT_STARTED
+    err = capsys.readouterr().err
+    assert "needs a slot of at least 300 GB" in err and "c (64 GB), d (64 GB)" in err and "only=trains" in err
+    assert not list(tmp_path.glob("check-line/*"))
+    monkeypatch.delenv(SLOT.MIN_MEM_ENV)
+    with pytest.raises(Exec):
+        SLOT.main(["--priority", "--", "check.py"], now=lambda: NOW)       # a Lean check needs no train slot
+    assert ran["slot"] == "c"
+    monkeypatch.setenv(SLOT.MIN_MEM_ENV, "lots")
+    with pytest.raises(SystemExit, match="not a whole number of GB"):
+        SLOT.main(["--priority", "--", "check.py"], now=lambda: NOW)
+
+
 def test_an_all_trains_pool_names_the_lane_pools_beside_it_and_another_machine_only_when_there_is_none(tmp_path, monkeypatch):
     """A machine whose default pool is all only=trains refuses a lane check naming the lane pool beside it, and names another
     machine only when there is none (`gpu/slots`, `research/slots`)."""
@@ -816,6 +852,33 @@ def test_priority_reaches_slot_py_from_record_and_unknown_options_are_refused(mo
     assert calls[-1][calls[-1].index("--") + 1:][:6] == ["python3", "tools/verity/check/slot.py", "--priority", "--by", "lander", "--"]
     with pytest.raises(SystemExit):
         SLOT.main(["--fast", "--", "true"])
+
+
+def test_record_asks_for_a_train_slot_only_for_a_trains_tests_or_circuit_check_and_through_the_runs_environment(monkeypatch):
+    """`research merge` reads a check's command, so the slot memory a train needs travels as `research run --env`, never as a
+    slot.py option; a lane's check, a pooled one, a combine and a train's shard of Lean steps alone need no train slot."""
+    spec2 = importlib.util.spec_from_file_location("repo_check_min_mem", ROOT / "tools" / "verity" / "check" / "check.py")
+    check = importlib.util.module_from_spec(spec2)
+    spec2.loader.exec_module(check)
+    monkeypatch.setattr(check, "gather_verdicts", lambda d, given=None: None)
+    calls = []
+    monkeypatch.setattr(check.subprocess, "run", lambda cmd, **kw: calls.append(cmd) or subprocess.CompletedProcess(cmd, 0, "", ""))
+    monkeypatch.setattr(check, "lean_deps_url_file", lambda d: None)
+    want = f"{SLOT.MIN_MEM_ENV}={check.TRAIN_GB}"
+
+    def sent(*argv: str) -> bool:
+        assert check.record(list(argv)) == 0
+        cmd = calls[-1][:calls[-1].index("--")]
+        return any(a == "--env" and b == want for a, b in zip(cmd, cmd[1:]))
+
+    assert sent("--on", "vy-nebius-1", "--priority")
+    assert not sent("--on", "vy-nebius-1")
+    assert check.train_gb(True, "research", None, False) is None
+    assert check.train_gb(True, None, ["lean-build", "lean-audit:Security"], False) is None
+    assert check.train_gb(True, None, ["pytest"], False) == check.TRAIN_GB                  # a post-landing run of the suites
+    assert check.train_gb(True, None, ["flock-circuit-build", "circuit-check"], False) == check.TRAIN_GB
+    assert check.train_gb(True, None, None, True) is None
+    assert check.TRAIN_GB == 300 and SLOT.MIN_MEM_ENV not in " ".join(calls[-1][calls[-1].index("--") + 1:])
 
 
 def test_memory_gb_is_the_least_of_memavailable_and_each_cgroup_limits_headroom(tmp_path):
