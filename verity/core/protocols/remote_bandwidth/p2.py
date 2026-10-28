@@ -141,8 +141,17 @@ class Registration:
             + self.rows.to_bytes(4, "big")).digest()
 
 
-def register(source: bytes, node: bytes, commitment: bytes, vk: VerifierKey, *,
+def register(source: bytes, view: log.View, store: str, commitment: bytes, vk: VerifierKey, *,
              rows: int | None = None) -> Registration:
+    """`_draw` for the node whose P2 store, of vk's blocks, the registration log registers as `store` (`stored`): the
+    node is the log's, never the prover's word."""
+    if type(vk) is not VerifierKey:
+        raise ValueError("vk is the verifier's own, built at PoUS's setup")
+    return _draw(source, stored(view, store, codec_of(vk.params).blocks), commitment, vk, rows=rows)
+
+
+def _draw(source: bytes, node: bytes, commitment: bytes, vk: VerifierKey, *,
+          rows: int | None = None) -> Registration:
     """The verifier's registration of a node's P2 store from its PoUS setup: the salt it draws from its own secret
     `source` after the commitment (`setup.draw_salt`), which `vk`, the key it built from the C* it decoded at setup
     (`setup.verifier_key_from_encoding`), must be under."""
@@ -168,12 +177,21 @@ def stored(view: log.View, store: str, blocks: int) -> bytes:
     return audit._node(host.encode())
 
 
-def register_stored(source: bytes, view: log.View, store: str, commitment: bytes, vk: VerifierKey, *,
-                    rows: int | None = None) -> Registration:
-    """`register` of the node whose P2 store, of vk's blocks, the registration log registers as `store` (`stored`)."""
-    if type(vk) is not VerifierKey:
-        raise ValueError("vk is the verifier's own, built at PoUS's setup")
-    return register(source, stored(view, store, codec_of(vk.params).blocks), commitment, vk, rows=rows)
+STORE = audit.STORE
+"""The store's id in a log `site_log` writes."""
+
+
+def site_log(node: bytes, blocks: int, store: str = STORE) -> log.View:
+    """The view of the remote site's registration log holding one node's P2 store, as the node states it: the node as a
+    host (its id the node's ASCII) and the store as a memory leaf of `blocks` blocks.  A verifier holding the site's
+    registered log reads that instead; ValueError for a node whose id isn't ASCII or a log the check refuses."""
+    try:
+        n = audit._node(node).decode("ascii")
+    except UnicodeDecodeError:
+        raise ValueError("a node registered in the log has an ASCII id") from None
+    site = log.Hardware(locs=(log.Loc("site", "site"), log.Loc(n, "host", "site"),
+                              log.Loc(store, "memory", n, tier="dram", bytes=blocks * BLOCK_BYTES)))
+    return audit.site_view(log.chain(audit.COMPOSITE, [site]))
 
 
 class Sketcher(receipts.SketchReceipter):

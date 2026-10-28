@@ -5,14 +5,13 @@ import RemoteAudit.Flight
 /-!
 # The verifier's registrations: `audit.py`'s `Registry`
 
-At most one live registration a node (the red team's KB-4). `register` draws a codec seed (`Registration.register`) only
+At most one live registration a node (the red team's KB-4). `register` draws a codec seed (`Registration.register`) for
+the store the deployment's registration log registers (`stored?`: its node, `N` and payload root are the log's) only
 for a node with none live: a second while one is live is refused and counted (`refused`), and draws nothing, so a retry
 never redraws. A session runs over its node's live registration, drawn by this registry, as its k-th, k its sessions so
 far: the epoch its coins are committed under (`coins.Coins`, epoch k of the one challenger). A registration ends only
 when the verifier closes it (`close`), which counts each of its sessions as it stands: "accepted", the failure that
 rejected it, or `UNENDED`, counted as failed. `drawn` is R, the registrations a node has had, closed and live.
-`registerStored` draws for the store the deployment's registration log registers (`stored?`): its node, `N` and payload
-root are the log's.
 
 `toJson` and `ofJson` are `registry/v0`, which keeps the registry across the verifier's processes: a registration read
 back is live and closable, and runs no session, its sessions' outcomes as they stood.
@@ -77,20 +76,6 @@ def drawn (r : Registry) (node : ByteArray) : Except String Nat := do
   let node ← node? node
   pure ((r.closed.filter (·.node == node)).size + if r.live.any (·.node == node) then 1 else 0)
 
-/-- `Registration.register`'s draw for a node with no live registration, which it makes live; refused, and counted, for
-one with. -/
-def register (r : Registry) (source node : ByteArray) (blocks : Nat) (payloadRoot : ByteArray) (codec : Codec.Codec)
-    (receipt : Kind) (bind : Bool) (layout : String) (rows : Nat) (nonce : ByteArray) :
-    Except String (Option Registration × Registry) := do
-  let node ← node? node
-  if r.live.any (·.node == node) then
-    let refused := match r.refused.findIdx? (·.1 == node) with
-      | some i => r.refused.modify i fun (n, k) => (n, k + 1)
-      | none => r.refused.push (node, 1)
-    return (none, { r with refused })
-  let reg ← Registration.register source node blocks payloadRoot codec receipt bind layout rows nonce
-  pure (some reg, { r with live := r.live.push { node, digest := reg.digest, drawn := some reg } })
-
 /-- `audit.PAYLOAD_WORDS`: a payload leaf's words in θ, a block's bytes as 16-bit words. -/
 def PAYLOAD_WORDS : Nat := Codec.BLOCK_BYTES / 2
 
@@ -112,13 +97,20 @@ def stored? (v : Core.Registration.View) (store : String) : Except String (ByteA
     throw s!"θ's value {store} is not the store's payload: a leaf a block of {PAYLOAD_WORDS} words in the node's payload domain"
   pure (node, blocks, ← Flock.unhex t.root)
 
-/-- `Registry.register_stored`: `register` of the store the registration log registers as `store` (`stored?`), its
-node, `N` and payload root the log's; a store the log doesn't register draws nothing (an error). -/
-def registerStored (r : Registry) (source : ByteArray) (v : Core.Registration.View) (store : String)
-    (codec : Codec.Codec) (receipt : Kind) (bind : Bool) (layout : String) (rows : Nat) (nonce : ByteArray) :
+/-- `Registration.register`'s draw of the store the registration log registers as `store` (`stored?`), its node, `N`
+and payload root the log's, for a node with no live registration, which it makes live; refused, and counted, for one
+with. A store the log doesn't register draws nothing (an error). -/
+def register (r : Registry) (source : ByteArray) (v : Core.Registration.View) (store : String) (codec : Codec.Codec)
+    (receipt : Kind) (bind : Bool) (layout : String) (rows : Nat) (nonce : ByteArray) :
     Except String (Option Registration × Registry) := do
   let (node, blocks, payloadRoot) ← stored? v store
-  r.register source node blocks payloadRoot codec receipt bind layout rows nonce
+  if r.live.any (·.node == node) then
+    let refused := match r.refused.findIdx? (·.1 == node) with
+      | some i => r.refused.modify i fun (n, k) => (n, k + 1)
+      | none => r.refused.push (node, 1)
+    return (none, { r with refused })
+  let reg ← Registration.register source node blocks payloadRoot codec receipt bind layout rows nonce
+  pure (some reg, { r with live := r.live.push { node, digest := reg.digest, drawn := some reg } })
 
 /-- The next session over the node's live registration, `Session.State.init` on its parameters and coins, as its k-th
 (`index`, if given, must be k), at `inFlight` windows in flight (`Flight`) and `perCoin` windows a draw's openings coin

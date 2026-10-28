@@ -109,7 +109,7 @@ def test_a_session_left_undecided_discloses_nothing() -> None:
 
 def test_the_disclosure_is_refused_until_the_session_has_its_outcome() -> None:
     n, root = P.Local("n0", STORE, entropy=Entropy(b"salts")).register()
-    reg = audit.register(COINS, b"n0", n, root)
+    reg = audit.register(COINS, audit.site_log(b"n0", n, root), audit.STORE)
     params = audit.Params(blocks=reg.blocks, deadline_ns=500_000_000, windows=2, window_ns=100_000_000, codec=reg.codec,
                           receipt=reg.receipt, rows=reg.rows)
     clock = Clock()

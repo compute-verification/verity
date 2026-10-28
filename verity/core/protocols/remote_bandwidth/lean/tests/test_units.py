@@ -394,7 +394,8 @@ def register(v) -> dict:
         blocks, rows = M.nat(v, "blocks"), M.nat(v, "rows")
         if M._bool(v, "bind"):
             raise D.Reject("a registration that binds PoUW's tile outputs is not covered: the Lean refuses it")
-        r = audit.register(source, node, blocks, root, c, kind, layout=layout, rows=rows, nonce=nonce)
+        r = audit.register(source, audit.site_log(node, blocks, root), audit.STORE, c, kind, layout=layout, rows=rows,
+                           nonce=nonce)
     return {"codec_seed": r.codec_seed.hex(), "digest": r.digest.hex()}
 
 

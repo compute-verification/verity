@@ -142,7 +142,8 @@ class Verifier:
     def _register(self, m: Message, at: int) -> list[Any]:
         q = self.request
         try:
-            reg = audit.register(self.coins, q["node"].encode(), m.fields["blocks"], m.body, nonce=self.nonce)
+            reg = audit.register(self.coins, audit.site_log(q["node"].encode(), m.fields["blocks"], m.body),
+                                 audit.STORE, nonce=self.nonce)
         except ValueError:
             return self._finish("schema")
         self.s = P.opened(reg, self.coins, self.held, not_before=at, windows=q["windows"], passes=q["passes"],

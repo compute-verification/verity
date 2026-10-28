@@ -100,7 +100,7 @@ def registration(store: S.Store, doc: dict, c_star: bytes, node: bytes = NODE) -
     blocks = blocks_of(store, c_star)
     vk = setup.verifier_key_from_encoding(params, None, commitment, salt,
                                           [blocks[n * s:n * (s + 1)] for s in range(params.segments)])
-    return p2.register(source, node, commitment, vk)
+    return p2.register(source, p2.site_log(node, p2.codec_of(vk.params).blocks), p2.STORE, commitment, vk)
 
 
 def _requant(v: np.ndarray, k: int) -> np.ndarray:

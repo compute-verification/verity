@@ -62,7 +62,8 @@ def registered() -> audit.Store:
     payloads = [payload(b"weights %d" % j) for j in range(N)]
     ys = salts(b"payload salts", N)
     root = audit.payload_tree(NODE, payloads, ys).commitment.root
-    return audit.Store(audit.register(SOURCE, NODE, N, root, P512, nonce=bytes(32)), payloads, ys)
+    return audit.Store(audit.register(SOURCE, audit.site_log(NODE, N, root), audit.STORE, P512,
+                                      nonce=bytes(32)), payloads, ys)
 
 
 def store() -> audit.Store:

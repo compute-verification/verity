@@ -227,9 +227,7 @@ def registerFn (j : Json) : V Json := do
 /-- A call on the registry. A session names its registration as one drawn earlier in the case, by its place among
 those drawn, or as one given in full. -/
 inductive Op
-  | register (node : ByteArray) (blocks : Nat) (payloadRoot : ByteArray) (codec : Codec.Codec) (receipt : Kind)
-      (bind : Bool) (layout : String) (rows : Nat) (nonce : ByteArray)
-  | registerStored (view : Core.Registration.View) (store : String) (codec : Codec.Codec) (receipt : Kind)
+  | register (view : Core.Registration.View) (store : String) (codec : Codec.Codec) (receipt : Kind)
       (bind : Bool) (layout : String) (rows : Nat) (nonce : ByteArray)
   | session (registration : Nat ⊕ Registration) (params : Session.Params) (coins appendCoins : Array ByteArray)
       (notBeforeNs : Nat) (index : Option Int) (inFlight perCoin : Nat)
@@ -253,13 +251,8 @@ def loggedView (j : Json) : V Core.Registration.View := do
 def opOf (j : Json) : V Op := do
   match ← J.str j "op" "op" with
   | "register" =>
-    let bind ← J.bool j "bind" "op"
     let some kind := Kind.ofName? (← J.str j "receipt" "op") | throw "a receipt kind is sketch-sha512 or block-sha512"
-    pure (.register (← hex j "node") (← nat j "blocks") (← hex j "payload_root") (← codecOf (← J.get j "codec" "op")) kind
-      bind (← J.str j "layout" "op") (← nat j "rows") (← hex j "nonce"))
-  | "register_stored" =>
-    let some kind := Kind.ofName? (← J.str j "receipt" "op") | throw "a receipt kind is sketch-sha512 or block-sha512"
-    pure (.registerStored (← loggedView j) (← J.str j "store" "op") (← codecOf (← J.get j "codec" "op")) kind
+    pure (.register (← loggedView j) (← J.str j "store" "op") (← codecOf (← J.get j "codec" "op")) kind
       (← J.bool j "bind" "op") (← J.str j "layout" "op") (← nat j "rows") (← hex j "nonce"))
   | "session" =>
     let which ← match ← J.get j "registration" "op" with
@@ -297,12 +290,8 @@ def registryFn (j : Json) : V Json := do
   let mut out : Array Json := #[]
   for op in ops do
     match op with
-    | .register node blocks root codec kind bind layout rows nonce =>
-      let (reg?, r') ← r.register source node blocks root codec kind bind layout rows nonce
-      r := r'
-      (drawn, out) := afterDraw drawn out reg?
-    | .registerStored v store codec kind bind layout rows nonce =>
-      let (reg?, r') ← r.registerStored source v store codec kind bind layout rows nonce
+    | .register v store codec kind bind layout rows nonce =>
+      let (reg?, r') ← r.register source v store codec kind bind layout rows nonce
       r := r'
       (drawn, out) := afterDraw drawn out reg?
     | .session which params coins appendCoins notBeforeNs index f g =>

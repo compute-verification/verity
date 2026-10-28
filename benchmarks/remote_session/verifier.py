@@ -1048,13 +1048,13 @@ class Verifier:
         bind = hello.get("bind", False)
         nonce = secrets.token_bytes(audit.NONCE_BYTES)
         try:
-            self.registration = self.registry.register(self.source, node, blocks, root, c, receipt, bind=bind,
-                                                       rows=rows, nonce=nonce)
+            self.registration = self.registry.register(self.source, audit.site_log(node, blocks, root), audit.STORE, c,
+                                                       receipt, bind=bind, rows=rows, nonce=nonce)
             mine, why = {"codec_seed": self.registration.codec_seed.hex(), "digest": self.registration.digest.hex()}, None
         except (audit.RegistryError, ValueError) as e:
             mine, why = (lv.REFUSED if isinstance(e, audit.RegistryError) else {"error": True}), e
         try:
-            got = self.lean.call(lv.register_request(node, blocks, root, c, receipt, rows, nonce, bind))
+            got = self.lean.call(lv.register_request(audit.site_chain(node, blocks, root), c, receipt, rows, nonce, bind))
         except (lv.LeanError, ValueError):
             got = {"error": True}
         if got != mine:

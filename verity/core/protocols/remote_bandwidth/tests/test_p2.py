@@ -68,23 +68,24 @@ def vk(fixture):
 
 @pytest.fixture(scope="module")
 def store(fixture, vk) -> p2.Store:
-    reg = p2.register(SOURCE, NODE, bytes.fromhex(fixture["commitment"]), vk)
+    reg = p2.register(SOURCE, p2.site_log(NODE, p2.codec_of(vk.params).blocks), p2.STORE,
+                      bytes.fromhex(fixture["commitment"]), vk)
     return p2.Store(reg, fixture["blocks"])
 
 
 def test_a_p2_store_drawn_from_the_registration_log_is_the_registration_of_its_node(fixture, vk, store) -> None:
-    """The node `register_stored` reads from the log is the one whose memory leaf holds vk's blocks: its registration is
-    `register`'s of that node, byte for byte.  A leaf of other bytes, or no such leaf, draws nothing."""
+    """The node `register` reads from the log is the one whose memory leaf holds vk's blocks: its registration is
+    `_draw`'s of that node, byte for byte.  A leaf of other bytes, or no such leaf, draws nothing."""
     def logged(store_bytes: int) -> log.View:
         site = log.Hardware(locs=(log.Loc("site", "site"), log.Loc(NODE.decode(), "host", "site"),
                                   log.Loc("c-star", "memory", NODE.decode(), tier="disk", bytes=store_bytes)))
         return log.check(log.Auditor(), "remote", log.chain("remote", [site])).view()
 
     reg, size = store.registration, store.registration.codec.blocks * p2.BLOCK_BYTES
-    assert p2.register_stored(SOURCE, logged(size), "c-star", reg.commitment, vk) == reg
+    assert p2.register(SOURCE, logged(size), "c-star", reg.commitment, vk) == reg
     for view, name in ((logged(size + p2.BLOCK_BYTES), "c-star"), (logged(size), "elsewhere"), (logged(size), "site")):
         with pytest.raises(ValueError):
-            p2.register_stored(SOURCE, view, name, reg.commitment, vk)
+            p2.register(SOURCE, view, name, reg.commitment, vk)
 
 
 def params(reg: p2.Registration, **kw) -> audit.Params:
@@ -151,7 +152,7 @@ def test_the_registration_is_pous_setups(fixture, vk, store) -> None:
     assert len({reg.digest, dataclasses.replace(reg, rows=64).digest, dataclasses.replace(reg, node=b"x").digest}) == 3
     other = setup.draw_salt(b"another secret", reg.commitment)
     with pytest.raises(ValueError, match="under the salt"):
-        p2.register(b"another secret", NODE, reg.commitment, vk)
+        p2.register(b"another secret", p2.site_log(NODE, p2.codec_of(vk.params).blocks), p2.STORE, reg.commitment, vk)
     assert other != reg.salt
     with pytest.raises(ValueError, match="not the registered C"):
         p2.Store(reg, fixture["blocks"][1:] + fixture["blocks"][:1])
@@ -257,7 +258,7 @@ def test_a_p2_store_takes_no_append_and_no_sloth_session(store) -> None:
     assert isinstance(v, audit.Verdict) and v.failure == "append"
     with pytest.raises(ValueError, match="p2.Session"):
         audit.Session(params(reg), reg, None, coins.local(reg.digest, 0, 2, Entropy(b"c")), not_before_ns=0)
-    sloth = audit.register(SOURCE, NODE, 2, bytes(64), nonce=bytes(32))
+    sloth = audit.register(SOURCE, audit.site_log(NODE, 2, bytes(64)), audit.STORE, nonce=bytes(32))
     with pytest.raises(ValueError, match="P2 Registration"):
         p2.Session(params(reg), sloth, coins.local(sloth.digest, 0, 2, Entropy(b"c")), not_before_ns=0)
     with pytest.raises(ValueError, match="P2Codec"):

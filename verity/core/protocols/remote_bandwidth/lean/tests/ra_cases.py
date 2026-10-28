@@ -385,7 +385,7 @@ STORE = "store"
 
 def store_log(node: bytes, blocks: int, payload_root: bytes, store: str = STORE, item: dict | None = None,
               store_bytes: int | None = None) -> dict:
-    """A remote site's registration log holding a node's store, with the auditor's parameters, as `register_stored`
+    """A remote site's registration log holding a node's store, with the auditor's parameters, as a registry's `register`
     takes them (`{"params", "log"}`): the site, the node as its host, the store as a memory leaf of the node's N blocks
     (or `store_bytes`), and θ's value for its payload (`audit.payload_item`, or `item`)."""
     n = node.decode()
@@ -417,11 +417,6 @@ def registry_op(v: Any) -> tuple:
     if op == "register":
         bind, kind = _bool(v, "bind"), _str(v, "receipt")
         receipts.receipt_kind(kind)
-        return (op, hex_(v, "node"), nat(v, "blocks"), hex_(v, "payload_root"), codec_of(_get(v, "codec")), kind,
-                bind, _str(v, "layout"), nat(v, "rows"), hex_(v, "nonce"))
-    if op == "register_stored":
-        bind, kind = _bool(v, "bind"), _str(v, "receipt")
-        receipts.receipt_kind(kind)
         return (op, logged_view(v), _str(v, "store"), codec_of(_get(v, "codec")), kind, bind, _str(v, "layout"),
                 nat(v, "rows"), hex_(v, "nonce"))
     if op == "session":
@@ -437,10 +432,9 @@ def registry_op(v: Any) -> tuple:
 
 
 def _registry_call(r: audit.Registry, source: bytes, drawn: list[audit.Registration], op: str, a: tuple) -> Any:
-    if op in ("register", "register_stored"):
-        *store, c, kind, bind, layout, rows, nonce = a
-        draw = r.register if op == "register" else r.register_stored
-        reg = draw(source, *store, c, kind, bind=bind, layout=layout, rows=rows, nonce=nonce)
+    if op == "register":
+        view, store, c, kind, bind, layout, rows, nonce = a
+        reg = r.register(source, view, store, c, kind, bind=bind, layout=layout, rows=rows, nonce=nonce)
         drawn.append(reg)
         return {"codec_seed": reg.codec_seed.hex(), "digest": reg.digest.hex()}
     if op == "session":
@@ -525,7 +519,8 @@ def _encoded(c: codec.Codec, blocks: int) -> audit.Store:
     payloads = [payload(b"weights %d" % j) for j in range(blocks)]
     ys = salts(b"payload salts", blocks)
     root = audit.payload_tree(NODE, payloads, ys).commitment.root
-    return audit.Store(audit.register(SOURCE, NODE, blocks, root, c, nonce=bytes(32)), payloads, ys)
+    return audit.Store(audit.register(SOURCE, audit.site_log(NODE, blocks, root), audit.STORE, c,
+                                      nonce=bytes(32)), payloads, ys)
 
 
 def store(world: World) -> audit.Store:

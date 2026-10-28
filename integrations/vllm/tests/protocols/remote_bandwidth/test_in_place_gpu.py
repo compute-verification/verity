@@ -136,7 +136,7 @@ def test_the_payload_tree_is_the_drivers_and_the_store_is_encoded_where_it_is():
     ref = audit.payload_tree(b"n", payloads, b.append_salts(0, N))
     assert N == 53 and b.payload_root(b"n") == ref.commitment.root
     assert all(b.payload_path(j) == ref.open(j).path for j in (0, 4, 5, 6, 29, N - 1))
-    reg = audit.register(bytes(32), b"n", N, ref.commitment.root, nonce=bytes(32))
+    reg = audit.register(bytes(32), audit.site_log(b"n", N, ref.commitment.root), audit.STORE, nonce=bytes(32))
     b.encode(reg)
     held = b._gather(np.arange(N)).cpu().numpy()
     assert [rcodec.decode(held[j].tobytes(), j, reg.key) for j in range(N)] == payloads
@@ -148,7 +148,7 @@ def test_calibration_reports_the_passes_in_place_and_the_bare_read_as_the_verifi
     b = backend(s, caches, calibration_passes=64, calibration_warm=4)
     N = b.blocks
     b.payload_root(b"n")
-    b.encode(audit.register(bytes(32), b"n", N, bytes(64), nonce=bytes(32)))
+    b.encode(audit.register(bytes(32), audit.site_log(b"n", N, bytes(64)), audit.STORE, nonce=bytes(32)))
     cal = b.calibrate()
     assert cal["passes"] == 63 and cal["warm_passes"] == 4
     assert 0 < cal["pass_ns"]["p50"] <= cal["pass_ns"]["p999"] <= cal["pass_ns_max"] == cal["pass_ns"]["max"]
@@ -199,7 +199,7 @@ def test_weights_are_decoded_at_use_so_the_forward_is_the_models_and_decoded_bac
     b = InPlaceBackend(s, lambda _: None, [s.backing(r.name) for r in s.layout().regions], session_lib=SESSION_SO,
                        kv_lib=KV_SO, randbytes=random.Random(7).randbytes, model=model)
     b.payload_root(b"n")
-    b.encode(audit.register(bytes(32), b"n", b.blocks, bytes(64), nonce=bytes(32)))
+    b.encode(audit.register(bytes(32), audit.site_log(b"n", b.blocks, bytes(64)), audit.STORE, nonce=bytes(32)))
     assert not torch.equal(model.up.weight, plain["up.weight"])
     assert b.gates["decode_at_use"]["modules"] == 4
     assert torch.equal(model(ids), want) and b.decoded.calls == 4
@@ -282,7 +282,7 @@ def test_the_credited_read_gives_the_int8_caches_plaintext_windows_through_regis
     lens, table = [37, 20], torch.tensor([[2, 0, 3], [1, 3, 0]], dtype=torch.int32, device="cuda")
     plain = [c.clone() for c in caches]
     b.payload_root(b"n")
-    b.encode(audit.register(bytes(32), b"n", b.blocks, bytes(64), nonce=bytes(32)))
+    b.encode(audit.register(bytes(32), audit.site_log(b"n", b.blocks, bytes(64)), audit.STORE, nonce=bytes(32)))
     g = b.gates["credited_read"]
     assert (g["layers"], g["installed"], g["slots"], g["settled"]) == (2, 0, 2 * I8_PAGES * I8_SLOTS, 0)
     for li in (0, 1):

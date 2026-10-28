@@ -22,6 +22,7 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
+from verity.core.protocols import registration as log
 from verity.core.protocols.remote_bandwidth import audit, codec, coins, receipts
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -144,9 +145,12 @@ def registration_json(r: audit.Registration) -> dict:
             "rows": r.rows}
 
 
-def register_request(node: bytes, blocks: int, payload_root: bytes, c: codec.Codec, receipt: str, rows: int | None,
-                     nonce: bytes, bind: bool = False) -> dict:
-    return {"op": "register", "node": node.hex(), "blocks": blocks, "payload_root": payload_root.hex(),
+def register_request(entries: list, c: codec.Codec, receipt: str, rows: int | None, nonce: bytes,
+                     bind: bool = False) -> dict:
+    """`Registry.register` of the store a remote site's registration log (`entries`, `audit.site_chain`) registers as
+    `audit.STORE`, under the auditor's parameters."""
+    return {"op": "register", "params": log.params(audit.COMPOSITE, log.Auditor()),
+            "log": {"composite": audit.COMPOSITE, "entries": [e.to_json() for e in entries]}, "store": audit.STORE,
             "codec": codec_json(c), "receipt": receipt, "bind": bind, "rows": receipts.sketch_rows(receipt, rows),
             "layout": receipts.LAYOUT, "nonce": nonce.hex()}
 

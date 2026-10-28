@@ -47,7 +47,8 @@ def store(s: Store | None = None) -> tuple[Store, list[ArrayBacking]]:
 
 
 def registration(s: Store) -> audit.Registration:
-    return audit.register(bytes(32), b"node", s.layout().blocks, bytes(64), nonce=bytes(32))
+    return audit.register(bytes(32), audit.site_log(b"node", s.layout().blocks, bytes(64)), audit.STORE,
+                          nonce=bytes(32))
 
 
 def expected_payload(s: Store, slot: int, page: int, life: int) -> bytes:

@@ -93,7 +93,8 @@ def store_of(blocks: int, seed: int, secret: bytes) -> C3.Store:
     salt = a7.Entropy(secret + b"payload salts")
     ys = [salt(receipts.SALT_BYTES) for _ in range(blocks)]
     root = audit.payload_tree(NODE, payloads, ys).commitment.root
-    return C3.Store(audit.register(SOURCE, NODE, blocks, root, P512, nonce=bytes(32)), payloads, ys)
+    return C3.Store(audit.register(SOURCE, audit.site_log(NODE, blocks, root), audit.STORE, P512,
+                                   nonce=bytes(32)), payloads, ys)
 
 
 def window(store: C3.Store, L: int, samples: int, delta: float, secret: bytes, seed: int) -> SimpleNamespace:

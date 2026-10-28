@@ -57,7 +57,8 @@ def store() -> O.Store:
     salt = Entropy(b"payload salts")
     ys = [salt(receipts.SALT_BYTES) for _ in range(N)]
     root = audit.payload_tree(NODE, payloads, ys).commitment.root
-    return O.Store(audit.register(SOURCE, NODE, N, root, P512, nonce=bytes(32)), payloads, ys)
+    return O.Store(audit.register(SOURCE, audit.site_log(NODE, N, root), audit.STORE, P512,
+                                  nonce=bytes(32)), payloads, ys)
 
 
 def window(store: O.Store) -> SimpleNamespace:

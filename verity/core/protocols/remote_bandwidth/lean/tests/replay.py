@@ -300,9 +300,13 @@ def refusal(v: dict, s: D.Server) -> dict:
     before["refused"][node] -= 1
     if not before["refused"][node]:
         del before["refused"][node]
-    op = {"op": "register", "node": node, "blocks": 1, "payload_root": "00" * 64, "codec": M.codec_json(M.P512),
-          "receipt": receipts.DEFAULT, "bind": False, "layout": receipts.LAYOUT,
-          "rows": receipts.sketch_rows(receipts.DEFAULT), "nonce": "00" * audit.NONCE_BYTES}
+    try:
+        logged = M.store_log(bytes.fromhex(node), 1, bytes(64))
+    except (UnicodeDecodeError, ValueError):
+        return {"agree": None, "held": None, "why": "the record's node has no ASCII id, which a registration log needs"}
+    op = {"op": "register", **logged, "store": M.STORE, "codec": M.codec_json(M.P512), "receipt": receipts.DEFAULT,
+          "bind": False, "layout": receipts.LAYOUT, "rows": receipts.sketch_rows(receipts.DEFAULT),
+          "nonce": "00" * audit.NONCE_BYTES}
     agree, out = registries({"source": "00", "registry": before, "ops": [op]}, s)
     if not agree:
         return {"agree": False, "held": False, "why": "the verifiers differ"}

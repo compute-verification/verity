@@ -97,7 +97,8 @@ def store() -> audit.Store:
     """The vectors' store, encoded once a process: its 21 blocks take about 6 s under the default codec."""
     payloads, salts = [payload(j) for j in range(BLOCKS)], payload_salts()
     root = audit.payload_tree(NODE, payloads, salts).commitment.root
-    return audit.Store(audit.register(SOURCE, NODE, BLOCKS, root, nonce=NONCE), payloads, salts)
+    return audit.Store(audit.register(SOURCE, audit.site_log(NODE, BLOCKS, root), audit.STORE,
+                                      nonce=NONCE), payloads, salts)
 
 
 @functools.cache
@@ -105,8 +106,8 @@ def registered(receipt: str, bind: bool, rows: int) -> audit.Store:
     """`store()` registered under `receipt`, `bind` and `rows` with the same nonce: its codec seed, so its blocks, are
     `store()`'s."""
     st = store()
-    reg = audit.register(SOURCE, NODE, BLOCKS, st.registration.payload_root, st.registration.codec, receipt, bind=bind,
-                         rows=rows, nonce=NONCE)
+    reg = audit.register(SOURCE, audit.site_log(NODE, BLOCKS, st.registration.payload_root), audit.STORE,
+                         st.registration.codec, receipt, bind=bind, rows=rows, nonce=NONCE)
     assert reg.codec_seed == st.registration.codec_seed
     out = copy.copy(st)
     out.registration = reg

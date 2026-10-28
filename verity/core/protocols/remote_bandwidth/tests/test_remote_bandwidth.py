@@ -64,14 +64,15 @@ def store() -> audit.Store:
     salts = [Entropy(b"payload salts")(receipts.SALT_BYTES * N)[receipts.SALT_BYTES * j:receipts.SALT_BYTES * (j + 1)]
              for j in range(N)]
     root = audit.payload_tree(NODE, payloads, salts).commitment.root
-    return audit.Store(audit.register(SOURCE, NODE, N, root, codec.FALLBACK, nonce=bytes(32)), payloads, salts)
+    return audit.Store(audit.register(SOURCE, audit.site_log(NODE, N, root), audit.STORE, codec.FALLBACK,
+                                      nonce=bytes(32)), payloads, salts)
 
 
 def registered(store: audit.Store, receipt: str, bind: bool, rows: int | None = None) -> audit.Store:
     """`store` registered under `receipt`, `bind` and `rows` with the same nonce: none is in the codec seed's context,
     so its blocks are `store`'s, and only the registration and its digest differ."""
-    reg = audit.register(SOURCE, NODE, N, store.registration.payload_root, codec.FALLBACK, receipt, bind=bind,
-                         rows=rows, nonce=bytes(32))
+    reg = audit.register(SOURCE, audit.site_log(NODE, N, store.registration.payload_root), audit.STORE, codec.FALLBACK,
+                         receipt, bind=bind, rows=rows, nonce=bytes(32))
     assert reg.key == store.registration.key
     out = copy.copy(store)
     out.registration = reg
@@ -488,22 +489,25 @@ def test_the_codecs_are_named_and_each_decodes_its_own_blocks() -> None:
 
 def test_the_codec_seed_is_drawn_after_and_bound_to_the_payload_root() -> None:
     root = hashlib.sha512(b"payloads").digest()
-    a = audit.register(SOURCE, NODE, N, root, nonce=bytes(32))
-    assert a == audit.register(SOURCE, NODE, N, root, nonce=bytes(32)) and a.codec == codec.DEFAULT
-    others = [audit.register(SOURCE, NODE, N, hashlib.sha512(b"other").digest(), nonce=bytes(32)),
-              audit.register(SOURCE, b"another node", N, root, nonce=bytes(32)),
-              audit.register(SOURCE, NODE, N + 1, root, nonce=bytes(32)),
-              audit.register(SOURCE, NODE, N, root, nonce=bytes([1]) * 32),
-              audit.register(b"another verifier", NODE, N, root, nonce=bytes(32)),
-              audit.register(SOURCE, NODE, N, root, codec.FALLBACK, nonce=bytes(32))]
+    a = audit.register(SOURCE, audit.site_log(NODE, N, root), audit.STORE, nonce=bytes(32))
+    assert a == audit.register(SOURCE, audit.site_log(NODE, N, root), audit.STORE,
+                               nonce=bytes(32)) and a.codec == codec.DEFAULT
+    others = [audit.register(SOURCE, audit.site_log(NODE, N, hashlib.sha512(b"other").digest()), audit.STORE,
+                             nonce=bytes(32)),
+              audit.register(SOURCE, audit.site_log(b"another node", N, root), audit.STORE, nonce=bytes(32)),
+              audit.register(SOURCE, audit.site_log(NODE, N + 1, root), audit.STORE, nonce=bytes(32)),
+              audit.register(SOURCE, audit.site_log(NODE, N, root), audit.STORE, nonce=bytes([1]) * 32),
+              audit.register(b"another verifier", audit.site_log(NODE, N, root), audit.STORE, nonce=bytes(32)),
+              audit.register(SOURCE, audit.site_log(NODE, N, root), audit.STORE, codec.FALLBACK, nonce=bytes(32))]
     assert len({a.codec_seed, *(o.codec_seed for o in others)}) == 7
     assert len({a.digest, *(o.digest for o in others)}) == 7
     assert dataclasses.replace(a, codec=codec.FALLBACK).digest != a.digest     # the digest binds the codec's name
     assert a.receipt == receipts.DEFAULT == receipts.SKETCH_SHA512 == receipts.KINDS[0] and a.bind is False
-    blocked = audit.register(SOURCE, NODE, N, root, codec.DEFAULT, receipts.BLOCK_SHA512, nonce=bytes(32))
+    blocked = audit.register(SOURCE, audit.site_log(NODE, N, root), audit.STORE, codec.DEFAULT, receipts.BLOCK_SHA512,
+                             nonce=bytes(32))
     assert blocked == dataclasses.replace(a, receipt=receipts.BLOCK_SHA512, rows=0)   # the same codec seed and store
     assert blocked.digest not in {a.digest, *(o.digest for o in others)}       # the digest binds the receipt kind
-    bound = audit.register(SOURCE, NODE, N, root, bind=True, nonce=bytes(32))
+    bound = audit.register(SOURCE, audit.site_log(NODE, N, root), audit.STORE, bind=True, nonce=bytes(32))
     assert bound == dataclasses.replace(a, bind=True)                          # nor is bind in the codec seed's context
     assert bound.digest not in {a.digest, blocked.digest, *(o.digest for o in others)}   # the digest binds it
     assert a.digest == hashlib.sha512(audit.REGISTRATION_DOMAIN + frame(NODE) + N.to_bytes(8, "big") + root
@@ -513,38 +517,40 @@ def test_the_codec_seed_is_drawn_after_and_bound_to_the_payload_root() -> None:
                                           + a.codec_seed + frame(a.codec.name) + frame(a.receipt) + b"\1"
                                           + frame("store-order/v0") + (16).to_bytes(4, "big")).digest()
     assert a.rows == receipts.SKETCH_ROWS == receipts.ROWS[0] == 16 and blocked.rows == 0
-    wide = audit.register(SOURCE, NODE, N, root, rows=64, nonce=bytes(32))
+    wide = audit.register(SOURCE, audit.site_log(NODE, N, root), audit.STORE, rows=64, nonce=bytes(32))
     assert wide == dataclasses.replace(a, rows=64)                             # nor are the rows in its context
     assert wide.digest == hashlib.sha512(audit.REGISTRATION_DOMAIN + frame(NODE) + N.to_bytes(8, "big") + root
                                          + a.codec_seed + frame(a.codec.name) + frame(a.receipt) + b"\0"
                                          + frame("store-order/v0") + (64).to_bytes(4, "big")).digest()
     assert wide.digest not in {a.digest, blocked.digest, bound.digest, *(o.digest for o in others)}
-    assert audit.register(SOURCE, NODE, N, root, rows=16, nonce=bytes(32)) == a
-    assert blocked == audit.register(SOURCE, NODE, N, root, codec.DEFAULT, receipts.BLOCK_SHA512, rows=0,
-                                     nonce=bytes(32))
+    assert audit.register(SOURCE, audit.site_log(NODE, N, root), audit.STORE, rows=16, nonce=bytes(32)) == a
+    assert blocked == audit.register(SOURCE, audit.site_log(NODE, N, root), audit.STORE, codec.DEFAULT,
+                                     receipts.BLOCK_SHA512, rows=0, nonce=bytes(32))
     sketch, block = receipts.SKETCH_SHA512, receipts.BLOCK_SHA512
     for kind, rows, match in ((sketch, 32, "rows are one of"), (sketch, 0, "one of"), (sketch, True, "one of"),
                               (sketch, 64.0, "one of"), (block, 16, "sketches nothing"), (block, False, "nothing")):
         with pytest.raises(ValueError, match=match):
-            audit.register(SOURCE, NODE, N, root, codec.DEFAULT, kind, rows=rows, nonce=bytes(32))
+            audit.register(SOURCE, audit.site_log(NODE, N, root), audit.STORE, codec.DEFAULT, kind, rows=rows,
+                           nonce=bytes(32))
         with pytest.raises(ValueError, match=match):
             params(receipt=kind, rows=rows)
     assert a.layout == receipts.LAYOUT == receipts.STORE_ORDER == receipts.LAYOUTS[0]
     assert dataclasses.replace(a, layout="gemm-a-fragment/v0").digest != a.digest   # the digest binds the layout
     with pytest.raises(ValueError, match="a block layout is one of"):                # one the verifier can't map
-        audit.register(SOURCE, NODE, N, root, layout="gemm-a-fragment/v0", nonce=bytes(32))
+        audit.register(SOURCE, audit.site_log(NODE, N, root), audit.STORE, layout="gemm-a-fragment/v0", nonce=bytes(32))
     with pytest.raises(ValueError, match="a block layout is one of"):
         params(layout="gemm-a-fragment/v0")
     with pytest.raises(ValueError, match="a receipt kind is one of"):
-        audit.register(SOURCE, NODE, N, root, codec.DEFAULT, "sha512", nonce=bytes(32))
+        audit.register(SOURCE, audit.site_log(NODE, N, root), audit.STORE, codec.DEFAULT, "sha512", nonce=bytes(32))
     with pytest.raises(ValueError, match="bind is True or False"):
-        audit.register(SOURCE, NODE, N, root, bind=1, nonce=bytes(32))
+        audit.register(SOURCE, audit.site_log(NODE, N, root), audit.STORE, bind=1, nonce=bytes(32))
     p512 = codec.Codec(codec.P512, 2, False)
-    assert audit.register(SOURCE, NODE, 1 << 58, root, p512, nonce=bytes(32)).blocks == 1 << 58
+    assert audit.register(SOURCE, audit.site_log(NODE, 1 << 58, root), audit.STORE, p512,
+                          nonce=bytes(32)).blocks == 1 << 58
     with pytest.raises(ValueError, match="at most"):
-        audit.register(SOURCE, NODE, (1 << 58) + 1, root, p512, nonce=bytes(32))
+        audit.register(SOURCE, audit.site_log(NODE, (1 << 58) + 1, root), audit.STORE, p512, nonce=bytes(32))
     with pytest.raises(ValueError, match="names a Codec"):
-        audit.register(SOURCE, NODE, N, root, "p1024/k3/masked", nonce=bytes(32))
+        audit.register(SOURCE, audit.site_log(NODE, N, root), audit.STORE, "p1024/k3/masked", nonce=bytes(32))
 
 
 def test_a_session_refuses_parameters_that_are_not_the_registrations(store, stores, block_store, rows64_store) -> None:

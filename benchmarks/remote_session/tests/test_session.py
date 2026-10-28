@@ -1577,7 +1577,7 @@ def test_an_append_is_answered_with_its_coin_and_a_root_message_is_applied_in_or
     appended by no message, is the session's `plan` rejection, a root with no step or one not above the last pass's
     is its `step` rejection, and a message the session cannot read, a root's carrying appends among them, is
     malformed."""
-    reg = audit.register(os.urandom(32), b"test-node", 8, bytes(64), P512)
+    reg = audit.register(os.urandom(32), audit.site_log(b"test-node", 8, bytes(64)), audit.STORE, P512)
     params = audit.Params(8, 10 ** 9, 1, 2, 2.0 ** -40, window_ns=10, codec=P512, receipt=reg.receipt, rows=reg.rows)
 
     def session():
@@ -1639,7 +1639,7 @@ def test_a_root_message_names_the_withdrawn_blocks_among_its_releases():
     """`Verifier.root` hands a message's withdrawn runs to its release (`Session.release(released, withdrawn)`): an
     appended block no plan held, freed before its encode landed, is withdrawn; one a plan held, a registered one, or a
     withdrawal outside the message's releases is the session's `release` rejection."""
-    reg = audit.register(os.urandom(32), b"test-node", 8, bytes(64), P512)
+    reg = audit.register(os.urandom(32), audit.site_log(b"test-node", 8, bytes(64)), audit.STORE, P512)
     params = audit.Params(8, 10 ** 9, 1, 2, 2.0 ** -40, window_ns=10, codec=P512, receipt=reg.receipt, rows=reg.rows,
                           lifetime=2, deferred=True)
     root = (b"\7" * 64).hex()

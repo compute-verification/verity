@@ -289,7 +289,8 @@ def test_a_completed_block_is_uncredited_until_its_encode_lands_and_resident_fro
 def test_a_pass_whose_plan_holds_a_block_not_yet_encoded_is_refused():
     s = store()
     b = remote.StoreBackend(s, engine(s))
-    reg = audit.register(bytes(32), b"n", b.blocks, b.payload_root(b"n"), P512, nonce=bytes(32))
+    reg = audit.register(bytes(32), audit.site_log(b"n", b.blocks, b.payload_root(b"n")), audit.STORE, P512,
+                         nonce=bytes(32))
     b.encode(reg)
     a = b.append([b"\x01" * rcodec.BLOCK_BYTES], [bytes(192)])
     plan = rb.Plan(((0, 19),), 19)
@@ -344,7 +345,8 @@ def test_a_session_whose_store_is_encoded_on_the_device_is_accepted_and_each_enc
 def test_a_device_that_keys_an_append_off_its_bound_offset_fails_its_gate():
     s = store()
     b = remote.StoreBackend(s, engine(s), device=Device(shift=1))
-    reg = audit.register(bytes(32), b"n", b.blocks, b.payload_root(b"n"), P512, nonce=bytes(32))
+    reg = audit.register(bytes(32), audit.site_log(b"n", b.blocks, b.payload_root(b"n")), audit.STORE, P512,
+                         nonce=bytes(32))
     b.encode(reg)
     a = b.audit.append([b"\x01" * rcodec.BLOCK_BYTES], [bytes(192)])
     with pytest.raises(RuntimeError, match="not codec.encode's"):
@@ -593,7 +595,8 @@ def test_a_verifier_address_is_host_port_and_a_store_serves_one_session():
             remote.address(bad)
     s = store()
     b = remote.StoreBackend(s, engine(s))
-    reg = audit.register(bytes(32), b"n", b.blocks, b.payload_root(b"n"), P512, nonce=bytes(32))
+    reg = audit.register(bytes(32), audit.site_log(b"n", b.blocks, b.payload_root(b"n")), audit.STORE, P512,
+                         nonce=bytes(32))
     b.encode(reg)
     b.begin_session()
     with pytest.raises(ValueError, match="at least 2 windows"):
@@ -608,7 +611,8 @@ def test_a_second_registration_of_a_live_node_is_refused_with_the_verifiers_reas
     is answered `bye`, and `prove` raises `remote.Refused` with the verifier's reason."""
     registry, s = audit.Registry(), store()
     b = remote.StoreBackend(s, engine(s))
-    registry.register(os.urandom(32), b"test-node", b.blocks, b.payload_root(b"test-node"), P512)
+    registry.register(os.urandom(32), audit.site_log(b"test-node", b.blocks, b.payload_root(b"test-node")), audit.STORE,
+                      P512)
     lsock = wire.listen("127.0.0.1", 0)
     address = f"127.0.0.1:{lsock.getsockname()[1]}"
     raised = []

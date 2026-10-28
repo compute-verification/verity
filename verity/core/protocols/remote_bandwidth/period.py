@@ -266,7 +266,7 @@ def session(node: str, prover: Prover, coins: bytes, *, windows: int = 2, passes
     """The verifier's side of the period's session on `node` against `prover` (`run`'s, wherever the prover is): the
     registration it draws from `coins`, its challenger's coins, its clock and its log, which are the case."""
     n, root = prover.register()
-    reg = audit.register(coins, node.encode(), n, root, codec_)
+    reg = audit.register(coins, audit.site_log(node.encode(), n, root), audit.STORE, codec_)
     held = _Held()
     s = opened(reg, coins, held, not_before=clock(), windows=windows, passes=passes, samples=samples,
                window_ns=window_ns, deadline_ns=deadline_ns)

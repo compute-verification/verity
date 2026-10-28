@@ -98,7 +98,7 @@ def test_the_split_session_is_the_periods(monkeypatch, cheat, verdict) -> None:
 
 
 def test_the_registration_round_trips() -> None:
-    reg = audit.register(COINS, b"n0", 3, bytes(64))
+    reg = audit.register(COINS, audit.site_log(b"n0", 3, bytes(64)), audit.STORE)
     assert P.registration_of(P.registration_json(reg)) == reg
 
 

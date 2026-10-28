@@ -10,9 +10,10 @@ many reads of a node's registered blocks the node made in each window, from rece
    follow (`receipts.LAYOUTS`: store-order/v0, a vector one registered block's bytes; `receipts.plan_of` checks a
    kernel's map), and sketch-sha512's rows (`receipts.ROWS`: 16 by default, or 64; 0 under block-sha512).
    `Registration.digest` binds the node, the store's size, the payload root, the codec seed, the codec's name, the
-   receipt kind, `bind`, the layout and the rows.  The node, N and the payload root are what the deployment's
-   registration log registers for the store (`stored`: a memory leaf of the node and θ's value of its payload), the
-   codec seed a coin, and the rest the protocol's public parameters (`Registry.register_stored`).  The verifier keeps
+   receipt kind, `bind`, the layout and the rows.  The node, N and the payload root are read only from the
+   deployment's registration log (`stored`: a memory leaf of the node and θ's value of its payload; `site_chain`, the
+   log of one store as its node states it), the codec seed is a coin, and the rest are the protocol's public
+   parameters.  The verifier keeps
    one live registration a node (`Registry`): a second while one is live is refused and draws nothing, and a
    registration ends only when the verifier closes it, counting its sessions, an unended one as failed.
 2. Coins.  Before the session the proof service's challenger draws two live coins a window, its challenge `σ_t` and
@@ -391,9 +392,16 @@ class Registration:
         return codec.key(self.codec_seed, self.codec)
 
 
-def register(source: bytes, node: bytes, blocks: int, payload_root: bytes, codec: Codec = codec.DEFAULT,
-             receipt: str = receipts.DEFAULT, *, bind: bool = False, layout: str = receipts.LAYOUT,
-             rows: int | None = None, nonce: bytes | None = None) -> Registration:
+def register(source: bytes, view: log.View, store: str, codec: Codec = codec.DEFAULT,
+             receipt: str = receipts.DEFAULT, **kw) -> Registration:
+    """`_draw` for the store the registration log registers as `store` (`stored`): its node, N and payload root are the
+    log's, never the prover's word; a store the log doesn't register draws nothing (ValueError)."""
+    return _draw(source, *stored(view, store), codec, receipt, **kw)
+
+
+def _draw(source: bytes, node: bytes, blocks: int, payload_root: bytes, codec: Codec = codec.DEFAULT,
+          receipt: str = receipts.DEFAULT, *, bind: bool = False, layout: str = receipts.LAYOUT,
+          rows: int | None = None, nonce: bytes | None = None) -> Registration:
     """The verifier's side of registration: the codec seed, drawn from its own secret `source` and a fresh nonce only
     after the payload root has arrived.  Drawn before it, the prover would register `decode(0)` and hold a store of
     zeros; drawn after, each encoded block costs k square roots a word to produce, whatever the payload.  Every block
@@ -454,6 +462,44 @@ def stored(view: log.View, store: str) -> tuple[bytes, int, bytes]:
         raise ValueError(f"θ's value {store} is not the store's payload: a leaf a block of {PAYLOAD_WORDS} words in "
                          "the node's payload domain")
     return node, blocks, root
+
+
+STORE = "store"
+"""The store's id in a log `site_log` writes."""
+
+
+COMPOSITE = "remote"
+"""The composite a log `site_chain` writes registers."""
+
+
+def site_chain(node: bytes, blocks: int, payload_root: bytes, store: str = STORE) -> list[log.Entry]:
+    """The remote site's registration log holding one node's store, as the node states it: the node as a host (its id
+    the node's ASCII), the store as a memory leaf of its N blocks, and θ's value for its payload (`payload_item`).  A
+    verifier holding the site's registered log reads that instead; ValueError for a node whose id isn't ASCII."""
+    try:
+        n = _node(node).decode("ascii")
+    except UnicodeDecodeError:
+        raise ValueError("a node registered in the log has an ASCII id") from None
+    receipts.store_blocks(blocks)
+    if type(payload_root) is not bytes or len(payload_root) != DIGEST_BYTES:
+        raise ValueError(f"the payload root is {DIGEST_BYTES} bytes")
+    site = log.Hardware(locs=(log.Loc("site", "site"), log.Loc(n, "host", "site"),
+                              log.Loc(store, "memory", n, tier="dram", bytes=blocks * BLOCK_BYTES)))
+    return log.chain(COMPOSITE, [site, log.Information((payload_item(store, node, blocks, payload_root),))])
+
+
+def site_view(entries: Sequence[log.Entry]) -> log.View:
+    """The view of a remote site's registration log under the auditor's parameters (`log.Auditor()`); ValueError for
+    one the check refuses."""
+    try:
+        return log.check(log.Auditor(), COMPOSITE, entries).view()
+    except log.Refused as e:
+        raise ValueError(f"the registration log refuses the store: {e}") from None
+
+
+def site_log(node: bytes, blocks: int, payload_root: bytes, store: str = STORE) -> log.View:
+    """`site_view` of `site_chain`."""
+    return site_view(site_chain(node, blocks, payload_root, store))
 
 
 class Tiles(Protocol):
@@ -1462,12 +1508,13 @@ class Registry:
         node = _node(node)
         return sum(c.node == node for c in self.closed) + (node in self._live)
 
-    def register(self, source: bytes, node: bytes, blocks: int, payload_root: bytes, codec: Codec = codec.DEFAULT,
+    def register(self, source: bytes, view: log.View, store: str, codec: Codec = codec.DEFAULT,
                  receipt: str = receipts.DEFAULT, **kw) -> Registration:
-        """`register`'s draw for a node with no live registration, which it makes live; refused, and counted, for one
-        with.  One that would bind PoUW's tile outputs (`bind`) draws nothing either (ValueError): the verifier's
-        definition, `RemoteAudit.Registry.register`, covers receipts of a block alone and refuses it."""
-        node = _node(node)
+        """`register`'s draw of the store the registration log registers as `store`, for a node with no live
+        registration, which it makes live; refused, and counted, for one with.  One that would bind PoUW's tile outputs
+        (`bind`) draws nothing either (ValueError): the verifier's definition, `RemoteAudit.Registry.register`, covers
+        receipts of a block alone and refuses it."""
+        node, blocks, payload_root = stored(view, store)
         if node in self._live:
             self.refused[node] = self.refused.get(node, 0) + 1
             raise RegistryError(f"node {node.hex()} has a live registration, {self._live[node].digest.hex()[:16]}…: a "
@@ -1475,15 +1522,9 @@ class Registry:
         if _bind(kw.get("bind", False)):
             raise ValueError("a registration that binds PoUW's tile outputs is not covered: the verifier's definition "
                              "(RemoteAudit, in Lean) covers receipts of a block alone")
-        registration = register(source, node, blocks, payload_root, codec, receipt, **kw)
+        registration = _draw(source, node, blocks, payload_root, codec, receipt, **kw)
         self._live[node] = _Live(registration.digest, registration, [])
         return registration
-
-    def register_stored(self, source: bytes, view: log.View, store: str, codec: Codec = codec.DEFAULT,
-                        receipt: str = receipts.DEFAULT, **kw) -> Registration:
-        """`register` of the store the registration log registers as `store` (`stored`): its node, N and payload root
-        are the log's, never the prover's word; a store the log doesn't register draws nothing (ValueError)."""
-        return self.register(source, *stored(view, store), codec, receipt, **kw)
 
     def session(self, params: Params, registration: Registration, tiles: Tiles | None, *, not_before_ns: int,
                 clock: Callable[[], int] = time.monotonic_ns, entropy: Callable[[int], bytes] = os.urandom,

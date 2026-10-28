@@ -204,7 +204,8 @@ def test_the_sessions_first_window_chains_from_the_verifiers_registration_digest
     from verity.core.protocols.remote_bandwidth import audit
     s = Store()
     weights(s)
-    digest = audit.register(bytes(32), b"node", s.layout().blocks, bytes(64), nonce=bytes(32)).digest
+    digest = audit.register(bytes(32), audit.site_log(b"node", s.layout().blocks, bytes(64)), audit.STORE,
+                            nonce=bytes(32)).digest
     s.begin_window(SIGMA, digest)
     s.begin_pass()
     s.end_pass()

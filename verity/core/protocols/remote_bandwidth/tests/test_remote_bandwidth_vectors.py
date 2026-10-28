@@ -173,7 +173,7 @@ def test_the_registration_and_the_codecs_words_reproduce_the_pinned_ones() -> No
     pinned = json.loads(rv.PATH.read_text())
     payloads, salts = [rv.payload(j) for j in range(rv.BLOCKS)], rv.payload_salts()
     root = audit.payload_tree(rv.NODE, payloads, salts).commitment.root
-    reg = audit.register(rv.SOURCE, rv.NODE, rv.BLOCKS, root, nonce=rv.NONCE)
+    reg = audit.register(rv.SOURCE, audit.site_log(rv.NODE, rv.BLOCKS, root), audit.STORE, nonce=rv.NONCE)
     assert pinned["payload"]["root"] == root.hex() and pinned["registration"]["digest"] == reg.digest.hex()
     assert pinned["registration"]["codec"] == pinned["codec"]["name"] == reg.codec.name == "p1024/k3/masked"
     assert pinned["registration"]["receipt"] == reg.receipt == receipts.DEFAULT == "sketch-sha512"
@@ -183,7 +183,8 @@ def test_the_registration_and_the_codecs_words_reproduce_the_pinned_ones() -> No
     assert set(pinned["variants"]) == {rv.name(*v) for v in rv.VARIANTS} and len(rv.VARIANTS) == 4
     assert "sketch-sha512/rows64" in pinned["variants"] and pinned["sketch"]["rows_allowed"] == [16, 64]
     for kind, bind, rows in rv.VARIANTS:
-        v = audit.register(rv.SOURCE, rv.NODE, rv.BLOCKS, root, reg.codec, kind, bind=bind, rows=rows, nonce=rv.NONCE)
+        v = audit.register(rv.SOURCE, audit.site_log(rv.NODE, rv.BLOCKS, root), audit.STORE, reg.codec, kind, bind=bind,
+                           rows=rows, nonce=rv.NONCE)
         assert pinned["variants"][rv.name(kind, bind, rows)]["registration"] == {
             "receipt": kind, "bind": bind, "layout": receipts.LAYOUT, "rows": rows, "codec_seed": reg.codec_seed.hex(),
             "digest": v.digest.hex()}
