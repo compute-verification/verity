@@ -33,7 +33,7 @@
 #     V3C_CLASS (default 4,32,4, which CLASSES must hold): `prove_path.py window-commit` commits the window as that class
 #     circuit's units, the weights it serves under the committer's key, so each served as registered has the registration's
 #     root; its circuit.json less its run fields is held to the verifier's own window-circuit record at the class; then
-#     `records_audit.py audit --circuit --registered` the registration (V3C_LAW, default subset:1) samples and proves its members.
+#     `records_audit.py audit --circuit --registered` the registration (V3C_LAW, default subset:1) draws and proves its members.
 #     `served_verdicts.sh v3c` runs only that step on an existing serve dir (D and its window K set), the build first.
 #  4. PoUW (H1 credit), the bandwidth audit, PoUS and the network certifier: `served_verdicts.py pieces` runs each one's piece
 #     where POUW_CMD, BANDWIDTH_CMD, POUS_CMD or CERTIFIER_CMD names it, else names it MISSING with its issue. No verdict is
@@ -48,7 +48,7 @@
 #     makes the record reject: a failed wipe is never accepted.
 #  5. the record: `served_verdicts.py record`: the all-protocols window report ($OUT/record/verdicts.json) and the block
 #     record ($OUT/record/block-record.json), composed `pending` while any subprotocol is missing.
-# Coins: sampled proofs' sampling is on the verifier's own live coins (Lean's IO.getRandomBytes, in-process) unless PP_CHALLENGER
+# Coins: sampled proofs' draw is on the verifier's own live coins (Lean's IO.getRandomBytes, in-process) unless PP_CHALLENGER
 # names the live challenger (run.sh's gate:USER@HOST with PP_PEER, PP_CHALLENGER_KEY and PP_GATE_KEY). With H1_GATE (the
 # lane's gate command, e.g. "ssh -i $HOME/.ssh/vllm_gate_ed25519 -o BatchMode=yes research@204.12.178.84") the endpoint serves
 # PoUW H1 (--protocols pouw:eps1-sm120-h1fx1 --challenger-gate H1_GATE --challenger-peer H1_PEER, at the engine's T and S

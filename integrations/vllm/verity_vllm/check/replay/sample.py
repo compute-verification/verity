@@ -49,7 +49,7 @@ def challenge_seed(challenge: str, run_root: bytes) -> tuple[int, str]:
     """The sample seed under a VERIFIER-ISSUED post-commitment challenge: sha256(challenge || run_root)[:8].  Binding the
     challenge to the root means a challenge issued before the root was fixed (or for another run) selects a different sample, and the
     prover cannot grind the sample by recommitting (the root changes -> the verifier issues a fresh challenge).  Returns (seed, source).
-    Legacy (`challenge.LEGACY`); its successor is `challenge.replay_key`, an auditor-keyed sampling key passed as `challenge_key`."""
+    Legacy (`challenge.LEGACY`); its successor is `challenge.replay_key`, an auditor-keyed draw passed as `challenge_key`."""
     return CH.legacy_replay_seed(challenge, run_root), RC.challenge_seed_source(challenge)
 
 

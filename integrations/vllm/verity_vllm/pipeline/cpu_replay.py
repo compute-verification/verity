@@ -550,8 +550,8 @@ def keep(out: Path, b: dict[str, Any], store: Any, run: Any, touched: SD.Touched
 
 
 def kept_draw(s: C2.Site, slim: dict[str, Any]) -> None:
-    """Refused unless this code's sample from it is the keep's picks, in order (`C2.plan`, read only).  A keep holds only its picks' reads,
-    so another sample (a sampler that changed, or a record's `replay_draw` this code does not make) would stop on a node it lacks."""
+    """Refused unless this code draws the keep's picks from it, in order (`C2.plan`, read only).  A keep holds only its picks' reads,
+    so another draw (a sampler that changed, or a record's `replay_draw` this code does not make) would stop on a node it lacks."""
     try:
         got, why = json.loads(json.dumps(C2.plan(s)["replay"].get("picks"))), None
     except KeyError as e:

@@ -2,8 +2,8 @@
 
 Today's derivations hash the run root, the prover's own commitment (Fiat-Shamir), and their outputs are recorded in
 verdicts.  They stay byte-identical while `LEGACY` is true; decision 42 retires them at the re-baseline epoch.  The
-non-legacy forms sample through `verity.ml.randomness.derive` from a `source` that is an auditor key, with the run root
-and the sample's other bindings as context:
+non-legacy forms draw through `verity.ml.randomness.derive` from a `source` that is an auditor key, with the run root
+and the draw's other bindings as context:
 
 * opening positions (`challenge_positions`): `verity/vllm-commit/opening-positions/v1`;
 * opening identities from the expected population (`identity_picker`): `verity/vllm-commit/opening-identities/v1`;
@@ -98,7 +98,7 @@ def challenge_positions(run_root: bytes, leaves_per_step: list[int], k: int, sal
 
 def identity_picker(run_root: bytes, map_digest: str, salt: bytes = b"", *, legacy: bool = LEGACY,
                     source: bytes | None = None) -> Callable[[int, int], int]:
-    """`pick(i, n)`: the i-th sampled index in [0, n) of an opening-identity challenge bound to (root, binding-map digest, salt).
+    """`pick(i, n)`: the i-th draw in [0, n) of an opening-identity challenge bound to (root, binding-map digest, salt).
 
     Legacy: sha256(sha256(root || map digest || salt) || i as 4 bytes)[:8] mod n."""
     _source(legacy, source)
