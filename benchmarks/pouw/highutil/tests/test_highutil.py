@@ -148,6 +148,7 @@ def test_a_served_step_s_sm_cycles_by_class_sum_to_one_from_kernels_breakdown(tm
     assert math.isclose(r["u"], acc + (attn + head) / (0.5 * 4096 * 132) / cycles)
     assert math.isclose(r["accounted_sheet"], int8 / 989.4e12 / 0.01, rel_tol=1e-4)
     assert math.isclose(r["macs"]["certified"], r["certified"]["certified_over_declared"] * int8)
+    assert "share" not in r["certified"]
     assert r["credit"] == terms.UNCREDITED and r["covers"] == terms.SERVED
     text = (tmp_path / "out.txt").read_text()
     assert terms.UNCREDITED in text and "no certifier in front" in text and "1.4310×" in text

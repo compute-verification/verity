@@ -24,7 +24,7 @@ per-kernel source P1a's table reads. It adds only what that breakdown leaves out
 - **the certified MACs** beside the declared: the declared plus the peels this route computes (2 m n L' a call), at the
   L' `period.lp_of` gives each of the model's linears at the word interval L (`--L`). That models this route's honest
   work on the served shapes; it measures nothing in the run, whose scheme may have no L' (H1 + fx1's noise is a keyed
-  per-row word).
+  per-row word), so no share of the step is given for it.
 - **the step itemized to 1 in SM-cycles**: each class's exclusive time at the SM clock sampled under it (the class's
   `clock_mhz`, else the steps'), over the step's cycles. The declared int8 linears' MACs at 4,096 a SM-cycle on each SM are
   the accounted share, and the int8 GEMM's other cycles are its shortfall below θ.
@@ -222,8 +222,7 @@ def served(doc: dict, label: str, L: int = ROUTE_L, credit: str = UNCREDITED, co
         "accounted": int8 / total, "accounted_sheet": macs["int8"] / sheet,
         "macs": {"declared": macs["int8"], "certified": ratio["certified_over_declared"] * macs["int8"],
                  "attention": macs["attn"], "lm_head": macs["head"]},
-        "certified": ratio | {"share": ratio["certified_over_declared"] * int8 / total,
-                              "of": "#5724's peels on the served shapes, a model: not what the run's scheme computes"},
+        "certified": ratio | {"of": "#5724's peels on the served shapes, a model: not what the run's scheme computes"},
         "tensor_active": s.get("tensor_active"), "shares": shares, "shares_sum": sum(shares.values()),
     }
 
