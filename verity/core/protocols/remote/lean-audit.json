@@ -5,12 +5,18 @@
  },
  "layers": {
   "CoreRemote": {
-   "imports": ["CoreComposition.Cases", "PouwCheck.Protocol", "SampledProofs.OneStage"],
+   "imports": [
+    "CoreComposition.Blobs",
+    "CoreComposition.Cases",
+    "NciCheck.Protocol",
+    "PouwCheck.Protocol",
+    "SampledProofs.OneStageZk"
+   ],
    "except": [],
    "why": "the program is code: the core interface, C-Flock's Lean and its components' ports, no Mathlib and nothing of Security (Daniel's layout ruling, 5 Oct)"
   }
  },
  "dependencies": {
-  "toolchain": "27511a72ecc19f2a3ce5d7dc8dd5400d2c5ba32555d12a4f390d1806b92e6e15"
+  "toolchain": "d5ca9d1164aa2cf25419881c4ec5c6a1486192af7c11e9d1704efd15e3fbd2fa"
  }
 }

@@ -129,6 +129,7 @@ theorem Witness.acceptsZKRAt_eq {s : V (SessionSpec × Array Stmt)}
     Witness.acceptsZKRAt s own record proofs = (do
       let r ← s
       r.2.forM (checkRegistered · (some own))
+      r.2.forM fun st => Registered.checkComplete st.c own
       r.2.forM Zk.shapeOk
       Zk.verifyWith Sha512.hash r.1 (r.2.map Setup.ofCircuit) record proofs) := by
   unfold Witness.acceptsZKRAt
@@ -138,9 +139,11 @@ theorem Witness.acceptsZKRAt_eq {s : V (SessionSpec × Array Stmt)}
     obtain ⟨spec, sts⟩ := r
     show (do
         sts.forM (checkRegistered · (some own))
+        sts.forM fun (st : Stmt) => Registered.checkComplete st.c own
         sts.forM Zk.shapeOk
         Zk.verify spec (sts.map Setup.ofCircuit) record proofs) = (do
         sts.forM (checkRegistered · (some own))
+        sts.forM fun (st : Stmt) => Registered.checkComplete st.c own
         sts.forM Zk.shapeOk
         Zk.verifyWith Sha512.hash spec (sts.map Setup.ofCircuit) record proofs)
     rw [Zk.verify_eq_verifyWith_of_returns hs hse]
@@ -151,6 +154,7 @@ theorem Witness.acceptsZKRAt_setupOf (I : Witness.Inputs) (own : Array Registere
     Witness.acceptsZKRAt (Witness.setupOf I record) own record proofs = (do
       let r ← Witness.setupOf I record
       r.2.forM (checkRegistered · (some own))
+      r.2.forM fun st => Registered.checkComplete st.c own
       r.2.forM Zk.shapeOk
       Zk.verifyWith Sha512.hash r.1 (r.2.map Setup.ofCircuit) record proofs) :=
   Witness.acceptsZKRAt_eq (With.setupTables_named _ _ _ _ _ _ _ _ _ none none none none) own record proofs

@@ -9,10 +9,25 @@ Python reference held to it.
 | `Params` | the verifier's own: the check item (`entries`, `scheme`, `template`, `tile_work`, and optionally `coins`, the window's coin mode, `live` or `seeded`), `eps` and `delta` as ratio strings, `grid_bits`, the declared `range` of tile counts, the window's `context`, the check query's SHA-512; the template one `PouwCheck.tiles` pins, with its tile work and query; and the rows' fixed `length` (`{max_tokens, stop}`, stop `fixed`) |
 | `Commitment` | the window's registration, one-stage's record (`registration.record`) as canonical JSON, its window `{kind, context, public}` holding `window.REGISTERED`, whose `length` item must be a fixed-length window's at the verifier's max_tokens (`PouwWindow.lengthProblem`; a window without one, registered before the rule, is refused as `window-form: no-fixed-length`) |
 | `digest` | the record's own: SHA-512(format ‖ 0 ‖ the canonical record), `registration.digest` |
-| `Evidence` | the proof service's answer for a registration, read by `Core.Answer.ofJson` (protocol one-stage's): on acceptance the profile, read by `Core.Integrity.ofJson`, and the public outputs `{"draw": d}`, `d` the verifier's draw as one-stage's `draw.py` writes it (`subset`, `bernoulli`, `stratified` or `work`, with exactly `check_draw`'s keys) |
+| `Evidence` | the proof system's answer for a registration, read by `Core.Answer.ofJson` (protocol one-stage's): on acceptance the profile, read by `Core.Integrity.ofJson`, and the public outputs `{"draw": d}`, `d` the verifier's draw as one-stage's `draw.py` writes it (`subset`, `bernoulli`, `stratified` or `work`, with exactly `check_draw`'s keys) |
 | `check` | `PouwCheck.check`: PoUW's rule over the registration (`registered`), then the service's answer to it (`outcome`); every refusal is the first rule it breaks, with `core_check.py`'s reason |
 | `Public` | `window.PUBLIC`: `verdict`, `work`, `check`, `sampling`, `length`, `drawn`, `root_W` |
 | `Profile` | the service's `Core.Integrity`, passed through once it is the registered partition's N units drawn subset:K′ at the window's δ, and the draw is subset:K′ over N |
+
+A second `Core.Protocol`, `PouwCheck.Period.protocol`, id `verity/pouw/period/v1` (`pouw-period`), is a period's credit
+and onsite's work component (`Core.Onsite.components`), with `verity/core/protocols/pouw/period_check.py` its Python
+(`tests/test_period_difftest.py`). It credits a period all or nothing: `Credit.periodCredit` accepts only when every
+window of the period's close is credited.
+
+| field | here |
+| --- | --- |
+| `Params` | the verifier's own `{key, main, name}`: the challenger key it pins, its copy of main's first-parent history, the period's name |
+| `Commitment` | the auditor's ledger, the lines the challenger signed, as canonical JSON: its period's open commits the circuit, K, T, the weights and the fixed length before any of the period's coins |
+| `digest` | SHA-512(`verity/pouw/period/ledger/v1` ‖ 0 ‖ the ledger's bytes) |
+| `Evidence` | `{pins, windows}`: the challenger host's pins log, and each window's evidence in the close's order (`Credit.PERIOD_KEYS`, each drawn unit's and each round's proof outcome the verifier of record's verdict) |
+| `check` | `Credit.periodCredit`; a refusal is `code: why`, and it never leaves a period undecided |
+| `Public` | `Credit.PeriodCredit.toJson`: each window's credited calls and credited served work, K, δ and each window's ε |
+| `Profile` | `{period, windows}`: the period's name and its number of windows |
 
 | module | `core_check.py` |
 | --- | --- |
@@ -21,6 +36,8 @@ Python reference held to it.
 | `PouwCheck.Inputs` | `params`, `commitment`, `digest`, `unit_draw`, `evidence`, with their refusals (`answer_of` and `integrity` are the interface's decoders) |
 | `PouwCheck.Check` | `expected_items` and `check` |
 | `PouwCheck.Protocol` | the `Core.Protocol` value |
+| `PouwCheck.Period` | `period_check.py`: the period's `Core.Protocol` value over `Credit.periodCredit`, its decoders and its digest |
+| `PouwCheck.PeriodMain` | `pouw-period`'s entry point |
 | `PouwCheck.Opening` | `opening`, `window_domain`, `verify_path`, `public_bc`: one unit's opening beside the check (`served_commit.check`'s rule), a certified window's under its certified salt |
 | `PouwCheck.Pass` | `pass_epoch` and `draw`, with `coins_of`, `opening_of`, `coin_reason` and `weights_root` under `COIN_VERSIONS`: the window's pass and its draw (`served_commit.Challenger`'s rules); `live_salt`, a live Pearl-C pass's salt from the salt-only session the auditor's ledger reserved, opened on its salt epoch's root (`epochOpenRoot` of its weights' root and its `pass_index`) and ended complete |
 | `PouwCheck.Rounds` | `salt`, `rounds`: a live window's salt coin, opened once after its open root (`salt.window_open_root` of its record and the session the auditor's ledger reserved), and its round coins, each opened once after its recorded round root (`window.rounds_reason`'s rules, `PouwWindow.roundsReason`), both read through the challenger's session the ledger opens for the window (`SampledProofs.Challenger.auditedSession`, `sessionNamed`) |
