@@ -16,16 +16,19 @@ The design dict (`design(**overrides)` builds one; `SCHEMA` lists every key, its
 
     point     T, real_tokens, seqs, steps_per_window, async, decode_steps, window_class
     forward   kernels ("stock" | "commit_taps"), gemm_eff, kfa3, graphs
-    commit    on, values ("every_op" | "dedup" | "fused_mlp" | "layer" | "layer_kv" | "partition"), bytes_per_token,
+    commit    on, values ("every_op" | "dedup" | "fused_mlp" | "layer" | "layer_kv" | "e1" | "e2" | "partition"),
+              bytes_per_token,
               bits_per_word, row_bytes, hash_eff, corun, seal ("tree" | "none" | "roots"), host ("today" | "fixed"),
               gather, padded
     pouw      scheme ("off" | "j10r" | "jr2" | "dither"), K, L, L_prime, noise ("periodic" | "fresh" | "permuted"),
               record_bytes_per_cell, trees, h1_host ("pre" | "main" | "main+6192" | "stack" | "floor"), kdhash,
-              hash_at_bar, coin_off_loop, noise_fused, denoise_g_frac, value_row_bytes, unit_cells
-    sampling  delta, eps, pouw_sampled, law ("achievability" | "uniform"), retain_GB
-    partition units: [{name, per_token, work, extra_ands, open_rows, out_bits}] or None for the preset of
-              `commit.values`
-    prover    o_per_and, staged_per_and, stmt_fixed, stmt_per_and, speed, m_max, shared
+              hash_at_bar, coin_off_loop, noise_fused, denoise_g_frac, value_row_bytes, tile (R, C),
+              form ("tile" | "lanes")
+    sampling  delta, eps, pouw_sampled, law ("achievability" | "uniform" | "stratified"), retain_GB, period
+    partition units: [{name, per_token, work, extra_ands, open_rows, out_bits, blocks?}] or None for the preset of
+              `commit.values`; a unit drawn as a group of proof blocks lists them, blocks: [{name, count, ands}]
+    prover    device ("h200" | "sm120"), reps (1 | 2), o_per_and, staged_per_and, stmt_fixed, stmt_per_and, speed,
+              m_max, k_max, k_pad, shared, stmt ("template" | "universal")
     lowering  gates_per_and, s_per_gate, bytes_per_gate, per ("template" | "instance"), ram_gib
     verify    stmt_fixed, stmt_per_and
     price     cpu_s_in_gpu_s, cpu_in_J, baseline ("same" | "fastest")
@@ -82,9 +85,27 @@ INPUTS: dict[str, tuple[float, str, str]] = {
     "hash_eff_today": (0.4966, "M", f"{B921}: 149.0 M compressions in 64.12 ms of hash kernels at 1,966 MHz ({LEVERS})"),
     "hash_overlap_today": (0.2245, "M", f"{B921}: 1 - 49.72 ms exclusive / 64.12 ms kernel time of the Commit's hashing"),
     "hash_mhz": (1966.0, "M", f"{B921} the Commit's hashing clock"),
-    "corun_share": (0.167, "E", "r20261028-012220-309e: beside a synthetic GEMM at 98.8% of peak, 2 chain-kernel hash "
-                                "warps an SM get 0.167 of the bar at kappa 1.001 (66.5 GB/s at 4 KiB rows); a model for "
-                                "the Commit's row kernel beside the served GEMM until GD-HASH measures it"),
+    # GD-HASH (note:compute-research/20261028T1945Z-report-gd-hash): nothing is free beside the GEMM. h_b / h_x, the
+    # GEMM's loss a byte hashed beside it over the same byte hashed alone, A-B-A r20261028-192103-b3eb at the
+    # cheapest phases; beside capacity, GB a forward below the whole grid against the 64 linears' 14.5 ms at T 8,192
+    "hash_eff_rows": (0.92, "M", "the row kernel's leaves at stream scale: 0.91-0.93 of HASH-38's bar a clock "
+                                 "(GD-HASH, r20261028-185933-4435); h_x 2,703 / 2,123 / 1,964 MAC-times a byte at "
+                                 "4 / 16 / 64 KiB rows is compressions_per_row at this share"),
+    "beside_4k": (2223 / 2703, "M", "h_b / h_x at 4 KiB rows, T 8,192 (GD-HASH: 2,223 / 2,703)"),
+    "beside_16k": (1465 / 2123, "M", "h_b / h_x at 16 KiB rows, T 8,192 (1,465 / 2,123)"),
+    "beside_64k": (1855 / 1964, "M", "h_b / h_x at 64 KiB rows, T 8,192 (1,855 / 1,964)"),
+    "beside512_4k": (1690 / 2703, "M", "h_b / h_x at 4 KiB rows, T 512, best cap (1,681-1,700)"),
+    "beside512_16k": (1350 / 2123, "M", "h_b / h_x at 16 KiB rows, T 512, best caps (1,308-1,393)"),
+    "beside512_64k": (1494 / 1964, "M", "h_b / h_x at 64 KiB rows, T 512 (1,494)"),
+    "beside_GB_4k": (0.7, "M", "GB a forward beside the GEMM below the whole grid at 4 KiB rows, T 8,192"),
+    "beside_GB_16k": (1.9, "M", "... at 16 KiB rows"),
+    "beside_GB_64k": (3.1, "M", "... at 64 KiB rows"),
+    "beside_gemm_ms": (14.5, "M", "GD-HASH's GEMM loop alone, a forward at T 8,192 (14.43-14.52 ms); capacity scales "
+                                  "with the model's int8 GEMM ms (T 512: 77-199 MB in 1.75 ms, the same rate)"),
+    "guess_p16": (2.79e-5, "E", "Dither PROTOCOL.md: the most predictable 16-bit word's free-guess rate on the H200; "
+                                "x 2^(16 - bits) down to 9 bits, 2^-bits at 8 and under (GD-BITS)"),
+    "mix4_ands": (214, "M", "GD-AGG's mix4 (four xorshift-multiply rounds mod 2^16) in circuit, a cell, counted "
+                            "(art:10db9c0c3d71...; note:compute-research/20261028T1945Z-report-gd-agg)"),
     "gemm_corun_penalty_per_hash_cycle": (0.347, "D", f"{B921}'s int8 GEMM 26.95 M cycles against {B57F}'s 17.12 M "
                                                       f"(+9.83 M), over the 28.3 M hash cycles that overlapped it"),
     "taps_ms": (1.41, "M", f"{B921}'s attention and elementwise kernels 8.78 ms against {B57F}'s 7.37 (the Commit's taps)"),
@@ -119,9 +140,7 @@ INPUTS: dict[str, tuple[float, str, str]] = {
     "noise_amp": (80, "M", "Dither v3.2: U, V uniform on +-80 (verity/core/protocols/pouw/dither/PROTOCOL.md)"),
     "b1_rate_vs_s8": (8.0, "E", f"{FLOOR}: the b1 product at 8x the s8 rate a clock, the coordinator's figure, "
                                 f"unmeasured on Hopper (mma.sync only)"),
-    "wrap_g_frac": (0.25, "E", "the wrap terms 256(w_X W'^T + X w_W^T + ...) of Dither's identity, as a share of G: an "
-                               "estimate pending GD-DENOISE (sparse ternary w_X at the noise's wrap rate)"),
-    "noise_fused_keep": (0.1, "E", "noise added in the GEMM's operand load keeps 10% of a separate HBM pass (estimate)"),
+    "noise_fused_keep": (0.1, "E", "X formed in the GEMM's operand load keeps 10% of GD-DENOISE's separate X arm"),
     # proving: C-Flock --zk, costfit over ZK_RUN. Measured on sm_120 at ~3-6 M ANDs a block; estimates for the H200
     # (and for larger blocks) until GD-PROVER's H200 fit lands.
     "o_per_and": (1.0870e-8, "E", f"{ZK_RUN}: GPU-s a drawn proof block's AND (prove fit, sigma 0.149)"),
@@ -133,29 +152,100 @@ INPUTS: dict[str, tuple[float, str, str]] = {
     "stage_per_and_staged": (2.855e-9, "E", f"{ZK_RUN}: CPU-s a staged proof block's AND"),
     "verify_fixed": (12.436, "E", f"{ZK_RUN}: Lean verify --zk CPU-s a statement (sigma 0.108)"),
     "verify_per_and": (6.710e-6, "E", f"{ZK_RUN}: Lean verify --zk CPU-s a statement per AND of its proof block"),
-    "h200_vs_sm120": (1.0, "E", "C-Flock's prover on the H200 against the RTX PRO 6000: taken equal until GD-PROVER"),
+    "o_per_and_h200": (3.18e-7, "M", "GD-PROVER on the H200 (r20261028-191928-57a0, firewall on, K 1,024 blocks of "
+                                     "1.94 M ANDs, warm sessions): 47.0 s at 64 drawn against 12.45 s at 8, so 34.5 s "
+                                     "for 56 padded draws; 29x the sm_120 fit (sm_90's GF(2^128) multiply possibly "
+                                     "emulated: GD-PROVER's unchecked cause). The statement term agrees with costfit's "
+                                     "(7.5 s against 9.8 s at that block)"),
+    "sm120_gpu_price": (0.5, "E", "an RTX PRO 6000 GPU-s priced in H200 GPU-s, when the prover runs on sm_120 "
+                                  "(prover.device): a judgement, not a quote"),
+    "rep_share": (0.27, "E", "the second rep's share of a two-rep proof's drawn-AND time: zerocheck 10.0 s and ring "
+                             "switch 4.8 s of 27.6 s GPU arithmetic (GD-PROVER's H200 K 1,024 k 64 session), halved, "
+                             "taking those per rep and ligerito's commitment shared"),
+    "one_rep_query_cost": (0.03, "E", "GD-KNOBS row 22: one rep clears 100 bits with Q a level up, about +3% queries"),
+    "soundness_bits_2reps": (195.5, "M", "C-Flock fast100x2: two reps on one root give 2^-195.5 a table "
+                                         "(verifier/PROTOCOL.md section 15; GD-KNOBS row 22)"),
+    "soundness_floor_bits": (100.0, "M", "the 100-bit floor one rep is raised to (one rep alone: 2^-97.8)"),
     "m_max": (35, "M", "C-Flock circuit.rs M_MAX: m = k_log + nbl <= 35 (note:proofs/20261028T1837Z-report-partopt)"),
-    "sha512_ands": (58_120, "M", "optimize.SHA512_ANDS: one SHA-512 compression in Boolean form (hm96 PROTOCOL 5)"),
-    "hm96_ands": (116_240, "M", "optimize.HM96_ANDS: the hiding part of an hm96-sha512 row in circuit"),
+    "sha512_ands": (81_402, "M", "C-Flock's SHA-512 circuit, rows a compression (GD-SIS reproduced the pin, "
+                                 "note:compute-research/20261028T1938Z-report-gd-sis; inbox 20:00Z), 1.40x "
+                                 "optimize.SHA512_ANDS' 58,120"),
+    "hm96_ands": (2 * 81_402, "M", "the hiding part of an hm96-sha512 row in circuit: two compressions, as "
+                                   "optimize.HM96_ANDS = 2 x SHA512_ANDS"),
     "s8_step_ands": (4_190, "M", "benchmarks/sampling_plan/inputs.py S8_STEP: ANDs of 32 s8 MACs (#2391's pin)"),
     "s8_epilogue_ands": (5_000, "M", "benchmarks/sampling_plan/inputs.py EPILOGUE"),
-    "ew_ands_per_elem": (2_000, "E", "an elementwise op's ANDs an element (norm, SiLU, RoPE, quantize, bf16 ops): "
-                                     "estimate pending GD-PARTITION"),
-    "attn_ands_per_mac": (600, "E", "bf16 attention's ANDs a MAC in circuit: estimate pending GD-PARTITION"),
+    "ew_ands_per_elem": (1_660, "E", "an elementwise op's ANDs an element, weighted over a layer's elements: "
+                                     "benchmarks/prove_path/class_size.py MEASURED where measured (RMSNorm 4.6-5.1 K, "
+                                     "SiluMul 1.38 K, RoPE 3.0 K an element), the quantizer 1,000 and the residual add "
+                                     "500 (estimates); GD-PARTITION's units replace it"),
+    "attn_ands_per_mac": (566, "E", "class_size.MEASURED's AttnBlock_v5{D=64,NVIS=128,BN=128}, 9.28 M ANDs, over a "
+                                    "query's 128 keys x 64 x 2 MACs (taking the block as one query's key block)"),
+    "attn_keys_per_block": (128, "M", "class_size.MEASURED's AttnBlock_v5 BN: keys an attention proof block"),
     "h1_tile_gates": (1.0e9, "M", "the brief: the K 2,048 32x32 H1 tile is about 1e9 gates, OOM at 600 GiB (TOP-138)"),
     # lowering (TOP-138) and prices
     "lower_bytes_per_gate": (16 * 2 ** 30 / 1.0e9, "E", "TOP-138's target: the 1e9-gate H1 tile in 16 GiB (17.2 B a "
-                                                        "gate); today's figure in lower_bytes_per_gate_today"),
-    "lower_bytes_per_gate_today": (600.0, "M", "the brief: about 600 B a gate at the H1 tile today (OOM at 600 GiB), "
-                                               "TOP-138; reported beside, as lower_peak_GiB_today"),
-    "lower_s_per_gate": (0.9e-6, "E", "TOP-138's target, 1e9 gates in 15 min; today's figure pending TOP-138"),
-    "gates_per_and": (3.5, "E", "the H1 tile's ~1e9 gates over its ~2.8e8 ANDs (1,024 cells x 64 s8 steps x 4,190)"),
+                                                        "gate); today's figure in lower_bytes_per_and_today"),
+    "lower_bytes_per_and_today": (4.912 * 2 ** 30 / 2_384_742, "M", "r20261028-184657-1d80 (TOP-138 harness, note:top/"
+                                  "20261028T1900Z-report-lowering-harness): the (64, 4x8) H1 unit, flat, 4.912 GiB peak "
+                                  "for 2,384,742 ANDs, 2,212 B an AND, fixed overheads included; reported beside as "
+                                  "lower_peak_GiB_today (the brief's 600 B a gate at the 1e9-gate tile is a floor: it OOMed)"),
+    "lower_s_per_and_today": (107.4 / 2_384_742, "M", "r20261028-184657-1d80: 1.79 min for the same unit, 45 us an AND"),
+    "lower_s_per_gate": (0.9e-6, "E", "TOP-138's target, 1e9 gates in 15 min"),
+    "gates_per_and": (1.0e9 / (32 * 23e6), "E", "the K 2,048 32x32 tile's ~1e9 gates over its 32 lanes of ~23 M ANDs "
+                                               "(note:top/20261028T1845Z-report-lowering-struct): 1.36"),
+    "k_max": (27, "M", "circuit.compose's K_MAX and the prover's IN_RANGE_K_LOG (live/src/circuit.rs:120): a block with "
+                       "k_log > 27 is refused (note:top/20261028T1845Z-report-lowering-struct)"),
+    "k_pad": (2, "E", "bits past ceil(log2 ANDs) a block's k_log takes: compose pads each range (gates, hm96 slots, "
+                      "sha512x3 slots, mask) to a power of two and lays them side by side (circuit._ranges). "
+                      "class_size.MEASURED's staged units at Llama-3.2-1B give 1 to 3, median 2, for units whose gates "
+                      "dominate (Gemm_v2{2048,16}: 16.9 M ANDs at k_log 27; AttnBlock_v5 9.3 M at 26; SiluMul 11.3 M "
+                      "at 26). The struct worker's 'a lane fits 2^27 to K about 5,041' (~57 M ANDs) is 1; the "
+                      "inbox's '2^27 ANDs' (top, 19:16Z) is 0"),
+    "k_pad_h1_lane": (1, "E", "k_pad of an H1 lane or combine block: the struct worker's 'a lane fits 2^27 to K about "
+                              "5,041' (h1unit.stager; note:top/20261028T1845Z-report-lowering-struct)"),
+    "h1_ands_per_mac": (300, "E", "J10-R's H1 leaf, ANDs a MAC before its openings (inbox 19:32Z: 'about 300 ANDs a "
+                                  "MAC'; with the tile's openings, the 32x32 K 2,048 leaf is the inbox's ~736 M) until "
+                                  "GD-PROVER"),
+    "prover_bytes_per_row": (474, "E", "C-Flock prover memory a block row: twice the 31.8 GB circuit at k_log 27 "
+                                       "(test_universal_same_shape's docstring)"),
+    "prover_mem_GB": (141, "M", "the H200's HBM3e"),
+    "cap_cost_per_bit": (0.05, "E", "per k_log past 27 (a fast100 schedule and Stmt.InRange extended, inbox 19:32Z): "
+                                    "more queries and a bigger proof, on a block's per-AND prove cost and its "
+                                    "statement's verify cost"),
+    "retain_GB": (100.0, "E", "GB a window may retain until its draw: the H200's 141 GB less weights, KV cache and "
+                              "activations under --retain device; VERITY_RETAIN=host (served_verdicts.sh) is bounded by "
+                              "the pod's host cgroup instead (host_retention.py), size not looked up"),
+    "partial_words_per_ks": (2, "M", "leaf_lanes: a lane partial is 2 (KS + m) u32, KS = K / 32 segments"),
     "cpu_s_in_gpu_s": (1 / 55, "M", "benchmarks/sampling_plan/inputs.py: vCPU $0.033/h against sm_120 $1.80/h"),
 }
 
 
+_OVERRIDE: dict[str, float] = {}
+
+
 def I(key: str) -> float:
-    return INPUTS[key][0]
+    return _OVERRIDE[key] if key in _OVERRIDE else INPUTS[key][0]
+
+
+class inputs:
+    """`with inputs(name=value, ...):` evaluates under those input values (GD-SEARCH's scenarios); unknown names are
+    refused."""
+
+    def __init__(self, values: dict | None = None, **kw):
+        self.values = {**(values or {}), **kw}
+        unknown = set(self.values) - set(INPUTS)
+        if unknown:
+            raise KeyError(f"unknown inputs {sorted(unknown)}")
+
+    def __enter__(self):
+        self.saved = dict(_OVERRIDE)
+        _OVERRIDE.update(self.values)
+        return self
+
+    def __exit__(self, *exc):
+        _OVERRIDE.clear()
+        _OVERRIDE.update(self.saved)
+        return False
 
 
 # ---------------------------------------------------------------------------------------------------------------------
@@ -259,12 +349,18 @@ SCHEMA = {
     },
     "commit": {
         "on": (True, "the Commit (rows-sha512) on"),
-        "values": ("every_op", "every_op | dedup | fused_mlp | layer | layer_kv | partition (from the units' outputs)"),
+        "values": ("every_op", "every_op | dedup | fused_mlp | layer | layer_kv | e1 | e2 (GD-PARTITION's measured "
+                               "bytes) | partition (from the units' outputs)"),
         "bytes_per_token": (None, "overrides values"),
         "bits_per_word": (16, "bits a committed word for the bf16 values (int8 and f32 entries unchanged)"),
         "row_bytes": (4096, "hm96 row size of the Commit's tree (4 KiB today; 16 KiB: lever 11 of P1a)"),
-        "hash_eff": (None, "share of HASH-38's bar the hash kernels reach (None: b921's 0.497; KCOMMIT: 1.0)"),
-        "corun": (False, "hash at the no-cost co-run share beside the GEMMs and at the bar in host gaps"),
+        "hash_eff": (None, "share of HASH-38's bar the hash kernels reach (None: b921's 0.497; the row kernel: "
+                           "INPUTS hash_eff_rows, 0.92)"),
+        "corun": (False, "False (b921's measured overlap) | True or 'corun4' (GD-HASH's beside curve: bytes up to the "
+                         "beside capacity cost the GEMM h_b / h_x of their exclusive time, the rest run alone; hashing "
+                         "in host gaps free, an estimate)"),
+        "open": ("whole", "whole (an opened byte range pays every row_bytes row it touches: hm96 hashes whole rows) | "
+                          "exact (each read its own row of its size, as costfit's sessions ran)"),
         "seal": ("tree", "tree (per-window tree sealed, b921) | none (5430) | roots (lever 1: seal roots, binding map "
                          "and records; an estimate: the tree's wait dropped, b921's other seal host time kept, since "
                          "nobody has split the seal's 1.31 s)"),
@@ -287,37 +383,71 @@ SCHEMA = {
         "kdhash": (False, "#6182: H1's tables hashed in one pass"),
         "hash_at_bar": (False, "H1's hashing at HASH-38's bar"),
         "coin_off_loop": (False, "the round coin's wait off the engine thread"),
-        "noise_fused": (True, "dither: noise added in the GEMM's operand load"),
+        "noise_fused": (False, "dither: X formed in the GEMM's operand load (False: GD-DENOISE's measured separate "
+                               "arm)"),
         "denoise_g_frac": (None, "dither: de-noising's cost as a share of G (None: from noise and L')"),
         "value_row_bytes": (16384, "dither: the value root's hm96 row (16 KiB pinned in PROTOCOL.md)"),
-        "unit_cells": (1, "PoUW proof block: cells (dither: 1 cell x 1 segment; J10-R tile: 32 x 32 = 1,024)"),
+        "tile": (None, "PoUW proof block's (R, C) cells (None: dither 1 x 1 over one segment; J10-R and JR2 32 x 32, "
+                       "the H1 kernel's warp tile). Registered operand rows are K + 4 bytes (chunk rows past K 4,096), "
+                       "opened whole; dither's A segment opens the Commit's rows"),
+        "credit": ("all4", "dither's credited linears: all4 (qkv, o, gate_up and down) | k2048 (the K 2,048 three)"),
+        "word_bits": (16, "dither: bits a T_s word (O stays 32)"),
+        "agg": (1, "dither: cells a T_s word"),
+        "joint": (False, "dither: each credited values tile also checks its cells' segments, drawn at the larger of "
+                         "the two laws (no separate PoUW blocks)"),
+        "form": ("tile", "j10r/jr2 leaf's proof: tile (one block; ~2^30 at K 2,048, refused by compose) | lanes "
+                         "(TOP-138, pouw.leaf_lanes: its 32 lanes of 4 x 8 cells, each in weights.chunks(K) chunks, and "
+                         "a combine over the lanes' partials, drawn as one group: delta counts leaves)"),
     },
     "sampling": {
         "delta": (2.0 ** -40, "failure probability a window"),
         "eps": (0.01, "share of credited work allowed wrong"),
         "pouw_sampled": (True, "PoUW's units drawn at (eps, delta) a window too (guarantee 2)"),
         "law": ("achievability", "achievability (q_u = min(1, Lambda w_u / C), Partitioning/Guarantees.lean) | uniform "
-                                 "(the deployed audit's uniform kd-subset over a population's units, SampledKSLiveV3; "
-                                 "eps then counts units)"),
-        "retain_GB": (100.0, "GB a window may hold until its draw (the Commit's step bytes, Dither's values, H1's "
-                             "records, times steps a window): an estimate, the H200's 141 GB less weights, KV cache "
-                             "and activations; over it, the design is listed infeasible"),
+                                 "(the deployed audit's uniform kd-subset over a population's units, SampledKSLiveV3, "
+                                 "at eps w_avg / w_max of the units, so that eps still bounds the wrong work) | "
+                                 "stratified (the deployed IntegrityPeriod law, benchmarks/sampling_plan/h200.py: each "
+                                 "unit class its own uniform kd-subset at eps of its units and delta / S, S classes)"),
+        "retain_GB": (None, "GB a window may hold until its draw (the Commit's step bytes, Dither's values, H1's "
+                            "records, times steps a window; None: INPUTS retain_GB); over it, the design is listed "
+                            "infeasible"),
+        "period": (1, "windows certified together (the accounting period, ASK-64's form: Properties/Pouw/Period.lean, "
+                      "eps(j) = Lambda ln(1/delta) / j): draws ~ Lambda / eps a period, so proving a window falls as "
+                      "1 / period, while eps bounds the period's work, not a window's (a window's share up to "
+                      "eps x period). Coins stay per unit and live, so a window retains only its own bytes"),
     },
     "partition": {
         "units": (None, "list of unit classes {name, per_token, work, extra_ands, open_rows, out_bits}; None: the "
-                        "preset per op of every_op (one s8 coordinate a unit, an element a unit elsewhere)"),
+                        "preset per op of every_op (an r x c tile of a linear a unit, an element a unit elsewhere)"),
+        "tile": ((1, 1), "a linear's proof block: r tokens x c output columns (1 x 1: one s8 coordinate)"),
+        "kchunk": (1, "a linear's K cut into chunks, each a block committing its running sums (4 B a cell a cut)"),
+        "attn_keys": (64, "keys an attention proof block (None: class_size's measured 128, whose block with its K and "
+                          "V rows' openings at C-Flock's SHA-512 passes 2^27 at k_pad 2; 64 fits, at "
+                          "attn_ands_per_mac, an estimate below the measured block)"),
     },
     "prover": {
-        "o_per_and": (None, "GPU-s a drawn block's AND (None: costfit)"),
+        "device": ("h200", "the prover's GPU: h200 (GD-PROVER's measured drawn-AND cost, o_per_and_h200) | sm120 (the "
+                           "RTX PRO 6000's costfit, its GPU-s at sm120_gpu_price)"),
+        "reps": (2, "C-Flock reps on one root: 2 (fast100x2, 195.5 bits) | 1 (Q a level up to clear the 100-bit "
+                    "floor: rep_share less drawn-AND time, one_rep_query_cost more)"),
+        "o_per_and": (None, "GPU-s a padded drawn block's AND (None: the device's)"),
         "staged_per_and": (None, "GPU-s a staged block's AND"),
-        "stmt_fixed": (None, "GPU-s a touched statement"),
-        "stmt_per_and": (None, "GPU-s a statement per AND of its block"),
-        "speed": (None, "prover speed on the H200 over sm_120's (None: 1.0, estimate)"),
-        "m_max": (35, "C-Flock's m = k_log + nbl cap"),
+        "stmt_fixed": (None, "GPU-s a session (touched statement)"),
+        "stmt_per_and": (None, "GPU-s a session per AND of its block"),
+        "speed": (None, "a further divisor on proving GPU-s (None: 1.0)"),
+        "m_max": (35, "C-Flock's m = k_log + nbl cap (a block's k_log itself is refused above k_max)"),
+        "k_max": (None, "the block cap's k_log (None: 27, compose's K_MAX; 28-30 with a fast100 schedule and an "
+                        "extended Stmt.InRange, each bit past 27 at cap_cost_per_bit and prover memory 2^k_log x "
+                        "prover_bytes_per_row against prover_mem_GB)"),
+        "k_pad": (None, "bits past ceil(log2 ANDs) a block's k_log takes (None: INPUTS k_pad, 2 from class_size's "
+                        "staged units; 0: the inbox's 2^27 ANDs a block)"),
         "shared": (True, "statements hold only the drawn blocks (IntegrityPeriod's hidden window)"),
+        "stmt": ("template", "template (a statement a block class) | universal (private_circuits' universal unit: each "
+                             "block at its power-of-two size class, statements shared by a size class; no universal "
+                             "overhead counted, an estimate)"),
     },
     "lowering": {
-        "gates_per_and": (None, "gates a proof block's AND (None: 3.5, the H1 tile)"),
+        "gates_per_and": (None, "gates a proof block's AND (None: 1.36, the H1 tile's gates over its lanes' ANDs)"),
         "s_per_gate": (None, "CPU-s a gate lowered (None: TOP-138's target 0.9 us)"),
         "bytes_per_gate": (None, "peak bytes a gate (None: TOP-138's target 17.2; today's 600 is reported beside)"),
         "per": ("template", "template (lowered once a shape, cached) | instance (every drawn block)"),
@@ -408,6 +538,12 @@ def stock_parts(d: dict) -> dict:
             "launch gaps in the forward": launch}
 
 
+#: GD-PARTITION's committed bytes a token (r20261028-192825-df06, the served decode step at T 35, layers and
+#: embedding): e1 epilogue fusion with the residual once a layer, e2 that with max-first recompute. Taken a prefill
+#: token too (an estimate); proof blocks stay the preset's
+PARTITION_BETA = {"e1": 823_488, "e2": 563_456}
+
+
 def commit_bytes_per_token(d: dict, units: list) -> float:
     c = d["commit"]
     if not c["on"]:
@@ -416,7 +552,10 @@ def commit_bytes_per_token(d: dict, units: list) -> float:
         return c["bytes_per_token"]
     if c["values"] == "partition":
         return sum(u["per_token"] * u["out_bits"] for u in units) / 8
-    return stream_bytes_per_token(c["values"], c["bits_per_word"])
+    sums = LAYERS * sum(4 * N for _, K, N in LINEARS) * (d["partition"]["kchunk"] - 1)
+    if c["values"] in PARTITION_BETA:
+        return PARTITION_BETA[c["values"]] + sums
+    return stream_bytes_per_token(c["values"], c["bits_per_word"]) + sums
 
 
 def hash_ms(compressions: float, eff: float, mhz: float) -> float:
@@ -425,9 +564,9 @@ def hash_ms(compressions: float, eff: float, mhz: float) -> float:
 
 def commit_parts(d: dict, stock: dict, units: list) -> tuple[dict, dict]:
     """The Commit's parts, ms a step, and what they rest on: its tree's compressions at the hash kernels' share of the
-    bar, less what overlaps (today: 22% of the kernel time under tensor work; co-run: 0.167 of the bar under the
-    GEMMs and the whole bar in host gaps), the GEMM's co-run loss, the taps, the gather, the host copies, the event
-    syncs and the seal, each scaled from b921 by bytes or held per step."""
+    bar, less what overlaps (today: b921's 22% of the kernel time under tensor work, at its measured GEMM loss;
+    co-run: GD-HASH's beside curve, nothing free under the GEMM, host gaps free), the taps, the gather, the host
+    copies, the event syncs and the seal, each scaled from b921 by bytes or held per step."""
     c, p = d["commit"], d["point"]
     bpt = commit_bytes_per_token(d, units)
     if bpt <= 0:
@@ -442,12 +581,13 @@ def commit_parts(d: dict, stock: dict, units: list) -> tuple[dict, dict]:
     kernel = max(hash_ms(comp, eff, mhz), I("commit_launches") * 0.8 * I("launch_us") / 1e3)
     b921_bytes = I("commit_B_per_token") * 8192
     scale = step_bytes / b921_bytes
+    ratio, beside_gb = beside(c["row_bytes"], tok_c)
     if c["corun"]:
-        tensor_ms = stock["int8 GEMM"] + stock["attention"]
-        idle_ms = stock["host gap between forwards"] + stock["launch gaps in the forward"]
-        free = I("corun_share") * tensor_ms * I("gemm_mhz") / mhz + idle_ms
-        exposed = max(0.0, kernel - free)
-        penalty = 0.0
+        idle = min(kernel, stock["host gap between forwards"] + stock["launch gaps in the forward"])
+        fits = min(1.0, beside_gb * 1e9 * stock["int8 GEMM"] / I("beside_gemm_ms") / step_bytes)
+        side = min(kernel - idle, kernel * fits)
+        exposed = kernel - idle - side
+        penalty = ratio * side
     else:
         exposed = kernel * (1 - I("hash_overlap_today"))
         overlapped_cycles = kernel * I("hash_overlap_today") * mhz
@@ -466,10 +606,30 @@ def commit_parts(d: dict, stock: dict, units: list) -> tuple[dict, dict]:
         seal_bytes = (tree["rows"] + tree["nodes"]) * 64
         parts["seal wait"] = seal_bytes / (I("seal_GBs") * 1e6) / S
     info = {"bytes_per_token": bpt, "step_bytes": step_bytes, "tree": tree, "compressions_per_step": comp,
-            "hash_kernel_ms": kernel, "hash_eff": eff,
-            "corun_free_GBs_at_row": I("corun_share") * I("sha_bar_per_sm_clock") * I("sms") * 1830e6
-            * c["row_bytes"] / compressions_per_row(c["row_bytes"]) / 1e9}
+            "hash_kernel_ms": kernel, "hash_eff": eff, "beside_h_ratio": ratio,
+            "beside_GB_a_step": beside_gb * stock["int8 GEMM"] / I("beside_gemm_ms")}
     return parts, info
+
+
+def _log_interp(x: float, xs: tuple, ys: list) -> float:
+    """Piecewise linear in log2 x through (xs, ys), held flat outside."""
+    lx, pts = math.log2(x), [(math.log2(a), b) for a, b in zip(xs, ys)]
+    if lx <= pts[0][0]:
+        return pts[0][1]
+    for (x0, y0), (x1, y1) in zip(pts, pts[1:]):
+        if lx <= x1:
+            return y0 + (y1 - y0) * (lx - x0) / (x1 - x0)
+    return pts[-1][1]
+
+
+def beside(row_bytes: int, tok: float) -> tuple[float, float]:
+    """GD-HASH's beside curve at a row size and T: (h_b / h_x, GB a forward that fit beside the GEMM below the whole
+    grid at its 14.5 ms). Rows under 4 KiB take 4 KiB's figures (unmeasured)."""
+    rows = (4096, 16384, 65536)
+    hi = _log_interp(row_bytes, rows, [I("beside_4k"), I("beside_16k"), I("beside_64k")])
+    lo = _log_interp(row_bytes, rows, [I("beside512_4k"), I("beside512_16k"), I("beside512_64k")])
+    gb = _log_interp(row_bytes, rows, [I("beside_GB_4k"), I("beside_GB_16k"), I("beside_GB_64k")])
+    return _log_interp(tok, (512, 8192), [lo, hi]), gb
 
 
 def l_prime(w: dict) -> int:
@@ -495,6 +655,18 @@ def pouw_forced_frac(d: dict) -> float:
     return min(1.0, 1.0 / I("b1_rate_vs_s8") + 3.0 / t)
 
 
+def guess_p(bits: int) -> float:
+    """A word's free-guess rate: 2^-b to 8 bits (GD-BITS, r20261028-194424-e326: sampling pays 1 / (1 - p), x1.005 at
+    8 bits, x1.07 at 4, x2.0 at 1), the measured 16-bit rate scaled above. A mix4 aggregate of g >= 8 cells keeps
+    its word's rate (GD-AGG)."""
+    return 2.0 ** -bits if bits <= 8 else I("guess_p16") * 2.0 ** (16 - bits)
+
+
+def dither_linears(d: dict):
+    """The linears dither credits: (name, K, N)."""
+    return [x for x in LINEARS if d["pouw"]["credit"] == "all4" or x[1] == 2048]
+
+
 def pouw_credit(d: dict) -> dict:
     """Guarantee 2's credit as a share of the four linears' int8 MACs: a dither call with L < K credits (K - L) / K of
     its MACs (the floor note; S15 of note:compute-research/20261028T1900Z-report-gd-smell), and the work that credit
@@ -502,7 +674,7 @@ def pouw_credit(d: dict) -> dict:
     w = d["pouw"]
     total = sum(K * N for _, K, N in LINEARS)
     if w["scheme"] == "dither":
-        cred = sum(K * N * (K - w["L"]) / K for _, K, N in LINEARS if w["L"] < K) / total
+        cred = sum(K * N * (K - w["L"]) / K for _, K, N in dither_linears(d) if w["L"] < K) / total
     elif w["scheme"] == "jr2":
         cred = sum(K * N for _, K, N in LINEARS if K == w["K"]) / total
     else:
@@ -525,10 +697,21 @@ def _h1_main_ms_8k(h1_host: str) -> float:
     return s - rest - I("h1_coin_ms")
 
 
-def _dither_calls(tok: float, L: int):
-    """Per credited call class of one token: (cells, segments). Dither credits all four linears."""
-    for _, K, N in LINEARS:
-        yield LAYERS * N * tok, math.ceil(K / L)
+#: GD-DENOISE (note:compute-research/20261028T1930Z-report-gd-denoise, run r20261028-190744-7676, one H200,
+#: cuBLASLt int8): Dither v3.2's served-call terms as multiples of the plain GEMM, model sums at m 64 / 512 / 8,192.
+#: coins at L' 32 / 128 / 512 (d_A bits and V), X, O's recompute on a', b' less the plain GEMM, fresh noise with O
+#: recomputed (without T_s), and ts_out: a T_s chunk's int32 output share at K 2,048 (the S 2 shapes' chunk arm less
+#: its L / K mainloop; derived)
+DENOISE_M = (64, 512, 8192)
+DENOISE = {"coins32": (1.483, 0.759, 0.155), "coins128": (1.479, 0.749, 0.205), "coins512": (1.499, 0.782, 0.470),
+           "x": (0.161, 0.100, 0.075), "rec": (0.333, 0.258, 0.202), "fresh": (3.21, 3.33, 4.0),
+           "ts_out": (0.24, 0.42, 0.49)}
+
+
+def _dither_calls(d: dict, tok: float):
+    """Per credited call class: (cells, segments)."""
+    for _, K, N in dither_linears(d):
+        yield LAYERS * N * tok, math.ceil(K / d["pouw"]["L"])
 
 
 def pouw_parts(d: dict, stock: dict) -> tuple[dict, dict]:
@@ -583,24 +766,28 @@ def pouw_parts(d: dict, stock: dict) -> tuple[dict, dict]:
             dg = w["denoise_g_frac"] if w["denoise_g_frac"] is not None else 1.0
             parts["JR2: de-noising the K-credited calls (fresh U: estimate 1 G)"] = dg * G_ms * k_share
         return parts, info
-    # dither
+    # dither: GD-DENOISE's served call over the credited calls' plain GEMM (an L >= K call commits O alone, un-noised)
     L, Lp = w["L"], l_prime(w)
-    act_entries = LAYERS * tok * (3 * HIDDEN + INTER)          # the four linears' A operands, one int8 entry each
-    pass_ms = 2 * (act_entries + WEIGHT_BYTES) / (I("hbm_GBs") * 1e6)
-    parts["dither: noise and dither added to A and B"] = pass_ms * (I("noise_fused_keep") if w["noise_fused"] else 1)
-    dither_bytes = (act_entries + WEIGHT_BYTES) / 8            # d_A and d_B: one bit an operand entry
-    parts["dither: d_A, d_B expanded from the coins (SHA-512 PRF)"] = \
-        hash_ms(dither_bytes / 64, 1.0, I("hash_mhz")) * (1 - I("corun_share"))
-    if w["denoise_g_frac"] is not None:
-        dg = w["denoise_g_frac"]
-    elif w["noise"] == "fresh":
-        dg = 1.0
+    G_c = {name: G_ms * LAYERS * K * N / WEIGHT_BYTES for name, K, N in dither_linears(d) if L < K}
+    G_cred = sum(G_c.values())
+    dn = {k: _log_interp(tok, DENOISE_M, list(v)) for k, v in DENOISE.items()}
+    if w["noise"] == "fresh":
+        parts["dither: fresh coins, noised A and O recomputed"] = dn["fresh"] * G_cred
+        dg = dn["fresh"]
     else:
-        dg = min(1.0, 2 * Lp / w["K"] + I("wrap_g_frac"))
-    parts["dither: de-noising O"] = dg * G_ms
-    calls = list(_dither_calls(tok, L))
+        coins = _log_interp(Lp, (32, 128, 512), [dn["coins32"], dn["coins128"], dn["coins512"]])
+        parts["dither: coins (d_A bits and V)"] = coins * G_cred
+        parts["dither: noised A (X)"] = dn["x"] * G_cred * (I("noise_fused_keep") if w["noise_fused"] else 1)
+        dg = w["denoise_g_frac"] if w["denoise_g_frac"] is not None else dn["rec"]
+        parts["dither: O recomputed on a', b' (less the plain GEMM)"] = dg * G_cred
+    # the noised GEMM over k < (S - 1) L, a chunk a segment, each writing its T_s words (int32 output share scaled
+    # to the word: an estimate below GD-DENOISE's int32 read-back arm)
+    parts["dither: noised GEMM over (S-1) L, T_s out"] = sum(
+        g * (math.ceil(K / L) - 1) * (L / K + dn["ts_out"] * (2048 / K) ** 0.5 * w["word_bits"] / 32 / w["agg"])
+        for (name, K, _), g in ((x, G_c[x[0]]) for x in dither_linears(d) if x[0] in G_c))
+    calls = list(_dither_calls(d, tok))
     cells = sum(c for c, _ in calls)
-    words = sum(c * (2 * (s - 1) + 4) for c, s in calls)
+    words = sum(c * ((s - 1) * w["word_bits"] / 8 / w["agg"] + 4) for c, s in calls)
     vt = tree_compressions(words, w["value_row_bytes"])
     vh = hash_ms(vt["compressions"], d["commit"]["hash_eff"] or I("hash_eff_today"), I("hash_mhz"))
     parts["dither: value roots hashed"] = vh * (1 - I("hash_overlap_today"))
@@ -616,51 +803,149 @@ def s8_coord_work(K: int) -> float:
     return K // 32 * I("s8_step_ands") + I("s8_epilogue_ands")
 
 
+def h1_chunks(K: int) -> int:
+    """pouw.weights.chunks: the chunks an H1 lane at K is proved in (1 to K 4,096, CHUNK_MAX; then the least n >= 2
+    whose chunks are at most 4,096 entries and whole 512-entry noise blocks)."""
+    if K <= 4096:
+        return 1
+    for n in range(-(-K // 4096), K // 512 + 1):
+        if K % (n * 512) == 0:
+            return n
+    raise ValueError(f"K = {K}: no chunking")
+
+
+def h1_digits(ks: int) -> int:
+    """pouw.leaf_lanes.n_digits: H1's digit count m at KS segments."""
+    m = 1
+    while not (-(128 ** m) <= -128 * ks and 127 * ks // 128 ** (m - 1) <= 127):
+        m += 1
+    return m
+
+
+def opened(nbytes: float, R: int, mode: str) -> list:
+    """The rows a read of nbytes contiguous bytes opens: every R-byte row it touches (whole, at least one; aligned), or
+    one row of its own size (exact)."""
+    if mode == "exact":
+        return [nbytes]
+    return [R] * max(1, math.ceil(nbytes / R))
+
+
+def dither_check(d: dict, K: int, span: int, cells: int) -> tuple[float, list]:
+    """Dither's in-circuit check of `cells` cells over `span` of K: the noised product's ANDs and the coins'
+    expansion, and the T_s rows it opens (value rows of value_row_bytes)."""
+    w = d["pouw"]
+    L, Rv = w["L"], w["value_row_bytes"]
+    segs = max(1, span // L)
+    noise = 2 * span * I("sha512_ands") / 64                   # V and U pi entries expanded from the coins (estimate)
+    words = cells * (segs + 1) * w["word_bits"] / 8 / w["agg"]
+    return cells * span / 32 * I("s8_step_ands") + noise, opened(words, Rv, "whole") + [Rv]
+
+
 def preset_units(d: dict) -> list:
-    """The per-op partition (every committed value a unit's output, at most 16 bits, one unit an output word):
-    one s8 coordinate a unit (opening its two K-byte operand rows and three one-block rows, costfit's
-    ScaledMmS8Coordinate_v1), one element a unit for the elementwise ops (opening one input row), one (head, query)
-    a unit for attention. Rows opened are the Commit's rows, so they grow with commit.row_bytes."""
-    R = d["commit"]["row_bytes"]
-    p = d["point"]
+    """The per-op partition (every committed value a unit's output, at most 16 bits a word): an r x c tile of a
+    linear's outputs over K / kchunk a unit (r A rows, c W rows, the scales and the r output rows; with K chunks, the
+    running sums in and out; at 1 x 1 costfit's ScaledMmS8Coordinate_v1), one element a unit for the elementwise ops
+    (opening one input row), one (head, query) a unit for attention. Rows are the Commit's (W's taken at the same
+    size, an estimate), opened whole or exact (commit.open). Under pouw.joint each credited tile also checks Dither
+    on its cells (`credit_work` its MACs)."""
+    R, mode = d["commit"]["row_bytes"], d["commit"]["open"]
+    p, w = d["point"], d["pouw"]
+    r, c = d["partition"]["tile"]
+    kc = d["partition"]["kchunk"]
     seq_len = (p["real_tokens"] or p["T"]) / p["seqs"]
+    joint = w["joint"] and w["scheme"] == "dither" and d["sampling"]["pouw_sampled"]
+    credited = {x[0] for x in dither_linears(d) if w["L"] < x[1]}
     units = []
     for name, K, N in LINEARS:
-        units.append({"name": f"{name} coordinate (K {K})", "per_token": LAYERS * N, "work": s8_coord_work(K),
-                      "extra_ands": 0.0, "open_rows": [min(K, R), min(K, R), 1, 1, 1], "out_bits": 16})
-    attn_work = I("attn_ands_per_mac") * 2 * HD * seq_len / 2
-    units.append({"name": "attention (head, query)", "per_token": LAYERS * QH, "work": attn_work, "extra_ands": 0.0,
-                  "open_rows": [R, R, R], "out_bits": 16 * HD})
+        Kc = K // kc
+        rows = [b for _ in range(r) for b in opened(Kc, R, mode)] + [b for _ in range(c) for b in opened(Kc, R, mode)]
+        rows += opened(4 * r, R, mode) + opened(4 * c, R, mode) + [b for _ in range(r) for b in opened(2 * c, R, mode)]
+        if kc > 1:
+            rows += [b for _ in range(2 * r) for b in opened(4 * c, R, mode)]
+        u = {"name": f"{name} {r}x{c} tile (K {K}{f' / {kc}' if kc > 1 else ''})",
+             "per_token": LAYERS * N * kc / (r * c), "work": r * c * s8_coord_work(Kc), "extra_ands": 0.0,
+             "open_rows": rows, "out_bits": 16 * r * c}
+        if joint and name in credited:
+            extra, vrows = dither_check(d, K, Kc, r * c)
+            u.update({"extra_ands": extra, "open_rows": rows + vrows, "credit_work": r * c * Kc})
+        units.append(u)
+    bn = d["partition"]["attn_keys"] or I("attn_keys_per_block")
+    blocks = max(1.0, seq_len / 2 / bn)                        # a query's causal keys, on average, in key blocks
+    kb = min(bn, seq_len / 2)
+    attn_rows = opened(2 * HD, R, mode) + 2 * opened(kb * HD * 2, R, mode) + 2 * opened(4 * (HD + 2), R, mode)
+    units.append({"name": f"attention (head, query, {bn:.0f}-key block)", "per_token": LAYERS * QH * blocks,
+                  "work": I("attn_ands_per_mac") * 2 * HD * kb, "extra_ands": 0.0,
+                  "open_rows": attn_rows, "out_bits": 32 * (HD + 2)})
     ew = (LAYERS * (2 * HIDDEN + 2 * HIDDEN + INTER + (QH + KVH) * HD + 3 * HIDDEN + INTER))
     units.append({"name": "elementwise element", "per_token": ew, "work": I("ew_ands_per_elem"), "extra_ands": 0.0,
                   "open_rows": [R], "out_bits": 16})
     return units
 
 
+def registered_rows(K: int) -> list:
+    """The registered rows a K-entry operand row is hashed in: one row of K + 4 bytes to K 4,096, then h1_chunks(K)
+    chunk rows of K / n + 4 (pouw.weights)."""
+    n = h1_chunks(K)
+    return [K // n + 4] * n
+
+
 def pouw_units(d: dict) -> list:
-    """PoUW's proof blocks. J10-R/JR2: a 32 x 32 tile at K (the brief's ~1e9 gates at K 2,048). Dither: one segment of
-    one cell (PROTOCOL.md), opening the rows of A's and B's segment and of T_s and T_{s-1} (or O)."""
+    """PoUW's proof blocks, an R x C tile of cells each (pouw.tile). J10-R/JR2: the tile's H1 leaf at K, ANDs a MAC
+    before its openings (h1_ands_per_mac), opening its R A rows and C B rows (registered rows) and its z/y record;
+    the lanes form splits it into 4 x 8 lanes (each its own A and B rows, chunked past K 4,096, and a partial row)
+    and a combine block, drawn as a group. Dither: the tile over one segment (PROTOCOL.md), opening A's segment rows
+    (the Commit's rows), B's registered rows and the tile's T_s and T_{s-1} (or O) value rows, row-major."""
     w = d["pouw"]
     if w["scheme"] == "off" or not d["sampling"]["pouw_sampled"]:
         return []
-    cells = H1_CELLS_PER_TOKEN
+    R, mode = d["commit"]["row_bytes"], d["commit"]["open"]
     if w["scheme"] in ("j10r", "jr2"):
-        tile = w["unit_cells"] if w["unit_cells"] > 1 else 1024
-        gates = I("h1_tile_gates") * tile / 1024 * w["K"] / 2048
-        work = tile * s8_coord_work(w["K"])
-        return [{"name": f"H1 tile ({tile} cells, K {w['K']})", "per_token": cells / tile,
-                 "work": work, "extra_ands": max(0.0, gates / I("gates_per_and") - work),
-                 "open_rows": [], "out_bits": 16, "gates": gates}]
+        r, c = w["tile"] or (32, 32)
+        K, kp = w["K"], I("k_pad_h1_lane")
+        work = r * c * s8_coord_work(K)
+        compute = I("h1_ands_per_mac") * r * c * K
+        record = opened(r * c * w["record_bytes_per_cell"], R, "exact")
+        unit = {"name": f"H1 leaf ({r}x{c}, K {K}, {w['form']})", "per_token": H1_CELLS_PER_TOKEN / (r * c),
+                "work": work, "extra_ands": max(0.0, compute - work), "k_pad": kp, "out_bits": 16,
+                "open_rows": [b for _ in range(r + c) for b in registered_rows(K)] + record}
+        if w["form"] not in ("tile", "lanes"):
+            raise ValueError(f"pouw.form {w['form']!r}")
+        lr, lc = min(r, 4), min(c, 8)
+        lanes = (r // lr) * (c // lc)
+        if w["form"] == "lanes" and lanes > 1:
+            n = h1_chunks(K)
+            ks = K // 32
+            partial = 4 * I("partial_words_per_ks") * (ks + h1_digits(ks))
+            # a chunk writes the lane's partial row (the last) or a carry, and a later chunk reads the carry
+            rows = [b for _ in range(lr + lc) for b in registered_rows(K)[:1]] + [partial] * (2 if n > 1 else 1)
+            combine = (lanes * row_ands(partial) + row_ands(16) + sum(row_ands(b) for b in record)
+                       + (lanes * n * row_ands(2) if n > 1 else 0))
+            unit["blocks"] = [{"name": "lane chunk" if n > 1 else "lane", "count": lanes * n, "k_pad": kp,
+                               "ands": compute / (lanes * n) + sum(row_ands(b) for b in rows)},
+                              {"name": "combine", "count": 1, "ands": combine, "k_pad": kp}]
+        return [unit]
+    if w["joint"]:
+        return []                                              # checked inside the values tiles (preset_units)
+    r, c = w["tile"] or (1, 1)
+    g = w["agg"]
+    if g > r * c:                                              # a block opens whole words: at least a group's cells
+        r = 1 << (g.bit_length() - 1) // 2
+        c = -(-g // r)
     L, Rv = w["L"], w["value_row_bytes"]
-    noise_ands = 2 * L * I("sha512_ands") / 64                 # V and U pi entries expanded from the coins (estimate)
+    noise_ands = (r + c) * L * I("sha512_ands") / 64           # V and U pi entries expanded from the coins (estimate)
+    mix = r * c * I("mix4_ands") if g > 1 else 0.0
+    t_rows = opened(c * w["word_bits"] / 8 / g, Rv, "whole")
     units = []
-    for name, K, N in LINEARS:
+    for name, K, N in dither_linears(d):
         if L >= K:
             continue                                           # O alone: un-noised, credits 0, not drawn
         S_seg = math.ceil(K / L)
-        units.append({"name": f"dither block, {name} (1 cell, L {L} of K {K})", "per_token": LAYERS * N * S_seg,
-                      "work": L / 32 * I("s8_step_ands"), "extra_ands": noise_ands,
-                      "open_rows": [min(L, Rv), min(L, Rv), Rv, Rv], "out_bits": 16})
+        b_rows = registered_rows(K)[:1] if mode == "whole" else [L]
+        units.append({"name": f"dither block, {name} ({r}x{c}, L {L} of K {K})",
+                      "per_token": LAYERS * N * S_seg / (r * c), "work": r * c * L / 32 * I("s8_step_ands"),
+                      "extra_ands": noise_ands + mix, "draw_factor": 1 / (1 - guess_p(w["word_bits"])),
+                      "open_rows": [b for _ in range(r) for b in opened(L, R, mode)] + b_rows * c + t_rows * 2 * r,
+                      "out_bits": 16})
     return units
 
 
@@ -703,16 +988,27 @@ def proving(d: dict, units: list, label: str) -> dict:
     with C = eps F, so draws ~ Lambda F / C = Lambda / eps; or the deployed uniform kd-subset over the population's
     units (ε then counts units, not ANDs). Each drawn block costs o (ANDs + row openings) and each touched statement
     stmt_fixed + stmt_per_and ANDs, with ceil(draws / cap) statements a class (cap = 2^(m_max - k_log), k_log =
-    ceil(log2 ANDs) + 1). Lowering is per class (template) or per draw (instance)."""
+    ceil(log2 ANDs) + k_pad, refused above prover.k_max). A k_log past 27 costs cap_cost_per_bit a bit on o and on
+    verification, and every block's prover memory is 2^k_log x prover_bytes_per_row against prover_mem_GB. A unit
+    drawn as a group (its `blocks`, the lanes form) pays each of its blocks on every draw, each block class its own
+    k_log, cap and statements. Lowering is per class (template) or per draw (instance)."""
     s = d["sampling"]
-    T, S = window_tokens(d), 1                                 # units cover what the forwards compute
+    P = s["period"]
+    T, S = window_tokens(d) * P, 1                             # a period's units: P windows certified together
     lam = math.log(1 / s["delta"])
     pv = d["prover"]
-    o = (pv["o_per_and"] if pv["o_per_and"] is not None else I("o_per_and"))
+    if pv["device"] not in ("h200", "sm120"):
+        raise ValueError(f"prover.device {pv['device']!r}")
+    if pv["reps"] not in (1, 2):
+        raise ValueError(f"prover.reps {pv['reps']!r}")
+    o = (pv["o_per_and"] if pv["o_per_and"] is not None else
+         I("o_per_and_h200" if pv["device"] == "h200" else "o_per_and"))
     so = (pv["staged_per_and"] if pv["staged_per_and"] is not None else I("staged_per_and"))
     f0 = (pv["stmt_fixed"] if pv["stmt_fixed"] is not None else I("stmt_fixed"))
     f1 = (pv["stmt_per_and"] if pv["stmt_per_and"] is not None else I("stmt_per_and"))
-    speed = pv["speed"] if pv["speed"] is not None else I("h200_vs_sm120")
+    speed = pv["speed"] if pv["speed"] is not None else 1.0
+    price = 1.0 if pv["device"] == "h200" else I("sm120_gpu_price")
+    rep = 1.0 if pv["reps"] == 2 else (1 - I("rep_share")) * (1 + I("one_rep_query_cost"))
     lo = d["lowering"]
     gpa = lo["gates_per_and"] if lo["gates_per_and"] is not None else I("gates_per_and")
     spg = lo["s_per_gate"] if lo["s_per_gate"] is not None else I("lower_s_per_gate")
@@ -723,51 +1019,148 @@ def proving(d: dict, units: list, label: str) -> dict:
     C = s["eps"] * F
     out = {"population": label, "F_ands": F, "C_ands": C, "Lambda": lam, "classes": [], "draws": 0.0, "gpu_s": 0.0,
            "statements": 0, "lower_cpu_s": 0.0, "stage_cpu_s": 0.0, "verify_cpu_s": 0.0, "lower_peak_GiB": 0.0,
-           "infeasible": []}
+           "prover_peak_GB": 0.0, "period": P, "soundness_bits": I("soundness_bits_2reps" if pv["reps"] == 2 else
+                                                                    "soundness_floor_bits"), "infeasible": []}
     if F <= 0:
         return out
+    k_cap = round(pv["k_max"] if pv["k_max"] is not None else I("k_max"))
     if s["law"] == "uniform":
+        # eps counts units under the kd-subset, so K0 wrong units hold up to K0 w_max of the work: eps of the work
+        # (the brief's guarantee) needs eps w_avg / w_max of the units
         n_all = sum(u["per_token"] * T * S for u in units)
-        kd = uniform_kd(n_all, s["eps"], s["delta"])
-        out["uniform_kd"] = kd
+        eps_units = s["eps"] * (F / n_all) / max(u["work"] for u in units)
+        kd = uniform_kd(n_all, eps_units, s["delta"])
+        out.update({"uniform_kd": kd, "uniform_eps_units": eps_units})
+    elif s["law"] == "stratified":
+        strata = sum(1 for u in units if u["per_token"] > 0)
+        out["strata"] = strata
     elif s["law"] != "achievability":
         raise ValueError(f"sampling.law {s['law']!r}")
+    k_pad = round(pv["k_pad"] if pv["k_pad"] is not None else I("k_pad"))
+    universal = pv["stmt"] == "universal"
+    if pv["stmt"] not in ("template", "universal"):
+        raise ValueError(f"prover.stmt {pv['stmt']!r}")
+    W_cred = sum(u["per_token"] * T * S * u.get("credit_work", 0.0) for u in units)
+    out["draws_compute"] = 0.0
+    plan = []
     for u in units:
         n = u["per_token"] * T * S
-        q = kd / n_all if s["law"] == "uniform" else min(1.0, lam * u["work"] / C)
+        if s["law"] == "uniform":
+            q = kd / n_all
+        elif s["law"] == "stratified":
+            q = uniform_kd(n, s["eps"], s["delta"] / out["strata"]) / n if n > 0 else 0.0
+        else:
+            q = min(1.0, lam * u["work"] / C)
+        q = min(1.0, q * u.get("draw_factor", 1.0))
+        if u.get("credit_work") and W_cred > 0:
+            qc = min(1.0, lam * u["credit_work"] / (s["eps"] * W_cred))
+            out["draws_compute"] += n * qc
+            q = max(q, qc)
+        own = u["work"] + u["extra_ands"] + sum(row_ands(r) for r in u["open_rows"])
+        blocks = []
+        whole = {"name": u["name"], "count": 1, "ands": own, **({"k_pad": u["k_pad"]} if "k_pad" in u else {})}
+        for b in u.get("blocks") or [whole]:
+            ands = b["ands"]
+            if universal:
+                ands = 2.0 ** math.ceil(math.log2(max(ands, 2)))
+            k_log = math.ceil(math.log2(max(ands, 2))) + (round(b["k_pad"]) if "k_pad" in b else k_pad)
+            blocks.append({**b, "ands": ands, "k_log": k_log, "cap": 1 << max(0, pv["m_max"] - k_log),
+                           "nb": n * q * b["count"]})
+        plan.append((u, n, q, own, blocks))
+    pooled: dict[int, float] = {}
+    for _, _, _, _, blocks in plan:
+        for b in blocks:
+            pooled[b["k_log"]] = pooled.get(b["k_log"], 0.0) + b["nb"]
+    for u, n, q, own, blocks in plan:
         draws = n * q
-        ands = u["work"] + u["extra_ands"] + sum(row_ands(r) for r in u["open_rows"])
-        k_log = math.ceil(math.log2(max(ands, 2))) + 1
-        cap = 1 << max(0, pv["m_max"] - k_log)
-        if k_log > pv["m_max"]:
-            out["infeasible"].append(f"{u['name']}: {ands:.3g} ANDs needs k_log {k_log} > m_max {pv['m_max']}")
-        stmts = math.ceil(draws / cap) if draws > 0 else 0
-        staged = draws if pv["shared"] else min(n, stmts * cap)
-        gpu = (draws * o * ands + staged * so * ands + stmts * (f0 + f1 * ands)) / speed
-        gates = u.get("gates", ands * gpa)
-        lowerings = (1 if draws > 0 else 0) if lo["per"] == "template" else draws
-        lower = lowerings * gates * spg
-        peak = gates * bpg / 2 ** 30
-        if peak > lo["ram_gib"]:
-            out["infeasible"].append(f"{u['name']}: lowering needs {peak:.3g} GiB > {lo['ram_gib']} GiB")
-        stage = stmts * (I("stage_fixed") + I("stage_per_and") * ands) + staged * I("stage_per_and_staged") * ands
-        verify = stmts * (vf + va * ands)
-        out["classes"].append({"name": u["name"], "units": n, "work": u["work"], "ands_with_openings": ands,
-                               "openings_share": 1 - (u["work"] + u["extra_ands"]) / ands, "q": q, "draws": draws,
-                               "cap": cap, "statements": stmts, "gpu_s": gpu, "lower_cpu_s": lower,
-                               "lower_peak_GiB": peak,
-                               "lower_peak_GiB_today": gates * I("lower_bytes_per_gate_today") / 2 ** 30,
-                               "stage_cpu_s": stage, "verify_cpu_s": verify})
+        cls = {"name": u["name"], "units": n, "work": u["work"], "q": q, "draws": draws, "statements": 0,
+               "gpu_s": 0.0, "lower_cpu_s": 0.0, "lower_peak_GiB": 0.0, "lower_peak_GiB_today": 0.0,
+               "lower_cpu_s_today": 0.0, "stage_cpu_s": 0.0, "verify_cpu_s": 0.0, "blocks": []}
+        for b in blocks:
+            ands, nb, k_log, cap = b["ands"], b["nb"], b["k_log"], b["cap"]
+            where = u["name"] if len(blocks) == 1 else f"{u['name']}, {b['name']}"
+            if k_log > k_cap:
+                out["infeasible"].append(f"{where}: {ands:.3g} ANDs needs k_log {k_log} > {k_cap} (compose "
+                                         f"and the prover refuse it)")
+            mem = 2.0 ** k_log * I("prover_bytes_per_row") / 1e9
+            out["prover_peak_GB"] = max(out["prover_peak_GB"], mem)
+            if mem > I("prover_mem_GB"):
+                out["infeasible"].append(f"{where}: prover memory {mem:.3g} GB at 2^{k_log} rows > "
+                                         f"{I('prover_mem_GB')} GB")
+            grow = 1 + I("cap_cost_per_bit") * max(0, k_log - I("k_max"))
+            per = o * ands * grow * rep
+            if universal:
+                ns, padded = sessions(pooled[k_log], cap, f0 + f1 * ands, per)
+                share = nb / pooled[k_log] if nb > 0 else 0.0
+                stmts, padded = ns * share, padded * share
+            else:
+                stmts, padded = sessions(nb, cap, f0 + f1 * ands, per)
+            staged = nb if pv["shared"] else min(n * b["count"], stmts * cap)
+            gpu = (padded * per + staged * so * ands + stmts * (f0 + f1 * ands)) * price / speed
+            gates = b.get("gates", u.get("gates") if len(blocks) == 1 else None) or ands * gpa
+            lowerings = (1 if nb > 0 else 0) if lo["per"] == "template" else nb
+            peak = gates * bpg / 2 ** 30
+            if peak > lo["ram_gib"]:
+                out["infeasible"].append(f"{where}: lowering needs {peak:.3g} GiB > {lo['ram_gib']} GiB")
+            part = {"statements": stmts, "gpu_s": gpu, "lower_cpu_s": lowerings * gates * spg,
+                    "lower_cpu_s_today": lowerings * ands * I("lower_s_per_and_today"),
+                    "stage_cpu_s": stmts * (I("stage_fixed") + I("stage_per_and") * ands)
+                    + staged * I("stage_per_and_staged") * ands,
+                    "verify_cpu_s": stmts * (vf + va * ands) * grow}
+            for k, v in part.items():
+                cls[k] += v
+            cls["lower_peak_GiB"] = max(cls["lower_peak_GiB"], peak)
+            cls["lower_peak_GiB_today"] = max(cls["lower_peak_GiB_today"],
+                                              ands * I("lower_bytes_per_and_today") / 2 ** 30)
+            cls["blocks"].append({"name": b["name"], "count": b["count"], "ands": ands, "k_log": k_log, "cap": cap,
+                                  "padded_draws": padded, **part})
+        group = sum(b["count"] * b["ands"] for b in blocks)
+        cls.update({"ands_with_openings": group, "openings_share": 1 - (u["work"] + u["extra_ands"]) / group,
+                    "k_log": max(b["k_log"] for b in cls["blocks"]), "cap": min(b["cap"] for b in cls["blocks"])})
+        out["classes"].append(cls)
         out["draws"] += draws
-        out["gpu_s"] += gpu
-        out["statements"] += stmts
-        out["lower_cpu_s"] += lower
-        out["stage_cpu_s"] += stage
-        out["verify_cpu_s"] += verify
-        out["lower_peak_GiB"] = max(out["lower_peak_GiB"], peak)
+        for k in ("gpu_s", "statements", "lower_cpu_s", "stage_cpu_s", "verify_cpu_s"):
+            out[k] += cls[k]
+        out["lower_peak_GiB"] = max(out["lower_peak_GiB"], cls["lower_peak_GiB"])
     out["lower_peak_GiB_today"] = max((c["lower_peak_GiB_today"] for c in out["classes"]), default=0.0)
     out["draws_bound"] = lam / s["eps"]
+    per_window = ("units", "draws", "statements", "gpu_s", "lower_cpu_s", "lower_cpu_s_today", "stage_cpu_s",
+                  "verify_cpu_s", "padded_draws")
+    for c in out["classes"]:
+        for b in c["blocks"]:
+            for k in per_window:
+                if k in b:
+                    b[k] /= P
+        for k in per_window:
+            if k in c:
+                c[k] /= P
+    for k in ("F_ands", "C_ands", "draws", "gpu_s", "statements", "lower_cpu_s", "stage_cpu_s", "verify_cpu_s",
+              "draws_compute", "draws_bound"):
+        out[k] /= P
     return out
+
+
+def sessions(k: float, cap: int, fixed: float, per: float) -> tuple[float, float]:
+    """C-Flock's sessions for k draws of one block class (GD-PROVER, note:compute-research/20261028T1955Z-report-gd-
+    prover): a session pads its draws to P = max(8, 2^ceil(log2 draws)), at most cap, paying `fixed` a session and
+    `per` a padded draw. The cheapest split into such sessions: (sessions, padded draws)."""
+    k = math.ceil(k - 1e-9)
+    if k <= 0:
+        return 0.0, 0.0
+    full, r = divmod(k, cap)
+
+    def best(r: int) -> tuple[int, int]:
+        if r <= 0:
+            return 0, 0
+        one = (1, min(cap, max(8, 1 << (r - 1).bit_length())))
+        lo = 1 << (r.bit_length() - 1)
+        if lo < 8 or lo == r:
+            return one
+        s2, p2 = best(r - lo)
+        return min(one, (1 + s2, lo + p2), key=lambda x: x[0] * fixed + x[1] * per)
+
+    s_, p_ = best(r)
+    return float(full + s_), float(full * cap + p_)
 
 
 # ---------------------------------------------------------------------------------------------------------------------
@@ -830,9 +1223,12 @@ def J(dsg: dict | None = None) -> dict:
     serve_term = win_remote_ms / win_stock_ms - 1
     prove_term = proving_gpu_s / stock_gpu_s
     infeasible = values["infeasible"] + pouw["infeasible"]
-    if retained > d["sampling"]["retain_GB"]:
-        infeasible.append(f"a window retains {retained:,.1f} GB for its draw > sampling.retain_GB "
-                          f"{d['sampling']['retain_GB']}")
+    retain_GB = _get(d, "sampling", "retain_GB", "retain_GB")
+    if retained > retain_GB:
+        infeasible.append(f"a window retains {retained:,.1f} GB for its draw > retain_GB {retain_GB}")
+    if d["pouw"]["scheme"] == "dither" and 1 < d["pouw"]["agg"] < 8:
+        infeasible.append(f"pouw.agg {d['pouw']['agg']}: an aggregate word under 8 cells loses the floor to the "
+                          f"attacks GD-AGG measured (safe from 8 with mix4)")
     return {
         "J": serve_term + prove_term,
         "serve_term": serve_term,
@@ -855,6 +1251,9 @@ def J(dsg: dict | None = None) -> dict:
                          "per_stock_gpu_s": verify_cpu_s * price / stock_gpu_s,
                          "statements": values["statements"] + pouw["statements"]},
         "draws": {"values": values["draws"], "pouw": pouw["draws"], "bound_each": values.get("draws_bound")},
+        "period": d["sampling"]["period"],
+        "eps_of_a_window": min(1.0, d["sampling"]["eps"] * d["sampling"]["period"]),
+        "soundness_bits": values["soundness_bits"],
         "retained_GB_per_window": retained,
         "infeasible": infeasible,
         "u_1830": ideal_ms_1830(d) / t_remote,
