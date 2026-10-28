@@ -341,7 +341,7 @@ None of these is assumed silently; each would restate the conclusion:
 | Step | Lean | Status |
 |---|---|---|
 | The actual circuit | `Accounting.Placed`, `Accounting.Placed.region` | Defined |
-| Declared objects | `Verity.Circuit`, `Verity.Partition`, `Verity.Partition.IsCK`, `Verity.Registered` (the registered compiler `Verity.Compiler` B and the advice a_j), `Verity.Registration`; the site and loc_j not yet in Lean | Partly defined |
+| Declared objects | `Verity.Circuit`, `Verity.Partition`, `Verity.Partition.IsCK`, `Verity.Registered` (the registered compiler `Verity.Compiler` B with its advice cap ℓa, and the advice a_j; its inference blocks 𝓘 and proof blocks P), `Verity.Committed.Explains`, `Verity.Registration`; the site and loc_j not yet in Lean | Partly defined |
 | Coverage | `Nci.Assumptions.CoversEfficientMethods` | A named assumption in the lock; Core not yet read off a run's circuit; untested |
 | Lemma 1 | `Verity.Guarantees.BlockDescription` | Proved |
 | Information premises | `Nci.Assumptions.DescriptionHard`, `Nci.Assumptions.MinEntropyHard`, `Nci.Assumptions.SourceHard`, `Nci.Assumptions.Recovers`, `Nci.Capability.Items` | Named assumptions in the lock, taken by the repertoire's proofs; no price measured at a decoder budget; several uniform activation rates refuted by exact decoders |

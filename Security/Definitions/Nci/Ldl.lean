@@ -12,9 +12,9 @@ partition. The registered inputs `θ` are a declaration's baseline (`Verity.Regi
 each inherits the circuit's topological order.
 
 * `Decoder`, `LDL`: a fixed decoder and `LDL_{t,R}(y) = K^t(y | R)`, the least program length producing `y` within `t`.
-* The committed registered circuit `R = (θ, C, 𝓘)` is core's `Verity.Committed`: the registered circuit, its registered
-  values and the compiler's partition `R.d.𝓘` into `R.d.n` blocks, fixed once; a run that takes the registered values
-  is `Verity.Committed.Honest`.
+* The committed registered circuit `R = (θ, C, 𝓘)` is core's `Verity.Committed`: the committed trace, the registered
+  circuit and its registered values, with the compiler's partition `R.d.𝓘` into `R.d.n` inference blocks; a run that
+  takes the registered values is `Verity.Committed.Honest`.
 * `Exact`, `ReadCap`, `CKPartition`: exactly `c` operation gates per block, at most `k` unregistered input bits per
   block, and both.
 * `Products`, `Products.inBlock`, `Products.acts`, `Products.FanOut`: counted product occurrences, `𝓙_I`, `V_I`, and
