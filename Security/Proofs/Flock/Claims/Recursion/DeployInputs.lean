@@ -16,7 +16,8 @@ registration (`--rec-inner-registration`) and how the inner statement is set up 
 (`decodeRec_injective`), and refuses every other format, `flock-verify-rec-statement/v1` (no link table) among them.
 
 `RecRaw.ins` runs the verifier's readers on those bytes as `Main.verifyCmd` runs them: Flock's (`Raw.ins`), then
-`RecLinks.refuseLinks` (`linksOf`: a statement carrying a link table is refused), `RecVStar.Inner.ofJson`, `RecVStar.ownBindingsOfJson`, `RecCoins.filesInput`'s source, the inner circuit's META binding
+`RecLinks.refuseLinks` (`linksOf`: a statement carrying a link table is refused), `RecVStar.Inner.ofJson`,
+`RecVStar.ownBindingsOfJson`, `RecCoins.filesInput`'s source, the inner circuit's META binding
 (`innerMetaRegistration`, from the header's first nine lines, `metaOf`), `recTranscriptInput`'s commits
 (`RecSetup.commits`), `recLinkInput`'s tops and link points (`RecVStar.innerLink`, `linkInputOf`) and `Registered.ofJson`
 on `--rec-rows`. `RecIns.setup` is `verifyCmd`'s `setupOf` at the statement's draw with those inputs and no
