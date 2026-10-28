@@ -240,7 +240,6 @@ serve() {  # under the lease: the endpoint, the requests, every closed window se
   [ -n "$H1_GATE" ] && h1=(--protocols pouw:eps1-sm120-h1fx1 --challenger-gate "$H1_GATE"
                            --challenger-peer "$H1_PEER" "${pc[@]}")
   [ -n "$H1_GATE" ] && [ -n "${H1_CIRCUITS:-}" ] && h1+=(--h1-prover "$D/private/h1")
-  [ -n "$H1_GATE" ] && [ -n "${H1_MODEL:-}" ] && h1+=(--h1-model "$H1_MODEL")
   if [ -n "${WIPE_CMD:-}" ]; then  # the wipe of this card, before its engine loads
     mkdir -p "$OUT/pieces/wipe"
     (cd "$TREE" && timeout -k 1m "${WIPE_TIMEOUT:-20m}" bash -c "$WIPE_CMD" _ "$D" all "$OUT/pieces/wipe") \

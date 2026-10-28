@@ -10,10 +10,8 @@ own Commit.
   (``--window-steps``); a window that closes early (idle, ``--window-gb``, ``--window-requests``) closes H1's with its
   remaining steps empty (`pouw_h1.H1Run.close`).
 * **Once a server.** The period's declared Program over the served linears at (T, S) and its digest
-  (`pouw_h1_served.declared`), and the weights' ``b/<K>`` registered under it (`pouw_h1_served.register_weights`), with
-  the salt key of the auditor's registration of model ``--h1-model`` under that digest (the gate's ``model-key``,
-  `model_key_of`), so they fold to the weights' root the period-open signs; without it, or when the gate refuses, with a
-  key of this process's, which no period credits. The Program holds one batch of K's tile
+  (`pouw_h1_served.declared`), and the weights' ``b/<K>`` registered under it (`pouw_h1_served.register_weights`), with a
+  key of this process's: no auditor's registration (``model-key``) is read yet. The Program holds one batch of K's tile
   template a call (S × the linears), its tile units (`units`, S × slot(T)/32 × Σn/32) the batch's members, so its
   descriptor, declaring it and its digest grow with the calls, not the units. The server logs both counts and both
   times. The digest is hashed as the descriptor is written, ``h1/`` `PROGRAM` beside `PROGRAM_META` (`served.write_program`),
@@ -145,10 +143,6 @@ class GateOptions:
                                         "rows, pouw_h1_prover) and its live@<s> rows (pouw_h1_live.dump) in DIR/w<k>/, "
                                         "owner-only, for proving its drawn units and rounds after the close; never a "
                                         "published path")
-    h1_model: str | None = option("--h1-model", default=None, metavar="M",
-                                  help="with --challenger-gate: the auditor's registration of the served model (e.g. "
-                                       "LLAMA32_1B_INT8_K2048), whose salt key the gate's model-key gives for the declared "
-                                       "Program; the weights' b/<K> are registered under it (model_key_of)")
 
 
 def config_of(value: str | None) -> dict[str, Any]:
@@ -423,31 +417,11 @@ def sessions_of(opts: Any) -> GateSessions | None:
                         ahead=worker("h1-reserve"))
 
 
-def model_key_of(opts: Any, run: Any = None) -> Callable[[str], Any] | None:
-    """The gate's ``model-key --model M --circuit C`` for ``--h1-model`` M through ``--challenger-gate`` (`run` replaces
-    its subprocess, tests), as a function of the circuit C giving `served.model_key`'s `ModelKey`, ValueError on a
-    refusal; None without both."""
-    if not (opts.gate.challenger_gate and opts.gate.h1_model):
-        return None
-    from verity_vllm.pipeline import commit_coins as CC
-    from verity_vllm.protocols.pouw.h1 import served as SV
-
-    gate = CC.ChallengerGate(opts.gate.challenger_gate, run)
-
-    def read(circuit: str) -> Any:
-        try:
-            return SV.model_key(gate.call("model-key", "--model", opts.gate.h1_model, "--circuit", circuit))
-        except CC.CoinError as e:
-            raise ValueError(str(e)) from None
-    return read
-
-
 class H1Windows:
     """The arm over ``model`` (the served `verity_vllm.LLM`'s) and the server's committer ``com``: T ``rows`` and S
     ``steps`` a window, ``config`` the pouw settings of ``--protocols-config``, ``engine`` the built ``vllm.LLM`` the
     runner and each window's coins come from, ``out`` where each window's transcript goes (``h1/w<k>/``). ``key`` is the
-    weights' registration key (when None, ``model_key``'s for the declared Program's digest, `model_key_of`, and a fresh
-    one when that is None or refuses); ``unit`` the Program's tile unit at each K (`h1window.tile_unit`
+    weights' registration key (a fresh one when None); ``unit`` the Program's tile unit at each K (`h1window.tile_unit`
     when None); ``sessions`` each window's session on the auditor host's challenger (`GateSessions`; None: in-process
     coins); ``prover`` the directory each window's prover state and live rows go in (``--h1-prover``, `prover_of`;
     None: kept nowhere, so no drawn unit or round of it can be proved). ``closer`` (a `worker`) runs each window's
@@ -458,7 +432,7 @@ class H1Windows:
     def __init__(self, model: Any, com: Any, rows: int, steps: int, *, engine: Any, out: Path,
                  config: Mapping[str, Any] | None = None, key: bytes | None = None, unit: Any = None,
                  sessions: GateSessions | None = None, prover: str | Path | None = None, closer: Any = None,
-                 draws: Any = None, model_key: Callable[[str], Any] | None = None,
+                 draws: Any = None,
                  clock: Callable[[], float] = time.perf_counter) -> None:
         from verity_vllm.protocols import pouw
         from verity_vllm.protocols.pouw.h1 import hooks as PHK
@@ -488,17 +462,6 @@ class H1Windows:
                                     self.out / "h1", rows=self.rows, steps=self.steps)
         print(f"[serve-h1] declared in {t1 - t0:.1f} s, its digest {self.digest[:16]} and {PROGRAM} in "
               f"{time.perf_counter() - t1:.1f} s", flush=True)
-        if key is None and model_key is not None:
-            try:
-                mk = model_key(self.digest)
-                if mk.circuit != self.digest:
-                    raise ValueError(f"model-key answered circuit {mk.circuit[:16]}..., not {self.digest[:16]}...")
-                key = mk.key
-                print(f"[serve-h1] the weights' b/<K> under {mk.model}'s registration (weights root "
-                      f"{mk.weights_root[:16]}...)", flush=True)
-            except ValueError as e:
-                print(f"[serve-h1] no auditor's registration ({e}): the weights' b/<K> under a key of this process's, "
-                      "which no period credits", flush=True)
         self.weights = SV.register_weights(self.digest, shapes, SV.weights_of(self.layers), key or os.urandom(32))
         self.tap: Any = None
         self.comp: Any = None
@@ -783,11 +746,11 @@ def arm_of(opts: Any, llm: Any, com: Any, out: Path) -> H1Windows | None:
         sessions.ahead_of(0)
     arm = H1Windows(llm.model, com, opts.max_num_batched_tokens, opts.window_steps, engine=llm.vllm, out=out,
                     config=config_of(opts.protocols_config), sessions=sessions, prover=opts.gate.h1_prover,
-                    closer=worker("h1-release"), model_key=model_key_of(opts))
+                    closer=worker("h1-release"))
     arm.ready()
     return arm
 
 
 __all__ = ["AT", "ENTRY", "GateOptions", "GateSessions", "H1Windows", "LISTEN_S", "MARGIN", "OWN", "POLLS", "PROGRAM",
-           "PROGRAM_META", "SCHEME", "SESSIONED", "arm_of", "config_of", "listening", "model_key_of", "refusal",
-           "sessions_of", "units", "worker"]
+           "PROGRAM_META", "SCHEME", "SESSIONED", "arm_of", "config_of", "listening", "refusal", "sessions_of", "units",
+           "worker"]
