@@ -362,31 +362,31 @@ class RegisteredInputs:
 
     def theta(self) -> dict[str, Any]:
         """The θ item the registration log registers for these values (`registration.item_of`): the root, a row per
-        element of one or more words of 16 or 32 bits, and the domain its leaves are hashed under, named by the
-        registered parameters."""
-        bits = 16 if self.rows.n_bits == 16 else 32
+        element, and the domain its leaves are hashed under, named by the registered parameters. θ's words are 16 or 32
+        bits, so the rows are its rows only when they are 16 bits or a multiple of 32; others are refused."""
+        n = self.rows.n_bits
+        if n != 16 and n % 32:
+            raise ValueError(f"{n}-bit rows are not θ's: its words are 16 or 32 bits")
         item = {"domain": advice.domain(self.rows.binding, len(self.rows.rows)).domain_id.hex(), "kind": "theta",
                 "leaves": len(self.rows.rows), "root": self.root.hex(), "value": ",".join(self.values),
-                "words": self.rows.n_bits // bits}
-        return registration.item_of(item | ({"word_bits": 32} if bits == 32 else {}))
+                "words": 1 if n == 16 else n // 32}
+        return registration.item_of(item | ({} if n == 16 else {"word_bits": 32}))
 
 
 def register(program: Program, inputs: dict[str, int | Sequence[int]], salts: Sequence[bytes] | None = None,
              profiles: Sequence[Mapping[Any, Mapping[int, int]] | bytes] = ()) -> RegisteredInputs:
     """Commit the values of `program`'s registered parameters, a row per element, under a binding to the Program's
     digest and to the occupancy `profiles` the developer may choose from (each with its buckets counted from its
-    epoch's first, or its `profile_digest`). A row is the element in θ's words (`RegisteredInputs.theta`): one 16-bit
-    word for an element of at most 16 bits, else as many 32-bit words as it needs."""
+    epoch's first, or its `profile_digest`)."""
     params = [(n, t) for (n, b), (_, t) in zip(parameters(program), program.fn.signature()[0]) if b == REGISTRATION]
     if not params:
         raise ValueError("the Program registers no parameter")
     regd = {n: inputs[n] if isinstance(inputs[n], int) else tuple(inputs[n]) for n, _ in params}
     words = [w for n in regd for w in ([regd[n]] if isinstance(regd[n], int) else regd[n])]
     width = max(sum(e) for _, t in params for e in layout(t))
-    width = 16 if width <= 16 else -(-width // 32) * 32
     digests = tuple(o if isinstance(o, bytes) else profile_digest(o) for o in profiles)
     return RegisteredInputs(regd, advice.commit(_rows(words, width), width,
-                                                _binding(b"datacenter/registration/v2", program, digests), salts),
+                                                _binding(b"datacenter/registration/v1", program, digests), salts),
                             digests)
 
 
