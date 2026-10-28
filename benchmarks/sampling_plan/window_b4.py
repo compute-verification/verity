@@ -28,7 +28,7 @@ from __future__ import annotations
 import argparse
 import json
 import sys
-from dataclasses import asdict
+from dataclasses import asdict, replace
 from math import ceil, fsum, log, log2
 from pathlib import Path
 
@@ -51,6 +51,11 @@ SHA512_BPS = {"card 4 KiB": 398e9, "card 16 KiB": 521e9, "beside GEMM": 66.5e9}
 COMPRESSION = 128
 #: C-Flock's compose refuses a proof block of more ANDs, its rows' openings included (TOP-138, 19:14Z)
 MAX_PROVED_ANDS = 1 << 27
+#: the joint plans' leak targets, shares of the window's output bits
+JOINT_LEAK = (0.01, 0.001)
+ATTN = "AttnBlockFirst_v2"
+#: the attention buckets' widths, in key counts (35 is one template for the window's 35 positions)
+BUCKETS = (2, 3, 5, 7, 12, 18, 35)
 
 
 def proved_ands(e: dict) -> int:
@@ -137,9 +142,16 @@ def report(p: Plan, cands: list[Candidate], cm: CostModel, F: float, split: dict
     proving = fsum(template_cost(c, cm, p.sizes[c.template])[0] for c in chosen)
     draws = sum(p.sizes.values())
     ands = sum(p.sizes[c.template] * cm.ands(c) for c in chosen)
-    grains = {c.op: {"N": int(c.cut[2:]), "units": c.units, "unit_ands": c.ands, "proved_ands": cm.ands(c),
-                     "commit_compressions": c.commit_rows, "drawn": p.sizes[c.template], "cap": c.cap}
-              for c in chosen if c.cut}
+    grains: dict[str, dict] = {}
+    for c in chosen:
+        if c.cut:
+            g = grains.setdefault(c.op, {"cut": c.cut, "templates": 0, "units": 0, "drawn": 0})
+            g["templates"] += 1
+            g["units"] += c.units
+            g["drawn"] += p.sizes[c.template]
+            if c.cut.startswith("N="):
+                g.update(N=int(c.cut[2:]), unit_ands=c.ands, proved_ands=cm.ands(c), cap=c.cap,
+                         commit_compressions=c.commit_rows)
     return {"grains": grains, "draws": draws, "proving_ands": ands, "proving_gpu_s": proving,
             "statements_gpu_s": p.cost["statements"], "units_gpu_s": p.cost["units"],
             "commit_gpu_s": p.cost["commit"], "total_gpu_s": p.cost["total"],
@@ -163,7 +175,60 @@ def run(cands: list[Candidate], cm: CostModel, split: dict[str, CostModel], *, g
     out["leak_frontier"] = [{"total_gpu_s": p.cost["total"], "harm_bits": p.certificate.harm, "draws": sum(p.sizes.values()),
                              "grains": {c.op: c.cut for c in cands if c.template in p.sizes and c.cut}}
                             for p in front[:: max(1, len(front) // 12)]]
+    B = out["work"]["window_out_bits"]
+    for share in JOINT_LEAK:
+        out[f"joint ℓ≤{share:g}"] = joint(work, cands, cm, split, F, share * B, grid=grid)
     return out
+
+
+def joint(work: Plan, cands: list[Candidate], cm: CostModel, split: dict[str, CostModel], F: float, leak: float, *,
+          grid: int) -> dict | None:
+    """Both targets at once: on the work plan's cuts, a bits plan, then each subcircuit drawn the larger of the two plans'
+    sizes, which certifies both (more draws never loosen a stratum's bound), certified again exactly. The bits plan's
+    target is its output bits' density bound, lowered by each round's overshoot of the exact leak (its location bits
+    beside), until the exact leak is at most `leak`."""
+    chosen = [c for c in cands if c.template in work.sizes]
+    target = leak
+    for _ in range(8):
+        bits = for_target(chosen, cm, Objective(DELTA, work=0.0, bits=1.0), target, by="harm", exact=False, grid=grid)
+        if bits is None:
+            return None
+        sizes = {t: max(work.sizes[t], bits.sizes[t]) for t in work.sizes}
+        cost = {"statements": 0.0, "units": 0.0, "commit": fsum(cm.commit(c) for c in chosen), "replay": 0.0,
+                "serve": 0.0}
+        for c in chosen:
+            p = template_cost(c, cm, sizes[c.template])[2]
+            cost["statements"] += p["statements"]
+            cost["units"] += p["units"]
+        cost["total"] = cost["statements"] + cost["units"] + cost["commit"]
+        out = report(Plan(0.0, dict(work.choice), {}, sizes, frozenset(), frozenset(), cost), chosen, cm, F, split)
+        if out["leak_bits"] <= leak or target <= out["leak_bits"] - leak:
+            break
+        target -= out["leak_bits"] - leak
+    return {**out, "leak_target_bits": leak, "bits_target": target}
+
+
+def bucketed(cands: list[Candidate], widths: tuple[int, ...] = BUCKETS) -> list[Candidate]:
+    """The attention blocks (`AttnBlockFirst_v2`, one template a key count NVIS) as one op whose alternatives pad each
+    bucket of `w` consecutive key counts to its widest, one template a bucket: an estimate, a masked block priced as
+    its bucket's widest (its ANDs, rows and output bits), each unit credited the widest's work."""
+    attn = sorted((c for c in cands if c.template.startswith(ATTN)), key=lambda c: _nvis(c.template))
+    if not attn:
+        return cands
+    op = f"{ATTN}{{pad}}"
+    out = [c for c in cands if not c.template.startswith(ATTN)]
+    out += [replace(c, op=op, cut="pad:1") for c in attn]
+    for w in widths:
+        for i in range(0, len(attn), w):
+            members = attn[i:i + w]
+            top = members[-1]
+            out.append(replace(top, op=op, template=f"{top.template}@pad:{w}", cut=f"pad:{w}",
+                               units=sum(c.units for c in members)))
+    return out
+
+
+def _nvis(template: str) -> int:
+    return int(template.split("NVIS=")[1].split(",")[0])
 
 
 def main() -> None:
@@ -190,17 +255,19 @@ def main() -> None:
             runs[f"mode2 h@{name}"] = run(cands, costs(h=1 / bps, w=1.0), split, grid=args.grid)
     for w in (float(x) for x in args.weights.split(",") if float(x) != 1.0):
         runs[f"mode2 w={w:g}"] = {"work": run(cands, costs(h=h, w=w), split, grid=args.grid)["work"]}
+    runs["mode1 attention buckets"] = run(bucketed(cands), costs(), split, grid=args.grid)
+    runs["mode2 attention buckets"] = run(bucketed(cands), costs(h=h, w=1.0), split, grid=args.grid)
     doc = {"delta": DELTA, "eps": EPS, "lambda": log(1 / DELTA), "census": args.census,
            "rates": asdict(H.Rates.fitted()), "fits": {t: dict(getattr(f, t).coef) for t in ("prove", "verify", "stage")},
            "cpu": f.cpu, "fit_key": dict(f.key), "sha512_bps": SHA512_BPS,
            "grain_table": grain_table(cands, costs(), h), "runs": runs}
     (out / "window_b4.json").write_text(json.dumps(doc, indent=1, default=str))
     for name, r in runs.items():
-        for tgt in ("work", "exfiltration"):
+        for tgt in ("work", "exfiltration", *(f"joint ℓ≤{s:g}" for s in JOINT_LEAK)):
             x = r.get(tgt)
             if not x:
                 continue
-            g = ", ".join(f"{op.split(',DOT')[0]} N={v['N']}" for op, v in x["grains"].items())
+            g = ", ".join(f"{op.split(',DOT')[0]} {v['cut']}" for op, v in x["grains"].items())
             print(f"{name:22s} {tgt:12s} s*: {g} | draws {x['draws']} | proving ANDs {x['proving_ands']:.4g} | "
                   f"{x['total_gpu_s']:.1f} GPU-s (prove {x['prove_gpu_s']:.1f}, verify {x['verify_cpu_s']:.0f} CPU-s), "
                   f"commit {x['commit_gpu_s']:.4g} | eps {x['eps']:.4g} | leak {x['leak_bits']:.4g} bits "
