@@ -7,12 +7,13 @@ input is certain; an estimate carries the range its source allows. `evaluate(kno
 knobs (benchmarks/golden_search/space.py) onto a `golden.model` design at the point (t8192: the throughput preset;
 t512: the demo's window, a prefill of 64 real tokens in T 512 and 3 decode steps), evaluates J under those input
 values, and returns GD-SEARCH's result keys. A knob GD-SEARCH leaves out keeps the model's default; the extra knobs
-`scheme`, `form`, `open` and `steps` reach pouw.scheme, pouw.form, commit.open and point.steps_per_window.
+`scheme`, `form`, `open`, `steps`, `ptile` (PoUW's tile, (R, C)) and `kmax` (the block cap's k_log, 27 to 30) reach
+pouw.scheme, pouw.form, commit.open, point.steps_per_window, pouw.tile and prover.k_max.
 
 A design is feasible when every credited linear's floor (Dither's forced work as a share of its G, at the best attack
-found) is at least 1 - eps ("floor"), every proof block is within compose's 2^27 ("k_log"), its largest block lowers
-within lowering.ram_gib and 15 minutes ("lowering"), and the window's retained bytes fit the retain_GB input
-("retain").
+found) is at least 1 - eps ("floor"), every proof block is within the block cap, 2^27 unless kmax raises it
+("k_log"), its prover memory fits the H200 ("prover_mem"), its largest block lowers within lowering.ram_gib and 15
+minutes ("lowering"), and the window's retained bytes fit the retain_GB input ("retain").
 """
 from __future__ import annotations
 
@@ -59,8 +60,10 @@ RANGES = {
     "lower_s_per_gate": (M.I("lower_s_per_gate"), M.I("lower_s_per_and_today") / M.I("gates_per_and")),
     "gates_per_and": (1.0, 2.1),
     "k_pad": (0, 3),                                     # 0: the inbox's 2^27 ANDs; class_size's units 1 to 3
-    "h1_ands_per_mac": (250.0, 500.0),
+    "h1_ands_per_mac": (250.0, 400.0),
     "retain_GB": (50.0, 1000.0),                         # device retention's margin to a host cgroup's pinned memory
+    "prover_bytes_per_row": (237.0, 948.0),              # the circuit alone to twice the estimate
+    "cap_cost_per_bit": (0.0, 0.2),
 }
 
 INPUTS: dict[str, Input] = {
@@ -107,6 +110,10 @@ def to_design(k: dict, point: str = "t8192") -> dict:
             s["pouw"][key] = k[knob]
     if "joint" in k:
         s["pouw"]["joint"] = k["joint"] == "joint"
+    if "ptile" in k:
+        s["pouw"]["tile"] = tuple(k["ptile"])
+    if "kmax" in k:
+        s["prover"]["k_max"] = k["kmax"]
     if "sampling" in k:
         s["sampling"]["law"] = _LAW[k["sampling"]]
     if "stmt" in k:
@@ -149,6 +156,8 @@ def evaluate(knobs: dict, v: dict | None = None, point: str = "t8192") -> dict:
         reasons.append("floor")
     if any("k_log" in m for m in r["infeasible"]):
         reasons.append("k_log")
+    if any("prover memory" in m for m in r["infeasible"]):
+        reasons.append("prover_mem")
     if lower_gib > d["lowering"]["ram_gib"] or lower_min > LOWER_MIN:
         reasons.append("lowering")
     if any(m.startswith("a window retains") for m in r["infeasible"]):

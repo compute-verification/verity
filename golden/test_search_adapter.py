@@ -21,6 +21,15 @@ def test_knobs_reach_the_design():
     assert d["point"]["T"] == 512 and d["partition"]["kchunk"] == 2 and d["commit"]["values"] == "dedup"
     assert d["pouw"]["L"] == 128 and d["pouw"]["L_prime"] == 64 and d["pouw"]["noise"] == "permuted"
     assert d["commit"]["hash_eff"] == 1.0 and d["commit"]["gather"] is False
+    d = A.to_design({**GOOD, "ptile": (2, 4), "kmax": 28})
+    assert d["pouw"]["tile"] == (2, 4) and d["prover"]["k_max"] == 28
+
+
+def test_a_block_past_the_cap_or_the_prover_memory_is_infeasible():
+    j10r = {**GOOD, "scheme": "j10r", "ptile": (16, 16)}
+    assert "k_log" in A.evaluate(j10r)["reasons"]
+    r = A.evaluate({**j10r, "kmax": 29})
+    assert "k_log" not in r["reasons"] and "prover_mem" in r["reasons"]
 
 
 def test_a_floor_under_one_minus_eps_is_infeasible():
