@@ -48,7 +48,8 @@ theorem toy_rootsColl (h : (root 0).data ≠ (root 1).data) : PortRoots.rootsCol
   have hpairs : PortRoots.pairs circuit.ports.size = [(0, 1)] := by rw [hp]; rfl
   unfold PortRoots.rootsColl PortRoots.collPair
   rw [hpairs]
-  simp [hne]
+  simp
+  exact fun he => absurd he (by simpa using hne)
 
 /-- **Probability 1 at every outcome**: an event whose condition fails at every outcome of `liveOfZJ`'s live audit
 holds with probability 1, so it exceeds any `x < 1`. -/

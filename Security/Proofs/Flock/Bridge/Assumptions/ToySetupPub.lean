@@ -1,5 +1,6 @@
 import Proofs.Flock.Bridge.ToyPubReads
 import Proofs.Flock.Bridge.PublicWitnesses
+import Proofs.Flock.Bridge.PubFinderRows
 import Proofs.Flock.Bridge.Honest
 import Flock.Test.ToyPubFiles
 
@@ -79,7 +80,7 @@ def ToySetupPub : Prop :=
             (Discharge.Layout.scopeOkH_spec hU hscope).2.1 dj y₀ wr _ toyPubI_tags hCust.1
             fun _ => drawOkZKHJ_of_file toyPubI toyPubI_typed (Flock.Desc.parse_flat hD) 1 1 toyPubI_div dj hCust.2 _))
         τ
-      (nTab toyPubI : ℝ) ^ 2 * Fintype.card (Bridge.PubIxR dj y₀ P vb L) *
+      (nTab toyPubI : ℝ) ^ 2 * @Fintype.card (Bridge.PubIxR dj y₀ P vb L) (Bridge.instFintypePubIxR dj y₀ P vb L) *
           (Bridge.pubFinderR dj y₀ P vb wo Bridge.kDep (2 ^ 192) (2 ^ 192) (2 * (t' + v)) (t' + v) t' (reg σ) (cont σ)
             (Bridge.strictComp (FlockSoundness.StrictCR.oneRun G τ fun o =>
               rd.pick o.1 (Discharge.ZkReg.regPathsHJ toyPubI circuit pub o.2.2 rd.port)) qR)).Pr
