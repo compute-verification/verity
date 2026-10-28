@@ -1,7 +1,7 @@
 """Sampled proofs' v2 case and onsite's registration case for a served window, from its records audit, each beside its
 own Lean answer, for `composite.py` (`served_composite.sh` runs this after the record):
 
-    served_cases.py (--audit DIR | --serve-dir D) --private DIR [--alpha N/D --gamma G] [--log FILE] [--blocks FILE]
+    served_cases.py (--audit DIR | --serve-dir D) --private DIR [--alpha N/D --gamma G] [--log FILE]
                     [--v2-exe PATH] [--registration-exe PATH]
 
 ``--audit`` is the window's `records_audit.py audit --circuit --registered` out directory (`served_verdicts.sh`'s
@@ -14,9 +14,9 @@ is written: that digest is what remote's and onsite's record tie compare.
   verdicts replaced by the drawn member's proofs' files, and ``blobs``), refused when it commits to another record than
   v1's case or names a blob that isn't there, and when a5 wrote none (its ``case-v2-error.txt`` says why: v2 verifies
   one member's `--zk` sessions). Its answer is `sampled-proofs-one-stage-zk check` on the case and its blobs.
-* **The registration case** (`registration_case`, `REGISTRATION`: `verity/inference-only/v0`, which #5603's
-  `verity/nci/v1` reads in the same form, so a rename is `REGISTRATION` and `REGISTRATION_LEAN`):
-  - params: ``alpha`` and ``gamma`` (training's α and Γ, ``--alpha`` and ``--gamma``; without both no case is
+* **The registration case** (`registration_case`, `REGISTRATION`: `verity/inference-only/v0`; `verity/nci/v1` reads
+  the same form, so a rename is `REGISTRATION` and `REGISTRATION_LEAN`):
+  - params: ``alpha`` and ``gamma`` (the policy's α and Γ, ``--alpha`` and ``--gamma``; without both no case is
     written), ``log`` (the deployment's records before this one, ``--log``; empty when the record's ``previous`` is
     null), ``program`` (v1's params' Program as canonical text, the one the record's ``program`` names) and
     ``parameters`` (its program function's, which the descriptor doesn't carry: the population program rebuilt over
@@ -25,10 +25,9 @@ is written: that digest is what remote's and onsite's record tie compare.
   - evidence: ``owner`` per root node of the Program, ``theta`` and ``provenance``. The window's Program is its
     population program (`interface.Circuit.program`), one batch node per template holding that template's units for
     every slot, so no division into one block a slot is a division of its root nodes: every non-input node is block 0,
-    which is B's table (``--blocks``, `predict.inference_blocks`'s rows) coarsened to root nodes, since each of its
-    entries spans every slot. With ``--blocks`` the table's header must name the record's Program and each entry's slot
-    digit be of the table's m. The Program registers no root input (its inputs are `Input<w>`), so ``theta`` and
-    ``provenance`` are empty and every input bit counts as fresh against α.
+    the window's m blocks of c gates as one of m·c, which complies only when Γ ≥ m·c. The Program registers no root
+    input (its inputs are `Input<w>`), so ``theta`` and ``provenance`` are empty and every input bit counts as fresh
+    against α.
 
 Each case goes to its own directory under ``--private`` (``sampled-proofs-v2/``, ``inference-only/``; 0700, files
 0600): ``case.json`` (``{"params", "commitment", "evidence"}``, hex commitment and evidence, and v2's ``blobs``) and
@@ -58,7 +57,7 @@ from verity.ml.circuits import codec
 
 ROOT = Path(__file__).resolve().parents[2]
 V2 = PF.V2
-#: Onsite's registration check: the inference-only policy's v0 (#5610's form; #5603's is `verity/nci/v1`, the same case).
+#: Onsite's registration check: the inference-only policy's v0 (`verity/nci/v1` takes the same case).
 REGISTRATION = "verity/inference-only/v0"
 REGISTRATION_LEAN = (ROOT / "verity/core/protocols/network/nci/lean", "inference-only")
 NCI_REFERENCE = REGISTRATION_LEAN[0] / "scripts" / "nci_reference.py"
@@ -108,7 +107,7 @@ def v2_case(audit: Path) -> dict[str, Any]:
     v1 = window_case(audit)
     if not (w / "case-v2.json").is_file():
         why = (w / "case-v2-error.txt").read_text().strip() if (w / "case-v2-error.txt").is_file() else \
-            "the audit's a5 writes no case-v2.json (a5.case_v2, #5603)"
+            "the audit's a5 writes no case-v2.json (a5.case_v2)"
         raise Refused(f"no v2 case: {why}")
     case = _json(w / "case-v2.json")
     _need(isinstance(case, dict) and set(case) == CASE_KEYS | {"blobs"},
@@ -145,23 +144,6 @@ def _chain(log: Sequence[Mapping[str, Any]], rec: Mapping[str, Any]) -> None:
         prev = R.digest(r)
 
 
-def blocks_of(table: bytes, program: str) -> int:
-    """B's table (`predict.inference_blocks.rows`, concatenated) held to the record's Program: its header names it, and
-    each entry's slot digit is of radix m, so every template's units span every block. -> m."""
-    try:
-        from verity_vllm.program.predict import inference_blocks as IB
-    except ImportError as e:
-        raise Refused(f"--blocks reads B's table with verity_vllm.program.predict.inference_blocks (#5763): {e}") from None
-    try:
-        named, m, entries = IB.decode([table[i:i + IB.ROW_BYTES] for i in range(0, len(table), IB.ROW_BYTES)])
-    except (ValueError, IndexError) as e:
-        raise Refused(f"B's table doesn't decode: {e}") from None
-    _need(named == program, "B's table names another Program than the record's")
-    _need(m >= 1 and all(d < len(radix) and radix[d] == m for _, _, radix, d in entries),
-          f"B's table has an entry whose slot digit isn't of its {m} blocks")
-    return m
-
-
 def parameters(desc: Mapping[str, Any], root: Any) -> list[list[Any]]:
     """The program function's ``[[name, type], ...]``, which the descriptor doesn't carry (it inlines the function into
     its root): the population program (`population.mixed_population_program`, or `population_program` for one template)
@@ -187,7 +169,7 @@ def parameters(desc: Mapping[str, Any], root: Any) -> list[list[Any]]:
 
 
 def registration_case(v1: Mapping[str, Any], alpha: Fraction | int | str, gamma: int,
-                      log: Sequence[Mapping[str, Any]] = (), table: bytes | None = None) -> dict[str, Any]:
+                      log: Sequence[Mapping[str, Any]] = ()) -> dict[str, Any]:
     """Onsite's registration case (module docstring) from v1's case of the window's audit."""
     rec, _ = record_of(v1)
     desc = v1["params"].get("program") if isinstance(v1.get("params"), Mapping) else None
@@ -195,8 +177,6 @@ def registration_case(v1: Mapping[str, Any], alpha: Fraction | int | str, gamma:
     _need(codec.program_digest(desc) == rec.get("program"), "the record names another Program than v1's params")
     _need(isinstance(gamma, int) and not isinstance(gamma, bool) and gamma >= 0, f"Γ is a natural, not {gamma!r}")
     _chain(log, rec)
-    if table is not None:
-        blocks_of(table, rec["program"])
     text = codec.canonical_json(desc).decode()
     NR = _reference()
     try:
@@ -292,11 +272,11 @@ def produce(a: argparse.Namespace) -> int:
     one(V2, lambda: v2_case(audit), a.v2_exe or PF.v2_executable)
 
     def registration() -> dict[str, Any]:
-        _need(a.alpha is not None and a.gamma is not None, "α and Γ are training's (TRN-24): pass --alpha and --gamma")
+        _need(a.alpha is not None and a.gamma is not None, "α and Γ are the policy's, not the run's: pass --alpha and "
+              "--gamma")
         log = _json(a.log) if a.log is not None else []
         _need(isinstance(log, list), "--log is a JSON list of registration records")
-        table = a.blocks.read_bytes() if a.blocks is not None else None
-        return registration_case(v1, a.alpha, a.gamma, log, table)
+        return registration_case(v1, a.alpha, a.gamma, log)
 
     one(REGISTRATION, registration, a.registration_exe or (lambda: build(*REGISTRATION_LEAN)))
     return bad
@@ -314,10 +294,9 @@ def main(argv: Sequence[str] | None = None) -> int:
     where.add_argument("--audit", type=Path, help="the window's records_audit.py out directory")
     where.add_argument("--serve-dir", type=Path, help="the serve dir, whose one v3c-w*/audit is the audit")
     ap.add_argument("--private", type=Path, required=True, help="where each case's directory goes (0700)")
-    ap.add_argument("--alpha", type=Fraction, help="α, N/D: fresh-input bits a gate (training's)")
-    ap.add_argument("--gamma", type=int, help="Γ: gates an inference block (training's)")
+    ap.add_argument("--alpha", type=Fraction, help="the policy's α, N/D: fresh-input bits a gate")
+    ap.add_argument("--gamma", type=int, help="the policy's Γ: gates an inference block")
     ap.add_argument("--log", type=Path, help="the deployment's registration records before the window's, a JSON list")
-    ap.add_argument("--blocks", type=Path, help="B's private inference-block table, its rows concatenated")
     ap.add_argument("--v2-exe", help="sampled-proofs-one-stage-zk (default: built here)")
     ap.add_argument("--registration-exe", help=f"{REGISTRATION_LEAN[1]} (default: built here)")
     return produce(ap.parse_args(argv))

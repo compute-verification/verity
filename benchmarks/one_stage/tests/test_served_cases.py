@@ -16,7 +16,6 @@ from __future__ import annotations
 
 import importlib.util
 import json
-import os
 import shutil
 import stat
 import sys
@@ -199,11 +198,11 @@ def test_both_cases_go_private_beside_answers_naming_the_records_digest(tmp_path
 
 def test_composite_reads_each_case_as_a_piece_of_the_windows_record(tmp_path, capsys):
     """`composite.py`'s own reader (`case_dirs`, `piece`) takes both directories: each piece is its protocol's, its
-    digest the record's, and its blobs v2's. Which id onsite composes as the registration (#5603's `verity/nci/v1`,
-    #5610's `verity/inference-only/v0`) is `served_cases.REGISTRATION`'s to follow, so it isn't asserted here."""
+    digest the record's, and its blobs v2's. Which id onsite composes as the registration (`verity/nci/v1` or
+    `verity/inference-only/v0`) is `served_cases.REGISTRATION`'s to follow, so it isn't asserted here."""
     path = HERE.parent / "composite.py"
     if not path.is_file():
-        pytest.skip("composite.py is #5603's/#5610's; this runs once it is on the branch")
+        pytest.skip("no composite.py on this branch yet; this runs once it lands")
     spec = importlib.util.spec_from_file_location("one_stage_composite", path)
     C = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(C)
@@ -306,7 +305,7 @@ def test_v2s_lean_names_the_records_digest_so_its_rejection_is_written(tmp_path,
     ("other-program", "the record names another Program than v1's params"),
     ("previous-no-log", "pass the deployment's log (--log)"),
     ("log-unchained", "the log and the record don't chain"),
-    ("no-alpha-gamma", "α and Γ are training's (TRN-24): pass --alpha and --gamma"),
+    ("no-alpha-gamma", "α and Γ are the policy's, not the run's: pass --alpha and --gamma"),
     ("gamma-bool", "Γ is a natural"),
 ])
 def test_the_producer_refuses_a_registration_case_that_would_not_be_the_windows(tmp_path, capsys, change, reason):
@@ -433,32 +432,6 @@ def test_a_usage_error_exits_64(capsys):
     with pytest.raises(SystemExit) as e:
         SC.main(["--private", "p"])
     assert e.value.code == SC.USAGE
-
-
-def test_the_blocks_table_is_held_to_the_records_program(tmp_path):
-    """``--blocks`` reads B's table with #5763's `inference_blocks`; without it the case is refused by name, and with it
-    a table naming another Program, or whose slot digit isn't of its m, is refused."""
-    program, query = toy()
-    v1 = v1_case(program, query)
-    try:
-        from verity_vllm.program.predict import inference_blocks as IB
-    except ImportError:
-        with pytest.raises(SC.Refused, match="#5763"):
-            SC.registration_case(v1, 1, 1, table=b"")
-        return
-    rec = json.loads(bytes.fromhex(v1["commitment"]))
-
-    def table(prog: str, m: int, radix: tuple[int, ...], slot: int) -> bytes:
-        head = IB._row(IB.MAGIC, bytes.fromhex(prog), IB._u(m, 8), IB._u(1, 8))
-        entry = IB._row(bytes(64), IB._u(0, 8), IB._u(len(radix), 1), IB._u(slot, 1), bytes(6),
-                        *(IB._u(r, 4) for r in radix))
-        return head + entry
-
-    assert SC.registration_case(v1, 1, 1, table=table(rec["program"], SLOTS, (2, SLOTS), 1))["params"]["gamma"] == 1
-    with pytest.raises(SC.Refused, match="names another Program"):
-        SC.registration_case(v1, 1, 1, table=table("ee" * 64, SLOTS, (2, SLOTS), 1))
-    with pytest.raises(SC.Refused, match="slot digit"):
-        SC.registration_case(v1, 1, 1, table=table(rec["program"], SLOTS, (SLOTS, 2), 1))
 
 
 #: the H200's declared target (`pins/NVIDIA_H200.json`), at which V2 serves the 4,32,4 class
