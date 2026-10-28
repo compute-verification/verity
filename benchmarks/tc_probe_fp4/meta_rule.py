@@ -114,7 +114,7 @@ def evaluate(pool, instr, As, Bg, SFA, SFB, C, procs: int):
 
 class FakeMeta:
     """CPU stand-in (``--fake-silicon pairs_from_bits``): the pinned dense step on the B each nibble gathers under
-    ``pairs_from_bits``; refused under a research run."""
+    ``pairs_from_bits``; refused with ``RESEARCH_RUN_ID`` set."""
 
     tcgen05 = False
 
@@ -303,7 +303,7 @@ def main(args) -> int:
     if args.chain != 1:
         raise SystemExit("--chain is not defined for the sparse rows")
     if args.fake_silicon and SHARED.RESEARCH_RUN_ID:
-        raise SystemExit("--fake-silicon is a dry run and never publishes: not under a research run")
+        raise SystemExit("--fake-silicon is a dry run and never publishes: unset RESEARCH_RUN_ID")
     if args.fake_silicon and not P.shutil.which(P.nvcc_bin()):
         so, nvcc = None, "not built (fake silicon)"
     else:
