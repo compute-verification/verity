@@ -24,15 +24,19 @@ from verity_difftest import protocol as P
 INTERFACE = Path(__file__).resolve().parents[2] / "interface"
 pytestmark = pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
 
-CARD = G.Card("sim-a", 2_000_000_000, (10**15, 2 * 10**15, 4 * 10**15), 3200, 1 << 25, 64 << 30)
-CARD_B = G.Card("sim-b", 1_000_000_000, (5 * 10**14, 10**15, 2 * 10**15), 6400, 1 << 26, 128 << 30)
+CARD = G.Card("sim-a", 2_000_000_000, (10**15, 2 * 10**15, 2 * 10**15, 15 * 10**14, 4 * 10**15), 3200, 1 << 25,
+              64 << 30)
+CARD_B = G.Card("sim-b", 1_000_000_000, (5 * 10**14, 10**15, 10**15, 75 * 10**13, 2 * 10**15), 6400, 1 << 26,
+                128 << 30)
 AUDITOR = G.Auditor((CARD,), (("cert0", "k0"), ("chal0", "k1")), (1, 20))
-#: Cards declared against `CARD`'s sheet at a twentieth's tolerance: within it at either edge, and just past it slow,
+#: Cards stated against `CARD`'s sheet at a twentieth's tolerance: within it at either edge, and just past it slow,
 #: fast or in one peak rate.
-WITHIN = (dataclasses.replace(CARD, clock=1_900_000_000), dataclasses.replace(CARD, clock=2_100_000_000,
-                                                                              peak=(10**15, 2 * 10**15, 38 * 10**14)))
+WITHIN = (dataclasses.replace(CARD, clock=1_900_000_000),
+          dataclasses.replace(CARD, clock=2_100_000_000, peak_rate=(*CARD.peak_rate[:4], 38 * 10**14)))
 PAST = (dataclasses.replace(CARD, clock=1_899_999_999), dataclasses.replace(CARD, clock=2_100_000_001),
-        dataclasses.replace(CARD, peak=(10**15, 21 * 10**14 + 1, 4 * 10**15)))
+        dataclasses.replace(CARD, peak_rate=(10**15, 21 * 10**14 + 1, *CARD.peak_rate[2:])))
+#: A card with a zero peak rate, refused at any tolerance.
+ZERO = dataclasses.replace(CARD, peak_rate=(*CARD.peak_rate[:3], 0, CARD.peak_rate[4]))
 LOCS = (G.Loc("site0", "site"), G.Loc("node0", "host", "site0"), G.Loc("gpu0", "device", "node0", card=CARD.digest()),
         G.Loc("hbm0", "memory", "gpu0", tier="hbm", bytes=1 << 30),
         G.Loc("cert0", "certifier", "site0", owner="auditor", key="k0"),
@@ -95,7 +99,7 @@ locs = st.builds(G.Loc, st.sampled_from(IDS), st.sampled_from(G.KINDS), st.none(
 links = st.builds(G.Link, st.sampled_from(["up0", "up1", "mc0", "l3", "gpu0"]),
                   st.tuples(st.sampled_from(IDS), st.sampled_from(IDS)), st.sampled_from([0, 1, 100]),
                   st.sampled_from([0, 1]))
-cards = st.sampled_from([CARD, CARD_B, dataclasses.replace(CARD, mem=1), *WITHIN, *PAST])
+cards = st.sampled_from([CARD, CARD_B, dataclasses.replace(CARD, mem=1), *WITHIN, *PAST, ZERO])
 #: Names a θ value takes: the example's, a new one, and one outside ASCII.
 VALUES = ["weights", "state", "tables", "poids\u00e9"]
 
@@ -245,6 +249,8 @@ def test_the_example_and_its_refusals_agree_with_the_lean_guards() -> None:
                     dataclasses.replace(AUDITOR, tolerance=(0, 7))), "entry 0: figures"),
               (case("remote", G.chain("remote", [G.Hardware((dataclasses.replace(CARD, clock=0),))]),
                     dataclasses.replace(AUDITOR, tolerance=(1, 1))), None),
+              (case("remote", G.chain("remote", [G.Hardware((ZERO,))]), dataclasses.replace(AUDITOR, tolerance=(1, 1))),
+               "entry 0: figures"),
               (case("onsite", G.chain("onsite", [G.Information(({**WEIGHTS, "value": "poids\u00e9"},))])),
                "commitment: ascii: the log holds a character outside ASCII")]
     with D.Server(PORT.argv()) as server:

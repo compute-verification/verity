@@ -13,8 +13,8 @@ names the whole log. An entry is one of two formats, each under its own versione
   (the site at the root, its hosts, a host's devices, memory leaves by tier and bytes, and at the site the auditor's
   network certifiers and memory challengers, with their keys), and the links between locations and the rest of the
   world (`outside`), each with its capacity `β` in bits a tick each way and its latency in ticks. A card is a device's
-  declaration: its SKU, its tensor clock, its peak rate of tensor-core multiply-adds for each operand class (random,
-  2-bit and all-zero operands), and its memory figures.
+  registered figures: `DeviceFigures`' SKU, tensor clock and peak rate of tensor-core multiply-adds for each operand
+  class (int8 operands uniform over one of four ranges, or all zero), and its memory figures.
 * **information** (`verity/registration/information/v1`): the items it registers, each once in the log (`Item.key`):
   θ, each registered value (weights, initial state, tables) by its committed root, and the builder `B` that compiles
   advice into the circuit (its digest, its advice's format and its public cap `ℓ` on one declaration's advice, in
@@ -36,7 +36,7 @@ fails, in this order:
 | `unknown-ref` | each new location's parent and each new link's ends are registered |
 | `kind` | each new location sits under a parent its kind allows and has a tier exactly when it is memory; each new link joins two different ends of kinds a link may join, at a positive capacity; each certifier splits exactly one uplink |
 | `card-digest` | each new card's SKU has an auditor's data sheet, and each new device names a registered card |
-| `figures` | each new card's clock and peak rates are within the auditor's tolerance of its sheet's in both directions, and its memory figures are its sheet's |
+| `figures` | each new card's clock and peak rates are within the auditor's tolerance of its sheet's in both directions, its peak rates are positive, and its memory figures are its sheet's |
 | `capacity` | each new memory leaf holds something, and each device's memory leaves fit in its card's memory |
 | `owner` | each new certifier or challenger is one of the auditor's own devices with its key, and every other new location is the prover's |
 | `uncertified` | onsite: every boundary link is certified |
@@ -50,7 +50,7 @@ A component reads its view of the log by projection (`View`): the site, θ's val
 core protocol (`protocol`, `verity/registration/log/v1`) the log is the commitment, its head the
 digest, and the parameters the auditor's own: the composite and, for the hardware checks, its data sheets, the tolerance
 it allows a card's clock and peak rates around its sheet's, and its devices' keys. `figures` is registration's check of
-a device's declared figures against the auditor's estimates, `DeviceFigures.Accepted` over the SKU, the clock and the
+a device's registered figures against the auditor's estimates, `DeviceFigures.Accepted` over the SKU, the clock and the
 peak rates, in integers.
 -/
 
@@ -137,38 +137,51 @@ def Owner.name : Owner → String
 
 def Owner.all : List Owner := [.prover, .auditor]
 
-/-- The operand class of a tensor-core multiply-add: random, 2-bit or all-zero operands. -/
+/-- The operand class of a tensor-core multiply-add, `DeviceFigures`' `OperandClass`: int8 operands drawn uniformly
+over `[-128, 127]`, `[-2, 1]`, `[0, 3]` or `[0, 15]`, or the one value `0`. -/
 inductive OperandClass
-  | random
-  | twoBit
+  | uniformS8
+  | uniformS2
+  | uniformU2
+  | uniformU4
   | zero
   deriving DecidableEq, Repr, Inhabited
 
 def OperandClass.name : OperandClass → String
-  | .random => "random"
-  | .twoBit => "two-bit"
+  | .uniformS8 => "uniform-s8"
+  | .uniformS2 => "uniform-s2"
+  | .uniformU2 => "uniform-u2"
+  | .uniformU4 => "uniform-u4"
   | .zero => "zero"
 
-def OperandClass.all : List OperandClass := [.random, .twoBit, .zero]
+def OperandClass.all : List OperandClass := [.uniformS8, .uniformS2, .uniformU2, .uniformU4, .zero]
 
-/-- A device's peak rate of tensor-core multiply-adds a second, for each operand class. -/
-structure Peak where
-  random : Nat
-  twoBit : Nat
+/-- A device's peak rate of tensor-core multiply-adds a second for each operand class, read as a function
+(`k.peakRate c`). -/
+structure PeakRate where
+  uniformS8 : Nat
+  uniformS2 : Nat
+  uniformU2 : Nat
+  uniformU4 : Nat
   zero : Nat
   deriving DecidableEq, Repr, Inhabited
 
-def Peak.rate (p : Peak) : OperandClass → Nat
-  | .random => p.random
-  | .twoBit => p.twoBit
+def PeakRate.rate (p : PeakRate) : OperandClass → Nat
+  | .uniformS8 => p.uniformS8
+  | .uniformS2 => p.uniformS2
+  | .uniformU2 => p.uniformU2
+  | .uniformU4 => p.uniformU4
   | .zero => p.zero
 
-/-- A device's card, its declaration: its SKU, its tensor clock in Hz (`clock`), its peak rates (`peak`), bits from
-device memory to the chip a tick (`bw`), bits of on-chip state (`chip`) and bytes of device memory (`mem`). -/
+instance : CoeFun PeakRate (fun _ => OperandClass → Nat) := ⟨PeakRate.rate⟩
+
+/-- A device's card, its registered figures: `DeviceFigures`' SKU, tensor clock in Hz (`clock`) and peak rates in
+multiply-adds a second (`peakRate`), and its memory figures: bits from device memory to the chip a tick (`bw`), bits of
+on-chip state (`chip`) and bytes of device memory (`mem`). -/
 structure Card where
   sku : String
   clock : Nat
-  peak : Peak
+  peakRate : PeakRate
   bw : Nat
   chip : Nat
   mem : Nat
@@ -263,11 +276,11 @@ def optJson {α} (f : α → Json) : Option α → Json
   | none => .null
   | some x => f x
 
-def Peak.toJson (p : Peak) : Json := Json.mkObj (OperandClass.all.map fun c => (c.name, Lean.toJson (p.rate c)))
+def PeakRate.toJson (p : PeakRate) : Json := Json.mkObj (OperandClass.all.map fun c => (c.name, Lean.toJson (p c)))
 
 def Card.toJson (k : Card) : Json :=
   Json.mkObj [("bw", Lean.toJson k.bw), ("chip", Lean.toJson k.chip), ("clock", Lean.toJson k.clock),
-    ("mem", Lean.toJson k.mem), ("peak", k.peak.toJson), ("sku", .str k.sku)]
+    ("mem", Lean.toJson k.mem), ("peakRate", k.peakRate.toJson), ("sku", .str k.sku)]
 
 def Card.digest (k : Card) : String := tagged CARD k.toJson
 
@@ -353,15 +366,16 @@ private def optOf {α} (f : Json → V α) : Json → V (Option α)
   | .null => pure none
   | j => some <$> f j
 
-def Peak.ofJson (j : Json) : V Peak := do
-  exactly j (OperandClass.all.map (·.name)) "a card's peak"
-  let rate := fun (c : OperandClass) => Flock.J.nat j c.name "a card's peak"
-  pure { random := ← rate .random, twoBit := ← rate .twoBit, zero := ← rate .zero }
+def PeakRate.ofJson (j : Json) : V PeakRate := do
+  exactly j ["uniform-s2", "uniform-s8", "uniform-u2", "uniform-u4", "zero"] "a card's peakRate"
+  let rate := fun (c : OperandClass) => Flock.J.nat j c.name "a card's peakRate"
+  pure { uniformS8 := ← rate .uniformS8, uniformS2 := ← rate .uniformS2, uniformU2 := ← rate .uniformU2,
+         uniformU4 := ← rate .uniformU4, zero := ← rate .zero }
 
 def Card.ofJson (j : Json) : V Card := do
-  exactly j ["bw", "chip", "clock", "mem", "peak", "sku"] "a card"
+  exactly j ["bw", "chip", "clock", "mem", "peakRate", "sku"] "a card"
   pure { sku := ← Flock.J.str j "sku" "a card", clock := ← Flock.J.nat j "clock" "a card",
-         peak := ← Peak.ofJson (← Flock.J.get j "peak" "a card"), bw := ← Flock.J.nat j "bw" "a card",
+         peakRate := ← PeakRate.ofJson (← Flock.J.get j "peakRate" "a card"), bw := ← Flock.J.nat j "bw" "a card",
          chip := ← Flock.J.nat j "chip" "a card", mem := ← Flock.J.nat j "mem" "a card" }
 
 def Loc.ofJson (j : Json) : V Loc := do
@@ -512,10 +526,11 @@ structure Auditor where
 def Auditor.sheet (A : Auditor) (sku : String) : Option Card := A.sheets.find? (·.sku == sku)
 
 /-- A card is within its estimate `e`: the clock and every peak rate within the tolerance of `e`'s in both directions,
-and its memory figures `e`'s. Its SKU is `e`'s by how `e` was found. -/
-def Auditor.declared (A : Auditor) (e k : Card) : Bool :=
+every peak rate positive (as `DeviceFigures.Accepted` requires), and its memory figures `e`'s. Its SKU is `e`'s by how
+`e` was found. -/
+def Auditor.accepts (A : Auditor) (e k : Card) : Bool :=
   A.tolerance.within e.clock k.clock &&
-    OperandClass.all.all (fun c => A.tolerance.within (e.peak.rate c) (k.peak.rate c)) &&
+    OperandClass.all.all (fun c => A.tolerance.within (e.peakRate c) (k.peakRate c) && 0 < k.peakRate c) &&
     k.bw == e.bw && k.chip == e.chip && k.mem == e.mem
 
 def Auditor.key (A : Auditor) (i : String) : Option String := (A.keys.find? (·.1 == i)).map (·.2)
@@ -569,7 +584,7 @@ def hardwareRefusal (A : Auditor) (c : Composite) (S : Site) (cards : List Card)
       T.locs.all fun x => x.kind != .certifier || splitsOne T x) then some .kind
   else if !(cards.all (fun k => (A.sheet k.sku).isSome) &&
       locs.all fun x => x.kind != .device || (T.cards.map (·.digest)).contains x.card) then some .cardDigest
-  else if !(cards.all fun k => (A.sheet k.sku).all (A.declared · k)) then some .figures
+  else if !(cards.all fun k => (A.sheet k.sku).all (A.accepts · k)) then some .figures
   else if !(locs.all (fun x => x.kind != .memory || 0 < x.bytes) &&
       T.locs.all fun x => x.kind != .device || (T.card? x).all (T.held x.id ≤ ·.mem)) then some .capacity
   else if !(locs.all fun x =>
@@ -698,7 +713,8 @@ def protocol : Protocol where
 namespace Example
 
 def card : Card :=
-  { sku := "sim-a", clock := 2000000000, peak := ⟨1000000000000000, 2000000000000000, 4000000000000000⟩, bw := 3200,
+  { sku := "sim-a", clock := 2000000000,
+    peakRate := ⟨1000000000000000, 2000000000000000, 2000000000000000, 1500000000000000, 4000000000000000⟩, bw := 3200,
     chip := 1 <<< 25, mem := 64 <<< 30 }
 
 def auditor : Auditor := { sheets := [card], tolerance := ⟨1, 20⟩, keys := [("cert0", "k0"), ("chal0", "k1")] }
@@ -751,10 +767,11 @@ private def bare : List Body :=
 -- a clock or a peak rate stated five percent off is within a twentieth either way; past it, slow or fast, is refused
 #guard refusal .remote [.hardware [{ card with clock := 1900000000 }] [] []] == none
 #guard refusal .remote
-  [.hardware [{ card with clock := 2100000000, peak := { card.peak with zero := 3800000000000000 } }] [] []] == none
+  [.hardware [{ card with clock := 2100000000, peakRate := { card.peakRate with zero := 3800000000000000 } }] [] []] ==
+    none
 #guard refusal .remote [.hardware [{ card with clock := 1899999999 }] [] []] == some (0, .figures)
-#guard refusal .remote [.hardware [{ card with peak := { card.peak with twoBit := 2100000000000001 } }] [] []] ==
-  some (0, .figures)
+#guard refusal .remote
+  [.hardware [{ card with peakRate := { card.peakRate with uniformS2 := 2100000000000001 } }] [] []] == some (0, .figures)
 #guard refusal .remote [.hardware [{ card with mem := 1 }] [] []] == some (0, .figures)
 -- at tolerance 0 only the sheet's figures; at 1 or more nothing below is refused
 #guard refusal .remote [.hardware [{ card with clock := 1999999999 }] [] []] { auditor with tolerance := ⟨0, 7⟩ } ==
@@ -762,6 +779,9 @@ private def bare : List Body :=
 #guard refusal .remote [.hardware [{ card with clock := 0 }] [] []] { auditor with tolerance := ⟨1, 1⟩ } == none
 #guard refusal .remote [.hardware [{ card with clock := 4000000001 }] [] []] { auditor with tolerance := ⟨1, 1⟩ } ==
   some (0, .figures)
+-- a zero peak rate is refused even where the tolerance allows it
+#guard refusal .remote [.hardware [{ card with peakRate := { card.peakRate with uniformU4 := 0 } }] [] []]
+  { auditor with tolerance := ⟨1, 1⟩ } == some (0, .figures)
 private def over : Loc := { id := "hbm0", kind := .memory, parent := some "gpu0", tier := some .hbm, bytes := (64 <<< 30) + 1 }
 #guard refusal .remote [.hardware [card] (locs.take 3 ++ [over]) []] == some (0, .capacity)
 #guard refusal .onsite bodies { auditor with keys := [("cert0", "k1"), ("chal0", "k1")] } == some (0, .owner)

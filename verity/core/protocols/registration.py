@@ -55,8 +55,9 @@ LINKS = (("host", "host"), ("host", "outside"), ("certifier", "host"), ("certifi
 AUDITOR_KINDS = ("certifier", "challenger")
 REFUSALS = ("previous", "duplicate-id", "unknown-ref", "kind", "card-digest", "figures", "capacity", "owner",
             "uncertified", "challenger-reach", "duplicate-information")
-OPERAND_CLASSES = ("random", "two-bit", "zero")
-"""The operand classes of a tensor-core multiply-add: random, 2-bit and all-zero operands."""
+OPERAND_CLASSES = ("uniform-s8", "uniform-s2", "uniform-u2", "uniform-u4", "zero")
+"""The operand classes of a tensor-core multiply-add, `DeviceFigures`' `OperandClass`: int8 operands drawn uniformly
+over `[-128, 127]`, `[-2, 1]`, `[0, 3]` or `[0, 15]`, or the one value 0."""
 
 
 class Malformed(ValueError):
@@ -78,20 +79,20 @@ def tagged(tag: str, obj: Any) -> str:
 
 @dataclass(frozen=True)
 class Card:
-    """A device's card, its declaration: its SKU, its tensor clock in Hz, its peak rate of tensor-core multiply-adds a
-    second for each of `OPERAND_CLASSES` (`peak`, in that order), bits from device memory to the chip a tick, bits of
-    on-chip state and bytes of device memory."""
+    """A device's card, its registered figures: `DeviceFigures`' SKU, tensor clock in Hz and peak rate of tensor-core
+    multiply-adds a second for each of `OPERAND_CLASSES` (`peak_rate`, in that order), and its memory figures: bits from
+    device memory to the chip a tick, bits of on-chip state and bytes of device memory."""
 
     sku: str
     clock: int
-    peak: tuple[int, int, int]
+    peak_rate: tuple[int, int, int, int, int]
     bw: int
     chip: int
     mem: int
 
     def to_json(self) -> dict[str, Any]:
         return {"bw": self.bw, "chip": self.chip, "clock": self.clock, "mem": self.mem,
-                "peak": dict(zip(OPERAND_CLASSES, self.peak)), "sku": self.sku}
+                "peakRate": dict(zip(OPERAND_CLASSES, self.peak_rate, strict=True)), "sku": self.sku}
 
     def digest(self) -> str:
         return tagged(CARD, self.to_json())
@@ -240,10 +241,10 @@ def _optional(f: Callable[[Any], Any], j: Any) -> Any:
 
 
 def card_of(j: Any) -> Card:
-    _exactly(j, ["bw", "chip", "clock", "mem", "peak", "sku"], "a card")
-    _exactly(j["peak"], list(OPERAND_CLASSES), "a card's peak")
+    _exactly(j, ["bw", "chip", "clock", "mem", "peakRate", "sku"], "a card")
+    _exactly(j["peakRate"], sorted(OPERAND_CLASSES), "a card's peakRate")
     return Card(_str(j["sku"], "sku"), _nat(j["clock"], "clock"),
-                tuple(_nat(j["peak"][c], c) for c in OPERAND_CLASSES),  # type: ignore[arg-type]
+                tuple(_nat(j["peakRate"][c], c) for c in OPERAND_CLASSES),  # type: ignore[arg-type]
                 _nat(j["bw"], "bw"), _nat(j["chip"], "chip"), _nat(j["mem"], "mem"))
 
 
@@ -405,11 +406,11 @@ class Auditor:
     def sheet(self, sku: str) -> Card | None:
         return next((k for k in self.sheets if k.sku == sku), None)
 
-    def declared(self, e: Card, k: Card) -> bool:
-        """`k` is within its sheet `e`: the clock and every peak rate within the tolerance in both directions, and its
-        memory figures `e`'s."""
+    def accepts(self, e: Card, k: Card) -> bool:
+        """`k` is within its sheet `e`: the clock and every peak rate within the tolerance in both directions, every
+        peak rate positive (as `DeviceFigures.Accepted` requires), and its memory figures `e`'s."""
         return (within(self.tolerance, e.clock, k.clock)
-                and all(within(self.tolerance, a, b) for a, b in zip(e.peak, k.peak, strict=True))
+                and all(within(self.tolerance, a, b) and b > 0 for a, b in zip(e.peak_rate, k.peak_rate, strict=True))
                 and (k.bw, k.chip, k.mem) == (e.bw, e.chip, e.mem))
 
     def key(self, i: str) -> str | None:
@@ -438,7 +439,7 @@ def hardware_refusal(auditor: Auditor, composite: str, site: Site, h: Hardware) 
     if not (all(auditor.sheet(k.sku) is not None for k in h.cards)
             and all(x.kind != "device" or x.card in digests for x in h.locs)):
         return "card-digest"
-    if not all(auditor.declared(auditor.sheet(k.sku), k) for k in h.cards):  # type: ignore[arg-type]
+    if not all(auditor.accepts(auditor.sheet(k.sku), k) for k in h.cards):  # type: ignore[arg-type]
         return "figures"
     if not (all(x.kind != "memory" or x.bytes > 0 for x in h.locs)
             and all(x.kind != "device" or (k := t.card(x)) is None or t.held(x.id) <= k.mem for x in t.locs)):
