@@ -14,8 +14,8 @@ For x [M, K] bf16, W [N, K] int8 and s_w [N] float32 (`engine.int8_exact`'s stat
 Triton's `/` on float32 is div.full.f32 (approximate) and its libdevice calls are flush-to-zero by default, so the kernels
 use tl.div_rn, an inline cvt.rni, enable_reflect_ftz=False and enable_fp_fusion=False; `ptx_check` reads the compiled PTX
 for exactly these instructions.  The GEMM is vLLM's `triton_scaled_mm` (the stock arm's kernel) on the pointer path, without
-bias, with the same epilogue order (activation scale first); its config per architecture, shape and M is `CONFIGS`
-(ksweep.py's gated winners), else vLLM's tiles.  A split-K config adds int32 partials (exact in any order) into a
+bias, with the same epilogue order (activation scale first); its config per architecture, shape and M is `CONFIGS`, the
+served table (`verity_vllm.engine.int8_fused`'s: ksweep.py's gated winners), else vLLM's tiles.  A split-K config adds int32 partials (exact in any order) into a
 self-zeroing `Workspace`, and the last split applies the epilogue.  A TMA config runs `exactlin_scaled_mm_tma`, the same
 product and epilogue with X and W read through host tensor descriptors (kernel parameters, so a graph captures them;
 out-of-bounds boxes read zeros), optionally warp-specialized.  The product needs no row
@@ -29,6 +29,7 @@ import functools
 import torch
 import triton
 import triton.language as tl
+from verity_vllm.engine.int8_fused import CONFIGS
 
 OPTS = {"enable_fp_fusion": False, "enable_reflect_ftz": False}
 
@@ -44,12 +45,14 @@ def _membar_gl(v):
 
 
 @triton.jit
-def exactlin_quant_rows(x_ptr, q_ptr, s_ptr, K, stride_x, stride_q, BLOCK_K: tl.constexpr):
-    row = tl.program_id(0).to(tl.int64)
+def exactlin_quant_rows(x_ptr, q_ptr, s_ptr, M, K, stride_x, stride_q, BLOCK_M: tl.constexpr, BLOCK_K: tl.constexpr):
+    # BLOCK_M rows a program, each row's arithmetic the same as alone (a max is exact in any order)
+    rows = tl.program_id(0).to(tl.int64) * BLOCK_M + tl.arange(0, BLOCK_M)
     offs = tl.arange(0, BLOCK_K)
-    mask = offs < K
-    x = tl.load(x_ptr + row * stride_x + offs, mask=mask, other=0.0).to(tl.float32)
-    a = tl.max(tl.abs(x), axis=0)
+    live = rows < M
+    mask = live[:, None] & (offs < K)[None, :]
+    x = tl.load(x_ptr + rows[:, None] * stride_x + offs[None, :], mask=mask, other=0.0).to(tl.float32)
+    a = tl.max(tl.abs(x), axis=1)
     s = tl.div_rn(tl.maximum(a, 1e-30), 127.0)
     # x / s == (x * 2^e) / (s * 2^e) with s * 2^e in [1, 2): s is normal, so both products are exact (x * 2^e unless it is
     # below 2^-126, where the quotient is too and X is 0 either way), and the rounded quotient is the same.  A |x * 2^e|
@@ -57,13 +60,13 @@ def exactlin_quant_rows(x_ptr, q_ptr, s_ptr, K, stride_x, stride_q, BLOCK_K: tl.
     sb = s.to(tl.int32, bitcast=True)
     s1 = ((sb & 0x7FFFFF) | 0x3F800000).to(tl.float32, bitcast=True)
     p = ((254 - (sb >> 23)) << 23).to(tl.float32, bitcast=True)
-    xs = x * p
+    xs = x * p[:, None]
     small = tl.abs(xs) < 0.25
-    q = _rni_s32(tl.div_rn(tl.where(small, 1.0, xs), tl.broadcast_to(s1, (BLOCK_K,))))
+    q = _rni_s32(tl.div_rn(tl.where(small, 1.0, xs), tl.broadcast_to(s1[:, None], (BLOCK_M, BLOCK_K))))
     q = tl.where(small, 0, q)
     q = tl.minimum(tl.maximum(q, -127), 127).to(tl.int8)
-    tl.store(q_ptr + row * stride_q + offs, q, mask=mask)
-    tl.store(s_ptr + row, s)
+    tl.store(q_ptr + rows[:, None] * stride_q + offs[None, :], q, mask=mask)
+    tl.store(s_ptr + rows, s, mask=live)
 
 
 @triton.jit
@@ -143,6 +146,21 @@ def quant_warps(k: int) -> int:
     return 16
 
 
+# Per architecture and K: (M floor, num_warps, rows a program), ksweep.py --quant-only's gated winners over 16 warps a row
+QUANT_PLANS: dict[str, dict[int, tuple[tuple[int, int, int], ...]]] = {
+    "sm_90": {2048: ((2048, 4, 1), (1024, 8, 1)), 4096: ((1024, 8, 1),), 8192: ((1024, 8, 1),), 14336: ((256, 16, 2),)},
+}
+
+
+def quant_plan(m: int, k: int, sm: str | None = None) -> tuple[int, int]:
+    """(num_warps, rows a program) of the row quantizer at [m, k] on `sm` (default: the current device's): QUANT_PLANS'
+    first plan for k whose M floor m reaches, else one row a program at `quant_warps`."""
+    for floor, warps, rows in QUANT_PLANS.get(sm or arch(torch.cuda.current_device()), {}).get(k, ()):
+        if m >= floor:
+            return warps, rows
+    return quant_warps(k), 1
+
+
 def tiles(m: int, n: int) -> tuple[int, int, int]:
     """vLLM triton_scaled_mm's heuristic (the stock arm's tiles)."""
     p = max(32, triton.next_power_of_2(m))
@@ -179,71 +197,6 @@ def default_cfg(m: int, n: int, k: int) -> Cfg:
     return Cfg(*tiles(m, n))
 
 
-# Per architecture and (N, K): (m_max, config) rows, ksweep.py's winners where they beat vLLM's tiles (best.json).
-CONFIGS: dict[str, dict[tuple[int, int], list[tuple[int, str]]]] = {
-    "sm_120": {  # RTX PRO 6000: swept at M <= 64, then M 256 to 8192 (pointer and TMA)
-        (6144, 4096): [(1, "16x64x128:w4:s5:k1"), (16, "16x32x128:w4:s4:k1"), (32, "32x32x128:w4:s4:k1"),
-                       (64, "32x64x128:w4:s4:k1"), (256, "128x64x128:w4:s3:k1:t1"), (2048, "128x128x64:w4:s3:k1:t1"),
-                       (8192, "128x128x64:w4:s3:k1:t1")],
-        (4096, 4096): [(1, "16x32x256:w4:s5:k1"), (16, "16x16x256:w4:s3:k1"), (32, "32x32x256:w4:s4:k1"),
-                       (64, "32x64x256:w8:s4:k1"), (256, "128x64x128:w4:s4:k1"), (2048, "128x128x64:w4:s3:k1:t1"),
-                       (8192, "128x128x64:w4:s3:k1:t1")],
-        (28672, 4096): [(1, "16x32x128:w4:s4:k1"), (16, "16x32x128:w4:s4:k1"), (32, "32x32x256:w4:s2:k1"),
-                        (64, "64x64x128:w4:s3:k1"), (256, "128x64x64:w4:s3:k1:t1"), (2048, "128x128x64:w4:s4:k1:t1"),
-                        (8192, "128x128x64:w4:s3:k1:t1")],
-        (4096, 14336): [(1, "16x32x512:w4:s4:k1"), (16, "16x32x512:w4:s4:k1"), (32, "32x32x512:w8:s4:k1"),
-                        (64, "32x64x512:w8:s3:k1"), (256, "128x64x128:w4:s5:k1"), (2048, "128x128x64:w4:s3:k1:t1"),
-                        (8192, "128x128x64:w4:s3:k1:t1")],
-        (24576, 4096): [(1, "16x32x128:w4:s4:k1"), (16, "16x32x128:w4:s3:k1"), (32, "32x32x256:w4:s2:k1"),
-                        (64, "32x64x128:w8:s2:k1"), (256, "128x128x64:w4:s4:k1:t1"), (2048, "128x128x64:w4:s3:k1:t1"),
-                        (8192, "128x128x64:w4:s3:k1:t1")],
-        (4096, 12288): [(1, "16x32x512:w4:s5:k1"), (16, "16x32x512:w4:s4:k1"), (32, "32x32x512:w4:s4:k1"),
-                        (64, "32x64x512:w8:s3:k1"), (256, "128x64x128:w4:s5:k1"), (2048, "128x128x64:w4:s3:k1:t1"),
-                        (8192, "128x128x64:w4:s3:k1:t1")],
-    },
-    "sm_90": {  # H200: swept at M <= 32, then M 64 to 8192 (pointer and TMA)
-        (6144, 4096): [(1, "16x64x512:w4:s4:k1"), (16, "16x64x512:w4:s4:k1"), (32, "32x32x512:w4:s3:k1"),
-                       (64, "64x32x256:w4:s4:k1:t1"), (256, "128x128x256:w4:s3:k1:t1"),
-                       (2048, "128x128x128:w4:s3:k1:t1"), (8192, "128x128x128:w4:s3:k1:t1")],
-        (4096, 4096): [(1, "16x32x512:w4:s4:k1"), (16, "16x32x512:w4:s4:k1"), (32, "32x32x256:w4:s5:k1"),
-                       (64, "64x16x256:w4:s5:k1:t1"), (256, "128x64x256:w4:s4:k1:t1"),
-                       (2048, "128x128x128:w4:s3:k1:t1"), (8192, "128x128x128:w4:s3:k1:t1")],
-        (28672, 4096): [(1, "16x32x256:w4:s3:k1"), (16, "16x32x128:w4:s3:k1"), (32, "32x128x256:w4:s3:k1"),
-                        (64, "64x128x128:w8:s4:k1:t1"), (256, "128x128x128:w4:s3:k1:t1"),
-                        (2048, "128x128x128:w4:s3:k1:t1"), (8192, "128x128x128:w4:s3:k1:t1")],
-        (4096, 14336): [(1, "16x64x256:w4:s3:k4"), (16, "16x32x512:w4:s3:k2"), (32, "32x32x512:w4:s5:k1"),
-                        (64, "64x32x256:w4:s5:k1:t2"), (256, "128x64x256:w4:s4:k1:t1"),
-                        (2048, "128x128x128:w4:s3:k1:t1"), (8192, "128x128x128:w4:s3:k1:t1")],
-        (24576, 4096): [(1, "16x64x256:w4:s3:k1"), (16, "16x64x256:w4:s3:k1"), (32, "32x64x256:w4:s3:k1"),
-                        (64, "64x64x128:w4:s4:k1:t1"), (256, "128x64x128:w4:s3:k1:t1"),
-                        (2048, "128x128x128:w4:s3:k1:t1"), (8192, "128x128x128:w4:s3:k1:t1")],
-        (4096, 12288): [(1, "16x32x256:w4:s3:k4"), (16, "16x32x512:w4:s4:k2"), (32, "32x32x512:w4:s5:k1"),
-                        (64, "64x32x256:w4:s5:k1:t2"), (256, "64x128x256:w8:s4:k1:t2"),
-                        (2048, "128x128x128:w8:s3:k1:t1"), (8192, "128x128x128:w8:s3:k1:t1")],
-    },
-    "sm_100": {  # B200: swept at M <= 64, then M 256 to 8192 (pointer and TMA)
-        (6144, 4096): [(1, "16x64x512:w4:s4:k1"), (16, "16x64x512:w4:s4:k1"), (32, "32x16x256:w4:s4:k1"),
-                       (64, "64x64x512:w4:s4:k1"), (256, "64x64x256:w4:s3:k1:t1"), (2048, "128x64x128:w4:s3:k1:t1"),
-                       (8192, "128x64x128:w4:s3:k1:t1")],
-        (4096, 4096): [(1, "16x32x512:w4:s4:k1"), (16, "16x32x512:w4:s4:k1"), (32, "32x32x512:w4:s4:k1"),
-                       (64, "64x32x512:w4:s4:k1"), (256, "64x64x256:w4:s3:k1:t1"), (2048, "128x64x128:w4:s3:k1:t1"),
-                       (8192, "128x128x128:w4:s3:k1:t1")],
-        (28672, 4096): [(1, "16x64x256:w4:s3:k1"), (16, "16x64x256:w4:s3:k1"), (32, "32x128x256:w4:s3:k1"),
-                        (64, "64x128x256:w4:s3:k1"), (256, "128x64x128:w4:s4:k1:t1"), (2048, "128x64x128:w4:s3:k1:t1"),
-                        (8192, "128x128x128:w4:s4:k1:t1")],
-        (4096, 14336): [(1, "16x64x256:w4:s5:k4"), (16, "16x64x512:w4:s3:k4"), (32, "32x64x256:w4:s4:k4"),
-                        (64, "64x64x512:w4:s4:k2"), (256, "64x64x256:w4:s4:k1:t1"), (2048, "128x64x128:w4:s3:k1:t1"),
-                        (8192, "128x128x128:w4:s4:k1:t1")],
-        (24576, 4096): [(1, "16x64x256:w4:s4:k1"), (16, "16x64x256:w4:s4:k1"), (32, "32x64x256:w4:s3:k1"),
-                        (64, "64x64x256:w4:s3:k1"), (256, "64x128x128:w4:s4:k1:t1"), (2048, "128x64x128:w4:s3:k1:t1"),
-                        (8192, "128x128x128:w4:s3:k1:t1")],
-        (4096, 12288): [(1, "16x64x256:w4:s5:k4"), (16, "16x64x512:w4:s3:k4"), (32, "32x64x256:w4:s5:k4"),
-                        (64, "64x32x512:w4:s4:k1"), (256, "64x64x256:w4:s3:k1:t1"), (2048, "128x64x128:w4:s3:k1:t1"),
-                        (8192, "128x128x128:w4:s3:k1:t1")],
-    },
-}
-
-
 @functools.cache
 def arch(index: int | None = None) -> str:
     major, minor = torch.cuda.get_device_capability(index)
@@ -268,14 +221,16 @@ class Workspace:
         self.cnt = torch.zeros(tiles, dtype=torch.int32, device=device)
 
 
-def quant_rows(x: torch.Tensor, xq: torch.Tensor, s: torch.Tensor, num_warps: int | None = None):
+def quant_rows(x: torch.Tensor, xq: torch.Tensor, s: torch.Tensor, num_warps: int | None = None, rows: int | None = None):
     """x [M, K] bf16 (unit stride along K) -> xq [M, K] int8 and s [M] (or [M, 1]) float32, in place."""
     m, k = x.shape
     assert x.dtype == torch.bfloat16 and x.stride(1) == 1, (x.dtype, x.stride())
     assert xq.dtype == torch.int8 and xq.shape == x.shape and xq.stride(1) == 1
     assert s.dtype == torch.float32 and s.numel() == m and s.is_contiguous()
-    return exactlin_quant_rows[(m,)](x, xq, s, k, x.stride(0), xq.stride(0), BLOCK_K=triton.next_power_of_2(k),
-                              num_warps=num_warps or quant_warps(k), **OPTS)
+    warps, r = quant_plan(m, k)
+    warps, r = num_warps or warps, rows or r
+    return exactlin_quant_rows[(triton.cdiv(m, r),)](x, xq, s, m, k, x.stride(0), xq.stride(0), BLOCK_M=r,
+                                                     BLOCK_K=triton.next_power_of_2(k), num_warps=warps, **OPTS)
 
 
 def scaled_mm(xq: torch.Tensor, s_a: torch.Tensor, w: torch.Tensor, s_w: torch.Tensor, y: torch.Tensor,
