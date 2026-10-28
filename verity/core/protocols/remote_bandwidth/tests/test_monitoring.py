@@ -1,4 +1,4 @@
-"""The monitoring period's pooled step (`monitoring`): the count is the least within δ of #4413's C(T, M)·p^M, the
+"""The monitoring period's pooled step (`monitoring`): the count is the least within δ of the count bound's C(T, M)·p^M, the
 reference year at 10⁻⁶ leaves one session uncovered where the union T·eps doesn't reach δ, the per-window figure is the
 session's openings bound at δ/T, its error charging each session's draw term at its `samples`, and a rejected session
 pools nothing."""
