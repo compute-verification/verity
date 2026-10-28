@@ -206,7 +206,7 @@ def test_the_shadow_gml_has_a_node_per_network_node_and_an_edge_per_link(g, ex):
 def test_the_command_line_prints_each_form(g, capsys):
     g.main(["--blocks", "1", "--json"])
     doc = json.loads(capsys.readouterr().out)
-    assert doc["name"] == "leaf-spine-1" and len(doc["zones"][0]["devices"]) == 13
+    assert doc["name"] == "leaf-spine-1" and len(doc["blocks"][0]["devices"]) == 13
     assert [d["name"] for d in doc["fabric"]] == ["leaf0", "b0.cert", "ext0"]
     g.main(["--blocks", "1", "--outside", "2", "--json"])
     assert [d["name"] for d in json.loads(capsys.readouterr().out)["fabric"]][-2:] == ["ext0", "ext1"]
