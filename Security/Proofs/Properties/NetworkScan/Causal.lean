@@ -143,6 +143,7 @@ theorem input_lands {q j : ℕ} (hq : q < (P.defs[P.root]!).body.nodes.size)
       simp only [hf] at hdn
       obtain ⟨h1, h2, -⟩ := hdn
       rw [Resolve.bs_members _ (Or.inl hf), h2 hprim] at hn
+      have := Nat.zero_le (j / (P.defs[((P.defs[P.root]!).body.nodes[q]!).fn]!).outLeaves)
       omega
     · simp only [hf] at hdn
       exact absurd (hdn.1.symm.trans hprim) (by decide)
@@ -184,8 +185,7 @@ theorem batch_lands (hc : NciCheck.Desc.calleesFirst P = true) (hrp : (P.defs[P.
   have hke1 : (P.defs[P.root]!).body.offsets[ke + 1]! ≤ (P.defs[P.root]!).gates := by
     rw [← hK]; exact hmono _ _ (by omega) (le_refl _)
   have hinv : Resolve.Inv P (P.defs[P.root]!).gates (P.rootScope, ⟨false, ke, j⟩) := by
-    refine ⟨good_root P, ⟨fun h => absurd h (by decide), fun _ => ⟨hk, hj⟩⟩, fun h => absurd h (by decide),
-      fun _ => ?_⟩
+    refine ⟨good_root P, ⟨fun h => by simp at h, fun _ => ⟨hk, hj⟩⟩, fun h => by simp at h, fun _ => ?_⟩
     show 0 + (P.defs[P.root]!).body.offsets[ke + 1]! ≤ (P.defs[P.root]!).gates
     omega
   obtain ⟨a, ha⟩ := OperandsResolve.resolve_ok P hroot hB hL hc hrp hz hfuel _ _ _ hinv
@@ -201,10 +201,12 @@ theorem batch_lands (hc : NciCheck.Desc.calleesFirst P = true) (hrp : (P.defs[P.
       (j / (P.defs[((P.defs[P.root]!).body.nodes[ke]!).fn]!).outLeaves)) :=
     Resolve.good_child P (good_root P) hk rfl hcomp hm rfl
   have hinv' := Resolve.down_ok P hroot hB hL _ _ hgA (le_refl _) _ (hdn3 hcomp)
+  have hstep := Resolve.rs_batch P P.rootScope ke j hbatch
+  simp only [rootScope_d, hcomp, Bool.false_eq_true, ite_false] at hstep
   unfold Flock.Program.resolve at ha
-  rw [fuel_succ, Flock.Steps.run.eq_2, Resolve.rs_batch P P.rootScope ke j hbatch] at ha
-  simp only [rootScope_d] at ha
-  simp only [hcomp, Bool.false_eq_true, ite_false, bind, Except.bind] at ha
+  rw [fuel_succ] at ha
+  generalize Flock.Steps.FUEL - 1 = fuel at ha
+  replace ha := ReadsExact.run_inr hstep ha
   have hf : ((P.defs[P.root]!).body.nodes[ke]!).form ≠ .scan := fun h => by rw [hbatch] at h; cases h
   rcases run_below P hroot hB hL rfl hf _ _ a hinv' Below.self ha with ⟨h1, h2⟩ | ⟨i, t, ht, n', -, h⟩
   · rw [child_off] at h1
@@ -256,7 +258,7 @@ theorem param_lands (hok : ∀ i < P.defs.size, BodiesOk.DefOk P.defs i P.defs[i
   have hj' : j < ((P.defs[((P.defs[P.root]!).body.nodes[kl]!).fn]!).body.params[0]!).2.leaves := by
     rw [hbp]; exact hj
   have hinv : Resolve.Inv P (P.defs[P.root]!).gates (P.child P.rootScope kl m, ⟨true, 0, j⟩) := by
-    refine ⟨hgA, ⟨fun _ => ⟨?_, ?_⟩, fun h => absurd h (by decide)⟩, fun _ => ?_, fun h => absurd h (by decide)⟩
+    refine ⟨hgA, ⟨fun _ => ⟨?_, ?_⟩, fun h => by simp at h⟩, fun _ => ?_, fun h => by simp at h⟩
     · show 0 < (P.defs[((P.defs[P.root]!).body.nodes[kl]!).fn]!).body.params.size
       exact hp0'
     · show j < ((P.defs[((P.defs[P.root]!).body.nodes[kl]!).fn]!).body.params[0]!).2.leaves
@@ -270,8 +272,9 @@ theorem param_lands (hok : ∀ i < P.defs.size, BodiesOk.DefOk P.defs i P.defs[i
       .ok (.inr (P.rootScope, (((P.defs[P.root]!).body.nodes[kl]!).args[0]!).memberRef m j)) :=
     Resolve.rs_up_batch P P.rootScope _ _ kl m 0 j hbatch
   unfold Flock.Program.resolve at ha
-  rw [fuel_succ, Flock.Steps.run.eq_2, hstep] at ha
-  simp only [bind, Except.bind] at ha
+  rw [fuel_succ] at ha
+  generalize Flock.Steps.FUEL - 1 = fuel at ha
+  replace ha := ReadsExact.run_inr hstep ha
   rw [Resolve.memberRef_eq] at ha
   obtain ⟨-, -, hup, -, -⟩ := hBr.1 kl hk
   have ht := hup 0 hp0' j hj' m hm
