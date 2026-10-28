@@ -17,7 +17,7 @@ card instances `Pouw.Guarantees.DitherInstance.WorkSoundAt` on
 [#4662](https://github.com/compute-verification/verity/pull/4662), with the clocks of `Timed` on
 [#4787](https://github.com/compute-verification/verity/pull/4787). The PR whose Lean covers this document deletes it.
 The numbers are D6 v1.1 (art:6926be1c98b7855aca699278551040538e83843d28b72fdf85044cfd291bf3ef, CMP-118), and the segment
-and noise periods NOFOLD-OPT's (see "The segment and the noise period").
+and noise tile NOFOLD-OPT's (see "The segment and the noise tile").
 
 **Names** (Daniel, 26 Oct, 7:51 PM PDT): Dither is the protocol, PoUW's no-fold design, and the ACCEL model is the
 physical model 𝓜 it is proved over (the Lean's `Accel`).
@@ -81,10 +81,10 @@ the proof service's "the proof system is sound" is `ProofSystemSound` (the Lean'
 weights (for PV, A is P and B is the value cache).
 
 **Noise.** The live coins give each call its dithers d_A ∈ {0,1}^{m×K} and d_B ∈ {0,1}^{N×K}, and HYB noise:
-- U is N×L′ and V is m×L′, both uniform on ±80, periodic along K with period L′.
+- U is N×L′ and V is m×L′, both uniform on ±80, repeated along K in every noise tile of L′ inner indices.
 - U's columns are permuted afresh (π_τ) in every noise tile τ.
 - A segment is t noise tiles, so L = t·L′. L, the word interval (one 16-bit word a cell every L inner indices), and L′,
-  the noise period, are separate parameters (see "The segment and the noise period").
+  a noise tile's length, are separate parameters (see "The segment and the noise tile").
 
 **The tensor operands** are X = wrap8(A + d_A + V) and W′ = wrap8(B + d_B + U π_τ), tile by tile, with wrap indicators
 w_X and w_W.
@@ -150,7 +150,7 @@ check passes, and O = −V·Y_Wᵀ costs L′/K + 1/m of the call's MACs. That f
 **What is credited.** Static matmuls and attention's PV, with O bound and a fresh dither bit on P. QKᵀ and V4's
 indexer are served plain and uncredited.
 
-**The segment and the noise period** per class of sampling block follow the 07:04Z rule. The pair (L, L′) maximizes
+**The segment and the noise tile** per class of sampling block follow the 07:04Z rule. The pair (L, L′) maximizes
 credited value per honest second, pub_μ°/T_honest, subject to γ ≤ 10 for that class. A class with no pair at γ ≤ 10 is
 credited at its least-γ pair only where that adds credited value per honest second; otherwise it is served plain.
 NOFOLD-OPT's picks (CMP-172, runs r20261027-031621-5469 and r20261027-032610-3a37), all with T_S implied by O and
@@ -424,7 +424,7 @@ k_exfil. Dither needs these of the challenger and the certifier:
   coin before its run's challenge phase. A replica's answers are a stream of one-statement batches, run concurrently
   beside its later sampling blocks and never serialized. τ_ans includes the wait for the firewall's release slot.
 - **No q(Δ + τ_ans) ≤ T.** #4787's `Timed` covers any number of sampling blocks, with answers beside later ones: their
-  sampling periods telescope to T. Selections arrive about every 43.8 s a replica (T/q).
+  sampling blocks' spans telescope to T. Selections arrive about every 43.8 s a replica (T/q).
 - **τ_ans isn't set.** v3.1's 10 s on an "8 s latency floor" rested on run r20261024-092255-2edd, which failed (rc 2) and
   measured no Dither proof block. τ_ans is to be set from a passing `--zk` run of the proof block with live coins, the
   release slot included, with a wide margin.
@@ -464,7 +464,7 @@ Notes on the headline:
 - Without the registration (P21's variant, the draw normalised by wall-clock time), ε_skip would be 0.270–0.424%.
 - Coverage counts V4's 48.85e9 static MACs a token at their own shapes. With mHC's F32 GEMMs uncredited, V4's coverage
   is 96.4% on the H200 and 95.7% on the RTX PRO 6000.
-- The γ column is D6 v1.1's. At NOFOLD-OPT's picks (see "The segment and the noise period"), the static calls' γ is
+- The γ column is D6 v1.1's. At NOFOLD-OPT's picks (see "The segment and the noise tile"), the static calls' γ is
   1.05–1.15 on the RTX PRO 6000 with B pinned and 1.40–2.15 on the H200; the headline isn't restated at them yet.
 - What v3.2 changes and D6 v1.1 doesn't price:
   - E with the answers' proofs raises ε_net by at most 0.0006%.

@@ -118,8 +118,8 @@ KEY = INST.default_key
 
 @dataclass(frozen=True)
 class Shape:
-    """A call: m rows of A against n rows of B at contraction k, HYB noise of period lp (L′), words every L inner indices,
-    leaf rows of `row` bytes, and O committed (`o`; a filler's calls commit none)."""
+    """A call: m rows of A against n rows of B at contraction k, HYB noise in noise tiles of lp (L′) inner indices,
+    words every L, leaf rows of `row` bytes, and O committed (`o`; a filler's calls commit none)."""
 
     m: int
     n: int
@@ -140,7 +140,7 @@ class Shape:
             raise ValueError(f"L is t L′, a multiple of L′ {self.lp}, not {self.L}")
         if min(self.L, self.k) > 8 * self.lp:
             raise ValueError(f"t = min(L, K) / L′ is at most 8 (verity/core/protocols/pouw/dither/PROTOCOL.md, The segment "
-                             f"and the noise period), not {min(self.L, self.k)} / {self.lp} at L {self.L}, K {self.k}")
+                             f"and the noise tile), not {min(self.L, self.k)} / {self.lp} at L {self.L}, K {self.k}")
         if self.row <= 0 or self.row % 16 or TILE_WORD_BYTES % self.row:
             raise ValueError(f"a row is a multiple of 16 bytes dividing {TILE_WORD_BYTES}, not {self.row}")
 
