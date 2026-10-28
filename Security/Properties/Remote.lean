@@ -83,9 +83,9 @@ def AcceptInferenceOnly : Prop :=
   ∀ (blobs : Array ByteArray) (ps : List Named) (c : ByteArray) (ev : List Case) (pub prof : Keyed),
     (Core.Remote.protocol.on blobs).check ps c ev = .accept pub prof →
       ∃ (kI kW kS : Case) (r : ByteArray), ev = [kI, kW, kS] ∧
-        digestOf NciCheck.Protocol.protocol kI.commitment = some r ∧
-        digestOf PouwCheck.protocol kW.commitment = some r ∧
-        digestOf SampledProofs.OneStageZk.protocol.toProtocol kS.commitment = some r ∧
+        Properties.Composition.digestOf NciCheck.Protocol.protocol kI.commitment = some r ∧
+        Properties.Composition.digestOf PouwCheck.protocol kW.commitment = some r ∧
+        Properties.Composition.digestOf SampledProofs.OneStageZk.protocol.toProtocol kS.commitment = some r ∧
         CaseHeld kI
 
 /-- **Remote's acceptance gives `Nci.Complies`**, the hypothesis `Nci.Guarantees.DampenerRemote` takes. On every input
