@@ -6,10 +6,10 @@ import Definitions.Pous.Model.StreamedWipeDisk
 The statements of `Security/Definitions/Pous/Guarantees/StreamedWipeDisk.lean` with the memory challenger's acceptance
 rule a parameter `V` (`Pous.StreamedWipe.Acceptance`), as `Security/Definitions/Pous/Claims/StreamedWipeServer.lean`
 states the wipe per server. Each guarantee there is its claim at the wipe's own acceptance rule, `StreamedWipe.Accepts`.
-The lock lists, for each claim, a `fails` theorem (the claim is false at `StreamedWipe.acceptAll`, where a prover
-inside the physical model that keeps all its prior content is accepted with probability 1) and a `meets` theorem (the
-claim's numeric antecedents hold at the deployed session as measured: vy-dc-h200-2's card, `StreamedWipe.h200`, with
-its disks, `StreamedWipe.h200Disks`).
+The lock lists, for each claim, a `fails` theorem (the claim is false at `StreamedWipe.acceptAll`, where a prover inside
+the physical model that keeps all its prior content is accepted with probability 1) and a `meets` theorem (the claim's
+numeric antecedents hold at the deployed session as measured: the deployed H200's card, `StreamedWipe.h200`, with its
+disks, `StreamedWipe.h200Disks`).
 -/
 
 namespace Pous.Claims
