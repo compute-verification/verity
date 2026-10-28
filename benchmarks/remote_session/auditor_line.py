@@ -339,7 +339,7 @@ def rates_at(disk_bytes_per_s: float = RATES["disk_bytes_per_s"],
         raise ValueError(f"bursts are one of {', '.join(BURSTS)}, not {bursts}")
     out = {"disk_bytes_per_s": disk_bytes_per_s, "link_bytes_per_s": link_bytes_per_s}
     if bursts == "stated":
-        node = ledger.Node.stated(disk_bytes_per_s=disk_bytes_per_s, link_bytes_per_s=link_bytes_per_s)
+        node = ledger.Node.stated(V.NODE, disk_bytes_per_s=disk_bytes_per_s, link_bytes_per_s=link_bytes_per_s)
         out |= {"rebuild_burst_bytes": node.rebuild_burst_bytes, "disk_burst_bytes": node.disk_burst_bytes,
                 "link_burst_bytes": node.link_burst_bytes}
     return out

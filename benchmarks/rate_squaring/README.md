@@ -17,6 +17,7 @@ gate (with `gcc`), and `gamma.py`, `wide.py` and `cycle_fit.py`. `sq.sh` needs o
 
 **Reads and writes:** `sq.sh` and `ifma.sh` write `time.jsonl`, the gate outputs, `sass-mix.json`, Nsight Compute's
 CSVs and the build logs into their output directory; `cycle_fit.py` reads `sq.sh`'s outputs. **Backs:** these rates are
-the evidence for `timing.GPU_SQUARINGS_PER_S` and so for the stated ceiling C_sq (`timing.SQUARINGS_PER_S`), the `s` of
+the evidence for the RTX card's `squaring` (`verity/hardware/cards/rtx-pro-6000-server.toml`) and so for the stated
+ceiling C_sq (the node's `squarings_per_s`, `verity.hardware.node`), the `s` of
 the named assumption `Accounting.Remote.Held.Assumptions.SquaringCeiling`, which `Accounting.Guarantees.Remote.Held`
 and `HeldOverTime` take.

@@ -48,12 +48,15 @@ HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 sys.path.insert(0, str(HERE.parents[1]))
 
-from verity.core.protocols.remote_bandwidth import audit, timing  # noqa: E402
+from verity.core.protocols.remote_bandwidth import audit  # noqa: E402
 from verity.core.protocols.sampled_proofs import costfit  # noqa: E402
+from verity.hardware import node as hardware  # noqa: E402
 
 import wire  # noqa: E402
 
 LN = -math.log(audit.DELTA)
+NODE = hardware.node(*hardware.VY_NEBIUS)
+"""The node the operating points serve on (`verity.hardware.node`)."""
 BLOCK = 4096
 STATEMENT = 512
 """Openings a statement: C-Flock's ceiling, m = k_log + nbl ≤ 35, at the unit's k_log 26."""
@@ -252,7 +255,7 @@ def points(recorded: list[dict]) -> dict:
 
 def pass_s(p: dict) -> float:
     """A pass: each GPU reads its shard."""
-    return p["shard_bytes"] / timing.GPU_READ_BYTES_PER_S
+    return p["shard_bytes"] / NODE.devices[0].read_bytes_per_s
 
 
 def c_at(p: dict, flight: int) -> float:
@@ -563,7 +566,7 @@ def main() -> None:
             meas = [arm for arm in MEMSAT["arms"] if arm[0] == r] if name.startswith("8B") else []
             sweep.append({"point": name, "r": r, "o": o, "k": k, "d": d, **two, "one_in_flight": one,
                           **costs(p, prices, o=o, r=r),
-                          "reads_over_R": r * p["blocks"] * BLOCK / timing.SPEC_BYTES_PER_S,
+                          "reads_over_R": r * p["blocks"] * BLOCK / NODE.spec_bytes_per_s,
                           "measured": {"serving_share": meas[0][0] * meas[0][1], "gamma_spec": meas[0][2],
                                        "tokens_per_s": meas[0][3]} if meas else None})
     def one(x: dict, cell: str) -> str:

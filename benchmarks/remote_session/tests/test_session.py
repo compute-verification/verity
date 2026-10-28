@@ -6,6 +6,8 @@ are audited, accepted when held and rejected when dropped. The Lean verifier dec
 beside it, and the two must agree at every event, window verdict and record field."""
 from __future__ import annotations
 
+import dataclasses
+import math
 import os
 import queue
 import random
@@ -20,7 +22,7 @@ HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parent))
 sys.path.insert(0, str(HERE.parents[2]))
 
-from verity.core.protocols.remote_bandwidth import audit, coins, ledger, receipts as rb, timing  # noqa: E402
+from verity.core.protocols.remote_bandwidth import audit, coins, ledger, receipts as rb  # noqa: E402
 from verity.core.protocols.remote_bandwidth import codec as rcodec  # noqa: E402
 
 import prover  # noqa: E402
@@ -28,6 +30,7 @@ import verifier  # noqa: E402
 import wire  # noqa: E402
 
 P512 = rcodec.Codec(rcodec.P512, 2, False)
+NODE = verifier.NODE
 
 
 VERIFIER, PROVER = 0, 1
@@ -147,6 +150,15 @@ class TickingBackend(prover.CpuBackend):
         return out
 
 
+def no_squarings(monkeypatch, *, chip: bool = True) -> None:
+    """Run the verifier's node at no squarings, and with no on-chip storage unless `chip`."""
+    def bare(d):
+        return dataclasses.replace(d, squarings_per_s={w: 0.0 for w in d.squarings_per_s},
+                                   chip_bytes=d.chip_bytes if chip else 0)
+    host = NODE.host if chip else dataclasses.replace(NODE.host, chip_bytes=0)
+    monkeypatch.setattr(verifier, "NODE", dataclasses.replace(NODE, devices=tuple(map(bare, NODE.devices)), host=host))
+
+
 def run(plan: str, *, blocks: int = 16, windows: int = 3, samples: int = 6, sessions: int = 1,
         read_bytes_per_s: float = 1e20, tiers: dict | None = None, lifetime: int | None = None,
         layout: list | None = None, host_bytes: int = 0, paces: list | None = None, then=None,
@@ -224,8 +236,8 @@ def test_a_prover_reporting_a_slow_read_cannot_lower_either_ledgers_capacity(mon
     (slow,), _ = run("honest", read_bytes_per_s=1.0)
     (fast,), _ = run("honest", read_bytes_per_s=1e20)
     assert slow["ledger"]["inputs"]["reported_read_bytes_per_s"] == 1.0
-    assert slow["ledger"]["measured"]["capacity_bytes_per_s"] == timing.READ_BYTES_PER_S
-    assert slow["ledger"]["spec"]["capacity_bytes_per_s"] == timing.SPEC_BYTES_PER_S
+    assert slow["ledger"]["measured"]["capacity_bytes_per_s"] == NODE.read_bytes_per_s
+    assert slow["ledger"]["spec"]["capacity_bytes_per_s"] == NODE.spec_bytes_per_s
     assert fast["ledger"]["measured"]["capacity_bytes_per_s"] == fast["ledger"]["spec"]["capacity_bytes_per_s"] == 1e20
 
 
@@ -234,15 +246,16 @@ def test_the_ledgers_are_the_nodes_whatever_share_of_it_the_store_is_on(monkeypa
     ceiling the node's, for a store on one GPU too: its calibration's one-GPU read lowers none of them, and its
     certified bytes are the same at either R."""
     monkeypatch.setattr(prover, "OPENINGS_PART", 4)
-    (r,), _ = run("honest", read_bytes_per_s=timing.GPU_READ_BYTES_PER_S)
+    gpu = NODE.devices[0]
+    (r,), _ = run("honest", read_bytes_per_s=gpu.read_bytes_per_s)
     lg = r["ledger"]
-    node_read = timing.GPUS * timing.GPU_READ_BYTES_PER_S + timing.HOST_READ_BYTES_PER_S
-    node_spec = timing.GPUS * timing.GPU_SPEC_BYTES_PER_S + timing.HOST_SPEC_BYTES_PER_S
-    assert lg["inputs"]["reported_read_bytes_per_s"] == timing.GPU_READ_BYTES_PER_S
+    node_read = math.fsum([8 * gpu.read_bytes_per_s, NODE.host.read_bytes_per_s])
+    node_spec = math.fsum([8 * gpu.spec_bytes_per_s, NODE.host.spec_bytes_per_s])
+    assert lg["inputs"]["reported_read_bytes_per_s"] == gpu.read_bytes_per_s
     assert lg["measured"]["capacity_bytes_per_s"] == lg["inputs"]["measured_read_bytes_per_s"] == node_read
     assert lg["spec"]["capacity_bytes_per_s"] == lg["inputs"]["spec_bytes_per_s"] == node_spec
-    assert lg["inputs"]["chip_bytes"] == timing.GPUS * timing.GPU_CHIP_BYTES + timing.HOST_CHIP_BYTES == 3_105_652_736
-    assert lg["inputs"]["squarings_per_s"] == timing.GPUS * timing.GPU_SQUARINGS_PER_S["p512"]
+    assert lg["inputs"]["chip_bytes"] == 8 * gpu.chip_bytes + NODE.host.chip_bytes == 3_105_652_736
+    assert lg["inputs"]["squarings_per_s"] == 8 * gpu.squarings_per_s["p512"]
     assert lg["spec"]["certified_bytes"] == pytest.approx(lg["measured"]["certified_bytes"], rel=1e-9)
 
 
@@ -252,16 +265,16 @@ def test_the_timing_parts_reproduce_the_whole_node_sessions_split_and_sum_to_its
     d101 = {"span_ns": 420_074_057_129, "passes": 6430, "reads_bytes": 4_888_145_229_250_560, "pass_ns": 65_259_603,
             "tiers": {"hbm": {"bytes": 751_619_276_800, "ms": 61.502974},
                       "host": {"bytes": 8_589_934_592, "ms": 25.468371}}}
-    for r in (timing.READ_BYTES_PER_S, timing.SPEC_BYTES_PER_S):
+    for r in (NODE.read_bytes_per_s, NODE.spec_bytes_per_s):
         parts = verifier.timing_parts(capacity_bytes_per_s=r, **d101)
         assert sum(parts.values()) == pytest.approx(1 - d101["reads_bytes"] / (r * d101["span_ns"] / 1e9), abs=1e-12)
-    parts = verifier.timing_parts(capacity_bytes_per_s=timing.READ_BYTES_PER_S, **d101)
+    parts = verifier.timing_parts(capacity_bytes_per_s=NODE.read_bytes_per_s, **d101)
     assert sum(parts.values()) == pytest.approx(0.09926702029063428, abs=1e-12)
     assert {k: round(v * 100, 2) for k, v in parts.items()} == {
         "above_stated_tiers": 0.0, "host_dram_idle": 3.68, "hbm_below_stated": 0.66, "receipts_beyond_read": 5.48,
         "boundaries_and_allowance": 0.10, "blocks_left_out": 0.0}
-    spec = verifier.timing_parts(capacity_bytes_per_s=timing.SPEC_BYTES_PER_S, **d101)
-    assert spec["above_stated_tiers"] == pytest.approx(1 - timing.READ_BYTES_PER_S / timing.SPEC_BYTES_PER_S)
+    spec = verifier.timing_parts(capacity_bytes_per_s=NODE.spec_bytes_per_s, **d101)
+    assert spec["above_stated_tiers"] == pytest.approx(1 - NODE.read_bytes_per_s / NODE.spec_bytes_per_s)
 
 
 def test_a_sessions_ledgers_carry_the_timing_parts_when_its_calibration_reads_each_tier(monkeypatch):
@@ -600,8 +613,7 @@ def test_the_memory_line_credits_the_labelled_weights_and_kv_only_on_a_verdict(m
     Unlabelled, the whole registered store is filler and no weights are credited.  The node has no on-chip storage
     here, which would hold the whole store."""
     monkeypatch.setattr(prover, "OPENINGS_PART", 4)
-    monkeypatch.setattr(timing, "SQUARINGS_PER_S", {"p512": 0.0})
-    monkeypatch.setattr(timing, "CHIP_BYTES", 0)
+    no_squarings(monkeypatch, chip=False)
     seen = {}
     memory = verifier.memory
 
@@ -666,8 +678,7 @@ def test_the_node_line_credits_each_kind_against_the_nodes_hbm_and_host_dram(mon
     verdict; each share is of HBM plus DRAM, the residual what the total leaves, and the line is its worst window's.
     The node has no on-chip storage here."""
     monkeypatch.setattr(prover, "OPENINGS_PART", 4)
-    monkeypatch.setattr(timing, "SQUARINGS_PER_S", {"p512": 0.0})
-    monkeypatch.setattr(timing, "CHIP_BYTES", 0)
+    no_squarings(monkeypatch, chip=False)
     seen, memory = {}, verifier.memory
 
     def keep(*a, **kw):
@@ -711,7 +722,7 @@ def test_the_memory_line_held_on_average_credits_what_the_worst_pass_form_cannot
     same line in both forms (`recorded_memory`), a record written before the worst-pass form charged the chip
     included."""
     monkeypatch.setattr(prover, "OPENINGS_PART", 4)
-    monkeypatch.setattr(timing, "SQUARINGS_PER_S", {"p512": 0.0})
+    no_squarings(monkeypatch)
     seen, memory = {}, verifier.memory
 
     def keep(*a, **kw):
@@ -724,7 +735,7 @@ def test_the_memory_line_held_on_average_credits_what_the_worst_pass_form_cannot
     (r,), (p,) = run("honest", samples=200, layout=layout)
     assert r["accepted"] and p["accepted"]
     (record, plans, regions), kw = seen["args"]
-    assert kw["chip_bytes"] == timing.CHIP_BYTES
+    assert kw["chip_bytes"] == NODE.chip_bytes
     B, span = rcodec.BLOCK_BYTES, max(w.span_ns for w in record.windows)
     rate = record.codec.encode_squarings * 1e9 / span / 2
     m = verifier.memory(record, plans, regions, hbm_bytes=kw["hbm_bytes"], rebuild=audit.Rebuild(record.codec, rate),
@@ -955,8 +966,8 @@ def test_the_line_of_record_reads_the_lean_verifiers_record_of_the_session():
 
 
 def test_the_line_of_record_deducts_at_least_the_auditors_s_chip():
-    """`verifier.recorded_chip_bytes`: a record its verifier wrote at an S_chip under `timing.CHIP_BYTES` (gate runs 7
-    to 9's 3,045,746,688 B) is deducted at `timing.CHIP_BYTES`, in the line of record's inputs (`recorded_inputs`, which
+    """`verifier.recorded_chip_bytes`: a record its verifier wrote at an S_chip under `NODE.chip_bytes` (gate runs 7
+    to 9's 3,045,746,688 B) is deducted at `NODE.chip_bytes`, in the line of record's inputs (`recorded_inputs`, which
     the Lean and line.py both read) and in the verifier's diagnostic (`recorded_paced`): every stretch, in both forms
     and both readings, charges the difference in whole blocks more as absent than the record's own S_chip would. A
     record at a larger S_chip keeps its own."""
@@ -966,25 +977,25 @@ def test_the_line_of_record_deducts_at_least_the_auditors_s_chip():
                   then=lambda v: got.update(reg=wire.registration_json(v.registration)))
     mem = r["ledger"]["memory"]
     b, short = mem["block_bytes"], 3_045_746_688
-    assert mem["chip_bytes"] == timing.CHIP_BYTES > short
+    assert mem["chip_bytes"] == NODE.chip_bytes > short
     rates = verifier.recorded_rates(r, got["reg"], disk_bytes_per_s=4.4e9, link_bytes_per_s=5e10)
 
     def at(chip: int) -> dict:
         return {**r, "ledger": {**r["ledger"], "memory": {**mem, "chip_bytes": chip}}}
 
     inputs = verifier.recorded_inputs(at(short), got["reg"], host_bytes=0, rates=rates)
-    assert inputs["chip_bytes"] == timing.CHIP_BYTES
+    assert inputs["chip_bytes"] == NODE.chip_bytes
     assert inputs == verifier.recorded_inputs(r, got["reg"], host_bytes=0, rates=rates)
     charged, own = line.record_run_json(inputs), line.record_run_json({**inputs, "chip_bytes": short})
-    more = -(-timing.CHIP_BYTES // b) - -(-short // b)
+    more = -(-NODE.chip_bytes // b) - -(-short // b)
     assert more > 0
     for f in line.FORMS:
         assert charged[f]["stretches"] and len(charged[f]["stretches"]) == len(own[f]["stretches"])
         for x, y in zip(charged[f]["stretches"], own[f]["stretches"]):
             for reading in line.READINGS:
                 assert line.number(x[reading]["lost_blocks"]) == line.number(y[reading]["lost_blocks"]) + more
-    assert verifier.recorded_paced(at(short), got["reg"], host_bytes=0)["chip_blocks"] == -(-timing.CHIP_BYTES // b)
-    larger = timing.CHIP_BYTES + b
+    assert verifier.recorded_paced(at(short), got["reg"], host_bytes=0)["chip_blocks"] == -(-NODE.chip_bytes // b)
+    larger = NODE.chip_bytes + b
     assert verifier.recorded_inputs(at(larger), got["reg"], host_bytes=0, rates=rates)["chip_bytes"] == larger
     assert verifier.recorded_paced(at(larger), got["reg"], host_bytes=0)["chip_blocks"] == -(-larger // b)
 
@@ -1067,9 +1078,9 @@ def test_held_over_time_charges_what_a_burst_frees_in_one_groups_slack_and_the_s
 def test_a_paced_lines_ingress_charge_brings_the_bursts_the_ledger_states_for_its_routes():
     """`ingress_bursts` is `ledger.Node.stated`'s B: the rebuild batch in flight always, one second at the disks'
     ceiling for the charge up to it, and a link window once the charge passes the disks (the link-charged line)."""
-    assert verifier.ingress_bursts(0.0) == timing.CHIP_BYTES
-    assert verifier.ingress_bursts(4.4e9) == timing.CHIP_BYTES + 4.4e9
-    assert verifier.ingress_bursts(54.4e9) == timing.CHIP_BYTES + 4.4e9 + timing.LINK_WINDOW_BYTES
+    assert verifier.ingress_bursts(0.0) == NODE.chip_bytes
+    assert verifier.ingress_bursts(4.4e9) == NODE.chip_bytes + 4.4e9
+    assert verifier.ingress_bursts(54.4e9) == NODE.chip_bytes + 4.4e9 + NODE.host.link_window_bytes
 
 
 def test_the_paced_line_refuses_a_session_any_of_whose_passes_leaves_a_registered_block_out():

@@ -132,6 +132,7 @@ sys.path.insert(0, str(HERE.parents[1]))
 
 from verity.core.protocols.remote_bandwidth import audit, coins, ledger, line, timing  # noqa: E402
 from verity.core.protocols.remote_bandwidth import store as rstore  # noqa: E402
+from verity.hardware import node as hardware  # noqa: E402
 
 import challengers  # noqa: E402
 import lean_verifier as lv  # noqa: E402
@@ -140,9 +141,12 @@ from checks import Checks  # noqa: E402
 
 CHECK_BATCH = 1024
 """Openings a Lean thread checks at once (`checkWindowChunked`)."""
+NODE = hardware.node(*hardware.VY_NEBIUS)
+"""The audited node's figures, read off its cards (`verity.hardware.node`): a vy-nebius node until the Site registers
+the audited node."""
 GPU_HBM_BYTES = 96 * 2 ** 30
 """One RTX PRO 6000's memory, 96 GiB (`benchmarks/census/hardware.json`)."""
-HBM_BYTES = timing.GPUS * GPU_HBM_BYTES
+HBM_BYTES = len(NODE.devices) * GPU_HBM_BYTES
 DISK_BYTES_PER_S = 4.4e9
 """The node's disks' read ceiling, each disk's highest second summed (4.311e9) and rounded up:
 how much of a paced line's ingress charge is its disks (`ingress_bursts`)."""
@@ -171,7 +175,7 @@ def timing_parts(*, capacity_bytes_per_s: float, span_ns: int, passes: int, read
     `receipts_beyond_read`."""
     s = span_ns / passes / 1e9
     whole = capacity_bytes_per_s * s
-    gpus, host = timing.GPUS * timing.GPU_READ_BYTES_PER_S, timing.HOST_READ_BYTES_PER_S
+    gpus, host = NODE.device_read_bytes_per_s, NODE.host.read_bytes_per_s
     hbm_bytes, host_bytes = tiers["hbm"]["bytes"], tiers.get("host", {}).get("bytes", 0)
     hbm_s, pass_s = tiers["hbm"]["ms"] / 1e3, pass_ns / 1e9
     return {"above_stated_tiers": (capacity_bytes_per_s - gpus - host) / capacity_bytes_per_s,
@@ -333,7 +337,7 @@ def summed(windows: list[dict], *, hbm_bytes: int, block_bytes: int, delta: floa
             "windows": windows}
 
 
-def recorded_memory(session: dict, *, chip_bytes: int = timing.CHIP_BYTES, host_bytes: int = 0) -> dict:
+def recorded_memory(session: dict, *, chip_bytes: int = NODE.chip_bytes, host_bytes: int = 0) -> dict:
     """An accepted session's memory line in both forms, from its record in `verifier.json` (`Verifier.session`'s),
     for one written before the average form (`averaged`): each window's mean held per pass is its read weights over its
     passes, and its registered receipts over its passes less its least host tier for HBM, exact while every pass reads
@@ -473,10 +477,10 @@ def paced_groups(mem: dict, seen: list[dict], *, block_bytes: int) -> list[line.
 def ingress_bursts(ingress_bytes_per_s: float, disk_bytes_per_s: float = DISK_BYTES_PER_S) -> float:
     """B, the bytes the routes back into node memory bring at once beyond their rates at an ingress charge of
     `ingress_bytes_per_s`, `ledger.Node.stated`'s bursts: one rebuild batch in flight (S_chip), one second at the disks'
-    ceiling (the charge up to `disk_bytes_per_s`), and one link window (`timing.LINK_WINDOW_BYTES`) when the charge is
-    above that, the boundary links charged too."""
+    ceiling (the charge up to `disk_bytes_per_s`), and one link window (the host card's `host.link_window`) when the
+    charge is above that, the boundary links charged too."""
     disk = min(ingress_bytes_per_s, disk_bytes_per_s)
-    n = ledger.Node.stated(disk_bytes_per_s=disk, link_bytes_per_s=ingress_bytes_per_s - disk)
+    n = ledger.Node.stated(NODE, disk_bytes_per_s=disk, link_bytes_per_s=ingress_bytes_per_s - disk)
     return n.rebuild_burst_bytes + n.disk_burst_bytes + n.link_burst_bytes
 
 
@@ -528,10 +532,11 @@ def paced_line(mem: dict, seen: list[dict], *, groups: int, wrong: float, blocks
 
 
 def recorded_chip_bytes(mem: dict) -> int:
-    """S_chip as a recorded session's line deducts it: the record's, or the auditor's `timing.CHIP_BYTES` where that is
-    larger. A record keeps the S_chip its verifier ran at, which can be short of the node's: gate runs 7 to 9's
-    3,045,746,688 B took the host's term from an estimate of its caches, 59,906,048 B under `timing.HOST_CHIP_BYTES`."""
-    return max(mem["chip_bytes"], timing.CHIP_BYTES)
+    """S_chip as a recorded session's line deducts it: the record's, or the auditor's node's (`NODE.chip_bytes`) where
+    that is larger. A record keeps the S_chip its verifier ran at, which can be short of the node's: gate runs 7 to 9's
+    3,045,746,688 B took the host's term from an estimate of its caches, 59,906,048 B under the host card's
+    `host.chip`."""
+    return max(mem["chip_bytes"], NODE.chip_bytes)
 
 
 def recorded_paced(session: dict, registration: dict, *, host_bytes: int, ingress_bytes_per_s: float = 0.0) -> dict:
@@ -1374,13 +1379,13 @@ class Verifier:
             out["ledger"] = self.ledgers(record, [list(w.arrived_ns) for w in record.windows],
                                          [w.plans for w in session.windows])
             if pace is not None:
-                rebuild = audit.Rebuild(record.codec, timing.SQUARINGS_PER_S[record.codec.field.name])
+                rebuild = audit.Rebuild(record.codec, NODE.squarings_per_s[record.codec.field.name])
                 try:
                     out["ledger"]["paced"] = paced_line(
                         out["ledger"]["memory"], out["windows_seen"], groups=pace["groups"],
                         wrong=audit.pooled(record)[0], blocks=reg.blocks,
                         rebuild_per_ns=line.number(rebuild.squarings_per_s) / record.codec.encode_squarings / line.NS,
-                        chip_bytes=timing.CHIP_BYTES, block_bytes=record.block_bytes,
+                        chip_bytes=NODE.chip_bytes, block_bytes=record.block_bytes,
                         node_bytes=self.hbm_bytes + self.host_bytes,
                         burst_bytes=ingress_bursts(self.ingress_bytes_per_s),
                         ingress_per_ns=line.number(self.ingress_bytes_per_s) / record.block_bytes / line.NS)
@@ -1436,15 +1441,16 @@ class Verifier:
         (`slack_log2`); a record without it was charged `UNRECORDED_SLACK_LOG2`."""
         cal = self.calibration
         reported = float(cal["read_bytes_per_s"])
-        stated = ledger.Node.stated(reported_read_bytes_per_s=reported, disk_bytes_per_s=self.disk_bytes_per_s,
+        stated = ledger.Node.stated(NODE, reported_read_bytes_per_s=reported, disk_bytes_per_s=self.disk_bytes_per_s,
                                     link_bytes_per_s=self.link_bytes_per_s, disk_burst_bytes=self.disk_burst_bytes,
                                     link_burst_bytes=self.link_burst_bytes)
         spec, measured = stated.spec_bytes_per_s, stated.read_bytes_per_s
         rebuild = stated.rebuild(record.codec)
-        node = {"gpus": timing.GPUS, "gpu_spec_bytes_per_s": timing.GPU_SPEC_BYTES_PER_S,
-                "gpu_read_bytes_per_s": timing.GPU_READ_BYTES_PER_S, "host_spec_bytes_per_s": timing.HOST_SPEC_BYTES_PER_S,
-                "host_read_bytes_per_s": timing.HOST_READ_BYTES_PER_S, "gpu_chip_bytes": timing.GPU_CHIP_BYTES,
-                "host_chip_bytes": timing.HOST_CHIP_BYTES}
+        gpu = NODE.devices[0]
+        node = {"gpus": len(NODE.devices), "gpu_spec_bytes_per_s": gpu.spec_bytes_per_s,
+                "gpu_read_bytes_per_s": gpu.read_bytes_per_s, "host_spec_bytes_per_s": NODE.host.spec_bytes_per_s,
+                "host_read_bytes_per_s": NODE.host.read_bytes_per_s, "gpu_chip_bytes": gpu.chip_bytes,
+                "host_chip_bytes": NODE.host.chip_bytes}
         out = {"inputs": {"spec_bytes_per_s": spec, "measured_read_bytes_per_s": measured,
                           "reported_read_bytes_per_s": reported, "node": node,
                           "disk_bytes_per_s": stated.disk_bytes_per_s, "link_bytes_per_s": stated.link_bytes_per_s,
@@ -1493,7 +1499,7 @@ class Verifier:
                                                                            blocks=record.blocks, outside=outside))}
         if plans is not None:
             out["memory"] = memory(record, plans, self.regions, hbm_bytes=self.hbm_bytes, rebuild=rebuild,
-                                   chip_bytes=timing.CHIP_BYTES)
+                                   chip_bytes=NODE.chip_bytes)
             if (error := memory_error(out)) is not None:
                 out["memory"]["error"] = error
             if self.host_bytes:
@@ -1552,7 +1558,7 @@ def main() -> int:
     ap.add_argument("--disk-burst-bytes", type=float,
                     help="the most the disks bring back at once beyond their ceiling (default: a second of it)")
     ap.add_argument("--link-burst-bytes", type=float,
-                    help="one link window, charged with the links (default: `timing.LINK_WINDOW_BYTES`)")
+                    help="one link window, charged with the links (default: the host card's `host.link_window`)")
     ap.add_argument("--close", metavar="NODE_HEX",
                     help="close the node's live registration in --registry, its sessions counted as they stood, "
                          "and exit")
@@ -1617,7 +1623,7 @@ def main() -> int:
                          "{file: SHA-512 hex}, checkpoint_sha512}), the registry's models.jsonl and its lines "
                          "of ROLE, or core's models.json ({ROLE: {checkpoint_sha512, files, ...}}) and its entry "
                          "of ROLE")
-    ap.add_argument("--engines", type=int, default=timing.GPUS,
+    ap.add_argument("--engines", type=int, default=len(NODE.devices),
                     help="--model's store: its arenas, an engine's at one GPU each, in GPU order")
     ap.add_argument("--arena-blocks", type=int, metavar="A",
                     help="--model's store: each arena's blocks, its weights then zero filler; the store's blocks "
