@@ -6,7 +6,7 @@ two subprotocols and accepts only when both accept:
 
 - **integrity**, by sampled proofs' one-stage audit (`verity/core/protocols/sampled_proofs/`): every value the serving
   computes is committed under hiding commitments, the verifier's own random coins draw proof blocks of a served sampling
-  period, the prover proves the drawn blocks with Flock in zero knowledge behind the Lean firewall, and the Lean verifier
+  period, the prover proves the drawn blocks with C-Flock in zero knowledge behind the Lean firewall, and the Lean verifier
   gives the verdict;
 - **work**, by proof of useful work (PoUW, `verity/core/protocols/pouw/`).
 
@@ -63,7 +63,7 @@ recorder; `--dry-run` prints the command.
    seals its replay bundle, kept on the node and put in the evidence store. `placement.toml`'s `COMMIT_RUN` names the
    Commit the endpoint commits under.
 2. `verity example vllm`: `served_verdicts.sh`, the endpoint committing under that Commit, its requests, every closed
-   sampling period sealed, then the sampled proofs (Flock `--zk` behind the Lean firewall, and the Lean verifier's
+   sampling period sealed, then the sampled proofs (C-Flock `--zk` behind the Lean firewall, and the Lean verifier's
    verdict), with one record of every verdict in `$OUT/verdicts.txt`. The other subprotocols (PoUW, PoUB, PoUS, memory
    wipes and network certification) run only when their commands are set (`POUW_CMD`, `BANDWIDTH_CMD`, `POUS_CMD`,
    `CERTIFIER_CMD`, `WIPE_CMD`); each one unset prints a `MISSING` line, and the record stays `pending`. The example's

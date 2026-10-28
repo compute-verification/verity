@@ -17,7 +17,7 @@ at a time, in four records:
    convention), committed as ``hm96-sha512/row/v2`` rows in ``frame-v3-sha512`` trees, one tree per port under the
    window-domain rule (`verity.ml.commitments.window`; `Window.close`, `rows.commit`), and registered before any coin (`Window.write`: `rows.write`'s files,
    the registration core's record made by the ``registrar`` the caller passes, core's ``one_stage.registration``).
-4. **On a draw, the openings**: a drawn member's private rows and salts as Flock's prover reads them
+4. **On a draw, the openings**: a drawn member's private rows and salts as C-Flock's prover reads them
    (`flock_inputs.flock_input_files`), for the prover behind the firewall.
 
 An integration may label each run of units it records (``label``): the window's ``index.json``, whose SHA-512 the
@@ -30,10 +30,10 @@ only to refuse it.
 
 The verifier's window comes from the records alone (`of_records`: ``circuit.json`` held to the registration's digest),
 never from the integration's code. A unit's rows are its Definition's bit rows: one row per parameter, the little-endian
-bit concatenation of its leaves, then one output row ``o<j>`` per return field, zero-padded to whole u16 words: Flock's
+bit concatenation of its leaves, then one output row ``o<j>`` per return field, zero-padded to whole u16 words: C-Flock's
 `UnitStager` rows (`unit_rows`), so the verifier composes the unit's circuit from the Definition alone; an integration's
-lowering refuses, with `check_proof_block`, a template whose rows Flock's composer would refuse (more than 256 rows, none
-past 111 bytes, or past a Flock block of 2^27 bits). A Boolean-profile port's leaves (one bit each) are read as their
+lowering refuses, with `check_proof_block`, a template whose rows C-Flock's composer would refuse (more than 256 rows, none
+past 111 bytes, or past a C-Flock block of 2^27 bits). A Boolean-profile port's leaves (one bit each) are read as their
 `boolean.word_type` words.
 
 A wired port's row is committed under its writer's output row's salt, so the two rows' public strings are one, which
@@ -218,7 +218,7 @@ def _bits(ty: Any) -> int:
 def _width(name: str, ty: Any, out: bool = False) -> int:
     """A port's element width: its leaves', or for a Boolean-profile port (every leaf one bit) its `boolean.word_type`
     words', the same bits in the same order. A return field of fewer than 16 bits (an embedding read's ``ok``) is one u16
-    word, its bits low and zero-padded as Flock's `UnitStager` pads every output field, recorded as a 16-bit integer."""
+    word, its bits low and zero-padded as C-Flock's `UnitStager` pads every output field, recorded as a 16-bit integer."""
     if out and 0 < _bits(ty) < 16:
         return 16
     if ty.width_set() == {1}:
@@ -246,7 +246,7 @@ class Layout:
 
     def cut(self, cuts: Mapping[str, int] | None = None) -> list[tuple[str, int, list[str]]]:
         """Each input row under ``cuts`` (port -> k), ``(name, words, elements)``: an uncut port is its row ``p``; one cut
-        ``k`` ways is ``k`` rows ``p#j``, row ``j`` its outer elements ``p[r]`` for r in ``[j·n/k, (j+1)·n/k)``, as Flock's
+        ``k`` ways is ``k`` rows ``p#j``, row ``j`` its outer elements ``p[r]`` for r in ``[j·n/k, (j+1)·n/k)``, as C-Flock's
         `class_statement.unit_ports` reads them."""
         out = []
         for (p, w), n in zip(self.rows, self.outer):
@@ -277,24 +277,24 @@ def layout(fn: Any) -> Layout:
 
 def unit_rows(fn: Any, cuts: Mapping[str, int] | None = None) -> tuple[list[tuple[str, str, int, list[str]]],
                                                                          list[tuple[str, tuple[int, ...]]]]:
-    """``fn``'s rows as Flock's `UnitStager` takes them, ``(in_rows, out_rows)``: one ``hm96-sha512/row/v2`` row per parameter,
+    """``fn``'s rows as C-Flock's `UnitStager` takes them, ``(in_rows, out_rows)``: one ``hm96-sha512/row/v2`` row per parameter,
     or per row of a cut one (`Layout.cut`), then one per return field."""
     lay = layout(fn)
     return [(p, V2, 16 * w, ps) for p, w, ps in lay.cut(cuts)], [(V2, (j,)) for j in range(len(lay.outs))]
 
 
-#: Flock's composer's sizes (`verity_flock.circuit`, which ``verity`` may not import; the windows tests hold them to
-#: its own): a Flock block of at most 2^K_MAX bits and at least 2^K_MIN, the sha512x3 and hm96 slots of 2^SLOT_LOG bits,
+#: C-Flock's composer's sizes (`verity_flock.circuit`, which ``verity`` may not import; the windows tests hold them to
+#: its own): a C-Flock block of at most 2^K_MAX bits and at least 2^K_MIN, the sha512x3 and hm96 slots of 2^SLOT_LOG bits,
 #: PER_SLOT compressions a sha512x3 slot, the mask's 2^MASK_LOG
 K_MAX, K_MIN, SLOT_LOG, PER_SLOT, MASK_LOG = 27, 20, 18, 3, 14
 #: the row bytes a row's last SHA-512 block holds beside the padding's 17: a longer row has a compression before it
 LAST_BLOCK_BYTES = 111
-#: the most rows a proof block may have: at one more, its hm96 range alone fills a Flock block of 2^K_MAX bits
+#: the most rows a proof block may have: at one more, its hm96 range alone fills a C-Flock block of 2^K_MAX bits
 MAX_ROWS = 1 << (K_MAX - SLOT_LOG - 1)
 
 
 def rows_k_log(row_bytes: Sequence[int]) -> int:
-    """The log of the Flock block that rows of ``row_bytes`` bytes alone need (Flock's composer's ranges for one unit:
+    """The log of the C-Flock block that rows of ``row_bytes`` bytes alone need (C-Flock's composer's ranges for one unit:
     its hm96 slots, one a row and a power of two in all, the mask, then its sha512x3 slots); the unit's gates come on top."""
     comps = sum(-(-(b - LAST_BLOCK_BYTES) // 128) for b in row_bytes if b > LAST_BLOCK_BYTES)
     bits = ((1 << (len(row_bytes) - 1).bit_length()) + 1 + -(-comps // PER_SLOT)) << SLOT_LOG
@@ -302,9 +302,9 @@ def rows_k_log(row_bytes: Sequence[int]) -> int:
 
 
 def check_proof_block(fn: Any, cuts: Mapping[str, int] | None = None) -> int:
-    """Refuse (ValueError) a template whose proof block, its unit's rows under ``cuts`` (`unit_rows`), Flock's composer
+    """Refuse (ValueError) a template whose proof block, its unit's rows under ``cuts`` (`unit_rows`), C-Flock's composer
     would refuse: more than `MAX_ROWS` rows, none past `LAST_BLOCK_BYTES` bytes (the sha512x3 range, which holds the pin,
-    would have no slot), or past a Flock block of 2^`K_MAX` bits. Its message names the template, its cuts, its rows and
+    would have no slot), or past a C-Flock block of 2^`K_MAX` bits. Its message names the template, its cuts, its rows and
     the fix. Returns the rows' `rows_k_log`, the least the proof block's ``k_log`` can be."""
     lay = layout(fn)
     rows = [(p, 2 * w) for p, w, _ in lay.cut(cuts)] + [(p, 2 * w) for p, w in lay.outs]
@@ -318,7 +318,7 @@ def check_proof_block(fn: Any, cuts: Mapping[str, int] | None = None) -> int:
                          f"a C-Flock block of 2^{K_MAX} bits: cut its ports fewer ways, or bind the Definition smaller")
     if all(b <= LAST_BLOCK_BYTES for _, b in rows):
         raise ValueError(f"{name}: no row past {LAST_BLOCK_BYTES} B, so none has a compression before its last SHA-512 block "
-                         "and Flock's sha512x3 range, which holds the pin, has no slot: cut its ports fewer ways, or bind "
+                         "and C-Flock's sha512x3 range, which holds the pin, has no slot: cut its ports fewer ways, or bind "
                          "the Definition larger")
     if (k := rows_k_log([b for _, b in rows])) > K_MAX:
         raise ValueError(f"{name}: its rows alone need a C-Flock block of 2^{k} bits, past 2^{K_MAX}: bind the Definition "
@@ -1333,7 +1333,7 @@ def circuit_record(w: CS.Window, name: str, templates: Sequence[tuple[str, int]]
                    blocks: Mapping[str, Any] | None = None) -> dict[str, Any]:
     """``circuit.json``: everything the verifier's window is (`of_records`), none of its values. ``templates``: each
     ``(descriptor id, units)`` in the program's order; ``statements``: by template, how its unit's statement reads its rows
-    (``in_rows``, ``out_rows``, ``reads``, as Flock's `UnitStager` takes them), for a template whose members are bit rows.
+    (``in_rows``, ``out_rows``, ``reads``, as C-Flock's `UnitStager` takes them), for a template whose members are bit rows.
     The members are listed, or with ``cap`` stated: the verifier derives them from the templates, ``cap``, ``wires``, cuts
     and server blocks (`members`), so the record grows with its templates and wires, not its units. ``boundary``: the
     circuit's I/O layout (`Circuit.boundary`), carried as given; ``declared``: its cuts, registered reads and ingress

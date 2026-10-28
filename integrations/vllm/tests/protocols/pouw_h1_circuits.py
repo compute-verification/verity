@@ -2,7 +2,7 @@
 ``--circuit-files`` its period-open commits (core's `credit.committed_files`).
 
 A drawn proof block at K is proved on K's template, `h1window.template(K, h1window.tile_unit(K, TILE))`, one of the declared
-Program's ``TILES``. It is lowered by Flock's `class_statement.UnitStager`, as ``benchmarks/pouw/h1_prove/stage.py``
+Program's ``TILES``. It is lowered by C-Flock's `class_statement.UnitStager`, as ``benchmarks/pouw/h1_prove/stage.py``
 lowers it (`h1unit.Shape.stager`, under ``HZ_STAGE``, ``fast`` by default), and bound to the window's Program and
 partition: ``{"program": its program_digest, "partition": the digest of its Q_template_instances partition object}``,
 its templates by ascending K, the object core's credit verifies a statement under (`credit.partition_of`). The file's

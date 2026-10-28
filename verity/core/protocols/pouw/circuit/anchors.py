@@ -18,9 +18,9 @@ window of a salt, since a call's noise key reads the salt and its call index.
 The tile checks' (`pc4`, `pc8`) anchored inputs are derived values, not ids: the noise lines E_A, E_B, F_A, F_B and
 G = F_Bᵀ·F_A, which the verifier derives from the scheme's seeds (`TileAnchors`, from `noise(ctx)`: seed_A reads the salt,
 A's root, B's registered root and the matmul index, seed_B the salt and B's root).  The call's Program and the weight's both
-read F_A and F_B; E_A is the call's alone, E_B and G the weight's.  In a unit's proof each is a Flock public input region
+read F_A and F_B; E_A is the call's alone, E_B and G the weight's.  In a unit's proof each is a C-Flock public input region
 (an ``In`` region): the unit's ports (`pc4.PORTS`, `pc8.PORTS`) name it, with its recomputation (`Derivation`: the rule, the
-seed, the domain and the derivation function, `Shape.derivations`; as Flock's circuit names it, `public_ports`: the seed's
+seed, the domain and the derivation function, `Shape.derivations`; as C-Flock's circuit names it, `public_ports`: the seed's
 label and the rule's versioned id), and the verifier values it from its own `--public-inputs` file
 (`TileAnchors.public_inputs`), whose content for one unit is `TileAnchors.regions`: each region's u16 words
 (`region_words`), every value unpacked, the region whole 128-bit words.  A row unit cut along k (`rowk`) reads F_A and F_B
@@ -106,7 +106,7 @@ class Anchors:
 
 #: the tile checks' anchored parameters, by name in their Programs
 ANCHORED = ("ea", "eb", "fa", "fb", "g")
-#: a public input region's word, as Flock lays out a unit's input leaves, and the input word a region fills whole
+#: a public input region's word, as C-Flock lays out a unit's input leaves, and the input word a region fills whole
 WORD_BITS, REGION_WORD_BITS = 16, 128
 
 
@@ -118,7 +118,7 @@ ANCHOR_RULE = re.compile(r"verity/pouw/anchor/[a-z0-9-]+/[a-z0-9]+(/slice)?/v(0|
 @dataclass(frozen=True)
 class Derivation:
     """How the verifier recomputes one anchor, which its public input region names: its rule (``rule``, `ANCHOR_RULE`'s
-    form: the id Flock's circuit pins, so a new rule is a new version), the seed it reads (``seed``: the scheme's
+    form: the id C-Flock's circuit pins, so a new rule is a new version), the seed it reads (``seed``: the scheme's
     ``noise(ctx).seed_a`` or ``.seed_b``), the scheme's domain separation of it (``domain``), the function that derives it
     (``fn(shape, seed, index)``: one line for global row ``index`` when ``per_row``, segment ``index`` of the anchor when
     ``per_segment``, else the whole anchor, flat in its parameter's leaf order) and each value's width in bits."""
@@ -141,7 +141,7 @@ class Derivation:
 
 
 def region_words(values: Sequence[int], bits: int) -> list[int]:
-    """Values of ``bits`` bits as a public input region's u16 words, unpacked as Flock lays out a unit's input leaves: each
+    """Values of ``bits`` bits as a public input region's u16 words, unpacked as C-Flock lays out a unit's input leaves: each
     value takes ceil(bits / 16) words, low half first, the bits above it zero.  So bit t of word j is the region's bit
     16j + t, and its bytes are the words little-endian (`region_bytes`).  The region must fill whole 128-bit words."""
     if not all(0 <= v < 1 << bits for v in values):
@@ -153,16 +153,16 @@ def region_words(values: Sequence[int], bits: int) -> list[int]:
 
 
 def region_bytes(words: Sequence[int]) -> bytes:
-    """A region's u16 words as its bytes, little-endian: Flock's ``bytes(region, b)`` for one unit."""
+    """A region's u16 words as its bytes, little-endian: C-Flock's ``bytes(region, b)`` for one unit."""
     return b"".join(w.to_bytes(2, "little") for w in words)
 
 
-#: Flock's format of the verifier's own `--public-inputs` file (its PROTOCOL.md §16.10, ``HmIn.checkOwn``)
+#: C-Flock's format of the verifier's own `--public-inputs` file (its PROTOCOL.md §16.10, ``HmIn.checkOwn``)
 PUBLIC_INPUTS_FORMAT = "verity/flock-public-inputs/v1"
 
 
 def public_ports(shape, role: str) -> dict[str, dict[str, str]]:
-    """``role``'s public input ports as Flock's circuit names them (``compose``'s ``public_inputs``, META's
+    """``role``'s public input ports as C-Flock's circuit names them (``compose``'s ``public_inputs``, META's
     ``public_inputs``), in the unit's parameter order: each region's seed by the scheme's label for it (``shape.seeds``) and
     its derivation by its rule id (`Derivation.rule`)."""
     out = {}
@@ -258,9 +258,9 @@ class TileAnchors:
         return json.dumps(head, sort_keys=True).encode() + b"\n" + b"".join(region_bytes(u[p]) for u in units for p in names)
 
     def check_public_inputs(self, role: str, indexes: Sequence[int], data: bytes, segment: int | None = None) -> None:
-        """Refuse a `--public-inputs` file that is not the verifier's own (`public_inputs`), as Flock's Lean verifier does
+        """Refuse a `--public-inputs` file that is not the verifier's own (`public_inputs`), as C-Flock's Lean verifier does
         (`HmIn.checkOwn`): its header must be the verifier's, and every word its recomputation, each region in the unit's
-        parameter leaf order and the instances in ``indexes``' order.  So a region in another order (Flock's read order
+        parameter leaf order and the instances in ``indexes``' order.  So a region in another order (C-Flock's read order
         of a transposed operand) or two instances swapped is refused, at the first word that differs."""
         own_head, own_body = self.public_inputs(role, indexes, segment).split(b"\n", 1)
         head, sep, body = data.partition(b"\n")

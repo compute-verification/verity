@@ -1,7 +1,7 @@
 """run.py prepare|summarize|cost: one served H1 leaf (32 × 32, at a small K: 448 by default; `h1zy.combine` takes K >= 384,
-the least whose partial row compresses before its last SHA-512 block, which Flock's circuit needs of a combine row)
+the least whose partial row compresses before its last SHA-512 block, which C-Flock's circuit needs of a combine row)
 proved as its 32 lanes and its combine (PRF-134, option A:
-`h1zy.PouwH1LaneZy_v1` and `PouwH1Combine_v1`, `pouw.leaf_lanes`' statement set), one Flock --zk statement each, every
+`h1zy.PouwH1LaneZy_v1` and `PouwH1Combine_v1`, `pouw.leaf_lanes`' statement set), one C-Flock --zk statement each, every
 statement reading the leaf's lane partials, a value committed after the draw (`one_stage.produced`), and the negatives.
 
 * **The statements.** All 32 lanes are one circuit (the lane index is a public input) and the combine another. Each

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # N2's advised unit in zero knowledge (n2_advised_zk.py) on a CPU machine, on hidden_zk's builds (its job.sh, sourced:
-# Flock's flock-circuit and the Lean flock-verify) with the firewall's Lean frame, N2's network-records and the
+# C-Flock's flock-circuit and the Lean flock-verify) with the firewall's Lean frame, N2's network-records and the
 # sampled-proofs verifier built in the tree, as n2_zk.sh runs n2_zk.py. From a clone, in one of the network
 # slots on vy-nebius-cpu-1:
 #   research run --on vy-nebius-cpu-1 --source . --project verity --as LANE --cwd clone --timeout 180m \

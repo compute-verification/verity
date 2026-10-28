@@ -9,7 +9,7 @@ driver's docstring says what it runs, what it publishes and what its verifier re
 
 - `verity bench network_traces` runs `run.sh`: one chunk of per-token vLLM timing traces on a leased GPU
   (`record.py`), as a `research run` job whose command is in the script's header.
-- Every other `.sh` here is a `research run` job, its command in its header. The proving jobs build Flock's
+- Every other `.sh` here is a `research run` job, its command in its header. The proving jobs build C-Flock's
   `flock-circuit`, the Lean `flock-verify` and the Lean firewall with `benchmarks/pouw/hidden_zk/job.sh`.
 - `research run` publishes every run, with its report and outputs, as an Attempt in the evidence store
   (`tools/research/src/research/store/README.md`). Results are read from there, never from this README.
@@ -29,7 +29,7 @@ driver's docstring says what it runs, what it publishes and what its verifier re
 - **The certifier as a relay.** `warden_serve.py` runs `verity.core.protocols.certifier.warden`, the network certifier
   as a relay that knows bytes only, in front of any TCP server and checks what it published offline; `warden_chain.py`
   is the chain's reads of a relay run, and `warden_zk.py` reads the relay's bucket rows in the proof system.
-- **Proofs in zero knowledge.** Each driver proves its proof blocks with Flock `prove --zk` behind the Lean firewall
+- **Proofs in zero knowledge.** Each driver proves its proof blocks with C-Flock `prove --zk` behind the Lean firewall
   and holds them by the Lean `flock-verify verify --zk`: `n2_zk.py` (N2's registered proof block, N2's verdict of
   record), `n2_advised_zk.py` (N2's advised proof block), `n2_tie_zk.py` (the ingress tie), `egress_zk.py` (N2's egress
   bucket), `scan_zk.py` (the step-indexed scan), `scan_period.py` (the scan's answers held by `NetworkCheck.Period`),
@@ -117,7 +117,7 @@ The run of record takes the network chain end to end on the gate's machines:
    prover's node.
 2. It certifies each sampling block's records and signs each sampling period's clock sync (a clock certificate).
 3. The client receives the certificates and keeps them (`certificates.jsonl`, `clocks.jsonl`).
-4. The consistency proof blocks are proved by sampled Flock `--zk` and decided by the Lean verifier of record: N2's
+4. The consistency proof blocks are proved by sampled C-Flock `--zk` and decided by the Lean verifier of record: N2's
    (each sampling block's head checks and counts), and the scan's ingress and egress proof blocks chained by registered
    reads.
 5. The verdict is the per-sampling-block acceptance that the certification period's leak bound reads.

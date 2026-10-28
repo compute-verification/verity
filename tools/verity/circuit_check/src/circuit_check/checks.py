@@ -5,7 +5,7 @@
                      of `circuit_check.vectors`: it must be total (a Definition whose
                      reference raises is partial), and every realization of it must equal it bit for bit: every registered
                      kernel (`verity.ml.circuits.evaluation.self_check`), a template's evaluated target where it is another Definition, and
-                     the Flock Boolean lowering (`verity_flock.ir_lower`: the whole Definition when it is small, a template's
+                     the C-Flock Boolean lowering (`verity_flock.ir_lower`: the whole Definition when it is small, a template's
                      proof blocks otherwise) and, under ``Options.struct_max_gates``, the structural lowering's template
                      (``c-flock:struct_lower``, `struct_lowering`, evaluated from the template); the word Definition a
                      Boolean Definition names
@@ -38,7 +38,7 @@
                      must hold both (a piece's, a Boolean Definition's whole lowering's,
                      a template proof block's, in the sidecar of the module that defines it or its file in ``pins/``,
                      `sidecars`; a Boolean Definition's lowering has at most its own And gates, besides its builder's
-                     commits), a template proof block's circuit digest against its Flock module's `PINS`, and the Boolean
+                     commits), a template proof block's circuit digest against its C-Flock module's `PINS`, and the Boolean
                      export's gate lists checked against the proof block's circuit (`verity_flock.boolean_export`); a gated
                      Definition's circuit digest (``gated``: a Program holds it as one gate naming the digest, such as N2's
                      head check) against its ``digests`` pin
@@ -596,7 +596,7 @@ def _topp_word(t: Any, arrays: Sequence[np.ndarray], ref: list, F: Findings) -> 
 
 def whole_lowering(t: Any, params: Sequence, arrays: Sequence[np.ndarray], ref: list, opts: Options, F: Findings, pins: dict,
                    memo: dict | None = None) -> dict:
-    """The Flock lowering of the whole Definition (a primitive's piece, or a small composite piece by piece) against the
+    """The C-Flock lowering of the whole Definition (a primitive's piece, or a small composite piece by piece) against the
     reference on the correspondence vectors; its redundant ANDs; a primitive's AND count and digest against the piece pins.  A composite's
     mismatch names the pieces that already differ from their own primitive (``memo["pieces"]``: piece -> mismatching vectors)."""
     from verity_flock import gf2
@@ -976,7 +976,7 @@ def _export_counts(build: Callable[[], Any], name: str) -> dict:
 
 
 def template_lowering(sub: Any, st: dict, d: Any, opts: Options, F: Findings, pins: dict) -> dict:
-    """A subcircuit's Flock proof blocks: one proof block's circuit digest against its module's pin, its counts against
+    """A subcircuit's C-Flock proof blocks: one proof block's circuit digest against its module's pin, its counts against
     their pin and the Boolean export, its redundant ANDs, and the laid-out proof blocks against the reference on the edge and
     random vectors."""
     from verity_flock import ir_lower as IL
@@ -1063,7 +1063,7 @@ def template_lowering(sub: Any, st: dict, d: Any, opts: Options, F: Findings, pi
 def check_subcircuit(sub: Any, opts: Options = Options(), *, instance_statics: Sequence[dict] = ({},), memo: dict | None = None,
                      pins: dict | None = None) -> dict:
     """Every check on a subcircuit: its Definition (and its evaluated target where that is another Definition) at each binding of
-    its instance statics, and its Flock lowering."""
+    its instance statics, and its C-Flock lowering."""
     memo = {} if memo is None else memo
     pins = load_pins() if pins is None else pins
     F = Findings()

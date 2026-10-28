@@ -80,7 +80,7 @@ registration its own tables of the session's statement. `Stream.session` opens i
 before its own draw, and so before every later round's. The first covered round's `Check.proof_deadline` spans the
 session. `deliver` delivers the session once, and every covered draw's outcome binds the same session records. Each
 draw's `outcome` runs its own audit record, on its own proof blocks and its own table's roots, and its record names the
-session's rounds (`session`). A late session is `late` for every round it covers. Flock's verifier of record refuses
+session's rounds (`session`). A late session is `late` for every round it covers. C-Flock's verifier of record refuses
 such a session (`verity/ml/flock/verifier/PROTOCOL.md` §16.12); `Stream.session` has its refusals.
 
 **The failure budget.** A stream counts its failures, and at the `budget`-th it stops and refuses further registrations.

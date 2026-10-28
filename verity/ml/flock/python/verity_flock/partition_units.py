@@ -1,4 +1,4 @@
-"""Flock over an arbitrary partition: every unit class (`verity.ml.circuits.units`) lowered once to AND/XOR/NOT with Flock's pieces,
+"""C-Flock over an arbitrary partition: every unit class (`verity.ml.circuits.units`) lowered once to AND/XOR/NOT with C-Flock's pieces,
 and checked against the reference evaluator on synthetic inputs lifted through the unit's flat Definition.
 
     uv run python -m verity_flock.partition_units --model tiny [--partition q-word|blocks:64|scatter:8]
@@ -105,7 +105,7 @@ class ClassCircuit:
 
 
 def lower_class(act: Activation, uc: UnitCircuit, max_gates: int = 1 << 20) -> ClassCircuit:
-    """Flock's Boolean lowering of one unit (inputs ``in0 ..``, outputs ``out0 ..``, one word per port), or why not."""
+    """C-Flock's Boolean lowering of one unit (inputs ``in0 ..``, outputs ``out0 ..``, one word per port), or why not."""
     prims = {act.gate(j).prim.id for j in uc.gates}
     missing = tuple(sorted(p for p in prims if p not in IL.PIECES and not p.startswith("Const") and input_id(p) is None))
     if missing:

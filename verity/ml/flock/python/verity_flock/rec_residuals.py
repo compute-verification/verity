@@ -1,5 +1,5 @@
 """V*'s algebra statement (hiding model architectures, lane rec-v0): the inner verifier's algebraic checks on each rep of the
-inner session (`verity_flock.rec_algebra`) as ``InnerRepCheck_v2{S}``, one instance a rep, one Flock statement.
+inner session (`verity_flock.rec_algebra`) as ``InnerRepCheck_v2{S}``, one instance a rep, one C-Flock statement.
 
     U16 = Array<16, Value<1>>
     InnerRepCheck_v2{S}(m0: Array<P(n_0), U16>, .., acc0: Array<64, U16>, acc1: Array<64, U16>, v: Array<P(nv), U16>)

@@ -5,7 +5,7 @@
 # `engine.revision`; bf16, served as pinned, `--precision pin`):
 #   window   the default: one served window through every subprotocol, benchmarks/one_stage/served_verdicts.sh: the endpoint
 #            committing under the workload's Commit of record, its requests (serve_load.py --varied), every closed window sealed, the
-#            window's sampled proofs (Flock --zk behind the Lean firewall, and the Lean verifier's verdict), PoUW, the bandwidth
+#            window's sampled proofs (C-Flock --zk behind the Lean firewall, and the Lean verifier's verdict), PoUW, the bandwidth
 #            audit, PoUS and the network certifier where each has its piece, and one record of every verdict
 #   commit   once per workload: its Commit of record with its sealed replay bundle (commit.sh), the workload dir the endpoint commits
 #            under (placement.toml's COMMIT_RUN names the one `window` and `serve` use)

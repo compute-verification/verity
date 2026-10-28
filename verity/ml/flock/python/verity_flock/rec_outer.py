@@ -1,4 +1,4 @@
-"""V*'s outer statements (hiding model architectures, lane rec-v0): the inner session's Ligerito openings, one Flock
+"""V*'s outer statements (hiding model architectures, lane rec-v0): the inner session's Ligerito openings, one C-Flock
 statement per level, each instance a `RecOpen` of one opening, the top node it climbs to and its running sum read from the
 prover's registrations of them.
 

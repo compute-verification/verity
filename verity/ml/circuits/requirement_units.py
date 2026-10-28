@@ -112,7 +112,7 @@ written blocks, about 32 (V (E - 1) + M) ANDs, and the cap a comparison, a count
 statement adds each row's hm96 commitment.
 
 `plan_match`, `plan_shard` and `memory_map` are the references, over plain ints; `plan_rows`, `plan_shard_rows` and
-`memory_map_rows` name each instance's rows (Flock's `in_rows` params). `plan_inputs` and `map_inputs` are a step's arguments
+`memory_map_rows` name each instance's rows (C-Flock's `in_rows` params). `plan_inputs` and `map_inputs` are a step's arguments
 from a `requirement.Requirement`, its `Layout` and `Store` (`layout_words`, `map_words` and `pass_words` the shared rows),
 `shard_inputs` a shard's from a pass's plan and the blocks its step reads, and `row_words` an instance's rows from them.
 """

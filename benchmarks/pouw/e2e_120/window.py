@@ -14,7 +14,7 @@ hgref.py pins it) behind the e2e slice's round (cursor/e2e-slice-ea24's challeng
     (f) the statement: the thread's W and X tile leaves at j and the receipt leaf holding its window's word, each a
         committed hm96-sha512/row/v2 row whose commit string b || c the public file carries; the public rows (asel, xu,
         wsel, wf, st, rsel) recomputed from sigma and the draw under public salts; the output row o0 held to 1; the proof
-        verified (Flock --zk, the Lean verifier of record on the pod; here `ideal_proof`, the statement's public file
+        verified (C-Flock --zk, the Lean verifier of record on the pod; here `ideal_proof`, the statement's public file
         computed from its rows)
 
 Nothing is retried or redrawn: a round refused at any step is rejected (`Refused`). Real values plug in at `Window` (W
@@ -376,7 +376,7 @@ def word_check(rows: dict[str, np.ndarray], S: int, fold: str = "duo") -> int:
 
 def ideal_proof(rows: dict[str, np.ndarray], salts: dict[str, bytes], sigma: bytes, S: int, fold: str = "duo") -> dict[str, bytes]:
     """The public file a sound proof's statement carries: every row's commit string (its salt the committer's, or the coin's
-    public salt), o0's the check's output. On the pod Flock's staging writes it (pub.bin) and the Lean verifier checks
+    public salt), o0's the check's output. On the pod C-Flock's staging writes it (pub.bin) and the Lean verifier checks
     the proof of it."""
     bits = {r: b for r, _s, b, _ps in in_rows(S, fold)}
     pub = {r: commit_string(rows[r], salts.get(r) or public_salt(sigma, r), bits[r]) for r, *_ in in_rows(S, fold)}

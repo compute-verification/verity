@@ -48,7 +48,7 @@ halves: `Accounting.Served.ValueChecked`'s product and dequant are checked by th
   commitment as registered ports of the verifier's own, lane l's ``partials`` at row l and the combine's ``p0`` .. ``p31``
   at rows 0 .. 31 (#3116's `pouw.leaf_lanes.reads`; each statement's ok is its ``o0``), since a port ``own`` doesn't name
   is free in #3108's relation (RT4-LOGIC-29(c)). A partial is 2 (KS + m) u32 (8,320 bits at K = 4096), so it is an
-  input, never an output, and a row of 8 (KS + m) bytes. The combine reads only those rows and the receipt, and Flock
+  input, never an output, and a row of 8 (KS + m) bytes. The combine reads only those rows and the receipt, and C-Flock
   proves a statement only with a row that compresses before its last block, so `combine` is staged only at K >= 384
   (`LEAST_K`: 112-byte rows, whose padding spills into a second block); `lane` takes any positive K. Both stage only a
   leaf whose R is a multiple of 16, since a lane reads the R admit bits as one row of whole 16-bit words.
@@ -60,7 +60,7 @@ halves: `Accounting.Served.ValueChecked`'s product and dequant are checked by th
   dead leaf's partials are zero. ok is 1 exactly when its partials row is those words and its 32 cells of the record
   (`lane_cells`: by row slot, then column slot) pass `PouwZyCheck_v1{4, 8}` at its rows' z (TILE's v1 or v3 form) and
   scales, a dead leaf's cells too (z = 0, y = dq(0, +0, s_w)). The index l is a public input, one 16-bit word (`LANE`:
-  Flock's public rows are whole 16-bit words): each noise block's counter and each of the lane's cells is picked from
+  C-Flock's public rows are whole 16-bit words): each noise block's counter and each of the lane's cells is picked from
   the leaf's by a `PouwMuxBit` tree over its low `lane_bits` bits, so one Definition at each K is every lane of a leaf,
   and ok is 0 at an l past the leaf's lanes (any higher bit set: their `PouwOrBit`s select a 0 by a `PouwMuxBit`, 16 -
   `lane_bits` ANDs). ok is a sink (`Out(sink=True)`): a Definition with a coin and a
@@ -68,7 +68,7 @@ halves: `Accounting.Served.ValueChecked`'s product and dequant are checked by th
   unit, would be one. `PouwH1Combine_v1{TILE}` reads the 32 ``partials`` rows and the leaf's committed ``receipt`` and
   returns ok, 1 exactly when the rows' XOR is the receipt word by word, so the 33 oks hold the receipt as the tile unit's
   receipt output does. The XOR is free and the equality is 64 (KS + m) - 1 ANDs (8,319 at K = 4096, 895 at K = 384).
-* **A lane in chunks.** A lane past K = `CHUNK_MAX` (4096, whose lane fills Flock's 2^27 block) outgrows the block, so
+* **A lane in chunks.** A lane past K = `CHUNK_MAX` (4096, whose lane fills C-Flock's 2^27 block) outgrows the block, so
   it is proved as `chunks`(K) = n statements along K (`lane_statements`): `PouwH1LaneZyChunk_v1{TILE, CHUNKS = n,
   CHUNK = c}` over entries [c K_c, (c + 1) K_c), K_c = K / n a multiple of `CHUNK_ALIGN` (6144: 2 × 3072, 12288: 3 × 4096,
   14336: 4 × 3584, 16384: 4 × 4096). A chunk reads its 4 A and 8 B rows at its entries, each with the row's scale
@@ -116,7 +116,7 @@ halves: `Accounting.Served.ValueChecked`'s product and dequant are checked by th
 combine's ok; `lane_chunk_carries` a lane's honest carries in chunks, and `lane_chunk_reference` a chunk's ok (each a
 lane's, with ``j10r``: over J10-R's v5).
 `statement_rows` is a lane's, a chunk's and the combine's input rows as `class_statement.unit_lowering` takes them, and
-`statement_ports` their Flock ports, each input's and the output's bits in its port's row, which Lean states as
+`statement_ports` their C-Flock ports, each input's and the output's bits in its port's row, which Lean states as
 `PouwWindow.Lanes` (with each port's registered row, and each unit input wire's port and bit) for proofs' decoders: v1's
 lane and combine, and J10-R's lane, lane chunks and combine (`chunkPorts`, `combine2Ports`); not v1's lane chunks.
 """
@@ -305,7 +305,7 @@ PouwMuxBit = definition("PouwMuxBit", 2, lambda C_, s, a, b: [a[0] ^ C_.AND(s[0]
                         doc="b where s is 1, else a, on bits: PouwMuxBit_v1")
 
 
-#: a lane's public index: one 16-bit word, since Flock's public rows are whole 16-bit words
+#: a lane's public index: one 16-bit word, since C-Flock's public rows are whole 16-bit words
 LANE = Array(16, BIT)
 
 
@@ -561,7 +561,7 @@ LEAST_K = 384
 
 def _leaf(tile: Any) -> int:
     """``tile``'s K, if its leaf's lanes and combine are staged; else ValueError. A leaf has a positive K (`leaf_lanes`'
-    word order), and a lane reads its R admit bits as one row, which Flock takes only as whole 16-bit words
+    word order), and a lane reads its R admit bits as one row, which C-Flock takes only as whole 16-bit words
     (`class_statement.unit_lowering`), so its R is a multiple of 16 (the served leaf's is 32)."""
     a = tile.signature()[0][0][1]
     r, k = int(a.n), int(a.elem.n)
@@ -584,7 +584,7 @@ def lane(tile: Any) -> Any:
 def combine(tile: Any) -> Any:
     """`PouwH1Combine` over ``tile``, the leaf's H1 tile (v1 over PouwH1Tile_v1 and _v3, v2, which folds the leaf's
     statements' oks, over J10-R's PouwH1Tile_v5), at an R `_leaf` takes and a K of at least `LEAST_K`: the combine
-    reads only the partials and the receipt, 8 (KS + m)-byte rows, and Flock proves a statement only with a row that
+    reads only the partials and the receipt, 8 (KS + m)-byte rows, and C-Flock proves a statement only with a row that
     compresses before its last block (``no row has a compression before its last block``, `verity_flock.circuit`'s and
     `Flock.HmRow`'s), a row of at least 112 bytes, whose 17 bytes of SHA-512 padding spill past its first block."""
     k = _leaf(tile)
@@ -955,7 +955,7 @@ def statement_rows(d: Any) -> list[tuple[str, list[str]]]:
 
 
 def statement_ports(d: Any) -> list[tuple[str, list[tuple[str, int, int]]]]:
-    """The Flock ports of a leaf's lane or combine statement (``d`` as `statement_rows` takes it, at any K), in order:
+    """The C-Flock ports of a leaf's lane or combine statement (``d`` as `statement_rows` takes it, at any K), in order:
     each input row of `statement_rows` with its fields ``(path, first bit, bits)`` in its bit row, the Definition's inputs
     it holds, their leaves concatenated in signature order (`class_statement.unit_lowering`; ``a[0].codes`` the codes of
     row 0 of ``a``), and last the output port ``o0``, ``ok``. Lean states it as `PouwWindow.Lanes`."""

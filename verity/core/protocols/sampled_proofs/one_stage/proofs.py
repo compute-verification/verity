@@ -1,4 +1,4 @@
-"""A statement's proof files, verified by Flock's Lean verifier of record (`flock-verify verify --zk`, the Lake package
+"""A statement's proof files, verified by C-Flock's Lean verifier of record (`flock-verify verify --zk`, the Lake package
 `verity/core/service/flock`, built with `lake` on first use): the proof system's own run of the verifier, so a protocol
 reads each session's verdict from that run, never from a verdict record the prover hands in.
 
