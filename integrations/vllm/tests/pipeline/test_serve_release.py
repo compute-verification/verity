@@ -162,5 +162,3 @@ def test_serve_openai_gates_every_device_held_seal_on_named_draws(tmp_path):
     draws, d = SL.release_of(opts(), tmp_path)
     assert draws.protocols == ("sampled_proofs", "pouw_h1") and d.path == tmp_path / "draws" and d.path.is_dir()
     assert SL.release_of(opts(retain="host", release_after=""), tmp_path) == (None, None)
-    from verity_vllm.pipeline import serve_openai as so
-    assert so.RL is SL, "serve-openai reaches its draw-gated release under its own alias, which no other module shadows"

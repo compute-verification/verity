@@ -422,11 +422,13 @@ class H1Windows:
     coins); ``prover`` the directory each window's prover state and live rows go in (``--h1-prover``, `prover_of`;
     None: kept nowhere, so no drawn unit or round of it can be proved). ``closer`` (a `worker`) runs each window's
     release off the engine loop, and `close` hands back its outcome's `Future`; None: on the loop, the outcome itself.
-    ``clock`` times each part."""
+    ``draws`` is serve-openai's draw-gated release (`serve_release.Draws`), into which each window's release puts its
+    draw under `DRAWER` (`drawn`) when it waits for one. ``clock`` times each part."""
 
     def __init__(self, model: Any, com: Any, rows: int, steps: int, *, engine: Any, out: Path,
                  config: Mapping[str, Any] | None = None, key: bytes | None = None, unit: Any = None,
                  sessions: GateSessions | None = None, prover: str | Path | None = None, closer: Any = None,
+                 draws: Any = None,
                  clock: Callable[[], float] = time.perf_counter) -> None:
         from verity_vllm.protocols import pouw
         from verity_vllm.protocols.pouw.h1 import hooks as PHK
@@ -437,6 +439,7 @@ class H1Windows:
         self.prover = None if prover is None else Path(prover)
         self.closer, self.clock = closer, clock
         self.draws: Any = None
+        self.drawing(draws)
         self._layout: dict[str, Any] | None = None
         self._period_k: dict[str, int] = {}
         self.layers = PHK.layers(model, pouw.linear_types())
