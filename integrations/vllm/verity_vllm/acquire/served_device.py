@@ -52,9 +52,9 @@ BACKEND = "FLASH_ATTN"
 
 
 @dataclass(frozen=True)
-class Device:
-    """A served Build's device: its compute capability and SM count, its GEMMs' k16 step, its attention kernel ("FA3" | "FA2") and,
-    under FA2, the max_model_len a FULL graph's split count reads."""
+class DeviceBindings:
+    """A served Build's device bindings: its compute capability and SM count, its GEMMs' k16 step, its attention kernel
+    ("FA3" | "FA2") and, under FA2, the max_model_len a FULL graph's split count reads."""
     cc: tuple[int, int]
     sms: int
     dot: Any
@@ -70,8 +70,8 @@ class Device:
 
 
 def device_of(cc: Any, sms: int, *, card: str | None = None, attention: list[dict[str, Any]] | None = None,
-              max_model_len: int | None = None) -> Device:
-    """The Device of compute capability `cc`; `card` the SKU of the card the served target is registered on (`card_of`), whose
+              max_model_len: int | None = None) -> DeviceBindings:
+    """The device bindings of compute capability `cc`; `card` the SKU of the card the served target is registered on (`card_of`), whose
     compute capability and SM count the device must have; `attention` the attention kernels
     the serving engine selected (`served_match.facts_of`: [{"backend", "fa_version"}]), held to the device's when a process reports
     them.  Raises `Unmodelled` naming each field that is not the card's, else every binding the device lacks."""
@@ -95,7 +95,7 @@ def device_of(cc: Any, sms: int, *, card: str | None = None, attention: list[dic
         missing.append("max_model_len (FA2's full-graph split count reads it)")
     if missing:
         raise Unmodelled(f"cc {cc[0]}.{cc[1]}: no binding for " + "; ".join(missing))
-    return Device(cc, int(sms), dot, f"FA{want}", max_model_len)
+    return DeviceBindings(cc, int(sms), dot, f"FA{want}", max_model_len)
 
 
 def card_of(name: str) -> str | None:
@@ -183,7 +183,7 @@ def fa2_attention_rows(qlen: int, klen: int, launch: dict[str, Any], *, NH: int,
     return [bound(W.Fa2AttentionSplit, T=klen, NS=NS, NH=NH, KVH=KVH, D=D, BN=BN, DOT=dot, INV=Fa2InvSum, MASKED_FROM=mf)]
 
 
-def launch(device: Device, qlens: list[int], klens: list[int], heads: tuple[int, int, int], *, mode: str, padded: int, split_cap: int,
+def launch(device: DeviceBindings, qlens: list[int], klens: list[int], heads: tuple[int, int, int], *, mode: str, padded: int, split_cap: int,
            capture_sizes: list[int]) -> tuple[list[int], list[list[dict[str, Any]]], dict[str, Any]]:
     """One step's attention launch on `device`: each request's split count and row Definitions, and the plan's record of the launch
     (its key "fa3" or "fa2")."""

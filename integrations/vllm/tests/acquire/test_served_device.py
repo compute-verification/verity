@@ -24,7 +24,7 @@ HEADS, SMS = (32, 8, 64), 188
 FA2 = [{"backend": "FLASH_ATTN", "fa_version": 2}]
 
 
-def fa2_device(max_model_len: int = 4096) -> SD.Device:
+def fa2_device(max_model_len: int = 4096) -> SD.DeviceBindings:
     return SD.device_of((12, 0), SMS, attention=FA2, max_model_len=max_model_len)
 
 
