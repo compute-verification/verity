@@ -364,7 +364,8 @@ def test_a_state_of_another_configuration_is_refused(tmp_path, capsys):
     assert rc == 2 and "refused state" in capsys.readouterr().err
 
 
-def test_verity_run_with_no_table_is_refused_by_name(tmp_path, capsys):
+def test_verity_run_with_no_table_is_refused_by_name(tmp_path, capsys, monkeypatch):
+    monkeypatch.setattr(R, "REGISTRY", None)
     path = tmp_path / "config.toml"
     path.write_text(K.render(config()))
     assert R.run_main([str(path), "--state", str(tmp_path / "state")]) == 2
