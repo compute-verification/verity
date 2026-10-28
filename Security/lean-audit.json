@@ -6679,10 +6679,22 @@
    "type_hash": "c4b6ffe60172f35c4d4e6cadfba6f2ff28af8d2b78c6a3f352a30e4f0aab684b"
   },
   "FlockSoundness.Audit.Partitioning.SecurityProofs.ServedGranularityChoice": {
-   "owner": "@proofs"
+   "owner": "@proofs",
+   "signature": [
+    "FlockSoundness.Audit.Partitioning.SecurityProofs.ServedGranularityChoice :",
+    "  FlockSoundness.Audit.Partitioning.Guarantees.ServedGranularityChoice"
+   ],
+   "assumptions": [],
+   "type_hash": "8f2fc028577136d254e4f9cdaf1047862de34beb1ee2ac2cfcd50773e6712e3f"
   },
   "FlockSoundness.Audit.Partitioning.SecurityProofs.ServedGranularityOptimum": {
-   "owner": "@proofs"
+   "owner": "@proofs",
+   "signature": [
+    "FlockSoundness.Audit.Partitioning.SecurityProofs.ServedGranularityOptimum :",
+    "  FlockSoundness.Audit.Partitioning.Guarantees.ServedGranularityOptimum"
+   ],
+   "assumptions": [],
+   "type_hash": "e9b9880455bbc93829e4bf149892f82136176f9d0f3f3b26aead7a93af54c72c"
   },
   "FlockSoundness.Audit.Partitioning.SecurityProofs.UnequalCost": {
    "owner": "@proofs",
@@ -11735,6 +11747,8 @@
    "FlockSoundness.Audit.Partitioning.SecurityProofs.NestedEscape": "lemma: leaves the list under the 5:11 PM ruling",
    "FlockSoundness.Audit.Partitioning.SecurityProofs.RefinementRule": "lemma: leaves the list under the 5:11 PM ruling",
    "FlockSoundness.Audit.Partitioning.SecurityProofs.RiskConcave": "lemma: leaves the list under the 5:11 PM ruling",
+   "FlockSoundness.Audit.Partitioning.SecurityProofs.ServedGranularityChoice": "lemma: leaves the list under the 5:11 PM ruling, as GranularityChoice does: a cost optimum over servedCost, no acceptance of a function to take",
+   "FlockSoundness.Audit.Partitioning.SecurityProofs.ServedGranularityOptimum": "lemma: leaves the list under the 5:11 PM ruling, as GranularityOptimum does: a cost bound over the planner's laws, no acceptance of a function to take",
    "FlockSoundness.Audit.Partitioning.SecurityProofs.UnequalCost": "lemma: leaves the list under the 5:11 PM ruling",
    "FlockSoundness.Audit.Partitioning.SecurityProofs.UnequalDraws": "lemma: leaves the list under the 5:11 PM ruling",
    "FlockSoundness.Audit.Partitioning.Witness.achievability": "lemma: leaves the list under the 5:11 PM ruling",
@@ -19278,6 +19292,7 @@
     "FlockSoundness.Audit.Partitioning.SecurityProofs.HeavyUnit",
     "FlockSoundness.Audit.Partitioning.SecurityProofs.NestedEscape",
     "FlockSoundness.Audit.Partitioning.SecurityProofs.RefinementRule",
+    "FlockSoundness.Audit.Partitioning.SecurityProofs.ServedGranularityOptimum",
     "FlockSoundness.Audit.Partitioning.SecurityProofs.UnequalCost",
     "FlockSoundness.Audit.Partitioning.SecurityProofs.UnequalDraws",
     "FlockSoundness.Audit.Partitioning.Witness.converse",
@@ -19498,6 +19513,7 @@
     "FlockSoundness.Audit.Partitioning.SecurityProofs.HeavyUnit",
     "FlockSoundness.Audit.Partitioning.SecurityProofs.NestedEscape",
     "FlockSoundness.Audit.Partitioning.SecurityProofs.RefinementRule",
+    "FlockSoundness.Audit.Partitioning.SecurityProofs.ServedGranularityOptimum",
     "FlockSoundness.Audit.Partitioning.SecurityProofs.UnequalCost",
     "FlockSoundness.Audit.Partitioning.SecurityProofs.UnequalDraws",
     "FlockSoundness.Audit.Partitioning.Witness.converse",
@@ -20815,6 +20831,7 @@
     "FlockSoundness.Audit.Partitioning.SecurityProofs.HeavyUnit",
     "FlockSoundness.Audit.Partitioning.SecurityProofs.NestedEscape",
     "FlockSoundness.Audit.Partitioning.SecurityProofs.RefinementRule",
+    "FlockSoundness.Audit.Partitioning.SecurityProofs.ServedGranularityOptimum",
     "FlockSoundness.Audit.Partitioning.SecurityProofs.UnequalCost",
     "FlockSoundness.Audit.Partitioning.SecurityProofs.UnequalDraws",
     "FlockSoundness.Audit.Partitioning.Witness.converse",
@@ -50236,7 +50253,7 @@
    ]
   },
   "Proofs.Flock.Soundness.Audit.Partitioning.Guarantees": {
-   "digest": "71b976dfe3cf93d633a3284625f4f793933b17a5ac2008bfef28cf14a0e5b829",
+   "digest": "0f2c09027897ac231e8619db7211d2726682abf0617f0097d09c7a0d790e07a4",
    "definitions": {
     "FlockSoundness.Audit.Partitioning.Guarantees.Achievability": "13289a2ad58152cd2636c2ffd2537d56d8398e1ba65c3e87929c9518f79d75ce",
     "FlockSoundness.Audit.Partitioning.Guarantees.Concentration": "d6b5c57356f7ad8772fe535a77b9a6f4ba12b52802bb8e0b4054392f083a5e09",
@@ -50249,6 +50266,8 @@
     "FlockSoundness.Audit.Partitioning.Guarantees.NestedEscape": "a8095e1266ff0f79bc1cd586d6974b8adfe8e771b5d01f3bc006c9f8b79c5829",
     "FlockSoundness.Audit.Partitioning.Guarantees.RefinementRule": "9a15ae2f648b879b982b13eb503cc85e5728a070b210befb00abf4626f4f4af5",
     "FlockSoundness.Audit.Partitioning.Guarantees.RiskConcave": "8d27ceab664e271c5c036cb611ac232e2f085c7a8369e49b40f23e8b46f1d01c",
+    "FlockSoundness.Audit.Partitioning.Guarantees.ServedGranularityChoice": "e1e458e1371cb1c4a288697904e3c76a42af9824a8b0fb4a6c70f23c4969564b",
+    "FlockSoundness.Audit.Partitioning.Guarantees.ServedGranularityOptimum": "e6c7cd659d060a8e02f6b88036c074aa60b6577feca7afc14b8cce2f07ace63c",
     "FlockSoundness.Audit.Partitioning.Guarantees.UnequalCost": "01f2e098445ca5140fe75fe7bdbca5c3484df46e1df71b2af18c64051582911f",
     "FlockSoundness.Audit.Partitioning.Guarantees.UnequalDraws": "fe02f8114d672999bdca769ff25b6d441fa5748ecd8522342d827d914c1625c0"
    },
@@ -50264,12 +50283,14 @@
     "FlockSoundness.Audit.Partitioning.SecurityProofs.NestedEscape",
     "FlockSoundness.Audit.Partitioning.SecurityProofs.RefinementRule",
     "FlockSoundness.Audit.Partitioning.SecurityProofs.RiskConcave",
+    "FlockSoundness.Audit.Partitioning.SecurityProofs.ServedGranularityChoice",
+    "FlockSoundness.Audit.Partitioning.SecurityProofs.ServedGranularityOptimum",
     "FlockSoundness.Audit.Partitioning.SecurityProofs.UnequalCost",
     "FlockSoundness.Audit.Partitioning.SecurityProofs.UnequalDraws"
    ]
   },
   "Proofs.Flock.Soundness.Audit.Partitioning.Model": {
-   "digest": "629275f137ead10d2ad1a04e0128259b0e88fb6653878f8ef7fb24cf1d1da2f5",
+   "digest": "53f969034331991ca21c780453f4f47fff9c38ab65281f1f037f69cd9b0e65b8",
    "definitions": {
     "FlockSoundness.Audit.Partitioning.CertifiesLeak": "49818a158eddf66e2a7ef4008c8b03b4834003e62ae4d590e8c04841a6b3d6c3",
     "FlockSoundness.Audit.Partitioning.MeetsTarget": "b73411c7d083bb260056938c2ce9794fef1a102e1fb940c0771502b7b766a676",
@@ -50278,6 +50299,7 @@
     "FlockSoundness.Audit.Partitioning.locBits": "d2441943f874af777526fbc5f489647ae668f613258e8ddb957bdb36d7c7dd43",
     "FlockSoundness.Audit.Partitioning.meanDraws": "695ca2cf9cec58b9b4b192d7b04d41c064c0ba380cb1b3a2ca862cd3c20c2dbb",
     "FlockSoundness.Audit.Partitioning.nested": "f61ec1364c52f0c61bb1801555070fe9d7c630ae946c0a6b8b209c1b5677b279",
+    "FlockSoundness.Audit.Partitioning.servedCost": "ec448241403ebbb4c616663d144708a7e92bb791a571034c38bf4051b880e4e8",
     "FlockSoundness.Audit.Partitioning.unitCost": "46cdfe75b4586b0d2116f244519a9b4212d044a0bdfd7ced3c807b43aa6cc07c",
     "FlockSoundness.Audit.Partitioning.wrongIn": "70ade1432b7bb37fb5e5aed84d30dd69a9e92d94fb2d52ba3c1d57a790cf7f87"
    },
@@ -50293,6 +50315,8 @@
     "FlockSoundness.Audit.Partitioning.SecurityProofs.NestedEscape",
     "FlockSoundness.Audit.Partitioning.SecurityProofs.RefinementRule",
     "FlockSoundness.Audit.Partitioning.SecurityProofs.RiskConcave",
+    "FlockSoundness.Audit.Partitioning.SecurityProofs.ServedGranularityChoice",
+    "FlockSoundness.Audit.Partitioning.SecurityProofs.ServedGranularityOptimum",
     "FlockSoundness.Audit.Partitioning.SecurityProofs.UnequalCost",
     "FlockSoundness.Audit.Partitioning.SecurityProofs.UnequalDraws",
     "FlockSoundness.Audit.Partitioning.Witness.concentration",
