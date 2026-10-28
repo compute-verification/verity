@@ -934,13 +934,26 @@ def rule_touches(rule: list[str], changed: list[str]) -> list[str]:
 
 
 def step_status(store, run_id: str, step: str) -> str:
-    """The status ``step`` has in the attempt's result.json ``steps`` ("absent" when it has none)."""
+    """The status ``step`` has in the attempt's result.json ``steps`` ("absent" when it has none).  A job a shard plan splits
+    (lean-audit, by Lake package): in a `--combine` check, its parts' (`STEP:PART`), passed only when each is; in a shard
+    (`SHARD_KIND`, or a deferred run's shard: drive's after-landing shards), "partial" unless that shard ran every part of it,
+    since a shard alone checks only its own."""
     try:
         art = (store.get_attempt(run_id) or {}).get("outputs", {}).get("result")
         doc = store.get_manifest(art).meta if art else {}       # a result artifact's document is its manifest's meta
     except Exception as e:  # noqa: BLE001  (an unreadable result admits nothing)
         return f"unreadable ({type(e).__name__})"
-    return next((s.get("status", "absent") for s in doc.get("steps", []) if s.get("step") == step), "absent")
+    steps = [s for s in doc.get("steps", []) if isinstance(s, dict)]
+    mine = [s for s in steps if s.get("step") == step]
+    sh = next((x for x in (doc.get("shard"), doc.get("deferred")) if isinstance(x, dict) and x.get("all")), None)
+    if sh and any(s.get("parts") for s in mine):
+        every = [p for p in sh["all"] if isinstance(p, str) and p.partition(":")[0] == step]
+        if sorted(p for s in mine for p in s.get("parts") or ()) != sorted(every):
+            return "partial"
+    if mine:
+        return mine[0].get("status", "absent")
+    parts = [s.get("status") or "absent" for s in steps if str(s.get("step", "")).startswith(step + ":")]
+    return next((x for x in parts if x != "passed"), "passed") if parts else "absent"
 
 
 def _record(tree: Path, tool: str, command: list[str], on: str | None, project: str | None, log=print,
