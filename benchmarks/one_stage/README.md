@@ -86,7 +86,9 @@ negatives.
   node and names each one missing, rejecting or about another server, with its reason (PoUW's development piece: development
   run, credits nothing). An accept's clause says when its weights were held and their share of the checkpoint, where its
   profile says so (PoUS's), and each δ of the block record's at which its quantity is not established. V3c runs last, within `V3C_TIMEOUT` and `V3C_AUDIT_TIMEOUT`, since nothing before it reads it. Each
-  step's verdict line is in `out/verdicts.txt`.
+  step's verdict line is in `out/verdicts.txt`. The network certifier's piece, the longest, starts as soon as the window is
+  picked. No line counts a window's requests: the serve dir's request lists, serve-openai's log and the load's records,
+  timings and log stay on the node, and leave it only as `served_overhead.py metrics`' aggregate.
 - `a6.sh`: run A6's entry point on a CPU machine, on hidden_zk's cached builds. A6 is the W8A8 coordinates of an int8
   decoder layer (`ScaledMmS8Coordinate_v1` at each K, Llama-3.2-1B's by default) under the stratified law, stand-in values
   staged by C-Flock's `UnitStager` bound to the partition in statements the spec's shape admits (m <= 35), each stratum's
@@ -179,9 +181,14 @@ negatives.
 - `served_stock.sh` (with `served_overhead.py`): `served_verdicts.sh`'s stock control, the same endpoint, engine and load
   served with `serve-openai --no-commit` and no protocol, once per fresh endpoint for `REPS` endpoints. `served_overhead.py
   table` compares the composed run with it on two clocks, each the same code in both runs: the client's
-  (`serve_load.py --varied`'s timings files) and the engine's step trace (`advice_trace.jsonl`). It reports time per output
+  (`serve_load.py --varied`'s timings files) and the engine's step trace (`advice_trace.jsonl`). The trace and the load's
+  records stay in the serve dir on the node, where `served_overhead.py metrics` reads them, and each run publishes only
+  that aggregate (`overhead.json`), which `table` reads. It reports time per output
   token, time to first token and tokens per second as composed over stock, the composed run's window open and close on
   the engine loop, and `verity-bench served-table`'s single-protocol rows beside them.
+- `served_composite.sh`: `served_verdicts.sh`'s step after its record. It writes PoUS's and the wipe's composite cases
+  (PoUS's `served_case.sh`), then gets remote's and onsite's Lean verdicts on the run's cases (soundness's composite
+  reader), all on the node. Only the verdict lines reach the run's `verdicts.txt`, and a tree without those two scripts skips the step.
 - `served_util.sh` (with `served_util.py`): the whole-step tensor utilization of serve-openai on the int8 Llama-3.2-1B
   prefill mix (prompts of 1,024 ids, `max_tokens` 1, all queued at once, T tokens a step), one arm a run (stock, the
   Commit unsealed or sealed, the Commit with PoUW H1 on in-process coins), under Nsight Systems' GPU metrics.

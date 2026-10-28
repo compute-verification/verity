@@ -130,6 +130,36 @@ def test_the_client_ruler_refuses_failed_requests_and_a_count_that_misses_the_lo
         O.serve_dir(s)
 
 
+def test_metrics_prints_aggregates_and_the_table_reads_them_as_it_reads_the_dirs(tmp_path, capsys):
+    c = _dir(tmp_path / "c", _load(10.0, 1.5, window=0), windows=[{"window": 0, "seconds": {"open": 0.5, "on_loop": 1.0}}])
+    (c / "load.timings.json").write_text(json.dumps(_timings(0.0, 4.0, 7.5)))
+    s = _dir(tmp_path / "s", _load(100.0, 0.5) + _load(200.0, 0.25))
+    for j in (1, 2):
+        (s / f"load-{j}.timings.json").write_text(json.dumps(_timings(0.0, 0.25, 1.5)))
+    assert O.main(["metrics", str(c), str(s)]) == 0
+    lines = capsys.readouterr().out.splitlines()
+    files = []
+    for name, line in zip("cs", lines):
+        doc = json.loads(line)
+        assert doc["schema"] == O.AGGREGATE and doc["identity"]["precision"] == "verity_int8"
+        assert all(set(ld) <= set(O.PUBLIC_LOAD) and "client_tokens_per_s" in ld for ld in doc["loads"])
+        assert not any(k in line for k in ("step_s", "start_unix", "timings.json", "emitted"))
+        (f := tmp_path / f"{name}.json").write_text(line)
+        files.append(f)
+    by_file, by_dir = O.table(files[:1], files[1:]), O.table([c], [s])
+    assert by_file["metrics"] == by_dir["metrics"] and by_file["composed"][0]["dir"] == str(files[0])
+    assert "step_s" not in json.dumps(by_dir)
+
+
+def test_the_table_refuses_a_file_that_is_no_aggregate_and_metrics_a_dir_with_no_trace(tmp_path, capsys):
+    (f := tmp_path / "x.json").write_text(json.dumps({"schema": "other"}))
+    with pytest.raises(ValueError, match="not a verity-bench/served-overhead-metrics/v0"):
+        O.run_of(f)
+    (tmp_path / "empty").mkdir()
+    assert O.main(["metrics", str(tmp_path / "empty")]) == 2
+    assert "no advice_trace.jsonl" in capsys.readouterr().err
+
+
 def test_without_timings_the_table_has_only_the_engine_ruler(tmp_path):
     t = O.table([_dir(tmp_path / "c", _load(10.0, 1.0))], [_dir(tmp_path / "s", _load(10.0, 0.5))])
     assert list(t["metrics"]) == list(O.METRICS)
