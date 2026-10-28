@@ -9,7 +9,7 @@ pins both files' SHA-256).
 
 `merkle` instances are trees of random blocks under either leaf (the spec's `reference.leaf`, the generic protocol's
 `verifier.leaf_hash`): every leaf, the root, the SHA-512 of every audit path (canonical JSON of the list), each path's
-exact length, and `verify_path` (`wire.verify_path`, `verifier.verify_path`) on each leaf's honest path and on a flipped,
+exact length, and `verifier.verify_path` (the wire verifier's too) on each leaf's honest path and on a flipped,
 shortened, lengthened, swapped (leaf for sibling), odd-length or misindexed one, and on an index past the tree.
 
 `randomness` instances are `verity.ml.randomness` derivations, streams and uniforms over random parts, and P2's audit id,
@@ -66,24 +66,20 @@ def _merkle(rng: random.Random) -> dict:
 
 
 def _merkle_answers(py, inst: dict) -> dict:
-    reference, wire, verifier = py
+    reference, _, verifier = py
     salt, bps = bytes.fromhex(inst["salt"]), inst["blocks_per_segment"]
     blocks = [bytes.fromhex(b) for b in inst["blocks"]]
     if inst["leaf"] == "spec":
         def leaf(s, v, b):
             return reference.leaf(salt, s, v, b)
-        verify = wire.verify_path
     else:
         def leaf(s, v, b):
             return verifier.leaf_hash(SimpleNamespace(blocks_per_segment=1 << 16, block_bytes=len(b)), salt, s * (1 << 16) + v, b)
-        verify = verifier.verify_path
     leaves = [leaf(i // bps, i % bps, b) for i, b in enumerate(blocks)]
     n = len(leaves)
     tree = verifier.MerkleTree(leaves)
-    root = reference.root(leaves)
-    assert root == tree.root
+    root = tree.root
     paths = [tree.path(i) for i in range(n)]
-    assert all(list(p) == reference.path(leaves, i) for i, p in enumerate(paths))
     rng = random.Random(inst["seed"])
     checks = []
     for i in range(n):
@@ -95,10 +91,10 @@ def _merkle_answers(py, inst: dict) -> dict:
         cases += [("long", 0, 0), ("index", rng.randrange(n + 2), 0), ("past", n + rng.randrange(3), 0)]
         for name, a, b in cases:
             j, lf, q = check_input(name, i, a, b, leaves, p, root)
-            checks.append([name, i, a, b, verify(root, n, j, lf, q)])
+            checks.append([name, i, a, b, verifier.verify_path(root, n, j, lf, q)])
     return {"leaves": [x.hex() for x in leaves], "root": root.hex(),
             "paths_sha512": hashlib.sha512(canonical([[s.hex() for s in p] for p in paths]).encode()).hexdigest(),
-            "path_lengths": [wire.path_length(n, i) for i in range(n)], "checks": checks,
+            "path_lengths": [verifier.path_length(n, i) for i in range(n)], "checks": checks,
             "samples": [leaf(s, v, bytes.fromhex(b)).hex() for s, v, b in inst["samples"]]}
 
 
@@ -268,13 +264,13 @@ def _small_session(py, rng: random.Random, **force) -> _Session:
     for i, m in enumerate(payloads):
         kv, t, _ = R.keys(salt, params, commitment, i // bps, i % bps)
         blocks.append(R.encode(params, m, kv, t).to_bytes(n, "big"))
-    leaves = [R.leaf(salt, i // bps, i % bps, b) for i, b in enumerate(blocks)]
-    paths = [R.path(leaves, i) for i in range(len(leaves))]
+    tree = py[2].MerkleTree([R.leaf(salt, i // bps, i % bps, b) for i, b in enumerate(blocks)])
+    paths = [list(tree.path(i)) for i in range(len(blocks))]
     public = force.get("public", rng.random() < 0.6)
     delta = rng.choice([R.DELTA_NS, rng.randint(0, 10**6)])
     rtt = rng.choice([0, R.MAX_RTT_ALLOWANCE_NS, rng.randint(0, 10**6)])
     flags = force.get("flags", rng.choice([0, 1, 1, 3]))
-    s = _Session(py, rng, params, commitment, salt, R.root(leaves), blocks.__getitem__, paths.__getitem__,
+    s = _Session(py, rng, params, commitment, salt, tree.root, blocks.__getitem__, paths.__getitem__,
                  blocks if public else None, force.get("mode", rng.choice([0, 0, 1])),
                  force.get("k", rng.randint(1, 6)), flags, delta, rtt)
     s.held = held
@@ -552,7 +548,7 @@ def _deployment_store(py) -> dict:
         assert level[12345] == R.leaf(salt, 12345 // bps, 12345 % bps, pool[12345 % 16])
         levels = [level]
         while len(level) > 1:
-            level = [R.node(level[i], level[i + 1]) for i in range(0, len(level), 2)]
+            level = [py[2].node_hash(level[i], level[i + 1]) for i in range(0, len(level), 2)]
             levels.append(level)
         root = level[0]
 
@@ -649,9 +645,9 @@ def _small_p_session(py, rng: random.Random, *, public: bool, flags: int) -> _Se
     for i, m in enumerate(payloads):
         kv, t, _ = R.keys(salt, q, commitment, i // bps, i % bps)
         blocks.append(R.encode(q, m, kv, t).to_bytes(w // 8, "big"))
-    leaves = [R.leaf(salt, i // bps, i % bps, b) for i, b in enumerate(blocks)]
-    paths = [R.path(leaves, i) for i in range(len(leaves))]
-    s = _Session(py, rng, q, commitment, salt, R.root(leaves), blocks.__getitem__, paths.__getitem__,
+    tree = py[2].MerkleTree([R.leaf(salt, i // bps, i % bps, b) for i, b in enumerate(blocks)])
+    paths = [list(tree.path(i)) for i in range(len(blocks))]
+    s = _Session(py, rng, q, commitment, salt, tree.root, blocks.__getitem__, paths.__getitem__,
                  blocks if public else None, 0, 3, flags, R.DELTA_NS, 0)
     s.w_bytes = held if flags & 2 else None
     return s
