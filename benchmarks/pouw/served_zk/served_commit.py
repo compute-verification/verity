@@ -298,7 +298,7 @@ def certifier_run(certifier: Any) -> dict[str, str]:
 
 DEPLOYMENT_FORM = ("a certified window's deployment is the network certifier's public key, its run's "
                    f"{RUN_ID_BYTES}-byte id and the verifier's challenger key (`challenger.ChallengerKey`)")
-#: infra's published challenger key, vy-challenger-1's from 2026-10-20T09:45:24Z: a challenger-key/v1 record
+#: the published challenger key, vy-challenger-1's: a challenger-key/v1 record
 CHALLENGER_KEY_PIN = "art:d12f85becc22388f3e9834d3894cbb99eb655bc19484b0bc3abe9b080689a657"
 #: the SHA-512 of the public key `CHALLENGER_KEY_PIN` publishes; a record of any other key is refused, whatever it names
 CHALLENGER_KEY_SHA512 = "27271eaf917d1a817198cbcfe7684debd9bdb11b9e386460948bb981642fab3ae065c0a877330a0da68ae76969550eb786dc172319876aaca21fd116e5a193bc"
@@ -341,7 +341,7 @@ class Deployment:
     coin record and the draw's check of record verifies it (`core_check.draw`, ``coin-key``), so no record a prover
     signs over coins it holds is read.  `pinned` takes the challenger key from infra's published pin."""
 
-    # TODO(NET-50): the auditor's deployment record is to give the certifier's key and run id; nothing writes it yet, so
+    # TODO: the auditor's deployment record is to give the certifier's key and run id; nothing writes it yet, so
     # the caller does.
     certifier_key: Any
     run_id: bytes
@@ -865,7 +865,7 @@ class Challenger:
         self.signed: dict | None = None
         self.deployment: Deployment | None = None
         if certifier is not None:
-            # TODO(RT4-INT-7): no Lean statement covers a certified window's timing, and no run measures the commit
+            # TODO: no Lean statement covers a certified window's timing, and no run measures the commit
             # pipeline the certifier's reveal deadline must be sized against.
             if params.get("registration_deadline") is not None or predates_deadline:
                 raise ValueError(CERTIFIED_DEADLINE)
