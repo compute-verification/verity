@@ -469,9 +469,10 @@ class Local:
         argv += ["--params", ",".join(map(str, LOCAL_PARAMS)), "--keygen-workers", "1"]
         A.run(host, session, signer=self.signer, pinned=self.pin, now=lambda: datetime.now(timezone.utc), argv=argv)
 
-    def open(self, root: str, layout: list, minutes: int = MINUTES, scheme: str = SCHEME) -> tuple[str, str, str]:
+    def open(self, root: str | Callable[[str], str], layout: list, minutes: int = MINUTES, scheme: str = SCHEME
+             ) -> tuple[str, str, str]:
         """Reserve and open the session on `root` with the coins `layout` of `scheme`, as the gate does: (address, secret,
-        commitment)."""
+        commitment). `root` may be a function of the reserved session, for a root that binds it (a filler window's)."""
         A, host, now = self.A, self.host, datetime.now(timezone.utc)
         hooks = dict(by=self.by, now=now, own=lambda p: None, token=secrets.token_hex(2),
                      reserve=lambda s: A.reserve(host, s, signer=self.signer, pinned=self.pin, now=now))
@@ -480,6 +481,8 @@ class Local:
         if rc:
             raise Ch.CoinError(f"the local gate refused the reserve: {out.decode().strip()}")
         self.session = json.loads(out)["session"]
+        if callable(root):
+            root = root(self.session)
 
         def start(s: str) -> None:
             self.thread = threading.Thread(target=self._serve, args=(s,), daemon=True)
