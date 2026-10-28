@@ -30,6 +30,7 @@ What the protocols cost: measured on served inference, and bounded on training.
 | `load_time/` | the time from spawn to engine-ready for a large model under vLLM at TP 8, by page-cache, compile-cache and loader state | frozen |
 | `rho/` | a lower bound on the overhead a training run pays under the regime, and the time to its target, per scenario and monitoring period | maintained |
 | `nci/` | the sources, parameters and policies NCI's bounds rest on, and a board of training methods with their slowdown brackets | maintained |
+| `update_price/` | upper bounds on update hardness's price: the shortest time-bounded descriptions found (codecs, low rank, replay-prefix predictors, short replay) for selections of a real fine-tune's updated slots | maintained |
 
 ## Kernels
 
