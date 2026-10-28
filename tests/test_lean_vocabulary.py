@@ -102,7 +102,7 @@ CANONICAL: dict[str, tuple[str, ...]] = {
     "Merkle": (),  # nothing in scope declares it
     "Netlist": ("verity/ml/private_circuits/universal.py::Netlist",),
     "Node": (),
-    "Op": (f"{CORE}Boolean.lean::Verity.Boolean.Op",),
+    "Op": (f"{CORE}Boolean.lean::FlockSoundness.Audit.Op",),
     "Opening": ("Security/Definitions/Hash/RowLeaf.lean::Hash.RowLeaf.Opening", "verity/ml/commitments/merkle.py::Opening"),
     "Outcome": (f"{PROTOCOL}::Core.Outcome",),
     "Partition": (f"{CORE}Partition.lean::Verity.Partition", f"{FLOCK}Evaluated.lean::Flock.Extract.Partition"),
@@ -111,7 +111,7 @@ CANONICAL: dict[str, tuple[str, ...]] = {
     "Prog": (f"{CORE}Accel/Machine.lean::Verity.Accel.Machine.Prog", f"{FLOCK}Program.lean::Flock.Program.Prog"),
     "Program": ("verity/ml/circuits/program.py::Program",),
     "Record": (),
-    "Registration": (),
+    "Registration": (f"{CORE}Formalism.lean::Verity.Registration",),
     "Registry": (),
     "Session": (),
     "Signature": ("verity/core/primitives/lms/lean/Lms/Verify.lean::Lms.Signature", "verity/ml/crypto/lms.py::Signature"),
@@ -375,7 +375,7 @@ def slots(s: Scan) -> set[str]:
 
 
 #: The most lines ``KNOWN`` may hold. Raising it, for a new line, needs lean's review; `--prune` lowers it to the count.
-KNOWN_MAX = 387
+KNOWN_MAX = 388
 
 #: Every hit that is not a canonical, a mirror, a reading of the canonical or a protocol's slot, with its reason and owner.
 #: For new code, read the canonical or rename; `--prune` deletes the lines whose declarations went.
@@ -483,6 +483,8 @@ KNOWN: dict[str, str] = {
     "Security/Definitions/Core/Accel/Isa.lean::Verity.Accel.Op": "homonym, an opcode over stores: rename (proofs)",
     "Security/Definitions/Core/Advice.lean::Verity.Advice.Registration":
         "homonym, a hiding commitment to a partition's rows: rename (proofs)",
+    "Security/Definitions/Core/Boolean.lean::FlockSoundness.Audit.Circuit":
+        "duplicate of `Verity.Circuit`: becomes its Boolean case (proofs)",
     "Security/Definitions/Core/Boolean.lean::Verity.Boolean.Circuit":
         "duplicate of `Verity.Circuit`: becomes its Boolean case (proofs)",
     "Security/Definitions/Flock/Accounting/Bound.lean::FlockSoundness.Accounting.Stmt":
