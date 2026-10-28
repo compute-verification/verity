@@ -1,5 +1,5 @@
-"""The two-machine network path alone, as one CPU `research run` on vy-nebius-2: `lat serve` built with g++ (answers from
-host memory, no GPU) on a core of the job, then challengers on vy-nebius-cpu-1 and vy-nebius-1 in turn, each in
+"""The two-machine network path alone, as one CPU job on a GPU node: `lat serve` built with g++ (answers from
+host memory, no GPU) on a core of the job, then challengers on a CPU node and a second GPU node in turn, each in
 variants that separate the network's causes: back-to-back pings, pings paced 1 ms and 300 µs apart (adaptive interrupt
 moderation follows the packet rate), and 4 KiB answers in 1,472-byte datagrams (fragmented on cpu-1's MTU-1450 path)
 and in 1,422-byte ones (whole), back to back and paced, and a five-minute ping series 1 ms apart (how the path's
@@ -43,7 +43,7 @@ CROSS_PORT, CROSS_LPORT = 47330, 47313
 def remote_serve(src: bytes, seconds: int, log_path: str, who: str = "node1", port: int = CROSS_PORT,
                  peers: tuple[str, ...] = (f"{REMOTES['cpu1'][0].split('@')[1]}:{CROSS_LPORT}",),
                  host_mib: int = 1024) -> subprocess.Popen:
-    """`lat serve` on `who` (default vy-nebius-1) for `seconds`, built and run in a scratch dir that it removes on exit.
+    """`lat serve` on `who` (default the second GPU node) for `seconds`, built and run in a scratch dir that it removes on exit.
     The log gets `PID n` (for `remote_stop`: a killed ssh client leaves the remote server running) and `READY` once it
     is bound (`remote_ready`)."""
     dest = REMOTES[who][0]

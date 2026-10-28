@@ -1,7 +1,7 @@
 """The CPU replay (`replay`): each template's function is circuits' semantics (a scalar composition of main's word
 primitives' own evaluators, and main's Definition wherever one is importable), every template keys and parses at the frozen
-shape's parameters, the draw is core's draw object from live coins, and a replay of the torch loop, of a tiny instance of the
-frozen architecture (`cpu_step` on ALLP-IFACE's seeded weights) and of a bundle in IFACE-B's form matches unit for unit and
+shape's parameters, the draw is core's draw object from live coins, and a replay of seeded W8A8 coordinates, of a tiny instance
+of the frozen architecture (`cpu_step` on the seeded weights) and of a bundle in the drawn-unit bundle's form matches unit for unit and
 catches one flipped bit."""
 from __future__ import annotations
 
@@ -210,7 +210,7 @@ def test_softmax_and_rmsnorm_on_rows_with_nans_and_infinities() -> None:
 
 
 def test_each_importable_definition_is_its_reference() -> None:
-    """Wherever main has a template's Definition (today the W8A8 and BF16 coordinates and Bf16Add; circuits' CIR-100 ones as
+    """Wherever main has a template's Definition (today the W8A8 and BF16 coordinates and Bf16Add; circuits' quantizer ones as
     they land), the reference must be that Definition."""
     rng = np.random.default_rng(5)
     keys = [*SCALAR, "ScaledMmS8Coordinate_v1{K=32,DOT=BlackwellS8ImmaDot32_v1}", "GemmCoordinate_v2{K=16,DOT=HopperBF16WgmmaDot16_v1}"]
@@ -297,32 +297,26 @@ def flip(units: list[dict], i: int, bit: int = 0) -> list[dict]:
     return out
 
 
-class Capture:
-    """What the torch loop records into a window, as `replay`'s units."""
-
-    def __init__(self) -> None:
-        self.units: list[dict] = []
-
-    def record(self, target, ins, outs, label=None) -> None:
-        t = R.template(target.id)
-        for i in range(len(outs[0])):
-            self.units.append({"unit": len(self.units), "template": t.key, "label": label,
-                               "inputs": {p[0]: R._row(np.asarray(a[i]).reshape(-1).view(f"u{np.asarray(a).dtype.itemsize}"), p)
-                                          .tolist() for p, a in zip(t.params, ins)},
-                               "outputs": [int(outs[0][i])]})
+S8 = "ScaledMmS8Coordinate_v1{K=128,DOT=BlackwellS8ImmaDot32_v1}"
 
 
-def torch_loop(tamper: bool = False) -> list[dict]:
-    from verity_torch_loop import loop as L
-    c = Capture()
-    L.TorchLoop(L.Model(), [3, 7], steps=1, tamper=tamper).run(c)
-    return c.units
+def s8_units(n: int = 48, tamper: bool = False) -> list[dict]:
+    """``n`` W8A8 coordinates on seeded s8 rows and positive scales, their outputs the template's numpy reference
+    (``tamper``: every output's bit 0 flipped), as `replay`'s units."""
+    t = R.template(S8)
+    rng = np.random.default_rng(0)
+    x, w = (rng.integers(-128, 128, (n, 128), dtype=np.int8).view(np.uint8) for _ in range(2))
+    sx, sw = (rng.uniform(1e-3, 1e-2, n).astype(np.float32).view(np.uint32) for _ in range(2))
+    outs = t.reference(x, sx, w, sw)[:, 0].astype(np.uint64) ^ np.uint64(tamper)
+    return [{"unit": i, "template": S8, "label": None,
+             "inputs": {"x": x[i].tolist(), "sx": [int(sx[i])], "wrow": w[i].tolist(), "sw": [int(sw[i])]},
+             "outputs": [int(outs[i])]} for i in range(n)]
 
 
-def test_the_torch_loop_replays_and_a_flipped_bit_is_caught() -> None:
-    units = torch_loop()
+def test_seeded_w8a8_coordinates_replay_and_a_flipped_bit_is_caught() -> None:
+    units = s8_units()
     pop = [(units[0]["template"], len(units))]
-    d = R.draw(pop, "uniform:24", b"fixture coins", {"run": "torch-loop"})
+    d = R.draw(pop, "uniform:24", b"fixture coins", {"run": "s8-units"})
     drawn = [units[u] for u in d["units"]]
     rep = R.replay(drawn)
     assert R.ok(rep) and rep["matched"] == 24
@@ -331,12 +325,12 @@ def test_the_torch_loop_replays_and_a_flipped_bit_is_caught() -> None:
     rep = R.replay(flip(drawn, 5, 9))
     assert not R.ok(rep) and [m["unit"] for m in rep["mismatched"]] == [drawn[5]["unit"]] and rep["matched"] == 23
     assert R.ok(R.replay(units))
-    bad = R.replay(torch_loop(tamper=True))
+    bad = R.replay(s8_units(tamper=True))
     assert bad["matched"] == 0 and len(bad["mismatched"]) == len(units)
 
 
 def test_a_malformed_unit_is_reported_not_replayed() -> None:
-    units = torch_loop()[:3]
+    units = s8_units()[:3]
     units[0] = {**units[0], "inputs": {**units[0]["inputs"], "x": units[0]["inputs"]["x"][:-1]}}
     units[1] = {**units[1], "template": "Nope_v1"}
     rep = R.replay(units)
@@ -344,7 +338,7 @@ def test_a_malformed_unit_is_reported_not_replayed() -> None:
 
 
 def iface_b(units: list[dict]) -> tuple[dict, bytes]:
-    """``units`` as IFACE-B's drawn-unit bundle carries them (`verity/drawn-unit-bundle/v1`: per unit its template's name
+    """``units`` as the drawn-unit bundle carries them (`verity/drawn-unit-bundle/v1`: per unit its template's name
     and binding, each port's row as u16 words little-endian in the payload); openings left out, `units_of` doesn't read them."""
     payload, out = bytearray(), []
     for u in units:
@@ -363,7 +357,7 @@ def iface_b(units: list[dict]) -> tuple[dict, bytes]:
 
 
 def test_an_iface_b_bundle_replays_and_a_flipped_payload_bit_is_caught() -> None:
-    units = torch_loop()[:6]
+    units = s8_units()[:6]
     doc, payload = iface_b(units)
     got = R.units_of(doc, payload)
     assert [(u["unit"], u["template"], u["inputs"], u["outputs"]) for u in got] == \
@@ -384,7 +378,7 @@ TINY_FORMS = S.Forms(rms_chunk=16, rms_group=2, amax_chunk=16, part_fanin=2, pv_
 @pytest.fixture(scope="module")
 def tiny() -> S.Step:
     """Two sequences through a tiny MQA decoder of the frozen architecture (width 64, 2 layers, 4 query heads of 16, MLP
-    128, byte vocabulary, context 8, 16-code weight rows) on ALLP-IFACE's test-seeded weights: 6 positions, ~159k units."""
+    128, byte vocabulary, context 8, 16-code weight rows) on the test-seeded weights: 6 positions, ~159k units."""
     from e2e_h200 import served_weights as WG
     shape = WG.Shape("replay-tiny-mqa", 64, 2, 4, 16, 1, 128, 256, 8, 16)
     step = S.Step(shape, lambda n: WG.generate(shape, WG.TEST_SEED, n), batch=2, forms=TINY_FORMS)

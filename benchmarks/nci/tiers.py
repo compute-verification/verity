@@ -71,8 +71,8 @@ REFERENCE_THREADED = (10.0, 37248.0)
 
 #: the ACCEL model's card table, the one hardware source for the GPUs here: the RTX PRO 6000 Server Edition at its
 #: firmware's maximum (``Verity.Accel.Sm120.card``, 188 SMs, 1024 tensor units an SM clock, a FP8 E4M3 MAC one unit,
-#: the clock's ceiling 2430 MHz), pinned from Security/Definitions/Core/Accel/Sm120.lean at ba71196752 (#4920) until it
-#: lands; tests/test_tiers.py holds the pin to the file
+#: the clock's ceiling 2430 MHz), pinned from Security/Definitions/Core/Accel/Sm120.lean;
+#: tests/test_tiers.py holds the pin to the file
 CARD = {"sms": 188, "tensor": 1024, "clock_hz": 2430e6}
 #: the clock PoUW credits on sm_120 (H1's SM120 record, verity/core/protocols/pouw/circuit/h1device.py: 2430 MHz)
 CREDITED_CLOCK_HZ = 2430e6
@@ -83,17 +83,16 @@ NODE_FLOPS = 8 * GPU_FLOPS
 HOST_OPS = 128 * 2048 * 3.6e9
 
 #: defaults: the Kimi K2 calibration and forward chain; the GPUs' residual under the floor credit at f_max,
-#: 1 - ((1 - phi)/q_sched + phi)/q_clock = 0.323: honest kernels run 1.72x the floor at the nodes' locked clock (run
-#: r20261017-123922-e558), diluted by the training window's filler (the C7 dossier, whose 0.326 also takes its
+#: 1 - ((1 - phi)/q_sched + phi)/q_clock = 0.323: honest kernels run 1.72x the floor at the nodes' locked clock,
+#: diluted by the training window's filler (the C7 dossier, whose 0.326 also takes its
 #: eps = 0.54% off the credited time, which eps_w charges here instead; 0.213 with an attested clock; 1% needs eight
-#: conditions; today nothing in a training window is credited); PoUW's deficit eps_W = 0.744% (CircuitCredit, draft
-#: #2638); the GPU clock above what PoUW credits, 0: PoUW credits 2,430 MHz, the card table's ceiling, which every
-#: card on vy-nebius-1 reports as its maximum, application, default and boost SM clock (CMP-165, run
-#: r20261027-032043-e2d1); the host CPUs at their INT8 AMX datasheet peak (``HOST_OPS``: 12.6% of the GPUs' FP8 rate at
+#: conditions; today nothing in a training window is credited); PoUW's deficit eps_W = 0.744% (CircuitCredit);
+#: the GPU clock above what PoUW credits, 0: PoUW credits 2,430 MHz, the card table's ceiling, which every
+#: card on vy-nebius-1 reports as its maximum, application, default and boost SM clock;
+#: the host CPUs at their INT8 AMX datasheet peak (``HOST_OPS``: 12.6% of the GPUs' FP8 rate at
 #: the card table's peak); 100,000 servers of 8 RTX PRO 6000s (vy-nebius-2's 2.668 TB) at the card table's peak for a
 #: year;
-#: the deployed proof-of-space audit (k = 111 rounds at delta = 1/100; the slack counts the floor once, memory-accounting
-#: MEM-51) and the memory
+#: the deployed proof-of-space audit (k = 111 rounds at delta = 1/100; the slack counts the floor once) and the memory
 #: the fill doesn't reach (3.05 GB on-chip, 18.4 GB GPU reserve, 29.5 GB host gap, about 7 GB of DPU, BMC and flash); disks
 #: unplugged; today's uncharged export; the declared computation's novel intake at alpha F (once the network's count check is in
 #: the ZK flow; line rate until then); sampled proofs at 1% on top of serve-time commitments, at today's sparse-draw cost

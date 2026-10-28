@@ -1,5 +1,5 @@
 """A request's arrival on each side of the wire: the client's read of a response the warden's cells carried, the API
-server's accept stamp, and the summary's arrival orders and its views of a warden trace for ENC-REPLAY."""
+server's accept stamp, and the summary's arrival orders and its views of a warden trace for the replay."""
 from __future__ import annotations
 
 import asyncio
