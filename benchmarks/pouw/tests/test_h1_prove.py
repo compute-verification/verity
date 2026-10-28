@@ -3,7 +3,7 @@ unit's circuit: the window's public Program and template-instance partition deri
 rows each reads, its registered values (each call's A table and z table, its tiles' z/y records, `scaled_mm_zy`'s, and
 the weights' b/<K>) are read where the window's own reads say, every per-window value's domain binds the window's open
 root (PRF-127) and b/<K>'s none, window credit's registration step takes the window's evidence and refuses it without
-that root, one call's units a statement, a window's drawn units open
+that root, one call's units a statement, a window's sampled proof blocks open
 to those rows of its registered roots and to nothing else (a tampered window's, another window's, a tampered A row), each
 in-proof negative's window changes the one value it names and makes
 the unit's word reference compute ok = 0 exactly where its record moved, a registration of z alone is refused, the public

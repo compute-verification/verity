@@ -1,4 +1,4 @@
-"""RT4-INT-10 on the certified served window (#2847, `served_commit.Challenger(certifier=…)`): a drawn unit's proof is
+"""RT4-INT-10 on the certified served window (#2847, `served_commit.Challenger(certifier=…)`): a sampled proof block's proof is
 held to the window's certified salt at its opening of record (`core_check.opening`'s ``salt``, Lean `PouwCheck.opening`'s).
 
 RT4-INT's witness lifted `salt.unit_reason` and passed rows formed before any certifier salt through every certified

@@ -1,10 +1,10 @@
-"""`proved_ticks`: PoUW's proved block-ticks for a window's declared work, the figure network accounting's joint ledger
+"""`proved_ticks`: PoUW's proved block-ticks for a window's registered work, the figure network accounting's joint ledger
 credits as a block's `compute` with basis "proved" (`benchmarks/datacenter`: `Placement.public(plan, ticks=...)`, where
 its tests place PoUW's compiled Program on a block).
 
     uv run python benchmarks/pouw/proved_ticks.py     the hand-checked point: H1 + fx1 on DS-120
 
-For a census W of a window's declared work on a block of G GPUs of one device, at its data-sheet reading (`placed`
+For a census W of a window's registered work on a block of G GPUs of one device, at its data-sheet reading (`placed`
 reads W off a block where the datacenter places a Program `SCHEME` or its one stream `SCHEME_V3` compiled):
 
     ticks(W) = (1 − ε) · U(W) · B_♭ / (4 · SMs · f_max) / G / tick_seconds

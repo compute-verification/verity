@@ -26,10 +26,10 @@ proved.
   counted multiplication with Lambda(K) = max(e, 2K / (4 d b_w)), or at the tighter partial-sum law rho_PS when no dark
   compute can sum the inference blocks' partial sums. The residual reads them on the server for free; unmonitored compute
   reads them through the export (line rate, or side channels plus readable export under network accounting). A relay op
-  reads 2 b_p bits, and the developer relays only as many partial sums as buy more declared work than the relay's gates
+  reads 2 b_p bits, and the developer relays only as many partial sums as buy more registered work than the relay's gates
   would train directly.
 * The verdict lag: from its first faulty proof block until the halt (a window plus the verdict delay), a developer can skip
-  all declared work, once per identity, in every tier; that capacity joins the residual. Detection must end the
+  all registered work, once per identity, in every tier; that capacity joins the residual. Detection must end the
   identity and take its hardware out of use, or the capacity after the halt is unmonitored.
 * chi, the cheating share: with sampled proofs at a budget, the faulty proof blocks the sampling design accepts number
   A ln(1/delta) / q per identity over the whole deployment, q = share / (overhead + replay)

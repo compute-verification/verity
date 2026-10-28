@@ -204,7 +204,7 @@ def templates(shape: Shape) -> dict[str, Any]:
 
 
 def unit(shape: Shape):
-    """The drawn unit: a thread's whole call under `PouwCallCheck_v1` (decision 101, a unit is a whole dot product)."""
+    """The sampled proof block: a thread's whole call under `PouwCallCheck_v1` (decision 101: a proof block is a whole dot product)."""
     shape.check()
     return check(shape.ks)
 
