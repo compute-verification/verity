@@ -202,8 +202,8 @@ def drawn_units(commits: Mapping[str, Any], layout: Mapping[str, Any], k: int, s
     from verity.core.protocols.pouw import credit as CR
     from verity.core.protocols.sampled_proofs.challenger import LiveOpening
 
-    draw = commits.get("draw")
-    if not draw or draw.get("coin") is None:
+    draw = commits.get("draw")                              # None: the window committed no draw root
+    if draw is None or draw.get("coin") is None:
         raise ValueError("the window opened no draw coin" + (f" ({draw['refused']})" if draw and draw.get("refused") else ""))
     got, why = CR.drawn(LiveOpening.from_json(draw["coin"]).coin.hex(), stream, draw.get("root"),
                         {"receipts": draw.get("receipts")}, dict(layout), k)
@@ -600,7 +600,7 @@ class H1Windows:
             if why is not None:
                 raise ValueError(f"{why[0]}: {why[1]}")
             self._period_k[period] = k
-        session = run.commits.get("session")
+        session = run.commits.get("session")                # None: no gate session carried the run's coins
         return self._period_k[period], session.get("root") if session else None, f"period {period}'s open"
 
     def _outcome(self, window: int, run: Any, held: dict[str, Any] | None, end: dict[str, Any] | None,
