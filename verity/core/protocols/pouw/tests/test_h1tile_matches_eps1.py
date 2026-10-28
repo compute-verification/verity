@@ -18,7 +18,7 @@ from verity.core.protocols.pouw.circuit import eps1_reference as EPS
 from verity.core.protocols.pouw.circuit import h1tile as H
 from verity.core.protocols.pouw.circuit import segment as SG
 
-pytestmark = pytest.mark.skipif(H.SG is None, reason="H1's receipts (circuit.segment, E2E-120) are not on this tree")
+pytestmark = pytest.mark.skipif(H.SG is None, reason="H1's receipts (circuit.segment) are not on this tree")
 
 SALT = hashlib.sha512(b"salt").digest()
 ROOTS = (hashlib.sha512(b"A0").digest(), hashlib.sha512(b"B0").digest())
