@@ -8,6 +8,7 @@ testpaths = ["tests"]
 # registered scheme's keys (verity.core.protocols.pous.schemes.p2), and what those import.
 inputs = ["verity/__init__.py", "verity/errors.py", "verity/core/__init__.py", "verity/core/claims/__init__.py",
           "verity/core/protocols/__init__.py", "verity/core/protocols/pous", "verity/core/protocols/interface",
+          "verity/ml/protocols/__init__.py", "verity/ml/protocols/pous",
           "verity/core/primitives/identity", "verity/core/primitives/randomness",
           "verity/ml/__init__.py", "verity/ml/commitments", "verity/ml/crypto", "verity/ml/randomness",
           "benchmarks/pous/p2_v1/__init__.py", "benchmarks/pous/p2_v1/reference.py", "benchmarks/pous/p2_v1/vectors.json"]

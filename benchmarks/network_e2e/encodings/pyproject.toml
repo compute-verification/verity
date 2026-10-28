@@ -18,7 +18,8 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 # and the circuits it imports) and writes the certifier's difftest vectors, which a test reads back; test_arith_vectors
 # holds the certifier's arith_encode vectors to what this directory's coders code now.
 inputs = ["verity/__init__.py", "verity/errors.py", "verity/core/__init__.py", "verity/core/protocols/__init__.py",
-          "verity/core/protocols/certifier", "verity/ml/__init__.py", "verity/ml/circuits", "verity/ml/commitments",
+          "verity/core/protocols/certifier", "verity/ml/__init__.py", "verity/ml/protocols/__init__.py",
+          "verity/ml/protocols/certifier", "verity/ml/circuits", "verity/ml/commitments",
           "verity/ml/crypto",
           # test_v1 runs the certifier's replay chain (`replay_chain`) over v1's windows, which imports sampled proofs'
           # produced and registered row helpers

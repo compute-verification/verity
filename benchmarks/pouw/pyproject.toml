@@ -44,6 +44,7 @@ inputs_only = true
 inputs = ["verity/__init__.py", "verity/errors.py", "verity/core/__init__.py", "verity/core/protocols/__init__.py",
           "verity/core/claims/__init__.py",
           "verity/core/protocols/profile.py", "verity/core/protocols/pouw", "verity/core/protocols/sampled_proofs",
+          "verity/ml/protocols/__init__.py", "verity/ml/protocols/pouw", "verity/ml/protocols/certifier",
           "verity/core/protocols/certifier",
           "verity/core/difftest", "verity/ml/__init__.py", "verity/ml/circuits", "verity/ml/commitments", "verity/ml/crypto",
           "verity/ml/kernels", "verity/ml/randomness", "verity/ml/flock/python", "verity/ml/windows",
