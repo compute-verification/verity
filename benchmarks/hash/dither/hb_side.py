@@ -1,5 +1,5 @@
-"""The `dither-hb` arm's receipts: kernels-dither-rtx's side receipts (`dither_fused`, rc="side": step s's receipts on a
-second stream after its coin, beside step s + 1) with this lane's two-launch unit, h1u.cu's `kh_unit_ws` (the noise
+"""The `dither-hb` arm's receipts: `dither-side`'s side receipts (`dither_fused`, rc="side": step s's receipts on a
+second stream after its coin, beside step s + 1) with h1u.cu's two-launch unit, `kh_unit_ws` (the noise
 grid-wide into a workspace, then the multiply and fold from it), in place of h1r's single-launch version 2.
 
 `install(win, path)` replaces the window's h1r object with `SideH1R`, which `Window._side_receipts` launches through:
@@ -9,7 +9,7 @@ seeds and none of the units. Every other version and every other attribute is h1
 coins, poisoning and `dither_fused.check` (every receipt against h1r v1, three units against h1tile.reference) are
 unchanged. What is committed, before which coin, and every receipt are the same as `dither-side`'s.
 
-The library is h1u.cu built by job.sh on this lane's branch (a variant's .so, `HB_H1U`), sent to the run with --send.
+The library is h1u.cu built by job.sh (a variant's .so, `HB_H1U`), in the run's inputs.
 """
 from __future__ import annotations
 

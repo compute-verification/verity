@@ -10,7 +10,7 @@ through `dither_one.check`, then timed against each other.
           int8 weights and positive scales; a decode step of m = 32 random rows captured per `Window.captures` (gate,
           control, fault, fault_wb, and peeled fault_xa; every buffer 0xA5 first) and `dither_one.check` on each: the A,
           admit and z roots and the round = commit.py's, every receipt = h1r v1's, every z = h1o_ref's (peeled: = A B^T,
-          and y = today's scaled_mm on every call), y = dequant(z), 3 units = CA's H1V3 on the CPU and H1V3's own code
+          and y = today's scaled_mm on every call), y = dequant(z), 3 units = H1V3 on the CPU and H1V3's own code
           (this source's h1tile unless DITHER_H1V3_TREE names a tree); the control refused and every fault conforming (`gate_verdict`; the
           perturbed noised word must move z and y in its cell, peeled too); wb's density and the xa entries (A = 127
           and b = 1) as the run reads them; the occupancy calculator's blocks an SM for each units kernel

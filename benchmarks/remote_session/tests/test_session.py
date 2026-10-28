@@ -219,7 +219,7 @@ def test_a_session_on_the_pass_clock_runs_one_schedule(monkeypatch):
 
 
 def test_a_prover_reporting_a_slow_read_cannot_lower_either_ledgers_capacity(monkeypatch):
-    """MEM-24: the capacity is the verifier's, and the prover's calibration can only raise it."""
+    """The capacity is the verifier's, and the prover's calibration can only raise it."""
     monkeypatch.setattr(prover, "OPENINGS_PART", 4)
     (slow,), _ = run("honest", read_bytes_per_s=1.0)
     (fast,), _ = run("honest", read_bytes_per_s=1e20)
@@ -230,7 +230,7 @@ def test_a_prover_reporting_a_slow_read_cannot_lower_either_ledgers_capacity(mon
 
 
 def test_the_ledgers_are_the_nodes_whatever_share_of_it_the_store_is_on(monkeypatch):
-    """MEM-26: R is every GPU's HBM and the host's DRAM, S_chip every GPU's chip and the host's caches, and the squaring
+    """R is every GPU's HBM and the host's DRAM, S_chip every GPU's chip and the host's caches, and the squaring
     ceiling the node's, for a store on one GPU too: its calibration's one-GPU read lowers none of them, and its
     certified bytes are the same at either R."""
     monkeypatch.setattr(prover, "OPENINGS_PART", 4)
@@ -247,7 +247,7 @@ def test_the_ledgers_are_the_nodes_whatever_share_of_it_the_store_is_on(monkeypa
 
 
 def test_the_timing_parts_reproduce_the_whole_node_sessions_split_and_sum_to_its_timing_term():
-    """r20261015-203743-d101 (15 Oct), 8 GPUs' HBM and a host tier, every pass the whole store: its parts are #2089's
+    """A whole-node session (`d101`), 8 GPUs' HBM and a host tier, every pass the whole store: its parts are the timing
     split, and at either R they sum to the ledger's timing term."""
     d101 = {"span_ns": 420_074_057_129, "passes": 6430, "reads_bytes": 4_888_145_229_250_560, "pass_ns": 65_259_603,
             "tiers": {"hbm": {"bytes": 751_619_276_800, "ms": 61.502974},
@@ -992,8 +992,7 @@ def test_the_line_of_record_deducts_at_least_the_auditors_s_chip():
 def test_the_auditor_line_reads_a_last_root_by_its_request_not_by_its_value():
     """A prover that repeats a root doesn't make a group's last root early on the challenger's clock: window 2's last
     root is also its boundary σ_3's (asked before it came), and window 4's is window 1's, but `auditor_seen` reads each
-    at its openings request, so every L is the honest 1.5 coin intervals (red team (g)1,
-    note:20261024T0330Z-report-redteam-night)."""
+    at its openings request, so every L is the honest 1.5 coin intervals."""
     import json
 
     import auditor_line as al

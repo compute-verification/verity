@@ -83,7 +83,7 @@ def inputs(shape, w: Weights, rp: Replayer, step: int, b: int) -> list[np.ndarra
     return out
 
 
-@pytest.fixture(scope="module", params=[(TINY, frozenset()), (MINI, frozenset()), (MINI, frozenset({"norm", "residual"}))],
+@pytest.fixture(scope="module", params=[(TINY, frozenset()), (MINI, frozenset()), (MINI, frozenset({"norm", "pv", "residual"}))],
                 ids=lambda p: "-".join([p[0].name, *(["fused", *sorted(p[1])] if p[1] else [])]))
 def served(request):
     shape, fused = request.param
