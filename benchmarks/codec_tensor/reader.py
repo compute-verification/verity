@@ -30,7 +30,7 @@ import numpy as np
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parents[1]))
 
-from benchmarks.word_codec import cuda_lib
+from benchmarks.word_codec import cuda_lib  # noqa: E402  (after the root's path entry, which it needs)
 from verity.core.protocols.remote_bandwidth import receipts as rb
 from verity.ml.commitments import merkle_depth
 from verity.ml.commitments.indexed import RangeIndexedDomain
