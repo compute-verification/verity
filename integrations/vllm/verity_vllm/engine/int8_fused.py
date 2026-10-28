@@ -43,7 +43,7 @@ import triton.language as tl
 
 from verity_vllm.engine import int8_wgmma
 from verity_vllm.engine.int8_exact import UNIT, ZY_BYTES, zy_units
-from verity_vllm.engine.profiles.int8_gemm_configs import CONFIGS, WGMMA
+from verity_vllm.engine.profiles.int8_gemm_configs import CONFIGS
 
 OPTS = {"enable_fp_fusion": False, "enable_reflect_ftz": False}
 
@@ -296,18 +296,9 @@ def pick(m: int, n: int, k: int, sm: str | None = None) -> Cfg:
     return default_cfg(m, n, k)
 
 
-def wgmma_row(m: int, n: int, k: int, sm: str) -> int8_wgmma.WgCfg | None:
-    """WGMMA's config for one call on `sm`: the last (m_min, cfg) row for (n, k) with m >= m_min, else None."""
-    text = None
-    for m_min, row in WGMMA.get(sm, {}).get((n, k), ()):
-        if m >= m_min:
-            text = row
-    return None if text is None else int8_wgmma.WgCfg.parse(text)
-
-
 def pick_wgmma(m: int, n: int, k: int, index: int) -> int8_wgmma.WgCfg | None:
-    """`wgmma_row` on device `index`, where `int8_wgmma` builds and loads there."""
-    cfg = wgmma_row(m, n, k, arch(index))
+    """`int8_wgmma.row` on device `index`, where `int8_wgmma` builds and loads there."""
+    cfg = int8_wgmma.row(m, n, k, arch(index))
     return cfg if cfg is not None and int8_wgmma.available(index) else None
 
 

@@ -24,6 +24,8 @@ from pathlib import Path
 
 import torch
 
+from verity_vllm.engine.profiles.int8_gemm_configs import WGMMA
+
 HERE = Path(__file__).resolve().parent
 SOURCES = ("int8_wgmma_acc.h", "int8_wgmma.cu")
 NVCC_FLAGS = ("-O3", "-std=c++17", "-gencode", "arch=compute_90a,code=sm_90a", "-fmad=false", "-Xcompiler", "-fPIC",
@@ -55,6 +57,15 @@ class WgCfg(tuple):
     def __str__(self) -> str:
         kernel, group, ctas = self
         return f"{kernel}:g{group}" + (f":c{ctas}" if ctas else "")
+
+
+def row(m: int, n: int, k: int, sm: str) -> WgCfg | None:
+    """`int8_gemm_configs.WGMMA`'s config for one call on `sm`: the last (m_min, cfg) row for (n, k) with m >= m_min."""
+    text = None
+    for m_min, cfg in WGMMA.get(sm, {}).get((n, k), ()):
+        if m >= m_min:
+            text = cfg
+    return None if text is None else WgCfg.parse(text)
 
 
 def nvcc() -> str | None:

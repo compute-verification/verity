@@ -70,6 +70,6 @@ CONFIGS: dict[str, dict[tuple[int, int], list[tuple[int, str]]]] = {
 }
 
 # `int8_fused.product`'s sm_90a GEMM (`engine.int8_wgmma`) per architecture and (N, K): (m_min, config) rows, the last whose
-# m_min <= M taken (`int8_fused.wgmma_row`); a shape with no row runs CONFIGS' Triton plan.  A config is `int8_wgmma.WgCfg`'s
+# m_min <= M taken (`int8_wgmma.row`); a shape with no row runs CONFIGS' Triton plan.  A config is `int8_wgmma.WgCfg`'s
 # text: kernel, raster group, CTAs.  `benchmarks/hash/exactlin/wgbench.py`'s gated winners against the Triton plan.
 WGMMA: dict[str, dict[tuple[int, int], list[tuple[int, str]]]] = {"sm_90": {}}

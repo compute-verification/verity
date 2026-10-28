@@ -240,6 +240,20 @@ template <int WM, int BN, int CO, int CL> DEV void body(const Params& p) {
       if (++s == STAGES) { s = 0; ph ^= 1; }
     }
     if (!CO && lane == 0) mbar_arrive(order + 8 * wg);
+
+    // the tile's scales, every load issued under the last stage's MMAs and before any store of y (which the compiler
+    // can't tell from s_w): one load latency a tile rather than one a column group
+    const int row0 = tm * WM + (CO ? wg * T::R : 0) + 16 * (x / 32) + (x % 32) / 4, col0 = tn * BN + 2 * (x % 4);
+    float2 c[NA / 4];
+    float r[NH][2];
+#pragma unroll
+    for (int q = 0; q < NA / 4; q++)
+      c[q] = col0 + 8 * q < N ? __ldg(reinterpret_cast<const float2*>(p.sw + col0 + 8 * q)) : make_float2(0.0f, 0.0f);
+#pragma unroll
+    for (int h = 0; h < NH; h++) {
+      r[h][0] = row0 + 64 * h < M ? __ldg(p.sa + row0 + 64 * h) : 0.0f;
+      r[h][1] = row0 + 64 * h + 8 < M ? __ldg(p.sa + row0 + 64 * h + 8) : 0.0f;
+    }
     WG_WAIT(0);
 #pragma unroll
     for (int h = 0; h < NH; h++) acc_fence<NA>(d[h]);
@@ -247,18 +261,16 @@ template <int WM, int BN, int CO, int CL> DEV void body(const Params& p) {
 
 #pragma unroll
     for (int h = 0; h < NH; h++) {
-      const int row = tm * WM + (CO ? wg * T::R : 0) + 64 * h + 16 * (x / 32) + (x % 32) / 4, col0 = tn * BN + 2 * (x % 4);
+      const int row = row0 + 64 * h;
       const bool live0 = row < M, live1 = row + 8 < M;
-      const float r0 = live0 ? p.sa[row] : 0.0f, r1 = live1 ? p.sa[row + 8] : 0.0f;
       uint32_t* y0 = reinterpret_cast<uint32_t*>(p.y + (size_t)row * N);
       uint32_t* y1 = reinterpret_cast<uint32_t*>(p.y + (size_t)(row + 8) * N);
 #pragma unroll
       for (int q = 0; q < NA / 4; q++) {
         const int col = col0 + 8 * q;
         if (col < N) {
-          const float2 c = *reinterpret_cast<const float2*>(p.sw + col);
-          if (live0) y0[col / 2] = words(d[h][4 * q], d[h][4 * q + 1], r0, c.x, c.y);
-          if (live1) y1[col / 2] = words(d[h][4 * q + 2], d[h][4 * q + 3], r1, c.x, c.y);
+          if (live0) y0[col / 2] = words(d[h][4 * q], d[h][4 * q + 1], r[h][0], c[q].x, c[q].y);
+          if (live1) y1[col / 2] = words(d[h][4 * q + 2], d[h][4 * q + 3], r[h][1], c[q].x, c[q].y);
         }
       }
     }
