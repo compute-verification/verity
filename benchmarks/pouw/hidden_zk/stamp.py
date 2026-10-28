@@ -17,6 +17,7 @@ bits that later rows (or the unit's outputs) read.
 A unit with a table read, a hint or an assertion is not stamped (`Unstampable`): `fast_stage` lowers it with the library."""
 from __future__ import annotations
 
+import gc
 import os
 import sys
 import time
@@ -35,9 +36,14 @@ from verity_flock import ir_lower as IL
 
 W = IL.WORD
 #: live ANDs per rendering task (a call is never split): a task's text is about this many rows
-TASK_ANDS = 1 << 16
-#: rendered tasks held ahead of the writer, per worker
+TASK_ANDS = 1 << 14
+#: rendered tasks held ahead of the writer, per thread
 AHEAD = 2
+#: tokens converted to text at once: about 70 bytes each while converting
+ASCII_TOKENS = 1 << 20
+#: walk calls between collections of the young generation (every 16th also the next): `fast_stage` turns automatic
+#: collection off, and the IR's traced forms are reference cycles (a `trace._Set` and its circuit's table)
+GC_CALLS = 1 << 8
 #: a template of more than one call keeps its rows as Python lists (for its evaluations) up to this many columns
 KEEP_COLS = 1 << 20
 
@@ -115,22 +121,33 @@ class Closure:
         self.prog, self.uses = None, 0
 
     def program(self, const: int):
-        """The live rows' text as a %-format of their columns, and per column ``(operand rank or -1, offset from the call's
-        first column)``; kept for a closure of more than one call."""
+        """The live rows as tokens, each row ``na A.. nb B..`` (a count, then its columns, the constant column ``const`` last
+        where the side has a constant): ``fixed`` (the counts and constants; a column's token 0), ``sep`` (the byte after each
+        token, the row's last a newline), and the columns' places in ``fixed``, those of an operand bit with its rank and those
+        of the call's own ANDs with their offset from its first column. Kept for a closure of more than one call."""
         if self.prog is not None:
             return self.prog
         t, m = self.t, self.t.m
         J = np.flatnonzero(self.mask)
         s0, s1, s2 = t.ptr[2 * J], t.ptr[2 * J + 1], t.ptr[2 * J + 2]
-        tot = s2 - s0
-        idx = np.repeat(s0 - np.concatenate([[0], np.cumsum(tot)[:-1]]), tot) + np.arange(int(tot.sum()), dtype=np.int64)
-        v = t.cols[idx].astype(np.int64)
+        a, b = s1 - s0, s2 - s1
+        x, y = t.cst[2 * J].astype(np.int64), t.cst[2 * J + 1].astype(np.int64)
+        per = 2 + a + x + b + y
+        R = np.cumsum(per) - per
+        fixed = np.zeros(int(per.sum()), dtype=np.int64)
+        fixed[R] = a + x
+        fixed[R + 1 + a + x] = b + y
+        fixed[(R + 1 + a)[x == 1]] = const
+        fixed[(R + 2 + a + x + b)[y == 1]] = const
+        sep = np.full(len(fixed), 32, dtype=np.uint8)
+        sep[R + per - 1] = 10
+        tot = a + b
+        e = np.arange(int(tot.sum()), dtype=np.int64) - np.repeat(np.cumsum(tot) - tot, tot)
+        v = t.cols[np.repeat(s0, tot) + e].astype(np.int64)
         ops = np.where(v < m, v, -1 - self.rank[np.where(v >= m, v - m, 0)])
-        k = f" {const}"
-        text = [f"{a + x}{' %d' * a}{k if x else ''} {b + y}{' %d' * b}{k if y else ''}"
-                for a, x, b, y in zip((s1 - s0).tolist(), t.cst[2 * J].tolist(), (s2 - s1).tolist(), t.cst[2 * J + 1].tolist())]
+        at = np.repeat(R + 1, tot) + e + np.where(e >= np.repeat(a, tot), 1 + np.repeat(x, tot), 0)
         isb = ops >= 0
-        prog = ("\n".join(text) + "\n" if text else "", isb, ops[isb], -1 - ops[~isb])
+        prog = (fixed, sep, at[isb], ops[isb], at[~isb], -1 - ops[~isb])
         if self.uses > 1:
             self.prog = prog
         return prog
@@ -165,6 +182,8 @@ class Stamp:
     def call(self, key0, groups, fn, cse: bool) -> list:
         """``fn(C, *groups)``'s output forms, ``groups`` lists of this circuit's forms: its template's, renamed."""
         self.calls += 1
+        if not self.calls % GC_CALLS:
+            gc.collect(0 if self.calls % (GC_CALLS << 4) else 1)
         vs: set[int] = set()
         for g in groups:
             for f in g:
@@ -390,18 +409,24 @@ class StampLayout(IL.Layout):
                 head += [c, words, len(bits), *bits]
         return " ".join(map(str, head)) + "\n"
 
+    def _tokens(self, i: int):
+        """Call ``i``'s rows as tokens and separators (`Closure.program`), or None for a call with no live AND."""
+        fixed, sep, pb, bidx, pl, loff = self.closures[self.cid[i]].program(self.const)
+        if not len(fixed):
+            return None
+        tok = fixed.copy()
+        tok[pb] = self.bindcol[self.off[i] + bidx]
+        tok[pl] = self.colbase[i] + loff
+        return tok, sep
+
     def _calls_text(self, lo: int, hi: int) -> bytes:
-        st, cl, cid, colbase, bindcol, off = self.st, self.closures, self.cid, self.colbase, self.bindcol, self.off
-        out = []
+        toks, seps = [], []
         for i in range(lo, hi):
-            fmt, isb, bidx, loff = cl[cid[i]].program(self.const)
-            if not fmt:
-                continue
-            vals = np.empty(len(isb), dtype=np.int64)
-            vals[isb] = bindcol[off[i] + bidx]
-            vals[~isb] = colbase[i] + loff
-            out.append(fmt % tuple(vals.tolist()))
-        return "".join(out).encode()
+            r = self._tokens(i)
+            if r is not None:
+                toks.append(r[0])
+                seps.append(r[1])
+        return _ascii(np.concatenate(toks), np.concatenate(seps)) if toks else b""
 
     def _tasks(self) -> list[tuple[int, int]]:
         """The recorded calls in runs of about `TASK_ANDS` live ANDs."""
@@ -423,7 +448,8 @@ class StampLayout(IL.Layout):
         return "\n".join(rows) + "\n"
 
     def netlist_pieces(self, name: str):
-        """`ir_lower.netlist(self, name)`'s bytes, in order, the calls' rows rendered by worker processes."""
+        """`ir_lower.netlist(self, name)`'s bytes, in order, the calls' rows rendered by threads (numpy's loops release the
+        GIL; worker processes would copy the walk's heap as they allocate in it)."""
         t0 = time.time()
         yield self.head(name).encode()
         rows = [f"1 {i} 1 {i}" for i in range(self.n_in)] + ["0 0"] * (self.first - self.n_in)
@@ -435,23 +461,19 @@ class StampLayout(IL.Layout):
             for lo, hi in tasks:
                 yield self._calls_text(lo, hi)
         else:
-            import multiprocessing as mp
             from collections import deque
+            from concurrent.futures import ThreadPoolExecutor
 
-            _WORKER[:] = [self]
-            try:
-                with mp.get_context("fork").Pool(procs) as pool:
-                    todo, ahead = iter(tasks), deque()
-                    for task in todo:
-                        ahead.append(pool.apply_async(_render, (task,)))
-                        if len(ahead) >= AHEAD * procs:
-                            yield ahead.popleft().get()
-                    while ahead:
-                        yield ahead.popleft().get()
-            finally:
-                _WORKER.clear()
+            with ThreadPoolExecutor(procs) as pool:
+                ahead: deque = deque()
+                for task in tasks:
+                    ahead.append(pool.submit(self._calls_text, *task))
+                    if len(ahead) >= AHEAD * procs:
+                        yield ahead.popleft().result()
+                while ahead:
+                    yield ahead.popleft().result()
         yield self._tail_text().encode()
-        print(f"STAMP-NETLIST {name}: procs={procs} tasks={len(tasks)} seconds={time.time() - t0:.1f} {_mem()}", file=sys.stderr,
+        print(f"STAMP-NETLIST {name}: threads={procs} tasks={len(tasks)} seconds={time.time() - t0:.1f} {_mem()}", file=sys.stderr,
               flush=True)
 
     # --- the rows, built only on request ----------------------------------------------------------------------------------
@@ -460,16 +482,15 @@ class StampLayout(IL.Layout):
             ra: list = [[i] for i in range(self.n_in)] + [[] for _ in range(self.first - self.n_in)]
             rb: list = [list(r) for r in ra]
             for i in range(len(self.st.tids)):
-                c = self.closures[self.cid[i]]
-                fmt, isb, bidx, loff = c.program(self.const)
-                vals = np.empty(len(isb), dtype=np.int64)
-                vals[isb] = self.bindcol[self.off[i] + bidx]
-                vals[~isb] = self.colbase[i] + loff
-                for line in (fmt % tuple(vals.tolist())).splitlines():
-                    x = list(map(int, line.split()))
-                    na = x[0]
-                    ra.append(x[1:1 + na])
-                    rb.append(x[2 + na:])
+                r = self._tokens(i)
+                if r is None:
+                    continue
+                x, s = r[0].tolist(), 0
+                for e in np.flatnonzero(r[1] == 10).tolist():
+                    na = x[s]
+                    ra.append(x[s + 1:s + 1 + na])
+                    rb.append(x[s + 2 + na:e + 1])
+                    s = e + 1
             ra += [[] for _ in range(self.out_at - len(ra))]
             rb += [[] for _ in range(self.out_at - len(rb))]
             for r in self.out_rows:
@@ -533,11 +554,27 @@ def _eval_template(t: Template, x: np.ndarray) -> np.ndarray:
     return np.array([lv[m + int(j)] for j in t.vis], dtype=np.uint8)
 
 
-_WORKER: list = []
+_D4 = np.frombuffer("".join(f"{i:04d}" for i in range(10 ** 4)).encode(), dtype=np.uint32)
+_P10 = 10 ** np.arange(1, 12, dtype=np.int64)
+#: by a token's digits less one: which of its 16 bytes (12 digits, its separator, 3 unused) the text keeps
+_KEEP = np.array([[11 - q <= j <= 12 for j in range(16)] for q in range(12)])
 
 
-def _render(task: tuple[int, int]) -> bytes:
-    return _WORKER[0]._calls_text(*task)
+def _ascii(tok: np.ndarray, sep: np.ndarray) -> bytes:
+    """Each of ``tok`` (in [0, 10^12)) in decimal, followed by its ``sep`` byte."""
+    if len(tok) and int(tok.max()) >= 10 ** 12:
+        raise ValueError("a column of 13 digits")
+    out = []
+    for i in range(0, len(tok), ASCII_TOKENS):
+        t = tok[i:i + ASCII_TOKENS]
+        D = np.empty((len(t), 4), dtype=np.uint32)
+        D[:, 0] = _D4[t // 10 ** 8]
+        D[:, 1] = _D4[t // 10 ** 4 % 10 ** 4]
+        D[:, 2] = _D4[t % 10 ** 4]
+        B = D.view(np.uint8).reshape(len(t), 16)
+        B[:, 12] = sep[i:i + ASCII_TOKENS]
+        out.append(B[_KEEP[np.searchsorted(_P10, t, side="right")]].tobytes())
+    return b"".join(out)
 
 
 def _procs() -> int:
@@ -574,6 +611,7 @@ def applies(definition, name, in_rows, public=(), structural=False, reads="inlin
 def unit_lowering(definition, name: str, in_rows, public=(), structural: bool = False, reads: str = "inline",
                   stage_ands="auto") -> tuple[IL.Lowering, list[int]]:
     """`class_statement.unit_lowering` of a flat unit with inline reads, stamped; `Unstampable` where it can't be."""
+    gc.collect()
     t0, start_mem = time.time(), _mem()
     ports, out_words, row_words = CS.unit_ports(definition, name, in_rows, public)
     n_words, n_out = len(ports.ins), len(ports.outs)
