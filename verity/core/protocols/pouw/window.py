@@ -50,7 +50,7 @@ leaves (`DEPTHS`) padded with frame-v3's pad leaf under the window's side domain
 `side_path`), and the tile instances' public inputs (`PUBLIC_PORTS`, `sessions`, `session_cap`, `instance_ts`,
 `public_inputs`); `tests/vectors/window.json` pins them.
 
-**Live windows** (decision 36).  The check item's optional ``coins`` is the window's coin mode, ``live`` or ``seeded``
+**Live windows**.  The check item's optional ``coins`` is the window's coin mode, ``live`` or ``seeded``
 (`mode`; an item that names none is seeded, as Pearl-C's served path registers).  A seeded window's noise is its scheme's
 derivation from the salt and the prover's roots.  A live window's comes from the proof system's challenger
 (`verity.core.protocols.sampled_proofs.challenger`), whose first client this is: the epoch's coins are the layout
@@ -77,7 +77,7 @@ from typing import Any, Mapping, Sequence
 
 from verity.core.protocols.sampled_proofs import challenger as Ch
 from verity.ml.circuits.codec import canonical_json
-from verity.ml.commitments import hm96
+from verity.ml.commitments import domains, hm96
 from verity.ml.commitments.identity import identity_digest_sha512
 from verity.ml.commitments.indexed import RangeIndexedDomain
 from verity.ml.commitments.merkle import CommitmentDomain
@@ -108,9 +108,9 @@ KINDS = ("call", "filler", "none")
 #: the check item's coin mode (`mode`), Compose's `CoinMode`
 COINS = "coins"
 MODES = ("live", "seeded")
-LIVE_SCHEME = "verity/pouw/epoch-coins/live/v1"
+LIVE_SCHEME = domains.POUW_EPOCH_COINS_LIVE
 SALT, DRAW, ROUND = "pouw/salt", "pouw/draw", "pouw/round"
-ROUND_NOISE_DOMAIN = "verity/pouw/round-noise/v1"
+ROUND_NOISE_DOMAIN = domains.POUW_ROUND_NOISE
 
 
 # ---- the grid ---------------------------------------------------------------------------------------------------------------
@@ -500,7 +500,7 @@ def entry_leaf(dom: CommitmentDomain, e: int, bc: bytes) -> bytes:
 
 # ---- the side trees -----------------------------------------------------------------------------------------------------
 
-SIDE_DOMAIN = "verity/pouw/window/side-domain/v1"
+SIDE_DOMAIN = domains.POUW_PERIOD_SIDE_DOMAIN
 #: the frame's owner, as C-Flock's statement domains have it
 OWNER = -1
 #: a side row's index field: the row's place in its call (I < 2^13 for A, J < 2^17 for B) as a u32, two u16 words low
@@ -683,18 +683,18 @@ def window_problem(rows: Sequence[bytes], work: Work, bound: int, root_h3: bytes
 # ---- the tile instances' public inputs ------------------------------------------------------------------------------------
 
 #: C-Flock's format of the verifier's own ``--public-inputs`` file (its PROTOCOL.md §16.10, Lean's ``HmIn.checkOwn``)
-PUBLIC_INPUTS_FORMAT = "verity/flock-public-inputs/v1"
+PUBLIC_INPUTS_FORMAT = domains.FLOCK_PUBLIC_INPUTS
 #: a tile instance's public input ports, in order, as its circuit's META ``public_inputs`` must name them: each port's u16
 #: words (whole 128-bit words, so no row leaf shares one), the public datum it is recomputed from and its rule.  t is a
 #: u128 below 2^40; the root and the domain ids are 64 bytes, each u16 word two of them, little-endian.  domain_h3 is the
 #: domain of the pass's -h3 tile tree, which binds its tile count and so its depth.
 PUBLIC_PORTS = (
-    {"port": "t", "words": 8, "seed": "drawn", "derivation": "verity/pouw/window/t/v1"},
-    {"port": "root", "words": 32, "seed": "registration", "derivation": "verity/pouw/window/root/v1"},
-    {"port": "domain", "words": 32, "seed": "registration", "derivation": "verity/pouw/window/domain/v1"},
-    {"port": "domain_a", "words": 32, "seed": "registration", "derivation": "verity/pouw/window/side-domain-a/v1"},
-    {"port": "domain_b", "words": 32, "seed": "registration", "derivation": "verity/pouw/window/side-domain-b/v1"},
-    {"port": "domain_h3", "words": 32, "seed": "pass", "derivation": "verity/pouw/window/domain-h3/v1"},
+    {"port": "t", "words": 8, "seed": "drawn", "derivation": domains.POUW_PERIOD_T},
+    {"port": "root", "words": 32, "seed": "registration", "derivation": domains.POUW_PERIOD_ROOT},
+    {"port": "domain", "words": 32, "seed": "registration", "derivation": domains.POUW_PERIOD_DOMAIN},
+    {"port": "domain_a", "words": 32, "seed": "registration", "derivation": domains.POUW_PERIOD_SIDE_DOMAIN_A},
+    {"port": "domain_b", "words": 32, "seed": "registration", "derivation": domains.POUW_PERIOD_SIDE_DOMAIN_B},
+    {"port": "domain_h3", "words": 32, "seed": "pass", "derivation": domains.POUW_PERIOD_DOMAIN_H3},
 )
 #: C-Flock's largest session: m = k_log + nbl <= 35, nbl = max(3, ⌈log2 blocks⌉) (its PROTOCOL.md §16.5, `shape_in_range`)
 M_MAX = 35

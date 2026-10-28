@@ -272,6 +272,7 @@
   "PouwCommit.Frame",
   "PouwCommit.Rows",
   "PouwCommit.Py",
+  "PouwCommit.Bindings",
   "PouwCommit.Coins",
   "PouwCommit.Draws",
   "Identity.Sha512",
@@ -10457,7 +10458,7 @@
    ]
   },
   "PouwCheck.Pass": {
-   "digest": "2226beee1bf478122eb20cfab5e9b1128fbc560c895bc188138a59336a836df9",
+   "digest": "23f0e40296cdd8dbcd58da1ed1d33900f52af2ad41134b74c670d502cfa3c0f3",
    "definitions": {
     "PouwCheck.CALL_BOUND": "add6af22980a5c0e786199b5344ea8d7e6c0e1cd40f7807e29ac07349bb7469f",
     "PouwCheck.CALL_RANGE": "3417060730df2ddbde847d3ced7f2d0533d59774105a352f161c9b8a4d48d6a6",
@@ -10487,7 +10488,7 @@
     "PouwCheck.at?": "f8df7a5d197063b436f48e572d84143ee929fe0e9e79ec82f5c4dd19143e5f96",
     "PouwCheck.carries": "1e035dc1f8801f7e17e819926c3420745c6653c1250b3346cb9f4831d24a36ee",
     "PouwCheck.certifiedSalt.match_3": "a6c8ef79da9c971123df3e72ecdb03a7bf0e57bebf0b50c4a6d09dea14a3b29b",
-    "PouwCheck.checkWorkload": "637de35a3b5ce10156471b7e130b18902a43c15066e0a362492ca1988674fd26",
+    "PouwCheck.checkWorkload": "88f4a2aed4e2a4c42c9c33807433b3e7f8cf3ff346f5802a8b3b32466a3aa3a3",
     "PouwCheck.coin": "ed5c30e48ee7c5aa3219944cac43062463c958dc1ea2d4bfbaed719029c42515",
     "PouwCheck.coinsOf._sparseCasesOn_1": "5dc94031832dcb0e0fd3b0041ca4b5cebc8aba792f5337b114463b978cef616c",
     "PouwCheck.coinsOf.match_4": "7ce3f1fe2ea2e5f93609f6e8267728e853892a43c0e301f3f312f0b1f1b73384",
@@ -10512,7 +10513,7 @@
     "PouwCheck.sameCommitment": "934fd1c75c87ea4ec1e52e5c2365ea57218993a50fe37c3beac9966654d6d33e",
     "PouwCheck.sessionEntries": "090fdd8823588d422ce6f74ca247b6c8c5781ae8a3891a44984d868b04362fa8",
     "PouwCheck.sessionId?": "f08c16976deff05d06d4a8f02d642a1d426b3ad0b3b7777dd9372928a1792425",
-    "PouwCheck.weightsRootAt": "752dfb33bfc94f786a5549403cab0006e86e989a949b8c764ad8eeefb97cac4e",
+    "PouwCheck.weightsRootAt": "d68af591a623b55cd226f0e2cf7c3faa96a4c8a31b4c83bb8e450e863e6bcaf5",
     "PouwCheck.windowOpenRoot": "848f51047d0ef5d5f5072a1cde8fbc1e525d377b2d13d17e3b816c0f569a11c0",
     "PouwCheck.workUnits": "eeec18dcfcfcf9de5fd011be055de5684006823bb51e3d1c389a361324fff64f",
     "PouwCheck.workloadOf": "1dff87176f8f41c2a000b98e9238b309d0014ac0af3408397a70901a134be65f",
@@ -10630,6 +10631,19 @@
     "Properties.Pouw.Period.SecurityProofs.checkedCreditPeriod",
     "Properties.Pouw.Period.SecurityProofs.checkedWorkPeriod",
     "Properties.Pouw.Period.SecurityProofs.h1CheckedCreditPeriod"
+   ]
+  },
+  "PouwCommit.Bindings": {
+   "digest": "8c1fd0194fb46ca3f4ca12ee202a50129d02c948fe1fd7ae31b5955237c85310",
+   "definitions": {
+    "PouwCommit.foldRoots": "f224b4e7f753154bba8dc8b4ca73acb5f7b2907e172ffde441996f4079235391"
+   },
+   "guarantees": [
+    "Properties.Pouw.LiveSalt.acceptMeans",
+    "Properties.Pouw.LiveSalt.onePair",
+    "Properties.Pouw.LiveSalt.oneRoot",
+    "Properties.Pouw.PeriodJ10R.SecurityProofs.h1J10RCheckedCreditPeriod",
+    "Properties.Pouw.ServedValues.SecurityProofs.rightValues"
    ]
   },
   "PouwCommit.Coins": {
