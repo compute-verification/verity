@@ -1,3 +1,4 @@
+import Flock.FV3
 import Flock.Hm96
 import RemoteAudit.Codec
 import RemoteAudit.Plan
@@ -128,12 +129,13 @@ def hiddenDigest (x salt : ByteArray) : ByteArray := Flock.Hm96.Default512.leaf 
 def hidden (row salt : ByteArray) : ByteArray := hiddenDigest (Codec.rowDigest row) salt
 
 /-- `receipts.domain(seed, plan)`. -/
-def treeDomain (seed : ByteArray) (plan : Plan) : FrameV3.Domain :=
-  FrameV3.Domain.make (sha512 (TREE_DOMAIN ++ seed ++ plan.digest)) 0 0 (leaves plan.length)
+def treeDomain (seed : ByteArray) (plan : Plan) : Flock.FV3.Sha512.Domain :=
+  .make (sha512 (TREE_DOMAIN ++ seed ++ plan.digest)) 0 0 (leaves plan.length)
 
 /-- `verify_leaf(seed, plan, root, p, leaf, salt, path)`. -/
 def verifyLeaf (seed : ByteArray) (plan : Plan) (root : ByteArray) (p : Nat) (leaf salt : ByteArray)
     (path : Array ByteArray) : Bool :=
-  FrameV3.verifyOpening (treeDomain seed plan) root (p / PER_LEAF) (hidden leaf salt) SCHEMA path
+  let d := treeDomain seed plan
+  d.verifyOpening root d.count (p / PER_LEAF) (hidden leaf salt) SCHEMA path
 
 end RemoteAudit

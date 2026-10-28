@@ -92,8 +92,10 @@ def Registration.digest (r : Registration) : ByteArray :=
     ++ frameStr r.codec.name ++ frameStr r.receipt.name ++ be 1 0 ++ frameStr LAYOUT ++ be 4 r.rows)
 
 /-- `payload_domain(node, N)`. -/
-def Registration.payloadDomain (r : Registration) : FrameV3.Domain :=
-  FrameV3.Domain.make (sha512 (PAYLOAD_DOMAIN ++ frameBytes r.node)) 0 0 r.blocks
+def payloadDomain (node : ByteArray) (blocks : Nat) : Flock.FV3.Sha512.Domain :=
+  .make (sha512 (PAYLOAD_DOMAIN ++ frameBytes node)) 0 0 blocks
+
+def Registration.payloadDomain (r : Registration) : Flock.FV3.Sha512.Domain := RemoteAudit.payloadDomain r.node r.blocks
 
 /-- An append the verifier received: store indices `first … first + count − 1`, its payload tree's root, and the coin
 `c_a` it answered with. -/
@@ -105,8 +107,8 @@ structure Append where
 deriving Inhabited
 
 /-- `append_domain(registration digest, first, count)`. -/
-def appendDomain (registration : ByteArray) (first count : Nat) : FrameV3.Domain :=
-  FrameV3.Domain.make (sha512 (APPEND_DOMAIN ++ registration)) 0 first count
+def appendDomain (registration : ByteArray) (first count : Nat) : Flock.FV3.Sha512.Domain :=
+  .make (sha512 (APPEND_DOMAIN ++ registration)) 0 first count
 
 /-- A pass of a window as the verifier received it: its root, its plan, and the chain over the appends received before
 it (`none` without one). -/
@@ -196,7 +198,7 @@ def checkOpening (reg : Registration) (digest : ByteArray) (appends : Array Appe
       | some a => (Codec.decode o.block j reg.key (some (o.digest, some a.coin)), appendDomain digest a.first a.count, a.root)
       | none => (.error "no append holds the block", reg.payloadDomain, reg.payloadRoot)
   let .ok (some payload) := decoded | return some .codec
-  if !FrameV3.verifyOpening dom root j (hidden payload o.payloadSalt) SCHEMA o.payloadPath then return some .payloadPath
+  if !dom.verifyOpening root dom.count j (hidden payload o.payloadSalt) SCHEMA o.payloadPath then return some .payloadPath
   if receipter.receipt j o.block != y then return some .receipt
   return none
 
