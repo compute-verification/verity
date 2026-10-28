@@ -72,6 +72,7 @@ from functools import cached_property
 
 from verity.ml.randomness import frame
 
+from ..audit import DEADLINE_NS
 from ..codec import Codec
 from ..labels import salt_value, tag
 from ..params import SALT_BITS
@@ -135,8 +136,9 @@ art:b92b6d56fa12cc8e04b3f6843991c2e76f49366adc89140a96c33842f70b41ed).  So the c
 and half of it 854,029.18 ns (`note:20261004T2102Z-report-relay-p2-redteam-timing`,
 art:23a323f313d2193873c59ee8ab59a0f1197167a0b4c6d008346d771c3e72de57; spec v1.1, `p2/PROTOCOL.md` §12)."""
 
-DELTA_NS = 500_000
-"""Δ at the spec's operating point, 0.5 ms, with the verifier off the responder's node (`p2/PROTOCOL.md` §6, decision F2)."""
+DELTA_NS = DEADLINE_NS
+"""Δ at the spec's operating point, 0.5 ms, with the verifier off the responder's node (`p2/PROTOCOL.md` §6, decision F2):
+the audit's `DEADLINE_NS`."""
 
 RTT_ALLOWANCE_CAP_NS = 354_000
 """The cap on the measured RTT allowance in spec v1.1 (`p2/PROTOCOL.md` §12): the

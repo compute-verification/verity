@@ -109,13 +109,13 @@ CANONICAL: dict[str, tuple[str, ...]] = {
                                  "verity/core/protocols/pouw/credit.py::DELTA"),
     "SHA-512's width, 64 bytes (512 bits)": ("verity/ml/commitments/scheme.py::DIGEST_BYTES",),
     "SHA-512's AND count, 58,120": ("verity/core/protocols/sampled_proofs/optimize.py::SHA512_ANDS",),
-    "PoUS's Δ, 500,000 ns": ("verity/core/protocols/pous/schemes/p2.py::DELTA_NS",),
+    "PoUS's Δ, 500,000 ns": ("verity/core/protocols/pous/audit.py::DEADLINE_NS",),
 }
 #: What to write instead, beyond importing the canonical name.
 HINT = {"SHA-512's width, 64 bytes (512 bits)": ' and take ["sha512"], or `hashlib.sha512().digest_size` where the module '
                                                 "may not import verity.ml.commitments"}
 
-KNOWN_MAX = 59
+KNOWN_MAX = 58
 
 #: Today's restatements, ``"path::Name": "reason"``, the reason naming the PR that removes it (or "no PR yet").
 KNOWN: dict[str, str] = {
@@ -187,7 +187,6 @@ KNOWN: dict[str, str] = {
     # PoUS's Δ
     "benchmarks/pous/fast_decode/model.py::DELTA_NS": "no PR yet: the census's PR 7",
     "benchmarks/pous/p2_v1/reference.py::DELTA_NS": "no PR yet: the census's PR 7",
-    "verity/core/protocols/pous/audit.py::DEADLINE_NS": "no PR yet: the audit's Δ under another name",
 }
 
 _ARITH = {ast.Add: operator.add, ast.Sub: operator.sub, ast.Mult: operator.mul, ast.Div: operator.truediv,
@@ -489,21 +488,20 @@ def test_a_restatement_fails_and_an_import_passes():
     """On a toy tree: the copy fails, naming the import that replaces it; the read, the source and a test pass."""
     files = {
         "verity/__init__.py": "", "verity/core/__init__.py": "", "verity/core/protocols/__init__.py": "",
-        "verity/core/protocols/pous/__init__.py": "", "verity/core/protocols/pous/schemes/__init__.py": "",
-        "verity/core/protocols/pous/schemes/p2.py": "DELTA_NS = 500_000\n",
+        "verity/core/protocols/pous/__init__.py": "", "verity/core/protocols/pous/audit.py": "DEADLINE_NS = 500_000\n",
         "benchmarks/pous/copy.py": "import math\n\nDELTA_NS = 500_000\n",
-        "benchmarks/pous/read.py": "from verity.core.protocols.pous.schemes.p2 import DELTA_NS\n\nLIMIT_NS = DELTA_NS\n",
+        "benchmarks/pous/read.py": "from verity.core.protocols.pous.audit import DEADLINE_NS\n\nLIMIT_NS = DEADLINE_NS\n",
         "benchmarks/pous/tests/test_copy.py": "DELTA_NS = 500_000\n",
         "verity/core/protocols/pous/lean/scripts/difftest_vectors.py": "DELTA_NS = 500_000\n",
         "archive/pous/copy.py": "DELTA_NS = 500_000\n",
     }
     hits = scan(list(files), files.get)
-    assert [h.key for h in hits] == ["verity/core/protocols/pous/schemes/p2.py::DELTA_NS", "benchmarks/pous/copy.py::DELTA_NS"]
+    assert [h.key for h in hits] == ["verity/core/protocols/pous/audit.py::DEADLINE_NS", "benchmarks/pous/copy.py::DELTA_NS"]
     assert restatements(hits, {}, frozenset(files)) == [
         "benchmarks/pous/copy.py:3: DELTA_NS = 500_000 restates PoUS's Δ, 500,000 ns: "
-        "from verity.core.protocols.pous.schemes.p2 import DELTA_NS (verity/core/protocols/pous/schemes/p2.py)"]
+        "from verity.core.protocols.pous.audit import DEADLINE_NS (verity/core/protocols/pous/audit.py)"]
     assert restatements(hits, {"benchmarks/pous/copy.py::DELTA_NS": "no PR yet"}, frozenset(files)) == []
-    assert sources(hits)["PoUS's Δ, 500,000 ns"] == ["verity/core/protocols/pous/schemes/p2.py::DELTA_NS"]
+    assert sources(hits)["PoUS's Δ, 500,000 ns"] == ["verity/core/protocols/pous/audit.py::DEADLINE_NS"]
 
 
 _KNOWN_OPEN, _KNOWN_CLOSE = "KNOWN: dict[str, str] = {\n", "\n}\n"
