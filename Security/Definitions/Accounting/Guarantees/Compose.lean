@@ -7,7 +7,7 @@ import Definitions.Accounting.Assumptions.Compose
 
 THEOREM's composed statement. Each `def G : Prop` is proved as `Accounting.SecurityProofs.Compose.G` in
 `Proofs.Accounting.Compose`, whose module doc gives each proof's steps. The circuit is any `Declared` one: the served
-circuit `D`, a `Gates.Dag` with no coin input and no template or receipt gate, and its annotation (`Annotation`: its
+circuit `D`, a `Gates.IntDag` with no coin input and no template or receipt gate, and its annotation (`Annotation`: its
 call sites, its rounds, their coin modes, the service's commit coins and its proof units), its words, kinds, cuts and
 late cones read off the IR. The protocol's work (each tile's noise, receipt and fold) is A's, read only through the
 scheme's lucks, so the certified words are `D`'s committed words.
