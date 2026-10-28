@@ -10069,7 +10069,7 @@
    ]
   },
   "PouwCheck.Credit": {
-   "digest": "fe1123a42c2f67481f23c939a205ccb2e0fa51c2d675bafd7486bd5ab2a7cca9",
+   "digest": "c11fb07d17ea7475881f8fa3fcd15cdbad5bd1d6428f22988e898f9a0197e8fb",
    "definitions": {
     "PouwCheck.Credit.BODY": "071fefb97f3971bcd352e1c3b07d11024a6f9c774c6fb6c3b46931a10dfb376c",
     "PouwCheck.Credit.CALLS_FORM": "d6bf6cb3768f79c8900ee97cb118d0b475d4456410e4d0a86afbe35047c0da92",
@@ -10214,7 +10214,7 @@
     "PouwCheck.Credit.isTied": "0b27dc31bf70f8bd42345492debac45646e439997c1cf4b25c1a6a93e3e2df64",
     "PouwCheck.Credit.j10rBlocks": "dc6708e871de941b091c62cf6cb3fcc55e3f1c9eebd48a3cc214ecf45b968818",
     "PouwCheck.Credit.knownRoot": "f3e13375f1857339b0dacd35ccadd76d142137a01563a49b1b109da8b82ea59a",
-    "PouwCheck.Credit.law": "652c16e7758813e0e4dddd45940ed7a9a92daf8ba15c5315d27fe25182f163ab",
+    "PouwCheck.Credit.law": "8c4fd67e28357315de17e59a68064a77f05fa8706fa051063616f019ff844b48",
     "PouwCheck.Credit.layoutOf": "bc3f326c31fdcb88b7db188f43aeeb353feb382533086e08e61ec908fe624636",
     "PouwCheck.Credit.layoutRefuse": "4a415164f4295a282b8f97dcdb41a093d0fcebc94e4d4b2cdcfd5012294eb2c0",
     "PouwCheck.Credit.leafWords": "5291af53996c4fe5bf3765a3eb904f432607d35157b396259cffff222d4e3ffd",
