@@ -36,11 +36,10 @@ private def emit (a : Answer) : IO (Option Verdict) := do
     IO.eprintln s!"{a.protocol}: the outcome is not canonical JSON: {e}"
     pure none
 
-/-- One `serve` case's inputs, from the first `stop` bytes of `line`: the parameters as JSON (re-encoded canonically for
-`answer`), commitment and evidence as hex. The line is read in place (`Canonical`), so a case of any size gets the
-answer `canonicalJson` and `Flock.unhex` give one small enough for them. -/
-def caseInputs (line : String) (stop : Nat) : V (ByteArray × ByteArray × ByteArray) := do
-  let j ← Canonical.parseUpTo line stop
+/-- One `serve` case's inputs from its JSON: the parameters (re-encoded canonically for `answer`), commitment and
+evidence as hex. The case is read in place (`Canonical`), so a case of any size gets the answer `canonicalJson` and
+`Flock.unhex` give one small enough for them. -/
+def caseInputs (j : Json) : V (ByteArray × ByteArray × ByteArray) := do
   let params ← Flock.canon (← Flock.J.get j "params" "the case")
   let c ← Canonical.unhex (← Flock.J.str j "commitment" "the case")
   let e ← Canonical.unhex (← Flock.J.str j "evidence" "the case")
@@ -53,20 +52,20 @@ def Protocol.ofCase (P : Protocol) : V (ByteArray × ByteArray × ByteArray) →
     { protocol := P.id, verdict := .reject, reason := some s!"case: {e}", digest := none, published := none, profile := none }
 
 /-- One `serve` case: the parameters as JSON (re-encoded canonically for `answer`), commitment and evidence as hex. -/
-def Protocol.case (P : Protocol) (line : String) : Answer := P.ofCase (caseInputs line line.utf8ByteSize)
+def Protocol.case (P : Protocol) (line : String) : Answer := P.ofCase (Canonical.parse line >>= caseInputs)
 
 /-- `line`'s first `stop` bytes without the newlines that end them. -/
 def trimNewlines (line : String) : (fuel stop : Nat) → Nat
   | 0, stop => stop
   | fuel + 1, stop => if 0 < stop && Canonical.byte line (stop - 1) == 10 then trimNewlines line fuel (stop - 1) else stop
 
-/-- `Protocol.case` on each line without its newline. The line is read before the case is answered, so the answer runs
-without it: a case's text is never held beside its decoded evidence. -/
+/-- `Protocol.case` on each line without its newline. The line is parsed before anything is decoded from it, so it is
+dropped before the evidence's hex is: a case's text is never held beside its decoded evidence. -/
 partial def serveLoop (P : Protocol) (stdin : IO.FS.Stream) : IO UInt32 := do
   let line ← stdin.getLine
   if line.isEmpty then return 0
-  let inputs := caseInputs line (trimNewlines line line.utf8ByteSize line.utf8ByteSize)
-  match ← emit (P.ofCase inputs) with
+  let j := Canonical.parseUpTo line (trimNewlines line line.utf8ByteSize line.utf8ByteSize)
+  match ← emit (P.ofCase (j >>= caseInputs)) with
   | some _ => serveLoop P stdin
   | none => return 70
 
