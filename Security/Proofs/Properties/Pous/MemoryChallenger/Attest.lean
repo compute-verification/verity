@@ -820,15 +820,6 @@ theorem livenessContext_some {d a : ByteArray} {p l : String} {per b : Nat} (hd 
   rw [periodContext_some hd hper, u64_some hb]
   rfl
 
-/-- The honest period's deployment hash, 64 bytes. -/
-def HONEST_DEPLOYMENT : ByteArray := ⟨Array.replicate 64 0⟩
-
-/-- The honest period's party, the memory challenger, with its attachment and link as `test_pous_period_reports`
-has them. -/
-def HONEST_PARTY : String := "memory-challenger"
-def HONEST_LINK : String := "server-3"
-def HONEST_ATTACHMENT : ByteArray := ⟨Array.replicate 32 0⟩
-
 theorem deployment_size : HONEST_DEPLOYMENT.size = 64 := rfl
 
 theorem honest_small : (Lms.lenField HONEST_DEPLOYMENT ++ Lms.lenField HONEST_PARTY.toUTF8 ++
@@ -906,21 +897,6 @@ theorem signs {I seed : ByteArray} {k : Lms.PrivateKey} (hk : Lms.key Lms.deploy
     Properties.CertifierDevice.Proofs.Lms.lmsSigns 64 1 20 false Lms.deployed I seed k 0 m rfl hk (by decide)
   exact ⟨σ, hσ, (Properties.CertifierDevice.Proofs.Lms.lmsCorrect 64 1 20 false Lms.deployed I seed k 0 m σ rfl hk hσ).1⟩
 
-/-- The honest one-record period whose record is `v`, closed under the lower key `lower` with its certificate `cert`
-and the root's signature `σ`: the honest attachment and link, period 0. -/
-def honestRoot (lower : ByteArray) (cert σ : Lms.Signature) (v : ByteArray) : Attest.SignedRoot :=
-  ⟨HONEST_ATTACHMENT, HONEST_LINK, 0, 1, Attest.root #[v], ⟨lower, cert, σ⟩⟩
-
-/-- The honest period's one read: its record at position 0, with no siblings. -/
-def honestRead (v : ByteArray) : Attest.Read := ⟨0, v, #[]⟩
-
-/-- The device that signed the honest period: the identity `identity` certified `lower` for the memory challenger in
-the honest deployment, and `lower` closed the one-record period of `v`. -/
-def honestDevice (identity lower v : ByteArray) : Device where
-  issued pk := if pk = identity then [⟨HONEST_DEPLOYMENT, HONEST_PARTY, lower⟩] else []
-  closed pk := if pk = lower then [⟨HONEST_DEPLOYMENT, HONEST_PARTY, HONEST_ATTACHMENT, HONEST_LINK, 0, #[v]⟩] else []
-  live _ := []
-
 /-- **The period check accepts the honest period**: for keys `Lms.key` derives at the deployed parameters, the identity
 `k` certifying the lower key `k'` for the memory challenger at leaf 0 and `k'` signing the one-record period's root at
 leaf 0, the check accepts the period with its one read, which is the device's. -/
@@ -996,13 +972,6 @@ theorem periodSigned_honest :
       OfDevice (honestDevice k.publicKey k'.publicKey .empty) k.publicKey HONEST_DEPLOYMENT HONEST_PARTY
         (honestRoot k'.publicKey cert σ .empty) #[honestRead .empty] :=
   honest_deployed .empty
-
-/-- The empty signed root: no lower key, no signature bytes, no records. -/
-def emptyRoot : Attest.SignedRoot :=
-  ⟨.empty, "", 0, 0, .empty, ⟨.empty, ⟨0, .empty, #[], #[]⟩, ⟨0, .empty, #[], #[]⟩⟩⟩
-
-/-- The device that signed nothing. -/
-def emptyDevice : Device := ⟨fun _ => [], fun _ => [], fun _ => []⟩
 
 /-- The empty run hashes nothing: its deployment hash has no bytes, so neither of its messages is formed. -/
 theorem empty_strings : runStrings emptyDevice .empty .empty "" emptyRoot #[] = [] := by
@@ -1084,9 +1053,6 @@ theorem periodSound_honest :
   obtain ⟨k, k', cert, σ, -, -, hc, ho⟩ := periodSigned_honest
   exact ⟨fun _ => honestRun k k' cert σ .empty, Pr_unit_true _ hc, Pr_unit_false _ fun h => h.2 ho⟩
 
-/-- The empty run, on one coin. -/
-def emptyRun : Unit → PeriodRun := fun _ => ⟨emptyDevice, .empty, .empty, "", emptyRoot, #[]⟩
-
 theorem empty_finder : (collisionFinder Unit emptyRun).Pr sha512 = 0 := by
   unfold Claims.Finder.Pr
   refine Pr_unit_false _ ?_
@@ -1112,10 +1078,6 @@ theorem empty_bound (p : Lms.Params) :
     (collisionFinder Unit emptyRun).Pr sha512 + forgeryPr p emptyRun = 0 ∧
       ¬ OfDevice emptyDevice .empty .empty "" emptyRoot #[] := by
   refine ⟨by rw [empty_finder, empty_forger, add_zero], fun h => empty_unsigned p (Or.inl h)⟩
-
-/-- The period check that accepts everything. -/
-def acceptAll : ByteArray → ByteArray → String → Attest.SignedRoot → Array Attest.Read → Lms.E Bool :=
-  fun _ _ _ _ _ => .ok true
 
 /-- **`PeriodSound`'s nontrivial lemma**: its bound fails at the check that accepts everything, on the empty run at the
 deployed parameters: the bad event has probability 1 and the right side is 0 (`empty_bound`). -/

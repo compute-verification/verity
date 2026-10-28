@@ -244,6 +244,51 @@ def PeriodSound : Prop :=
         ¬ OfDevice (τ ω).dev (τ ω).identity (τ ω).deployment (τ ω).party (τ ω).root (τ ω).reads) ≤
       (collisionFinder Ω τ).Pr sha512 + forgeryPr p τ
 
+/-! ## The honest period, and the empty run
+
+The instances `PeriodSigned`'s and `PeriodSound`'s lemmas read (`Proofs.Properties.Pous.MemoryChallenger.Attest`).
+Their honest lemmas: the check accepts the honest one-record period at the deployed parameters, and the period is the
+device's. Their nontrivial lemmas: the empty run, which a check that accepts everything accepts, is no device's and
+carries no break. -/
+
+/-- The honest period's deployment hash, 64 bytes. -/
+def HONEST_DEPLOYMENT : ByteArray := ⟨Array.replicate 64 0⟩
+
+/-- The honest period's party, the memory challenger, with its attachment and link as `test_pous_period_reports`
+has them. -/
+def HONEST_PARTY : String := "memory-challenger"
+def HONEST_LINK : String := "server-3"
+def HONEST_ATTACHMENT : ByteArray := ⟨Array.replicate 32 0⟩
+
+/-- The honest one-record period whose record is `v`, closed under the lower key `lower` with its certificate `cert`
+and the root's signature `σ`: the honest attachment and link, period 0. -/
+def honestRoot (lower : ByteArray) (cert σ : Lms.Signature) (v : ByteArray) : Attest.SignedRoot :=
+  ⟨HONEST_ATTACHMENT, HONEST_LINK, 0, 1, Attest.root #[v], ⟨lower, cert, σ⟩⟩
+
+/-- The honest period's one read: its record at position 0, with no siblings. -/
+def honestRead (v : ByteArray) : Attest.Read := ⟨0, v, #[]⟩
+
+/-- The device that signed the honest period: the identity `identity` certified `lower` for the memory challenger in
+the honest deployment, and `lower` closed the one-record period of `v`. -/
+def honestDevice (identity lower v : ByteArray) : Device where
+  issued pk := if pk = identity then [⟨HONEST_DEPLOYMENT, HONEST_PARTY, lower⟩] else []
+  closed pk := if pk = lower then [⟨HONEST_DEPLOYMENT, HONEST_PARTY, HONEST_ATTACHMENT, HONEST_LINK, 0, #[v]⟩] else []
+  live _ := []
+
+/-- The empty signed root: no lower key, no signature bytes, no records. -/
+def emptyRoot : Attest.SignedRoot :=
+  ⟨.empty, "", 0, 0, .empty, ⟨.empty, ⟨0, .empty, #[], #[]⟩, ⟨0, .empty, #[], #[]⟩⟩⟩
+
+/-- The device that signed nothing. -/
+def emptyDevice : Device := ⟨fun _ => [], fun _ => [], fun _ => []⟩
+
+/-- The empty run, on one coin. -/
+def emptyRun : Unit → PeriodRun := fun _ => ⟨emptyDevice, .empty, .empty, "", emptyRoot, #[]⟩
+
+/-- The period check that accepts everything. -/
+def acceptAll : ByteArray → ByteArray → String → Attest.SignedRoot → Array Attest.Read → Lms.E Bool :=
+  fun _ _ _ _ _ => .ok true
+
 /-! ## What the auditor and the prover see of the party -/
 
 /-- One step of the party (`attest.Period`): a sampling block's records, which it adds to the period's and marks live
