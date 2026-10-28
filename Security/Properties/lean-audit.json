@@ -274,10 +274,6 @@
   "Properties.RemoteAudit.Component.HonestSchedule": {
    "owner": "@memory-accounting",
    "digest": "78b64c8ef4f8e96c69c8f809928e38b51f2acc08b6fd52b48f9f65e4c17b4aa9"
-  },
-  "Properties.RemoteAudit.ScheduleLayoutGap": {
-   "owner": "@memory-accounting",
-   "digest": "7a9fc4b287459b57492b22f04af9961b0fea507e9e20f7d07ece852e1050d80b"
   }
  },
  "meaning": [
@@ -411,6 +407,22 @@
   "MemoryChallenger.Properties.SecurityProofs.wipeSigned": {
    "honest": ["MemoryChallenger.Properties.SecurityProofs.wipeSigned_honest"],
    "nontrivial": "MemoryChallenger.Properties.SecurityProofs.wipeSigned_nontrivial"
+  },
+  "Properties.RemoteAudit.codeLayoutTiles": {
+   "honest": ["Properties.RemoteAudit.codeLayoutTiles_honest"],
+   "nontrivial": "Properties.RemoteAudit.codeLayoutTiles_nontrivial"
+  },
+  "Properties.RemoteAudit.opensAtPosition": {
+   "honest": ["Properties.RemoteAudit.opensAtPosition_honest"],
+   "nontrivial": "Properties.RemoteAudit.opensAtPosition_nontrivial"
+  },
+  "Properties.RemoteAudit.planBlocks": {
+   "honest": ["Properties.RemoteAudit.planBlocks_honest"],
+   "nontrivial": "Properties.RemoteAudit.planBlocks_nontrivial"
+  },
+  "Properties.RemoteAudit.steered_of_checked": {
+   "honest": ["Properties.RemoteAudit.steered_of_checked_honest"],
+   "nontrivial": "Properties.RemoteAudit.steered_of_checked_nontrivial"
   }
  },
  "unwitnessed": {
@@ -578,7 +590,6 @@
   "Properties.RemoteAudit.releasedStayOut": "9a969c04fe8d92c87062758f2b1063d15e60fe0db11e774427db2f8f9d45b6ce",
   "Properties.RemoteAudit.scheduleChecked": "7d24cf63d2813c8aadbbcdeb5bcb4efc9f33c59451af0dae591fd359ca0e8e1e",
   "Properties.RemoteAudit.scheduleFixesLayout": "9208ff59300d11ed98f57101b871efd1e060561660733e3b6083c1dab8da6a9e",
-  "Properties.RemoteAudit.steered_of_checked": "be81031b23d2333f173c7540da5dd2c2e8fc393ce9d84ee7118d5b1bd70c1f53",
   "Properties.SampledProofs.SecurityProofs.designWellFormed": "82f731f8e60afaa767b56880491e41c6465a0158b3520999c7e4c6fb29546c8a",
   "Properties.SampledProofs.SecurityProofs.drawMisses": "303f59f6e5d086c022bcd5f65d8494f0da4a42aa9cb9b2d7b80aaba186bfc119",
   "Properties.SampledProofs.acceptMeans": "8b5d59c8e389ebb7fca362bc1f59eb906994cdeb37ade677622b6b55e7d43910",
@@ -775,9 +786,9 @@
    "why": "the memory line of record is stated against the line's and the verifier's own functions (RemoteAudit) and the memory model's trace, paced session, draw and premises (Definitions.Accounting.Remote, Definitions.Accounting.Assumptions), its probability `Pouw.pr` (Definitions.Pouw.Basic); never a proof"
   },
   "Properties.RemoteAudit.Schedule": {
-   "imports": ["Definitions.Accounting", "RemoteAudit"],
+   "imports": ["Definitions.Accounting", "RemoteAudit", "Properties.RemoteAudit"],
    "except": [],
-   "why": "the schedule check (`RemoteAudit.Schedule`) is stated against the code, and the gap it leaves against the layout vocabulary it feeds (`Definitions.Accounting.Schedule`), never a proof"
+   "why": "the schedule check (`RemoteAudit.Schedule`) and the verifier's layout (`sessionLayout`, where `checkOpening` checks each block under `Properties.RemoteAudit.receipterOf`) are stated against the code and the layout vocabulary they feed (`Definitions.Accounting.Schedule`), never a proof"
   },
   "Properties.Pouw.Period": {
    "imports": ["Definitions.Accounting", "Definitions.Accounting.Assumptions", "PouwCheck"],
@@ -792,7 +803,7 @@
   "Properties.Accounting.DeclaredCircuit": {
    "imports": ["Definitions.Accounting", "Properties.RemoteAudit.Schedule"],
    "except": [],
-   "why": "the declared circuit's requirement at the committed steering cap is stated over the memory model's game and premises (`Definitions.Accounting`, `Accounting.Guarantees.DeclaredCircuitRequirement`'s module) and the schedule check's statements and gap (`Properties.RemoteAudit.Schedule`), never a proof"
+   "why": "the declared circuit's requirement at the committed steering cap is stated over the memory model's game and premises (`Definitions.Accounting`, `Accounting.Guarantees.DeclaredCircuitRequirement`'s module) and the schedule check's statements and the verifier's layout (`Properties.RemoteAudit.Schedule`), never a proof"
   },
   "Properties.Pouw.PeriodJ10R": {
    "imports": ["Definitions.Accounting", "Definitions.Accounting.Assumptions", "PouwCheck", "Properties.Pouw.Period"],
@@ -2819,6 +2830,54 @@
    "assumptions": [],
    "type_hash": "a55b21eea959675213296153cd5512118ada7de5f7ea491ee22a32c7b98c5cdb"
   },
+  "Properties.RemoteAudit.codeLayoutTiles": {
+   "owner": "@memory-accounting",
+   "signature": ["Properties.RemoteAudit.codeLayoutTiles : Properties.RemoteAudit.CodeLayoutTiles"],
+   "assumptions": [],
+   "type_hash": "2515137ac93d73406859ea8ad9ce731b4149fbcd172ee882f68ee2f394c75a61"
+  },
+  "Properties.RemoteAudit.codeLayoutTiles_honest": {
+   "owner": "@memory-accounting",
+   "signature": [
+    "Properties.RemoteAudit.codeLayoutTiles_honest :",
+    "  And",
+    "    (Eq (RemoteAudit.Plan.make? (List.cons { fst := 0, snd := 130023424 } List.nil).toArray 130023424)",
+    "      (Option.some (RemoteAudit.Plan.whole 130023424)))",
+    "    (And (Eq (Properties.RemoteAudit.runBlocks (RemoteAudit.Plan.whole 130023424).runs).length 130023424)",
+    "      (∀ (i : Nat),",
+    "        instLTNat.lt i 130023424 →",
+    "          Eq (Properties.RemoteAudit.tileAt 130023424 List.nil.toArray (RemoteAudit.Plan.whole 130023424).runs i)",
+    "            (Option.some { fst := 0, snd := i })))"
+   ],
+   "assumptions": [],
+   "type_hash": "f483e5157c582feaed1b998d0e5b38dd1d1c99b07763afe2a4f4a7d7b6d45930"
+  },
+  "Properties.RemoteAudit.codeLayoutTiles_nontrivial": {
+   "owner": "@memory-accounting",
+   "signature": [
+    "Properties.RemoteAudit.codeLayoutTiles_nontrivial :",
+    "  Not",
+    "    (Eq",
+    "      (Properties.RemoteAudit.tileAt 1 List.nil.toArray",
+    "        (List.cons { fst := 0, snd := 1 } (List.cons { fst := 0, snd := 1 } List.nil)).toArray (Fin.val 1))",
+    "      (Option.some",
+    "        {",
+    "          fst :=",
+    "            (Function.instFunLikeEmbedding.coe",
+    "                  (Properties.RemoteAudit.codeLayout 1 { toFun := fun i => { fst := 0, snd := i }, inj' := ⋯ }",
+    "                    List.nil.toArray",
+    "                    (List.cons { fst := 0, snd := 1 } (List.cons { fst := 0, snd := 1 } List.nil)).toArray)",
+    "                  1).fst.val,",
+    "          snd :=",
+    "            (Function.instFunLikeEmbedding.coe",
+    "                  (Properties.RemoteAudit.codeLayout 1 { toFun := fun i => { fst := 0, snd := i }, inj' := ⋯ }",
+    "                    List.nil.toArray",
+    "                    (List.cons { fst := 0, snd := 1 } (List.cons { fst := 0, snd := 1 } List.nil)).toArray)",
+    "                  1).snd.val }))"
+   ],
+   "assumptions": [],
+   "type_hash": "b1a0e78990ee83a63f36e10f8ae596b94b433ee6264e4d5c1c8493885235fd30"
+  },
   "Properties.RemoteAudit.drawIsSubset": {
    "owner": "@memory-accounting",
    "signature": ["Properties.RemoteAudit.drawIsSubset : Properties.RemoteAudit.DrawIsSubset"],
@@ -2849,6 +2908,48 @@
    "assumptions": [],
    "type_hash": "7950b2e590d3ed22aca9bb8b36e278fe678fa759ad722024d154c78c13762310"
   },
+  "Properties.RemoteAudit.opensAtPosition": {
+   "owner": "@memory-accounting",
+   "signature": ["Properties.RemoteAudit.opensAtPosition : Properties.RemoteAudit.OpensAtPosition"],
+   "assumptions": [],
+   "type_hash": "111150eaa0d138025444b31c09ae5104f3f91a425059fdd7a751a2787faa2bbe"
+  },
+  "Properties.RemoteAudit.opensAtPosition_honest": {
+   "owner": "@memory-accounting",
+   "signature": [
+    "Properties.RemoteAudit.opensAtPosition_honest :",
+    "  Exists fun reg =>",
+    "    Exists fun w =>",
+    "      Exists fun o =>",
+    "        And",
+    "          (Eq",
+    "            (RemoteAudit.Registration.make? (RemoteAudit.zeros 1) 130023424 reg.payloadRoot",
+    "              (RemoteAudit.zeros RemoteAudit.Codec.SEED_BYTES)",
+    "              { field := RemoteAudit.Codec.P1024, rounds := 3, masked := Bool.true } RemoteAudit.Kind.sketch Bool.false",
+    "              RemoteAudit.LAYOUT 16)",
+    "            (Except.ok reg))",
+    "          (And (Eq w.passes.size 1)",
+    "            (And (Eq (Array.instGetElem?NatLtSize.getElem! w.passes 0).plan (RemoteAudit.Plan.whole 130023424))",
+    "              (Eq",
+    "                (RemoteAudit.checkOpening reg reg.digest List.nil.toArray w (Properties.RemoteAudit.receipterOf reg w 0)",
+    "                  0 0 o)",
+    "                Option.none)))"
+   ],
+   "assumptions": [],
+   "type_hash": "114cbe4a14ae93089cb3c545b9839e5a831f14b3b5aea949a3d3c5f47b46483a"
+  },
+  "Properties.RemoteAudit.opensAtPosition_nontrivial": {
+   "owner": "@memory-accounting",
+   "signature": [
+    "Properties.RemoteAudit.opensAtPosition_nontrivial (t : Nat) :",
+    "  Not",
+    "    (Eq",
+    "      (Properties.RemoteAudit.position 130023424 List.nil.toArray ((RemoteAudit.Plan.whole 130023425).block 130023424))",
+    "      (Option.some { fst := t, snd := (RemoteAudit.Plan.whole 130023425).block 130023424 }))"
+   ],
+   "assumptions": [],
+   "type_hash": "4f579a80bcf7a45d83f0c6f86981146cbffb177eda129678a174a259fbad350e"
+  },
   "Properties.RemoteAudit.passesChained": {
    "owner": "@memory-accounting",
    "signature": ["Properties.RemoteAudit.passesChained : Properties.RemoteAudit.PassesChained"],
@@ -2866,6 +2967,43 @@
    "signature": ["Properties.RemoteAudit.passesStepped : Properties.RemoteAudit.PassesStepped"],
    "assumptions": [],
    "type_hash": "39e482d66d951d973df481350e4501d76cf3467d68436f9b51cf66b7993e58ea"
+  },
+  "Properties.RemoteAudit.planBlocks": {
+   "owner": "@memory-accounting",
+   "signature": ["Properties.RemoteAudit.planBlocks : Properties.RemoteAudit.PlanBlocks"],
+   "assumptions": [],
+   "type_hash": "b52f9ab9527953b5d6389d4e21022197366698223b4ae485749e62cf43ba2f73"
+  },
+  "Properties.RemoteAudit.planBlocks_honest": {
+   "owner": "@memory-accounting",
+   "signature": [
+    "Properties.RemoteAudit.planBlocks_honest :",
+    "  Eq (RemoteAudit.Plan.make? (List.cons { fst := 0, snd := 130023424 } List.nil).toArray 130023424)",
+    "    (Option.some (RemoteAudit.Plan.whole 130023424))"
+   ],
+   "assumptions": [],
+   "type_hash": "93e2a89f675e16240675c6e4e5ca1336dd56105c8ade41ddff2dbcd1f6c806ee"
+  },
+  "Properties.RemoteAudit.planBlocks_nontrivial": {
+   "owner": "@memory-accounting",
+   "signature": [
+    "Properties.RemoteAudit.planBlocks_nontrivial :",
+    "  Not",
+    "    (And",
+    "      (Eq { blocks := 1, runs := List.nil.toArray, ends := (List.cons 1 List.nil).toArray }.length",
+    "        (Properties.RemoteAudit.runBlocks",
+    "            { blocks := 1, runs := List.nil.toArray, ends := (List.cons 1 List.nil).toArray }.runs).length)",
+    "      (∀ (p : Nat),",
+    "        instLTNat.lt p { blocks := 1, runs := List.nil.toArray, ends := (List.cons 1 List.nil).toArray }.length →",
+    "          Eq",
+    "            (List.instGetElem?NatLtLength.getElem?",
+    "              (Properties.RemoteAudit.runBlocks",
+    "                { blocks := 1, runs := List.nil.toArray, ends := (List.cons 1 List.nil).toArray }.runs)",
+    "              p)",
+    "            (Option.some ({ blocks := 1, runs := List.nil.toArray, ends := (List.cons 1 List.nil).toArray }.block p))))"
+   ],
+   "assumptions": [],
+   "type_hash": "6e294008319128d1b11fc0e7d900c08ce145b23f97af56ee6ecb5879fe06844b"
   },
   "Properties.RemoteAudit.planReadsDistinct": {
    "owner": "@memory-accounting",
@@ -2919,10 +3057,7 @@
    "owner": "@memory-accounting",
    "signature": [
     "Properties.RemoteAudit.steered_of_checked {Pfx Y : Type} {N T M blocks a : Nat} {idx : Pfx → Nat}",
-    "  {pos : Pfx → Array (Prod Nat Nat) → Array (Prod Nat Nat) → Function.Embedding (Fin N) (Prod (Fin T) (Fin M))}",
-    "  {appended sent : Pfx → Y → Array (Prod Nat Nat)}",
-    "  {layout : Pfx → Y → Function.Embedding (Fin N) (Prod (Fin T) (Fin M))}",
-    "  (gap : Properties.RemoteAudit.ScheduleLayoutGap pos appended sent layout)",
+    "  {dflt : Pfx → Function.Embedding (Fin N) (Prod (Fin T) (Fin M))} {appended sent : Pfx → Y → Array (Prod Nat Nat)}",
     "  (checked :",
     "    ∀ (c : Pfx) (y : Y),",
     "      Exists fun sc =>",
@@ -2931,10 +3066,40 @@
     "            And (Eq (RemoteAudit.Schedule.check sc blocks a passes (appended c y)) (Except.ok b))",
     "              (Eq (Option.map Prod.snd (Array.instGetElem?NatLtSize.getElem? passes (idx c)))",
     "                (Option.some (sent c y)))) :",
-    "  Exists fun steer => Accounting.Assumptions.SteeredLayout layout steer"
+    "  Exists fun steer =>",
+    "    Accounting.Assumptions.SteeredLayout (Properties.RemoteAudit.sessionLayout blocks dflt appended sent) steer"
    ],
    "assumptions": [],
-   "type_hash": "be81031b23d2333f173c7540da5dd2c2e8fc393ce9d84ee7118d5b1bd70c1f53"
+   "type_hash": "2128e84650a110e23a0c5b93de13ce647bc6798406445b474795a55a3f76c04b"
+  },
+  "Properties.RemoteAudit.steered_of_checked_honest": {
+   "owner": "@memory-accounting",
+   "signature": [
+    "Properties.RemoteAudit.steered_of_checked_honest :",
+    "  Exists fun sc =>",
+    "    Exists fun passes =>",
+    "      Exists fun b =>",
+    "        And (Eq (RemoteAudit.Schedule.check sc 130023424 792 passes List.nil.toArray) (Except.ok b))",
+    "          (∀ (s : Nat),",
+    "            instLTNat.lt s 96 →",
+    "              Eq (Option.map Prod.snd (Array.instGetElem?NatLtSize.getElem? passes s))",
+    "                (Option.some (RemoteAudit.Plan.whole 130023424).runs))"
+   ],
+   "assumptions": [],
+   "type_hash": "aec9d714beaf2c3410bc927cd5f6042b6c2e4b7a21b4d06b2b5b1db87f3ebe6c"
+  },
+  "Properties.RemoteAudit.steered_of_checked_nontrivial": {
+   "owner": "@memory-accounting",
+   "signature": [
+    "Properties.RemoteAudit.steered_of_checked_nontrivial (steer : Unit → Fin 3 → Pous.Bits (instHAdd.hAdd 0 1)) :",
+    "  Not",
+    "    (Accounting.Assumptions.SteeredLayout",
+    "      (Properties.RemoteAudit.sessionLayout 3 (fun x => { toFun := fun x => { fst := 0, snd := 0 }, inj' := ⋯ })",
+    "        (fun x x_1 => List.nil.toArray) fun x y => (List.cons { fst := y.val, snd := 1 } List.nil).toArray)",
+    "      steer)"
+   ],
+   "assumptions": [],
+   "type_hash": "7e684951741d0df3f61602dc3f52764b1aa99754df33d776ada8c890c1b1e9cb"
   },
   "Properties.Requirement.credited": {
    "owner": "@memory-accounting",
@@ -3145,8 +3310,7 @@
   "premises": [
    "Definitions.NetworkCertifier.Premises",
    "Definitions.Accounting.Assumptions",
-   "Properties.RemoteAudit.Line.Premises",
-   "Properties.RemoteAudit.Schedule"
+   "Properties.RemoteAudit.Line.Premises"
   ],
   "statements": ["Properties"],
   "properties": {
@@ -4283,6 +4447,26 @@
    "MemoryChallenger.Attest.Properties.SecurityProofs.proverSeesMessages": {
     "function": "MemoryChallenger.Attest.Properties.code",
     "outcome": "none"
+   },
+   "Properties.RemoteAudit.planBlocks": {
+    "conjuncts": [
+     {
+      "function": "RemoteAudit.Plan.make?",
+      "outcome": "accept"
+     },
+     {
+      "function": "RemoteAudit.Plan.whole",
+      "outcome": "none"
+     }
+    ]
+   },
+   "Properties.RemoteAudit.codeLayoutTiles": {
+    "function": "RemoteAudit.Plan.make?",
+    "outcome": "accept"
+   },
+   "Properties.RemoteAudit.opensAtPosition": {
+    "function": "RemoteAudit.checkOpening",
+    "outcome": "accept"
    }
   },
   "frozen": {
@@ -4302,7 +4486,7 @@
    "Properties.Pouw.Period.SecurityProofs.checkedCreditPeriod": "frozen (no-function,world-unlisted): CheckedWorkPeriod's credit in live words, CircuitCreditPeriod at the deployed check's accepted prefix (checkedRun): at a, b > 0 an accepted period has at least (1 - eps(j))+ of the check's accepted prefix's live words fixed right, eps at the realized prefix j (Windows.prefixLen), except with probability delta_s + n (delta_bind + delta_ks); not one acceptance hypothesis, a Pouw.RelativeSecurity.prob event that shape.events does not list, with CheckedWorkPeriod's premises, of which RegisteredBeforeDraw, DrawIsCoin and ServiceSound are listed under assumptions (ASK-133, option A, decided by the lane: RegisteredBeforeDraw and DrawIsCoin protocol-code facts to prove, ServiceSound standard crypto, C-Flock's); proved from CircuitCreditPeriod (Proofs.Pouw.Period).",
    "Properties.Pouw.Period.SecurityProofs.h1CheckedCreditPeriod": "frozen (no-function,world-unlisted): CheckedCreditPeriod at H1's tile unit on the torch loop (PouwH1Tile_v1 K=64 R=4 C=8, N_p = 144, K_d = 24, one round a window, rho = 8/9, lucks 7/8 and 1/2, a = b = 1, Lambda = 67/8 from SplitRateClosed), Pins from SaltIsLiveCoin and StagedPins; not one acceptance hypothesis, a Pouw.RelativeSecurity.prob event that shape.events does not list. Its five premises beyond CheckedCreditPeriod's claims are listed under assumptions, each a named Prop with its own record (ASK-133, option A, decided by the lane): DrawIsCoin, StagedPins and RegisteredBeforeDraw protocol-code facts to prove (the loop's registration has anchors [] and wires [], so it commits no row before the draw, CMP-91's to fix with ALLP-WIRE's anchors); ServiceSound standard crypto (C-Flock's soundness); SaltIsLiveCoin a deployment gap: the check holds a live window's salt to its salt session's coin, opened after the window's committed activations (anchoredEpochRoot W X k), but no path that serves H1 windows takes its salt from such a session yet, and the proved tiles' salt port is still a value the prover records. Non-vacuous: Proofs.Pouw.Period.Accept evaluates the deployed check to an accept at #4351's parameters for every draw (N = 144, K' = 24), and Proofs.Pouw.Period.Honest builds a live-salt period meeting every premise (h1_meets).",
    "Accounting.SecurityProofs.Bridge.WorkOfH1CheckedCreditPeriod": "frozen (no-function,world-unlisted): the joint period's PoUW guarantee (Accounting.PeriodRun.Sound at .pouw, error delta_s + n (delta_bind + delta_ks)) at every price p, per-kind multiply-add count macs, unit count u and unit width b_unit, for a period whose PoUW audit credits H1's checked words (RealizesCreditedWords at m = Compose.minWordMacs Sc Cd macs, u and b_unit), from Properties.Pouw.Period.SecurityProofs.h1CheckedCreditPeriod at the source's instance at each value of the other coins, through WorkOfCreditedWords. As its source: no deployed function's outcome is one hypothesis (the verdict is a PeriodRun field), the event is a Pouw.pr through PeriodRun.Sound that shape.events does not list, and the source's premises stay as they are (SaltIsLiveCoin, RegisteredBeforeDraw, StagedPins off the premises list). The bridge's added premises (RT4-LOGIC-6) are Accounting.Assumptions.WordCostsMacs (each right word of a unit not outsourced cost m multiply-adds of priced work, SAK(matmul) at tile scale) and Accounting.Assumptions.HelpWithinCertifier (at most K / b_unit units outsourced), both on the premises list.",
-   "Properties.DeclaredCircuit.SecurityProofs.scheduledRequirement": "frozen (no-function,hash): Accounting.SecurityProofs.DeclaredCircuitRequirement's game, premises and bound (its frozen reason in Security/lean-audit.json) with SteeredLayout replaced by the named gap Properties.RemoteAudit.ScheduleLayoutGap and, as the event's first conjunct, RemoteAudit.Schedule.check's acceptance of every pass of the session at the steering cap it committed before its first coin (a session the check refuses is credited nothing after the seed, so its shortfall is not counted); on the accepted coins the layout is steered by the schedule's cap + 1 padded bits (Properties.RemoteAudit.steered_of_checked at each prefix), the pass devices told any a bits and the query term's union over both summaries, 2^(a + (cap + 1)); a bound on a game's probability (Pous.pr, not a shape.events constant), whose other hypotheses are G's and not premises, not a property of the check.",
+   "Properties.DeclaredCircuit.SecurityProofs.scheduledRequirement": "frozen (no-function,hash): Accounting.SecurityProofs.DeclaredCircuitRequirement's game, premises and bound (its frozen reason in Security/lean-audit.json) at the verifier's layout (Properties.RemoteAudit.sessionLayout) with SteeredLayout replaced by, as the event's first conjunct, RemoteAudit.Schedule.check's acceptance of every pass of the session at the steering cap it committed before its first coin (a session the check refuses is credited nothing after the seed, so its shortfall is not counted); on the accepted coins the layout is steered by the schedule's cap + 1 padded bits (Properties.RemoteAudit.steered_of_checked at each prefix), the pass devices told any a bits and the query term's union over both summaries, 2^(a + (cap + 1)); a bound on a game's probability (Pous.pr, not a shape.events constant), whose other hypotheses are G's and not premises, not a property of the check.",
    "Properties.Pouw.PeriodJ10R.SecurityProofs.h1J10RCheckedCreditPeriod": "frozen (no-function,world-unlisted): CheckedCreditPeriod at J10-R's tile stratum s_T of the sampling block's stratified draw (N_p = |stratum sigma s_T|, padded with wordless fillers, K_d = k s_T), with PouwCheck.Credit.window as the verdict, H1's lucks 7/8 and 1/2, a = b = 1, wmax = 1 and Lambda = j10rRate (k s_T) rho = 8(1 + K rho)/(rho K) from SplitRateClosed (8 + 8/k s_T at the demo shape's rho = 1); the pin is pinnedAt, the unit's tile at its public-row noise and keys (#2352's pin, one description), from SaltIsLiveCoin; not one acceptance hypothesis, a Pouw.RelativeSecurity.prob event that shape.events does not list. Its new premises, decided by lane (Asks for Daniel, Decided by lane, A: https://app.notion.com/p/405399515d9e813fbd6ac073422b3340), each listed under assumptions: TileDrawIsCoin, a code fact once CMP-126's verifier draws the tiles inside the stratified draw (a SHA-512 random oracle, R-ACCEL-3, if the draw's stream is expanded from the live coin); TileServiceSound, a fact to prove (C-Flock's soundness at each drawn unit under live coins); SharedNoiseLucks, a claim, computational (Theorem O's one slot, its form FOLD-LUCK's, CMP-134); RegisteredBeforeDraw, as H1CheckedCreditPeriod's (a deployment gap). SaltIsLiveCoin as H1CheckedCreditPeriod's; UnitFixed to be made provable from the code (ASSUMPTION-AUDIT). TileStratumEscape, the stratum's hypergeometric escape of the tile coordinate, is proved (SecurityProofs.tileStratumEscape) and equal to the escape of Law.stratified's coordinate s_T (Law.stratified_proj_escape, by tileStratumEscape_eq_proj), so the uniform tile permutation is the sampling block's sample at the tile stratum, with no premise. Honest lemma: HonestJ10R.j10r_meets; nontrivial lemma: HonestJ10R.j10r_nontrivial (the conclusion fails at the verdict crediting every window, against the play fixing no word). Proved from CircuitCreditPeriod at tileRun (Proofs.Pouw.PeriodJ10R).",
    "Properties.Pouw.PeriodJ10R.TileStratumEscape": "unstated: proved in security_proofs by Properties.Pouw.PeriodJ10R.SecurityProofs.tileStratumEscape (Proofs.Pouw.PeriodJ10R.Stratum): the tile coordinate (tileDraw, the first k s_T places of a uniform permutation of stratum s_T) misses B with stratum s_T's hypergeometric factor, since a uniform permutation's k-prefix misses B with C(N - |B|, k)/C(N, k) exactly (miss_eq), and that escape equals the escape of Law.stratified's coordinate s_T (Law.stratified_proj_escape, by tileStratumEscape_eq_proj). A lemma, not a premise: no guarantee states it, since its proof is security_proofs' and stratum is restated here until it moves to Definitions.",
    "Accounting.SecurityProofs.Bridge.SpaceOfPeriodHeld": "frozen (premise,no-function): PeriodHeld read as the coins model's .pous guarantee: under PeriodHeld's premises, for every prover strategy under DeviceModel and Instantiates, a PeriodRun that realizes its PoUS audit as an abstract joint run's capacity audit (RealizesSpaceOfPeriodHeld) has PeriodRun.Sound at δ + ε_max, a bound on a Pouw.pr event of a verdict that is a field of the run, not a Lean function; it holds at the challenge times PoUS grades until Pous.Guarantees.ContinuousAudit is tied to the deployed check.",
@@ -5259,7 +5443,8 @@
    },
    "guarantees": [
     "Properties.DeclaredCircuit.SecurityProofs.scheduledRequirement",
-    "Properties.RemoteAudit.steered_of_checked"
+    "Properties.RemoteAudit.steered_of_checked",
+    "Properties.RemoteAudit.steered_of_checked_nontrivial"
    ]
   },
   "Definitions.Accounting.Assumptions.TS": {
@@ -7412,7 +7597,8 @@
     "Properties.RemoteAudit.Line.SecurityProofs.lineHeld",
     "Properties.RemoteAudit.lineCoversSession",
     "Properties.RemoteAudit.pooledCoversSession",
-    "Properties.RemoteAudit.steered_of_checked"
+    "Properties.RemoteAudit.steered_of_checked",
+    "Properties.RemoteAudit.steered_of_checked_nontrivial"
    ]
   },
   "Definitions.Pous.Model.Audit": {
@@ -8338,6 +8524,8 @@
     "Properties.RemoteAudit.lifetimeCapped",
     "Properties.RemoteAudit.liveIsRun",
     "Properties.RemoteAudit.openingsUnreadUntilDrawn",
+    "Properties.RemoteAudit.opensAtPosition",
+    "Properties.RemoteAudit.opensAtPosition_honest",
     "Properties.RemoteAudit.passesChained",
     "Properties.RemoteAudit.passesReadDistinct",
     "Properties.RemoteAudit.passesStepped",
@@ -8720,6 +8908,8 @@
     "Properties.RemoteAudit.lifetimeCapped",
     "Properties.RemoteAudit.liveIsRun",
     "Properties.RemoteAudit.openingsUnreadUntilDrawn",
+    "Properties.RemoteAudit.opensAtPosition",
+    "Properties.RemoteAudit.opensAtPosition_honest",
     "Properties.RemoteAudit.passesChained",
     "Properties.RemoteAudit.passesReadDistinct",
     "Properties.RemoteAudit.passesStepped",
@@ -8851,6 +9041,8 @@
     "Properties.RemoteAudit.lifetimeCapped",
     "Properties.RemoteAudit.liveIsRun",
     "Properties.RemoteAudit.openingsUnreadUntilDrawn",
+    "Properties.RemoteAudit.opensAtPosition",
+    "Properties.RemoteAudit.opensAtPosition_honest",
     "Properties.RemoteAudit.passesChained",
     "Properties.RemoteAudit.passesReadDistinct",
     "Properties.RemoteAudit.passesStepped",
@@ -14125,6 +14317,8 @@
     "Properties.RemoteAudit.chunkedIsWhole",
     "Properties.RemoteAudit.drawIsSubset",
     "Properties.RemoteAudit.lifetimeCapped",
+    "Properties.RemoteAudit.opensAtPosition",
+    "Properties.RemoteAudit.opensAtPosition_honest",
     "Properties.RemoteAudit.passesChained",
     "Properties.RemoteAudit.passesReadDistinct",
     "Properties.RemoteAudit.passesStepped",
@@ -14323,17 +14517,32 @@
    ]
   },
   "Properties.RemoteAudit.Schedule": {
-   "digest": "dd31848888e7fdbb98512bffbe87e9c4ff13aedfd6a0419ee126209372a42a95",
+   "digest": "737bccd347c065400fb41d6dec896ea63441bd434e3f621389763bc59fbe2cb2",
    "definitions": {
+    "Properties.RemoteAudit.CodeLayoutTiles": "12d06228aaab191a537794fa70fe03a6fc88ec418e409e8ecc0dcd61a7724916",
+    "Properties.RemoteAudit.OpensAtPosition": "9609d5c175a05d640bd4595bc01ceee1a1530db4e3c6579eb393981171742b12",
+    "Properties.RemoteAudit.PlanBlocks": "a6eab2f0c4c70872e2f9c4048cee9990921cd552e36be388d9225616ee9c8aed",
     "Properties.RemoteAudit.ScheduleChecked": "15ff0123b745b983557da70f848995c566240327ea805405e504e39edc83ef77",
     "Properties.RemoteAudit.ScheduleFixesLayout": "2999686e9d1d5866487eae6f36373f6046db823e558afa17e5d46464fd3205fd",
-    "Properties.RemoteAudit.ScheduleLayoutGap": "7a9fc4b287459b57492b22f04af9961b0fea507e9e20f7d07ece852e1050d80b"
+    "Properties.RemoteAudit.codeLayout": "2e5766f796ecf020ed2349c3728c585c33da43bee7c76906516362d2f6d4b62d",
+    "Properties.RemoteAudit.position": "c6d4e9fa887e96917fb1e560c653cba6810e2c8672f34216733fa3924735c12d",
+    "Properties.RemoteAudit.runBlocks": "c861e9121d65c5458cc0881e6e7177a02f546e08239d951ef67edf5351293b62",
+    "Properties.RemoteAudit.sessionLayout": "7e672a14fbaaec746a56e8d39032fe644767be17e5d0a442e6e492d5a24507e8",
+    "Properties.RemoteAudit.tileAt": "2bb40254f89138644670e928ab397b45fc2cbe726eb025846cd843c94c84c75d"
    },
    "guarantees": [
     "Properties.DeclaredCircuit.SecurityProofs.scheduledRequirement",
+    "Properties.RemoteAudit.codeLayoutTiles",
+    "Properties.RemoteAudit.codeLayoutTiles_honest",
+    "Properties.RemoteAudit.codeLayoutTiles_nontrivial",
+    "Properties.RemoteAudit.opensAtPosition",
+    "Properties.RemoteAudit.opensAtPosition_nontrivial",
+    "Properties.RemoteAudit.planBlocks",
+    "Properties.RemoteAudit.planBlocks_nontrivial",
     "Properties.RemoteAudit.scheduleChecked",
     "Properties.RemoteAudit.scheduleFixesLayout",
-    "Properties.RemoteAudit.steered_of_checked"
+    "Properties.RemoteAudit.steered_of_checked",
+    "Properties.RemoteAudit.steered_of_checked_nontrivial"
    ]
   },
   "Properties.RemoteAudit.Shared": {
@@ -14489,6 +14698,7 @@
     "RemoteAudit.zeros": "fd9a64c40e28d26bd8336e9fd795177ad085b47bfd67c280c321d125bb5c7565"
    },
    "guarantees": [
+    "Properties.DeclaredCircuit.SecurityProofs.scheduledRequirement",
     "Properties.RemoteAudit.Component.SecurityProofs.lineHeldAtComponent",
     "Properties.RemoteAudit.Component.acceptIsVerified",
     "Properties.RemoteAudit.Component.acceptIsVerified_complete",
@@ -14513,17 +14723,27 @@
     "Properties.RemoteAudit.appendsInOrder",
     "Properties.RemoteAudit.changedReadsDistinct",
     "Properties.RemoteAudit.chunkedIsWhole",
+    "Properties.RemoteAudit.codeLayoutTiles",
+    "Properties.RemoteAudit.codeLayoutTiles_honest",
+    "Properties.RemoteAudit.codeLayoutTiles_nontrivial",
     "Properties.RemoteAudit.drawIsSubset",
     "Properties.RemoteAudit.lifetimeCapped",
     "Properties.RemoteAudit.liveIsRun",
     "Properties.RemoteAudit.openingsUnreadUntilDrawn",
+    "Properties.RemoteAudit.opensAtPosition",
+    "Properties.RemoteAudit.opensAtPosition_honest",
+    "Properties.RemoteAudit.opensAtPosition_nontrivial",
     "Properties.RemoteAudit.passesChained",
     "Properties.RemoteAudit.passesReadDistinct",
     "Properties.RemoteAudit.passesStepped",
+    "Properties.RemoteAudit.planBlocks",
+    "Properties.RemoteAudit.planBlocks_nontrivial",
     "Properties.RemoteAudit.planReadsDistinct",
     "Properties.RemoteAudit.receiptsBelowLimit",
     "Properties.RemoteAudit.recordKeptAfterDraw",
-    "Properties.RemoteAudit.releasedStayOut"
+    "Properties.RemoteAudit.releasedStayOut",
+    "Properties.RemoteAudit.steered_of_checked",
+    "Properties.RemoteAudit.steered_of_checked_nontrivial"
    ]
   },
   "RemoteAudit.Codec": {
@@ -14602,6 +14822,8 @@
     "Properties.RemoteAudit.lifetimeCapped",
     "Properties.RemoteAudit.liveIsRun",
     "Properties.RemoteAudit.openingsUnreadUntilDrawn",
+    "Properties.RemoteAudit.opensAtPosition",
+    "Properties.RemoteAudit.opensAtPosition_honest",
     "Properties.RemoteAudit.passesChained",
     "Properties.RemoteAudit.passesReadDistinct",
     "Properties.RemoteAudit.passesStepped",
@@ -14785,16 +15007,25 @@
     "Properties.RemoteAudit.appendsInOrder",
     "Properties.RemoteAudit.changedReadsDistinct",
     "Properties.RemoteAudit.chunkedIsWhole",
+    "Properties.RemoteAudit.codeLayoutTiles",
+    "Properties.RemoteAudit.codeLayoutTiles_honest",
     "Properties.RemoteAudit.lifetimeCapped",
     "Properties.RemoteAudit.liveIsRun",
     "Properties.RemoteAudit.openingsUnreadUntilDrawn",
+    "Properties.RemoteAudit.opensAtPosition",
+    "Properties.RemoteAudit.opensAtPosition_honest",
+    "Properties.RemoteAudit.opensAtPosition_nontrivial",
     "Properties.RemoteAudit.passesChained",
     "Properties.RemoteAudit.passesReadDistinct",
     "Properties.RemoteAudit.passesStepped",
+    "Properties.RemoteAudit.planBlocks",
+    "Properties.RemoteAudit.planBlocks_honest",
+    "Properties.RemoteAudit.planBlocks_nontrivial",
     "Properties.RemoteAudit.planReadsDistinct",
     "Properties.RemoteAudit.receiptsBelowLimit",
     "Properties.RemoteAudit.recordKeptAfterDraw",
-    "Properties.RemoteAudit.releasedStayOut"
+    "Properties.RemoteAudit.releasedStayOut",
+    "Properties.RemoteAudit.steered_of_checked_honest"
    ]
   },
   "RemoteAudit.Pooled": {
@@ -14942,6 +15173,8 @@
     "Properties.RemoteAudit.lifetimeCapped",
     "Properties.RemoteAudit.liveIsRun",
     "Properties.RemoteAudit.openingsUnreadUntilDrawn",
+    "Properties.RemoteAudit.opensAtPosition",
+    "Properties.RemoteAudit.opensAtPosition_honest",
     "Properties.RemoteAudit.passesChained",
     "Properties.RemoteAudit.passesReadDistinct",
     "Properties.RemoteAudit.passesStepped",
@@ -14980,7 +15213,8 @@
     "Properties.DeclaredCircuit.SecurityProofs.scheduledRequirement",
     "Properties.RemoteAudit.scheduleChecked",
     "Properties.RemoteAudit.scheduleFixesLayout",
-    "Properties.RemoteAudit.steered_of_checked"
+    "Properties.RemoteAudit.steered_of_checked",
+    "Properties.RemoteAudit.steered_of_checked_honest"
    ]
   },
   "RemoteAudit.Session": {
@@ -15293,6 +15527,8 @@
     "Properties.RemoteAudit.lifetimeCapped",
     "Properties.RemoteAudit.liveIsRun",
     "Properties.RemoteAudit.openingsUnreadUntilDrawn",
+    "Properties.RemoteAudit.opensAtPosition",
+    "Properties.RemoteAudit.opensAtPosition_honest",
     "Properties.RemoteAudit.passesChained",
     "Properties.RemoteAudit.passesReadDistinct",
     "Properties.RemoteAudit.passesStepped",
