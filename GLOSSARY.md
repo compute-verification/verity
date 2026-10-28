@@ -22,7 +22,7 @@ necessary subcomputation, over the reference's).
 | annotation α | The gates α(ℓ) each label ℓ of a circuit holds; blocks, placements, covers and selections are annotations, each a predicate on α. | `Verity.Annotation`, `Annotation.IsPartition`, `Partition.toAnnotation` |
 | θ, x | The registered information's input gates (weights, programs, the circuit builder), fixed before the period and the same in every circuit compared; the fresh input, x : in(C) ∖ θ → values (prompts, request inputs, network bits, what the memory wipe leaves). | `Verity.Declaration.θ`; x is the input part of `Circuit.eval`'s argument |
 | D, R = (θ, D, 𝓘) | The declared circuit, what the developer claims it computed: its registered programs on its committed inputs (the one use of "declared"). R is its registration, once: θ, D and 𝓘, its (c, k)-partition into inference blocks, which the verifier checks from D and θ alone (the inference-only policy). | `Verity.Declaration.D`, `Verity.Declaration`; 𝓘 is a `Verity.Partition`; the policy, `Nci.Complies` in an older form |
-| (c, k), 𝒞_{c,k} | A partition's budgets per block: gate budget c, exactly (padded), and fresh-input budget k, at most; \|I\| = c and \|in(I) ∖ θ\| ≤ k. 𝒞_{c,k} is the set of circuits with such a partition. | `Verity.Partition`, `Partition.gates`, `Partition.IsCK` |
+| (c, k), 𝒞_{c,k} | A partition's budgets per block: gate budget c, exactly (padded), and fresh-input budget k, at most; \|I\| = c and \|in(I) ∖ θ\| ≤ k. 𝒞_{c,k} is the set of circuits with such a partition. | `Verity.Partition`, `Partition.gates`; the (c, k) condition `Partition.IsCK` not yet in Lean |
 | A, x(g), t(g) | The actual circuit: everything the hardware computed in the period, hidden work included, each gate g placed at a device x(g) and a tick t(g). | `Accounting.Placed`, `Accounting.Placed.x`, `Accounting.Placed.t` |
 | A[X, J], Φ_X | The operation gates of A placed in the location X (a set of devices) during the ticks J; X's capacity in gates per second, \|A[X, J]\| ≤ Φ_X·\|J\|. Φ_s is a server's, Φ_total the fleet's, and M_s a server's memory in bits. | `Accounting.Placed.region`, `Accounting.Placed.ComputeRate`, `Accounting.Placed.Memory` |
 | V(X, J), U(X, J) | The verified compute at X during J (below), as gate occurrences; the free gates, \|A[X, J]\| − \|A[X, J] ∩ V(X, J)\|. | the share 1 − V/C: `Nci.Dampener.residualShare`; the sets not yet in Lean |
@@ -47,7 +47,7 @@ necessary subcomputation, over the reference's).
 | τ, b | A prover strategy; a server block (below). | `Verity.Game.Strategy`; b as `Verity.Block` |
 | δ_coin, δ_crypto | Probability bounds from the live-coin draws, under uniform coins; advantage bounds for SHA-512's binding, knowledge soundness and pseudorandomness, against a stated adversary. | `Verity.Sound`'s δ; `Security/Definitions/Hash/` |
 | Break, B^τ, 𝒟_b^τ | The event that the fixed finder exhibits a SHA-512 collision, or that the fixed forger produces a valid LMS signature under a device's registered key on a message the device's log never signed, charged as f(Pr[B^τ collides]) + Pr[the forger succeeds] and never assumed away; B^τ is the fixed finder built from τ; 𝒟_b^τ is the distinguisher built from τ at server block b, Adv_PRF(𝒟_b^τ) the PRF term. | not yet in Lean |
-| ε_Wipe,b | The streamed wipe's failure bound at server block b, 2^-128 + Adv_PRF. | `StreamedWipeMeetsServer5GB` |
+| ε_Wipe,b | The streamed wipe's failure bound at server block b, 2^-128 + Adv_PRF. | `StreamedWipeMeetsServer5GB`, not yet in Lean |
 
 **Training tasks, cost and overhead**
 
@@ -165,7 +165,7 @@ Older names stay where they are baked into a digest, a frozen fixture, a recorde
 | "batch verifier" (B-Ligero's was another thing) | the verifier |
 | "GPU workers" | workers |
 | "netlist"; C-Flock's `verity/flock-netlist/…` tags and domains and the `flock-netlist/v1` file format of its older statements (`netlist-vectors.patch`) | a private circuit, or the circuit's description |
-| "trusted text", in the `layers` reasons of `lean-audit.json` and the module docs of the `Protocol.lean` files | spec |
+| "trusted text", in the `layers` reasons of `lean-audit.json` | spec |
 | "horizon" and "accounting period" for the stretch of time a bound is about; the Lean's `*Horizon*` and `*Period*` names (`HorizonSampling`, `RateHorizon`, `ComposePeriod`, `CircuitWorkPeriod`), PoUB's ledger's `horizon` field, until they are renamed | monitoring period (`horizon` is its pooled reading) |
 | "block" for a part of the device graph; `datacenter.physical.Block`, `block_of`, `network_sim`'s `--blocks` flag | zone |
 | "block", "thread block" for CUDA's unit of a launch; CUDA's `blockIdx`, `blockDim` | CTA |
