@@ -1,4 +1,4 @@
-"""The coverage table (data/cover/): the evidence for MODEL-MIN's coverage premise (CMP-165), that every instruction a card
+"""The coverage table (data/cover/): the evidence for MODEL-MIN's coverage premise, that every instruction a card
 executes is dominated by an envelope op (envelope.toml: MODEL-MIN's `Accel.Op`, its pipes and formats, each device's
 card file, whose numbers `from_card` reads, and the entries MODEL-COVER proposes) at no fewer units of the same resource, one row per opcode (rows.toml) on the H200
 (sm_90) and the RTX PRO 6000 (sm_120).
