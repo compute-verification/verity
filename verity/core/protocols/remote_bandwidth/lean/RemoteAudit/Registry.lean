@@ -91,7 +91,7 @@ def stored? (v : Core.Registration.View) (store : String) : Except String (ByteA
   let node ← node? host.toUTF8
   let blocks := x.bytes / Codec.BLOCK_BYTES
   let some t := v.value? store | throw s!"θ registers no payload for the store {store}"
-  let domain := Flock.hexOf (FrameV3.Domain.make (sha512 (PAYLOAD_DOMAIN ++ frameBytes node)) 0 0 blocks).id
+  let domain := Flock.hexOf (payloadDomain node blocks).id
   if !(t.leaves == blocks && t.words == PAYLOAD_WORDS && t.wordBits == 16 && t.domain == domain
       && t.checkpoint.isNone) then
     throw s!"θ's value {store} is not the store's payload: a leaf a block of {PAYLOAD_WORDS} words in the node's payload domain"

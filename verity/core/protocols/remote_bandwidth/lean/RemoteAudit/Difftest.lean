@@ -362,8 +362,8 @@ def verifyOpeningFn (j : Json) : V Json := do
   if !(binding.size == 32 || binding.size == 64) || owner < -2 || !(root.size == 32 || root.size == 64)
       || path.any fun x => !(x.size == 32 || x.size == 64) then
     throw "not a domain, commitment and opening"
-  let d := FrameV3.Domain.make binding owner (← nat j "start") (← nat j "count")
-  pure (.bool (FrameV3.verifyOpening d root (← nat j "position") (← hex j "value") (← J.str j "schema" "input") path))
+  let d := FV3.Sha512.Domain.make binding owner (← nat j "start") (← nat j "count")
+  pure (.bool (d.verifyOpening root d.count (← nat j "position") (← hex j "value") (← J.str j "schema" "input") path))
 
 def leafReceiptFn (j : Json) : V Json := do
   match leafReceipt (← hex j "leaf") (← nat j "p") (← nat j "positions") with
