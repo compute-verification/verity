@@ -3,7 +3,8 @@ and ledger and the verifier host's status, and refuses (exit 3, the reason in pr
 period, a period of the lane still open, a host pinned elsewhere or busy, and, before any request, a CIRCUIT that isn't COMMIT's
 and a COMMIT off origin/main's first-parent line (or no line to check it on). A host pinned elsewhere on that line is
 told to rerun at its pin; one pinned off it, to repin. Under DRY=1 nothing reaches ssh. The gates are a stub ssh on
-PATH; COMMIT is the head of a throwaway repository whose bare origin's main holds it and its parent."""
+PATH; COMMIT is the head of a throwaway repository whose bare origin's main holds it and its parent. `gate.sh host`
+paces its 60 s sessions at the clone's `audit.SAMPLES` unless PACED is given."""
 from __future__ import annotations
 
 import hashlib
@@ -15,7 +16,10 @@ from pathlib import Path
 
 import pytest
 
+from verity.core.protocols.remote_bandwidth import audit
+
 GATE = Path(__file__).resolve().parents[1] / "gate.sh"
+AUDIT_PY = "verity/core/protocols/remote_bandwidth/audit.py"
 FP = "SHA256:s8UdOpJZGMXJR1DjgmOyTsWpTqQX7GDJq/yQCYhSJhs"
 PUBLIC = bytes(range(80))
 PIN = hashlib.sha512(PUBLIC).hexdigest()
@@ -194,3 +198,31 @@ def test_fire_goes_on_for_a_lease_begun_by_lease_by(tmp_path):
     p, calls = fire(tmp_path, held("2026-10-24T12:45:02Z"), "2026-10-24T13:15Z")
     assert re.search(r"^\S+Z leased$", p.stdout, re.M) and "nothing opened" not in p.stdout, p.stdout
     assert len(calls) == 1 and "gpu-lease status" in calls[0]
+
+
+def dry_host(tmp_path: Path, audit_py: str | None) -> tuple[subprocess.CompletedProcess, str]:
+    """gate.sh host under DRY=1, no PACED, from a clone whose remote audit's audit.py is `audit_py` (None: it has none);
+    its result and the requests it would send."""
+    clone, out = tmp_path / "clone", tmp_path / "out"
+    (clone / AUDIT_PY).parent.mkdir(parents=True)
+    out.mkdir()
+    if audit_py is not None:
+        (clone / AUDIT_PY).write_text(audit_py)
+    env = {**os.environ, "OUT": str(out), "DRY": "1", "PERIOD": "ma-remote-coins-9", "PIN": PIN,
+           "GATE_KEY": str(tmp_path / "key")}
+    env.pop("PACED", None)
+    p = subprocess.run(["bash", str(GATE), "host"], cwd=clone, env=env, capture_output=True, text=True)
+    return p, (out / "gate.requests").read_text()
+
+
+def test_the_host_run_paces_the_stated_window_at_audit_samples(tmp_path):
+    p, requests = dry_host(tmp_path, Path(audit.__file__).read_text())
+    assert p.returncode == 0, p.stdout + p.stderr
+    s = audit.SAMPLES
+    assert f" --paced 1:60000:{s}:2 1:60000:{s}:2 1:1000:2773:7 1:1000:2773:7 --pace-pass-ms " in requests, requests
+
+
+def test_the_host_run_refuses_a_clone_without_audit_samples(tmp_path):
+    p, requests = dry_host(tmp_path, None)
+    assert p.returncode == 3 and f"no SAMPLES = N line in {AUDIT_PY}" in p.stdout, p.stdout + p.stderr
+    assert requests == ""

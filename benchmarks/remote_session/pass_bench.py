@@ -20,6 +20,9 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
+sys.path.insert(0, str(HERE.parents[1]))
+
+from verity.core.protocols.remote_bandwidth.audit import SAMPLES  # noqa: E402
 
 import device  # noqa: E402
 from device import BLOCK, PER_LEAF, DeviceStore, Lib, percentiles, rb, skr  # noqa: E402
@@ -46,7 +49,7 @@ def main() -> int:
     ap.add_argument("--kept-from", type=int, default=6)
     ap.add_argument("--passes", type=int, default=30)
     ap.add_argument("--open-passes", type=int, default=300)
-    ap.add_argument("--openings", type=int, default=33273)
+    ap.add_argument("--openings", type=int, default=SAMPLES)
     ap.add_argument("--contend", default="0:0:5,-10:0:5,-10:0:0.5,-10:0:5:nogc,-10:0:0.5:nogc",
                     help="passes run while a window opens: pass stream priority:open stream priority:GIL switch ms[:nogc]")
     a = ap.parse_args()
