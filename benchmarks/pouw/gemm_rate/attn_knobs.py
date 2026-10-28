@@ -22,7 +22,8 @@ step's tokens at their slots. Every arm is one layer's flash_attn_varlen_func-eq
 - `so:NS`, per --fa3-so NS=PATH: `served` and `contig` through a rebuilt FA3 extension's `torch.ops.NS.fwd` (fa3_tile.sh).
 
 Each arm is checked before it's timed: out and lse equal to `served`'s bytes (else the max abs difference and the most
-bf16 ulps apart), equal on a rerun, and equal with another sequence ahead of the step's in the batch. Arms are graphed
+bf16 ulps apart), equal on a rerun, and equal with another sequence ahead of the step's in the batch. A paged arm is also
+checked against the wheel's served call on CONTEXTS' batches (prior context, decode rows, short prompts). Arms are graphed
 (attn_rate.py's `graphed`), and `served-eager` launches `served` from Python as the engine does. Rounds interleave
 every arm, each window --window-ms long after --lead-ms of calls; a window's MACs (attn_rate.py's useful causal ones) a
 SM clock against bf16's 2,048, theta at 1,830 and 1,980 MHz and the SM clock come from torch_rate.py's stamps.
@@ -200,6 +201,41 @@ class Guard:
         return [k for k, x in self.t.items() if not torch.equal(x, self.ref[k])]
 
 
+#: (query rows, keys) a sequence of the paged calls `contexts` checks: chunks after prior context, decode rows beside a
+#: prefill, and prompts short enough for few query tiles.
+CONTEXTS = {"prior": ([1024, 1024, 1024, 1024], [1536, 2024, 1040, 1025]),
+            "decode": ([1024, 1, 1, 1, 7], [1024, 900, 2048, 17, 300]),
+            "short": ([3, 50, 129], [3, 50, 129])}
+
+
+def contexts(arms: Arms, arm: str, m: dict, seed: int) -> dict:
+    """arm's paged call against the wheel's served call on CONTEXTS' batches, each into its own poisoned output."""
+    if arm.startswith("so:"):
+        ns, _, form = arm[3:].partition(":")
+        if form:
+            return {}
+        op = arms.ops[ns]
+    elif arm in ("served", "served-eager", "splits0", "sched", "kattn", "page128"):
+        op = arms.ops["wheel"]
+    else:
+        return {}
+    out = {}
+    for name, (qn, kn) in CONTEXTS.items():
+        full = Step(m, kn, seed)
+        off = [sum(kn[:i]) for i in range(len(kn))]
+        rows = torch.cat([torch.arange(o + k - q, o + k) for o, q, k in zip(off, qn, kn)]).cuda()
+        q = full.q[rows]
+        cu = i32([0] + [sum(qn[:i + 1]) for i in range(len(qn))])
+        kc, vc, bt = full.caches["served"]
+        got = []
+        for f in (arms.ops["wheel"], op):
+            o = poisoned(full)[: len(rows)]
+            got.append(snap(fwd(f, q, kc, vc, o, cu, None, full.used, max(qn), max(kn), bt, full.scale, None, 1)[:2]))
+        torch.cuda.synchronize()
+        out[name] = compare(got[1], got[0])
+    return out
+
+
 def batched(m: dict, s: Step, seed: int) -> Step:
     """s's step with one more sequence (half its length) ahead of its own, the same q, k, v rows for s's sequences."""
     x = max(BLOCK, s.max // 2)
@@ -256,6 +292,9 @@ def main() -> None:
 
     emit({"kind": "device", "uuid": nv.uuid, "name": torch.cuda.get_device_name(0), "sms": st.nsm, "torch": torch.__version__,
           "cuda": torch.version.cuda, "arms": names, "sos": sos, **nv.sample()})
+    for a in names:
+        if got := contexts(arms, a, m, args.seed + 200):
+            emit({"kind": "contexts", "arm": a, **got})
     for pi, prompt in enumerate(args.prompt or PROMPTS):
         lens = ar.parse_prompt(prompt)
         arms.sched_cache.clear()
