@@ -22,10 +22,12 @@
 #     CERTIFIER_FRONT runs within CERTIFIER_FRONT_TIMEOUT (default 20m), and a flag it passes to `certifier_piece.py front`
 #     that this tree's front doesn't take, or a front whose endpoint isn't on the warden's id form (SERVE_ARGS without
 #     `--protocol ids`), is refused before the lease. The
-#     lease ends once every closed window is sealed. Each request's
-#     send, first-token and done times (the load's timings file, `serve_load.py`'s docstring) go to $OUT/timings/; each
-#     committed step's end is $OUT/serve/step_trace.jsonl's t_end, on the clock of the timings' start_unix.
-#  3. sampled proofs, on the window `served_verdicts.py window` picks (the most requests, none carried across windows): every
+#     lease ends once every closed window is sealed. What names a window's requests (the serve dir's windows.jsonl,
+#     seals.jsonl and requests.jsonl, the load's records, timings file and log) stays in the serve dir on the node; what
+#     leaves it is their aggregate ($OUT/serve/overhead.json) and verdict lines that count no window's requests.
+#  3. sampled proofs, on the window `served_verdicts.py window` picks (the most requests, none carried across windows; its
+#     WINDOW line gives its engine steps and whether its requests filled the SLOTS slots, and CLASSES the window circuit's
+#     classes beside the certifier's scan class, CERTIFIER_SCAN, default W63, the one the gate serves): every
 #     closed window's advice under the prove path's registered compiler and the weights registration (`--weights-of-record`),
 #     then this window's request Programs (`tools/advice_compile.py`); V3b's window circuit (`prove_path.py window-circuit
 #     --pins` the registration, and PIN's NAME=ROOT if set), its registered and free input bits at those
@@ -37,7 +39,8 @@
 #     firewall, and the Lean verifier's verdict. Those proof blocks are the sealed window's step units (PP_PARTITION, default
 #     layer 0's SiluMul_v2 at step 1, or at step 0 with MAX_TOKENS 1, whose window has no step 1), not the window circuit's.
 #  4. PoUW (H1 credit), the bandwidth audit, PoUS and the network certifier: `served_verdicts.py pieces` runs each one's piece
-#     where POUW_CMD, BANDWIDTH_CMD, POUS_CMD or CERTIFIER_CMD names it, one at a time, each within <COMPONENT>_TIMEOUT
+#     where POUW_CMD, BANDWIDTH_CMD, POUS_CMD or CERTIFIER_CMD names it, one at a time (the certifier's alone, the longest,
+#     from the moment the window is picked, beside step 3, its lines said after the others'), each within <COMPONENT>_TIMEOUT
 #     (else PIECE_TIMEOUT, default 60m), else names it MISSING with the command it lacks and its owner. No verdict is made
 #     for a piece that didn't run or refused to; one that ran and wrote no answer errs. A piece that needs a GPU takes its
 #     own `gpu-lease`, the serve's being over. POUS_CMD defaults to 'bash benchmarks/pous/served_piece.sh "$@"' where the
@@ -221,21 +224,21 @@ serve() {  # under the lease: the endpoint, the requests, every closed window se
     --max-num-batched-tokens "$T" --window-steps "$WINDOW_STEPS" "${h1[@]}" \
     --required-manifest "$ROW/manifest.json" --hidden-so "$HIDDEN_SO" --norm-tap-so "$NORM_TAP_SO" --tap-cap-mb 2048 \
     --admit release-order --window-requests "$SLOTS" --max-model-len "$MAX_MODEL_LEN" --window-gb 32 \
-    --disk-floor-gb "$DISK_FLOOR_GB" --seal-hold-gb 32 --seal-warm-gb 0 --copy-records-to "$OUT/serve" ${SERVE_ARGS:-} \
-    > "$OUT/serve.log" 2>&1 &
+    --disk-floor-gb "$DISK_FLOOR_GB" --seal-hold-gb 32 --seal-warm-gb 0 ${SERVE_ARGS:-} \
+    > "$D/serve.log" 2>&1 &
   local srv=$! up=0 c=0 s=0 rc=0 release
   trap 'kill -TERM "$srv" 2>/dev/null; wait "$srv"; exit 143' TERM INT
   for _ in $(seq 1 900); do
-    grep -q "SERVE-OPENAI listening" "$OUT/serve.log" && { up=1; break; }
+    grep -q "SERVE-OPENAI listening" "$D/serve.log" && { up=1; break; }
     kill -0 "$srv" 2>/dev/null || break
     sleep 2
   done
   if [ "$up" != 1 ]; then
-    tail -40 "$OUT/serve.log"
-    say "SERVE: not listening: $(grep -m1 -E 'UsageError|Error|refus' "$OUT/serve.log" | cut -c1-400)"
+    tail -40 "$D/serve.log"
+    say "SERVE: not listening: $(grep -m1 -E 'UsageError|Error|refus' "$D/serve.log" | cut -c1-400)"
     kill -TERM "$srv" 2>/dev/null; wait "$srv"; return 10
   fi
-  say "SERVE $(grep -m1 'SERVE-OPENAI listening' "$OUT/serve.log" | cut -c1-300)"
+  say "SERVE $(grep -m1 'SERVE-OPENAI listening' "$D/serve.log" | cut -c1-300)"
   weights
   local period=0
   if [ -n "${H1_GATE:-}" ] && [ -n "${H1_CIRCUITS:-}" ]; then  # before the first window reserves, at its first engine step
@@ -263,7 +266,6 @@ serve() {  # under the lease: the endpoint, the requests, every closed window se
       --release "$release" --seed "$SEED" --out "$D/load.jsonl" > "$D/load.log" 2>&1
     rc=$?
     say "REQUESTS (exit $rc, release run $release): $(tail -1 "$D/load.log" | sed -E 's/, prompts .*//' | cut -c1-300)"
-    mkdir -p "$OUT/timings" && cp "$D/load.timings.json" "$OUT/timings/" || say "TIMINGS: no $D/load.timings.json"
   fi
   c=$(count "$D/windows.jsonl"); s=$(count "$D/seals.jsonl")
   if [ "$LOAD" != front ] || [ "$rc" = 0 ]; then  # a front that failed sent the run's only requests, so none will close
@@ -422,13 +424,13 @@ for s in seals:
     good = good and v.get("commit_scheme") == c.get("commit_scheme") == store == "rows-sha512" and len(rr) == 128
     ok &= good
     print(f"WINDOW w{k}: commit_scheme {v.get('commit_scheme')}, committer {c.get('committer')}, run root {rr[:16]}… "
-          f"({len(rr) // 2} bytes), {len(s.get('requests') or [])} requests; bundle {opened}: {'PASS' if good else 'FAIL'}")
+          f"({len(rr) // 2} bytes); bundle {opened}: {'PASS' if good else 'FAIL'}")
 print(f"SERVED-SEAL VERDICT: {'PASS' if ok else 'FAIL'} ({len(seals)} sealed window(s), scheme {serve.get('scheme')}, "
       f"precision {serve.get('precision')})")
 sys.exit(0 if ok else 1)
 EOF
 [ "${PIPESTATUS[0]}" = 0 ] || stop seal 11
-for f in serve.json windows.jsonl seals.jsonl requests.jsonl load.jsonl; do cp "$D/$f" "$OUT/serve/" 2>/dev/null; done
+for f in serve.json period.json; do cp "$D/$f" "$OUT/serve/" 2>/dev/null; done
 [ -d "$D/h1" ] && (cd "$D" && find h1 -name pouw-h1-calls.json -exec cp --parents {} "$OUT/serve/" \;)
 # the serve dir's step trace and the load's records stay on the node; what the stock control's table reads is their aggregate
 "$PY" "$TREE/benchmarks/one_stage/served_overhead.py" metrics "$D" > "$OUT/serve/overhead.json" 2> "$D/overhead.err" \
@@ -439,6 +441,13 @@ PICK=$("$PY" benchmarks/one_stage/served_verdicts.py window "$D" --slots "$SLOTS
 [ -n "$PICK" ] || { say "WINDOW refused: $(cut -c1-600 "$OUT/window.err")"; stop window 12; }
 K=$(echo "$PICK" | "$PY" -c 'import json, sys; print(json.load(sys.stdin)["window"])')
 say "WINDOW $PICK"
+say "CLASSES: the window circuit's ${CLASSES}; the certifier's scan ${CERTIFIER_SCAN:-W63}, the one class the gate serves"
+CERT=
+if [ -n "${CERTIFIER_CMD:-}" ]; then  # the certifier's chain is the longest piece, so it starts once the window is picked
+  "$PY" benchmarks/one_stage/served_verdicts.py pieces --serve-run "$D" --window "$K" --out "$OUT/pieces" --only certifier \
+    > "$OUT/pieces-certifier.txt" 2>&1 &
+  CERT=$!
+fi
 cd "$TREE/integrations/vllm" || exit 9
 CA=$(cd "$TREE" && "$PY" benchmarks/prove_path/prove_path.py compiler --serve-run "$D" --cap-bits "$CAP" \
   | "$PY" -c "import json, sys; c = json.load(sys.stdin)['inner']; print('--compiler-name', c['name'], '--compiler-digest', c['digest'])")
@@ -448,17 +457,17 @@ WA=()
 [ -f "$WREG" ] && WA=(--weights-of-record "$WREG")
 for k in $("$PY" -c "import json,sys; [print(json.loads(l)['window']) for l in open(sys.argv[1]) if l.strip()]" "$D/windows.jsonl"); do
   # shellcheck disable=SC2086
-  vv advice "$D" --window "$k" --cap "$CAP" $CA "${WA[@]}" --out "$D/advice/.w$k" >> "$OUT/advice.log" 2>&1
+  vv advice "$D" --window "$k" --cap "$CAP" $CA "${WA[@]}" --out "$D/advice/.w$k" >> "$D/advice.log" 2>&1
   [ -d "$D/advice/.w$k/w$k" ] && mv "$D/advice/.w$k/w$k" "$D/advice/w$k"
   [ "$k" = "$K" ] && break
 done
-[ -f "$D/advice/w$K/registration.json" ] || { tail -20 "$OUT/advice.log"; say "ADVICE w$K: none written"; stop advice 14; }
+[ -f "$D/advice/w$K/registration.json" ] || { tail -20 "$D/advice.log"; say "ADVICE w$K: none written"; stop advice 14; }
 cp "$D/advice/w$K/registration.json" "$OUT/registration-w$K.json"
-"$PY" tools/advice_compile.py "$D" --window "$K" > "$OUT/compile_w$K.log" 2>&1
+"$PY" tools/advice_compile.py "$D" --window "$K" > "$D/compile_w$K.log" 2>&1
 rc=$?
 say "ADVICE w$K: $("$PY" -c 'import json, sys; w = json.load(open(sys.argv[1]))["windows"][sys.argv[2]]; print("root", w["root"][:16] + "…", "bits", w["bits"])' \
   "$D/advice/.w$K/windows.json" "$K" 2>&1 | cut -c1-200); $("$PY" -c 'import json, sys; print(len(json.load(open(sys.argv[1])).get("registered_roots") or {}))' \
-  "$D/advice/w$K/registration.json" 2>&1 | cut -c1-200) weight roots recorded (${WA[*]:-$NO_WEIGHTS}); compile (advice_compile.py) exit $rc: $(tail -1 "$OUT/compile_w$K.log" | cut -c1-300)"
+  "$D/advice/w$K/registration.json" 2>&1 | cut -c1-200) weight roots recorded (${WA[*]:-$NO_WEIGHTS}); compile (advice_compile.py) exit $rc$([ "$rc" = 0 ] || echo ": $(tail -1 "$D/compile_w$K.log" | cut -c1-300)")"
 [ "$rc" = 0 ] || stop compile 15
 cd "$TREE" || exit 9
 wc_ok=0
@@ -474,7 +483,9 @@ say "SAMPLED-PROOFS (run.sh exit $rc): $(grep -m1 '^RECORDS' "$OUT/sampled-proof
 
 # 4. the other subprotocols, each its piece's verdict or MISSING with the command it lacks
 TPY=$TREE/.venv/bin/python
-"$TPY" benchmarks/one_stage/served_verdicts.py pieces --serve-run "$D" --window "$K" --out "$OUT/pieces" 2>&1 | tee -a "$OUT/verdicts.txt"
+"$TPY" benchmarks/one_stage/served_verdicts.py pieces --serve-run "$D" --window "$K" --out "$OUT/pieces" ${CERT:+--skip certifier} \
+  2>&1 | tee -a "$OUT/verdicts.txt"
+[ -z "$CERT" ] || { wait "$CERT"; tee -a "$OUT/verdicts.txt" < "$OUT/pieces-certifier.txt"; }
 
 # 5. one record of every verdict
 "$TPY" benchmarks/one_stage/served_verdicts.py record --serve-run "$D" --window "$K" --sampled-proofs "$OUT/sampled-proofs/served" \

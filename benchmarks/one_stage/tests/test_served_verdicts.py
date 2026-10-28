@@ -17,6 +17,7 @@ record, on an injected clock and a stand-in endpoint."""
 from __future__ import annotations
 
 import argparse
+import contextlib
 import importlib.util
 import io
 import itertools
@@ -63,6 +64,27 @@ def test_the_window_is_the_fullest_one_with_no_request_carried(tmp_path):
     got = S.pick(_serve_dir(tmp_path), slots=4)
     assert (got["window"], got["requests"], got["users"], got["steps"]) == (1, 3, ["b", "c", "d"], [5, 11])
     assert set(got["refused"]) == {"2", "3"} and "carried" in got["refused"]["3"]
+
+
+def test_the_published_window_counts_none_of_its_requests(tmp_path):
+    """What the run says of its window: its engine steps and whether its requests filled the class's slots, and the
+    refused windows by number, with no count, list or user of any window's requests."""
+    got = S.pick(_serve_dir(tmp_path), slots=4)
+    assert S.public_pick(got, 4) == {"window": 1, "steps": [5, 11], "engine_steps": 6, "slots": 4, "every_slot": False,
+                                     "refused": [2, 3]}
+    assert S.public_pick(got, 3)["every_slot"] is True
+    out = io.StringIO()
+    with contextlib.redirect_stdout(out):
+        assert S.main(["window", str(tmp_path), "--slots", "4"]) == 0
+    assert json.loads(out.getvalue()) == S.public_pick(got, 4)
+
+
+def test_one_piece_runs_alone_or_all_but_it(tmp_path, capsys):
+    """``only`` runs the named pieces alone and ``skip`` all but them, so the certifier's can run beside the others."""
+    assert list(S.pieces(tmp_path, 1, tmp_path / "pieces", env={}, only=["certifier"])) == ["certifier"]
+    assert "the network certifier" in capsys.readouterr().out
+    assert list(S.pieces(tmp_path, 1, tmp_path / "pieces", env={}, skip=["certifier"])) == ["pouw", "bandwidth", "pous"]
+    assert "the network certifier" not in capsys.readouterr().out
 
 
 def test_a_window_past_the_slots_or_named_and_refused_is_refused(tmp_path):

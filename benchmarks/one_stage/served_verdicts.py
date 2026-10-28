@@ -7,7 +7,7 @@ sampled proofs, and the one record of every verdict (the block record).
                                  [--model M]
     served_verdicts.py period close SERVE_DIR [--gate CMD]
     served_verdicts.py program OUT [--model M] [--rows T] [--steps S] [--like SERVE_DIR]
-    served_verdicts.py pieces --serve-run DIR --window K --out DIR [--node NAME]
+    served_verdicts.py pieces --serve-run DIR --window K --out DIR [--node NAME] [--only COMPONENT]... [--skip COMPONENT]...
     served_verdicts.py pouw SERVE_DIR WINDOW DIR [--gate CMD] [--key-sha512 HEX] [--main FILE] [--python PY]
                                 [--statements FILE] [--live-evidence FILE]
     served_verdicts.py record --serve-run DIR --window K --sampled-proofs DIR --pieces DIR --out DIR [--node NAME]
@@ -15,8 +15,10 @@ sampled proofs, and the one record of every verdict (the block record).
 ``window``: the sealed window to audit, from a serve-openai run's ``seals.jsonl``, ``windows.jsonl`` and ``requests.jsonl``
 (`pick`): sealed without error, its Commit passed, each of its requests checked and in no other window (V3b's window
 circuit refuses a request carried across windows), at most ``--slots`` of them (its class's); the most requests, then the
-earliest. ``--window K`` holds K to the same rules. Prints ``{window, requests, users, steps, refused}``, ``steps`` the
-window's ``[lo, hi)`` in the run's committed engine steps.
+earliest. ``--window K`` holds K to the same rules. Prints what the run publishes of it (`public_pick`):
+``{window, steps, engine_steps, slots, every_slot, refused}``, ``steps`` the window's ``[lo, hi)`` in the run's committed
+engine steps, ``every_slot`` whether its requests filled the class's slots, ``refused`` the windows refused, by number. Its
+requests' count, list and users stay on the node.
 
 ``pieces``: each subprotocol after sampled proofs (`PIECES`: PoUW, the bandwidth audit, PoUS, the network certifier) runs
 its piece where one is named (``POUW_CMD``, ``BANDWIDTH_CMD``, ``POUS_CMD``, ``CERTIFIER_CMD``: a command run in the tree as
@@ -28,7 +30,7 @@ leaves it missing; no verdict is made for a piece that didn't run. A development
 (`DEVELOPMENT`) in place of a core answer: its verdict is printed as a development run's, and it credits nothing. A piece
 that audited another server than the node it ran on says so in ``DIR/served.json`` (`SERVED`: ``{server, source}``,
 ``source`` ``fixture`` for an answer brought from a recorded run); one that names no server there leaves its answer about
-the node it ran on.
+the node it ran on. ``--only`` and ``--skip`` (a component each, repeatable) run those pieces alone, or all but those.
 
 ``gate``: before serving with H1's coins from infra's gate (``--gate``, default ``H1_GATE``): refused while the key's lane
 (``--lane``) has a period open, which a reserve would join; prints one ``GATE`` line with the gate's latest pin and,
@@ -213,18 +215,29 @@ def pick(serve_dir: Path, slots: int, want: int | None = None) -> dict[str, Any]
             "refused": {str(j): why for j, why in refused.items()}}
 
 
+def public_pick(got: Mapping[str, Any], slots: int) -> dict[str, Any]:
+    """What the run publishes of `pick`'s window: its engine steps and whether its requests filled the class's ``slots``,
+    with no count, list or user of them, and the windows refused by number alone."""
+    lo, hi = got["steps"]
+    return {"window": got["window"], "steps": [lo, hi], "engine_steps": hi - lo, "slots": slots,
+            "every_slot": got["requests"] == slots, "refused": sorted(int(j) for j in got["refused"])}
+
+
 def _unset(comp: str, what: str) -> str:
     return f"{comp.upper()}_CMD unset: {what}"
 
 
 def pieces(serve_dir: Path, window: int, out: Path, env: Mapping[str, str] | None = None,
-           node: str | None = None) -> dict[str, dict[str, Any]]:
+           node: str | None = None, only: Sequence[str] | None = None, skip: Sequence[str] = ()) -> dict[str, dict[str, Any]]:
     """Each piece of `PIECES` run where ``<COMPONENT>_CMD`` names it, under `timeout` at its limit, else named missing;
-    one line each on stdout, its verdict the one `piece` gives the record."""
+    one line each on stdout, its verdict the one `piece` gives the record. ``only`` and ``skip`` name components: those
+    alone, or all but those, so one piece can run beside the others (`served_verdicts.sh` starts the certifier's early)."""
     env = dict(os.environ if env is None else env)
     node = node or socket.gethostname()
     got: dict[str, dict[str, Any]] = {}
     for key, (name, comp, owner, what) in PIECES.items():
+        if (only is not None and comp not in only) or comp in skip:
+            continue
         cmd = env.get(f"{comp.upper()}_CMD")
         if not cmd:
             got[comp] = {"verdict": "missing", "why": _unset(comp, what)}
@@ -755,6 +768,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         q.add_argument("--serve-run", type=Path, required=True)
         q.add_argument("--window", type=int, required=True)
     p.add_argument("--out", type=Path, required=True)
+    p.add_argument("--only", action="append", choices=[v[1] for v in PIECES.values()])
+    p.add_argument("--skip", action="append", default=[], choices=[v[1] for v in PIECES.values()])
     r.add_argument("--sampled-proofs", type=Path, required=True)
     r.add_argument("--pieces", type=Path, required=True)
     r.add_argument("--out", type=Path, required=True)
@@ -763,7 +778,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     a = ap.parse_args(argv)
     if a.cmd == "window":
         try:
-            print(json.dumps(pick(a.serve_dir, a.slots, a.window), sort_keys=True))
+            print(json.dumps(public_pick(pick(a.serve_dir, a.slots, a.window), a.slots), sort_keys=True))
         except ValueError as e:
             print(f"served_verdicts.py window: {e}", file=sys.stderr)
             return 1
@@ -815,7 +830,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         return 0
     if a.cmd == "pieces":
         a.out.mkdir(parents=True, exist_ok=True)
-        got = pieces(a.serve_run, a.window, a.out, node=a.node)
+        got = pieces(a.serve_run, a.window, a.out, node=a.node, only=a.only, skip=a.skip)
         return 0 if all(g["verdict"] in ("accept", "missing") for g in got.values()) else 1
     steps = pick(a.serve_run, 1 << 30, a.window)["steps"]
     run = os.environ.get("RESEARCH_RUN_ID")
