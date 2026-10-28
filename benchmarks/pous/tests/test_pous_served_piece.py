@@ -337,12 +337,20 @@ def registered(served, monkeypatch) -> Served:
 def _bandwidth(tmp_path, **kw):
     """`served_piece.run`'s bandwidth session: the party in the gate's shape (`p2_party --listen` from the tree with no
     site packages), its registration the challenger's record in ``parties/pous``, which the in-process challenger keeps,
-    and a short session."""
+    and a short session, which a toy party's flags hold it to."""
     party = (f"cd {ROOT} && exec {sys.executable} -S -E -m verity.core.protocols.remote_bandwidth.p2_party "
-             f"--device {tmp_path / 'parties' / 'bw'} --listen 127.0.0.1:0 --pous-record {tmp_path / 'parties' / 'pous'}")
+             f"--device {tmp_path / 'parties' / 'bw'} --listen 127.0.0.1:0 --pous-record {tmp_path / 'parties' / 'pous'} "
+             f"--windows 2 --passes 2 --samples 4 --window-ns 1000000 --deadline-ns 1000000")
     return {"keep": tmp_path / "parties" / "pous", "bw_party": party, "bw_host": "127.0.0.1",
             "bw_request": SP.HB.request(NODE.encode(), windows=2, passes=2, samples=4, window_s=0.001,
                                         deadline_s=0.001)} | kw
+
+
+def test_the_held_sessions_request_is_the_auditors_session():
+    """The held session requests, by default, the session the auditor's party holds every request to
+    (`p2_party.SESSION`), so V3's served run is never refused for its parameters."""
+    assert SP.HB.request(NODE.encode()) == SP.HB.p2_party.request_of(NODE.encode(), **SP.HB.p2_party.SESSION)
+    assert (SP.HB.WINDOWS, SP.HB.PASSES, SP.HB.SAMPLES, SP.HB.WINDOW_S, SP.HB.DEADLINE_S) == (6, 4, 1024, 20.0, 1.0)
 
 
 def _jsonl(path: Path) -> list:

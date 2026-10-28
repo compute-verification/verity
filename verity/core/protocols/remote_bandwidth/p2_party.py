@@ -81,10 +81,11 @@ from .receipts import Plan
 MODULE = "verity.core.protocols.remote_bandwidth.p2_party"
 PROTOCOL = "verity/remote-bandwidth/p2/v0"
 REQUEST_KEYS = ("deadline_ns", "node", "passes", "samples", "window_ns", "windows")
-SESSION = {"deadline_ns": 10**9, "passes": 1, "samples": 1024, "window_ns": 10**9, "windows": 2}
+SESSION = {"deadline_ns": 10**9, "passes": 4, "samples": 1024, "window_ns": 20 * 10**9, "windows": 6}
 """The auditor's session parameters, which a request must carry as they are (`params_of`): the served bandwidth piece's
-(`benchmarks/one_stage/served_bandwidth.sh`), two windows of at least 1 s, one pass each, 1,024 openings a window and
-an allowance of 1 s."""
+(`benchmarks/pous/held_bandwidth.py`'s defaults, over the store the PoUS piece holds), six windows of at least 20 s,
+four passes each, 1,024 openings a window and an allowance of 1 s. At δ = 2^-40 an accepted session's ε is
+δ + 6,144/2^64 (`EPS_TERMS`), about 9.1e-13."""
 REFUSED = {"refused": True}
 DISAGREEMENT = "disagreement"
 #: The draws a thread of the Lean checks at once (`P2Session.checkOpeningsChunked`).

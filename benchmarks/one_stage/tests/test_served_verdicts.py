@@ -123,7 +123,7 @@ def test_a_piece_runs_within_its_limit_and_one_out_of_time_or_refused_says_so(tm
     env = {"PATH": f"{bin_}:{os.defpath}", "PIECE_TIMEOUT": "7m", "BANDWIDTH_TIMEOUT": "0", "BANDWIDTH_CMD": "true",
            "POUS_CMD": 'echo "PoUS REFUSED: the card has a compute process" > "$3/refused.txt"; exit 3'}
     got = S.pieces(tmp_path, 1, tmp_path / "pieces", env=env, node="n")
-    assert (tmp_path / "limits").read_text().split() == ["0", "7m"]
+    assert (tmp_path / "limits").read_text().split() == ["7m", "0"]
     assert got["bandwidth"] == {"verdict": "error", "rc": 124,
                                 "reason": "its piece ran (exit 124, out of time at 0) and wrote no answer; "
                                           "its log is bandwidth/piece.log"}

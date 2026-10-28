@@ -22,8 +22,8 @@ form under a hiding commitment to the case's digest (one ``hm96-sha512/row/v2`` 
 `verity.ml.commitments.advice`, bound to the window), its profile without the registration's digest.
 
 **The session's length** is the request's: ``windows`` of ``window_s`` each (`WINDOWS`, `WINDOW_S`: two minutes), each of
-``passes`` passes (`PASSES`) and ``samples`` openings (`SAMPLES`). At δ = 2^-40 an accepted session's ε is δ + Σ
-draws/2^64, and the pooled bound leaves at most 0.45% of its receipts wrong at those defaults over a store of 2^17
+``passes`` passes (`PASSES`) and ``samples`` openings (`SAMPLES`), by default the auditor's (`p2_party.SESSION`, which
+its party holds every request to). At δ = 2^-40 an accepted session's ε is δ + Σ draws/2^64, and the pooled bound leaves at most 0.45% of its receipts wrong at those defaults over a store of 2^17
 units (6 windows of 4 passes, 1,024 draws each; `pooled.bound`), so q_bytes is at least 99.5% of the reads.
 """
 from __future__ import annotations
@@ -52,7 +52,8 @@ from verity.ml.commitments.identity import canonical_json_bytes
 
 UNIT, BLOCK, DIGEST = p2.UNIT_BLOCKS, p2.BLOCK_BYTES, receipts.DIGEST_BYTES
 SALT, PER_LEAF = receipts.SALT_BYTES, receipts.PER_LEAF
-WINDOWS, PASSES, SAMPLES, WINDOW_S, DEADLINE_S = 6, 4, 1024, 20.0, 1.0
+WINDOWS, PASSES, SAMPLES = (p2_party.SESSION[k] for k in ("windows", "passes", "samples"))
+WINDOW_S, DEADLINE_S = p2_party.SESSION["window_ns"] / 1e9, p2_party.SESSION["deadline_ns"] / 1e9
 #: an H200's specified HBM read rate, bytes a second: what γ is against
 R_BYTES_PER_S = 4_800_000_000_000
 BINDING_TAG = b"verity/remote-bandwidth/served-window/v1"

@@ -108,7 +108,7 @@ def test_the_pous_piece_runs_first_and_the_bandwidth_piece_collects_what_its_ses
     env = dict(os.environ) | {"POUS_CMD": f'mkdir -p "$3/../bandwidth" && cp {held}/*.json "$3/../bandwidth/"',
                               "BANDWIDTH_CMD": COLLECT.replace("python", sys.executable, 1)}
     got = S.pieces(serve, 0, tmp_path / "pieces", env=env)
-    assert got["bandwidth"] == {"verdict": "accept", "reason": None, "rc": 0}
+    assert got["bandwidth"] == {"verdict": "accept", "rc": 0}
     log = (tmp_path / "pieces" / "bandwidth" / "piece.log").read_text()
     assert log.startswith("BANDWIDTH ") and json.loads(log.split(" ", 1)[1])["public"] == HELD["public"]
     row = S.piece_row("bandwidth", tmp_path / "pieces")
@@ -122,7 +122,7 @@ def test_collect_names_the_audit_missing_where_the_pous_piece_wrote_nothing(tmp_
     assert capsys.readouterr().out.startswith("MISSING the bandwidth audit: the PoUS piece wrote no bandwidth answer")
     assert not (out / "answer.json").exists()
     row = S.piece_row("bandwidth", tmp_path / "pieces")
-    assert row["verdict"] == "missing" and row["issue"] == S.PIECES["bandwidth"][3]
+    assert row["verdict"] == "missing" and row["owner"] == S.PIECES["bandwidth"][2]
 
 
 def test_collect_replaces_another_windows_answer_and_errs_on_another_protocols(tmp_path, capsys):
@@ -148,8 +148,8 @@ def test_a_session_with_no_record_is_a_reject_that_says_its_window_was_not_serve
 
 def test_the_served_pieces_request_is_the_auditors_session() -> None:
     """`served_bandwidth.sh` requests, by default, the session the auditor's party holds every session to
-    (`p2_party.SESSION`), as `bandwidth.py session` turns its flags into the request: one off it is refused before any
-    coin."""
+    (`p2_party.SESSION`, the held session's in the PoUS piece), as `bandwidth.py session` turns its flags into the
+    request: one off it is refused before any coin."""
     text = (ROOT / "benchmarks" / "one_stage" / "served_bandwidth.sh").read_text()
     got = dict(re.findall(r"\$\{BW_(WINDOWS|PASSES|SAMPLES|WINDOW_S|DEADLINE_S):-([0-9.]+)\}", text))
     assert {"windows": int(got["WINDOWS"]), "passes": int(got["PASSES"]), "samples": int(got["SAMPLES"]),

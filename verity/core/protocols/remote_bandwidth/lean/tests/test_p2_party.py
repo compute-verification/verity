@@ -238,9 +238,8 @@ def test_the_party_holds_its_sessions_to_the_served_parameters_unless_its_flags_
 
     refused = first(request(store))["answer"]
     assert refused["verdict"] == "refused", refused
-    for k in ("deadline_ns", "passes", "samples", "window_ns"):
+    for k in ("deadline_ns", "passes", "samples", "window_ns", "windows"):
         assert f"the request's {k} is not the auditor's ({TOY[k]}, not {p2_party.SESSION[k]})" in refused["reason"]
-    assert "the request's windows" not in refused["reason"]
     assert "hold" in first(p2_party.request_of(store.registration.node, **p2_party.SESSION))
     assert "hold" in first(request(store), *[x for k, v in TOY.items() for x in ("--" + k.replace("_", "-"), str(v))])
 
