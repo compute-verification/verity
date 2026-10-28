@@ -129,8 +129,7 @@ def test_each_window_draws_its_coins_from_a_gate_session_of_its_own(tmp_path, mo
     families for S rounds, as this peer), round 0 opens it on the window's open root once its port listens, and the
     window's close waits for its end entry, closed and complete. The window's salt, round and draw coins are that
     session's, its record carries the session without its secret, and the verifier's check of the record against the
-    auditor's ledger (`pouw_h1_challenger.session_reason`) passes. The server's Commit commits no linear's y, so no
-    window ties at its z tables and none is gate-passed."""
+    auditor's ledger (`pouw_h1_challenger.session_reason`) passes."""
     srv, auditor = _Server(monkeypatch), _GateAuditor(tmp_path, monkeypatch)
     ports: list[int] = []
     sessions = SH.GateSessions(CC.Gate(GATE, auditor.run), PEER, STEPS, wait=auditor.settle,
