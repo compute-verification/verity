@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import dataclasses
 import hashlib
 import json
 import random
@@ -16,6 +17,8 @@ sys.path.insert(0, str(HERE.parent))
 
 import kv as K  # noqa: E402
 import kv_twin as T  # noqa: E402
+
+from verity.core.protocols.remote_bandwidth import codec as RB  # noqa: E402
 
 SEED = hashlib.sha256(b"verity/word-codec/kv/vectors").digest()
 NAMES = sorted(K.FIELDS)
@@ -133,6 +136,30 @@ def test_masked_round_trip(name, rounds):
         y = K.encode_word(m, 1000 + i, k)
         assert 0 <= y < f.p and K.decode_word(y, 1000 + i, k) == m
         assert (y == K.encode_word(m, 1000 + i, plain)) == (rounds == 1)
+
+
+@pytest.mark.parametrize("name", ["p512", "p1024"])
+@pytest.mark.parametrize("rounds,mask", [(2, False), (3, False), (2, True), (3, True)])
+def test_at_a_registrable_codec_the_key_and_words_are_the_stores(name, rounds, mask):
+    """At p512 and p1024, k ≥ 2, a key is the store codec's and so are its words, under the seed's key and a bound
+    offset; this module's own rounds, which k = 1 and the other fields take, give the same words, and its own
+    derivation the same constants and bound offset."""
+    k = K.key(name, SEED, rounds, mask=mask)
+    assert k.store == RB.key(SEED, RB.Codec(RB.FIELDS[name], rounds, mask))
+    assert (k.c, k.tau, k.mask, k.seed) == (k.store.c, k.store.tau, k.store.mask, SEED)
+    one = K.key(name, SEED, 1, mask=mask)
+    assert one.store is None and (one.c, one.tau, one.mask) == (k.c[:1], k.tau, k.mask)
+    d, block = K.digest(_bound_data()), 3 * K.LAYERS + 17
+    b = K.binding(d, block, k)
+    assert b == RB.binding(d, block, k.store)
+    own, f = dataclasses.replace(k, store=None), k.field
+    rng = random.Random(f"{name}/k{rounds}/{mask}")
+    for i, m in enumerate(_edges(f) + [rng.randrange(f.p)]):
+        for off in (0, b):
+            y = K.encode_word(m, 1000 + i, k, off)
+            assert y == K.encode_word(m, 1000 + i, own, off)
+            assert K.decode_word(y, 1000 + i, k, off) == K.decode_word(y, 1000 + i, own, off) == m
+    assert K.key("p768", SEED, rounds, mask=mask).store is None
 
 
 def test_sigma_is_an_involution_on_the_field():
