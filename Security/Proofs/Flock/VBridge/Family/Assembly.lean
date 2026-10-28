@@ -5,23 +5,23 @@ import Proofs.Flock.VBridge.Family.Encode
 import Proofs.Flock.VBridge.Family.Structure
 
 /-!
-# VBridge G at V*'s family, assembled from the lanes' definitions
+# VBridge G at V*'s family, assembled from its parts' definitions
 
-`assembled` is a `VStarFamily` whose every field the lanes define is their definition:
+`assembled` is a `VStarFamily` whose every field its parts define is their definition:
 
-* `rep₀ := repOf coinFiles` (ha's `repOf` at the history's coins, `Join.lean`), `alpha := alphaOf` (ho);
-* `rows := rowsOf`, `acc := accOf` (ho: the openings read off the layers);
+* `rep₀ := repOf coinFiles` (`repOf` at the history's coins, `Join.lean`), `alpha := alphaOf` (Openings.lean);
+* `rows := rowsOf`, `acc := accOf` (Openings.lean: the openings read off the layers);
 * `Sk := skOf own sel`, `cmt := cmtOf bc`, `wmsg := wmsgOf dec`, `msg := msgOf dec` (hc);
-* `files := filesOf spec st cap lig` (hf).
+* `files := filesOf spec st cap lig` (Files.lean).
 
 `HResL` and `HZeroL` (`Rep.lean`) read the parts' outputs in the layer, as the openings' are (`HUL`);
 `vbridgeRead_of_layers` is `vbridgeRead_of_family` at `HFilesR`: the files are valid once they run (`hFilesR_of`), so
 the runs come first.
 
 `vbridgeRead_of_lanes` is `VBridgeRead` at any family whose fields satisfy the defining equations, its obligations
-discharged by the lanes' theorems; `vbridgeRead_assembled` is `VBridgeRead` at `assembled` and the decoder `decOf`,
-every defining equation by `rfl` and `hmsg` by `msgsAre_assembled`. Their hypotheses are the lanes' named facts, each a
-`Prop` whose docstring names the check or lane that establishes it.
+discharged by their theorems; `vbridgeRead_assembled` is `VBridgeRead` at `assembled` and the decoder `decOf`,
+every defining equation by `rfl` and `hmsg` by `msgsAre_assembled`. Their hypotheses are named facts, each a `Prop`
+whose docstring names the check or lemma that establishes it.
 -/
 
 namespace FlockVBridge.Family
@@ -72,7 +72,7 @@ variable (spec : SessionSpec) (st : Reg → L.Ω → Setup)
     (own : Fin F.stmts.size → Array Flock.Registered.Port) (sel : ℕ → String → ℕ → Prop)
     (bc : (j : Fin F.stmts.size) → Cm → PosK (F.Vs j).c (F.Vs j).hU (F.Vs j).nv → List UInt8)
 
-/-- **`VBridgeRead` at a family whose fields are the lanes' definitions**: `rep₀` is `repOf coinFiles`, `rows` and `acc`
+/-- **`VBridgeRead` at a family whose fields are the parts' definitions**: `rep₀` is `repOf coinFiles`, `rows` and `acc`
 the layers' (`rowsOf`, `accOf`), `files` `filesOf`'s, `Sk`, `cmt`, `wmsg` and `msg` `skOf`'s, `cmtOf`'s, `wmsgOf`'s and
 `msgOf`'s. Each obligation is a lane's theorem: `HStruct` (`hStruct_of`, at struct's `hSomePart`), `HFit` (`hFit_of`,
 `claimsIs_of`), `HShape` (`hShape_of`), `HResL` (`hResL_of`, at struct's `hCover_of` and reg's `hOne_of`,
@@ -121,7 +121,7 @@ theorem vbridgeRead_of_lanes (dec : ℕ → ((j : Fin F.stmts.size) → (F.Vs j)
     (F.hCommits_of own sel bc hSk hcmt hpub) (F.vDecodesRead_of dec hw hm)
     F.vFullRead_of
 
-/-- **The family at the lanes' definitions**: the coins' family (`coinFamily`: `rep₀` `repOf coinFiles`, `rows` and
+/-- **The family at the parts' definitions**: the coins' family (`coinFamily`: `rep₀` `repOf coinFiles`, `rows` and
 `acc` the layers', `alpha` `alphaOf`), with `Sk`, `cmt`, `wmsg` and `msg` hc's at `own`, `sel`, `bc` and the decoder
 `decOf`, then `files` `filesOf` at that `rep`. -/
 noncomputable def assembled : VStarFamily T CT cls regs sch L Reg Cm Reg' Reg₂ :=
@@ -148,7 +148,7 @@ theorem msgsAre_assembled (hread : F.MsgsRead dg N k Rw spec st cap lig own sel)
     rw [wmsgOf, List.getElem?_map, List.getElem?_range hi, Option.map_some]
     exact congrArg some (F.decOf_spec dg N k Rw spec st cap lig own sel hread htys h i)
 
-/-- **VBridge G's read conjunct at the lanes' definitions**: `VBridgeRead` at `skOf`'s commit strings, `cmtOf`'s
+/-- **VBridge G's read conjunct at the parts' definitions**: `VBridgeRead` at `skOf`'s commit strings, `cmtOf`'s
 digests and `wmsgOf`'s and `msgOf`'s messages at the decoder `decOf`, at the family `assembled` (`vbridgeRead_of_lanes`,
 every defining equation by `rfl`, `hmsg` by `msgsAre_assembled`). The hypotheses that read a field `assembled` defines
 (`rep`, `coef`, `ops`, `files`, `Sk`) are read at `assembled`; the others at `F`, whose statements, sessions and

@@ -23,7 +23,7 @@ with.
 * `TableSrc.encodes_of`: `TableSrc.Encodes` at `bytes r := encodeProof (shapeOf …) (proof r)`, from the setup
   (`SetupRealizes`), V*'s shape (`ShapeIs`, and its claims `2 + n`: `ClaimsAre`, from `HFit` and `ExtrasAre` by
   `claimsAre_of`), the shapes of the level-0 cap and the Ligerito openings the proof files carry (`CapShaped`,
-  `LigShaped`), and fewer than `2^48` regions (`RegionsFit`). `hEnc_of` is it at the family; `hdec_filesAt` is ht's
+  `LigShaped`), and fewer than `2^48` regions (`RegionsFit`). `hEnc_of` is it at the family; `hdec_filesAt` is
   `hdec` at the table files.
 -/
 
@@ -433,7 +433,7 @@ theorem encodes_of {ptLocal mPts : ℕ} (hset : SetupRealizes s.st s.S s.sch ptL
     omega
   exact ⟨encodeProof _ (s.proof r), decodeProof_encodeProof _ _ ⟨by rw [hH]; omega, show 1 ≤ s.sch.levels.size - 1 by omega, hfit, hlen⟩⟩
 
-/-- **ht's `hdec`** at the table files: each rep's bytes decode to its proof file at the shape `verifyRep` decodes
+/-- **`hdec`** at the table files: each rep's bytes decode to its proof file at the shape `verifyRep` decodes
 with (Verify.lean:40-41), whenever the files have encodings (`Encodes`). -/
 theorem hdec_filesAt {cls : HClass} (pts : Fin 2 → Fin cls.mPts → FlockLevel3.GF128)
     (hset : SetupRealizes s.st s.S s.sch cls.ptLocal cls.mPts) (henc : s.Encodes) (r : ℕ) :
@@ -455,7 +455,7 @@ section claims
 
 variable {nT nR : ℕ} (T : Fin nT → Type) (CT : Fin nR → Type) {cls : HClass}
 
-/-- **`ClaimsAre` from `verifierRows` accepting rep 0's coins** (ha's `HFit`) and the reps' extra claims being the
+/-- **`ClaimsAre` from `verifierRows` accepting rep 0's coins** (`HFit`) and the reps' extra claims being the
 setup's at the inner transcript's link points (`ExtrasAre`). -/
 theorem TableSrc.claimsAre_of (s : TableSrc) (tr : List (List (SMsg T) × ((k : Fin nR) → CT k)))
     (hset : SetupRealizes s.st s.S s.sch cls.ptLocal cls.mPts) (hxs : s.ExtrasAre T CT cls tr)

@@ -3,7 +3,7 @@ import Mathlib.Data.Fintype.BigOperators
 import Proofs.Flock.Sampled.Statements
 
 /-!
-# F2's statements, proved
+# The sampled audit's statements, proved
 
 * `coverage_holds`: the coverage check routes the slots bijectively onto the draw's order, which is injective, so each
   drawn unit is held by exactly one slot; and the slots, `Σ_b slots(b)` of them, number at least the draw.
@@ -11,11 +11,12 @@ import Proofs.Flock.Sampled.Statements
   other than the committed one (the record's format), so the two openings give a SHA-512 collision: of the two tree
   leaves' inputs, or of the two openings' (`Flock.Registered.opensLeaf_binding`).
 * `slotsSound_holds`: from the two, and the statement's slot check.
-* `composition_holds`: at each draw, F1's soundness bounds the sessions verifying with the statement failing by `ε`; at
-  each outcome the run reaches where it holds, `slotsSound_holds` puts the draw clear of the wrong units or gives a
-  reached slot break, and the outcomes it doesn't reach carry probability 0 (`prob_mono_reaches`). So a draw that hits
-  a wrong unit accepts with probability at most `ε`, and averaging over the draws gives the escape plus `E_ω[ε]`.
-* `zeroKnowledge_holds`: F1's `hides` at the honest audit's reveal list.
+* `composition_holds`: at each draw, the recursion's soundness bounds the sessions verifying with the statement failing
+  by `ε`; at each outcome the run reaches where it holds, `slotsSound_holds` puts the draw clear of the wrong units or
+  gives a reached slot break, and the outcomes it doesn't reach carry probability 0 (`prob_mono_reaches`). So a draw
+  that hits a wrong unit accepts with probability at most `ε`, and averaging over the draws gives the escape plus
+  `E_ω[ε]`.
+* `zeroKnowledge_holds`: the recursion's `hides` at the honest audit's reveal list.
 * `menuComplete_holds`, `menuCompleteAt_holds`, `zeroKnowledgeAt_holds`: the honest prover fills a fitting batching's
   held slots with the trace's values (`fillValues`); so it aborts only where the draw doesn't fit; and at every other
   draw its audit's view is `zeroKnowledge_holds`'s.

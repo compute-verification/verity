@@ -1,6 +1,5 @@
 /-
-The soundness lane's `Model.Arith.Correct` facts (Project store
-`internal/lanes/flock-verifier/20260927T0200Z-handoff-from-flock-soundness-arith-facts.md`), each in the shape of its field,
+The `Model.Arith.Correct` facts, each in the shape of its field,
 for the executable's functions: `F = GF128`, `K = GF256`, and the concrete `pack`, `unpack`, `pinned`, `omega` and `lo`
 below. The instance itself lives in the soundness package.
 -/

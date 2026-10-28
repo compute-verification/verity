@@ -2,7 +2,7 @@ import Mathlib.Data.Fintype.Card
 import Proofs.Flock.Sampled.Statements
 
 /-!
-# F2's statements' hypotheses hold together
+# The sampled audit's statements' hypotheses hold together
 
 One instance for all of them: one padded index, one type, nothing in the values (`Ty₁`, `X₁`), a one-leaf root holding
 the unit's record (`onePort`: its root is the climb of the record's leaf, so the opening holds without computing SHA-512),
@@ -18,7 +18,7 @@ and one session of one slot holding the unit (`batch₁`, its slots routed in se
   under every law; `menu₀_fits`, `menu₀_roomAt` there. `menuComplete_nonvacuous`: `MenuComplete`'s and
   `MenuCompleteAt`'s hypotheses at `menu₀`, given that V* stages it.
 * `composition_nonvacuous`: `Composition`'s hypotheses at that instance, under a one-point law and a session that
-  verifies at once, with an instance of F1's interface (`I₁`) whose break fires at no draw.
+  verifies at once, with an instance of the recursion's interface (`I₁`) whose break fires at no draw.
 * `zeroKnowledge_nonvacuous`, `zeroKnowledgeAt_nonvacuous`: `ZeroKnowledge`'s hypotheses at that instance, `menu₀` and
   the one-unit draw; `ZeroKnowledgeAt`'s, under the one-point law.
 -/
@@ -230,8 +230,8 @@ theorem menuComplete_nonvacuous (h : menu₀.staged = true) :
 /-- Sessions that end at once. -/
 def session₁ : Finset (Fin 1) → Unit → Game Unit := fun _ _ => .ret ()
 
-/-- **An instance of F1's interface**: the sessions always verify, hold `h₁`, and break only away from the one draw; no
-owed outputs, and one view. -/
+/-- **An instance of the recursion's interface**: the sessions always verify, hold `h₁`, and break only away from the
+one draw; no owed outputs, and one view. -/
 noncomputable def I₁ : Recursion session₁ Ty₁ (fun _ => C₁) where
   verifies := fun _ => true
   hid := fun _ _ _ => h₁
@@ -253,8 +253,8 @@ noncomputable def I₁ : Recursion session₁ Ty₁ (fun _ => C₁) where
   hides := fun _ _ _ _ _ _ => rfl
 
 /-- **`Composition`'s hypotheses hold together**: at the one registration, the one-point law, `session₁` and `I₁`, the
-records determine their contents, `X₁` is the trace committed, and the break of F1's interface fires at no draw of any
-prover. -/
+records determine their contents, `X₁` is the trace committed, and the break of the recursion's interface fires at no
+draw of any prover. -/
 theorem composition_nonvacuous :
     C₁.Injective ∧ C₁.Committed X₁ path₀₁ ∧
       ∀ σ : Strategy (sampledAudit L₁ session₁ ()), ¬ ∃ ω, I₁.Break (L₁.draw ω) () (contOf σ ω) :=

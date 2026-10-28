@@ -13,7 +13,7 @@ the hidden partition) and its values. The auditor draws units over the padded in
 (`FlockSoundness.Audit.Law`). The prover batches the drawn units into the slots of sessions whose shapes come from a
 public menu: each slot selects its unit's type's matrix by a hidden index into its session's type table, which holds at
 most the shape's public type bound and is padded up to it, each matrix padded to the shape's nonzero bound; each session
-is one C-Flock session, which F1's recursion proves. The auditor sees only the sessions' shapes, and checks them against
+is one C-Flock session, which the recursion proves. The auditor sees only the sessions' shapes, and checks them against
 the menu's padded sessions for the draw's size. That each drawn unit sits in exactly one slot is checked once, globally,
 in the outer proof: the slots' records pass up V*'s levels, and the top statement routes them into the draw's order. Each
 slot is bound to its unit's committed record by its opening of the root.
@@ -33,8 +33,9 @@ slot is bound to its unit's committed record by its opening of the root.
   the record's format; the trace it commits; the slots' openings; the SHA-512 inputs two openings at one position give;
   slot binding's break.
 * `Proves`, `Accepts`, `sampledAudit`, `Reaches`, `Public`, `reveal`, `Recursion`: the statement the sessions prove; the
-  auditor's verdict; F2's audit at a registration; an outcome a run reaches; the reveal list and an honest audit's; and
-  F1's conclusion as F2 uses it, an interface, its soundness and its zero knowledge.
+  auditor's verdict; the sampled audit at a registration; an outcome a run reaches; the reveal list and an honest
+  audit's; and the recursion's conclusion as the sampled audit uses it, an interface, its soundness and its zero
+  knowledge.
 -/
 
 namespace FlockSampled
@@ -228,8 +229,8 @@ def SlotOpens (C : Commit N T V) (h : Hidden N T V) : Prop :=
 end Commit
 
 /-- The SHA-512 inputs that two records' openings at one position give: their tree leaves' inputs when the leaves
-agree, and the two leaves' openings' pair (`Flock.Registered.openPair`) otherwise. F1's `bcPair` restated (same `if`),
-which replaces it when F1 lands. -/
+agree, and the two leaves' openings' pair (`Flock.Registered.openPair`) otherwise. The recursion's `bcPair` restated
+(same `if`). -/
 def recordPair (rt : Flock.Registered.Port) (pos : ℕ) (x path y path' : ByteArray) : ByteArray × ByteArray :=
   if Flock.Hm96.Default512.treeLeaf x = Flock.Hm96.Default512.treeLeaf y then
     (Flock.Hm96.Default512.leafPrefix ++ x, Flock.Hm96.Default512.leafPrefix ++ y)
@@ -263,9 +264,9 @@ def Accepts {N : ℕ} {O : Type} (M : Menu) (view : O → List Shape) (verifies 
     (o : O) : Prop :=
   view o = M.padded S.card ∧ verifies o = true
 
-/-- **F2's audit at a registration**, one game per registration with its sessions in the continuation: the prover has
-registered `R` (its trace root among it); the auditor draws `S` by `L`; the sessions on the drawn units run against `R`.
-Output: the outcome and the draw. -/
+/-- **The sampled audit at a registration**, one game per registration with its sessions in the continuation: the prover
+has registered `R` (its trace root among it); the auditor draws `S` by `L`; the sessions on the drawn units run against
+`R`. Output: the outcome and the draw. -/
 def sampledAudit {N : ℕ} (L : Law N) {Reg O : Type} (session : Finset (Fin N) → Reg → Game O) (R : Reg) :
     Game (O × Finset (Fin N)) :=
   .coin L.Ω fun ω => (session (L.draw ω) R).map fun o => (o, L.draw ω)
@@ -275,15 +276,15 @@ def contOf {N : ℕ} {L : Law N} {Reg O : Type} {session : Finset (Fin N) → Re
     (σ : Strategy (sampledAudit L session R)) (ω : L.Ω) : Strategy (session (L.draw ω) R) :=
   Strategy.ofMap _ _ (σ ω)
 
-/-- **An outcome a run reaches**: `τ` plays `g` to `o` at some coins. F1's `Game.Outcome` restated, which replaces it
-when F1 lands. -/
+/-- **An outcome a run reaches**: `τ` plays `g` to `o` at some coins. The recursion's `Game.Outcome` restated. -/
 def Reaches {O : Type} : (g : Game O) → Strategy g → O → Prop
   | .ret b, _, o => b = o
   | .send _ k, τ, o => Reaches (k τ.1) τ.2 o
   | @Game.coin _ _ _ _ k, τ, o => ∃ c, Reaches (k c) (τ c) o
 
-/-- **The reveal list** at a draw, all F2's zero-knowledge simulator reads: the menu (its shapes, nonzero bounds and type
-bounds), the draw (the auditor's own coins, so `k = |S|`), the sessions' shapes in order, and the owed public outputs. -/
+/-- **The reveal list** at a draw, all the sampled audit's zero-knowledge simulator reads: the menu (its shapes, nonzero
+bounds and type bounds), the draw (the auditor's own coins, so `k = |S|`), the sessions' shapes in order, and the owed
+public outputs. -/
 structure Public (N : ℕ) (Out : Type) where
   menu : Menu
   draw : Finset (Fin N)
@@ -294,19 +295,19 @@ structure Public (N : ℕ) (Out : Type) where
 def reveal {N : ℕ} {Out : Type} (M : Menu) (S : Finset (Fin N)) (out : Out) : Public N Out :=
   ⟨M, S, M.padded S.card, out⟩
 
-/-- **F1's conclusion, as F2 uses it**: an interface, not F1's statement (`PublicAudit`, or `RecursiveAudit` at
-registered units).
+/-- **The recursion's conclusion, as the sampled audit uses it**: an interface, not the recursion's statement
+(`PublicAudit`, or `RecursiveAudit` at registered units).
 
 (i), soundness: `verifies`, the sessions' verdict on an outcome; `hid`, what they hold hidden behind it, as the extractor
 recovers it (an analysis device). At every registration `R` and draw `S`, for every prover of the sessions: a break of
-its runs (`Break`: F1's forks, or a read commit string whose opening collides with the registered one's), or the sessions
-verify while the statement they prove fails with probability at most `ε`.
+its runs (`Break`: the recursion's forks, or a read commit string whose opening collides with the registered one's), or
+the sessions verify while the statement they prove fails with probability at most `ε`.
 
-(ii), zero knowledge (`RecursiveFirewallPrivate`, being restated at `hidingGap`; its form is F1's, not pinned here):
-`out R`, the owed outputs the registration names; `real x R h`, the auditor's view of the honest sessions at the reveal
-list `x`, on the registration `R` (its root among it) and the hidden `h`; `sim x`, the simulated view, reading `x` alone;
-`hides`, that the two are close (`Close`, F1's notion and gap) at every honest witness: the owed outputs `R`'s, the
-sessions at `x`'s shapes, proving the statement at `x`'s draw. -/
+(ii), zero knowledge (`RecursiveFirewallPrivate`, being restated at `hidingGap`; its form is the recursion's, not pinned
+here): `out R`, the owed outputs the registration names; `real x R h`, the auditor's view of the honest sessions at the
+reveal list `x`, on the registration `R` (its root among it) and the hidden `h`; `sim x`, the simulated view, reading
+`x` alone; `hides`, that the two are close (`Close`, the recursion's notion and gap) at every honest witness: the owed
+outputs `R`'s, the sessions at `x`'s shapes, proving the statement at `x`'s draw. -/
 structure Recursion {N : ℕ} {T V Reg O : Type} (session : Finset (Fin N) → Reg → Game O) (Ty : Types T V)
     (com : Reg → Commit N T V) where
   verifies : O → Bool
