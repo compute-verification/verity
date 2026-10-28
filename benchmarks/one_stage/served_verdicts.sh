@@ -60,7 +60,8 @@
 #  5. the record: `served_verdicts.py record`: the all-protocols window report ($OUT/record/verdicts.json) and the block
 #     record ($OUT/record/block-record.json), composed `pending` while any subprotocol is missing, `accept` only when every
 #     one accepted on this node; any other server's answer is carried as elsewhere. Then, unless COMPOSITE is set empty,
-#     remote's and onsite's Lean verdicts on the run's cases (`served_composite.sh`'s docstring), which gate nothing.
+#     remote's and onsite's Lean verdicts on the run's cases (`served_composite.sh`'s docstring). Their verdicts gate
+#     nothing, but a composite that didn't run (a tree without composite.py) or whose Lean didn't answer fails the run.
 #  6. V3c, after the record since V2 doesn't read it: it proves the window circuit's own units at V3C_CLASS (default 4,32,4,
 #     which CLASSES must hold). `prove_path.py window-commit`, within V3C_TIMEOUT (default 15m), commits the window as that
 #     class circuit's units, the weights it serves under the committer's key, so each served as registered has the
@@ -250,6 +251,7 @@ serve() {  # under the lease: the endpoint, the requests, every closed window se
       --release "$release" --seed "$SEED" --out "$D/load.jsonl" > "$D/load.log" 2>&1
     rc=$?
     say "REQUESTS (exit $rc, release run $release): $(tail -1 "$D/load.log" | sed -E 's/, prompts .*//' | cut -c1-300)"
+    [ -f "$D/load.timings.json" ] || say "TIMINGS: no $D/load.timings.json"
   fi
   c=$(count "$D/windows.jsonl"); s=$(count "$D/seals.jsonl")
   # a front that failed before a window closed sent the run's only requests, so none will
@@ -374,7 +376,7 @@ fi
 if [ -n "${PP_CHALLENGER:-}" ]; then
   say "COINS sampled proofs: the live challenger $PP_CHALLENGER (peer ${PP_PEER:-?}); $H1_COINS"
 else
-  say "COINS sampled proofs: the verifier's own live coins (Lean's IO.getRandomBytes, in-process); $H1_COINS"
+  say "COINS sampled proofs: Lean's IO.getRandomBytes in the verifier's process on $(hostname -s), the served node, not an auditor's challenger (PP_CHALLENGER unset); $H1_COINS"
 fi
 
 # 1-2. the endpoint and its requests, under the GPU lease
@@ -446,13 +448,15 @@ for k in $("$PY" -c "import json,sys; [print(json.loads(l)['window']) for l in o
   [ -d "$D/advice/.w$k/w$k" ] && mv "$D/advice/.w$k/w$k" "$D/advice/w$k"
   [ "$k" = "$K" ] && break
 done
-[ -f "$D/advice/w$K/registration.json" ] || { tail -20 "$D/advice.log"; say "ADVICE w$K: none written"; stop advice 14; }
+# the advice and compile logs name the request Programs by their prompt lengths and count the window's requests, which
+# are values: they stay in the serve dir
+[ -f "$D/advice/w$K/registration.json" ] || { say "ADVICE w$K: none written (the serve dir's advice.log, on the node)"; stop advice 14; }
 cp "$D/advice/w$K/registration.json" "$OUT/registration-w$K.json"
 "$PY" tools/advice_compile.py "$D" --window "$K" > "$D/compile_w$K.log" 2>&1
 rc=$?
-say "ADVICE w$K: $("$PY" -c 'import json, sys; w = json.load(open(sys.argv[1]))["windows"][sys.argv[2]]; print("root", w["root"][:16] + "…", "bits", w["bits"])' \
+say "ADVICE w$K: $("$PY" -c 'import json, sys; w = json.load(open(sys.argv[1]))["windows"][sys.argv[2]]; print("root", w["root"][:16] + "…")' \
   "$D/advice/.w$K/windows.json" "$K" 2>&1 | cut -c1-200); $("$PY" -c 'import json, sys; print(len(json.load(open(sys.argv[1])).get("registered_roots") or {}))' \
-  "$D/advice/w$K/registration.json" 2>&1 | cut -c1-200) weight roots recorded (${WA[*]:-$NO_WEIGHTS}); compile (advice_compile.py) exit $rc$([ "$rc" = 0 ] || echo ": $(tail -1 "$D/compile_w$K.log" | cut -c1-300)")"
+  "$D/advice/w$K/registration.json" 2>&1 | cut -c1-200) weight roots recorded (${WA[*]:-$NO_WEIGHTS}); compile (advice_compile.py) exit $rc$([ "$rc" = 0 ] || echo ", the serve dir's compile_w$K.log on the node")"
 [ "$rc" = 0 ] || stop compile 15
 cd "$TREE" || exit 9
 wc_ok=0
@@ -476,9 +480,10 @@ TPY=$TREE/.venv/bin/python
 "$TPY" benchmarks/one_stage/served_verdicts.py record --serve-run "$D" --window "$K" --sampled-proofs "$OUT/sampled-proofs/served" \
   --pieces "$OUT/pieces" --out "$OUT/record" 2>&1 | tee -a "$OUT/verdicts.txt"
 rec=${PIPESTATUS[0]}
-[ -z "${COMPOSITE-1}" ] || TPY=$TPY bash benchmarks/one_stage/served_composite.sh "$D" "$OUT"
+comp=0
+[ -z "${COMPOSITE-1}" ] || TPY=$TPY bash benchmarks/one_stage/served_composite.sh "$D" "$OUT" || comp=1
 measure
 # V3c after the record, each step within its limit: it gates nothing
 v3c_commit && v3c_audit
 echo "---- verdicts"; cat "$OUT/verdicts.txt"
-[ "$wc_ok" = 1 ] && [ "$rec" = 0 ] && grep -q '"composed": "\(pending\|accept\)"' "$OUT/verdicts.txt"
+[ "$wc_ok" = 1 ] && [ "$rec" = 0 ] && [ "$comp" = 0 ] && grep -q '"composed": "\(pending\|accept\)"' "$OUT/verdicts.txt"

@@ -12,7 +12,7 @@ engine's identity and scheduler, and no step's or request's own times or values.
 `table`'s RUN is such a file, or a serve dir when it runs on the node.
 
 Two rulers, each the same code in both arms. The client's is `examples/vllm/serve_load.py --varied`'s timings file
-(``load.timings.json`` beside its record, in the serve dir on the node): each request's
+(``load.timings.json`` beside its record, on the node, which `metrics` reads there): each request's
 send, first-token and done times on the client's monotonic clock. Per load, from it:
 
 - ``client_time_per_output_token_s``: the first send to the last done, over the output ids the requests streamed;
@@ -140,7 +140,8 @@ def client_metrics(doc: dict[str, Any]) -> dict[str, Any]:
 
 def timings_of(d: Path) -> list[Path]:
     """A serve dir's timings files in load order: beside its records (`served_stock.sh`'s load-<j>, the serve dir's load), else
-    in ``../timings`` (an older run's ``$OUT/timings`` beside its ``$OUT/serve``)."""
+    in ``../timings`` (the ``$OUT/timings`` beside ``$OUT/serve`` of `served_verdicts.sh` runs before the timings stayed on
+    the node)."""
     key = lambda f: (len(f.name), f.name)   # noqa: E731  (load-2 before load-10)
     return sorted(d.glob(TIMINGS), key=key) or sorted((d.parent / "timings").glob(TIMINGS), key=key)
 
