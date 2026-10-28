@@ -25,8 +25,6 @@ import Proofs.Pouw.Dimension.H100MeasuredProofs
 import Proofs.Pouw.Dimension.H100PeakTcProofs
 import Proofs.Pouw.Dimension.H100Proofs
 import Proofs.Pouw.Dimension.H100WProofs
-import Proofs.Pouw.Dimension.LiftProofs
-import Proofs.Pouw.Dimension.Lifting
 import Proofs.Pouw.Dimension.MinRankProofs
 import Proofs.Pouw.Dimension.MixingProofs
 import Proofs.Pouw.Dimension.OpenPipeProofs
@@ -42,7 +40,6 @@ import Proofs.Pouw.Fp8Atom.Checks.C00
 import Proofs.Pouw.Fp8Atom.Checks.C01
 import Proofs.Pouw.Fp8Atom.Fp32Proofs
 import Proofs.Pouw.Fp8Atom.H1TAtomProofs
-import Proofs.Pouw.Fp8Atom.H1TBoundedStaging
 import Proofs.Pouw.Fp8Atom.H1TChecks
 import Proofs.Pouw.Fp8Atom.H1TCrossLateStaging
 import Proofs.Pouw.Fp8Atom.H1TFlipProofs
@@ -57,7 +54,7 @@ import Proofs.Pouw.Fp8Atom.Proofs
 import Proofs.Pouw.FpG1
 import Proofs.Pouw.FpG1.H1
 import Proofs.Pouw.Game
-import Proofs.Pouw.HiddenCredit
+import SampledProofs.HiddenDraw
 import Proofs.Pouw.H1Zy
 import Proofs.Pouw.LiveCredit
 import Proofs.Pouw.M1
@@ -107,7 +104,6 @@ import Proofs.Pouw.PearlC.DeviceSm120CapRev1Gamma
 import Proofs.Pouw.PearlC.DeviceSm120Gamma
 import Proofs.Pouw.PearlC.DeviceSm120KernelGamma
 import Proofs.Pouw.PearlC.DeviceSm120LoopGamma
-import Proofs.Pouw.PearlC.DeviceSm120v2LoopEquiv
 import Proofs.Pouw.PearlC.EncChecks
 import Proofs.Pouw.PearlC.FlockTile
 import Proofs.Pouw.PearlC.Forming
@@ -147,12 +143,9 @@ import Proofs.Pouw.PearlC.ServedFadd8Rev1Gamma
 import Proofs.Pouw.PearlC.ServedMixedRev1Gamma
 import Proofs.Pouw.PearlC.ServedRev1Gamma
 import Proofs.Pouw.PearlC.Sm120Checks
-import Proofs.Pouw.PearlC.TTOutW1RowSeed
 import Proofs.Pouw.PearlC.Tile4Circuit
 import Proofs.Pouw.PearlC.TileCapRev1Gamma
-import Proofs.Pouw.PearlC.TileCheck
 import Proofs.Pouw.PearlC.TileCircuit
-import Proofs.Pouw.PearlC.TileProtocol
 import Proofs.Pouw.PearlC.TileValues
 import Proofs.Pouw.PearlC.TileGamma
 import Proofs.Pouw.PearlC.TileUOnlyGamma
