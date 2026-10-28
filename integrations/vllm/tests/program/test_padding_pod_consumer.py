@@ -1,4 +1,4 @@
-"""[LIFTING-SPEC v0.7 B9.1 (5); PADDED-TABLE #3 / #4 -- the POD consumer] `NativeHostCommitter.finalize` materialises the inactive rows:
+"""The POD consumer (LIFTING-SPEC v0.7 B9.1 (5)): `NativeHostCommitter.finalize` materialises the inactive rows:
 padding steps registered before the run-root fold (`add_padding_steps`) become steps of the ONE run root -- a step nobody executed is
 appended as a step of its own; a MIXED step (B > 1) is REFOLDED from the committer's retained leaf digests + the padding leaves, no
 active byte re-read.  Openings of executed and padding leaves verify against the committer's original roots with the committer's
@@ -233,7 +233,7 @@ def test_padding_hook_end_to_end_b2_eos_stop_full_cap_coverage_context_and_popul
     sample = [(e["identity"]["step"], e["leaf_lo"]) for e in pad_entries[:6]]
     ops = com.open(sample)
     assert ops and all(com.verify(run, o) for o in ops) and all(o.identity["padding"] for o in ops)
-    if hasattr(com, "leaf_retained"):                                   # int-8's committer (R17 fp8 retain=host+exclude): a padding leaf is always held
+    if hasattr(com, "leaf_retained"):                                   # a retaining committer (retain=host+exclude): a padding leaf is always held
         assert all(com.leaf_retained(s, i) for s, i in sample)
     # the hook refuses an unplaceable prefix by name (an EOS stop with no declared LAG) and synthesizes nothing
     com2 = _committer()
@@ -257,7 +257,7 @@ def test_the_padding_leaf_rule_is_the_committers_not_the_environment(monkeypatch
     assert {ps.layout for ps in v2} == {"chunk-leaf-v2"} and all(PS.verify_opening(ps, 0) for ps in v2)
 
 
-# ------------------------------------------------------------------------------------------------------------------ F-r17b-64: shared planes, rule (a)
+# ------------------------------------------------------------------------------------------------------------------ shared planes, rule (a)
 
 LAYERS = 2
 PLANE_WORDS = 32
@@ -291,7 +291,7 @@ def _executed_with_planes(present: dict[int, list[str]], *, heads: int | None = 
 
 
 def test_f_r17b_64_rule_a_an_inactive_listed_member_of_a_shared_launch_plane_gets_its_own_bot_plane_at_mixed_and_idle_steps(tmp_path):
-    """revb F-r17b-64 (M-1392) on revb's own probe: r0 EOS at its 2nd token, r1 at its 3rd, cap 5 -> step 2 MIXED (r1 launched alone),
+    """The probe: r0 EOS at its 2nd token, r1 at its 3rd, cap 5 -> step 2 MIXED (r1 launched alone),
     steps 3, 4 IDLE.  Rule (a): the plane of a listed member the executed prefix places outside the step is ⊥ by enablement -- one
     per-sequence ⊥ plane per (inactive member, layer): r0 at step 2 (2), both at steps 3 and 4 (4 + 4) = 10.  The pod's full-cap
     population (load_required_manifest as commit_delta loads it) is then COVERED on the shared class: 20 / 20, 0 missing, and the
@@ -410,10 +410,10 @@ def test_the_padding_entrys_step_is_the_engine_step_when_a_member_arrives_late()
     assert all(e["identity"]["step"] == 3 and e["engine_step"] == 3 and e["request_step"] == 2 for e in ents)
 
 
-# ------------------------------------------------------------------------------------------------- exec M-1413 / revb M-1419: the two pod refusals
+# ------------------------------------------------------------------------------------------------- the two pod refusals
 
 def _b2_mixed_padded(tmp_path=None):
-    """The pod fixture of the F-r17b-64 test: r0 EOS at its 2nd token, r1 at its 3rd, cap 5 (LAG 0) -> step 2 MIXED, steps 3, 4 IDLE."""
+    """The pod fixture of the shared-planes test: r0 EOS at its 2nd token, r1 at its 3rd, cap 5 (LAG 0) -> step 2 MIXED, steps 3, 4 IDLE."""
     from verity_vllm.query.manifest import format as RM
     ids = _identities(["r0", "r1"]) + _shared_rows(["r0", "r1"])
     manifest = {"schema": RM.SCHEMA, "program_digest": PD, "identities": ids, "manifest_digest": RM.manifest_digest(ids)}
@@ -440,8 +440,8 @@ def _b2_mixed_padded(tmp_path=None):
 
 
 def test_f_r17b_66_the_composition_check_tiles_the_executed_member_by_the_active_members_and_the_padding_is_its_own_row_space():
-    """exec M-1413 (#4, 20/20 mixed steps: 'r1 rows [0,1) overlaps the previous block ending at 1'): the r0 padding block, a tensor of its
-    own with element_offset 0, was tiled INTO r1's live member.  revb M-1419 (2) sign-against: the executed member is tiled by the ACTIVE
+    """The r0 padding block, a tensor of its own with element_offset 0, is never tiled INTO r1's live member ('r1 rows [0,1) overlaps
+    the previous block ending at 1'): the executed member is tiled by the ACTIVE
     members only (cursor == live rows), a bot-by-enablement entry is its own row space (one per absent request, declared rows), the UNION
     equals the declared cap composition (read unrestricted), and the four named refusals: double binding, padding inside the prefix,
     executed block past the stop, padding for no declared member."""
@@ -485,8 +485,8 @@ def test_f_r17b_66_the_composition_check_tiles_the_executed_member_by_the_active
 
 
 def test_the_inactive_stratum_is_the_padded_records_population_every_bot_entry_read_back_equals_the_bot_word_and_the_families_reconcile():
-    """exec M-1413 (#3 B1: 'R17-27 one mechanism: the Commit classified 0 not-executed, the population excluded 8,274'); revb M-1419 (1)
-    sign-against for fix (a): on a padded record the population is the FULL cap; the identities the replay excluded at n_exec are the
+    """On a padded record the population is the FULL cap (never 'the Commit classified 0 not-executed, the population excluded
+    8,274'); the identities the replay excluded at n_exec are the
     named stratum `inactive_by_enablement` (not_executed_by_rule n 0 on both sides, RENAMED, never dropped); every bot-by-enablement entry
     is read back through the committed reader (`<name>#ord<ordinal>`: a padding tensor beside an executed one of the same name at a mixed
     step) and checked word for word == bot_word(committed_dtype); the one-mechanism reconciliation compares the Commit's padding entries
@@ -520,7 +520,7 @@ def test_the_inactive_stratum_is_the_padded_records_population_every_bot_entry_r
     assert out["padding_entries"] == out["checked_entries"] == 35 and out["unread_n"] == 0 and out["mismatches_n"] == 0
     assert out["checked_words"] == sum(int(e["width_bytes"]) // PS.LIFTED_CONTAINER[e["encoding"]["committed_dtype"]][1] for e in pads)
     assert all(d["commit_padding_entries"] == d["population_inactive"] for d in out["by_family"].values())
-    # [revb S-r17b-67 C1, M-1565 (4)] the shared-plane family's bot planes state HOW they were sized, on the record: this fixture's shared rows
+    # the shared-plane family's bot planes state HOW they were sized, on the record: this fixture's shared rows
     # carry neither members_geometry nor a launch geometry -> every plane `row-width` (the fixture-only fallback), counted and labelled, not 'declared'
     sizing = out["by_family"]["fa2_hidden_m1_stream"].pop("bot_plane_sizing")
     assert sizing["planes"] == 10 and sizing["geometry_source"] == {"row-width": 10} and sizing["all_declared"] is False
@@ -542,7 +542,7 @@ def test_the_inactive_stratum_is_the_padded_records_population_every_bot_entry_r
     assert sr["population"]["inactive_by_enablement"]["identities"] == 29 and sr["population"]["inactive_by_enablement"]["by_family"] == dict(pop_fam)
     assert sr["population"]["not_executed_by_rule"] == {**sr["population"]["not_executed_by_rule"], "identities": 0, "n": 0, "applied": False, "renamed_to": "inactive_by_enablement"}
     assert sr["not_executed_rule"]["n"] == 0 and sr["not_executed_by_family"] == {} and sr["inactive_by_family"] == dict(pop_fam)
-    # (alpha/beta, revb M-1419 (3)): a population that stated no cells for the shared family would compare planes (4) to bot planes (10) -- named
+    # a population that stated no cells for the shared family would compare planes (4) to bot planes (10) -- named
     no_cells = {"population": {"not_executed_by_rule": {"identities": 29, "by_family": dict(pop_fam)}}, "not_executed_rule": {"requests": sr["not_executed_rule"]["requests"]}}
     nc = PS.padded_population(no_cells, pm, rd, epr)
     assert nc["by_family"]["fa2_hidden_m1_stream"].pop("bot_plane_sizing")["geometry_source"] == {"row-width": 10}
@@ -574,7 +574,7 @@ def test_the_inactive_stratum_is_the_padded_records_population_every_bot_entry_r
     assert not dis["ok"] and any("family instance_outputs" in p for p in dis["problems"])
 
 
-# ------------------------------------------------------------------------------------------ BRIEF §7 (e) at the committed word: the MoE planes past a stop
+# ------------------------------------------------------------------------------------------ at the committed word: the MoE planes past a stop
 
 MOE_MEMBERS = [("router_ids", "i32", 8), ("router_w", "f32", 8), ("act", "bf16", 64)]     # OLMoE's moe_block_stream members per (layer, token): 8 routes
 
@@ -607,13 +607,13 @@ def _executed_with_moe(present: dict[int, list[str]]) -> list[list[tuple[str, by
 
 
 def test_brief_7e_past_a_requests_stop_the_moe_route_planes_are_bot_words_and_a_smuggled_expert_index_fails_by_name():
-    """BRIEF §7 (e) 'inactive continuation does not invent an expert route', at the COMMITTED word through the pod hook: on a B2 mixed stop
+    """An inactive continuation does not invent an expert route, at the COMMITTED word through the pod hook: on a B2 mixed stop
     (r0 stops by EOS at its 2nd token, LAG 0; r1 to the cap) the `moe_block_stream` planes of r0 past its stop are synthesized as bot-by-
     enablement tensors of their own (`moe/L0/router_ids/r0/bot` ...): router ids i32 -> lifted33/u64 bot, router weights f32 -> lifted33 bot,
     activations bf16 -> lifted17/u32 bot -- no expert index and no router weight exists as a committed value past the stop, only the bot word;
     r1's live route at the same mixed step is its own tensor by the bare name (ONE meta), untouched; the padding leaves open under the original
     root; a non-bot word in the route plane (an expert index smuggled into the inactive suffix) fails verify() and the word check by name.
-    Seam named in pad M-1475: the moe planes' executed layouts at a mixed step beside r0's padding tensor -- the host committer half of it."""
+    The seam: the moe planes' executed layouts at a mixed step beside r0's padding tensor -- the host committer half of it."""
     from verity_vllm.check import oracle_compare as OC
     ids = _moe_identities(["r0", "r1"])
     manifest = {"identities": ids, "program_digest": PD}
@@ -679,7 +679,7 @@ def test_brief_7e_past_a_requests_stop_the_moe_route_planes_are_bot_words_and_a_
               "not_executed_rule": {"requests": {"r0": {"n_exec": 2}, "r1": {"n_exec": CAP}}}}
         bad = PS.padded_population(sr, pm, forging, epr)
         assert not bad["ok"] and bad["mismatches_n"] == 3 and all("moe/L0/router_ids/r0/bot" in str(m) for m in bad["mismatches"])
-        # [revb M-1482 (ii)] the honest record states the dtypes it read the bot words back through, per committed dtype, with the count
+        # the honest record states the dtypes it read the bot words back through, per committed dtype, with the count
         sr2 = {"population": {"not_executed_by_rule": {"identities": sum(fam.values()), "by_family": dict(fam), "applied": True}},
                "not_executed_rule": {"requests": {"r0": {"n_exec": 2}, "r1": {"n_exec": CAP}}}}      # padded_population renames in place
         good = PS.padded_population(sr2, pm, rd, epr)
@@ -698,10 +698,9 @@ MAN = {"modules": sorted({op.split("/", 1)[0] for op, *_ in OPS}), "attention_la
 
 
 def test_fix_e_the_identity_check_reads_a_padding_only_step_as_the_identities_of_step_0_materialized_as_bot_and_a_mixed_step_as_unpadded():
-    """The second #3 pod run (b542ef5fc, 07:35Z) refused 'identity check: 21 step(s) differ from the expected manifest ... multiplicity_vs_step0
-    {logits_processor: [0, 1], logits_processor/r0/bot: [1, 0], ...}': fix (c) gave the padding tensors their own names, so X-03 (4) -- the
-    multiset of module-tensor NAMES equal in every step -- saw the padding-only steps as steps that dropped every module and produced unknown
-    ones.  A padding tensor materializes an identity, it is not a module call: a padding-only step passes iff it materializes every identity
+    """The padding tensors have names of their own, so X-03 (4) -- the multiset of module-tensor NAMES equal in every step -- would read a
+    padding-only step as one that dropped every module and produced unknown ones ('identity check: 21 step(s) differ from the expected
+    manifest').  A padding tensor materializes an identity, it is not a module call: a padding-only step passes iff it materializes every identity
     NAME of step 0 as bot (set equality) and covers every expected module; a mixed step's executed metas are checked exactly as before."""
     ids = _identities(["r0"])
     executed = {0: ["r0"], 1: ["r0"]}
@@ -741,7 +740,7 @@ def test_fix_e_the_identity_check_reads_a_padding_only_step_as_the_identities_of
     bad2 = com2.identity_check(manifest=MAN)
     assert not bad2["ok"] and bad2["violations"][0]["step"] == 3 and bad2["violations"][0]["multiplicity_vs_step0"] == {"logits_processor": (2, 1)}
     assert bad2["violations"][0]["padding_only"] is False and bad2["violations"][0]["padding_tensors"] == len(OPS)
-    # [revb F-r17b-72] an MoE manifest, B2 SYNC stop (both requests inactive from step 2 -> PADDING-ONLY steps with 2 inactive requests): the
+    # an MoE manifest, B2 SYNC stop (both requests inactive from step 2 -> PADDING-ONLY steps with 2 inactive requests): the
     # MoE per-layer count at a padding-only step is the number of distinct (layer, member) identities (3 = want), not 2 x 3
     man_moe = dict(MAN, moe_layers=[0], moe_tensors_per_layer=len(MOE_MEMBERS))
     ids3 = _moe_identities(["r0", "r1"])

@@ -1,19 +1,19 @@
 #!/usr/bin/env bash
-# attn_bf16's run on one card, from build.sh's ship (cwd = the source tree's root, a --cwd source run):
+# attn_bf16's run on one H200, from build.sh's ship (cwd = the source tree's root):
 #
-#   tar -C BUILD_RUN/out/ship -cf /tmp/ship.tar .
-#   research run --on vy-dc-h200 --project verity --source . --cwd source --env GPU_LEASE_WHO=LANE --send /tmp/ship.tar \
-#     -- bash benchmarks/torch_gpu/attn_bf16/run.sh
+#   tar -C SHIP -cf IN/ship.tar .
+#   OUT=DIR IN=IN bash benchmarks/torch_gpu/attn_bf16/run.sh
 #
+# Needs CUDA torch and `gpu-lease` on PATH; IN defaults to a run directory's inputs/ (RESEARCH_RUN_DIR).
 # Outside any lease: the ship unpacked into a scratch directory and held to its MANIFEST.sha256, and the card recorded.  Under
 # one lease of at most 30 minutes: run.py, the identity check, every case of check/ and the diagnostic timing.  Every step's
-# exit code is in $OUT/rc.txt; exits non-zero if any failed.  The ship must arrive as inputs/ship.tar: --send keeps the
-# file's name.  (The card's canary of sm90.mma.m16n8k16.bf16 is its own run, benchmarks/tc_probe's.)
+# exit code is in $OUT/rc.txt; exits non-zero if any failed.  (The card's canary of sm90.mma.m16n8k16.bf16 is its own
+# run, benchmarks/tc_probe's.)
 # VERITY_BENCH_VENV names the Python with numpy and CUDA torch (default /workspace/cp/venv312, else /workspace/jobs/venv312);
 # ATTN_EXPECT the card's name prefix (default "NVIDIA H200"); GPU_LEASE_WHO the lease's holder (default attn_bf16/ and the
 # run's id).
 set -uo pipefail
-O=${OUT:?}; IN=${RESEARCH_RUN_DIR:?}/inputs
+O=${OUT:?}; IN=${IN:-${RESEARCH_RUN_DIR:?set IN}/inputs}
 export O ATTN_EXPECT=${ATTN_EXPECT:-NVIDIA H200} GPU_LEASE_WHO=${GPU_LEASE_WHO:-attn_bf16/${RESEARCH_RUN_ID:-local}}
 V=${VERITY_BENCH_VENV:-}
 if [ -z "$V" ]; then for c in /workspace/cp/venv312 /workspace/jobs/venv312; do [ -x "$c/bin/python" ] && V=$c && break; done; fi

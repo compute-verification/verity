@@ -1,5 +1,5 @@
 import Mathlib
-import Definitions.Accounting.Actual.WipeDraw
+import Definitions.Accounting.Actual.Sampler
 import Definitions.Accounting.TS.Drawn
 import Definitions.Hash.RowLeaf
 import Definitions.Pous.Model.StreamedWipe
