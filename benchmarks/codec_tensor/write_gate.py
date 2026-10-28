@@ -92,7 +92,7 @@ def launches(a) -> list[dict]:
     _, shapes = BW.MODELS[step["model_name"]]
     shapes = {**shapes, "lm_head": (128256, 4096 if step["model_name"] == "8b" else 8192)}
     st = BW.stream(torch)
-    BW.set_sketch_tag(lib)
+    BW.set_receipt_prefix(lib)
     rows = step.get("k_s", BW.SR.ROWS)
     BW.set_pass(lib, t, rows=rows)
     bits = BW.sketch_bits(lib, BW.window_seed(lib), rows, SKT.vector_bytes(lib.sb, t))
