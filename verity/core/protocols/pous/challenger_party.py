@@ -15,6 +15,13 @@ The challenger draws its coins on its own host, designates the session id from t
 prints `{"listening": PORT}`, serves one prover (`serve`) and prints its report. `session(party, request, respond)` is
 the leg's side: it starts the challenger's side with `party.command`, connects to `party.address` (by default the port
 it printed, on this machine) and answers each index with `respond(index)` (`answer`).
+
+The request may carry the setup it binds, `"setup": {"blocks", "commitment", "root", "salt", "params"}` (setup's
+published outputs and P2's parameters, `request_of`'s `setup`), refused before the session unless its root is the
+binding and its blocks the request's (`setup_of`). Each session the challenger completes is kept on its own host,
+`DIR/setups/<session id>.json` (0700, the file 0600: `keep`), the request and the id it designated: the auditor's record
+of that window's setup, from which the remote bandwidth audit's verifier on the same host builds its registration
+(`remote_bandwidth.p2_party --pous-record`), never from a file the prover sends.
 """
 
 from __future__ import annotations
@@ -36,12 +43,15 @@ from verity.ml.randomness import derive
 
 from . import memory_challenger as mc
 from . import run as R
+from .schemes.p2 import P2Params
 
 END = 2 ** 64 - 1
 #: the untimed exchanges before round 0 (module docstring); the index is public, so they reveal no coin
 WARMUPS, WARMUP_INDEX = 8, 0
 MODULE = "verity.core.protocols.pous.challenger_party"
 PREMISE = "trusted-host"
+SETUPS = "setups"
+PARAMS = ("blocks_per_segment", "c0", "expander", "segments", "w")
 
 
 def _read(f: BinaryIO, n: int) -> bytes:
@@ -158,10 +168,52 @@ def session(party: Party, request: Mapping[str, Any], respond: Callable[[int], b
     return out | {"rounds": rounds - out.get("warmups", 0)}
 
 
-def request_of(node: str, point: R.Point, binding: bytes) -> dict[str, Any]:
+def request_of(node: str, point: R.Point, binding: bytes, setup: R.Setup | None = None) -> dict[str, Any]:
+    """The session's request; with `setup`, setup's published outputs under `point`'s parameters, which the challenger
+    keeps (`keep`)."""
     q = point.params
-    return {"binding": binding.hex(), "block_bytes": q.block_bytes, "blocks": q.blocks, "k": point.k,
-            "limit_ns": point.limit_ns, "node": node}
+    out = {"binding": binding.hex(), "block_bytes": q.block_bytes, "blocks": q.blocks, "k": point.k,
+           "limit_ns": point.limit_ns, "node": node}
+    if setup is not None:
+        out["setup"] = setup.to_json() | {"params": {k: getattr(q, k) for k in PARAMS}}
+    return out
+
+
+def setup_of(request: Mapping[str, Any]) -> dict[str, Any] | None:
+    """The request's setup (`request_of`), None without one; ValueError unless its root is the session's binding, its
+    blocks the request's, its commitment and root 64 bytes, its salt PoUS's, and its parameters P2's at those blocks
+    and block size."""
+    s = request.get("setup")
+    if s is None:
+        return None
+    if not isinstance(s, dict) or sorted(s) != sorted(("blocks", "commitment", "params", "root", "salt")):
+        raise ValueError("a request's setup is {blocks, commitment, params, root, salt}")
+    if s["root"] != request["binding"]:
+        raise ValueError("the setup's root is not the session's binding")
+    if s["blocks"] != request["blocks"]:
+        raise ValueError(f"the setup is of {s['blocks']} blocks, the session of {request['blocks']}")
+    p = s["params"]
+    if not isinstance(p, dict) or sorted(p) != sorted(PARAMS):
+        raise ValueError(f"a setup's params are {list(PARAMS)}")
+    q = P2Params(**p)
+    if (q.blocks, q.block_bytes) != (request["blocks"], request["block_bytes"]):
+        raise ValueError("the setup's parameters are not the session's blocks")
+    published = R.Setup.from_json(s)
+    if len(published.commitment) != 64 or len(published.root) != 64 or len(published.salt) != R.SALT_BYTES:
+        raise ValueError("a setup's commitment and root are 64 bytes and its salt PoUS's")
+    return s
+
+
+def keep(device: Path, sid: bytes, request: Mapping[str, Any]) -> Path:
+    """The completed session's request and id, `device/setups/<id>.json` (0700, the file 0600, written once)."""
+    d = device / SETUPS
+    d.mkdir(parents=True, exist_ok=True, mode=0o700)
+    os.chmod(d, 0o700)
+    path = d / f"{sid.hex()}.json"
+    fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+    with os.fdopen(fd, "w") as f:
+        f.write(json.dumps({"request": dict(request), "session_id": sid.hex()}, sort_keys=True) + "\n")
+    return path
 
 
 def main(argv: Sequence[str] | None = None) -> int:
@@ -172,6 +224,11 @@ def main(argv: Sequence[str] | None = None) -> int:
     ap.add_argument("--listen", default="127.0.0.1:0", help="HOST:PORT to listen on (port 0: any)")
     a = ap.parse_args(argv)
     request = json.loads(sys.stdin.readline())
+    try:
+        setup_of(request)
+    except (ValueError, TypeError, KeyError) as e:
+        print(f"challenger_party: the request is refused: {e}", file=sys.stderr, flush=True)
+        return 2
     device = Path(a.device)
     signer = period.challenger(device, workers=min(period.SETUP_WORKERS, len(os.sched_getaffinity(0))))
     if not (device / "sessions").exists():
@@ -184,12 +241,13 @@ def main(argv: Sequence[str] | None = None) -> int:
             conn.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
             sid, s = serve(f, request, signer=signer, log=mc.SessionLog(device / "sessions"),
                            coins=secrets.token_bytes(64), domain=period.SESSION_DOMAIN)
+    keep(device, sid, request)
     print(json.dumps(report(sid, s, signer.public_key), sort_keys=True), flush=True)
     return 0
 
 
-__all__ = ["END", "PREMISE", "WARMUPS", "WARMUP_INDEX", "Party", "answer", "main", "placement", "report", "request_of",
-           "serve", "session"]
+__all__ = ["END", "PARAMS", "PREMISE", "SETUPS", "WARMUPS", "WARMUP_INDEX", "Party", "answer", "keep", "main",
+           "placement", "report", "request_of", "serve", "session", "setup_of"]
 
 if __name__ == "__main__":
     sys.exit(main())
