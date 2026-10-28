@@ -150,7 +150,7 @@ def test_every_gemma_root_resolves_to_a_quarantine_dense_compute():
     assert {k: len(c) for k, c in specs.items()} == expected
     for k, cs in specs.items():
         for c in cs:
-            # [R13 X-08] Bf16MulScalarTensor was promoted into the accepted registry (b1); [R15 dense F-dense-05] the rest into
+            # Bf16MulScalarTensor is in the accepted registry (b1); the rest in
             # `verity.ml.definitions.registry.dense` (the quarantine modules re-export the same objects: same ids, same bodies)
             assert spec_module(c.spec) == "verity.ml.definitions.registry.dense" or (
                 k.startswith("Bf16MulScalarTensor_v1") and spec_module(c.spec) == "verity.ml.definitions.registry.b1"), (k, spec_module(c.spec))

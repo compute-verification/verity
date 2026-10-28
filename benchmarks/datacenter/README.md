@@ -10,10 +10,10 @@ credit; its evaluation, a Call at a time through `verity.ml.circuits.evaluation`
 commitments to its registered inputs, with the occupancy profiles the developer may choose from, and to a run's census
 values, a row per element, so that inputs and rows are words in the word view whether the Program is Boolean or not) and
 `claims` (`audit`: what the trusted devices' records and the commitments establish about the prover system, with no
-device premise). The **physical layer** interprets those claims with declared hardware, named assumptions and trusted
+device premise). The **physical layer** interprets those claims with registered hardware, named assumptions and trusted
 devices: `physical` (devices, blocks, links, certifier ports, the certifiers' cadence and trusted clock, datacenters and
-fleets, every number an `Assumption`), `memory` (registered stores, challenges, read audits, wipes and the times to
-serve them) and `account` (credit in ANDs, with the MACs beside it, attribution, where each store was, what could be
+fleets, every number an `Assumption`), `memory` (registered stores, challenges, read audits, memory wipes and the times
+to serve them) and `account` (credit in ANDs, with the MACs beside it, attribution, where each store was, what could be
 carried in, the covert budget, the export, the `Ledger` across epochs with its custody check, and `double_credit`, the
 joint rule for credit from several audits). `binding` places a Program's root nodes on a datacenter (where an input
 enters says where its bits come from), derives its crossings and publishes its `Profile`, the only part of the placement
@@ -22,7 +22,7 @@ a placement and records what the trusted devices see.
 
 The covert budget is only what goes beyond the committed computation. Beside it, the account reports the export, λ_out
 (`Account.export_bits`): the committed bits that crossed a certified boundary out of a block, by egress port, from the
-declared crossings (`Profile.exported`). It counts as novel information read by its receivers once the declaration's
+declared crossings (`Profile.exported`). It counts as fresh input read by its receivers once the declaration's
 certifiers cover every link, so that `Datacenter.uncovered_links()`, the links no trusted device ends (a
 switch-to-switch link, an outside host's link to a switch), is empty; until then it is reported as not applicable, with
 those links named. With the certifiers' pair links sealed (`Datacenter(sealed=True)`, off by default; the certifier's
