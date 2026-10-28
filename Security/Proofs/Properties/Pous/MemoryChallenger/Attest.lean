@@ -6,8 +6,9 @@ import Proofs.Properties.CertifierDevice.Lms
 /-!
 # Proofs of a party's signed periods (`Properties.Attest`)
 
-**Soundness.** An accepted period check (`check_ok`) has the certificate verify under the identity over the lower key's
-party-key message, the root's signature under the lower key over the root's message, and each read open to the root.
+**Soundness.** An accepted period (`accepts_ok`) has the public certificate verify under the identity over the lower
+key's party-key message, the root's signature under the lower key over the root's message, and each read open to the
+root.
 A role digest is SHA-512 of `[tag] ‖ I ‖ [context] ‖ [record]`, each `[·]` a u64 length then the bytes, so its input
 determines its tag, identifier, context and record (`roleInput_inj`), and a context its fields, every field under `2^64`
 bytes since the context is (`tail_inj`). Under no SHA-512 collision among the run's strings (`CF`), a message the
@@ -30,12 +31,13 @@ so the auditor sees what the code sends in the clear on its coins and the skelet
 
 **Honest and nontrivial lemmas.** Each guarantee's hypotheses hold at the honest deployed instance: keys `Lms.key`
 derives at `Lms.deployed`, the identity certifying the memory challenger's lower key at leaf 0 and the lower key
-signing a one-record period's root at leaf 0 (`honest_accepts`, by `Properties.CertifierDevice.Proofs.Lms.lmsCorrect`),
-and the party's code run as it is meant to (`meantRun`). Each conclusion fails somewhere: at the empty run, which no
-device signed and which carries no break, so a check that accepts everything fails `PeriodSigned` and `PeriodSound`
-(`periodSigned_acceptAll`, `periodSound_acceptAll`); at the party's whole output, which carries the records
-(`livenessContentFree_nontrivial`); at an overheard witness path (`auditorSeesSkeleton_nontrivial`); and at a prover
-that reads the party's state (`proverSeesMessages_nontrivial`).
+signing the root of the one-record period of `HONEST_RECORD` at leaf 0 (`honest_accepts`, by
+`Properties.CertifierDevice.Proofs.Lms.lmsCorrect`; `periodSigned_honest`, `periodSound_honest`), and the party's code
+run as it is meant to (`meantRun`). Each conclusion fails somewhere: at the empty run, which no device signed and which
+carries no break (`periodSigned_nontrivial`), so a verifier that accepts everything fails `PeriodSigned` and
+`PeriodSound` (`periodSigned_acceptAll`, `periodSound_acceptAll`; `periodSound_nontrivial` at `acceptAll`); at the
+party's whole output, which carries the records (`livenessContentFree_nontrivial`); at an overheard witness path
+(`auditorSeesSkeleton_nontrivial`); and at a prover that reads the party's state (`proverSeesMessages_nontrivial`).
 -/
 
 namespace MemoryChallenger.Attest.Properties.SecurityProofs
@@ -473,8 +475,8 @@ theorem opening_bind {vs : Array ByteArray} {S : List ByteArray} {pos : Nat} {v 
   simp only [lev, base] at hleaf
   rw [getElem!_pos _ pos (by rw [Array.size_append, hL]; omega), Array.getElem_append_left (by rw [hL]; exact hpos),
     ← getElem!_pos, leaves_get hpos, leaf_hash] at hleaf
-  have e := frame_last
-    (ps := [(Attest.periodDomain vs.size).id, FV3.uint pos, FV3.uint pos, Attest.PERIOD_SCHEMA.toUTF8]) (cf _ (hC _ (List.mem_cons_self ..)) _ (hT _ (leaf_mem hpos)) hleaf)
+  have e := frame_last (ps := [(Attest.periodDomain vs.size).id, FV3.uint pos, FV3.uint pos,
+    Attest.PERIOD_SCHEMA.toUTF8]) (cf _ (hC _ (List.mem_cons_self ..)) _ (hT _ (leaf_mem hpos)) hleaf)
   rw [e, getElem?_pos vs pos hpos, getElem!_pos vs pos hpos]
 
 /-! ## The period check -/
@@ -495,65 +497,59 @@ theorem verifyCertificate_ok {p : Lms.Params} {identity d lower : ByteArray} {pa
       exact ⟨hi, cm, rfl, h⟩
   · simp [hi, throw, throwThe, MonadExceptOf.throw, bind, Except.bind] at h
 
-theorem hssVerify_ok {p : Lms.Params} {identity d m : ByteArray} {party : String} {sig : Lms.HssSignature}
-    (h : Lms.hssVerify p identity d party sig m = .ok true) :
-    Lms.verifyCertificate p identity d party sig.lower sig.certificate = .ok true ∧
-      Lms.verify p sig.lower m sig.signature = .ok true := by
-  unfold Lms.hssVerify at h
-  cases hc : Lms.verifyCertificate p identity d party sig.lower sig.certificate with
+/-- What the verifier's acceptance of a period establishes: the lower key's length, the identity's, the certificate's
+verification under the identity over the lower key's party-key message, the root signature's under the lower key over
+the root's message, and each read's opening. -/
+theorem accepts_ok {p : Lms.Params} {identity deployment : ByteArray} {party : String} {k : Attest.PartyKey}
+    {s : Attest.SignedRoot} {reads : Array Attest.Read}
+    (h : Attest.accepts p identity deployment party k s reads = .ok true) :
+    k.lower.size = 16 + p.N ∧ identity.size = 16 + p.N ∧
+      (∃ cm, Lms.partyKeyMessage (identity.extract 0 16) deployment party k.lower = .ok cm ∧
+        Lms.verify p identity cm k.certificate = .ok true) ∧
+      (∃ rm, s.message k.lower deployment party = .ok rm ∧ Lms.verify p k.lower rm s.signature = .ok true) ∧
+      ∀ r ∈ reads, (Attest.periodDomain s.count).verifyOpening s.root s.count r.position r.record Attest.PERIOD_SCHEMA
+        r.path = true := by
+  unfold Attest.accepts Attest.checkKey at h
+  cases hc : Lms.verifyCertificate p identity deployment party k.lower k.certificate with
   | error e => simp [hc, bind, Except.bind] at h
   | ok b =>
     cases b
     · simp [hc, bind, Except.bind, pure, Except.pure] at h
-    · simp only [hc, bind, Except.bind, Bool.not_true, Bool.false_eq_true, ↓reduceIte] at h
-      exact ⟨rfl, h⟩
-
-/-- What an accepted period check establishes: the lower key's length, the identity's, the certificate's verification
-under the identity over the lower key's party-key message, the root signature's under the lower key over the root's
-message, and each read's opening. -/
-theorem check_ok {p : Lms.Params} {identity deployment : ByteArray} {party : String} {s : Attest.SignedRoot}
-    {reads : Array Attest.Read} (h : Attest.check p identity deployment party s reads = .ok true) :
-    s.signature.lower.size = 16 + p.N ∧ identity.size = 16 + p.N ∧
-      (∃ cm, Lms.partyKeyMessage (identity.extract 0 16) deployment party s.signature.lower = .ok cm ∧
-        Lms.verify p identity cm s.signature.certificate = .ok true) ∧
-      (∃ rm, s.message deployment party = .ok rm ∧ Lms.verify p s.signature.lower rm s.signature.signature = .ok true) ∧
-      ∀ r ∈ reads, (Attest.periodDomain s.count).verifyOpening s.root s.count r.position r.record Attest.PERIOD_SCHEMA
-        r.path = true := by
-  unfold Attest.check at h
-  by_cases hl : s.signature.lower.size = 16 + p.N
-  · simp only [hl, ne_eq, not_true_eq_false, ↓reduceIte] at h
-    cases hm : s.message deployment party with
-    | error e => simp [hm, bind, Except.bind] at h
-    | ok rm =>
-      cases hv : Lms.hssVerify p identity deployment party s.signature rm with
-      | error e => simp [hm, hv, bind, Except.bind] at h
-      | ok b =>
-        cases b
-        · simp [hm, hv, bind, Except.bind, pure, Except.pure] at h
-        · simp only [hm, hv, bind, Except.bind, Bool.not_true, Bool.false_eq_true, ↓reduceIte, pure, Except.pure,
-            Except.ok.injEq, Array.all_eq_true] at h
-          obtain ⟨hc, hr⟩ := hssVerify_ok hv
-          obtain ⟨hi, hcm⟩ := verifyCertificate_ok hc
-          exact ⟨hl, hi, hcm, ⟨rm, rfl, hr⟩, fun r hr => by
-            obtain ⟨i, hi, rfl⟩ := Array.getElem_of_mem hr
-            exact h i hi⟩
-  · simp [hl, pure, Except.pure] at h
+    simp only [hc, bind, Except.bind, Bool.not_true, Bool.false_eq_true, ↓reduceIte] at h
+    obtain ⟨hi, hcm⟩ := verifyCertificate_ok hc
+    unfold Attest.check at h
+    by_cases hl : k.lower.size = 16 + p.N
+    · simp only [hl, ne_eq, not_true_eq_false, ↓reduceIte] at h
+      cases hm : s.message k.lower deployment party with
+      | error e => simp [hm, bind, Except.bind] at h
+      | ok rm =>
+        cases hv : Lms.verify p k.lower rm s.signature with
+        | error e => simp [hm, hv, bind, Except.bind] at h
+        | ok b =>
+          cases b
+          · simp [hm, hv, bind, Except.bind, pure, Except.pure] at h
+          · simp only [hm, hv, bind, Except.bind, Bool.not_true, Bool.false_eq_true, ↓reduceIte, pure, Except.pure,
+              Except.ok.injEq, Array.all_eq_true] at h
+            exact ⟨hl, hi, hcm, ⟨rm, rfl, hv⟩, fun r hr => by
+              obtain ⟨i, hi, rfl⟩ := Array.getElem_of_mem hr
+              exact h i hi⟩
+    · simp [hl, pure, Except.pure] at h
 
 
 /-! ## `PeriodSigned` -/
 
 theorem periodSigned : PeriodSigned := by
-  intro p identity deployment party s reads dev h
-  obtain ⟨-, -, ⟨cm, hcm, hcv⟩, ⟨rm, hrm, hrv⟩, hreads⟩ := check_ok h
-  by_cases cf : CF (runStrings dev identity deployment party s reads)
+  intro p identity deployment party k s reads dev h
+  obtain ⟨-, -, ⟨cm, hcm, hcv⟩, ⟨rm, hrm, hrv⟩, hreads⟩ := accepts_ok h
+  by_cases cf : CF (runStrings dev identity deployment party k s reads)
   · by_cases hsc : Signed dev identity cm
-    · by_cases hsr : Signed dev s.signature.lower rm
+    · by_cases hsr : Signed dev k.lower rm
       · left
-        have hK1 : ∀ x ∈ keyStrings dev identity, x ∈ runStrings dev identity deployment party s reads :=
+        have hK1 : ∀ x ∈ keyStrings dev identity, x ∈ runStrings dev identity deployment party k s reads :=
           fun x hx => by
             simp only [runStrings, List.mem_append]
             exact Or.inl (Or.inr hx)
-        have hK2 : ∀ x ∈ keyStrings dev s.signature.lower, x ∈ runStrings dev identity deployment party s reads :=
+        have hK2 : ∀ x ∈ keyStrings dev k.lower, x ∈ runStrings dev identity deployment party k s reads :=
           fun x hx => by
             simp only [runStrings, List.mem_append]
             exact Or.inr hx
@@ -628,12 +624,12 @@ theorem finds {L : List ByteArray} (h : ∃ x ∈ L, ∃ y ∈ L, x ≠ y ∧ Sh
 /-- On coins where the check accepts values that are not the device's, the collision finder outputs a collision or
 the forger a forgery. -/
 theorem bad_cases {p : Lms.Params} {Ω : Type} [Fintype Ω] [Nonempty Ω] (τ : Ω → PeriodRun) (ω : Ω)
-    (ha : Attest.check p (τ ω).identity (τ ω).deployment (τ ω).party (τ ω).root (τ ω).reads = .ok true)
-    (hn : ¬ OfDevice (τ ω).dev (τ ω).identity (τ ω).deployment (τ ω).party (τ ω).root (τ ω).reads) :
+    (ha : Attest.accepts p (τ ω).identity (τ ω).deployment (τ ω).party (τ ω).key (τ ω).root (τ ω).reads = .ok true)
+    (hn : ¬ OfDevice (τ ω).dev (τ ω).identity (τ ω).deployment (τ ω).party (τ ω).key (τ ω).root (τ ω).reads) :
     (∃ u v, (collisionFinder Ω τ).out ω = some (u, v) ∧ Claims.Collision sha512 u v) ∨
       ∃ pk m σ, forger τ ω = some (pk, m, σ) ∧ Forges p (τ ω).dev pk m σ := by
-  obtain ⟨-, -, ⟨cm, hcm, hcv⟩, -, -⟩ := check_ok ha
-  rcases (periodSigned p _ _ _ _ _ (τ ω).dev ha).resolve_left hn with hc | ⟨m, hm, hf⟩ | ⟨m, hm, hf⟩
+  obtain ⟨-, -, ⟨cm, hcm, hcv⟩, -, -⟩ := accepts_ok ha
+  rcases (periodSigned p _ _ _ _ _ _ (τ ω).dev ha).resolve_left hn with hc | ⟨m, hm, hf⟩ | ⟨m, hm, hf⟩
   · exact Or.inl (finds hc)
   · exact Or.inr ⟨_, _, _, by simp [forger, hm, hf.2], hf⟩
   · refine Or.inr ?_
@@ -819,15 +815,6 @@ theorem livenessContext_some {d a : ByteArray} {p l : String} {per b : Nat} (hd 
   rw [periodContext_some hd hper, u64_some hb]
   rfl
 
-/-- The honest period's deployment hash, 64 bytes. -/
-def HONEST_DEPLOYMENT : ByteArray := ⟨Array.replicate 64 0⟩
-
-/-- The honest period's party, the memory challenger, with its attachment and link as `test_pous_period_reports`
-has them. -/
-def HONEST_PARTY : String := "memory-challenger"
-def HONEST_LINK : String := "server-3"
-def HONEST_ATTACHMENT : ByteArray := ⟨Array.replicate 32 0⟩
-
 theorem deployment_size : HONEST_DEPLOYMENT.size = 64 := rfl
 
 theorem honest_small : (Lms.lenField HONEST_DEPLOYMENT ++ Lms.lenField HONEST_PARTY.toUTF8 ++
@@ -884,7 +871,7 @@ theorem opening_one (v : ByteArray) :
   have hw := root_width #[v]
   rw [root_one] at hw
   simp only [FV3.Domain.verifyOpening, hc, root_one, hw, scheme_bytes]
-  simp [Attest.periodDomain, FV3.Sha512.Domain.make, FV3.Domain.make, log2ceil]
+  simp [Attest.periodDomain, Attest.domainU64, log2ceil]
 
 /-- What `Lms.key` gives at the deployed parameters: a 16-byte identifier, and a public key of `16 + N` bytes that
 starts with it. -/
@@ -905,40 +892,25 @@ theorem signs {I seed : ByteArray} {k : Lms.PrivateKey} (hk : Lms.key Lms.deploy
     Properties.CertifierDevice.Proofs.Lms.lmsSigns 64 1 20 false Lms.deployed I seed k 0 m rfl hk (by decide)
   exact ⟨σ, hσ, (Properties.CertifierDevice.Proofs.Lms.lmsCorrect 64 1 20 false Lms.deployed I seed k 0 m σ rfl hk hσ).1⟩
 
-/-- The honest one-record period whose record is `v`, closed under the lower key `lower` with its certificate `cert`
-and the root's signature `σ`: the honest attachment and link, period 0. -/
-def honestRoot (lower : ByteArray) (cert σ : Lms.Signature) (v : ByteArray) : Attest.SignedRoot :=
-  ⟨HONEST_ATTACHMENT, HONEST_LINK, 0, 1, Attest.root #[v], ⟨lower, cert, σ⟩⟩
-
-/-- The honest period's one read: its record at position 0, with no siblings. -/
-def honestRead (v : ByteArray) : Attest.Read := ⟨0, v, #[]⟩
-
-/-- The device that signed the honest period: the identity `identity` certified `lower` for the memory challenger in
-the honest deployment, and `lower` closed the one-record period of `v`. -/
-def honestDevice (identity lower v : ByteArray) : Device where
-  issued pk := if pk = identity then [⟨HONEST_DEPLOYMENT, HONEST_PARTY, lower⟩] else []
-  closed pk := if pk = lower then [⟨HONEST_DEPLOYMENT, HONEST_PARTY, HONEST_ATTACHMENT, HONEST_LINK, 0, #[v]⟩] else []
-  live _ := []
-
-/-- **The period check accepts the honest period**: for keys `Lms.key` derives at the deployed parameters, the identity
-`k` certifying the lower key `k'` for the memory challenger at leaf 0 and `k'` signing the one-record period's root at
-leaf 0, the check accepts the period with its one read, which is the device's. -/
+/-- **The verifier accepts the honest period**: for keys `Lms.key` derives at the deployed parameters, the identity `k`
+certifying the lower key `k'` for the memory challenger at leaf 0 and `k'` signing the one-record period's root at
+leaf 0, the verifier accepts the period with its one read, which is the device's. -/
 theorem honest_accepts {I seed I' seed' : ByteArray} {k k' : Lms.PrivateKey}
     (hk : Lms.key Lms.deployed I seed = .ok k) (hk' : Lms.key Lms.deployed I' seed' = .ok k') (v : ByteArray) :
     ∃ cm rm cert σ, Lms.partyKeyMessage I HONEST_DEPLOYMENT HONEST_PARTY k'.publicKey = .ok cm ∧
-      Lms.signAt k 0 cm = .ok cert ∧ (honestRoot k'.publicKey cert σ v).message HONEST_DEPLOYMENT HONEST_PARTY = .ok rm ∧
+      Lms.signAt k 0 cm = .ok cert ∧ (honestRoot σ v).message k'.publicKey HONEST_DEPLOYMENT HONEST_PARTY = .ok rm ∧
       Lms.signAt k' 0 rm = .ok σ ∧
-      Attest.check Lms.deployed k.publicKey HONEST_DEPLOYMENT HONEST_PARTY (honestRoot k'.publicKey cert σ v)
-        #[honestRead v] = .ok true ∧
+      Attest.accepts Lms.deployed k.publicKey HONEST_DEPLOYMENT HONEST_PARTY (honestKey k'.publicKey cert)
+        (honestRoot σ v) #[honestRead v] = .ok true ∧
       OfDevice (honestDevice k.publicKey k'.publicKey v) k.publicKey HONEST_DEPLOYMENT HONEST_PARTY
-        (honestRoot k'.publicKey cert σ v) #[honestRead v] := by
+        (honestKey k'.publicKey cert) (honestRoot σ v) #[honestRead v] := by
   obtain ⟨hIs, hps, hpI⟩ := pub_spec hk
   obtain ⟨hIs', hps', hpI'⟩ := pub_spec hk'
   obtain ⟨cm, hcm⟩ := honest_partyKeyMessage hIs hps'
   obtain ⟨rm, hrm⟩ := honest_periodRootMessage hIs' v
   obtain ⟨cert, hcs, hcv⟩ := signs hk cm
   obtain ⟨σ, hσs, hσv⟩ := signs hk' rm
-  have hmsg : (honestRoot k'.publicKey cert σ v).message HONEST_DEPLOYMENT HONEST_PARTY = .ok rm := by
+  have hmsg : (honestRoot σ v).message k'.publicKey HONEST_DEPLOYMENT HONEST_PARTY = .ok rm := by
     unfold Attest.SignedRoot.message
     simp only [honestRoot, hpI']
     exact hrm
@@ -948,19 +920,14 @@ theorem honest_accepts {I seed I' seed' : ByteArray} {k k' : Lms.PrivateKey}
       unfold Lms.verifyCertificate
       simp only [hps, hps', ne_eq, not_true_eq_false, ↓reduceIte, hpI, hcm]
       exact hcv
-    have hhss : Lms.hssVerify Lms.deployed k.publicKey HONEST_DEPLOYMENT HONEST_PARTY ⟨k'.publicKey, cert, σ⟩ rm =
-        .ok true := by
-      unfold Lms.hssVerify
-      simp only [hcert]
-      exact hσv
-    unfold Attest.check
-    simp only [hmsg]
-    simp only [honestRoot, hps', ne_eq, not_true_eq_false, ↓reduceIte]
-    simp [honestRead, opening_one]
-    simp only [bind, Except.bind, hhss]
+    unfold Attest.accepts Attest.checkKey Attest.check
+    simp only [honestKey, hcert, hmsg, hps', ne_eq, not_true_eq_false, ↓reduceIte, bind, Except.bind,
+      Bool.not_true, Bool.false_eq_true]
+    simp only [honestRoot, hσv, Bool.not_true, Bool.false_eq_true, ↓reduceIte, honestRead]
+    simp [opening_one]
     rfl
   · refine ⟨⟨⟨HONEST_DEPLOYMENT, HONEST_PARTY, k'.publicKey⟩, by simp [honestDevice], rfl, rfl, rfl⟩,
-      ⟨HONEST_DEPLOYMENT, HONEST_PARTY, HONEST_ATTACHMENT, HONEST_LINK, 0, #[v]⟩, by simp [honestDevice, honestRoot], rfl,
+      ⟨HONEST_DEPLOYMENT, HONEST_PARTY, HONEST_ATTACHMENT, HONEST_LINK, 0, #[v]⟩, by simp [honestDevice, honestKey], rfl,
       rfl, rfl, rfl, rfl, rfl, ?_⟩
     intro r hr
     simp [honestRead] at hr
@@ -970,36 +937,29 @@ theorem honest_accepts {I seed I' seed' : ByteArray} {k k' : Lms.PrivateKey}
 /-- **`PeriodSigned`'s honest lemma**: its hypothesis holds at the honest deployed instance, and with it its
 conclusion's first disjunct. For keys `Lms.key` derives at the deployed parameters (`Lms.deployed`, SHA-512 with
 `n = 64`, `w = 1`, `h = 20`), the identity certifying the lower key for the memory challenger in a deployment at leaf 0
-and the lower key signing a one-record period's root at leaf 0 (`Lms.signAt`), the period check accepts the period
-with its one read, and the period and the read are the device's. -/
-theorem periodSigned_honest (v : ByteArray) :
+and the lower key signing the one-record period of `HONEST_RECORD`'s root at leaf 0 (`Lms.signAt`), the verifier
+accepts the period with its one read, and the period and the read are the device's. -/
+theorem periodSigned_honest :
     ∃ (k k' : Lms.PrivateKey) (cert σ : Lms.Signature),
       (∃ I seed, Lms.key Lms.deployed I seed = .ok k) ∧ (∃ I seed, Lms.key Lms.deployed I seed = .ok k') ∧
-      Attest.check Lms.deployed k.publicKey HONEST_DEPLOYMENT HONEST_PARTY (honestRoot k'.publicKey cert σ v)
-        #[honestRead v] = .ok true ∧
-      OfDevice (honestDevice k.publicKey k'.publicKey v) k.publicKey HONEST_DEPLOYMENT HONEST_PARTY
-        (honestRoot k'.publicKey cert σ v) #[honestRead v] := by
+      Attest.accepts Lms.deployed k.publicKey HONEST_DEPLOYMENT HONEST_PARTY (honestKey k'.publicKey cert)
+        (honestRoot σ HONEST_RECORD) #[honestRead HONEST_RECORD] = .ok true ∧
+      OfDevice (honestDevice k.publicKey k'.publicKey HONEST_RECORD) k.publicKey HONEST_DEPLOYMENT HONEST_PARTY
+        (honestKey k'.publicKey cert) (honestRoot σ HONEST_RECORD) #[honestRead HONEST_RECORD] := by
   obtain ⟨k, hk⟩ := Properties.CertifierDevice.Proofs.Lms.key_ok Lms.deployed
     (I := ⟨Array.replicate 16 0⟩) rfl HONEST_DEPLOYMENT
   obtain ⟨k', hk'⟩ := Properties.CertifierDevice.Proofs.Lms.key_ok Lms.deployed
     (I := ⟨Array.replicate 16 1⟩) rfl HONEST_DEPLOYMENT
-  obtain ⟨-, -, cert, σ, -, -, -, -, hc, ho⟩ := honest_accepts hk hk' v
+  obtain ⟨-, -, cert, σ, -, -, -, -, hc, ho⟩ := honest_accepts hk hk' HONEST_RECORD
   exact ⟨k, k', cert, σ, ⟨_, _, hk⟩, ⟨_, _, hk'⟩, hc, ho⟩
 
-/-- The empty signed root: no lower key, no signature bytes, no records. -/
-def emptyRoot : Attest.SignedRoot :=
-  ⟨.empty, "", 0, 0, .empty, ⟨.empty, ⟨0, .empty, #[], #[]⟩, ⟨0, .empty, #[], #[]⟩⟩⟩
-
-/-- The device that signed nothing. -/
-def emptyDevice : Device := ⟨fun _ => [], fun _ => [], fun _ => []⟩
-
 /-- The empty run hashes nothing: its deployment hash has no bytes, so neither of its messages is formed. -/
-theorem empty_strings : runStrings emptyDevice .empty .empty "" emptyRoot #[] = [] := by
+theorem empty_strings : runStrings emptyDevice .empty .empty "" emptyKey emptyRoot #[] = [] := by
   have h1 : Lms.partyContext ByteArray.empty "" = .error
       s!"a deployment's hash is {Lms.DEPLOYMENT_BYTES} bytes, not {ByteArray.empty.size}" := rfl
   have h2 : ∃ e, Lms.periodRootContext ByteArray.empty "" ByteArray.empty "" 0 0 = .error e := ⟨_, rfl⟩
   obtain ⟨e, h2⟩ := h2
-  simp only [runStrings, roleStrings, h1, h2, keyStrings, emptyDevice, emptyRoot]
+  simp only [runStrings, roleStrings, h1, h2, keyStrings, emptyDevice, emptyKey, emptyRoot]
   rfl
 
 theorem empty_partyKeyMessage (I : ByteArray) :
@@ -1007,14 +967,15 @@ theorem empty_partyKeyMessage (I : ByteArray) :
   intro m h
   cases h
 
-theorem empty_message : ∀ m, emptyRoot.message .empty "" ≠ .ok m := by
+theorem empty_message : ∀ m, emptyRoot.message .empty .empty "" ≠ .ok m := by
   intro m h
   cases h
 
-/-- **`PeriodSigned`'s nontrivial lemma**: its conclusion fails at the empty run, for any parameters: the device
-signed nothing, so the run is not its, and the run hashes no string and forms no message, so it carries no break. -/
-theorem periodSigned_nontrivial (p : Lms.Params) :
-    ¬ (OfDevice emptyDevice .empty .empty "" emptyRoot #[] ∨ Break p emptyDevice .empty .empty "" emptyRoot #[]) := by
+/-- `PeriodSigned`'s conclusion fails at the empty run, for any parameters: the device signed nothing, so the run is
+not its, and the run hashes no string and forms no message, so it carries no break. -/
+theorem empty_not_signed (p : Lms.Params) :
+    ¬ (OfDevice emptyDevice .empty .empty "" emptyKey emptyRoot #[] ∨
+      Break p emptyDevice .empty .empty "" emptyKey emptyRoot #[]) := by
   rintro (⟨⟨i, hi, -⟩, -⟩ | ⟨x, hx, -⟩ | ⟨m, hm, -⟩ | ⟨m, hm, -⟩)
   · simp [emptyDevice] at hi
   · rw [empty_strings] at hx
@@ -1022,15 +983,23 @@ theorem periodSigned_nontrivial (p : Lms.Params) :
   · exact empty_partyKeyMessage _ m hm
   · exact empty_message m hm
 
-/-- **`PeriodSigned` fails at a verifier that accepts everything**: such a check accepts the empty run, where the
-conclusion fails (`periodSigned_nontrivial`). -/
+/-- **`PeriodSigned`'s nontrivial lemma**: its conclusion fails at the empty run, at the deployed LMS parameters
+(`empty_not_signed`), so a verifier that accepts the empty run, as one that accepts everything does
+(`periodSigned_acceptAll`), does not have `PeriodSigned`'s conclusion. -/
+theorem periodSigned_nontrivial :
+    ¬ (OfDevice emptyDevice .empty .empty "" emptyKey emptyRoot #[] ∨
+      Break Lms.deployed emptyDevice .empty .empty "" emptyKey emptyRoot #[]) :=
+  empty_not_signed Lms.deployed
+
+/-- **`PeriodSigned` fails at a verifier that accepts everything**: such a verifier accepts the empty run, where the
+conclusion fails (`empty_not_signed`). -/
 theorem periodSigned_acceptAll (p : Lms.Params)
-    (check : ByteArray → ByteArray → String → Attest.SignedRoot → Array Attest.Read → Lms.E Bool)
-    (hall : ∀ identity deployment party s reads, check identity deployment party s reads = .ok true) :
-    ¬ ∀ (identity deployment : ByteArray) (party : String) (s : Attest.SignedRoot) (reads : Array Attest.Read)
-      (dev : Device), check identity deployment party s reads = .ok true →
-        OfDevice dev identity deployment party s reads ∨ Break p dev identity deployment party s reads :=
-  fun h => periodSigned_nontrivial p (h _ _ _ _ _ _ (hall _ _ _ _ _))
+    (accepts : ByteArray → ByteArray → String → Attest.PartyKey → Attest.SignedRoot → Array Attest.Read → Lms.E Bool)
+    (hall : ∀ identity deployment party k s reads, accepts identity deployment party k s reads = .ok true) :
+    ¬ ∀ (identity deployment : ByteArray) (party : String) (k : Attest.PartyKey) (s : Attest.SignedRoot)
+      (reads : Array Attest.Read) (dev : Device), accepts identity deployment party k s reads = .ok true →
+        OfDevice dev identity deployment party k s reads ∨ Break p dev identity deployment party k s reads :=
+  fun h => empty_not_signed p (h _ _ _ _ _ _ _ (hall _ _ _ _ _ _))
 
 /-! ### `PeriodSound`'s lemmas -/
 
@@ -1051,23 +1020,20 @@ theorem Pr_unit_false (q : Unit → Prop) (h : ¬ q ()) : Claims.Pr q = 0 := by
 /-- The honest run: the honest period's check on the honest device's period, read through an extractor that reads
 the honest values. -/
 def honestRun (k k' : Lms.PrivateKey) (cert σ : Lms.Signature) (v : ByteArray) : PeriodRun :=
-  ⟨honestDevice k.publicKey k'.publicKey v, k.publicKey, HONEST_DEPLOYMENT, HONEST_PARTY, honestRoot k'.publicKey cert σ v,
-    #[honestRead v]⟩
+  ⟨honestDevice k.publicKey k'.publicKey v, k.publicKey, HONEST_DEPLOYMENT, HONEST_PARTY, honestKey k'.publicKey cert,
+    honestRoot σ v, #[honestRead v]⟩
 
-/-- **`PeriodSound`'s honest lemma**: at the honest deployed run (`periodSigned_honest`), the check accepts with
+/-- **`PeriodSound`'s honest lemma**: at the honest deployed run (`periodSigned_honest`), the verifier accepts with
 probability 1 and the bound's event, an accepted run that is not the device's, has probability 0. -/
-theorem periodSound_honest (v : ByteArray) :
+theorem periodSound_honest :
     ∃ τ : Unit → PeriodRun,
-      Claims.Pr (fun ω =>
-        Attest.check Lms.deployed (τ ω).identity (τ ω).deployment (τ ω).party (τ ω).root (τ ω).reads = .ok true) = 1 ∧
-      Claims.Pr (fun ω =>
-        Attest.check Lms.deployed (τ ω).identity (τ ω).deployment (τ ω).party (τ ω).root (τ ω).reads = .ok true ∧
-          ¬ OfDevice (τ ω).dev (τ ω).identity (τ ω).deployment (τ ω).party (τ ω).root (τ ω).reads) = 0 := by
-  obtain ⟨k, k', cert, σ, -, -, hc, ho⟩ := periodSigned_honest v
-  exact ⟨fun _ => honestRun k k' cert σ v, Pr_unit_true _ hc, Pr_unit_false _ fun h => h.2 ho⟩
-
-/-- The empty run, on one coin. -/
-def emptyRun : Unit → PeriodRun := fun _ => ⟨emptyDevice, .empty, .empty, "", emptyRoot, #[]⟩
+      Claims.Pr (fun ω => Attest.accepts Lms.deployed (τ ω).identity (τ ω).deployment (τ ω).party (τ ω).key (τ ω).root
+        (τ ω).reads = .ok true) = 1 ∧
+      Claims.Pr (fun ω => Attest.accepts Lms.deployed (τ ω).identity (τ ω).deployment (τ ω).party (τ ω).key (τ ω).root
+          (τ ω).reads = .ok true ∧
+        ¬ OfDevice (τ ω).dev (τ ω).identity (τ ω).deployment (τ ω).party (τ ω).key (τ ω).root (τ ω).reads) = 0 := by
+  obtain ⟨k, k', cert, σ, -, -, hc, ho⟩ := periodSigned_honest
+  exact ⟨fun _ => honestRun k k' cert σ HONEST_RECORD, Pr_unit_true _ hc, Pr_unit_false _ fun h => h.2 ho⟩
 
 theorem empty_finder : (collisionFinder Unit emptyRun).Pr sha512 = 0 := by
   unfold Claims.Finder.Pr
@@ -1082,37 +1048,51 @@ theorem empty_forger (p : Lms.Params) : forgeryPr p emptyRun = 0 := by
   rintro ⟨pk, m, σ, h, -⟩
   have h1 : Lms.partyKeyMessage (ByteArray.empty.extract 0 16) .empty "" .empty = .error
       s!"a deployment's hash is {Lms.DEPLOYMENT_BYTES} bytes, not {ByteArray.empty.size}" := rfl
-  obtain ⟨e, h2⟩ : ∃ e, emptyRoot.message .empty "" = .error e := ⟨_, rfl⟩
-  simp only [forger, emptyRun, emptyRoot] at h
+  obtain ⟨e, h2⟩ : ∃ e, emptyRoot.message .empty .empty "" = .error e := ⟨_, rfl⟩
+  simp only [forger, emptyRun, emptyKey, emptyRoot] at h
   simp only [emptyRoot] at h2
   rw [h1, h2] at h
   cases h
 
-/-- **`PeriodSound`'s nontrivial lemma**: at the empty run, the bound's right side is 0 (the collision finder outputs
-nothing, the forger nothing) and the run is not the device's: a check that accepted it would put probability 1 on the
-left. -/
-theorem periodSound_nontrivial (p : Lms.Params) :
+/-- At the empty run, for any parameters, `PeriodSound`'s right side is 0 (the collision finder outputs nothing, the
+forger nothing) and the run is not the device's: a verifier that accepted it would put probability 1 on the left. -/
+theorem empty_bound (p : Lms.Params) :
     (collisionFinder Unit emptyRun).Pr sha512 + forgeryPr p emptyRun = 0 ∧
-      ¬ OfDevice emptyDevice .empty .empty "" emptyRoot #[] := by
-  refine ⟨by rw [empty_finder, empty_forger, add_zero], fun h => periodSigned_nontrivial p (Or.inl h)⟩
+      ¬ OfDevice emptyDevice .empty .empty "" emptyKey emptyRoot #[] := by
+  refine ⟨by rw [empty_finder, empty_forger, add_zero], fun h => empty_not_signed p (Or.inl h)⟩
 
-/-- **`PeriodSound` fails at a verifier that accepts everything**: on the empty run, such a check's bad event has
-probability 1 and the bound's right side is 0 (`periodSound_nontrivial`). -/
+/-- **`PeriodSound`'s nontrivial lemma**: its bound fails at the empty run, at the deployed LMS parameters, for the
+verifier that accepts everything (`acceptAll`): its event, an accepted run that is not the device's, has probability
+1, and the bound's right side is 0 (`empty_bound`). -/
+theorem periodSound_nontrivial :
+    ¬ Claims.Pr (fun ω =>
+        acceptAll (emptyRun ω).identity (emptyRun ω).deployment (emptyRun ω).party (emptyRun ω).key
+          (emptyRun ω).root (emptyRun ω).reads = .ok true ∧
+        ¬ OfDevice (emptyRun ω).dev (emptyRun ω).identity (emptyRun ω).deployment (emptyRun ω).party
+          (emptyRun ω).key (emptyRun ω).root (emptyRun ω).reads) ≤
+      (collisionFinder Unit emptyRun).Pr sha512 + forgeryPr Lms.deployed emptyRun := by
+  obtain ⟨h0, hn⟩ := empty_bound Lms.deployed
+  rw [h0, not_le, Pr_unit_true]
+  · norm_num
+  · exact ⟨rfl, hn⟩
+
+/-- **`PeriodSound` fails at a verifier that accepts everything**: on the empty run, such a verifier's bad event has
+probability 1 and the bound's right side is 0 (`empty_bound`). -/
 theorem periodSound_acceptAll (p : Lms.Params)
-    (check : ByteArray → ByteArray → String → Attest.SignedRoot → Array Attest.Read → Lms.E Bool)
-    (hall : ∀ identity deployment party s reads, check identity deployment party s reads = .ok true) :
+    (accepts : ByteArray → ByteArray → String → Attest.PartyKey → Attest.SignedRoot → Array Attest.Read → Lms.E Bool)
+    (hall : ∀ identity deployment party k s reads, accepts identity deployment party k s reads = .ok true) :
     ¬ ∀ (Ω : Type) [Fintype Ω] [Inhabited Ω] (τ : Ω → PeriodRun),
-      Claims.Pr (fun ω => check (τ ω).identity (τ ω).deployment (τ ω).party (τ ω).root (τ ω).reads = .ok true ∧
-          ¬ OfDevice (τ ω).dev (τ ω).identity (τ ω).deployment (τ ω).party (τ ω).root (τ ω).reads) ≤
+      Claims.Pr (fun ω => accepts (τ ω).identity (τ ω).deployment (τ ω).party (τ ω).key (τ ω).root (τ ω).reads = .ok true ∧
+          ¬ OfDevice (τ ω).dev (τ ω).identity (τ ω).deployment (τ ω).party (τ ω).key (τ ω).root (τ ω).reads) ≤
         (collisionFinder Ω τ).Pr sha512 + forgeryPr p τ := by
   intro h
   have hb := h Unit emptyRun
-  obtain ⟨h0, hn⟩ := periodSound_nontrivial p
+  obtain ⟨h0, hn⟩ := empty_bound p
   rw [h0] at hb
   refine absurd hb (not_le.2 ?_)
   rw [Pr_unit_true]
   · norm_num
-  · exact ⟨hall _ _ _ _ _, hn⟩
+  · exact ⟨hall _ _ _ _ _ _, hn⟩
 
 /-! ### What the auditor and the prover see: the lemmas -/
 
