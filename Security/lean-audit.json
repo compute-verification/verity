@@ -2764,6 +2764,7 @@
  },
  "unread": {
   "Definitions.Accounting.Actual": ["Accounting.Placed.Forward", "Accounting.Placed.egress"],
+  "Definitions.Accounting.Assumptions.CreditedWords": ["Accounting.Assumptions.HelpWithinCertifier", "Accounting.Assumptions.WordCostsMacs"],
   "Definitions.Accounting.Assumptions.Remote": [
    "Accounting.Remote.Assumptions.ComputeAdditive",
    "Accounting.Remote.Assumptions.Identity",
@@ -2833,8 +2834,25 @@
   "Definitions.Accounting.HeadlineDc.Sm100Measured": ["Accounting.TS.Headline.Sm100Measured.rowNames"],
   "Definitions.Accounting.HeadlineDc.Sm90": ["Accounting.TS.Headline.Sm90.classes"],
   "Definitions.Accounting.HeadlineDc.Sm90Measured": ["Accounting.TS.Headline.Sm90Measured.rowNames"],
-  "Definitions.Accounting.JointBridge.CreditedWords": ["Accounting.receiptUnitMacs", "Accounting.receiptWordMacs"],
+  "Definitions.Accounting.JointBlocks": [
+   "Accounting.BlockWipe",
+   "Accounting.BlockWipe.Survives",
+   "Accounting.BlockWipe.unfilled",
+   "Accounting.BlocksRun",
+   "Accounting.BlocksRun.MemoryTerm",
+   "Accounting.BlocksRun.sideBits",
+   "Accounting.BlocksRun.undeclared"
+  ],
+  "Definitions.Accounting.JointBridge.CreditedWords": [
+   "Accounting.Certificates.helpUnits",
+   "Accounting.Compose.minWordMacs",
+   "Accounting.RealizesCreditedWords",
+   "Accounting.receiptUnitMacs",
+   "Accounting.receiptWordMacs"
+  ],
   "Definitions.Accounting.JointBridge.H200": ["Accounting.h200S8Price", "Accounting.w1Price"],
+  "Definitions.Accounting.JointBridge.SpaceOfPeriodHeld": ["Accounting.RealizesSpaceOfPeriodHeld"],
+  "Definitions.Accounting.JointLive": ["Accounting.condError"],
   "Definitions.Accounting.Overhead": [
    "Accounting.Overhead.Class",
    "Accounting.Overhead.Reads",
@@ -3142,6 +3160,7 @@
   ],
   "Definitions.Core.Circuit": ["Verity.Contains", "Verity.Implements"],
   "Definitions.Core.Decisive": ["Verity.Game.Decisive", "Verity.Game.Productive", "Verity.Game.Reaches", "Verity.Game.Unambiguous"],
+  "Definitions.Core.Draw": ["Verity.Coins", "Verity.Draw", "Verity.Draw.law"],
   "Definitions.Core.Fp32": [
    "Verity.Fp32.BF16_NAN_F2FP",
    "Verity.Fp32.BF16_NAN_TORCH",
@@ -3447,7 +3466,7 @@
   ],
   "Definitions.Pous.Accounting.LemmaA": ["Pous.A7Row", "Pous.gammaM1", "Pous.histCount", "Pous.logHistGammaM1", "Pous.logHistGammaM2"],
   "Definitions.Pous.Assumptions": ["Pous.Assumptions.B1Prime", "Pous.Assumptions.LemmaA"],
-  "Definitions.Pous.Assumptions.P2": ["Pous.P2.Assumptions.PrimeP16448"],
+  "Definitions.Pous.Assumptions.P2": ["Pous.P2.Assumptions.CoinCommitHides", "Pous.P2.Assumptions.PrimeP16448"],
   "Definitions.Pous.Game.Oracle": ["Pous.IdealModel.plain", "Pous.Prog.RoundBounded", "Pous.Prog.width"],
   "Definitions.Pous.Model.BandGraph": ["PousP3Column.bandExtra", "PousP3Column.bandGraph"],
   "Definitions.Pous.Model.ColumnGame": [
@@ -4616,8 +4635,6 @@
    "Pouw.Window.Game",
    "Pouw.Window.Game.bind",
    "Pouw.Window.Game.map",
-   "Pouw.Window.Law",
-   "Pouw.Window.Law.escape",
    "Pouw.Window.Law.prod",
    "Pouw.Window.LinkSoundIn",
    "Pouw.Window.SeedIn",
@@ -4636,7 +4653,6 @@
    "Pouw.Window.along",
    "Pouw.Window.atTgt",
    "Pouw.Window.auditReg",
-   "Pouw.Window.avg",
    "Pouw.Window.chunk",
    "Pouw.Window.coll",
    "Pouw.Window.cont",
@@ -4644,7 +4660,6 @@
    "Pouw.Window.onAccept",
    "Pouw.Window.onAcceptExp",
    "Pouw.Window.pick",
-   "Pouw.Window.prCoin",
    "Pouw.Window.prob",
    "Pouw.Window.rank",
    "Pouw.Window.reg",
