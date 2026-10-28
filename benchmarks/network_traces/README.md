@@ -203,7 +203,7 @@ The terms, in the generator reading of the scan's statement (each unit's registe
 - log2(cap_c + 1) = log2 66 = 6.04 bits a connection. Here cap_c bounds `WardenSchedule.cells c`, the egress cells of
   connection c's lane, which is egress_cells. The endpoint's slot count isn't a term of the network certifier's
   schedule: it enters the compute audit's terms, which go into JointPeriodLive.
-- The free inputs are the scan's `prog` rows: T·NP = 32 × 4,480 = 143,360 bits a link-window as registered today, or
+- The free inputs are the scan's `prog` rows: T·NP = 32 × 4,480 = 143,360 bits a sampling block as registered, or
   32 + KO·IDB = 1,120 bits a request if `prog` is an input only at its anchored entries.
 - No faulty term with every unit drawn, and D_j = 1, so the jitter term is 0: assumed (J), `NetTiming.JitterBounded`,
   not met at D_j = 1 until a run shows the warden's written buckets tell a receiver no more than an idle one. The
