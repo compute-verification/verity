@@ -7,7 +7,8 @@ block record. The record accepts only when every subprotocol accepted on its nod
 malformed or about another server. The wipe composes only when its answer accepts on the record's server. PoUW's
 development piece checks the window's gate session and credits nothing, and the gate is refused while the lane has a period
 open. `served_verdicts.sh`'s window circuits gate on every class of CLASSES, and the class of record's count after them
-gates nothing. Its load, `serve_load.py --varied`, writes each request's send, first-token and done times beside its
+gates nothing. Its preflight refuses a flag the tree's certifier front doesn't take, and a front load with no front; its
+composite step publishes each case's and each product's verdict lines and nothing else. Its load, `serve_load.py --varied`, writes each request's send, first-token and done times beside its
 record, on an injected clock and a stand-in endpoint."""
 from __future__ import annotations
 
@@ -473,10 +474,10 @@ def _circuits(tmp_path: Path, classes: str, answers: dict) -> tuple[int, list[st
 
 def test_the_class_of_record_is_measured_after_the_gating_classes_and_its_timeout_fails_nothing(tmp_path):
     rc, lines, limits = _circuits(tmp_path, "4,32,4", {"4,32,4": "count", "record": "expire"})
-    assert rc == 0 and limits == ["30m", "20m"], (rc, lines)
+    assert rc == 0 and limits == ["30m", "45m"], (rc, lines)
     assert lines[0].startswith("WINDOW-CIRCUIT class 4,32,4: registered 7 bits, free 3 bits of 10 input bits at the "
                                "weights registration's pins; ")
-    assert lines[1:] == ["WINDOW-CIRCUIT class record (measurement) timed out after WC_RECORD_TIMEOUT=20m (exit 124): no count"]
+    assert lines[1:] == ["WINDOW-CIRCUIT class record (measurement) timed out after WC_RECORD_TIMEOUT=45m (exit 124): no count"]
 
 
 @pytest.mark.parametrize("classes, answers, refused", [
@@ -491,7 +492,94 @@ def test_any_class_of_classes_that_does_not_count_fails_the_run(tmp_path, classe
     assert rc != 0 and sum(line.startswith(refused) for line in lines) == 1, lines
     assert any("prove_path.py window-circuit: refused at" in line for line in lines) == (answers.get("8,64,4") == "refuse")
     measured = [line for line in lines if line.startswith("WINDOW-CIRCUIT class record (measurement)")]
-    assert len(measured) == (classes != "record") and limits[-1] == ("30m" if classes == "record" else "20m")
+    assert len(measured) == (classes != "record") and limits[-1] == ("30m" if classes == "record" else "45m")
+
+
+def _script(path: Path, body: str) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(f"#!/bin/sh\n{body}\n")
+    path.chmod(0o755)
+
+
+FRONT = '"$PY" benchmarks/network_traces/certifier_piece.py front "$1" "$2" "$3" --bucket-ms 4000 --warmup 0'
+
+
+@pytest.mark.parametrize("load, front, takes, line", [
+    ("varied", FRONT, "--gate --warmup --bucket-ms", None),
+    ("front", FRONT, "--gate --warmup --bucket-ms", None),
+    ("varied", "", "", None),
+    ("varied", FRONT, "--gate --warmup --bucket-ms-x", "PREFLIGHT: CERTIFIER_FRONT passes --bucket-ms, which this tree's "
+                                                        "certifier front doesn't take"),
+    ("front", "", "", "PREFLIGHT: LOAD=front sends the front's group alone, and CERTIFIER_FRONT is unset"),
+])
+def test_the_preflight_refuses_a_front_flag_the_trees_front_does_not_take_and_a_front_load_with_no_front(
+        tmp_path, load, front, takes, line):
+    tree, venv = tmp_path / "tree", tmp_path / "venv" / "bin"
+    (tree / "benchmarks" / "network_traces").mkdir(parents=True)
+    (tree / "benchmarks" / "network_traces" / "certifier_piece.py").write_text(
+        f"import sys\nassert sys.argv[1:] == ['front', '--help']\nprint('usage: certifier_piece.py front PORT [{takes}]')\n")
+    _script(venv / "python", f'exec {sys.executable} "$@"')
+    env = {"PATH": os.defpath, "HOME": str(tmp_path), "VENV": str(venv.parent), "OUT": str(tmp_path / "out"),
+           "LOAD": load, "CERTIFIER_FRONT": front}
+    rc = subprocess.run(["bash", str(HERE.parent / "served_verdicts.sh"), "front-flags"], cwd=tree, env=env,
+                        check=False).returncode
+    said = (tmp_path / "out" / "verdicts.txt").read_text().splitlines() if (tmp_path / "out" / "verdicts.txt").exists() else []
+    assert (rc, said) == ((3, [line]) if line else (0, []))
+
+
+FAKE_COMPOSITE = '''import json, sys
+from pathlib import Path
+COMPONENTS = {"onsite": ("verity/pous/p2/v4/run", "verity/wipe/v0"), "remote": ("verity/pouw/v1",)}
+REGISTRATION = "verity/nci/v1"
+if __name__ == "__main__":
+    a = sys.argv[1:]
+    Path(a[a.index("--private-out") + 1]).mkdir(parents=True)
+    cases = [a[i + 1] for i, x in enumerate(a) if x == "--cases"]
+    Path(a[a.index("--private-out") + 1], "argv.json").write_text(json.dumps(cases))
+    print("PIECE verity/pous/p2/v4/run accept 0123456789abcdef0123")
+    print("NOT_ESTABLISHED missing verity/wipe/v0")
+    print(f"VERDICT verity/{a[0]}/v0 reject components")
+    sys.exit(1)
+'''
+
+
+def test_the_composite_step_publishes_only_each_cases_verdict_and_each_products_lean_verdict(tmp_path):
+    """served_composite.sh with a stand-in lake, served_case.sh and composite.py: PoUS's case is written under the serve
+    dir's private dir with both Lean answers built and passed; onsite gets the cases of its own subprotocols and remote
+    none of them; OUT/verdicts.txt gets the CASE line's protocol and verdict and each product's NOT_ESTABLISHED and VERDICT
+    lines, never a PIECE line, a log or a path; and without composite.py in the tree it does nothing."""
+    tree, bin_, d, out = tmp_path / "tree", tmp_path / "bin", tmp_path / "serve", tmp_path / "out"
+    out.mkdir()
+    _script(bin_ / "lake", 'mkdir -p .lake/build/bin && touch ".lake/build/bin/$2"')
+    _script(bin_ / "systemd-run", "exit 1")
+    _script(tree / "benchmarks" / "pous" / "served_case.sh", f'''set -e
+[ -x "$POUS_EXE" ] && [ -x "$WIPE_EXE" ] && [ "$1" = {out}/pieces ] && [ "$MEM_GB" = 170 ]
+for w in pous/w0 other; do mkdir -p {d}/private/$w; echo '{{"evidence": "beef"}}' > {d}/private/$w/case.json; done
+echo '{{"protocol": "verity/pous/p2/v4/run", "verdict": "accept"}}' > {d}/private/pous/w0/answer.json
+echo '{{"protocol": "verity/certifier/v9", "verdict": "accept"}}' > {d}/private/other/answer.json
+echo "CASE: evidence beef"
+echo 'CASE {{"piece": "{d}/private/pous/w0", "protocol": "verity/pous/p2/v4/run", "verdict": "accept"}}' ''')
+    for pkg in ("protocols/pous/check", "devices/memory_challenger/lean", "protocols/remote", "protocols/onsite"):
+        (tree / "verity" / "core" / pkg).mkdir(parents=True)
+    (tree / "benchmarks" / "one_stage").mkdir(parents=True)
+    (tree / "benchmarks" / "one_stage" / "composite.py").write_text(FAKE_COMPOSITE)
+    env = {"PATH": f"{bin_}:{os.defpath}", "HOME": str(tmp_path), "PY": sys.executable, "TPY": sys.executable}
+    run = lambda: subprocess.run(["bash", str(HERE.parent / "served_composite.sh"), str(d), str(out)], cwd=tree, env=env,  # noqa: E731
+                                 check=False, capture_output=True, text=True)
+    r = run()
+    assert r.returncode == 0, r.stderr
+    assert (out / "verdicts.txt").read_text().splitlines() == [
+        "COMPOSITE CASE verity/pous/p2/v4/run accept", "COMPOSITE CASES: served_case.sh exit 0",
+        "COMPOSITE remote: NOT_ESTABLISHED missing verity/wipe/v0", "COMPOSITE remote: VERDICT verity/remote/v0 reject components",
+        "COMPOSITE onsite: NOT_ESTABLISHED missing verity/wipe/v0", "COMPOSITE onsite: VERDICT verity/onsite/v0 reject components"]
+    p = d / "private" / "composite"
+    assert json.loads((p / "remote" / "private" / "argv.json").read_text()) == []
+    assert json.loads((p / "onsite" / "private" / "argv.json").read_text()) == [str(d / "private" / "pous" / "w0")]
+    assert oct((d / "private").stat().st_mode & 0o777) == "0o700" and list(out.iterdir()) == [out / "verdicts.txt"]
+    (tree / "benchmarks" / "one_stage" / "composite.py").unlink()
+    (out / "verdicts.txt").unlink()
+    assert run().returncode == 0
+    assert (out / "verdicts.txt").read_text() == "COMPOSITE: not run, this tree has no benchmarks/one_stage/composite.py\n"
 
 
 class _Response:
