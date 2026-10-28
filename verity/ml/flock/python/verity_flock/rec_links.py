@@ -43,7 +43,9 @@ class Refused(ValueError):
 
 
 @dataclass(frozen=True)
-class Link:
+class LinkEntry:
+    """One entry of the link table: input row ``port`` of unit ``reader`` holds output row ``out`` of unit ``writer``."""
+
     reader: int
     port: int
     writer: int
@@ -63,26 +65,26 @@ def grid(x: int) -> int:
     return _grid(x, GRID_BITS)
 
 
-def encode(link: Link) -> bytes:
+def encode(link: LinkEntry) -> bytes:
     fields = (KIND_LINK, link.reader, link.port, link.writer, link.out)
     if any(not 0 <= f < 2 ** 32 for f in fields):
         raise ValueError(f"a link's fields are u32s: {link}")
     return struct.pack("<5I", *fields) + bytes(ROW_BYTES - FIELD_BYTES)
 
 
-def table(links: Sequence[Link]) -> list[bytes]:
+def table(links: Sequence[LinkEntry]) -> list[bytes]:
     """The table's rows: the links, then fillers up to ``grid(L)``."""
     if not links:
         raise ValueError("a table without links is no table")
     return [encode(link) for link in links] + [bytes(ROW_BYTES)] * (grid(len(links)) - len(links))
 
 
-def register(links: Sequence[Link], salts: Sequence[bytes] | None = None) -> advice.Registration:
+def register(links: Sequence[LinkEntry], salts: Sequence[bytes] | None = None) -> advice.Registration:
     """The table committed as advice; its root and row count are what goes public."""
     return advice.register(table(links), 8 * ROW_BYTES, BINDING, salts)
 
 
-def decode(row: bytes) -> Link | None:
+def decode(row: bytes) -> LinkEntry | None:
     if len(row) != ROW_BYTES:
         raise Refused("row-size", f"a row of {len(row)} bytes, not {ROW_BYTES}")
     kind, reader, port, writer, out = struct.unpack_from("<5I", row)
@@ -93,7 +95,7 @@ def decode(row: bytes) -> Link | None:
     if kind == KIND_LINK:
         if any(row[FIELD_BYTES:]):
             raise Refused("row-nonzero", "a link row's bytes past its fields are not zero")
-        return Link(reader, port, writer, out)
+        return LinkEntry(reader, port, writer, out)
     raise Refused("row-kind", f"a row of kind {kind}, neither a link ({KIND_LINK}) nor a filler (0)")
 
 
@@ -137,10 +139,10 @@ def _population(sh: Shape, seed: int) -> tuple[list[list[list[int]]], list[list[
     return ins, outs
 
 
-def _chain(sh: Shape, seed: int) -> tuple[list[Link], list[list[list[int]]], list[list[list[int]]]]:
+def _chain(sh: Shape, seed: int) -> tuple[list[LinkEntry], list[list[list[int]]], list[list[list[int]]]]:
     """A chain: unit u + 1's input row 0 reads unit u's output row 0, its values copied, so every link holds."""
     ins, outs = _population(sh, seed)
-    links = [Link(u + 1, 0, u, 0) for u in range(sh.units - 1)]
+    links = [LinkEntry(u + 1, 0, u, 0) for u in range(sh.units - 1)]
     for link in links:
         ins[link.reader][link.port] = list(outs[link.writer][link.out])
     return links, ins, outs
@@ -157,7 +159,7 @@ def vectors() -> dict:
 
     for n in (1, 2, 16, 17, 33, 39):
         add(f"honest-{n}", table(links[:n]))
-    fan = [Link(u, 0, 0, 0) for u in range(1, 18)]
+    fan = [LinkEntry(u, 0, 0, 0) for u in range(1, 18)]
     fan_ins = [[list(r) for r in unit] for unit in ins]
     for link in fan:
         fan_ins[link.reader][link.port] = list(outs[0][0])
@@ -171,12 +173,12 @@ def vectors() -> dict:
     add("empty", [bytes(ROW_BYTES)] * 16)
     add("count", rows + [bytes(ROW_BYTES)] * 2)
     add("count-short", rows[:17])
-    add("range-unit", table(links[:3] + [Link(40, 0, 1, 0)]))
-    add("range-port", table(links[:3] + [Link(5, 2, 4, 0)]))
-    add("range-out", table(links[:3] + [Link(5, 0, 4, 2)]))
-    add("width", table(links[:3] + [Link(5, 1, 4, 0)]))
+    add("range-unit", table(links[:3] + [LinkEntry(40, 0, 1, 0)]))
+    add("range-port", table(links[:3] + [LinkEntry(5, 2, 4, 0)]))
+    add("range-out", table(links[:3] + [LinkEntry(5, 0, 4, 2)]))
+    add("width", table(links[:3] + [LinkEntry(5, 1, 4, 0)]))
     add("twice", table(links[:3] + [links[1]]))
-    add("unequal", table(links[:3] + [Link(5, 0, 7, 0)]))
+    add("unequal", table(links[:3] + [LinkEntry(5, 0, 7, 0)]))
     bent = [[list(r) for r in unit] for unit in ins]
     bent[9][0][3] ^= 1
     add("unequal-word", table(links[:12]), i=bent)

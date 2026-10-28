@@ -37,7 +37,8 @@ def grid (x : Nat) (bits : Nat := GRID_BITS) : Nat :=
   let e := bitLength x - bits
   (x + 2 ^ e - 1) / 2 ^ e * 2 ^ e
 
-structure Link where
+/-- One entry of the link table: input row `port` of unit `reader` holds output row `out` of unit `writer`. -/
+structure LinkEntry where
   reader : Nat
   port : Nat
   writer : Nat
@@ -56,7 +57,7 @@ def u32At (row : ByteArray) (off : Nat) : Nat :=
     16777216 * (row.get! (off + 3)).toNat
 
 /-- A table row: a link, a filler (none), or the refusal. -/
-def decode (row : ByteArray) : Except String (Option Link) :=
+def decode (row : ByteArray) : Except String (Option LinkEntry) :=
   if row.size != ROW_BYTES then .error s!"row-size: a row of {row.size} bytes, not {ROW_BYTES}"
   else
     let kind := u32At row 0
@@ -73,16 +74,16 @@ def le32 (x : Nat) : ByteArray := ⟨#[(x % 256).toUInt8, (x / 256 % 256).toUInt
   (x / 16777216 % 256).toUInt8]⟩
 
 /-- A link's row (each field below `2 ^ 32`). -/
-def encode (l : Link) : ByteArray :=
+def encode (l : LinkEntry) : ByteArray :=
   le32 KIND_LINK ++ le32 l.reader ++ le32 l.port ++ le32 l.writer ++ le32 l.out ++
     ⟨Array.replicate (ROW_BYTES - FIELD_BYTES) 0⟩
 
 /-- The prover's table: the links' rows, then fillers up to `grid L`. -/
-def table (ls : List Link) : Array ByteArray :=
+def table (ls : List LinkEntry) : Array ByteArray :=
   (ls.map encode).toArray ++ Array.replicate (grid ls.length - ls.length) ⟨Array.replicate ROW_BYTES 0⟩
 
 /-- Every row decoded, in order; the first refusal. -/
-def decodeAll : List ByteArray → Except String (List (Option Link))
+def decodeAll : List ByteArray → Except String (List (Option LinkEntry))
   | [] => .ok []
   | r :: rs =>
     match decode r with
@@ -93,19 +94,19 @@ def decodeAll : List ByteArray → Except String (List (Option Link))
       | .ok xs => .ok (x :: xs)
 
 /-- The links come first: no link after a filler. -/
-def ordered : List (Option Link) → Bool
+def ordered : List (Option LinkEntry) → Bool
   | [] => true
   | some _ :: xs => ordered xs
   | none :: xs => xs.all Option.isNone
 
 /-- What a link holds at the shape and the rows' values: its units and rows exist, its two rows have the same words, and
 its reader row's words are its writer row's. -/
-def Holds (sh : Shape) (inRow outRow : Nat → Nat → Array Nat) (l : Link) : Prop :=
+def Holds (sh : Shape) (inRow outRow : Nat → Nat → Array Nat) (l : LinkEntry) : Prop :=
   l.reader < sh.units ∧ l.writer < sh.units ∧ l.port < sh.ins.size ∧ l.out < sh.outs.size ∧
     sh.ins[l.port]! = sh.outs[l.out]! ∧ inRow l.reader l.port = outRow l.writer l.out
 
 /-- Link `k`'s refusal, `seen` the input rows the links before it read. -/
-def linkErr (sh : Shape) (inRow outRow : Nat → Nat → Array Nat) (seen : List (Nat × Nat)) (k : Nat) (l : Link) :
+def linkErr (sh : Shape) (inRow outRow : Nat → Nat → Array Nat) (seen : List (Nat × Nat)) (k : Nat) (l : LinkEntry) :
     Option String :=
   if ¬ (l.reader < sh.units ∧ l.writer < sh.units ∧ l.port < sh.ins.size ∧ l.out < sh.outs.size) then
     some s!"range: link {k} reads input row {l.port} of unit {l.reader} as output row {l.out} of unit {l.writer}, outside the population's {sh.units} units, {sh.ins.size} input and {sh.outs.size} output rows"
@@ -118,7 +119,7 @@ def linkErr (sh : Shape) (inRow outRow : Nat → Nat → Array Nat) (seen : List
   else none
 
 /-- Each link in order, `k` the first's index. -/
-def links (sh : Shape) (inRow outRow : Nat → Nat → Array Nat) : List (Nat × Nat) → Nat → List Link → Except String Unit
+def links (sh : Shape) (inRow outRow : Nat → Nat → Array Nat) : List (Nat × Nat) → Nat → List LinkEntry → Except String Unit
   | _, _, [] => .ok ()
   | seen, k, l :: ls =>
     match linkErr sh inRow outRow seen k l with
@@ -142,7 +143,7 @@ def check (sh : Shape) (inRow outRow : Nat → Nat → Array Nat) (rows : Array 
 
 /-! ## What `check` accepts -/
 
-theorem linkErr_none {sh : Shape} {inRow outRow : Nat → Nat → Array Nat} {seen : List (Nat × Nat)} {k : Nat} {l : Link}
+theorem linkErr_none {sh : Shape} {inRow outRow : Nat → Nat → Array Nat} {seen : List (Nat × Nat)} {k : Nat} {l : LinkEntry}
     (h : linkErr sh inRow outRow seen k l = none) : Holds sh inRow outRow l ∧ (l.reader, l.port) ∉ seen := by
   unfold linkErr at h
   split at h
@@ -161,7 +162,7 @@ theorem linkErr_none {sh : Shape} {inRow outRow : Nat → Nat → Array Nat} {se
           exact ⟨⟨h1.1, h1.2.1, h1.2.2.1, h1.2.2.2, Decidable.not_not.1 h2, Decidable.not_not.1 h4⟩, h3⟩
 
 theorem links_sound {sh : Shape} {inRow outRow : Nat → Nat → Array Nat} :
-    ∀ {seen : List (Nat × Nat)} {k : Nat} {ls : List Link}, links sh inRow outRow seen k ls = .ok () →
+    ∀ {seen : List (Nat × Nat)} {k : Nat} {ls : List LinkEntry}, links sh inRow outRow seen k ls = .ok () →
       (∀ l ∈ ls, Holds sh inRow outRow l) ∧ (ls.map fun l => (l.reader, l.port)).Nodup ∧
         ∀ l ∈ ls, (l.reader, l.port) ∉ seen
   | _, _, [], _ => ⟨by simp, by simp, by simp⟩
@@ -186,7 +187,7 @@ theorem links_sound {sh : Shape} {inRow outRow : Nat → Nat → Array Nat} :
         · exact hs
         · exact fun hm => ih3 x hx (List.mem_cons_of_mem _ hm)
 
-theorem ordered_split : ∀ {xs : List (Option Link)}, ordered xs = true →
+theorem ordered_split : ∀ {xs : List (Option LinkEntry)}, ordered xs = true →
     xs = (xs.filterMap id).map some ++ List.replicate (xs.length - (xs.filterMap id).length) none
   | [], _ => rfl
   | some l :: xs, h => by
@@ -207,7 +208,7 @@ the shape and the rows' values (`Holds`: its reader row's words are its writer r
 links. -/
 theorem check_sound {sh : Shape} {inRow outRow : Nat → Nat → Array Nat} {rows : Array ByteArray} {L : Nat}
     (h : check sh inRow outRow rows = .ok L) :
-    ∃ ls : List Link, decodeAll rows.toList = .ok (ls.map some ++ List.replicate (rows.size - L) none) ∧
+    ∃ ls : List LinkEntry, decodeAll rows.toList = .ok (ls.map some ++ List.replicate (rows.size - L) none) ∧
       L = ls.length ∧ 0 < L ∧ rows.size = grid L ∧ (∀ l ∈ ls, Holds sh inRow outRow l) ∧
       (ls.map fun l => (l.reader, l.port)).Nodup := by
   unfold check at h
@@ -235,7 +236,7 @@ theorem check_sound {sh : Shape} {inRow outRow : Nat → Nat → Array Nat} {row
             obtain ⟨h1, h2, -⟩ := links_sound hl
             have hlen : xs.length = rows.size := by
               have := congrArg List.length (ordered_split ho)
-              have hx : ∀ {ys : List ByteArray} {zs : List (Option Link)}, decodeAll ys = .ok zs → zs.length = ys.length
+              have hx : ∀ {ys : List ByteArray} {zs : List (Option LinkEntry)}, decodeAll ys = .ok zs → zs.length = ys.length
                 := by
                 intro ys
                 induction ys with
