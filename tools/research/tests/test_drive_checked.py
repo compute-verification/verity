@@ -46,6 +46,9 @@ def test_a_review_landing_moves_checked_and_main_follows_only_once_its_after_lan
     assert [c for c, *_ in h.posted] == [tip]                   # the after-landing run checks `checked`'s tip
     h.tick()                                                    # #1 and #2 are still open on GitHub: not admitted again
     assert _main(world) == main and world.on_next(h.q) == [3]
+    st = h.q.status()
+    assert st[1].state == "queued" and st[1].why.startswith("landed on `checked`: it reaches `main` when"), st[1]
+    assert st[3].state == "queued" and st[3].position == 1
     _pass(h)
     h.tick()
     assert h.postland()["verified"] == tip and _main(world) == tip

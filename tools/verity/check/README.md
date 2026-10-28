@@ -1,7 +1,7 @@
 # `check`
 
-`check` is the repository's one check. `verity check` runs `check.py` here, on `main` after each landing, and on any commit
-you ask it to. The jobs it runs are data in `ci.toml`: each has an owner, a part, a group and what its failure means.
+`check` is the repository's one check. `verity check` runs `check.py` here, on each landing's tip before `main` moves there, and on any
+commit you ask it to. The jobs it runs are data in `ci.toml`: each has an owner, a part, a group and what its failure means.
 
 | Part | Jobs |
 | --- | --- |
@@ -50,6 +50,7 @@ the checkout.
 
 PRs land through the merge queue (`research queue drive`): its flags are `drive.toml` and its admission rules are
 `queue.toml`. Before a PR lands, the landing gates `drive.toml` names (`gates/markdown_caps.py` among them) judge its
-merge. After each landing, one run checks `main`'s tip (`train.sh --deferred`), and `post_train.py` runs the vLLM
-regression's rebuilds. AGENTS.md "Checking and merging" is the procedure. A pure move that `move_check.py` certifies
+merge. Reviewed PRs land on `checked` (`land_into`); after each landing, one run of the full check checks `checked`'s tip
+(`train.sh --deferred`), and `main` moves only to a commit whose run passed every step, where `post_train.py` runs the vLLM
+regression's rebuilds. The team skill's "Landing" is the procedure. A pure move that `move_check.py` certifies
 (`verity check move BASE HEAD`) lands ahead of the queue.

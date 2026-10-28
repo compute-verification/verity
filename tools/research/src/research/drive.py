@@ -9,17 +9,18 @@ What only a PR's owner acts on goes to that owner alone (`tell`).  Each tick app
 at `stale_close_days` drive closes it, its branch kept.  After a landing, the owner of each unmarked open PR whose head contains
 a landed PR's head hears once that its base landed and to merge `main` (`_stacked`).
 
-Review landing, the only landing.  `main` holds only tested commits: PRs land on a review onto the
-landing branch, drive.toml's `land_into` (`checked`: `Queue.into`), and `main` is fast-forwarded only to a commit of it whose
-after-landing run passed every step (`_promote`); with `land_into = "main"` they land on `main` and are checked after.  A tick
+Review landing, the only landing.  `main` holds only fully checked commits: PRs land on a review onto the
+landing branch, drive.toml's `land_into` (`checked`: `Queue.into`), drive runs the full check on its tip, and `main` is
+fast-forwarded only to a commit of it whose after-landing run passed every step (`_promote`); with `land_into = "main"` they
+land on `main` and are checked after.  A tick
 syncs `next` (`Queue.sync`: admit and drop PRs, rebuild on a moved `checked`), then lands its longest prefix whose every member has a land verdict at its head and no hold
 (`research queue review N --land|--hold`, a `reviewed` label on `pr:N@HEAD`; one by its owner, the owner's handle or its ready
 mark's author doesn't count: `queue.unreviewed`), a fast-forward of `checked` (`_land`); once `main` reaches it, `merge.caught_up`
 (the spec DM, node 1's mirror, the post-train regression, the Lean cache publish, the landing post) and the sweep (`_on_main`).
 A `main` pushed outside drive (a pure move, on its own check) is merged into `checked` (`_absorb`).  Two gates cut the prefix
 first.  A Lean change (a member whose own change touches a lock, `lean-audit.json`, or a Lean source outside `Security/`
-of a package that has one, Lean that runs as code: `queue.lean_change`; Lean proofs alone land on the verdict, checked after
-landing) lands only once a lean-audit passed on a commit of `next` at or above it: drive's own Lean
+of a package that has one, Lean that runs as code: `queue.lean_change`; Lean proofs alone land on the verdict, checked by the
+after-landing run) lands only once a lean-audit passed on a commit of `next` at or above it: drive's own Lean
 check (`train.sh TOP MACHINES --deferred lean-audit`, of the prefix's top, while `next` stays on its base for it), or any
 recorded run of the store whose lean-audit passed there; one that regenerated locks lands exactly at its commit,
 the locks on top, and `next` is rebuilt on that lock commit at once, each member above with its merge's tree and those records
@@ -840,7 +841,7 @@ class Driver:
         `CI`, and launched again."""
         if not (pl := drive.get("postland")) or not (run := pl.get("run")):
             return
-        if (tail := self._resolve(run, f"the post-landing run of `main` {run['tip'][:12]}")) is not None:
+        if (tail := self._resolve(run, f"the post-landing run of `{self.q.into}` {run['tip'][:12]}")) is not None:
             pl["run"] = None
             if run.get("resend"):
                 pl["resend"] = True
@@ -868,10 +869,10 @@ class Driver:
                     self._red_baseline(drive, pl, run, f"it passed without passing {', '.join(unrun)}")
                     return
                 pl["failed"] = tip
-                self.refuse(drive, f"postland:{tip}", f"the post-landing run {' '.join(run['ids'])} of `main` {tip[:12]} "
+                self.refuse(drive, f"postland:{tip}", f"the post-landing run {' '.join(run['ids'])} of `{self.q.into}` {tip[:12]} "
                                                       f"passed without passing {', '.join(unrun)} (skipped, or absent from its "
                                                       "steps.jsonl): it verified nothing and reverted nothing. Find why; "
-                                                      "the next landing's run checks `main` again")
+                                                      f"the next landing's run checks `{self.q.into}` again")
                 return
             pl["verified"], pl["verified_run"] = tip, " ".join(run["ids"])
             # a step it skipped by name (`start_postland`) still holds from the run that verified `main` before
@@ -880,7 +881,7 @@ class Driver:
             pl["pending"] = [p for p in pl["pending"] if not self._ancestor(p, tip)]
             pl["landed_at"] = {p: t for p, t in (pl.get("landed_at") or {}).items() if p in pl["pending"]}
             self._red(drive, pl, run, ended=True)
-            self.q.log(f"research queue drive: `main` {tip[:12]} verified: its post-landing run {' '.join(run['ids'])} passed "
+            self.q.log(f"research queue drive: `{self.q.into}` {tip[:12]} verified: its post-landing run {' '.join(run['ids'])} passed "
                        f"({', '.join(pl.get('steps') or ())})" + (f"; {len(pl['pending'])} landing(s) above it wait" if pl["pending"] else ""))
             return
         if not early and all(rc in (NOT_STARTED, SIGTERM_RC) for _, rc, *_ in states.values()):
@@ -927,12 +928,12 @@ class Driver:
         was_killed = signalled or (bool(members) and any(implicated(d) is None and killed(d, why)
                                                          for d in self.evidence(self.repo, run["ids"])))
         since = " ".join(f"#{x.pr}" for x in members) or "none"
-        head = (f"the post-landing run {ids} of `main` {tip[:12]} ({', '.join(pl.get('steps') or ())}) failed ({why}); PRs "
-                f"landed since {base[:12]}, its last verified `main`: {since}")
+        head = (f"the post-landing run {ids} of `{self.q.into}` {tip[:12]} ({', '.join(pl.get('steps') or ())}) failed ({why}); PRs "
+                f"landed since {base[:12]}, its last verified `{self.q.into}`: {since}")
         key = f"postland:{tip}"
         if was_killed and not run.get("resend"):
             pl["resend"] = True
-            self.q.log(f"research queue drive: {head}. It was killed, a machine's fault: it runs again once, on `main`'s tip")
+            self.q.log(f"research queue drive: {head}. It was killed, a machine's fault: it runs again once, on `{self.q.into}`'s tip")
             return
         if run.get("baseline"):
             self._red_baseline(drive, pl, run, why)
@@ -942,7 +943,7 @@ class Driver:
             self.refuse(drive, key, f"{head}. Reverted nothing: it was killed again on its resend, a machine's fault")
         elif not self._red(drive, pl, run, ended=True):
             self.refuse(drive, key, f"{head}. Its records name no failed suite or step: reverted nothing. Find why; the "
-                                    "next landing's run checks `main` again")
+                                    f"next landing's run checks `{self.q.into}` again")
 
     def _lost(self, run: dict, states: dict) -> bool:
         """Whether every twin of ``run`` that hasn't ended has had no readable state (`unknown`) for `LOST_AFTER_S` since its
@@ -958,10 +959,10 @@ class Driver:
         unrun = self._unrun(run["ids"], steps)
         pl["verified"], pl["verified_as"] = tip, {"steps": [s for s in steps if s not in unrun], "no_cache": run["as"]["no_cache"]}
         pl["pending"] = [p for p in pl["pending"] if not self._ancestor(p, tip)]
-        self.refuse(drive, f"postland:{tip}", f"the baseline after-landing run {' '.join(run['ids'])} of `main` {tip[:12]} failed "
-                                              f"({why}): `main` was red before any review landing. Landing goes on, and until a "
-                                              f"run of `main` passes {', '.join(unrun) or 'them'}, their failure reverts nothing. "
-                                              "Fix `main`")
+        self.refuse(drive, f"postland:{tip}", f"the baseline after-landing run {' '.join(run['ids'])} of `{self.q.into}` {tip[:12]} failed "
+                                              f"({why}): `{self.q.into}` was red before any review landing. Landing goes on, and until a "
+                                              f"run of `{self.q.into}` passes {', '.join(unrun) or 'them'}, their failure reverts nothing. "
+                                              f"Fix `{self.q.into}`")
 
     def _failing(self, run: dict) -> list[str]:
         """The steps a post-landing run's steps.jsonl records as failed."""
@@ -1034,7 +1035,7 @@ class Driver:
             del pl["red"][key]
             if (pl.get("bisect") or {}).get("key") == key:
                 del pl["bisect"]
-            self.q.log(f"research queue drive: {key} passed on `main` {tip[:12]}; its red record of {r['tip'][:12]} ends")
+            self.q.log(f"research queue drive: {key} passed on `{self.q.into}` {tip[:12]}; its red record of {r['tip'][:12]} ends")
 
     def _base_of(self, pl: dict, key: str, step: str, tip: str) -> str | None:
         """The newest commit at or below ``tip`` an after-landing run passed ``key`` at: its green, else the last verified
@@ -1102,7 +1103,7 @@ class Driver:
              "owner": self._path_owner(rec["suite"]) if rec.get("suite") else None, "not_run": stopped}
         red[key] = r
         if (base := self._base_of(pl, key, step, tip)) is None:
-            self._ring(drive, r, key, f"it never passed in an after-landing run since `main` {pl['verified'][:12]}, so no "
+            self._ring(drive, r, key, f"it never passed in an after-landing run since `{self.q.into}` {pl['verified'][:12]}, so no "
                                       "landing can be named. Reverted nothing")
             return
         r["base"] = base
@@ -1115,7 +1116,7 @@ class Driver:
             label, ok = rule
             hits, why = [x for x in members if any(ok(f) for f in self._own(x))], f"its change touches {label}"
             r["paths"] += sorted({f for x in hits for f in self._own(x) if ok(f)})
-        since = f"{len(members)} landing(s) since `main` {base[:12]}, where it last passed"
+        since = f"{len(members)} landing(s) since `{self.q.into}` {base[:12]}, where it last passed"
         if len(hits) == 1:
             r.update(culprit=[hits[0].pr, hits[0].head, hits[0].owner, hits[0].commit], why=why, rung=self.now())
             self._ring(drive, r, key, f"Culprit: #{hits[0].pr} ({why}), of the {since}")
@@ -1159,7 +1160,7 @@ class Driver:
                                 "suite": key.split(" ", 1)[1] if key.startswith("suite ") else None,
                                 "no_cache": self.after_landing_no_cache, "cands": cands, "good": -1,
                                 "bad": len(cands) - 1 if cands[-1][3] == r["tip"] else len(cands), "run": None}
-                self.q.log(f"research queue drive: bisecting {key}, red on `main` {r['tip'][:12]}, among "
+                self.q.log(f"research queue drive: bisecting {key}, red on `{self.q.into}` {r['tip'][:12]}, among "
                            f"{' '.join(f'#{c[0]}' for c in cands)}")
                 return
 
@@ -1305,7 +1306,7 @@ class Driver:
         pl["run"] = {**rec, "tip": main, "at": self.now(), **({"resend": True} if pl.pop("resend", False) else {}),
                      **({"skip": skip} if skip else {}), **({"baseline": True} if base else {}),
                      "as": {"steps": [s for s in AFTER_LANDING if s not in skip], "no_cache": extra["no_cache"]}}
-        q.log(f"research queue drive: post-landing run of `main` {main[:12]} ({steps}): {_ids(rec)}; "
+        q.log(f"research queue drive: post-landing run of `{self.q.into}` {main[:12]} ({steps}): {_ids(rec)}; "
               f"{len(pl['pending'])} landing(s) since {pl['verified'][:12]}")
 
     def _owner(self, m: Member) -> str | None:
@@ -1964,8 +1965,8 @@ class Driver:
 
     def _lean_change(self, m: Member) -> bool:
         """Whether ``m`` waits for a Lean check before it lands: its own change is a Lean change (`queue.lean_change`) and its
-        title doesn't say ``two demos`` (`TWO_DEMOS`).  A two-demos PR's Lean is checked after landing instead, by the
-        after-landing run's lean-audit, which reverts it if it fails; its ready mark already passed the records gate."""
+        title doesn't say ``two demos`` (`TWO_DEMOS`).  A two-demos PR's Lean is checked by the after-landing run's
+        lean-audit instead, which reverts it if it fails; its ready mark already passed the records gate."""
         if m.commit not in self._lean_of:
             self._lean_of[m.commit] = lean_change(self.repo, m.commit) and not self._two_demos(m)
         return self._lean_of[m.commit]

@@ -755,7 +755,7 @@ def test_a_trains_slot_is_taken_only_by_a_priority_waiter(tmp_path, monkeypatch,
     assert ran["slot"] == "d"
     assert SLOT.status(SLOT.parse("d 0 only=trains\n"), tmp_path, NOW)[0].startswith("d  cores 0  trains only  ")
     (tmp_path / "slots").write_text("d 0 only=trains\n")
-    with pytest.raises(SystemExit, match="every slot in .* is for train checks.* eyeball review.*research run --on vy-nebius-cpu-K"):
+    with pytest.raises(SystemExit, match="every slot in .* is for train checks.* drive's full check decides what reaches `main`.*research run --on vy-nebius-cpu-K"):
         SLOT.main(["--", "check.py"], now=lambda: NOW, sleep=free)
 
 

@@ -1,4 +1,5 @@
-"""The review landing (`land = "review"`: PRs land on an eyeball review, and the full check runs after landing).  A tick
+"""The review landing (`land = "review"`, here with `land_into = "main"`: PRs land on review, and the full check runs on
+`main` after; `test_drive_checked.py` has `land_into = "checked"`, where `main` moves only to a checked commit).  A tick
 lands `next`'s longest prefix whose every member has a land verdict at its head by a reviewer who isn't its owner, a Lean
 change only once a Lean check passed; the after-landing run checks `main`, and its failure reverts what it implicates once
 `main` passed that step before, bisecting when several PRs are implicated."""

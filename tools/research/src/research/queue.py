@@ -385,7 +385,7 @@ class DriveFlags:
     marked_after: str | None = None
     regenerate_locks: bool = False
     first: tuple[int, ...] = ()
-    #: how `next` lands: "review", each member on a reviewer's verdict, the full check running after landing (`Driver`)
+    #: how `next` lands: "review", each member on a reviewer's verdict, onto `land_into`, whose tip the full check checks (`Driver`)
     land: str = "review"
     #: the branch a review landing fast-forwards and `next` is built on (`Queue.into`): `checked`, which `main` follows only to
     #: a commit whose after-landing run passed every step (`Driver._promote`), or `main` itself
@@ -680,8 +680,8 @@ LEAN_LOCK = "lean-audit.json"
 LEAN_SOURCES = (".lean", "lakefile.lean", "lakefile.toml", "lean-toolchain", "lake-manifest.json")
 
 
-#: the analysis tree: a Lean change only here that touches no lock is proofs, which lands on its land verdict and is checked after
-#: landing, a failure reverting it; Lean anywhere else runs as code (C-Flock's verifier and the ZK
+#: the analysis tree: a Lean change only here that touches no lock is proofs, which lands on its land verdict and is checked by
+#: the after-landing run, a failure reverting it; Lean anywhere else runs as code (C-Flock's verifier and the ZK
 #: server, the PoUS grader, the certifier program, the NCI check, the remote audit's verifier) and keeps its Lean check first
 LEAN_PROOFS_TREE = "Security/"
 
@@ -1515,6 +1515,12 @@ class Queue:
         for i, m in enumerate(self.chain(), 1):
             if m.pr in entries and entries[m.pr].pr.head == m.head:
                 entries[m.pr].state, entries[m.pr].position, entries[m.pr].commit = "queued", i, m.commit
+        if self.into != "main":
+            for e in entries.values():
+                if e.state == "ready" and not _git(self.workdir, "merge-base", "--is-ancestor", e.pr.head, self.base,
+                                                   check=False).returncode:
+                    e.state, e.why = "queued", (f"landed on `{self.into}`: it reaches `main` when drive's full check of a "
+                                                f"`{self.into}` commit at or above it passes every step")
         conflicts, waits = state.get("conflicts", {}), state.get("waiting", {})
         main = _out(self.workdir, "rev-parse", "refs/remotes/origin/main")
         for n in contained_first(entries):

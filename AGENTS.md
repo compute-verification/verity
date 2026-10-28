@@ -152,8 +152,9 @@ unchanged.
 
 A part's verdict is reused while a hash of its declared inputs, the base image and its runner is unchanged, so a
 docs-only change reruns nothing; a nightly uncached check must agree, and a disagreement is fixed in the check. `main` holds
-only tested commits: reviewed PRs land on `checked`, and `main` moves only to a commit of
-`checked` whose full check passed (how a PR lands: the team skill).
+only fully checked commits: drive lands `next`'s longest reviewed prefix on `checked`, runs the full check on its tip itself,
+and moves `main` only to a commit of `checked` whose full check passed every step; a red step's culprit is reverted on
+`checked` (how a PR lands: the team skill).
 
 ## Lean
 

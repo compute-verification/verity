@@ -43,8 +43,8 @@ AGENTS.md states the code's layout and rules. This skill states how the team tha
 
 ## Landing
 
-`main` holds only tested commits: reviewed PRs land on `checked`, the full check runs there, and
-`main` moves only to a commit whose check passed. ci's `research queue drive` lands them
+`main` holds only fully checked commits: reviewed PRs land on `checked`, drive runs the full check on its tip, and
+`main` moves only to a commit whose check passed every step. ci's `research queue drive` lands them
 (`research.drive`'s docstring has the rules; `tools/verity/check/drive.toml` the settings):
 
 - The worker that made a branch opens its PR, `research queue open --head BRANCH --sha SHA --title T --body-file F --by
@@ -64,7 +64,7 @@ AGENTS.md states the code's layout and rules. This skill states how the team tha
   passed at or above it; Lean proofs alone land on the verdict.
 - One run checks `checked`'s tip after each landing; when it passes every step, drive fast-forwards `main` there. A red
   suite's culprit is rung and reverted on `checked` 60 min later unless a fix is marked, and `main` doesn't move.
-  Citations and tables read only commits whose after-landing run passed, which `main` now holds only.
+  Citations and tables read only commits whose after-landing run passed: `main`'s.
 - A pure move that `verity check move BASE HEAD` certifies lands alone on `main`, ahead of the queue, through the lander;
   drive merges it into `checked`. Only drive's App pushes `main`, `checked` and `next`.
 - `check.py --record --on M --pool NAME`, from a checkout, records `check` as an Attempt of the clean commit in M's NAME
