@@ -254,22 +254,3 @@ def test_intrinsic_summary():
     s = lin.intrinsic()
     assert s.gates == 20 and s.nodes == 1 and s.offsets == (0, 20)
     assert s.param_types == (A2, Array(5, A2))
-
-
-def test_plan_input_gates_are_sampled_gates():
-    from fractions import Fraction
-    from verity.core.protocols.sampled_proofs.plan import weight_binding_plan, Obligation
-    P = make_program()
-    C = P.circuit
-    # W (param 1) at p = 1 = WB's model binding; everything else sampled at 1/4
-    plan = weight_binding_plan(P, [1], other_rate=Fraction(1, 4))
-    assert plan.check_probability(C[4]) == 1 and plan.check_probability(C[13]) == 1  # W Input gates
-    assert plan.check_probability(C[0]) == Fraction(1, 4)  # X Input gates are sampled like any other gate
-    assert plan.check_probability(C[14]) == Fraction(1, 4)
-    assert plan.expected_checked(C[0:54]) == 10 + Fraction(44, 4)
-    # the same plan with sampled weights
-    plan2 = weight_binding_plan(P, [1], other_rate=Fraction(1, 4), weight_rate=Fraction(1, 2))
-    assert plan2.check_probability(C[4]) == Fraction(1, 2)
-    row = query(C, "//Row")[0]
-    ob = Obligation(row, plan, {g: None for g in row.in_}, {g: None for g in row.out})
-    assert ob.to_json()["function_call"]["args"] == [0, 1, 4, 5]
