@@ -4,8 +4,8 @@ Every leaf and root rule the integration hashes comes from here.  Headers, root 
 The two rules that run once per leaf keep a prefix-once form over core's tags -- the position leaf (one hash per
 ``chunk``-byte piece) and the level fold -- and take a hashlib-shaped ``new`` so a benchmark can swap the hash; under
 SHA-256 they are core's bytes.  ``tests/commit/test_production_vectors.py`` pins this module to core's conformance vectors
-and ``tests/commit/test_scheme_cuda.py`` pins the CUDA copies (``native_tree.cu``, ``hidden_gpu_tree.cu``,
-``native_leafhash.cu``, the FA2 tap's ``Verity_sha_ctx``), which must hash the same bytes.
+and ``tests/commit/test_scheme_cuda.py`` pins the CUDA copies (``native_tree.cu``, ``hidden_gpu_tree.cu``, the FA2 tap's
+``Verity_sha_ctx``), which must hash the same bytes.
 
 The adapters take the integration's argument shapes (a layout object, positional header fields, numpy integers, buffer
 digests) and hand core plain ints and bytes.

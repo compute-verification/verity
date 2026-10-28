@@ -193,7 +193,6 @@ these tags, with a pluggable hash for benchmarks. Every committer, the opening v
   header are hard-wired to 0, so it can only reproduce the legacy-tile chunk vectors.
 - `verity_vllm/commit/committer/hidden_gpu_src/hidden_gpu_tree.cu`: the same chunk-leaf and level kernels, and the
   same legacy-tile limit.
-- `verity_vllm/commit/committer/native_leafhash.cu`: position leaves and the node/lift fold (device weights hashing).
 - `verity_vllm/acquire/fa2_tap_src/verity_tap.h`: the in-kernel thread-leaf header and SHA-256 (`Verity_sha_ctx`).
 
 The FA3 tap (`fa3_tap_src/verity_tap_fa3.h`) only materialises the stream and does no hashing.
@@ -349,8 +348,8 @@ Recorded roots don't move. The vLLM integration keeps SHA-256 until the re-basel
 **Not covered.** Capture-v1 id leaves (`leaves.LeafTree`) stay SHA-256; they are a research capture format, not a serving tree.
 
 **What the integration changes at the re-baseline.**
-- The committers hash with SHA-512: the Python `commit.scheme` rules, and the CUDA copies `native_tree.cu`, `hidden_gpu_tree.cu`,
-  `native_leafhash.cu` and the FA2 tap's `Verity_sha_ctx`.
+- The committers hash with SHA-512: the Python `commit.scheme` rules, and the CUDA copies `native_tree.cu`, `hidden_gpu_tree.cu`
+  and the FA2 tap's `Verity_sha_ctx`.
 - They match `vectors_sha512.json` byte for byte.
 
 **Vectors.** `vectors_sha512.json`, written by `python -m verity.ml.commitments.vllm_v1.vectors_sha512`, covers:

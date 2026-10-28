@@ -150,7 +150,6 @@ SETTINGS: dict[str, Setting] = _declare(
     S("VERITY_GATHER_DESC_DEV", flag, True, VALUE, "the gather kernel reads its descriptors from device memory (native_collect.cpp)"),
     S("VERITY_HI_PRIO", one, True, VALUE, "1: native hooks stage on a high-priority stream (empty: off)", empty=True),
     S("VERITY_INLINE_D2H", one, False, VALUE, "1: the host committer copies device to host inline, not on its worker"),
-    S("VERITY_LEAFHASH_BUILD", str, None, WHERE, "the leaf-hash extension's build directory (default: torch's)"),
     S("VERITY_LEARN_HOST_BUDGET_MB", float, 4096.0, VALUE, "the host budget in MiB the windowed collector learns its ring in"),
     S("VERITY_MEMTRACE", present, False, DEBUG, "the host committer prints its memory trace (any value, 0 included)"),
     S("VERITY_PIN", one, False, VALUE, "1: the host committer's worker pins its CPU affinity"),
