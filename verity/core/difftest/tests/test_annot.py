@@ -126,10 +126,10 @@ def test_sets_are_query_ast_families(server, name: str, q: str) -> None:
     assert _call(server, "annot.term", doc) == ("output", doc)
     try:
         want = [[list(iv) for iv in s.intervals()] for s in G.evaluate(PROGRAMS[name], parse(q))]
-    except G.QueryError:
-        want = None
+    except G.QueryError as e:
+        want = e
     kind, got = _call(server, "annot.sets", annot.instance(TEXT[name], doc))
-    if want is None:
+    if isinstance(want, G.QueryError):
         assert kind == "reject" and got.startswith("plan:"), got
     else:
         assert kind == "output" and got["sets"] == want
@@ -208,10 +208,10 @@ def test_table_group_label_are_query_ast_families(server, name: str, doc: dict, 
     assert _call(server, "annot.term", doc) == ("output", to_json(q))
     try:
         want = [[list(iv) for iv in s.intervals()] for s in G.evaluate(PROGRAMS[name], q, tables)]
-    except G.QueryError:
-        want = None
+    except G.QueryError as e:
+        want = e
     kind, got = _call(server, "annot.sets", annot.instance(TEXT[name], doc, tables))
-    if want is None:
+    if isinstance(want, G.QueryError):
         assert kind == "reject" and got.startswith("plan:"), got
     else:
         assert kind == "output" and got["labels"] == want, got
@@ -311,7 +311,10 @@ def test_partition_reads_inputs_as_held_by_none(server) -> None:
     text = TEXT["gemm"]
     whole = to_json(parse("default(32)"))
     computed = to_json(parse('instances("@2")'))
-    verdict = lambda q, t: _call(server, "annot.check", annot.instance(text, q, None, {"tiling": t}))[1]
+
+    def verdict(q, t):
+        return _call(server, "annot.check", annot.instance(text, q, None, {"tiling": t}))[1]
+
     assert verdict(whole, "cover")["accept"]
     assert verdict(whole, "partition")["code"] == "input-held"
     assert verdict(computed, "partition") == {"accept": True, "count": 6}
