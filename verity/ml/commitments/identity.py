@@ -12,7 +12,6 @@ from enum import StrEnum
 from typing import NewType
 
 from verity.errors import InvalidArtifact
-from verity.ml.circuits.codec import canonical_json as codec_canonical_json
 
 Digest = NewType("Digest", str)
 
@@ -62,6 +61,9 @@ def canonical_json_text(manifest: JSONValue) -> str:
 def canonical_json_bytes(manifest: JSONValue) -> bytes:
     """Return the canonical encoding of an identity manifest:
     ``verity.ml.circuits.codec.canonical_json`` of it, floats refused."""
+
+    # imported here: `verity.ml.commitments` imports this module, and only a writer of canonical JSON reads the codec
+    from verity.ml.circuits.codec import canonical_json as codec_canonical_json
 
     return codec_canonical_json(_normalize_json(manifest))
 
