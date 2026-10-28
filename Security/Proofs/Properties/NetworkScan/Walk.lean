@@ -164,7 +164,7 @@ theorem step_below {A : Scope} {k m : ℕ} (hA : A = P.child P.rootScope k m)
       by_cases hcp : (P.defs[((P.defs[sc.d]!).body.nodes[i]!).fn]!).prim = true
       · simp only [hcp, ite_true] at h
         cases h
-        exact ⟨(fun a ha => by cases ha; omega), fun s' hs' => by cases hs'⟩
+        exact ⟨(fun a ha => by cases ha; exact Nat.le_add_right_of_le (Nat.le_add_right _ _)), fun s' hs' => by cases hs'⟩
       · simp only [hcp, Bool.false_eq_true, ite_false] at h
         cases h
         exact ⟨(fun a ha => by cases ha), fun s' hs' => by cases hs'; exact Or.inl (Below.child hb)⟩
