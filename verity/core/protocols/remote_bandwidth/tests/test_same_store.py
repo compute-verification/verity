@@ -78,7 +78,8 @@ def _committed() -> p2.Store:
     commitment, salt, n = bytes.fromhex(doc["commitment"]), bytes.fromhex(doc["salt"]), params.blocks_per_segment
     vk = setup.verifier_key_from_encoding(params, None, commitment, salt,
                                           [blocks[n * s:n * (s + 1)] for s in range(params.segments)])
-    return p2.Store(p2.register(SOURCE, b"n0", commitment, vk), blocks)
+    return p2.Store(p2.register(SOURCE, p2.site_log(b"n0", p2.codec_of(vk.params).blocks), p2.STORE, commitment, vk),
+                    blocks)
 
 
 def _root(pous_case: dict) -> bytes:
