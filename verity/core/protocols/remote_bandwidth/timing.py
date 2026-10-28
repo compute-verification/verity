@@ -241,7 +241,7 @@ def wrong_bound(units: int, samples: int, delta: float) -> int:
     return math.ceil(-units * math.expm1(math.log(delta) / samples))
 
 
-def spanning(node: hardware.Node, device_bytes: int) -> int:
+def spanning(node: hardware.NodeFigures, device_bytes: int) -> int:
     """The store that spans every tier of `node` in proportion to its read rate, `device_bytes` in each device's
     memory: host DRAM holds what it reads in the time the slowest device reads its share, so a pass of the whole store
     reads at R."""
@@ -249,7 +249,7 @@ def spanning(node: hardware.Node, device_bytes: int) -> int:
     return len(node.devices) * device_bytes + math.floor(device_bytes * node.host.read_bytes_per_s / slowest)
 
 
-def stated(node: hardware.Node, store_bytes: int, window_ns: int, windows: int, *, rtt_ns: int, samples: int,
+def stated(node: hardware.NodeFigures, store_bytes: int, window_ns: int, windows: int, *, rtt_ns: int, samples: int,
            delta: float = 2.0 ** -40, gap_ns: int = 50 * US, jitter_ns: int = 50 * US,
            read_bytes_per_s: float | None = None, capacity_bytes_per_s: float | None = None) -> audit.Ledger:
     """The ledger of the honest prover's session over a store of `store_bytes` on `node`, of `capacity_bytes_per_s`
@@ -275,7 +275,7 @@ def stated(node: hardware.Node, store_bytes: int, window_ns: int, windows: int, 
                         wrong=lambda pr: wrong_bound(pr.sizes[0], pr.drawn["receipt"], pr.delta))
 
 
-def store_floor(node: hardware.Node, gap_ns: int = 0, target: float = 0.01) -> float:
+def store_floor(node: hardware.NodeFigures, gap_ns: int = 0, target: float = 0.01) -> float:
     """The store on `node`, in bytes, spanning every tier, below which no T brings `stated`'s worst γ_t under
     `target`.  As T grows, a window's μ_sample and its ends vanish, and γ_t tends to
     `(g + S_chip/R + λ·p + μ_rebuild·(p + g))/(p + g)` with p the store's read at R: the chain's steady state, μ_chip,
@@ -299,7 +299,7 @@ def _named_bits(k: int, queries_log2: int, binomial: bool) -> int:
     return audit.named_bits(k, queries_log2) if binomial else k * queries_log2
 
 
-def _sizing(at: hardware.Node, gap: int) -> None:
+def _sizing(at: hardware.NodeFigures, gap: int) -> None:
     gpus, read, chip = len(at.devices), at.read_bytes_per_s, at.chip_bytes
     gpu_store, hbm = 94 * 10 ** 9, gpus * 96 * 10 ** 9
     store = spanning(at, gpu_store)
@@ -380,7 +380,7 @@ def _pct(x: float) -> str:
     return f"{x:.2%}" if x < 1 else "vacuous"
 
 
-def _grid(node: hardware.Node) -> None:
+def _grid(node: hardware.NodeFigures) -> None:
     gap, jitter = 50 * US, _ns(0.05)
     gpus, one = len(node.devices), node.devices[0]
     read, spec, chip, sha512 = node.read_bytes_per_s, node.spec_bytes_per_s, node.chip_bytes, node.sha512_per_s

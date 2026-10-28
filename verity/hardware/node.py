@@ -38,7 +38,7 @@ installed DIMMs aren't on record, and the part takes MRDIMMs up to 8800 MT/s (th
 
 
 @dataclass(frozen=True, slots=True)
-class Device:
+class DeviceFigures:
     """One device's figures (bytes a second, bytes, compressions and squarings a second)."""
 
     sku: str
@@ -50,7 +50,7 @@ class Device:
 
 
 @dataclass(frozen=True, slots=True)
-class Host:
+class HostFigures:
     """The host's figures: its DRAM's measured read, ceiling and write ceiling (bytes a second), its on-chip storage
     and one link window (bytes)."""
 
@@ -63,13 +63,13 @@ class Host:
 
 
 @dataclass(frozen=True, slots=True)
-class Node:
+class NodeFigures:
     """A node's devices and its host, and the sums the remote bandwidth audit reads: R measured and at spec over every
     tier, S_chip, the devices' SHA-512 rate and squaring ceiling, one device's and host DRAM's write ceilings. Its
     ``placeholders`` are the open figures it was read with."""
 
-    devices: tuple[Device, ...]
-    host: Host
+    devices: tuple[DeviceFigures, ...]
+    host: HostFigures
     placeholders: tuple[str, ...] = ()
 
     def __post_init__(self) -> None:
@@ -146,21 +146,21 @@ class _Reader:
         return tuple(sorted(self.read))
 
 
-def _device(r: _Reader, sku: str) -> Device:
+def _device(r: _Reader, sku: str) -> DeviceFigures:
     card = r.card(sku, "gpu")
-    return Device(sku, float(r.figure(card, "memory", "read")), float(r.figure(card, "memory", "bandwidth")),
+    return DeviceFigures(sku, float(r.figure(card, "memory", "read")), float(r.figure(card, "memory", "bandwidth")),
                   int(r.figure(card, "store", "chip")), float(r.figure(card, "hash", "sha512")),
                   MappingProxyType({w: float(r.figure(card, "squaring", w)) for w in card["squaring"]}))
 
 
-def _host(r: _Reader, sku: str) -> Host:
+def _host(r: _Reader, sku: str) -> HostFigures:
     card = r.card(sku, "host")
-    return Host(sku, float(r.figure(card, "memory", "read")), float(r.figure(card, "memory", "bandwidth")),
+    return HostFigures(sku, float(r.figure(card, "memory", "read")), float(r.figure(card, "memory", "bandwidth")),
                 float(r.figure(card, "memory", "write")), int(r.figure(card, "store", "chip")),
                 int(r.figure(card, "link", "window")))
 
 
-def device_of(sku: str, placeholders: Sequence[str] = ()) -> Device:
+def device_of(sku: str, placeholders: Sequence[str] = ()) -> DeviceFigures:
     """The device figures of GPU card ``sku``."""
     r = _Reader(placeholders)
     d = _device(r, sku)
@@ -168,7 +168,7 @@ def device_of(sku: str, placeholders: Sequence[str] = ()) -> Device:
     return d
 
 
-def host_of(sku: str, placeholders: Sequence[str] = ()) -> Host:
+def host_of(sku: str, placeholders: Sequence[str] = ()) -> HostFigures:
     """The host figures of host card ``sku``."""
     r = _Reader(placeholders)
     h = _host(r, sku)
@@ -176,9 +176,9 @@ def host_of(sku: str, placeholders: Sequence[str] = ()) -> Host:
     return h
 
 
-def node(devices: Sequence[str], host: str, placeholders: Sequence[str] = ()) -> Node:
+def node(devices: Sequence[str], host: str, placeholders: Sequence[str] = ()) -> NodeFigures:
     """The node of a device of each GPU card in ``devices`` on the host of host card ``host``, reading the
     placeholders ``placeholders`` names as open figures."""
     r = _Reader(placeholders)
     ds, h = tuple(_device(r, sku) for sku in devices), _host(r, host)
-    return Node(ds, h, r.done())
+    return NodeFigures(ds, h, r.done())

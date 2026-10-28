@@ -8,7 +8,7 @@ import math
 import pytest
 
 from verity.hardware import load
-from verity.hardware.node import VY_NEBIUS, Node, device_of, host_of, node
+from verity.hardware.node import VY_NEBIUS, NodeFigures, device_of, host_of, node
 
 
 def test_a_vy_nebius_node_is_its_eight_cards_and_their_host() -> None:
@@ -36,13 +36,13 @@ def test_a_mixed_node_sums_exactly_whatever_the_order() -> None:
     fastest's."""
     a, b = device_of("rtx-pro-6000-server"), host_of("xeon-6776p-2s", VY_NEBIUS[2])
     slow = type(a)("slow", 1e-3, 3.0, 1, 0.1, {"p1024": 0.5})
-    one, two = Node((a, slow, a), b), Node((slow, a, a), b)
+    one, two = NodeFigures((a, slow, a), b), NodeFigures((slow, a, a), b)
     assert one.read_bytes_per_s == two.read_bytes_per_s == math.fsum([2 * a.read_bytes_per_s, 1e-3,
                                                                       b.read_bytes_per_s])
     assert dict(one.squarings_per_s) == {"p1024": math.fsum([2 * a.squarings_per_s["p1024"], 0.5])}
     assert one.device_write_bytes_per_s == a.spec_bytes_per_s
     with pytest.raises(ValueError, match="one or more devices"):
-        Node((), b)
+        NodeFigures((), b)
 
 
 @pytest.mark.parametrize(("devices", "host", "placeholders", "refusal"), [

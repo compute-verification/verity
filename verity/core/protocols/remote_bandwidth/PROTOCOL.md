@@ -117,7 +117,7 @@ the node's, the sum over its devices, whatever share of the node the store is on
   is 8 × 1,539 + 606.8 = 12,918.8 GB/s (`read_bytes_per_s`); specified, 8 × 1,597.568 + 819.2 = 13,599.744 GB/s
   (`spec_bytes_per_s`). The host's 819.2 is DDR5-6400's, a placeholder on its card: the installed DIMMs aren't on
   record, and the part takes MRDIMMs up to 8,800 MT/s (1,126.4 GB/s), so the node is read with it named open
-  (`Node.placeholders`).
+  (`NodeFigures.placeholders`).
 - \(S_{\text{chip}}\) is every GPU's on-chip storage and the host's: 8 × 263,163,904 + 1,000,341,504 =
   3,105,652,736 B (`chip_bytes`). The host's part bounds the whole host, two Xeon 6776P sockets of 64 cores,
   whatever share its VM gets: their caches at the guest's CPUID sizes, with allowances for registers and buffers.

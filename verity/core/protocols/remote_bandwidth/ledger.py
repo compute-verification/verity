@@ -58,7 +58,7 @@ def _rate(x: object, what: str) -> float:
     return float(x)
 
 
-def figures(site: Site, h: str, host: str, placeholders: Sequence[str] = ()) -> hardware.Node:
+def figures(site: Site, h: str, host: str, placeholders: Sequence[str] = ()) -> hardware.NodeFigures:
     """The figures of host `h`'s node as `site` registers it (`Site.node h`): for each of its devices, in the log's
     order, the GPU card its sheet names (`Sheet.sku`), on the host of host card `host` (a host carries no sheet in the
     Site, so its card is named), reading the placeholders `placeholders` names as open figures.  An `h` the site
@@ -124,7 +124,7 @@ class Node:
         return cls.stated(figures(site, h, host, placeholders), **stated)
 
     @classmethod
-    def stated(cls, figures: hardware.Node, *, reported_read_bytes_per_s: float = 0.0, disk_bytes_per_s: float = 0.0,
+    def stated(cls, figures: hardware.NodeFigures, *, reported_read_bytes_per_s: float = 0.0, disk_bytes_per_s: float = 0.0,
                link_bytes_per_s: float = 0.0, disk_burst_bytes: float | None = None,
                link_burst_bytes: float | None = None, sketch_outside: int = timing.SKETCH_OUTSIDE) -> Node:
         """The node of the Site's `figures` (`Site.node h`): R measured is the larger of its devices' and host DRAM's

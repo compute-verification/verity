@@ -151,7 +151,7 @@ GPU_HBM_BYTES = 96 * 2 ** 30
 """One RTX PRO 6000's memory, 96 GiB (`benchmarks/census/hardware.json`)."""
 
 
-def device_memory(node: hardware.Node) -> int:
+def device_memory(node: hardware.NodeFigures) -> int:
     """The node's device memory, bytes: each device's card's `store.dram`."""
     return sum(int(load(d.sku)["store"]["dram"]["value"]) for d in node.devices)
 
@@ -160,7 +160,7 @@ HBM_BYTES = device_memory(NODE)
 
 
 def site_node(log: Path, host: str, keys: Path | None = None, host_card: str = hardware.VY_NEBIUS[1],
-              placeholders: Sequence[str] = hardware.VY_NEBIUS[2]) -> hardware.Node:
+              placeholders: Sequence[str] = hardware.VY_NEBIUS[2]) -> hardware.NodeFigures:
     """The figures of host `host`'s node in the Site a registration log registers (`ledger.figures`), on host card
     `host_card` with the placeholders `placeholders` names read as open (by default a vy-nebius node's): the log
     (`verity.core.site.Registration`'s JSON) checked entry by entry (`site.check`) against the auditor's data sheets,
