@@ -160,3 +160,6 @@ def test_one_session_with_a_side_of_its_own() -> None:
         side.talk({"rc": 4}, _shout)
     with pytest.raises(RuntimeError, match="the side on auditor exited 3 before it listened"):
         Side("auditor", (sys.executable, "-c", "import sys; sys.stdin.readline(); sys.exit(3)")).talk({}, _shout)
+    refuse = "import sys; sys.stdin.readline(); print('{\"refused\": \"a second session\"}'); sys.exit(1)"
+    with pytest.raises(RuntimeError, match="the side on auditor refused: a second session$"):
+        Side("auditor", (sys.executable, "-c", refuse)).talk({}, _shout)

@@ -57,6 +57,10 @@ leaves and challenge derivation), not with the expander.
   twice `Δ + RTT` on the allowed hardware, a CPU or GPU core with cooperation within one chiplet.  `call_ns` stands for
   it, half the fastest such root (`ROOT_CALL_NS`), and the certificate allows no such call within the deadline.  The
   spec caps the RTT allowance at `RTT_ALLOWANCE_CAP_NS`.
+- At `k ≥ 320` challenges the run protocol takes `wide320_certificate` for `2^19` to `2^27` blocks:
+  `Pous.SecurityProofs.ObligationWide320`, P2's ring-model audit window of 320 reads, the state at most `⌊ρ·|C|⌋` at
+  each, passed with probability at most `2^-20` (`(1 − 0.043)^320 + 320·2^-137`), from `P2RingRoundSecureWide`. It
+  bounds the window at the store's snapshot, not the composed check, for which `periodHeldAt` holds at 105 reads only.
 - A shared mask with linear tweaks is model M2, which is not covered; the keys here are per block.
 - Neither codec is ever the default.  Its profile says so plainly (`EXPERIMENTAL`).
 """
@@ -68,6 +72,7 @@ import itertools
 import struct
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
+from fractions import Fraction
 from functools import cached_property
 
 from verity.ml.randomness import frame
@@ -124,6 +129,10 @@ of `P2RingRoundSecureWide`."""
 
 CERT_K = 105
 """The spec's k (decision F6): `P2SlackFamilyUncond`'s `λ = 128` row, for every block count from 2^8 to 2^23."""
+
+CERT_K_WIDE320 = 320
+"""The reads of `Pous.SecurityProofs.ObligationWide320`'s window (`wide320_certificate`): at P2's per-round floor
+`p = 0.043` and bad-event mass `2^-137`, `(1 − p)^320 + 320·2^-137 ≤ 2^-20` (`PousP2Rounds.floor_043_eps_320`)."""
 
 ROOT_CALL_NS = 854_029
 """Half the fastest 16,448-bit root on the allowed hardware, 8 cores of one chiplet cooperating, in ns rounded down:
@@ -498,7 +507,21 @@ def wide_certificate(params: P2Params) -> CapacityBound | None:
                          theorem="Pous.Period.SecurityProofs.periodHeldAt", segments=None, claims=WIDE_CLAIMS)
 
 
-__all__ = ["CERT_BLOCKS", "CERT_FAMILY_BLOCKS", "CERT_K", "CERT_WIDE_BLOCKS", "CHACHA8", "CHACHA8_NONCONFORMING", "DELTA_NS", "EXPERIMENTAL", "KEYS_TAG", "P2_CLAIMS",
+def wide320_certificate(params: P2Params) -> CapacityBound | None:
+    """`Pous.SecurityProofs.ObligationWide320` for a v4 store at the registered width and prime of any block count in
+    `CERT_WIDE_BLOCKS`, in any number of segments: a window of `CERT_K_WIDE320` reads at the store's snapshot, the state
+    at most `⌊ρ·N·16448⌋` bits at each challenge, passes with probability at most `2^-20`, read at `N` = the store's
+    blocks, under `WIDE_CLAIMS`. `delta` is `2^-20 − 2^-128`, so that `delta + 2^eps_log2` is the statement's `2^-20`.
+    The run protocol takes it at `k ≥ CERT_K_WIDE320` (`period.certificate`, `PousCheck.RunProtocol.certificate`)."""
+    lo, hi = CERT_WIDE_BLOCKS
+    if (params.w, params.c0) != POINT[:2] or params.expander != SHA512_CTR or not lo <= params.blocks <= hi:
+        return None
+    return CapacityBound(k=CERT_K_WIDE320, rounds=0, work=1 << 20, call_ns=ROOT_CALL_NS,
+                       theorem="Pous.SecurityProofs.ObligationWide320",
+                       delta=Fraction(1, 1 << 20) - Fraction(1, 1 << 128), segments=None, claims=WIDE_CLAIMS)
+
+
+__all__ = ["CERT_BLOCKS", "CERT_FAMILY_BLOCKS", "CERT_K", "CERT_K_WIDE320", "CERT_WIDE_BLOCKS", "CHACHA8", "CHACHA8_NONCONFORMING", "DELTA_NS", "EXPERIMENTAL", "KEYS_TAG", "P2_CLAIMS",
            "POINT", "PROTOCOL_ID", "ROOT_CALL_NS", "RTT_ALLOWANCE_CAP_NS", "SEED_DOMAIN", "SHA512_CTR", "WIDE_CLAIMS", "P2", "P2ChaCha", "P2Params",
            "below", "block_keys", "chacha_block", "chacha_keys", "decode_segment", "encode_blocks", "encode_segment",
            "expand_prefix", "family_certificate", "segment_keys", "segment_seed", "sha512_keys", "stream", "wide_certificate"]

@@ -276,8 +276,8 @@ def check(registration: Registration, seed: bytes, plan: Plan, root: bytes, i: i
     return None
 
 
-class Session(audit.Session):
-    """The verifier's side of one session over a P2 store: the audit's session (`audit.Session`) with units for blocks,
+class Session(audit.AuditRun):
+    """The verifier's side of one session over a P2 store: the audit's session (`audit.AuditRun`) with units for blocks,
     its openings checked on PoUS's vk (`_check`), and no appends."""
 
     codecs = (P2Codec,)
