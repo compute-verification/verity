@@ -243,7 +243,7 @@ def _period_dir(tmp_path, n: int):
 
 
 def test_its_period_accepts_with_the_challenger_on_its_host_and_states_the_bits_it_certifies(toy, tmp_path, monkeypatch):
-    """The leg: the memory challenger at period.json's challenger host, the prover answering from C*, the verifier's tie of
+    """`PousOption.leg`: the memory challenger at period.json's challenger host, the prover answering from C*, the verifier's tie of
     the setup case and its check; an accepted period says plainly that this point certifies 0 bits."""
     session, calls = _in_process_party(ts.TestSigner(b"pous-vllm", directory=tmp_path), ts.session_log(tmp_path))
     monkeypatch.setattr(CP, "session", session)

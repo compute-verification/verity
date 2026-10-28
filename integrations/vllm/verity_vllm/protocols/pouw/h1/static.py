@@ -1,4 +1,4 @@
-"""A static H1 window's declaration and its u (`pouw_h1`'s static layout, PERIOD-PATH's ``u`` in
+"""A static H1 window's declaration and its u (`pouw_h1`'s static layout, the ``u`` of
 `benchmarks/pouw/period_cost.py`): each step's rows a function of the declaration alone, so its u is public."""
 from __future__ import annotations
 
@@ -8,7 +8,7 @@ from typing import Any, Mapping, Sequence
 
 
 def utilization(step_rows: Sequence[int], rows: int, steps: int) -> Fraction:
-    """PERIOD-PATH's u: the window's served rows over its declared rows, Σ_s m_s / (S·T)."""
+    """The window's u: its served rows over its declared rows, Σ_s m_s / (S·T)."""
     if len(step_rows) > steps or any(not 0 <= m <= rows for m in step_rows):
         raise ValueError(f"{list(step_rows)} is not a window of {steps} steps of at most {rows} rows")
     return Fraction(sum(step_rows), rows * steps)
@@ -79,7 +79,7 @@ def graph_pad(m: int, batch: int, sizes: Sequence[int]) -> int:
     return m - batch if batch < m and fit and fit[0] == m else 0
 
 
-#: PERIOD-PATH's ask 1: 64 one-token prompts at cap 16, every row of SERVE-H1's 16 served steps filled (u = 16/18)
+#: 64 one-token prompts at cap 16, every row of the 16 served steps filled (u = 16/18)
 FILL = Static((1,) * 64, 16, 64, 18)
 
 

@@ -1,18 +1,18 @@
 #!/usr/bin/env bash
 # Pod runtime for the Verity x vLLM integration (research/infra; no Verity semantics): ONE Python 3.12 environment (torch cu129, vLLM
 # d9105ea80, numpy, safetensors),
-# the native taps (hidden_gpu chunk tree, FA2 matReq tap; FA3 on sm_90; the default-on row taps), the pinned checkpoints, and a readiness record.
+# the native taps (hidden_gpu chunk tree, FA2 matReq tap; FA3 on sm_90; the default-on workload taps), the pinned checkpoints, and a readiness record.
 #
 #   research run --on <machine> --project verity --source <verity checkout> -- bash -c "cd integrations/vllm && bash verity_vllm/ops/pod_bootstrap.sh [--cases B0[,B1]] [--out DIR] [--cpu|--gpu] [--dry-run]"
 #
 # Idempotent: every step checks before it builds.  Runs from this directory (the shipped tree's integrations/vllm).  Fails closed with
 # a named class (BOOTSTRAP_FAIL_<step>) and exits 3; the readiness record (readiness.json) is written whether or not every check passed.
 # Env: WORK (/workspace), VENV ($WORK/venv312), HF_HOME ($WORK/hf), FA2_TAP_HDIMS (64,96,128,256), MAX_JOBS (nproc), CUDA_HOME,
-# ROW_TAPS (1: build the taps a row runs by default -- the guarded-max FA2 / FA3 builds, the norm and router taps; 0 skips them, and a
-# row on this pod then needs GUARDED_MAX_TAP=0 NORM_TAP=0 ROUTER_TAP=0).
+# ROW_TAPS (1: build the taps a workload runs by default -- the guarded-max FA2 / FA3 builds, the norm and router taps; 0 skips
+# them, and a workload on this pod then needs GUARDED_MAX_TAP=0 NORM_TAP=0 ROUTER_TAP=0).
 #
 # PROTOCOL SUMMARY (pod readiness; runs once per pod, before any row_pod.sh)
-#   Purpose: make a fresh pod able to run rows from THIS shipped tree: venv312 (Python 3.12) + the sha256-pinned vLLM d9105ea80 cu129
+#   Purpose: make a fresh pod able to run workloads from THIS shipped tree: venv312 (Python 3.12) + the sha256-pinned vLLM d9105ea80 cu129
 #     wheel + torch cu129, the pinned checkpoints (manifests/checkpoints.json: sha256 per safetensors shard), the native taps
 #     (hidden_gpu chunk tree, FA2 matReq tap, FA3 tap on cc 9.0) and a mechanical readiness record.
 #   Inputs: --cases B0[,B1] (checkpoint roles of checkpoints.json), --out DIR, --cpu | --gpu (force a mode), --dry-run; the env above.
@@ -28,7 +28,6 @@
 #     readiness.json is written BEFORE its verdict is taken (a failed check still leaves the record; `ok` = AND of the checks);
 #     every Verity package must import from this tree (verity_from_tree, verity_vllm_from_tree,
 #     no_old_tree_on_path); the network/disk/cgroup-memory measurements are advisory and never fail the bootstrap.
-#   Protocol spec: Notion -> "vLLM integration — protocol spec (Build · Match · Commit)".
 set -uo pipefail
 ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd -P); cd "$ROOT" || exit 3
 CORE=$(cd "$ROOT/../.." 2>/dev/null && pwd -P) || { echo "BOOTSTRAP_FAIL_TREE: no Verity tree above $ROOT (run from the shipped Verity tree)" >&2; exit 3; }
@@ -245,12 +244,12 @@ r["identities"] = {"python": sys.version.split()[0], "executable": sys.executabl
                    "tree": {"integration_root": root, "verity_core": core, "research": research},
                    "native": {k: r["checks"][k].get("value") for k in ("hidden_gpu_so", "fa2_tap_so", "fa3_tap_so") if k in r["checks"]}}
 r["ok"] = all(c["ok"] for c in r["checks"].values())
-# ---- measurements [r19-int-20]: the pod's non-GPU admission resources, MEASURED at bootstrap and recorded beside the checks.  Advisory:
+# ---- measurements: the pod's non-GPU admission resources, MEASURED at bootstrap and recorded beside the checks.  Advisory:
 # none fails the bootstrap (a slow or small pod can still compute); the launcher and the attempt's conditions read them.  Why each:
-#   network  -- vyv-l40s2b (EUR-IS-2) moved 2.6 MB/s to /vault and 6-8 MiB/s to R2 while its neighbours did 84-287 MiB/s (F-r19-mirror-3;
-#               R2 probe 16:30Z): a 30 GB row landed on the one pod that could not ship its evidence.  One 64 MiB download + one 16 MiB
+#   network  -- one pod can move a few MB/s to /vault and R2 while its neighbours do hundreds, and a 30 GB workload placed there can't
+#               ship its evidence.  One 64 MiB download + one 16 MiB
 #               upload against Cloudflare's public speed endpoint (a User-Agent is required: the default python-urllib UA is refused 403).
-#   disk     -- the container overlay is an unmodelled admission resource (F-r19-int-14): l40s4 filled under two rows' captures.
+#   disk     -- the container overlay is an unmodelled admission resource: two workloads' captures can fill it.
 #   memory   -- the cgroup ceiling, not the host's RAM, is what a Match / Commit is admitted against (351 vs 1511 GiB on tp2).
 import shutil, time, urllib.request
 UA = {"User-Agent": "verity-pod-readiness/1 (python-urllib)"}

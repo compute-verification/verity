@@ -1,4 +1,4 @@
-"""Direct Triton launches, observed at `triton.runtime.jit.JITFunction.run` (pinned Triton 3.7.1; D63).
+"""Direct Triton launches, observed at `triton.runtime.jit.JITFunction.run` (pinned Triton 3.7.1).
 
 Triton 3.7.1's `run(self, *args, grid, warmup, **kwargs)` binds the call with a per-device *binder*
 (`kernel_cache, kernel_key_cache, target, backend, binder = self.device_caches[device]`;
