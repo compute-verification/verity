@@ -1,4 +1,4 @@
-"""RT-DC's red-team audit (campaign cmp-13): the binding and near facets of each headline design, decision 76's margin on
+"""The red-team audit: the binding and near facets of each headline design, the 2% margin on
 their measured lane coefficients (the driver, and the least filler that holds it), and the uniform-datapath gap a device
 without a UNI class leaves open."""
 from __future__ import annotations
@@ -9,7 +9,7 @@ from verity_machine_model import eps as E
 from verity_machine_model import redteam as RT
 from verity_machine_model.model import device
 
-# device -> its headline design (decision 93 / #2322 / JI89 / JIM): the rows these audits read must exist
+# device -> its headline design (JI89 / JIM): the rows these audits read must exist
 HEAD = {"sm_90": "dither-2s-li-l32", "sm_100": "dither-2s-li-l32", "sm_89": "dither-2s-l16", "sm_80": "dither-2s-l16"}
 
 
@@ -29,9 +29,9 @@ def test_audit_is_well_formed(dev: str, design: str) -> None:
 
 
 def test_margin_moves_only_the_lane_coefficient() -> None:
-    """Decision 76 moves a facet's small (lane) coefficient, not the tensor-pipe MMA value it also carries. On sm_90
+    """The margin moves a facet's small (lane) coefficient, not the tensor-pipe MMA value it also carries. On sm_90
     JPA90_0 (ALU beside the IGMMA tensor pipe), the move must scale the ALU coefficient and leave the MMA one exactly
-    as measured. Scaling the whole column — the round-1 bug — mis-prices the tensor route and is not this margin."""
+    as measured. Scaling the whole column mis-prices the tensor route and is not this margin."""
     pi = E.machine("", device("sm_90"))
     small, hit = RT._lane_coef(pi, "JPA90_0")
     assert hit == ("ALU",) and small == pytest.approx(pi.c["ALU"]["JPA90_0"])
@@ -43,9 +43,9 @@ def test_margin_moves_only_the_lane_coefficient() -> None:
 
 
 def test_h200_margin_driver_is_the_lane_issue_joint() -> None:
-    """On the H200 the single facet that drives decision 76's margin on the LI design is JI90_0, the joint issue row,
+    """On the H200 the single facet that drives the margin on the LI design is JI90_0, the joint issue row,
     once its lane coefficient is the one the CUDA lane classes share there (0.9805), not UNI's own measured 0.965: the
-    cheater runs no uniform instruction on that facet, so moving UNI's coefficient (the round-2 reading) moved nothing.
+    cheater runs no uniform instruction on that facet, so moving UNI's coefficient moves nothing.
     JPA90_0 (the ALU pipe beside the tensor) still raises the core on its own, less."""
     pi = E.machine("", device("sm_90"))
     small, hit = RT._lane_coef(pi, "JI90_0")
@@ -80,7 +80,7 @@ def test_margin_reads_the_named_vector() -> None:
 
 def test_b200_issue_bound_is_robust() -> None:
     """B200's headline cheater binds the hardware issue width, which silicon cannot beat; no near measured row flips at
-    decision 76's 2% margin, so the joint margin leaves the core where it is and names no driver. A refit that makes one
+    the 2% margin, so the joint margin leaves the core where it is and names no driver. A refit that makes one
     flip there means B200 turned thin — the guard should fire."""
     data = device("sm_100")
     a = RT.audit("dither-2s-li-l32", data)
@@ -93,7 +93,7 @@ def test_b200_issue_bound_is_robust() -> None:
 
 
 def test_least_filler_holds_the_margin_on_the_h200() -> None:
-    """The H200 LI design leaks above its floor under decision 76's 2% margin (the lane route opens); the cheapest
+    """The H200 LI design leaks above its floor under the 2% margin (the lane route opens); the cheapest
     verified FFMA filler a word brings the joint worst back to the floor. least_filler finds that add-on; a design that
     already holds the margin needs none."""
     data = device("sm_90")

@@ -2,7 +2,6 @@
 name = "VF3i"
 epoch = "VF3i"
 summary = "Filtered textures and uniform heads at 32 MACs a word written, inside the LP; round 8's adopted vector."
-note = "note:20261016T1538Z-draft-rs-vf3i-textures-uniform"
 rows = [
     "issue", "M", "R1", "F", "VMNX", "H", "I", "A",
     "F2FS", "XU", "R6r", "LDSi", "R6w", "LDG", "L2red", "UP",
