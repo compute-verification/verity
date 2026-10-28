@@ -51,14 +51,15 @@ from enum import Enum
 from fractions import Fraction
 
 from verity.ml.randomness import Key
+from .tags import DIGEST_BYTES
 
 from . import audit
 
 DOMAIN = "verity/bandwidth/openings/v1"
 SHA512_BLOCK = 128
-NODE_BYTES = 64
+NODE_BYTES = DIGEST_BYTES
 ROW_PREFIX_BYTES = 128
-STORE_LEAF_BYTES = 1 + 32 + 2 + 64
+STORE_LEAF_BYTES = 1 + 32 + 2 + DIGEST_BYTES
 NODE_MESSAGE_BYTES = 1 + 2 * NODE_BYTES
 RECEIPT_PREFIX_BYTES = 128 + 8
 SLACK_ERROR_LOG2 = -41
@@ -173,7 +174,7 @@ class Geometry:
     blocks: int
     passes: int
     block_bytes: int
-    receipt_bytes: int = 64
+    receipt_bytes: int = DIGEST_BYTES
     receipts_per_leaf: int = 1
     bound_bytes: int = 0
     sketch_rows: int = 16

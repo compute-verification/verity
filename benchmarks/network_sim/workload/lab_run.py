@@ -621,7 +621,7 @@ def n2_verdicts(lab: L.Lab, setup: ar.Setup, plans: dict[str, dict], published: 
     no proof to time: the stream's clock is held at 0, so no outcome is late."""
     windows = plans[lab.blocks[0]]["windows"]
     H = max(4, (2 * windows * len(lab.blocks) - 1).bit_length())
-    key = lms.keygen(lms.Params(64, 1, H), hashlib.sha512(b"lab-n2/lms").digest())
+    key = lms.keygen(lms.Params(CT.DIGEST_BYTES, 1, H), hashlib.sha512(b"lab-n2/lms").digest())
     public, session, signed = CT.LmsKey(key.params, lms.public_key(key)), bytes(lms.SESSION_BYTES), [0]
 
     def certify(head: CT.RecordHead) -> CT.CertifiedRecord:
