@@ -7,7 +7,7 @@ from typing import Any
 
 def _network_served_tie_roots() -> list[Any]:
     """The tie at the compile slice's class: corpus-smallkv's window of seven steps at R 2, its engine's L 4096 and T 256,
-    request ids of 6 bits, and the port's i64 ids and positions (`tests/fixtures/compile_slice_smallkv.json`), as one
+    request ids of 6 bits, and the port's i64 ids and positions (`verity/core/protocols/certifier/tests/fixtures/compile_slice_smallkv.json`), as one
     unit (G = P) and as seven (G = 1, the block's selection), with the step and its slots, routing and scan."""
     from verity.ml.circuits.defs import bind
     from verity.ml.protocols.certifier.served_tie import (ServedTieScan, ServedTieSelect, ServedTieSlots, ServedTieStep,

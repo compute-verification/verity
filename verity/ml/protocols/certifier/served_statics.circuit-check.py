@@ -7,7 +7,7 @@ from typing import Any
 
 def _network_served_statics_roots() -> list[Any]:
     """The tie at the compile slice's class, corpus-smallkv's window of seven steps at R 2, its engine's L 4096 and T 256 and
-    request ids of 6 bits (`tests/fixtures/compile_slice_smallkv.json`), as one unit (G = P) and as seven (G = 1), with the
+    request ids of 6 bits (`verity/core/protocols/certifier/tests/fixtures/compile_slice_smallkv.json`), as one unit (G = P) and as seven (G = 1), with the
     step; and at the sealed served run's class (R 8, IW 16, L 512, T 2048) at G = 16, its ZK run's unit."""
     from verity.ml.circuits.defs import bind
     from verity.ml.protocols.certifier.served_statics import ServedStaticsStep, unit
