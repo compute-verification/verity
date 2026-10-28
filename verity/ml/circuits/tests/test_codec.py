@@ -131,8 +131,8 @@ def _dot_body_b(B, S, x, w):
 
 
 def test_two_bodies_for_one_fully_qualified_specialization_are_rejected():
-    """Ruling §8.1: within one program a fully qualified specialization resolves to one body; a conflicting
-    definition is an `IdentityConflict`, never first-wins."""
+    """Within one program a fully qualified specialization resolves to one body; a conflicting definition is an
+    `IdentityConflict`, never first-wins."""
     da, db = _dot_like(_dot_body_a), _dot_like(_dot_body_b)
     top = CompositeDefinition("TopConflict", 1, (), lambda S: ((("x", A2), ("w", A2)), Array(2, V16)),
                               lambda B, S, x, w: __import__("verity.ml.circuits.refs", fromlist=["array_of"]).array_of(
