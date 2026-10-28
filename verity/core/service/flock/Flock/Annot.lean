@@ -37,8 +37,8 @@ Refused by code (`Annot.Refusal`): `term` (a document the codec doesn't read, or
 `override`, `frontier`, a two-axis `k`, a set-algebra family, a table of anything but nodes, `@name:` selectors, which
 name metadata outside the descriptor), `table` (rows missing, of another length or not dense), `plan` (what `query_ast`
 refuses at plan time: `zip` over unequal member counts, `each` over a set of several nodes, `instances('.')` inside a
-body, a label map on the root activation, `group` over a set of several nodes, a label table splitting a set) and
-`fuel`.
+body, a label map on the root activation, `group` over a set of several nodes, a label table splitting a set, `where`
+over a table) and `fuel`.
 
 ## Meanings
 
@@ -807,9 +807,7 @@ def applyWhere : Nat → Nat → Pred → M Nat
         let sub ← applyWhere fuel s pred
         if (← planOf sub).total > 0 then es := es.push { e with kind := .descend sub }
       | .zip ns => if ← ns.allM fun j => predOk P pred body.nodes[j]! 1 then es := es.push e
-      | .table rows _ =>
-        if ← (Array.range rows.size).allM fun j => if rows[j]!.isSome then
-            predOk P pred body.nodes[j]! body.nodes[j]!.members else pure true then es := es.push e
+      | .table _ _ => liftV (refuse "plan" s!"where(...) keeps a set by its node; a table set (in {(P.defs[pl.d]!).key}) spans nodes, so filter its base")
       | .atomic k => if ← predOk P pred body.nodes[e.j]! k then es := es.push e
       | .whole => if ← predOk P pred body.nodes[e.j]! body.nodes[e.j]!.members then es := es.push e
     push pl.d es

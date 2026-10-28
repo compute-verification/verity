@@ -182,6 +182,7 @@ OPS = [
       for name, path, spec in [("gemm", ".", ""), ("gemm", "//TGemmCoordinate_v1", "TGemmCoordinate_v1"),
                                ("gemm", "//TDot_v1", "TDot_v1"), ("synth", ".", ""), ("twice", "//TGemm_v1", "TGemm_v1")]
       for m in (1, 2) for of in ({}, {"of": "nodes"})],
+    ("gemm", {"op": "where", "base": _table(".", "t"), "pred": {"form": "batch"}}, lambda name: {"t": _rows(name, "", 2, 3)}),
 ]
 
 
