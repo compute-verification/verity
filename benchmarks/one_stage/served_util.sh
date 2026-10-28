@@ -20,15 +20,20 @@
 #           our served stack: serve-openai serves eager, and the row's Program declares async scheduling off. Under async
 #           scheduling a step's slots stay held until the step before it is processed, so SEQS defaults to 2·T/1024
 #   async   stock eager with async scheduling on (UTIL_ENGINE_JSON's default {"async_scheduling": true}), without the bench
-#           row, as graphs: not the served stack either (the Commit and H1 refuse async scheduling), so util.json's
+#           row, as graphs: not the served stack either (the B4 row's Build declares synchronous scheduling), so util.json's
 #           served_stack is false for both
 # ASYNC=1 serves a Commit arm (noseal, seal, h1) with --async-scheduling, in a tree whose serve-openai takes it with the
-# Commit on (its `serve_row` module). No bench row's Build declares async scheduling yet, so serve-openai's row check (`serve_row.of`) takes
-# the row whichever scheduler it declares, as `tests/pipeline/serve_async_commit_gpu.py` does: its records attest the row's
-# LAG 0 Programs, so the arm is <arm>-async and not the served stack. SEQS defaults to 2·T/1024, as for async.
+# Commit on (its `serve_row` module), as <arm>-async; SEQS defaults to 2·T/1024, as for async. With a ROW whose Build
+# declares async scheduling (LAG 1), serve-openai's row check (`serve_row.of`) holds the engine to it and the arm is the
+# served stack. With a row that declares sync (B4's), the check is bypassed, as `tests/pipeline/serve_async_commit_gpu.py`
+# does: its records attest the row's LAG 0 Programs, so the arm is not the served stack.
 # Env: ARM, T (8192), N (64), WARM (2·T/1024), GPU_HZ (10000), LEASE_MIN (90), EXTRA (more serve-openai arguments, split
 # on spaces), PROTOCOLS_CONFIG (one --protocols-config argument), PYSAMPLE=1 (Nsight Systems' Python backtrace sampling at
-# PYHZ, 1000, for the host gaps), SEQS (--max-num-seqs and --window-requests, T/1024, 2·T/1024 for graphs and async; the
+# PYHZ, 1000, for the host gaps; its sqlite export keeps none of the Python frames), PYSPY=1 (py-spy 0.4.2, installed under
+# UTIL_ROOT/tools/pyspy, launches the server under the session, since the node's ptrace_scope 1 lets it read only its own
+# children, and records it and its subprocesses at PYSPY_HZ, 20, as a Chrome trace in the scratch, which `pyspy_steps.py`
+# cuts to the full steps into pyspy_steps.json), SEAL_SHM=1 (the serve dir's windows/ on /dev/shm, so a seal writes to memory
+# rather than the node's network disk: what the step is when the disk doesn't bound the seal), SEQS (--max-num-seqs and --window-requests, T/1024, 2·T/1024 for graphs and async; the
 # window's request cap also bounds the requests in flight), HEADS (the merged heads, written to heads.txt with the tree's
 # commit and parents), RELEASE_AFTER (a Commit arm's values held on the device, --retain device --retain-device-gb
 # RETAIN_DEVICE_GB (32) --release-after RELEASE_AFTER), STANDIN_DRAWS (protocols of RELEASE_AFTER no drawer serves yet: the
@@ -76,6 +81,9 @@ if [ "${1:-}" != leased ]; then
     lrc=$?; say "LEAN pouw-check-difftest built (exit $lrc): $(tail -1 "$OUT/lean.txt" | cut -c1-200)"
     [ "$lrc" = 0 ] || exit 4
   fi
+  if [ "${PYSPY:-0}" = 1 ] && [ ! -x "$ROOT/tools/pyspy/bin/py-spy" ]; then
+    uv pip install -q --target "$ROOT/tools/pyspy" --python "$PY" py-spy==0.4.2 >> "$OUT/pyspy.txt" 2>&1 || { say "PYSPY: install failed"; exit 3; }
+  fi
   research keep "$ROOT/scratch" --owner @vllm --expires 3d --priority normal \
     --why "vllm-util80: serve dirs of the utilization runs (request bodies, outputs, H1 transcripts)" > /dev/null 2>&1
   say "ARM $LABEL T $T N $N WARM $WARM SEQS $SEQS row $(basename "$ROW") tree $(git -C "$TREE" rev-parse --short HEAD 2>/dev/null)" \
@@ -86,8 +94,15 @@ if [ "${1:-}" != leased ]; then
   "$PY" "$TREE/benchmarks/one_stage/served_util.py" --sqlite "$SCR/prof.sqlite" --trace "$D/advice_trace.jsonl" \
     --serve-dir "$D" --timings "$SCR/main.timings.json" --arm "$LABEL" --T "$T" --N "$N" --out "$OUT/util.json" > "$OUT/util.txt" 2>&1
   say "ANALYSIS rc=$?"; cat "$OUT/util.txt"
+  if [ "${PYSPY:-0}" = 1 ]; then
+    "$PY" "$TREE/benchmarks/one_stage/pyspy_steps.py" --trace-json "$SCR/pyspy.json" --t0 "$SCR/pyspy.t0" \
+      --steps "$D/advice_trace.jsonl" --timings "$SCR/main.timings.json" --T "$T" --out "$OUT/pyspy_steps.json" > "$OUT/pyspy_steps.txt" 2>&1
+    say "PYSPY ANALYSIS rc=$?"; cat "$OUT/pyspy_steps.txt"
+  fi
   if [ -d "$D/windows" ]; then
-    say "SEALED $(du -sh "$D/windows" | cut -f1), deleted"; rm -rf "$D/windows"
+    say "SEALED $(du -sh "$D/windows/" | cut -f1)$([ -L "$D/windows" ] && echo ' on /dev/shm'), deleted"
+    [ -L "$D/windows" ] && rm -rf "$(readlink -f "$D/windows")"
+    rm -rf "$D/windows"
   fi
   exit "$rc"
 fi
@@ -132,15 +147,27 @@ if [ "${ASYNC:-0}" = 1 ]; then
   serve=("$PY" -c 'import json, sys
 from pathlib import Path
 from verity_vllm.pipeline import cli, serve_row as RW, serve_seal as SS
+checked = RW.of
 def of(opts):
     if not opts.required_manifest:
         return None
     path = Path(SS.programs_root_of(opts)) / RW.WORKLOAD_PROGRAM
     got = json.loads(path.read_text())["applicability"]["engine"]["async_scheduling"]
+    if got is True:
+        print(f"UTIL the row declares async_scheduling true: serve_row checks it ({path})", flush=True)
+        return checked(opts)
     print(f"UTIL row scheduler check bypassed (not the served stack): the row declares async_scheduling {got}", flush=True)
     return {"async_scheduling": got, "source": str(path)}
 RW.of = of
 sys.exit(cli.main())' serve-openai)
+fi
+if [ "${SEAL_SHM:-0}" = 1 ]; then
+  mkdir -p "/dev/shm/vllm-util80/${RESEARCH_RUN_ID:-local}" && rm -rf "$D/windows" && ln -sfn "/dev/shm/vllm-util80/${RESEARCH_RUN_ID:-local}" "$D/windows"
+fi
+if [ "${PYSPY:-0}" = 1 ]; then
+  serve=("$ROOT/tools/pyspy/bin/py-spy" record --rate "${PYSPY_HZ:-20}" --idle --threads --subprocesses --nolineno
+         --format chrometrace -o "$SCR/pyspy.json" -- "${serve[@]}")
+  date -u +%s.%N > "$SCR/pyspy.t0"
 fi
 SESS=util80-${RESEARCH_RUN_ID:-local}
 pysample=(); sample=none
@@ -214,7 +241,13 @@ say "MAIN $N requests (exit $lrc): $(tail -1 "$SCR/main.log" | cut -c1-200)"
 "$NSYS" stop --session="$SESS" > "$OUT/nsys_stop.txt" 2>&1
 say "CAPTURE stop (exit $?)"
 # the server's own stop drains its seals; nsys's shutdown signals the whole tree, the spawned sealer with it
+pspid=; [ "${PYSPY:-0}" = 1 ] && [ -n "$spid" ] && pspid=$(ps -o ppid= -p "$spid" | tr -d ' ')
 [ -n "$spid" ] && { kill -TERM "$spid"; reap; say "SERVE: its own stop $(grep -a 'SERVE-OPENAI stopping' "$SCR/serve.log" | tail -1 | cut -c1-120)"; }
+# py-spy writes its trace once its children are gone, or at a SIGINT; nsys's shutdown would SIGTERM it unwritten
+if [ -n "$pspid" ]; then
+  for i in $(seq 1 300); do alive "$pspid" || break; [ "$i" = 60 ] && kill -INT "$pspid"; sleep 1; done
+  say "PYSPY $(du -sh "$SCR/pyspy.json" 2>/dev/null | cut -f1) ($(alive "$pspid" && echo 'still up' || echo done))"
+fi
 "$NSYS" shutdown --session="$SESS" --kill=sigterm > /dev/null 2>&1
 wait "$srv"; say "SERVE stopped (exit $?)"
 reap
