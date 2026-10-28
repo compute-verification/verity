@@ -45,6 +45,11 @@ def meanings : List String := ["{\"tiling\":\"partition\"}", "{\"tiling\":\"cove
 #guard same gemm "{\"query\":{\"op\":\"table\",\"path\":\".\",\"table\":\"t\"},\"tables\":{\"t\":{\"Root[TGemm_v1{K=32,N=6}]_v1\":[null,null,0]}}}" meanings
 #guard same gemm "{\"query\":{\"op\":\"table\",\"path\":\".\",\"table\":\"t\"},\"tables\":{\"t\":{\"Root[TGemm_v1{K=32,N=6}]_v1\":[0,1,2]}}}" meanings
 #guard same gemm "{\"query\":{\"op\":\"table\",\"path\":\".\",\"table\":\"t\"},\"tables\":{\"t\":{\"Root[TGemm_v1{K=32,N=6}]_v1\":[null,0,0]}}}" meanings
+#guard same gemm "{\"query\":{\"base\":{\"k\":1,\"op\":\"members\",\"path\":\"//TGemmCoordinate_v1\",\"sel\":\"@*\"},\"key\":[\"name\",\"static:K\"],\"op\":\"group\"}}" meanings
+#guard same gemm "{\"query\":{\"base\":{\"op\":\"default\",\"w\":16},\"key\":\"static:K\",\"op\":\"group\"}}" meanings
+#guard same gemm "{\"query\":{\"base\":{\"k\":1,\"op\":\"members\",\"path\":\".\",\"sel\":\"@*\"},\"key\":[],\"op\":\"group\"}}" meanings
+#guard same gemm "{\"query\":{\"base\":{\"op\":\"instances\",\"path\":\"@2\"},\"map\":{\"table\":\"u\"},\"op\":\"label\"},\"tables\":{\"u\":{\"Root[TGemm_v1{K=32,N=6}]_v1\":[null,null,0]}}}" meanings
+#guard same gemm "{\"query\":{\"base\":{\"op\":\"default\",\"w\":16},\"map\":{\"table\":\"u\"},\"op\":\"label\"},\"tables\":{\"u\":{\"Root[TGemm_v1{K=32,N=6}]_v1\":[0,1,1]}}}" meanings
 #guard same synth "{\"query\":{\"op\":\"default\",\"w\":32}}" meanings
 #guard same synth "{\"query\":{\"op\":\"concat\",\"parts\":[{\"op\":\"zip\",\"path\":\".\",\"sels\":[\"@1\",\"@2\"]},{\"base\":null,\"op\":\"rest\"}]}}" meanings
 #guard same synth "{\"query\":{\"op\":\"zip\",\"path\":\".\",\"sels\":[\"@1\",\"@2\"]}}" meanings
@@ -55,6 +60,8 @@ def meanings : List String := ["{\"tiling\":\"partition\"}", "{\"tiling\":\"cove
 #guard same synth "{\"query\":{\"op\":\"table\",\"path\":\".\",\"table\":\"t\"},\"tables\":{\"t\":{\"Root[TSynth_v1{N=4}]_v1\":[null,0,0,1,2]}}}" meanings
 #guard same synth "{\"query\":{\"op\":\"table\",\"path\":\".\",\"table\":\"t\"},\"tables\":{\"t\":{\"Root[TSynth_v1{N=4}]_v1\":[null,1,0,1,0]}}}" meanings
 
+#guard same synth "{\"query\":{\"base\":{\"k\":1,\"op\":\"members\",\"path\":\".\",\"sel\":\"@*\"},\"map\":{\"table\":\"u\"},\"op\":\"label\"},\"tables\":{\"u\":{\"Root[TSynth_v1{N=4}]_v1\":[null,0,0,1,1]}}}" meanings
+#guard same synth "{\"query\":{\"base\":{\"op\":\"zip\",\"path\":\".\",\"sels\":[\"@1\",\"@2\"]},\"map\":{\"table\":\"u\"},\"op\":\"label\"},\"tables\":{\"u\":{\"Root[TSynth_v1{N=4}]_v1\":[null,0,1,null,null]}}}" meanings
 /-! The verdicts: `default(32)` holds the Input nodes' gates, so it is no partition; the six coordinates (4 gates each:
 `TDot`'s 3 and `TCvt16`) are one; with `TDot` again inside them they overlap; `TDot` alone leaves `TCvt16` in no set;
 grouped by Definition the coordinates' members are `TDot{K=32}` (18 gates) and `TCvt16` (6); four affine labels are more
@@ -69,6 +76,13 @@ than three; `synth`'s `rest()` holds its Input batch, and its batches, constant 
 #guard run check gemm "{\"query\":{\"op\":\"label\",\"map\":{\"affine\":[1,0,4]},\"base\":{\"op\":\"instances\",\"path\":\"@2\"}}}" "{\"tiling\":\"partition\",\"max_count\":3}" == "{\"accept\":false,\"code\":\"too-many\",\"count\":4}"
 #guard run check synth "{\"query\":{\"op\":\"concat\",\"parts\":[{\"op\":\"zip\",\"path\":\".\",\"sels\":[\"@1\",\"@2\"]},{\"op\":\"rest\",\"base\":null}]}}" "{\"tiling\":\"partition\"}" == "{\"accept\":false,\"code\":\"input-held\",\"count\":13}"
 #guard run check synth "{\"query\":{\"op\":\"concat\",\"parts\":[{\"op\":\"members\",\"path\":\".\",\"sel\":\"@1\",\"k\":1},{\"op\":\"members\",\"path\":\".\",\"sel\":\"@2\",\"k\":1},{\"op\":\"members\",\"path\":\".\",\"sel\":\"@3\",\"k\":1},{\"op\":\"instances\",\"path\":\"//TScanStep_v1\"}]}}" "{\"tiling\":\"partition\",\"max_gates\":2}" == "{\"accept\":true,\"count\":13}"
+
+/-! Labelled by the root's table, the six coordinates are one label of 24 gates; the root's members by `[_, 0, 0, 1, 1]`
+are two labels, and a zip of nodes labelled apart is refused as `query_ast` refuses it. -/
+#guard run check gemm "{\"query\":{\"op\":\"label\",\"map\":{\"table\":\"u\"},\"base\":{\"op\":\"instances\",\"path\":\"@2\"}},\"tables\":{\"u\":{\"Root[TGemm_v1{K=32,N=6}]_v1\":[null,null,0]}}}" "{\"tiling\":\"partition\",\"max_gates\":24}" == "{\"accept\":true,\"count\":1}"
+#guard run check gemm "{\"query\":{\"op\":\"label\",\"map\":{\"table\":\"u\"},\"base\":{\"op\":\"instances\",\"path\":\"@2\"}},\"tables\":{\"u\":{\"Root[TGemm_v1{K=32,N=6}]_v1\":[null,null,0]}}}" "{\"max_gates\":23}" == "{\"accept\":false,\"code\":\"too-large\",\"count\":1}"
+#guard run check synth "{\"query\":{\"op\":\"label\",\"map\":{\"table\":\"u\"},\"base\":{\"op\":\"members\",\"path\":\".\",\"sel\":\"@*\",\"k\":1}},\"tables\":{\"u\":{\"Root[TSynth_v1{N=4}]_v1\":[null,0,0,1,1]}}}" "{\"max_count\":1}" == "{\"accept\":false,\"code\":\"too-many\",\"count\":2}"
+#guard run check synth "{\"query\":{\"op\":\"label\",\"map\":{\"table\":\"u\"},\"base\":{\"op\":\"zip\",\"path\":\".\",\"sels\":[\"@1\",\"@2\"]}},\"tables\":{\"u\":{\"Root[TSynth_v1{N=4}]_v1\":[null,0,1,null,null]}}}" "{}" == "reject plan"
 
 /-- `expand` of the six coordinates: the last input gate in no label, the first and last coordinate gates in labels 0 and 5. -/
 def coords : Except String (Array (Array Nat)) := do

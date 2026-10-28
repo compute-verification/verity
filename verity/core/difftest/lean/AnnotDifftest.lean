@@ -48,7 +48,7 @@ def sets : Difftest.Fn := fun j => do
   let P ← program j
   let F ← eval P (← desc j)
   let ss ← Flock.Annot.sets P F
-  let ls ← labelled P F
+  let ls ← labelled P (← desc j) F
   return Json.mkObj [("sets", Json.arr (ss.map (intervals ·.gates))), ("labels", Json.arr (ls.map intervals))]
 
 def table := Difftest.table [("annot.term", term), ("annot.check", check), ("annot.reference", reference),
