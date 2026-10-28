@@ -9,9 +9,10 @@ import Proofs.Core.Game.Prob
 What `Vocab.PousSound` reduces to at PoUS's compiled component (`PousCheck.RunProtocol.protocol`), proved from the
 composition's properties and the compiled check alone, with no premise:
 
-- `target_of_split` (`pousSound_of_split` at PoUS): a subprotocol's target follows from two bounds wherever its finder
-  meets its collision premise, the verdict with no break and a failed claim at most its published `δ`, and the verdict
-  with a break at most its loss at the finder's collision probability.
+- `target_of_split` (`pousSound_of_split` at PoUS): a subprotocol's target follows from three bounds wherever its
+  finder meets its collision premise, the verdict with no break, no forgery and a failed claim at most its published
+  `δ`, the verdict with a forgery at most its forgery term, and the verdict with a break at most its loss at the
+  finder's collision probability.
 - `componentAccepts_pous` (`verdict_pous`): PoUS's verdict is onsite's, and its case decodes to parameters, setup
   outputs and evidence on which the verifier's whole decision at the case's point accepts (`Pous.EndToEnd.AcceptedAt`),
   the event `Pous.Period.PeriodHeldAt` bounds.
@@ -34,14 +35,17 @@ namespace Vocab
 
 variable {ι : Type} {d : Device ι} {α : Type} [Fintype α] (V : Vocab d α)
 
-/-- **A target from its two halves**: wherever subprotocol `a`'s finder meets its collision premise, its verdict with
-no break `brk` and a failed claim has probability at most its published `δ` at the strategy's SHA-512 calls, and its
-verdict with a break at most its loss at the finder's collision probability. Elsewhere its error is `⊤`. -/
+/-- **A target from its three parts**: wherever subprotocol `a`'s finder meets its collision premise, its verdict with
+no collision break `brk`, no forgery `forged` and a failed claim has probability at most its published `δ` at the
+strategy's SHA-512 calls, its verdict with a forgery at most its forgery term there, and its verdict with a break at
+most its loss at the finder's collision probability. Elsewhere its error is `⊤`. -/
 theorem target_of_split (k : Verity.Registration.Composite) (a : Subprotocol)
-    (brk : ∀ θ F c : ByteArray, Game.Strategy (V.game θ F c) → Exchange → Prop)
+    (brk forged : ∀ θ F c : ByteArray, Game.Strategy (V.game θ F c) → Exchange → Prop)
     (hgood : ∀ θ F c σ, V.FinderCR a θ F c σ →
-      Game.prob (fun o => V.Verdict k a o ∧ ¬ brk θ F c σ o ∧ ¬ V.Holds k θ F c σ a o) (V.game θ F c) σ ≤
-        V.delta θ a (V.cost θ F c σ))
+      Game.prob (fun o => V.Verdict k a o ∧ ¬ brk θ F c σ o ∧ ¬ forged θ F c σ o ∧ ¬ V.Holds k θ F c σ a o)
+        (V.game θ F c) σ ≤ V.delta θ a (V.cost θ F c σ))
+    (hforged : ∀ θ F c σ, V.FinderCR a θ F c σ →
+      Game.prob (fun o => V.Verdict k a o ∧ forged θ F c σ o) (V.game θ F c) σ ≤ V.forgery θ a (V.cost θ F c σ))
     (hbrk : ∀ θ F c σ, V.FinderCR a θ F c σ →
       Game.prob (fun o => V.Verdict k a o ∧ brk θ F c σ o) (V.game θ F c) σ ≤
         V.loss a θ (ENNReal.ofReal ((V.finder a θ F c σ).Pr sha512Msg))) :
@@ -50,25 +54,30 @@ theorem target_of_split (k : Verity.Registration.Composite) (a : Subprotocol)
   unfold Vocab.error condError
   split_ifs with hcr
   · calc Game.prob (fun o => V.Verdict k a o ∧ ¬ V.Holds k θ F c σ a o) (V.game θ F c) σ
-        ≤ Game.prob (fun o => (V.Verdict k a o ∧ ¬ brk θ F c σ o ∧ ¬ V.Holds k θ F c σ a o) ∨
-            (V.Verdict k a o ∧ brk θ F c σ o)) (V.game θ F c) σ :=
+        ≤ Game.prob (fun o => ((V.Verdict k a o ∧ ¬ brk θ F c σ o ∧ ¬ forged θ F c σ o ∧ ¬ V.Holds k θ F c σ a o) ∨
+            (V.Verdict k a o ∧ forged θ F c σ o)) ∨ (V.Verdict k a o ∧ brk θ F c σ o)) (V.game θ F c) σ :=
           Game.prob_mono (fun o ⟨hv, hh⟩ => (em (brk θ F c σ o)).elim (fun hb => Or.inr ⟨hv, hb⟩)
-            (fun hb => Or.inl ⟨hv, hb, hh⟩)) _ σ
+            (fun hb => Or.inl ((em (forged θ F c σ o)).elim (fun hf => Or.inr ⟨hv, hf⟩)
+              (fun hf => Or.inl ⟨hv, hb, hf, hh⟩)))) _ σ
       _ ≤ _ := Game.prob_or_le _ _ _ σ
-      _ ≤ _ := add_le_add (hgood θ F c σ hcr) (hbrk θ F c σ hcr)
+      _ ≤ _ := add_le_add (Game.prob_or_le _ _ _ σ) le_rfl
+      _ ≤ _ := add_le_add (add_le_add (hgood θ F c σ hcr) (hforged θ F c σ hcr)) (hbrk θ F c σ hcr)
   · exact le_top
 
-/-- **PoUS's target from its two halves** (`target_of_split` at PoUS). -/
+/-- **PoUS's target from its three parts** (`target_of_split` at PoUS). -/
 theorem pousSound_of_split (k : Verity.Registration.Composite)
-    (brk : ∀ θ F c : ByteArray, Game.Strategy (V.game θ F c) → Exchange → Prop)
+    (brk forged : ∀ θ F c : ByteArray, Game.Strategy (V.game θ F c) → Exchange → Prop)
     (hgood : ∀ θ F c σ, V.FinderCR .pous θ F c σ →
-      Game.prob (fun o => V.Verdict k .pous o ∧ ¬ brk θ F c σ o ∧ ¬ V.Holds k θ F c σ .pous o) (V.game θ F c) σ ≤
-        V.delta θ .pous (V.cost θ F c σ))
+      Game.prob (fun o => V.Verdict k .pous o ∧ ¬ brk θ F c σ o ∧ ¬ forged θ F c σ o ∧ ¬ V.Holds k θ F c σ .pous o)
+        (V.game θ F c) σ ≤ V.delta θ .pous (V.cost θ F c σ))
+    (hforged : ∀ θ F c σ, V.FinderCR .pous θ F c σ →
+      Game.prob (fun o => V.Verdict k .pous o ∧ forged θ F c σ o) (V.game θ F c) σ ≤
+        V.forgery θ .pous (V.cost θ F c σ))
     (hbrk : ∀ θ F c σ, V.FinderCR .pous θ F c σ →
       Game.prob (fun o => V.Verdict k .pous o ∧ brk θ F c σ o) (V.game θ F c) σ ≤
         V.loss .pous θ (ENNReal.ofReal ((V.finder .pous θ F c σ).Pr sha512Msg))) :
     V.PousSound k :=
-  V.target_of_split k .pous brk hgood hbrk
+  V.target_of_split k .pous brk forged hgood hforged hbrk
 
 /-- A subprotocol's error is `⊤` at a strategy where its published `δ` is. -/
 theorem error_eq_top {a : Subprotocol} {θ F c : ByteArray} {σ : Game.Strategy (V.game θ F c)}
