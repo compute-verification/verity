@@ -300,7 +300,7 @@ theorem AuditInteractiveRO : Bandwidth.Guarantees.AuditInteractiveRO := by
     funext x
     simp only [Bandwidth.Accepts, InteractiveProver.Accepts, atOracle_tags A hA, atOracle_ingress A hA]
   rw [hev]
-  exact AuditRO N b h S c G q s k lam (A.toRelay.atOracle O₀)
+  exact Accounting.SecurityProofs.Remote.AuditRO N b h S c G q s k lam (A.toRelay.atOracle O₀)
 
 end SecurityProofs
 
