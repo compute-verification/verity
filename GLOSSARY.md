@@ -43,8 +43,8 @@ changes here and the older name gets a row under Older names, in the same change
   `program/predict/`). The subprotocols' Programs and the proof system are the protocol's own, not registered.
 - **Execution**: for each **declared advice** a_j (declaring is the developer's), B outputs the **execution block** E_j,
   its partition 𝓘_j into inference blocks, and its placement loc_j on the site's registered devices. B also outputs the
-  cut into proof blocks, which validation checks against public rules (outputs of at most 16 bits, size classes, a
-  count cap). The site is public; a_j, 𝓘_j and loc_j (where on the site each part of the workload runs) are private,
+  cut into proof blocks, which validation checks against public rules (each proof block's outputs within its public
+  size class, a count cap). The site is public; a_j, 𝓘_j and loc_j (where on the site each part of the workload runs) are private,
   and only their padded counts are public. For network traffic loc_j carries when: B predicts each transfer's send
   tick, and a_j corrects it. a_j is charged only by its length, a public budget per execution block, and is committed
   after E_j runs and before E_j's challenge. PoUW's own compile is not part of B. The **declared circuit** is D = E_1 ‖ … ‖ E_n, the one use of "declared". The **actual circuit** A is everything the hardware
