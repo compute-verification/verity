@@ -37,8 +37,8 @@ consecutive slots, so they run the same length. The row kernel starts the rows w
 tensors, which at 4,096 slots fills the GPU better than one layer a call (25 rows × 4,096 slots is 1.5 waves on an H200).
 `SaltKey` draws row r's salt in slot s as ChaCha20 chunks 3r … 3r + 2 under the key with nonce `nonce0 + s` (C-Flock's
 `hm96_salt`, commit_slots' `row_salts`). hm96's mask M·y reads the key's 64 KB Hankel table (`hankel_table`: bytes
-[p, p + 64) of T_v are `byte_tables(key)[p][v]`) from shared memory, commit_gpu's `hm96_mask` with each lane taking T's
-16-byte columns in its own order (`mask_column`), so that a warp's loads of T fall in distinct bank groups whatever the salt
+[p, p + 64) of T_v are `byte_tables(key)[p][v]`) from shared memory, `row_commit.cuh`'s `mask_lanes` with each lane taking
+T's 16-byte columns in its own order (`mask_column`), so that a warp's loads of T fall in distinct bank groups whatever the salt
 bytes; the mask is a XOR over the columns, so the order changes no byte. Each thread's 192 salt bytes sit in shared memory
 beside T (112 KB a CTA) rather than in registers. The leaf kernel comes at 1 or 2 CTAs an SM (`leaves(..., minb=)`):
 1, the default, holds its registers without spilling; at 2 an SM they spill.
@@ -93,7 +93,9 @@ n mod 128 >= 112 ends with such a chunk, as 21,022 of a slot's 21,857 rows do on
 
 ## Files
 
-- `rows.cuh`: the formats as host+device functions.
+- `rows.cuh`: the row digest and the schedule (the layout `engine.py` fills, the salts, each lane's column order) as
+  host+device functions. The frame-v3-sha512 leaf, node and pad and the hm96 leaf's mask, salt digest and value are
+  `verity/ml/kernels/row_commit.cuh`'s.
 - `rows.cu`: the kernels.
 - `rows_host.cpp`: the host twin.
 - `engine.py`: the call.

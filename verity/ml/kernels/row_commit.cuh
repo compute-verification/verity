@@ -12,6 +12,8 @@
 //                   two compressions past the chaining value after its first block, which fixes only the level (NodeK)
 // Positions, ranks and indices are below 2^32 (MAX_NB bytes), and uint's length is picked at compile time (`_nb`, a body a
 // length) or read at run time (`_rt`, one body for every length).
+// A kernel with no such plan takes the forms at the end: a leaf from its head (any rank, position and schema, the prefix
+// built once per row), a node from its chaining value alone and a pad from its domain id, for any value below 2^64.
 //
 // The hm96-sha512 leaf of a row digest x under the salt y: c = SHA-512(salt_prefix || y), b = x ^ M_key y and the value
 // h = SHA-512(leaf_prefix(key) || b || c) the frame leaf binds (Hm96K). M_key y comes from a table of T_v, the XOR of
@@ -86,7 +88,7 @@ struct Compact : Sha {
 
 RC_HD int nbytes(u64 x) {
   int n = 1;
-  while (x >> (8 * n) && n < 8) ++n;
+  while (n < 8 && x >> (8 * n)) ++n;
   return n;
 }
 RC_HD int nb_of(u64 x) {
@@ -357,29 +359,51 @@ RC_HD void node_rt(const NodeK& N, int level, u64 index, const u64* L, const u64
 
 // --- the hm96-sha512 leaf ------------------------------------------------------------------------------------------------
 
-// c = SHA-512(salt_prefix || y), y the salt as 24 big-endian words
-template <class C = Sha>
-RC_HD void salt_digest(const Hm96K& H, const u64* Y, u64* c) {
+// The salt's 24 big-endian words as y(i): from words (SaltWords), or from 48 little-endian u32 words ys apart (SaltU32, in
+// shared memory, say, so that a thread's registers stay free).
+struct SaltWords {
+  const u64* Y;
+  RC_HD u64 operator()(int i) const { return Y[i]; }
+};
+struct SaltU32 {
+  const u32* y;
+  u32 ys;
+  RC_HD u64 operator()(int i) const { return sx::be64(y[2 * i * ys], y[(2 * i + 1) * ys]); }
+};
+
+// c = SHA-512(salt_prefix || y) from mid_salt (Hm96K's)
+template <class C = Sha, class Y>
+RC_HD void salt_digest(const u64* mid_salt, const Y& y, u64* c) {
   u64 w[16];
-  cpy8(c, H.mid_salt);
+  cpy8(c, mid_salt);
   RC_UNROLL
-  for (int i = 0; i < 16; ++i) w[i] = Y[i];
+  for (int i = 0; i < 16; ++i) w[i] = y(i);
   C::compress(c, w);
   RC_UNROLL
-  for (int i = 0; i < 8; ++i) w[i] = Y[16 + i];
+  for (int i = 0; i < 8; ++i) w[i] = y(16 + i);
   w[8] = 0x8000000000000000ull;
   RC_UNROLL
   for (int i = 9; i < 15; ++i) w[i] = 0;
   w[15] = (128 + 192) * 8;
   C::compress(c, w);
 }
+// with y the salt as 24 big-endian words
+template <class C = Sha>
+RC_HD void salt_digest(const Hm96K& H, const u64* Y, u64* c) {
+  salt_digest<C>(H.mid_salt, SaltWords{Y}, c);
+}
 
-// h = SHA-512(leaf_prefix(key) || b || c) from B = b || c (16 words, which the schedule overwrites)
+// h = SHA-512(leaf_prefix(key) || b || c) from mid_leaf, the schedule kw of the message's all-padding last block (Hm96K's)
+// and B = b || c (16 words, which the schedule overwrites)
+template <class C = Sha>
+RC_HD void hm96_value(const u64* mid_leaf, const u64* kw, u64* B, u64* h) {
+  cpy8(h, mid_leaf);
+  C::compress(h, B);
+  C::compress_kw(h, kw);
+}
 template <class C = Sha>
 RC_HD void hm96_value(const Hm96K& H, u64* B, u64* h) {
-  cpy8(h, H.mid_leaf);
-  C::compress(h, B);
-  C::compress_kw(h, H.kw_leafpad);
+  hm96_value<C>(H.mid_leaf, H.kw_leafpad, B, h);
 }
 
 // The hm96 leaf's frame leaf, into f, which holds the state after the leaf's first block (frame_first, frame_first_rt
@@ -476,6 +500,31 @@ RC_HD void mask(const Tab& T, const u64* Y, u32* m) {
     }
   }
 }
+// mask from the salt as 48 little-endian u32 words ys apart (SaltU32's), taking the salt's 16-byte column q = col(k) at step
+// k, col a permutation of 0 .. 11: a lane's order, which spreads a warp's loads over shared memory's banks, and the XOR is
+// the same in any order. Word 4 q + a holds salt bytes 16 q + 4 a .. 16 q + 4 a + 3, so each word loaded serves four r.
+template <class Tab, class Col>
+RC_HD void mask_lanes(const Tab& T, const u32* y, u32 ys, const Col& col, u32* m) {
+  RC_UNROLL
+  for (int w = 0; w < 16; ++w) m[w] = 0;
+  RC_UNROLL
+  for (int a = 0; a < 4; ++a) {
+    u32 yw[12];
+    RC_UNROLL
+    for (int k = 0; k < 12; ++k) yw[k] = y[(4 * col(k) + a) * ys];
+    RC_UNROLL
+    for (int rr = 0; rr < 4; ++rr) {
+      u32 A[20];
+      RC_UNROLL
+      for (int i = 0; i < 20; ++i) A[i] = 0;
+      RC_UNROLL
+      for (int k = 0; k < 12; ++k) T.xor80(A, col(k), (yw[k] >> (8 * rr)) & 0xFFu);
+      const int sh = 8 * rr;
+      RC_UNROLL
+      for (int w = 0; w < 16; ++w) m[w] ^= sh ? (A[w + a] >> sh | A[w + a + 1] << (32 - sh)) : A[w + a];
+    }
+  }
+}
 // mask's words as M_key y's 8 big-endian words
 RC_HD void mask_words(const u32* m, u64* my) {
   RC_UNROLL
@@ -493,11 +542,12 @@ RC_HD void be_put(uint8_t* p, u64 v, int n) {
   for (int i = n - 1; i >= 0; --i, v >>= 8) p[i] = (uint8_t)v;
 }
 // the chaining value after one block
+template <class C = Sha>
 RC_HD void midstate(const uint8_t* block, u64* st) {
   u64 w[16];
   for (int i = 0; i < 16; ++i) w[i] = be64_at(block + 8 * i);
   sha::iv(st);
-  sha::compress(st, w);
+  C::compress(st, w);
 }
 // the all-padding last block of a message of `bytes` bytes (a multiple of 128), scheduled for compress_kw
 RC_HD void pad_schedule(u64 bytes, u64* kw) {
@@ -545,6 +595,7 @@ RC_HD int padded_words(uint8_t* m, int n, u64* w) {
   return total / 8;
 }
 // SHA-512 of the n-byte message in m (zero past n, with room for its padding), any number of blocks
+template <class C = Sha>
 RC_HD void digest_padded(uint8_t* m, int n, u64* out) {
   const int total = (n + 17 + 127) / 128 * 128;
   m[n] = 0x80;
@@ -553,7 +604,7 @@ RC_HD void digest_padded(uint8_t* m, int n, u64* out) {
   for (int b = 0; b < total; b += 128) {
     u64 w[16];
     for (int i = 0; i < 16; ++i) w[i] = be64_at(m + b + 8 * i);
-    sha::compress(out, w);
+    C::compress(out, w);
   }
 }
 
@@ -620,14 +671,18 @@ RC_HD int node_tpls(u64 (*tpl)[32]) {
   }
   return 0;
 }
-// node_mid[0 .. levels - 1] for domain did: the chaining value after the first block of a node message at each level
+// the chaining value after the first block of domain did's node message at level (below 256): its bytes past the level are
+// the first six of u64be(len uint(index)), all zero
+template <class C = Sha>
+RC_HD void node_mid(const uint8_t* did, int level, u64* mid) {
+  uint8_t m[128] = {};
+  const uint8_t lv = (uint8_t)level;
+  frame_part(m, frame_head(m, "node", did), &lv, 1);
+  midstate<C>(m, mid);
+}
+// node_mid[0 .. levels - 1] for domain did
 RC_HD void node_mids(const uint8_t* did, u64 (*mid)[8], int levels) {
-  for (int l = 0; l < levels; ++l) {
-    uint8_t m[384] = {};
-    const uint8_t lv = (uint8_t)l;
-    frame_part(m, frame_head(m, "node", did), &lv, 1);
-    midstate(m, mid[l]);
-  }
+  for (int l = 0; l < levels; ++l) node_mid(did, l, mid[l]);
 }
 // the whole NodeK of domain id did. 0, or -1.
 RC_HD int node_plan(const uint8_t* did, NodeK& N) {
@@ -683,6 +738,104 @@ RC_HD q4 byte_chunk(const q4* Tn, u32 b, u32 c) {
   q4 r;
   r.x = lo.x ^ hi.x; r.y = lo.y ^ hi.y; r.z = lo.z ^ hi.z; r.w = lo.w ^ hi.w;
   return r;
+}
+
+// --- with no plan: a leaf from its head, a node from its chaining value alone, a pad from its domain id ------------------
+
+// w[0, NW) |= the NV words v at byte offset off (off >> 3 <= MAXQ, off + 8 NV <= 8 NW). Every index is a constant (the word
+// offset is selected, not indexed), so w and v stay in registers.
+template <int NW, int NV, int MAXQ>
+RC_HD void place(u64* w, const u64* v, u32 off) {
+  const u32 qw = off >> 3, sh = 8 * (off & 7);
+  u64 u[NV + 1];
+  RC_UNROLL
+  for (int k = 0; k <= NV; ++k) u[k] = (k < NV ? v[k] >> sh : 0) | ((k > 0 && sh) ? v[k - 1] << (64 - sh) : 0);
+  RC_UNROLL
+  for (int i = 0; i < NW; ++i) {
+    RC_UNROLL
+    for (int j = 0; j <= MAXQ; ++j)
+      if (i - j >= 0 && i - j <= NV && qw == (u32)j) w[i] |= u[i - j];
+  }
+}
+
+constexpr int MAX_HEAD_SCHEMA = 95;   // the longest schema whose leaf prefix fits two blocks at any rank and position
+
+// The head of leaf (rank, position, schema) in domain did: its prefix (everything before the value) as the chaining value
+// after its first block (mid) and the q bytes after that (tail: 16 big-endian words, zero past q). Returns q, or -1.
+template <class C = Sha>
+RC_HD int leaf_head(const uint8_t* did, u64 rank, u64 position, const uint8_t* schema, int sl, u64* mid, u64* tail) {
+  if (sl < 0 || sl > MAX_HEAD_SCHEMA) return -1;
+  uint8_t m[256] = {};
+  int n = frame_head(m, "leaf", did);
+  n = frame_uint(m, n, rank);
+  n = frame_uint(m, n, position);
+  n = frame_part(m, n, schema, sl);
+  be_put(m + n, 64, 8);
+  midstate<C>(m, mid);
+  for (int i = 0; i < 16; ++i) tail[i] = be64_at(m + 128 + 8 * i);
+  return n + 8 - 128;
+}
+// The leaf of the 64-byte value v from its head (out may be v): one compression from mid when the tail and v fit one block
+// (q <= 47: under an 18-byte schema, a rank and a position below 2^48), in registers; else two.
+template <class C = Sha>
+RC_HD void leaf_tail(const u64* mid, const u64* tail, u32 q, const u64* v, u64* out) {
+  if (q <= 47) {
+    u64 w[16], vm[9];
+    RC_UNROLL
+    for (int i = 0; i < 16; ++i) w[i] = i < 6 ? tail[i] : 0;
+    RC_UNROLL
+    for (int i = 0; i < 8; ++i) vm[i] = v[i];
+    vm[8] = 0x8000000000000000ull;
+    place<16, 9, 5>(w, vm, q);
+    w[15] = 8 * (128 + 64 + (u64)q);
+    RC_UNROLL
+    for (int i = 0; i < 8; ++i) out[i] = mid[i];
+    C::compress(out, w);
+    return;
+  }
+  uint8_t m[256] = {};
+  for (u32 k = 0; k < q; ++k) m[k] = (uint8_t)(tail[k >> 3] >> (56 - 8 * (k & 7)));
+  for (int i = 0; i < 8; ++i) be_put(m + q + 8 * i, v[i], 8);
+  m[q + 64] = 0x80;
+  be_put(m + 248, 8 * (128 + 64 + (u64)q), 8);
+  cpy8(out, mid);
+  for (int b = 0; b < 2; ++b) {
+    u64 w[16];
+    for (int i = 0; i < 16; ++i) w[i] = be64_at(m + 128 * b + 8 * i);
+    C::compress(out, w);
+  }
+}
+
+// node(level, index, L, R) from mid (node_mid's at the level) alone: the 146 + n bytes after the first block (u64be(n)'s last
+// two, index's n, then u64be(64) || L || u64be(64) || R) and the padding are two blocks, built in registers
+template <class C = Sha>
+RC_HD void node_at(const u64* mid, u64 index, const u64* L, const u64* R, u64* out) {
+  const u32 n = (u32)nbytes(index);
+  u64 w[32], v[19];
+  RC_UNROLL
+  for (int i = 0; i < 32; ++i) w[i] = 0;
+  w[0] = (u64)n << 48;
+  const u64 ix = n == 8 ? index : index << (64 - 8 * n);
+  place<32, 1, 0>(w, &ix, 2);
+  v[0] = v[9] = 64;
+  RC_UNROLL
+  for (int i = 0; i < 8; ++i) {
+    v[1 + i] = L[i];
+    v[10 + i] = R[i];
+  }
+  v[18] = 0x8000000000000000ull;
+  place<32, 19, 1>(w, v, 2 + n);
+  w[31] = 8 * (128 + 146 + (u64)n);
+  cpy8(out, mid);
+  C::compress(out, w);
+  C::compress(out, w + 16);
+}
+
+// pad(rank) in domain did, its message built and hashed whole
+template <class C = Sha>
+RC_HD void pad_of(const uint8_t* did, u64 rank, u64* out) {
+  uint8_t m[256] = {};
+  digest_padded<C>(m, frame_uint(m, frame_head(m, "pad", did), rank), out);
 }
 
 }  // namespace rc
