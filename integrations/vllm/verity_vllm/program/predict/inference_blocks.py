@@ -26,7 +26,7 @@ fresh input is the circuit's over m.
 **Table** (private; `rows`, `decode`). `ROW_BYTES`-byte rows, integers little-endian: row 0 the header (`MAGIC`, the
 SHA-512 of the circuit's Program, m, the entry count), then one row an entry: its template (`partition_v2.definition_digest`,
 64 bytes), its first unit (8 bytes), its digit count and which digit is the slot (a byte each, then 6 zero bytes) and its
-radix (4 bytes a digit, at most `DIGITS`); every unused byte 0. `commit` pads them with zero rows to grid(R) and registers
+radix (4 bytes a digit, at most `DIGITS`); every unused byte 0. `commit` pads them with zero rows to grid(R) and commits
 them with `verity.ml.commitments.advice` before any coin: hm96-sha512/row/v2 hiding leaves under fresh salts in one
 frame-v3-sha512 tree, under `BINDING`.
 """
@@ -118,12 +118,12 @@ def budgets(circuit: IF.Circuit) -> tuple[int, int]:
 
 
 def commit(circuit: IF.Circuit, program: str | None = None,
-           salts: Sequence[bytes] | None = None) -> tuple[dict[str, Any], AC.Registration]:
-    """``circuit``'s partition into inference blocks registered (module docstring): its public statement and the
-    registration, the prover's to keep (the rows, their salts, the tree). ``program`` as `rows` takes it."""
+           salts: Sequence[bytes] | None = None) -> tuple[dict[str, Any], AC.Committed]:
+    """``circuit``'s partition into inference blocks committed (module docstring): its public statement and the
+    commitment, the prover's to keep (the rows, their salts, the tree). ``program`` as `rows` takes it."""
     rs = rows(circuit, program)
     padded = rs + [bytes(ROW_BYTES)] * (PV2.grid(len(rs)) - len(rs))
-    reg = AC.register(padded, ROW_BITS, BINDING, salts)
+    reg = AC.commit(padded, ROW_BITS, BINDING, salts)
     c, k = budgets(circuit)
     st = RIB.Statement(query=QUERY, c=c, k=k, blocks=PV2.grid(_blocks(circuit).slots), rows=len(padded), root=reg.root.hex())
     return st.dump(), reg
