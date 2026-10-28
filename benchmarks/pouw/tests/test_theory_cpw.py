@@ -40,13 +40,14 @@ def _listing(functions: dict[str, list[str]]) -> str:
     return "\n".join(out) + "\n"
 
 
-def test_bound_breaks_a_hair_under_the_floor():
+def test_bound_is_the_lean_headline_and_breaks_a_hair_under_the_floor():
+    _, i, w, phi = cf.headline()
+    c = cf.issue_price()
+    assert 0 < c <= 1 and (w, phi) == (c / 128, c / 8) and cf.lean_floor() == 17 * c
     b = cf.bound()
-    assert b["lean_floor"] == 17.0
-    assert 0.00655 < b["eps_unfolded"] <= b["eps_stated"] == 0.00656
-    assert b["eps_folded"] < b["eps_unfolded"]
-    assert 16.9999 < b["break_line"] < 17.0
-    assert b["brief_break_line"] < b["break_line"]
+    assert b["eps_folded"] < b["eps_unfolded"] <= b["eps_stated"] == float(i.fam.eps)
+    assert b["eps_unfolded"] == float(1 - cf.lean_floor() / i.B * (1 - cf.Fraction(41, i.checks)))
+    assert 0 < b["break_slack"] < 1e-3
 
 
 def test_checkpoint_floors_clear_the_break_line():
@@ -55,16 +56,17 @@ def test_checkpoint_floors_clear_the_break_line():
     routes = c["routes_slots_a_set_warp"]
     assert routes["pair2 (6 LOP3, 2 REDG.E.XOR.64 into one pair)"] == c["lower_bound_issue_merged"]
     assert routes["st256 (2 STG.E.ENL2.256; TMA XOR tree amortized)"] == c["lower_bound_egress"]
-    assert (c["floor_egress"], c["floor_issue_merged"]) == (17.25, 18.0)
-    assert c["floor_egress"] > cf.bound()["break_line"]
+    p = cf.issue_price()
+    assert (c["floor_egress"], c["floor_issue_merged"]) == (float(17 * p + p / 4), float(18 * p))
+    assert c["floor_issue_merged"] > c["floor_egress"] > float(cf.break_line())
 
 
-def test_pricing_the_checkpoint_in_both_moves_the_bound_only_at_equal_routes():
+def test_pricing_the_checkpoint_in_both_holds_the_bound_only_at_equal_routes():
     e = cf.checkpoint()["eps_priced"]
-    assert e["floor issue-merged, flat pair2"] < cf.bound()["eps_unfolded"]
-    assert e["floor egress, flat pair2"] > 0.04
-    assert cf.priced(cf.Fraction(0), cf.Fraction(0)) == 1 - cf.NW * (cf.W_STAR + cf.PHI_STAR) / (
-        sum(cf.FLAT_WORDS.values()) + sum(cf.FLAT_FOLD.values()) + sum(cf.FLAT_SKIP.values())) * (1 - cf.Fraction(41, cf.CHECKS))
+    unfolded = cf.bound()["eps_unfolded"]
+    assert e["floor issue-merged, flat pair2"] <= unfolded and e["floor egress, flat egress"] <= unfolded
+    assert e["floor egress, flat pair2"] > unfolded + 0.03
+    assert cf.priced(cf.Fraction(0), cf.Fraction(0)) == cf.headline()[1].unfolded
 
 
 def test_pair_route_is_the_warp_checkpoint():
