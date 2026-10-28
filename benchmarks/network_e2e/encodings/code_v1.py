@@ -2,7 +2,7 @@
 
 Advice v1 (`derived.py`) charges nothing for what is certified (the warden's admission order, the request records, the
 release buckets), replayed (the scheduler replay, `replay.py`) or derived (`derived.py`'s rules), and sends only the
-residual, one `Window` (the certifier's `window_charge.Window`) per certifier window, each field's values in the
+residual, one `Window` (the certifier's `window_charge.Window`) per sampling block, each field's values in the
 order its reader asks for them:
 - `arrived`: the replay's decisions, one per open step: whether the next request had arrived (`replay.Decision`);
 - `hits`: each admitting row's prefix-cache hit in hit units, from the step where the no-eviction bound fails

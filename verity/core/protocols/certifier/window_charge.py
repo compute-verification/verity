@@ -117,12 +117,13 @@ class WindowCarry:
 
 @dataclass(frozen=True)
 class Window:
-    """What one certifier window is charged: advice v1's residual for the window, each field's values in the order
-    its reader asks for them, as `code_v1` codes them. `arrived`, the replay's decisions; `hits`, each sent hit in hit
-    units; `resumes`, the resumed rows' positions; `order`, each entry a step's position and its new requests'
-    certified ingress indices; `lag`, async mode's bits. `reference_window` charges the window v1 sends, which has no
-    resumes and no lag bits and one index an order entry, in slots: `arrived` in (en, bits), `hits` in (hen, short)
-    and each entry (p, (r,)) in (oen, p, r). That window is the spec's `Window` (`ds`, `hits`, `order`)."""
+    """What one sampling block of the network certifier is charged: advice v1's residual for the block, each field's
+    values in the order its reader asks for them, as `code_v1` codes them. `arrived`, the replay's decisions; `hits`,
+    each sent hit in hit units; `resumes`, the resumed rows' positions; `order`, each entry a step's position and its
+    new requests' certified ingress indices; `lag`, async mode's bits. `reference_window` charges the residual v1
+    sends, which has no resumes and no lag bits and one index an order entry, in slots: `arrived` in (en, bits),
+    `hits` in (hen, short) and each entry (p, (r,)) in (oen, p, r). That residual is the spec's `Window` (`ds`,
+    `hits`, `order`)."""
 
     arrived: tuple[bool, ...] = ()
     hits: tuple[int, ...] = ()
