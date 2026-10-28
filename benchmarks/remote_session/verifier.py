@@ -1560,7 +1560,7 @@ def main() -> int:
                     help="a built remote-audit-verifier (default: `lake build` it in its package)")
     ap.add_argument("--transcript", type=Path, metavar="DIR",
                     help="write each session's difftest case to DIR (`lean_verifier.Transcript`: about 0.6 GB a "
-                         "window at 33,273 openings), its path, bytes and sha256 in verifier.json")
+                         f"window at {audit.SAMPLES:,} openings), its path, bytes and sha256 in verifier.json")
     ap.add_argument("--paced", nargs="+", metavar="K:T_MS:DRAWS:WINDOWS[:F]",
                     help="pace each session's passes, one spec a session (`pace_of`; replaces --sessions, --windows, "
                          "--window-ms and --samples): groups of K passes under a live coin each (`audit.Pace`), "
