@@ -25,4 +25,7 @@ package imports nothing else from `verity_vllm`, so every stage may import it.
   and `dump` writes it back.
 * `source_identity` -- the source-identity record's schema id (`research-infra/source-identity/v1`) and nothing else: the
   runner's telemetry embeds the record and no stage reads it back.
+* `predicted_row` -- a predicted row's record (`verity-vllm/predicted-row/v1`, ``predicted.json``): the Build of record the
+  ahead-of-time compiler wrote and its manifest's sha256, as ``predict compare --predicted`` reads it; its `of` refuses an
+  unknown field and `dump` writes it back.
 """
