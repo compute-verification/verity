@@ -269,6 +269,8 @@ class CommitTap:
         mine = np.array(words, copy=True)
         mine[:, 2 * r * c:] = record_words(np.zeros((len(y), call.n), "<i4"), y, served.m, served.tile)[:, 2 * r * c:]
         same = np.array_equal(mine, words) and value in served.registered
+        if same:
+            served.settle()
         reg = served.registered[value] if same else served.zy_tree(run, call, mine)
         self._put(CR.commit_outputs(call.index), reg, same,
                   {"call": call.index, "round": call.step, "step": j, "site": s, "rows": len(y)})
