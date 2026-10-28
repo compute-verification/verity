@@ -91,7 +91,7 @@ def termsOf (pub prof : Json) : V (List (String × Ratio)) :=
     let .str s ← at? (← Flock.J.get j c where_) path ctx | throw s!"{ctx}: its error is not a ratio"
     pure (c, ← Ratio.ofString s ctx)
 
-/-- Integrity's inputs: the least fraction `q = kd/n` of its proof blocks a block's draw covers, with that block's `n`
+/-- Integrity's inputs: the least fraction `q = kd/n` of its proof blocks a block's sample covers, with that block's `n`
 and `kd` (the largest `n` at that `q`). -/
 structure Draw where
   q : Ratio
@@ -103,7 +103,7 @@ structure Store where
   p : Ratio
   sBits : Nat
 
-/-- The network certifier's inputs: the least fraction a block's audit draws covers, and the block whose own terms
+/-- The network certifier's inputs: the least fraction a block's audits' samples cover, and the block whose own terms
 (schedules, cells, each audit's free inputs and jitter) cost most, with its proof blocks and its whole `K`. -/
 structure Leak where
   q : Ratio
@@ -113,7 +113,7 @@ structure Leak where
 
 private def ratioOf (n d : Nat) : Ratio := (Ratio.mk' n d).getD ⟨0, 1⟩
 
-/-- A block's integrity draw: sampled proofs' checked level (its last) and the proof blocks drawn at it. -/
+/-- A block's integrity sample: sampled proofs' checked level (its last) and the proof blocks sampled at it. -/
 def drawOf (prof : Json) : V Draw := do
   let ctx := s!"{SAMPLED_PROOFS}'s profile"
   let p ← Flock.J.get prof SAMPLED_PROOFS "profile"
@@ -121,7 +121,7 @@ def drawOf (prof : Json) : V Draw := do
   let name ← Flock.J.str l "name" s!"{ctx}.levels"
   let n ← Flock.J.nat l "size" s!"{ctx}.levels"
   let kd ← Flock.J.nat (← Flock.J.get p "drawn" ctx) name s!"{ctx}.drawn"
-  if n == 0 || kd == 0 then throw s!"{ctx}: a draw of {kd} of {n} proof blocks covers no fraction of them"
+  if n == 0 || kd == 0 then throw s!"{ctx}: a sample of {kd} of {n} proof blocks covers no fraction of them"
   pure ⟨ratioOf kd n, n, kd⟩
 
 /-- A block's PoUS storage, `none` when its certificate didn't certify. -/
@@ -131,7 +131,7 @@ def storeOf (pub : Json) : V (Option Store) := do
   if !(← Flock.J.bool j "certified" ctx) then return none
   pure (some ⟨← Ratio.ofString (← Flock.J.str j "eps" ctx) s!"{ctx}.eps", ← Flock.J.nat j "s_bits" ctx⟩)
 
-/-- A block's leak terms, from its period check's itemized `K`: each audit's proof blocks and draw, and the free inputs and
+/-- A block's leak terms, from its period check's itemized `K`: each audit's proof blocks and sample, and the free inputs and
 jitter of its terms (the scans' in the rows form). -/
 def leakOf (pub : Json) : V Leak := do
   let ctx := s!"{CERTIFIER}'s public"
@@ -145,7 +145,7 @@ def leakOf (pub : Json) : V Leak := do
     pure ((← Flock.J.nat a "units" s!"{ctx}.audits"), (← Flock.J.nat a "drawn" s!"{ctx}.audits"))
   let some q := (draws.filter (·.1 > 0)).foldl (fun m (n, k) =>
       let r := ratioOf k n; match m with | some m => some (if m.le r then m else r) | none => some r) none
-    | throw s!"{ctx}: no audit with proof blocks, so no fraction drawn"
+    | throw s!"{ctx}: no audit with proof blocks, so no fraction sampled"
   if q.num == 0 then throw s!"{ctx}: an audit drew none of its proof blocks"
   pure ⟨q, every, draws.foldl (· + ·.1) 0, ← Flock.J.nat j "K" ctx⟩
 

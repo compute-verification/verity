@@ -68,7 +68,7 @@ def pooledCount (q δ : Ratio) : Nat :=
   cdiv ((ln ⟨δ.den, δ.num⟩).2 * q.den) (q.num * 2 ^ PREC)
 
 /-- `IntegrityHorizon`'s figure: the most faulty proof blocks the monitoring period's accepted blocks total at `δ`, each
-block's draw covering at least a fraction `q` of its proof blocks. -/
+block's sample covering at least a fraction `q` of its proof blocks. -/
 def faultyBlocks (q δ : Ratio) : Nat := pooledCount q δ - 1
 
 /-- The least `k` in `[lo, hi)` with `ok k`, else `hi`, for `ok` monotone; whatever `ok` is, the result is `hi` or passes
@@ -112,7 +112,7 @@ def shortCount (U : Nat) (p δ : Ratio) : Nat :=
 def certified (U : Nat) (p δ : Ratio) : Nat := U + 1 - shortCount U p δ
 
 /-- `HorizonLeakAccepted` over `B` server-time blocks, each paying `every` bits of its own terms, over `B·units` proof
-blocks with each block's draw covering at least a fraction `q` of them: `(K, Fmax, the faulty proof blocks' bits)`. -/
+blocks with each block's sample covering at least a fraction `q` of them: `(K, Fmax, the faulty proof blocks' bits)`. -/
 def leakBits (B every units : Nat) (q δ : Ratio) : Nat × Nat × Nat :=
   let f := pooledCount q δ
   let faulty := f * (BLOCK_BITS + clog2 (B * units + 1))

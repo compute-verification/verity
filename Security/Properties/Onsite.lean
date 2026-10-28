@@ -39,7 +39,7 @@ def LnBrackets : Prop :=
     ((Pooled.ln ⟨d + 1 + a, d + 1⟩).1 : ℝ) / 2 ^ Pooled.PREC ≤ Real.log (((d + 1 + a : ℕ) : ℝ) / ((d + 1 : ℕ) : ℝ)) ∧
       Real.log (((d + 1 + a : ℕ) : ℝ) / ((d + 1 : ℕ) : ℝ)) ≤ ((Pooled.ln ⟨d + 1 + a, d + 1⟩).2 : ℝ) / 2 ^ Pooled.PREC
 
-/-- **`IntegrityHorizon`'s figure.** For a draw covering at least a fraction `q = (a + 1)/(b + 1) > 0` of each block's
+/-- **`IntegrityHorizon`'s figure.** For a sample covering at least a fraction `q = (a + 1)/(b + 1) > 0` of each block's
 proof blocks and `δ = (c + 1)/(c + 1 + e) ∈ (0, 1]`, `ln(1/δ)/q ≤ faultyBlocks q δ + 1`: every total `w` of faulty proof
 blocks with `¬ ln(1/δ)/q ≤ w`, outside the event `IntegrityHorizon` bounds, is at most `faultyBlocks q δ`. -/
 def IntegrityHorizonCovers : Prop :=
@@ -47,7 +47,7 @@ def IntegrityHorizonCovers : Prop :=
     Real.log (1 / (((c + 1 : ℕ) : ℝ) / ((c + 1 + e : ℕ) : ℝ))) / (((a + 1 : ℕ) : ℝ) / ((b + 1 : ℕ) : ℝ)) ≤
       ((Pooled.faultyBlocks ⟨a + 1, b + 1⟩ ⟨c + 1, c + 1 + e⟩ + 1 : ℕ) : ℝ)
 
-/-- **`IntegrityPeriod`'s threshold.** Either `threshold n kd e` exceeds `n`, or a block of `n` proof blocks drawing `kd`
+/-- **`IntegrityPeriod`'s threshold.** Either `threshold n kd e` exceeds `n`, or a block of `n` proof blocks sampling `kd`
 has sampling term `C(n − K₀, kd)/C(n, kd)` at most `e = num/(d + 1)` at `K₀ = threshold n kd e`. -/
 def IntegrityPeriodCovers : Prop :=
   ∀ n kd num d : ℕ, n < Pooled.threshold n kd ⟨num, d + 1⟩ ∨
