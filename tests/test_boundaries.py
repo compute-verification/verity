@@ -240,7 +240,8 @@ BENCHMARKS_IMPORTERS = {
                                                               "(`benchmarks/tc_probe`)",
     **dict.fromkeys(("integrations/vllm/tests/protocols/pouw_h1_circuits.py",
                      "integrations/vllm/tests/protocols/pouw_h1_gpu.py",
-                     "integrations/vllm/tests/protocols/test_pouw_h1_circuits.py"),
+                     "integrations/vllm/tests/protocols/test_pouw_h1_circuits.py",
+                     "integrations/vllm/tests/protocols/test_pouw_h1_drawn.py"),
                     "compute-accounting: H1's prover, producer and the live challenger's auditor "
                     "(`benchmarks/pouw/h1_prove`, `served_h1`, `benchmarks/live_challenger`)"),
     **dict.fromkeys(("integrations/vllm/tests/protocols/challenger_host.py", "integrations/vllm/tests/protocols/local_gate.py"),
