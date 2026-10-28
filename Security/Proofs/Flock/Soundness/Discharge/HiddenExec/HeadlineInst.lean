@@ -80,14 +80,14 @@ include ht hc x₀ in
 at the layout of the statement the draw `x₀` sets up). -/
 theorem instKeysRowH (hU : Built c.unit) (hpr : Layout.PortReads c hU) (hw : ProvedScope.wiresAcyclic c = true) :
     InstKeysRow c (portRowW c) := by
-  have hcx : x₀.st.c = c := Except.ok.inj ((setupHidden_parseC x₀.h).symm.trans hc)
+  have hcx : x₀.st.c = c := setupHidden_c_of_parse hc x₀.h
   have L := flat_layout ht x₀.h
   subst hcx
   exact instKeysRow_of_parse (st := Hidden.flatTwin x₀.st) L (parse_untyped ht hc).1 hpr hw
 
 /-- **`pp` at the hidden tables, at `instProg`** (`SitesH.progPlaces_instProg` at `sitesAtH`). -/
 noncomputable abbrev ppHI : ProgPlaces (instProg c n) (outsOfI c n) (planAtH (Reg := Reg) dj x₀) (tabAtH dj x₀) :=
-  SitesH.progPlaces_instProg (sitesAtH_parse ht hc hrf dj x₀) hrf.1 (outsOfI c n)
+  SitesH.progPlaces_instProg (sitesAtH_c ht hc hrf dj x₀) hrf.1 (outsOfI c n)
 
 /-- **`lay` at the hidden tables, at `instProg`**: `instLayoutH` at `sitesAtH`, the program's outputs the output words'
 bits, the registration the population's public file. -/
@@ -95,20 +95,20 @@ noncomputable abbrev layAtHI :
     Binding.Layout ((instProg c n).partition (outsOfI c n)) (planAtH (Reg := Reg) dj x₀) (tabAtH dj x₀)
       (((instProg c n).partition (outsOfI c n)).placeDecoder (planAtH dj x₀) (tabAtH dj x₀)
         (ppHI ht hc hrf dj x₀).derived.place) :=
-  instLayoutH (sitesAtH_parse ht hc hrf dj x₀) hrf (outsOfI c n) (fun _ => pub)
+  instLayoutH (sitesAtH_c ht hc hrf dj x₀) hrf (outsOfI c n) (fun _ => pub)
 
 /-- **`rs` at the hidden tables, at `instProg`**: `instRowsH` at `sitesAtH`, with `hsite` from `sitesAtH_bcSiteI` and
 `InstKeysRow` from `instKeysRowH`. -/
 noncomputable abbrev rsAtHI (hU : Built c.unit) (hpr : Layout.PortReads c hU) (hw : ProvedScope.wiresAcyclic c = true) :
     Binding.HmRowsX (layAtHI ht hc hrf dj x₀ (pub := pub) (Reg := Reg)) :=
-  instRowsH (sitesAtH_parse ht hc hrf dj x₀) hrf (outsOfI c n) (fun _ => pub) outsOutI_outsOfI
+  instRowsH (sitesAtH_c ht hc hrf dj x₀) hrf (outsOfI c n) (fun _ => pub) outsOutI_outsOfI
     (pinFit_of_rowsS ht hc hrf.1)
     (sitesAtH_bcSiteI ht hc hrf dj x₀ hpub) (instKeysRowH ht hc dj x₀ hU hpr hw)
 
 /-- **`hHm` at the hidden tables, at `instProg`** (`instRowsH_computes`, a unit per VU from the check). -/
 theorem rsAtHI_computes (hU : Built c.unit) (hpr : Layout.PortReads c hU) (hw : ProvedScope.wiresAcyclic c = true) :
     (rsAtHI ht hc hrf dj x₀ hpub hU hpr hw (Reg := Reg)).Computes :=
-  instRowsH_computes (sitesAtH_parse ht hc hrf dj x₀) hrf (outsOfI c n) (fun _ => pub) outsOutI_outsOfI
+  instRowsH_computes (sitesAtH_c ht hc hrf dj x₀) hrf (outsOfI c n) (fun _ => pub) outsOutI_outsOfI
     (pinFit_of_rowsS ht hc hrf.1)
     (checkFactsH ht hc).upv_pos (sitesAtH_bcSiteI ht hc hrf dj x₀ hpub) (instKeysRowH ht hc dj x₀ hU hpr hw)
 
@@ -168,8 +168,8 @@ theorem flock_headline_exec_hidden_inst {Lp : Merkle.Leaf (List FlockLevel3.GF12
             (rsAtHI_computes ht hc hrf dj x₀ hpub hU hpr hw)) k Rw M ρ t' :=
   flock_headline_hidden dj x₀ (instProg c n) (outsOfI c n) σs ks hks St hS Kd pop Lb src hA3
     (ppHI ht hc hrf dj x₀)
-    {instOneG (c := c) (n := n)} (constCols_instProgH (sitesAtH_parse ht hc hrf dj x₀) hrf.1 (outsOfI c n))
-    {instZeroG (c := c) (n := n)} (zeroCols_instProgH (sitesAtH_parse ht hc hrf dj x₀) hrf.1 (outsOfI c n))
+    {instOneG (c := c) (n := n)} (constCols_instProgH (sitesAtH_c ht hc hrf dj x₀) hrf.1 (outsOfI c n))
+    {instZeroG (c := c) (n := n)} (zeroCols_instProgH (sitesAtH_c ht hc hrf dj x₀) hrf.1 (outsOfI c n))
     (layAtHI ht hc hrf dj x₀ (pub := pub)) (rsAtHI ht hc hrf dj x₀ hpub hU hpr hw)
     (rsAtHI_computes ht hc hrf dj x₀ hpub hU hpr hw) hk hRw hM hρ hr ht' K wr opn dg dec one fin capOf N hdec τ hCR hKS
 

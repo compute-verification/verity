@@ -15,7 +15,7 @@
 # filler's stand-ins, EG_SET=eps1fill the four linears at 6016 tokens (whole waves) against 6144. The small gate's seed has
 # a key that key_ok_r9 rejects. Clocks are read, never set.
 #
-#   research run --on vy-nebius-2 --project verity --campaign cmp-13 --source . --cwd source --env GPU_LEASE_WHO=EGEMM \
+#   research run --on vy-nebius-2 --project verity --source . --cwd source --env GPU_LEASE_WHO=LANE \
 #     -- bash benchmarks/pouw/edited_gemm/run.sh
 set -uo pipefail
 export O=${OUT:?}
@@ -57,7 +57,7 @@ awk '/Function :/{f=$3} /[[:space:]](LDL|STL)[.[:space:]]/{n[f]++} END{for (f in
   > "$O/sass_local_mem_ops.txt" 2>&1
 export O_SHAPE=${O_SHAPE:-"8192 4096 4096"}
 export LAYERS=${LAYERS:-"qkv:8192:6144:4096 gate_up:8192:28672:4096 down:8192:4096:14336"}
-# EG_SET=eps1, the fold-cost sweep (note:20261017T0320Z-draft-eps1-profile): 8192^3, and Llama-3.1-8B's o_proj and gate_up
+# EG_SET=eps1, the fold-cost sweep: 8192^3, and Llama-3.1-8B's o_proj and gate_up
 # at m = 2048 (EG_SET=eps1lag too)
 case "${EG_SET:-all}" in
   eps1 | eps1lag | eps1sleep) O_SHAPE="8192 8192 8192" LAYERS="o2k:2048:4096:4096 gu2k:2048:28672:4096" ;;
@@ -164,7 +164,7 @@ if [ "${EG_SET:-all}" = eps1wave ]; then
   cold="" larms=$arms lil=$il ncu="" stall=""
   NCU_ONE="plain e_plains e_l7qs"
 fi
-# EG_SET=eps1pred: the machine model's predictions (note:20261017T0320Z-draft-eps1-calc) against kernels at e_l7qs's
+# EG_SET=eps1pred: the machine model's predictions against kernels at e_l7qs's
 # schedule: r = 2 (f20), duo on x-op filler chains (fx<x>, x = 4.5, 8, 12, 24), duo with 8 or 16 uniform-datapath
 # instructions a MMA (u8, u16); ncu on every arm at 8192^3 and gate_up, and e_l7qs's counts at k = 1024 to 8192 for its
 # closed-form instruction counts

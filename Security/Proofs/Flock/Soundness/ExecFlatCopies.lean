@@ -396,8 +396,10 @@ theorem eq_unit {R : Range} (hR : R ∈ st.c.ranges.toList) {n : ℕ} (hk : R.ki
   exact ⟨Kind.net.inj (hk.symm.trans L.unit_kind), slot_add_inj ha hb' he⟩
 
 
-/-- A net slot's input port bit, in another net's range than the unit's, is none of the unit slots' columns. -/
-theorem ne_unit_at {tags : Tags} (P : ParseFacts tags st.c) (C : CheckFacts st.c) {n : ℕ} (hn : n < st.c.nets.size)
+/-- A net slot's input port bit, in another net's range than the unit's, is none of the unit slots' columns: of any
+circuit whose nets are `NetOK` (a flat one's, `nets_ok`, or a templated one's, `parseTmpl_nets_ok`). -/
+theorem ne_unit_atT (hok : ∀ n, NetOK (st.c.nets.getD n default).2) (C : CheckFacts st.c) {n : ℕ}
+    (hn : n < st.c.nets.size)
     (hne : n ≠ st.c.unitNet) {g i : ℕ} {q : ℕ × ℕ} {tt : ℕ} (hg : g < st.c.g) (hi : i < st.c.perVu.getD n 0)
     (hq : q ∈ (portCols (st.c.nets.getD n default).2.inGroups).toList) (htt : tt < q.2) {s₀ b : ℕ}
     (hs₀ : s₀ < st.c.unitRange.count) (hb : b < 2 ^ st.c.unit.unitLog) :
@@ -406,10 +408,17 @@ theorem ne_unit_at {tags : Tags} (P : ParseFacts tags st.c) (C : CheckFacts st.c
   obtain ⟨hm, hk, -⟩ := rangeOf_spec (C.one_range n hn)
   have hc := C.count _ hm _ hk
   have hs : g * st.c.perVu.getD n 0 + i < (st.c.rangeOf n).count := by rw [hc]; exact Rows.mul_add_lt hg hi
-  have hq' := (nets_ok P n).1.2.2 q hq
+  have hq' := (hok n).2.2 q hq
   have hfit := (L.fit n).2
   have ha : q.1 + tt < 2 ^ (st.c.rangeOf n).slotLog := by rw [L.slotLog _ hm n hk]; omega
   exact hne (L.eq_unit hm hk hs ha hs₀ hb (by rw [← he]; unfold Circuit.slotCol; omega)).1
+
+theorem ne_unit_at {tags : Tags} (P : ParseFacts tags st.c) (C : CheckFacts st.c) {n : ℕ} (hn : n < st.c.nets.size)
+    (hne : n ≠ st.c.unitNet) {g i : ℕ} {q : ℕ × ℕ} {tt : ℕ} (hg : g < st.c.g) (hi : i < st.c.perVu.getD n 0)
+    (hq : q ∈ (portCols (st.c.nets.getD n default).2.inGroups).toList) (htt : tt < q.2) {s₀ b : ℕ}
+    (hs₀ : s₀ < st.c.unitRange.count) (hb : b < 2 ^ st.c.unit.unitLog) :
+    st.c.slotCol n g i + q.1 + tt ≠ st.c.unitRange.slot s₀ + b :=
+  L.ne_unit_atT (fun n => (nets_ok P n).1) C hn hne hg hi hq htt hs₀ hb
 
 /-- A port bit's offset is inside the unit's input rows. -/
 theorem port_lt {p t : ℕ} (hp : p < (portCols st.c.unit.inGroups).size)
@@ -543,7 +552,7 @@ theorem cutPairs_count (C : CheckFacts st.c) (hnd : (portBits st.c.unit.inGroups
     rw [(vu_split he1).2 ⟨rfl, h1⟩]
 
 /-- **The wire pairs at a unit port bit**: the copy pair of each wire into its port, in its template instance. -/
-theorem wirePairs_count {tags : Tags} (P : ParseFacts tags st.c) (C : CheckFacts st.c)
+theorem wirePairs_countT (hok : ∀ n, NetOK (st.c.nets.getD n default).2) (C : CheckFacts st.c)
     (hnd : (portBits st.c.unit.inGroups).Nodup) {s₀ p t : ℕ}
     (hs₀ : s₀ < st.c.unitRange.count) (hp : p < (portCols st.c.unit.inGroups).size)
     (ht : t < (portCols st.c.unit.inGroups)[p]!.2) (j : ℕ) :
@@ -591,7 +600,7 @@ theorem wirePairs_count {tags : Tags} (P : ParseFacts tags st.c) (C : CheckFacts
         rw [(vu_split hd2).2 ⟨rfl, h1⟩]
     · constructor
       · intro heq
-        exact absurd heq (L.ne_unit_at P C hd1 hdu hg hd2 (getD_mem_toList hd3) htt hs₀
+        exact absurd heq (L.ne_unit_atT hok C hd1 hdu hg hd2 (getD_mem_toList hd3) htt hs₀
           (lt_of_lt_of_le hx (by rw [L.unit_slotLog])))
       · rintro ⟨-, hF, -⟩
         exact absurd (congrArg Prod.fst hF) hdu
@@ -601,9 +610,24 @@ theorem wirePairs_count {tags : Tags} (P : ParseFacts tags st.c) (C : CheckFacts
     rw [getD_portCols hp]
     exact ht
 
+theorem wirePairs_count {tags : Tags} (P : ParseFacts tags st.c) (C : CheckFacts st.c)
+    (hnd : (portBits st.c.unit.inGroups).Nodup) {s₀ p t : ℕ}
+    (hs₀ : s₀ < st.c.unitRange.count) (hp : p < (portCols st.c.unit.inGroups).size)
+    (ht : t < (portCols st.c.unit.inGroups)[p]!.2) (j : ℕ) :
+    (Flat.wirePairs st.c).count (st.c.unitRange.slot s₀ + ((portCols st.c.unit.inGroups)[p]!.1 + t), j) =
+      ((st.c.wires.toList.filter fun w => decide (w.dst = (st.c.unitNet, s₀ % st.c.upv, p))).flatMap fun w =>
+        [(st.c.unitRange.slot s₀ + ((portCols st.c.unit.inGroups)[p]!.1 + t),
+          st.c.unitRange.slot s₀ + ((portCols st.c.unit.inGroups)[p]!.1 + t)),
+          (st.c.unitRange.slot s₀ + ((portCols st.c.unit.inGroups)[p]!.1 + t),
+            Flat.wireSrc st.c (s₀ / st.c.upv) w + t)]).count
+        (st.c.unitRange.slot s₀ + ((portCols st.c.unit.inGroups)[p]!.1 + t), j) :=
+  L.wirePairs_countT (fun n => (nets_ok P n).1) C hnd hs₀ hp ht j
 
-/-- **Δ at a unit copy's input port bit**: its one copy pair, `(x, x)` and `(x, flatSrc …)`. -/
-theorem delta_port {tags : Tags} (P : ParseFacts tags st.c) (C : CheckFacts st.c) (hΔ : FlatDelta st.c st.pin st.da)
+
+/-- **Δ at a unit copy's input port bit**: its one copy pair, `(x, x)` and `(x, flatSrc …)`; of a flat or a templated
+circuit (`ParseFactsU`, nets `NetOK`). -/
+theorem delta_portT {tags : Tags} {pre : Array (String × Net)} (P : ParseFactsU tags pre st.c)
+    (hok : ∀ n, NetOK (st.c.nets.getD n default).2) (C : CheckFacts st.c) (hΔ : FlatDelta st.c st.pin st.da)
     (hsha : st.c.unitNet ≠ st.c.shaNet) (hhm : st.c.unitNet ≠ st.c.hmNet) (hnd : (portBits st.c.unit.inGroups).Nodup)
     {s₀ p t : ℕ} (hs₀ : s₀ < st.c.unitRange.count) (hp : p < (portCols st.c.unit.inGroups).size)
     (ht : t < (portCols st.c.unit.inGroups)[p]!.2) (j : ℕ) :
@@ -621,12 +645,12 @@ theorem delta_port {tags : Tags} (P : ParseFacts tags st.c) (C : CheckFacts st.c
     rcases hrows q hq with ⟨g, hg, pp, hpp, k, hk, i, hi, tt, htt, he⟩ | ⟨g, hg, pp, hpp, i, hi, tt, htt, he⟩
     · obtain ⟨h1, h2⟩ := hall _ (getElem_mem_toList' hpp) _ (getElem_mem_toList' hk)
       have hidx : 2 * ((HmRow.rowSlots st.c.ports).2[pp]!)[k]!.2 + i < 6 := by omega
-      refine L.ne_unit_at P C P.shaNet (Ne.symm hsha) hg (by rw [C.perVu_sha]; exact h1)
+      refine L.ne_unit_atT hok C P.shaNet (Ne.symm hsha) hg (by rw [C.perVu_sha]; exact h1)
         (getElem_mem_toList' (by rw [C.sha_in.1]; exact hidx)) ?_ hs₀ hb (he ▸ heq)
       rw [C.sha_in.2 _ hidx, sha_width _ _ hi]
       exact htt
     · obtain ⟨hil, hw⟩ := hm_width C.hm_in hi
-      refine L.ne_unit_at P C P.hmNet (Ne.symm hhm) hg ?_ (getElem_mem_toList' hil)
+      refine L.ne_unit_atT hok C P.hmNet (Ne.symm hhm) hg ?_ (getElem_mem_toList' hil)
         (by rw [hw]; exact htt) hs₀ hb (he ▸ heq)
       rw [C.perVu_hm, ← hws]
       exact lt_of_lt_of_le hpp (le_nextPow2 _)
@@ -634,7 +658,7 @@ theorem delta_port {tags : Tags} (P : ParseFacts tags st.c) (C : CheckFacts st.c
   simp only [List.count_append]
   rw [List.count_eq_zero.2 (L.constPairs_not_below L.unit_mem L.unit_kind hs₀ (lt_of_lt_of_le hoff L.unit_in) j),
     List.count_eq_zero.2 (fun hm => hrow0 _ hm rfl), L.leafPairs_count C hnd hs₀ hp ht,
-    L.cutPairs_count C hnd hs₀ hp ht, L.wirePairs_count P C hnd hs₀ hp ht]
+    L.cutPairs_count C hnd hs₀ hp ht, L.wirePairs_countT hok C hnd hs₀ hp ht]
   unfold Flat.flatSrc
   split
   · rename_i hpl
@@ -680,9 +704,19 @@ theorem delta_port {tags : Tags} (P : ParseFacts tags st.c) (C : CheckFacts st.c
       rw [hcl, hw0]
       simp only [List.flatMap_cons, List.flatMap_nil, List.append_nil, count_pair_eq, List.count_nil, Nat.add_zero]
 
+theorem delta_port {tags : Tags} (P : ParseFacts tags st.c) (C : CheckFacts st.c) (hΔ : FlatDelta st.c st.pin st.da)
+    (hsha : st.c.unitNet ≠ st.c.shaNet) (hhm : st.c.unitNet ≠ st.c.hmNet) (hnd : (portBits st.c.unit.inGroups).Nodup)
+    {s₀ p t : ℕ} (hs₀ : s₀ < st.c.unitRange.count) (hp : p < (portCols st.c.unit.inGroups).size)
+    (ht : t < (portCols st.c.unit.inGroups)[p]!.2) (j : ℕ) :
+    st.da.toList.count (st.c.unitRange.slot s₀ + ((portCols st.c.unit.inGroups)[p]!.1 + t), j) =
+      (if st.c.unitRange.slot s₀ + ((portCols st.c.unit.inGroups)[p]!.1 + t) = j then 1 else 0) +
+        if Flat.flatSrc st.c s₀ p t = j then 1 else 0 :=
+  L.delta_portT P.toU (fun n => (nets_ok P n).1) C hΔ hsha hhm hnd hs₀ hp ht j
+
 /-- **The block rows at a unit copy's input port bit read its source**: the net's self row there, and Δ's one copy
-pair. -/
-theorem placed_port {tags : Tags} (P : ParseFacts tags st.c) (C : CheckFacts st.c) (hΔ : FlatDelta st.c st.pin st.da)
+pair; of a flat or a templated circuit (`ParseFactsU`, nets `NetOK`). -/
+theorem placed_portT {tags : Tags} {pre : Array (String × Net)} (P : ParseFactsU tags pre st.c)
+    (hok : ∀ n, NetOK (st.c.nets.getD n default).2) (C : CheckFacts st.c) (hΔ : FlatDelta st.c st.pin st.da)
     (hsha : st.c.unitNet ≠ st.c.shaNet) (hhm : st.c.unitNet ≠ st.c.hmNet) (hnd : (portBits st.c.unit.inGroups).Nodup)
     {s₀ p t : ℕ} (hs₀ : s₀ < st.c.unitRange.count) (hp : p < (portCols st.c.unit.inGroups).size)
     (ht : t < (portCols st.c.unit.inGroups)[p]!.2)
@@ -698,7 +732,7 @@ theorem placed_port {tags : Tags} (P : ParseFacts tags st.c) (C : CheckFacts st.
   have hb : (portCols st.c.unit.inGroups)[p]!.1 + t < 2 ^ st.c.unit.unitLog :=
     lt_of_lt_of_le hoff (L.fit st.c.unitNet).2
   have hW : 0 < 2 ^ st.c.unit.unitLog := Nat.two_pow_pos _
-  have hcnt := L.delta_port P C hΔ hsha hhm hnd hs₀ hp ht j.val
+  have hcnt := L.delta_portT P hok C hΔ hsha hhm hnd hs₀ hp ht j.val
   have fin : ∀ (x src : ℕ), ((if j.val = x then (1 : ZMod 2) else 0) +
       (((if x = j.val then 1 else 0) + if src = j.val then 1 else 0 : ℕ) : ZMod 2)) = if j.val = src then 1 else 0 := by
     intro x src
@@ -723,6 +757,20 @@ theorem placed_port {tags : Tags} (P : ParseFacts tags st.c) (C : CheckFacts st.
     rw [Nat.add_assoc]
     exact fin _ _
 
+
+theorem placed_port {tags : Tags} (P : ParseFacts tags st.c) (C : CheckFacts st.c) (hΔ : FlatDelta st.c st.pin st.da)
+    (hsha : st.c.unitNet ≠ st.c.shaNet) (hhm : st.c.unitNet ≠ st.c.hmNet) (hnd : (portBits st.c.unit.inGroups).Nodup)
+    {s₀ p t : ℕ} (hs₀ : s₀ < st.c.unitRange.count) (hp : p < (portCols st.c.unit.inGroups).size)
+    (ht : t < (portCols st.c.unit.inGroups)[p]!.2)
+    (hA : ∀ j', sparseEntry st.c.unit.a ((portCols st.c.unit.inGroups)[p]!.1 + t) j' =
+      if j' = (portCols st.c.unit.inGroups)[p]!.1 + t then 1 else 0)
+    (hB : ∀ j', sparseEntry st.c.unit.b ((portCols st.c.unit.inGroups)[p]!.1 + t) j' +
+      lookupEntry st.c.unit.lookup ((portCols st.c.unit.inGroups)[p]!.1 + t) j' =
+        if j' = (portCols st.c.unit.inGroups)[p]!.1 + t then 1 else 0)
+    (r j : Fin (2 ^ st.c.kLog)) (hr : r.val = st.c.unitRange.slot s₀ + ((portCols st.c.unit.inGroups)[p]!.1 + t)) :
+    placedA st r j = (if j.val = Flat.flatSrc st.c s₀ p t then 1 else 0) ∧
+      placedB st r j = if j.val = Flat.flatSrc st.c s₀ p t then 1 else 0 :=
+  L.placed_portT P.toU (fun n => (nets_ok P n).1) C hΔ hsha hhm hnd hs₀ hp ht hA hB r j hr
 
 /-- **A unit slot's row past its useful rows is zero**, in `A` and `B`: the net's row there is empty, no slot constant is
 there, and Δ's other pairs are at input bits. -/

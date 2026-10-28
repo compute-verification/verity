@@ -3,13 +3,13 @@
 # vllm's Served at one Llama-3.1-8B layer, against receipts.py's torch chain and h1tile.reference, the kernel with dead
 # tiles skipped against h1tile.reference's v4, a step's calls of one K in one launch against each call's own, and J10-R's:
 # noise.cu's call streams against hashlib's and the units kernel's J10-R receipts against h1tile.j10r_reference) for each
-# -hbc build of h1u.cu in BUILDS: hbc, sbench.sh's dither-a-hbc flags alone, and hbc-3290, with #3290's levers (H1U_PF,
+# -hbc build of h1u.cu in BUILDS: hbc, sbench.sh's dither-a-hbc flags alone, and hbc-3290, with its levers (H1U_PF,
 # H1U_NB2, H1U_L2PF); then, under the same lease, the producer's time a decode step with dead tiles computed and skipped,
 # a call at a time and batched, at each of STEP_ROWS (comma-separated, of 64) served rows (step_time.py; empty: none).
 # The builds run before the lease, niced; each build's tests and timing hold one GPU, about 10 minutes. GPU_LEASE_ON, if
 # set, is gpu-lease's --on: the GPUs it may take; LEASE_MIN its --max-min (20).
 #
-#   research run --on vy-nebius-2 --cwd source --source . [--env GPU_LEASE_ON=2,3] [--env BUILDS=hbc] \
+#   research run --on MACHINE --cwd source --source . [--env GPU_LEASE_ON=2,3] [--env BUILDS=hbc] \
 #     -- bash benchmarks/pouw/served_h1/producer_gpu.sh
 set -euo pipefail
 PY=${PY:-/workspace/jobs/venv312/bin/python}

@@ -62,9 +62,9 @@ noncomputable def sitesPHJI : SitesH (planPHJ (Reg := Reg) dj x₀) (tabPHJ dj x
   B S R u _ := castM (congrArg TabSpec.S (tabOfPHJ_eq dj x₀ S R u)).symm
     (tablePHJ dj x₀ S (partOf I (dj S) u.val)).2.twinB
   sat S R u _ := twin_sat_cast (congrArg TabSpec.S (tabOfPHJ_eq dj x₀ S R u)).symm
-    ((tablePHJ dj x₀ S (partOf I (dj S) u.val)).2.sat (tablePHJ_typed dj x₀ ht S _))
+    ((tablePHJ dj x₀ S (partOf I (dj S) u.val)).2.sat (tablePHJ_typed dj x₀ ht S _) (tablePHJ_parse dj x₀ ht hc S _))
   pin S R u _ := pin_cast (congrArg TabSpec.S (tabOfPHJ_eq dj x₀ S R u)).symm
-    ((tablePHJ dj x₀ S (partOf I (dj S) u.val)).2.pin (tablePHJ_typed dj x₀ ht S _))
+    ((tablePHJ dj x₀ S (partOf I (dj S) u.val)).2.pin (tablePHJ_typed dj x₀ ht S _) (tablePHJ_parse dj x₀ ht hc S _))
   acc S R u _ := recastAccH ((tablePHJ dj x₀ S (partOf I (dj S) u.val)).2.acc
     (tablePHJ_typed dj x₀ ht S _) (tablePHJ_parse dj x₀ ht hc S _) hrf)
     (congrArg TabSpec.S (tabOfPHJ_eq dj x₀ S R u)).symm
@@ -78,6 +78,20 @@ theorem sitesPHJI_parse :
       HmRow.parse ((sitesPHJI dj x₀ ht hc hrf).acc S R u h).tags ((sitesPHJI dj x₀ ht hc hrf).acc S R u h).cf
         ((sitesPHJI dj x₀ ht hc hrf).acc S R u h).tables = .ok c :=
   fun S _ _ _ => (HiddenExec.parse_untyped (tablePHJ_typed dj x₀ ht S _) (tablePHJ_parse dj x₀ ht hc S _)).1
+
+/-- Every site's committed circuit is the session's circuit `c` (the flat `instProg` path). -/
+theorem sitesPHJI_c :
+    ∀ (S : Finset (Fin n)) (R : Reg) (u : Fin n) (h : u ∈ S), ((sitesPHJI dj x₀ ht hc hrf).acc S R u h).st.c = c :=
+  fun S R u h => ((sitesPHJI dj x₀ ht hc hrf).acc S R u h).c_eq
+    (HmOut.parse_isTmpl (tablePHJ_parse dj x₀ ht hc S (partOf I (dj S) u.val))) (sitesPHJI_parse dj x₀ ht hc hrf S R u h)
+
+/-- Every site's statement circuit is the session's circuit `c`, which is flat (the `keyProg` path). -/
+theorem sitesPHJI_stmt :
+    ∀ (S : Finset (Fin n)) (R : Reg) (u : Fin n) (h : u ∈ S),
+      HmOut.unrolled ((sitesPHJI dj x₀ ht hc hrf).acc S R u h).st.c = c :=
+  fun S R u h => by
+    rw [sitesPHJI_c dj x₀ ht hc hrf S R u h]
+    exact unrolled_flat (parse_tmpl_none ht hc)
 
 variable {pub : Public} (hpub : HmOut.loadPublic I.tags c I.publicFile = .ok pub)
 
@@ -114,7 +128,7 @@ theorem sitesPHJI_bcSite :
 /-- **`pp` at the plan, at `instProg`** (`SitesH.progPlaces_instProg` at `sitesPHJI`). -/
 noncomputable abbrev ppPHJI :
     ProgPlaces (instProg c n) (outsOfI c n) (planPHJ (Reg := Reg) dj x₀) (tabPHJ dj x₀) :=
-  SitesH.progPlaces_instProg (sitesPHJI_parse dj x₀ ht hc hrf) hrf.1 (outsOfI c n)
+  SitesH.progPlaces_instProg (sitesPHJI_c dj x₀ ht hc hrf) hrf.1 (outsOfI c n)
 
 /-- **`lay` at the plan, at `instProg`**: `instLayoutH` at `sitesPHJI`, the program's outputs the output words' bits, the
 registration the population's public file. -/
@@ -122,7 +136,7 @@ noncomputable abbrev layPHJI :
     Binding.Layout ((instProg c n).partition (outsOfI c n)) (planPHJ (Reg := Reg) dj x₀) (tabPHJ dj x₀)
       (((instProg c n).partition (outsOfI c n)).placeDecoder (planPHJ dj x₀) (tabPHJ dj x₀)
         (ppPHJI dj x₀ ht hc hrf).derived.place) :=
-  instLayoutH (sitesPHJI_parse dj x₀ ht hc hrf) hrf (outsOfI c n) (fun _ => pub)
+  instLayoutH (sitesPHJI_c dj x₀ ht hc hrf) hrf (outsOfI c n) (fun _ => pub)
 
 variable (hU : Built c.unit) (hpr : Layout.PortReads c hU) (hw : ProvedScope.wiresAcyclic c = true)
 
@@ -135,13 +149,13 @@ theorem instKeysRowPHJ : InstKeysRow c (portRowW c) :=
 /-- **`rs` at the plan, at `instProg`**: `instRowsH` at `sitesPHJI`, with `hsite` from `sitesPHJI_bcSite` and
 `InstKeysRow` from `instKeysRowPHJ`. -/
 noncomputable abbrev rsPHJI : Binding.HmRowsX (layPHJI dj x₀ ht hc hrf (pub := pub) (Reg := Reg)) :=
-  instRowsH (sitesPHJI_parse dj x₀ ht hc hrf) hrf (outsOfI c n) (fun _ => pub) outsOutI_outsOfI
+  instRowsH (sitesPHJI_c dj x₀ ht hc hrf) hrf (outsOfI c n) (fun _ => pub) outsOutI_outsOfI
     (pinFit_of_rowsS ht hc hrf.1)
     (sitesPHJI_bcSite dj x₀ ht hc hrf hpub) (instKeysRowPHJ x₀ ht hc hU hpr hw)
 
 /-- **`hHm` at the plan's rows, at `instProg`** (`instRowsH_computes`, a unit per VU from the check). -/
 theorem rsPHJI_computes : (rsPHJI dj x₀ ht hc hrf hpub hU hpr hw (Reg := Reg)).Computes :=
-  instRowsH_computes (sitesPHJI_parse dj x₀ ht hc hrf) hrf (outsOfI c n) (fun _ => pub) outsOutI_outsOfI
+  instRowsH_computes (sitesPHJI_c dj x₀ ht hc hrf) hrf (outsOfI c n) (fun _ => pub) outsOutI_outsOfI
     (pinFit_of_rowsS ht hc hrf.1)
     (checkFactsH ht hc).upv_pos (sitesPHJI_bcSite dj x₀ ht hc hrf hpub) (instKeysRowPHJ x₀ ht hc hU hpr hw)
 
@@ -156,7 +170,7 @@ variable (hscope : Layout.scopeOkH c = true)
 /-- **`pp` at the plan, at `keyProg`** (`SitesH.progPlaces_keyProg` at `sitesPHJI`). -/
 noncomputable abbrev ppPHJ :
     ProgPlaces (Placed.keyProg c hU n) (Layout.outsOf c hU n) (planPHJ (Reg := Reg) dj x₀) (tabPHJ dj x₀) :=
-  SitesH.progPlaces_keyProg hU (sitesPHJI_parse dj x₀ ht hc (rowsFit_of_scopeH ht hc hscope)) (Layout.outsOf c hU n)
+  SitesH.progPlaces_keyProg hU (sitesPHJI_stmt dj x₀ ht hc (rowsFit_of_scopeH ht hc hscope)) (Layout.outsOf c hU n)
 
 /-- **`lay` at the plan, at `keyProg`**: `keyLayoutH` at `sitesPHJI`, the program's outputs the returned outputs' bits,
 the registration the population's public file. -/
@@ -165,13 +179,13 @@ noncomputable abbrev layPHJ :
       (tabPHJ dj x₀)
       (((Placed.keyProg c hU n).partition (Layout.outsOf c hU n)).placeDecoder (planPHJ dj x₀) (tabPHJ dj x₀)
         (ppPHJ dj x₀ ht hc hU hscope).derived.place) :=
-  keyLayoutH (sitesPHJI_parse dj x₀ ht hc (rowsFit_of_scopeH ht hc hscope)) (Layout.outsOf c hU n) (fun _ => pub)
+  keyLayoutH (sitesPHJI_stmt dj x₀ ht hc (rowsFit_of_scopeH ht hc hscope)) (Layout.outsOf c hU n) (fun _ => pub)
     (Layout.scopeOkH_spec hU hscope).2.1 (rowsFit_of_scopeH ht hc hscope) (Layout.outsOut_outsOf c hU n)
 
 /-- **`rs` at the plan, at `keyProg`**: `keyRowsH` at `sitesPHJI`, with `hsite` from `sitesPHJI_bcSite` and the rows'
 keys from the parse (`Layout.keysRow_of_parse`). -/
 noncomputable abbrev rsPHJ : Binding.HmRowsX (layPHJ dj x₀ ht hc hU hscope (pub := pub) (Reg := Reg)) :=
-  keyRowsH (sitesPHJI_parse dj x₀ ht hc (rowsFit_of_scopeH ht hc hscope)) (Layout.outsOf c hU n) (fun _ => pub)
+  keyRowsH (sitesPHJI_stmt dj x₀ ht hc (rowsFit_of_scopeH ht hc hscope)) (Layout.outsOf c hU n) (fun _ => pub)
     (Layout.scopeOkH_spec hU hscope).2.1 (rowsFit_of_scopeH ht hc hscope) (Layout.outsOut_outsOf c hU n)
     (sitesPHJI_bcSite dj x₀ ht hc (rowsFit_of_scopeH ht hc hscope) hpub)
     (Layout.keysRow_of_parse (HiddenExec.parse_untyped ht hc).1 (Layout.scopeOkH_spec hU hscope).1
@@ -179,7 +193,7 @@ noncomputable abbrev rsPHJ : Binding.HmRowsX (layPHJ dj x₀ ht hc hU hscope (pu
 
 /-- **`hHm` at the plan's rows, at `keyProg`** (`keyRowsH_computes`). -/
 theorem rsPHJ_computes : (rsPHJ dj x₀ ht hc hpub hU hscope (Reg := Reg)).Computes :=
-  keyRowsH_computes (sitesPHJI_parse dj x₀ ht hc (rowsFit_of_scopeH ht hc hscope)) (Layout.outsOf c hU n)
+  keyRowsH_computes (sitesPHJI_stmt dj x₀ ht hc (rowsFit_of_scopeH ht hc hscope)) (Layout.outsOf c hU n)
     (fun _ => pub) (Layout.scopeOkH_spec hU hscope).2.1 (rowsFit_of_scopeH ht hc hscope)
     (Layout.outsOut_outsOf c hU n) (sitesPHJI_bcSite dj x₀ ht hc (rowsFit_of_scopeH ht hc hscope) hpub)
     (Layout.keysRow_of_parse (HiddenExec.parse_untyped ht hc).1 (Layout.scopeOkH_spec hU hscope).1
