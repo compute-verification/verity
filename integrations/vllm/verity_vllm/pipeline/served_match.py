@@ -121,7 +121,7 @@ def moe_facts(model: Any) -> dict[str, dict[str, Any]]:
             return None
 
     # each tensor under its first registration, the name the loader fills from the checkpoint: the runner re-registers the block's
-    # gate as its own `gate` ([R15 moe GATE-PATH])
+    # gate as its own `gate`
     named = {id(p): n for n, p in model.named_parameters()}
     out: dict[str, dict[str, Any]] = {}
     for m in runners:

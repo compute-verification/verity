@@ -41,7 +41,7 @@ are ``out of domain``.  Positive tiers must have none; the negative tier's ``rej
 have ``hardware != claimed`` and ``hardware == correct``).
 
 Outputs under ``--out``: ``probe_results.json``, ``capture_<tier>.npz`` (the hardware accumulator of every instance at every step,
-the final words, the ids), ``sass_<kernel>_<arch>.txt`` with ``--sass-check``, and under ``research run`` a ``result.json`` of kind
+the final words, the ids), ``sass_<kernel>_<arch>.txt`` with ``--sass-check``, and in a recorded run (``RESEARCH_RUN_ID`` set) a ``result.json`` of kind
 ``tc-evidence/v1`` whose ``tc_evidence`` is the meta contract: ``{instruction, target, instances_dataset, instances_tier, range,
 manifest_sha256, elements, mismatches, first_mismatch | null, per_step_checked, sass, device, driver, cuda, model_agrees, ...}``.
 ``mismatches`` counts hardware words that differ from the reference words: the tier's expected (model-recorded) words, and on the
@@ -289,13 +289,13 @@ BF16_HOPPER_SYNTHETIC = Synthetic(
     target=BF16_HOPPER_TARGET, instruction=BF16_HOPPER_INSTRUCTION, model=S.HOPPER_BF16_M16N8K16,
     operands=bf16_random_finite_operands, dtype=np.uint16, epilogue=EPILOGUE_BF16,
     recipe="a, b = random_finite_bf16 (exponent fields [96, 160), 1/10 signed zeros, 1/10 subnormals); accs = tc_dot(HOPPER_BF16_M16N8K16) "
-           "chained from +0 (archive.direct.ligero.relchain.instances, relation bf16-hopper, lane b-hopper dc3c141)")
+           "chained from +0 (archive.direct.ligero.relchain.instances, relation bf16-hopper)")
 FP8_HOPPER_SYNTHETIC = Synthetic(
     dataset_id="bench-instances-fp8-hopper/v1", dataset="bench-instances-fp8-hopper/v1", tier="vu-k1536-fp8-hopper", relation="fp8-hopper",
     target=T.FP8_HOPPER_WGMMA.name, instruction=T.FP8_HOPPER_WGMMA.instruction, model=S.HOPPER_E4M3_K32,
     operands=fp8_random_finite_operands, dtype=np.uint8, epilogue=None,
     recipe="a, b = uniform finite E4M3 bytes (NaN codes -> 0x77 | sign); accs = tc_dot(HOPPER_E4M3_K32) chained from +0 "
-           "(archive.direct.ligero.relchain.instances, relation fp8-hopper, lane b-hopper dc3c141)")
+           "(archive.direct.ligero.relchain.instances, relation fp8-hopper)")
 SYNTHETIC = {s.spec: s for s in (FP8_ADA_SYNTHETIC, BF16_HOPPER_SYNTHETIC, FP8_HOPPER_SYNTHETIC)}
 
 
@@ -364,8 +364,8 @@ DATASETS = {
     f"{BENCH_INSTANCES}/tu-k16": "FIRST: 4,096 single transitions with arbitrary finite c",
     f"{BENCH_INSTANCES}/vu-k1536-neg": "FIRST: 52 claimed-wrong / out-of-domain inputs (the harness must detect all)",
     FP8_ADA_SYNTHETIC.spec: "FP8_ADA_MMA: 4,096 inputs x 48 E4M3 steps generated from seed 20260922, bare FP32 word",
-    BF16_HOPPER_SYNTHETIC.spec: "BF16_HOPPER: 4,096 inputs x 96 BF16 steps generated from seed 20260922, f32_to_bf16 epilogue (lane b-hopper)",
-    FP8_HOPPER_SYNTHETIC.spec: "FP8_HOPPER_WGMMA: 4,096 inputs x 48 E4M3 steps generated from seed 20260922, bare FP32 word (lane b-hopper)",
+    BF16_HOPPER_SYNTHETIC.spec: "BF16_HOPPER: 4,096 inputs x 96 BF16 steps generated from seed 20260922, f32_to_bf16 epilogue",
+    FP8_HOPPER_SYNTHETIC.spec: "FP8_HOPPER_WGMMA: 4,096 inputs x 48 E4M3 steps generated from seed 20260922, bare FP32 word",
 }
 
 
