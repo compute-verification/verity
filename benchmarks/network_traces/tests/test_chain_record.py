@@ -430,15 +430,13 @@ def test_leak_counts_the_scans_terms_on_the_warden_run(tmp_path):
         cr.leak(run)
 
 
-def test_the_draws_bound_is_the_profiles_count_bound():
-    def bound(n, k):
-        return cr.eps_at_delta(n, k, "subset")["wrong_units_at_delta"]
-
-    assert bound(26, 26) == {"0.5": 0, "9.54e-07": 0}
-    assert bound(256, 64)["0.5"] == 2 and bound(256, 2)["0.5"] == 74
-    # miss(1) = C(3, 2) / C(4, 2) is δ exactly: one wrong unit is counted, as Lean's countBound counts it
-    assert bound(4, 2) == {"0.5": 1, "9.54e-07": 2}
-    assert bound(0, 0) == {"0.5": None, "9.54e-07": None}
+def test_subset_bound():
+    assert cr.subset_bound(26, 26, 2.0 ** -20) == 0
+    assert cr.subset_bound(256, 64, 0.5) == 2
+    assert cr.subset_bound(256, 2, 0.5) == 74
+    assert cr.subset_bound(0, 0, 0.5) is None
+    # one wrong unit of 4 escapes a sample of 2 with C(3, 2)/C(4, 2) = 1/2 exactly: within δ = 1/2
+    assert cr.subset_bound(4, 2, 0.5) == 1
 
 
 def test_the_certifier_only_path_needs_no_scan_names_its_stubs_and_counts_the_tampers(tmp_path):
