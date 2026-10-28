@@ -17,17 +17,24 @@ own Commit.
   times.
 * **Coins.** With ``--challenger-gate CMD`` and ``--challenger-peer NAME`` (`sessions_of`), the auditor host's
   challenger's, one session a window through infra's gate (`GateSessions`, `commit_coins.Gate`): window 0's session is
-  reserved (scheme `pouw_h1_challenger.SCHEME`, `pouw_h1_challenger.families` (S)) at its open and window k+1's while
-  window k serves, off the engine loop (`GateSessions.take`); round 0 opens it on the window's open root
+  reserved (scheme `pouw_h1_challenger.SCHEME`, `pouw_h1_challenger.families` (S)) at startup (`arm_of`) and window
+  k+1's while window k serves, off the engine loop (`GateSessions.take`); round 0 opens it on the window's open root
   (`pouw_h1_window.Window`), reached on this machine's 127.0.0.1 at the port the gate's open answers once the auditor
-  host's ``ssh -R`` listens there, and the window's release waits for its end entry. The gate's open answers a port no
-  session without an end entry holds, so a window whose session opens while the window before is still releasing takes
-  a port of its own. A reserve joins its lane's open period, if one is open, so window 0's waits for its open, after a
-  period opened once the server listens; and a reserve made ahead that no window opens (the server stopped first) would
-  leave its period incomplete, so the next window's is reserved ahead only while the last reserve joined no period, and
-  one no window opened is ``unused`` in the summary. Without a gate, the epoch's in-process coins,
-  one epoch a window (`pouw_h1_settings.from_engine`): such a window credits nothing (`pouw_h1.IN_PROCESS`).
-  ``--protocols-config`` sets no session (``SESSIONED``).
+  host's ``ssh -R`` listens there (looked for every `LISTEN_S`), and the window's release waits for its end entry. The
+  gate's open answers a port no session without an end entry holds, so a window whose session opens while the window
+  before is still releasing takes a port of its own. A reserve joins its lane's open ``period``, if one is open, so one
+  is opened before the server starts for window 0's to join; and a reserve made ahead that no window opens (the server
+  stopped first, window 0's included) would leave its ``period`` incomplete, so the next window's is reserved ahead
+  only while the last reserve joined none, and one no window opened is ``unused`` in the summary. Without a gate, the
+  epoch's in-process coins, one epoch a window (`pouw_h1_settings.from_engine`): such a window credits nothing
+  (`pouw_h1.IN_PROCESS`). ``--protocols-config`` sets no session (``SESSIONED``).
+* **Ready before it listens.** `H1Windows.ready`, before serve-openai listens, does what the first block's first step
+  would otherwise do before its first token: the weights' roots (`pouw_h1_hooks.weight_roots`, which each install
+  reuses), the call tables' GPU hasher built (`pouw_h1_tables_device.available`), every z/y kernel a step of up to T
+  rows runs compiled (`pouw_h1_hooks.warm_zy`), the Lean verifier of record built (`verifier.executable`, once a
+  process: in a fresh tree a minute's build, which in-process coins otherwise run at the first one's draw), and the wait
+  for that block's reserve (window 0's, which `arm_of` makes while the Program is declared). Round 0's open stays at the block's first admission: its open root binds that round's
+  requests, and the call tables are bound under the salt the open draws.
 * **Off the engine loop.** At a window's close the loop takes only H1's hooks and tap off; its release (the empty
   steps' calls, the manifest's commit, the draw coin, the session's close and the wait for its end entry) runs on
   ``closer``, one thread in window order, while the next window serves. Each window still has its own session,
@@ -74,8 +81,11 @@ SESSIONED = ("challenger", "session", "gate", "period")
 #: the challenger as the window reaches it: this machine's 127.0.0.1, its port the one the gate's open answers
 #: (`pouw_h1_window.at_port`; the gate's 7811..7899)
 AT = "127.0.0.1:7811"
-#: how many times, a second apart, a session's state is polled: its ``ssh -R`` port listening here, its end entry
+#: how many times, a second apart, a session's end entry is polled for, and for how many seconds its ``ssh -R`` port is
+#: looked for here
 POLLS = 300
+#: how often a session's ``ssh -R`` port is looked for here once its open answers
+LISTEN_S = 0.1
 #: a session reserved ahead is opened only while its reserve has this long left before it expires (the gate refuses an
 #: expired reserve's open); else its window reserves another
 MARGIN = timedelta(minutes=5)
@@ -266,7 +276,7 @@ class GateSessions:
     `commit_coins.Gate`) as peer `peer`, for windows of S `steps` rounds. `take` is a window's session, `open` (the
     pouw setting ``gate``) opens it on the window's open root and `ended` waits for its end entry. ``held`` is each
     session reserved, as the gate answered it, under the window it was reserved for; one no window opened says why
-    (``unused``). With ``ahead`` (a `worker`), each window's after the first is reserved there before it opens (`take`).
+    (``unused``). With ``ahead`` (a `worker`), a window's session is reserved there before it opens (`ahead_of`, `take`).
     `wait` sleeps between polls, `listens` is `listening` and `now` the UTC time a reserve's expiry is read against
     (tests)."""
 
@@ -302,6 +312,14 @@ class GateSessions:
         """Window `window`'s session reserved on ``ahead``, so its open finds it (`take`); nothing without ``ahead``."""
         if self.ahead is not None and window not in self._ahead:
             self._ahead[window] = self.ahead.submit(self.reserve, window)
+
+    def settled(self, window: int) -> dict[str, Any] | None:
+        """Window `window`'s reserve made ahead, once it ends: the session it reserved, or None when none was made or it
+        failed (`take` reserves at the window's open then)."""
+        fut = self._ahead.get(window)
+        if fut is None or fut.exception() is not None:
+            return None
+        return fut.result()
 
     def take(self, window: int) -> dict[str, Any]:
         """Window `window`'s session: the one reserved ahead for it, waited for if its reserve is still in flight, unless
@@ -340,19 +358,20 @@ class GateSessions:
 
     def open(self, session: str, root: str) -> dict[str, Any]:
         """`pouw_h1_window.Gate`: ``open --session SESSION --root ROOT`` (its commitment from ``status`` when the answer's
-        is null), answered once the answer's port listens here (the auditor host's ``ssh -R``, polled `POLLS` times)."""
+        is null), answered once the answer's port listens here (the auditor host's ``ssh -R``, looked for every
+        `LISTEN_S` for `POLLS` seconds; ``listen_polls`` the looks it took)."""
         answer = self._open(session, root)
-        port, polls = answer.get("port"), None
+        port, polls, looks = answer.get("port"), None, round(POLLS / LISTEN_S)
         if type(port) is int:
-            for i in range(POLLS):
+            for i in range(looks):
                 if self.listens(port):
                     polls = i
                     break
-                self.wait(1.0)
+                self.wait(LISTEN_S)
         self.held_of(session).update(port=port, listen_polls=polls)
         print(f"[serve-h1] session {session} opened on {root[:16]}…: port {port} "
-              + (f"listening after {polls} polls" if polls is not None else f"not listening after {POLLS} polls"),
-              flush=True)
+              + (f"listening after {polls} polls of {LISTEN_S} s" if polls is not None
+                 else f"not listening after {POLLS} s"), flush=True)
         return answer
 
     def ended(self, session: str) -> dict[str, Any]:
@@ -432,19 +451,54 @@ class H1Windows:
         self.opened: dict[str, float] = {}
         self.outcomes: list[dict[str, Any]] = []
         self.releasing = 0
+        self.readied: dict[str, Any] | None = None
         self._lock = threading.Lock()
+
+    def ready(self) -> dict[str, Any]:
+        """What window 0's first step would otherwise do before its first token, done now (the module's "Ready before it
+        listens"): the weights' roots computed, the call tables' GPU hasher built, the z/y kernels compiled, the Lean
+        verifier of record built (the in-process coins' entropy and each release's verdicts) and window 0's reserve ended
+        (`GateSessions.settled`, made here unless made ahead already); ``readied``, with where each part's time went
+        (``seconds``)."""
+        from verity.core.protocols.pouw import verifier
+        from verity_vllm.protocols.pouw.h1 import hooks as PHK
+        from verity_vllm.protocols.pouw.h1 import tables_device as TD
+
+        t0 = self.clock()
+        PHK.weight_roots(self.layers)
+        t1 = self.clock()
+        tables = "gpu" if TD.available() else "off"
+        t2 = self.clock()
+        kernels = PHK.warm_zy(self.layers, self.rows)
+        t3 = self.clock()
+        verifier.executable()
+        t4 = self.clock()
+        session = None
+        if self.sessions is not None:
+            self.sessions.ahead_of(0)
+            session = (self.sessions.settled(0) or {}).get("session")
+        t5 = self.clock()
+        self.readied = {"tables": tables, "kernels": kernels, "session": session,
+                        "seconds": {"roots": round(t1 - t0, 4), "tables": round(t2 - t1, 4), "kernels": round(t3 - t2, 4),
+                                    "lean": round(t4 - t3, 4), "reserve": round(t5 - t4, 4)}}
+        print(f"[serve-h1] ready: weight roots in {t1 - t0:.1f} s, the call tables' GPU hasher {tables} in {t2 - t1:.1f} s, "
+              f"{kernels} z/y kernels compiled in {t3 - t2:.1f} s, the Lean verifier built in {t4 - t3:.1f} s"
+              + ("" if self.sessions is None else f", window 0's session {session or 'not reserved (its open reserves)'}"
+                                                  f" after {t5 - t4:.1f} s"), flush=True)
+        return self.readied
 
     def describe(self) -> dict[str, Any]:
         """serve.json's ``protocols``: the entry, T and S, the period's Program digest, the weights' root, where the
         coins come from (``challenger``, with the gate's peer, or ``in-process``), where each window's session is reserved
-        (``ahead``: window k+1's while window k serves, outside a period) and where its release runs."""
+        (``ahead``: window 0's at startup and window k+1's while window k serves, outside a period), where its release
+        runs and what was made ready before the server listened (``ready``, `ready`)."""
         coins = {"coins": "in-process"} if self.sessions is None else {"coins": "challenger", "peer": self.sessions.peer}
         return {"entry": ENTRY, "rows": self.rows, "steps": self.steps, "program": self.digest,
                 "weights_root": self.weights.root().hex(), "weights_key": "local", **coins,
                 "reserve": "ahead" if self.sessions is not None and self.sessions.ahead is not None else "at the open",
                 "draw": f"put as {DRAWER} into the draw-gated release" if self.draws is not None else None,
                 "release": "on the loop" if self.closer is None else "off the loop",
-                "linears": len(self.layers), "config": dict(self.config)}
+                "linears": len(self.layers), "config": dict(self.config), "ready": self.readied}
 
     def open(self, window: int) -> None:
         """Window ``window``'s H1, on the open Commit window: its session (with ``sessions``, `GateSessions.take`), the
@@ -641,13 +695,18 @@ class H1Windows:
 
 def arm_of(opts: Any, llm: Any, com: Any, out: Path) -> H1Windows | None:
     """The server's arm under ``--protocols`` over the served ``llm`` and its committer ``com`` (None without): T
-    ``--max-num-batched-tokens`` and S ``--window-steps`` a window, each window's session through `sessions_of` and its
-    release on a `worker` of its own."""
+    ``--max-num-batched-tokens`` and S ``--window-steps`` a window, each window's session through `sessions_of` (window
+    0's reserved while the Program is declared) and its release on a `worker` of its own, made ready (`H1Windows.ready`)."""
     if not opts.protocols:
         return None
-    return H1Windows(llm.model, com, opts.max_num_batched_tokens, opts.window_steps, engine=llm.vllm, out=out,
-                     config=config_of(opts.protocols_config), sessions=sessions_of(opts), closer=worker("h1-release"))
+    sessions = sessions_of(opts)
+    if sessions is not None:
+        sessions.ahead_of(0)
+    arm = H1Windows(llm.model, com, opts.max_num_batched_tokens, opts.window_steps, engine=llm.vllm, out=out,
+                    config=config_of(opts.protocols_config), sessions=sessions, closer=worker("h1-release"))
+    arm.ready()
+    return arm
 
 
-__all__ = ["AT", "ENTRY", "GateOptions", "GateSessions", "H1Windows", "MARGIN", "OWN", "POLLS", "SCHEME", "SESSIONED",
-           "arm_of", "config_of", "listening", "refusal", "sessions_of", "units", "worker"]
+__all__ = ["AT", "ENTRY", "GateOptions", "GateSessions", "H1Windows", "LISTEN_S", "MARGIN", "OWN", "POLLS", "SCHEME",
+           "SESSIONED", "arm_of", "config_of", "listening", "refusal", "sessions_of", "units", "worker"]
