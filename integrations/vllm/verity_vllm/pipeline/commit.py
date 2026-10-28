@@ -65,7 +65,7 @@ from verity_vllm import protocols as PO
 from verity_vllm.acquire.sources import hidden_source as HS, taps as TAPS
 from verity_vllm import settings  # noqa: E402 (after the process clock, like the imports around it)
 from verity_vllm.config import group, option, workload_arg
-from verity_vllm.engine import engine_profile as prof  # noqa: F401
+from verity_vllm.engine import engine_profile as prof
 
 prof.apply_env()
 
