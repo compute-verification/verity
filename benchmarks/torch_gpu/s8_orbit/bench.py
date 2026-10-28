@@ -9,9 +9,9 @@ Each arm is one item of about --seconds: back-to-back calls on one stream betwee
 κ, a correction MAC's time in tensor MACs (one MAC a B carry and a row of A, M/2 a carry), is bfix's time over those MACs
 against PEAK and against int_mm's time a MAC.
 X is int8 uniform on ±127; W is the checkpoint's [N, K] int8 (q, k, v and gate, up concatenated as served). An arm records
-ms a call, θ = MACs / s / PEAK (PEAK MACs a second at F_MAX), its SM clock and board power from NVML samples every 100 ms
-past the item's first second (NVML's power is a one-second average), θ at that clock (θ · F_MAX / MHz) and pJ a MAC. An
-orbit arm also records the clock its CTAs saw (clock64 over globaltimer, the last call's).
+ms a call, θ = MACs / s / PEAK (PEAK MACs a second at F_MAX), its SM clock from NVML samples every 100 ms past the item's
+first second, and θ at that clock (θ · F_MAX / MHz). An orbit arm also records the clock its CTAs saw (clock64 over
+globaltimer, the last call's).
 
 --sha adds, per linear, SHA-512 alone (the engine's row kernel on 32 KiB rows, 257 compressions a row) and then beside the
 orbit: the orbit's persistent grid on CTAS of the SMs while the row kernel loops on a second stream over the rest. Its rate
@@ -47,13 +47,13 @@ SHA_ROW, SHA_ROWS, SHA_SLOTS = 32768, 20, 1024
 
 
 class Smi:
-    """NVML's SM clock and board power every 100 ms, stamped on arrival, from nvidia-smi on the leased GPU."""
+    """NVML's SM clock every 100 ms, stamped on arrival, from nvidia-smi on the leased GPU."""
 
     def __init__(self, out: Path) -> None:
         dev = os.environ.get("GPU_LEASE_UUID") or str(torch.cuda.current_device())
-        self.samples: list[tuple[float, float, float]] = []
+        self.samples: list[tuple[float, float]] = []
         self.log = (out / "smi.csv").open("w")
-        self.p = subprocess.Popen(["nvidia-smi", "-i", dev, "--query-gpu=clocks.sm,power.draw", "--format=csv,noheader,nounits",
+        self.p = subprocess.Popen(["nvidia-smi", "-i", dev, "--query-gpu=clocks.sm", "--format=csv,noheader,nounits",
                                    "-lms", "100"], stdout=subprocess.PIPE, text=True)
         self.t = threading.Thread(target=self._read, daemon=True)
         self.t.start()
@@ -63,17 +63,16 @@ class Smi:
             now = time.time()
             self.log.write(f"{now:.3f},{line.strip()}\n")
             try:
-                mhz, w = (float(v) for v in line.split(","))
+                mhz = float(line)
             except ValueError:
                 continue
-            self.samples.append((now, mhz, w))
+            self.samples.append((now, mhz))
 
     def window(self, t0: float, t1: float) -> dict:
-        s = [(m, w) for t, m, w in self.samples if t0 + 1.0 <= t <= t1]
+        s = [m for t, m in self.samples if t0 + 1.0 <= t <= t1]
         if not s:
             return {"smi_samples": 0}
-        return {"smi_samples": len(s), "sm_mhz": float(np.mean([m for m, _ in s])), "power_w": float(np.mean([w for _, w in s])),
-                "power_w_max": float(max(w for _, w in s))}
+        return {"smi_samples": len(s), "sm_mhz": float(np.mean(s)), "sm_mhz_min": float(min(s))}
 
     def close(self) -> None:
         self.p.terminate()
@@ -107,7 +106,6 @@ def rates(r: dict, macs: int, smi: Smi) -> dict:
     r["theta"] = macs / (r["ms"] / 1e3) / PEAK
     if "sm_mhz" in r:
         r["theta_clk"] = r["theta"] * F_MAX / r["sm_mhz"]
-        r["pJ_per_mac"] = r["power_w"] / (macs / (r["ms"] / 1e3)) * 1e12
     return r
 
 
@@ -259,8 +257,7 @@ def main() -> int:
                 r["vs_int_mm"] = r["ms"] / base
         doc["linears"][name] = rec
         print(json.dumps({"linear": name, "kappa_vs_peak": rec.get("kappa_vs_peak"), "kappa_vs_int_mm": rec.get("kappa_vs_int_mm"),
-                          **{key: {f: r.get(f) for f in ("ms", "theta", "theta_clk", "vs_int_mm", "vs_wgmma", "sm_mhz", "power_w",
-                                                         "pJ_per_mac", "cta_mhz")}
+                          **{key: {f: r.get(f) for f in ("ms", "theta", "theta_clk", "vs_int_mm", "vs_wgmma", "sm_mhz", "cta_mhz")}
                              for key, r in arms.items()},
                           "beside": [{f: r.get(f) for f in ("ctas", "ms", "vs_int_mm", "sha_frac_bar")} for r in rec.get("beside", [])]}),
               flush=True)
