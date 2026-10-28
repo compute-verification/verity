@@ -4,11 +4,12 @@ either composite, from the honest example site and its information (`EXAMPLE`, t
 with a few changes, or from small random entries, chained or with a broken `previous`; it checks it under the
 example's auditor or a changed one, and sometimes breaks the JSON of the log, the params or the evidence. The two must
 agree on every field of the outcome, and on the reason when the check refuses a log (`entry I: REFUSAL`, a composite
-the params don't name, or a log or params outside ASCII): the public view of an accepted log among them."""
+the params don't name, or a log or params outside ASCII or holding DEL): the public view of an accepted log among them."""
 
 from __future__ import annotations
 
 import dataclasses
+import hashlib
 import json
 import shutil
 from pathlib import Path
@@ -71,9 +72,23 @@ def reference(case: Any) -> dict:
                     digest=lambda c: bytes.fromhex(G.head(*c)))
 
 
+def _digest(e: G.Entry) -> str:
+    """`G.Entry.digest` through `D.canonical`, the same bytes on ASCII, which also writes an entry past ASCII or with
+    DEL (`wire.canonical` raises on one), so a log can hold one anywhere for the check to refuse."""
+    return hashlib.sha512(e.format.encode() + b"\0" + D.canonical(e.to_json()).encode()).hexdigest()
+
+
+def chain(composite: str, bodies: Any) -> list[G.Entry]:
+    """`G.chain`, through `_digest`."""
+    log: list[G.Entry] = []
+    for b in bodies:
+        log.append(G.Entry(_digest(log[-1]) if log else G.genesis(composite), b))
+    return log
+
+
 def case(composite: str, log: list[G.Entry], auditor: G.Auditor = AUDITOR, composed: str | None = None) -> dict:
-    return {"params": G.params(composite, auditor), "commitment": G.committed(composed or composite, log).hex(),
-            "evidence": b"{}".hex()}
+    commitment = D.canonical({"composite": composed or composite, "entries": [e.to_json() for e in log]})
+    return {"params": G.params(composite, auditor), "commitment": commitment.encode().hex(), "evidence": b"{}".hex()}
 
 
 @dataclasses.dataclass(frozen=True)
@@ -100,8 +115,8 @@ links = st.builds(G.Link, st.sampled_from(["up0", "up1", "mc0", "l3", "gpu0"]),
                   st.tuples(st.sampled_from(IDS), st.sampled_from(IDS)), st.sampled_from([0, 1, 100]),
                   st.sampled_from([0, 1]))
 cards = st.sampled_from([CARD, CARD_B, dataclasses.replace(CARD, mem=1), *WITHIN, *PAST, ZERO])
-#: Names a θ value takes: the example's, a new one, and one outside ASCII.
-VALUES = ["weights", "state", "tables", "poids\u00e9"]
+#: Names a θ value takes: the example's, a new one, one outside ASCII and one with DEL.
+VALUES = ["weights", "state", "tables", "poids\u00e9", "poids\x7f"]
 
 
 def _theta(value: str, root: str, leaves: int, wide: bool, pin: str | None) -> dict:
@@ -201,9 +216,9 @@ def cases(draw) -> dict:
     composite = pick(draw, G.COMPOSITES)
     source = pick(draw, ["changed"] * 5 + ["twist"] * 3 + ["random"] * 2)
     if source == "twist":
-        return case(composite, G.chain(composite, [*EXAMPLE, pick(draw, TWISTS)]))
+        return case(composite, chain(composite, [*EXAMPLE, pick(draw, TWISTS)]))
     bodies = draw(changed()) if source == "changed" else draw(st.lists(st.one_of(hardware, information), max_size=3))
-    log = G.chain(composite, bodies)
+    log = chain(composite, bodies)
     if log and not pick(draw, range(8)):
         k = pick(draw, range(len(log)))
         log[k] = dataclasses.replace(log[k], previous=pick(draw, ["0" * 128, G.genesis("remote")]))
@@ -211,7 +226,8 @@ def cases(draw) -> dict:
                                          G.Auditor(AUDITOR.sheets, AUDITOR.keys, (0, 7)),
                                          G.Auditor(AUDITOR.sheets, AUDITOR.keys, (1, 1)),
                                          G.Auditor(AUDITOR.sheets, (("cert0", "k1"), ("chal0", "k1"))),
-                                         G.Auditor(AUDITOR.sheets, (("cert0", "k\u00e9"), ("chal0", "k1")))])
+                                         G.Auditor(AUDITOR.sheets, (("cert0", "k\u00e9"), ("chal0", "k1"))),
+                                         G.Auditor(AUDITOR.sheets, (("cert0", "k\x7f"), ("chal0", "k1")))])
     composed = composite if pick(draw, range(16)) else pick(draw, G.COMPOSITES)
     c = case(composite, log, auditor, composed)
     broken = pick(draw, ["none"] * 12 + ["commitment", "params", "evidence"])
@@ -231,27 +247,31 @@ PORT = RegistrationPort(exe="core-registration", package=INTERFACE, reference=re
 def test_the_example_and_its_refusals_agree_with_the_lean_guards() -> None:
     """The Lean's `#guard`s on `Core.Registration.Example`, in Python, and each replayed against the Lean."""
     bare = [G.Hardware((CARD,), LOCS[:4], (G.Link("up0", ("node0", G.OUTSIDE), 100, 1),))]
-    expect = [(case("onsite", G.chain("onsite", EXAMPLE)), None),
-              (case("onsite", G.chain("remote", EXAMPLE)), "entry 0: previous"),
-              (case("onsite", G.chain("onsite", bare)), "entry 0: uncertified"),
-              (case("remote", G.chain("remote", bare)), None),
-              (case("onsite", G.chain("onsite", [G.Hardware((CARD,), LOCS[:5], LINKS[:2])])), "entry 0: challenger-reach"),
-              (case("onsite", G.chain("onsite", [*EXAMPLE, G.Information(ITEMS[:1])])), "entry 2: duplicate-information"),
-              (case("onsite", G.chain("onsite", [*EXAMPLE, G.Information(ITEMS[2:])])), "entry 2: duplicate-information"),
-              (case("onsite", G.chain("onsite", [*EXAMPLE, G.Information(({**WEIGHTS, "value": "tables"},))])), None),
-              (case("onsite", G.chain("remote", EXAMPLE), composed="remote"), "composite: the log is remote's, not onsite's"),
-              *((case("remote", G.chain("remote", [G.Hardware((k,))])), None) for k in WITHIN),
-              *((case("remote", G.chain("remote", [G.Hardware((k,))])), "entry 0: figures") for k in PAST),
-              (case("remote", G.chain("remote", [G.Hardware((dataclasses.replace(CARD, mem=1),))])), "entry 0: figures"),
-              (case("remote", G.chain("remote", [G.Hardware((dataclasses.replace(CARD, sku="sim-b"),))])),
+    expect = [(case("onsite", chain("onsite", EXAMPLE)), None),
+              (case("onsite", chain("remote", EXAMPLE)), "entry 0: previous"),
+              (case("onsite", chain("onsite", bare)), "entry 0: uncertified"),
+              (case("remote", chain("remote", bare)), None),
+              (case("onsite", chain("onsite", [G.Hardware((CARD,), LOCS[:5], LINKS[:2])])), "entry 0: challenger-reach"),
+              (case("onsite", chain("onsite", [*EXAMPLE, G.Information(ITEMS[:1])])), "entry 2: duplicate-information"),
+              (case("onsite", chain("onsite", [*EXAMPLE, G.Information(ITEMS[2:])])), "entry 2: duplicate-information"),
+              (case("onsite", chain("onsite", [*EXAMPLE, G.Information(({**WEIGHTS, "value": "tables"},))])), None),
+              (case("onsite", chain("remote", EXAMPLE), composed="remote"), "composite: the log is remote's, not onsite's"),
+              *((case("remote", chain("remote", [G.Hardware((k,))])), None) for k in WITHIN),
+              *((case("remote", chain("remote", [G.Hardware((k,))])), "entry 0: figures") for k in PAST),
+              (case("remote", chain("remote", [G.Hardware((dataclasses.replace(CARD, mem=1),))])), "entry 0: figures"),
+              (case("remote", chain("remote", [G.Hardware((dataclasses.replace(CARD, sku="sim-b"),))])),
                "entry 0: card-digest"),
-              (case("remote", G.chain("remote", [G.Hardware((WITHIN[0],))]),
+              (case("remote", chain("remote", [G.Hardware((WITHIN[0],))]),
                     dataclasses.replace(AUDITOR, tolerance=(0, 7))), "entry 0: figures"),
-              (case("remote", G.chain("remote", [G.Hardware((dataclasses.replace(CARD, clock=0),))]),
+              (case("remote", chain("remote", [G.Hardware((dataclasses.replace(CARD, clock=0),))]),
                     dataclasses.replace(AUDITOR, tolerance=(1, 1))), None),
-              (case("remote", G.chain("remote", [G.Hardware((ZERO,))]), dataclasses.replace(AUDITOR, tolerance=(1, 1))),
+              (case("remote", chain("remote", [G.Hardware((ZERO,))]), dataclasses.replace(AUDITOR, tolerance=(1, 1))),
                "entry 0: figures"),
-              (case("onsite", G.chain("onsite", [G.Information(({**WEIGHTS, "value": "poids\u00e9"},))])),
+              (case("onsite", chain("onsite", [G.Information(({**WEIGHTS, "value": "poids\u00e9"},))])),
+               "commitment: ascii: the log holds a character outside ASCII"),
+              (case("onsite", chain("onsite", [G.Information(({**WEIGHTS, "value": "poids\x7f"},))])),
+               "commitment: ascii: the log holds a character outside ASCII"),
+              (case("onsite", chain("onsite", [G.Information(({**WEIGHTS, "value": "poids\x7f"},)), *EXAMPLE])),
                "commitment: ascii: the log holds a character outside ASCII")]
     with D.Server(PORT.argv()) as server:
         for c, reason in expect:
@@ -259,7 +279,7 @@ def test_the_example_and_its_refusals_agree_with_the_lean_guards() -> None:
             assert out["reason"] == reason, (out["reason"], reason)
             assert out["verdict"] == ("accept" if reason is None else "reject")
             D.replay(PORT, c, server)
-    view = G.check(AUDITOR, "onsite", G.chain("onsite", EXAMPLE)).view()
+    view = G.check(AUDITOR, "onsite", chain("onsite", EXAMPLE)).view()
     assert view.value("weights") == WEIGHTS and view.theta == ITEMS[:2] and view.builder == ITEMS[2]
     assert view.site.locs == LOCS
 

@@ -869,7 +869,8 @@ def build(m: str, seed: int, small: bool = False) -> dict:
     key = _key(ki)
     N, W, H, toy = KEYS[ki]
     session = r.randbytes(lms.SESSION_BYTES)
-    link = r.choice(["eth0", "a", "dé"])
+    # the rows form binds the link in its domain's canonical JSON, whose strings are ASCII without DEL
+    link = r.choice(["eth0", "a", "d-e" if rows else "dé"])
     program = hashlib.sha512(b"link program %d" % r.randrange(3)).hexdigest()
     least_windows = 2 if m in ("undecided-and-reject", "clock-reused", "delta") else 1
     least_audits = 1 if m.startswith("audit") or m in ("undecided-and-reject", "count-audits") else 0

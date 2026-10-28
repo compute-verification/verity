@@ -412,7 +412,7 @@ def descriptor_chunks(program, schema: str = SCHEMA) -> Iterator[bytes]:
     """The bytes `program_digest` hashes, `canonical_json` of `encode_program(program, schema)` without ``annotations``, in pieces,
     without the descriptor's dict: one walk of the specializations (`_walk`), interning v1's tables in `encode_program`'s order,
     then each definition in key order, its body a batch of nodes at a time. Raises what `encode_program` raises, `_check_domain`'s
-    ValueError once the last piece is out."""
+    ValueError before the first piece: a piece's `canonical_json` would refuse the same string by its path in the piece."""
     if schema not in SCHEMAS:
         raise ValueError(f"unknown descriptor schema {schema!r}")
     tables = None if schema == SCHEMA_V0 else _Tables()
@@ -432,6 +432,8 @@ def descriptor_chunks(program, schema: str = SCHEMA) -> Iterator[bytes]:
                 "definitions": {fid: heads[fid] for fid in seen}}
     if tables is not None:
         skeleton.update(tables.to_json())
+    _check_domain(skeleton)
+    if tables is not None:
         interned = (len(tables.callees), len(tables.type_json))
         yield b'{"callees":' + canonical_json(skeleton["callees"]) + b',"definitions":{'
     else:
@@ -450,11 +452,33 @@ def descriptor_chunks(program, schema: str = SCHEMA) -> Iterator[bytes]:
             raise AssertionError("descriptor_chunks: encoding a body interned an entry the tables were written without")
         yield b',"types":' + canonical_json(skeleton["types"])
     yield b"}"
-    _check_domain(skeleton)
 
 
 def canonical_json(obj: Any) -> bytes:
-    return json.dumps(obj, sort_keys=True, separators=(",", ":"), ensure_ascii=True).encode()
+    """`obj` as compact JSON with its keys sorted: the bytes every canonical-JSON digest hashes. Every string, keys
+    included, is ASCII without DEL, so the text is the same whether a writer escapes the rest (`ensure_ascii`) or writes
+    it as UTF-8 (Lean's `Flock.canon`); any other string is refused (`ValueError`, naming where it is)."""
+    text = json.dumps(obj, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
+    if not text.isascii() or "\x7f" in text:
+        raise ValueError(f"outside the canonical JSON domain: {_string_error(obj)}")
+    return text.encode()
+
+
+def _string_error(v: Any) -> str:
+    """The first string of `v`, a key or a value, that isn't ASCII without DEL, as `jcs_domain_error` names it."""
+    stack: list[tuple[Any, Any]] = [(v, (None, "$"))]
+    while stack:
+        x, at = stack.pop()
+        if isinstance(x, str):
+            if not x.isascii() or "\x7f" in x:
+                return f"{_path(at)}: string {x[:40]!r} is not ASCII without DEL"
+        elif isinstance(x, (list, tuple)):
+            stack.extend((y, (at, i)) for i, y in enumerate(x))
+        elif isinstance(x, dict):
+            for k, y in x.items():
+                stack.append((k, (at, ".<key>")))
+                stack.append((y, (at, f".{k}")))
+    return "$: a string is not ASCII without DEL"
 
 
 MAX_SAFE_INT = 2**53 - 1
