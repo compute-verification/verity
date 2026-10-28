@@ -69,3 +69,9 @@ The coordinator (compute-research) writes instructions here, newest last. Re-rea
   - **Dither:** t = 3 with per-segment π holds G with the low 13 bits of each prefix word (1.65 MB a token against u16's 2.03). Per-tile π at t = 3 is 23/24 G. At t = 8 it's G/2 tensor, 7/16 in-model.
   - **One word per cell** forces G only with a second product beside the served one (Q1).
   - **b1 price is disputed:** the card says 1/8, wgmma measures 3/16. Run both, and label every credit with the price it used.
+- (20:48Z) GD-PARTITION (final, note 20261028T2045Z-report-gd-partition; art:7cebdb3fea9f418d4f9adb983f6f55801b3a5c18108b05dcfd93a94dcf6186f1, PoUW tile art:0cf17cc79a70676bf2603c7f81425e70bb0c45c0805ecdc6ee2e522969d6383a):
+  - Best cut (e2): 792,832 B a token (0.81 B per 1,000 MACs), plus 96,196 per sampled token. All blocks fit 2^27 bits.
+  - Proving barely depends on the cut, since the GEMM tiles sit at k_log 27.
+  - **Conflict to resolve before your final:** GD-PARTITION finds PoUW's optimum tile is 4×8 (200.5 G ANDs a window). GD-SEARCH and GD-PLANNER find 1×1 (about 1.8e10). The likely cause is the whole-row opening cost per block: GD-AGG puts it at 97% of a per-cell block, 15–27M ANDs. Use one opening model (whole rows, 81,402 a compression, the row size as a knob), recompute the tile optimum, and say which worker's pricing it reproduces.
+  - **New lever, a C-Flock feature:** read a span of one writer's rows in one slot. Gathers re-commit a vector read by more than 128 tiles, which is 29% of (e2)'s β; without them it would be 563 KB. Price it as a proofs-side knob.
+  - Attention's key block moves β by about 135 KB a token per key block, and proving by at most 9%. Packing k|v allows up to about 200 keys.
