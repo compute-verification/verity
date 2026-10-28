@@ -59,7 +59,7 @@ private def tail (expected : Nat → Option ByteArray) (s : SignedSession)
     if !(0 ≤ r.elapsedNs && r.elapsedNs ≤ c.limitNs) then late := late + 1
   if wrong > 0 then reasons := reasons.push s!"{wrong} answers are not their blocks of C"
   if late > 0 then reasons := reasons.push s!"{late} answers are past Δ + RTT = {c.limitNs} ns"
-  return ⟨reasons.isEmpty, reasons, late, wrong⟩
+  return (Findings.mk reasons late wrong, if reasons.isEmpty then Core.Verdict.accept else Core.Verdict.reject)
 
 private theorem verdict_eq (schemes : Schemes) (trusted : List ByteArray) (expected : Nat → Option ByteArray)
     (s : SignedSession) (c : SessionCommitment) (openings : Array CoinOpening) :
@@ -114,6 +114,12 @@ private def Good (expected : Nat → Option ByteArray) (s : SignedSession) (c : 
     (decide (s.rounds[j].index < c.blocks) && expected s.rounds[j].index == some s.rounds[j].digest) = true ∧
     (decide (0 ≤ s.rounds[j].elapsedNs) && decide (s.rounds[j].elapsedNs ≤ ↑c.limitNs)) = true
 
+private theorem accepted_ite (f : Findings) (b : Bool) :
+    Verdict.accepted (f, if b then Core.Verdict.accept else Core.Verdict.reject) = b := by
+  cases b <;> rfl
+
+private theorem accepted_reject (f : Findings) : Verdict.accepted (f, Core.Verdict.reject) = false := rfl
+
 private theorem tail_accepted (expected : Nat → Option ByteArray) (s : SignedSession) (c : SessionCommitment)
     (openings : Array CoinOpening) (r0 : Array String) (h : (tail expected s c openings r0).accepted = true) :
     r0 = #[] ∧ ∀ j < s.rounds.size, Good expected s c openings j := by
@@ -138,7 +144,7 @@ private theorem tail_accepted (expected : Nat → Option ByteArray) (s : SignedS
   obtain ⟨rs, lt, wr⟩ := L
   simp only [Id.run] at m1 m2
   rw [show ∀ (x : Id (Array String × Nat × Nat)) (f : _ → Id Verdict), (x >>= f) = f x.run from fun _ _ => rfl] at h
-  by_cases hw : wr > 0 <;> by_cases hl : lt > 0 <;> simp [hw, hl, Id.run] at h
+  by_cases hw : wr > 0 <;> by_cases hl : lt > 0 <;> simp [hw, hl, Id.run, accepted_ite, accepted_reject] at h
   have h0 : rs.size = 0 := by simpa using (show rs.isEmpty = true from h)
   have hw0 : wr = 0 := by omega
   have hl0 : lt = 0 := by omega
