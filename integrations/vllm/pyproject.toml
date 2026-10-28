@@ -56,13 +56,13 @@ markers = [
 # imports lean_verifier.py, challengers.py and store_layout.py; tests/protocol_options/test_pouw_h1_circuits.py parses a
 # period-open's --circuit-files with infra's gate (benchmarks/live_challenger/auditor.py), and the in-process gate
 # (tests/protocol_options/challenger_host.py) runs infra's model registry (benchmarks/live_challenger/models.py);
-# tests/protocols/test_pouw_h1_drawn.py stages a served window's drawn calls with h1_prove's drawn.py, on its h1unit.py;
 # tests/protocols/test_pous_option.py encodes and spot-checks C* with P2's store (benchmarks/pous/p2_v1/store.py and the
 # reference decode it imports); tests/tools/test_ratchet_gate.py commits the repository's lints (tests/lint/test_repo_env_reads.py,
 # test_repo_ruff.py, test_repo_silent_excepts.py and test_repo_lane_text.py) into the repositories it gates.
 # The tests build and run the Lake packages whose lakefiles they list: tests/pipeline/test_row_tables_stream.py
 # `sampled-proofs-verifier`, tests/protocol_options/test_pouw_h1.py `pouw-check-difftest` and test_remote_session.py
 # `remote-audit-verifier`.
+# tests/protocols/test_pouw_h1_drawn.py stages a served window's drawn calls with h1_prove's drawn.py, on its h1unit.py.
 inputs_only = true
 inputs = ["verity", "verity/README.md", "tools/config/verity_config", "fixtures/artifacts.json", "examples/vllm/workloads/SHA256SUMS", ".gitignore",
           "verity/core/service/sampled_proofs/lakefile.toml", "verity/core/protocols/pouw/lean/check/lakefile.toml",
@@ -73,7 +73,6 @@ inputs = ["verity", "verity/README.md", "tools/config/verity_config", "fixtures/
           "benchmarks/remote_session/checks.py", "benchmarks/remote_session/lean_verifier.py", "benchmarks/remote_session/challengers.py",
           "benchmarks/remote_session/store_layout.py", "benchmarks/live_challenger/auditor.py", "benchmarks/live_challenger/host.json",
           "benchmarks/live_challenger/models.py", "benchmarks/pouw/harness/sass_gate.py",
-          "benchmarks/pouw/h1_prove/drawn.py", "benchmarks/pouw/h1_prove/h1unit.py",
           "benchmarks/pous/p2_v1/__init__.py", "benchmarks/pous/p2_v1/store.py", "benchmarks/pous/p2_v1/reference.py",
           "tests/lint/test_repo_env_reads.py", "tests/lint/test_repo_ruff.py", "tests/lint/test_repo_silent_excepts.py",
           "tests/lint/test_repo_lane_text.py",
@@ -83,7 +82,8 @@ inputs = ["verity", "verity/README.md", "tools/config/verity_config", "fixtures/
           "tools/research/src/research/runs.py", "tools/research/src/research/secret_hint.py", "tools/research/src/research/timefmt.py", "tools/research/src/research/waitcap.py",
           "tools/research/src/research/store", "tools/research/src/research/telemetry", "tools/research/tests/fixtures/run_v0.2",
           "tools/research/src/research/withdraw.py",
-          "tools/research/src/research/__main__.py"]
+          "tools/research/src/research/__main__.py",
+          "benchmarks/pouw/h1_prove/drawn.py", "benchmarks/pouw/h1_prove/h1unit.py"]
 parallel = true
 # benchmarks/pouw/edited_gemm/fattn_ref.py is the int8 attention tests' oracle (tests/engine), beside benchmarks/ppl's linears;
 # tests/engine/int8_attention_sass.py reads the int8 attention kernels' SASS with the PoUW SASS gate's nvdisasm parser
