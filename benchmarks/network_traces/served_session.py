@@ -130,7 +130,7 @@ PROMPT_IDS = 256
 #: (the endpoint's sizing: 636.5 MB a full-length request)
 REQUESTS = 113
 #: where the sessions run, kept as data (``site.json``): the served peer, the gate (USER@HOST) and the lane whose key it
-#: takes, the auditor's node, the gate key's file under ~/.ssh, the lane's gate directory there and the endpoint's start
+#: takes, the auditor's node, the gate key's file under ~/.ssh and the lane's gate directory there
 SITE: dict[str, str] = json.loads((HERE / "site.json").read_text())
 PEER, PORT, GATE, LANE = SITE["peer"], 18782, SITE["gate"], SITE["lane"]
 #: the auditor's side, where the chain runs and the gate's coins for its draw arrive
@@ -152,8 +152,14 @@ CONTEXT = 512
 #: the endpoint's record in its records artifact: each engine request's engine_id and its warden user (null for a body
 #: that sent none), a line in requests.jsonl's order: requests.jsonl less its values
 USERS = "request_users.jsonl"
-#: how the endpoint is started by hand on the peer (``site.json``'s ``hand_start``)
-HAND_START: str = SITE["hand_start"]
+HAND_START = ("serve-openai run directly, not examples/vllm/serve.sh: serve.sh's serve-openai line (--required-manifest "
+              "ROW/manifest.json, the int8 B4 row's Build of record r20261026-182623-0d2a, with vy-dc-h200-2's own taps as "
+              "--hidden-so and --norm-tap-so) plus the endpoint's flags, and --disk-floor-gb 40 (serve-openai's own default "
+              "under --seal is 300 GB; 72 GB of seals then needs about 112 GB free at the start); serve.sh refuses on "
+              "h200-2 under its 300 GB disk floor "
+              "and sends its own smoke and load requests into the records. Its --copy-records-to copies requests.jsonl "
+              "too, so it points at a private dir on h200-2, and the records art is the four public records copied from "
+              "there: request_users.jsonl, advice_trace.jsonl, windows.jsonl and serve.json")
 
 
 class Refused(Exception):
