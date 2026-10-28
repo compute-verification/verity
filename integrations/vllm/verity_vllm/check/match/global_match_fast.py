@@ -204,10 +204,10 @@ def _check_origin(h) -> None:
     inherited); a plain dict (no origin) is refused like a foreign one -- never compared."""
     if not isinstance(h, _Hashes):
         raise RuntimeError(f"global_match_fast: dag_hashes memo holds a {type(h).__name__} without an origin pid -- only a _Hashes computed "
-                           f"by this process is accepted (F-r17-08)")
+                           f"by this process is accepted")
     if h.pid not in (os.getpid(), os.getppid()):
         raise RuntimeError(f"global_match_fast: dag_hashes ids from process {h.pid} used in process {os.getpid()} -- the small-id space is "
-                           f"per process (F-r17-07); recompute in this process or map ids back to digests before crossing")
+                           f"per process; recompute in this process or map ids back to digests before crossing")
 
 
 # STRUCTURAL INTERNING replaces sha256(json(payload)) in the fast path's dag_hashes.  The record's Merkle hash is
@@ -609,7 +609,7 @@ def _x09_legs(items: list, leg: Callable, weight: Callable) -> list:
 def seed_dag_hashes(P: SEQ.Prog, hashes: dict) -> None:
     """RETIRED: a worker's dag_hashes dict must never seed the parent's memo -- the Merkle ids are per process.
     The legs return G8's per-step matching as facts instead (global_match._perm_match in the leg)."""
-    raise RuntimeError("seed_dag_hashes is retired (F-r17-07): legs return matching facts, never hash dicts across processes")
+    raise RuntimeError("seed_dag_hashes is retired: legs return matching facts, never hash dicts across processes")
 
 
 def request_legs(items: list, fn: Callable, n_workers: int, weight: Callable | None = None) -> list:
