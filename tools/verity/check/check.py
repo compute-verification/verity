@@ -88,7 +88,10 @@ budget`, so a hung test can't hold a check slot for a day; each suite is bounded
 The steps stay in this process's group, which a runner's timeout and a manual stop signal as a whole. Each step's record is
 appended to `steps.jsonl` in the output directory as the step ends, so a failure shows while the rest still run, and mirrored
 as a trace/v1 span line in `spans.jsonl` (`spans.py`: the run opens a root span, each step is a completed child, the run's end
-completes the root), the frozen shape the observability watcher reads.  A SIGTERM
+completes the root), the frozen shape the observability watcher reads.  The run's live record (`live.py`, `check-live.json`)
+holds every planned step's state, elapsed time and progress, and a recorded run publishes it on the store's remote with its
+custody key as each step ends and every few minutes, so `verity ci ls` and `verity ci inspect RUN` read a running check from
+anywhere without its node.  A SIGTERM
 (`research cancel`, a runner's timeout) stops the steps the same way (a step it reaches first and kills is `stopped` too, not
 failed), and a recorded run still writes its result, validation `not_run`, and the pack of the passes its steps stored before
 it, then exits 143: a cancelled check's passes are reused.
@@ -248,6 +251,8 @@ VERDICTS = _load("verdicts")
 COMMON = _load("common")
 #: trace/v1 spans over the run (`spans.py`): `spans.jsonl` beside `steps.jsonl`, the frozen shape the watcher reads
 SPANS = _load("spans")
+#: the run's live record (`live.py`): `check-live.json` beside `steps.jsonl`, published on the store's remote as the run goes
+LIVE = _load("live")
 #: the test runner (`suites.py`), for where the steps' Python imports this tree's packages from
 SUITES = _load("suites")
 cache_dir = COMMON.cache_dir
@@ -1001,7 +1006,7 @@ def record(argv: list[str]) -> int:
     # every run of a commit shares the shipped tree <root>/src/<sha>, and two checks' Lake builds there broke each other's .lake,
     # so each runs in its own clone of it
     cmd = [sys.executable, "-m", "research", "run", *(["--tool", "check"] if deferred is None else []), "--project", "verity",
-           "--cwd", "clone" if on else "source", *(x for p in PACK_FILES for x in ("--declared-output", p)), *pooled]
+           "--cwd", "clone" if on else "source", *(x for p in DECLARED for x in ("--declared-output", p)), *pooled]
     env = dict(os.environ)
     if "lean-agreement" in need:
         from research.store.local import LocalStore
@@ -1098,6 +1103,8 @@ def gather_verdicts(d: Path, store=None, limit: int = GATHER, given: Path | None
 #: those it found before they ran (`Reused`)
 REUSED_PACK = "verdicts-reused.tar.xz"
 PACK_FILES = ("verdicts.tar.gz", REUSED_PACK)
+#: what `record` declares outputs, which custody uploads however the run ends: the packs and the final live record
+DECLARED = (*PACK_FILES, LIVE.LIVE_FILE)
 
 
 def attempt_pack(store, rid: str, d: Path, name: str = "verdicts.tar.gz") -> Path | None:
@@ -1805,10 +1812,12 @@ class Reused:
 class Steps:
     """The steps of one run: their processes while they run, so that the first failure stops the others (unless ``keep_going``,
     and a step in `HALTS`, or one `HALTS_ON` marks `halts`, stops them even then), and each step's record appended to `STEPS_LOG`
-    as it ends."""
+    as it ends, and each start and end to the run's live record (`LIVE`)."""
 
-    def __init__(self, out: Path, keep_going: bool = False, packs: Packs | None = None, reused: Reused | None = None):
+    def __init__(self, out: Path, keep_going: bool = False, packs: Packs | None = None, reused: Reused | None = None,
+                 live=None):
         self.log, self.keep_going, self.packs, self.reused = out / STEPS_LOG, keep_going, packs, reused
+        self.live = live or LIVE.Live(out)
         self.lock = threading.RLock()
         self.running: dict[str, subprocess.Popen] = {}
         self.stopped: set[str] = set()
@@ -1839,6 +1848,7 @@ class Steps:
             if self.stopping:
                 return None
             self.running[name] = p = subprocess.Popen(argv, cwd=cwd, env=env, stdout=log, stderr=subprocess.STDOUT)
+            self.live.started(name)
             return p
 
     def end(self, rec: dict) -> dict:
@@ -1850,6 +1860,7 @@ class Steps:
             with open(self.log, "a") as f:
                 f.write(json.dumps(rec) + "\n")
             self.spans.step(rec)
+            self.live.ended(rec)
             if self.packs is not None:
                 self.packs.request()
             if self.reused is not None:
@@ -1921,10 +1932,10 @@ PREBUILD = ("try:\n    from verity.ml.definitions.numerics import twins\nexcept 
 
 def run(out: Path, n: int | None = None, cache: bool = True, keep_going: bool = False,
         only: list[str] | None = None, packs: Packs | None = None, reused: Reused | None = None,
-        regenerate: bool = True, circuit_cache: bool | None = None) -> tuple[bool, list[dict]]:
+        regenerate: bool = True, circuit_cache: bool | None = None, live=None) -> tuple[bool, list[dict]]:
     n = n or cores()
     urls = take_lean_deps_urls(out)
-    steps = Steps(out, keep_going, packs, reused)
+    steps = Steps(out, keep_going, packs, reused, live)
 
     ended: dict[str, threading.Event] = {}
     status: dict[str, str] = {}
@@ -1950,12 +1961,16 @@ def run(out: Path, n: int | None = None, cache: bool = True, keep_going: bool = 
         return done
 
     try:
-        results = [_step(name, argv, cwd, out, cache, steps) for name, argv, cwd in preflight()]
+        pre = preflight()
+        steps.live.plan([name for name, _, _ in pre])
+        results = [_step(name, argv, cwd, out, cache, steps) for name, argv, cwd in pre]
         if not steps.stopping and all(r["status"] == "passed" for r in results):
             subprocess.run([sys.executable, "-c", PREBUILD], cwd=ROOT, env=env(), capture_output=True)
             if reused is not None:
                 reused.start()
             gs = groups(out, n, cache, urls, only=only, regenerate=regenerate, circuit_cache=circuit_cache)
+            steps.live.plan([name for g in gs for name, _, _ in g])
+            steps.live.request()
             ended.update({name: threading.Event() for g in gs for name, _, _ in g})
             beside = [ended[name] for g in gs if all(s[0] != "circuit-check" for s in g) for name, _, _ in g]
             grant = None
@@ -2062,7 +2077,7 @@ def write_result(run_dir: Path, ok: bool, done: list[dict], verdicts: dict | Non
                                     + "; ".join(f"{s['step']} {s['status']}" for s in done)},
            "measurements": [{"name": f"{s['step']}_wall", "value": s["seconds"], "unit": "s"} for s in done],
            "steps": done, "artifacts": [p for p in ("suites.json", "suites-lean.json", "suites/", "circuit-check.json", "lean-audit/",
-                                                    *PACK_FILES, STEPS_LOG, SPANS.SPANS_LOG,
+                                                    *PACK_FILES, STEPS_LOG, SPANS.SPANS_LOG, LIVE.LIVE_FILE,
                                                     *(s.get("log") for s in done), *agreement_verdicts(run_dir))
                                         if p and (run_dir / p).exists()]}
     if shard:
@@ -2076,6 +2091,21 @@ def write_result(run_dir: Path, ok: bool, done: list[dict], verdicts: dict | Non
     tmp = run_dir / "result.json.tmp"
     tmp.write_text(json.dumps(doc, indent=1) + "\n")
     os.replace(tmp, run_dir / "result.json")
+
+
+def live_record(out: Path, run_dir: Path | None, sharded: dict | None, picked: list[str]):
+    """The run's `LIVE.Live`: what it checks (a shard, a post-landing run's steps, parts, or the whole check) of which commit, published
+    with the run's custody key when it has one (`custody_dir`)."""
+    what = (f"shard {sharded['k']}/{sharded['n']}" if sharded and "k" in sharded else
+            f"deferred {','.join(sharded['deferred'])}" if sharded and sharded.get("deferred") else
+            f"parts {','.join(picked)}" if picked else "check")
+    put = None
+    if run_dir is not None and (custody := custody_dir()) is not None:
+        try:
+            put = LIVE.custody_put(custody)
+        except Exception as e:  # noqa: BLE001  (unpublished, the record stays in the run dir)
+            print(f"check: live: no publishing ({type(e).__name__}: {e}); {LIVE.LIVE_FILE} stays in the run dir", flush=True)
+    return LIVE.Live(out, put=put, commit=os.environ.get("RESEARCH_SOURCE_SHA") or _rev("HEAD"), what=what)
 
 
 def main(argv: list[str]) -> int:
@@ -2182,15 +2212,18 @@ def main(argv: list[str]) -> int:
     prior = signal.signal(signal.SIGTERM, _terminated) if main_thread else None
     packs = Packs(run_dir / "verdicts.tar.gz", before) if before is not None else None
     reused = Reused(run_dir, before, None if cache else CIRCUIT_ENTRIES) if before is not None else None
+    live = live_record(out, run_dir, sharded, picked)
+    live.start()
     try:
         ok, done = run(out, n, cache, keep_going, sharded["parts"] if sharded else None, packs, reused, regenerate,
-                       circuit_cache)
+                       circuit_cache, live)
     finally:
         if main_thread:
             signal.signal(signal.SIGTERM, prior)
         stopped_by = TERMINATED[0] if TERMINATED else None
         TERMINATED.clear()
     ok = ok and not stopped_by
+    live.close("stopped" if stopped_by else "passed" if ok else "failed")
     bad, flaky = contradictions(out), contradictions(out, "nondeterministic")
     for c in bad:
         print(f"check: CACHE CONTRADICTED in {c['suite']}: {', '.join(c['contradicts'][:5])} failed fresh, and a cached pass answers for it",

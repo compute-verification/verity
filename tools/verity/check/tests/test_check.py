@@ -414,8 +414,8 @@ def test_record_sends_the_verdicts_it_gathers_with_a_pack_given_added_unless_no_
     launched.clear()
     assert CHECK.record(["--base", "HEAD", "--no-cache"]) == 0 and len(given_to) == 3
     head = launched[0][:launched[0].index("--")]
-    assert [head[i + 1] for i, x in enumerate(head) if x == "--declared-output"] == list(CHECK.PACK_FILES), \
-        "custody uploads the packs however the run ends, never trimming them as undeclared"
+    assert [head[i + 1] for i, x in enumerate(head) if x == "--declared-output"] == [*CHECK.PACK_FILES, "check-live.json"], \
+        "custody uploads the packs and the live record however the run ends, never trimming them as undeclared"
 
 
 def test_record_sends_the_agreement_for_a_file_renamed_out_of_its_paths(tmp_path, monkeypatch, capsys):
