@@ -5,7 +5,7 @@ nonlinearity claimed, and the class the stacking-budget classifier puts it in.
 
     uv run python benchmarks/property_redteam/demo.py [--out FILE.json] [--words N]
 
-Sections (encode_in_circuit takes ~35 s a word on one core):
+Sections (encode_in_circuit takes ~55 s a word on one core):
   imma    the s8 IMMA's clamp and wrap become exact comparisons once the incoming accumulator C is a runtime value, and
           the static reduction-length limits that property/v1 checks (operand ranges + K);
   floors  registry primitives that compute an exact floor, carry, comparison, select or mod, with the class the
@@ -30,6 +30,8 @@ import struct
 import sys
 
 from verity.ml.circuits.defs import REGISTRY, PrimitiveDefinition
+from verity.ml.circuits.evaluation.reference import ScalarReference, evaluate
+from verity.ml.circuits.types import Array, Value
 from verity.ml.circuits.silicon.integer import (BLACKWELL_SM120_S8_M16N8K32 as IMMA_SAT,
                                                  BLACKWELL_SM120_S8_M16N8K32_WRAP as IMMA_WRAP, IntegerMma, S32_MAX,
                                                  S32_MIN, s32_value)
@@ -314,11 +316,15 @@ def _jacobi(a: int, n: int) -> int:
 #: chain is in range from C = 0 and passes a static operand-range and reduction-length check.
 IMMA_U8 = IntegerMma(name="blackwell_sm120_u8u8_m16n8k32", arch="sm_120", dtype="u8", b_dtype="u8", operand_bits=8,
                      k_per_instruction=32, satfinite=True, validated="run r20261015-084000-06d8, form u8.u8 .satfinite")
+_IMMA_U8_SIGNATURE = ((Value(32), Array(32, Value(8)), Array(32, Value(8))), Value(32))
+IMMA_U8_STEP = ScalarReference(
+    "silicon.blackwell_sm120_u8u8_m16n8k32.step", IMMA_U8.step, lambda: _IMMA_U8_SIGNATURE,
+    doc="one accumulator coordinate of IMMA.16832.U8.U8.SAT: C + 32 u8 products, clamped to s32 (IntegerMma at u8.u8)")
 
 
-class DigitArithmetic:
-    """Multi-precision arithmetic mod p = 2^1024 - 105 on 128 u8 digits, every operation a registry evaluator call or an
-    IMMA step, counted by primitive id."""
+class ModArith:
+    """Multi-precision arithmetic mod p = 2^1024 - 105 on 128 u8 digits, every operation one run of the reference
+    evaluator (`reference.evaluate`) on a registry primitive or on the u8 IMMA step, counted by primitive id."""
 
     D = 128
 
@@ -343,7 +349,7 @@ class DigitArithmetic:
 
     def call(self, pid: str, *args: int) -> int:
         self.n[pid] += 1
-        return self.prims[pid].evaluate(*args)
+        return evaluate(self.prims[pid], *args)[0]
 
     def dot(self, c: int, pairs: list[tuple[int, int]]) -> int:
         """C + sum of u8 products, 32 a step (the chain's C the previous D)."""
@@ -353,7 +359,7 @@ class DigitArithmetic:
             a = [x for x, _ in chunk] + [0] * (32 - len(chunk))
             b = [y for _, y in chunk] + [0] * (32 - len(chunk))
             self.n["IMMA.u8.u8.SAT (silicon model)"] += 1
-            word = IMMA_U8.step(word, a, b)
+            word = evaluate(IMMA_U8_STEP, word, a, b)[0]
         return word
 
     def normalize(self, cols: list[int], width: int) -> tuple[list[int], int]:
@@ -462,7 +468,7 @@ def section_encode_in_circuit(prims: dict[str, PrimitiveDefinition], rng: random
     for w in range(words):
         m = int.from_bytes(bytes(rng.randrange(256) for _ in range(f.word_bytes - 1)), "little")
         i = rng.randrange(1 << 20)
-        ckt = DigitArithmetic(prims)
+        ckt = ModArith(prims)
         t = ckt.mul(digits(k.tau), digits(i))
         x = digits(m)
         for r, c in enumerate(k.c):
@@ -477,7 +483,7 @@ def section_encode_in_circuit(prims: dict[str, PrimitiveDefinition], rng: random
     # Comparison-only carries: the same circuit with every `split` by compares and selects, checked on modular products,
     # its encode census the measured one with each carry's I32Div + I32Rem replaced by the cmp split's 80 calls.
     p = f.p
-    ckt = DigitArithmetic(prims, carry="cmp")
+    ckt = ModArith(prims, carry="cmp")
     cmp_ok = 0
     trials = 4
     for _ in range(trials):

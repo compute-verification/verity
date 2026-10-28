@@ -2,7 +2,7 @@
 for refusal, on Programs encoded as descriptor v1 (`verity/ml/circuits/PROTOCOL.md`), through the difftest harness
 (`verity_difftest`: one server open per module, reject parity, Hypothesis drawing deterministically).
 
-The reference is `python_answer`: `codec.decode_program`, then `evaluate.evaluate_region` over each of the root's nodes that
+The reference is `python_answer`: `codec.decode_program`, then `reference.evaluate_region` over each of the root's nodes that
 is not an input node, with the inputs bound by runs (a registered table as `reference`'s `RegisteredTable`, read where a gate
 reads it), the gate-by-gate oracle that `reference.evaluate` runs on a target's one-call Program; for those Programs
 `reference.evaluate` itself is checked too. Two of the Lean evaluator's refusals are not the oracle's, so `python_answer`
@@ -53,7 +53,6 @@ from verity.ml.circuits import boolean as BL
 from verity.ml.circuits import codec
 from verity.ml.circuits.boolean.trace import word_of
 from verity.ml.circuits.defs import REGISTRY, CompositeDefinition, PrimitiveDefinition, bind
-from verity.ml.circuits.evaluate import evaluate_region
 from verity.ml.circuits.evaluation import reference
 from verity.ml.circuits.ops import fp32 as FP
 from verity.ml.circuits.ops import mufu as MU
@@ -138,8 +137,8 @@ REGISTERED_TABLES = {
 }
 
 
-def _bind(D, inputs: list) -> reference._Transcript:
-    """The transcript of the root's Input gates bound to `inputs` (`Evaluate.bind`): each argument a list of words, or
+def _bind(D, inputs: list) -> reference._TableTrace:
+    """The trace of the root's Input gates bound to `inputs` (`Evaluate.bind`): each argument a list of words, or
     `{"table": name}` binding as many consecutive `RegisteredInput16_v1` gates as the table has leaves, read on demand."""
     body = D.root.body
     runs = [(body.offsets[k], n.gates, *input_id(n.fn.id)[::-1]) for k, n in enumerate(body.nodes)
@@ -153,7 +152,7 @@ def _bind(D, inputs: list) -> reference._Transcript:
     total = sum(n for _, n, _, _ in runs)
     if given != total:
         raise ValueError(f"expected {total} input words, got {given}")
-    t = reference._Transcript()
+    t = reference._TableTrace()
     ri = ro = 0
     for p in inputs:
         if isinstance(p, list):
@@ -189,7 +188,7 @@ def python_answer(desc: dict, inputs: list) -> dict:
         body = D.root.body
         for k, n in enumerate(body.nodes):
             if not (isinstance(n.fn, PrimitiveDefinition) and input_id(n.fn.id)):
-                evaluate_region(D.circuit, D.circuit[body.offsets[k]:body.offsets[k] + n.gates], t)
+                reference.evaluate_region(D.circuit, D.circuit[body.offsets[k]:body.offsets[k] + n.gates], t)
         return {"output": [t[g] for g in D.circuit.root_outputs()]}
     except (ValueError, KeyError, TypeError, IndexError) as e:
         return {"reject": f"{type(e).__name__}: {e}"}
