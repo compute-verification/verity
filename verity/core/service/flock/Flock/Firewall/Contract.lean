@@ -19,10 +19,10 @@ of three things.
 * (c) A value uniquely fixed by what is already committed or public (`Item.fixed`): by the public schedule (the contract
   derives the value itself, and holds the items to the schedule's order), by the public statement (the value the public
   input names), or by the firewall's own values (its level-0 recheck, its opening, the values it computes from its pads,
-  under names the public input lists). Under D8 (a) the last three are today's Rust, which the transcript reports and
+  under names the public input lists). Under D8 (a) the last three are the current Rust, which the transcript reports and
   this contract does not recompute.
 
-What the contract holds a transcript to is the verifier's public input (`PublicInput`), never the transcript's own
+What the contract holds a release log to is the verifier's public input (`PublicInput`), never the release log's own
 copy of it. The tape's salts are pairwise distinct as bytes, and so are its pads, so a tape number names one value and a
 salt or pad the workers saw under one number is not used under another.
 
@@ -34,21 +34,21 @@ commitment) of the round's coin message (`coinMsg`: the stream, the round and th
 A coins item then carries that salt as its opening, and it leaves only if the opening opens the round's commitment to its
 coins, once a round: a session whose public input declares commitments is refused coins without an opening, coins that
 don't open, and coins of a round it holds no commitment for. A session that declares none (the inner phase, and the outer
-phase, whose coins are C-Flock's coin tree, checked by its prover before the transcript is written) relays coins without
+phase, whose coins are C-Flock's coin tree, checked by its prover before the release log is written) relays coins without
 an opening, and it refuses coins that carry one.
 
-A transcript is the firewall's candidate outbound items in order: the values it would release, each tagged with its case,
+A release log is the firewall's candidate outbound items in order: the values it would release, each tagged with its case,
 with its tape (the salts and pads it drew, by id) and the tape entries it handed the workers. The firewall's send check
 decides each candidate as it comes; so does `run`. The first item that breaks the contract is the cut: a refused item
 stops the session, nothing of the session's own after it leaves, and the auditor sees a stop (in the outer phase at the
 session's `Finish`: the firewall releases the statement's schedule in the refused item's place, live PROTOCOL.md §10.1, and
-the transcript ends at the cut). A session is accepted when every item may leave
+the release log ends at the cut). A session is accepted when every item may leave
 and the last one is `finish`; one that ends without `finish` is a stop at its end.
 
 `holds_commit`, `holds_masked`, `holds_fixed`, `holds_coins` and `holds_finish` say what an accepted session lets out, in
 those terms; `holds_coins_binding` is the coins' binding in the fork form: two accepted sessions under one public input
-that relay different coin messages for one committed round give a SHA-512 collision on two inputs computed from them. The transcript's JSON form is `Transcript.ofJson`'s and the public input's `PublicInput.ofJson`'s;
-`flock-firewall contract [--public FILE] TRANSCRIPT…` prints `run`'s verdict for each transcript.
+that relay different coin messages for one committed round give a SHA-512 collision on two inputs computed from them. The release log's JSON form is `ReleaseLog.ofJson`'s and the public input's `PublicInput.ofJson`'s;
+`flock-firewall contract [--public FILE] TRANSCRIPT…` prints `run`'s verdict for each release log.
 -/
 import Flock.Canon
 import Flock.Hm96
@@ -89,7 +89,7 @@ def By.name : By → String
   | .shadow => "the firewall's opening"
   | .own => "the firewall's own values"
 
-/-- One step of a firewall transcript, in the order the firewall takes it. Every step but `check` is an outbound item. -/
+/-- One step of a firewall release log, in the order the firewall takes it. Every step but `check` is an outbound item. -/
 inductive Item where
   /-- (a): a commitment to `msg` under the firewall's salt number `salt`; `sent` leaves -/
   | commit (msg : ByteArray) (salt : Nat) (sent : ByteArray)
@@ -107,7 +107,7 @@ inductive Item where
   | finish
   deriving Inhabited
 
-structure Transcript where
+structure ReleaseLog where
   phase : String
   /-- the firewall's tape: salt number `i` is `salts[i]`, pad number `i` is `pads[i]` -/
   salts : Array ByteArray
@@ -118,7 +118,7 @@ structure Transcript where
   items : Array Item
   deriving Inhabited
 
-/-- The verifier's public input, which the contract holds a transcript to and never reads from it: the session's public
+/-- The verifier's public input, which the contract holds a release log to and never reads from it: the session's public
 schedule (the inner phase's `SCHEDULE_FORMAT`), every relation the verifier checks on the masked values,
 the values the public statement fixes by name, the names of the values the firewall fixes by its own computation, and the
 challenger's commitments to its coins, if it made any before the session: per stream, round `k`'s at `k`. -/
@@ -191,7 +191,7 @@ structure State where
   finished : Bool := false
   deriving Inhabited
 
-def State.init (t : Transcript) : State :=
+def State.init (t : ReleaseLog) : State :=
   { usedSalt := Array.replicate t.salts.size false, usedPad := Array.replicate t.pads.size false,
     passed := Array.replicate t.pads.size #[] }
 
@@ -323,7 +323,7 @@ def State.checked (s : State) (pub : PublicInput) (p : Nat) : Bool :=
   pub.relations.all fun r => (s.passed.getD p #[]).contains r
 
 /-- One item: the state after it, or why it may not leave. -/
-def step (pub : PublicInput) (t : Transcript) (s : State) : Item → V State
+def step (pub : PublicInput) (t : ReleaseLog) (s : State) : Item → V State
   | .commit msg i sent => do
     need (s.owed > 0) s!"a commitment under salt {i} that the schedule does not owe here"
     need (i < t.salts.size) s!"a commitment under salt {i}, which the firewall never drew"
@@ -384,7 +384,7 @@ structure Verdict where
 
 def Verdict.accepted (v : Verdict) : Bool := v.cut.isNone
 
-def go (pub : PublicInput) (t : Transcript) : State → List Item → Nat → Verdict
+def go (pub : PublicInput) (t : ReleaseLog) : State → List Item → Nat → Verdict
   | s, [], n => if s.finished then ⟨n, none⟩ else ⟨n, some "the session ended without Finish"⟩
   | s, it :: rest, n =>
     if s.finished then ⟨n, some "an item after Finish"⟩
@@ -393,26 +393,26 @@ def go (pub : PublicInput) (t : Transcript) : State → List Item → Nat → Ve
       | .error why => ⟨n, some why⟩
 
 /-- Why the tape is not one a number can name: two salt numbers, or two pad numbers, with one value. -/
-def tapeError (t : Transcript) : Option String :=
+def tapeError (t : ReleaseLog) : Option String :=
   if !pairwiseDistinct bytesEq t.salts then some "the tape's salts are not pairwise distinct: two salt numbers are one salt"
   else if !pairwiseDistinct f128Eq t.pads then some "the tape's pads are not pairwise distinct: two pad numbers are one pad"
   else none
 
-/-- The contract on one transcript, held to the verifier's public input `pub`; a tape whose salts or pads repeat a value
+/-- The contract on one release log, held to the verifier's public input `pub`; a tape whose salts or pads repeat a value
 releases nothing. -/
-def run (pub : PublicInput) (t : Transcript) : Verdict :=
+def run (pub : PublicInput) (t : ReleaseLog) : Verdict :=
   match tapeError t with
   | some why => ⟨0, some why⟩
   | none => go pub t (State.init t) t.items.toList 0
 
-/-- The contract holds of the transcript under the public input: every item may leave, and the session ends with
+/-- The contract holds of the release log under the public input: every item may leave, and the session ends with
 `finish`. -/
-def Holds (pub : PublicInput) (t : Transcript) : Prop := (run pub t).accepted = true
+def Holds (pub : PublicInput) (t : ReleaseLog) : Prop := (run pub t).accepted = true
 
 /-! ## What an accepted session lets out -/
 
 /-- Every item of a list `go` lets through whole is one `step` takes from some state before Finish. -/
-theorem go_steps {pub : PublicInput} {t : Transcript} : ∀ {s : State} {l : List Item} {n : Nat},
+theorem go_steps {pub : PublicInput} {t : ReleaseLog} : ∀ {s : State} {l : List Item} {n : Nat},
     (go pub t s l n).cut = none → ∀ it ∈ l, ∃ s₀ s₁, s₀.finished = false ∧ step pub t s₀ it = .ok s₁
   | s, [], n, _ => by intro it h; cases h
   | s, it :: rest, n, h => by
@@ -440,7 +440,7 @@ private theorem bind_ok {α β : Type} {m : V α} {k : α → V β} {x : β}
 
 /-- (a) item by item: a commitment leaves only as `b ‖ c` of its message under a drawn salt of 192 bytes, unused and
 unseen by the workers. -/
-theorem step_commit {pub : PublicInput} {t : Transcript} {s s' : State} {msg : ByteArray} {i : Nat} {sent : ByteArray}
+theorem step_commit {pub : PublicInput} {t : ReleaseLog} {s s' : State} {msg : ByteArray} {i : Nat} {sent : ByteArray}
     (h : step pub t s (.commit msg i sent) = .ok s') :
     i < t.salts.size ∧ s.usedSalt[i]! = false ∧ i ∉ t.exposedSalts ∧ (t.salts[i]!).size = SALT_BYTES ∧
       sent.data = (commitBC msg t.salts[i]!).data := by
@@ -449,7 +449,7 @@ theorem step_commit {pub : PublicInput} {t : Transcript} {s s' : State} {msg : B
   all_goals simp_all [bytesEq]
 
 /-- (b) item by item: a masked value leaves only under a drawn pad, unused and unseen by the workers. -/
-theorem step_masked {pub : PublicInput} {t : Transcript} {s s' : State} {v : F128} {p : Nat} {sent : F128}
+theorem step_masked {pub : PublicInput} {t : ReleaseLog} {s s' : State} {v : F128} {p : Nat} {sent : F128}
     (h : step pub t s (.masked v p sent) = .ok s') :
     p < t.pads.size ∧ s.usedPad[p]! = false ∧ p ∉ t.exposedPads ∧ sent = v + t.pads[p]! := by
   simp only [step, need, bind, Except.bind] at h
@@ -457,7 +457,7 @@ theorem step_masked {pub : PublicInput} {t : Transcript} {s s' : State} {v : F12
 
 /-- The workers' coins are the challenger's, and either they open the challenger's commitment to their round, a round
 whose coins have not gone before, or the session declares no commitment, and they carry no opening. -/
-theorem step_coins {pub : PublicInput} {t : Transcript} {s s' : State} {stream : String} {k : Nat}
+theorem step_coins {pub : PublicInput} {t : ReleaseLog} {s s' : State} {stream : String} {k : Nat}
     {cs relayed : Array F128} {opening : ByteArray} (h : step pub t s (.coins stream k cs relayed opening) = .ok s') :
     relayed = cs ∧
       ((∃ c, pub.coinCommit stream k = some c ∧ opening.size = SALT_BYTES ∧
@@ -481,7 +481,7 @@ theorem step_coins {pub : PublicInput} {t : Transcript} {s s' : State} {stream :
     exact .inr ⟨hc, h3, by simpa using h4⟩
 
 /-- What `fixes` fixes a value to: the schedule's own value, the public statement's, or, for a name the public input lists
-as the firewall's own computation, the value the transcript reports. -/
+as the firewall's own computation, the value the release log reports. -/
 theorem fixes_spec {pub : PublicInput} {o : Order} {what : String} {src : By} {want : ByteArray}
     {r : ByteArray × Order × Nat} (h : fixes pub o what src want = .ok r) :
     (src = .schedule → ∃ sched o', pub.schedule = some sched ∧ scheduled sched o what = .ok (r.1, o')) ∧
@@ -515,7 +515,7 @@ theorem fixes_spec {pub : PublicInput} {o : Order} {what : String} {src : By} {w
 
 /-- (c) item by item: a fixed value leaves only as `fixes` fixes it, and after every pad it depends on has passed every
 relation. -/
-theorem step_fixed {pub : PublicInput} {t : Transcript} {s s' : State} {what : String} {src : By} {want sent : ByteArray}
+theorem step_fixed {pub : PublicInput} {t : ReleaseLog} {s s' : State} {what : String} {src : By} {want sent : ByteArray}
     {ps : Array Nat} (h : step pub t s (.fixed what src want sent ps) = .ok s') :
     (∃ r, fixes pub s.order what src want = .ok r ∧ sent.data = r.1.data) ∧
     ∀ p ∈ ps, s.usedPad.getD p false = true ∧ s.checked pub p = true := by
@@ -528,14 +528,14 @@ theorem step_fixed {pub : PublicInput} {t : Transcript} {s s' : State} {what : S
   have := Array.all_eq_true_iff_forall_mem.mp h2 p hp
   simpa using this
 
-theorem step_finished {pub : PublicInput} {t : Transcript} {s s' : State} {it : Item} (h : step pub t s it = .ok s')
+theorem step_finished {pub : PublicInput} {t : ReleaseLog} {s s' : State} {it : Item} (h : step pub t s it = .ok s')
     (hit : it ≠ .finish) : s'.finished = s.finished := by
   cases it <;> simp only [step, need, bind, Except.bind] at h
   all_goals repeat' (split at h <;> try simp_all [pure, Except.pure, throw, throwThe, MonadExceptOf.throw])
   all_goals first | (subst h; rfl) | simp_all
 
 /-- A list `go` lets through whole, from a state before Finish, ends with Finish. -/
-theorem go_last {pub : PublicInput} {t : Transcript} : ∀ {s : State} {l : List Item} {n : Nat},
+theorem go_last {pub : PublicInput} {t : ReleaseLog} : ∀ {s : State} {l : List Item} {n : Nat},
     (go pub t s l n).cut = none → s.finished = false → l.getLast? = some .finish
   | s, [], n, h, hf => by simp [go, hf] at h
   | s, it :: rest, n, h, hf => by
@@ -560,7 +560,7 @@ theorem go_last {pub : PublicInput} {t : Transcript} : ∀ {s : State} {l : List
     · simp at h
 
 /-- An accepted session's tape names each salt and each pad once, and `go` lets every item through. -/
-theorem holds_go {pub : PublicInput} {t : Transcript} (h : Holds pub t) :
+theorem holds_go {pub : PublicInput} {t : ReleaseLog} (h : Holds pub t) :
     tapeError t = none ∧ (go pub t (State.init t) t.items.toList 0).cut = none := by
   have h' : (run pub t).cut = none := by simpa [Holds, Verdict.accepted, Option.isNone_iff_eq_none] using h
   unfold run at h'
@@ -577,20 +577,20 @@ theorem pairwiseDistinct_ne {α : Type} [Inhabited α] {eq : α → α → Bool}
   have := h i hi j hj
   simpa [hne] using this
 
-theorem tapeError_none {t : Transcript} (h : tapeError t = none) :
+theorem tapeError_none {t : ReleaseLog} (h : tapeError t = none) :
     pairwiseDistinct bytesEq t.salts = true ∧ pairwiseDistinct f128Eq t.pads = true := by
   unfold tapeError at h
   by_cases a : pairwiseDistinct bytesEq t.salts = true <;> by_cases b : pairwiseDistinct f128Eq t.pads = true <;>
     simp_all
 
 /-- An accepted session ends with Finish: a session that stops is never accepted. -/
-theorem holds_finish {pub : PublicInput} {t : Transcript} (h : Holds pub t) : t.items.toList.getLast? = some .finish :=
+theorem holds_finish {pub : PublicInput} {t : ReleaseLog} (h : Holds pub t) : t.items.toList.getLast? = some .finish :=
   go_last (holds_go h).2 rfl
 
 /-- (a) on an accepted session: every commitment that left is hm96-sha512's `b ‖ c` of its message under a salt the
 firewall drew, of 192 bytes, that the workers never saw and that no other salt number of the tape names (`commitLeaf`
 is its tree leaf). That no two commitments share a salt number is `step`'s check, not stated here. -/
-theorem holds_commit {pub : PublicInput} {t : Transcript} (h : Holds pub t) {msg : ByteArray} {i : Nat}
+theorem holds_commit {pub : PublicInput} {t : ReleaseLog} (h : Holds pub t) {msg : ByteArray} {i : Nat}
     {sent : ByteArray} (hm : Item.commit msg i sent ∈ t.items.toList) :
     i < t.salts.size ∧ i ∉ t.exposedSalts ∧ (t.salts[i]!).size = SALT_BYTES ∧
       sent.data = (commitBC msg t.salts[i]!).data ∧
@@ -604,7 +604,7 @@ theorem holds_commit {pub : PublicInput} {t : Transcript} (h : Holds pub t) {msg
 
 /-- (b) on an accepted session: every masked value that left is its value plus a pad the firewall drew that the workers
 never saw and that no other pad number of the tape names. -/
-theorem holds_masked {pub : PublicInput} {t : Transcript} (h : Holds pub t) {v : F128} {p : Nat} {sent : F128}
+theorem holds_masked {pub : PublicInput} {t : ReleaseLog} (h : Holds pub t) {v : F128} {p : Nat} {sent : F128}
     (hm : Item.masked v p sent ∈ t.items.toList) :
     p < t.pads.size ∧ p ∉ t.exposedPads ∧ sent = v + t.pads[p]! ∧
       ∀ q < t.pads.size, q ≠ p → t.pads[q]! ≠ t.pads[p]! := by
@@ -619,7 +619,7 @@ theorem holds_masked {pub : PublicInput} {t : Transcript} (h : Holds pub t) {v :
 commitments they are the coins the challenger committed to before the session: the opening, a 192-byte salt, opens the
 public input's commitment to their round to their coin message, hm96-sha512's `b ‖ c` of it (`commitBC`). A session that
 declares none (the inner phase, whose coins are live, and the outer phase) relays them with no opening. -/
-theorem holds_coins {pub : PublicInput} {t : Transcript} (h : Holds pub t) {stream : String} {k : Nat}
+theorem holds_coins {pub : PublicInput} {t : ReleaseLog} (h : Holds pub t) {stream : String} {k : Nat}
     {cs relayed : Array F128} {opening : ByteArray} (hm : Item.coins stream k cs relayed opening ∈ t.items.toList) :
     relayed = cs ∧
       ((∃ c, pub.coinCommit stream k = some c ∧ opening.size = SALT_BYTES ∧
@@ -632,7 +632,7 @@ theorem holds_coins {pub : PublicInput} {t : Transcript} (h : Holds pub t) {stre
   · exact ⟨h1, .inr h2.2⟩
 
 /-- A session that declares commitments relays, in an accepted run, only committed coins. -/
-theorem holds_coins_committed {pub : PublicInput} {t : Transcript} (h : Holds pub t) {stream : String} {k : Nat}
+theorem holds_coins_committed {pub : PublicInput} {t : ReleaseLog} (h : Holds pub t) {stream : String} {k : Nat}
     {cs relayed : Array F128} {opening : ByteArray} (hm : Item.coins stream k cs relayed opening ∈ t.items.toList)
     (hd : pub.coins ≠ #[]) :
     relayed = cs ∧ ∃ c, pub.coinCommit stream k = some c ∧ opening.size = SALT_BYTES ∧
@@ -705,7 +705,7 @@ theorem commitBC_binding {m m' y y' : ByteArray} (hne : m ≠ m') (h : (commitBC
 /-- **The coins' binding, in the fork form**: two accepted sessions under one public input that relay coins of one
 committed round whose coin messages differ give a SHA-512 collision on two inputs computed from the two coins items. The
 inner phase's coins are live, and its public input declares no committed round. -/
-theorem holds_coins_binding {pub : PublicInput} {t t' : Transcript} (h : Holds pub t) (h' : Holds pub t')
+theorem holds_coins_binding {pub : PublicInput} {t t' : ReleaseLog} (h : Holds pub t) (h' : Holds pub t')
     {stream : String} {k : Nat} {cs cs' relayed relayed' : Array F128} {y y' : ByteArray}
     (hm : Item.coins stream k cs relayed y ∈ t.items.toList) (hm' : Item.coins stream k cs' relayed' y' ∈ t'.items.toList)
     (hc : pub.coinCommit stream k ≠ none) (hne : coinMsg stream k cs ≠ coinMsg stream k cs') :
@@ -713,7 +713,7 @@ theorem holds_coins_binding {pub : PublicInput} {t t' : Transcript} (h : Holds p
         (coinPair (coinMsg stream k cs) (coinMsg stream k cs') y y').2 ∧
       Sha512.hash (coinPair (coinMsg stream k cs) (coinMsg stream k cs') y y').1 =
         Sha512.hash (coinPair (coinMsg stream k cs) (coinMsg stream k cs') y y').2 := by
-  have one : ∀ {t : Transcript} {cs r : Array F128} {y : ByteArray}, Holds pub t →
+  have one : ∀ {t : ReleaseLog} {cs r : Array F128} {y : ByteArray}, Holds pub t →
       Item.coins stream k cs r y ∈ t.items.toList →
       ∃ c, pub.coinCommit stream k = some c ∧ c.data = (commitBC (coinMsg stream k cs) y).data := by
     intro t cs r y h hm
@@ -727,9 +727,9 @@ theorem holds_coins_binding {pub : PublicInput} {t t' : Transcript} (h : Holds p
   exact commitBC_binding hne (b.symm.trans b')
 
 /-- (c) on an accepted session: every fixed value that left is the public schedule's own (`scheduled`), the public
-statement's, or, under a name the public input lists as the firewall's own computation, the value the transcript reports
+statement's, or, under a name the public input lists as the firewall's own computation, the value the release log reports
 the firewall computing, which the contract does not recompute (`FirewallComputes` names that assumption). -/
-theorem holds_fixed {pub : PublicInput} {t : Transcript} (h : Holds pub t) {what : String} {src : By}
+theorem holds_fixed {pub : PublicInput} {t : ReleaseLog} (h : Holds pub t) {what : String} {src : By}
     {want sent : ByteArray} {ps : Array Nat} (hm : Item.fixed what src want sent ps ∈ t.items.toList) :
     (src = .schedule → ∃ sched o w o', pub.schedule = some sched ∧ scheduled sched o what = .ok (w, o') ∧
       sent.data = w.data) ∧
@@ -744,7 +744,7 @@ theorem holds_fixed {pub : PublicInput} {t : Transcript} (h : Holds pub t) {what
   · obtain ⟨c1, c2⟩ := c e1 e2
     exact ⟨by rw [← c1]; exact he, c2⟩
 
-/-! ## The transcript's JSON form -/
+/-! ## The release log's JSON form -/
 
 private def hexField (j : Json) (k ctx : String) : V ByteArray := do
   match unhex (← J.str j k ctx) with
@@ -792,7 +792,7 @@ def Item.ofJson (j : Json) (ctx : String) : V Item := do
     | _ => throw s!"{ctx}: not one item of commit, masked, fixed, check, coins or finish"
   | _ => throw s!"{ctx}: not an object"
 
-def Transcript.ofJson (j : Json) : V Transcript := do
+def ReleaseLog.ofJson (j : Json) : V ReleaseLog := do
   let kind ← J.str j "kind" "transcript"
   need (kind == FORMAT) s!"transcript: kind {kind}, not {FORMAT}"
   let tape ← J.get j "tape" "transcript"
@@ -807,7 +807,7 @@ def Transcript.ofJson (j : Json) : V Transcript := do
 
 /-- The public input's JSON form, `verity/firewall-public/v0`: `schedule` (or `null`), `relations` and `computes` (lists
 of names), `statement`, an object from each name the statement fixes to its value in hex, and `coins`, an object from each
-stream to the challenger's commitments to its rounds' coins in order, each `b ‖ c` in hex. A transcript's own
+stream to the challenger's commitments to its rounds' coins in order, each `b ‖ c` in hex. A release log's own
 `schedule` or `relations`, if it carries them, are never read. -/
 def PublicInput.ofJson (j : Json) : V PublicInput := do
   let kind ← J.str j "kind" "public input"
@@ -842,10 +842,10 @@ def Verdict.toJson (v : Verdict) : Json :=
   Json.mkObj [("accepted", Json.bool v.accepted), ("released", Json.num v.released),
     ("why", match v.cut with | some w => Json.str w | none => Json.null)]
 
-/-- `flock-firewall contract [--public FILE] FILE…` (`args` after `contract`): each transcript's verdict under the public
-input in `--public`'s file, one JSON line each; without `--public` the public input is empty, so every transcript that
+/-- `flock-firewall contract [--public FILE] FILE…` (`args` after `contract`): each release log's verdict under the public
+input in `--public`'s file, one JSON line each; without `--public` the public input is empty, so every release log that
 leans on a schedule, a statement, a relation or the firewall's own values is refused. Exit 2 when a file is not a
-transcript or the public input is not one. -/
+release log or the public input is not one. -/
 def cmd (args : List String) : IO UInt32 := do
   let (pubFile, files) := match args with
     | "--public" :: f :: rest => (some f, rest)
@@ -866,7 +866,7 @@ def cmd (args : List String) : IO UInt32 := do
     let mut rc : UInt32 := 0
     for f in files do
       let text ← IO.FS.readFile f
-      match JsonParse.parse text >>= Transcript.ofJson with
+      match JsonParse.parse text >>= ReleaseLog.ofJson with
       | .ok t =>
         IO.println ((run pub t).toJson.setObjVal! "file" (Json.str f)).compress
       | .error e =>
