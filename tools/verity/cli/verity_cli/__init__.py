@@ -188,7 +188,7 @@ def main(argv: list[str] | None = None) -> int:
         return _runner("examples", "example", args[1:])
     if args[0] == "lean":
         return _lean(args[1:])
-    raise SystemExit(f"verity: no command {args[0]!r}\\n{__doc__}")
+    raise SystemExit(f"verity: no command {args[0]!r}\n{__doc__}")
 
 
 if __name__ == "__main__":
