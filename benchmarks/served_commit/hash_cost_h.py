@@ -6,6 +6,7 @@ A MAC-time is one int8 MAC at the P1a ruler, 1 / (4,096 x SMs x f) seconds at th
 so h is the SM-cycles a byte holds the whole card, times 4,096:
   alone:  h = ruler x (hash time) / bytes                       the leaves alone (leaf), with the best tree form added (commit)
   beside: h = ruler x (the GEMM loop's extra time) / bytes      the leaves on a low-priority stream beside the served int8 GEMM
+          h_noise: the same for the median |A' - A| of the loop alone before and after (A-B-A runs only)
 Beside, the hash also needs room: at a point hashing r GB/s while the GEMM runs, a forward of t_G ms carries r x t_G bytes at that h.
 """
 from __future__ import annotations
@@ -87,6 +88,9 @@ def main() -> None:
                             "gemm_slowdown": b["gemm_slowdown_total"], "delta_ms": b["gemm_delta_ms"], "overlapped": b["overlapped"],
                             "h_beside": round(ruler_b * b["gemm_delta_ms"] * 1e-3 / b["bytes"], 1),
                             "bytes_per_fwd": round(b["hash_gbps"] * 1e9 * b["loop_alone_ms"] / b["n_fwd"] * 1e-3)})
+                if "aa_ms" in b:   # A-B-A runs: the median |A' - A| and B's delta range over reps, in h
+                    pts[-1].update(h_noise=round(ruler_b * b["aa_ms"] * 1e-3 / b["bytes"], 1),
+                                   h_range=[round(ruler_b * d * 1e-3 / b["bytes"], 1) for d in b["delta_ms_range"]])
             row["beside"] = pts
             out["rows"][f"{form}:{rb}"] = row
     text = json.dumps(out, indent=1)

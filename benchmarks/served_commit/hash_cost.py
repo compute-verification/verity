@@ -213,46 +213,62 @@ class Gemm:
 def beside(R: Rows, P, data: torch.Tensor, rb: int, n_rows: int, lv: torch.Tensor, scratch: torch.Tensor, cap: int, G: Gemm,
            n_fwd: int, hs: torch.cuda.Stream, gs: torch.cuda.Stream, reps: int) -> dict[str, Any]:
     """The GEMM loop (n_fwd forwards, an event after each) on gs and n_rows leaves on hs, released by one event; medians over reps.
-    The loop alone, timed just before, is the baseline."""
+    Each rep runs the loop alone (A), beside the hash (B), and alone again (A'), each behind the same spin, so the power-capped clock
+    starts each leg alike: B's baseline is (A + A') / 2, and A' - A is the noise floor (aa_ms)."""
     main = torch.cuda.current_stream()
-    loop_ms = timed(lambda s: [G.replay() for _ in range(n_fwd)], reps, gs)
-    fwd_ms = loop_ms / n_fwd
-    rows = []
-    for r in range(reps + 1):
+
+    def leg(hashing: bool) -> tuple[float, dict[str, Any] | None]:
         e0, eh, eh0, eg0 = (torch.cuda.Event(enable_timing=True) for _ in range(4))
         ef = [torch.cuda.Event(enable_timing=True) for _ in range(n_fwd)]
         torch.cuda.synchronize()
         torch.cuda._sleep(60_000_000)
         e0.record(main)
         gs.wait_event(e0)
-        hs.wait_event(e0)
         with torch.cuda.stream(gs):
             eg0.record(gs)
             for i in range(n_fwd):
                 G.replay()
                 ef[i].record(gs)
-        with torch.cuda.stream(hs):
-            eh0.record(hs)
-            R.leaves(P, data, rb, n_rows, n_rows, lv, scratch, hs, cap)
-            eh.record(hs)
+        if hashing:
+            hs.wait_event(e0)
+            with torch.cuda.stream(hs):
+                eh0.record(hs)
+                R.leaves(P, data, rb, n_rows, n_rows, lv, scratch, hs, cap)
+                eh.record(hs)
         torch.cuda.synchronize()
+        done = [e0.elapsed_time(e) for e in ef]
+        g0 = e0.elapsed_time(eg0)
+        if not hashing:
+            return done[-1] - g0, None
+        th = e0.elapsed_time(eh)
+        k = sum(1 for t in done if t <= th)
+        prev = done[k - 1] if k else g0
+        frac = k + ((th - prev) / (done[k] - prev) if k < n_fwd and done[k] > prev else 0.0)
+        return done[-1] - g0, {"hash_ms": th, "gemm_ms": done[-1], "hash_start_ms": e0.elapsed_time(eh0), "gemm_start_ms": g0,
+                               "fwd_in_hash_window": frac, "overlapped": th < done[-1]}
+
+    rows = []
+    for r in range(reps + 1):
+        a, _ = leg(False)
+        b, row = leg(True)
+        a2, _ = leg(False)
         if not r:
             continue
-        th = e0.elapsed_time(eh)
-        done = [e0.elapsed_time(e) for e in ef]
-        k = sum(1 for t in done if t <= th)
-        prev = done[k - 1] if k else e0.elapsed_time(eg0)
-        frac = k + ((th - prev) / (done[k] - prev) if k < n_fwd and done[k] > prev else 0.0)
-        rows.append({"hash_ms": th, "gemm_ms": done[-1], "hash_start_ms": e0.elapsed_time(eh0), "gemm_start_ms": e0.elapsed_time(eg0),
-                     "fwd_in_hash_window": frac, "overlapped": th < done[-1]})
+        base = (a + a2) / 2
+        row.update(loop_a_ms=a, loop_a2_ms=a2, delta_ms=b - base, aa_ms=a2 - a,
+                   kappa=row["fwd_in_hash_window"] * base / n_fwd / row["hash_ms"], slowdown=b / base)
+        rows.append(row)
     med = {k: statistics.median(x[k] for x in rows) for k in ("hash_ms", "gemm_ms", "hash_start_ms", "gemm_start_ms", "fwd_in_hash_window")}
     H = n_rows * rb
-    delta = med["gemm_ms"] - med["gemm_start_ms"] - loop_ms
+    loop_ms = statistics.median((x["loop_a_ms"] + x["loop_a2_ms"]) / 2 for x in rows)
+    delta = statistics.median(x["delta_ms"] for x in rows)
     return {"cap": cap, "n_rows": n_rows, "bytes": H, "n_fwd": n_fwd, "loop_alone_ms": round(loop_ms, 4),
             "overlapped": all(x["overlapped"] for x in rows),
             "hash_gbps": round(H / (med["hash_ms"] - med["hash_start_ms"]) * 1e-6, 2), "gemm_delta_ms": round(delta, 4),
-            "kappa_window": round(med["fwd_in_hash_window"] * fwd_ms / med["hash_ms"], 4),
-            "gemm_slowdown_total": round((med["gemm_ms"] - med["gemm_start_ms"]) / loop_ms, 4),
+            "kappa_window": round(statistics.median(x["kappa"] for x in rows), 4),
+            "gemm_slowdown_total": round(statistics.median(x["slowdown"] for x in rows), 4),
+            "aa_ms": round(statistics.median(abs(x["aa_ms"]) for x in rows), 4),
+            "delta_ms_range": [round(min(x["delta_ms"] for x in rows), 4), round(max(x["delta_ms"] for x in rows), 4)],
             "delta_ms_per_gb": round(delta / (H * 1e-9), 4), **{k: round(v, 4) for k, v in med.items()}, "reps": rows}
 
 
