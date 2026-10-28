@@ -1,0 +1,160 @@
+"""Where a served_util run's steady steps leave the GPU idle: per step, its kernels' busy time and idle gaps, what the serving
+thread (the one with the most kernel launches) was in during them, by CUDA call and, with PHASES=1's ranges
+(`phase_nvtx.py`), by its innermost range, and the kernels before and after each gap of at least ``--min-gap-us``.
+
+    python host_gaps.py --sqlite prof.sqlite --trace advice_trace.jsonl --timings main.timings.json --T 8192
+"""
+from __future__ import annotations
+
+import argparse
+import bisect
+import sqlite3
+import statistics
+from collections import Counter, defaultdict
+from pathlib import Path
+
+import served_util as su
+
+
+def ranges(db: sqlite3.Connection, tid: int, lo: int, hi: int) -> list[tuple[int, int, str]]:
+    """The closed NVTX push/pop ranges of thread ``tid`` that meet [lo, hi]."""
+    if not su._has(db, "NVTX_EVENTS"):
+        return []
+    q = ("SELECT e.start, e.end, COALESCE(e.text, s.value) FROM NVTX_EVENTS e LEFT JOIN StringIds s ON s.id = e.textId "
+         "WHERE e.globalTid = ? AND e.end IS NOT NULL AND e.end > ? AND e.start < ?")
+    return [(int(a), int(b), str(t)) for a, b, t in db.execute(q, (tid, lo, hi))]
+
+
+def innermost(rs: list[tuple[int, int, str]], lo: int, hi: int) -> list[tuple[int, int, str]]:
+    """[lo, hi] cut into segments, each labelled with the path of nested ranges open over it ("" outside every range)."""
+    out: list[tuple[int, int, str]] = []
+    stack: list[tuple[int, int, str]] = []
+    t = lo
+
+    def emit(a: int, b: int, path: list[tuple[int, int, str]]) -> None:
+        a, b = max(a, lo), min(b, hi)
+        if b > a:
+            out.append((a, b, " > ".join(lab for _, _, lab in path)))
+
+    for r in sorted(rs, key=lambda r: (r[0], -r[1])):
+        while stack and stack[-1][1] <= r[0]:
+            emit(t, stack[-1][1], stack)
+            t = max(t, stack.pop()[1])
+        emit(t, r[0], stack)
+        t = max(t, r[0])
+        stack.append(r)
+    while stack:
+        emit(t, stack[-1][1], stack)
+        t = max(t, stack.pop()[1])
+    emit(t, hi, [])
+    return out
+
+
+def overlap(segs: list[tuple[int, int, str]], ivs: list[tuple[int, int]]) -> Counter:
+    """ns of the intervals ``ivs`` (sorted, disjoint) under each segment's label."""
+    got: Counter = Counter()
+    j = 0
+    for a, b, lab in segs:
+        while j < len(ivs) and ivs[j][1] <= a:
+            j += 1
+        k = j
+        while k < len(ivs) and ivs[k][0] < b:
+            got[lab] += min(b, ivs[k][1]) - max(a, ivs[k][0])
+            k += 1
+    return got
+
+
+def main() -> None:
+    ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
+    ap.add_argument("--sqlite", type=Path, required=True)
+    ap.add_argument("--trace", type=Path, required=True)
+    ap.add_argument("--timings", type=Path)
+    ap.add_argument("--T", type=int, default=8192)
+    ap.add_argument("--min-gap-us", type=int, default=500)
+    ap.add_argument("--top", type=int, default=24)
+    a = ap.parse_args()
+    db = sqlite3.connect(a.sqlite)
+    st = su.steps(a.trace)
+    z = su.utc0_ns(db)
+    at = lambda s: int(s * 1e9) - z
+    ks = su.kernels(db)
+    names = dict(db.execute("SELECT id, value FROM StringIds"))
+    idx = su.steady(st, a.T, float("-inf"), float("inf"), after_s=su.last_send(a.timings))
+    spans = [(at(st[i - 1]["t"]), at(st[i]["t"])) for i in idx]
+    if not spans:
+        print("HOSTGAP no steady steps")
+        return
+    med = statistics.median(b - x for x, b in spans)
+    spans = [(x, b) for x, b in spans if b - x <= su.STEADY_X * med]
+    lo, hi, n = spans[0][0], spans[-1][1], len(spans)
+    calls = defaultdict(list)
+    for table in ("CUPTI_ACTIVITY_KIND_RUNTIME", "CUPTI_ACTIVITY_KIND_DRIVER"):
+        if su._has(db, table):
+            for x, y, nm, tid in db.execute(f"SELECT start, end, nameId, globalTid FROM {table} WHERE end > ? AND start < ?", (lo, hi)):
+                calls[int(tid)].append((int(x), int(y), str(names.get(nm, nm))))
+    launches = Counter({tid: sum(1 for _, _, nm in cs if nm.startswith("cudaLaunchKernel")) for tid, cs in calls.items()})
+    serving = launches.most_common(1)[0][0]
+    sc = sorted(calls[serving])
+    starts = [x for x, _, _ in sc]
+    rs = ranges(db, serving, lo, hi)
+    print(f"HOSTGAP {n} steady steps (median wall {med / 1e6:.2f} ms), serving tid {serving} ({launches[serving]} launches), "
+          f"{len(rs)} NVTX ranges on it")
+    per = defaultdict(list)
+    by_call, pairs = Counter(), defaultdict(lambda: [0, 0, 0.0])
+    wall_by, idle_by, gap_by, incl = Counter(), Counter(), Counter(), Counter()
+    kstart = [x for x, _, _ in ks]
+    min_gap = a.min_gap_us * 1000
+    for x0, x1 in spans:
+        busy = su.union([(x, y) for x, y, _ in ks if y > x0 and x < x1], x0, x1)
+        edges = [x0] + [e for iv in busy for e in iv] + [x1]
+        idle = [(edges[k], edges[k + 1]) for k in range(0, len(edges), 2) if edges[k + 1] > edges[k]]
+        gaps = [(g0, g1) for g0, g1 in idle if g1 - g0 >= min_gap]
+        per["wall"].append((x1 - x0) / 1e6)
+        per["busy"].append(sum(y - x for x, y in busy) / 1e6)
+        per["idle"].append(sum(y - x for x, y in idle) / 1e6)
+        per["gaps"].append(sum(y - x for x, y in gaps) / 1e6)
+        per["n_gaps"].append(len(gaps))
+        for g0, g1 in gaps:
+            j = bisect.bisect_left(kstart, g1)
+            nxt = ks[j][2] if j < len(ks) else "-"
+            prv = max((k for k in ks[max(0, j - 400):j] if k[1] <= g0 + 1), key=lambda k: k[1], default=(0, 0, "-"))[2]
+            p = pairs[(prv[:40], nxt[:40])]
+            p[0], p[1], p[2] = p[0] + 1, p[1] + g1 - g0, p[2] + (g0 - x0) / 1e6
+            inside = 0
+            for x, y, nm in sc[max(0, bisect.bisect_left(starts, g0) - 64):]:
+                if x >= g1:
+                    break
+                o = min(y, g1) - max(x, g0)
+                if o > 0:
+                    by_call[nm] += o
+                    inside += o
+            by_call["(host, outside CUDA calls)"] += (g1 - g0) - inside
+        if rs:
+            mine = [r for r in rs if r[1] > x0 and r[0] < x1]
+            segs = innermost(mine, x0, x1)
+            for s0, s1, lab in segs:
+                wall_by[lab] += s1 - s0
+            idle_by.update(overlap(segs, idle))
+            gap_by.update(overlap(segs, gaps))
+            for r0, r1, lab in mine:
+                incl[lab] += min(r1, x1) - max(r0, x0)
+    for k, v in per.items():
+        print(f"  {k:7s} mean {statistics.fmean(v):8.2f}  median {statistics.median(v):8.2f}  (ms a step; n_gaps a count)")
+    print(f"  gaps >= {a.min_gap_us} us, by what the serving thread was in (ms a step):")
+    for nm, ns in by_call.most_common(6):
+        print(f"    {ns / 1e6 / n:8.2f}  {nm[:90]}")
+    print(f"  gaps >= {a.min_gap_us} us by the kernels before and after them (a step: count, ms; mean offset into the step, ms):")
+    for (prv, nxt), (c, ns, off) in sorted(pairs.items(), key=lambda kv: -kv[1][1])[:12]:
+        print(f"    {c / n:5.2f} {ns / 1e6 / n:7.2f} ms  at {off / c:6.1f}  {prv} -> {nxt}")
+    if not rs:
+        return
+    print("  the serving thread's ranges, inclusive (ms a step):")
+    for lab, ns in incl.most_common(a.top):
+        print(f"    {ns / 1e6 / n:8.2f}  {lab}")
+    print(f"  by the serving thread's innermost range (ms a step): its own time, the GPU idle under it, idle in gaps >= {a.min_gap_us} us")
+    for lab, ns in sorted(wall_by.items(), key=lambda kv: -idle_by[kv[0]])[:a.top]:
+        print(f"    {ns / 1e6 / n:8.2f} {idle_by[lab] / 1e6 / n:8.2f} {gap_by[lab] / 1e6 / n:8.2f}  {lab or '(no range)'}")
+
+
+if __name__ == "__main__":
+    main()

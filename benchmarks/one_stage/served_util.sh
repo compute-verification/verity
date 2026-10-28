@@ -24,7 +24,8 @@
 #           served_stack is false for both
 # Env: ARM, T (8192), N (64), WARM (2·T/1024), GPU_HZ (10000), LEASE_MIN (90), EXTRA (more serve-openai arguments, split
 # on spaces), PROTOCOLS_CONFIG (one --protocols-config argument), PYSAMPLE=1 (Nsight Systems' Python backtrace sampling at
-# PYHZ, 1000, for the host gaps; its sqlite export keeps none of the Python frames), PYSPY=1 (py-spy 0.4.2, installed under
+# PYHZ, 1000, for the host gaps; its sqlite export keeps none of the Python frames), PHASES=1 (NVTX ranges on the serving
+# thread's phases of a step, `phase_nvtx.py`, which `host_gaps.py` splits the GPU's idle time by), PYSPY=1 (py-spy 0.4.2, installed under
 # UTIL_ROOT/tools/pyspy, launches the server under the session, since the node's ptrace_scope 1 lets it read only its own
 # children, and records it and its subprocesses at PYSPY_HZ, 20, without pausing them (blocking samples at 250 Hz doubled a
 # 26 ms step), as a Chrome trace in the scratch, which `pyspy_steps.py`
@@ -39,7 +40,7 @@
 # serve-openai scans its draws every VERITY_DRAWS_POLL_S, also 0.2: with the seal's store slim, a window's release waits on both).
 # A Commit arm at T 8,192 needs VERITY_LEARN_HOST_BUDGET_MB above its step's committed bytes (the default 4,096 MiB fails
 # every step closed: "bounded staging: learning step 0 exceeds the transient host budget").
-# Published ($OUT): util.json and util.txt, the profile (prof.nsys-rep), serve.json, summary.json, windows.jsonl's timings
+# Published ($OUT): util.json and util.txt, host_gaps.txt, the profile (prof.nsys-rep), serve.json, summary.json, windows.jsonl's timings
 # and sizes (in util.json), the step trace, the loads' timings files (times and token counts), steps.txt. Request
 # bodies, outputs, sealed windows (deleted once measured) and the H1 transcripts stay in UTIL_ROOT/scratch/<run id>.
 set -uo pipefail
@@ -89,6 +90,9 @@ if [ "${1:-}" != leased ]; then
   "$PY" "$TREE/benchmarks/one_stage/served_util.py" --sqlite "$SCR/prof.sqlite" --trace "$D/advice_trace.jsonl" \
     --serve-dir "$D" --timings "$SCR/main.timings.json" --arm "$ARM" --T "$T" --N "$N" --out "$OUT/util.json" > "$OUT/util.txt" 2>&1
   say "ANALYSIS rc=$?"; cat "$OUT/util.txt"
+  "$PY" "$TREE/benchmarks/one_stage/host_gaps.py" --sqlite "$SCR/prof.sqlite" --trace "$D/advice_trace.jsonl" \
+    --timings "$SCR/main.timings.json" --T "$T" > "$OUT/host_gaps.txt" 2>&1
+  say "HOST GAPS rc=$?"; cat "$OUT/host_gaps.txt"
   if [ "${PYSPY:-0}" = 1 ]; then
     "$PY" "$TREE/benchmarks/one_stage/pyspy_steps.py" --trace-json "$SCR/pyspy.json" --t0 "$SCR/pyspy.t0" \
       --steps "$D/advice_trace.jsonl" --timings "$SCR/main.timings.json" --T "$T" --out "$OUT/pyspy_steps.json" > "$OUT/pyspy_steps.txt" 2>&1
@@ -137,6 +141,10 @@ print("UTIL engine options overridden (not the served stack):", json.dumps(over)
 sys.exit(cli.main())' serve-openai)
     say "ENGINE $UTIL_ENGINE_JSON" ;;
 esac
+if [ "${PHASES:-0}" = 1 ]; then
+  [ "${serve[1]}" = -m ] || { say "PHASES: not with ARM $ARM's engine override"; exit 2; }
+  serve=("$PY" "$TREE/benchmarks/one_stage/phase_nvtx.py" serve-openai)
+fi
 if [ "${SEAL_SHM:-0}" = 1 ]; then
   mkdir -p "/dev/shm/vllm-util80/${RESEARCH_RUN_ID:-local}" && rm -rf "$D/windows" && ln -sfn "/dev/shm/vllm-util80/${RESEARCH_RUN_ID:-local}" "$D/windows"
 fi
