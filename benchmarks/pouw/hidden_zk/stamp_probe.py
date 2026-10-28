@@ -91,10 +91,31 @@ def census(objs):
     seen.clear()
 
 
+def allocators(when):
+    """glibc's heap (in use, free, mmapped) and pymalloc's arenas, then what `malloc_trim` returns."""
+    import ctypes
+
+    class MI2(ctypes.Structure):
+        _fields_ = [(n, ctypes.c_size_t) for n in ("arena", "ordblks", "smblks", "hblks", "hblkhd", "usmblks", "fsmblks",
+                                                   "uordblks", "fordblks", "keepcost")]
+
+    libc = ctypes.CDLL("libc.so.6")
+    libc.mallinfo2.restype = MI2
+    m = libc.mallinfo2()
+    G = 2 ** 30
+    say(f"{when} glibc heap={m.arena / G:.2f}G in_use={m.uordblks / G:.2f}G free={m.fordblks / G:.2f}G mmapped={m.hblkhd / G:.2f}G "
+        f"{stamp._mem()}")
+    sys.stderr.flush()
+    sys._debugmallocstats()
+    libc.malloc_trim(0)
+    say(f"{when} after malloc_trim {stamp._mem()}")
+
+
 def init(self, st, *a, **kw):
     if FRAMES:
         traced()
         raise SystemExit(0)
+    allocators("walk end")
     cheap(st)
     orig(self, st, *a, **kw)
     say(f"after layout blocks={sys.getallocatedblocks()} {stamp._mem()}")
