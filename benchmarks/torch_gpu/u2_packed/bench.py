@@ -69,14 +69,17 @@ class Stamp(C.Structure):
 assert C.sizeof(Params) == 384 and Params.o.offset == 256 and Params.M.offset == 272 and Params.started.offset == 288
 assert C.sizeof(Stamp) == 48
 
-#: arm -> (kernel, operands it streams: "i8" or "p2", its shared-memory layout in pk_layout's order, whether it multiplies)
+#: arm -> (kernel, operands it streams: "i8", "p2" or "p2m" (W's pairs reversed), its shared-memory layout in pk_layout's
+#: order, whether it multiplies)
 KERNELS = {
     "i8": ("pk_i8", "i8", 0, True),
     "p2": ("pk_p2", "p2", 1, True),
     "p2u": ("pk_p2u", "p2", 1, True),
+    "p2m": ("pk_p2m", "p2m", 1, True),
     "res": ("pk_res", "p2", 2, True),
     "p2x": ("pk_p2x", "p2", 1, False),
     "p2ux": ("pk_p2ux", "p2", 1, False),
+    "p2mx": ("pk_p2mx", "p2m", 1, False),
 }
 HASH_THREADS = 256
 
@@ -93,12 +96,15 @@ def unpack(p: torch.Tensor) -> torch.Tensor:
     return ((p.view(r, q // 4, 1, 4) >> shifts) & 3).reshape(r, 4 * q).to(torch.int8)
 
 
-def pack(v: torch.Tensor) -> torch.Tensor:
-    """unpack's inverse: values [R, K] in {0, 1, 2, 3} to packed rows [R, K / 4] (uint8)."""
+def pack(v: torch.Tensor, reverse: bool = False) -> torch.Tensor:
+    """unpack's inverse: values [R, K] in {0, 1, 2, 3} to packed rows [R, K / 4] (uint8).  reverse: each byte's pairs in
+    the opposite order (value k at bits 2 (3 - i) and 2 (3 - i) + 1), the masked form's W."""
     r, k = v.shape
     if k % 16:
         raise ValueError(f"K {k} must be a multiple of 16")
     w = v.to(torch.uint8).view(r, k // 16, 4, 4)  # word, i, byte j
+    if reverse:
+        w = w.flip(2)
     out = w[:, :, 0] | (w[:, :, 1] << 2) | (w[:, :, 2] << 4) | (w[:, :, 3] << 6)
     return out.reshape(r, k // 4)
 
@@ -171,7 +177,7 @@ class Lib:
 
 class Gemm:
     """One arm at one shape: O = A W^T, s32, on our kernel; `call(stamps)` launches it on the current stream.  ops: the
-    packed operands (ap, wp) and the int8 ones (a, w); each arm reads its own."""
+    packed operands (ap, wp, and wpr, W with its pairs reversed) and the int8 ones (a, w); each arm reads its own."""
 
     def __init__(self, lib: Lib, arm: str, ops: dict, o: torch.Tensor, group: int = 8):
         self.lib, self.arm = lib, arm
@@ -192,7 +198,8 @@ class Gemm:
             mb = lib.tmap(ops["w"].data_ptr(), n, k, BN, BK, TMAP_SWIZZLE_128B)
         else:
             ma = lib.tmap(ops["ap"].data_ptr(), m, k // 4, TM, BK // 4, TMAP_SWIZZLE_NONE)
-            mb = lib.tmap(ops["wp"].data_ptr(), n, k // 4, BN, BK // 4, TMAP_SWIZZLE_NONE)
+            wp = ops["wpr" if kind == "p2m" else "wp"]
+            mb = lib.tmap(wp.data_ptr(), n, k // 4, BN, BK // 4, TMAP_SWIZZLE_NONE)
         C.memmove(C.addressof(self.p) + Params.a.offset, ma, 128)
         C.memmove(C.addressof(self.p) + Params.b.offset, mb, 128)
         self.p.o, self.p.M, self.p.N, self.p.K, self.p.group = o.data_ptr(), m, n, k, group
@@ -463,12 +470,13 @@ def finish(event: torch.cuda.Event, what: str) -> None:
 
 
 def operands(m: int, n: int, k: int, seed: int) -> dict:
-    """Uniform packed bytes (each value uniform on {0, 1, 2, 3}), their unpacked int8 values, and the reference O."""
+    """Uniform packed bytes (each value uniform on {0, 1, 2, 3}), W's values packed again with their pairs reversed, and
+    the unpacked int8 values."""
     g = torch.Generator(device="cuda").manual_seed(seed)
     ap = torch.randint(0, 256, (m, k // 4), dtype=torch.uint8, device="cuda", generator=g)
     wp = torch.randint(0, 256, (n, k // 4), dtype=torch.uint8, device="cuda", generator=g)
     a, w = unpack(ap), unpack(wp)
-    return {"ap": ap, "wp": wp, "a": a, "w": w}
+    return {"ap": ap, "wp": wp, "wpr": pack(w, reverse=True), "a": a, "w": w}
 
 
 def gate(arm: str, op, o: torch.Tensor, want, tag: str) -> tuple[dict, float]:
@@ -499,7 +507,7 @@ def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--out", type=Path, required=True)
     ap.add_argument("--cubin", type=Path, default=Path(os.environ.get("U2_PACKED_CUBIN", Path(__file__).parent / "build" / "packed.cubin")))
-    ap.add_argument("--arms", default="lt,i8,p2,p2u,res,p2x,p2ux,i8+h1,p2+h1,p2u+h1,res+h1",
+    ap.add_argument("--arms", default="lt,i8,p2,p2u,p2m,res,p2x,p2ux,p2mx,i8+h1,p2+h1,p2u+h1,p2m+h1,res+h1",
                     help="comma-separated: lt (torch._int_mm) and KERNELS' arms; ARM+h1 / ARM+h2: beside 1 or 2 hash_k CTAs an SM")
     ap.add_argument("--shapes", default="25344x16384x32768,25344x16384x8192", help="MxNxK, comma-separated")
     ap.add_argument("--secs", type=float, default=4.0)
@@ -531,7 +539,8 @@ def main() -> int:
         idx = torch.randint(0, m * n, (512,), generator=torch.Generator().manual_seed(args.seed + 1))
         rows, cols = (idx // n).cuda(), (idx % n).cuda()
         exact = (ops["a"][rows].long() * ops["w"][cols].long()).sum(1)
-        ref_ok = bool(torch.equal(exact, ref[rows, cols].long())) and bool(torch.equal(pack(ops["a"][:64]), ops["ap"][:64]))
+        ref_ok = (bool(torch.equal(exact, ref[rows, cols].long())) and bool(torch.equal(pack(ops["a"][:64]), ops["ap"][:64]))
+                  and bool(torch.equal(pack(ops["w"][:64]), ops["wp"][:64])))
         res_ref = None
         if k % RES_K == 0:
             blk = torch._int_mm(ops["a"][:TM, :RES_K].contiguous(), ops["w"][:BN, :RES_K].contiguous().t()) * (k // RES_K)

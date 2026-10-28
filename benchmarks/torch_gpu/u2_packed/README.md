@@ -12,6 +12,11 @@ i = ⌊k / 4⌋ mod 4. Each little-endian 32-bit word x of a row then holds 16 c
 (x >> 2i) & 0x03030303 is the four bytes of values 16w + 4i to 16w + 4i + 3, in order. `bench.py`'s `pack` and `unpack`
 are the format's reference, and `tests/` holds the kernel's arithmetic to them.
 
+The masked form (`p2m`) packs W with each byte's pairs reversed (value k at bits 2 (3 − i) and 2 (3 − i) + 1, `pack(w,
+reverse=True)`). Then x & (0x03030303 << 2i) is A's four values times 4ⁱ and y & (0x03030303 << (6 − 2i)) is W's times
+4³⁻ⁱ, so every product is 64 times the values' product. Unpacking is one AND per four values with no shifts, the MMA runs on
+u8, and the epilogue shifts O right by 6 (exact while K < 2³¹ / 576).
+
 ## The kernel (`packed.cu`)
 
 A persistent CTA per SM with two consumer warpgroups and no producer warpgroup, each warpgroup 64 × 256 of a 128 × 256
@@ -24,8 +29,9 @@ named barrier per k-block orders the two. The arms:
 | `i8` | int8 by TMA straight into the MMA's slots | the same schedule on four times the bytes |
 | `p2` | packed by TMA, unpacked by shifts and masks | the candidate |
 | `p2u` | packed, unpacked as u8 × 64 (left shifts, which ptxas may put on the FMA pipe), shifted back in the epilogue | a cheaper unpack on the integer pipe |
+| `p2m` | packed with W's pairs reversed, unpacked by masks alone (u8 × 64) | the fewest integer instructions an unpacked value |
 | `res` | one block unpacked once and reused | the schedule's ceiling with nothing streamed |
-| `p2x`, `p2ux` | `p2`'s and `p2u`'s loads and unpacking, no MMA | the unpacking's own time |
+| `p2x`, `p2ux`, `p2mx` | `p2`'s, `p2u`'s and `p2m`'s loads and unpacking, no MMA | the unpacking's own time |
 
 ## Running it
 

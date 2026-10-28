@@ -46,8 +46,8 @@ def test_every_arm_is_a_kernel_of_the_build_and_the_gate_wants_it():
     for arm, (name, kind, lay, mma) in B.KERNELS.items():
         load, kmma, su, sp = built[name]
         assert (kmma == "true") == mma and (SG.GEMMS[name] is not None) == mma
-        assert (kind == "i8") == (load == "I8")
-        assert SG.GEMMS[name] in (None, "U8" if load == "P2U" else "S8")
+        assert (kind == "i8") == (load == "I8") and (kind == "p2m") == (load == "P2M")
+        assert SG.GEMMS[name] in (None, "U8" if load in ("P2U", "P2M") else "S8")
         assert SG.REG_CAP[name] == 168
     layouts = re.findall(r"out\[\d\] = Layout<(\w+), (\d), (\d)>::SMEM;", SRC)
     assert [(load, int(su), int(sp)) for load, su, sp in layouts] == [("I8", 4, 0), ("P2", 3, 6), ("RES", 4, 1)]
@@ -76,29 +76,59 @@ def test_pack_and_unpack_are_inverse_and_the_format_is_the_documented_one():
             assert (int(p[r, byte]) >> (2 * i)) & 3 == int(v[r, k])
     q = torch.randint(0, 256, (3, 32), dtype=torch.uint8, generator=g)
     assert torch.equal(B.pack(B.unpack(q)), q)
+    # reversed: value k at bits 2 (3 - i) of the same byte
+    r = B.pack(v, reverse=True)
+    for k in range(64):
+        byte, i = 4 * (k // 16) + k % 4, (k // 4) % 4
+        assert (int(r[0, byte]) >> (2 * (3 - i))) & 3 == int(v[0, k])
 
 
-def words(x: int, u8: bool) -> list[int]:
-    """The kernel's four unpacked words of packed word x (packed.cu's unpack)."""
-    if u8:
+def words(x: int, form: str) -> list[int]:
+    """The kernel's four unpacked words of packed word x (packed.cu's unpack_half): form p2, p2u, or p2m on A's (a) or
+    on W's reversed pairs (w)."""
+    m2 = 0x03030303
+    if form == "p2u":
         return [((x << s) & 0xFFFFFFFF) & 0xC0C0C0C0 for s in (6, 4, 2, 0)]
-    return [(x >> s) & 0x03030303 for s in (0, 2, 4, 6)]
+    if form == "p2m_a":
+        return [x & (m2 << s) for s in (0, 2, 4, 6)]
+    if form == "p2m_w":
+        return [x & (m2 << s) for s in (6, 4, 2, 0)]
+    return [(x >> s) & m2 for s in (0, 2, 4, 6)]
+
+
+def as_bytes(ws: list[int]) -> list[int]:
+    return list(b"".join(w.to_bytes(4, "little") for w in ws))
 
 
 def test_the_kernels_unpacking_is_the_formats():
     assert "sts128(at, x & M2, (x >> 2) & M2, (x >> 4) & M2, (x >> 6) & M2)" in SRC
     assert "sts128(at, (x << 6) & H2, (x << 4) & H2, (x << 2) & H2, x & H2)" in SRC
+    assert "sts128(at, x & M2, x & (M2 << 2), x & (M2 << 4), x & (M2 << 6))" in SRC
+    assert "sts128(at, x & (M2 << 6), x & (M2 << 4), x & (M2 << 2), x & M2)" in SRC
     rnd = random.Random(2)
     for _ in range(200):
         x = rnd.getrandbits(32)
         row = torch.tensor([list(x.to_bytes(4, "little"))], dtype=torch.uint8)
         vals = B.unpack(row)[0].tolist()  # 16 values of one word
-        plain = b"".join(w.to_bytes(4, "little") for w in words(x, False))
-        assert list(plain) == vals
-        scaled = b"".join(w.to_bytes(4, "little") for w in words(x, True))
-        assert list(scaled) == [64 * v for v in vals]
+        assert as_bytes(words(x, "p2")) == vals
+        assert as_bytes(words(x, "p2u")) == [64 * v for v in vals]
     # u8 x 64 sums stay below 2^31 at the largest K the kernel's comment allows
     assert 58254 * (3 * 64) ** 2 < 2 ** 31 <= 58255 * (3 * 64) ** 2
+
+
+def test_the_masked_forms_products_are_64_times_the_values():
+    """p2m: A's word x unpacked with rising masks and W's reversed word y with falling ones: each value k's two bytes
+    multiply to 64 a_k w_k, so a row pair's dot product is 64 times O's, and the u8 MMA's sums stay exact."""
+    rnd = random.Random(3)
+    for _ in range(200):
+        a = [rnd.randrange(4) for _ in range(16)]
+        w = [rnd.randrange(4) for _ in range(16)]
+        x = int.from_bytes(bytes(B.pack(torch.tensor([a]))[0].tolist()), "little")
+        y = int.from_bytes(bytes(B.pack(torch.tensor([w]), reverse=True)[0].tolist()), "little")
+        ua, uw = as_bytes(words(x, "p2m_a")), as_bytes(words(y, "p2m_w"))
+        assert max(ua + uw) <= 192
+        assert [p * q for p, q in zip(ua, uw)] == [64 * p * q for p, q in zip(a, w)]
+    assert (2 ** 31 - 1) // (64 * 9) == 3728270
 
 
 def test_the_unpacking_writes_every_chunk_of_the_swizzled_slot_once_without_bank_conflicts():

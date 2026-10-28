@@ -10,6 +10,10 @@
 // the same values times 64, whose left shifts ptxas may issue as multiplies on the FMA pipe; the u8 MMA's sums are then
 // 4,096 times O's (exact while K <= 58,254), and the epilogue shifts them back.
 //
+// The masked form needs no shifts: W packed with its pairs reversed (value k at bits 2 (3 - i) and 2 (3 - i) + 1 of the
+// same byte), x & (0x03030303 << 2i) is A's values times 4^i and y & (0x03030303 << (6 - 2i)) W's times 4^(3 - i), so every
+// product is 64 times the values', one AND a 4 values, and the u8 MMA's sums are 64 times O's (exact while K < 2^31 / 576).
+//
 // One CTA an SM, persistent, 256 threads in two consumer warpgroups, each 64 x 256 of a 128 x 256 tile, at most 168
 // registers each, so a 256-thread hash_k CTA fits beside them on the SM.  No producer warpgroup: thread 0 issues every TMA,
 // all 256 threads unpack, and one named barrier a k-block (128 deep) orders the two:
@@ -21,9 +25,10 @@
 //         schedule on four times the bytes
 //   p2    packed boxes (32 bytes of each row a k-block) by TMA into a ring of SP slots, unpacked by shifts and masks
 //   p2u   the same, unpacked as u8 times 64 (above)
+//   p2m   the same with W's pairs reversed, unpacked by masks alone (above)
 //   res   p2's unpack of one 128 x 256 x 512 block into the four slots once, then the MMAs over them for every tile: the
 //         schedule's ceiling with nothing streamed; O is (K / 512) times that block's product in every tile
-//   p2x, p2ux  p2's and p2u's loads and unpacking with no MMAs: the unpacking's own time
+//   p2x, p2ux, p2mx  p2's, p2u's and p2m's loads and unpacking with no MMAs: the unpacking's own time
 // M must be a multiple of 128, N of 256 and K of 128 (512 for res) (bench.py checks): the filler picks its shape.
 //
 // hash_k: SHA-512 compressions (sha512_rows' sx::compress, V 0, rolled), each thread chaining its own state, for the rate
@@ -123,7 +128,7 @@ template <int NA> DEV void acc_fence(int32_t* d) {
 }
 
 // ---------------------------------------------------------------- the GEMM
-enum Load { I8 = 0, P2 = 1, P2U = 2, RES = 3 };
+enum Load { I8 = 0, P2 = 1, P2U = 2, RES = 3, P2M = 4 };
 constexpr int TM = 128, BN = 256, BK = 128, NA = BN / 2;
 // an unpacked slot: A's 128 rows, then W's 256, 128 bytes each in the SWIZZLE_128B layout; a packed slot: the same rows,
 // 32 bytes each
@@ -143,35 +148,44 @@ DEV void raster(int t, int tiles_m, int tiles_n, int group, int& tm, int& tn) {
   tn = r / size;
 }
 
-// packed slot src into unpacked slot dst: thread tid's three (row, half) pairs of the slot's 384 rows (A's, then W's), each
-// half 16 packed bytes into four 16-byte chunks at chunk (c ^ (row % 8)) of the row
-template <bool U8> DEV void unpack(uint32_t src, uint32_t dst, int tid) {
+// one row's half: 16 packed bytes at src into four 16-byte chunks at chunk ((4 h + q) ^ sw) of the row at dst, in form F
+// (P2, P2U, or P2M with W's reversed pairs when REV)
+template <int F, bool REV> DEV void unpack_half(uint32_t src, uint32_t dst, int h, int sw) {
   constexpr uint32_t M2 = 0x03030303u, H2 = 0xC0C0C0C0u;
-  const int h = tid & 1, sw = (tid >> 1) & 7;
-  src += (tid >> 1) * (BK / 4) + 16 * h;
-  dst += (tid >> 1) * BK;
-  // one pass at a time: the 128 accumulators leave the unpacking about 40 registers
-#pragma unroll 1
-  for (int j = 0; j < 3; j++, src += 128 * (BK / 4), dst += 128 * BK) {
-    const uint4 v = lds128(src);
-    const uint32_t w[4] = {v.x, v.y, v.z, v.w};
+  const uint4 v = lds128(src);
+  const uint32_t w[4] = {v.x, v.y, v.z, v.w};
 #pragma unroll
-    for (int q = 0; q < 4; q++) {
-      const uint32_t x = w[q], at = dst + (((4 * h + q) ^ sw) << 4);
-      if constexpr (U8)
-        sts128(at, (x << 6) & H2, (x << 4) & H2, (x << 2) & H2, x & H2);
-      else
-        sts128(at, x & M2, (x >> 2) & M2, (x >> 4) & M2, (x >> 6) & M2);
-    }
+  for (int q = 0; q < 4; q++) {
+    const uint32_t x = w[q], at = dst + (((4 * h + q) ^ sw) << 4);
+    if constexpr (F == P2U)
+      sts128(at, (x << 6) & H2, (x << 4) & H2, (x << 2) & H2, x & H2);
+    else if constexpr (F == P2M && REV)
+      sts128(at, x & (M2 << 6), x & (M2 << 4), x & (M2 << 2), x & M2);
+    else if constexpr (F == P2M)
+      sts128(at, x & M2, x & (M2 << 2), x & (M2 << 4), x & (M2 << 6));
+    else
+      sts128(at, x & M2, (x >> 2) & M2, (x >> 4) & M2, (x >> 6) & M2);
   }
 }
 
-// a 64 x 256 accumulator of warpgroup wg into O: rows r and r + 8, each pair of adjacent columns one 8-byte store
-template <bool SHIFT> DEV void store_tile(const Params& p, const int32_t* d, int tm, int tn, int wg, int x) {
+// packed slot src into unpacked slot dst: thread tid's three (row, half) pairs of the slot's 384 rows (A's, then W's), each
+// half 16 packed bytes into four 16-byte chunks at chunk (c ^ (row % 8)) of the row
+template <int F> DEV void unpack(uint32_t src, uint32_t dst, int tid) {
+  const int h = tid & 1, sw = (tid >> 1) & 7;
+  src += (tid >> 1) * (BK / 4) + 16 * h;
+  dst += (tid >> 1) * BK;
+  unpack_half<F, false>(src, dst, h, sw);
+  // one pass at a time: the 128 accumulators leave the unpacking about 40 registers
+#pragma unroll 1
+  for (int j = 1; j < 3; j++) unpack_half<F, true>(src + j * 128 * (BK / 4), dst + j * 128 * BK, h, sw);
+}
+
+// a 64 x 256 accumulator of warpgroup wg into O, each sum shifted right by S: rows r and r + 8, each pair of adjacent
+// columns one 8-byte store
+template <int S> DEV void store_tile(const Params& p, const int32_t* d, int tm, int tn, int wg, int x) {
   const int row = tm * TM + wg * 64 + 16 * (x / 32) + (x % 32) / 4, col0 = tn * BN + 2 * (x % 4);
   int32_t* o0 = p.o + (size_t)row * p.N + col0;
   int32_t* o1 = o0 + (size_t)8 * p.N;
-  constexpr int S = SHIFT ? 12 : 0;
 #pragma unroll
   for (int j = 0; j < NA / 4; j++) {
     *reinterpret_cast<int2*>(o0 + 8 * j) = make_int2(d[4 * j] >> S, d[4 * j + 1] >> S);
@@ -201,7 +215,8 @@ DEV void stamp_end(const Params& p, int tiles) {
 
 template <int LOAD, bool MMA, int SU, int SP> DEV void body(const Params& p) {
   using L = Layout<LOAD, SU, SP>;
-  constexpr bool U8 = LOAD == P2U, STREAM = LOAD == P2 || LOAD == P2U;
+  constexpr bool U8 = LOAD == P2U || LOAD == P2M, STREAM = LOAD == P2 || LOAD == P2U || LOAD == P2M;
+  constexpr int SHIFT = LOAD == P2U ? 12 : LOAD == P2M ? 6 : 0;
   constexpr int NP = SP > 0 ? SP : 1;  // the packed ring's modulus (i8 has none)
   extern __shared__ __align__(1024) uint8_t smem[];
   stamp_start(p);
@@ -240,7 +255,7 @@ template <int LOAD, bool MMA, int SU, int SP> DEV void body(const Params& p) {
   auto unpack_n = [&](int n) {
     if (n >= G) return;
     mbar_wait(bars + 8 * (n % NP), (n / NP) & 1);
-    unpack<U8>(pbase + (n % NP) * P_STAGE, ubase + (n % SU) * U_STAGE, tid);
+    unpack<LOAD>(pbase + (n % NP) * P_STAGE, ubase + (n % SU) * U_STAGE, tid);
   };
 
   if constexpr (LOAD == RES) {
@@ -252,7 +267,7 @@ template <int LOAD, bool MMA, int SU, int SP> DEV void body(const Params& p) {
         tma_load(pbase + A_BYTES / 4, &p.b, bars, f * (BK / 4), 0);
       }
       mbar_wait(bars, f & 1);
-      unpack<false>(pbase, ubase + f * U_STAGE, tid);
+      unpack<P2>(pbase, ubase + f * U_STAGE, tid);
       __syncthreads();
     }
     fence_async();
@@ -302,7 +317,7 @@ template <int LOAD, bool MMA, int SU, int SP> DEV void body(const Params& p) {
       acc_fence<NA>(d);
       int tm, tn;
       raster(t, tiles_m, tiles_n, p.group, tm, tn);
-      store_tile<U8>(p, d, tm, tn, tid / 128, tid % 128);
+      store_tile<SHIFT>(p, d, tm, tn, tid / 128, tid % 128);
     }
     tiles++;
   }
@@ -316,11 +331,13 @@ PK(pk_i8, I8, true, 4, 0)
 PK(pk_p2, P2, true, 3, 6)
 PK(pk_p2u, P2U, true, 3, 6)
 PK(pk_res, RES, true, 4, 1)
+PK(pk_p2m, P2M, true, 3, 6)
 PK(pk_p2x, P2, false, 3, 6)
 PK(pk_p2ux, P2U, false, 3, 6)
+PK(pk_p2mx, P2M, false, 3, 6)
 
 // what bench.py takes from this build, checked when it loads the cubin: Params' size and offsets, then the shared memory
-// of the i8, p2 (p2u, p2x, p2ux) and res layouts
+// of the i8, p2 (p2u, p2m and their unpack-only arms) and res layouts
 extern "C" __global__ void pk_layout(int* out) {
   out[0] = sizeof(Params);
   out[1] = offsetof(Params, o);

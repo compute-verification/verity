@@ -1,7 +1,7 @@
 """run.sh's gate on packed.cubin: ptxas's report and cuobjdump's SASS.  Refuses (exit 1, the reasons on stderr) on a ptxas
 warning or serialized wgmma, a stack frame, a spill or local memory in any kernel, on a GEMM kernel (pk_*) whose
-tensor-core instructions aren't the atom alone, IGMMA.64x256x32 on s8 (u8 for p2u) operands, in a multiple of 4 (a
-128-deep k-block), or none at all where it should multiply (none in p2x and p2ux), or that issues no TMA load, and on a
+tensor-core instructions aren't the atom alone, IGMMA.64x256x32 on s8 (u8 for p2u and p2m) operands, in a multiple of 4
+(a 128-deep k-block), or none at all where it should multiply (none in p2x, p2ux and p2mx), or that issues no TMA load, and on a
 GEMM kernel over 168 registers or hash_k over 80 (so a hash_k CTA fits beside it).  Records each kernel's opcode counts,
 from which the unpacking's instructions are read.
 
@@ -17,7 +17,8 @@ from collections import Counter
 
 MMA = re.compile(r"\b([QHOIU]MMA|[QHI]GMMA|UTC\w*MMA)(\.[\w.]+)?")
 #: GEMM kernel -> the operand type of its atoms (None: no MMAs)
-GEMMS = {"pk_i8": "S8", "pk_p2": "S8", "pk_p2u": "U8", "pk_res": "S8", "pk_p2x": None, "pk_p2ux": None}
+GEMMS = {"pk_i8": "S8", "pk_p2": "S8", "pk_p2u": "U8", "pk_p2m": "U8", "pk_res": "S8", "pk_p2x": None, "pk_p2ux": None,
+         "pk_p2mx": None}
 WANT = set(GEMMS) | {"pk_layout", "hash_k", "stamp_k", "wait_k"}
 REG_CAP = {**{g: 168 for g in GEMMS}, "hash_k": 80}
 OPCODE = re.compile(r"/\*[0-9a-f]{4,}\*/\s+(?:@!?U?P\w+\s+)?([A-Z][A-Z0-9_]*)(\.[\w.]+)?")
