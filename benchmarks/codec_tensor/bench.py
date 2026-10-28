@@ -45,7 +45,7 @@ import numpy as np
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
-sys.path.insert(1, str(HERE.parents[1]))
+sys.path.append(str(HERE.parents[1]))
 
 from benchmarks.word_codec import cuda_lib  # noqa: E402
 import sketch_receipt as SR  # noqa: E402

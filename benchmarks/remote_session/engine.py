@@ -45,7 +45,9 @@ import sys
 import time
 from pathlib import Path
 
-from benchmarks.word_codec import cuda_lib
+sys.path.append(str(Path(__file__).resolve().parents[2]))
+
+from benchmarks.word_codec import cuda_lib  # noqa: E402
 
 BLOCK = 4096
 GIB = 1 << 30
