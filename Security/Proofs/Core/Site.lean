@@ -16,7 +16,8 @@ import Definitions.Core.Site
   tree, each location under a registered parent of a kind its own allows.
 * A small onsite site and a later entry for each check, each refused by that check's name
   (`Registration.Example.onsite_refusals`), and the same entries on a remote site, which accepts the two that only an
-  onsite site refuses (`Registration.Example.remote_refusals`).
+  onsite site refuses (`Registration.Example.remote_refusals`); and θ and the builder registered after the site, each
+  value and the builder once (`Registration.Example.information_refusals`).
 -/
 
 namespace Verity
@@ -97,13 +98,30 @@ namespace Registration
 
 variable {D : Digests} {A : Auditor} {c : Composite}
 
+theorem Entry.informationRefusal_eq_none_iff {S : Site} {I : List (Option String)} {e : Entry} :
+    e.informationRefusal D A c S I = none ↔ e.Information D A c S I := by
+  unfold Entry.informationRefusal Entry.Information
+  rw [← Site.Entry.refusal_eq_none_iff]
+  cases Site.Entry.refusal D A c S {} <;> split_ifs <;> simp_all [Option.or]
+
 /-- **The refusal decides validity**: an entry is refused exactly when it is invalid. -/
-theorem Entry.refusal_eq_none_iff {S : Site} {head : String} {e : Entry} :
-    e.refusal D A c S head = none ↔ e.Valid D A c S head := by
+theorem Entry.refusal_eq_none_iff {S : Site} {I : List (Option String)} {head : String} {e : Entry} :
+    e.refusal D A c S I head = none ↔ e.Valid D A c S I head := by
+  have hk : e.kindRefusal D A c S I = none ↔ e.Checks D A c S I := by
+    cases e with
+    | site _ s => exact Site.Entry.refusal_eq_none_iff
+    | theta => exact Entry.informationRefusal_eq_none_iff
+    | builder => exact Entry.informationRefusal_eq_none_iff
+  unfold Entry.refusal Entry.Valid
+  split_ifs <;> simp_all
+
+/-- An entry's checks include a site entry's of what it adds: its own, or those of nothing for θ or the builder. -/
+theorem Entry.Checks.added {S : Site} {I : List (Option String)} {e : Entry} (h : e.Checks D A c S I) :
+    e.added.Valid D A c S := by
   cases e with
-  | site _ s =>
-    unfold Entry.refusal Entry.Valid Entry.kindRefusal Entry.Checks
-    split_ifs <;> simp_all [Site.Entry.refusal_eq_none_iff]
+  | site _ s => exact h
+  | theta => exact And.left h
+  | builder => exact And.left h
 
 @[simp] theorem head_nil : head D c [] = D.genesis c := rfl
 
@@ -116,7 +134,7 @@ theorem Entry.refusal_eq_none_iff {S : Site} {head : String} {e : Entry} :
 /-- **A log is checked one entry at a time**: with one more entry it is valid exactly when it was, and the entry is
 valid against it. -/
 theorem valid_append_singleton {l : Registration} {e : Entry} :
-    Valid D A c (l ++ [e]) ↔ Valid D A c l ∧ e.Valid D A c (Site.ofLog l) (head D c l) := by
+    Valid D A c (l ++ [e]) ↔ Valid D A c l ∧ e.Valid D A c (Site.ofLog l) (items l) (head D c l) := by
   unfold Valid
   constructor
   · intro h
@@ -145,8 +163,7 @@ theorem Valid.ids_nodup {l : Registration} (h : Valid D A c l) : (Site.ofLog l).
   · simp [Site.ids]
   · rw [Site.ofLog_concat]
     obtain ⟨-, -, he⟩ := valid_append_singleton.mp h
-    cases e with
-    | site _ s => exact he.1.1
+    exact he.added.1.1
 
 /-- **A valid log's Site is a tree**: each location's parent is registered, and of a kind the location's own allows. -/
 theorem Valid.parents {l : Registration} (h : Valid D A c l) :
@@ -156,9 +173,9 @@ theorem Valid.parents {l : Registration} (h : Valid D A c l) :
   | nil => simp
   | append_singleton l e ih =>
     obtain ⟨hl, -, he⟩ := valid_append_singleton.mp h
-    cases e with | site _ s => ?_
-    have hpre : (Site.ofLog l).locs <+: ((Site.ofLog l).add s).locs := by simp [Site.add, List.prefix_append]
-    rw [Site.ofLog_concat, Entry.added]
+    have he := he.added
+    have hpre : (Site.ofLog l).locs <+: ((Site.ofLog l).add e.added).locs := by simp [Site.add, List.prefix_append]
+    rw [Site.ofLog_concat]
     intro x hx
     rcases List.mem_append.mp hx with hx | hx
     · obtain ⟨hk, hp⟩ := ih hl x hx
@@ -247,15 +264,37 @@ theorem remote_valid : Valid digests auditor .remote [remote] := by decide
 
 /-- Each check refuses its case on the onsite site, by its name. -/
 theorem onsite_refusals :
-    later.map (fun x => x.1.refusal digests auditor .onsite (Site.ofLog [onsite]) (head digests .onsite [onsite])) =
+    later.map (fun x => x.1.refusal digests auditor .onsite (Site.ofLog [onsite]) (items [onsite])
+      (head digests .onsite [onsite])) =
       later.map (·.2) := by
   decide
 
 /-- The remote site refuses each case as the onsite site does, but accepts a bare uplink and a host no challenger
 reaches. -/
 theorem remote_refusals :
-    later.map (fun x => x.1.refusal digests auditor .remote (Site.ofLog [remote]) (head digests .remote [remote])) =
+    later.map (fun x => x.1.refusal digests auditor .remote (Site.ofLog [remote]) (items [remote])
+      (head digests .remote [remote])) =
       later.map (fun x => if x.2 = some .uncertified ∨ x.2 = some .challengerReach then none else x.2) := by
+  decide
+
+/-- θ's weights by their commitment, and the builder. -/
+def weights : Theta := ⟨"weights", "root-weights", 1024, 8, 64, "theta/weights", none⟩
+def builderB : Builder := ⟨"builder-b", "advice/v1", 4096⟩
+
+/-- The onsite log with θ and the builder registered after the site. -/
+def information : Registration := [onsite, .theta "genesis+" [weights], .builder "genesis++" builderB]
+
+theorem information_valid : Valid digests auditor .onsite information := by decide
+
+/-- A θ entry naming one value twice, one naming a value already registered, and a second builder, each refused as
+`duplicateInformation`; and a new value, accepted. -/
+theorem information_refusals :
+    [Entry.theta "genesis+++" [{ weights with value := "state" }, { weights with value := "state" }],
+      .theta "genesis+++" [weights], .builder "genesis+++" builderB,
+      .theta "genesis+++" [{ weights with value := "state" }]].map
+        (·.refusal digests auditor .onsite (Site.ofLog information) (items information)
+          (head digests .onsite information)) =
+      [some .duplicateInformation, some .duplicateInformation, some .duplicateInformation, none] := by
   decide
 
 end Example

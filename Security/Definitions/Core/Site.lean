@@ -20,13 +20,16 @@ counts are public.
   (`Site.Boundary`), and a link is certified when a certifier is at one of its ends (`Site.Certified`).
 
 The Site is folded from an append-only log, **the registration** (`Verity.Registration`), whose entries each have a
-kind (`Registration.Entry`): today the site entry (`Registration.Entry.site`), which adds sheets, locations and links
-(`Site.Entry`); θ and the builder `B` are the registration's other kinds of entry. Each entry names the head of the log
-it follows (`Registration.Entry.previous`): the digest of the log's last entry, which names its own predecessor, so the
-head is a digest of the whole prefix. The Site of a log is its entries' additions in order (`Site.ofLog`), and a log is
-valid when each entry is valid against the Site and head of the prefix before it (`Registration.Valid`). An entry is
-checked as a whole (`Registration.Entry.Valid`, a site entry's own checks being `Site.Entry.Valid`), and refused by the
-first check it fails (`Registration.Entry.refusal`):
+kind (`Registration.Entry`): the site entry (`Registration.Entry.site`), which adds sheets, locations and links
+(`Site.Entry`); the θ entry (`Registration.Entry.theta`), θ's committed values each by its name, root and row shape
+(`Registration.Theta`); and the builder entry (`Registration.Entry.builder`), the builder `B` by its digest, its advice
+format and its cap `ℓ` (`Registration.Builder`). Each entry names the head of the log it follows
+(`Registration.Entry.previous`): the digest of the log's last entry, which names its own predecessor, so the head is a
+digest of the whole prefix. The Site of a log is its entries' additions in order (`Site.ofLog`), a θ or builder entry
+adding nothing, and the information a log registers is its θ values and builder (`Registration.items`), each once. A log
+is valid when each entry is valid against the Site, items and head of the prefix before it (`Registration.Valid`). An
+entry is checked as a whole (`Registration.Entry.Valid`, a site entry's own checks being `Site.Entry.Valid`), and
+refused by the first check it fails (`Registration.Entry.refusal`):
 
 | Refusal | The check |
 | --- | --- |
@@ -39,6 +42,7 @@ first check it fails (`Registration.Entry.refusal`):
 | `owner` | each new certifier or challenger is one of the auditor's own devices with its key, and every other new location is the prover's |
 | `uncertified` | onsite: every boundary link is certified |
 | `challengerReach` | onsite: the host of every memory leaf is at an end of a memory challenger's link |
+| `duplicateInformation` | θ or builder entry: no θ value is registered twice, and the builder at most once |
 
 The digests are parameters (`Registration.Digests`), SHA-512 in the deployed check, and the auditor's data sheets and
 keys are the check's own (`Registration.Auditor`). At every choice of them the check is decidable.
@@ -143,10 +147,33 @@ structure Site where
   links : List Site.Link
   deriving DecidableEq, Repr
 
+/-- One of θ's registered values (weights, initial state, tables) by its hiding commitment: its name, its committed
+root, its rows (`leaves`) of `words` words of `wordBits` bits, the domain its leaves are hashed under, and for public
+weights their checkpoint's digest. -/
+structure Registration.Theta where
+  value : String
+  root : String
+  leaves : ℕ
+  words : ℕ
+  wordBits : ℕ
+  domain : String
+  checkpoint : Option String := none
+  deriving DecidableEq, Repr
+
+/-- The builder `B`: its digest, the format of the advice it compiles, and its public cap `ℓ` on one declaration's
+advice, in bits. -/
+structure Registration.Builder where
+  digest : String
+  advice : String
+  cap : ℕ
+  deriving DecidableEq, Repr
+
 /-- **An entry of the registration**, by its kind, naming the head of the log it follows: the site entry, which adds
-hardware to the Site. -/
+hardware to the Site; the θ entry, one item per committed value of θ; and the builder entry. -/
 inductive Registration.Entry
   | site (previous : String) (entry : Site.Entry)
+  | theta (previous : String) (values : List Registration.Theta)
+  | builder (previous : String) (builder : Registration.Builder)
   deriving DecidableEq, Repr
 
 /-- **The registration**: the log the Site is folded from, oldest entry first. It is append-only: an entry is checked
@@ -157,13 +184,24 @@ namespace Registration.Entry
 
 /-- The head of the log the entry follows. -/
 def previous : Entry → String
-  | .site p _ => p
+  | .site p _ | .theta p _ | .builder p _ => p
 
-/-- What the entry adds to the Site: a site entry's sheets, locations and links. -/
+/-- What the entry adds to the Site: a site entry's sheets, locations and links, and nothing for θ or the builder. -/
 def added : Entry → Site.Entry
   | .site _ s => s
+  | .theta _ _ | .builder _ _ => {}
+
+/-- What the entry registers of the information, which the log registers once each: each θ value by its name, and the
+builder (`none`). -/
+def items : Entry → List (Option String)
+  | .site _ _ => []
+  | .theta _ vs => vs.map (some ·.value)
+  | .builder _ _ => [none]
 
 end Registration.Entry
+
+/-- What a log registers of the information: its entries' items, in order. -/
+def Registration.items (log : Registration) : List (Option String) := log.flatMap (·.items)
 
 namespace Site
 
@@ -269,6 +307,7 @@ inductive Refusal
   | owner
   | uncertified
   | challengerReach
+  | duplicateInformation
   deriving DecidableEq, Repr
 
 end Registration
@@ -352,40 +391,67 @@ namespace Registration
 
 namespace Entry
 
-variable (D : Digests) (A : Auditor) (c : Composite) (S : Site) (head : String)
+variable (D : Digests) (A : Auditor) (c : Composite) (S : Site) (I : List (Option String)) (head : String)
 
 /-- `previous`: the entry follows the log's head. -/
 def Follows (e : Entry) : Prop := e.previous = head
 
-/-- The checks of the entry's kind, against the Site `S` of the log before it: a site entry's (`Site.Entry.Valid`). -/
+/-- `duplicateInformation`: what the entry registers of the information, each θ value and the builder, is registered
+once, the items `I` of the log before it included. -/
+def Once (e : Entry) : Prop := (I ++ e.items).Nodup
+
+/-- A θ or builder entry's checks: it adds nothing to the Site and is held to a site entry's checks of that
+(`Site.Entry.Valid` of `{}`, which hold whenever the log before it is valid), then registers its items once (`Once`). -/
+def Information (e : Entry) : Prop := Site.Entry.Valid D A c S {} ∧ Once I e
+
+/-- The checks of the entry's kind, against the Site `S` and the items `I` of the log before it: a site entry's
+(`Site.Entry.Valid`), and a θ or builder entry's (`Information`). -/
 def Checks : Entry → Prop
   | .site _ s => s.Valid D A c S
+  | .theta p vs => Information D A c S I (.theta p vs)
+  | .builder p b => Information D A c S I (.builder p b)
 
-/-- **A valid entry** of a log for the composite `c`, against the Site `S` of the log before it and its head `head`: it
-follows the head, and passes its kind's checks. -/
-def Valid (e : Entry) : Prop := Follows head e ∧ Checks D A c S e
+/-- **A valid entry** of a log for the composite `c`, against the Site `S`, the items `I` and the head `head` of the log
+before it: it follows the head, and passes its kind's checks. -/
+def Valid (e : Entry) : Prop := Follows head e ∧ Checks D A c S I e
 
-/-- The refusal of the entry's kind: a site entry's (`Site.Entry.refusal`). -/
+/-- A θ or builder entry's refusal: the first of `Information`'s checks it fails. -/
+def informationRefusal (e : Entry) : Option Refusal :=
+  (Site.Entry.refusal D A c S {}).or (if Once I e then none else some .duplicateInformation)
+
+/-- The refusal of the entry's kind: a site entry's (`Site.Entry.refusal`), and a θ or builder entry's
+(`informationRefusal`). -/
 def kindRefusal : Entry → Option Refusal
   | .site _ s => s.refusal D A c S
+  | .theta p vs => informationRefusal D A c S I (.theta p vs)
+  | .builder p b => informationRefusal D A c S I (.builder p b)
 
 instance instDecidableFollows (e : Entry) : Decidable (Follows head e) := by unfold Follows; infer_instance
 
-instance instDecidableChecks : ∀ e : Entry, Decidable (Checks D A c S e)
-  | .site _ s => inferInstanceAs (Decidable (s.Valid D A c S))
+instance instDecidableOnce (e : Entry) : Decidable (Once I e) := by unfold Once; infer_instance
 
-instance instDecidableValid (e : Entry) : Decidable (Valid D A c S head e) := by unfold Valid; infer_instance
+instance instDecidableInformation (e : Entry) : Decidable (Information D A c S I e) := by
+  unfold Information; infer_instance
+
+instance instDecidableChecks : ∀ e : Entry, Decidable (Checks D A c S I e)
+  | .site _ s => inferInstanceAs (Decidable (s.Valid D A c S))
+  | .theta p vs => inferInstanceAs (Decidable (Information D A c S I (.theta p vs)))
+  | .builder p b => inferInstanceAs (Decidable (Information D A c S I (.builder p b)))
+
+instance instDecidableValid (e : Entry) : Decidable (Valid D A c S I head e) := by unfold Valid; infer_instance
 
 /-- **The refusal**: `previous` when the entry doesn't follow the log's head, else its kind's, or `none` when it passes
 every check. -/
 def refusal (e : Entry) : Option Refusal :=
-  if ¬Follows head e then some .previous else kindRefusal D A c S e
+  if ¬Follows head e then some .previous else kindRefusal D A c S I e
 
 end Entry
 
-/-- **A valid log** for the composite `c`: each entry is valid against the Site and head of the prefix before it. -/
+/-- **A valid log** for the composite `c`: each entry is valid against the Site, items and head of the prefix before
+it. -/
 def Valid (D : Digests) (A : Auditor) (c : Composite) (log : Registration) : Prop :=
-  ∀ i (h : i < log.length), log[i].Valid D A c (Site.ofLog (log.take i)) (head D c (log.take i))
+  ∀ i (h : i < log.length),
+    log[i].Valid D A c (Site.ofLog (log.take i)) (items (log.take i)) (head D c (log.take i))
 
 instance instDecidableValid (D : Digests) (A : Auditor) (c : Composite) (log : Registration) :
     Decidable (Valid D A c log) := by
