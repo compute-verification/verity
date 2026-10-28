@@ -83,7 +83,7 @@ tree, one session a window, each recorded in a signed append-only ledger before 
   LANE`, `period-close --name P`). A period's name is used once, and a lane has one period open at a time. Its open
   commits, before window 0's first coin, the most windows it may hold (`--cap`, a positive integer) and its circuit
   (`--circuit`: the declared circuit's SHA-512, never a Program's id, which the gate records and CHAL1 checks each window
-  against), and with `--draw-k K` the draw K the proof service selects each window's units with (`draw_k`, a positive
+  against), and with `--draw-k K` the draw K the proof system selects each window's units with (`draw_k`, a positive
   integer at most 2^24, which PoUW's credit reads; an open without it commits none), with `--rows T` the served tables'
   rows (`rows`, each round's request and slot tables' leaves, which bound every step's served rows m_s in PoUW's
   credit and whose `h1window.slot` is each window's A slot M; an open without it credits nothing), and with `--model M` (or
@@ -536,7 +536,7 @@ def cap_of(v: Any) -> int:
 def draw_k_of(s: str) -> int:
     """A period-open's draw K (`--draw-k`, written as `draw_k`): a positive integer at most 2^24, or Refused."""
     if not re.fullmatch(r"[1-9][0-9]{0,7}", s) or int(s) > MAX_DRAW_K:
-        raise Refused(f"--draw-k {s!r}: the draw K the proof service selects each window's units with, 1 to 2^24")
+        raise Refused(f"--draw-k {s!r}: the draw K the proof system selects each window's units with, 1 to 2^24")
     return int(s)
 
 

@@ -14,7 +14,7 @@ in the payload and holds only public structure, hiding commitments and paths bes
 * ``target``: the card's binding of the templates' dot, ``{binding, card, dot}`` (`BINDINGS`: ``GEMM_SM90_S8`` for the
   H200's INT8 and ``GEMM_HOPPER`` for its BF16, ``GEMM_SM120_S8`` for the RTX PRO 6000; ``BOOLEAN_…`` the same cards' dots
   on bits, which the Boolean-profile templates bind). Every unit's template binds that dot, as circuits resolves the binding.
-* ``draw``: the drawn units (global indices), the law, and ``source``: ``live`` (the proof service's draw of record, with
+* ``draw``: the drawn units (global indices), the law, and ``source``: ``live`` (the proof system's draw of record, with
   ``receipt``, the challenger's live-coin receipt, which a live draw must carry) or ``fixture`` (chosen by hand). The law is
   the window's registered one, fixed before any coin, and a live draw's ``record`` (the verifier's draw object, when it
   carries one) is a draw under it over the registered population, of exactly the bundle's units (`check` against the
