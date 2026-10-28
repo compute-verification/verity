@@ -224,7 +224,7 @@ class Shape:
         return (1 << self.ow) - 1
 
     @property
-    def I(self) -> int:  # noqa: E743
+    def I(self) -> int:
         """A′'s cells a row: the gate columns 0 .. n / 2 − 1, each paired with up column j + n / 2."""
         return self.n // 2
 
@@ -1191,7 +1191,7 @@ def act_ok(sh: Shape, ins: Sequence[Sequence[int]]) -> int:
     return int(bounded(h, amax) and requant(h, amax) == ap & 0xFF)
 
 
-def amax_ok(I: int, rec: bytes, h_k: Callable[[int], int]) -> int:  # noqa: E741
+def amax_ok(I: int, rec: bytes, h_k: Callable[[int], int]) -> int:
     """The consumer's amax check of one A′ row, in the clear, on its opened record (`rec`, `REC` bytes) and h at the
     record's column (`h_k(k)`, a bf16 word, as `check_amax` recomputes it): k < I, amax is no NaN and not negative, and
     |h_k| = amax."""

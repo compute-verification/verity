@@ -449,8 +449,13 @@ def test_fill_buffer_and_root_are_dithers_with_a_prime():
 
 
 def _recs(recs) -> np.ndarray:
-    """dither's records (`ActRecord`s) as the device holds them, m x dither.REC bytes."""
+    """dither's records (`ActRecord`s) as v31lib's `act` returns them, m x dither.REC bytes."""
     return np.frombuffer(b"".join(r.pack() for r in recs), np.uint8).reshape(-1, dither.REC).copy()
+
+
+def _slots(rb: np.ndarray) -> np.ndarray:
+    """Records as the device holds and dumps them, each in a 16-byte slot, zero past dither.REC."""
+    return np.pad(rb, ((0, 0), (0, 16 - dither.REC)))
 
 
 def test_silu_table_is_dithers_silu():
@@ -465,8 +470,8 @@ def test_silu_table_is_dithers_silu():
 def test_fill_sample_checks_a_prime(tmp_path, capsys):
     """`v31 fill-bench`'s sample files of a gate-up call: each sampled tile's gate tile of A′ by dither's map, its
     tile-row's A′ leaves (codes and records), and four whole rows (O from D with its sums and shifts) with their records,
-    the consumer's amax check passing each and refusing a forged amax; one A′ byte off is refused, and so is a record whose
-    amax is the row's second-largest |h|."""
+    both amax checks passing each and refusing a forged amax; one A′ byte off is refused, and so is a row whose codes and
+    record are formed under the row's second-largest |h|."""
     f = v31.Fill(128, 256, 1024, 256, 512, 2048, True, 16, True)
     sh = dither.Shape(128, 256, 1024, 256, 512, 2048, o=True, ow=16, act=True)
     rng = np.random.default_rng(8)
@@ -494,7 +499,7 @@ def test_fill_sample_checks_a_prime(tmp_path, capsys):
         tg = tn % (f.n // v31.TILE // 2)
         tu, a0 = tg + f.n // v31.TILE // 2, f.span(f.tile_base(tile))[0]
         files = {"A": A[tm * 128:(tm + 1) * 128], "B": B[tn * 128:(tn + 1) * 128], "act": Ap[tm * 128:(tm + 1) * 128],
-                 "rec": rb[tm * 128:(tm + 1) * 128], "xs": sa[tm * 128:(tm + 1) * 128],
+                 "rec": _slots(rb[tm * 128:(tm + 1) * 128]), "xs": sa[tm * 128:(tm + 1) * 128],
                  "Bg": B[tg * 128:(tg + 1) * 128], "Bu": B[tu * 128:(tu + 1) * 128],
                  "D": O[orows[i]].astype("<u4"), "rasa": np.zeros(8, "<u4")}
         for name, x in files.items():
@@ -505,7 +510,7 @@ def test_fill_sample_checks_a_prime(tmp_path, capsys):
     assert v31.main(["v31", "fill-sample", str(s)]) == 0
     rep = json.loads((s / "sample-check.json").read_text())
     assert all(t["act_exact"] and t["act_cells"] == 128 * 128 and t["act_rows_tied"] == 4 for t in rep["tiles"])
-    assert all(t["act_named_ok"] == 4 and t["act_forged_refused"] == t["act_forged"] == 4 for t in rep["tiles"])
+    assert all(t["act_amax_ok"] == 4 and t["act_forged_refused"] == t["act_forged"] == 4 for t in rep["tiles"])
     act = bytearray((s / "t1_act.bin").read_bytes())
     act[9 * f.I + 3] ^= 1
     (s / "t1_act.bin").write_bytes(bytes(act))
@@ -519,11 +524,12 @@ def test_fill_sample_checks_a_prime(tmp_path, capsys):
     act[f.I:2 * f.I] = bytes(x & 0xFF for x in fc)
     (s / "t1_act.bin").write_bytes(bytes(act))
     rec = bytearray((s / "t1_rec.bin").read_bytes())
-    rec[dither.REC:2 * dither.REC] = fr.pack()
+    rec[16:16 + dither.REC] = fr.pack()
     (s / "t1_rec.bin").write_bytes(bytes(rec))
     assert v31.main(["v31", "fill-sample", str(s)]) == 1
     t = json.loads((s / "sample-check.json").read_text())["tiles"][1]
-    assert t["act_named_ok"] == 3 and t["act_amax_bad"] == 1 and t["act_rec_bad"] == 1
+    assert t["act_amax_ok"] == 3 and t["act_amax_bad"] == 1 and t["act_rec_bad"] == 1
+    assert dither.amax_ok(len(hs), fr.pack(), lambda k: hs[k]) == 1 and v31.gate_refusals(hs, fc, fr.amax) > 0
     capsys.readouterr()
 
 
@@ -613,7 +619,7 @@ def test_fill_dither_accepts_dithers_own_values_and_refuses_a_forged_a_prime(mon
     elif line.endswith(" 1"):
         assert r["consumer"]["ok"] and r["values_equal"] and r["act_equal"] and r["rec_equal"]
     if r["cheat"] == "none":
-        assert r["act_named_ok"] == r["act_rows"] and r["act_forged_refused"] == r["act_forged"] > 0
+        assert r["act_amax_ok"] == r["act_rows"] and r["act_forged_refused"] == r["act_forged"] > 0
 
 
 def test_fill_table(tmp_path, capsys):

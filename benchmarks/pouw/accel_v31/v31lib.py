@@ -163,8 +163,9 @@ class Prover:
 
     def act(self, c: int) -> tuple[np.ndarray, np.ndarray, int]:
         """Call c's A′ (m x I int8), its rows' records (m x dither.REC bytes, `dither.ActRecord.pack`) and how many of its
-        rows have more columns at ±127 than a record's slots (rows the layout can't commit)."""
-        a, rec, over = np.zeros((self.f.m, self.f.I), np.int8), np.zeros((self.f.m, 16), np.uint8), ctypes.c_uint32()
+        rows have no column at amax (every h NaN: rows the layout can't commit)."""
+        a, rec = np.zeros((self.f.m, self.f.I), np.int8), np.zeros((self.f.m, v31.dither.REC), np.uint8)
+        over = ctypes.c_uint32()
         self.lib.check(self.lib.act(self.h, c, a.ctypes.data_as(ctypes.c_void_p), rec.ctypes.data_as(ctypes.c_void_p),
                                     ctypes.byref(over)))
         return a, rec, int(over.value)

@@ -655,7 +655,7 @@ class Fill:
         return self.W * self.row_w + self.row_o
 
     @property
-    def I(self) -> int:  # noqa: E743
+    def I(self) -> int:
         return self.n // 2 if self.act else 0
 
     @property
@@ -973,14 +973,22 @@ def cmd_fill_params(a: argparse.Namespace) -> int:
 
 
 def forged_amax(hs: list[int]) -> tuple[list[int], dither.ActRecord] | None:
-    """A prover's row under a shrunk amax, the row's second-largest |h| (NaN skipped), its codes and S_i formed under it
-    (None: no second magnitude, or S_i past a record's slots)."""
+    """A prover's row under a shrunk amax, the row's second-largest |h| (NaN skipped): its codes formed under it and the
+    record naming that cell (None: no second magnitude)."""
     mags = sorted({h & 0x7FFF for h in hs if h & 0x7FFF <= 0x7F80}, reverse=True)
     if len(mags) < 2:
         return None
-    codes = [(dither.requant(h, mags[1]) ^ 0x80) - 0x80 for h in hs]
-    named = dither.named_of(codes)
-    return (codes, dither.ActRecord(mags[1], named)) if len(named) <= dither.NAMED else None
+    return [(dither.requant(h, mags[1]) ^ 0x80) - 0x80 for h in hs], dither.ActRecord(mags[1], dither.argmax(hs, mags[1]))
+
+
+def gate_refusals(hs: list[int], codes: list[int], amax: int) -> int:
+    """The gate cells of a row whose last block refuses its code under amax, on h (dither.act_ok's checks)."""
+    return sum(not (dither.bounded(h, amax) and dither.requant(h, amax) == c & 0xFF) for h, c in zip(hs, codes))
+
+
+def row_amax_ok(hs: list[int], codes: list[int], rec: bytes) -> bool:
+    """Both of a row's amax checks on h: the consumer's on its record (dither.amax_ok) and every gate cell's."""
+    return bool(dither.amax_ok(len(hs), rec, lambda k: hs[k])) and not gate_refusals(hs, codes, int.from_bytes(rec[:2], "little"))
 
 
 def sample_act(f: Fill, d: Path, idx: int, tile: int, A: np.ndarray, seeds: dict[str, bytes], ks: bytes, off: int,
@@ -988,9 +996,10 @@ def sample_act(f: Fill, d: Path, idx: int, tile: int, A: np.ndarray, seeds: dict
     """A sampled tile's tile-row A′ against dither.py's map: the gate tile's 128 x 128 cells (its O and its up tile's from
     A, B's gate and up rows and the coins; amax the GPU's record's), every leaf of the tile-row's A′ rows (codes and
     record), and four whole rows (O from the GPU's D with its sums and shifts, tied to the reference at the tile's columns)
-    with their records (dither.act_codes over the row's SiLU·mul: amax and S_i) and every A′ cell. On each whole row the
-    consumer's amax check (dither.named_ok, h at S_i from the row) passes the GPU's codes and record and refuses a forged
-    amax, the row's second-largest |h| with its codes and S_i formed under it."""
+    with their records (dither.act_codes over the row's SiLU·mul: amax and its column) and every A′ cell. On each whole
+    row the amax checks (`row_amax_ok`: the consumer's at the record's column, every gate cell's bound) pass the GPU's
+    codes and record and refuse a forged amax, the row's second-largest |h| with its codes formed under it and the record
+    naming its cell, which the consumer passes and the maximum's gate cell refuses."""
     tm, tn = divmod(tile, f.n // TILE)
     tg = tn % (f.n // TILE // 2)
     tu, I, r0 = tg + f.n // TILE // 2, f.I, tm * TILE
@@ -998,7 +1007,7 @@ def sample_act(f: Fill, d: Path, idx: int, tile: int, A: np.ndarray, seeds: dict
     def rd(name: str, dt) -> np.ndarray:
         return np.frombuffer((d / f"{name}.bin").read_bytes(), dtype=dt)
 
-    ga, grec = rd(f"t{idx}_act", np.int8).reshape(TILE, I), rd(f"t{idx}_rec", np.uint8).reshape(TILE, dither.REC)
+    ga, grec = rd(f"t{idx}_act", np.int8).reshape(TILE, I), rd(f"t{idx}_rec", np.uint8).reshape(TILE, -1)[:, :dither.REC]
     amax = grec[:, :2].copy().view("<u2").reshape(TILE).astype(int)
     xs, xw = rd(f"t{idx}_xs", "<u4").astype(int), rd("xw", "<u4").astype(int)
     Bg, Bu = (rd(f"t{idx}_{x}", np.int8).reshape(TILE, f.k) for x in ("Bg", "Bu"))
@@ -1020,7 +1029,7 @@ def sample_act(f: Fill, d: Path, idx: int, tile: int, A: np.ndarray, seeds: dict
             leaves_bad += row_leaf(dom, pos, leaf_h(chunk, cref.prf_salt(ks, off + pos)), V2) != g_al[64 * x:64 * x + 64]
     D, rasa = rd(f"t{idx}_D", "<u4").astype(np.uint64).reshape(4, f.n), rd(f"t{idx}_rasa", "<u4").astype(np.uint64)
     rb, sb = rd("rb", "<u4").astype(np.uint64), rd("sb", "<u4").astype(np.uint64)
-    tied = amax_bad = rows_bad = rec_bad = named_pass = forged = forged_refused = 0
+    tied = amax_bad = rows_bad = rec_bad = amax_pass = forged = forged_refused = 0
     for x, i in enumerate(orows):
         O = (D[x] + sb * rasa[2 * x] + rasa[2 * x + 1] * rb) & 0xFFFFFFFF
         r = i - r0
@@ -1031,21 +1040,20 @@ def sample_act(f: Fill, d: Path, idx: int, tile: int, A: np.ndarray, seeds: dict
         codes, rec = dither.act_codes(hs)
         amax_bad += rec.amax != int(amax[r])
         rows_bad += codes != ga[r].tolist()
-        rec_bad += len(rec.named) > dither.NAMED or rec.pack() != grec[r].tobytes()
-        g_codes = ga[r].tolist()
-        named_pass += dither.named_ok(g_codes, grec[r].tobytes(), {j: hs[j] for j in dither.named_of(g_codes)})
+        rec_bad += rec.k >= I or rec.pack() != grec[r].tobytes()
+        amax_pass += row_amax_ok(hs, ga[r].tolist(), grec[r].tobytes())
         cheat = forged_amax(hs)
         if cheat is not None:
             fc, fr = cheat
             forged += 1
-            forged_refused += not dither.named_ok(fc, fr.pack(), {j: hs[j] for j in fr.named})
+            forged_refused += not row_amax_ok(hs, fc, fr.pack())
     over = int(rd("aover", "<u4")[0])
     out = {"act_cells": TILE * TILE, "act_cells_bad": int(cells_bad), "act_leaves": TILE * f.apr,
            "act_leaves_bad": int(leaves_bad), "act_rows": len(orows), "act_rows_tied": int(tied), "act_amax_bad": int(amax_bad),
-           "act_rows_bad": int(rows_bad), "act_rec_bad": int(rec_bad), "act_named_ok": int(named_pass),
+           "act_rows_bad": int(rows_bad), "act_rec_bad": int(rec_bad), "act_amax_ok": int(amax_pass),
            "act_forged": forged, "act_forged_refused": forged_refused, "act_rows_over": over}
     out["act_exact"] = (not cells_bad and not leaves_bad and tied == len(orows) and not amax_bad and not rows_bad
-                        and not rec_bad and named_pass == len(orows) and forged_refused == forged and not over)
+                        and not rec_bad and amax_pass == len(orows) and forged_refused == forged and not over)
     return out
 
 

@@ -1379,27 +1379,24 @@ DEV u32 requant_w(u32 h, float scale) {
   const float q = fminf(fmaxf(__fdiv_rn(__uint_as_float(h << 16), scale), -127.0f), 127.0f);
   return (u32)__float2int_rn(q) & 0xFFu;
 }
-// a code byte at +-127 (dither.named_of)
-DEV bool named_w(u32 c) { return c == 0x7Fu || c == 0x81u; }
 DEV uint4 ld4u(const int* p) { return __ldg(reinterpret_cast<const uint4*>(p)); }
-// dither.REC and NAMED: an A′ row's record, amax then S_i in 7 u16 slots (0xFFFF past the last)
-constexpr int AREC = 16, ANAMED = 7;
+// dither.REC: an A′ row's record, amax then k (the first column whose |h| is amax), each a u16; on the device each row's
+// record sits in a slot of ASLOT bytes, zero past AREC, so a leaf loads it aligned
+constexpr int AREC = 4, ASLOT = 16;
 // A′ of a gate-up call ([gate | up], I = N / 2), a CTA a row i: h_j = silu_mul(dequant(O_ij), dequant(O_i,j+I)) for j < I
 // into shared memory (2 I bytes) with the row's amax = max |h_j|, NaN skipped (dither.abs_max), then A′_ij = requant(h_j,
-// amax) into act (m x I) and the row's record (dither.ActRecord.pack: amax, then S_i = {j : |A′_ij| = 127} ascending) into
-// rec (m x AREC). A row with more than ANAMED columns at +-127, which the layout can't commit, gets its slots all 0xFFFF
-// and counts in *over. O = D + tau_j ra_i + sigma_i rb_j mod 2^32 (ServedSrc's); xa: s_a, a row's, xw: s_w, a column's
-// (f32).
+// amax) into act (m x I) and the row's record (dither.ActRecord.pack: amax, then k = dither.argmax) into rec (m x ASLOT).
+// A row with no column at amax (every h NaN), which the layout can't commit, gets k = 0xFFFF and counts in *over.
+// O = D + tau_j ra_i + sigma_i rb_j mod 2^32 (ServedSrc's); xa: s_a, a row's, xw: s_w, a column's (f32).
 __global__ void __launch_bounds__(256) act_kernel(const int* __restrict__ D, const int* __restrict__ ra, const int* __restrict__ sa,
                                                   const int* __restrict__ rb, const int* __restrict__ sb, int N, int I,
                                                   const float* __restrict__ xa, const float* __restrict__ xw,
                                                   const uint16_t* __restrict__ lut, int8_t* __restrict__ act,
                                                   uint8_t* __restrict__ rec, u32* __restrict__ over) {
   extern __shared__ uint16_t hs[];
-  __shared__ u32 red[8], nn;
-  __shared__ uint16_t nm[ANAMED + 1];
+  __shared__ u32 red[8], kmin;
   const u64 i = blockIdx.x;
-  if (!threadIdx.x) nn = 0;
+  if (!threadIdx.x) kmin = ~0u;
   const int* d = D + i * (u64)N;
   const u32 a = (u32)__ldg(ra + i), s = (u32)__ldg(sa + i);
   const float x = __ldg(xa + i);
@@ -1426,39 +1423,30 @@ __global__ void __launch_bounds__(256) act_kernel(const int* __restrict__ D, con
   for (int w = 1; w < (int)(blockDim.x >> 5); ++w) mx = max(mx, red[w]);
   // dither.act_scale (Int8RowScale_v1): RN(fmaxf(f32(amax), RN(1e-30)) / 127)
   const float scale = __fdiv_rn(fmaxf(__uint_as_float(mx << 16), __uint_as_float(0x0DA24260u)), 127.0f);
+  u32 km = ~0u;
   for (int j0 = 16 * threadIdx.x; j0 < I; j0 += 16 * blockDim.x) {
     const uint4 p = *reinterpret_cast<const uint4*>(hs + j0), q = *reinterpret_cast<const uint4*>(hs + j0 + 8);
     const u32 w[8] = {p.x, p.y, p.z, p.w, q.x, q.y, q.z, q.w};
     u32 o[4];
 #pragma unroll
     for (int e = 0; e < 4; ++e) {
-      const u32 c[4] = {requant_w(w[2 * e] & 0xFFFFu, scale), requant_w(w[2 * e] >> 16, scale),
-                        requant_w(w[2 * e + 1] & 0xFFFFu, scale), requant_w(w[2 * e + 1] >> 16, scale)};
-      o[e] = c[0] | c[1] << 8 | c[2] << 16 | c[3] << 24;
+      const u32 h[4] = {w[2 * e] & 0xFFFFu, w[2 * e] >> 16, w[2 * e + 1] & 0xFFFFu, w[2 * e + 1] >> 16};
+      o[e] = 0;
 #pragma unroll
-      for (int y = 0; y < 4; ++y)
-        if (named_w(c[y])) {
-          const u32 at = atomicAdd(&nn, 1u);
-          if (at <= ANAMED) nm[at] = (uint16_t)(j0 + 4 * e + y);
-        }
+      for (int y = 0; y < 4; ++y) {
+        o[e] |= requant_w(h[y], scale) << 8 * y;
+        if ((h[y] & 0x7FFFu) == mx) km = min(km, (u32)(j0 + 4 * e + y));
+      }
     }
     *reinterpret_cast<uint4*>(act + i * (u64)I + j0) = make_uint4(o[0], o[1], o[2], o[3]);
   }
+  for (int o2 = 16; o2; o2 >>= 1) km = min(km, __shfl_xor_sync(0xFFFFFFFFu, km, o2));
+  if (!(threadIdx.x & 31)) atomicMin(&kmin, km);
   __syncthreads();
   if (threadIdx.x) return;
-  uint16_t r[1 + ANAMED], *sl = r + 1;
-  r[0] = (uint16_t)mx;
-  const u32 k = nn <= ANAMED ? nn : 0;
-  for (u32 e = 0; e < k; ++e) {
-    u32 b = e;
-    for (; b && sl[b - 1] > nm[e]; --b) sl[b] = sl[b - 1];
-    sl[b] = nm[e];
-  }
-  for (u32 e = k; e < ANAMED; ++e) sl[e] = 0xFFFFu;
-  if (nn > ANAMED) atomicAdd(over, 1u);
-  uint4 v;
-  memcpy(&v, r, AREC);
-  *reinterpret_cast<uint4*>(rec + i * (u64)AREC) = v;
+  const u32 k = kmin < (u32)I ? kmin : 0xFFFFu;
+  if (k == 0xFFFFu) atomicAdd(over, 1u);
+  *reinterpret_cast<uint4*>(rec + i * (u64)ASLOT) = make_uint4(mx | k << 16, 0, 0, 0);
 }
 
 // ---------------------------------------------------------------- the committed rows
@@ -1578,8 +1566,8 @@ template <bool LIVE = false> struct ServedSrcT {
 };
 using ServedSrc = ServedSrcT<>;
 // A′'s bytes of a leaf (a gate-up call's, dither.Shape.act): lc bytes of one row of the m x I int8 buffer, 16-byte
-// aligned, then, on the row's last chunk, the row's AREC-byte record (lb = lc + AREC; rec null on the others, lb = lc);
-// zero past lb (an opening's short row)
+// aligned, then, on the row's last chunk, the row's AREC-byte record from its ASLOT-byte slot (lb = lc + AREC; rec null on
+// the others, lb = lc); zero past the slot (an opening's short row)
 struct ActSrc {
   const uint8_t *p, *rec;
   u32 lc, lb, pfm;
@@ -1617,7 +1605,7 @@ struct ServedRow {
     const u64 r = a / apr, c = a % apr, i = tm * TILE + r;
     if (c + 1 < apr) return ActSrc{reinterpret_cast<const uint8_t*>(act) + i * I + c * row, nullptr, row, row, pf};
     const u32 lc = (u32)(I - c * (u64)row);
-    return ActSrc{reinterpret_cast<const uint8_t*>(act) + i * I + c * row, rec + i * AREC, lc, lc + AREC, pf};
+    return ActSrc{reinterpret_cast<const uint8_t*>(act) + i * I + c * row, rec + i * ASLOT, lc, lc + AREC, pf};
   }
   DEV const u64* act_cv(const ActSrc& s) const { return s.lb == row ? C.mid_P : mida; }
   // whether leaf pos is an A′ row: (tm, a) set
@@ -2583,8 +2571,8 @@ struct Fill {
   int I = 0, apr = 0, row_o = 0;      // A′'s cells a row (n / 2), its leaves a row, and O's leaves a tile
   u64 stride = 0, nbytes = 0;         // leaves a tile-row, and the call's value bytes (dither.Shape.stride, nbytes)
   int8_t* actb[2] = {};               // A′ (m x I int8), a copy each
-  uint8_t* recb[2] = {};              // its rows' records (m x AREC: amax, then S_i), a copy each
-  u32* aover = nullptr;               // aover[copy]: its rows past ANAMED columns at +-127 (uncommittable)
+  uint8_t* recb[2] = {};              // its rows' records (amax, then k; m slots of ASLOT bytes), a copy each
+  u32* aover = nullptr;               // aover[copy]: its rows with no column at amax (every h NaN: uncommittable)
   float *xs = nullptr, *xw = nullptr; // the map's s_a (m) and s_w (n), f32 (set_act)
   uint16_t* lut = nullptr;            // bf16(silu_f32(f32(g))) of every bf16 word g (set_act)
   u64* mida = nullptr;                // the chaining value after P(8 alen), an A′ row's last chunk's (alen bytes)
@@ -2643,7 +2631,7 @@ struct Fill {
     if (ow != 32 && ow != 16) return "O is committed at 32 or 16 bits, not " + std::to_string(ow);
     if ((ow != 32 || act) && !o) return "O16 and A′ are a served call's (V31_SERVED=1)";
     if (act && (n % (2 * TILE) || n / 2 >= 0xFFFF))
-      return "A′: n a multiple of 256 (gate tiles pair with up tiles), n / 2 below 65535 (S_i's u16 columns)";
+      return "A′: n a multiple of 256 (gate tiles pair with up tiles), n / 2 below 65535 (a record's u16 column)";
     const u64 S = (k + L - 1) / L, lpt = (o ? S - 1 : S) * (32768 / row) + (o ? (u64)ow / 8 * 16384 / row : 0),
               apr = act ? ((u64)n / 2 + AREC + row - 1) / row : 0, lv = (u64)(m / TILE) * ((n / TILE) * lpt + TILE * apr);
     if (lv > (1ull << 32)) return "more than 2^32 leaves";
@@ -2760,7 +2748,7 @@ struct Fill {
   // A′'s buffers, the map's default scalars (s_a and s_w in [1, 2) / 127 from a hash of the index; set_act replaces them
   // and gives the SiLU table) and mida: P(8 alen) from the IV, P the params' P(8 ROW) with its length rewritten
   void act_setup(const Params& params) {
-    for (int b = 0; b < 2; b++) { actb[b] = dalloc<int8_t>((size_t)m * I); recb[b] = dalloc<uint8_t>((size_t)m * AREC); }
+    for (int b = 0; b < 2; b++) { actb[b] = dalloc<int8_t>((size_t)m * I); recb[b] = dalloc<uint8_t>((size_t)m * ASLOT); }
     aover = dalloc<u32>(2);
     CK(cudaMemset(aover, 0, 8));
     xs = dalloc<float>(m); xw = dalloc<float>(n); lut = dalloc<uint16_t>(65536); mida = dalloc<u64>(8);
@@ -3003,7 +2991,7 @@ struct Fill {
   void poison(int b, cudaStream_t st) {
     if (D[b]) gk::poison(D[b], (size_t)m * n * 4, st);
     if (words[b]) gk::poison(words[b], (size_t)tiles * Wn * 32768, st);
-    if (actb[b]) { gk::poison(actb[b], (size_t)m * I, st); gk::poison(recb[b], (size_t)m * AREC, st); }
+    if (actb[b]) { gk::poison(actb[b], (size_t)m * I, st); gk::poison(recb[b], (size_t)m * ASLOT, st); }
   }
   // copy b's committed values (testing): leaves x ROW bytes, leaf pos's row at pos ROW (dither.values_buffer); words[b]
   // itself, or the rows gathered into vbuf
@@ -3123,7 +3111,8 @@ __global__ void values_kernel(P src, u64 n, int row, uint8_t* __restrict__ out) 
   const u64 t = (u64)blockIdx.x * blockDim.x + threadIdx.x, q = (u64)row / 16;
   if (t < n * q) *reinterpret_cast<uint4*>(out + 16 * t) = src.piece(t / q, (u32)(16 * (t % q)));
 }
-// the same for a served call's rows at their spans (dither.values_buffer: an A′ row's last chunk is short)
+// the same for a served call's rows at their spans (dither.values_buffer: an A′ row's last chunk is short, and its rows of
+// I + AREC bytes leave the spans after a tile-row's first 4-byte aligned), each piece in u32 words up to its span's end
 __global__ void served_values_kernel(ServedRow r, u64 n, uint8_t* __restrict__ out) {
   const u64 t = (u64)blockIdx.x * blockDim.x + threadIdx.x, q = (u64)r.row / 16, pos = t / q;
   const u32 c = (u32)(16 * (t % q));
@@ -3131,7 +3120,11 @@ __global__ void served_values_kernel(ServedRow r, u64 n, uint8_t* __restrict__ o
   u64 off;
   u32 len;
   r.span(pos, off, len);
-  if (c < len) *reinterpret_cast<uint4*>(out + off + c) = r.piece(pos, c);
+  if (c >= len) return;
+  const uint4 v = r.piece(pos, c);
+  const u32 w[4] = {v.x, v.y, v.z, v.w};
+  u32* o = reinterpret_cast<u32*>(out + off + c);
+  for (u32 e = 0; e < 4 && c + 4 * e < len; ++e) o[e] = w[e];
 }
 // a thread a (position, 16-byte piece) of the rows, then a (position, level) of the paths
 template <class P>
@@ -3629,7 +3622,7 @@ static void fill_samples(Fill& f, int b, const std::string& dir, const std::stri
     if (!f.act) continue;
     const int tg = tn % (f.tiles_n / 2), tu = tg + f.tiles_n / 2;
     d.bytes(s + "act", f.actb[b] + (size_t)tm * TILE * f.I, (size_t)TILE * f.I, f.s0);
-    d.bytes(s + "rec", f.recb[b] + (size_t)tm * TILE * AREC, (size_t)TILE * AREC, f.s0);
+    d.bytes(s + "rec", f.recb[b] + (size_t)tm * TILE * ASLOT, (size_t)TILE * ASLOT, f.s0);
     d.bytes(s + "xs", f.xs + (size_t)tm * TILE, 4 * (size_t)TILE, f.s0);
     d.digests(s + "aleaves", f.cm[b].levels + 8 * ((u64)tm * f.stride + (u64)f.tiles_n * f.lpt), (size_t)TILE * f.apr, f.s0);
     d.bytes(s + "Bg", f.B + (size_t)tg * TILE * f.k, (size_t)TILE * f.k, f.s0);
@@ -3956,15 +3949,15 @@ int v31_set_act(void* h, const uint32_t* sa, const uint32_t* sw, const uint16_t*
   f.set_act(sa, sw, lut);
   return 0;
 }
-// Call c's A′ (m x I int8), its rows' records (m x 16 bytes, dither.ActRecord.pack) and the count of its rows past the
-// record's 7 slots (a u32), into host memory (any null: skipped)
+// Call c's A′ (m x I int8), its rows' records (m x AREC bytes, dither.ActRecord.pack) and the count of its rows with no
+// column at amax (a u32), into host memory (any null: skipped)
 int v31_act(void* h, uint64_t c, int8_t* act, uint8_t* rec, uint32_t* over) {
   V31_FILL(h);
   if (!f.act) return fail("this context commits no A′");
   const int b = f.ready(c);
   if (b < 0) return fail("call " + std::to_string(c) + " isn't one of the last two calls");
   if (act) CK(cudaMemcpy(act, f.actb[b], (size_t)f.m * f.I, cudaMemcpyDeviceToHost));
-  if (rec) CK(cudaMemcpy(rec, f.recb[b], (size_t)f.m * AREC, cudaMemcpyDeviceToHost));
+  if (rec) CK(cudaMemcpy2D(rec, AREC, f.recb[b], ASLOT, AREC, (size_t)f.m, cudaMemcpyDeviceToHost));
   if (over) CK(cudaMemcpy(over, f.aover + b, 4, cudaMemcpyDeviceToHost));
   return 0;
 }

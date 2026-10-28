@@ -12,12 +12,13 @@ leaves rebuilt from only the cells they hold (`dither.leaf_row`) and opened agai
 on the GPU's openings (`dither.block_inputs`, `dither.check_last`; a gate cell's reads its up row, the map's scalars,
 amax from its row's opened record and A′), and, on the small cases, the whole call (`dither.values`, `dither.acts`,
 `dither.values_buffer`, `dither.commit`) against the GPU's values and root. A gate-up call also: two whole rows of A′ and
-their records against dither's map (`dither.act_codes` over the row's `dither.silu_mul`: amax, the codes and S_i) on O's
-rows, which numpy takes on v31's coins (d_B for every column) and `dither.cell_values` ties at sampled columns, those
-rows' A′ leaves (codes and record) opened against the root, the consumer's amax check on each (`dither.check_named`,
-h at S_i recomputed from A and B) passing the GPU's row and refusing a forged amax (the row's second-largest |h|, its
-codes and S_i formed under it), no row past a record's slots, and the device's A′ buffer and records against what it
-committed; on the small ones a consumer call whose A is
+their records against dither's map (`dither.act_codes` over the row's `dither.silu_mul`: amax, its column and the
+codes) on O's rows, which numpy takes on v31's coins (d_B for every column) and `dither.cell_values` ties at sampled
+columns, those rows' A′ leaves (codes and record) opened against the root, both amax checks on each (the consumer's,
+`dither.check_amax`, h at the record's column recomputed from A and B, and every gate cell's bound) passing the GPU's
+row and refusing a forged amax (the row's second-largest |h|, its codes formed under it and the record naming its
+cell), every row with a column at amax, and the device's A′ buffer and records against what it committed; on the small
+ones a consumer call whose A is
 the device's A′ where it lies (`Prover.act_ptr`), its seeds drawn on the producer's root, against dither on A′'s rows as
 opened from that root (`dither.act_row`). The device runs on the seeds read back from its buffer and the reference on
 dither's. A cheating call must fail them.
@@ -127,16 +128,15 @@ def o_rows(sh: dither.Shape, seeds: dict[str, bytes], A: np.ndarray, B: np.ndarr
 
 
 def act_rows(sh: dither.Shape, O: dict[int, np.ndarray], sa: list[int], sw: list[int]
-             ) -> dict[int, tuple[list[int], bytes, dither.ActRecord | None, list[int]]]:
+             ) -> dict[int, tuple[list[int], bytes, dither.ActRecord, list[int]]]:
     """Each row's (h, A′ row bytes, record, codes) by dither's map on its whole O row (`dither.act_codes`): the row's I
-    codes and then its record (None, and the codes alone, when S_i passes a record's slots)."""
+    codes and then its record."""
     out = {}
     for i, o in O.items():
         hs = [dither.silu_mul(dither.dequant(int(o[j]), sa[i], sw[j]), dither.dequant(int(o[j + sh.I]), sa[i], sw[j + sh.I]))
               for j in range(sh.I)]
         codes, rec = dither.act_codes(hs)
-        fits = len(rec.named) <= dither.NAMED
-        out[i] = hs, bytes(x & 0xFF for x in codes) + (rec.pack() if fits else b""), rec if fits else None, codes
+        out[i] = hs, bytes(x & 0xFF for x in codes) + rec.pack(), rec, codes
     return out
 
 
@@ -150,8 +150,9 @@ def check_act(rep: dict, sh: dither.Shape, ref: dict[str, bytes], Aref: np.ndarr
               rng: np.random.Generator) -> dict[int, bytes]:
     """A gate-up call's A′: the device's A′ buffer and records against what it committed, two whole rows (and the rows of
     every sampled A′ leaf) against dither's map on O's rows, tied to dither.cell_values at two columns a row, the rows' A′
-    leaves opened against the root, and the consumer's amax check on each whole row (`dither.check_named` on the GPU's
-    row, then `dither.named_ok` on a forged amax). Returns the reference rows of the sampled A′ leaves."""
+    leaves opened against the root, and both amax checks on each whole row (`dither.check_amax` on the GPU's record with
+    every gate cell's bound, then `v31.row_amax_ok` on a forged amax). Returns the reference rows of the sampled A′
+    leaves."""
     tl, nb = sh.n // dither.TILE * sh.lpt, dither.TILE * sh.arow
     starts = [sh.leaf_span(tm * sh.stride + tl)[0] for tm in range(sh.m // dither.TILE)]
     rows_b = np.concatenate([Ap.view(np.uint8), recs], axis=1)
@@ -171,16 +172,16 @@ def check_act(rep: dict, sh: dither.Shape, ref: dict[str, bytes], Aref: np.ndarr
     ar = act_rows(sh, O, list(map(int, p.sa)), list(map(int, p.sw)))
     rec_b = records(recs)
     rep["act_rows"], rep["act_rows_tied"] = len(whole), tied
-    rep["act_rows_amax_equal"] = sum(ar[i][2] is not None and ar[i][2].amax == int.from_bytes(rec_b[i][:2], "little")
-                                     for i in whole)
+    rep["act_rows_amax_equal"] = sum(ar[i][2].amax == int.from_bytes(rec_b[i][:2], "little") for i in whole)
     rep["act_rows_equal"] = sum(ar[i][1] == Ap[i].tobytes() + rec_b[i] for i in whole)
     sc = dither.ActScales(list(map(int, p.sa)), list(map(int, p.sw)))
-    rep["act_named_ok"] = sum(dither.check_named(sh, ref, Aref[i], B, i, Ap[i].tolist(), rec_b[i], sc) for i in whole)
+    rep["act_amax_ok"] = sum(dither.check_amax(sh, ref, Aref[i], B, i, rec_b[i], sc) == 1
+                             and not v31.gate_refusals(ar[i][0], Ap[i].tolist(), int.from_bytes(rec_b[i][:2], "little"))
+                             for i in whole)
     forged = [(i, v31.forged_amax(ar[i][0])) for i in whole]
     forged = [(i, x) for i, x in forged if x is not None]
     rep["act_forged"] = len(forged)
-    rep["act_forged_refused"] = sum(not dither.named_ok(fc, fr.pack(), {j: ar[i][0][j] for j in fr.named})
-                                    for i, (fc, fr) in forged)
+    rep["act_forged_refused"] = sum(not v31.row_amax_ok(ar[i][0], fc, fr.pack()) for i, (fc, fr) in forged)
     dom, salt = sh.domain(), dither.salts(p.ks, p.calls[c]["off"])
     lv = [q for i in whole for q in sh.act_leaves(i)]
     rows_open = 0
@@ -191,7 +192,7 @@ def check_act(rep: dict, sh: dither.Shape, ref: dict[str, bytes], Aref: np.ndarr
     out = {}
     for q in act_picks:
         (i, j0), n = sh.leaf_of(q)[1][0], sh.leaf_span(q)[1]
-        small = ar[i][2] is not None and 2 * n * sh.k <= LEAF_ROW_PRODUCTS
+        small = 2 * n * sh.k <= LEAF_ROW_PRODUCTS
         out[q] = dither.leaf_row(sh, ref, Aref, B, q, sc, ar[i][2]) if small else ar[i][1][j0:j0 + n]
     return out
 
@@ -320,7 +321,7 @@ def run_case(lib: v31lib.Lib, line: str, cells: int, leaves: int, blocks: int, r
               and rep.get("act_rows_amax_equal", 0) == rep.get("act_rows", 0)
               and rep.get("act_rows_equal", 0) == rep.get("act_rows", 0)
               and rep.get("act_leaves_open", 0) == rep.get("act_leaves", 0)
-              and rep.get("act_named_ok", 0) == rep.get("act_rows", 0) and not rep.get("act_over", 0)
+              and rep.get("act_amax_ok", 0) == rep.get("act_rows", 0) and not rep.get("act_over", 0)
               and rep.get("values_equal", True) and rep.get("root_equal", True)
               and rep.get("rec_equal", True) and rep.get("act_equal", True) and rep.get("consumer", {}).get("ok", True))
     rep["accept"] = bool(honest)
@@ -340,12 +341,12 @@ def describe(r: dict) -> str:
     parts.append(f"leaves {r['rows_equal']}/{r['leaves']} rows equal ({r['act_leaves_sampled']} of A′), "
                  f"{r['leaves_open']}/{r['leaves']} open the GPU's root")
     if "act_rows" in r:
-        parts.append(f"A′ buffer and records {'equal' if r['act_buffer_equal'] else 'DIFFER'}, {r['act_over']} rows past "
-                     f"a record's slots; whole rows: O tied {r['act_rows_tied']}/{r['act_rows']}, amax "
+        parts.append(f"A′ buffer and records {'equal' if r['act_buffer_equal'] else 'DIFFER'}, {r['act_over']} rows with "
+                     f"no column at amax; whole rows: O tied {r['act_rows_tied']}/{r['act_rows']}, amax "
                      f"{r['act_rows_amax_equal']}/{r['act_rows']}, A′ and record {r['act_rows_equal']}/{r['act_rows']} "
-                     f"equal, their A′ leaves {r['act_leaves_open']}/{r['act_leaves']} equal and open, the consumer's "
-                     f"amax check {r['act_named_ok']}/{r['act_rows']} pass, a forged amax (the second-largest |h|) "
-                     f"{r['act_forged_refused']}/{r['act_forged']} refused")
+                     f"equal, their A′ leaves {r['act_leaves_open']}/{r['act_leaves']} equal and open, the amax checks "
+                     f"(the consumer's at the record's column, every gate cell's bound) {r['act_amax_ok']}/{r['act_rows']} "
+                     f"pass, a forged amax (the second-largest |h|) {r['act_forged_refused']}/{r['act_forged']} refused")
     if "blocks" in r:
         parts.append(f"last blocks {r['blocks_pass']}/{r['blocks']} pass the verifier"
                      + (f" (first off: {tuple(r['blocks_bad'][0])})" if r["blocks_bad"] else ""))
