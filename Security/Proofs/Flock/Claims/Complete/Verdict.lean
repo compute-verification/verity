@@ -29,7 +29,7 @@ theorem ok_bind {ε α β : Type} (a : α) (f : α → Except ε β) : (Except.o
 /-! ## A rep -/
 
 /-- **A rep accepts** when each of its checks passes, each replay from the transcript the previous one left. -/
-theorem verifyRepWith_ok (hs : Flock.Hashes V) (spec : SessionSpec) (st : Setup) (sch : Schedule) (sess : Session)
+theorem verifyRepWith_ok (hs : Flock.Hashes V) (spec : SessionSpec) (st : Setup) (sch : Schedule) (sess : RunRecord)
     (i r : ℕ) (bytes : ByteArray) {stream : StreamRec} {extras : Array Claim} {p : Proof} {zc : ZcOut} {lc : LcOut}
     {T : F128} {sws : Array Switched} {t₁ t₂ t₃ t₄ : Transcript}
     (hS : sess.streams.find? (·.name == s!"{spec.tables[i]!}/rep{r}") = some stream)
@@ -92,7 +92,7 @@ theorem dgWith_ofSha512 (spec : SessionSpec) (h : ByteArray → ByteArray) (b : 
 
 /-- **The plain verdict accepts** when each of its checks passes. -/
 theorem verifyWith_ok (h : ByteArray → ByteArray) (spec : SessionSpec) (tabs : Array Setup) (record : String)
-    (proofs : Array ByteArray) {sess : Session}
+    (proofs : Array ByteArray) {sess : RunRecord}
     (hT : (tabs.size != spec.tables.size || tabs.size == 0) = false)
     (hD : Record.decodeWith (Flock.Hashes.ofSha512 h : Flock.Hashes V) spec record = Except.ok sess)
     (hU : ∀ q ∈ (tabs.zip sess.publics).toList, q.1.publics q.2 = .ok ())

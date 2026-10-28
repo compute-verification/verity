@@ -252,7 +252,7 @@ schedule, on a circuit fold that refuses a point of the wrong length, a rep that
 oracle) has a stream with that round, and level 0's Merkle check passed against the committed `root_B` on the proof's
 opened rows at the positions of that round's coins. -/
 theorem plainQueryRound_verifyRepWith (hs : Hashes Flock.V) (spec : SessionSpec) (st : Setup) (sch : Flock.Schedule)
-    (sess : Session) (i r : ℕ) (bytes cap : ByteArray) (hsch : fast100 st.m = some sch)
+    (sess : RunRecord) (i r : ℕ) (bytes cap : ByteArray) (hsch : fast100 st.m = some sch)
     (hf : ∀ a b lw rho ts v, st.fold.folded a b lw rho ts = .ok v → rho.size + 6 = st.fold.kLog)
     (hkl : st.fold.kLog = st.kLog) (h : verifyRepWith hs spec st sch sess i r bytes = .ok cap) :
     ∃ (stream : StreamRec) (extras : Array Flock.Claim) (p : Proof),
@@ -325,7 +325,7 @@ theorem plainProofShape_eq (st : Setup) (sch : Flock.Schedule) (extras : Array F
 and proof file is the proof's level-0 rows at the positions of round `plainQueryRound`'s coins, the positions and rows
 on which level 0's Merkle check passed against the committed `root_B` (`plainQueryRound_verifyRepWith`). -/
 theorem plainRepColsOf_verifyRepWith (hs : Hashes Flock.V) (spec : SessionSpec) (st : Setup) (sch : Flock.Schedule)
-    (sess : Session) (i r : ℕ) (bytes cap : ByteArray) (hsch : fast100 st.m = some sch)
+    (sess : RunRecord) (i r : ℕ) (bytes cap : ByteArray) (hsch : fast100 st.m = some sch)
     (hf : ∀ a b lw rho ts v, st.fold.folded a b lw rho ts = .ok v → rho.size + 6 = st.fold.kLog)
     (hkl : st.fold.kLog = st.kLog) (h : verifyRepWith hs spec st sch sess i r bytes = .ok cap) :
     ∃ (stream : StreamRec) (extras : Array Flock.Claim) (p : Proof),
@@ -356,7 +356,7 @@ session decodes, has one statement per table, and each table `i`'s rep `r` (`r <
 by `verifyRepWith` at the table's `fast100` schedule, both with one cap. -/
 theorem plainVerifyWithM_reps (hs : Hashes Flock.V) (spec : SessionSpec) (tabs : Array Setup) (record : String)
     (proofs : Array ByteArray) (h : verifyWithM hs spec tabs record proofs = .ok ()) :
-    ∃ sess : Session, Record.decodeWith hs spec record = .ok sess ∧ tabs.size = spec.tables.size ∧
+    ∃ sess : RunRecord, Record.decodeWith hs spec record = .ok sess ∧ tabs.size = spec.tables.size ∧
       ∀ (i : ℕ) (hi : i < tabs.size), ∃ (sch : Flock.Schedule) (c : ByteArray),
         fast100 tabs[i].m = some sch ∧ ∀ r < 2,
           verifyRepWith hs spec tabs[i] sch sess i r proofs[2 * i + r]! = .ok c := by
@@ -419,7 +419,7 @@ theorem plainQueryRound_verifyWithM (hs : Hashes Flock.V) (spec : SessionSpec) (
     (hf : ∀ st ∈ tabs, (∀ a b lw rho ts v, st.fold.folded a b lw rho ts = .ok v → rho.size + 6 = st.fold.kLog) ∧
       st.fold.kLog = st.kLog)
     (h : verifyWithM hs spec tabs record proofs = .ok ()) :
-    ∃ sess : Session, Record.decodeWith hs spec record = .ok sess ∧ tabs.size = spec.tables.size ∧
+    ∃ sess : RunRecord, Record.decodeWith hs spec record = .ok sess ∧ tabs.size = spec.tables.size ∧
       ∀ (i : ℕ) (hi : i < tabs.size), ∃ sch : Flock.Schedule, fast100 tabs[i].m = some sch ∧ ∀ r < 2,
         ∃ (stream : StreamRec) (extras : Array Flock.Claim) (p : Proof),
           sess.streams.find? (fun x => x.name == s!"{spec.tables[i]!}/rep{r}") = some stream ∧
