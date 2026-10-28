@@ -8,6 +8,11 @@ real coins (`dither.seeds`) at A = B = 0, the prover's best operands (note:compu
 noised-floor), where X = d_A + V and W′ = d_B + Uπ exactly.
 
     python bits_floor.py --out DIR           # every experiment, then the tables: DIR/out.json and DIR/tables.md
+
+The price is tensor-pipe time at the card's weights, as in the floor note; `direct_inmodel` adds the alu pipe for
+Strassen's sparse corrections (time the max over pipes). Approximate routes are judged by the rate condition of
+`SAKMatmul` (Security/Definitions/Pouw/Assumptions/Dither.lean), linearized: a route of cost c failing a checked
+window with probability p_err stays within the moment iff p_err ≥ (1 − c/pub)(1 − p).
 """
 
 from __future__ import annotations
@@ -304,7 +309,9 @@ def _marg(x, y, L):
     return np.rint(np.outer(x.sum(1), y.sum(1)) / L).astype(np.int64)
 
 
-ROUTES = ("sep-nobin", "sep-noY", "sep-truncF", "sep-truncF-noY", "sep-truncF-noY-nobin", "direct-trunc-strassen-q1",
+#: sep-nobin-kN keeps d_A d_Bᵀ exactly on the first N/8 of each segment's inner indices
+PARTIAL = (2, 4, 6, 7)
+ROUTES = ("sep-nobin", *(f"sep-nobin-k{k}" for k in PARTIAL), "sep-noY", "sep-truncF", "sep-truncF-noY", "sep-truncF-noY-nobin", "direct-trunc-strassen-q1",
           "direct-trunc-winograd-q2", "direct-strassen-nocorr", "direct-b1-top-planes")
 
 
@@ -326,6 +333,10 @@ def approx_routes(c: Call):
         meta["truncF_q"] = max(meta.get("truncF_q", 0), q)
         FU, VY, FqU = F @ c.U.T, c.V @ Y.T, Fq @ c.U.T
         est["sep-nobin"].append(w - bin_ + e_bin)
+        for k in PARTIAL:
+            h = (b - a) * k // 8
+            part = dA[:, :h] @ dB[:, :h].T + _marg(dA[:, h:], dB[:, h:], b - a - h)
+            est[f"sep-nobin-k{k}"].append(w - bin_ + part)
         est["sep-noY"].append(w - VY + e_Y)
         est["sep-truncF"].append(w - FU + FqU)
         est["sep-truncF-noY"].append(w - FU + FqU - VY + e_Y)
@@ -365,6 +376,7 @@ def route_costs(n: int, t: int) -> dict:
     hi = min(1.0, pairs(n - 8, hi_bits(t), 8) * B1) if n > 8 else 0.0
     return {
         "sep-nobin": (lo + hi + y) / t,
+        **{f"sep-nobin-k{k}": B1 * k / 8 + (lo + hi + y) / t for k in PARTIAL},
         "sep-noY": B1 + (lo + hi) / t,
         "sep-truncF": B1 + (lo + y) / t,
         "sep-truncF-noY": B1 + lo / t,
@@ -453,6 +465,67 @@ def floor_low(n: int, t: int) -> dict:
             "floor_no_strassen": min(d0, s0), "floor": min(d0, d1, s0, s1)}
 
 
+def lane_per_side(n: int, rho: float) -> float:
+    """In-model alu time (share of G) of one form side's sparse corrections mod 2^(n−8): for each wrapped entry, add
+    ±(the other form's low n − 8 bits) into n/2 outputs, packed: 32 parities a lop3 at n = 9, else ⌊32/(n−8)⌋ fields
+    a 3-op SWAR add. An alu lane-op is 64 s8 MACs of time (4,096 MACs vs 64 lanes an SM-clock); forms' own adds and the
+    gathers are not counted (an estimate, and the model's free indirect reads)."""
+    if n <= 8:
+        return 0.0
+    w = n - 8
+    ops = 1 / 32 if w == 1 else 3 / (32 // w)
+    return rho / 8 * ops * 64
+
+
+def direct_inmodel(n: int, rhos: list) -> dict:
+    """Classic Strassen d = 1 with sparse lane corrections, time the max over the tensor and alu pipes."""
+    tensor = STRASSEN * lo_cost(n)
+    alu = sum(lane_per_side(n, r) for r in rhos)
+    return {"tensor": tensor, "alu": alu, "time": min(1.0, max(tensor, alu)) if n > 8 else min(1.0, tensor)}
+
+
+#: the 8-bit window each design's note recommends, [r, r + 8)
+RECOMMENDED = {"seg-t8": (4, 12), "seg-t3": (8, 16), "cell-fresh": (8, 16)}
+
+#: Llama-3.2-1B's linear layers a token, (K, N): qkv, o, gate+up, down; 16 layers (lm_head and attention left out)
+LLAMA_1B = [(2048, 3072), (2048, 2048), (2048, 16384), (8192, 2048)]
+LAYERS = 16
+
+
+def ands_per_mac(n: int) -> int:
+    """An s8 × s8 MAC mod 2^n in a free-XOR circuit (an estimate): P(n) partial-product ANDs, one AND a full or half
+    adder compressing them to min(n, 16) bits, and n − 1 for the accumulator."""
+    P = pairs(n)
+    return P + (P - min(n, 16)) + (n - 1)
+
+
+def word_bytes(res: dict) -> dict:
+    """PoUW word bytes a token on Llama-3.2-1B's linear layers, per design and word format (an estimate: dense packing
+    of b-bit words; O and the values' commitment not included)."""
+    out = {}
+    for name, (_, lp, L) in DESIGNS.items():
+        nstar = res["price"][name]["n_star"]
+        top = RECOMMENDED[name][0] + 8
+        nim = res["price"][name]["n_star_inmodel"]
+        if name.startswith("cell"):
+            fmts = {"u32 sum": (32, "S", 32), f"low {nstar} bits": (nstar, "S", nstar),
+                    f"low {nim} bits (in-model n*)": (nim, "S", nim),
+                    f"8-bit window {RECOMMENDED[name]}": (8, "S", top)}
+        else:
+            fmts = {"u16 prefix (today)": (16, "S-1", 16), f"low {nstar} bits, prefix": (nstar, "S-1", nstar),
+                    f"8-bit window {RECOMMENDED[name]} of each segment": (8, "S", top)}
+        row = {}
+        for fmt, (bits, w, width) in fmts.items():
+            tot = 0
+            for K, N in LLAMA_1B:
+                S = 1 if name.startswith("cell") else -(-K // L)
+                words = S - 1 if w == "S-1" else S
+                tot += N * words * bits / 8
+            row[fmt] = {"bytes_per_token": tot * LAYERS, "ands_per_mac": ands_per_mac(width)}
+        out[name] = row
+    return out
+
+
 def price(res: dict) -> dict:
     tabs = {}
     for name, (K, lp, L) in DESIGNS.items():
@@ -492,7 +565,13 @@ def price(res: dict) -> dict:
                        "best_r": best[1] if best else None, "sampling": best[0] if best else None,
                        "best_floor_any_window": max(win[f"{rr},{bb}"]["floor"] for rr, bb in windows(name) if bb == b)}
         bmin = min([b for b in by_b if by_b[b]["best_r"] is not None], default=None)
+        side = "dither-A0B0-fresh" if name.startswith("cell") else "dither-A0B0"
+        rhos = [x["density"] for x in res["e3"][side]["strassen"]["form_sides"]] if "e3" in res else []
+        inmodel = [direct_inmodel(n, rhos) for n in range(1, bits + 1)]
+        nstar_inmodel = min(n for n in range(1, bits + 1) if min(inmodel[n - 1]["time"], rows[n - 1]["floor"]) >= full
+                            - 1e-12) if rhos else None
         tabs[name] = {"t": t, "K": K, "L'": lp, "L": L, "word_bits": bits, "rows": rows, "full_floor": full,
+                      "inmodel_direct": inmodel, "n_star_inmodel": nstar_inmodel,
                       "full_floor_no_strassen": full0, "n_star": nstar, "n_star_no_strassen": nstar0, "b_min": bmin,
                       "by_b": by_b, "windows": win}
     return tabs
@@ -500,7 +579,10 @@ def price(res: dict) -> dict:
 
 def tables_md(res: dict) -> str:
     out = []
-    f = lambda x: "—" if x is None or x == float("inf") else f"{x:.4f}"
+
+    def f(x):
+        return "—" if x is None or x == float("inf") else f"{x:.4f}"
+
     for name, tb in res["price"].items():
         lp = tb["L'"]
         out.append(f"### {name}: t {tb['t']}, K {tb['K']}, L′ {lp}, L {tb['L']}, word {tb['word_bits']} bits\n")
@@ -519,6 +601,14 @@ def tables_md(res: dict) -> str:
             out.append(f"| {b} | {f(v['low_bits_floor'])} | {v['windows_that_hold'] or '—'} | {v['best_r']} | "
                        f"{f(v['sampling'])} |")
         out.append("")
+        out.append(f"in-model (classic Strassen + sparse lane corrections, max over pipes; an estimate): n* = "
+                   f"{tb['n_star_inmodel']}; time at n = 9, 10, 11, 12, 16: "
+                   + ", ".join(f"{tb['inmodel_direct'][n - 1]['time']:.3f} (alu {tb['inmodel_direct'][n - 1]['alu']:.3f})"
+                               for n in (9, 10, 11, 12, 16)) + "\n")
+        sd = res.get("second_draw", {}).get(name)
+        if sd:
+            out.append(f"second coin draw: b_min {sd['b_min']}, n* {sd['n_star']}, verdicts that differ: "
+                       f"{sd['verdicts_that_differ'] or 'none'}\n")
         out.append("| approximate route | cost / G at n = 16 | err std | p_err, b = 8 window at r = 4, 8, 10, 12, 14 (b = 2) |")
         out.append("|---|---|---|---|")
         costs = route_costs(16, tb["t"])
@@ -526,6 +616,12 @@ def tables_md(res: dict) -> str:
             ps = ", ".join(f"{v['p_err'][key]:.3g}" for key in ("4,8", "8,8", "10,6", "12,4", "14,2"))
             out.append(f"| {k} | {costs[k]:.4f} | {v['err_std']:.1f} | {ps} |")
         out.append("")
+    out.append("### PoUW word bytes a token, Llama-3.2-1B linear layers (estimate)\n")
+    out.append("| design | format | bytes a token | ANDs a MAC in-circuit (arithmetic only) |")
+    out.append("|---|---|---|---|")
+    for name, row in res.get("bytes", {}).items():
+        for fmt, v in row.items():
+            out.append(f"| {name} | {fmt} | {v['bytes_per_token']:,.0f} | {v['ands_per_mac']} |")
     return "\n".join(out)
 
 
@@ -545,6 +641,15 @@ def main() -> None:
     res["e5"] = e5(calls)
     res["e6"] = e6(calls)
     res["price"] = price(res)
+    res["bytes"] = word_bytes(res)
+    alt = {k: Call(*v, call=1) for k, v in DESIGNS.items()}
+    res2 = {"e3": res["e3"], "e5": e5(alt), "e6": e6(alt)}
+    p2 = price(res2)
+    res["second_draw"] = {name: {
+        "b_min": p2[name]["b_min"], "n_star": p2[name]["n_star"],
+        "windows_that_hold": {b: v["windows_that_hold"] for b, v in p2[name]["by_b"].items()},
+        "verdicts_that_differ": sorted(k for k, v in p2[name]["windows"].items()
+                                       if v["holds"] != res["price"][name]["windows"][k]["holds"])} for name in p2}
     res["seconds"] = time.perf_counter() - t0
     (a.out / "out.json").write_text(json.dumps(res, indent=1, default=str))
     (a.out / "tables.md").write_text(tables_md(res))
