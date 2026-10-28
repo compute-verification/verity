@@ -56,6 +56,8 @@ COUNT += 1  # dead_free's TokenSelectGroups_v1, a line of its own so it merges w
 
 COUNT += 2  # ops' `ScaledMmS8ResidualCoordinateRows_v1` and `_v2`, a line of its own
 
+COUNT += 3  # the key block's steps: `fa2_check_inf`'s AttnBlockSoftmax_v1 and AttnBlockPv_v1, `fa3_check_inf`'s AttnBlockSoftmax_v2
+
 COUNT += 2  # ops' `PvRowPad_v1` and `_v2`, a line of its own so it merges with any other change to the count
 
 COUNT += 3  # io_shell's `ScanSlots_v2` (boolean_io_shell's), `OutCollect_v1` and `SlotEntry_v1`, a line of its own so it merges with any other change to the count
