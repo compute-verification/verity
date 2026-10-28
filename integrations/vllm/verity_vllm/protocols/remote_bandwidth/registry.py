@@ -295,12 +295,9 @@ class _Pass:
 
 
 class NodeMemory:
-    """The node's memory under the audit: its regions' bytes, the registration log, the KV pool's pages, and each
-    window's passes and openings.  Its store, the blocks registered and those each step wrote and freed, is the audit's
-    `requirement.Store`, which `audit_store` reads off the memory map.  ``filler_plan(store, pass_index)`` returns the
-    filler a pass reads after the weights and the KV, as ``(region, blocks)`` pairs (region block indices in read
-    order); ``chaining`` derives each pass's seed (`chain`); ``salt_key`` keys the leaves' salts (`salt`), fresh by
-    default."""
+    """The node's memory.  ``filler_plan(store, pass_index)`` returns the filler a pass reads after the weights and the
+    KV, as ``(region, blocks)`` pairs (region block indices in read order); ``chaining`` derives each pass's seed
+    (`chain`); ``salt_key`` keys the leaves' salts (`salt`), fresh by default."""
 
     def __init__(self, *, filler_plan: FillerPlan | None = None,
                  chaining: Callable[[bytes, bytes, int], bytes] = chain, salt_key: bytes | None = None) -> None:
@@ -451,10 +448,8 @@ class NodeMemory:
         return m
 
     def audit_store(self) -> requirement.Store:
-        """The audit's store as the memory map's lines closed so far record it (`memory_map.audit_store`)."""
-        if self.memory_map is None:
-            raise RuntimeError("the audit's store is read off the memory map: start one (record_memory_map)")
-        return mm.audit_store(self.memory_map.text())
+        """The node's store, the audit's `requirement.Store`, as its memory map records it (`memory_map.audit_store`)."""
+        return mm.audit_store(self.memory_map)
 
     def end_step(self) -> None:
         """The step's forward has written its KV (`Scheduler.update_from_output`): a memory map takes its digests."""

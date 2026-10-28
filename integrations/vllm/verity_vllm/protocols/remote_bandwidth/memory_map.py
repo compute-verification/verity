@@ -294,12 +294,14 @@ class MemoryMap:
         return self.path.read_text() if self.path is not None else self._head + "".join(self._kept)
 
 
-def audit_store(text: str) -> requirement.Store:
-    """The audit's store (`requirement.Store`, Lean's `CircuitRequirement.Store`) as the map ``text`` records it,
-    replayed from its header: its N registered blocks, each step's written indices and the indices it released (freed,
-    or overwritten by a write to their slot; a withdrawn index is never written, so never freed), and no payloads (the
+def audit_store(m: MemoryMap | None) -> requirement.Store:
+    """The audit's store (`requirement.Store`, Lean's `CircuitRequirement.Store`) as the map ``m`` records it, replayed
+    from its header: its N registered blocks, each step's written indices and the indices it released (freed, or
+    overwritten by a write to their slot; a withdrawn index is never written, so never freed), and no payloads (the
     map holds their digests)."""
-    head, steps = parse(text.splitlines(keepends=True))
+    if m is None:
+        raise RuntimeError("the audit's store is read off the memory map: start one (record_memory_map)")
+    head, steps = parse(m.text().splitlines(keepends=True))
     r, written, freed = Replay(head), {}, {}
     for st in steps:
         change = r.apply(st)
@@ -327,7 +329,7 @@ def agreement(backend: Any) -> dict[str, Any]:
     r, digests = replay()
     n = r.header.blocks
     held = np.zeros(max(r.extent, len(trace.live)), bool)
-    held[sorted(audit_store(store.memory_map.text()).resident(r.last + 1))] = True
+    held[sorted(audit_store(store.memory_map).resident(r.last + 1))] = True
     mine = np.zeros(max(r.extent, len(trace.live)), bool)
     mine[:len(trace.live)] = trace.live
     live = bool(np.array_equal(held, mine))
