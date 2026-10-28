@@ -68,11 +68,16 @@ def _blocks(circuit: IF.Circuit) -> IF.Blocks:
     return circuit.blocks
 
 
-def rows(circuit: IF.Circuit) -> list[bytes]:
-    """The table's rows (module docstring), unpadded."""
+def program_digest(circuit: IF.Circuit) -> str:
+    """The SHA-512 of ``circuit``'s Program (`partition_object.program_sha512`), the ``program`` its record names."""
+    return PO.program_sha512(circuit.program()[0])
+
+
+def rows(circuit: IF.Circuit, program: str | None = None) -> list[bytes]:
+    """The table's rows (module docstring), unpadded; ``program`` is `program_digest`'s, made here unless given."""
     b = _blocks(circuit)
-    program, _ = circuit.program()
-    out = [_row(MAGIC, bytes.fromhex(PO.program_sha512(program)), _u(b.slots, 8), _u(len(b.inference), 8))]
+    program = program_digest(circuit) if program is None else program
+    out = [_row(MAGIC, bytes.fromhex(program), _u(b.slots, 8), _u(len(b.inference), 8))]
     for e in b.inference:
         if len(e.radix) > DIGITS:
             raise ValueError(f"inference entry {e.doc()}: {len(e.radix)} digits, past a row's {DIGITS}")
@@ -109,10 +114,11 @@ def budgets(circuit: IF.Circuit) -> tuple[int, int]:
     return c, fresh // b.slots
 
 
-def commit(circuit: IF.Circuit, salts: Sequence[bytes] | None = None) -> tuple[dict[str, Any], AC.Registration]:
+def commit(circuit: IF.Circuit, program: str | None = None,
+           salts: Sequence[bytes] | None = None) -> tuple[dict[str, Any], AC.Registration]:
     """``circuit``'s partition into inference blocks registered (module docstring): its public statement and the
-    registration, the prover's to keep (the rows, their salts, the tree)."""
-    rs = rows(circuit)
+    registration, the prover's to keep (the rows, their salts, the tree). ``program`` as `rows` takes it."""
+    rs = rows(circuit, program)
     padded = rs + [bytes(ROW_BYTES)] * (PV2.grid(len(rs)) - len(rs))
     reg = AC.register(padded, ROW_BITS, BINDING, salts)
     c, k = budgets(circuit)
@@ -121,4 +127,5 @@ def commit(circuit: IF.Circuit, salts: Sequence[bytes] | None = None) -> tuple[d
     return st, reg
 
 
-__all__ = ["BINDING", "DIGITS", "FORMAT", "MAGIC", "QUERY", "ROW_BYTES", "budgets", "commit", "decode", "rows"]
+__all__ = ["BINDING", "DIGITS", "FORMAT", "MAGIC", "QUERY", "ROW_BYTES", "budgets", "commit", "decode", "program_digest",
+           "rows"]

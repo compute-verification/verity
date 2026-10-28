@@ -12,7 +12,7 @@ import os
 import numpy as np
 import pytest
 from tests.program.predict import test_steps as S
-from tests.program.predict.test_window_circuit import CLASS, GRAIN, OTHER, WINDOW, _labels, held
+from tests.program.predict.test_window_circuit import CLASS, GRAIN, WINDOW, _labels, held
 from tests.program.predict.test_window_circuit_fa3 import H200, LLAMA_1B
 from verity_vllm.program.model import INT8_EXACT_QUANT
 from verity_vllm.program.predict import inference_blocks as IB
@@ -20,12 +20,13 @@ from verity_vllm.program.predict.scan_state import SCAN_STATE
 from verity_vllm.program.predict.window_builder import WEIGHTS
 from verity_vllm.program.predict.window_circuit import WindowClass, class_circuit, window_circuit
 
-from verity.ml.circuits import partition_object as PO
 from verity.ml.circuits import partition_v2 as PV2
 from verity.ml.commitments import advice as AC
 from verity.ml.windows import interface as IF
 
 INT8_H200 = {**H200, "int8_exact": "linears"}
+#: the Program digest the header names, as the record gives it (`inference_blocks.program_digest`, about a minute at TINY)
+PROGRAM = "ab" * 64
 
 
 def _registered(config: dict = S.TINY):
@@ -37,8 +38,7 @@ def _registered(config: dict = S.TINY):
 @pytest.fixture(scope="module")
 def window():
     reg = _registered()
-    return (window_circuit(reg, S.compile_steps(reg, *S._session(*WINDOW)), CLASS, GRAIN),
-            window_circuit(reg, S.compile_steps(reg, *S._session(*OTHER)), CLASS, GRAIN))
+    return window_circuit(reg, S.compile_steps(reg, *S._session(*WINDOW)), CLASS, GRAIN), PROGRAM
 
 
 def _slots(circuit, rs) -> dict[str, np.ndarray]:
@@ -71,16 +71,17 @@ def _unrolled(circuit, slots: dict[str, np.ndarray]) -> tuple[list[int], list[in
 
 
 def test_the_table_is_the_windows_entries_one_block_a_slot(window):
-    """The table is a header (the circuit's Program, its 2 blocks, its entries) and one row an inference entry, never one a
+    """The table is a header (the Program it is given, its 2 blocks, its entries) and one row an inference entry, never one a
     unit: each entry's template, first unit, radix and which digit is the slot. Read back alone it puts every unit in its
-    slot's block, as the circuit's entries do, and two windows of the class have one table."""
-    circuit, other = window
-    rs = IB.rows(circuit)
-    program, m, entries = IB.decode(rs)
-    assert (program, m) == (PO.program_sha512(circuit.program()[0]), 2) and len(rs) == 1 + len(entries)
+    slot's block, as the circuit's entries do."""
+    circuit, program = window
+    rs = IB.rows(circuit, program)
+    assert IB.decode(rs)[:2] == (program, 2)
+    entries = IB.decode(rs)[2]
+    assert len(rs) == 1 + len(entries)
     assert entries == [(PV2.definition_digest(circuit.template(e.template)), e.at, e.radix, e.axes.index("slot"))
                        for e in circuit.blocks.inference]
-    assert all(len(r) == IB.ROW_BYTES for r in rs) and IB.rows(other) == rs
+    assert all(len(r) == IB.ROW_BYTES for r in rs)
     labels, slots = _labels(circuit), _slots(circuit, rs)
     assert all((slots[t] == labels[t][:, 0]).all() for t in circuit.ids)
 
@@ -88,9 +89,9 @@ def test_the_table_is_the_windows_entries_one_block_a_slot(window):
 def test_every_block_has_c_gates_and_k_fresh_input_bits(window):
     """Every block has exactly c gates and takes k fresh-input bits, the circuit unrolled unit by unit agreeing: no wire
     crosses blocks, and a block's fresh input is its slot's lane of the scan state (4,548 words), the weights θ."""
-    circuit, _ = window
+    circuit, program = window
     c, k = IB.budgets(circuit)
-    gates, fresh = _unrolled(circuit, _slots(circuit, IB.rows(circuit)))
+    gates, fresh = _unrolled(circuit, _slots(circuit, IB.rows(circuit, program)))
     assert gates == [c, c] and fresh == [k, k] and k == 4548 * 16
     assert {r.param for r in circuit.registered.reads if r.param.split("/", 1)[0] != WEIGHTS} == {SCAN_STATE}
 
@@ -99,16 +100,16 @@ def test_the_statement_is_the_budgets_and_padded_counts_under_a_hiding_root(wind
     """The statement is the query, c and k, the block and row counts on the grid and the root: no entry, template or unit
     of the table. Each row opens under the root at the padded count, the padding rows zero; the same rows under fresh salts
     have another root, and under the same salts the same one."""
-    circuit, _ = window
-    st, reg = IB.commit(circuit)
-    rs = IB.rows(circuit)
+    circuit, program = window
+    st, reg = IB.commit(circuit, program)
+    rs = IB.rows(circuit, program)
     assert st == {"format": IB.FORMAT, "query": IB.QUERY, "c": IB.budgets(circuit)[0], "k": 4548 * 16, "blocks": 2,
                   "rows": PV2.grid(len(rs)), "root": reg.root.hex()}
     assert list(reg.rows[:len(rs)]) == rs and set(reg.rows[len(rs):]) <= {bytes(IB.ROW_BYTES)}
     root = bytes.fromhex(st["root"])
     assert all(AC.verify(root, st["rows"], IB.ROW_BITS, IB.BINDING, reg.open(i)) for i in range(st["rows"]))
     assert not AC.verify(root, st["rows"], IB.ROW_BITS, PV2.BINDING, reg.open(0))
-    assert IB.commit(circuit)[0]["root"] != st["root"] and IB.commit(circuit, reg.salts)[0] == st
+    assert IB.commit(circuit, program)[0]["root"] != st["root"] and IB.commit(circuit, program, reg.salts)[0] == st
 
 
 @pytest.mark.skipif(not os.environ.get("VERITY_VLLM_FA3_LLAMA_1B"),
@@ -118,8 +119,9 @@ def test_int8_llama_3_2_1b_on_the_h200_is_one_block_a_slot():
     and every block has c gates and k fresh-input bits, the circuit unrolled unit by unit agreeing. Its statement is
     printed as a JSON line."""
     circuit = class_circuit(_registered(json.loads(LLAMA_1B.read_text())), WindowClass(4, 32, 4))
-    st, _ = IB.commit(circuit)
-    rs = IB.rows(circuit)
+    program = IB.program_digest(circuit)
+    st, _ = IB.commit(circuit, program)
+    rs = IB.rows(circuit, program)
     labels, slots = _labels(circuit), _slots(circuit, rs)
     assert all((slots[t] == labels[t][:, 0]).all() for t in circuit.ids)
     gates, fresh = _unrolled(circuit, slots)
