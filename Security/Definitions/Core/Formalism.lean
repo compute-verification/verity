@@ -24,10 +24,12 @@ stated on these objects.
   C-Flock pays for. Credit and reporting count `andSize`; Theorem 3 and the `(c, k)`-partition count `size`.
 * **Credit** (`creditSize lower d`) is the AND count of the registered declared circuit under one public lowering,
   pinned at registration.
-* The **registration** `R = (θ, C, 𝓘)` (`Registration`) is a declaration `(C, θ)`, the fixed values of `θ`'s gates and
-  a partition `𝓘` of the operation gates into `B` proof blocks. A proof block is a unit of a `Partition`; NCI's instance
-  calls them inference blocks, and training's serving blocks. No ordering of the proof blocks is required: Lemma 1 and
-  Theorem 3 read none, so the draft's "inter-block edges point forward" is dropped.
+* The **committed declaration** `R = (θ, C, 𝓘)` (`Committed`) is a declaration `(C, θ)`, the committed values of
+  `θ`'s gates and a partition `𝓘` of the operation gates into `B` proof blocks. It is not the registration
+  (`Verity.Registration`), which holds only the Site, `θ` and the builder `B`: the partition is private. A proof block
+  is a unit of a `Partition`; NCI's instance calls them inference blocks, and training's serving blocks. No ordering of
+  the proof blocks is required: Lemma 1 and Theorem 3 read none, so the draft's "inter-block edges point forward" is
+  dropped.
 * A **`(c, k)`-partition** (`Partition.IsCK`) of a Boolean circuit: every proof block has exactly `c` gates, padding
   included, and at most `k` unregistered input bits, `|in(I) \ θ| ≤ k` (`unregistered`). Its circuit has size `c · B`.
   Proof blocks of at most `c` gates become exactly `c` by a `Pad`: registered padding gates in each proof block, read by
@@ -37,7 +39,7 @@ stated on these objects.
   indexed access to the registered information `r`, outputs `y` within `t` steps, and `⊤` when none does. Side
   information `z` is registered information paired with it, `LDL M t (r, z) y`. The decoder is a parameter (`Decoder`):
   its programs are self-delimiting and more time never changes an output.
-* Lemma 1's proof-block evaluation: `Registration.recompute X u` evaluates proof block `u`'s gates from the registered
+* Lemma 1's proof-block evaluation: `Committed.recompute X u` evaluates proof block `u`'s gates from the registered
   values and `X`'s values at its unregistered inputs, which a decoder is handed as `blockProgram`: an evaluator `e`, the
   proof block's index in `⌈log₂ B⌉` bits (`indexCode`) and the bits of `in(I) \ θ` in gate order.
 
@@ -121,28 +123,28 @@ structure Pad (d : Declaration) {B : ℕ} (P : Partition d.D B) (d' : Declaratio
 /-- **The slowdown** of `C` relative to a reference circuit of size `T₀`: `|C| / T₀`. -/
 noncomputable def slowdown (C : Circuit) (T₀ : ℝ) : ℝ := ((C.size C.computed : ℕ) : ℝ) / T₀
 
-/-- **The registration** `R = (θ, C, 𝓘)`, fixed once before the monitored computation: the declaration `(C, θ)`, the
-values of `θ`'s gates (`val`, read only there) and the partition `P` into `B` proof blocks. -/
-structure Registration where
+/-- **The committed declaration** `R = (θ, C, 𝓘)`, fixed once before the monitored computation: the declaration
+`(C, θ)`, the committed values of `θ`'s gates (`val`, read only there) and the partition `P` into `B` proof blocks. -/
+structure Committed where
   d : Declaration
   val : d.D.Transcript
   B : ℕ
   P : Partition d.D B
 
-namespace Registration
+namespace Committed
 
-variable (R : Registration)
+variable (R : Committed)
 
 /-- A run of the registered circuit: its evaluation on inputs that agree with the registered values on `θ`. -/
 def Honest (a : R.d.D.Transcript) : Prop := ∀ g ∈ R.d.θ, a g = R.val g
 
-/-- **Proof block `u` recomputed** from the registration and `X`: a registered gate takes its registered value, every
+/-- **Proof block `u` recomputed** from `R` and `X`: a registered gate takes its registered value, every
 other gate outside the proof block takes `X`'s value, and the proof block's gates are computed in order. On the proof
 block and its inputs, only `X`'s values on `in(I) \ θ` matter. -/
 def recompute (X : R.d.D.Transcript) (u : Fin R.B) : R.d.D.Transcript :=
   R.d.D.run fun g => if g ∈ R.d.θ then some (R.val g) else if R.P.unit g = some u then none else some (X g)
 
-end Registration
+end Committed
 
 /-- Proof block `u`'s index in `⌈log₂ B⌉` bits, least significant first. -/
 def indexCode {B : ℕ} (u : Fin B) : List Bool :=
@@ -163,13 +165,13 @@ noncomputable def LDL {ρ : Type} (M : Decoder ρ) (t : ℕ) (r : ρ) (y : List 
 
 /-- The program Lemma 1 hands a decoder for proof block `u` of a run `X`: the evaluator `e`, the proof block's index,
 and the bits of its unregistered inputs in gate order. -/
-def blockProgram (R : Registration) (e : List Bool) (X : R.d.D.Transcript) (u : Fin R.B) : List Bool :=
+def blockProgram (R : Committed) (e : List Bool) (X : R.d.D.Transcript) (u : Fin R.B) : List Bool :=
   e ++ indexCode u ++ R.d.D.bits X ((R.d.unregistered (R.P.gates u)).sort (· ≤ ·))
 
 /-- **A fixed evaluator** `e` performs the extraction rule `y` within time `t` for every proof block: on proof block
 `u`'s program of any run `X`, `M` outputs the string `y u` extracts from proof block `u` recomputed from that program's
 contents. -/
-def Evaluates {ρ : Type} (M : Decoder ρ) (r : ρ) (t : ℕ) (R : Registration) (e : List Bool)
+def Evaluates {ρ : Type} (M : Decoder ρ) (r : ρ) (t : ℕ) (R : Committed) (e : List Bool)
     (y : Fin R.B → R.d.D.Transcript → List Bool) : Prop :=
   ∀ u X, M.run r (blockProgram R e X u) t = some (y u (R.recompute X u))
 
