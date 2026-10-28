@@ -1,7 +1,7 @@
 # Honest at L = 32 on the H200 (sm_90) with the LI fold and LI-CP-W's checkpoint reduced across the warp by ONE
-# redux.sync.xor.b32 a segment. The sm_90 gate refuses a warp-collective op in a dynamic-trip OP_UNTIL loop (a clock
-# read ends up inside a loop), so a static-trip OP_LOOP variant (wgli_redux) keeps the clock reads outside the loop,
-# the redux gates, and it times the honest loop beside the saturated
+# redux.sync.xor.b32 a segment. Measured: the sm_90 gate refuses a warp-collective op in a dynamic-trip OP_UNTIL loop
+# (a clock read ends up inside a loop); a static-trip OP_LOOP variant
+# (wgli_redux) keeps the clock reads outside the loop, so the redux gates, and times the honest loop beside the saturated
 # wgmma: it folds the 512 committed words a warpgroup with LI and reduces each segment by one redux.sync.xor, running the
 # wgmma at 0.5993 of its alone rate (the no-checkpoint loop wgli_base at 0.6309, the 5-shuffle fallback wgli_reduce at
 # 0.4937). That loop folds registers the wgmma never writes, so its fold overlaps its own wgmma, which the receipt can't:
