@@ -19,7 +19,7 @@
 // row of 256 bytes a byte value), read through L1 or from shared memory.
 //
 // Every digest is 8 big-endian words, as SHA-512's state holds it. The compression is a policy C, by default `Sha`
-// (sha512.cuh's `sha::` forms), so a kernel passes its own form of the same function.
+// (sha512.cuh's `sha::` forms; `Compact` is its one-body form), so a kernel passes its own form of the same function.
 #pragma once
 #include <cstdint>
 #include <cstring>
@@ -69,6 +69,7 @@ struct NodeK {
 struct Hm96K {
   u64 mid_salt[8];           // the chaining value after salt_prefix
   u64 mid_leaf[8];           // after leaf_prefix(key)
+  u64 kw_leafpad[80];        // the leaf message's all-padding last block (it is 256 bytes), scheduled (pad_schedule)
 };
 
 // sha512.cuh's forms. A kernel's own form is a struct with the same three members.
@@ -77,6 +78,10 @@ struct Sha {
   template <int R0>
   static RC_HD void compress_from(u64* cv, const u64* m, u64* w) { sha::compress_from<R0>(cv, m, w); }
   static RC_HD void compress_kw(u64* st, const u64* kw) { sha::compress_kw(st, kw); }
+};
+// Sha with compress as sha512.cuh's one-body form (compress_compact), for a fold whose CTA has mostly idle warps.
+struct Compact : Sha {
+  static RC_HD void compress(u64* st, u64* w) { sha::compress_compact(st, w); }
 };
 
 RC_HD int nbytes(u64 x) {
@@ -360,7 +365,7 @@ template <class C = Sha>
 RC_HD void hm96_value(const Hm96K& H, u64* B, u64* h) {
   cpy8(h, H.mid_leaf);
   C::compress(h, B);
-  C::compress_kw(h, sx::kw_pad256());
+  C::compress_kw(h, H.kw_leafpad);
 }
 
 // The hm96 leaf's frame leaf, into f, which holds the state after the leaf's first block (frame_first, frame_first_rt
@@ -479,6 +484,12 @@ RC_HD void midstate(const uint8_t* block, u64* st) {
   for (int i = 0; i < 16; ++i) w[i] = be64_at(block + 8 * i);
   sha::iv(st);
   sha::compress(st, w);
+}
+// the all-padding last block of a message of `bytes` bytes (a multiple of 128), scheduled for compress_kw
+RC_HD void pad_schedule(u64 bytes, u64* kw) {
+  u64 blk[16] = {0x8000000000000000ull};
+  blk[15] = bytes * 8;
+  sha::schedule_kw(blk, kw);
 }
 
 // frame-v3's message (merkle._message) into m, zero past it: FRAME || u32be(len tag) || tag || u64be(64) || did, then the
@@ -617,19 +628,20 @@ RC_HD void empty_root(const uint8_t* did, u64* out) {
 }
 
 // Hm96K of key (256 bytes): the chaining values after salt_prefix and after leaf_prefix(key), each its tag (with its NUL)
-// zero-padded to a block, leaf_prefix's after the tag SHA-512(key)
+// zero-padded to a block, leaf_prefix's after the tag SHA-512(key); and kw_leafpad, which is the key's padding too
 RC_HD void hm96_plan(const uint8_t* key, Hm96K& H) {
   const char salt_tag[] = "verity/hm96-sha512/salt/v1", leaf_tag[] = "verity/hm96-sha512/leaf/v1";
   uint8_t blk[128] = {};
   for (int i = 0; i < (int)sizeof salt_tag; ++i) blk[i] = (uint8_t)salt_tag[i];
   midstate(blk, H.mid_salt);
+  pad_schedule(256, H.kw_leafpad);
   u64 st[8], w[16];
   sha::iv(st);
   for (int b = 0; b < 2; ++b) {
     for (int i = 0; i < 16; ++i) w[i] = be64_at(key + 128 * b + 8 * i);
     sha::compress(st, w);
   }
-  sha::compress_kw(st, sx::kw_pad256());
+  sha::compress_kw(st, H.kw_leafpad);
   for (int i = 0; i < 128; ++i) blk[i] = 0;
   for (int i = 0; i < (int)sizeof leaf_tag; ++i) blk[i] = (uint8_t)leaf_tag[i];
   for (int i = 0; i < 8; ++i) be_put(blk + (int)sizeof leaf_tag + 8 * i, st[i], 8);
