@@ -24,7 +24,8 @@ pass) plus the coin commitment's hiding terms (`hiding`), the receipts' binding 
 `timing.sketch_failure` over the session, and the draw's rejection (`rejection`): the statements' δc and δs, and
 `LineHeld`'s Σ_t hide_t, bind and Σ_t k_t/2^64 at the record's `samples`.  `LineHeld`'s error also carries the
 windows' PRF advantages, which are named (`PRF_CLAIM`) and in no δ here.  γ's errors carry `PooledDraw`'s terms beyond
-δ by name (`draw`), the advantages named with their claim and priced in neither."""
+δ by name (`draw`), which have no hiding term since the prover is sent the coin commitment only at the end, the
+advantages named with their claim and priced in neither."""
 from __future__ import annotations
 
 import math
@@ -107,7 +108,7 @@ class Node:
                link_burst_bytes: float | None = None, sketch_outside: int = timing.SKETCH_OUTSIDE) -> Node:
         """`timing`'s node: R measured is the larger of `timing.READ_BYTES_PER_S` and the prover's reported read, R
         at spec the larger of `timing.SPEC_BYTES_PER_S` and that, so a prover reporting a slower read can't shrink
-        a term (MEM-24).  Its rebuild burst is S_chip, what a batch in flight holds on the chips; its disk burst one
+        a term.  Its rebuild burst is S_chip, what a batch in flight holds on the chips; its disk burst one
         second at the disks' ceiling, which is a one-second peak; its link burst `timing.LINK_WINDOW_BYTES` when the
         links are charged."""
         measured = max(timing.READ_BYTES_PER_S, _rate(reported_read_bytes_per_s, "a reported read"))
@@ -164,10 +165,11 @@ def rejection(record: audit.Record) -> float:
 
 
 def hiding(record: audit.Record) -> float:
-    """The coin commitment's hiding terms over the record's n windows (`Committed.hide`,
-    `Accounting.Guarantees.Remote.PooledDraw`): window t's two distances between coin t's hm96 leaf and a leaf
-    committing zeros, each within 2^-192 under the pinned key, n·2^-191 in all (claims `statistical-hiding`,
-    `common-reference-string`, `hash-derived-key`)."""
+    """The coin commitment's hiding terms over the record's n windows, `LineHeld`'s Σ_t hide_t (`Committed.hide`):
+    window t's two distances between coin t's hm96 leaf and a leaf committing zeros, each within 2^-192 under the
+    pinned key, n·2^-191 in all (claims `statistical-hiding`, `common-reference-string`, `hash-derived-key`).  The
+    prover is sent the commitment only at the session's end (`coins.py`), so `PooledDraw` reads no hiding term and
+    `draw` charges none; the memory line's δ keeps it while `LineHeld` states it."""
     return hiding_over(len(record.windows))
 
 
@@ -213,9 +215,10 @@ def binding(record: audit.Record, node: Node) -> float:
     term's t is a draw, one openings coin over g windows (`LineHeld`'s `Receipts` over `Node.draws`): ⌈W/g⌉ of them,
     each opening at most g·|L_t| receipts, its windows' together, at the cap s over them.  Where the cut fixes the
     roots, split_t = 0 and the term is Σ_t √(|L_t|·s_t)·q_t/2^256.5 (`Binding.binding_le_of_fixed`), this charge.  The
-    deployed prover holds the coin commitment, from which it may compute a window's roots, so split_t has no bound
-    yet: this charge takes it as 0, pending the change that sends the prover no commitment to a window's openings coin
-    before its roots (the gap `binding-split`, `PROTOCOL.md` §8)."""
+    prover is sent no coin commitment before the session's end (`coins.Released`, `audit.Session.disclose`), so
+    nothing it holds before a window's openings coin is released depends on that coin; the statement that the play
+    then fixes each window's roots by its cut is not yet in Lean, and this charge takes split_t as 0 (the gap
+    `binding-split`, `PROTOCOL.md` §8)."""
     if record.samples is None or record.append_coins is None:
         raise ValueError("the binding term is charged at the session's bounds, its draw cap and its append coins, "
                          "which a record no session made doesn't state")
@@ -227,28 +230,27 @@ def binding(record: audit.Record, node: Node) -> float:
 
 @dataclass(frozen=True, slots=True)
 class Draw:
-    """`PooledDraw`'s terms beyond its δ, each by name: the rejection (`rejection`), the hiding terms (`hiding`) and
-    the receipts' binding term (`binding`), what reading the record's openings as the deployed draw over receipts its
-    roots hold costs.  `total` is their sum.  The windows' PRF advantages Σ_t Adv(prf t) are the fourth term, which
-    `PRF_CLAIM` prices with no numeric value: `to_json` names it, and `total` holds none of it."""
+    """`PooledDraw`'s terms beyond its δ, each by name: the rejection (`rejection`) and the receipts' binding term
+    (`binding`), what reading the record's openings as the deployed draw over receipts its roots hold costs.  `total`
+    is their sum.  The windows' PRF advantages Σ_t Adv(prf t) are the third term, which `PRF_CLAIM` prices with no
+    numeric value: `to_json` names it, and `total` holds none of it."""
 
     rejection: float
-    hiding: float
     binding: float
 
     @property
     def total(self) -> float:
-        return self.rejection + self.hiding + self.binding
+        return self.rejection + self.binding
 
     def to_json(self) -> dict:
-        return {"binding": self.binding, "hiding": self.hiding, "rejection": self.rejection,
+        return {"binding": self.binding, "rejection": self.rejection,
                 "named": {"prf_advantage": {"claim": PRF_CLAIM, "term": "Σ_t Adv(prf t)", "value": None,
                                             "in_total": False}}}
 
 
 def draw(record: audit.Record, node: Node) -> Draw:
     """The record's draw terms on `node`."""
-    return Draw(rejection(record), hiding(record), binding(record, node))
+    return Draw(rejection(record), binding(record, node))
 
 
 def windows(record: audit.Record) -> list[tuple[int, int]]:
@@ -266,8 +268,8 @@ class Gamma:
     """γ against one R, `capacity_bytes_per_s`: the session's terms (`audit.Ledger`, read per window at Wδ, `gamma`,
     and over the horizon at δ, `gamma_horizon`) and `windows`, the same over each span γ is declared over (`windows`:
     a paced session's fixed windows), each as a fraction of R over its own span.  `error` and `error_horizon` are the
-    ledger's with the sketch's term and the draw's (`draw`: `PooledDraw`'s rejection, hiding and binding terms, the
-    PRF advantages named) added: both readings read the record's openings, each window's or pooled."""
+    ledger's with the sketch's term and the draw's (`draw`: `PooledDraw`'s rejection and binding terms, the PRF
+    advantages named) added: both readings read the record's openings, each window's or pooled."""
 
     capacity_bytes_per_s: float
     ledger: audit.Ledger
