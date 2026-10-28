@@ -181,7 +181,8 @@ changes here and the older name gets a row under Older names, in the same change
   A protocol credits a size S: except with probability δ_coin + δ_crypto, an accepted run's right values cover at
   least (1 − ε_skip)·S AND gates (Size, credit and the slowdown lower bound, below).
 - **Device model** (`Verity.Device`): S_chip bits on chip and M of device memory; per tick at most BW bits from memory,
-  side-channel capacities and each op class's rate. **Schedule** (`Accounting.Schedule`): its steps, each charging a
+  side-channel capacities and each op class's rate. A server's compute is its accelerators': its host CPUs are assumed
+  to contribute none (**hosts carry no compute**, a named assumption). **Schedule** (`Accounting.Schedule`): its steps, each charging a
   **resource account** (`Accounting.Resource`): compute in AND gates (PoUW), bandwidth in bits read (PoUB), capacity in
   bit-ticks (PoUS). A **certificate** is how much of its resource an accepted audit's account used (`Run.ComputeSound`,
   `Run.BandwidthSound`, `Run.CapacitySound`); the **covert residual** what the limits leave beside it
