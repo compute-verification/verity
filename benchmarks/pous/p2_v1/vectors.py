@@ -17,6 +17,7 @@ import hashlib
 import json
 from pathlib import Path
 
+from verity.core.protocols.pous.verifier import MerkleTree
 from verity.ml.commitments.identity import canonical_json_bytes
 from verity.ml.randomness import derive, frame
 
@@ -118,10 +119,10 @@ def _setup(params: R.Params, w_bytes: bytes, payloads: list[int], source: bytes)
     for i, value in enumerate(payloads):
         k, t, _ = R.keys(salt, params, commitment, i // bps, i % bps)
         blocks.append(R.encode(params, value, k, t).to_bytes(n, "big"))
-    leaves = [R.leaf(salt, i // bps, i % bps, b) for i, b in enumerate(blocks)]
-    root = R.root(leaves)
-    return {"manifest": manifest, "commitment": commitment, "salt": salt, "blocks": blocks, "leaves": leaves, "root": root,
-            "epoch": R.epoch_id(params, commitment, salt, root),
+    tree = MerkleTree([R.leaf(salt, i // bps, i % bps, b) for i, b in enumerate(blocks)])
+    root = tree.root
+    return {"manifest": manifest, "commitment": commitment, "salt": salt, "blocks": blocks, "leaves": list(tree.leaves),
+            "tree": tree, "root": root, "epoch": R.epoch_id(params, commitment, salt, root),
             "messages": Wi.setup_messages(manifest, commitment, salt, blocks, root)}
 
 
@@ -140,7 +141,7 @@ def small_vector() -> dict:
     for j in range(k):
         index, nonce = key.uniform(SMALL.blocks, j), key.stream(("nonce", j), 32)
         challenge = Wi.challenge_message(s["epoch"], audit_id, j, index, nonce)
-        response = Wi.response_message(s["epoch"], audit_id, j, index, s["blocks"][index], R.path(s["leaves"], index))
+        response = Wi.response_message(s["epoch"], audit_id, j, index, s["blocks"][index], s["tree"].path(index))
         transcript += [challenge, response]
         records.append(Wi.record(j, index, elapsed[j], 0x0F, hashlib.sha512(challenge).digest(),
                                  hashlib.sha512(response).digest()))
