@@ -8,8 +8,8 @@ the blocks the monitoring period holds. Every other span of time is a block's sp
 block's, a server block's.
 
 * **A tick** (`Tick`): one step of a clock, the device model's unit of time.
-* **A span of ticks** (`TickSpan`): the ticks `[start, start + len)` of one clock, ending at `stop`. Which clock it is
-  on is its reader's. `Within` says one span lies inside another.
+* **A span of ticks** (`TickSpan`): the ticks `[start, start + len)` on the one clock (`OneClock`), ending at `stop`.
+  `Within` says one span lies inside another.
 * **A cut** of a span into `n` consecutive spans (`TickSpan.Cut`): `n + 1` boundaries, in order, from the span's start
   to its stop. Its part `j` (`Cut.part`) is the span between boundaries `j` and `j + 1`.
 * **A monitoring period** (`MonitoringPeriod`): a span of ticks cut into its execution blocks' spans, each cut into its
@@ -26,8 +26,8 @@ namespace Verity
 /-- **A tick**: one step of a clock, the device model's unit of time. -/
 abbrev Tick : Type := ℕ
 
-/-- **A span of ticks**: the ticks `[start, start + len)` of one clock. A monitoring period's span and a block's span are
-each a `TickSpan` read in that role; which clock it is on is its reader's. -/
+/-- **A span of ticks**: the ticks `[start, start + len)` on the one clock (`OneClock`). A monitoring period's span and a
+block's span are each a `TickSpan` read in that role. -/
 structure TickSpan where
   /-- its first tick -/
   start : Tick
@@ -86,7 +86,8 @@ def samplingSpan (m : MonitoringPeriod) (j : Fin m.executionBlocks) (t : Fin (m.
 end MonitoringPeriod
 
 /-- **A play over `n` sampling blocks**, each drawing a coin from `Ω`: block `t`'s move, an `X t`, is any function of
-the coins of the blocks before it. -/
+the coins of the blocks before it. It is a `Game.Strategy` of the game that, block by block, receives the block's move
+and then draws its coin, indexed by block where the strategy is a tree: the same data, uncurried. -/
 abbrev Play (n : ℕ) (Ω : Type) (X : Fin n → Type) : Type :=
   (t : Fin n) → ({s : Fin n // s < t} → Ω) → X t
 
