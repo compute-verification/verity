@@ -37,7 +37,8 @@ included), from the run's Nsight Systems export, step trace and serve record:
   length: launch (under 20 µs), host (20 µs to 2 ms), or idle (2 ms or more).
 
     terms.py served --sqlite PROF.sqlite --trace ADVICE_TRACE.jsonl --util UTIL.json --serve SERVE.json
-        --certified-over-declared R [--credit TEXT] [--key all]      prints one JSON object and, with --text, a table
+        --certified-over-declared R [--credit TEXT] [--key all] [--steps FIRST-LAST ...] [--text OUT.txt]
+                                  prints one JSON object (a list of them with --steps) and, with --text, a table each
 """
 from __future__ import annotations
 
@@ -319,15 +320,20 @@ def host_spans(trace: list[dict], wins: list[dict], st: dict, at) -> list[tuple[
     return out
 
 
-def served(prof: dict, trace: list[dict], util: dict, serve: dict, ratio: float, credit: str, key: str = "all") -> dict:
+def served(prof: dict, trace: list[dict], util: dict, serve: dict, ratio: float, credit: str, key: str = "all",
+           steps: tuple[int, int] | None = None) -> dict:
     w = util.get(key) or {}
-    if not w.get("first_step"):
+    if not w.get("first_step") and not steps:
         raise SystemExit(f"terms.py served: util.json has no window {key!r} of two or more full steps")
     model = SERVED_MODELS.get(serve.get("model"))
     if model is None:
         raise SystemExit(f"terms.py served: no shapes for {serve.get('model')!r}: add its config to SERVED_MODELS")
     st = {r["step"]: r for r in trace if r.get("kind") == "step" and "t" in r}
-    first, last = w["first_step"], w["last_step"]
+    first, last = steps or (w["first_step"], w["last_step"])
+    if steps:
+        key, w = f"steps {first}-{last}", {}
+        if not all(s in st for s in range(first - 1, last + 1)):
+            raise SystemExit(f"terms.py served: --steps {first}-{last}: the trace lacks a step from {first - 1} to {last}")
     at = lambda s: int(s * 1e9) - prof["zero"]          # noqa: E731  (a wall-clock second on the export's timeline)
     lo, hi = at(st[first - 1]["t"]), at(st[last]["t"])
     wall = (hi - lo) / 1e9
@@ -374,7 +380,7 @@ def served(prof: dict, trace: list[dict], util: dict, serve: dict, ratio: float,
 
 def served_text(r: dict) -> str:
     rd = r["readings"]
-    lines = [f"{r['arm']} T {r['T']}: {r['steps']} full steps {r['first_step']}–{r['last_step']}, wall {r['wall_s']:.4f} s "
+    lines = [f"{r['arm']} T {r['T']} [{r['window']}]: {r['steps']} full steps {r['first_step']}–{r['last_step']}, wall {r['wall_s']:.4f} s "
              f"({1e3 * r['wall_s'] / r['steps']:.2f} ms a step)",
              "u (tensor work at peak over wall): " + ", ".join(f"{v['u']:.2%} at {v['clock_mhz']:,} MHz ({k})" for k, v in rd.items())
              + (f"; Tensor Active {r['tensor_active']:.2%}" if r["tensor_active"] is not None else ""),
@@ -402,14 +408,19 @@ def served_main(argv: list[str]) -> int:
     ap.add_argument("--certified-over-declared", required=True, type=float)
     ap.add_argument("--credit", default=UNCREDITED)
     ap.add_argument("--key", default="all")
+    ap.add_argument("--steps", action="append", default=[], metavar="FIRST-LAST",
+                    help="also these steps (each from the previous step's end), past util.json's window; repeatable")
     ap.add_argument("--text", type=Path, help="also write the table here")
     a = ap.parse_args(argv)
     trace = [json.loads(x) for x in a.trace.read_text().splitlines() if x.strip()]
-    r = served(served_profile(sqlite3.connect(a.sqlite)), trace, json.loads(a.util.read_text()),
-               json.loads(a.serve.read_text()), a.certified_over_declared, a.credit, a.key)
-    print(json.dumps(r, indent=1))
+    prof, util, serve = served_profile(sqlite3.connect(a.sqlite)), json.loads(a.util.read_text()), json.loads(a.serve.read_text())
+    rs = [served(prof, trace, util, serve, a.certified_over_declared, a.credit, a.key)]
+    for s in a.steps:
+        lo, _, hi = s.partition("-")
+        rs.append(served(prof, trace, util, serve, a.certified_over_declared, a.credit, steps=(int(lo), int(hi or lo))))
+    print(json.dumps(rs[0] if len(rs) == 1 else rs, indent=1))
     if a.text:
-        a.text.write_text(served_text(r) + "\n")
+        a.text.write_text("\n\n".join(served_text(r) for r in rs) + "\n")
     return 0
 
 

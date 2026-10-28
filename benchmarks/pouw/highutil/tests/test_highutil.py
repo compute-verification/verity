@@ -182,6 +182,14 @@ def test_a_served_step_s_u_accounted_share_and_rest_sum_to_one(tmp_path, capsys)
     assert math.isclose(r["tensor_active"], 0.5) and r["credit"] == terms.UNCREDITED
     assert r["windows"]["measured"] == {"windows": [0], "passed": 1, "committed_GB": 13.6}
     assert terms.UNCREDITED in (tmp_path / "out.txt").read_text()
+    assert terms.main(["served", "--sqlite", str(tmp_path / "prof.sqlite"), "--trace", str(tmp_path / "trace.jsonl"),
+                       "--util", str(tmp_path / "util.json"), "--serve", str(tmp_path / "serve.json"),
+                       "--certified-over-declared", "1.5", "--steps", "2-2"]) == 0
+    whole, step2 = json.loads(capsys.readouterr().out)
+    assert whole == r and step2["window"] == "steps 2-2" and math.isclose(step2["wall_s"], 0.01)
+    assert {k: round(v * 10, 6) for k, v in step2["shares"].items()} == {
+        "idle (GPU idle 2 ms or more)": 6, terms.HOSTS[0]: 2, terms.HOSTS[1]: 1, "quantize (int8 rows)": 1}
+    assert step2["macs"]["declared"] == 512 * per_token and step2["windows"]["measured"]["windows"] == []
 
 
 def test_gamma_is_against_the_first_baseline_timed_and_each_baseline_has_its_own():
