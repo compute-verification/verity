@@ -979,18 +979,6 @@
    "assumptions": [],
    "type_hash": "9ef48444197e3ddf011a98db92e86110363c2cf80dde2491249648d8fe97dbc2"
   },
-  "Properties.Period.monitoringPeriodIsSpec": {
-   "owner": "@network-accounting",
-   "signature": ["Properties.Period.monitoringPeriodIsSpec : Properties.Period.MonitoringPeriodIsSpec"],
-   "assumptions": [],
-   "type_hash": "09ddaaf6097de9af2ede528fcb7a0d704c8e59bec5ce64636c04c85193b4cb96"
-  },
-  "Properties.Period.tickSpanIsSpec": {
-   "owner": "@network-accounting",
-   "signature": ["Properties.Period.tickSpanIsSpec : Properties.Period.TickSpanIsSpec"],
-   "assumptions": [],
-   "type_hash": "ae2e64d76b008496fa2bcc2fa6f4dfae63322354cc6fbd26a1736f95ab6a0d28"
-  },
   "Properties.DeclaredCircuit.SecurityProofs.scheduledRequirement": {
    "owner": "@compute-accounting",
    "signature": [
@@ -1628,6 +1616,18 @@
    "signature": ["Properties.NetworkRecords.noGridMeans : Properties.NetworkRecords.NoGridMeans"],
    "assumptions": [],
    "type_hash": "9e643a105f5704513bd184fa62a05149067300421a23658f5650e0bfc18672ee"
+  },
+  "Properties.Period.monitoringPeriodIsSpec": {
+   "owner": "@network-accounting",
+   "signature": ["Properties.Period.monitoringPeriodIsSpec : Properties.Period.MonitoringPeriodIsSpec"],
+   "assumptions": [],
+   "type_hash": "2f47dc444e12b00f03b19c2ee86429f209e80e0940ff5a63b9a1b288e82f2369"
+  },
+  "Properties.Period.tickSpanIsSpec": {
+   "owner": "@network-accounting",
+   "signature": ["Properties.Period.tickSpanIsSpec : Properties.Period.TickSpanIsSpec"],
+   "assumptions": [],
+   "type_hash": "d9536d7f99148ae2590b8bd756deb5d4237e2a692047bc12bb1837705825db5b"
   },
   "Properties.Pouw.Check.acceptMeans": {
    "owner": "@compute-accounting",
@@ -11349,13 +11349,13 @@
    "guarantees": ["Properties.Composition.acceptMeans", "Properties.Composition.answerAccepts"]
   },
   "Properties.Core.Period": {
-   "digest": "9892abae38297c35223a059b00fe4970638b324228e4335fe63f74c3eca25628",
+   "digest": "90e1f16f61a3f7c88ea56962eb373e3da5d8c30be44c966668d8398d662ce768",
    "definitions": {
-    "Properties.Period.MonitoringPeriodIsSpec": "0d8d976c7e701841e1afc5a8c1264fe07ec98de0de8223ba7a2f3c0f7cbff4af",
-    "Properties.Period.TickSpanIsSpec": "6d4b5836980de66827135daff0aa931bab64982e6f51791872e8101ba7c0de82",
-    "Properties.Period.boundaries": "169f9c3a1a036487f93403c6ec5b08b71165e2d97b0856f347f28da15557f9d7",
-    "Properties.Period.code": "b96adc723c395a01982c92bc5ead34c7754a30dde8d2f39b19bba8a52084a02b",
-    "Properties.Period.spec": "768d40a5dbb6307ff4b7496f26dc417ea0f026b349223bb86c938911b368f1b7"
+    "Properties.Period.MonitoringPeriodIsSpec": "367fc89df7a00e74c5466ce46af85ddf2fb19473c8e11ff39b8aeff501ccb0fe",
+    "Properties.Period.TickSpanIsSpec": "b9715256c2a475435c2528939a46029883716afcc98f1bdccba900483c119c66",
+    "Properties.Period.boundaries": "7fe05c5430ee827d6f5cff7f5bddff0de2a684c998f2c0aa5e2751049c87c592",
+    "Properties.Period.code": "f8da8be770bb1bc6d6ce88923775ace1aaac61bfa7da2bc549ebc53c59dc2727",
+    "Properties.Period.spec": "7ea08605ed01e8af886d1b0a6e4e39666218b83a60ee01407d57b06e8068b614"
    },
    "guarantees": ["Properties.Period.monitoringPeriodIsSpec", "Properties.Period.tickSpanIsSpec"]
   },
