@@ -154,6 +154,40 @@ def test_the_declared_program_is_written_as_its_digest_is_hashed_with_the_layout
     srv.src.uninstall()
 
 
+def test_with_h1_model_the_weights_are_registered_under_the_auditors_key_for_the_declared_program(tmp_path, monkeypatch):
+    """``--h1-model`` M with ``--challenger-gate``: the arm asks the gate's ``model-key --model M --circuit C`` for the
+    declared Program's digest C and registers the weights' b/<K> under the answer's key, so they fold to the root the
+    period-open signs; a refusal, or an answer for another circuit, leaves a key of the process's."""
+    import hashlib
+
+    key, asked, used = bytes(range(32)), [], []
+    real = SV.register_weights
+    monkeypatch.setattr(SV, "register_weights", lambda d, s, w, k: used.append(k) or real(d, s, w, k))
+
+    def gate(answer):
+        def run(argv):
+            asked.append(shlex.split(argv[-1]))
+            return answer(asked[-1][4])
+        return run
+
+    def registered(circuit):
+        return 0, json.dumps({"model": "M", "circuit": circuit, "weights_root": "ab" * 64, "key": key.hex(),
+                              "key_sha512": hashlib.sha512(key).hexdigest()})
+
+    def opts(model):
+        return SimpleNamespace(gate=SimpleNamespace(challenger_gate=GATE, h1_model=model))
+    assert SH.model_key_of(opts(None)) is None
+    srv = _Server(monkeypatch)
+    for answer, want in ((registered, key), (lambda c: (3, json.dumps({"refused": "no registration"})), None),
+                         (lambda c: registered("cd" * 64), None)):
+        used.clear()
+        arm = SH.H1Windows(srv.model, srv.com, ROWS, STEPS, engine=object(), out=tmp_path, unit=_unit(),
+                           model_key=SH.model_key_of(opts("M"), gate(answer)))
+        assert asked[-1] == ["model-key", "--model", "M", "--circuit", arm.digest]
+        assert (used == [key]) if want else (len(used) == 1 and used[0] != key)
+    srv.src.uninstall()
+
+
 class _GateAuditor(_Auditor):
     """`test_commit_coins._Auditor` answering ``status`` as infra's gate does, with the session's open and end entries;
     `settle` (the arm's wait between polls) ends each session whose client has closed it, as serve.py's exit does."""
@@ -385,7 +419,7 @@ def test_the_arm_is_ready_before_the_server_listens(tmp_path, monkeypatch):
     monkeypatch.setattr(TD, "available", lambda: False)
     monkeypatch.setattr(verifier, "executable", lambda: built.append(len(calls)))
     opts = SimpleNamespace(protocols=SH.ENTRY, max_num_batched_tokens=ROWS, window_steps=STEPS, protocols_config=None,
-                           gate=SimpleNamespace(h1_prover=None))
+                           gate=SimpleNamespace(h1_prover=None, challenger_gate=None, h1_model=None))
     arm = SH.arm_of(opts, SimpleNamespace(model=srv.model, vllm=object()), srv.com, tmp_path)
     (held,) = sessions.held
     assert arm.describe()["ready"] == {"tables": "off", "kernels": 3, "session": held["session"],
