@@ -8,7 +8,8 @@
 # (on vy-nebius-2 a guest job adds --preemptible; one arm a run, ZK_ARMS=fw, takes about 3.5 h with its verification, the builds cached)
 # env: ZK_KS=4096,14336  ZK_SIZES=1,8,64,512  ZK_DRAWS=1,8,64,c  ZK_ARMS=fw,nofw  ZK_COLD=2  ZK_RUNS=3  ZK_WARM=1
 #      LEASE_MAX_MIN=30 (one GPU lease a point)  ZK_SM (the build's SM; default the GPU's compute_cap, else 120)
-#      CUDA_TK (a toolkit the node's driver runs, such as an H200 node's /usr/local/cuda-13.0; default CUDA 13.3)
+#      CUDA_TK (a CUDA 13.3 toolkit; default /usr/local/cuda-13.3, else apt's packages, else CUDA_REDIST=13.3.1's archives,
+#      unpacked under FLOCK_WORK)
 #      FLOCK_WORK=/workspace/jobs/proof-throughput (the CUDA prover's build and venv, as proof_throughput's job.sh keeps them)
 #      PT_WORK=/workspace/cache/proof-throughput (the Lean verifier's build, as its verify.sh keeps it)
 # Kept in $OUT: the records (stage, prove and verify .jsonl), the fit (fit.json, fit.md, observations.json) and the logs;
@@ -43,7 +44,15 @@ if [ ! -x /usr/local/cuda-13.3/bin/nvcc ] && [ -z "${CUDA_TK:-}" ]; then
       && for d in "$CR"/debs/*.deb; do dpkg-deb -x "$d" "$CR"; done; }) > "$O/cuda-unpack.log" 2>&1
   [ -x "$CR/usr/local/cuda-13.3/bin/nvcc" ] && export CUDA_TK=$CR/usr/local/cuda-13.3
 fi
-[ -x /usr/local/cuda-13.3/bin/nvcc ] || [ -n "${CUDA_TK:-}" ] || { log "no CUDA 13.3 on this node"; tail -5 "$O/cuda-unpack.log"; exit 1; }
+# else NVIDIA's redistributable archives of CUDA_REDIST, where apt has no 13.3 (an H200 node, whose host CUDA 13.0's ptxas
+# doesn't know the kernels' clmad)
+if [ ! -x /usr/local/cuda-13.3/bin/nvcc ] && [ -z "${CUDA_TK:-}" ]; then
+  RD=$FLOCK_WORK/cuda-${CUDA_REDIST:-13.3.1}
+  (exec 8>"$FLOCK_WORK/cuda-redist.lock"; flock 8; [ -x "$RD/bin/nvcc" ] \
+    || python3 verity/ml/flock/pod/cuda_redist.py "${CUDA_REDIST:-13.3.1}" "$RD") > "$O/cuda-redist.log" 2>&1
+  [ -x "$RD/bin/nvcc" ] && export CUDA_TK=$RD
+fi
+[ -x /usr/local/cuda-13.3/bin/nvcc ] || [ -n "${CUDA_TK:-}" ] || { log "no CUDA 13.3 on this node"; tail -5 "$O/cuda-unpack.log" "$O/cuda-redist.log"; exit 1; }
 C13=${CUDA_TK:-/usr/local/cuda-13.3}; export LD_LIBRARY_PATH=$C13/compat:$C13/lib64:${LD_LIBRARY_PATH:-}
 { lscpu | grep -E 'Model name|^CPU\(s\)'; nproc; free -g; } > "$O/host.txt" 2>&1
 
