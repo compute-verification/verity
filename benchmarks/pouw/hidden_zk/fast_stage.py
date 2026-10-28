@@ -2,8 +2,9 @@
 one process (stage.py's); `composed()`, `size()` and `release()` hand stage.py the circuit it composed, so it never reads
 the circuit back.
 
-    - the cycle collector is off: staging makes no cyclic garbage (a K=256 row unit's 30k collections freed 325 objects),
-      and its collections were about 30% of the time at K=256, more at K=4096
+    - the cycle collector is off: staging makes little cyclic garbage (a K=256 row unit's 30k collections freed 325
+      objects; an H1 lane at K=2048 ends holding 10.9M unreachable objects, about 0.3 GiB of its 3.9 GiB), and its
+      collections were about 30% of the time at K=256, more at K=4096
     - the unit circuit is a `compact_stage.CompactCircuit`: its ANDs' operands go to a spool under ``scratch`` as int32, and
       `compact_stage.layout` lays it out from there (a circuit it does not take gets the library's lists back, and the
       layout below). `compact_stage.lower` lowers into it, dropping each IR wire after its last read
