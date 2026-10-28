@@ -21,4 +21,4 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 
 [tool.verity.tests]
 # measure.py reads the run's id, directory and commit through verity_config's SHARED settings.
-inputs = ["benchmarks/census", "tools/config/verity_config"]
+inputs = ["benchmarks/census", "tools/config/verity_config", "verity/__init__.py", "verity/settings.py"]
