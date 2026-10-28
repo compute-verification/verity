@@ -13595,7 +13595,7 @@
    ]
   },
   "SampledProofs.ChallengerSession": {
-   "digest": "6b4b08d2e1400d302b737b62b25a46e480b9a3f165b519535592eb40ed90c21d",
+   "digest": "6dfacbb9e12e457e42b6acdde13a89ec77fc865b49a078e03ce5c5f0e8f3ed67",
    "definitions": {
     "SampledProofs.Challenger.Audited": "159b77cf065dee90e23af320bf78c6c962956fb8dafae7711c47bf9b416a91e0",
     "SampledProofs.Challenger.Audited.commitment": "468002e4d32fd36d92c016491502672fbffc8b638777f35e073eb3b379bd9b63",
@@ -13672,7 +13672,7 @@
     "SampledProofs.Challenger.Win.leaf": "70c267f9f5e3a2b5d5951207683242113397dab420e6810e4350eeaa8fb3ac75",
     "SampledProofs.Challenger.Win.opened": "702e6d338563166ebf5bf755e1f4eba982a8b27620b0f622a32fbdd439933f0a",
     "SampledProofs.Challenger.Win.root": "d145218c1794c4273308c84e088d74538a2b9f189a5bd47594d2e9464da9853c",
-    "SampledProofs.Challenger.ZERO": "baab14c603e8c5c06ca3ab4b224a31b3089af1dc631ac07600b27d030ebba497",
+    "SampledProofs.Challenger.ZERO": "e7f51c66d4d20f842a81843feb761873e1190db918e1f77795db1bac168aa4f9",
     "SampledProofs.Challenger.auditedOpen": "280c02bea47d3390683214a737e67a082d78fc6f6b7c75050d95dad9e42aa947",
     "SampledProofs.Challenger.auditedSession": "c11aee02c4ac7c235d8a00bb5c3eda93b5c80fc763aee3142b480db67a0434ac",
     "SampledProofs.Challenger.checked": "dd3765be37fdd0b1fa5e3f18f9bce0299f256e053678aeb146dfdf89f01367e8",
@@ -13695,9 +13695,9 @@
     "SampledProofs.Challenger.laneOf": "89f94029905b9a787a9b6cb67c31561dd1e28d8c6538e861e0f1e0991405fcff",
     "SampledProofs.Challenger.later": "6aa8332f863691e24553bbcfc3c19835da9115c5f053df9d2c7d644722e04267",
     "SampledProofs.Challenger.leafOf": "4712a23a6e2670b893b88edaeeabda556391b612cd99fc324902b4497ec3d224",
-    "SampledProofs.Challenger.ledgerEntry?": "1393d273e8c685111f0e4478715facc72cd82ee8bc9d08174246c7b1c24d6652",
-    "SampledProofs.Challenger.ledgerEntry?._sparseCasesOn_1": "55eb025b69d6c627bbc6128956d32302b4b7a8aeeb6a1ca84eb56205cab7aca1",
-    "SampledProofs.Challenger.ledgerMessage": "b87b9459b0c091128fa0ecc10d3713416fda2f8edfcee6a9871cfc69f96a9aee",
+    "SampledProofs.Challenger.ledgerEntry?": "6d65b5dca772e46eecfe845d1b579fca9a5e025284ff406839e1002264bcbbbe",
+    "SampledProofs.Challenger.ledgerEntry?._sparseCasesOn_1": "b53f656b00c51cba381be3db08bf896f9a10713ceb227229fa341acd5da7097e",
+    "SampledProofs.Challenger.ledgerMessage": "589a1ecc7b3f9823b6f3066626c8689e426adc44c48464e9463a460c2f89560e",
     "SampledProofs.Challenger.ledgerTag?": "3a56c57ec82fb0eeda7fa2552b9477c656fabf72be8687c1147e1889a884172c",
     "SampledProofs.Challenger.logChain": "fbde5859f5f5bf70d7e326d5ee0089196a31d1e8f28ea84f809c85ce5c3f530c",
     "SampledProofs.Challenger.logDigest": "6d06248e8115e687377bb0f9515d3cdea1ad643c3426b7a06ab0754872b2fecf",
