@@ -3,9 +3,10 @@
 A card is a GPU's (``kind = "gpu"``) or a host's (``kind = "host"``: a server's CPUs and DRAM, apart from the GPUs it
 carries). Every number in a card file is an entry ``{value, unit, mark, source}``. ``mark`` is ``ceiling`` (no program
 on that SKU and firmware exceeds it: what the model's premises need), ``measurement`` (a measured value, so only a lower
-bound on the ceiling) or ``placeholder`` (neither: open). ``source`` names a data sheet, a document, a run id or an
-``art:`` id. The Lean card tables (``Security/Definitions/Core/Accel``) are held to the GPU cards that name one
-(``lean``), number by number (``verity/hardware/tests/test_lean.py``). Stdlib only, and it imports no other unit.
+bound on the ceiling) or ``placeholder`` (neither: open). ``source`` names a data sheet, a document or an ``art:`` id
+(a run's record), and a node by its kind, never its host name. The Lean card tables (``Security/Definitions/Core/Accel``)
+are held to the GPU cards that name one (``lean``), number by number (``verity/hardware/tests/test_lean.py``). Stdlib
+only, and it imports no other unit.
 
 ~~~python
 from verity.hardware import load, skus

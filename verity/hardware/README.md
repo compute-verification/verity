@@ -6,7 +6,8 @@ no second card). Each number is an entry `{ value, unit, mark, source }`:
 
 - `mark` is `ceiling` (no program on that SKU and firmware exceeds it: what the model's premises need), `measurement`
   (a measured value, so only a lower bound on the ceiling) or `placeholder` (neither: open);
-- `source` names a data sheet, a document, a run id or an `art:` id.
+- `source` names a data sheet, a document or an `art:` id (a run's evidence: its record, `research data show RUN`'s
+  `outputs.run_record`), and a node by its kind, never its host name.
 
 | SKU | kind | file | Lean table |
 |---|---|---|---|
@@ -16,8 +17,8 @@ no second card). Each number is an entry `{ value, unit, mark, source }`:
 | Two Xeon 6776P, the RTX node's host | host | `cards/xeon-6776p-2s.toml` | none |
 | Two Xeon Platinum 8468, the H200 nodes' host | host | `cards/xeon-platinum-8468-2s.toml` | none |
 
-Every card of a kind has the same sections. A GPU card's are `sm`, `clock`, `power`, `store`, `rate` (each resource's
-units a SM-clock), `memory` (device memory's bus, transfers and bandwidth), `weight` (the tensor units a MAC of each
+Every card of a kind has the same sections. A GPU card's are `sm`, `clock`, `store`, `rate` (each resource's units a
+SM-clock), `memory` (device memory's bus, transfers and bandwidth), `weight` (the tensor units a MAC of each
 format uses) and `model` (`Accel.Card`'s `exact` and code space). A host card's are `cpu` (sockets and cores), `clock`,
 `rate` (AMX MACs and the host's op peak), `memory` (DRAM's channels, speed, bandwidth, measured read and write ceiling)
 and `store` (its caches and allowances, and `chip`, the host's on-chip bytes in S_chip).

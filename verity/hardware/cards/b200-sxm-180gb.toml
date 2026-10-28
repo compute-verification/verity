@@ -20,9 +20,6 @@ count = { value = 148, unit = "SM", mark = "ceiling", source = "the SMs the firm
 sm = { value = 1965, unit = "MHz", mark = "ceiling", source = "art:a597e0beaf00 (nvidia-smi -q: max, application, default application and max customer boost clocks 1965 MHz; NVML GPC and memory clock VF offset ranges [0, 0]; supported graphics clocks top at 1965; every lock, application clock and offset above 1965 MHz clamped or refused); no NVIDIA document states a B200 clock" }
 memory = { value = 3996, unit = "MHz", mark = "ceiling", source = "art:a597e0beaf00 (max, application and default application memory clock 3996 MHz; supported memory clocks top at 3996; memory VF offset range [0, 0], a +500 MHz offset refused)" }
 
-[power]
-limit = { value = 1000, unit = "W", mark = "ceiling", source = "art:a597e0beaf00 (power limit 1000 W: default 1000, min 200, max 1000; 1050 W refused); Lenovo ThinkSystem NVIDIA HGX B200 180GB 1000W GPU Product Guide Table 2: 'Total Graphics Power (TGP) 1000W'" }
-
 # The stores. Registers in 32-bit words an SM; the rest in bytes.
 [store]
 reg = { value = 65536, unit = "word/SM", mark = "ceiling", source = "Blackwell Tuning Guide section 1.4.1.1: 'The register file size is 64K 32-bit registers per SM'" }
