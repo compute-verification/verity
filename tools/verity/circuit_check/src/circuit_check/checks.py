@@ -44,7 +44,8 @@
                      head check) against its ``digests`` pin
     block            the witness bits a whole Definition needs as one C-Flock unit, read off it (its ANDs and port bits,
                      `verity_flock.circuit.unit_witness`), within C-Flock's proved range of 2^``K_MAX`` (`block_range`): past
-                     it, `UnitStager` refuses the unit before lowering, and `compose` would have refused it after
+                     it, `UnitStager` refuses the unit before lowering, and `compose` would have refused it after.  Failed
+                     for the Definitions staged whole as one unit (PoUW's, `UNIT_OWNERS`), recorded for the rest
 
 Correctness and invariant violations are failures, each with a name (``"<check>/<code> <definition> ..."``); redundant and dead
 gates are warnings with counts (they become failures with the re-baseline's common-subexpression pass).  An unpinned lowering,
@@ -935,16 +936,23 @@ def check_definition(fn: Any, opts: Options = Options(), *, memo: dict | None = 
             entry["digest"] = circuit_digest_pin(t, pins, F)
     if kind != "reference":
         with spent("block"):
-            entry["block"] = block_range(t, F, applies=lower_whole)
+            entry["block"] = block_range(t, F, applies=lower_whole and (SC.owner(t) or "").startswith(UNIT_OWNERS))
     entry["failures"], entry["warnings"] = F.failures, F.warnings
     done[(t.id, lower_whole, as_call)] = entry
     return entry
 
 
+#: the packages whose Definitions are each staged whole as one C-Flock unit (`verity_flock.class_statement.UnitStager`), so
+#: `block_range` fails one past the range: PoUW's.  A served Program's Call is proved as its partition's proof blocks
+#: (`partition`), so a Call's whole count bounds none of them and is recorded, not failed.
+UNIT_OWNERS = ("verity.core.protocols.pouw.",)
+
+
 def block_range(t: Any, F: Findings, applies: bool = True) -> dict:
     """The witness bits ``t`` needs as one C-Flock unit, read off its Definition (`verity_flock.circuit.unit_witness`), against
-    C-Flock's proved range of 2^``K_MAX``; past it a failure where ``t`` is checked as one unit (``applies``: a whole
-    Definition, not a subcircuit's, whose units are its template's proof blocks), the one `UnitStager` raises before lowering."""
+    C-Flock's proved range of 2^``K_MAX``; past it a failure where ``t`` is one unit (``applies``: checked whole, not as a
+    subcircuit whose units are its template's proof blocks, and owned under `UNIT_OWNERS`), the one `UnitStager` raises
+    before lowering."""
     from verity_flock import circuit as FC
 
     w = FC.unit_witness(t)
@@ -1213,6 +1221,6 @@ def report(targets: list[dict], opts: Options) -> dict:
             "targets": targets}
 
 
-__all__ = ["Findings", "Options", "SCHEMA", "block_range", "check_definition", "check_row", "check_subcircuit", "correspondence", "dead_gates",
+__all__ = ["Findings", "Options", "SCHEMA", "UNIT_OWNERS", "block_range", "check_definition", "check_row", "check_subcircuit", "correspondence", "dead_gates",
            "load_pins", "partition", "redundant_ands", "redundant_gates", "report", "summarize", "target_equivalence", "template_lowering",
            "whole_lowering"]
