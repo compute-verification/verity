@@ -5,18 +5,18 @@ import Proofs.Flock.Soundness.Discharge.ZkHidden.CustodyJP
 # `SampledKSLiveV5`: the sampled audit's knowledge soundness at the verifier's public inputs (stated)
 
 `SampledKSLiveV2` at flock-verify `--zk --public-inputs`, with or without shared rows. `own` is the verifier's own
-recomputation of each unit's public input words (`HmIn.checkOwn`), and the statement holds at every `own`:
+recomputation of each proof block's public input words (`HmIn.checkOwn`), and the statement holds at every `own`:
 
 * the circuit's public input ports `pi` (`HmIn.parse`) and the population's public file loaded over them
   (`HmIn.loadPublic`), in place of `HmOut.loadPublic` and `pub.tables = none`;
-* the program `Placed.keyProgP`, whose units read the gates of their keys with public inputs, its outputs
+* the program `Placed.keyProgP`, whose proof blocks read the gates of their keys with public inputs, its outputs
   `Layout.outsOfP`, the binding `ZkHidden.rsZHJP`, the session's tables `planZHJP` and its simulator `simZJA` at
   flock-verify's acceptance at `own` (`AcceptsZKP`, through `decodesZCJH_custodyP`);
 * `live-verifier` at `own` (`Assumptions.Zk.RecordCustodyZKJP`);
-* the constants `Bridge.constsOfP`: `constsOf`'s constant and zero, and each unit's public gates at its public input
+* the constants `Bridge.constsOfP`: `constsOf`'s constant and zero, and each proof block's public gates at its public input
   words' bits in the population's public file (`HiddenExec.pubBitOf`). The verifier derives the public inputs, so the
   statement fixes them, and a public gate is read with no opening;
-* the registration at the public file's leaf map (`LeafMap.ofPublic`: one leaf per unit, or a `shared_rows` file's
+* the registration at the public file's leaf map (`LeafMap.ofPublic`: one leaf per proof block, or a `shared_rows` file's
   refs), as `TransportsLiveCR` reads it.
 
 The targets V5's assembly takes (`Bridge.AssemblyTargetV5`): `TransportsLiveV5` (`TransportsLiveCR` at these),
@@ -32,7 +32,7 @@ open FlockSoundness FlockSoundness.Game FlockSoundness.Audit FlockSoundness.Disc
 open FlockSoundness.Discharge.Tables (LiveOutJ)
 open scoped ENNReal
 
-/-- **The circuit's constants at public inputs**: `constsOf`'s (`oneG` is `1`, `zeroG` is `0`), and at unit `u`'s
+/-- **The circuit's constants at public inputs**: `constsOf`'s (`oneG` is `1`, `zeroG` is `0`), and at proof block `u`'s
 public gate of bit `t` of public word `q` (`Layout.keyPubOf`) that bit of `u`'s public input words in the population's
 public file `pub` (`HiddenExec.pubBitOf`). -/
 noncomputable def _root_.Flock.Bridge.constsOfP (c : Flock.Circuit) (hU : Built c.unit) (n : ℕ) (pi : HmIn.Ports)
@@ -42,8 +42,8 @@ noncomputable def _root_.Flock.Bridge.constsOfP (c : Flock.Circuit) (hU : Built 
   | none => (Discharge.Layout.keyPubOf c hU n pi g).map fun x =>
       Discharge.HiddenExec.pubBitOf pi (fun (_ : Unit) => pub) () x.1 x.2.1 x.2.2
 
-/-- **A drawn unit's openings are canonical at public inputs** (`OpeningsCanonTarget` at `keyProgP`, `rsZHJP` and
-`constsOfP`): in every satisfying witness of a drawn unit, the opening of each of its committed wires' commit strings
+/-- **A drawn proof block's openings are canonical at public inputs** (`OpeningsCanonTarget` at `keyProgP`, `rsZHJP` and
+`constsOfP`): in every satisfying witness of a drawn proof block, the opening of each of its committed wires' commit strings
 carries the constant at a constant wire (the constant, the zero, and the public gates at their public bits,
 `HiddenExec.keyProgHP_valPinned`), and at any other is a row of its wire's row's width with a salt of `saltLen`
 bytes. -/
@@ -70,7 +70,7 @@ def _root_.Flock.Bridge.OpeningsCanonTargetV5 : Prop :=
 
 open Classical in
 /-- **`EndToEndHiddenC` at public inputs**: its bound at flock-verify `--zk --public-inputs`'s acceptance, the session
-at `own` (`planZHJP`, `rsZHJP`, `simZJA`), `live-verifier` at `own`, and "wrong" the units wrong on the registration
+at `own` (`planZHJP`, `rsZHJP`, `simZJA`), `live-verifier` at `own`, and "faulty" the proof blocks faulty on the registration
 with canonical openings at `constsOfP`. -/
 def _root_.Flock.Bridge.EndToEndHiddenV5 : Prop :=
   ∀ (n : ℕ) (Reg : Type)
@@ -129,7 +129,7 @@ def _root_.Flock.Bridge.EndToEndHiddenV5 : Prop :=
 
 open Classical in
 /-- **The canonical registered openings open the deployed commitment at public inputs** (`TransportsLiveCR` at
-`keyProgP`, `rsZHJP`, the session at `own` and `constsOfP`): at every unit `u`, every committed wire `g` of `u` that
+`keyProgP`, `rsZHJP`, the session at `own` and `constsOfP`): at every proof block `u`, every committed wire `g` of `u` that
 isn't a constant, and every opening of `g`'s registered commit string at the prover's registration that is canonical
 at `g`, some data opens `g`'s claims position to the opening's bit there, under the roots of the public file's leaf
 map at SHA-512. -/
@@ -174,10 +174,10 @@ def _root_.Flock.Bridge.TransportsLiveV5 : Prop :=
 
 open Classical in
 /-- **`SampledKSLiveV2` at the verifier's public inputs, with or without shared rows**: flock-verify
-`--zk --public-inputs` at `own` accepts and the committed transcript fixed at registration, read as the sampling witness
-of the session's statement at the constants `constsOfP` (the constant, the zero and every unit's public input bits), is
+`--zk --public-inputs` at `own` accepts and the committed trace fixed at registration, read as the sampling witness
+of the session's statement at the constants `constsOfP` (the constant, the zero and every proof block's public input bits), is
 outside `RelS` at `δ = C(n − K₀, kd)/C(n, kd)`, at the deployed commitment at the public file's leaf map, with
-probability at most `δ + ε_ks + δ_link`. Its named assumptions are V2's, with `live-verifier` at `own` (`RecordCustodyZKJP`). -/
+probability at most `δ + ε_ks + ε_bind`. Its named assumptions are V2's, with `live-verifier` at `own` (`RecordCustodyZKJP`). -/
 def SampledKSLiveV5 : Prop :=
   ∀ (n : ℕ) (Reg : Type)
     (I : Inputs) (own : Option ByteArray) (ht : I.tags.typed = false)
@@ -188,7 +188,7 @@ def SampledKSLiveV5 : Prop :=
     (_hrows : Bridge.RowsOk D.unroll)
     (_hdup : Flock.Registered.dupName D.unroll = none)
     (_hroots : Bridge.RootFixesDomainL D.unroll (Bridge.LeafMap.ofPublic D.unroll pub n))
-    -- the statement's descriptor, and the registration's query, whose population is the game's n units in order
+    -- the statement's descriptor, and the registration's query, whose population is the game's n proof blocks in order
     (desc : Claims.Msg) (qr : Lean.Json) (_hpop : Bridge.PopMatches desc qr n)
     (kd : ℕ) (_hkd : kd ≤ n) (hdiv : kd % nTab I = 0)
     (dj : Finset (Fin n) → Lean.Json) (S₀ : Finset (Fin n)) (d₀ : Lean.Json)
@@ -226,7 +226,7 @@ def SampledKSLiveV5 : Prop :=
         ⟨r.2.1.val, Lm.ref r.2.1.val r.1.val, Discharge.Layout.portRowW D.unroll r.2.1, r.2.2.val⟩
     let roots := Bridge.rootsOfL D.unroll Lm
     let Cd := Bridge.commitDepL Cc rows D.unroll Lm roots
-    -- the circuit's constants and every unit's public input bits, public
+    -- the circuit's constants and every proof block's public input bits, public
     let κ : Fin Cc.N → Option Bool := fun g => Bridge.constsOfP D.unroll hU n pi pub g
     -- cr/sha-512 for the knowledge finders of each table the prover's session runs
     (∀ ω j, TableCRZ execArith hs512 (planZHJP dj y₀ (L.draw ω) (reg σ)) j
