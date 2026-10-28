@@ -8,7 +8,7 @@
 #     --send RUN/out/lib/sm_90a/h1u_kraqwxsc.so --send RUN/inputs/j10r_ref.so [--send PIN/sass_pins.json] -- \
 #     bash demos/h200/percall_job.sh
 #
-# Before the lease: uv sync, attn_ref's cubin, the SHA-512 engine's build, and the SASS gate on the h1u build under this
+# Before the lease: uv sync, attn_bf16's cubin, the SHA-512 engine's build, and the SASS gate on the h1u build under this
 # tree's pins and (sass_pins.json sent) the sent pins. Under one GPU lease (gpu-lease, shared with the node's other runs):
 # run.py into $OUT/f1. Env: H1U (kraqwxsc; the sent h1u_$H1U.so), BATCH (4096), STEPS (3), MB (1024), SAMPLES (2,
 # PERCALL_SAMPLES), LEASE_MIN (40).
@@ -21,8 +21,8 @@ mkdir -p "$OUT"
 uv sync -q --all-packages --extra torch
 for c in /usr/local/cuda-13.0 /usr/local/cuda; do [ -x "$c/bin/nvcc" ] && export CUDA=$c && break; done
 export PATH="$CUDA/bin:$PATH"
-CUBIN_ONLY=1 bash benchmarks/torch_gpu/attn_ref/build.sh "$OUT/attn_ship" 2>&1 | tail -2
-export ATTN_REF_CUBIN="$OUT/attn_ship/attn_ref.sm_90a.cubin"
+CUBIN_ONLY=1 bash benchmarks/torch_gpu/attn_bf16/build.sh "$OUT/attn_ship" 2>&1 | tail -2
+export ATTN_BF16_CUBIN="$OUT/attn_ship/attn_bf16.sm_90a.cubin"
 uv run --no-sync python -c "import sys; sys.path.insert(0, 'benchmarks/torch_gpu/commit_slots'); import slots_gpu; print(slots_gpu.build('9.0'))"
 sha256sum "$IN/h1u_$H1U.so" "$IN/j10r_ref.so" | tee "$OUT/libs.sha256"
 POUW_CUDA_BIN=$CUDA/bin POUW_SASS_GATE_CACHE=none uv run --no-sync python benchmarks/pouw/harness/sass_gate.py "$IN/h1u_$H1U.so" \
