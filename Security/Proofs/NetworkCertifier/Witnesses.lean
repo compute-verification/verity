@@ -179,7 +179,7 @@ theorem notLay_fits : notLay.Fits notProg 1 := by
 
 theorem rejCm_val_none (H : Msg → Msg) (s : Claims.Sampling.AuditStatement) (w : Claims.Sampling.Wit) (g : ℕ) :
     w.val H rejCm s g = none := by
-  simp [Wit.val, Commitment.Opens, rejCm, OC.eval]
+  simp [Wit.val, CommitmentScheme.Opens, rejCm, OC.eval]
 
 /-- With nothing held and the input `false`, the circuit computes the negation `true`. -/
 theorem notProg_val (inp : ℕ → Bool) (h0 : inp 0 = false) : valOver notProg inp (fun _ => none) 1 = true := by

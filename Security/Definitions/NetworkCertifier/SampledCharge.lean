@@ -70,7 +70,7 @@ observation sequence of length `k` with jitter below `Dj` that the trace's trans
 status complete (`Covered`) is among the sequences `AccSeqsSampled` counts at the inputs `As s ρ`, `ρ` the trace's
 committed values (`traceVal`): a set that the statement, `δ`, `As`, the operator, `Dj` and the trace's values where
 `As` reads them fix. At `AsReg` those are the registered inputs' values, which the registration commits. -/
-def RLeak (H : Msg → Msg) (Cm : Commitment Bool) (parse : Msg → Option AuditStatement) (partition : AuditStatement → Option Partition)
+def RLeak (H : Msg → Msg) (Cm : CommitmentScheme Bool) (parse : Msg → Option AuditStatement) (partition : AuditStatement → Option Partition)
     (L K S : ℕ) (lay : AuditStatement → BoundaryGates L S) (k : AuditStatement → ℕ) (δ : ℝ) (As : AuditStatement → (ℕ → Bool) → Set (ℕ → Bool)) (Dj : ℕ) :
     Rel Wit :=
   fun x w => ∃ s P, parse x = some s ∧ partition s = some P ∧

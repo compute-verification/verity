@@ -402,7 +402,7 @@ theorem disjoint_allSlots {d : Design} {P : Partition} {δ : ℝ} {B : Finset �
 
 open Classical in
 /-- **Every unit that isn't faulty has interior values making its proof units correct.** -/
-theorem correct_of_not_faulty (H : Msg → Msg) (Cm : Commitment Bool) (s : AuditStatement) (P : Partition) (w : Wit) :
+theorem correct_of_not_faulty (H : Msg → Msg) (Cm : CommitmentScheme Bool) (s : AuditStatement) (P : Partition) (w : Wit) :
     ∃ ι : ℕ → ℕ → Bool, ∀ v r, P.rus[v]? = some r → v ∉ faulty H Cm s P w →
       ∀ u ∈ r, s.prog.Correct (RU.ref s.prog r (w.val H Cm s) (ι v)) u := by
   have : ∀ v, ∃ ι : ℕ → Bool, ∀ r, P.rus[v]? = some r → v ∉ faulty H Cm s P w →
