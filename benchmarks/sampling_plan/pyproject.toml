@@ -10,9 +10,11 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 # transformer.py plans with the sampled-proofs planner and core's Stratified law over the primitive circuits'
 # Definitions and their circuit-check pins (verity.ml.circuits, which reads verity.ml.kernels); the large model's test
 # reads the card's memory from the census; Demo A's tile stratum reads PoUW's `eps_at` (pouw/window.py, with the
-# commitments and randomness it imports).
+# commitments and randomness it imports); the reporting deltas and monitoring periods are core's `wipe_monitoring`'s,
+# whose imports span PoUS.
 inputs = ["verity/__init__.py", "verity/errors.py", "verity/core/__init__.py", "verity/core/protocols/__init__.py",
           "verity/core/protocols/profile.py", "verity/core/protocols/sampled_proofs", "verity/core/claims",
-          "verity/core/protocols/pouw/__init__.py", "verity/core/protocols/pouw/window.py", "verity/ml/__init__.py",
+          "verity/core/protocols/pouw/__init__.py", "verity/core/protocols/pouw/window.py",
+          "verity/core/protocols/pous", "verity/ml/__init__.py",
           "verity/ml/circuits", "verity/ml/kernels", "verity/ml/commitments", "verity/ml/crypto",
           "verity/ml/randomness", "benchmarks/census/hardware.json"]
