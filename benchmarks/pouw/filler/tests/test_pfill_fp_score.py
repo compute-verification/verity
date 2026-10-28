@@ -1,4 +1,4 @@
-"""HC-PROVED's combined runner (benchmarks/pouw/filler/pfill_fp_score.py) on synthetic out dirs: each point has one driver
+"""The combined runner (benchmarks/pouw/filler/pfill_fp_score.py) on synthetic out dirs: each point has one driver
 (fscore at a fused step, pscore at a phase filler, the locked dscore elsewhere, never two), the report is the locked
 report with both runners' gates, and a failure in either runner's gates voids the SCORE."""
 

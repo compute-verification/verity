@@ -1,4 +1,4 @@
-// FACET-BREAK r3's joint-issue schedule on sm_89 (EPS1 ADA r3, note:20261017T0605Z-draft-eps1-ada): facet_break/ji.cuh
+// facet_break's joint-issue schedule on sm_89: facet_break/ji.cuh
 // jmix at placement 0, over the L40S's two int8 forms. Every warp runs 8U MMAs an iteration on NA accumulators (MMA c
 // on c mod NA) and Q lane ops a group of 8 MMAs (Q a multiple of 8), Q/8 after each MMA, each on one of 8 chains
 // (facet_break/mix.cuh's Lanes, the same PTX). On sm_120 FMUL by an immediate, 112 a 8 MMAs, on 2-3 accumulators at 2
