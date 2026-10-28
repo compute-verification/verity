@@ -45,7 +45,7 @@ modeled under (`calibrate_run`).
 **Checks.** The certifier's audit (`active_replay.audit_configuration` with `audit.Audit`) on each block's raw and committed
 records, in its live mode, whose Program is the block's event log anchored at each request's release as the ingress
 records show it: the timing. N2's served verdict on each block's link (`n2_verdicts`): each link-window's published
-records, their heads signed by a stand-in certifier (the lab's proxy signs nothing), through the proof service's stream
+records, their heads signed by a stand-in certifier (the lab's proxy signs nothing), through the proof system's stream
 on live coins and N2's verifier of record, so the counts only. And the answers against the Program evaluated in one
 process.
 

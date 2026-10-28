@@ -43,7 +43,7 @@ check that reads the same leaf is tied to N2's only under three conditions, each
 N2 compares no grid, and the network claim is counts only. N2's verifier of record
 decides each sampling block on a `--zk` proof of its registered unit and public inputs alone, and reads no head, salt or
 sibling ("Its verifier of record" below). What stays open is in the README: the certificates reach the verifier in
-the clear beside the proof service, a provisional exception to the four public kinds, and a run that proves nothing is
+the clear beside the proof system, a provisional exception to the four public kinds, and a run that proves nothing is
 decided in the clear.
 
 A proof is held to the unit's circuits: each gate names its Definition's pinned circuit digest, so the unit's Program
@@ -164,9 +164,9 @@ bit set and the parameters digest of `params` and Σ_sync, and compares it with 
 digests mean equal records, so the audit stays exact. A certified record rests on `cr/sha-512`,
 on the signature's unforgeability, and on an honest certifier; not on `cr/sha-256`.
 
-## Through the proof service (`service`)
+## Through the proof system (`service`)
 
-One sampling block's certificates are registered through the proof service (`verity.core.protocols.sampled_proofs.service`)
+One sampling block's certificates are registered through the proof system (`verity.core.protocols.sampled_proofs.service`)
 as a `Spec` of its own (`service.LinkWindows`, one per link):
 - **Committed:** one value, `certificates`, of four leaves: the sampling block's egress and ingress certified records,
   leaves 0 and 1, each `hm96-sha512/row/v2` over `service.encode` (the head, the certifier's salt, then the
@@ -231,7 +231,7 @@ as a `Spec` of its own (`service.LinkWindows`, one per link):
   sha512/row/v2 digest would share it and save about 1.2M ANDs a head at T = 600. The count check needs no frame's bytes, so it is the part of the egress grid check
   a proof can make without the content, and the only grid check on ingress. It runs on every sampling block: a
   structural check runs in full.
-- **N3, the content check,** a prototype in `benchmarks/network_sim` evaluated in the clear and in no proof-service
+- **N3, the content check,** a prototype in `benchmarks/network_sim` evaluated in the clear and in no proof-system
   Spec, is retired, superseded by the network certifier's step-indexed scan (`ingress_scan`, `egress`), which
   `benchmarks/network_traces/scan_zk.py` proves in zero knowledge, outside this protocol.
 - **Its verifier of record** is `LinkWindows.verify`, which decides on the delivered proof (`service.Delivered`) and
@@ -243,7 +243,7 @@ as a `Spec` of its own (`service.LinkWindows`, one per link):
   digests) and its ``o0`` row to the output word delivered, whose verdict and deadline bits are both 1; the
   certificates verify (`LinkWindows.certified`); and the window's declared sync is one of Σ_sync. It receives the
   registration, the draw, the certificates' public fields and signatures (from the certifier, beside the proof
-  service: the service has no public kind for them), the declared syncs, and from the prover the statement's public
+  system: the service has no public kind for them), the declared syncs, and from the prover the statement's public
   file, its sessions, the circuit file and the salts of ``pub`` and ``o0`` with the output word; never the opening nor
   ``wit``'s salt. The outcome passes the registered root as the session's. A proof after `proof_deadline` is the
   service's `late`. On a plain, served or network certifier link the verdict of record is the Lean's (`NetworkCheck.LinkWindow`,
@@ -592,7 +592,7 @@ unit outputs 1 exactly when, in each lane of ordinal q:
   verified on its own lanes (`lanes` from that advice's prompt lengths and order and the network certifier's release) and given
   only by the verifier's own tie source (`LinkWindows.ties`, `tie_service.Ties`). It refuses a verdict on another
   link or other registrations than the source records, and an advised link whose every ingress window isn't
-  accepted. The proof service runs it (`tie_service.IngressTie`, "The tie" below). That makes `advised.ends`'
+  accepted. The proof system runs it (`tie_service.IngressTie`, "The tie" below). That makes `advised.ends`'
   premise a check: connection order[i] + 1 is an id request of `prompt_lens[i]` prompt ids. The advised unit itself
   doesn't change.
 - **The first negative** is the phase-6 attack's split (`test_redteam_phase6_split_is_refused`). At B = 4,096, prompts
@@ -960,7 +960,7 @@ requests, whose frames are a function of the prompt's length alone), for every p
   - the link's j-th request is advice request j (FCFS admission: IoTieRequest's ordinals are the verifier's, so an
     advice numbered in another order, as a runner's batch order numbers v0 and the walk's `walk.order` maps
     back, is refused), an id request of its prompt length;
-  - IoTieRequest runs in the proof service and accepts every ingress window of the link (until it does, no advised
+  - IoTieRequest runs in the proof system and accepts every ingress window of the link (until it does, no advised
     link is accepted);
   - each window's declared sync has a δ and ρ that every frame released in it meets: a small δ, and ρ at least a
     stream's frames a bucket (`schedule.eligible` reads the anchor's window's sync, the view the release's, which the
@@ -1850,7 +1850,7 @@ them.
     refuses a window whose weights weren't recorded. The order is the certifier's word, under `trusted-host`,
     like the salt.
   - **Revealed on the window's registration, after t_d.** `Proxy.reveal(p, registration)` gives PoUW window p's salt.
-    The verifier calls it with the registration the proof service returned for p (`Registration`, from
+    The verifier calls it with the registration the proof system returned for p (`Registration`, from
     `sampled_proofs.service`), and the certifier fails closed (`RuntimeError`) unless the registration's receipt is a
     registration receipt (`one_stage.registration.RECEIPT`) whose digest is the record's own and the registration's,
     and `registered` reads p off the registration: by default `served_window`, which reads the provenance
@@ -1861,7 +1861,7 @@ them.
     never drawn; and for one whose salt it has revealed already, so a second registration naming p, by another stream
     or epoch, gets none. Nothing else publishes the salt.
   - **Asked for and answered under LMS** (`Proxy(challenger_key=…, signer=…)`, both or neither). Deployed, the
-    certifier runs on the link, off the prover's node, and the proof service's challenger, which is the
+    certifier runs on the link, off the prover's node, and the proof system's challenger, which is the
     auditor's, on an auditor host. `challenger_key` comes from the auditor's deployment record, never from the
     prover's configuration, and `trusted-host` covers that record's custody. Each proxy draws a run id at
     construction, 32 bytes of the certifier's own randomness (`Proxy.run_id`; `run_nonce`, `secrets.token_bytes` by
