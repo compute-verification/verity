@@ -44,7 +44,7 @@ from verity.core.protocols.certifier.schedule import (
     run_shaper,
 )
 from verity.core.protocols.sampled_proofs.one_stage import registration as R
-from verity.core.protocols.sampled_proofs.service import Registration
+from verity.core.protocols.sampled_proofs.service import WindowCommitmentRecord
 
 
 def test_frames_round_trip_and_padding_is_zero():
@@ -1243,11 +1243,11 @@ def test_a_requests_frames_and_signed_records_are_its_token_counts_whatever_its_
     assert [changed.streams[k + 1].anchor for k in range(len(others))] == ends
 
 
-def registration(window: int, provenance: dict | None = None) -> Registration:
-    """A stand-in for the proof service's registration of PoUW window `window` (`Stream.register`'s): a record whose
+def registration(window: int, provenance: dict | None = None) -> WindowCommitmentRecord:
+    """A stand-in for the proof system's registration of PoUW window `window` (`Stream.register`'s): a record whose
     provenance names the window, with its receipt and digest."""
     record = {"window": {"kind": "served", "window": window} if provenance is None else provenance}
-    return Registration(record, R.receipt(record, "test", received=str(window)), R.digest(record), window)
+    return WindowCommitmentRecord(record, R.receipt(record, "test", received=str(window)), R.digest(record), window)
 
 
 def salted_run(seed: int, **salting):
@@ -1360,10 +1360,10 @@ def test_one_salt_per_pouw_window_of_its_width(honest_run):
 
 
 def test_reveal_takes_the_windows_registration_and_fails_closed_without_it():
-    """`reveal(p, registration)` gives PoUW window p's salt only on the registration the proof service returned for p.
+    """`reveal(p, registration)` gives PoUW window p's salt only on the registration the proof system returned for p.
     It refuses none, another window's, a receipt or digest that isn't the record's, a receipt of another format, a
-    provenance the reader (`registered`) doesn't read as p, and anything that isn't a `Registration`; a window whose
-    last ingress record is unpublished; and one whose salt a proxy back from maintenance never drew. A reader the
+    provenance the reader (`registered`) doesn't read as p, and anything that isn't a `WindowCommitmentRecord`; a window
+    whose last ingress record is unpublished; and one whose salt a proxy back from maintenance never drew. A reader the
     protocol gives reads its own provenance."""
     drawn: list[int] = []
 
@@ -1573,14 +1573,14 @@ def test_a_signed_reveal_takes_only_the_challengers_request_and_answers_under_th
             p.bucketer.tick()
         return p
 
-    def asks(w: int, reg: Registration, what: bytes = active.SALT_KIND, link: str = "requests", by=sign,
+    def asks(w: int, reg: WindowCommitmentRecord, what: bytes = active.SALT_KIND, link: str = "requests", by=sign,
              key_id: bytes = key.key_id, run_id: bytes = RUN) -> bytes:
         return by(active.reveal_request_message(key_id, run_id, link, w, reg.digest, what))
 
     p, reg = proxy(challenger_key=challenger_key, signer=certifier), registration(0)
     assert p.run_id == RUN
     record = {"window": {"kind": "served", "window": 1}, "made": "up"}
-    made_up = Registration(record, R.receipt(record, "anyone"), R.digest(record), 1)
+    made_up = WindowCommitmentRecord(record, R.receipt(record, "anyone"), R.digest(record), 1)
     for w, r, request in ((0, reg, None), (0, reg, b""), (0, reg, asks(0, reg, by=forge)), (0, reg, asks(1, reg)),
                           (0, reg, asks(0, registration(1))), (0, reg, asks(0, reg, active.WEIGHTS_KIND)),
                           (0, reg, asks(0, reg, link="responses")), (0, reg, asks(0, reg, run_id=OTHER_RUN)),

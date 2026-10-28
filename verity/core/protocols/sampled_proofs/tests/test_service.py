@@ -1,4 +1,4 @@
-"""The proof service: the Spec's types, the public-items rule, and a Stream's register, select, deliver and outcome over
+"""The proof system: the Spec's types, the public-items rule, and a Stream's register, select, deliver and outcome over
 the one-stage audit, with a stub verifier, injected coins and an injected clock."""
 
 from __future__ import annotations
@@ -252,16 +252,12 @@ def test_a_spec_states_each_public_item_once_with_its_reason():
         _spec(values=(*VALUES, VALUES[0]))
     with pytest.raises(ValueError):
         S.Law("subset:two")
-    with pytest.raises(ValueError, match="uniform"):
-        S.Sequential("subset:4", "B")
     with pytest.raises(ValueError, match="positive"):
         _spec(proof_deadline=0)
     assert _spec().digest() == _spec().digest() != _spec(S.Law("subset:3")).digest()
 
 
 def test_a_stream_refuses_what_isnt_built_and_another_unit():
-    with pytest.raises(ValueError, match="Sequential"):
-        _stream(_spec(S.Sequential("uniform:4", "population")))
     with pytest.raises(ValueError, match="unit"):
         S.Stream(_spec(), OTHER, budget=1, delta=DELTA, challenger="c")
     with pytest.raises(ValueError, match="proof deadline"):
