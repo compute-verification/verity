@@ -670,8 +670,7 @@ def build(opts: Options, session: SR.ServeSession | None = None, row: Mapping[st
     scope = register_int8(opts.precision)
     from verity_vllm.llm import LLM
 
-    kw = engine_options(opts)
-    llm = RW.checked(opts, row, LLM(opts.model, revision=opts.revision, **(session.engine_args(kw) if session is not None else kw)))
+    llm = RW.checked(opts, row, LLM(opts.model, revision=opts.revision, **(dict if session is None else session.engine_args)(engine_options(opts))))
     if scope is not None:
         from verity_vllm.program.frontend.kernel_readback import int8_exact_of
         if (got := int8_exact_of(llm.model)) != scope:
