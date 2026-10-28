@@ -1,5 +1,5 @@
 """`circuit.h1tile`: H1 + fx1 as a compile-pass tile unit under CP-W. Its lanes are the tile's cells once each, its noise is
-seed_j's stream in counter mode and its fold keys σ_R's, its receipt is #2438's warp checkpoint (two words a set), and on a
+seed_j's stream in counter mode and its fold keys σ_R's, its receipt is the warp checkpoint (two words a set), and on a
 compiled grid its gates are its word reference (`segment.call_words`, fx1's fold), with the served outputs unchanged."""
 from __future__ import annotations
 
@@ -20,7 +20,7 @@ from verity.core.protocols.pouw.circuit import compile as C
 from verity.core.protocols.pouw.circuit import h1tile as H
 from verity.core.protocols.pouw.circuit import seeds as SD
 
-pytestmark = pytest.mark.skipif(H.SG is None, reason="H1's receipts (circuit.segment, E2E-120) are not on this tree")
+pytestmark = pytest.mark.skipif(H.SG is None, reason="H1's receipts (circuit.segment) are not on this tree")
 COIN_RULES = C._ports is not None and hasattr(C._ports, "_coin_role") and "position" not in C._ports.KINDS
 compiles = pytest.mark.skipif(COIN_RULES, reason="COIN-RULES refuses the salt's flow into PouwSeed: E_COIN_FLOW")
 BIT = BL.BIT
@@ -88,7 +88,7 @@ def test_lanes_are_the_tile_once(r, c):
 
 def test_noise_is_counter_mode():
     """Every row's and column's noise is its own blocks of seed_j's stream, and every lane's fold keys a block of σ_R's
-    (decision 121), so a kernel derives any of them alone; at a warp and K = 4096 the receipt is #2438's 8,320 bits a warp a
+    so a kernel derives any of them alone; at a warp and K = 4096 the receipt is the warp checkpoint's 8,320 bits a warp a
     call (2 (KS + m) words, KS = 128, m = 2)."""
     lay = H.Layout(32, 32, 4096)
     assert (lay.ks, lay.m, lay.rb, lay.cb, lay.lanes, lay.blocks) == (128, 2, 9, 9, 32, 576)
@@ -228,7 +228,7 @@ def test_live_salt_is_the_round_key_stream():
 def test_h1_tile_is_its_reference():
     """A 4 × 16 grid at K = 64 compiles to one H1 tile unit of two lanes, whose floor is its 64 dots' 4,096 multiply-adds
     (H1 noises both rows); on random rows its served outputs are the served
-    Program's, and its receipt is `reference`'s (E2E-120's `call_words` and fx1 fold from σ_R's keys, then the lanes' XOR a
+    Program's, and its receipt is `reference`'s (`segment.call_words` and fx1's fold from σ_R's keys, then the lanes' XOR a
     set). Slow: the two seeds' and 22 noise blocks' SHA-512 in gates and 64 exact s8 dots on bits; it is the only test of
     the unit's gates."""
     served = Program(bind(GRID, R=4, C=16, K=64))

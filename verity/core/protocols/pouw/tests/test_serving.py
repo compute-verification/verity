@@ -137,7 +137,7 @@ def variant(**kw):
 
 
 def gate(v, **kw):
-    base = dict(variant=v.id, run="r20260930-124211-a304", gates="harness@f5e584af", shapes=LLAMA_8B, exact=True,
+    base = dict(variant=v.id, run="gate-run-1", gates="harness@f5e584af", shapes=LLAMA_8B, exact=True,
                 poisoned_accepted=True, controls_rejected=True, schedules_equal=True, sass_ok=True, toolkit="nvcc 12.9 -O3",
                 prices="cast-8.72")
     return GateRecord(**{**base, **kw})
@@ -169,7 +169,7 @@ def test_a_gate_admits_only_its_own_variant_at_its_own_shapes_and_prices():
     got = variant_refusals(v, "pearl-c-sm120-v1-h3", "serial", [*LLAMA_8B, (8192, 8192)],
                            gate(other, controls_rejected=False, prices="cast-32.06"))
     assert got == [f"{v.id}: the gate is {other.id}'s",
-                   f"{v.id}: its gate (r20260930-124211-a304) failed controls_rejected",
+                   f"{v.id}: its gate (gate-run-1) failed controls_rejected",
                    f"{v.id}: its gate didn't cover [(8192, 8192)]",
                    f"{v.id}: gated on priced path cast-32.06, declares cast-8.72"]
 
