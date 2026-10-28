@@ -4,14 +4,15 @@ The device graph, and a mock datacenter of Linux network namespaces that runs th
 accounting layer's declarations, `datacenter.Datacenter`, which `datacenter.examples` (`benchmarks/datacenter`) declares:
 `rtx_node` is the measured node (8 GPUs on two sockets, each GPU on a PCIe root port of its own, one NIC on socket 1) as
 one zone, `leaf_spine` puts such nodes behind a leaf-spine fabric, each through its zone's certifier, with hosts
-outside every zone, and `two_sites` joins two leaf-spines by a WAN between their spines. The code and its flags still
-call a zone a block (`datacenter.physical.Block`, `--blocks`).
+outside every zone, and `two_sites` joins two leaf-spines by a WAN between their spines. A zone is a
+`datacenter.physical.Zone`; the rest of the code and its flags still call a zone a block (`Datacenter.blocks`,
+`--blocks`).
 
 - `graph.py`: the exports, which read any `Datacenter` that validates, a fleet's merged one included: the netns plan
   `mockdc.py` stands up, and Shadow's GML. `python graph.py --blocks 2 --netns` prints `leaf_spine(2)`'s plan, and
   `--fleet` `two_sites(2)`'s.
-- `records.py`: the certifier's published records as `datacenter.observe.Record`s (port, sampling period, counts,
-  digest), the records an honest run declares by port and sampling period, and the certifiers' parameters as the
+- `records.py`: the certifier's published records as `datacenter.observe.PortRecord`s (port, sampling period,
+  counts, digest), the records an honest run declares by port and sampling period, and the certifiers' parameters as the
   declaration's `Cadence`; `datacenter.check_records` audits them.
 - `mockdc.py`: a declaration's netns plan stood up on one host, the certifier's proxy on each zone's uplink, both
   audits, and the account's charge for each zone.
@@ -68,7 +69,7 @@ whose connection crosses the fabric. Each zone's server plays one strategy: `hon
 random bit per request; `late`, which holds a request in sampling period 0 past every sync; `extra`, which writes one
 event at a position the Program doesn't have; or `maintenance`, honest with its certifier down for sampling period 1
 (below). Each zone is audited twice. The certifier's audit is `audit.Audit`'s `check_link` and `check_ingress_link`
-on its raw and committed records. The datacenter record check is `datacenter.check_records` on its records as `datacenter.observe.Record`s against the ones an honest run of the Program publishes: each port
+on its raw and committed records. The datacenter record check is `datacenter.check_records` on its records as `datacenter.observe.PortRecord`s against the ones an honest run of the Program publishes: each port
 (`b0.cert:out` for what leaves the zone, `b0.cert:in` for what enters it) needs a record for each sampling period, with
 the declared counts and digest, and each carried sampling period leaves log2 of the sync set's size bits of timing
 advice. The declaration's cadence is the certifiers' calibrated parameters: frames of 4,096 bytes, buckets of 100 ticks
