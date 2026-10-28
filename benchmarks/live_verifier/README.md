@@ -27,7 +27,7 @@ session's end, beside the ledger, and it reads main's first-parent history from 
 
 ~~~sh
 git fetch origin main && git rev-list --first-parent origin/main > main-first-parent.txt
-install -m 0644 -o root -g root main-first-parent.txt /opt/vy-verifier/main-first-parent.txt   # on vy-auditor-1
+install -m 0644 -o root -g root main-first-parent.txt /opt/vy-verifier/main-first-parent.txt   # on the auditor host
 ~~~
 
 The gate refuses a run before starting anything while the file is missing. A challenger pinned after the file was
