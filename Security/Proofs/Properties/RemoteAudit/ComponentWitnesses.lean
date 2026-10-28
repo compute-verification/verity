@@ -15,8 +15,8 @@ Each of `Properties.RemoteAudit.Component`'s three properties, and the memory li
   (`acceptIsVerified_complete`). Nontrivial: a check that accepts everything accepts a log that decodes to no session
   (`acceptIsVerified_nontrivial`).
 * **PublishedEps** (`PublishedEpsFor`), whose antecedent is the same acceptance, so its honest witnesses are
-  `AcceptIsVerified`'s. Nontrivial: a check that accepts every session it decodes, certifying a byte read at eps 0,
-  accepts the deployed period's log, and 0 is below the draw term at every node of positive δ (`drawTerm_pos`,
+  `AcceptIsVerified`'s. Nontrivial: a check that accepts every log, certifying a byte read at eps 0, accepts the
+  deployed period's log, and 0 is below the draw term at every node of positive δ (`drawTerm_pos`,
   `publishedEps_nontrivial`).
 * **LineHeld** (`LineHeldBy`) and **LineHeldAtComponent** (`LineHeldAtComponentBy`), which take the same premises.
   Honest: every premise holds at a node that holds its whole store in memory throughout, every receipt correct, no
@@ -704,15 +704,11 @@ theorem drawTerm_pos (node : Node) (hδ : 0 < (node.delta : ℚ)) :
     0 < (node.delta : ℚ) + ((∑ _c : Fin node.draws, node.params.samples : ℕ) : ℚ) / 2 ^ 64 :=
   add_pos_of_pos_of_nonneg hδ (by positivity)
 
-/-- **`PublishedEps` fails at a check that certifies reads at eps 0**: a check that accepts every session it decodes,
-publishing one byte read at eps 0, accepts the deployed period's log, and 0 is below the draw term at every node. -/
-theorem publishedEps_nontrivial : ¬ PublishedEpsFor (fun p _ e => match RemoteAudit.Protocol.sessionOf p e with
-    | .ok _ => .accept ⟨⟨0, 1⟩, 1⟩ Lean.Json.null
-    | .error why => .reject why) := by
+/-- **`PublishedEps` fails at a check that certifies reads at eps 0**: a check that accepts every log, publishing one
+byte read at eps 0, accepts the deployed period's log, and 0 is below the draw term at every node of positive δ. -/
+theorem publishedEps_nontrivial : ¬ PublishedEpsFor (fun _ _ _ => .accept ⟨⟨0, 1⟩, 1⟩ Lean.Json.null) := by
   intro h
-  obtain ⟨_, _, hs, -⟩ := (acceptIsVerified_honest Toy.reg).1
-  obtain ⟨params, g, _, _, _, _, -, hd⟩ :=
-    h honestParams Toy.reg honestEvidence ⟨⟨0, 1⟩, 1⟩ .null (by simp [hs])
+  obtain ⟨params, g, _, _, _, _, -, hd⟩ := h honestParams Toy.reg honestEvidence ⟨⟨0, 1⟩, 1⟩ .null rfl
   have hpos : (0 : ℚ) < RemoteAudit.Protocol.DELTA := by
     unfold RemoteAudit.Protocol.DELTA
     positivity
