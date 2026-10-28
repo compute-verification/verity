@@ -49,8 +49,8 @@ leaves and challenge derivation), not with the expander.
   `Pous.Period.SecurityProofs.periodHeldAt`, for every block count `2^19 ≤ N ≤ 2^27` at the registered width and prime,
   the same `⌊ρ·|C|⌋` at `1% + 2^-128` (`PeriodHeldDemo` at Demo B's `1038·2^16` blocks: 1,060,008,348,186 bits).  It
   is in the ring model, not abstract M1, and rests on the open conjecture `P2RingRoundSecureWide` (unchecked in `N`
-  above `2^25`), the device model `RingDeviceAt` and the coin commitments' hiding at `N` (`WIDE_CLAIMS`).
-- **The instantiation assumption is not accepted** (spec decision 8, Daniel's deferred default): that
+  above `2^25`) and the device model `RingDeviceAt` (`WIDE_CLAIMS`).
+- **The instantiation assumption is not accepted** (spec decision 8): that
   square–mask–square with fresh per-block keys instantiates M1's slow-inverse permutation is a novel, algebraic
   assumption, and it is outside Lean.
 - So is SeqRoot: no 16,448-bit root, nor another computation with its effect on the challenged block, finishes within
@@ -103,10 +103,10 @@ P2_CLAIMS = ("m1-ideal-permutations", "sms-m1-instantiation", "seq-root", "rando
 - a live, designated verifier, whose memory challenger is the auditor's hardware, a VM under the auditor's account
   that the prover doesn't control and nothing attests (core's `trusted-host`)."""
 
-WIDE_CLAIMS = (*P2_CLAIMS, "p2-ring-round-secure-wide", "pous-ring-device-at", "statistical-hiding")
+WIDE_CLAIMS = (*P2_CLAIMS, "p2-ring-round-secure-wide", "pous-ring-device-at")
 """What `wide_certificate` rests on: `P2_CLAIMS`, and one claim for each premise `periodHeldAt` takes at `N` blocks, the
-conjecture `Pous.P2.Assumptions.P2RingRoundSecureWide`, the device model `Pous.Period.RingDeviceAt` and the coin
-commitments' hiding `Pous.P2.Assumptions.CoinCommitHides (coinViewAt N)`."""
+conjecture `Pous.P2.Assumptions.P2RingRoundSecureWide` and the device model `Pous.Period.RingDeviceAt`.  It takes no
+hiding premise on the memory challenger's coin tree, whose root leaves the device only after the last answer."""
 
 POINT = (16448, 21065, 1 << 16)
 """`w`, `c0` and blocks per segment at the registered point.  `2^19` blocks, the certificate's store (1.08 GB), are 8
