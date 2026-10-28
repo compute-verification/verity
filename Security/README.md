@@ -46,7 +46,8 @@ and after and each changed definition with its source; nothing waits on it, and 
 the verifier accepts while a claim of the period fails with probability at most their errors summed, each subprotocol's
 guarantee entering as a target until that subprotocol's own proof discharges it. The subprotocols are the table's first
 six rows, memory wipes among them; PoUB's row is outside it. Neither composite runs the bandwidth audit over PoUS's store
-or memory wipes yet, and onsite composes PoUB instead (below). Its building block on `main` is `Verity.Sound`
+or memory wipes yet, and onsite composes PoUB instead (below). Both run the inference-only policy's check
+(`NciCheck.Protocol`), which the statement doesn't name yet. Its building block on `main` is `Verity.Sound`
 (`Definitions/Core/Game.lean`).
 
 The table lists what it rests on, then one guarantee outside it; each is proved under `Proofs/`. A status names the statement's named assumptions; the
