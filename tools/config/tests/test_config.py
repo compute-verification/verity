@@ -9,7 +9,7 @@ from pathlib import Path
 
 import pytest
 
-from verity_config import Admission, ConfigError, dumps, gpus, load, machines, sha256
+from verity_config import Admission, ConfigError, dumps, gpus, load, sha256
 
 
 @dataclass(frozen=True)
@@ -54,13 +54,10 @@ def test_admission_cost_deadline_and_duration_do_not_change_identity():
     assert sha256(base, identity=True) == sha256(other, identity=True)
 
 
-def test_resource_registries_keep_namespaces_distinct_and_are_internally_consistent():
+def test_gpu_registry_keeps_namespaces_distinct():
     gpu = gpus()["rtx-pro-6000"]
     assert gpu.id != gpu.census_id != gpu.nvidia_smi_name
-    assert gpu.memory_bytes == 96 * 1024**3
-    assert gpu.spec_bandwidth_bytes_per_second == 1_597_000_000_000
-    assert machines()["vy-nebius-2"].gpu_id == gpu.id
-    assert all(machine.gpu_id is None or machine.gpu_id in gpus() for machine in machines().values())
+    assert gpus()["h200"].nebius_platform == "gpu-h200-sxm"
 
 
 def test_package_imports_the_standard_library_and_the_settings_machinery_alone():

@@ -12,7 +12,8 @@
 #      session at a time)  N2_DEBUG_CLEAR=1 (each verdict also carries the in-the-clear comparison)  N2_CACHE (the build cache,
 #      kept across runs where writable)  N2_DRY=1 (the link-windows and their references only)
 # Kept in $OUT/n2zk: n2_zk's records and logs, the public files and everything the verifier received; never a prover's
-# file (inst-*, prover-instances.bin) nor a circuit (its pin is kept). $OUT/runs: the runs' public files.
+# file (inst-*, prover-instances.bin) nor a circuit (its pin is kept). $OUT/runs: the runs' public files, never their
+# request values (plan.json's and probe.json's requests, io.json's certified I/O).
 set -uo pipefail
 export HZ_CONFIGS=n2zk HZ_MEM_GB=${N2_MEM_GB:?}
 if [ -n "${N2_CACHE:-}" ] && mkdir -p "$N2_CACHE" 2>/dev/null && [ -w "$N2_CACHE" ]; then export HZ_CACHE=$N2_CACHE; fi
@@ -40,7 +41,8 @@ else
     || { log "n2zk: virtual FAILED"; exit 7; }
 fi
 mkdir -p "$OUT/runs"
-(cd "$RUNS" && find . -type f \( -name '*.json' -o -name 'certified.jsonl' \) -print0 | xargs -0 -r -I{} cp --parents {} "$OUT/runs/")
+(cd "$RUNS" && find . -type f \( -name '*.json' -o -name 'certified.jsonl' \) ! -name plan.json ! -name probe.json ! -name io.json \
+  -print0 | xargs -0 -r -I{} cp --parents {} "$OUT/runs/")
 EXTRA=; [ -d "$RUNS/extra" ] && EXTRA=$RUNS/extra
 LATE=; [ -d "$RUNS/late" ] && LATE=$RUNS/late
 log "n2zk: proving${N2_DEBUG_CLEAR:+, debug clear}${N2_DRY:+, dry}"

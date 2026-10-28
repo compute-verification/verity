@@ -58,7 +58,8 @@
 # (n2_zk.ONE_SESSION), so no two of their provers' firewalled sessions overlap.
 # Kept in $OUT: the steps' records and logs, the public files and everything each verifier received; never a prover's
 # file (inst-*, prover-instances.bin, instances.bin) nor a circuit (its pin is kept), a session's archive, a signer's
-# state or a gate run's witness/ (custody uploads all of $OUT; a warden run's witness is its lane key's only).
+# state, a gate run's witness/ (custody uploads all of $OUT; a warden run's witness is its lane key's only) nor a
+# rehearsal's request values (plan.json's and probe.json's requests, io.json's certified I/O, out-witness.jsonl's rows).
 # Custody publishes the whole run dir once this exits (out/, the runner's logs, and undeclared files, inputs/ among
 # them), so none of it may hold the gates' witness. Every step writes to the hold, $Q/held (0700, outside the run dir),
 # and so does the job's own stdout and stderr (released as out/stdout.log), so nothing it writes reaches the record
@@ -154,7 +155,7 @@ else
 fi
 mkdir -p "$OUT/gates"
 (cd "$G" && find . -type f \( -name '*.json' -o -name '*.jsonl' -o -name '*.log' \) -size -64M ! -path '*/witness/*' \
-  -print0 | xargs -0 -r -I{} cp --parents {} "$OUT/gates/")
+  ! -name plan.json ! -name probe.json ! -name io.json ! -name out-witness.jsonl -print0 | xargs -0 -r -I{} cp --parents {} "$OUT/gates/")
 
 setup
 "$PY" "$CR" custody --gates "$G" --out "$OUT/custody.json" 2>&1 | tee -a "$OUT/job.log" | cut -c1-2000

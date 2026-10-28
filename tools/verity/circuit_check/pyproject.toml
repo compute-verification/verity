@@ -51,6 +51,8 @@ worker_gb = 8
 # claims/__init__.py: pouw/coins.py names its entropy's claim instance through the challenger's `coin_claim`.
 # pouw/core_check.py and pouw/leaf_lanes.py: circuit/h1window.py imports both, so building the H1 units reads them.
 # answer.py: pouw/core_check.py reads its check's answer with the core answer's reader.
+# verity_vllm/engine/spec.py: what the package's lazy `EngineSpec` (in its `__all__`) imports when a session fixture resolves
+# the package's names.
 inputs_only = true
 inputs = ["verity/core/protocols/answer.py", "verity/__init__.py", "verity/settings.py", "verity/errors.py", "verity/core/__init__.py", "verity/core/protocols/__init__.py", "verity/ml/__init__.py",
           "verity/core/protocols/sampled_proofs/__init__.py",
@@ -63,7 +65,6 @@ inputs = ["verity/core/protocols/answer.py", "verity/__init__.py", "verity/setti
           "verity/core/protocols/pouw/serving.py", "verity/core/protocols/pouw/registration.py", "verity/core/protocols/pouw/coins.py",
           "verity/core/protocols/sampled_proofs/challenger.py", "verity/core/claims/__init__.py",
           "verity/core/protocols/pouw/grind.py", "verity/core/protocols/pouw/circuit", "verity/core/protocols/pouw/schemes",
-          "verity/core/protocols/pouw/core_check.py", "verity/core/protocols/pouw/leaf_lanes.py",
           "verity/core/protocols/pous/__init__.py", "verity/core/protocols/pous/circuit.py",
           "verity/core/protocols/pous/circuit.circuit-check.py", "verity/core/protocols/pous/circuit.circuit-check.json",
           "verity/core/protocols/pous/answer_circuit.py", "verity/core/protocols/pous/answer_circuit.circuit-check.py",
@@ -122,7 +123,7 @@ inputs = ["verity/core/protocols/answer.py", "verity/__init__.py", "verity/setti
           "integrations/vllm/verity_vllm/settings.py", "integrations/vllm/verity_vllm/__init__.py", "integrations/vllm/verity_vllm/config.py", "integrations/vllm/verity_vllm/program",
           "integrations/vllm/verity_vllm/check", "integrations/vllm/verity_vllm/commit", "integrations/vllm/verity_vllm/correspondence",
           "integrations/vllm/verity_vllm/observe", "integrations/vllm/verity_vllm/query", "integrations/vllm/verity_vllm/records",
-          "integrations/vllm/verity_vllm/engine/hooks.py",
+          "integrations/vllm/verity_vllm/engine/hooks.py", "integrations/vllm/verity_vllm/engine/spec.py",
           "integrations/vllm/verity_vllm/llm.py", "integrations/vllm/verity_vllm/pipeline/program_graph.py",
           "integrations/vllm/tests/check/test_sampled_replay.py", "benchmarks/numerical/python/verity_numerical",
           "verity/core/protocols/sampled_proofs/__init__.py",
