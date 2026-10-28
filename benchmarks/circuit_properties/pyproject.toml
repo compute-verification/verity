@@ -17,3 +17,8 @@ packages = ["circuit_properties"]
 testpaths = ["tests"]
 pythonpath = ["."]
 markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
+
+[tool.verity.tests]
+# test_smollm2_layer holds benchmarks/rho's SmolLM2-135M shapes to the measured layer (run.rho_shapes imports rho by
+# path and loads its registry).
+inputs = ["benchmarks/rho/rho", "benchmarks/rho/data"]
