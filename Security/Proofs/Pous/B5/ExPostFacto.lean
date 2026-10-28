@@ -51,22 +51,22 @@ section Trace
 variable {M : IdealModel} {α : Type}
 
 /-- The queries on the path taken when queries are answered by `f`, in order, each with its round (from 0). -/
-def trace (f : M.Qry → M.Ans) : Prog M α → List (ℕ × M.Qry)
+def trace (f : M.Qry → M.Ans) : OracleProg M α → List (ℕ × M.Qry)
   | .ret _ => []
   | .round qs k => qs.map (fun x => (0, x)) ++ (trace f (k (qs.map f))).map fun e => (e.1 + 1, e.2)
 
-theorem length_trace (f : M.Qry → M.Ans) (P : Prog M α) : (trace f P).length = P.work f := by
+theorem length_trace (f : M.Qry → M.Ans) (P : OracleProg M α) : (trace f P).length = P.work f := by
   induction P with
   | ret a => rfl
-  | round qs k ih => simp [trace, Prog.work, ih]
+  | round qs k ih => simp [trace, OracleProg.work, ih]
 
-theorem round_lt_depth (f : M.Qry → M.Ans) (P : Prog M α) : ∀ e ∈ trace f P, e.1 < P.depth f := by
+theorem round_lt_depth (f : M.Qry → M.Ans) (P : OracleProg M α) : ∀ e ∈ trace f P, e.1 < P.depth f := by
   induction P with
   | ret a => simp [trace]
   | round qs k ih =>
     intro e he
     simp only [trace, List.mem_append, List.mem_map] at he
-    simp only [Prog.depth]
+    simp only [OracleProg.depth]
     rcases he with ⟨x, _, rfl⟩ | ⟨e', he', rfl⟩
     · simp
     · have := ih _ e' he'
@@ -74,20 +74,20 @@ theorem round_lt_depth (f : M.Qry → M.Ans) (P : Prog M α) : ∀ e ∈ trace f
       omega
 
 /-- `f` and `g` agree on every point that `P` asks, under `f`, before round `r`. -/
-def AgreeBefore (f g : M.Qry → M.Ans) (P : Prog M α) (r : ℕ) : Prop :=
+def AgreeBefore (f g : M.Qry → M.Ans) (P : OracleProg M α) (r : ℕ) : Prop :=
   ∀ e ∈ trace f P, e.1 < r → f e.2 = g e.2
 
-theorem mem_trace_round (f : M.Qry → M.Ans) (qs : List M.Qry) (k : List M.Ans → Prog M α) (x : M.Qry)
+theorem mem_trace_round (f : M.Qry → M.Ans) (qs : List M.Qry) (k : List M.Ans → OracleProg M α) (x : M.Qry)
     (hx : x ∈ qs) : (0, x) ∈ trace f (.round qs k) := by
   simp only [trace, List.mem_append, List.mem_map]
   exact Or.inl ⟨x, hx, rfl⟩
 
-theorem mem_trace_round_succ (f : M.Qry → M.Ans) (qs : List M.Qry) (k : List M.Ans → Prog M α)
+theorem mem_trace_round_succ (f : M.Qry → M.Ans) (qs : List M.Qry) (k : List M.Ans → OracleProg M α)
     (e : ℕ × M.Qry) (he : e ∈ trace f (k (qs.map f))) : (e.1 + 1, e.2) ∈ trace f (.round qs k) := by
   simp only [trace, List.mem_append, List.mem_map]
   exact Or.inr ⟨e, he, rfl⟩
 
-theorem agree_round {f g : M.Qry → M.Ans} {qs : List M.Qry} {k : List M.Ans → Prog M α} {r : ℕ}
+theorem agree_round {f g : M.Qry → M.Ans} {qs : List M.Qry} {k : List M.Ans → OracleProg M α} {r : ℕ}
     (h : AgreeBefore f g (.round qs k) (r + 1)) :
     qs.map f = qs.map g ∧ AgreeBefore f g (k (qs.map f)) r :=
   ⟨List.map_congr_left fun x hx => h (0, x) (mem_trace_round f qs k x hx) (Nat.succ_pos r),
@@ -95,7 +95,7 @@ theorem agree_round {f g : M.Qry → M.Ans} {qs : List M.Qry} {k : List M.Ans �
 
 /-- **Transcript locality.** If `f` and `g` agree on the points asked before round `r`, then the transcripts agree,
 entry by entry, up to round `r`; and every entry of `g`'s transcript up to round `r` is one of `f`'s. -/
-theorem trace_stable (f g : M.Qry → M.Ans) (P : Prog M α) : ∀ r : ℕ, AgreeBefore f g P r →
+theorem trace_stable (f g : M.Qry → M.Ans) (P : OracleProg M α) : ∀ r : ℕ, AgreeBefore f g P r →
     (∀ (n : ℕ) (e : ℕ × M.Qry), (trace f P)[n]? = some e → e.1 ≤ r → (trace g P)[n]? = some e) ∧
     (∀ e ∈ trace g P, e.1 ≤ r → e ∈ trace f P) := by
   induction P with
@@ -151,26 +151,26 @@ theorem trace_stable (f g : M.Qry → M.Ans) (P : Prog M α) : ∀ r : ℕ, Agre
 
 /-- **Output locality.** A program that stops by round `r` returns the same output, at the same depth, under any
 oracle that agrees with `f` on the points asked before round `r`. -/
-theorem run_stable (f g : M.Qry → M.Ans) (P : Prog M α) : ∀ r : ℕ, AgreeBefore f g P r → P.depth f ≤ r →
+theorem run_stable (f g : M.Qry → M.Ans) (P : OracleProg M α) : ∀ r : ℕ, AgreeBefore f g P r → P.depth f ≤ r →
     P.run g = P.run f ∧ P.depth g = P.depth f := by
   induction P with
   | ret a => intro _ _ _; exact ⟨rfl, rfl⟩
   | round qs k ih =>
     intro r hag hd
     cases r with
-    | zero => simp [Prog.depth] at hd
+    | zero => simp [OracleProg.depth] at hd
     | succ r =>
       obtain ⟨hqs, hag'⟩ := agree_round hag
-      have hd' : (k (qs.map f)).depth f ≤ r := by simp only [Prog.depth] at hd; omega
+      have hd' : (k (qs.map f)).depth f ≤ r := by simp only [OracleProg.depth] at hd; omega
       obtain ⟨h1, h2⟩ := ih (qs.map f) r hag' hd'
-      simp only [Prog.run, Prog.depth, ← hqs]
+      simp only [OracleProg.run, OracleProg.depth, ← hqs]
       exact ⟨h1, by rw [h2]⟩
 
-theorem work_le_depth_mul_width (f : M.Qry → M.Ans) (P : Prog M α) : P.work f ≤ P.depth f * P.width f := by
+theorem work_le_depth_mul_width (f : M.Qry → M.Ans) (P : OracleProg M α) : P.work f ≤ P.depth f * P.width f := by
   induction P with
-  | ret a => simp [Prog.work]
+  | ret a => simp [OracleProg.work]
   | round qs k ih =>
-    simp only [Prog.work, Prog.depth, Prog.width]
+    simp only [OracleProg.work, OracleProg.depth, OracleProg.width]
     have h1 := ih (qs.map f)
     have h2 : (k (qs.map f)).depth f * (k (qs.map f)).width f ≤
         (k (qs.map f)).depth f * max qs.length ((k (qs.map f)).width f) :=
@@ -248,7 +248,7 @@ structure Replay (N w : ℕ) where
   VC : Finset (Fin N)
   D : ℕ
   Q : ℕ
-  P : Fin N → Prog (RO N w) (Bits w)
+  P : Fin N → OracleProg (RO N w) (Bits w)
 
 namespace Replay
 

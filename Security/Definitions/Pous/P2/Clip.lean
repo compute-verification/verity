@@ -5,8 +5,8 @@ import Definitions.Pous.P2.Cost
 
 What the fixed extractor of a period's PoUS audit (`Pous.Period.extract`, `Properties.Pous.Period`) is built from:
 
-* `Prog.clip g d D Q L P`: `P` with its output mapped by `g`, cut to the budget `(D, Q, L)`: a round that would take
-  it past the budget ends it with `d` instead. It is `(D, Q, L)`-bounded whatever `P` is (`Prog.clip_ringBounded`),
+* `OracleProg.clip g d D Q L P`: `P` with its output mapped by `g`, cut to the budget `(D, Q, L)`: a round that would take
+  it past the budget ends it with `d` instead. It is `(D, Q, L)`-bounded whatever `P` is (`OracleProg.clip_ringBounded`),
   and wherever `P` stays within the budget it runs as `P` does, its output mapped by `g`.
 * `StateBits.pack` and `StateBits.unpack`: a state of fewer than `n` bits as `n` bits (its bits, a `true`, then
   `false`s), and back.
@@ -17,13 +17,13 @@ namespace Pous
 
 variable {B w p : ℕ} [NeZero p]
 
-namespace Prog
+namespace OracleProg
 
 variable {α β : Type}
 
 /-- `P` with its output mapped by `g`, cut to the budget `(D, Q, L)`: a round that would take it past `D` rounds with a
 multiplication, `Q` key queries or `L` ring queries ends it with `d` instead. -/
-def clip (g : α → β) (d : β) : ℕ → ℕ → ℕ → Prog (ringRO B w p) α → Prog (ringRO B w p) β
+def clip (g : α → β) (d : β) : ℕ → ℕ → ℕ → OracleProg (ringRO B w p) α → OracleProg (ringRO B w p) β
   | _, _, _, ret a => ret (g a)
   | D, Q, L, round qs k =>
     if (if qs.any RingQry.isMul then 1 else 0) ≤ D ∧ qs.countP RingQry.isKey ≤ Q ∧
@@ -32,7 +32,7 @@ def clip (g : α → β) (d : β) : ℕ → ℕ → ℕ → Prog (ringRO B w p) 
         (L - qs.countP (fun q => !q.isKey)) (k as)
     else ret d
 
-theorem clip_costs (g : α → β) (d : β) (f : (ringRO B w p).Qry → (ringRO B w p).Ans) (P : Prog (ringRO B w p) α) :
+theorem clip_costs (g : α → β) (d : β) (f : (ringRO B w p).Qry → (ringRO B w p).Ans) (P : OracleProg (ringRO B w p) α) :
     ∀ D Q L, (clip g d D Q L P).mulDepth f ≤ D ∧ (clip g d D Q L P).keyWork f ≤ Q ∧
       (clip g d D Q L P).ringWork f ≤ L := by
   induction P with
@@ -50,11 +50,11 @@ theorem clip_costs (g : α → β) (d : β) (f : (ringRO B w p).Qry → (ringRO 
       simp [mulDepth, keyWork, ringWork]
 
 /-- **A clipped program is `(D, Q, L)`-bounded**, whatever it clips. -/
-theorem clip_ringBounded (g : α → β) (d : β) (D Q L : ℕ) (P : Prog (ringRO B w p) α) :
+theorem clip_ringBounded (g : α → β) (d : β) (D Q L : ℕ) (P : OracleProg (ringRO B w p) α) :
     (clip g d D Q L P).RingBounded D Q L :=
   fun _ => clip_costs g d _ P D Q L
 
-end Prog
+end OracleProg
 
 namespace StateBits
 
@@ -71,8 +71,8 @@ end StateBits
 /-- **The rounds of a sequential strategy** `step`, from round `j` in state `s`, for the indices `is`: the state each
 round starts from and the program it runs, the next round starting from the state the program returns when its
 queries are answered by `f`. -/
-def seqRounds {M : IdealModel} {σ α ι : Type} (f : M.Qry → M.Ans) (step : ℕ → σ → ι → Prog M (α × σ)) :
-    ℕ → List ι → σ → List (σ × Prog M (α × σ))
+def seqRounds {M : IdealModel} {σ α ι : Type} (f : M.Qry → M.Ans) (step : ℕ → σ → ι → OracleProg M (α × σ)) :
+    ℕ → List ι → σ → List (σ × OracleProg M (α × σ))
   | _, [], _ => []
   | j, i :: is, s => (s, step j s i) :: seqRounds f step (j + 1) is ((step j s i).run f).2
 

@@ -78,26 +78,26 @@ theorem unpack_pack {n : ℕ} (l : List Bool) (hl : l.length < n) : StateBits.un
     rw [dite_eq_left h2]
 
 theorem clip_run {B w p : ℕ} [NeZero p] {α β : Type} (g : α → β) (d : β)
-    (f : (ringRO B w p).Qry → (ringRO B w p).Ans) (P : Prog (ringRO B w p) α) :
-    ∀ D Q L, P.mulDepth f ≤ D → P.keyWork f ≤ Q → P.ringWork f ≤ L → (Prog.clip g d D Q L P).run f = g (P.run f) := by
+    (f : (ringRO B w p).Qry → (ringRO B w p).Ans) (P : OracleProg (ringRO B w p) α) :
+    ∀ D Q L, P.mulDepth f ≤ D → P.keyWork f ≤ Q → P.ringWork f ≤ L → (OracleProg.clip g d D Q L P).run f = g (P.run f) := by
   induction P with
   | ret a => intro D Q L _ _ _; rfl
   | round qs k ih =>
     intro D Q L h1 h2 h3
-    simp only [Prog.mulDepth, Prog.keyWork, Prog.ringWork] at h1 h2 h3
+    simp only [OracleProg.mulDepth, OracleProg.keyWork, OracleProg.ringWork] at h1 h2 h3
     have h : (if qs.any RingQry.isMul then 1 else 0) ≤ D ∧ qs.countP RingQry.isKey ≤ Q ∧
         qs.countP (fun q => !q.isKey) ≤ L := ⟨by omega, by omega, by omega⟩
-    rw [Prog.clip, ite_eq_left h]
+    rw [OracleProg.clip, ite_eq_left h]
     exact ih (qs.map f) _ _ _ (by omega) (by omega) (by omega)
 
 /-- **The packed, clipped strategy answers as the strategy does**, on rounds whose states have fewer than `S` bits and
 whose programs stay within `(D, Q, L)`. -/
 theorem seqAnswers_clip {B w p : ℕ} [NeZero p] {S D Q L ℓ Bn : ℕ} (f : (ringRO B w p).Qry → (ringRO B w p).Ans)
-    (d : Bits ℓ × Bits S) (step : ℕ → List Bool → Fin Bn → Prog (ringRO B w p) (Bits ℓ × List Bool)) :
+    (d : Bits ℓ × Bits S) (step : ℕ → List Bool → Fin Bn → OracleProg (ringRO B w p) (Bits ℓ × List Bool)) :
     ∀ (is : List (Fin Bn)) (j : ℕ) (s : List Bool),
       (∀ e ∈ seqRounds f step j is s,
         e.1.length < S ∧ e.2.mulDepth f ≤ D ∧ e.2.keyWork f ≤ Q ∧ e.2.ringWork f ≤ L) →
-      seqAnswers f (fun j σ i => Prog.clip (fun out => (out.1, StateBits.pack out.2)) d D Q L
+      seqAnswers f (fun j σ i => OracleProg.clip (fun out => (out.1, StateBits.pack out.2)) d D Q L
           (step j (StateBits.unpack σ) i)) j is (StateBits.pack s) =
         (seqRounds f step j is s).map fun e => (e.2.run f).1
   | [], _, _, _ => rfl
@@ -201,16 +201,16 @@ theorem lookup_step {ΩW ΩQ : Type} (o : ΩW × ΩQ) (W : Bits sch.n) (pp : Bit
 /-- A strategy that keeps its state and answers from it with no query: every round starts from the first state and runs
 a `ret`, and its answers are the lookups. -/
 theorem seqRounds_ret {M : IdealModel} {σ α ι : Type} (f : M.Qry → M.Ans) (g : σ → ι → α)
-    (step : ℕ → σ → ι → Prog M (α × σ)) (hstep : ∀ j s i, step j s i = .ret (g s i, s)) :
+    (step : ℕ → σ → ι → OracleProg M (α × σ)) (hstep : ∀ j s i, step j s i = .ret (g s i, s)) :
     ∀ (j : ℕ) (is : List ι) (s : σ),
       (seqRounds f step j is s).map (fun e => (e.2.run f).1) = is.map (g s) ∧
         ∀ e ∈ seqRounds f step j is s, e.1 = s ∧ ∃ i, e.2 = .ret (g s i, s)
   | _, [], _ => ⟨rfl, fun _ he => by simp [seqRounds] at he⟩
   | j, i :: is, s => by
     have ih := seqRounds_ret f g step hstep (j + 1) is s
-    have hs : ((step j s i).run f).2 = s := by simp [hstep, Prog.run]
+    have hs : ((step j s i).run f).2 = s := by simp [hstep, OracleProg.run]
     refine ⟨?_, fun e he => ?_⟩
-    · simp only [seqRounds, List.map_cons, ih.1, hstep, Prog.run]
+    · simp only [seqRounds, List.map_cons, ih.1, hstep, OracleProg.run]
     · simp only [seqRounds, List.mem_cons, hs] at he
       rcases he with rfl | he
       · exact ⟨rfl, i, hstep j s i⟩

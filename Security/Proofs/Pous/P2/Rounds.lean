@@ -82,14 +82,14 @@ def ofSeq {sch : Scheme (ringRO B w p)} {S D Q L : ℕ} (A₂ : SeqResponderOn s
   ⟨A₂.step, A₂.bounded⟩
 
 theorem varAnswers_const {M : IdealModel} {ℓ S B' : ℕ} (f : M.Qry → M.Ans)
-    (step : ℕ → Bits S → Fin B' → Prog M (Bits ℓ × Bits S)) :
+    (step : ℕ → Bits S → Fin B' → OracleProg M (Bits ℓ × Bits S)) :
     ∀ (j : ℕ) (is : List (Fin B')) (σ : Bits S),
       varAnswers (Sz := fun _ => S) f step j is σ = seqAnswers f step j is σ
   | _, [], _ => rfl
   | j, i :: is, σ => by simp only [varAnswers, seqAnswers, varAnswers_const f step (j + 1) is]
 
 theorem length_seqAnswers {M : IdealModel} {ℓ S B' : ℕ} (f : M.Qry → M.Ans)
-    (step : ℕ → Bits S → Fin B' → Prog M (Bits ℓ × Bits S)) :
+    (step : ℕ → Bits S → Fin B' → OracleProg M (Bits ℓ × Bits S)) :
     ∀ (j : ℕ) (is : List (Fin B')) (σ : Bits S), (seqAnswers f step j is σ).length = is.length
   | _, [], _ => rfl
   | j, i :: is, σ => by simp only [seqAnswers, List.length_cons, length_seqAnswers f step (j + 1) is]

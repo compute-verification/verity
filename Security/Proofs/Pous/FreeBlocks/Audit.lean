@@ -18,12 +18,12 @@ open scoped ENNReal
 variable {M : IdealModel}
 
 /-- Every round of a sequential run from round `j` in state `σ` satisfies `P` at its index and answer. -/
-def seqAll {ℓ S B : ℕ} (f : M.Qry → M.Ans) (step : ℕ → Bits S → Fin B → Prog M (Bits ℓ × Bits S))
+def seqAll {ℓ S B : ℕ} (f : M.Qry → M.Ans) (step : ℕ → Bits S → Fin B → OracleProg M (Bits ℓ × Bits S))
     (P : Fin B → Bits ℓ → Prop) : ℕ → List (Fin B) → Bits S → Prop
   | _, [], _ => True
   | j, i :: is, σ => P i ((step j σ i).run f).1 ∧ seqAll f step P (j + 1) is ((step j σ i).run f).2
 
-theorem seqAll_of_getElem? {ℓ S B : ℕ} (f : M.Qry → M.Ans) (step : ℕ → Bits S → Fin B → Prog M (Bits ℓ × Bits S))
+theorem seqAll_of_getElem? {ℓ S B : ℕ} (f : M.Qry → M.Ans) (step : ℕ → Bits S → Fin B → OracleProg M (Bits ℓ × Bits S))
     (P : Fin B → Bits ℓ → Prop) :
     ∀ (j : ℕ) (is : List (Fin B)) (σ : Bits S),
       (∀ (n : ℕ) (hn : n < is.length) (a : Bits ℓ), (seqAnswers f step j is σ)[n]? = some a → P is[n] a) →
@@ -36,7 +36,7 @@ theorem seqAll_of_getElem? {ℓ S B : ℕ} (f : M.Qry → M.Ans) (step : ℕ →
 
 /-- **Chain rule for a per-round predicate.** `PousThm1.pr_seq_le` with "the answer is right" replaced by `P`. -/
 theorem pr_seqAll_le {ℓ S B : ℕ} [NeZero B] (f : M.Qry → M.Ans)
-    (step : ℕ → Bits S → Fin B → Prog M (Bits ℓ × Bits S)) (P : Fin B → Bits ℓ → Prop) (c : ℝ≥0∞) :
+    (step : ℕ → Bits S → Fin B → OracleProg M (Bits ℓ × Bits S)) (P : Fin B → Bits ℓ → Prop) (c : ℝ≥0∞) :
     ∀ (k j : ℕ) (σ : Bits S),
       (∀ h : List (Fin B), h.length < k →
         pr (fun i : Fin B => P i ((step (j + h.length) (seqState f step j h σ) i).run f).1) ≤ c) →

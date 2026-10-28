@@ -169,7 +169,7 @@ theorem b5_stacked {ℓ n N : ℕ} {V : Type} [Fintype V] [DecidableEq V] (α β
     (t : Fin ℓ) (ht : (t : ℕ) + 1 = ℓ)
     (w m Q : ℕ) (d : Fin N → Bits w)
     (A₁ : (LabelQry N w → Bits w) → Bits m)
-    (A₂ : Bits m → Fin N → Prog (IdealModel.randomOracle (LabelQry N w) (Bits w)) (Bits w))
+    (A₂ : Bits m → Fin N → OracleProg (IdealModel.randomOracle (LabelQry N w) (Bits w)) (Bits w))
     (hA₂ : ∀ σ c, (A₂ σ c).Bounded (⌊β * n⌋₊ - 1) Q) :
     pr (fun H : LabelQry N w → Bits w =>
         n - ⌈ε / 2 * n⌉₊ + 1 ≤ ((Finset.univ.image fun b => e (node t b)).filter fun c =>

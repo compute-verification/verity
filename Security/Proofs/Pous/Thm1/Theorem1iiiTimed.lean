@@ -331,7 +331,7 @@ open Classical in
 under `TimedINC D Q β π`. -/
 theorem pr_hitFits_le {M : IdealModel} (sch : Scheme M) (D Q β S R : ℕ) (π : ℝ≥0∞)
     (hinc : TimedINC sch D Q β π) (W : Bits sch.n) (st : Bits sch.n → Bits sch.t → sch.Code → M.Ω → Bits S)
-    (pred : Bits sch.n → Bits sch.t → Bits S → Fin R → Fin sch.B → Prog M (Bits sch.ℓ))
+    (pred : Bits sch.n → Bits sch.t → Bits S → Fin R → Fin sch.B → OracleProg M (Bits sch.ℓ))
     (hpred : ∀ W pp σ r i, (pred W pp σ r i).Bounded D Q) :
     pr (fun a : M.Ω × sch.Coins => hitCost S sch.B sch.ℓ R (Finset.univ.filter fun i => ∃ r,
       (pred W (sch.enc W a.1 a.2).1 (st W (sch.enc W a.1 a.2).1 (sch.enc W a.1 a.2).2 a.1) r i).run
@@ -341,8 +341,8 @@ theorem pr_hitFits_le {M : IdealModel} (sch : Scheme M) (D Q β S R : ℕ) (π :
     if h : ∃ r, (pred W pp (st W pp C ω) r i).run (M.answer ω) = C i then Sum.inl h.choose else Sum.inr (C i)
   let cmp : Bits sch.n → Bits sch.t → sch.Code → M.Ω → Bits β :=
     fun W pp C ω => c (st W pp C ω, msg W pp C ω)
-  let exp : Bits sch.n → Bits sch.t → Bits β → Fin sch.B → Prog M (Bits sch.ℓ) :=
-    fun W pp w i => ((d w).2 i).elim (fun r => pred W pp (d w).1 r i) Prog.ret
+  let exp : Bits sch.n → Bits sch.t → Bits β → Fin sch.B → OracleProg M (Bits sch.ℓ) :=
+    fun W pp w i => ((d w).2 i).elim (fun r => pred W pp (d w).1 r i) OracleProg.ret
   have hexp : ∀ W pp w i, (exp W pp w i).Bounded D Q := by
     intro W pp w i
     cases h : (d w).2 i with
@@ -438,7 +438,7 @@ theorem theorem1_iii_timed {M : IdealModel} (sch : Scheme M) (D Q β S k lam R :
   have hBad : ∀ j, pr (Bad j) ≤ π + (2⁻¹ : ℝ≥0∞) ^ lam := by
     intro j
     let pred : (Fin R → Fin k → Fin sch.B) → Bits sch.n → Bits sch.t → Bits S → Fin R → Fin sch.B →
-        Prog M (Bits sch.ℓ) :=
+        OracleProg M (Bits sch.ℓ) :=
       fun s W pp σ r i => progMap (fun out => out j) (A₂.prog W pp σ (Function.update (s r) j i))
     calc pr (Bad j) = pr (fun x : (M.Ω × sch.Coins) × (Fin R → Fin k → Fin sch.B) => Bad j x.1) :=
           (pr_fst _).symm

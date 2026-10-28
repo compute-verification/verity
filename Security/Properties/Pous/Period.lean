@@ -103,7 +103,7 @@ structure Strategy (ΩW ΩQ : Type) where
   pre : ΩW × ΩQ → Bits sch.n → Bits sch.t → sch.Code → (ringRO (2 ^ 19) 16448 (2 ^ 16448 - 21065)).Ω → List Bool
   /-- round `j`'s answer to index `i` from the state `σ` -/
   step : ΩW × ΩQ → Bits sch.n → Bits sch.t → ℕ → List Bool → Fin sch.B →
-    Prog (ringRO (2 ^ 19) 16448 (2 ^ 16448 - 21065)) (Bits sch.ℓ × List Bool)
+    OracleProg (ringRO (2 ^ 19) 16448 (2 ^ 16448 - 21065)) (Bits sch.ℓ × List Bool)
 
 namespace Audits
 
@@ -148,7 +148,7 @@ it from and the program it runs on index `I j`, the first round starting from wh
 commitment is not among its inputs: the challenger releases it after the last answer. -/
 noncomputable def trace (τ : Strategy ΩW ΩQ) (o : ΩW × ΩQ)
     (x : (ringRO (2 ^ 19) 16448 (2 ^ 16448 - 21065)).Ω × HmCoins × Streams) (I : Fin 105 → Fin (2 ^ 19)) :
-    List (List Bool × Prog (ringRO (2 ^ 19) 16448 (2 ^ 16448 - 21065)) (Bits sch.ℓ × List Bool)) :=
+    List (List Bool × OracleProg (ringRO (2 ^ 19) 16448 (2 ^ 16448 - 21065)) (Bits sch.ℓ × List Bool)) :=
   seqRounds ((ringRO (2 ^ 19) 16448 (2 ^ 16448 - 21065)).answer x.1)
     (τ.step o (P.W o) (sch.enc (P.W o) x.1 ()).1) 0 (List.ofFn I)
     (τ.pre o (P.W o) (sch.enc (P.W o) x.1 ()).1 (sch.enc (P.W o) x.1 ()).2 x.1)
@@ -208,16 +208,16 @@ def Instantiates {ΩW ΩQ : Type} (P : Audits ΩW ΩQ) (τ : Strategy ΩW ΩQ) :
 
 /-- **The fixed extractor**: the ring game's server read from the strategy `τ` at the other audits' coins `o`. It packs
 `τ`'s state into `S₀` bits (`StateBits.pack`, read back by `StateBits.unpack`) and cuts each round's program to
-`(D, Q, L)` (`Prog.clip`, which ends a round past the budget with the all-`false` block), so it is an `S₀`-bit,
+`(D, Q, L)` (`OracleProg.clip`, which ends a round past the budget with the all-`false` block), so it is an `S₀`-bit,
 `(D, Q, L)`-bounded `Server` whatever `τ` is; on a trace whose states have fewer than `S₀` bits and whose programs stay
 within the budget, it answers as `τ` does. -/
 noncomputable def extract {ΩW ΩQ : Type} (τ : Strategy ΩW ΩQ) (o : ΩW × ΩQ) (D Q L : ℕ) :
     Server Pous.EndToEnd.S D Q L where
   pre W pp C ω := StateBits.pack (τ.pre o W pp C ω)
   step W pp j σ i :=
-    Prog.clip (fun out => (out.1, StateBits.pack out.2)) (fun _ => false, fun _ => false) D Q L
+    OracleProg.clip (fun out => (out.1, StateBits.pack out.2)) (fun _ => false, fun _ => false) D Q L
       (τ.step o W pp j (StateBits.unpack σ) i)
-  bounded _ _ _ _ _ := Prog.clip_ringBounded _ _ _ _ _ _
+  bounded _ _ _ _ _ := OracleProg.clip_ringBounded _ _ _ _ _ _
 
 /-- **PoUS's per-period guarantee, about the deployed check.** Given P2's security in the ring model at `(D, Q, L)`
 (`P2RingAuditSecure`): for every joint run on every device whose capacity coins are the ring game's, every period's

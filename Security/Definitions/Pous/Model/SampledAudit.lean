@@ -11,7 +11,7 @@ namespace Pous.Sampled
 
 /-- The state a sequential responder reaches after answering the history `h` from round `j` in state `σ`. -/
 def seqState {M : IdealModel} {ℓ S B : ℕ} (f : M.Qry → M.Ans)
-    (step : ℕ → Bits S → Fin B → Prog M (Bits ℓ × Bits S)) : ℕ → List (Fin B) → Bits S → Bits S
+    (step : ℕ → Bits S → Fin B → OracleProg M (Bits ℓ × Bits S)) : ℕ → List (Fin B) → Bits S → Bits S
   | _, [], σ => σ
   | j, i :: is, σ => seqState f step (j + 1) is ((step j σ i).run f).2
 

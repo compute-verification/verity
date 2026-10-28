@@ -32,54 +32,54 @@ variable {M : IdealModel}
 /-! ### A program stopped at `(D, Q)` -/
 
 /-- `p` stopped after `D` rounds or before the round that would exceed `Q` queries, answering `dflt` there. -/
-def cut {α : Type} (dflt : α) : ℕ → ℕ → Prog M α → Prog M α
+def cut {α : Type} (dflt : α) : ℕ → ℕ → OracleProg M α → OracleProg M α
   | _, _, .ret a => .ret a
   | 0, _, .round _ _ => .ret dflt
   | D + 1, Q, .round qs k =>
       if qs.length ≤ Q then .round qs fun as => cut dflt D (Q - qs.length) (k as) else .ret dflt
 
-theorem cut_depth_work {α : Type} (dflt : α) (f : M.Qry → M.Ans) (p : Prog M α) :
+theorem cut_depth_work {α : Type} (dflt : α) (f : M.Qry → M.Ans) (p : OracleProg M α) :
     ∀ D Q : ℕ, (cut dflt D Q p).depth f ≤ D ∧ (cut dflt D Q p).work f ≤ Q := by
   induction p with
-  | ret a => intro D Q; cases D <;> simp [cut, Prog.depth, Prog.work]
+  | ret a => intro D Q; cases D <;> simp [cut, OracleProg.depth, OracleProg.work]
   | round qs k ih =>
       intro D Q
       cases D with
-      | zero => simp [cut, Prog.depth, Prog.work]
+      | zero => simp [cut, OracleProg.depth, OracleProg.work]
       | succ D =>
           by_cases h : qs.length ≤ Q
           · have := ih (qs.map f) D (Q - qs.length)
-            simp only [cut, h, ↓reduceIte, Prog.depth, Prog.work]
+            simp only [cut, h, ↓reduceIte, OracleProg.depth, OracleProg.work]
             omega
-          · simp [cut, h, Prog.depth, Prog.work]
+          · simp [cut, h, OracleProg.depth, OracleProg.work]
 
-theorem cut_bounded {α : Type} (dflt : α) (D Q : ℕ) (p : Prog M α) : (cut dflt D Q p).Bounded D Q :=
+theorem cut_bounded {α : Type} (dflt : α) (D Q : ℕ) (p : OracleProg M α) : (cut dflt D Q p).Bounded D Q :=
   fun ω => cut_depth_work dflt (M.answer ω) p D Q
 
-theorem bounded_mono {α : Type} {p : Prog M α} {D Q D' Q' : ℕ} (h : p.Bounded D Q) (hD : D ≤ D') (hQ : Q ≤ Q') :
+theorem bounded_mono {α : Type} {p : OracleProg M α} {D Q D' Q' : ℕ} (h : p.Bounded D Q) (hD : D ≤ D') (hQ : Q ≤ Q') :
     p.Bounded D' Q' :=
   fun ω => ⟨(h ω).1.trans hD, (h ω).2.trans hQ⟩
 
 /-- On a path within `(D, Q)` the stopped program returns what the program returns. -/
-theorem cut_run {α : Type} (dflt : α) (f : M.Qry → M.Ans) (p : Prog M α) :
+theorem cut_run {α : Type} (dflt : α) (f : M.Qry → M.Ans) (p : OracleProg M α) :
     ∀ D Q : ℕ, p.depth f ≤ D → p.work f ≤ Q → (cut dflt D Q p).run f = p.run f := by
   induction p with
   | ret a => intro D Q _ _; cases D <;> simp [cut]
   | round qs k ih =>
       intro D Q hD hQ
-      simp only [Prog.depth, Prog.work] at hD hQ
+      simp only [OracleProg.depth, OracleProg.work] at hD hQ
       cases D with
       | zero => omega
       | succ D =>
           have h : qs.length ≤ Q := by omega
-          simp only [cut, h, ↓reduceIte, Prog.run]
+          simp only [cut, h, ↓reduceIte, OracleProg.run]
           exact ih (qs.map f) D (Q - qs.length) (by omega) (by omega)
 
 /-! ### Late rounds and misses -/
 
 /-- When every answer is correct, the rounds whose stopped program is wrong are among the late ones. -/
 theorem misses_le_late {ℓ S B : ℕ} (f : M.Qry → M.Ans) (D Q : ℕ) (dflt : Bits ℓ × Bits S)
-    (step : ℕ → Bits S → Fin B → Prog M (Bits ℓ × Bits S)) (C : Fin B → Bits ℓ) (is : List (Fin B)) :
+    (step : ℕ → Bits S → Fin B → OracleProg M (Bits ℓ × Bits S)) (C : Fin B → Bits ℓ) (is : List (Fin B)) :
     ∀ (j : ℕ) (σ : Bits S), (gradedAnswers f D Q step j is σ).map Prod.fst = is.map C →
       misses (fun j σ i => ((step j σ i).run f).2) (fun j σ i => ((cut dflt D Q (step j σ i)).run f).1 = C i)
           j is σ ≤ (gradedAnswers f D Q step j is σ).countP (fun a => !a.2) := by
@@ -99,14 +99,14 @@ theorem misses_le_late {ℓ S B : ℕ} (f : M.Qry → M.Ans) (D Q : ℕ) (dflt :
         split_ifs <;> omega
 
 theorem map_fst_gradedAnswers {ℓ S B : ℕ} (f : M.Qry → M.Ans) (D Q : ℕ)
-    (step : ℕ → Bits S → Fin B → Prog M (Bits ℓ × Bits S)) (is : List (Fin B)) :
+    (step : ℕ → Bits S → Fin B → OracleProg M (Bits ℓ × Bits S)) (is : List (Fin B)) :
     ∀ (j : ℕ) (σ : Bits S), (gradedAnswers f D Q step j is σ).map Prod.fst = seqAnswers f step j is σ := by
   induction is with
   | nil => intro j σ; rfl
   | cons i is ih => intro j σ; simp only [gradedAnswers, seqAnswers, List.map_cons, ih]
 
 theorem countP_late_eq_zero {ℓ S B : ℕ} (f : M.Qry → M.Ans) (D Q : ℕ)
-    (step : ℕ → Bits S → Fin B → Prog M (Bits ℓ × Bits S))
+    (step : ℕ → Bits S → Fin B → OracleProg M (Bits ℓ × Bits S))
     (hb : ∀ j σ i, (step j σ i).depth f ≤ D ∧ (step j σ i).work f ≤ Q) (is : List (Fin B)) :
     ∀ (j : ℕ) (σ : Bits S), (gradedAnswers f D Q step j is σ).countP (fun a => !a.2) = 0 := by
   induction is with
@@ -118,7 +118,7 @@ theorem countP_late_eq_zero {ℓ S B : ℕ} (f : M.Qry → M.Ans) (D Q : ℕ)
 
 /-- With no late round, the stopped responder answers as the responder does. -/
 theorem seqAnswers_cut {ℓ S B : ℕ} (f : M.Qry → M.Ans) (D Q : ℕ) (dflt : Bits ℓ × Bits S)
-    (step : ℕ → Bits S → Fin B → Prog M (Bits ℓ × Bits S)) (is : List (Fin B)) :
+    (step : ℕ → Bits S → Fin B → OracleProg M (Bits ℓ × Bits S)) (is : List (Fin B)) :
     ∀ (j : ℕ) (σ : Bits S), (gradedAnswers f D Q step j is σ).countP (fun a => !a.2) = 0 →
       seqAnswers f (fun j σ i => cut dflt D Q (step j σ i)) j is σ = (gradedAnswers f D Q step j is σ).map Prod.fst := by
   induction is with
@@ -177,7 +177,7 @@ theorem theorem1_ii_graded (sch : Scheme M) (D Q β S k t : ℕ) {D_late Q_late 
     fun W pp ω j σ i => ((A₂.step W pp j σ i).run (M.answer ω)).2
   let st : List (Fin sch.B) → Bits sch.n → Bits sch.t → sch.Code → M.Ω → Bits S :=
     fun h W pp C ω => after (nxt W pp ω) 0 h (A₁ W pp C ω)
-  let pred : List (Fin sch.B) → Bits sch.n → Bits sch.t → Bits S → Fin sch.B → Prog M (Bits sch.ℓ) :=
+  let pred : List (Fin sch.B) → Bits sch.n → Bits sch.t → Bits S → Fin sch.B → OracleProg M (Bits sch.ℓ) :=
     fun h W pp σ i => progMap Prod.fst (cut dflt D Q (A₂.step W pp h.length σ i))
   let good : List (Fin sch.B) → M.Ω × sch.Coins → Fin sch.B → Prop := fun h a i =>
     (pred h W (sch.enc W a.1 a.2).1 (st h W (sch.enc W a.1 a.2).1 (sch.enc W a.1 a.2).2 a.1) i).run

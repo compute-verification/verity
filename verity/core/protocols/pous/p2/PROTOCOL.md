@@ -462,7 +462,7 @@ This subsection maps the Lean sequential audit game to deployment. It is normati
 S = floor((18/19) · |C|) bits.
 ```
 
-The bound is a condition on the adversarial prover quantified by the security guarantee, not a storage rule for the honest prover. The formal conditional claim is: every prover with no outside help whose retained state is at most S bits and whose round program is `Prog.Bounded D Q` passes with probability at most `δ + ε`. The honest prover retains all of C and is expected to pass. Its wall-clock interpretation additionally depends on the external calibration and SeqRoot assumption below, and a deployment reads outside help through the help-accounted row ("Help accounting and evidence").
+The bound is a condition on the adversarial prover quantified by the security guarantee, not a storage rule for the honest prover. The formal conditional claim is: every prover with no outside help whose retained state is at most S bits and whose round program is `OracleProg.Bounded D Q` passes with probability at most `δ + ε`. The honest prover retains all of C and is expected to pass. Its wall-clock interpretation additionally depends on the external calibration and SeqRoot assumption below, and a deployment reads outside help through the help-accounted row ("Help accounting and evidence").
 
 #### Game-to-deployment map
 
@@ -501,9 +501,9 @@ The state boundary is enforced:
 1. after preprocessing and erasure of C, encoder coins and setup secrets, immediately before round 0's challenge; and
 2. after the complete RESPONSE for round j has been produced and before CHALLENGE j+1 is released.
 
-There is no unmetered computation gap between rounds. The responder's next-state choice is part of round j. Working memory and local computation within a round are unrestricted by S, matching `Prog`. Before the next boundary, every transient byte must be erased or represented in the counted next state. Temporary files, child processes, GPU allocations, swap, caches and asynchronous work do not become free merely because the response was already sent.
+There is no unmetered computation gap between rounds. The responder's next-state choice is part of round j. Working memory and local computation within a round are unrestricted by S, matching `OracleProg`. Before the next boundary, every transient byte must be erased or represented in the counted next state. Temporary files, child processes, GPU allocations, swap, caches and asynchronous work do not become free merely because the response was already sent.
 
-In `Prog.Bounded D Q`, D is the number of adaptive oracle rounds and Q is the total number of modeled forward-oracle queries in one answer, across all cooperating hardware; neither bounds local computation. The P2 pins hold for every D. A deployment claim must separately freeze the hardware/cooperation class, calibrate aggregate Q for the `Δ + RTT` response window, and assume SeqRoot excludes an inverse or equivalent target computation in that same window. The Lean game contains no wall clock: every `(D,Q)`-bounded program is treated as on time.
+In `OracleProg.Bounded D Q`, D is the number of adaptive oracle rounds and Q is the total number of modeled forward-oracle queries in one answer, across all cooperating hardware; neither bounds local computation. The P2 pins hold for every D. A deployment claim must separately freeze the hardware/cooperation class, calibrate aggregate Q for the `Δ + RTT` response window, and assume SeqRoot excludes an inverse or equivalent target computation in that same window. The Lean game contains no wall clock: every `(D,Q)`-bounded program is treated as on time.
 
 Cross-answer decoded-block, root, lattice, table or key caches count whenever they contain information not determined by the true free inputs. Reloading a charged object after the boundary does not evade the cap: if it remains reachable, its retained information was part of σ at that boundary.
 

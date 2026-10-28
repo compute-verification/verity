@@ -65,14 +65,14 @@ variable {M : IdealModel} {α : Type}
 
 /-- `p` on a budget of `b` queries: a round of no queries is skipped, a round past the budget stops with `a₀`, and
 every other round is `p`'s. -/
-def cut (a₀ : α) : ℕ → Prog M α → Prog M α
+def cut (a₀ : α) : ℕ → OracleProg M α → OracleProg M α
   | _, .ret a => .ret a
   | b, .round [] k => cut a₀ b (k [])
   | b, .round (q :: qs) k =>
     if qs.length + 1 ≤ b then .round (q :: qs) fun as => cut a₀ (b - (qs.length + 1)) (k as) else .ret a₀
 
-theorem work_cut (a₀ : α) (f : M.Qry → M.Ans) : ∀ (p : Prog M α) (b : ℕ), (cut a₀ b p).work f ≤ b
-  | .ret a, b => by simp [cut, Prog.work]
+theorem work_cut (a₀ : α) (f : M.Qry → M.Ans) : ∀ (p : OracleProg M α) (b : ℕ), (cut a₀ b p).work f ≤ b
+  | .ret a, b => by simp [cut, OracleProg.work]
   | .round [] k, b => by
     simp only [cut]
     exact work_cut a₀ f (k []) b
@@ -80,12 +80,12 @@ theorem work_cut (a₀ : α) (f : M.Qry → M.Ans) : ∀ (p : Prog M α) (b : �
     simp only [cut]
     split_ifs with h
     · have ih := work_cut a₀ f (k ((q :: qs).map f)) (b - (qs.length + 1))
-      simp only [Prog.work, List.length_cons]
+      simp only [OracleProg.work, List.length_cons]
       omega
-    · simp [Prog.work]
+    · simp [OracleProg.work]
 
-theorem depth_cut (a₀ : α) (f : M.Qry → M.Ans) : ∀ (p : Prog M α) (b : ℕ), (cut a₀ b p).depth f ≤ b
-  | .ret a, b => by simp [cut, Prog.depth]
+theorem depth_cut (a₀ : α) (f : M.Qry → M.Ans) : ∀ (p : OracleProg M α) (b : ℕ), (cut a₀ b p).depth f ≤ b
+  | .ret a, b => by simp [cut, OracleProg.depth]
   | .round [] k, b => by
     simp only [cut]
     exact depth_cut a₀ f (k []) b
@@ -93,28 +93,28 @@ theorem depth_cut (a₀ : α) (f : M.Qry → M.Ans) : ∀ (p : Prog M α) (b : �
     simp only [cut]
     split_ifs with h
     · have ih := depth_cut a₀ f (k ((q :: qs).map f)) (b - (qs.length + 1))
-      simp only [Prog.depth]
+      simp only [OracleProg.depth]
       omega
-    · simp [Prog.depth]
+    · simp [OracleProg.depth]
 
 /-- The cut program is `(b, b)`-bounded against every primitive. -/
-theorem bounded_cut (a₀ : α) (b : ℕ) (p : Prog M α) : (cut a₀ b p).Bounded b b := by
+theorem bounded_cut (a₀ : α) (b : ℕ) (p : OracleProg M α) : (cut a₀ b p).Bounded b b := by
   intro ω
   exact ⟨depth_cut a₀ _ p b, work_cut a₀ _ p b⟩
 
 /-- Within its budget the cut program outputs what `p` does. -/
 theorem run_cut (a₀ : α) (f : M.Qry → M.Ans) :
-    ∀ (p : Prog M α) (b : ℕ), p.work f ≤ b → (cut a₀ b p).run f = p.run f
-  | .ret a, b, _ => by simp [cut, Prog.run]
+    ∀ (p : OracleProg M α) (b : ℕ), p.work f ≤ b → (cut a₀ b p).run f = p.run f
+  | .ret a, b, _ => by simp [cut, OracleProg.run]
   | .round [] k, b, h => by
-    simp only [cut, Prog.run, List.map_nil]
-    exact run_cut a₀ f (k []) b (by simpa [Prog.work] using h)
+    simp only [cut, OracleProg.run, List.map_nil]
+    exact run_cut a₀ f (k []) b (by simpa [OracleProg.work] using h)
   | .round (q :: qs) k, b, h => by
-    have hw : qs.length + 1 + (k ((q :: qs).map f)).work f ≤ b := by simpa [Prog.work] using h
+    have hw : qs.length + 1 + (k ((q :: qs).map f)).work f ≤ b := by simpa [OracleProg.work] using h
     have hb : qs.length + 1 ≤ b := by omega
     simp only [cut]
     rw [if_pos hb]
-    simp only [Prog.run]
+    simp only [OracleProg.run]
     exact run_cut a₀ f _ _ (by omega)
 
 end Cut
@@ -122,7 +122,7 @@ end Cut
 /-- **Chain work.** On the line of `N + 1` data-carrying labels, an oracle program with `m` bits of advice that outputs
 the last label after at most `N` queries is right with probability at most `2^m · 4(N + 1)³ / 2^w`. -/
 theorem chain_work (N w m : ℕ) (d : Fin (N + 1) → Bits w) (A₁ : (LabelQry (N + 1) w → Bits w) → Bits m)
-    (P : Bits m → Prog (IdealModel.randomOracle (LabelQry (N + 1) w) (Bits w)) (Bits w)) :
+    (P : Bits m → OracleProg (IdealModel.randomOracle (LabelQry (N + 1) w) (Bits w)) (Bits w)) :
     Pous.pr (fun H : LabelQry (N + 1) w → Bits w =>
         (P (A₁ H)).work H ≤ N ∧ (P (A₁ H)).run H = label (line (N + 1)) d H (Fin.last N)) ≤
       2 ^ m * ((4 * (N + 1) ^ 3 : ℕ) : ℝ≥0∞) / 2 ^ w := by

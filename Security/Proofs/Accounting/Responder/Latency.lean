@@ -65,11 +65,11 @@ theorem any_filter_not_mul (A : List (RingQry B w)) : (A.filter fun q => !q.isMu
   List.any_eq_false.2 fun q hq => by simpa using (List.mem_filter.1 hq).2
 
 /-- A round of a ring program, its queries and answers at the ring's own types. -/
-def rnd (qs : List (RingQry B w)) (k : List (Bits w) → Prog (ringRO B w p) α) : Prog (ringRO B w p) α :=
+def rnd (qs : List (RingQry B w)) (k : List (Bits w) → OracleProg (ringRO B w p) α) : OracleProg (ringRO B w p) α :=
   .round qs k
 
 section rnd
-variable (f : RingQry B w → Bits w) (qs : List (RingQry B w)) (k : List (Bits w) → Prog (ringRO B w p) α)
+variable (f : RingQry B w → Bits w) (qs : List (RingQry B w)) (k : List (Bits w) → OracleProg (ringRO B w p) α)
 theorem run_rnd : (rnd qs k).run f = (k (qs.map f)).run f := rfl
 theorem keyWork_rnd : (rnd qs k).keyWork f = qs.countP RingQry.isKey + (k (qs.map f)).keyWork f := rfl
 theorem ringWork_rnd : (rnd qs k).ringWork f = qs.countP (fun q => !q.isKey) + (k (qs.map f)).ringWork f := rfl
@@ -93,7 +93,7 @@ their ticks, `ds` the batches delivered so far, `g` the answers it knows, `held`
 their ticks, and `h0` the tick the earliest-asked of them was asked at. -/
 noncomputable def sim (W : RingWindow B w α) (ℓ : ℕ) :
     ℕ → ℕ → List (ℕ × RingQry B w) → List (List (Bits w)) → (RingQry B w → Bits w) → List (ℕ × RingQry B w) → ℕ →
-      Prog (ringRO B w p) α
+      OracleProg (ringRO B w p) α
   | 0, _, as, ds, g, held, _ =>
     rnd (held.map Prod.snd) fun r => .ret (W.out ds (W.inFlight (upd g (held.map Prod.snd) r) as))
   | k + 1, n, as, ds, g, held, h0 =>
@@ -136,7 +136,7 @@ theorem sim_spec (W : RingWindow B w α) {ℓ : ℕ} (hℓ : 0 < ℓ) (hlat : �
     intro n g held h0 hk hg hheld
     have hn : n = W.span := by omega
     subst hn
-    simp only [sim, run_rnd, keyWork_rnd, ringWork_rnd, Prog.run, Prog.keyWork, Prog.ringWork]
+    simp only [sim, run_rnd, keyWork_rnd, ringWork_rnd, OracleProg.run, OracleProg.keyWork, OracleProg.ringWork]
     have hm : ∀ q ∈ held.map Prod.snd, q.isMul = true := fun q hq => by
       obtain ⟨e, he, rfl⟩ := List.mem_map.1 hq
       exact (hheld e he).1
@@ -303,7 +303,7 @@ theorem sim_mulDepth (W : RingWindow B w α) {ℓ : ℕ} (hℓ : 0 < ℓ) (f : R
   induction k with
   | zero =>
     intro n as ds g held h0 hk hh
-    simp only [sim, mulDepth_rnd, Prog.mulDepth, Nat.add_zero]
+    simp only [sim, mulDepth_rnd, OracleProg.mulDepth, Nat.add_zero]
     by_cases hne : held = []
     · subst hne
       simp
@@ -347,7 +347,7 @@ theorem sim_mulDepth (W : RingWindow B w α) {ℓ : ℕ} (hℓ : 0 < ℓ) (f : R
 
 /-- The program `P`, stopped with `d` at the first round that would take it past `D` rounds with a multiplication, `Q`
 key queries or `L` ring queries. -/
-def cap (d : α) : ℕ → ℕ → ℕ → Prog (ringRO B w p) α → Prog (ringRO B w p) α
+def cap (d : α) : ℕ → ℕ → ℕ → OracleProg (ringRO B w p) α → OracleProg (ringRO B w p) α
   | _, _, _, .ret a => .ret a
   | D, Q, L, .round qs k =>
     if (if qs.any RingQry.isMul then 1 else 0) ≤ D ∧ qs.countP RingQry.isKey ≤ Q ∧
@@ -356,12 +356,12 @@ def cap (d : α) : ℕ → ℕ → ℕ → Prog (ringRO B w p) α → Prog (ring
         (L - qs.countP fun q => !q.isKey) (k r)
     else .ret d
 
-theorem cap_bounded (d : α) (f : (ringRO B w p).Qry → (ringRO B w p).Ans) (P : Prog (ringRO B w p) α) :
+theorem cap_bounded (d : α) (f : (ringRO B w p).Qry → (ringRO B w p).Ans) (P : OracleProg (ringRO B w p) α) :
     ∀ D Q L, (cap d D Q L P).mulDepth f ≤ D ∧ (cap d D Q L P).keyWork f ≤ Q ∧ (cap d D Q L P).ringWork f ≤ L := by
   induction P with
   | ret a =>
     intro D Q L
-    simp [cap, Prog.mulDepth, Prog.keyWork, Prog.ringWork]
+    simp [cap, OracleProg.mulDepth, OracleProg.keyWork, OracleProg.ringWork]
   | round qs k ih =>
     intro D Q L
     simp only [cap]
@@ -370,13 +370,13 @@ theorem cap_bounded (d : α) (f : (ringRO B w p).Qry → (ringRO B w p).Ans) (P 
     · rw [ite_eq_left h]
       obtain ⟨h1, h2, h3⟩ := ih (qs.map f) (D - if qs.any RingQry.isMul then 1 else 0)
         (Q - qs.countP RingQry.isKey) (L - qs.countP fun q => !q.isKey)
-      simp only [Prog.mulDepth, Prog.keyWork, Prog.ringWork]
+      simp only [OracleProg.mulDepth, OracleProg.keyWork, OracleProg.ringWork]
       generalize (if qs.any RingQry.isMul then 1 else 0) = m at h h1 h2 h3 ⊢
       omega
     · rw [ite_eq_right h]
-      simp [Prog.mulDepth, Prog.keyWork, Prog.ringWork]
+      simp [OracleProg.mulDepth, OracleProg.keyWork, OracleProg.ringWork]
 
-theorem cap_run (d : α) (f : (ringRO B w p).Qry → (ringRO B w p).Ans) (P : Prog (ringRO B w p) α) :
+theorem cap_run (d : α) (f : (ringRO B w p).Qry → (ringRO B w p).Ans) (P : OracleProg (ringRO B w p) α) :
     ∀ D Q L, P.mulDepth f ≤ D → P.keyWork f ≤ Q → P.ringWork f ≤ L → (cap d D Q L P).run f = P.run f := by
   induction P with
   | ret a =>
@@ -384,10 +384,10 @@ theorem cap_run (d : α) (f : (ringRO B w p).Qry → (ringRO B w p).Ans) (P : Pr
     simp [cap]
   | round qs k ih =>
     intro D Q L hD hQ hL
-    simp only [Prog.mulDepth, Prog.keyWork, Prog.ringWork] at hD hQ hL
+    simp only [OracleProg.mulDepth, OracleProg.keyWork, OracleProg.ringWork] at hD hQ hL
     simp only [cap]
     rw [ite_eq_left ⟨by omega, by omega, by omega⟩]
-    simp only [Prog.run]
+    simp only [OracleProg.run]
     exact ih (qs.map f) _ _ _ (by omega) (by omega) (by omega)
 
 /-! ## A window as a `RingBounded` program -/
@@ -397,7 +397,7 @@ spans at most `D·ℓ` ticks, some `RingBounded D Q L` program yields what the w
 wherever the window asks at most `Q` keys and `L` ring operations. -/
 theorem window_responder (W : RingWindow B w α) (ℓ D Q L : ℕ) (d : α) (hℓ : 0 < ℓ)
     (hlat : ∀ q : RingQry B w, q.isMul = true → ℓ ≤ W.lat q) (hspan : W.span ≤ D * ℓ) :
-    ∃ P : Prog (ringRO B w p) α, P.RingBounded D Q L ∧
+    ∃ P : OracleProg (ringRO B w p) α, P.RingBounded D Q L ∧
       ∀ f : RingQry B w → Bits w, W.keys f ≤ Q → W.ops f ≤ L → P.run f = W.result f := by
   refine ⟨cap d D Q L (sim W ℓ W.span 0 [] [] (fun _ _ => false) [] 0), fun ω => cap_bounded d _ _ D Q L, ?_⟩
   intro f hQ hL
@@ -417,7 +417,7 @@ theorem window_responder (W : RingWindow B w α) (ℓ D Q L : ℕ) (d : α) (h�
   exact h1
 
 theorem seqAnswers_congr {I : IdealModel} {ℓ' S B' : ℕ} (f : I.Qry → I.Ans)
-    (step step' : ℕ → Bits S → Fin B' → Prog I (Bits ℓ' × Bits S))
+    (step step' : ℕ → Bits S → Fin B' → OracleProg I (Bits ℓ' × Bits S))
     (h : ∀ j σ i, (step j σ i).run f = (step' j σ i).run f) :
     ∀ (is : List (Fin B')) j σ, seqAnswers f step j is σ = seqAnswers f step' j is σ := by
   intro is
@@ -442,7 +442,7 @@ theorem B2WindowAudit : Guarantees.B2WindowAudit := by
   unfold Pous.seqAcceptsOn
   dsimp only
   refine Eq.trans (Latency.seqAnswers_congr ((Pous.ringRO B w p).answer x.1) (A₂.step W (sch.enc W x.1 x.2.1).1)
-    (fun j σ i => Pous.Prog.ret ((Wd W (sch.enc W x.1 x.2.1).1 j σ i).result ((Pous.ringRO B w p).answer x.1)))
+    (fun j σ i => Pous.OracleProg.ret ((Wd W (sch.enc W x.1 x.2.1).1 j σ i).result ((Pous.ringRO B w p).answer x.1)))
     (fun j σ i => hA₂ W (sch.enc W x.1 x.2.1).1 j σ i _ (hbud x.1 _ _ j σ i).1 (hbud x.1 _ _ j σ i).2)
     (List.ofFn x.2.2) 0 _) hx
 

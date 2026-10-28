@@ -21,7 +21,7 @@ The tweaks of different steps differ, so the charges sum to at most the work, `�
 first rounds asking `c_0, …, c_D` strictly increase, which `D` rounds cannot fit: `c_D` is never asked, and the
 output hits `x_{D+1} = H(c_D)` with probability `1/m`.
 
-Only the total work enters, so the same proof gives `(Q + 1)/m` for `Prog.Bounded D Q` (`b3_chain_bounded`).
+Only the total work enters, so the same proof gives `(Q + 1)/m` for `OracleProg.Bounded D Q` (`b3_chain_bounded`).
 -/
 
 namespace PousPebbling
@@ -41,25 +41,25 @@ section Queries
 variable {M : IdealModel} {α : Type}
 
 /-- Every query, in order, on the path taken when queries are answered by `f`. -/
-def allQ (f : M.Qry → M.Ans) : Prog M α → List M.Qry
+def allQ (f : M.Qry → M.Ans) : OracleProg M α → List M.Qry
   | .ret _ => []
   | .round qs k => qs ++ allQ f (k (qs.map f))
 
 /-- The queries of the rounds up to and including the first round that asks `p` (all of them if none does). -/
-def pre [DecidableEq M.Qry] (p : M.Qry) (f : M.Qry → M.Ans) : Prog M α → List M.Qry
+def pre [DecidableEq M.Qry] (p : M.Qry) (f : M.Qry → M.Ans) : OracleProg M α → List M.Qry
   | .ret _ => []
   | .round qs k => qs ++ if p ∈ qs then [] else pre p f (k (qs.map f))
 
-theorem length_allQ (f : M.Qry → M.Ans) (P : Prog M α) : (allQ f P).length = P.work f := by
+theorem length_allQ (f : M.Qry → M.Ans) (P : OracleProg M α) : (allQ f P).length = P.work f := by
   induction P with
   | ret a => rfl
-  | round qs k ih => simp [allQ, Prog.work, ih]
+  | round qs k ih => simp [allQ, OracleProg.work, ih]
 
-theorem work_le_depth_mul_width (f : M.Qry → M.Ans) (P : Prog M α) : P.work f ≤ P.depth f * P.width f := by
+theorem work_le_depth_mul_width (f : M.Qry → M.Ans) (P : OracleProg M α) : P.work f ≤ P.depth f * P.width f := by
   induction P with
-  | ret a => simp [Prog.work]
+  | ret a => simp [OracleProg.work]
   | round qs k ih =>
-    simp only [Prog.work, Prog.depth, Prog.width]
+    simp only [OracleProg.work, OracleProg.depth, OracleProg.width]
     have h1 := ih (qs.map f)
     have h2 : (k (qs.map f)).depth f * (k (qs.map f)).width f ≤
         (k (qs.map f)).depth f * max qs.length ((k (qs.map f)).width f) :=
@@ -68,7 +68,7 @@ theorem work_le_depth_mul_width (f : M.Qry → M.Ans) (P : Prog M α) : P.work f
     rw [Nat.succ_mul]
     omega
 
-theorem mem_allQ_of_mem_pre [DecidableEq M.Qry] {p x : M.Qry} (f : M.Qry → M.Ans) (P : Prog M α)
+theorem mem_allQ_of_mem_pre [DecidableEq M.Qry] {p x : M.Qry} (f : M.Qry → M.Ans) (P : OracleProg M α)
     (h : x ∈ pre p f P) : x ∈ allQ f P := by
   induction P with
   | ret a => simp [pre] at h
@@ -82,7 +82,7 @@ theorem mem_allQ_of_mem_pre [DecidableEq M.Qry] {p x : M.Qry} (f : M.Qry → M.A
 
 /-- `pre p` does not look at the answer to `p`. -/
 theorem pre_congr [DecidableEq M.Qry] (p : M.Qry) {f g : M.Qry → M.Ans} (hfg : ∀ x, x ≠ p → f x = g x)
-    (P : Prog M α) : pre p f P = pre p g P := by
+    (P : OracleProg M α) : pre p f P = pre p g P := by
   induction P with
   | ret a => rfl
   | round qs k ih =>
@@ -94,7 +94,7 @@ theorem pre_congr [DecidableEq M.Qry] (p : M.Qry) {f g : M.Qry → M.Ans} (hfg :
 
 /-- A program that never asks `p` does not depend on the answer to `p`. -/
 theorem run_congr [DecidableEq M.Qry] (p : M.Qry) {f g : M.Qry → M.Ans} (hfg : ∀ x, x ≠ p → f x = g x)
-    (P : Prog M α) (hp : p ∉ pre p f P) : P.run g = P.run f := by
+    (P : OracleProg M α) (hp : p ∉ pre p f P) : P.run g = P.run f := by
   induction P with
   | ret a => rfl
   | round qs k ih =>
@@ -102,19 +102,19 @@ theorem run_congr [DecidableEq M.Qry] (p : M.Qry) {f g : M.Qry → M.Ans} (hfg :
     obtain ⟨hq, hrest⟩ := hp
     simp only [hq, ↓reduceIte] at hrest
     have : qs.map f = qs.map g := List.map_congr_left fun x hx => hfg x fun h => hq (h ▸ hx)
-    simp only [Prog.run]
+    simp only [OracleProg.run]
     rw [← this]
     exact ih _ hrest
 
 /-- If `c (i+1)` is never asked by the first round that asks `c i`, for every `i < k`, and `c k` is asked at all,
 then the first rounds asking `c 0, …, c k` strictly increase, so there are at least `k + 1` rounds. -/
-theorem depth_ge [DecidableEq M.Qry] (f : M.Qry → M.Ans) (P : Prog M α) :
+theorem depth_ge [DecidableEq M.Qry] (f : M.Qry → M.Ans) (P : OracleProg M α) :
     ∀ (c : ℕ → M.Qry) (k : ℕ), (∀ i < k, c (i + 1) ∉ pre (c i) f P) → c k ∈ allQ f P → k + 1 ≤ P.depth f := by
   induction P with
   | ret a => intro c k _ hk; simp [allQ] at hk
   | round qs cont ih =>
     intro c k hc hk
-    simp only [Prog.depth]
+    simp only [OracleProg.depth]
     have hq : ∀ i < k, c (i + 1) ∉ qs := fun i hi h => hc i hi (by simp only [pre]; exact List.mem_append_left _ h)
     cases k with
     | zero => omega
@@ -213,7 +213,7 @@ instance instDecidableEqRandomOracleQry (X Y : Type) [Fintype X] [DecidableEq X]
 
 /-- The counting form of B3, for any work bound `W`: `m · #{H | success} ≤ |Ω| · (W + 1)`. -/
 theorem b3_count (m D W : ℕ) [NeZero m] (x₀ : Fin m)
-    (P : Prog (IdealModel.randomOracle (Fin (D + 1) × Fin m) (Fin m)) (Fin m))
+    (P : OracleProg (IdealModel.randomOracle (Fin (D + 1) × Fin m) (Fin m)) (Fin m))
     (hd : ∀ H : Fin (D + 1) × Fin m → Fin m, P.depth H ≤ D) (hw : ∀ H : Fin (D + 1) × Fin m → Fin m, P.work H ≤ W) :
     (Finset.univ.filter fun H : Fin (D + 1) × Fin m → Fin m => P.run H = chain H x₀ (D + 1)).card * m ≤
       Fintype.card (Fin (D + 1) × Fin m → Fin m) * (W + 1) := by
@@ -311,7 +311,7 @@ theorem b3_count (m D W : ℕ) [NeZero m] (x₀ : Fin m)
 
 /-- The probability form of `b3_count`. -/
 theorem b3_pr (m D W : ℕ) [NeZero m] (x₀ : Fin m)
-    (P : Prog (IdealModel.randomOracle (Fin (D + 1) × Fin m) (Fin m)) (Fin m))
+    (P : OracleProg (IdealModel.randomOracle (Fin (D + 1) × Fin m) (Fin m)) (Fin m))
     (hd : ∀ H : Fin (D + 1) × Fin m → Fin m, P.depth H ≤ D) (hw : ∀ H : Fin (D + 1) × Fin m → Fin m, P.work H ≤ W) :
     pr (fun H : Fin (D + 1) × Fin m → Fin m => P.run H = chain H x₀ (D + 1)) ≤ ((W + 1 : ℕ) : ℝ≥0∞) / m := by
   have key := b3_count m D W x₀ P hd hw
@@ -337,14 +337,14 @@ theorem b3_pr (m D W : ℕ) [NeZero m] (x₀ : Fin m)
 /-- B3. Hash-chain sequentiality: `D` rounds of at most `q` random-oracle queries output the end `x_{D+1}` of the
 tweaked chain with probability at most `(D·q + 1)/m` (verbatim from `PousProofs.b3_chain`). -/
 theorem b3_chain (m D q : ℕ) [NeZero m] (x₀ : Fin m)
-    (P : Prog (IdealModel.randomOracle (Fin (D + 1) × Fin m) (Fin m)) (Fin m)) (hP : P.RoundBounded D q) :
+    (P : OracleProg (IdealModel.randomOracle (Fin (D + 1) × Fin m) (Fin m)) (Fin m)) (hP : P.RoundBounded D q) :
     pr (fun H : Fin (D + 1) × Fin m → Fin m => P.run H = chain H x₀ (D + 1)) ≤ ((D * q + 1 : ℕ) : ℝ≥0∞) / m :=
   b3_pr m D (D * q) x₀ P (fun H => (hP H).1)
     (fun H => (work_le_depth_mul_width H P).trans (Nat.mul_le_mul (hP H).1 (hP H).2))
 
-/-- B3 in the audit game's `(D, Q)` model (`Prog.Bounded`, not drafted): probability at most `(Q + 1)/m`. -/
+/-- B3 in the audit game's `(D, Q)` model (`OracleProg.Bounded`, not drafted): probability at most `(Q + 1)/m`. -/
 theorem b3_chain_bounded (m D Q : ℕ) [NeZero m] (x₀ : Fin m)
-    (P : Prog (IdealModel.randomOracle (Fin (D + 1) × Fin m) (Fin m)) (Fin m)) (hP : P.Bounded D Q) :
+    (P : OracleProg (IdealModel.randomOracle (Fin (D + 1) × Fin m) (Fin m)) (Fin m)) (hP : P.Bounded D Q) :
     pr (fun H : Fin (D + 1) × Fin m → Fin m => P.run H = chain H x₀ (D + 1)) ≤ ((Q + 1 : ℕ) : ℝ≥0∞) / m :=
   b3_pr m D Q x₀ P (fun H => (hP H).1) (fun H => (hP H).2)
 

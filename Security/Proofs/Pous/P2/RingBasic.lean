@@ -23,42 +23,42 @@ open scoped ENNReal
 
 /-! ### Programs: sequencing and the ring cost -/
 
-section Prog
+section OracleProg
 
 variable {B w p : ℕ} [NeZero p] {α β : Type}
 
 /-- Run `P`, then `g` on its output. -/
-def pbind : Prog (ringRO B w p) α → (α → Prog (ringRO B w p) β) → Prog (ringRO B w p) β
+def pbind : OracleProg (ringRO B w p) α → (α → OracleProg (ringRO B w p) β) → OracleProg (ringRO B w p) β
   | .ret a, g => g a
   | .round qs k, g => .round qs fun as => pbind (k as) g
 
 variable (f : (ringRO B w p).Qry → (ringRO B w p).Ans)
 
-theorem run_pbind (P : Prog (ringRO B w p) α) (g : α → Prog (ringRO B w p) β) :
+theorem run_pbind (P : OracleProg (ringRO B w p) α) (g : α → OracleProg (ringRO B w p) β) :
     (pbind P g).run f = (g (P.run f)).run f := by
   induction P with
   | ret a => rfl
   | round qs k ih => exact ih _
 
-theorem mulDepth_pbind (P : Prog (ringRO B w p) α) (g : α → Prog (ringRO B w p) β) :
+theorem mulDepth_pbind (P : OracleProg (ringRO B w p) α) (g : α → OracleProg (ringRO B w p) β) :
     (pbind P g).mulDepth f = P.mulDepth f + (g (P.run f)).mulDepth f := by
   induction P with
-  | ret a => simp [pbind, Prog.mulDepth, Prog.run]
-  | round qs k ih => simp only [pbind, Prog.mulDepth, Prog.run, ih]; omega
+  | ret a => simp [pbind, OracleProg.mulDepth, OracleProg.run]
+  | round qs k ih => simp only [pbind, OracleProg.mulDepth, OracleProg.run, ih]; omega
 
-theorem keyWork_pbind (P : Prog (ringRO B w p) α) (g : α → Prog (ringRO B w p) β) :
+theorem keyWork_pbind (P : OracleProg (ringRO B w p) α) (g : α → OracleProg (ringRO B w p) β) :
     (pbind P g).keyWork f = P.keyWork f + (g (P.run f)).keyWork f := by
   induction P with
-  | ret a => simp [pbind, Prog.keyWork, Prog.run]
-  | round qs k ih => simp only [pbind, Prog.keyWork, Prog.run, ih]; omega
+  | ret a => simp [pbind, OracleProg.keyWork, OracleProg.run]
+  | round qs k ih => simp only [pbind, OracleProg.keyWork, OracleProg.run, ih]; omega
 
-theorem ringWork_pbind (P : Prog (ringRO B w p) α) (g : α → Prog (ringRO B w p) β) :
+theorem ringWork_pbind (P : OracleProg (ringRO B w p) α) (g : α → OracleProg (ringRO B w p) β) :
     (pbind P g).ringWork f = P.ringWork f + (g (P.run f)).ringWork f := by
   induction P with
-  | ret a => simp [pbind, Prog.ringWork, Prog.run]
-  | round qs k ih => simp only [pbind, Prog.ringWork, Prog.run, ih]; omega
+  | ret a => simp [pbind, OracleProg.ringWork, OracleProg.run]
+  | round qs k ih => simp only [pbind, OracleProg.ringWork, OracleProg.run, ih]; omega
 
-theorem ringBounded_pbind {D₁ Q₁ L₁ D₂ Q₂ L₂ : ℕ} {P : Prog (ringRO B w p) α} {g : α → Prog (ringRO B w p) β}
+theorem ringBounded_pbind {D₁ Q₁ L₁ D₂ Q₂ L₂ : ℕ} {P : OracleProg (ringRO B w p) α} {g : α → OracleProg (ringRO B w p) β}
     (hP : P.RingBounded D₁ Q₁ L₁) (hg : ∀ a, (g a).RingBounded D₂ Q₂ L₂) :
     (pbind P g).RingBounded (D₁ + D₂) (Q₁ + Q₂) (L₁ + L₂) := fun ω => by
   rw [mulDepth_pbind, keyWork_pbind, ringWork_pbind]
@@ -66,61 +66,61 @@ theorem ringBounded_pbind {D₁ Q₁ L₁ D₂ Q₂ L₂ : ℕ} {P : Prog (ringR
   obtain ⟨h4, h5, h6⟩ := hg (P.run ((ringRO B w p).answer ω)) ω
   omega
 
-theorem mulDepth_progMap (g : α → β) (P : Prog (ringRO B w p) α) :
+theorem mulDepth_progMap (g : α → β) (P : OracleProg (ringRO B w p) α) :
     (PousThm1.progMap g P).mulDepth f = P.mulDepth f := by
   induction P with
   | ret a => rfl
-  | round qs k ih => simp only [PousThm1.progMap, Prog.mulDepth, ih]
+  | round qs k ih => simp only [PousThm1.progMap, OracleProg.mulDepth, ih]
 
-theorem keyWork_progMap (g : α → β) (P : Prog (ringRO B w p) α) :
+theorem keyWork_progMap (g : α → β) (P : OracleProg (ringRO B w p) α) :
     (PousThm1.progMap g P).keyWork f = P.keyWork f := by
   induction P with
   | ret a => rfl
-  | round qs k ih => simp only [PousThm1.progMap, Prog.keyWork, ih]
+  | round qs k ih => simp only [PousThm1.progMap, OracleProg.keyWork, ih]
 
-theorem ringWork_progMap (g : α → β) (P : Prog (ringRO B w p) α) :
+theorem ringWork_progMap (g : α → β) (P : OracleProg (ringRO B w p) α) :
     (PousThm1.progMap g P).ringWork f = P.ringWork f := by
   induction P with
   | ret a => rfl
-  | round qs k ih => simp only [PousThm1.progMap, Prog.ringWork, ih]
+  | round qs k ih => simp only [PousThm1.progMap, OracleProg.ringWork, ih]
 
-theorem ringBounded_progMap {D Q L : ℕ} (g : α → β) {P : Prog (ringRO B w p) α} (h : P.RingBounded D Q L) :
+theorem ringBounded_progMap {D Q L : ℕ} (g : α → β) {P : OracleProg (ringRO B w p) α} (h : P.RingBounded D Q L) :
     (PousThm1.progMap g P).RingBounded D Q L := fun ω => by
   rw [mulDepth_progMap, keyWork_progMap, ringWork_progMap]
   exact h ω
 
-theorem ringBounded_ret (a : α) (D Q L : ℕ) : (Prog.ret a : Prog (ringRO B w p) α).RingBounded D Q L :=
+theorem ringBounded_ret (a : α) (D Q L : ℕ) : (OracleProg.ret a : OracleProg (ringRO B w p) α).RingBounded D Q L :=
   fun _ => ⟨Nat.zero_le _, Nat.zero_le _, Nat.zero_le _⟩
 
-theorem mulDepth_le_depth (P : Prog (ringRO B w p) α) : P.mulDepth f ≤ P.depth f := by
+theorem mulDepth_le_depth (P : OracleProg (ringRO B w p) α) : P.mulDepth f ≤ P.depth f := by
   induction P with
-  | ret a => simp [Prog.mulDepth, Prog.depth]
+  | ret a => simp [OracleProg.mulDepth, OracleProg.depth]
   | round qs k ih =>
-      simp only [Prog.mulDepth, Prog.depth]
+      simp only [OracleProg.mulDepth, OracleProg.depth]
       have := ih (qs.map f)
       split <;> omega
 
-theorem keyWork_le_work (P : Prog (ringRO B w p) α) : P.keyWork f ≤ P.work f := by
+theorem keyWork_le_work (P : OracleProg (ringRO B w p) α) : P.keyWork f ≤ P.work f := by
   induction P with
-  | ret a => simp [Prog.keyWork, Prog.work]
+  | ret a => simp [OracleProg.keyWork, OracleProg.work]
   | round qs k ih =>
-      simp only [Prog.keyWork, Prog.work]
+      simp only [OracleProg.keyWork, OracleProg.work]
       exact Nat.add_le_add (List.countP_le_length) (ih _)
 
-theorem ringWork_le_work (P : Prog (ringRO B w p) α) : P.ringWork f ≤ P.work f := by
+theorem ringWork_le_work (P : OracleProg (ringRO B w p) α) : P.ringWork f ≤ P.work f := by
   induction P with
-  | ret a => simp [Prog.ringWork, Prog.work]
+  | ret a => simp [OracleProg.ringWork, OracleProg.work]
   | round qs k ih =>
-      simp only [Prog.ringWork, Prog.work]
+      simp only [OracleProg.ringWork, OracleProg.work]
       exact Nat.add_le_add (List.countP_le_length) (ih _)
 
 /-- **The old bound is a special case**: a `(D, Q)`-bounded program is `(D, Q, Q)`-bounded in the ring model. -/
-theorem ringBounded_of_bounded {D Q : ℕ} {P : Prog (ringRO B w p) α} (h : P.Bounded D Q) :
+theorem ringBounded_of_bounded {D Q : ℕ} {P : OracleProg (ringRO B w p) α} (h : P.Bounded D Q) :
     P.RingBounded D Q Q := fun ω =>
   ⟨(mulDepth_le_depth _ P).trans (h ω).1, (keyWork_le_work _ P).trans (h ω).2,
     (ringWork_le_work _ P).trans (h ω).2⟩
 
-end Prog
+end OracleProg
 
 /-- Security against every `(D, Q, Q)`-bounded responder is security against every `(D, Q)`-bounded one. -/
 theorem auditSecure_of_auditSecureOn {B w p : ℕ} [NeZero p] (sch : Scheme (ringRO B w p)) (reveal : Reveal)

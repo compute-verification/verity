@@ -234,7 +234,7 @@ def B2WindowAudit : Prop :=
         (Wd W pp j σ i).ops ((Pous.ringRO B w p).answer ω) ≤ L) →
       Pous.pr (fun x : Pous.Outcome sch k =>
         Pous.seqAnswers ((Pous.ringRO B w p).answer x.1)
-            (fun j σ i => Pous.Prog.ret ((Wd W (sch.enc W x.1 x.2.1).1 j σ i).result ((Pous.ringRO B w p).answer x.1)))
+            (fun j σ i => Pous.OracleProg.ret ((Wd W (sch.enc W x.1 x.2.1).1 j σ i).result ((Pous.ringRO B w p).answer x.1)))
             0 (List.ofFn x.2.2) (A₁ W (sch.enc W x.1 x.2.1).1 (sch.enc W x.1 x.2.1).2 x.1) =
           List.ofFn fun j => (sch.enc W x.1 x.2.1).2 (x.2.2 j)) ≤ δ + ε
 
@@ -263,7 +263,7 @@ def B2WindowP2Ring : Prop :=
         (Wd W pp j σ i).ops ((Pous.ringRO (2 ^ 19) 16448 (2 ^ 16448 - 21065)).answer ω) ≤ L) →
       Pous.pr (fun x : Pous.Outcome (Pous.p2ring (2 ^ 19) 16448 (2 ^ 16448 - 21065) 16432) 105 =>
         Pous.seqAnswers ((Pous.ringRO (2 ^ 19) 16448 (2 ^ 16448 - 21065)).answer x.1)
-            (fun j σ i => Pous.Prog.ret ((Wd W ((Pous.p2ring (2 ^ 19) 16448 (2 ^ 16448 - 21065) 16432).enc W x.1
+            (fun j σ i => Pous.OracleProg.ret ((Wd W ((Pous.p2ring (2 ^ 19) 16448 (2 ^ 16448 - 21065) 16432).enc W x.1
               x.2.1).1 j σ i).result ((Pous.ringRO (2 ^ 19) 16448 (2 ^ 16448 - 21065)).answer x.1)))
             0 (List.ofFn x.2.2)
             (A₁ W ((Pous.p2ring (2 ^ 19) 16448 (2 ^ 16448 - 21065) 16432).enc W x.1 x.2.1).1

@@ -56,8 +56,8 @@ theorem PousProofs.theorem1_ii_timed : Pous.Guarantees.Theorem1iiTimed := by
   refine (pr_all_good_le sch.B sch.ℓ β S k sch.B_pos good).trans (add_le_add ?_ le_rfl)
   let cmp : Bits sch.n → Bits sch.t → sch.Code → M.Ω → Bits β :=
     fun W pp C ω => c (A₁ W pp C ω, patch (fun i => (A₂.prog W pp (A₁ W pp C ω) i).run (M.answer ω)) C)
-  let exp : Bits sch.n → Bits sch.t → Bits β → Fin sch.B → Prog M (Bits sch.ℓ) :=
-    fun W pp w i => ((d w).2 i).elim (A₂.prog W pp (d w).1 i) Prog.ret
+  let exp : Bits sch.n → Bits sch.t → Bits β → Fin sch.B → OracleProg M (Bits sch.ℓ) :=
+    fun W pp w i => ((d w).2 i).elim (A₂.prog W pp (d w).1 i) OracleProg.ret
   have hexp : ∀ W pp w i, (exp W pp w i).Bounded D Q := by
     intro W pp w i
     cases h : (d w).2 i with

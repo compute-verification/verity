@@ -54,8 +54,8 @@ protocol that breaks one. `PROTOCOL.md` ("The graded audit") states them as requ
    challenger counts at least the game's late rounds, and accepting with at most `t` counted implies the game's
    acceptance.
 
-**What to check.** That "late" is measured on the program's own path (`Prog.depth`, `Prog.work` under
-`M.answer ω`), as `Prog.Bounded` is, rather than against every primitive; that the state stays `S` bits across a late
+**What to check.** That "late" is measured on the program's own path (`OracleProg.depth`, `OracleProg.work` under
+`M.answer ω`), as `OracleProg.Bounded` is, rather than against every primitive; that the state stays `S` bits across a late
 round (a late round can recompute anything within `(D_late, Q_late)`, but keeps only `S` bits of it); that
 `(D_late, Q_late)` is what the adversary completes within `Δ_late`; and that the memory challenger's count of late
 rounds is what the implementation's deadline check counts.
@@ -71,13 +71,13 @@ variable {M : IdealModel}
 block and the next state, within `(D_late, Q_late)`: the hard deadline (requirement 2). Whether a round is on time is
 measured against the audit's `(D, Q)` on its own path (`gradedAnswers`). -/
 structure GradedResponder (sch : Scheme M) (S D_late Q_late : ℕ) : Type where
-  step : Bits sch.n → Bits sch.t → ℕ → Bits S → Fin sch.B → Prog M (Bits sch.ℓ × Bits S)
+  step : Bits sch.n → Bits sch.t → ℕ → Bits S → Fin sch.B → OracleProg M (Bits sch.ℓ × Bits S)
   bounded : ∀ W pp j σ i, (step W pp j σ i).Bounded D_late Q_late
 
 /-- The blocks a graded responder returns for the indices `is`, from round `j` in state `σ`, each with whether its
 round was on time: at most `D` rounds and `Q` queries on the path `f` answers. -/
 def gradedAnswers {ℓ S B : ℕ} (f : M.Qry → M.Ans) (D Q : ℕ)
-    (step : ℕ → Bits S → Fin B → Prog M (Bits ℓ × Bits S)) : ℕ → List (Fin B) → Bits S → List (Bits ℓ × Bool)
+    (step : ℕ → Bits S → Fin B → OracleProg M (Bits ℓ × Bits S)) : ℕ → List (Fin B) → Bits S → List (Bits ℓ × Bool)
   | _, [], _ => []
   | j, i :: is, σ =>
       (((step j σ i).run f).1, decide ((step j σ i).depth f ≤ D ∧ (step j σ i).work f ≤ Q)) ::

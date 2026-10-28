@@ -53,7 +53,7 @@ theorem pr_le_outcome {α β γ : Type} [Fintype α] [Fintype β] [Fintype γ] [
 /-! ### Programs -/
 
 /-- Post-process a program's output; the queries are unchanged. -/
-def progMap {M : IdealModel} {α β : Type} (g : α → β) : Prog M α → Prog M β
+def progMap {M : IdealModel} {α β : Type} (g : α → β) : OracleProg M α → OracleProg M β
   | .ret a => .ret (g a)
   | .round qs k => .round qs fun as => progMap g (k as)
 
@@ -61,22 +61,22 @@ section progMap
 
 variable {M : IdealModel} {α β : Type} (g : α → β) (f : M.Qry → M.Ans)
 
-theorem run_progMap (p : Prog M α) : (progMap g p).run f = g (p.run f) := by
+theorem run_progMap (p : OracleProg M α) : (progMap g p).run f = g (p.run f) := by
   induction p with
   | ret a => rfl
   | round qs k ih => exact ih _
 
-theorem depth_progMap (p : Prog M α) : (progMap g p).depth f = p.depth f := by
+theorem depth_progMap (p : OracleProg M α) : (progMap g p).depth f = p.depth f := by
   induction p with
   | ret a => rfl
   | round qs k ih => exact congrArg (· + 1) (ih _)
 
-theorem work_progMap (p : Prog M α) : (progMap g p).work f = p.work f := by
+theorem work_progMap (p : OracleProg M α) : (progMap g p).work f = p.work f := by
   induction p with
   | ret a => rfl
   | round qs k ih => exact congrArg (qs.length + ·) (ih _)
 
-theorem bounded_progMap {D Q : ℕ} {p : Prog M α} (h : p.Bounded D Q) : (progMap g p).Bounded D Q :=
+theorem bounded_progMap {D Q : ℕ} {p : OracleProg M α} (h : p.Bounded D Q) : (progMap g p).Bounded D Q :=
   fun ω => by rw [depth_progMap, work_progMap]; exact h ω
 
 end progMap
@@ -84,7 +84,7 @@ end progMap
 /-! ### Sequential responders -/
 
 /-- A responder that keeps its state answers `is` by running `p σ` on each index. -/
-theorem seqAnswers_keep {M : IdealModel} {ℓ S B : ℕ} (f : M.Qry → M.Ans) (p : Bits S → Fin B → Prog M (Bits ℓ)) :
+theorem seqAnswers_keep {M : IdealModel} {ℓ S B : ℕ} (f : M.Qry → M.Ans) (p : Bits S → Fin B → OracleProg M (Bits ℓ)) :
     ∀ (j : ℕ) (is : List (Fin B)) (σ : Bits S),
       seqAnswers f (fun _ σ i => progMap (fun b => (b, σ)) (p σ i)) j is σ = is.map fun i => (p σ i).run f
   | _, [], _ => rfl

@@ -84,22 +84,22 @@ theorem work_askList (f : Q → A) (qs : List Q) (c : List A → Tree Q A α) :
 
 end Tree
 
-/-- A `Prog` as a query tree, one query per node. -/
-def toTree {M : IdealModel} {α : Type} : Prog M α → Tree M.Qry M.Ans α
+/-- An `OracleProg` as a query tree, one query per node. -/
+def toTree {M : IdealModel} {α : Type} : OracleProg M α → Tree M.Qry M.Ans α
   | .ret a => .ret a
   | .round qs k => Tree.askList qs (fun as => toTree (k as))
 
-theorem run_toTree {M : IdealModel} {α : Type} (f : M.Qry → M.Ans) (p : Prog M α) :
+theorem run_toTree {M : IdealModel} {α : Type} (f : M.Qry → M.Ans) (p : OracleProg M α) :
     (toTree p).run f = p.run f := by
   induction p with
   | ret a => rfl
-  | round qs k ih => simp only [toTree, Tree.run_askList, Prog.run]; exact ih _
+  | round qs k ih => simp only [toTree, Tree.run_askList, OracleProg.run]; exact ih _
 
-theorem work_toTree {M : IdealModel} {α : Type} (f : M.Qry → M.Ans) (p : Prog M α) :
+theorem work_toTree {M : IdealModel} {α : Type} (f : M.Qry → M.Ans) (p : OracleProg M α) :
     (toTree p).work f = p.work f := by
   induction p with
   | ret a => rfl
-  | round qs k ih => simp only [toTree, Tree.work_askList, Prog.work]; rw [ih]; omega
+  | round qs k ih => simp only [toTree, Tree.work_askList, OracleProg.work]; rw [ih]; omega
 
 /-- The trees `p i`, `i ∈ l`, one after another; block `i` of the output is `p i`'s output. -/
 def comb {Q A ι β : Type} [DecidableEq ι] (p : ι → Tree Q A β) (d : ι → β) : List ι → Tree Q A (ι → β)

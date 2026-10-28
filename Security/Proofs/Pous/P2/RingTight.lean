@@ -26,7 +26,7 @@ variable {B w p : ℕ} [NeZero p]
 
 /-- `acc·y^e` over `n` bits of `e`, right to left: one round `[acc·y, y·y]` per bit, keeping `acc·y` when the bit is
 set. -/
-def powAux : ℕ → Bits w → Bits w → ℕ → Prog (ringRO B w p) (Bits w)
+def powAux : ℕ → Bits w → Bits w → ℕ → OracleProg (ringRO B w p) (Bits w)
   | 0, acc, _, _ => .ret acc
   | n + 1, acc, y, e => .round [RingQry.mul acc y, RingQry.mul y y] fun r =>
       powAux n (if e % 2 = 1 then nthAns r 0 else acc) (nthAns r 1) (e / 2)
@@ -38,16 +38,16 @@ def rootSel (p : ℕ) {w : ℕ} (a r s : Bits w) : Bits w :=
   else (if bitsVal r % 2 = 1 then r else negL p r)
 
 /-- Square `r` and choose the sign. -/
-def rootTail (a r : Bits w) : Prog (ringRO B w p) (Bits w) :=
+def rootTail (a r : Bits w) : OracleProg (ringRO B w p) (Bits w) :=
   .round [RingQry.mul r r] fun r₂ => .ret (rootSel p a r (nthAns r₂ 0))
 
 /-- `ρ(a)`: ask for `1`, raise `a` to `e` over `n` bits, then square and choose the sign. -/
-def rootProg (n e : ℕ) (a : Bits w) : Prog (ringRO B w p) (Bits w) :=
+def rootProg (n e : ℕ) (a : Bits w) : OracleProg (ringRO B w p) (Bits w) :=
   .round [RingQry.one] fun r₀ => pbind (powAux n (nthAns r₀ 0) a e) (rootTail a)
 
 /-- **Recomputing block `i`** from its payload label `v`: both keys, `v + τ`, the first root, `σ_K`, the second
 root. -/
-def recBlock (n e : ℕ) (v : Bits w) (i : Fin B) : Prog (ringRO B w p) (Bits w) :=
+def recBlock (n e : ℕ) (v : Bits w) (i : Fin B) : OracleProg (ringRO B w p) (Bits w) :=
   .round [RingQry.key i .mask, RingQry.key i .offset] fun r₁ =>
     .round [RingQry.add v (nthAns r₁ 1)] fun r₂ =>
       pbind (rootProg n e (nthAns r₂ 0)) fun y => rootProg n e (sigmaK p (nthAns r₁ 0) y)
@@ -61,65 +61,65 @@ section Cost
 variable {B w p : ℕ} [NeZero p] (f : (ringRO B w p).Qry → (ringRO B w p).Ans)
 
 theorem powAux_cost : ∀ (n : ℕ) (acc y : Bits w) (e : ℕ),
-    (powAux n acc y e : Prog (ringRO B w p) _).mulDepth f = n ∧
-      (powAux n acc y e : Prog (ringRO B w p) _).keyWork f = 0 ∧
-      (powAux n acc y e : Prog (ringRO B w p) _).ringWork f = 2 * n
+    (powAux n acc y e : OracleProg (ringRO B w p) _).mulDepth f = n ∧
+      (powAux n acc y e : OracleProg (ringRO B w p) _).keyWork f = 0 ∧
+      (powAux n acc y e : OracleProg (ringRO B w p) _).ringWork f = 2 * n
   | 0, _, _, _ => ⟨rfl, rfl, rfl⟩
   | n + 1, acc, y, e => by
       obtain ⟨h1, h2, h3⟩ := powAux_cost n (if e % 2 = 1 then f (.mul acc y) else acc) (f (.mul y y)) (e / 2)
       refine ⟨?_, ?_, ?_⟩
-      · change 1 + Prog.mulDepth f (powAux n (if e % 2 = 1 then f (.mul acc y) else acc) (f (.mul y y)) (e / 2)) = _
+      · change 1 + OracleProg.mulDepth f (powAux n (if e % 2 = 1 then f (.mul acc y) else acc) (f (.mul y y)) (e / 2)) = _
         omega
-      · change 0 + Prog.keyWork f (powAux n (if e % 2 = 1 then f (.mul acc y) else acc) (f (.mul y y)) (e / 2)) = _
+      · change 0 + OracleProg.keyWork f (powAux n (if e % 2 = 1 then f (.mul acc y) else acc) (f (.mul y y)) (e / 2)) = _
         omega
-      · change 2 + Prog.ringWork f (powAux n (if e % 2 = 1 then f (.mul acc y) else acc) (f (.mul y y)) (e / 2)) = _
+      · change 2 + OracleProg.ringWork f (powAux n (if e % 2 = 1 then f (.mul acc y) else acc) (f (.mul y y)) (e / 2)) = _
         omega
 
 theorem rootProg_cost (n e : ℕ) (a : Bits w) :
-    (rootProg n e a : Prog (ringRO B w p) _).mulDepth f = n + 1 ∧
-      (rootProg n e a : Prog (ringRO B w p) _).keyWork f = 0 ∧
-      (rootProg n e a : Prog (ringRO B w p) _).ringWork f = 2 * n + 2 := by
+    (rootProg n e a : OracleProg (ringRO B w p) _).mulDepth f = n + 1 ∧
+      (rootProg n e a : OracleProg (ringRO B w p) _).keyWork f = 0 ∧
+      (rootProg n e a : OracleProg (ringRO B w p) _).ringWork f = 2 * n + 2 := by
   obtain ⟨h1, h2, h3⟩ := powAux_cost (B := B) (p := p) f n (f .one) a e
   refine ⟨?_, ?_, ?_⟩
-  · change 0 + Prog.mulDepth f (pbind (powAux n (f .one) a e) (rootTail a)) = _
+  · change 0 + OracleProg.mulDepth f (pbind (powAux n (f .one) a e) (rootTail a)) = _
     rw [mulDepth_pbind, h1]
     change 0 + (n + (1 + 0)) = _
     omega
-  · change 0 + Prog.keyWork f (pbind (powAux n (f .one) a e) (rootTail a)) = _
+  · change 0 + OracleProg.keyWork f (pbind (powAux n (f .one) a e) (rootTail a)) = _
     rw [keyWork_pbind, h2]
     rfl
-  · change 1 + Prog.ringWork f (pbind (powAux n (f .one) a e) (rootTail a)) = _
+  · change 1 + OracleProg.ringWork f (pbind (powAux n (f .one) a e) (rootTail a)) = _
     rw [ringWork_pbind, h3]
     change 1 + (2 * n + (1 + 0)) = _
     omega
 
 theorem recBlock_cost (n e : ℕ) (v : Bits w) (i : Fin B) :
-    (recBlock n e v i : Prog (ringRO B w p) _).mulDepth f = 2 * (n + 1) ∧
-      (recBlock n e v i : Prog (ringRO B w p) _).keyWork f = 2 ∧
-      (recBlock n e v i : Prog (ringRO B w p) _).ringWork f = 4 * n + 5 := by
-  let y₀ := (rootProg n e (f (.add v (f (.key i .offset)))) : Prog (ringRO B w p) _).run f
+    (recBlock n e v i : OracleProg (ringRO B w p) _).mulDepth f = 2 * (n + 1) ∧
+      (recBlock n e v i : OracleProg (ringRO B w p) _).keyWork f = 2 ∧
+      (recBlock n e v i : OracleProg (ringRO B w p) _).ringWork f = 4 * n + 5 := by
+  let y₀ := (rootProg n e (f (.add v (f (.key i .offset)))) : OracleProg (ringRO B w p) _).run f
   obtain ⟨a1, a2, a3⟩ := rootProg_cost (B := B) (p := p) f n e (f (.add v (f (.key i .offset))))
   obtain ⟨b1, b2, b3⟩ := rootProg_cost (B := B) (p := p) f n e (sigmaK p (f (.key i .mask)) y₀)
   refine ⟨?_, ?_, ?_⟩
-  · change 0 + (0 + Prog.mulDepth f (pbind (rootProg n e (f (.add v (f (.key i .offset)))))
+  · change 0 + (0 + OracleProg.mulDepth f (pbind (rootProg n e (f (.add v (f (.key i .offset)))))
       fun y => rootProg n e (sigmaK p (f (.key i .mask)) y))) = _
     rw [mulDepth_pbind, a1, b1]
     omega
-  · change 2 + (0 + Prog.keyWork f (pbind (rootProg n e (f (.add v (f (.key i .offset)))))
+  · change 2 + (0 + OracleProg.keyWork f (pbind (rootProg n e (f (.add v (f (.key i .offset)))))
       fun y => rootProg n e (sigmaK p (f (.key i .mask)) y))) = _
     rw [keyWork_pbind, a2, b2]
-  · change 0 + (1 + Prog.ringWork f (pbind (rootProg n e (f (.add v (f (.key i .offset)))))
+  · change 0 + (1 + OracleProg.ringWork f (pbind (rootProg n e (f (.add v (f (.key i .offset)))))
       fun y => rootProg n e (sigmaK p (f (.key i .mask)) y))) = _
     rw [ringWork_pbind, a3, b3]
     omega
 
-theorem ringBounded_mono {α : Type} {P : Prog (ringRO B w p) α} {D Q L D' Q' L' : ℕ} (h : P.RingBounded D Q L)
+theorem ringBounded_mono {α : Type} {P : OracleProg (ringRO B w p) α} {D Q L D' Q' L' : ℕ} (h : P.RingBounded D Q L)
     (hD : D ≤ D') (hQ : Q ≤ Q') (hL : L ≤ L') : P.RingBounded D' Q' L' := fun ω =>
   ⟨(h ω).1.trans hD, (h ω).2.1.trans hQ, (h ω).2.2.trans hL⟩
 
 /-- Recomputing a block costs `2(n + 1)` multiplication rounds, `2` key queries and `4n + 5` ring queries. -/
 theorem recBlock_bounded (n e : ℕ) (v : Bits w) (i : Fin B) :
-    (recBlock n e v i : Prog (ringRO B w p) _).RingBounded (2 * (n + 1)) 2 (4 * n + 5) := fun ω => by
+    (recBlock n e v i : OracleProg (ringRO B w p) _).RingBounded (2 * (n + 1)) 2 (4 * n + 5) := fun ω => by
   obtain ⟨h1, h2, h3⟩ := recBlock_cost (B := B) (p := p) ((ringRO B w p).answer ω) n e v i
   exact ⟨h1.le, h2.le, h3.le⟩
 
@@ -133,17 +133,17 @@ variable {B w p : ℕ} [NeZero p]
 
 theorem powAux_run (hp2 : p ≤ 2 ^ w) (ω : (ringRO B w p).Ω) :
     ∀ (n : ℕ) (x y : ZMod p) (e : ℕ), e < 2 ^ n →
-      (powAux n (lab w ω.1 x) (lab w ω.1 y) e : Prog (ringRO B w p) _).run ((ringRO B w p).answer ω) =
+      (powAux n (lab w ω.1 x) (lab w ω.1 y) e : OracleProg (ringRO B w p) _).run ((ringRO B w p).answer ω) =
         lab w ω.1 (x * y ^ e)
   | 0, x, y, e, he => by
       obtain rfl : e = 0 := by simpa using he
       rw [pow_zero, mul_one]
       rfl
   | n + 1, x, y, e, he => by
-      have hrun : (powAux (n + 1) (lab w ω.1 x) (lab w ω.1 y) e : Prog (ringRO B w p) _).run
+      have hrun : (powAux (n + 1) (lab w ω.1 x) (lab w ω.1 y) e : OracleProg (ringRO B w p) _).run
           ((ringRO B w p).answer ω) =
           (powAux n (if e % 2 = 1 then (ringRO B w p).answer ω (.mul (lab w ω.1 x) (lab w ω.1 y)) else lab w ω.1 x)
-            ((ringRO B w p).answer ω (.mul (lab w ω.1 y) (lab w ω.1 y))) (e / 2) : Prog (ringRO B w p) _).run
+            ((ringRO B w p).answer ω (.mul (lab w ω.1 y) (lab w ω.1 y))) (e / 2) : OracleProg (ringRO B w p) _).run
             ((ringRO B w p).answer ω) := rfl
       have hif : (if e % 2 = 1 then lab w ω.1 (x * y) else lab w ω.1 x) = lab w ω.1 (x * y ^ (e % 2)) := by
         rcases Nat.mod_two_eq_zero_or_one e with h | h <;> simp [h]
@@ -216,7 +216,7 @@ theorem rootSel_lab (hp : p.Prime) (h4 : p % 4 = 3) (hp2 : p ≤ 2 ^ w) (φ : Od
 /-- `rootProg` computes `ρ`, on every primitive, once the exponent `(p+1)/4` fits in `n` bits. -/
 theorem rootProg_run (hp : p.Prime) (h4 : p % 4 = 3) (hp2 : p ≤ 2 ^ w) (n : ℕ) (hn : (p + 1) / 4 < 2 ^ n)
     (ω : (ringRO B w p).Ω) (y : ZMod p) :
-    (rootProg n ((p + 1) / 4) (lab w ω.1 y) : Prog (ringRO B w p) _).run ((ringRO B w p).answer ω) =
+    (rootProg n ((p + 1) / 4) (lab w ω.1 y) : OracleProg (ringRO B w p) _).run ((ringRO B w p).answer ω) =
       lab w ω.1 (rhoE ω.1 y) := by
   change (pbind (powAux n ((ringRO B w p).answer ω .one) (lab w ω.1 y) ((p + 1) / 4)) (rootTail (lab w ω.1 y))).run
     ((ringRO B w p).answer ω) = _
@@ -229,7 +229,7 @@ theorem rootProg_run (hp : p.Prime) (h4 : p % 4 = 3) (hp2 : p ≤ 2 ^ w) (n : �
 /-- **Recomputation is always right**: `recBlock` returns block `i` of the code, for a payload label below `p`. -/
 theorem recBlock_run (hp : p.Prime) (h4 : p % 4 = 3) (hp2 : p ≤ 2 ^ w) (n : ℕ) (hn : (p + 1) / 4 < 2 ^ n)
     (ω : (ringRO B w p).Ω) (i : Fin B) {v : Bits w} (hv : bitsVal v < p) :
-    (recBlock n ((p + 1) / 4) v i : Prog (ringRO B w p) _).run ((ringRO B w p).answer ω) =
+    (recBlock n ((p + 1) / 4) v i : OracleProg (ringRO B w p) _).run ((ringRO B w p).answer ω) =
       encBlock ω.1 (ω.2 i).1 (ω.2 i).2 v := by
   obtain ⟨m, rfl⟩ : ∃ m, lab w ω.1 m = v := ⟨_, lab_eltD ω.1 hv⟩
   change (pbind (rootProg n ((p + 1) / 4) ((ringRO B w p).answer ω (.add (lab w ω.1 m)

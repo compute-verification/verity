@@ -18,7 +18,7 @@ open scoped ENNReal
 
 variable {M : IdealModel}
 
-theorem seqAnswers_take {ℓ S B : ℕ} (f : M.Qry → M.Ans) (step : ℕ → Bits S → Fin B → Prog M (Bits ℓ × Bits S)) :
+theorem seqAnswers_take {ℓ S B : ℕ} (f : M.Qry → M.Ans) (step : ℕ → Bits S → Fin B → OracleProg M (Bits ℓ × Bits S)) :
     ∀ (j : ℕ) (is is' : List (Fin B)) (σ : Bits S),
       (seqAnswers f step j (is ++ is') σ).take is.length = seqAnswers f step j is σ
   | _, [], _, _ => by simp [seqAnswers]

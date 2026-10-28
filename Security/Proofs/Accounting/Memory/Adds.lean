@@ -23,7 +23,7 @@ open scoped ENNReal
 /-! ## A program with its output mapped -/
 
 /-- `P` with its output mapped by `g`: the same rounds and the same queries. -/
-def progMap {I : IdealModel} {α β : Type} (g : α → β) : Prog I α → Prog I β
+def progMap {I : IdealModel} {α β : Type} (g : α → β) : OracleProg I α → OracleProg I β
   | .ret a => .ret (g a)
   | .round qs k => .round qs fun as => progMap g (k as)
 
@@ -31,22 +31,22 @@ section progMap
 
 variable {I : IdealModel} {α β : Type} (g : α → β) (f : I.Qry → I.Ans)
 
-theorem run_progMap (P : Prog I α) : (progMap g P).run f = g (P.run f) := by
+theorem run_progMap (P : OracleProg I α) : (progMap g P).run f = g (P.run f) := by
   induction P with
   | ret a => rfl
-  | round qs k ih => simp only [progMap, Prog.run]; exact ih _
+  | round qs k ih => simp only [progMap, OracleProg.run]; exact ih _
 
-theorem depth_progMap (P : Prog I α) : (progMap g P).depth f = P.depth f := by
+theorem depth_progMap (P : OracleProg I α) : (progMap g P).depth f = P.depth f := by
   induction P with
   | ret a => rfl
-  | round qs k ih => simp only [progMap, Prog.depth, ih]
+  | round qs k ih => simp only [progMap, OracleProg.depth, ih]
 
-theorem work_progMap (P : Prog I α) : (progMap g P).work f = P.work f := by
+theorem work_progMap (P : OracleProg I α) : (progMap g P).work f = P.work f := by
   induction P with
   | ret a => rfl
-  | round qs k ih => simp only [progMap, Prog.work, ih]
+  | round qs k ih => simp only [progMap, OracleProg.work, ih]
 
-theorem bounded_progMap {D Q : ℕ} {P : Prog I α} (h : P.Bounded D Q) : (progMap g P).Bounded D Q :=
+theorem bounded_progMap {D Q : ℕ} {P : OracleProg I α} (h : P.Bounded D Q) : (progMap g P).Bounded D Q :=
   fun ω => by rw [depth_progMap, work_progMap]; exact h ω
 
 end progMap
@@ -55,22 +55,22 @@ section ring
 
 variable {B w p : ℕ} [NeZero p] {α β : Type} (g : α → β) (f : (ringRO B w p).Qry → (ringRO B w p).Ans)
 
-theorem mulDepth_progMap (P : Prog (ringRO B w p) α) : (progMap g P).mulDepth f = P.mulDepth f := by
+theorem mulDepth_progMap (P : OracleProg (ringRO B w p) α) : (progMap g P).mulDepth f = P.mulDepth f := by
   induction P with
   | ret a => rfl
-  | round qs k ih => simp only [progMap, Prog.mulDepth, ih]
+  | round qs k ih => simp only [progMap, OracleProg.mulDepth, ih]
 
-theorem keyWork_progMap (P : Prog (ringRO B w p) α) : (progMap g P).keyWork f = P.keyWork f := by
+theorem keyWork_progMap (P : OracleProg (ringRO B w p) α) : (progMap g P).keyWork f = P.keyWork f := by
   induction P with
   | ret a => rfl
-  | round qs k ih => simp only [progMap, Prog.keyWork, ih]
+  | round qs k ih => simp only [progMap, OracleProg.keyWork, ih]
 
-theorem ringWork_progMap (P : Prog (ringRO B w p) α) : (progMap g P).ringWork f = P.ringWork f := by
+theorem ringWork_progMap (P : OracleProg (ringRO B w p) α) : (progMap g P).ringWork f = P.ringWork f := by
   induction P with
   | ret a => rfl
-  | round qs k ih => simp only [progMap, Prog.ringWork, ih]
+  | round qs k ih => simp only [progMap, OracleProg.ringWork, ih]
 
-theorem ringBounded_progMap {D Q L : ℕ} {P : Prog (ringRO B w p) α} (h : P.RingBounded D Q L) :
+theorem ringBounded_progMap {D Q L : ℕ} {P : OracleProg (ringRO B w p) α} (h : P.RingBounded D Q L) :
     (progMap g P).RingBounded D Q L :=
   fun ω => by rw [mulDepth_progMap, keyWork_progMap, ringWork_progMap]; exact h ω
 
@@ -96,7 +96,7 @@ theorem exists_code {α β : Type} [Nonempty α] [Fintype β] [Nonempty β] (s :
 of `P j` before challenge `j < c`, from the code of a state whose run is in `P` before each challenge, the responder
 returns the same blocks. -/
 theorem seqAnswers_code {I : IdealModel} {ℓ N S B : ℕ} (f : I.Qry → I.Ans)
-    (step : ℕ → Bits N → Fin B → Prog I (Bits ℓ × Bits N)) (P : ℕ → Bits N → Prop) (c : ℕ)
+    (step : ℕ → Bits N → Fin B → OracleProg I (Bits ℓ × Bits N)) (P : ℕ → Bits N → Prop) (c : ℕ)
     (e : ℕ → Bits N → Bits S) (d : ℕ → Bits S → Bits N)
     (hed : ∀ j < c, ∀ σ, P j σ → d j (e j σ) = σ) :
     ∀ (is : List (Fin B)) (j : ℕ) (σ : Bits N), j + is.length ≤ c →
@@ -119,7 +119,7 @@ theorem seqAnswers_code {I : IdealModel} {ℓ N S B : ℕ} (f : I.Qry → I.Ans)
 /-- The sequential audit with `c` challenges accepts a preprocessing `A₁` and a step `step` with an `S`-bit state:
 `seqAccepts` and `seqAcceptsOn`, each with its responder's step. -/
 def accepts {I : IdealModel} (sch : Scheme I) {S : ℕ} (c : ℕ) (W : Bits sch.n) (A₁ : Preprocessor sch S)
-    (step : Bits sch.n → Bits sch.t → ℕ → Bits S → Fin sch.B → Prog I (Bits sch.ℓ × Bits S))
+    (step : Bits sch.n → Bits sch.t → ℕ → Bits S → Fin sch.B → OracleProg I (Bits sch.ℓ × Bits S))
     (x : Outcome sch c) : Prop :=
   let ω := x.1
   let pp := (sch.enc W ω x.2.1).1
@@ -133,16 +133,16 @@ def codedPre {I : IdealModel} {sch : Scheme I} {M S : ℕ} (A₁ : Preprocessor 
 
 /-- The location's adversary for `z`, run through the codes `e`, `d`: its step. -/
 def codedStep {I : IdealModel} {sch : Scheme I} {M S : ℕ}
-    (step : Bits sch.n → Bits sch.t → ℕ → Bits M → Fin sch.B → Prog I (Bits sch.ℓ × Bits M))
+    (step : Bits sch.n → Bits sch.t → ℕ → Bits M → Fin sch.B → OracleProg I (Bits sch.ℓ × Bits M))
     (e : ℕ → Bits M → Bits S) (d : ℕ → Bits S → Bits M) :
-    Bits sch.n → Bits sch.t → ℕ → Bits S → Fin sch.B → Prog I (Bits sch.ℓ × Bits S) :=
+    Bits sch.n → Bits sch.t → ℕ → Bits S → Fin sch.B → OracleProg I (Bits sch.ℓ × Bits S) :=
   fun W pp j s i => progMap (fun r => (r.1, e (j + 1) r.2)) (step W pp j (d j s) i)
 
 /-- Where the codes invert on the sets `P j` that hold every state the audit reaches before challenge `j`, the coded
 adversary is accepted exactly when the location's is. -/
 theorem accepts_coded_iff {I : IdealModel} (sch : Scheme I) {N S : ℕ} (c : ℕ) (W : Bits sch.n)
     (A₁ : Preprocessor sch N)
-    (step : Bits sch.n → Bits sch.t → ℕ → Bits N → Fin sch.B → Prog I (Bits sch.ℓ × Bits N))
+    (step : Bits sch.n → Bits sch.t → ℕ → Bits N → Fin sch.B → OracleProg I (Bits sch.ℓ × Bits N))
     (P : ℕ → Bits N → Prop)
     (hreach : ∀ (x : Outcome sch c) (j : ℕ), j < c →
       P j (Sampled.seqState (I.answer x.1) (step W (sch.enc W x.1 x.2.1).1) 0 ((List.ofFn x.2.2).take j)
@@ -190,7 +190,7 @@ probability at most `2^-k` at each `j`. If every coded adversary is accepted wit
 location's adversary, with a uniform `z`, is accepted with probability at most `η + c · 2^-k`. -/
 theorem adds_sets {I : IdealModel} (sch : Scheme I) {N q : ℕ} (S c k T : ℕ) (η : ℝ≥0∞) (W : Bits sch.n)
     (A₁ : Bits q → Preprocessor sch N)
-    (step : Bits q → Bits sch.n → Bits sch.t → ℕ → Bits N → Fin sch.B → Prog I (Bits sch.ℓ × Bits N))
+    (step : Bits q → Bits sch.n → Bits sch.t → ℕ → Bits N → Fin sch.B → OracleProg I (Bits sch.ℓ × Bits N))
     (F : ℕ → Bits q → Finset (Bits N))
     (hreach : ∀ (z : Bits q) (x : Outcome sch c) (j : ℕ), j < c →
       Sampled.seqState (I.answer x.1) (step z W (sch.enc W x.1 x.2.1).1) 0 ((List.ofFn x.2.2).take j)
@@ -229,7 +229,7 @@ theorem adds_sets {I : IdealModel} (sch : Scheme I) {N q : ℕ} (S c k T : ℕ) 
 /-- **Memory adds, in general.** The fibres of the decoders `π j`, at `T = 2^(N − q + k)`. -/
 theorem adds_core {I : IdealModel} (sch : Scheme I) {N q : ℕ} (S c k : ℕ) (η : ℝ≥0∞) (W : Bits sch.n)
     (π : ℕ → Bits N → Bits q) (A₁ : Bits q → Preprocessor sch N)
-    (step : Bits q → Bits sch.n → Bits sch.t → ℕ → Bits N → Fin sch.B → Prog I (Bits sch.ℓ × Bits N))
+    (step : Bits q → Bits sch.n → Bits sch.t → ℕ → Bits N → Fin sch.B → OracleProg I (Bits sch.ℓ × Bits N))
     (hdet : Determines sch c W π A₁ step) (hNS : N + k ≤ S + q)
     (hsec : ∀ (z : Bits q) (e : ℕ → Bits N → Bits S) (d : ℕ → Bits S → Bits N),
       pr (accepts sch c W (codedPre (A₁ z) e) (codedStep (step z) e d)) ≤ η) :
@@ -241,7 +241,7 @@ theorem adds_core {I : IdealModel} (sch : Scheme I) {N q : ℕ} (S c k : ℕ) (�
 /-- **Memory adds with advice, in general.** The advice fibres of the decoders `π j`, at `T = 2^(N + a − q + k)`. -/
 theorem adds_advice_core {I : IdealModel} (sch : Scheme I) {N a q : ℕ} (S c k : ℕ) (η : ℝ≥0∞) (W : Bits sch.n)
     (π : ℕ → Bits N → Bits a → Bits q) (A₁ : Bits q → Preprocessor sch N)
-    (step : Bits q → Bits sch.n → Bits sch.t → ℕ → Bits N → Fin sch.B → Prog I (Bits sch.ℓ × Bits N))
+    (step : Bits q → Bits sch.n → Bits sch.t → ℕ → Bits N → Fin sch.B → OracleProg I (Bits sch.ℓ × Bits N))
     (hdet : DeterminesAdvice sch c W π A₁ step) (hNS : N + a + k ≤ S + q)
     (hsec : ∀ (z : Bits q) (e : ℕ → Bits N → Bits S) (d : ℕ → Bits S → Bits N),
       pr (accepts sch c W (codedPre (A₁ z) e) (codedStep (step z) e d)) ≤ η) :

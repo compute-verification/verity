@@ -124,7 +124,7 @@ theorem SampledAuditProd : Pous.Guarantees.SampledAuditProd := @PousAudit.sample
 
 /-- `PousThm1.seqState` is `Pous.Sampled.seqState`, the trusted definition the guarantee reads. -/
 theorem seqState_eq_pinned {M : Pous.IdealModel} {ℓ S B : ℕ} (f : M.Qry → M.Ans)
-    (step : ℕ → Pous.Bits S → Fin B → Pous.Prog M (Pous.Bits ℓ × Pous.Bits S)) :
+    (step : ℕ → Pous.Bits S → Fin B → Pous.OracleProg M (Pous.Bits ℓ × Pous.Bits S)) :
     ∀ (j : ℕ) (h : List (Fin B)) (σ : Pous.Bits S),
       Pous.Sampled.seqState f step j h σ = PousThm1.seqState f step j h σ
   | _, [], _ => rfl
