@@ -411,9 +411,9 @@ class Served:
     def a_words(self, call: Any, codes: np.ndarray, scales: np.ndarray) -> np.ndarray:
         """Call ``call``'s A table's words over the Program's M slots: its rows' int8 ``codes`` [m, K] and f32 ``scales``
         [m], then zero codes of scale 0, each row `weights.chunks` (K) = n leaves (`chunk_words`, n·M leaves)."""
-        full, sc = np.zeros((self.m, call.k), np.int8), np.zeros(self.m, "<f4")
-        full[:len(codes)], sc[:len(codes)] = codes, scales
-        return chunk_words(full, sc, Wt.chunks(call.k))
+        if np.shape(codes)[-1] != call.k:
+            raise ValueError(f"call {getattr(call, 'index', '?')}: codes of K = {np.shape(codes)[-1]}, not {call.k}")
+        return chunk_words(codes, scales, Wt.chunks(call.k), rows=self.m)
 
     @property
     def steps(self) -> int:
