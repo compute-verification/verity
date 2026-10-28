@@ -255,7 +255,7 @@ def audit_round(a, sg, m: dict, rs, c3, draws, out: Path, port: int) -> dict:
         roots.append({"port": f"{name}/{p_}", "root": fv["roots"][p_], "leaves": w["leaves"], "domain": fv["domain_ids"][p_]})
     leaf_layer = hashlib.sha512(canonical_json({name: a0.sha512_file(m["dir"] / f"pub-{n}.bin")})).hexdigest()
     law = D.parse_law(f"stratified:{n}")
-    win = {"kind": "stand-in", "of": "the openings of one window of a remote bandwidth session (a8.py), on a "
+    win = {"kind": "stand-in", "of": "the openings of one window of a PoUB session (a8.py), on a "
                                       f"{rs.store.registration.blocks}-chunk registered store",
            "members": {name: {"template": P.template_id(m["defn"]), "units": [m["base"], m["base"] + n]}},
            "link": "opening.plan_link: the plan row by its b || c to the verifier's own copy of the pass's plan"}
