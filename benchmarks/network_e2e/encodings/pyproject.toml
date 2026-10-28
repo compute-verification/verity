@@ -27,4 +27,9 @@ inputs = ["verity/__init__.py", "verity/errors.py", "verity/core/__init__.py", "
           "verity/core/protocols/sampled_proofs/one_stage/__init__.py",
           "verity/core/protocols/sampled_proofs/one_stage/partition.py",
           "verity/core/protocols/sampled_proofs/one_stage/produced.py",
-          "verity/core/protocols/sampled_proofs/one_stage/registered.py"]
+          "verity/core/protocols/sampled_proofs/one_stage/registered.py",
+          # v1's default cap ℓ is the registered compiler's (`advice_windows.CAP_BITS`), and its import reads these
+          "verity/ml/windows", "integrations/vllm/verity_vllm/__init__.py", "integrations/vllm/verity_vllm/config.py",
+          "integrations/vllm/verity_vllm/settings.py", "integrations/vllm/verity_vllm/records/__init__.py",
+          "integrations/vllm/verity_vllm/records/fields.py", "integrations/vllm/verity_vllm/records/workload.py",
+          "integrations/vllm/verity_vllm/pipeline/__init__.py", "integrations/vllm/verity_vllm/pipeline/advice_windows.py"]

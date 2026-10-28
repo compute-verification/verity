@@ -87,6 +87,7 @@ from pathlib import Path
 from typing import Any, NamedTuple, TypeVar
 
 from verity.core.protocols.certifier import advice as I1
+from verity_vllm.pipeline.advice_windows import CAP_BITS
 
 HERE = Path(__file__).resolve().parent
 T = TypeVar("T")
@@ -293,7 +294,7 @@ class Registered:
     row_order: str = "batch"
     T: int = 600
     book: Any = None
-    cap_bits: int = 1 << 23
+    cap_bits: int = CAP_BITS
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "stop_ids", tuple(self.stop_ids))

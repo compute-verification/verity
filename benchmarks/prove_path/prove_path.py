@@ -171,13 +171,11 @@ from verity.ml.circuits.codec import canonical_json  # noqa: E402
 from verity.ml.windows import interface as IF  # noqa: E402
 from verity_vllm.pipeline import advice_windows as AW  # noqa: E402
 from verity_vllm.pipeline import deferred_rows as DRW  # noqa: E402
+from verity_vllm.pipeline.advice_windows import CAP_BITS  # noqa: E402
 from verity_vllm.pipeline.tp import serving_rows as SRT  # noqa: E402
 
 CAPPED = "verity/prove-path/capped-compiler/v0"
 I2 = "verity/prove-path/i2-compile-steps/v0"
-#: ℓ, the public cap on the advice's encoding in bits: 1 MiB, far above a TP Commit's few hundred requests (I1 spends tens of
-#: bits a row)
-CAP_BITS = 1 << 23
 #: the checkpoint config I2's φ reads when none is given: unsloth/Llama-3.2-1B's (I2's test fixture)
 LLAMA32_1B_CONFIG = HERE.parents[1] / "integrations/vllm/tests/program/predict/fixtures/llama32-1b.config.json"
 ROWS1 = "prove_path.py commit: a single-GPU Commit's sealed replay bundle -> rows over the registered compiler's Programs"
