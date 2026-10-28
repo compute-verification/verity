@@ -358,8 +358,10 @@ each call's error table at the call's operand commitment, before its draw; every
 by the play's game or breaks binding or zero knowledge in some round, at most `δb` and `δz` a round.
 
 **Superseded by `ServiceSoundStagedJ10RPerProver`**, for `ServiceSoundStaged`'s reason: one `δb` for every adversary is
-false below 1 at SHA-512. It mirrors the premise today's floor of
-record is proved from, so that the call-scope floor `StagedFloorKOneSidedJ10R` is that floor read at the call. -/
+false below 1 at SHA-512. It mirrors `ServiceSoundStaged`, the premise the floor of record
+`Definitions.Pouw.Guarantees.RelativeSecurity.StagedFloorKOneSided` is proved from (accepted runs charged below
+`(R − 274 ln 2) · St · κ L n n' B − Vmax` with probability at most `2^{−40} + R (δb + δz)`, at the parity luck 0.854),
+so that the call-scope floor `StagedFloorKOneSidedJ10R` is that floor read at the call. -/
 def ServiceSoundStagedJ10R (Mc : Machine) (S : Service) (run : JRunMap Mc S R St n L B n' Ar)
     (e : S.Seed ≃ Paths (JStage St n L B n') R) (δb δz : ℝ) : Prop :=
   ∀ (Ω' : Type) [Fintype Ω'] (M : Mc.Alg (S.Seed × Ω') (S.Com × S.Ans)),
@@ -433,8 +435,11 @@ drawn uniformly among every call's (the uniform draw is `ServiceSoundOverlap`'s 
 each round's error tables, every call's, before the round's first draw (E3); every accepted run is accepted by the
 play's game or breaks binding or zero knowledge in some round, at most `δb` and `δz` a round.
 
-**Superseded by `ServiceSoundOverlapJ10RPerProver`**, for `ServiceSoundOverlap`'s reason. It mirrors the premise
-today's overlapped floor of record is proved from. -/
+**Superseded by `ServiceSoundOverlapJ10RPerProver`**, for `ServiceSoundOverlap`'s reason. It mirrors
+`ServiceSoundOverlap`, the premise the overlapped floor of record
+`Definitions.Pouw.Guarantees.RelativeSecurity.OverlapFloorKOneSided` is proved from (accepted runs charged below
+`(R − 274 ln 2) · κ L Σ_t n_t n'_t B_t − Vmax` with probability at most `2^{−40} + R (δb + δz)`, at the parity luck
+0.854 a draw), so that `OverlapFloorKOneSidedJ10R` is that floor read at the call. -/
 def ServiceSoundOverlapJ10R (Mc : Machine) (S : Service) (run : JORunMap Mc S R St n L B n' Ar)
     (e : S.Seed ≃ Paths (OJSpot St n L B n') R) (δb δz : ℝ) : Prop :=
   ∀ (Ω' : Type) [Fintype Ω'] (M : Mc.Alg (S.Seed × Ω') (S.Com × S.Ans)),
