@@ -132,7 +132,7 @@ A transcript written before it named its session's pace (20 Oct) replays only wi
 - `schedule.py`: the schedule check, without which `ledger` credits nothing after the seed: each pass's plan is the
   verifier's plan of the published schedule at its step, the schedule is within the cap on its bits the session
   committed before its coins (`audit.Params.schedule_cap`), and that cap is the layout's steering
-  (`audit.Session.scheduled`, `audit.Ledger.steering`). Of record in `lean/RemoteAudit/Schedule.lean`.
+  (`audit.Session.scheduled`, `audit.GammaTerms.steering`). Of record in `lean/RemoteAudit/Schedule.lean`.
 - `store.py`: a registered store bound to a pinned model. It reads and checks the pin (`read_pin`, `pin_of`, `check`),
   lays out the arena of a BF16 checkpoint's weights in vLLM's module order and the store of arenas and host filler
   (`arena`, `Store`), and computes the payload root that store has under the verifier's salt key (`expected_root`).

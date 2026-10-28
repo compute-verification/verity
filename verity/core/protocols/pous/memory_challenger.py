@@ -85,7 +85,7 @@ from verity.ml.commitments.rowleaf import sha512_row_v2_digest
 from verity.ml.crypto import lms
 from verity.ml.randomness import derive
 
-from .protocol import Certificate, Scheme
+from .protocol import CapacityBound, Scheme
 from .verifier import DIGEST_BYTES
 
 PROTOCOL = "verity-pous/memory-challenger/v1"
@@ -362,7 +362,7 @@ class SignedSession:
                    doc["scheme"], bytes.fromhex(doc["public_key"]), bytes.fromhex(doc["signature"]))
 
 
-def covering_certificate(scheme: Scheme, k: int, limit_ns: int, *, experimental: bool = False) -> Certificate:
+def covering_certificate(scheme: Scheme, k: int, limit_ns: int, *, experimental: bool = False) -> CapacityBound:
     """The first of `scheme`'s certificates that covers `k` rounds within `limit_ns`, as `protocol.TimedAudit` picks it;
     `ValueError` when none does, or when the scheme is experimental and `experimental` is not set."""
     if scheme.experimental and not experimental:

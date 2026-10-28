@@ -48,7 +48,7 @@ opened like any other, but not credited.
 | term | what it is | where it comes from |
 | --- | --- | --- |
 | \(\mu_{\text{timing}}\) | \(1 - \sum_t U^{c}_t b / (R\Sigma)\), \(U^{c}_t\) window \(t\)'s credited receipts: the span the credited receipts don't fill (the gap \(g\) after each pass, the session's two ends, blocks a plan leaves out, post-seed blocks without a verdict) | the record |
-| \(\mu_{\text{sample}}\) | \(\sum_t m^*_t\, b / (R\Sigma)\) read per window (`Ledger.sample`), or the pooled bound's wrong receipts \(\cdot\, b / (R\Sigma)\) read over the horizon (`Ledger.horizon`, §10) | the record's profiles, at δ |
+| \(\mu_{\text{sample}}\) | \(\sum_t m^*_t\, b / (R\Sigma)\) read per window (`GammaTerms.sample`), or the pooled bound's wrong receipts \(\cdot\, b / (R\Sigma)\) read over the horizon (`GammaTerms.horizon`, §10) | the record's profiles, at δ |
 | \(\mu_{\text{chip}}\) | \(\sum_t P_t S_{\text{chip}} / (R\Sigma)\): each pass, what is held on chip needn't be read again | \(S_{\text{chip}}\), measured |
 | \(\lambda\) | AuditRO's slack: per pass of \(k\) receipts (every certified one, in either reading), `named_bits(k)`, a whole number of bits at least \(\log_2(q^k/k!) \ge \log_2 C(q, k)\) at \(q = 2^{64}\) (`queries_log2`), and `slack_log2` (`SLACK_LOG2`, 67: the failure probability's \(2^{-\text{slack}}\) a pass, below, adds at most \(2^{-50}\) up to \(2^{17}\) passes, more than an hour of the node's 41.2 ms passes over gate runs 8 and 9's 532.6 GB store); 0.116% at the node's 192.6M 4 KiB blocks a pass over every tier (37.9 bits a block), more than \(\mu_{\text{sample}}\) | proved (`Bandwidth.Guarantees.AuditRO`, applied per pass) |
 | \(\mu_{\text{rebuild}}\) | \(C_{\text{sq}} b / (E_{\text{sq}} R)\): blocks re-encoded from their payloads in place of reads, each at least the record's codec's \(E_{\text{sq}}\) squarings (`Codec.encode_squarings`: 98,016 at p1024/k3/masked, 65,344 at k = 2, 65,152 at p512/k2) at the node's stated ceiling of \(C_{\text{sq}}\) squarings a second at that width (`Rebuild`) | the record's codec, and assumption 5 stated per width (`WorkHardness(p, k)`) |
@@ -93,11 +93,11 @@ to γ.
 
 **Each window alone.** The same terms over window \(t\)'s own span \(\Sigma_t = D_t - b_{t-1}\) (`WindowRecord.span_ns`),
 with its \(U_t\), \(P_t\) and \(m^*_t\) (or the pooled bound's \(f_t U_t\)) in place of the session's sums, give
-\(\gamma_t\): window \(t\)'s reads are at least \((1 - \gamma_t) R \Sigma_t\) (`Ledger.windows`, a `WindowLedger`
+\(\gamma_t\): window \(t\)'s reads are at least \((1 - \gamma_t) R \Sigma_t\) (`GammaTerms.windows`, a `WindowLedger`
 each). Every read behind window \(t\)'s receipts falls in \(\Sigma_t\): its chain starts from \(\sigma_t\), which left
 at \(b_{t-1}\), and its roots arrived by \(D_t\). Consecutive spans overlap by \(A\), but no read serves two windows'
-receipts (§5). The every-window claim is \(\max_t \gamma_t\) (`Ledger.worst`, and `Ledger.worst_horizon` read over
-the horizon), which the ledger reports beside the session's γ. A window the prover leaves idle is its own
+receipts (§5). The every-window claim is \(\max_t \gamma_t\) (`GammaTerms.worst`, and `GammaTerms.worst_horizon` read
+over the horizon), which the ledger reports beside the session's γ. A window the prover leaves idle is its own
 \(\gamma_t\) there, where the session's γ sees about \(1/W\) of it. Read per window, the failure probability is the
 same \(W\delta\); read over the horizon, every window's \(f_t\) holds on the session's one event (§10). A window is
 charged \(A\) and the rest of the pass in flight at its challenge, where the session is charged them once, so its
@@ -1151,7 +1151,7 @@ over them. Until `public()` is trimmed to match (it already keeps `stale` out), 
   freed, which registered blocks are freed and when, and each pass's step. The verifier refuses a schedule over the
   cap, computes each pass's plan from it (`Schedule.plan`, the blocks resident when the step begins, in store order)
   and the session's appends (`Schedule.appendRuns`), and refuses the session if a pass's plan or an append differs
-  (`Session.scheduled`, a `Scheduled` verdict carrying the cap; `Ledger.steering` is the cap). `ledger` credits
+  (`Session.scheduled`, a `Scheduled` verdict carrying the cap; `GammaTerms.steering` is the cap). `ledger` credits
   nothing after the seed without a `Scheduled` of the same session. So a credited plan is the verifier's own function
   of a schedule of at most \(a\) bits, and a plan that follows a coin at that schedule is refused: the `a` of the
   stacked guarantee's `SteeredLayout` premise is the cap plus one (`Properties.RemoteAudit.steered_of_checked`, under
@@ -1174,7 +1174,7 @@ over them. Until `public()` is trimmed to match (it already keeps `stale` out), 
   proofs hold, the circuit's read bits from complete blocks at each step \(r_s\), and the memory-map unit's verdict
   on the session's appends and its passes' heads (`mapped`, below). On it, a pass's credit is the circuit's read bits
   at its step, less a block for each planned block it credits no receipt of (`linked_bits`, by `RequirementMoved`
-  below), and the ledger says it is linked (`Ledger.linked`); without it, the credit is the store's, flagged as
+  below), and the ledger says it is linked (`GammaTerms.linked`); without it, the credit is the store's, flagged as
   such. The checks behind the link belong to the
   units named below, and the ledger takes them as given. Those units are sampled, so the link carries what their draw
   established: \(\varepsilon\), the most share of the linked credit the units it leaves unproved can carry (the
@@ -1182,7 +1182,7 @@ over them. Until `public()` is trimmed to match (it already keeps `stale` out), 
   probability \(\delta\). The session is credited \((1 - \varepsilon)\sum_\text{passes} \max(0, r_s - u_s B)\),
   \(u_s\) the pass's planned blocks it credits no receipt of (0 when its receipts cover its plan), a window
   its own sum less \(\varepsilon\) of the session's (the unproved share may all be one window's), and \(\delta\) adds
-  to the ledger's error (`Ledger.error`, `error_horizon`). That \(\varepsilon\) bounds the unproved credit, not only
+  to the ledger's error (`GammaTerms.error`, `error_horizon`). That \(\varepsilon\) bounds the unproved credit, not only
   the share of units drawn wrong, is the link's to establish: a faulty proof block at a heavy step carries more than its
   share.
   - *Reads the circuit doesn't make.* The plan is the resident set, and the circuit's reads at a step can be fewer: a
@@ -1455,7 +1455,7 @@ give each window 1%, and over its 600 windows 0.0017%.
 
 `ledger` reports μ_sample both ways: `sample`, the per-window reading, and `horizon`, the pooled one (`pooled`: the
 most \(\sum_t f_t U_t\) the bounds above allow), with `floor`, the largest \(f_t\) they allow, and γ for each
-(`gamma`, `gamma_horizon`). It reports each window's the same way over its own span (`Ledger.windows`: each
+(`gamma`, `gamma_horizon`). It reports each window's the same way over its own span (`GammaTerms.windows`: each
 \(f_t\), from `floors`, is its `floor`, and \(f_t U_t\) its `horizon`), and the worst window's γ either way beside the
 session's (`worst`, `worst_horizon`). All of it starts from each window's profile and span, which the record keeps.
 
