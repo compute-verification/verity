@@ -24,6 +24,7 @@ private form (the division committed under hiding leaves, compliance proved, a p
 -/
 import CoreComposition.Blobs
 import CoreComposition.Cases
+import CoreComposition.Tie
 import MemoryChallenger.WipeProtocol
 import NciCheck.Protocol
 import NetworkCheck.Period
