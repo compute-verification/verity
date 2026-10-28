@@ -75,18 +75,18 @@ variable {n N b h ρ S L q s : ℕ}
 /-- Window `i` was accepted within the compute budget with its footprint short of the floor `fl`. -/
 def Short (A : Windows n N b h ρ S L q s) (cTag cEnc F fl : ℕ) (i : Fin n) (x : Store N b × (Fin n → Coins N b h ρ s)) :
     Prop :=
-  (A.dev i x.2).Accepts x.1 (x.2 i).1 (x.2 i).2.1 (x.2 i).2.2 ∧
-    (A.dev i x.2).compute cTag cEnc x.1 (x.2 i).1 (x.2 i).2.1 ≤ F ∧
-    (A.dev i x.2).footprint x.1 (x.2 i).1 (x.2 i).2.1 * cEnc < fl
+  (A.dev i x.2).Accepts x.1 (x.2 i).1.1 (x.2 i).1.2 (x.2 i).2 ∧
+    (A.dev i x.2).compute cTag cEnc x.1 (x.2 i).1.1 (x.2 i).1.2 ≤ F ∧
+    (A.dev i x.2).footprint x.1 (x.2 i).1.1 (x.2 i).1.2 * cEnc < fl
 
 open Classical in
 /-- Footprints summing short of `n + 1 − m` floors, in windows all accepted within the budget, leave at least `m`
 windows short. -/
 theorem le_card_short (A : Windows n N b h ρ S L q s) (cTag cEnc F fl m : ℕ)
     (x : Store N b × (Fin n → Coins N b h ρ s))
-    (hall : ∀ i, (A.dev i x.2).Accepts x.1 (x.2 i).1 (x.2 i).2.1 (x.2 i).2.2 ∧
-      (A.dev i x.2).compute cTag cEnc x.1 (x.2 i).1 (x.2 i).2.1 ≤ F)
-    (hsum : ∑ i, (A.dev i x.2).footprint x.1 (x.2 i).1 (x.2 i).2.1 * cEnc < (n + 1 - m) * fl) :
+    (hall : ∀ i, (A.dev i x.2).Accepts x.1 (x.2 i).1.1 (x.2 i).1.2 (x.2 i).2 ∧
+      (A.dev i x.2).compute cTag cEnc x.1 (x.2 i).1.1 (x.2 i).1.2 ≤ F)
+    (hsum : ∑ i, (A.dev i x.2).footprint x.1 (x.2 i).1.1 (x.2 i).1.2 * cEnc < (n + 1 - m) * fl) :
     m ≤ (Finset.univ.filter (fun i => Short A cTag cEnc F fl i x)).card := by
   classical
   by_contra hlt
@@ -94,14 +94,14 @@ theorem le_card_short (A : Windows n N b h ρ S L q s) (cTag cEnc F fl m : ℕ)
   set T := Finset.univ.filter (fun i => ¬ Short A cTag cEnc F fl i x)
   have hT : (Finset.univ.filter (fun i => Short A cTag cEnc F fl i x)).card + T.card = n := by
     rw [Finset.card_filter_add_card_filter_not, Finset.card_univ, Fintype.card_fin]
-  have hle : T.card * fl ≤ ∑ i, (A.dev i x.2).footprint x.1 (x.2 i).1 (x.2 i).2.1 * cEnc :=
+  have hle : T.card * fl ≤ ∑ i, (A.dev i x.2).footprint x.1 (x.2 i).1.1 (x.2 i).1.2 * cEnc :=
     calc T.card * fl = ∑ _i ∈ T, fl := by rw [Finset.sum_const, smul_eq_mul]
-      _ ≤ ∑ i ∈ T, (A.dev i x.2).footprint x.1 (x.2 i).1 (x.2 i).2.1 * cEnc := by
+      _ ≤ ∑ i ∈ T, (A.dev i x.2).footprint x.1 (x.2 i).1.1 (x.2 i).1.2 * cEnc := by
           refine Finset.sum_le_sum (fun i hi => ?_)
           have hi := (Finset.mem_filter.1 hi).2
           simp only [Short, not_and, not_lt] at hi
           exact hi (hall i).1 (hall i).2
-      _ ≤ ∑ i, (A.dev i x.2).footprint x.1 (x.2 i).1 (x.2 i).2.1 * cEnc :=
+      _ ≤ ∑ i, (A.dev i x.2).footprint x.1 (x.2 i).1.1 (x.2 i).1.2 * cEnc :=
           Finset.sum_le_sum_of_subset_of_nonneg (Finset.filter_subset _ _) (fun _ _ _ => Nat.zero_le _)
   have : (n + 1 - m) * fl ≤ T.card * fl := Nat.mul_le_mul_right _ (by omega)
   omega
@@ -139,9 +139,9 @@ theorem RateAuditWindows : Accounting.Guarantees.RateAuditWindows := by
   classical
   intro n N b h ρ S L q s k F cTag cEnc lam m A
   calc (m : ℝ≥0∞) * pr (fun x : Store N b × (Fin n → Coins N b h ρ s) =>
-          (∀ i, (A.dev i x.2).Accepts x.1 (x.2 i).1 (x.2 i).2.1 (x.2 i).2.2 ∧
-            (A.dev i x.2).compute cTag cEnc x.1 (x.2 i).1 (x.2 i).2.1 ≤ F) ∧
-          ∑ i, (A.dev i x.2).footprint x.1 (x.2 i).1 (x.2 i).2.1 * cEnc <
+          (∀ i, (A.dev i x.2).Accepts x.1 (x.2 i).1.1 (x.2 i).1.2 (x.2 i).2 ∧
+            (A.dev i x.2).compute cTag cEnc x.1 (x.2 i).1.1 (x.2 i).1.2 ≤ F) ∧
+          ∑ i, (A.dev i x.2).footprint x.1 (x.2 i).1.1 (x.2 i).1.2 * cEnc <
             (n + 1 - m) * floor b ρ S L F cTag cEnc k lam)
       ≤ (m : ℝ≥0∞) * pr (fun x : Store N b × (Fin n → Coins N b h ρ s) =>
           m ≤ (Finset.univ.filter (fun i => Short A cTag cEnc F (floor b ρ S L F cTag cEnc k lam) i x)).card) := by

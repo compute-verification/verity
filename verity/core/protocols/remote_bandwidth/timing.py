@@ -25,7 +25,7 @@ the failure each SHA-512 compression of the prover's buys, a guess's 2^-8r besid
 below r on one of a block's 128 sectors (`sign_rank_at_most`, exact through F2: `gf2_rank_at_most`).  `sketch_failure`
 is a session's, and `grind_compressions` what one grinding try costs.
 
-`python -m verity.core.protocols.remote_bandwidth.timing` prints the grid of the report on a vy-nebius node
+`python -m verity.core.protocols.remote_bandwidth.timing` prints the grid of the report on an RTX PRO 6000 node
 (`verity.hardware.node.VY_NEBIUS`), ending with what would bring λ and μ_chip under 0.05% (wider receipts, a larger
 store, a flush a pass).
 """
@@ -56,8 +56,7 @@ own over its span, Q = F·C (`sketch_failure`'s `outside`).  Grinding a sketch-s
 on any hardware the prover reaches, not only the node's GPUs: 2^20 nodes' SHA-512, about 8.4M RTX PRO 6000s, past any
 one operator's fleet.  At 16 rows it costs a session's line 0.4 bits of error (2^-29.95 to 2^-29.55 at 2118 passes),
 since AuditRO's 2^-41 a pass dominates it; 64 rows would bring δs under 2^-50 at τ 1.226 a pass on the reader, the
-option if that slack is ever cut.  Provisional, under the sketch's random-oracle ask (memory-accounting, 24 Oct; RD-5,
-note:20261024T1350Z-report-sketch-named)."""
+option if that slack is ever cut.  Provisional, under the sketch's random-oracle assumption."""
 
 
 def deadline(pass_ns: int, *, gap_ns: int = 0, down_ns: int, up_ns: int, jitter_ns: int = 0) -> int:
@@ -250,7 +249,7 @@ def spanning(node: hardware.NodeFigures, device_bytes: int) -> int:
 
 
 def stated(node: hardware.NodeFigures, store_bytes: int, window_ns: int, windows: int, *, rtt_ns: int, samples: int,
-           delta: float = 2.0 ** -40, gap_ns: int = 50 * US, jitter_ns: int = 50 * US,
+           delta: float = audit.DELTA, gap_ns: int = 50 * US, jitter_ns: int = 50 * US,
            read_bytes_per_s: float | None = None, capacity_bytes_per_s: float | None = None) -> audit.Ledger:
     """The ledger of the honest prover's session over a store of `store_bytes` on `node`, of `capacity_bytes_per_s`
     (R measured by default; R at spec, the headline): a pass is the store's read at `read_bytes_per_s` (R measured by
@@ -310,7 +309,7 @@ def _sizing(at: hardware.NodeFigures, gap: int) -> None:
           f"({store / 1e9:.0f} GB, {p * 1e3:.1f} ms passes), in the steady state at g = {gap // US} µs.  A receipt of m "
           f"blocks: its bits for C(q, k) at q = 2^{audit.QUERIES_LOG2} bounded by q^k, or by q^k/k! as ledger charges "
           "them, and the bits 0.05% allows; an opening on that store with a payload leaf a receipt or a block; τ a pass "
-          "scaled from #1916's 8 GiB pass (sketch 5.82 ms, hash 0.33 ms, tree 0.90 ms, over a 5.60 ms read); "
+          "scaled from an 8 GiB pass (sketch 5.82 ms, hash 0.33 ms, tree 0.90 ms, over a 5.60 ms read); "
           "sketch-sha512's rate a compression at m·128 sectors, log2")
     print("| m | KiB | q^k bits | λ | q^k/k! bits | λ | bits at 0.05% | opening B, payload a receipt | a block | τ | rate |")
     print("| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |")

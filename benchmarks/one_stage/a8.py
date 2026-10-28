@@ -1,5 +1,5 @@
 """One-stage audit, run A8: one window of the remote bandwidth audit over a registered store of a few thousand chunks, its
-openings proved in zero knowledge through the proof service in place of opened (PROTOCOL.md §6's checks 1-3 and 5, as §8
+openings proved in zero knowledge through the proof system in place of opened (PROTOCOL.md §6's checks 1-3 and 5, as §8
 deploys them), so that the verifier receives no chunk bytes; and the prover's cost per opening.
 
     python benchmarks/one_stage/a8.py --bin flock-circuit --lean flock-verify --out DIR [--blocks 4096] [--plan 64]
@@ -105,7 +105,7 @@ def window(store: C3.Store, L: int, samples: int, delta: float, secret: bytes, s
     clock = a7.Clock()
     s = C3.Session(p, reg, None, coins.local(reg.digest, 0, p.windows, a7.Entropy(b"a8 coins %d" % seed)),
                    not_before_ns=0, clock=clock)
-    prover = audit.Prover(store, None, s.commitment, entropy=a7.Entropy(secret + b"receipt salts"))
+    prover = audit.Prover(store, None, entropy=a7.Entropy(secret + b"receipt salts"))
     challenge, previous, passes, msgs = s.start(), reg.digest, {}, []
     for i in range(N // L):
         runs = ((L * i, L),)

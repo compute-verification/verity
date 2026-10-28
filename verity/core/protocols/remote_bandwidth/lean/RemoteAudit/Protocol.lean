@@ -22,15 +22,19 @@ the difftest's `session` reads (`Difftest.sessionFn`):
 * the check: the session replayed through the verifier. It rejects with the failure that rejected the session, or
   when the parameters or the log don't decode, as the difftest's port refuses; it is undecided while the session runs
   (a window not yet verified); it accepts once every window is. `Properties.RemoteAudit.Component.AcceptIsVerified`
-  states that it accepts only what `Shared.run g` accepts, and publishes `certify` of that run's record at g.
+  states that it accepts only what `Shared.run g` accepts, and publishes `certify` of that run's record at the
+  session's parameters and g.
 
 On acceptance it publishes the reads it certifies and the error that holds at, `{"eps", "q_bytes"}` (`certify`): the
 session's receipts U less the wrong ones its openings leave, W rounded up (`Pooled.pooled` of each draw's receipts and
-draws at `DELTA`), each a read of one `BLOCK_BYTES` block, at ε = δ + S/2^64 for S the draws (the per-draw term of
-`Accounting.Guarantees.Remote.PooledDraw`; its PRF and coin-commitment hiding terms are named assumptions, not
-numbers). The ledger's γ terms, which need the node's measured rates, are not taken off: `q_bytes` is the reads the
-session's openings certify. When the pooled bound refuses the windows, `q_bytes` and `eps` are 0 and the profile says
-why.
+draws at `DELTA`), each a read of one `BLOCK_BYTES` block, at ε = δ + ⌈W/g⌉·s/2^64 (`eps`), the session's `⌈W/g⌉`
+openings coins at its `samples` s each (the per-draw term of `Accounting.Guarantees.Remote.PooledDraw`; its PRF
+advantages are a named assumption, not a number, and it has no hiding term, since the prover is sent the coin
+commitment only at the session's end): the draw term of the bound `Properties.RemoteAudit.Component.LineHeldAtComponent`
+proves at `Node.delta = DELTA` (`PublishedEps`). It is a constant of the parameters, not the draws a session made
+(`min(s, U_c)`, U_c the prover's), which can be fewer. The ledger's γ terms, which need the node's measured rates, are
+not taken off: `q_bytes` is the reads the session's openings certify. When the pooled bound refuses the windows,
+`q_bytes` and `eps` are 0 and the profile says why.
 -/
 
 namespace RemoteAudit.Protocol
@@ -86,11 +90,11 @@ def sessionOf (p : Params) (e : Evidence) :
   pure (params, g, coins, appendCoins, notBeforeNs, events)
 
 /-- The session after the log's events through the Lean verifier (`Shared.run g` from `State.init`, `Session.run` at
-g = 1), and its windows a draw. -/
-def replay (p : Params) (reg : Registration) (e : Evidence) : V (Session.State × Nat) := do
+g = 1), its parameters and its windows a draw. -/
+def replay (p : Params) (reg : Registration) (e : Evidence) : V (Session.State × Session.Params × Nat) := do
   let (params, g, coins, appendCoins, notBeforeNs, events) ← sessionOf p e
   let (_, s) ← Shared.run g (Session.State.init params reg coins appendCoins notBeforeNs) events
-  pure (s, g)
+  pure (s, params, g)
 
 /-- Each draw's receipts and draws, a draw being `g` consecutive windows (`audit.pooled_windows`). -/
 def windowsOf (sm : Session.Summary) (g : Nat) : Array (Nat × Nat) :=
@@ -108,26 +112,35 @@ structure Public where
 
 def Public.toJson (p : Public) : Json := Json.mkObj [("eps", .str p.eps.toString), ("q_bytes", natJ p.qBytes)]
 
+/-- `⌈W/g⌉`: the openings coins of a session of `params.windows` windows drawn `g` a coin (`coins.openings_coins`), one
+a window at g ≤ 1, as `Properties.RemoteAudit.Line.Setup.draws`. -/
+def openingsCoins (params : Session.Params) (g : Nat) : Nat :=
+  if g ≤ 1 then params.windows else (params.windows + g - 1) / g
+
+/-- The error an accepted session's reads are certified at: `DELTA + ⌈W/g⌉·s/2^64`, the pooled bound's δ and the
+draw's rejection at the session's `samples` s a draw. -/
+def eps (params : Session.Params) (g : Nat) : Rat :=
+  DELTA + ((openingsCoins params g * params.samples : Nat) : Rat) / (2 ^ 64 : Nat)
+
 /-- What an accepted session certifies (module docstring), with its profile. -/
-def certify (sm : Session.Summary) (g : Nat) : Public × Json :=
+def certify (params : Session.Params) (g : Nat) (sm : Session.Summary) : Public × Json :=
   let ws := windowsOf sm g
   let receipts := (ws.map (·.1)).toList.sum
-  let draws := (ws.map (·.2)).toList.sum
   let base := [("delta", Json.str (ratio DELTA).toString), ("receipts", natJ receipts),
     ("windows", .arr (ws.map fun (u, s) => .arr #[natJ u, natJ s]))]
   match Pooled.pooled ws DELTA with
   | .ok b =>
     let wrong := (b.wrong.num.toNat + b.wrong.den - 1) / b.wrong.den
-    (⟨(Core.Ratio.mk' (2 ^ 24 + draws) (2 ^ 64)).getD ⟨1, 1⟩, (receipts - wrong) * Codec.BLOCK_BYTES⟩,
+    (⟨ratio (eps params g), (receipts - wrong) * Codec.BLOCK_BYTES⟩,
      Json.mkObj (base ++ [("gaps", .arr #[]), ("wrong", .str (ratio b.wrong).toString)]))
   | .error why => (⟨⟨0, 1⟩, 0⟩, Json.mkObj (base ++ [("gaps", .arr #[.str why]), ("wrong", .null)]))
 
 def check (p : Params) (reg : Registration) (e : Evidence) : Core.Outcome Public Json :=
   match replay p reg e with
   | .error why => .reject why
-  | .ok (s, g) =>
+  | .ok (s, params, g) =>
     match s.outcome, s.summary with
-    | some "accepted", some sm => let (pub, prof) := certify sm g; .accept pub prof
+    | some "accepted", some sm => let (pub, prof) := certify params g sm; .accept pub prof
     | some failure, _ => .reject s!"the session was rejected: {failure}"
     | none, _ => .undecided "the session has a window not yet verified"
 
@@ -149,5 +162,8 @@ def protocol : Core.Protocol where
 #guard (protocol.answer "{}".toUTF8 ByteArray.empty ByteArray.empty).reason ==
   some "params: params: the keys must be [not_before_ns, params], not []"
 #guard (ratio DELTA).toString == "1/1099511627776"
+private def three : Session.Params :=
+  { deadlineNs := 0, windows := 3, samples := 5, minPasses := 1, windowNs := 0, lifetime := 1 }
+#guard (ratio (eps three 2)).toString == "8388613/9223372036854775808"
 
 end RemoteAudit.Protocol

@@ -1,4 +1,4 @@
-"""The auditor host's verifier service (vy-auditor-1): the remote bandwidth audit's verifier
+"""The auditor host's verifier service: the remote bandwidth audit's verifier
 (`benchmarks/remote_session/verifier.py`, the Lean verifier deciding) runs only as the `auditor` user,
 from a tree infra pinned, one run at a time, each run's parameters a lane's request held to a fixed whitelist.
 
@@ -25,7 +25,7 @@ from a tree infra pinned, one run at a time, each run's parameters a lane's requ
   that reaches the challenger's gate (`.ssh/vy-challenger-gate`, which infra registers there for the lane in
   `verifier.json`).
 - **A run** (`run`) is verifier.py with the whitelisted parameters and the host's own: it listens on 127.0.0.1 at
-  `--port` (one of `PORTS`), takes each session's coins from vy-challenger-1 through its gate (`--challenger gate`, the
+  `--port` (one of `PORTS`), takes each session's coins from the challenger host through its gate (`--challenger gate`, the
   host's key and this host's name there, under the lane's `--period` and `--pin`), holds each session's pin to the
   challenger's pins log, which it fetches through the same gate (`pins`), and to main's first-parent history at
   `/opt/vy-verifier/main-first-parent.txt` (`--challenger-main`; infra writes `git rev-list --first-parent origin/main`
@@ -65,7 +65,9 @@ from a tree infra pinned, one run at a time, each run's parameters a lane's requ
   alone when the run left no transcript, into `runs/<run>/replay/`; a transcript that isn't the recorded one fails it.
 - **The memory challenger's parties**: `wipe_party [--reads K] [--native [--threads T]]` and `challenger_party`
   run PoUS's streamed-wipe challenger (`verity/core/protocols/pous/wipe_party.py`, port 47611) and its block challenger
-  (`challenger_party.py`, port 47610) as `auditor` from the pinned tree, one session per ssh connection: the request line
+  (`challenger_party.py`, port 47610), and `bw_party [--minutes M]` the remote bandwidth audit's P2 party
+  (`verity/core/protocols/remote_bandwidth/p2_party.py`, port 47612, with the registration the host names), as `auditor` from
+  the pinned tree, one session per ssh connection: the request line
   on the gate's stdin, `{"listening"}` and the signed report on its stdout, as a lane's `--challenger-command` expects
   (`benchmarks/pous/block/block.py`). The prover connects to the host's address at the port over direct TCP, which the
   security groups admit from the card only. Each party's LMS key and session log are `<root>/parties/<wipe|pous>/`, made
@@ -75,8 +77,8 @@ from a tree infra pinned, one run at a time, each run's parameters a lane's requ
   never names a path, an address or an egress count: a session signs `UNCOUNTED` egress until the network certifier's
   count reaches the host. A session waits for no verifier unit to run, each party serves one session at a time, and the
   gate kills a party after its session's `--minutes M` (60 by default, at most 180), so a session no prover joined ends.
-- **The store.** When a run's or a replay's unit stops, `vy-verifier-publish@<run>.service` puts `runs/<run>/` (`research
-  data put --kind verifier-run/v1 --tree ... --preserve`, from the pinned tree) with the credential infra keeps in
+- **The store.** When a run's or a replay's unit stops, `vy-verifier-publish@<run>.service` puts `runs/<run>/` in the
+  evidence store (a preserved tree of kind `verifier-run/v1`, by the pinned tree's store client) with the credential infra keeps in
   `/etc/vy/verifier-store.env`, which only that unit reads.
 """
 from __future__ import annotations
@@ -137,7 +139,11 @@ STORE_INT = re.compile(r"[1-9][0-9]{0,7}")
 MODEL_PINS = Path("verity/core/protocols/pouw/lean/check/models.json")
 """Core's pin of each model role, in the pinned tree: a bound run's `verifier.py --pin`."""
 PARTIES = {"wipe_party": ("wipe", "verity.core.protocols.pous.wipe_party", 47611),
-           "challenger_party": ("pous", "verity.core.protocols.pous.challenger_party", 47610)}
+           "challenger_party": ("pous", "verity.core.protocols.pous.challenger_party", 47610),
+           "bw_party": ("bw", "verity.core.protocols.remote_bandwidth.p2_party", 47612)}
+PARTY_FIXED = {"bw_party": ["--registration", "benchmarks/pous/p2_v1/bandwidth-mem69-v2.json"]}
+"""Arguments the host adds to a party's command, never a caller's: the bandwidth session's registration in the pinned
+tree."""
 PARTY_INTS = {"--reads": (1, 1 << 20), "--threads": (1, 256)}
 PARTY_MINUTES = (1, 180)
 """A party session's limit (`--minutes M`, 60 by default): the gate kills the party then, so one no prover joined, or whose ssh
@@ -590,7 +596,8 @@ def party_argv(verb: str, rest: list[str], host: Host) -> list[str]:
                           f"; got {flag!r}")
     if "--threads" in extra and "--streamer" not in extra:
         raise Refused("wipe_party --threads sets the native streamer's threads: give --native too")
-    return _as_auditor_python("-m", module, "--device", str(host.parties / name), "--listen", f"0.0.0.0:{port}", *extra)
+    return _as_auditor_python("-m", module, "--device", str(host.parties / name), "--listen", f"0.0.0.0:{port}",
+                              *PARTY_FIXED.get(verb, []), *extra)
 
 
 def exec_party(argv: list[str], sink: BinaryIO, log: Path, minutes: int) -> int:
@@ -712,7 +719,8 @@ def run_keygen(argv: list[str]) -> str:
 USAGE = ("verbs: run --peer NAME --port P --period P --pin SHA512 (--paced SPEC ... [--pace-pass-ms MS] | --sessions N "
          "[--windows W] [--window-ms MS] [--samples S]) [--minutes M] [--jitter-ms MS] [--quantile Q] [--lifetime L] "
          "[--model ROLE [--engines E] --arena-blocks A] | replay RUN | stop RUN | close NODE_HEX "
-         "| wipe_party [--reads K] [--native [--threads T]] [--minutes M] | challenger_party [--minutes M] (the request line "
+         "| wipe_party [--reads K] [--native [--threads T]] [--minutes M] | challenger_party [--minutes M] "
+         "| bw_party [--minutes M] (the request line "
          "on stdin) "
          "(a lane's own gate key, or vy-admin) | status [RUN] | fetch RUN [--transcripts] | party_key wipe|pous "
          "| party_log wipe|pous [LOG]")
@@ -939,8 +947,8 @@ def replay_run(host: Host, run: str, *, now: Callable[[], datetime],
 
 
 def publish(host: Host, run: str, *, put: Callable[[list[str]], int] | None = None) -> int:
-    """Put the run's directory in the evidence store (`research data put --tree --preserve`, the pinned tree's
-    `research`), its request as the artifact's meta."""
+    """Put the run's directory in the evidence store as a preserved tree, through the pinned tree's store client, its
+    request as the artifact's meta."""
     req = request_of(host, run)
     meta = {k: req.get(k) for k in ("run", "by", "pinned", "peer", "period", "requested_utc")}
     meta["end"] = {k: (read_json(host.runs / run / "end.json") or {}).get(k) for k in ("rc", "ended_utc")}

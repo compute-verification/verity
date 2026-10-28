@@ -1,8 +1,8 @@
 """The two exports a datacenter's network needs: the plan of Linux network namespaces that `mockdc.py` stands up, and
 Shadow's network graph.
 
-They read any `datacenter.Datacenter` (`benchmarks/datacenter`, the Lean physical model's mirror: `Block`s, fabric
-`Device`s and `Link`s, in bits, seconds and bits per second, every capacity a named `Assumption` with its source). The
+They read any `datacenter.Datacenter` (`benchmarks/datacenter`, the Lean physical model's mirror: `Zone`s, fabric
+`DeviceEntry`s and `LinkEntry`s, in bits, seconds and bit/s, every capacity a named `Assumption` with its source). The
 declarations themselves, the measured node and the leaf-spine datacenter of them among them, are
 `datacenter.examples`'s, the node's figures read off its cards (`verity.hardware.node`). Each block is
 one node, standing in for the whole block, each fabric device is another, and the links between two nodes are the
@@ -26,7 +26,7 @@ DATACENTER = str(Path(__file__).resolve().parents[1] / "datacenter")
 if DATACENTER not in sys.path:
     sys.path.insert(0, DATACENTER)
 
-from datacenter import Datacenter, Link  # noqa: E402
+from datacenter import Datacenter, LinkEntry  # noqa: E402
 from datacenter.examples import leaf_spine, two_sites  # noqa: E402
 
 NETNS_PREFIX = "na-"
@@ -39,7 +39,7 @@ def check(dc: Datacenter) -> Datacenter:
     return dc
 
 
-def network(dc: Datacenter) -> tuple[dict[str, str], list[tuple[Link, str, str]]]:
+def network(dc: Datacenter) -> tuple[dict[str, str], list[tuple[LinkEntry, str, str]]]:
     """The network the exports stand up: each node's role (`block`, or a fabric device's kind) and each link between
     two nodes, with the node at each end."""
     def node(x: str) -> str:
@@ -55,7 +55,7 @@ def netns_name(node: str) -> str:
     return NETNS_PREFIX + node.replace(".", "-")
 
 
-def jitter_of(e: Link, jitter: float, wan_jitter: float | None) -> float:
+def jitter_of(e: LinkEntry, jitter: float, wan_jitter: float | None) -> float:
     return wan_jitter if e.kind == "wan" and wan_jitter is not None else jitter
 
 
@@ -149,7 +149,7 @@ def _us(seconds: float) -> str:
     return f"{round(seconds * 1e6, 3):g}us"
 
 
-def _netem(e: Link, jitter: float) -> tuple[str, ...]:
+def _netem(e: LinkEntry, jitter: float) -> tuple[str, ...]:
     out = ["delay", _us(e.delay)] + ([_us(jitter)] if jitter else [])
     if math.isfinite(float(e.capacity)):
         out += ["rate", f"{int(float(e.capacity))}bit"]
@@ -167,7 +167,7 @@ def netns_plan(dc: Datacenter, jitter: float = 0.0, base: str = "10.77.0.0",
     check(dc)
     roles, links = network(dc)
     start = ipaddress.IPv4Address(base)
-    ifaces: dict[str, list[tuple[str, str, str, str, Link, int]]] = {x: [] for x in roles}
+    ifaces: dict[str, list[tuple[str, str, str, str, LinkEntry, int]]] = {x: [] for x in roles}
     for n, (e, a, b) in enumerate(links):
         if "block" in (roles[a], roles[b]) and "certifier" not in (roles[a], roles[b]):
             raise ValueError(f"the link {e.a}-{e.b} leaves block {a if roles[a] == 'block' else b} past its certifier")

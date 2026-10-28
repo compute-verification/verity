@@ -11,6 +11,7 @@ import hashlib
 
 import pytest
 
+from remote_bandwidth_fakes import Clock, Entropy
 from verity.core.protocols.profile import IntegrityProfile, Subset
 from verity.core.protocols.remote_bandwidth import audit, codec, coins, receipts, schedule
 from verity.core.protocols.remote_bandwidth.audit import Params, Session
@@ -23,28 +24,6 @@ CAP = 256
 NODE = b"node-under-test"
 SOURCE = b"the verifier's secret"
 P512 = codec.Codec(codec.P512, 2, False)
-
-
-class Clock:
-    def __init__(self) -> None:
-        self.now = 0
-
-    def __call__(self) -> int:
-        return self.now
-
-
-class Entropy:
-    """SHA-512 in counter mode under `label`, in place of the operating system's generator."""
-
-    def __init__(self, label: bytes) -> None:
-        self.label, self.count = label, 0
-
-    def __call__(self, n: int) -> bytes:
-        out = b""
-        while len(out) < n:
-            out += hashlib.sha512(self.label + self.count.to_bytes(8, "big")).digest()
-            self.count += 1
-        return out[:n]
 
 
 def payload(label: bytes) -> bytes:
@@ -97,7 +76,7 @@ class Run:
         else:
             self.s = registry.session(self.p, reg, None, not_before_ns=0, clock=self.clock, entropy=Entropy(b"coins"))
         self.store = store
-        self.prover = audit.Prover(prover_store or store, None, self.s.commitment, entropy=Entropy(b"receipt salts"))
+        self.prover = audit.Prover(prover_store or store, None, entropy=Entropy(b"receipt salts"))
         self.challenges = [self.s.start()]
         self.t, self.i, self.previous, self.plan, self.step = 0, 0, reg.digest, Plan.whole(reg.blocks), -1
         self.head: bytes | None = None
@@ -421,10 +400,10 @@ def test_a_registered_session_with_filler_planned_is_credited_the_circuit_s_read
 
 
 def test_a_requirement_link_caps_nothing_unless_its_memory_map_unit_makes_the_record_s_appends(honest) -> None:
-    """The red team's KB-2: frees, re-keys and append order chosen after the seed cost no encode, so the advice they
-    give is zero only if W's memory map fixes them, which the memory-map unit proves.  The record carries the chain
-    over the session's appends (public: a hash over hiding roots and their indices), the link's `mapped` is asked
-    about the record, and a link whose unit doesn't make those appends is refused."""
+    """Frees, re-keys and append order chosen after the seed cost no encode, so the advice they give is zero only if
+    W's memory map fixes them, which the memory-map unit proves.  The record carries the chain over the session's
+    appends (public: a hash over hiding roots and their indices), the link's `mapped` is asked about the record, and a
+    link whose unit doesn't make those appends is refused."""
     r, _ = honest
     rec = r.s.record()
     assert r.head is not None and rec.appends == r.head and rec.public()["appends"] == r.head.hex()
@@ -526,7 +505,7 @@ def appended_at_step_one(early: bool) -> Run:
 
 
 def test_mapped_refuses_an_append_sent_before_its_step_s_pass() -> None:
-    """The red team's early append: step 1's append sent before step 1's root binds it into that pass's seed.  The
+    """An early append: step 1's append sent before step 1's root binds it into that pass's seed.  The
     session accepts either order and the chain over the appends is the same, so the chain alone can't tell them
     apart; step 1's head can, and a units link whose map appends at step 1 refuses the early session.  An append the
     map dates at step 0 isn't the honest session's either: the heads pin each append between two passes."""

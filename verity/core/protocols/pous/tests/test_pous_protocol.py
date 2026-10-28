@@ -13,6 +13,7 @@ from pathlib import Path
 
 import pytest
 
+from pous_fakes import Clock
 from verity.core.claims import get as core_claim
 from verity.core.protocols.pous import band, dense, primitives, protocol, schemes
 from verity.core.protocols.pous.codec import Geometry
@@ -57,11 +58,6 @@ def _w(params: Geometry, seed: int) -> bytes:
     return random.Random(seed).randbytes(params.w_bytes)
 
 
-def _ticks(step: int = 1_000):
-    counter = itertools.count(0, step)
-    return lambda: next(counter)
-
-
 def _lifecycle(sch: protocol.Scheme, seed: int = 1):
     w = _w(sch.params, seed)
     com = protocol.commit(sch, w)
@@ -104,11 +100,11 @@ def test_audit_through_the_interface(name):
     key = protocol.challenge_key(b"audit secret", vk)
     with pytest.raises(ValueError, match="no certificate"):
         protocol.TimedAudit(sch, vk, key, k=20, experimental=True)
-    v = protocol.TimedAudit(sch, vk, key, k=20, research=True, experimental=True, clock=_ticks())
+    v = protocol.TimedAudit(sch, vk, key, k=20, research=True, experimental=True, clock=Clock(step=1_000))
     assert v.run(protocol.responder(sch, blocks.__getitem__)).accepted
     profile = v.profile()
     assert not profile.certified and profile.state_bound_bits is None and "no certificate" in profile.statement()
-    wrong = protocol.TimedAudit(sch, vk, key, k=20, research=True, experimental=True, clock=_ticks())
+    wrong = protocol.TimedAudit(sch, vk, key, k=20, research=True, experimental=True, clock=Clock(step=1_000))
     assert not wrong.run(lambda i: bytes(len(blocks[i]))).accepted
     with pytest.raises(ValueError, match="accepted"):
         wrong.profile()
@@ -228,12 +224,12 @@ def test_a_shared_domain_breaks_the_audit(name):
     vk_shared = VerifierKey.from_segments(sch.params, SALT, shared)
     held = shared[0]
     v = protocol.TimedAudit(sch, vk_shared, protocol.challenge_key(b"audit", vk_shared), k=40, research=True,
-                          experimental=True, clock=_ticks())
+                          experimental=True, clock=Clock(step=1_000))
     assert v.run(lambda i: held[i % b]).accepted
     own = protocol.encode(sch, seg * 3, SALT)
     vk = VerifierKey.from_segments(sch.params, SALT, own)
     v = protocol.TimedAudit(sch, vk, protocol.challenge_key(b"audit", vk), k=40, research=True, experimental=True,
-                          clock=_ticks())
+                          clock=Clock(step=1_000))
     assert not v.run(lambda i: own[0][i % b]).accepted
 
 
@@ -444,7 +440,7 @@ def test_a_two_round_audit_gives_its_profile():
     blocks = [bytes(sch.params.block_bytes)] * sch.params.blocks
     vk = VerifierKey.from_segments(sch.params, SALT, [blocks])
     v = protocol.TimedAudit(sch, vk, protocol.challenge_key(b"audit secret", vk), k=97, rtt_allowance_ns=224_499,
-                          clock=_ticks())
+                          clock=Clock(step=1_000))
     assert v.run(protocol.responder(sch, blocks.__getitem__)).accepted
     p = v.profile()
     assert p.certified and p.k == 97 and p.effective_rounds == 2 and p.state_bound_bits == 254_307_274
@@ -470,7 +466,7 @@ def test_certified_profile_of_one_band12_segment():
     rng = random.Random(7)
     blocks = [rng.randbytes(sch.params.block_bytes) for _ in range(sch.params.blocks)]
     vk = VerifierKey.from_segments(sch.params, SALT, [blocks])
-    v = protocol.TimedAudit(sch, vk, protocol.challenge_key(b"audit secret", vk), rtt_allowance_ns=36_800, clock=_ticks())
+    v = protocol.TimedAudit(sch, vk, protocol.challenge_key(b"audit secret", vk), rtt_allowance_ns=36_800, clock=Clock(step=1_000))
     assert v.run(protocol.responder(sch, blocks.__getitem__)).accepted
     p = v.profile()
     assert p.certified and p.gaps == () and p.effective_rounds == 2
@@ -479,7 +475,7 @@ def test_certified_profile_of_one_band12_segment():
     assert "given" not in p.statement()
     j = p.to_json()
     assert j["schema"] == "verity-pous/storage-profile/v1" and j["certified"] and j["certificate"]["k"] == 111
-    late = protocol.TimedAudit(sch, vk, protocol.challenge_key(b"audit secret", vk), clock=_ticks(600_000))
+    late = protocol.TimedAudit(sch, vk, protocol.challenge_key(b"audit secret", vk), clock=Clock(step=600_000))
     assert not late.run(protocol.responder(sch, blocks.__getitem__)).accepted
 
 
@@ -640,8 +636,8 @@ def test_p2_square_is_exact_for_every_accepted_c0(w, c0):
 def test_p2_call_is_half_the_cooperating_floor_root_and_the_cap_the_largest_us_under_it():
     """Spec v1.1 (§12): `ROOT_CALL_NS` is half the cooperating root in ns, rounded down,
     from the sources' own numbers: the red team's floor of 2,060.845 cycles at 5.7 GHz per squaring (`regate.py` at
-    w = 16,448), 16,486 squaring-equivalents per root, and the measured 8-core speedup 2,716.7 / 778.5 (run
-    r20260929-060834-0ec4).  The RTT cap is the largest whole µs with `Δ + cap < ROOT_CALL_NS`, so the certificate
+    w = 16,448), 16,486 squaring-equivalents per root, and the measured 8-core speedup 2,716.7 / 778.5.  The
+    RTT cap is the largest whole µs with `Δ + cap < ROOT_CALL_NS`, so the certificate
     admits the cap and refuses every whole µs past it; what it admits past the cap is under 1 µs."""
     from fractions import Fraction
 

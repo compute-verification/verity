@@ -15,9 +15,9 @@ One connection serves one registration and then `--sessions` sessions over it, e
 3. each session: `Params` with the allowance A = `timing.deadline` at a high percentile of the calibration's passes
    and gaps and of the measured round trip (`--quantile`), `--jitter-ms`, and the lifetime cap L on an appended block
    (`--lifetime`, windows, by default those of `--window-ms` in 30 s, `audit.lifetime_windows`, sent with the
-   session so the prover re-keys in time); the coin commitment sent first, then
-   σ_0, a boundary message every window, each append answered with its coin (`Verifier.append`), each root fed to
-   `Session.receive` stamped with the time its last byte was read (with the releases its message carries first, and
+   session so the prover re-keys in time); σ_0, then a boundary message every window, each coin sent as its value and
+   the root it was opened after (`coins.Released`), each append answered with its coin (`Verifier.append`), each root
+   fed to `Session.receive` stamped with the time its last byte was read (with the releases its message carries first, and
    the withdrawn blocks among them, its plan as a change when it carries one, and the step its pass covers:
    `Verifier.root`), each window closed
    (`Session.close`) as soon as its roots are final and its draws sent; the prover's openings
@@ -26,7 +26,8 @@ One connection serves one registration and then `--sessions` sessions over it, e
    (`ledger.declared`'s: γ at both R and the memory line, snapshot and, paced, time-held and link-charged), and as
    diagnostics the node's HBM it shows held by kind (`memory`: the credited share and the residual, at ε, held at
    every pass and held on average), and with `--host-bytes` the same by kind against the node's HBM and host DRAM
-   (`node_line`).
+   (`node_line`); last, once the prover has answered the session's `end` with `ended`, the coin commitment and every
+   released coin's opening (`coins`, `audit.Session.disclose`), which the prover checks each coin it was sent against.
 
 With `--paced K:T_MS:DRAWS:WINDOWS[:F]` each session is paced (`pace_of`, `audit.Pace(K, T, F)`): a coin every K
 passes, each boundary message at `Session.next_boundary_ns`, WINDOWS stretches of as many groups as T_MS holds at the
@@ -35,7 +36,7 @@ passes, each boundary message at `Session.next_boundary_ns`, WINDOWS stretches o
 root, its roots final then, so its openings coin is asked for after that root first: the challenger's signed log
 fixes each group's end there, and `auditor_line.py` reads the line on the challenger's clock from it. A boundary due by
 then leaves right behind the close, so its coin, after the same root, is asked for in the same round trip, second
-(`coins.Coins.ahead`): at k = 1, every root's two coins are one round trip to the challenger.  At F = 1 a group's
+(`coins.SessionCoins.ahead`): at k = 1, every root's two coins are one round trip to the challenger.  At F = 1 a group's
 boundary is due at its k-th root, so its coin is asked for first, after that root, and the close second, and the
 prover waits a round trip on each coin.
 
@@ -84,7 +85,7 @@ verifiers, rejections included. A message the driver couldn't read is in no even
 keeps DIR in scratch and preserves what it keeps of it (the writing-runs skill): a 60 s window's openings are about
 0.6 GB of JSON.
 
-A session's coins are an epoch of the proof service's one challenger (`coins.Coins`): from a challenger in this process
+A session's coins are an epoch of the proof system's one challenger (`coins.SessionCoins`): from a challenger in this process
 (`--challenger local`, the default), from `benchmarks/live_challenger/serve.py`, started for the session on this
 machine and reached through `sampled_proofs.remote`'s client (`--challenger serve`, `challengers.Serve`), or from the
 auditor host's challenger through its gate, a session reserved in the audit's period and opened at the session's
@@ -1194,8 +1195,7 @@ class Verifier:
         case = None if self.transcript is None else lv.Transcript(
             self.transcript / f"{reg.digest.hex()[:16]}-session-{k}.json", reg, params, not_before_ns)
         session = Pair(self, books, k, case)
-        self.conn.send({"type": "session", "k": k, "windows": W, "lifetime": params.lifetime,
-                        "commitment": session.commitment.to_json(), "pace": K} | one | shared)
+        self.conn.send({"type": "session", "k": k, "windows": W, "lifetime": params.lifetime, "pace": K} | one | shared)
         self.expect("armed")
         while self.clock.now() < not_before_ns:
             item = self.clock.wait(self.inbox, not_before_ns)
@@ -1411,6 +1411,8 @@ class Verifier:
             head, _, _ = self.expect("ended")
             if head["k"] == k:
                 break
+        commitment, opened = session.disclose()
+        self.conn.send({"type": "coins", "k": k, "commitment": commitment.to_json()}, wire.openings_json(opened))
         out = shared | {"k": k, "accepted": accepted, "failure": failure, "allowance_ns": allowance_ns,
                "samples": samples, "delta": self.delta, "window_ns": window_ns, "windows": W, "pace": pace,
                "lifetime": params.lifetime,
@@ -1637,7 +1639,7 @@ def main() -> int:
                     help="a built remote-audit-verifier (default: `lake build` it in its package)")
     ap.add_argument("--transcript", type=Path, metavar="DIR",
                     help="write each session's difftest case to DIR (`lean_verifier.Transcript`: about 0.6 GB a "
-                         "window at 33,273 openings), its path, bytes and sha256 in verifier.json")
+                         f"window at {audit.SAMPLES:,} openings), its path, bytes and sha256 in verifier.json")
     ap.add_argument("--paced", nargs="+", metavar="K:T_MS:DRAWS:WINDOWS[:F]",
                     help="pace each session's passes, one spec a session (`pace_of`; replaces --sessions, --windows, "
                          "--window-ms and --samples): groups of K passes under a live coin each (`audit.Pace`), "

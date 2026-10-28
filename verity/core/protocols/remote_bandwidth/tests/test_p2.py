@@ -12,6 +12,7 @@ from pathlib import Path
 
 import pytest
 
+from remote_bandwidth_fakes import Clock, Entropy
 from test_registrations import hosts
 from verity.core.protocols.pous import setup
 from verity.core.protocols.pous.schemes import p2 as pous_p2
@@ -25,26 +26,6 @@ NODE = b"p2-node-under-test"
 SITE = hosts(NODE.decode())
 SCHEDULE = timing.honest(1000, 2, 300, gap_ns=10, down_ns=20, up_ns=30)
 A = 20 + 30 + 300 + 10
-
-
-class Clock:
-    def __init__(self) -> None:
-        self.now = 0
-
-    def __call__(self) -> int:
-        return self.now
-
-
-class Entropy:
-    def __init__(self, label: bytes) -> None:
-        self.label, self.count = label, 0
-
-    def __call__(self, n: int) -> bytes:
-        out = b""
-        while len(out) < n:
-            out += hashlib.sha512(self.label + self.count.to_bytes(8, "big")).digest()
-            self.count += 1
-        return out[:n]
 
 
 @pytest.fixture(scope="module")
@@ -83,7 +64,7 @@ def drive(store: p2.Store, p: audit.Params, run=None):
     clock = Clock()
     s = p2.Session(p, store.registration, coins.local(store.registration.digest, 0, p.windows, Entropy(b"coins")),
                    not_before_ns=0, clock=clock)
-    prover = p2.Prover(store, s.commitment, entropy=Entropy(b"receipt salts"))
+    prover = p2.Prover(store, entropy=Entropy(b"receipt salts"))
     events = sorted([(0, 0, -1)] + [(b, 0, t) for t, b in enumerate(SCHEDULE.boundaries)]
                     + [(a, 1, (t, i)) for t, i, a in SCHEDULE.arrivals])
     challenges, passes, previous = {}, {}, store.registration.digest

@@ -7,9 +7,10 @@ The premises of `Accounting.Guarantees.Remote.Held` and its time-held forms, eac
 (`Accounting.Remote.Held.Trace`) taken as a hypothesis:
 
 * `Identity` (statement C's links clause): no block comes back into the node over its boundary links. The link-charged
-  forms take `Links` instead, the links' ceiling. Statement C in full, no device outside the node computing on a
-  registered block or a receipt, is `NoOutsideCompute` (`Definitions.Accounting.Assumptions.RemoteOutside`), with which the
-  memory line of record splits `SketchBound`.
+  forms take `Links` instead, the links' ceiling. Statement C in full, no device outside the node computing for it, is
+  no longer assumed of the prover: the memory line of record reads it from the network certifiers' record, an event
+  charged at δ_net (`Covered`, `IngressCounted` in `Definitions.Accounting.Assumptions.RemoteOutside`), with which it
+  splits `SketchBound`.
 * `SquaringCeiling s E B`: the node's compute re-encodes at most `s / E` blocks a tick and a burst of `B`: `s` squarings
   a tick at the codec's width over every GPU and the host (`Accounting.Assumptions.SquaringCeiling`: the GPU cards'
   ceilings over the Site's node h, each with its share of the host's, `RemoteAudit.Line.ofSite`), a block costing at
@@ -40,9 +41,8 @@ completing.
   bound the wrong ones (`audit.pooled`). It is derived from the deployed opening draw (`Accounting.Remote.Draw`) for
   every `W` at least the record's pooled bound (`Accounting.Guarantees.Remote.LiveCoinsDrawn`), under the draw's own
   premises (`Accounting.Remote.Draw.Assumptions`), at `δ` plus the sampler's rejections plus the coin function's
-  advantage plus the coin commitment's hiding terms (`Accounting.Remote.Draw.Committed.hide`, hm96's) plus the
-  receipts' binding term (`Accounting.Remote.Draw.Receipts.binding`: an opened receipt moved off the row its root
-  holds, a SHA-512 collision between its held and presented openings).
+  advantage plus the receipts' binding term (`Accounting.Remote.Draw.Receipts.binding`: an opened receipt moved off
+  the row its root holds, a SHA-512 collision between its held and presented openings).
 -/
 
 namespace Accounting.Remote.Held.Assumptions

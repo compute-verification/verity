@@ -226,11 +226,18 @@ def event_of(v: Any) -> tuple:
 # --- the session ----------------------------------------------------------------------------------------------------
 
 class Clock:
-    def __init__(self) -> None:
-        self.now = 0
+    """The suite's one injected clock: nanoseconds from `now`, each reading `step` after the last (at `step = 0` time moves
+    only when a test sets `now`); waiting until `t` (`period.run`'s `sleep_until`) moves it there."""
+
+    def __init__(self, now: int = 0, step: int = 0) -> None:
+        self.now, self.step = now, step
 
     def __call__(self) -> int:
+        self.now += self.step
         return self.now
+
+    def sleep_until(self, _clock, t: int) -> None:
+        self.now = max(self.now, t)
 
 
 class Replay:
@@ -253,8 +260,9 @@ class Replay:
 
 
 def replayed(reg: audit.Registration, k: int, windows: int, committed: list[bytes], appends: list[bytes],
-             per_coin: int = 1) -> coins.Coins:
-    return coins.Coins(Replay(k, windows, committed, appends, per_coin), reg.digest, k, windows, per_coin=per_coin)
+             per_coin: int = 1) -> coins.SessionCoins:
+    return coins.SessionCoins(Replay(k, windows, committed, appends, per_coin), reg.digest, k, windows,
+                              per_coin=per_coin)
 
 
 def verdict_json(v: audit.Verdict) -> dict:
@@ -470,7 +478,8 @@ def registry(v: Any) -> dict:
 # --- recorded sessions ----------------------------------------------------------------------------------------------
 
 class Entropy:
-    """SHA-512 in counter mode under `label`, in place of the operating system's generator."""
+    """The suite's one entropy source: SHA-512 in counter mode under `label`, in place of the operating system's
+    generator."""
 
     def __init__(self, label: bytes) -> None:
         self.label, self.count = label, 0
@@ -553,8 +562,7 @@ class Run:
         self.not_before_ns = not_before_ns
         self.coins = coins.local(reg.digest, 0, windows, Entropy(b"coins"), per_coin=groups_per_coin)
         self.s = Session(self.params, reg, None, self.coins, not_before_ns=not_before_ns, clock=self.clock)
-        self.prover = audit.Prover(cheat(self.store) if cheat else self.store, None, self.s.commitment,
-                                   entropy=Entropy(b"receipt salts"))
+        self.prover = audit.Prover(cheat(self.store) if cheat else self.store, None, entropy=Entropy(b"receipt salts"))
         self.events: list[dict] = []
         self.append_coins: list[bytes] = []
         self.challenges: dict[int, coins.LiveOpening] = {}
