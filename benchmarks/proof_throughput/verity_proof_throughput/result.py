@@ -1,7 +1,7 @@
 """A point's ``result.json``: the campaign contract's (``verity_numerical.bench.contract``), used as it is.
 
 One point is sessions of one workload that each prove the B coordinates a loopback ``flock-circuit serve`` draws from the
-workload's population by the stratified law (``instances``), proved by C-Flock's native prover with live coins, warm
+workload's population by the stratified law (``instances``), proved by Flock's native prover with live coins, warm
 ``warm`` times and timed ``runs`` times, then each timed session verified by the compiled Lean verifier (``flock-verify
 verify --stratified B``, its own law). The VU is one coordinate (K MACs, 2K FLOP), ``vu.count`` = B. The fingerprint's
 ``instances`` is null (the contract's names the B ids a statement proves, which a sample doesn't fix); ``population`` names the

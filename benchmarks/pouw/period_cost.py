@@ -21,7 +21,7 @@ live). Its 485.5 s serve is 439.1 s of receipts (284 µs a unit, launch-bound to
 empty steps and about 45 s of eager int8 serving; the receipt trees add 12.6 s. The period counts 439.1 s a window,
 and 32 times that at 4×8 units unless the receipts are fused into the kernel.
 
-**A window's certification** is its K_d sampled proof blocks, proved by C-Flock (`--zk`, live coins) and checked by the Lean
+**A window's certification** is its K_d sampled proof blocks, proved by Flock (`--zk`, live coins) and checked by the Lean
 verifier (`flock-verify`). A sampled proof block costs its outputs × K in lanes of the measured H1 tile (`PouwH1Tile_v1`, 4×8
 outputs at K = 4,096: 46.7 M ANDs, `k_log` 27, the most `Stmt.InRange` admits): 32 at K = 4,096, 39.6 at the served mean
 K. down's units need a narrower lane to fit a block (a 4×8 tile at K = 14,336 is 164 M ANDs). A statement holds at most

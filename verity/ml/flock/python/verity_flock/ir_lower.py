@@ -1,4 +1,4 @@
-"""C-Flock's generic IR lowering: an IR Definition becomes a Flock binary circuit by composing :mod:`fp` pieces.
+"""Flock's generic IR lowering: an IR Definition becomes a Flock binary circuit by composing :mod:`fp` pieces.
 
 :func:`lower` walks the Definition's gates in canonical order, as ``verity.ml.circuits.evaluate`` does, and maps each primitive to
 its piece in :data:`PIECES` (a primitive without one is an error naming it). Constant gates, and gates whose operands are
@@ -172,7 +172,7 @@ PIECES = _Pieces(PIECES)
 
 
 class NoPiece(NotImplementedError):
-    """An IR primitive that C-Flock's lowering has no piece for."""
+    """An IR primitive that Flock's lowering has no piece for."""
 
 
 # --- the walk ----------------------------------------------------------------------------------------------------------

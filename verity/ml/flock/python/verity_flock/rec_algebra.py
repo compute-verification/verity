@@ -1,4 +1,4 @@
-"""V*'s algebra: the inner verifier's algebraic checks on one rep of a C-Flock session (`verifier/PROTOCOL.md` §9.2, §10, §12,
+"""V*'s algebra: the inner verifier's algebraic checks on one rep of a Flock session (`verifier/PROTOCOL.md` §9.2, §10, §12,
 §13), at the session's coins, as residuals over F that are all zero iff the checks hold.
 
 With the coins values, every check is linear in the rep's messages with coefficients that are functions of the coins and the

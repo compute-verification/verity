@@ -1,6 +1,6 @@
 # proof_throughput: the proof system's throughput on GLM-5.3's dot products
 
-How many verification units (VU) per second C-Flock proves and the Lean verifier accepts, as a function of the batch size B,
+How many verification units (VU) per second Flock proves and the Lean verifier accepts, as a function of the batch size B,
 for the dot products GLM-5.3 serves. The report is the throughput frontier over B: one row per B with VU/s, the overhead
 against the H200's native peak, the dominant prover phase, peak memory, proof bytes and the Lean verifier's seconds.
 
@@ -111,7 +111,7 @@ staging them through `benchmarks/served_units/stage.py` is the next workload's w
 (`verity_proof_throughput/instances.py`): `n_max` independent instances of the workload's VU Definition (core's
 `population_program` at v0, whose digest every lane is derived from, `verity_proof_throughput/population.py`), each
 instance one unit of `Q_template_instance` v0, so the population is one stratum and the stratified law samples B of its
-units uniformly. The lanes are those C-Flock's class sweep
+units uniformly. The lanes are those Flock's class sweep
 gives that unit class at seed 0. The manifest pins every lane's digest and the population's; the prover run recomputes
 them before proving, and the result names the manifest by its SHA-256. The words are uniform 16-bit encodings: at K = 6144
 every coordinate meets a NaN, so every output is the same NaN word (`output_words` in the manifest). A Boolean circuit's

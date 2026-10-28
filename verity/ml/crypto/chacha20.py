@@ -1,5 +1,5 @@
 """ChaCha20's keystream in numpy, many blocks at once: Bernstein's block function (20 rounds) with a 64-bit block counter in
-words 12 and 13 and a 64-bit nonce in words 14 and 15, the layout C-Flock's ``chacha20_block``
+words 12 and 13 and a 64-bit nonce in words 14 and 15, the layout Flock's ``chacha20_block``
 (``verity/ml/flock/cuda/sha512.cuh``) draws hm96 leaf salts with.  RFC 8439's 32-bit counter and 96-bit nonce are the same
 four words read another way.  The plain reference is ``verity.core.protocols.pouw.audit.chacha20_block``, whose tests hold
 this to it, and ``audit.hm96_salt`` is `hm96_salts`' (row j's salt, blocks 3j .. 3j + 2).

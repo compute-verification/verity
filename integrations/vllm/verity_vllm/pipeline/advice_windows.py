@@ -36,7 +36,7 @@ floor all its units, so its stratum is sampled whole, beside the rest's strata a
 (`draw.work_k`) is the All stratum, with no new verifier form; both sides derive the table, the registration's law is expanded
 under it (R1), and the Stream registers with it.  A partition that leaves a transfer-gate template out, or draws it by another law,
 is refused by name.  Until COMPILER lists the I/O shell's units, the stand-in's list is given (``--transfer-gate``), a template
-C-Flock proves today: the toy Commit's ``RoPEHead_v1{D=64}`` (its egress render, ``TokenSelect_v1``, has no C-Flock lowering).
+Flock proves today: the toy Commit's ``RoPEHead_v1{D=64}`` (its egress render, ``TokenSelect_v1``, has no Flock lowering).
 
 The advice is I1's (``codec``, default `I1`): `of_advice` reads its bytes, which must be its canonical encoding, commits them and
 binds the root and the advice's length, ``total_bits``.  `advice_of_workload` is the stand-in's advice, the prover's, for a

@@ -241,7 +241,7 @@ def step_s8_bits(C, model: IntegerMma, acc, a, b):
     the sum is clamped at D: it leaves s32 exactly when its bits 31 and 32 differ, and bit 32 is then its sign.
 
     The result is committed (``C.commit``, a row of a lowering and no gate): uncommitted, each accumulator bit is an XOR form
-    over every earlier step's, and a K/k-step chain's lowering grows as K^2 (C-Flock's unit at K = 256: 20.9M nonzeros, against
+    over every earlier step's, and a K/k-step chain's lowering grows as K^2 (Flock's unit at K = 256: 20.9M nonzeros, against
     2.0M committed)."""
     if (model.dtype, model.b_dtype) != ("s8", "s8"):
         raise InvalidArtifact(f"{model.name}: step_s8_bits takes s8 x s8 models")

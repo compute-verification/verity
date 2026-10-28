@@ -1,7 +1,7 @@
 """transfer-zk: a server block's proof units read against the network certifier's transfer rows (`certifier.transfer_rows`):
 n units of ``ScaledMmS8Coordinate_v1{K}`` on one uplink, every input row a registered read of a value the network
 certifier committed and signed as it crossed the server's boundary and every output row a row of the response it signed.
-The verifier pins each root from its certificate alone (`certifier.blocks`), C-Flock `prove --zk` proves the statement
+The verifier pins each root from its certificate alone (`certifier.blocks`), Flock `prove --zk` proves the statement
 behind the Lean firewall, and the Lean verifier's registered reads hold it (`flock-verify verify --zk --registered`),
 through the one-stage audit as warden_zk.py's.
 

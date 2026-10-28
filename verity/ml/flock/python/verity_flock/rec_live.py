@@ -1,5 +1,5 @@
 """``rec/inner-transcript/v1``: the inner session of a recursive session (hiding model architectures), run by the unmodified
-C-Flock prover against a verifier that never sees the hidden statement or the prover's messages.
+Flock prover against a verifier that never sees the hidden statement or the prover's messages.
 
     python -m verity_flock.rec_live --listen 127.0.0.1:PORT --out DIR --schedule FILE [--draw FILE] [--sessions 1]
     python -m verity_flock.rec_live --schedule-for STATEMENT         a statement's schedule (flock-circuit statement's output)

@@ -3,7 +3,7 @@ verifier of record itself (`one_stage.proofs.verify`) on the circuit file the pe
 with the partition object and the ``--registered`` file it builds from the committed descriptor and the window's entries,
 and credits nothing from a verdict the evidence carries.
 
-The verifier here is a stand-in `flock-verify` (`FAKE`), so the test runs without a C-Flock proof of an H1 window: it
+The verifier here is a stand-in `flock-verify` (`FAKE`), so the test runs without a Flock proof of an H1 window: it
 answers as the Lean verifier does, one ``VERDICT`` line a session, and accepts a session only when its proof is the
 SHA-512 of every file it was handed (the circuit file, the public file, the program, the partition object and the
 ``--registered`` file, those two as the JSON they hold, whose key order the verifier doesn't read) and the units its

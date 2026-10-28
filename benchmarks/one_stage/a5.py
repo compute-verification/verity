@@ -55,7 +55,7 @@ against, is SHA-512 too (`weights_sha512`: rows-sha512's registration, `step_row
   each member's circuit itself from an input set of its template under `--template-sets` (the lowering is all it reads; the values
   are never used), or, for a member of bit rows in chunks (`serving_rows.chunked`: a MoE pair GEMM's coordinate,
   `COORDS`, a MoeSum or all-reduce column block, `COLS`, a w13 coordinate's K-chunk, `KCHUNKS`, a sparse-MLA row's split part or
-  combine, `SPLITS`, or a row template the partition's `chunk_cap` names), by C-Flock's `UnitStager` on the rows the window lays out
+  combine, `SPLITS`, or a row template the partition's `chunk_cap` names), by Flock's `UnitStager` on the rows the window lays out
   (`compose_circuit.py --template`, once per template, every chunk on that circuit, read and hashed once,
   `flock_inputs.flock_circuit`), bound to its partition and program. It holds every public file to that circuit, its unit indices and classes, and
   the registered roots and served domains. Then R1-R7 run over the registration with the leaf layer over the public bodies it holds
@@ -87,13 +87,13 @@ against, is SHA-512 too (`weights_sha512`: rows-sha512's registration, `step_row
   table, verifier PROTOCOL §16.15). Each prover runs behind the ZK server's send check (`--firewall`, Lean's `flock-firewall`: `FC_FIREWALL=1`, live
   PROTOCOL.md §10.4), its `Hello` set up on the statement's partition and program. Lean `verify --zk` holds each session with
   `--partition` and `--program` (units derived).
-* **Plain sessions** (``--plain``; `--zk` is the default): C-Flock's unmasked protocol, which Lean's soundness covers at one
+* **Plain sessions** (``--plain``; `--zk` is the default): Flock's unmasked protocol, which Lean's soundness covers at one
   table under a stratified sample, hidden outputs included (`SoundExecH`), until proofs' multi-table coverage (`PLAIN_SCOPE`).
   So a plain audit takes only a stream's sample (``--challenger`` or ``--coins verifier``) by a ``stratified:K`` law, over a
   window of one member with no registered reads or shared rows, and refuses any other before the sample (`plain_refusal`).
   The member's one session is served the stream's sample itself and runs on per-round OS coins (``FC_COINS=os``), and Lean
   `verify --coins os --stratified K` holds it to the stratified law it derives from its own `--program` and `--partition`.
-  C-Flock's ZK server checks only a `--zk` statement's sends, so a plain prover isn't behind it (the summary's ``plain``).
+  Flock's ZK server checks only a `--zk` statement's sends, so a plain prover isn't behind it (the summary's ``plain``).
 * **The sample from the auditor's challenger** (`--challenger local|gate:USER@HOST`, a TP Commit; `a5_coins`), on the proof
   system's path of record: the step's one challenger session, opened on the TP run root once every rank has passed its
   checks before the sample and planned the coins its sample reads (`a5_coins.need`), and only under a reserve that covers

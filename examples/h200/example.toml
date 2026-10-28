@@ -2,7 +2,7 @@
 # nothing else. `verity example h200 --out OUT` runs its step driver, run.py (on the CPU at small shapes, or the H200 at the
 # frozen shape), and writes a replay bundle and a block record; phases.sh runs the drawn-block proving, one phase a run.
 # Its evidence is sampled proofs': the step committed on the H200, 8 proof blocks sampled by one live coin, each proved by
-# C-Flock --zk and accepted by the Lean verifier. The other subprotocols in e2e_h200 (PoUS, the bandwidth audit, network
+# Flock --zk and accepted by the Lean verifier. The other subprotocols in e2e_h200 (PoUS, the bandwidth audit, network
 # certification and the memory wipe) are a skeleton on fixture coins, not runs, and aren't claimed.
 # Placed where the drawn-block proving's runs ran: the step committed and replayed on the H200 node, the coin from the
 # challenger host, and the sampled proof blocks proved and the Lean verifier run together on a CPU node. Being placed needs the
@@ -14,12 +14,12 @@ workload = "none"              # the frozen MQA shape on seeded INT8 weights, no
 level = 1
 
 [placement]
-prover = "gpu-node"            # the H200 node: the step's commit and the drawn slots' replay; the C-Flock prover on a CPU node
+prover = "gpu-node"            # the H200 node: the step's commit and the drawn slots' replay; the Flock prover on a CPU node
 verifier = "cpu-node"          # the Lean verifier, on the CPU node beside the prover
 challenger = "auditor-host"    # the challenger host, one live coin through the gate
 
 [evidence]
-# The drawn-block proving: 8 live-drawn proof blocks, each proved by C-Flock --zk behind the ZK server and accepted by the
+# The drawn-block proving: 8 live-drawn proof blocks, each proved by Flock --zk behind the ZK server and accepted by the
 # Lean verifier, one flipped bit refused (at an 8-block draw, at most 43.77% of the step's proof blocks wrong at δ = 1%);
 # the H200 report (m3.template); the sampled proof blocks' tree it proved, whose manifest names every phase's run; the step
 # registration, recorded before the coin; then the phases' runs: commit, the weights registration, coin, weights open,

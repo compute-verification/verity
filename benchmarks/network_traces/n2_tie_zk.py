@@ -1,6 +1,6 @@
 """The ingress tie in zero knowledge: each ingress link-window's T bucket rows of the warden's cells, each proved as
 IoTieRequest (`tie_service.IngressTie`, its unit `NetworkIngressTieBucket_v1{B=512,L=2,R=2}`), registered on the link's
-own stream, proved by C-Flock `prove --zk` behind the Lean ZK server with each unit's witness row read off the warden's
+own stream, proved by Flock `prove --zk` behind the Lean ZK server with each unit's witness row read off the warden's
 root (`warden_rows.bucket_port`), delivered, decided by the tie's verifier of record on its own lanes from the advice
 and the warden's release (`IngressTie.outcome(advice=…, releases=…, head=…)`), and `advised.IoTieVerdict` on the link
 and the stream's registrations built from the stream's outcomes of record alone (`IngressTie.tie`, read through

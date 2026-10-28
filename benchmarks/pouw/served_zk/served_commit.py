@@ -26,7 +26,7 @@ judged through the proof system (`sampled_proofs.service`, P1: a `Stream`'s `reg
   tile is a tile of the same template on zero rows (both sides), committed like any row, so its proof has the shape of
   every other tile's.  Unit t is `pouw.window.tile_at` of the advice: the population is
   `population_program(Pc8TileSide{K,1,1,sm120}, N)` under `Q_template_instance`.
-- **The commitment** is C-Flock's: each row's b ‖ c is hm96-sha512 over its row digest under a fresh 192-byte salt.  Each
+- **The commitment** is Flock's: each row's b ‖ c is hm96-sha512 over its row digest under a fresh 192-byte salt.  Each
   side of each entry (a call, or the filler) is one frame-v3-sha512 tree of its kept rows only, in order, padded to 2^D
   leaves under the window's side domain (`pouw.window.side_domain` of the window root's domain, one-stage's served domain
   of the window's program, partition and context: one per window and side).  Each entry is one fixed-width entry row
@@ -170,7 +170,7 @@ CERTIFIED_DEADLINE = ("a certified window's time bound is the network certifier'
                       "(`Proxy(reveal_deadline=…)`), so its parameters carry no registration_deadline and it replays none")
 #: a certified window's stream as the PoUW salt binds it (`stream_id`)
 STREAM_ID = "verity/pouw/served-zk/stream/v3"
-#: the frame's owner, as C-Flock's statement domains have it (`verity_flock.ir_frame.OWNER`)
+#: the frame's owner, as Flock's statement domains have it (`verity_flock.ir_frame.OWNER`)
 OWNER = -1
 SALT_BYTES = 192
 K = 4096

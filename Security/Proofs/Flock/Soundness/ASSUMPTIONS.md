@@ -450,7 +450,7 @@ before the session's first coin, not bounds state by state.
   (Table 1 would need `collapsing/sha-512`). No concrete post-quantum bound is known at these parameters, and none is
   claimed.
 - **Table 1** cites Flock's soundness under the `live-verifier` model and the collision resistance of each row's hashes
-  (`cr/sha-512` in the C-Flock SHA-512 row); A1's proof took `rs-proximity-johnson` off. An audit's integrity profile
+  (`cr/sha-512` in the Flock SHA-512 row); A1's proof took `rs-proximity-johnson` off. An audit's integrity profile
   would add `SHA512CRExpected` as `ecr/sha-512`, a `verity.core.claims` id that no row cites yet.
 
 ## What is pinned

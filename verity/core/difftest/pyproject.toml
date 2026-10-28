@@ -17,7 +17,7 @@ testpaths = ["tests"]
 markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 
 [tool.verity.tests]
-# Test-only: `lake` builds lean/ (in this directory) and, through its path require, these files of C-Flock's verifier
+# Test-only: `lake` builds lean/ (in this directory) and, through its path require, these files of Flock's verifier
 # (`Flock.Canon` and what it imports, and the package's configuration); the protocol-mode tests build the core protocol
 # interface's example (`core-protocol-example`), which reads the same files and the interface package.
 inputs = ["verity/core/protocols/interface", "verity/core/service/flock/lakefile.toml", "verity/core/service/flock/lake-manifest.json",

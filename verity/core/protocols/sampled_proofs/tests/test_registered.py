@@ -115,7 +115,7 @@ def test_a_16_bit_value_keeps_the_bytes_it_had_before_word_bits():
 
 
 def test_a_32_bit_value_is_its_u16_words_low_first_under_its_own_domain():
-    """A 32-bit leaf is two u16 words, low first (the statement's layout of a port row, and C-Flock's `values` row): its
+    """A 32-bit leaf is two u16 words, low first (the statement's layout of a port row, and Flock's `values` row): its
     domain names `word_bits`, so a 32-bit registration is never a 16-bit one's, and the entry carries it."""
     prog = P.program_digest(_program(w=32))
     assert G.row_words([0x3727C5AC, 0x3E38AA3B], 32) == [0xC5AC, 0x3727, 0xAA3B, 0x3E38, *[0] * 60]

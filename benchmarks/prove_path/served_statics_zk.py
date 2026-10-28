@@ -1,6 +1,6 @@
 """The served rows held to their Programs' statics (`served_statics.ServedStaticsTie_v1`) on a sealed served window's real
 rows, proved in zero knowledge: the window's P / G blocks, each a unit whose committed served rows are its leaf of the
-served-rows registration, read through the Lean verifier's registered reads, by C-Flock `prove --zk` behind the Lean
+served-rows registration, read through the Lean verifier's registered reads, by Flock `prove --zk` behind the Lean
 ZK server and held by Lean `verify --zk --registered`, through N2-ZK's audit path (`served_tie_zk`'s stager and scan); and
 the cost.
 
@@ -8,8 +8,8 @@ the cost.
     python benchmarks/prove_path/served_statics_zk.py prove --serve-run DIR --window K --g G [--per N]
       --bin flock-circuit --lean flock-verify --out DIR [--dry]
 
-* **cost**: a unit's ANDs (`served_statics.size`) and C-Flock block (``zk_block``) at the compile slice's class, the
-  sealed run 9c10's and the served class, at every G dividing P, and the largest G whose unit fits C-Flock's 2^K_MAX. The
+* **cost**: a unit's ANDs (`served_statics.size`) and Flock block (``zk_block``) at the compile slice's class, the
+  sealed run 9c10's and the served class, at every G dividing P, and the largest G whose unit fits Flock's 2^K_MAX. The
   unit hashes its two rows, the block's statics and its served rows, and no more.
 * **prove**: the window and its steps opened and bound natively (`served_tie_window.bindings`), and the Programs' statics
   checked against each step's committed positions (``statics_held``). The Programs are a stand-in: the honest rows' (start,
@@ -62,7 +62,7 @@ log = STZ.log
 
 
 def zk_block(rows: list[tuple[str, int]], ands: int) -> dict:
-    """A unit's C-Flock block as `circuit.compose` places it for one VU (`served_tie_zk.zk_block`'s, on these rows)."""
+    """A unit's Flock block as `circuit.compose` places it for one VU (`served_tie_zk.zk_block`'s, on these rows)."""
     from verity_flock import circuit as FC
 
     ports = [FC.Port(r, -(-b // 16), b) for r, b in rows]
@@ -420,7 +420,7 @@ def prove(a) -> int:
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(prog="served_statics_zk.py", description=__doc__.splitlines()[0])
     sub = ap.add_subparsers(dest="command", required=True)
-    c = sub.add_parser("cost", help="a unit's ANDs and C-Flock block at the slice's, 9c10's and the served class, by G")
+    c = sub.add_parser("cost", help="a unit's ANDs and Flock block at the slice's, 9c10's and the served class, by G")
     c.add_argument("--out")
     p = sub.add_parser("prove", help="a sealed window's blocks proved --zk and held by Lean with its registered reads")
     p.add_argument("--serve-run", type=Path, required=True)

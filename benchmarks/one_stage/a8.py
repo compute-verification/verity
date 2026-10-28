@@ -6,7 +6,7 @@ deploys them), so that the verifier receives no chunk bytes; and the prover's co
       [--samples 16] [--points 1,4,16] [--arms nofw,fw] [--cold 1] [--gpu [--lease CMD]] [--no-audit]
 
 * **Store and window.** ``--blocks`` N seeded payloads (each 64-byte word's top byte zero, p512's words) registered under
-  p512/k2 (`a7.P512`: the opening's proof block at the default p1024/k3/masked is past C-Flock's K_MAX), sketch-sha512
+  p512/k2 (`a7.P512`: the opening's proof block at the default p1024/k3/masked is past Flock's K_MAX), sketch-sha512
   receipts. One window of N / ``--plan`` passes, pass i a stripe of P chunks from P i, so the window's U is N receipts, of
   which its openings coin selects ``--samples`` (`audit.Session.close`). Every salt of the prover's (the payloads', the
   receipt leaves', every row's) comes from its own secret, drawn per run from the OS.

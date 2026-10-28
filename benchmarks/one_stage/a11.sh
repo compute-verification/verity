@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # One-stage audit, run A11, on a CPU machine: GLM-5.3 TP8 B1's served values through the one-stage audit (a11.py), or its census
-# and lowering probe (a11_kinds.py), on hidden_zk's builds (its job.sh, sourced: C-Flock's flock-circuit and the Lean
+# and lowering probe (a11_kinds.py), on hidden_zk's builds (its job.sh, sourced: Flock's flock-circuit and the Lean
 # flock-verify, cached under $A11_CACHE). From a clone, since the verifier of record builds the sampled-proofs Lean in the tree:
 #   research run --on auto --cpus 32 --mem-gb 256 --max-min 240 --source . --cwd clone --send FILE ... \
 #     --env A11_MODE=kinds|audit --env A11_MEM_GB=256 -- bash benchmarks/one_stage/a11.sh

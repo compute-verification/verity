@@ -7,7 +7,7 @@ The demo has the GPU run at full honest utilization on useful matmuls, not fille
 can. The workload is an 8B model's linear layers at M = 16,384 in s8, back to back at full batch, over seeded weights
 registered before the coin. PoUW credits the work through Dither's no-fold receipt, and a live session from the
 challenger host supplies each verification phase's coins. The verifier opens the sampled proof blocks, and once their Definition exists
-it decides them in C-Flock `--zk` and Lean. The figure the run reports is ε, the share of the GPU's capacity that isn't
+it decides them in Flock `--zk` and Lean. The figure the run reports is ε, the share of the GPU's capacity that isn't
 certified, with its terms: model slack, idle pipes, ε_skip at δ = 1%, and exchanged bits. Beside ε it reports γ and a
 refused negative.
 

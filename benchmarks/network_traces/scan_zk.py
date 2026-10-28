@@ -2,7 +2,7 @@
 (`ingress_scan.IngressScanBucket`; bucket 0's `IngressScanFirst`, from the empty state) reads the warden's ingress row
 t, the scan's state S_{t−1} and the Programs' row t, and computes S_t and its egress view; egress bucket t
 (`egress.EgressBucket`) reads that view and computes the warden's egress row t. A group of link-windows is one
-registration, every row of every unit, input or output, a registered read, proved by C-Flock `prove --zk` behind the
+registration, every row of every unit, input or output, a registered read, proved by Flock `prove --zk` behind the
 Lean ZK server and held by Lean `verify --zk --registered`. Standalone: in no Spec, except the honest round on the
 challenger's coins (``--challenger``), a `service.Stream`'s.
 
@@ -1046,7 +1046,7 @@ def charge_terms(M, result: dict, members: list[dict], delta: float) -> dict | N
 
 
 def per_unit(members: list[dict], statement: dict) -> dict[str, dict]:
-    """Each member's session per sampled proof block (prove_path's `per_unit`): C-Flock's ``prove_total_s``, the session's wall
+    """Each member's session per sampled proof block (prove_path's `per_unit`): Flock's ``prove_total_s``, the session's wall
     and Lean's verify, over the units the session proved; and a unit's ANDs and m."""
     out = {}
     for m in members:

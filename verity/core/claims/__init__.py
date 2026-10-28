@@ -409,7 +409,7 @@ ENTRIES: dict[str, Entry] = {e.id: e for e in (
           "with probability at most δ_fork), read at δ_bind = √δ_fork through BindingOfFork; and each proof's "
           "soundness at "
           "δ_ZK (ProofSoundAt: a proof is accepted with an opening that fails its relation with probability at most "
-          "δ_ZK), which C-Flock's EndToEndHiddenDrawn gives only for a cheater whose hash calls over the window are "
+          "δ_ZK), which Flock's EndToEndHiddenDrawn gives only for a cheater whose hash calls over the window are "
           "capped, and only against its committed transcript: that the relation's rows are the leaves' committed rows "
           "is not stated there", "TS proofs sound", "standard"),
     Entry("accounting-ts-proofs-pin", "assumption",
@@ -433,17 +433,17 @@ ENTRIES: dict[str, Entry] = {e.id: e for e in (
           "retry or redraw); the draw is revealed only after the session's registration and prover are fixed; the draw "
           "is no coin the setting reads (not σ_w, nothing derived from σ_w or from a prover's salt, not another "
           "session's draw); the path carries the draw (a later round's coin, or a draw beside σ_w in each round's "
-          "coin, which the last round needs); and the session's audit coins (C-Flock's --zk coin tree) come from the "
+          "coin, which the last round needs); and the session's audit coins (Flock's --zk coin tree) come from the "
           "auditor's verifier, on a machine the prover doesn't control, fresh for each session (trusted-host). "
           "Under full checking the draw is every unit, but the law still holds the audit coins fresh and uniform given "
           "the prover. served_zk's per-tile sessions today draw their coin tree from a serve --zk --operator loopback "
           "beside the prover, which doesn't meet the fifth fact", "TS window law", "standard"),
     Entry("accounting-ts-served-checks", "assumption",
-          "A proof's relation (its served Definition's check) holds at its C-Flock session's extracted value layer "
+          "A proof's relation (its served Definition's check) holds at its Flock session's extracted value layer "
           "wherever flock-verify accepts the session and every drawn unit is right at its own owned reads; under a "
           "sampled draw, only for a relation that reads the drawn units alone", "TS served checks", "conjectured"),
     Entry("accounting-ts-served-roots-linked", "assumption",
-          "C-Flock's rows link covers the served roots: outside δ_s, where flock-verify accepts a session and every "
+          "Flock's rows link covers the served roots: outside δ_s, where flock-verify accepts a session and every "
           "drawn unit is right at its owned reads, the session's extracted value layer is the served layer's opening "
           "(the round's served leaves, committed before σ_w)", "TS served roots linked", "conjectured"),
     Entry("accounting-ts-leaf-checks", "assumption",
@@ -454,9 +454,9 @@ ENTRIES: dict[str, Entry] = {e.id: e for e in (
           "is registered and opens at its registered root is proved from flock-verify's complete check, not assumed",
           "TS leaf checks", "conjectured"),
     Entry("accounting-ts-ok-realizes", "assumption",
-          "The checked unit's C-Flock circuit is its declared unit's: on any wire assignment the key program's "
+          "The checked unit's Flock circuit is its declared unit's: on any wire assignment the key program's "
           "evaluation agrees with at a unit, whose ok wires carry the ok row (the word 1), every check the declared "
-          "circuit makes of that unit holds (the Σ check and the dequant check). Nothing in Lean derives a C-Flock "
+          "circuit makes of that unit holds (the Σ check and the dequant check). Nothing in Lean derives a Flock "
           "circuit from a declared one or checks one against the other, and circuit-check binds the Definition to its "
           "Boolean lowering, not to the declared circuit", "TS ok realizes", "conjectured"),
     Entry("accounting-ts-tile-checks", "assumption",

@@ -1,7 +1,7 @@
 """One-stage audit, run A5, on a transfer-gate stand-in: a window whose transfer-gate units open the warden's signed cells,
 audited by `a5.audit` as rank 0 of a one-rank step through its `service.Stream`, on a local challenger's coins
 (``--challenger local``) or the verifier's own (``--coins verifier``). No served window has transfer gates yet (the I/O
-shell's ingress parse and egress render units have no C-Flock lowering, and no Commit was served behind the warden), so
+shell's ingress parse and egress render units have no Flock lowering, and no Commit was served behind the warden), so
 this window stands in for one, its cells a warden run's (`warden_serve.py rehearse`, ``--run``).
 
 * **The rows** are the warden's, one a bucket (`warden_rows`, registration v2): row t − first_bucket of a link-window is
@@ -384,7 +384,7 @@ def negatives(at: dict[str, SimpleNamespace], source, rec: dict) -> dict[str, di
 
 
 def composer(defn, bits: int):
-    """``a5.audit``'s composer of the template's circuit: C-Flock's `UnitStager` over its one ``row`` in and ``o0`` out,
+    """``a5.audit``'s composer of the template's circuit: Flock's `UnitStager` over its one ``row`` in and ``o0`` out,
     bound to the window's partition and program."""
     def compose(circuit: Path, partition: str, program: str) -> dict:
         from verity_flock.class_statement import UnitStager

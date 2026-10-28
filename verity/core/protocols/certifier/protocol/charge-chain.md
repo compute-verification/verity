@@ -209,7 +209,7 @@ A class whose windows send hits or order entries does the following:
 - Its H and O are fixed per class, like D. A window that sends more hits or entries than its slots can't be charged,
   so that window's unit fails.
 
-**Cost** (`size`, ANDs). `window_charge.circuit-check.json` pins C-Flock's lowering, which adds one row for each commit
+**Cost** (`size`, ANDs). `window_charge.circuit-check.json` pins Flock's lowering, which adds one row for each commit
 copy of the carry: 53,734 at `{1, 1, 1}` and 40,280 at `{2, 2, 0}`.
 
 | unit | ANDs |

@@ -19,7 +19,7 @@ opens the registered root under the registered compiler, and that compiler, run 
 names for it (``--compilers``) from a checkout of the registered commit whose code hashes to the registered digest, makes
 this circuit from the advice and charges the registered length. A circuit with no compiler is the one the verifier
 registered (``--circuit``). Then `a5.audit`: the registration checked by Lean and Python, the sample on live coins read after
-the receipt, C-Flock ``--zk`` behind the Lean ZK server on the drawn members, Lean's verdicts and the audit record. Then the
+the receipt, Flock ``--zk`` behind the Lean ZK server on the drawn members, Lean's verdicts and the audit record. Then the
 advice was fixed before the sample (`fixed_before_draw`), and advice re-committed after the coins is refused (`after_draw`).
 Units whose outputs are served out (``--outputs`` and the circuit's registered reads of output ports, `output_class`) are
 proved whole beside the sample, under a work law: every sample's closure (a5's `output_closure`).
@@ -532,7 +532,7 @@ def after_draw(receipt: Mapping[str, Any], rec: Mapping[str, Any], held: Mapping
 
 
 def composer(fn: Any, st: Mapping[str, Any]) -> Callable[[Path, str, str], dict[str, Any]]:
-    """A template's circuit from its Definition and its statement in the circuit record (C-Flock's `UnitStager` on the record's
+    """A template's circuit from its Definition and its statement in the circuit record (Flock's `UnitStager` on the record's
     ``in_rows``, ``out_rows`` and ``reads``), bound to the window's partition and program: a5's composer for its members."""
     def compose(out: Path, partition: str, program: str) -> dict[str, Any]:
         from verity_flock import circuit as FC

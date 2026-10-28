@@ -2,7 +2,7 @@
 
 Network accounting under arbitrary vLLM usage proves a served run's step units after the fact: a precommitted compiler turns
 the run's advice into each step's Programs, the committing vLLM has recorded each step's values, and the proof system samples
-units on live coins, proves them with C-Flock `--zk` behind the Lean ZK server, and the Lean verifier accepts or refuses them.
+units on live coins, proves them with Flock `--zk` behind the Lean ZK server, and the Lean verifier accepts or refuses them.
 `prove_path.py` is that path on a committed run, a TP Commit (`--tp-commit`), a single-GPU one (`--bundle`, TP1) or a closed
 Commit window of a `verity-vllm serve-openai` run (`--serve-run`, TP1): the prover commits the advice under hiding rows (a
 served window's the server committed) and each rank's window over the compiler's Programs for it, and the verifier audits each
@@ -255,7 +255,7 @@ The unit closes the named gap: the advice is never opened, and the verifier neve
 
 ## The class circuit's size and its window's commit
 
-`class_size.py` sizes a class circuit in ANDs and C-Flock blocks, and `class_rows.py` counts its rows by what fills them and
+`class_size.py` sizes a class circuit in ANDs and Flock blocks, and `class_rows.py` counts its rows by what fills them and
 their SHA-512 compressions (`--probe S,NP,O` lowers one Program at a small class). `window_cost.py` prices a
 window's commit from that census, or from a probe projected to a class (`--project 8,1024,64`, which reproduces the exact
 census unit for unit), against its target of 0.20 to 0.25 of the served window. It reports in ANDs (58,120 a

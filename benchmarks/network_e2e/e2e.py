@@ -1,7 +1,7 @@
 """network-e2e: network accounting end to end on a served model, as one report. A certifier-serve rehearsal's runs (the
 network certifier in front of a served endpoint, `certifier_serve.py`), N2's verdict of record on every link-window and
 the link's network verdict (`LinkWindows.verify` through the proof system's stream, `network_verdict`), every
-link-window's head checks proved by C-Flock ``prove --zk`` behind the Lean ZK server and held by Lean (`n2_zk.prove`), and
+link-window's head checks proved by Flock ``prove --zk`` behind the Lean ZK server and held by Lean (`n2_zk.prove`), and
 the negatives (``late``, ``extra`` and a tampered head) refused, in `report.json` and `report.md` under ``--out``; then
 the chain's stages (`chain`): the advice's bits per link-window, the prove path's audit and the negatives
 (`negatives.py`), and what is still stubbed.
@@ -120,7 +120,7 @@ CLAIM = {
         "proofs ran, the head checks (NetworkHeadCheck_v2: the head's hiding opening under the registered root, its "
         "fields, its counts against the profile, and its record digest under the certifier's salt against the digest "
         "its certificate signs) of every honest link-window at both ends, and the egress head checks of the tampered "
-        "run and, when its plan has the honest run's windows, the extra run, were proved by C-Flock prove --zk behind "
+        "run and, when its plan has the honest run's windows, the extra run, were proved by Flock prove --zk behind "
         "the Lean firewall and held by Lean verify --zk, the verifier opening only each unit's public row and its "
         "verdict row. Late's head checks are not proved: N2 alone refuses it."),
     "not_covered": [
@@ -900,7 +900,7 @@ def main(argv=None) -> int:
                                                                   "127.0.0.1:PORT, through an ssh forward (/etc/vy/peers)")
     ap.add_argument("--out", default=os.environ.get("OUT"), help="the report's directory (default $OUT)")
     ap.add_argument("--work", help="scratch, kept (default: a temporary directory, removed)")
-    ap.add_argument("--bin", help="C-Flock's flock-circuit (run.sh builds it)")
+    ap.add_argument("--bin", help="Flock's flock-circuit (run.sh builds it)")
     ap.add_argument("--lean", help="the Lean flock-verify (run.sh builds it)")
     ap.add_argument("--delta", type=float, default=2.0 ** -20)
     how = ap.add_mutually_exclusive_group()

@@ -22,7 +22,7 @@ testpaths = ["tests"]
 markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 
 [tool.verity.tests]
-# Test-only: the bench spine's tests drive C-Flock's lowerings over the repository's fixtures and census;
+# Test-only: the bench spine's tests drive Flock's lowerings over the repository's fixtures and census;
 # tests/bench/test_bench_judge.py runs benchmarks/judge.py; test_unit_costs_menu.py
 # holds the Lean menu (VStar.Menu.Pinned) to the pinned menu.json it is generated from.
 inputs = ["verity/core/service/flock/VStar/Menu/Pinned.lean", "verity/ml/flock", "benchmarks/judge.py", "benchmarks/census", "fixtures"]

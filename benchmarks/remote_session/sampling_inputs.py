@@ -56,7 +56,7 @@ import wire  # noqa: E402
 LN = -math.log(audit.DELTA)
 BLOCK = 4096
 STATEMENT = 512
-"""Openings a statement: C-Flock's ceiling, m = k_log + nbl ≤ 35, at the unit's k_log 26."""
+"""Openings a statement: Flock's ceiling, m = k_log + nbl ≤ 35, at the unit's k_log 26."""
 FLOOR_GPU_S = 0.0799
 """An opening's GPU device phase at a full statement, ZK server on: measured."""
 DEPLOYED_EXTRA_ANDS = (45.4e6 - 20.3e6) + 5e6

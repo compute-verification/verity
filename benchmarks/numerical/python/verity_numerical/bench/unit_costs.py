@@ -4,7 +4,7 @@ work weight.
 
     python -m verity_numerical.bench.unit_costs --out DIR [--exact-nnz 4e8] [--jobs 8] [--workload SUBSTRING] [--reuse JSON]
 
-**Registered lowerings (the primary count).** Where the template has a registered C-Flock lowering (``bench.lowerings``,
+**Registered lowerings (the primary count).** Where the template has a registered Flock lowering (``bench.lowerings``,
 :func:`registered`), a subcircuit is that lowering's ``units.n`` identical units, each one ``flock-ir-unit/v2`` layout: the
 matrix a session evaluates, with the intermediates the lowering commits as rows and the native tail outside it. A unit's
 committed rows are ``units x rows`` and its nonzeros ``units x (nnz_a + nnz_b + rows)`` (C = I over rows). Attention's
@@ -18,10 +18,10 @@ count (kept as ``nnz_superseded``) and its ``nnz_step_model``, a cut scan at (V 
 an earlier inventory. :func:`reconcile` sets circuits' F3 unit figures beside these.
 
 **Gates and nonzeros (generic).** A unit type's subcircuit is its census template bound at the census parameters
-(``bench.templates.subcircuit``), and its circuit is that Definition lowered whole, piece by piece, by C-Flock's generic
-lowering (``verity_flock.ir_lower.lower``) into ``verity.ml.circuits.boolean.forms.Circuit`` with CSE, the builder C-Flock's
+(``bench.templates.subcircuit``), and its circuit is that Definition lowered whole, piece by piece, by Flock's generic
+lowering (``verity_flock.ir_lower.lower``) into ``verity.ml.circuits.boolean.forms.Circuit`` with CSE, the builder Flock's
 units use. ``counts()`` gives the live cone's committed input bits, ANDs, output copies and ``nnz_AB`` (the nonzeros of A and
-B); C = I adds one nonzero per AND row, so a unit's C-Flock nonzeros are ``nnz_AB + ands``. Table reads (``lookups``) are not
+B); C = I adds one nonzero per AND row, so a unit's Flock nonzeros are ``nnz_AB + ands``. Table reads (``lookups``) are not
 ANDs; their tables and widths are listed.
 
 Every number says how it was obtained (``method``):
@@ -159,7 +159,7 @@ def run_builds(jobs: Iterable[tuple], n_jobs: int, fn: Callable[[tuple], tuple] 
 
 # --- registered lowerings ----------------------------------------------------------------------------------------------------
 
-#: the C-Flock template module's function giving the lowering a session evaluates (default ``lowering``)
+#: the Flock template module's function giving the lowering a session evaluates (default ``lowering``)
 REGISTERED_FN = {"gemm-coordinate": "circuit_lowering"}
 SCHEME = "frame-v3/blake3-keyed"
 #: attention's key counts at which its registered head is lowered, to check its tensor-core step count (:func:`attention_steps`)
@@ -167,7 +167,7 @@ ATTENTION_REG_T = (1, 15, 16, 17, 100, 128, 129, 1000)
 
 
 def registered(template: str, params: Mapping[str, Any], T: int | None = None) -> dict[str, Any]:
-    """The template's registered C-Flock lowering (``bench.lowerings``): its units per subcircuit and the unit's
+    """The template's registered Flock lowering (``bench.lowerings``): its units per subcircuit and the unit's
     ``flock-ir-unit/v2`` layout counts, the matrix a session evaluates per unit with the intermediates the lowering commits.
     The native tail (``tail_gates``) is evaluated by the verifier and has no rows. ``{"none": why}`` without one."""
     from . import lowerings
@@ -888,7 +888,7 @@ def render(inv: Mapping[str, Any]) -> str:
              "law (read off every V in 2..139, checked by an exact build at V = 1030), M attention model (affine in T within "
              "a key block; past the first block, the metrics not affine in the block count are fitted with an unchecked "
              "curvature), – missing, x excluded, nb not built.", "",
-             "src: R the template's registered C-Flock lowering (units x its flock-ir-unit/v2 layout; committed = rows, "
+             "src: R the template's registered Flock lowering (units x its flock-ir-unit/v2 layout; committed = rows, "
              "nnz = nnz_a + nnz_b + rows, C = I over rows), G the generic whole lowering (no registered one; committed = "
              "inputs + ANDs + output copies, nnz = nnz_AB + ANDs). nnz_generic is the generic count for every row. "
              "q = the 1 − 2⁻⁴⁰ hypergeometric quantile of the sampled count. Ops and bytes are the census work model.", ""]

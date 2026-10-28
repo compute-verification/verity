@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # The served-rows tie in zero knowledge (served_tie_zk.py, or served_statics_zk.py) on a sealed served window, on a CPU machine, on
-# hidden_zk's builds (its job.sh, sourced: C-Flock's flock-circuit and the Lean flock-verify) with the ZK server's Lean
+# hidden_zk's builds (its job.sh, sourced: Flock's flock-circuit and the Lean flock-verify) with the ZK server's Lean
 # frame and the sampled-proofs verifier built in the tree. From a clone, the outputs in $RESEARCH_RUN_DIR/out, in up to
 # 180 minutes:
 #   STZK_MEM_GB=56 STZK_RUN=RUN_DIR STZK_WINDOW=5 bash benchmarks/prove_path/served_tie_zk.sh

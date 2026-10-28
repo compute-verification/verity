@@ -216,7 +216,7 @@ as a `Spec` of its own (`service.LinkWindows`, one per link):
   signs the head the check opened. In the unit's Program each head check is one gate that names the Definition and
   its circuit digest, `Gate[NetworkHeadCheck_v2{L,T,COUNTS}@<digest>]_v2` (`head_check.gate`): the commitment gadgets'
   Boolean bodies encode to about 140 MB, and the service encodes the Program on every registration. The digest is
-  core's `program_digest` of the Definition's Program (`head_check.circuit_digest`), the one a C-Flock statement names
+  core's `program_digest` of the Definition's Program (`head_check.circuit_digest`), the one a Flock statement names
   a template by, read from `head_check.circuit-check.json`'s ``digests``, which circuit-check holds to the Definition
   (a lowering pin). The Program's digest is the check's, so the spec, the stream and each registration bind to it, and
   through the gates to the circuits: a proof of another circuit with the same interface names another Program. A size
@@ -235,7 +235,7 @@ as a `Spec` of its own (`service.LinkWindows`, one per link):
   Spec, is retired, superseded by the network certifier's step-indexed scan (`ingress_scan`, `egress`), which
   `benchmarks/network_traces/scan_zk.py` proves in zero knowledge, outside this protocol.
 - **Its verifier of record** is `LinkWindows.verify`, which decides on the delivered proof (`service.Delivered`) and
-  public inputs alone. It accepts when its own run of C-Flock's Lean verifier (`proofs.verify`, `verify --zk`, on the
+  public inputs alone. It accepts when its own run of Flock's Lean verifier (`proofs.verify`, `verify --zk`, on the
   circuit file the auditor committed) accepts every session, the sessions prove the link's registered unit (every gate
   names a pinned digest and every session names the registered Program, the partition object's `program`,
   `LinkWindows.proved`) and the sampled proof block; the proof's ``pub`` row opens, under the salt delivered, to the verifier's
@@ -643,7 +643,7 @@ unit outputs 1 exactly when, in each lane of ordinal q:
     value), each opened entry (class, 1, its id) and the sink past them, and `IoTieIdsChain` checks the classes
     non-decreasing, one value a class but the sink, and each class starting with a slot (`IoTieIdsFirst` on the first
     member and one batch of `IoTieIdsLink` over each member and its successor, so a binding traces one link; its
-    C-Flock lowering is the flat trace's, AND for AND). A Beneš network is a
+    Flock lowering is the flat trace's, AND for AND). A Beneš network is a
     permutation under any switches, so every member is in the order and the switches can only sort. On a link whose
     every bucket row is accepted, every computation of request i's prompt position p, and every KV read in place of
     one, is the id the user sent. Public: IoTieRequest's lanes, the Commit's root and domain id, the steps (the
@@ -2207,7 +2207,7 @@ grid whatever the load (the I/O tie's layout, "The I/O tie"):
   its padding cells among them; a slot no connection holds is B zero bytes, so T and the row's size are the
   schedule's;
 - a row is `hm96-sha512/row/v2` of its 8·S·B bits, bit 8k + i being bit i of byte k: S·B/2 little-endian u16 words
-  at 16 bits, which is how a C-Flock port of 8·S·B bits lays out the row.
+  at 16 bits, which is how a Flock port of 8·S·B bits lays out the row.
 
 **The wiring** says which connection holds which slots: connection q, live in `cells`/r rows from row `first`, holds
 slots ρ·r … ρ·r + r − 1 of each, ρ its rank by ordinal among the row's live connections, so its cell k of the
@@ -2265,7 +2265,7 @@ verifier: the network certifier's named gap "The cells' wiring is open to the ve
 
 **Demonstration** (`benchmarks/network_traces/warden_zk.py`). A toy unit, `WardenRowIdentity{B}` at B a row's S·B
 bytes, takes one row's bits through two NOTs. Each unit reads one of a connection's cells, so its row is that cell's
-bucket. Its port is registered against the network certifier's egress root of a `warden_serve` run, proved by C-Flock `prove --zk`
+bucket. Its port is registered against the network certifier's egress root of a `warden_serve` run, proved by Flock `prove --zk`
 behind the ZK server, and held by Lean `verify --zk --registered`. The members:
 - the sender's output and the receiver's input are accepted;
 - rows under the prover's own root are refused, and so is the prover's registration of it under the network certifier's

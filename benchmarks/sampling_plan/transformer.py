@@ -1,4 +1,4 @@
-"""The sampling plan for the end-to-end demo's transformer under C-Flock: the demo's decoder block, small (the CPU
+"""The sampling plan for the end-to-end demo's transformer under Flock: the demo's decoder block, small (the CPU
 reference) or scaled onto one RTX PRO 6000 (the Phase 2 model), every operation a proof block.
 
 The Definition DAG is one server-time block of serving: `requests` requests of `context` positions each (`prompt` given,
@@ -25,7 +25,7 @@ and its units, from the finest up:
 
 The harm is faulty ANDs: each unit is credited its ANDs (a recomputed statistic once, in the op it belongs to), so a
 plan's certificate means the same whatever the cut, where a count of faulty proof blocks falls as the cut coarsens; the
-faulty proof blocks (`IntegrityPeriod`'s W) are reported beside it. The cost is C-Flock's, fitted from its zero-knowledge
+faulty proof blocks (`IntegrityPeriod`'s W) are reported beside it. The cost is Flock's, fitted from its zero-knowledge
 sessions on sm_120 (`inputs.observations`, `costfit`), in GPU-seconds of an RTX PRO 6000, with every serve-time
 commitment of the block: every unit's outputs, the requests' bytes, the carried KV cache at the block's close, PoUW's
 CP-W receipts (h1, assumed) and the bandwidth audit's receipts (`serve`), and the replay of each drawn request
@@ -366,7 +366,7 @@ def serve(m: Model, s: Serving) -> tuple[Commitment, ...]:
 
 
 def costs(m: Model, s: Serving) -> CostModel:
-    """C-Flock's fitted model (int8_llama's fit) with the commitment rate, the block's serve-time commitments and the
+    """Flock's fitted model (int8_llama's fit) with the commitment rate, the block's serve-time commitments and the
     `request` replay domain."""
     obs = observations()
     fitted = Fitted(fit(obs, "prove", ["one", "ands", "ands*staged", "ands*drawn"]),

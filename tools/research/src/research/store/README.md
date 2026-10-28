@@ -414,7 +414,7 @@ value form: `enum` (a closed set), `bool` (`true` | `false`), `int`, `number`, `
 prints the table; the groups are:
 
 - **result** — the producing lane about its own result (the r20 ledger import, or `label` by hand): `candidate` (enum: the backend
-  families A-GKR, B-Ligero, C-Flock, D-SP1, and the frozen ledger's B-AIR, C (the VOLE candidate), SP1 (D-SP1) and shared),
+  families A-GKR, B-Ligero, Flock, D-SP1, and the frozen ledger's B-AIR, C (the VOLE candidate), SP1 (D-SP1) and shared),
   `proof_class` (enum: the contract's classes + `COMPONENT`), `soundness`, `K`, `B`, `hardware`,
   `authentication` (enum: included | included-hash | excluded), `campaign`, `relation`, `mode` (enum: interactive | fiat-shamir), `zk` (bool),
   `overhead`, `seconds_per_vu`, `track` (enum), `scope` (enum: `unit` | `vu` | `component`), `label`, `note`, `assumptions` (list),

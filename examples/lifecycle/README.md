@@ -18,7 +18,7 @@ uv run --directory examples/lifecycle pytest tests/test_lifecycle.py     # hones
 
 **The proofs are a stand-in.** `prove(statement, witness) -> proof` returns the sampled proof block's openings, and
 `verify(statement, proof) -> verdict` checks them against the commitments and re-evaluates the unit's circuit in the clear.
-It is sound for the example and not zero-knowledge; C-Flock behind the ZK server replaces it (`verity/ml/flock/`,
+It is sound for the example and not zero-knowledge; Flock behind the ZK server replaces it (`verity/ml/flock/`,
 `verity/core/service/flock/`). Everything else is the repository's own code, as (b) says.
 
 ## Terms
@@ -143,8 +143,8 @@ The deviations, one or more a phase, each refused or rejected (`tests/test_lifec
 | `UNIT`, `BLOCK`, `block_digest(n)` | B | — | Boolean Definitions; a Program digest | `verity.ml.circuits` (`boolean.trace`, `defs.CompositeDefinition`, `codec`) |
 | `evaluate_unit` | the stand-in verifier | theta, state, x | y, state′ | `verity.ml.circuits.evaluation.evaluate_words` |
 | `draw(coins, block)`, `draw_size` | verifier | live coins | the sampled proof blocks | `verity/core/protocols/sampled_proofs/coins.py` (`draw_first`), `verity/core/protocols/pouw/window.py` (`bucket`, `k_prime`) |
-| `prove(statement, witness)` | ZK server | a `Statement`, the openings | a proof | STAND-IN for C-Flock |
-| `verify(statement, proof)` | verifier | a `Statement`, a proof | each check's reason, or none | STAND-IN for C-Flock's verifier |
+| `prove(statement, witness)` | ZK server | a `Statement`, the openings | a proof | STAND-IN for Flock |
+| `verify(statement, proof)` | verifier | a `Statement`, a proof | each check's reason, or none | STAND-IN for Flock's verifier |
 | `sampled_proofs`, `pouw_window`, `OnsiteVerifier.answers` | verifier | one declaration's checks, view, report | `Core.Protocol` outcomes | missing as per-declaration functions: written in the example |
 | `compose(protocol, answers)` | verifier | the subprotocols' outcomes | the composite verdict and binding | `verity/core/protocols/composition/tests/reference.py` (`verdict`, `bind`, `ONSITE`, `REMOTE`) |
 | `account(baseline, declarations, lines, layout)` | verifier | the period's records and verdicts | period verdict, credit, bound, projections, scaling | missing: written in the example |
@@ -199,7 +199,7 @@ The deviations, one or more a phase, each refused or rejected (`tests/test_lifec
   block; the memory challenger samples theta rows.
 - **The advice is charged but the toy's circuit doesn't depend on it beyond the count.** Batching enters B only as
   validation; a batched matmul would make B's output depend on it.
-- **Message kinds.** `Proofs` is private only because the stand-in's proof is an opening; C-Flock's proof would be
+- **Message kinds.** `Proofs` is private only because the stand-in's proof is an opening; Flock's proof would be
   public. The certifier's frame openings (`Mark`) and the memory challenger's answers are witness.
 
 ## (d) Proposed homes

@@ -1,5 +1,5 @@
 """The compile slice (`compile_slice.CompileSlice_v1`) proved in zero knowledge: one window of a few steps as one unit,
-proved by C-Flock `prove --zk` behind the Lean ZK server and held by Lean `verify --zk`, through N2's audit path
+proved by Flock `prove --zk` behind the Lean ZK server and held by Lean `verify --zk`, through N2's audit path
 (`n2_zk.py`: its stager, ZK server and received-pieces scan).
 
     python benchmarks/network_traces/compile_slice_zk.py prove --bin flock-circuit --lean flock-verify --out DIR

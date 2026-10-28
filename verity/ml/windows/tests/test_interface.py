@@ -1,5 +1,5 @@
 """What an integration hands Verity (`verity.ml.windows.interface`), against the interface alone: a circuit takes only
-Verity's Definitions, a unit's rows are its Definition's bit rows as C-Flock stages them, a window tiles the partition and
+Verity's Definitions, a unit's rows are its Definition's bit rows as Flock stages them, a window tiles the partition and
 commits under the window-domain rule, a label in a circuit with blocks is its run's class structure (its bounds where
 the units change inference block, its step and slot and a form of the window's), an integration's outputs are checked
 against the Definitions before it commits, a wire pattern wires whole members unit by unit under its writers' salts, a
@@ -465,7 +465,7 @@ def test_a_cut_port_is_rows_each_wired_from_its_own_writer():
 
 def test_a_proof_block_c_flock_would_refuse_is_refused_at_lowering():
     """A template passes with the k_log its rows alone need, and is refused, its message naming it, its cuts, its rows and
-    the fix, when its rows are more than C-Flock's composer takes, none is past 111 bytes, or they alone need a C-Flock block
+    the fix, when its rows are more than Flock's composer takes, none is past 111 bytes, or they alone need a Flock block
     past 2^27 bits."""
     assert I.check_proof_block(GEMM) == I.check_proof_block(GEMM, {"x": 2}) == 21
     wide = bind(G.Gemm, K=16, N=256, **G.GEMM_AMPERE)
@@ -479,9 +479,9 @@ def test_a_proof_block_c_flock_would_refuse_is_refused_at_lowering():
 
 
 def test_the_proof_block_limits_are_c_flocks_composers():
-    """`check_proof_block`'s sizes are C-Flock's composer's, and `rows_k_log` is the k_log its ranges give a unit's rows,
+    """`check_proof_block`'s sizes are Flock's composer's, and `rows_k_log` is the k_log its ranges give a unit's rows,
     holding every gate range's k_log at or above it: a row has a compression before its last block exactly past
-    ``LAST_BLOCK_BYTES``, and `MAX_ROWS` is the most rows whose hm96 range leaves a 2^K_MAX-bit C-Flock block room."""
+    ``LAST_BLOCK_BYTES``, and `MAX_ROWS` is the most rows whose hm96 range leaves a 2^K_MAX-bit Flock block room."""
     from verity_flock import circuit as FC
 
     assert (I.K_MAX, I.SLOT_LOG, I.PER_SLOT, I.MASK_LOG) == (FC.K_MAX, FC.SHA_LOG, FC.PER_SLOT, FC.MASK_LOG)

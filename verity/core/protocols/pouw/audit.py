@@ -53,7 +53,7 @@ _M32 = 0xFFFFFFFF
 
 
 def chacha20_block(key: bytes, counter: int, nonce: int) -> bytes:
-    """ChaCha20's block function, 20 rounds, with a 64-bit counter (words 12, 13) and a 64-bit nonce (words 14, 15): C-Flock's
+    """ChaCha20's block function, 20 rounds, with a 64-bit counter (words 12, 13) and a 64-bit nonce (words 14, 15): Flock's
     ``chacha20_block`` (``verity/ml/flock/cuda/sha512.cuh``), the stream its hm96 leaf salts are sampled from."""
     s = [0x61707865, 0x3320646E, 0x79622D32, 0x6B206574, *struct.unpack("<8I", key),
          counter & _M32, counter >> 32, nonce & _M32, nonce >> 32]
@@ -73,13 +73,13 @@ def chacha20_block(key: bytes, counter: int, nonce: int) -> bytes:
 
 def hm96_salt(key: bytes, nonce: int, i: int) -> bytes:
     """Leaf i's 192-byte salt in the tree with salt nonce `nonce`: ChaCha20 blocks 3i, 3i + 1 and 3i + 2 under the prover's
-    32-byte `key` (C-Flock's ``hm96_salt``)."""
+    32-byte `key` (Flock's ``hm96_salt``)."""
     return b"".join(chacha20_block(key, 3 * i + j, nonce) for j in range(3))
 
 
 @functools.lru_cache(maxsize=1)
 def hm96_kernel_constants() -> bytes:
-    """`HM96`'s constants as a kernel reads them (C-Flock's ``hm96_finish_leaves``, pearl_c's ``hm_leaves``): the midstates
+    """`HM96`'s constants as a kernel reads them (Flock's ``hm96_finish_leaves``, pearl_c's ``hm_leaves``): the midstates
     after the salt prefix and after the leaf prefix (eight u64 little-endian each), then the byte tables, per salt byte position
     and byte value the 64-byte column XOR little-endian (3 MiB)."""
     mids = [sha512_gates.midstate(p) for p in (hm96.SHA512.salt_prefix, hm96.SHA512.leaf_prefix(HM96_KEY))]

@@ -39,7 +39,7 @@ The statement is in `../ASSUMPTIONS.md`: `UniformRandomBytes L t` (every event),
   `DecompB` at what each part's circuit accepts (`PartAccepts`).
   Holo statements are candidate 3's own model, and `BitsLin2` at the dense
   statements follows from it (`bitsLin2On_of_ksLin2On`).
-- **The salts.** C-Flock's prover reads every hm96 leaf salt, 192 bytes a leaf,
+- **The salts.** Flock's prover reads every hm96 leaf salt, 192 bytes a leaf,
   from the operating system (`getrandom`, the kernel's `getrandom(2)`, which `/dev/urandom` also reads; under the
   ZK server, from its tap), and the recursive audit's ZK server and a registrant read theirs the same way (`os.urandom`).
   A3 per test (`UniformRandomBytesTest`) is that those reads pass the theorem's test as independent uniform bytes do, up

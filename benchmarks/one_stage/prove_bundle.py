@@ -1,5 +1,5 @@
 """A drawn-unit replay bundle (`verity/drawn-unit-bundle/v2`, `examples/h200/interfaces`) proved: each drawn member's units in
-one C-Flock `prove --zk` session behind the Lean ZK server, served the bundle's own draw, and decided by Lean's `verify --zk`,
+one Flock `prove --zk` session behind the Lean ZK server, served the bundle's own draw, and decided by Lean's `verify --zk`,
 the verifier of record; then the honest session with one bit of its proof flipped, which Lean must refuse, and optionally a
 tampered window's member, whose proof must not be accepted.
 
@@ -10,7 +10,7 @@ tampered window's member, whose proof must not be accepted.
   store's `BUNDLE_WINDOW` (a W8A8 MLP's window, its tampered twin and the H200 interfaces' bundle of four sampled proof blocks under its
   registered `subset:4`, a fixture's sample) unless it's given others.
 * **The bundle held to the window** before anything is proved. The window is the prover's (what ``Window.write`` wrote, its
-  private files included), since C-Flock's statement is a whole member. Checks: the bundle's own check
+  private files included), since Flock's statement is a whole member. Checks: the bundle's own check
   (`replay_bundle.check` against the window's registration: every string, path and domain, and each unit's Definition
   replayed, and the sample's law the registered one); the bundle's run, registration digest and partition are the
   window's; each drawn member's public body is the one the bundle names (SHA-512); and a live sample (``--live`` requires

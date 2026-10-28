@@ -336,7 +336,7 @@ def _registration(n=9, k=3, root=_d(7), dom=_d(8)):
 
 
 def test_the_public_inputs_file_is_c_flocks_and_pads_with_the_last_filler_tile():
-    """F_σ is C-Flock's ``verity/flock-public-inputs/v1`` (a key-sorted JSON header line, then the instances' words, u16 LE,
+    """F_σ is Flock's ``verity/flock-public-inputs/v1`` (a key-sorted JSON header line, then the instances' words, u16 LE,
     instance-major, the ports in order): t as a u128, the window root, its domain, the two side domains and the pass's -h3
     tile domain, from the registration, the sample and the pass alone.  Session σ of ⌈K′/cap⌉ holds drawn[σ·cap ..], then
     N − 1."""

@@ -13,7 +13,7 @@ recomputed inside each reader (a covering, `recomputed_across` in `Q_word` v2), 
 whose wrong output can forfeit downstream work (a noise or form proof block every dot of its row reads) carries that work as
 `influence`, which its harm counts.
 
-**Cost.**  Per touched statement plus per proved proof block, as C-Flock does: subcircuit `s` cut into statements of `c` proof blocks costs
+**Cost.**  Per touched statement plus per proved proof block, as Flock does: subcircuit `s` cut into statements of `c` proof blocks costs
 `touched_s(k; c) * (a0 + a1 c) + k * (b + replay)`, a statement being touched when the sample meets it.  Everything is
 committed at serve time whatever the sample: every proof block's outputs (`commit_bits`, `commit_rows`),
 and the fixed serve-time commitments of every scale (`Commitment`: the Commit's taps, PoUW's work blocks, the remote audit's

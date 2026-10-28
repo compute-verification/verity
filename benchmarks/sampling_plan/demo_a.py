@@ -1,5 +1,5 @@
 """Demo A's frontier on one H200: plain INT8 weights, no P2 decode, a block of 16,384 requests at a 6.35 s step (its
-commit 1.0 s of it), on the map of every subcircuit to a Definition C-Flock stages (`examples/h200/e2e_h200/plan.py`'s
+commit 1.0 s of it), on the map of every subcircuit to a Definition Flock stages (`examples/h200/e2e_h200/plan.py`'s
 `Map`) with PoUW's tiles as one more subcircuit, planned by `optimize.frontier` under the demo's objective (its work half
 circuit size): half skipped work, half leaked output bits.
 
@@ -10,7 +10,7 @@ the exchange rate divides each half by the least bound B certifies for that half
 two bounds from its one sample, `free_compute` and `leak`, at delta = 1% and 1e-6, and the tile stratum's epsilon at delta
 (`pouw.window.eps_at`).
 
-**Units** (`families`). Each subcircuit is the map's Definition at its measured ANDs and C-Flock's staged k_log (at most
+**Units** (`families`). Each subcircuit is the map's Definition at its measured ANDs and Flock's staged k_log (at most
 27, its statement cap `min(2^(35 - k_log), 2^20)`), its units counted from the shape: the s8 coordinates as
 `ScaledMmS8CoordinateRows_v1` (x in the quantizer's 8 KiB chunk rows), the residual stream as 128 chunk rows of 256 B
 (`Bf16AddRow_v2{128}` x 128 an add, RMSNorm as `RmsSumSqPart_v1` and `RmsNormOutSums_v1` a chunk, the quantizer as
@@ -83,7 +83,7 @@ BUDGET_SHARE = 0.01
 GRID = (1, 8.5, 10, 12.5, 15, 20, 30, 50, 100, 300, 1000)
 S8 = "ScaledMmS8CoordinateRows_v1"
 TILE = "PouwH1LaneZy_v2"
-#: C-Flock's largest statement (it refuses k_log 28)
+#: Flock's largest statement (it refuses k_log 28)
 K_LOG_MAX = 27
 #: M3's live sample: a uniform subset of this many of one block's units
 M3_UNITS = 8
@@ -116,7 +116,7 @@ PV_ANDS = ((1, 111_104), (8, 321_024), (31, 1_009_152), (32, 1_039_168))
 
 @dataclass(frozen=True)
 class Unit(H.Template):
-    """A subcircuit of the block at C-Flock's staged `k_log`, serving committing `commit` bits a unit (its `out_bits`
+    """A subcircuit of the block at Flock's staged `k_log`, serving committing `commit` bits a unit (its `out_bits`
     when None). A unit of `chunks` chunks (PoUW's lanes) is proved as its chunks at `k_log`, a statement holding `cap`
     whole units in `groups` statements, and one combine."""
 

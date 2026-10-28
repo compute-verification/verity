@@ -795,7 +795,7 @@ def _salt_reason(p: dict, t: Tile | None, salt: Any) -> str | None:
 
 
 def _ports(lay: Salted | None) -> list[str]:
-    """The side rows a tile proof opens, by port name in its circuit's port order: A rows, then B rows. C-Flock reads
+    """The side rows a tile proof opens, by port name in its circuit's port order: A rows, then B rows. Flock reads
     port k's b ‖ c at the body's k-th place, in the order of the circuit's ports, not of the header's keys."""
     return list(PC8_PORTS) if lay is None else [f"a{k}" for k in range(lay.r)] + [f"b{k}" for k in range(lay.c)]
 

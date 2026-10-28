@@ -12,7 +12,7 @@ def _network_advised_roots() -> list[Any]:
     60, salted, R_in = 1 and R_in = 2, which
     `benchmarks/network_traces/n2_advised_zk.py --e2e` proves on a served run's advice. The T = 600 roots are over
     circuit-check's whole-Definition AND budget (60,000), so check holds them to the reference and their digest pins
-    without lowering them; T = 512 and T = 60 are under it, so their C-Flock lowering is checked and their AND count
+    without lowering them; T = 512 and T = 60 are under it, so their Flock lowering is checked and their AND count
     pinned."""
     from verity.core.protocols.certifier.advised import unit
 

@@ -88,7 +88,7 @@ more than its prompt and the weights (a stochastic request's seed, a prefix-cach
 a Commit window carries in or out, byte ingress, a family this lowering doesn't know, a weight whose leaves aren't whole u16
 words, a read that cuts a writer's row, and at `settle`, every one named at once, a template's port read at two row counts
 or as rows that aren't its outer elements cut that many ways, a unit of more than ``grain.rows`` rows, and then a unit
-C-Flock's composer wouldn't prove (`interface.check_proof_block`). The circuit is completeness only: that it computes what
+Flock's composer wouldn't prove (`interface.check_proof_block`). The circuit is completeness only: that it computes what
 serving ran is held by the units' proofs on their committed rows, never by this lowering.
 
 Its weight reads, the embedding's table reads and its openings count registered (`interface.input_count`) only where the
@@ -717,7 +717,7 @@ def class_circuit(registered: Any, cls: WindowClass, programs: int | None = None
     scan state row before its anchor (`WindowClass.anchor`), each allocation's slots side by side in its template; its blocks'
     slots are the slots. Its registered parameters are the weights (`window_builder.weight_param`) and ``SCAN_STATE``'s
     ``cls.buckets`` rows, row a the scan's state row before bucket a (`ingress_scan.window_state`). A window's circuit is every
-    slot's; ``programs`` is the first slots only, a probe's census (`class_size`). Each unit is a proof block C-Flock's composer
+    slot's; ``programs`` is the first slots only, a probe's census (`class_size`). Each unit is a proof block Flock's composer
     proves (`_Builder.settle`) unless not ``provable`` (a probe's, or a test's of too small a class)."""
     return lower(registered, cls, programs, grain, name, provable=provable).circuit
 

@@ -1,7 +1,7 @@
 """Pinned vectors for the audit window's layout for gates (`verity.core.protocols.pouw.window`): ``uv run python
 verity/core/protocols/pouw/tests/window_vectors.py`` rewrites ``tests/vectors/window.json``.  A change to that file
 is a change to what the window's tile and entry circuits read (an entry row's bits, a side tree, the window root or the
-public inputs file C-Flock's verifier writes), and needs a reason in the PR.
+public inputs file Flock's verifier writes), and needs a reason in the PR.
 
 The toy window: P = 4 entries over a toy window domain, the identity ``verity/pouw/window-vectors/v1`` of {"window":
 "toy"}.  Call 0 is an 80 x 32 x 128 call whose tiles start at tile 3 of the pass; it keeps A rows 0, 1 and 70 (so a

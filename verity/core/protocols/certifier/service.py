@@ -30,7 +30,7 @@ outcome of record (on an advised link naming the committed advice), and it state
 with probability δ, at most `wrong_units["bound"]` of the n committed windows are wrong (the uniform K-subset's exact
 bound, one-stage's `wrong_units` over windows), so ε = bound / n at δ. The challenger's sample is Python's
 (`service.select_draw`), which records the coin bytes it read (`read`); the sample of record is the Lean verifier of
-record's on those bytes (`lean_draw`: C-Flock's `flock-verify draw --population n --k K --stream-file`, the Lean
+record's on those bytes (`lean_draw`: Flock's `flock-verify draw --population n --k K --stream-file`, the Lean
 `draw` the one-stage drivers run, `Flock.Draw.drawOn`), which the network verdict runs itself, as a registration's own
 draw is the Lean's `Select.select` on the bytes it read. The verdict accepts only when the windows registered and
 proved are exactly that sample's, and otherwise refuses by name (`PERIOD_DRAWN`), whatever units the sample object it is
@@ -67,7 +67,7 @@ their public fields (`LinkWindows.certified`).
 In the unit's Program each head check is one gate that names the Definition and its circuit digest (`head_check.gate`,
 `Gate[NetworkHeadCheck_v2{L,T,COUNTS}@<digest>]_v2`), because the commitment gadgets' Boolean bodies encode to about
 140 MB and the proof system encodes the Program on every registration. The digest is core's `program_digest` of the
-Definition's Program (`head_check.circuit_digest`), the one a C-Flock statement names a template by, pinned in
+Definition's Program (`head_check.circuit_digest`), the one a Flock statement names a template by, pinned in
 `head_check.circuit-check.json` and held to the Definition by circuit-check. So the Program's digest binds the head
 check's circuit, and the spec, the stream and each registration bind to it: a proof of another circuit with the same
 interface names another Program, which the verifier of record refuses (`LinkWindows.proved`), and a proof's circuit
@@ -83,7 +83,7 @@ N3, the content check, a prototype in `benchmarks/network_sim` evaluated in the 
 retired, superseded by the step-indexed scan (`ingress_scan`, `egress`), which `benchmarks/network_traces/scan_zk.py`
 proves in zero knowledge, outside this protocol.
 
-**The proof.** The prover proves the sampled proof block as one C-Flock statement of one instance: rows ``pub`` (the unit's
+**The proof.** The prover proves the sampled proof block as one Flock statement of one instance: rows ``pub`` (the unit's
 public parameters) and ``wit`` (each end's head, its leaf's salt, its two siblings and the certifier's salt), each the
 little-endian concatenation of its parameters' bits in whole u16 words (`LinkWindows.layout`, `LinkWindows.row`), and
 the output row ``o0``, one u16 word holding the two output bits (`OUT_BITS`); each row committed under a hiding salt. Its
@@ -92,7 +92,7 @@ the registered partition and Program (`benchmarks/network_traces/n2_zk.py` prove
 
 Its verifier of record is `LinkWindows.verify`, which decides on the delivered proof (`Delivered`) and public inputs
 alone. It accepts when
-- the verifier's own run of C-Flock's Lean verifier (`proofs.verify`, `verify --zk`) accepts every session on the circuit
+- the verifier's own run of Flock's Lean verifier (`proofs.verify`, `verify --zk`) accepts every session on the circuit
   file the auditor committed, the sessions prove this link's registered unit (`LinkWindows.proved`: every gate names a
   pinned circuit digest and every session names the registered Program) and the sampled proof block;
 - the proof's ``pub`` row opens, under the salt delivered, to the verifier's own copy (`public_arguments`: the registered
@@ -195,7 +195,7 @@ Lean takes as an input rather than checks:
   syncs), which is why an advised link's verdict of record stays this module's;
 - on a warden link, the warden's parameters digest (`WardenProfile.digest`, which the warden's deployment publishes
   as its schedule's, `warden.WardenParams.digest`), which neither derives;
-- what both take from the proof system and the lowering: the findings of the verifier's own run of C-Flock's Lean
+- what both take from the proof system and the lowering: the findings of the verifier's own run of Flock's Lean
   verifier (`proofs.verify`), the delivered sessions' SHA-512s, the registration and the sample, and the registered
   Program's and partition's digests and the gate ids (`P.partition`, `head_check.gate`), which the Lean holds the
   findings and pins to but doesn't derive.
@@ -283,7 +283,7 @@ OUTPUTS = ("verdict", "deadline")
 #: output row ``o0``, the two output bits; each instance's commitments are in this order in a statement's public file
 ROWS = ("pub", "wit")
 PORTS = ROWS + ("o0",)
-#: the output row's length: C-Flock commits an output port as whole u16 words, so ``o0`` is one word, its bit 0 the
+#: the output row's length: Flock commits an output port as whole u16 words, so ``o0`` is one word, its bit 0 the
 #: verdict and bit 1 the deadline, its other bits 0
 OUT_BITS = 16
 #: a head check's witness parameters; the rest of the unit's parameters are public
@@ -493,7 +493,7 @@ def _root_of(record: Any) -> Any:
 
 
 def lean_draw(k: int, n: int, read: bytes) -> dict[str, Any]:
-    """The period's sample of record: C-Flock's Lean verifier of record (`proofs.executable`, which verifies the
+    """The period's sample of record: Flock's Lean verifier of record (`proofs.executable`, which verifies the
     windows' proofs) sampling `subset:k` of n on `read`, the coin bytes the period draw read, in order
     (``flock-verify draw --population n --k k --stream-file``, `Flock.Draw.drawOn`, which `select_draw`'s sampler is
     byte for byte: `test_lean_verifier.test_unit_draw_samplers_are_the_exact_reduction` and `test_coins`); its ``DRAW``
@@ -1102,7 +1102,7 @@ class LinkWindows:
                        delivered: Delivered, findings: Sequence[Finding] | None, sessions: Sequence[str],
                        advice: Any = None) -> dict[str, Any]:
         """This module's verdict on the link-window (`verify`'s conditions), on the findings of the verifier's own run
-        of C-Flock's Lean verifier (None where `proofs.verify` refused): its accept bit, digest and public outputs."""
+        of Flock's Lean verifier (None where `proofs.verify` refused): its accept bit, digest and public outputs."""
         reg = draw.registration.record
         w, root = reg["window"]["window"], bytes.fromhex(reg["roots"][0]["root"])
         proved = findings is not None and self.proved(findings) \
@@ -1120,7 +1120,7 @@ class LinkWindows:
                   delivered: Delivered, findings: Sequence[Finding] | None, sessions: Sequence[str],
                   advice: Any = None) -> dict[str, Any] | None:
         """`verify`'s inputs as `NetworkCheck.LinkWindow.caseOf` reads them: the verifier's own structure (the Program's
-        and partition's digests, the gate ids), the registration, the sample, the findings of its own run of C-Flock's
+        and partition's digests, the gate ids), the registration, the sample, the findings of its own run of Flock's
         Lean verifier (None where `proofs.verify` refused), the delivered public file, salts, output word and session
         SHA-512s, the certificates (each null unless a `Certificate` of well-typed fields) and each one's signed digest
         as `public_arguments` reads it, the declared syncs, Σ_sync,
@@ -1197,7 +1197,7 @@ class LinkWindows:
                advice: Any = None) -> dict[str, Any]:
         """The verdict of record on the link-window's delivered proof, from public inputs and the proof alone: accepted
         when
-        - the verifier's own run of C-Flock's Lean verifier (`proofs.verify`, on the circuit file the auditor built,
+        - the verifier's own run of Flock's Lean verifier (`proofs.verify`, on the circuit file the auditor built,
           `circuit_sha512`) accepts every session, and they prove this link's registered unit (`proved`) and the sampled
           proof block;
         - the proof's public row opens, under the salt delivered, to the verifier's own copy (`public_arguments`: the
