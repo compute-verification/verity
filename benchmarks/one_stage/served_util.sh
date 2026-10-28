@@ -31,7 +31,8 @@
 # on spaces), PROTOCOLS_CONFIG (one --protocols-config argument), PYSAMPLE=1 (Nsight Systems' Python backtrace sampling at
 # PYHZ, 1000, for the host gaps; its sqlite export keeps none of the Python frames), PYSPY=1 (py-spy 0.4.2, installed under
 # UTIL_ROOT/tools/pyspy, launches the server under the session, since the node's ptrace_scope 1 lets it read only its own
-# children, and records it and its subprocesses at PYSPY_HZ, 20, as a Chrome trace in the scratch, which `pyspy_steps.py`
+# children, and records it and its subprocesses at PYSPY_HZ, 20, without pausing them (blocking samples at 250 Hz doubled a
+# 26 ms step), as a Chrome trace in the scratch, which `pyspy_steps.py`
 # cuts to the full steps into pyspy_steps.json), SEAL_SHM=1 (the serve dir's windows/ on /dev/shm, so a seal writes to memory
 # rather than the node's network disk: what the step is when the disk doesn't bound the seal), SEQS (--max-num-seqs and --window-requests, T/1024, 2·T/1024 for graphs and async; the
 # window's request cap also bounds the requests in flight), HEADS (the merged heads, written to heads.txt with the tree's
@@ -39,7 +40,8 @@
 # RETAIN_DEVICE_GB (32) --release-after RELEASE_AFTER), STANDIN_DRAWS (protocols of RELEASE_AFTER no drawer serves yet: the
 # harness draws each window for each once its windows.jsonl line is out, reading only the step-input port's ids and
 # positions at each of its steps, 16T bytes a step, which the seal's positions check reads and the release keeps only when a
-# draw names them; standin_draws.txt counts them).
+# draw names them; standin_draws.txt counts them), STANDIN_POLL_S (0.2, how often the stand-in drawer reads windows.jsonl;
+# serve-openai scans its draws every VERITY_DRAWS_POLL_S, also 0.2: with the seal's store slim, a window's release waits on both).
 # A Commit arm at T 8,192 needs VERITY_LEARN_HOST_BUDGET_MB above its step's committed bytes (the default 4,096 MiB fails
 # every step closed: "bounded staging: learning step 0 exceeds the transient host budget").
 # Published ($OUT): util.json and util.txt, the profile (prof.nsys-rep), serve.json, summary.json, windows.jsonl's timings
@@ -165,8 +167,8 @@ if [ "${SEAL_SHM:-0}" = 1 ]; then
   mkdir -p "/dev/shm/vllm-util80/${RESEARCH_RUN_ID:-local}" && rm -rf "$D/windows" && ln -sfn "/dev/shm/vllm-util80/${RESEARCH_RUN_ID:-local}" "$D/windows"
 fi
 if [ "${PYSPY:-0}" = 1 ]; then
-  serve=("$ROOT/tools/pyspy/bin/py-spy" record --rate "${PYSPY_HZ:-20}" --idle --threads --subprocesses --nolineno
-         --format chrometrace -o "$SCR/pyspy.json" -- "${serve[@]}")
+  serve=("$ROOT/tools/pyspy/bin/py-spy" record --rate "${PYSPY_HZ:-20}" --nonblocking --idle --threads --subprocesses
+         --nolineno --format chrometrace -o "$SCR/pyspy.json" -- "${serve[@]}")
   date -u +%s.%N > "$SCR/pyspy.t0"
 fi
 SESS=util80-${RESEARCH_RUN_ID:-local}
@@ -180,7 +182,7 @@ srv=$!
 drawer=
 if [ -n "${STANDIN_DRAWS:-}" ]; then
   "$PY" -c 'import json, os, sys, time
-d, protos, done = sys.argv[1], [p for p in sys.argv[2].split(",") if p], set()
+d, protos, poll, done = sys.argv[1], [p for p in sys.argv[2].split(",") if p], float(sys.argv[3]), set()
 while True:
     try:
         lines = open(f"{d}/windows.jsonl").read().split("\n")[:-1]
@@ -199,7 +201,7 @@ while True:
                 os.rename(tmp, f"{d}/draws/w{k}.{p}.json")
                 done.add((k, p))
                 print(f"w{k} {p}", flush=True)
-    time.sleep(0.2)' "$D" "$STANDIN_DRAWS" > "$OUT/standin_draws.txt" 2>&1 &
+    time.sleep(poll)' "$D" "$STANDIN_DRAWS" "${STANDIN_POLL_S:-0.2}" > "$OUT/standin_draws.txt" 2>&1 &
   drawer=$!
 fi
 spid=
