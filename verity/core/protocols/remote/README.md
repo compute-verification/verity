@@ -180,7 +180,7 @@ its work. The composite accepts only if every subprotocol accepts and their comm
 
 **Assumes.** PoUW's premises:
 
-- the proof service is sound (`Properties.Pouw.Period.ServiceSound`), a named assumption no theorem discharges yet;
+- the proof system is sound (`Properties.Pouw.Period.ServiceSound`), a named assumption no theorem discharges yet;
 - the published draw is the coin's (`DrawIsCoin`), and registration precedes the draw (`RegisteredBeforeDraw`);
 - the salt is a live coin (`SaltIsLiveCoin`), and the staged statement pins the receipts' tile (`StagedPins`);
 - PoUW's per-step receipts bind (`OperandHMu`, `ReceiptLuckAt`, `GuessLuckAt`, `UnitFixed`).
