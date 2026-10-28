@@ -142,7 +142,7 @@ def test_a_window_on_a_gate_session_that_served_no_step_still_opens_and_closes_i
     session opened on an empty round 0 and closed, and its end entry waited for, so the session it took doesn't leave its
     period incomplete."""
     srv, auditor = _Server(monkeypatch), _GateAuditor(tmp_path, monkeypatch)
-    sessions = SH.GateSessions(CC.Gate(GATE, auditor.run), PEER, STEPS, wait=auditor.settle, listens=lambda port: True)
+    sessions = SH.GateSessions(CC.ChallengerGate(GATE, auditor.run), PEER, STEPS, wait=auditor.settle, listens=lambda port: True)
     arm = SH.H1Windows(srv.model, srv.com, ROWS, STEPS, engine=object(), out=tmp_path, unit=_unit(), sessions=sessions)
     arm.open(0)
     run = pouw.h1_run(SH.ENTRY)
