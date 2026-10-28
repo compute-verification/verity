@@ -25,7 +25,8 @@
 #     `--protocol ids`), is refused before the lease. The
 #     lease ends once every closed window is sealed. What names a window's requests (the serve dir's windows.jsonl,
 #     seals.jsonl and requests.jsonl, the load's records, timings file and log) stays in the serve dir on the node; what
-#     leaves it is their aggregate ($OUT/serve/overhead.json) and verdict lines that count no window's requests.
+#     leaves it is their aggregate ($OUT/serve/overhead.json, except with LOAD=front, whose warden-paced load no stock
+#     control compares to) and verdict lines that count no window's requests.
 #  3. sampled proofs, on the window `served_verdicts.py window` picks (the most requests, none carried across windows; its
 #     WINDOW line gives its engine steps and whether its requests filled the SLOTS slots, and CLASSES the window circuit's
 #     classes beside the certifier's scan class, CERTIFIER_SCAN, default W63, the one the gate serves): every
@@ -419,9 +420,14 @@ EOF
 [ "${PIPESTATUS[0]}" = 0 ] || stop seal 11
 for f in serve.json period.json; do cp "$D/$f" "$OUT/serve/" 2>/dev/null; done
 [ -d "$D/h1" ] && (cd "$D" && find h1 -name pouw-h1-calls.json -exec cp --parents {} "$OUT/serve/" \;)
-# the serve dir's step trace and the load's records stay on the node; what the stock control's table reads is their aggregate
-"$PY" "$TREE/benchmarks/one_stage/served_overhead.py" metrics "$D" > "$OUT/serve/overhead.json" 2> "$D/overhead.err" \
-  || { say "OVERHEAD: no aggregate: $(cut -c1-300 "$D/overhead.err")"; rm -f "$OUT/serve/overhead.json"; }
+# the serve dir's step trace and the load's records stay on the node; what the stock control's table reads is their aggregate.
+# A front's load is the warden's, paced by its buckets, which no stock run's is, and one window's aggregate is its timing.
+if [ "$LOAD" = front ]; then
+  say "OVERHEAD: none with LOAD=front (the warden paces its requests, so no stock control compares)"
+else
+  "$PY" "$TREE/benchmarks/one_stage/served_overhead.py" metrics "$D" > "$OUT/serve/overhead.json" 2> "$D/overhead.err" \
+    || { say "OVERHEAD: no aggregate: $(cut -c1-300 "$D/overhead.err")"; rm -f "$OUT/serve/overhead.json"; }
+fi
 
 # 3. sampled proofs: the window, its advice and Programs, V3b's window circuit, then C-Flock --zk and the Lean verifier
 PICK=$("$PY" benchmarks/one_stage/served_verdicts.py window "$D" --slots "$SLOTS" ${WINDOW:+--window "$WINDOW"} 2> "$OUT/window.err")
