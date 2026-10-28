@@ -476,7 +476,7 @@ class DeviceEncoded(audit.Store):
         self.blocks: list[bytes | None] = list(encoded)
         self.appends: list[audit.Append] = []
         self.pending: dict[int, tuple[bytes, ...]] = {}
-        self.append_coins: dict[int, bytes] = {}
+        self.coin_of: dict[int, bytes] = {}
         self.gates = {"registered": len(encoded), "appends": 0, "blocks_checked": len({0, len(encoded) - 1})}
 
     def _gate(self, block: bytes, payload: bytes, j: int, coin: bytes | None = None) -> None:
@@ -492,7 +492,7 @@ class DeviceEncoded(audit.Store):
         encoded = self.device.encode(payloads, first, [rcodec.binding(d, first + u, k, coin) for u, d in enumerate(digests)])
         self._gate(encoded[0], payloads[0], first, coin)
         del self.pending[first]
-        self.append_coins[first] = coin
+        self.coin_of[first] = coin
         self.blocks[first:first + len(encoded)] = encoded
         self.gates["appends"] += 1
         self.gates["blocks_checked"] += 1

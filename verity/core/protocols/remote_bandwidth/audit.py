@@ -500,7 +500,7 @@ class Store:
         self.blocks: list[bytes | None] = [codec.encode(m, j, k) for j, m in enumerate(self.payloads)]
         self.appends: list[Append] = []
         self.pending: dict[int, tuple[bytes, ...]] = {}
-        self.append_coins: dict[int, bytes] = {}
+        self.coin_of: dict[int, bytes] = {}
 
     @property
     def extent(self) -> int:
@@ -538,7 +538,7 @@ class Store:
         k = self.registration.key
         encoded = [codec.encode(m, first + u, k, bound=True, coin=coin) for u, m in enumerate(payloads)]
         del self.pending[first]
-        self.append_coins[first] = coin
+        self.coin_of[first] = coin
         self.blocks[first:first + len(encoded)] = encoded
 
     def _append_of(self, j: int) -> Append:
@@ -560,7 +560,7 @@ class Store:
         a = self._append_of(j)
         if a.first in self.pending:
             return self.pending[a.first][j - a.first]
-        m = codec.decode(self.blocks[j], j, self.registration.key, a.digests[j - a.first], self.append_coins[a.first])
+        m = codec.decode(self.blocks[j], j, self.registration.key, a.digests[j - a.first], self.coin_of[a.first])
         if m is None:
             raise ValueError(f"block {j} decodes to no payload of its digest under its append's coin")
         return m
