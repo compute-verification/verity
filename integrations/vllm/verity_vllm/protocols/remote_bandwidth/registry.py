@@ -28,8 +28,7 @@ the registration's root before the session's first.  The reference computes ever
 The plan and the tree are the remote bandwidth driver's, imported (`rb`, its `receipts`): a pass's plan is its
 `Plan` (canonical runs of distinct blocks; `plan_digest` is its digest in numpy), its tree `rb.domain`'s
 frame-v3-sha512 over leaves of ``PER_LEAF`` receipts in plan order, each `rb.hidden` as an hm96-sha512/row/v2 leaf
-under its salt, and an opening carries its leaf's `merkle.Opening` in that tree, which verifies as `rb.verify_leaf`
-verifies a leaf.  `RemoteBandwidthReceipt` is its receipt.  The seed is
+under its salt, and an opening verifies by `rb.verify_leaf`.  `RemoteBandwidthReceipt` is its receipt.  The seed is
 the chained one (`chain`, under its seed domain).  A leaf's salt is `Store.salt`, a PRF of the store's secret key, so
 no salt is kept.
 """
