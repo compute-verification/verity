@@ -1,4 +1,5 @@
-"""Synthetic serving traces in I1 v0's form, for measuring the codes before TRACE-CORPUS's real ones (and beside them).
+"""Synthetic serving traces in I1 v0's form, for measuring the codes before the trace corpus's real ones (and beside
+them).
 
 A vLLM-V1-like engine on the bucket clock:
 - **Arrivals**: Poisson at `rate` requests per second. Request j arrives in bucket `b_j` (its certified anchor), and the
