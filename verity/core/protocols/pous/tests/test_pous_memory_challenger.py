@@ -1,4 +1,5 @@
-"""The memory challenger (`memory_challenger`): the coin tree's commit and openings, the signed session record, the
+"""The memory challenger (`memory_challenger`): the coin tree, released with its openings only once the session is
+signed, the signed session record, the
 verdict that fails closed, the whole block hashed under `sha512/row/v2`, a late round that ends the session with no retry,
 no garbage collection inside the rounds, and the session log that refuses a used id.  Every clock is injected."""
 from __future__ import annotations
@@ -68,15 +69,25 @@ def judge(c, signed, signer, *, schemes_=ts.SCHEMES, openings=None):
                       trusted={signer.public_key}, schemes=schemes_)
 
 
-def test_coin_tree_commits_before_and_opens_after():
+def test_coin_tree_is_released_after_the_last_answer():
     tree = coins()
     want = mc.derive(SOURCE, mc.COIN_DOMAIN, {"session": SESSION, "blocks": BLOCKS, "k": K})
     assert tree.indices == tuple(want.uniform(BLOCKS, j) for j in range(K))
     c = mc.MemoryChallenger(tree, ts.TestSigner(b"k", height=1), log=ts.session_log(), limit_ns=LIMIT,
                             block_bytes=BLOCK_BYTES, binding=ROOT, clock=Clock())
-    assert c.commitment.coin_root == tree.root and len(tree.root) == 64
-    with pytest.raises(RuntimeError, match="opened after the session"):
-        c.openings()
+    for j in range(K):
+        with pytest.raises(RuntimeError, match="released after the session"):
+            _ = c.commitment
+        with pytest.raises(RuntimeError, match="opened after the session"):
+            c.openings()
+        assert c.challenge() == tree.indices[j]
+        c.receive(block(tree.indices[j]))
+    assert c.done
+    with pytest.raises(RuntimeError, match="released after the session"):
+        _ = c.commitment
+    signed = c.close()
+    assert c.commitment == signed.commitment and c.commitment.coin_root == tree.root and len(tree.root) == 64
+    assert c.openings() == tuple(tree.opening(j) for j in range(K))
     for j in range(K):
         assert mc.verify_coin(c.commitment, tree.opening(j))
     o = tree.opening(3)

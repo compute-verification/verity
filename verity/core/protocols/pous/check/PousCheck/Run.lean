@@ -48,8 +48,8 @@ def DEPLOYED : Point := ⟨P2.Params.deployed, K, DELTA_NS + RTT_CAP_NS⟩
 /-- The setup salt's bytes. -/
 def SALT : Nat := 24
 
-/-- One challenge phase as the memory challenger records it: what it signed, the commitment published before it and its
-coin openings. Which keys are trusted is the verifier's, never the record's (`check`'s `trusted`). -/
+/-- One challenge phase as the memory challenger records it: what it signed, the commitment it released with it and
+its coin openings. Which keys are trusted is the verifier's, never the record's (`check`'s `trusted`). -/
 structure ChallengePhase where
   signed : SignedSession
   commitment : SessionCommitment
