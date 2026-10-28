@@ -26,8 +26,8 @@ is one lane. Every lowering runs with `HZ_STAGE=fast` and with `H1_TMPL` unset (
   meets the target's time (r20261028-192717-8754).
 - **Past K 4096 the lane can't fit C-Flock's block.** Compose gives the unit section a power-of-two slot and puts the SHA and
   hm96 ranges beside it (`circuit._ranges`), so k_log ≤ 27 needs the unit under 2^26 rows, about 67M. A lane has
-  1.66M + 11,130 K ANDs: about 93M at K 8192 and 161M at K 14336. The lane's k_log was 25 at K 448 and 26 at K 1024 and
-  K 2048.
+  1.73M + 11,060 K ANDs: about 92M at K 8192 and 160M at K 14336. The lane's k_log was 25 at K 448, 26 at K 1024 and
+  K 2048, and 27 at K 4096.
 
 ## The two numbers and the guard
 
@@ -51,17 +51,40 @@ its k_log is at most 27. The tile is bound to `{"partition": "0"*128, "program":
 | target | ≤ 16 GiB, ≤ 15 min, k_log ≤ 27 | the same |
 | stretch | lanes at K 8192 and K 14336 in ≤ 64 GiB, ≤ 60 min and 2^27 | |
 
-The baseline's fit over the three lanes measured (`fit.py`, within 4.3% of each) projects these lanes:
+A lane's ANDs are linear in K: 1.73M + 11,060 K, within 1.4% of each lane measured. That is about 92M at K 8192 and 160M at
+K 14336. Its peak and wall time grow faster than that past K 2048:
 
-| K | ANDs | peak GiB | wall min |
-| --- | --- | --- | --- |
-| 4096 | 47.2M | 77.3 | 24.3 |
-| 8192 | 92.8M | 152.2 | 47.9 |
-| 14336 | 161.2M | 264.4 | 83.1 |
+| K | peak GiB per K | wall min per K | peak B/AND | file B/AND |
+| --- | --- | --- | --- | --- |
+| 448 → 1024 | 0.0168 | 0.0051 | 1,797 → 1,693 | 373 → 428 |
+| 1024 → 2048 | 0.0190 | 0.0060 | 1,693 → 1,764 | 428 → 489 |
+| 2048 → 4096 | 0.0323 | 0.0076 | 1,764 → 2,428 | 489 → 571 |
+
+The K 4096 lane (r20261028-193352-e765) took 106.2 GiB and 28.1 min, with k_log 27. If the last step's rates hold, a lane
+needs at least 238 GiB and 59 min at K 8192, and 437 GiB and 105 min at K 14336. `fit.py`'s linear peak doesn't describe
+this: its residual over the four lanes is 46%.
 
 The fixed part is about 2.5 GiB and 0.8 min, which is the combine's whole cost. So meeting the target at K 2048 takes at most
 about 590 B a lane AND. For the block, the stretch takes a unit of under 2^26 rows (about 66.8M ANDs): 28% fewer ANDs at
 K 8192 and 59% fewer at K 14336.
+
+## By leaf, at K 2048
+
+A lane is 4 rows by 8 columns at any leaf, so one statement's cost barely depends on the leaf. These are all measured, flat
+on d40fe21d26's lowering:
+
+| leaf | statement | run | ANDs | peak GiB | wall min | k_log |
+| --- | --- | --- | --- | --- | --- | --- |
+| 4 × 8 | tile (its one lane) | r20261028-195458-d820 | 24,353,765 | 39.783 | 12.32 | 26 |
+| 8 × 8 | tile (two lanes) | r20261028-195504-f270 | 45,063,832 | 74.334 | 23.82 | 27 |
+| 16 × 16 | lane (8 lanes, one circuit) | r20261028-195336-48bf | 24,374,031 | 39.957 | 12.61 | 26 |
+| 16 × 16 | combine | r20261028-195348-bdfb | 4,223 | 2.797 | 0.81 | 23 |
+| 32 × 32 | lane (32 lanes, one circuit) | r20261028-192717-8754 | 24,411,115 | 40.110 | 12.67 | 26 |
+| 32 × 32 | combine | r20261028-192737-c341 | 4,223 | 2.799 | 1.00 | 25 |
+
+The 8 × 8 tile costs 1.85 lanes and is at the cap (k_log 27): it is the largest tile that is one block at K 2048, and its
+74.3 GiB and 23.8 min miss the target as a lane does, at the same 1.77 KB an AND. The tile as one statement is past the block
+from 16 × 16. `fit.py` over the nine tiles puts it at about 159M ANDs at 16 × 16, and 606M at 32 × 32.
 
 ## The baseline
 
@@ -76,6 +99,13 @@ These are main's lowering at d40fe21d26 (the harness's branch changes none of it
 | lane | 448 | 32 × 32 | r20261028-192650-520b | 6,587,943 | 2,456,417,158 | 11.025 | 3.55 | 25 |
 | lane | 1024 | 32 × 32 | r20261028-192712-4f61 | 13,126,706 | 5,613,470,942 | 20.699 | 6.48 | 26 |
 | lane | 2048 | 32 × 32 | r20261028-192717-8754 | 24,411,115 | 11,928,476,042 | 40.110 | 12.67 | 26 |
+| lane | 4096 | 32 × 32 | r20261028-193352-e765 | 46,979,920 | 26,845,806,510 | 106.223 | 28.15 | 27 |
+| combine | 448 | 16 × 16 | r20261028-195343-dc43 | 1,023 | 55,787,617 | 2.797 | 0.81 | 23 |
+| combine | 2048 | 16 × 16 | r20261028-195348-bdfb | 4,223 | 56,569,248 | 2.797 | 0.81 | 23 |
+| lane | 448 | 16 × 16 | r20261028-195330-37f4 | 6,551,065 | 2,452,561,376 | 10.936 | 3.44 | 25 |
+| lane | 2048 | 16 × 16 | r20261028-195336-48bf | 24,374,031 | 11,925,211,408 | 39.957 | 12.61 | 26 |
+| tile | 2048 | 4 × 8 | r20261028-195458-d820 | 24,353,765 | 11,966,464,478 | 39.783 | 12.32 | 26 |
+| tile | 2048 | 8 × 8 | r20261028-195504-f270 | 45,063,832 | 23,734,216,333 | 74.334 | 23.82 | 27 |
 | tile | 64 | 4 × 8 | r20261028-184657-1d80 | 2,384,742 | 660,464,727 | 4.912 | 1.79 | |
 | tile | 64 | 8 × 8 | r20261028-190833-eb4e | 3,819,091 | 1,155,450,279 | 6.687 | 1.98 | |
 | tile | 256 | 4 × 8 | r20261028-190839-670c | 4,155,238 | 1,517,594,569 | 7.594 | 2.34 | |
@@ -124,22 +154,23 @@ Every lowering runs remotely (AGENTS.md "Tests"). The file goes in a scratch dir
 ```text
 research run --on auto --cwd source --mem-gb 64 --timeout 60m -- bash -lc 'uv sync -q --all-packages --extra torch-cpu &&
   d=$(mktemp -d) && trap "rm -rf $d" EXIT &&
-  .venv/bin/python benchmarks/unit_lowering/run.py --unit lane --k 2048 --scratch "$d" --out "$OUT" [--guard]'
+  .venv/bin/python benchmarks/unit_lowering/run.py --unit lane --k 2048 --tile 16,16 --scratch "$d" --out "$OUT" [--guard]'
 ```
 
-- `run.py --k K [--unit tile|lane|combine] [--tile R,C] [--form flat|structural] --scratch DIR --out DIR [--guard [all]]
+- `run.py --k K --tile R,C [--unit tile|lane|combine] [--form flat|structural] --scratch DIR --out DIR [--guard [all]]
   [--tree PATH]` writes `OUT/unit_lowering.json`. The record holds `unit`, `k`, `tile`, `form`, `peak_gib`, `wall_min`,
   `bytes`, `ands`, `k_log`, `sha512` and `commit`, plus each section's rows. It prints `UNIT-LOWERING unit=.. k=.. tile=RxC
   form=.. peak_gib=.. wall_min=.. ands=.. bytes=.. k_log=.. sha512=<16 hex>`.
-- A lane or combine is always on the 32 × 32 leaf, at any K from 384 (the combine's floor). A tile is R = 4 i rows by C = 8 j
-  columns (i j lanes, `h1tile.Layout.lanes`), at a K that is a multiple of 32 from 64. The 1 × 1 and 4 × 4 tiles fail in
-  `h1tile._xor`.
+- A tile is R = 4 i rows by C = 8 j columns (i j lanes, `h1tile.Layout.lanes`), at a K that is a multiple of 32 from 64. The
+  1 × 1 and 4 × 4 tiles fail in `h1tile._xor`. A lane or combine also needs R to be a multiple of 16, and the combine needs
+  K from 384.
 - `--guard` exits 1 and names each shape whose SHA-512 or k_log fails. `--tree PATH` runs another checkout's lowering (a
   worktree of your approach) under this harness.
 - `fit.py RECORD...` fits ANDs, bytes, peak and wall on one unit's terms and projects them:
-  - lane and combine: 1 and K, projected to K 2048, 8192 and 14336;
+  - lane and combine, one leaf at a time: 1 and K, projected to K 2048, 8192 and 14336 at that leaf;
   - tile: 1, R C, R C K and (R + C) K, projected to (2048, 32 × 32), (8192, 32 × 32) and (128, 32 × 32).
-- `mem_profile.py --k K --tile R,C --scratch DIR --out DIR [--frames N]` runs the tile's lowering in-process. It reports:
+- `mem_profile.py --k K --tile R,C [--unit tile|lane|combine] --scratch DIR --out DIR [--frames N]` runs the lowering
+  in-process. It reports:
   - each phase's peak: `unit_lowering`, `ir_lower.lower`, `ir_lower.layout`, `circuit.compose`, the netlist, the digests;
   - a census of live objects by type at the peak;
   - with `--frames`, tracemalloc's allocation sites.
@@ -152,9 +183,9 @@ research run --on auto --cwd source --mem-gb 64 --timeout 60m -- bash -lc 'uv sy
 Every measured run gets a label:
 
 ```text
-research data label RUN unit_lowering '{"unit":"lane","k":2048,"tile":[32,32],"form":"flat","peak_gib":..,"wall_min":..,
-  "ands":..,"bytes":..,"k_log":..,"guard":"pass|fail|n/a","approach":"<approach>","commit":"<branch>@<sha>"}' --value-json
-  --by LANE --ref RUN
+research data label RUN unit_lowering '{"unit":"lane","k":2048,"tile":[R,C],"form":"flat","peak_gib":..,"wall_min":..,
+  "ands":..,"bytes":..,"k_log":..,"peak_b_per_and":..,"file_b_per_and":..,"guard":"pass|fail|n/a","approach":"<approach>",
+  "commit":"<branch>@<sha>"}' --value-json --by LANE --ref RUN
 ```
 
 Runs of d40fe21d26's lowering carry the approach `baseline`. To read the leaderboard:
