@@ -515,9 +515,9 @@ theorem ScopeZR.parseH {I : Inputs} (h : ScopeZR I) (hh : I.tags.hiddenOutputs =
 /-- **At tags that are not a templated statement's, `HmOut.parse` reads the session's circuit** under
 `--zk --registered`, at hidden outputs (`Checks.flat_of_isTmpl`). -/
 theorem ScopeZR.parseHF {I : Inputs} (h : ScopeZR I) (hh : I.tags.hiddenOutputs = true)
-    (hi : (zkTags I).isTmpl = false) :
+    (hi : I.tags.isTmpl = false) :
     HmOut.parse (zkTags I) I.circuitFile I.tables = .ok (circZ I) :=
-  Checks.parseH h (by rw [zkTags_hiddenOutputs]; exact hh) (Checks.flat_of_isTmpl h hi)
+  Checks.parseH h (by rw [zkTags_hiddenOutputs]; exact hh) (Checks.flat_of_isTmpl h (by rw [zkTags_eq]; exact hi))
 
 theorem ScopeZR.loadH {I : Inputs} (h : ScopeZR I) (hh : I.tags.hiddenOutputs = true) :
     HmOut.loadPublic (zkTags I) (circZ I) I.publicFile = .ok (pubZ I) :=

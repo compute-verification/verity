@@ -49,16 +49,16 @@ theorem parse_zkTags_vstar {I : Inputs} {t₀ : Flock.Tags} (hT : I.tags = t₀)
   simp only [zkTags, zkCoins, Flock.Zk.tags, withCoins_tree, parse_identity]
 
 /-- **A session of V*'s statement `Q` loads it**, at V*'s tags and no lookup tables, when its circuit file parses at
-the file's constant tags to `Q`'s circuit and its registered population has `Q`'s units: the session's circuit is the
-file's parse at `zkTags I` (`ScopeZR.parseH`, untyped: `Hidden.parse_untyped`), which is that constant
-(`parse_zkTags_vstar`). -/
+the file's constant tags to `Q`'s circuit and its registered population has `Q`'s units, at untemplated tags: the
+session's circuit is the file's parse at `zkTags I` (`ScopeZR.parseHF`, untyped: `Hidden.parse_untyped`), which is that
+constant (`parse_zkTags_vstar`). -/
 theorem loads_of_check {t₀ : Flock.Tags} {Q : VStmt} {Reg' : Type} (x : Q.OuterR Reg') (hck : ScopeZR x.I)
-    (hT : x.I.tags = t₀) (htab : x.I.tables = [])
+    (hT : x.I.tags = t₀) (hi : t₀.isTmpl = false) (htab : x.I.tables = [])
     (hp : HmRow.parse (Flock.Zk.tags (t₀.withCoins (.tree (Flock.Zk.coinSpec #[t₀.table])))
       (Flock.Zk.maskLogOf x.I.circuitFile) 1) x.I.circuitFile [] = .ok Q.c) (hn : (pubZ x.I).n = Q.nv) :
     Q.Loads x.I := by
   have hZ : HmRow.parse (zkTags x.I) x.I.circuitFile x.I.tables = .ok (circZ x.I) :=
-    (Hidden.parse_untyped (zkTyped hck.typed) (hck.parseH x.hTags.1)).1
+    (Hidden.parse_untyped (zkTyped hck.typed) (hck.parseHF x.hTags.1 (hT ▸ hi))).1
   rw [parse_zkTags_vstar hT, htab, hp] at hZ
   exact ⟨(Except.ok.inj hZ).symm, hn⟩
 
@@ -78,31 +78,32 @@ theorem loads_of_verifiesV {S : ℕ} {i : RecVStar.Inner} {bind : Fin S → VSta
     rw [htag, find?_circuit] at h
     exact (Option.some.inj h).symm
   have hZ : HmRow.parse (zkTags x.I) x.I.circuitFile x.I.tables = .ok (circZ x.I) :=
-    (Hidden.parse_untyped (zkTyped hck.typed) (hck.parseH x.hTags.1)).1
+    (Hidden.parse_untyped (zkTyped hck.typed) (hck.parseHF x.hTags.1 (isTmpl_of_name htag))).1
   rw [parse_zkTags_vstar hT, htab] at hZ
   obtain ⟨hc, hnv⟩ := hob j ss s _ _ hss hj hf hZ (scope_of_accepts x t hacc hck)
   exact ⟨hc, hn.trans hnv.symm⟩
 
-/-- **A session the verifier of record accepts types**, where its inputs pass the statement check and load V*'s
-statement (`hL`): the record carries the draw (custody), at which table 0 sets up (`setupZHJ_of_acceptsZKI`). -/
+/-- **A session the verifier of record accepts types**, where its inputs pass the statement check at untemplated tags
+and load V*'s statement (`hL`): the record carries the draw (custody), at which table 0 sets up
+(`setupZHJ_of_acceptsZKI`). -/
 theorem typable_of_accepts {Q : VStmt} {Reg' : Type} (x : Q.OuterR Reg')
     (hRec : RecordsLiveZKJ x.I x.dj (fun _ _ => Q.J) x.wr) (ω : Q.law.live.Ω) (R : Reg') (o : LiveOutJ Q.J Q.mPts)
-    (hacc : AcceptsZKR x.I x.own (x.wr (Q.law.live.draw ω) R o)) (hck : ScopeZR x.I) (hL : Q.Loads x.I) :
-    x.Typable := by
+    (hacc : AcceptsZKR x.I x.own (x.wr (Q.law.live.draw ω) R o)) (hck : ScopeZR x.I) (hL : Q.Loads x.I)
+    (hi : x.I.tags.isTmpl = false) : x.Typable := by
   have hacc' := acceptsZK_of_R hacc
-  exact ⟨hck, hL.1, hL.2, _, _, ZkHidden.setupZHJ_of_acceptsZKI x.I x.hTags.1 hck.typed (hck.parseH x.hTags.1)
-    x.dj hacc' (hRec _ R o hacc').1 (x.hDraw ω) ⟨0, nTab_pos _⟩⟩
+  exact ⟨hck, hi, hL.1, hL.2, _, _, ZkHidden.setupZHJ_of_acceptsZKI x.I x.hTags.1 hck.typed
+    (hck.parseHF x.hTags.1 hi) x.dj hacc' (hRec _ R o hacc').1 (x.hDraw ω) ⟨0, nTab_pos _⟩⟩
 
 /-- **A session that never types accepts nowhere** where its inputs pass the statement check, for an event at which it
-accepts and loads V*'s statement: an acceptance would type it (`typable_of_accepts`). -/
+accepts, loads V*'s statement and is at untemplated tags: an acceptance would type it (`typable_of_accepts`). -/
 theorem prob_game_untypable {Q : VStmt} {Reg' : Type} (x : Q.OuterR Reg')
     (hRec : RecordsLiveZKJ x.I x.dj (fun _ _ => Q.J) x.wr)
     (hx : ¬ x.Typable) (hck : ScopeZR x.I) {P : Reg' × Finset (Fin Q.nv) × Exec.Transcript → Prop}
-    (hP : ∀ o, P o → LiveAcceptsZKR x.I x.own o ∧ Q.Loads x.I) (dg : ByteArray → ByteArray) (N : ℕ)
-    (τ : Strategy (x.game dg N)) : prob P (x.game dg N) τ = 0 :=
+    (hP : ∀ o, P o → LiveAcceptsZKR x.I x.own o ∧ Q.Loads x.I ∧ x.I.tags.isTmpl = false)
+    (dg : ByteArray → ByteArray) (N : ℕ) (τ : Strategy (x.game dg N)) : prob P (x.game dg N) τ = 0 :=
   le_antisymm ((prob_auditLive_liveJ_mono dg N x.wr τ (p := P) (q := fun _ => False)
-    fun ω o' h => hx (typable_of_accepts x hRec ω τ.1 o' (hP _ h).1 hck (hP _ h).2)).trans (prob_false _ _).le)
-    (zero_le ..)
+    fun ω o' h => hx (typable_of_accepts x hRec ω τ.1 o' (hP _ h).1 hck (hP _ h).2.1 (hP _ h).2.2)).trans
+      (prob_false _ _).le) (zero_le ..)
 
 /-- **Where a session of index `j₀` never types, the raw sessions' event is empty**, for an event at which every
 session accepts as V*'s statement of its index and passes the statement check, where every session's inputs carry the
@@ -119,8 +120,8 @@ theorem prob_sessionsR_untypable {S : ℕ} {Vs : Fin S → VStmt} {Reg' : Type} 
   by_cases hck : ScopeZR (zr j₀).I
   · have hP : ∀ o : Reg' × Finset (Fin (Vs j₀).nv) × Exec.Transcript,
         LiveAcceptsZKV i j₀ (bind j₀) rows (zr j₀).I (zr j₀).own o →
-        LiveAcceptsZKR (zr j₀).I (zr j₀).own o ∧ (Vs j₀).Loads (zr j₀).I :=
-      fun o h => ⟨h.1, loads_of_verifiesV hob j₀ (zr j₀) o.2.2 h hck (hF j₀)⟩
+        LiveAcceptsZKR (zr j₀).I (zr j₀).own o ∧ (Vs j₀).Loads (zr j₀).I ∧ (zr j₀).I.tags.isTmpl = false :=
+      fun o h => ⟨h.1, loads_of_verifiesV hob j₀ (zr j₀) o.2.2 h hck (hF j₀), flat_of_acceptsV (zr j₀) o.2.2 h hck⟩
     refine le_antisymm (((prob_mono (q := fun b : VRec Vs Reg' dg N =>
         ∃ j, j = j₀ ∧ LiveAcceptsZKV i j (bind j) rows (zr j).I (zr j).own (b j).2)
         (fun b hb => ⟨j₀, rfl, (hp b hb).1 j₀⟩) _ _).trans
