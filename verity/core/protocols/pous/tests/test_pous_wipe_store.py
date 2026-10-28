@@ -24,6 +24,7 @@ import pytest
 
 import pous_test_signer as ts
 import pous_test_site as tsite
+from verity.core.deploy.stream import Side
 from verity.core.protocols.pous import memory_challenger as mc
 from verity.core.protocols.pous import streamed_wipe as sw
 from verity.core.protocols.pous import wipe_party as WP
@@ -255,8 +256,8 @@ def test_the_leg_on_a_gpu_declares_its_driver_reserve(tmp_path, monkeypatch, nvm
     _drivers(monkeypatch, {"libcuda.so.1": cuda_on_host(cuda)} | ({WS.NVML: nvml_of({BUS: tier}, [])} if nvml else {}))
     period, device = _period(tmp_path, {"challenger_host": "auditor", "wipe": {"store": "cuda", "segments": 1}},
                              (("gpu-hbm", tier),))
-    side = WP.Party("auditor", (sys.executable, str(Path(__file__).parent / "wipe_side.py"), str(device)))
-    monkeypatch.setattr(WP.Party, "of", classmethod(lambda cls, doc, node, d, extra=(): side))
+    side = Side("auditor", (sys.executable, str(Path(__file__).parent / "wipe_side.py"), str(device)))
+    monkeypatch.setattr(WP, "side_of", lambda doc, node, d, extra=(): side)
     out = tmp_path / "out"
     answer = W.leg(period, "n0", out)
     record = json.loads((out / "wipe.json").read_text())
@@ -287,8 +288,8 @@ def test_the_leg_on_a_disk_and_a_gpu_declares_the_gpus_driver_reserve(tmp_path, 
         "store": "cuda", "segments": 1,
         "disk": {"paths": [str(target)], "bytes": 1 << 25, "reserve_bytes": 0, "direct": None}}},
         (("disk", _disk_total(target)), ("gpu-hbm", tier)))
-    side = WP.Party("auditor", (sys.executable, str(Path(__file__).parent / "wipe_side.py"), str(device)))
-    monkeypatch.setattr(WP.Party, "of", classmethod(lambda cls, doc, node, d, extra=(): side))
+    side = Side("auditor", (sys.executable, str(Path(__file__).parent / "wipe_side.py"), str(device)))
+    monkeypatch.setattr(WP, "side_of", lambda doc, node, d, extra=(): side)
     out = tmp_path / "out"
     answer = W.leg(period, "n0", out)
     assert answer["verdict"] == "accept", answer
@@ -313,9 +314,9 @@ def test_the_leg_on_a_store_with_a_native_fill(tmp_path, monkeypatch, wipe_strea
     period, device = _period(tmp_path, {"challenger_host": "auditor",
                                         "wipe": {"store": "host", "segments": 1, "streamer": "native"}},
                              (("host-dram", 1 << 25),))
-    side = WP.Party("auditor", (sys.executable, str(Path(__file__).parent / "wipe_side.py"), str(device),
+    side = Side("auditor", (sys.executable, str(Path(__file__).parent / "wipe_side.py"), str(device),
                                 str(wipe_streamer.path)))
-    monkeypatch.setattr(WP.Party, "of", classmethod(lambda cls, doc, node, d, extra=(): side))
+    monkeypatch.setattr(WP, "side_of", lambda doc, node, d, extra=(): side)
     out = tmp_path / "out"
     answer = W.leg(period, "n0", out)
     assert answer["verdict"] == "accept", answer
@@ -336,9 +337,9 @@ def test_the_cheats_leg_rejects_under_a_simulated_placement(tmp_path, monkeypatc
     the prover kept."""
     period, device = _period(tmp_path, {"wipe": {"store": "host", "segments": 1, "foreign_bytes": "fM",
                                                  "placement": "simulated", "egress_bits": 0}}, (("host-dram", 1 << 25),))
-    side = WP.Party("n0", (sys.executable, str(Path(__file__).parent / "wipe_side.py"), str(device)))
+    side = Side("n0", (sys.executable, str(Path(__file__).parent / "wipe_side.py"), str(device)))
     extras = []
-    monkeypatch.setattr(WP.Party, "of", classmethod(lambda cls, doc, node, d, extra=(): extras.append(extra) or side))
+    monkeypatch.setattr(WP, "side_of", lambda doc, node, d, extra=(): extras.append(extra) or side)
     out = tmp_path / "out"
     assert W.main(["--period", str(period), "--out", str(out), "--node", "n0", "--expect", "reject"]) == 0
     assert extras == [("--site", str(period / "site.json"), "--egress-bits", "0")], \
@@ -448,8 +449,8 @@ def test_the_leg_on_a_disk_and_host_memory(tmp_path, monkeypatch) -> None:
         "store": "host", "segments": 1, "disk": {"paths": [str(target)], "bytes": 1 << 25, "reserve_bytes": 0,
                                                  "direct": None}}},
         (("disk", _disk_total(target)), ("host-dram", 1 << 25)))
-    side = WP.Party("auditor", (sys.executable, str(Path(__file__).parent / "wipe_side.py"), str(device)))
-    monkeypatch.setattr(WP.Party, "of", classmethod(lambda cls, doc, node, d, extra=(): side))
+    side = Side("auditor", (sys.executable, str(Path(__file__).parent / "wipe_side.py"), str(device)))
+    monkeypatch.setattr(WP, "side_of", lambda doc, node, d, extra=(): side)
     out = tmp_path / "out"
     answer = W.leg(period, "n0", out)
     assert answer["verdict"] == "accept", answer
@@ -474,8 +475,8 @@ def test_the_leg_on_a_disk_and_the_whole_dram(tmp_path, monkeypatch) -> None:
     period, device = _period(tmp_path, {"challenger_host": "auditor", "wipe": {
         "store": "disk", "disk": {"paths": [str(target)], "bytes": 1 << 25, "reserve_bytes": 0, "direct": None},
         "dram": {"bytes": 1 << 25, "reserve_bytes": 0}}}, (("disk", _disk_total(target)), ("host-dram", whole)))
-    side = WP.Party("auditor", (sys.executable, str(Path(__file__).parent / "wipe_side.py"), str(device)))
-    monkeypatch.setattr(WP.Party, "of", classmethod(lambda cls, doc, node, d, extra=(): side))
+    side = Side("auditor", (sys.executable, str(Path(__file__).parent / "wipe_side.py"), str(device)))
+    monkeypatch.setattr(WP, "side_of", lambda doc, node, d, extra=(): side)
     out = tmp_path / "out"
     answer = W.leg(period, "n0", out)
     assert answer["verdict"] == "accept", answer
