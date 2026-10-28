@@ -20,7 +20,7 @@ import sys
 
 try:
     from verity.ml.protocols.pouw.circuit import h1tile as HT
-except ModuleNotFoundError:  # a TREE from before ONE-14 (H1V3_SHA, J10R_SHA) has h1tile in core
+except ModuleNotFoundError:  # a pinned TREE (H1V3_SHA, J10R_SHA) from before the builders left core has h1tile there
     from verity.core.protocols.pouw.circuit import h1tile as HT
 
 

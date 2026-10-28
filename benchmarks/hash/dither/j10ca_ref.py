@@ -12,7 +12,7 @@ import json
 import sys
 from concurrent.futures import ProcessPoolExecutor
 
-from verity.core.protocols.pouw.circuit import banded as BD  # CA's tree is at CA_SHA, before ONE-14
+from verity.core.protocols.pouw.circuit import banded as BD  # CA's tree (CA_SHA) has the builders in core
 
 
 def one(u: dict) -> dict:

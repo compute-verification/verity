@@ -173,7 +173,7 @@ h1v3_tree() {  # SHA DIR [PREFIX]: DIR/verity from the sent PREFIX-SHA.tar.gz (h
   mkdir -p "$2"
   if [ -f "$INPUTS/$p-$1.tar.gz" ]; then tar -xzf "$INPUTS/$p-$1.tar.gz" -C "$2"
   else git -C "$ROOT" archive "$1" verity 2>/dev/null | tar -x -C "$2" 2>/dev/null; fi
-  # h1tile is in ml from ONE-14 on, in core at the commits before it
+  # h1tile is in ml, and in core at the commits before the builders left it
   [ -f "$2/verity/ml/protocols/pouw/circuit/h1tile.py" ] || [ -f "$2/verity/core/protocols/pouw/circuit/h1tile.py" ] ||
     { echo "hb_served: ${p^^}_NO_TREE at $1" >&2; exit 14; }
 }
