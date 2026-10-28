@@ -5,10 +5,9 @@ own VM or box, under the auditor's account), never a process on the prover's nod
 
 A session has four steps:
 
-1. **Commit.** The session id is the auditor's, fixed for one audit, and the memory challenger runs at most one
+1. **Commit.** The session id is the auditor's, designated for one audit, and the memory challenger runs at most one
    session under it: its `SessionLog` refuses an id already used and records the new one, fsynced, before the
-   session's first challenge.  On the deployed party the id is derived from the audit's binding and the setup salt the
-   memory challenger drew for it, which its `SaltLog` keeps (`challenger_party.session_id`).  Before the session the memory challenger draws its `k` indices from its own secret
+   session's first challenge.  Before the session the memory challenger draws its `k` indices from its own secret
    (`verity.ml.randomness`, `COIN_DOMAIN`) and commits to them in a coin tree.  It publishes the coin tree's
    root and hm96 key together with the session's id and parameters and the root the setup published for the `C*` it
    audits (`SessionCommitment`).
@@ -438,8 +437,9 @@ class SaltLog:
     fails closed as that log does. The file is `SALT_LOG`'s line, then one entry a line: the audit's 64-byte binding, the
     64-byte commitment to `W` the salt was drawn after, and the salt, each in lowercase hex. `record` takes the file's
     lock, reads it again, refuses an audit already in it and appends the entry, fsynced, before it returns, so an audit
-    has one salt and a retry never redraws one. It rests on `trusted-host` as the session log does: its host never
-    restores an earlier copy of it."""
+    has one salt and a retry never redraws one. On the deployed party an audit's session id is derived from its binding,
+    commitment and salt (`challenger_party.session_id`), so the `SessionLog` refuses its second session. It rests on
+    `trusted-host` as the session log does: its host never restores an earlier copy of it."""
 
     def __init__(self, path: str | os.PathLike) -> None:
         self.path = Path(path)
