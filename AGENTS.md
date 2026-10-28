@@ -18,10 +18,11 @@ it contains. Your checkout and your prompt can be older than `main`: `git show o
   - `verity/ml/`: Python and CUDA: the provers, and Python that mirrors the Lean for speed. `circuits` (format in
     `circuits/PROTOCOL.md`; `ops`, the primitive circuits' Definitions; `silicon`, the GPUs' exact semantics),
     `kernels`, `commitments`, `crypto`, `randomness` (the one challenge derivation), `private_circuits`, `definitions`
-    (the served workloads' Definitions) and `flock/` (`verity_flock`, its own distribution: C-Flock, the proof
-    system's prover, with its verifier's specification in `verifier/`). Until each protocol's verifier is Lean, the units its
-    Python verifier reads are on the soundness path: `ml.circuits`, `ml.circuits.ops`, `ml.circuits.silicon`,
-    `ml.kernels`, `ml.commitments`, `ml.crypto` and `ml.randomness` (`SOUNDNESS_PATH`, which only shrinks). The rest
+    (the served workloads' Definitions), `protocols` (the circuits core's protocols' provers build, which their
+    verifiers don't read) and `flock/` (`verity_flock`, its own distribution: C-Flock, the proof system's prover, with its
+    verifier's specification in `verifier/`). Until each protocol's verifier is Lean, the units its Python verifier reads
+    are on the soundness path: `ml.circuits`, `ml.commitments`, `ml.crypto` and `ml.randomness` (`SOUNDNESS_PATH`, which
+    only shrinks); core reaches neither the catalog (`ml.circuits.ops`, `ml.circuits.silicon`) nor the kernels. The rest
     can't affect soundness.
 - `Security/`: the Lean every guarantee is stated and proved in (Lean, below).
 - `integrations/`: one directory per serving stack, holding only what attaches Verity to it. `integrations/vllm/`
