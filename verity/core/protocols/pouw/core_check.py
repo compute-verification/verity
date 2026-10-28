@@ -83,6 +83,7 @@ from typing import Any, NamedTuple
 from verity.core.protocols.pouw import coins as Co
 from verity.core.protocols.pouw import salt as PS
 from verity.core.protocols.pouw import window as Wd
+from verity.core.protocols.sampled_proofs.one_stage import registration as R
 from verity.core.protocols.sampled_proofs import challenger as Ch
 from verity.core.protocols.sampled_proofs.one_stage import registered as G
 from verity.core.protocols.pouw.audit import EPOCH_SALT_DOMAIN, SALT_DOMAIN
@@ -327,8 +328,8 @@ def commitment(b: bytes) -> dict:
 
 
 def digest(c: dict) -> bytes:
-    """`registration.digest`: SHA-512(format || 0 || the canonical record)."""
-    return hashlib.sha512(c["format"].encode() + b"\0" + c["bytes"]).digest()
+    """`registration.record_digest` over the record's own bytes: SHA-512(format || 0 || the canonical record)."""
+    return R.record_digest(c["format"], c["bytes"])
 
 
 # ---- the evidence, as `Core.Answer.ofJson` and `Core.Integrity.ofJson` read it (with `Flock.J`'s messages) ------------
