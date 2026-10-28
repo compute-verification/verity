@@ -8,8 +8,8 @@
 #     cross-check: PREDICT-COMPARE, every Program digest and the manifest's digest, Program digest and identities, gates the serve.
 #  1. serve: `verity-vllm serve-openai` of LLAMA32_1B_INT8 (REPO at REV, --precision PRECISION: verity-int8/Llama-3.2-1B-INT8, verity_int8) on one GPU
 #     under `gpu-lease`, `--scheme rows-sha512 --seal --admit release-order --window-requests SLOTS`, its committer built from
-#     B's manifest (PRED/manifest.json) and taps (HIDDEN_SO, NORM_TAP_SO); B-OF-RECORD says each sealed window's record names
-#     it, and its Program digest predict's. Each closed window is sealed as a
+#     B's manifest (PRED/manifest.json) and taps (HIDDEN_SO, NORM_TAP_SO); B-OF-RECORD says each sealed sampling block's record
+#     names it, and its Program digest predict's. Each closed window is sealed as a
 #     rows-sha512 row dir, and the seal opens each one's replay bundle (`deferred_rows.of_record`). Once it listens, before
 #     the first request, the committer registers its weights (`prove_path.py weights-registration`: each weight parameter of
 #     the checkpoint CKPT, REPO's snapshot at REV under HF_HOME, and the rotary table at the words the engine serves,
