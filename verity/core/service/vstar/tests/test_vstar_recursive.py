@@ -30,9 +30,8 @@ from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 import pytest
+import settings
 import verity_difftest as D
-
-from verity import settings
 
 LEAN = Path(__file__).resolve().parents[1]
 RECURSIVE = LEAN / "recursive"
@@ -208,7 +207,7 @@ def test_plain_leaves_under_zk_are_refused_with_the_compiled_checks_reason(tmp_p
 
 # --- a whole recursive session: a recursion_e2e run's kept data ---------------------------------------------------------------
 
-DATA = settings.VERITY_VSTAR_RECURSIVE_DATA
+DATA = settings.recursive_data()
 DEPLOYED = pytest.mark.skipif(not DATA, reason="a recursion_e2e run's kept data/TAG (KEEP_DATA=1, after STEP=lean): set "
                               "VERITY_VSTAR_RECURSIVE_DATA=DIR")
 
@@ -252,7 +251,7 @@ class Session:
 
     def check(self, inner: Inner, parts: list[Part], tmp: Path) -> list[tuple[str, bool]]:
         lean = lean_verdicts(self.exe, inner, parts, tmp)
-        with ThreadPoolExecutor(settings.LEAN_JOBS) as ex:
+        with ThreadPoolExecutor(settings.lean_jobs()) as ex:
             flock = list(ex.map(lambda jp: flock_verdict(self.flock, inner, self.rec_inner, *jp), enumerate(parts)))
         return agree(lean, flock, parts)
 
@@ -309,7 +308,7 @@ def test_an_inner_draw_that_does_not_parse_is_refused_by_both(session, tmp_path)
     inner.draw.write_bytes(session.inner.draw.read_bytes()[:-2])
     lean = lean_verdicts(session.exe, inner, session.parts, tmp_path)
     assert lean.get("refused", "").startswith("rec inner statement: Flock's plain verifier refuses it: draw: not JSON"), lean
-    with ThreadPoolExecutor(settings.LEAN_JOBS) as ex:
+    with ThreadPoolExecutor(settings.lean_jobs()) as ex:
         flock = list(ex.map(lambda jp: flock_verdict(session.flock, inner, session.rec_inner, *jp), enumerate(session.parts)))
     print(json.dumps({"lean": lean, "flock-verify": flock}))
     assert not any(f["accepted"] for f in flock), flock
