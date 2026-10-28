@@ -19,7 +19,7 @@ SCALE = int(np.float32(float(np.float32(64 ** -0.5)) * 1.4426950408889634).view(
 
 
 def value_row(widths, values) -> list[int]:
-    """#749's `ir_lower.value_row`: each value's 16-bit words, low first, in order, zero-padded to whole 64-word blocks."""
+    """`ir_lower.value_row`: each value's 16-bit words, low first, in order, zero-padded to whole 64-word blocks."""
     row = [(int(v) >> (16 * i)) & 0xFFFF for w, v in zip(widths, values) for i in range(-(-w // 16))]
     return row + [0] * (-len(row) % 64)
 
@@ -47,7 +47,7 @@ def test_a_16_bit_registered_row_is_the_ports_row():
 
 
 def test_a_32_bit_registered_row_is_the_values_row():
-    """The values row of #749: eps, the softmax scale, and both in one row, each f32 two u16 words, low first."""
+    """The values row: eps, the softmax scale, and both in one row, each f32 two u16 words, low first."""
     assert (EPS, SCALE) == (0x3727C5AC, 0x3E38AA3B)
     assert value_row([32, 32], [EPS, SCALE])[:5] == [0xC5AC, 0x3727, 0xAA3B, 0x3E38, 0]
     for rows in ([[EPS]], [[SCALE]], [[EPS, SCALE], [SCALE, EPS]]):

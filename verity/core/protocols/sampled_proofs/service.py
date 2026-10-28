@@ -273,7 +273,7 @@ class Sequential:
 
 Selection = All | Law | Sequential
 
-RETIRED_TWO_STAGE = ("two-stage sampling is retired (ASK-25: everything is committed at serve time); a selection rule is "
+RETIRED_TWO_STAGE = ("two-stage sampling is retired (everything is committed at serve time); a selection rule is "
                      "all or a law")
 """The refusal of a selection rule that names two-stage sampling, here and in the Lean verifier (`Select.retiredTwoStage`)."""
 

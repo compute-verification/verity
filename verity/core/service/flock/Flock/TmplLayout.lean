@@ -1,5 +1,5 @@
 /-
-Layout (iv) of a templated unit (PRF-133): the committed position of each of its columns, given per Definition, so the
+Layout (iv) of a templated unit: the committed position of each of its columns, given per Definition, so the
 lincheck fold can read a templated unit from its description. No verifier path reads it yet.
 
 Each Definition is laid out once, from its callees' layouts. Its own columns keep their order, in runs; a call's copies
