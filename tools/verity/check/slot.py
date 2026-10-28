@@ -317,16 +317,15 @@ def _windows(slot: dict) -> list[tuple[str, datetime, int, str]]:
 
 #: no slot starts a check while DISK has fewer free inodes or GB than these: on 27 Oct cpu-2, -4, -5 and -6 ran out of inodes with
 #: bytes to spare, and checks that started there died mid-build with ENOSPC; waiting costs less than a check lost at its end
-DISK = Path(os.environ.get("CHECK_DISK", "/workspace"))
+DISK = Path("/workspace")
 DISK_MIN_INODES, DISK_MIN_GB = 400_000, 50
 
 
 def disk_short(path: Path | None = None) -> str | None:
     """Why the disk holding `path` (DISK) can't take a check now, or None; a missing path is no refusal."""
-    try:
-        s = os.statvfs(path or DISK)
-    except OSError:
+    if not (path or DISK).is_dir():
         return None
+    s = os.statvfs(path or DISK)
     gb = s.f_bavail * s.f_frsize / 1e9
     if s.f_files and s.f_favail < DISK_MIN_INODES:
         return f"{path or DISK} has {s.f_favail} inodes free, under {DISK_MIN_INODES}"
