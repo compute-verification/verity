@@ -44,6 +44,7 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 
+import cuda_lib  # noqa: E402
 import kv as K  # noqa: E402
 
 SEED = hashlib.sha256(b"verity/word-codec/kv/bench/seed").digest()
@@ -69,27 +70,45 @@ CLOCK_LOCKED_MHZ, CLOCK_MAX_MHZ = 2092, 2430  # the nodes' locked SM clock (thei
 RATES_SCHEMA = "verity/codec-frontier-rates/v0"
 
 
+_v, _i, _q = ctypes.c_void_p, ctypes.c_int, ctypes.c_uint64
+KV = {   # kv.cu's functions every build exports (`cuda_lib.load`)
+    "kv_set_key": [_v, _i, _v],
+    "kv_encode": [_v, _v, _q, _q, _i, _i, _v],
+    "kv_decode": [_v, _v, _q, _q, _i, _i, _v, _v],
+    "kv_encode_bound": [_v, _v, _q, _q, _i, _v, _i, _v],
+    "kv_decode_bound": [_v, _v, _q, _q, _i, _v, _i, _v],
+    "kv_read": [_v, _q, _v, _i, _v],
+    "kv_chain": [_i, _i, _i, _q, _i, _v, _v],
+    "kv_spin": [ctypes.c_longlong, _v],
+    "kv_attn_shape": [_v],
+    "kv_attn": [_v, _i, _v, _v, _v, _i, _i, _i, _i, _i, _i, _v],
+    "kv_karatsuba": ([], _i),
+}
+KV_BUILT = {   # and those of some builds, each bound where the library has it
+    "kv_set_mask": [_v],
+    "kv_rc_set": [_i, _v, _v],
+    "kv_rc_buffers": [_v, _v, _v],
+    "kv_rc_pass": [_v, _v, _v],
+    "kv_rc_receipts": [_v, _q, _i, _i, _q, _v],
+    "kv_rc_tag": [_i, _q, _v],
+    "kv_rc_l2": [_q, _v, _v],
+    "kv_rc_tag16": [_i, _q, _v],
+    "kv_rc_tag8": [_i, _q, _v],
+    "kv_rc_sha_set": [ctypes.c_char_p],
+    "kv_rc_sha8": [_q, _v],
+    "kv_prim": [_i, _v, _v, _v, _i, _v],
+    "kv_decode_occ": [_v, _q, _q, _i, _i, _v, _i, _v, _v],
+}
+
+
 class Lib:
-    def __init__(self, name: str, path: str) -> None:
-        v, i, q = ctypes.c_void_p, ctypes.c_int, ctypes.c_uint64
-        self.name, self.path, self.so = name, path, ctypes.CDLL(str(Path(path).resolve()))
-        so = self.so
-        so.kv_set_key.argtypes = [v, i, v]
-        so.kv_encode.argtypes = [v, v, q, q, i, i, v]
-        so.kv_decode.argtypes = [v, v, q, q, i, i, v, v]
-        so.kv_encode_bound.argtypes = [v, v, q, q, i, v, i, v]
-        so.kv_decode_bound.argtypes = [v, v, q, q, i, v, i, v]
-        so.kv_read.argtypes = [v, q, v, i, v]
-        so.kv_chain.argtypes = [i, i, i, q, i, v, v]
-        so.kv_spin.argtypes = [ctypes.c_longlong, v]
-        so.kv_attn_shape.argtypes = [v]
-        so.kv_attn.argtypes = [v, i, v, v, v, i, i, i, i, i, i, v]
-        so.kv_karatsuba.restype = i
+    def __init__(self, name: str, path: str, functions: dict | None = None) -> None:
+        """kv.cu's library at `path`, with `functions` (another library's that includes kv.cu) bound beside its own."""
+        self.name, self.path = name, path
+        so = self.so = cuda_lib.load(Path(path).resolve(), {**KV, **(functions or {})}, KV_BUILT)
         self.field = K.field(name.split("-")[0])
         self.karatsuba = so.kv_karatsuba()
         self.mask = hasattr(so, "kv_mask") and so.kv_mask() != 0
-        if self.mask:
-            so.kv_set_mask.argtypes = [v]
         if so.kv_bits() != self.field.n:
             raise RuntimeError(f"{name}: the library is built for {so.kv_bits()} bits")
         self.kmax = so.kv_kmax()
