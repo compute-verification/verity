@@ -1975,8 +1975,9 @@ def inline_failures(policy: dict, facts: dict) -> tuple[list[Failure], dict, dic
     `Guarantees` definition unfolded once, in each conjunct, past its leading `∀` over data and split at `∧`
     (`Facts.lean`'s `inline`; instance binders aside) is one of:
 
-    - a named assumption: its head, as written or past reducible unfolding, is listed under `assumptions` or an alias of
-      listed ones (`unfolding`);
+    - a named assumption: its head, as written or past reducible unfolding, is listed under `assumptions`, an alias of
+      listed ones (`unfolding`), or a premise the premise rule lists (one of an `Assumptions` module or this repository's,
+      which fails `assumptions.unlisted-premise` until `--update` lists it);
     - another lock-listed guarantee's statement: its head is the `Guarantees` definition that guarantee is lifted into,
       which the `reads` record holds;
     - a plain range: `0 < x`, `0 ≤ x`, `x ≤ 1`, `x ≤ y` (`<` alike), each side a bound variable or a numeral, or
@@ -1997,6 +1998,7 @@ def inline_failures(policy: dict, facts: dict) -> tuple[list[Failure], dict, dic
     guarantees, assumed = policy.get("guarantees") or {}, policy.get("assumptions") or {}
     assumed = assumed if isinstance(assumed, dict) else {}
     held = set(spec.get("properties") or {}) - set(spec.get("frozen") or {})
+    own = set(facts["own_modules"]) if "own_modules" in facts else own_modules(facts)
     statements = {h: g for g in guarantees if (h := ((facts["pins"].get(g) or {}).get("lift") or {}).get("head"))}
     fails, kept, offenders = [], {g: v for g, v in allow.items() if g not in guarantees}, {}
     for g in sorted(guarantees):
@@ -2014,9 +2016,11 @@ def inline_failures(policy: dict, facts: dict) -> tuple[list[Failure], dict, dic
                 kept[g] = old
             continue
         unfolds = {k: v for p in pin.get("premises") or [] for k, v in (p.get("unfolds") or {}).items()}
+        premised = {p["head"] for p in pin.get("premises") or [] if p.get("head") and (
+            "Assumptions" in (m := p.get("module") or "").split(".") or m in own)}
 
         def named(h: str | None) -> bool:
-            return bool(h) and (h in assumed or bool((u := unfolding(h, unfolds, assumed)) and not u[1]))
+            return bool(h) and (h in assumed or h in premised or bool((u := unfolding(h, unfolds, assumed)) and not u[1]))
         bad = list(dict.fromkeys(
             printed(p["type"]) for p in pin["inline"]
             if not (p.get("closed") and p.get("outer")) and not p.get("range")

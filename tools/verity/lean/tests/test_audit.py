@@ -29,7 +29,7 @@ def sha(s: str) -> str:
 
 #: the functions whose failures make up a report, and where in what each returns its failures are (None: all of it)
 EMITTERS = {"judge": 0, "unreported": None, "dropped": None, "verifier_failures": None, "claim_failures": None,
-            "witness_failures": None, "assumption_records": 1, "shape": None, "spec_reads": None, "tree_failures": None, "scans": None, "listings": 0, "dependency_scans": 0,
+            "witness_failures": None, "inline_failures": 0, "assumption_records": 1, "shape": None, "spec_reads": None, "tree_failures": None, "scans": None, "listings": 0, "dependency_scans": 0,
             "assign": 1, "proved": 0, "replay_step": 0, "tests": 0, "run_paths": None}
 
 
@@ -1916,6 +1916,103 @@ def test_an_unwitnessed_guarantee_is_listed_with_its_statement_and_the_list_only
                                 "unwitnessed": {"P.b": h}}, {"P": "Q"}) == {
         "witnesses": {"Q.a": {"honest": ["Q.a_h"], "nontrivial": "Q.a_n"}}, "unwitnessed": {"Q.b": h}}
     assert A.renamed_witnesses(POLICY, {"P": "Q"}) == {}
+
+
+def premise(text, head=None, unfolded=None, range=False, closed=False, outer=True, binder="h"):
+    """One of `Facts.lean`'s `inline` entries: a `Prop` a guarantee takes."""
+    return {"binder": binder, "type": text, "head": head, "unfolded": unfolded or head, "range": range, "closed": closed,
+            "outer": outer}
+
+
+def inlined(*premises, **policy):
+    """(policy, facts) with `P.t` taking ``premises`` (`P.Fits` and `P.Hyp` listed, `P.SecurityProofs.u` a listed
+    guarantee lifted into `P.Guarantees.U`) and recorded."""
+    u = fact(signature="P.SecurityProofs.u : P.Guarantees.U", hyps=[], h="00000000000000bb") | {
+        "lift": {"head": "P.Guarantees.U", "module": "P.Guarantees"}, "inline": []}
+    f = facts(pins={"P.t": fact() | {"inline": list(premises)}, "P.SecurityProofs.u": u})
+    pol = POLICY | {"assumptions": {"P.Hyp": {"owner": "@lean"}, "P.Fits": {"owner": "@lean"}},
+                    "guarantees": {"P.t": {"owner": "@lean"}, "P.SecurityProofs.u": {"owner": "@lean"}}}
+    pol = A.judge(pol, f, FILES, update=True)[1] | policy
+    return pol, f
+
+
+def inline_codes(pol, f) -> list[str]:
+    return [x.code for x in A.judge(pol, f, FILES)[0] if "inline" in x.code]
+
+
+def test_a_guarantee_takes_named_assumptions_other_guarantees_and_plain_ranges_inline():
+    """Each `Prop` a guarantee takes that the rule allows: a listed assumption (as written or past reducible unfolding), a
+    premise of this repository the premise rule lists, another listed guarantee's statement, a plain range, and a closed
+    hypothesis of the statement as written (the hypotheses rule's)."""
+    ok = [premise("P.Fits n", "P.Fits"), premise("P.Within n", "P.Within", unfolded="P.Fits"),
+          premise("P.Guarantees.U", "P.Guarantees.U"), premise("0 < x", "LT.lt", range=True),
+          premise("∀ (i : Fin n), 0 ≤ w i", "LE.le", range=True), premise("P.Hyp", "P.Hyp", closed=True),
+          premise("1 = 1", "Eq", closed=True)]
+    pol, f = inlined(*ok)
+    assert inline_codes(pol, f) == []
+    owned = facts(pins=f["pins"] | {"P.t": f["pins"]["P.t"] | {
+        "inline": [premise("P.Leaves n", "P.Leaves")], "premises": [{"binder": "h", "head": "P.Leaves", "module": "P.Thms"}]}},
+        graph={"P.Thms": {"imports": ["Init"], "olean": "/r/P/.lake/build/lib/lean/P/Thms.olean"}})
+    assert inline_codes(pol, owned) == []
+    _, inline, offenders = A.inline_failures(pol, f)
+    assert inline == {} and offenders == {}
+
+
+def test_an_unnamed_inline_hypothesis_fails_with_the_fix():
+    """A `Prop` a guarantee takes that is no named assumption, no other listed guarantee's statement and no plain range
+    fails with the rule's code and fix: an equation, a bound against a term, the guarantee's own statement, the statement
+    of a guarantee the lock doesn't list, and a closed one inside a conjunct (not the statement as written)."""
+    bad = [premise("P.f n = 3", "Eq"), premise("x ≤ 2 * y", "LE.le"), premise("P.Guarantees.T", "P.Guarantees.T"),
+           premise("P.Unlisted n", "P.Unlisted"), premise("1 = 1", "Eq", closed=True, outer=False)]
+    pol, f = inlined(*bad)
+    f["pins"]["P.t"]["lift"] = {"head": "P.Guarantees.T", "module": "P.Guarantees"}
+    fails = [x for x in A.judge(pol, f, FILES)[0] if "inline" in x.code]
+    assert [(x.code, x.entry) for x in fails] == [("guarantees.inline-hypothesis", "P.t")]
+    assert fails[0] == ("guarantees: P.t takes (P.f n = 3); (x ≤ 2 * y); (P.Guarantees.T); (P.Unlisted n); (1 = 1): an "
+                        "inline hypothesis, neither a named assumption the lock lists, another listed guarantee's statement "
+                        "nor a plain range (`0 < x`, `0 ≤ x`, `x ≤ 1`, `x ≤ y`, `∀ i, 0 ≤ f i`, over bound variables and "
+                        "numerals); name it as a Prop in an Assumptions module and list it in the lock, or state it as a "
+                        "lock-listed guarantee's conclusion")
+    assert A.INLINE_FIX in fails[0]
+    assert A.inline_failures(pol, f)[2] == {"P.t": ["P.f n = 3", "x ≤ 2 * y", "P.Guarantees.T", "P.Unlisted n", "1 = 1"]}
+    unread = facts(pins=f["pins"] | {"P.t": f["pins"]["P.t"] | {"inline": None}})
+    assert inline_codes(pol, unread) == ["guarantees.inline-unread"]
+    assert inline_codes(pol, facts(pins={k: {x: y for x, y in v.items() if x != "inline"} for k, v in f["pins"].items()})) \
+        == [], "facts of an older audit tool, without `inline`"
+
+
+def test_a_grandfathered_inline_hypothesis_passes_and_the_list_only_shrinks():
+    """`shape.inline` lists the offenders when the rule came, keyed by their text with its whitespace as one space: they
+    pass, a new one fails, and `--update` drops each entry whose premise no longer offends (all of a guarantee's, its key
+    with them, and the map once empty), keeps those of a guarantee the lock doesn't list yet, and adds none. A property
+    `shape.properties` holds is the shape rule's; a frozen one is judged here. An entry with no reason fails."""
+    why = "inline when the rule came"
+    pol, f = inlined(premise("P.f n\n    = 3", "Eq"), premise("P.g n = 4", "Eq"))
+    allow = {"P.t": {"P.f n = 3": why, "P.g n = 4": why, "P.h n = 5": why}, "P.ahead": {"x = y": why}}
+    held = pol | {"shape": {"premises": ["P.Assumptions"], "inline": allow}}
+    assert inline_codes(held, f) == []
+    fails, out = A.judge(held, f, FILES, update=True)
+    assert [x for x in fails if "inline" in x.code] == []
+    assert out["shape"] == {"premises": ["P.Assumptions"], "inline": {"P.ahead": {"x = y": why},
+                                                                      "P.t": {"P.f n = 3": why, "P.g n = 4": why}}}
+    grown = inlined(premise("P.f n = 3", "Eq"), premise("P.k n = 6", "Eq"))[1]
+    fails = [x for x in A.judge(held, grown, FILES)[0] if "inline" in x.code]
+    assert [x.code for x in fails] == ["guarantees.inline-hypothesis"] and fails[0].startswith(
+        "guarantees: P.t takes (P.k n = 6): an inline hypothesis")
+    assert A.judge(held, grown, FILES, update=True)[1]["shape"]["inline"]["P.t"] == {"P.f n = 3": why}
+    fixed = inlined(premise("P.Fits n", "P.Fits"))[1]
+    assert A.judge(held, fixed, FILES, update=True)[1]["shape"] == {"premises": ["P.Assumptions"],
+                                                                    "inline": {"P.ahead": {"x = y": why}}}
+    alone = pol | {"shape": {"inline": {"P.t": {"P.f n = 3": why}}}}
+    assert A.judge(alone, fixed, FILES, update=True)[1]["shape"] == {}
+    assert A.inline_failures(held, grown)[1:] == ({"P.ahead": {"x = y": why}, "P.t": {"P.f n = 3": why}},
+                                                  {"P.t": ["P.f n = 3", "P.k n = 6"]})
+    prop = {"function": "P.f", "outcome": "none"}
+    assert inline_codes(pol | {"shape": {"properties": {"P.t": prop}}}, grown) == []
+    assert inline_codes(pol | {"shape": {"properties": {"P.t": prop}, "frozen": {"P.t": "frozen: open"}}}, grown) == \
+        ["guarantees.inline-hypothesis"]
+    assert inline_codes(pol | {"shape": {"inline": {"P.t": {"P.f n = 3": " "}}}}, grown) == ["shape.inline-form"]
+    assert inline_codes(pol | {"shape": {"inline": ["P.t"]}}, grown) == ["shape.inline-form"]
 
 
 def test_a_lifted_guarantee_is_witnessed_as_the_statement_it_lifts():
