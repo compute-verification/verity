@@ -22,13 +22,34 @@ if [ "${1:-}" != leased ]; then
   exit "$rc"
 fi
 
+if [ "${ARMSET:-}" = diag ]; then
+  D=THREADS=256,TREE=0
+  ARMS="base:$D,ROWS=4096+65536,CAPS=1+2+4+8+16 base16k:$D,ROWS=16384,CAPS=2+4+8
+        stride0:$D,ROWS=4096+65536,CAPS=2+8+16+132+0,STRIDE0=1 fused:$D,ROWS=4096+65536,CAPS=2+8+16+132+0,VERITY_ROWS_FORM=fused
+        ph16:$D,ROWS=4096+65536,CAPS=2+8+16+132,VERITY_ROWS_PHASES=16 gdef:$D,ROWS=4096+65536,CAPS=8+16+0,GPRIO=0"
+fi
 say "leased CUDA_VISIBLE_DEVICES=${CUDA_VISIBLE_DEVICES-unset}"
 nvidia-smi --query-gpu=name,uuid,clocks.sm,clocks.max.sm,power.limit,memory.used --format=csv | tee -a "$OUT/steps.txt"
 nvidia-smi --query-gpu=timestamp,clocks.sm,power.draw,utilization.gpu,temperature.gpu --format=csv -lms 200 \
   -i "${CUDA_VISIBLE_DEVICES:-0}" > "$OUT/smi.csv" 2>&1 &
 smi=$!
 trap 'kill $smi 2>/dev/null' EXIT
-"$VENV/bin/python" benchmarks/served_commit/hash_cost.py 2>&1 | tee "$OUT/hash_cost.log"
-rc=${PIPESTATUS[0]}
-say "hash_cost rc $rc"
-exit "$rc"
+if [ -z "${ARMS:-}" ]; then
+  "$VENV/bin/python" benchmarks/served_commit/hash_cost.py 2>&1 | tee "$OUT/hash_cost.log"
+  rc=${PIPESTATUS[0]}
+  say "hash_cost rc $rc"
+  exit "$rc"
+fi
+# ARMS: space-separated NAME:K=V,K=V,... specs (a list's items joined by +), each one hash_cost.py process with that environment, its
+# output in $OUT/NAME. ARMSET=diag: low caps, then what the GEMM's loss comes from (row traffic, the salt kernel's shared memory, how
+# long a CTA lives, the GEMM's priority).
+worst=0
+for arm in $ARMS; do
+  name=${arm%%:*}; kv=${arm#*:}; [ "$kv" = "$arm" ] && kv=
+  mkdir -p "$OUT/$name"
+  # shellcheck disable=SC2086
+  env OUT="$OUT/$name" ${kv//,/ } "$VENV/bin/python" benchmarks/served_commit/hash_cost.py > "$OUT/$name/hash_cost.log" 2>&1
+  rc=$?; say "arm $name ($kv) rc $rc"; grep -E "cap|failed" "$OUT/$name/hash_cost.log" | cut -c1-200
+  [ "$rc" = 0 ] || worst=$rc
+done
+exit "$worst"

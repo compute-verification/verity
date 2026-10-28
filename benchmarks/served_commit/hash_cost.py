@@ -86,6 +86,7 @@ class Rows:
         L.verity_rows_level_launch.argtypes = [c_p, c_p, c_p, c_u64, ctypes.c_int, c_u64, c_u64, c_p]
         L.verity_rows_levels_launch.argtypes = [c_p, c_p, c_p, c_u64, ctypes.c_int, c_u64, ctypes.c_int, c_p]
         self.L, self.threads = L, threads
+        self.stride0 = False                # STRIDE0: every thread hashes row 0 (the same compressions, no row traffic past L1)
         self.tn = torch.frombuffer(bytearray(step_rows.t_nibbles()), dtype=torch.uint8).cuda()
 
     def params(self, dom: Any, ks: bytes, rb: int) -> ctypes.Array:
@@ -98,8 +99,8 @@ class Rows:
 
     def leaves(self, P, rows: torch.Tensor, rb: int, n_rows: int, m: int, out: torch.Tensor, scratch: torch.Tensor,
                s: torch.cuda.Stream, cap: int = 0) -> None:
-        rc = self.L.verity_rows_leaves_sf_launch(P, rows.data_ptr(), rb, n_rows, None, self.tn.data_ptr(), 0, m, n_rows, out.data_ptr(),
-                                                 None, None, scratch.data_ptr(), cap, s.cuda_stream)
+        rc = self.L.verity_rows_leaves_sf_launch(P, rows.data_ptr(), 0 if self.stride0 else rb, n_rows, None, self.tn.data_ptr(), 0, m,
+                                                 n_rows, out.data_ptr(), None, None, scratch.data_ptr(), cap, s.cuda_stream)
         assert rc == 0, rc
 
     def tree_level(self, P, lv: torch.Tensor, m: int, s: torch.cuda.Stream, cap: int = 0) -> None:
@@ -260,21 +261,26 @@ def main() -> None:
     out_dir.mkdir(parents=True, exist_ok=True)
     reps = int(os.environ.get("REPS", "5"))
     total = int(float(os.environ.get("TOTAL_GB", "16")) * (1 << 30))
-    sizes = [int(x) for x in os.environ.get("ROWS", "4096 16384 65536").split()]
-    threads_forms = [int(x) for x in os.environ.get("THREADS", "256 128 64").split()]
-    warps = [int(x) for x in os.environ.get("WARPS", "1 2 4 8").split()]
+    sizes = [int(x) for x in os.environ.get("ROWS", "4096 16384 65536").replace("+", " ").split()]
+    threads_forms = [int(x) for x in os.environ.get("THREADS", "256 128 64").replace("+", " ").split()]
+    warps = [int(x) for x in os.environ.get("WARPS", "1 2 4 8").replace("+", " ").split()]
     T = int(os.environ.get("T", "8192"))
     hash_ms_target = float(os.environ.get("HASH_MS", "30"))
+    caps_given = [int(x) for x in os.environ["CAPS"].replace("+", " ").split()] if os.environ.get("CAPS") else None
+    tree = os.environ.get("TREE", "1") == "1"
+    stride0 = os.environ.get("STRIDE0", "0") == "1"
+    gprio = int(os.environ.get("GPRIO", "-100"))
     build_dir = Path(os.environ.get("BUILD_DIR") or tempfile.mkdtemp(prefix="hash-cost-"))
     prop = torch.cuda.get_device_properties(0)
     arch, sms = f"{prop.major}{prop.minor}", prop.multi_processor_count
-    res: dict[str, Any] = {"device": prop.name, "sms": sms, "arch": arch, "total_bytes": total, "T": T, "phases":
-                           os.environ.get("VERITY_ROWS_PHASES", "4"), "cuda_cflags": list(CUDA_CFLAGS), "forms": {}, "clock_marks": []}
+    res: dict[str, Any] = {"device": prop.name, "sms": sms, "arch": arch, "total_bytes": total, "T": T,
+                           "phases": os.environ.get("VERITY_ROWS_PHASES", "4"), "form": os.environ.get("VERITY_ROWS_FORM", "split"),
+                           "stride0": stride0, "gemm_priority": gprio, "cuda_cflags": list(CUDA_CFLAGS), "forms": {}, "clock_marks": []}
 
     def mark(tag: str) -> None:
         res["clock_marks"].append([tag, time.time()])
 
-    hs, gs = torch.cuda.Stream(priority=0), torch.cuda.Stream(priority=-100)   # -100: clamped to the highest
+    hs, gs = torch.cuda.Stream(priority=0), torch.cuda.Stream(priority=gprio)   # -100: clamped to the highest
     mark("gemm_build")
     G = Gemm(T)
     fwd_ms = timed(lambda s: G.replay(), max(reps, 9), gs)
@@ -305,11 +311,12 @@ def main() -> None:
             P = R.params(domain(m, rb), os.urandom(step_rows.KEY_BYTES), rb)
             lv = torch.empty(2 * m - 1, 64, dtype=torch.uint8, device="cuda")
             scratch = torch.empty(192 * m, dtype=torch.uint8, device="cuda")
+            R.stride0 = stride0
             mark(f"t{threads}:{rb}:alone")
             leaf_ms = timed(lambda s: R.leaves(P, data, rb, m, m, lv, scratch, s), reps, hs)
             entry.update(rows=m, leaf_ms=round(leaf_ms, 4), leaf_gbps=round(total / leaf_ms * 1e-6, 2),
                          leaf_gcomp_per_s=round(m * compressions_leaf(rb) / leaf_ms * 1e-6, 3))
-            if threads == 256:
+            if threads == 256 and tree:
                 pw = m & (m - 1) == 0
                 tl = timed(lambda s: R.tree_level(P, lv, m, s), reps, hs)
                 root_l = bytes(lv[-1].cpu().numpy())
@@ -322,13 +329,13 @@ def main() -> None:
                 best_tree = min(x for x in (tl, tm) if x)
                 entry["commit_ms"] = round(leaf_ms + best_tree, 4)
                 entry["commit_gbps"] = round(total / (leaf_ms + best_tree) * 1e-6, 2)
-            caps = sorted({max(1, round(sms * w * 32 / threads)) for w in warps})
+            caps = caps_given if caps_given is not None else [*sorted({max(1, round(sms * w * 32 / threads)) for w in warps}), 0]
             entry["capped_alone"] = {}
             entry["beside"] = []
-            for cap in [*caps, 0]:
+            for cap in caps:
                 # the hash's bytes: about HASH_MS alone at this cap, whole launches of cap CTAs, at most the stream
                 chunk = (cap or 10 ** 9) * threads
-                probe = min(m, max(chunk, threads * sms))
+                probe = min(m, max(chunk, min(threads * sms, 8 * chunk)))
                 probe -= probe % min(chunk, probe)
                 pm = timed(lambda s: R.leaves(P, data, rb, probe, probe, lv, scratch, s, cap), 3, hs)
                 rate = probe / pm                                   # rows a ms, alone at this cap
@@ -362,7 +369,7 @@ def build_all() -> None:
     """`hash_cost.py build`: every THREADS form's library into BUILD_DIR for ARCH (default 90), no GPU needed."""
     d = Path(os.environ["BUILD_DIR"])
     d.mkdir(parents=True, exist_ok=True)
-    for threads in [int(x) for x in os.environ.get("THREADS", "256 128 64").split()]:
+    for threads in [int(x) for x in os.environ.get("THREADS", "256 128 64").replace("+", " ").split()]:
         b = build(d, os.environ.get("ARCH", "90"), threads)
         (d / f"rows_t{threads}.json").write_text(json.dumps(b["ptxas"]))
         print(f"t{threads} build rc {b['rc']}", json.dumps(b["ptxas"]), b["log"], flush=True)
