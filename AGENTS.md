@@ -10,15 +10,16 @@ it contains. Your checkout and your prompt can be older than `main`: `git show o
 - `verity/`: the distribution `verity` (the root `pyproject.toml`; its module list is `verity/README.md`). Import from the
   owning module (`from verity.ml.circuits import Program`); `verity` re-exports nothing.
   - `verity/core/`: the verifiers, trusted code. `verity/core/protocols/` holds the integrity profile (`profile`) and one
-    package per protocol: sampled proofs, PoUW, PoUS, the bandwidth audit, the remote bandwidth audit and the network
-    certifier, each a Python verifier until its Lean (its `lean/`) is its verifier of record; NCI is Lean only. `claims`
-    holds the security claims' ids, `service/flock/` C-Flock's Lean verifier of record and the ZK server
-    (`Flock.Firewall`), `service/firewall/` the ZK server's release side, and `difftest` the Python held to each Lean.
+    package per protocol: sampled proofs, PoUW, proof of useful space (PoUS), the bandwidth audit, proof of useful
+    bandwidth (PoUB) and network certification, each a Python verifier until its Lean verifier (its `lean/`) replaces
+    it; the inference-only policy (`network/nci/`) is Lean only. `claims` holds the security claims' ids,
+    `service/flock/` C-Flock's Lean verifier and the ZK server (`Flock.Firewall`), `service/firewall/` the ZK server's
+    release side, and `difftest` the Python held to each Lean.
   - `verity/ml/`: Python and CUDA: the provers, and Python that mirrors the Lean for speed. `circuits` (format in
     `circuits/PROTOCOL.md`; `ops`, the primitive circuits' Definitions; `silicon`, the GPUs' exact semantics),
     `kernels`, `commitments`, `crypto`, `randomness` (the one challenge derivation), `private_circuits`, `definitions`
     (the served workloads' Definitions) and `flock/` (`verity_flock`, its own distribution: C-Flock, the proof system,
-    with its verifier's specification in `verifier/`). Until each protocol's verifier of record is Lean, the units its
+    with its verifier's specification in `verifier/`). Until each protocol's verifier is Lean, the units its
     Python verifier reads are on the soundness path: `ml.circuits`, `ml.circuits.ops`, `ml.circuits.silicon`,
     `ml.kernels`, `ml.commitments`, `ml.crypto` and `ml.randomness` (`SOUNDNESS_PATH`, which only shrinks). The rest
     can't affect soundness.
@@ -36,11 +37,13 @@ it contains. Your checkout and your prompt can be older than `main`: `git show o
   messaging, pods), `tools/agent-guard/`, `tools/move/` and `infra/` (the team skill).
 
 Dependencies point inward (`tests/test_boundaries.py`; every list it holds only shrinks). A verifier imports no
-`verity.ml` code; until its protocol's verifier of record is Lean, a Python verifier keeps only the edges into `verity.ml`
+`verity.ml` code; until its protocol's verifier is Lean, a Python verifier keeps only the edges into `verity.ml`
 that `CORE_ML_EDGES` lists. `verity.ml` never imports `verity.core` (`ML_IMPORTS_CORE` names the exceptions).
 Inside `verity` each unit imports only what `ALLOWED` lists, and `verity` imports no other distribution of the workspace.
 Nothing outside `infra/` imports it (`INFRA_IMPORTERS`), and nothing under `verity/` imports an integration (`KNOWN` in
-`tests/test_integration_boundaries.py`).
+`tests/test_integration_boundaries.py`). `benchmarks/` is measurement only: nothing outside it imports its code, by
+package name or by a path put on `sys.path` or loaded by file (`BENCHMARKS_IMPORTERS` names today's importers); a number a
+protocol uses reaches it through a card file citing an `art:` id.
 
 `verity` is the one command: `verity check [tests|lean|circuits]`, `verity bench|example NAME`, `verity --help`.
 
@@ -74,8 +77,8 @@ The rules in force, each stated as itself; the friction skill has the standing r
   are hash-based (LMS, n = 64). Two named exceptions: Pearl's FP8 scheme as Pearl defines it,
   and Duo receipts, PoUW's per-step keyed u32 mul/xor/rotl folds over committed accumulator words, which bind under the
   named premise H-μ⁺, not yet in a lock.
-- **Live coins only.** No Fiat–Shamir, except at two rates where live coins are impractical: the remote bandwidth
-  audit's pass seeds inside a window, from the window's live challenge and the previous pass's root; and PoUW's
+- **Live coins only.** No Fiat–Shamir, except at two rates where live coins are impractical: PoUB's pass seeds
+  inside a window, from the window's live challenge and the previous pass's root; and PoUW's
   per-matmul noise seeds, seed_j = SHA-512(tag ‖ salt ‖ forward ‖ position ‖ root(A_j) ‖ root(B_j)), from the window's
   live salt (`pouw.salt`) and the operands' committed roots, which a drawn unit's proof derives. Grinding is a term
   of the guarantee: a steer that needs m noised coordinates succeeds with probability at most μ^m a try. No
@@ -83,7 +86,7 @@ The rules in force, each stated as itself; the friction skill has the standing r
   sessions: each staged statement is fixed before any session draws coins and gets exactly one session, with its own live
   coins in its own firewall pass; no statement reads another session's transcript or coins; every session is recorded and
   every verdict counts (provisional).
-- **Verifier cost: O(circuit description), never O(unrolled circuit).** A verifier of record works in
+- **Verifier cost: O(circuit description), never O(unrolled circuit).** A verifier works in
   proportion to the descriptor it reads (its Definitions, nodes and references) and never walks every gate, batch member
   or scan iteration: it summarizes once per specialized Definition and multiplies through batches and scans
   (`NciCheck.Desc`). An unrolled walk survives only as a difftest's reference. `tests/test_verifier_cost.py` enforces it
@@ -95,7 +98,7 @@ The rules in force, each stated as itself; the friction skill has the standing r
 - **The audited hardware is untrusted, and so is its vendor.** No guarantee rests on a GPU attesting its own
   SKU, firmware or clocks. Hardware constants (f_max, peak rates) come from the data sheet under two or three readings,
   and later from a separate physical calibration.
-- **Lean is the definition and the verifier of record.** Python in `verity.ml` mirrors it for the prover's
+- **Lean is the definition and the verifier.** Python in `verity.ml` mirrors it for the prover's
   speed, held to it by difftest. Each protocol switches by the friction skill's switching ruling; until then its
   Python verifier and the ml units it reads stay on `SOUNDNESS_PATH`, and no core → ml edge is added.
 - **Soundness and zero knowledge in Lean; completeness may be Python.** What a guarantee says about a cheating
@@ -167,8 +170,8 @@ on review, and the full check runs after landing (how a PR lands: the team skill
   area and protocol reads; an area defines only its own, and no new Lean adds a second definition.
 - **Lean is code or security analysis.** Code stays with its component and never requires `Security/`: C-Flock's
   executable verifier and the ZK server (`verity/core/service/flock/`, with the release side in
-  `verity/core/service/firewall/`), the PoUS grader, the certifier program, the NCI check and the remote bandwidth
-  audit's verifier, each in its protocol's `lean/` with a difftest. Under `FC_FIREWALL=1` every byte that leaves is
+  `verity/core/service/firewall/`), the PoUS grader, the certifier program, the inference-only policy's check and
+  PoUB's verifier, each in its protocol's `lean/` with a difftest. Under `FC_FIREWALL=1` every byte that leaves is
   computed by `Flock.Firewall`; the ZK theorem (`Flock.zk_server_lean_loop`) still reads the released bytes through
   hypotheses not yet proved about the live path. The analysis is `Security/`, three trees: definitions
   (`Definitions/`, the package `security`, Mathlib only: the vocabulary, named assumptions and guarantee

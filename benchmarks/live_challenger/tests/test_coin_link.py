@@ -173,3 +173,27 @@ def test_the_gates_run_starts_the_link_once_serve_listens_and_stops_it_once_serv
     session = json.loads(open_window(host, signer, token="ef56", commit="ef" * 64)[1])["session"]
     end = A.run(host, session, signer=signer, pinned="c" * 40, now=lambda: T1)
     assert not end["body"]["closed"] and "the coin link ended first (exit 0" in end["body"]["ended"]
+
+
+def test_a_coin_link_that_never_listens_is_killed_and_ends_the_session(host, tmp_path, monkeypatch):
+    """A link that prints nothing, so never listens, holds the session no longer than serve.py's start may take
+    (`START_SECONDS`): it is killed and the session ends, saying so, instead of waiting for the window's deadline. The
+    link here waits for a signal it never gets, so the bound is 0, and only its expiry, not its length, is tested."""
+    from test_auditor import P, T1, open_window
+    monkeypatch.setenv("COINS_LOG", str(tmp_path / "coins.log"))
+    signer = A.key_signer(host, P, workers=1)
+    session = json.loads(open_window(host, signer)[1])["session"]
+    real_serve = A.serve_argv
+
+    def serve_argv(host_, session_, body_):
+        argv = real_serve(host_, session_, body_)
+        argv[argv.index("--port") + 1] = "0"
+        return [sys.executable, str(HERE / "stub_serve.py"), *argv[2:], "--params", "4,4", "--keygen-workers", "1"]
+
+    monkeypatch.setattr(A, "serve_argv", serve_argv)
+    monkeypatch.setattr(A, "coin_link_argv", lambda h, s, b: [sys.executable, "-c", "import signal; signal.pause()"])
+    monkeypatch.setattr(A, "START_SECONDS", 0)
+    end = A.run(host, session, signer=signer, pinned="c" * 40, now=lambda: T1)
+    assert not end["body"]["closed"] and end["body"]["rc"] != 0
+    assert end["body"]["ended"].startswith("the coin link didn't listen within 0 s, so it was killed")
+    assert (host.sessions / session / "out" / "coin-link.log").read_text() == ""

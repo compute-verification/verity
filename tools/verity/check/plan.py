@@ -30,7 +30,7 @@ Each part of the check, with its key at COMMIT and the recorded passes under tha
                           skips its Lean group there): a skip passes nothing
     lean-changed          no verdict, never required: it vouches for nothing, the audit decides
 
-The steps that build or fetch what other steps read (`IMPLIED`) keep no verdict of their own (Daniel, 19 Oct).  Each is
+The steps that build or fetch what other steps read (`IMPLIED`) keep no verdict of their own.  Each is
 `implied` when every part that reads what it makes has passed (`implied_by`), and `must-run` when one hasn't.  Why those passes
 answer for each:
 

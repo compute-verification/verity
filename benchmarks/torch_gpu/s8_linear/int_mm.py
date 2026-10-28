@@ -1,4 +1,4 @@
-"""The int_mm backend of the exact W8A8 linear (run.py's `--kernel int_mm`; KS8-SIMPLE's path, HASH-11, the plain GEMM
+"""The int_mm backend of the exact W8A8 linear (run.py's `--kernel int_mm`; the plain GEMM
 p2_stage's full.py and j10r_sm90's bench call): every coordinate of x W^T is `ScaledMmS8Coordinate_v1{K, DOT}`
 (`verity.ml.circuits.ops.gemm`),
 

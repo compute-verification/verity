@@ -31,7 +31,7 @@ PARAMS = WardenParams(cell_bytes=64, slots=2, bucket_ms=100, delay=3, lanes=2, q
 SESSION = bytes(range(32))
 #: the clocks `slow_commit` moves: a run's while it ticks in this process; a spawned process's list stays empty
 PROCESS_CLOCK: list[VirtualClock] = []
-#: what a window's commit takes of its process's time: TRACE-CORPUS's small-KV run measured 378-392 ms
+#: what a window's commit takes of its process's time: the trace corpus's small-KV run measured 378-392 ms
 SLOW_COMMIT_S = 0.4
 
 
@@ -137,8 +137,8 @@ def test_the_gates_sampling_is_on_every_request_and_moves_nothing_else_of_the_tr
 def test_the_gates_scan_rehearsal_is_rehearse_ids_at_scan_zks_schedule_and_its_least_minutes_cover_its_traffic(
         tmp_path, capsys):
     """`warden-rehearse --scan` runs `rehearse --ids` at `scan_zk.PARAMS` (the schedule `scan_zk.py prove
-    --warden-run` refuses any other of), which the scan's class serves: ASK-122's EVERY 16 buckets, 4 Program slots a
-    boundary, 8 a link-window and D 2.7 s, the schedule of NET-83's sessions. Its id traffic's prompts and outputs are
+    --warden-run` refuses any other of), which the scan's class serves: EVERY 16 buckets, 4 Program slots a
+    boundary, 8 a link-window and D 2.7 s, the gate sessions' schedule. Its id traffic's prompts and outputs are
     within the scan's KI and KO, on the gate's arrivals at the gate's sampling; for every request count the gate takes,
     at its lowest height, `warden_minutes` covers the id traffic's last arrival, its tail, the rest of the window it
     ends in, the origin's delay and 30 s for the key and the check."""
@@ -171,6 +171,35 @@ def test_the_gates_scan_rehearsal_is_rehearse_ids_at_scan_zks_schedule_and_its_l
     for n in range(A.WARDEN_REQUESTS[0], A.WARDEN_REQUESTS[1] + 1):
         took = math.ceil((most[n - 1]["at"] + A.WARDEN_TAIL_S) / window_s) * window_s + args.start_in + 30
         assert took <= A.warden_minutes(n, A.REHEARSAL_HEIGHT[0]) * 60, n
+
+
+def test_the_gates_warden_windows_are_at_least_every_request_counts_link_windows_which_its_key_signs(tmp_path):
+    """The gate sizes a warden rehearsal's key on `warden_windows` of its requests (`warden_height`), so for every
+    request count it takes, those are at least the link-windows `rehearse` runs (its traffic's last arrival and tail):
+    at the scan's schedule on the gate's id traffic and on `--prompts`' arrivals, and at `warden_serve.py`'s default
+    (`WARDEN_WINDOW_MS`) on its varied traffic; a request count's traffic is the first of the most's. The gate's most
+    requests are 1064 link-windows of `--prompts`, about 57 minutes, which height 13 signs and 12 doesn't."""
+    sys.path.insert(0, str(HERE))
+    sys.path.insert(0, str(HERE.parent / "live_challenger"))
+    import auditor as A
+    import scan_zk as sz
+    plain = ws.parser().parse_args(A.warden_command({"requests": 7}, tmp_path, "http://h:1")[2:])
+    assert A.WARDEN_WINDOW_MS == plain.window * plain.bucket_ms
+    assert A.SCAN["--window"] * A.SCAN["--bucket-ms"] == sz.PARAMS.window * sz.PARAMS.bucket_ms
+    most, at = A.WARDEN_REQUESTS[1], dict(rate=A.WARDEN_RATE, seed=A.WARDEN_SEED)
+    scan = {"ids": ws.id_traffic(most, model="m", max_tokens=(1, sz.PARAMS.egress_cells - 1), **at),
+            "prompts": ws.prompt_traffic([[1]], most, model="m", params=sz.PARAMS, max_tokens=24, **at)}
+    varied = ws.varied_traffic(most, model="m", **at)
+    assert ws.prompt_traffic([[1]], 400, model="m", params=sz.PARAMS, max_tokens=24, **at) == scan["prompts"][:400]
+
+    def windows(traffic, n, window_ms):
+        return math.ceil((traffic[n - 1]["at"] + A.WARDEN_TAIL_S) * 1000 / window_ms)
+    scan_ms = sz.PARAMS.window * sz.PARAMS.bucket_ms
+    for n in range(A.WARDEN_REQUESTS[0], most + 1):
+        assert all(windows(t, n, scan_ms) <= A.warden_windows(n) for t in scan.values()), n
+        assert windows(varied, n, A.WARDEN_WINDOW_MS) <= A.warden_windows(n, scan=False), n
+    assert (windows(scan["prompts"], 400, scan_ms), windows(scan["prompts"], most, scan_ms)) == (259, 1064)
+    assert A.warden_height(windows(scan["prompts"], most, scan_ms)) == A.warden_height(A.warden_windows(most)) == 13
 
 
 def test_the_gates_prompts_rehearsal_sends_its_prompts_a_group_a_span_of_windows_and_its_minutes_cover_them(tmp_path):

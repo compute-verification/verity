@@ -4,20 +4,21 @@ import Definitions.Pouw.Game.Deadline
 /-!
 # The cost model of `A`'s provers (trusted)
 
-Section 8 of `note:console/20261012T0645Z-draft-actual-circuit-model` (v2.4), B1: PoUW's game (`Pouw.CostModel`) at
-the provers of actual circuits. The verifier sits at the leaves `V`, releases the salt at `tₛ` and decodes the
-transcript (`read`, the protocol's) from what it receives from outside before the deadline `t_d`; `ℓ` is the latency
-between it and the prover. A program (`Actual.Prover`) is a strategy over the online phase's inputs (oracle,
-workload, activation input, preprocessed state, salt), with runs in the feasible set `𝓕` and causal from every tick;
-what the prover (off `V`) can tell when the salt reaches it, at `tₛ + ℓ`, doesn't depend on the salt (preprocessing is
-everything before `tₛ + ℓ`, and it hands on what the prover holds then); and its oracle calls are the hash's gates
-(`hash`). Its cost is the prover's work at `π` in `[tₛ + ℓ, t_d − ℓ)` (`Actual.costModel`, `CM_A`).
-`Actual.timedRun` is an adversary's timed run: the salt released at `tₛ`, the transcript received at `t_d`, and by
-each time `t` the cost window's work placed before `t` spent, so that what it spends from `tₛ` to `t_d` is the cost.
+The actual-circuit model's B1: PoUW's game (`Pouw.CostModel`) at the provers of actual circuits. The verifier sits at
+the leaves `V`, releases the salt at `tₛ` and decodes the transcript (`read`, the protocol's) from what it receives from
+outside before the deadline `t_d`; `ℓ` is the latency between it and the prover. A program (`Actual.Prover`) is a
+strategy over the online phase's inputs (oracle, workload, activation input, preprocessed state, salt), with runs in the
+feasible set `𝓕` and causal from every tick; what the prover (off `V`) can tell when the salt reaches it, at `tₛ + ℓ`,
+doesn't depend on the salt (preprocessing is everything before `tₛ + ℓ`, and it hands on what the prover holds then);
+and its oracle calls are the hash's gates (`hash`). Its cost is the prover's work at `π` in `[tₛ + ℓ, t_d − ℓ)`
+(`Actual.costModel`, `CM_A`). `Actual.timedRun` is an adversary's timed run: the salt released at `tₛ`, the transcript
+received at `t_d`, and by each time `t` the cost window's work placed before `t` spent, so that what it spends from `tₛ`
+to `t_d` is the cost.
 
 Runs don't confine the oracle to the hash's gates (a gate's operation is any function of what it reads, and a strategy
-any map from the oracle to runs), so a program carries red-team B6's form as a field (`queries`): on the other inputs
-fixed, what the verifier receives before `t_d` is an oracle program's output and the hash's gates are its queries.
+any map from the oracle to runs), so a program carries an oracle program's form as a field (`queries`): on the other
+inputs fixed, what the verifier receives before `t_d` is an oracle program's output and the hash's gates are its
+queries.
 -/
 
 namespace Accounting
@@ -31,7 +32,7 @@ noncomputable def Actual.Run.workIn {L : Type*} (ρ : Actual.Run L) (π : Fin ρ
     ℕ :=
   ρ.A.work π (ρ.A.computed.filter fun g => ρ.A.x g ∉ V ∧ ρ.A.t g ∈ I)
 
-/-- **A prover** (v2.4, B1): a strategy over the online phase's inputs with runs in `𝓕`, causal from every tick, such
+/-- **A prover** (B1): a strategy over the online phase's inputs with runs in `𝓕`, causal from every tick, such
 that what the prover can tell at `tₛ + ℓ` (`history`) doesn't depend on the salt, and, on the other inputs fixed, what
 the verifier receives before `t_d`, decoded by `read`, and the number of the hash's gates are an oracle program's
 output and queries. -/
@@ -47,7 +48,7 @@ structure Actual.Prover (Q R S : Type) {L : Type} [LinearOrder L] [Fintype L] (�
     read ((strategy (H, U, act, σ, s)).crossing (↑V)ᶜ ↑V (Set.Iio t_d)) = t.eval H ∧
       (hash (strategy (H, U, act, σ, s))).card = t.calls H
 
-/-- **`CM_A`, the cost model of `A`'s provers** (v2.4, B1): its programs are the provers; a program outputs the
+/-- **`CM_A`, the cost model of `A`'s provers** (B1): its programs are the provers; a program outputs the
 transcript the verifier decodes from what it receives before `t_d`, costs the prover's work at `π` in
 `[tₛ + ℓ, t_d − ℓ)` and makes as many oracle calls as its run has hash's gates. -/
 noncomputable def Actual.costModel (Q R S : Type) {L : Type} [LinearOrder L] [Fintype L] (𝓕 : Set (Actual.Run L))

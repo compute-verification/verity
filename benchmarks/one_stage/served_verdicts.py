@@ -33,9 +33,9 @@ is one manifest under them; core's credit refuses the window and is shown beside
 
 ``record``: sampled proofs' answer from the records audit `prove_path/run.sh` (``PP_RECORDS=1``) kept under
 ``--sampled-proofs`` (its ``NAME`` dir: ``summary.json``, ``window/audit.json``, ``windows/rank0/registration.json``), read
-as the all-protocols integrity step reads it (`legs/sampled_proofs.answer`); each other subprotocol's from
-``--pieces/<component>/answer.json``, else a ``missing`` row naming its issue. They go into the all-protocols window report
-(``verdicts.json``, `runner.row_of`'s rows) and from it the block record (``block-record.json``, `block_record.from_period`,
+as `served_integrity.answer` reads it; each other subprotocol's from
+``--pieces/<component>/answer.json``, else a ``missing`` row naming its issue. They go into the window report
+(``verdicts.json``, `row_of`'s rows) and from it the block record (``block-record.json``, `block_record.from_period`,
 held by `block_record.check`). `block_record` carries only an accepted subprotocol's certificate, so where one rejects or
 errs the composed verdict is ``reject`` and no block record is written. Prints one ``RECORD`` line.
 """
@@ -50,13 +50,19 @@ import subprocess
 import sys
 import tarfile
 from collections.abc import Callable, Mapping, Sequence
+from fractions import Fraction
 from pathlib import Path
 from typing import Any
 
 ROOT = Path(__file__).resolve().parents[2]
-for _p in (ROOT / "benchmarks" / "all_protocols", ROOT / "benchmarks" / "e2e_demo"):
+for _p in (Path(__file__).resolve().parent, ROOT / "examples" / "h200" / "interfaces"):
     if str(_p) not in sys.path:
         sys.path.insert(0, str(_p))
+
+#: the window report's format, kept from the all-protocols runner whose report it was
+REPORT_FORMAT = "verity/all-protocols-window/v1"
+#: sampled proofs' owner, its row's
+INTEGRITY_OWNER = "compute-accounting"
 
 #: each subprotocol after sampled proofs, by its runner name: (its name, its component, its piece's owner, the issue its piece
 #: is, what the piece does), in the chain's order
@@ -74,7 +80,8 @@ PIECES: dict[str, tuple[str, str, str, str, str]] = {
                       "the network certifier in front of serve-openai (Llama-3.2-1B int8, ASK-122's slots)"),
 }
 #: the record's subprotocol outside this chain
-WIPE = ("the wipe", "wipe", "memory-accounting", None, "no step of this chain runs the wipe")
+WIPE = ("the wipe", "wipe", "memory-accounting", "MEM-96",
+        "WIPE_CMD unset: serve() runs benchmarks/pous/streamed_wipe/served_wipe.sh on the card before its engine loads")
 NAMES = {"integrity": "sampled proofs", **{k: v[0] for k, v in PIECES.items()}, "wipe": WIPE[0]}
 #: a development piece's document, written in place of its core answer
 DEVELOPMENT = "development.json"
@@ -266,24 +273,56 @@ def pouw(serve_dir: Path, window: int, out: Path, *, gate: str | None, key: str 
     return doc
 
 
-def sampled_proofs_row(audit_dir: Path) -> dict[str, Any]:
-    """Sampled proofs' runner row from the records audit kept under ``audit_dir`` (module docstring)."""
-    from verity_all_protocols import runner, table
+def check_answer(a: Any) -> dict[str, Any]:
+    """``a`` when it is an answer in the shapes `Answer.ofJson` reads (`pouw.core_check.answer_of`, the Python mirror of
+    the core interface's decoder): an accept has no reason and both its public outputs and its profile, a refusal a
+    reason and neither. Anything else is a ValueError, which the row reports as the subprotocol's error."""
+    from verity.core.protocols.pouw import core_check as CC
 
-    entry = next(e for e in table.TABLE if e.name == "integrity")
+    try:
+        CC.answer_of(a)
+    except CC.Refused as e:
+        raise ValueError(f"not a core answer: {e}") from None
+    return dict(a)
+
+
+def epsilon(a: Mapping[str, Any]) -> str | None:
+    """A sampled protocol's bound on wrong units (``public.bound``) over its checked level's size (`Core.Integrity`), or
+    None for an answer that has no such bound."""
+    public, profile = a.get("public"), a.get("profile")
+    levels = profile.get("levels") if isinstance(profile, Mapping) else None
+    if not isinstance(public, Mapping) or not isinstance(levels, list) or not levels or not isinstance(levels[-1], Mapping):
+        return None
+    bound, size = public.get("bound"), levels[-1].get("size")
+    return str(Fraction(bound, size)) if isinstance(bound, int) and isinstance(size, int) and size > 0 else None
+
+
+def row_of(owner: str, a: Any, out: Path, run: str | None = None) -> dict[str, Any]:
+    """A subprotocol's report row from its answer (checked to be a core answer first); ``run`` is the recording run."""
+    a = check_answer(a)
+    runs = json.loads((out / "runs.json").read_text()) if (out / "runs.json").exists() else []
+    accepted = a["verdict"] == "accept"
+    return {"protocol": a["protocol"], "owner": owner, "verdict": a["verdict"], "reason": a["reason"],
+            "commitment": a["commitment"], "quantity": a["public"] if accepted else None,
+            "delta": (a["profile"] or {}).get("delta") if isinstance(a["profile"], dict) else None,
+            "epsilon": epsilon(a) if accepted else None, "runs": [*([run] if run else []), *runs], "answer": a}
+
+
+def sampled_proofs_row(audit_dir: Path, run: str | None = None) -> dict[str, Any]:
+    """Sampled proofs' row from the records audit kept under ``audit_dir`` (module docstring)."""
+    import served_integrity as SI
+
     reg = audit_dir / "windows" / "rank0" / "registration.json"
     try:
-        a = table.load(entry.component).answer(audit_dir, json.loads(reg.read_text()) if reg.exists() else None)
-        return runner.row_of(entry, a, audit_dir)
+        a = SI.answer(audit_dir, json.loads(reg.read_text()) if reg.exists() else None)
+        return row_of(INTEGRITY_OWNER, a, audit_dir, run)
     except (RuntimeError, ValueError) as e:
-        return {"verdict": "error", "owner": entry.owner, "reason": f"{type(e).__name__}: {e}"[:2000]}
+        return {"verdict": "error", "owner": INTEGRITY_OWNER, "reason": f"{type(e).__name__}: {e}"[:2000]}
 
 
-def piece_row(key: str, pieces_dir: Path) -> dict[str, Any]:
+def piece_row(key: str, pieces_dir: Path, run: str | None = None) -> dict[str, Any]:
     """A subprotocol's runner row from its piece's answer, or ``missing`` with its issue; a development piece's is
     ``missing`` with its document when it accepts (it credits nothing), else ``reject``."""
-    from verity_all_protocols import runner, table
-
     _name, comp, owner, issue, what = PIECES.get(key, WIPE)
     f, dev = pieces_dir / comp / "answer.json", pieces_dir / comp / DEVELOPMENT
     if not f.exists() and dev.exists():
@@ -295,19 +334,18 @@ def piece_row(key: str, pieces_dir: Path) -> dict[str, Any]:
     if not f.exists():
         return {"verdict": "missing", "owner": owner, "issue": issue, "why": what}
     try:
-        return runner.row_of(table.Entry(key, comp, owner), json.loads(f.read_text()), f.parent)
+        return row_of(owner, json.loads(f.read_text()), f.parent, run)
     except ValueError as e:
         return {"verdict": "error", "owner": owner, "reason": f"{type(e).__name__}: {e}"[:2000]}
 
 
 def record(rows: Mapping[str, Mapping[str, Any]], *, window: int, steps: tuple[int, int], node: str,
-           run: str | None) -> tuple[dict[str, Any], dict[str, Any] | None, dict[str, Any]]:
+           run: str | None, wipe_server: str | None = None) -> tuple[dict[str, Any], dict[str, Any] | None, dict[str, Any]]:
     """The window report over ``rows`` (by runner name), its block record (None when a subprotocol rejected, erred or was
     undecided), and the ``RECORD`` line's summary."""
-    from verity_all_protocols import runner
     from verity_e2e_demo import block_record as BR
 
-    report = {"format": runner.FORMAT, "window": window, "node": node, "run": run, "protocols": dict(rows)}
+    report = {"format": REPORT_FORMAT, "window": window, "node": node, "run": run, "protocols": dict(rows)}
     verdicts = {NAMES[k]: r.get("verdict") for k, r in rows.items()}
     missing = {NAMES[k]: r.get("issue") for k, r in rows.items() if r.get("verdict") == "missing"}
     dev = {"development": {NAMES[k]: r["development"]["verdict"] for k, r in rows.items() if "development" in r}}
@@ -318,7 +356,10 @@ def record(rows: Mapping[str, Mapping[str, Any]], *, window: int, steps: tuple[i
         line = {"composed": composed, "by": bad, "verdicts": verdicts, "missing": missing, "block_record": None,
                 "why": "block_record carries an accepted subprotocol's certificate only", **dev}
         return report, None, line
-    rec = BR.from_period(report, steps=steps, deployment=BR.REFERENCE)
+    w = rows.get("wipe") or {}
+    extra = ({"wipe": {"row": w, "server": wipe_server, "runs": w.get("runs") or [run]}}
+             if w.get("verdict") == "accept" and wipe_server is not None else None)
+    rec = BR.from_period(report, steps=steps, deployment=BR.REFERENCE, extra=extra)
     line = {"composed": rec["composed"]["verdict"], "verdicts": verdicts, "missing": missing, **dev,
             "record_missing": rec["composed"]["missing"], "check": BR.check(rec), "steps": list(steps), "node": node,
             "deployment": rec["monitoring_period"]["deployment"]["id"]}
@@ -382,10 +423,12 @@ def main(argv: Sequence[str] | None = None) -> int:
         got = pieces(a.serve_run, a.window, a.out)
         return 0 if all(g["verdict"] in ("accept", "missing") for g in got.values()) else 1
     steps = pick(a.serve_run, 1 << 30, a.window)["steps"]
-    rows = {"integrity": sampled_proofs_row(a.sampled_proofs), **{k: piece_row(k, a.pieces) for k in PIECES},
-            "wipe": piece_row("wipe", a.pieces)}
-    report, rec, line = record(rows, window=a.window, steps=(steps[0], steps[1]), node=a.node,
-                               run=os.environ.get("RESEARCH_RUN_ID"))
+    run = os.environ.get("RESEARCH_RUN_ID")
+    rows = {"integrity": sampled_proofs_row(a.sampled_proofs, run), **{k: piece_row(k, a.pieces, run) for k in PIECES},
+            "wipe": piece_row("wipe", a.pieces, run)}
+    served = a.pieces / "wipe" / "served.json"
+    report, rec, line = record(rows, window=a.window, steps=(steps[0], steps[1]), node=a.node, run=run,
+                               wipe_server=json.loads(served.read_text())["server"] if served.exists() else None)
     a.out.mkdir(parents=True, exist_ok=True)
     (a.out / "verdicts.json").write_text(json.dumps(report, indent=1, sort_keys=True, default=str) + "\n")
     if rec is not None:

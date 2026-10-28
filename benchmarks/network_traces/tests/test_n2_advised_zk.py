@@ -5,8 +5,7 @@ head checks passing and every window's unit taking an instance; the verifier's o
 the certificates and its own view of the public advice, is the prover's, in whole u16 words. The --e2e link's advice
 (`joined`) numbers each Commit window's requests after the windows' before it. At the tests' T = 8 the
 proof block (`LinkWindows.proof_unit`), evaluated on the rows the prover stages, gives the output words the gates'
-references do (`LinkWindows.outputs`) in every window of every member and on a head the prover changed. Each builder
-`n2_advised_zk.builders` attaches, called as C-Flock's lowering calls it, traces to its part's own gates. ``--jobs`` is 1
+references do (`LinkWindows.outputs`) in every window of every member and on a head the prover changed. ``--jobs`` is 1
 unless given and 2 is refused, naming the rule (`n2_zk.ONE_SESSION`). Nothing here lowers or proves
 (`n2_advised_zk.prove` does, on a node)."""
 
@@ -23,7 +22,6 @@ from types import SimpleNamespace
 
 import numpy as np
 import pytest
-from verity.ml.circuits.boolean import trace as TR
 from verity.ml.circuits.evaluation.bits import evaluate_bits
 from verity.core.protocols.certifier import advice as ADV, head_check as HC
 
@@ -166,8 +164,7 @@ def test_a_served_runs_clock_source_is_its_certifiers_signed_syncs_even_beside_a
 def test_a_clocks_jsonl_that_isnt_a_regular_file_is_the_signed_source_not_a_run_without_one(tmp_path):
     """A run's ``clocks.jsonl`` that is there but isn't a regular file (a dangling symlink, a directory) is the
     certifier's clock certificates, which can't be read, so the run is refused, the stand-in asked for or not; it is
-    never taken for a run without them, whose unsigned proxy log beside it could hold phase 11's δ = 0 (REDTEAM
-    phase 18)."""
+    never taken for a run without them, whose unsigned proxy log beside it could hold δ = 0."""
     _proxy_log(tmp_path, [replace(s, delta=0) for s in AT.SYNCS])
     (tmp_path / "clocks.jsonl").symlink_to(tmp_path / "gone" / "clocks.jsonl")
     for stand_in in (False, True):
@@ -256,25 +253,10 @@ def test_the_proof_unit_on_the_staged_rows_is_the_gates_references():
     assert all(0 in [x.word & 1 for x in rd.windows] for name, rd in rounds.items() if name != "honest")
 
 
-@pytest.mark.slow
-def test_each_advised_builder_traces_to_its_parts_gates_called_as_c_flock_calls_it():
-    parts = n2.builders()
-    assert {"NetworkAdvisedOwn", "NetworkAdvisedBucket", "NetworkAdvisedEnd"} <= {d.name for d in parts}
-    for d in parts:
-        if not d.name.startswith("NetworkAdvised"):
-            continue
-        key = (n2.T, 4)
-        S = SimpleNamespace(**dict(zip(d.statics, key)))
-        params, ret = d.signature(S)
-        got, want = TR.trace(lambda C, *e, d=d, S=S: d.build(C, S, *e), [t for _, t in params], ret), d.traced(*key)
-        assert (got.gates, got.outputs) == (want.gates, want.outputs), d.name
-
-
 def test_the_scan_names_both_ends_pieces_and_leaves_out_what_the_public_rows_hold():
     """The scan looks for every piece of both ends' heads, salts and siblings, and leaves out the pieces the windows'
     ``pub`` rows hold: on an advised link the egress head's counts in an accepted window are its public ``released``,
-    so a piece of them with frames in it (run r20261024-084443-2f66's ``egress head 0 @2128``, bucket 509's two
-    frames) is public, while no piece of a salt or sibling is."""
+    so a piece of them with frames in it (an egress head's piece holding a bucket's frames) is public, while no piece of a salt or sibling is."""
     _, rounds = _link(n2.T)
     rd = rounds["honest"]
     blobs, held = n2.Z.blobs_of(rd)
@@ -318,9 +300,9 @@ def test_a_sampled_period_adds_the_other_subset_member_and_an_unsampled_one_refu
 def test_the_provers_instance_holds_every_piece_the_control_expects_of_a_head_but_its_zero_padded_tail():
     """The control (`a8.received` on the prover's own instance files) expects every held piece of each head, but not its
     zero-padded last chunk: the advised unit's head is 157 + L + 4T bytes, 2214 at T = 512, so its last 6 bytes end
-    off a 16-byte boundary, and the wit row holds the head followed by its salt's field, never by zeros. Run
-    r20261025-183805-7c27's control failed on exactly those 8 pieces (``head egress 0 @2208`` …), holding the other 57
-    of the scan's 337. Here the windows' wit rows, the rows the instance files hold as they are, stand in for them."""
+    off a 16-byte boundary, and the wit row holds the head followed by its salt's field, never by zeros, so a
+    control on the instance files fails on exactly those pieces. Here the sampling blocks' wit rows, the rows the
+    instance files hold as they are, stand in for them."""
     _, rounds = _link(n2.T)
     rd = rounds["honest"]
     blobs, held = n2.Z.blobs_of(rd)

@@ -156,10 +156,10 @@ def test_a_state_tree_that_skips_or_alters_a_transition_is_refused_where_its_uni
 
 
 def test_a_group_of_link_windows_is_one_registration_a_member_a_window(tmp_path):
-    """IO-TIE's group (``--group G``) at the test class: link-windows 0 and 1 in one registration, the state and view
-    trees G·T leaves (the state tree the group's window state, from bucket 0) and the slot entries NR a boundary of the
-    group, each member's warden port its own link-window's registration, the group's last ingress unit a member of its
-    own, and the chains running across the windows."""
+    """The I/O tie's group (``--group G``) at the test class: link-windows 0 and 1 in one registration, the state and
+    view trees G·T leaves (the state tree the group's window state, from bucket 0) and the slot entries NR a boundary of
+    the group, each member's warden port its own link-window's registration, the group's last ingress unit a member of
+    its own, and the chains running across the windows."""
     G, T = 2, sz.TEST.params.window
     h = sz.host(tmp_path, setup=sz.TEST, group=G)
     at = h.at
@@ -464,7 +464,7 @@ def test_a_void_run_is_its_honest_round_refused_at_the_egress_member_of_its_fail
 
 
 @pytest.mark.slow
-def test_the_rows_forms_case_is_the_link_windows_rows_certificates_and_the_scans_answer(tmp_path):
+def test_the_rows_forms_case_is_the_link_windows_rows_certificates_and_the_scans_answer(tmp_path, monkeypatch):
     """`scan_period.rows_case` of one link-window in the rows form's formats (`NetworkCheck.Period`; its Lean checks the
     case on a node: scan_period.sh): the deployment's key, session and schedule, the registered Program and its
     descriptor (``joint/program.json``, the generator form, `scan_zk.scan_root`, whose one-stage reads are each unit's
@@ -472,14 +472,16 @@ def test_the_rows_forms_case_is_the_link_windows_rows_certificates_and_the_scans
     ``SlotEntry_v1{…}/c0/o0`` is the scan's ``scan/prog`` root and domain and whose ``scan/state`` is the scan's, and
     its answer), the registration, and its answer, three records' certificates (requests, responses, fails: its own)
     and two row registrations, each named by the registration's roots. The period's mirror reads the block's
-    `SlotEntry_v1` template's entries off its descriptor and accepts the honest case, its scan's terms read off the
-    test class's own templates with no free inputs; it refuses the forged case (a certificate's signature changed) at
-    the certificates, the tampered case (another Program's registration) at the registration, the chain case (the
-    round's registration of the Program) at its refusal, a block whose entries are at another root by name, and one
-    whose root is at its o1, no `SlotEntry_v1` template's entries, at the wiring (`period_case.UNWIRED`), and a block
-    whose ``scan/state`` is a state tree that skips a transition, or that names none, at the state tie
-    (`period_case.UNSTATED`); a group of two link-windows is refused by name. Slow (the test class's Program, about
-    30 s): the period check reads the scan's templates' signatures, which no stand-in can stand for."""
+    `SlotEntry_v1` template's entries off its descriptor, a stand-in whose closure digest is no pinned Definition's
+    (`period_case.SLOT_ENTRY_PINS`), and refuses the honest case at the wiring (`period_case.UNWIRED`); with that digest
+    pinned it accepts it, its scan's terms read off the test class's own templates with no free inputs, and refuses the
+    forged case (a certificate's signature changed) at the certificates, the tampered case (another Program's
+    registration) at the registration, the chain case (the round's registration of the Program) at its refusal, a block
+    whose entries are at another root by name, and one whose root is at its o1, no `SlotEntry_v1` template's entries, at
+    the wiring (`period_case.UNWIRED`), and a block whose ``scan/state`` is a state tree that skips a transition, or
+    that names none, at the state tie (`period_case.UNSTATED`); a group of two link-windows is refused by name. Slow
+    (the test class's Program, about 30 s): the period check reads the scan's templates' signatures, which no stand-in
+    can stand for."""
     import scan_period as SP
 
     PC = SP.mirror(PERIOD_CASE)
@@ -539,7 +541,10 @@ def test_the_rows_forms_case_is_the_link_windows_rows_certificates_and_the_scans
                                                                   WS.LINK)
     assert (p["program"], p["windows"], p["first"]) == (reg["program"], 1, 0)
     assert p["audits"] == [{"free": E * sz.IS.entry_bits(cls), "program": encode_program(block), "steps": 0}]
-    assert PC.params(p).audits[0].entries == ((sz.PA.template_id(defs["block"]), E),) and E == T // cls.EVERY * cls.NR
+    key = sz.PA.template_id(defs["block"])
+    digest = PC.slot_entry_digest(encode_program(block), key)
+    assert PC.params(p).audits[0].entries == ((key, E, digest),) and E == T // cls.EVERY * cls.NR
+    assert digest not in PC.SLOT_ENTRY_PINS
     assert p["scan"] == json.loads((scan / "joint" / "program.json").read_text())
     assert json.loads(bytes.fromhex(case["commitment"])) == {"audits": [audit["registration"]], "windows": [reg]}
     ev = json.loads(bytes.fromhex(case["evidence"]))
@@ -553,6 +558,9 @@ def test_the_rows_forms_case_is_the_link_windows_rows_certificates_and_the_scans
     ports = sz.ports_of(sz.TEST.cls)
     bits = {tp: dict(ins + outs) for tp, (ins, outs) in ports.items()}
     assert PC.params(p).scan == PC.Scan(T, 0, 16 + bits["first"]["o1"] + bits["first"]["o2"], 16 + bits["egress"]["o1"])
+    out = PC.reference(case)
+    assert (out["verdict"], out["reason"]) == ("reject", f"window 0: {PC.UNWIRED}"), out
+    monkeypatch.setattr(PC, "SLOT_ENTRY_PINS", (*PC.SLOT_ENTRY_PINS, digest))
     out = PC.reference(case)
     assert (out["verdict"], out["public"]["windows"], out["public"]["scans"][0]["units"]) == ("accept", 1, 2 * T), out
     refused = {r: PC.reference(SP.rows_case(run, scan, r)) for r in ("forged", "tampered", "chain")}

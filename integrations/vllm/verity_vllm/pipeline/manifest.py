@@ -32,7 +32,7 @@ from contextlib import contextmanager
 from dataclasses import dataclass, field
 from typing import Any, Callable
 
-from verity_vllm.config import option
+from verity_vllm.config import option, workload_arg
 from verity_vllm.program import prefix_plan as PP
 from verity_vllm.correspondence.reader_for_query import Correspondence
 from verity_vllm.query.program_view import from_instances, iter_instance_rows
@@ -548,7 +548,7 @@ JOBS_HELP = ("processes for the word check's cuts (word.prefetch) and, in build-
 @dataclass(frozen=True, kw_only=True)
 class BuildOptions:
     program: str = option("--program")
-    workload: str | None = option("--workload", default=None)
+    workload: str | None = option("--workload", type=workload_arg, default=None)
     request_id: str | None = option("--request-id", default=None)
     profile: str | None = option("--profile", default=None)
     rank: int = option("--rank", type=int, default=0)
@@ -570,7 +570,7 @@ class BuildOptions:
 
 @dataclass(frozen=True, kw_only=True)
 class BuildGlobalOptions:
-    fixture: str = option("--fixture")
+    fixture: str = option("--fixture", type=workload_arg)
     programs_root: list[str] = option("--programs-root", action="append",
                                       help="TP row: repeat per rank, with --rank r at the same position")
     workload_digest: list[str] | None = option("--workload-digest", action="append", default=None,

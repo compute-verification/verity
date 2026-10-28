@@ -87,7 +87,7 @@ def test_the_claims_gaps_are_the_ones_the_certifier_readme_names():
     readme = (ROOT / e2e.README).read_text()
     gaps = readme.split("## Zero knowledge: what N2's verdict reads, and what's open", 1)[1]
     for named, ours in (("A run that proves nothing", "N2's verdicts here are decided in the clear"),
-                        ("NET-42", "NET-42"), ("CertifiedRecord.verify", "CertifiedRecord.verify")):
+                        ("CertifiedRecord.salt", "CertifiedRecord.salt"), ("CertifiedRecord.verify", "CertifiedRecord.verify")):
         assert named in gaps and any(ours in g for g in e2e.CLAIM["zero_knowledge_gaps"]), named
     assert "counts only" in readme and any("N3" in x for x in e2e.CLAIM["not_covered"])
 

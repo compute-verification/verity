@@ -7,7 +7,7 @@ answer for it (`scan_zk.py prove --group 1`'s ``answers.json``), checked by the 
 * **The case** (`rows_case`) of link-window W: the parameters the warden run's ``deployment.json`` (its key, session
   and one schedule), the link `warden_serve.LINK`, the Program the scan's registration's, the compute audits
   ``answers.json`` carries (the block round's, whose o0 is the scan's `prog`: its descriptor, free inputs and steps),
-  jitter bound 1 (K's jitter term 0, assumed (J), which the certifier doesn't meet at 1), and the scan that Program's
+  jitter bound 1 (K's jitter term 0, assumed (J), not met at 1), and the scan that Program's
   descriptor (``joint/program.json``), off which the period check reads the scan's terms; the commitment the audits'
   registrations and the scan's; the evidence the audits' answers, then the scan's answer, the certificates of W's
   three records (``certified.jsonl``: requests, responses, fails) and W's two row registrations (``cells.jsonl``, as
@@ -20,11 +20,12 @@ answer for it (`scan_zk.py prove --group 1`'s ``answers.json``), checked by the 
 * **forged**: the honest case with the responses record's certificate's signature changed: a certificate the network
   certifier didn't sign.
 * **The check**: each case through the mirror (``--mirror``, `period_case.py` loaded by path: `reference`) and
-  ``network-period check`` (``--lean``), whose verdicts and public outputs must agree and be the case's: accept for the
-  honest case where the scan's answer accepts, reject for every other. The block round's o0 is a `SlotEntry_v1`
-  stand-in's entries, so the scan's `prog` is wired, and its registration names the scan's state tree as
-  ``scan/state``, so the scan's state is tied (`stateTied`). ``DIR`` gets each case's files and ``period.json``, each
-  case's answers.
+  ``network-period check`` (``--lean``), whose verdicts must agree and be the case's: reject, and where the scan's
+  answer accepts, at the wiring (the mirror's ``UNWIRED`` in its reason and in Lean's). The block round's o0 is a
+  `SlotEntry_v1` stand-in's entries, whose closure digest is none the period check pins (`slotEntryPins`: the scan's
+  `prog` must be `io_shell.SlotEntry_v1`'s own entries), so the honest case passes every check before the wiring and
+  is refused there; its registration names the scan's state tree as ``scan/state``, the state the stand-in's
+  `SCAN_STATE` is tied to (`stateTied`). ``DIR`` gets each case's files and ``period.json``, each case's answers.
 """
 from __future__ import annotations
 
@@ -132,8 +133,10 @@ def main(argv=None) -> int:
         (a.out / name / "case.json").write_text(json.dumps(case, indent=1, sort_keys=True))
         py, lean = m.reference(case), lean_check(a.lean, case, a.out / name)
         scan_said = {x["answer"]["verdict"] for x in json.loads((Path(scan) / "answers.json").read_text())["windows"]}
-        want = "accept" if not round_ and scan_said == {"accept"} else "reject"
-        good = py.get("verdict") == lean.get("verdict") == want and py.get("public") == lean.get("public")
+        why = m.UNWIRED if not round_ and scan_said == {"accept"} else None
+        want = "reject" + (" at the wiring" if why else "")
+        good = (py.get("verdict") == lean.get("verdict") == "reject" and py.get("public") == lean.get("public")
+                and (why is None or why in py.get("reason", "") and why in lean.get("reason", "")))
         ok &= good
         reg = json.loads(bytes.fromhex(case["commitment"]))["windows"][0]
         got[name] = {"want": want, "mirror": py, "lean": lean, "as_expected": good, "registration": RG.digest(reg)}

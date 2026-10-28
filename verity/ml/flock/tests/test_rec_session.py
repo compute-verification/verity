@@ -644,8 +644,8 @@ def _toy_circuit(d: Path, seed: int) -> tuple[Path, dict]:
     stage.mkdir(parents=True)
     (stage / "circuit.txt").write_text(text)
     head = {"circuit_sha512": FC.digest(text), "instances": 1, "units": {"classes": [FC.class_digest(text)]}}
-    for f in ("inst-1.bin", "pub-1.bin"):
-        (stage / f).write_bytes(json.dumps(head).encode() + b"\n")
+    (stage / "inst-1.bin").write_bytes(json.dumps(dict(head, rows=True)).encode() + b"\n")
+    (stage / "pub-1.bin").write_bytes(FC.public_file(head, b""))
     return stage / "circuit.txt", rng
 
 

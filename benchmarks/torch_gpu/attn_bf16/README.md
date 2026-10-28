@@ -3,10 +3,9 @@
 QK^T and PV for one H100/H200 (sm_90a) or RTX PRO 6000 (sm_120a), each output word exactly
 `GemmCoordinate_v2{K, GEMM_HOPPER}` (`verity.ml.circuits.ops.gemm`): K/16 `mma.sync.m16n8k16` BF16 steps in ascending k
 from +0, then `cvt.rn.bf16.f32`. QK^T's K is the head dim; PV's is the larger of `kpv` and the query's KV length padded to
-a multiple of 16, both operands zero-padded to it. Softmax is its own unit, so QK^T's words come out and PV's P goes in.
+a multiple of 16, both operands zero-padded to it. Softmax is its own Definition, so QK^T's words come out and PV's P goes in.
 Decode (one query a sequence), causal prefill and prefill chunks, head dims 64 and 128, MHA, GQA and MQA over a BF16 KV
-cache. Two paths compute the same words: the fast one, and a slow reference path that is tuned for nothing (attn_ref's
-kernels until HASH-32 folded them in here).
+cache. Two paths compute the same words: the fast one, and a slow reference path that is tuned for nothing.
 
 ```python
 import attn                                      # beside attn_bf16.<arch>.cubin, or $ATTN_BF16_CUBIN
@@ -16,7 +15,7 @@ o = attn.pv(p, v, lens, path="ref")              # the same words through the re
 ```
 
 - `attn_bf16.cu`: the kernels, and how each word's chain is fixed (one warp per 16 x 8 tile, no split-K, no atomics, and
-  per-query zeroing of V in the block where the tile's queries stop at different keys). The `_h8` kernels put 8 query
+  per-query zeroing of V in the 16-key segment where the tile's queries stop at different keys). The `_h8` kernels put 8 query
   heads that share a KV head in a tile's columns, so a decode step reads each key and value once for 8 heads, and a warp
   runs every tile of its head groups (Q or P loaded once a group). The `_h16` kernels put 16 heads in a tile's rows
   instead, and load and store word pairs 32 bits at a time where a buffer's strides allow; their PV transposes O's words
@@ -37,24 +36,26 @@ o = attn.pv(p, v, lens, path="ref")              # the same words through the re
   subnormal products and accumulators, uniform words); the H200 model's whole decode step as per-sequence digests over
   `gen.py`'s inputs.
 - `run.py`: on the card, the identity check, every case under 0xA5 poison in each tiling of both paths at several launch
-  shapes, a no-launch control that must fail, the whole decode step also over its first 4,096 and 16,384 sequences (the
-  skeleton's and the block's M), `attn.py`'s functions through both paths on every decode case, and diagnostic timing
-  against SDPA and torch's matmuls at the model's decode step for M = 4,096, 16,384 and 20,480.
-- `session.sh`: the card's part as one run from the build's ship (sent as `ship.tar`), `run.py` under `gpu-lease 1`. The
+  shapes, a no-launch control that must fail, the whole decode step also over its first 4,096 and 16,384 sequences,
+  `attn.py`'s functions through both paths on every decode case, and diagnostic timing against SDPA and torch's matmuls
+  at the model's decode step for M = 4,096, 16,384 and 20,480.
+- `run.sh`: the card's part as one run from the build's ship (`IN/ship.tar`), `run.py` under `gpu-lease 1`. The
   card's canary is `benchmarks/tc_probe`'s own run.
 - `tests/`: on the CPU, the SASS gate's verdicts, `attn.py`'s kernels and the reference grid, and `fixture.py`'s words on
   `kinds_d64` against the Definition's reference evaluator (`GemmCoordinatePad` for PV).
 
 ```text
-research run --on auto --project verity --source . --cwd source --cpus 16 --mem-gb 48 -- \
-  bash -lc 'uv sync -q --all-packages --extra torch-cpu && PROCS=16 bash benchmarks/torch_gpu/attn_bf16/build.sh "$OUT/ship"'
-research fetch BUILD_RUN --all && tar -C ~/.research/runs/BUILD_RUN/out/ship -cf /tmp/ship.tar .
-research run --on vy-dc-h200 --project verity --source . --cwd source --env GPU_LEASE_WHO=LANE --send /tmp/ship.tar -- \
-  bash benchmarks/torch_gpu/attn_bf16/session.sh
+# from the tree's root, on a CPU node with CUDA's nvcc (12.8 or later), 16 CPUs and 48 GB: the cubins, their SASS gates
+# and the fixture
+uv sync --all-packages --extra torch-cpu
+PROCS=16 bash benchmarks/torch_gpu/attn_bf16/build.sh /tmp/attn-bf16-ship
+mkdir -p IN && tar -C /tmp/attn-bf16-ship -cf IN/ship.tar .
+# on an H200 with CUDA torch and `gpu-lease`: run.py's checks and timing
+OUT=DIR IN=IN bash benchmarks/torch_gpu/attn_bf16/run.sh
 uv run tools/verity/check/suites.py benchmarks/torch_gpu/attn_bf16      # the CPU suite
 ```
 
 `benchmarks/torch_gpu/attn_ref/` keeps `attn_ref.py` and `build.sh` for one release, as a shim over the reference path
-for its callers (`benchmarks/e2e_h200` and `benchmarks/torch_gpu/commit_slots/overlap.sh`); new code imports `attn` here.
+for its callers (`examples/h200` and `benchmarks/torch_gpu/commit_slots/overlap.sh`); new code imports `attn` here.
 
 Results go to the evidence store with the run, never here.

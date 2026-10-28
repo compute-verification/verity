@@ -1,6 +1,6 @@
 """No retired term in the tree's prose (AGENTS.md "Working principles": a decision rolls out in the change that records it).
-A semantically meaningful part of the declared or actual circuit is a block, always named with a prefix (Daniel, 26 Oct
-2026, 10:07 AM PDT; `ARCHITECTURE.md`, Glossary, "Block"): a proof unit is a proof block, and a faulty unit a faulty
+A semantically meaningful part of the declared or actual circuit is a block, always named with a prefix
+(`ARCHITECTURE.md`, Glossary, "Block"): a proof unit is a proof block, and a faulty unit a faulty
 proof block.
 
 Scanned: every tracked text file but the Lean (`.lean` files and their locks' reasons, `lean-audit.json`). A term matches case-insensitively as two words, hyphenated, or wrapped onto the next
@@ -9,8 +9,8 @@ line (behind a comment marker or not). Identifiers (`proof_unit`) are code; the 
 record or a digest (``ALLOWED``, one reason each; an entry that matches nothing fails too), and a file whose lines a PR
 already queued on `next` rewrites (``PENDING``), until that PR lands and the rename follows it.
 
-The maintained docs (every tracked Markdown file but a CHANGELOG) retire more (``DOC_TERMS``, Daniel,
-26 Oct: "block" is reserved for parts of circuits, the subprotocols go by their names, and "leg" is retired). Their code
+The maintained docs (every tracked Markdown file but a CHANGELOG) retire more (``DOC_TERMS``:
+"block" is reserved for parts of circuits, the subprotocols go by their names, and "leg" is retired). Their code
 keeps the old words until its owners rename it, so this scan skips code spans and fences, where a path (`legs/`) or a
 record key stays, and a term written as a quoted mention ("leg"); the table's rows name them too.
 """
@@ -57,11 +57,10 @@ ALLOWED: dict[str, str] = {
 
 PENDING: dict[str, str] = {
     "Security/Proofs/NetworkCertifier/README.md": "#4690 adds lines",
-    "benchmarks/all_protocols/README.md": "#4644 adds lines",
     "benchmarks/census/README.md": "#4731 rewrites its lines",
-    "benchmarks/e2e_demo/README.md": "#4719 rewrites its lines",
-    "benchmarks/e2e_demo/verity_e2e_demo/report.py": "#4691 adds a line",
-    "benchmarks/e2e_h200/README.md": "#4680 rewrites its lines",
+    "examples/h200/interfaces/README.md": "#4719 rewrites its lines",
+    "examples/h200/interfaces/verity_e2e_demo/report.py": "#4691 adds a line",
+    "examples/h200/README.md": "#4680 rewrites its lines",
     "benchmarks/network_traces/chain_record.py": "#4575 rewrites its lines",
     "benchmarks/network_traces/transfer_zk.py": "#4441 adds it",
     "benchmarks/network_traces/transfer_zk.sh": "#4441 adds it",
@@ -77,7 +76,6 @@ PENDING: dict[str, str] = {
     "verity/core/protocols/network/tests/test_network_period_protocol.py": "#4721 adds lines",
     "verity/core/protocols/pous/README.md": "#4719 rewrites its lines",
     "verity/core/protocols/remote_bandwidth/PROTOCOL.md": "#4620 rewrites its lines",
-    "verity/core/protocols/sampled_proofs/README.md": "#4637 rewrites its lines",
     "verity/ml/circuits/ops/boolean/rowwise.py": "#4539 rewrites its lines",
     "verity/ml/windows/interface.py": "#4502 adds lines",
 }
@@ -179,7 +177,7 @@ def test_the_doc_scan_reads_each_form():
         "b.md": 'The `legs/pous.py` file and `wipe_period.leg(dir)`; ``a `leg` key``; "leg" is retired.\n'
                 "```sh\nLEGS=A,B ./run.sh  # each leg\n```\n~~~\na leg\n~~~\nA thread block after the fences.\n",
         "c.py": '"""A wrong unit and a leg stay in code until PR 2."""',
-        "benchmarks/numerical/CHANGELOG.md": "a leg",
+        "benchmarks/pouw/CHANGELOG.md": "a leg",
         "verity/README.md": "a leg",
         GLOSSARY: '| "leg"; a physical block | subprotocol |\nA leg outside the table.\n',
     }

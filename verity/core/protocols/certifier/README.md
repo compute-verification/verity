@@ -187,7 +187,7 @@ A spec-level reference for network accounting's timing channel:
   it for the transfer it expects, and `port` the verifier's own `--registered` port of the value at the signed root
   (`benchmarks/network_traces/transfer_zk.py`; the load relayed and committed as it crosses,
   `benchmarks/network_traces/load_relay.py`);
-- the blocks (`blocks`): the server blocks, the server-time block and the transfer gates of a circuit, schema
+- the blocks (`blocks`): the proof blocks each server runs, the steps the circuit spans and its transfer gates, schema
   `verity/blocks/v1`, kept in this module until the window interface carries it in ``circuit.json``. `check` refuses
   blocks whose servers don't partition the units, an inference block on two servers (below), a boundary row that is no
   transfer's (an ``ingress``, a registered read no transfer brings in, a wire between servers, an external port's row
@@ -200,8 +200,9 @@ A spec-level reference for network accounting's timing channel:
   blocks' declared inputs and outputs, so which server may read an inference block's input bits is unambiguous. `check`
   reads each unit's (slot, step) from the record's inference entries (``blocks.inference``) and refuses, by name, a
   block whose units are on two servers, and two servers or more over a record that states no inference block;
-  `server_blocks` is that part alone. Which server runs which units is protocol structure, public like NCI's
-  declaration and not a private partition, so it is checked in the clear with no proof block;
+  `server_blocks` is that part alone. Which server runs which units is protocol structure, public like the
+  registration the inference-only policy checks and not a private partition, so it is checked in the clear with no
+  proof block;
 - the scan's ingress side (`ingress_scan`): `IngressScanBucket`, one unit a certifier bucket, reads the bucket's
   warden ingress row, the slot state the bucket before carries and the Programs' entries, one port `prog<j>` a slot,
   each `SlotEntry_v1`'s word-aligned row of its slot (registered reads), and computes the next state (each block to the
@@ -210,18 +211,19 @@ A spec-level reference for network accounting's timing channel:
   last egress bucket, `admitted + D + ⌊n/r⌋`) and its egress view, the state as `egress.EgressBucket` reads it (bucket,
   then per slot live, q, admitted, n and the output ids), its outputs beside a public ok bit, which is 0 at an
   occupied slot whose entry of the Programs' row isn't read (its read bit 0: a request no Program served). Unless the
-  Programs' row is a compute audit's `SlotEntry_v1` template's entries, the read bit is the prover's word (an entry of
-  read 1 and no outputs passes), so the period check refuses such a link-window (`NetworkCheck.Period`'s `wired`), and
-  one whose scan's state isn't that audit's `SCAN_STATE`, by root and domain (`stateTied`): the scan's state tree is
-  the window state (`window_state`), each row but the empty state's the one a unit computes (its o1) and the next
-  reads (its sin), both registered reads, so a Program reads the states the scan's steps computed;
+  Programs' row is a compute audit's `SlotEntry_v1` template's entries, that template a pinned Definition (its closure
+  digest one of `slotEntryPins`), the read bit is the prover's word (an entry of read 1 and no outputs passes), so the
+  period check refuses such a link-window (`NetworkCheck.Period`'s `wired`), and one whose scan's state isn't that
+  audit's `SCAN_STATE`, by root and domain (`stateTied`): the scan's state tree is the window state (`window_state`),
+  each row but the empty state's the one a unit computes (its o1) and the next reads (its sin), both registered reads,
+  so a Program reads the states the scan's steps computed;
   `IngressScanFirst`, the first bucket's, starts from the empty state, constants of its circuit. Programs start at
   fixed slots a network timestep (ASK-122): a timestep is `EVERY` buckets, the warden's `every`, which divides its
   window, with `SLOTS` = lanes Program slots each, and only `EVERY` and the slot count are public. The token-id row a
   slot's Program reads is the scan's state row b − 1 (`verity/certifier/scan-state/v1`, `token_row`): its occupancy
   word `occ` (1 for a slot whose Program starts at b, 0 for an empty slot), its prompt's length `fields` and its prompt
   ids, which the scan reads off the warden's signed ingress cells, so no other tie holds them to the certified bytes;
-  `slot_row` gives each one's bits in the state row, for a reader that takes them as i32s (vllm's `SlotRow_v1`), and
+  `slot_row` gives each one's bits in the state row, for a reader that takes them as i32s (vllm's `ScanSlots_v2`), and
   `window_state` the rows a window circuit of the link-window from bucket t0 reads, the scan's rows t0 − 1 on (the
   empty state's for row −1). A Program gives all its outputs to its entry at its anchor (its read bit, n, u32, and 64
   ids of 17 bits at w63's class, 71 words, the row `SlotEntry_v1` writes once it carries the read bit); a link-window's
