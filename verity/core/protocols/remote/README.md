@@ -132,7 +132,7 @@ The whole argument rests on a short list. Everything else is a theorem or a name
 
 That each use of a weight needs its own token's context is not an assumption. It is a property of the training
 circuit's wiring: every gate a use requires reaches, inside that use's own upstream computation, the operand the use
-reads (`Nci.Capability.Upstream`, checkable on the circuit, not yet checked on a named one). The two learning rows are all the overhead lower bound assumes
+reads (`Nci.Capability.Consumers.Upstream`, checkable on the circuit, not yet checked on a named one). The two learning rows are all the overhead lower bound assumes
 about learning, and they are where its scientific content lies; the second is the least certain.
 
 ### 1. The proofs of the drawn proof blocks
@@ -254,13 +254,15 @@ the local bound (an activation price, a joint price, a recoverable source), each
 
 **Lean.**
 
-- The local bounds' caps `Nci.Guarantees.HeldBudget`, `Nci.Guarantees.ImportOrRecompute`,
-  `Nci.Guarantees.RecomputeByGates`, `Nci.Guarantees.RecomputeByState` and `Nci.Guarantees.WeightedProductCap`, and the
-  floor `Nci.Guarantees.CapabilityFloor`: **stated** (held in the lock by `Nci.Guarantees.LocalBoundsStated` and
-  `Nci.Guarantees.CapabilityFloorStated`), not proved.
+- The local bounds' caps `Nci.Guarantees.HeldBudget` (or, statistically, `Nci.Guarantees.StatHeldBudget`),
+  `Nci.Guarantees.ImportOrRecompute`, `Nci.Guarantees.RecomputeByGates`, `Nci.Guarantees.RecomputeByState` and
+  `Nci.Guarantees.WeightedProductCap`, and the floor `Nci.Guarantees.CapabilityFloor`: **stated** (held in the lock by
+  `Nci.Guarantees.LocalBoundsStated` and `Nci.Guarantees.CapabilityFloorStated`), not proved. Every premise, structure
+  and bound is surveyed in `Security/Definitions/Nci/Capability/README.md`.
 - Their premises: `Nci.Assumptions.CoversEfficientMethods` is a named assumption in the lock;
-  `Nci.Assumptions.DescriptionHard` and the wiring property `Nci.Capability.Upstream` are recorded through those
-  statements but **written, not in a lock** as named assumptions.
+  `Nci.Assumptions.DescriptionHard` (or `Nci.Assumptions.MinEntropyHard`) and the wiring property
+  `Nci.Capability.Consumers.Upstream` are recorded through those statements but **written, not in a lock** as named
+  assumptions.
 - The overhead lower bound over remote, `Nci.Guarantees.DampenerRemote`: **proved**, but as arithmetic over inline
   hypotheses (`Nci.Assumptions.PouwSound` among them, which no PoUW guarantee discharges), not over the local bounds.
 - Over a monitoring period, `Nci.Guarantees.DampenerRemotePeriod`: **stated** (its lock entry is
