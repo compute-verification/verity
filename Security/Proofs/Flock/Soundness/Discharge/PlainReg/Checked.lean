@@ -63,7 +63,7 @@ theorem opens_of_acceptsR (I : Inputs) (own : Array Registered.Port) {c : Flock.
   rw [hd] at hst
   have s := Hidden.setupHidden_spec' hst
   have hcst : st.c = c := by
-    have h1 := s.parse
+    have h1 := s.parseF (HmOut.parse_isTmpl hc)
     rw [hc] at h1
     exact (Except.ok.inj h1).symm
   obtain ⟨pop', hpop', -, hdr⟩ := s.pub

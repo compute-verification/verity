@@ -7,6 +7,7 @@ import struct
 from dataclasses import replace
 
 import pytest
+from verity.core.protocols import registration
 from verity.core.protocols.sampled_proofs.one_stage import registration as one_stage
 from verity.ml.circuits import partition_object
 from verity.ml.circuits.census import census
@@ -15,11 +16,13 @@ from verity.ml.circuits.defs import bind
 from verity.ml.circuits.ops.boolean.gemm import GEMM_SM120_E4M3, GemmCoordinateE4m3
 from verity.ml.circuits.refs import tuple_of
 from verity.ml.circuits.types import Array, Tuple
+from verity.ml.commitments import advice
 
-from datacenter import (FLEET_CLOSED, SALT_CUSTODY, SERVED_PARTITION, Assumption, Block, Cadence, Carried, Challenge, Computed, Credit,
-                        Datacenter, Deviation, Device, Entered, Fleet, Held, Interval, Ledger, Link, Maintenance, On,
-                        Plan, Port, Record, Refused, Store, Wipe, account, ands, audit, check_records, crossings,
-                        double_credit, evaluate, names, occupancy, place, read, register, run, traffic, values, work)
+from datacenter import (FLEET_CLOSED, SALT_CUSTODY, SERVED_PARTITION, Accounts, Assumption, Cadence, Carried, Challenge,
+                        Computed, Credit, Datacenter, Deviation, DeviceEntry, Entered, Fleet, Held, Interval, LinkEntry,
+                        Maintenance, On, Plan, Port, PortRecord, Refused, StoreEntry, Wipe, Zone, account, ands, audit,
+                        check_records, crossings, double_credit, evaluate, names, occupancy, place, read, register, run,
+                        traffic, values, work)
 from datacenter.binding import hops
 from datacenter.logical import census_of, committed
 from datacenter.models import DOT, LINEAR, MAT, VEC, WEIGHTS, X, program, two_stage, word, words
@@ -34,20 +37,21 @@ ANDS = 528640 + 2112                                # its ANDs on bits: the BF16
 HBM, RESIDUAL = 6.4e10, 8e6
 
 
-def node(n: str) -> Block:
-    gpu = Device(f"{n}.gpu", "gpu", rate={"mac:bf16": Assumption(f"{n}.gpu.bf16", 1e6, "MAC/s"),
-                                          "cuda:gate": Assumption(f"{n}.gpu.gates", 1e7, "gate/s")},
-                 memory=Assumption(f"{n}.gpu.hbm", HBM, "bits"), residual=Assumption(f"{n}.gpu.residual", RESIDUAL, "bits"),
-                 write=Assumption(f"{n}.gpu.write", 1e14, "bit/s"))
-    return Block(n, [gpu])
+def node(n: str) -> Zone:
+    gpu = DeviceEntry(f"{n}.gpu", "gpu", rate={"mac:bf16": Assumption(f"{n}.gpu.bf16", 1e6, "MAC/s"),
+                                               "cuda:gate": Assumption(f"{n}.gpu.gates", 1e7, "gate/s")},
+                      memory=Assumption(f"{n}.gpu.hbm", HBM, "bits"),
+                      residual=Assumption(f"{n}.gpu.residual", RESIDUAL, "bits"),
+                      write=Assumption(f"{n}.gpu.write", 1e14, "bit/s"))
+    return Zone(n, [gpu])
 
 
 def datacenter(tick: float = 1e-3) -> Datacenter:
     up = Assumption("uplink", 1e8, "bit/s", "declared")
-    fabric = [Device("a.cert", "certifier"), Device("b.cert", "certifier"), Device("leaf", "switch"),
-              Device("challenger", "challenger"), Device("world", "outside")]
-    links = [Link("a.gpu", "a.cert", up), Link("a.cert", "leaf", up), Link("leaf", "b.cert", up),
-             Link("b.cert", "b.gpu", up), Link("challenger", "leaf", up), Link("world", "leaf", up)]
+    fabric = [DeviceEntry("a.cert", "certifier"), DeviceEntry("b.cert", "certifier"), DeviceEntry("leaf", "switch"),
+              DeviceEntry("challenger", "challenger"), DeviceEntry("world", "outside")]
+    links = [LinkEntry("a.gpu", "a.cert", up), LinkEntry("a.cert", "leaf", up), LinkEntry("leaf", "b.cert", up),
+             LinkEntry("b.cert", "b.gpu", up), LinkEntry("challenger", "leaf", up), LinkEntry("world", "leaf", up)]
     cadence = Cadence(frame_bits=32, bucket_ticks=1, buckets=4, jitter_classes=128,
                       tick=Assumption("tick", tick, "s", "declared"))
     return Datacenter("dc0", [node("a"), node("b")], fabric, links, cadence)
@@ -219,7 +223,7 @@ def test_work_is_credited_in_ands_and_takes_time_by_kind_at_its_rate():
     dc = datacenter()
     rates = {"mac:bf16": Assumption("a.gpu.bf16", 1e6, "MAC/s"), "mac:fp8": Assumption("a.gpu.fp8", 5e5, "MAC/s"),
              "cuda:gate": Assumption("a.gpu.gates", 1e7, "gate/s")}
-    dc.blocks[0] = Block("a", [replace(dc.blocks[0].devices[0], rate=rates)])
+    dc.blocks[0] = Zone("a", [replace(dc.blocks[0].devices[0], rate=rates)])
     k = [0x30 + i % 8 for i in range(32)]                            # E4M3 codes 0.5 to 0.94
     p = place(attend, dc, "a.gpu", registration=register(attend, {"w1": WEIGHTS["w1"], "k": k}), deliver="world",
               x="world", q="world")
@@ -238,7 +242,7 @@ def test_work_is_credited_in_ands_and_takes_time_by_kind_at_its_rate():
 
 def test_a_boundary_link_without_a_certifier_breaks_coverage():
     dc = datacenter()
-    dc.links.append(Link("a.gpu", "leaf", Assumption("bypass", 1e9, "bit/s")))
+    dc.links.append(LinkEntry("a.gpu", "leaf", Assumption("bypass", 1e9, "bit/s")))
     assert any("passes no certifier" in p for p in dc.validate())
     assert datacenter().validate() == []
 
@@ -267,6 +271,16 @@ def test_crossings_are_derived_from_the_placement_including_inputs_and_delivery(
     for x in crossings(p):
         assert any(dc.port(*h) for h in hops(x.path, x.src))
     assert set(traffic(p)) == {Port(c, d) for c in ("a.cert", "b.cert") for d in ("ingress", "egress")}
+
+
+def test_the_registered_inputs_are_a_theta_item_of_the_registration_log():
+    """`register`'s commitment is what the registration log registers: one θ item, which a log's information entry
+    takes and whose view reads back with the root, the rows and the domain the commitment's leaves are hashed under."""
+    log = registration.chain("onsite", [registration.Information((REG.theta(),))])
+    t = registration.check(registration.Auditor(), "onsite", log).view().value(",".join(REG.values))
+    assert t == REG.theta() and t["root"] == REG.root.hex() and t["leaves"] == len(REG.rows.rows)
+    assert t["domain"] == advice.domain(REG.rows.binding, len(REG.rows.rows)).domain_id.hex()
+    assert t["words"] * t.get("word_bits", 16) == REG.rows.n_bits
 
 
 def test_a_registered_value_has_a_copy_in_every_block_that_reads_it_unless_held_in_one():
@@ -321,9 +335,9 @@ def certified(tick: float = 1e-3) -> Datacenter:
     trusted device."""
     dc = datacenter(tick)
     up = dc.link("world", "leaf").capacity
-    dc.fabric.append(Device("world.cert", "certifier"))
-    dc.links = [l for l in dc.links if "world" not in (l.a, l.b)] + [Link("world", "world.cert", up),
-                                                                     Link("world.cert", "leaf", up)]
+    dc.fabric.append(DeviceEntry("world.cert", "certifier"))
+    dc.links = [l for l in dc.links if "world" not in (l.a, l.b)] + [LinkEntry("world", "world.cert", up),
+                                                                     LinkEntry("world.cert", "leaf", up)]
     return dc
 
 
@@ -333,7 +347,7 @@ def test_the_links_where_two_machines_the_auditor_doesnt_control_meet_are_uncove
     bypass from a block to the leaf; with the world behind a certifier of its own, every link is covered."""
     dc = datacenter()
     assert [(l.a, l.b) for l in dc.uncovered_links()] == [("world", "leaf")]
-    dc.links.append(Link("a.gpu", "leaf", Assumption("bypass", 1e9, "bit/s")))
+    dc.links.append(LinkEntry("a.gpu", "leaf", Assumption("bypass", 1e9, "bit/s")))
     assert [(l.a, l.b) for l in dc.uncovered_links()] == [("world", "leaf"), ("a.gpu", "leaf")]
     assert certified().validate() == [] and certified().uncovered_links() == []
 
@@ -423,9 +437,10 @@ def test_records_are_checked_against_the_declared_ones_whatever_the_certifier_si
     """The mock datacenter's records carry the real certifier's digest, not `observe.digest`: `check_records` compares
     whatever the certifier signs with what an honest run would have it sign."""
     cadence, port = datacenter().cadence, Port("a.cert", "egress")
-    declared = {(port, 0): Record(port, 0, (1, 0, 0, 0), b"one frame"), (port, 1): Record(port, 1, (0, 0, 0, 0), b"none")}
+    declared = {(port, 0): PortRecord(port, 0, (1, 0, 0, 0), b"one frame"),
+                (port, 1): PortRecord(port, 1, (0, 0, 0, 0), b"none")}
     assert [type(x) for x in check_records(list(declared.values()), declared, cadence)] == [Carried, Carried]
-    late = [Record(port, 0, (0, 1, 0, 0), b"one frame"), Record(port, 5, (0, 0, 0, 0), b"another epoch's")]
+    late = [PortRecord(port, 0, (0, 1, 0, 0), b"one frame"), PortRecord(port, 5, (0, 0, 0, 0), b"another epoch's")]
     assert [x.why for x in check_records(late, declared, cadence)] == [
         "occupancy differs from the declared profile", "no record: the certifier was down or its record was withheld"]
 
@@ -490,7 +505,7 @@ def test_work_is_pinned_to_a_block_only_by_data_it_must_consume_there_or_a_named
 
 
 def test_a_salt_in_its_certifiers_custody_pins_the_work_that_depends_on_it():
-    """The salt anchor. Block a's certifier releases a 512-bit salt into a alone. The noised product p
+    """The salt anchor. Zone a's certifier releases a 512-bit salt into a alone. The noised product p
     (PoUW's proof work) depends on it and never leaves, so a helper off the block can't have computed it. That holds
     while k, the bits that could carry the salt out before registration, stays at most 384: a's egress timing advice
     (4 windows × 7 bits) and nothing else here. A 512-bit telemetry input delivered out of a voids it, and so does a
@@ -530,7 +545,7 @@ def test_the_joint_ledger_credits_each_units_time_and_memory_once(setup):
     sound. A block's compute is the block's only as far as attribution places it there: without
     an anchor it comes out of the whole datacenter's capacity, and under one it carries that anchor as its grade."""
     dc, p = setup
-    stores = (Store("s1", 5e10, "a.gpu"), Store("s2", 5e10, "a.gpu"))
+    stores = (StoreEntry("s1", 5e10, "a.gpu"), StoreEntry("s2", 5e10, "a.gpu"))
     crowded = staged(dc, stores=stores)
     plan = Plan(EPOCH, challenges=[Challenge("s1", 0, 8), Challenge("s2", 0, 8)])
     acc = account(audit(run(crowded, INPUTS, plan), crowded.public(plan)), crowded.public(plan))
@@ -554,9 +569,9 @@ def test_the_joint_ledger_credits_each_units_time_and_memory_once(setup):
     assert [(x.unit, x.resource, x.work, x.grade, x.basis) for x in pouw.credits if x.unit == "a"] == [
         ("a", "compute", 2.0, "fleet-closed", "proved")]
     assert {x.basis for x in closed.credits if x.resource.startswith("compute")} == {"honest-routing"}
-    overlap = Ledger([pouw, pouw]).joint()                      # 4 block-ticks fit in 16, but the windows overlap
+    overlap = Accounts([pouw, pouw]).joint()                      # 4 block-ticks fit in 16, but the windows overlap
     assert ("a", "compute", EPOCH, 4.0, 0.0) in overlap and not any(r == "compute" and v > 0 for _, r, _, _, v in overlap)
-    twice = Ledger().add(honest).add(honest)
+    twice = Accounts().add(honest).add(honest)
     assert not twice.sound and [(u, r, i) for u, r, i, _, _ in twice.joint()] == [("b.gpu", "held", Interval(0, 2))]
 
 
@@ -634,7 +649,7 @@ def test_the_occupancy_profile_is_one_of_those_the_registration_commits_and_cost
 
 def test_a_program_placed_across_a_fleet_crosses_the_inter_datacenter_link():
     fleet = Fleet([datacenter().prefixed("east"), datacenter().prefixed("west")],
-                  [Link("east.leaf", "west.leaf", Assumption("wan", 1e10, "bit/s"), kind="wan")])
+                  [LinkEntry("east.leaf", "west.leaf", Assumption("wan", 1e10, "bit/s"), kind="wan")])
     assert fleet.validate() == []
     p = place(PROGRAM, fleet.merged(), "west.a.gpu", registration=REG, deliver="world", x="world", h="west.a.gpu",
               y="east.b.gpu")
@@ -653,23 +668,23 @@ def test_a_link_between_datacenters_is_fabric_and_coverage_is_per_block():
     east, west = datacenter().prefixed("east"), datacenter().prefixed("west")
     wan = Assumption("wan", 1e9, "bit/s")
     for a, b in (("east.leaf", "west.leaf"), ("east.leaf", "west.a.cert"), ("east.challenger", "world")):
-        assert Fleet([east, west], [Link(a, b, wan, kind="wan")]).validate() == [], (a, b)
-    merged = Fleet([east, west], [Link("east.leaf", "west.leaf", wan, kind="wan")]).merged()
+        assert Fleet([east, west], [LinkEntry(a, b, wan, kind="wan")]).validate() == [], (a, b)
+    merged = Fleet([east, west], [LinkEntry("east.leaf", "west.leaf", wan, kind="wan")]).merged()
     assert [repr(p) for p in merged.ports] == [f"{s}.{b}.cert:{d}" for s in ("east", "west") for b in "ab"
                                                for d in ("in", "out")]
-    assert Fleet([east, west], [Link("east.a.gpu", "west.leaf", wan)]).validate() == [
+    assert Fleet([east, west], [LinkEntry("east.a.gpu", "west.leaf", wan)]).validate() == [
         "inter-datacenter link east.a.gpu-west.leaf passes no certifier (coverage)"]
-    assert Fleet([east, west], [Link("east.leaf", "west.spine", wan)]).validate() == [
+    assert Fleet([east, west], [LinkEntry("east.leaf", "west.spine", wan)]).validate() == [
         "inter-datacenter link east.leaf-west.spine names an unknown device 'west.spine'"]
     assert Fleet([datacenter(), datacenter()]).validate() == [f"device {d!r} is in both dc0 and dc0" for d in
                                                               ("a.gpu", "b.gpu", "a.cert", "b.cert", "leaf", "challenger")]
-    leaky = replace(east, links=[*east.links, Link("east.a.gpu", "east.leaf", wan)])
+    leaky = replace(east, links=[*east.links, LinkEntry("east.a.gpu", "east.leaf", wan)])
     assert Fleet([leaky, west]).validate() == ["east: boundary link east.a.gpu-east.leaf passes no certifier (coverage)"]
 
 
 def test_a_ledger_adds_covert_bits_across_nights_and_wipes_bound_what_each_night_carries(setup):
     dc, _ = setup
-    ledger = Ledger()
+    ledger = Accounts()
     for night in range(3):
         start = 16 * night                                           # successive nights on the one trusted clock
         p = staged(dc, start=start)
@@ -689,8 +704,8 @@ def test_custody_is_the_share_of_the_registered_weights_the_ledgers_epochs_could
     2 Mbit/s) the same nights could have carried more than the weights."""
     registered = 2 * 32 * 32 * 16
 
-    def nights(dc: Datacenter) -> Ledger:
-        ledger = Ledger()
+    def nights(dc: Datacenter) -> Accounts:
+        ledger = Accounts()
         for night in range(3):
             plan, q = Plan(Interval(16 * night, 16 * night + 16)), staged(dc, start=16 * night)
             ledger.add(account(audit(run(q, INPUTS, plan), q.public(plan)), q.public(plan)))

@@ -1,7 +1,7 @@
 """The whole codec word at 0 budgeted units, as Model.lean once counted: `EncodeChainHardness` false for every `E > 0`.
 
 `squaring.free_square` shows a squaring mod p1024 at 0 units through the one-word gather (`gather [idx, const c]` is
-`c·[idx ≤ 0]`, and `Gate.indexBits = Nat.clog 2 (args.length − 1) = 0` for it). This module completes the argument at the
+`c·[idx ≤ 0]`, and `IntGate.indexBits = Nat.clog 2 (args.length − 1) = 0` for it). This module completes the argument at the
 fields 6b's `codecRows` (`Security/Proofs/Accounting/Gates.lean`) use, `⟨8, 5⟩` and `⟨16, 17⟩`: a circuit of the model
 that computes `byte (lessParity (encodeWord F.p d.key (d.tweak F i) m)) l` for every `l`, on every draw, from the
 `CodecInputs` slots (payload bytes registered, round constants', mask's and tweak's bytes coin), with its window
@@ -23,7 +23,8 @@ data product, a unit (`Builder.nonlinear_units`).
 
 from __future__ import annotations
 
-from squaring import U8, Builder, free_bit
+from gates import U8, Builder
+from squaring import free_bit
 
 
 def rho_ref(p: int, a: int) -> int:
@@ -94,7 +95,7 @@ class FreeField:
     def reduce(self, v: int) -> int:
         """`v mod p` for `v ≥ 0` by binary long division: `[v ≥ 2^k·p]` then subtract, from the top quotient bit down."""
         b, p = self.b, self.p
-        q = b.gates[v].hi // p
+        q = b.hi[v] // p
         for k in range(max(q.bit_length() - 1, 0), -1, -1):
             bit = self.geq(v, const=(2 ** k) * p)
             v = b.affine(0, [(1, v), (-(2 ** k) * p, bit)])

@@ -4,7 +4,7 @@ log signed when the session ends.
 
     python3 benchmarks/live_challenger/serve.py --out DIR --port PORT --scheme SCHEME --families JSON --session ID
         [--epoch E] [--peer NAME [--peers FILE]] [--key DIR] [--params W,H] [--keygen-workers N] [--host NAME]
-        [--root HEX] [--secret-file FILE] [--sign-lock FILE]
+        [--root HEX] [--secret-file FILE] [--sign-lock FILE] [--withhold]
 
 - **The key** is the challenger's LMS key over SHA-512, on its host in `--key DIR` (default
   `~/.local/state/live-challenger/key`), in the memory challenger's layout (`benchmarks/pous/memory_challenger/live.py`):
@@ -32,6 +32,10 @@ log signed when the session ends.
   (`auditor.py`) the session has a secret, `--secret-file` (64 hex digits, given to the window's opener by the gate),
   which the client's hello must carry, and `--root`, the window's Commit root: a salt family's coin (label `salt` or
   `.../salt`) opens only after that root, and any other is refused, which ends the session.
+- **A withheld session** (`--withhold`, which the auditor host passes when the window's open entry says `withheld: true`)
+  keeps its commitment on this host until the client closes it (`remote.open_session(..., withhold=True)`): the hello is
+  answered with the layout alone and each open with the coin's raw bytes, and once the signed close is written the
+  commitment and every opened coin's salt and path are released (`remote`, "A withheld session").
 - **Signing.**  The key's leaf state is opened only for each signature (the session id's start with the record's, then
   the close's), under `--sign-lock` when given (the auditor host's `sign.lock`, which every signer of the key takes), so
   the host's other sessions and the ledger sign between them.
@@ -129,6 +133,7 @@ def parse(argv: list[str] | None) -> argparse.Namespace:
     p.add_argument("--root", default=None, help="the window's Commit root, 128 lowercase hex digits")
     p.add_argument("--secret-file", type=Path, default=None)
     p.add_argument("--sign-lock", type=Path, default=None)
+    p.add_argument("--withhold", action="store_true")
     return p.parse_args(argv)
 
 
@@ -147,8 +152,8 @@ class WindowChallenger:
 
     def open(self, label: str, index: int, after: bytes):
         if is_salt(label) and bytes(after) != self._root:
-            raise CoinError(f"a {label} coin opens only after the window's Commit root {self._root.hex()[:16]}…, not "
-                            f"{bytes(after).hex()[:16]}…")
+            raise CoinError(f"a {label} coin opens only after the window's Commit root {self._root.hex()[:16]}..., not "
+                            f"{bytes(after).hex()[:16]}...")
         return self._challenger.open(label, index, after)
 
 
@@ -213,7 +218,7 @@ def main(argv: list[str] | None = None) -> int:
         with leaf_state(key, key_dir, args.sign_lock) as st:
             st.start(args.session.encode())
         session = remote.open_session(served, ChallengerKey(params.W, params.H, lms.public_key(key)), args.host, sign,
-                                      out, args.session)
+                                      out, args.session, withhold=args.withhold)
         with open(out / HELLOS, "x", encoding="utf-8") as f:
             os.fsync(f.fileno())
     except (CoinError, ValueError, OSError, lms.StateError) as e:

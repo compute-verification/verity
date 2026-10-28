@@ -16,7 +16,7 @@ sessions.
   program and partition, served from that file (`serve --zk --draw-file`). `--draws c` proves every unit: the cost of c
   drawn units in one statement.
 * **Sessions.** Per point and arm, `--cold` processes proving one session each (`--runs 1 --warm 0`: one touched
-  statement's prover today) and one proving `--warm` + `--runs` sessions (the in-process session cost). Arm `fw` is the
+  statement's prover) and one proving `--warm` + `--runs` sessions (the in-process session cost). Arm `fw` is the
   design's path: the firewall's send check on every session (`FC_FIREWALL=1`), which rechecks the host's witness; `nofw`
   is the same with the check off. Both take the host's witness (`FC_HOST_WITNESS=1`), as proof_throughput's ZK point does,
   so their difference is the firewall's.
@@ -52,9 +52,10 @@ import a0  # noqa: E402
 import a6  # noqa: E402
 from verity.ml.circuits.codec import canonical_json, encode_program  # noqa: E402
 from verity.core.protocols.sampled_proofs.one_stage import partition as P  # noqa: E402
+from verity.core.protocols.sampled_proofs.optimize import SHA512_ANDS  # noqa: E402
 
 #: ANDs of the pieces of a unit with its rows' openings (benchmarks/sampling_plan's inputs: its pins, hm96 PROTOCOL §5)
-S8_STEP, EPILOGUE, SHA512, HM96 = 4_190, 5_000, 58_120, 116_240
+S8_STEP, EPILOGUE, SHA512, HM96 = 4_190, 5_000, SHA512_ANDS, 116_240
 
 
 def unit_ands(K: int) -> int:

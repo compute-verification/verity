@@ -83,8 +83,10 @@ from typing import Any, NamedTuple
 from verity.core.protocols.pouw import coins as Co
 from verity.core.protocols.pouw import salt as PS
 from verity.core.protocols.pouw import window as Wd
+from verity.core.protocols.sampled_proofs.one_stage import registration as R
 from verity.core.protocols.sampled_proofs import challenger as Ch
 from verity.core.protocols.sampled_proofs.one_stage import registered as G
+from verity.core.protocols.profile import Work, WorkStratum
 from verity.core.protocols.pouw.audit import EPOCH_SALT_DOMAIN, SALT_DOMAIN
 from verity.core.protocols.pouw.protocol import U64, tagged
 from verity.ml.commitments import Commitment, Opening, VerificationLimits, verify_opening
@@ -327,8 +329,8 @@ def commitment(b: bytes) -> dict:
 
 
 def digest(c: dict) -> bytes:
-    """`registration.digest`: SHA-512(format || 0 || the canonical record)."""
-    return hashlib.sha512(c["format"].encode() + b"\0" + c["bytes"]).digest()
+    """`registration.record_digest` over the record's own bytes: SHA-512(format || 0 || the canonical record)."""
+    return R.record_digest(c["format"], c["bytes"])
 
 
 # ---- the evidence, as `Core.Answer.ofJson` and `Core.Integrity.ofJson` read it (with `Flock.J`'s messages) ------------
@@ -394,17 +396,25 @@ def _exactly(written: Any, j: Any, ctx: str) -> None:
 
 
 def _core_draw(j: Any, ctx: str) -> dict:
-    """`Core.Draw.ofJson`, as `Draw.toJson` writes it."""
+    """`Core.SamplingDesign.ofJson`, as `SamplingDesign.toJson` writes it."""
     if _has(j, "bernoulli"):
         d: dict = {"bernoulli": str(ratio(_str_at(j, "bernoulli", ctx), f"{ctx}.bernoulli"))}
     elif _has(j, "subset"):
         d = {"subset": _nat_at(j, "subset", ctx)}
+    elif _has(j, "strata") and isinstance(j, dict) and j.get("law") == "work":
+        k, c = _nat_at(j, "k", ctx), f"{ctx}.strata"
+        strata = [WorkStratum(_str_at(s, "name", c), _nat_at(s, "size", c), _nat_at(s, "k", c), _nat_at(s, "work", c),
+                              _nat_at(s, "floor", c)) for s in _arr_at(j, "strata", ctx)]
+        try:
+            d = Work(k, tuple(strata)).to_json()
+        except ValueError as e:
+            raise Refused(f"{ctx}: {e}") from None
     elif _has(j, "strata"):
         c = f"{ctx}.strata"
         d = {"law": "stratified", "strata": [{"name": _str_at(s, "name", c), "size": _nat_at(s, "size", c),
                                               "k": _nat_at(s, "k", c)} for s in _arr_at(j, "strata", ctx)]}
     else:
-        raise Refused(f"{ctx}: not a bernoulli, subset or stratified draw")
+        raise Refused(f"{ctx}: not a bernoulli, subset, stratified or work draw")
     _exactly(d, j, ctx)
     return d
 
@@ -503,6 +513,14 @@ def _strata(work: bool, j: Any, ctx: str) -> list[dict]:
     return out
 
 
+def _num_den(p: str, ctx: str) -> str:
+    """`pOf`: ``num/den``, each a natural number in canonical decimal (`Flock.Draw.Law.bernoulli`'s), kept as written."""
+    parts = p.split("/")
+    if len(parts) == 2 and all(t and all(c in "0123456789" for c in t) and str(int(t)) == t for t in parts):
+        return p
+    raise Refused(f"{ctx}.p: not num/den")
+
+
 def unit_draw(j: Any) -> dict:
     """The public outputs ``{"draw": d}``, `d` one of one-stage's `draw.py` laws with exactly its keys (`check_draw`'s),
     and a live window's ``salt``, an object (`window_salt` reads it)."""
@@ -515,7 +533,7 @@ def unit_draw(j: Any) -> dict:
     _keys_are(d, (["closure"] if law == "work" and "closure" in d else []) + _DRAW_KEYS[law], ctx)
     out: dict[str, Any] = {"law": law, "population": _nat_at(d, "population", ctx)}
     if law == "bernoulli":
-        out["p"] = _str_at(d, "p", ctx)
+        out["p"] = _num_den(_str_at(d, "p", ctx), ctx)
     else:
         out["k"] = _nat_at(d, "k", ctx)
     if law in ("stratified", "work"):
@@ -733,9 +751,9 @@ def public_row_salt(context: str, position: int) -> bytes:
     return b"".join(hashlib.sha512(head + bytes([i])).digest() for i in range(SALT_BYTES // 64))
 
 
-#: the ok row the verifier accepts: a unit's one output bit, 1, in its one word (h1_prove's `OK`, #3124)
+#: the ok row the verifier accepts: a unit's one output bit, 1, in its one word (h1_prove's `OK`)
 OK_ROW = (1,)
-#: the ok row's hm96 salt tag (h1_prove's, #3124)
+#: the ok row's hm96 salt tag (h1_prove's)
 OK_SALT_TAG = b"verity/pouw/h1-prove/ok-row-salt/v0\0"
 
 
@@ -923,12 +941,12 @@ MANIFEST_RECORDED = "verity-vllm/pouw-pearl-c-run/v1"
 #: a pass salted by the network certifier, `salt.pouw_salt` of its PoUW window's reveal: only a certified window's
 #: verifier, which holds the reveal, reads it, and that verifier reads no other
 MANIFEST_CERTIFIED = "verity-vllm/pouw-pearl-c-run/v3"
-#: the e2e-service passes' coin commitment (r20261006-19… to -22…), whose binding and weights' root are the first 32 bytes
+#: the e2e-service passes' coin commitment, whose binding and weights' root are the first 32 bytes
 #: of `tagged`: only a replay of a recorded pass reads it
 COINS_RECORDED = "verity/pouw/epoch-coins/v2"
 #: a coin commitment's scheme: (the bytes of `tagged` its binding and the weights' root keep, the weights' root's tag)
 COIN_VERSIONS = {Co.SCHEME: (64, "verity/pouw/weights/v1"), COINS_RECORDED: (32, "verity/pouw/weights/v2")}
-#: the e2e-service's first coin commitments (r20261006-08…, -19… to -21…), named `coins.SCHEME` but on SHA-256 as core
+#: the e2e-service's first coin commitments, named `coins.SCHEME` but on SHA-256 as core
 #: was then: bound by `tagged_sha256`, and the draw's key and stream `derive_v1`'s.  Only a replay of a recorded draw
 #: reads it, after the current binding (none of their passes was retained, so the pass's rule doesn't)
 COIN_EARLY = Co.SCHEME
@@ -1306,7 +1324,7 @@ SIGNED_LIVE = ("a live window's coins are its challenger's signed record and the
                "(`challenger.trusted_commitment`), not a bare commitment")
 
 
-#: the refusal of a draw whose coins aren't the record of the challenger the window's parameters pin (RT4-INT-5)
+#: the refusal of a draw whose coins aren't the record of the challenger the window's parameters pin
 COIN_KEY = "coin-key"
 NO_PINNED_KEY = "the window's parameters pin no challenger key for its draw's record"
 OTHER_KEY = "the challenger record is signed under a key other than the challenger key the window's parameters pin"
@@ -1525,8 +1543,8 @@ def _salt_epoch(key: Any, ledger: Any, pins: Any, main: Any, session: Any, r: by
 def values_root(g: Any) -> bytes | None:
     """The root of a group of committed values the window names (`WINDOW_VALUES`), or None when `g` is not one: ``{program,
     values}``, ``program`` a string and ``values`` a non-empty object of entries by value name, each naming its value
-    (``value``) and its ``domain`` and ``root``, SHA-512 digests (core's ``registered`` entries: #4426's
-    `loop.activations` and its weights' pin's ``values``).  The root is SHA-512(`VALUES_TAG` ‖ u64be(len program) ‖
+    (``value``) and its ``domain`` and ``root``, SHA-512 digests (core's ``registered`` entries: the served
+    loop's `loop.activations` and its weights' pin's ``values``).  The root is SHA-512(`VALUES_TAG` ‖ u64be(len program) ‖
     program ‖ for each name in sorted order: u64be(len name) ‖ name ‖ domain ‖ root), strings as UTF-8, so it fixes
     every value's root under its domain.  An entry's other fields (its rows, words and width) are bound by its domain,
     which the records' audit holds to them (`records_audit.committed_activations`, `pinned`)."""

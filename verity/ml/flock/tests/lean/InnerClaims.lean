@@ -52,7 +52,7 @@ def lincheckComb (c : CircuitFold) (zc : ZcOut) (p : LincheckProof) : TM (LcOut 
 
 def claimJson (c : Claim) : Json := Json.mkObj [("value", hx c.value), ("skip", hxs c.skip), ("x", hxs c.x)]
 
-def dumpRep (spec : SessionSpec) (st : Setup) (sch : Schedule) (sess : Session) (r : Nat) (bytes : ByteArray) : V Json := do
+def dumpRep (spec : SessionSpec) (st : Setup) (sch : Schedule) (sess : RunRecord) (r : Nat) (bytes : ByteArray) : V Json := do
   let t := spec.tables[0]!
   let name := s!"{t}/rep{r}"
   let some stream := sess.streams.find? (·.name == name) | throw s!"no stream {name}"

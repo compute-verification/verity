@@ -4,11 +4,11 @@
 honest = "e-l7qs"
 L = 32
 work = 1.0
-unit = "whole"      # the proof block, a table of data/adapt.toml: whole dot products (decision 72)
+unit = "whole"      # the proof block, a table of data/adapt.toml: whole dot products
 
 [coins]             # the challenger's live coins: one σ a request, drawn after the circuit and its inputs are committed
 bits = 1            # a noised entry's coin, uniform on {0, …, 2^bits − 1}: 1-bit coins carried (PPL-DITHER-SIZE)
-source = "decision 72's order (commit the circuit and its inputs, draw σ once, evaluate); 1-bit coins (note:20261017T0310Z-report-eps1-program, QSTAR r2 and CALC r2)"
+source = "the one-σ order (commit the circuit and its inputs, draw σ once, evaluate); 1-bit coins"
 
 [fold]
 name = "duo"
@@ -21,18 +21,18 @@ source = "named assumption: duo at 3 lane instructions a word is the cheapest im
 
 [clock]
 eps = 0.1391
-source = "SPEC's P1 (note:20261017T0324Z-draft-eps1-spec, 04:47Z): the prover sets its own clocks, so f_max is the hardware's 2,430 MHz against honest at the node's 2,092 lock, 1 − 2092/2430, unless a trusted device attests the lock; at the lock every program runs 2,099.5-2,100.0 MHz (DATASHEET, r20261017-033131-4e67), and the default-clock gap is unmeasured"
+source = "the prover sets its own clocks, so f_max is the hardware's 2,430 MHz against honest at the node's 2,092 lock, 1 − 2092/2430, unless a trusted device attests the lock; at the lock every program runs 2,099.5-2,100.0 MHz, and the default-clock gap is unmeasured"
 
 [luck]              # Theorem S: ln(1/δ)/((1 − p)·S)
 delta = 4.547473508864641e-13   # 2^-41: δ_bind + δ_ZK take half of 2^-40
 p = 0.75                        # every alphabet, repaired: a deficient word passes its check w.p. ≤ 3/4
-checks = 48000                  # one week of 12.6 s rounds (decision 15), one check a round
-source = "SPEC §5 (note:20261017T0324Z-draft-eps1-spec): Theorem S at p = 3/4 over one week of 12.6 s rounds, δ′ = 2^-41 (note:20261016T0005Z-draft-luck-loss-round4 §1)"
+checks = 48000                  # one week of 12.6 s rounds, one check a round
+source = "Theorem S at p = 3/4 over one week of 12.6 s rounds, δ′ = 2^-41"
 
-[baseline]          # honest's own lane program: its words belong to the baseline, not to ε (the brief §2)
+[baseline]          # honest's own lane program: its words belong to the baseline, not to ε
 name = "dp4a"
 program = { IMAD = 8, LDS128 = 0.5 }   # lane instructions a word: 8 IDP4A at k = 32, operands for an 8x8 tile a lane
-source = "dp4a at 8 IDP4A a word (note:20261017T0310Z-report-eps1-program §3); its loads: 2(a + b)/(ab) LDS.128 a word at a = b = 8"
+source = "dp4a at 8 IDP4A a word; its loads: 2(a + b)/(ab) LDS.128 a word at a = b = 8"
 
 [routes]
 lanes = true

@@ -9,8 +9,8 @@ products.
   weight `b`), and the outputs fan-in is read at are the GEMM coordinates (`GemmCoordinate`). Attention's dot steps are
   `AttnDotStep`s, activation by activation, and are not counted.
 
-`CONFIGS` are the served rows' configurations (b1's `B0_CONFIG`, `B1_CONFIG`, `SMOL360_CONFIG`) and two shapes with no
-served row, b1's Definitions bound at Qwen2.5-7B's and Llama-3-405B's published config.json shapes.
+`CONFIGS` are the served workloads' configurations (b1's `B0_CONFIG`, `B1_CONFIG`, `SMOL360_CONFIG`) and two shapes with
+no served workload, b1's Definitions bound at Qwen2.5-7B's and Llama-3.1-405B's published config.json shapes.
 """
 
 from __future__ import annotations
@@ -50,30 +50,26 @@ def configs() -> dict[str, tuple[dict, str]]:
         "smollm2-135m": (b1.B0_CONFIG, "served: b1.B0_CONFIG"),
         "smollm2-360m": (b1.SMOL360_CONFIG, "served: b1.SMOL360_CONFIG"),
         "qwen25-1b5": (b1.B1_CONFIG, "served: b1.B1_CONFIG"),
-        "qwen25-7b": (qwen7, "constructed: b1's layer Definitions at Qwen2.5-7B's config.json shapes (no served row)"),
-        "llama3-405b": (llama, "constructed: b1's layer Definitions at Llama-3.1-405B's config.json shapes (no served row)"),
+        "qwen25-7b": (qwen7, "constructed: b1's layer Definitions at Qwen2.5-7B's config.json shapes (no served workload)"),
+        "llama3-405b": (llama, "constructed: b1's layer Definitions at Llama-3.1-405B's config.json shapes (no served workload)"),
     }
 
 
 def on_bits(word: CompositeDefinition, version: int, **bindings):
-    """σ(``word``) at ``bindings`` (`sigma_lift`'s body: each Call the Boolean version of its Definition), with the QKV bias
+    """σ(``word``) at ``bindings`` (`boolean.lift_body`: each Call the Boolean version of its Definition), with the QKV bias
     add, `BiasAdd_v1`, which has no registered Boolean version, as σ(`BiasAdd_v1`) (its `Bf16Add`s on bits)."""
     from verity.ml.definitions import boolean as BB
     from verity.ml.definitions.registry import b1
-    w = bind(word, **bindings)
-    callee, missing = BB._sigma_callees(w)
     bias = BB.sigma_lift(b1.BiasAdd, 2, register=False)
-    for node in w.body.nodes:
-        if getattr(node.fn, "base_id", None) == "BiasAdd_v1":
-            callee[id(node.fn)] = bind(bias, **node.fn.bindings)
-    missing = {k: v for k, v in missing.items() if not k.startswith("BiasAdd_v1")}
-    if missing:
-        raise BB.NoBooleanVersion(missing)
+
+    def override(fn):
+        return bind(bias, **fn.bindings) if getattr(fn, "base_id", None) == "BiasAdd_v1" else None
+
+    w = bind(word, **bindings)
+    body = BB.lift_body(w, override)
     params, ret = w.signature()
     sig = (tuple((n, bit_type(t)) for n, t in params), bit_type(ret))
-    defn = CompositeDefinition(word.name, version, tuple(word.statics), lambda S: sig,
-                               BB._bit_replayer(w.body, [t for _, t in params], callee), register=False)
-    return bind(defn, **bindings)
+    return bind(CompositeDefinition(word.name, version, tuple(word.statics), lambda S: sig, body, register=False), **bindings)
 
 
 def layer_fn(C: dict, T: int = 1):

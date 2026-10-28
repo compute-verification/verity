@@ -6,9 +6,12 @@ testpaths = ["tests"]
 
 [tool.verity.tests]
 # the word codecs' references, which the layouts must equal, the sketches' vector layouts, and (the KV-append capture's
-# CPU references) the KV codec with its key derivation and the circuits' E4M3 append Definition
+# CPU references) the KV codec with its key derivation, the remote bandwidth audit's codec it takes (on the commitments)
+# and the circuits' E4M3 append Definition; the kernels open through cuda_lib.py
 inputs = ["benchmarks/word_codec/codec.py", "benchmarks/word_codec/wide.py", "benchmarks/word_codec/wide_sketch.py",
           "benchmarks/codec_tensor/wide.py", "benchmarks/codec_tensor/sketching.py", "benchmarks/codec_tensor/tagging.py",
-          "benchmarks/word_codec/kv.py", "benchmarks/word_codec/kv_bench.py",
-          "verity/__init__.py", "verity/errors.py", "verity/ml/__init__.py", "verity/ml/circuits",
+          "benchmarks/word_codec/kv.py", "benchmarks/word_codec/kv_bench.py", "benchmarks/word_codec/cuda_lib.py",
+          "verity/__init__.py", "verity/errors.py", "verity/core/__init__.py", "verity/core/protocols/__init__.py",
+          "verity/core/protocols/remote_bandwidth/__init__.py", "verity/core/protocols/remote_bandwidth/codec.py",
+          "verity/ml/__init__.py", "verity/ml/circuits", "verity/ml/commitments", "verity/ml/crypto",
           "verity/ml/kernels/__init__.py", "verity/ml/kernels/tc.py"]

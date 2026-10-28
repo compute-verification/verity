@@ -53,6 +53,32 @@ def test_a_tree_is_discovered_and_keyed_from_gits_view_of_it(tmp_path, monkeypat
     assert S.object_ids(S.worktree(), ["pkg"])["pkg"] != before["pkg"]
 
 
+def test_a_clone_another_step_has_not_checked_out_yet_is_left_out_of_the_tree(tmp_path, monkeypatch):
+    (tmp_path / "a.py").write_text("a = 1\n")
+    _git(tmp_path, "init", "-q")
+    S = _suites(monkeypatch, tmp_path)
+    before = S.object_ids(S.worktree(), ["a.py", "clone"])
+    (tmp_path / "clone").mkdir()
+    _git(tmp_path / "clone", "init", "-q")                     # a clone in flight: no commit checked out yet
+    (tmp_path / "a.py").write_text("a = 2\n")
+    after = S.object_ids(S.worktree(), ["a.py", "clone"])
+    assert after["clone"] == "absent" and after["a.py"] != before["a.py"], "the rest of the tree is still read"
+
+
+def test_any_other_error_of_git_add_is_raised_with_its_message(tmp_path, monkeypatch):
+    (tmp_path / "a.py").write_text("a = 1\n")
+    _git(tmp_path, "init", "-q")
+    S = _suites(monkeypatch, tmp_path)
+    (tmp_path / ".git" / "objects").chmod(0o500)
+    try:
+        if os.access(tmp_path / ".git" / "objects", os.W_OK):
+            pytest.skip("this user writes through read-only modes (root)")
+        with pytest.raises(RuntimeError, match=r"git add -A.*\n.*"):
+            S.worktree()
+    finally:
+        (tmp_path / ".git" / "objects").chmod(0o700)
+
+
 def test_a_tree_that_is_not_a_checkout_is_refused(tmp_path, monkeypatch, capsys):
     (tmp_path / "pyproject.toml").write_text('[tool.uv.workspace]\nmembers = []\n')
     S = _suites(monkeypatch, tmp_path)
@@ -1054,6 +1080,23 @@ def test_a_moved_suite_reuses_its_tests_passes_and_its_own_until_a_byte_changes(
     assert p.returncode == 0 and "cached  pkg" not in p.stdout and "5 passed" in p.stdout, p.stdout
 
 
+def test_a_failure_on_a_full_disk_is_not_kept_so_it_is_not_nondeterministic(tmp_path):
+    """A test that failed only because the machine's disk was full (ENOSPC) failed for the machine, not its inputs: its run
+    keeps no failure, so the pass beside it isn't flagged nondeterministic."""
+    import json
+
+    root, tests = tmp_path / "tree", tmp_path / "tree" / "pkg" / "tests"
+    _per_test_workspace(root)
+    (tests / "test_sibling.py").write_text(
+        "import errno, os\n\ndef test_sibling():\n    if os.environ.get('PKG_BREAK'):\n"
+        "        raise OSError(errno.ENOSPC, 'No space left on device')\n")
+    assert _run_suite(root, tmp_path).returncode == 0
+    out = tmp_path / "suites.json"
+    p = _run_suite(root, tmp_path, "--fresh", "--json", str(out), extra={"PKG_BREAK": "1"})
+    assert p.returncode == 1 and "NONDETERMINISTIC" not in p.stdout, p.stdout
+    assert not json.loads(out.read_text())[0].get("nondeterministic")
+
+
 def test_a_fresh_run_that_fails_what_a_kept_pass_answers_for_says_so(tmp_path):
     """The nightly cold check's signal: a key that misses an input shows as a fresh failure a cached pass contradicts."""
     import json
@@ -1555,6 +1598,24 @@ def test_the_tracer_names_what_a_key_narrowed_to_the_tests_reads_must_hold(tmp_p
     assert r.trace("subprocess.Popen", (None, ["uname", "-p"], None, None)) == []       # a machine probe reads no repository file
     monkeypatch.delenv("VERITY_SUITE_MODULE")                  # outside a test module sitecustomize doesn't trace
     assert r.trace("subprocess.Popen", (None, [sys.executable, "-c", "pass"], None, None)) == [("X", sys.executable)]
+
+
+def test_a_dir_fd_relative_open_is_not_read_as_a_file_in_the_current_directory(tmp_path, monkeypatch):
+    """`shutil.rmtree` opens each entry by its bare name relative to a directory descriptor, which the `open` audit event
+    doesn't carry: a bare name missing from the current directory is no read of it, and one present there still is."""
+    spec = importlib.util.spec_from_file_location("reads_under_test", HERE / "guard" / "child" / "verity_suite_reads.py")
+    R = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(R)
+    (tmp_path / "present.txt").write_text("")
+    for k, v in {"VERITY_SUITE_ROOT": str(tmp_path), "VERITY_SUITE_READS": str(tmp_path / "reads"),
+                 "VERITY_SUITE_ALLOW": '["lib"]'}.items():
+        monkeypatch.setenv(k, v)
+    monkeypatch.chdir(tmp_path)
+    r = R.Reads()
+    r.seen("open", ("removed_piece", None, 0), "pkg/tests/test_x.py")
+    assert not (tmp_path / "reads").exists()
+    r.seen("open", ("present.txt", None, 0), "pkg/tests/test_x.py")
+    assert (tmp_path / "reads").read_text().splitlines() == ["O\tpkg/tests/test_x.py\tpresent.txt", "F\tpkg/tests/test_x.py\tpresent.txt"]
 
 
 def test_a_declared_build_output_is_traced_by_the_repository_paths_it_is_given(tmp_path, monkeypatch):

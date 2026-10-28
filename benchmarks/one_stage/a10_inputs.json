@@ -1,0 +1,16 @@
+{
+  "commit": "r20261019-074856-7c3a",
+  "replay": "r20261019-110314-3fd7",
+  "replay_cancelled": "r20261019-091406-48bd",
+  "bundle": "art:6437727df08be44eba654589780a7d307a4e8038d70b373146eba4b83878034e",
+  "rowmeta": "art:7d815b1d963c7e9cf42aaeff8793901b38a301d10ed8c814d2ffe292b757d9ea",
+  "build": "art:8be49d1e6f506b6a2105dfba80222db6aa6b9542613548c1c9012af1ebcca4f4",
+  "row_dir": "/workspace/cp/circuits/glm-aot/r20261018-070557-2172/glm53__fp8__h200__tp8__b1__i256__o32__mixed__greedy__eager",
+  "slices": [
+    "art:2767c3a80137ce6cd7782373e1cba8b4231d4598f1b902caaa7bc1604edf09c8",
+    "art:22e7456dcc5018b85c511d507ff3c33ffa5be2b1946e3106de1ce5727f0d3106",
+    "art:84ae2056669e502abb2751cd38d2125167728fd580193df7f7432338877551ff",
+    "art:c1ec2634adc0f5b548bec6af41cca82995d11b977fdb67d716895695a0b38cf8"
+  ],
+  "kinds": "art:9ec1d8b37286bdd5ec3cee7d39da27d97866eece6018d994c4921d068bc49abb"
+}

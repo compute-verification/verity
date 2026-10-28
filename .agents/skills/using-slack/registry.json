@@ -228,6 +228,7 @@
         "benchmarks/numerical/",
         "benchmarks/ppl/",
         "benchmarks/nci/",
+        "benchmarks/int8_class_rate/",
         ".agents/skills/kernel-engineering/",
         "integrations/vllm/verity_vllm/protocols/pouw/__init__.py",
         "integrations/vllm/verity_vllm/protocols/pouw/circuit.py",
@@ -294,7 +295,10 @@
       "holder": "compute-accounting's research lane (bc-ebc09a9a-ce64-52b5-b3b6-2c8862c7e9ac): the machine model (W1 and the device records), the Lean accounting statements (NCI, DeclaredCircuitRequirement) and their red and blue teams, and PoUW's protocol statements (period, salt, credit form)",
       "remit": "The machine model, the Lean accounting statements (NCI and the rest) and their red and blue teams, and PoUW's protocol statements.",
       "charter": "note:compute-accounting/20261019T2230Z-report-lane-split",
-      "usergroup": "S0CBZ2L8542"
+      "usergroup": "S0CBZ2L8542",
+      "owns": [
+        "verity/hardware/"
+      ]
     },
     {
       "handle": "memory-accounting",
@@ -307,6 +311,7 @@
       ],
       "linear": "MEM",
       "owns": [
+        "verity/core/deploy/",
         "Security/Definitions/Pous/",
         "Security/Proofs/Pous/",
         "benchmarks/bandwidth/",
@@ -322,6 +327,7 @@
         "benchmarks/stacked_share/",
         "benchmarks/vllm_encoded/",
         "benchmarks/word_codec/",
+        "examples/onsite_served/",
         "integrations/vllm/verity_vllm/protocols/pous.py",
         "verity/core/devices/memory_challenger/",
         "verity/core/protocols/bandwidth/",
@@ -339,10 +345,10 @@
         "Security/Definitions/Accounting/Memory.lean",
         "Security/Definitions/Accounting/RateAudit.lean",
         "Security/Definitions/Accounting/RateAuditDeployed.lean",
-        "Security/Definitions/Accounting/RateAuditHorizon.lean",
         "Security/Definitions/Accounting/RateAuditInteractive.lean",
         "Security/Definitions/Accounting/RateAuditJoint.lean",
         "Security/Definitions/Accounting/RateAuditPartial.lean",
+        "Security/Definitions/Accounting/RateAuditPooled.lean",
         "Security/Definitions/Accounting/RateAuditRemote.lean",
         "Security/Definitions/Accounting/RateAuditSketch.lean",
         "Security/Definitions/Accounting/RateAuditSketchDeployed.lean",
@@ -367,9 +373,9 @@
         "Security/Definitions/Accounting/Guarantees/Memory.lean",
         "Security/Definitions/Accounting/Guarantees/RateAudit.lean",
         "Security/Definitions/Accounting/Guarantees/RateAuditDeployed.lean",
-        "Security/Definitions/Accounting/Guarantees/RateAuditHorizon.lean",
         "Security/Definitions/Accounting/Guarantees/RateAuditNamed.lean",
         "Security/Definitions/Accounting/Guarantees/RateAuditPartial.lean",
+        "Security/Definitions/Accounting/Guarantees/RateAuditPooled.lean",
         "Security/Definitions/Accounting/Guarantees/RateAuditRemote.lean",
         "Security/Definitions/Accounting/Guarantees/RateAuditSketch.lean",
         "Security/Definitions/Accounting/Guarantees/Requirement.lean",
@@ -414,6 +420,7 @@
       ],
       "linear": "NET",
       "owns": [
+        "verity/core/protocols/network/",
         "verity/core/protocols/certifier/",
         "verity/core/devices/certifier/",
         "Security/Definitions/NetworkCertifier/",
@@ -567,6 +574,7 @@
       "charter": "Daniel, 2026-10-13 (a new slice, in architecture's rollout)",
       "usergroup": "S0C954BELSW",
       "owns": [
+        "verity/ml/windows/",
         "integrations/vllm/",
         "examples/vllm/",
         "ruff.toml"

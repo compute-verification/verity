@@ -34,13 +34,17 @@
   "Proofs.Properties.Evaluate",
   "Proofs.Properties.NetworkRecords",
   "Proofs.Properties.NetworkPeriod",
+  "Proofs.Properties.NetworkScan",
   "Proofs.Properties.SampledProofs",
   "Proofs.Properties.SampledProofs.Halt",
   "Proofs.Properties.Pous.TimedAudit",
   "Proofs.Properties.Pous.MemoryChallenger",
+  "Proofs.Properties.Pous.MemoryChallenger.Attest",
   "Proofs.Properties.Pous.Run",
   "Proofs.Properties.Pous.Setup",
   "Proofs.Properties.Pous.RunAt",
+  "Proofs.Properties.Pous.Wipe",
+  "Proofs.Properties.Pous.Component",
   "Proofs.Properties.Accounting.Requirement",
   "Proofs.Properties.RemoteAudit",
   "Proofs.Properties.RemoteAudit.Coins",
@@ -54,20 +58,24 @@
   "Proofs.Properties.RemoteAudit.Schedule",
   "Proofs.Properties.RemoteAudit.Live",
   "Proofs.Properties.RemoteAudit.Component",
+  "Proofs.Properties.RemoteAudit.ComponentWitnesses",
   "Proofs.Properties.Pouw.LiveSalt.Ledger",
   "Proofs.Properties.Pouw.LiveSalt.Canon",
   "Proofs.Properties.Pouw.LiveSalt.Coin",
   "Proofs.Properties.Nci.ReadsExact",
   "Proofs.Properties.Nci.BodiesOk.ReadsDecoded",
-  "Proofs.Properties.Composition"
+  "Proofs.Properties.Composition",
+  "Proofs.Properties.Core.Site",
+  "Proofs.Properties.Pous.WipeSigned",
+  "Proofs.Properties.Challenger"
  ],
  "exempt": {
   "Proofs.Pouw.Bulk": "the bulk FP8 conformance test, under `runs`: compiled evaluation of the pins' predicates, a test and not a proof",
-  "Proofs.Flock.Claims.ZkColsSession": "the masked reader on recorded `--zk` sessions (art:5542740a), run by hand (`lake env lean --run`): a probe, not a proof"
+  "Proofs.Flock.Claims.ZkColsSession": "the masked reader on recorded `--zk` sessions (the `zk-sessions` fixture), run by hand (`lake env lean --run`): a probe, not a proof"
  },
  "runs": {
   "Proofs.Pouw.Bulk": {
-   "why": "every generated FP8 step and FP32 add, with red-team R1's 166,000 differential steps: the vectors that left the kernel when Pouw.Fp8Atom.Proofs.conformance and addConformance were narrowed to covers (29 Sep 01:10Z, granted by R1)",
+   "why": "every generated FP8 step and FP32 add, with the red team's 166,000 differential steps: the vectors that left the kernel when Pouw.Fp8Atom.Proofs.conformance and addConformance were narrowed to covers (granted by the red team)",
    "args": ["{conformance/steps.txt}", "176549", "{conformance/adds.txt}", "5000"],
    "data": {
     "conformance/adds.txt": "517e190bae67fd64ae9273eba6e52be524038f17cdcc1821b759311ca72b8a6b",
@@ -91,26 +99,32 @@
    "why": "push_unfold and lead_unfold, local tactics that unfold the primed prover one node (a `simp only` over Lock's rightSame, leftSame, lockWith, interleaveLock, bind and oracleStrat) in the pushing chooser's proofs (firstS_push, followR_push, lead_push and the rest of the module). They run only inside the elaborator and do no IO, and the kernel replays every proof they build.",
    "digest": "34be1e89abec1ac3c72f02d08dc9ac7c78124e56f609216a1ef9b345746e2edf"
   },
+  "Proofs.Flock.Claims.Recursion.CallsLe": {
+   "why": "keep_walk, a macro that expands to repeated refine/exact of the module's keepL/keepT bind, pure and get lemmas (a logged computation keeps its log's prefix). It runs only inside the elaborator and does no IO, and the kernel replays every proof it builds.",
+   "digest": "3b5080f54c4b73aea6b61de4721c9ec6c30aa29eb33d9bb0666a05ec19d1d431"
+  },
+  "Proofs.Flock.Claims.Recursion.CallsRep": {
+   "why": "tw_walk, tw_step and lw_step, macros that expand to first/repeat' over refine/exact of the module's calcCS/calcCS2 bind, pure, throw and sample lemmas (the call bound of a rep's verification). They run only inside the elaborator and do no IO, and the kernel replays every proof they build.",
+   "digest": "21eefb3d7ab83b3a0ec14542c323777458cfddc7c0a92858eeb36cc31e03e988"
+  },
+  "Proofs.Flock.Claims.Recursion.CallsTop": {
+   "why": "cl_step, dec_step and ret_step, macros that expand to first over refine/exact of the module's CL/Ret bind, pure and throw lemmas, and cl_bind_of and cl_head, elabs that only read the goal and fail unless its program's head is the named constant. They run only inside the elaborator, read no files and do no IO, and the kernel replays every proof they build.",
+   "digest": "b79afd58b999bf109956c0ce64b53f15e9ca536e0072ebb8218438d6c4b303f0"
+  },
   "Proofs.Flock.Claims.Recursion.LogWalk": {
    "why": "retl_walk, the tactic (an elab) that walks RetL goals at elaboration, step by step on the logged computation's head (retlStep, in Recursion/DecodeLog.lean's proofs and the module's own). It reads no files and does no IO, and the kernel replays every proof it builds.",
    "digest": "5dca0cbd5c9510d395564190eaa9597f5352180152be0e3b481a6ceb301f0435"
   },
   "Proofs.Flock.Claims.ZK.FinishLigEnd": {
    "why": "end_l and keep_l, local tactics (two macro_rules) that walk a Ligerito step by its head to its last squeeze (EndL) or through steps that only update its state (KeepL), trying the module's endL_*/keepL_* lemmas with refine, exact and split, in ligeritoCut_end's proof. They run only inside the elaborator and do no IO, and the kernel replays every proof they build.",
-   "digest": "0fa506f7f2ca93554004bfd09007f3cd41114b8ae051e53ed783b95b853655e5"
+   "digest": "accc9479df9dc288a7e94f66fb36e63584f870dc095aaa78c798265fc1bbda7c"
   },
   "Proofs.Flock.Soundness.Refine.Walk": {
    "why": "walk_step and ret_walk, the tactics that step through a computation of the executable by its head (Refine/Setup.lean's proofs of the setups' well-formedness), and kernel_rfl, which leaves an equation to the kernel (Composed/TagsJ.lean). They run only inside the elaborator and do no IO, and the kernel replays every proof they build.",
    "digest": "01a97925bc0546457b627fff99e05739c3739fe9a1366622621c7d23578e162e"
   }
  },
- "layers": {
-  "Proofs.Pouw.Dimension.Lifting": {
-   "imports": ["Mathlib"],
-   "except": [],
-   "why": "the lifting worker's grid-density and slice lemmas (L2, L3) stand alone on Mathlib"
-  }
- },
+ "layers": {},
  "upstream": {
   "imports": [
    "ArkLib",

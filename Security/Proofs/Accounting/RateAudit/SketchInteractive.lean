@@ -101,12 +101,12 @@ theorem Accounting.SecurityProofs.RateAuditSketchInteractiveRO :
     Accounting.Guarantees.RateAuditSketchInteractiveRO := by
   intro N m ρ h S L q w s k F cTag cEnc g X Sig Dg _ _ _ _ _ dig A
   have hev : (fun x : Accounting.RateSketch.Data N m ρ X × Accounting.RateSketch.Coins N ρ h s X Sig Dg =>
-      A.Accepts dig x.2.1 x.2.2.1 x.1 x.2.2.2 ∧ A.compute cTag cEnc x.2.1 x.2.2.1 x.1 ≤ F ∧
-        A.footprint x.2.1 x.2.2.1 x.1 * cEnc < Accounting.RateSketch.floor m w ρ S L F cTag cEnc k) =
-      fun x => A.toDevice.Accepts dig x.2.1 x.2.2.1 x.1 x.2.2.2 ∧ A.toDevice.compute cTag cEnc x.2.1 x.2.2.1 x.1 ≤ F ∧
-        A.toDevice.footprint x.2.1 x.2.2.1 x.1 * cEnc < Accounting.RateSketch.floor m w ρ S L F cTag cEnc k := by
+      A.Accepts dig x.2.1.1 x.2.1.2 x.1 x.2.2 ∧ A.compute cTag cEnc x.2.1.1 x.2.1.2 x.1 ≤ F ∧
+        A.footprint x.2.1.1 x.2.1.2 x.1 * cEnc < Accounting.RateSketch.floor m w ρ S L F cTag cEnc k) =
+      fun x => A.toDevice.Accepts dig x.2.1.1 x.2.1.2 x.1 x.2.2 ∧ A.toDevice.compute cTag cEnc x.2.1.1 x.2.1.2 x.1 ≤ F ∧
+        A.toDevice.footprint x.2.1.1 x.2.1.2 x.1 * cEnc < Accounting.RateSketch.floor m w ρ S L F cTag cEnc k := by
     funext x
-    obtain ⟨e1, e2, e3⟩ := A.toDevice_eq dig cTag cEnc x.2.1 x.2.2.1 x.1 x.2.2.2
+    obtain ⟨e1, e2, e3⟩ := A.toDevice_eq dig cTag cEnc x.2.1.1 x.2.1.2 x.1 x.2.2
     rw [e2, e3, propext e1]
   rw [hev]
   exact Accounting.SecurityProofs.RateAuditSketch N m ρ h S L q w s k F cTag cEnc g X Sig Dg dig A.toDevice

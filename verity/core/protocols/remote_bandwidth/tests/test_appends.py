@@ -11,9 +11,10 @@ import hashlib
 
 import pytest
 
+from remote_bandwidth_fakes import Clock, Entropy
 from verity.core.protocols.profile import IntegrityProfile, Subset
 from verity.core.protocols.remote_bandwidth import audit, codec, coins, receipts, schedule
-from verity.core.protocols.remote_bandwidth.audit import Params, Session
+from verity.core.protocols.remote_bandwidth.audit import AuditRun, Params
 from verity.core.protocols.remote_bandwidth.receipts import Plan
 
 N = 8
@@ -23,28 +24,6 @@ CAP = 256
 NODE = b"node-under-test"
 SOURCE = b"the verifier's secret"
 P512 = codec.Codec(codec.P512, 2, False)
-
-
-class Clock:
-    def __init__(self) -> None:
-        self.now = 0
-
-    def __call__(self) -> int:
-        return self.now
-
-
-class Entropy:
-    """SHA-512 in counter mode under `label`, in place of the operating system's generator."""
-
-    def __init__(self, label: bytes) -> None:
-        self.label, self.count = label, 0
-
-    def __call__(self, n: int) -> bytes:
-        out = b""
-        while len(out) < n:
-            out += hashlib.sha512(self.label + self.count.to_bytes(8, "big")).digest()
-            self.count += 1
-        return out[:n]
 
 
 def payload(label: bytes) -> bytes:
@@ -92,12 +71,12 @@ class Run:
                         schedule_cap=schedule_cap)
         self.clock = Clock()
         if registry is None:
-            self.s = Session(self.p, reg, None, coins.local(reg.digest, 0, self.p.windows, Entropy(b"coins"),
+            self.s = AuditRun(self.p, reg, None, coins.local(reg.digest, 0, self.p.windows, Entropy(b"coins"),
                                                             appends=appends), not_before_ns=0, clock=self.clock)
         else:
             self.s = registry.session(self.p, reg, None, not_before_ns=0, clock=self.clock, entropy=Entropy(b"coins"))
         self.store = store
-        self.prover = audit.Prover(prover_store or store, None, self.s.commitment, entropy=Entropy(b"receipt salts"))
+        self.prover = audit.Prover(prover_store or store, None, entropy=Entropy(b"receipt salts"))
         self.challenges = [self.s.start()]
         self.t, self.i, self.previous, self.plan, self.step = 0, 0, reg.digest, Plan.whole(reg.blocks), -1
         self.head: bytes | None = None
@@ -106,7 +85,7 @@ class Run:
         self.received: list[tuple[int, int, bytes]] = []
 
     def commit(self, root: bytes, count: int) -> int:
-        """An append's root sent (`Session.append`): the index the verifier assigns, its coin kept, the append as the
+        """An append's root sent (`AuditRun.append`): the index the verifier assigns, its coin kept, the append as the
         verifier received it, (first, count, root), kept in `received` and, if the store awaits that append's coin,
         its blocks encoded under it."""
         first, coin = self.s.append(root, count)
@@ -390,11 +369,11 @@ def test_a_registered_session_with_filler_planned_is_credited_the_circuit_s_read
                          {v: steps - 1 for v in width},
                          {t: frozenset((*weights, 100 + tokens[t], *(200 + u for u in range(t)))) for t in range(steps)},
                          steps, {})
-    layout = RQ.Layout({**{v: v // 4 for v in weights}, **{v: 4 + (v - 100) // 8 for v in rows},
-                        **{v: 100 + t for v, t in kv.items()}},
-                       {**{v: v % 4 * 8192 for v in weights}, **{v: (v - 100) % 8 * 4096 for v in rows},
-                        **{v: 0 for v in kv}},
-                       {100 + t: audit.STEP_LIMIT for t in kv.values()})
+    layout = RQ.Store.Placement({**{v: v // 4 for v in weights}, **{v: 4 + (v - 100) // 8 for v in rows},
+                                 **{v: 100 + t for v, t in kv.items()}},
+                                {**{v: v % 4 * 8192 for v in weights}, **{v: (v - 100) % 8 * 4096 for v in rows},
+                                 **{v: 0 for v in kv}},
+                                {100 + t: audit.STEP_LIMIT for t in kv.values()})
     r = Run(store())
     for s in range(steps):
         assert r.run() is None
@@ -421,10 +400,10 @@ def test_a_registered_session_with_filler_planned_is_credited_the_circuit_s_read
 
 
 def test_a_requirement_link_caps_nothing_unless_its_memory_map_unit_makes_the_record_s_appends(honest) -> None:
-    """The red team's KB-2: frees, re-keys and append order chosen after the seed cost no encode, so the advice they
-    give is zero only if W's memory map fixes them, which the memory-map unit proves.  The record carries the chain
-    over the session's appends (public: a hash over hiding roots and their indices), the link's `mapped` is asked
-    about the record, and a link whose unit doesn't make those appends is refused."""
+    """Frees, re-keys and append order chosen after the seed cost no encode, so the advice they give is zero only if
+    W's memory map fixes them, which the memory-map unit proves.  The record carries the chain over the session's
+    appends (public: a hash over hiding roots and their indices), the link's `mapped` is asked about the record, and a
+    link whose unit doesn't make those appends is refused."""
     r, _ = honest
     rec = r.s.record()
     assert r.head is not None and rec.appends == r.head and rec.public()["appends"] == r.head.hex()
@@ -526,7 +505,7 @@ def appended_at_step_one(early: bool) -> Run:
 
 
 def test_mapped_refuses_an_append_sent_before_its_step_s_pass() -> None:
-    """The red team's early append: step 1's append sent before step 1's root binds it into that pass's seed.  The
+    """An early append: step 1's append sent before step 1's root binds it into that pass's seed.  The
     session accepts either order and the chain over the appends is the same, so the chain alone can't tell them
     apart; step 1's head can, and a units link whose map appends at step 1 refuses the early session.  An append the
     map dates at step 0 isn't the honest session's either: the heads pin each append between two passes."""

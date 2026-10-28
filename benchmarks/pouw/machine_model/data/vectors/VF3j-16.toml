@@ -1,8 +1,7 @@
-# VF3j-16: VF3j with every register load at 16 MACs a word (PRICES-32 in full).
+# VF3j-16: VF3j with every register load at 16 MACs a word.
 name = "VF3j-16"
 epoch = "VF3j-8"
-summary = "VF3j with every register load at 16 MACs a word (PRICES-32 in full)."
-note = "note:20261016T1640Z-draft-rs-vf3j-strict-closure"
+summary = "VF3j with every register load at 16 MACs a word."
 superseded_by = "VF3k-16"
 rows = [
     "issue", "M", "R1", "F", "VMNX", "H", "I", "A",
@@ -40,9 +39,8 @@ credits = [
     ["LDSM_X2", 1024], ["LDSM_X4", 2048],
 ]
 
-[published]  # as the legacy scripts printed them: τ, τ at 600 W and U/F_low to 4 places, the margin to 3
+[published]  # as the legacy scripts printed them: τ and U/F_low to 4 places, the margin to 3
 tau = 0.061
-tau_600w = 0.0477
 uf_low = 1.1563
 margin = 2.0
 

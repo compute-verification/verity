@@ -1,5 +1,5 @@
 """The weights' store and its decode call: the stand-in for memory-accounting's layout and decode call, on
-the conventions kernels' decode-to-staging kernel already reads (`benchmarks/torch_gpu/s8_dec_linear`).
+the conventions of P2's staging decode (`benchmarks/torch_gpu/p2_stage`).
 
 **Layout.** W is the seeded weights stream (`weights.Weights.stream`: every tensor's little-endian bytes, s8 codes, f32
 scales and bf16 gains and embeddings, at `Tensor.offset`). Block j of the store carries W bytes
@@ -8,13 +8,14 @@ scales and bf16 gains and embeddings, at `Tensor.offset`). Block j of the store 
 last block is zero-padded. Block j is (segment, block) = divmod(j, 2^16).
 
 **The decode call.** `Store.stage(name, dst)` writes linear ``name``'s codes, (N, K) s8, into the staging buffer ``dst`` (or a
-new one) from the blocks it overlaps, and `Store.load(name)` returns any tensor (scales, gains, embeddings) the same way: on the GPU by kernels' `Stage.decode` (`p2stage.cu`) when its library is given, else by
+new one) from the blocks it overlaps, and `Store.load(name)` returns any tensor (scales, gains, embeddings) the same way: on the GPU by the staging decode
+(`p2_stage.stage.EncodedRows.decode_into`, memory-accounting's `libp2v1.so`) when its library's directory is given, else by
 the P2 reference on the CPU. Every stage is checked against the reference's refusals (a c >= p, or a decode wider than the
 payload): a refused block raises, never stages.
 
 Stores:
-* `P2Store`: the encoded rows C, in host memory or on a CUDA device; built by `encode` (the CPU reference, ~1 s a block with
-  gmpy2: tiny shapes only) or loaded from a file of raw rows (`load`), the form memory-accounting's store ships in.
+* `P2Store`: the encoded rows C, in host memory or on a CUDA device; built by `encode` (the CPU reference, seconds a
+  block: tiny shapes only) or loaded from a file of raw rows (`load`), the form memory-accounting's store ships in.
 * `GeneratorStore`: no store; ``stage`` regenerates the tensor from the seed. The FIXTURE for running the frozen shape's
   compute before C* is on the card; the record says so.
 * `FileStore`: W itself, the file network's load sink writes, read in place. Before it serves, every tensor's
@@ -24,6 +25,9 @@ Stores:
 from __future__ import annotations
 
 import hashlib
+import importlib
+import importlib.machinery
+import importlib.util
 import json
 import sys
 from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor
@@ -39,11 +43,12 @@ from verity.core.protocols.pous.schemes import p2 as S
 from .weights import SW, Weights
 
 ROOT = Path(__file__).resolve().parents[3]
+P2_STAGE = ROOT / "benchmarks" / "torch_gpu" / "p2_stage"
 sys.path.insert(0, str(ROOT / "benchmarks" / "pous"))
 from p2_v1 import reference as R  # noqa: E402
 
 PARAMS = S.P2Params(*S.POINT)
-SPEC = R.Params(PARAMS.w, PARAMS.c0, PARAMS.payload_bytes, PARAMS.blocks_per_segment)
+SPEC = R.DEPLOYMENT
 ROW, PAYLOAD = PARAMS.block_bytes, PARAMS.payload_bytes     # 2,056 and 2,054
 SALT_BYTES = 24
 
@@ -80,6 +85,16 @@ def decode_block(prefix: bytes, j: int, row: bytes) -> bytes:
     if m >> (8 * PAYLOAD):
         raise Refused(f"block {j}: decodes wider than the payload")
     return m.to_bytes(PAYLOAD, "big")
+
+
+def p2_stage() -> Any:
+    """The staging decode (`benchmarks/torch_gpu/p2_stage/stage.py`), loaded as the package ``p2_stage`` so its modules
+    import one another as they do in their own tree."""
+    if "p2_stage" not in sys.modules:
+        spec = importlib.machinery.ModuleSpec("p2_stage", None, is_package=True)
+        spec.submodule_search_locations = [str(P2_STAGE)]
+        sys.modules["p2_stage"] = importlib.util.module_from_spec(spec)
+    return importlib.import_module("p2_stage.stage")
 
 
 def _encode_range(args: tuple[bytes, int, bytes]) -> bytes:
@@ -171,9 +186,8 @@ class P2Store(Store):
         self.prefix = S.expand_prefix(PARAMS, salt)
         self._stage = None
         if stage_lib:
-            sys.path.insert(0, str(ROOT / "benchmarks" / "torch_gpu" / "s8_dec_linear"))
-            from stage import Stage  # kernels' decode-to-staging wrapper
-            self._stage = Stage(stage_lib, rows.device)
+            st = p2_stage()
+            self._stage, self._refused = st.EncodedRows(st.L.StoreLayout(PARAMS, (), self.prefix), rows, 0, stage_lib), st.StoreError
 
     @classmethod
     def encode(cls, weights: Weights, salt: bytes, workers: int = 1, chunk_blocks: int = 16) -> P2Store:
@@ -208,7 +222,7 @@ class P2Store(Store):
 
     def describe(self) -> dict:
         return {"kind": self.kind, "blocks": int(self.rows.shape[0]), "salt": self.salt.hex(),
-                "decode": "p2stage" if self._stage else "p2-reference-cpu"}
+                "decode": "p2_stage staging decode (libp2v1.so)" if self._stage else "p2-reference-cpu"}
 
     def block(self, j: int) -> bytes:
         r = self.rows[j]
@@ -230,13 +244,15 @@ class P2Store(Store):
     def stage(self, name: str, dst: Any | None = None) -> Any:
         n, k = self.weights.dims[name]
         base, length = self.weights.base(name), n * k
-        js = blocks_of(base, length)
         if self._stage is not None:
             import torch
-            out = self._stage.decode(self.rows[js.start:js.stop], js.start, self.prefix, base, length,
-                                     None if dst is None else dst.view(-1).view(torch.uint8))
-            if self._stage.flags():
-                raise Refused(f"{name}: the decode kernel flagged a block the reference refuses")
+            out = (torch.empty(length, dtype=torch.uint8, device=self.rows.device) if dst is None
+                   else dst.view(-1).view(torch.uint8))
+            try:
+                self._stage.decode_into(base, length, out)
+                self._stage.check()
+            except self._refused as e:
+                raise Refused(f"{name}: {e}") from e
             return out.view(torch.int8).view(n, k)
         return _into(np.frombuffer(self._bytes(base, length), dtype=np.int8).reshape(n, k), dst)
 

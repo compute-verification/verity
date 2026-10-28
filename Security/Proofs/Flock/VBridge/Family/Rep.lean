@@ -16,7 +16,7 @@ import Proofs.Flock.VBridge.ResLayer
   points (`Piop.lean:143`), 64 elements.
 
 `hStruct_of`, `hShape_of` and `hResL_of` prove `HStruct`, `HShape` and `HResL` for every family whose `rep₀` is `repOf`,
-from facts about V*'s statements, circuits and registrations, each a named `Prop` below saying which check or lane
+from facts about V*'s statements, circuits and registrations, each a named `Prop` below saying which check or lemma
 establishes it. `HResL` asks each part's row ports for the rep's `w` only at the columns some computed row reads
 (`ResZeroAtL`), so each such bit of `w` is read where it is asked, and `repOf`'s `w` needs no column beyond those.
 -/
@@ -439,15 +439,15 @@ sessions. -/
 def HSomePart : Prop := ∃ (j : Fin F.stmts.size) (p : ℕ) (nm : String) (pt : VStar.Part), F.stmts[j] = .inner p nm pt
 
 /-- **Every verifier part has V*'s statement.** V*'s parts (`rec_residuals.parts`, `VStar.parts`) are the verifier's
-groups (`RecResiduals.groups`) at the shape; established by a lemma `VStar.parts (spec vsh)` = `groups` (V*'s algebra
-lane), or by a verifier check that a session per part `p<j>` of `groups` is present. -/
+groups (`RecResiduals.groups`) at the shape; established by a lemma `VStar.parts (spec vsh)` = `groups` (V*'s algebra),
+or by a verifier check that a session per part `p<j>` of `groups` is present. -/
 def HCover : Prop :=
   ∀ p < (partsOf F.sh).size, ∃ (j : Fin F.stmts.size) (nm : String) (pt : VStar.Part), F.stmts[j] = .inner p nm pt
 
 /-- Obligation: discharged by `circuitFile`'s emit and parse round trip.
 **The circuit of a part's statement names its unit as the statement.** `circuitFile` writes the unit of
 `innerUnit S nm` under `nm` (`metaHead`, `emitSections`, `Compose.lean:217,233`) and `HmRow.parse` reads it as the
-circuit's unit (`hfile`); established by the emit/parse round trip of `circuitFile` (the lane that proves `hfile`). -/
+circuit's unit (`hfile`); established by the emit/parse round trip of `circuitFile`. -/
 def HUnitName : Prop :=
   ∀ (j : Fin F.stmts.size) p nm pt, F.stmts[j] = .inner p nm pt → (F.Vs j).c.unit.name = nm
 
@@ -464,7 +464,7 @@ def HRowKeys : Prop :=
 /-- **Two parts read the same registered bit of an element of `w`.** At an accepted outer proof, where parts `p` and
 `p'` hold the same element of `w` at positions `a` and `a'`, the registrant's bit `e` there is the same in both sessions:
 both read row `r` of the same registered row (`rec_vstage.py:356-357`); established by V*'s registrations of
-`regs[nm]` across the part sessions (the lane that proves `HCommits`). -/
+`regs[nm]` across the part sessions (as for `HCommits`). -/
 def HRowsAgree : Prop :=
   ∀ R ω t R₂ τ o, Accepted (I := ℐ) F.zs dg N k Rw R ω t R₂ τ o → ∀ (r : Fin 2) (p p' a a' e : ℕ) (b : Bool),
     p < (partsOf F.sh).size → p' < (partsOf F.sh).size → ∀ (ha : a < (wIOf F.sh p).size)
@@ -479,10 +479,8 @@ def HOne : Prop :=
     layers F.zs dg N k Rw R ω t R₂ τ (F.sess p)
       (Const.Prog.oneAt (Placed.keyProg (F.Vs (F.sess p)).c (F.Vs (F.sess p)).hU (F.Vs (F.sess p)).nv) (F.un p r)) = true
 
-/-- Obligation: discharged by `hVCoins_of` (`Family/VCoins.lean`) from the parts' `v` keys (`PartVCols`), their reads
-files naming `v` (`OwnNamesV`) and the registrant's `v` (`VRowsAre`): check 5's `RecCoins.checkResiduals` (in the event
-as `ChecksC3`'s `RecCoins.check`) holds the `v` port's registration to `verifierRows` at the inner session's coins, extra
-claims and comb (`checkValue` at `rec-v`).
+/-- Obligation: check 5's `RecCoins.checkResiduals` (in the event as `ChecksC3`'s `RecCoins.check`) holds the `v` port's
+registration to `verifierRows` at the inner session's coins, extra claims and comb (`checkValue` at `rec-v`).
 **The registered `v` is the verifier's at the rep's coins.** At an accepted outer proof, the `v` port of rep `r`'s copy
 of part `p` is registered bits of `verifierRows`' coefficients at the rep's coins, extra claims and comb (`vOf`), at the
 part's `V`; established from that check's rows (the registrant's rows at `rec-v`'s root, as `AccRowsAre` reads
@@ -496,9 +494,7 @@ def HVCoins : Prop :=
             (F.rep R ω t (layers F.zs dg N k Rw R ω t R₂ τ) r).extras
             (F.rep R ω t (layers F.zs dg N k Rw R ω t R₂ τ) r).comb)) q)
 
-/-- Obligation: discharged by `hZeroL_of` (`Family/VCoins.lean`) from the parts' `out` columns (`PartOutCols`, which
-makes their gates committed, `outCol_committed`) and their reads (`ZeroReads`, open: the Lean verifier does not check
-`out`'s registration).
+/-- Obligation, open: the Lean verifier does not check `out`'s registration.
 **The parts' outputs are 0 in the layer.** At an accepted outer proof, every output column of rep `r`'s copy of
 part `p` is 0 in the layer (`copyVal`). V* registers each part's `out` as reads of the zero row `rec-residuals-zero`
 (`rec_vstage.py`), and `ZkOuter.Good` asks the layer to agree with the registrant at registered reads only
@@ -514,7 +510,7 @@ def HZeroL : Prop :=
 /-- **The rep's coins fit the verifier's schedule.** At an accepted outer proof, `verifierRows` accepts each rep's
 coins and extra claims: its rounds have the sizes the shape's schedule draws and there are `claims - 2` extra claims
 (`verifierRows_schedule`); established from the table's files (`TableFiles.Valid`: the stream's `RepTape` and the
-session's extra claims, the lane that proves `HFiles`). -/
+session's extra claims, as for `HFiles`). -/
 def HFit : Prop :=
   ∀ R ω t R₂ τ o, Accepted (I := ℐ) F.zs dg N k Rw R ω t R₂ τ o → ∀ r,
     ∃ x, verifierRows F.sh (F.rep R ω t (layers F.zs dg N k Rw R ω t R₂ τ) r).rounds

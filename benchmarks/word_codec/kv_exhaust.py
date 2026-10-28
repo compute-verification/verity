@@ -1,7 +1,7 @@
 """The KV cache's read and write sides at an HBM-exhaustion shape (HBM holds the encoded weights, the KV cache and
 filler, and every step reads all of it), on one GPU: `kv.cu`'s libraries (`--lib NAME=PATH`, built with
-KV_QHEADS the model's query heads) gated, then timed. Writes `kv-exhaust.json` and `kv.log` under `--out`, and in a
-`research run` its `result.json`.
+KV_QHEADS the model's query heads) gated, then timed. Writes `kv-exhaust.json` and `kv.log` under `--out`, and, with
+`RESEARCH_RUN_DIR` set, its `result.json`.
 
 Nothing is timed before its gate passed:
 - `gate`: kv_bench's codec gate at every k of `--ks`;
@@ -106,17 +106,12 @@ def rc_shape(lib: B.Lib) -> dict:
 
 def rc_setup(lib: B.Lib, seed: bytes) -> dict:
     """The receipt forms' sign rows and keys under `seed`, each form the build runs; their sign bits by rc."""
-    v, i, q = ctypes.c_void_p, ctypes.c_int, ctypes.c_uint64
-    so = lib.so
-    so.kv_rc_set.argtypes, so.kv_rc_buffers.argtypes, so.kv_rc_tag.argtypes = [i, v, v], [v, v, v], [i, q, v]
-    so.kv_rc_l2.argtypes, so.kv_rc_tag16.argtypes, so.kv_rc_tag8.argtypes = [q, v, v], [i, q, v], [i, q, v]
     rs = rc_shape(lib)
     bits = {}
     for rc in (rc for rc in (1, 2) if rs["forms"] >> (rc - 1) & 1):
         bits[rc] = R.sign_bits(seed, rc, 32 * rs["steps"] * rs["rt"])
         table, key = R.rows(bits[rc], rs["rt"], rc), R.key_words(seed, rc)
         lib.call("kv_rc_set", rc, table.ctypes.data, key.ctypes.data)
-    so.kv_rc_sha_set.argtypes, so.kv_rc_sha8.argtypes = [ctypes.c_char_p], [q, v]
     lib.call("kv_rc_sha_set", R.sha_prefix(seed))
     return bits
 
@@ -361,8 +356,6 @@ def fit(ks, ys) -> dict:
 def prim_gate(lib: B.Lib, torch, log) -> dict:
     """kv_prim's ops at the twin's rare_cases (each op's rare carry or borrow, edges, random words) against
     kv_twin.prim_want, bit for bit."""
-    v, i = ctypes.c_void_p, ctypes.c_int
-    lib.so.kv_prim.argtypes = [i, v, v, v, i, v]
     f = lib.field
     out, st = {}, B.stream(torch)
     for op, cases in T.rare_cases(f, random.Random(f.n + 7)).items():
@@ -398,8 +391,6 @@ def floor_gate(lib: B.Lib, torch, store, n_words: int, k: int, grids, st) -> lis
 def floor_occ(lib: B.Lib, torch, store, n_words: int, k: int, sms: int, reps: int, r: float, st) -> dict:
     """The read-and-decode at OCC_CTAS CTAs an SM, each checksum-gated against one word a thread's; r the read in
     bytes/s."""
-    v, q, i = ctypes.c_void_p, ctypes.c_uint64, ctypes.c_int
-    lib.so.kv_decode_occ.argtypes = [v, q, q, i, i, v, i, v, v]
     xr = torch.zeros(1, dtype=torch.int64, device="cuda")
     xr.zero_()
     lib.call("kv_decode", B.ptr(store), 0, n_words, 0, k, 0, B.ptr(xr), st)

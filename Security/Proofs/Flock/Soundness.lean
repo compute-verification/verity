@@ -24,7 +24,6 @@ import Proofs.Flock.Soundness.RepSound
 import Proofs.Flock.Soundness.Soundness
 import Proofs.Flock.Soundness.Merkle
 import Proofs.Flock.Soundness.Rewinding
-import Proofs.Flock.Soundness.Compiled
 import Proofs.Flock.Soundness.OpeningPhase
 import Proofs.Flock.Soundness.ListSize
 import Proofs.Flock.Soundness.LincheckPhase
@@ -96,6 +95,9 @@ import Proofs.Flock.Soundness.ExecCheck
 import Proofs.Flock.Soundness.ExecLookup
 import Proofs.Flock.Soundness.ExecSetup
 import Proofs.Flock.Soundness.TmplNetOK
+import Proofs.Flock.Soundness.TmplUnitAt
+import Proofs.Flock.Soundness.TmplLayout
+import Proofs.Flock.Soundness.ParseStmt
 import Proofs.Flock.Soundness.ExecTyped
 import Proofs.Flock.Soundness.ExecTemplate
 import Proofs.Flock.Soundness.ExecTemplatePlace
@@ -110,8 +112,7 @@ import Proofs.Flock.Soundness.Compose
 import Proofs.Flock.Soundness.ComposeDag
 import Proofs.Flock.Soundness.Game.Prob
 import Proofs.Flock.Soundness.Audit.Law
-import Proofs.Flock.Soundness.Audit.Share
-import Proofs.Flock.Soundness.Audit.Horizon
+import Proofs.Flock.Soundness.Audit.Pooled
 import Proofs.Flock.Soundness.Audit.Circuit
 import Proofs.Flock.Soundness.Audit.OneStage
 import Proofs.Flock.Soundness.Audit.TwoStage
@@ -142,7 +143,6 @@ import Proofs.Flock.Soundness.Audit.Harm
 import Proofs.Flock.Soundness.Audit.Influence
 import Proofs.Flock.Soundness.Audit.InfluenceWitness
 import Proofs.Flock.Soundness.Audit.Partitioning
-import Proofs.Flock.Soundness.Audit.TwoStageExfil
 import Proofs.Flock.Soundness.Audit.HarmBound
 import Proofs.Flock.Soundness.Audit.HarmBudget
 import Proofs.Flock.Soundness.Audit.HarmBudgetLife
@@ -184,7 +184,6 @@ import Proofs.Flock.Soundness.Discharge.ZkBind
 import Proofs.Flock.Soundness.Discharge.DecodeZL
 import Proofs.Flock.Soundness.Discharge.ZkView
 import Proofs.Flock.Soundness.Discharge.ZkView.OsSalts
-import Proofs.Flock.Soundness.Discharge.DrawWords
 import Proofs.Flock.Soundness.Discharge.PlaysCoin
 import Proofs.Flock.Soundness.Discharge.ZkExec
 import Proofs.Flock.Soundness.Discharge.Tables
@@ -195,8 +194,7 @@ import Proofs.Flock.Soundness.Discharge.HiddenDec
 import Proofs.Flock.Soundness.Discharge.HdecCor
 import Proofs.Flock.Soundness.Discharge.Hidden
 import Proofs.Flock.Soundness.Discharge.Pinned
-import Proofs.Flock.Soundness.Discharge.ZkCoins
-import Proofs.Flock.Soundness.Discharge.PrivateCircuit
+import Proofs.Flock.Soundness.Discharge.PrivateCircuit.Hides
 import Proofs.Flock.Soundness.Discharge.ZkHidden
 import Proofs.Flock.Soundness.Discharge.Composed
 import Proofs.Flock.Soundness.Discharge.PlainJ

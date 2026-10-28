@@ -1,5 +1,5 @@
 /-
-PROTOCOL.md §16.7: the program format `verity-ir/descriptor/v1` (core's `verity/ir/PROTOCOL.md`, PR #120), as the verifier
+PROTOCOL.md §16.7: the program format `verity-ir/descriptor/v1` (core's `verity/ir/PROTOCOL.md`), as the verifier
 reads its own copy of a Program: the canonical JSON domain and the program's SHA-512 (§1), types and leaves (§2), reference
 sequences (§3), the descriptor and what the decoder refuses (§4), input nodes (§5), the canonical layout (§6) and scope
 resolution (§7).
@@ -873,5 +873,21 @@ def gateStep (P : Prog) (g : Nat) (sc : Scope) : V ((Nat × Array Nat × Scope) 
 def Prog.gate (P : Prog) (g : Nat) : V (Nat × Array Nat × Scope) := do
   if g ≥ (P.defs[P.root]!).gates then throw s!"gate {g} outside the circuit"
   Steps.run "gate location" (gateStep P g) Steps.FUEL P.rootScope
+
+/-- A Program's canonical layout (§6) read gate by gate, as `Prog.gate` locates each gate: the width of its value in bits,
+whether it is an input gate, whether it is an input bound at registration (`RegisteredInput<w>_v1`, §5.2), and the gates
+its operands name (repeats kept). It is `Verity.Circuit`'s wiring and widths, with no operation. -/
+structure GateTable where
+  w : Array Nat
+  isInput : Array Bool
+  registered : Array Bool
+  reads : Array (Array Nat)
+
+def GateTable.N (c : GateTable) : Nat := c.w.size
+
+/-- `c` with one more gate. -/
+def GateTable.push (c : GateTable) : Nat × Bool × Bool × Array Nat → GateTable
+  | (w, inp, reg, ops) =>
+    { w := c.w.push w, isInput := c.isInput.push inp, registered := c.registered.push reg, reads := c.reads.push ops }
 
 end Flock.Program

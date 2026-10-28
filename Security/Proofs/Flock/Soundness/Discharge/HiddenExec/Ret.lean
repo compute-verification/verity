@@ -298,14 +298,14 @@ theorem outPortOf_spec (c : Circuit) {o : ℕ} (ho : o < c.outWords) :
 
 /-! ## An output row's words -/
 
-/-- **Each output row's words hold its port's** (`HmOut.checkRows`: a padded lone port's are the port's, zero-padded to
+/-- **Each output row's words hold its port's** (`Hidden.RowsOut`: a padded lone port's are the port's, zero-padded to
 whole SHA-512 blocks; a bit row of `16 · words` bits holds exactly its port's). -/
-theorem checkRows_words {c : Circuit} (h : HmOut.checkRows c = .ok ())
+theorem rowsOut_words {c : Circuit} (h : Hidden.RowsOut c)
     (hr : c.outRowPorts = Array.replicate c.outPorts.size 1)
     (hb : ∀ p ∈ c.ports.toList, p.bits = 16 * p.words) {j : ℕ} (hj : j < c.outPorts.size) :
     (c.outPorts.getD j default).2 ≤ (c.ports.getD (HmOut.nIn c + j) default).words := by
   have hj' : j < c.outRowPorts.size := by rw [hr, Array.size_replicate]; exact hj
-  obtain ⟨hlt, hrow⟩ := Hidden.checkRows_out h hj'
+  obtain ⟨hlt, hrow⟩ := h j hj'
   have hmem : c.ports.getD (HmOut.nIn c + j) default ∈ c.ports.toList := by
     rw [Array.getD_eq_getD_getElem?, Array.getElem?_eq_getElem hlt, Option.getD_some]
     exact Array.getElem_mem_toList hlt
@@ -315,5 +315,12 @@ theorem checkRows_words {c : Circuit} (h : HmOut.checkRows c = .ok ())
   rcases hrow with ⟨-, hw, -⟩ | ⟨-, hb'⟩
   · rw [hw]; omega
   · omega
+
+/-- **Each output row's words hold its port's** (`HmOut.checkRows`, through `rowsOut_words`). -/
+theorem checkRows_words {c : Circuit} (h : HmOut.checkRows c = .ok ())
+    (hr : c.outRowPorts = Array.replicate c.outPorts.size 1)
+    (hb : ∀ p ∈ c.ports.toList, p.bits = 16 * p.words) {j : ℕ} (hj : j < c.outPorts.size) :
+    (c.outPorts.getD j default).2 ≤ (c.ports.getD (HmOut.nIn c + j) default).words :=
+  rowsOut_words (Hidden.rowsOut_of_checkRows h) hr hb hj
 
 end FlockSoundness.Discharge.HiddenExec

@@ -15,37 +15,10 @@ import pytest
 
 from verity.core.protocols.remote_bandwidth import audit, codec, verifier_party
 from verity.core.protocols.remote_bandwidth import period as P
+from remote_bandwidth_fakes import Clock, Entropy
 
 STORE = hashlib.shake_256(b"a tiny MLP's weights").digest(3 * 4032 - 17)
 COINS = hashlib.sha512(b"the period's live coins").digest()
-
-
-class Clock:
-    """The verifier's clock: each reading a microsecond after the last, and waiting moves it on."""
-
-    def __init__(self) -> None:
-        self.now = 10 ** 9
-
-    def __call__(self) -> int:
-        self.now += 1_000
-        return self.now
-
-    def sleep_until(self, clock, t: int) -> None:
-        self.now = max(self.now, t)
-
-
-class Entropy:
-    """A deterministic stand-in for the operating system's generator: SHA-512 in counter mode under `label`."""
-
-    def __init__(self, label: bytes) -> None:
-        self.label, self.count = label, 0
-
-    def __call__(self, n: int) -> bytes:
-        out = b""
-        while len(out) < n:
-            out += hashlib.sha512(self.label + self.count.to_bytes(8, "big")).digest()
-            self.count += 1
-        return out[:n]
 
 
 class _Dropped:
@@ -71,7 +44,7 @@ def _split(cheat=None) -> tuple[P.Period, int]:
     got: dict = {}
 
     def verifier() -> None:
-        c = Clock()
+        c = Clock(10 ** 9, 1_000)
         with a, a.makefile("rwb") as f:
             got["period"] = verifier_party.serve(f, request, coins=COINS, clock=c, sleep_until=c.sleep_until)
 
@@ -84,7 +57,7 @@ def _split(cheat=None) -> tuple[P.Period, int]:
 
 
 def _in_process(cheat=None) -> P.Period:
-    c = Clock()
+    c = Clock(10 ** 9, 1_000)
     return P.run("n0", STORE, COINS, clock=c, sleep_until=c.sleep_until, entropy=Entropy(b"salts"), cheat=cheat)
 
 
@@ -107,12 +80,12 @@ def test_the_party_follows_period_json() -> None:
     assert local.host == "n0" and local.address is None
     assert local.command == (sys.executable, "-m", verifier_party.MODULE, "--listen", "127.0.0.1:0")
     assert verifier_party.Party.of({"challenger_host": "n0"}, "n0") == local
-    with pytest.raises(RuntimeError, match="vy-auditor-1 isn't wired for bandwidth"):
-        verifier_party.Party.of({"challenger_host": "vy-auditor-1", "challenger": {"pous": {"command": ["x"]}}}, "n0")
-    wired = verifier_party.Party.of({"challenger_host": "vy-auditor-1", "challenger": {"bandwidth": {
-        "command": ["ssh", "vy-auditor-1", "verifier"], "address": "10.0.0.7:7961"}}}, "n0")
-    assert wired == verifier_party.Party("vy-auditor-1", ("ssh", "vy-auditor-1", "verifier"), ("10.0.0.7", 7961))
+    with pytest.raises(RuntimeError, match="auditor-host isn't wired for bandwidth"):
+        verifier_party.Party.of({"challenger_host": "auditor-host", "challenger": {"pous": {"command": ["x"]}}}, "n0")
+    wired = verifier_party.Party.of({"challenger_host": "auditor-host", "challenger": {"bandwidth": {
+        "command": ["ssh", "auditor-host", "verifier"], "address": "192.0.2.7:7961"}}}, "n0")
+    assert wired == verifier_party.Party("auditor-host", ("ssh", "auditor-host", "verifier"), ("192.0.2.7", 7961))
     assert verifier_party.placement("n0", "n0")["trusted-host"].startswith("unmet: ")
-    held = verifier_party.placement("n0", "vy-auditor-1")
-    assert held["parties"] == {"challenger": "vy-auditor-1", "prover": "n0", "verifier": "vy-auditor-1"}
+    held = verifier_party.placement("n0", "auditor-host")
+    assert held["parties"] == {"challenger": "auditor-host", "prover": "n0", "verifier": "auditor-host"}
     assert held["trusted-host"].startswith("holds: ")

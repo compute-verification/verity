@@ -1,11 +1,12 @@
 {
  "roots": ["CoreProtocol"],
  "exempt": {
-  "CoreProtocol.ExampleMain": "the core-protocol-example executable's entry point, one line; its command is Core.Protocol.main, audited under CoreProtocol"
+  "CoreProtocol.ExampleMain": "the core-protocol-example executable's entry point, one line; its command is Core.Protocol.main, audited under CoreProtocol",
+  "CoreProtocol.RegistrationMain": "the core-registration executable's entry point, one line; its command is Core.Protocol.main, audited under CoreProtocol"
  },
  "escapes": {
-  "Core.BlobProtocol.serveLoop": "partial def: `serve` reads cases until end of input, which no bound limits; no proof is about it, and CoreProtocol.BlobsExample's guards cover BlobProtocol.case, which it runs on each line",
-  "Core.serveLoop": "partial def: `serve` reads cases until end of input, which no bound limits; no proof is about it, and CoreProtocol.Example's guards cover Protocol.case, which it runs on each line"
+  "Core.serveLoop": "partial def: `serve` reads cases until end of input, which no bound limits; no proof is about it, and CoreProtocol.Example's guards cover Protocol.case, which it runs on each line",
+  "Core.BlobProtocol.serveLoop": "partial def: `serve` reads cases until end of input, which no bound limits; no proof is about it, and CoreProtocol.BlobsExample's guards cover BlobProtocol.case, which it runs on each line"
  },
  "layers": {
   "CoreProtocol.Ratio": {
@@ -14,17 +15,32 @@
    "why": "the interface is spec: a protocol's properties are stated over `Protocol`, `Outcome`, `Answer`, `Integrity` and `Ratio`, so these import only Lean's JSON, C-Flock's bytes and canonical JSON, and one another"
   },
   "CoreProtocol.Profile": {
-   "imports": ["Lean.Data.Json", "Flock.Canon", "CoreProtocol.Ratio"],
+   "imports": ["Lean.Data.Json", "Flock.Canon", "Flock.Draw", "CoreProtocol.Ratio"],
    "except": [],
-   "why": "the interface is spec: a protocol's properties are stated over `Protocol`, `Outcome`, `Answer`, `Integrity` and `Ratio`, so these import only Lean's JSON, C-Flock's bytes and canonical JSON, and one another"
+   "why": "the interface is spec: a protocol's properties are stated over `Protocol`, `Outcome`, `Answer`, `Integrity` and `Ratio`, so these import only Lean's JSON, C-Flock's bytes and canonical JSON, and one another; the profile's sampling design also imports C-Flock's law (`Flock.Draw`), which it is held to and whose work rule it checks"
   },
   "CoreProtocol.Protocol": {
    "imports": ["Lean.Data.Json", "Flock.Bytes", "Flock.Canon"],
    "except": [],
    "why": "the interface is spec: a protocol's properties are stated over `Protocol`, `Outcome`, `Answer`, `Integrity` and `Ratio`, so these import only Lean's JSON, C-Flock's bytes and canonical JSON, and one another"
+  },
+  "CoreProtocol.Live": {
+   "imports": ["CoreProtocol.Protocol"],
+   "except": [],
+   "why": "the interface is spec: a protocol's live coins (`Live`, `answerAt`) are stated over `Protocol` alone"
+  },
+  "CoreProtocol.Record": {
+   "imports": ["Lean.Data.Json", "Flock.Bytes", "Flock.Hash"],
+   "except": [],
+   "why": "the record entry form is spec: a ledger's properties are stated over the entries `Record.ofJson` reads and the `Record.message` they are signed under, so it imports only Lean's JSON and C-Flock's bytes and SHA-512"
+  },
+  "CoreProtocol.Site": {
+   "imports": ["Lean.Data.Json", "Flock.Canon", "Flock.Hash"],
+   "except": [],
+   "why": "the Site in code is spec: its properties (`Properties.Core.Site`) are stated over its fold, check and types, so it imports only Lean's JSON and C-Flock's canonical JSON and SHA-512, for its digests and decoders"
   }
  },
  "dependencies": {
-  "toolchain": "1efe7aefd37af8682255d67bc7aeb32378d6650322729009305da53183dab0a0"
+  "toolchain": "9861e83df7e59cd690a56f1b1123a7d6cfeca7df65d05a986f3a0c9794f60079"
  }
 }

@@ -86,8 +86,8 @@ def _window_a() -> tuple[Any, Any, dict[str, Any]]:
     com.pool = PP.PinnedPool(1 << 14, exact=False, populate_threads=0)
     rc = _commit(com, A)
     com.weights_tree, com.model = {"root": (rc.weight_registration or {}).get("root"), "names": []}, torch.nn.Module()
-    leds = {"alice": sc.Ledger("cmpl-1", "e1", [1, 2, 3], {"params": {"max_tokens": 4}}, "alice", streamed=[7, 9]),
-            "cmpl-2": sc.Ledger("cmpl-2", "e2", [4, 5], {"params": {"max_tokens": 2}}, None, streamed=[8])}
+    leds = {"alice": sc.LiveRequest("cmpl-1", "e1", [1, 2, 3], {"params": {"max_tokens": 4}}, "alice", streamed=[7, 9]),
+            "cmpl-2": sc.LiveRequest("cmpl-2", "e2", [4, 5], {"params": {"max_tokens": 2}}, None, streamed=[8])}
     reqs, rows = ss.window_requests(ROWS, NAMES.get, leds.get)
     kw = dict(rec={"window": 5, "run_id": "t/w5", "steps": len(rc.steps), "passed": True}, reqs=reqs, request_rows=rows,
               tokens={k: v.streamed for k, v in leds.items()}, sampling={}, label="serve-openai:t", code="c0de",
@@ -175,6 +175,23 @@ def test_the_pool_is_warmed_before_serving_in_blocks_that_hold_any_one_take(monk
         pool.take(n)
     assert pool.allocs == 3 and len(pool.in_use) == 3, "the first window's takes are served from the warmed blocks"
     pool.mode = None
+
+
+def test_the_gpu_tree_extension_is_built_before_serving_only_for_a_worker_that_loads_it():
+    """A windowed or ``--gpu-tree`` committer's worker loads the extension in its first step, so it is built before serving;
+    any other committer never builds it."""
+    loads: list[Any] = []
+
+    def com(**kw):
+        c = SimpleNamespace(**({"windowed": False, "gpu_tree": False} | kw))
+        c._gpu_ext_load = lambda: loads.append(c)
+        return c
+
+    for kw in ({"windowed": True}, {"gpu_tree": True}):
+        c, t = com(**kw), iter([2.0, 31.25])
+        assert ss.warm_gpu_ext(c, clock=lambda: next(t)) == 29.25 and loads == [c]
+        loads.clear()
+    assert ss.warm_gpu_ext(com(), clock=lambda: pytest.fail("no build to time")) is None and loads == []
 
 
 def test_a_close_waits_for_room_only_while_the_windows_awaiting_their_seal_hold_the_bound():

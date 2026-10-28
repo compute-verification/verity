@@ -6,11 +6,11 @@ import Proofs.Flock.VBridge.Family.Tape
 import Proofs.Flock.VBridge.Algebra.Schedule
 
 /-!
-# The lanes' joins
+# The family's joins
 
-Ha's `repOf tf` reads each rep's rounds and extra claims from a table's files `tf`, and hf's `filesOf` streams issue
-`F.rep`'s coins, so `files = filesOf …` with `rep₀ = repOf files` is circular. The inner coins are the history's, so
-they are taken from it once:
+`repOf tf` (Rep.lean) reads each rep's rounds and extra claims from a table's files `tf`, and `filesOf`'s streams
+(Files.lean) issue `F.rep`'s coins, so `files = filesOf …` with `rep₀ = repOf files` is circular. The inner coins are
+the history's, so they are taken from it once:
 
 * `coinsOf`: rep `r`'s rounds are the coin steps of the history's coins (`coinSteps`) after the link points and `r`
   reps' rounds, each read as the array of the size `verifierRows` takes there (`roundSizes`, `verifierRows_schedule`);
@@ -18,15 +18,15 @@ they are taken from it once:
   statement as `filesOf`'s and at the link points of the history's first coin (`ptsC`), so they read no message and
   their extra claims are `filesOf`'s wherever the inner transcript's link points are those; `rep₀ := repOf coinFiles`.
 
-At a family whose `rep₀` is that, the joins between the lanes hold:
+At a family whose `rep₀` is that, the joins between the family's parts hold:
 
-* `extrasAre_of` (hf's `ExtrasAre`): any well-formed link point arrays give the same extra claims (`extras_unique`:
+* `extrasAre_of` (`ExtrasAre`): any well-formed link point arrays give the same extra claims (`extras_unique`:
   `ClaimRel` determines a claim);
-* `hFit_of` (ha's `HFit`): the rounds have `verifierRows`' sizes by construction, and the extra claims number
+* `hFit_of` (`HFit`): the rounds have `verifierRows`' sizes by construction, and the extra claims number
   `2 |regions|` (`ClaimsIs`);
-* `combFolds_of` (hf's `CombFolds`): `combOf` is the lincheck's fold at the rep's coins wherever that fold returns 64
+* `combFolds_of` (`CombFolds`): `combOf` is the lincheck's fold at the rep's coins wherever that fold returns 64
   elements (`FoldsOk`);
-* `coins_of` (hf's `Coins`): `CoinsShaped` reads only the rounds' sizes, which are `verifierRows`' (`CoinsAgree`).
+* `coins_of` (`Coins`): `CoinsShaped` reads only the rounds' sizes, which are `verifierRows`' (`CoinsAgree`).
 -/
 
 namespace FlockVBridge.Family
@@ -314,8 +314,8 @@ variable (spec : SessionSpec) (st : Reg → L.Ω → Setup)
 /-- The verifier's shape counts the statement's claims: `2` and two per region. -/
 def ClaimsIs : Prop := ∀ R ω, F.sh.claims = 2 + 2 * ((F.x R ω).toStatement regs).regions.length
 
-/-- Obligation: discharged by the verifier's ClaimsAt check (`verity/rec-inner/v1`'s `regions`,
-`cursor/rec-vstar-checks-741b`), with the setup's `regs.length = st.regions.size`.
+/-- Obligation: discharged by the verifier's ClaimsAt check (`verity/rec-inner/v1`'s `regions`), with the setup's
+`regs.length = st.regions.size`.
 **V*'s shape counts the inner statement's claims** (the verifier's gap `vsh`, with `ShapeIs`): `vsh`'s claims are
 `2` and two per region of the inner session's `regs` (`rec_vstage.shape`'s claims). -/
 def ClaimsAt : Prop := F.vsh.claims = 2 + 2 * regs.length
@@ -348,7 +348,7 @@ theorem rep_comb (hrep : F.rep₀ = F.repOf (F.coinFiles spec st cap lig)) (R : 
   rw [hrep]
   rfl
 
-/-- **hf's `ExtrasAre`**: each rep's extra claims are the coins' files', which are the setup's at every well-formed
+/-- **`ExtrasAre`**: each rep's extra claims are the coins' files', which are the setup's at every well-formed
 link point arrays (`TableSrc.extra_points`). -/
 theorem extrasAre_of (hrep : F.rep₀ = F.repOf (F.coinFiles spec st cap lig))
     (hset : ∀ R ω, SetupRealizes (st R ω) ((F.x R ω).toStatement regs) sch cls.ptLocal cls.mPts)
@@ -361,7 +361,7 @@ theorem extrasAre_of (hrep : F.rep₀ = F.repOf (F.coinFiles spec st cap lig))
   rw [hpts] at hP
   exact (F.coinSrc spec st cap lig R ω t l).extra_points (hset R ω) _ hP
 
-/-- **ha's `HFit`**: each rep's rounds have `verifierRows`' sizes (`coinsOf_sizes`), and its extra claims number the
+/-- **`HFit`**: each rep's rounds have `verifierRows`' sizes (`coinsOf_sizes`), and its extra claims number the
 shape's (`ClaimsIs`, `TableSrc.extrasAt_size`), so `verifierRows` returns (`roundSizes_spec`). -/
 theorem hFit_of (hrep : F.rep₀ = F.repOf (F.coinFiles spec st cap lig)) {GS : Flock.RecAlgebra.GfS}
     {gs : Array (Array ℕ × Array ℕ × Array ℕ)} (hst : F.HStruct GS gs)
@@ -379,7 +379,7 @@ theorem hFit_of (hrep : F.rep₀ = F.repOf (F.coinFiles spec st cap lig)) {GS : 
     rw [TableSrc.extrasAt_size _ (hset R ω)]
     rfl
 
-/-- **hf's `CombFolds`**: each rep's comb is `combOf` at its coins and the coins' files' extra claims (`rep_comb`), of
+/-- **`CombFolds`**: each rep's comb is `combOf` at its coins and the coins' files' extra claims (`rep_comb`), of
 `verifierRows`' sizes, so it is the lincheck's fold where that returns 64 elements (`combFolds_of`). -/
 theorem combFolds_at (hrep : F.rep₀ = F.repOf (F.coinFiles spec st cap lig))
     (hfold : ∀ R ω, FoldsOk (st R ω) F.sh) (R : Reg) (ω : L.Ω) (t : List (Cm × (ℐ).Coin))
@@ -388,7 +388,7 @@ theorem combFolds_at (hrep : F.rep₀ = F.repOf (F.coinFiles spec st cap lig))
     (F.rep_extras spec st cap lig hrep R ω t l r)
     (by rw [F.rep_rounds spec st cap lig hrep]; exact coinsOf_sizes CT F.sh _ r) (hfold R ω)
 
-/-- **hf's `Coins`**: each rep's rounds have `verifierRows`' sizes, and those have `verifyRep`'s counts
+/-- **`Coins`**: each rep's rounds have `verifierRows`' sizes, and those have `verifyRep`'s counts
 (`CoinsAgree`). -/
 theorem coins_of (hrep : F.rep₀ = F.repOf (F.coinFiles spec st cap lig))
     (hco : ∀ R ω, CoinsAgree (st R ω) F.sh sch (2 * ((F.x R ω).toStatement regs).regions.length))

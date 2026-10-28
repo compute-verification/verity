@@ -1,5 +1,5 @@
 """`p2-audit-wire/v4` (`benchmarks/pous/p2_v1/wire.py`) against its pinned vectors: every negative transcript gives its pinned
-FINAL, the small end-to-end audit is accepted and rebuilt byte for byte, every hash the spec's §7 pins is the files', and the
+FINAL, the small end-to-end audit is accepted and rebuilt byte for byte, every hash `reference.py` pins is the files', and the
 package's copy of the keys is `vectors.json`'s."""
 from __future__ import annotations
 
@@ -18,6 +18,7 @@ sys.path.insert(0, str(BENCH))
 from p2_v1 import reference as R  # noqa: E402
 from p2_v1 import vectors as V  # noqa: E402
 from p2_v1 import wire as Wi  # noqa: E402
+from verity.core.protocols.pous.verifier import MerkleTree  # noqa: E402
 
 
 def _load(path: Path) -> dict:
@@ -77,12 +78,14 @@ def test_frame_sizes_at_the_deployment_point():
     assert (Wi.OPEN_BYTES, Wi.CHALLENGE_BYTES, Wi.SETUP_ROOT_BYTES, Wi.RECORD_BYTES) == (124, 138, 169, 147)
 
 
-def test_every_spec_pin_is_the_files_and_the_package_keys_are_the_vectors():
+def test_every_reference_pin_is_the_files_and_the_package_keys_are_the_vectors():
+    """`reference.py` pins each file and each width's `vectors.json` entry; the frames' hashes are in the files."""
     maps, audit, negative = (_load(p) for p in (R.VECTORS, R.AUDIT_VECTORS, R.NEGATIVE_VECTORS))
     files = {p.name: p.read_bytes() for p in (R.VECTORS, R.AUDIT_VECTORS, R.NEGATIVE_VECTORS)}
-    spec = V.SPEC.read_text()
-    for name, value in V.pins(maps, audit, negative, files).items():
-        assert value in spec, name
+    pins = V.pins(maps, audit, negative, files)
+    assert [pins[p.name] for p in (R.VECTORS, R.AUDIT_VECTORS, R.NEGATIVE_VECTORS)] == [
+        R.VECTORS_SHA512, R.AUDIT_VECTORS_SHA512, R.NEGATIVE_VECTORS_SHA512]
+    assert {v["w"]: pins[f"entry/{v['id']}"] for v in maps["vectors"]} == R.ENTRY_SHA512
     assert _load(V.KEYS_FIXTURE) == V.keys_fixture(maps, R.VECTORS_SHA512)
 
 
@@ -116,17 +119,17 @@ def _setup_with_block(small, setup, i, block):
     salt, bps = bytes.fromhex(small["setup_salt"]), V.SMALL.blocks_per_segment
     blocks = [bytes.fromhex(b) for b in small["blocks"]]
     blocks[i] = block
-    root = R.root([R.leaf(salt, j // bps, j % bps, b) for j, b in enumerate(blocks)])
+    root = MerkleTree([R.leaf(salt, j // bps, j % bps, b) for j, b in enumerate(blocks)]).root
     return Wi.setup_messages(small["manifest"].encode(), bytes.fromhex(small["w_commitment"]), salt, blocks, root)
 
 
 def test_a_setup_salt_of_the_wrong_length_is_malformed():
-    """A body outside its type's length is code 1 (spec §4's table), before any binding is compared."""
+    """A body outside its type's length is code 1, before any binding is compared."""
     small, setup, audit = _small_session()
     for body in (setup[1][10:] + b"\x00", setup[1][10:-1]):
         assert _verify([setup[0], Wi.envelope(Wi.SETUP_SALT, body), *setup[2:], *audit], small) == (False, 1, 0)
 def test_several_setup_faults_report_the_first_in_1_2_3_5_precedence():
-    """Spec §4: "the same 1, 2, 3, 5 precedence applies if one setup transcript has multiple faults", whatever the frame
+    """The same 1, 2, 3, 5 precedence applies if one setup transcript has several faults, whatever the frame
     order: a binding mismatch (2) in SETUP_SALT or a SETUP_BLOCK before a malformed later frame (1) is code 1, and an
     out-of-profile block (5) with a wrong root (3) is code 3."""
     small, setup, audit = _small_session()
@@ -144,7 +147,7 @@ def test_several_setup_faults_report_the_first_in_1_2_3_5_precedence():
     assert _verify([*setup[:2], Wi.envelope(Wi.SETUP_BLOCK, setup[2][10:-8] + wide), *setup[3:-1], wrong_root, *audit],
                    small) == (False, 3, 0)
 def test_a_public_setup_is_decoded_back_to_the_committed_w():
-    """Spec §4: the verifier decodes the stream and checks the reconstructed W commitment: a block that authenticates but
+    """The verifier decodes the stream and checks the reconstructed W commitment: a block that authenticates but
     decodes outside the payload profile is code 5, and one that decodes to another payload is code 3."""
     small, setup, audit = _small_session()
     params = V.SMALL
@@ -156,7 +159,7 @@ def test_a_public_setup_is_decoded_back_to_the_committed_w():
 
 
 def test_a_private_setup_checks_the_declared_root_against_the_verifier_s_own():
-    """Spec §4: in private setup the verifier constructs the root itself from W and accepts SETUP_ROOT only when it is
+    """In private setup the verifier constructs the root itself from W and accepts SETUP_ROOT only when it is
     that root; a disagreeing root is code 3 before the epoch is checked.  The verifier never trusts the declared one."""
     small, setup, audit = _small_session()
     root = bytes.fromhex(small["verification_root"])
@@ -169,7 +172,7 @@ def test_a_private_setup_checks_the_declared_root_against_the_verifier_s_own():
 
 
 def test_seen_audit_ids_are_required_and_persist_across_audits():
-    """Spec §4: the verifier persists used `(epoch_id, audit_id)` pairs across audits and rejects reuse before round 0."""
+    """The verifier persists used `(epoch_id, audit_id)` pairs across audits and rejects reuse before round 0."""
     small, setup, audit = _small_session()
     with pytest.raises(TypeError):
         Wi.verify_audit([*setup, *audit], small["elapsed_ns"], verifier_source=bytes.fromhex(small["audit_source"]))
@@ -179,7 +182,7 @@ def test_seen_audit_ids_are_required_and_persist_across_audits():
 
 
 def test_flag_bit_1_compares_each_payload_with_the_verifier_held_w():
-    """Spec §4: flag bit 1 compares the decoded payload with verifier-held expected bytes: the true W passes, a W differing
+    """Flag bit 1 compares the decoded payload with verifier-held expected bytes: the true W passes, a W differing
     in a challenged payload is code 5 with the decode flags set, and a verifier holding no W cannot ask for it."""
     small, setup, audit = _small_session()
     o = 10 + Wi.D + Wi.S
@@ -198,7 +201,7 @@ def test_flag_bit_1_compares_each_payload_with_the_verifier_held_w():
 
 
 def test_a_manifest_json_cannot_hold_and_an_unrepresentable_elapsed_time_is_refused():
-    """A manifest with `1e999` (no float, spec §4) or a lone surrogate (not UTF-8) is malformed code 1, not a crash; an
+    """A manifest with `1e999` (no float) or a lone surrogate (not UTF-8) is malformed code 1, not a crash; an
     elapsed time outside a record's u64 is the verifier's own error, refused before any FINAL."""
     small, setup, audit = _small_session()
     commitment = setup[0][-Wi.D:]

@@ -32,6 +32,9 @@ verifier); the code is what the verifier of record establishes, which `n2` reads
   profile's row, and its record digest under the certifier's salt the certificate's signed digest;
 - ``NetworkServedCounts_v1``: N2's served counts on a served link (`served.reference`);
 - ``audit.VIOLATION``: N2's audit of both records (`audit.Audit`, the Python reference of the Lean check of record);
+- ``Issuer.refused``: no check's but the certifier's: it certifies no record whose status isn't complete
+  (`certificate.Issuer`, which lists the link-window in `refused`), so the window has no certified record and the
+  link stops there;
 - pending checks, by the names their drafts give them: ``NetworkAdvisedCounts_v1`` (N2-ADVICE's advised counts on an
   advised link, `LinkWindows.advised_check`: the egress head's counts the release of the advice's frames, the ingress
   head's the request frames the advice needs; ``.view`` when the advice is malformed, doesn't cover the window or its
@@ -76,7 +79,7 @@ what it brought), each window's arriving whole so their request cells are the ho
 on every bucket row on the verifier's lanes from its advice and the warden's release (`request_tie`), whose verdict is
 the tie source's for `N2_LINK` (`n2_advice`). Without a frame size, the tie is the stand-in on the prompt lengths.
 
-`Negative.waits` names the interfaces a negative waits on; one with none runs today. `table` renders the registry.
+`Negative.waits` names the interfaces a negative waits on; one with none runs. `table` renders the registry.
 """
 from __future__ import annotations
 
@@ -136,6 +139,7 @@ TIE_PARTS = {"drop": "content", "token": "content", "frame": "cells_root", "advi
 #: upstream (`tie_suite`): extra's one event past a response's end is a data cell no committed output is
 TIE_RUN_PARTS = {"extra": "content"}
 CHECKS_TODAY = (HEAD, SERVED, "audit")  # the checks `n2` runs; every other code's check is pending
+ISSUER_REFUSED = "Issuer.refused"
 ENDS = ("egress", "ingress")
 
 
@@ -585,7 +589,7 @@ def commit_edit(edit: Callable) -> Callable[[Path, Path, Path], Path]:
 class Negative:
     """One tampering: its `family` (the goal's four: `io`, `advice`, `token`, `circuit`), what it `tampers` (`plan`,
     `certified`, `frames`, `advice` or `commit`), the `check` that must refuse it and its refusal `code` (`served`: the code on a
-    served link where it differs), the interfaces it `waits` on (each by what it is; none: it runs today), and `make`,
+    served link where it differs), the interfaces it `waits` on (each by what it is; none: it runs), and `make`,
     the pure function that writes the tampered copy."""
 
     name: str
@@ -608,9 +612,9 @@ class Negative:
 
 
 NEGATIVES = {n.name: n for n in [
-    Negative("late", "io", "plan", "the shim holds a window-0 session past every sync; the certifier faults the window",
-             "N2's head check (the record's status)", f"{HEAD}.fields", shim("late"),
-             also=("audit.status:coverage-never-established",)),
+    Negative("late", "io", "plan", "the shim holds a window-0 session past every sync; the certifier faults the window "
+             "and certifies none of it", "the certifier (it certifies no incomplete status)", ISSUER_REFUSED,
+             shim("late")),
     Negative("extra", "io", "plan", "the shim writes one event more than the endpoint sent; certified",
              "N2's counts against the profile", f"{HEAD}.counts", shim("extra"), served=SERVED),
     Negative("drop", "io", "plan", "the shim drops the first event of a response; certified",
@@ -676,7 +680,7 @@ def table(markdown: bool = True) -> str:
     for n in NEGATIVES.values():
         code = f"{q}{n.code}{q}" + (f" (served: {q}{n.served}{q})" if n.served else "")
         rows.append((f"{q}{n.name}{q}", n.family, n.tampers, n.check, code,
-                     f"pending: {', '.join(n.waits)}" if n.waits else "runs today"))
+                     f"pending: {', '.join(n.waits)}" if n.waits else "runs"))
     if not markdown:
         return "\n".join("\t".join(r) for r in rows)
     out = ["| " + " | ".join(rows[0]) + " |", "|" + "---|" * len(rows[0])]
@@ -1533,7 +1537,8 @@ def n2(run: Path, clock=time.monotonic) -> dict:
     """N2's verdict on every link-window of the run's `certified.jsonl`, through the proof system's stream as
     `certifier_serve.check` takes it (Selection All, the Lean audit, `unproved_outcome`: nothing is proved, so the
     verdict reads the opening) without asking the certifier's salts, and the link's network verdict; each refused
-    link-window's codes (`codes`), and their union."""
+    link-window's codes (`codes`), and their union. The link stops at the first window without both certified records,
+    whose code is `ISSUER_REFUSED` when the certifier listed it as refused, else ``no-certified-record``."""
     lw, plan = link(run)
     syncs = [ClockSync(d, Fraction(r)) for d, r in plan["syncs"]]
     st = lw.stream(budget=plan["windows"], delta=cs.DELTA, challenger="negatives", coins=cs._no_coins, clock=clock)
@@ -1542,7 +1547,8 @@ def n2(run: Path, clock=time.monotonic) -> dict:
     for w in range(plan["windows"]):
         pair = certified.get((Direction.EGRESS, w)), certified.get((Direction.INGRESS, w))
         if None in pair:
-            rows.append({"window": w, "accepted": False, "codes": ["no-certified-record"]})
+            code = ISSUER_REFUSED if any(r[2] == w for r in refused) else "no-certified-record"
+            rows.append({"window": w, "accepted": False, "codes": [code]})
             break
         opening = lw.commit(w, *pair)
         reg = lw.register(st, lw.registration(opening, previous))

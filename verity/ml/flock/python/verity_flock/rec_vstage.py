@@ -1,4 +1,4 @@
-"""V*'s statements over one inner session (hiding model architectures, lane rec-v0): each Ligerito level's `RecOpen`
+"""V*'s statements over one inner session (hiding model architectures): each Ligerito level's `RecOpen`
 statement (`verity_flock.rec_outer`) and the algebra's `InnerRepCheck` (`verity_flock.rec_residuals`), staged from the inner
 session's directory (`verity_flock.rec_live.Proxy.write`: ``public.json``, ``private.json``, ``session/``). The algebra is
 staged as its parts (`rec_residuals.parts`, ``alg/p<j>/``), each within --zk's coin schedule, and holds when every part does.
@@ -94,8 +94,7 @@ VERIFIER_FILES = ("circuit.txt", "pub.bin", "program.json", "partition.json", "r
 
 def _without_gc(f):
     """``f`` with CPython's cyclic collector paused: staging holds tens of millions of acyclic forms (`forms.L`), and the
-    collector's passes over them were about a third of the algebra's and L0's staging at K = N = 64, at the same peak memory
-    (run r20261024-062524-9b83)."""
+    collector's passes over them were about a third of the algebra's and L0's staging at K = N = 64, at the same peak memory."""
     @functools.wraps(f)
     def run(*args, **kwargs):
         was = gc.isenabled()

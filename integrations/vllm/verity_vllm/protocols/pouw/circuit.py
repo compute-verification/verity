@@ -39,7 +39,7 @@ from verity.core.protocols.pouw.protocol import tagged
 
 from verity.ml.circuits import partition_object as PO
 from verity_vllm.query.manifest.format import spec_family
-from verity.ml.circuits.evaluate import evaluate_region
+from verity.ml.circuits.evaluation.reference import evaluate_region
 
 #: The model Program's families for one row of a PoUW site: its served output, checked by the replay against the call; the
 #: second is a biased linear's row whose bias add was the pre-bias output's only reader (`program.registry.pouw_rows`)

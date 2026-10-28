@@ -166,17 +166,17 @@ def parts_missing(com: Any, manifest: Mapping[str, Any], hidden_required: bool |
     return [p for p in want if not any(h == p or (p == "hidden_m1" and h.startswith(p)) for h in have)]
 
 
-def target_of(model: Any = None) -> dict[str, Any]:
+def target_of(model: Any = None, async_scheduling: bool = False) -> dict[str, Any]:
     """What the compiler's φ reads of the serving device: its target profile (`TargetProfile.from_device`) with, given the served
     ``model``, the int8 scope its layers run read back from them (`kernel_readback.int8_exact_of`: ``linears`` under
     ``--precision verity_int8``, which predict's Build of an exact-int8 checkpoint requires; a mixed scope is refused), and the
-    execution, bi-eager where vLLM runs batch-invariant (`vllm.envs.VLLM_BATCH_INVARIANT`)."""
+    execution, bi-eager where vLLM runs batch-invariant (`vllm.envs.VLLM_BATCH_INVARIANT`). The profile declares ``async_scheduling`` (LAG 1) only under it."""
     import vllm.envs as envs
 
     from verity_vllm.program.frontend.kernel_readback import int8_exact_of
     from verity_vllm.program.frontend.target_profile import TargetProfile
 
-    target = TargetProfile.from_device()
+    target = TargetProfile.from_device().with_overrides(**({"async_scheduling": True} if async_scheduling else {}))
     if model is not None:
         target = target.with_overrides(int8_exact=int8_exact_of(model))
     return {"target": target.to_json(), "execution": "bi-eager" if envs.VLLM_BATCH_INVARIANT else "eager"}
@@ -245,6 +245,7 @@ def committer(opts: Any, llm: Any, label: str = "serve-openai") -> Any:
     com.arena_sizing_record = com.size_arena({"batch": opts.max_num_seqs, "max_prompt": tokens, "max_new": 1,
                                               "max_num_batched_tokens": tokens, "max_model_len": opts.max_model_len},
                                              hidden_m1=hidden_m1)
+    com.gpu_ext_warm_s = warm_gpu_ext(com)
     if getattr(com, "windowed", False):
         com.window_ring = com.enable_windows(com.arena_sizing_record)     # windowed staging's ring replaces the per-step blocks
     if opts.retention.retain == "device":
@@ -639,6 +640,17 @@ def warm_pool(com: Any, gb: float, clock: Callable[[], float] = time.perf_counte
     t0 = clock()
     made = pool.reserve([WARM_BLOCK] * n)
     return {"gb": round(made / GB, 1), "blocks": n, "seconds": round(clock() - t0, 2)}
+
+
+def warm_gpu_ext(com: Any, clock: Callable[[], float] = time.perf_counter) -> float | None:
+    """The seconds the committer took to build and load its GPU tree's extension before serving; None when its worker never
+    loads it (neither windowed nor ``--gpu-tree``). Left to the worker's first step, a cold build (about 30 s) keeps the worker
+    from handing any windowed staging slot back, and the engine loop waits on the ring once it has filled it."""
+    if not (getattr(com, "windowed", False) or getattr(com, "gpu_tree", False)):
+        return None
+    t0 = clock()
+    com._gpu_ext_load()
+    return round(clock() - t0, 2)
 
 
 def extras_of(com: Any, rc: Any) -> Any:

@@ -59,6 +59,46 @@ theorem bound {j k t : ℕ} (hj : j < c.outPorts.size) (hk : k < (c.ports.getD (
 
 end OutRowsS
 
+/-- **Output rows beside input rows of any kind, past them output ports without a row**: one output row per run of
+`out_row_ports`, each run one output port, each row after the input rows and unsegmented (`PadRow`). The output ports
+past the runs have no row: META `pinned_outputs`' (`HmRow.pinnedCount`). With every output port in a run it is
+`OutRowsS` (`OutRowsS.toP`, `OutRowsP.toS`). -/
+def OutRowsP (c : Circuit) : Prop :=
+  c.outRowPorts = Array.replicate c.outRowPorts.size 1 ∧
+    ∀ j < c.outRowPorts.size, HmOut.nIn c + j < c.ports.size ∧ PadRow c.ports[HmOut.nIn c + j]!
+
+theorem OutRowsS.toP {c : Circuit} (h : OutRowsS c) : OutRowsP c :=
+  ⟨by rw [h.size]; exact h.1, fun j hj => h.2 j (by rw [← h.size]; exact hj)⟩
+
+theorem OutRowsP.toS {c : Circuit} (h : OutRowsP c) (hs : c.outRowPorts.size = c.outPorts.size) : OutRowsS c :=
+  ⟨by rw [← hs]; exact h.1, fun j hj => h.2 j (by rw [hs]; exact hj)⟩
+
+namespace OutRowsP
+
+variable {c : Circuit} (h : OutRowsP c)
+include h
+
+theorem segs {j : ℕ} (hj : j < c.outRowPorts.size) : (c.ports.getD (HmOut.nIn c + j) default).segs = none := by
+  rw [← getElem!_eq_getD']
+  exact (h.2 j hj).2.1
+
+theorem bound {j k t : ℕ} (hj : j < c.outRowPorts.size) (hk : k < (c.ports.getD (HmOut.nIn c + j) default).words)
+    (ht : t < 16) :
+    HmOut.nIn c + j < c.ports.size ∧ 2 * k + t / 8 < 2 * c.ports[HmOut.nIn c + j]!.words ∧ t % 8 < 8 := by
+  rw [getElem!_eq_getD']
+  exact ⟨(h.2 j hj).1, by omega, by omega⟩
+
+end OutRowsP
+
+/-- `outCopies` over the output rows (`out_row_ports`' runs) rather than the output ports. -/
+def outCopiesR (c : Circuit) : List (ℕ × ℕ) :=
+  (List.range c.g).flatMap fun g => (List.range c.outRowPorts.size).flatMap fun j =>
+    (List.range (c.ports.getD (HmOut.nIn c + j) default).words).flatMap fun k =>
+      (List.range 16).map fun t => (deltaMsgCol c g (HmOut.nIn c + j) (2 * k + t / 8) (t % 8), outSrc c g j k t)
+
+theorem outPairs_eqR (c : Circuit) : outPairs c = (outCopiesR c).flatMap pair2 := by
+  simp only [outPairs, outCopiesR, List.flatMap_assoc, List.flatMap_map, pair2]
+
 /-- Rows that fit give `OutRowsS`. -/
 theorem OutRowsF.outRowsS {c : Circuit} (h : OutRowsF c) : OutRowsS c :=
   ⟨h.2.1, fun j hj => ⟨h.2.2 j hj, padRow_of_fit (h.fit (h.2.2 j hj))⟩⟩
@@ -156,17 +196,17 @@ end Pos
 
 /-! ## `outPairs` at an output row's message bit -/
 
-section Out
+section OutP
 
-variable {c : Circuit} (R : RowRanges c) (hrows : OutRowsS c)
+variable {c : Circuit} (R : RowRanges c) (hrows : OutRowsP c)
 include R hrows
 
 /-- **`outPairs`' one copy at output row `j`'s message bit for word `k`, bit `t`**: from `outSrc`. -/
-theorem outCopies_filterF {g j k t : ℕ} (hg : g < c.g) (hj : j < c.outPorts.size)
+theorem outCopies_filterP {g j k t : ℕ} (hg : g < c.g) (hj : j < c.outRowPorts.size)
     (hk : k < (c.ports.getD (HmOut.nIn c + j) default).words) (ht : t < 16) :
-    (outCopies c).filter (fun e => e.1 = deltaMsgCol c g (HmOut.nIn c + j) (2 * k + t / 8) (t % 8)) =
+    (outCopiesR c).filter (fun e => e.1 = deltaMsgCol c g (HmOut.nIn c + j) (2 * k + t / 8) (t % 8)) =
       [(deltaMsgCol c g (HmOut.nIn c + j) (2 * k + t / 8) (t % 8), outSrc c g j k t)] := by
-  have hdec : ∀ g' < c.g, ∀ j' < c.outPorts.size, ∀ k' < (c.ports.getD (HmOut.nIn c + j') default).words,
+  have hdec : ∀ g' < c.g, ∀ j' < c.outRowPorts.size, ∀ k' < (c.ports.getD (HmOut.nIn c + j') default).words,
       ∀ t' < 16, deltaMsgCol c g' (HmOut.nIn c + j') (2 * k' + t' / 8) (t' % 8) =
         deltaMsgCol c g (HmOut.nIn c + j) (2 * k + t / 8) (t % 8) → g' = g ∧ j' = j ∧ k' = k ∧ t' = t := by
     intro g' hg' j' hj' k' hk' t' ht' he
@@ -175,7 +215,7 @@ theorem outCopies_filterF {g j k t : ℕ} (hg : g < c.g) (hj : j < c.outPorts.si
     obtain ⟨h1, h2, h3, h4⟩ := deltaMsgCol_injF R hg' hp' (hrows.2 j' hj').2 hb' ht'' hg hp (hrows.2 j hj).2 hb
       ht''' he
     exact ⟨h1, by omega, by omega, by omega⟩
-  unfold outCopies
+  unfold outCopiesR
   rw [filter_flatMap2_single _ _ (fun g j => (List.range (c.ports.getD (HmOut.nIn c + j) default).words).flatMap
       fun k => (List.range 16).map fun t => (deltaMsgCol c g (HmOut.nIn c + j) (2 * k + t / 8) (t % 8), outSrc c g j k t))
       _ g j hg hj fun g' hg' j' hj' hne e he => ?_]
@@ -198,13 +238,28 @@ theorem outCopies_filterF {g j k t : ℕ} (hg : g < c.g) (hj : j < c.outPorts.si
     exact fun h => hne ⟨(hdec g' hg' j' hj' k' hk' t' ht' h).1, (hdec g' hg' j' hj' k' hk' t' ht' h).2.1⟩
 
 /-- **`outPairs`' pairs at output row `j`'s message bit for word `k`, bit `t`**: one copy from `outSrc`. -/
-theorem outPairs_countF {g j k t : ℕ} (hg : g < c.g) (hj : j < c.outPorts.size)
+theorem outPairs_countP {g j k t : ℕ} (hg : g < c.g) (hj : j < c.outRowPorts.size)
     (hk : k < (c.ports.getD (HmOut.nIn c + j) default).words) (ht : t < 16) (i : ℕ) :
     (outPairs c).count (deltaMsgCol c g (HmOut.nIn c + j) (2 * k + t / 8) (t % 8), i) =
       (if i = deltaMsgCol c g (HmOut.nIn c + j) (2 * k + t / 8) (t % 8) then 1 else 0) +
         (if i = outSrc c g j k t then 1 else 0) := by
-  rw [outPairs_eq hrows.size, count_pair2, outCopies_filterF R hrows hg hj hk ht]
+  rw [outPairs_eqR, count_pair2, outCopies_filterP R hrows hg hj hk ht]
   simp only [List.map_cons, List.map_nil, List.sum_cons, List.sum_nil, Nat.add_zero]
+
+end OutP
+
+section Out
+
+variable {c : Circuit} (R : RowRanges c) (hrows : OutRowsS c)
+include R hrows
+
+/-- `outPairs_countP` at one output row per output port. -/
+theorem outPairs_countF {g j k t : ℕ} (hg : g < c.g) (hj : j < c.outPorts.size)
+    (hk : k < (c.ports.getD (HmOut.nIn c + j) default).words) (ht : t < 16) (i : ℕ) :
+    (outPairs c).count (deltaMsgCol c g (HmOut.nIn c + j) (2 * k + t / 8) (t % 8), i) =
+      (if i = deltaMsgCol c g (HmOut.nIn c + j) (2 * k + t / 8) (t % 8) then 1 else 0) +
+        (if i = outSrc c g j k t then 1 else 0) :=
+  outPairs_countP R hrows.toP hg (by rw [hrows.size]; exact hj) hk ht i
 
 end Out
 
@@ -254,18 +309,18 @@ end Twin
 
 /-! ## The hidden statement and its flat twin, with unsegmented output rows -/
 
-section Hidden
+section HiddenP
 
 variable {tags : Tags} {st : Stmt} (L : Layout st) (L0 : Layout (flatTwin st)) (F0 : Aliased.UnitFacts tags (flatTwin st))
-  (hda : st.da = (HmRow.delta st.c st.pin).1 ++ (outPairs st.c).toArray) (hrows : OutRowsS st.c)
+  (hda : st.da = (HmRow.delta st.c st.pin).1 ++ (outPairs st.c).toArray) (hrows : OutRowsP st.c)
 include L L0 F0 hda hrows
 
 /-- **An output row's message bit holds its copy** in every block of a satisfying witness of the hidden statement, with
 unsegmented output rows and input rows of any kind: at template instance `g`, output row `j`'s word `k`, bit `t`, what the
 witness holds at `outSrc`. -/
-theorem msg_copyF {regs : List (Model.Region st.c.kLog (st.m - st.c.kLog))} {z : Model.Witness (L.model regs).m}
+theorem msg_copyP {regs : List (Model.Region st.c.kLog (st.m - st.c.kLog))} {z : Model.Witness (L.model regs).m}
     (hz : (L.model regs).Satisfies z) (o : Fin (2 ^ (L.model regs).nbl)) {g j k t : ℕ} (hg : g < st.c.g)
-    (hj : j < st.c.outPorts.size) (hk : k < (st.c.ports.getD (HmOut.nIn st.c + j) default).words) (ht : t < 16) :
+    (hj : j < st.c.outRowPorts.size) (hk : k < (st.c.ports.getD (HmOut.nIn st.c + j) default).words) (ht : t < 16) :
     blockBit (L.model regs) z o (deltaMsgCol st.c g (HmOut.nIn st.c + j) (2 * k + t / 8) (t % 8)) =
       blockBit (L.model regs) z o (outSrc st.c g j k t) := by
   have R : RowRanges st.c := RowRanges.ofL (st := flatTwin st) L0 F0.parse F0.check
@@ -284,14 +339,14 @@ theorem msg_copyF {regs : List (Model.Region st.c.kLog (st.m - st.c.kLog))} {z :
         (((if i = deltaMsgCol st.c g (HmOut.nIn st.c + j) (2 * k + t / 8) (t % 8) then 1 else 0) +
           (if i = outSrc st.c g j k t then 1 else 0) : ℕ) : ZMod 2) := by
       rw [deltaEntry_eq_count, hda, Array.toList_append, List.count_append, List.toList_toArray,
-        delta_flat_any _ _ F0.parse.typed, hfc, Nat.zero_add, outPairs_countF R hrows hg hj hk ht]
+        delta_flat_any _ _ F0.parse.typed, hfc, Nat.zero_add, outPairs_countP R hrows hg hj hk ht]
     exact ⟨e, by rw [L.delta_b]; exact e⟩
   exact block_of_rows hz o hx fun i => inBit_rows (st := st) R hn hat hl hself hx hδ i
 
 /-- **A satisfying witness of the hidden statement satisfies its flat twin**, with unsegmented output rows and input rows of
 any kind: the rows agree past `outPairs`' message bits (`deltaEntry_append_out`), and there the twin's row is a self row
 (`flat_selfF`). -/
-theorem sat_flatF {regs : List (Model.Region st.c.kLog (st.m - st.c.kLog))} {z : Model.Witness (L.model regs).m}
+theorem sat_flatP {regs : List (Model.Region st.c.kLog (st.m - st.c.kLog))} {z : Model.Witness (L.model regs).m}
     (hz : (L.model regs).Satisfies z) : (L0.model regs).Satisfies z := by
   have R : RowRanges st.c := RowRanges.ofL (st := flatTwin st) L0 F0.parse F0.check
   refine ⟨fun o i => ?_, hz.2.1, hz.2.2⟩
@@ -301,7 +356,6 @@ theorem sat_flatF {regs : List (Model.Region st.c.kLog (st.m - st.c.kLog))} {z :
     obtain ⟨g, hg, j, hj, k, hk, t, ht, hq⟩ := hq
     have hq1 : q.1 = deltaMsgCol st.c g (HmOut.nIn st.c + j) (2 * k + t / 8) (t % 8) := by
       rcases hq with rfl | rfl <;> rfl
-    rw [hrows.size] at hj
     obtain ⟨hp, hb, ht8⟩ := hrows.bound hj hk ht
     have hx := deltaMsgCol_ltF R (b := 2 * k + t / 8) hg hp (hrows.segs hj) ht8
     have hie : i = ⟨deltaMsgCol st.c g (HmOut.nIn st.c + j) (2 * k + t / 8) (t % 8), hx⟩ :=
@@ -342,6 +396,27 @@ theorem sat_flatF {regs : List (Model.Region st.c.kLog (st.m - st.c.kLog))} {z :
       rfl
     rw [eA, eB]
     exact hz.1 o i
+
+end HiddenP
+
+section Hidden
+
+variable {tags : Tags} {st : Stmt} (L : Layout st) (L0 : Layout (flatTwin st)) (F0 : Aliased.UnitFacts tags (flatTwin st))
+  (hda : st.da = (HmRow.delta st.c st.pin).1 ++ (outPairs st.c).toArray) (hrows : OutRowsS st.c)
+include L L0 F0 hda hrows
+
+/-- `msg_copyP` at one output row per output port. -/
+theorem msg_copyF {regs : List (Model.Region st.c.kLog (st.m - st.c.kLog))} {z : Model.Witness (L.model regs).m}
+    (hz : (L.model regs).Satisfies z) (o : Fin (2 ^ (L.model regs).nbl)) {g j k t : ℕ} (hg : g < st.c.g)
+    (hj : j < st.c.outPorts.size) (hk : k < (st.c.ports.getD (HmOut.nIn st.c + j) default).words) (ht : t < 16) :
+    blockBit (L.model regs) z o (deltaMsgCol st.c g (HmOut.nIn st.c + j) (2 * k + t / 8) (t % 8)) =
+      blockBit (L.model regs) z o (outSrc st.c g j k t) :=
+  msg_copyP L L0 F0 hda hrows.toP hz o hg (by rw [hrows.size]; exact hj) hk ht
+
+/-- `sat_flatP` at one output row per output port. -/
+theorem sat_flatF {regs : List (Model.Region st.c.kLog (st.m - st.c.kLog))} {z : Model.Witness (L.model regs).m}
+    (hz : (L.model regs).Satisfies z) : (L0.model regs).Satisfies z :=
+  sat_flatP L L0 F0 hda hrows.toP hz
 
 end Hidden
 

@@ -195,7 +195,7 @@ def commit_served(statics: Mapping[str, int], by_step: Mapping[int, Sequence[tup
 
 
 @dataclass
-class Ledger:
+class LiveRequest:
     """One request as served: its ids, the HTTP id -> engine id map, its ingress record and its stream."""
 
     http_id: str
@@ -220,8 +220,8 @@ class _Closed:
     window: int
     com: Any
     step_t: dict[int, float]
-    ledgers: Mapping[str, Ledger]
-    finished: list[Ledger]
+    ledgers: Mapping[str, LiveRequest]
+    finished: list[LiveRequest]
     open_s: float
     off_loop: bool = False
     on_loop: dict[str, float] = field(default_factory=dict)    # off the loop: the close's phases on the loop
@@ -239,7 +239,7 @@ def _lap(laps: list[tuple[str, float]], clock: Callable[[], float], name: str) -
 
 
 class CommitWindows:
-    """The committer's windows over a serving engine, and every request's `Ledger`. ``committer`` is a
+    """The committer's windows over a serving engine, and every request's `LiveRequest`. ``committer`` is a
     `NativeHostCommitter` with a `served_record.SamplerInputsSource` attached (or its offline stand-in in the tests:
     ``reset``, ``install``, ``uninstall``, ``finalize``, ``_layouts``, ``_step_index``, ``sources``, and to close off the loop
     ``enable_window_views`` and ``detach``, whose view has ``wait_absorbed`` and ``finalize``); ``eos_ids`` and
@@ -275,7 +275,7 @@ class CommitWindows:
         self.record = Record(known=self.known)
         self.window, self.open_s, self.is_open = -1, 0.0, False
         self.step_t: dict[int, float] = {}               # the open window's committed steps -> when their engine step ended
-        self.ledgers: dict[str, Ledger] = {}
+        self.ledgers: dict[str, LiveRequest] = {}
         self.records: list[dict[str, Any]] = []
         self.seals: list[dict[str, Any]] = []            # seals.jsonl's lines, appended on the sealer's thread
         self.checked: list[dict[str, Any]] = []
@@ -291,7 +291,7 @@ class CommitWindows:
         """``adm`` a `verity_vllm.pipeline.serve_openai.Admission`."""
         self.known[adm.engine_id] = adm.http_id
         self.arrivals.setdefault(adm.engine_id, len(self.arrivals))
-        self.ledgers[adm.engine_id] = Ledger(adm.http_id, adm.engine_id, list(adm.prompt_ids), dict(adm.ingress),
+        self.ledgers[adm.engine_id] = LiveRequest(adm.http_id, adm.engine_id, list(adm.prompt_ids), dict(adm.ingress),
                                              getattr(adm, "user", None), getattr(adm, "release", None), len(self.known) - 1,
                                              times=dict(getattr(adm, "times", None) or {}))
         self.names[adm.engine_id] = self.ledgers[adm.engine_id].user or adm.http_id
@@ -324,8 +324,12 @@ class CommitWindows:
     def before_step(self, live: Iterable[str] = ()) -> None:
         """``live``: the engine ids the next step may run. With ``request_cap``, the open window closes before a step that
         would bring its distinct requests past the cap; the engine loop holds ``live`` to the cap, so the next window
-        opens within it."""
+        opens within it. A window that holds no step yet counts no request: under async scheduling the call that only
+        returns a burst's last outputs opens one that runs nothing, and the next burst serves in it rather than closing it
+        empty."""
         live = set(live)
+        if self.is_open and not int(self.com._step_index):
+            self.in_window = set()
         if self.is_open and (int(self.com._step_index) >= self.window_steps
                              or (self.window_bytes and committed_bytes(self.com) >= self.window_bytes)
                              or (self.request_cap and len(self.in_window | live) > self.request_cap)):
@@ -660,7 +664,7 @@ class CommitWindows:
         else:
             self.sealer.submit(run, int(rec.get("committed_bytes") or 0))
 
-    def check(self, led: Ledger) -> dict[str, Any]:
+    def check(self, led: LiveRequest) -> dict[str, Any]:
         """``led``'s record against what was served: `Record.check` with the seed it carried and its finish."""
         params = led.ingress.get("params") or {}
         finish = None if led.finish is None else {**led.finish, "max_tokens": params.get("max_tokens"),
@@ -684,11 +688,11 @@ class CommitWindows:
                                      "step_root": root, "t_end": c.step_t.get(s), "rows": [list(r) for r in rows.get(s, [])],
                                      **own}) + "\n")
 
-    def _pop_finished(self) -> list[Ledger]:
+    def _pop_finished(self) -> list[LiveRequest]:
         """The loop's: the ledgers finished by the close, out of the open ones (their requests ran no step after it)."""
         return [self.ledgers.pop(e) for e in [e for e, led in self.ledgers.items() if led.finished]]
 
-    def _check_finished(self, finished: Sequence[Ledger]) -> None:
+    def _check_finished(self, finished: Sequence[LiveRequest]) -> None:
         """Each of ``finished`` checked against the record its window's readback completed, a line of requests.jsonl, and its
         engine id and ``user`` a line of `REQUEST_USERS`."""
         with open(self.out / "requests.jsonl", "a") as fh, open(self.out / REQUEST_USERS, "a") as fu:

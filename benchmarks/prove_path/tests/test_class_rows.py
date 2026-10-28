@@ -1,4 +1,4 @@
-"""class_rows (V3c): the class circuit's rows by what fills them, on TINY's class circuit.
+"""class_rows: the class circuit's rows by what fills them, on TINY's class circuit.
 
 * no input row of any unit is free: each is wired, a registered read of the weights or of the network certifier's scan
   state rows, a table root or an opening;

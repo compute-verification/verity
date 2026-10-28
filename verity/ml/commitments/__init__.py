@@ -18,7 +18,7 @@ verifiers check the trees natively.  Both schemes have an opt-in SHA-512 variant
 SP1 kernel does not mirror it.  ``hm96`` is the hiding leaf rule over
 a SHA-256 or SHA-512 leaf digest (``hm96-sha256/v1``, ``hm96-sha512/v1``: Halevi–Micali, a stored salt per leaf;
 statistically hiding given uniform salts, with the pinned key except for a 2^-64 fraction of keys; binding under the hash's
-collision resistance), configured over ``vllm_v1`` by ``hm96.Hm96Sha256`` and ``hm96.Hm96Sha512``.
+collision resistance); frame-v3 names it in a tree leaf's schema (``hm96-sha512/row/v2``).
 
 These establish that the values supplied to a check are the values previously bound.  They say nothing about the
 relation between those values; that is a verification obligation (``verity_sp1.proofs``) a backend establishes.

@@ -6,6 +6,7 @@ import NciCheck.DescLiveness
 import NciCheck.DescFuzz
 import NciCheck.Baseline
 import NciCheck.BaselineDifftest
+import NciCheck.Protocol
 
 /-!
 # The NCI policy's check
@@ -15,7 +16,7 @@ isolation units meets `Nci.Complies Γ α` (`Security/Definitions/Nci.lean`), fo
 cost of the descriptor: `NciCheck.Desc.check`, one summary per Definition, never a walk over the unrolled circuit
 (AGENTS.md "Design rules"), then each θ entry's provenance, registered public data that the first record of the
 deployment's registration log registers and never an earlier run's output, against the service's log
-(`NciCheck.Baseline`, CMP-66; `NciCheck.BaselineDifftest` holds it to the Python reference).
+(`NciCheck.Baseline`; `NciCheck.BaselineDifftest` holds it to the Python reference).
 `NciCheck.check` is the same check gate by gate, with the input format and its mapping to the definition's circuit in
 `NciCheck.Check`'s docstring, kept as the reference: `NciCheck.Difftest` holds it to the Python reference, and
 `NciCheck.DescDifftest` holds `NciCheck.Desc` to it and to the Python reference, `NciCheck.DescLiveness` to it on
@@ -23,6 +24,9 @@ Program shapes past anything `NciCheck.Desc` walks one by one, and `NciCheck.Des
 statements their agreement rests on, and the agreement itself. Code: it reads the Program with C-Flock's
 decoder (`Flock.Program`) and imports nothing else but Lean core. It stays experimental until its agreement with the
 definition is proved.
+
+`NciCheck.Protocol` is the policy's check as a core protocol, `verity/inference-only/v0` (the `inference-only` exe),
+on the core interface (`CoreProtocol`). Neither composite runs it yet.
 
 C-Flock's decoder doesn't check that a reference reads a leaf at the width it was committed with, which the
 Python codec refuses as it decodes (`E_REINTERPRET`), so every Program the check reads goes through

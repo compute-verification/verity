@@ -11,6 +11,7 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 # interface (`RemoteAudit.Protocol`, which `test_protocol.py` holds to the period hook, `period.py`). The schedule check
 # (`schedule.py`) is a reference too.
 inputs = ["verity/__init__.py", "verity/errors.py", "verity/core/__init__.py", "verity/core/protocols/__init__.py",
+          "verity/core/protocols/record.py",
           "verity/core/protocols/profile.py", "verity/core/protocols/remote_bandwidth/__init__.py",
           "verity/core/protocols/remote_bandwidth/audit.py", "verity/core/protocols/remote_bandwidth/codec.py",
           "verity/core/protocols/remote_bandwidth/wire.py",
@@ -27,14 +28,21 @@ inputs = ["verity/__init__.py", "verity/errors.py", "verity/core/__init__.py", "
           "verity/core/service/flock/lake-manifest.json", "verity/core/service/flock/lean-toolchain",
           "verity/core/primitives/randomness", "verity/core/difftest/lean",
           # the P2 store (`p2.py`, `RemoteAudit.P2`): PoUS's setup, P2 and vk, whose Lean leaf and path check
-          # (`pous/check`'s `PousCheck.Merkle`) `lake` builds; the configurations of pous_check's other requires, which
-          # `lake` reads to resolve them; and the committed C*, whose registration and openings test_p2.py replays
-          "verity/core/protocols/remote_bandwidth/p2.py", "verity/core/protocols/pous",
+          # (`pous/check`'s `PousCheck.Merkle`) `lake` builds; its sessions' party (`p2_party.py`), whose books
+          # test_p2.py holds to `RemoteAudit.P2Session` and whose sessions test_p2_party.py runs on the Lean of record
+          # (`p2_lean.py`), and their core case (`p2_case.py`), which test_p2_case.py holds to the session's answer and
+          # to PoUS's store; the configurations of pous_check's other requires, which `lake` reads to resolve them; and
+          # the committed C*, whose registration, openings and a session test_p2.py replays
+          "verity/core/protocols/remote_bandwidth/p2.py", "verity/core/protocols/remote_bandwidth/p2_party.py",
+          "verity/core/protocols/remote_bandwidth/p2_lean.py", "verity/core/protocols/remote_bandwidth/p2_case.py",
+          "verity/core/protocols/pous",
           "verity/core/primitives/identity/lakefile.toml",
           "verity/core/primitives/identity/lake-manifest.json", "verity/core/primitives/identity/lean-toolchain",
           "verity/core/devices/memory_challenger/lean/lakefile.toml",
           "verity/core/devices/memory_challenger/lean/lake-manifest.json",
-          "verity/core/devices/memory_challenger/lean/lean-toolchain", "verity/core/primitives/lms/lean/lakefile.toml",
+          "verity/core/devices/memory_challenger/lean/lean-toolchain", "verity/core/attest/lean/lakefile.toml",
+          "verity/core/attest/lean/lake-manifest.json", "verity/core/attest/lean/lean-toolchain",
+          "verity/core/primitives/lms/lean/lakefile.toml",
           "verity/core/primitives/lms/lean/lake-manifest.json", "verity/core/primitives/lms/lean/lean-toolchain",
           "verity/core/protocols/remote_bandwidth/tests/fixtures/p2-c-star.bin",
           "verity/core/protocols/remote_bandwidth/tests/fixtures/p2-store.json"]

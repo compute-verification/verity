@@ -152,7 +152,7 @@ theorem layoutBDeployed_fixedAt_zero (x : Msg) : layoutBDeployed.fixedAt x 0 = n
 
 theorem layoutBDeployed_pieceAt (x : Msg) (i : ℕ) : layoutBDeployed.pieceAt x i = [] := rfl
 
-/-- **Only the last round could be assembled** (READERS1's `WholeBeforeLast`): the layout has no pieces. -/
+/-- **Only the last round could be assembled** (`WholeBeforeLast`): the layout has no pieces. -/
 theorem wholeBeforeLast_layoutBDeployed : layoutBDeployed.WholeBeforeLast := fun _ _ _ => rfl
 
 /-- **A held round reads the hm96 slot's output columns**: the forms `hmCommit` reads are one wire each, so the held
@@ -171,7 +171,7 @@ there are no pieces. -/
 theorem heldB_layoutBDeployed_iff {W : Type} (D : Claims.Recursion.Deploy Coin) (I : Claims.Recursion.Inner Coin W)
     (shape : Claims.Recursion.Form → Prop) :
     Claims.Recursion.VStarB.HeldB D I layoutBDeployed shape ↔
-      ∀ (x : Msg) (st : Claims.Recursion.Stmt), D.parse x = some st → ¬ shape st.form := by
+      ∀ (x : Msg) (st : Claims.Recursion.CompiledStatement), D.parse x = some st → ¬ shape st.form := by
   constructor
   · intro h x st hst hf
     obtain ⟨hK, hcl, -⟩ := h x st hst hf

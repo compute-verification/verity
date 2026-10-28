@@ -36,7 +36,7 @@ Registered functions (all `Name_v1`):
               + ScaledMmFp8, the linear as one function), LayerPreFp8{C,L0}, LayerPostFp8{C}, ServeFp8{C,LP,STEPS};
               DotE4m3_v2{K,DOT}, ScaledMmFp8NoSwapCoordinate{K,BIAS,DOT}, ScaledMmFp8NoSwap{K,N,BIAS,DOT} (the same GEMM
               dispatched without swap_ab, on the target's e4m3 step: `targets.scaled_mm_fp8_spec`)
-`verity/ml/definitions/registry/b1.py` (TA1) and `hopper.py` (HP) are not modified; the Hopper bf16 composites (RMSNorm, RoPE,
+`verity/ml/definitions/registry/b1.py` and `hopper.py` are not modified; the Hopper bf16 composites (RMSNorm, RoPE,
 AttentionFA3, SiluMul, Embedding, GemmHopper for lm_head, TokenSelect) are reused as registered.
 """
 
@@ -210,8 +210,8 @@ _EPILOGUE, _BLACKWELL = EVIDENCE["cc12_scaled_mm_epilogue_probe"], EVIDENCE["bla
                        + ((("b", BF16),) if S.BIAS else ())), BF16),
            conformance="exact-model-tested; the RTX PRO 6000's _C.cutlass_scaled_mm (cc 12.0) against this order over the cc 12.0 "
                        "step's chain at K = 4096, per-row/per-column and scalar scales: without a bias 15,728,640 of 15,728,640 "
-                       f"coordinates exact (run {_EPILOGUE['no_bias']}; the swapped order misses 89 of the 125 discriminating ones); "
-                       f"with a bias 786,432 of 786,432 (run {_EPILOGUE['bias']}: two roundings, the swapped FMA and (s_x*s_w)*acc + b "
+                       f"coordinates exact ({_EPILOGUE['no_bias']}; the swapped order misses 89 of the 125 discriminating ones); "
+                       f"with a bias 786,432 of 786,432 ({_EPILOGUE['bias']}: two roundings, the swapped FMA and (s_x*s_w)*acc + b "
                        "miss 8, 9 and 13 of the 17 discriminating ones), and this Definition by the IR reference on 576 sampled "
                        "coordinates, every discriminating one included, exact")
 def ScaledMmFp8NoSwapCoordinate(B, S, xq, sx, wrow, sw, *bias):
@@ -296,8 +296,8 @@ _BLOCK_CONF = (f"exact-model-tested; H100 80GB {_H100_CAPTURED} (vLLM d9105ea80,
                "vs descending k: 160/160 ascending, s = FMUL(sfa, sfb) vs the other associations: 240/240) — out/gen/sweep/evidence/fp8/")
 _QUANT_CONF = (f"exact-model-tested; H100 80GB {_H100_CAPTURED}: _C.per_token_group_fp8_quant vs the model on 290,304 e4m3 words and 2,268 group scales "
                "(seven shapes, rows of varying magnitude with outliers), 0 mismatches — out/gen/sweep/evidence/fp8/check_block_gemm.json; "
-               "all at G = 128; G = 64 (QUANT_GROUPS) and G = 128 on cc 12.0: property blackwell_fp8_capture on an RTX PRO 6000, run "
-               f"{_BLACKWELL['run']}, record {_BLACKWELL['record']} (#{_BLACKWELL['pr']} @ {_BLACKWELL['commit']}), cases "
+               "all at G = 128; G = 64 (QUANT_GROUPS) and G = 128 on cc 12.0: property blackwell_fp8_capture on an RTX PRO 6000, record "
+               f"{_BLACKWELL['record']} ({_BLACKWELL['run_record']}, harness {_BLACKWELL['commit']}), cases "
                "quant/K4096/G64 and quant/K192/G64 (the fused-MoE experts' inputs, 300 rows each) and quant/K4096/G128 and quant/K1024/G128, "
                "with every quant call its dense and MoE GEMM cases received, 7,941 rows, 0 mismatches")
 
@@ -453,8 +453,8 @@ def ScaledMmFp8BlockSharedScale(B, S, xq, sx, w, ws):
 
 _BLOCK_DOT_CONF = ("exact-model-tested; at DOT = HopperE4m3QgmmaDot32_v1 the function of the version 1 form (tests/program/"
                    "test_fp8_block_dot.py, every word equal), which is exact-model-tested on Hopper; at DOT = BlackwellE4m3QmmaDot32_v1, "
-                   f"G = 128 (cc 12.0): property blackwell_fp8_capture on an RTX PRO 6000, run {_BLACKWELL['run']}, record "
-                   f"{_BLACKWELL['record']} (#{_BLACKWELL['pr']} @ {_BLACKWELL['commit']}), cases cutlass/qkv_proj (K 4096, N 1280) "
+                   f"G = 128 (cc 12.0): property blackwell_fp8_capture on an RTX PRO 6000, record {_BLACKWELL['record']} "
+                   f"({_BLACKWELL['run_record']}, harness {_BLACKWELL['commit']}), cases cutlass/qkv_proj (K 4096, N 1280) "
                    "and cutlass/o_proj (K 1024, N 4096) x M in {1, 2, 64, 65, 256, 257, 300}: CutlassFp8BlockScaledMMKernel's blockwise "
                    "_C.cutlass_scaled_mm in all three cc 12.0 dispatch variants, 5,080,320 words, 0 mismatches; Hopper's step, both Triton "
                    "scale orders and an unfused mul + add each refuted (30,354, 13,159, 13,278 and 13,222 words)")
@@ -501,7 +501,7 @@ FP8_BLOCK_COMPOSITES = [Fp8GroupScale, Fp8GroupQuant, ScaledMmFp8BlockCoordinate
 
 
 # ---------------------------------------------------------------------------------------------------------
-# the layer functions with FP8 linears (structure: TA1's LayerPre/LayerPost with Gemm(+BiasAdd) -> Fp8ActQuant + ScaledMmFp8)
+# the layer functions with FP8 linears (structure: b1's LayerPre/LayerPost with Gemm(+BiasAdd) -> Fp8ActQuant + ScaledMmFp8)
 # ---------------------------------------------------------------------------------------------------------
 
 
@@ -537,7 +537,7 @@ BN = H.KBLOCK_N_FA3
                             Array(S.C["KVH"], Array(S.C["D"], BF16)), Array(S.C["KVH"], Array(S.C["D"], BF16)))),
            conformance="model-untested")
 def LayerPreFp8(B, S, h, res, w, cs):
-    """TA1's LayerPre with the QKV projection as `Fp8ActQuant` + `ScaledMmFp8` (bias fused in the epilogue; no BiasAdd node).
+    """b1's LayerPre with the QKV projection as `Fp8ActQuant` + `ScaledMmFp8` (bias fused in the epilogue; no BiasAdd node).
     Returns (residual_out, q[NH][D], k[KVH][D], v[KVH][D])."""
     C = S.C
     Hd, NH, KVH, D = C["H"], C["NH"], C["KVH"], C["D"]
@@ -564,7 +564,7 @@ def LayerPreFp8(B, S, h, res, w, cs):
                       Tuple(Array(S.C["H"], BF16), Array(S.C["H"], BF16))),
            conformance="model-untested")
 def LayerPostFp8(B, S, attn, res, w):
-    """TA1's LayerPost with o_proj, gate_up_proj and down_proj as `Fp8ActQuant` + `ScaledMmFp8` (no bias).  Returns (mlp_out, residual)."""
+    """b1's LayerPost with o_proj, gate_up_proj and down_proj as `Fp8ActQuant` + `ScaledMmFp8` (no bias).  Returns (mlp_out, residual)."""
     C = S.C
     Hd = C["H"]
     a = _Coll(Array(C["NH"] * C["D"], BF16), attn.refs)
@@ -581,7 +581,7 @@ def LayerPostFp8(B, S, attn, res, w):
 
 
 # ---------------------------------------------------------------------------------------------------------
-# Serve: TA1's `_forward_positions` / `Serve` bodies over the FP8 layer functions (HP's re-instantiation idiom)
+# Serve: b1's `_forward_positions` / `Serve` bodies over the FP8 layer functions (`hopper.py`'s re-instantiation idiom)
 # ---------------------------------------------------------------------------------------------------------
 
 ENV: dict = dict(H.ENV)  # Hopper environment (P bound to Hopper prims, BN = 128, Attention -> AttentionFA3, Final -> FinalHopper)
@@ -594,8 +594,8 @@ ENV["_forward_positions"] = H._reinstantiate(b1._forward_positions, ENV)
 
 ServeFp8 = CompositeDefinition("ServeFp8", 1, b1.Serve.statics, H._reinstantiate(b1.Serve.signature, ENV),
                                H._reinstantiate(b1.Serve.body, ENV),
-                               doc=f"{b1.Serve.doc.strip()}\n\n[b1-fp8] TA1's Serve over LayerPreFp8/LayerPostFp8 (every decoder linear "
-                                   "a QuantLinearFp8), HP's AttentionFA3 and FinalHopper (bf16 lm_head); weights record weights_type_fp8.",
+                               doc=f"{b1.Serve.doc.strip()}\n\n[b1-fp8] b1's Serve over LayerPreFp8/LayerPostFp8 (every decoder linear "
+                                   "a QuantLinearFp8), hopper's AttentionFA3 and FinalHopper (bf16 lm_head); weights record weights_type_fp8.",
                                conformance="model-untested")
 ServeFp8.ported_from = b1.Serve  # type: ignore[attr-defined]
 LayerPreFp8.ported_from = b1.LayerPre  # type: ignore[attr-defined]

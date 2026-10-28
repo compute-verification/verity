@@ -17,7 +17,7 @@ go: 18,529 rows and 24,008,260 B a slot, 1,099 writers. With ``norm`` as well ea
 and 20,569,300 B a slot, 1,204 writers. With ``pv`` too each layer's softmax rows go: 14,337 rows and 19,717,332 B a slot,
 1,152 writers.
 
-**The reads.** `Window.locate` gives a proof block's input port as `Piece`\\ s, its bytes theirs in order:
+**The reads.** `Locator.locate` gives a proof block's input port as `Piece`\\ s, its bytes theirs in order:
 
 - `Segment`: bytes of one committed row, named by the step whose commitment holds it, the commitment's slot at that step
   (the batch row the sequence ran at), the row's index in the slot's layout, and the bytes within it;
@@ -33,7 +33,7 @@ position p reads key j < n = p + 1 at step s - p + j, in the row that sequence h
 read opens the widest row holding its bytes and an output the narrowest, so the same calls work on today's
 ``families/v1`` layout (`commit.layout`), where a gather's row re-commits its parts' bytes.
 
-`Window.bundle` gives the same pieces as the drawn-block bundle's ``locate`` returns them (a ``Read``'s
+`Locator.bundle` gives the same pieces as the drawn-block bundle's ``locate`` returns them (a ``Read``'s
 commit unit and rank, the port word it fills and its bytes in the row; ``n`` a ``Position``; an output that is one whole
 row as ``(unit, rank, None)``). Binding a port's words to the segments of rows opened under the step roots is that bundle's
 and C-Flock's statement's: the windows wiring reads a row whole, and a port here is pieces of rows.
@@ -68,7 +68,7 @@ WRITERS_SCHEMA = "circuits/shared-row-bindings/v2"
 
 @dataclass(frozen=True)
 class Segment:
-    """``nbytes`` bytes at ``offset`` of row ``row`` (`Window.unit_of` gives its commit unit and rank) of slot ``slot`` in
+    """``nbytes`` bytes at ``offset`` of row ``row`` (`Locator.unit_of` gives its commit unit and rank) of slot ``slot`` in
     step ``step``'s commitment."""
 
     step: int
@@ -158,13 +158,13 @@ def _shared_group(entries: list[Entry], row: int) -> L.Group:
 
 def shared_layout(shape: Shape, row: int = ROW, fused: frozenset[str] = frozenset()) -> Any:
     """FAMILIES' shared-row layout at ``shape`` with the map's fusions ``fused``, one commit unit a row of at most ``row``
-    bytes (a quantizer's row is its chunk's codes and the scale), as the `slots.Layout` that commits it; every layer's group
+    bytes (a quantizer's row is its chunk's codes and the scale), as the `slots.CommitShape` that commits it; every layer's group
     is one `L.Group`."""
     S, _ = _slots()
     m = Map(shape, fused)
     layer = _shared_group(m.layer(0), row)
     groups = [layer if 1 <= i <= shape.layers else _shared_group(entries, row) for i, entries in enumerate(m.groups())]
-    lay = S.Layout(f"e2e-h200/{shape.name}/c{shape.context}/families-shared-rows-{row}b{fusion_tag(m.fused)}/v1",
+    lay = S.CommitShape(f"e2e-h200/{shape.name}/c{shape.context}/families-shared-rows-{row}b{fusion_tag(m.fused)}/v1",
                    tuple(groups))
     check_shared(lay, m)
     return lay
@@ -229,7 +229,7 @@ class _Index:
         return out
 
 
-class Window:
+class Locator:
     """Proof blocks' reads and outputs in the step commitments of a run at ``shape``: ``schedule[s]`` has ``slots`` and
     ``positions`` (`commit.StepTables`, `driver.StepResult`), batch row b of step s being sequence ``slots[b]`` at position
     ``positions[b]``; ``layout`` is `shared_layout` (by default) or any layout of the map's tables, ``fused`` the map's

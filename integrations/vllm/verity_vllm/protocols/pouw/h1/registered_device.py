@@ -11,8 +11,8 @@ holds them (64-byte nodes, 128-byte strings, as bytes). `device_hash` launches t
 hashes from, and rows written there (under `hashing`) it reads with no wait. `host_commit` runs
 the same functions on the CPU (`registered_rows_host.cpp`, built with the system C++ compiler): the twin the CPU tests
 hold to `pouw_h1_registered.commit`'s NumPy path on machines without a GPU. Builds share the Commit's row-table builder
-(`row_tables_device._build`, keyed by sources, flags and compiler); nvcc is `pouw_device`'s (its `TOOLCHAIN`'s,
-or the one on the path).
+(`row_tables_device._build`, keyed by sources, flags and compiler) and its per-device state (`row_tables_device.Device`);
+nvcc is `pouw_device`'s (its `TOOLCHAIN`'s, or the one on the path).
 """
 from __future__ import annotations
 
@@ -27,6 +27,7 @@ from typing import Any
 import numpy as np
 
 from verity_vllm.commit import row_tables_device as RTD
+from verity_vllm.protocols.pouw.h1.nodes import Nodes
 
 __all__ = ["CHUNK_BYTES", "Hashing", "Pub", "Table", "available", "device_commit", "device_hash", "device_lib",
            "device_public_salts", "hashing", "host_commit", "host_lib", "host_public_salts", "nvcc", "pub", "table"]
@@ -134,21 +135,21 @@ def _salts(row_salts: bytes, n: int) -> np.ndarray:
     return np.frombuffer(row_salts, np.uint8).copy()
 
 
-def _out(bcs: np.ndarray, levels: np.ndarray, W: int) -> tuple[tuple[bytes, ...], tuple[tuple[bytes, ...], ...]]:
-    """The device's big-endian words as `Registered`'s ``bcs`` and ``levels``."""
-    nodes = levels.byteswap().view("V64").tolist()
+def _out(bcs: np.ndarray, levels: np.ndarray, W: int) -> tuple[Nodes, tuple[Nodes, ...]]:
+    """The device's big-endian words as `Registered`'s ``bcs`` and ``levels``, each node's bytes made on read."""
+    nodes = levels.byteswap().view(np.uint8)
     out, off, w = [], 0, W
     while True:
-        out.append(tuple(nodes[off:off + w]))
+        out.append(Nodes(nodes[64 * off:64 * (off + w)], 64))
         off += w
         if w == 1:
             break
         w //= 2
-    return tuple(bcs.byteswap().view("V128").tolist()), tuple(out)
+    return Nodes(bcs.byteswap().view(np.uint8), 128), tuple(out)
 
 
 def host_commit(words: np.ndarray, key: bytes, nonce: int, row_salts: bytes | None,
-                domain_id: bytes) -> tuple[tuple[bytes, ...], tuple[tuple[bytes, ...], ...]]:
+                domain_id: bytes) -> tuple[Nodes, tuple[Nodes, ...]]:
     """The ``b || c`` strings and tree levels of ``words`` ``(n, W)`` u16 by the kernels' functions on the CPU: the device
     path's twin."""
     rows = _rows(words)
@@ -171,31 +172,8 @@ def host_public_salts(head: bytes, first: int, n: int) -> bytes:
     return out.tobytes()
 
 
-class _Device:
-    """One CUDA device's build, its copies of the byte tables and midstates, and the stream values are hashed on."""
-
-    def __init__(self, torch: Any, device: Any) -> None:
-        major, minor = torch.cuda.get_device_capability(device)
-        self.lib = device_lib(f"{major}{minor}")
-        self.stream = torch.cuda.Stream(device)
-        with torch.cuda.stream(self.stream):
-            self.hm = torch.from_numpy(RTD._hm().view(np.int64)).to(device)
-            pre = torch.from_numpy(RTD._prefixes().view(np.int64)).to(device)
-            self.ms = torch.empty(16, dtype=torch.int64, device=device)
-            rc = self.lib.rr_midstates(self.stream.cuda_stream, pre.data_ptr(), self.ms.data_ptr())
-        if rc:
-            raise RuntimeError(f"rr_midstates: CUDA error {rc}")
-        self.stream.synchronize()
-
-
-_DEVICES: dict[int, _Device] = {}
-
-
-def _device(torch: Any) -> _Device:
-    index = torch.cuda.current_device()
-    if index not in _DEVICES:
-        _DEVICES[index] = _Device(torch, torch.device("cuda", index))
-    return _DEVICES[index]
+def _device(torch: Any) -> RTD.Device:
+    return RTD.Device.of(torch, torch.cuda.current_device(), device_lib, "rr_midstates")
 
 
 @cache

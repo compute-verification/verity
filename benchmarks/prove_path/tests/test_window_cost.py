@@ -8,8 +8,10 @@
 * the attention at key blocks of 4 over 6 positions is the hand count, each block reading its keys' and values' rows, and
   with a block's state in one row (`L3b`) too;
 * at the class of record, every lever leaves the commit's compressions no larger and every step of the plan lowers them,
-  and the plan from ``L1 + L2`` on leaves no pad pass at any traffic, once Llama-3.2-1B's class circuit lowers (until its
-  readers' Definitions land, the window refuses its key blocks' values, o_proj's quantizer and a norm by name);
+  and the plan from ``L1 + L2`` on leaves no pad pass at any traffic, once every template of Llama-3.2-1B's probe has a
+  measured price: its probe lowers, first blocks `AttnBlockFirst_v2` priced as v1 and quantizers `Int8RowQuant_v3` as
+  v1, but the scan off the class of record's lanes, `SiluMul_v2` at I 2,048 and the norm's add parts and tail have none
+  yet;
 * serving's stream commit is its stream's 4 KiB rows under both schedules, its FA3 interiors the hand count of each launch,
   and ``F`` leaves out exactly those, 37% of the stream at 4,32,4;
 * the H200's AND tables are `BS.compile`'s counts.
@@ -22,7 +24,6 @@ from pathlib import Path
 
 import pytest
 from verity_vllm.program.model import INT8_EXACT_QUANT
-from verity_vllm.program.predict.build import Unexpressible
 from verity_vllm.program.predict.phi import Phi
 from verity_vllm.program.predict.steps import Registered
 from verity_vllm.program.predict.window_circuit import Grain, WindowClass, class_circuit
@@ -62,7 +63,7 @@ def test_tinys_census_rebuilt_is_class_rows_total_and_its_private_bodies_its_byt
     assert sum(u.compressions(W.CENSUS) for u in us) == doc["total"]["compressions"]
     t = doc["total"]
     rows = sum(v for k, v in t.items() if k.startswith("rows."))
-    assert W.Registration.of(us, False).private_bytes == sum(v for k, v in t.items() if k.startswith("bytes.")) + \
+    assert W.RegistrationSize.of(us, False).private_bytes == sum(v for k, v in t.items() if k.startswith("bytes.")) + \
         rows * W.SALT_BYTES
     assert sum(u.n * (u.ins + u.out) for u in us) == rows
 
@@ -115,7 +116,8 @@ def test_a_windows_position_layouts_are_its_output_rows_and_bytes(levers):
 
 
 @pytest.mark.slow
-@pytest.mark.xfail(raises=Unexpressible, strict=True, reason="Llama-3.2-1B's class circuit waits on its readers' Definitions")
+@pytest.mark.xfail(raises=ValueError, strict=True, reason="Llama-3.2-1B's probe lowers, and some of its templates have no "
+                   "measured price on the H200")
 def test_at_the_class_of_record_every_lever_lowers_the_commit_and_the_plan_leaves_no_pad_pass():
     """Lowers int8 Llama-3.2-1B's probe for the H200 (about 5 s), as `class_rows.py --llama1b --int8 --probe 1,2,2`."""
     cfg = json.loads(LLAMA_1B.read_text()) | {"quantization_config": dict(INT8_EXACT_QUANT)}

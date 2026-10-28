@@ -50,7 +50,7 @@ leaves (`DEPTHS`) padded with frame-v3's pad leaf under the window's side domain
 `side_path`), and the tile instances' public inputs (`PUBLIC_PORTS`, `sessions`, `session_cap`, `instance_ts`,
 `public_inputs`); `tests/vectors/window.json` pins them.
 
-**Live windows** (decision 36).  The check item's optional ``coins`` is the window's coin mode, ``live`` or ``seeded``
+**Live windows**.  The check item's optional ``coins`` is the window's coin mode, ``live`` or ``seeded``
 (`mode`; an item that names none is seeded, as Pearl-C's served path registers).  A seeded window's noise is its scheme's
 derivation from the salt and the prover's roots.  A live window's comes from the proof system's challenger
 (`verity.core.protocols.sampled_proofs.challenger`), whose first client this is: the epoch's coins are the layout
@@ -102,8 +102,8 @@ PUBLIC = (
 )
 #: the items a registration carries; the verdict and the draw come after it
 REGISTERED = ("work", "check", "sampling", "length", "root_W")
-#: what a registration made before the fixed-length rule carries: no `length`, so not of record
-LEGACY_REGISTERED = ("work", "check", "sampling", "root_W")
+#: what a registration made before the fixed-length rule carries: `REGISTERED` without `length`, so not of record
+LEGACY_REGISTERED = tuple(i for i in REGISTERED if i != "length")
 KINDS = ("call", "filler", "none")
 #: the check item's coin mode (`mode`), Compose's `CoinMode`
 COINS = "coins"
@@ -709,8 +709,7 @@ def session_cap(k_log: int, per_block: int = 1) -> int:
 
 
 def sessions(k: int, cap: int) -> int:
-    """S, the fixed-shape sessions of `cap` instances that hold a window's K′ = `k` drawn tiles.  Served windows draw
-    K′ <= 31,178 (ε = 0.1%, δ = 2^-40 over levels 87 to 143) and K′ <= 9,937 (ε = 1%, δ = 2^-128)."""
+    """S, the fixed-shape sessions of `cap` instances that hold a window's K′ = `k` drawn tiles (`k_prime`)."""
     if not (_positive(k) and _positive(cap)):
         raise ValueError(f"K′ and the cap are positive, not {k!r} and {cap!r}")
     return -(-k // cap)

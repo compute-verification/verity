@@ -8,7 +8,7 @@ own Commit.
   hooks sit on top of the committer's, and closes it first thing at the window's close, before the committer comes off.
   The H1 window's T is the engine's token budget (``--max-num-batched-tokens``) and its S the Commit window's steps
   (``--window-steps``); a window that closes early (idle, ``--window-gb``, ``--window-requests``) closes H1's with its
-  remaining steps empty (`pouw_h1.H1Run.close`).
+  remaining steps empty (`pouw_h1.H1Run.close`), unless it served none on in-process coins (`UNSERVED`).
 * **Once a server.** The period's declared Program over the served linears at (T, S) and its digest
   (`pouw_h1_served.declared`), and the weights' ``b/<K>`` registered under it (`pouw_h1_served.register_weights`), with a
   key of this process's: no auditor's registration (``model-key``) is read yet. The Program holds one batch of K's tile
@@ -18,7 +18,7 @@ own Commit.
   and ``served_verdicts.py program`` writes the same file without serving, so the period-open of it (``served_verdicts.py
   period open``) goes out before the server starts, ahead of window 0's reserve at startup.
 * **Coins.** With ``--challenger-gate CMD`` and ``--challenger-peer NAME`` (`sessions_of`), the auditor host's
-  challenger's, one session a window through infra's gate (`GateSessions`, `commit_coins.Gate`): window 0's session is
+  challenger's, one session a window through infra's gate (`GateSessions`, `commit_coins.ChallengerGate`): window 0's session is
   reserved (scheme `pouw_h1_challenger.SCHEME`, `pouw_h1_challenger.families` (S)) at startup (`arm_of`) and window
   k+1's while window k serves, off the engine loop (`GateSessions.take`); round 0 opens it on the window's open root
   (`pouw_h1_window.Window`), reached on this machine's 127.0.0.1 at the port the gate's open answers once the auditor
@@ -97,6 +97,10 @@ LISTEN_S = 0.1
 MARGIN = timedelta(minutes=5)
 #: the subprotocol H1's draw of each window is put under in serve-openai's draw-gated release (``--release-after``)
 DRAWER = "pouw"
+#: the ``release`` of a window on in-process coins that served no step (async scheduling's last call, which only returns
+#: outputs, can open one at the stop): its option stays unclosed, so its S steps aren't padded and nothing is drawn, as it
+#: holds no session, credits nothing and seals nothing
+UNSERVED = "none: the window served no step and holds no session"
 #: an s_a's bytes a row (f32)
 S_A_BYTES = 4
 
@@ -143,6 +147,26 @@ class GateOptions:
                                         "rows, pouw_h1_prover) and its live@<s> rows (pouw_h1_live.dump) in DIR/w<k>/, "
                                         "owner-only, for proving its drawn units and rounds after the close; never a "
                                         "published path")
+    h1_model: str | None = option("--h1-model", default=None, metavar="ROLE",
+                                  help="with --challenger-gate: the auditor's registration role of the served model (e.g. "
+                                       "LLAMA32_1B_INT8_K2048); its b/<K> are committed under the salt key the gate's "
+                                       "model-key hands for the window Program's circuit, so the windows' weights root is the "
+                                       "registry's, the root the period signs; without it the key is local and credits nothing")
+    h1_weights_root: str | None = option("--h1-weights-root", default=None, metavar="HEX",
+                                         help="with --h1-model: the registration's weights root (the period's signed one), "
+                                              "required when the role is registered more than once under the circuit")
+
+
+def model_key_of(gate: Any, model: str, weights_root: str | None) -> Callable[[str], tuple[bytes, str]]:
+    """The salt key of ``model``'s auditor registration under a window Program's circuit, from the gate's ``model-key``
+    (`auditor.gate_model_key`), with the registry's weights root it opens: a callable of the circuit's digest."""
+    def key(circuit: str) -> tuple[bytes, str]:
+        words = ["model-key", "--model", model, "--circuit", circuit]
+        if weights_root:
+            words += ["--weights-root", weights_root]
+        answer = gate.call(*words)
+        return bytes.fromhex(answer["key"]), str(answer["weights_root"])
+    return key
 
 
 def config_of(value: str | None) -> dict[str, Any]:
@@ -286,7 +310,7 @@ def listening(port: int) -> bool:
 
 class GateSessions:
     """H1's coins from the auditor host's challenger, one session a window, through infra's gate `gate` (a
-    `commit_coins.Gate`) as peer `peer`, for windows of S `steps` rounds. `take` is a window's session, `open` (the
+    `commit_coins.ChallengerGate`) as peer `peer`, for windows of S `steps` rounds. `take` is a window's session, `open` (the
     pouw setting ``gate``) opens it on the window's open root and `ended` waits for its end entry. ``held`` is each
     session reserved, as the gate answered it, under the window it was reserved for; one no window opened says why
     (``unused``). With ``ahead`` (a `worker`), a window's session is reserved there before it opens (`ahead_of`, `take`).
@@ -413,7 +437,7 @@ def sessions_of(opts: Any) -> GateSessions | None:
         return None
     from verity_vllm.pipeline import commit_coins as CC
 
-    return GateSessions(CC.Gate(opts.gate.challenger_gate), opts.gate.challenger_peer, opts.window_steps,
+    return GateSessions(CC.ChallengerGate(opts.gate.challenger_gate), opts.gate.challenger_peer, opts.window_steps,
                         ahead=worker("h1-reserve"))
 
 
@@ -432,7 +456,7 @@ class H1Windows:
     def __init__(self, model: Any, com: Any, rows: int, steps: int, *, engine: Any, out: Path,
                  config: Mapping[str, Any] | None = None, key: bytes | None = None, unit: Any = None,
                  sessions: GateSessions | None = None, prover: str | Path | None = None, closer: Any = None,
-                 draws: Any = None,
+                 draws: Any = None, model_key: Callable[[str], tuple[bytes, str]] | None = None,
                  clock: Callable[[], float] = time.perf_counter) -> None:
         from verity_vllm.protocols import pouw
         from verity_vllm.protocols.pouw.h1 import hooks as PHK
@@ -462,7 +486,15 @@ class H1Windows:
                                     self.out / "h1", rows=self.rows, steps=self.steps)
         print(f"[serve-h1] declared in {t1 - t0:.1f} s, its digest {self.digest[:16]} and {PROGRAM} in "
               f"{time.perf_counter() - t1:.1f} s", flush=True)
+        registered = None
+        if model_key is not None:
+            key, registered = model_key(self.digest)
         self.weights = SV.register_weights(self.digest, shapes, SV.weights_of(self.layers), key or os.urandom(32))
+        self.weights_key = "local" if registered is None else "auditor"
+        if registered is not None and self.weights.root().hex() != registered:
+            raise ValueError(f"{ENTRY}: the served weights committed under the auditor's key give root "
+                             f"{self.weights.root().hex()[:16]}, not the registration's {registered[:16]}: the served "
+                             f"checkpoint or the window Program's linears differ from the registered ones")
         self.tap: Any = None
         self.comp: Any = None
         self.run: Any = None
@@ -516,7 +548,7 @@ class H1Windows:
         coins = {"coins": "in-process"} if self.sessions is None else {"coins": "challenger", "peer": self.sessions.peer}
         return {"entry": ENTRY, "rows": self.rows, "steps": self.steps, "program": self.digest,
                 "program_file": f"h1/{PROGRAM}",
-                "weights_root": self.weights.root().hex(), "weights_key": "local", **coins,
+                "weights_root": self.weights.root().hex(), "weights_key": self.weights_key, **coins,
                 "reserve": "ahead" if self.sessions is not None and self.sessions.ahead is not None else "at the open",
                 "draw": f"put as {DRAWER} into the draw-gated release" if self.draws is not None else None,
                 "release": "on the loop" if self.closer is None else "off the loop",
@@ -597,23 +629,27 @@ class H1Windows:
         """Window ``window``'s release: its option closed (the empty steps' calls, its manifest committed, the draw coin
         opened and its session closed), with ``draws`` its draw put (`drawn`), and, with ``sessions``, its end entry
         waited for; its outcome, recorded in ``outcomes``, with ``error`` when any of it failed. ``off``: on ``closer``,
-        one of the windows ``releasing``."""
+        one of the windows ``releasing``. A window on in-process coins that served no step is `UNSERVED`."""
         t0 = t1 = self.clock()
         end = drawn = None
+        unserved = held is None and error is None and run.step < 0
         try:
             try:
-                comp.close()
+                if not unserved:
+                    comp.close()
             except (ValueError, RuntimeError, OSError) as e:      # the window's failure, its outcome's error
                 error = error or f"{type(e).__name__}: {e}"
             finally:
                 t1 = self.clock()
-                if self.draws is not None:
+                if self.draws is not None and not unserved:
                     drawn = self.drawn(window, run, held, error)
                 if held:
                     end = self.sessions.ended(held["session"])
             seconds = {**seconds, "queued": round(t0 - queued, 4), "release": round(t1 - t0, 4),
                        "ended": round(self.clock() - t1, 4)}
             out = self._outcome(window, run, held, end, seconds)
+            if unserved:
+                out.update(steps_served=0, release=UNSERVED)
             if drawn is not None:
                 out["draw"] = drawn
             if error is not None:
@@ -745,13 +781,17 @@ def arm_of(opts: Any, llm: Any, com: Any, out: Path) -> H1Windows | None:
     sessions = sessions_of(opts)
     if sessions is not None:
         sessions.ahead_of(0)
+    model_key = None
+    if sessions is not None and opts.gate.h1_model:
+        model_key = model_key_of(sessions.gate, opts.gate.h1_model, opts.gate.h1_weights_root)
     arm = H1Windows(llm.model, com, opts.max_num_batched_tokens, opts.window_steps, engine=llm.vllm, out=out,
                     config=config_of(opts.protocols_config), sessions=sessions, prover=opts.gate.h1_prover,
-                    closer=worker("h1-release"))
+                    closer=worker("h1-release"), model_key=model_key)
     arm.ready()
     return arm
 
 
 __all__ = ["AT", "ENTRY", "GateOptions", "GateSessions", "H1Windows", "LISTEN_S", "MARGIN", "OWN", "POLLS", "PROGRAM",
-           "PROGRAM_META", "SCHEME", "SESSIONED", "arm_of", "config_of", "listening", "refusal", "sessions_of", "units",
+           "PROGRAM_META", "SCHEME", "SESSIONED", "arm_of", "config_of", "listening", "model_key_of", "refusal", "sessions_of",
+           "units",
            "worker"]

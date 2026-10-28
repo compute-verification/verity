@@ -2,8 +2,8 @@
 (`prove_units`) that stages each member's units, registers them, takes the verifier's draw, proves each drawn member's
 units in one `--zk` session, verifies it with Lean `flock-verify verify --zk` (with `--registered` when the units read
 registered values), opens the rows the verifier holds its own copy of, and records every verdict in the one-stage audit
-record. Network-accounting's I5 for the arbitrary-vLLM goal (thread 1792816009.557169): the compiled per-step units, N2's
-head-check units and the I/O tie's units all ride it.
+record. The compiled per-step units of an arbitrary vLLM model, its head-check units and the I/O tie's units all ride
+it.
 
     python benchmarks/one_stage/prove_leg.py standin --bin flock-circuit --lean flock-verify --firewall flock-firewall \\
       --out DIR [--n 4] [--negatives] [--registered]
@@ -43,7 +43,7 @@ template the serving rows commit (`serving_rows.template`: a row, or a ``SLICES`
 and the window circuit's units (`window_circuit`): an attention head's per-key-block Calls on the RTX PRO 6000 and the H200
 (``CUT_TARGETS``) and the embedding's registered read. A unit's MUFU table reads are laid out as its template's own
 (`chunk_rows.reads`) unless ``--reads`` says otherwise. A shape whose rows' in-circuit hashing alone passes C-Flock's block
-(`m1_families.block`) is reported refused, not lowered, and an ``UNSTAGED`` unit (the embedding's read) is sized only.
+(`m1_families.block`) is reported refused, not lowered.
 
 Known limits: units flat or untyped staged; C-Flock's block at most 2^27 (split-K past K = 5041); table-heavy units
 need lookup slots; tail lookup slots are the GPU prover's; prover worker threads may need a bigger stack.
@@ -635,11 +635,6 @@ STATE = {"m_prev": (2.0, 0.0), "l_prev": (4.0, 16.0), "o_prev": (4.0, 0.0), "l":
 #: the window circuit's units that no serving row commits (`serving_rows.template` refuses their one-bit leaves): their
 #: Definition is the window's own (`interface.resolve`), and they read no pinned table
 WINDOW_ONLY = ("EmbeddingRead_v1",)
-#: the units `defs` sizes but never stages, and why: the stager lowers a unit whole through `ir_lower`, and these whole
-#: pass any node's memory
-UNSTAGED = {"EmbeddingRead_v1": "lowered whole, its SHA-512 parts take about 150 GB each through ir_lower, and staging "
-                                "embedding-read:1b reached 430 GB before its out-of-memory kill: it needs cutting into Calls "
-                                "first"}
 
 
 def _gen(rng: np.random.Generator, n: int, size: int, scale: float = 1.0, mean: float = 0.0) -> np.ndarray:
@@ -845,9 +840,9 @@ def units_for(k_log: int, per_block: int) -> int:
 
 
 def served_member(shape: str, seed: int, n: int = 1, reads: str | None = None) -> tuple[Member, dict]:
-    """``shape``'s served unit as a member of ``n`` units: its parameters the prover's rows, its outputs hidden, values seeded
-    by ``seed``, its table reads laid out by ``reads`` (`Member`), by default its template's own (`chunk_rows.reads`)."""
-    import a11_kinds as K
+    """``shape``'s served unit as a member of ``n`` units: its parameters the prover's rows (`interface.unit_rows`), its outputs
+    hidden, values seeded by ``seed``, its table reads laid out by ``reads`` (`Member`), by default its template's own
+    (`chunk_rows.reads`)."""
     from verity.ml.circuits.codec import descriptor_id
     from verity.ml.windows import interface as IF
     from verity_vllm.pipeline import chunk_rows as CR, serving_rows as SRW
@@ -860,12 +855,10 @@ def served_member(shape: str, seed: int, n: int = 1, reads: str | None = None) -
         tp = SRW.template(did)
         tfn, layout, own = tp.fn, tp.layout, CR.reads(tp)
     reads = reads or own
-    params, ret = fn.signature()
-    rows = [(nm, V2, K.leaf_bits(t), [nm]) for nm, t in params]
-    out_rows = K.out_rows(len(ret.fields) if hasattr(ret, "fields") else 1)
+    rows, out_rows = IF.unit_rows(fn)
     values = gen(np.random.default_rng(seed), n)
-    if set(values) != {nm for nm, _t in params}:
-        raise AssertionError(f"{shape}: values for {sorted(values)}, parameters {[nm for nm, _t in params]}")
+    if set(values) != {nm for nm, *_ in rows}:
+        raise AssertionError(f"{shape}: values for {sorted(values)}, parameters {[nm for nm, *_ in rows]}")
     info = {"descriptor_id": did, "layout": layout, "values": "stand-in: seeded inputs, outputs by the Definition's own evaluator",
             "seed": seed, "rows": [[r, b] for r, _s, b, _p in rows], "n": n, "reads": reads}
     return Member(shape.replace(":", "-"), tfn, rows, out_rows, values, reads=reads), info
@@ -898,7 +891,7 @@ def defs(shapes: Sequence[str], tools: Tools | None, out: Path, negs: bool, seed
     """Each served shape sized, and unless only sizing (``tools`` None), proved: one unit drawn by Lean, its member staged at
     `served_member`'s units (its table reads by ``reads``, else its template's own), through `prove_units` and, with ``negs``, `negatives` at that
     draw. A shape whose rows alone pass C-Flock's block is recorded refused and not lowered (with ``lower_refused``: lowered,
-    its blocker C-Flock's own refusal), nor one whose estimate passes ``max_ands``, nor an ``UNSTAGED`` unit."""
+    its blocker C-Flock's own refusal), nor one whose estimate passes ``max_ands``."""
     summary: dict[str, dict] = {}
     for shape in shapes:
         rec: dict[str, Any] = {"shape": shape}
@@ -910,9 +903,6 @@ def defs(shapes: Sequence[str], tools: Tools | None, out: Path, negs: bool, seed
             rec["descriptor_id"] = descriptor_id(fn)
             rec["census"] = c = sized(fn)
             log(f"{shape}: census {c}")
-            if fn.base_id in UNSTAGED:
-                rec["blocker"] = f"not staged: {UNSTAGED[fn.base_id]}"
-                continue
             if c["refused_block"]:
                 rec["blocker"] = (f"refused by C-Flock's block: its rows ({c['row_bits']} bits) need a block of 2^{c['rows_log']} "
                                   f"for their in-circuit hashing alone, past 2^{c['k_max']}")

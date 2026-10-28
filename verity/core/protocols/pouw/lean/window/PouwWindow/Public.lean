@@ -1,7 +1,7 @@
 /-!
 # What the window makes public (`window.py`, "Public items")
 
-`PUBLIC`, the draft's list and the rows' fixed length (19 Oct), in the service's `Public` form, `REGISTERED`, the items
+`PUBLIC`, the draft's list and the rows' fixed length, in the service's `Public` form, `REGISTERED`, the items
 a registration carries, `LEGACY_REGISTERED`, what one made before the fixed-length rule carries, and `KINDS`, the kinds
 of an entry.
 -/
@@ -33,8 +33,9 @@ def publicItems : List PublicItem := [
 /-- `REGISTERED`: the items a registration carries; the verdict and the draw come after it. -/
 def registered : List String := ["work", "check", "sampling", "length", "root_W"]
 
-/-- `LEGACY_REGISTERED`: what a registration made before the fixed-length rule (19 Oct) carries, so not of record. -/
-def legacyRegistered : List String := ["work", "check", "sampling", "root_W"]
+/-- `LEGACY_REGISTERED`: what a registration made before the fixed-length rule carries, `registered` without `length`,
+so not of record. -/
+def legacyRegistered : List String := registered.filter (· != "length")
 
 /-- `KINDS`. -/
 def kinds : List String := ["call", "filler", "none"]

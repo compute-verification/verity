@@ -19,8 +19,9 @@ shape), O, up and down; after the last layer the head (`HEAD`, 256 x 16,384) is 
 at its stream offset, QKV being wq, wk and wv one after another, each with its f32 scales, and the head the stream's
 `head` (`Tensor.stream_names`). `payloads` lays it out as the store's W.
 
-`decode_block` is the reference's decode of one block (`p2_v1.reference.decode` under `reference.keys_after`), refusing
-what `store.decode_block` refuses: a row not below p, or a decode wider than the payload.
+`check_blocks` holds rows to W's payloads by memory-accounting's reference decode of one block (`p2_v1/store.py`'s
+`decode_block`: `p2_v1.reference.decode` under `reference.keys_after`), which refuses a row not below p, or a decode
+wider than the payload.
 """
 from __future__ import annotations
 
@@ -40,7 +41,7 @@ sys.path.insert(0, str(ROOT / "benchmarks" / "pous"))
 from p2_v1 import reference as R  # noqa: E402
 
 PARAMS = S.P2Params(*S.POINT)
-SPEC = R.Params(PARAMS.w, PARAMS.c0, PARAMS.payload_bytes, PARAMS.blocks_per_segment)
+SPEC = R.DEPLOYMENT
 ROW = PARAMS.block_bytes          # 2,056
 PAYLOAD = PARAMS.payload_bytes    # 2,054
 LEAD = ROW - PAYLOAD              # a decoded row's zero bytes before its payload
@@ -134,8 +135,7 @@ class StoreLayout:
 
     @property
     def spec(self) -> R.Params:
-        p = self.params
-        return R.Params(p.w, p.c0, p.payload_bytes, p.blocks_per_segment, p.segments)
+        return R.Params.of(self.params)
 
     def layer(self, layer: int) -> tuple[Tensor, ...]:
         out = tuple(t for t in self.tensors if t.layer == layer)
@@ -335,32 +335,19 @@ def segment_rows(root: Path, spec: R.Params, j0: int, n: int) -> bytes:
     return bytes(out)
 
 
-def decode_block(spec: R.Params, prefix: bytes, j: int, c: bytes) -> bytes:
-    """Block `j`'s payload from its 2,056-byte row `c`, by the P2 spec's reference; `ValueError` for a row that is not a
-    codeword."""
-    if len(c) != ROW:
-        raise ValueError(f"block {j}: a row is {ROW} bytes, not {len(c)}")
-    v = int.from_bytes(c, "big")
-    if v >= spec.p:
-        raise ValueError(f"block {j} is not below p")
-    k, t, _ = R.keys_after(prefix, spec, *divmod(j, spec.blocks_per_segment))
-    m = R.decode(spec, v, k, t)
-    if m >> (8 * spec.payload_bytes):
-        raise ValueError(f"block {j} decodes to more than {8 * spec.payload_bytes} bits: not a codeword")
-    return m.to_bytes(spec.payload_bytes, "big")
-
-
-def check_blocks(spec: R.Params, prefix: bytes, first: int, rows: bytes | memoryview,
+def check_blocks(params: S.P2Params, prefix: bytes, first: int, rows: bytes | memoryview,
                  payloads: bytes | memoryview) -> list[tuple[int, str]]:
-    """The blocks `first ..` of `rows` (2,056 bytes each) whose reference decode is refused or differs from their 2,054
-    bytes of `payloads`, with why."""
+    """The blocks `first ..` of `rows` (2,056 bytes each) whose reference decode (`p2_v1/store.py`'s `decode_block`) is
+    refused or differs from their 2,054 bytes of `payloads`, with why."""
+    from p2_v1.store import decode_block
+
     n = len(rows) // ROW
     if len(rows) != n * ROW or len(payloads) != n * PAYLOAD:
         raise ValueError(f"{len(rows)} bytes of rows and {len(payloads)} of payload are not the same whole blocks")
     bad = []
     for i in range(n):
         try:
-            got = decode_block(spec, prefix, first + i, bytes(rows[i * ROW:(i + 1) * ROW]))
+            got = decode_block(params, prefix, first + i, bytes(rows[i * ROW:(i + 1) * ROW]))
         except ValueError as e:
             bad.append((first + i, str(e)))
             continue

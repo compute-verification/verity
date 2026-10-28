@@ -6,7 +6,7 @@ subprotocols into one verdict over one commitment: sampled proofs (the committed
 except on few proof blocks) and PoUW (the hardware's time went to the declared work).
 
 **The open gap.** Remote's composed soundness theorem, `Verity.Soundness`, is not in Lean yet. It is due after the Lean
-dedupe (one vocabulary), and its owner is soundness. Today the pieces below compose by hand: each is proved on its own,
+dedupe (one vocabulary). Today the pieces below compose by hand: each is proved on its own,
 and no Lean theorem states remote's guarantee from them. Nothing yet ties the deployed verifier's verdicts to those
 theorems either, because remote reads sampled proofs' one-stage v1, which takes the sessions' verdicts as evidence
 instead of computing them.
@@ -15,7 +15,7 @@ This file is an outline with signposts. The Lean is the definition. The vocabula
 Glossary, and `GLOSSARY.md` for the notation and the older names. The lifecycle's terms (a declaration, declaring, the
 declared advice, a declaration block and a declaration period) are in `ARCHITECTURE.md`'s Glossary, under Declaration,
 Block and Period. Lean names keep some older names until they are renamed: `Dampener*` means overhead, `*Horizon` a
-monitoring period's pooled bound, `Session*` a run of a subprotocol, and `window` a period.
+monitoring period's pooled bound, `Session*` a run of a subprotocol, and `Window*` a period.
 
 **Which "remote".** Six things in the tree are called "remote", and this page means the first:
 
@@ -28,7 +28,7 @@ monitoring period's pooled bound, `Session*` a run of a subprotocol, and `window
 - `RemoteChallenger` (`verity/core/protocols/sampled_proofs/remote.py`), the client of a challenger on another host;
 - `RemoteCertifier` (`verity/core/protocols/certifier/active.py`), onsite's network certifier reached over the network;
 - the overhead bound's remote regime, `Nci.Guarantees.DampenerRemote` (the inference-only policy's Lean is still named
-  `Nci`) and `benchmarks/rho`'s `regime.remote`: a bound over this protocol (see the guarantee below), not a part of it;
+  `Nci`) and `benchmarks/rho`'s `regime.remote`: a bound over this protocol (part 5 of the security argument below), not a part of it;
 - "run remotely": a job run on a cluster node (`research run --on`), which has nothing to do with any protocol.
 
 ## Parties
@@ -43,7 +43,7 @@ monitoring period's pooled bound, `Session*` a run of a subprotocol, and `window
   (`IO.getRandomBytes`) instead of the challenger's.
 - **How the coins reach the developer.** The challenger opens each coin only after the developer's commitment is
   recorded, over one TCP stream that the developer's client opens at its own `127.0.0.1` port (`RemoteChallenger`).
-  Deployed (the auditor host vy-challenger-1), that port is the far end of a coin link the auditor host opens to the
+  Deployed, on an auditor host, that port is the far end of a coin link the auditor host opens to the
   developer's machine: `ssh -N -R` straight to that machine's sshd, relayed and counted by network certification's
   code running on the auditor host (`benchmarks/live_challenger/coin_link.py`). No coin path of remote's own, with no
   network certifier anywhere, is specified yet.
@@ -93,43 +93,256 @@ SampledProofs.OneStage.protocol]`. Its executable is `remote id | check PARAMS C
    (`Flock.Guarantees.IntegrityHorizon` for sampled proofs, `Accounting.Guarantees.ComposePeriod.CircuitCreditPeriod`
    for PoUW), and the overhead calculator turns them into overhead (see Results).
 
-## The guarantee
+## The security argument, end to end
 
-**In words.** Suppose the remote verdict accepts every sampling period of a monitoring period. Then, except with a
-failure probability set by the draw and by SHA-512, two things hold:
+**The claim.** Suppose the remote verdict accepts every sampling period of a monitoring period. Then, except with a
+failure probability that, beyond the draw and SHA-512, rests on undischarged premises (What's open):
 
-- the committed computation satisfies the declared circuit, except on at most the proof blocks a draw of that size
-  misses at δ;
-- the period's credited live work is at least (1 − ε) of the declared work.
+- the committed computation satisfies the declared circuit, except on few proof blocks;
+- the hardware's credited time went to the declared work, on part 3's premises, which the deployed path doesn't meet.
 
-Everything is about the committed trace. That the declared circuit computes what the served model computes is
-completeness, never a security claim.
+Conditionally on the items under What's open below, a third claim follows: training a new frontier model costs more
+GPU-hours than it would without the protocol, by the overhead lower bound.
 
-**The pieces.** "Proved" means its proof is in a lock on `main`. For a guarantee, that's `<Area>.SecurityProofs.G :
-<Area>.Guarantees.G` in `Security/lean-audit.json`. For a property of the code, it's its proof in
-`Security/Properties/lean-audit.json` (`Properties.Composition.acceptMeans : Properties.Composition.AcceptMeans`). The
-last column is the end-to-end chain's status in `benchmarks/prove_path/e2e_chains/README.md`. That page's row for the
-remote composite is "none" (the open gap), so the column gives its subprotocols' rows (Sampled proofs / C-Flock `--zk`,
-PoUW `--zk`), and a chain can be "none" while each piece is proved.
+The argument has six parts. **Each part is proved, stated or open on its own: no Lean theorem yet chains one part's
+conclusion into the next part's hypothesis.** The one partial link is `Accounting.Guarantees.TS.SessionSoundAt`, which
+consumes part 1's theorem for PoUW's proofs. The links that are missing are listed under What's open. Each part gives
+what it establishes, what it assumes, its Lean and that Lean's status:
 
-| Piece | Lean declaration | Lock | End to end |
+- **proved**: its proof is in a lock (`<Area>.SecurityProofs.G : <Area>.Guarantees.G` in
+  `Security/lean-audit.json`, or a property's proof in `Security/Properties/lean-audit.json`);
+- **stated**: its statement is in a lock, with no proof yet;
+- **open**: not in Lean.
+
+C-Flock's guarantee statements (`Flock.Guarantees.*`) are in `Security/Proofs/Flock/`, not `Definitions/`: its spec
+isn't extracted yet.
+
+The derivations are in `Security/README.md`'s security argument; every named `Prop` is listed under Assumptions, by
+name, below.
+
+### The assumptions, in plain words
+
+These are the argument's assumptions by kind; Assumptions, by name, below, lists every named `Prop`. Everything
+else is a theorem or a named gap.
+
+| Kind | Assumption | Lean | How it's tested, or why it's believed |
 |---|---|---|---|
-| The verdict rule | `Properties.Composition.AcceptMeans`, `AnswerAccepts` (`Security/Properties/Composition.lean`; proofs `acceptMeans`, `answerAccepts`) | **proved** | — |
-| Sampled proofs' accept rule | `Properties.SampledProofs.AcceptMeans` (`Security/Properties/SampledProofs.lean`; proof `acceptMeans`) | **proved** | — |
-| A C-Flock `--zk` proof, read in the sampling relation: Pr[accept ∧ faulty proof blocks outside what the draw catches at δ] ≤ δ + ε_ks + δ_link | `Flock.Guarantees.SampledKSLiveV3` (stated in `Security/Proofs/Flock/Bridge/Refused.lean`, proved in `Security/Proofs/Flock/Bridge/KSLive.lean`) | **proved** | sampled proofs `--zk`: proved |
-| Sampled proofs over a monitoring period | `Flock.Guarantees.IntegrityPeriod`, `IntegrityHorizon` (`Security/Proofs/Flock/EndToEnd/Period/Statement.lean`) | **proved** | — |
-| The verifier's verdicts tied to those theorems | none: remote reads one-stage v1, which takes the verdicts as evidence; v2 (`verity/sampled-proofs/one-stage/v2`) runs `flock-verify verify --zk` itself, and remote doesn't read v2 yet | **open** | — |
-| PoUW's accept rule, and its accepted prefix tied to the period credit | `Properties.Pouw.Check.AcceptMeans`, and `Properties.Pouw.Period.H1CheckedCreditPeriod`, the instance at the deployed H1 tile unit of the general `CheckedCreditPeriod` (`Security/Properties/Pouw/Period.lean`; proofs `Properties.Pouw.Check.acceptMeans`, `Properties.Pouw.Period.SecurityProofs.h1CheckedCreditPeriod` and `checkedCreditPeriod`, all in `Security/Properties/lean-audit.json`) | **proved**, under the PoUW assumptions below | — |
-| PoUW's credit over a monitoring period | `Accounting.Guarantees.ComposePeriod.CircuitCreditPeriod` | **proved** | — |
-| PoUW's proof layer | `Accounting.Guarantees.TS.SessionSoundAt`: proved, but it needs `AcceptedLive`, which no served path meets yet | **open** as a chain | PoUW `--zk`: broken at the proof layer |
-| The overhead over remote, per period | `Nci.Guarantees.DampenerRemote` (`Security/Definitions/Nci/Guarantees/Remote.lean`) | **proved** | none with a proof layer: it takes `PouwSound`, which no PoUW guarantee instantiates |
-| The overhead over a monitoring period | `Nci.Guarantees.DampenerRemotePeriod` (`RemotePeriod.lean`): only `DampenerRemotePeriodStated` is in the lock | **open** | — |
-| The composed soundness of remote | `Verity.Soundness`: not yet in Lean, and `lean-audit.json` here lists no guarantee (the open gap, above) | **open** | — |
+| Cryptography | SHA-512 is collision resistant, and the commitments hide their values. | `cr/sha-512`, `ecr/sha-512` (`TableCRZAt`, `LinkCRZC`, `RowsCRZC`); hm96's hiding | Standard; no attack known. |
+| The auditor's devices | The challenger runs on a host the developer doesn't control, its coins are uniform, and they reach the developer only after the commitment. | `Verity.Assumptions.TrustedHost`, `RecordCustodyZKJ`, `UniformRandomBytes`; `CoinsConfidential` (prose only) | Inspect the deployment: where the challenger runs, and its coin path. |
+| The hardware | Each GPU computes at most at its data sheet's rates, hosts carry no hidden compute, and unregistered hardware is at most a stated share of the fleet. | `Accounting.Assumptions.TS.Sheet*`; the share is a hypothesis of `DampenerRemote` | Measure the cards and inventory the fleet. The share is a claim about the world, not the protocol. |
+| Matrix products | Nobody multiplies the protocol's random noised matrices faster than the known way. Only noised calls are credited: the premise is over random operands, never ones the prover chooses. | `OperandHMu`, `FoldOpt`, `FillOpt` | A faster algorithm for random matrix products refutes it. |
+| PoUW's receipts | A skipped round passes its receipt, or a guessed fold state passes, only at the stated rate. Conjectured, as their docstrings say. | `ReceiptLuckAt`, `GuessLuckAt` | Believed because each receipt folds committed accumulator words under a key fixed after the commitment; search for a skipped round or a fold-state guess that passes more often than the rate. |
+| Enforcement | Sampled proofs catch each faulty proof block with probability at least q, whatever came before, and a detected cheat ends its identity and takes its hardware out of use within Δ. | `Nci.Assumptions.SampledDetection`, `Nci.Assumptions.TerminalDetection` | The first is what part 2's draw gives, not yet derived from it in Lean. The second is the auditor's policy: check that a refusal triggers it. |
+| The baseline | The data the registration names was public, not computed off the books before. | `Nci.Assumptions.BaselineRegistered` | Check the registered data's provenance: each named dataset or model is public, by its digest. |
+| Learning, 1: fresh weights are hard to hold | After enough training since registration, a short program that runs no longer than a block may run can't reproduce many freshly trained weight values: each costs about p bits, even to a program that knows the registered model and may replay a little training. | `Nci.Assumptions.DescriptionHard` | Compress the update: on adversarially chosen sets of updated weights, find the shortest program that outputs them within the time budget (codecs, low-rank fits, predictors from the registered model, short replays). A program well under p bits a weight refutes the price. |
+| Learning, 2: no cheap way around it | Any way of reaching the target, at a cost worth ruling out, repeatedly combines freshly trained weights with fresh per-token values. | `Nci.Assumptions.CoversEfficientMethods` | Try to reach the target cheaply without that: small adapters, independently trained small experts, distillation from the served model, frozen features. A cheap success refutes it at that target. |
 
-## Assumptions
+That each use of a weight needs its own token's context is a checkable wiring property of the training circuit: every
+gate a use requires reaches, inside that use's own upstream computation, the operand the use reads. It is named in the
+lock (`Nci.Capability.Consumers.Upstream`) until it is checked on a named circuit. The two learning rows are all the overhead lower bound assumes
+about learning, and they are where its scientific content lies; the second is the least certain.
+
+### 1. The proofs of the drawn proof blocks
+
+**Establishes.** One C-Flock `--zk` audit of the drawn proof blocks is knowledge sound: if the verifier accepts, the
+prover knows values satisfying the drawn proof blocks, except with probability ε_ks + ε_bind: the knowledge-soundness
+error, plus the binding error, which here sums the Lean's link, rows and registered-reads terms.
+It is zero knowledge against an honest verifier: the verifier's view is simulatable without those values, to within the
+commitments' hiding gap.
+
+**Assumes.**
+
+- SHA-512 collision resistance (`cr/sha-512`, `ecr/sha-512`).
+- The verifier's coins are uniform. Part 1's statements draw them in their own law; `SampledKSLiveV3` and
+  `IntegrityHorizon` take `FlockSoundness.Assumptions.UniformRandomBytes`.
+- The record the verifier reads is the live run's (`FlockSoundness.Assumptions.Zk.RecordCustodyZKJ`).
+- The hiding gap of hm96 at its pinned key, which is below 2^-193 for all but 2^-64 of keys but not proved small for the
+  pinned one.
+
+**Lean.**
+
+- Knowledge soundness of the one-stage audit at the drawn proof blocks: `Flock.Guarantees.EndToEndRegisteredRows`,
+  **proved**.
+- Zero knowledge against an honest verifier at each fixed coin vector: `Flock.Guarantees.ZeroKnowledgeHidden`, **proved**.
+  It holds only at coins the prover doesn't refuse and on runs its self-check doesn't stop, and the self-check's inner
+  relation (`InnerHolds`) is unproved.
+- Zero knowledge against a verifier that chooses its coins: `Flock.Guarantees.MaskedZK`, **proved**, with its ε_zk
+  through hm96's hiding gap at the pinned key. What is unproved is the live zero-knowledge server
+  (`Flock.zk_server_lean_loop`'s hypotheses).
+
+### 2. Sampling
+
+**Establishes.** Live coins, drawn after the commitment, pick which proof blocks are proved. If every drawn block is
+proved, only the blocks the draw missed can hold faults:
+Pr[accept ∧ more faulty proof blocks than the draw allows at δ] ≤ δ + ε_ks + ε_bind, ε_bind the binding error of the
+links between proof blocks.
+
+**Assumes.** Part 1's assumptions; the challenger is the auditor's device (`Verity.Assumptions.TrustedHost`); its coins
+reach the developer only after the commitment (`CoinsConfidential`, in prose only).
+
+**Lean.** `Flock.Guarantees.SampledKSLiveV3`, **proved**. It states its own sampling relation; it doesn't take part 1's
+theorem as a hypothesis.
+
+### 3. The audit of each sampling period
+
+**Establishes.** Sampled proofs bound the faulty proof blocks. PoUW establishes that the period's credited live work is
+at least (1 − ε) of the declared work, crediting only noised calls: an un-noised call has no live coin, so nothing forces
+its work. The composite accepts only if every subprotocol accepts and their commitments bind into one.
+
+**Assumes.** PoUW's premises:
+
+- the proof system is sound (`Properties.Pouw.Period.ServiceSound`), a named assumption no theorem discharges yet;
+- the published draw is the coin's (`DrawIsCoin`), and registration precedes the draw (`RegisteredBeforeDraw`);
+- the salt is a live coin (`SaltIsLiveCoin`), and the staged statement pins the receipts' tile (`StagedPins`). The
+  deployed path meets neither `SaltIsLiveCoin` nor the roots' binding that `H1CheckedCreditPeriod` reads
+  (`MovedIn ≤ δ_bind` in the Lean): its registered roots are tags;
+- PoUW's per-step receipts bind (`OperandHMu`, `ReceiptLuckAt`, `GuessLuckAt`, `UnitFixed`).
+
+The time credit adds the data sheet's rates.
+
+**Lean.**
+
+- The verdict rule: `Properties.Composition.AcceptMeans`, **proved**.
+- Sampled proofs' accept rule: `Properties.SampledProofs.AcceptMeans`, **proved**.
+- PoUW's accept rule and period credit: `Properties.Pouw.Check.AcceptMeans` and
+  `Properties.Pouw.Period.H1CheckedCreditPeriod` (the general `CheckedCreditPeriod` at the deployed tile unit),
+  **proved** under the premises above.
+- The time credit: `Accounting.Guarantees.Compose.CircuitCredit`, **proved**, reading the data sheet.
+- The proofs behind PoUW's credit, `Accounting.Guarantees.TS.SessionSoundAt`: **proved**, under `AcceptedLive` (no served path meets
+  it yet), `WindowLaw`, `ServedChecksHold` and `ServedRootsLinked`.
+- The verifier's verdicts tied to these theorems: **open**. Remote reads sampled proofs' one-stage v1, which takes the
+  sessions' verdicts as evidence; v2 runs `flock-verify verify --zk` itself.
+
+### 4. The monitoring period
+
+**Establishes.** The sampling periods' bounds pool over a monitoring period, even when the developer adapts each period
+to the coins before it: the chance that some subprotocol of some period accepts while its claim fails is at most the sum
+of their errors. For sampled proofs,
+Pr[every period accepted ∧ faulty proof blocks ≥ ln(1/δ)/q] ≤ δ + Σ_t (ε_ks,t + ε_bind,t), q the draw's coverage.
+PoUW reports ε at δ_s = 2⁻⁴⁰ (`verity/core/protocols/pouw/credit.py`'s `DELTA`), the draw's error alone. Its pooled
+failure over n sampling periods is δ_s + n·(δ_bind + δ_ks), PoUW's own binding and proof-system errors (not sampled
+proofs' ε_bind and ε_ks above). δ_ks rests on the undischarged `ServiceSound`, and δ_bind has no deployed bound, so
+neither has a number yet. Over a week, a month and a year, at one sampling period an hour (n = 168, 730 and 8,766), the
+total is 2⁻⁴⁰ + n·(δ_bind + δ_ks): for a year's total below 1%, δ_bind + δ_ks must stay below about 1.1·10⁻⁶ a period.
+
+**Assumes.** Parts 1 to 3's assumptions.
+
+**Lean.** `Accounting.Guarantees.JointHorizonLive` (all subprotocols, one adaptive game), `Flock.Guarantees.IntegrityHorizon`
+(sampled proofs) and `Accounting.Guarantees.ComposePeriod.CircuitCreditPeriod` (PoUW): **proved**. `JointHorizonLive`
+takes per-period guarantees as hypotheses; no theorem yet instantiates it with parts 2 and 3.
+
+### 5. The overhead lower bound
+
+**Establishes, conditionally.** The overhead lower bound: training a new frontier model on the monitored fleet costs at
+least
+
+$$ \mathrm{overhead}(\mathcal G, \mathcal A, \eta) \;\ge\; \frac{\Omega_*}{C_{\mathrm{ref}}\,\big[\bar\zeta\,f + (q/c)\,(1 - f)\big]} $$
+
+times the GPU-hours it costs unmonitored, up to probability η. No Lean states this bound: it is derived in prose
+(`Security/README.md`, part 4) from the local bounds, `Verity.Guarantees.Counting` and `Nci.Guarantees.CapabilityFloor`.
+
+- Ω_* is the training work any covered method needs.
+- C_ref is a demonstrated reference run's GPU-hours.
+- f is the share of capacity outside correct credited declared work, and ζ̄ the rate at which work can be done there.
+- q/c is the most training work one verified inference block of c gates can do, per gate.
+
+**Conditional on three things remote doesn't have yet:**
+
+- remote doesn't run the inference-only policy's check (its components are sampled proofs and PoUW);
+- there is no utilization policy, so nothing bounds f uniformly over accepted runs;
+- the rate ceiling ζ̄ is a hypothesis: reference efficiency, ζ̄ equal to the reference run's rate, is open.
+
+**The mechanism, in words.** Learning repeatedly combines freshly learned weights with fresh per-token information. The
+inference-only policy divides declared work into inference blocks of c gates, each taking in at most k fresh bits. A
+block can import information, spending its fresh bits, or reconstruct it, spending its gates.
+
+- Fresh weights are hard to hold, so a block holds few of them.
+- Each use of a weight needs its own token's context, so a block serves few uses.
+- So verified work does little learning, and learning at scale has to run on the uncredited capacity, which PoUW keeps
+  small.
+
+The per-block cap is about h·(k + c/g) weighted weight-uses, h the bits of fresh weights a block can hold and g the gates
+a use's context takes to rebuild. When rebuilding that context needs more fresh weights than a block holds, the cap falls
+to h·k.
+
+**Assumes.** The learning rows of the table above, the hardware rows, and parts 1 to 4. Further premises can strengthen
+the local bound (an activation price, a joint price, a recoverable source), each a new hypothesis to earn;
+`Security/README.md`, part 2, lists them.
+
+**Lean.**
+
+- The local bounds' caps `Nci.Guarantees.HeldBudget` (or, statistically, `Nci.Guarantees.StatHeldBudget`),
+  `Nci.Guarantees.ImportOrRecompute`, `Nci.Guarantees.RecomputeByGates`, `Nci.Guarantees.RecomputeByState` and
+  `Nci.Guarantees.WeightedProductCap`, and the floor `Nci.Guarantees.CapabilityFloor`: **proved**
+  (`Security/Proofs/Nci/Capability/`, `Security/Proofs/Accounting/Coverage.lean`), each from its premises. Every premise,
+  structure and bound is surveyed in `Security/Definitions/Nci/Capability/README.md`.
+- Their premises, `Nci.Assumptions.CoversEfficientMethods`, `Nci.Assumptions.DescriptionHard` (or
+  `Nci.Assumptions.MinEntropyHard`) and the wiring property `Nci.Capability.Consumers.Upstream`, are named assumptions in
+  the lock, which those proofs take as hypotheses; none is tested yet: no price is measured at a decoder budget, and the
+  certificate is not checked on a named training circuit.
+- `Nci.Guarantees.DampenerRemote`: **proved**, but it is the threaded dampener, an older and different bound,
+  ρ = max(1, 1/(s + …)/MFU₀) over the thread structure, not the bound displayed above. It is arithmetic over inline
+  hypotheses (`Nci.Assumptions.PouwSound` among them, which no PoUW guarantee discharges), not over the local bounds.
+- Over a monitoring period, `Nci.Guarantees.DampenerRemotePeriod`: **stated** (its lock entry is
+  `DampenerRemotePeriodStated`).
+- The block-description bound (`Verity.Guarantees.BlockDescription`) and the counting bound
+  (`Verity.Guarantees.Counting`): **proved**.
+
+### 6. What is completeness, not security
+
+That the declared circuit computes what the served model computes is completeness: it says an honest developer's run is
+accepted. No security claim rests on it. A wrong circuit costs the developer acceptance; it never makes the auditor
+accept a false claim. Likewise the overhead's numbers depend on measured and assumed parameters (the reference run, the
+unregistered share, the prices), each labelled with its source in the calculator.
+
+### What's open
+
+- **Chaining the parts in Lean.**
+  - `Verity.Soundness`, the one theorem over everything the compiled verifier accepts, isn't in Lean.
+  - `SampledKSLiveV3` doesn't read part 1's theorem.
+  - `ServiceSound` and `PouwSound` are undischarged premises.
+  - `JointHorizonLive` isn't instantiated with parts 2 and 3.
+  - Today the parts compose by hand.
+- **The verifier's verdicts.** Remote reads one-stage v1, which takes the sessions' verdicts as evidence.
+- **PoUW's deployed path.** It meets neither `SaltIsLiveCoin`, the roots' binding nor `AcceptedLive`; `DrawIsCoin` and
+  `StagedPins` are unproved code facts.
+- **The pooled δ.** δ_ks and δ_bind have no number, so PoUW's failure over a monitoring period has none either.
+- **The inference-only policy in remote.** Remote's components don't include it. Where it runs, v0 checks the policy in
+  the clear, publishing the division into inference blocks; its zero-knowledge check is open.
+- **The utilization policy.** Nothing bounds the uncredited share f over every accepted run.
+- **The rate ceiling.** Reference efficiency, which sets ζ̄, is a hypothesis.
+- **Part 5's premises.**
+  - No update price has been measured at a decoder budget.
+  - The wiring property hasn't been checked on a named training circuit.
+  - Coverage is untested.
+  - The caps and the floor are proved, but their honest witnesses hold `DescriptionHard`, `SourceHard`, `Recovers` and
+    coverage only degenerately (a decoder that compresses nothing, coverage of every computation): that the premises
+    hold together at a decoder that compresses, and with coverage that excludes some computation, isn't shown yet.
+  - The displayed overhead bound has no Lean statement; `DampenerRemote` is the older threaded dampener.
+
+### Promising directions
+
+- **Measure update prices.** Hardness of fresh weights is the argument's one information premise. Measure it on real
+  fine-tunes: bits per updated weight, for adversarially chosen sets, against decoders that may use the registered model,
+  low-rank fits and short replays within the block's time.
+- **Measure the width of a use.** The minimal premises charge one fresh bit per use, which makes the per-block cap grow
+  like k². How many bits of a token's upstream values a block must import before rebuilding the rest becomes cheap is a
+  local description length of the operand given what the block holds. If it is near a token's hidden state, the cap
+  becomes linear in k and the overhead large. This is the measurement worth most.
+- **Choose (c, k) per block type.** The caps bind only when a block's own capacity is well above what its fresh bits
+  allow. Decoding reads earlier tokens' cached keys and values as fresh input, so how k counts them decides whether any
+  cap bites.
+- **Weight the structure.** With per-weight prices and per-use weights fixed, the strongest bound the wiring property
+  gives is a linear program over the weights. Solving it on the training circuit replaces "every value is hard" with
+  "enough priced, structurally supported work".
+- **Test coverage directly.** Compute to the target for compact-state methods (adapters, independent small experts,
+  distillation from served outputs) against full training, at matched targets. The ratio caps the overhead from above.
+
+## Assumptions, by name
 
 Each is a named `Prop` in a lock's `assumptions` (`Security/lean-audit.json`, and `Security/Properties/lean-audit.json`
-for the `Properties.*` ones), one line in plain words, except the two coin premises below, which are prose only.
+for the `Properties.*` ones), one line in plain words, except `CoinsConfidential` (prose only). The local
+bounds' premises and proofs arrive in the lock in the same change as this section.
 
 Sampled proofs (`benchmarks/prove_path/README.md`, "What an accepted audit means"):
 
@@ -142,35 +355,38 @@ Sampled proofs (`benchmarks/prove_path/README.md`, "What an accepted audit means
 - `trusted-host` (`Verity.Assumptions.TrustedHost`, `Security/Definitions/Core/Assumptions.lean`): the challenger is
   the auditor's device on a host the developer doesn't control, and the custody above rests on it; the verifier runs
   on an auditor host too. In Lean, only onsite's guarantees (network certification's) read `TrustedHost` itself.
-- `CoinsConfidential` (the challenger's coins reach the developer's machine only over auditor-host paths) and
-  `OneClock` (its release times and the network certifier's ingress times share one clock): premises about where the
-  challenger runs, stated in prose in `verity/core/protocols/sampled_proofs/README.md` and not yet in Lean. No `.lean`
-  file defines either, and no guarantee takes either as a hypothesis.
+- `CoinsConfidential`: the challenger's coins reach the developer's machine only over paths the auditor's hosts
+  control, and only after the commitment. A premise about where the challenger runs, stated in prose in
+  `verity/core/protocols/sampled_proofs/README.md` and not yet in Lean: no `.lean` file defines it, and no guarantee takes
+  it as a hypothesis. (Its companion `OneClock` ties the challenger's clock to onsite's network certifiers; remote has
+  none.)
 
 PoUW, as `H1CheckedCreditPeriod` takes them (the general `CheckedCreditPeriod` takes all but `SaltIsLiveCoin` and
 `StagedPins`):
 
 - `Properties.Pouw.Period.ServiceSound`: the proof system is sound at δ_ks against PoUW's check, which is C-Flock's
-  soundness at each drawn unit (`Flock.Guarantees.EndToEndRegisteredRows` for one session). It is a named assumption: no
+  soundness at each drawn unit (`Flock.Guarantees.EndToEndRegisteredRows`, at the drawn proof blocks of one audit). It is a named assumption: no
   theorem discharges it yet.
-- `Properties.Pouw.Period.DrawIsCoin`: the units the check publishes as drawn are the model's draw at the window's live
+- `Properties.Pouw.Period.DrawIsCoin`: the units the check publishes as drawn are the model's draw at the period's live
   coin. A protocol-code fact still to prove.
-- `Properties.Pouw.Period.RegisteredBeforeDraw`: each window's registration is fixed before its draw coin. It states
+- `Properties.Pouw.Period.RegisteredBeforeDraw`: each period's registration is fixed before its draw coin. It states
   the order only, and the binding it is used for also needs the rows committed by the registration, which the deployed
   path doesn't do yet: its registered roots are tags, with no row committed (`anchors []`).
-- `Properties.Pouw.Period.SaltIsLiveCoin`: each window's salt is its round's live coin. The deployed path doesn't meet
+- `Properties.Pouw.Period.SaltIsLiveCoin`: each period's salt is its round's live coin. The deployed path doesn't meet
   it: the loop is given its salt before it serves, and nothing in the record binds the salt to a live coin (`Security/Properties/Pouw/Period.lean`,
   `SaltIsLiveCoin`'s docstring).
 - `Properties.Pouw.Period.StagedPins`: the staged statement the service proves pins the flat tile the receipts are
   claims of. Neither side has a Lean function yet.
-- `Accounting.Assumptions.TS.OperandHMu` (H-μ⁺, the Duo receipts' premise): a cheater can't predict its skipped words'
-  values better than μ.
+- `Accounting.Assumptions.TS.OperandHMu`, the premise of PoUW's per-step receipts: a cheater can't predict its skipped
+  words' values better than μ.
 - `Accounting.Assumptions.TS.ReceiptLuckAt` and `Accounting.Assumptions.Compose.GuessLuckAt`: a skipped round passes
   its receipt, or a guessed fold state passes, only at the stated rate.
 - `Accounting.Assumptions.TS.UnitFixed`: the run's fixed and folded words are at least those of the units it didn't
   skip. It stays an assumption until those words are defined from the committed values.
-- `Accounting.Assumptions.TS.AcceptedLive`, the proof layer's (`SessionSoundAt`'s), not the period credit's: an
+- `Accounting.Assumptions.TS.AcceptedLive`, a premise of the proofs behind PoUW's credit (`SessionSoundAt`'s), not of the period credit: an
   accepted proof's check words are `1` as `flock-verify --zk --registered` reads them. No served path meets it yet.
+- `Accounting.Assumptions.TS.WindowLaw`, `ServedChecksHold` and `ServedRootsLinked`, `SessionSoundAt`'s other premises:
+  the draw follows its stated law, the served checks hold, and the served roots are linked to the registered ones.
 - The data sheet: `Accounting.Assumptions.TS.SheetClock`, `SheetDispatch`, `SheetTensor`, `SheetPipe`, `SheetSmem`,
   `SheetWords`, `SheetSemantics`, `FoldOpt`, `FoldOptFoldedAt` and `FillOpt`: the GPU's clock, rates and semantics are
   the data sheet's, and the folds are optimal. The live-words credit over a monitoring period (`CircuitCreditPeriod`,
@@ -188,27 +404,45 @@ The overhead, `DampenerRemote`:
 - `Nci.Assumptions.BaselineRegistered` (`Security/Definitions/Nci/Assumptions/Baseline.lean`): the data the
   registration names was public, not computed off the books before.
 - `Nci.Assumptions.WeightsIncompressible` (`Security/Definitions/Nci/Assumptions/Threads.lean`): no small subcircuit
-  rebuilds the weights it uses from fewer bits than their width.
+  rebuilds the weights it uses from fewer bits than their width. It is the older form, which the local bounds below
+  replace (`Security/README.md`, part 2).
 - `Nci.Complies` (`Security/Definitions/Nci.lean`): the declaration meets the inference-only policy.
+
+The local bounds (part 5):
+
+- `Nci.Assumptions.DescriptionHard` (in the lock): every selection of an item
+  family (updated weights, operands, or both) has time-bounded description length at least its price, less a deficit.
+- `Nci.Assumptions.CoversEfficientMethods` (in the lock): every sufficiently cheap successful method carries at least
+  the covered work Ω_*, except with probability η.
 
 ## Results per monitoring period
 
 The overhead calculator is `benchmarks/rho` (`verity bench rho`; it is being renamed to overhead). Its `periods.py`
-gives the overhead's lower bound for monitoring periods of a week, a month and a year. It covers one datacenter
-(`reference-h200`, 12,500 HGX nodes) and all compute (`world-h200`), at the remote scenario `reference-remote-h200`:
+gives the overhead lower bound for monitoring periods of a week, a month and a year, over one datacenter
+(`reference-h200`, 12,500 HGX nodes) and all compute (`world-h200`), at the remote scenario `reference-remote-h200`
+(`uv run python benchmarks/rho/periods.py --scenario reference-remote-h200`):
 
-```text
-uv run python benchmarks/rho/periods.py --scenario reference-remote-h200
-```
+| Over | Week | Month | Year | Range | Worst corner | No protocol |
+|---|---|---|---|---|---|---|
+| one datacenter | 2.75 | 2.79 | 2.8 | 1 to 21.1 | 1 | 2.5 |
+| the world | 2.75 | 2.79 | 2.8 | 1 to 21.1 | 1 | 2.5 |
 
-Each figure states which of its parameters are measured on one machine and which are scaled. The δ it reports is pooled
-over the monitoring period (`IntegrityHorizon`, `CircuitCreditPeriod`), not per sampling period.
+- **What the figures mean.** Each figure is the overhead lower bound against the fleet's full capacity. On that scale a
+  developer no protocol encumbers already scores 2.5 (1/MFU₀), so these figures barely exceed it.
+- **Their status.** They are draft and their premises contested. They come from the calculator's partial-sum route, not
+  from part 5's local bounds.
+- **What sets them.** The developer's undeclared GPU share sets nearly all of each figure (about 89%).
+- **Their range.** The range takes each parameter to either end of its plausible range; the worst corner takes them all
+  at once.
+- **The failure probability.** The δ is pooled over the monitoring period (`IntegrityHorizon`, `CircuitCreditPeriod`),
+  not per sampling period.
 
 ## The demo
 
 **No example runs the remote verifier yet:** `remote check` has no run of record; its first is due Wed 28 Oct, 11 AM
 PDT (D3). Lifecycle is the only example that steps through the whole remote composite, with a stand-in prover; h200
-and vllm each run remote's sampled-proofs half for real:
+runs remote's sampled-proofs half for real, and the vLLM demo runs both halves on one served run, PoUW's as a
+development run:
 
 - `verity example lifecycle` (`examples/lifecycle/README.md`): the remote composite stepped through one monitoring period
   on CPU in about 2 s: hardware registration, registration, declarations, live draws, each declaration's verdict and the
@@ -221,13 +455,14 @@ and vllm each run remote's sampled-proofs half for real:
   refused. At an 8-block draw, that allows at most 43.77% faulty proof blocks at δ = 1%. It runs, at proof level
   none, and isn't placed: its Lean verifier ran beside the prover. On a CPU at a small shape, run
   `uv run python examples/h200/run.py --out /tmp/e2e` (`--tamper l1.wup` must exit 3).
-- `verity example vllm` (`examples/vllm/README.md`): Llama-3.2-1B in bf16 served by vLLM on one RTX PRO 6000 (its run
-  of record), its values committed while serving, and a sampling period's proof blocks drawn by live coins, proved by
-  C-Flock `--zk` and checked by the Lean verifier. It runs, at proof level none: no remote guarantee exists for those
-  verdicts to reach (the open gap, above). The int8 served run on an H200 (`benchmarks/one_stage/served_verdicts.sh`'s
-  default) is tonight's, Tue 27 Oct, 6 PM PDT.
+- `verity example vllm` (`examples/vllm/README.md`), the vLLM demo: Llama-3.2-1B INT8 served by vLLM on one H200, its
+  values committed while serving, a sampling block's proof blocks sampled by live coins, proved by C-Flock `--zk` and
+  checked by the Lean verifier, and PoUW's H1 on the served model. PoUW's verdict there is a development run under the
+  challenger's development key and credits nothing, and an H1 commitment's served execution blocks aren't yet a
+  `verity/pouw/v1` case, so no run of record of the remote verdict has passed: its run is moved, at proof level none,
+  and no remote guarantee exists for its verdicts to reach (the open gap, above).
 
-PoUW's half has no runner. `examples/dither_full_util/README.md` has no runner and no run of record. What of PoUW runs
+`examples/dither_full_util/README.md` has no runner and no run of record. What of PoUW's own check runs
 is its Lean check, through its difftest against the Python (`lake exe pouw-check`, the suite
 `verity-pouw-check-difftest`; `verity/core/protocols/pouw/lean/check/README.md`), and the composite's difftest
 (`verity/core/protocols/composition/tests`).

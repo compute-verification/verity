@@ -7,6 +7,7 @@ prover answers with the collector paused, as the challenger does. `Party.of` rea
 
 from __future__ import annotations
 
+import functools
 import gc
 import hashlib
 import json
@@ -15,6 +16,7 @@ import threading
 
 import pytest
 
+import pous_fakes
 import pous_test_signer as ts
 from verity.core.protocols.pous import challenger_party as CP
 from verity.core.protocols.pous import memory_challenger as mc
@@ -23,18 +25,10 @@ from verity.core.protocols.pous import period, run
 STORE = hashlib.shake_256(b"a tiny MLP's weights").digest(600)
 COINS = hashlib.sha512(b"the period's live coins").digest()
 TEST_ID = mc.TEST_PREFIX + period.PROTOCOL
+Clock = functools.partial(pous_fakes.Clock, 10 ** 9, 1_000)
 
 
-class Clock:
-    def __init__(self) -> None:
-        self.now = 10 ** 9
-
-    def __call__(self) -> int:
-        self.now += 1_000
-        return self.now
-
-
-def _in_process() -> tuple[period.Period, run.Point, run.Setup, list[bytes], bytes]:
+def _in_process() -> tuple[period.Run, run.Point, run.Setup, list[bytes], bytes]:
     """`period.run` in one process under a test signer at the small point: its period, point, published setup, `C*`'s
     labels and table."""
     point = period.point_for(len(STORE), period.W, period.C0)
@@ -128,16 +122,16 @@ def test_the_prover_answers_with_no_collection_inside_the_rounds() -> None:
 
 
 def test_the_party_follows_period_json(tmp_path) -> None:
-    local = CP.Party.of({}, "vy-nebius-cpu-4", tmp_path)
-    assert (local.host, local.address) == ("vy-nebius-cpu-4", None) and str(tmp_path) in local.command
-    assert CP.Party.of({"challenger_host": "vy-nebius-cpu-4"}, "vy-nebius-cpu-4", tmp_path) == local
-    with pytest.raises(RuntimeError, match="vy-auditor-1 isn't wired for pous"):
-        CP.Party.of({"challenger_host": "vy-auditor-1", "challenger": {"bandwidth": {"command": ["x"]}}},
-                    "vy-nebius-cpu-4", tmp_path)
-    wired = CP.Party.of({"challenger_host": "vy-auditor-1", "challenger": {"pous": {
-        "command": ["ssh", "gate", "pous-challenger"], "address": "127.0.0.1:7960"}}}, "vy-nebius-cpu-4", tmp_path)
-    assert wired == CP.Party("vy-auditor-1", ("ssh", "gate", "pous-challenger"), ("127.0.0.1", 7960))
+    local = CP.Party.of({}, "cpu-node", tmp_path)
+    assert (local.host, local.address) == ("cpu-node", None) and str(tmp_path) in local.command
+    assert CP.Party.of({"challenger_host": "cpu-node"}, "cpu-node", tmp_path) == local
+    with pytest.raises(RuntimeError, match="auditor-host isn't wired for pous"):
+        CP.Party.of({"challenger_host": "auditor-host", "challenger": {"bandwidth": {"command": ["x"]}}},
+                    "cpu-node", tmp_path)
+    wired = CP.Party.of({"challenger_host": "auditor-host", "challenger": {"pous": {
+        "command": ["ssh", "gate", "pous-challenger"], "address": "127.0.0.1:7960"}}}, "cpu-node", tmp_path)
+    assert wired == CP.Party("auditor-host", ("ssh", "gate", "pous-challenger"), ("127.0.0.1", 7960))
     assert CP.placement("n0", "n0")[CP.PREMISE].startswith("unmet: ")
-    assert CP.placement("n0", "vy-auditor-1") == {
-        "parties": {"memory_challenger": "vy-auditor-1", "prover": "n0", "verifier": "n0"},
-        CP.PREMISE: "holds: the memory challenger ran on vy-auditor-1, not the prover's n0"}
+    assert CP.placement("n0", "auditor-host") == {
+        "parties": {"memory_challenger": "auditor-host", "prover": "n0", "verifier": "n0"},
+        CP.PREMISE: "holds: the memory challenger ran on auditor-host, not the prover's n0"}

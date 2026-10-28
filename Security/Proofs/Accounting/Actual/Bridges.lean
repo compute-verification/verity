@@ -255,7 +255,8 @@ theorem honestClock {Q R S : Type} {L : Type} [LinearOrder L] [Fintype L] {𝓕 
     {hash : (ρ : Actual.Run L) → Finset (Fin ρ.A.N)} {π : (ρ : Actual.Run L) → Fin ρ.A.N → ℕ}
     (U : Pouw.Workload) (A : Pouw.Adversary (Actual.costModel Q R S 𝓕 V tₛ t_d ℓ read hash π)) {td : ℝ}
     (htd : (t_d : ℝ) ≤ td) :
-    Pouw.Assumptions.HonestClock (Actual.costModel Q R S 𝓕 V tₛ t_d ℓ read hash π) U A (Actual.timedRun A U) td :=
+    Pouw.Assumptions.HonestClock ((Actual.costModel Q R S 𝓕 V tₛ t_d ℓ read hash π).adversaries U) A
+      (Actual.timedRun A U) td :=
   ⟨A, rfl, fun H s => ⟨fun _ => rfl, (timedRun_spentIn U A H s htd).ge, le_rfl⟩⟩
 
 end Actual

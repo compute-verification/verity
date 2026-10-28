@@ -26,7 +26,7 @@ IMAD = 1
 
 [skip.served]
 eps = 0.530
-source = "eps_budget.py (benchmarks/pouw, `design_skip`, `floor_skip`): Corollary D3's ε_skip, the skippable work at its issue-model price over the floor program's bound B_♭ (SPEC §2.9), ♭ 3.922 SMSP-cycles a 4096-MAC MMA on DC-90; the most over Llama-3.1-8B and 70B at 2K, 8K and 32K, prefill and decode (decode's ♭ its compute alone), every served output free. At 8B 32K decode: the linears' one-sided strip 2.06%; QKᵀ's one-sided strip 50.1%; P·V's peel 0.874%: its tail 0.779%, the sums DG, S and X(0) 0.0759%, the served epilogue 0.0192%. With P·V's served output checked it is 53.0% (8B) / 44.7% (70B) there. Skip terms: the peel's tail at the larger of 1.57 of ♭'s MACs a strip product and Π's price of its tail instructions (4 mma.sync m16n8k32, 6.93 IMAD, 16.09 other), its sums by vfold (#2300, decision 91; 0.760 an entry) and served epilogue (6.15 a tile) at one an issue cycle; a one-sided strip's 2L executed products at ♭'s price a MAC, the peel on sm_90a's own instruction counts for the same kernel source (RT-ISA-7: static nvdisasm counts with ncu's rule applied, not ncu; eps_budget's SASS), on this device's Π; the clean lm_head skips nothing, its words are ♭'s (note:20261017T0320Z-draft-eps1-calc Round 10)"
+source = "eps_budget.py (benchmarks/pouw, `design_skip`, `floor_skip`): Corollary D3's ε_skip, the skippable work at its issue-model price over the floor program's bound B_♭, ♭ 3.922 SMSP-cycles a 4096-MAC MMA on DC-90; the most over Llama-3.1-8B and 70B at 2K, 8K and 32K, prefill and decode (decode's ♭ its compute alone), every served output free. At 8B 32K decode: the linears' one-sided strip 2.06%; QKᵀ's one-sided strip 50.1%; P·V's peel 0.874%: its tail 0.779%, the sums DG, S and X(0) 0.0759%, the served epilogue 0.0192%. With P·V's served output checked it is 53.0% (8B) / 44.7% (70B) there. Skip terms: the peel's tail at the larger of 1.57 of ♭'s MACs a strip product and Π's price of its tail instructions (4 mma.sync m16n8k32, 6.93 IMAD, 16.09 other), its sums by vfold (0.760 an entry) and served epilogue (6.15 a tile) at one an issue cycle; a one-sided strip's 2L executed products at ♭'s price a MAC, the peel on sm_90a's own instruction counts for the same kernel source (static nvdisasm counts with ncu's rule applied, not ncu; eps_budget's SASS), on this device's Π; the clean lm_head skips nothing, its words are ♭'s"
 
 [mand.fold]
 eps = 0.0
@@ -34,18 +34,18 @@ source = "named assumption: duo at 3 lane instructions a word is the cheapest im
 
 [clock]
 eps = 0.0
-source = "f_H unmeasured on the H200 (EPS1 DC measured f_max = 1980 MHz at default clocks, 06:01Z): 0 here, so γ with the clock gap is γ, a lower bound"
+source = "f_H unmeasured on the H200 (f_max = 1980 MHz at default clocks, @h200-fmax): 0 here, so γ with the clock gap is γ, a lower bound"
 
 [luck]
 delta = 4.547473508864641e-13
 p = 0.75
 checks = 48000
-source = "SPEC §5 (note:20261017T0324Z-draft-eps1-spec): Theorem S at p = 3/4 over one week of 12.6 s rounds, δ′ = 2^-41 (note:20261016T0005Z-draft-luck-loss-round4 §1)"
+source = "Theorem S at p = 3/4 over one week of 12.6 s rounds, δ′ = 2^-41"
 
-[baseline]          # honest's own lane program: its words belong to the baseline, not to ε (the brief §2)
+[baseline]          # honest's own lane program: its words belong to the baseline, not to ε
 name = "dp4a"
 program = { IMAD = 64 }
-source = "dp4a at 64 IDP4A a word at L = 256, on IMAD's class as sm_120 prices it (no IDP4A kind in EPS1 DC's census); no LDS kind either, so its loads are unpriced"
+source = "dp4a at 64 IDP4A a word at L = 256, on IMAD's class as sm_120 prices it (no IDP4A kind in this device's census); no LDS kind either, so its loads are unpriced"
 
 [routes]
 lanes = true

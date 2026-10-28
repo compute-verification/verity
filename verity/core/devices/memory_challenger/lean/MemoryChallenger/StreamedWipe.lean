@@ -1,3 +1,4 @@
+import CoreProtocol.Site
 import MemoryChallenger.Verdict
 
 /-!
@@ -34,7 +35,8 @@ and the count's 15. -/
 def EGRESS_MAX_UNITS : Int := 2 ^ 15 - 1
 
 /-- `WipeParams`: `labels` (`N`), the `k` challenges revealed `batch` at a time, each batch's deadline, and the memory
-tiers as `(name, bytes)`, which hold the fill and may declare memory past it. -/
+tiers as `(name, bytes)`, which hold the fill and may declare memory past it. A server's tiers are its registered memory
+leaves (`Params.ofSite`, `Params.checkSite`). -/
 structure Params where
   labels : Nat
   k : Nat
@@ -60,15 +62,40 @@ def Params.covered (p : Params) : Bool := p.batch == 1
 /-- `WipeParams.batches`: `⌈k / batch⌉`. -/
 def Params.batches (p : Params) : Nat := (p.k + p.batch - 1) / p.batch
 
+private def tiersJson (tiers : Array (String × Nat)) : String :=
+  "[" ++ ",".intercalate (tiers.toList.map fun (t, b) => "[" ++ pyJsonStr t ++ "," ++ toString b ++ "]") ++ "]"
+
+/-- `TIER_NAMES`: the wipe's name for each of the registered site's memory tiers. -/
+def tierName : Core.Site.Tier → String
+  | .hbm => "gpu-hbm" | .dram => "host-dram" | .disk => "disk"
+
+/-- `registered_tiers`: the memory leaves the registered site has in the server's host, by tier in the Site's order,
+each tier that has bytes. A server that is no registered host, or isn't UTF-8, is refused. -/
+def registeredTiers (S : Core.Site) (server : ByteArray) : E (Array (String × Nat)) :=
+  match String.fromUTF8? server with
+  | none => throw "the server is not a host the registered site has: it isn't UTF-8"
+  | some h =>
+    if S.kind? h = some .host then
+      pure ((S.tiers Core.Site.Registration.sha512.sheet h).filter (·.2 > 0) |>.map fun (t, b) => (tierName t, b)).toArray
+    else throw s!"the server '{h}' is not a host the registered site has"
+
+/-- `WipeParams.of`: a wipe of the server whose tiers are its registered memory. -/
+def Params.ofSite (S : Core.Site) (server : ByteArray) (labels k batch limitNs : Nat) : E Params := do
+  pure ⟨labels, k, batch, limitNs, ← registeredTiers S server⟩
+
+/-- `WipeParams.check_site`: the tiers are the server's registered memory, in any order, as the bound reads only their
+sum. -/
+def Params.checkSite (p : Params) (S : Core.Site) (server : ByteArray) : E Unit := do
+  let want ← registeredTiers S server
+  unless p.tiers.toList.isPerm want.toList do
+    throw s!"the wipe declares the tiers {tiersJson p.tiers}, not the registered host's memory {tiersJson want}"
+
 /-- `WipeCommitment`: what the challenger publishes when it opens the session. -/
 structure Commitment where
   server : ByteArray
   session : ByteArray
   params : Params
   deriving BEq, Inhabited
-
-private def tiersJson (tiers : Array (String × Nat)) : String :=
-  "[" ++ ",".intercalate (tiers.toList.map fun (t, b) => "[" ++ pyJsonStr t ++ "," ++ toString b ++ "]") ++ "]"
 
 /-- `WipeCommitment.header()`'s fields, each value as `json.dumps` writes it. -/
 def Commitment.headerFields (c : Commitment) : List (String × String) :=
@@ -140,13 +167,20 @@ def Signed.message (s : Signed) : E ByteArray :=
 /-- `egress_units`: the egress in whole MiB, rounded up (Python's floor division), saturating at `EGRESS_MAX_UNITS`. -/
 def egressUnits (egressBits : Int) : Int := min (-(Int.fdiv (-egressBits) EGRESS_UNIT_BITS)) EGRESS_MAX_UNITS
 
-/-- Whether the signed session passes, and its egress in MiB. `reasons` are witness; `accepted` and `egressMib` are what
-`Verdict.public()` publishes. -/
-structure Verdict where
-  accepted : Bool
+/-- What the check found besides its verdict: the reasons it rejects (empty when it passes), which are witness, and the
+egress in MiB. -/
+structure Findings where
   reasons : Array String
   egressMib : Int
   deriving BEq, Inhabited
+
+/-- Whether the signed session passes, as `Core.Verdict` (`accept` exactly when there is no reason, never `undecided`),
+with its findings. The verdict and `egressMib` are what `Verdict.public()` publishes. -/
+abbrev Verdict := Findings × Core.Verdict
+
+def Verdict.accepted (v : Verdict) : Bool := v.2 == Core.Verdict.accept
+def Verdict.reasons (v : Verdict) : Array String := v.1.reasons
+def Verdict.egressMib (v : Verdict) : Int := v.1.egressMib
 
 /-- `verdict(signed, commitment, trusted=trusted, schemes=schemes)`. It fails closed: an unknown scheme, an untrusted key
 or a bad signature rejects whatever the batches say, and a commitment whose batch size the guarantee doesn't cover
@@ -177,6 +211,6 @@ def verdict (schemes : Schemes) (trusted : List ByteArray) (s : Signed) (c : Com
     if !(0 ≤ r.elapsedNs && r.elapsedNs ≤ (p.limitNs : Int)) then
       reasons := reasons.push s!"batch {b} is past its deadline of {p.limitNs} ns"
     if b == 0 && r.sendNs < s.fillEndNs then reasons := reasons.push "the first batch was sent before the fill completed"
-  return ⟨reasons.isEmpty, reasons, egressUnits s.egressBits⟩
+  return (Findings.mk reasons (egressUnits s.egressBits), acceptIf reasons.isEmpty)
 
 end MemoryChallenger.StreamedWipe

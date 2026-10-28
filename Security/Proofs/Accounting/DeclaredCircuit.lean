@@ -16,7 +16,7 @@ namespace Accounting.RateSketch.Provenance
 windows, its inputs are at most the run-input bits the stacking property's caps allow in any `life` of them
 (`8·R_life`), and its encodes at most `life` times the most nonlinear units (budgeted units and data products) the
 circuit has in a window. -/
-theorem OfCircuit.budget {N m : ℕ} {α ι : Type} {K : Provenance N m α} {cost : ℕ → ℕ∞} {W : Gates.Dag ι}
+theorem OfCircuit.budget {N m : ℕ} {α ι : Type} {K : Provenance N m α} {cost : ℕ → ℕ∞} {W : Gates.IntDag ι}
     {caps : Gates.Caps} {A : Gates.Audit} {I : Finset ℕ} {life : ℕ} (hK : K.OfCircuit cost W A I)
     (hP : Gates.Property caps A W) (hI : I ⊆ Finset.range A.windows) (hcard : I.card ≤ life)
     (E : SketchStore N m) :

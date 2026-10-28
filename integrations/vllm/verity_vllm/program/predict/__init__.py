@@ -8,8 +8,8 @@ Builds), `score` (predicted vs traced, per row and granularity: digest, equivale
 comparison that switches a row, and a switched row's AOT Build), `compiled` (the served-compiled Build from a model's config and
 its pins), `cli` (`verity-vllm predict`), `domain` (what of φ a predicted Program can't be the prediction of), `steps` (I2,
 the compiler from a served run's advice to the Programs its committed rows must pass) with `batch` (its batch invariance),
-`window_circuit` (a served window as its class's one Circuit) with `window_builder` (its proof blocks) and `window_weights`
-(its registered weights), and `node_registration` (θ of a node's Program, registered from its TP Commit of record).
+`window_circuit` (a served window as its class's one Circuit) with `window_builder` (its proof blocks), `inference_blocks` (its
+partition into inference blocks, a private table) and `window_weights` (its registered weights), and `node_registration` (θ of a node's Program, registered from its TP Commit of record).
 
 The record path reaches this package only through a switched row (its `aot` in `manifests/records.json`): its Build's derives are
 `predict emit` (`aot`), each refused unless the predicted Program is the one its comparison's trace holds.  No module of the Build,

@@ -246,7 +246,7 @@ stream, or one fewer, skipping the round `j` of `R`'s stream that has no coins. 
 theorem coinTie_sized (hq : ∀ (a : Array Json) (lt : Json → Json → Bool) x, x ∈ a.qsort lt → x ∈ a)
     {tr : Json} {record : String} {reg : Option Json} {bound : Option String}
     {shape : Option RecVStar.StackedShape} {cs : RecVStar.InnerCommits} {ish : RecVStar.Inner} {tt : String}
-    {spec : SessionSpec} {sess : Session} {name : String} {st : StreamRec}
+    {spec : SessionSpec} {sess : RunRecord} {name : String} {st : StreamRec}
     (hic : RecVStar.innerCommits tr record reg bound shape = .ok cs)
     (hR : RecSetup.checkReads ish tt tr record cs = .ok ())
     (hdec : Record.decode spec record = .ok sess) (hst : sess.streams.find? (·.name == name) = some st) :
@@ -674,7 +674,7 @@ def ExtrasR (untr : TrReader) (b : Brings) (Bk : Msg → ℕ) (s : ℕ) (x : Msg
 
 /-- **`InnerAt` at a dense compiled statement**, from the verifier's checks, wherever the coins `c` run to at least the
 deployed plain verifier's inner rounds. -/
-theorem staged_innerAt {b : Brings} {Bk : Msg → ℕ} {s : ℕ} {x : Msg} {c : ℕ → Coin} {st0 : Claims.Recursion.Stmt}
+theorem staged_innerAt {b : Brings} {Bk : Msg → ℕ} {s : ℕ} {x : Msg} {c : ℕ → Coin} {st0 : Claims.Recursion.CompiledStatement}
     (hst : parse x = some st0) (hd : Claims.Recursion.Form.Dense st0.form) (hB : RestRead.kI x ≤ Bk (xIOf x)) :
     InnerAt recRead b Bk s x c := by
   intro xO hsh i hins f unit inn hf hload
@@ -745,7 +745,7 @@ theorem staged_innerAt {b : Brings} {Bk : Msg → ℕ} {s : ℕ} {x : Msg} {c : 
     rw [canon_eq (B := Bk (xIOf x)) hsched (by omega) hk2]
 
 /-- **`InnerCoinsR` at a dense compiled statement**: `InnerAt` (`staged_innerAt`) and the extra claims (`ExtrasR`). -/
-theorem innerCoinsR_of {b : Brings} {Bk : Msg → ℕ} {s : ℕ} {x : Msg} {c : ℕ → Coin} {st0 : Claims.Recursion.Stmt}
+theorem innerCoinsR_of {b : Brings} {Bk : Msg → ℕ} {s : ℕ} {x : Msg} {c : ℕ → Coin} {st0 : Claims.Recursion.CompiledStatement}
     (hst : parse x = some st0) (hd : Claims.Recursion.Form.Dense st0.form) (hB : RestRead.kI x ≤ Bk (xIOf x))
     (hE : ExtrasR recRead b Bk s x c) : InnerCoinsR recRead b Bk s x c := by
   intro xO hsh i spec sts hsu hsz f inn hf hload
@@ -754,7 +754,7 @@ theorem innerCoinsR_of {b : Brings} {Bk : Msg → ℕ} {s : ℕ} {x : Msg} {c : 
 
 /-- **`PosTieR` at row D's position reader**, at a dense compiled statement, from `ExtrasR`. -/
 theorem posTieR_staged {b : Brings} {pieces : Msg → List OpenPiece} {Bk : Msg → ℕ} {s : ℕ} {x : Msg}
-    {c : ℕ → Coin} {st0 : Claims.Recursion.Stmt} (hst : parse x = some st0)
+    {c : ℕ → Coin} {st0 : Claims.Recursion.CompiledStatement} (hst : parse x = some st0)
     (hd : Claims.Recursion.Form.Dense st0.form) (hR : PiecesInRangeR pieces) (hB : RestRead.kI x ≤ Bk (xIOf x))
     (hE : ExtrasR recRead b Bk s x c) : PosTieR recRead b pieces posAt Bk s x c :=
   posTieR_of hst hd hR (innerCoinsR_of hst hd hB hE)

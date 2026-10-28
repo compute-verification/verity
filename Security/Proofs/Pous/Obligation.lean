@@ -182,6 +182,34 @@ theorem ObligationDemoWide : Pous.Guarantees.ObligationDemoWide := by
   rw [hlow, Nat.cast_ofNat] at hb
   exact hb.trans hnum
 
+/-- **A 320-read window at `2^-20`, from the widened per-round floor** (`Pous.Guarantees.ObligationWide320`). -/
+theorem ObligationWide320 : Pous.Guarantees.ObligationWide320 := by
+  intro p ε₀ D Q L hnum h N _ h1 h2 T _ _ tag htag Sz hSz W A₁ A₂
+  have hb := ObligationOfRoundSecureWide p ε₀ D Q L h N h1 h2 T tag htag Sz 320 W A₁ A₂
+  rw [lowBoundaries_of_le hSz] at hb
+  exact hb.trans hnum
+
+/-- **`ObligationWide320`'s premise holds at P2's floor**: `p = 0.043` and `ε₀ = 2^-137` meet `RoundsBound` at 320
+rounds and `2^-20` (`PousP2Rounds.floor_043_eps_320`). -/
+theorem ObligationWide320_honest :
+    Pous.Guarantees.RoundsBound (43 / 1000) ((2⁻¹ : ℝ≥0∞) ^ 137) 320 ((2⁻¹ : ℝ≥0∞) ^ 20) := by
+  unfold Pous.Guarantees.RoundsBound
+  rw [Nat.cast_ofNat]
+  exact PousP2Rounds.floor_043_eps_320
+
+/-- **`ObligationWide320`'s bound says something**: at the registered point's `2^19` blocks and 320 reads, the event a
+verifier that accepts everything passes has probability 1, above `2^-20`. -/
+theorem ObligationWide320_nontrivial :
+    ¬ pr (fun _ : Oracle 16448 (2 ^ 16448 - 21065) (Fin (2 ^ 19)) × Unit × (Fin 320 → Fin (2 ^ 19)) => True) ≤
+      (2⁻¹ : ℝ≥0∞) ^ 20 := by
+  haveI : Nonempty (Oracle 16448 (2 ^ 16448 - 21065) (Fin (2 ^ 19))) :=
+    (ringRO (2 ^ 19) 16448 (2 ^ 16448 - 21065)).nonemptyΩ
+  haveI : Nonempty (Fin (2 ^ 19)) := ⟨⟨0, by norm_num⟩⟩
+  have h1 : pr (fun _ : Oracle 16448 (2 ^ 16448 - 21065) (Fin (2 ^ 19)) × Unit × (Fin 320 → Fin (2 ^ 19)) => True) = 1 :=
+    pr_eq_one fun _ => trivial
+  rw [h1]
+  exact not_le.2 (pow_lt_one₀ zero_le (ENNReal.inv_lt_one.2 ENNReal.one_lt_two) (by norm_num))
+
 end Pous.SecurityProofs
 
 namespace Pous.Period.SecurityProofs
@@ -194,12 +222,31 @@ set_option exponentiation.threshold 20000
 /-- **PoUS's per-window obligation guarantee** (`Pous.Period.ObligationHeld`): `PeriodHeld` at the snapshot, at every
 value of the other tags' keys, averaged over them. -/
 theorem obligationHeld : ObligationHeld := by
-  intro hH D Q L hP ι α ΩW ΩQ T _ _ _ _ tag htag d r P round S hdev hS o
+  intro D Q L hP ι α ΩW ΩQ T _ _ _ _ tag htag d r P τ round S hdev hinst hS o
   exact Pous.Mutable.SecurityProofs.pr_snap_le_real tag htag
     (fun e x => P.Accepts (o.1, (o.2, e), x) ∧ ¬ P.Break (o.1, (o.2, e), x) ∧
       (r.held (o.1, (o.2, e), x) : ℝ) < S * (r.win .capacity).len) _
     (add_nonneg δ_nonneg ENNReal.toReal_nonneg)
-    fun e => periodHeld hH D Q L hP ι α ΩW (ΩQ × Mutable.RestKeys tag 16448 (2 ^ 16448 - 21065)) d r P round S
-      hdev hS (o.1, (o.2, e))
+    fun e => periodHeld D Q L hP ι α ΩW (ΩQ × Mutable.RestKeys tag 16448 (2 ^ 16448 - 21065)) d r P τ round S
+      hdev hinst hS (o.1, (o.2, e))
+
+/-- **`obligationHeld` holds at the honest instance**: its device premises, `periodHeld_honest`, with the other tags'
+keys among the other audits' coins. -/
+theorem obligationHeld_honest {ι : Type} [Fintype ι] {d : Accounting.Device ι} {α ΩW ΩQ : Type} [Fintype α]
+    (r : Accounting.Run d α ΩW ΩQ ((ringRO (2 ^ 19) 16448 (2 ^ 16448 - 21065)).Ω × HmCoins × Streams))
+    (P : Audits ΩW ΩQ) (D Q L round : ℕ) (hs : P.sid.size = 32)
+    (hfull : ∀ ω, ∃ t ∈ (r.win .capacity).ticks, FULL ≤ (r.schedule ω t).mem (r.acct .capacity)) :
+    DeviceModel r P (lookup ΩW ΩQ) D Q L round ∧ Instantiates P (lookup ΩW ΩQ) :=
+  periodHeld_honest r P D Q L round hs hfull
+
+/-- **`obligationHeld` is nontrivial**: at a store of `2^19` tags, an event that holds on every oracle and coin
+exceeds its bound `δ + ε_max`. -/
+theorem obligationHeld_nontrivial :
+    ¬ Pouw.pr (fun _ : Mutable.Oracle 16448 (2 ^ 16448 - 21065) (Fin (2 ^ 19)) × HmCoins × Streams => True) ≤
+      (Params.δ : ℝ) + Params.εMax.toReal := by
+  have : Nonempty (Mutable.Oracle 16448 (2 ^ 16448 - 21065) (Fin (2 ^ 19))) :=
+    inferInstanceAs (Nonempty (ringRO (2 ^ 19) 16448 (2 ^ 16448 - 21065)).Ω)
+  rw [Pouw.pr_eq_one fun _ => trivial]
+  exact not_le.2 bound_toReal_lt_one
 
 end Pous.Period.SecurityProofs

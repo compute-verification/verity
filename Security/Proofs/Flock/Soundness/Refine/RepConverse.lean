@@ -127,7 +127,7 @@ stream, the statement's extra claims at the link points are `extras`, the proof 
 `verifyRep` decodes with, its PCS parameters are the pinned ones, the rep's program returns from the stream's replay
 transcript at `t₄` (`prog_of_checks`), `t₄` consumed every recorded round, and the proof's cap is the committed
 `root_B`, then `verifyRep` returns that cap. -/
-theorem verifyRep_of_checks (spec : SessionSpec) (st : Setup) (sch : Flock.Schedule) (sess : Session) (i r : ℕ)
+theorem verifyRep_of_checks (spec : SessionSpec) (st : Setup) (sch : Flock.Schedule) (sess : RunRecord) (i r : ℕ)
     (bytes : ByteArray) (stream : StreamRec) (extras : Array Claim) (p : Proof) (t₄ : Transcript)
     (hs : sess.streams.find? (fun x => x.name == toString spec.tables[i]! ++ toString "/rep" ++ toString r) =
       some stream)

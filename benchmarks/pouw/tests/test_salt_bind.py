@@ -1,7 +1,7 @@
-"""RT4-INT-10 on the certified served window (#2847, `served_commit.Challenger(certifier=…)`): a drawn unit's proof is
+"""On the certified served window (`served_commit.Challenger(certifier=…)`), a drawn unit's proof is
 held to the window's certified salt at its opening of record (`core_check.opening`'s ``salt``, Lean `PouwCheck.opening`'s).
 
-RT4-INT's witness lifted `salt.unit_reason` and passed rows formed before any certifier salt through every certified
+A witness that lifted `salt.unit_reason` and passed rows formed before any certifier salt through every certified
 check, the opening included. The opening now opens a certified window's unit only when its template is salted
 (`core_check.Salted`) and only under the 64-byte salt the verifier holds (`core_check.certified_salt`, the salt
 `pass_epoch` checked), and requires the salted unit's public row to be `core_check.public_bc` of that salt, the unit's
@@ -54,7 +54,7 @@ POUW_WINDOW, WINDOWS = 2, 4
 SCHEME = C.PearlC(k_min=K, forming="v1", device=DEVICES["sm120"], hashing="h3")
 MATMUL = Matmul(5, Shape(16, K, N), 2)
 RUN = "r-salt-bind"
-#: the runner's record of a request served at the verifier's fixed length under ignore_eos (ASK-39)
+#: the runner's record of a request served at the verifier's fixed length under ignore_eos
 SERVED = {"ignore_eos": True, "max_tokens": [SC.MAX_TOKENS], "served": [SC.MAX_TOKENS]}
 #: the network certifier's LMS key and the challenger's, which the certifier registers, and the certifier run's id
 CERTIFIER, CHALLENGER = (lms.keygen(lms.Params(64, 1, 6), hashlib.sha512(s).digest())
@@ -129,13 +129,13 @@ def _certifier(sid: bytes, key, sign, record: bytes, tmp_path: Path,
     return active.RemoteCertifier(*reveals(c), signers[0].public_key(), signers[1], LINK, RUN_ID), drawn
 
 
-def _challenger(params, c, prover, path: Path, ledger: PS.Registrations) -> SC.Challenger:
+def _challenger(params, c, prover, path: Path, ledger: PS.WindowOpens) -> SC.Challenger:
     k = lms.keygen(lms.Params(64, 4, 2), hashlib.sha512(str(path).encode()).digest())
     live = Wd.live_challenger(0, 1, random.Random(str(path)).randbytes)
     Ch.write_record(path, live.sign_record("auditor-host", lms.public_key(k), lambda m: lms.sign_at(k, 0, m).encode()))
     deployment = SC.Deployment(c.certifier_key, c.run_id, Ch.ChallengerKey(4, 2, lms.public_key(k)))
     return SC.Challenger(params, live, clock=lambda: 0.0, record=OR.Record(lean=False), certifier=c, prover=prover,
-                         coin_record=path, deployment=deployment, registrations=ledger)
+                         coin_record=path, deployment=deployment, opens=ledger)
 
 
 def _window(p: int, reveal: bytes, sid: bytes, prover: bytes, words) -> dict:
@@ -167,7 +167,7 @@ def _pub(priv, advice, t: int) -> bytes:
 
 
 def test_rows_formed_before_any_salt_are_refused_at_a_certified_windows_opening(tmp_path, monkeypatch, reveals):
-    """RT4-INT-10, the served path. RT4-INT's witness: lift `unit_reason` and the prover's rows, formed once under a salt
+    """The served path. The witness: lift `unit_reason` and the prover's rows, formed once under a salt
     that is neither window's and committed in PoUW windows 0 and 1, pass the certifier's record and reveal (through its
     client, `RemoteCertifier`), `pass_epoch` of record, the registration ledger and the live draw. They now stop at the
     opening of record: the window is certified and `Pc8TileSide` reads no salt, so every drawn unit is refused, through
@@ -178,7 +178,7 @@ def test_rows_formed_before_any_salt_are_refused_at_a_certified_windows_opening(
     prover, sid = PS.prover_id(key.public), _sid()
     committed = PS.pouw_record(weights_root(_pass(RUN)[1]), sid, prover)
     c, drawn = _certifier(sid, key, sign, committed, tmp_path, reveals)
-    ledger = PS.Registrations()
+    ledger = PS.WindowOpens()
     refused = "the window is certified, and its template's unit reads no salt"
     for p in (0, 1):
         w = _window(p, drawn[p], sid, prover, PRECOMPUTED)
@@ -199,7 +199,7 @@ def test_rows_formed_before_any_salt_are_refused_at_a_certified_windows_opening(
 
 
 def test_a_salted_unit_formed_under_its_own_salt_is_refused_under_the_certified_one():
-    """RT4-INT-10, the salted unit. A certified window's salt is `pouw_salt` of the certifier's reveal; the prover can
+    """The salted unit. A certified window's salt is `pouw_salt` of the certifier's reveal; the prover can
     pick its own salt s* before any reveal and form the H1 unit's public row under it, its rows the same. Under the
     certified salt the verifier holds, the opening of record (`of_record.py_opening`, the difftest's input) refuses the
     s* proof at its public row and opens the proof formed under the certified salt (the honest twin: every rule of the

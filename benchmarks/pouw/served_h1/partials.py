@@ -1,13 +1,13 @@
-"""Option A's prover side (CA, 21 Oct 16:04Z): a drawn leaf's 32 lane partials, recomputed after the draw from what serving
+"""Option A's prover side: a drawn leaf's 32 lane partials, recomputed after the draw from what serving
 committed, bit for bit the words the served receipt XORed.  Serving is unchanged: one receipt a 32 × 32 leaf (`receipts`).
-The proof of a drawn leaf is 32 lane sub-statements and a combine that checks the XOR of their partials is the committed
-receipt; this module computes those partials.
+The proof of a drawn leaf is 32 sub-statements, one a lane, and a combine that checks the XOR of their partials is the
+committed receipt; this module computes those partials.
 
-A window (`Window`) holds each call's B [N, K] (s8, the int8 pin's weight) and B root, the call's first position in a step
-(`offs`) and the positions a step (`u_step`); a step (`Step`) its calls' committed A [t, K] (s8, every slot), their A
-roots, its live rows m and its salt, `h1tile.live_salt` of its coin (`Step.from_coin`).  A leaf (`Leaf`) is unit u of
-call w at step s: row block u // (N / 32), column block u % (N / 32), position s u_step + offs[w] + u, seeds (seed_j, σ_R)
-from (salt, position, A root, B root) (`seeds.seed` / `receipt_seed`).
+An execution block's calls (`Calls`) hold each call's B [N, K] (s8, the int8 pin's weight) and B root, the call's first
+position in a step (`offs`) and the positions a step (`u_step`); a step (`Step`) its calls' committed A [t, K] (s8, every
+slot), their A roots, its live rows m and its salt, `h1tile.live_salt` of its coin (`Step.from_coin`).  A leaf (`Leaf`) is
+unit u of call w at step s: row block u // (N / 32), column block u % (N / 32), position s u_step + offs[w] + u, seeds
+(seed_j, σ_R) from (salt, position, A root, B root) (`seeds.seed` / `receipt_seed`).
 
 `lane_partials(window, leaf)` is (32, W) uint32, W = 2 (KS + m) (KS = K / 32, m = `segment.n_digits(KS)`: W = 260 at
 K = 4096, 902 at K = 14336), the layout `kh_lanes` writes a leaf's record in:
@@ -75,8 +75,8 @@ class Step:
 
 
 @dataclass
-class Window:
-    """A window's calls: B [N, K] s8 and its root a call, call w's first position in a step, the positions a step, and
+class Calls:
+    """An execution block's calls: B [N, K] s8 and its root a call, call w's first position in a step, the positions a step, and
     its steps by number."""
 
     b: list[torch.Tensor]
@@ -101,7 +101,7 @@ class _At:
     live: bool
 
 
-def _at(win: Window, leaf: Leaf) -> _At:
+def _at(win: Calls, leaf: Leaf) -> _At:
     st = win.steps[leaf.step]
     a, b = st.a[leaf.call], win.b[leaf.call]
     if a.shape[1] != b.shape[1] or b.shape[0] % RC.C_:
@@ -113,7 +113,7 @@ def _at(win: Window, leaf: Leaf) -> _At:
     return _At(leaf, ri, cj, leaf.step * win.u_step + win.offs[leaf.call] + leaf.unit, RC.R * ri < st.m)
 
 
-def _seeds(win: Window, ats: list[_At]) -> tuple[list[bytes], list[bytes]]:
+def _seeds(win: Calls, ats: list[_At]) -> tuple[list[bytes], list[bytes]]:
     sj, sr = [], []
     for x in ats:
         st = win.steps[x.leaf.step]
@@ -127,7 +127,7 @@ def _be(b: bytes) -> np.ndarray:
     return np.frombuffer(b, dtype=">u8").astype(np.uint64)
 
 
-def _seed_inputs(win: Window, ats: list[_At], device) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+def _seed_inputs(win: Calls, ats: list[_At], device) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
     """`kh_seeds_at`'s inputs: a record (kh_seeds' data: SEED_TAG, RECEIPT_TAG, salt, root_a, root_b, 30 big-endian
     words) a step and call, each leaf's record index and its position."""
     recs: dict[tuple[int, int], int] = {}
@@ -148,7 +148,7 @@ def _rows(t: torch.Tensor, blocks: list[int], device) -> torch.Tensor:
     return t.index_select(0, idx).view(len(blocks), RC.R, t.shape[1]).to(device)
 
 
-def _gather(win: Window, ats: list[_At], device) -> tuple[torch.Tensor, torch.Tensor]:
+def _gather(win: Calls, ats: list[_At], device) -> tuple[torch.Tensor, torch.Tensor]:
     """The leaves' A and B row blocks, (L, 32, K) s8 each on `device`, in `ats`' order (one index_select a step and call)."""
     k = win.k(ats[0].leaf.call)
     a = torch.empty(len(ats), RC.R, k, dtype=torch.int8, device=device)
@@ -210,7 +210,7 @@ class Kernel:
         return out, rec
 
 
-def _cpu(win: Window, ats: list[_At], chunk: int) -> np.ndarray:
+def _cpu(win: Calls, ats: list[_At], chunk: int) -> np.ndarray:
     k = win.k(ats[0].leaf.call)
     lay = RC.layout(k)
     out = np.empty((len(ats), LANES, 2 * lay.sets), dtype=np.uint32)
@@ -225,7 +225,7 @@ def _cpu(win: Window, ats: list[_At], chunk: int) -> np.ndarray:
     return out
 
 
-def _live_by_k(win: Window, ats: list[_At]) -> dict[int, list[int]]:
+def _live_by_k(win: Calls, ats: list[_At]) -> dict[int, list[int]]:
     by_k: dict[int, list[int]] = defaultdict(list)
     for i, x in enumerate(ats):
         if x.live:
@@ -233,7 +233,7 @@ def _live_by_k(win: Window, ats: list[_At]) -> dict[int, list[int]]:
     return by_k
 
 
-def gpu_batches(win: Window, leaves: list[Leaf], kernel: Kernel, chunk: int | None = None, device=None):
+def gpu_batches(win: Calls, leaves: list[Leaf], kernel: Kernel, chunk: int | None = None, device=None):
     """The live leaves on `kernel`, `chunk` of one K at a time (2^30 / (64 K) by default: a GiB of gathered operands), on
     `device` (the B tensors' by default), their seeds from `kh_seeds_at`: yields (indices into `leaves`, receipts (n, W),
     records (n, 32, W)), int32 on the device; a dead leaf is in no batch (its partials are zero)."""
@@ -250,7 +250,7 @@ def gpu_batches(win: Window, leaves: list[Leaf], kernel: Kernel, chunk: int | No
             yield sel, out, rec
 
 
-def lane_partials_many(win: Window, leaves: list[Leaf], backend: str = "cpu", kernel: Kernel | None = None,
+def lane_partials_many(win: Calls, leaves: list[Leaf], backend: str = "cpu", kernel: Kernel | None = None,
                        chunk: int | None = None, device=None) -> list[np.ndarray]:
     """Each leaf's lane partials, (32, W) uint32 (the module docstring's lane and word order), in `leaves`' order: the
     live leaves of each K batched, `chunk` at a time (cpu: 2^20 / K; gpu: `gpu_batches`), on `backend` ("cpu", or "gpu":
@@ -274,7 +274,7 @@ def lane_partials_many(win: Window, leaves: list[Leaf], backend: str = "cpu", ke
     return res  # type: ignore[return-value]
 
 
-def lane_partials(win: Window, leaf: Leaf, backend: str = "cpu", kernel: Kernel | None = None,
+def lane_partials(win: Calls, leaf: Leaf, backend: str = "cpu", kernel: Kernel | None = None,
                   device=None) -> np.ndarray:
     """Leaf `leaf`'s 32 lane partials, (32, W) uint32: row l lane l = 4 g + q, word 2 s its chains' y after set s and
     2 s + 1 their z (the module docstring); their XOR over rows is the leaf's receipt."""
@@ -287,4 +287,4 @@ def combine(partials: np.ndarray) -> np.ndarray:
     return np.bitwise_xor.reduce(partials, axis=-2)
 
 
-__all__ = ["Kernel", "LANES", "Leaf", "Step", "Window", "combine", "gpu_batches", "lane_partials", "lane_partials_many"]
+__all__ = ["Calls", "Kernel", "LANES", "Leaf", "Step", "combine", "gpu_batches", "lane_partials", "lane_partials_many"]

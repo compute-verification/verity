@@ -312,7 +312,7 @@ def test_a_signature_ignores_how_an_immediate_is_loaded_and_nothing_else():
 
 
 def test_a_sections_flags_line_keeps_its_function():
-    """nvdisasm writes `.sectionflags` after `.section` for a kernel that uses barriers (#449's sm_90a plainq)."""
+    """nvdisasm writes `.sectionflags` after `.section` for a kernel that uses barriers (the sm_90a plainq)."""
     flagged = "".join(ln + ('\t.sectionflags\t@"SHF_BARRIERS=1"\n' if ln.lstrip().startswith(".section\t.text.") else "")
                       for ln in listing("plain").splitlines(keepends=True))
     assert flagged.count(".sectionflags") >= 3
@@ -390,9 +390,8 @@ def test_pins_of_another_format_are_refused(tmp_path):
 
 
 # ---- sm_90a ---------------------------------------------------------------------------------------------------------------
-# `plain90` and `refused90` are 13.0.1's sm_90a builds of the probes (r20261023-101808-80bd, the ptxas of the sm_90a pin
-# attempt r20261023-083327-2d51). The shipped 13.0.1-sm_90a entry is ieee_pin.cu's, numeric run r20261026-085046-75c4 on
-# the H200.
+# `plain90` and `refused90` are 13.0.1's sm_90a builds of the probes, by the sm_90a pin's ptxas. The shipped
+# 13.0.1-sm_90a entry is ieee_pin.cu's, from its numeric run on the H200.
 
 
 @pytest.fixture
@@ -467,7 +466,7 @@ def test_an_sm90a_sequence_with_another_operand_or_constant_is_not_exempt(pins90
 @pytest.mark.parametrize("f2f,exempt", [("F2F.F32.F64 R2, R10", True), ("F2F.F64.F32 R2, R10", False),
                                         ("F2F.F64.F64 R2, R10", False)])
 def test_a_conversion_may_write_only_its_destination_types_width(pins90, f2f, exempt):
-    """sm_90a's ptxas schedules an F2F.F32.F64 inside ieee_pin.cu's cdiv_all div.rn fast path (r20261023-083327-2d51), its
+    """sm_90a's ptxas schedules an F2F.F32.F64 inside ieee_pin.cu's cdiv_all div.rn fast path, its
     destination the register before the divisor: an F32 result writes one register, an F64 result two."""
     v = verdict("plain90", text=after(listing("plain90"), "div_k", "FCHK P0, R0, R3", f2f, 0xb8), p=pins90)
     if exempt:
@@ -478,8 +477,8 @@ def test_a_conversion_may_write_only_its_destination_types_width(pins90, f2f, ex
 
 
 # ---- exceptions -----------------------------------------------------------------------------------------------------------
-# `units_softmax90` is kernels' units_softmax (benchmarks/torch_gpu/units/units.cu at 3cc8d5b6a6, #4518) as 13.0.1's ptxas
-# built it for sm_90a: the cubin H200 run r20261026-032225-3cee ran (sha256 81d539e9...), listed by r20261026-072428-54b7.
+# `units_softmax90` is units_softmax (benchmarks/torch_gpu/units/units.cu at 3cc8d5b6a6) as 13.0.1's ptxas built it for
+# sm_90a: the cubin an H200 run ran (sha256 81d539e9...).
 # Its 32 MUFU.EX2 are ex2.approx.ftz.f32, one per element of a row; the same run's units_sweep held that instruction to
 # MufuEx2Ftz on all 2^32 operands.
 
@@ -539,9 +538,9 @@ def test_the_exception_names_the_definition_and_table_its_runs_measured():
     assert [tk for tk, rec in p["toolkits"].items() if rec.get("exceptions")] == ["13.0.1-sm_90a"]
 
 
-# ---- kernels' units.cu at sm_90a ------------------------------------------------------------------------------------------
+# ---- units.cu at sm_90a ------------------------------------------------------------------------------------------
 # `units_sweep90` and `units_rmsnorm90` are the units_sweep and units_rmsnorm sections of the listing `units_softmax90` comes
-# from (r20261026-081741-cfef's, of the cubin 81d539e9...), with its tool notes. Their fast paths reload a divisor or
+# from (of the cubin 81d539e9...), with its tool notes. Their fast paths reload a divisor or
 # numerator from constant bank 0 in the call block, FCHK reads a copy of it, and units_sweep switches with BRX; rmsnorm's
 # and softmax's slow paths are the bodies ieee_pin.cu's units_rms, units_sqrt and units_soft test.
 
@@ -865,7 +864,7 @@ def test_the_gate_names_the_failing_binary_function_and_instruction(tmp_path, mo
     lib = a_library(tmp_path / "libarm.so")
     fake_tools(monkeypatch, "fast_math")
     logged: list[str] = []
-    g = SG.Gate(log=logged.append, tools=TOOLS, cache=None, pins=pins_file(tmp_path / "pins.json"))
+    g = SG.SassChecker(log=logged.append, tools=TOOLS, cache=None, pins=pins_file(tmp_path / "pins.json"))
     with pytest.raises(SG.SassGateFailed, match=r"libarm\.so: 42 flagged instruction\(s\) .* first \w+ 0x[0-9a-f]+: "):
         g.check([str(lib)], "arm:x")
     assert logged[0].startswith(f"sass gate: FAIL {lib} (ptxas 12.9.1; 55 flagged, covered ")
@@ -887,7 +886,7 @@ def test_discovery_takes_mapped_device_code_and_leaves_nvidias_libraries_unscann
     libs = [a_library(tmp_path / "libcublasLt.so.12"), a_library(tmp_path / "libarm.so"), tmp_path / "libhost.so"]
     libs[2].write_bytes(elf(62, {".text": b"\x90" * 16}))
     monkeypatch.setattr(SG, "mapped", lambda: [str(p) for p in libs])
-    g = SG.Gate(tools=TOOLS, cache=None)
+    g = SG.SassChecker(tools=TOOLS, cache=None)
     assert g.discover() == [str(libs[1])]
     assert g.report()["not_scanned"] == [{"path": str(libs[0]), "reason": "NVIDIA's library"}]
     for gone in (str(tmp_path / "libgone.so") + " (deleted)", "/memfd:lib (deleted)", "/dev/shm/x (deleted)"):
@@ -900,7 +899,7 @@ def test_shared_anonymous_memory_is_not_a_library(tmp_path, monkeypatch):
     """The CUDA driver maps shared anonymous memory, which /proc/self/maps names '/dev/zero (deleted)'."""
     anon = ["/dev/zero (deleted)", "/SYSV0000a1b2 (deleted)"]
     monkeypatch.setattr(SG, "mapped", lambda: [*anon, str(a_library(tmp_path / "libarm.so"))])
-    g = SG.Gate(tools=TOOLS, cache=None)
+    g = SG.SassChecker(tools=TOOLS, cache=None)
     assert g.discover() == [str(tmp_path / "libarm.so")]
     assert g.report()["not_scanned"] == [{"path": p, "reason": "shared anonymous memory, not a file"} for p in anon]
 
@@ -913,7 +912,7 @@ def test_a_deleted_posix_semaphore_is_not_a_library_but_a_bigger_or_code_bearing
     sems = [p for p in SG.mapped() if SG.POSIX_SEM.fullmatch(p)]
     assert sems, "a multiprocessing lock maps no /dev/shm/sem.* (deleted)"
     monkeypatch.setattr(SG, "mapped", lambda: sems[:1])
-    g = SG.Gate(tools=TOOLS, cache=None)
+    g = SG.SassChecker(tools=TOOLS, cache=None)
     assert g.discover() == [] and g.report()["not_scanned"][0]["reason"].startswith("a POSIX semaphore")
     fake = "/dev/shm/sem.mp-planted (deleted)"
     monkeypatch.setattr(SG, "mapped", lambda: [fake])
@@ -921,7 +920,7 @@ def test_a_deleted_posix_semaphore_is_not_a_library_but_a_bigger_or_code_bearing
         monkeypatch.setattr(SG, "regions", lambda p, size=size: [(0x1000, 0x1000 + size)])
         monkeypatch.setattr(SG, "read_mapped", lambda s, n, data=data: data.ljust(n, b"\0"))
         with pytest.raises(SG.SassGateFailed, match="mapped but deleted"):
-            SG.Gate(tools=TOOLS, cache=None).discover()
+            SG.SassChecker(tools=TOOLS, cache=None).discover()
 
 
 def test_this_process_maps_the_python_interpreter():

@@ -47,7 +47,7 @@ np.seterr(all="ignore")
 
 
 def _silu_f32_bits(g_f32_bits: int) -> int:
-    """W4b's registered stand-in for the CUDA `silu` (expf + division): RN32 of the exact real value
+    """The registered stand-in for the CUDA `silu` (expf + division): RN32 of the exact real value
     g / (1 + e^-g). Total: NaN -> NaN, +inf -> +inf, -inf -> -0 (exact limit)."""
     c, v = _decode(g_f32_bits)
     if c == 2:
@@ -65,8 +65,8 @@ def _silu_f32_bits(g_f32_bits: int) -> int:
 @primitive("SiluMulBf16", 1, [("g", BF16), ("u", BF16)], BF16, conformance="exact-model-tested",
            tables=(("silu_bf16", "registered"),))
 def SiluMulBf16(g: int, u: int) -> int:
-    """vLLM CUDA `act_and_mul_kernel<silu>` (eager): bf16(f32(bf16(silu_f32(g))) * u); W4b's model, exact on
-    every captured element in numerics.md; `silu_f32` is the float64-exact stand-in for expf+div."""
+    """vLLM CUDA `act_and_mul_kernel<silu>` (eager): bf16(f32(bf16(silu_f32(g))) * u); exact on
+    every captured element; `silu_f32` is the float64-exact stand-in for expf+div."""
     s = f32_to_bf16_rn_bits(_silu_f32_bits(bf16_to_f32_bits(g)), BF16_NAN_TORCH)
     return f32_to_bf16_rn_bits(f32_mul_bits(bf16_to_f32_bits(s), bf16_to_f32_bits(u)), BF16_NAN_TORCH)
 
@@ -74,7 +74,7 @@ def SiluMulBf16(g: int, u: int) -> int:
 @primitive("RopeOut", 1, [("x", BF16), ("y", BF16), ("c", BF16), ("s", BF16)], BF16, conformance="exact-model-tested")
 def RopeOut(x: int, y: int, c: int, s: int) -> int:
     """vLLM CUDA `rotary_embedding_kernel` (NeoX): bf16_rn(RN32(x*c - y*s)) with the bf16 cos/sin cache
-    words; products of two bf16 are exact in f32, so this equals fma(x, c, -(y*s)) (W11/numerics.md model)."""
+    words; products of two bf16 are exact in f32, so this equals fma(x, c, -(y*s))."""
     t = f32_mul_bits(bf16_to_f32_bits(y), bf16_to_f32_bits(s))  # exact
     o = f32_fma_bits(bf16_to_f32_bits(x), bf16_to_f32_bits(c), t ^ 0x80000000)
     return f32_to_bf16_rn_bits(o, BF16_NAN_TORCH)

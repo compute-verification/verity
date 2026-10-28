@@ -107,7 +107,8 @@ OWN_CODE = {"late": "audit.status:coverage-never-established", "extra": "io:long
 README = "verity/core/protocols/certifier/README.md"
 PEERS = Path("/etc/vy/peers")
 ADVICE = [sys.executable, "-m", "verity_vllm.pipeline.cli", "advice"]
-GATE_HOST = "vy-challenger-1"
+#: the auditor's host whose gate runs the certifier (``benchmarks/network_traces/site.json``'s ``challenger``)
+GATE_HOST = json.loads((ROOT / "benchmarks" / "network_traces" / "site.json").read_text())["challenger"]
 
 CLAIM = {
     "statement": (
@@ -594,7 +595,9 @@ def alone(summary: dict, d: Path | None) -> dict | None:
 
 def negative(run: dict, rows: list[dict], name: str | None = None, tie: dict | None = None) -> dict:
     """Whether negative ``name`` was refused, and by what: N2's network verdict and its link-windows' verdicts of
-    record, the rehearsal's own check, and where proved, its head checks' proved verdicts (each proof held by Lean).
+    record (a link-window the certifier certified nothing of, `Issuer.refused`, has no verdict of its own, and the
+    network verdict refuses it unregistered), the rehearsal's own check, and where proved, its head checks' proved
+    verdicts (each proof held by Lean).
     Refused only when every one of them that ran refuses it. Where N2 gives no verdict (the advice profile), the check
     refuses it only by its own violation (`OWN_CODE`): a refusal for another reason is not this negative's. A pending
     negative (`PENDING`) is refused by the I/O tie alone (``tie``, its row of `chain.tie`) when its verdict is the one it
@@ -607,11 +610,14 @@ def negative(run: dict, rows: list[dict], name: str | None = None, tie: dict | N
         return {"refused": refused, "ran": ran, "by": [_tie_by(tie)] if refused else [], "own_code": None,
                 "check_codes": None if check is None else check.get("codes"), "n2_refused_windows": [],
                 "proved_refused_windows": [], "failed_parts": {}, "proved": False, "proofs_held": None, "tie": tie}
-    n2 = [r["window"] for r in rows if r["n2"] == "refuse"]
+    n2 = sorted({r["window"] for r in rows if r["n2"] == "refuse"} | set(run["network"].get("refused") or ()))
     decided = run["network"]["accepted"] is not None
     own = None if decided else OWN_CODE.get(name)
     check_refused = check is not None and check["verdict"] == "refused"
     by_own = check_refused and own is not None and own in (check.get("codes") or ())
+    issuer = sorted({w for *_, w in run.get("issuer_refused") or ()})
+    if issuer:
+        by.append(f"the certifier (Issuer.refused; link-windows {issuer})")
     if run["network"]["accepted"] is False and n2:
         by.append(f"N2 (network verdict; link-windows {n2})")
     if check_refused and (decided or by_own):

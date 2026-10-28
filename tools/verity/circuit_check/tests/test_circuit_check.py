@@ -137,28 +137,81 @@ def test_the_partition_applies_to_the_calls_of_served_programs():
     assert not {"AttnBlock_v3", "DotBf16_v1", "Serve_v1", "TopPMask_v1"} & calls
 
 
-def _without_the_catalog(monkeypatch, fallback=None) -> None:
-    """`is_call` from scratch, failing a test that builds the catalog; with ``fallback``, `call_families` answers from it."""
+def _without_the_catalog(monkeypatch) -> None:
+    """`is_call` from scratch, failing a test that builds the catalog or asks for its Calls."""
     monkeypatch.setattr(TG, "_CALLS", set())
     monkeypatch.setattr(TG, "_SHORT", {})
     monkeypatch.setattr(TG, "suite", lambda: pytest.fail("the catalog was built"))
-    monkeypatch.setattr(TG, "call_families", (lambda: pytest.fail("call_families was asked")) if fallback is None else fallback)
+    monkeypatch.setattr(TG, "call_families", lambda found=None: pytest.fail("call_families was asked"))
 
 
 @pytest.mark.slow
 def test_is_call_holds_a_family_exactly_when_call_families_does(monkeypatch, suite):
     """`is_call` decides without the catalog by a superset of the Boolean Calls (`boolean_call_candidates`, the Boolean table's
-    links) and a subset of them (`certified_boolean_calls`, the catalog's roots), and asks `call_families` for the rest: on every
-    family the suite checks, every registered one and every Call it answers as `call_families` does."""
+    links) and a subset of them (`certified_boolean_calls`, the catalog's roots), and refuses the rest (`Undecided`) rather than
+    build the catalog: on every family the suite checks, every registered one and every Call, each one it decides it decides as
+    `call_families` does, and it decides most."""
     calls = TG.call_families()
     words = TG.word_call_families()
-    assert calls - words <= TG.boolean_call_candidates(words)
     assert TG.certified_boolean_calls(words) <= calls
-    asked: list[int] = []
-    _without_the_catalog(monkeypatch, lambda: asked.append(1) or calls)
+    _without_the_catalog(monkeypatch)
     fams = set(TG.REGISTERED) | {TG.family(fn) for fn in suite.values()} | calls
-    assert {f for f in fams if TG.is_call(f)} == fams & calls
-    assert len(asked) < len(fams) // 10, "most families need no catalog"
+    decided: dict[str, bool] = {}
+    undecided: dict[str, str] = {}
+    for f in fams:
+        try:
+            decided[f] = TG.is_call(f)
+        except TG.Undecided as e:
+            undecided[f] = str(e)
+    assert {f for f, call in decided.items() if call} == set(decided) & calls
+    assert len(undecided) < len(fams) // 10, f"most families need no catalog: {sorted(undecided.values())[:20]}"
+
+
+@pytest.mark.slow
+def test_the_boolean_call_candidates_drop_only_families_boolean_version_refuses(suite):
+    """`boolean_call_candidates`, narrowed to the statics a binding of the word Call family could give, drops only Boolean
+    families `boolean_version` refuses: on the real catalog, the Boolean version `boolean_version` accepts for each suite
+    Definition of a word Call family (`boolean_call_families`) is a candidate, unless its family is a word Call family itself,
+    which is decided as one first.  `units.call_families` looks for ``--all``'s Boolean Calls only among the candidates, and
+    `is_call` says a family outside them is no Call, so a family dropped here would leave both short of `call_families`."""
+    words = TG.word_call_families()
+    accepted = TG.boolean_call_families(words, suite) - words
+    assert accepted, "the served word Calls have Boolean versions"
+    missing = sorted(accepted - TG.boolean_call_candidates(words))
+    assert not missing, f"Boolean versions boolean_version accepts that the candidates drop: {missing}"
+
+
+def test_a_boolean_version_whose_statics_no_word_call_binds_is_not_a_candidate(monkeypatch):
+    """A Boolean Definition linked to its word by name is the Boolean version only at a binding that gives each of its statics
+    (`verity.ml.definitions.boolean._find`), so one with a static no word Call family of its name has is not a candidate, and
+    `is_call` says it is no Call without the catalog: a new port shape (``{K,R}`` beside the word Call's ``{K}``) is not
+    refused."""
+    from types import SimpleNamespace
+
+    from verity.ml.definitions import boolean as BV
+
+    TG.load_registries()
+    exact, by_name, errors = BV._load()
+    wider = SimpleNamespace(name="Int8RowQuant", version=99, statics=("K", "R"))
+    monkeypatch.setattr(BV, "_load", lambda: (exact, {**by_name, "Int8RowQuant": [*by_name.get("Int8RowQuant", ()), wider]}, errors))
+    got = TG.boolean_call_candidates({"Int8RowQuant_v1"})
+    assert "Int8RowQuant_v2" in got and "Int8RowQuant_v99" not in got
+
+
+def test_a_family_is_call_cannot_decide_alone_is_refused_by_name_with_the_flags_that_decide_it(monkeypatch):
+    """`is_call` never builds the catalog for one family: a Boolean candidate no catalog root certifies is `Undecided`, and a
+    targeted run fails on that target by name, naming ``--as-call`` and ``--no-as-call``, in place of building it."""
+    from circuit_check import cli
+
+    _without_the_catalog(monkeypatch)
+    TG.word_call_families()
+    TG._SHORT["candidates"] = {"RoPEHead_v2"}
+    monkeypatch.setattr(TG, "certified_boolean_calls", lambda words, only=None: set())
+    with pytest.raises(TG.Undecided, match="give --as-call or --no-as-call"):
+        TG.is_call("RoPEHead_v2")
+    (target,) = cli.run(["RoPEHead_v2{D=8}"], OPTS, log=None, isolate=False)["targets"]
+    (f,) = target["failures"]
+    assert f["code"] == "error" and "Undecided" in f["name"] and "--no-as-call" in f["name"], f["name"]
 
 
 @pytest.mark.slow
@@ -485,6 +538,21 @@ def test_a_value_computed_in_two_units_is_a_recompute_failure():
     assert [w["count"] for w in inner["warnings"] if w["check"] == "redundant-gates" and w["code"] == "ir"] == [1]
 
 
+def test_a_definition_over_the_partition_budget_is_an_unchecked_warning():
+    """Over ``partition_max_gates`` the partition is not run: a ``partition/unchecked`` warning names the Definition and the
+    summary counts it, so its entry does not read as a pass."""
+    from verity.ml.circuits.types import Value
+    from verity.ml.definitions.registry import prims as P
+
+    fn = _composite("CircuitCheckOverBudget", (_f32x2(), Value(32)),
+                    lambda B, S, x: B.call(P.F32Mul, B.call(P.F32Add, x[0], x[1]), x[1]))
+    e = CK.check_definition(fn, dataclasses.replace(OPTS, partition_max_gates=1), as_call=True)
+    assert e["partition"]["checked"] is False and not e["failures"]
+    (w,) = [w for w in e["warnings"] if w["check"] == "partition"]
+    assert w["code"] == "unchecked" and w["definition"] == fn.id and w["name"].endswith("over the partition budget 1")
+    assert CK.summarize([e])["unchecked"] == {"items": len(e["warnings"]), "definitions": 1}
+
+
 #: a Boolean Call family (`RoPEHead_v1`'s Boolean version) whose cut computes 1,120 values in two proof blocks
 BOOL_RECOMPUTE = "RoPEHead_v2{D=8}"
 
@@ -717,6 +785,31 @@ def test_a_kernel_wrong_only_on_edge_words_is_caught():
         del _KERNELS[prim.id]
     (f,) = e["failures"]
     assert f["name"].startswith("correspondence/kernel-mismatch CircuitCheckKernel_v1 [numpy]")
+
+
+def test_a_kernel_that_compared_nothing_or_declined_inside_the_domain_is_not_reported_checked():
+    """A kernel that declines every vector, and one not registered partial that declines vectors the reference accepts,
+    each fail `correspondence` under their `SelfCheck.fault`; the partial one that computes some vectors passes."""
+    from verity.ml.circuits.evaluation import register_kernel
+    from verity.ml.circuits.evaluation.batch import _KERNELS
+    from verity.ml.circuits.defs import PrimitiveDefinition
+    from verity.ml.circuits.types import Value
+
+    prim = PrimitiveDefinition("CircuitCheckDeclines", 1, (("a", Value(16)),), Value(16), lambda a: a ^ 1, register=False)
+    odd = lambda a: (a ^ 1, a % 2 == 1)  # noqa: E731
+    register_kernel(prim, lambda a: (a ^ 1, np.ones(a.shape, dtype=bool)), kernel="every")
+    register_kernel(prim, odd, kernel="odd")
+    register_kernel(prim, odd, kernel="odd-partial", partial=True)
+    try:
+        e = CK.check_definition(prim, OPTS)
+    finally:
+        del _KERNELS[prim.id]
+    assert sorted(f["name"].split(":")[0] for f in e["failures"]) == [
+        "correspondence/kernel-compared-nothing CircuitCheckDeclines_v1 [every]",
+        "correspondence/kernel-declined-in-domain CircuitCheckDeclines_v1 [odd]"]
+    via = {r["via"]: r for r in e["correspondence"]["realizations"] if r["via"].startswith("kernel:")}
+    assert (via["kernel:every"]["compared"], via["kernel:every"]["fault"]) == (0, "compared-nothing")
+    assert via["kernel:odd-partial"]["compared"] > 0 and "fault" not in via["kernel:odd-partial"]
 
 
 def test_a_word_definition_that_differs_from_its_boolean_definition_is_caught():

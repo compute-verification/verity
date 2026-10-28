@@ -114,7 +114,7 @@ LG2_COEFFS = (
 #: the measurement the coefficients reproduce: ``lg2.approx.ftz.f32`` of ``0x3F800000 | m`` for every m (`registry.mla_capture`'s
 #: probe), the SHA-256 of the 2^23 little-endian u32 words
 _DIFFTEST, _CAPTURE = EVIDENCE["cc12_difftest"], EVIDENCE["dsv4_moe_capture"]
-LG2_MEASURED = {"device": "NVIDIA RTX PRO 6000 Blackwell Server Edition", "cc": "12.0", "run": _DIFFTEST["run"],
+LG2_MEASURED = {"device": "NVIDIA RTX PRO 6000 Blackwell Server Edition", "cc": "12.0",
                 "run_record": _DIFFTEST["run_record"], "words": 1 << 23,
                 "sha256": "7fd9be9a924e40a0ee18ba20e7f5158135112947597c8dd86131d3d4d8f9dbfa"}
 
@@ -153,9 +153,9 @@ def mufu_lg2_mantissa_bits(x: int) -> int:
 
 @primitive("MufuLg2Mantissa", 1, [("x", F32)], F32,
            conformance="exact-model-tested: lg2.approx.ftz.f32 on every 1.m of [1, 2), 8,388,608 words measured on a cc 12.0 GPU "
-                       f"(run {_DIFFTEST['run']}) equal to the interpolant; captured on a cc 9.0 GPU (132 SMs) too: "
+                       f"({_DIFFTEST['run_record']}) equal to the interpolant; captured on a cc 9.0 GPU (132 SMs) too: "
                        "lg2.approx.ftz.f32 and lg2.approx.f32 on every 1.m are those words, lg2(2) = 1 and a NaN 0x7FFFFFFF "
-                       f"(run {_CAPTURE['run']} at {_CAPTURE['harness']}, tests/properties/dsv4_moe_capture_gpu.py)",
+                       f"({_CAPTURE['run_record']}, the harness at {_CAPTURE['harness']}, tests/properties/dsv4_moe_capture_gpu.py)",
            tables=(("lg2", "library"),))
 def MufuLg2Mantissa(x: int) -> int:
     """MUFU.LG2 (``lg2.approx.f32``) of 1.m, m = x's 23 mantissa bits: the unit's quadratic interpolator rounded toward zero on
@@ -172,7 +172,8 @@ PTX_NAN = b1.const(32, F32_NAN_PTX)
 
 #: vLLM d9105ea80 on a cc 9.0 GPU: each kernel run twice on every captured row, both runs bit-exact against the Program's numpy
 #: twin, and the Program itself evaluated on every row (`--check`)
-_CAPTURED = f"on a cc 9.0 GPU (132 SMs; run {_CAPTURE['run']} at {_CAPTURE['harness']}, tests/properties/dsv4_moe_capture_gpu.py)"
+_CAPTURED = (f"on a cc 9.0 GPU (132 SMs; {_CAPTURE['run_record']}, the harness at {_CAPTURE['harness']}, "
+             "tests/properties/dsv4_moe_capture_gpu.py)")
 _ROUTER_ROWS = "8,192 rows of _dsv4_topk_kernel at E=384, SCALE=2.5, both runs bit-exact against this Program"
 _HASH_ROWS = "8,192 rows of dsv4HashTopkSoftplusSqrt<int, int> at E=384, SCALE=2.5, both runs bit-exact against this Program"
 _CLAMP_ROWS = ("act_and_mul_kernel with HAS_CLAMP at LIMIT=10, vectorised at I=384 (7,510 rows) and scalar at I=9 (1,024 rows), "

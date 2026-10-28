@@ -1,4 +1,5 @@
 import Proofs.Core.Circuit
+import Proofs.Core.Annotation
 import Proofs.Core.Advice
 import Proofs.Core.PrivatePartition
 import Proofs.Core.Boolean
@@ -27,15 +28,16 @@ import Proofs.Core.Formalism
 import Proofs.Core.Expand
 import Proofs.Core.Padding
 import Proofs.Core.AndSize
-import Proofs.Core.Accel.Principles
-import Proofs.Core.Accel.Float
-import Proofs.Core.Accel.Decode
-import Proofs.Core.Accel.Witness
+import Proofs.Core.Accel.Model
 import Proofs.Core.Accel.Sheet
+import Proofs.Core.Accel.Witness
 import Proofs.Core.NaiveStrassen
 import Proofs.Core.Bilinear
 import Proofs.Core.HongKung
 import Proofs.Core.Blocks
+import Proofs.Core.DeviceFigures
+import Proofs.Core.Site
+import Proofs.Core.CapacityWithinEstimate
 
 /-!
 # Proofs of core's guarantees

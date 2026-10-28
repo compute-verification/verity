@@ -1,12 +1,12 @@
 """The templated statement (``flock-circuit/tmpl``, `circuit.compose`'s ``layout``): the flat statement with its unit given as
 the unit's ``flock-ir-tmpl/v2`` template, META ``template`` its lines and ``layout`` the mode, and no ``CIRCUIT unit``
-section, which the Lean verifier reads with ``HmOut.parseTmpl`` (PRF-133).
+section, which the Lean verifier reads with ``HmOut.parseTmpl``.
 
 `tmpl.layout`, the mirror of ``Tmpl.layoutM`` that puts the unit's range at its committed slot, is held to
 ``Flock.Test.TmplLayout``'s vectors and to a Definition two call paths reach, which is where the modes differ. The Boolean
 toy's templated statement unrolls to its flat unit and differs from the flat statement's META in the templated keys alone.
 The Lean verifier derives from it the class `circuit.class_digest` computes and the regions, Δ and partition check it
-derives from the flat statement. Until the templated statement's proof lands it is outside the verifier's ``Tags.all``, and
+derives from the flat statement. It is outside the verifier's ``Tags.all``, in its own list (``Tags.templated``), and
 the Lean test skips unless the verifier knows it, as TMPL1's does (``FLOCK_VERIFY_TMPL``: its flock-verify)."""
 from __future__ import annotations
 
@@ -231,7 +231,7 @@ def verifier() -> Path:
     p = subprocess.run([str(b), "statement", "--statement", FC.TMPL_STATEMENT, "--circuit", os.devnull, "--public", os.devnull],
                        capture_output=True, text=True)
     if "unknown statement" in p.stderr:
-        pytest.skip(f"{b} does not know {FC.TMPL_STATEMENT} (outside Tags.all until its proof lands; FLOCK_VERIFY_TMPL: TMPL1's flock-verify)")
+        pytest.skip(f"{b} does not know {FC.TMPL_STATEMENT} (not in its Tags.templated; FLOCK_VERIFY_TMPL: TMPL1's flock-verify)")
     return b
 
 

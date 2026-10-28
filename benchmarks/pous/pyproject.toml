@@ -1,7 +1,7 @@
 # PoUS's benchmarks and their tests. Not a package: the drivers run on a GPU pod (torch/Triton), their CPU reference
 # invariants run here as a suite (`uv run tools/verity/check/suites.py benchmarks/pous`), so `check` keeps them pinned.
 [tool.pytest.ini_options]
-testpaths = ["tests", "hbm_audit/tests", "erase_calib/tests", "fast_decode/tests"]
+testpaths = ["tests", "hbm_audit/tests", "fast_decode/tests"]
 markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 
 [tool.verity.tests]
@@ -10,13 +10,15 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 # run and the Lean programs they start (pous-timed-audit, memory-challenger-verdict) read, which no tracer sees: those
 # packages and their path dependencies (each lakefile's `[[require]]`).
 inputs = ["verity/__init__.py", "verity/errors.py", "verity/core/__init__.py", "verity/core/claims/__init__.py",
-          "verity/core/protocols/__init__.py", "verity/core/protocols/pous", "verity/core/protocols/pous/p2/PROTOCOL.md", "verity/core/protocols/interface",
+          "verity/core/protocols/__init__.py", "verity/core/protocols/pous", "verity/core/protocols/interface",
           "verity/core/protocols/bandwidth",
+          "verity/core/protocols/record.py",
           "verity/core/service/flock", "verity/core/primitives/identity", "verity/core/primitives/randomness",
           "verity/core/primitives/lms", "verity/core/difftest", "verity/core/devices/memory_challenger",
           "verity/ml/__init__.py", "verity/ml/commitments", "verity/ml/crypto", "verity/ml/randomness",
           "benchmarks/census/hardware.json", "benchmarks/numerical/python/verity_numerical/bench/placement.py",
-          # the remote bandwidth audit over the P2 store, which p2_v1/serve.py runs, and what it imports
+          # the remote bandwidth audit over the P2 store, which p2_v1/serve.py runs, and what it imports; its party's
+          # Lean verifier, `remote-audit-verifier`, which `p2_party` has `lake` build in remote_bandwidth/lean
           "verity/core/protocols/remote_bandwidth", "verity/core/protocols/profile.py",
           "verity/core/protocols/sampled_proofs/__init__.py", "verity/core/protocols/sampled_proofs/challenger.py",
           "verity/core/protocols/sampled_proofs/remote.py", "verity/ml/circuits",
@@ -25,7 +27,7 @@ inputs = ["verity/__init__.py", "verity/errors.py", "verity/core/__init__.py", "
           "benchmarks/torch_gpu/p2_stage/full.py", "benchmarks/torch_gpu/p2_stage/gemm.py",
           # served_piece.py holds the served weights as C* through the vLLM adapter, which imports these
           "integrations/vllm/verity_vllm/__init__.py", "integrations/vllm/verity_vllm/config.py",
-          "integrations/vllm/verity_vllm/settings.py", "integrations/vllm/verity_vllm/records/__init__.py",
+          "integrations/vllm/verity_vllm/settings.py", "verity/settings.py", "integrations/vllm/verity_vllm/records/__init__.py",
           "integrations/vllm/verity_vllm/records/fields.py", "integrations/vllm/verity_vllm/records/workload.py",
           "integrations/vllm/verity_vllm/protocols/__init__.py", "integrations/vllm/verity_vllm/protocols/interface.py",
           "integrations/vllm/verity_vllm/protocols/pous.py", "integrations/vllm/verity_vllm/engine/__init__.py",
@@ -35,6 +37,9 @@ inputs = ["verity/__init__.py", "verity/errors.py", "verity/core/__init__.py", "
           "benchmarks/one_stage/served_verdicts.py", "examples/h200/interfaces/verity_e2e_demo/block_record.py",
           "verity/core/protocols/pouw/__init__.py", "verity/core/protocols/pouw/audit.py",
           "verity/core/protocols/pouw/coins.py", "verity/core/protocols/pouw/core_check.py",
+          "verity/core/protocols/sampled_proofs/one_stage/registration.py",
+          "verity/core/protocols/sampled_proofs/one_stage/draw.py",
+          "verity/core/protocols/sampled_proofs/one_stage/verdict.py",
           "verity/core/protocols/pouw/protocol.py", "verity/core/protocols/pouw/salt.py",
           "verity/core/protocols/pouw/window.py", "verity/core/protocols/sampled_proofs/one_stage/__init__.py",
           "verity/core/protocols/sampled_proofs/one_stage/partition.py",

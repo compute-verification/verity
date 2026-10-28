@@ -95,7 +95,7 @@ _STATICS = ("B", "L", "R")
 PUBLIC = (
     S.Public("population", "structure", "T proof units per registration, unit t the link-window's bucket row t"),
     S.Public("window", "structure", "provenance: the ingress link-window's index, held to the registration's order"),
-    S.Public(f"leaves:{VALUE}", "structure", "T leaves, one bucket row of L·R cells each"),
+    S.Public(f"leaves:{VALUE}", "structure", "T leaves, one bucket row of L*R cells each"),
     S.Public(f"domain:{VALUE}", "structure", "the warden's domain (`warden_rows.domain`), which binds the session, the "
              "link, ingress and the window"),
     S.Public(VALUE, "commitment", "the warden's salted root over the window's bucket rows, its signed head's"),
@@ -303,7 +303,7 @@ class IngressTie:
         return R.record(self._program, self.query, {"law": "subset", "k": self.T}, S.SCHEME, roots,
                         self.provenance(head.window), previous=previous)
 
-    def register(self, stream: S.Stream, record: Mapping[str, Any]) -> S.Registration:
+    def register(self, stream: S.Stream, record: Mapping[str, Any]) -> S.WindowCommitmentRecord:
         """`stream.register` with the window's own ports, after holding its `window` provenance to exactly
         `{"kind": "served", "window": order}`."""
         window = len(stream.records)
