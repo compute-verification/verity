@@ -4,8 +4,8 @@ renews its lease while the handler runs and acknowledges it on a clean exit; a `
 RetryAfter, which makes the message visible again after its delay.
 
 Push mode needs Vercel's Python framework build, which compiles a `[[tool.vercel.subscribers]]` entry into a
-queue-triggered function; this project's build (`framework: null`, `api/index.py`) never did, so from 19 to 23 Oct
-nothing consumed the topic.  Polling needs no build support: it authenticates as `send` does."""
+queue-triggered function; this project's build (`framework: null`, `api/index.py`) never does, so a push subscriber
+would consume nothing.  Polling needs no build support: it authenticates as `send` does."""
 from __future__ import annotations
 
 import time

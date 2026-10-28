@@ -1,4 +1,4 @@
-"""[R17-42 / R17-45 (a) route A (3), lane moe] GP-01's `moe_construction` header block (`global_program.workload_moe_construction`): the
+"""GP-01's `moe_construction` header block (`global_program.workload_moe_construction`): the
 fused-MoE construction is a declared-and-bound Program static of the workload -- read from the manifest's target, coupled to every component
 (its derive-time `target.declared` AND its `spec_histogram` Definitions), never attested.  Fail closed, by name:
 
@@ -115,9 +115,8 @@ def test_a_foreign_or_misspelt_field_is_refused_not_absorbed(tmp_path):
 
 
 def test_gm01_carries_the_block_from_the_artifact_and_labels_a_pre_r17_42_artifact_by_its_absence(tmp_path):
-    """[route A (4) fix, found on the first padded GM-01 run] `global_match.from_gprog` must carry GP-01's `moe_construction` block into the
-    checker's Program dict (the block GM-01 REPORTS beside the verdict; never compared with the record).  Before this fix the block was dropped
-    on the way and a padded Program was labelled "pre-R17-42 Build" by GM-01 -- the row's population label would have been the wrong one."""
+    """`global_match.from_gprog` carries GP-01's `moe_construction` block into the checker's Program dict (the block GM-01 REPORTS beside
+    the verdict; never compared with the record), and None for an artifact without it."""
     from verity_vllm.check.match import global_match as GM
     block = {"schema": "verity/workload-program/v1/moe_construction", "value": "padded", "declared_explicitly": True, "attested": False,
              "moe_block_present": True, "population_label": "ACTUAL population |Q(Lift(P_fixed-slot))|"}
@@ -128,5 +127,5 @@ def test_gm01_carries_the_block_from_the_artifact_and_labels_a_pre_r17_42_artifa
     p.write_text(json.dumps({**art, "moe_construction": block}))
     gp = GM.from_gprog(str(p))
     assert gp["moe_construction"] == block and gp["gprog_artifact"]["digest_verification"]["verified"] is False   # carried verbatim; unverified (no descriptor)
-    p.write_text(json.dumps(art))                                                                                   # a pre-R17-42 artifact: no block
+    p.write_text(json.dumps(art))                                                                                   # an artifact without the block
     assert GM.from_gprog(str(p))["moe_construction"] is None

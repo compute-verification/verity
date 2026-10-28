@@ -1,7 +1,7 @@
-"""[rel M-0367 / ruling R17-11 / reqval] `CommittedStore` resolves a Program op_path through the manifest's `op_path_aliases` -- the ONE
+"""`CommittedStore` resolves a Program op_path through the manifest's `op_path_aliases` -- the ONE
 table the population reconciliation resolves through -- and reads THAT invocation's entry exactly.
 
-The record that failed (smollm2 B1 on the int-2 canary, M-0367): vLLM has one RotaryEmbedding instance called by every layer; the required
+The record that failed (smollm2 B1 on the canary): vLLM has one RotaryEmbedding instance called by every layer; the required
 manifest binds it under `model.layers.0.self_attn.rotary_emb` with invocation = layer order and records
 `model.layers.N.self_attn.rotary_emb -> [model.layers.0.self_attn.rotary_emb, N]`.  The Attention_v3/v2 row evaluator reads the layer's
 query (rotary_emb/0) and key history (rotary_emb/1) through the Program's per-layer path; the pre-fix store looked that path up verbatim
