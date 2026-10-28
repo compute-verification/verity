@@ -740,6 +740,25 @@ def test_the_preflight_refuses_a_front_flag_the_trees_front_does_not_take_and_a_
     assert (rc, said) == ((3, [line]) if line else (0, []))
 
 
+
+def test_settings_are_read_before_the_defaults_and_an_unreadable_file_is_refused(tmp_path):
+    """SETTINGS names the file a load's counts are launched from, so the job record's command holds only its path."""
+    tree, venv = tmp_path / "tree", tmp_path / "venv" / "bin"
+    tree.mkdir()
+    _script(venv / "python", f'exec {sys.executable} "$@"')
+    settings = tmp_path / "private" / "settings.env"
+    settings.parent.mkdir()
+    settings.write_text("LOAD=front\nCERTIFIER_FRONT=\n")
+    env = {"PATH": os.defpath, "HOME": str(tmp_path), "VENV": str(venv.parent), "OUT": str(tmp_path / "out"),
+           "SETTINGS": str(settings)}
+    rc = subprocess.run(["bash", str(HERE.parent / "served_verdicts.sh"), "front-flags"], cwd=tree, env=env,
+                        check=False).returncode
+    said = (tmp_path / "out" / "verdicts.txt").read_text().splitlines()
+    assert (rc, said) == (3, ["PREFLIGHT: LOAD=front sends the front's group alone, and CERTIFIER_FRONT is unset"])
+    got = subprocess.run(["bash", str(HERE.parent / "served_verdicts.sh"), "front-flags"], cwd=tree,
+                         env={**env, "SETTINGS": str(tmp_path / "missing.env")}, check=False, capture_output=True, text=True)
+    assert (got.returncode, got.stderr.strip()) == (3, f"PREFLIGHT: SETTINGS={tmp_path / 'missing.env'} is not a readable file")
+
 FAKE_COMPOSITE = '''import json, sys
 from pathlib import Path
 COMPONENTS = {"onsite": ("verity/pous/p2/v4/run", "verity/wipe/v0"),
