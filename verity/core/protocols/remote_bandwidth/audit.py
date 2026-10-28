@@ -101,7 +101,7 @@ from dataclasses import dataclass, field, replace
 from fractions import Fraction
 from typing import Any, Protocol
 
-from verity.core.protocols.profile import IntegrityProfile, Subset
+from verity.core.protocols.profile import WINDOW_DELTA, IntegrityProfile, Subset
 from verity.core.site import Site
 from verity.ml.commitments import Commitment, CommitmentDomain, MerkleTree, Opening as MerkleOpening, RangeIndexedDomain
 from verity.ml.commitments import verify_opening
@@ -134,7 +134,7 @@ pass, which γ's error and the memory line's δ add once a pass.  Up to 2^17 pas
 (532.6 GB, eight GPUs' 62 GiB shards) at an RTX PRO 6000 node's R measured (`verity.hardware.node`) is 87,326 passes."""
 WINDOW_NS = 60 * 10**9
 SAMPLES = 33_273
-DELTA = 2.0 ** -40
+DELTA = float(WINDOW_DELTA)
 
 FAILURES = ("late", "order", "step", "plan", "lifetime", "append", "coin", "release", "few", "malformed",
             "receipt-path", "codec", "payload-path", "tile", "receipt")
