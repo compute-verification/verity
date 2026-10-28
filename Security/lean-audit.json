@@ -1334,6 +1334,10 @@
    "owner": "@training",
    "digest": "fab2506f36f16f4e86a0329c97935ec4a201c80743714fb23ddff89a96d39d12"
   },
+  "Nci.Capability.Selects": {
+   "owner": "@training",
+   "digest": "a8aaaf2ed3716b7e44556a765256be878c94d4c0f5221c3f73ebb9c41c08eac0"
+  },
   "Nci.Capability.SlotsRead": {
    "owner": "@training",
    "digest": "49f1035075a0a734932dcb6a095da7f41fb3708f2c4d9dd33ee4c8e4308fa677"
@@ -2105,10 +2109,6 @@
   "Verity.TC.Relation.packHolds": {
    "owner": "@proofs",
    "digest": "ba87ddd4f64a0fe79b117e6376e5b113805dbe47547cd9ba45537cdafbfdc22e"
-  },
-  "Nci.Capability.Selects": {
-   "owner": "@training",
-   "digest": "a8aaaf2ed3716b7e44556a765256be878c94d4c0f5221c3f73ebb9c41c08eac0"
   }
  },
  "meaning": [
@@ -8352,13 +8352,22 @@
    "type_hash": "c4eb9f6f3eb171da49c3706a625d10ba7bc90ac1ca1672a9aa0ed2131ae404ed"
   },
   "Nci.SecurityProofs.BlockDescriptionAdvice": {
-   "owner": "@training"
+   "owner": "@training",
+   "signature": ["Nci.SecurityProofs.BlockDescriptionAdvice : Nci.Guarantees.BlockDescriptionAdvice"],
+   "assumptions": [],
+   "type_hash": "c572a42b63ef4d48cb5c95ab61006755e6ba6161456655e2a4fb811102e928d2"
   },
   "Nci.SecurityProofs.BlockDescriptionAdviceHonest": {
-   "owner": "@training"
+   "owner": "@training",
+   "signature": ["Nci.SecurityProofs.BlockDescriptionAdviceHonest : Nci.Guarantees.BlockDescriptionAdviceHonest"],
+   "assumptions": [],
+   "type_hash": "020d2a53469655e401a725320b0bdb20e9e81db2d0bb7f2bc14b68ff91da5d05"
   },
   "Nci.SecurityProofs.BlockDescriptionAdviceNontrivial": {
-   "owner": "@training"
+   "owner": "@training",
+   "signature": ["Nci.SecurityProofs.BlockDescriptionAdviceNontrivial : Nci.Guarantees.BlockDescriptionAdviceNontrivial"],
+   "assumptions": [],
+   "type_hash": "81d6728c0b81eb5e9476df8cc8629343696ca242b47548cbd7e64503d25e2f4a"
   },
   "Nci.SecurityProofs.CapabilityFloor": {
    "owner": "@training",
@@ -8481,13 +8490,22 @@
    "type_hash": "bdcdad57fd63b97150c3b5c625dbaed887016cd6836a34943e8a5eded68556e5"
   },
   "Nci.SecurityProofs.FaultyInjection": {
-   "owner": "@training"
+   "owner": "@training",
+   "signature": ["Nci.SecurityProofs.FaultyInjection : Nci.Guarantees.FaultyInjection"],
+   "assumptions": [],
+   "type_hash": "e2a88afe287dcdb172d697c6647a305898917aa0528a2b37fe27a7523af6dd26"
   },
   "Nci.SecurityProofs.FaultyInjectionHonest": {
-   "owner": "@training"
+   "owner": "@training",
+   "signature": ["Nci.SecurityProofs.FaultyInjectionHonest : Nci.Guarantees.FaultyInjectionHonest"],
+   "assumptions": [],
+   "type_hash": "1439ac6d5dd2ff7143ab4e430837364650c39ef5141b974c504c47edcc116610"
   },
   "Nci.SecurityProofs.FaultyInjectionNontrivial": {
-   "owner": "@training"
+   "owner": "@training",
+   "signature": ["Nci.SecurityProofs.FaultyInjectionNontrivial : Nci.Guarantees.FaultyInjectionNontrivial"],
+   "assumptions": [],
+   "type_hash": "221674048040fbbb1d29cc7b104ae5f88dbfa1ef8551664cc0f144f31c2097e4"
   },
   "Nci.SecurityProofs.FitBound": {
    "owner": "@lean",
@@ -19359,6 +19377,9 @@
     "Nci.SecurityProofs.ActivationsChain",
     "Nci.SecurityProofs.ActivationsReads",
     "Nci.SecurityProofs.ActivationsTrainingOn",
+    "Nci.SecurityProofs.BlockDescriptionAdvice",
+    "Nci.SecurityProofs.BlockDescriptionAdviceHonest",
+    "Nci.SecurityProofs.BlockDescriptionAdviceNontrivial",
     "Nci.SecurityProofs.CapabilityFloor",
     "Nci.SecurityProofs.CapabilityFloorHonest",
     "Nci.SecurityProofs.CapabilityFloorNontrivial",
@@ -19376,6 +19397,9 @@
     "Nci.SecurityProofs.DampenerThreaded",
     "Nci.SecurityProofs.DampenerThreadedSlots",
     "Nci.SecurityProofs.ExpandComplies",
+    "Nci.SecurityProofs.FaultyInjection",
+    "Nci.SecurityProofs.FaultyInjectionHonest",
+    "Nci.SecurityProofs.FaultyInjectionNontrivial",
     "Nci.SecurityProofs.FitBound",
     "Nci.SecurityProofs.FitBoundSlots",
     "Nci.SecurityProofs.FitRate",
@@ -19507,6 +19531,9 @@
     "Nci.SecurityProofs.ActivationsChain",
     "Nci.SecurityProofs.ActivationsReads",
     "Nci.SecurityProofs.ActivationsTrainingOn",
+    "Nci.SecurityProofs.BlockDescriptionAdvice",
+    "Nci.SecurityProofs.BlockDescriptionAdviceHonest",
+    "Nci.SecurityProofs.BlockDescriptionAdviceNontrivial",
     "Nci.SecurityProofs.CompliesCK",
     "Nci.SecurityProofs.ContainedFanOutOn",
     "Nci.SecurityProofs.ContainedMatMul",
@@ -19521,6 +19548,9 @@
     "Nci.SecurityProofs.DampenerThreaded",
     "Nci.SecurityProofs.DampenerThreadedSlots",
     "Nci.SecurityProofs.ExpandComplies",
+    "Nci.SecurityProofs.FaultyInjection",
+    "Nci.SecurityProofs.FaultyInjectionHonest",
+    "Nci.SecurityProofs.FaultyInjectionNontrivial",
     "Nci.SecurityProofs.FitBound",
     "Nci.SecurityProofs.FitBoundSlots",
     "Nci.SecurityProofs.FitRate",
@@ -19752,7 +19782,13 @@
     "Verity.slowdown": "bcc17fbdb9d4847eb2dad542959451341d0437675065f525f0bb8c86b421ac7b"
    },
    "guarantees": [
+    "Nci.SecurityProofs.BlockDescriptionAdvice",
+    "Nci.SecurityProofs.BlockDescriptionAdviceHonest",
+    "Nci.SecurityProofs.BlockDescriptionAdviceNontrivial",
     "Nci.SecurityProofs.CompliesCK",
+    "Nci.SecurityProofs.FaultyInjection",
+    "Nci.SecurityProofs.FaultyInjectionHonest",
+    "Nci.SecurityProofs.FaultyInjectionNontrivial",
     "Nci.SecurityProofs.HeldBudget",
     "Nci.SecurityProofs.HeldBudgetHonest",
     "Nci.SecurityProofs.HeldBudgetNontrivial",
@@ -20206,6 +20242,9 @@
     "Nci.Ldl.SecurityProofs.FanOutBound",
     "Nci.SecurityProofs.ActivationsBoundOn",
     "Nci.SecurityProofs.ActivationsTrainingOn",
+    "Nci.SecurityProofs.BlockDescriptionAdvice",
+    "Nci.SecurityProofs.BlockDescriptionAdviceHonest",
+    "Nci.SecurityProofs.BlockDescriptionAdviceNontrivial",
     "Nci.SecurityProofs.CompliesCK",
     "Nci.SecurityProofs.ContainedFanOutOn",
     "Nci.SecurityProofs.ContainedMatMul",
@@ -20216,6 +20255,9 @@
     "Nci.SecurityProofs.DampenerThreaded",
     "Nci.SecurityProofs.DampenerThreadedSlots",
     "Nci.SecurityProofs.ExpandComplies",
+    "Nci.SecurityProofs.FaultyInjection",
+    "Nci.SecurityProofs.FaultyInjectionHonest",
+    "Nci.SecurityProofs.FaultyInjectionNontrivial",
     "Nci.SecurityProofs.FitBound",
     "Nci.SecurityProofs.FitBoundSlots",
     "Nci.SecurityProofs.FitRate",
@@ -23575,6 +23617,24 @@
     "Nci.SecurityProofs.RecomputeByStateNontrivial"
    ]
   },
+  "Definitions.Nci.Capability.Fresh": {
+   "digest": "b7962888769b31e2ccef9d046218ab424c7bb618dda9e626bea2e5c6149f2876",
+   "definitions": {
+    "Nci.Capability.EvaluatesAdvice": "d782274042f0a42af73e91a95fbff51ff591d4e6721cbd77209e6bd7cd76076b",
+    "Nci.Capability.cutCircuit": "cc5813201758b291d7ef9dd4d94c98da4fb0571e95edce50df489693ed222aa5",
+    "Nci.Capability.cutDecl": "ded99d584baa636790cc5ca50eb64cbcc56c50a2e23e49b6f11db4074cac2a4f",
+    "Nci.Capability.cutInputs": "ef9e8c28180d112e2f99e79bef1e8324a49860aa9f0798f9943e0e152cc86013",
+    "Nci.Capability.cutPartition": "3cd6949c571da7d4282bff02cfeda9c58613595322235d5c9e36a2262ec41f3d",
+    "Nci.Capability.cutReg": "b3f3415d5288ca09d24e849cd5447541eb01348d79969f5f02e1bb1af4f184b8",
+    "Nci.Capability.injected": "2144f9d3d1de997c499f4703e3a8ad2512d2d63ac8f59e59b4d2bdccda81d129"
+   },
+   "guarantees": [
+    "Nci.SecurityProofs.BlockDescriptionAdvice",
+    "Nci.SecurityProofs.BlockDescriptionAdviceHonest",
+    "Nci.SecurityProofs.FaultyInjection",
+    "Nci.SecurityProofs.FaultyInjectionNontrivial"
+   ]
+  },
   "Definitions.Nci.Capability.Items": {
    "digest": "0a27cd835b4439c57f5331c464ffd8cfc282768557e7499a5a449c1ae8ec6500",
    "definitions": {
@@ -23632,10 +23692,11 @@
    ]
   },
   "Definitions.Nci.Capability.Toy": {
-   "digest": "4f711cdba2849867e5f60fb91bc05cc0b0cc6c90cee560764bd08620a03a2265",
+   "digest": "559a9cbe68e9eb05263c10e7ecc9dc5cb250beba4d40c511bb6723fac6489875",
    "definitions": {
     "Nci.Capability.Toy.B": "6ed2759b6deb0473200d4df32d7ddf2496c60d828d443852b66fa845deb893e9",
     "Nci.Capability.Toy.C": "cabd3e3a3cb89de0fbf0f43f956faa4d126c8549a6bcdaf275b3e254cae19232",
+    "Nci.Capability.Toy.Cb": "ea254b83617dd8b351c3d90a95f44257b5b4eb56910353a7e5780ee7f88e06ae",
     "Nci.Capability.Toy.D": "997befc253ce2b6823307db5d4eccab030e23df4885e9b1f11a962b4aca03a80",
     "Nci.Capability.Toy.I": "ae20710aefa241e50d1a12efaa15bcbcb32ea01f7de0eedfff0657dc2a5957b0",
     "Nci.Capability.Toy.K": "468178b56ec16c4fa35c41192f01520609f6bfec1d15bd8c9426a32ff48636c4",
@@ -23646,14 +23707,22 @@
     "Nci.Capability.Toy.P2": "1fdfbd6fbf96440284418fb0963db982401b0ce13d2d8304e0f4c08c7061ba2d",
     "Nci.Capability.Toy.R1": "c5a5d09ee6645b6735a7dde42164070ca45d3f8917e0bef3972d488d4259f4d1",
     "Nci.Capability.Toy.R2": "4357b433a8e7e662f2ec9ad962172146816e567c29c6444098f5fb503291c35a",
+    "Nci.Capability.Toy.Ra": "fee600fb2e41bd5a2b90304764715157dfb1eed5327abe696057e050fee5517f",
+    "Nci.Capability.Toy.Rb": "6710f35bae012152b9bc325250e21f12e1135338c6d93b8cf2a0395af926257d",
     "Nci.Capability.Toy.W": "97cc9ba087d1ad30aca01c13e7bc19c44e52e208e1c33f1d2d47337cc67a17f5",
     "Nci.Capability.Toy.W2": "55f1a874013ddf9c0119a8eeac557dffb077010881c00384d87c1f5b2138ece8",
+    "Nci.Capability.Toy.Xf": "ead1f24c09aadce41720b942c33c418da9dfb2cb197a19fd8fc2ce8741b1d2d2",
     "Nci.Capability.Toy.Y": "1af1303814ca2fdce14d67f7072f5e85a8292693fd90b56f4146863c1d452b04",
     "Nci.Capability.Toy.tok": "c80cf29cfcf9e0368142c2207406646798b5ebc29054d1560207f0ced364d5a8",
+    "Nci.Capability.Toy.ya": "65882e5d8fb05f30a9c559404358a7738d3afabc24fd1ebacc36e9109c05e238",
     "Nci.Capability.Toy.z": "86956fde64304bd5c673e5408304564b7dee13e9c1fdd58df7da23d491045437",
     "Nci.Capability.Toy.μ": "8691a2cbbc630f80574485a5591fe8fbeb33360e1b9fccd6a240c659ecd661e1"
    },
    "guarantees": [
+    "Nci.SecurityProofs.BlockDescriptionAdviceHonest",
+    "Nci.SecurityProofs.BlockDescriptionAdviceNontrivial",
+    "Nci.SecurityProofs.FaultyInjectionHonest",
+    "Nci.SecurityProofs.FaultyInjectionNontrivial",
     "Nci.SecurityProofs.HeldBudgetHonest",
     "Nci.SecurityProofs.HeldBudgetNontrivial",
     "Nci.SecurityProofs.ImportOrRecomputeHonest",
@@ -23995,6 +24064,14 @@
     "Nci.SecurityProofs.WeightedProductCap"
    ]
   },
+  "Definitions.Nci.Guarantees.Capability.Fresh": {
+   "digest": "5e90f4d5aaf57e525e50e3e4c464577d34897887169bf2e82f4472c0d09dcccb",
+   "definitions": {
+    "Nci.Guarantees.BlockDescriptionAdvice": "05ab3c6b914e111bc83ab223afdd1bbc0d18d056434f38d30767156083be45a2",
+    "Nci.Guarantees.FaultyInjection": "40517863eee968ef4732e70a5d567c4121ddb061d00d8eaa4c2f3952369bef0c"
+   },
+   "guarantees": ["Nci.SecurityProofs.BlockDescriptionAdvice", "Nci.SecurityProofs.FaultyInjection"]
+  },
   "Definitions.Nci.Guarantees.Capability.Incidence": {
    "digest": "866ba973b31e59505f1adb7ebfaa96d79a9a455fd97c16b54eaabc1e6c2c128a",
    "definitions": {
@@ -24009,8 +24086,12 @@
    ]
   },
   "Definitions.Nci.Guarantees.Capability.Witnesses": {
-   "digest": "a9e029a3c1d052dbdde349dacdd6559962800d3031573ee41c583769f7c301cd",
+   "digest": "0189e4ea586122e90a9681cc6fb48dfdc95ff13af8524424306d90136d1b3ed6",
    "definitions": {
+    "Nci.Guarantees.BlockDescriptionAdviceHonest": "4645959f0ebd58d9c4e6b56ae5e828eb5e87921f86c426065582022da493a861",
+    "Nci.Guarantees.BlockDescriptionAdviceNontrivial": "6c9d0e631fdb64962923117ee2fb2cd6b4b8090d1a571d66d3bfaffb6878777d",
+    "Nci.Guarantees.FaultyInjectionHonest": "015814097cff85cdea2684cf1ded126142a8593b3e59194d1aa633f22357012a",
+    "Nci.Guarantees.FaultyInjectionNontrivial": "e17fbbd971e2f5f7f6d77eff96ac1a6a79086509ad1b5924d203a860e71fb470",
     "Nci.Guarantees.HeldBudgetHonest": "b8d4f57efba57e124da609dead3860a94a0d77df87e6ba28859e395cdb5570d9",
     "Nci.Guarantees.HeldBudgetNontrivial": "98c7ec802ab01b0f24dcf483f121f6949c93c0b65343152b1a3bdc4fb17a5771",
     "Nci.Guarantees.ImportOrRecomputeHonest": "6078c3a58c854085d04473d0bb830408664d7c92624db14e630f51955692dd53",
@@ -24032,6 +24113,10 @@
     "Nci.Guarantees.WeightedProductCapNontrivial": "212ec143faff101a768141dd7e7b91abc742db4a9b9bae11b5d32a76171c52ce"
    },
    "guarantees": [
+    "Nci.SecurityProofs.BlockDescriptionAdviceHonest",
+    "Nci.SecurityProofs.BlockDescriptionAdviceNontrivial",
+    "Nci.SecurityProofs.FaultyInjectionHonest",
+    "Nci.SecurityProofs.FaultyInjectionNontrivial",
     "Nci.SecurityProofs.HeldBudgetHonest",
     "Nci.SecurityProofs.HeldBudgetNontrivial",
     "Nci.SecurityProofs.ImportOrRecomputeHonest",
