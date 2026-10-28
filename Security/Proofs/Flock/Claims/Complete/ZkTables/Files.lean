@@ -209,8 +209,8 @@ theorem Run.repJ (S : JsonSpec) (h64 : Out64 H) (o : Run H rel) (hS : StmtAt o.t
       Zk.decode (shapeZk o.tabs[i]! (o.sch i) (o.extras i).size) (o.bytes i r) = .ok (o.zp i r) ∧
       (o.zp i r).proof.params = pcsParams o.tabs[i]!.merkle (o.sch i) ∧
       flat (o.zp i r).proof.cap = o.sess.rootB[i]! ∧ (o.zp i r).inner.root.size = 64 := by
-  obtain ⟨-, -, -, m, kvs, hown, -, -, -, hg, ha, -⟩ := id hS
-  obtain ⟨hz, hcz⟩ := S.canon_ok _ hg ha
+  obtain ⟨-, -, -, m, kvs, hown, -, -, -, hg⟩ := id hS
+  obtain ⟨hz, hcz, -⟩ := S.canon_ok _ hg
   obtain ⟨ct, hct⟩ : ∃ ct, o.spec.coinTree = some ct := Option.isSome_iff_exists.1 o.ready_parts.2.2.2.2
   obtain ⟨-, hmax, hsz, -⟩ := o.toCase.tables
   unfold Tags.MAX_TABLES at hmax

@@ -39,7 +39,7 @@ theorem readyZk_of_ready {x : Claims.Msg} (h : ready H x = true) {s : Ins} {spec
   rw [hs] at h ⊢
   simp only [Bool.and_eq_true, decide_eq_true_eq] at h
   simp only [Bool.and_eq_true, beq_iff_eq, decide_eq_true_eq]
-  exact ⟨⟨⟨⟨⟨⟨h1, h.1.1.1.1.1.1⟩, h.1.1.1.1.2⟩, h.1.1.1.2⟩, h.1.1.2⟩, h.1.2⟩, (recordFitsAt_one h1).1 h.2⟩
+  exact ⟨⟨⟨⟨⟨⟨h1, h.1.1.1.1.1⟩, h.1.1.1.1.2⟩, h.1.1.1.2⟩, h.1.1.2⟩, h.1.2⟩, (recordFitsAt_one h1).1 h.2⟩
 
 /-- **A good case of one table is a good masked case.** -/
 def Case.toZk (c : Case H rel) (h1 : c.sts.size = 1) : CaseZk H rel :=

@@ -336,7 +336,7 @@ theorem Hm96Hiding_holds {Y : Type} [Fintype Y] [Nonempty Y] : Hm96Hiding (id : 
 
 /-- **`JsonSpec` fails** at a canonical printer that never returns. -/
 theorem JsonSpec_fails (print : Lean.Json → String) : ¬ JsonSpec print fun _ => .error "" := fun h => by
-  obtain ⟨_, hs⟩ := h.canon_ok .null Claims.Json.Good.null Claims.Json.Ascii.null
+  obtain ⟨_, hs, -⟩ := h.canon_ok .null Claims.Json.Good.null
   cases hs
 
 end Assumptions

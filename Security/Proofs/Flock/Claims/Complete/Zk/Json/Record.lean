@@ -94,26 +94,6 @@ theorem good_coinTreeJ (ct : CoinTree.Spec) : Good (coinTreeJ ct) := by
   simp only [List.mem_cons, List.mem_nil_iff, or_false, forall_eq_or_imp, forall_eq]
   exact ⟨.str _, .str _, .str _, good_specJson ct⟩
 
-/-- **The coin tree's `coins` entry is ASCII only if its spec and its `nonce` key are.** -/
-theorem ascii_coins {ct : CoinTree.Spec} (h : Ascii (ct.coins "")) :
-    Ascii ct.toJson ∧ ∀ c ∈ "nonce".toList, c.toNat < 0x7f := by
-  have hg := good_specJson ct
-  unfold CoinTree.Spec.coins at h
-  unfold CoinTree.Spec.toJson at hg h ⊢
-  cases hg with
-  | obj hm _ =>
-  refine ⟨ascii_of_insert (k := "nonce") (v := Json.str "") hm
-    (get?_mkObj_none (by first | (simp only [List.map_cons, List.map_nil]; decide) | simp)) h, ?_⟩
-  exact ascii_key (k := "nonce") (v := Json.str "") hm.insert h
-    (by rw [Std.TreeMap.Raw.get?_eq_getElem?, Std.TreeMap.Raw.getElem?_insert_self hm])
-
-theorem ascii_zeros (n : Nat) : ∀ c ∈ (zeros n).toList, c.toNat < 0x7f := by
-  unfold zeros
-  rw [String.toList_ofList]
-  intro c hc
-  rw [List.eq_of_mem_replicate hc]
-  decide
-
 theorem recordListZk_distinct (spec : SessionSpec) (h : ByteArray → ByteArray) (hz : String) (ct : CoinTree.Spec)
     (rootB : Array ByteArray) (points : Array (Array F128)) (streams : Array (Array Round))
     (proofs : Array ByteArray) : Distinct (recordListZk spec h hz ct rootB points streams proofs) := by
@@ -202,8 +182,8 @@ theorem checkHello_ok (S : Claims.JsonSpec printJ Flock.canon) {m kvs : Std.Tree
   rfl
 
 /-- **The record's `coin_tree`** passes: its keys are `key, nonce, root, spec`, its nonce `Hello`'s, its key and root
-hex of their lengths with bit 2047 clear, and its spec the statement's, which `canon` prints where it is ASCII. -/
-theorem checkRecord_ok (S : Claims.JsonSpec printJ Flock.canon) (ct : CoinTree.Spec) (ha : Ascii ct.toJson) {cj : Json}
+hex of their lengths with bit 2047 clear, and its spec the statement's. -/
+theorem checkRecord_ok (S : Claims.JsonSpec printJ Flock.canon) (ct : CoinTree.Spec) {cj : Json}
     (hs : Same (coinTreeJ ct) cj) : ∃ key, CoinTree.checkRecord ct (zeros 64) cj = .ok key := by
   have hd := coinTreeJ_list_distinct ct
   have gC : ∀ {k v}, (k, v) ∈ [("key", Json.str (zeros 512)), ("nonce", Json.str (zeros 64)),
@@ -213,7 +193,7 @@ theorem checkRecord_ok (S : Claims.JsonSpec printJ Flock.canon) (ct : CoinTree.S
   have hnon := strAs_same hs (gC (k := "nonce") (v := Json.str (zeros 64)) (by simp))
   have hroot := strAs_same hs (gC (k := "root") (v := Json.str (zeros 128)) (by simp))
   obtain ⟨sv, hsv, hsvs⟩ := hs.getObjVal (gC (k := "spec") (v := ct.toJson) (by simp))
-  obtain ⟨cs, hcs⟩ := S.canon_ok _ (good_specJson ct) ha
+  obtain ⟨cs, hcs, -⟩ := S.canon_ok _ (good_specJson ct)
   have hcs' : canon sv = .ok cs := by rw [← S.canon_same _ _ hsvs, hcs]
   obtain ⟨n, rfl, hn, hk⟩ := same_obj_wf hs
   have hkeys : n.keys = ["key", "nonce", "root", "spec"] := keys_of hn (by decide) fun k => by

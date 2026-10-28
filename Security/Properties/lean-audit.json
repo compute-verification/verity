@@ -4226,11 +4226,11 @@
    ]
   },
   "CoreProtocol.Protocol": {
-   "digest": "efd27193df54e143df5da0b9ff24f350dcf1025c40854caac7508e9853c47ac2",
+   "digest": "f688a6c1fff616359ab583c5e071dc3f3d77815e5aed58f6aa6027e2cb11824b",
    "definitions": {
     "Core.Answer": "5da1a1dc7c3a38866fb726c7c8f20f4a5f59ee249feb3cda145b8e3cb4143014",
     "Core.Answer.digest": "d836aa67c9938f2a8b2b90aa9072dee781ea1e90129eca96845002ccbcb3e2b0",
-    "Core.Answer.ofJson": "33f91e2d83fd60db3cefbd7be5fc0b4193d6195e993a073d3fb8e872e1a5a245",
+    "Core.Answer.ofJson": "feb5e534f563229265b30bbe1d13da3b1c7a0ae762a083366bb437fbe80d5351",
     "Core.Answer.ofJson._sparseCasesOn_1": "0304a4bbf5d52c8a95addc32c55827db03a1c1d13f3da1f7de5fa284eae36d8f",
     "Core.Answer.ofJson._sparseCasesOn_4": "73b187c6719d04f710de80e4b47c73e9a68af13e962e545b503891df206d1bde",
     "Core.Answer.ofJson._sparseCasesOn_5": "ae84cbcff2259f14ddcbe1075fac42f50df610257d6e7c709e615fdc5e740321",
@@ -4271,7 +4271,7 @@
     "Core.Verdict.rec": "95fcc45ffe00868cea717c9aeb8f804a76a79ade52403c90c3c140d84e39ba13",
     "Core.Verdict.reject": "51a3f6946f282bd4c992323d0eddaa4101c87759f7eb96f348ef4195e69d3dd3",
     "Core.Verdict.undecided": "c286e20877f53e983e2847548bf0864728a1ee7a2988a2c852bc9684a58c2b7d",
-    "Core.canonicalJson": "4adb5e8d00b4e97de36f7d604b234e6551bd186089c1f8b08b2a05e1c67ee2c6",
+    "Core.canonicalJson": "248f540589e66dcee3fed2d3a1b6dfc238132c311c5694875a67c6ab98bff35c",
     "Core.canonicalJson._sparseCasesOn_3": "636006752adbd5a614a0be69f18609f0783764283355527f05cc5159d5172c06",
     "Core.instDecidableEqVerdict": "f46bce4ed5ce4155001bb005897480dc26f2267c50d3b4c2cf4c622a33d232db",
     "Core.instReprVerdict.repr.match_1": "512a9ee16b4e82345f3343510c022654d75d82c2a8b0218985a2e4bf3cb23d3d",
@@ -7252,7 +7252,7 @@
    ]
   },
   "Flock.Canon": {
-   "digest": "e5a732c60bcc53086c85529ca81bcb4874ee3f66574b852dbbb36d74ef5c037e",
+   "digest": "9bcc7b1a0507390609e73c4bc92a0c85f264d10ed837f83b2ba70b8610ff94b1",
    "definitions": {
     "Flock.J.arr": "e94445c03299d8a507d899f63836a7bf1449487d9f7e5e8fdf40233a8f5909ed",
     "Flock.J.asArr": "1b27db679047d2f116aa1f9a34f952f53a203ac47471331311ff49f0937597b0",
@@ -7265,11 +7265,8 @@
     "Flock.J.has": "ca6982e3c1614babecc5c8ac4f8e0dbe6d84112fb997d55371d9644449b9d208",
     "Flock.J.nat": "14651f660693f11c7c802159f9ef5dd00e9d1ab41c9994d1475731cc4fec6aa0",
     "Flock.J.str": "e3b64bf9e865f4b684f547639349e4d4af1dca863e4b32aa1becab9980d2fdaa",
-    "Flock.ascii": "beb31478c715142b89e4d11f4ec248e0bd97c52cee1058811f2632d220133731",
-    "Flock.canon": "c87ae51bccab878e374830c0a80c1e4f669bf75da5ea5ab0e8fb48a0542a8a21",
-    "Flock.canonLine": "8e249c4092756ac3e813d8f94150105b70a6b516c53edb8122f906a193501ffb",
+    "Flock.canon": "91721c8381191df75ed1970942b7cc109bf7ffde3d4daf2578471d7ec12e2fb1",
     "Flock.canonStr": "004d0450163619de70153792b310392e674d6f8022604a84ab492ae059079804",
-    "Flock.notAscii": "d6322464f334502bd9e9c30ceaed16afb5bf260dd29ff281b3cd46826466daca",
     "_private.Flock.Canon.0.Flock.hex4": "7c4da174272bc28875627bc5c5f157d6d70a8c1163e8e6e961d111bf7cf9a56c"
    },
    "guarantees": [

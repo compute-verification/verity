@@ -1,4 +1,6 @@
+import Batteries.Tactic.OpenPrivate
 import Proofs.Flock.Claims.CanonEq
+import Proofs.Flock.Soundness.ExecDraw
 import Proofs.Flock.Claims.Complete.Json.Spec
 
 /-!
@@ -6,20 +8,252 @@ import Proofs.Flock.Claims.Complete.Json.Spec
 
 `Flock.canon` is total, so the two fields of `JsonSpec` about it are theorems: `canon` is the same
 on alike values (`canon_same`: alike values are equivalent, `same_jsonEquiv`, and `canon` prints equivalent values
-alike, `FlockDeploy.canon_jsonEquiv`), and returns on printable ASCII ones (`canon_ok`: every number an integer and
-every string and key ASCII without DEL, so neither refusal fires). The fields left are the ones about `Json.parse`
-(the printer's and `canon`'s round trips, and well-formed trees) and `Json`'s `==` (`beq_same`), both `partial` in
-Lean's core.
-
-A value `canon` prints is ASCII (`ascii_of_canon`), and so is every value alike it (`ascii_of_same`) and an ASCII
-object with an ASCII entry put in (`ascii_insert`): the honest prover's `Hello`, which `canon` printed, stays ASCII
-once the verifier has read it back and put its nonce in.
+alike, `FlockDeploy.canon_jsonEquiv`), and returns on printable ones a text of ASCII without DEL (`canon_ok`: every
+number an integer, so the one refusal never fires, and `canon_ascii`: `canonStr` writes every character outside printable
+ASCII as a `\u` escape, `escU`). The fields left are the ones about `Json.parse` (the printer's and `canon`'s round trips, and
+well-formed trees) and `Json`'s `==` (`beq_same`), both `partial` in Lean's core.
 -/
 
 namespace FlockComplete.JsonRT
 
 open Lean (Json JsonNumber)
 open Flock
+open private hex4 from Flock.Canon
+
+namespace Ascii
+
+theorem ascii_append {s t : String} (hs : Claims.Json.Ascii s) (ht : Claims.Json.Ascii t) : Claims.Json.Ascii (s ++ t) := by
+  intro c hc
+  rw [String.toList_append, List.mem_append] at hc
+  rcases hc with h | h
+  · exact hs c h
+  · exact ht c h
+
+theorem ascii_lit {s : String} (h : s.toList.all (·.toNat < 0x7f) = true) : Claims.Json.Ascii s := by
+  intro c hc
+  simpa using List.all_eq_true.1 h c hc
+
+theorem ofNat_lt {n : Nat} (h : n < 0x7f) : (Char.ofNat n).toNat < 0x7f := by
+  have hv : n.isValidChar := Or.inl (by omega)
+  rw [Char.ofNat, dite_eq_left_of_eq_true (eq_true hv)]
+  simp [Char.ofNatAux, Char.toNat]
+  omega
+
+theorem hex4_ascii (n : Nat) : Claims.Json.Ascii (hex4 n) := by
+  unfold hex4
+  intro c hc
+  simp only [String.toList_ofList, List.mem_cons, List.not_mem_nil, or_false] at hc
+  have hx : ∀ k, n >>> (4 * k) % 16 < 16 := fun _ => Nat.mod_lt _ (by decide)
+  rcases hc with rfl | rfl | rfl | rfl
+  all_goals (split <;> apply ofNat_lt <;> have := hx 0 <;> have := hx 1 <;> have := hx 2 <;> have := hx 3 <;> omega)
+
+theorem escU_ascii (n : Nat) : Claims.Json.Ascii (Flock.escU n) := by
+  unfold Flock.escU
+  split
+  · exact ascii_append (ascii_lit (by decide)) (hex4_ascii _)
+  · exact ascii_append (ascii_append (ascii_append (ascii_lit (by decide)) (hex4_ascii _)) (ascii_lit (by decide)))
+      (hex4_ascii _)
+
+theorem foldl_ascii (f : String → Char → String) (hf : ∀ b a, Claims.Json.Ascii b → Claims.Json.Ascii (f b a)) :
+    ∀ (cs : List Char) (out : String), Claims.Json.Ascii out → Claims.Json.Ascii (cs.foldl f out) := by
+  intro cs
+  induction cs with
+  | nil => intro out h; simpa using h
+  | cons c cs ih => intro out h; rw [List.foldl_cons]; exact ih _ (hf _ _ h)
+
+/-- What `canonStr` writes for one character. -/
+def esc (c : Char) : List Char :=
+  match c with
+  | '"' => ['\\', '"']
+  | '\\' => ['\\', '\\']
+  | '\n' => ['\\', 'n']
+  | '\r' => ['\\', 'r']
+  | '\t' => ['\\', 't']
+  | c => if c.toNat == 8 then ['\\', 'b'] else if c.toNat == 12 then ['\\', 'f']
+    else if c.toNat < 0x20 || 0x7f ≤ c.toNat then (Flock.escU c.toNat).toList else [c]
+
+theorem foldl_esc (f : String → Char → String) (hf : ∀ b a, (f b a).toList = b.toList ++ esc a) :
+    ∀ (cs : List Char) (out : String), (cs.foldl f out).toList = out.toList ++ cs.flatMap esc := by
+  intro cs
+  induction cs with
+  | nil => intro out; simp
+  | cons c cs ih => intro out; rw [List.foldl_cons, ih, hf, List.flatMap_cons, List.append_assoc]
+
+theorem canonStr_toList (s : String) : (Flock.canonStr s).toList = '"' :: s.toList.flatMap esc ++ ['"'] := by
+  unfold Flock.canonStr
+  simp only [Id.run, List.forIn_pure_yield_eq_foldl]
+  show (List.foldl _ "\"" s.toList ++ "\"").toList = _
+  rw [String.toList_append, foldl_esc]
+  · simp
+  · intro b a
+    unfold esc
+    split
+    all_goals first
+      | (simp; done)
+      | ((repeat' split) <;> simp_all)
+
+theorem list_ascii {l : List Char} (h : l.all (·.toNat < 0x7f) = true) : ∀ x ∈ l, x.toNat < 0x7f := by
+  intro x hx
+  simpa using List.all_eq_true.1 h x hx
+
+theorem esc_ascii (c : Char) : ∀ x ∈ esc c, x.toNat < 0x7f := by
+  unfold esc
+  split
+  any_goals exact list_ascii rfl
+  split
+  · exact list_ascii rfl
+  split
+  · exact list_ascii rfl
+  split
+  · exact escU_ascii _
+  · rename_i h
+    simp only [Bool.or_eq_true, decide_eq_true_eq, not_or, Nat.not_le] at h
+    simp only [List.mem_singleton]
+    rintro x rfl
+    exact h.2
+
+/-- `canonStr` writes ASCII without DEL. -/
+theorem canonStr_ascii (s : String) : Claims.Json.Ascii (Flock.canonStr s) := by
+  intro x hx
+  rw [canonStr_toList] at hx
+  simp only [List.mem_cons, List.mem_append, List.mem_flatMap] at hx
+  rcases hx with (rfl | ⟨c, -, hc⟩) | (rfl | hx)
+  · decide
+  · exact esc_ascii c x hc
+  · decide
+  · simp at hx
+
+theorem mem_intercalate {α} (sep : List α) (c : α) : ∀ (l : List (List α)), c ∈ sep.intercalate l → c ∈ sep ∨ ∃ x ∈ l, c ∈ x
+  | [], h => by simp at h
+  | [a], h => Or.inr ⟨a, by simp, by simpa using h⟩
+  | a :: b :: l, h => by
+    rw [List.intercalate_cons_cons] at h
+    simp only [List.mem_append] at h
+    rcases h with (h | h) | h
+    · exact Or.inr ⟨a, by simp, h⟩
+    · exact Or.inl h
+    · rcases mem_intercalate sep c (b :: l) h with h | ⟨x, hx, hc⟩
+      · exact Or.inl h
+      · exact Or.inr ⟨x, List.mem_cons_of_mem _ hx, hc⟩
+
+theorem ascii_intercalate {sep : String} (hs : Claims.Json.Ascii sep) {l : List String} (h : ∀ x ∈ l, Claims.Json.Ascii x) :
+    Claims.Json.Ascii (sep.intercalate l) := by
+  intro c hc
+  rw [String.toList_intercalate] at hc
+  rcases mem_intercalate _ _ _ hc with hc | ⟨x, hx, hc⟩
+  · exact hs c hc
+  · obtain ⟨y, hy, rfl⟩ := List.mem_map.1 hx
+    exact h y hy c hc
+
+theorem ascii_int (m : Int) : Claims.Json.Ascii (toString m) := by
+  have hn : ∀ n : Nat, Claims.Json.Ascii (toString n) := by
+    intro n c hc
+    have hd := Nat.isDigit_of_mem_toDigits (b := 10) (n := n) (by decide) (by decide)
+      (by simpa [toString, Nat.repr] using hc)
+    simp only [Char.isDigit, Bool.and_eq_true, decide_eq_true_eq] at hd
+    have : c.val.toNat ≤ 57 := by
+      have := hd.2
+      simpa [UInt32.le_iff_toNat_le] using this
+    simp only [Char.toNat]
+    omega
+  cases m with
+  | ofNat n => simpa [toString, Int.repr] using hn n
+  | negSucc n =>
+    show Claims.Json.Ascii ("-" ++ toString (n + 1))
+    exact ascii_append (ascii_lit (by decide)) (hn _)
+
+theorem mem_of_mapM_ok {α β ε : Type} {f : α → Except ε β} :
+    ∀ {l : List α} {r : List β}, l.mapM f = .ok r → ∀ y ∈ r, ∃ x ∈ l, f x = .ok y
+  | [], r, h => by
+    simp only [List.mapM_nil, pure, Except.pure, Except.ok.injEq] at h
+    subst h; intro y hy; simp at hy
+  | a :: l, r, h => by
+    rw [List.mapM_cons] at h
+    cases hb : f a with
+    | error e => rw [hb] at h; cases h
+    | ok b =>
+      cases hl : l.mapM f with
+      | error e => rw [hb] at h; simp only [bind, Except.bind] at h; rw [hl] at h; cases h
+      | ok bs =>
+        rw [hb] at h; simp only [bind, Except.bind] at h; rw [hl] at h
+        simp only [pure, Except.pure, Except.ok.injEq] at h
+        subst h
+        intro y hy
+        rcases List.mem_cons.1 hy with rfl | hy
+        · exact ⟨a, by simp, hb⟩
+        · obtain ⟨x, hx, hfx⟩ := mem_of_mapM_ok hl y hy
+          exact ⟨x, List.mem_cons_of_mem _ hx, hfx⟩
+
+theorem array_mem_of_mapM_ok {α β ε : Type} {f : α → Except ε β} {a : Array α} {r : Array β}
+    (h : a.mapM f = .ok r) : ∀ y ∈ r, ∃ x ∈ a, f x = .ok y := by
+  rw [Array.mapM_eq_mapM_toList] at h
+  cases hl : a.toList.mapM f with
+  | error e => rw [hl] at h; cases h
+  | ok l =>
+    rw [hl] at h
+    simp only [Functor.map, Except.map, Except.ok.injEq] at h
+    subst h
+    intro y hy
+    obtain ⟨x, hx, hfx⟩ := mem_of_mapM_ok hl y (by simpa using hy)
+    exact ⟨x, Array.mem_toList_iff.1 hx, hfx⟩
+
+theorem canon_ascii_lt
+    (hq : ∀ (a : Array (String × String)) x, x ∈ a.qsort (fun a b => a.1 < b.1) → x ∈ a) :
+    ∀ (k : Nat) (j : Json) {s : String}, sizeOf j < k → Flock.canon j = .ok s → Claims.Json.Ascii s
+  | 0, _, _, h, _ => absurd h (Nat.not_lt_zero _)
+  | k + 1, j, s, hk, h => by
+    match j, h with
+    | .null, h => rw [Flock.canon] at h; cases h; exact ascii_lit (by decide)
+    | .bool b, h => rw [Flock.canon] at h; cases h; cases b <;> exact ascii_lit (by decide)
+    | .num n, h =>
+      rw [Flock.canon] at h
+      split at h
+      · cases h; exact ascii_int _
+      · cases h
+    | .str t, h => rw [Flock.canon] at h; cases h; exact canonStr_ascii t
+    | .arr a, h =>
+      rw [Flock.canon] at h
+      cases hp : a.attach.mapM (fun x => Flock.canon x.1) with
+      | error e => rw [hp] at h; cases h
+      | ok parts =>
+        rw [hp] at h
+        simp only [bind, Except.bind, pure, Except.pure, Except.ok.injEq] at h
+        subst h
+        refine ascii_append (ascii_append (ascii_lit (by decide)) (ascii_intercalate (ascii_lit (by decide)) ?_))
+          (ascii_lit (by decide))
+        intro y hy
+        obtain ⟨x, -, hx⟩ := array_mem_of_mapM_ok hp y (Array.mem_toList_iff.1 hy)
+        have hlt := Array.sizeOf_lt_of_mem x.2
+        simp only [Json.arr.sizeOf_spec] at hk
+        exact canon_ascii_lt hq k x.1 (by omega) hx
+    | .obj m, h =>
+      rw [Flock.canon] at h
+      cases hp : m.toArray.attach.mapM (fun p => do pure (p.1.1, ← Flock.canon p.1.2) : _ → Flock.V (String × String)) with
+      | error e => rw [hp] at h; cases h
+      | ok vals =>
+        rw [hp] at h
+        simp only [bind, Except.bind, pure, Except.pure, Except.ok.injEq] at h
+        subst h
+        refine ascii_append (ascii_append (ascii_lit (by decide)) (ascii_intercalate (ascii_lit (by decide)) ?_))
+          (ascii_lit (by decide))
+        intro y hy
+        obtain ⟨kv, hkv, rfl⟩ := List.mem_map.1 hy
+        obtain ⟨p, -, hpv⟩ := array_mem_of_mapM_ok hp kv (hq _ _ (Array.mem_toList_iff.1 hkv))
+        cases hc : Flock.canon p.1.2 with
+        | error e => rw [hc] at hpv; cases hpv
+        | ok v =>
+          rw [hc] at hpv
+          simp only [bind, Except.bind, pure, Except.pure, Except.ok.injEq] at hpv
+          subst hpv
+          have hlt := Flock.sizeOf_lt_of_mem_toArray p.2
+          refine ascii_append (ascii_append (canonStr_ascii _) (ascii_lit (by decide))) ?_
+          exact canon_ascii_lt hq k p.1.2 (by omega) hc
+
+end Ascii
+
+/-- **`canon` writes ASCII without DEL.** -/
+theorem canon_ascii (j : Json) {s : String} (h : canon j = .ok s) : Claims.Json.Ascii s :=
+  Ascii.canon_ascii_lt (fun a x hx => (FlockSoundness.Audit.DrawExec.mem_qsort a _ x).1 hx) _ j (Nat.lt_succ_self _) h
 
 /-- **Alike values are equivalent** (`FlockDeploy.JsonEquiv`): one form, whatever their objects' key order. -/
 theorem same_jsonEquiv : ∀ {a b : Json}, Same a b → FlockDeploy.JsonEquiv a b
@@ -35,205 +269,31 @@ theorem same_jsonEquiv : ∀ {a b : Json}, Same a b → FlockDeploy.JsonEquiv a 
 theorem canon_same (a b : Json) (h : Same a b) : canon a = canon b :=
   FlockDeploy.canon_jsonEquiv (same_jsonEquiv h)
 
-/-- `Flock.ascii` is `Ascii`'s condition on a string. -/
-theorem ascii_iff (s : String) : Flock.ascii s = true ↔ ∀ c ∈ s.toList, c.toNat < 0x7f := by
-  simp [Flock.ascii, List.all_eq_true]
-
-/-- **An object whose every entry has an ASCII key and an ASCII value** is ASCII. -/
-theorem ascii_obj {m : Std.TreeMap.Raw String Json compare}
-    (h : ∀ p ∈ m.toList, (∀ c ∈ p.1.toList, c.toNat < 0x7f) ∧ Ascii p.2) : Ascii (.obj m) :=
-  .obj (fun p hp => (h p hp).1) (fun p hp => (h p hp).2)
-
-/-- **Every entry of an ASCII object** has an ASCII key and an ASCII value. -/
-theorem ascii_obj_mem {m : Std.TreeMap.Raw String Json compare} (ha : Ascii (.obj m)) :
-    ∀ p ∈ m.toList, (∀ c ∈ p.1.toList, c.toNat < 0x7f) ∧ Ascii p.2 := by
-  cases ha with
-  | obj hk hv => exact fun p hp => ⟨hk p hp, hv p hp⟩
-
-/-- **`canon` returns on printable ASCII values** (`JsonSpec.canon_ok`). -/
-theorem canon_ok : ∀ j : Json, Good j → Ascii j → ∃ s, canon j = .ok s
-  | _, .null, _ => ⟨_, by rw [canon]; rfl⟩
-  | _, .bool _, _ => ⟨_, by rw [canon]; rfl⟩
-  | _, .num _, _ => ⟨_, by rw [canon]; rfl⟩
-  | .str s, .str _, .str ha => ⟨_, by rw [canon, if_pos ((ascii_iff s).2 ha)]; rfl⟩
-  | .arr a, .arr h, .arr ha => by
+/-- **`canon` returns on printable values.** -/
+theorem canon_ok_some : ∀ j : Json, Good j → ∃ s, canon j = .ok s
+  | _, .null => ⟨_, by rw [canon]; rfl⟩
+  | _, .bool _ => ⟨_, by rw [canon]; rfl⟩
+  | _, .num _ => ⟨_, by rw [canon]; rfl⟩
+  | _, .str _ => ⟨_, by rw [canon]; rfl⟩
+  | .arr a, .arr h => by
     obtain ⟨r, hr⟩ := FlockDeploy.array_mapM_ok (f := fun x : {x // x ∈ a} => canon x.1) (a := a.attach)
-      fun x _ => canon_ok x.1 (h x.1 x.2) (ha x.1 x.2)
+      fun x _ => canon_ok_some x.1 (h x.1 x.2)
     exact ⟨_, by rw [canon, hr]; rfl⟩
-  | .obj m, .obj hm h, .obj hak hav => by
+  | .obj m, .obj hm h => by
     obtain ⟨r, hr⟩ := FlockDeploy.array_mapM_ok
-      (f := fun p : {p // p ∈ m.toArray} =>
-        if ascii p.1.1 then do pure (p.1.1, ← canon p.1.2) else throw notAscii) (a := m.toArray.attach)
+      (f := fun p : {p // p ∈ m.toArray} => do pure (p.1.1, ← canon p.1.2)) (a := m.toArray.attach)
       fun p _ => by
         have hp : (p.1.1, p.1.2) ∈ m.toList := by
           rw [← Std.TreeMap.Raw.toList_toArray]
           exact Array.mem_toList_iff.2 p.2
         have hg := (Std.TreeMap.Raw.mem_toList_iff_getElem?_eq_some hm).1 hp
-        obtain ⟨s, hs⟩ := canon_ok p.1.2 (h _ _ (by rw [Std.TreeMap.Raw.get?_eq_getElem?]; exact hg)) (hav _ hp)
-        exact ⟨_, by rw [if_pos ((ascii_iff p.1.1).2 (hak _ hp)), hs]; rfl⟩
+        obtain ⟨s, hs⟩ := canon_ok_some p.1.2 (h _ _ (by rw [Std.TreeMap.Raw.get?_eq_getElem?]; exact hg))
+        exact ⟨_, by rw [hs]; rfl⟩
     exact ⟨_, by rw [canon, hr]; rfl⟩
 
-private theorem bind_ok' {ε α β : Type} {x : Except ε α} {f : α → Except ε β} {b : β} (h : (x >>= f) = .ok b) :
-    ∃ a, x = .ok a ∧ f a = .ok b := by
-  cases x with
-  | error e => cases h
-  | ok a => exact ⟨a, rfl, h⟩
-
-private theorem mapM_ok_mem' {α β ε : Type} {f : α → Except ε β} :
-    ∀ {l : List α} {r : List β}, l.mapM f = .ok r → ∀ x ∈ l, ∃ y, f x = .ok y
-  | [], _, _, _, hx => by cases hx
-  | a :: as, _, h, x, hx => by
-    rw [List.mapM_cons] at h
-    obtain ⟨b, hb, h⟩ := bind_ok' h
-    obtain ⟨bs, hbs, -⟩ := bind_ok' h
-    rcases List.mem_cons.1 hx with rfl | hx
-    · exact ⟨b, hb⟩
-    · exact mapM_ok_mem' hbs x hx
-
-private theorem array_mapM_ok_mem' {α β ε : Type} {f : α → Except ε β} {a : Array α} {r : Array β}
-    (h : a.mapM f = .ok r) : ∀ x ∈ a, ∃ y, f x = .ok y := by
-  rw [Array.mapM_eq_mapM_toList] at h
-  cases hl : a.toList.mapM f with
-  | error e => rw [hl] at h; cases h
-  | ok l => exact fun x hx => mapM_ok_mem' hl x (Array.mem_toList_iff.2 hx)
-
-private theorem ascii_of_canon_lt : ∀ (k : Nat) (j : Json) {s : String}, sizeOf j < k → canon j = .ok s → Ascii j
-  | 0, _, _, h, _ => absurd h (Nat.not_lt_zero _)
-  | k + 1, j, _, hk, h => by
-    match j with
-    | .null => exact .null
-    | .bool b => exact .bool b
-    | .num n => exact .num n
-    | .str t =>
-      rw [canon] at h
-      by_cases ht : ascii t = true
-      · exact .str ((ascii_iff t).1 ht)
-      · rw [if_neg ht] at h; cases h
-    | .arr a =>
-      rw [canon] at h
-      obtain ⟨_, hp, -⟩ := bind_ok' h
-      refine .arr fun x hx => ?_
-      obtain ⟨_, hy⟩ := array_mapM_ok_mem' hp ⟨x, hx⟩ (Array.mem_attach _ _)
-      have hlt := Array.sizeOf_lt_of_mem hx
-      simp only [Json.arr.sizeOf_spec] at hk
-      exact ascii_of_canon_lt k x (by omega) hy
-    | .obj m =>
-      rw [canon] at h
-      obtain ⟨_, hv, -⟩ := bind_ok' h
-      refine ascii_obj fun p hp => ?_
-      have hp' : p ∈ m.toArray := by
-        rw [← Array.mem_toList_iff, Std.TreeMap.Raw.toList_toArray]
-        exact hp
-      obtain ⟨_, hy⟩ := array_mapM_ok_mem' hv ⟨p, hp'⟩ (Array.mem_attach _ _)
-      try dsimp only at hy
-      have hlt := sizeOf_lt_of_mem_toArray hp'
-      by_cases ht : ascii p.1 = true
-      · rw [if_pos ht] at hy
-        obtain ⟨_, hc, -⟩ := bind_ok' hy
-        exact ⟨(ascii_iff p.1).1 ht, ascii_of_canon_lt k p.2 (by omega) hc⟩
-      · rw [if_neg ht] at hy; cases hy
-
-/-- **A value `canon` prints is ASCII.** -/
-theorem ascii_of_canon {j : Json} {s : String} (h : canon j = .ok s) : Ascii j :=
-  ascii_of_canon_lt (sizeOf j + 1) j (Nat.lt_succ_self _) h
-
-/-- **A value alike an ASCII one is ASCII.** -/
-theorem ascii_of_same : ∀ {a b : Json}, Same a b → Ascii a → Ascii b
-  | _, _, .null, _ => .null
-  | _, _, .bool b, _ => .bool b
-  | _, _, .num n, _ => .num n
-  | _, _, .str _, h => h
-  | _, _, .arr hs he, h => by
-    cases h with
-    | arr ha =>
-    refine .arr fun x hx => ?_
-    obtain ⟨i, hi, rfl⟩ := Array.mem_iff_getElem.1 hx
-    exact ascii_of_same (he i (hs ▸ hi) hi) (ha _ (Array.getElem_mem _))
-  | _, _, .obj hm hn hk hv, h => by
-    have ha := ascii_obj_mem h
-    refine ascii_obj fun ⟨k, v⟩ hp => ?_
-    have hb := (Std.TreeMap.Raw.mem_toList_iff_getElem?_eq_some hn).1 hp
-    rw [← Std.TreeMap.Raw.get?_eq_getElem?] at hb
-    have hs := hk k
-    rw [hb] at hs
-    obtain ⟨a, ha'⟩ := Option.isSome_iff_exists.1 hs
-    have hma : (k, a) ∈ _ := (Std.TreeMap.Raw.mem_toList_iff_getElem?_eq_some hm).2
-      (by rw [← Std.TreeMap.Raw.get?_eq_getElem?]; exact ha')
-    obtain ⟨hk', hav⟩ := ha _ hma
-    exact ⟨hk', ascii_of_same (hv k a v ha' hb) hav⟩
-
-/-- **A value alike an ASCII one is ASCII**, the other way round. -/
-theorem ascii_of_same_rev : ∀ {a b : Json}, Same a b → Ascii b → Ascii a
-  | _, _, .null, _ => .null
-  | _, _, .bool b, _ => .bool b
-  | _, _, .num n, _ => .num n
-  | _, _, .str _, h => h
-  | _, _, .arr hs he, h => by
-    cases h with
-    | arr ha =>
-    refine .arr fun x hx => ?_
-    obtain ⟨i, hi, rfl⟩ := Array.mem_iff_getElem.1 hx
-    exact ascii_of_same_rev (he i hi (hs ▸ hi)) (ha _ (Array.getElem_mem _))
-  | _, _, .obj hm hn hk hv, h => by
-    have ha := ascii_obj_mem h
-    refine ascii_obj fun ⟨k, v⟩ hp => ?_
-    have hb := (Std.TreeMap.Raw.mem_toList_iff_getElem?_eq_some hm).1 hp
-    rw [← Std.TreeMap.Raw.get?_eq_getElem?] at hb
-    have hs := hk k
-    rw [hb] at hs
-    obtain ⟨b, hb'⟩ := Option.isSome_iff_exists.1 hs.symm
-    have hnb : (k, b) ∈ _ := (Std.TreeMap.Raw.mem_toList_iff_getElem?_eq_some hn).2
-      (by rw [← Std.TreeMap.Raw.get?_eq_getElem?]; exact hb')
-    obtain ⟨hk', hbv⟩ := ha _ hnb
-    exact ⟨hk', ascii_of_same_rev (hv k v b hb hb') hbv⟩
-
-/-- **An entry of an ASCII object** is ASCII. -/
-theorem ascii_get {m : Std.TreeMap.Raw String Json compare} (hm : m.WF) (ha : Ascii (.obj m)) {k : String} {v : Json}
-    (hv : m.get? k = some v) : Ascii v := by
-  exact (ascii_obj_mem ha (k, v) ((Std.TreeMap.Raw.mem_toList_iff_getElem?_eq_some hm).2
-    (by rw [← Std.TreeMap.Raw.get?_eq_getElem?]; exact hv))).2
-
-/-- **A key of an ASCII object** is ASCII. -/
-theorem ascii_key {m : Std.TreeMap.Raw String Json compare} (hm : m.WF) (ha : Ascii (.obj m)) {k : String} {v : Json}
-    (hv : m.get? k = some v) : ∀ c ∈ k.toList, c.toNat < 0x7f := by
-  exact (ascii_obj_mem ha (k, v) ((Std.TreeMap.Raw.mem_toList_iff_getElem?_eq_some hm).2
-    (by rw [← Std.TreeMap.Raw.get?_eq_getElem?]; exact hv))).1
-
-/-- **A value an ASCII object reads at a key** is ASCII. -/
-theorem ascii_getObjVal {m : Std.TreeMap.Raw String Json compare} (hm : m.WF) (ha : Ascii (.obj m)) {k : String}
-    {v : Json} (hv : (Json.obj m).getObjVal? k = .ok v) : Ascii v := by
-  simp only [Json.getObjVal?] at hv
-  split at hv
-  · cases hv
-    exact ascii_get hm ha (by assumption)
-  · cases hv
-
-/-- **An ASCII object with an ASCII entry put in** is ASCII. -/
-theorem ascii_insert {m : Std.TreeMap.Raw String Json compare} (hm : m.WF) (ha : Ascii (.obj m)) {k : String}
-    {v : Json} (hk : ∀ c ∈ k.toList, c.toNat < 0x7f) (hv : Ascii v) : Ascii (.obj (m.insert k v)) := by
-  replace ha := ascii_obj_mem ha
-  refine ascii_obj fun ⟨k', v'⟩ hp => ?_
-  have h := (Std.TreeMap.Raw.mem_toList_iff_getElem?_eq_some hm.insert).1 hp
-  rw [Std.TreeMap.Raw.getElem?_insert hm] at h
-  split at h
-  · rename_i he
-    cases h
-    rw [← Std.LawfulEqCmp.compare_eq_iff_eq.1 he]
-    exact ⟨hk, hv⟩
-  · exact ha _ ((Std.TreeMap.Raw.mem_toList_iff_getElem?_eq_some hm).2 h)
-
-/-- **An object is ASCII where it is with a new entry put in.** -/
-theorem ascii_of_insert {m : Std.TreeMap.Raw String Json compare} (hm : m.WF) {k : String} {v : Json}
-    (hn : m.get? k = none) (ha : Ascii (.obj (m.insert k v))) : Ascii (.obj m) := by
-  replace ha := ascii_obj_mem ha
-  refine ascii_obj fun ⟨k', v'⟩ hp => ha _ ?_
-  have h := (Std.TreeMap.Raw.mem_toList_iff_getElem?_eq_some hm).1 hp
-  refine (Std.TreeMap.Raw.mem_toList_iff_getElem?_eq_some hm.insert).2 ?_
-  rw [Std.TreeMap.Raw.getElem?_insert hm]
-  split
-  · rename_i he
-    rw [← Std.LawfulEqCmp.compare_eq_iff_eq.1 he, ← Std.TreeMap.Raw.get?_eq_getElem?, hn] at h
-    cases h
-  · exact h
+/-- **`canon` returns on printable values a text of ASCII without DEL** (`JsonSpec.canon_ok`). -/
+theorem canon_ok (j : Json) (h : Good j) : ∃ s, canon j = .ok s ∧ Claims.Json.Ascii s :=
+  let ⟨s, hs⟩ := canon_ok_some j h
+  ⟨s, hs, canon_ascii j hs⟩
 
 end FlockComplete.JsonRT

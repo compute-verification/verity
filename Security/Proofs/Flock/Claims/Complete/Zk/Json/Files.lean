@@ -223,8 +223,8 @@ theorem RunZk.rep (S : Claims.JsonSpec printJ Flock.canon) (h64 : Claims.Out64 H
           (o.zp 0 r).inner.root = ic.root := by
   obtain ⟨st, rb, streams, hz, ct, hst, ht, htabs, hss, hpf, hex, hlink, -, hrec, hdec, hsess, hlv, hlive⟩ :=
     RunZk.json S h64 hS hP o
-  obtain ⟨-, -, -, m, kvs, hown, -, -, -, hg, ha, -⟩ := hS o.toCaseZk
-  obtain ⟨hz', hc⟩ := S.canon_ok _ hg ha
+  obtain ⟨-, -, -, m, kvs, hown, -, -, -, hg⟩ := hS o.toCaseZk
+  obtain ⟨hz', hc, -⟩ := S.canon_ok _ hg
   obtain ⟨ct', hct⟩ : ∃ ct, o.spec.coinTree = some ct := Option.isSome_iff_exists.1 o.ready_parts.2.2.2.2
   obtain ⟨hC, -⟩ := hP o.toCaseZk st (by rw [hst]; simp)
   have hrun := o.ran

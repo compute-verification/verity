@@ -19,10 +19,7 @@ import Proofs.Flock.Verifier.Hash
   `Json.parse` read, so it is well formed.
 * A masked statement's coins are its keyed coin tree (`zkCoins`), so the `Hello`'s `coins` entry is the tree's spec with
   a nonce, an object; `canon` prints the `Hello` and `parse` reads back an alike object (`hello_ok`), which stays
-  printable with the prover's nonce put in (`good_of_same`, `good_insert`). `canon` printed it, so it is ASCII
-  (`ascii_of_canon`), as is the coin tree's spec it carries, and it stays so with the nonce put in (`ascii_insert`).
-* The setup of several tables never prints the statement's draw, so its ASCII is the readiness check's
-  (`Case.drawAscii`).
+  printable with the prover's nonce put in (`good_of_same`, `good_insert`).
 -/
 
 namespace FlockComplete.ZkTables
@@ -73,7 +70,7 @@ theorem hello_of_list (S : JsonSpec) {ct : CoinTree.Spec} {L : List (String × J
     (hh : canon (Json.mkObj L) = .ok hello) (hd : Distinct L) (hg : ∀ p ∈ L, Good p.2)
     (hc : ("coins", ct.coins "") ∈ L) :
     ∃ m kvs : Std.TreeMap.Raw String Json compare, Json.parse hello = .ok (.obj m) ∧ m.WF ∧ kvs.WF ∧
-      m.get? "coins" = some (.obj kvs) ∧ Good (helloJ (.obj m)) ∧ Ascii (helloJ (.obj m)) ∧ Ascii ct.toJson := by
+      m.get? "coins" = some (.obj kvs) ∧ Good (helloJ (.obj m)) := by
   have hgj := good_mkObj hd hg
   obtain ⟨j', hp, hs⟩ := S.parse_canon _ _ hgj hh
   obtain ⟨m, rfl, hm, -⟩ := same_obj_wf hs
@@ -89,28 +86,23 @@ theorem hello_of_list (S : JsonSpec) {ct : CoinTree.Spec} {L : List (String × J
     · cases hcv
   have hgm : Good (.obj m) := good_of_same hs hgj
   have hgk : Good (.obj kvs) := good_of_same hcs (hM ▸ good_coins ct "")
-  have ham : Ascii (.obj m) := ascii_of_same hs (ascii_of_canon hh)
-  have hak : Ascii (.obj kvs) := ascii_get hm ham hmg
-  obtain ⟨hA, hnk⟩ := ascii_coins (ct := ct) (by rw [hM]; exact ascii_of_same_rev hcs hak)
+  refine ⟨m, kvs, hp, hm, hkv, hmg, ?_⟩
+  cases hgm with
+  | obj _ hgm =>
+  cases hgk with
+  | obj _ hgk =>
   have e : helloJ (.obj m) = .obj (m.insert "coins" (.obj (kvs.insert "nonce" (Json.str (zeros 64))))) := by
     simp only [helloJ, Json.getObjVal?, hmg, Json.setObjVal!]
     rfl
-  refine ⟨m, kvs, hp, hm, hkv, hmg, ?_, ?_, hA⟩
-  · cases hgm with
-    | obj _ hgm =>
-    cases hgk with
-    | obj _ hgk =>
-    rw [e]
-    exact good_insert hm hgm (good_insert hkv hgk (.str _))
-  · rw [e]
-    exact ascii_insert hm ham (ascii_key hm ham hmg) (ascii_insert hkv hak hnk (.str (ascii_zeros 64)))
+  rw [e]
+  exact good_insert hm hgm (good_insert hkv hgk (.str _))
 
 /-- **The masked `Hello` reads back** as an object whose `coins` are an object, and the prover's version, with its
-nonce put in, is printable and ASCII, as is the coin tree's spec. -/
+nonce put in, is printable. -/
 theorem hello_ok (S : JsonSpec) {tags : Tags} {sigma : ByteArray} {mPts : ℕ} {ct : CoinTree.Spec}
     {names : Array String} {hello : String} (hh : Flock.helloOf tags sigma mPts (.tree ct) names = .ok hello) :
     ∃ m kvs : Std.TreeMap.Raw String Json compare, Json.parse hello = .ok (.obj m) ∧ m.WF ∧ kvs.WF ∧
-      m.get? "coins" = some (.obj kvs) ∧ Good (helloJ (.obj m)) ∧ Ascii (helloJ (.obj m)) ∧ Ascii ct.toJson := by
+      m.get? "coins" = some (.obj kvs) ∧ Good (helloJ (.obj m)) := by
   have hlink : Good (Json.mkObj [("sigma", Json.str (hexOf sigma)), ("m", Lean.toJson mPts),
       ("points", Lean.toJson (2 : ℕ))]) := by
     refine good_mkObj (by simp) ?_
@@ -358,8 +350,7 @@ theorem setupTables_spec {tags : Tags} {cf pf : ByteArray} {coins : Coins} {coun
     spec.unitDraw = draw ∧ spec.sigma.size = 64 ∧
       (∀ d, draw = some d → ∃ D, Draw.UnitDraw.ofJson d = .ok D ∧
         ((∃ k, D.law = .subset k) ∨ ∃ K st, D.law = .stratified K st) ∧ spec.instances = D.units.size) ∧
-      Flock.helloOf tags spec.sigma spec.mPts coins (tags.tableNames count) = .ok spec.hello ∧
-      spec.coinTree = coins.tree? := by
+      Flock.helloOf tags spec.sigma spec.mPts coins (tags.tableNames count) = .ok spec.hello := by
   unfold Stmt.setupTables at h
   extract_lets (config := { underBinder := false, onlyGivenNames := true }) jp0 at h
   replace h : jp0 () = .ok (spec, sts) := by
@@ -386,7 +377,7 @@ theorem setupTables_spec {tags : Tags} {cf pf : ByteArray} {coins : Coins} {coun
     obtain ⟨rfl, rfl⟩ := h
   all_goals first
     | exact absurd hs (Nat.lt_irrefl 1)
-    | refine ⟨rfl, Sha512.hash_size _, ?_, ‹_›, rfl⟩
+    | refine ⟨rfl, Sha512.hash_size _, ?_, ‹_›⟩
   all_goals
     intro d hd
     subst hd
@@ -442,21 +433,16 @@ the JSON library's specification: `Σ` is a SHA-512 digest, the session's draw i
 stratified draw that is
 printable and decodes to the session's instances, and its `Hello` reads back with `coins` an object. -/
 theorem Case.stmtAt (S : JsonSpec) (c : Case H rel) (hc : 1 < c.sts.size) : StmtAt c := by
-  obtain ⟨hu, hsig, hd, hh, hct⟩ := setupTables_spec c.setupTables hc
+  obtain ⟨hu, hsig, hd, hh⟩ := setupTables_spec c.setupTables hc
   have hzk : c.s.read.zk = true := readOf_zk (x := c.x) (by
     unfold readOf
     rw [(setupOf_some c.setup).1]
     rfl)
   have hco : c.s.read.coins = .tree (Zk.coinSpec (c.s.read.I.tags.tableNames c.s.read.I.count)) := by
     simp [Readable.Read.coins, hzk, FlockSoundness.Discharge.ZkExec.zkCoins]
-  rw [hco] at hh hct
-  obtain ⟨m, kvs, hp, hm, hkv, hmg, hg, ha, hA⟩ := hello_ok S hh
-  refine ⟨by rw [hsig]; omega, ?_, hu, m, kvs, hp, hm, hkv, hmg, hg, ha, fun ct hc' => ?_⟩
-  swap
-  · rw [hct] at hc'
-    simp only [Coins.tree?, Option.some.injEq] at hc'
-    subst hc'
-    exact hA
+  rw [hco] at hh
+  obtain ⟨m, kvs, hp, hm, hkv, hmg, hg⟩ := hello_ok S hh
+  refine ⟨by rw [hsig]; omega, ?_, hu, m, kvs, hp, hm, hkv, hmg, hg⟩
   unfold DrawOk
   rw [hu]
   cases hdr : c.s.read.draw with
@@ -468,7 +454,7 @@ theorem Case.stmtAt (S : JsonSpec) (c : Case H rel) (hc : 1 < c.sts.size) : Stmt
       rcases hlaw with ⟨k, hk⟩ | ⟨K, st, hK⟩
       · exact good_subset hw hD hk
       · exact ⟨JsonRT.good_stratified hw hD hK, closure_stratified hw hD hK⟩
-    refine ⟨ofJson_obj hD, hgd, c.drawAscii hc d hdr, D, hD, ?_⟩
+    refine ⟨ofJson_obj hD, hgd, D, hD, ?_⟩
     rw [hn]
     simp [Draw.UnitDraw.proved, hcl]
 

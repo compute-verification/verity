@@ -329,16 +329,7 @@ theorem Case.ready_all (c : Case H rel) :
   have h := c.ready
   unfold ZkTables.ready at h
   rw [c.setup] at h
-  simp only [Bool.and_eq_true, decide_eq_true_eq] at h
-  exact ⟨h.1.1.1.1.1.1, h.1.1.1.1.2, h.1.1.1.2, h.1.1.2, h.1.2, h.2⟩
-
-/-- `ready` at the case's setup: at several tables, the session's draw is ASCII. -/
-theorem Case.drawAscii (c : Case H rel) : DrawAscii c.s.read.draw c.sts := by
-  have h := c.ready
-  unfold ZkTables.ready at h
-  rw [c.setup] at h
-  simp only [Bool.and_eq_true, decide_eq_true_eq] at h
-  exact h.1.1.1.1.1.2
+  simpa [and_assoc] using h
 
 /-- `ready`'s parts but the record's. -/
 theorem Case.ready_parts (c : Case H rel) :
