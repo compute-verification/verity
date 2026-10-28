@@ -1,4 +1,5 @@
 import PouwCommit.Tagged
+import Identity.Domains
 
 /-!
 # The protocol's bindings (`verity.core.protocols.pouw.audit`)
@@ -14,10 +15,10 @@ What each of the protocol's trees is bound to, and the one root over the weights
 
 namespace PouwCommit
 
-def weightBinding (w : Nat) : ByteArray := tagged "verity/pouw/weight-rows/v1" [.int w]
+def weightBinding (w : Nat) : ByteArray := tagged Domains.POUW_WEIGHT_ROWS [.int w]
 
 def activationBinding (salt : ByteArray) (index : Nat) : ByteArray :=
-  tagged "verity/pouw/activation-rows/v1" [.bytes salt, .int index]
+  tagged Domains.POUW_ACTIVATION_ROWS [.bytes salt, .int index]
 
 /-- `protocol.fold_roots`: `tagged` of `tag` and each `(id, root)` by ascending id, the one fold of registered roots
 every PoUW weights' root is at its own tag (`weightsRoot`, `PouwCheck.weightsRootAt`, `PouwCheck.Credit.weightsRoot`). -/
@@ -29,9 +30,9 @@ def foldRoots (tag : String) (roots : List (Nat × ByteArray)) : ByteArray :=
 def weightsRoot (roots : List (Nat × ByteArray)) : Except String ByteArray := do
   let sorted := roots.mergeSort fun a b => a.1 ≤ b.1
   if (sorted.zip sorted.tail).any fun (a, b) => a.1 == b.1 then throw "a weight is listed twice"
-  pure (foldRoots "verity/pouw/weights/v1" roots)
+  pure (foldRoots Domains.POUW_WEIGHTS_ROOT roots)
 
 def transcriptBinding (salt weightsRoot : ByteArray) : ByteArray :=
-  tagged "verity/pouw/transcript/v1" [.bytes salt, .bytes weightsRoot]
+  tagged Domains.POUW_TRANSCRIPT [.bytes salt, .bytes weightsRoot]
 
 end PouwCommit
