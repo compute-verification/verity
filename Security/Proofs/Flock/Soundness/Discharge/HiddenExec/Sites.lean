@@ -93,7 +93,7 @@ include hc in
 theorem c_eq : x.st.c = c := setupHidden_c_of_parse hc x.h
 
 include hc in
-/-- A drawn table's statement circuit is what a flat session's circuit file parses to. -/
+/-- A sampled table's statement circuit is what a flat session's circuit file parses to. -/
 theorem parse_eq : HmOut.parse I.tags I.circuitFile I.tables = .ok x.st.c := by
   rw [x.c_eq hc]
   exact hc
@@ -146,7 +146,7 @@ theorem satS (z : Model.Witness x.T.S.m) (hz : x.T.S.Satisfies z) : (twin x.T.S 
     (fun y hy => by rw [Hidden.pinnedCols_nil hpin] at hy; cases hy) hz
 
 include ht hcS hv1 in
-/-- **A witness of a drawn table is 0 at every pinned output's bit**: one output row per output port pins no output
+/-- **A witness of a sampled table is 0 at every pinned output's bit**: one output row per output port pins no output
 (`Hidden.Committed.unpinned_of_rep`), so there is no pinned bit. -/
 theorem pinS (z : Model.Witness x.T.S.m) (_hz : x.T.S.Satisfies z) :
     ∀ o (r : Fin (2 ^ x.T.S.kLog)), PinBit x.st.c r.val → x.T.S.block z o r = 0 := fun _ _ hr => by
@@ -161,7 +161,7 @@ theorem pinS (z : Model.Witness x.T.S.m) (_hz : x.T.S.Satisfies z) :
 noncomputable abbrev acc : AcceptedH (twin x.T.S x.twinA x.twinB) := x.accS ht (parseStmt_of_parseH hc) hvP
 
 include ht hc in
-/-- **A witness of a drawn table satisfies its statement without Δ's pinned copies**, at a flat session's circuit:
+/-- **A witness of a sampled table satisfies its statement without Δ's pinned copies**, at a flat session's circuit:
 every pinned bit is a linear row (`pinned_linear`, at the flat parse), so `twin_sat_of_linear`. -/
 theorem sat (z : Model.Witness x.T.S.m) (hz : x.T.S.Satisfies z) : (twin x.T.S x.twinA x.twinB).Satisfies z :=
   have sc := Hidden.setupHidden_specCC x.h
@@ -171,7 +171,7 @@ theorem sat (z : Model.Witness x.T.S.m) (hz : x.T.S.Satisfies z) : (twin x.T.S x
     sc.self.db (pinned_linear (Hidden.checkPinned_of_checkRows hp.2) P.typed P.nets) hz
 
 include ht hc in
-/-- **A witness of a drawn table is 0 at every pinned output's bit**, at a flat session's circuit
+/-- **A witness of a sampled table is 0 at every pinned output's bit**, at a flat session's circuit
 (`twin_zero_of_linear`, as `sat`). -/
 theorem pin (z : Model.Witness x.T.S.m) (hz : x.T.S.Satisfies z) :
     ∀ o (r : Fin (2 ^ x.T.S.kLog)), PinBit x.st.c r.val → x.T.S.block z o r = 0 :=
