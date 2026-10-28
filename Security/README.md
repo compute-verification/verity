@@ -46,7 +46,8 @@ and after and each changed definition with its source; nothing waits on it, and 
 the verifier accepts while a claim of the period fails with probability at most their errors summed, each subprotocol's
 guarantee entering as a target until that subprotocol's own proof discharges it. The subprotocols are the table's first
 six rows, memory wipes among them; PoUB's row is outside it. Neither composite runs the bandwidth audit over PoUS's store
-or memory wipes yet, and onsite composes PoUB instead (below). Its building block on `main` is `Verity.Sound`
+yet, and onsite composes PoUB instead (below). Both run the inference-only policy's check (`NciCheck.Protocol`), which
+the statement doesn't name yet, tied to the record sampled proofs audits. Its building block on `main` is `Verity.Sound`
 (`Definitions/Core/Game.lean`).
 
 The table lists what it rests on, then one guarantee outside it; each is proved under `Proofs/`. A status names the statement's named assumptions; the
@@ -67,15 +68,16 @@ PoUW has other guarantees, outside protocol soundness.
 ## The remote protocol in Lean
 
 Remote (`verity/core/protocols/remote`, `Core.Remote.protocol`) is the composite for an auditor with no devices at the
-site. It composes two subprotocols, sampled proofs' one-stage audit (v2) and PoUW's period check
-(`verity/pouw/period/v1`, onsite's work component too), and accepts only when both accept, the commitment binds both
-(`Properties.Composition`, proved), and every window of the period names v2's window record (`Core.Remote.windowRecords`). Onsite adds PoUS, PoUB and network certification; memory wipes are a component of neither yet.
+site. It composes three subprotocols, sampled proofs' one-stage audit on the proofs themselves (v2), PoUW's period check
+(`verity/pouw/period/v1`, onsite's work component too) and the inference-only policy's check (`NciCheck.Protocol`), and
+accepts only when all three accept and the commitment binds them (`Properties.Composition`, proved), and only when all
+three commit to one record (`Core.Composition.same`): the policy's and v2's commitments, and the Commit record every
+window of the period names (`Core.Remote.windowRecords`). Onsite adds PoUS, PoUB, network certification and memory
+wipes.
 
 - **Guarantees:** the table's sampled-proofs and PoUW rows, both proved. The composed statement, `Verity.Soundness`, is
-  not in Lean yet (above), so the two compose by hand, and nothing ties the deployed verdicts to the theorems: on
-  `main`, remote's sampled-proofs component is one-stage v1, which takes the sessions' verdicts as evidence; the
-  verifier's run of `flock-verify --zk` produces them, and the link from remote's acceptance to that run's comes with
-  v2.
+  not in Lean yet (above), so the two compose by hand. Remote's sampled-proofs component is one-stage v2, which runs
+  `flock-verify --zk` on the sessions' files it is handed as blobs rather than taking their verdicts as evidence.
 - **Assumptions:** those rows' named assumptions, `UniformRandomBytes`, `RecordCustodyZKJ`, `TableCRZAt`, `LinkCRZC`,
   `ServiceSound`, `DrawIsCoin`, `SaltIsLiveCoin`, `RegisteredBeforeDraw`, `StagedPins`, `UnitFixed`, `OperandHMu`,
   `ReceiptLuckAt` and `GuessLuckAt`. Trust model: nothing the prover runs or hosts is trusted, and every coin is live,

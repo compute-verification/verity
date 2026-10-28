@@ -10,12 +10,13 @@ parameter: it surfaces the ε at δ its draw established.
 
 ## PoUW in the remote protocol
 
-The remote protocol, for an auditor with no devices at the datacenter, composes two subprotocols: sampled proofs'
-one-stage audit and PoUW's period check, `PouwCheck.Period.protocol` (`verity/pouw/period/v1`), as onsite does
-(`Core.Remote.components` in `verity/core/protocols/remote/CoreRemote.lean`, id `verity/remote/v0`). It accepts only
-when both components accept their own cases, its commitment binds both components' commitments, and every window of the
-period names the one-stage audit's window record as its Commit record; either one's rejection rejects it
-(`Core.Composition.sameB`, `verity/core/protocols/composition/README.md`). In the remote demo, the vLLM demo
+The remote protocol, for an auditor with no devices at the datacenter, composes three subprotocols: sampled proofs'
+one-stage audit, PoUW's period check, `PouwCheck.Period.protocol` (`verity/pouw/period/v1`), as onsite does, and the
+inference-only policy's check (`Core.Remote.components` in `verity/core/protocols/remote/CoreRemote.lean`, id
+`verity/remote/v0`). It accepts only when every component accepts its own case, its commitment binds the components'
+commitments, and all three commit to one record: every window of the period names the one-stage audit's window record as
+its Commit record, the policy's too; any one's rejection rejects it (`Core.Composition.sameB`,
+`verity/core/protocols/composition/README.md`). In the remote demo, the vLLM demo
 (`verity example vllm`), PoUW runs on the served model as H1, under the challenger's development key, so its verdict
 credits nothing, and an H1 commitment's served execution blocks aren't yet a `verity/pouw/v1` case. The remote
 protocol's front door is

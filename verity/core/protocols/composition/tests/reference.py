@@ -1,15 +1,17 @@
 """The Python the composition's Lean (`CoreComposition`, `CoreOnsite`, `CoreRemote`) is held to: the composition rule
 of onsite and remote, over the harness's framing of the core interface (`verity_difftest.protocol.answer`, as
-`Core.Protocol.case` and `answer` decode a case), and each component's own Python: PoUW's `period_check.case`
+`Core.Protocol.case` and `answer` decode a case), and each subprotocol's own Python: PoUW's `period_check.case`
 (`verity/pouw/period/v1`, onsite's and remote's work, with `credit.commit_of` reading the window records each window of
-the period names, `window_records`), the network certifier's period check's difftest's `reference` (`verity/certifier/v0`, its Python
-mirror over the certifier's certificates and one-stage's answers,
-`verity/core/protocols/network/tests/test_network_period_protocol.py`), for sampled proofs' one-stage audit on the
+the period names, `window_records`), the network certifier's period check's difftest's `reference`
+(`verity/certifier/v0`, its Python mirror over the certifier's certificates and one-stage's answers,
+`verity/core/protocols/network/tests/test_network_period_protocol.py`), the inference-only policy's difftest's
+`reference` (`verity/inference-only/v0`, the policy's Python check, `nci_reference.check_baseline`, behind the
+protocol's decoders, `verity/core/protocols/network/tests/test_inference_only_protocol.py`), for sampled proofs' one-stage audit on the
 proofs themselves (`verity/sampled-proofs/one-stage/v2`) `one_stage_zk`: v2's framing over v1's `one_stage` and decoders
 (`verity/core/service/sampled_proofs/tests/test_difftest.py`), on the cases v2 decides without a proof, the wipe's
 (`verity/wipe/v0`) `wipe_protocol_case.answer`, and for space (`verity/pous/p2/v4/run`) and bandwidth
 (`verity/remote-bandwidth/v0`) their Python verifiers' answers on small periods of their hooks (`Recorded`,
-`periods.py`). Each component's own difftest holds its Lean to that Python; this one holds the composition of them.
+`periods.py`). Each subprotocol's own difftest holds its Lean to that Python; this one holds the composition of them.
 
 The trial's rule, onsite's and remote's over their components' statements:
 
@@ -74,6 +76,9 @@ POUW_PERIOD_CASES = module("pouw_period_cases", CORE / "protocols/pouw/lean/chec
 #: The network certifier's period difftest: `reference` is the period check's Python mirror, and `build` makes a signed
 #: period with one change.
 PERIOD = module("network_period_difftest", CORE / "protocols/network/tests/test_network_period_protocol.py")
+#: The inference-only policy's difftest: `reference` is the policy's Python check (`check_baseline`) behind the
+#: protocol's decoders, and `drawn` draws a declaration's case with one change.
+INFERENCE = module("inference_only_protocol_difftest", CORE / "protocols/network/tests/test_inference_only_protocol.py")
 #: The wipe protocol in Python: `answer`, its mirror under S1's LMS, and `case`, a signed wipe aimed at a kind (`KINDS`).
 WIPE_CASES = module("wipe_protocol_case", CORE / "devices/memory_challenger/lean/tests/wipe_protocol_case.py")
 
@@ -210,6 +215,7 @@ def one_stage_zk(case: Any) -> dict:
 
 
 CERTIFIER = Ported("verity/certifier/v0", PERIOD.reference)
+INFERENCE_ONLY = Ported("verity/inference-only/v0", INFERENCE.reference)
 
 
 @functools.cache
@@ -355,13 +361,19 @@ class Product:
         return fitted_verdicts(answers)
 
 
-def v2_record(commitment: bytes, evidence: bytes) -> list[str] | Reject:
-    """`Core.Composition.committed` at v2: its commitment's digest, the registration record's, as v2 decodes it; else
-    v2's refusal of the commitment, which reads as no records."""
-    try:
-        return [ONE_STAGE.decode_commitment(commitment)[1].hex()]
-    except Reject as e:
-        return e
+def committed(decode: Callable[[bytes], str]) -> Callable[[bytes, bytes], list[str] | Reject]:
+    """`Core.Composition.committed` for a component whose commitment ``decode`` reads to its digest: that digest, the
+    registration record's; else the component's refusal of the commitment, which reads as no records."""
+    def read(commitment: bytes, evidence: bytes) -> list[str] | Reject:
+        try:
+            return [decode(commitment)]
+        except Reject as e:
+            return e
+    return read
+
+
+V2_RECORD = committed(lambda c: ONE_STAGE.decode_commitment(c)[1].hex())
+POLICY_RECORD = committed(lambda c: INFERENCE.commitment(c)[1])
 
 
 def window_records(commitment: bytes, evidence: bytes) -> list[str] | core_check.Refused | None:
@@ -386,8 +398,8 @@ def window_records(commitment: bytes, evidence: bytes) -> list[str] | core_check
 @dataclass(frozen=True)
 class Same(Product):
     """`Core.Composition.sameB id ss components`: `product`, except that once the cases fit, the components ``same``
-    (each with its reading of the window records its case commits to, from its commitment and evidence bytes) must all
-    have committed to the first record."""
+    (each with its reading of the records its case commits to, from its commitment and evidence bytes) must all have
+    committed to the first record."""
 
     same: tuple = ()
 
@@ -430,7 +442,10 @@ class Same(Product):
         return [] if isinstance(ev, Exception) else [d for _, d in self.records(ev)]
 
 
-#: `Core.Remote.protocol` and `Core.Onsite.protocol`, over their components in the order of their ids, remote's two
-#: committing to one window record.
-REMOTE = Same("verity/remote/v0", (POUW_PERIOD, SAMPLED_PROOFS), ((V2, v2_record), (POUW_PERIOD.id, window_records)))
-ONSITE = Product("verity/onsite/v0", (CERTIFIER, POUS, POUW_PERIOD, BANDWIDTH, SAMPLED_PROOFS, WIPE))
+#: `Core.Remote.protocol` and `Core.Onsite.protocol`, over their subprotocols in the order of their ids: remote's three
+#: committing to one record, the run's registration record that each window of the period names; onsite's policy and
+#: integrity (v2) to one registration record.
+REMOTE = Same("verity/remote/v0", (INFERENCE_ONLY, POUW_PERIOD, SAMPLED_PROOFS),
+              ((INFERENCE_ONLY.id, POLICY_RECORD), (V2, V2_RECORD), (POUW_PERIOD.id, window_records)))
+ONSITE = Same("verity/onsite/v0", (CERTIFIER, INFERENCE_ONLY, POUS, POUW_PERIOD, BANDWIDTH, SAMPLED_PROOFS, WIPE),
+              ((INFERENCE_ONLY.id, POLICY_RECORD), (V2, V2_RECORD)))
