@@ -22,7 +22,13 @@
 //   wrap       wrap2_kernel's dO = w_X B~^T + X w_W^T, sparse on the CUDA cores, over max(m, 128) rows (its tiles are 128)
 //   seg        the noised GEMM as S = K / L chunks accumulating in cuBLASLt (beta 1), L = min(8 L', K / 2): the prefix sums
 //              T_s left in D by a library GEMM rather than stored from the kernel's registers
-// and fresh noise's A side: noise_vk (V, m x K) and form_xk (X from it).
+// and fresh noise's A side: noise_vk (V, m x K) and form_xk (X from it). The served call (PROTOCOL.md's no-fold call: T_s
+// committed for s < S, O recomputed plain), at the word interval Lw (DENOISE_L, default 1,024, the static pick):
+//   ts_srv     the noised GEMM over k < (Sw - 1) Lw as Sw - 1 chunks, the first at beta 0 and each next one reading the last
+//              one's T_s (C) into the other of two buffers (D): every T_s left whole in DRAM for a hash to read
+//   served-LP  the whole call's GPU work in one arm: d_A's bits, V (m x L'), X (all of K), ts_srv, a', and O = a' b'^T
+//   nop        an empty kernel: this loop's launch floor
+//   plain_i8, plain_bf16   the plain GEMM writing int8 or bf16 (scale float32) instead of int32, where cuBLASLt has one
 //
 //   denoise REPS name:M:N:K ...     one JSON line a shape on stdout, gpu_kit's summary lines on stderr
 // Build: nvcc -O3 -std=c++17 -gencode arch=compute_90a,code=sm_90a -DSHA_ADD=0 -DSHA_ROT=0 -DSHA_ROLL=1 denoise.cu -lcuda -lcublasLt
@@ -43,7 +49,9 @@ __global__ void add_kernel(int* __restrict__ o, const int* __restrict__ d, size_
   }
 }
 
-// lt_setup's D (m x n) = A B^T + beta D, with A and B at row strides lda and ldb (a K-chunk of wider rows), autotuned the same way
+__global__ void nop_kernel() {}
+
+// lt_setup's D (m x n) = A B^T + beta C, with A and B at row stride ldk (a K-chunk of wider rows), autotuned the same way
 struct LtS {
   cublasLtHandle_t h;
   cublasLtMatmulDesc_t op;
@@ -54,7 +62,9 @@ struct LtS {
   int32_t beta = 1;
   int algo_id = -1;
 };
-void lts_setup(LtS& L, int m, int n, int k, int ldk, const int8_t* A, const int8_t* B, int* D, cudaStream_t st) {
+void lts_setup(LtS& L, int m, int n, int k, int ldk, const int8_t* A, const int8_t* B, int* D, cudaStream_t st,
+               int32_t beta = 1) {
+  L.beta = beta;
   CL(cublasLtCreate(&L.h));
   CL(cublasLtMatmulDescCreate(&L.op, CUBLAS_COMPUTE_32I, CUDA_R_32I));
   const cublasOperation_t ta = CUBLAS_OP_T, tb = CUBLAS_OP_N;
@@ -101,6 +111,70 @@ void lts_setup(LtS& L, int m, int n, int k, int ldk, const int8_t* A, const int8
 void lts_run(LtS& L, const int8_t* A, const int8_t* B, int* D, cudaStream_t st) {
   const int32_t one = 1;
   CL(cublasLtMatmul(L.h, L.op, &one, B, L.la, A, L.lb, &L.beta, D, L.ld, D, L.ld, &L.algo, L.ws, L.wsz, st));
+}
+void lts_run2(LtS& L, const int8_t* A, const int8_t* B, const int* C, int* D, cudaStream_t st) {
+  const int32_t one = 1;
+  CL(cublasLtMatmul(L.h, L.op, &one, B, L.la, A, L.lb, &L.beta, C, L.ld, D, L.ld, &L.algo, L.ws, L.wsz, st));
+}
+
+// lt_setup's plain GEMM with D of type dt and a float32 scale: false where cuBLASLt has no algorithm for it
+struct LtX {
+  cublasLtHandle_t h;
+  cublasLtMatmulDesc_t op;
+  cublasLtMatrixLayout_t la, lb, ld;
+  cublasLtMatmulAlgo_t algo;
+  void* ws = nullptr;
+  size_t wsz = 64u << 20;
+  int algo_id = -1;
+};
+bool ltx_setup(LtX& L, int m, int n, int k, cudaDataType dt, const int8_t* A, const int8_t* B, void* D, cudaStream_t st) {
+  CL(cublasLtCreate(&L.h));
+  CL(cublasLtMatmulDescCreate(&L.op, CUBLAS_COMPUTE_32I, CUDA_R_32F));
+  const cublasOperation_t ta = CUBLAS_OP_T, tb = CUBLAS_OP_N;
+  CL(cublasLtMatmulDescSetAttribute(L.op, CUBLASLT_MATMUL_DESC_TRANSA, &ta, sizeof ta));
+  CL(cublasLtMatmulDescSetAttribute(L.op, CUBLASLT_MATMUL_DESC_TRANSB, &tb, sizeof tb));
+  CL(cublasLtMatrixLayoutCreate(&L.la, CUDA_R_8I, k, n, k));
+  CL(cublasLtMatrixLayoutCreate(&L.lb, CUDA_R_8I, k, m, k));
+  CL(cublasLtMatrixLayoutCreate(&L.ld, dt, n, m, n));
+  CK(cudaMalloc(&L.ws, L.wsz));
+  cublasLtMatmulPreference_t pref;
+  CL(cublasLtMatmulPreferenceCreate(&pref));
+  CL(cublasLtMatmulPreferenceSetAttribute(pref, CUBLASLT_MATMUL_PREF_MAX_WORKSPACE_BYTES, &L.wsz, sizeof L.wsz));
+  cublasLtMatmulHeuristicResult_t res[16];
+  int got = 0;
+  if (cublasLtMatmulAlgoGetHeuristic(L.h, L.op, L.la, L.lb, L.ld, L.ld, pref, 16, res, &got) != CUBLAS_STATUS_SUCCESS) got = 0;
+  CL(cublasLtMatmulPreferenceDestroy(pref));
+  const float one = 1.f, zero = 0.f;
+  cudaEvent_t e0, e1;
+  CK(cudaEventCreate(&e0)); CK(cudaEventCreate(&e1));
+  float best = 1e30f;
+  int bi = -1;
+  for (int i = 0; i < got; i++) {
+    if (res[i].state != CUBLAS_STATUS_SUCCESS) continue;
+    bool ok = true;
+    for (int w = 0; w < 2 && ok; w++)
+      ok = cublasLtMatmul(L.h, L.op, &one, B, L.la, A, L.lb, &zero, D, L.ld, D, L.ld, &res[i].algo, L.ws, L.wsz, st) ==
+           CUBLAS_STATUS_SUCCESS;
+    if (!ok) continue;
+    CK(cudaEventRecord(e0, st));
+    for (int r = 0; r < 5; r++) cublasLtMatmul(L.h, L.op, &one, B, L.la, A, L.lb, &zero, D, L.ld, D, L.ld, &res[i].algo, L.ws, L.wsz, st);
+    CK(cudaEventRecord(e1, st));
+    CK(cudaEventSynchronize(e1));
+    float ms;
+    CK(cudaEventElapsedTime(&ms, e0, e1));
+    if (ms < best) { best = ms; bi = i; }
+  }
+  CK(cudaEventDestroy(e0)); CK(cudaEventDestroy(e1));
+  CK(cudaGetLastError());
+  if (bi < 0) return false;
+  L.algo = res[bi].algo;
+  size_t w;
+  cublasLtMatmulAlgoConfigGetAttribute(&L.algo, CUBLASLT_ALGO_CONFIG_ID, &L.algo_id, sizeof L.algo_id, &w);
+  return true;
+}
+void ltx_run(LtX& L, const int8_t* A, const int8_t* B, void* D, cudaStream_t st) {
+  const float one = 1.f, zero = 0.f;
+  CL(cublasLtMatmul(L.h, L.op, &one, B, L.la, A, L.lb, &zero, D, L.ld, D, L.ld, &L.algo, L.ws, L.wsz, st));
 }
 
 // One L': its coins, both forms' outputs, the extended operands and the GEMMs that read them
@@ -192,6 +266,24 @@ int run_shape(int reps, const std::string& sh, std::mt19937_64& rng, const gk::N
   Lt plain, f3;
   lt_setup(plain, m, n, k, A, B, O, s);
   lt_setup(f3, m, n, 3 * k, Xf, Wf, O, s);
+  const char* le = getenv("DENOISE_L");
+  const int Lw = std::min(le ? atoi(le) : 1024, k), Sw = Lw > 0 ? k / Lw : 0;
+  if (Lw <= 0 || k % Lw) { fprintf(stderr, "%s: DENOISE_L must divide K\n", name); return 2; }
+  int* Ts[2] = {dalloc<int>(mn), dalloc<int>(mn)};
+  LtS t0, t1;
+  if (Sw > 1) lts_setup(t0, m, n, Lw, k, P[1].X, P[1].W, Ts[0], s, 0);
+  if (Sw > 2) lts_setup(t1, m, n, Lw, k, P[1].X, P[1].W, Ts[1], s, 1);
+  auto ts_chain = [&](const Per* p, cudaStream_t st) {
+    if (Sw < 2) return;
+    lts_run2(t0, p->X, p->W, Ts[0], Ts[0], st);
+    for (int c = 1; c < Sw - 1; c++)
+      lts_run2(t1, p->X + (size_t)c * Lw, p->W + (size_t)c * Lw, Ts[(c - 1) & 1], Ts[c & 1], st);
+  };
+  int8_t* O8 = dalloc<int8_t>(mn);
+  uint16_t* Obf = dalloc<uint16_t>(mn);
+  LtX xi8, xbf;
+  const bool has_i8 = ltx_setup(xi8, m, n, k, CUDA_R_8I, A, B, O8, s);
+  const bool has_bf = ltx_setup(xbf, m, n, k, CUDA_R_16BF, A, B, Obf, s);
   CK(cudaStreamSynchronize(s));
   const Per& p1 = P[1];
   const u64 cx = (u64)m * k / 16, cwb = (u64)n * k / 16;
@@ -275,6 +367,25 @@ int run_shape(int reps, const std::string& sh, std::mt19937_64& rng, const gk::N
                     for (int i = 0; i < r; i++)
                       fill_a_kernel<<<(unsigned)((cx + 255) / 256), 256, 0, st>>>(A, dA, Vk, X1, cx, k, k, kb64);
                   }});
+  arms.push_back({"ts_srv", [&](cudaStream_t st, int r) { for (int i = 0; i < r; i++) ts_chain(&P[1], st); }});
+  for (int q = 0; q < 3; q++) {
+    const Per* p = &P[q];
+    const u64 cv = (u64)m * p->lp;
+    arms.push_back({"served-" + std::to_string(p->lp), [&, p, cv](cudaStream_t st, int r) {
+                      for (int i = 0; i < r; i++) {
+                        bits_kernel<<<(unsigned)((ba + 127) / 128), 128, 0, st>>>(sd, S_DA, ba, dA);
+                        noise_kernel<<<(unsigned)((cv / 16 + 127) / 128), 128, 0, st>>>(sd, S_V, cv, p->V);
+                        fill_a_kernel<<<(unsigned)((cx + 255) / 256), 256, 0, st>>>(A, dA, p->V, p->X, cx, k, p->lp, kb64);
+                        ts_chain(p, st);
+                        serve_rows_kernel<<<m, 256, 0, st>>>(A, dA, k, kb64, 0, Ap, rsA, shA, bad);
+                        lt_run(plain, Ap, Bp, D2, st);
+                      }
+                    }});
+  }
+  arms.push_back({"nop", [](cudaStream_t st, int r) { for (int i = 0; i < r; i++) nop_kernel<<<1, 32, 0, st>>>(); }});
+  if (has_i8) arms.push_back({"plain_i8", [&](cudaStream_t st, int r) { for (int i = 0; i < r; i++) ltx_run(xi8, A, B, O8, st); }});
+  if (has_bf)
+    arms.push_back({"plain_bf16", [&](cudaStream_t st, int r) { for (int i = 0; i < r; i++) ltx_run(xbf, A, B, Obf, st); }});
   const gk::Timing tm = gk::timed_items(arms, reps, s, nv);
   CK(cudaStreamSynchronize(s));
   CK(cudaGetLastError());
@@ -282,9 +393,10 @@ int run_shape(int reps, const std::string& sh, std::mt19937_64& rng, const gk::N
   int hbad = 0;
   CK(cudaMemcpy(&hbad, bad, 4, cudaMemcpyDeviceToHost));
   printf("{\"shape\": \"%s\", \"m\": %d, \"n\": %d, \"k\": %d, \"gpu\": \"%s\", \"uuid\": \"%s\", \"sms\": %d, \"steady\": %s, "
-         "\"warmup_ms\": %.1f, \"served_rows_bad\": %d, \"lt_algo\": %d, \"lp\": [",
+         "\"warmup_ms\": %.1f, \"served_rows_bad\": %d, \"lt_algo\": %d, \"Lw\": %d, \"Sw\": %d, \"ts_algo\": [%d, %d], "
+         "\"i8_algo\": %d, \"bf16_algo\": %d, \"lp\": [",
          name, m, n, k, prop.name, nv.uuid().c_str(), prop.multiProcessorCount, tm.steady ? "true" : "false", tm.warmup_ms, hbad,
-         plain.algo_id);
+         plain.algo_id, Lw, Sw, t0.algo_id, t1.algo_id, has_i8 ? xi8.algo_id : -1, has_bf ? xbf.algo_id : -1);
   for (int q = 0; q < 3; q++) {
     const Per& p = P[q];
     printf("%s{\"lp\": %d, \"NT\": %d, \"dz\": %d, \"dy\": %d, \"TL\": %d, \"L\": %d, \"S\": %d, \"cap\": %d, \"flag\": %d, "

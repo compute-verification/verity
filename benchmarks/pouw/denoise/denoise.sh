@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # denoise.cu on one leased H200 (sm_90a): the build outside the lease, then every shape under one lease, then table.py.
 #
-#   research run --on vy-dc-h200-3 --project verity --campaign CAMPAIGN --source . --cwd source --as LANE \
+#   research run --on vy-dc-h200-5 --project verity --campaign CAMPAIGN --source . --cwd source --as LANE \
 #     --env GPU_LEASE_WHO=LANE -- bash benchmarks/pouw/denoise/denoise.sh
 #
 # Env: MS (default "64 512 8192"), LINEARS (default every one of Llama-3.2-1B's: qkv o gu down head), REPS (default 5),

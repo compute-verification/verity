@@ -15,6 +15,10 @@ per-call price is shown beside):
 coins_a(L') is bits_a + noise_v(L'). T_s's own cost (seg, the prefix sums through a library GEMM) is shown apart: v31's
 GEMM stores them from its registers.
 
+The served call (`served-LP`, where the JSON has it) is measured whole: d_A's bits, V, X, the noised GEMM over k < (S - 1) L
+at L = Lw with every T_s left in DRAM, a' and O's plain GEMM; its overhead is served - plain. Beside it: ts_srv (that noised
+GEMM alone), the launch floor (nop), and the plain GEMM writing int8 or bf16 instead of int32.
+
     python3 table.py DENOISE.jsonl [--md]
 """
 from __future__ import annotations
@@ -48,6 +52,14 @@ def parts(r: dict) -> dict[str, float]:
         out[f"per_recompute-{lp}"] = coins + a["form_x"] + (nz - p) + a["recompute"]
     out["fresh_recompute"] = out["fresh_a"] + (nz - p) + a["recompute"]
     out["fresh_gemms"] = out["fresh_a"] + (a["fresh3k"] - p)
+    if "ts_srv" in a:
+        out["ts_srv"] = a["ts_srv"]
+        out["nop"] = a["nop"]
+        for lp in LPS:
+            out[f"served-{lp}"] = a[f"served-{lp}"] - p
+        for o in ("plain_i8", "plain_bf16"):
+            if o in a:
+                out[o] = a[o]
     return out
 
 
@@ -86,7 +98,17 @@ def model(rows: dict, m: int) -> dict[str, float] | None:
     qs = [parts(rows[(lin, m)]) for lin in LINEARS if (lin, m) in rows]
     if len(qs) != len(LINEARS):
         return None
-    return {k: LAYERS * sum(q[k] for q in qs) for k in qs[0]}
+    out = {k: LAYERS * sum(q[k] for q in qs) for k in qs[0] if all(k in q for q in qs)}
+    if "nop" in out:
+        out["nop"] /= LAYERS * len(qs)
+    return out
+
+
+SERVED = [*[(f"served call {lp}", (lambda lp: lambda q: q[f"served-{lp}"] / q["plain"])(lp), "{:.3f}") for lp in LPS],
+          ("ts_srv", lambda q: q["ts_srv"] / q["plain"], "{:.3f}"),
+          ("launch floor µs", lambda q: 1e3 * q["nop"], "{:.1f}"),
+          ("plain int8 out", lambda q: q["plain_i8"] / q["plain"] if "plain_i8" in q else float("nan"), "{:.3f}"),
+          ("plain bf16 out", lambda q: q["plain_bf16"] / q["plain"] if "plain_bf16" in q else float("nan"), "{:.3f}")]
 
 
 def main() -> int:
@@ -110,6 +132,14 @@ def main() -> int:
     for (lin, m), q in keyed:
         best = " / ".join(f"{min(q[f'per_denoise-{lp}'], q[f'per_recompute-{lp}']) / q['plain']:.3f}" for lp in LPS)
         print(f"| {lin} | {m} | " + " | ".join(f"{fn(q):.3f}" for _, fn in TOT) + f" | {best} |")
+    if all("ts_srv" in q for _, q in keyed):
+        lw = {r["Lw"] for r in rows.values()}
+        print(f"\nThe served call, measured whole (L = {', '.join(map(str, sorted(lw)))}), over its plain GEMM; the GEMMs beside it\n")
+        print("| shape | m | S | " + " | ".join(c for c, _, _ in SERVED) + " |")
+        print("|---|---|---|" + "---|" * len(SERVED))
+        for (lin, m), q in keyed:
+            s = rows[(lin, m)]["Sw"] if lin != "model" else ""
+            print(f"| {lin} | {m} | {s} | " + " | ".join(f.format(fn(q)) for _, fn, f in SERVED) + " |")
     print("\nRuns' conditions\n")
     print("| shape | m | GPU | SM MHz (plain) | steady | throttled arms | wrap rate A, B at L' 128 | flags |")
     print("|---|---|---|---|---|---|---|---|")
