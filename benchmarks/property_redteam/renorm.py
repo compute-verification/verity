@@ -14,10 +14,11 @@ set is a circuit with r = L − k budgeted gates (`build`), and every circuit of
 (§R3.3 step 1). The search measures the largest fiber N_k it finds for each k, so ε = N_k/p and the measured d is k; the
 formula then needs d₀ ≥ k − log_B(p/N_k) (`implied_d0`).
 
-**The model.** `Op`, `Gate` and the functions below port `Security/Definitions/Accounting/Gates/Model.lean` (6b's branch
-cursor/circuit-encode-proofs-6cd3 at f7a216e236): `raw`, `out`, `Ok`, `InWindow`, `derive`, `Proven`, `DeclaredHold`,
-`FanIn`, `Width`, `budgeted`, and `Restricted` (`Codec.lean`). One generalization: an `mma` operand format has b bits, not 8,
-so that at a toy base B = 2^b a digit fills its format as a byte does at B = 256 (the closure lemma's degree bound needs that).
+**The model.** `WordOp`, `WordGate` and the functions below port `Security/Definitions/Accounting/Gates/Model.lean` (6b's
+branch cursor/circuit-encode-proofs-6cd3 at f7a216e236): its `Op` and `Gate`, and `raw`, `out`, `Ok`, `InWindow`, `derive`,
+`Proven`, `DeclaredHold`, `FanIn`, `Width`, `budgeted`, and `Restricted` (`Codec.lean`). One generalization: an `mma`
+operand format has b bits, not 8, so that at a toy base B = 2^b a digit fills its format as a byte does at B = 256 (the
+closure lemma's degree bound needs that).
 At B = 256 the formats are Model.lean's s8 and u8.
 
 Exhaustive over a ∈ [0, p) at every toy size; the constraint sets are searched exactly where stated (modes, every subset of
@@ -54,7 +55,7 @@ S8, U8 = (True, 8), (False, 8)
 
 
 @dataclass(frozen=True)
-class Op:
+class WordOp:
     """`Op ι`: an input slot (by binding), a constant, an affine map `c + Σ coeff·v`, an s8-family coordinate `mma`, a
     `gather`, or a `budgeted` primitive of class `cls` (any function of its operands, vectorized over inputs)."""
 
@@ -84,8 +85,8 @@ class Op:
 
 
 @dataclass(frozen=True)
-class Gate:
-    op: Op
+class WordGate:
+    op: WordOp
     args: tuple[int, ...]
     lo: int
     hi: int
@@ -103,7 +104,7 @@ def _dot(k: int, v: Sequence[np.ndarray], n: int) -> np.ndarray:
     return out
 
 
-def raw(op: Op, x: dict[int, np.ndarray], v: list[np.ndarray], n: int) -> np.ndarray:
+def raw(op: WordOp, x: dict[int, np.ndarray], v: list[np.ndarray], n: int) -> np.ndarray:
     """`Op.raw`: the exact value before an s8-family step's clamp or wrap."""
     if op.kind == "input":
         return x[op.slot]
@@ -125,7 +126,7 @@ def raw(op: Op, x: dict[int, np.ndarray], v: list[np.ndarray], n: int) -> np.nda
     return np.asarray(op.f(v), dtype=np.int64)  # type: ignore[misc]
 
 
-def out(op: Op, z: np.ndarray) -> np.ndarray:
+def out(op: WordOp, z: np.ndarray) -> np.ndarray:
     """`Op.out`: an s8-family step clamps (`satfinite`) or wraps to s32; every other op passes its exact value."""
     if op.kind != "mma":
         return z
@@ -134,7 +135,7 @@ def out(op: Op, z: np.ndarray) -> np.ndarray:
     return (z - S32_MIN) % 2 ** 32 + S32_MIN
 
 
-def operands_ok(op: Op, v: list[np.ndarray], n: int) -> np.ndarray:
+def operands_ok(op: WordOp, v: list[np.ndarray], n: int) -> np.ndarray:
     if op.kind != "mma":
         return np.ones(n, dtype=bool)
     if len(v) != 2 * op.k + 1:
@@ -149,7 +150,7 @@ def operands_ok(op: Op, v: list[np.ndarray], n: int) -> np.ndarray:
     return ok
 
 
-def evaluate(C: Sequence[Gate], x: dict[int, np.ndarray], n: int) -> tuple[list[np.ndarray], np.ndarray, np.ndarray]:
+def evaluate(C: Sequence[WordGate], x: dict[int, np.ndarray], n: int) -> tuple[list[np.ndarray], np.ndarray, np.ndarray]:
     """`values` with, per input, `InWindow` (every gate `Ok`) and `DeclaredHold` (inputs and budgeted gates in their
     declared intervals), as boolean arrays over the n inputs."""
     vs: list[np.ndarray] = []
@@ -172,7 +173,7 @@ def evaluate(C: Sequence[Gate], x: dict[int, np.ndarray], n: int) -> tuple[list[
 Iv = tuple[int, int]
 
 
-def derive(g: Gate, ivs: Sequence[Iv]) -> Iv:
+def derive(g: WordGate, ivs: Sequence[Iv]) -> Iv:
     """`Gate.derive`: a constant's value, an affine map's or an s8-family step's interval image, else the declared one."""
     a = [ivs[j] if j < len(ivs) else (0, 0) for j in g.args]
     if g.op.kind == "const":
@@ -192,14 +193,14 @@ def derive(g: Gate, ivs: Sequence[Iv]) -> Iv:
     return (g.lo, g.hi)
 
 
-def intervals(C: Sequence[Gate]) -> list[Iv]:
+def intervals(C: Sequence[WordGate]) -> list[Iv]:
     ivs: list[Iv] = []
     for g in C:
         ivs.append(derive(g, ivs))
     return ivs
 
 
-def proven(C: Sequence[Gate]) -> list[str]:
+def proven(C: Sequence[WordGate]) -> list[str]:
     """`Proven C`'s failures (empty when it holds): a derived interval outside its declared one, or an s8-family step whose
     operands' derived intervals leave their formats or whose declared interval leaves s32."""
     bad = []
@@ -224,24 +225,24 @@ def proven(C: Sequence[Gate]) -> list[str]:
     return bad
 
 
-def fan_in(f: int, C: Sequence[Gate]) -> bool:
+def fan_in(f: int, C: Sequence[WordGate]) -> bool:
     return all(not g.op.charged or g.op.budget == "gather" or len(g.args) <= f for g in C)
 
 
-def width(w: int, C: Sequence[Gate]) -> bool:
+def width(w: int, C: Sequence[WordGate]) -> bool:
     return all(-(2 ** w) <= g.lo and g.hi < 2 ** w for g in C)
 
 
-def restricted(f: int, w: int, C: Sequence[Gate]) -> bool:
+def restricted(f: int, w: int, C: Sequence[WordGate]) -> bool:
     """`Restricted f w C` (Codec.lean): `Proven C ∧ FanIn f C ∧ Width w C`."""
     return not proven(C) and fan_in(f, C) and width(w, C)
 
 
-def budgeted(C: Sequence[Gate]) -> int:
+def budgeted(C: Sequence[WordGate]) -> int:
     return sum(1 for g in C if g.op.budget is not None)
 
 
-def run_bits(C: Sequence[Gate]) -> int:
+def run_bits(C: Sequence[WordGate]) -> int:
     return sum(g.bits for g in C if g.op.kind == "input" and g.op.binding == "run")
 
 
@@ -676,7 +677,7 @@ def search(T: Table, *, lines_bases: int = 200, small_coeff: int = 1, max_rows: 
 
 @dataclass
 class Built:
-    C: list[Gate]
+    C: list[WordGate]
     out: list[int]
     slots: list[int]
 
@@ -687,29 +688,29 @@ def build(T: Table, cn: Constraint | None, mono_names: list[tuple[int, ...]]) ->
     completion of the constraint rows. `cn = None` is the honest circuit (k = 0, L budgeted carries)."""
     F, L, B = T.F, T.F.L, T.F.B
     fu = (False, F.b)
-    C: list[Gate] = []
+    C: list[WordGate] = []
     ivs: list[Iv] = []
 
-    def add(op: Op, args: Sequence[int], lo: int | None = None, hi: int | None = None) -> int:
-        g = Gate(op, tuple(args), 0, 0)
+    def add(op: WordOp, args: Sequence[int], lo: int | None = None, hi: int | None = None) -> int:
+        g = WordGate(op, tuple(args), 0, 0)
         if op.derived:
             dlo, dhi = derive(g, ivs)
-            g = Gate(op, tuple(args), dlo, dhi)
+            g = WordGate(op, tuple(args), dlo, dhi)
         else:
-            g = Gate(op, tuple(args), int(lo), int(hi))  # type: ignore[arg-type]
+            g = WordGate(op, tuple(args), int(lo), int(hi))  # type: ignore[arg-type]
         C.append(g)
         ivs.append(derive(g, ivs))
         return len(C) - 1
 
-    dig = [add(Op("input", slot=l, binding="registered"), (), 0, B - 1) for l in range(L)]
-    zero = add(Op("const", c=0), ())
-    A = add(Op("affine", c=0, coeff=tuple(B ** l for l in range(L))), dig)
+    dig = [add(WordOp("input", slot=l, binding="registered"), (), 0, B - 1) for l in range(L)]
+    zero = add(WordOp("const", c=0), ())
+    A = add(WordOp("affine", c=0, coeff=tuple(B ** l for l in range(L))), dig)
     t = []
     for col in range(2 * L - 1):
         pairs = [(i, col - i) for i in range(L) if 0 <= col - i < L]
-        t.append(add(Op("mma", fa=fu, fb=fu, k=len(pairs)), [zero] + [dig[i] for i, _ in pairs] + [dig[j] for _, j in pairs]))
-    s = [add(Op("affine", c=0, coeff=(1, F.delta)), (t[l], t[l + L])) if l + L < 2 * L - 1 else
-         add(Op("affine", c=0, coeff=(1,)), (t[l],)) for l in range(L)]
+        t.append(add(WordOp("mma", fa=fu, fb=fu, k=len(pairs)), [zero] + [dig[i] for i, _ in pairs] + [dig[j] for _, j in pairs]))
+    s = [add(WordOp("affine", c=0, coeff=(1, F.delta)), (t[l], t[l + L])) if l + L < 2 * L - 1 else
+         add(WordOp("affine", c=0, coeff=(1,)), (t[l],)) for l in range(L)]
 
     k = cn.k if cn else 0
     W = unimodular_completion(cn.psi if cn else [], L)
@@ -731,19 +732,19 @@ def build(T: Table, cn: Constraint | None, mono_names: list[tuple[int, ...]]) ->
                 g = dig[name[0]]
             else:
                 if name not in prods:
-                    prods[name] = add(Op("mma", fa=fu, fb=fu, k=1), (zero, dig[name[0]], dig[name[1]]))
+                    prods[name] = add(WordOp("mma", fa=fu, fb=fu, k=1), (zero, dig[name[0]], dig[name[1]]))
                 g = prods[name]
             terms.append(g)
             coefs.append(cf)
-        w.append(add(Op("affine", c=cn.m[j], coeff=tuple(coefs)), terms))  # type: ignore[union-attr]
+        w.append(add(WordOp("affine", c=cn.m[j], coeff=tuple(coefs)), terms))  # type: ignore[union-attr]
     for j in range(k, L):
         col = w_full[:, j]
         lut = col.copy()
         lo, hi = int(col[good].min()), int(col[good].max())
-        w.append(add(Op("budgeted", cls="rounding", f=lambda v, lut=lut: lut[v[0]]), (A,), lo, hi))
-    c = [add(Op("affine", c=0, coeff=tuple(Winv[l])), w) for l in range(L)]
-    y = [add(Op("affine", c=0, coeff=(1, F.delta, -B)), (s[0], c[L - 1], c[0]))] + \
-        [add(Op("affine", c=0, coeff=(1, 1, -B)), (s[l], c[l - 1], c[l])) for l in range(1, L)]
+        w.append(add(WordOp("budgeted", cls="rounding", f=lambda v, lut=lut: lut[v[0]]), (A,), lo, hi))
+    c = [add(WordOp("affine", c=0, coeff=tuple(Winv[l])), w) for l in range(L)]
+    y = [add(WordOp("affine", c=0, coeff=(1, F.delta, -B)), (s[0], c[L - 1], c[0]))] + \
+        [add(WordOp("affine", c=0, coeff=(1, 1, -B)), (s[l], c[l - 1], c[l])) for l in range(1, L)]
     return Built(C, y, dig)
 
 
