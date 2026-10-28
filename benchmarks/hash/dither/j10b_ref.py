@@ -52,7 +52,7 @@ def ca_tree() -> str | None:
             tree = tempfile.mkdtemp(prefix="j10ca-")
             with tarfile.open(arc) as t:
                 t.extractall(tree, filter="data")
-        ok = tree and (Path(tree) / "verity/ml/protocols/pouw/circuit/banded.py").is_file()
+        ok = tree and (Path(tree) / "verity/core/protocols/pouw/circuit/banded.py").is_file()
         _CA["tree"] = tree if ok else None
     return _CA["tree"]
 
