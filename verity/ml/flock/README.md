@@ -6,12 +6,15 @@ binary-field proof with upstream Flock (`succinctlabs/flock` at `b684b12`, patch
 ## Layout
 
 - `python/verity_flock/`: the Python package.
-  - `backend.py`: the configured backends over the GEMM-coordinate subcircuits (`BACKENDS`: `FLOCK_FRAME_V3_BLAKE3`,
-    `FLOCK_BLOCK`, `FLOCK_VLLM_V1`); `lowering.py` and `unit.py`: the pinned lowering of one tensor-core transition unit.
+  - `backend.py`: the pure-block backends over the GEMM-coordinate subcircuits (`BACKENDS`: `FLOCK_FRAME_V3_BLAKE3`,
+    `FLOCK_BLOCK`, `FLOCK_VLLM_V1`, proved by `flock-pure`). Archived: they commit rows as keyed-BLAKE3 leaves, the
+    Lean verifier does not implement their statements, and they stay for the benchmark tables. `lowering.py` and
+    `unit.py`: the pinned lowering of one tensor-core transition unit.
   - `ir_lower.py`: the generic IR lowering, an IR Definition composed from the per-op circuit pieces of `fp.py` (over
     `gf2.py`); `tail_pieces.py`: circuits for the primitives a template's units leave outside.
   - `templates/`: one lowering per subcircuit template; `ir_frame.py` (`verity/flock-ir-frame/v3`) and `ir_sampling.py`
-    (`verity/flock-ir-sampling/v1`): their frame-v3 statements.
+    (`verity/flock-ir-sampling/v1`): their frame-v3 statements, archived like the pure-block backends (BLAKE3 row
+    digests, not in the Lean verifier).
   - `partition_units.py`: every unit class of an arbitrary partition (`verity.ml.circuits.units`) lowered and checked against the
     reference evaluator; `boolean_export.py`: a served workload's leaf templates, or one census subcircuit (`subcircuit`, the catalog's blob), as Boolean
     circuits (a derived format, not a statement); `circuit_types.py` (`verity/circuit-type/v1`): each distinct sub-circuit once, the object the Boolean
@@ -35,9 +38,9 @@ binary-field proof with upstream Flock (`succinctlabs/flock` at `b684b12`, patch
   `live/PROTOCOL.md` §10.4 says what each side computes.
 - `*.patch`, `cuda_*_patch.py`, `cuda/`: what the pod scripts apply to the upstream checkout.
 - `pod/`: the pod scripts, run through `research run` (`tool.py` declares the `flock_pure` tool).
-- `verifier/`: the verifier of record: the specification `PROTOCOL.md`, the executable Lean verifier (`../../core/service/flock/`,
-  `flock-verify`) and the agreement scripts; its Lean proofs are under `Security/Proofs/Flock/` (`Level3/`,
-  `Soundness/`). See its README.
+- `verifier/`: the outline of the verifier of record (`PROTOCOL.md`), which is the executable Lean verifier
+  (`../../core/service/flock/`, `flock-verify`), and the scripts that hold it to upstream's Rust verifier; its Lean
+  proofs are under `Security/Proofs/Flock/`. See its README.
 
 C-Flock's circuit prover is M0 in the Layout above (module `verity_flock.circuit`, CLI `flock-circuit`, statements
 `verity/flock-circuit` and `verity/flock-tables`). The Lean verifier reads its format, serving writes rows in it
