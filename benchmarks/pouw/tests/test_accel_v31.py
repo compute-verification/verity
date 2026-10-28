@@ -21,9 +21,9 @@ import v31
 import v31lib
 
 
-def _coins(f: v31.Fill, seed: int = 3) -> tuple[dict[str, bytes], v31.Coins]:
+def _coins(f: v31.Fill, seed: int = 3) -> tuple[dict[str, bytes], v31.CallNoise]:
     seeds = {s: bytes([seed, i]) * 32 for i, s in enumerate(v31.STREAMS)}
-    return seeds, v31.Coins.expand(f, seeds)
+    return seeds, v31.CallNoise.expand(f, seeds)
 
 
 def test_coins_have_their_ranges():
@@ -38,7 +38,7 @@ def test_coins_have_their_ranges():
 def test_a_tiles_coins_are_the_calls_rows(lp):
     f = v31.Fill(384, 256, 1536, lp, 3 * lp)
     seeds, c = _coins(f, 5)
-    r = v31.Coins.rows(f, seeds, range(256, 384), range(128, 256))
+    r = v31.CallNoise.rows(f, seeds, range(256, 384), range(128, 256))
     assert (r.dA == c.dA[256:]).all() and (r.V == c.V[256:]).all()
     assert (r.dB == c.dB[128:]).all() and (r.U == c.U[128:]).all() and (r.perm == c.perm).all()
 
@@ -147,7 +147,7 @@ def test_fill_is_dithers_no_fold_call(case):
         A = v31.pad_rows(seeds, range(m), k)
         assert hashlib.sha512(A.tobytes()).hexdigest() == pad_h
         assert np.array_equal(v31.pad_rows(seeds, range(5, 9), k), A[5:9])
-    values = v31.fill_buffer(f, *v31.fill_values(f, A, B, v31.Coins.expand(f, seeds)))
+    values = v31.fill_buffer(f, *v31.fill_values(f, A, B, v31.CallNoise.expand(f, seeds)))
     assert hashlib.sha512(values).hexdigest() == values_h
     assert f.leaves == leaves and f.domain().domain_id.hex() == dom_h
     assert v31.fill_commit(f, values, bytes(range(192, 256)), 3 * leaves).root.hex() == root_h
@@ -178,7 +178,7 @@ def test_fill_verdicts(cheat, served, L):
         seeds = v31.fill_seeds(rng.bytes(64), rng.bytes(64))
         A = None
     Aop = v31.pad_rows(seeds, range(f.m), f.k) if A is None else A
-    co = v31.Coins.expand(f, seeds)
+    co = v31.CallNoise.expand(f, seeds)
     T, O = v31.fill_values(f, Aop, B, co, skip=5 if cheat == "skip" else None)
     if cheat == "forge" and f.W >= 2:
         T[1] ^= 0x0F0F
@@ -234,7 +234,7 @@ def test_fill_sample_rebuilds_a_tile_and_the_params(tmp_path, capsys, served):
         seeds = v31.fill_seeds(rng.bytes(64), rng.bytes(64))
         A = v31.pad_rows(seeds, range(f.m), f.k)
     ks, off = rng.bytes(64), 5 * f.leaves
-    cm = v31.fill_commit(f, v31.fill_buffer(f, *v31.fill_values(f, A, B, v31.Coins.expand(f, seeds))), ks, off)
+    cm = v31.fill_commit(f, v31.fill_buffer(f, *v31.fill_values(f, A, B, v31.CallNoise.expand(f, seeds))), ks, off)
     args = ["--served"] if served else []
     assert v31.main(["v31", "fill-params", str(tmp_path / "p"), "--L", "512", "--row", "2048", "x:256:384:1024", *args]) == 0
     name = v31.fill_params_name(256, 384, 1024, 256, 512, 2048, served)

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# ε_skip's per-instruction counts off sm_120 (eps_budget.py's APV_TAIL, c_apv_serve and c_vfold, BC-KERNEL r2's and
-# D2S-KERNEL r3's ncu counts on sm_120): build the kernels they came from (edited_gemm/apv.cu: apv_l7qs, apv_cc,
+# ε_skip's per-instruction counts off sm_120 (eps_budget.py's APV_TAIL, c_apv_serve and c_vfold, the checked kernels'
+# and the D2S kernels' ncu counts on sm_120): build the kernels they came from (edited_gemm/apv.cu: apv_l7qs, apv_cc,
 # apv_plain, vfold, vfold_x) for sm_120a, sm_90a and sm_100a with -lineinfo, and dump each cubin's SASS with its inlined
 # line info for eps_counts.py, which counts each kernel's tail, served epilogue and sums by the source lines they come
 # from. CPU only, no GPU. Each source tree is a `git archive` of apv.cu's include closure at the commit its counts were

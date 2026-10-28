@@ -12,8 +12,9 @@ call)`), so `ovl_w`, the weight side every call; a filler's is `ovl_pad`, its pa
 serial call's parts with those seeds: tensor `gemm` (served: cuBLASLt's O, then the protocol GEMM over k < (S - 1) L),
 hashing `coins`, `coins_w`, `pad` and `commit`, other `form_a` and `form_b`. gamma_u is against wgmma.linear's step from
 the same lines where they time it (`wgl`, a -DV31_WG build's served bench), else against --wgmma's mqa16k52 step. The
-residual is 1 - W / (step ρ), W the step's MACs and ρ the H200's data-sheet rate (4,096 MACs an SM a clock, 132 SMs,
-1,830 MHz).
+residual is 1 - W / (step ρ), W the step's MACs and ρ the H200's rate (4,096 MACs an SM a clock, 132 SMs) at each reading
+of its clock in `CLOCKS_MHZ`, side by side: the tensor clock (1,830 MHz, the data sheet's dense INT8 rate) and the boost
+clock nvidia-smi reports (1,980 MHz).
 
     python3 h200_step.py BENCH.jsonl ... [--wgmma SECONDS]
 """
@@ -27,7 +28,10 @@ LAYERS = 52
 CALLS = {(16384, 16384): 2 * LAYERS, (128, 16384): LAYERS, (65536, 16384): LAYERS, (16384, 65536): LAYERS,
          (256, 16384): 1}
 MODELS = {"mqa16k52": CALLS, "8b": {(6144, 4096): 32, (4096, 4096): 32, (28672, 4096): 32, (4096, 14336): 32}}
-RHO = 4096 * 132 * 1.83e9
+#: the H200's SM clock under each reading; one constant until the card file states the tensor clock
+CLOCKS_MHZ = {"tensor": 1830, "boost": 1980}
+RHO = {name: 4096 * 132 * mhz * 1e6 for name, mhz in CLOCKS_MHZ.items()}
+MHZ = " / ".join(f"{m:,}" for m in CLOCKS_MHZ.values())
 FILL_ARMS = ("lt", "coins", "coins_w", "pad", "form_a", "form_b", "gemm", "commit", "call", "ovl", "ovl_w", "ovl_pad", "wgl")
 
 
@@ -67,6 +71,11 @@ def fill_steps(lines: list[dict], m: int = 16384, calls: dict[tuple[int, int], i
     return out
 
 
+def residual(macs: int, step: float | None) -> str:
+    """1 - W / (step ρ) at each reading of the clock, in `CLOCKS_MHZ`'s order."""
+    return " / ".join(f"{1 - macs / (step * rho):.3f}" for rho in RHO.values()) if step else "-"
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("files", nargs="+")
@@ -80,7 +89,7 @@ def main() -> int:
         found, ref = True, wg.get(model)
         print(f"\n{model}, Dither's no-fold call\n\n| L' | L | ROW | kind | variant | step s | arm | gamma_u | gamma_lt | "
               "ovl s | ovl_w s | ovl_pad s | call s | tensor s | hashing s | other s | hashing share | cuBLASLt s | "
-              "residual | SM MHz |")
+              f"residual at {MHZ} MHz | SM MHz |")
         print("|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|")
         f = lambda x: "-" if x is None else f"{x:.3f}"  # noqa: E731
         for (lp, L, row, o, var), v in st.items():
@@ -92,7 +101,7 @@ def main() -> int:
             print(f"| {lp} | {L} | {row} | {'served' if o else 'filler'} | {var} | {f(step)} | {v['record']} | {gu} | "
                   f"{f(step / s['lt'] if step else None)} | {f(s['ovl'])} | {f(s['ovl_w'])} | {f(s['ovl_pad'])} | "
                   f"{f(s['call'])} | {v['tensor']:.3f} | {v['hashing']:.3f} | {v['other']:.3f} | "
-                  f"{v['hashing'] / split:.1%} | {s['lt']:.3f} | {f(1 - v['macs'] / (step * RHO) if step else None)} | "
+                  f"{v['hashing'] / split:.1%} | {s['lt']:.3f} | {residual(v['macs'], step)} | "
                   f"{mhz} |")
         for (lp, L, row, o, var), v in st.items():
             step, lt, wl = v["step"], v["s"]["lt"], v["s"]["wgl"]

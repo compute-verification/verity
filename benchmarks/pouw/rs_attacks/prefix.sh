@@ -5,7 +5,7 @@
 # BLOCKS sets the timed blocks (default 16384). Results in $OUT.
 #
 #   research run --on vy-nebius-2 --project verity --campaign cmp-13 --source . --cwd clone \
-#     --env GPU_LEASE_WHO=RS-D2A --send benchmarks/pouw/rs_attacks/prefix.sh -- bash -c 'bash "$RESEARCH_RUN_DIR/inputs/prefix.sh"'
+#     --env GPU_LEASE_WHO=LANE --send benchmarks/pouw/rs_attacks/prefix.sh -- bash -c 'bash "$RESEARCH_RUN_DIR/inputs/prefix.sh"'
 set -uxo pipefail
 export O=${OUT:?}
 export PATH=/usr/local/cuda-13.0/bin:$PATH

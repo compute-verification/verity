@@ -4,7 +4,7 @@
 # short lease, checked by sref.py against hashlib after it; then the interleaved timing at the edited-GEMM table's shapes
 # under a second lease, whatever the gate said (the table marks an arm whose gate failed). Clocks are read, never set.
 #
-#   research run --on vy-nebius-2 --project verity --campaign cmp-13 --source . --cwd clone --env GPU_LEASE_WHO=T1 \
+#   research run --on vy-nebius-2 --project verity --campaign cmp-13 --source . --cwd clone --env GPU_LEASE_WHO=LANE \
 #     --send benchmarks/pouw/masked_gemm/srun.sh -- bash -c 'bash "$RESEARCH_RUN_DIR/inputs/srun.sh"'
 # STAGE=build|gate|all (default all); REPS (default 7); SHAPES (name:m:n:k:batch); SG_ARMS.
 set -uo pipefail
