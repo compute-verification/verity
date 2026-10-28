@@ -50,7 +50,7 @@ files = ["verity/core/protocols/certifier/tests/test_network_certifier_egress.py
 [words_in.words]
 "EG.Record" = "EG.Occupancy"
 
-# service: the firewall's hidden side of one link-window's commitment
+# service: what one commitment hides, a link's two certified records in an execution phase and their salts
 [[words_in]]
 files = ["verity/core/protocols/certifier/service.py"]
 [words_in.words]
@@ -66,21 +66,21 @@ files = ["verity/core/protocols/certifier/PROTOCOL.md"]
 [words_in.words]
 "(`Opening`)" = "(`Hidden`)"
 
-# audit: one link-window's check, whose verdict is `Core.Verdict`'s
+# audit: one link's check over one execution phase, whose verdict is `Core.Verdict`'s
 [[words_in]]
 files = ["verity/core/protocols/certifier/audit.py", "verity/core/protocols/certifier/active.py",
          "verity/core/protocols/certifier/lean_audit.py",
          "verity/core/protocols/certifier/tests/test_network_certifier_active.py"]
 [words_in.words]
-"Verdict" = "LinkWindowCheck"
+"Verdict" = "LinkPhaseCheck"
 
 [[words_in]]
 files = ["verity/core/protocols/network/tests/test_lean_audit.py"]
 [words_in.words]
-"audit.Verdict" = "audit.LinkWindowCheck"
-"[Verdict(link=" = "[LinkWindowCheck(link="
+"audit.Verdict" = "audit.LinkPhaseCheck"
+"[Verdict(link=" = "[LinkPhaseCheck(link="
 
-# replay_chain: a window row, the queue of arrivals and decisions beside the state row (`Row`)
+# replay_chain: the queue row, the arrivals and decisions the steps read, beside the state row (`Row`)
 [[words_in]]
 files = ["verity/core/protocols/certifier/replay_chain.py"]
 [words_in.words]
@@ -95,7 +95,7 @@ files = ["verity/core/protocols/certifier/compile_slice.py", "verity/core/protoc
 "RC.Window" = "RC.QueueRow"
 
 [keep]
-# prose that starts a sentence with the window itself
+# prose that starts a sentence with the word, not the class
 patterns = ['\*\*The carry\.\*\* Window']
 
 [rewrite]
