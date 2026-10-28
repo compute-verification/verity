@@ -510,6 +510,35 @@ def limit_run(run_max: float, slot: str, run_dir: str | None, mono=time.monotoni
     return f"slot: the run's timeout is now {t:g} s from its start: {run_max:g} s from taking slot {slot}"
 
 
+def defer_run(waited_s: float, line: str, run_dir: str | None) -> str | None:
+    """Move the `research run` in ``run_dir``'s timeout ``waited_s`` later, the time it spent in ``line`` (a wait with no limit of
+    its own, as a Lean audit slot's), so the wait doesn't use up the time its work was given. Its timeout now is RUN_TIMEOUT's
+    when that was set, else its status.json's. What was done, in a line; None when there is nothing to move (no wait, not in a
+    `research run`, or a run with no timeout)."""
+    if not run_dir or waited_s <= 0:
+        return None
+    ctl = Path(run_dir) / RUN_TIMEOUT
+    try:
+        doc = json.loads(ctl.read_text() or "{}")
+    except (OSError, ValueError):
+        doc = {}
+    now = doc.get("timeout_s") if isinstance(doc, dict) else doc
+    if not isinstance(now, (int, float)) or isinstance(now, bool):
+        now = _read(Path(run_dir) / "status.json").get("timeout_s")
+    if not isinstance(now, (int, float)) or isinstance(now, bool) or now <= 0:
+        return None
+    t = round(now + waited_s, 3)
+    try:
+        ctl.parent.mkdir(parents=True, exist_ok=True)
+        tmp = ctl.with_name(f".{ctl.name}.{os.getpid()}")
+        tmp.write_text(json.dumps({"timeout_s": t, "actor": "timeout",
+                                   "reason": f"{now:g} s, plus {waited_s:g} s waited in {line}"}) + "\n")
+        os.replace(tmp, ctl)
+    except OSError as e:
+        return f"{line}: the run's timeout stays {now:g} s from its start, counting this {waited_s:g} s wait ({ctl}: {e})"
+    return f"{line}: the run's timeout is now {t:g} s from its start: {now:g} s, plus the {waited_s:g} s it waited here"
+
+
 def record_slot(run_dir: str | None, doc: dict) -> None:
     """``doc`` as the run's RUN_SLOT, replaced whole, so `research status` shows a check waiting in the line as waiting and not as
     running since its run began (10 Oct: af2d waited 95 min on node 1 and was reported running all along). Nothing outside a

@@ -288,7 +288,7 @@ def run(a: argparse.Namespace, cmd: list[str]) -> int:
     sid = em.span_start(a.stage, pid=proc.pid, pgid=proc.pid, cmd0=Path(cmd[0]).name)
     timed_out = False
     rc: int | None = None
-    timeout = a.timeout
+    timeout, limit = a.timeout, "the run's --timeout"
     ctl = _TimeoutControl(d)
     sweep: Sweep | None = None          # set by a timeout or a cancel: the run's processes, ended once `deadline` has passed
     deadline, stop_actor, stop_grace = 0.0, "timeout", a.grace
@@ -307,7 +307,7 @@ def run(a: argparse.Namespace, cmd: list[str]) -> int:
                 # (or lower) it while the row runs, and the change is a recorded mark beside the launch value -- not a paused watchdog.
                 em.mark(a.stage, "timeout_changed", old_timeout_s=timeout, new_timeout_s=new["timeout_s"], actor=new.get("actor"), reason=new.get("reason"),
                         elapsed_s=round(clock() - armed, 3), control=str(ctl.path))
-                timeout = new["timeout_s"]
+                timeout, limit = new["timeout_s"], new.get("reason") or f"{ctl.path}, set by {new.get('actor') or 'someone'}"
                 set_status(d, "running", timeout_s=timeout, timeout_changed_utc=utc_now_ms())
             if stall is not None:
                 try:
@@ -323,7 +323,7 @@ def run(a: argparse.Namespace, cmd: list[str]) -> int:
                 em.mark(a.stage, "cancel_seen", actor=stop_actor, grace_s=stop_grace, reason=req.get("reason"))
             if timeout and clock() - armed >= timeout and not timed_out:
                 timed_out = True
-                _marker(d, "timeout", None, proc.pid, signal.SIGTERM, f"stage {a.stage} exceeded timeout_s={timeout}", None, True, a.job)
+                _marker(d, "timeout", None, proc.pid, signal.SIGTERM, f"stage {a.stage} exceeded timeout_s={timeout} ({limit})", None, True, a.job)
                 if sweep is None:
                     sweep = Sweep(proc.pid, str(d.resolve()), leader_start=starttime)
                     stop_actor, stop_grace, deadline = "timeout", a.grace, clock() + a.grace
