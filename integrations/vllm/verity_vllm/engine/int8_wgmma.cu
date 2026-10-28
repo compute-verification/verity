@@ -362,23 +362,20 @@ template <int WM, int BN, int CO, int CL> DEV void body(const Params& p) {
     body<WM, BN, CO, 2>(p);                                                                                              \
   }
 KERNELS(pp, 128, 128, 0)
-KERNELS(pp, 64, 256, 0)
 KERNELS(co, 128, 256, 1)
 
 // ---------------------------------------------------------------- the host side (int8_wgmma.py's ctypes calls)
-// Variants, in this order: ping-pong 128x128, its pairs, 64x256, its pairs, cooperative 128x256, its pairs.
+// Variants, in this order: ping-pong 128x128, its pairs, cooperative 128x256, its pairs.
 namespace {
-constexpr int NV = 6;
-constexpr int VWM[NV] = {128, 128, 64, 64, 128, 128}, VBN[NV] = {128, 128, 256, 256, 256, 256}, VCL[NV] = {1, 2, 1, 2, 1, 2};
-constexpr int VCO[NV] = {0, 0, 0, 0, 1, 1};
+constexpr int NV = 4;
+constexpr int VWM[NV] = {128, 128, 128, 128}, VBN[NV] = {128, 128, 256, 256}, VCL[NV] = {1, 2, 1, 2};
+constexpr int VCO[NV] = {0, 0, 1, 1};
 using T0 = Tile<128, 128, 0>;
-using T1 = Tile<64, 256, 0>;
 using T2 = Tile<128, 256, 1>;
-constexpr int VSMEM[NV] = {T0::SMEM, T0::SMEM, T1::SMEM, T1::SMEM, T2::SMEM, T2::SMEM};
-constexpr int VSTAGES[NV] = {T0::STAGES, T0::STAGES, T1::STAGES, T1::STAGES, T2::STAGES, T2::STAGES};
+constexpr int VSMEM[NV] = {T0::SMEM, T0::SMEM, T2::SMEM, T2::SMEM};
+constexpr int VSTAGES[NV] = {T0::STAGES, T0::STAGES, T2::STAGES, T2::STAGES};
 constexpr int MAX_DEV = 64;
 const void* const VFN[NV] = {(const void*)exactlin_scaled_mm_wgmma_pp_128x128, (const void*)exactlin_scaled_mm_wgmma_ppm2_128x128,
-                             (const void*)exactlin_scaled_mm_wgmma_pp_64x256,  (const void*)exactlin_scaled_mm_wgmma_ppm2_64x256,
                              (const void*)exactlin_scaled_mm_wgmma_co_128x256, (const void*)exactlin_scaled_mm_wgmma_com2_128x256};
 // per device: SMs, and per variant the CTAs (or pairs) the card holds at once; 0 until the device's first call
 int g_sms[MAX_DEV], g_most[MAX_DEV][NV];

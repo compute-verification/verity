@@ -5,8 +5,8 @@ the same epilogue in the same order: cvt.rn.f32.s32, mul.rn by s_a, mul.rn by s_
 `scaled_mm(xq, s_a, w, s_w, y, cfg)` launches it on torch's current stream: xq [M, K] int8, s_a [M] float32, w [N, K] int8
 (row-major), s_w [N] float32 -> y [M, N] bf16, in place.  It allocates nothing and a CUDA graph captures it (the tensor maps
 are kernel parameters, encoded on the host each call).  A config (`WgCfg`, text "ppm2_128x128:g8") is the kernel (`VARIANTS`:
-ping-pong with a consumer tile of 128 x 128 or 64 x 256, or cooperative on 128 x 256; `m2` for clusters of two CTAs sharing
-W's boxes by multicast), the raster group (tile rows, or pairs of them, a group) and at most how many CTAs (0: one an SM).
+ping-pong with a consumer tile of 128 x 128, or cooperative on 128 x 256; `m2` for clusters of two CTAs sharing W's boxes
+by multicast), the raster group (tile rows, or pairs of them, a group) and at most how many CTAs (0: one an SM).
 
 The library is built by the nvcc on the path (`-fmad=false`, no FTZ or fast-math flag) for sm_90a and kept under
 ``~/.cache/verity/int8_wgmma``, keyed by its sources, flags and nvcc's version, as `commit.row_tables_device` builds its
@@ -33,13 +33,13 @@ NVCC_FLAGS = ("-O3", "-std=c++17", "-gencode", "arch=compute_90a,code=sm_90a", "
 BUILD_DIR = Path.home() / ".cache" / "verity" / "int8_wgmma"
 #: the library's variants, in `int8_wgmma_layout`'s order: (tile rows, columns, cluster); `pp` ping-pong (each consumer
 #: its own tile), `co` cooperative (both consumers one tile, 64 rows each)
-VARIANTS = {"pp_128x128": (128, 128, 1), "ppm2_128x128": (128, 128, 2), "pp_64x256": (64, 256, 1),
-            "ppm2_64x256": (64, 256, 2), "co_128x256": (128, 256, 1), "com2_128x256": (128, 256, 2)}
+VARIANTS = {"pp_128x128": (128, 128, 1), "ppm2_128x128": (128, 128, 2), "co_128x256": (128, 256, 1),
+            "com2_128x256": (128, 256, 2)}
 _vp, _i = ctypes.c_void_p, ctypes.c_int
 
 
 class WgCfg(tuple):
-    """(kernel, raster group, CTAs); `WgCfg.parse("ppm2_128x128:g8")`, `"pp_64x256:g16:c66"`."""
+    """(kernel, raster group, CTAs); `WgCfg.parse("ppm2_128x128:g8")`, `"pp_128x128:g16:c66"`."""
 
     def __new__(cls, kernel: str, group: int = 8, ctas: int = 0):
         if kernel not in VARIANTS or group < 1 or ctas < 0:

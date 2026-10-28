@@ -20,7 +20,7 @@ sm90 = pytest.mark.skipif(not _sm90_nvcc(), reason="an sm_90 GPU and nvcc requir
 def test_configs_parse_and_print():
     assert W.WgCfg.parse("ppm2_128x128") == ("ppm2_128x128", 8, 0)
     assert W.WgCfg.parse("co_128x256:g16:c66") == ("co_128x256", 16, 66)
-    for text in ("com2_128x256:g8", "pp_64x256:g4:c64"):
+    for text in ("com2_128x256:g8", "pp_128x128:g4:c64"):
         assert str(W.WgCfg.parse(text)) == text
     for bad in ("co_128x128", "pp_128x128:g0", "pp_128x128:c-1"):
         with pytest.raises(ValueError):

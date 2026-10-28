@@ -25,7 +25,7 @@ padding: a row of X W^T reads only that row, so M < 17 is just a masked tile (in
 refuses M <= 16).  Non-finite activations are outside the statement and not gated.
 
 On sm_90, `product` takes `int8_gemm_configs.WGMMA`'s plan where it has a row for the call's (N, K) and M: `int8_wgmma`, a
-persistent warp-specialized ping-pong wgmma kernel in CUDA with the same s32 product and this epilogue in this order, so the
+persistent warp-specialized wgmma kernel in CUDA with the same s32 product and this epilogue in this order, so the
 same y bit for bit (`pick_wgmma`; where its library doesn't build or load, the Triton plan runs).
 
 `scaled_mm_zy` (`verity_int8::scaled_mm_zy`'s CUDA body, `product_zy`) is `scaled_mm` at the same config whose epilogue also
