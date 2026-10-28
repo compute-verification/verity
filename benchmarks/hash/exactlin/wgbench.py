@@ -19,11 +19,15 @@ theta = 989.4 T int8 MAC/s (4,096 x 132 x 1,830 MHz).  `dcgmi dmon` samples Tens
 beside the run; an item's mean is over the samples inside it.  Back to back, every arm holds the card at its power cap
 (about 1,350 to 1,600 MHz); a served step's GEMMs run near 1,713 MHz between memory-bound kernels.  `--rest R` puts the SMs
 to sleep after each call (`stamp.cu`'s rest, R times the call's clocks at 0.7 of the rate) and takes their rest clocks out
-of the span, so an item's rate is the GEMM's at that lower mean power and higher clock.  `--plan` times
-`int8_fused._plan`'s Triton config beside TRITON: what serves today where the shape has no row.
+of the span, so an item's rate is the GEMM's at that lower mean power and higher clock.  A rest is to the GEMM after it
+what a served step's producer (a norm or quantizer) is: `int8_wgmma`'s programmatic launch overlaps its setup with the
+rest's drain, and `--rest-trigger` has each rest trigger it at once, as a producer that calls
+`griddepcontrol.launch_dependents` would.  `--plan` times `int8_fused._plan`'s Triton config beside TRITON: what serves
+today where the shape has no row.
 
     python wgbench.py --out OUT [--ms 8192,16384,32768] [--linears qkv,o,gate_up,down] [--variants all] [--secs 2]
                       [--rounds 2] [--no-lt] [--gate-only] [--no-edges] [--time-kinds served,random] [--plan] [--rest R]
+                      [--rest-trigger] [--probes CFG#FLAGS,...]
 """
 from __future__ import annotations
 
@@ -58,7 +62,7 @@ def stamp_lib(tmp: Path) -> ctypes.CDLL:
                     str(so), str(HERE / "stamp.cu")], check=True)
     dll = ctypes.CDLL(str(so))
     dll.stamp.argtypes = [ctypes.c_void_p, ctypes.c_int, ctypes.c_void_p]
-    dll.rest.argtypes = [ctypes.c_longlong, ctypes.c_void_p, ctypes.c_int, ctypes.c_void_p]
+    dll.rest.argtypes = [ctypes.c_longlong, ctypes.c_void_p, ctypes.c_int, ctypes.c_int, ctypes.c_void_p]
     dll.stamp.restype = dll.rest.restype = ctypes.c_int
     return dll
 
@@ -66,8 +70,9 @@ def stamp_lib(tmp: Path) -> ctypes.CDLL:
 class Clock:
     """Stamps of every SM's %clock64 and %globaltimer on the current stream, and the clocks each SM spent in `rest`."""
 
-    def __init__(self, dll: ctypes.CDLL):
+    def __init__(self, dll: ctypes.CDLL, trigger: bool = False):
         self.dll = dll
+        self.trigger = int(trigger)
         self.sms = torch.cuda.get_device_properties(0).multi_processor_count
         self.buf = torch.zeros(2, self.sms * 3, dtype=torch.int64, device="cuda")
         self.acc = torch.zeros(1024, dtype=torch.int64, device="cuda")  # by %smid
@@ -79,7 +84,7 @@ class Clock:
             raise RuntimeError("stamp launch failed")
 
     def rest(self, cycles: int) -> None:
-        if self.dll.rest(cycles, self.acc.data_ptr(), self.sms, torch.cuda.current_stream().cuda_stream):
+        if self.dll.rest(cycles, self.acc.data_ptr(), self.sms, self.trigger, torch.cuda.current_stream().cuda_stream):
             raise RuntimeError("rest launch failed")
 
     def span(self) -> dict:
@@ -291,6 +296,8 @@ def main() -> int:
     ap.add_argument("--plan", action="store_true", help="time `int8_fused._plan`'s Triton config too (what serves today)")
     ap.add_argument("--rest", type=float, default=0.0,
                     help="the SMs asleep after each call for this many times its clocks at 0.7 of the rate (a served step's clock)")
+    ap.add_argument("--rest-trigger", action="store_true",
+                    help="each rest lets the next call's programmatic launch start at once, as a producer that triggers it would")
     a = ap.parse_args()
     out = Path(a.out)
     out.mkdir(parents=True, exist_ok=True)
@@ -317,7 +324,7 @@ def main() -> int:
     if a.gate_only:
         return 0
     tmp = Path(tempfile.mkdtemp())
-    clock, dmon = Clock(stamp_lib(tmp)), Dmon()
+    clock, dmon = Clock(stamp_lib(tmp), a.rest_trigger), Dmon()
     arms = (["triton"] + (["plan"] if a.plan else []) + [f"wg:{v}" for v in variants]
             + [f"wg:{v}" for v in a.probes.split(",") if v] + ([] if a.no_lt else ["lt"]))
     items = []

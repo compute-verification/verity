@@ -21,9 +21,12 @@ extern "C" __global__ void stamp_k(unsigned long long* out) {
 }
 
 // the SMs idle (asleep) for `cycles` of their own clock, one CTA an SM, each adding the clocks it spent to acc[smid]: rests
-// between a GEMM's calls lower the card's mean power, so its clock rises toward a served step's
-extern "C" __global__ void rest_k(long long cycles, unsigned long long* acc) {
+// between a GEMM's calls lower the card's mean power, so its clock rises toward a served step's.  With `trigger` each CTA
+// first lets a programmatic dependent launch (griddepcontrol.launch_dependents), as a producer kernel would that triggers
+// its consumer early; without it the dependent launches only as the last CTA exits
+extern "C" __global__ void rest_k(long long cycles, unsigned long long* acc, int trigger) {
   extern __shared__ uint8_t keep_off[];
+  if (trigger) asm volatile("griddepcontrol.launch_dependents;" ::: "memory");
   if (threadIdx.x == 0) {
     keep_off[0] = 0;
     const long long c0 = clock64();
@@ -40,8 +43,8 @@ extern "C" int stamp(void* out, int sms, void* stream) {
   return cudaGetLastError() != cudaSuccess;
 }
 
-extern "C" int rest(long long cycles, void* acc, int sms, void* stream) {
+extern "C" int rest(long long cycles, void* acc, int sms, int trigger, void* stream) {
   if (cudaFuncSetAttribute(rest_k, cudaFuncAttributeMaxDynamicSharedMemorySize, STAMP_SMEM) != cudaSuccess) return 1;
-  rest_k<<<sms, 32, STAMP_SMEM, static_cast<cudaStream_t>(stream)>>>(cycles, static_cast<unsigned long long*>(acc));
+  rest_k<<<sms, 32, STAMP_SMEM, static_cast<cudaStream_t>(stream)>>>(cycles, static_cast<unsigned long long*>(acc), trigger);
   return cudaGetLastError() != cudaSuccess;
 }

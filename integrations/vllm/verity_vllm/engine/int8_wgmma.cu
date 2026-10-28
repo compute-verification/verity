@@ -13,8 +13,10 @@
 // epilogue between mainloops.  The producer holds 40 registers and the consumers 232.  `m2` (`ppm2`, `com2`): clusters of
 // two CTAs on M-adjacent tiles of one column of tiles, the pair sharing each W box by TMA multicast (each CTA loads half of
 // it into both).  Barrier arrivals stay at CTA scope (a cluster-scope release puts a MEMBAR.ALL.GPU on every consumer warp's
-// stage).  M, N and K need not be multiples of the tile: a box past the matrix reads zeros, which add nothing, and the
-// epilogue stores rows < M and columns < N alone (N even, K a multiple of 16).  The kernels are named
+// stage).  Each launch is a programmatic dependent launch: a CTA's barrier setup, and an L2 prefetch of its first W boxes,
+// run while the kernel before it on the stream drains, and every thread waits for that kernel (griddepcontrol.wait) before
+// it loads X, W or the scales or writes y.  M, N and K need not be multiples of the tile: a box past the matrix reads zeros,
+// which add nothing, and the epilogue stores rows < M and columns < N alone (N even, K a multiple of 16).  The kernels are named
 // exactlin_scaled_mm_wgmma_*, so a profile's kernel classes count them with exactlin's GEMM.
 #include <cstddef>
 #include <cstdint>
@@ -75,6 +77,10 @@ DEV void stsm4(uint32_t addr, uint32_t r0, uint32_t r1, uint32_t r2, uint32_t r3
                : "memory");
 }
 DEV void tma_prefetch(const void* map) { asm volatile("prefetch.tensormap [%0];" ::"l"(map) : "memory"); }
+// the box into L2 alone: nothing reaches the CTA, and L2 is where every write lands, so it may run before griddepcontrol.wait
+DEV void tma_prefetch_l2(const void* map, int c0, int c1) {
+  asm volatile("cp.async.bulk.prefetch.tensor.2d.L2.global.tile [%0, {%1, %2}];" ::"l"(map), "r"(c0), "r"(c1) : "memory");
+}
 DEV void tma_load(uint32_t dst, const void* map, uint32_t bar, int c0, int c1) {
   asm volatile("cp.async.bulk.tensor.2d.shared::cluster.global.mbarrier::complete_tx::bytes [%0], [%1, {%3, %4}], [%2];" ::"r"(dst),
                "l"(map), "r"(bar), "r"(c0), "r"(c1)
@@ -102,6 +108,10 @@ DEV void mbar_arrive_at(uint32_t bar, uint32_t rank) {
 }
 template <int R> DEV void regs_dec() { asm volatile("setmaxnreg.dec.sync.aligned.u32 %0;" ::"n"(R)); }
 template <int R> DEV void regs_inc() { asm volatile("setmaxnreg.inc.sync.aligned.u32 %0;" ::"n"(R)); }
+// programmatic dependent launch: the kernel before on the stream has completed and its writes are visible (at once when
+// this launch has no programmatic dependency); and a dependent launched with one may be scheduled
+DEV void grid_wait() { asm volatile("griddepcontrol.wait;" ::: "memory"); }
+DEV void grid_launch_dependents() { asm volatile("griddepcontrol.launch_dependents;" ::: "memory"); }
 
 #define WG_FENCE asm volatile("wgmma.fence.sync.aligned;" ::: "memory")
 #define WG_COMMIT asm volatile("wgmma.commit_group.sync.aligned;" ::: "memory")
@@ -217,6 +227,13 @@ template <int WM, int BN, int CO, int CL> DEV void body(const Params& p) {
     if (tid == 256) {
       tma_prefetch(&p.a);
       tma_prefetch(&p.b);
+      // W's boxes of the first unit's first stages into L2 while the kernel before drains
+      if (first_u < units) {
+        int tm, tn;
+        raster(first_u, rows_u, tiles_n, p.group, tm, tn);
+        for (int kb = 0; kb < KB && kb < STAGES; kb++) tma_prefetch_l2(&p.b, kb * BK, tn * BN + rank * (BN / CL));
+      }
+      grid_wait();
       constexpr uint32_t B_PART = BN / CL * BK;
       int s = 0;
       uint32_t ph = 0;
@@ -238,6 +255,7 @@ template <int WM, int BN, int CO, int CL> DEV void body(const Params& p) {
           if (++s == STAGES) { s = 0; ph ^= 1; }
         }
       }
+      grid_launch_dependents();
       // the peer's consumers arrive on this CTA's barriers: it stays until every stage it loaded is released by both
       if constexpr (CL == 2)
         for (int i = 0; i < STAGES; i++) {
@@ -248,6 +266,8 @@ template <int WM, int BN, int CO, int CL> DEV void body(const Params& p) {
     asm volatile("exit;");
   }
   regs_inc<232>();
+  // under a programmatic launch the barriers' setup ran beside the kernel before; s_a, s_w and y wait for it
+  grid_wait();
 
   const int x = tid % 128, lane = tid % 32;
   int32_t d[NH][NA];
@@ -453,7 +473,8 @@ extern "C" int int8_wgmma_layout(int* out) {
 // y = exactlin(xq W^T) on `stream` with variant v, at most `ctas` CTAs (0: every SM) and raster groups of `group` tile rows
 // (pairs of them with a cluster); returns 0, or a nonzero code naming the failed step, and writes the grid to *grid.  y goes
 // out by TMA stores where its rows allow (N a multiple of 8, y 16-byte aligned) unless flags has 16; flags' 1, 2 and 4 are
-// the kernel's timing probes.
+// the kernel's timing probes.  The launch is programmatic (its CTAs start as the kernel before on the stream drains, and
+// wait on it before any global read or write) unless flags has 32.
 extern "C" int int8_wgmma_launch(int v, const void* xq, const void* w, const float* sa, const float* sw, void* y, int M, int N,
                                  int K, int group, int ctas, int flags, void* stream, int* grid) {
   if (v < 0 || v >= NV || M < 1 || N < 2 || N % 2 || K < 16 || K % 16 || group < 1) return 10;
@@ -483,7 +504,16 @@ extern "C" int int8_wgmma_launch(int v, const void* xq, const void* w, const flo
   const int rounds = (units + cap - 1) / cap, n = (units + rounds - 1) / rounds;
   *grid = n * cl;
   void* args[] = {&p};
-  if (cudaLaunchKernel(VFN[v], dim3(n * cl), dim3(384), args, VSMEM[v], static_cast<cudaStream_t>(stream)) != cudaSuccess)
-    return 13;
+  cudaLaunchConfig_t cfg = {};
+  cfg.gridDim = dim3(n * cl);
+  cfg.blockDim = dim3(384);
+  cfg.dynamicSmemBytes = VSMEM[v];
+  cfg.stream = static_cast<cudaStream_t>(stream);
+  cudaLaunchAttribute pdl[1];
+  pdl[0].id = cudaLaunchAttributeProgrammaticStreamSerialization;
+  pdl[0].val.programmaticStreamSerializationAllowed = 1;
+  cfg.attrs = pdl;
+  cfg.numAttrs = flags & 32 ? 0 : 1;
+  if (cudaLaunchKernelExC(&cfg, VFN[v], args) != cudaSuccess) return 13;
   return 0;
 }
