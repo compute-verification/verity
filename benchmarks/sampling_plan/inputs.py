@@ -8,7 +8,6 @@ from dataclasses import dataclass
 from math import ceil, log2
 
 from verity.core.protocols.sampled_proofs.costfit import Observation
-from verity.core.protocols.sampled_proofs.optimize import HM96_ANDS, SHA512_ANDS
 
 
 @dataclass(frozen=True)
@@ -50,11 +49,11 @@ I = {
                                  "the epilogues' pieces), each held at its floor", "A"),
 }
 
-#: ANDs of the pieces (their pins; a compression's is `Sha512Compress_v1`'s, through `optimize`)
+#: ANDs of the pieces (their pins and hm96 PROTOCOL §5)
 S8_STEP = 4_190
 EPILOGUE = 5_000
-SHA512 = SHA512_ANDS
-HM96 = HM96_ANDS
+SHA512 = 58_120
+HM96 = 116_240
 
 
 
@@ -169,8 +168,10 @@ def tree_chain(leaves: float) -> int:
 
 def s8_coord_ands(k: int) -> int:
     """One s8 coordinate's ANDs with its rows' openings, as `costfit` counts them: K/32 steps, the epilogue, two K-byte
-    operand rows and three one-block rows (the scales and the output)."""
-    return k // 32 * S8_STEP + EPILOGUE + 2 * (HM96 + SHA512 * ceil((k + 17) / 128)) + 3 * (HM96 + SHA512)
+    operand rows and three one-block rows (the scales and the output), each at `optimize.row_ands`."""
+    from verity.core.protocols.sampled_proofs.optimize import row_ands
+
+    return k // 32 * S8_STEP + EPILOGUE + 2 * row_ands(k) + 3 * row_ands(1)
 
 
 #: the measurements the cost model is fitted from (`costfit`): benchmarks/one_stage/zk_cost.py's sessions of

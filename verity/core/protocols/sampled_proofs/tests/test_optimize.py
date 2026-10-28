@@ -15,7 +15,7 @@ from pathlib import Path
 
 import pytest
 
-from verity.core.protocols.sampled_proofs.optimize import (HM96_ANDS, PROVING_ONLY, SHA512_ANDS, Grain, grain_costs,
+from verity.core.protocols.sampled_proofs.optimize import (HM96_ANDS, PROVING_ONLY, SHA512_ANDS, SHA512_ROWS, Grain, grain_costs,
                                                            grain_optimum, leak_count, leak_draws, loc_bits, pinned_ands,
                                                            sqrt_grain)
 from verity.core.protocols.profile import Stratified, Stratum
@@ -231,27 +231,27 @@ def test_for_budget_closes_the_grid_gaps(batched):
 
 def test_row_ands_follows_hm96_table():
     """Two hiding compressions and the digest's blocks, the 17 bytes of padding and length included."""
-    assert [row_ands(n) for n in (4, 111, 112, 256, 4096)] == [c * SHA512_ANDS for c in (3, 3, 4, 5, 35)]
-    assert HM96_ANDS == 2 * SHA512_ANDS
+    assert [row_ands(n) for n in (4, 111, 112, 256, 4096)] == [c * SHA512_ROWS for c in (3, 3, 4, 5, 35)]
+    assert HM96_ANDS == 2 * SHA512_ROWS
 
 
 def test_a_compression_costs_its_pin_which_is_the_gadgets_rows():
-    """`SHA512_ANDS` is `Sha512Compress_v1`'s circuit-check pin, the same as the opening unit's `RowCompress_v1`, and both
-    are `compress_gadget`'s AND rows on a `forms.Circuit`, its committed copies included (the ripple-carry model's
-    58,120 leaves them out)."""
+    """`SHA512_ROWS` is `Sha512Compress_v1`'s circuit-check pin, the same as the opening unit's `RowCompress_v1`, and both
+    are `compress_gadget`'s AND rows on a `forms.Circuit`, its committed copies included, which `SHA512_ANDS`, the
+    ripple-carry model's count, leaves out."""
     from verity.ml.circuits.boolean.forms import Circuit
     from verity.ml.commitments import gates
     from verity.ml.commitments.gates.sha512 import compress_gadget
 
     pins = {name: json.loads(Path(gates.__file__).with_name(f"{name}.circuit-check.json").read_text())["definitions"]
             for name in ("lms", "block_check")}
-    assert SHA512_ANDS == pinned_ands("Sha512Compress_v1") == pinned_ands("RowCompress_v1", "block_check")
-    assert SHA512_ANDS == pins["lms"]["Sha512Compress_v1"]["and"] == pins["block_check"]["RowCompress_v1"]["and"]
+    assert SHA512_ROWS == pinned_ands("Sha512Compress_v1") == pinned_ands("RowCompress_v1", "block_check")
+    assert SHA512_ROWS == pins["lms"]["Sha512Compress_v1"]["and"] == pins["block_check"]["RowCompress_v1"]["and"]
     assert pins["lms"]["Sha512Compress_v1"]["type"] == pins["block_check"]["RowCompress_v1"]["type"]
     C = Circuit()
     out = compress_gadget(C, [C.input(f"cv{i}", 64) for i in range(8)], [C.input(f"m{i}", 64) for i in range(16)])
     C.output("cv", [b for w in out for b in w])
-    assert C.counts()["ands"] == SHA512_ANDS
+    assert C.counts()["ands"] == SHA512_ROWS > SHA512_ANDS
 
 
 def test_candidates_fit_a_size_class():

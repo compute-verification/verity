@@ -59,17 +59,20 @@ def pinned_ands(definition: str, sidecar: str = "lms") -> int:
     return pins["definitions"][definition]["and"]
 
 
-#: one SHA-512 compression's AND rows in C-Flock, `Sha512Compress_v1`'s pin: hm96 PROTOCOL §5's ripple-carry count plus
-#: the copies `compress_gadget` commits
-SHA512_ANDS = pinned_ands("Sha512Compress_v1")
+#: ANDs of one SHA-512 compression in hm96 PROTOCOL §5's ripple-carry model, no copies: a gate count to compare hashes
+#: by, not what C-Flock proves
+SHA512_ANDS = 58_120
+#: the AND rows C-Flock proves for one SHA-512 compression, `Sha512Compress_v1`'s pin: `compress_gadget`'s ANDs and the
+#: copies it commits
+SHA512_ROWS = pinned_ands("Sha512Compress_v1")
 #: the hiding part of an hm96-sha512 row in circuit: two private compressions (hm96 PROTOCOL §5)
-HM96_ANDS = 2 * SHA512_ANDS
+HM96_ANDS = 2 * SHA512_ROWS
 
 
 def row_ands(nbytes: int) -> int:
     """In-circuit AND rows to open one hm96-sha512 row of `nbytes` bytes: its digest's private blocks, the length and
-    padding included, and the hiding part (hm96 PROTOCOL §6's table, at `SHA512_ANDS` a compression)."""
-    return HM96_ANDS + SHA512_ANDS * ceil((nbytes + 17) / 128)
+    padding included, and the hiding part (hm96 PROTOCOL §6's table, at `SHA512_ROWS` a compression)."""
+    return HM96_ANDS + SHA512_ROWS * ceil((nbytes + 17) / 128)
 
 
 @dataclass(frozen=True)
@@ -1012,7 +1015,7 @@ def sqrt_grain(beta: float, h: float, target: float, o: float, delta: float, wei
 
 
 __all__ = ["Candidate", "Certificate", "Commitment", "CostModel", "Grain", "HM96_ANDS", "LN_BITS", "LN_PREC", "LN_TERMS",
-           "Objective", "PROVING_ONLY", "Plan", "ReplayDomain", "SHA512_ANDS", "TemplateCost", "acceptance_parts",
+           "Objective", "PROVING_ONLY", "Plan", "ReplayDomain", "SHA512_ANDS", "SHA512_ROWS", "TemplateCost", "acceptance_parts",
            "certify", "density_bound", "density_exact", "fill", "for_budget", "for_target", "frontier", "grain_costs",
            "grain_optimum", "leak_count", "leak_draws", "ln_bound", "ln_upper", "loc_bits", "max_harm",
            "max_harm_check", "needs_benchmark", "overlaps", "perturb", "pinned_ands", "replay_cost", "row_ands", "sensitivity",

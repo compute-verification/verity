@@ -25,13 +25,13 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from inputs import (EPILOGUE, I, KEY, MODELS, S8_STEP, SCHEMES, SHA512, Model, leaf_chain, observations,  # noqa: E402
+from inputs import (EPILOGUE, I, KEY, MODELS, S8_STEP, SCHEMES, Model, leaf_chain, observations,  # noqa: E402
                     s8_coord_ands, serve_rows, tree_chain)
 
 from verity.core.protocols.sampled_proofs.candidates import Shape, cuts, pressure  # noqa: E402
 from verity.core.protocols.sampled_proofs.costfit import Fitted, fit  # noqa: E402
-from verity.core.protocols.sampled_proofs.optimize import (Candidate, Commitment, CostModel, Objective,  # noqa: E402
-                                                           ReplayDomain, for_budget, for_target, frontier,
+from verity.core.protocols.sampled_proofs.optimize import (SHA512_ROWS, Candidate, Commitment, CostModel,  # noqa: E402
+                                                           Objective, ReplayDomain, for_budget, for_target, frontier,
                                                            needs_benchmark, overlaps, perturb, row_ands, structure,
                                                            weigh)
 
@@ -64,7 +64,7 @@ def s8_unit(name: str, length: int, out_bits: int, *, extra_rows: tuple[int, ...
             ways=()) -> Shape:
     noise = 2 + 2 * ceil(length * bits / 512)
     rows = (length, length) + extra_rows
-    ands = (length // 32) * S8_STEP + noise * SHA512 + (EPILOGUE if out_bits == 16 else 0)
+    ands = (length // 32) * S8_STEP + noise * SHA512_ROWS + (EPILOGUE if out_bits == 16 else 0)
     total = ands + sum(row_ands(r) for r in rows)
     return Shape(name, ands, length, out_bits, 1, rows, commit_bits, 0.0, cap=min(cap(total), 1 << 20), ways=ways)
 
@@ -79,8 +79,8 @@ def linear(k: int, bits: int, chunks=CHUNKS, tiles=((2, 1), (16, 16))) -> Shape:
     shape = coord
     for r, c in sorted(tiles, key=lambda t: t[0] * t[1]):
         n = r * c
-        tile_ands = n * (coord.ands - (2 + 2 * ceil(k * bits / 512)) * SHA512) \
-            + (2 + (r + c) * ceil(k * bits / 512)) * SHA512
+        tile_ands = n * (coord.ands - (2 + 2 * ceil(k * bits / 512)) * SHA512_ROWS) \
+            + (2 + (r + c) * ceil(k * bits / 512)) * SHA512_ROWS
         shape = Shape(f"S8Tile{{K={k},{r}x{c}}}", tile_ands, n * k, 16 * n, n, (k,) * (r + c) + (2 * n, 4 * r, 4 * c),
                       0, 0.0, cap=min(cap(tile_ands + sum(row_ands(x) for x in (k,) * (r + c))), 1 << 20),
                       parts=((shape, n // (shape.work // k)),))
