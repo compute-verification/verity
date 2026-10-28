@@ -55,7 +55,7 @@ CLASSES = [
     ("bf16 GEMM (LM head)", "head", r"nvjet|xmma_gemm|sm90_.*gemm|cutlass.*gemm|gemv|cublas|ampere_.*gemm|Kernel2|gemmSN|"
                                     r"matmul_kernel_persistent"),
     ("Commit hashing", None, r"rows_leaf|rows_level|chunk_leaves|tree_level|pos_leaves|sha512|hm96"),
-    ("Commit gather and taps", None, r"gather_copy|native_collect|tap"),
+    ("Commit gather", None, r"gather_copy|native_collect"),
     ("H1", None, r"\bkf?_(midstates|leaves|level|pads|public_salts|top|rows|segments|step|trees|tiles|strips|tree_key|"
                  r"units_level|form_leaves|node_leaves|key_leaf|dequant|x|y|ceiling|f1|fill|hash|row_digests|tile_leaves)\b"),
     ("quantize", None, r"exactlin_quant_rows|scaled_int8_quant|int8_quant|kv_quant"),
