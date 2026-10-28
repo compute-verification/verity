@@ -792,8 +792,8 @@ def FaultyBoundary : Prop :=
     (Faulty H Cm s P w v ↔ BoundaryFaulty H Cm s P w v)
 
 /-- **Sampling: Complete**, on the statements in scope, when no unit is faulty. It needs the verifier to check before
-the draw that every unit's session has a form Flock proves (`Flock.InScope`); that check waits for the reference prover
-(ruling 4). It is of the deployed record's reference prover (`D.P`), at the deployed error (`D.δc H`). -/
+the draw that every unit's session has a form Flock proves (`Flock.InScope`); that check waits for the reference
+prover. It is of the deployed record's reference prover (`D.P`), at the deployed error (`D.δc H`). -/
 def Complete (H : Msg → Msg) (D : Deploy Coin Col T) : Prop :=
   Claims.Complete H D.V D.P (Rhon H D.commit D.parse D.partition) (Scope D) (D.δc H)
 
