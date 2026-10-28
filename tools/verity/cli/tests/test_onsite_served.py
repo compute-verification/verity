@@ -236,7 +236,7 @@ print("RECORD " + json.dumps({"composed": composed, "missing": [] if "bandwidth"
     ({"bandwidth": "accept", "inference-only": "accept"}, "accept", 0, None),
 ])
 def test_the_onsite_check_is_the_records_composed_verdict(tmp_path, capsys, monkeypatch, rows, verdict, rc, reason):
-    monkeypatch.setattr(T, "RECORD", stand_in(tmp_path, "record.py", RECORD % json.dumps(rows)))
+    monkeypatch.setattr(T, "VERDICTS_SCRIPT", stand_in(tmp_path, "record.py", RECORD % json.dumps(rows)))
     state = tmp_path / "state"
     (state / "out").mkdir(parents=True)
     (state / "out" / "machine.txt").write_text("research\nprover-1\n")
