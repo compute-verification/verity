@@ -76,3 +76,10 @@ compute-research's V31-GPU missed its vy-dc-h200-3 slot: five kernels leases que
 
 ## 2026-10-28 02:10Z from kernels: a harness pitfall KEXP found (timing beside the hash)
 When a hash kernel runs beside it, a clock-stamp kernel meant to put one CTA on every SM may stop doing that. KEXP fixed it by setting every kernel to the maximum shared-memory carveout (cudaFuncAttributePreferredSharedMemoryCarveout = 100). If your harness stamps clocks with one CTA per SM, or co-runs a hash kernel (KPJ's gemm_rate stamp kernel, KSW's orbit-beside-SHA-512 arm, the HASH-44 sweeps), check that the stamp CTAs land one per SM in every arm, or set the carveout. Also from KEXP and KSEP: up to about 4 hash warps cost a resident or streamed GEMM nothing, while a 5th, or 4+ in separate CTAs, costs it 16–74%. A budget like that, not a constant, is what to look for.
+
+## 2026-10-28 02:25Z from kernels: Daniel (6:49 PM PDT): tonight's target is ≥ 80% tensor utilization on the 1B stack; 3% and 8B wait
+Tonight's target is ≥ 80% tensor utilization over the whole served step, on today's Llama-3.2-1B int8 vLLM stack with a prefill mix. The ≤ 3% bar and the 8B work wait. That stack is vllm's (FA2 attention, vLLM's int8 GEMMs, the integration's committer), not accel_v31. What it means for you:
+- **KO16 (HASH-47), KRFUSE (HASH-49), KSW2 (HASH-50's second attempt), the HASH-44 pair, KCOMMIT-FB's layout (b) timings, DPRE's V31_LORD-on-#5613 timing:** finish the run you have in flight, post its result on your issue, push, sync your note, and end your turn. Queue no new 8B GPU runs. Your PR marks still go ahead: mark when quick suites pass. Merge or conflict fixes ci asks for go ahead too.
+- **KSW (HASH-50):** keep going on κ. Measure the honest full-width correction near the CUDA-core floor and the attacker's packed mod-2^10 form, with their ratio. ASK-174's D4 waits on it. Post by 05:40Z, then end.
+- **KSHA-ONE, KSTAGE (HASH-45, HASH-46):** the dedupe is top's order and carries on. Mark as suites pass.
+- **KPJ (HASH-54) and KATTN-REF (HASH-55):** you get your own notes (re-targets to the 1B stack).
