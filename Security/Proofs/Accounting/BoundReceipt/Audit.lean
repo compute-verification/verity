@@ -272,6 +272,8 @@ theorem BoundReceiptShare : Accounting.Guarantees.BoundReceiptShare := by
 /-- **The link relay** (`Accounting.Guarantees.BoundReceiptLink`). -/
 theorem BoundReceiptLink : Accounting.Guarantees.BoundReceiptLink := by
   intro N a b h S L q Lz qz s k m F cTag cEnc w Fz lam A hm
+  rw [Bandwidth.pr_coins_flat]
+  dsimp only
   classical
   rcases Nat.eq_zero_or_pos (k - m) with hkm | hk0
   · refine (pr_le_of_card _ 1 0 one_ne_zero ?_).trans (by simp)
@@ -281,7 +283,7 @@ theorem BoundReceiptLink : Accounting.Guarantees.BoundReceiptLink := by
     fun E z G => queried (A.gpu z).toRelay E noStream (atZ G z)
   let rQ : Store N b → Store N a → Mix N a b h → Finset (Fin N) :=
     fun E z G => queried (A.rest E).view z noStream (atE G E)
-  have hsplit : ∀ x : Store N b × BoundReceipt.Coins N a b h s,
+  have hsplit : ∀ x : Store N b × (Store N a × Mix N a b h × (Fin s → Fin N)),
       (A.Accepts x.1 x.2.1 x.2.2.1 x.2.2.2 ∧ A.compute cTag cEnc x.1 x.2.1 x.2.2.1 ≤ F ∧
         A.tileWork w x.1 x.2.1 x.2.2.1 ≤ Fz ∧
         A.footprint x.1 x.2.1 x.2.2.1 * cEnc < floor b 0 S L F cTag cEnc (k - m) lam) →
@@ -332,7 +334,7 @@ theorem BoundReceiptLink : Accounting.Guarantees.BoundReceiptLink := by
         rcases hacc i with h | h
         · exact Or.inl ⟨h, hi.1⟩
         · exact Or.inr ⟨h, hi.2⟩
-  have hΩ : Fintype.card (Store N b × BoundReceipt.Coins N a b h s) =
+  have hΩ : Fintype.card (Store N b × (Store N a × Mix N a b h × (Fin s → Fin N))) =
       Fintype.card (Store N b) * (Fintype.card (Store N a) * (Fintype.card (Mix N a b h) * N ^ s)) := by
     simp only [Fintype.card_prod, Fintype.card_fun, Fintype.card_fin]
   by_cases hN : N ^ s = 0
@@ -343,7 +345,7 @@ theorem BoundReceiptLink : Accounting.Guarantees.BoundReceiptLink := by
   refine (add_le_add ((pr_or_le _ _).trans (add_le_add ?_ ?_)) ((pr_or_le _ _).trans (add_le_add ?_ ?_))).trans
     (le_of_eq (add_assoc _ _ _).symm)
   · -- the sample misses the blocks made nowhere
-    have hc := pr_le_of_card (fun x : Store N b × BoundReceipt.Coins N a b h s =>
+    have hc := pr_le_of_card (fun x : Store N b × (Store N a × Mix N a b h × (Fin s → Fin N)) =>
         (gQ x.1 x.2.1 x.2.2.1 ∪ rQ x.1 x.2.1 x.2.2.1).card < k ∧
           ∀ i, x.2.2.2 i ∈ gQ x.1 x.2.1 x.2.2.1 ∪ rQ x.1 x.2.1 x.2.2.1) (N ^ s) ((k - 1) ^ s) hN (by
       rw [hΩ]
@@ -361,7 +363,7 @@ theorem BoundReceiptLink : Accounting.Guarantees.BoundReceiptLink := by
     rw [Nat.cast_pow, Nat.cast_pow, div_eq_mul_inv, div_eq_mul_inv, mul_pow, ENNReal.inv_pow]
   · -- a guessed receipt, at either location
     refine (pr_exists_le _).trans ?_
-    have hi : ∀ i : Fin s, pr (fun x : Store N b × BoundReceipt.Coins N a b h s =>
+    have hi : ∀ i : Fin s, pr (fun x : Store N b × (Store N a × Mix N a b h × (Fin s → Fin N)) =>
         (A.gpuReceipts x.1 x.2.1 x.2.2.1 (x.2.2.2 i) = x.2.2.1 (x.2.2.2 i, x.1 (x.2.2.2 i), x.2.1 (x.2.2.2 i)) ∧
             ¬ A.MadeAtGpu x.1 x.2.1 x.2.2.1 (x.2.2.2 i)) ∨
           (A.restReceipts x.1 x.2.1 x.2.2.1 (x.2.2.2 i) = x.2.2.1 (x.2.2.2 i, x.1 (x.2.2.2 i), x.2.1 (x.2.2.2 i)) ∧
