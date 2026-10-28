@@ -1,13 +1,10 @@
-"""P2, **experimental**: the squaring-based POUS scheme from the efficient-cryptography campaign (POUS
-`internal/efficient-crypto/p2-verdict.md`; its spec is the POUS store's `docs/efficient-crypto/p2-spec-draft.md`, frozen
-v1, amended to v1.1 (the RTT cap) and to v4 (one hash, SHA-512) in `../p2/PROTOCOL.md`, which this
-module implements).  Every block is independent, and its decode is two big-integer squarings.  Two codecs differ only
-in how a block's keys are expanded:
+"""P2, **experimental**: the squaring-based POUS scheme, P2 v4 (one hash, SHA-512), whose reference is
+`benchmarks/pous/p2_v1/reference.py` and whose outline is `../README.md` ("P2").  Every block is independent, and its
+decode is two big-integer squarings.  Two codecs differ only in how a block's keys are expanded:
 
-- `p2-16448/v4`: counter-mode SHA-512 with the spec's v4 framing, the expander its setup assumption P2-EXP-IO names
-  (decision F4).
-- `p2-16448/v2`: ChaCha8 from a SHAKE256 seed per segment.  It is **nonconforming** to F4, which adds a reduced-round
-  assumption, but its keys cost about 1% of the decode's multiply work on the device.
+- `p2-16448/v4`: counter-mode SHA-512 with the spec's v4 framing, the expander its setup assumption P2-EXP-IO names.
+- `p2-16448/v2`: ChaCha8 from a SHAKE256 seed per segment.  It is **nonconforming** (not v4's expander) and adds a
+  reduced-round assumption, but its keys cost about 1% of the decode's multiply work on the device.
 
 ~~~text
 p          2^w − c0, prime, p ≡ 3 mod 4           registered: w = 16448, c0 = 21065 (`p2-p16448-c21065`, 2,056-byte blocks)
@@ -37,8 +34,8 @@ binds the model, but the bytes are not the spec's vectors'; that goes with the r
 leaves and challenge derivation), not with the expander.
 
 **What is proved, and what is not.**
-- The certificate is the pinned `Pous.SecurityProofs.P2SlackFamilyUncond`, its `λ = 128` row at the spec's k = 105
-  (decision F6): for every block count `2^8 ≤ B ≤ 2^23` and every payload width `b` with `20·16448 ≤ 21·b ≤ 21·16447`,
+- The certificate is the pinned `Pous.SecurityProofs.P2SlackFamilyUncond`, its `λ = 128` row at the spec's k = 105:
+  for every block count `2^8 ≤ B ≤ 2^23` and every payload width `b` with `20·16448 ≤ 21·b ≤ 21·16447`,
   the profile's 16,432 among them, an adversary holding `⌊ρ·|C|⌋ + 128·B` bits, with sequential reveal, `2^20`
   forward queries per answer and any depth, is accepted with probability at most `1% + 2^-128`.  The 128 bits per block
   are a budget for structure an instantiation might leak.  That is **abstract M1** on P2's exact domain `[0, p)`:
@@ -80,7 +77,7 @@ from ..protocol import Certificate, Scheme
 EXPERIMENTAL = ("abstract-M1 result (pinned P2SlackFamilyUncond); the P2-M1 instantiation assumption is not accepted, "
                 "and the XOR-then-reduce compression attack on it is open")
 
-CHACHA8_NONCONFORMING = "ChaCha8 key expander, nonconforming to the spec's F4 (counter-mode SHA-512)"
+CHACHA8_NONCONFORMING = "ChaCha8 key expander, nonconforming to v4's (counter-mode SHA-512)"
 
 SHA512_CTR, CHACHA8 = "sha512-ctr-v4", "chacha8"
 """The two key expanders: v4's and v2's."""
@@ -123,7 +120,7 @@ CERT_WIDE_BLOCKS = (1 << 19, 1 << 27)
 of `P2RingRoundSecureWide`."""
 
 CERT_K = 105
-"""The spec's k (decision F6): `P2SlackFamilyUncond`'s `λ = 128` row, for every block count from 2^8 to 2^23."""
+"""The audit's k: `P2SlackFamilyUncond`'s `λ = 128` row, for every block count from 2^8 to 2^23."""
 
 ROOT_CALL_NS = 854_029
 """Half the fastest 16,448-bit root on the allowed hardware, 8 cores of one chiplet cooperating, in ns rounded down:
@@ -133,16 +130,15 @@ squaring (`regate.py`) over the root's 16,486 squaring-equivalents, 5,960.54 µs
 Zen 4 chiplet is 2,716.7 / 778.5 = 3.48966× per squaring (run r20260929-060834-0ec4,
 art:b92b6d56fa12cc8e04b3f6843991c2e76f49366adc89140a96c33842f70b41ed).  So the cooperating root is 1,708,058.35 ns
 and half of it 854,029.18 ns (`note:20261004T2102Z-report-relay-p2-redteam-timing`,
-art:23a323f313d2193873c59ee8ab59a0f1197167a0b4c6d008346d771c3e72de57; spec v1.1, `p2/PROTOCOL.md` §12)."""
+art:23a323f313d2193873c59ee8ab59a0f1197167a0b4c6d008346d771c3e72de57)."""
 
 DELTA_NS = 500_000
-"""Δ at the spec's operating point, 0.5 ms, with the verifier off the responder's node (`p2/PROTOCOL.md` §6, decision F2)."""
+"""Δ at the spec's operating point, 0.5 ms, with the verifier off the responder's node."""
 
 RTT_ALLOWANCE_CAP_NS = 354_000
-"""The cap on the measured RTT allowance in spec v1.1 (`p2/PROTOCOL.md` §12): the
-largest whole µs with `Δ + cap < ROOT_CALL_NS`, so `Δ + RTT ≤ 854 µs`.  The certificate refuses every whole µs past
-it, and the verifier any RTT past it or any Δ but `DELTA_NS` (`P2.deadline_refusals`), which the certificate's sum
-alone admits up to `ROOT_CALL_NS − 1`."""
+"""The cap on the measured RTT allowance: the largest whole µs with `Δ + cap < ROOT_CALL_NS`, so `Δ + RTT ≤ 854 µs`.
+The certificate refuses every whole µs past it, and the verifier any RTT past it or any Δ but `DELTA_NS`
+(`P2.deadline_refusals`), which the certificate's sum alone admits up to `ROOT_CALL_NS − 1`."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -331,7 +327,7 @@ def below(p: int, candidates) -> int:
 
 
 def sha512_keys(params: P2Params, prefix: bytes, s: int, j: int) -> tuple[int, int]:
-    """v4: block `j` of segment `s`'s `(K, t)` after `prefix` (`expand_prefix`), the spec's §4 streams: `K` is the first
+    """v4: block `j` of segment `s`'s `(K, t)` after `prefix` (`expand_prefix`), the spec's streams: `K` is the first
     `w/8` bytes of `stream(base, "K")`, and `t` the first `w/8`-byte word of `stream(base, "t")` below `p`."""
     nb, base = params.block_bytes, prefix + s.to_bytes(8, "big") + j.to_bytes(8, "big")
     k = int.from_bytes(stream(base, b"K", nb), "big")
