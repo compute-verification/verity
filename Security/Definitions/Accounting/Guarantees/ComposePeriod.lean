@@ -23,7 +23,7 @@ tiles only (`PerLiveTile`), and a dead tile's words count for nothing (`liveCone
 
 An honest period of 82,403 windows completes with probability `(1 − f)^n`, 44% at a per-window failure rate
 `f = 10^-5`, and dropping failed windows instead hides about `0.26` of the live words per dropped share. So a period
-is credited up to its first window with a refused proof (`PeriodRun.Credited`), a stopping time, and the tail is taken
+is credited up to its first window with a refused proof (`Outcomes.Credited`), a stopping time, and the tail is taken
 at it (`PeriodTailMax`).
 
 * `PeriodBudget`: the composition lemma. If every window's `serviceGame` has its saving per unit of detection bounded by
@@ -78,8 +78,8 @@ declared circuit `Cd` and scheme `Sc`, run as a period of at most `n ≥ 1` wind
 committed, then the service's draw of `K_d` of the `N_p ≥ Cd.units` tiles (`drawOf`, uniform over every tile, dead ones
 included) with the proofs' coins `Ξ`, all fresh; window `w + 1`'s first coin is released after window `w`'s draw. The
 cheater's play in each window, its live tiles included, may be any function of every earlier window's coins
-(`Period`). The period is credited up to its first window with a refused proof (`PeriodRun.Credited`): its accepted
-prefix, of `j = PeriodRun.prefixLen` windows. Under:
+(`Period`). The period is credited up to its first window with a refused proof (`Outcomes.Credited`): its accepted
+prefix, of `j = Outcomes.prefixLen` windows. Under:
 * `CircuitWork`'s premises on the circuit, unchanged: `Scope`, `ρ`, `w_max`, the lucks `p, p0`, `a, b ≥ 0`, `Λ > 0` and
   `SplitRate` at them. They read the static `shareCone`, which bounds every window's live weights, so none reads the
   load;
@@ -236,7 +236,7 @@ def CircuitWorkPeriod : Prop :=
     (hr : 0 < Cd.rounds) (hK : Kd ≤ Np)
     (Wp : Period C (Paths C Cd.rounds × (Equiv.Perm (Fin Np) × Ξ)) (Fin Np) Cd.rounds n)
     (Pl : Play (Paths C Cd.rounds × (Equiv.Perm (Fin Np) × Ξ)) n K T L U)
-    (pr : PeriodRun C (Equiv.Perm (Fin Np) × Ξ) Cd.rounds Kd Np n V)
+    (pr : Outcomes C (Equiv.Perm (Fin Np) × Ξ) Cd.rounds Kd Np n V)
     (folded : Paths (Paths C Cd.rounds × (Equiv.Perm (Fin Np) × Ξ)) n → ℝ) (ρ p p0 a b wmax Λ δs δbind δks : ℝ),
     Scope Sc Cd δs →
     0 < ρ → (∀ t : Fin Np, ρ * Np * shareCone Sc Cd Np t ≤ 1) →
@@ -260,7 +260,7 @@ def CircuitWorkPeriod : Prop :=
 /-- **(L)'s credit in live words over a monitoring period's accepted prefix, live coins.** Under `CircuitWorkPeriod`'s
 premises with `a, b > 0`, an accepted period has at least its credit `(1 − ε(j))₊·N_live` (`creditPrefix`) of its
 prefix's live words fixed right (`n·fixed`), `N_live` the prefix's live words (`creditedLive`) and
-`ε(j) = r(j)·N_w/(min(a, b)·N_live)` at the realized prefix `j = PeriodRun.prefixLen` (`epsPrefix`), except with
+`ε(j) = r(j)·N_w/(min(a, b)·N_live)` at the realized prefix `j = Outcomes.prefixLen` (`epsPrefix`), except with
 probability `δ_s + n·(δ_bind + δ_ks)`. So a period may be credited `(1 − ε(j))₊` of its prefix's live words, and a
 prefix's deficit is at most what the discount takes. `ε` is read at the prefix the period realized, never at its cap
 `n`: a short prefix, whose `ε` is at least `1`, earns nothing, and where the prefix ends, which the cheater may steer,
@@ -281,7 +281,7 @@ def CircuitCreditPeriod : Prop :=
     (hr : 0 < Cd.rounds) (hK : Kd ≤ Np)
     (Wp : Period C (Paths C Cd.rounds × (Equiv.Perm (Fin Np) × Ξ)) (Fin Np) Cd.rounds n)
     (Pl : Play (Paths C Cd.rounds × (Equiv.Perm (Fin Np) × Ξ)) n K T L U)
-    (pr : PeriodRun C (Equiv.Perm (Fin Np) × Ξ) Cd.rounds Kd Np n V)
+    (pr : Outcomes C (Equiv.Perm (Fin Np) × Ξ) Cd.rounds Kd Np n V)
     (folded : Paths (Paths C Cd.rounds × (Equiv.Perm (Fin Np) × Ξ)) n → ℝ) (ρ p p0 a b wmax Λ δs δbind δks : ℝ),
     Scope Sc Cd δs →
     0 < ρ → (∀ t : Fin Np, ρ * Np * shareCone Sc Cd Np t ≤ 1) →

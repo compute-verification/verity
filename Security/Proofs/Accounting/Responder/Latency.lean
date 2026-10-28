@@ -5,7 +5,7 @@ import Proofs.Accounting.Responder
 /-!
 # B2's oracle-location form, proved: a window as a ring responder
 
-`B2Window` (`Security/Definitions/Accounting/Guarantees/Responder.lean`): a family of `RingWindow`s whose multiplications
+`B2Window` (`Security/Definitions/Accounting/Guarantees/Responder.lean`): a family of `RingResponder`s whose multiplications
 take at least `ℓ > 0` ticks to answer and whose spans are at most `D·ℓ` ticks is the step of an `(N, D, Q, L)`
 sequential responder. With `ℓ = ⌈(Δ + RTT)/D_p⌉` (the latency form of sequential speed) and one challenge every
 `Δ + RTT` ticks (fixed pacing), that is `D = D_p`.
@@ -91,7 +91,7 @@ open Classical in
 /-- The responder's program for the window `W` from tick `n`, with `k` ticks left: `as` the queries asked so far with
 their ticks, `ds` the batches delivered so far, `g` the answers it knows, `held` the multiplications it holds, with
 their ticks, and `h0` the tick the earliest-asked of them was asked at. -/
-noncomputable def sim (W : RingWindow B w α) (ℓ : ℕ) :
+noncomputable def sim (W : RingResponder B w α) (ℓ : ℕ) :
     ℕ → ℕ → List (ℕ × RingQry B w) → List (List (Bits w)) → (RingQry B w → Bits w) → List (ℕ × RingQry B w) → ℕ →
       Prog (ringRO B w p) α
   | 0, _, as, ds, g, held, _ =>
@@ -105,7 +105,7 @@ noncomputable def sim (W : RingWindow B w α) (ℓ : ℕ) :
         (if kept held h0 ℓ n = [] then n else h0)
 
 open Classical in
-theorem sim_succ (W : RingWindow B w α) (ℓ k n : ℕ) (as : List (ℕ × RingQry B w)) (ds : List (List (Bits w)))
+theorem sim_succ (W : RingResponder B w α) (ℓ k n : ℕ) (as : List (ℕ × RingQry B w)) (ds : List (List (Bits w)))
     (g : RingQry B w → Bits w) (held : List (ℕ × RingQry B w)) (h0 : ℕ) :
     sim (p := p) W ℓ (k + 1) n as ds g held h0 =
       rnd (fired held h0 ℓ n ++ (W.ask ds).filter fun q => !q.isMul) fun r =>
@@ -120,7 +120,7 @@ theorem sim_succ (W : RingWindow B w α) (ℓ k n : ℕ) (as : List (ℕ × Ring
 /-! ## The responder answers as the window does, and asks what it asks -/
 
 open Classical in
-theorem sim_spec (W : RingWindow B w α) {ℓ : ℕ} (hℓ : 0 < ℓ) (hlat : ∀ q : RingQry B w, q.isMul = true → ℓ ≤ W.lat q)
+theorem sim_spec (W : RingResponder B w α) {ℓ : ℕ} (hℓ : 0 < ℓ) (hlat : ∀ q : RingQry B w, q.isMul = true → ℓ ≤ W.lat q)
     (f : RingQry B w → Bits w) :
     ∀ k n (g : RingQry B w → Bits w) (held : List (ℕ × RingQry B w)) h0, n + k = W.span →
       (∀ e ∈ (W.trace f n).1, g e.2 = f e.2 ∨ e ∈ held) → (∀ e ∈ held, e.2.isMul = true ∧ h0 ≤ e.1 ∧ e.1 < n) →
@@ -145,9 +145,9 @@ theorem sim_spec (W : RingWindow B w α) {ℓ : ℕ} (hℓ : 0 < ℓ) (hlat : �
     have r0 : (held.map Prod.snd).countP (fun q => !q.isKey) = held.length := by
       rw [List.countP_eq_length.2 fun q hq => by simp [isKey_of_isMul (hm q hq)], List.length_map]
     refine ⟨?_, ?_, ?_⟩
-    · unfold RingWindow.result
+    · unfold RingResponder.result
       congr 1
-      unfold RingWindow.inFlight
+      unfold RingResponder.inFlight
       refine List.map_congr_left fun e he => upd_map _ _ _ _ ?_
       rcases hg e (List.mem_filter.1 he).1 with h | h
       · exact Or.inr h
@@ -209,7 +209,7 @@ theorem sim_spec (W : RingWindow B w α) {ℓ : ℕ} (hℓ : 0 < ℓ) (hlat : �
         · exact Or.inl (hup _ (Or.inl (List.mem_append_left _ (hfired e h hk'))))
     have hdue : W.dueAt g' ((W.trace f n).1 ++ A.map fun q => (n, q)) n =
         W.dueAt f ((W.trace f n).1 ++ A.map fun q => (n, q)) n := by
-      unfold RingWindow.dueAt
+      unfold RingResponder.dueAt
       refine List.map_congr_left fun e he => ?_
       obtain ⟨he, hn⟩ := List.mem_filter.1 he
       have hn : e.1 + W.lat e.2 = n := by simpa using hn
@@ -295,7 +295,7 @@ theorem step_bound {ℓ : ℕ} (hℓ : 0 < ℓ) {S c c' m r : ℕ} (hr : r ≤ (
       _ ≤ (S - c) / ℓ := Nat.div_le_div_right (by omega)
 
 open Classical in
-theorem sim_mulDepth (W : RingWindow B w α) {ℓ : ℕ} (hℓ : 0 < ℓ) (f : RingQry B w → Bits w) :
+theorem sim_mulDepth (W : RingResponder B w α) {ℓ : ℕ} (hℓ : 0 < ℓ) (f : RingQry B w → Bits w) :
     ∀ k n (as : List (ℕ × RingQry B w)) (ds : List (List (Bits w))) (g : RingQry B w → Bits w)
       (held : List (ℕ × RingQry B w)) h0, n + k = W.span → (held ≠ [] → h0 < n) →
       (sim (p := p) W ℓ k n as ds g held h0).mulDepth f ≤ (W.span + ℓ - 1 - if held = [] then n else h0) / ℓ := by
@@ -395,16 +395,16 @@ theorem cap_run (d : α) (f : (ringRO B w p).Qry → (ringRO B w p).Ans) (P : Pr
 /-- **A window as a ring responder.** When every multiplication takes at least `ℓ > 0` ticks to answer and the window
 spans at most `D·ℓ` ticks, some `RingBounded D Q L` program yields what the window yields, whatever the oracle answers,
 wherever the window asks at most `Q` keys and `L` ring operations. -/
-theorem window_responder (W : RingWindow B w α) (ℓ D Q L : ℕ) (d : α) (hℓ : 0 < ℓ)
+theorem window_responder (W : RingResponder B w α) (ℓ D Q L : ℕ) (d : α) (hℓ : 0 < ℓ)
     (hlat : ∀ q : RingQry B w, q.isMul = true → ℓ ≤ W.lat q) (hspan : W.span ≤ D * ℓ) :
     ∃ P : Prog (ringRO B w p) α, P.RingBounded D Q L ∧
       ∀ f : RingQry B w → Bits w, W.keys f ≤ Q → W.ops f ≤ L → P.run f = W.result f := by
   refine ⟨cap d D Q L (sim W ℓ W.span 0 [] [] (fun _ _ => false) [] 0), fun ω => cap_bounded d _ _ D Q L, ?_⟩
   intro f hQ hL
-  unfold RingWindow.keys at hQ
-  unfold RingWindow.ops at hL
+  unfold RingResponder.keys at hQ
+  unfold RingResponder.ops at hL
   obtain ⟨h1, h2, h3⟩ := sim_spec (p := p) W hℓ hlat f W.span 0 (fun _ _ => false) [] 0 (by omega)
-    (fun e he => by simp [RingWindow.trace] at he) (fun e he => by simp at he)
+    (fun e he => by simp [RingResponder.trace] at he) (fun e he => by simp at he)
   have hd := sim_mulDepth (p := p) W hℓ f W.span 0 [] [] (fun _ _ => false) [] 0 (by omega) (fun h => absurd rfl h)
   have hD : (W.span + ℓ - 1) / ℓ ≤ D := by
     have := (Nat.div_lt_iff_lt_mul hℓ).2 (show W.span + ℓ - 1 < (D + 1) * ℓ by
@@ -412,7 +412,7 @@ theorem window_responder (W : RingWindow B w α) (ℓ D Q L : ℕ) (d : α) (h�
       generalize D * ℓ = M at hspan ⊢
       omega)
     omega
-  simp only [RingWindow.trace, List.countP_nil, Nat.add_zero, List.length_nil] at h1 h2 h3
+  simp only [RingResponder.trace, List.countP_nil, Nat.add_zero, List.length_nil] at h1 h2 h3
   rw [cap_run d f _ D Q L (le_trans hd (by simpa using hD)) (by omega) (by omega)]
   exact h1
 

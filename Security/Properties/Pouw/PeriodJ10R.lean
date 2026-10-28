@@ -222,7 +222,7 @@ noncomputable def tileRun {C Ξ V : Type} {m nB mB n : ℕ} (σ : Fin nB → Fin
     (hk : ∀ s, k s ≤ (stratum σ s).card) (sT : Fin mB) (unitOf : Fin nB → ℕ)
     (ws : CreditWindows (Coin C Ξ m σ sT) n) (opened : Paths (Coin C Ξ m σ sT) n → Fin n → ℕ → ℕ → V)
     (rel right : Paths (Coin C Ξ m σ sT) n → Fin n → Fin (tileCount σ sT) → (ℕ → V) → Prop) :
-    PeriodRun C (Equiv.Perm (Fin (tileCount σ sT)) × Ξ) m (k sT) (tileCount σ sT) n V where
+    Outcomes C (Equiv.Perm (Fin (tileCount σ sT)) × Ξ) m (k sT) (tileCount σ sT) n V where
   accepted x w _ := WindowAccepts (ws.reg x w) (ws.ev x w)
   opened x w i := opened x w (unitOf (tileAt σ sT (drawOf (hk sT) (coinAt x w).2 i)))
   rel := rel

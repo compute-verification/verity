@@ -181,7 +181,7 @@ noncomputable def unitsOf (β : Equiv.Perm (Fin 144) × Unit) : Array ℕ :=
 
 /-- The period's windows as the check reads them: the honest registration, and the service's answer accepting the
 units of the window's draw. -/
-noncomputable def windows (n : ℕ) : Windows Ω1 n where
+noncomputable def windows (n : ℕ) : Executions Ω1 n where
   reg := fun _ _ => reg
   ev := fun x w => h1Evidence reg (unitsOf (coinAt x w).2)
 
@@ -200,7 +200,7 @@ def staged : ByteArray → Fin 144 → (ℕ → Unit) → Prop := fun _ _ _ => T
 def flat : ByteArray → Fin 144 → (ℕ → Unit) → Prop := fun _ _ _ => True
 
 /-- The period's proofs under the check. -/
-noncomputable def run (n : ℕ) : PeriodRun Bool (Equiv.Perm (Fin 144) × Unit) circuit.rounds 24 144 n Unit :=
+noncomputable def run (n : ℕ) : Outcomes Bool (Equiv.Perm (Fin 144) × Unit) circuit.rounds 24 144 n Unit :=
   checkedRun hK24 prm (windows n) opened (stagedAt salt staged) (flatAtCoin hr1 enc flat)
 
 noncomputable def layer (n : ℕ) :
@@ -263,7 +263,7 @@ theorem serviceSound (n : ℕ) : ServiceSound prm (windows n) opened (stagedAt s
 
 theorem prefixLen_all (n : ℕ) (x : Paths Ω1 n) : (windows n).prefixLen prm x = n := by
   classical
-  unfold Windows.prefixLen
+  unfold Executions.prefixLen
   rw [Finset.filter_true_of_mem fun w _ => acceptedUpTo_all n x w, Finset.card_univ, Fintype.card_fin]
 
 /-! ## The honest windows' claims -/

@@ -381,7 +381,7 @@ theorem moment_le_one (F : TDraw → Fin 2 → Word) (σ : Finset (Fin 2))
 
 end Sampling
 
-section Period
+section Jobs
 
 /-- The prices: a MAC unit at 2, a hash unit and a unit of the rest at 1. -/
 noncomputable def twμ (r : Fin 3) : ℝ := if r = 0 then 2 else 1
@@ -395,7 +395,7 @@ noncomputable def twHon (r : Fin 3) : ℝ := if r = 2 then 2 else 4
 
 /-- **The witness period**: `T = 8` seconds of the three resources at rate 1, one other job per resource worth its
 use at `μ`, and the credited use `hon` worth `C = μ · hon = 14`. -/
-noncomputable def twPd : Period tw where
+noncomputable def twPd : Jobs tw where
   T := 8
   J := Fin 3
   val := twμ
@@ -452,7 +452,7 @@ theorem twCost :
   show ∑ _w : Fin 2, ((4 : ℝ) + 2 + 1) = ∑ r : Fin 3, twμ r * twHon r
   norm_num [Fin.sum_univ_three, twμ, twHon]
 
-end Period
+end Jobs
 
 section Premises
 
