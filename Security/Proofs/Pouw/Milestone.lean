@@ -12,7 +12,7 @@ open Finset
 
 variable {Q R S : Type}
 
-theorem complete_mono (P : Protocol Q R S) {D D' : Layout → Prop} (hD : ∀ L, D L → D' L) (h : P.Complete D') :
+theorem complete_mono (P : Protocol Q R S) {D D' : UnitLayout → Prop} (hD : ∀ L, D L → D' L) (h : P.Complete D') :
     P.Complete D := fun U hU => h U ⟨hU.1, hD _ hU.2.1, hU.2.2⟩
 
 theorem m1Shape_inDefault (sh : Shape) (h : D1.M1Shape sh) : sh.InDefaultDomain := by
@@ -21,7 +21,7 @@ theorem m1Shape_inDefault (sh : Shape) (h : D1.M1Shape sh) : sh.InDefaultDomain 
   rw [h4, h5]
   exact ⟨lt_of_lt_of_le (by norm_num) h1, h3, by norm_num, le_rfl, by norm_num, by norm_num, le_rfl, by norm_num⟩
 
-theorem m1Domain_shapes (L : Layout) (h : D1.m1Domain L) : L.ShapesIn Shape.InDefaultDomain :=
+theorem m1Domain_shapes (L : UnitLayout) (h : D1.m1Domain L) : L.ShapesIn Shape.InDefaultDomain :=
   fun u hu => m1Shape_inDefault _ (h u hu).1
 
 /-- Every D1 instance with noise in `[−63, 63]` is complete on the milestone domain. -/

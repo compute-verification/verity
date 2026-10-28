@@ -867,11 +867,11 @@ def pearlCShapeFp4 (s : Shape) : Prop :=
 /-- **D₄** (theory §2) at `sem`: D-SK of `sem`'s lines (`Fp4Sem.SaltKeyedB`), and every unit of a shape D₄ admits
 (`pearlCShapeFp4`); no promotion (the record has none). It is empty at a `sem` whose `B̃` is not keyed by A's salt. The
 row rules are the protocol's `actOK` and `weightOK`. -/
-def pearlCDomainFp4 (sem : Fp4Sem Q R S) (L : Layout) : Prop :=
+def pearlCDomainFp4 (sem : Fp4Sem Q R S) (L : UnitLayout) : Prop :=
   sem.SaltKeyedB ∧ ∀ u < L.N, pearlCShapeFp4 (L.shape u)
 
 /-- The domain restricted to one shape. -/
-def pearlCDomainFp4At (sem : Fp4Sem Q R S) (s : Shape) (L : Layout) : Prop :=
+def pearlCDomainFp4At (sem : Fp4Sem Q R S) (s : Shape) (L : UnitLayout) : Prop :=
   pearlCDomainFp4 sem L ∧ ∀ u < L.N, L.shape u = s
 
 /-- **Pearl-C4's audit tiles at an FP4 record**, as `pearlCTilesDev` (credit on the credited rows), with `creditFp4`,

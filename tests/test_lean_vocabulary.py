@@ -372,7 +372,7 @@ def slots(s: Scan) -> set[str]:
 
 
 #: The most lines ``KNOWN`` may hold. Raising it, for a new line, needs lean's review; `--prune` lowers it to the count.
-KNOWN_MAX = 385
+KNOWN_MAX = 364
 
 #: Every hit that is not a canonical, a mirror, a reading of the canonical or a protocol's slot, with its reason and owner.
 #: For new code, read the canonical or rename; `--prune` deletes the lines whose declarations went.
@@ -388,8 +388,6 @@ KNOWN: dict[str, str] = {
         "duplicate of the live coins (`Verity.Coins`; `SampledProofs.Challenger.LiveCommitment` in code): becomes a reading of it (memory-accounting)",
     "Security/Definitions/Accounting/BoundReceipt.lean::Accounting.BoundReceipt.Node":
         "duplicate of the Site (`Verity.Site`, not yet in Core: LEAN-93): becomes a reading of it (memory-accounting)",
-    "Security/Definitions/Accounting/CoinFlow.lean::Accounting.CoinFlow.Program":
-        "homonym, a Program's dataflow over coins and values: rename (compute-accounting)",
     "Security/Definitions/Accounting/Compose.lean::Accounting.Compose.Certificate":
         "homonym, a credit certificate: rename (lean)",
     "Security/Definitions/Accounting/ComposePeriod.lean::Accounting.Compose.Period":
@@ -412,8 +410,6 @@ KNOWN: dict[str, str] = {
         "homonym, a gate's place in its Definition (renamed Gates.Place by an open PR): rename (memory-accounting)",
     "Security/Definitions/Accounting/Physical.lean::Accounting.Hardware":
         "duplicate of the Site (`Verity.Site`, not yet in Core: LEAN-93): becomes a reading of it: the Site plus the device model (lean)",
-    "Security/Definitions/Accounting/PouwWork.lean::Accounting.PouwWork.Verdict":
-        "duplicate of `Core.Verdict`: becomes a spec verdict over it, once the spec has one (compute-accounting)",
     "Security/Definitions/Accounting/RateAudit.lean::Accounting.Rate.Coins":
         "duplicate of the live coins (`Verity.Coins`; `SampledProofs.Challenger.LiveCommitment` in code): becomes a reading of it (memory-accounting)",
     "Security/Definitions/Accounting/RateAudit.lean::Accounting.Rate.Device":
@@ -450,10 +446,6 @@ KNOWN: dict[str, str] = {
         "duplicate of `CircuitRequirement.Store`, stated in Accounting: becomes Core's, moved into Security/Definitions/Core/ (memory-accounting)",
     "Security/Definitions/Accounting/Served.lean::Accounting.Served.Layout":
         "duplicate of the execution block (no canonical yet: LEAN-93): becomes a reading of it: an execution block's public shape (lean)",
-    "Security/Definitions/Accounting/TS/J10R.lean::Accounting.TS.J10R.Layout":
-        "homonym, a tile shape: rename (compute-accounting)",
-    "Security/Definitions/Accounting/TS/Machine.lean::Accounting.TS.Machine":
-        "duplicate of the device model (`Accounting.Device`, not yet in Core): becomes a reading of it (compute-accounting)",
     "Security/Definitions/Accounting/Tag/PolyHash.lean::Accounting.Tag.Block":
         "homonym, a chunk of the store: rename (lean)",
     "Security/Definitions/Claims.lean::Claims.Circuit":
@@ -514,36 +506,6 @@ KNOWN: dict[str, str] = {
         "homonym, an audit's randomness: rename (memory-accounting)",
     "Security/Definitions/Pous/Model/StreamedWipeServer.lean::Pous.StreamedWipe.Verdict":
         "homonym, the wipe's acceptance rule over a prover's answers: rename (memory-accounting)",
-    "Security/Definitions/Pouw/Assumptions/Dimension/Assumptions.lean::Pouw.Dimension.Assumptions.Machine":
-        "homonym, a cost model of checked words: rename (compute-accounting)",
-    "Security/Definitions/Pouw/Assumptions/Dimension/Embed.lean::Pouw.Dimension.Embed.Op":
-        "homonym, an M4090 instruction: rename (compute-accounting)",
-    "Security/Definitions/Pouw/Dither.lean::Pouw.Dither.Period":
-        "duplicate of the period (`Verity.Period`, not yet in Core): becomes a reading of it: a monitoring period (compute-accounting)",
-    "Security/Definitions/Pouw/Dither.lean::Pouw.Dither.Verdict":
-        "duplicate of `Core.Verdict`: becomes a spec verdict over it, once the spec has one (compute-accounting)",
-    "Security/Definitions/Pouw/DitherInstance.lean::Pouw.Dither.Layout":
-        "homonym, where a round's words sit in memory: rename (compute-accounting)",
-    "Security/Definitions/Pouw/Eps1/M3.lean::Pouw.Eps1.Prog":
-        "homonym, an M3 program for Dither's words: rename (compute-accounting)",
-    "Security/Definitions/Pouw/Game/Defs.lean::Pouw.Layout":
-        "homonym, a declared tensor layout: rename (compute-accounting)",
-    "Security/Definitions/Pouw/Game/Defs.lean::Pouw.Transcript":
-        "homonym, PoUW's committed transcript of unit commitments: rename (compute-accounting)",
-    "Security/Definitions/Pouw/PearlC/Game.lean::Pouw.PearlC.Layout":
-        "duplicate of `Pouw.Layout`: becomes a reading of it (compute-accounting)",
-    "Security/Definitions/Pouw/PearlC/Game.lean::Pouw.PearlC.Transcript":
-        "homonym, Pearl-C's committed transcript, `Pouw.Transcript` again: rename (compute-accounting)",
-    "Security/Definitions/Pouw/PearlC/TileCircuit.lean::Pouw.PearlC.TileCircuit.Gate":
-        "homonym, one gate of Pearl-C's word circuit: rename (compute-accounting)",
-    "Security/Definitions/Pouw/PearlC/W1.lean::Pouw.PearlC.W1.Prog":
-        "homonym, Pearl-C's W1 constant bank and code tree: rename (compute-accounting)",
-    "Security/Definitions/Pouw/PearlC/WholeCircuit.lean::Pouw.PearlC.WholeCircuit.Block":
-        "homonym, a proof block kind of a table: rename (compute-accounting)",
-    "Security/Definitions/Pouw/RelativeSecurity.lean::Pouw.RelativeSecurity.Machine":
-        "homonym, a model of computation: rename (compute-accounting)",
-    "Security/Definitions/Pouw/TileBound/Defs.lean::Pouw.TileBound.Gate":
-        "homonym, one firing of the m16n8k64 tile: rename (compute-accounting)",
     # Security/Proofs/
     "Security/Proofs/Flock/Claims/Bridge/Committed.lean::Claims.Bridge.CoinTree":
         "duplicate of the live coins (`Verity.Coins`; `SampledProofs.Challenger.LiveCommitment` in code): becomes it (a coin tree over k rounds) (proofs)",
@@ -584,10 +546,6 @@ KNOWN: dict[str, str] = {
         "duplicate of `Hash.Collision`: becomes it at SHA-512 (proofs)",
     "Security/Proofs/Flock/Verifier/Merkle.lean::Flock.MerkleScheme.Collision":
         "duplicate of `Hash.Collision`: becomes it at the scheme's hash (proofs)",
-    "Security/Proofs/Pouw/RelativeSecurity.lean::Pouw.RelativeSecurity.ModelB.Gate":
-        "homonym, relative security's proof-local gate: rename (compute-accounting)",
-    "Security/Proofs/Pouw/RelativeSecurity.lean::Pouw.RelativeSecurity.ModelB.Prog":
-        "homonym, relative security's proof-local program: rename (compute-accounting)",
     # Security/Properties/
     "Security/Properties/Pous/MemoryChallenger.lean::MemoryChallenger.Properties.Device":
         "homonym, the memory challengers a property ranges over: rename (lean)",

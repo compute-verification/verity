@@ -25,7 +25,7 @@ section
 variable {Q R S : Type}
 
 open Classical in
-theorem correctSet_subset_correctSetU (P : Protocol Q R S) (U : Workload) (H : Q → R) (s : S) (τ : Transcript) :
+theorem correctSet_subset_correctSetU (P : Protocol Q R S) (U : Workload) (H : Q → R) (s : S) (τ : CommitLog) :
     correctSet P U H s τ ⊆ correctSetU P U H s τ := by
   intro u hu
   unfold correctSet at hu
@@ -36,7 +36,7 @@ theorem correctSet_subset_correctSetU (P : Protocol Q R S) (U : Workload) (H : Q
 
 /-- `G_γ^U` gives `G_γ` when `W_ref` is non-negative. -/
 theorem gammaU_implies_gamma [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (CM : CostModel Q R S)
-    (P : Protocol Q R S) (D : Layout → Prop) (γ : ℝ) (η : ℕ → ℕ → ℝ) (hW : ∀ L u, 0 ≤ P.Wref L u)
+    (P : Protocol Q R S) (D : UnitLayout → Prop) (γ : ℝ) (η : ℕ → ℕ → ℝ) (hW : ∀ L u, 0 ≤ P.Wref L u)
     (h : GγU CM P D γ η) : Gγ CM P D γ η := by
   intro U hU T hT q hq A hA
   refine le_trans (Pouw.pr_mono ?_) (h U hU T hT q hq A hA)
@@ -47,7 +47,7 @@ theorem gammaU_implies_gamma [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S]
     fun u _ _ => hW _ u)
 
 theorem gammaFromTTOutU [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (CM : CostModel Q R S)
-    (P : Protocol Q R S) (D : Layout → Prop) (γ₀ Ω : ℝ) (ε : ℕ → ℕ → ℝ) (hΩ : 0 < Ω)
+    (P : Protocol Q R S) (D : UnitLayout → Prop) (γ₀ Ω : ℝ) (ε : ℕ → ℕ → ℝ) (hΩ : 0 < Ω)
     (hW : ∀ U : Workload, U.InDomain P D → ∀ (H : Q → R) (s : S), ∀ u < U.layout.N, ∀ act : Codes,
       P.actOK (U.layout.shape u) act → P.capOK H s U u act → P.Wref U.layout u ≤ Ω * P.credit H s U u act)
     (hTT : TTOutU CM P D γ₀ ε) : GγU CM P D (1 - (1 - γ₀) / Ω) ε := by

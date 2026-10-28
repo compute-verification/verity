@@ -105,7 +105,7 @@ MinRank ≥ 5, one of the machine's programs outputs the non-final checked words
 asks `A1_nonquad`'s question in program-matching form. Neither that A2 nor `A1_nonquad` implies the other. -/
 def TTNCPQuadOfA2 : Prop :=
   ∀ (k m n N : ℕ) (R : Mat) (A : (Fin k → Fin n → Fin 64) → ℕ → Mat) (B : ℕ → Mat) (U : Finset ℕ)
-    (M : Machine (Noise N m n k)) (q : M.Prog) (γ₀ γ₂ : ℝ), 16 ∣ k → 0 < k →
+    (M : WordCostModel (Noise N m n k)) (q : M.Prog) (γ₀ γ₂ : ℝ), 16 ∣ k → 0 < k →
     CheckpointIndependent k 16 R → MinRankGe k R 5 → U ⊆ range N →
     A2_algebraicSufficiency γ₂ M (QuadPipe 8) (wordSet (word k m n N R A B) U) →
     (∀ u ∈ U, ∀ p < nonFinal k m n, word k m n N R A B u p ∈ M.outputs q) →

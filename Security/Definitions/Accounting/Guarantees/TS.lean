@@ -41,7 +41,7 @@ open Accounting.TS Accounting.Assumptions.TS Pouw.RelativeSecurity
 
 /-- **Lemma 1 (time).** On the stated device, every run's time is at least its bound over `f_max`. -/
 def TimeBound : Prop :=
-  ∀ {K R : Type} [Fintype K] [Fintype R] [Nonempty R] (G : Machine K R) (P : Run K),
+  ∀ {K R : Type} [Fintype K] [Fintype R] [Nonempty R] (G : FacetCosts K R) (P : Run K),
     FacetCeilings G P → G.bound P.n / G.fmax ≤ P.time
 
 /-- **Theorem D(a) (the master inequality).** Given (Π) on every run, (RD) on every accepted run and (Lk) at
@@ -170,7 +170,7 @@ def VectorThresholdD1 : Prop :=
 `N_u ≥ 0` it puts on routes `u`, each saving `s_u ≥ 0` a word, and a facet `r_u` caps route `u` at `κ_u ≥ 0` words a
 cycle (`N_u ≤ κ_u · a_{r_u}·n`), then `B(M) ≥ B₀/(1 + Σ_u κ_u s_u)`. -/
 def RoutesOffD2 : Prop :=
-  ∀ {K R ι : Type} [Fintype K] [Fintype R] [Fintype ι] (G : Machine K R) (n : K → ℝ) (rs : R) (cap : ι → R)
+  ∀ {K R ι : Type} [Fintype K] [Fintype R] [Fintype ι] (G : FacetCosts K R) (n : K → ℝ) (rs : R) (cap : ι → R)
     (N s κ : ι → ℝ) (B₀ : ℝ),
     (∀ u, 0 ≤ N u) → (∀ u, 0 ≤ s u) → (∀ u, 0 ≤ κ u) →
     B₀ - ∑ u, N u * s u ≤ G.load n rs → (∀ u, N u ≤ κ u * G.load n (cap u)) →

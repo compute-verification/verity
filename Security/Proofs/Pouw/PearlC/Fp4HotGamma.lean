@@ -25,7 +25,7 @@ open Pouw.PearlC.Assumptions
 /-- TT_OUT at a protocol meeting Pearl-C4 v2's per-unit accounting with credited bound `K > 0` gives `G_γ` at
 `1 − (399/400)/(wrefFp4Hot/K)`. -/
 theorem pearlCGammaFp4HotAt {Q R S : Type} [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (CM : CostModel Q R S)
-    (P : Protocol Q R S) (D : Layout → Prop) (d : Fp4Device) (a K : ℚ) (s : Shape) (hK : 0 < K)
+    (P : Protocol Q R S) (D : UnitLayout → Prop) (d : Fp4Device) (a K : ℚ) (s : Shape) (hK : 0 < K)
     (hW0 : 0 < wrefFp4Hot d a s) (hacc : Fp4HotUnitAccounting P D d a K s) (hTT : TTOut CM P D (1 / 400) εPearlC) :
     Gγ CM P D ((1 - (1 - 1 / 400) / (wrefFp4Hot d a s / K) : ℚ) : ℝ) εPearlC := by
   set ω := wrefFp4Hot d a s / K with hωdef
@@ -46,7 +46,7 @@ theorem pearlCGammaFp4HotAt {Q R S : Type} [Fintype Q] [DecidableEq Q] [Fintype 
 /-- TT_OUT per tile at a protocol and tiles meeting Pearl-C4 v2's per-tile accounting with credited bound `K > 0` gives
 `GγSampled` at `1 − (399/400)/(wrefFp4Hot/K)`. -/
 theorem pearlCSampledFp4HotAt {Q R S : Type} [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (CM : CostModel Q R S)
-    (P : Protocol Q R S) (TR : TileRules Q R S) (D : Layout → Prop) (d : Fp4Device) (a K : ℚ) (s : Shape) (hK : 0 < K)
+    (P : Protocol Q R S) (TR : TileRules Q R S) (D : UnitLayout → Prop) (d : Fp4Device) (a K : ℚ) (s : Shape) (hK : 0 < K)
     (hW0 : 0 < wrefFp4Hot d a s) (hacc : Fp4HotTileAccounting P TR D d a K s)
     (hTT : TTOutTile CM P TR D (1 / 400) εPearlC) :
     GγSampled CM P TR D ((1 - (1 - 1 / 400) / (wrefFp4Hot d a s / K) : ℚ) : ℝ) εPearlC := by
@@ -78,7 +78,7 @@ variable {Q R S : Type} [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (CM 
 /-- **Pearl-C4 v2, 8192³**, at any FP32 price `fadd` and scale path `p`, the H removal credited at `2·fadd` per word,
 cap `1/400`: γ = `gammaFp4Hot d (2 * fadd) (1 / 400) sh8192` (the `gammaFp4Hot_…` lemmas give its values). -/
 theorem pearlCGammaFp4Sm120HotAt_8192
-    (P : Protocol Q R S) (D : Layout → Prop) (d : Fp4Device) (fadd : ℚ) (p : Fp4ScalePath)
+    (P : Protocol Q R S) (D : UnitLayout → Prop) (d : Fp4Device) (fadd : ℚ) (p : Fp4ScalePath)
     (hf : 0 ≤ fadd) (hp : d.prices = Fp4Prices.sm120At fadd p)
     (hacc : Fp4HotUnitAccounting P D d (2 * fadd) ((1 - 1 / 400) * creditFp4Hot d (2 * fadd) sh8192) sh8192)
     (hTT : TTOut CM P D (1 / 400) εPearlC) :
@@ -101,7 +101,7 @@ theorem pearlCGammaFp4Sm120HotAt_8192
 /-- **Pearl-C4 v2, 16384³**, at any FP32 price `fadd` and scale path `p`, the H removal credited at `2·fadd` per word,
 cap `1/400`: γ = `gammaFp4Hot d (2 * fadd) (1 / 400) sh16384` (the `gammaFp4Hot_…` lemmas give its values). -/
 theorem pearlCGammaFp4Sm120HotAt_16384
-    (P : Protocol Q R S) (D : Layout → Prop) (d : Fp4Device) (fadd : ℚ) (p : Fp4ScalePath)
+    (P : Protocol Q R S) (D : UnitLayout → Prop) (d : Fp4Device) (fadd : ℚ) (p : Fp4ScalePath)
     (hf : 0 ≤ fadd) (hp : d.prices = Fp4Prices.sm120At fadd p)
     (hacc : Fp4HotUnitAccounting P D d (2 * fadd) ((1 - 1 / 400) * creditFp4Hot d (2 * fadd) sh16384) sh16384)
     (hTT : TTOut CM P D (1 / 400) εPearlC) :
@@ -125,7 +125,7 @@ theorem pearlCGammaFp4Sm120HotAt_16384
 `2·fadd` per word, cap `1/400`: γ = `gammaFp4Hot d (2 * fadd) (1 / 400) sh8192` (the `gammaFp4Hot_…` lemmas give its
 values). -/
 theorem pearlCSampledFp4Sm120HotAt_8192
-    (P : Protocol Q R S) (TR : TileRules Q R S) (D : Layout → Prop) (d : Fp4Device) (fadd : ℚ) (p : Fp4ScalePath)
+    (P : Protocol Q R S) (TR : TileRules Q R S) (D : UnitLayout → Prop) (d : Fp4Device) (fadd : ℚ) (p : Fp4ScalePath)
     (hf : 0 ≤ fadd) (hp : d.prices = Fp4Prices.sm120At fadd p)
     (hacc : Fp4HotTileAccounting P TR D d (2 * fadd) ((1 - 1 / 400) * creditFp4Hot d (2 * fadd) sh8192) sh8192)
     (hTT : TTOutTile CM P TR D (1 / 400) εPearlC) :
@@ -149,7 +149,7 @@ theorem pearlCSampledFp4Sm120HotAt_8192
 `2·fadd` per word, cap `1/400`: γ = `gammaFp4Hot d (2 * fadd) (1 / 400) sh16384` (the `gammaFp4Hot_…` lemmas give its
 values). -/
 theorem pearlCSampledFp4Sm120HotAt_16384
-    (P : Protocol Q R S) (TR : TileRules Q R S) (D : Layout → Prop) (d : Fp4Device) (fadd : ℚ) (p : Fp4ScalePath)
+    (P : Protocol Q R S) (TR : TileRules Q R S) (D : UnitLayout → Prop) (d : Fp4Device) (fadd : ℚ) (p : Fp4ScalePath)
     (hf : 0 ≤ fadd) (hp : d.prices = Fp4Prices.sm120At fadd p)
     (hacc : Fp4HotTileAccounting P TR D d (2 * fadd) ((1 - 1 / 400) * creditFp4Hot d (2 * fadd) sh16384) sh16384)
     (hTT : TTOutTile CM P TR D (1 / 400) εPearlC) :
@@ -173,7 +173,7 @@ theorem pearlCSampledFp4Sm120HotAt_16384
 per word, cap `1/400`: γ = `gammaFp4HotChainOnly d (2 * fadd) (1 / 400) sh8192` (the `gammaFp4HotChainOnly_…` lemmas
 give its values). -/
 theorem pearlCGammaFp4Sm120HotChainOnlyAt_8192
-    (P : Protocol Q R S) (D : Layout → Prop) (d : Fp4Device) (fadd : ℚ) (p : Fp4ScalePath)
+    (P : Protocol Q R S) (D : UnitLayout → Prop) (d : Fp4Device) (fadd : ℚ) (p : Fp4ScalePath)
     (hf : 0 ≤ fadd) (hp : d.prices = Fp4Prices.sm120At fadd p)
     (hK : 0 < creditFp4HotChainOnly d (2 * fadd) sh8192 - 1 / 400 * creditFp4Hot d (2 * fadd) sh8192)
     (hacc : Fp4HotUnitAccounting P D d (2 * fadd)
@@ -193,7 +193,7 @@ theorem pearlCGammaFp4Sm120HotChainOnlyAt_8192
 per word, cap `1/400`: γ = `gammaFp4HotChainOnly d (2 * fadd) (1 / 400) sh16384` (the `gammaFp4HotChainOnly_…` lemmas
 give its values). -/
 theorem pearlCGammaFp4Sm120HotChainOnlyAt_16384
-    (P : Protocol Q R S) (D : Layout → Prop) (d : Fp4Device) (fadd : ℚ) (p : Fp4ScalePath)
+    (P : Protocol Q R S) (D : UnitLayout → Prop) (d : Fp4Device) (fadd : ℚ) (p : Fp4ScalePath)
     (hf : 0 ≤ fadd) (hp : d.prices = Fp4Prices.sm120At fadd p)
     (hK : 0 < creditFp4HotChainOnly d (2 * fadd) sh16384 - 1 / 400 * creditFp4Hot d (2 * fadd) sh16384)
     (hacc : Fp4HotUnitAccounting P D d (2 * fadd)
@@ -213,7 +213,7 @@ theorem pearlCGammaFp4Sm120HotChainOnlyAt_16384
 credited at `2·fadd` per word, cap `1/400`: γ = `gammaFp4HotChainOnly d (2 * fadd) (1 / 400) sh8192` (the
 `gammaFp4HotChainOnly_…` lemmas give its values). -/
 theorem pearlCSampledFp4Sm120HotChainOnlyAt_8192
-    (P : Protocol Q R S) (TR : TileRules Q R S) (D : Layout → Prop) (d : Fp4Device) (fadd : ℚ) (p : Fp4ScalePath)
+    (P : Protocol Q R S) (TR : TileRules Q R S) (D : UnitLayout → Prop) (d : Fp4Device) (fadd : ℚ) (p : Fp4ScalePath)
     (hf : 0 ≤ fadd) (hp : d.prices = Fp4Prices.sm120At fadd p)
     (hK : 0 < creditFp4HotChainOnly d (2 * fadd) sh8192 - 1 / 400 * creditFp4Hot d (2 * fadd) sh8192)
     (hacc : Fp4HotTileAccounting P TR D d (2 * fadd)
@@ -233,7 +233,7 @@ theorem pearlCSampledFp4Sm120HotChainOnlyAt_8192
 credited at `2·fadd` per word, cap `1/400`: γ = `gammaFp4HotChainOnly d (2 * fadd) (1 / 400) sh16384` (the
 `gammaFp4HotChainOnly_…` lemmas give its values). -/
 theorem pearlCSampledFp4Sm120HotChainOnlyAt_16384
-    (P : Protocol Q R S) (TR : TileRules Q R S) (D : Layout → Prop) (d : Fp4Device) (fadd : ℚ) (p : Fp4ScalePath)
+    (P : Protocol Q R S) (TR : TileRules Q R S) (D : UnitLayout → Prop) (d : Fp4Device) (fadd : ℚ) (p : Fp4ScalePath)
     (hf : 0 ≤ fadd) (hp : d.prices = Fp4Prices.sm120At fadd p)
     (hK : 0 < creditFp4HotChainOnly d (2 * fadd) sh16384 - 1 / 400 * creditFp4Hot d (2 * fadd) sh16384)
     (hacc : Fp4HotTileAccounting P TR D d (2 * fadd)

@@ -47,7 +47,7 @@ def A1_W1 (γ₁ : ℝ) (k : ℕ) (R : Mat) : Prop :=
 
 /-- A machine for NCP's checked words (M_4090 when instantiated): its programs, their W1 cost, and each program's
 outputs, the functions of the noise it outputs correctly on the whole grid. -/
-structure Machine (G : Type) where
+structure WordCostModel (G : Type) where
   /-- The programs, fixed before the salt. -/
   Prog : Type
   /-- A program's W1 cost. -/
@@ -71,7 +71,7 @@ of a tensor-core word, which the model may price above their real cost, are not 
 This is the deterministic form: `M.outputs` is correctness on the whole grid. The probabilistic lifting, from
 a program correct at the realized noise with probability `ε` to one correct on the whole grid, is not in A2; it is a
 separate node of the chain (`Lift_MinRank`, open), which needs MinRank. -/
-def A2_algebraicSufficiency (γ₂ : ℝ) {N m n k : ℕ} (M : Machine (Noise N m n k))
+def A2_algebraicSufficiency (γ₂ : ℝ) {N m n k : ℕ} (M : WordCostModel (Noise N m n k))
     (Alg : List (Instr (Noise N m n k)) → Prop) (W : Set (Noise N m n k → ℚ)) : Prop :=
   ∀ q : M.Prog, ∃ (L : List (Noise N m n k → ℚ)) (P : List (Instr (Noise N m n k))), (∀ f ∈ L, f ∈ V0 N m n k) ∧
     Alg P ∧ (∀ φ ∈ M.outputs q, φ ∈ W → φ ∈ slots P L) ∧ (1 - γ₂) * (cost P : ℝ) ≤ M.cost q

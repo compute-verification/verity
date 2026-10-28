@@ -22,7 +22,7 @@ coins `C` drawn independently of `H` and `s`, any acceptance predicate) satisfie
 `Pr[accept ∧ ∑_{u ∉ K} W_ref(u) > ε_s·W] ≤ δ_s`, then `Pr[accept ∧ T < (1 − γ)(1 − ε_s)·W] ≤ δ_s + η`. -/
 def Theorem1 : Prop :=
   ∀ (Q R S : Type) [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S]
-    (CM : CostModel Q R S) (P : Protocol Q R S) (D : Layout → Prop) (γ : ℝ) (η : ℕ → ℕ → ℝ),
+    (CM : CostModel Q R S) (P : Protocol Q R S) (D : UnitLayout → Prop) (γ : ℝ) (η : ℕ → ℕ → ℝ),
     γ < 1 → Gγ CM P D γ η →
     ∀ U : Workload, U.InDomain D → ∀ T : ℝ, 0 ≤ T → ∀ q : ℕ, q ≤ 2 ^ 64 →
     ∀ A : Adversary CM, A.Bounded U T q →
@@ -47,7 +47,7 @@ workload, budget, oracle bound and adversary, the audit with `t` work-weighted s
 `Pr[accept ∧ T < (1 − γ)(1 − ε_s)·W] ≤ (1 − ε_s)^t + ε(q, N)` with `γ = 1 − (1 − γ₀)/Ω_max`. -/
 def EndToEnd : Prop :=
   ∀ (Q R S : Type) [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S]
-    (CM : CostModel Q R S) (P : Protocol Q R S) (D : Layout → Prop) (γ₀ Ωmax : ℝ) (ε : ℕ → ℕ → ℝ),
+    (CM : CostModel Q R S) (P : Protocol Q R S) (D : UnitLayout → Prop) (γ₀ Ωmax : ℝ) (ε : ℕ → ℕ → ℝ),
     γ₀ < 1 → 0 < Ωmax →
     (∀ U : Workload, U.InDomain D → ∀ u < U.layout.N,
       (P.Wref U.layout u : ℝ) ≤ Ωmax * ((U.layout.shape u).Wmm : ℝ)) →

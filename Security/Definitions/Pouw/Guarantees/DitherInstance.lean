@@ -77,10 +77,10 @@ cards reach is `Assumptions.PeriodInventory`, held open and not read here. `Q` c
 capacity of one card resource `r` a public compression uses (`cap_r ≤ Q callUse_r`, `CallsAtPub`), whatever the
 price. -/
 def WorkSoundAtX (c : Verity.Accel.Card) (pb : PubBest c) (hr : HostRow) (x : Verity.Accel.Open) : Prop :=
-  ∀ (D : Devices c) (P : RoundProto) (L : Layout (D.machine x) P) (G : Accel)
+  ∀ (D : Devices c) (P : RoundProto) (L : MemMap (D.machine x) P) (G : Accel)
     (e : G.Res ≃ Verity.Accel.Res ⊕ D.oth.Res), OnCard G c x D P L e → HostsCounted D hr → CallsAtPub G e pb →
-  ∀ (nsb : ℕ) (Reg : Set P.Inst) (reg : Fin nsb → P.Inst) (Obs : Type) (verdict : Verdict P nsb Obs)
-    (dev : Readings G P nsb Obs) (Pd : Period G) (μ : G.Res → ℝ) (Wmm Wsha Wans macs comps : P.Inst → ℝ)
+  ∀ (nsb : ℕ) (Reg : Set P.Inst) (reg : Fin nsb → P.Inst) (Obs : Type) (verdict : Acceptance P nsb Obs)
+    (dev : Readings G P nsb Obs) (Pd : PeriodDevices G) (μ : G.Res → ℝ) (Wmm Wsha Wans macs comps : P.Inst → ℝ)
     (ηw δ nmax Wmac Ein Eout κS Δ Q : ℝ) (κdmm κdsha : ℕ → ℝ) (Badv : Prover G P nsb → ℕ)
     (ξ : Prover G P nsb → G.Res → ℝ) (κx κsha : Prover G P nsb → ℝ) (cin cout : Obs → ℝ)
     (t arrive : Obs → Fin nsb → ℝ) (sel : P.Chk → Prop) (τans : ℝ) (tc ansAt : Obs → Fin nsb → ℝ),

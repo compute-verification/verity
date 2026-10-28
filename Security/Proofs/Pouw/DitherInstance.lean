@@ -172,7 +172,7 @@ theorem cardUnits_le {ι : Type} {m : Verity.Accel.Machine ι} (Prg : m.Prog ℕ
 
 /-- Programs as runs with a use and a wall time, each resource used at most at its rate over the run's wall time;
 composing runs adds their uses and wall times. -/
-noncomputable def boundedMc {R : Type} (rate : R → ℝ) : Machine where
+noncomputable def boundedMc {R : Type} (rate : R → ℝ) : AlgModel where
   Alg I O := {a : (I → O) × (I → R → ℝ) × (I → ℝ) // ∀ i r, 0 ≤ a.2.1 i r ∧ a.2.1 i r ≤ rate r * a.2.2 i}
   eval f := f.1.1
   time _ := 0
@@ -228,7 +228,7 @@ open Classical in
 /-- **`OnCard` is met, with G1, G2 and G3** (rule I): at positive card rates and clock, positive other rates and their
 memory, `cardAccel` is the period's devices at `x` under the identity match, meeting (G1), (G2) and (G3). -/
 theorem cardAccel_onCard (c : Verity.Accel.Card) (x : Verity.Accel.Open) (D : Devices c) (u : ResUnits)
-    (P : RoundProto) (L : Layout (D.machine x) P) (hρ : ∀ r, 0 < c.ρ r) (hf : 0 < D.f)
+    (P : RoundProto) (L : MemMap (D.machine x) P) (hρ : ∀ r, 0 < c.ρ r) (hf : 0 < D.f)
     (hoth : ∀ h, 0 < D.oth.rate h) (hmem : 0 ≤ D.oth.mem) :
     OnCard (cardAccel c x D u) c x D P L (Equiv.refl _) ∧ (cardAccel c x D u).G1 ∧ (cardAccel c x D u).G2 ∧
       (cardAccel c x D u).G3 := by
@@ -290,7 +290,7 @@ theorem cardAccel_callsAtPub {c : Verity.Accel.Card} (x : Verity.Accel.Open) (D 
 /-- **`WorkSoundH200`'s hypotheses on the card are met** (rule I): at θ's floors with the product form, on any
 period's devices with a positive clock and positive other rates, some accelerator is the devices under some match,
 meets (G1), (G2) and (G3), and has its oracle calls at a public compression. -/
-theorem h200_onCard (D : Devices Verity.Accel.H200.card) (P : RoundProto) (L : Layout (D.machine floorOpen) P)
+theorem h200_onCard (D : Devices Verity.Accel.H200.card) (P : RoundProto) (L : MemMap (D.machine floorOpen) P)
     (hf : 0 < D.f) (hoth : ∀ h, 0 < D.oth.rate h) (hmem : 0 ≤ D.oth.mem) :
     ∃ (G : Accel) (e : G.Res ≃ Verity.Accel.Res ⊕ D.oth.Res),
       OnCard G Verity.Accel.H200.card floorOpen D P L e ∧ G.G1 ∧ G.G2 ∧ G.G3 ∧ CallsAtPub G e pubBestH200 :=
@@ -300,7 +300,7 @@ by
   exact ⟨_, _, h1, h2, h3, h4, cardAccel_callsAtPub floorOpen D pubBestH200 (List.Mem.head _)⟩
 
 /-- **`WorkSoundSm120`'s hypotheses on the card are met** (rule I), as on the H200. -/
-theorem sm120_onCard (D : Devices Verity.Accel.Sm120.card) (P : RoundProto) (L : Layout (D.machine floorOpen) P)
+theorem sm120_onCard (D : Devices Verity.Accel.Sm120.card) (P : RoundProto) (L : MemMap (D.machine floorOpen) P)
     (hf : 0 < D.f) (hoth : ∀ h, 0 < D.oth.rate h) (hmem : 0 ≤ D.oth.mem) :
     ∃ (G : Accel) (e : G.Res ≃ Verity.Accel.Res ⊕ D.oth.Res),
       OnCard G Verity.Accel.Sm120.card floorOpen D P L e ∧ G.G1 ∧ G.G2 ∧ G.G3 ∧ CallsAtPub G e pubBestSm120 :=

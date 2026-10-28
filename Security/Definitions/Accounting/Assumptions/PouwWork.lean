@@ -14,7 +14,7 @@ namespace Accounting.Assumptions
 
 open Accounting.PouwWork
 
-variable {Ω : Type} [Fintype Ω] {L : Type*} (S : Ω → Actual.Run L) (P : Verdict Ω L)
+variable {Ω : Type} [Fintype Ω] {L : Type*} (S : Ω → Actual.Run L) (P : Verifier Ω L)
 
 /-- **A2 Detection** (the live-coin draw; `Pouw.Guarantees.WorkWeightedSampling` for a ticket audit): the verifier
 accepts with fewer than `Nmin` blocks right at the coin with probability at most `δ`. For one exact live-coin opening it

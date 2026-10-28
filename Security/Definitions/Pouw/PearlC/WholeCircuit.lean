@@ -6,9 +6,9 @@ import Definitions.Core.Partition
 
 A tile-check Program (`verity.protocols.accounting.work.pouw.circuit.pc8`'s `Pc8Check`) is its proof units' templates wired together: each row
 unit reads the Program's input regions, and each tile unit reads its rows' outputs. Its table here is a `Whole`: the
-Program's input gates, then its units' computed gates, each unit an instance of a `Block`, a unit template's own table
+Program's input gates, then its units' computed gates, each unit an instance of a `UnitKind`, a unit template's own table
 (`TileCircuit.Spec`, whose inputs are its first `nIn` gates) with the gate each instance's input reads (`port`). An
-instance's computed gates are the template's, in order, with every read relocated (`Block.reloc`): an input to the gate
+instance's computed gates are the template's, in order, with every read relocated (`UnitKind.reloc`): an input to the gate
 its port names, a computed gate to the instance's own copy. These ports are the only wires between units.
 
 The partition (`Whole.part`) puts each instance's gates in a unit of its own, numbered in the blocks' order, as
@@ -33,59 +33,59 @@ open Pouw.Fp8Atom Pouw.PearlC Pouw.PearlC.TileCircuit Pouw.PearlC.RowCircuit
 
 /-- One kind of proof unit of a composed table: the unit template's own table `S`, whose inputs are its first `nIn`
 gates, and its `cnt` instances, instance `q`'s input `a` reading the composed table's gate `port q a`. -/
-structure Block where
+structure UnitKind where
   S : Spec
   nIn : ℕ
   cnt : ℕ
   port : ℕ → ℕ → ℕ
 
-namespace Block
+namespace UnitKind
 
-variable (B : Block)
+variable (B : UnitKind)
 
 /-- An instance's computed gates. -/
 def len : ℕ := B.S.N - B.nIn
 
-/-- Gate `a` of instance `q` of a block whose gates start at `o`: an input is the gate its port names, a computed gate
+/-- Cell `a` of instance `q` of a block whose gates start at `o`: an input is the gate its port names, a computed gate
 the instance's own copy. -/
 def reloc (o q a : ℕ) : ℕ := if a < B.nIn then B.port q a else o + q * B.len + (a - B.nIn)
 
-/-- Gate `a` of the template as instance `q`'s copy: the template's width and value, its reads relocated. -/
-def gateAt (o q a : ℕ) : Gate := ⟨(B.S.gate a).w, false, (B.S.gate a).rd.map (B.reloc o q), (B.S.gate a).f⟩
+/-- Cell `a` of the template as instance `q`'s copy: the template's width and value, its reads relocated. -/
+def gateAt (o q a : ℕ) : Cell := ⟨(B.S.gate a).w, false, (B.S.gate a).rd.map (B.reloc o q), (B.S.gate a).f⟩
 
-end Block
+end UnitKind
 
 /-- Where a computed gate lies: its block, the block's first gate, its unit, the instance and the template's gate. -/
 structure Loc where
-  B : Block
+  B : UnitKind
   o : ℕ
   u : ℕ
   q : ℕ
   a : ℕ
 
-/-- Gate `g` of blocks laid out from gate `o`, their units numbered from `u`. -/
-def locate : List Block → ℕ → ℕ → ℕ → Option Loc
+/-- Cell `g` of blocks laid out from gate `o`, their units numbered from `u`. -/
+def locate : List UnitKind → ℕ → ℕ → ℕ → Option Loc
   | [], _, _, _ => none
   | B :: L, o, u, g =>
     if g < o + B.cnt * B.len then some ⟨B, o, u + (g - o) / B.len, (g - o) / B.len, B.nIn + (g - o) % B.len⟩
     else locate L (o + B.cnt * B.len) (u + B.cnt) g
 
 /-- Blocks laid out from gate `o` read earlier gates only: every port of an instance names a gate before its block. -/
-def BlocksOK : List Block → ℕ → Prop
+def BlocksOK : List UnitKind → ℕ → Prop
   | [], _ => True
   | B :: L, o => (∀ q < B.cnt, ∀ a < B.nIn, B.port q a < o) ∧ BlocksOK L (o + B.cnt * B.len)
 
 /-- The blocks' computed gates. -/
-def blocksLen : List Block → ℕ
+def blocksLen : List UnitKind → ℕ
   | [] => 0
   | B :: L => B.cnt * B.len + blocksLen L
 
 /-- The blocks' units. -/
-def unitCount : List Block → ℕ
+def unitCount : List UnitKind → ℕ
   | [] => 0
   | B :: L => B.cnt + unitCount L
 
-theorem locate_spec : ∀ (L : List Block) (o u g : ℕ) {l : Loc}, BlocksOK L o → o ≤ g → locate L o u g = some l →
+theorem locate_spec : ∀ (L : List UnitKind) (o u g : ℕ) {l : Loc}, BlocksOK L o → o ≤ g → locate L o u g = some l →
     (∀ q < l.B.cnt, ∀ a < l.B.nIn, l.B.port q a < l.o) ∧ l.o ≤ g ∧ l.q < l.B.cnt ∧ l.B.nIn ≤ l.a ∧
       l.a < l.B.S.N ∧ g = l.o + l.q * l.B.len + (l.a - l.B.nIn) ∧ l.u < u + unitCount L
   | [], _, _, _, _, _, _, h => by simp [locate] at h
@@ -98,13 +98,13 @@ theorem locate_spec : ∀ (L : List Block) (o u g : ℕ) {l : Loc}, BlocksOK L o
       have hr := Nat.mod_lt (g - o) hL
       have hd := Nat.div_add_mod' (g - o) B.len
       refine ⟨hok.1, hog, hq, Nat.le_add_right _ _, ?_, ?_, ?_⟩
-      · simp only [Block.len] at hL hr ⊢; omega
+      · simp only [UnitKind.len] at hL hr ⊢; omega
       · simp only [Nat.add_sub_cancel_left]; omega
       · simp only [unitCount]; omega
     · obtain ⟨h1, h2, h3, h4, h5, h6, h7⟩ := locate_spec L _ _ g hok.2 (by omega) h
       exact ⟨h1, h2, h3, h4, h5, h6, by simp only [unitCount]; omega⟩
 
-theorem locate_isSome : ∀ (L : List Block) (o u g : ℕ), o ≤ g → g < o + blocksLen L → (locate L o u g).isSome
+theorem locate_isSome : ∀ (L : List UnitKind) (o u g : ℕ), o ≤ g → g < o + blocksLen L → (locate L o u g).isSome
   | [], _, _, _, _, h => by simp only [blocksLen] at h; omega
   | B :: L, o, u, g, hog, hg => by
     unfold locate
@@ -117,7 +117,7 @@ outputs. -/
 structure Whole where
   nIn : ℕ
   inW : ℕ → ℕ
-  blocks : List Block
+  blocks : List UnitKind
   outs : Finset ℕ
   ok : BlocksOK blocks nIn
 
@@ -128,8 +128,8 @@ variable (W : Whole)
 /-- The gate count. -/
 def N : ℕ := W.nIn + blocksLen W.blocks
 
-/-- Gate `g`: an input, or the copy of its template's gate in its instance. -/
-def gate (g : ℕ) : Gate :=
+/-- Cell `g`: an input, or the copy of its template's gate in its instance. -/
+def gate (g : ℕ) : Cell :=
   if g < W.nIn then ⟨W.inW g, true, [], fun _ => 0⟩
   else match locate W.blocks W.nIn 0 g with
     | some l => l.B.gateAt l.o l.q l.a
@@ -147,10 +147,10 @@ def spec : Spec where
     · split at ha
       · next l hl =>
         obtain ⟨hp, hog, hq, -, haN, hg, -⟩ := locate_spec _ _ _ _ W.ok (not_lt.1 h) hl
-        simp only [Block.gateAt, List.mem_map] at ha
+        simp only [UnitKind.gateAt, List.mem_map] at ha
         obtain ⟨a', ha', rfl⟩ := ha
         have := l.B.S.rd_lt l.a haN a' ha'
-        unfold Block.reloc
+        unfold UnitKind.reloc
         split_ifs with h'
         · exact lt_of_lt_of_le (hp l.q hq a' h') hog
         · omega
@@ -160,7 +160,7 @@ def spec : Spec where
     split_ifs with h
     · rfl
     · split
-      · next l hl => simp [h, hl, Block.gateAt] at hi
+      · next l hl => simp [h, hl, UnitKind.gateAt] at hi
       · rfl
 
 /-- The unit of gate `g`: none for an input, else its instance's. -/
@@ -177,7 +177,7 @@ def part : Verity.Partition W.spec.toCircuit (unitCount W.blocks) where
     · have hs := locate_isSome W.blocks W.nIn 0 g.val (not_lt.1 h) g.isLt
       obtain ⟨l, hl⟩ := Option.isSome_iff_exists.1 hs
       have hu := (locate_spec _ _ _ _ W.ok (not_lt.1 h) hl).2.2.2.2.2.2
-      simp only [h, ↓reduceIte, hl, Option.map_some, Option.bind_some, Block.gateAt]
+      simp only [h, ↓reduceIte, hl, Option.map_some, Option.bind_some, UnitKind.gateAt]
       simp only [zero_add] at hu
       simp [hu]
 

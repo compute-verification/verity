@@ -56,7 +56,7 @@ namespace Pouw.SecurityProofs.DitherWitness
 
 open Pouw.RelativeSecurity Pouw.Dither Pouw.Assumptions Finset
 
-section Machine
+section AlgModel
 
 /-- A root cell: a word reduced into 17 values. 17 is odd, so no product with the roots' type (`289` values) has as
 many values as the words' type (`2^64`), which the laws read. -/
@@ -131,7 +131,7 @@ def TAlg.ofFun {I O : Type} (f : I → O) (u : I → Fin 3 → ℝ) (hu : ∀ x 
 
 /-- The witness machine. Its `time` is zero (the headline reads `Accel.use`, not `time`), and composing or routing
 programs pays two units of every resource, the most any program's cells can cost. -/
-abbrev tm : Machine where
+abbrev tm : AlgModel where
   Alg I O := TAlg I O
   eval f := f.run
   time _ := 0
@@ -221,7 +221,7 @@ theorem ttr_ne_prod (S : Type) : TTr ≠ (S × TRoot) := fun e => by
   rw [Nat.card_prod, card_ttr, card_troot] at this
   omega
 
-end Machine
+end AlgModel
 
 section Round
 
@@ -381,7 +381,7 @@ theorem moment_le_one (F : TDraw → Fin 2 → Word) (σ : Finset (Fin 2))
 
 end Sampling
 
-section Period
+section PeriodDevices
 
 /-- The prices: a MAC unit at 2, a hash unit and a unit of the rest at 1. -/
 noncomputable def twμ (r : Fin 3) : ℝ := if r = 0 then 2 else 1
@@ -395,7 +395,7 @@ noncomputable def twHon (r : Fin 3) : ℝ := if r = 2 then 2 else 4
 
 /-- **The witness period**: `T = 8` seconds of the three resources at rate 1, one other job per resource worth its
 use at `μ`, and the credited use `hon` worth `C = μ · hon = 14`. -/
-noncomputable def twPd : Period tw where
+noncomputable def twPd : PeriodDevices tw where
   T := 8
   J := Fin 3
   val := twμ
@@ -452,12 +452,12 @@ theorem twCost :
   show ∑ _w : Fin 2, ((4 : ℝ) + 2 + 1) = ∑ r : Fin 3, twμ r * twHon r
   norm_num [Fin.sum_univ_three, twμ, twHon]
 
-end Period
+end PeriodDevices
 
 section Premises
 
 /-- **The witness verdict**: the rounds' checks on the transcript. The devices read nothing. -/
-def twVerdict : Verdict twRound 2 Unit := fun o x t _ =>
+def twVerdict : Acceptance twRound 2 Unit := fun o x t _ =>
   ∀ w, twRound.accept o (twReg w) (x w).1 (x w).2 (t w).1 (t w).2
 
 /-- The devices' readings: nothing. -/

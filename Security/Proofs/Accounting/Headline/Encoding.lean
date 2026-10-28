@@ -39,11 +39,11 @@ theorem sum_mul_coeff (n : ℕ) (c : ℕ → ℚ) (v : Sparse) :
   (Fin.sum_univ_eq_sum_range (fun i => c i * Sparse.coeff v i) n).trans (sum_range_mul_coeff n c v)
 
 /-- A load of sparse counts on rational rows. -/
-theorem load_counts {n : ℕ} {R : Type} [Fintype R] (G : Machine (Fin n) R) (c : R → ℕ → ℚ)
+theorem load_counts {n : ℕ} {R : Type} [Fintype R] (G : FacetCosts (Fin n) R) (c : R → ℕ → ℚ)
     (hG : ∀ r k, G.a r k = (c r k.val : ℝ)) (v : Sparse) (r : R) :
     G.load (Sparse.counts v) r = (dot (c r) n v : ℝ) := by
   rw [← sum_mul_coeff]
-  simp only [Machine.load, hG, Sparse.counts, Rat.cast_sum, Rat.cast_mul]
+  simp only [FacetCosts.load, hG, Sparse.counts, Rat.cast_sum, Rat.cast_mul]
 
 theorem coeff_nonneg (v : Sparse) (i : ℕ) : 0 ≤ Sparse.coeff v i := by
   unfold Sparse.coeff
@@ -53,9 +53,9 @@ theorem coeff_nonneg (v : Sparse) (i : ℕ) : 0 ≤ Sparse.coeff v i := by
   · exact div_nonneg (Nat.cast_nonneg _) (Nat.cast_nonneg _)
   · exact le_rfl
 
-theorem load_counts_nonneg {n : ℕ} {R : Type} [Fintype R] (G : Machine (Fin n) R) (hG : ∀ r k, 0 ≤ G.a r k)
+theorem load_counts_nonneg {n : ℕ} {R : Type} [Fintype R] (G : FacetCosts (Fin n) R) (hG : ∀ r k, 0 ≤ G.a r k)
     (v : Sparse) (r : R) : 0 ≤ G.load (Sparse.counts v) r := by
-  unfold Machine.load
+  unfold FacetCosts.load
   exact Finset.sum_nonneg fun k _ => mul_nonneg (hG r k) (Rat.cast_nonneg.mpr (coeff_nonneg v k.val))
 
 theorem coeff_append (v w : Sparse) (i : ℕ) : Sparse.coeff (v ++ w) i = Sparse.coeff v i + Sparse.coeff w i := by
@@ -92,10 +92,10 @@ theorem sheetCoef_nonneg {P : Type} [DecidableEq P] (D : SheetData P) (r : Sheet
   cases r <;> simp only [sheetCoef] <;> (try split_ifs) <;> positivity
 
 /-- The bound is facet `r0`'s load when no facet's is larger. -/
-theorem bound_eq {n : ℕ} {R : Type} [Fintype R] [Nonempty R] (G : Machine (Fin n) R) (c : R → ℕ → ℚ)
+theorem bound_eq {n : ℕ} {R : Type} [Fintype R] [Nonempty R] (G : FacetCosts (Fin n) R) (c : R → ℕ → ℚ)
     (hG : ∀ r k, G.a r k = (c r k.val : ℝ)) (v : Sparse) (r0 : R) (h : ∀ r, dot (c r) n v ≤ dot (c r0) n v) :
     G.bound (Sparse.counts v) = (dot (c r0) n v : ℝ) := by
-  unfold Machine.bound
+  unfold FacetCosts.bound
   simp only [load_counts G c hG v]
   exact le_antisymm (ciSup_le fun r => Rat.cast_le.mpr (h r))
     (le_ciSup (f := fun r => ((dot (c r) n v : ℚ) : ℝ)) (Set.finite_range _).bddAbove r0)

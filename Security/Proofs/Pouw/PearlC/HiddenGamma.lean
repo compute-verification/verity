@@ -74,7 +74,7 @@ theorem hidden_pointwise {w : ℕ → ℕ} {NT t : ℕ} (g : Verity.Game (List B
 phase sound per tile up to `ηzk` (`TileProofSound`) wins the hidden audit with probability at most
 `(1 − ε_s)^t + η(q, N) + t·ηzk`, for any hidden audit. -/
 theorem gammaHidden_of_sampled [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (CM : CostModel Q R S)
-    (P : Protocol Q R S) (TR : TileRules Q R S) (D : Layout → Prop) (HA : HiddenAudit Q R S) (γ : ℝ)
+    (P : Protocol Q R S) (TR : TileRules Q R S) (D : UnitLayout → Prop) (HA : HiddenAudit Q R S) (γ : ℝ)
     (η : ℕ → ℕ → ℝ) (h : GγSampled CM P TR D γ η) (U : Workload) (hU : U.InDomain P D) (T : ℝ) (hT : 0 ≤ T) (q : ℕ)
     (hq : q ≤ 2 ^ 64) (A : Adversary CM) (hA : A.Bounded U T q) (w : ℕ → ℕ) (κ : ℝ) (hκ : 0 < κ)
     (hw : ∀ g < (TR.tiling U.layout).NT, (w g : ℝ) = κ * TR.Wref U.layout g) (t : ℕ) (εs : ℝ) (hεs : εs ≤ 1)
@@ -101,7 +101,7 @@ theorem gammaHidden_of_sampled [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype 
 class: `GγSampled` and the open obligation `TileProofSoundAll` give `GγHidden`, at `t·ηzk(q)` more error, for any
 hidden audit. -/
 theorem gammaHidden_of_sampled_all [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (CM : CostModel Q R S)
-    (P : Protocol Q R S) (TR : TileRules Q R S) (D : Layout → Prop) (HA : HiddenAudit Q R S) (γ : ℝ)
+    (P : Protocol Q R S) (TR : TileRules Q R S) (D : UnitLayout → Prop) (HA : HiddenAudit Q R S) (γ : ℝ)
     (η : ℕ → ℕ → ℝ) (ηzk : ℕ → ℝ) (h : GγSampled CM P TR D γ η) (hzk : TileProofSoundAll P TR D HA ηzk) :
     GγHidden CM P TR D HA γ η ηzk :=
   fun U hU T hT q hq A hA w κ hκ hw t εs hεs op σ hσ =>

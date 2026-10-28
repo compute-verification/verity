@@ -24,18 +24,18 @@ theorem shapeWF4090 : ShapeWF4090 := by
   show 16 * outs.length ≤ s.regPrice * outs.length
   exact Nat.mul_le_mul_right _ (regPrice_ge s)
 
-theorem cost4090_int {G : Type} (fs : List (G → ℚ)) : cost4090 (fs.map Op.int) = 16 * fs.length := by
+theorem cost4090_int {G : Type} (fs : List (G → ℚ)) : cost4090 (fs.map Insn.int) = 16 * fs.length := by
   induction fs with
   | nil => rfl
   | cons f fs ih =>
     simp only [cost4090, List.map_cons, List.sum_cons, List.length_cons] at ih ⊢
-    rw [ih, Op.price]
+    rw [ih, Insn.price]
     ring
 
 /-- **No bound in `M4090` exceeds 16 per target word.** -/
 theorem ceiling4090 : Ceiling4090 := by
   intro N m n k fpSem W b hb
-  let P : List (Op (Noise N m n k)) := W.toList.map Op.int
+  let P : List (Insn (Noise N m n k)) := W.toList.map Insn.int
   have hwf : ∀ o ∈ P, o.WF := fun o ho => by
     obtain ⟨f, -, rfl⟩ := List.mem_map.1 ho
     trivial

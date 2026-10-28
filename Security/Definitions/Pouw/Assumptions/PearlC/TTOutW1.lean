@@ -42,7 +42,7 @@ separately. It speaks at the deployment when `sem := NoiseSha512.sha512Sem base 
 model reads: one salt, which the program reads as its salt bytes (`W1.init`'s region 1) and the protocol reads as the
 noise's. At any other pair it is still proved, but about a game the deployment doesn't play.
 
-**The program's text is bounded** (`W1.Prog.bounded`: at every layout `2^64` code nodes and `2^64` constants).
+**The program's text is bounded** (`W1.Listing.bounded`: at every layout `2^64` code nodes and `2^64` constants).
 W1 charges only the path a run takes, so a strategy with unbounded text could hold the reference at
 `sha512Sem` as a table of one leaf per salt in its code. A W1 program can't
 (`Proofs.Pouw.PearlC.W1Tabulate.tree_not_code`).
@@ -63,7 +63,7 @@ variable {Q R S : Type}
 words are correct and whose debit is within the cap, no W1 program bounded by `T` makes
 `∑_{u ∈ K} credit(u) > T / (1 − γ₀)` with probability over `(H, s)` more than `ε(q, N)`. -/
 def TTOutW1 [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (dv : W1.W1Device) (salt : S → List ℕ)
-    (P : Protocol Q R S) (D : Layout → Prop) (γ₀ : ℝ) (ε : ℕ → ℕ → ℝ) : Prop :=
+    (P : Protocol Q R S) (D : UnitLayout → Prop) (γ₀ : ℝ) (ε : ℕ → ℕ → ℝ) : Prop :=
   ∀ U : Workload, U.InDomain P D → ∀ T : ℝ, 0 ≤ T → ∀ q : ℕ, q ≤ 2 ^ 64 →
     ∀ A : Adversary (W1.w1Priced dv salt : CostModel Q R S), A.Bounded U T q →
     pr (fun x : (Q → R) × S =>
@@ -74,7 +74,7 @@ def TTOutW1 [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (dv : W1.W1Devic
 /-- **TT_OUT(γ₀) per tile at W1**: `TTOutTile`'s game at `CM := W1.w1Priced dv salt`, the good tiles of `TR` in place of
 the correct units. -/
 def TTOutTileW1 [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (dv : W1.W1Device) (salt : S → List ℕ)
-    (P : Protocol Q R S) (TR : TileRules Q R S) (D : Layout → Prop) (γ₀ : ℝ) (ε : ℕ → ℕ → ℝ) : Prop :=
+    (P : Protocol Q R S) (TR : TileRules Q R S) (D : UnitLayout → Prop) (γ₀ : ℝ) (ε : ℕ → ℕ → ℝ) : Prop :=
   ∀ U : Workload, U.InDomain P D → ∀ T : ℝ, 0 ≤ T → ∀ q : ℕ, q ≤ 2 ^ 64 →
     ∀ A : Adversary (W1.w1Priced dv salt : CostModel Q R S), A.Bounded U T q →
     pr (fun x : (Q → R) × S =>

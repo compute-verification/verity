@@ -45,13 +45,13 @@ structure Tiling where
 
 /-- The audit's grid: each unit's `m × n` words in blocks of `tm × tn`, clipped at the edges; the units in order, and a
 unit's blocks by block row, then block column. The order does not enter γ: every tile is drawn by its own weight. -/
-def gridTiles (tm tn : ℕ) (L : Layout) : List (ℕ × ℕ × ℕ) :=
+def gridTiles (tm tn : ℕ) (L : UnitLayout) : List (ℕ × ℕ × ℕ) :=
   (List.range L.N).flatMap fun u =>
     (List.range (((L.shape u).m + tm - 1) / tm)).flatMap fun bi =>
       (List.range (((L.shape u).n + tn - 1) / tn)).map fun bj => (u, bi, bj)
 
 /-- The tiling of the audit's `tm × tn` grid. -/
-def auditTiling (tm tn : ℕ) (L : Layout) : Tiling where
+def auditTiling (tm tn : ℕ) (L : UnitLayout) : Tiling where
   NT := (gridTiles tm tn L).length
   unit := fun g => ((gridTiles tm tn L).getD g (0, 0, 0)).1
   rows := fun g =>
@@ -65,12 +65,12 @@ def auditTiling (tm tn : ℕ) (L : Layout) : Tiling where
 credit, its cap (its replayed debit within the cap), its `W_ref` (the draw's weight, from the layout) and `Wcred`, the
 `W_ref` of its credited rows given the committed activations. -/
 structure TileRules (Q R S : Type) where
-  tiling : Layout → Tiling
+  tiling : UnitLayout → Tiling
   rowOK : Shape → Codes → ℕ → Prop
   credit : (Q → R) → S → Workload → ℕ → Codes → ℝ
   capOK : (Q → R) → S → Workload → ℕ → Codes → Prop
-  Wref : Layout → ℕ → ℝ
-  Wcred : Layout → ℕ → Codes → ℝ
+  Wref : UnitLayout → ℕ → ℝ
+  Wcred : UnitLayout → ℕ → Codes → ℝ
 
 variable {Q R S : Type}
 
@@ -91,7 +91,7 @@ def TileGood (P : Protocol Q R S) (TR : TileRules Q R S) (U : Workload) (H : Q �
 open Classical in
 /-- The good tiles of `τ`. -/
 noncomputable def goodTiles (P : Protocol Q R S) (TR : TileRules Q R S) (U : Workload) (H : Q → R) (s : S)
-    (τ : Transcript) : Finset ℕ :=
+    (τ : CommitLog) : Finset ℕ :=
   (range (TR.tiling U.layout).NT).filter fun g =>
     ∃ c, τ ((TR.tiling U.layout).unit g) = some c ∧ TileGood P TR U H s g c
 
@@ -111,25 +111,25 @@ def TileGoodU (P : Protocol Q R S) (TR : TileRules Q R S) (U : Workload) (H : Q 
 open Classical in
 /-- The good tiles of `τ` under U-only binding. -/
 noncomputable def goodTilesU (P : Protocol Q R S) (TR : TileRules Q R S) (U : Workload) (H : Q → R) (s : S)
-    (τ : Transcript) : Finset ℕ :=
+    (τ : CommitLog) : Finset ℕ :=
   (range (TR.tiling U.layout).NT).filter fun g =>
     ∃ c, τ ((TR.tiling U.layout).unit g) = some c ∧ TileGoodU P TR U H s g c
 
 open Classical in
 /-- The tiles of the units `τ` leaves blank (declared uncredited): the audit never checks them, and they earn nothing. -/
-noncomputable def blankTiles (TR : TileRules Q R S) (U : Workload) (τ : Transcript) : Finset ℕ :=
+noncomputable def blankTiles (TR : TileRules Q R S) (U : Workload) (τ : CommitLog) : Finset ℕ :=
   (range (TR.tiling U.layout).NT).filter fun g => τ ((TR.tiling U.layout).unit g) = none
 
 /-- The work `τ` claims: the `W_ref` of the credited rows of the tiles of the units it commits. -/
-noncomputable def claimedWref (TR : TileRules Q R S) (U : Workload) (τ : Transcript) : ℝ :=
+noncomputable def claimedWref (TR : TileRules Q R S) (U : Workload) (τ : CommitLog) : ℝ :=
   ∑ g ∈ range (TR.tiling U.layout).NT \ blankTiles TR U τ,
     TR.Wcred U.layout g (actOf τ ((TR.tiling U.layout).unit g))
 
 /-- The layout's `W_ref`, tile by tile. -/
-def tileWrefTotal (TR : TileRules Q R S) (L : Layout) : ℝ := ∑ g ∈ range (TR.tiling L).NT, TR.Wref L g
+def tileWrefTotal (TR : TileRules Q R S) (L : UnitLayout) : ℝ := ∑ g ∈ range (TR.tiling L).NT, TR.Wref L g
 
 /-- `AdmitsRef` with the reference's cost bounded tile by tile. -/
-def AdmitsRefTile (CM : CostModel Q R S) (P : Protocol Q R S) (TR : TileRules Q R S) (D : Layout → Prop)
+def AdmitsRefTile (CM : CostModel Q R S) (P : Protocol Q R S) (TR : TileRules Q R S) (D : UnitLayout → Prop)
     (qref : Workload → ℕ) : Prop :=
   ∃ prog : CM.Prog, ∀ U : Workload, U.InDomain P D → U.WeightsOK P → ∀ act : ℕ → Codes,
     (∀ u < U.layout.N, P.actOK (U.layout.shape u) (act u)) → ∀ (H : Q → R) (s : S),
@@ -142,7 +142,7 @@ adversary, every ticket count `w` proportional to the tiles' `W_ref` (`verity.pr
 draws and `ε_s ≤ 1`: the audit accepts (every drawn tile is good, or of a blank unit) while `T` is below `1 − γ` of the
 claimed work (the credited rows' `W_ref`) less `ε_s` of the layout's, with probability at most `(1 − ε_s)^t + η(q, N)`. -/
 def GγSampled [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (CM : CostModel Q R S) (P : Protocol Q R S)
-    (TR : TileRules Q R S) (D : Layout → Prop) (γ : ℝ) (η : ℕ → ℕ → ℝ) : Prop :=
+    (TR : TileRules Q R S) (D : UnitLayout → Prop) (γ : ℝ) (η : ℕ → ℕ → ℝ) : Prop :=
   ∀ U : Workload, U.InDomain P D → ∀ T : ℝ, 0 ≤ T → ∀ q : ℕ, q ≤ 2 ^ 64 → ∀ A : Adversary CM, A.Bounded U T q →
     ∀ (w : ℕ → ℕ) (κ : ℝ), 0 < κ → (∀ g < (TR.tiling U.layout).NT, (w g : ℝ) = κ * TR.Wref U.layout g) →
     ∀ (t : ℕ) (εs : ℝ), εs ≤ 1 →
@@ -155,7 +155,7 @@ def GγSampled [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (CM : CostMod
 /-- **The γ-gap property under the sampled audit with U-only binding**: `GγSampled` with the audit accepting a drawn tile
 when it is good under U-only binding (`goodTilesU`) or of a blank unit. -/
 def GγSampledU [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (CM : CostModel Q R S) (P : Protocol Q R S)
-    (TR : TileRules Q R S) (D : Layout → Prop) (γ : ℝ) (η : ℕ → ℕ → ℝ) : Prop :=
+    (TR : TileRules Q R S) (D : UnitLayout → Prop) (γ : ℝ) (η : ℕ → ℕ → ℝ) : Prop :=
   ∀ U : Workload, U.InDomain P D → ∀ T : ℝ, 0 ≤ T → ∀ q : ℕ, q ≤ 2 ^ 64 → ∀ A : Adversary CM, A.Bounded U T q →
     ∀ (w : ℕ → ℕ) (κ : ℝ), 0 < κ → (∀ g < (TR.tiling U.layout).NT, (w g : ℝ) = κ * TR.Wref U.layout g) →
     ∀ (t : ℕ) (εs : ℝ), εs ≤ 1 →

@@ -35,7 +35,7 @@ namespace Accounting.SecurityProofs.TS
 open Accounting.TS Accounting.Assumptions.TS Pouw.RelativeSecurity
 
 /-- Steps 1 and 3 of Theorem D(a): `π·n ≤ B(n) ≤ f_max·T(M)` on a run whose facets are ceilings. -/
-theorem price_le_time {K R : Type} [Fintype K] [Fintype R] [Nonempty R] (G : Machine K R) (lam : R → ℝ)
+theorem price_le_time {K R : Type} [Fintype K] [Fintype R] [Nonempty R] (G : FacetCosts K R) (lam : R → ℝ)
     (M : Run K) (h : IsCert lam) (hf : 0 < G.fmax) (hM : FacetCeilings G M) :
     G.price lam M.n ≤ G.fmax * M.time := by
   have h1 := price_le_bound G lam M.n h
@@ -266,10 +266,10 @@ theorem iInf_le_price {ι R : Type} [Finite ι] [Fintype R] (lam : R → ℝ) (d
   ciInf_le (Set.finite_range _).bddBelow i
 
 /-- The price of a load that is a nonnegative combination of routes: `π·(Σ_i c_i d_i) = Σ_i c_i·(π·d_i)`. -/
-theorem price_of_combination {K R ι : Type} [Fintype K] [Fintype R] [Fintype ι] (G : Machine K R)
+theorem price_of_combination {K R ι : Type} [Fintype K] [Fintype R] [Fintype ι] (G : FacetCosts K R)
     (lam : R → ℝ) (n : K → ℝ) (c : ι → ℝ) (d : ι → R → ℝ) (hn : ∀ r, G.load n r = ∑ i, c i * d i r) :
     G.price lam n = ∑ i, c i * demandPrice lam (d i) := by
-  unfold Machine.price demandPrice
+  unfold FacetCosts.price demandPrice
   simp_rw [hn, Finset.mul_sum]
   rw [Finset.sum_comm]
   exact Finset.sum_congr rfl fun i _ => Finset.sum_congr rfl fun r _ => by ring
@@ -308,7 +308,7 @@ theorem FloorCreditD3 : Accounting.Guarantees.TS.FloorCreditD3 := by
     refine ⟨?_, ?_, ?_, ?_, ?_, ?_⟩
     · rw [Model.epsSkip]
       refine div_nonneg ?_ hB.le
-      unfold Machine.price Machine.load
+      unfold FacetCosts.price FacetCosts.load
       exact Finset.sum_nonneg fun r _ => mul_nonneg (h.1 r) (Finset.sum_nonneg fun k _ =>
         mul_nonneg (ha0 r k) (hns k))
     · rw [Model.epsCert]

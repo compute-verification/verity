@@ -10,7 +10,7 @@ Neekon Vafa's definition as RS-DEF froze it
 proof workers' results land here as theorems or as named hypotheses. The definitions the guarantees
 (`Definitions.Pouw.Guarantees.RelativeSecurity`) read are in `Definitions.Pouw.RelativeSecurity`, under the same names.
 
-* The machine model (`Machine`, `MatMachine`): algorithms from inputs to outputs, their semantics with the coins as
+* The machine model (`AlgModel`, `MatMachine`): algorithms from inputs to outputs, their semantics with the coins as
   part of the input, a per-run `cost` and its worst case `time`, with axioms: nonnegativity, monotonicity (running `f`
   first, or beside another algorithm, costs at least `f`), subadditivity of sequential and side-by-side composition,
   free routing, and the cost of a linear map (an `a × b` by `b × c` product costs at most `κ a b c`). `costed` shows
@@ -20,7 +20,7 @@ proof workers' results land here as theorems or as named hypotheses. The definit
   `RelativelySecure`) with `ε`, `δ`, `γ`, `η`, `α`, `κ`; usefulness, completeness and the floors quantify over the
   protocol's `promise` (RS-DEF v2 §1.4, `A, B ∈ G_use`). Probabilities are uniform counts over the finite σ and coins
   (`prob`, `expect`). Core, the floors and Lemma R charge a run the program's size and its cost,
-  `max(|M|, cost)` (`Machine.charge`, RS-DEF v2 after RS-RT's V1). `secureInf_of_core` (Core ⇒ Security for `δ > κ`),
+  `max(|M|, cost)` (`AlgModel.charge`, RS-DEF v2 after RS-RT's V1). `secureInf_of_core` (Core ⇒ Security for `δ > κ`),
   `rate_of_core` (RS-DEF's rate form) and `core_of_floor` (RS-DEF's Lemma R) are proved.
 * The masking algebra, proved over any ring (`mask_peel`, `lowRank_peel`), exact over `ZMod (2^32)` and over any
   field, and recovering the integer product from its s32 residue when the entries are below `2^31`
@@ -54,7 +54,7 @@ proof workers' results land here as theorems or as named hypotheses. The definit
   exponential form `E[1[pass_w] e^{(1−p) d_w}] ≤ 1`, `window_le_exp`) is a service floor (`RoundsHyp`, over
   `ExpBound`, `serviceFloor_of_rounds`), and the B_θ certified fraction rests on it in place of Theorem M
   (`certifiedFraction120θ_rounds`, at `2^{−40}` `_rounds_40`).
-* The Model B bridge (RS-MODEL): typed circuits of priced gates with free routing; `ModelB.machine` is a `Machine`
+* The Model B bridge (RS-MODEL): typed circuits of priced gates with free routing; `ModelB.machine` is a `AlgModel`
   whose time is `timeB`, `ModelB.matMachine` a `MatMachine` from priced circuits (`MatGates`, realized by a GEMM gate
   family), `matMachine120` the sm_120 instance at `price120` with the worst-case `κ = 16` u (circuits named `Gemm120`),
   and `gridMatMachine120` its width-typed refinement, the int8 tile GEMM at `κ = 1` u on `G_op = int8` (circuits named
@@ -687,7 +687,7 @@ theorem RoundGame.expBound_of_staged {Ωs J : Type} [Fintype Ωs] [Nonempty Ωs]
 
 end Stages
 
-section Machine
+section AlgModel
 
 /-- `n × m` matrices over `R`, indexed by `Fin`. -/
 abbrev Mat (R : Type) (a b : ℕ) : Type := Matrix (Fin a) (Fin b) R
@@ -695,7 +695,7 @@ abbrev Mat (R : Type) (a b : ℕ) : Type := Matrix (Fin a) (Fin b) R
 /-- A machine model with matrix arithmetic over a ring `R`: the cost of a linear map, `X ↦ X Y` for an `a × b` by
 `b × c` product, is at most `κ a b c` (`κ` the price of a multiply-accumulate), and an entrywise addition or
 subtraction of `a × b` matrices costs at most `κadd a b`. -/
-structure MatMachine (R : Type) [Ring R] extends Machine where
+structure MatMachine (R : Type) [Ring R] extends AlgModel where
   κ : ℝ
   κadd : ℝ
   mul : ∀ a b c : ℕ, Alg (Mat R a b × Mat R b c) (Mat R a c)
@@ -709,9 +709,9 @@ structure MatMachine (R : Type) [Ring R] extends Machine where
   time_add_le : ∀ a b : ℕ, time (add a b) ≤ κadd * ((a : ℝ) * b)
   time_sub_le : ∀ a b : ℕ, time (sub a b) ≤ κadd * ((a : ℝ) * b)
 
-namespace Machine
+namespace AlgModel
 
-variable (Mc : Machine)
+variable (Mc : AlgModel)
 
 /-- Run `f` and `g` on the same input and combine their outputs with `h`. -/
 def lift2 {I O P Q : Type} (f : Mc.Alg I O) (g : Mc.Alg I P) (h : Mc.Alg (O × P) Q) : Mc.Alg I Q :=
@@ -751,12 +751,12 @@ theorem charge_nonneg {I O : Type} (f : Mc.Alg I O) (x : I) : 0 ≤ Mc.charge f 
 
 theorem size_le_charge {I O : Type} (f : Mc.Alg I O) (x : I) : Mc.size f ≤ Mc.charge f x := le_max_left _ _
 
-end Machine
+end AlgModel
 
 /-- The axioms are satisfiable with nontrivial prices: algorithms are functions annotated with a cost, composition
 adds costs, routing is free, and an `a × b` by `b × c` product costs exactly `a b c`. (This model has no floor: any
 function is an algorithm. A floor needs a syntactic model, RS-MODEL's.) -/
-def costed : Machine where
+def costed : AlgModel where
   Alg I O := (I → O) × ℕ
   eval f := f.1
   time f := f.2
@@ -797,7 +797,7 @@ def costedMat (R : Type) [Ring R] : MatMachine R where
   time_add_le a b := by simp [costed]
   time_sub_le a b := by simp [costed]
 
-end Machine
+end AlgModel
 
 section Definition
 
@@ -805,7 +805,7 @@ section Definition
 round): the prover sends a commitment to its instance before any coin, the verifier sends live coins σ, the prover
 answers, and the verifier decides, deterministically in its view. `Solve` also outputs `C`, kept by the prover. The
 `|π| ≤ 10λ` bound of Neekon's draft is dropped, as RS-DEF does (security never uses it). -/
-structure Protocol (Mc : Machine) (Inst Out : Type) where
+structure Protocol (Mc : AlgModel) (Inst Out : Type) where
   /-- The verifier's live coins σ, `λ` bits. -/
   Seed : Type
   [instSeed : Fintype Seed]
@@ -832,13 +832,13 @@ structure Protocol (Mc : Machine) (Inst Out : Type) where
 attribute [instance] Protocol.instSeed Protocol.instCoins
 
 /-- A transcript's prover messages `(c, a)`. -/
-abbrev Protocol.Proof {Mc : Machine} {Inst Out : Type} (P : Protocol Mc Inst Out) : Type := P.Com × P.Ans
+abbrev Protocol.Proof {Mc : AlgModel} {Inst Out : Type} (P : Protocol Mc Inst Out) : Type := P.Com × P.Ans
 
 /-- The verifier accepts the prover messages `π = (c, a)` against σ. -/
-def Protocol.accepts {Mc : Machine} {Inst Out : Type} (P : Protocol Mc Inst Out) (σ : P.Seed) (π : P.Proof) : Bool :=
+def Protocol.accepts {Mc : AlgModel} {Inst Out : Type} (P : Protocol Mc Inst Out) (σ : P.Seed) (π : P.Proof) : Bool :=
   P.verify π.1 σ π.2
 
-variable {Mc : Machine} {Inst Out : Type}
+variable {Mc : AlgModel} {Inst Out : Type}
 
 /-- **Live coins** (RS-DEF's T6): the commitment a prover sends doesn't depend on σ. -/
 def CommitsFirst (P : Protocol Mc Inst Out) {X : Type} (f : P.Seed × X → P.Proof) : Prop :=
@@ -1060,12 +1060,12 @@ theorem relativelySecurePerProver_of_advFloor (P : Protocol Mc Inst Out) {γ η 
 
 /-- The matmul problem on instances that embed into pairs of `n × n` matrices over `R` (for example RS-DEF's useful
 grid `G_use` as a subtype): `x` is answered by `C = A · B` for `(A, B) = emb x`. -/
-def IsMatmulOn {R : Type} [Ring R] {n : ℕ} {Mc : Machine} {Inst : Type} (P : Protocol Mc Inst (Mat R n n))
+def IsMatmulOn {R : Type} [Ring R] {n : ℕ} {Mc : AlgModel} {Inst : Type} (P : Protocol Mc Inst (Mat R n n))
     (emb : Inst → Mat R n n × Mat R n n) : Prop :=
   ∀ σ x C, P.correct σ x C ↔ (emb x).1 * (emb x).2 = C
 
 /-- The matmul problem on all pairs of `n × n` matrices over `R`. -/
-def IsMatmul {R : Type} [Ring R] {n : ℕ} {Mc : Machine} (P : Protocol Mc (Mat R n n × Mat R n n) (Mat R n n)) :
+def IsMatmul {R : Type} [Ring R] {n : ℕ} {Mc : AlgModel} (P : Protocol Mc (Mat R n n × Mat R n n) (Mat R n n)) :
     Prop :=
   IsMatmulOn P id
 
@@ -1243,9 +1243,9 @@ end ZeroInstance
 
 section Reduction
 
-namespace Machine
+namespace AlgModel
 
-variable (Mc : Machine)
+variable (Mc : AlgModel)
 
 /-- **The reduction** `M' = M ++ Q`: run the extractor `E` (M's own program on the masked instance; its proof and the
 blocks read off its wires), keep the proof, and run the peel and then the correction on the blocks. -/
@@ -1277,9 +1277,9 @@ theorem time_reduction_le_of_le {I Pf Bl Mid O J : Type} {E : Mc.Alg I (Pf × Bl
     Mc.time (Mc.reduction E peel corr) ≤ Mc.time M + Mc.time peel + Mc.time corr := by
   linarith [Mc.time_reduction_le E peel corr]
 
-end Machine
+end AlgModel
 
-variable {Mc : Machine} {Inst Out : Type}
+variable {Mc : AlgModel} {Inst Out : Type}
 
 /-- **Extraction** (a named hypothesis, RS-EXT's Lemma E and Theorem R): from an adversary `M`, an extractor `E` that
 commits first, costs at most `(1 + εext) time M` (one straight-line run of M on the planted instance, reading M's
@@ -1296,7 +1296,7 @@ def Extraction (P : Protocol Mc Inst Out) {Bl : Type} (valid : Inst → Bl → P
 /-- **The floor** (a named hypothesis, the floor agenda's: Conjecture A, Theorems B/C/W/F): every algorithm that
 answers every promised instance correctly with probability at least `1 - η` over its coins costs at least `T`
 (`T*_mm(n)` for matmul, RS-DEF §1.7; no proof is asked for, so `T_use(η) ≥ T`). -/
-def Floor (Mc : Machine) {Inst Out : Type} (promise : Inst → Prop) (correct : Inst → Out → Prop) (T η : ℝ) : Prop :=
+def Floor (Mc : AlgModel) {Inst Out : Type} (promise : Inst → Prop) (correct : Inst → Out → Prop) (T η : ℝ) : Prop :=
   ∀ (Ω : Type) [Fintype Ω] (N : Mc.Alg (Inst × Ω) Out),
     (∀ x, promise x → 1 - η ≤ prob fun ω : Ω => correct x (Mc.eval N (x, ω))) → T ≤ Mc.time N
 
@@ -1316,7 +1316,7 @@ theorem Floor.le_time (P : Protocol Mc Inst Out) {correct : Inst → Out → Pro
     exact hcorr _ _ _ hω.1)
   have hr : Mc.time route ≤ 0 := by
     apply le_trans
-    · apply_rules [Machine.time_pair_le_of, Machine.time_seq_le_of, Machine.time_fst_le, Machine.time_snd_le]
+    · apply_rules [AlgModel.time_pair_le_of, AlgModel.time_seq_le_of, AlgModel.time_fst_le, AlgModel.time_snd_le]
     · norm_num
   have r1 := Mc.time_seq_le (Mc.seq route M') (Mc.snd (I := P.Proof) (J := Out))
   have r2 := Mc.time_seq_le route M'
@@ -1437,20 +1437,20 @@ def sub₂ {I : Type} {a b : ℕ} (f g : Mc.Alg I (Mat R a b)) : Mc.Alg I (Mat R
 
 theorem eval_mul₂ {I : Type} {a b c : ℕ} (f : Mc.Alg I (Mat R a b)) (g : Mc.Alg I (Mat R b c)) (x : I) :
     Mc.eval (Mc.mul₂ f g) x = Mc.eval f x * Mc.eval g x := by
-  rw [mul₂, Machine.eval_lift2, Mc.eval_mul]
+  rw [mul₂, AlgModel.eval_lift2, Mc.eval_mul]
 
 theorem eval_sub₂ {I : Type} {a b : ℕ} (f g : Mc.Alg I (Mat R a b)) (x : I) :
     Mc.eval (Mc.sub₂ f g) x = Mc.eval f x - Mc.eval g x := by
-  rw [sub₂, Machine.eval_lift2, Mc.eval_sub]
+  rw [sub₂, AlgModel.eval_lift2, Mc.eval_sub]
 
 theorem time_mul₂_le_of {I : Type} {a b c : ℕ} {f : Mc.Alg I (Mat R a b)} {g : Mc.Alg I (Mat R b c)} {u v : ℝ}
     (hf : Mc.time f ≤ u) (hg : Mc.time g ≤ v) :
     Mc.time (Mc.mul₂ f g) ≤ u + v + Mc.κ * ((a : ℝ) * b * c) :=
-  (Machine.time_lift2_le _ _ _ _).trans (by linarith [Mc.time_mul_le a b c])
+  (AlgModel.time_lift2_le _ _ _ _).trans (by linarith [Mc.time_mul_le a b c])
 
 theorem time_sub₂_le_of {I : Type} {a b : ℕ} {f g : Mc.Alg I (Mat R a b)} {u v : ℝ} (hf : Mc.time f ≤ u)
     (hg : Mc.time g ≤ v) : Mc.time (Mc.sub₂ f g) ≤ u + v + Mc.κadd * ((a : ℝ) * b) :=
-  (Machine.time_lift2_le _ _ _ _).trans (by linarith [Mc.time_sub_le a b])
+  (AlgModel.time_lift2_le _ _ _ _).trans (by linarith [Mc.time_sub_le a b])
 
 /-- Add the outputs of `f` and `g`. -/
 def add₂ {I : Type} {a b : ℕ} (f g : Mc.Alg I (Mat R a b)) : Mc.Alg I (Mat R a b) :=
@@ -1458,11 +1458,11 @@ def add₂ {I : Type} {a b : ℕ} (f g : Mc.Alg I (Mat R a b)) : Mc.Alg I (Mat R
 
 theorem eval_add₂ {I : Type} {a b : ℕ} (f g : Mc.Alg I (Mat R a b)) (x : I) :
     Mc.eval (Mc.add₂ f g) x = Mc.eval f x + Mc.eval g x := by
-  rw [add₂, Machine.eval_lift2, Mc.eval_add]
+  rw [add₂, AlgModel.eval_lift2, Mc.eval_add]
 
 theorem time_add₂_le_of {I : Type} {a b : ℕ} {f g : Mc.Alg I (Mat R a b)} {u v : ℝ} (hf : Mc.time f ≤ u)
     (hg : Mc.time g ≤ v) : Mc.time (Mc.add₂ f g) ≤ u + v + Mc.κadd * ((a : ℝ) * b) :=
-  (Machine.time_lift2_le _ _ _ _).trans (by linarith [Mc.time_add_le a b])
+  (AlgModel.time_lift2_le _ _ _ _).trans (by linarith [Mc.time_add_le a b])
 
 /-- The correction `(C', X, Y) ↦ C' − X − Y`. -/
 def corr (n : ℕ) : Mc.Alg (Mat R n n × Mat R n n × Mat R n n) (Mat R n n) :=
@@ -1476,8 +1476,8 @@ theorem eval_corr (n : ℕ) (b : Mat R n n × Mat R n n × Mat R n n) :
 theorem time_corr_le (n : ℕ) : Mc.time (Mc.corr n) ≤ 2 * Mc.κadd * (n : ℝ) ^ 2 := by
   apply le_trans
   · unfold corr
-    apply_rules [time_mul₂_le_of, time_sub₂_le_of, Machine.time_pair_le_of, Machine.time_seq_le_of,
-      Machine.time_fst_le, Machine.time_snd_le]
+    apply_rules [time_mul₂_le_of, time_sub₂_le_of, AlgModel.time_pair_le_of, AlgModel.time_seq_le_of,
+      AlgModel.time_fst_le, AlgModel.time_snd_le]
   · linarith
 
 /-- The full-rank peel's blocks `(C', A, Y, R, S)`: the committed product, the instance's `A`, M's masked
@@ -1512,8 +1512,8 @@ theorem peelFull_correct {n : ℕ} (x : Mat R n n × Mat R n n) (b : FullBlocks 
 theorem time_peelFull_le (n : ℕ) : Mc.time (Mc.peelFull n) ≤ 2 * Mc.κ * (n : ℝ) ^ 3 := by
   apply le_trans
   · unfold peelFull
-    apply_rules [time_mul₂_le_of, time_sub₂_le_of, Machine.time_pair_le_of, Machine.time_seq_le_of,
-      Machine.time_fst_le, Machine.time_snd_le]
+    apply_rules [time_mul₂_le_of, time_sub₂_le_of, AlgModel.time_pair_le_of, AlgModel.time_seq_le_of,
+      AlgModel.time_fst_le, AlgModel.time_snd_le]
   · linarith
 
 /-- The low-rank peel's blocks `(C', A, Y, U, Vᵀ, W, Zᵀ)`: the committed product, the instance's `A`, M's masked
@@ -1558,8 +1558,8 @@ theorem peelLow_correct {n r : ℕ} (x : Mat R n n × Mat R n n) (b : LowBlocks 
 theorem time_peelLow_le (n r : ℕ) : Mc.time (Mc.peelLow n r) ≤ 4 * Mc.κ * (n : ℝ) ^ 2 * r := by
   apply le_trans
   · unfold peelLow
-    apply_rules (maxDepth := 200) [time_mul₂_le_of, time_sub₂_le_of, Machine.time_pair_le_of, Machine.time_seq_le_of,
-      Machine.time_fst_le, Machine.time_snd_le]
+    apply_rules (maxDepth := 200) [time_mul₂_le_of, time_sub₂_le_of, AlgModel.time_pair_le_of, AlgModel.time_seq_le_of,
+      AlgModel.time_fst_le, AlgModel.time_snd_le]
   · linarith
 
 /-- **The honest useful computation, full-rank masks**: `(A, B, R, S) ↦ (A + R)(B + S) − R (B + S) − A S`, the masked
@@ -1584,8 +1584,8 @@ theorem time_honestFull_le (n : ℕ) :
     Mc.time (Mc.honestFull n) ≤ 3 * Mc.κ * (n : ℝ) ^ 3 + 5 * Mc.κadd * (n : ℝ) ^ 2 := by
   apply le_trans
   · unfold honestFull
-    apply_rules (maxDepth := 200) [time_mul₂_le_of, time_sub₂_le_of, time_add₂_le_of, Machine.time_pair_le_of,
-      Machine.time_seq_le_of, Machine.time_fst_le, Machine.time_snd_le]
+    apply_rules (maxDepth := 200) [time_mul₂_le_of, time_sub₂_le_of, time_add₂_le_of, AlgModel.time_pair_le_of,
+      AlgModel.time_seq_le_of, AlgModel.time_fst_le, AlgModel.time_snd_le]
   · linarith
 
 /-- **The honest useful computation, rank-`r` masks**:
@@ -1619,8 +1619,8 @@ theorem time_honestLow_le (n r : ℕ) :
     Mc.time (Mc.honestLow n r) ≤ Mc.κ * (n : ℝ) ^ 3 + 7 * Mc.κ * (n : ℝ) ^ 2 * r + 5 * Mc.κadd * (n : ℝ) ^ 2 := by
   apply le_trans
   · unfold honestLow
-    apply_rules (maxDepth := 300) [time_mul₂_le_of, time_sub₂_le_of, time_add₂_le_of, Machine.time_pair_le_of,
-      Machine.time_seq_le_of, Machine.time_fst_le, Machine.time_snd_le]
+    apply_rules (maxDepth := 300) [time_mul₂_le_of, time_sub₂_le_of, time_add₂_le_of, AlgModel.time_pair_le_of,
+      AlgModel.time_seq_le_of, AlgModel.time_fst_le, AlgModel.time_snd_le]
   · linarith
 
 variable {n : ℕ} {Inst : Type} {P : Protocol Mc.toMachine Inst (Mat R n n)} {emb : Inst → Mat R n n × Mat R n n}
@@ -2386,7 +2386,7 @@ round game whose rounds meet the exponential bound `E[1[pass_w] e^{(1−p) d_w}]
 the pass bound along guard paths, `expBound_of_pathBound`, or from a round's stages, `expBound_of_staged`). Its accepted runs are accepted by the game or break binding or zero knowledge in some
 round (probabilities at most `δb` and `δz`), and its charge is at least `(R − Σ_w d_w) F₀ − V − R sl` with noise
 reads `V ≤ Vmax` (Theorem E½ per round, `x_w F₀ − L(M + K)` with `sl = L(M + K)`, and Lemma RD's `n v_λ`). -/
-def RoundsHyp (Mc : Machine) (S : Service) (Ω : Type) [Fintype Ω] (R : ℕ) (p F₀ sl Vmax δb δz : ℝ) : Prop :=
+def RoundsHyp (Mc : AlgModel) (S : Service) (Ω : Type) [Fintype Ω] (R : ℕ) (p F₀ sl Vmax δb δz : ℝ) : Prop :=
   ∃ e : S.Seed ≃ Paths Ω R, ∀ (Ω' : Type) [Fintype Ω'] (M : Mc.Alg (S.Seed × Ω') (S.Com × S.Ans)),
     (∀ σ σ' r, (Mc.eval M (σ, r)).1 = (Mc.eval M (σ', r)).1) → ∀ r : Ω',
     ∃ (G : RoundGame Ω R) (Bind ZK : Fin R → Paths Ω R → Prop) (V : Paths Ω R → ℝ),
@@ -2399,7 +2399,7 @@ def RoundsHyp (Mc : Machine) (S : Service) (Ω : Type) [Fintype Ω] (R : ℕ) (p
 /-- **The window's service floor from Theorem S** (in place of Theorem M): under the window's rounds, every adversary
 that commits first has its accepted runs charged below `(R − D) F₀ − Vmax − R sl` with probability at most
 `e^{−(1−p) D} + R (δb + δz)`. -/
-theorem serviceFloor_of_rounds {Mc : Machine} {S : Service} {Ω : Type} [Fintype Ω] {R : ℕ}
+theorem serviceFloor_of_rounds {Mc : AlgModel} {S : Service} {Ω : Type} [Fintype Ω] {R : ℕ}
     {p F₀ sl Vmax δb δz : ℝ} (h : RoundsHyp Mc S Ω R p F₀ sl Vmax δb δz) (hp : p ≤ 1) (hF₀ : 0 < F₀)
     (hδb : 0 ≤ δb) (hδz : 0 ≤ δz) (D : ℝ) :
     ServiceFloor Mc S ((R - D) * F₀ - Vmax - R * sl) (Real.exp (-((1 - p) * D)) + R * (δb + δz)) := by
@@ -2458,7 +2458,7 @@ value `r` of its coins, a slice of the window's rounds whose round-`w` breaks ar
 `breakBound` at `ε ≥ e^{−(1−p) D}`, at any budget constants: each slice's bound is at most 1 and at most
 `ε + R (δb + δz)` plus its finder terms (`Claims.ecrBound` bounds each finder at every budget), and the slices
 average. -/
-theorem serviceFloorPerProver_of_slices {Mc : Machine} {S : Service} {Ω : Type} [Fintype Ω] {R : ℕ}
+theorem serviceFloorPerProver_of_slices {Mc : AlgModel} {S : Service} {Ω : Type} [Fintype Ω] {R : ℕ}
     {p F₀ sl Vmax δb βb δz βz : ℝ} (e : S.Seed ≃ Paths Ω R) (sha : Claims.Msg → Claims.Msg) (fb fz : Finders Mc S R)
     (h : ∀ (Ω' : Type) [Fintype Ω'] (M : Mc.Alg (S.Seed × Ω') (S.Com × S.Ans)),
       (∀ σ σ' r, (Mc.eval M (σ, r)).1 = (Mc.eval M (σ', r)).1) → ∀ r : Ω',
@@ -2565,15 +2565,15 @@ def editMul {Seed : Type} {n : ℕ} (E : Mc.Edit Seed n) (m : Mc.Alg (Mat R n n 
 
 theorem eval_editMul {Seed : Type} {n : ℕ} (E : Mc.Edit Seed n) (m : Mc.Alg (Mat R n n × Mat R n n) (Mat R n n))
     (y : Seed × (Mat R n n × Mat R n n)) : Mc.eval (Mc.editMul E m) y = Mc.eval m (E.edit y.1 y.2) := by
-  simp only [editMul, Machine.eval_lift2, eval_add₂, Mc.eval_seq, Mc.eval_pair, Mc.eval_fst, Mc.eval_snd,
+  simp only [editMul, AlgModel.eval_lift2, eval_add₂, Mc.eval_seq, Mc.eval_pair, Mc.eval_fst, Mc.eval_snd,
     E.eval_gen, Edit.edit]
 
 theorem time_editMul_le {Seed : Type} {n : ℕ} (E : Mc.Edit Seed n) (m : Mc.Alg (Mat R n n × Mat R n n) (Mat R n n)) :
     Mc.time (Mc.editMul E m) ≤ Mc.time E.gen + Mc.time m + 2 * Mc.κadd * (n : ℝ) ^ 2 := by
   apply le_trans
-  · unfold editMul Machine.lift2
-    apply_rules [time_add₂_le_of, Machine.time_pair_le_of, Machine.time_seq_le_of, Machine.time_fst_le,
-      Machine.time_snd_le, le_refl]
+  · unfold editMul AlgModel.lift2
+    apply_rules [time_add₂_le_of, AlgModel.time_pair_le_of, AlgModel.time_seq_le_of, AlgModel.time_fst_le,
+      AlgModel.time_snd_le, le_refl]
   · linarith
 
 /-- **Honest Solve on edited instances** (`honestEdit`): compute the edited product with `m`, then run the proof layer
@@ -2601,7 +2601,7 @@ theorem time_honestEdit_le {Seed Coins Pf : Type} {n : ℕ} (E : Mc.Edit Seed n)
       Mc.time m + 2 * Mc.κadd * (n : ℝ) ^ 2 + Mc.time E.gen + Mc.time prove := by
   apply le_trans
   · unfold honestEdit
-    apply_rules [Machine.time_pair_le_of, Machine.time_seq_le_of, Machine.time_fst_le, Machine.time_snd_le,
+    apply_rules [AlgModel.time_pair_le_of, AlgModel.time_seq_le_of, AlgModel.time_fst_le, AlgModel.time_snd_le,
       time_editMul_le, le_refl]
   · linarith [Mc.time_add_le n n]
 
@@ -2848,12 +2848,12 @@ def mulW₂ {I : Type} {a b c : ℕ} (f : Mc.Alg I (Mat R a b)) (g : Mc.Alg I (M
 theorem time_mulG₂_le_of {I : Type} {a b c : ℕ} {f : Mc.Alg I (Mat R a b)} {g : Mc.Alg I (Mat R b c)} {u v : ℝ}
     (hs : Mc.shape a b c) (hf : Mc.time f ≤ u) (hg : Mc.time g ≤ v) :
     Mc.time (Mc.mulG₂ f g) ≤ u + v + Mc.κG * ((a : ℝ) * b * c) :=
-  (Machine.time_lift2_le _ _ _ _).trans (by linarith [Mc.time_mulG_le a b c hs])
+  (AlgModel.time_lift2_le _ _ _ _).trans (by linarith [Mc.time_mulG_le a b c hs])
 
 theorem time_mulW₂_le_of {I : Type} {a b c : ℕ} {f : Mc.Alg I (Mat R a b)} {g : Mc.Alg I (Mat R b c)} {u v : ℝ}
     (hs : Mc.shape a b c) (hf : Mc.time f ≤ u) (hg : Mc.time g ≤ v) :
     Mc.time (Mc.mulW₂ f g) ≤ u + v + Mc.κW * ((a : ℝ) * b * c) :=
-  (Machine.time_lift2_le _ _ _ _).trans (by linarith [Mc.time_mulW_le a b c hs])
+  (AlgModel.time_lift2_le _ _ _ _).trans (by linarith [Mc.time_mulW_le a b c hs])
 
 /-- A matrix on the grid. -/
 def On {a b : ℕ} (X : Mat R a b) : Prop := ∀ i k, Mc.G (X i k)
@@ -2870,7 +2870,7 @@ def peelFullG (n : ℕ) : Mc.Alg (MatMachine.FullBlocks R n) (Mat R n n × Mat R
 
 theorem eval_peelFullG {n : ℕ} (hs : Mc.shape n n n) (b : MatMachine.FullBlocks R n) (hb : Mc.GridFull b) :
     Mc.eval (Mc.peelFullG n) b = (b.1, b.2.2.2.1 * b.2.2.1, b.2.1 * b.2.2.2.2) := by
-  simp only [peelFullG, mulG₂, Machine.eval_lift2, Mc.eval_pair, Mc.eval_seq, Mc.eval_fst, Mc.eval_snd]
+  simp only [peelFullG, mulG₂, AlgModel.eval_lift2, Mc.eval_pair, Mc.eval_seq, Mc.eval_fst, Mc.eval_snd]
   rw [Mc.eval_mulG n n n (b.2.2.2.1, b.2.2.1) hs hb.2.2.1 hb.2.1,
     Mc.eval_mulG n n n (b.2.1, b.2.2.2.2) hs hb.1 hb.2.2.2]
 
@@ -2883,8 +2883,8 @@ theorem peelFullG_correct {n : ℕ} (hs : Mc.shape n n n) (x : Mat R n n × Mat 
 theorem time_peelFullG_le {n : ℕ} (hs : Mc.shape n n n) : Mc.time (Mc.peelFullG n) ≤ 2 * Mc.κG * (n : ℝ) ^ 3 := by
   apply le_trans
   · unfold peelFullG
-    apply_rules [time_mulG₂_le_of, Machine.time_pair_le_of, Machine.time_seq_le_of, Machine.time_fst_le,
-      Machine.time_snd_le]
+    apply_rules [time_mulG₂_le_of, AlgModel.time_pair_le_of, AlgModel.time_seq_le_of, AlgModel.time_fst_le,
+      AlgModel.time_snd_le]
   · linarith
 
 /-- The low-rank blocks on the grid: `A`, `Y = B + W Zᵀ` and the factors `U`, `Vᵀ`, `W`, `Zᵀ`. -/
@@ -2911,7 +2911,7 @@ theorem eval_peelLowG {n r : ℕ} (hs : Mc.LowShapes n r) (b : MatMachine.LowBlo
     Mc.eval (Mc.peelLowG n r) b =
       (b.1, b.2.2.2.1 * (b.2.2.2.2.1 * b.2.2.1), (b.2.1 * b.2.2.2.2.2.1) * b.2.2.2.2.2.2) := by
   obtain ⟨hA, hY, hU, hV, hW, hZ⟩ := hb
-  simp only [peelLowG, mulG₂, mulW₂, Machine.eval_lift2, Mc.eval_pair, Mc.eval_seq, Mc.eval_fst, Mc.eval_snd]
+  simp only [peelLowG, mulG₂, mulW₂, AlgModel.eval_lift2, Mc.eval_pair, Mc.eval_seq, Mc.eval_fst, Mc.eval_snd]
   rw [Mc.eval_mulG r n n (b.2.2.2.2.1, b.2.2.1) hs.1 hV hY,
     Mc.eval_mulG n n r (b.2.1, b.2.2.2.2.2.1) hs.2.2 hA hW,
     Mc.eval_mulW n r n (b.2.2.2.1, b.2.2.2.2.1 * b.2.2.1) hs.2.1 (Or.inl hU),
@@ -2929,8 +2929,8 @@ theorem time_peelLowG_le {n r : ℕ} (hs : Mc.LowShapes n r) :
   obtain ⟨h1, h2, h3⟩ := hs
   apply le_trans
   · unfold peelLowG
-    apply_rules (maxDepth := 200) [time_mulG₂_le_of, time_mulW₂_le_of, Machine.time_pair_le_of,
-      Machine.time_seq_le_of, Machine.time_fst_le, Machine.time_snd_le]
+    apply_rules (maxDepth := 200) [time_mulG₂_le_of, time_mulW₂_le_of, AlgModel.time_pair_le_of,
+      AlgModel.time_seq_le_of, AlgModel.time_fst_le, AlgModel.time_snd_le]
   · linarith
 
 variable {n : ℕ} {Inst : Type} {P : Protocol Mc.toMachine Inst (Mat R n n)} {emb : Inst → Mat R n n × Mat R n n}
@@ -5234,7 +5234,7 @@ The game's `PathBound p` is derived at `p = ¾` when the game is the spot-check 
 (`RoundsHypKS`, `roundsHypK_of_spot`). For one-sided operands of any form it fails in this deficiency
 (`luck_oneSided_point`) and holds at `p = 0.854` in the product deficit, with charging purity in place of row purity
 (`RoundsHypKStP`, `roundsHyp_of_stagedP`; `RoundsHypKOvP`, `roundsHyp_of_overlapP`). -/
-def RoundsHypK (Mc : Machine) (S : Service) (Ω : Type) [Fintype Ω] (R : ℕ) (p Vmax δb δz κ : ℝ)
+def RoundsHypK (Mc : AlgModel) (S : Service) (Ω : Type) [Fintype Ω] (R : ℕ) (p Vmax δb δz κ : ℝ)
     (n L np B n' : ℕ) {Ar : Type} [CommRing Ar] (wt : Fin np → Ar)
     (Ok : ((DBits n L np B n' → Ar) → Ar) → Prop) : Prop :=
   ∃ e : S.Seed ≃ Paths Ω R, ∀ (Ω' : Type) [Fintype Ω'] (M : Mc.Alg (S.Seed × Ω') (S.Com × S.Ans)),
@@ -5258,7 +5258,7 @@ def RoundsHypK (Mc : Machine) (S : Service) (Ω : Type) [Fintype Ω] (R : ℕ) (
 
 /-- **The chain lemma gives the window's cost line**: under `RoundsHypK` for a product class with chain factor
 `c`, `RoundsHyp` holds with `F₀ = κ L n n' B / c` and no slack. -/
-theorem roundsHyp_of_K {Mc : Machine} {S : Service} {Ω : Type} [Fintype Ω] {R : ℕ} {p Vmax δb δz κ : ℝ}
+theorem roundsHyp_of_K {Mc : AlgModel} {S : Service} {Ω : Type} [Fintype Ω] {R : ℕ} {p Vmax δb δz κ : ℝ}
     {n L np B n' : ℕ} {Ar : Type} [CommRing Ar] {wt : Fin np → Ar}
     {Ok : ((DBits n L np B n' → Ar) → Ar) → Prop} {c : ℕ}
     (h : RoundsHypK Mc S Ω R p Vmax δb δz κ n L np B n' wt Ok) (hc : ChainBound Ar n L np B n' wt Ok c)
@@ -5289,7 +5289,7 @@ theorem roundsHyp_of_K {Mc : Machine} {S : Service} {Ω : Type} [Fintype Ω] {R 
 
 /-- At chain factor 1 (one-sided products, `chainBound_oneSided`; mixed ones, `chainBound_gProd`): `F₀ = κ L n n' B`,
 the round's `n × LB × n'` GEMM at `κ` a product (`c = 1`). -/
-theorem roundsHyp_of_K_one {Mc : Machine} {S : Service} {Ω : Type} [Fintype Ω] {R : ℕ} {p Vmax δb δz κ : ℝ}
+theorem roundsHyp_of_K_one {Mc : AlgModel} {S : Service} {Ω : Type} [Fintype Ω] {R : ℕ} {p Vmax δb δz κ : ℝ}
     {n L np B n' : ℕ} {Ar : Type} [CommRing Ar] {wt : Fin np → Ar}
     {Ok : ((DBits n L np B n' → Ar) → Ar) → Prop}
     (h : RoundsHypK Mc S Ω R p Vmax δb δz κ n L np B n' wt Ok) (hc : ChainBound Ar n L np B n' wt Ok 1)
@@ -5301,7 +5301,7 @@ hypothesis. It is `RoundsHypK` with its game the spot-check game of the prover's
 deficiency is the share of uncertified cell-blocks, and the check passes where the drawn cell-block's error vanishes
 at the drawn bits), and the certified cell-blocks those whose error is zero at every bit point with at most two
 ones. Along every play `x`, round `w`'s error table is its run's committed prefix words minus their targets. -/
-def RoundsHypKS (Mc : Machine) (S : Service) (R : ℕ) (Vmax δb δz κ : ℝ) (n L np B n' : ℕ) {Ar : Type}
+def RoundsHypKS (Mc : AlgModel) (S : Service) (R : ℕ) (Vmax δb δz κ : ℝ) (n L np B n' : ℕ) {Ar : Type}
     [CommRing Ar] (wt : Fin np → Ar) (Ok : ((DBits n L np B n' → Ar) → Ar) → Prop) : Prop :=
   ∃ e : S.Seed ≃ Paths (DSpot n L np B n') R, ∀ (Ω' : Type) [Fintype Ω'] (M : Mc.Alg (S.Seed × Ω') (S.Com × S.Ans)),
     (∀ σ σ' r, (Mc.eval M (σ, r)).1 = (Mc.eval M (σ', r)).1) → ∀ r : Ω',
@@ -5327,7 +5327,7 @@ def RoundsHypKS (Mc : Machine) (S : Service) (R : ℕ) (Vmax δb δz κ : ℝ) (
 /-- **The luck is derived for affine operands**: under `RoundsHypKS` with products of affine operands (one-sided or
 mixed), `RoundsHypK` holds at `p = ¾`, its `PathBound` from the spot check's degree-2 errors
 (`RoundGame.pathBound_spot`, `SlpG.cubeQuad_err`) and its certified count from the game's deficiency. -/
-theorem roundsHypK_of_spot {Mc : Machine} {S : Service} {R : ℕ} {Vmax δb δz κ : ℝ} {n L np B n' : ℕ}
+theorem roundsHypK_of_spot {Mc : AlgModel} {S : Service} {R : ℕ} {Vmax δb δz κ : ℝ} {n L np B n' : ℕ}
     {Ar : Type} [CommRing Ar] {wt : Fin np → Ar} {Ok : ((DBits n L np B n' → Ar) → Ar) → Prop}
     (h : RoundsHypKS Mc S R Vmax δb δz κ n L np B n' wt Ok) (hOk : ∀ π, Ok π → AffProd π) :
     RoundsHypK Mc S (DSpot n L np B n') R (3 / 4) Vmax δb δz κ n L np B n' wt Ok := by
@@ -5383,7 +5383,7 @@ window's game is the staged spot-check game of the prover's play (`StagedPlay.ga
 
 Decode's deferred edit, every operand of the round's products committed before one draw, is the case `St = 1`.
 Overlapping stages, and stages of different shapes, are `RoundsHypKOv`. -/
-def RoundsHypKSt (Mc : Machine) (S : Service) (R St : ℕ) (Vmax δb δz κ : ℝ) (n L np B n' : ℕ) {Ar : Type}
+def RoundsHypKSt (Mc : AlgModel) (S : Service) (R St : ℕ) (Vmax δb δz κ : ℝ) (n L np B n' : ℕ) {Ar : Type}
     [CommRing Ar] (wt : Fin np → Ar) (Ok : ((DBits n L np B n' → Ar) → Ar) → Prop) : Prop :=
   ∃ e : S.Seed ≃ Paths (DStage St n L np B n') R, ∀ (Ω' : Type) [Fintype Ω']
     (M : Mc.Alg (S.Seed × Ω') (S.Com × S.Ans)), (∀ σ σ' r, (Mc.eval M (σ, r)).1 = (Mc.eval M (σ', r)).1) →
@@ -5479,7 +5479,7 @@ of affine operands and chain factor 1, `RoundsHyp` holds at `p = ¾` with `F₀ 
 stage floors summed, and no slack. The round's deficiency is the mean of its stages' (`StagedPlay.dAt_game`), its
 exponential bound comes from the stages' supermartingale (`RoundGame.expBound_of_staged`, `StagedPlay.game_staged`),
 and each stage's certified count from its own errors (`roundsSlice_of_staged`, slice by slice). -/
-theorem roundsHyp_of_staged {Mc : Machine} {S : Service} {R St : ℕ} {Vmax δb δz κ : ℝ} {n L np B n' : ℕ}
+theorem roundsHyp_of_staged {Mc : AlgModel} {S : Service} {R St : ℕ} {Vmax δb δz κ : ℝ} {n L np B n' : ℕ}
     {Ar : Type} [CommRing Ar] {wt : Fin np → Ar} {Ok : ((DBits n L np B n' → Ar) → Ar) → Prop}
     (h : RoundsHypKSt Mc S R St Vmax δb δz κ n L np B n' wt Ok) (hc : ChainBound Ar n L np B n' wt Ok 1)
     (hOk : ∀ π, Ok π → AffProd π) (hSt : 0 < St) (hκ : 0 ≤ κ) :
@@ -6675,7 +6675,7 @@ other draws' at theirs, is uncertified (`ovDef`). Along every play `x`:
 
 `RoundsHypKSt` is the sequential case with stages of one shape, where a stage's program may also branch on earlier
 draws. -/
-def RoundsHypKOv (Mc : Machine) (S : Service) (R St : ℕ) (Vmax δb δz κ : ℝ) (n : Fin St → ℕ) (L np : ℕ)
+def RoundsHypKOv (Mc : AlgModel) (S : Service) (R St : ℕ) (Vmax δb δz κ : ℝ) (n : Fin St → ℕ) (L np : ℕ)
     (B n' : Fin St → ℕ) {Ar : Type} [CommRing Ar] (wt : Fin np → Ar) : Prop :=
   ∃ e : S.Seed ≃ Paths (OSpot St n L np B n') R, ∀ (Ω' : Type) [Fintype Ω']
     (M : Mc.Alg (S.Seed × Ω') (S.Com × S.Ans)), (∀ σ σ' r, (Mc.eval M (σ, r)).1 = (Mc.eval M (σ', r)).1) →
@@ -6812,7 +6812,7 @@ every stage's shape, `RoundsHyp` holds at `p = ¾` with `F₀ = κ L C`, `C` the
 stages, and no slack. The luck is per draw, with the other draws' bits given (`OvPlay.passBound_game`), and the
 certified count is `SlpG.cells_card_le_ov`'s at every bit point of the draws, so at least its mean
 (`roundsSlice_of_overlap`, slice by slice). -/
-theorem roundsHyp_of_overlap {Mc : Machine} {S : Service} {R St : ℕ} {Vmax δb δz κ : ℝ} {n B n' : Fin St → ℕ}
+theorem roundsHyp_of_overlap {Mc : AlgModel} {S : Service} {R St : ℕ} {Vmax δb δz κ : ℝ} {n B n' : Fin St → ℕ}
     {L np : ℕ} {Ar : Type} [CommRing Ar] {wt : Fin np → Ar} (h : RoundsHypKOv Mc S R St Vmax δb δz κ n L np B n' wt)
     (hc : ∀ t, ChainBound Ar (n t) L np (B t) (n' t) wt (fun π => AffProd π) 1) (hκ : 0 ≤ κ) :
     RoundsHyp Mc S (OSpot St n L np B n') R (3 / 4) (κ * L * (Fintype.card (OCells St n n' B) : ℝ)) 0 Vmax δb δz := by
@@ -6887,7 +6887,7 @@ theorem card_not_ge {C : Type} [Fintype C] (Q : C → Prop) [DecidablePred Q] :
 /-- **The window's staged rounds, one-sided operands of any form** (RS-E-REF r6 VI.2), a named hypothesis:
 `RoundsHypKSt` with its products one-sided of any form (`OneSided`) in place of affine, and charging purity
 (`SlpG.ChargePure`, through a ring map `φ` onto `F₂` at plane `p₀`) in place of row purity. -/
-def RoundsHypKStP (Mc : Machine) (S : Service) (R St : ℕ) (Vmax δb δz κ : ℝ) (n L np B n' : ℕ) {Ar : Type}
+def RoundsHypKStP (Mc : AlgModel) (S : Service) (R St : ℕ) (Vmax δb δz κ : ℝ) (n L np B n' : ℕ) {Ar : Type}
     [CommRing Ar] (wt : Fin np → Ar) (φ : Ar →+* ZMod 2) (p₀ : Fin np) : Prop :=
   ∃ e : S.Seed ≃ Paths (DStage St n L np B n') R, ∀ (Ω' : Type) [Fintype Ω']
     (M : Mc.Alg (S.Seed × Ω') (S.Com × S.Ans)), (∀ σ σ' r, (Mc.eval M (σ, r)).1 = (Mc.eval M (σ', r)).1) →
@@ -6969,7 +6969,7 @@ theorem roundsSlice_of_stagedP {R St : ℕ} {Vmax κ : ℝ} {n L np B n' : ℕ} 
 game is the product-deficit game (`StagedPlay.gameP`, accepting as `game` does), whose rounds are staged at `0.854`
 whatever the errors (`StagedPlay.game_stagedP`); each stage's cell-blocks not short of products are counted by
 `SlpG.card_full_le` (`roundsSlice_of_stagedP`, slice by slice). -/
-theorem roundsHyp_of_stagedP {Mc : Machine} {S : Service} {R St : ℕ} {Vmax δb δz κ : ℝ} {n L np B n' : ℕ}
+theorem roundsHyp_of_stagedP {Mc : AlgModel} {S : Service} {R St : ℕ} {Vmax δb δz κ : ℝ} {n L np B n' : ℕ}
     {Ar : Type} [CommRing Ar] {wt : Fin np → Ar} {φ : Ar →+* ZMod 2} {p₀ : Fin np}
     (h : RoundsHypKStP Mc S R St Vmax δb δz κ n L np B n' wt φ p₀) (hw : φ (wt p₀) = 1) (hSt : 0 < St)
     (hκ : 0 ≤ κ) :
@@ -6985,7 +6985,7 @@ theorem roundsHyp_of_stagedP {Mc : Machine} {S : Service} {R St : ℕ} {Vmax δb
 /-- **The window's rounds with overlapping stages, one-sided operands of any form** (RS-E-REF r6 VI.2), a named
 hypothesis: `RoundsHypKOv` with its products one-sided per draw at every bit point of the other draws (`OneSidedAt`)
 in place of `AffMulAt`, and charging purity across draws (`SlpG.ChargePureAt`) in place of row purity. -/
-def RoundsHypKOvP (Mc : Machine) (S : Service) (R St : ℕ) (Vmax δb δz κ : ℝ) (n : Fin St → ℕ) (L np : ℕ)
+def RoundsHypKOvP (Mc : AlgModel) (S : Service) (R St : ℕ) (Vmax δb δz κ : ℝ) (n : Fin St → ℕ) (L np : ℕ)
     (B n' : Fin St → ℕ) {Ar : Type} [CommRing Ar] (wt : Fin np → Ar) (φ : Ar →+* ZMod 2) (p₀ : Fin np) : Prop :=
   ∃ e : S.Seed ≃ Paths (OSpot St n L np B n') R, ∀ (Ω' : Type) [Fintype Ω']
     (M : Mc.Alg (S.Seed × Ω') (S.Com × S.Ans)), (∀ σ σ' r, (Mc.eval M (σ, r)).1 = (Mc.eval M (σ', r)).1) →
@@ -7076,7 +7076,7 @@ theorem roundsSlice_of_overlapP {R St : ℕ} {Vmax κ : ℝ} {n B n' : Fin St �
 cell-blocks over all its stages, and no slack. The game is the product-deficit game (`OvPlay.gameP`), whose rounds
 pass at most `1 − 0.146 d` whatever the errors (`OvPlay.passBound_gameP`); the count is `SlpG.card_full_le_ov`'s at
 every bit point of the draws, so at least its mean (`roundsSlice_of_overlapP`, slice by slice). -/
-theorem roundsHyp_of_overlapP {Mc : Machine} {S : Service} {R St : ℕ} {Vmax δb δz κ : ℝ} {n B n' : Fin St → ℕ}
+theorem roundsHyp_of_overlapP {Mc : AlgModel} {S : Service} {R St : ℕ} {Vmax δb δz κ : ℝ} {n B n' : Fin St → ℕ}
     {L np : ℕ} {Ar : Type} [CommRing Ar] {wt : Fin np → Ar} {φ : Ar →+* ZMod 2} {p₀ : Fin np}
     (h : RoundsHypKOvP Mc S R St Vmax δb δz κ n L np B n' wt φ p₀) (hw : φ (wt p₀) = 1) (hκ : 0 ≤ κ) :
     RoundsHyp Mc S (OSpot St n L np B n') R (427 / 500) (κ * L * (Fintype.card (OCells St n n' B) : ℝ)) 0 Vmax δb
@@ -7099,7 +7099,7 @@ rather than assumed. Along every play `x`:
 
 Not needed for the re-encoded design: `RoundsHypK` over `ℚ` gives the same floor with merges free
 (`certifiedFraction120θ_reEncodedExactK_40`); this is the alternative with merges priced. -/
-def RoundsHypH (Mc : Machine) (S : Service) (Ω : Type) [Fintype Ω] (R : ℕ) (p Vmax δb δz κ h : ℝ)
+def RoundsHypH (Mc : AlgModel) (S : Service) (Ω : Type) [Fintype Ω] (R : ℕ) (p Vmax δb δz κ h : ℝ)
     (F : Type) [Field F] (n L np B n' : ℕ) (wt : Fin np → F) : Prop :=
   ∃ e : S.Seed ≃ Paths Ω R, ∀ (Ω' : Type) [Fintype Ω'] (M : Mc.Alg (S.Seed × Ω') (S.Com × S.Ans)),
     (∀ σ σ' r, (Mc.eval M (σ, r)).1 = (Mc.eval M (σ', r)).1) → ∀ r : Ω',
@@ -7119,7 +7119,7 @@ def RoundsHypH (Mc : Machine) (S : Service) (Ω : Type) [Fintype Ω] (R : ℕ) (
 
 /-- **Theorem H gives the window's cost line** in exact arithmetic: under `RoundsHypH` with plane `p₀` at weight 1
 and merges at `h ≥ 2L/3` slots, `RoundsHyp` holds with `F₀ = κ L n n' B` and no slack, as from Theorem K. -/
-theorem roundsHyp_of_H {Mc : Machine} {S : Service} {Ω : Type} [Fintype Ω] {R : ℕ} {p Vmax δb δz κ h : ℝ}
+theorem roundsHyp_of_H {Mc : AlgModel} {S : Service} {Ω : Type} [Fintype Ω] {R : ℕ} {p Vmax δb δz κ h : ℝ}
     {F : Type} [Field F] {n L np B n' : ℕ} {wt : Fin np → F} {p₀ : Fin np}
     (hH : RoundsHypH Mc S Ω R p Vmax δb δz κ h F n L np B n' wt) (hwt : wt p₀ = 1) (hκ : 0 ≤ κ)
     (hh : 2 * (L : ℝ) / 3 ≤ h) :
@@ -7156,7 +7156,7 @@ section ModelB
 
 Model B prices a straight-line gate program by the sum of its gates' prices (`timeB`, additive) and never reads its
 wiring (`timeB_rewire`). A Model B algorithm `I → O` is a typed circuit (`Circ`) of gates and routing: its semantics
-is gate evaluation and its time is `timeB` of its gate list. `machine` is the `Machine`; `matMachine` is the
+is gate evaluation and its time is `timeB` of its gate list. `machine` is the `AlgModel`; `matMachine` is the
 `MatMachine` over ℤ given circuits for the products, sums and differences at their prices (`MatGates`), which a gate
 family with one GEMM kind per shape provides (`gemmGates`). On sm_120 (`price120`) the worst case is `κ = 16` u per
 product (s32 operands as 4 × 4 int8 limb products) and `κadd = 1` u per entry; on the int8 grid and the tile shapes the
@@ -7173,29 +7173,29 @@ structure Kind where
   sem : (Fin arity → ℤ) → Fin outs → ℤ
 
 /-- RS-MODEL's gate: a kind, the wires it reads, its round. -/
-structure Gate (K : Type) where
+structure Step (K : Type) where
   kind : K
   args : List ℕ
   round : ℕ := 0
 
 /-- RS-MODEL's straight-line program. -/
-abbrev Prog (K : Type) : Type := List (Gate K)
+abbrev Steps (K : Type) : Type := List (Step K)
 
 variable {K : Type}
 
 /-- RS-MODEL's `time_B`: the sum of the gates' prices (on sm_120 in u = 1/R* SMSP-cycles). -/
-def timeB (price : K → ℕ) (P : Prog K) : ℕ := (P.map fun g => price g.kind).sum
+def timeB (price : K → ℕ) (P : Steps K) : ℕ := (P.map fun g => price g.kind).sum
 
-theorem timeB_append (price : K → ℕ) (P Q : Prog K) : timeB price (P ++ Q) = timeB price P + timeB price Q := by
+theorem timeB_append (price : K → ℕ) (P Q : Steps K) : timeB price (P ++ Q) = timeB price P + timeB price Q := by
   simp [timeB]
 
 /-- RS-MODEL's `timeB_rewire`: rewiring never changes time. -/
-theorem timeB_rewire (price : K → ℕ) (P : Prog K) (f : Gate K → List ℕ) :
+theorem timeB_rewire (price : K → ℕ) (P : Steps K) (f : Step K → List ℕ) :
     timeB price (P.map fun g => { g with args := f g }) = timeB price P := by
   simp [timeB, Function.comp_def]
 
 /-- The program of a gate list, with its wiring left out (Model B's time doesn't read it, `timeB_rewire`). -/
-def progOf (l : List K) : Prog K := l.map fun k => { kind := k, args := [] }
+def progOf (l : List K) : Steps K := l.map fun k => { kind := k, args := [] }
 
 theorem timeB_progOf_append (price : K → ℕ) (l m : List K) :
     timeB price (progOf (l ++ m)) = timeB price (progOf l) + timeB price (progOf m) := by
@@ -7279,7 +7279,7 @@ def Circ.gates : {I O : Type} → Circ kd I O → List K
   | _, _, .snd => []
 
 /-- Its Model B program (wiring left out). -/
-def Circ.prog {I O : Type} (c : Circ kd I O) : Prog K := progOf c.gates
+def Circ.prog {I O : Type} (c : Circ kd I O) : Steps K := progOf c.gates
 
 variable (kd) in
 /-- A Model B algorithm `I → O`: what it computes and its gate list, as some circuit's. (A subtype, so that
@@ -7290,10 +7290,10 @@ def Alg (I O : Type) : Type := {p : (I → O) × List K // ∃ c : Circ kd I O, 
 def Circ.alg {I O : Type} (c : Circ kd I O) : Alg kd I O := ⟨(c.eval, c.gates), c, rfl, rfl⟩
 
 variable (kd) in
-/-- **Model B as a `Machine`**, at an additive price `p` (`timeB` for RS-MODEL's B, `Price.ofNat`): time is `p` of the
+/-- **Model B as a `AlgModel`**, at an additive price `p` (`timeB` for RS-MODEL's B, `Price.ofNat`): time is `p` of the
 gate list and a run costs its time (Model B is oblivious); composition concatenates gate lists, so time is additive
 (RS-DEF's T1, `timeB_append`), and routing is free. -/
-def machine (p : Price K) : Machine where
+def machine (p : Price K) : AlgModel where
   Alg := Alg kd
   eval f := f.1.1
   time f := p.t f.1.2
@@ -8232,7 +8232,7 @@ theorem certifiedFraction120θ_overlap_40 (kd : K120 → Kind) (S : Service) {R 
     (by norm_num) hF₀ hδb hδz
   rwa [e, mul_zero, sub_zero, card_oCells] at this
 
-theorem ServiceFloor.mono {Mc : Machine} {S : Service} {F κ κ' : ℝ} (h : ServiceFloor Mc S F κ) (hκ : κ ≤ κ') :
+theorem ServiceFloor.mono {Mc : AlgModel} {S : Service} {F κ κ' : ℝ} (h : ServiceFloor Mc S F κ) (hκ : κ ≤ κ') :
     ServiceFloor Mc S F κ' := fun Ω _ M hc => (h Ω M hc).trans hκ
 
 /-- At the parity luck `0.854`, `D₀ = 274 ln 2` rounds of luck reach `2⁻⁴⁰`: `0.146 · 274 ≥ 40`. -/

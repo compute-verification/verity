@@ -25,7 +25,7 @@ checked words, are each equivalent to the per-word cost `(1 − γ₂)·16`. One
 in both classes. -/
 def A2WordsIff : Prop :=
   ∀ (k m n N : ℕ) (R : Mat) (A : (Fin k → Fin n → Fin 64) → ℕ → Mat) (B : ℕ → Mat) (U : Finset ℕ)
-    (M : Machine (Noise N m n k)) (γ₂ : ℝ), CheckpointIndependent k 16 R → MinRankGe k R 5 → U ⊆ range N → γ₂ ≤ 1 →
+    (M : WordCostModel (Noise N m n k)) (γ₂ : ℝ), CheckpointIndependent k 16 R → MinRankGe k R 5 → U ⊆ range N → γ₂ ≤ 1 →
     (A2_algebraicSufficiency γ₂ M (QuadPipe 8) (wordSet (word k m n N R A B) U) ↔
         PerWordCost γ₂ M (word k m n N R A B) U) ∧
       (A2_algebraicSufficiency γ₂ M (OpenQuadPipe 16 8) (wordSet (word k m n N R A B) U) ↔

@@ -63,7 +63,7 @@ structure Params (Q R S : Type) where
   qWt : S → ℕ → List Q
   expAct : Shape → List R → Mat
   expWt : Shape → List R → Mat × Mat
-  Wref : Layout → ℕ → ℕ
+  Wref : UnitLayout → ℕ → ℕ
 
 namespace Params
 
@@ -137,6 +137,6 @@ def nz (H : Q → R) (s : S) (U : Workload) (u : ℕ) (A : Mat) (i : ℕ) : Mat 
 end Params
 
 /-- The lead's domain: §3.2's default shapes, and at most `2^40` rows on any weight. -/
-def leadDomain (L : Layout) : Prop := L.ShapesIn Shape.InDefaultDomain ∧ ∀ w, L.rowsOf w ≤ 2 ^ 40
+def leadDomain (L : UnitLayout) : Prop := L.ShapesIn Shape.InDefaultDomain ∧ ∀ w, L.rowsOf w ≤ 2 ^ 40
 
 end Pouw.NCP

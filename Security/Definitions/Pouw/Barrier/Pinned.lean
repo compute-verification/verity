@@ -13,7 +13,7 @@ open Finset
 `η` bounds by `η(q, N)` the probability that `𝒜` commits every unit of `U` correct. -/
 def GenericPr : Prop :=
   ∀ (Q R S : Type) [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S]
-    (CM : CostModel Q R S) (P : Protocol Q R S) (D : Layout → Prop) (U : Workload) (A : Adversary CM) (c₀ : ℝ)
+    (CM : CostModel Q R S) (P : Protocol Q R S) (D : UnitLayout → Prop) (U : Workload) (A : Adversary CM) (c₀ : ℝ)
     (q : ℕ),
     U.InDomain D → 0 ≤ c₀ → q ≤ 2 ^ 64 → A.Bounded U c₀ q → 0 < totalWref P U.layout →
     ∀ γ : ℝ, γ < 1 - c₀ / totalWref P U.layout → ∀ η : ℕ → ℕ → ℝ, Gγ CM P D γ η →
@@ -27,7 +27,7 @@ decode by plain products that costs one product more than the checked one (`p = 
 decode `C' − A·F − E·(B + F)` (`p = 3`) gives `γ ≥ 2/3`. -/
 def Additive : Prop :=
   ∀ (Q R S : Type) [Fintype Q] [DecidableEq Q] [Fintype R] [Nonempty R] [Fintype S] [Nonempty S]
-    (N : NoiseSrc Q R S) (W : Layout → ℕ → ℕ) (p : ℝ) (D : Layout → Prop) (U : Workload),
+    (N : NoiseSrc Q R S) (W : UnitLayout → ℕ → ℕ) (p : ℝ) (D : UnitLayout → Prop) (U : Workload),
     1 ≤ p → U.InDomain D → 0 < ∑ u ∈ range U.layout.N, ((U.layout.shape u).Wmm : ℝ) →
     (∀ u < U.layout.N, p * ((U.layout.shape u).Wmm : ℝ) ≤ (W U.layout u : ℝ)) →
     ∀ γ : ℝ, γ < 1 - 1 / p → ∀ η : ℕ → ℕ → ℝ, Gγ (gemmModel N) (addProto N W) D γ η → 1 ≤ η 0 U.layout.N
@@ -36,7 +36,7 @@ def Additive : Prop :=
 source and domain, `addProto` is complete, and the abstract model runs a complete `H_ref` at `W_ref = 2·W_mm` (the
 checked product and `A·B`) and at `W_ref = 3·W_mm` (the checked product and the standard decode). -/
 def AdditiveWitness : Prop :=
-  ∀ (Q R S : Type) (N : NoiseSrc Q R S) (D : Layout → Prop),
+  ∀ (Q R S : Type) (N : NoiseSrc Q R S) (D : UnitLayout → Prop),
     (addProto N fun L u => 2 * (L.shape u).Wmm).Complete D ∧
     AdmitsRef (gemmModel N) (addProto N fun L u => 2 * (L.shape u).Wmm) D (fun _ => 0) ∧
     AdmitsRef (gemmModel N) (addProto N fun L u => 3 * (L.shape u).Wmm) D (fun _ => 0)
@@ -47,7 +47,7 @@ workload with positive work: the adversary that commits `A = 0`, computes the fi
 last one from the relation (at `A = 0` the useful output is `0`) wins with probability 1 at every `γ < 1/t`. -/
 def Relation : Prop :=
   ∀ (Q R S : Type) [Fintype Q] [DecidableEq Q] [Fintype R] [Nonempty R] [Fintype S] [Nonempty S]
-    (t : ℕ) (c : ℕ → ℤ) (N : NoiseSrc Q R S) (W : Layout → ℕ → ℕ) (D : Layout → Prop) (U : Workload),
+    (t : ℕ) (c : ℕ → ℤ) (N : NoiseSrc Q R S) (W : UnitLayout → ℕ → ℕ) (D : UnitLayout → Prop) (U : Workload),
     1 ≤ t → c (t - 1) * c (t - 1) = 1 → RelNoise t c N → U.InDomain D →
     0 < ∑ u ∈ range U.layout.N, ((U.layout.shape u).Wmm : ℝ) →
     (∀ u < U.layout.N, (t : ℝ) * ((U.layout.shape u).Wmm : ℝ) ≤ (W U.layout u : ℝ)) →
@@ -66,7 +66,7 @@ side): for all factor sources and domains, `relProto` with `t = 3`, `c = (1, 1, 
 is complete, and the abstract model runs a complete `H_ref` at `W_ref = 3·W_mm` (the three checked products, and the
 useful output as their free combination). -/
 def RelationAdmits : Prop :=
-  ∀ (Q R S : Type) (e f r : (Q → R) → S → Workload → ℕ → Mat → Mat) (D : Layout → Prop),
+  ∀ (Q R S : Type) (e f r : (Q → R) → S → Workload → ℕ → Mat → Mat) (D : UnitLayout → Prop),
     (relProto 3 (fun i => if i = 2 then -1 else 1) (cancelNoise e f r) fun L u => 3 * (L.shape u).Wmm).Complete D ∧
     AdmitsRef (gemmModel (cancelNoise e f r))
       (relProto 3 (fun i => if i = 2 then -1 else 1) (cancelNoise e f r) fun L u => 3 * (L.shape u).Wmm) D
@@ -79,7 +79,7 @@ layout with zero weights and positive work, the adversary that commits `A = 0`, 
 sums step by step and commits the known last one (`0`) wins with probability 1 at every `γ < 1/L`. -/
 def Segment : Prop :=
   ∀ (Q R S : Type) [Fintype Q] [DecidableEq Q] [Fintype R] [Nonempty R] [Fintype S] [Nonempty S]
-    (L d : ℕ) (α β : Mat → Mat) (N : NoiseSrc Q R S) (W : Layout → ℕ → ℕ) (D : Layout → Prop) (Lay : Layout),
+    (L d : ℕ) (α β : Mat → Mat) (N : NoiseSrc Q R S) (W : UnitLayout → ℕ → ℕ) (D : UnitLayout → Prop) (Lay : UnitLayout),
     1 ≤ L → α 0 = 0 → β 0 = 0 →
     (∀ (H : Q → R) (s : S) (U : Workload) (u : ℕ), ∀ a < (U.layout.shape u).m, ∀ b < (U.layout.shape u).n,
       mm (L * d) (N H s U u 0 0) (N H s U u 0 1) a b = 0) →
@@ -92,7 +92,7 @@ def Segment : Prop :=
 are a protocol whose `H_ref` is complete and admitted at `W_ref`, an in-domain workload and a cheap point at a cost
 `c₀` strictly below `W`, so the range `γ < 1 − c₀/W` contains `γ = 0`. -/
 def GenericWitness : Prop :=
-  ∃ (N : NoiseSrc Unit Unit Unit) (P : Protocol Unit Unit Unit) (D : Layout → Prop) (U : Workload)
+  ∃ (N : NoiseSrc Unit Unit Unit) (P : Protocol Unit Unit Unit) (D : UnitLayout → Prop) (U : Workload)
     (A : Adversary (gemmModel N)) (c₀ : ℝ),
     P.Complete D ∧ AdmitsRef (gemmModel N) P D (fun _ => 0) ∧ CheapPoint (gemmModel N) P D U A c₀ 0 ∧
       0 < totalWref P U.layout ∧ c₀ < totalWref P U.layout

@@ -170,7 +170,7 @@ noncomputable def hWords (Z : Model K R T L U F X) (t0 : T) : Head T L U → ℝ
   | .side _ => 0
 
 /-- A run of counts `n` at `M`'s `f_max`, its cycles `Σ_k n_k·Σ_r |a_{r,k}|`, at least every facet's load. -/
-noncomputable def runOf {R' : Type} [Fintype R'] (n : K → ℝ) (M : Machine K R') : Run K where
+noncomputable def runOf {R' : Type} [Fintype R'] (n : K → ℝ) (M : FacetCosts K R') : Run K where
   n := n
   cycles := ∑ k, n k * ∑ r, |M.a r k|
   clock := M.fmax
@@ -178,7 +178,7 @@ noncomputable def runOf {R' : Type} [Fintype R'] (n : K → ℝ) (M : Machine K 
 /-- **The honest run's labelling**: writer kind `t0` heads every word, route counts `c` fold every word, no filler,
 every word owned, right and fixed; the run at `M`'s ceilings. -/
 noncomputable def hAnat {R' : Type} [Fintype R'] (Z : Model K R T L U F X) (t0 : T) (c : K → ℝ)
-    (M : Machine K R') : Anatomy K T L U where
+    (M : FacetCosts K R') : Anatomy K T L U where
   run := runOf (hN Z t0 c) M
   nword := hNword Z t0
   nfold := hNfold Z c
@@ -192,7 +192,7 @@ noncomputable def honestPlay (Ω : Type) (n : ℕ) (A : Anatomy K T L U) : Play 
   accepts _ := True
   run _ := A
 
-theorem load_le {R' : Type} [Fintype R'] (M : Machine K R') (n : K → ℝ) (hn : ∀ k, 0 ≤ n k) (r : R') :
+theorem load_le {R' : Type} [Fintype R'] (M : FacetCosts K R') (n : K → ℝ) (hn : ∀ k, 0 ≤ n k) (r : R') :
     M.load n r ≤ (runOf n M).cycles := by
   show ∑ k, M.a r k * n k ≤ ∑ k, n k * ∑ r', |M.a r' k|
   refine Finset.sum_le_sum fun k _ => ?_
@@ -200,14 +200,14 @@ theorem load_le {R' : Type} [Fintype R'] (M : Machine K R') (n : K → ℝ) (hn 
   exact mul_le_mul_of_nonneg_right ((le_abs_self _).trans
     (Finset.single_le_sum (f := fun r' => |M.a r' k|) (fun r' _ => abs_nonneg _) (Finset.mem_univ r))) (hn k)
 
-theorem load_smul {R' : Type} (M : Machine K R') (s : ℝ) (c : K → ℝ) (r : R') :
+theorem load_smul {R' : Type} (M : FacetCosts K R') (s : ℝ) (c : K → ℝ) (r : R') :
     M.load (fun k => s * c k) r = s * M.load c r := by
-  simp only [Machine.load, Finset.mul_sum]
+  simp only [FacetCosts.load, Finset.mul_sum]
   exact Finset.sum_congr rfl fun k _ => by ring
 
-theorem price_smul {R' : Type} [Fintype R'] (M : Machine K R') (lam : R' → ℝ) (s : ℝ) (c : K → ℝ) :
+theorem price_smul {R' : Type} [Fintype R'] (M : FacetCosts K R') (lam : R' → ℝ) (s : ℝ) (c : K → ℝ) :
     M.price lam (fun k => s * c k) = s * demandPrice lam (M.load c) := by
-  unfold Machine.price demandPrice
+  unfold FacetCosts.price demandPrice
   rw [Finset.mul_sum]
   refine Finset.sum_congr rfl fun r _ => ?_
   rw [load_smul]
@@ -246,14 +246,14 @@ theorem hN_nonneg (Z : Model K R T L U F X) (t0 : T) (c : K → ℝ) (hNw : 0 �
   show 0 ≤ ∑ h, hNword Z t0 h k + hNfold Z c k + 0
   linarith
 
-theorem hAnat_split {R' : Type} [Fintype R'] (Z : Model K R T L U F X) (t0 : T) (c : K → ℝ) (M : Machine K R')
+theorem hAnat_split {R' : Type} [Fintype R'] (Z : Model K R T L U F X) (t0 : T) (c : K → ℝ) (M : FacetCosts K R')
     (hNw : 0 ≤ Z.Nw) (hω : 0 < Z.omega t0) (hc : ∀ k, 0 ≤ c k) : (hAnat Z t0 c M).Split :=
   And.intro (fun h k => hNword_nonneg Z t0 hNw hω h k) (And.intro (fun k => mul_nonneg hNw (hc k))
     (And.intro (fun _ => le_rfl) (And.intro (fun h => hWords_nonneg Z t0 hNw h) (fun _ => le_rfl))))
 
 omit [Fintype R] [Fintype F] [Fintype X] in
 theorem hAnat_sheetWords {R' : Type} [Fintype R'] (Z : Model K R T L U F X) (t0 : T) (c : K → ℝ)
-    (M : Machine K R') (hω : 0 < Z.omega t0) : SheetWords Z (hAnat Z t0 c M) := by
+    (M : FacetCosts K R') (hω : 0 < Z.omega t0) : SheetWords Z (hAnat Z t0 c M) := by
   refine And.intro (fun t => ?_) (And.intro ?_ (fun l => ?_))
   · show hWords Z t0 (.writer t) ≤ Z.omega t * hNword Z t0 (.writer t) (Z.cls t)
     by_cases ht : t = t0
@@ -272,7 +272,7 @@ theorem hAnat_sheetWords {R' : Type} [Fintype R'] (Z : Model K R T L U F X) (t0 
 omit [Fintype R] [Fintype F] [Fintype X] in
 /-- (I3) at any floors: the honest run heads no vector or table word. -/
 theorem hAnat_scalarRoute {R' : Type} [Fintype R'] (Z : Model K R T L U F X) (t0 : T) (c : K → ℝ)
-    (M : Machine K R') : ScalarRoute Z (hAnat Z t0 c M) := by
+    (M : FacetCosts K R') : ScalarRoute Z (hAnat Z t0 c M) := by
   refine And.intro ?_ (fun l => And.intro ?_ ?_)
   · show Z.q * hWords Z t0 .vector ≤ 32 * ∑ k ∈ Z.vec, hNword Z t0 .vector k
     simp [hWords, hNword]
@@ -281,7 +281,7 @@ theorem hAnat_scalarRoute {R' : Type} [Fintype R'] (Z : Model K R T L U F X) (t0
   · show Z.bT * hWords Z t0 (.table l) ≤ hNword Z t0 (.table l) (Z.bytes l)
     simp [hWords, hNword]
 
-theorem hAnat_noSum {R' : Type} [Fintype R'] (Z : Model K R T L U F X) (t0 : T) (c : K → ℝ) (M : Machine K R')
+theorem hAnat_noSum {R' : Type} [Fintype R'] (Z : Model K R T L U F X) (t0 : T) (c : K → ℝ) (M : FacetCosts K R')
     (hNw : 0 ≤ Z.Nw) : NoSum (hAnat Z t0 c M) := by
   show Z.Nw ≤ ∑ h, hWords Z t0 h
   have e : hWords Z t0 (.writer t0) = Z.Nw := by simp [hWords]
@@ -291,18 +291,18 @@ theorem hAnat_noSum {R' : Type} [Fintype R'] (Z : Model K R T L U F X) (t0 : T) 
 
 omit [Fintype R] [Fintype F] [Fintype X] in
 theorem hAnat_sideUnits {R' : Type} [Fintype R'] (Z : Model K R T L U F X) (t0 : T) (c : K → ℝ)
-    (M : Machine K R') : SideUnits Z (hAnat Z t0 c M) := by
+    (M : FacetCosts K R') : SideUnits Z (hAnat Z t0 c M) := by
   intro u k
   show hWords Z t0 (.side u) * Z.side u k ≤ hNword Z t0 (.side u) k
   simp [hWords, hNword]
 
 theorem hAnat_semantics {R' : Type} [Fintype R'] (Z : Model K R T L U F X) (t0 : T) (c : K → ℝ)
-    (M : Machine K R') (hNw : 0 ≤ Z.Nw) : SheetSemantics Z (hAnat Z t0 c M) :=
+    (M : FacetCosts K R') (hNw : 0 ≤ Z.Nw) : SheetSemantics Z (hAnat Z t0 c M) :=
   And.intro (hAnat_noSum Z t0 c M hNw) (hAnat_sideUnits Z t0 c M)
 
 omit [Fintype X] in
 /-- **FOLD-OPT at any certificate**: the run folds every word by route `φ0`, which `φ*` prices at most. -/
-theorem hAnat_foldOpt {R' : Type} [Fintype R'] (Z : Model K R T L U F X) (t0 : T) (c : K → ℝ) (M : Machine K R')
+theorem hAnat_foldOpt {R' : Type} [Fintype R'] (Z : Model K R T L U F X) (t0 : T) (c : K → ℝ) (M : FacetCosts K R')
     (hNw : 0 ≤ Z.Nw) (hmu : Z.muF = 0) (φ0 : F) (hφ : Z.fold φ0 = Z.G.load c) (lam : R → ℝ) :
     FoldOptFoldedAt Z (hAnat Z t0 c M) Z.Nw lam := by
   unfold FoldOptFoldedAt
@@ -312,7 +312,7 @@ theorem hAnat_foldOpt {R' : Type} [Fintype R'] (Z : Model K R T L U F X) (t0 : T
   exact mul_le_mul_of_nonneg_left (Finite.ciInf_le (fun φ => demandPrice lam (Z.fold φ)) φ0) hNw
 
 theorem honest_foldOpt {R' : Type} [Fintype R'] (Ω : Type) (n : ℕ) (Z : Model K R T L U F X) (t0 : T) (c : K → ℝ)
-    (M : Machine K R') (hNw : 0 ≤ Z.Nw) (hmu : Z.muF = 0) (φ0 : F) (hφ : Z.fold φ0 = Z.G.load c) (lam : R → ℝ)
+    (M : FacetCosts K R') (hNw : 0 ≤ Z.Nw) (hmu : Z.muF = 0) (φ0 : F) (hφ : Z.fold φ0 = Z.G.load c) (lam : R → ℝ)
     (x : Paths Ω n) : FoldOptFoldedAt Z (hAnat Z t0 c M) ((1 - (honestUf Ω n).share x / n) * Z.Nw) lam := by
   rw [honest_share, zero_div, sub_zero, one_mul]
   exact hAnat_foldOpt Z t0 c M hNw hmu φ0 hφ lam
@@ -342,7 +342,7 @@ theorem sheetClock_of (S : Sheet K P) (hf : 0 < S.fmax) (n : K → ℝ) : SheetC
 theorem sheetDispatch_of (S : Sheet K P) (n : K → ℝ) (hn : ∀ k, 0 ≤ n k) : SheetDispatch (runOf n S.machine) := by
   have h := load_le S.machine n hn SheetRow.issue
   have e : S.machine.load n SheetRow.issue = ∑ k, n k := by
-    unfold Machine.load
+    unfold FacetCosts.load
     exact Finset.sum_congr rfl fun k _ => one_mul (n k)
   rw [e] at h
   exact h
@@ -357,7 +357,7 @@ theorem sheetPipe_of (S : Sheet K P) (hw : ∀ p, 0 < S.width p) (n : K → ℝ)
   have hwp : S.width p ≠ 0 := (hw p).ne'
   have e : ∑ k, (if S.pipe k = some p then (32 : ℝ) else 0) * n k =
       S.width p / 4 * S.machine.load n (SheetRow.pipe p) := by
-    unfold Machine.load
+    unfold FacetCosts.load
     rw [Finset.mul_sum]
     refine Finset.sum_congr rfl fun k _ => ?_
     show (if S.pipe k = some p then (32 : ℝ) else 0) * n k =
@@ -373,7 +373,7 @@ theorem sheetPipe_of (S : Sheet K P) (hw : ∀ p, 0 < S.width p) (n : K → ℝ)
 theorem sheetSmem_of (S : Sheet K P) (n : K → ℝ) (hn : ∀ k, 0 ≤ n k) : SheetSmem S (runOf n S.machine) := by
   have h := load_le S.machine n hn SheetRow.smem
   have e : ∑ k, S.smem k * n k = 32 * S.machine.load n SheetRow.smem := by
-    unfold Machine.load
+    unfold FacetCosts.load
     rw [Finset.mul_sum]
     refine Finset.sum_congr rfl fun k _ => ?_
     show S.smem k * n k = 32 * (S.smem k / 32 * n k)
@@ -384,7 +384,7 @@ theorem sheetSmem_of (S : Sheet K P) (n : K → ℝ) (hn : ∀ k, 0 ≤ n k) : S
 
 end Sheet
 
-theorem facetCeilings_of {R' : Type} [Fintype R'] (M : Machine K R') (hf : 0 < M.fmax) (n : K → ℝ)
+theorem facetCeilings_of {R' : Type} [Fintype R'] (M : FacetCosts K R') (hf : 0 < M.fmax) (n : K → ℝ)
     (hn : ∀ k, 0 ≤ n k) : FacetCeilings M (runOf n M) := by
   have hcyc : 0 ≤ (runOf n M).cycles :=
     Finset.sum_nonneg fun k _ => mul_nonneg (hn k) (Finset.sum_nonneg fun r _ => abs_nonneg _)
@@ -424,7 +424,7 @@ theorem sheet_meets {P : Type} [Fintype P] [DecidableEq P] (S : Sheet K P) (Z : 
     honestLayer_pins Bool n, honest_rightFixed Bool n _ _ Z.Nw le_rfl, fun _ => trivial⟩
 
 /-- **A measured headline's premises at an honest play**, on any measured machine `M` and TS model `Z` on it. -/
-theorem measured_meets (M : Machine K R) (Z : Model K R T L U F X) (n : ℕ) (t0 : T) (φ0 : F) (c : K → ℝ)
+theorem measured_meets (M : FacetCosts K R) (Z : Model K R T L U F X) (n : ℕ) (t0 : T) (φ0 : F) (c : K → ℝ)
     (lam : R → ℝ) (hf : 0 < M.fmax) (hNw : 0 ≤ Z.Nw) (hω : 0 < Z.omega t0) (hc : ∀ k, 0 ≤ c k) (hmu : Z.muF = 0)
     (hφ : Z.fold φ0 = Z.G.load c) :
     ∃ (Pl : Play Bool n K T L U) (G : ReceiptGame Bool n) (Uf : Unfolded Bool n) (pf : ProofLayer Bool n 1 Unit)
@@ -447,7 +447,7 @@ theorem measured_meets (M : Machine K R) (Z : Model K R T L U F X) (n : ℕ) (t0
 
 /-- **A measured headline's premises at an honest play under (I3)**: `measured_meets` with (I2)/(I4)
 `WordsWritten` and (I3) `ScalarRoute` in A6's place, at any floors. -/
-theorem measured_meets_i3 (M : Machine K R) (Z : Model K R T L U F X) (n : ℕ) (t0 : T) (φ0 : F) (c : K → ℝ)
+theorem measured_meets_i3 (M : FacetCosts K R) (Z : Model K R T L U F X) (n : ℕ) (t0 : T) (φ0 : F) (c : K → ℝ)
     (lam : R → ℝ) (hf : 0 < M.fmax) (hNw : 0 ≤ Z.Nw) (hω : 0 < Z.omega t0) (hc : ∀ k, 0 ≤ c k) (hmu : Z.muF = 0)
     (hφ : Z.fold φ0 = Z.G.load c) :
     ∃ (Pl : Play Bool n K T L U) (G : ReceiptGame Bool n) (Uf : Unfolded Bool n) (pf : ProofLayer Bool n 1 Unit)

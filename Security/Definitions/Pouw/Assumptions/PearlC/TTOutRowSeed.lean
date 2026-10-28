@@ -54,23 +54,23 @@ variable {Q R S : Type}
 /-! ## The split layout -/
 
 /-- The rows before unit `u`: `Σ_{v < u} m_v`. -/
-def rowOffset (L : Layout) (u : ℕ) : ℕ := ∑ v ∈ range u, (L.shape v).m
+def rowOffset (L : UnitLayout) (u : ℕ) : ℕ := ∑ v ∈ range u, (L.shape v).m
 
 /-- The declared rows, `R = Σ_u m_u`. -/
-def rowsOf (L : Layout) : ℕ := rowOffset L L.N
+def rowsOf (L : UnitLayout) : ℕ := rowOffset L L.N
 
 /-- Row `i` of unit `u` as a unit of the split layout: `offset(u) + i`. -/
-def rowIdx (L : Layout) (u i : ℕ) : ℕ := rowOffset L u + i
+def rowIdx (L : UnitLayout) (u i : ℕ) : ℕ := rowOffset L u + i
 
 /-- The unit that split unit `v` is a row of: the last `u < N` with `offset(u) ≤ v`. -/
-def unitOfRow (L : Layout) (v : ℕ) : ℕ := Nat.findGreatest (fun u => rowOffset L u ≤ v) (L.N - 1)
+def unitOfRow (L : UnitLayout) (v : ℕ) : ℕ := Nat.findGreatest (fun u => rowOffset L u ≤ v) (L.N - 1)
 
 /-- The row of its unit that split unit `v` is. -/
-def rowOfRow (L : Layout) (v : ℕ) : ℕ := v - rowOffset L (unitOfRow L v)
+def rowOfRow (L : UnitLayout) (v : ℕ) : ℕ := v - rowOffset L (unitOfRow L v)
 
 /-- **The split layout:** unit `u` becomes `m_u` units of shape `(1, n_u, k_u)` with `u`'s weight id, its row `i` at
 `rowIdx L u i`. -/
-def splitLayout (L : Layout) : Layout where
+def splitLayout (L : UnitLayout) : UnitLayout where
   N := rowsOf L
   shape v := ⟨1, (L.shape (unitOfRow L v)).n, (L.shape (unitOfRow L v)).k⟩
   wid v := L.wid (unitOfRow L v)
@@ -86,7 +86,7 @@ def rowCommit (c : Commit) (i : ℕ) : Commit := ⟨rowCodes c.act i, rowCodes c
 
 /-- A transcript relabelled row by row: split unit `v` commits its row of its unit's commitment, and is blank where its
 unit is. -/
-def splitTranscript (L : Layout) (τ : Transcript) : Transcript := fun v =>
+def splitTranscript (L : UnitLayout) (τ : CommitLog) : CommitLog := fun v =>
   if v < rowsOf L then (τ (unitOfRow L v)).map fun c => rowCommit c (rowOfRow L v) else none
 
 /-! ## The conditions -/
@@ -180,7 +180,7 @@ def CostModel.SplitClosed (CM : CostModel Q R S) : Prop :=
 /-- **The row-seeded TT_OUT** (a target form, proved from rev1's TT_OUT, not assumed): `TTOut` with the error read at
 the row count, `εPearlC q R = (q + R)/2^128` for the `R = rowsOf U.layout ≤ 2^64` declared rows. -/
 def TTOutRowSeed [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (CM : CostModel Q R S) (P : Protocol Q R S)
-    (D : Layout → Prop) (γ₀ : ℝ) : Prop :=
+    (D : UnitLayout → Prop) (γ₀ : ℝ) : Prop :=
   CM.Queries ∧
   ∀ U : Workload, U.InDomain P D → rowsOf U.layout ≤ 2 ^ 64 → ∀ T : ℝ, 0 ≤ T → ∀ q : ℕ, q ≤ 2 ^ 64 →
     ∀ A : Adversary CM, A.Bounded U T q →
@@ -191,7 +191,7 @@ def TTOutRowSeed [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (CM : CostM
 
 /-- **The row-seeded TT_OUT per audit tile** (a target form): `TTOutTile` with the error read at the row count. -/
 def TTOutTileRowSeed [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (CM : CostModel Q R S) (P : Protocol Q R S)
-    (TR : TileRules Q R S) (D : Layout → Prop) (γ₀ : ℝ) : Prop :=
+    (TR : TileRules Q R S) (D : UnitLayout → Prop) (γ₀ : ℝ) : Prop :=
   CM.Queries ∧
   ∀ U : Workload, U.InDomain P D → rowsOf U.layout ≤ 2 ^ 64 → ∀ T : ℝ, 0 ≤ T → ∀ q : ℕ, q ≤ 2 ^ 64 →
     ∀ A : Adversary CM, A.Bounded U T q →
@@ -206,7 +206,7 @@ def TTOutTileRowSeed [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (CM : C
 `π L` of the oracle's inputs (one per layout) carries `sem'`'s inputs to them: `semC` at `H` is `sem'` at `H ∘ π L`.
 For P2's rows, `π L` takes the one-row unit's input at `rowIdx L u i` to the code's, indexed `u·2³² + i` with `leaf_i`
 framed inside unit `u`; the chain, scales and floor are `sem'`'s. -/
-def CodeSeedNoise (sem' semC : PearlCSem Q R S) (π : Layout → Q ≃ Q) : Prop :=
+def CodeSeedNoise (sem' semC : PearlCSem Q R S) (π : UnitLayout → Q ≃ Q) : Prop :=
   semC.fc = sem'.fc ∧ semC.alpha = sem'.alpha ∧ semC.beta = sem'.beta ∧ semC.floor = sem'.floor ∧
     ∀ (H : Q → R) (s : S) (U : Workload) (u : ℕ) (act : Codes),
       semC.noise H s U u act = sem'.noise (H ∘ π U.layout) s U u act

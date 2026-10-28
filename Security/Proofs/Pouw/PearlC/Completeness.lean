@@ -81,10 +81,10 @@ theorem mem_blankTiles_honest (P : Protocol Q R S) (TR : TileRules Q R S) (U : W
 in-domain workload is an FP32 word's and every tile's columns are columns of its unit, `HonestTileCapRate` at `ε` gives
 `CompleteSampled` at `ε` per draw. -/
 theorem completeSampled_of_rate [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (P : Protocol Q R S)
-    (TR : TileRules Q R S) (D : Layout → Prop) (Served : Workload → (ℕ → Codes) → Prop) (ε : ℝ)
+    (TR : TileRules Q R S) (D : UnitLayout → Prop) (Served : Workload → (ℕ → Codes) → Prop) (ε : ℝ)
     (hW : ∀ U : Workload, U.InDomain P D → ∀ u < U.layout.N, ∀ (H : Q → R) (s : S) (act : Codes) (i j : ℕ),
       (∃ wd, wordQ wd = P.ticket H s U u act i j) ∧ ∃ wd, wordQ wd = P.useful H s U u act i j)
-    (hcols : ∀ (L : Layout) (g : ℕ), ∀ j ∈ (TR.tiling L).cols g, j < (L.shape ((TR.tiling L).unit g)).n)
+    (hcols : ∀ (L : UnitLayout) (g : ℕ), ∀ j ∈ (TR.tiling L).cols g, j < (L.shape ((TR.tiling L).unit g)).n)
     (hR : HonestTileCapRate P TR D Served ε) :
     CompleteSampled P TR D Served ε := by
   classical
@@ -119,7 +119,7 @@ honest kernel's `W_ref`, on any domain within `pearlCDomainDev` (so every unit i
 cap rate `HonestTileCapRate` at `ε` gives `CompleteSampled` at `ε` per draw. The honest words are proved
 (`honestWords_devRev1K`); the cap rate is the one assumption. -/
 theorem completeSampledDevRev1K [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] {w : ℕ} (hw : 24 ≤ w) (z : ℤ)
-    (G : ℕ) (pr : Prices) (sem : PearlCSem Q R S) (ρ c : ℚ) (D : Layout → Prop)
+    (G : ℕ) (pr : Prices) (sem : PearlCSem Q R S) (ρ c : ℚ) (D : UnitLayout → Prop)
     (hD : ∀ L, D L → pearlCDomainDev (devAt ⟨[32], w, z⟩ G pr) L) (Served : Workload → (ℕ → Codes) → Prop)
     (ε : ℝ)
     (hR : HonestTileCapRate (pearlCProtocolDevRev1K (devAt ⟨[32], w, z⟩ G pr) sem ρ c)

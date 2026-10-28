@@ -25,13 +25,13 @@ namespace Pouw.Guarantees.Dither
 
 open Pouw.RelativeSecurity Pouw.Dither Pouw.Assumptions Pouw.MerkleExtract
 
-/-- **The no-fold protocol is `(1 − ε)`-work-sound over a monitoring period** (freed compute, `Period.FreedWithin`).
+/-- **The no-fold protocol is `(1 − ε)`-work-sound over a monitoring period** (freed compute, `PeriodDevices.FreedWithin`).
 In every accelerator model `G` and for every round protocol `P` (the no-fold protocol is `noFoldRound` at its knobs, so
 protocol v1 and v2, or a SYM design's rounds, are instances), every set `Reg` of registrable instances and every
 period's registered instances `reg w ∈ Reg`, every service verdict on the transcript and the auditor's devices'
-readings (`Verdict`, `Readings`), every period `Pd` whose credited unit `hon` is the registered sampling blocks' honest
+readings (`Acceptance`, `Readings`), every period `Pd` whose credited unit `hon` is the registered sampling blocks' honest
 use (their work and the selected blocks' answers), and every price `μ` that is the period's dual price at that unit
-(`Period.DualOpt μ 1`): if
+(`PeriodDevices.DualOpt μ 1`): if
 each registrable instance's honest round costs `H = H_mm + H_sha + H_o` at `μ` (its words and commitment, both
 positive, and the rest, `H_o ≥ 0`, its answers among it),
 its public bests cost `pub_mm ≤ H_mm` and `pub_sha ≤ H_sha`, the registered rounds' honest costs sum to `μ · hon`,
@@ -100,7 +100,7 @@ Open (stated so the red team can aim at them):
   `PeriodInventory`, held open). -/
 def WorkSound : Prop :=
   ∀ (G : Accel) (P : RoundProto) (k : ℕ) (Reg : Set P.Inst) (reg : Fin k → P.Inst) (Obs : Type)
-    (verdict : Verdict P k Obs) (dev : Readings G P k Obs) (Pd : Period G) (μ : G.Res → ℝ)
+    (verdict : Acceptance P k Obs) (dev : Readings G P k Obs) (Pd : PeriodDevices G) (μ : G.Res → ℝ)
     (Hmm Hsha Ho pubmm pubsha : P.Inst → ℝ) (η δ β K κS Q : ℝ) (κdmm κdsha : ℕ → ℝ) (Badv : Prover G P k → ℕ)
     (ξ : Prover G P k → G.Res → ℝ) (κx κsha : Prover G P k → ℝ),
     (∀ w, reg w ∈ Reg) → Pd.DualOpt μ 1 →
@@ -151,7 +151,7 @@ The log's term `μ · q ξl / C` is `(k + 1) M` log entries' upkeep against the 
 call (`Accel.shaPub`); `WorkSound` keeps each prover's own `q_A`. -/
 def WorkSoundNoFold : Prop :=
   ∀ (G : Accel) (nf : NoFold) (k : ℕ) (Reg : Set (noFoldRound nf).Inst) (reg : Fin k → (noFoldRound nf).Inst)
-    (Obs : Type) (verdict : Verdict (noFoldRound nf) k Obs) (dev : Readings G (noFoldRound nf) k Obs) (Pd : Period G)
+    (Obs : Type) (verdict : Acceptance (noFoldRound nf) k Obs) (dev : Readings G (noFoldRound nf) k Obs) (Pd : PeriodDevices G)
     (μ : G.Res → ℝ) (Hmm Hsha Ho pubmm pubsha : (noFoldRound nf).Inst → ℝ) (η δ β K κS Q κsha : ℝ)
     (κdmm κdsha : ℕ → ℝ) (Badv V : ℕ) (X D : Type) [Fintype X] [DecidableEq X] [Fintype D] [DecidableEq D]
     [Inhabited D] (E : Enc X D Word) (eo : nf.Orc ≃ (X → D)) (rD : nf.Root → D) (pl : nf.Path → List (Bool × D × D))
@@ -192,8 +192,8 @@ over the oracle and every unit's coins that some unit's period is accepted while
 `ε_u(A u y) C_u` is at most `Σ_u κmax_u`. Each unit at `δ/N`, so a luck term `ln(N/δ)/η` in its `ε_u`, gives the
 fleet `δ` for the luck, with `k` rounds a unit. -/
 def FleetSound : Prop :=
-  ∀ (G : Accel) (P : RoundProto) (k N : ℕ) (Obs : Type) (verdict : Fin N → Verdict P k Obs)
-    (dev : Fin N → Readings G P k Obs) (Pd : Fin N → Period G) (ε κ : Fin N → Prover G P k → ℝ)
+  ∀ (G : Accel) (P : RoundProto) (k N : ℕ) (Obs : Type) (verdict : Fin N → Acceptance P k Obs)
+    (dev : Fin N → Readings G P k Obs) (Pd : Fin N → PeriodDevices G) (ε κ : Fin N → Prover G P k → ℝ)
     (C κmax : Fin N → ℝ),
     (∀ u, 0 ≤ κmax u) → (∀ u, FreedSound G P k (verdict u) (dev u) (Pd u) 1 (ε u) (C u) (κ u)) →
     ∀ A : (u : Fin N) → ({v : Fin N // v ≠ u} → Fin k → P.Draw × P.Chk) → Prover G P k,
@@ -203,7 +203,7 @@ def FleetSound : Prop :=
           ∃ z, (Pd u).Fits ((A u fun v => ox.2 v.1).timedUse ox.1 (ox.2 u)) z ∧
             ¬ (Pd u).FreedWithin 1 z (ε u (A u fun v => ox.2 v.1)) (C u)) ≤ ∑ u, κmax u
 
-/-- **Freed compute is at most `ε C` at the period's dual price**. On a period's devices (`Period`), let
+/-- **Freed compute is at most `ε C` at the period's dual price**. On a period's devices (`PeriodDevices`), let
 `μ ≥ 0` be a dual price for the other work (every job worth at most its use at `μ`) at which an honest strategy
 credited `W` with other work `z'` is optimal (its other work worth exactly the capacity it leaves, at `μ`:
 complementary slackness). Any strategy credited the same `W`, whose credited part uses `X` and whose other work `z`
@@ -211,7 +211,7 @@ fits beside it, and whose credited part meets the work floor at `μ` (`μ · X �
 `ε C` with `C = μ · W hon`, the credited rounds' honest cost at the dual price. The floor on the whole
 run would not be enough here: it would count the other work `z` toward the credited part's floor. -/
 def FreedOfFloor : Prop :=
-  ∀ (G : Accel) (Pd : Period G) (W ε : ℝ) (X μ : G.Res → ℝ) (z z' : Pd.J → ℝ),
+  ∀ (G : Accel) (Pd : PeriodDevices G) (W ε : ℝ) (X μ : G.Res → ℝ) (z z' : Pd.J → ℝ),
     (∀ r, 0 ≤ μ r) → (∀ j r, 0 ≤ Pd.needs j r) → (∀ j, Pd.val j ≤ ∑ r, μ r * Pd.needs j r) → 0 ≤ W → 0 ≤ ε →
     Pd.Fits (fun r => W * Pd.hon r) z' → ∑ j, Pd.val j * z' j = ∑ r, μ r * (Pd.cap r - W * Pd.hon r) →
     Pd.Fits X z → (1 - ε) * ∑ r, μ r * (W * Pd.hon r) ≤ ∑ r, μ r * X r →

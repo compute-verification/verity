@@ -28,8 +28,8 @@ under the opening `o`, is in the class at `q` when, wherever `G` is a batch `pre
 induces on `g` (`Verity.Game.InducedAt`: `σ`'s moves in `g`, with the other games' coins fixed at some values) is in
 `Cls τ o` at `q`. For C-Flock, `Cls τ o g s q` is the hypotheses of `flock_e2e_drawn_hm96_reads` at `q` for the strategy
 `s` of `g`, its audit relabelled to the verdict. -/
-def BoundedByInduced {O : Type} (Cls : Transcript → O → (g : Verity.Game Bool) → Verity.Game.Strategy g → ℕ → Prop)
-    (τ : Transcript) (o : O) (G : Verity.Game (List Bool)) (σ : Verity.Game.Strategy G) (q : ℕ) : Prop :=
+def BoundedByInduced {O : Type} (Cls : CommitLog → O → (g : Verity.Game Bool) → Verity.Game.Strategy g → ℕ → Prop)
+    (τ : CommitLog) (o : O) (G : Verity.Game (List Bool)) (σ : Verity.Game.Strategy G) (q : ℕ) : Prop :=
   ∀ (pre : List (Verity.Game Bool)) (g : Verity.Game Bool) (post : List (Verity.Game Bool))
     (e : Verity.Game.batch (pre ++ g :: post) = G) (s : Verity.Game.Strategy g),
     Verity.Game.InducedAt g post pre (e ▸ σ) s → Cls τ o g s q
@@ -53,8 +53,8 @@ are no bad tile's proof game hold it, and give a `TileGame` for every tile at `�
 and so `GγHidden` from `GγSampled` with no proof system. -/
 structure TileGame [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (P : Protocol Q R S) (TR : TileRules Q R S)
     (HA : HiddenAudit Q R S)
-    (Cls : Transcript → HA.Opening → (g : Verity.Game Bool) → Verity.Game.Strategy g → ℕ → Prop) (ηzk : ℕ → ℝ)
-    (U : Workload) (τ : Transcript) (o : HA.Opening) (H : Q → R) (s : S) (g : ℕ) where
+    (Cls : CommitLog → HA.Opening → (g : Verity.Game Bool) → Verity.Game.Strategy g → ℕ → Prop) (ηzk : ℕ → ℝ)
+    (U : Workload) (τ : CommitLog) (o : HA.Opening) (H : Q → R) (s : S) (g : ℕ) where
   Out : Type
   G : Verity.Game Out
   verdict : Out → Bool

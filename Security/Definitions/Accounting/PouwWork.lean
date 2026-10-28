@@ -10,7 +10,7 @@ actual-circuit model rather than a device model of its own. A strategy `S` maps 
 leaves `V`. The coins are the verifier's, so the strategy, fixed before them, is the prover's circuit for every value
 they take; each coin reaches the node only through what crosses from `V`, at the tick the verifier sends it.
 
-* `Verdict`: the verifier's side, the window `[ts, td)`, the `N` blocks, how it decodes block `k`'s word from what
+* `Verifier`: the verifier's side, the window `[ts, td)`, the `N` blocks, how it decodes block `k`'s word from what
   crossed into `V` before the deadline `td` (`word`), the right word at the coins (`target`), and its rule (`accept`),
   which reads the coins and everything that crossed into `V`.
 * `good`, `goodAll`: the blocks whose word is right at the coin, and those right at every coin (v3.1's `goodAt`,
@@ -35,7 +35,7 @@ abbrev Inbox (L : Type*) : Type _ := Set (ℕ × L × ℕ × L × ℕ × ℕ × 
 word as the verifier decodes it from what crossed into `V` before `td` (`word`), its right value at the coins
 (`target`), and the acceptance rule on the coins and what crossed into `V` (`accept`). `ts` and `td` are the
 verifier's ticks, never the prover's. -/
-structure Verdict (Ω : Type) (L : Type*) where
+structure Verifier (Ω : Type) (L : Type*) where
   V : Finset L
   ts : ℕ
   td : ℕ
@@ -44,7 +44,7 @@ structure Verdict (Ω : Type) (L : Type*) where
   target : Ω → ℕ → ℕ
   accept : Ω → Inbox L → Prop
 
-variable {Ω : Type} {L : Type*} (S : Ω → Actual.Run L) (P : Verdict Ω L)
+variable {Ω : Type} {L : Type*} (S : Ω → Actual.Run L) (P : Verifier Ω L)
 
 /-- What crossed into the verifier's leaves at coin `r`, read during `I`. -/
 def inbox (I : Set ℕ) (r : Ω) : Inbox L := (S r).crossing (↑P.V)ᶜ ↑P.V I

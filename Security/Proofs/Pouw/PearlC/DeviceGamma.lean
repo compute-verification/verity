@@ -56,7 +56,7 @@ theorem pearlCProtocolDev_h100 (sem : PearlCSem Q R S) (ρ : ℚ) :
   rfl
 
 /-- The H100 record's domain is the granted one with `n`'s floor (`pearlCDomainDev`). -/
-theorem pearlCDomainDev_h100 (L : Layout) : pearlCDomainDev devH100 L ↔
+theorem pearlCDomainDev_h100 (L : UnitLayout) : pearlCDomainDev devH100 L ↔
     pearlCDomain Params.pi L ∧ ∀ u < L.N, 64 ≤ (L.shape u).n ∧ 64 ∣ (L.shape u).n := by
   simp only [pearlCDomainDev, pearlCDomain, Shape.Tiled, devH100, Params.pi]
   constructor
@@ -151,7 +151,7 @@ theorem pearlCSampledDevAt {Q R S : Type} [Fintype Q] [DecidableEq Q] [Fintype R
   exact key
 
 /-- On a layout of nonempty units, the audit tiles' `W_ref` at a device adds up to the layout's `∑_u wrefDev`. -/
-theorem pearlCTilesDev_total {Q R S : Type} (d : PearlCDevice) (sem : PearlCSem Q R S) (ρ : ℚ) (L : Layout)
+theorem pearlCTilesDev_total {Q R S : Type} (d : PearlCDevice) (sem : PearlCSem Q R S) (ρ : ℚ) (L : UnitLayout)
     (hpos : ∀ u < L.N, 0 < (L.shape u).m ∧ 0 < (L.shape u).n) :
     tileWrefTotal (pearlCTilesDev d sem ρ) L = ∑ u ∈ range L.N, (wrefDev d (L.shape u) : ℝ) := by
   let F : ℕ × ℕ × ℕ → ℝ := fun b => ((wrefDev d (L.shape b.1) * tileShare (L.shape b.1)

@@ -51,7 +51,7 @@ theorem budgetAbortG_of_constCost (CM : CostModel Q R S)
 
 /-- **A fixed-price model**: a program is a price and what it commits, or nothing, which commits blanks at no cost. -/
 def fixedPrice (Q R S : Type) : CostModel Q R S where
-  Prog := Option (ℕ × (Workload → (ℕ → Mat) → State → S → Transcript))
+  Prog := Option (ℕ × (Workload → (ℕ → Mat) → State → S → CommitLog))
   run := fun p _ U act σ s => match p with
     | some c => c.2 U act σ s
     | none => fun _ => none

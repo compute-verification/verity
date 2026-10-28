@@ -18,7 +18,7 @@ cost `c₀` with `q` oracle calls and `W = ∑_u W_ref(u) > 0`, then `G_γ` fail
 error `η` with `η(q, N) < 1`: the adversary wins with probability 1. -/
 def Generic : Prop :=
   ∀ (Q R S : Type) [Fintype Q] [DecidableEq Q] [Fintype R] [Nonempty R] [Fintype S] [Nonempty S]
-    (CM : CostModel Q R S) (P : Protocol Q R S) (D : Layout → Prop) (U : Workload) (A : Adversary CM) (c₀ : ℝ)
+    (CM : CostModel Q R S) (P : Protocol Q R S) (D : UnitLayout → Prop) (U : Workload) (A : Adversary CM) (c₀ : ℝ)
     (q : ℕ),
     CheapPoint CM P D U A c₀ q → 0 < totalWref P U.layout →
     ∀ γ : ℝ, γ < 1 - c₀ / totalWref P U.layout → ∀ η : ℕ → ℕ → ℝ, Gγ CM P D γ η → 1 ≤ η q U.layout.N

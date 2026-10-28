@@ -12,7 +12,7 @@ namespace Pouw.NCP
 open Classical in
 /-- The output-priced model at `3·m·k·n` per committed unit. -/
 noncomputable def outputPriced3 (Q R S : Type) : CostModel Q R S where
-  Prog := Workload → (ℕ → Mat) → State → S → QTree Q R Transcript
+  Prog := Workload → (ℕ → Mat) → State → S → QTree Q R CommitLog
   run prog H U act σ s := (prog U act σ s).eval H
   cost prog H U act σ s :=
     ∑ u ∈ (Finset.range U.layout.N).filter (fun u => ((prog U act σ s).eval H u).isSome),

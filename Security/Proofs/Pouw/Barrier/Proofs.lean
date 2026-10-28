@@ -19,7 +19,7 @@ variable {Q R S : Type}
 
 /-! ## The generic barrier -/
 
-theorem wins_of_all_correct (P : Protocol Q R S) (U : Workload) (H : Q → R) (s : S) (τ : Transcript) {γ c₀ : ℝ}
+theorem wins_of_all_correct (P : Protocol Q R S) (U : Workload) (H : Q → R) (s : S) (τ : CommitLog) {γ c₀ : ℝ}
     (hc : 0 ≤ c₀) (hW : 0 < totalWref P U.layout) (hγ : γ < 1 - c₀ / totalWref P U.layout)
     (hK : correctSet P U H s τ = range U.layout.N) : Wins P U γ c₀ τ H s := by
   unfold Wins
@@ -95,7 +95,7 @@ def addPlan (sh : Shape) : Plan :=
 theorem addPlan_cost (sh : Shape) : (addPlan sh).cost = sh.Wmm := by
   simp [addPlan, Plan.cost, MExpr.cost]
 
-theorem addPlan_correct (N : NoiseSrc Q R S) (W : Layout → ℕ → ℕ) (U : Workload) (H : Q → R) (s : S) (u : ℕ) :
+theorem addPlan_correct (N : NoiseSrc Q R S) (W : UnitLayout → ℕ → ℕ) (U : Workload) (H : Q → R) (s : S) (u : ℕ) :
     Correct (addProto N W) U H s u ((addPlan (U.layout.shape u)).commit N H s U (fun _ => 0) u) := by
   refine ⟨⟨zero_actOK _, fun x hx => ?_⟩, fun i hi j hj => ?_⟩
   · simp only [addProto, Finset.mem_product, Finset.mem_singleton, Finset.mem_range] at hx
@@ -122,7 +122,7 @@ theorem additive : Pinned.Additive := by
 
 /-! ## Class (a): `H_ref` plans -/
 
-theorem addProto_complete (N : NoiseSrc Q R S) (W : Layout → ℕ → ℕ) (D : Layout → Prop) :
+theorem addProto_complete (N : NoiseSrc Q R S) (W : UnitLayout → ℕ → ℕ) (D : UnitLayout → Prop) :
     (addProto N W).Complete D := by
   intro U _ u _ H s A _
   refine ⟨fun x hx => ?_, fun i hi j hj => ?_⟩
@@ -143,7 +143,7 @@ def refPlan3 (sh : Shape) : Plan :=
     .add (.add (.reg 0) (.smul (-1) (.gemm sh 0 .act (.noise 1))))
       (.smul (-1) (.gemm sh 0 (.noise 0) (.add .wt (.noise 1))))⟩
 
-theorem refPlan_checked (N : NoiseSrc Q R S) (W : Layout → ℕ → ℕ) (U : Workload) (H : Q → R) (s : S)
+theorem refPlan_checked (N : NoiseSrc Q R S) (W : UnitLayout → ℕ → ℕ) (U : Workload) (H : Q → R) (s : S)
     (act : ℕ → Mat) (u : ℕ) (p : Plan) (hp : p.nReg = 1) (hr : p.reg 0 = addBase (U.layout.shape u)) :
     p.regs (act u) (wtOf U u) (N H s U u (act u)) = (addProto N W).refChecked H s U u (act u) := by
   funext t i j
@@ -153,7 +153,7 @@ theorem refPlan_checked (N : NoiseSrc Q R S) (W : Layout → ℕ → ℕ) (U : W
     simp only [zero_lt_one, ite_true, hr, addProto, addBase, MExpr.eval, corner, mm, sum_Ico_zero, Pi.add_apply]
   · simp [addProto, ht]
 
-theorem refPlan_run (N : NoiseSrc Q R S) (W : Layout → ℕ → ℕ) (f : Shape → Plan) (U : Workload) (act : ℕ → Mat)
+theorem refPlan_run (N : NoiseSrc Q R S) (W : UnitLayout → ℕ → ℕ) (f : Shape → Plan) (U : Workload) (act : ℕ → Mat)
     (H : Q → R) (s : S) (hc : ∀ u < U.layout.N, (f (U.layout.shape u)).commit N H s U act u
       = ⟨act u, (addProto N W).refChecked H s U u (act u), (addProto N W).refOut H s U u (act u)⟩) :
     (gemmModel N).run (fun L u => if u < L.N then some (f (L.shape u)) else none) H U act [] s
@@ -171,7 +171,7 @@ theorem refPlan_cost (N : NoiseSrc Q R S) (f : Shape → Plan) (c : ℕ) (hf : �
   simp only [gemmModel]
   exact Finset.sum_congr rfl fun u hu => by simp [Finset.mem_range.1 hu, hf]
 
-theorem refPlan_commit (N : NoiseSrc Q R S) (W : Layout → ℕ → ℕ) (U : Workload) (H : Q → R) (s : S)
+theorem refPlan_commit (N : NoiseSrc Q R S) (W : UnitLayout → ℕ → ℕ) (U : Workload) (H : Q → R) (s : S)
     (act : ℕ → Mat) (u : ℕ) (p : Plan) (hact : p.act = none) (hp : p.nReg = 1)
     (hr : p.reg 0 = addBase (U.layout.shape u))
     (hout : p.out.eval (act u) (wtOf U u) (N H s U u (act u)) ((addProto N W).refChecked H s U u (act u))
@@ -182,13 +182,13 @@ theorem refPlan_commit (N : NoiseSrc Q R S) (W : Layout → ℕ → ℕ) (U : Wo
   simp only [Plan.commit, hact, Option.getD_none]
   rw [hc, hout]
 
-theorem refPlan2_out (N : NoiseSrc Q R S) (W : Layout → ℕ → ℕ) (U : Workload) (H : Q → R) (s : S) (A : Mat)
+theorem refPlan2_out (N : NoiseSrc Q R S) (W : UnitLayout → ℕ → ℕ) (U : Workload) (H : Q → R) (s : S) (A : Mat)
     (u : ℕ) (rg : ℕ → Mat) :
     (refPlan2 (U.layout.shape u)).out.eval A (wtOf U u) (N H s U u A) rg = (addProto N W).refOut H s U u A := by
   funext i j
   simp [refPlan2, addProto, MExpr.eval, corner, mm]
 
-theorem refPlan3_out (N : NoiseSrc Q R S) (W : Layout → ℕ → ℕ) (U : Workload) (H : Q → R) (s : S) (A : Mat)
+theorem refPlan3_out (N : NoiseSrc Q R S) (W : UnitLayout → ℕ → ℕ) (U : Workload) (H : Q → R) (s : S) (A : Mat)
     (u : ℕ) :
     (refPlan3 (U.layout.shape u)).out.eval A (wtOf U u) (N H s U u A) ((addProto N W).refChecked H s U u A)
       = (addProto N W).refOut H s U u A := by
@@ -284,7 +284,7 @@ theorem relPlan_regs_base {t : ℕ} (c : ℕ → ℤ) (N : NoiseSrc Q R S) (H : 
   rw [regs_eq, relPlan_nReg, ite_eq_left (by omega), relPlan_reg, ite_eq_left hi]
   simp only [relBase, MExpr.eval, ha, hb, and_self, ite_true, relProd, mm, sum_Ico_zero, Pi.add_apply]
 
-theorem relPlan_correct {t : ℕ} {c : ℕ → ℤ} {N : NoiseSrc Q R S} (W : Layout → ℕ → ℕ) (ht : 1 ≤ t)
+theorem relPlan_correct {t : ℕ} {c : ℕ → ℤ} {N : NoiseSrc Q R S} (W : UnitLayout → ℕ → ℕ) (ht : 1 ≤ t)
     (hc : c (t - 1) * c (t - 1) = 1) (hN : RelNoise t c N) (U : Workload) (H : Q → R) (s : S) (u : ℕ) :
     Correct (relProto t c N W) U H s u ((relPlan t c (U.layout.shape u)).commit N H s U (fun _ => 0) u) := by
   refine ⟨⟨zero_actOK _, fun x hx => ?_⟩, fun i hi j hj => ?_⟩
@@ -384,8 +384,8 @@ theorem rel_sum {t : ℕ} {c : ℕ → ℤ} {N : NoiseSrc Q R S} (hN : RelNoise 
   rw [t1, t2, t3, hEF a b]
   ring
 
-theorem relProto_complete {t : ℕ} {c : ℕ → ℤ} {N : NoiseSrc Q R S} (hN : RelNoise t c N) (W : Layout → ℕ → ℕ)
-    (D : Layout → Prop) : (relProto t c N W).Complete D := by
+theorem relProto_complete {t : ℕ} {c : ℕ → ℤ} {N : NoiseSrc Q R S} (hN : RelNoise t c N) (W : UnitLayout → ℕ → ℕ)
+    (D : UnitLayout → Prop) : (relProto t c N W).Complete D := by
   intro U _ u _ H s A _
   refine ⟨fun x hx => ?_, fun i hi j hj => ?_⟩
   · simp only [relProto, Finset.mem_product, Finset.mem_range] at hx ⊢
@@ -409,7 +409,7 @@ theorem relRef_out (t : ℕ) (c : ℕ → ℤ) (sh : Shape) :
 theorem relRef_cost (c : ℕ → ℤ) (sh : Shape) : (relRef 3 c sh).cost = 3 * sh.Wmm := by
   simp [Plan.cost, relRef_nReg, relRef_reg, relRef_out, cost_sumE, relBase, MExpr.cost]
 
-theorem relRef_regs (t : ℕ) (c : ℕ → ℤ) (N : NoiseSrc Q R S) (W : Layout → ℕ → ℕ) (U : Workload) (H : Q → R)
+theorem relRef_regs (t : ℕ) (c : ℕ → ℤ) (N : NoiseSrc Q R S) (W : UnitLayout → ℕ → ℕ) (U : Workload) (H : Q → R)
     (s : S) (A : Mat) (u : ℕ) :
     (relRef t c (U.layout.shape u)).regs A (wtOf U u) (N H s U u A) = (relProto t c N W).refChecked H s U u A := by
   funext x i j
@@ -418,7 +418,7 @@ theorem relRef_regs (t : ℕ) (c : ℕ → ℤ) (N : NoiseSrc Q R S) (W : Layout
   · simp only [hx, ite_true, relBase, MExpr.eval, relProto, corner, relProd, mm, sum_Ico_zero, Pi.add_apply]
   · simp [relProto, hx]
 
-theorem relRef_eval_out (t : ℕ) (c : ℕ → ℤ) (N : NoiseSrc Q R S) (W : Layout → ℕ → ℕ) (U : Workload) (H : Q → R)
+theorem relRef_eval_out (t : ℕ) (c : ℕ → ℤ) (N : NoiseSrc Q R S) (W : UnitLayout → ℕ → ℕ) (U : Workload) (H : Q → R)
     (s : S) (A : Mat) (u : ℕ) :
     (relRef t c (U.layout.shape u)).out.eval A (wtOf U u) (N H s U u A) ((relProto t c N W).refChecked H s U u A)
       = (relProto t c N W).refOut H s U u A := by
@@ -506,11 +506,11 @@ theorem segPlan_regs (L d : ℕ) (sh : Shape) (A B : Mat) (nz : ℕ → Mat) {a 
     congr 2
     ring
 
-theorem segPlan_correct {L d : ℕ} {α β : Mat → Mat} {N : NoiseSrc Q R S} (W : Layout → ℕ → ℕ) (hL : 1 ≤ L)
+theorem segPlan_correct {L d : ℕ} {α β : Mat → Mat} {N : NoiseSrc Q R S} (W : UnitLayout → ℕ → ℕ) (hL : 1 ≤ L)
     (hα : α 0 = 0) (hβ : β 0 = 0)
     (hcan : ∀ (H : Q → R) (s : S) (U : Workload) (u : ℕ), ∀ a < (U.layout.shape u).m, ∀ b < (U.layout.shape u).n,
       mm (L * d) (N H s U u 0 0) (N H s U u 0 1) a b = 0)
-    (Lay : Layout) (H : Q → R) (s : S) (u : ℕ) :
+    (Lay : UnitLayout) (H : Q → R) (s : S) (u : ℕ) :
     Correct (segProto L d α β N W) ⟨Lay, fun _ => 0⟩ H s u
       ((segPlan L d (Lay.shape u)).commit N H s ⟨Lay, fun _ => 0⟩ (fun _ => 0) u) := by
   refine ⟨⟨zero_actOK _, fun x hx => ?_⟩, fun i hi j hj => ?_⟩

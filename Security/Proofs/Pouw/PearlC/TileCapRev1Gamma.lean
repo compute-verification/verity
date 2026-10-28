@@ -25,7 +25,7 @@ variable {Q R S : Type}
 open Classical in
 theorem rev1_tile_cap_credit_sum_le (d : PearlCDevice) (sem : PearlCSem Q R S) (ρ ρ' : ℚ) (hadd : 0 ≤ d.prices.add)
     (hbf : 0 ≤ d.prices.bf16) (hle : ρ' ≤ ρ) (hρ1 : ρ < 1) (U : Workload) (hD : pearlCDomainDev d U.layout)
-    (H : Q → R) (s : S) (τ : Transcript) :
+    (H : Q → R) (s : S) (τ : CommitLog) :
     ∑ g ∈ goodTiles (pearlCProtocolDevRev1 d sem ρ') (pearlCTilesDevRev1 d sem ρ') U H s τ,
         (pearlCTilesDevRev1 d sem ρ').credit H s U g
           (actOf τ (((pearlCTilesDevRev1 d sem ρ').tiling U.layout).unit g)) ≤

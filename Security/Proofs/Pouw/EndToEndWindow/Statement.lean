@@ -84,16 +84,16 @@ variable {Q R S : Type}
 
 /-- **The incorrect work** of a transcript `τ` at the oracle `H` and the salt `s`: the declared work of the units that
 are not correct in it, `∑_{u < N, u ∉ K(τ)} W_ref(u)`. -/
-noncomputable def incorrectWork (P : Protocol Q R S) (U : Workload) (H : Q → R) (s : S) (τ : Pouw.Transcript) : ℝ :=
+noncomputable def incorrectWork (P : Protocol Q R S) (U : Workload) (H : Q → R) (s : S) (τ : Pouw.CommitLog) : ℝ :=
   ∑ u ∈ range U.layout.N \ correctSet P U H s τ, (P.Wref U.layout u : ℝ)
 
 /-- **Coordinate units** (decision 107): every unit is one output coordinate, shape `(1, k, 1)`: one row of `A`
 against one column of `B`, a `K`-chunked s8 dot with s32 running sums. -/
-def coordinates (L : Layout) : Prop := ∀ u < L.N, (L.shape u).m = 1 ∧ (L.shape u).n = 1
+def coordinates (L : UnitLayout) : Prop := ∀ u < L.N, (L.shape u).m = 1 ∧ (L.shape u).n = 1
 
 /-- **Decision 107's domain**: coordinate units, each a dot of positive length `k` (a whole dot, or a `K`-chunk of
 2048 committing its s32 running sum). -/
-def coordDomain (L : Layout) : Prop := coordinates L ∧ ∀ u < L.N, 0 < (L.shape u).k
+def coordDomain (L : UnitLayout) : Prop := coordinates L ∧ ∀ u < L.N, 0 < (L.shape u).k
 
 /-- **The work step at coordinate units, TileWork(γ_u)** (a named premise, open), for a cost model `CM`, a protocol `P`,
 a gap `γ_u` and an error `η(q, N)`, on decision 107's domain `coordDomain`. A correct unit was paid for: the prover
@@ -120,7 +120,7 @@ workload, activation input, state and salt), a run outputs what its program retu
 costs `(1 − γ)·W_ref(u)` for every unit `u < N` it commits. It is a device that pays each committed coordinate's
 declared work at the discount `γ` and can't commit one for less. -/
 noncomputable def meteredModel (P : Protocol Q R S) (γ : ℝ) : CostModel Q R S where
-  Prog := Workload → (ℕ → Pouw.Mat) → Pouw.State → S → QTree Q R Pouw.Transcript
+  Prog := Workload → (ℕ → Pouw.Mat) → Pouw.State → S → QTree Q R Pouw.CommitLog
   run p H U act st s := (p U act st s).eval H
   cost p H U act st s := (1 - γ) * ∑ u ∈ (range U.layout.N).filter (fun u => ((p U act st s).eval H u).isSome),
     (P.Wref U.layout u : ℝ)
@@ -282,8 +282,8 @@ premises, an adversary that commits first with random-oracle commitments (`Assum
 (`Accounting.Assumptions.Compose.SeedExtractedAt`), so that the random oracle is ruled on once. -/
 def StraightLineExtraction [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] {n : ℕ} {Reg : Type}
     {Lr : Reg → Law n} {session : (Q → R) → S → Finset (Fin n) → Reg → FlockSoundness.Game Bool}
-    (PM : ProverModel Q R S Reg Lr session) (CM : CostModel Q R S) (D : Layout → Prop)
-    (Ccom : (Q → R) → S → Reg → Pouw.Transcript) (Text : ℝ) (qext : ℕ) (εid : ℕ → ℕ → ℝ) : Prop :=
+    (PM : ProverModel Q R S Reg Lr session) (CM : CostModel Q R S) (D : UnitLayout → Prop)
+    (Ccom : (Q → R) → S → Reg → Pouw.CommitLog) (Text : ℝ) (qext : ℕ) (εid : ℕ → ℕ → ℝ) : Prop :=
   PM.RegQueries → ∀ U : Workload, U.InDomain D → ∀ (T : ℝ) (q : ℕ) (B : Prover PM), B.Bounded U T q →
     ∃ A : Adversary CM, A.Bounded U (T + Text) (q + qext) ∧
       pr (fun x : (Q → R) × S =>
@@ -308,7 +308,7 @@ Its discharges:
   copy-closed (`Pouw.Window.WrongCopyClosed`) and `Realizes` at them. -/
 def WindowBound (P : Protocol Q R S) (U : Workload) (ε : ℝ) {n : ℕ} {Reg : Type} {Lr : Reg → Law n}
     {session : (Q → R) → S → Finset (Fin n) → Reg → FlockSoundness.Game Bool}
-    (Ccom : (Q → R) → S → Reg → Pouw.Transcript)
+    (Ccom : (Q → R) → S → Reg → Pouw.CommitLog)
     (σ' : (H : Q → R) → (s : S) → FlockSoundness.Game.Strategy (auditReg Lr (session H s)))
     (β : (Q → R) → S → ℝ≥0∞) : Prop :=
   ∀ (H : Q → R) (s : S), FlockSoundness.Game.prob
@@ -322,7 +322,7 @@ $$\sum_{u < N,\ u \notin K(tx\,X)} W_{ref}(u) \le \mathrm{unsoundWork}_w(cl, \ma
 At the service's draw the closures are empty (`fun _ => ∅`, each drawn unit proved alone), and the unsound work is the
 wrong units' own. At coordinate units it holds by construction (`realizes_of_coordinates`). -/
 def Realizes (P : Protocol Q R S) (U : Workload) (H : Q → R) (s : S) {n m : ℕ} (σ : Fin n → Fin m) (w : Fin m → ℕ)
-    (cl : Fin n → Finset (Fin n)) {Tr : Type} (wrong : Tr → Finset (Fin n)) (tx : Tr → Pouw.Transcript) : Prop :=
+    (cl : Fin n → Finset (Fin n)) {Tr : Type} (wrong : Tr → Finset (Fin n)) (tx : Tr → Pouw.CommitLog) : Prop :=
   ∀ X : Tr, incorrectWork P U H s (tx X) ≤ (Law.unsoundWork σ w cl (wrong X) : ℝ)
 
 /-- **Each PoUW unit is one template instance** (what the compiler gives at decision 107's coordinate units), at the
@@ -335,7 +335,7 @@ transcripts, the map `tx` to PoUW transcripts and the instance `a u` of each PoU
   it has committed outputs that aren't its instance's function of its inputs.
 Audit units that are no PoUW unit's instance, the fillers among them, are unconstrained. -/
 def CoordinateInstances (P : Protocol Q R S) (U : Workload) (H : Q → R) (s : S) {n m : ℕ} (σ : Fin n → Fin m)
-    (w : Fin m → ℕ) {Tr : Type} (wrong : Tr → Finset (Fin n)) (tx : Tr → Pouw.Transcript) (a : ℕ → Fin n) : Prop :=
+    (w : Fin m → ℕ) {Tr : Type} (wrong : Tr → Finset (Fin n)) (tx : Tr → Pouw.CommitLog) (a : ℕ → Fin n) : Prop :=
   (∀ u < U.layout.N, ∀ u' < U.layout.N, a u = a u' → u = u') ∧
     (∀ u < U.layout.N, P.Wref U.layout u ≤ w (σ (a u))) ∧
     ∀ (X : Tr) (u : ℕ), u < U.layout.N → u ∉ correctSet P U H s (tx X) → a u ∈ wrong X
@@ -346,7 +346,7 @@ their instances' work, which is in the wrong units' work, which is in the unsoun
 def RealizesOfCoordinates : Prop :=
   ∀ (Q R S : Type) (P : Protocol Q R S) (U : Workload) (H : Q → R) (s : S) (n m : ℕ) (σ : Fin n → Fin m)
     (w : Fin m → ℕ) (cl : Fin n → Finset (Fin n)) (Tr : Type) (wrong : Tr → Finset (Fin n))
-    (tx : Tr → Pouw.Transcript) (a : ℕ → Fin n),
+    (tx : Tr → Pouw.CommitLog) (a : ℕ → Fin n),
     CoordinateInstances P U H s σ w wrong tx a → Realizes P U H s σ w cl wrong tx
 
 theorem realizes_of_coordinates : RealizesOfCoordinates := by
@@ -393,7 +393,7 @@ def WindowBoundOfService : Prop :=
     ∀ (N K : ℕ) (hK : K ≤ N) (m : ℕ) (σ : Fin N → Fin m) (w : Fin m → ℕ) (wmax : ℕ), (∀ t, w t ≤ wmax) →
     ∀ (Reg : Type) (session : (Q → R) → S → Finset (Fin N) → Reg → FlockSoundness.Game Bool)
       (An : (H : Q → R) → (s : S) → ExtractionAnalysis (Law.subset N K hK) Reg (session H s))
-      (tx : (H : Q → R) → (s : S) → (An H s).Tr → Pouw.Transcript) (Ccom : (Q → R) → S → Reg → Pouw.Transcript),
+      (tx : (H : Q → R) → (s : S) → (An H s).Tr → Pouw.CommitLog) (Ccom : (Q → R) → S → Reg → Pouw.CommitLog),
     (∀ H s R' τ, tx H s ((An H s).committed R' τ) = Ccom H s R') →
     (∀ H s, Realizes P U H s σ w (fun _ => ∅) (An H s).wrong (tx H s)) →
     ∀ εks δlink : (H : Q → R) → (s : S) → (R' : Reg) → Cont (Law.subset N K hK) Reg (session H s) R' → ℝ≥0∞,
@@ -458,7 +458,7 @@ def EndToEndWindow : Prop :=
     -- oracle and salt, and the transcript a registration's commitments bind, read as PoUW's transcript
     ∀ (n K : ℕ) (hK : K ≤ n) (Reg : Type)
       (session : (Q → R) → S → Finset (Fin n) → Reg → FlockSoundness.Game Bool)
-      (Ccom : (Q → R) → S → Reg → Transcript)
+      (Ccom : (Q → R) → S → Reg → CommitLog)
     -- the prover model and the extraction of PoUW's adversary from its provers
       (PM : WindowWork.ProverModel Q R S Reg (fun _ : Reg => Law.subset n K hK) session) (Text : ℝ) (qext : ℕ)
       (εid : ℕ → ℕ → ℝ),

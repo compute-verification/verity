@@ -31,7 +31,7 @@ structure Params (Q R S : Type) where
   qWt : S → ℕ → ℕ → List Q
   expAct : Shape → List R → List R → Mat × Mat
   expWt : Shape → List R → Mat × Mat
-  Wref : Layout → ℕ → ℕ
+  Wref : UnitLayout → ℕ → ℕ
 
 /-- The number of checked blocks, `⌈k/d⌉` (`0` when `d = 0`). -/
 def nBlocks (d k : ℕ) : ℕ := (k + d - 1) / d

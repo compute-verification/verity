@@ -308,7 +308,7 @@ abbrev Noise : Type := List (List ℕ × List (List ℕ)) × List (List ℕ × L
 namespace Place
 
 /-- The unit's tile at its call's contraction, `r × c` at `K`. -/
-def layout (p : Place) : J10R.Layout := ⟨p.r, p.c, p.K⟩
+def layout (p : Place) : J10R.TileShape := ⟨p.r, p.c, p.K⟩
 
 /-- The unit's first row block and first column block, the verifier's (`Credit.j10rBlocks`). -/
 def blocks (p : Place) : ℕ × ℕ := PouwCheck.Credit.j10rBlocks p.m p.K (p.r, p.c) p.I p.J

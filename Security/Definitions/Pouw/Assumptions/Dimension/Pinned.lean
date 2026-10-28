@@ -22,7 +22,7 @@ def A1Witness : Prop :=
 
 /-- AlgM_16 as a machine: its programs are the H_16 programs on the noise coordinates, at their AlgM cost,
 outputting their slots. -/
-def algMachine (N m n k : ℕ) : Machine (Noise N m n k) where
+def algMachine (N m n k : ℕ) : WordCostModel (Noise N m n k) where
   Prog := {P : List (Instr (Noise N m n k)) // H16 P}
   cost P := (cost P.1 : ℝ)
   outputs P := {φ | φ ∈ slots P.1 (coords N m n k)}
@@ -38,7 +38,7 @@ checked words of the units in `U` for some `A = g(F₁)`, and `1 − γ₀ ≤ (
 fails for that program: not `cost/(1 − γ₀) < Σ_{u ∈ U} 3·m·k·n`. -/
 def TTNCPOfA2 : Prop :=
   ∀ (k m n N : ℕ) (R : Mat) (A : (Fin k → Fin n → Fin 64) → ℕ → Mat) (B : ℕ → Mat) (U : Finset ℕ)
-    (M : Machine (Noise N m n k)) (q : M.Prog) (γ₀ γ₂ : ℝ), 16 ∣ k → 0 < k → CheckpointIndependent k 16 R →
+    (M : WordCostModel (Noise N m n k)) (q : M.Prog) (γ₀ γ₂ : ℝ), 16 ∣ k → 0 < k → CheckpointIndependent k 16 R →
     U ⊆ range N → A2_algebraicSufficiency γ₂ M H16 (wordSet (word k m n N R A B) U) →
     (∀ u ∈ U, ∀ p < nonFinal k m n, word k m n N R A B u p ∈ M.outputs q) →
     γ₂ < 1 → γ₀ < 1 → 1 - γ₀ ≤ (1 - γ₂) * (1 - 16 / (3 * k : ℝ)) →

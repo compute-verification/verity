@@ -53,7 +53,7 @@ namespace Pouw.PearlC
 open Finset Assumptions Pouw.Fp8Atom Matrix
 
 theorem gammaFromTTOut {Q R S : Type} [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (CM : CostModel Q R S)
-    (P : Protocol Q R S) (D : Layout → Prop) (γ₀ Ω : ℝ) (ε : ℕ → ℕ → ℝ) (hΩ : 0 < Ω)
+    (P : Protocol Q R S) (D : UnitLayout → Prop) (γ₀ Ω : ℝ) (ε : ℕ → ℕ → ℝ) (hΩ : 0 < Ω)
     (hW : ∀ U : Workload, U.InDomain P D → ∀ (H : Q → R) (s : S), ∀ u < U.layout.N, ∀ act : Codes,
       P.actOK (U.layout.shape u) act → P.capOK H s U u act → P.Wref U.layout u ≤ Ω * P.credit H s U u act)
     (hTT : TTOut CM P D γ₀ ε) : Gγ CM P D (1 - (1 - γ₀) / Ω) ε := by
@@ -81,7 +81,7 @@ theorem gammaFromTTOut {Q R S : Type} [Fintype Q] [DecidableEq Q] [Fintype R] [F
 
 /-- TT_OUT on a domain gives it on any smaller domain. -/
 theorem ttOut_mono_domain {Q R S : Type} [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] {CM : CostModel Q R S}
-    {P : Protocol Q R S} {D D' : Layout → Prop} {γ₀ : ℝ} {ε : ℕ → ℕ → ℝ} (hD : ∀ L, D' L → D L)
+    {P : Protocol Q R S} {D D' : UnitLayout → Prop} {γ₀ : ℝ} {ε : ℕ → ℕ → ℝ} (hD : ∀ L, D' L → D L)
     (h : TTOut CM P D γ₀ ε) : TTOut CM P D' γ₀ ε :=
   ⟨h.1, fun U hU => h.2 U ⟨hU.1, hD _ hU.2⟩⟩
 

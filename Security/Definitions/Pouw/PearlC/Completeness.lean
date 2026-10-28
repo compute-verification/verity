@@ -24,7 +24,7 @@ the rules, every activation input `act` in `Served`, every ticket count `w` prop
 work-weighted draws, the audit rejects the honest transcript (some drawn tile is neither good nor of a blank unit) with
 probability at most `t·ε`. -/
 def CompleteSampled [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (P : Protocol Q R S) (TR : TileRules Q R S)
-    (D : Layout → Prop) (Served : Workload → (ℕ → Codes) → Prop) (ε : ℝ) : Prop :=
+    (D : UnitLayout → Prop) (Served : Workload → (ℕ → Codes) → Prop) (ε : ℝ) : Prop :=
   ∀ U : Workload, U.InDomain P D → U.WeightsOK P → ∀ act : ℕ → Codes, Served U act →
     ∀ (w : ℕ → ℕ) (κ : ℝ), 0 < κ → (∀ g < (TR.tiling U.layout).NT, (w g : ℝ) = κ * TR.Wref U.layout g) →
     ∀ t : ℕ,

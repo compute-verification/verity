@@ -76,7 +76,7 @@ through the Python check that the L5 test ties to it. The measurement is `served
 (`inputs.json`'s `cited_upper`), `art:<pending: FP8 served table>`; the module docstring gives the bounds for an input
 with failures and for fresh trials. -/
 def HonestTileCapRate [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (P : Protocol Q R S) (TR : TileRules Q R S)
-    (D : Layout → Prop) (Served : Workload → (ℕ → Codes) → Prop) (ε : ℝ) : Prop :=
+    (D : UnitLayout → Prop) (Served : Workload → (ℕ → Codes) → Prop) (ε : ℝ) : Prop :=
   ∀ U : Workload, U.InDomain P D → U.WeightsOK P → ∀ act : ℕ → Codes, Served U act →
     ∀ (w : ℕ → ℕ) (κ : ℝ), 0 < κ → (∀ g < (TR.tiling U.layout).NT, (w g : ℝ) = κ * TR.Wref U.layout g) →
       pr (fun x : (Q → R) × S × Ticket w (TR.tiling U.layout).NT =>

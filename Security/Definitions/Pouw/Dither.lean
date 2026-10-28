@@ -22,8 +22,8 @@ The headline of the ACCEL program (`Definitions.Pouw.Guarantees.Dither.WorkSound
 * **a monitoring period's prover** sampling block by sampling block on instances registered before the period
   (`Prover`), what it sends (`Prover.transcript`), its timed use and oracle calls (`Prover.timedUse`, `Prover.calls`:
   its sampling blocks' work, from each block's dither coins to its commitment), and the service's
-  verdict on the transcript and the auditor's devices' readings (`Verdict`, `Readings`, `Prover.Passes`);
-* **freed compute** (`Period`, `Period.FreedWithin`, `Period.DualOpt`, `FreedSound`): the definition, kept in
+  verdict on the transcript and the auditor's devices' readings (`Acceptance`, `Readings`, `Prover.Passes`);
+* **freed compute** (`PeriodDevices`, `PeriodDevices.FreedWithin`, `PeriodDevices.DualOpt`, `FreedSound`): the definition, kept in
   this one place, and its probability form, the headline's conclusion;
 * the error (`epsWorkSound`).
 -/
@@ -44,7 +44,7 @@ premises, exact operand formats and one accumulator per product, as MODEL-SPEC d
 `Definitions.Core.Accel.Principles`. `θ = (M, ρ, u)` are the model's parameters. -/
 structure Accel where
   /-- The programs, what they compute and how they compose. -/
-  Mc : Machine
+  Mc : AlgModel
   /-- The period's devices' resources. -/
   Res : Type
   [instRes : Fintype Res]
@@ -361,7 +361,7 @@ end Prover
 coins, the transcript (`Prover.transcript`) and the readings `Obs` of the auditor's devices (the network certifier's
 signed counts). It reads no code: the rounds' checks run inside C-Flock's zero-knowledge proofs (`ServiceSound` ties
 it to `Prover.Accepted`). -/
-abbrev Verdict (P : RoundProto) (k : ℕ) (Obs : Type) : Type :=
+abbrev Acceptance (P : RoundProto) (k : ℕ) (Obs : Type) : Type :=
   P.Orc → (Fin k → P.Draw × P.Chk) → (Fin k → P.Root × P.Ans) → Obs → Prop
 
 /-- **The auditor's devices' readings** of a prover's period (the network certifier's counts), at the oracle and the
@@ -370,7 +370,7 @@ abbrev Readings (G : Accel) (P : RoundProto) (k : ℕ) (Obs : Type) : Type 1 :=
   Prover G P k → P.Orc → (Fin k → P.Draw × P.Chk) → Obs
 
 /-- **The service accepts the period**: the verdict on the prover's transcript and the devices' readings. -/
-def Prover.Passes {G : Accel} {P : RoundProto} {k : ℕ} {Obs : Type} (A : Prover G P k) (verdict : Verdict P k Obs)
+def Prover.Passes {G : Accel} {P : RoundProto} {k : ℕ} {Obs : Type} (A : Prover G P k) (verdict : Acceptance P k Obs)
     (dev : Readings G P k Obs) (o : P.Orc) (x : Fin k → P.Draw × P.Chk) : Prop :=
   verdict o x (A.transcript o x) (dev A o x)
 
@@ -393,7 +393,7 @@ section Freed
 `hon` of the credited work and its value `rv` (the credit, in the jobs' units: its honest cost at the dual
 price). `WorkSound` reads it at `W = 1` credited unit: `hon` is the registered sampling blocks' total
 honest use, their work and the selected blocks' answers beside it, whose blocks differ, and `rv` their credit. -/
-structure Period (G : Accel) where
+structure PeriodDevices (G : Accel) where
   T : ℝ
   J : Type
   [instJ : Fintype J]
@@ -402,11 +402,11 @@ structure Period (G : Accel) where
   hon : G.Res → ℝ
   rv : ℝ
 
-attribute [instance] Period.instJ
+attribute [instance] PeriodDevices.instJ
 
-namespace Period
+namespace PeriodDevices
 
-variable {G : Accel} (Pd : Period G)
+variable {G : Accel} (Pd : PeriodDevices G)
 
 /-- What the devices can do in the period (G2): `ρ_r T` of resource `r`. -/
 def cap (r : G.Res) : ℝ := G.rate r * Pd.T
@@ -434,19 +434,19 @@ def DualOpt (μ : G.Res → ℝ) (W : ℝ) : Prop :=
   (∀ r, 0 ≤ μ r) ∧ (∀ j r, 0 ≤ Pd.needs j r) ∧ (∀ j, Pd.val j ≤ ∑ r, μ r * Pd.needs j r) ∧
     ∃ z' : Pd.J → ℝ, Pd.Fits (fun r => W * Pd.hon r) z' ∧ ∑ j, Pd.val j * z' j = ∑ r, μ r * (Pd.cap r - W * Pd.hon r)
 
-end Period
+end PeriodDevices
 
-/-- **Freed compute at most `ε C`, prover by prover** (`Period.FreedWithin`'s probability form): for every prover, the
+/-- **Freed compute at most `ε C`, prover by prover** (`PeriodDevices.FreedWithin`'s probability form): for every prover, the
 probability over the oracle and the verifier's coins that the service accepts its period (`Prover.Passes`, on its
 transcript and the devices' readings `dev`) and some other work `z` fits on the period's devices beside its sampling
 blocks' timed work (`Prover.timedUse`) with `W rv + W_other(z) > OPT_honest + ε C`
-(`¬ Period.FreedWithin`) is at most
+(`¬ PeriodDevices.FreedWithin`) is at most
 `κ`. `W` is the credited work. `ε` and `κ` are the prover's own: a prover whose commitment path makes more queries
 has a larger walk-and-log cost and extraction error (`ExtractAdv`). Wrap corrections and peels (BET-HYBRID-2) are
 serving work outside the words: they are other work here, never credit, so skipping them isn't a soundness
 question. -/
-def FreedSound (G : Accel) (P : RoundProto) (k : ℕ) {Obs : Type} (verdict : Verdict P k Obs)
-    (dev : Readings G P k Obs) (Pd : Period G) (W : ℝ) (ε : Prover G P k → ℝ) (C : ℝ) (κ : Prover G P k → ℝ) :
+def FreedSound (G : Accel) (P : RoundProto) (k : ℕ) {Obs : Type} (verdict : Acceptance P k Obs)
+    (dev : Readings G P k Obs) (Pd : PeriodDevices G) (W : ℝ) (ε : Prover G P k → ℝ) (C : ℝ) (κ : Prover G P k → ℝ) :
     Prop :=
   ∀ A : Prover G P k, prob (fun ox : P.Orc × (Fin k → P.Draw × P.Chk) => A.Passes verdict dev ox.1 ox.2 ∧
     ∃ z, Pd.Fits (A.timedUse ox.1 ox.2) z ∧ ¬ Pd.FreedWithin W z (ε A) C) ≤ κ A

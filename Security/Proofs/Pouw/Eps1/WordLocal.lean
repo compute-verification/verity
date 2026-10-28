@@ -24,41 +24,41 @@ section Block
 variable {Rd Cd : Type} {m n Lseg : ℕ} {FR FU : Type} {G : ℕ}
 
 /-- `a` is an argument of `b`, an instruction of block `τ`. -/
-def ArgIn (P : Prog Rd Cd m n Lseg FR FU G) (blk : Fin G → Tau m n Lseg) (τ : Tau m n Lseg) (a b : Fin G) : Prop :=
+def ArgIn (P : M3Words Rd Cd m n Lseg FR FU G) (blk : Fin G → Tau m n Lseg) (τ : Tau m n Lseg) (a b : Fin G) : Prop :=
   blk b = τ ∧ ∃ j s, P.prog.arg b j = .inr s ∧ M3.earlier b s = a
 
 open Classical in
 /-- Block `τ`'s live part: its writer and the writer's ancestors inside the block. -/
-noncomputable def live (P : Prog Rd Cd m n Lseg FR FU G) (blk : Fin G → Tau m n Lseg) (τ : Tau m n Lseg) :
+noncomputable def live (P : M3Words Rd Cd m n Lseg FR FU G) (blk : Fin G → Tau m n Lseg) (τ : Tau m n Lseg) :
     Finset (Fin G) :=
   univ.filter fun t => blk t = τ ∧ Relation.ReflTransGen (ArgIn P blk τ) t (P.out τ)
 
-theorem mem_live {P : Prog Rd Cd m n Lseg FR FU G} {blk : Fin G → Tau m n Lseg} {τ : Tau m n Lseg} {t : Fin G} :
+theorem mem_live {P : M3Words Rd Cd m n Lseg FR FU G} {blk : Fin G → Tau m n Lseg} {τ : Tau m n Lseg} {t : Fin G} :
     t ∈ live P blk τ ↔ blk t = τ ∧ Relation.ReflTransGen (ArgIn P blk τ) t (P.out τ) := by
   simp [live]
 
-theorem out_mem_live {P : Prog Rd Cd m n Lseg FR FU G} {blk : Fin G → Tau m n Lseg} (hW : P.WordLocal blk)
+theorem out_mem_live {P : M3Words Rd Cd m n Lseg FR FU G} {blk : Fin G → Tau m n Lseg} (hW : P.WordLocal blk)
     (τ : Tau m n Lseg) : P.out τ ∈ live P blk τ :=
   mem_live.mpr ⟨hW.1 τ, .refl⟩
 
-theorem live_used {P : Prog Rd Cd m n Lseg FR FU G} {blk : Fin G → Tau m n Lseg} {τ : Tau m n Lseg} {t : Fin G}
+theorem live_used {P : M3Words Rd Cd m n Lseg FR FU G} {blk : Fin G → Tau m n Lseg} {τ : Tau m n Lseg} {t : Fin G}
     (ht : t ∈ live P blk τ) (hne : t ≠ P.out τ) :
     ∃ t' ∈ live P blk τ, ∃ j s, P.prog.arg t' j = .inr s ∧ M3.earlier t' s = t := by
   rcases (mem_live.mp ht).2.cases_head with h | ⟨c, ⟨hc, j, s, harg, he⟩, hcr⟩
   · exact absurd h hne
   · exact ⟨c, mem_live.mpr ⟨hc, hcr⟩, j, s, harg, he⟩
 
-theorem live_closed {P : Prog Rd Cd m n Lseg FR FU G} {blk : Fin G → Tau m n Lseg} {τ : Tau m n Lseg} {t : Fin G}
+theorem live_closed {P : M3Words Rd Cd m n Lseg FR FU G} {blk : Fin G → Tau m n Lseg} {τ : Tau m n Lseg} {t : Fin G}
     {j : Fin 3} {s : Fin t.val} (ht : t ∈ live P blk τ) (harg : P.prog.arg t j = .inr s)
     (hb : blk (M3.earlier t s) = τ) : M3.earlier t s ∈ live P blk τ :=
   mem_live.mpr ⟨hb, .head ⟨(mem_live.mp ht).1, j, s, harg, rfl⟩ (mem_live.mp ht).2⟩
 
-theorem live_card_le (P : Prog Rd Cd m n Lseg FR FU G) (blk : Fin G → Tau m n Lseg) (τ : Tau m n Lseg) :
+theorem live_card_le (P : M3Words Rd Cd m n Lseg FR FU G) (blk : Fin G → Tau m n Lseg) (τ : Tau m n Lseg) :
     (live P blk τ).card ≤ (univ.filter fun t => blk t = τ).card :=
   card_le_card fun t ht => mem_filter.mpr ⟨mem_univ t, (mem_live.mp ht).1⟩
 
 /-- The writer's value is a function of its live part's input slots and the previous segment's output. -/
-theorem out_determined (P : Prog Rd Cd m n Lseg FR FU G) (blk : Fin G → Tau m n Lseg) (hW : P.WordLocal blk)
+theorem out_determined (P : M3Words Rd Cd m n Lseg FR FU G) (blk : Fin G → Tau m n Lseg) (hW : P.WordLocal blk)
     (τ : Tau m n Lseg) (x x' : Rd) (y y' : Cd) (v v' : Fin G → Word) (hv : P.prog.IsRun (P.inputs x y) v)
     (hv' : P.prog.IsRun (P.inputs x' y') v')
     (hprev : ∀ h : 0 < τ.1.val, v (P.out (τ.prev h)) = v' (P.out (τ.prev h)))
@@ -94,7 +94,7 @@ theorem out_determined (P : Prog Rd Cd m n Lseg FR FU G) (blk : Fin G → Tau m 
   exact key _ _ (out_mem_live hW τ) (Nat.lt_succ_self _)
 
 /-- The live part's row-side and column-side input slots number at most `2|L| + 1` (`block_outside_slots`). -/
-theorem slots_le (P : Prog Rd Cd m n Lseg FR FU G) (blk : Fin G → Tau m n Lseg) (hW : P.WordLocal blk)
+theorem slots_le (P : M3Words Rd Cd m n Lseg FR FU G) (blk : Fin G → Tau m n Lseg) (hW : P.WordLocal blk)
     (τ : Tau m n Lseg) (Sr Su : Finset (Fin 3 × Fin G))
     (hSr : ∀ tj ∈ Sr, tj.2 ∈ live P blk τ ∧ ∃ a, P.prog.arg tj.2 tj.1 = .inl (.inl a))
     (hSu : ∀ tj ∈ Su, tj.2 ∈ live P blk τ ∧ ∃ b, P.prog.arg tj.2 tj.1 = .inl (.inr b)) :
@@ -178,7 +178,7 @@ theorem zeroOut_fiber_prev (τ : Tau m n Lseg) (r : Fin 32 → Bool) (U : Cols n
   rfl
 
 /-- **Theorem B's block bound, zero instance**: each block's live part has at least 4 instructions. -/
-theorem block_zero {FR FU : Type} {G : ℕ} (P : Prog (Dither m Lseg) (Cols n) m n Lseg FR FU G)
+theorem block_zero {FR FU : Type} {G : ℕ} (P : M3Words (Dither m Lseg) (Cols n) m n Lseg FR FU G)
     (blk : Fin G → Tau m n Lseg) (hC : P.Computes (fun _ U => ColsValid U) zeroOut) (hW : P.WordLocal blk)
     (τ : Tau m n Lseg) : 4 ≤ (live P blk τ).card := by
   classical
@@ -212,7 +212,7 @@ theorem block_zero {FR FU : Type} {G : ℕ} (P : Prog (Dither m Lseg) (Cols n) m
         have hmem : ((j, t) : Fin 3 × Fin G) ∈ Su := mem_filter.mpr ⟨mem_product.mpr ⟨mem_univ _, ht⟩, b, hb⟩
         have hk := congrFun hf (e ⟨_, hmem⟩)
         simp only [Equiv.symm_apply_apply, g, hb] at hk
-        simpa [Prog.inputs] using hk)
+        simpa [M3Words.inputs] using hk)
     rw [hout r u hu, hout r u' hu'] at hd
     simp only [r, decide_eq_true_eq, sum_ite_eq', mem_univ, ite_true] at hd
     have h1 := abs_le.mp (hu p).2
@@ -333,7 +333,7 @@ theorem int8_bounds {z : ℤ} (hz : Int8Valid z) : -2 ^ 31 ≤ z ∧ z < 2 ^ 31 
   constructor <;> omega
 
 /-- **Theorem B's block bound, general instance**: each block's live part has at least 8 instructions. -/
-theorem block_general {FR FU : Type} {G : ℕ} (P : Prog (Rows m Lseg) (GCols n Lseg) m n Lseg FR FU G)
+theorem block_general {FR FU : Type} {G : ℕ} (P : M3Words (Rows m Lseg) (GCols n Lseg) m n Lseg FR FU G)
     (blk : Fin G → Tau m n Lseg)
     (hC : P.Computes (fun A B => (∀ i l p, Int8Valid (A i l p)) ∧ ∀ j l p, Int8Valid (B j l p)) genOut)
     (hW : P.WordLocal blk) (τ : Tau m n Lseg) : 8 ≤ (live P blk τ).card := by
@@ -369,7 +369,7 @@ theorem block_general {FR FU : Type} {G : ℕ} (P : Prog (Rows m Lseg) (GCols n 
         have hmem : ((j, t) : Fin 3 × Fin G) ∈ Su := mem_filter.mpr ⟨mem_product.mpr ⟨mem_univ _, ht⟩, c, hc⟩
         have hk := congrFun hf (e ⟨_, hmem⟩)
         simp only [Equiv.symm_apply_apply, g, hc] at hk
-        simpa [Prog.inputs] using hk)
+        simpa [M3Words.inputs] using hk)
     rw [hout _ _ (ind_valid p) hb, hout _ _ (ind_valid p) hb'] at hd
     simp only [ind, ite_mul, one_mul, zero_mul, sum_ite_eq', mem_univ, ite_true] at hd
     exact ofInt_inj (int8_bounds (hb p)) (int8_bounds (hb' p)) hd
@@ -387,7 +387,7 @@ theorem block_general {FR FU : Type} {G : ℕ} (P : Prog (Rows m Lseg) (GCols n 
         have hmem : ((j, t) : Fin 3 × Fin G) ∈ Sr := mem_filter.mpr ⟨mem_product.mpr ⟨mem_univ _, ht⟩, c, hc⟩
         have hk := congrFun hf (e ⟨_, hmem⟩)
         simp only [Equiv.symm_apply_apply, g, hc] at hk
-        simpa [Prog.inputs] using hk)
+        simpa [M3Words.inputs] using hk)
       (fun _ _ _ _ _ => rfl)
     rw [hout _ _ ha (ind_valid p), hout _ _ ha' (ind_valid p)] at hd
     simp only [ind, mul_ite, mul_one, mul_zero, sum_ite_eq', mem_univ, ite_true] at hd

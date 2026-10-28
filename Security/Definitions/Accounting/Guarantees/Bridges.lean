@@ -36,9 +36,9 @@ the prover's work at `π` in `[tₛ + ℓ, t_d − ℓ)`). With `HonestClock` at
 (`Accounting.SecurityProofs.Actual.honestClock`), `Pouw.SecurityProofs.WorkBetweenSaltAndDeadline` then bounds the work
 between the salt and the deadline. -/
 def B1 (Q R S : Type) [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] {L : Type} [LinearOrder L] [Fintype L]
-    (𝓕 : Set (Actual.Run L)) (V : Finset L) (tₛ t_d ℓ : ℕ) (read : Set (ℕ × L × ℕ × L × ℕ × ℕ × ℕ) → Pouw.Transcript)
+    (𝓕 : Set (Actual.Run L)) (V : Finset L) (tₛ t_d ℓ : ℕ) (read : Set (ℕ × L × ℕ × L × ℕ × ℕ × ℕ) → Pouw.CommitLog)
     (hash : (ρ : Actual.Run L) → Finset (Fin ρ.A.N)) (π : (ρ : Actual.Run L) → Fin ρ.A.N → ℕ)
-    (P : Pouw.Protocol Q R S) (D : Pouw.Layout → Prop) (γ₀ : ℝ) (ε : ℕ → ℕ → ℝ) : Prop :=
+    (P : Pouw.Protocol Q R S) (D : Pouw.UnitLayout → Prop) (γ₀ : ℝ) (ε : ℕ → ℕ → ℝ) : Prop :=
   Pouw.Assumptions.TT (Actual.costModel Q R S 𝓕 V tₛ t_d ℓ read hash π) P D γ₀ ε
 
 /-- **PoUW's row, from B1**: `Pouw.Guarantees.WorkBetweenSaltAndDeadline` at `CM_A`, its terms and names as
@@ -49,9 +49,9 @@ before `t_d` while `T < (1 − γ)(1 − ε_s)·W`, `γ = 1 − (1 − γ₀)/Ω
 `(1 − ε_s)^t + ε(q, N)`. -/
 def pouwRow : Prop :=
   ∀ (Q R S : Type) [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] {L : Type} [LinearOrder L] [Fintype L]
-    (𝓕 : Set (Actual.Run L)) (V : Finset L) (tₛ t_d ℓ : ℕ) (read : Set (ℕ × L × ℕ × L × ℕ × ℕ × ℕ) → Pouw.Transcript)
+    (𝓕 : Set (Actual.Run L)) (V : Finset L) (tₛ t_d ℓ : ℕ) (read : Set (ℕ × L × ℕ × L × ℕ × ℕ × ℕ) → Pouw.CommitLog)
     (hash : (ρ : Actual.Run L) → Finset (Fin ρ.A.N)) (π : (ρ : Actual.Run L) → Fin ρ.A.N → ℕ)
-    (P : Pouw.Protocol Q R S) (D : Pouw.Layout → Prop) (γ₀ Ωmax : ℝ) (ε : ℕ → ℕ → ℝ),
+    (P : Pouw.Protocol Q R S) (D : Pouw.UnitLayout → Prop) (γ₀ Ωmax : ℝ) (ε : ℕ → ℕ → ℝ),
     γ₀ < 1 → 0 < Ωmax →
     (∀ U : Pouw.Workload, U.InDomain D → ∀ u < U.layout.N,
       (P.Wref U.layout u : ℝ) ≤ Ωmax * ((U.layout.shape u).Wmm : ℝ)) →

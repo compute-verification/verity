@@ -55,7 +55,7 @@ Open:
 * **The cost split** is `Realization`'s cost clause, a premise, on runs within the cap.
   The oracle calls are priced steps (G3) and the only way to the oracle (`Accel.OracleCalls`), but nothing in `Accel`
   says which of a program's steps are its commitment path. Three facts would discharge it:
-  - `use` composes: a program built by `Mc.seq`, `Mc.pair` and routing uses at most what its parts use (`Machine`'s
+  - `use` composes: a program built by `Mc.seq`, `Mc.pair` and routing uses at most what its parts use (`AlgModel`'s
     `time` has these laws; `Accel.use` has none);
   - a call can be cut out: a program that reads the oracle has a twin without the calls whose answers it doesn't read
     again, whose use plus `callUse` for each call cut is at most the program's (with (G3), what a priced step means);

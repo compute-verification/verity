@@ -24,17 +24,17 @@ theorem tileGood_iff (P : Protocol Q R S) (TR : TileRules Q R S) (U : Workload) 
   Iff.rfl
 
 theorem TileCheck.computes_of (TC : TileCheck Q R S) (P : Protocol Q R S) (TR : TileRules Q R S)
-    (D : Layout → Prop) (hc : TC.ComputesCap P TR D) (hw : TC.ComputesWords P TR D) : TC.Computes P TR D := by
+    (D : UnitLayout → Prop) (hc : TC.ComputesCap P TR D) (hw : TC.ComputesWords P TR D) : TC.Computes P TR D := by
   intro U hU H s g hg c X hX
   rcases hw U hU H s g hg c X hX with h | h
   · exact Or.inl ⟨hc U hU H s g hg c X hX, hX.2.2.2.2, h⟩
   · exact Or.inr h
 
 theorem TileCheck.mem_of_computes (TC : TileCheck Q R S) (P : Protocol Q R S) (TR : TileRules Q R S)
-    (D : Layout → Prop) (h : TC.Computes P TR D) (U : Workload) (hU : U.InDomain P D) (H : Q → R) (s : S)
-    (τ : Transcript) (g : ℕ) (hg : g < (TR.tiling U.layout).NT) (c : Commit)
+    (D : UnitLayout → Prop) (h : TC.Computes P TR D) (U : Workload) (hU : U.InDomain P D) (H : Q → R) (s : S)
+    (τ : CommitLog) (g : ℕ) (hg : g < (TR.tiling U.layout).NT) (c : Commit)
     (hc : τ ((TR.tiling U.layout).unit g) = some c)
-    (X : (TC.C (U.layout.shape ((TR.tiling U.layout).unit g))).Transcript) (hX : TC.Accepts P TR H s U g c X) :
+    (X : (TC.C (U.layout.shape ((TR.tiling U.layout).unit g))).CommitLog) (hX : TC.Accepts P TR H s U g c X) :
     g ∈ goodTiles P TR U H s τ ∪ blankTiles TR U τ ∨
       TC.Collides U ((TR.tiling U.layout).unit g) ((TR.tiling U.layout).rows g) ((TR.tiling U.layout).cols g) c X := by
   rcases h U hU H s g hg c X hX with h | h
@@ -44,13 +44,13 @@ theorem TileCheck.mem_of_computes (TC : TileCheck Q R S) (P : Protocol Q R S) (T
   · exact Or.inr h
 
 /-- A tile of a blank unit is blank. -/
-theorem TileCheck.mem_blank (TR : TileRules Q R S) (U : Workload) (τ : Transcript) (g : ℕ)
+theorem TileCheck.mem_blank (TR : TileRules Q R S) (U : Workload) (τ : CommitLog) (g : ℕ)
     (hg : g < (TR.tiling U.layout).NT) (hb : τ ((TR.tiling U.layout).unit g) = none) : g ∈ blankTiles TR U τ := by
   simp only [blankTiles, Finset.mem_filter, Finset.mem_range]
   exact ⟨hg, hb⟩
 
 /-- The registered values of a committed unit are its commitment's. -/
-theorem TileCheck.valueAt_some (TC : TileCheck Q R S) (U : Workload) (τ : Transcript) (u : ℕ) (c : Commit)
+theorem TileCheck.valueAt_some (TC : TileCheck Q R S) (U : Workload) (τ : CommitLog) (u : ℕ) (c : Commit)
     (hc : τ u = some c) : TC.valueAt U τ u = TC.rowsOf U u c := by
   simp only [TileCheck.valueAt, hc]
 

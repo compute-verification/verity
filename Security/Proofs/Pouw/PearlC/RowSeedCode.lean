@@ -44,10 +44,10 @@ theorem calls_relabelTree {α : Type} (π : Q → Q) (H : Q → R) (t : QTree Q 
   | query q k ih => exact congrArg (· + 1) (ih (H (π q)))
 
 /-- The noise relabelled: `sem` at `H ∘ π L`. -/
-def PearlCSem.relabel (sem : PearlCSem Q R S) (π : Layout → Q ≃ Q) : PearlCSem Q R S :=
+def PearlCSem.relabel (sem : PearlCSem Q R S) (π : UnitLayout → Q ≃ Q) : PearlCSem Q R S :=
   { sem with noise := fun H s U u act => sem.noise (H ∘ π U.layout) s U u act }
 
-theorem eq_relabel {sem' semC : PearlCSem Q R S} {π : Layout → Q ≃ Q} (h : CodeSeedNoise sem' semC π) :
+theorem eq_relabel {sem' semC : PearlCSem Q R S} {π : UnitLayout → Q ≃ Q} (h : CodeSeedNoise sem' semC π) :
     semC = sem'.relabel π := by
   obtain ⟨h1, h2, h3, h4, h5⟩ := h
   cases semC
@@ -103,7 +103,7 @@ variable [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S]
 `sem'` gives it at the code's form `semC`, at the same error `εPearlC q R`. A bounded adversary against `semC` is,
 relabelled by `π⁻¹`, one against `sem'` that wins on `H ∘ π` exactly when it wins on `H`, and `H ∘ π` is uniform. -/
 theorem ttOutRowSeed_code {CM : CostModel Q R S} {d : PearlCDevice} {sem' semC : PearlCSem Q R S}
-    {π : Layout → Q ≃ Q} {ρ : ℚ} {D : Layout → Prop} {γ₀ : ℝ}
+    {π : UnitLayout → Q ≃ Q} {ρ : ℚ} {D : UnitLayout → Prop} {γ₀ : ℝ}
     (h : TTOutRowSeed CM (pearlCProtocolDevRev1RowCap d sem' ρ) D γ₀) (hC : CodeSeedNoise sem' semC π)
     (hCM : CM.RelabelClosed) : TTOutRowSeed CM (pearlCProtocolDevRev1RowCap d semC ρ) D γ₀ := by
   obtain rfl := eq_relabel hC
@@ -119,7 +119,7 @@ theorem ttOutRowSeed_code {CM : CostModel Q R S} {d : PearlCDevice} {sem' semC :
 
 /-- **The code-form seed bridge per audit tile**, as `ttOutRowSeed_code`. -/
 theorem ttOutTileRowSeed_code {CM : CostModel Q R S} {d : PearlCDevice} {sem' semC : PearlCSem Q R S}
-    {π : Layout → Q ≃ Q} {ρ : ℚ} {D : Layout → Prop} {γ₀ : ℝ}
+    {π : UnitLayout → Q ≃ Q} {ρ : ℚ} {D : UnitLayout → Prop} {γ₀ : ℝ}
     (h : TTOutTileRowSeed CM (pearlCProtocolDevRev1RowCap d sem' ρ) (pearlCTilesDevRev1RowCap d sem' ρ) D γ₀)
     (hC : CodeSeedNoise sem' semC π) (hCM : CM.RelabelClosed) :
     TTOutTileRowSeed CM (pearlCProtocolDevRev1RowCap d semC ρ) (pearlCTilesDevRev1RowCap d semC ρ) D γ₀ := by
@@ -137,7 +137,7 @@ theorem ttOutTileRowSeed_code {CM : CostModel Q R S} {d : PearlCDevice} {sem' se
 /-- **The code-form seed from rev1's TT_OUT:** C1, C1-h3, C3 and C5 give the row-seeded TT_OUT at the code's form,
 at the row count's error. -/
 theorem ttOutRowSeedCode_of_ttOut {CM : CostModel Q R S} {d : PearlCDevice} {sem sem' semC : PearlCSem Q R S}
-    {π : Layout → Q ≃ Q} {ρ : ℚ} (hTT : TTOutPearlCDevRev1 CM d sem ρ) (hN : RowSeedNoise sem sem')
+    {π : UnitLayout → Q ≃ Q} {ρ : ℚ} (hTT : TTOutPearlCDevRev1 CM d sem ρ) (hN : RowSeedNoise sem sem')
     (hC : CodeSeedNoise sem' semC π) (hCM : CM.SplitClosed) (hCM' : CM.RelabelClosed) (hd : d.RowLocal) (hρ : ρ ≤ 1)
     (hadd : 0 ≤ d.prices.add) (hbf : 0 ≤ d.prices.bf16) :
     TTOutRowSeed CM (pearlCProtocolDevRev1RowCap d semC ρ) (pearlCDomainDev d) (1 / 400) :=
@@ -145,7 +145,7 @@ theorem ttOutRowSeedCode_of_ttOut {CM : CostModel Q R S} {d : PearlCDevice} {sem
 
 /-- **The code-form seed from rev1's TT_OUT per audit tile**, as `ttOutRowSeedCode_of_ttOut`. -/
 theorem ttOutTileRowSeedCode_of_ttOutTile {CM : CostModel Q R S} {d : PearlCDevice} {sem sem' semC : PearlCSem Q R S}
-    {π : Layout → Q ≃ Q} {ρ : ℚ} (hTT : TTOutTilePearlCDevRev1 CM d sem ρ) (hN : RowSeedNoise sem sem')
+    {π : UnitLayout → Q ≃ Q} {ρ : ℚ} (hTT : TTOutTilePearlCDevRev1 CM d sem ρ) (hN : RowSeedNoise sem sem')
     (hC : CodeSeedNoise sem' semC π) (hCM : CM.SplitClosed) (hCM' : CM.RelabelClosed) (hd : d.RowLocal) (hρ : ρ ≤ 1)
     (hadd : 0 ≤ d.prices.add) (hbf : 0 ≤ d.prices.bf16) :
     TTOutTileRowSeed CM (pearlCProtocolDevRev1RowCap d semC ρ) (pearlCTilesDevRev1RowCap d semC ρ) (pearlCDomainDev d)

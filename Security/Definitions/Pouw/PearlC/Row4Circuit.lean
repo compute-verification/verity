@@ -58,7 +58,7 @@ def d4Run (K b : ℕ) : Run := ⟨2 * K, fun r =>
 /-- Position `t`'s formed FP32 word. -/
 def d4 (K b t : ℕ) : ℕ := d4At K b + 2 * t + 1
 
-/-- Gate `s < 52` of block `q`'s quantisation at gate `base`: the running `fmaxf` of `|d|` over the block's 16
+/-- Cell `s < 52` of block `q`'s quantisation at gate `base`: the running `fmaxf` of `|d|` over the block's 16
 positions, `·/6`, its floor at `2⁻⁹`, the UE4M3 scale byte, its value, its reciprocal, then per position `d·(1/scale)`
 and its E2M1 cast. -/
 def blk4 (K b q s base : ℕ) : RGate :=
@@ -103,7 +103,7 @@ def af4Run (K b : ℕ) : Run :=
 /-- The noise' `Ẽ`: per code of `e`, `PouwETilde_v1` at `a_E`. -/
 def et4Run (K b : ℕ) : Run := ⟨32, fun l => ⟨.eTilde, [.g (K + l), .g (a4At K b + 7)]⟩⟩
 
-/-- Gate `s` of RowB's block `q`, at gate `gt`: the 32 FMAs of `Σ_s Ẽ_s·g_{s,q}` (from `+0`, `Ẽ` widened, at gates
+/-- Cell `s` of RowB's block `q`, at gate `gt`: the 32 FMAs of `Σ_s Ẽ_s·g_{s,q}` (from `+0`, `Ẽ` widened, at gates
 from `et`), the chain of `B̃`'s codes against the chain basis' column `q`, its negation, the sum, and its BF16 cast,
 `P_B`'s word `q`. -/
 def mid4 (K b et q s gt : ℕ) : RGate :=

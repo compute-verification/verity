@@ -86,8 +86,8 @@ def IsLeadInd {Q R S : Type} (P : Params Q R S) : Prop := P.IsLead ∧ RIndepend
 /-- **The lead's instance with independence, jointly**: `GamePinned.LeadWitness` with `IsLeadInd` in place of
 `IsLead`. -/
 def LeadIndWitness : Prop :=
-  ∃ (P : Params Unit Unit Salt) (Lay : Layout), IsLeadInd P ∧ P.RSigned ∧ P.QueryBound 0 ∧
-    (∀ (L : Layout) (u : ℕ), P.Wref L u = 3 * (L.shape u).Wmm) ∧
+  ∃ (P : Params Unit Unit Salt) (Lay : UnitLayout), IsLeadInd P ∧ P.RSigned ∧ P.QueryBound 0 ∧
+    (∀ (L : UnitLayout) (u : ℕ), P.Wref L u = 3 * (L.shape u).Wmm) ∧
     P.toProtocol.Complete leadDomain ∧
     AdmitsRef (outputPriced3 Unit Unit Salt) P.toProtocol leadDomain (fun _ => 0) ∧
     (∀ γ₀ : ℝ, 0 ≤ γ₀ → γ₀ < 1 →

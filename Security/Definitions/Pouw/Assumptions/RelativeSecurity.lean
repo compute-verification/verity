@@ -68,7 +68,7 @@ F2, C-Flock's binding and zero knowledge), at most `δb` and `δz` a round.
 `M` ranges over all of `Mc` with no cost bound, and one `δb` bounds them all, so the premise is false for every
 `δb < 1` at SHA-512: a machine that hard-codes a collision opens a committed leaf two ways, and the third conjunct puts
 its accepted runs in `Bind`. It stays only because `StagedFloorK` and `StagedFloorKOneSided` are proved from it. -/
-def ServiceSoundStaged (Mc : Machine) (S : Service) (run : RunMap Mc S R St n L np B n' Ar)
+def ServiceSoundStaged (Mc : AlgModel) (S : Service) (run : RunMap Mc S R St n L np B n' Ar)
     (e : S.Seed ≃ Paths (DStage St n L np B n') R) (δb δz : ℝ) : Prop :=
   ∀ (Ω' : Type) [Fintype Ω'] (M : Mc.Alg (S.Seed × Ω') (S.Com × S.Ans)),
     (∀ σ σ' r, (Mc.eval M (σ, r)).1 = (Mc.eval M (σ', r)).1) → ∀ r : Ω',
@@ -134,7 +134,7 @@ prover's (`Claims.KS`'s `√(γ · PrB)`, `Claims.KSLin`'s `β · Pr[Fe]`, the c
 session state holding two openings of one column-tree leaf passes with extraction failing. Its hiding part, hm96's
 (`Claims.Hm96Hiding`), is statistical, a bound on every event at once, so no machine hard-codes it: an analysis whose
 `ZK` is only hiding reads `βz = 0` and the constant `δz`. -/
-def ServiceSoundStagedPerProver (Mc : Machine) (S : Service) (run : RunMap Mc S R St n L np B n' Ar)
+def ServiceSoundStagedPerProver (Mc : AlgModel) (S : Service) (run : RunMap Mc S R St n L np B n' Ar)
     (e : S.Seed ≃ Paths (DStage St n L np B n') R) (sha : Claims.Msg → Claims.Msg) (fb fz : Finders Mc S R)
     (δb βb δz βz : ℝ) : Prop :=
   ∀ (Ω' : Type) [Fintype Ω'] (M : Mc.Alg (S.Seed × Ω') (S.Com × S.Ans)),
@@ -156,7 +156,7 @@ On this scope `c = 1` is proved at the luck ¾, the sibling floor `StagedFloorK`
 the two proved scopes, this one and `KScopeOneSided`'s (one-sided operands of any form, charge-pure, at the parity luck
 0.854: the floor of record's), and the verifier can't observe which case applies: no check of the service refuses a
 run outside a scope (the ledger's "priced, not prevented"). -/
-def KScopeAffine (Mc : Machine) (S : Service) (run : RunMap Mc S R St n L np B n' Ar) (wt : Fin np → Ar) : Prop :=
+def KScopeAffine (Mc : AlgModel) (S : Service) (run : RunMap Mc S R St n L np B n' Ar) (wt : Fin np → Ar) : Prop :=
   ∀ (Ω' : Type) [Fintype Ω'] (M : Mc.Alg (S.Seed × Ω') (S.Com × S.Ans)),
     (∀ σ σ' r, (Mc.eval M (σ, r)).1 = (Mc.eval M (σ', r)).1) → ∀ (r : Ω') x,
       (∀ w s j, ((run Ω' M r).prog x w s).isProd j = true → AffProd (((run Ω' M r).prog x w s).prod j)) ∧
@@ -186,7 +186,7 @@ sibling of the ledger's K1, not a narrowing (RS-E-REF r8 VIII.3 item 6): its coi
 `GProd` is, and charging purity neither implies nor follows from row purity. K1 is not claimed outside the two proved
 scopes, this one and `KScopeAffine`'s (affine operands, mixed included, row-pure, at ¾), and the verifier can't
 observe which case applies: no check of the service refuses a run outside a scope. -/
-def KScopeOneSided (Mc : Machine) (S : Service) (run : RunMap Mc S R St n L np B n' Ar) (wt : Fin np → Ar)
+def KScopeOneSided (Mc : AlgModel) (S : Service) (run : RunMap Mc S R St n L np B n' Ar) (wt : Fin np → Ar)
     (φ : Ar →+* ZMod 2) (p₀ : Fin np) : Prop :=
   ∀ (Ω' : Type) [Fintype Ω'] (M : Mc.Alg (S.Seed × Ω') (S.Com × S.Ans)),
     (∀ σ σ' r, (Mc.eval M (σ, r)).1 = (Mc.eval M (σ', r)).1) → ∀ (r : Ω') x,
@@ -204,7 +204,7 @@ its measured cost, (π₃₂) closed for the whole census, every register load c
 with P4 (B_θ complete), and it sums the stages' products, so it
 holds when a stage's interval, from its draw to its outputs' commitment, holds no other draw. Stages that overlap are
 `ChargeVF3j16Overlap`'s. -/
-def ChargeVF3j16 (Mc : Machine) (S : Service) (run : RunMap Mc S R St n L np B n' Ar)
+def ChargeVF3j16 (Mc : AlgModel) (S : Service) (run : RunMap Mc S R St n L np B n' Ar)
     (e : S.Seed ≃ Paths (DStage St n L np B n') R) (κ Vmax : ℝ) : Prop :=
   ∀ (Ω' : Type) [Fintype Ω'] (M : Mc.Alg (S.Seed × Ω') (S.Com × S.Ans)),
     (∀ σ σ' r, (Mc.eval M (σ, r)).1 = (Mc.eval M (σ', r)).1) → ∀ (r : Ω') x,
@@ -237,7 +237,7 @@ stage has one size.
 finding), for `ServiceSoundStaged`'s reason: one `δb` for every adversary is false below 1 at SHA-512, since a machine
 that hard-codes a collision opens a committed leaf two ways. It stays only because `OverlapFloorK` and
 `OverlapFloorKOneSided` are proved from it. -/
-def ServiceSoundOverlap (Mc : Machine) (S : Service) (run : ORunMap Mc S R St n L np B n' Ar)
+def ServiceSoundOverlap (Mc : AlgModel) (S : Service) (run : ORunMap Mc S R St n L np B n' Ar)
     (e : S.Seed ≃ Paths (OSpot St n L np B n') R) (δb δz : ℝ) : Prop :=
   ∀ (Ω' : Type) [Fintype Ω'] (M : Mc.Alg (S.Seed × Ω') (S.Com × S.Ans)),
     (∀ σ σ' r, (Mc.eval M (σ, r)).1 = (Mc.eval M (σ', r)).1) → ∀ r : Ω',
@@ -263,7 +263,7 @@ binding or zero knowledge in some round (N1, X-RO commitments; F1 and F2, C-Floc
 - a machine that hard-codes a collision gets 1 there;
 - `δz` is per prover because C-Flock's soundness has a collision term of the prover's, while hm96's hiding is
   statistical (`βz = 0` for an analysis whose `ZK` is only hiding). -/
-def ServiceSoundOverlapPerProver (Mc : Machine) (S : Service) (run : ORunMap Mc S R St n L np B n' Ar)
+def ServiceSoundOverlapPerProver (Mc : AlgModel) (S : Service) (run : ORunMap Mc S R St n L np B n' Ar)
     (e : S.Seed ≃ Paths (OSpot St n L np B n') R) (sha : Claims.Msg → Claims.Msg) (fb fz : Finders Mc S R)
     (δb βb δz βz : ℝ) : Prop :=
   ∀ (Ω' : Type) [Fintype Ω'] (M : Mc.Alg (S.Seed × Ω') (S.Com × S.Ans)),
@@ -290,7 +290,7 @@ On this scope `c = 1` is proved at the luck ¾ per draw, the sibling floor `Over
 outside the two proved scopes across draws, this one and `KScopeOverlapOneSided`'s (one-sided operands of any form
 per draw, charge-pure across draws, at the parity luck 0.854: the floor of record's), and the verifier can't observe
 which case applies: no check of the service refuses a run outside a scope. -/
-def KScopeOverlapAffine (Mc : Machine) (S : Service) (run : ORunMap Mc S R St n L np B n' Ar) (wt : Fin np → Ar) :
+def KScopeOverlapAffine (Mc : AlgModel) (S : Service) (run : ORunMap Mc S R St n L np B n' Ar) (wt : Fin np → Ar) :
     Prop :=
   ∀ (Ω' : Type) [Fintype Ω'] (M : Mc.Alg (S.Seed × Ω') (S.Com × S.Ans)),
     (∀ σ σ' r, (Mc.eval M (σ, r)).1 = (Mc.eval M (σ', r)).1) → ∀ (r : Ω') x,
@@ -322,7 +322,7 @@ On this scope `c = 1` is proved at the parity luck 0.854 per draw, the floor of 
 Like `KScopeOneSided` it is a sibling of the ledger's K1, not a narrowing. K1 is not claimed outside the two proved
 scopes across draws, this one and `KScopeOverlapAffine`'s (operands affine per draw, row-pure across draws, at ¾),
 and the verifier can't observe which case applies: no check of the service refuses a run outside a scope. -/
-def KScopeOverlapOneSided (Mc : Machine) (S : Service) (run : ORunMap Mc S R St n L np B n' Ar) (wt : Fin np → Ar)
+def KScopeOverlapOneSided (Mc : AlgModel) (S : Service) (run : ORunMap Mc S R St n L np B n' Ar) (wt : Fin np → Ar)
     (φ : Ar →+* ZMod 2) (p₀ : Fin np) : Prop :=
   ∀ (Ω' : Type) [Fintype Ω'] (M : Mc.Alg (S.Seed × Ω') (S.Com × S.Ans)),
     (∀ σ σ' r, (Mc.eval M (σ, r)).1 = (Mc.eval M (σ', r)).1) → ∀ (r : Ω') x,
@@ -336,7 +336,7 @@ For every adversary that commits first, every value of its coins and every play 
 times the products of every round's run, less its noise reads `V x ≤ Vmax`. With `Mc` the sm_120 machine B_θ this is
 P1 at VF3j-16's prices with P4, as `ChargeVF3j16`; it counts each product once, whatever draws' intervals it lies in,
 so it reads nothing of the schedule. -/
-def ChargeVF3j16Overlap (Mc : Machine) (S : Service) (run : ORunMap Mc S R St n L np B n' Ar)
+def ChargeVF3j16Overlap (Mc : AlgModel) (S : Service) (run : ORunMap Mc S R St n L np B n' Ar)
     (e : S.Seed ≃ Paths (OSpot St n L np B n') R) (κ Vmax : ℝ) : Prop :=
   ∀ (Ω' : Type) [Fintype Ω'] (M : Mc.Alg (S.Seed × Ω') (S.Com × S.Ans)),
     (∀ σ σ' r, (Mc.eval M (σ, r)).1 = (Mc.eval M (σ', r)).1) → ∀ (r : Ω') x,
@@ -360,7 +360,7 @@ by the play's game or breaks binding or zero knowledge in some round, at most `�
 **Superseded by `ServiceSoundStagedJ10RPerProver`**, for `ServiceSoundStaged`'s reason: one `δb` for every adversary is
 false below 1 at SHA-512. It mirrors the premise today's floor of
 record is proved from, so that the call-scope floor `StagedFloorKOneSidedJ10R` is that floor read at the call. -/
-def ServiceSoundStagedJ10R (Mc : Machine) (S : Service) (run : JRunMap Mc S R St n L B n' Ar)
+def ServiceSoundStagedJ10R (Mc : AlgModel) (S : Service) (run : JRunMap Mc S R St n L B n' Ar)
     (e : S.Seed ≃ Paths (JStage St n L B n') R) (δb δz : ℝ) : Prop :=
   ∀ (Ω' : Type) [Fintype Ω'] (M : Mc.Alg (S.Seed × Ω') (S.Com × S.Ans)),
     (∀ σ σ' r, (Mc.eval M (σ, r)).1 = (Mc.eval M (σ', r)).1) → ∀ r : Ω',
@@ -373,7 +373,7 @@ call design. The seed, the round protocol and the play's form are `ServiceSoundS
 break is at most `δb + βb · Pr[fb Ω' M r w finds a collision of sha]` and its zero-knowledge break
 `δz + βz · Pr[fz Ω' M r w …]`. Everything `ServiceSoundStagedPerProver` says of its form, finders and budgets holds
 here unchanged: it assumes nothing of SHA-512, and `ecr/sha-512` enters only the floors' bound (`breakBound`). -/
-def ServiceSoundStagedJ10RPerProver (Mc : Machine) (S : Service) (run : JRunMap Mc S R St n L B n' Ar)
+def ServiceSoundStagedJ10RPerProver (Mc : AlgModel) (S : Service) (run : JRunMap Mc S R St n L B n' Ar)
     (e : S.Seed ≃ Paths (JStage St n L B n') R) (sha : Claims.Msg → Claims.Msg) (fb fz : Finders Mc S R)
     (δb βb δz βz : ℝ) : Prop :=
   ∀ (Ω' : Type) [Fintype Ω'] (M : Mc.Alg (S.Seed × Ω') (S.Com × S.Ans)),
@@ -396,7 +396,7 @@ program over `Z/2³²` on the call's bits (E3; ring operations only), and:
 A product shared by the call's rows or columns of a segment (a fast algorithm for the call's `⟨M, 32, N⟩` product, or
 a selection of shared streams) is two-sided at several frames and outside it. K1 is not claimed outside the scope, and
 the verifier can't observe which case applies: no check of the service refuses a run outside it. -/
-def KScopeOneSidedJ10R (Mc : Machine) (S : Service) (run : JRunMap Mc S R St n L B n' (ZMod (2 ^ 32))) : Prop :=
+def KScopeOneSidedJ10R (Mc : AlgModel) (S : Service) (run : JRunMap Mc S R St n L B n' (ZMod (2 ^ 32))) : Prop :=
   ∀ (Ω' : Type) [Fintype Ω'] (M : Mc.Alg (S.Seed × Ω') (S.Com × S.Ans)),
     (∀ σ σ' r, (Mc.eval M (σ, r)).1 = (Mc.eval M (σ', r)).1) → ∀ (r : Ω') x,
       (∀ w s j, ((run Ω' M r).prog x w s).isProd j = true → OneSided (((run Ω' M r).prog x w s).prod j)) ∧
@@ -413,7 +413,7 @@ call's bits (the call's rows' and columns' coins, shared across the call, each s
 machine B_θ this is P1 at VF3j-16's prices with P4, as `ChargeVF3j16`, read at the call rather than the unit: it
 holds when a call's interval, from its draw to its outputs' commitment, holds no other draw. Overlapping calls are
 `ChargeVF3j16OverlapJ10R`'s. -/
-def ChargeVF3j16J10R (Mc : Machine) (S : Service) (run : JRunMap Mc S R St n L B n' Ar)
+def ChargeVF3j16J10R (Mc : AlgModel) (S : Service) (run : JRunMap Mc S R St n L B n' Ar)
     (e : S.Seed ≃ Paths (JStage St n L B n') R) (κ Vmax : ℝ) : Prop :=
   ∀ (Ω' : Type) [Fintype Ω'] (M : Mc.Alg (S.Seed × Ω') (S.Com × S.Ans)),
     (∀ σ σ' r, (Mc.eval M (σ, r)).1 = (Mc.eval M (σ', r)).1) → ∀ (r : Ω') x,
@@ -435,7 +435,7 @@ play's game or breaks binding or zero knowledge in some round, at most `δb` and
 
 **Superseded by `ServiceSoundOverlapJ10RPerProver`**, for `ServiceSoundOverlap`'s reason. It mirrors the premise
 today's overlapped floor of record is proved from. -/
-def ServiceSoundOverlapJ10R (Mc : Machine) (S : Service) (run : JORunMap Mc S R St n L B n' Ar)
+def ServiceSoundOverlapJ10R (Mc : AlgModel) (S : Service) (run : JORunMap Mc S R St n L B n' Ar)
     (e : S.Seed ≃ Paths (OJSpot St n L B n') R) (δb δz : ℝ) : Prop :=
   ∀ (Ω' : Type) [Fintype Ω'] (M : Mc.Alg (S.Seed × Ω') (S.Com × S.Ans)),
     (∀ σ σ' r, (Mc.eval M (σ, r)).1 = (Mc.eval M (σ', r)).1) → ∀ r : Ω',
@@ -446,7 +446,7 @@ def ServiceSoundOverlapJ10R (Mc : Machine) (S : Service) (run : JORunMap Mc S R 
 /-- `pouw-rs-overlap-service` (proposed; per prover) at call scope under J10-R: `ServiceSoundOverlapPerProver` on the
 call design, with `ServiceSoundOverlapJ10R`'s seed, round protocol, uniform draw and play, and each round's breaks
 bounded through the adversary's own collision finders as `ServiceSoundOverlapPerProver` states. -/
-def ServiceSoundOverlapJ10RPerProver (Mc : Machine) (S : Service) (run : JORunMap Mc S R St n L B n' Ar)
+def ServiceSoundOverlapJ10RPerProver (Mc : AlgModel) (S : Service) (run : JORunMap Mc S R St n L B n' Ar)
     (e : S.Seed ≃ Paths (OJSpot St n L B n') R) (sha : Claims.Msg → Claims.Msg) (fb fz : Finders Mc S R)
     (δb βb δz βz : ℝ) : Prop :=
   ∀ (Ω' : Type) [Fintype Ω'] (M : Mc.Alg (S.Seed × Ω') (S.Com × S.Ans)),
@@ -467,7 +467,7 @@ straight-line program over `Z/2³²` on every call's bits (E3), and:
   calls, whose words read it with odd coefficients (`SlpG.ChargePureAtJ`).
 
 K1 is not claimed outside the scope, and the verifier can't observe which case applies. -/
-def KScopeOverlapOneSidedJ10R (Mc : Machine) (S : Service) (run : JORunMap Mc S R St n L B n' (ZMod (2 ^ 32))) :
+def KScopeOverlapOneSidedJ10R (Mc : AlgModel) (S : Service) (run : JORunMap Mc S R St n L B n' (ZMod (2 ^ 32))) :
     Prop :=
   ∀ (Ω' : Type) [Fintype Ω'] (M : Mc.Alg (S.Seed × Ω') (S.Com × S.Ans)),
     (∀ σ σ' r, (Mc.eval M (σ, r)).1 = (Mc.eval M (σ', r)).1) → ∀ (r : Ω') x,
@@ -482,7 +482,7 @@ value of its coins and every play `x`, the run's charge is at least `κ` times t
 straight-line program over every call's bits (each call's rows' and columns' coins shared across the call), less its
 noise reads `V x ≤ Vmax`. With `Mc` the sm_120 machine B_θ this is P1 at VF3j-16's prices with P4, as
 `ChargeVF3j16Overlap`; it counts each product once, whatever calls' intervals it lies in. -/
-def ChargeVF3j16OverlapJ10R (Mc : Machine) (S : Service) (run : JORunMap Mc S R St n L B n' Ar)
+def ChargeVF3j16OverlapJ10R (Mc : AlgModel) (S : Service) (run : JORunMap Mc S R St n L B n' Ar)
     (e : S.Seed ≃ Paths (OJSpot St n L B n') R) (κ Vmax : ℝ) : Prop :=
   ∀ (Ω' : Type) [Fintype Ω'] (M : Mc.Alg (S.Seed × Ω') (S.Com × S.Ans)),
     (∀ σ σ' r, (Mc.eval M (σ, r)).1 = (Mc.eval M (σ', r)).1) → ∀ (r : Ω') x,

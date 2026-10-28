@@ -1578,7 +1578,7 @@ def vf3s16 : List Sparse := [
    (66, 31485163, 2000000), (67, 31485163, 2000000), (68, 31485163, 2000000), (69, 31485163, 2000000)]]
 
 /-- The measured machine: VF3s-16's rows over `Sm120.classes`. -/
-noncomputable def machine : Machine (Fin 122) (Fin 130) :=
+noncomputable def machine : FacetCosts (Fin 122) (Fin 130) :=
   rowsMachine 122 130 vf3s16 2430
 
 /-- H1 + fx1's design data on VF3s-16: writer kinds as (class, ω), and `Sm120.h1fx1`'s routes. -/

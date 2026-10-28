@@ -34,7 +34,7 @@ variable {Q R S : Type}
 open Classical in
 theorem cap_credit_sum_le_rev1 (d : PearlCDevice) (sem : PearlCSem Q R S) (ρ ρ' : ℚ) (hadd : 0 ≤ d.prices.add)
     (hbf : 0 ≤ d.prices.bf16) (hle : ρ' ≤ ρ) (hρ1 : ρ ≤ 1) (U : Workload) (hD : pearlCDomainDev d U.layout)
-    (H : Q → R) (s : S) (τ : Transcript) :
+    (H : Q → R) (s : S) (τ : CommitLog) :
     ∑ u ∈ correctSet (pearlCProtocolDevRev1 d sem ρ') U H s τ,
         (pearlCProtocolDevRev1 d sem ρ').credit H s U u (actOf τ u) ≤
       ∑ u ∈ correctSet (pearlCProtocolDevRev1 d sem ρ) U H s τ,

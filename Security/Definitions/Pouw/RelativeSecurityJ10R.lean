@@ -106,7 +106,7 @@ structure JStagedRun (R St n L B n' : ℕ) (Ar : Type) [CommRing Ar] where
   word : ∀ x w s, DCells n n' B → Fin (N x w s)
 
 /-- **The analysis's map from adversaries to their window runs on the call design.** -/
-abbrev JRunMap (Mc : Machine) (S : Service) (R St n L B n' : ℕ) (Ar : Type) [CommRing Ar] : Type 1 :=
+abbrev JRunMap (Mc : AlgModel) (S : Service) (R St n L B n' : ℕ) (Ar : Type) [CommRing Ar] : Type 1 :=
   ∀ (Ω' : Type) [Fintype Ω'], Mc.Alg (S.Seed × Ω') (S.Com × S.Ans) → Ω' → JStagedRun R St n L B n' Ar
 
 /-- A round's bits with overlapping calls: call `t`'s bits, of shape `(n t, L, B t, n' t)`. -/
@@ -156,7 +156,7 @@ structure JOverlapRun (R St : ℕ) (n : Fin St → ℕ) (L : ℕ) (B n' : Fin St
   word : ∀ x w, OCells St n n' B → Fin (N x w)
 
 /-- **The analysis's map from adversaries to their window runs with overlapping calls.** -/
-abbrev JORunMap (Mc : Machine) (S : Service) (R St : ℕ) (n : Fin St → ℕ) (L : ℕ) (B n' : Fin St → ℕ) (Ar : Type)
+abbrev JORunMap (Mc : AlgModel) (S : Service) (R St : ℕ) (n : Fin St → ℕ) (L : ℕ) (B n' : Fin St → ℕ) (Ar : Type)
     [CommRing Ar] : Type 1 :=
   ∀ (Ω' : Type) [Fintype Ω'], Mc.Alg (S.Seed × Ω') (S.Com × S.Ans) → Ω' → JOverlapRun R St n L B n' Ar
 

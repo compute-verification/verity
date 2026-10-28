@@ -27,7 +27,7 @@ namespace Pouw.PearlC
 open Finset Assumptions Pouw.Fp8Atom
 
 theorem goodTiles_subset {Q R S : Type} (P : Protocol Q R S) (TR : TileRules Q R S) (U : Workload) (H : Q → R)
-    (s : S) (τ : Transcript) : goodTiles P TR U H s τ ⊆ range (TR.tiling U.layout).NT \ blankTiles TR U τ := by
+    (s : S) (τ : CommitLog) : goodTiles P TR U H s τ ⊆ range (TR.tiling U.layout).NT \ blankTiles TR U τ := by
   classical
   intro g hg
   unfold goodTiles at hg
@@ -44,7 +44,7 @@ oracle and salt, a set `good` of committed tiles of `τ` on which `Wcred ≤ Ω�
 with probability at most `e`, then the audit that accepts `good ∪ blank` does so while `T` is below `1 − γ` of the
 claimed work less `ε_s` of the layout's, `γ = 1 − (1 − γ₀)/Ω`, with probability at most `(1 − ε_s)^t + e`. -/
 theorem sampledOfGood {Q R S : Type} [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (TR : TileRules Q R S)
-    (U : Workload) (τ : (Q → R) → S → Transcript) (good : (Q → R) → S → Finset ℕ) (γ₀ Ω T e : ℝ) (hγ₀ : γ₀ < 1)
+    (U : Workload) (τ : (Q → R) → S → CommitLog) (good : (Q → R) → S → Finset ℕ) (γ₀ Ω T e : ℝ) (hγ₀ : γ₀ < 1)
     (hΩ : 0 < Ω) (hsub : ∀ H s, good H s ⊆ range (TR.tiling U.layout).NT \ blankTiles TR U (τ H s))
     (hW : ∀ H s, ∀ g ∈ good H s, TR.Wcred U.layout g (actOf (τ H s) ((TR.tiling U.layout).unit g)) ≤
       Ω * TR.credit H s U g (actOf (τ H s) ((TR.tiling U.layout).unit g)))
@@ -132,7 +132,7 @@ theorem sampledOfGood {Q R S : Type} [Fintype Q] [DecidableEq Q] [Fintype R] [Fi
           _ ≤ _ := Pouw.Proofs.workWeightedSampling ((Q → R) × S) w (TR.tiling U.layout).NT t K εs hεs
 
 theorem gammaSampled {Q R S : Type} [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (CM : CostModel Q R S)
-    (P : Protocol Q R S) (TR : TileRules Q R S) (D : Layout → Prop) (γ₀ Ω : ℝ) (ε : ℕ → ℕ → ℝ) (hγ₀ : γ₀ < 1)
+    (P : Protocol Q R S) (TR : TileRules Q R S) (D : UnitLayout → Prop) (γ₀ Ω : ℝ) (ε : ℕ → ℕ → ℝ) (hγ₀ : γ₀ < 1)
     (hΩ : 0 < Ω)
     (hW : ∀ U : Workload, U.InDomain P D → ∀ (H : Q → R) (s : S), ∀ g < (TR.tiling U.layout).NT, ∀ act : Codes,
       TR.capOK H s U g act → TR.Wcred U.layout g act ≤ Ω * TR.credit H s U g act)
@@ -154,17 +154,17 @@ theorem gammaSampled {Q R S : Type} [Fintype Q] [DecidableEq Q] [Fintype R] [Fin
 
 /-- TT_OUT per tile on a domain gives it on any smaller domain. -/
 theorem ttOutTile_mono_domain {Q R S : Type} [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S]
-    {CM : CostModel Q R S} {P : Protocol Q R S} {TR : TileRules Q R S} {D D' : Layout → Prop} {γ₀ : ℝ}
+    {CM : CostModel Q R S} {P : Protocol Q R S} {TR : TileRules Q R S} {D D' : UnitLayout → Prop} {γ₀ : ℝ}
     {ε : ℕ → ℕ → ℝ} (hD : ∀ L, D' L → D L) (h : TTOutTile CM P TR D γ₀ ε) : TTOutTile CM P TR D' γ₀ ε :=
   ⟨h.1, fun U hU => h.2 U ⟨hU.1, hD _ hU.2⟩⟩
 
-theorem gridTiles_unit_lt {tm tn : ℕ} {L : Layout} {b : ℕ × ℕ × ℕ} (hb : b ∈ gridTiles tm tn L) : b.1 < L.N := by
+theorem gridTiles_unit_lt {tm tn : ℕ} {L : UnitLayout} {b : ℕ × ℕ × ℕ} (hb : b ∈ gridTiles tm tn L) : b.1 < L.N := by
   unfold gridTiles at hb
   simp only [List.mem_flatMap, List.mem_range, List.mem_map] at hb
   obtain ⟨u, hu, bi, _, bj, _, rfl⟩ := hb
   exact hu
 
-theorem auditTiling_unit_lt (tm tn : ℕ) (L : Layout) {g : ℕ} (hg : g < (auditTiling tm tn L).NT) :
+theorem auditTiling_unit_lt (tm tn : ℕ) (L : UnitLayout) {g : ℕ} (hg : g < (auditTiling tm tn L).NT) :
     (auditTiling tm tn L).unit g < L.N := by
   simp only [auditTiling] at hg ⊢
   rw [List.getD_eq_getElem?_getD, List.getElem?_eq_getElem hg, Option.getD_some]
@@ -205,7 +205,7 @@ theorem wrefOf_nonneg (c : Costs) (s : Shape) : 0 ≤ wrefOf Params.pi c s := by
   positivity
 
 /-- A tile's credited `W_ref` is at most its `W_ref`. -/
-theorem pearlCTiles_wcred_le {Q R S : Type} (sem : PearlCSem Q R S) (c : Costs) (ρ : ℚ) (L : Layout) (g : ℕ)
+theorem pearlCTiles_wcred_le {Q R S : Type} (sem : PearlCSem Q R S) (c : Costs) (ρ : ℚ) (L : UnitLayout) (g : ℕ)
     (act : Codes) : (pearlCTiles sem c ρ).Wcred L g act ≤ (pearlCTiles sem c ρ).Wref L g := by
   simp only [pearlCTiles]
   exact_mod_cast mul_le_mul_of_nonneg_left (tileShare_mono _ (passRows_subset sem _ act _) _) (wrefOf_nonneg c _)
@@ -296,7 +296,7 @@ theorem unit_blocks (w : ℚ) (m n : ℕ) (hm : 0 < m) (hn : 0 < n) :
 
 /-- On a layout of nonempty units, the audit tiles' `W_ref` adds up to the layout's: each unit's words are covered
 once, so the `W` of `GγSampled` is `∑_u wrefOf`. -/
-theorem pearlCTiles_total {Q R S : Type} (sem : PearlCSem Q R S) (c : Costs) (ρ : ℚ) (L : Layout)
+theorem pearlCTiles_total {Q R S : Type} (sem : PearlCSem Q R S) (c : Costs) (ρ : ℚ) (L : UnitLayout)
     (hpos : ∀ u < L.N, 0 < (L.shape u).m ∧ 0 < (L.shape u).n) :
     tileWrefTotal (pearlCTiles sem c ρ) L = ∑ u ∈ range L.N, (wrefOf Params.pi c (L.shape u) : ℝ) := by
   let F : ℕ × ℕ × ℕ → ℝ := fun b => ((wrefOf Params.pi c (L.shape b.1) * tileShare (L.shape b.1)

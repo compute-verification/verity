@@ -32,13 +32,13 @@ open Finset Pouw.PearlC.Assumptions Pouw.Fp8Atom
 
 /-! ## The split layout's indices -/
 
-theorem rowOffset_succ (L : Layout) (u : ℕ) : rowOffset L (u + 1) = rowOffset L u + (L.shape u).m := by
+theorem rowOffset_succ (L : UnitLayout) (u : ℕ) : rowOffset L (u + 1) = rowOffset L u + (L.shape u).m := by
   unfold rowOffset; exact sum_range_succ _ _
 
-theorem rowOffset_mono (L : Layout) {u w : ℕ} (h : u ≤ w) : rowOffset L u ≤ rowOffset L w := by
+theorem rowOffset_mono (L : UnitLayout) {u w : ℕ} (h : u ≤ w) : rowOffset L u ≤ rowOffset L w := by
   unfold rowOffset; exact sum_le_sum_of_subset (range_subset_range.mpr h)
 
-theorem unitOfRow_rowIdx {L : Layout} {u i : ℕ} (hu : u < L.N) (hi : i < (L.shape u).m) :
+theorem unitOfRow_rowIdx {L : UnitLayout} {u i : ℕ} (hu : u < L.N) (hi : i < (L.shape u).m) :
     unitOfRow L (rowIdx L u i) = u := by
   unfold unitOfRow
   rw [Nat.findGreatest_eq_iff]
@@ -50,17 +50,17 @@ theorem unitOfRow_rowIdx {L : Layout} {u i : ℕ} (hu : u < L.N) (hi : i < (L.sh
     show ¬ rowOffset L w ≤ rowIdx L u i
     unfold rowIdx; omega
 
-theorem rowOfRow_rowIdx {L : Layout} {u i : ℕ} (hu : u < L.N) (hi : i < (L.shape u).m) :
+theorem rowOfRow_rowIdx {L : UnitLayout} {u i : ℕ} (hu : u < L.N) (hi : i < (L.shape u).m) :
     rowOfRow L (rowIdx L u i) = i := by
   unfold rowOfRow; rw [unitOfRow_rowIdx hu hi]; unfold rowIdx; omega
 
-theorem rowIdx_lt_rowsOf {L : Layout} {u i : ℕ} (hu : u < L.N) (hi : i < (L.shape u).m) :
+theorem rowIdx_lt_rowsOf {L : UnitLayout} {u i : ℕ} (hu : u < L.N) (hi : i < (L.shape u).m) :
     rowIdx L u i < rowsOf L := by
   have h1 := rowOffset_mono L (Nat.succ_le_of_lt hu)
   rw [rowOffset_succ] at h1
   unfold rowIdx rowsOf; omega
 
-theorem rowIdx_inj {L : Layout} {u i u' i' : ℕ} (hu : u < L.N) (hi : i < (L.shape u).m) (hu' : u' < L.N)
+theorem rowIdx_inj {L : UnitLayout} {u i u' i' : ℕ} (hu : u < L.N) (hi : i < (L.shape u).m) (hu' : u' < L.N)
     (hi' : i' < (L.shape u').m) (h : rowIdx L u i = rowIdx L u' i') : u = u' ∧ i = i' := by
   have h1 := unitOfRow_rowIdx hu hi
   have h2 := unitOfRow_rowIdx hu' hi'
@@ -70,7 +70,7 @@ theorem rowIdx_inj {L : Layout} {u i u' i' : ℕ} (hu : u < L.N) (hi : i < (L.sh
   refine ⟨rfl, ?_⟩
   unfold rowIdx at h; omega
 
-theorem unitOfRow_lt {L : Layout} {v : ℕ} (hv : v < rowsOf L) : unitOfRow L v < L.N := by
+theorem unitOfRow_lt {L : UnitLayout} {v : ℕ} (hv : v < rowsOf L) : unitOfRow L v < L.N := by
   have hN : L.N ≠ 0 := by
     intro h
     unfold rowsOf rowOffset at hv
@@ -80,20 +80,20 @@ theorem unitOfRow_lt {L : Layout} {v : ℕ} (hv : v < rowsOf L) : unitOfRow L v 
   unfold unitOfRow; omega
 
 /-- On a one-shape layout the declared rows are `N·m`. -/
-theorem rowsOf_const {L : Layout} {s : Shape} (h : ∀ u < L.N, L.shape u = s) : rowsOf L = L.N * s.m := by
+theorem rowsOf_const {L : UnitLayout} {s : Shape} (h : ∀ u < L.N, L.shape u = s) : rowsOf L = L.N * s.m := by
   unfold rowsOf rowOffset
   rw [sum_congr rfl fun u hu => by rw [h u (mem_range.mp hu)], sum_const, card_range, smul_eq_mul]
 
-theorem splitShape_eq {L : Layout} {u i : ℕ} (hu : u < L.N) (hi : i < (L.shape u).m) :
+theorem splitShape_eq {L : UnitLayout} {u i : ℕ} (hu : u < L.N) (hi : i < (L.shape u).m) :
     (splitLayout L).shape (rowIdx L u i) = ⟨1, (L.shape u).n, (L.shape u).k⟩ := by
   show (⟨1, (L.shape (unitOfRow L (rowIdx L u i))).n, (L.shape (unitOfRow L (rowIdx L u i))).k⟩ : Shape) = _
   rw [unitOfRow_rowIdx hu hi]
 
-theorem splitShape_n {L : Layout} {u i : ℕ} (hu : u < L.N) (hi : i < (L.shape u).m) :
+theorem splitShape_n {L : UnitLayout} {u i : ℕ} (hu : u < L.N) (hi : i < (L.shape u).m) :
     ((splitLayout L).shape (rowIdx L u i)).n = (L.shape u).n := by
   rw [splitShape_eq hu hi]
 
-theorem splitShape_k {L : Layout} {u i : ℕ} (hu : u < L.N) (hi : i < (L.shape u).m) :
+theorem splitShape_k {L : UnitLayout} {u i : ℕ} (hu : u < L.N) (hi : i < (L.shape u).m) :
     ((splitLayout L).shape (rowIdx L u i)).k = (L.shape u).k := by
   rw [splitShape_eq hu hi]
 
@@ -112,13 +112,13 @@ theorem splitShapeW_k {U : Workload} {u i : ℕ} (hu : u < U.layout.N) (hi : i <
 /-! ## One-row units are in the domain -/
 
 /-- **The split layout of an in-domain layout is in the domain**: one-row units are admitted. -/
-theorem pearlCDomainDev_split {d : PearlCDevice} {L : Layout} (h : pearlCDomainDev d L) :
+theorem pearlCDomainDev_split {d : PearlCDevice} {L : UnitLayout} (h : pearlCDomainDev d L) :
     pearlCDomainDev d (splitLayout L) := fun _ hv =>
   have hw := h _ (unitOfRow_lt hv)
   ⟨Nat.one_pos, hw.2.1, hw.2.2.1, hw.2.2.2.1, hw.2.2.2.2.1, hw.2.2.2.2.2⟩
 
 /-- An in-domain unit has positive `m` and `n`. -/
-theorem pearlCDomainDev_pos {d : PearlCDevice} {L : Layout} (h : pearlCDomainDev d L) {u : ℕ} (hu : u < L.N) :
+theorem pearlCDomainDev_pos {d : PearlCDevice} {L : UnitLayout} (h : pearlCDomainDev d L) {u : ℕ} (hu : u < L.N) :
     0 < (L.shape u).m ∧ 0 < (L.shape u).n :=
   ⟨(h u hu).1, lt_of_lt_of_le (by norm_num) (h u hu).2.1.1⟩
 
@@ -564,12 +564,12 @@ theorem split_correct {d : PearlCDevice} (hd : d.RowLocal) (hN : RowSeedNoise se
     exact ⟨(hc.2.2.2 i hi j hj').1.trans (split_ticket hd hN ρ H s hu hi c.act j),
       (hc.2.2.2 i hi j hj').2.trans (split_useful hd hN ρ H s hu hi c.act j)⟩
 
-theorem splitTranscript_rowIdx {L : Layout} (τ : Transcript) {u i : ℕ} (hu : u < L.N) (hi : i < (L.shape u).m) :
+theorem splitTranscript_rowIdx {L : UnitLayout} (τ : CommitLog) {u i : ℕ} (hu : u < L.N) (hi : i < (L.shape u).m) :
     splitTranscript L τ (rowIdx L u i) = (τ u).map fun c => rowCommit c i := by
   unfold splitTranscript
   rw [ite_eq_left (rowIdx_lt_rowsOf hu hi), unitOfRow_rowIdx hu hi, rowOfRow_rowIdx hu hi]
 
-theorem actOf_split {L : Layout} (τ : Transcript) {u i : ℕ} (hu : u < L.N) (hi : i < (L.shape u).m) :
+theorem actOf_split {L : UnitLayout} (τ : CommitLog) {u i : ℕ} (hu : u < L.N) (hi : i < (L.shape u).m) :
     actOf (splitTranscript L τ) (rowIdx L u i) = rowCodes (actOf τ u) i := by
   unfold actOf
   rw [splitTranscript_rowIdx τ hu hi]
@@ -601,7 +601,7 @@ open Classical in
 /-- **The row-seeded credit is at most the split game's**, on every transcript. -/
 theorem split_credit_le {d : PearlCDevice} (hd : d.RowLocal) (hN : RowSeedNoise sem sem') {ρ : ℚ} (hρ : ρ ≤ 1)
     (hadd : 0 ≤ d.prices.add) (hbf : 0 ≤ d.prices.bf16) {U : Workload} (hU : pearlCDomainDev d U.layout)
-    (H : Q → R) (s : S) (τ : Transcript) :
+    (H : Q → R) (s : S) (τ : CommitLog) :
     ∑ u ∈ correctSet (pearlCProtocolDevRev1RowCap d sem' ρ) U H s τ,
         (pearlCProtocolDevRev1RowCap d sem' ρ).credit H s U u (actOf τ u) ≤
       ∑ v ∈ correctSet (pearlCProtocolDevRev1 d sem ρ) (splitWorkload U) H s (splitTranscript U.layout τ),
@@ -678,7 +678,7 @@ end Reduction
 
 /-! ## The audit's grid on the split layout -/
 
-theorem mem_gridTiles {tm tn : ℕ} {L : Layout} {u bi bj : ℕ} :
+theorem mem_gridTiles {tm tn : ℕ} {L : UnitLayout} {u bi bj : ℕ} :
     (u, bi, bj) ∈ gridTiles tm tn L ↔
       u < L.N ∧ bi < ((L.shape u).m + tm - 1) / tm ∧ bj < ((L.shape u).n + tn - 1) / tn := by
   unfold gridTiles
@@ -689,7 +689,7 @@ theorem mem_gridTiles {tm tn : ℕ} {L : Layout} {u bi bj : ℕ} :
   · rintro ⟨hu, hbi, hbj⟩
     exact ⟨u, hu, bi, hbi, bj, hbj, rfl, rfl, rfl⟩
 
-theorem gridTiles_nodup (tm tn : ℕ) (L : Layout) : (gridTiles tm tn L).Nodup := by
+theorem gridTiles_nodup (tm tn : ℕ) (L : UnitLayout) : (gridTiles tm tn L).Nodup := by
   unfold gridTiles
   refine List.nodup_flatMap.mpr ⟨fun u _ => List.nodup_flatMap.mpr ⟨fun bi _ => List.nodup_range.map ?_,
     List.pairwise_lt_range.imp fun {a b} hab => ?_⟩, List.pairwise_lt_range.imp fun {a b} hab => ?_⟩
@@ -708,16 +708,16 @@ theorem gridTiles_nodup (tm tn : ℕ) (L : Layout) : (gridTiles tm tn L).Nodup :
     simp only [Prod.mk.injEq] at h
     omega
 
-theorem gridTiles_getD {tm tn : ℕ} {L : Layout} {g : ℕ} (hg : g < (auditTiling tm tn L).NT) :
+theorem gridTiles_getD {tm tn : ℕ} {L : UnitLayout} {g : ℕ} (hg : g < (auditTiling tm tn L).NT) :
     (gridTiles tm tn L).getD g (0, 0, 0) = (gridTiles tm tn L)[g]'hg := by
   rw [List.getD_eq_getElem?_getD, List.getElem?_eq_getElem hg, Option.getD_some]
 
-theorem gridTiles_getD_mem {tm tn : ℕ} {L : Layout} {g : ℕ} (hg : g < (auditTiling tm tn L).NT) :
+theorem gridTiles_getD_mem {tm tn : ℕ} {L : UnitLayout} {g : ℕ} (hg : g < (auditTiling tm tn L).NT) :
     (gridTiles tm tn L).getD g (0, 0, 0) ∈ gridTiles tm tn L := by
   rw [gridTiles_getD hg]
   exact List.getElem_mem hg
 
-theorem gridTiles_getD_inj {tm tn : ℕ} {L : Layout} {g g' : ℕ} (hg : g < (auditTiling tm tn L).NT)
+theorem gridTiles_getD_inj {tm tn : ℕ} {L : UnitLayout} {g g' : ℕ} (hg : g < (auditTiling tm tn L).NT)
     (hg' : g' < (auditTiling tm tn L).NT)
     (h : (gridTiles tm tn L).getD g (0, 0, 0) = (gridTiles tm tn L).getD g' (0, 0, 0)) : g = g' := by
   rw [gridTiles_getD hg, gridTiles_getD hg'] at h
@@ -725,11 +725,11 @@ theorem gridTiles_getD_inj {tm tn : ℕ} {L : Layout} {g g' : ℕ} (hg : g < (au
 
 /-- The split tile of row `i` of block column `bj` of unit `u`: the index of the one-row block `(rowIdx u i, 0, bj)` in
 the split layout's grid. -/
-def splitTile (L : Layout) (u i bj : ℕ) : ℕ := (gridTiles 64 64 (splitLayout L)).idxOf (rowIdx L u i, 0, bj)
+def splitTile (L : UnitLayout) (u i bj : ℕ) : ℕ := (gridTiles 64 64 (splitLayout L)).idxOf (rowIdx L u i, 0, bj)
 
 section SplitTile
 
-variable {L : Layout} {u i bj : ℕ} (hu : u < L.N) (hi : i < (L.shape u).m) (hbj : bj < ((L.shape u).n + 64 - 1) / 64)
+variable {L : UnitLayout} {u i bj : ℕ} (hu : u < L.N) (hi : i < (L.shape u).m) (hbj : bj < ((L.shape u).n + 64 - 1) / 64)
 include hu hi hbj
 
 theorem splitTile_mem : (rowIdx L u i, 0, bj) ∈ gridTiles 64 64 (splitLayout L) :=
@@ -814,7 +814,7 @@ theorem rowTile_cap (d : PearlCDevice) (ρ : ℚ) (sh : Shape) (i : ℕ) (hm : 0
   have hn' : (sh.n : ℚ) ≠ 0 := by exact_mod_cast hn.ne'
   field_simp
 
-theorem tile_facts {L : Layout} {g : ℕ} (hg : g < (auditTiling 64 64 L).NT) : ∃ u bi bj : ℕ,
+theorem tile_facts {L : UnitLayout} {g : ℕ} (hg : g < (auditTiling 64 64 L).NT) : ∃ u bi bj : ℕ,
     (gridTiles 64 64 L).getD g (0, 0, 0) = (u, bi, bj) ∧ u < L.N ∧ bj < ((L.shape u).n + 64 - 1) / 64 := by
   have hmem := gridTiles_getD_mem hg
   rcases hb : (gridTiles 64 64 L).getD g (0, 0, 0) with ⟨u, bi, bj⟩
@@ -824,7 +824,7 @@ theorem tile_facts {L : Layout} {g : ℕ} (hg : g < (auditTiling 64 64 L).NT) : 
 
 section Block
 
-variable {L : Layout} {g u bi bj : ℕ} (hb : (gridTiles 64 64 L).getD g (0, 0, 0) = (u, bi, bj))
+variable {L : UnitLayout} {g u bi bj : ℕ} (hb : (gridTiles 64 64 L).getD g (0, 0, 0) = (u, bi, bj))
 include hb
 
 theorem tile_unit : (auditTiling 64 64 L).unit g = u := by
@@ -904,7 +904,7 @@ open Classical in
 is a good one-row tile of the split layout with the row's share of the credit. -/
 theorem split_tileCredit_le {d : PearlCDevice} (hd : d.RowLocal) (hN : RowSeedNoise sem sem') {ρ : ℚ} (hρ : ρ ≤ 1)
     (hadd : 0 ≤ d.prices.add) (hbf : 0 ≤ d.prices.bf16) {U : Workload} (hU : pearlCDomainDev d U.layout)
-    (H : Q → R) (s : S) (τ : Transcript) :
+    (H : Q → R) (s : S) (τ : CommitLog) :
     ∑ g ∈ goodTiles (pearlCProtocolDevRev1RowCap d sem' ρ) (pearlCTilesDevRev1RowCap d sem' ρ) U H s τ,
         (pearlCTilesDevRev1RowCap d sem' ρ).credit H s U g (actOf τ ((auditTiling 64 64 U.layout).unit g)) ≤
       ∑ g ∈ goodTiles (pearlCProtocolDevRev1 d sem ρ) (pearlCTilesDevRev1 d sem ρ) (splitWorkload U) H s
@@ -1087,13 +1087,13 @@ theorem ttOutTile_of_ttOutTileRowSeed {CM : CostModel Q R S} {P : Protocol Q R S
     rwa [rowsOf_const hU.2.1.2] at h'⟩
 
 /-- The row-seeded TT_OUT does not read `W_ref`. -/
-theorem ttOutRowSeed_wref {CM : CostModel Q R S} {P : Protocol Q R S} {D : Layout → Prop} {γ₀ : ℝ}
-    (W : Layout → ℕ → ℝ) (h : TTOutRowSeed CM P D γ₀) : TTOutRowSeed CM { P with Wref := W } D γ₀ :=
+theorem ttOutRowSeed_wref {CM : CostModel Q R S} {P : Protocol Q R S} {D : UnitLayout → Prop} {γ₀ : ℝ}
+    (W : UnitLayout → ℕ → ℝ) (h : TTOutRowSeed CM P D γ₀) : TTOutRowSeed CM { P with Wref := W } D γ₀ :=
   h
 
 /-- The row-seeded TT_OUT per tile reads neither `W_ref` nor the credited rows' `W_ref`. -/
 theorem ttOutTileRowSeed_wref {CM : CostModel Q R S} {P : Protocol Q R S} {TR : TileRules Q R S}
-    {D : Layout → Prop} {γ₀ : ℝ} (W W' : Layout → ℕ → ℝ) (Wc : Layout → ℕ → Codes → ℝ)
+    {D : UnitLayout → Prop} {γ₀ : ℝ} (W W' : UnitLayout → ℕ → ℝ) (Wc : UnitLayout → ℕ → Codes → ℝ)
     (h : TTOutTileRowSeed CM P TR D γ₀) :
     TTOutTileRowSeed CM { P with Wref := W } { TR with Wref := W', Wcred := Wc } D γ₀ :=
   h

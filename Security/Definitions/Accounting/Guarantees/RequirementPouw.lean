@@ -46,7 +46,7 @@ produces but the registered ones and the run's inputs, each at its device and it
 
 Completeness: an identity over a wiring, its placed execution and PoUW's vocabulary, about no function of the code. -/
 def RequirementCredits : Prop :=
-  ∀ (Ω L : Type) (n : ℕ) (W : Wiring (Fin n)) (p : Ω → Placement L (Fin n)) (P : PouwWork.Verdict Ω L)
+  ∀ (Ω L : Type) (n : ℕ) (W : Wiring (Fin n)) (p : Ω → Placement L (Fin n)) (P : PouwWork.Verifier Ω L)
     (X : Finset L) (π : Ω → Fin n → ℕ) (m : Ω → Finset (Fin n)) (r : Ω),
     PouwWork.credits (fun r => (p r).actual W) P X π m r = work (π r) (region W (p r) X (Set.Ico P.ts P.td) \ m r)
 
@@ -67,7 +67,7 @@ so the actual run's wires into a region are the operands its gates use.
 
 Completeness: an identity over a wiring, its placed execution and PoUW's vocabulary, about no function of the code. -/
 def RequirementHelp : Prop :=
-  ∀ (Ω L : Type) (n : ℕ) (W : Wiring (Fin n)) (p : Ω → Placement L (Fin n)) (P : PouwWork.Verdict Ω L)
+  ∀ (Ω L : Type) (n : ℕ) (W : Wiring (Fin n)) (p : Ω → Placement L (Fin n)) (P : PouwWork.Verifier Ω L)
     (X : Finset L) (r : Ω), W.Topological → (p r).Follows W →
     PouwWork.help (fun r => (p r).actual W) P X r = ingress W (p r) (X ∪ P.V) (Set.Ico P.ts P.td)
 
@@ -85,7 +85,7 @@ its gates use.
 
 Completeness: a bound over a wiring, its placed execution and PoUW's vocabulary, about no function of the code. -/
 def RequirementHelpBound : Prop :=
-  ∀ (Ω L : Type) (n : ℕ) (W : Wiring (Fin n)) (p : Ω → Placement L (Fin n)) (P : PouwWork.Verdict Ω L)
+  ∀ (Ω L : Type) (n : ℕ) (W : Wiring (Fin n)) (p : Ω → Placement L (Fin n)) (P : PouwWork.Verifier Ω L)
     (X : Finset L) (r : Ω),
     PouwWork.help (fun r => (p r).actual W) P X r ≤ ingress W (p r) (X ∪ P.V) (Set.Ico P.ts P.td)
 
@@ -138,7 +138,7 @@ Proof: `Accounting.SecurityProofs.RequirementCreditsSteps`, from `RequirementCre
 
 Completeness: a bound over a wiring, its placed execution and PoUW's vocabulary, about no function of the code. -/
 def RequirementCreditsSteps : Prop :=
-  ∀ (Ω L : Type) (n : ℕ) (W : Wiring (Fin n)) (p : Ω → Placement L (Fin n)) (P : PouwWork.Verdict Ω L)
+  ∀ (Ω L : Type) (n : ℕ) (W : Wiring (Fin n)) (p : Ω → Placement L (Fin n)) (P : PouwWork.Verifier Ω L)
     (X : Finset L) (π : Ω → Fin n → ℕ) (m : Ω → Finset (Fin n)) (r : Ω) (w : Window),
     (p r).Paced X → (∀ x ∈ X, P.ts ≤ (p r).ticks x w.start ∧ (p r).ticks x (w.start + w.len) ≤ P.td) →
     work (π r) (stepRegion W (p r) X w \ m r) ≤ PouwWork.credits (fun r => (p r).actual W) P X π m r

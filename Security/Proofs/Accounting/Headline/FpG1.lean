@@ -211,7 +211,7 @@ theorem honestRun_clock : SheetClock Sm120.sheet honestRun.run := by
 
 theorem honestRun_dispatch : SheetDispatch honestRun.run := by
   have e : Sm120.model.G.load (Sparse.counts flatAll) .issue = ∑ k : Fin 122, Sparse.counts flatAll k := by
-    unfold Machine.load
+    unfold FacetCosts.load
     refine Finset.sum_congr rfl fun k _ => ?_
     rw [sm120_hG]
     simp [sheetCoef]
@@ -231,7 +231,7 @@ theorem honestRun_pipe : SheetPipe Sm120.sheet honestRun.run := by
   have hw0 := hw.ne'
   have e : ∑ k, (if Sm120.sheet.pipe k = some p then (32 : ℝ) else 0) * Sparse.counts flatAll k =
       Sm120.sheet.width p / 4 * Sm120.model.G.load (Sparse.counts flatAll) (.pipe p) := by
-    unfold Machine.load
+    unfold FacetCosts.load
     rw [Finset.mul_sum]
     refine Finset.sum_congr rfl fun k _ => ?_
     show _ = _ * ((if Sm120.sheet.pipe k = some p then 128 / Sm120.sheet.width p else 0) * _)
@@ -247,7 +247,7 @@ theorem honestRun_pipe : SheetPipe Sm120.sheet honestRun.run := by
 theorem honestRun_smem : SheetSmem Sm120.sheet honestRun.run := by
   have e : ∑ k, Sm120.sheet.smem k * Sparse.counts flatAll k =
       32 * Sm120.model.G.load (Sparse.counts flatAll) .smem := by
-    unfold Machine.load
+    unfold FacetCosts.load
     rw [Finset.mul_sum]
     refine Finset.sum_congr rfl fun k _ => ?_
     show _ = 32 * (Sm120.sheet.smem k / 32 * _)

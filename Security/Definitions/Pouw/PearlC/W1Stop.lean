@@ -35,7 +35,7 @@ noncomputable def CostModel.withStop (CM : CostModel Q R S) : CostModel Q R S wh
 /-- **The γ-gap property with the budget per coin**: for every adversary within `q` oracle calls, the probability that
 it costs at most `T` and its correct units' honest work exceeds `T / (1 − γ)` is at most `η(q, N)`. -/
 def GγPerCoin [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (CM : CostModel Q R S) (P : Protocol Q R S)
-    (D : Layout → Prop) (γ : ℝ) (η : ℕ → ℕ → ℝ) : Prop :=
+    (D : UnitLayout → Prop) (γ : ℝ) (η : ℕ → ℕ → ℝ) : Prop :=
   ∀ U : Workload, U.InDomain P D → ∀ T : ℝ, 0 ≤ T → ∀ q : ℕ, q ≤ 2 ^ 64 → ∀ A : Adversary CM,
     (∀ (H : Q → R) (s : S), A.pre.calls H + CM.calls A.online H U A.act (A.pre.eval H) s ≤ q) →
       pr (fun x : (Q → R) × S => CM.cost A.online x.1 U A.act (A.pre.eval x.1) x.2 ≤ T ∧

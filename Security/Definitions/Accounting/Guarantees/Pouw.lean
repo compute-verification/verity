@@ -24,7 +24,7 @@ oracle queries over the compute window at most `2^64`, the compute audit has its
 rate times the compute window's length. -/
 def ComputeOfPouw : Prop :=
   ∀ (Q R S : Type) [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S]
-    (CM : CostModel Q R S) (P : Protocol Q R S) (D : Layout → Prop) (γ₀ Ωmax : ℝ) (ε : ℕ → ℕ → ℝ),
+    (CM : CostModel Q R S) (P : Protocol Q R S) (D : UnitLayout → Prop) (γ₀ Ωmax : ℝ) (ε : ℕ → ℕ → ℝ),
     γ₀ < 1 → 0 < Ωmax →
     (∀ U : Workload, U.InDomain D → ∀ u < U.layout.N,
       (P.Wref U.layout u : ℝ) ≤ Ωmax * ((U.layout.shape u).Wmm : ℝ)) →

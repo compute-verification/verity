@@ -205,7 +205,7 @@ theorem sm120_fillOpt {Ω : Type} [Fintype Ω] (Pl : Play Ω Sm120.checks (Fin 1
     show ∑ r, lam r * (0 : ℝ) = 0
     simp
   have hprice : 0 ≤ Sm120.model.G.price lam (Pl.run x).nfill := by
-    unfold Machine.price Machine.load
+    unfold FacetCosts.price FacetCosts.load
     exact Finset.sum_nonneg fun r _ => mul_nonneg (hlam.1 r)
       (Finset.sum_nonneg fun k _ => mul_nonneg (sm120_a_nonneg r k) ((hSplit x).2.2.1 k))
   show (1 - (0 : ℝ)) * Sm120.model.chiStar lam ≤ _

@@ -8,10 +8,10 @@ facets `R`, each facet a row `a r : K → ℝ` (the cycles of facet `r` one inst
 SM-clocked or fixed-clock, and the highest SM clock `fmax` any program runs at (P1: 2,430 MHz on sm_120).
 
 * A program's counts `n : K → ℝ` are its device totals of each class divided by the SMSPs, per unit of honest work.
-* Its load on facet `r` is `a_r · n` (`Machine.load`), and its bound `B(n) = max_r a_r · n` (`Machine.bound`).
+* Its load on facet `r` is `a_r · n` (`FacetCosts.load`), and its bound `B(n) = max_r a_r · n` (`FacetCosts.bound`).
 * A run (`Run`) is a program's counts with its cycles per SMSP and its SM clock; its time is cycles over clock.
 * A certificate (`IsCert`) is a probability vector `λ` on the facets. Its price of counts is
-  `π · n = Σ_r λ_r a_r · n` (`Machine.price`), and of a route's per-facet demand `d` it is `Σ_r λ_r d_r`
+  `π · n = Σ_r λ_r a_r · n` (`FacetCosts.price`), and of a route's per-facet demand `d` it is `Σ_r λ_r d_r`
   (`demandPrice`).
 -/
 
@@ -23,7 +23,7 @@ open Finset
 instruction occupies, per SMSP), whether the facet is SM-clocked (`true`: pipes, issue, joint issue frontiers, shared
 memory, TEX, LDSM) or fixed-clock (`false`: DRAM, PCIe, anything off the SM clock, its row
 `a_{r,k} = fmax · N_SMSP / R_{r,k}` priced at the fastest SM clock), and `fmax`, the highest SM clock. -/
-structure Machine (K R : Type) where
+structure FacetCosts (K R : Type) where
   a : R → K → ℝ
   smClocked : R → Bool
   fmax : ℝ
@@ -38,10 +38,10 @@ structure Run (K : Type) where
 variable {K R : Type} [Fintype K] [Fintype R]
 
 /-- A program's load on facet `r`: `a_r · n`. -/
-def Machine.load (G : Machine K R) (n : K → ℝ) (r : R) : ℝ := ∑ k, G.a r k * n k
+def FacetCosts.load (G : FacetCosts K R) (n : K → ℝ) (r : R) : ℝ := ∑ k, G.a r k * n k
 
 /-- The model's bound `B(n) = max_r a_r · n`, in cycles. -/
-noncomputable def Machine.bound (G : Machine K R) (n : K → ℝ) : ℝ := ⨆ r, G.load n r
+noncomputable def FacetCosts.bound (G : FacetCosts K R) (n : K → ℝ) : ℝ := ⨆ r, G.load n r
 
 /-- A run's time: its cycles over its clock. -/
 noncomputable def Run.time (P : Run K) : ℝ := P.cycles / P.clock
@@ -50,7 +50,7 @@ noncomputable def Run.time (P : Run K) : ℝ := P.cycles / P.clock
 def IsCert (lam : R → ℝ) : Prop := (∀ r, 0 ≤ lam r) ∧ ∑ r, lam r = 1
 
 /-- The certificate `π = Σ_r λ_r a_r`'s price of counts: `π · n = Σ_r λ_r a_r · n`. -/
-def Machine.price (G : Machine K R) (lam : R → ℝ) (n : K → ℝ) : ℝ := ∑ r, lam r * G.load n r
+def FacetCosts.price (G : FacetCosts K R) (lam : R → ℝ) (n : K → ℝ) : ℝ := ∑ r, lam r * G.load n r
 
 /-- The certificate's price of a route's per-facet demand `d`: `Σ_r λ_r d_r`. -/
 def demandPrice (lam : R → ℝ) (d : R → ℝ) : ℝ := ∑ r, lam r * d r

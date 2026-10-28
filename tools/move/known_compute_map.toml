@@ -1,0 +1,112 @@
+# compute-accounting's names off the vocabulary guard's KNOWN list (`tests/test_lean_vocabulary.py`): what
+# `tools/move/rename.py --map tools/move/known_compute_map.toml` renames. Each homonym takes the name of what it is, in
+# Security's Pouw and Accounting areas, PoUW's code Lean and Python, and benchmarks/pouw. A [[words_in]] block names the
+# files where its bare word means that declaration; [keep] holds the other declarations of the same word in those files
+# (the canonical `Verity.Accel.Machine`, a circuit's `Transcript`, a cost model's `Prog` field) and every module name, so
+# no file moves. Declarations keep their place in the locks' records: `rename.py --moves` prints the map that
+# `check.py --update --moved` takes. It reruns on a later tree, so a branch carried across it runs it again after merging.
+
+[words]
+
+[keep]
+patterns = ['\b(?:Definitions|Proofs|Properties|Models)\.[\w.]+', '\b(?:Verity\.)?Accel\.Machine\b',
+            '(?:\bC|toCircuit|Circuit)\.Transcript\b', '(?m)^[ \t]+Prog :=', '\b(?:CM[₀-₉]?|M|m|Pous|Mc|toyMc|tm)\.Prog\b',
+            '\b(?:Served|Discharge|Slots)\.Layout\b', 'note:[\w./-]+', 'art:[0-9a-f]+', 'cursor/[\w./-]+', 'lanes/[\w.-]+']
+strings = []
+
+[rewrite]
+# Never rewritten: records of what was (the earlier moves and their maps, changelogs, the rulings), the frozen backends,
+# files whose bytes a digest pins, the research harness's recorded moves, and the guard's own list, edited by hand.
+exclude = ["tools/move/**", "archive/**", "tools/research/**", ".agents/skills/friction/SKILL.md", "**/CHANGELOG.md",
+           "fixtures/**", "**/fixtures/**", "**/*vectors*.json", "**/*vectors*.txt.gz", "*.patch", "**/TRUSTED.sha256",
+           "uv.lock", "**/*.lock", "tools/verity/check/tests/test_move_check.py", "tests/test_lean_vocabulary.py"]
+
+# Each Lean name where it stands qualified, in Security, the code's Lean and the locks.
+[[words_in]]
+files = ["Security/**", "verity/core/protocols/pouw/**"]
+words = { "CoinFlow.Program" = "CoinFlow.Dataflow", "PouwWork.Verdict" = "PouwWork.Verifier", "J10R.Layout" = "J10R.TileShape", "TS.Machine" = "TS.FacetCosts", "Dimension.Assumptions.Machine" = "Dimension.Assumptions.WordCostModel", "Embed.Op" = "Embed.Insn", "Dither.Period" = "Dither.PeriodDevices", "Dither.Verdict" = "Dither.Acceptance", "Dither.Layout" = "Dither.MemMap", "Eps1.Prog" = "Eps1.M3Words", "Pouw.Layout" = "Pouw.UnitLayout", "Pouw.Transcript" = "Pouw.CommitLog", "PearlC.Layout" = "PearlC.UnitLayout", "PearlC.Transcript" = "PearlC.CommitLog", "TileCircuit.Gate" = "TileCircuit.Cell", "W1.Prog" = "W1.Listing", "WholeCircuit.Block" = "WholeCircuit.UnitKind", "RelativeSecurity.Machine" = "RelativeSecurity.AlgModel", "TileBound.Gate" = "TileBound.Firing", "ModelB.Gate" = "ModelB.Step", "ModelB.Prog" = "ModelB.Steps" }
+
+[[words_in]]
+files = ["Security/Definitions/Accounting/Assumptions/PouwFloor.lean", "Security/Definitions/Accounting/Assumptions/PouwWork.lean", "Security/Definitions/Accounting/Guarantees/PouwWork.lean", "Security/Definitions/Accounting/PouwWork.lean", "Security/Proofs/Accounting/PouwWork.lean"]
+words = { "Verdict" = "Verifier" }
+
+[[words_in]]
+files = ["Security/Definitions/Accounting/TS/J10R.lean", "Security/Proofs/Accounting/TS/J10RChecks.lean"]
+words = { "Layout" = "TileShape" }
+
+[[words_in]]
+files = ["Security/Definitions/Pouw/Assumptions/Dimension/A2Words.lean", "Security/Definitions/Pouw/Assumptions/Dimension/Assumptions.lean", "Security/Definitions/Pouw/Assumptions/Dimension/Embed.lean", "Security/Definitions/Pouw/Assumptions/Dimension/Forest.lean", "Security/Definitions/Pouw/Assumptions/Dimension/Mixing.lean", "Security/Definitions/Pouw/Assumptions/Dimension/OpenPipe.lean", "Security/Definitions/Pouw/Assumptions/Dimension/Pinned.lean", "Security/Definitions/Pouw/Assumptions/Dimension/Pipe.lean", "Security/Definitions/Pouw/Assumptions/Dimension/RouteU.lean", "Security/Definitions/Pouw/Assumptions/Dimension/RouteUPipe.lean", "Security/Definitions/Pouw/Guarantees/Dimension.lean"]
+words = { "Machine" = "WordCostModel" }
+
+[[words_in]]
+files = ["Security/Definitions/Pouw/Assumptions/Dimension/Embed.lean", "Security/Definitions/Pouw/Assumptions/Dimension/Fp8Mma.lean", "Security/Proofs/Pouw/Dimension/EmbedProofs.lean", "Security/Proofs/Pouw/Dimension/Fp8MmaProofs.lean"]
+words = { "Op" = "Insn" }
+
+[[words_in]]
+files = ["Security/Definitions/Pouw/Dither.lean", "Security/Definitions/Pouw/DitherInstance.lean", "Security/Definitions/Pouw/Guarantees/Dither.lean", "Security/Definitions/Pouw/Guarantees/DitherInstance.lean", "Security/Proofs/Pouw/Dither.lean", "Security/Proofs/Pouw/DitherWitness.lean"]
+words = { "Period" = "PeriodDevices" }
+
+[[words_in]]
+files = ["Security/Definitions/Pouw/Assumptions/Dither.lean", "Security/Definitions/Pouw/Dither.lean", "Security/Definitions/Pouw/DitherInstance.lean", "Security/Definitions/Pouw/Guarantees/Dither.lean", "Security/Definitions/Pouw/Guarantees/DitherInstance.lean", "Security/Proofs/Pouw/DitherWitness.lean"]
+words = { "Verdict" = "Acceptance" }
+
+[[words_in]]
+files = ["Security/Definitions/Pouw/DitherInstance.lean", "Security/Definitions/Pouw/Guarantees/DitherInstance.lean", "Security/Proofs/Pouw/DitherInstance.lean"]
+words = { "Layout" = "MemMap" }
+
+[[words_in]]
+files = ["Security/Definitions/Pouw/Eps1/M3.lean", "Security/Definitions/Pouw/Guarantees/Eps1.lean", "Security/Proofs/Pouw/Eps1/Basics.lean", "Security/Proofs/Pouw/Eps1/ClassP.lean", "Security/Proofs/Pouw/Eps1/WordLocal.lean"]
+words = { "Prog" = "M3Words" }
+
+[[words_in]]
+files = ["Security/Definitions/Accounting/Guarantees/PerRun.lean", "Security/Definitions/Accounting/Guarantees/Pouw.lean", "Security/Definitions/Pouw/Assumptions/Game.lean", "Security/Definitions/Pouw/Assumptions/NCP/Assumptions.lean", "Security/Definitions/Pouw/Assumptions/NCP/Chain.lean", "Security/Definitions/Pouw/Assumptions/NCP/GamePinned.lean", "Security/Definitions/Pouw/Assumptions/NCP/RouteUAssumptions.lean", "Security/Definitions/Pouw/Assumptions/NCP/RouteUGame.lean", "Security/Definitions/Pouw/Assumptions/PearlC/HiddenTile.lean", "Security/Definitions/Pouw/Assumptions/PearlC/HonestCap.lean", "Security/Definitions/Pouw/Assumptions/PearlC/TTOut.lean", "Security/Definitions/Pouw/Assumptions/PearlC/TTOutRowSeed.lean", "Security/Definitions/Pouw/Assumptions/PearlC/TTOutTileUOnly.lean", "Security/Definitions/Pouw/Assumptions/PearlC/TTOutUOnly.lean", "Security/Definitions/Pouw/Assumptions/PearlC/TTOutW1.lean", "Security/Definitions/Pouw/Assumptions/Pinned.lean", "Security/Definitions/Pouw/Barrier/Defs.lean", "Security/Definitions/Pouw/Barrier/Pinned.lean", "Security/Definitions/Pouw/D1.lean", "Security/Definitions/Pouw/Game/Defs.lean", "Security/Definitions/Pouw/Guarantees/Barrier.lean", "Security/Definitions/Pouw/Guarantees/Deadline.lean", "Security/Definitions/Pouw/Guarantees/Game.lean", "Security/Definitions/Pouw/Guarantees/NCP.lean", "Security/Definitions/Pouw/M1.lean", "Security/Definitions/Pouw/NCP/Protocol.lean", "Security/Definitions/Pouw/NCP/RouteU.lean", "Security/Definitions/Pouw/PearlC/Completeness.lean", "Security/Definitions/Pouw/PearlC/Device.lean", "Security/Definitions/Pouw/PearlC/DeviceFp4.lean", "Security/Definitions/Pouw/PearlC/DeviceFp4Hot.lean", "Security/Definitions/Pouw/PearlC/Hidden.lean", "Security/Definitions/Pouw/PearlC/Tile.lean", "Security/Definitions/Pouw/PearlC/TileCheck.lean", "Security/Definitions/Pouw/PearlC/W1.lean", "Security/Definitions/Pouw/PearlC/W1Stop.lean", "Security/Proofs/Accounting/JointBridge/CommOfPeriodLeakAccepted.lean", "Security/Proofs/Accounting/PerRunNecessity.lean", "Security/Proofs/Pouw/Barrier/Proofs.lean", "Security/Proofs/Pouw/EndToEndWindow/Statement.lean", "Security/Proofs/Pouw/M1.lean", "Security/Proofs/Pouw/Milestone.lean", "Security/Proofs/Pouw/NCP/GameProofs.lean", "Security/Proofs/Pouw/PearlC/Completeness.lean", "Security/Proofs/Pouw/PearlC/DeviceGamma.lean", "Security/Proofs/Pouw/PearlC/FlockTile/Audit.lean", "Security/Proofs/Pouw/PearlC/FlockTile/Gamma.lean", "Security/Proofs/Pouw/PearlC/Fp4HotGamma.lean", "Security/Proofs/Pouw/PearlC/Gamma.lean", "Security/Proofs/Pouw/PearlC/HiddenGamma.lean", "Security/Proofs/Pouw/PearlC/HiddenTileGame.lean", "Security/Proofs/Pouw/PearlC/KernelWrefGamma.lean", "Security/Proofs/Pouw/PearlC/Rev1Witness.lean", "Security/Proofs/Pouw/PearlC/RowCapAtGamma.lean", "Security/Proofs/Pouw/PearlC/RowSeedCode.lean", "Security/Proofs/Pouw/PearlC/RowSeedGamma.lean", "Security/Proofs/Pouw/PearlC/RowSeedKGamma.lean", "Security/Proofs/Pouw/PearlC/TTOutW1.lean", "Security/Proofs/Pouw/PearlC/TTOutW1Item1.lean", "Security/Proofs/Pouw/PearlC/TTOutW1Variants.lean", "Security/Proofs/Pouw/PearlC/TileCheck.lean", "Security/Proofs/Pouw/PearlC/TileCheck8Words.lean", "Security/Proofs/Pouw/PearlC/TileCheckWords.lean", "Security/Proofs/Pouw/PearlC/TileGamma.lean", "Security/Proofs/Pouw/PearlC/TileUOnlyGamma.lean", "Security/Proofs/Pouw/PearlC/UOnlyGamma.lean", "Security/Proofs/Pouw/PearlC/W1Priced.lean", "Security/Proofs/Pouw/PearlC/W1Stop.lean", "Security/Proofs/Pouw/PearlC/W1Tabulate.lean", "Security/Proofs/Pouw/Sanity.lean", "Security/Proofs/Pouw/Witness.lean"]
+words = { "Layout" = "UnitLayout" }
+
+[[words_in]]
+files = ["Security/Definitions/Pouw/Assumptions/PearlC/HiddenTile.lean", "Security/Definitions/Pouw/Assumptions/PearlC/TTOutRowSeed.lean", "Security/Definitions/Pouw/Assumptions/PearlC/TTOutUOnly.lean", "Security/Definitions/Pouw/Game/Defs.lean", "Security/Definitions/Pouw/NCP/Witness.lean", "Security/Definitions/Pouw/PearlC/Hidden.lean", "Security/Definitions/Pouw/PearlC/HiddenTileGame.lean", "Security/Definitions/Pouw/PearlC/Tile.lean", "Security/Definitions/Pouw/PearlC/TileCheck.lean", "Security/Definitions/Pouw/PearlC/W1.lean", "Security/Definitions/Pouw/Witness/Model.lean", "Security/Proofs/Pouw/Barrier/Proofs.lean", "Security/Proofs/Pouw/BudgetAbort.lean", "Security/Proofs/Pouw/EndToEndWindow/Statement.lean", "Security/Proofs/Pouw/NCP/GameProofs.lean", "Security/Proofs/Pouw/NCP/RouteUProofs.lean", "Security/Proofs/Pouw/PearlC/DeviceCapGamma.lean", "Security/Proofs/Pouw/PearlC/DeviceCapRev1Gamma.lean", "Security/Proofs/Pouw/PearlC/DeviceChainCapGamma.lean", "Security/Proofs/Pouw/PearlC/DeviceRev1Gamma.lean", "Security/Proofs/Pouw/PearlC/FlockTile/Audit.lean", "Security/Proofs/Pouw/PearlC/HiddenTileGame.lean", "Security/Proofs/Pouw/PearlC/RowCapAtGamma.lean", "Security/Proofs/Pouw/PearlC/RowSeedGamma.lean", "Security/Proofs/Pouw/PearlC/TileCapRev1Gamma.lean", "Security/Proofs/Pouw/PearlC/TileCheck.lean", "Security/Proofs/Pouw/PearlC/TileGamma.lean", "Security/Proofs/Pouw/PearlC/TileUOnlyGamma.lean", "Security/Proofs/Pouw/PearlC/UOnlyGamma.lean", "Security/Proofs/Pouw/PearlC/W1BudgetAbort.lean", "Security/Proofs/Pouw/Reduction.lean", "Security/Proofs/Pouw/Sanity.lean", "Security/Proofs/Pouw/Theorem1.lean", "Security/Proofs/Pouw/Witness.lean"]
+words = { "Transcript" = "CommitLog" }
+
+[[words_in]]
+files = ["Security/Definitions/Accounting/Guarantees/PerRun.lean", "Security/Definitions/Pouw/Assumptions/PearlC/HiddenTile.lean", "Security/Definitions/Pouw/Assumptions/PearlC/HonestCap.lean", "Security/Definitions/Pouw/Assumptions/PearlC/TTOut.lean", "Security/Definitions/Pouw/Assumptions/PearlC/TTOutRowSeed.lean", "Security/Definitions/Pouw/Assumptions/PearlC/TTOutTileUOnly.lean", "Security/Definitions/Pouw/Assumptions/PearlC/TTOutUOnly.lean", "Security/Definitions/Pouw/Assumptions/PearlC/TTOutW1.lean", "Security/Definitions/Pouw/Guarantees/Deadline.lean", "Security/Definitions/Pouw/PearlC/Completeness.lean", "Security/Definitions/Pouw/PearlC/Device.lean", "Security/Definitions/Pouw/PearlC/DeviceFp4.lean", "Security/Definitions/Pouw/PearlC/DeviceFp4Hot.lean", "Security/Definitions/Pouw/PearlC/Game.lean", "Security/Definitions/Pouw/PearlC/Hidden.lean", "Security/Definitions/Pouw/PearlC/Tile.lean", "Security/Definitions/Pouw/PearlC/TileCheck.lean", "Security/Definitions/Pouw/PearlC/W1.lean", "Security/Definitions/Pouw/PearlC/W1Stop.lean", "Security/Proofs/Accounting/PerRunNecessity.lean", "Security/Proofs/Pouw/PearlC/Completeness.lean", "Security/Proofs/Pouw/PearlC/DeviceGamma.lean", "Security/Proofs/Pouw/PearlC/FlockTile/Audit.lean", "Security/Proofs/Pouw/PearlC/FlockTile/Gamma.lean", "Security/Proofs/Pouw/PearlC/Fp4HotGamma.lean", "Security/Proofs/Pouw/PearlC/Gamma.lean", "Security/Proofs/Pouw/PearlC/HiddenGamma.lean", "Security/Proofs/Pouw/PearlC/HiddenTileGame.lean", "Security/Proofs/Pouw/PearlC/KernelWrefGamma.lean", "Security/Proofs/Pouw/PearlC/Rev1Witness.lean", "Security/Proofs/Pouw/PearlC/RowCapAtGamma.lean", "Security/Proofs/Pouw/PearlC/RowSeedCode.lean", "Security/Proofs/Pouw/PearlC/RowSeedGamma.lean", "Security/Proofs/Pouw/PearlC/RowSeedKGamma.lean", "Security/Proofs/Pouw/PearlC/TTOutW1.lean", "Security/Proofs/Pouw/PearlC/TTOutW1Item1.lean", "Security/Proofs/Pouw/PearlC/TTOutW1Variants.lean", "Security/Proofs/Pouw/PearlC/TileCheck.lean", "Security/Proofs/Pouw/PearlC/TileCheck8Words.lean", "Security/Proofs/Pouw/PearlC/TileCheckWords.lean", "Security/Proofs/Pouw/PearlC/TileGamma.lean", "Security/Proofs/Pouw/PearlC/TileUOnlyGamma.lean", "Security/Proofs/Pouw/PearlC/UOnlyGamma.lean", "Security/Proofs/Pouw/PearlC/W1Priced.lean", "Security/Proofs/Pouw/PearlC/W1Stop.lean", "Security/Proofs/Pouw/PearlC/W1Tabulate.lean"]
+words = { "Layout" = "UnitLayout" }
+
+[[words_in]]
+files = ["Security/Definitions/Pouw/Assumptions/PearlC/HiddenTile.lean", "Security/Definitions/Pouw/Assumptions/PearlC/TTOutRowSeed.lean", "Security/Definitions/Pouw/Assumptions/PearlC/TTOutUOnly.lean", "Security/Definitions/Pouw/PearlC/Game.lean", "Security/Definitions/Pouw/PearlC/Hidden.lean", "Security/Definitions/Pouw/PearlC/HiddenTileGame.lean", "Security/Definitions/Pouw/PearlC/Tile.lean", "Security/Definitions/Pouw/PearlC/TileCheck.lean", "Security/Definitions/Pouw/PearlC/W1.lean", "Security/Proofs/Pouw/PearlC/DeviceCapGamma.lean", "Security/Proofs/Pouw/PearlC/DeviceCapRev1Gamma.lean", "Security/Proofs/Pouw/PearlC/DeviceChainCapGamma.lean", "Security/Proofs/Pouw/PearlC/DeviceRev1Gamma.lean", "Security/Proofs/Pouw/PearlC/FlockTile/Audit.lean", "Security/Proofs/Pouw/PearlC/HiddenTileGame.lean", "Security/Proofs/Pouw/PearlC/RowCapAtGamma.lean", "Security/Proofs/Pouw/PearlC/RowSeedGamma.lean", "Security/Proofs/Pouw/PearlC/TileCapRev1Gamma.lean", "Security/Proofs/Pouw/PearlC/TileCheck.lean", "Security/Proofs/Pouw/PearlC/TileGamma.lean", "Security/Proofs/Pouw/PearlC/TileUOnlyGamma.lean", "Security/Proofs/Pouw/PearlC/UOnlyGamma.lean", "Security/Proofs/Pouw/PearlC/W1BudgetAbort.lean"]
+words = { "Transcript" = "CommitLog" }
+
+[[words_in]]
+files = ["Security/Definitions/Pouw/PearlC/Row4Circuit.lean", "Security/Definitions/Pouw/PearlC/RowCircuit.lean", "Security/Definitions/Pouw/PearlC/Tile4Circuit.lean", "Security/Definitions/Pouw/PearlC/TileCircuit.lean", "Security/Definitions/Pouw/PearlC/WholeCircuit.lean"]
+words = { "Gate" = "Cell" }
+
+[[words_in]]
+files = ["Security/Definitions/Pouw/PearlC/W1.lean", "Security/Definitions/Pouw/PearlC/W1Stop.lean", "Security/Proofs/Pouw/PearlC/W1BudgetAbort.lean", "Security/Proofs/Pouw/PearlC/W1Checks.lean", "Security/Proofs/Pouw/PearlC/W1Priced.lean", "Security/Proofs/Pouw/PearlC/W1Stop.lean", "Security/Proofs/Pouw/PearlC/W1Tabulate.lean"]
+words = { "Prog" = "Listing" }
+
+[[words_in]]
+files = ["Security/Definitions/Pouw/PearlC/WholeCircuit.lean", "Security/Proofs/Pouw/PearlC/Block4Sem.lean", "Security/Proofs/Pouw/PearlC/TileCheck4.lean", "Security/Proofs/Pouw/PearlC/TileCheck8.lean", "Security/Proofs/Pouw/PearlC/WholeCircuit.lean"]
+words = { "Block" = "UnitKind" }
+
+[[words_in]]
+files = ["Security/Definitions/Pouw/Assumptions/RelativeSecurity.lean", "Security/Definitions/Pouw/Assumptions/ShaRealize.lean", "Security/Definitions/Pouw/Dither.lean", "Security/Definitions/Pouw/Guarantees/RelativeSecurity.lean", "Security/Definitions/Pouw/RelativeSecurity.lean", "Security/Definitions/Pouw/RelativeSecurityJ10R.lean", "Security/Proofs/Pouw/DitherInstance.lean", "Security/Proofs/Pouw/DitherWitness.lean", "Security/Proofs/Pouw/RelativeSecurity.lean", "Security/Proofs/Pouw/RelativeSecurityJ10R.lean", "Security/Proofs/Pouw/ShaRealizeWitness.lean"]
+words = { "Machine" = "AlgModel" }
+
+[[words_in]]
+files = ["Security/Definitions/Pouw/TileBound/Defs.lean", "Security/Proofs/Pouw/TileBound/Proofs.lean", "Security/Proofs/Pouw/TileBound/Witness.lean"]
+words = { "Gate" = "Firing" }
+
+[[words_in]]
+files = ["Security/Definitions/Accounting/Assumptions/TS.lean", "Security/Definitions/Accounting/Guarantees/TS.lean", "Security/Definitions/Accounting/Headline/Encoding.lean", "Security/Definitions/Accounting/Headline/Sm120Measured.lean", "Security/Definitions/Accounting/HeadlineDc/Encoding.lean", "Security/Definitions/Accounting/HeadlineDc/Sm100Measured.lean", "Security/Definitions/Accounting/HeadlineDc/Sm90Measured.lean", "Security/Definitions/Accounting/TS/Routes.lean", "Security/Definitions/Accounting/TS/Sheet.lean", "Security/Proofs/Accounting/Headline/Encoding.lean", "Security/Proofs/Accounting/Headline/FpG1.lean", "Security/Proofs/Accounting/Headline/Sm120.lean", "Security/Proofs/Accounting/Headline/Sm120Measured.lean", "Security/Proofs/Accounting/HeadlineDc/Branches.lean", "Security/Proofs/Accounting/HeadlineDc/Meets.lean", "Security/Proofs/Accounting/TS.lean", "Security/Proofs/Accounting/TS/Facets.lean", "Security/Proofs/Accounting/TS/FanIn.lean", "Security/Proofs/Accounting/TS/Price.lean", "Security/Proofs/Accounting/TS/Sheet.lean"]
+words = { "Machine" = "FacetCosts" }
+
+[[words_in]]
+files = ["Security/Definitions/Accounting/CoinFlow.lean", "Security/Definitions/Accounting/Guarantees/CoinFlow.lean", "Security/Proofs/Accounting/CoinFlow/Flow.lean"]
+words = { "Program m C V" = "Dataflow m C V", "structure Program" = "structure Dataflow", "namespace Program" = "namespace Dataflow", "end Program" = "end Dataflow", "Program.eval" = "Dataflow.eval", "Program.admits" = "Dataflow.admits", "Program.noiseCoins" = "Dataflow.noiseCoins", "Program.Desc" = "Dataflow.Desc", "Program.Topological" = "Dataflow.Topological", "Program.CoinFlowRule" = "Dataflow.CoinFlowRule", "Program.OneUse" = "Dataflow.OneUse", "Program.SinkConfined" = "Dataflow.SinkConfined", "Program.View" = "Dataflow.View", "Program.view" = "Dataflow.view" }
+
+[[words_in]]
+files = ["Security/Definitions/Accounting/TS/Machine.lean"]
+words = { "Machine K R" = "FacetCosts K R", "structure Machine" = "structure FacetCosts", "`Machine`" = "`FacetCosts`", "Machine.load" = "FacetCosts.load", "Machine.bound" = "FacetCosts.bound", "Machine.price" = "FacetCosts.price" }
+
+[[words_in]]
+files = ["Security/Proofs/Pouw/RelativeSecurity.lean"]
+words = { "Gate K" = "Step K", "structure Gate" = "structure Step", "Prog K" = "Steps K", "abbrev Prog" = "abbrev Steps" }
+
