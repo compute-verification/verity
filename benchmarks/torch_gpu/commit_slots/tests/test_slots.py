@@ -43,7 +43,7 @@ def test_salts_are_cflocks_hm96_salt_with_the_slot_as_nonce() -> None:
         assert S.row_salts(KEY, slot, g, 2) == hm96_salt(KEY, slot, g) + hm96_salt(KEY, slot, g + 1)
 
 
-def _slot_root_by_hand(layout: S.Layout, rows: list[bytes], slot: int) -> bytes:
+def _slot_root_by_hand(layout: S.CommitShape, rows: list[bytes], slot: int) -> bytes:
     inst, key = hm96.SHA512, hm96.SHA512.default_key
     salts = hm96_salt
     unit_roots = []
@@ -101,7 +101,7 @@ def test_a_replay_of_other_rows_is_refused() -> None:
         S.open_unit(CTX, layout, 0, KEY, c.slot_roots, 0, 0, S.slot_rows(layout, out, 1))
 
 
-def _round_trip(layout: S.Layout, tmp_path: Path) -> S.Layout:
+def _round_trip(layout: S.CommitShape, tmp_path: Path) -> S.CommitShape:
     """``layout`` written in ``_layout_json``'s form (compact JSON, then a newline) and loaded back by ``S.load``
     (``commitments.layout``): an equal layout, its repeated groups one object again, with equal digests, written back to
     the same bytes."""
@@ -109,7 +109,7 @@ def _round_trip(layout: S.Layout, tmp_path: Path) -> S.Layout:
     paths = tmp_path / "layout.json", tmp_path / "again.json"
     paths[0].write_text(json.dumps(S._layout_json(layout), separators=(",", ":")) + "\n")
     back = S.load(paths[0])
-    assert type(back) is S.Layout and back == layout
+    assert type(back) is S.CommitShape and back == layout
     assert len({id(g) for g in back.groups}) == len({id(g) for g in layout.groups})
     assert back.digest == layout.digest and back.json_digest == layout.json_digest
     assert S._layout_json(back) == L.to_json(back)
