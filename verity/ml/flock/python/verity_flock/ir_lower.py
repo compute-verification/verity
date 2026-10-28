@@ -318,19 +318,19 @@ _PIECE_ANDS: dict[str, int] = {}
 
 
 def _piece_ands(prim) -> int:
-    """The ANDs of ``prim``'s piece on free operands (none for a primitive without one), each primitive id lowered once."""
+    """The ANDs of ``prim``'s piece on free operands (none for a primitive C-Flock has no piece for, which no unit holding it
+    lowers past), each primitive id lowered once."""
     if prim.id not in _PIECE_ANDS:
         from verity.ml.circuits.evaluation.reference import signature_of
 
-        C = Circuit()
-        try:
+        ands = 0
+        if prim.id in PIECES:
+            C = Circuit()
             params, _ = signature_of(prim)
             outs = lower(C, prim, [C.input(f"in{j}", w) for j, w in enumerate(w for pt in params for w in pt.leaf_widths())])
-        except (KeyError, NotImplementedError, ValueError):
-            outs = None
-        if outs is not None:
             C.output("out", [b for w in outs for b in w])
-        _PIECE_ANDS[prim.id] = C.counts()["ands"] if outs is not None else 0
+            ands = C.counts()["ands"]
+        _PIECE_ANDS[prim.id] = ands
     return _PIECE_ANDS[prim.id]
 
 

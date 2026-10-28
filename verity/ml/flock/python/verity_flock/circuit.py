@@ -581,7 +581,7 @@ def past_range(w: dict) -> str | None:
 def refuse_past_range(definition, name: str) -> dict:
     """`unit_witness`, or ValueError (`past_range`), before any lowering, for a unit whose Definition alone needs more than
     C-Flock's proved range of 2^`K_MAX` witness bits: `compose` refuses its block only once the whole unit is lowered (the
-    32 × 32 H1 tile at K = 2048 OOM'd at 600 GiB on the way, TOP-138). `compose` refuses every unit this refuses unless its
+    32 × 32 H1 tile at K = 2048 ran out of 600 GiB on the way). `compose` refuses every unit this refuses unless its
     lowering lays out fewer than half the witness bits its Definition counts (its slot alone would be 2^`K_MAX`)."""
     w = unit_witness(definition)
     if (why := past_range(w)) is not None:
