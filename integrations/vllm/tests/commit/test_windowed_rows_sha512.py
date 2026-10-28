@@ -382,9 +382,3 @@ def test_what_rows_sha512_refuses(monkeypatch):
     for scheme in ("vllm-v1", "rows-sha256"):
         with pytest.raises(ValueError, match="unknown commit scheme"):
             NC.NativeCollectCommitter(eng, commit_scheme=scheme, **base)
-    com = committer(monkeypatch)
-    try:
-        with pytest.raises(ValueError, match=R.NAME):
-            com.add_padding_steps([object()])
-    finally:
-        com.close()

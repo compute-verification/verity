@@ -102,13 +102,6 @@ def test_sparse_host_retainers_dump_what_they_hold(tmp_path, cs):
     assert OC.OpenedReader(store, run)(2, "model.layers.0.mlp.down_proj", 1000 * K, 1100 * K) is None
 
 
-def test_a_store_with_padding_steps_is_refused(tmp_path, cs):
-    com, rc = commit_steps(steps(cs), commit_scheme=cs)
-    com._padding = {3: object()}
-    with pytest.raises(ValueError, match="padding steps"):
-        SD.dump(com, rc, tmp_path)
-
-
 def test_the_dumped_block_is_the_retained_block(tmp_path, cs):
     com, rc = commit_steps(steps(cs), commit_scheme=cs)
     SD.dump(com, rc, tmp_path)

@@ -575,7 +575,6 @@ def binding_record(com, rc, reqs, sampling, args, pair: int, *, served_tokens: d
         return B.logical_request(rid, order)
 
     request_rows = {int(s): [(_logical(rid), lo, hi) for rid, lo, hi in rows] for s, rows in step_rows.items()} if n_req > 1 else None
-    padded = bool(getattr(com, "_padding", None))                                   # finalize materialised padding steps (--padded-finalize)
     caps = {f"r{int(r.get('index', i))}": int(r.get("max_tokens") or sampling.get("max_tokens") or 1) for i, r in enumerate(reqs)}
     # the EXECUTED PREFIX OF RECORD of every request: cap on a length stop; served + LAG on an EOS stop
     # (the driver's served tokens of THIS run; the Program's declared EOS set and LAG -- stop_rule_of_record; nothing from the trace).
@@ -607,22 +606,10 @@ def binding_record(com, rc, reqs, sampling, args, pair: int, *, served_tokens: d
         binder = Binder.of_manifest(_hdr, rank=0, ports=source_ports(getattr(com, "sources", []) or []), arrivals=arrivals)
         if binder.rebind:
             collector = dict(collector, promoted_inputs={"names": {k: list(v) for k, v in binder.rebind.items()}, "rule": "binding.PROMOTED_INPUT_RULE"})
-    if padded:
-        from verity_vllm.commit import padding_steps as PS
-        bmap = PS.padded_binding_map_of_committer(com, rc, pd, request_id="r0", rank=0, layout_version=collector["layout"], chunk=com.chunk,
-                                                  weight_registration=rc.weight_registration, collector=collector, request_rows=request_rows,
-                                                  binder=binder)
-    else:
-        bmap = B.build_binding_map(com._layouts, rc.steps, rc.run_root, pd, request_id="r0", rank=0, layout_version=collector["layout"], chunk=com.chunk,
-                                   weight_registration=rc.weight_registration, collector=collector, request_rows=request_rows, binder=binder)
+    bmap = B.build_binding_map(com._layouts, rc.steps, rc.run_root, pd, request_id="r0", rank=0, layout_version=collector["layout"], chunk=com.chunk,
+                               weight_registration=rc.weight_registration, collector=collector, request_rows=request_rows, binder=binder)
     horizon = max(arrivals[k] + n_exec[k] for k in caps)
     request_steps = EP.request_steps_of_record(epr, arrivals)
-    executed_steps = request_steps
-    if padded:
-        # the padded Commit's population is the FULL cap population (Q(P) is fixed across stopping points): every request's
-        # steps arrival .. arrival + cap; the executed prefix stays the rows-past-the-stop rule's, over the ACTIVE entries
-        request_steps = {k: list(range(int(arrivals[k]), int(arrivals[k]) + int(caps[k]))) for k in caps}
-        horizon = max(arrivals[k] + caps[k] for k in caps)
     workload = {"program_digest": pd, "requests": sorted(caps, key=lambda k: int(k[1:])), "steps": horizon, "ranks": [0], "request_steps": request_steps}
     man_hdr = None
     comp = None
@@ -633,10 +620,8 @@ def binding_record(com, rc, reqs, sampling, args, pair: int, *, served_tokens: d
         man_hdr["schedule"] = schedule
         man_hdr["root_program_digest"] = root_pd
         man_hdr["build_program_digest"] = getattr(args, "program_digest", None)
-        # declared per-step composition vs the map's partition.  The EXECUTED steps of record go in (not the padded population's
-        # full-cap axis): on a padded map the check reads the declaration unrestricted itself and uses them only to name a padding entry
-        # inside the prefix / an executed block past the stop; on a plain map they are the same dict
-        comp = B.composition_check(man_hdr, bmap, request_steps=executed_steps)
+        # declared per-step composition vs the map's partition, over the executed steps of record
+        comp = B.composition_check(man_hdr, bmap, request_steps=request_steps)
     else:
         pop = list(B.expected_population(structure, workload))
     pop_digest, pop_n = B.population_digest(pop)
@@ -644,22 +629,7 @@ def binding_record(com, rc, reqs, sampling, args, pair: int, *, served_tokens: d
     cov["schedule"] = schedule
     # the two lengths of every request beside the population they placed, and the rows-past-the-stop check
     cov["executed_prefix_of_record"] = {k: v for k, v in epr.items() if k != "rule"} | {"rule": EP.RULE, "request_steps": {k: [v[0], v[-1]] if v else [] for k, v in request_steps.items()}}
-    if padded:
-        # a `bot-by-enablement` entry outside the prefix is the REQUIRED padding, never
-        # 'execution past the stop'; the check runs over the active entries, the padding is counted beside it
-        if hasattr(EP, "ACTIVITY_PADDING"):
-            # the padding-aware rule present: the FULL map goes through it -- it counts the padding AND fails by name on
-            # padding INSIDE the prefix (the inactive fallback)
-            past = EP.rows_past_the_stop(bmap, executed_steps)
-        else:
-            _active = {**bmap, "entries": [e for e in bmap["entries"] if e.get("activity") != "bot-by-enablement"]}
-            past = EP.rows_past_the_stop(_active, executed_steps)
-            past["padding_entries_n"] = sum(1 for e in bmap["entries"] if e.get("activity") == "bot-by-enablement")
-        past["padding_steps"] = sorted(int(k) for k in getattr(com, "_padding", {}))
-        # [A14.3 (g)] the padded Commit's overhead of record: bytes / leaves / wall of the padding beside the executed Commit (finalize measured it)
-        cov["padding_overhead"] = getattr(com, "padding_stats", None)
-    else:
-        past = EP.rows_past_the_stop(bmap, request_steps)
+    past = EP.rows_past_the_stop(bmap, request_steps)
     cov["rows_past_the_stop"] = past
     # the prefix is accepted only LINKED to an account of the same attempt: the Match record (--match-dir: capture/tokens.json
     # + ../global_match.json) and, where a prefix is reduced and the sampled ids are committed, the Commit's token record (commit/tokens_p<pair>.json,
@@ -1077,7 +1047,6 @@ class Options:
     program_digest: str | None = option("--program-digest", default=None, help="the Build's Program digest of record (B=1: build_request's program_digest; B>=2: gprog's workload digest): the " "required manifest's program_digest must equal it or the Commit fails closed as wrong-Program; also the binding map's key digest")
     required_manifest: str | None = option("--required-manifest", default=None, help="the Program/query-derived required-value manifest (verity_vllm.pipeline.cli build ...): every " "identity it lists (step, invocation, op_path, output_member, element range, request, rank) must be covered by a committed " "tensor of every instrumented run (coverage_check); replaces the counts+classes source, which is the labelled fallback")
     tensor_digests: bool = option("--tensor-digests", default=False, action="store_true", help="diagnostic: per-tensor digests of the retained host bytes per instrumented run, diffed across pairs")
-    padded_finalize: bool = option("--padded-finalize", default=False, action="store_true", help="the padded Commit: at finalize, every identity the required manifest names " "for a request OUTSIDE its executed prefix of record (declared LAG + declared EOS + served tokens; never inferred) is MATERIALISED as the " "canonical bot of its lifted width -- a step nobody executed becomes a padding step, a mixed step (B>1) is refolded from the retained leaf " "digests + the padding leaves -- so the ONE run root is over S = cap steps and the map (padded-binding-map/1) binds the full cap " "population (activity active / bot-by-enablement).  Requires --required-manifest.  Off = today's executed-steps-only Commit")
     moe_source: str = option("--moe-source", choices=["auto", "on", "off"], default="auto", help="[MOE-03] attach the fused-MoE block source (router_w/ids, up, act, down, sum per MoE layer per step; class moe_block_stream, " "added to the required classes): auto = when the model has MoE-runner modules (the default), on = refuse if it has none, off = never")
     compiled_taps: str = option("--compiled-taps", choices=["off", "on", "kernels", "served"], default="off", help="served = the "
                                 "served-compiled row: every value of every engine step at vLLM's defaults (ServedCompiledSource), the served Build "
@@ -1167,8 +1136,6 @@ def main(args: Options, argv: list[str] | None = None) -> None:
     required_classes_cli = args.required_classes is not None
     moe_attached = False
     required_manifest = None
-    if getattr(args, "padded_finalize", False) and not args.required_manifest:
-        raise SystemExit("--padded-finalize needs --required-manifest: the padding is RequiredValues outside the executed prefix of record; nothing to pad without it")
     if args.required_manifest:
         from verity_vllm.commit.binding import require_build_program_digest
         require_build_program_digest(args.required_manifest, args.program_digest)          # named refusal, before any engine
@@ -1737,13 +1704,6 @@ def main(args: Options, argv: list[str] | None = None) -> None:
             if _lock is not None:
                 r["remote_session"] = RS.end_run(_rs, pair, arm)
             if arm != "control":
-                if getattr(args, "padded_finalize", False):
-                    # the padding hook runs INSIDE finalize (after the worker drained: every executed step's leaf count / layout is
-                    # known, before the run-root fold); the served tokens of THIS run + stop_rule_of_record place the executed prefix
-                    from functools import partial
-                    from verity_vllm.commit import padding_steps as PS
-                    com.padding_hook = partial(PS.padding_for_committer, manifest=required_manifest, requests=reqs, sampling=sampling,
-                                               served_tokens=r["tokens"], stop=stop_of_record)
                 rc = com.finalize()
                 t_ready = time.perf_counter()
                 com.uninstall()
@@ -1873,15 +1833,6 @@ def main(args: Options, argv: list[str] | None = None) -> None:
                     TL.start("validate.manifest_coverage", pair=pair)
                     # identity coverage against the Program/query manifest (the collector's own layouts are the CLAIM, the manifest the requirement)
                     lay = com.layouts_dump()
-                    _pad_lay = None
-                    if getattr(com, "_padding", None):
-                        # this check is the manifest OVER THE EXECUTED PREFIX against the committed layouts; the
-                        # padding tensors (the lifted containers `lifted17/u32`, `lifted33/u64`: bot by enablement, outside every prefix)
-                        # are not its business -- split out and COUNTED here (never `committed_unmatched`), checked by the padded map's
-                        # full-cap coverage above (binding_record)
-                        _pad_lay = {st: sum(1 for m in ms if str(m.get("dtype", "")).startswith("lifted")) for st, ms in lay.items()}
-                        lay = {st: [m for m in ms if not str(m.get("dtype", "")).startswith("lifted")] for st, ms in lay.items()}
-                        lay = {st: ms for st, ms in lay.items() if ms}                      # a padding-only step has no executed claim
                     # this layouts-only check keys on the manifest's `engine_step` annotation, which the compiled
                     # manifest derived under the DECLARED arrive_steps; on a workload with gaps the engine admits a pending request as soon
                     # as it is idle, so the population is placed on the committed-step axis by the engine schedule of record (the same
@@ -1939,10 +1890,6 @@ def main(args: Options, argv: list[str] | None = None) -> None:
                         cov = {"ok": False, "error": repr(e)[:300], "checked": 0, "missing_n": -1, "missing_by_family": {}, "families_missing_entirely": [],
                                "committed_unmatched_n": -1, "manifest_source": str(args.required_manifest)}
                         print(f"[delta] MANIFEST COVERAGE ERROR (pair {pair}, {arm}): {e!r}", flush=True)
-                    if _pad_lay is not None:
-                        cov["padding_tensors_excluded"] = {"n": sum(_pad_lay.values()), "steps": sorted(st for st, n in _pad_lay.items() if n),
-                                                           "padding_only_steps": sorted(st for st, n in _pad_lay.items() if n and st not in lay),
-                                                           "rule": "B9.1: bot-by-enablement tensors are outside every executed prefix; their coverage is the padded map's (binding.coverage over the full cap)"}
                     if _cov_sched is not None:
                         cov["schedule"] = {k: _cov_sched.get(k) for k in ("use", "basis", "why", "all_equal_declared", "declared_arrive_steps", "observed_arrive_steps")}
                         cov["engine_step_basis"] = ("engine schedule of record (request step + observed arrival)" if _man_cov is not required_manifest
@@ -1955,13 +1902,6 @@ def main(args: Options, argv: list[str] | None = None) -> None:
                                                             for k, v in _epr_cov["requests"].items()} | {"lag": _epr_cov["lag"], "ok": _epr_cov["ok"], "problems": _epr_cov["problems"][:3]}
                         # the classification beside the requirement it placed; the manifest of record's own count + digest beside both
                         cov["not_executed_by_rule"] = _ne_class
-                        if _pad_lay is not None and isinstance(_ne_class, dict):
-                            # on a padded Commit this classification is the LIST of identities the padding materialized (the manifest
-                            # placed over the executed prefix names them), not an exclusion: the population of record is the full cap and these
-                            # are its `inactive_by_enablement` stratum (checked == bot word in the replay block); n stays the count of that list
-                            cov["not_executed_by_rule"] = dict(_ne_class, padded=True, reading="inactive_by_enablement",
-                                                               note="padded Commit: these identities are bot-by-enablement entries of the padded map; "
-                                                                    "the population's not_executed_by_rule reads n 0, renamed inactive_by_enablement")
                         cov["manifest_of_record"] = {"digest": required_manifest.get("manifest_digest"), "identities_n": _ids_all_n, "required_n": len(_man_cov.get("identities") or []),
                                                      "not_executed_n": (_ne_class or {}).get("n"), "edited": False}
                         if not _epr_cov["ok"] and cov.get("ok"):

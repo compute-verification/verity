@@ -5,7 +5,7 @@ retained bytes (the byte ranges the host copy holds) and its tree levels, plus t
 `load(d)` returns `(store, run)`: `store` is a `NativeRangeOpenings` over the dumped state with the committer's own leaf, layout and
 context rules, so an `OpenedReader(store, run)` recomputes every leaf it returns and folds it to the step root and the run root of record,
 exactly as the committer does.  A dumped byte that differs from the committed one does not verify.  Only packed GPU-tree steps with
-vllm-v1 leaves or under rows-sha512 (`step_rows`), and no padding steps, are dumped; any other store is refused by name.
+vllm-v1 leaves or under rows-sha512 (`step_rows`) are dumped; any other store is refused by name.
 
     store.json                  {schema, chunk, program_digest, geo_digest, run_id, layout_v2, gpu_tree_src, run_root, steps: [...]}
                                 (rows-sha512: commit_scheme too)
@@ -176,8 +176,6 @@ def _refusal(com: Any) -> str | None:
         return f"{com.leaf_scheme} leaves (salted): not dumped"
     if getattr(com, "commit_scheme", scheme.NAME) not in SCHEMES:
         return f"{com.commit_scheme} steps: not dumped"
-    if getattr(com, "_padding", None):
-        return "padding steps: not dumped"
     if getattr(com, "_streams", None):
         return "host-path step streams: not dumped (GPU-tree committers only)"
     if not getattr(com, "retain_levels", True):
@@ -413,7 +411,6 @@ class DumpedStore(NativeRangeOpenings, leaf_rule.LeafSchemeRule):
     _block_holds = staticmethod(NativeHostCommitter._block_holds)
     _ctx_digest = NativeHostCommitter._ctx_digest
     _gpu_layout = NativeHostCommitter._gpu_layout
-    _padding_leaf = NativeHostCommitter._padding_leaf
 
     def __init__(self, doc: dict[str, Any], d: Path) -> None:
         self.chunk = int(doc["chunk"])
@@ -430,7 +427,6 @@ class DumpedStore(NativeRangeOpenings, leaf_rule.LeafSchemeRule):
         self.row_keys: dict[int, bytes] = {}
         self._salted: dict[int, tuple[list[tuple[int, int, int]], memoryview]] = {}
         self._salts: dict[int, bytes] = {}
-        self._padding: dict[int, Any] = {}
         self._streams: dict[int, Any] = {}
         self._levels: dict[int, Any] = {}
         self._layouts: dict[int, list[TensorMeta]] = {}

@@ -85,6 +85,3 @@ def test_what_the_offline_rows_core_refuses():
         NativeHostCommitter(None, gpu_tree=True, commit_scheme="rows-sha256")
     with pytest.raises(ValueError, match="GPU-tree steps"):
         NativeHostCommitter(None, commit_scheme=R.NAME)
-    com, _rc = committed()
-    with pytest.raises(ValueError, match=R.NAME):
-        com.add_padding_steps([object()])

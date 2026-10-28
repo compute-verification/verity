@@ -487,7 +487,7 @@ class _Null:
 # ---------------------------------------------------------------------------------------------------------------- off the loop
 
 #: what a committer's `reset` rebinds for its next window: the closed window's per-step state, as its seal reads it
-WINDOW_STATE = ("_layouts", "_gpu_blocks", "_gpu_levels", "_streams", "_levels", "_padding", "_salts", "_done", "row_keys")
+WINDOW_STATE = ("_layouts", "_gpu_blocks", "_gpu_levels", "_streams", "_levels", "_salts", "_done", "row_keys")
 GB = 10 ** 9
 
 

@@ -18,7 +18,7 @@ Sites (`SITE_KINDS`):
                     (`seed`); launch_proxy = a host constant read from a kernel launch (`splits`)
   registered_input  a weight of record: hashed once at registration (`register_weights`); analytic_table = a derived table the Match phase
                     dumps and checks analytically (`analytic_table_of_buffer`)
-  prescribed        no runtime producer: the Value is materialised by rule (a padding step's identities, `padding_steps`)
+  prescribed        no runtime producer: the Value is materialised by rule (a padding step's identities)
 
 Policy (`POLICY`): a Value with one legal site takes it; with several, producer output first; consumer input when the producer is a
 PROMOTED interior Call (a pre-flip v1 manifest's row: its output is no module's return, `manifest_format.promoted_observation`); a Value with no legal site is
@@ -57,7 +57,7 @@ HIDDEN_TAP_OF_FAMILY = {"fa2_hidden_m1_stream": "fa2.m1", "fa3_hidden_m1_stream"
 MOE_FAMILY = "moe_block_stream"
 TP_FAMILY = "tp_rank_partials"
 WEIGHTS_FAMILY = "weights"
-#: manifest `boundary_class` / `enablement` values that mean "materialised by enablement, no runtime producer" (padding_steps)
+#: manifest `boundary_class` / `enablement` values that mean "materialised by enablement, no runtime producer"
 PRESCRIBED_ENABLEMENT = frozenset({"padding", "inactive"})
 
 
@@ -236,7 +236,7 @@ def _identity_key(r: Mapping[str, Any]) -> tuple:
 
 def value_classes(manifest: Mapping[str, Any], padding_identities: Iterable[Mapping[str, Any]] = ()) -> list[ValuePlan]:
     """One Value class per (op_path, output_member, family).  `padding_identities`: the manifest identities OUTSIDE their request's executed
-    prefix of record (`padding_steps.padding_steps_of_record`, a runtime fact known at finalize): those are PRESCRIBED -- materialised by
+    prefix of record (a runtime fact known at finalize): those are PRESCRIBED -- materialised by
     enablement, no runtime producer.  A row may also declare it (`boundary_class: padding`)."""
     rows = manifest.get("identities") or manifest.get("entries") or manifest.get("rows") or []
     padded = {_identity_key(p) for p in padding_identities}
@@ -515,7 +515,7 @@ def acquisition_plan(manifest: Mapping[str, Any], correspondence: AcquireCorresp
         residuals = residuals_of(values, rt, tabs)
     else:
         residuals = []
-    notes = ["every identity of a Value at a step >= its request's executed prefix is a PRESCRIBED materialisation (padding_steps: enablement, no runtime producer); "
+    notes = ["every identity of a Value at a step >= its request's executed prefix is a PRESCRIBED materialisation (enablement, no runtime producer); "
              "the plan's runtime sites are for the executed steps"]
     pdig = str(manifest.get("program_digest") or "")
     mdig = str(manifest.get("manifest_digest") or "")

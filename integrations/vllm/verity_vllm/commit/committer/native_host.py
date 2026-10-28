@@ -697,11 +697,11 @@ def _gib(n: float) -> str:
     return f"{n / 2**30:.2f} GiB"
 
 
-def _split_step_names(srcs: list[Any], names: Any, step: int, padding_only: bool) -> tuple[Any, dict[str, tuple[int, int]]]:
+def _split_step_names(srcs: list[Any], names: Any, step: int) -> tuple[Any, dict[str, tuple[int, int]]]:
     """The step's names with each call-boundary source's own split off in turn, and every source's mismatches."""
     bad: dict[str, tuple[int, int]] = {}
     for src in srcs:
-        names, mine = src.split_step_names(names, step, padding_only)
+        names, mine = src.split_step_names(names, step, False)
         bad.update(mine)
     return names, bad
 
@@ -761,9 +761,6 @@ class NativeHostCommitter(WindowViews, NativeRangeOpenings, leaf_rule.LeafScheme
         self._levels: dict[int, list[list[bytes]]] = {}
         self._layouts: dict[int, list[TensorMeta]] = {}
         self._streams: dict[int, memoryview] = {}
-        self._padding: dict[int, Any] = {}          # [B9.1] padding steps (verity_vllm.commit.padding_steps.PaddingStep), by engine step
-        self.padding_stats: dict[str, Any] | None = None   # [B9.1 / A14.3 (g)] set by finalize() when padding was applied: bytes/leaves/wall
-        self.padding_hook: Any = None               # [B9.1] callable(committer) -> PaddingSteps, run inside finalize() once every step is hashed
         self.sources: list[Any] = []
         self._worker: threading.Thread | None = None
         # optional CPU pinning experiment (env VERITY_PIN=1): serving thread -> one core, worker + hash threads -> other cores
@@ -948,11 +945,9 @@ class NativeHostCommitter(WindowViews, NativeRangeOpenings, leaf_rule.LeafScheme
 
     # ------------------------------------------------------------------ offline core (tests; no engine, no CUDA)
 
-    def commit_offline(self, steps: list[list[tuple]], *, padding: list | None = None) -> RunCommitment:
+    def commit_offline(self, steps: list[list[tuple]]) -> RunCommitment:
         """Commit the given per-step tensors (name, raw bytes[, dtype, shape]; default uint8 of the byte length) synchronously — the exact
-        hashing / layout / root code the online path runs on the worker thread, minus hooks and D2H -- for the security tests and CPU cross-checks.
-        `padding`: [B9.1] PaddingSteps -- or a callable(committer) -> PaddingSteps run after the steps are committed -- registered
-        before `finalize()` (see `add_padding_steps`)."""
+        hashing / layout / root code the online path runs on the worker thread, minus hooks and D2H -- for the security tests and CPU cross-checks."""
         class _Ev:
             def synchronize(self) -> None:
                 return None
@@ -970,8 +965,6 @@ class NativeHostCommitter(WindowViews, NativeRangeOpenings, leaf_rule.LeafScheme
                 job.metas.append(m)
             job.t_step_end = time.perf_counter()
             self._commit_step(job)
-        if padding:                                   # a callable sees the committed steps (leaf counts of a mixed step) like the pod does
-            self.add_padding_steps(padding(self) if callable(padding) else padding)
         return self.finalize()
 
     # ------------------------------------------------------------------ static context
@@ -1209,8 +1202,6 @@ class NativeHostCommitter(WindowViews, NativeRangeOpenings, leaf_rule.LeafScheme
         self._salts = {}
         self._gpu_blocks = {}
         self._gpu_levels = {}
-        self._padding = {}
-        self.padding_stats = None
         self._step_index = 0
         self.spans = Spans(scheme.NAME)
         self.gc_pauses.pauses, self.gc_pauses.freeze_s = [], []
@@ -1272,7 +1263,6 @@ class NativeHostCommitter(WindowViews, NativeRangeOpenings, leaf_rule.LeafScheme
 
     ALIGN = 4
     GPU_TREE_SRC = 0                       # hidden-path chunk header field `src_mask` (0: not an FA2 tap stream); the tag field carries the step index
-    layout = "chunk-leaf-v1"               # the offline GPU tree's leaf rule, which padding leaves follow
 
     def commit_block_offline(self, step: int, stream: bytes | bytearray, metas: list[TensorMeta]) -> StepCommitment:
         """CPU reference of the GPU chunk tree for ONE packed step block (tests; no CUDA): the same 256 B chunk leaves (hidden-path chunk header), the
@@ -1742,81 +1732,6 @@ class NativeHostCommitter(WindowViews, NativeRangeOpenings, leaf_rule.LeafScheme
         chunk = self.chunk
         return [scheme.pos_leaf(mv[o:o + chunk]) for o in range(0, len(mv), chunk)]
 
-    # ------------------------------------------------------------------ [B9.1] padding steps -- the inactive rows of a padded Commit
-    # (LIFTING-SPEC v0.7 B9.1; verity_vllm/commit/padding_steps.py: one rule, this committer and the laptop conversion are its two
-    # consumers).  Nothing here observes a value: every padding word is the canonical bot of its lifted width, synthesized by ENABLEMENT
-    # from RequiredValues(Lift(P)) outside the request's executed prefix of record.
-
-    def add_padding_steps(self, padding: list) -> None:
-        """Register the padding steps (`PaddingStep`s from `padding_steps.padding_step_commit`, built with THIS committer's program digest,
-        run id, geo digest and layout) before `finalize()`.  A step nobody executed becomes a step of its own; a MIXED step (index below the
-        executed count; B > 1) is refolded from this committer's retained leaf digests + the padding leaves (`refold_step`) -- no active
-        byte is re-read.  The padding must be laid out after the executed leaves (`leaf_base == n_leaves` of the step), else refused."""
-        self._refuse_padding(padding)
-        for ps in padding:
-            if ps.step in self._padding:
-                raise ValueError(f"padding step {ps.step} registered twice")
-            self._padding[int(ps.step)] = ps
-
-    def _leaf_digests_of(self, step: int) -> list[bytes]:
-        if step in self._gpu_levels:
-            lv0 = self._gpu_levels[step][0]
-            return [lv0[i].cpu().numpy().astype("uint32").tobytes() for i in range(int(lv0.shape[0]))]
-        if step not in self._levels and not getattr(self, "retain_levels", True):
-            raise RuntimeError(f"step {step}: this run kept no tree levels (retain_levels=False), so its leaves cannot be refolded with padding")
-        return list(self._levels[step][0])
-
-    def _apply_padding(self, steps: list[StepCommitment]) -> list[StepCommitment]:
-        from verity_vllm.commit import padding_steps as PSm
-
-        for s in sorted(self._padding):
-            ps = self._padding[s]
-            # host-only metas: `dev_off -1` -- a padding tensor has no bytes in the step's device block (a GPU-tree mixed step keeps one),
-            # so a reader of its bytes (`commit.opened.OpenedReader`: `leaf_span` on `stream_off`) opens the padding leaves, never the executed block at offset 0
-            pad_metas = [TensorMeta(m.ordinal, m.name, m.dtype, tuple(m.shape), m.nbytes, m.chunk, m.first_leaf, m.n_leaves,
-                                    host=memoryview(ps.stream)[m.stream_off - ps.stream_base:m.stream_off - ps.stream_base + m.nbytes],
-                                    stream_off=m.stream_off, dev_off=-1) for m in ps.metas]
-            t = time.perf_counter()
-            if s < len(steps):                                      # a MIXED step: other requests executed it -> refold, one root
-                sc = steps[s]
-                if not ps.appended or ps.leaf_base != sc.n_leaves:
-                    raise RuntimeError(f"padding of step {s}: laid out after {ps.leaf_base} leaves but the executed step has {sc.n_leaves} "
-                                       f"(appended={ps.appended}) -- the padding must be built on this committer's step (B9.1 (3))")
-                levels, root = PSm.refold_step(self._leaf_digests_of(s), self._layouts[s], ps, program_digest=self.program_digest,
-                                               run_id=self.run_id, geo_digest=self._geo_digest)
-                self._layouts[s] = list(self._layouts[s]) + pad_metas
-                self._levels[s] = levels                             # host levels of the refolded tree (padding openings read these)
-                if s in self._gpu_levels:                            # the executed leaves' openings read the tensor levels: refolded too
-                    self._gpu_levels[s] = [torch.frombuffer(bytearray(b"".join(lv)), dtype=torch.int32).reshape(len(lv), 8).clone() for lv in levels]
-                if s in self._streams and s not in self._gpu_blocks:  # host packed: the step stream grows by the padding block (chunk-aligned)
-                    old = bytes(self._streams[s])
-                    self._streams[s] = memoryview(old + b"\0" * (ps.stream_base - len(old)) + ps.stream)
-                n = sc.n_leaves + ps.n_leaves
-                steps[s] = StepCommitment(s, root, levels[-1][0], n, sc.n_bytes + ps.n_bytes, sc.n_tensors + len(pad_metas),
-                                          self.layout_digest(self._layouts[s]), sc.t_step_end, time.perf_counter(), sc.backlog_at_step_end,
-                                          hashing_s=sc.hashing_s, root_finalisation_s=sc.root_finalisation_s + (time.perf_counter() - t))
-                self._done[s] = steps[s]
-            else:                                                   # a step nobody executed: the padding IS the step
-                if s != len(steps):
-                    raise RuntimeError(f"padding step {s} is not the next step ({len(steps)} committed): the padded Program's steps are contiguous")
-                if ps.appended:
-                    raise RuntimeError(f"padding step {s} was laid out as appended (leaf_base {ps.leaf_base}) but no executed step {s} exists")
-                self._layouts[s] = pad_metas
-                self._levels[s] = ps.levels
-                self._streams[s] = memoryview(ps.stream)
-                sc = StepCommitment(s, ps.root, ps.merkle_root, ps.n_leaves, ps.n_bytes, len(pad_metas), self.layout_digest(pad_metas),
-                                    t, time.perf_counter(), 0, root_finalisation_s=time.perf_counter() - t)
-                self._done[s] = sc
-                steps.append(sc)
-                self._step_index = s + 1
-            self.spans.add("padding", time.perf_counter() - t, step=s, nbytes=ps.n_bytes, leaves=ps.n_leaves)
-        return steps
-
-    def _padding_leaf(self, step: int, index: int):
-        """The PaddingStep owning leaf `index` of `step`, or None (an executed leaf)."""
-        ps = self._padding.get(step)
-        return ps if (ps is not None and index >= ps.leaf_base) else None
-
     # ------------------------------------------------------------------ finalize / open / verify
 
     def finalize(self) -> RunCommitment:
@@ -1829,23 +1744,6 @@ class NativeHostCommitter(WindowViews, NativeRangeOpenings, leaf_rule.LeafScheme
                 time.sleep(0.0005)
         steps = [self._done[s] for s in range(self._step_index)]
         t1 = time.perf_counter()
-        ex_steps, ex_bytes, ex_leaves = len(steps), sum(s.n_bytes for s in steps), sum(s.n_leaves for s in steps)
-        if self.padding_hook is not None:               # [B9.1] the pod consumer: the hook sees every executed step's leaf count and layout
-            hook, self.padding_hook = self.padding_hook, None
-            self.add_padding_steps(hook(self) or [])
-        t_hook = time.perf_counter()
-        if self._padding:
-            steps = self._apply_padding(steps)          # [B9.1] the inactive rows, synthesized by enablement, BEFORE the run-root fold
-        if self._padding:                               # [B9.1 / A14.3 (g)] the padding's cost beside the executed Commit, measured on THIS run
-            pads = list(self._padding.values())
-            self.padding_stats = {
-                "executed_steps": ex_steps, "executed_bytes": ex_bytes, "executed_leaves": ex_leaves,
-                "padding_steps_total": len(pads), "padding_steps_appended": sum(1 for ps in pads if ps.appended),
-                "padding_steps_own": sum(1 for ps in pads if not ps.appended), "padding_bytes": sum(ps.n_bytes for ps in pads),
-                "padding_leaves": sum(ps.n_leaves for ps in pads), "padding_tensors": sum(len(ps.metas) for ps in pads),
-                "steps_after": len(steps), "bytes_after": sum(s.n_bytes for s in steps), "leaves_after": sum(s.n_leaves for s in steps),
-                "hook_wall_s": t_hook - t1, "apply_wall_s": time.perf_counter() - t_hook,
-                "padding_bytes_over_executed": (sum(ps.n_bytes for ps in pads) / ex_bytes) if ex_bytes else None}
         step_roots = [s.root for s in steps]    # b"": a placeholder step (a learn-only warm-up pass, or a failed step whose error is recorded)
         run_root = self._fold_run_root(step_roots) or b""
         t2 = time.perf_counter()
@@ -1961,69 +1859,41 @@ class NativeHostCommitter(WindowViews, NativeRangeOpenings, leaf_rule.LeafScheme
         ref_names: Counter | None = None
         fa2_rules_used: Counter = Counter()                          # per step: "per-layer" (declarations + active set) or "uniform"
         decls = getattr(self, "attention_layer_decls", None) or []   # the Program's per-layer attention Call statics (driver-supplied)
-        # A PADDED run's layouts carry the padding tensors (host-only metas,
-        # `dev_off -1`, named `<executed name>/<rid>/bot`) beside or instead of the executed ones.  A padding tensor materializes an
-        # identity the executed prefix left INACTIVE: it is not a module call, so it is not one of the "tensors a module produced" (1), (4) count;
-        # (a) at a MIXED step the executed metas alone are checked as before (the batched launch is still one tensor per identity name) and the
-        # padding metas are counted apart; (b) at a PADDING-ONLY step (nobody executed it) the check reads the padding: every identity NAME of
-        # step 0 must be materialized as ⊥ (set equality, not multiplicity: each inactive request contributes one), every expected module
-        # covered, the sampler-ids identity present -- a step that drops one identity's ⊥ still FAILS by name.  Never a relabel: the
-        # padding's words are checked == bot by `padding_steps.padded_population`, its placement by the composition check.
-        padded_run = bool(getattr(self, "_padding", None))
-        padding_only_steps, padding_tensors_n = [], 0
         # per-step names held to the source's own rule, not rule (4): the call-boundary targets; the capture map's names on the step's routes
         rt_src = next((s for s in self.sources if hasattr(s, "step_modules")), None)
         cb_srcs = [s for s in self.sources if hasattr(s, "split_step_names") and s is not rt_src]
         own = frozenset().union(*(getattr(s, "own_names", ()) for s in self.sources), STEP_DEPENDENT_NAMES)   # what no module produced (KV slots)
         moe_of = self._moe_layer_of()
 
-        def _identity_of_padding(n: str) -> str:                     # "<executed name>/<rid>/bot" -> "<executed name>"
-            return n[:-len("/bot")].rsplit("/", 1)[0] if n.endswith("/bot") and "/" in n[:-len("/bot")] else n
-
-        # no padding, step-reading source or attention declarations: a step's verdict reads its names, step 0's and the manifest only
-        step_free, verdicts = not padded_run and rt_src is None and not cb_srcs and not (decls and man["fa2_hidden_per_layer"]), {}
+        # no step-reading source or attention declarations: a step's verdict reads its names, step 0's and the manifest only
+        step_free, verdicts = rt_src is None and not cb_srcs and not (decls and man["fa2_hidden_per_layer"]), {}
         for step in sorted(self._layouts):
-            metas_all = self._layouts[step]
-            cols = metas_all.names if hasattr(metas_all, "scan") else None   # a cached plan's record (plan_cache): its names, no TensorMeta built
+            metas = self._layouts[step]
+            cols = metas.names if hasattr(metas, "scan") else None   # a cached plan's record (plan_cache): its names, no TensorMeta built
             if step_free and cols in verdicts:                         # a plan-name tuple already judged (None is never a key)
                 fa2_rules_used.update({"uniform": 1} if man["fa2_hidden_per_layer"] else {})
                 violations.extend([{**verdicts[cols], "step": step}] if verdicts[cols] else [])
                 continue
-            ps = self._padding.get(step) if padded_run else None
-            # a padding meta: the step has a PaddingStep, the meta sits in the padding block of the step stream (`stream_off >= stream_base`;
-            # an executed arena meta reads -1, an executed packed meta < stream_base) and carries the padding name (fix (c))
-            is_pad = (lambda m: m.name.endswith("/bot") and m.stream_off >= ps.stream_base) if ps is not None else (lambda m: False)
-            pad_metas = [m for m in metas_all if is_pad(m)] if cols is None else []
-            metas = [m for m in metas_all if not is_pad(m)] if cols is None else metas_all
-            padding_only = bool(pad_metas) and not metas
-            padding_tensors_n += len(pad_metas)
-            if padding_only:
-                padding_only_steps.append(int(step))
-            names_all = Counter(m.name for m in metas_all) if cols is None else Counter(cols)   # fa2 per-layer uniformity reads every plane of the step (rule (a) planes included)
-            names = Counter(m.name for m in metas) if cols is None else names_all
+            names = Counter(m.name for m in metas) if cols is None else Counter(cols)
             mod_names = Counter({n: c for n, c in names.items() if not n.startswith(HIDDEN_M1_PREFIXES) and not n.startswith("moe/") and moe_of(n) is None and not TP_PARTIAL_RE.search(n) and not CALL_DEPENDENT_RE.search(n) and n not in own})
-            pad_ident = Counter(_identity_of_padding(m.name) for m in pad_metas)
-            pad_mod_names = Counter({n: 1 for n in pad_ident if not n.startswith(HIDDEN_M1_PREFIXES) and not n.startswith("moe/") and moe_of(n) is None and not TP_PARTIAL_RE.search(n) and not CALL_DEPENDENT_RE.search(n) and n not in own})
-            if padding_only:
-                mod_names = pad_mod_names                                # the identities materialized as ⊥, one each (set semantics below)
             tp_bad = tp_partials_bad(man, names)
-            mod_names, rt_bad = rt_src.split_step_names(mod_names, step, padding_only, metas) if rt_src is not None else (mod_names, {})
+            mod_names, rt_bad = rt_src.split_step_names(mod_names, step, False, metas) if rt_src is not None else (mod_names, {})
             by_module = Counter()
             for n, c in mod_names.items():
                 by_module[self._module_of(n)] += c
             step_expected = rt_src.step_modules(expected_modules) if rt_src is not None else expected_modules
             missing = sorted(step_expected - set(by_module))
             unknown = sorted(set(by_module) - expected_modules)
-            fa2_layers = FP.counts_by_layer(names_all.elements())
+            fa2_layers = FP.counts_by_layer(names.elements())
             fa2_bad: dict[int, int] = {}
             fa2_detail: dict[str, Any] = {}
             if man["fa2_hidden_per_layer"]:
-                seqs = (FP.StepSequences(()) if padding_only else self._step_sequences(step, metas if cols is None else metas.scan())) if decls else None
+                seqs = self._step_sequences(step, metas if cols is None else metas.scan()) if decls else None
                 if seqs is not None:
                     # each layer's class is DERIVED from the Program's attention Call statics x the step's active-sequence set
                     # (fa2_plane_classes.plane_class): a windowed layer's decode launch is un-swapped (6 planes x sequences) while a global GQA
                     # layer's is swapped (one whole row) -- uniformity across layers is a consequence for one-class Programs, not a rule
-                    v = FP.check_step(decls, seqs, names_all.elements(), self._plane_policy())
+                    v = FP.check_step(decls, seqs, names.elements(), self._plane_policy())
                     fa2_bad = v["fa2_layers_bad"]
                     fa2_rules_used["per-layer"] += 1
                     if fa2_bad:
@@ -2036,40 +1906,29 @@ class NativeHostCommitter(WindowViews, NativeRangeOpenings, leaf_rule.LeafScheme
                     fa2_bad = FP.uniform_rule(fa2_layers, man["attention_layers"])
                     fa2_rules_used["uniform"] += 1
             moe_bad: dict[int, int] = {}
-            # a padding-only step's MoE planes: one identity per (layer, member) -- SET semantics, as for mod_names (a Counter(pad_ident)
-            # counts one per padding META = per inactive request, so >= 2 inactive requests would read n_inactive x moe_tensors_per_layer -> false refusal)
-            moe_src = (Counter({n: 1 for n in pad_ident}) if padding_only else names)
             if man.get("moe_layers"):
-                moe_counts = Counter(k for n in moe_src.elements() if (k := moe_of(n)) is not None)
+                moe_counts = Counter(k for n in names.elements() if (k := moe_of(n)) is not None)
                 want, rs_layers, hash_layers = (int(man.get("moe_tensors_per_layer") or 0), set(man.get("router_softmax_layers") or []),
                                                 set(man.get("moe_hash_layers") or []))
                 moe_bad = {k: moe_counts.get(k, 0) for k in man["moe_layers"] if moe_counts.get(k, 0) != want + (k in rs_layers) + (k in hash_layers)}
                 moe_bad.update({k: c for k, c in moe_counts.items() if k not in man["moe_layers"]})
-            elif any(n.startswith("moe/") for n in moe_src):
-                moe_bad = {-1: sum(c for n, c in moe_src.items() if n.startswith("moe/"))}      # MoE tensors from no declared source
-            n_ids = (1 if "runner.sampler/sampled_token_ids" in pad_ident else 0) if padding_only else names.get("runner.sampler/sampled_token_ids", 0)
+            elif any(n.startswith("moe/") for n in names):
+                moe_bad = {-1: sum(c for n, c in names.items() if n.startswith("moe/"))}      # MoE tensors from no declared source
+            n_ids = names.get("runner.sampler/sampled_token_ids", 0)
             sampler_bad = bool(man["sampler_ids"]) and n_ids != man["sampler_ids"]
-            mod_names, cb_bad = _split_step_names(cb_srcs, mod_names, step, padding_only)
+            mod_names, cb_bad = _split_step_names(cb_srcs, mod_names, step)
             split_bad = {k: bad for k, bad in (("call_boundaries", cb_bad), ("routes", rt_bad)) if bad}
             ref_names = mod_names if ref_names is None else ref_names
-            if padding_only:                                              # (b): set equality of identity names with step 0, not multiplicity
-                diff = {n: (mod_names.get(n, 0), ref_names.get(n, 0)) for n in set(mod_names) ^ set(ref_names)}
-            else:
-                diff = {n: (mod_names.get(n, 0), ref_names.get(n, 0)) for n in set(mod_names) | set(ref_names) if mod_names.get(n, 0) != ref_names.get(n, 0)}
+            diff = {n: (mod_names.get(n, 0), ref_names.get(n, 0)) for n in set(mod_names) | set(ref_names) if mod_names.get(n, 0) != ref_names.get(n, 0)}
             if missing or unknown or fa2_bad or moe_bad or tp_bad or sampler_bad or diff or split_bad:
                 violations.append({"step": step, "missing_modules": missing[:8], "unknown_modules": unknown[:8], "fa2_layers_bad": fa2_bad,
                                    "moe_layers_bad": moe_bad, "tp_sites_bad": dict(list(tp_bad.items())[:8]), "tp_sites_bad_n": len(tp_bad),
                                    "sampler_ids": n_ids, "multiplicity_vs_step0": dict(sorted(diff.items())[:8]),
                                    **{k: v for sn, bad in split_bad.items() for k, v in ((f"{sn}_bad", dict(sorted(bad.items())[:8])), (f"{sn}_bad_n", len(bad)))},
-                                   **({"fa2_detail": fa2_detail} if fa2_detail else {}),
-                                   **({"padding_only": padding_only, "padding_tensors": len(pad_metas)} if pad_metas else {})})
+                                   **({"fa2_detail": fa2_detail} if fa2_detail else {})})
             if step_free and cols is not None:
                 verdicts[cols] = violations[-1] if violations and violations[-1]["step"] == step else None
         return {"ok": not violations, "steps_checked": len(self._layouts),
-                **({"padding": {"steps_with_padding": len(self._padding), "padding_only_steps": padding_only_steps, "padding_tensors": padding_tensors_n,
-                                "rule": "padding tensors (<name>/<rid>/bot, host-only) are counted apart: a mixed step's executed metas are checked as an unpadded step's; "
-                                        "a padding-only step must materialize every identity NAME of step 0 as bot (set equality) and cover every expected module"}}
-                   if padded_run else {}),
                 "manifest": {"modules": len(expected_modules), "attention_layers": len(man["attention_layers"]), "fa2_hidden_per_layer": man["fa2_hidden_per_layer"],
                              "sampler_ids": man["sampler_ids"], "moe_layers": len(man.get("moe_layers") or []), "moe_tensors_per_layer": man.get("moe_tensors_per_layer", 0),
                              "tp_sites": len(man.get("tp_sites") or []), "tp_rank": man.get("tp_rank"), "tp_sites_ruled_out": man.get("tp_sites_ruled_out") or []},
@@ -2131,14 +1990,6 @@ class NativeHostCommitter(WindowViews, NativeRangeOpenings, leaf_rule.LeafScheme
     def identity_of(self, step: int, index: int) -> dict:
         """Verifier-side: (step, rank) -> (tensor ordinal, name, dtype, shape, byte range) from the published layout."""
         metas = self._layouts[step]
-        ps = self._padding_leaf(step, index)
-        if ps is not None:                                          # [B9.1] a padding leaf: bytes of the padding block, tensors from its metas
-            lo, hi = index * self.chunk, min((index + 1) * self.chunk, ps.stream_base + ps.n_bytes)
-            over = [{"tensor": m.ordinal, "name": m.name, "dtype": m.dtype, "shape": list(m.shape),
-                     "first_byte": max(lo, m.stream_off) - lo, "last_byte": min(hi, m.stream_off + m.nbytes) - lo}
-                    for m in metas if m.stream_off < hi and m.stream_off + m.nbytes > lo]
-            return {"packed": True, "padding": True, "byte_lo": lo, "byte_hi": hi, "tensors": over,
-                    "tensor": over[0]["tensor"] if over else -1, "name": ";".join(o["name"] for o in over)}
         if step in self._gpu_blocks or step in self._streams:      # packed: leaf = stream bytes [lo, hi); tensors overlapping it
             n = self._gpu_blocks[step][1] if step in self._gpu_blocks else len(self._streams[step])
             lo, hi = index * self.chunk, min((index + 1) * self.chunk, n)
@@ -2169,8 +2020,6 @@ class NativeHostCommitter(WindowViews, NativeRangeOpenings, leaf_rule.LeafScheme
     def leaf_retained(self, step: int, index: int) -> bool:
         """True when leaf `index` of `step` opens from THIS committer's retained raw bytes; False when it must open by replay
         (raw bytes released / never kept / an excluded family's interior chunk)."""
-        if self._padding_leaf(step, index) is not None:
-            return True                                   # [B9.1] a padding leaf's bytes are the synthesized block's, always held
         if step not in self._gpu_blocks:
             return step in self._streams or bool(self._layouts.get(step))
         blk, _used = self._gpu_blocks[step]
@@ -2190,12 +2039,6 @@ class NativeHostCommitter(WindowViews, NativeRangeOpenings, leaf_rule.LeafScheme
             for step, index in sample:
                 metas = self._layouts[step]
                 ident = self.identity_of(step, index)
-                ps = self._padding_leaf(step, index)
-                if ps is not None:                                   # [B9.1] a padding leaf: its bytes are the synthesized block's, path from the (re)folded levels
-                    lo = (index - ps.leaf_base) * self.chunk
-                    value = bytes(ps.stream[lo:lo + self.chunk])
-                    out.append(Opening(step, index, value, scheme.path_in_levels(self._levels[step], index), ident))
-                    continue
                 if step in self._gpu_blocks:
                     blk, used = self._gpu_blocks[step]           # lazy D2H of the 256 B chunk (zero-padded past `used`) + level sibling path
                     lo = index * self.chunk
@@ -2252,15 +2095,7 @@ class NativeHostCommitter(WindowViews, NativeRangeOpenings, leaf_rule.LeafScheme
         ident = self.identity_of(opening.step, opening.index)
         if ident != opening.identity or (self.hiding is None and opening.salt) or self._unsalted(opening.step, sc.n_leaves):
             return False
-        ps = self._padding_leaf(opening.step, opening.index)
-        if ps is not None:                                           # [B9.1] a padding leaf: the padding block's leaf rule (NB = 1 header, or pos_leaf)
-            from verity_vllm.commit import padding_steps as PSm
-
-            if len(opening.value) != ident["byte_hi"] - ident["byte_lo"]:      # a chunk (the GPU tree's blocks are chunk multiples; a host tail may be short)
-                return False
-            leaf = PSm.leaf_digest_of(ps, opening.value, opening.index - ps.leaf_base)
-            merkle = scheme.fold_path(leaf, opening.index, list(opening.path))
-        elif opening.step in self._gpu_blocks:
+        if opening.step in self._gpu_blocks:
             used = self._gpu_blocks[opening.step][1]
             if len(opening.value) != self.chunk:
                 return False
@@ -2278,11 +2113,6 @@ class NativeHostCommitter(WindowViews, NativeRangeOpenings, leaf_rule.LeafScheme
         if root != sc.root:
             return False
         return len(run.run_root) == 32 and self._run_root(run) == run.run_root
-
-    def _refuse_padding(self, padding: list) -> None:
-        if padding and self.rows:
-            raise ValueError(f"padding steps are vllm-v1 position-leaf blocks: not implemented under {step_rows.NAME}")
-        super()._refuse_padding(padding)
 
     def _leaf_record(self, steps: list) -> dict:
         rec = super()._leaf_record(steps)

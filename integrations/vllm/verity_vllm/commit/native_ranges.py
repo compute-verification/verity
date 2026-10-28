@@ -81,7 +81,7 @@ def level_sizes(leaf_count: int, levels: int) -> list[int]:
 
 
 class NativeRangeOpenings:
-    """Range openings over the committer's retained copies (`_gpu_blocks`, `_streams`, per-tensor `host`, padding streams) and levels."""
+    """Range openings over the committer's retained copies (`_gpu_blocks`, `_streams`, per-tensor `host`) and levels."""
 
     commit_scheme = scheme.NAME
     rows = False
@@ -120,7 +120,7 @@ class NativeRangeOpenings:
     def leaf_span(self, step: int, m: Any, lo: int, hi: int) -> tuple[int, int, int]:
         """The leaves [a, b) of `step` that hold bytes [lo, hi) of tensor `m`, and the offset of byte `lo` in their concatenated bytes."""
         so = m.stream_off
-        if so is not None and so >= 0:                            # packed (GPU block, host stream, padding): chunks of the step stream
+        if so is not None and so >= 0:                            # packed (GPU block, host stream): chunks of the step stream
             s0, s1 = so + lo, so + hi
             return s0 // self.chunk, -(-s1 // self.chunk), s0 % self.chunk
         return m.first_leaf + lo // m.chunk, m.first_leaf + -(-hi // m.chunk), lo % m.chunk
@@ -160,14 +160,10 @@ class NativeRangeOpenings:
         return next((m for m in self._layouts.get(step, []) if m.first_leaf <= lo and hi <= m.first_leaf + m.n_leaves), None)
 
     def open_range(self, step: int, lo: int, hi: int) -> RangeOpening | None:
-        """A range opening of leaves [lo, hi) of `step` (all executed or all padding): their bytes from this committer's retained copy and the
-        run's boundary siblings from its levels.  None when the retained copy does not hold them (they open by replay, `open(values_from=)`)."""
+        """A range opening of leaves [lo, hi) of `step`: their bytes from this committer's retained copy and the run's boundary siblings
+        from its levels.  None when the retained copy does not hold them (they open by replay, `open(values_from=)`)."""
         C = self.chunk
-        ps = self._padding_leaf(step, lo)
-        if ps is not None:
-            value = bytes(ps.stream[(lo - ps.leaf_base) * C:(hi - ps.leaf_base) * C])
-            levels = self._levels[step]
-        elif step in self._gpu_blocks:
+        if step in self._gpu_blocks:
             blk = self._gpu_blocks[step][0]
             if not self._block_holds(blk, lo * C, hi * C):
                 return None
@@ -189,20 +185,10 @@ class NativeRangeOpenings:
 
     def _range_leaves(self, step: int, lo: int, hi: int, value: bytes, salts: bytes = b"") -> list[bytes] | None:
         """The leaf digests of leaves [lo, hi) of `step` recomputed from their concatenated bytes (and salts) under `verify`'s leaf rules;
-        None when the bytes do not tile the leaves or the run mixes executed and padding leaves."""
+        None when the bytes do not tile the leaves."""
         if salts and self.hiding is None:
             return None
         C, mv = self.chunk, memoryview(value)
-        ps = self._padding_leaf(step, lo)
-        if ps is not None or self._padding_leaf(step, hi - 1) is not None:
-            if ps is None:
-                return None
-            from verity_vllm.commit import padding_steps as PSm
-
-            end = ps.stream_base + ps.n_bytes - lo * C
-            if len(value) != min((hi - lo) * C, end):
-                return None
-            return [PSm.leaf_digest_of(ps, mv[k * C:min((k + 1) * C, end)], lo + k - ps.leaf_base) for k in range(hi - lo)]
         if step in self._gpu_blocks:
             if len(value) != (hi - lo) * C:
                 return None

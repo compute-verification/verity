@@ -162,7 +162,7 @@ def test_serving_rows_defer_in_full_and_a_slim_bundle_with_them_is_refused_by_na
 
     def args(**kw):
         return SimpleNamespace(**{"replay_deferred": "full", "program_dir": "/p", "programs_root": None, "arms": None, "only_arm": None,
-                                  "padded_finalize": False, "compiled_taps": "off", "vu_export_dir": None,
+                                  "compiled_taps": "off", "vu_export_dir": None,
                                   "serving_rows": "/r/request.json", **kw})
 
     RB.refuse(args())
