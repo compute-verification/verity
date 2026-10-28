@@ -14,6 +14,7 @@ import threading
 import pytest
 
 import pous_test_signer as ts
+import pous_test_site as tsite
 from verity.core.protocols.pous import memory_challenger as mc
 from verity.core.protocols.pous import streamed_wipe as sw
 from verity.core.protocols.pous import wipe_party as WP
@@ -95,7 +96,7 @@ def test_a_native_fill_is_judged_as_the_python_fill(wipe_streamer, store: str) -
 
     def side() -> None:
         with a, a.makefile("rwb") as f:
-            got["c"] = WP.serve(f, WP.request_of("n0", SMALL), site=ts.site_of("n0", SMALL.tiers), signer=signer,
+            got["c"] = WP.serve(f, WP.request_of("n0", SMALL), site=tsite.site_of("n0", SMALL.tiers), signer=signer,
                                 log=ts.session_log(), egress_bits=0, clock=Clock(), fill=native)
 
     t = threading.Thread(target=side)

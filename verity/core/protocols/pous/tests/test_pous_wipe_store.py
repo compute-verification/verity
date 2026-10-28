@@ -23,6 +23,7 @@ from types import SimpleNamespace
 import pytest
 
 import pous_test_signer as ts
+import pous_test_site as tsite
 from verity.core.protocols.pous import memory_challenger as mc
 from verity.core.protocols.pous import streamed_wipe as sw
 from verity.core.protocols.pous import wipe_party as WP
@@ -114,7 +115,7 @@ def test_a_store_keeping_prior_content_past_the_threshold_is_rejected() -> None:
     assert (n - 1) * sw.LABEL_BITS <= threshold < n * sw.LABEL_BITS
     store = WS.StoreProver(params, WS.HostMemory(), clock=Clock(), foreign=n)
     w = W.run("n0", params, signer=ts.TestSigner(b"store cheat", 2), log=ts.session_log(),
-              site=ts.site_of("n0", params.tiers), schemes=ts.SCHEMES, protocol=mc.TEST_PREFIX + W.PROTOCOL,
+              site=tsite.site_of("n0", params.tiers), schemes=ts.SCHEMES, protocol=mc.TEST_PREFIX + W.PROTOCOL,
               clock=Clock(), coin_secret=b"coins", egress_bits=0, prover=lambda _: store)
     store.close()
     assert w.verdict == "reject" and w.report["ended"] == sw.WRONG and "wrong answers" in w.answer["reason"]
@@ -232,8 +233,8 @@ def _period(tmp_path: Path, doc: dict, tiers) -> tuple[Path, Path]:
     period, device = tmp_path / "periods" / "p0", tmp_path / "device"
     period.mkdir(parents=True)
     device.mkdir()
-    (period / "period.json").write_text(json.dumps(doc | {"site": ts.write_site(period, "n0", tiers)}))
-    ts.write_site(device, "n0", tiers)
+    (period / "period.json").write_text(json.dumps(doc | {"site": tsite.write_site(period, "n0", tiers)}))
+    tsite.write_site(device, "n0", tiers)
     return period, device
 
 
@@ -420,7 +421,7 @@ def test_one_session_over_a_disk_and_host_memory(tmp_path, foreign: int) -> None
     store = WS.StoreProver(params, joint, staging=4 * WS.BLOCK, clock=Clock(), foreign=foreign)
     store.gate()
     w = W.run("n0", params, signer=ts.TestSigner(b"disk %d" % foreign, 2), log=ts.session_log(),
-              site=ts.site_of("n0", params.tiers), schemes=ts.SCHEMES, protocol=mc.TEST_PREFIX + W.PROTOCOL,
+              site=tsite.site_of("n0", params.tiers), schemes=ts.SCHEMES, protocol=mc.TEST_PREFIX + W.PROTOCOL,
               clock=Clock(), secret=KEY, session_id=bytes(32), coin_secret=b"coins", egress_bits=0,
               prover=lambda _: store)
     [fill] = _fills(tmp_path)

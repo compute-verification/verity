@@ -21,6 +21,7 @@ from pathlib import Path
 import pytest
 
 import pous_test_signer as ts
+import pous_test_site as tsite
 from verity.core.protocols.pous import memory_challenger as mc
 from verity.core.protocols.pous import streamed_wipe as sw
 from verity.core.protocols.pous import wipe_party as WP
@@ -44,7 +45,7 @@ class Clock:
 
 
 def _run(params: sw.WipeParams = SMALL, secret: bytes = b"wipe period", **kw) -> W.Wipe:
-    return W.run("n0", params, signer=ts.TestSigner(secret, 2), log=ts.session_log(), site=ts.site_of("n0", params.tiers),
+    return W.run("n0", params, signer=ts.TestSigner(secret, 2), log=ts.session_log(), site=tsite.site_of("n0", params.tiers),
                  schemes=ts.SCHEMES, protocol=TEST_ID, clock=kw.pop("clock", Clock()), coin_secret=b"coins", **kw)
 
 
@@ -149,7 +150,7 @@ def _split(params: sw.WipeParams, prover: sw.Prover, signer, stop_after: int | N
 
     def side() -> None:
         with a, a.makefile("rwb") as f:
-            got["c"] = WP.serve(f, WP.request_of("n0", params), site=ts.site_of("n0", params.tiers), signer=signer,
+            got["c"] = WP.serve(f, WP.request_of("n0", params), site=tsite.site_of("n0", params.tiers), signer=signer,
                                 log=ts.session_log(), egress_bits=0, clock=Clock())
 
     t = threading.Thread(target=side)
@@ -206,11 +207,11 @@ SITE_TIERS = ((W.TIER, W.SEGMENTS * W.SEGMENT_BYTES),)
 def _side(tmp_path, monkeypatch, wipe: dict, tiers=SITE_TIERS) -> Path:
     period = tmp_path / "periods" / "p0"
     period.mkdir(parents=True)
-    site = ts.write_site(period, "n0", tiers)
+    site = tsite.write_site(period, "n0", tiers)
     (period / "period.json").write_text(json.dumps({"challenger_host": "auditor", "site": site, "wipe": wipe}))
     device = tmp_path / "device"
     device.mkdir()
-    ts.write_site(device, "n0", tiers)
+    tsite.write_site(device, "n0", tiers)
     side = WP.Party("auditor", (sys.executable, str(Path(__file__).parent / "wipe_side.py"), str(device)))
     monkeypatch.setattr(WP.Party, "of", classmethod(lambda cls, doc, node, d, extra=(): side))
     return period

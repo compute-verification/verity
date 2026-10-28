@@ -15,6 +15,7 @@ import types
 import pytest
 
 import pous_test_signer as ts
+import pous_test_site as tsite
 import settings
 from verity.core.deploy import sources as S
 from verity.core.deploy.party import Finish
@@ -64,7 +65,7 @@ def serve(monkeypatch, params: sw.WipeParams, secret: bytes) -> sw.Challenger:
 
     def side() -> None:
         with a, a.makefile("rwb") as f:
-            got["c"] = WP.serve(f, WP.request_of("n0", params), site=ts.site_of("n0", params.tiers), signer=signer,
+            got["c"] = WP.serve(f, WP.request_of("n0", params), site=tsite.site_of("n0", params.tiers), signer=signer,
                                 log=log, egress_bits=0, reads=params.k, clock=itertools.count(T0, STEP).__next__)
 
     t = threading.Thread(target=side)
@@ -77,7 +78,7 @@ def serve(monkeypatch, params: sw.WipeParams, secret: bytes) -> sw.Challenger:
 
 def challenger_caps(secret: bytes, params: sw.WipeParams) -> dict:
     return {"signer": ts.TestSigner(secret, 2), "log": ts.session_log(), "egress_bits": 0, "reads": params.k,
-            "site": ts.site_of("n0", params.tiers)}
+            "site": tsite.site_of("n0", params.tiers)}
 
 
 def wipe(params: sw.WipeParams, secret: bytes, *, mode: str = "live", chunk: int = WP.CHUNK, store=sw.Prover,

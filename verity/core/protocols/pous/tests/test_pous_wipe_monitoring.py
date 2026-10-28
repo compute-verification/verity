@@ -12,6 +12,7 @@ from fractions import Fraction
 import pytest
 
 import pous_test_signer as ts
+import pous_test_site as tsite
 from verity.core.protocols.pous import memory_challenger as mc
 from verity.core.protocols.pous import streamed_wipe as sw
 from verity.core.protocols.pous import wipe_monitoring as WM
@@ -27,7 +28,7 @@ LINK = WP.link("control", "n0", "outside", "eth0")
 def _answer(egress_bits: int) -> dict:
     """An accepted HBM-only wipe of `HBM`, its egress signed as `egress_bits`, with the placement a GPU leg records."""
     w = W.run("n0", HBM, signer=ts.TestSigner(b"wipe monitoring", 2), log=ts.session_log(),
-              site=ts.site_of("n0", HBM.tiers), schemes=ts.SCHEMES, protocol=mc.TEST_PREFIX + W.PROTOCOL,
+              site=tsite.site_of("n0", HBM.tiers), schemes=ts.SCHEMES, protocol=mc.TEST_PREFIX + W.PROTOCOL,
               clock=iter(range(10 ** 9, 10 ** 10)).__next__, coin_secret=b"coins", egress_bits=egress_bits)
     assert w.verdict == "accept"
     where = WP.placement("n0", "auditor", store=STORE, links=[LINK])
