@@ -54,10 +54,10 @@ from dataclasses import dataclass, field
 from verity.core.protocols.certifier.certificate import (CertifiedRecord, Direction, PublicKey,
                                                                           parameters_digest, record_head)
 from verity.core.protocols.certifier.commitment import CommittedRecord, record_digest
-from verity.core.protocols.certifier.grid import COMPLETE, GridParams, Record
+from verity.core.protocols.certifier.grid import COMPLETE, GridParams, BlockGrid
 from verity.core.protocols.certifier.schedule import ClockSync, LogicalFrame, SyncSet, expected_grids
 
-Published = Record | CommittedRecord | CertifiedRecord
+Published = BlockGrid | CommittedRecord | CertifiedRecord
 
 
 @dataclass(frozen=True, slots=True)
