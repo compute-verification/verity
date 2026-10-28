@@ -77,9 +77,9 @@ def table(links: Sequence[Link]) -> list[bytes]:
     return [encode(link) for link in links] + [bytes(ROW_BYTES)] * (grid(len(links)) - len(links))
 
 
-def register(links: Sequence[Link], salts: Sequence[bytes] | None = None) -> advice.Registration:
+def register(links: Sequence[Link], salts: Sequence[bytes] | None = None) -> advice.Committed:
     """The table committed as advice; its root and row count are what goes public."""
-    return advice.register(table(links), 8 * ROW_BYTES, BINDING, salts)
+    return advice.commit(table(links), 8 * ROW_BYTES, BINDING, salts)
 
 
 def decode(row: bytes) -> Link | None:
