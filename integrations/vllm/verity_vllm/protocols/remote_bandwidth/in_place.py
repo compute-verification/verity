@@ -13,7 +13,7 @@ append        the step's completed blocks at their slots (`InPlace.append`), com
               fails) are encoded in place under b_j(c_a) and the memory map records their writes (deferred residency)
 pass          run when launched, after the engine step it follows (`step_of`), over the tensors as they are: each
               plan position read through the map, except a block the step's forward rewrote, read from the copy taken
-              before the forward (`Store.on_write`), and a block withheld (servedrop), read as zeros
+              before the forward (`NodeMemory.on_write`), and a block withheld (servedrop), read as zeros
 opening       its subtree recomputed from the store under the same map, a block rewritten since the pass read from the
               earliest copy taken at or after the pass's step; a subtree that still differs from the pass's raises
               `Stale` (a block rewritten after its receipt with no copy)
@@ -48,7 +48,7 @@ from verity.core.protocols.remote_bandwidth import audit, codec as rcodec, recei
 from verity_vllm import config
 from verity_vllm.protocols.remote_bandwidth.decode_at_use import DecodeAtUse, encoded_weights, kv_decoder
 from verity_vllm.protocols.remote_bandwidth.interface import Stale
-from verity_vllm.protocols.remote_bandwidth.registry import Store
+from verity_vllm.protocols.remote_bandwidth.registry import NodeMemory
 from verity_vllm.protocols.remote_bandwidth.remote import KvDevice, StoreBackend, session_module
 
 BLOCK = rcodec.BLOCK_BYTES
@@ -98,12 +98,12 @@ class Appends:
 
 class InPlaceBackend(StoreBackend):
     """`StoreBackend` over the store's tensors in place (the module's docstring): ``backings`` are the registered
-    regions' backings in store order (`Store.backing`), ``session_lib`` session.cu's build and ``kv_lib`` kv.cu's at
+    regions' backings in store order (`NodeMemory.backing`), ``session_lib`` session.cu's build and ``kv_lib`` kv.cu's at
     the codec's field and mask, ``moved()`` the registered tensors no longer where they were (`Binder.moved`).
     ``model``'s registered weights are decoded at use; with ``paged_lib`` (paged.cu's build at the codec's field), its
     int8 attention reads the KV pool through `credited` (with no model, the read is built and not installed)."""
 
-    def __init__(self, store: Store, engine: Callable[[int], None], backings: Sequence[Any], *, session_lib: str,
+    def __init__(self, store: NodeMemory, engine: Callable[[int], None], backings: Sequence[Any], *, session_lib: str,
                  kv_lib: str, codec: rcodec.Codec = rcodec.DEFAULT, moved: Callable[[], list[str]] = list,
                  path: Any = None, randbytes: Callable[[int], bytes] = os.urandom, kept_from: int = 6,
                  calibration_passes: int = 256, calibration_warm: int = 16, warmup_ms: float = 500.0,
@@ -393,7 +393,7 @@ class InPlaceBackend(StoreBackend):
             self.trace.encoded(first)
 
     def _before_write(self, step: int, keys: np.ndarray) -> None:
-        """`Store.on_write`: the pool blocks ``keys`` the step's forward is about to write, copied first."""
+        """`NodeMemory.on_write`: the pool blocks ``keys`` the step's forward is about to write, copied first."""
         if not len(keys):
             return
         p, store = self.store.pool, self.store
@@ -440,8 +440,8 @@ class InPlaceBackend(StoreBackend):
         return {"passes": len(at), "ms": (at[-1] - at[0]) / 1e6 if at else 0.0}
 
     def calibrate(self) -> dict:
-        """`device.Device.calibrate`'s report from this store read in place, before the session: the bare read of every
-        registered block where it is (`rs_mapped_read`, the best of 6 after the first), then ``calibration_passes``
+        """`device.GpuBackend.calibrate`'s report from this store read in place, before the session: the bare read of
+        every registered block where it is (`rs_mapped_read`, the best of 6 after the first), then ``calibration_passes``
         passes over the whole store chained as a session's (the first ``calibration_warm`` untimed): each root's
         interval from the one before (the allowance's pass) and each root's gap to its send, at the percentiles the
         verifier's allowance reads (`device.percentiles`).  An engine step in lockstep, the appends' round trips and

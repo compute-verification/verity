@@ -742,7 +742,7 @@ def hook_runner(hooks, install: Install) -> None:
             hooks.wrap(cls, "capture_model", make_capture)
 
 
-class Window:
+class ProfilerWindow:
     """cudaProfilerStart/Stop around `steps` steady decode steps of each point (for `ncu --profile-from-start off`), each
     window opened by torch's ``spin_kernel`` (`torch.cuda._sleep`) so the profile splits by point."""
 
@@ -775,7 +775,7 @@ class Window:
         self.point = None
 
 
-def recorder(hooks, sched, rec: list, window: Window) -> None:
+def recorder(hooks, sched, rec: list, window: ProfilerWindow) -> None:
     def make(orig):
         def update_from_output(so, mro):
             rec.append((time.perf_counter(), so.total_num_scheduled_tokens, len(so.num_scheduled_tokens)))
@@ -897,14 +897,14 @@ def main() -> None:
     binder = None
     if args.store:
         from verity_vllm.protocols.remote_bandwidth.binder import Binder, Every
-        from verity_vllm.protocols.remote_bandwidth.registry import Store
+        from verity_vllm.protocols.remote_bandwidth.registry import NodeMemory
         window = {}
         if args.store_window:
             from verity.core.protocols.remote_bandwidth.audit import NoiseTiles
             sigma = lambda t: hashlib.sha512(b"vllm_encoded store window" + t.to_bytes(8, "big")).digest()[:32]
             window = {"messages": Every(args.store_window, sigma), "reader": lambda segments: bytes(64),
                       "tiles": NoiseTiles()}
-        binder = Binder(Store(), weights=lambda r: store_weights(r, install, args), **window).install()
+        binder = Binder(NodeMemory(), weights=lambda r: store_weights(r, install, args), **window).install()
     max_tokens_cap = args.steps + math.ceil(max(batches) * max(contexts) / args.max_batched_tokens) + 8
     cc = {"cudagraph_capture_sizes": CAPTURE}
     if not args.compiled:
@@ -933,7 +933,7 @@ def main() -> None:
     attn = sorted({type(getattr(m, "attn_backend", None)).__name__ for _, m in model.named_modules()
                    if getattr(m, "attn_backend", None) is not None})
     rec: list = []
-    window = Window(args.profile_steps)
+    window = ProfilerWindow(args.profile_steps)
     recorder(hooks, handle.scheduler(llm), rec, window)
 
     props = torch.cuda.get_device_properties(0)

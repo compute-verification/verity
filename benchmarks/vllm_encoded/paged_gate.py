@@ -214,7 +214,7 @@ def bound_gate(lib: P.PagedLib, torch, ks: list[int], log, main_rc) -> dict:
     return out
 
 
-def deferred_gate(lib: P.PagedLib, torch, k: int, plain, enc, bjs, rows, lay: P.Layout, bt, btd, lens, q, rng,
+def deferred_gate(lib: P.PagedLib, torch, k: int, plain, enc, bjs, rows, lay: P.CacheShape, bt, btd, lens, q, rng,
                   main_rc, log) -> dict:
     """The plaintext flag (deferred residency, remote_bandwidth's PROTOCOL.md §4) on `bound_gate`'s random caches: each
     slot of both layers appended as it is (its flag set) or encoded under its offset (flag clear), at random, so every
