@@ -7,8 +7,8 @@ slowdown a secret training run suffers, with its symbols and where each step sta
 
 ## The security argument
 
-This is a conditional argument, not yet a proved theorem. Its scientific content is three hypotheses about learning,
-H1 to H3; the protocol's part is to make them matter. The question it rests on:
+This is a conditional argument, not yet a proved theorem. Its scientific content is hypotheses about learning: four
+alternative local sets and one coverage assumption. The protocol's part is to make them matter. The question it rests on:
 
 > What property of a capability-acquiring computation forces it to integrate information that can't be cheaply
 > regenerated within small computational compartments that receive little input?
@@ -21,9 +21,9 @@ update that is hard to reconstruct but needed once is imported once, at a cost t
 
 The argument has four parts:
 
-1. **Reaching the target requires hard-to-localize computation**: H3, coverage of efficient methods.
-2. **Small inference blocks can do little of it**: H1, local update hardness, and H2, distributed dependence, with
-   Lemma 1 and Theorem 3.
+1. **Reaching the target requires hard-to-localize computation**: coverage of efficient methods.
+2. **Small inference blocks can do little of it**: one of four alternative local sets, of which the primary is local
+   update hardness with an upstream dependency certificate, with Lemma 1 and Theorem 3.
 3. **The protocol forces most physical compute into those blocks**: the device model, protocol soundness and the
    accounting.
 4. **So reaching the target takes more fleet-time**: the slowdown bound.
@@ -110,25 +110,25 @@ arithmetic, and the range T_max of computation the claim rules out. Information 
 through preparation that isn't charged. The setting does not say that θ can't produce an acceptable model cheaply: that
 is the question.
 
-**H3, coverage of efficient methods** (`Nci.Assumptions.CoversEfficientMethods`). Let Core(A, x) say that the
-computation contains a counted structure of at least M_* counted multiplications, each meeting H1 and H2 at the block
-budgets. Uniformly over the programs, the initial information and the experiment,
+**Coverage of efficient methods** (`Nci.Assumptions.CoversEfficientMethods`). Let Core(A, x) say that, for one of
+part 2's local sets, the computation meets that set's premises at the block budgets and contains at least its minimum
+counted computation. Uniformly over the programs, the initial information and the experiment,
 
 $$ \Pr\big[\,A(x) \text{ reaches the target} \;\wedge\; |A| < T_{\max} \;\wedge\; \neg\,\mathrm{Core}(A, x)\,\big]
    \;\le\; \eta. $$
 
 Each method may have its own covered structure (products, accumulations, recoveries); none has to reproduce a reference
-circuit. H3 doesn't say that slow methods of another structure are impossible, only that methods cheap enough to matter
+circuit. Coverage doesn't say that slow methods of another structure are impossible, only that methods cheap enough to matter
 can't escape every analysed structure. The question it answers is a trade-off: as a method reduces the updated state or
 dependence the policy restricts, how much more computation does it need for the same target? That full-parameter
 training is the unrestricted optimum isn't enough: if a compact-state method reaches the target at twice the cost and
 the policy barely slows it, the slowdown is at most two. A method that reaches the target cheaply with a compact update,
 frozen features, another learning procedure or another representation, escaping every lower bound that applies, refutes
-H3 at that target and operating point. Small-state and alternative-precision training experiments test it. H3 is the
-largest scientific uncertainty here.
+it at that target and operating point. Small-state and alternative-precision training experiments test it. It is the
+largest scientific uncertainty here; a first result states it for an explicit implementation family.
 
 The earlier work floor (every computation reaching the target does at least M_ref/α of a reference's counted
-multiplications) is H3 for one structure: a candidate sufficient condition, not the explanation.
+multiplications) is coverage for one structure: a candidate sufficient condition, not the explanation.
 
 ### Part 2: small inference blocks can do little of it
 
@@ -137,52 +137,70 @@ gates and k fresh bits each, if a fixed evaluator of a_blk bits extracts y_I fro
 
 $$ \mathrm{LDL}_{t,R}(y_I) \;\le\; k' := k + \lceil \log_2 B \rceil + a_{\mathrm{blk}}. $$
 
-This is mathematics, not a hypothesis about learning. The question is what useful training computation can't fit under
-it.
+This is mathematics, not a hypothesis about learning. Each of four **local sets** turns it into a cap q on the counted
+multiplications a block computes whole, and Theorem 3 (`Verity.Guarantees.Counting`, proved) then gives
+|C| ≥ c·|𝒥|/q. The sets are alternatives, not a conjunction: they differ in where the hard information lives. A cap
+counts only when its set's premises hold for the same blocks, and a refuted premise contributes nothing. Rates and
+deficits belong to the decoder budget t, R, the arithmetic and the computation evaluated; none is a universal
+bits-per-value constant. A counted multiplication pairs an updated slot i with a use j, one activation occurrence, so
+each pair has at most one.
 
-**H1, local update hardness** (`Nci.Assumptions.LocalUpdateHardness`). For every set U of updated slots and every
-choice of one eligible version of each, the tuple w_U of their values satisfies
+**Set 1, updated state and upstream dependencies**, the primary hypothesis.
 
-$$ \mathrm{LDL}_{t,R}(w_U) \;\ge\; \sum_{i \in U} p_i \;-\; \lambda_w. $$
+- *Local update hardness* (`Nci.Assumptions.LocalUpdateHardness`): for every set U of updated slots and every choice
+  of one eligible version of each, LDL_{t,R}(w_U) ≥ Σ_{i∈U} p_i − λ_w. It covers every collection a block can choose,
+  charges a slot once however often it is reused, and is time-bounded, so replaying training counts only within t.
+  With Lemma 1, a block holds updated state priced at most k' + λ_w (`Nci.Guarantees.UpdatedStatePerBlock`). It fails,
+  or holds only at lower prices, where a block can replay the training prefix within t, where the update has a small
+  effective representation (low rank, a short seed), or where the chosen slots are predictable from R; and a deficit
+  that cancels every useful price leaves it empty. Each decoder found is an upper bound; not finding a shorter one is
+  evidence, not proof.
+- *The upstream certificate* (`Nci.Capability.UpstreamCert`), a property of the wiring, checkable on a named circuit:
+  each use j has an upstream region T_j, disjoint from other uses' and from θ, holding upstream products over at least
+  d distinct slots, each of whose gates reaches, inside T_j, the operand every counted product of j reads. A block
+  that serves j without being handed a gate of T_j must contain all of j's upstream products.
 
-It covers every collection a block can choose, not a typical tensor or a random subset; it charges a slot once however
-often a block reuses it; and it is time-bounded, so a short program that rebuilds the state by replaying training counts
-only if it finishes within t. It doesn't assume the parameters independent or incompressible with unlimited time. It
-fails, or holds only at lower prices, where a block can replay the training prefix within t, where the update has a
-small effective representation (low rank, a short seed), or where the chosen slots are cheaply predictable from R; those
-cases mark where it applies, and a deficit λ_w that cancels every useful price leaves it empty. The measured object is
-the cheapest joint reconstruction found for slot sets an adversary can choose, at the decoder budget t, not an entropy
-code for a checkpoint. Each decoder found is an upper bound and can refute a price; not finding a shorter one is
-evidence, not proof.
+If β_w·d > k' + λ_w, no block can contain them, so every use a block serves costs it a fresh gate of its own region,
+and (`Nci.Guarantees.UpstreamCap`)
 
-With Lemma 1, a block holds updated state priced at most k' + λ_w, whether it loads, decompresses or computes it
-(`Nci.Guarantees.UpdatedStatePerBlock`).
+$$ q_I \;\le\; \frac{k\,(k' + \lambda_w)}{\beta_w}. $$
 
-**H2, distributed dependence of width r** (`Nci.Assumptions.DistributedDependence`). The upstream computations T_j of
-distinct uses are disjoint and hold no registered gate. A block that completes a counted multiplication of use j while
-reading fewer than r values of T_j holds updated state priced above k' + λ_w: without enough of j's own upstream
-values, reproducing j's operand needs more updated state than one block can describe. H1 alone isn't enough: in one
-trained layer over cheaply computable features a_j = h_θ(x_j), a block pays once for w_i and generates every a_j
-itself. At r = 1, H2 is a property of the wiring, checkable on a named circuit; first layers and fixed features fail
-it, and their products aren't counted. A larger r is the empirical part: how many bits of a use's upstream values a
-block must import before rebuilding the rest within t gets cheap, which the operand's local description length given
-the held state measures.
+No operand is priced: the recurring input cost is derived from update hardness and the graph. Update hardness alone
+isn't enough:
+in one trained layer over cheaply computable features a_j = h_θ(x_j), a block pays once for w_i and generates every
+a_j itself, and there is no certificate. The certificate is the analysed implementation's; an algebraic rewrite needs
+its own. Since the cap is about k²/β_w, it bites only when a block's own capacity, c·ζ̄ counted multiplications, is
+well above k²/β_w.
 
-With H1 and one price β_w per slot, a block holds at most (k' + λ_w)/β_w slots, and each use it serves costs it r fresh
-bits from that use's own region, which no other use shares, so (`Nci.Guarantees.ProductsPerBlock`)
+**Set 2, two operand families.** Local update hardness and *activation hardness*
+(`Nci.Assumptions.ActivationHardness`), LDL_{t,R}(a_V) ≥ β_x·|V| − λ_x for every set V of operands, each with Lemma 1
+(`Nci.Guarantees.HeldUsesPerBlock`), give (`Nci.Guarantees.OperandPairsCap`)
 
-$$ q_I \;\le\; \frac{k}{r} \cdot \frac{k' + \lambda_w}{\beta_w}. $$
+$$ q_I \;\le\; \frac{(k' + \lambda_w)(k' + \lambda_x)}{\beta_w\,\beta_x}. $$
 
-No activation is assumed to carry an information rate. At r = 1 the bound is about k²/β_w, which at a token-sized k
-exceeds what a block computes anyway: the wiring alone gives no slowdown, and the bound bites only through a large r. Overlapping regions need a multiplicity argument,
-repeated products of one slot and one use a reuse factor, and multiplications split between blocks their own account.
+This doesn't assume the families' costs independent: each meets its own bound. One joint budget,
+LDL_{t,R}(w_U, a_V) ≥ Σ_{i∈U} p_i + β_x·|V| − λ (`Nci.Assumptions.JointOperandHardness`,
+`Nci.Guarantees.JointOperandsPerBlock`), gives (r + s)²/4 ≥ r·s's (`Nci.Guarantees.JointOperandsCap`)
 
-Stronger bounds are refinements, each a hypothesis still to earn: an activation rate,
-LDL_{t,R}(a_I) ≥ β_x·|V_I| − λ_x (`Nci.Ldl.Assumptions.ActivationRate`), which the exact-decoding experiments already
-contradict at several uniform rates; a joint additive budget for weights and activations (the same bits can describe
-both); and the threaded read costs (`Nci.Threading.Threaded`, `Nci.Assumptions.WeightsIncompressible`), under which
-`Nci.Guarantees.ThreadedReads` proves q(c, k) = (k/β)·max(a_out, w_out·k/(4·a_in·b_w)). ThreadedReads counts what
-fits under assumed read costs; it doesn't show that training incurs them.
+$$ q_I \;\le\; \frac{(k' + \lambda)^2}{4\,\beta_w\,\beta_x}; $$
+
+that factor 4 is a new hypothesis, since the same bits can help rebuild both families. Activation hardness covers
+operands a block produces itself, after it exploits everything it holds: it is a substantial computational hypothesis,
+not a code rate measured for one tensor, and the exact-decoding experiments already refute several uniform rates.
+
+**Set 3, hard operands and bounded fan-out.** Activation hardness alone, each operand feeding at most a_out counted
+multiplications (`Nci.Guarantees.FanOutCap`): q_I ≤ a_out·(k' + λ_x)/β_x. Simple and adversarially testable, but the
+activation premise carries almost all of the difficulty; it is a candidate, not the default.
+
+**Set 4, a hard source recoverable from the block's outputs.** A source z of length ℓ_z with
+LDL_{τ,R}(z) ≥ ℓ_z − δ (`Nci.Assumptions.SourceHardness`), recoverable from a block's program and a complement of at
+most ℓ_z − β_v·|𝒥_I| bits (`Nci.Assumptions.Recovers`), gives β_v·|𝒥_I| ≤ k' + δ (`Nci.Guarantees.RecoverableCap`). It
+counts outputs that reveal the source, not a multiplication recipe. Correlated outputs need not shorten the complement
+one coordinate each (for an exact linear map the rank counts), and δ is paid in every block's bound.
+
+The threaded read costs (`Nci.Threading.Threaded`, `Nci.Assumptions.WeightsIncompressible`), under which
+`Nci.Guarantees.ThreadedReads` proves q(c, k) = (k/β)·max(a_out, w_out·k/(4·a_in·b_w)), are a further refinement:
+ThreadedReads counts what fits under assumed read costs; it doesn't show that training incurs them.
 
 ### Part 3: the protocol forces most physical compute into those blocks
 
@@ -211,7 +229,7 @@ one of two parts:
 
 - an inference block I of correct credited declared computation whose effective fresh input k_I + k_{F,I} + k_{a,I}
   (its own fresh input, the bits faulty proof blocks inject into it, and the advice bits its structure depends on) is
-  within H1's and H2's range, contributing q_I;
+  within the range of part 2's local set, contributing q_I;
 - the remainder: unregistered hardware, registered hardware not running credited declared work, the faulty proof
   blocks, the credit gap, the bookkeeping, blocks out of range, and multiplications split between a block and the rest.
 
@@ -238,26 +256,27 @@ over 𝒜 (the utilization policy bounds it),
 
 $$ \rho \;\ge\; \frac{M_*}{C_{\mathrm{ref}}\,\big[\bar\zeta\,f + (q/c)\,(1 - f)\big]}, $$
 
-up to probability η: by H3, computations without the covered structure reach the target below T_max with probability
+up to probability η: by coverage, computations without the covered structure reach the target below T_max with probability
 at most η (`Nci.Guarantees.CapabilityFloor`). With the earlier work floor, M_* = ζ_ref·C_ref/α, and reference efficiency
 this is 1/(α·[f + y]), y = (q/(c·ζ_ref))·(1 − f) the declared yield as a share. Without part 2, q/c could reach ζ̄ and
 the bound falls to M_*/(ζ̄·C_ref), no slowdown at all: part 2 is what keeps declared work from being training.
 
 **Onsite.** As remote, except that each registered server's remainder is capped per server block: a server block of at
-most c_S gates whose effective fresh input k_S is within H1's and H2's range does at most q_S counted multiplications,
+most c_S gates whose effective fresh input k_S is within the local set's range does at most q_S counted multiplications,
 declared and residual together. When k_S is large enough for a server block to hold a token's whole path, the cap is
 void and onsite gives remote's bound.
 
 ### What the argument doesn't assume
 
-Each of these would restate the conclusion:
+None of these is assumed silently; each would restate the conclusion:
 
 - that a large final model is hard to compartmentalize: large state can have a short generator, or be used without
   repeated expensive crossings;
 - that every activation carries β_x new bits: some are cheaply rebuilt from R and the tokens, others share information
-  with held weights or upstream values;
+  with held weights or upstream values. Sets 2 and 3 state an activation bound as a named hypothesis, and Set 1 needs
+  none;
 - that weights and activations pay independent additive costs: they can describe one another or come from the same
-  small input;
+  small input. Set 2's joint form states it as a named hypothesis;
 - that because a whole active path doesn't fit, the local bound holds: that rules out one strategy, not recomputation,
   partial paths, compression or other representations;
 - that the reference's achieved rate is a ceiling on every method;
@@ -269,11 +288,11 @@ Each of these would restate the conclusion:
 |---|---|---|
 | The actual circuit | `Accounting.Placed`, `Accounting.Placed.region` | Defined |
 | Declared objects | `Verity.Circuit`, `Verity.Partition`, `Verity.Partition.IsCK`, `Verity.Declaration`, `Verity.Registration`; the site, B, a_j and loc_j not yet in Lean | Partly defined |
-| H3, coverage | `Nci.Assumptions.CoversEfficientMethods` | Stated; Core not yet read off a run's circuit; untested |
+| Coverage | `Nci.Assumptions.CoversEfficientMethods` | Stated; Core not yet read off a run's circuit; untested |
 | Lemma 1 | `Verity.Guarantees.BlockDescription` | Proved |
-| H1, local update hardness | `Nci.Assumptions.LocalUpdateHardness`, `Nci.Capability.UpdatedState` | Stated; no prices measured at a decoder budget |
-| H2, distributed dependence | `Nci.Assumptions.DistributedDependence`, `Nci.Covering.MulBlocks` | Stated; not yet checked on a named training circuit |
-| Part 2's consequences | `Nci.Guarantees.UpdatedStatePerBlock`, `Nci.Guarantees.ProductsPerBlock` | Stated, not yet proved |
+| Set 1 | `Nci.Assumptions.LocalUpdateHardness`, `Nci.Capability.UpstreamCert`, `Nci.Covering.MulBlocks` | Stated; no prices measured at a decoder budget; the certificate not yet checked on a named training circuit |
+| Sets 2 to 4 | `Nci.Assumptions.ActivationHardness`, `Nci.Assumptions.JointOperandHardness`, `Nci.Assumptions.SourceHardness`, `Nci.Assumptions.Recovers` | Stated; several uniform activation rates refuted by exact decoders |
+| The local caps | `Nci.Guarantees.UpdatedStatePerBlock`, `Nci.Guarantees.HeldUsesPerBlock`, `Nci.Guarantees.JointOperandsPerBlock`, `Nci.Guarantees.UpstreamCap`, `Nci.Guarantees.OperandPairsCap`, `Nci.Guarantees.JointOperandsCap`, `Nci.Guarantees.FanOutCap`, `Nci.Guarantees.RecoverableCap` | Stated, not yet proved |
 | Theorem 3 | `Verity.Guarantees.Counting` | Proved |
 | The threaded refinement | `Nci.Threading.Threaded`, `Nci.Assumptions.WeightsIncompressible`, `Nci.Guarantees.ThreadedReads` | Proved for the circuit in hand under assumed read costs |
 | Device model | `Accounting.Placed.ComputeRate`, `Accounting.Placed.Links`, `Accounting.Placed.Memory`, `Accounting.Placed.Causal`, `Accounting.Overhead.physClass`; hosts carry no compute, `OneClock` and the inventory not yet in Lean | Defined; three premises unstated |
