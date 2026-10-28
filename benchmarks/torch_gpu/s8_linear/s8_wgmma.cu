@@ -453,12 +453,14 @@ DEV void body(const Params& p, const CUtensorMap* rmap = nullptr, int32_t* zout 
       y_store<0, NA / 4>(d, p, row, col0, live0, live1, r0, r1);
     } else {
       // the reduction: chunk c's four atoms take accumulator groups 4 c .. 4 c + 3, in A's order, as A, then the y words.
-      // Between the fence and the wait only atoms and their addresses: the tile's R stages are waited on and its groups put
-      // in A's order before the fence, since a barrier's wait loop there, or a y word computed under the atoms, makes
-      // ptxas serialize the wgmma pipeline.  Each R stage is released once no atom reads it (s8mrb: once the bulk add has
-      // read the sums over it)
+      // Between the fence and the wait only atoms and their addresses: a barrier's wait loop there, or a y word computed
+      // under the atoms, makes ptxas serialize the wgmma pipeline.  The groups are put in A's order ahead of the R stages'
+      // wait loops, whose branches keep ptxas from sinking the exchanges past the fence (it would, within one block, and an
+      // exchange there writes the main atoms' accumulators).  Each R stage is released once no atom reads it (s8mrb: once
+      // the bulk add has read the sums over it)
       using G = Red<TM, BN, RR>;
       constexpr int CH = G::CH, Q = G::Q, RST = G::RST;
+      a_order<0, NA / 4>(d);
       int rs[RST];
 #pragma unroll
       for (int i = 0; i < RST; i++) {
@@ -466,7 +468,6 @@ DEV void body(const Params& p, const CUtensorMap* rmap = nullptr, int32_t* zout 
         rs[i] = s;
         if (++s == STAGES) { s = 0; ph ^= 1; }
       }
-      a_order<0, NA / 4>(d);
       WG_FENCE;
 #pragma unroll
       for (int c = 0; c < CH; c++) {
