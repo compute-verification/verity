@@ -320,7 +320,7 @@ def test_the_arm_is_ready_before_the_server_listens(tmp_path, monkeypatch):
     monkeypatch.setattr(SH, "worker", lambda name: None)
     monkeypatch.setattr(SH, "H1Windows", functools.partial(SH.H1Windows, unit=_unit(), clock=lambda: next(ticks)))
     monkeypatch.setattr(PHK, "_ROOTS", {})
-    monkeypatch.setattr(PH, "weight_root", lambda w, rows: roots.append(w) or weight_root(w, rows))
+    monkeypatch.setattr(PH, "weight_root", lambda w, rows, *key: roots.append(w) or weight_root(w, rows, *key))
     monkeypatch.setattr(PHK, "warm_zy", lambda layers, rows: warmed.append((len(layers), rows)) or 3)
     monkeypatch.setattr(TD, "available", lambda: False)
     opts = SimpleNamespace(protocols=SH.ENTRY, max_num_batched_tokens=ROWS, window_steps=STEPS, protocols_config=None)
