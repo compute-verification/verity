@@ -157,7 +157,8 @@ def _pool(doc: Any, cpus: int, mem_gb: float) -> tuple[int, int, int, str]:
     """A pool's fitting slots, free ones among them and waiters; ValueError when no slot of it fits the job."""
     if not isinstance(doc, dict) or "error" in doc:
         raise ValueError(doc.get("error") if isinstance(doc, dict) else doc or "not read")
-    fit = [s for s in doc.get("slots") or [] if not s.get("trains") and cpulist(s["cpus"]) >= cpus and (s.get("mem") or 0) >= mem_gb]
+    fit = [s for s in doc.get("slots") or [] if not s.get("trains") and cpulist(s["cpus"]) >= cpus
+           and (s.get("mem") is None or s["mem"] >= mem_gb)]  # slot.py raises a slot without mem= to what the run asks
     if not fit:
         raise ValueError(f"no slot of {doc.get('file')} gives {cpus} CPUs and {mem_gb:g} GB")
     free = [s for s in fit if s.get("holder") is None and not s.get("blocked")]
