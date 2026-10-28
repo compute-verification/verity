@@ -28,10 +28,10 @@ bridges `Accounting.SecurityProofs.Bridge.*`) through a coupling (`Vocab.Couplin
   they lead to (`Vocab.prob_eq_pr`, from `Subprotocol.prob_play`), so a bound over the coins is one in the game.
 * **The world.** The run's claim for `a` at the coupling's price implies the game's at that outcome (`world`, the world
   each play realizes).
-* **The verdict at the code** (`Coupling.verdict`): `a`'s component accepts, every release its check read is in the
-  device's log, and the coupling's break (`brk`) is absent. The rest of the event, a release missing from the log or a
-  break, is the finder's: where it meets `FinderCR`, its probability is at most `a`'s collision term
-  (`Coupling.BreakBound`).
+* **The verdict at the code** (`Coupling.verdict`): `a`'s component accepts, every release its check read is the
+  device's at the round the coupling assigns it (`pos`, `Logged`), and the coupling's break (`brk`) is absent. The rest
+  of the event, a release out of place or a break, is the finder's: where it meets `FinderCR`, its probability is at
+  most `a`'s collision term (`Coupling.BreakBound`).
 
 `Coupling.bound` gives `ComponentBound`'s event at most `a`'s error from the run at the verdict at the code
 (`Coupling.atCode`) meeting a guarantee within `a`'s published `δ`, and `componentBound_of_coupling` collects it over
@@ -143,6 +143,56 @@ theorem prCoin_eq_ofReal_pr {C : Type} [Fintype C] (p : C → Prop) :
   · have := Fintype.card_eq_zero_iff.mp h
     simp
   · rw [ENNReal.ofReal_div_of_pos (by exact_mod_cast h), ENNReal.ofReal_natCast, ENNReal.ofReal_natCast]
+
+/-- Each round's coins, in order, as the device releases them. -/
+def CoinsOf.bits : (ns : List ℕ) → CoinsOf ns → List (List Bool)
+  | [], _ => []
+  | _ :: ns, (x, xs) => List.ofFn x :: CoinsOf.bits ns xs
+
+/-- **The device's log holds each round's coins at its round**, whatever the strategy sent. -/
+theorem outK_coins : ∀ (ns : List ℕ) (K : List Release → Game α) (s : Game.Strategy (releasesK ns K))
+    (xs : CoinsOf ns), (outK ns K s xs).1.map Release.coins = CoinsOf.bits ns xs
+  | [], _, _, _ => rfl
+  | _ :: ns, K, s, (x, xs) => congrArg (List.ofFn x :: ·) (outK_coins ns _ (s.2 x) xs)
+
+/-- **The play's log holds each round's coins at its round**, whatever the strategy. -/
+theorem playOut_coins (ns : List ℕ) (θ F c : ByteArray) (σ : Game.Strategy (play ns θ F c)) (xs : CoinsOf ns) :
+    (playOut ns θ F c σ xs).log.map Release.coins = CoinsOf.bits ns xs :=
+  outK_coins ns _ _ xs
+
+/-- The device's log at the coins `xs` when every round's release answers `b`. -/
+def logOf (b : ByteArray) : (ns : List ℕ) → CoinsOf ns → List Release
+  | [], _ => []
+  | _ :: ns, (x, xs) => ⟨b, List.ofFn x⟩ :: logOf b ns xs
+
+/-- **Forwarding through the rounds `ns`, then `K`**: send `b` before every round, then play `t` at the device's
+log. -/
+def forwardK (b : ByteArray) : (ns : List ℕ) → (K : List Release → Game α) → (∀ log, Game.Strategy (K log)) →
+    Game.Strategy (releasesK ns K)
+  | [], _, t => t []
+  | _ :: ns, K, t => ⟨b, fun x => forwardK b ns (fun log => K (⟨b, List.ofFn x⟩ :: log))
+      fun log => t (⟨b, List.ofFn x⟩ :: log)⟩
+
+theorem outK_forwardK (b : ByteArray) : ∀ (ns : List ℕ) (K : List Release → Game α)
+    (t : ∀ log, Game.Strategy (K log)) (xs : CoinsOf ns),
+    outK ns K (forwardK b ns K t) xs = ⟨logOf b ns xs, t (logOf b ns xs)⟩
+  | [], _, _, _ => rfl
+  | _ :: ns, K, t, (x, xs) => by
+      simp only [outK, forwardK, logOf]
+      rw [outK_forwardK b ns]
+
+/-- **The forwarding strategy**: it sends `b` before every round, and then, as its evidence, `enc` of the device's
+log, as a prover that forwards the device's records does. -/
+def forward (ns : List ℕ) (θ F c b : ByteArray) (enc : List Release → ByteArray) : Game.Strategy (play ns θ F c) :=
+  cast (congrArg Game.Strategy (releases_bind ns _)).symm
+    (forwardK b ns (fun log => Game.send ByteArray fun e => Game.ret (⟨θ, F, c, log, e⟩ : Outcome))
+      fun log => ⟨enc log, PUnit.unit⟩)
+
+/-- **The forwarding strategy's play**: the device's log, and `enc` of it as the evidence. -/
+theorem playOut_forward (ns : List ℕ) (θ F c b : ByteArray) (enc : List Release → ByteArray) (xs : CoinsOf ns) :
+    playOut ns θ F c (forward ns θ F c b enc) xs = ⟨θ, F, c, logOf b ns xs, enc (logOf b ns xs)⟩ := by
+  simp only [playOut, forward, cast_cast, cast_eq]
+  rw [outK_forwardK]
 
 end Coins
 
@@ -488,9 +538,20 @@ theorem prob_eq_pr {I : Type} {Ω : I → Type} [Fintype I] [DecidableEq I] [∀
   (Subprotocol.prob_play q (V.rounds θ) θ F c σ).trans ((Subprotocol.prCoin_eq_ofReal_pr _).trans
     (congrArg ENNReal.ofReal (Pouw.pr_equiv e fun xs => q (Subprotocol.playOut (V.rounds θ) θ F c σ xs)).symm))
 
+/-- **The honest play meets `Logged`**: where `a`'s check reads back, from the evidence `enc log`, releases of `log`
+at the rounds `pos` assigns them, the strategy that forwards the device's log as its evidence (`Subprotocol.forward`)
+meets `Logged pos a` at every coin. -/
+theorem logged_forward (θ F c b : ByteArray) (enc : List Release → ByteArray) (pos : ℕ → ℕ) (a : Audit)
+    (h : ∀ log k r, (V.coinsRead a ⟨θ, c, enc log, #[F]⟩)[k]? = some r → log[pos k]? = some r)
+    (xs : Subprotocol.CoinsOf (V.rounds θ)) :
+    V.Logged pos a (Subprotocol.playOut (V.rounds θ) θ F c (Subprotocol.forward (V.rounds θ) θ F c b enc) xs) := by
+  rw [Subprotocol.playOut_forward]
+  exact h _
+
 /-- **A period run coupled to the play of `σ` for subprotocol `a`**: a run of the coins model whose coins are in
-bijection with the device's rounds' coins (`coins`), at a price, with a break on the coins (`brk`, the subprotocol's
-events its finder answers for), whose claim for `a` implies the game's at the outcome the coins lead to (`world`). -/
+bijection with the device's rounds' coins (`coins`), at a price, with the round of the device's log each release a
+subprotocol's check reads sits at (`pos`), a break on the coins (`brk`, the subprotocol's events its finder answers
+for), and whose claim for `a` implies the game's at the outcome the coins lead to (`world`). -/
 structure Coupling (a : Audit) (θ F c : ByteArray) (σ : Game.Strategy (V.game θ F c)) where
   C : Verity.Circuit
   I : Type
@@ -502,6 +563,7 @@ structure Coupling (a : Audit) (θ F c : ByteArray) (σ : Game.Strategy (V.game 
   coins : ((i : I) → Ω i) ≃ Subprotocol.CoinsOf (V.rounds θ)
   run : PeriodRun d α C Ω
   price : Price
+  pos : Audit → ℕ → ℕ
   brk : ((i : I) → Ω i) → Prop
   world : ∀ ξ, run.Holds (V.certOf θ) price a ξ → V.Holds θ F c σ a (V.outcome θ F c σ coins ξ)
 
@@ -512,20 +574,21 @@ namespace Coupling
 variable {V} {a : Audit} {θ F c : ByteArray} {σ : Game.Strategy (V.game θ F c)} (k : V.Coupling a θ F c σ)
 
 /-- **The verdict at the code**: subprotocol `b`'s component accepts its own case at the outcome the coins lead to,
-every release its check read is in the device's log, and the coupling's break is absent. -/
+every release its check read is the device's at its round (`pos b`), and the coupling's break is absent. -/
 def verdict (b : Audit) (ξ : (i : k.I) → k.Ω i) : Prop :=
-  ComponentAccepts b (V.outcome θ F c σ k.coins ξ).sent ∧ V.Logged b (V.outcome θ F c σ k.coins ξ) ∧ ¬ k.brk ξ
+  ComponentAccepts b (V.outcome θ F c σ k.coins ξ).sent ∧ V.Logged (k.pos b) b (V.outcome θ F c σ k.coins ξ) ∧
+    ¬ k.brk ξ
 
 /-- The coupled run with the verdict at the code. -/
 def atCode : PeriodRun d α k.C k.Ω := Subprotocol.atCode k.run k.verdict
 
 /-- **The finder answers for the rest of the event**: the probability over the coins that `a`'s component accepts
-while a release its check read is missing from the log, or the coupling's break holds, is at most `a`'s collision
-term at the strategy (a missing release is a forgery of the device's LMS signature, a break a collision, each of which
-`a`'s finder outputs). -/
+while a release its check read is not the device's at its round, or the coupling's break holds, is at most `a`'s
+collision term at the strategy (a release out of place is a forgery of the device's LMS signature, a break a collision,
+each of which `a`'s finder outputs). -/
 def BreakBound : Prop :=
   ENNReal.ofReal (Pouw.pr fun ξ => ComponentAccepts a (V.outcome θ F c σ k.coins ξ).sent ∧
-      (¬ V.Logged a (V.outcome θ F c σ k.coins ξ) ∨ k.brk ξ)) ≤
+      (¬ V.Logged (k.pos a) a (V.outcome θ F c σ k.coins ξ) ∨ k.brk ξ)) ≤
     V.loss a θ ((V.live θ F c).collides sha512Msg a σ)
 
 /-- **A coupled period guarantee bounds the component's event in the game**: where the coupled run at the verdict at
@@ -542,9 +605,9 @@ theorem bound {δ : ℝ} (hs : k.atCode.Sound (V.certOf θ) k.price a δ)
     refine le_trans (ENNReal.ofReal_le_ofReal (le_trans (Pouw.pr_mono
       (P' := fun ξ => (k.verdict a ξ ∧ ¬ V.Holds θ F c σ a (V.outcome θ F c σ k.coins ξ)) ∨
         (ComponentAccepts a (V.outcome θ F c σ k.coins ξ).sent ∧
-          (¬ V.Logged a (V.outcome θ F c σ k.coins ξ) ∨ k.brk ξ))) ?_) (Pouw.pr_or_le _ _))) ?_
+          (¬ V.Logged (k.pos a) a (V.outcome θ F c σ k.coins ξ) ∨ k.brk ξ))) ?_) (Pouw.pr_or_le _ _))) ?_
     · intro ξ hξ
-      by_cases hl : V.Logged a (V.outcome θ F c σ k.coins ξ)
+      by_cases hl : V.Logged (k.pos a) a (V.outcome θ F c σ k.coins ξ)
       · by_cases hk : k.brk ξ
         · exact Or.inr ⟨hξ.1, Or.inr hk⟩
         · exact Or.inl ⟨⟨hξ.1, hl, hk⟩, hξ.2⟩
