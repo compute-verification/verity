@@ -1,4 +1,0 @@
-order = 335
-path = "`theory/isa_escape_fp.py`"
-runs_on = "CPU"
-what = "ISA-ESCAPE for FP words (an FP8 word, an FP4 word, an int8 word on FP pipes) on sm_120, H200 (sm_90a) and B200 (sm_100a): every tensor form's rate against the credited row, a counting bound that reads no FP semantics (elementwise routes CLOSED/TIE/WATCH; the joint-encoding gap listed), the constructions k3/k3h/k4/k9 checked exhaustively, and premise (a)'s small-grid exactness replayed on the Lean bit-exact models with controls; stdlib + exact_kit, seconds"

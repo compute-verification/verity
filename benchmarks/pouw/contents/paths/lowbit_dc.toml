@@ -1,4 +1,0 @@
-order = 90
-path = "`lowbit_dc/`"
-runs_on = "B200, H200 (CPU: build and selftest)"
-what = "Dither's FP8 and FP4 routes on datacenter GPUs: whether tcgen05's and wgmma's FP8/FP4 kinds are exact integer arithmetic (`fpx.cu`), and dgemm's Dither GEMM with int8 emulated in E4M3 limbs (k3z, k4s on tcgen05; k3h on wgmma), gated bit for bit and timed against native int8 in the same kernel (`egemm.cu`; `run.sh [gemm]`)"

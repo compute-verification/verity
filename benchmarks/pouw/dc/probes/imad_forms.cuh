@@ -1,4 +1,4 @@
-// EPS1 DC r4: the IMAD forms of duo's ALU work, alone and beside the fold (SPEC r4 §2.8: an idle unit that does the
+// The IMAD forms of duo's ALU work, alone and beside the fold (SPEC §2.8: an idle unit that does the
 // binding row's mandatory work more cheaply). duo is LOP3 + IMAD + LEA.HI a word, two of its three on the ALU pipe;
 // LEA.HI's rotl(u, r) + y has an exact IMAD form, hi(u·2^r) + y on IMAD.HI.U32 and then u·2^r + that on IMAD (the
 // multiplier comes from a kernel argument, so ptxas can't turn the IMAD back into a shift or LEA). Built as scalar.cu;

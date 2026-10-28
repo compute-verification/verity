@@ -5,7 +5,7 @@ and B on {±1, ..., ±64}, -DPFILL_BU). Written from the matrices with hashlib's
 with its own; `dcap dgate` holds the GPU to that `dfill_ref`, and tests/test_pfill_ref.py holds this file to that
 reference built with g++ (pfill_host.cpp).
 
-The cheats of note:20261016T0917Z-draft-fullfloor-s-r8 §1.2 are here too, each as the words it hands the same fold:
+The cheats against the folds are here too, each as the words it hands the same fold:
 `q_receipt` computes Q = a0 d0 + d1 a pair with one product a pair (ram's step reads nothing else), and
 `packed_receipt` gets both words of a pair from one packed product (4 A)(33 B0 + B1) and a table (±1 and {0,1} only)."""
 
@@ -36,7 +36,7 @@ DOM_BU = 0x5046494C4C2D6255  # "PFILL-bU": the bU tile
 CTR_B, CTR_KEY = 1 << 56, 2 << 56
 M32 = 0xFFFFFFFF
 RAM, DUO, XOR = 4, 2, 1
-LI, XIN13 = 10, 13  # P2-FF r9's folds: NC 4's in a -DPFILL_LI or -DPFILL_XIN13 build
+LI, XIN13 = 10, 13  # the r9 folds: NC 4's in a -DPFILL_LI or -DPFILL_XIN13 build
 R9 = (LI, XIN13)
 S8, E2M1, BITS, BU = 0, 1, 2, 3  # pfill.cuh's PF_S8, PF_E2M1, PF_BITS, PF_BU
 KINDS = (S8, E2M1, BITS, BU)
@@ -187,7 +187,7 @@ def fold(c0: int, c1: int, tile: int, nc: int, steps: int, cw: np.ndarray, kind:
 
 
 def ho_ok(c0: int, c1: int, tile: int, steps: int, kind: int = S8, w: int = W) -> bool:
-    """(HO), LI's layout premise (note:20261016T1117Z-draft-fullfloor-s-r9): no hand-off of a lane's chain, (d1, d2) in a
+    """(HO), LI's layout premise: no hand-off of a lane's chain, (d1, d2) in a
     step or (d3, the next step's d0), joins two words whose rows or columns are equal or complementary (either lets one
     product make both words, the complement's through the other operand's sum). Rows: g and g + 8 of a fragment, and
     g + 8 of fragment f with g of f + 4 (chain f % 4's next); columns: 8 j + 2 t with 8 j + 2 t + 1, and that with
