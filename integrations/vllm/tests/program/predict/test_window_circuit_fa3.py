@@ -6,7 +6,7 @@ groups. A softmax reads its keys as rows of the RoPE'd keys and a group its valu
 row, so a unit's rows are bounded by its block's keys. An attention version with no cut (`Attention_v2`, which
 `fa3_construction = "guard-every-block"` binds) is a unit a head of its own head Definition, reading the same rows, refused
 by name past the grain's rows. With ``VERITY_VLLM_FA3_LLAMA_1B=1``, int8 Llama-3.2-1B on sm_90 at 4,32,4 lowers with every
-reader wired, and C-Flock's composer refuses its slot I/O alone. Pinned on `test_window_circuit`'s TINY class, its served
+reader wired and every unit a proof block C-Flock's composer takes. Pinned on `test_window_circuit`'s TINY class, its served
 traffic and grain.
 """
 from __future__ import annotations
@@ -131,50 +131,45 @@ def test_an_attention_with_no_cut_is_its_heads_each_reading_a_key_and_a_value_ro
 def test_a_head_with_no_cut_past_the_grains_rows_is_refused_by_name():
     """A head of a version with no cut is one unit of its keys' and values' rows besides its query and output: at 10 rows a
     unit, position 4's T of 5 (12 rows) is refused by name. The norm of 12 rows is cut at its residual add instead, one part
-    of 10 rows and a tail of 4."""
+    of 10 rows and a tail of 4, and a token select of 128 logits a unit is 8 rows a combine."""
     with pytest.raises(Unexpressible, match=re.escape(
             f"1 {REFUSED}AttentionHead_v2{{T=5,D=16,BN=128,{DOT},{INV}}}: 12 rows in and out, past a unit's 10")):
-        class_circuit(_registered(GUARDED), CLASS, None, Grain(gemm_words=1024, rows=10, select=64))
+        class_circuit(_registered(GUARDED), CLASS, None, Grain(gemm_words=1024, rows=10, select=128))
 
 
 @pytest.mark.skipif(not os.environ.get("VERITY_VLLM_FA3_LLAMA_1B"),
                     reason="int8 Llama-3.2-1B on sm_90 at 4,32,4, minutes on a pod; set VERITY_VLLM_FA3_LLAMA_1B=1")
-def test_int8_llama_3_2_1b_on_sm_90_lowers_and_c_flock_refuses_its_slot_io_alone():
+def test_int8_llama_3_2_1b_on_sm_90_lowers_every_unit_to_a_proof_block():
     """int8 Llama-3.2-1B's window circuit on the H200 (exact-int8 linears, FA3's heads at D 64 and kBlockN 192) at the default
     grain and 4,32,4 lowers with every unit within 256 rows: each P·V group reads its values a slice a row of the value
     projection (`AttnBlockPv_v1{VS}`), and the norm after down_proj, whose x down_proj's slices write as 512 rows where
-    o_proj's write 128, is cut at its residual add (8 parts of 256 and the tail). C-Flock's composer then refuses its slot
-    I/O alone (`interface.check_proof_block`): at 4 outputs each `OutCollect_v1`'s and the `SlotEntry_v1`'s rows are under
-    112 bytes. Every other unit passes, each head's softmax steps and P·V groups among them. Its heads are
-    `Attention_v22`'s Calls (no whole `AttentionHead_v4`, no guarded full block). Its numbers (units, templates, registered
-    reads, the heads' census, each head family's most rows and rows' k_log, the refused templates, peak RSS) are printed as a
-    JSON line."""
+    o_proj's write 128, is cut at its residual add (8 parts of 256 and the tail). Every unit is a proof block C-Flock's
+    composer takes (`interface.check_proof_block`, which the lowering runs), each head's softmax steps and P·V groups among
+    them: at 4 outputs a collector's rows and an entry's are under 112 bytes, so each is its position's combine's
+    (`SelectCollect_v1`, the last's `SelectEntry_v1`), which reads its group units' bests and indices as rows of 334 and 668
+    bytes. Its heads are `Attention_v22`'s Calls (no whole `AttentionHead_v4`, no guarded full block). Its numbers (units,
+    templates, registered reads, the heads' census, each head family's most rows and rows' k_log, the most rows and k_log of
+    a proof block, peak RSS) are printed as a JSON line."""
     config = {**json.loads(LLAMA_1B.read_text()), "quantization_config": dict(INT8_EXACT_QUANT)}
     reg, cls = _registered({**H200, "int8_exact": "linears"}, config), WindowClass(4, 32, 4)
-    circuit = class_circuit(reg, cls, provable=False)
-    with pytest.raises(Unexpressible) as refused:
-        class_circuit(reg, cls)
-    why = str(refused.value)
-    named = sorted(_label(fn) for fn, _ in circuit.templates if re.search(re.escape(IF.descriptor_id(fn)) + "(: | cut )", why))
-    heads, n, most = Counter(), {_label(fn): k for fn, k in circuit.templates}, {}
-    proved = {}
+    circuit = class_circuit(reg, cls)
+    heads, n, most, proved, rows = Counter(), {_label(fn): k for fn, k in circuit.templates}, {}, {}, {}
     for fn, k in circuit.templates:
         cuts = circuit.cuts.get(IF.descriptor_id(fn))
-        if _label(fn) not in named:
-            proved[_label(fn)] = IF.check_proof_block(fn, cuts)
+        proved[_label(fn)], rows[_label(fn)] = IF.check_proof_block(fn, cuts), sum(map(len, IF.unit_rows(fn, cuts)))
         if fn.id.startswith(("Attention", "AttnBlock", "AttnHeadEnd")):
             fam = fn.id.split("{")[0] + ("" if fn.base_id != "AttnBlockSoftmax_v2"
                                          else f"{{CHECK={str(fn.bindings['CHECK']).lower()}}}")
             heads[fam] += k
-            rows = sum(map(len, IF.unit_rows(fn, cuts)))
-            most[fam] = max(most.get(fam, (0, 0)), (rows, proved.get(_label(fn), -1)))
+            most[fam] = max(most.get(fam, (0, 0)), (rows[_label(fn)], proved[_label(fn)]))
     print(json.dumps({"class": [cls.slots, cls.prompt, cls.outputs, cls.lanes, cls.every], "positions": cls.positions,
                       "units": sum(n.values()), "templates": len(n), "reads": len(circuit.registered.reads),
-                      "heads": dict(heads), "heads_most_rows_k_log": most, "unprovable": named,
+                      "heads": dict(heads), "heads_most_rows_k_log": most, "rows": max(rows.values()),
+                      "k_log": max(proved.values()),
                       "max_rss_gb": round(resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / 2**20, 1)}, sort_keys=True), flush=True)
-    assert why.startswith(f"{len(named)} templates C-Flock's composer wouldn't prove: ")
-    assert {lab.split("{")[0] for lab in named} == {"OutCollect_v1", "SlotEntry_v1"}
-    assert len(proved) + len(named) == len(n) and all(k <= IF.K_MAX for k in proved.values())
+    assert max(rows.values()) <= IF.MAX_ROWS and max(proved.values()) <= IF.K_MAX
+    assert {lab.split("{")[0] for lab in n} >= {"SelectCollect_v1", "SelectEntry_v1"}
+    assert not {lab.split("{")[0] for lab in n} & {"TokenSelectCombine_v2", "OutCollect_v1", "SlotEntry_v1"}
     assert set(heads) <= {"AttnBlockSoftmax_v1", "AttnBlockSoftmax_v2{CHECK=false}", "AttnBlockPv_v1", "AttnHeadEnd_v1"}
     assert {"AttnBlockSoftmax_v1", "AttnBlockPv_v1", "AttnHeadEnd_v1"} <= set(most)
     tail = n["RMSNormFusedCudaTail_v1{N=2048}"]
