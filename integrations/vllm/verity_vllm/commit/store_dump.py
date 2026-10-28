@@ -273,9 +273,9 @@ def not_retained(com: Any) -> dict[str, Any] | None:
 
 def dump(com: Any, rc: Any, d: str | os.PathLike, *, threads: int = 8, digests: dict[str, str] | None = None,
          touched: Touched | None = None) -> dict[str, Any]:
-    """Writes the committed store of `com` (run commitment `rc`, or the `RunRoots` a dump loads back) under `d`, its steps ``threads`` at a
-    time; returns the `store.json` document.  ``digests``, when given, receives the sha256 of every step file written (by its path under
-    `d`).  ``touched``: a slim dump of only what those reads opened."""
+    """Writes the committed store of `com` (run commitment `rc`) under `d`, its steps ``threads`` at a time; returns the `store.json`
+    document.  ``digests``, when given, receives the sha256 of every step file written (by its path under `d`).  ``touched``: a slim dump
+    of only what those reads opened."""
     why = _refusal(com)
     rows = getattr(com, "rows", False)
     keys = getattr(com, "row_keys", None) or {}
