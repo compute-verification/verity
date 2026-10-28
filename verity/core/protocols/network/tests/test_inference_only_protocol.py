@@ -1,14 +1,15 @@
-"""The NCI check as a core protocol (`NciCheck.Protocol`, `nci serve`, `verity/nci/v1`) against `nci_reference`'s
-`check_baseline` behind the protocol's decoders, through the difftest harness's `ProtocolPort`.
+"""The inference-only policy as a core protocol (`NciCheck.Protocol`, `inference-only serve`, `verity/inference-only/v0`)
+against `nci_reference`'s `check_baseline` behind the protocol's decoders, through the difftest harness's `ProtocolPort`.
 
-The reference decodes the protocol's formats (`NciCheck/Protocol.lean`'s module docstring), rebuilds the check of
-record's instance and trusted input (the params' log with the run's own record, the commitment, appended, and that
-record's digest the run) and runs `check_baseline`, which `NciCheck.BaselineDifftest` holds `NciCheck.Baseline.check` to.
-The cases are θ's provenance difftest's declarations (`baseline_difftest_vectors.case`), split at the run's own record
-into the protocol's params, commitment and evidence, then at most one change (`MUTATIONS`): the division made to fail
-(`gamma` 0), the run's record repeated in the log, and malformed params, commitments and evidence. Onsite's difftest
-(`verity/core/protocols/composition/tests/`) draws its registration's cases from `cases` and answers them with
-`reference`."""
+The reference decodes the protocol's formats (`NciCheck/Protocol.lean`'s module docstring), checks that the run's
+record names the declared circuit (`names`), rebuilds the policy's check's instance and trusted input (the params' log
+with the run's own record, the commitment, appended, and that record's digest the run) and runs `check_baseline`, which
+`NciCheck.BaselineDifftest` holds `NciCheck.Baseline.check` to. The cases are θ's provenance difftest's declarations
+(`baseline_difftest_vectors.case`), split at the run's own record into the protocol's params, commitment and evidence,
+then at most one change (`MUTATIONS`): the division made to fail (`gamma` 0, so every inference block is over its gate
+budget), the run's record naming another circuit, the run's record repeated in the log, and malformed params,
+commitments and evidence. Onsite's and remote's difftest (`verity/core/protocols/composition/tests/`) draws the
+subprotocol's cases from `drawn` and answers them with `reference`."""
 
 from __future__ import annotations
 
@@ -29,9 +30,11 @@ from verity_difftest import protocol as P
 LEAN = Path(__file__).resolve().parents[1] / "nci" / "lean"
 pytestmark = pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
 
-ID = "verity/nci/v1"
+ID = "verity/inference-only/v0"
 PARAMS_KEYS = ["alpha", "gamma", "log", "parameters", "program"]
 EVIDENCE_KEYS = ["owner", "provenance", "theta"]
+NONCOMPLIANT = "the division does not comply"
+UNNAMED = "the run's registration record is not the declared circuit's: its program is not the circuit's SHA-512"
 
 
 def _load(name: str):
@@ -74,8 +77,27 @@ def evidence(b: bytes) -> dict:
     return j
 
 
+def _digest(program: str) -> str | Exception:
+    """The declared circuit's SHA-512 (`Prog.sha512`), or why its program doesn't decode."""
+    try:
+        desc = json.loads(program)
+        NR.codec.decode_program(desc, NR.declared(desc))
+    except (ValueError, KeyError, TypeError, AttributeError) as e:
+        return e
+    return NR.codec.program_digest(desc)
+
+
+def names(p: dict, record: dict) -> bool:
+    """`NciCheck.Protocol.names`: the run's record names the declared circuit, its `program` the circuit's SHA-512. A
+    program that doesn't decode is left to the check, which refuses it."""
+    digest = _digest(p["program"])
+    return isinstance(digest, Exception) or record.get("program") == digest
+
+
 def check(p: dict, c: tuple[dict, str], e: dict) -> tuple:
     record, run = c
+    if not names(p, record):
+        return "reject", UNNAMED
     instance = {"alpha": p["alpha"], "gamma": p["gamma"], "owner": e["owner"], "program": p["program"],
                 "provenance": e["provenance"], "theta": e["theta"]}
     trusted = {"log": [*p["log"], record], "params": p["parameters"], "run": run}
@@ -83,8 +105,10 @@ def check(p: dict, c: tuple[dict, str], e: dict) -> tuple:
     if "error" in out:
         return "reject", out["error"]
     if out["complies"] is True:
-        return "accept", {}, {"gates": out["gates"], "ius": out["ius"]}
-    return "reject", "the division does not comply"
+        return "accept", {}, {"blocks": out["ius"], "gates": out["gates"]}
+    u, rule = out["failure"]
+    over = "has more than Γ gates" if rule == "size" else "reads more than α bits of fresh input per gate"
+    return "reject", f"{NONCOMPLIANT}: inference block {u} {over}"
 
 
 def reference(case) -> dict:
@@ -94,9 +118,10 @@ def reference(case) -> dict:
 
 # --- the cases ------------------------------------------------------------------------------------------------------------
 
-#: Each change and the verdict and kind it aims at (`_kind`): the decoder that refuses it, the check of record's code, or
-#: `comply` for a division that fails the policy.
+#: Each change and the verdict and kind it aims at (`_kind`): the decoder that refuses it, the policy's check, `unnamed`
+#: for a record that names another circuit, or `comply` for a division that fails the policy.
 EXPECT = {"honest": ("accept", "accept"), "refused": ("reject", "code"), "noncompliant": ("reject", "comply"),
+          "record-program": ("reject", "unnamed"),
           "log-repeat": ("reject", "trusted"), "alpha-den-0": ("reject", "params"), "params-key": ("reject", "params"),
           "program-type": ("reject", "params"), "log-type": ("reject", "params"),
           "commitment-type": ("reject", "commitment"), "commitment-noncanonical": ("reject", "commitment"),
@@ -106,10 +131,12 @@ MUTATIONS = list(EXPECT)
 SEEDS = 240
 
 
+@lru_cache(maxsize=None)
 def split(seed: int) -> dict | None:
     """Declaration `seed` as the protocol's parts: params, the run's own record and the evidence, with the code the
     provenance difftest built it for (`None` when it isn't broken); `None` when its trusted input names no run of its
-    log (a broken `trusted`, which the protocol, rebuilding the trusted input, can't carry)."""
+    log (a broken `trusted`, which the protocol, rebuilding the trusted input, can't carry). Shared: a caller copies
+    before it changes a part."""
     v = vectors.case(seed)
     inst, tr = v["case"]["instance"], v["case"]["trusted"]
     log = tr.get("log") if isinstance(tr, dict) else None
@@ -126,7 +153,7 @@ def split(seed: int) -> dict | None:
 
 @lru_cache(maxsize=None)
 def seeds() -> tuple[tuple[int, ...], tuple[int, ...]]:
-    """The seeds whose split complies, and those whose split the check of record refuses."""
+    """The seeds whose split complies, and those whose split the policy's check refuses."""
     honest, refused = [], []
     for seed in range(SEEDS):
         s = split(seed)
@@ -135,7 +162,7 @@ def seeds() -> tuple[tuple[int, ...], tuple[int, ...]]:
         out = check(s["params"], (s["record"], NR.record_digest(s["record"])), s["evidence"])
         if out[0] == "accept":
             honest.append(seed)
-        elif out[1] != "the division does not comply":
+        elif not out[1].startswith(NONCOMPLIANT):
             refused.append(seed)
     return tuple(honest), tuple(refused)
 
@@ -148,6 +175,8 @@ def case_of(seed: int, m: str, pick: int = 0) -> dict:
     e_bytes = None
     if m == "noncompliant":
         p["gamma"] = 0
+    elif m == "record-program":
+        c_bytes = D.canonical({**record, "program": f"{pick:02x}" * 64}).encode()
     elif m == "log-repeat":
         p["log"] = [*p["log"], record]
     elif m == "alpha-den-0":
@@ -177,17 +206,23 @@ def case_of(seed: int, m: str, pick: int = 0) -> dict:
     return {"commitment": c_bytes.hex(), "evidence": e_bytes.hex(), "params": p}
 
 
+@st.composite
+def drawn(draw, m: str) -> dict:
+    """A declaration's case with change `m` (`honest` for none), on an honest declaration (a refused one for
+    `refused`)."""
+    honest, refused = seeds()
+    return case_of(draw(st.sampled_from(refused if m == "refused" else honest)), m, draw(st.integers(0, 9)))
+
+
 TAGS: dict[str, str] = {}
 SEEN: Counter = Counter()
 
 
 @st.composite
 def cases(draw, only: tuple[str, ...] = tuple(MUTATIONS)) -> dict:
-    """A declaration's case with one change of `only` (`honest` for none)."""
+    """A declaration's case with one change of `only` (`honest` for none), tagged with it for `counted`."""
     m = draw(st.sampled_from(only))
-    honest, refused = seeds()
-    seed = draw(st.sampled_from(refused if m == "refused" else honest))
-    case = case_of(seed, m, draw(st.integers(0, 9)))
+    case = draw(drawn(m))
     TAGS[D.canonical(case)] = m
     return case
 
@@ -200,8 +235,10 @@ def _kind(out: dict) -> str:
     for prefix in ("params", "commitment", "evidence", "case"):
         if reason.startswith(prefix + ": "):
             return prefix
-    if reason == "the division does not comply" or reason.startswith("the division does not comply:"):
+    if reason.startswith(NONCOMPLIANT):
         return "comply"
+    if reason == UNNAMED:
+        return "unnamed"
     return reason.split(":")[0]
 
 
@@ -211,13 +248,13 @@ def counted(case) -> dict:
     return out
 
 
-PORT = D.ProtocolPort("nci", counted, cases(), package=LEAN)
+PORT = D.ProtocolPort("inference-only", counted, cases(), package=LEAN, of_record="lean")
 server = D.server_fixture(PORT)
 
 
 def test_each_change_takes_its_path():
     """Each change, on the first honest declarations (refused ones for `refused`), gets the verdict and the path it is
-    aimed at in the reference, and an accepted case's profile is the check of record's report."""
+    aimed at in the reference, and an accepted case's profile is the policy's check's report."""
     honest, refused = seeds()
     assert len(honest) >= 20 and len(refused) >= 20, (len(honest), len(refused))
     for m, (verdict, kind) in EXPECT.items():
@@ -236,10 +273,11 @@ def test_each_change_takes_its_path():
     trusted = {"log": [*s["params"]["log"], s["record"]], "params": s["params"]["parameters"],
                "run": NR.record_digest(s["record"])}
     verdict = NR.check_baseline(inst, trusted)
-    assert out["profile"] == {"gates": verdict["gates"], "ius": verdict["ius"]} and out["public"] == {}
+    assert out["profile"] == {"blocks": verdict["ius"], "gates": verdict["gates"]} and out["public"] == {}
+    assert out["commitment"] == NR.record_digest(s["record"])
 
 
-def test_the_nci_protocol_agrees_with_the_reference(server):
+def test_the_inference_only_protocol_agrees_with_the_reference(server):
     """Lean and the reference agree on every case, and every change takes its path at least once."""
     SEEN.clear()
     stats = D.run(PORT, examples=300, server=server)
