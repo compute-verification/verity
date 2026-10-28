@@ -251,7 +251,7 @@ def msgAt (s : String) (j : Nat) (got want : String) (n m : Nat) : Option String
   msgAt "sparse/rep1" 0 "round 2" "round 1" 33 33
 #guard why (checkCovers c3 (withS #[sparseAt 0 spRounds.dropLast, sparseAt 1, stackedAt])) ==
   msgAt "sparse/rep0" 32 "no round" "round 33" 32 33
--- each sparse stream draws its phase's coins round for round (the coin server's record of r20261012-081440-2d61 holds
+-- each sparse stream draws its phase's coins round for round (the challenger's record of the recorded session holds
 -- 6, six 1s, 0, a 1 per H3 round, P_LOG's 5 and the claim's 0): a round short, a coin over, and none are refused
 def spCoins : Array (Array Flock.F128) := repCoins (sparsePhaseRounds sp18)
 def spDraws (cs : Array (Array Flock.F128)) : Option String :=

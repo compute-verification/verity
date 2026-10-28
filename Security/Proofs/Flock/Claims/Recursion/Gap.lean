@@ -43,7 +43,7 @@ def gI : Inner Bool Unit where
 
 /-- The outer statement: a circuit with no gates and no outputs, so every witness is in its relation. -/
 def gs₀ : Flock.Stmt :=
-  ⟨0, 0, ⟨0, [], []⟩, fun _ => [], fun _ => [], [],
+  ⟨0, 0, ⟨0, fun g => g.elim0, fun g => g.elim0, ∅⟩, fun _ _ => .pub 0, fun _ _ => .pub 0, [],
     ⟨false, false, false, "", 0, false, false, false, false, 0, false, 0, false, false, false, false, false⟩⟩
 
 /-- The outer verifier: one round, accepting at its coin `false`. -/
@@ -286,7 +286,7 @@ theorem firstWait_const_some {R W Op : Type} (H : Msg → Msg) (run : R → Trac
   rw [(RP.eval_bind H run _ _).1, ha]
   simp [hc, RP.eval]
 
-theorem gRelS (w : Flock.Wit) : Flock.RelS gs₀ w := fun _ _ => rfl
+theorem gRelS (w : Flock.Wit) : Flock.RelS gs₀ w := fun _ _ o => o.elim0
 
 theorem gDO_E_some (H : Msg → Msg) (decode : List (ℕ × ℕ) → List Unit)
     (hdec : Flock.ListWithin gDO.len gDO.enc gDO.θ decode) {Ω : Type} (P : Prover Ω) (x : Msg) (ω : Ω)

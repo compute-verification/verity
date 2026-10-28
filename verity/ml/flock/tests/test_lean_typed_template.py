@@ -1,4 +1,4 @@
-"""Item 1e for a template: the Lean verifier reads a typed template statement (`verity/flock-circuit/types`, GEMM) as #273's
+"""Item 1e for a template: the Lean verifier reads a typed template statement (`verity/flock-circuit/types`, GEMM) as the
 Rust prover splits it: the instance type's root one slot per VU and each placed layout's slots its parts, with rows only
 through `deriveChecked`, the row wiring derived, and Δ in the prover's order (the flat entries, then per VU the inputs'
 copies, the parts' bound rows and the root's cross entries). A typed statement is a form the soundness proof does not
@@ -21,8 +21,8 @@ LEAN = Path(__file__).resolve().parents[3] / "core" / "service" / "flock"
 VERIFIER = Path(__file__).resolve().parents[1] / "verifier"
 BIN = LEAN / ".lake" / "build" / "bin" / "flock-verify"
 STATEMENT = "verity/flock-circuit/types@210d32e1+seed-injection"
-#: the typed GEMM (gemm-coordinate/k64/sm80-mma-bf16, 4 instances) staged at #273, and every CPU selftest case of its
-#: flock-circuit (seed-injection build, #273 at 8505c540: the typed id's own tags), recorded
+#: the typed GEMM (gemm-coordinate/k64/sm80-mma-bf16, 4 instances) staged at 8505c540, and every CPU selftest case of its
+#: flock-circuit (seed-injection build at 8505c540: the typed id's own tags), recorded
 FIXTURE = "art:e9c0209d"
 
 pytestmark = pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
