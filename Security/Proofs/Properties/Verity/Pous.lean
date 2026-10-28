@@ -154,7 +154,7 @@ theorem decoded_unique {s s' : Sent} (hp : s.params = s'.params) (hc : s.commitm
   exact ⟨Except.ok.inj (h1.symm.trans h1'), Except.ok.inj (h2.symm.trans h2')⟩
 
 /-- A list's `mapM` into `Option`, where it succeeds, is the function at each index. -/
-theorem mapM_getElem? {α β : Type} {f : α → Option β} :
+theorem mapM_getElem?.{u, v} {α : Type u} {β : Type v} {f : α → Option β} :
     ∀ {l : List α} {ys : List β}, l.mapM f = some ys → ∀ (i : ℕ) (x : α), l[i]? = some x → f x = ys[i]?
   | [], _, _, _, _, hx => by simp at hx
   | a :: l, ys, h, i, x, hx => by
