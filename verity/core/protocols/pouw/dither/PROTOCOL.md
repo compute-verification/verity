@@ -542,8 +542,8 @@ week and 4.76e26 a year at H200 V4, and 1.70e26 and 7.32e26 at RTX PRO 6000 V4.
   the fleet registered before any member's coin (see "The fleet"), and each replica's periods as one sequence. With it,
   ε_S = ln(1/δ_coin)/(ηq) at a fleet whose replicas all accept, and G leaves ε_skip. A headline taking the minimum of
   two tiers holds at δ_coin only with each tier at δ_coin/2.
-- **κ's values** (see "Its budget") and the headline's single κ are not yet set: κ_dmm and κ_dsha are `SAKMatmul`'s and
-  `SAKSha`'s error terms.
+- **κ's values** (see "Its budget") and the headline's single κ are still to be decided: κ_dmm and κ_dsha are
+  `SAKMatmul`'s and `SAKSha`'s error terms.
 - **The Lean**:
   - the dither run's commit phase: `reg b` read at the operand roots' arrival, `∀ b, opArrive ob b ≤ t ob b` in
     `Timed`, and the phase's oracle calls logged before root b;
