@@ -1,5 +1,6 @@
 import Definitions.NetworkCertifier.Guarantees.Period
 import Proofs.NetworkCertifier.SampledLeak
+import Proofs.NetworkCertifier.SampledLeakReg
 import Proofs.NetworkCertifier.SampledAuditAccepted
 import Proofs.NetworkCertifier.Tap
 import Proofs.NetworkCertifier.TapRows
@@ -9,13 +10,14 @@ import Proofs.NetworkCertifier.TapRows
 
 A window that meets `WindowGood`, whose observations the network certifier registers at the transfer gates
 (`TapOpens`), has them among the sequences `AccSeqsSampled` counts at its registration, with the registration's values
-at `reg` (`mem_accSeqsSampled_of_windowGood`). The observations are the trusted network certifier's record of the cells
+at `reg`, where `WindowGood` pins them (`mem_accSeqsSampled_of_windowGood`). The observations are the trusted network certifier's record of the cells
 it sends, so the client's view reads back from them under its schedule, one its record format holds
 (`tap_cells_read`): the views, and the secrets
 they decode to, number at most `#Ss` times the size of the product of those sets (`encard_periodGood_le`). The record
 holds the fail cells and the padding too, so the count needs no separate charge for them: the bound's
 `∏_c (cap_c + 1)`, one fail choice per connection, is room here. `periodLeak` adds the per-window bound at
-the network certifier's rows (`sampledLeak_tap`).
+the network certifier's rows and the registration's values (`sampledLeak_tap_registered`): an extracted trace that
+opens a registered input to a value other than the registration's collides with the registration's opening (`B_reg`).
 -/
 
 namespace NetTiming
@@ -42,14 +44,13 @@ theorem mem_accSeqsSampled_of_windowGood {H : Msg → Msg} {D : Deploy Coin Col 
     (h : WindowGood H D L K S lay k δ reg Dj s₀ ρ tops x w o) :
     (lay s₀).Fits s₀.prog (k s₀) ∧
       o ∈ AccSeqsSampled s₀.prog P₀ s₀.design (lay s₀) (k s₀) (AsReg s₀.prog (lay s₀) (k s₀) (reg s₀) ρ) δ op Dj := by
-  obtain ⟨⟨s₁, P₁, hs₁, hP₁, hl⟩, ⟨-, s₂, hs₂, hfits⟩, s, hs, ⟨hprog, hdes, hlay, hk, hreg, hpart⟩, hρ, hcov,
+  obtain ⟨⟨s₁, P₁, hs₁, hP₁, hl⟩, ⟨-, s₂, hs₂, hfits⟩, s, hs, ⟨hprog, hdes, hlay, hk, hreg, hpart⟩, hcov,
     hlen, hj⟩ := h
   rw [Option.some_injective _ (hs₁.symm.trans hs)] at hP₁ hl
   rw [Option.some_injective _ (hs₂.symm.trans hs)] at hfits
   rw [Option.some_injective _ (hP₁.symm.trans (hpart.trans hP₀))] at hl
   have hmem := hl op o (htap s hs) hcov hlen hj
   beta_reduce at hmem
-  rw [asReg_congr _ _ _ _ hρ] at hmem
   rw [hprog, hdes, hlay, hk, hreg] at hmem
   rw [hprog, hlay, hk] at hfits
   exact ⟨hfits, hmem⟩
@@ -111,13 +112,32 @@ theorem encard_periodGood_le (H : Msg → Msg) (D : Deploy Coin Col T) (L K S : 
         refine hA.trans ?_
         exact_mod_cast Nat.le_mul_of_pos_left _ hcap1
 
+/-- **The leak bound at the network certifier's rows and the registration's values**: `TapProof.sampledLeak_tap` with
+the registered inputs pinned at the registration's values (`AsReg` at `regVal`), on the statements in scope whose
+registration opens their registered inputs (`RegOpens`): `Pr[acc ∧ ¬RLeakTap] ≤ δ + ε_ks + ε_bind + Pr[B_tap] +
+Pr[B_reg]`, a trace that opens a registered input to another value colliding with the registration (`B_reg`). -/
+theorem sampledLeak_tap_registered (H : Msg → Msg) (D : Deploy Coin Col T) (hks : KS H D) (hb : D.commit.Binds H)
+    (L K S : ℕ) (lay : AuditStatement → BoundaryGates L S) (k : AuditStatement → ℕ) (δ : ℝ)
+    (decode : List (ℕ × Col) → List T) (hδ : 0 ≤ δ)
+    (hdec : Claims.Flock.ListWithin D.flock.len D.flock.enc D.flock.θ decode) (reg : AuditStatement → Finset ℕ)
+    (rops : AuditStatement → List (Opening Bool)) (Dj : ℕ) (tops : AuditStatement → List (Opening Bool)) (x : Msg)
+    (hx : ScopeAcc D lay k x) (hreg : ∀ st, D.parse x = some st → RegOpens H D.commit st (reg st) (rops st))
+    (Ω : Type) [Fintype Ω] [Nonempty Ω] (P : Prover Ω) :
+    PrBad H D.V
+        (RLeakTap H D.commit D.parse D.partition L K S lay k δ
+          (fun st _ => AsReg st.prog (lay st) (k st) (reg st) (regVal (rops st))) Dj tops) (E D decode) x P ≤
+      κ D δ x + Real.sqrt (γ D x * PrB H D.V P x) + (Bext H D.V (E D decode) Ω P x).Pr H +
+        (Btap H D.V (E D decode) D.commit D.parse tops Ω P x).Pr H +
+        (Breg H D.V (E D decode) D.commit D.parse rops Ω P x).Pr H := by
+  sorry
+
 /-- **The leak through the network certifier over a monitoring period**: `Guarantees.PeriodLeakAccepted`, from
-`sampledLeak_tap` with the registered inputs pinned (`adviceIn_asReg`), and `encard_periodGood_le`. -/
+`sampledLeak_tap_registered` and `encard_periodGood_le`. -/
 theorem periodLeak : Guarantees.PeriodLeakAccepted := by
   intro Coin Col T _ _ _ _ _ H D hks L K S lay k δ decode hδ hdec reg Dj n sw Pw hPw ρ op β hβ Conn Cell Srv Dev Z _
-    arr f tap run htrust cap Ss hcap hfit Zs schedOf srvOf hs dec hdz x wit tops hb
-  exact ⟨fun m hm Ω _ _ P => TapProof.sampledLeak_tap H D hks hb L K S lay k δ decode hδ hdec _ Dj
-    (fun _ _ _ _ => adviceIn_asReg K _ _ _ _ _ _ _ _) tops m hm Ω P,
+    arr f tap run htrust cap Ss hcap hfit Zs schedOf srvOf hs dec hdz x wit tops rops hb
+  exact ⟨fun m hm hr Ω _ _ P =>
+      sampledLeak_tap_registered H D hks hb L K S lay k δ decode hδ hdec reg rops Dj tops m hm hr Ω P,
     encard_periodGood_le H D L K S lay k δ reg Dj sw Pw hPw ρ op β hβ arr f tap run htrust cap Ss hfit Zs
       schedOf srvOf hs dec hdz x wit tops⟩
 

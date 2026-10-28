@@ -1,5 +1,6 @@
 import Definitions.NetworkCertifier.Guarantees.SampledCharge
 import Definitions.NetworkCertifier.Period
+import Definitions.NetworkCertifier.SampledReg
 import Definitions.NetworkCertifier.Tap
 import Definitions.Core.Assumptions
 import Mathlib.Data.Set.Card
@@ -15,11 +16,13 @@ code gives the cells the client receives and the observations the audits read, i
 schedule its record format holds the client's view reads back from the observations. The network certifier registers its records at the transfer gates: its
 openings `tops s` under the statement's roots, its signed root for the window, so they vary with what the server did
 (`TapOpens`). `PeriodLeakAccepted` composes the sampled leak bound at the network certifier's rows (`RLeakTap`, with the
-prover's registered inputs pinned: `AsReg`) with that read-back, so the content term of the bound comes from the
-audits, not from a premise:
+prover's registered inputs pinned at the registration's values: `AsReg` at `regVal`) with that read-back, so the content
+term of the bound comes from the audits, not from a premise:
 
-* each window's audit, at a statement in its scope, fails the leak relation at the network certifier's rows with
-  probability at most `δ + ε_ks + ε_bind + Pr[B_tap]` at that statement (`Claims.Sampling.KS`'s errors, and `B_tap` the
+* each window's audit, at a statement in its scope whose registration opens its registered inputs (`RegOpens`, the
+  registration's openings `rops s`), fails the leak relation at the network certifier's rows with probability at most
+  `δ + ε_ks + ε_bind + Pr[B_tap] + Pr[B_reg]` at that statement (`Claims.Sampling.KS`'s errors, `B_reg` the
+  collisions with the registration's openings, and `B_tap` the
   collisions between the extracted trace's openings and the network certifier's, under `CommitmentScheme.Binds`);
 * where the network certifier registers its observations, the secrets of a covert sender in the server whose every
   window meets its good event (`WindowGood`) number at most
@@ -28,8 +31,8 @@ audits, not from a premise:
   through the network certifier in the monitoring period.
 
 The union of the windows' failures over the monitoring period's live coins is not stated here. `WindowGood` is the
-event the first part bounds, plus one condition no proof here gives: the registration's values at the prover's
-registered inputs, which the registration's commitment binds. The network certifier's rows are not pinned: they vary
+event the first part bounds, at a statement whose registration opens the registered inputs to `ρ i`, with the scope
+and the observations' coverage. The network certifier's rows are not pinned: they vary
 with the secret. The first part covers an extracted trace that leaves them outside the faulty units, where every
 transfer gate is opened; the count charges a faulty unit's rows through the Program, from the free inputs, the faulty
 sets, their committed bits and the timing. A unit the draw missed is in the faulty set.
@@ -46,12 +49,15 @@ set_option linter.unusedVariables false
 deployment `D` of the sampled verifier where `Claims.Sampling.KS` holds and the trace's commitment binds
 (`CommitmentScheme.Binds`), with a decoder that lists every trace within Flock's radius, over a monitoring period of `n`
 windows registered as `sw i` (partition `Pw i`, registered values `ρ i`, operator `op i`, and `β i` bounding the
-committed bits of each of its possible faulty sets), with the network certifier's openings `tops s` at each statement,
-and a network certifier that runs its code by `trusted-host` on schedules in `Ss`, each held by its record format `f`
-(`TapRecord.fits`) and giving connection `c` at most `cap c` cells, its one run giving the cells the client receives
-and the observations of the monitoring period's windows (its record of those cells, in the format `f`):
+committed bits of each of its possible faulty sets), with the network certifier's openings `tops s` and the
+registration's `rops s` at each statement, and a network certifier that runs its code by `trusted-host` on schedules in
+`Ss`, each held by its record format `f` (`TapRecord.fits`) and giving connection `c` at most `cap c` cells, its one run
+giving the cells the client receives and the observations of the monitoring period's windows (its record of those
+cells, in the format `f`):
 
-* each window's audit, at a statement in its scope, has `Pr[acc ∧ ¬RLeakTap δ] ≤ δ + ε_ks + ε_bind + Pr[B_tap]`;
+* each window's audit, at a statement in its scope whose registration opens its registered inputs, has
+  `Pr[acc ∧ ¬RLeakTap δ] ≤ δ + ε_ks + ε_bind + Pr[B_tap] + Pr[B_reg]`, with the registered inputs pinned at
+  `regVal (rops s)`;
 * where at every window's statement the network certifier registers its observations at that window's operator
   (`TapOpens`), a covert sender in the server, whose secrets a decoder recovers from the client's view of the server
   side: its secrets whose every window meets `WindowGood`, at that window's statement `x z i` and extracted witness
@@ -74,13 +80,17 @@ def PeriodLeakAccepted : Prop :=
     (hfit : ∀ s ∈ Ss, f.fits s)
     (Zs : Set Z) (schedOf : Z → WardenSchedule Conn) (srvOf : Z → Srv) (hs : ∀ z ∈ Zs, schedOf z ∈ Ss)
     (dec : (Conn → List (ℕ × CellView Cell)) → Z) (hdz : ∀ z ∈ Zs, dec (run tap (schedOf z, srvOf z)).1 = z)
-    (x : Z → Fin n → Claims.Msg) (wit : Z → Fin n → Wit) (tops : AuditStatement → List (Opening Bool)) (hb : D.commit.Binds H),
-    (∀ m, ScopeAcc D lay k m → ∀ (Ω : Type) [Fintype Ω] [Nonempty Ω] (P : Claims.Prover Ω),
+    (x : Z → Fin n → Claims.Msg) (wit : Z → Fin n → Wit) (tops : AuditStatement → List (Opening Bool))
+    (rops : AuditStatement → List (Opening Bool)) (hb : D.commit.Binds H),
+    (∀ m, ScopeAcc D lay k m → (∀ st, D.parse m = some st → RegOpens H D.commit st (reg st) (rops st)) →
+      ∀ (Ω : Type) [Fintype Ω] [Nonempty Ω] (P : Claims.Prover Ω),
       Claims.PrBad H D.V
-          (RLeakTap H D.commit D.parse D.partition L K S lay k δ (fun s => AsReg s.prog (lay s) (k s) (reg s)) Dj tops)
+          (RLeakTap H D.commit D.parse D.partition L K S lay k δ
+            (fun s _ => AsReg s.prog (lay s) (k s) (reg s) (regVal (rops s))) Dj tops)
           (E D decode) m P ≤
         κ D δ m + Real.sqrt (γ D m * Claims.PrB H D.V P m) + (Bext H D.V (E D decode) Ω P m).Pr H +
-          (Btap H D.V (E D decode) D.commit D.parse tops Ω P m).Pr H) ∧
+          (Btap H D.V (E D decode) D.commit D.parse tops Ω P m).Pr H +
+          (Breg H D.V (E D decode) D.commit D.parse rops Ω P m).Pr H) ∧
       ((∀ z ∈ Zs, ∀ i s, D.parse (x z i) = some s → TapOpens H D.commit (lay s) (k s) (op i) s (tops s)
           ((run tap (schedOf z, srvOf z)).2 i)) →
         {z | z ∈ Zs ∧ ∀ i, WindowGood H D L K S lay k δ reg Dj (sw i) (ρ i) tops (x z i) (wit z i)

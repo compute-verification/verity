@@ -1,5 +1,6 @@
 import Definitions.Accounting.JointPeriod
 import Definitions.NetworkCertifier.Period
+import Definitions.NetworkCertifier.SampledReg
 import Definitions.NetworkCertifier.Tap
 import Definitions.Core.Assumptions
 
@@ -28,12 +29,14 @@ deployment `D` of the sampled verifier, the public layouts `lay`, horizons `k`, 
 bound `Dj`, at `δ` and the decoder `decode`, with the claim at `K`. Every field is a property of the deployed run:
 
 * the period's windows, as `PeriodLeakAccepted` takes them: each window's registration (`sw`) and its registered
-  values (`ρ`), and the network certifier's openings at each statement (`tops`);
+  values (`ρ`), and the network certifier's openings (`tops`) and the registration's (`rops`) at each statement;
 * at the coins, each window's statement (`stmt`), the audit's extracted witness there (`wit`) and the network
   certifier's record of the window (`obs`);
 * the claim at `K` is that every window meets `WindowGood` (`comm_iff`): that is the event whose secrets
   `PeriodLeakAccepted`'s count bounds;
 * the statements are in the sampled audit's scope (`scope`): the registration refuses any other;
+* each window's statement's registration opens its registered inputs under the statement's roots (`rops_opens`), to
+  the window's registered values (`rops_ρ`);
 * the deployed network certifier, in `PeriodLeakAccepted`'s form: one device (`device`) on the server's uplink, with
   its connections `Conn`, cells `Cell` and the server's state `Srv`, whose run (`run`) on a schedule and the server's
   state gives the cells the client receives and its records of the period's windows; its record format (`fmt`) and
@@ -50,14 +53,13 @@ bound `Dj`, at `δ` and the decoder `decode`, with the claim at `K`. Every field
 * at each window and every value of the other coins, the network audit's own coins are a run of the sampled verifier
   at the window's statement against a prover (`prover`, on a finite tape `Tape`, the rest of the coins), and the
   probability over the audit's own coins that the network certifier accepts while the window fails `WindowGood` is at
-  most that run's `PrBad` at the leak relation at the network certifier's rows, `RLeakTap` (`window_le`). Past
-  `RLeakTap` and the scope, `WindowGood` holds the trace's values at the registered inputs and the records' coverage
-  (`Covered`, length and jitter): `window_le` holds them on acceptance. The registered values are the gap
-  `PeriodLeakAccepted` names: a trace disagreeing with them opens the registration's commitment two ways, a collision
-  that the one theorem charges to the network component's finder (`PeriodLive.finder .network s`) like the guarantee's
-  other two; no proof here gives it. `window_le` is the
-  per-window bound that the trusted network certifier's records give; deriving it from `PeriodLeakAccepted` at the
-  deployed period and `trusted`, rather than reading it as a field, is the follow-up. -/
+  most that run's `PrBad` at the leak relation at the network certifier's rows with the registered inputs pinned at the
+  registration's values, `RLeakTap` at `regVal (rops s)` (`window_le`). By `rops_ρ` that relation is `WindowGood`'s
+  at the window's statement; past it and the scope, `WindowGood` holds the records' coverage (`Covered`, length and
+  jitter): `window_le` holds them on acceptance. A trace disagreeing with the registration opens its commitment two
+  ways, a collision (`B_reg`) that the guarantee charges to the network component's finder like the other two.
+  `window_le` is the per-window bound that the trusted network certifier's records give; deriving it from
+  `PeriodLeakAccepted` at the deployed period and `trusted`, rather than reading it as a field, is the follow-up. -/
 structure RealizesCommOfPeriodLeakAccepted {ι : Type} {d : Device ι} {α : Type} [Fintype α] {C : Verity.Circuit}
     {I : Type} {Ω : I → Type} [DecidableEq I] [∀ i, Fintype (Ω i)] {Coin Col T : Type} [Fintype Coin] [Nonempty Coin]
     [Inhabited Coin] [DecidableEq Col] [Zero Col]
@@ -70,6 +72,8 @@ structure RealizesCommOfPeriodLeakAccepted {ι : Type} {d : Device ι} {α : Typ
   ρ : Fin n → ℕ → Bool
   /-- the network certifier's openings at each statement, under its roots -/
   tops : AuditStatement → List (Opening Bool)
+  /-- the registration's openings of the registered inputs at each statement, under its roots -/
+  rops : AuditStatement → List (Opening Bool)
   /-- each window's statement at the coins -/
   stmt : ((i : I) → Ω i) → Fin n → Msg
   /-- the audit's extracted witness at each window, at the coins -/
@@ -81,6 +85,10 @@ structure RealizesCommOfPeriodLeakAccepted {ι : Type} {d : Device ι} {α : Typ
     ∀ i, WindowGood H D L Kₒ S lay k δ reg Dj (sw i) (ρ i) tops (stmt ξ i) (wit ξ i) (obs ξ i)
   /-- every window's statement is in the sampled audit's scope -/
   scope : ∀ ξ i, ScopeAcc D lay k (stmt ξ i)
+  /-- every window's statement's registration opens its registered inputs -/
+  rops_opens : ∀ ξ i st, D.parse (stmt ξ i) = some st → RegOpens H D.commit st (reg st) (rops st)
+  /-- to the window's registered values -/
+  rops_ρ : ∀ ξ i st, D.parse (stmt ξ i) = some st → ∀ g ∈ reg st, regVal (rops st) g = ρ i g
   /-- the tape of window `i`'s prover at the other coins `ξ` -/
   Tape : ((i : I) → Ω i) → Fin n → Type
   [tapeFintype : ∀ ξ i, Fintype (Tape ξ i)]
@@ -137,15 +145,16 @@ structure RealizesCommOfPeriodLeakAccepted {ι : Type} {d : Device ι} {α : Typ
       reg (sw i)).card * (faultySets (sw i).design (Pw i) δ).card * 2 ^ β i * Dj ^ k (sw i)) : ℕ) : ℕ∞) ≤ N ∧
     (N : ℝ) ≤ 2 ^ K
   /-- the network audit's acceptance with window `i` failing its good event, over the audit's own coins, is at most
-  the sampled verifier's `PrBad` at the window's statement and prover: the per-window bound that the trusted network
-  certifier's records (`trusted`) give. It is a field until it is derived from `PeriodLeakAccepted` at the deployed
-  period (the follow-up). -/
+  the sampled verifier's `PrBad` at the window's statement and prover, with the registered inputs pinned at the
+  registration's values: the per-window bound that the trusted network certifier's records (`trusted`) give. It is a
+  field until it is derived from `PeriodLeakAccepted` at the deployed period (the follow-up). -/
   window_le : ∀ ξ i, Pouw.pr (fun x : Ω (r.own .network) =>
       r.accepts .network (Function.update ξ (r.own .network) x) ∧
         ¬ WindowGood H D L Kₒ S lay k δ reg Dj (sw i) (ρ i) tops (stmt (Function.update ξ (r.own .network) x) i)
           (wit (Function.update ξ (r.own .network) x) i) (obs (Function.update ξ (r.own .network) x) i)) ≤
     PrBad H D.V
-      (RLeakTap H D.commit D.parse D.partition L Kₒ S lay k δ (fun s => AsReg s.prog (lay s) (k s) (reg s)) Dj tops)
+      (RLeakTap H D.commit D.parse D.partition L Kₒ S lay k δ
+        (fun s _ => AsReg s.prog (lay s) (k s) (reg s) (regVal (rops s))) Dj tops)
       (E D decode) (stmt ξ i) (prover ξ i)
 
 attribute [instance] RealizesCommOfPeriodLeakAccepted.tapeFintype RealizesCommOfPeriodLeakAccepted.tapeNonempty

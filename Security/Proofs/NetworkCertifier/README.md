@@ -90,7 +90,8 @@ Period.lean     the leak through the network certifier over a monitoring period:
                                          registered observations are among AccSeqsSampled at its registration
                                          (mem_accSeqsSampled_of_windowGood), and the secrets the network certifier's
                                          cells decode to, read back from those observations and counted over the
-                                         windows (encard_periodGood_le, periodLeak)
+                                         windows (encard_periodGood_le, periodLeak); the per-window bound at the
+                                         registration's values (sampledLeak_tap_registered)
 PeriodSum.lean  the period sum: per-window leak bounds `Pr[acc w ∧ b w < moved w] ≤ ε w` summed over a
                                          period's windows by a union bound (Pr_exists_mem_le_sum, periodLeak_le_sum)
 Pooled.lean     the wrong units over a monitoring period: a uniform draw misses `f` units with probability at most
@@ -247,13 +248,17 @@ The other 23 are the rest of the Capacity table's bounds and the schedule's caus
   registration's commitment binds them is a separate statement, not yet proved. Both `SampledAuditAccepted` and
   `Claims.Sampling.KS` are named assumptions in the lock.
 - **The leak through the network certifier over a monitoring period** (`Period.lean`): `PeriodLeakAccepted` composes
-  the leak bound at the network certifier's rows (`TapRows.lean`'s `sampledLeak_tap`) with the read-back of its
-  record, so the bound's content term comes from the audits: over a monitoring period's windows, each registered as a
-  statement, where the network certifier registers its observations at the transfer gates (`TapOpens`, its openings
-  under the statement's roots), the secrets of a covert sender whose every window meets its good event (`WindowGood`)
-  number at most `#Ss · ∏_c (cap_c + 1) · ∏_i 2^#(freeInputs_i \ reg_i) · #faultySets_i(δ) · 2^β_i · Dj^k_i`, and each
-  window's audit fails the leak relation at the network certifier's rows (`RLeakTap`) with probability at most
-  `δ + ε_ks + ε_bind + Pr[B_tap]`. Every unit outside the faulty set is correct, so the extracted trace opens every
+  the leak bound at the network certifier's rows and the registration's values (`sampledLeak_tap_registered`,
+  `TapRows.lean`'s `sampledLeak_tap` with the registered inputs pinned at the registration's values) with the read-back
+  of its record, so the bound's content term comes from the audits: over a monitoring period's windows, each registered
+  as a statement, where the network certifier registers its observations at the transfer gates (`TapOpens`, its
+  openings under the statement's roots), the secrets of a covert sender whose every window meets its good event
+  (`WindowGood`) number at most
+  `#Ss · ∏_c (cap_c + 1) · ∏_i 2^#(freeInputs_i \ reg_i) · #faultySets_i(δ) · 2^β_i · Dj^k_i`, and each window's audit,
+  where its registration opens its registered inputs (`RegOpens`), fails the leak relation at the network certifier's
+  rows (`RLeakTap`) with probability at most `δ + ε_ks + ε_bind + Pr[B_tap] + Pr[B_reg]`, a trace that opens a
+  registered input to another value colliding with the registration's opening (`B_reg`). Every unit outside the faulty
+  set is correct, so the extracted trace opens every
   transfer gate there, at the network certifier's value unless the two openings collide (`B_tap`, under
   `CommitmentScheme.Binds`); filled in with the network certifier's values, it carries its records, and the faulty units'
   gates are the advice the count already charges, so the count is unchanged. The network certifier is one device on
@@ -267,7 +272,7 @@ The other 23 are the rest of the Capacity table's bounds and the schedule's caus
   holds the fail cells and padding too, so the proof counts the cells through the
   observations and needs no fail-cell charge: `∏_c (cap_c + 1)` is room. Its named assumptions are
   `Claims.Sampling.KS`, `CommitmentScheme.Binds`, `Claims.Flock.ListWithin` and `trusted-host`. The union over the monitoring
-  period's live coins and the registration's binding of the prover's values at `reg` are not yet stated.
+  period's live coins is not yet stated.
   `Claims.Sampling.KS` stands in for proofs' live bound (`Flock.Guarantees.SampledKSLive`), which replaces it once
   locked, with live forms of `SampledAuditAccepted` and `SampledLeakAccepted`.
 - **The wrong units over a monitoring period** (`Pooled.lean`): `PooledWrongUnitsLe` is the bound over many periods,
