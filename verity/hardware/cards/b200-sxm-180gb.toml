@@ -11,17 +11,14 @@ die = "GB100 x 2"
 arch = "sm_100a"
 board = "692-2G525-0220-000"
 vbios = "97.00.D9.00.35"
-nodes = "vy-dc-b200: one card a VM (r20261017-210820-22f6: nvidia-smi -q and the clock trials; r20261019-051412-05a3)"
+nodes = "a B200 node: one card a VM (art:a597e0beaf00: nvidia-smi -q and the clock trials; art:986044d82e9b)"
 
 [sm]
 count = { value = 148, unit = "SM", mark = "ceiling", source = "the SMs the firmware enables, as the device reports them (sm_100/table.toml, EPS1 DC, note:20261017T0452Z-draft-eps1-dc); no NVIDIA document read gives the B200's count (Technical Brief V2.1 Table 3 says only '16 Blackwell Die for 8 GPUs')" }
 
 [clock]
-sm = { value = 1965, unit = "MHz", mark = "ceiling", source = "r20261017-210820-22f6 (nvidia-smi -q: max, application, default application and max customer boost clocks 1965 MHz; NVML GPC and memory clock VF offset ranges [0, 0]; supported graphics clocks top at 1965; every lock, application clock and offset above 1965 MHz clamped or refused); no NVIDIA document states a B200 clock" }
-memory = { value = 3996, unit = "MHz", mark = "ceiling", source = "r20261017-210820-22f6 (max, application and default application memory clock 3996 MHz; supported memory clocks top at 3996; memory VF offset range [0, 0], a +500 MHz offset refused)" }
-
-[power]
-limit = { value = 1000, unit = "W", mark = "ceiling", source = "r20261017-210820-22f6 (power limit 1000 W: default 1000, min 200, max 1000; 1050 W refused); Lenovo ThinkSystem NVIDIA HGX B200 180GB 1000W GPU Product Guide Table 2: 'Total Graphics Power (TGP) 1000W'" }
+sm = { value = 1965, unit = "MHz", mark = "ceiling", source = "art:a597e0beaf00 (nvidia-smi -q: max, application, default application and max customer boost clocks 1965 MHz; NVML GPC and memory clock VF offset ranges [0, 0]; supported graphics clocks top at 1965; every lock, application clock and offset above 1965 MHz clamped or refused); no NVIDIA document states a B200 clock" }
+memory = { value = 3996, unit = "MHz", mark = "ceiling", source = "art:a597e0beaf00 (max, application and default application memory clock 3996 MHz; supported memory clocks top at 3996; memory VF offset range [0, 0], a +500 MHz offset refused)" }
 
 # The stores. Registers in 32-bit words an SM; the rest in bytes.
 [store]
@@ -29,7 +26,7 @@ reg = { value = 65536, unit = "word/SM", mark = "ceiling", source = "Blackwell T
 reg_extra = { value = 70030, unit = "word/SM", mark = "ceiling", source = "the uniform registers (63 a warp at 64 warps, 4032 words), the predicates (7 bits a thread at 2048 threads, 448 words) and the uniform predicates (7 bits a warp, 14 words), as the H200's at the Tuning Guide's 64 warps an SM; and the tensor memory, 256 KiB an SM (65536 words: PTX ISA 9.0 'Tensor Memory', 128 lanes of 512 32-bit columns), which Isa.lean has no Store for" }
 smem = { value = 262144, unit = "B/SM", mark = "ceiling", source = "Blackwell Tuning Guide section 1.4.2.3: the B200's 'combined L1 cache, texture cache, and shared memory of 256 KB' (shared memory alone is configurable to 228 KB, so the pool is the larger)" }
 l2 = { value = 132120576, unit = "B", mark = "placeholder", source = "126 MiB: Blackwell Tuning Guide section 1.4.2.2, 'The NVIDIA GB200 GPU increases the L2 cache capacity to 126 MB', taken as MiB; no document gives the HGX B200's, and the device's L2 size isn't on record" }
-dram = { value = 193273528320, unit = "B", mark = "ceiling", source = "Lenovo HGX B200 180GB 1000W GPU Product Guide Table 2: 'GPU Memory 180 GB HBM3e', taken as 180 GiB, above the 183,359 MiB the driver reports (r20261017-210820-22f6)" }
+dram = { value = 193273528320, unit = "B", mark = "ceiling", source = "Lenovo HGX B200 180GB 1000W GPU Product Guide Table 2: 'GPU Memory 180 GB HBM3e', taken as 180 GiB, above the 183,359 MiB the driver reports (art:a597e0beaf00)" }
 chip = { value = 0, unit = "B", mark = "placeholder", source = "not enumerated: the RTX card's store.chip is chip.cu's enumeration over sm_120; open until one over sm_100 replaces it" }
 
 # The resources' rates, each a SM-clock (a Lean table's rho would be SMs x this x the SM clock).
@@ -76,5 +73,5 @@ f64 = { value = 128, unit = "tensor unit/MAC", mark = "ceiling", source = "the d
 
 # The model's own ranges (Accel.Card's exact and text).
 [model]
-exact = { value = 31, unit = "bit", mark = "ceiling", source = "PTX ISA 9.0 tcgen05.mma and mma: integer MMAs accumulate in .s32, so a dot is exact at most while |C| + sum |a*b| < 2^31 (P1, Card.Exact); captured exact within it (silicon.integer.BLACKWELL_SM100_S8_K32, r20261019-042817-8fd3, 0 mismatches)" }
+exact = { value = 31, unit = "bit", mark = "ceiling", source = "PTX ISA 9.0 tcgen05.mma and mma: integer MMAs accumulate in .s32, so a dot is exact at most while |C| + sum |a*b| < 2^31 (P1, Card.Exact); captured exact within it (silicon.integer.BLACKWELL_SM100_S8_K32, art:1015987ce8db, 0 mismatches)" }
 instruction_bytes = { value = 16, unit = "B/instruction", mark = "ceiling", source = "an instruction is 128 bits from Volta on (CUDA Binary Utilities 12.9), so code fits in store.dram / 16 instructions" }
