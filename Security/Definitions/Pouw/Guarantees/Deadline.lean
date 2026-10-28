@@ -1,6 +1,6 @@
 import Definitions.Pouw.Assumptions.Pinned
 import Definitions.Pouw.Assumptions.Deadline
-import Definitions.Pouw.Assumptions.PearlC.Deadline
+import Definitions.Pouw.PearlC.Deadline
 import Definitions.Pouw.Assumptions.PearlC.TTOutRev1
 import Definitions.Pouw.Assumptions.PearlC.TTOutW1
 import Definitions.Pouw.PearlC.DeviceKernelWref
@@ -45,7 +45,7 @@ def WorkBetweenSaltAndDeadline : Prop :=
       (P.Wref U.layout u : ℝ) ≤ Ωmax * ((U.layout.shape u).Wmm : ℝ)) →
     Assumptions.TT CM P D γ₀ ε →
     ∀ U : Workload, U.InDomain D → ∀ (A : Adversary CM) (run : TimedRun Q R S) (td : ℝ),
-    Assumptions.HonestClock CM U A run td →
+    Assumptions.HonestClock (CM.adversaries U) A run td →
     ∀ T : ℝ, 0 ≤ T → ∀ q : ℕ, q ≤ 2 ^ 64 → A.BoundedBy U run td T q → ∀ (t : ℕ) (εs : ℝ), εs ≤ 1 →
       pr (fun x : (Q → R) × S × (Fin t → Ticket (P.Wref U.layout) U.layout.N) =>
           AcceptsBy run td x.1 x.2.1 (correctSet P U x.1 x.2.1 (A.transcript U x.1 x.2.1)) x.2.2 ∧
@@ -65,7 +65,7 @@ def SpareCapacityAtDeadline : Prop :=
       (P.Wref U.layout u : ℝ) ≤ Ωmax * ((U.layout.shape u).Wmm : ℝ)) →
     Assumptions.TT CM P D γ₀ ε →
     ∀ U : Workload, U.InDomain D → ∀ (A : Adversary CM) (run : TimedRun Q R S) (td : ℝ),
-    Assumptions.HonestClock CM U A run td →
+    Assumptions.HonestClock (CM.adversaries U) A run td →
     ∀ C Y : ℝ, Y ≤ C * (td - run.ts) → ∀ q : ℕ, q ≤ 2 ^ 64 →
     (∀ (H : Q → R) (s : S), run.spentIn H s run.ts td + Y ≤ C * (td - run.ts) ∧
       A.pre.calls H + CM.calls A.online H U A.act (A.pre.eval H) s ≤ q) →
@@ -84,7 +84,7 @@ def PearlCSampledByDeadline : Prop :=
     (P : PearlC.Protocol Q R S) (TR : PearlC.TileRules Q R S) (D : PearlC.Layout → Prop) (γ : ℝ)
     (η : ℕ → ℕ → ℝ), PearlC.GγSampled CM P TR D γ η →
     ∀ U : PearlC.Workload, U.InDomain P D → ∀ (A : PearlC.Adversary CM) (run : TimedRun Q R S) (td : ℝ),
-    PearlC.Assumptions.HonestClock CM U A run td →
+    Assumptions.HonestClock (CM.adversaries U) A run td →
     ∀ T : ℝ, 0 ≤ T → ∀ q : ℕ, q ≤ 2 ^ 64 → A.BoundedBy U run td T q →
     ∀ (w : ℕ → ℕ) (κ : ℝ), 0 < κ → (∀ g < (TR.tiling U.layout).NT, (w g : ℝ) = κ * TR.Wref U.layout g) →
     ∀ (t : ℕ) (εs : ℝ), εs ≤ 1 →
@@ -109,7 +109,8 @@ def PearlCSm120Rev1Cap1000ByDeadline_8192 : Prop :=
     let TR := PearlC.pearlCTilesDevRev1K d sem (1 / 1000) (218 / 25 - 8953 / 1000)
     PearlC.Assumptions.TTOutTilePearlCDevRev1W1 dv salt d sem (1 / 1000) →
     ∀ U : PearlC.Workload, U.InDomain P (PearlC.pearlCDomainDevAt d PearlC.sh8192) →
-    ∀ (A : PearlC.Adversary CM) (run : TimedRun Q R S) (td : ℝ), PearlC.Assumptions.HonestClock CM U A run td →
+    ∀ (A : PearlC.Adversary CM) (run : TimedRun Q R S) (td : ℝ),
+    Assumptions.HonestClock (CM.adversaries U) A run td →
     ∀ T : ℝ, 0 ≤ T → ∀ q : ℕ, q ≤ 2 ^ 64 → A.BoundedBy U run td T q →
     ∀ (w : ℕ → ℕ) (κ : ℝ), 0 < κ → (∀ g < (TR.tiling U.layout).NT, (w g : ℝ) = κ * TR.Wref U.layout g) →
     ∀ (t : ℕ) (εs : ℝ), εs ≤ 1 →
@@ -133,7 +134,8 @@ def PearlCSm120Rev1Cap1000ByDeadline_16384 : Prop :=
     let TR := PearlC.pearlCTilesDevRev1K d sem (1 / 1000) (218 / 25 - 8953 / 1000)
     PearlC.Assumptions.TTOutTilePearlCDevRev1W1 dv salt d sem (1 / 1000) →
     ∀ U : PearlC.Workload, U.InDomain P (PearlC.pearlCDomainDevAt d PearlC.sh16384) →
-    ∀ (A : PearlC.Adversary CM) (run : TimedRun Q R S) (td : ℝ), PearlC.Assumptions.HonestClock CM U A run td →
+    ∀ (A : PearlC.Adversary CM) (run : TimedRun Q R S) (td : ℝ),
+    Assumptions.HonestClock (CM.adversaries U) A run td →
     ∀ T : ℝ, 0 ≤ T → ∀ q : ℕ, q ≤ 2 ^ 64 → A.BoundedBy U run td T q →
     ∀ (w : ℕ → ℕ) (κ : ℝ), 0 < κ → (∀ g < (TR.tiling U.layout).NT, (w g : ℝ) = κ * TR.Wref U.layout g) →
     ∀ (t : ℕ) (εs : ℝ), εs ≤ 1 →
@@ -157,7 +159,8 @@ def PearlCSm120Rev1Cap1000ByDeadline_qwen3_8b : Prop :=
     let TR := PearlC.pearlCTilesDevRev1K d sem (1 / 1000) (218 / 25 - 8953 / 1000)
     PearlC.Assumptions.TTOutTilePearlCDevRev1W1 dv salt d sem (1 / 1000) →
     ∀ U : PearlC.Workload, U.InDomain P (PearlC.pearlCDomainDevShapes d PearlC.qwen3_8bLinears) →
-    ∀ (A : PearlC.Adversary CM) (run : TimedRun Q R S) (td : ℝ), PearlC.Assumptions.HonestClock CM U A run td →
+    ∀ (A : PearlC.Adversary CM) (run : TimedRun Q R S) (td : ℝ),
+    Assumptions.HonestClock (CM.adversaries U) A run td →
     ∀ T : ℝ, 0 ≤ T → ∀ q : ℕ, q ≤ 2 ^ 64 → A.BoundedBy U run td T q →
     ∀ (w : ℕ → ℕ) (κ : ℝ), 0 < κ → (∀ g < (TR.tiling U.layout).NT, (w g : ℝ) = κ * TR.Wref U.layout g) →
     ∀ (t : ℕ) (εs : ℝ), εs ≤ 1 →
@@ -181,7 +184,8 @@ def PearlCSm120Rev1Cap1000ByDeadline_llama31_8b : Prop :=
     let TR := PearlC.pearlCTilesDevRev1K d sem (1 / 1000) (218 / 25 - 8953 / 1000)
     PearlC.Assumptions.TTOutTilePearlCDevRev1W1 dv salt d sem (1 / 1000) →
     ∀ U : PearlC.Workload, U.InDomain P (PearlC.pearlCDomainDevShapes d PearlC.llama31_8bLinears) →
-    ∀ (A : PearlC.Adversary CM) (run : TimedRun Q R S) (td : ℝ), PearlC.Assumptions.HonestClock CM U A run td →
+    ∀ (A : PearlC.Adversary CM) (run : TimedRun Q R S) (td : ℝ),
+    Assumptions.HonestClock (CM.adversaries U) A run td →
     ∀ T : ℝ, 0 ≤ T → ∀ q : ℕ, q ≤ 2 ^ 64 → A.BoundedBy U run td T q →
     ∀ (w : ℕ → ℕ) (κ : ℝ), 0 < κ → (∀ g < (TR.tiling U.layout).NT, (w g : ℝ) = κ * TR.Wref U.layout g) →
     ∀ (t : ℕ) (εs : ℝ), εs ≤ 1 →
