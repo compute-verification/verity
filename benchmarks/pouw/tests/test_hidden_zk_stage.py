@@ -83,3 +83,72 @@ def test_fast_staging_composes_the_library_circuit_flat_and_templated(layout, tm
     fast, lib = ((tmp_path / m / "circuit.txt").read_bytes() for m in ("fast", "library"))
     assert fast == lib and got["fast"] == got["library"]
     assert fast.startswith(b"flock-circuit/tmpl " if layout else b"flock-circuit ")
+
+
+#: a flat unit of many calls of two Boolean Definitions (`stamp`'s templates): a chain, a call whose operands share bits, a
+#: dead call, constant operand bits and a call on a later row's bits; its pin, class, layout counts and the unit's outputs
+#: at one and at three random lanes, under ``argv[1]`` as in `STAGER`
+CHAIN = """
+import json, sys
+from pathlib import Path
+sys.path.insert(0, sys.argv[3])
+mode, out = sys.argv[1], Path(sys.argv[2])
+out.mkdir(parents=True)
+if mode == "fast":
+    import fast_stage
+    fast_stage.install(out)
+import numpy as np
+from verity.ml.circuits.boolean import BIT
+from verity.ml.circuits.boolean.forms import ZERO
+from verity.ml.circuits.boolean.trace import definition
+from verity.ml.circuits.defs import CompositeDefinition, bind
+from verity.ml.circuits.types import Array
+from verity.ml.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2
+from verity_flock import class_statement as CS
+W, N = 16, 9
+WORD = Array(W, BIT)
+
+def mix(C, s, x):
+    t = [s[i] ^ s[(i + 1) % W] ^ x[i] for i in range(W)]
+    return C.commit([t[i] ^ C.AND(t[(i + 1) % W], t[(i + 3) % W]) for i in range(W)])
+
+MIX = definition("StampChainMix", 1, mix, (("s", WORD), ("x", WORD)), WORD, register=False)
+HALF = definition("StampChainHalf", 1, lambda C, s, x: [C.AND(s[i], x[i]) if i < 9 else ZERO for i in range(W)],
+                  (("s", WORD), ("x", WORD)), WORD, register=False)
+
+def body(B, S, s, x, p):
+    for i in range(N):
+        s = B.call(MIX, s, x[i % 3])
+    B.call(MIX, x[0], s)
+    u = B.call(MIX, s, s)
+    v = B.call(HALF, x[1], u)
+    w = B.call(MIX, v, x[2])
+    w = B.call(HALF, w, p[3])
+    return B.call(MIX, w, v)
+
+d = bind(CompositeDefinition("StampChain", 1, (), lambda S: ((("s", WORD), ("x", Array(3, WORD)), ("p", Array(128, WORD))), WORD),
+                             body, register=False))
+st = CS.UnitStager(d, "unit/stamp-chain", [("s", V2, 16, ["s"]), ("x", V2, 48, ["x"]), ("p", V2, 2048, ["p"])], [(V2, (0,))],
+                   circuit=out / "circuit.txt")
+x = np.random.default_rng(7).integers(0, 1 << 16, size=(3, 132), dtype=np.uint64)
+evals = [st.low.evaluate(x[:n])[0].tolist() for n in (1, 3)]
+print(json.dumps({"pin": st.pin, "class": st.class_sha512, "counts": st.low.layout.counts, "evals": evals}))
+"""
+
+
+@pytest.mark.slow
+def test_stamped_unit_writes_the_library_bytes(tmp_path):
+    """About 15 s: a flat unit of many calls (`CHAIN`) built with fast_stage's stamp and without it, each in its own process:
+    the same file, pin, class, counts and values. The single-Definition units above are one call each, so only this catches
+    a stamp that renames a call's ANDs, keeps a dead one, or keys a template on less than its operands' sharing."""
+    runs = {mode: subprocess.Popen([sys.executable, "-c", CHAIN, mode, str(tmp_path / mode), str(STAGE.parent)],
+                                   text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+            for mode in ("fast", "library")}
+    got, err = {}, {}
+    for mode, p in runs.items():
+        out, err[mode] = p.communicate()
+        assert p.returncode == 0, f"{mode}: {err[mode][-2000:]}"
+        got[mode] = json.loads(out.strip().splitlines()[-1])
+    assert "STAMP unit/stamp-chain" in err["fast"]
+    fast, lib = ((tmp_path / m / "circuit.txt").read_bytes() for m in ("fast", "library"))
+    assert fast == lib and got["fast"] == got["library"]
