@@ -37,6 +37,9 @@ SPILL = (("vy-nebius-cpu-1", "research"), ("vy-nebius-cpu-5", "research"), ("vy-
 DESCRIPTION = Path("infra/cluster/descriptions/nebius.toml")
 SLOT_PY = Path("tools/verity/check/slot.py")
 READ_TIMEOUT_S = 30
+#: a machine whose DISK_PATH has fewer free inodes or GB than these takes no `--on auto` job: on 27 Oct cpu-5 and cpu-6 ran out of
+#: inodes with half their bytes free, and every job placed there failed shipping its source or mid-build with ENOSPC
+DISK_PATH, MIN_FREE_INODES, MIN_FREE_GB = "/workspace", 400_000, 50
 
 
 class Unplaceable(Exception):
@@ -76,11 +79,25 @@ def doc(f):
         return {"error": f"{type(e).__name__}: {e}"}
 
 
+def disk_short():
+    if not os.path.isdir(DISK):
+        return None
+    s = os.statvfs(DISK)
+    gb = s.f_bavail * s.f_frsize / 1e9
+    if s.f_files and s.f_favail < MIN_INODES:
+        return f"{DISK} has {s.f_favail} inodes free, under {MIN_INODES}"
+    if gb < MIN_GB:
+        return f"{DISK} has {gb:.0f} GB free, under {MIN_GB}"
+    return None
+
+
 out = {}
 if SHARE is not None:
     out["share"] = doc(lambda: share(SHARE, CLAIMS, CPU_ROOT))
+short = disk_short()
 for pool, slots in POOLS.items():
-    out[pool] = doc(lambda: load("auto_slot_" + pool, SLOT_SRC, {"CHECK_SLOTS": slots}).status_doc(datetime.now(timezone.utc)))
+    out[pool] = {"error": f"disk: {short}"} if short else \
+        doc(lambda: load("auto_slot_" + pool, SLOT_SRC, {"CHECK_SLOTS": slots}).status_doc(datetime.now(timezone.utc)))
 print(json.dumps(out))
 '''
 
@@ -109,7 +126,7 @@ def payload(source: Path, cpus: int, share: str | None, pools: list[str]) -> byt
 
     head = {"CORES_SRC": Path(cores.__file__).read_text(), "SLOT_SRC": (Path(source) / SLOT_PY).read_text() if pools else "",
             "JOB_CPUS": max(cpus, 1), "SHARE": share, "CLAIMS": str(cores.CLAIMS), "CPU_ROOT": str(cores.CPU_ROOT),
-            "POOLS": {p: slot_only.POOLS[p] for p in pools}}
+            "POOLS": {p: slot_only.POOLS[p] for p in pools}, "DISK": DISK_PATH, "MIN_INODES": MIN_FREE_INODES, "MIN_GB": MIN_FREE_GB}
     return ("".join(f"{k} = {v!r}\n" for k, v in head.items()) + PROBE).encode()
 
 
