@@ -16,7 +16,8 @@ counts a miss for every round that is not a hit: wrong, late or rejected.  Three
    refused.  That cap is the graded audit's; `ContinuousAudit` holds at every `D_late`, so for it the cap is only
    conservative.
 3. **Every late answer counted.** Every answer past `Δ + RTT`, rejected or not, is a miss, and so is every wrong one
-   (`AuditResult.misses`).  Every challenge closes with an `Answer` recorded, whether answered, rejected or expired.
+   (`AuditResult.misses`).  Every challenge closes with a `ChallengeReply` recorded, whether answered, rejected or
+   expired.
 
 A graded audit's window also needs a cap on its whole duration (`Pous.SecurityProofs.BackgroundRebuildExcluded`):
 with `audit_cap=audit.AUDIT_CAP` (1,505 calls of `call_ns`, ≈ 363.5 ms at 241.5 µs), a receipt past it rejects the
@@ -42,7 +43,7 @@ from dataclasses import dataclass
 
 from verity.ml.randomness import Key
 
-from .audit import DEADLINE_NS, RTT_ALLOWANCE_NS, Answer, AuditResult, UnsignedRounds
+from .audit import DEADLINE_NS, RTT_ALLOWANCE_NS, AuditResult, ChallengeReply, UnsignedRounds
 from .verifier import VerifierKey
 
 
@@ -78,8 +79,9 @@ class ContinuousMemoryChallenger:
 
     def __init__(self, vk: VerifierKey, key: Key, n: int, *, late_deadline_ns: int, max_misses: int = 0,
                  deadline_ns: int = DEADLINE_NS, rtt_allowance_ns: int = RTT_ALLOWANCE_NS,
-                 clock: Callable[[], int] = time.perf_counter_ns, on_answer: Callable[[Answer], None] | None = None,
-                 root_only: bool = False, audit_cap: int | None = None) -> None:
+                 clock: Callable[[], int] = time.perf_counter_ns,
+                 on_answer: Callable[[ChallengeReply], None] | None = None, root_only: bool = False,
+                 audit_cap: int | None = None) -> None:
         if late_deadline_ns is None:
             raise ValueError("the continuous audit needs a hard deadline")
         if n < 1 or max_misses < 0:
@@ -103,7 +105,7 @@ class ContinuousMemoryChallenger:
         return self.timed.late_limit_ns
 
     @property
-    def answers(self) -> tuple[Answer, ...]:
+    def answers(self) -> tuple[ChallengeReply, ...]:
         return tuple(self.timed.answers)
 
     @property
@@ -161,13 +163,14 @@ class ContinuousMemoryChallenger:
         i = self.timed.challenge()
         return self.timed.pending, i
 
-    def respond(self, j: int, block: bytes, path: tuple[bytes, ...] | None = None, report: object = None) -> Answer:
+    def respond(self, j: int, block: bytes, path: tuple[bytes, ...] | None = None,
+                report: object = None) -> ChallengeReply:
         if j != self.timed.pending:
             state = "closed" if j < len(self.timed.answers) else "not revealed"
             raise RuntimeError(f"challenge {j} is {state}: an answer counts only for the open challenge")
         return self.timed.respond(block, path, report)
 
-    def expire(self) -> Answer:
+    def expire(self) -> ChallengeReply:
         return self.timed.expire()
 
     def result(self) -> AuditResult:
