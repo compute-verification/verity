@@ -347,7 +347,7 @@ def coin_check(p: dict, s: dict) -> dict:
     """A plan `s` drawn g = `s["per_coin"]` groups a coin, read by the code: its closed form's held-over-time sampling
     term against `span_line`'s arithmetic on the uniform session it describes (whole coins over Θ, then one more),
     whose wrong receipts are `audit.pooled`'s on a record of each group's receipts and draws naming `groups_per_coin`
-    (all of a coin's draws on its last group, as `Session.close` may share them: the code pools them over the coin's
+    (all of a coin's draws on its last group, as `AuditRun.close` may share them: the code pools them over the coin's
     groups). At one group in flight (`s["flight"]` 1) each group's root comes `least_period` after its coin, before the
     next coin as a record naming f = 1 must have it. Refuses to go on unless they agree."""
     g, k, r, N, f = s["per_coin"], s["k"], s["r"], p["blocks"], s.get("flight", 2)

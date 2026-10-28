@@ -9,7 +9,10 @@ The record's `plan` is the units every pass reads (`plan_of`): the units holding
 padding past the last tensor, which is PoUS's and which the decode never reads; without one, every unit.
 
 - The prover opens with the request `{"request": {"deadline_ns", "node", "passes", "samples", "window_ns",
-  "windows"}}`, whose node must be the registration's.
+  "windows"}}`, whose node must be the registration's and the rest the auditor's session parameters as they are
+  (`SESSION`, `params_of`): the request only restates them, so the prover chooses none. `main` holds its sessions to
+  `SESSION` unless `--windows`, `--passes`, `--samples`, `--window-ns` or `--deadline-ns` names another value (a toy
+  party's); the auditor's gate passes none of them.
 - The verifier answers `{"hold": {"registration"}}`: the registration with its plan, which the prover checks against
   its store and reads each pass in.
 - It then drives the session on its clock (`session`): `{"run": {"challenge", "i", "previous", "t"}}` asks for pass i
@@ -18,8 +21,11 @@ padding past the last tensor, which is PoUS's and which the decode never reads; 
   next window's first root, or its deadline for the last) it sends `{"open": {"draws", "t"}}`, answered `{"openings":
   [opening_json, ...]}`, and verifies them while the prover serves on.
 - Once the session has its outcome, `{"end": {"commitment", "openings"}}`: the session's coin commitment and every
-  released coin's opening (`audit.Session.disclose`), against which the prover checks each challenge it was sent
+  released coin's opening (`audit.AuditRun.disclose`), against which the prover checks each challenge it was sent
   (`audit.Prover.end`). The commitment is a function of every coin, so the prover gets it only after its last root.
+- `{"case": {...}}`: the session's core case (`p2_case`), the log of every request the Lean answered with the
+  registration, the request and the verifier's clock floor, which `RemoteAudit.P2Protocol` replays; it is witness, which
+  the prover keeps private. A session the books vetoed has none.
 - `{"answer": {...}}` ends the session (`answer`): the verdict, the failure and where, and on acceptance the credited
   reads `q_bytes`, the receipts less the wrong ones the pooled bound leaves (`pooled.bound` at δ = 2^-40), a unit's
   8,224 bytes each, over the session's span. `core_answer` puts it in the core interface's form.
@@ -38,8 +44,10 @@ N]) [--answer FILE | --device DIR] [--lean-exe EXE]` is the verifier's side (`ma
 Lean built in its package (`lake build remote-audit-verifier`) unless `--lean-exe` names a built one, or, without `lake`
 on the PATH, the one already built there (`p2_lean.exe`). Listening, it prints `{"listening": port}` and then each
 session's `{"answer"}` on stdout, the shape of a party the auditor's gate starts over ssh with its `--device` directory
-(`benchmarks/live_verifier/host.py`'s party verbs). `prove(reader, writer, prover)` is the prover's: it answers each
-message with `prover`'s `hold`, `run`, `open` and `end` until the answer, which it returns. It also reads a verifier that
+(`benchmarks/live_verifier/host.py`'s party verbs), where it keeps each session's case too, a line of
+`private/cases.jsonl` (0700, the file 0600). `prove(reader, writer, prover)` is the prover's: it answers each
+message with `prover`'s `hold`, `run`, `open` and `end` until the answer, which it returns, and hands the case to its
+`case`, if it has one. It also reads a verifier that
 sends each challenge as the coin's whole opening and discloses no coins at the end, the form before `Released`: the
 challenge is read as its released part, and `end` never comes.
 """
@@ -48,6 +56,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import re
 import secrets
 import socket
@@ -69,6 +78,10 @@ from .receipts import Plan
 MODULE = "verity.core.protocols.remote_bandwidth.p2_party"
 PROTOCOL = "verity/remote-bandwidth/p2/v0"
 REQUEST_KEYS = ("deadline_ns", "node", "passes", "samples", "window_ns", "windows")
+SESSION = {"deadline_ns": 10**9, "passes": 1, "samples": 1024, "window_ns": 10**9, "windows": 2}
+"""The auditor's session parameters, which a request must carry as they are (`params_of`): the served bandwidth piece's
+(`benchmarks/one_stage/served_bandwidth.sh`), two windows of at least 1 s, one pass each, 1,024 openings a window and
+an allowance of 1 s."""
 REFUSED = {"refused": True}
 DISAGREEMENT = "disagreement"
 #: The draws a thread of the Lean checks at once (`P2Session.checkOpeningsChunked`).
@@ -191,17 +204,22 @@ def request_of(node: bytes, *, windows: int, passes: int, samples: int, window_n
             "window_ns": window_ns, "windows": windows}
 
 
-def params_of(reg: p2.Registration, request: Mapping[str, Any]) -> audit.Params:
-    """The session's parameters from the prover's request (`P2Session.paramsOf`), refused unless its node is the
-    registration's and the rest are positive integers."""
+def params_of(reg: p2.Registration, request: Mapping[str, Any],
+              auditor: Mapping[str, int] = SESSION) -> audit.Params:
+    """The session's parameters, the auditor's (`auditor`, `SESSION`'s keys), refused unless the prover's request is
+    for the registration's node and carries each of the auditor's values as it is, by name. The Lean's
+    `P2Session.paramsOf` reads the request alone: it is this with the request's own values as `auditor`."""
     if not isinstance(request, dict) or sorted(request) != sorted(REQUEST_KEYS):
         raise ValueError(f"a request is {list(REQUEST_KEYS)}")
     if _unhex(request["node"]) != reg.node:
         raise ValueError("the request's node is not the registration's")
     if any(type(request[k]) is not int or request[k] < 1 for k in REQUEST_KEYS if k != "node"):
         raise ValueError("a request's deadline_ns, passes, samples, window_ns and windows are positive integers")
-    return audit.Params(blocks=reg.blocks, deadline_ns=request["deadline_ns"], windows=request["windows"],
-                        samples=request["samples"], min_passes=request["passes"], window_ns=request["window_ns"],
+    if off := [k for k in SESSION if request[k] != auditor[k]]:
+        raise ValueError("; ".join(f"the request's {k} is not the auditor's ({request[k]}, not {auditor[k]})"
+                                   for k in off))
+    return audit.Params(blocks=reg.blocks, deadline_ns=auditor["deadline_ns"], windows=auditor["windows"],
+                        samples=auditor["samples"], min_passes=auditor["passes"], window_ns=auditor["window_ns"],
                         codec=reg.codec, receipt=reg.receipt, layout=reg.layout, rows=reg.rows)
 
 
@@ -382,15 +400,20 @@ class Twin:
     where the two agree; where they differ, or the Lean answers an error, the session is rejected `disagreement` at
     the event's window (`disagreement` says where and what each answered) and the event raises `_Ended`."""
 
-    def __init__(self, lean: Lean, k: int, books: Books) -> None:
+    def __init__(self, lean: Lean, k: int, books: Books, request: dict[str, Any] | None = None,
+                 not_before_ns: int = 0) -> None:
         self.lean, self.k, self.books = lean, k, books
+        self.request, self.not_before_ns = request, not_before_ns
         self.disagreement: dict[str, Any] | None = None
+        self.log: list[dict[str, Any]] = []
+        """Every request after the session opened, as `RemoteAudit.P2Protocol` replays them (`p2_case`)."""
 
     @classmethod
     def open(cls, lean: Lean, registration: p2.Registration, plan: Plan, line: bytes, secret: bytes,
-             not_before_ns: int) -> Twin:
+             not_before_ns: int, auditor: Mapping[str, int] = SESSION) -> Twin:
         """The session the prover's request `line` asks for, on coins from `secret`: `_Refused` where the Lean refuses
-        it, or the Python does where the Lean doesn't (the veto)."""
+        it, or the Python does where the Lean doesn't (the veto), as for a request off the auditor's parameters
+        `auditor` (`params_of`)."""
         try:
             got = lean.call({"op": "p2_session", "bytes": len(line), "not_before_ns": not_before_ns}, line)
         except LeanError as e:
@@ -399,12 +422,14 @@ class Twin:
             why = got.get("refused") if isinstance(got, dict) else None
             raise _Refused(why if type(why) is str else f"the Lean verifier answered {got}")
         try:
-            params = params_of(registration, message(line, "request"))
+            request = message(line, "request")
+            params = params_of(registration, request, auditor)
         except (ConnectionError, ValueError, KeyError, TypeError) as e:
             raise _Refused(f"{DISAGREEMENT}: the Lean verifier takes the request, the Python refuses it: "
                            f"{type(e).__name__}: {e}") from None
         coins_ = C.local(registration.digest, 0, params.windows, P._Stream(secret, registration.node))
-        return cls(lean, got["session"], Books(params, registration, coins_, plan, not_before_ns))
+        return cls(lean, got["session"], Books(params, registration, coins_, plan, not_before_ns), request,
+                   not_before_ns)
 
     def _ask(self, request: dict[str, Any], body: bytes = b"") -> Any:
         try:
@@ -424,8 +449,9 @@ class Twin:
 
     def _event(self, t: int, event: dict[str, Any], mine: dict[str, Any]) -> dict[str, Any]:
         c = self.books.released
-        got = self._ask({"op": "p2_event", "session": self.k, "event": event,
-                         "coin": None if c is None else C.coin(c).hex()})
+        coin = None if c is None else C.coin(c).hex()
+        self.log.append({"coin": coin, "event": event, "op": "p2_event"})
+        got = self._ask({"op": "p2_event", "session": self.k, "event": event, "coin": coin})
         return self._settle(t, event["kind"], got, mine)
 
     def start(self, now: int) -> tuple[dict[str, Any], C.LiveOpening | None]:
@@ -442,6 +468,7 @@ class Twin:
     def root(self, t: int, i: int, line: bytes, now: int) -> dict[str, Any]:
         """Root i of window t from the prover's `line`, arriving at `now`."""
         mine = self.books.root(t, i, line, now)
+        self.log.append({"i": i, "line": line.hex(), "now": now, "op": "p2_root", "t": t})
         got = self._ask({"op": "p2_root", "session": self.k, "t": t, "i": i, "now": now, "bytes": len(line)}, line)
         return self._settle(t, "root", got, mine)
 
@@ -453,6 +480,7 @@ class Twin:
     def openings(self, t: int, line: bytes) -> dict[str, Any]:
         """Window t's openings from the prover's `line`: the Lean checks them while the books do."""
         got = None
+        self.log.append({"line": line.hex(), "op": "p2_openings", "t": t})
         try:
             self.lean.send({"op": "p2_openings", "session": self.k, "t": t, "bytes": len(line)}, line)
         except LeanError as e:
@@ -469,6 +497,7 @@ class Twin:
         """The session rejected `malformed` at the window filling: the prover is gone."""
         t = self.books.s.filling
         mine = self.books.fail()
+        self.log.append({"op": "p2_fail"})
         got = self._ask({"op": "p2_fail", "session": self.k})
         if got != mine:
             self._veto(t, "fail", got, mine)
@@ -519,18 +548,21 @@ def hold(lean: Lean, data: bytes, chunk: int = CHUNK) -> tuple[p2.Registration, 
 def session(f_in: BinaryIO, f_out: BinaryIO, registration: p2.Registration, *, coins: bytes, lean: Lean,
             plan: Plan | None = None, clock: Callable[[], int] = time.monotonic_ns,
             sleep_until: Callable[[Callable[[], int], int], None] = P._sleep_until,
-            log: Callable[[str], None] = lambda _m: None, host: str | None = None) -> dict[str, Any]:
+            log: Callable[[str], None] = lambda _m: None, host: str | None = None,
+            keep: Callable[[dict[str, Any]], None] | None = None,
+            auditor: Mapping[str, int] = SESSION) -> dict[str, Any]:
     """The verifier's side of one session over the channel (`f_in`, `f_out`), decided by `lean`, which holds
     `registration` and `plan` (`hold`; every unit by default), with the books beside it (`Twin`): the prover's
-    request, the registration, each pass asked for in order under `plan`, each window's openings drawn once its roots
-    are final and verified, the session's coins disclosed, and the answer, sent last and returned, naming the
-    verifier's `host` (this one's name by default). A line out of form or a closed channel rejects the session (its
-    answer says why)."""
+    request, refused unless it carries the auditor's parameters `auditor` (`params_of`), the registration, each pass
+    asked for in order under `plan`, each window's openings drawn once its roots
+    are final and verified, the session's coins disclosed, its case (`p2_case.case_of`, which `keep` is given too)
+    unless the books vetoed it, and the answer, sent last and returned, naming the verifier's `host` (this one's name
+    by default). A line out of form or a closed channel rejects the session (its answer says why)."""
     host = host or socket.gethostname()
     plan = Plan.whole(registration.blocks) if plan is None else plan
     line = f_in.readline()
     try:
-        twin = Twin.open(lean, registration, plan, line, coins, clock())
+        twin = Twin.open(lean, registration, plan, line, coins, clock(), auditor)
     except _Refused as e:
         out = {"protocol": PROTOCOL, "registration": registration.digest.hex(), "verdict": "refused",
                "reason": str(e), "host": host}
@@ -578,16 +610,26 @@ def session(f_in: BinaryIO, f_out: BinaryIO, registration: p2.Registration, *, c
     if twin.books.s.outcome is None:
         twin.fail()
     commitment, openings = twin.books.s.disclose()
-    return _last(f_out, twin.answer(reason) | {"host": host},
-                 {"commitment": commitment.to_json(), "openings": [o.to_json() for o in openings]})
+    out = twin.answer(reason) | {"host": host}
+    case = None
+    if twin.disagreement is None:
+        from . import p2_case
+
+        case = p2_case.case_of(registration_json(registration, plan), twin.request, twin.not_before_ns, twin.log)
+        if keep is not None:
+            keep(case)
+    return _last(f_out, out, {"commitment": commitment.to_json(), "openings": [o.to_json() for o in openings]}, case)
 
 
-def _last(f_out: BinaryIO, out: dict[str, Any], end: dict[str, Any] | None = None) -> dict[str, Any]:
-    """The session's coins disclosed (`end`, when it has any) and the answer, sent if the prover is still there to read
-    them, and the answer returned."""
+def _last(f_out: BinaryIO, out: dict[str, Any], end: dict[str, Any] | None = None,
+          case: dict[str, Any] | None = None) -> dict[str, Any]:
+    """The session's coins disclosed (`end`, when it has any), its case (when it has one) and the answer, sent if the
+    prover is still there to read them, and the answer returned."""
     try:
         if end is not None:
             send(f_out, {"end": end})
+        if case is not None:
+            send(f_out, {"case": case})
         send(f_out, {"answer": out})
     except OSError:
         pass
@@ -595,7 +637,8 @@ def _last(f_out: BinaryIO, out: dict[str, Any], end: dict[str, Any] | None = Non
 
 
 class Prover(Protocol):
-    """The prover's side as `prove` drives it."""
+    """The prover's side as `prove` drives it. One that also has `case(doc)` is handed the session's core case
+    (`p2_case`), witness it keeps privately."""
 
     def hold(self, registration: Mapping[str, Any]) -> None:
         """The verifier's registration, before any coin: refuse a registration that isn't the store's."""
@@ -635,11 +678,25 @@ def prove(f_in: BinaryIO, f_out: BinaryIO, prover: Prover, request: Mapping[str,
             send(f_out, {"openings": [opening_json(o) for o in prover.open(m["t"], [tuple(d) for d in m["draws"]])]})
         elif kind == "end":
             prover.end(C.LiveCommitment.from_json(m["commitment"]), [C.LiveOpening.from_json(o) for o in m["openings"]])
+        elif kind == "case":
+            keep = getattr(prover, "case", None)
+            if keep is not None:
+                keep(m)
         elif kind == "answer":
             return m
         else:
             raise ValueError(f"no message {kind!r}")
         log(f"{kind} answered")
+
+
+def _keep(path: Path, case: Mapping[str, Any]) -> None:
+    """`case` appended to `path` as one JSON line, its directory 0700 and the file 0600: the verifier's own record."""
+    path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+    os.chmod(path.parent, 0o700)
+    fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_APPEND, 0o600)
+    with os.fdopen(fd, "a") as f:
+        f.write(json.dumps(dict(case), sort_keys=True) + "\n")
+    os.chmod(path, 0o600)
 
 
 def main(argv: Sequence[str] | None = None) -> int:
@@ -649,6 +706,10 @@ def main(argv: Sequence[str] | None = None) -> int:
     where.add_argument("--stdio", action="store_true", help="the channel is this process's stdin and stdout")
     where.add_argument("--listen", help="HOST:PORT to accept provers on (port 0: any, printed as {\"listening\"})")
     ap.add_argument("--sessions", type=int, default=1, help="with --listen: the sessions to serve, one after another")
+    held_to = ap.add_argument_group("the auditor's session parameters, which a request must carry as they are "
+                                    "(default: SESSION's, the served bandwidth piece's; the auditor's gate passes none)")
+    for k, v in SESSION.items():
+        held_to.add_argument("--" + k.replace("_", "-"), type=int, default=v, metavar="N")
     record = ap.add_mutually_exclusive_group()
     record.add_argument("--answer", type=Path, help="a file each session's answer is appended to, a JSON line each: "
                                                     "the verifier's own record of them")
@@ -659,9 +720,11 @@ def main(argv: Sequence[str] | None = None) -> int:
                                                   "there)")
     a = ap.parse_args(argv)
     data = a.registration.read_bytes()
+    cases = None
     if a.device is not None:
         a.device.mkdir(parents=True, exist_ok=True)
         a.answer = a.device / "answers.jsonl"
+        cases = a.device / "private" / "cases.jsonl"
 
     def log(m: str) -> None:
         print(f"p2_party {time.strftime('%H:%M:%SZ', time.gmtime())}: {m}", file=sys.stderr, flush=True)
@@ -673,17 +736,25 @@ def main(argv: Sequence[str] | None = None) -> int:
         log(f"answer {out['verdict']} {out.get('failure') or ''} q_bytes={out.get('q_bytes')} "
             f"host={socket.gethostname()}")
 
+    auditor = {k: getattr(a, k) for k in SESSION}
+    if any(v < 1 for v in auditor.values()):
+        ap.error(f"the session's parameters are positive integers, not {auditor}")
     exe = p2_lean.exe(a.lean_exe)
     with Lean(exe) as lean:
         reg, plan = hold(lean, data)
     log(f"registration {reg.digest.hex()[:16]} ({reg.blocks} units, {plan.length} a pass) on "
-        f"{socket.gethostname()}, of record in {p2_lean.EXE}")
+        f"{socket.gethostname()}, of record in {p2_lean.EXE}; every session held to {auditor}")
+
+    def kept(case: dict[str, Any]) -> None:
+        if cases is not None:
+            _keep(cases, case)
 
     def served(r: BinaryIO, w: BinaryIO) -> dict[str, Any]:
         """One session on a Lean process of its own, so that one the prover crashes ends only its session."""
         with Lean(exe) as lean:
             hold(lean, data)
-            return session(r, w, reg, coins=secrets.token_bytes(64), lean=lean, plan=plan, log=log)
+            return session(r, w, reg, coins=secrets.token_bytes(64), lean=lean, plan=plan, log=log, keep=kept,
+                           auditor=auditor)
 
     if a.stdio:
         done(served(sys.stdin.buffer, sys.stdout.buffer))

@@ -8,7 +8,7 @@ and root's receipt on the challenger's come back to the nanosecond, and so the l
 The loop replayed is `verifier.py`'s at k = 1, as a session's record shows it, and a record of another form is refused:
 at root g the verifier asks the challenger for openings coin g and σ_(g+2) in one round trip (`coins.SessionCoins.ahead`),
 sends window g's draws (its `draws_sent_ns` D_g), then σ_(g+2) (its `released_ns` R_(g+2)); σ_0 and σ_1 each go alone,
-stamped before they are asked (`audit.Session._release`), and the last two groups' openings coins go alone. Group g's
+stamped before they are asked (`audit.AuditRun._release`), and the last two groups' openings coins go alone. Group g's
 root arrives at A_g. The prover's record (`prover.json`) has each pass from its coin's arrival to its root, ph_g, and
 from its root to its send, gp_g, and τ, half the verifier↔prover round trip (verifier.json's `rtt` median), puts them on
 the verifier's clock: root g seen at S_g = A_g − τ − gp_g, coin g arrived at C_g = S_g − ph_g. So:
@@ -76,7 +76,7 @@ def log_coins(lines: list[str]) -> list[tuple[str, int, str, int, int]]:
 
 
 @dataclass(frozen=True)
-class Record:
+class SessionTimes:
     """A session's times as the replay reads them, ns: the verifier's series R, A, D and the auditor's Ra (σ_g's
     release) and Aa (root g's first receipt), with the residuals that rebuild them."""
     n: int
@@ -120,7 +120,7 @@ class Record:
         return [max(0, x - a) for x, a in zip(b, self.A)]
 
 
-def record(s: dict, lines: list[str], auditor: list[dict], prover: dict, tau: int) -> Record:
+def record(s: dict, lines: list[str], auditor: list[dict], prover: dict, tau: int) -> SessionTimes:
     """Session `s`'s record (`verifier.json`'s), its signed release log `lines`, its groups on the challenger's clock
     (`auditor_line.auditor_seen`), its prover's session (`prover.json`'s), and τ; refused unless it is the loop the
     replay models."""
@@ -166,14 +166,14 @@ def record(s: dict, lines: list[str], auditor: list[dict], prover: dict, tau: in
     end = [log[at["challenge", g + 2]][4] if g + 2 < n else log[at["openings", g]][4] for g in range(n)]
     P = [end[g] - log[at["openings", g]][3] for g in range(n)]
     sigma0 = log[at["challenge", 0]]
-    return Record(n=n, tau=tau, window=s["window_ns"], R=R, A=A, D=D, Ra=Ra, Aa=Aa, coin=[c - r for c, r in zip(C, R)],
-                  pure=pure, gp=gp,
-                  X=[d - q for d, q in zip(D, Q)], P=P, step=step, to_aa=[a - q for a, q in zip(Aa, Q)],
-                  from_ra=[Ra[0] - R[0], Ra[1] - R[1]] + [D[g - 2] - Ra[g] for g in range(2, n)],
-                  fetch0=R[1] - R[0] - (sigma0[4] - sigma0[3]))
+    return SessionTimes(n=n, tau=tau, window=s["window_ns"], R=R, A=A, D=D, Ra=Ra, Aa=Aa,
+                        coin=[c - r for c, r in zip(C, R)], pure=pure, gp=gp,
+                        X=[d - q for d, q in zip(D, Q)], P=P, step=step, to_aa=[a - q for a, q in zip(Aa, Q)],
+                        from_ra=[Ra[0] - R[0], Ra[1] - R[1]] + [D[g - 2] - Ra[g] for g in range(2, n)],
+                        fetch0=R[1] - R[0] - (sigma0[4] - sigma0[3]))
 
 
-def passes_of(rec: Record, scale: float | None = None, ms: float | None = None) -> list[int]:
+def passes_of(rec: SessionTimes, scale: float | None = None, ms: float | None = None) -> list[int]:
     """Each group's pass time under a pass model: its own times `scale`, or `ms` for every pass, or (neither) its
     own."""
     if ms is not None:
@@ -181,7 +181,7 @@ def passes_of(rec: Record, scale: float | None = None, ms: float | None = None) 
     return list(rec.pure) if scale is None else [round(x * scale) for x in rec.pure]
 
 
-def replay(rec: Record, rtt_ns: int, passes: list[int] | None = None) -> dict[str, list[int]]:
+def replay(rec: SessionTimes, rtt_ns: int, passes: list[int] | None = None) -> dict[str, list[int]]:
     """The session's times with every exchange `rtt_ns` instead of `rec.r0` and each pass `passes` (its own by
     default, `passes_of`): the verifier's series R, A, D and the auditor's Ra, Aa; `rec`'s own at `rtt_ns` =
     `rec.r0`."""
@@ -210,7 +210,7 @@ def replay(rec: Record, rtt_ns: int, passes: list[int] | None = None) -> dict[st
     return {"R": R, "A": A, "D": D, "Ra": Ra, "Aa": Aa}
 
 
-def waits(rec: Record, t: dict[str, list[int]], rtt_ns: int) -> dict[str, int]:
+def waits(rec: SessionTimes, t: dict[str, list[int]], rtt_ns: int) -> dict[str, int]:
     """In `replay`'s series `t` at `rtt_ns`, the groups after the first whose pass waited on its coin (it reached the
     prover after root g − 1 was sent) and the roots that waited for the verifier to send their window's boundary."""
     d, n, R, A, D = rec.r0 - rtt_ns, rec.n, t["R"], t["A"], t["D"]
@@ -224,7 +224,7 @@ def seen_at(s: dict, released: list[int], arrived: list[int]) -> dict:
                                   for g, w in enumerate(s["windows_seen"])]}
 
 
-def row_at(s: dict, reg: dict, rec: Record, rtt_ns: int, host_bytes: int, rates: dict,
+def row_at(s: dict, reg: dict, rec: SessionTimes, rtt_ns: int, host_bytes: int, rates: dict,
            passes: list[int] | None = None) -> dict:
     t = replay(rec, rtt_ns, passes)
     v, a = seen_at(s, t["R"], t["A"]), seen_at(s, t["Ra"], t["Aa"])
@@ -235,7 +235,7 @@ def row_at(s: dict, reg: dict, rec: Record, rtt_ns: int, host_bytes: int, rates:
             "shares_auditor_clock": al.shares(a, reg, host_bytes, rates, clock="replay")}
 
 
-def identity(rec: Record, at_r0: dict, row: dict) -> dict:
+def identity(rec: SessionTimes, at_r0: dict, row: dict) -> dict:
     """Whether the replay at the session's own round trip is its record: each series to the ns, and both clocks'
     shares as `auditor_line.analyse` read them (`row`)."""
     own = {"R": rec.R, "A": rec.A, "D": rec.D, "Ra": rec.Ra, "Aa": rec.Aa}
