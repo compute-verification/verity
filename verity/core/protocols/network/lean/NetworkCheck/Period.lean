@@ -304,7 +304,7 @@ def Schedule.windowPrograms (s : Schedule) : Nat := s.window / s.every * s.progr
 
 /-- The clock form's link as N2 declares it: Σ_sync, its run, each end's grid and occupancy profile, and the auditor's
 one-stage v2 parameters for its link-windows (`oneStage`, without `ports`) with their partition object's digest. -/
-structure Link where
+structure ClockLink where
   syncSet : NetworkCertifier.SyncSet
   run : String
   egress : LinkWindow.End
@@ -325,7 +325,7 @@ structure Scan where
 /-- Which run the link-windows are: the clock form's, N2's on the link, or the rows form's, under one schedule (and its
 digest), read by the scan whose terms are the last. -/
 inductive Form where
-  | clock (link : Link)
+  | clock (link : ClockLink)
   | rows (schedule : Schedule) (digest : ByteArray) (scan : Scan)
 
 structure Params where
@@ -949,7 +949,7 @@ def rootOf (reg : Json) : ByteArray :=
 /-- Link-window `w` of the clock form's link as N2's verdict of record reads it (`LinkWindow.Case`, a plain link): its
 registered root, its certificates, the units its proof proved, its public file and the delivered salts, the output the
 word 3; the fields neither its served domain nor its opening reads are empty. -/
-def linkCase (p : Params) (l : Link) (w : Nat) (root : ByteArray) (certs : Array Certificate) (units : Array Nat)
+def linkCase (p : Params) (l : ClockLink) (w : Nat) (root : ByteArray) (certs : Array Certificate) (units : Array Nat)
     (statement : Option ByteArray) (s : Salts) : LinkWindow.Case :=
   { link := p.link, run := l.run, window := w, root, registration := "", units, program := p.program,
     partition := l.partition, gates := #[], findings := none, statement, saltPub := some s.pub, saltOut := some s.out,
@@ -963,7 +963,7 @@ def linkCase (p : Params) (l : Link) (w : Nat) (root : ByteArray) (certs : Array
 /-- One-stage v2's parameters for a link-window whose served domain is `dom`: the auditor's, with the link-window's own
 port (`LinkWindows.ports`: `certificates`, four leaves under `dom`) and the period's `earlier` link-windows'
 registrations after the auditor's `log`. -/
-def windowParams (l : Link) (dom : ByteArray) (earlier : Array Json) : V SampledProofs.OneStageZk.Params :=
+def windowParams (l : ClockLink) (dom : ByteArray) (earlier : Array Json) : V SampledProofs.OneStageZk.Params :=
   let log := match l.oneStage.getObjValD "log" with | .arr xs => xs | _ => #[]
   let port := Json.mkObj [("domain", .str (Flock.hexOf dom)), ("leaves", toJson LinkWindow.leaves)]
   SampledProofs.OneStageZk.paramsOfJson
@@ -972,7 +972,7 @@ def windowParams (l : Link) (dom : ByteArray) (earlier : Array Json) : V Sampled
 /-- Link-window `w`'s opening, once one-stage v2 accepted its proof (`LinkWindows.verify`'s `_opened`): the public
 file's ``pub`` row commitment for the drawn unit opens under the delivered salt to the verifier's own public row
 (`LinkWindow.pubRow` of `linkCase`), and its ``o0`` row commitment to the word 3 (`LinkWindow.opened`). -/
-def opening (p : Params) (l : Link) (w : Nat) (reg : Json) (certs : Array Certificate) (s : Salts)
+def opening (p : Params) (l : ClockLink) (w : Nat) (reg : Json) (certs : Array Certificate) (s : Salts)
     (e : SampledProofs.OneStageZk.Evidence) (bs : Core.Blobs) : Found Unit := do
   let what := s!"window {w}: opening"
   let .ok file := bs.get e.pub "public file" | refuse s!"{what}: the public file is in no blob"
@@ -988,7 +988,7 @@ def opening (p : Params) (l : Link) (w : Nat) (reg : Json) (certs : Array Certif
 
 /-- Link-window `w`'s findings, in the order the module docstring gives, `clear` being `clearClocks` of Σ_sync,
 `earlier` the period's earlier link-windows' clock digests and `log` their registrations. -/
-def windowCheck (p : Params) (l : Link) (clear : List ByteArray) (earlier : Array ByteArray) (log : Array Json)
+def windowCheck (p : Params) (l : ClockLink) (clear : List ByteArray) (earlier : Array ByteArray) (log : Array Json)
     (w : Nat) (reg : Json) (x : Window) (bs : Core.Blobs) : Found Unit := do
   let what := s!"window {w}"
   let .clock clock salts e := x.shown | refuse s!"{what}: registrations, not a clock certificate: the rows form's"
