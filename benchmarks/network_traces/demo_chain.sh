@@ -33,7 +33,7 @@ if mkdir -p "$CR_CACHE" 2>/dev/null && [ -w "$CR_CACHE" ]; then export HZ_CACHE=
 (source benchmarks/pouw/hidden_zk/job.sh && setup && echo "$PY" > "$D/py") || { log "demo-chain: setup FAILED"; exit 7; }
 PY=$(cat "$D/py")
 export PATH=$HOME/.elan/bin:$PATH
-export PYTHONPATH=$SRC:$SRC/verity/ml/flock/python:$SRC/integrations/vllm:$SRC/examples/h200:$SRC/tools/verity/circuit_check/src:$SRC/benchmarks/numerical/python:$SRC/tools/research/src
+export PYTHONPATH=$SRC:$SRC/verity/ml/flock/python:$SRC/integrations/vllm:$SRC/demos/h200:$SRC/tools/verity/circuit_check/src:$SRC/benchmarks/numerical/python:$SRC/tools/research/src
 
 EOS=${DC_EOS:-0}
 RUN=certifier-$(date -u +%Y%m%dT%H%M%SZ)-offhost

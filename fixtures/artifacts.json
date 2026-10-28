@@ -59,7 +59,7 @@
   "art:61d521ebdf9cb49b76ba2343c027a6197addf0c83a6801a97801572202aeaa2b": "benchmarks/pouw/sass_census/data/bu_12_9.json",
   "art:eb79e5280af4a8bad9ff2a864de5ae4684e11cbed44a01d5ca6c66bafa24720c": "benchmarks/pouw/sass_census/data/sass_isa_tables.json",
   "art:fdfa0b2082fef5a43cf9f24592b790cef05f0f2ea3548282a586827be99797ef": "benchmarks/torch_gpu/commit_slots/fixtures/families-shared.layout.json",
-  "art:fbda52b07457b79607d0170e149923debd5ff104fb0c7e94bf3b933ddc946887": "examples/vllm/workloads/llama32-1b__bf16__rtxpro6000__tp1__b4__i256__o32__mixed__greedy__bi-eager.json",
+  "art:fbda52b07457b79607d0170e149923debd5ff104fb0c7e94bf3b933ddc946887": "demos/vllm/workloads/llama32-1b__bf16__rtxpro6000__tp1__b4__i256__o32__mixed__greedy__bi-eager.json",
   "art:6de3e339833a96cd1c2df2878be6525cbde4a81d32dc10aa6f0b0d330cc4f72b": "integrations/vllm/workloads/dsv4-pro__fp8__h200__tp8__b1__i256__o32__mixed__greedy__eager.json",
   "art:ac0642a356eff29ed4dc08992ebc2556dad56e76c2a54760bde4dbf7cd7d62c9": "integrations/vllm/workloads/dsv4-pro__fp8__h200__tp8__b8__i256__o32__mixed-arrivals__greedy__eager.json",
   "art:fc4e77efdf81a241cc00b1aa6c79656e78743a055738f622571e8ce121ffc94e": "integrations/vllm/workloads/gemma2-2b__bf16__l40s__tp1__b8__i1024__o128__mixed__greedy__bi-eager.json",

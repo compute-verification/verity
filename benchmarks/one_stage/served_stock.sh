@@ -4,13 +4,15 @@
 # the bench row's check (--required-manifest ROW/manifest.json, which here only refuses a row declaring async scheduling),
 # --max-model-len MAX_MODEL_LEN, --max-num-batched-tokens MNBT (default 512, served_verdicts.sh's T), --admit release-order and --window-requests
 # SLOTS, under served_verdicts.sh's engine environment (VLLM_BATCH_INVARIANT=1, eager), then LOADS loads of
-# `examples/vllm/serve_load.py --varied` with served_verdicts.sh's REQUESTS, RATE, PROMPTS, MAX_TOKENS and SEED, each under a
+# `demos/vllm/serve_load.py --varied` with served_verdicts.sh's REQUESTS, RATE, PROMPTS, MAX_TOKENS and SEED, each under a
 # release run of its own. The first load is the composed run's one load after its endpoint listens; later ones are warm.
 # What the composed run has and this doesn't: the Commit (committer, taps, GPU tree, seal), H1, any SERVE_ARGS subprotocol, and
-# the weights registration before the load. $OUT/rep-<i>/ is that lifetime's --out: serve.json, advice_trace.jsonl (the
-# scheduler's step trace with wall times), summary.json, pauses.jsonl, load-<j>.jsonl, the client's record of load j, and
-# load-<j>.timings.json, its per-request send, first-token and done times (the composed run's is $OUT/timings/load.timings.json).
-# `served_overhead.py` reads them beside the composed run's $OUT/serve. WARM lifetimes (default 1) run first as $OUT/warm-<i>/,
+# the weights registration before the load. Each lifetime's --out is a serve dir on the node, SERVE_ROOT/runs/RUN/<lifetime>:
+# serve.json, advice_trace.jsonl (the scheduler's step trace with wall times), summary.json, pauses.jsonl, load-<j>.jsonl,
+# the client's record of load j, and load-<j>.timings.json, its per-request send, first-token and done times. The trace and
+# the load's records hold request values, so they stay there: once the endpoint stops, `served_overhead.py metrics` reads
+# them on the node and $OUT/<lifetime>/overhead.json gets its aggregate alone, which `served_overhead.py table --stock`
+# reads beside the composed run's $OUT/serve/overhead.json. WARM lifetimes (default 1) run first as warm-<i>,
 # so the reps find the Triton and vLLM caches as warm as the composed run's node keeps them; a cold first lifetime's first step
 # took 0.40 s against 0.018 s warm (r20261027-175833-6214). With NOT_AFTER (a UTC time, `date -d` syntax) no lifetime starts
 # after it, so a control queued behind other leases never runs into a later window (V2's run of record, say).
@@ -32,11 +34,11 @@ export TRITON_CACHE_DIR=$ROOT/cache/triton VLLM_CACHE_ROOT=$ROOT/cache/vllm VLLM
 
 serve() {  # under the lease: lifetime $1's (rep-<i> or warm-<i>) endpoint, its LOADS loads, the endpoint stopped
   export PATH=$VENV/bin:$CUDA_HOME/bin:$PATH
-  local D=$OUT/$1 srv up=0 rc=0 j release
+  local D=$ROOT/runs/${RESEARCH_RUN_ID:-local}/$1 srv up=0 rc=0 j release
   if [ -n "${NOT_AFTER:-}" ] && [ "$(date -u +%s)" -gt "$(date -u -d "$NOT_AFTER" +%s)" ]; then
     echo "$1: not started, past NOT_AFTER $NOT_AFTER" | tee -a "$OUT/stock.txt"; return 11
   fi
-  mkdir -p "$D"
+  mkdir -p "$D" "$OUT/$1"
   cd "$TREE/integrations/vllm" || return 9
   "$PY" -m verity_vllm.pipeline.cli serve-openai --model "$REPO" --revision "$REV" --out "$D" --port "$PORT" \
     --precision "$PRECISION" --run-id "${RESEARCH_RUN_ID:-local}-$1" --no-commit --required-manifest "$ROW/manifest.json" \
@@ -56,19 +58,22 @@ serve() {  # under the lease: lifetime $1's (rep-<i> or warm-<i>) endpoint, its 
   fi
   for j in $(seq 1 "$LOADS"); do
     release=$("$PY" -c 'import uuid; print(uuid.uuid4().hex)')
-    "$PY" "$TREE/examples/vllm/serve_load.py" --port "$PORT" --model "$REPO" --varied "$REQUESTS" --rate "$RATE" \
+    "$PY" "$TREE/demos/vllm/serve_load.py" --port "$PORT" --model "$REPO" --varied "$REQUESTS" --rate "$RATE" \
       --prompt-range "$PROMPTS" --max-tokens "$MAX_TOKENS" --release "$release" --seed "$SEED" --out "$D/load-$j.jsonl" \
       > "$D/load-$j.log" 2>&1 || rc=$?
-    echo "$1 LOAD $j (exit $rc, release run $release): $(tail -1 "$D/load-$j.log" | cut -c1-300)" | tee -a "$OUT/stock.txt"
+    echo "$1 LOAD $j (exit $rc, release run $release): $(tail -1 "$D/load-$j.log" | sed -E 's/, prompts .*//' | cut -c1-300)" \
+      | tee -a "$OUT/stock.txt"
   done
   trap - TERM INT
   kill -TERM "$srv" 2>/dev/null; wait "$srv"
   echo "$1: stopped (exit $?)" | tee -a "$OUT/stock.txt"
+  "$PY" "$TREE/benchmarks/one_stage/served_overhead.py" metrics "$D" > "$OUT/$1/overhead.json" 2> "$D/overhead.err" \
+    || { echo "$1: no aggregate: $(cut -c1-300 "$D/overhead.err")" | tee -a "$OUT/stock.txt"; rm -f "$OUT/$1/overhead.json"; rc=12; }
   return "$rc"
 }
 reps() {
   local i bad=0
-  for i in $(seq 1 "$WARM"); do serve "warm-$i" || return $?; done
+  for i in $(seq 1 "$WARM"); do serve "warm-$i" || { bad=$?; [ "$bad" = 12 ] || return "$bad"; bad=0; }; done
   for i in $(seq 1 "$REPS"); do serve "rep-$i" || bad=$?; [ "$bad" = 11 ] && break; done
   return "$bad"
 }

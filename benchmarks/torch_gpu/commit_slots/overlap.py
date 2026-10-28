@@ -1,5 +1,5 @@
 """On one CUDA device: how much of the serve-time commit (`slots_gpu`, this directory's call) hides behind the H200's
-served step (`examples/h200`'s `Driver` at the frozen shape, resident weights), as JSON to ``--out``/overlap.json
+served step (`demos/h200`'s `Driver` at the frozen shape, resident weights), as JSON to ``--out``/overlap.json
 and a summary to ``--out``/summary.txt.
 
 The served loop (`e2e_h200.driver.Driver.step_slots`) streams each group (the embedding, a layer, the head) to the commit's
@@ -62,7 +62,7 @@ import torch
 from verity_config.settings import SHARED
 
 HERE = Path(__file__).resolve().parent
-E2E = HERE.parents[2] / "examples" / "h200"
+E2E = HERE.parents[2] / "demos" / "h200"
 sys.path[:0] = [str(HERE), str(E2E)]
 import slots as S
 import slots_gpu as G
@@ -316,7 +316,7 @@ class Threaded(Pipelined):
 
 
 def prompts_for(run_id: str, batch: int, p: int) -> np.ndarray:
-    """`examples/h200/run.py`'s prompts."""
+    """`demos/h200/run.py`'s prompts."""
     h = hashlib.sha512(b"e2e-h200/prompts-fixture\0" + run_id.encode()).digest()
     rng = np.random.Generator(np.random.PCG64(int.from_bytes(h[:16], "big")))
     return rng.integers(32, 127, size=(batch, p), dtype=np.int64)

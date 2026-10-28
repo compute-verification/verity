@@ -13,7 +13,7 @@ conjecture N_L, `products_pass.py` counts data products on property/v1's pass, a
 `EncodeChainHardness`'s falsification test, `Security/Definitions/Accounting/Gates/Registry.lean` holds `classOf` to
 `cases.py`'s closed table, `benchmarks/stacked_share` loads `products_pass.py`, and the audit's `test_encode_chain.py`
 and `verity/ml/circuits/tests/test_stacking.py` cite it. Decided by `rg property_redteam` over `verity/`, `benchmarks/`,
-`examples/`, `tests/`, `integrations/` and `Security/`.
+`demos/`, `tests/`, `integrations/` and `Security/`.
 
 **Run:** `uv run tools/verity/check/suites.py benchmarks/property_redteam` runs every attack and the cases on the CPU.
 `uv run python benchmarks/property_redteam/run.py --check MODULE:FUNCTION --out FILE.json` grades one check.

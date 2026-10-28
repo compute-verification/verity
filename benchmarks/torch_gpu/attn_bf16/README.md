@@ -55,7 +55,7 @@ OUT=DIR IN=IN bash benchmarks/torch_gpu/attn_bf16/run.sh
 uv run tools/verity/check/suites.py benchmarks/torch_gpu/attn_bf16      # the CPU suite
 ```
 
-`examples/h200`'s attention and `benchmarks/torch_gpu/commit_slots/overlap.sh` run the reference path (`path="ref"`) from
+`demos/h200`'s attention and `benchmarks/torch_gpu/commit_slots/overlap.sh` run the reference path (`path="ref"`) from
 `build.sh`'s sm_90a cubin, named by `$ATTN_BF16_CUBIN` (`attn.cubin_path`).
 
 Results go to the evidence store with the run, never here.
