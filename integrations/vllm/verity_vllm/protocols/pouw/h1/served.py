@@ -42,8 +42,8 @@
   its ``b/<K>`` are the registration's openings, and a window whose served rows fold to a root other than W is refused.
 * **Rows** are ``hm96-sha512/row/v2`` bit rows of 16-bit words (`V2`, `row_words`, `record_words`), committed as
   `registered.Registered.commit` commits them, from their NumPy words (`pouw_h1_registered.commit`), under the
-  registered-value domain of the Program's digest, the value, its words and rows, and for a call's tables the window's
-  open root (`registered.domain`'s ``window``, `Served.root`), row j's salt `audit.hm96_salt` of the run's key at
+  registered-value domain of the Program's digest (the weights' ``b/<K>``: θ's, `weights.THETA` in its place), the
+  value, its words and rows, and for a call's tables the window's open root (`registered.domain`'s ``window``, `Served.root`), row j's salt `audit.hm96_salt` of the run's key at
   the value's nonce (`nonce`). A window keeps its trees, not its rows, which the prover rebuilds from its own.
 * **Chunk rows** (SPLITK). Past K = 4096 an A or B row of K is n = `weights.chunks` (K) leaves (6144 → 2, 14336 → 4):
   row r's leaf n·r + c is its codes [c·K/n, (c + 1)·K/n) then its scale (`chunk_words`, `h1zy.ROW` (K/n)), so
@@ -203,9 +203,9 @@ def weights_of(layers: Sequence[Any]) -> dict[int, tuple[np.ndarray, np.ndarray]
 class Weights:
     """A period's registered weights: each K's ``<prefix>b/<K>``, the B rows of K's linears in the window's
     linear order, each row its K int8 codes then its f32 s_w as `weights.chunks` (K) = n leaves (`chunk_words`; one
-    leaf, `row_words`, at K <= 4096), registered once (`register_weights`) under the
-    period's declared Program (``circuit``, its `program_digest`), binding no window, its salts fixed for the
-    registration. ``at`` gives each linear's K and first row in its ``b/<K>``, whose first leaf is n times it. Every window of the period registers these
+    leaf, `row_words`, at K <= 4096), registered once (`register_weights`) under θ's registered domain
+    (`weights.domain`), binding no window, for the period's declared Program (``circuit``, its `program_digest`), its
+    salts fixed for the registration. ``at`` gives each linear's K and first row in its ``b/<K>``, whose first leaf is n times it. Every window of the period registers these
     same entries, and `root`, `credit.weights_root` of their roots, is the weights' root every window's open root binds
     and the period-open signs (``--model``'s registration, `ModelKey`)."""
 
@@ -232,7 +232,8 @@ def register_weights(circuit: str, shapes: Sequence[tuple[int, int]], weights: M
     """The period's `Weights`: for each K, ascending, ``<prefix>b/<K>`` over K's linears' rows (``shapes`` each linear's
     ``(n, K)``, in the window's order; ``weights`` each linear's int8 codes ``(n, K)`` and f32 s_w ``(n,)``), each row
     `weights.chunks` (K) leaves (`chunk_words`), committed by
-    `pouw_h1_registered.commit` under the declared Program's digest ``circuit`` with no window, leaf j's salt
+    `pouw_h1_registered.commit` under θ's registered domain (`weights.THETA`, no window), for the declared Program
+    ``circuit``, leaf j's salt
     `audit.hm96_salt` of the period's key ``key`` at ``B_NONCE`` plus K's place, its rows kept (`Weights.matches`).
     Committed once, before the period's first window's salt. ValueError on an odd K, a K `weights.chunks` refuses, or a
     weight that isn't its linear's n × K int8 codes and n scales."""
@@ -250,7 +251,7 @@ def register_weights(circuit: str, shapes: Sequence[tuple[int, int]], weights: M
             rows.append(chunk_words(codes, scales.astype("<f4").reshape(-1), x))
             at[w], lo = (k, lo), lo + n
         words = np.concatenate(rows)
-        reg[k] = NR.commit(circuit, f"{prefix}b/{k}", words, key, B_NONCE + i, keep_rows=True)
+        reg[k] = NR.commit(Wt.THETA, f"{prefix}b/{k}", words, key, B_NONCE + i, keep_rows=True)
     return Weights(circuit, reg, at)
 
 
@@ -395,13 +396,13 @@ class Served:
             self.refused.append(str(e))
             return
         if self.weights is not None and self.weights.circuit != digest:
-            self.refused.append("the period's registered weights are under another Program than the window's: register "
-                                "each K's b/<K> under the period's declared Program")
+            self.refused.append("the period's registered weights are registered for another Program than the window's: "
+                                "register the model for the period's declared Program")
 
     def _tree(self, run: Any, value: str, words: np.ndarray, first: int, window: str | None,
               session: str | None = None, row_salts: bytes | None = None) -> G.Registered:
-        return NR.commit(self.program_digest, value, words, run._key, first, row_salts is not None, row_salts,
-                         window=window, session=session)
+        return NR.commit(Wt.THETA if CR.is_held(value) else self.program_digest, value, words, run._key, first,
+                         row_salts is not None, row_salts, window=window, session=session)
 
     def _register(self, run: Any, value: str, words: np.ndarray, first: int, window: str | None,
                   row_salts: bytes | None = None) -> str:

@@ -87,11 +87,11 @@ class Registry:
         prefix, linears = M.layout(descriptor, circuit)
         key = self._entropy(32)
         shapes = [(n, k) for _name, k, n in linears]
-        roots = Wt.weights_roots(circuit, prefix, shapes, lambda w: rows(linears[w][0], linears[w][1]), key)
+        roots = Wt.weights_roots(prefix, shapes, lambda w: rows(linears[w][0], linears[w][1]), key)
         leaves = {k: sum(n for n, kw in shapes if kw == k) for k in roots}
         line = {"model": model, "circuit": circuit, "prefix": prefix, "checkpoint_sha512": pin,
                 "roots": {str(k): roots[k].hex() for k in sorted(roots)},
-                "entries": [Wt.entry(circuit, prefix, k, leaves[k], roots[k]) for k in sorted(roots)],
+                "entries": [Wt.entry(prefix, k, leaves[k], roots[k]) for k in sorted(roots)],
                 "weights_root": Wt.weights_root(roots).hex(), "key_sha512": hashlib.sha512(key).hexdigest(),
                 "pinned": PINNED, "registered_utc": "2026-10-20T10:30:00Z"}
         self._keys[line["key_sha512"]] = key

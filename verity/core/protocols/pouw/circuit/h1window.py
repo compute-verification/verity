@@ -539,10 +539,10 @@ def table_reads_file(program: Program, tp: Any, call: int, roots: dict[str, str]
     B row at the weights' ``b/<K>``. ``roots`` ``{value: root}`` holds those two tables' roots, as its round's record names
     them before that round's coin, and the weights'; ``ports`` names a key's circuit port when they differ
     (`window_ports`); ``prog`` the Program's digest when the caller holds it. Every table is a ``row/v2`` value of 16-bit
-    leaves under `registered.domain` of its own name, rows and width: an A table is M rows of the parameter's width for
-    each of its step's calls of K, a z table one record a unit of the call. ``window``, a served window's open root,
-    binds the two tables' domains, the window's own rows (`credit.domain_of`), and never the weights', which are
-    held across windows. When ``roots`` holds the call's receipt table, its units' receipts are the statement's output
+    leaves under `registered.domain` of its own name, rows and width, the weights' under θ's (`weights.domain`) and the
+    rest under ``prog``: an A table is M rows of the parameter's width for each of its step's calls of K, a z table one
+    record a unit of the call. ``window``, a served window's open root, binds the two tables' domains, the window's own
+    rows (`credit.domain_of`), and never the weights', which are held across windows. When ``roots`` holds the call's receipt table, its units' receipts are the statement's output
     row o0 (`RECEIPT_PORT`) at its rows, one a unit, under the z table's domain rule. A unit of another call reads none
     of them: each port's reads start at the call's first unit (``reads_from``, `core_check.call_reads`) and end at its
     last (the verifier reads none below ``reads_from`` or past ``reads``, `Flock.Registered.Port.readAt`), so the file
@@ -578,7 +578,8 @@ def table_reads_file(program: Program, tp: Any, call: int, roots: dict[str, str]
         port = {OUTPUTS[0]: RECEIPT_PORT, **(ports or {})}.get(key, key)
         out[port] = {**({G.PARAM_KEY: key} if key in (ports or {}) and port != key else {}),
             "value": r["value"], "root": roots[r["value"]], "leaves": leaves, "words": words, "word_bits": G.WORD_BITS,
-            "domain": G.domain(prog, r["value"], words, leaves, window=None if r["value"] == b else window).domain_id.hex(),
+            "domain": (W.domain(b, words, leaves) if r["value"] == b
+                       else G.domain(prog, r["value"], words, leaves, window=window)).domain_id.hex(),
             **G.schema_entry(G.SCHEMA_V2), **CC.call_reads(u0, r["rows"])}
     if salt is not None:
         if window is None:
@@ -807,7 +808,7 @@ def leaf_reads_file(program: Program, u: int, kind: str, ln: int | None, roots: 
     ``{value: root}`` (the call's tables' roots as the round log names them, the weights' and the produced record's
     ``partials``), each table's entry the verifier's own (`_shapes`: a ``row/v2`` value of 16-bit leaves under
     `registered.domain` of its name, rows and width, binding ``window``, the served window's open root, except the
-    weights' ``b/<K>``), ``partials``' entry ``partials`` and a J10-R leaf's carries' and ok rows' theirs in
+    weights' ``b/<K>``, which are θ's, `weights.domain`), ``partials``' entry ``partials`` and a J10-R leaf's carries' and ok rows' theirs in
     ``produced`` (each `produced.entry` under the window's registration). A read of an A row, a B row, a partials row,
     a carry or an ok row is marked `READ_IN_FULL` (`leaf_lanes.read_in_full`), never an ``o0``. Then ``known_ports``
     (`produced.known_port` of `leaf_known_rows`), and ``complete``."""
@@ -830,7 +831,8 @@ def leaf_reads_file(program: Program, u: int, kind: str, ln: int | None, roots: 
         else:
             leaves, words = shape[value]
             e = {"leaves": leaves, "words": words, "word_bits": G.WORD_BITS,
-                 "domain": G.domain(prog, value, words, leaves, window=None if value == b else window).domain_id.hex()}
+                 "domain": (W.domain(b, words, leaves) if value == b
+                            else G.domain(prog, value, words, leaves, window=window)).domain_id.hex()}
         out[port] = PR.port(value, e, roots[value], [row], G.SCHEMA_V2)
         if LL.read_in_full(logical[port][0]) and port != LL.OK:
             out[port][READ_IN_FULL] = True

@@ -122,7 +122,7 @@ subtrees and its domain's pads. `registration`: each drawn unit's proof outcome 
 (`PROOF_KEYS`: the SHA-512 of the descriptor it verified the session against and the session's registered finding,
 flock-verify's `registered`, each port's value and the root its reads were opened against); each A value's domain, and
 each other value's a proof opened, is the one one-stage's registration gives it under the committed descriptor's
-SHA-512 and, for every value but the weights' `…/b/<K>`, the window's open root (`SampledProofs.Registered.domainAt`); and each proof was verified against that descriptor, opened only values the window registers once, each at
+SHA-512 (the weights' `…/b/<K>` under θ's `THETA` instead, `programOf`) and, for every value but the weights, the window's open root (`SampledProofs.Registered.domainAt`); and each proof was verified against that descriptor, opened only values the window registers once, each at
 its registered root, and opened its unit's K's A value, the window's `…/a/<K>` or its own call's round's `…/a/<K>@<s>`. So entries of another window or circuit, a proof verified against another registration, and an entry whose root
 is not the one its sessions opened are refused. `length`: the period's open commits each request's public max_tokens
 with the public-cap done source (`committedLength`, `{max_tokens, stop}`, stop `fixed`), and the

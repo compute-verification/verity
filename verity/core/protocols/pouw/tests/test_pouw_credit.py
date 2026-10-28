@@ -684,8 +684,9 @@ def test_a_hostile_leaf_count_is_refused_before_the_verifier_hashes_any_pad(monk
 def test_a_glm_window_at_k_6144_registers_its_b_rows_as_2_chunk_leaves_each_past_2_to_the_24():
     """GLM's routed experts at K = 6144 (`weights.chunks` 2: each B row 2 leaves of `weights.leaf_words` (6144) = 1538
     words): Σn = 9 900 032 rows are 19 800 064 leaves, above 2^24. `_weights` accepts b/6144 at those leaves under its
-    registered domain, since the layout fixes a weights' value's rows and no `MAX_ROWS` bounds them, and one-stage's
-    entry form (`_entry`) takes it; the whole-row registration (Σn leaves of `b_words` (6144)) is refused."""
+    registered domain, θ's (`weights.domain`), since the layout fixes a weights' value's rows and no `MAX_ROWS` bounds
+    them, and one-stage's entry form (`_entry`) takes it; the whole-row registration (Σn leaves of `b_words` (6144)) and
+    one under the circuit's digest are refused."""
     sigma = 9_900_032
     lay = {"calls": [["experts", 0]], "linears": [["experts", 6144, sigma]], "m": 32, "tile": [32, 32]}
     digest, requests, session = "ef" * 64, "ab" * 64, "s-1"
@@ -693,15 +694,17 @@ def test_a_glm_window_at_k_6144_registers_its_b_rows_as_2_chunk_leaves_each_past
     assert Cr.strata(lay)[1] is None and (x, w) == (2, 1538) and sigma < Cr.MAX_ROWS < x * sigma
     root = hashlib.sha512(b"b/6144").digest()
     entry = {"value": "b/6144", "root": root.hex(), "leaves": x * sigma, "words": w,
-             "domain": G.domain(digest, "b/6144", w, x * sigma).domain_id.hex()}
+             "domain": Wt.domain("b/6144", w, x * sigma).domain_id.hex()}
     wr = Wt.weights_root({6144: root})
     window = {"root": PS.window_open_root(wr, bytes.fromhex(requests), session).hex()}
     assert Cr._entry(entry)
     assert Cr._weights(window, lay, [entry], requests, session, digest, "") == (wr, None)
     bw = Wt.b_words(6144)
-    whole = {**entry, "leaves": sigma, "words": bw, "domain": G.domain(digest, "b/6144", bw, sigma).domain_id.hex()}
-    assert Cr._weights(window, lay, [whole], requests, session, digest, "") == (
-        None, ("weights", Cr.other_weights_entry("b/6144", 6144, sigma)))
+    whole = {**entry, "leaves": sigma, "words": bw, "domain": Wt.domain("b/6144", bw, sigma).domain_id.hex()}
+    circuit = {**entry, "domain": G.domain(digest, "b/6144", w, x * sigma).domain_id.hex()}
+    for bad in (whole, circuit):
+        assert Cr._weights(window, lay, [bad], requests, session, digest, "") == (
+            None, ("weights", Cr.other_weights_entry("b/6144", 6144, sigma)))
     assert Cr._weights(window, {**lay, "linears": [["experts", 6200, sigma]]}, [entry], requests, session, digest,
                        "")[1][0] == "layout"
 
@@ -1332,17 +1335,18 @@ def test_a_window_on_other_b_rows_than_its_periods_refuses_the_period(seed):
 
 def test_a_window_whose_s_w_differs_from_the_registered_is_refused():
     """Each K's b/<K>, its linears' B rows (each row its int8 codes then its f32 s_w) committed as the served path
-    registers the weights (`registered.Registered`, the domain that binds no window, salts drawn once), folded by
+    registers the weights (`registered.Registered`, θ's domain, which binds no window, salts drawn once), folded by
     `weights_root` into the window's open root, is accepted. The same window whose b/32 has one row's s_w changed, every
     code and salt kept, is refused, and so is one with a code changed instead: the open root fixes both before the
-    salt. So is a b/32 registered under another circuit's domain, or missing a row, though the open root binds it."""
+    salt. So is a b/32 registered under a circuit's domain, the window's own or another's, or missing a row, though the
+    open root binds it."""
     m = HW.slot(5, h1.TILE)
     prog = HW.program(h1.LINEARS, h1.CALLS, m, h1.TILE, unit=h1.unit)
     digest, rng = P.program_digest(prog), random.Random(7)
     lay = {"calls": [list(x) for x in h1.CALLS], "linears": [list(x) for x in h1.LINEARS], "m": m, "tile": list(h1.TILE)}
     rows = {k: [r for name, kk, n in h1.LINEARS if kk == k for r in _b_rows(rng, n, k)] for k in (32, 64)}
 
-    def commit(k: int, b: list[tuple[list[int], float]], program: str = digest) -> G.Registered:
+    def commit(k: int, b: list[tuple[list[int], float]], program: str = Wt.THETA) -> G.Registered:
         return G.Registered.commit(program, f"b/{k}", [_b_row(c, sw) for c, sw in b],
                                    G.supplied_salts(program, f"b/{k}", len(b)), schema=G.SCHEMA_V2)
 
@@ -1360,7 +1364,7 @@ def test_a_window_whose_s_w_differs_from_the_registered_is_refused():
         assert other.root != reg[32].root
         got = Cr._weights(window, lay, [other.entry(), entries[1]], requests, session, digest, "")
         assert got == (None, ("weights", Cr.OTHER_WEIGHTS)), changed
-    for other in (commit(32, rows[32], "cd" * 64), commit(32, rows[32][:-1])):
+    for other in (commit(32, rows[32], digest), commit(32, rows[32], "cd" * 64), commit(32, rows[32][:-1])):
         w2 = Wt.weights_root({32: other.root, 64: reg[64].root})
         window2 = {"root": PS.window_open_root(w2, bytes.fromhex(requests), session).hex()}
         got = Cr._weights(window2, lay, [other.entry(), entries[1]], requests, session, digest, "")

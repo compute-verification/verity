@@ -4,8 +4,8 @@ rows of the window Program's linears of that K, and `weights_root`, their fold, 
 * **A B row** (`row_bytes`) is one output row of a linear: its K int8 codes, then the 4 bytes of its f32 scale s_w,
   little-endian (`h1zy.ROW`): `b_words(K)` u16 words, as a ``hm96-sha512/row/v2`` bit row is its bytes.
 * **``<prefix>b/<K>``** is the rows of K's linears, linear after linear in the window's order, committed as
-  `registered.Registered.commit` commits them: under `registered.domain` of the circuit's SHA-512, the name, `b_words(K)`
-  words and Σn leaves, binding no window (a value held across windows), in ``hm96-sha512/row/v2``, row j's salt
+  `registered.Registered.commit` commits them: under `registered.domain` of `THETA`, never a circuit's digest, the name,
+  `b_words(K)` words and Σn leaves, binding no window (a value held across windows), in ``hm96-sha512/row/v2``, row j's salt
   `audit.hm96_salt` of the registration's 32-byte key at `B_NONCE` plus K's place among the Ks, ascending. The auditor
   hands that key to every lane serving the model (`model-key`), so it salts these rows only, never a window's A or z/y:
   those stay under the prover's own key.
@@ -45,6 +45,9 @@ from verity.ml.crypto import chacha20
 
 #: an H1 window's weights' root: each K's registered ``…/b/<K>`` root
 WEIGHTS_TAG = "verity/pouw/h1/weights/v1"
+#: θ's registered domain's ``program``: θ is registered once, under no circuit, and every Program that reads it opens
+#: that one registration
+THETA = "verity/registration/theta/v1"
 #: ``b/<K>``'s first salt nonce, past every round's and call's tables in the prover's salt stream (vllm's
 #: ``REQUESTS_NONCE + 2^42 + 2^40``), so a key that salts both never repeats a (nonce, leaf)
 B_NONCE = (1 << 61) + (1 << 42) + (1 << 40)
@@ -124,14 +127,15 @@ def chunk_bits(width: int, depth: int) -> int:
 
 
 @functools.lru_cache(maxsize=8)
-def _domain(circuit: str, name: str, words: int, leaves: int):
-    return G.domain(circuit, name, words, leaves)
+def domain(name: str, words: int, leaves: int):
+    """θ's registered value `name`'s domain: `registered.domain` of `THETA`, binding no window."""
+    return G.domain(THETA, name, words, leaves)
 
 
 def _subtree(spec: tuple, ci: int, rows: bytes) -> bytes:
     """Chunk `ci`'s subtree root: its rows' leaves (`rows` their bytes, possibly none), then pads to 2^bits leaves."""
-    circuit, name, words, total, key, nonce, width, bits = spec
-    dom, j0, n = _domain(circuit, name, words, total), ci << bits, len(rows) // width
+    name, words, total, key, nonce, width, bits = spec
+    dom, j0, n = domain(name, words, total), ci << bits, len(rows) // width
     level = []
     if n:
         row_h = hashlib.sha512(sha512_row_v2_prefix(8 * width))
@@ -192,7 +196,7 @@ def _shape(linears, k: int) -> tuple[list[int], int, int, int, int]:
     return mine, total, width, depth, chunk_bits(width, depth)
 
 
-def weights_roots(circuit: str, prefix: str, linears: Sequence[tuple[int, int]], rows: Callable[[int], Iterable[bytes]],
+def weights_roots(prefix: str, linears: Sequence[tuple[int, int]], rows: Callable[[int], Iterable[bytes]],
                   key: bytes, *, progress: Callable[[int, int], None] | None = None,
                   workers: int | None = None) -> dict[int, bytes]:
     """Each K's ``<prefix>b/<K>`` root: `linears` the window's linears in its order, ``(n, K)`` each; ``rows(w)`` linear w's
@@ -209,7 +213,7 @@ def weights_roots(circuit: str, prefix: str, linears: Sequence[tuple[int, int]],
     slot_bytes = max((1 << s[4]) * s[2] for s in (_shape(linears, k) for k in order))
     if workers == 1 or "fork" not in multiprocessing.get_all_start_methods():
         local = [memoryview(bytearray(slot_bytes))]
-        return {k: _k_root(circuit, prefix, linears, rows, key, i, k, local, None, None, progress)
+        return {k: _k_root(prefix, linears, rows, key, i, k, local, None, None, progress)
                 for i, k in enumerate(order)}
     call = next(_CALLS)
     _SLOTS[call] = [mmap.mmap(-1, slot_bytes) for _ in range(2 * workers + 1)]
@@ -218,7 +222,7 @@ def weights_roots(circuit: str, prefix: str, linears: Sequence[tuple[int, int]],
         pool = multiprocessing.get_context("fork").Pool(workers)
         views = [memoryview(m) for m in _SLOTS[call]]
         try:
-            return {k: _k_root(circuit, prefix, linears, rows, key, i, k, views, pool, call, progress)
+            return {k: _k_root(prefix, linears, rows, key, i, k, views, pool, call, progress)
                     for i, k in enumerate(order)}
         finally:
             for v in views:
@@ -231,10 +235,10 @@ def weights_roots(circuit: str, prefix: str, linears: Sequence[tuple[int, int]],
             m.close()
 
 
-def _k_root(circuit, prefix, linears, rows, key, i, k, slots, pool, call, progress) -> bytes:
+def _k_root(prefix, linears, rows, key, i, k, slots, pool, call, progress) -> bytes:
     mine, total, width, depth, bits = _shape(linears, k)
-    spec = (circuit, value(prefix, k), b_words(k), total, bytes(key), B_NONCE + i, width, bits)
-    fold, pending, free = _Fold(_domain(*spec[:4]), bits), deque(), list(range(len(slots)))[::-1]
+    spec = (value(prefix, k), b_words(k), total, bytes(key), B_NONCE + i, width, bits)
+    fold, pending, free = _Fold(domain(*spec[:3]), bits), deque(), list(range(len(slots)))[::-1]
 
     def settle() -> None:
         result, index = pending.popleft()
@@ -288,11 +292,11 @@ def _k_root(circuit, prefix, linears, rows, key, i, k, slots, pool, call, progre
     return fold.root()
 
 
-def entry(circuit: str, prefix: str, k: int, n: int, root: bytes) -> dict[str, Any]:
+def entry(prefix: str, k: int, n: int, root: bytes) -> dict[str, Any]:
     """``<prefix>b/<K>``'s registration entry (`Registered.entry`) of Σn = `n` rows with root `root`."""
     v = value(prefix, k)
     return {"value": v, "root": root.hex(), "leaves": n, "words": b_words(k),
-            "domain": G.domain(circuit, v, b_words(k), n).domain_id.hex()}
+            "domain": domain(v, b_words(k), n).domain_id.hex()}
 
 
 def weights_root(roots: Mapping[int, bytes]) -> bytes:
@@ -300,5 +304,6 @@ def weights_root(roots: Mapping[int, bytes]) -> bytes:
     return tagged(WEIGHTS_TAG, *(p for k in sorted(roots) for p in (k, roots[k])))
 
 
-__all__ = ["B_NONCE", "CHUNK_ALIGN", "CHUNK_BYTES", "CHUNK_MAX", "DEFAULT_WORKERS", "SCHEMA", "WEIGHTS_TAG", "b_words",
-           "chunk_bits", "chunks", "entry", "ks", "leaf_words", "row_bytes", "row_words", "value", "weights_root", "weights_roots"]
+__all__ = ["B_NONCE", "CHUNK_ALIGN", "CHUNK_BYTES", "CHUNK_MAX", "DEFAULT_WORKERS", "SCHEMA", "THETA", "WEIGHTS_TAG",
+           "b_words", "chunk_bits", "chunks", "domain", "entry", "ks", "leaf_words", "row_bytes", "row_words", "value",
+           "weights_root", "weights_roots"]

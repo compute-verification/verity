@@ -98,27 +98,27 @@ def model(tmp_path):
     return pinned(tmp_path, PARTS, LINEARS, 6, config={"num_hidden_layers": 1})
 
 
-def expected_roots(ts, circuit, key=KEY):
+def expected_roots(ts, key=KEY):
     def fused(parts):
         w = np.concatenate([ts[f"{L0}{p}.weight"] for p in parts])
         s = np.concatenate([ts[f"{L0}{p}.weight_scale"] for p in parts]).reshape(-1)
         return [w[j].tobytes() + s[j].tobytes() for j in range(len(w))]
     rows = [fused(["self_attn.q_proj", "self_attn.k_proj", "self_attn.v_proj"]), fused(["self_attn.o_proj"]),
             fused(["mlp.gate_proj", "mlp.up_proj"]), fused(["mlp.down_proj"])]
-    return Wt.weights_roots(circuit, "h1/", [(n, k) for _name, k, n in LINEARS], lambda w: rows[w], key)
+    return Wt.weights_roots("h1/", [(n, k) for _name, k, n in LINEARS], lambda w: rows[w], key)
 
 
 def test_a_registration_commits_the_pinned_checkpoints_rows_for_the_descriptors_linears(model):
     """qkv_proj is q, k and v's rows in turn, each its int8 codes and s_w, in the descriptor's linear order; the roots, the
-    entries and their fold are `weights`', under the circuit's domain, with the auditor's key."""
+    entries and their fold are `weights`', under θ's domain (`weights.THETA`), with the auditor's key."""
     line = M.register(model["tree"], ROLE, model["circuit"], model["descriptor"], model["ckpt"], KEY, pinned=PIN,
                       now="2026-10-22T19:00:00Z")
-    roots = expected_roots(model["tensors"], model["circuit"])
+    roots = expected_roots(model["tensors"])
     assert line["roots"] == {str(k): r.hex() for k, r in roots.items()}
     assert line["weights_root"] == Wt.weights_root(roots).hex()
     assert line["prefix"] == CR.shape_of(model["descriptor"])["prefix"] == "h1/" and line["model"] == ROLE and line["circuit"] == model["circuit"]
-    assert line["entries"] == [Wt.entry(model["circuit"], "h1/", 32, 208, roots[32]),
-                               Wt.entry(model["circuit"], "h1/", 64, 32, roots[64])]
+    assert line["entries"] == [Wt.entry("h1/", 32, 208, roots[32]),
+                               Wt.entry("h1/", 64, 32, roots[64])]
     assert line["checkpoint_sha512"] == model["pin"]
     assert line["key_sha512"] == hashlib.sha512(KEY).hexdigest()
     assert set(line["checkpoint"]) == {p.name for p in model["ckpt"].iterdir()}
@@ -174,7 +174,7 @@ def test_a_shard_outside_the_pin_never_shadows_a_pinned_tensor(model):
     """An extra safetensors file in DIR is never opened, and a tensor in two pinned shards is refused."""
     extra = {f"{L0}self_attn.q_proj.weight": np.zeros((32, 32), np.int8)}
     safetensors(model["ckpt"] / "zz.safetensors", extra)
-    roots = expected_roots(model["tensors"], model["circuit"])
+    roots = expected_roots(model["tensors"])
     assert reg(model)["weights_root"] == Wt.weights_root(roots).hex()
     with pytest.raises(M.Refused, match="is in both"):
         M.Checkpoint(model["ckpt"], ["model-00001-of-00002.safetensors", "zz.safetensors",
@@ -220,7 +220,7 @@ def test_a_role_that_declares_its_linears_commits_each_unmerged_module_as_itself
     ts = mlp["tensors"]
     rows = [[ts[f"{m}.weight"][j].tobytes() + ts[f"{m}.weight_scale"][j].tobytes() for j in range(n)]
             for m, _k, n in MLP]
-    roots = Wt.weights_roots(mlp["circuit"], "h1/", [(n, k) for _m, k, n in MLP], lambda w: rows[w], KEY)
+    roots = Wt.weights_roots("h1/", [(n, k) for _m, k, n in MLP], lambda w: rows[w], KEY)
     line = reg(mlp)
     assert line["weights_root"] == Wt.weights_root(roots).hex() and line["model"] == MLP_ROLE
     assert line["roots"] == {str(k): r.hex() for k, r in roots.items()}
@@ -301,7 +301,7 @@ def test_vy_admin_registers_and_a_period_open_signs_the_registered_root_and_mode
     assert rc == 3 and "vy-admin alone" in json.loads(out)["refused"]
     rc, out = A.gate(words.split(), host, by="vy-admin", **register_hooks(host, signer, model))
     reg = json.loads(out)
-    assert rc == 0 and reg["weights_root"] == Wt.weights_root(expected_roots(model["tensors"], model["circuit"])).hex()
+    assert rc == 0 and reg["weights_root"] == Wt.weights_root(expected_roots(model["tensors"])).hex()
     assert [json.loads(x)["weights_root"] for x in host.models.read_text().splitlines()] == [reg["weights_root"]]
     assert (A.gate(["--ssh", "models"], host)[1] == host.models.read_bytes())
 

@@ -148,8 +148,9 @@ returns the credit bits whatever the proofs' outcome, and `_a_link` trusts the r
   record's verdict for its session (`PROOF_KEYS`): the SHA-512 of the descriptor it verified the session against
   (``program``) and the session's own registered finding (``registered``, flock-verify's: each registered port's value
   and the root its reads were opened against). The entries are the registration's: each A value's domain, and each
-  other value's a proof opened, is `domain_of` the committed descriptor's SHA-512 and, for every value but the weights'
-  ``…/b/<K>`` (held across windows, `is_held`) and round 0's input-ids and request tables, the window's open root
+  other value's a proof opened, is `domain_of`: the weights' ``…/b/<K>`` (held across windows, `is_held`) are θ's,
+  under `weights.THETA` and no window; every other value's is the committed descriptor's SHA-512's and, for every value
+  but round 0's input-ids and request tables, the window's open root
   (``window.root``, the root the auditor's ledger opens its session for, which a per-window value's domain binds);
   round 0's input-ids and request tables, whose roots that open root contains, bind the window's session
   instead. Each proof was
@@ -161,7 +162,7 @@ returns the credit bits whatever the proofs' outcome, and `_a_link` trusts the r
   refused.
 * **The weights are the period's, registered before the salt** (`_weights`, `committed_weights`): each K's
   ``<PREFIX>b/<K>``, all the B rows (int8 codes and their s_w) of the window's linears of that K, is registered once
-  under the registered domain of its name and the window's circuit, binding no window, and
+  under θ's registered domain of its name (`weights.domain`, under no circuit), binding no window, and
   `weights_root` of their roots is the weights' root the window's open root binds (`salt.window_open_root`, with its
   round-0 request table's root, round 0's ``requests`` in its round log, and the session the auditor's ledger opened for
   it), which its salt coin opens after. That root is the one its period's open signed (`WEIGHTS_FIELD`, the gate's
@@ -193,7 +194,7 @@ from verity.core.protocols.pouw import verifier as V
 from verity.core.protocols.pouw import window as Wd
 from verity.core.protocols.pouw.circuit import live_reads as LR
 from verity.core.protocols.pouw.protocol import CALL_RANGE, tagged
-from verity.core.protocols.pouw.weights import CHUNK_ALIGN, CHUNK_MAX, chunks, leaf_words, weights_root
+from verity.core.protocols.pouw.weights import CHUNK_ALIGN, CHUNK_MAX, THETA, chunks, leaf_words, weights_root
 from verity.core.protocols.sampled_proofs import challenger as Ch
 from verity.core.protocols.sampled_proofs.one_stage import proofs as PF
 from verity.core.protocols.sampled_proofs.one_stage import registered as G
@@ -1036,8 +1037,8 @@ def registered_file(program: str, layout: dict, shape: dict, call: int, roots: d
         leaves, words = rows_of[v]
         out[port] = {**params.get(port, {}), "value": v, "root": roots[v][0], "leaves": leaves, "words": words,
                      "word_bits": G.WORD_BITS,
-                     "domain": G.domain(program, v, words, leaves,
-                                        window=None if is_held(v) else window).domain_id.hex(),
+                     "domain": (G.domain(THETA, v, words, leaves) if is_held(v)
+                                else G.domain(program, v, words, leaves, window=window)).domain_id.hex(),
                      **G.schema_entry(G.SCHEMA_V2), **CC.call_reads(u0, [row(t) for t in range(size)])}
     pv = f"{prefix}pub@{call}"
     blocks = [CC.j10r_blocks(m, k, (r, c), t // per, t % per) for t in range(size)] if tile["j10r"] else None
@@ -1259,23 +1260,23 @@ def _entry(e: Any) -> bool:
 def domain_of(program: str, window: str, e: dict, session: str | None = None) -> str:
     """The domain one-stage's registration gives the registered value `e` (an entry `_entry` accepts) of the window whose
     open root is `window`, under the circuit whose descriptor's SHA-512 is `program` (`registered.domain`): the
-    weights' (``…/b/<K>``, `is_held`) are held across windows and bind none; round 0's input-ids table (``…/ids@0``,
+    weights' (``…/b/<K>``, `is_held`) are θ's, under `THETA` in the circuit's place, held across windows and bind none;
+    round 0's input-ids table (``…/ids@0``,
     `ids_step` 0) and request table (``…/requests@0``, `is_requests`), whose roots the window's open root contains
     (`requests_root`, `_arow`), bind the window's session `session` in that root's place; every other value's rows are
     the window's own, its A rows and its calls' A and z tables (`h1window.table`) among them, and its domain binds the
     window's open root."""
     v, first = e["value"], ids_step(e["value"]) == 0 or is_requests(e["value"])
-    return G.domain(program, v, e["words"], e["leaves"], e.get(G.WIDTH_KEY, G.WORD_BITS),
+    return G.domain(THETA if is_held(v) else program, v, e["words"], e["leaves"], e.get(G.WIDTH_KEY, G.WORD_BITS),
                     None if is_held(v) or first else window, session=session if first else None).domain_id.hex()
 
 
 def other_registration(v: str) -> str:
     return (f"registered value {v}'s domain is not the one the window's registration gives it (the registered domain of "
-            f"{v} under the circuit the window's proofs were verified against, the SHA-512 of its descriptor, and, for a "
-            "value other than the weights' …/b/<K> and round 0's …/ids@0 and …/requests@0, the window's open root, the "
-            "root the auditor's ledger opened its session for, for those two that session): the entry is another "
-            "registration's, "
-            "another window's or another circuit's")
+            f"{v} under the circuit the window's proofs were verified against, the SHA-512 of its descriptor, or for the "
+            "weights' …/b/<K> under weights.THETA, and, for a value other than the weights' …/b/<K> and round 0's "
+            "…/ids@0 and …/requests@0, the window's open root, the root the auditor's ledger opened its session for, "
+            "for those two that session): the entry is another registration's, another window's or another circuit's")
 
 
 def _registration(window: str, program: str, prefix: str, entries: list, ss: list[dict], layout: dict, steps: int,
@@ -2827,8 +2828,8 @@ def other_weights_entry(v: str, k: int, n: int) -> str:
     return (f"registered weights {v}'s entry is not the registration of K = {k}'s B rows: one-stage's {{value, root, "
             f"leaves, words, domain}}, its root a SHA-512 digest, its {n} rows (K's linears' n in turn) of {x} leaves "
             f"each (weights.chunks), {x * n} leaves of {leaf_words(k)} 16-bit words (a chunk's K/{x} codes then the "
-            f"row's s_w, h1zy.ROW) under the registered domain of {v} and the window's circuit (the SHA-512 of its "
-            "descriptor), binding no window (registered.domain)")
+            f"row's s_w, h1zy.ROW) under θ's registered domain of {v} (weights.domain: weights.THETA in a circuit's "
+            "place), binding no window")
 
 
 def _weights(window: Any, layout: Any, entries: Any, requests: Any, session: Any, program: Any, prefix: Any
@@ -2838,7 +2839,7 @@ def _weights(window: Any, layout: Any, entries: Any, requests: Any, session: Any
     `layout` (`strata`), exactly ``<prefix>b/<K>`` (`prefix` its descriptor's ``PREFIX``) once, and no other ``…/b/<K>``;
     each such entry must be the registration of all of K's B rows (K's linears' n in turn, each x = `weights.chunks` (K)
     leaves of `weights.leaf_words` (K) words, x·Σn leaves),
-    under `registered.domain` of its name and the circuit whose descriptor's SHA-512 is `program`, binding no window
+    under θ's registered domain of its name (`weights.domain`, `THETA` in the circuit's place), binding no window
     (`other_weights_entry`); and `weights_root` of their roots, the window's round-0 request table's root `requests`
     (hex) and `session` (the id of the session the auditor's ledger opened for `window`, as `core_check.salt` reads it)
     must be the window's open root (``window.root``, `salt.window_open_root`). The salt coin opens only after that root,
@@ -2886,7 +2887,7 @@ def _weights(window: Any, layout: Any, entries: Any, requests: Any, session: Any
         h, x, w = _digest(e.get("root")), chunks(k), leaf_words(k)
         if not (h is not None and sorted(e) == sorted(G.ENTRY_KEYS) and e["leaves"] == x * n and type(e["leaves"]) is int
                 and e["words"] == w and type(e["words"]) is int
-                and e["domain"] == G.domain(program, v, w, x * n).domain_id.hex()):
+                and e["domain"] == G.domain(THETA, v, w, x * n).domain_id.hex()):
             return no(other_weights_entry(v, k, n))
         roots[k] = h
     for k in sorted(rows):

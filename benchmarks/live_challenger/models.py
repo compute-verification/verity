@@ -18,7 +18,8 @@ its own salts, so a period's weights' root is never the prover's choice.
     (`declared_linears`). Only the pinned tree declares them, never the prover.
   It then draws a fresh 32-byte salt key; commits each K's ``<prefix>b/<K>`` from the int8 codes and s_w of the pinned
   shards alone, a tensor in two shards refused (`Checkpoint`), vLLM's fused ``qkv_proj`` and ``gate_up_proj`` their
-  parts' rows in turn (`FUSED`, `weights.weights_roots`); keeps the key (`key_path`, auditor's, 0600); and appends one
+  parts' rows in turn (`FUSED`, `weights.weights_roots`), under θ's registered domain (`weights.THETA`), which names no
+  circuit: `--circuit` indexes the registration and fixes the linears, not the trees; keeps the key (`key_path`, auditor's, 0600); and appends one
   line to the registry (`Host.models`, append-only, root's seal): ``{model, circuit, prefix, checkpoint: {file:
   SHA-512}, checkpoint_sha512, source, roots: {K: root}, entries, weights_root, key_sha512, pinned, registered_utc}``.
 - **A period-open** with ``--model M`` (or ``--weights-root W``) signs the registry entry's ``weights_root`` and
@@ -263,7 +264,7 @@ def register(tree: Path, role: str, circuit: str, descriptor: bytes, checkpoint:
     ckpt = Checkpoint(checkpoint, names)
     shapes = [(n, k) for _name, k, n in linears]
     try:
-        roots = Wt.weights_roots(circuit, prefix, shapes, lambda w: rows_of(ckpt, linears[w][0], linears[w][1]), key,
+        roots = Wt.weights_roots(prefix, shapes, lambda w: rows_of(ckpt, linears[w][0], linears[w][1]), key,
                                  progress=lambda k, j: log(f"K = {k}: row {j}"))
     except ValueError as e:
         raise Refused(f"the checkpoint's rows are not the window's linears: {e}") from None
@@ -271,7 +272,7 @@ def register(tree: Path, role: str, circuit: str, descriptor: bytes, checkpoint:
     return {"model": role, "circuit": circuit, "prefix": prefix, "checkpoint": files, "checkpoint_sha512": digest,
             "source": {"repo": entry["repo"], "revision": entry["revision"], "recipe": entry.get("recipe")},
             "roots": {str(k): roots[k].hex() for k in sorted(roots)},
-            "entries": [Wt.entry(circuit, prefix, k, leaves[k], roots[k]) for k in sorted(roots)],
+            "entries": [Wt.entry(prefix, k, leaves[k], roots[k]) for k in sorted(roots)],
             "weights_root": Wt.weights_root(roots).hex(), "key_sha512": hashlib.sha512(key).hexdigest(),
             "pinned": pinned, "registered_utc": now}
 

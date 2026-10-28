@@ -567,12 +567,12 @@ def test_the_periods_weights_under_the_registrations_key_are_the_auditors_regist
     period = _period(ws)
     linears = [(n, k) for n, k in SHAPES]
     rows = [[Wt.row_bytes(w[j].numpy().tobytes(), np.float32(s[j, 0]).tobytes()) for j in range(len(w))] for w, s in ws]
-    roots = Wt.weights_roots(period.circuit, SV.PREFIX, linears, lambda w: rows[w], WKEY)
+    roots = Wt.weights_roots(SV.PREFIX, linears, lambda w: rows[w], WKEY)
     assert SV.B_NONCE == Wt.B_NONCE == RQ.REQUESTS_NONCE + (1 << 42) + (1 << 40)
     assert {k: r.root for k, r in period.registered.items()} == roots
     assert period.root() == Wt.weights_root(roots)
     leaves = {k: sum(n for n, kw in linears if kw == k) for k in roots}
-    assert period.entries() == [Wt.entry(period.circuit, SV.PREFIX, k, leaves[k], roots[k]) for k in sorted(roots)]
+    assert period.entries() == [Wt.entry(SV.PREFIX, k, leaves[k], roots[k]) for k in sorted(roots)]
 
 
 @pytest.mark.parametrize("edit", ["s_w", "code"])

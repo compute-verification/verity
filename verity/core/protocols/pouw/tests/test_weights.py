@@ -16,18 +16,17 @@ from verity.ml.commitments.merkle import tree_levels
 from verity.ml.commitments.rowleaf import sha512_row_v2_digest
 from verity.ml.crypto import chacha20
 
-CIRCUIT = "ab" * 64
 PREFIX = "h1/"
 KEY = bytes(range(32))
 
 
-def scalar_roots(circuit, prefix, linears, rows, key):
+def scalar_roots(prefix, linears, rows, key):
     """Each K's root one row at a time: every leaf from core's per-row path, kept, then `tree_levels`."""
     out = {}
     for i, k in enumerate(Wt.ks(linears)):
         mine = [w for w, (_n, kw) in enumerate(linears) if kw == k]
         width = 2 * Wt.b_words(k)
-        dom = G.domain(circuit, Wt.value(prefix, k), Wt.b_words(k), sum(linears[w][0] for w in mine))
+        dom = G.domain(Wt.THETA, Wt.value(prefix, k), Wt.b_words(k), sum(linears[w][0] for w in mine))
         leaves = []
         for w in mine:
             for row in rows(w):
@@ -54,7 +53,7 @@ def committed(shapes, rows, key=KEY):
     out = {}
     for i, k in enumerate(Wt.ks(shapes)):
         words = [Wt.row_words(r) for w, (_n, kw) in enumerate(shapes) if kw == k for r in rows[w]]
-        out[k] = G.Registered.commit(CIRCUIT, Wt.value(PREFIX, k), words,
+        out[k] = G.Registered.commit(Wt.THETA, Wt.value(PREFIX, k), words,
                                      [hm96_salt(key, Wt.B_NONCE + i, j) for j in range(len(words))], schema=G.SCHEMA_V2)
     return out
 
@@ -62,41 +61,41 @@ def committed(shapes, rows, key=KEY):
 @pytest.mark.parametrize("workers", [1, 3])
 def test_roots_and_entries_are_registered_commits(workers):
     shapes, rows = model()
-    roots = Wt.weights_roots(CIRCUIT, PREFIX, shapes, lambda w: iter(rows[w]), KEY, workers=workers)
+    roots = Wt.weights_roots(PREFIX, shapes, lambda w: iter(rows[w]), KEY, workers=workers)
     ref = committed(shapes, rows)
     assert sorted(roots) == [8, 12]
     for k, r in ref.items():
         assert roots[k] == r.root
-        assert Wt.entry(CIRCUIT, PREFIX, k, r.leaves, roots[k]) == r.entry()
+        assert Wt.entry(PREFIX, k, r.leaves, roots[k]) == r.entry()
         assert r.words == Wt.b_words(k)
 
 
 def test_weights_root_folds_by_ascending_k():
     shapes, rows = model()
-    roots = Wt.weights_roots(CIRCUIT, PREFIX, shapes, lambda w: rows[w], KEY)
+    roots = Wt.weights_roots(PREFIX, shapes, lambda w: rows[w], KEY)
     assert Wt.weights_root(roots) == Wt.weights_root(dict(reversed(list(roots.items()))))
     assert Wt.weights_root(roots) != Wt.weights_root({**roots, 8: roots[12]})
 
 
 def test_a_changed_code_scale_or_key_moves_the_root():
     shapes, rows = model()
-    base = Wt.weights_root(Wt.weights_roots(CIRCUIT, PREFIX, shapes, lambda w: rows[w], KEY))
+    base = Wt.weights_root(Wt.weights_roots(PREFIX, shapes, lambda w: rows[w], KEY))
     code = [list(r) for r in rows]
     code[1][2] = bytes([code[1][2][0] ^ 1]) + code[1][2][1:]
     scale = [list(r) for r in rows]
     scale[3][0] = scale[3][0][:-1] + bytes([scale[3][0][-1] ^ 0x80])
     for other, key in ((code, KEY), (scale, KEY), (rows, bytes(32))):
-        assert Wt.weights_root(Wt.weights_roots(CIRCUIT, PREFIX, shapes, lambda w: other[w], key)) != base
+        assert Wt.weights_root(Wt.weights_roots(PREFIX, shapes, lambda w: other[w], key)) != base
 
 
 def test_refuses_rows_of_another_width_or_count():
     shapes, rows = model()
     with pytest.raises(ValueError, match="row 0 is"):
-        Wt.weights_roots(CIRCUIT, PREFIX, shapes, lambda w: [r + b"\0\0" for r in rows[w]], KEY)
+        Wt.weights_roots(PREFIX, shapes, lambda w: [r + b"\0\0" for r in rows[w]], KEY)
     with pytest.raises(ValueError, match="gave 5 rows"):
-        Wt.weights_roots(CIRCUIT, PREFIX, shapes, lambda w: rows[w][:-1], KEY)
+        Wt.weights_roots(PREFIX, shapes, lambda w: rows[w][:-1], KEY)
     with pytest.raises(ValueError, match="32 bytes"):
-        Wt.weights_roots(CIRCUIT, PREFIX, shapes, lambda w: rows[w], KEY[:16])
+        Wt.weights_roots(PREFIX, shapes, lambda w: rows[w], KEY[:16])
     with pytest.raises(ValueError, match="positive even"):
         Wt.ks([(3, 7)])
     with pytest.raises(ValueError, match="whole u16"):
@@ -116,8 +115,8 @@ def test_fast_roots_are_the_scalar_references(seed, chunk_bytes, workers, monkey
     """Random shapes, chunks of 16 rows (`CHUNK_BYTES` 1) or one chunk per tree, in-process or on three processes."""
     monkeypatch.setattr(Wt, "CHUNK_BYTES", chunk_bytes)
     shapes, rows = random_model(seed)
-    want = scalar_roots(CIRCUIT, PREFIX, shapes, lambda w: rows[w], KEY)
-    assert Wt.weights_roots(CIRCUIT, PREFIX, shapes, lambda w: rows[w], KEY, workers=workers) == want
+    want = scalar_roots(PREFIX, shapes, lambda w: rows[w], KEY)
+    assert Wt.weights_roots(PREFIX, shapes, lambda w: rows[w], KEY, workers=workers) == want
 
 
 @pytest.mark.parametrize("total", [1, 2, 3, 15, 16, 17, 31, 32, 33, 48, 64, 65])
@@ -129,8 +128,8 @@ def test_edge_row_counts_around_chunks(total, workers, monkeypatch):
     rng = random.Random(total)
     shapes = [(n, k) for k in (2, 30) for n in ((total,) if total == 1 else (total // 2, total - total // 2))]
     rows = [linear(rng, n, k) for n, k in shapes]
-    want = scalar_roots(CIRCUIT, PREFIX, shapes, lambda w: rows[w], KEY)
-    assert Wt.weights_roots(CIRCUIT, PREFIX, shapes, lambda w: rows[w], KEY, workers=workers) == want
+    want = scalar_roots(PREFIX, shapes, lambda w: rows[w], KEY)
+    assert Wt.weights_roots(PREFIX, shapes, lambda w: rows[w], KEY, workers=workers) == want
 
 
 @pytest.mark.parametrize("workers", [1, 2])
@@ -139,12 +138,12 @@ def test_bytes_like_rows_and_slots_released(workers, monkeypatch):
     midway included."""
     monkeypatch.setattr(Wt, "CHUNK_BYTES", 1)
     shapes, rows = random_model(7)
-    want = Wt.weights_roots(CIRCUIT, PREFIX, shapes, lambda w: rows[w], KEY, workers=1)
+    want = Wt.weights_roots(PREFIX, shapes, lambda w: rows[w], KEY, workers=1)
     for kind in (bytearray, memoryview):
-        assert Wt.weights_roots(CIRCUIT, PREFIX, shapes, lambda w: map(kind, rows[w]), KEY, workers=workers) == want
+        assert Wt.weights_roots(PREFIX, shapes, lambda w: map(kind, rows[w]), KEY, workers=workers) == want
     assert Wt._SLOTS == {}
     with pytest.raises(ValueError, match="gave"):
-        Wt.weights_roots(CIRCUIT, PREFIX, shapes, lambda w: rows[w][:-1], KEY, workers=workers)
+        Wt.weights_roots(PREFIX, shapes, lambda w: rows[w][:-1], KEY, workers=workers)
     assert Wt._SLOTS == {}
 
 
@@ -169,11 +168,11 @@ def test_keystream_is_chacha20_block_and_hm96_salt(nonce, first):
 def test_progress_and_workers():
     shapes, rows = model()
     seen = []
-    Wt.weights_roots(CIRCUIT, PREFIX, shapes, lambda w: rows[w], KEY, progress=lambda k, j: seen.append((k, j)), workers=1)
+    Wt.weights_roots(PREFIX, shapes, lambda w: rows[w], KEY, progress=lambda k, j: seen.append((k, j)), workers=1)
     assert seen == [(8, 0), (12, 0)]
     for bad in (0, -1, True, 1.5):
         with pytest.raises(ValueError, match="positive integer"):
-            Wt.weights_roots(CIRCUIT, PREFIX, shapes, lambda w: rows[w], KEY, workers=bad)
+            Wt.weights_roots(PREFIX, shapes, lambda w: rows[w], KEY, workers=bad)
     assert 1 <= Wt.DEFAULT_WORKERS <= 4
 
 

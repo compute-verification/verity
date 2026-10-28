@@ -88,14 +88,14 @@ round log's roots, which only `roundsCheck` (`core_check.rounds`) holds to the o
   verdict for its session (`PROOF_KEYS`: the SHA-512 of the descriptor it verified the session against, and the
   session's registered finding, each registered port's value and the root its reads were opened against). The entries
   are the window's registration's: each A value's domain, and each other value's a proof opened, is `domainOf` the
-  committed descriptor's SHA-512 and, for every value but the weights' `…/b/<K>` (`isHeld`) and round 0's `…/ids@0`,
-  the window's open root (`SampledProofs.Registered.domainAt`), for `…/ids@0` the window's session; each
+  committed descriptor's SHA-512 (the weights' `…/b/<K>`, `isHeld`: `THETA`, θ's, `programOf`) and, for every value
+  but the weights and round 0's `…/ids@0`, the window's open root (`SampledProofs.Registered.domainAt`), for `…/ids@0` the window's session; each
   proof was verified against that descriptor, opened only values
   the window registers once, each at its registered root, and opened its unit's K's A value, the window's `…/a/<K>` or
   its call's round's `…/a/<K>@<s>`, and its K's weights `<PREFIX>b/<K>`. So the A rows `Internal.aLink` ties to the round roots are the ones each drawn unit's
   proof opened, under this window's registration.
-* `Internal.weights` is `credit._weights`: each K's `<PREFIX>b/<K>` registered once, all of K's B rows under the
-  registered domain of its name and the window's circuit, binding no window, and `weightsRoot` of their
+* `Internal.weights` is `credit._weights`: each K's `<PREFIX>b/<K>` registered once, all of K's B rows under θ's
+  registered domain of its name (`THETA`, under no circuit), binding no window, and `weightsRoot` of their
   roots, the window's round-0 request table's root and its session are its open root (`windowOpenRoot`), so its B rows,
   codes and s_w, were fixed before its salt. `window` composes it right after `layoutOf` (`periodWeights`), and holds their root to the
   one the open of the window's period signed (`committedWeights`), so every window of a period opens the same B rows.
@@ -857,6 +857,14 @@ def isHeld : Json → Bool
     | _ => false
   | _ => false
 
+/-- `weights.THETA`: θ's registered domain's `program`. θ is registered once, under no circuit, and every Program that
+reads it opens that one registration. -/
+def THETA : String := "verity/registration/theta/v1"
+
+/-- The `program` a registered value's domain names (`credit.domain_of`): `THETA` for the weights (`isHeld`), `program`,
+the circuit's descriptor's SHA-512, for every other value. -/
+def programOf (program v : String) : String := if isHeld (.str v) then THETA else program
+
 /-- The node at (`level`, `index`) of `d`'s tree from the subtree roots `have_`, and its pads past its count. -/
 def treeAt (d : Domain) (have_ : Std.HashMap (Nat × Nat) ByteArray) : Nat → Nat → Option ByteArray
   | 0, index => match have_.get? (0, index) with
@@ -991,7 +999,8 @@ def entryOk (e : Json) : Bool :=
 
 /-- `credit.domain_of`: the domain (hex) one-stage's registration gives the registered value `e` (an entry `entryOk`
 holds) of the window whose open root is `window`, under the circuit whose descriptor's SHA-512 is `program`
-(`SampledProofs.Registered.domainAt`): the weights' (`…/b/<K>`, `isHeld`) are held across windows and bind none;
+(`SampledProofs.Registered.domainAt`): the weights' (`…/b/<K>`, `isHeld`) are θ's, under `THETA` in the circuit's
+place (`programOf`), held across windows and bind none;
 round 0's input-ids table (`…/ids@0`, `idsStep?` 0) and request table (`…/requests@0`, `isRequests`), whose roots the
 window's open root contains (`requestsRoot`, `Internal.arow`), bind the window's session `session` in that root's place
 (`domainBound` at `"session"`); every
@@ -1003,16 +1012,16 @@ def domainOf (program window session : String) (e : Json) : R String := do
     (nat? (get e "word_bits")).getD 16)
   let d ← (if idsStep? (.str v) == some 0 || isRequests (.str v) then
       SampledProofs.Registered.domainBound program v words leaves bits "session" session
-    else SampledProofs.Registered.domainAt program v words leaves bits
+    else SampledProofs.Registered.domainAt (programOf program v) v words leaves bits
       (if isHeld (.str v) then none else some window)).mapError fun why => ("registration", why)
   pure (Flock.hexOf d)
 
 def otherRegistration (v : String) : String :=
   s!"registered value {v}'s domain is not the one the window's registration gives it (the registered domain of " ++
-  s!"{v} under the circuit the window's proofs were verified against, the SHA-512 of its descriptor, and, for a " ++
-  "value other than the weights' …/b/<K> and round 0's …/ids@0 and …/requests@0, the window's open root, the " ++
-  "root the auditor's ledger opened its session for, for those two that session): the entry is another " ++
-  "registration's, another window's or another circuit's"
+  s!"{v} under the circuit the window's proofs were verified against, the SHA-512 of its descriptor, or for the " ++
+  "weights' …/b/<K> under weights.THETA, and, for a value other than the weights' …/b/<K> and round 0's " ++
+  "…/ids@0 and …/requests@0, the window's open root, the root the auditor's ledger opened its session for, " ++
+  "for those two that session): the entry is another registration's, another window's or another circuit's"
 
 /-- `credit._leaves`: a descriptor type's leaves, `["Value", w]` one, `["Array", n, t]` n of t's, a `["Tuple", [t, ...]]`
 or `["Record", [[name, t], ...]]` its fields'; zero for any other form, or past `fuel` levels. -/
@@ -1233,7 +1242,7 @@ row t, so the receipts the round roots commit are the ones the units return; eve
 port's reads start at the call's first unit u0 (`READS_FROM`) and end at its last (`Flock.Registered.Port.readAt` reads
 none below `reads_from` or past `reads`). Each value is a
 row/v2 value of 16-bit leaves under `SampledProofs.Registered.domainAt` of its name, rows and words, binding the
-window's open root `window` but for the weights' (`isHeld`), at the root `roots` (`{value: [root, ...]}`) gives it. Its
+window's open root `window` but for the weights' (`isHeld`, θ's under `THETA`, `programOf`), at the root `roots` (`{value: [root, ...]}`) gives it. Its
 reads cost the call's units, once a port; only the ok rows' known content is the window's. The statement's public row `pub`
 (`PUB_PORT`) is the verifier's own: unit u0 + t reads row t of the call's public table `<prefix>pub@<call>`, which the
 file names at its known content (`known`, `Flock.Registered.checkKnownAll`), the window's Program salt `salt` (hex), the
@@ -1311,7 +1320,7 @@ def registeredFile (program : String) (layout : Json) (shape : Shape) (call : Na
     let reads := (List.range size).map fun t => Lean.toJson (row t)
     let lw : Nat × Nat := ((shapes.find? (·.1 == v)).map (·.2)).getD (0, 0)
     let (leaves, words) := lw
-    let d ← (SampledProofs.Registered.domainAt program v words leaves 16
+    let d ← (SampledProofs.Registered.domainAt (programOf program v) v words leaves 16
       (if isHeld (.str v) then none else some window)).mapError fun why => ("registration", why)
     out := out ++ [(port, Json.mkObj [("value", Json.str v), ("root", Json.str ((root.lookup v).getD "")),
       ("leaves", Lean.toJson leaves), ("words", Lean.toJson words), ("word_bits", Lean.toJson (16 : Nat)),
@@ -1571,12 +1580,12 @@ def otherWeightsEntry (v : String) (k n : Nat) : String :=
   s!"registered weights {v}'s entry is not the registration of K = {k}'s B rows: one-stage's \{value, root, " ++
   s!"leaves, words, domain}, its root a SHA-512 digest, its {n} rows (K's linears' n in turn) of {x} leaves " ++
   s!"each (weights.chunks), {x * n} leaves of {leafWords k} 16-bit words (a chunk's K/{x} codes then the " ++
-  s!"row's s_w, h1zy.ROW) under the registered domain of {v} and the window's circuit (the SHA-512 of its " ++
-  "descriptor), binding no window (registered.domain)"
+  s!"row's s_w, h1zy.ROW) under θ's registered domain of {v} (weights.domain: weights.THETA in a circuit's " ++
+  "place), binding no window"
 
 /-- `credit._weights`: the weights' root the window registered, exactly `<prefix>b/<K>` for each K of its layout once
-and no other `…/b/<K>`, each the registration of K's B rows under `SampledProofs.Registered.domain` of its name and
-the circuit `program`, binding no window, when `weightsRoot` of their roots, its round-0 request table's root
+and no other `…/b/<K>`, each the registration of K's B rows under `SampledProofs.Registered.domain` of `THETA` and
+its name (θ's, under no circuit), binding no window, when `weightsRoot` of their roots, its round-0 request table's root
 `requests` and its session `session` are its open root (`windowOpenRoot`); else the refusal (`weights` or
 `layout`). Each K's B rows are x = `chunks?` K leaves each, x·Σn leaves of `leafWords` K words; a K with no chunks is
 refused (`layout`). -/
@@ -1587,7 +1596,6 @@ def Internal.weights (window layout entries requests session program prefix_ : J
   unless sessionId? s do weightsRefuse SESSION_FORM
   let (some _, .str pre) := (digest? program, prefix_) | weightsRefuse CIRCUIT_FORM
   unless _root_.PouwCheck.plain pre do weightsRefuse CIRCUIT_FORM
-  let prog := (str? program).getD ""
   discard <| strata layout
   let lins : List (Nat × Nat) := match get layout "linears" with
     | .arr xs => xs.toList.filterMap fun x => match x with
@@ -1614,7 +1622,7 @@ def Internal.weights (window layout entries requests session program prefix_ : J
         weightsRefuse (s!"the window registers K = {k}'s weights twice ({name}): each K's B rows are one registered " ++
           s!"value {pre}b/<K>")
       let (x, w) := ((chunks? k).getD 1, leafWords k)
-      let d ← (SampledProofs.Registered.domain prog name w (x * n) 16).mapError fun why => ("weights", why)
+      let d ← (SampledProofs.Registered.domain THETA name w (x * n) 16).mapError fun why => ("weights", why)
       let some h := digest? (get e "root") | weightsRefuse (otherWeightsEntry name k n)
       unless keys e == some ["domain", "leaves", "root", "value", "words"] && nat? (get e "leaves") == some (x * n)
           && nat? (get e "words") == some w && str? (get e "domain") == some (Flock.hexOf d) do

@@ -1106,9 +1106,9 @@ def b_counts(lay: dict) -> dict[int, int]:
 
 
 def weights_of(rng: random.Random, lay: dict, program: str, prefix: str) -> list[dict]:
-    """Each K's ``<prefix>b/<K>`` of layout `lay` as one-stage registers it under the circuit `program`, binding no
-    window (`_b_entry`), at a random root."""
-    return [_b_entry(program, f"{prefix}b/{k}", k, n, rng) for k, n in sorted(b_counts(lay).items())]
+    """Each K's ``<prefix>b/<K>`` of layout `lay` as the circuit `program`'s registration holds it, under θ's domain,
+    binding no window (`_b_entry`), at a random root."""
+    return [_b_entry(f"{prefix}b/{k}", k, n, rng) for k, n in sorted(b_counts(lay).items())]
 
 
 def fold(weights: list[dict]) -> str:
@@ -1170,17 +1170,17 @@ def b_leaf_words(codes: bytes, sw: float) -> list[list[int]]:
 
 def registered_b(program: str, v: str, rows: list[tuple[bytes, float]]) -> dict:
     """The entry of `rows` registered as the served path registers each K's B rows (`registered.Registered`, each row
-    its `b_leaf_words`, salts drawn once, binding no window)."""
+    its `b_leaf_words`, salts drawn once, under θ's domain, binding no window)."""
     words = [w for codes, sw in rows for w in b_leaf_words(codes, sw)]
-    return G.Registered.commit(program, v, words, G.supplied_salts(program, v, len(words)), schema=G.SCHEMA_V2).entry()
+    return G.Registered.commit(Wt.THETA, v, words, G.supplied_salts(program, v, len(words)), schema=G.SCHEMA_V2).entry()
 
 
 def _rehome(weights: list[dict], program: str, prefix: str) -> list[dict]:
-    """`weights`' roots registered under another circuit `program` and `prefix`."""
+    """`weights`' roots registered for another circuit `program` under its `prefix` (θ's domain names no circuit)."""
     out = []
     for e in weights:
         v = prefix + "b/" + e["value"].rsplit("/", 1)[1]
-        out.append({**e, "value": v, "domain": G.domain(program, v, e["words"], e["leaves"]).domain_id.hex()})
+        out.append({**e, "value": v, "domain": Wt.domain(v, e["words"], e["leaves"]).domain_id.hex()})
     return out
 
 
@@ -1618,8 +1618,7 @@ def window_instance(rng: random.Random, name: str = "honest", lay: dict | None =
         case "weights-leaves":
             e = rng.choice([x for x in d["entries"] if Cr.is_held(x["value"])])
             e["leaves"] += rng.choice([-1, 1]) if e["leaves"] > 1 else 1
-            e["domain"] = G.domain(hashlib.sha512(bytes.fromhex(d["descriptor"])).hexdigest(), e["value"], e["words"],
-                                   e["leaves"]).domain_id.hex()
+            e["domain"] = Wt.domain(e["value"], e["words"], e["leaves"]).domain_id.hex()
         case _ if credit in CREDIT_NAMES:
             _mutate_credit(d, s, credit, rng)
         case _:
@@ -2112,11 +2111,11 @@ A_LINK_NAMES = ["untied", "late-rows", "rewritten", "round-root", "gap", "extra"
                 "receipt-calls", "receipt-unknown"]
 
 
-def _b_entry(program: str, v: str, k: int, n: int, rng: random.Random) -> dict:
+def _b_entry(v: str, k: int, n: int, rng: random.Random) -> dict:
     """K's ``b/<K>`` of `n` rows: `weights.chunks` (K) leaves a row of `weights.leaf_words` (K) words."""
     x, w = Wt.chunks(k), Wt.leaf_words(k)
     return {"value": v, "root": _hex(rng), "leaves": x * n, "words": w,
-            "domain": G.domain(program, v, w, x * n).domain_id.hex()}
+            "domain": Wt.domain(v, w, x * n).domain_id.hex()}
 
 
 def weights_instance(rng: random.Random, name: str = "honest") -> dict:
@@ -2126,7 +2125,7 @@ def weights_instance(rng: random.Random, name: str = "honest") -> dict:
     rows: dict[int, int] = {}
     for _name, k, n in lay["linears"]:
         rows[k] = rows.get(k, 0) + n
-    entries = [_b_entry(program, f"{prefix}b/{k}", k, n, rng) for k, n in sorted(rows.items())]
+    entries = [_b_entry(f"{prefix}b/{k}", k, n, rng) for k, n in sorted(rows.items())]
     b = list(entries)
     lone = ["a/32@0", "zy@0", "b/x", f"b/0{min(rows)}", "b/" + "0" * 5000 + "1"]
     entries += [{"value": f"{prefix}{v}", "root": _hex(rng)}
@@ -2162,8 +2161,9 @@ def weights_instance(rng: random.Random, name: str = "honest") -> dict:
             e["words"] = rng.choice([e["words"] + 1, k // 2, k, str(e["words"])])
         case "other-domain":
             e["domain"] = rng.choice([_hex(rng)[:64], G.domain(_hex(rng), e["value"], e["words"], e["leaves"]).domain_id.hex(),
-                                      G.domain(program, e["value"], e["words"], e["leaves"], window=_hex(rng)).domain_id.hex(),
-                                      G.domain(program, e["value"], e["words"], e["leaves"] + 1).domain_id.hex(), None])
+                                      G.domain(program, e["value"], e["words"], e["leaves"]).domain_id.hex(),
+                                      G.domain(Wt.THETA, e["value"], e["words"], e["leaves"], window=_hex(rng)).domain_id.hex(),
+                                      Wt.domain(e["value"], e["words"], e["leaves"] + 1).domain_id.hex(), None])
         case "entry-form":
             got = rng.choice(["extra", "drop", "bits"])
             if got == "extra":

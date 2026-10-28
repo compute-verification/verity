@@ -257,8 +257,8 @@ def test_a_calls_statement_opens_its_units_rows_at_its_tables_and_at_no_other_ca
     tp, digest, rng = P.evaluate(prog, HW.query(prog)), P.program_digest(prog), random.Random(7)
 
     def commit(value: str, rows: int, words: int) -> G.Registered:
-        return G.Registered.commit(digest, value, [[rng.randrange(1 << 16) for _ in range(words)] for _ in range(rows)],
-                                   schema=G.SCHEMA_V2)
+        return G.Registered.commit(W.THETA if value == "b/32" else digest, value,
+                                   [[rng.randrange(1 << 16) for _ in range(words)] for _ in range(rows)], schema=G.SCHEMA_V2)
 
     a = HW.table(prog, "a", 3, 2)
     assert a == HW.table(prog, "a", 4, 2) == "a/32@1"
@@ -274,7 +274,7 @@ def test_a_calls_statement_opens_its_units_rows_at_its_tables_and_at_no_other_ca
         assert file["format"] == G.READS_V1 and sorted(file["ports"]) == sorted(
             [f"a_k32_{i}" for i in range(R)] + [f"b_k32_{j}" for j in range(C)] + ["zy"])
         for port, e in file["ports"].items():
-            reg, dom = tabs[e["value"]], G.domain(digest, e["value"], e["words"], e["leaves"])
+            reg, dom = tabs[e["value"]], tabs[e["value"]].domain
             assert (e["leaves"], e["words"], e["domain"], e["row_schema"]) == (reg.leaves, reg.words,
                                                                                  dom.domain_id.hex(), G.SCHEMA_V2), port
             assert e[G.READS_FROM] == u0 and len(e["reads"]) == n and None not in e["reads"], port
@@ -390,8 +390,8 @@ def test_a_served_windows_call_tables_bind_its_open_root_and_the_weights_none():
     assert sorted(file["ports"]) == sorted(bare["ports"])
     for port, e in file["ports"].items():
         held = e["value"] == "b/32"
-        assert e["domain"] == G.domain(digest, e["value"], e["words"], e["leaves"],
-                                       window=None if held else window).domain_id.hex(), port
+        assert e["domain"] == (W.domain(e["value"], e["words"], e["leaves"]) if held else
+                               G.domain(digest, e["value"], e["words"], e["leaves"], window=window)).domain_id.hex(), port
         assert e["domain"] == Cr.domain_of(digest, window, e), port
         assert (e["domain"] == bare["ports"][port]["domain"]) == held, port
         assert {k: v for k, v in e.items() if k != "domain"} == {k: v for k, v in bare["ports"][port].items()
@@ -501,7 +501,8 @@ def test_under_a_windows_open_root_a_calls_file_opens_the_tables_committed_in_th
     u0, n = HW.call_units(prog)[c]
 
     def commit(value: str, rows: int, words: int, window: str | None) -> G.Registered:
-        return G.Registered.commit(digest, value, [[rng.randrange(1 << 16) for _ in range(words)] for _ in range(rows)],
+        return G.Registered.commit(W.THETA if value == "b/32" else digest, value,
+                                   [[rng.randrange(1 << 16) for _ in range(words)] for _ in range(rows)],
                                    schema=G.SCHEMA_V2, window=window)
 
     tabs = {a: commit(a, 2 * m, _words(32), w), zy: commit(zy, n, 3 * R * C, w), "b/32": commit("b/32", 24, _words(32), None)}
@@ -515,7 +516,8 @@ def test_under_a_windows_open_root_a_calls_file_opens_the_tables_committed_in_th
         assert e["domain"] == reg.domain.domain_id.hex(), port
         assert (e["domain"] == bare[port]["domain"]) == (e["value"] == "b/32"), port
         assert {k: v for k, v in e.items() if k != "domain"} == {k: v for k, v in bare[port].items() if k != "domain"}
-        assert bare[port]["domain"] == G.domain(digest, e["value"], e["words"], e["leaves"]).domain_id.hex(), port
+        assert bare[port]["domain"] == G.domain(W.THETA if e["value"] == "b/32" else digest, e["value"], e["words"],
+                                                e["leaves"]).domain_id.hex(), port
         for u in range(u0, u0 + n):
             p = CC.port_reads(e)[u]
             assert G.verify_read(reg.domain, reg.root, p, reg.bcs[p], reg.path(p), G.SCHEMA_V2), (port, u)
@@ -761,8 +763,8 @@ def test_a_drawn_leafs_file_marks_its_shared_rows_read_in_full_and_binds_its_win
                 assert {x: e[x] for x in partials} == partials
                 continue
             held = value == f"h1/w/b/{k}"
-            assert e["domain"] == G.domain(digest, value, e["words"], e["leaves"],
-                                           window=None if held else window).domain_id.hex(), port
+            assert e["domain"] == (W.domain(value, e["words"], e["leaves"]) if held else
+                                   G.domain(digest, value, e["words"], e["leaves"], window=window)).domain_id.hex(), port
             assert e["domain"] == Cr.domain_of(digest, window, e), port
             if logical == LL.RECEIPT:
                 assert (e["leaves"], e["words"]) == (HW.call_units(prog)[ci][1], tile_receipt.leaves // 16)
