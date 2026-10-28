@@ -114,7 +114,7 @@ theorem bF_switchVec (tr : Trace) (c : Claim) (m : ℕ) (hx : c.x.size = m - 6) 
   rw [FlockSoundness.Refine.getElem!_range_map _ hv, bF_bit_sumF _ (fun y => tr.z[128 * y + v]!) _ u hu,
     FlockLevel3.eqTable_size, Array.size_extract, Nat.min_self, hx, show m - 6 - 1 = m - 7 by omega]
 
-theorem sws_get (claims : Array Claim) (cs : Rs.Coins) (k : ℕ) (hk : k < claims.size) :
+theorem sws_get (claims : Array Claim) (cs : Rs.Challenges) (k : ℕ) (hk : k < claims.size) :
     (Rs.sws claims cs)[k]! =
       { gamma := cs.cg k, rpp := cs.rpp k, z := claims[k]!.x.extract 1 claims[k]!.x.size } := by
   rw [Rs.sws, FlockSoundness.Refine.getElem!_range_map _ hk, Rs.perClaim, pushes_get _ _ k hk, Rs.gamma,
@@ -136,7 +136,7 @@ theorem sum_reorder {K : Type} [CommSemiring K] (N n : ℕ) (c : ℕ → ℕ →
 
 /-- **Ring switching's claim is the packed table's**: at claims of `m − 6` coordinates,
 `Σ_y packed(y)·basisVals(y) = T`. -/
-theorem rsSum_eq (tr : Trace) (m : ℕ) (claims : Array Claim) (cs : Rs.Coins)
+theorem rsSum_eq (tr : Trace) (m : ℕ) (claims : Array Claim) (cs : Rs.Challenges)
     (hx : ∀ c ∈ claims, c.x.size = m - 6) :
     dot (packed tr m) (basisVals (Rs.sws claims cs) (m - 7)) = Rs.T tr claims cs := by
   have hxk : ∀ k < claims.size, claims[k]!.x.size = m - 6 := fun k hk => by
@@ -144,7 +144,7 @@ theorem rsSum_eq (tr : Trace) (m : ℕ) (claims : Array Claim) (cs : Rs.Coins)
     exact hx _ (Array.getElem_mem hk)
   have hrpp : ∀ k, (eqTable (cs.rpp k)).size = 128 := fun k => by
     rw [FlockLevel3.eqTable_size]
-    simp [Rs.Coins.rpp]
+    simp [Rs.Challenges.rpp]
   apply fOf_injective
   rw [fOf_dot_rng _ _ (2 ^ (m - 7)) (by simp [packed]), Rs.T,
     fOf_dot_rng _ _ claims.size (by simp [Rs.gamma])]

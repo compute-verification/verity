@@ -24,7 +24,7 @@ namespace ZcZ
 
 /-- **The masked zerocheck's sent bodies**, untagged: its two squeezes' frames (`rSkip`, `rOuter`), `z`'s squeeze frame
 after the padded `round1_ab` and `round1_c` (`t₄`), then residual round `i`'s after its padded message. -/
-def sends (lay : Zk.PadLayout) (h : Array F128) (m : ℕ) (digest cap root : ByteArray) (cs : Zc.Coins) (tr : Trace)
+def sends (lay : Zk.PadLayout) (h : Array F128) (m : ℕ) (digest cap root : ByteArray) (cs : Zc.Challenges) (tr : Trace)
     (t : Transcript) : List Claims.Msg :=
   Claims.toMsg (framed (t₁ digest cap root t) 2 6) :: Claims.toMsg (framed (t₂ digest cap root cs t) 2 (m - 13)) ::
     Claims.toMsg (framed (t₄ lay h m digest cap root cs tr t) 1 1) ::
@@ -34,7 +34,7 @@ def sends (lay : Zk.PadLayout) (h : Array F128) (m : ℕ) (digest cap root : Byt
           pF (msg lay h tr (m - 6) (cs.r m) cs.z cs.ρ i).2 (pF (msg lay h tr (m - 6) (cs.r m) cs.z cs.ρ i).1
             (loopT lay h m cs tr (t₅ lay h m digest cap root cs tr t) i).pending)⟩ 1 1)
 
-theorem sends_length (lay : Zk.PadLayout) (h : Array F128) (m : ℕ) (digest cap root : ByteArray) (cs : Zc.Coins)
+theorem sends_length (lay : Zk.PadLayout) (h : Array F128) (m : ℕ) (digest cap root : ByteArray) (cs : Zc.Challenges)
     (tr : Trace) (t : Transcript) : (sends lay h m digest cap root cs tr t).length = 3 + (m - 6) := by
   simp [sends]
   omega

@@ -27,7 +27,7 @@ set_option synthInstance.maxHeartbeats 1000000
 namespace FlockComplete.Replay
 
 /-- **The switched claims read only the claims' points.** -/
-theorem rsSws_congr_x {A B : Array _root_.Flock.Claim} (cs : Rs.Coins) (hsz : A.size = B.size)
+theorem rsSws_congr_x {A B : Array _root_.Flock.Claim} (cs : Rs.Challenges) (hsz : A.size = B.size)
     (hx : ∀ k : ℕ, A[k]!.x = B[k]!.x) : Rs.sws A cs = Rs.sws B cs := by
   have hp : Rs.perClaim A cs = Rs.perClaim B cs := by
     unfold Rs.perClaim

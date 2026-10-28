@@ -28,7 +28,7 @@ namespace RecDeploy
 
 open Flock
 open FlockDeploy (Coin)
-open Claims.ZKMal (Layout ZKmalAt SeqTape progOf progOf_of Proto)
+open Claims.ZKMal (RunParts ZKmalAt SeqTape progOf progOf_of Proto)
 open scoped NNReal
 
 variable (IV : Claims.Verifier Coin) (b : Brings)
@@ -146,7 +146,7 @@ namespace RecDeploy
 
 open Flock
 open FlockDeploy (Coin)
-open Claims.ZKMal (Layout ZKmalAt SeqTape progOf progOf_of Proto)
+open Claims.ZKMal (RunParts ZKmalAt SeqTape progOf progOf_of Proto)
 open FlockSoundness.Discharge
 open scoped NNReal
 

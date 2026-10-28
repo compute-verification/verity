@@ -25,7 +25,7 @@ variable (resp : ℕ → Claims.Msg) (st : Setup) (tr : Trace) (L : ℕ)
 def zcR : ZcOut := Zc.out st.m (Zc.coinsAt resp L) tr
 
 /-- Its lincheck's coins, from the bodies after the zerocheck's. -/
-def lcCoinsR : Lc.Coins := Lc.coinsAt resp (L + 3 + (st.m - 6)) (st.fold.kLog - 6)
+def lcCoinsR : Lc.Challenges := Lc.coinsAt resp (L + 3 + (st.m - 6)) (st.fold.kLog - 6)
 
 /-- Its lincheck output. -/
 def lcR : LcOut := Lc.out st.fold st.m tr (zcR resp st tr L) (lcCoinsR resp st L)
@@ -35,7 +35,7 @@ def claimsR (extras : Array Claim) : Array Claim :=
   abcClaims st.m st.kLog (zcR resp st tr L) (lcR resp st tr L) ++ extras
 
 /-- Its ring switch's coins, from the bodies after the lincheck's. -/
-def rsCoinsR (extras : Array Claim) : Rs.Coins :=
+def rsCoinsR (extras : Array Claim) : Rs.Challenges :=
   Rs.coinsAt resp (L + 3 + (st.m - 6) + 3 + (st.fold.kLog - 6)) (2 + extras.size)
 
 /-- A masked rep's sends before its Ligerito. -/

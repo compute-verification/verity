@@ -265,7 +265,7 @@ end Rs
 
 namespace Lc
 
-theorem zrT_foldl (c : CircuitFold) (m : ℕ) (tr : Trace) (zc : ZcOut) (cs : Coins) (j : ℕ) :
+theorem zrT_foldl (c : CircuitFold) (m : ℕ) (tr : Trace) (zc : ZcOut) (cs : Challenges) (j : ℕ) :
     (pushes cs.τ j).foldl (fun acc t => halve t acc) (zr0 c m tr zc) = zrT c m tr zc cs j := by
   induction j with
   | zero => rfl
@@ -315,7 +315,7 @@ theorem zr0_hcol (S : Model.Statement) (c : CircuitFold) (hK : c.kLog = S.kLog) 
 columns is the evaluation of the claim `(L(r'), ρ_in' ‖ ρ_out)` (`ρ_in'` the round coins, last first). -/
 theorem ab_eval (S : Model.Statement) (c : CircuitFold) (hK : c.kLog = S.kLog) (tr : Trace) (zc : ZcOut)
     (hrho : zc.rho.size = S.m - 6) (w : Model.Witness S.m)
-    (hz : ∀ a : Fin (2 ^ S.m), Zc.bitF tr.z a.val = ((w a).val : 𝔽)) (cs : Coins) (v : F128) :
+    (hz : ∀ a : Fin (2 ^ S.m), Zc.bitF tr.z a.val = ((w a).val : 𝔽)) (cs : Challenges) (v : F128) :
     fOf (dot (skipWeights (cs.cf 0)) (zrT c S.m tr zc cs (c.kLog - 6))) =
       (Discharge.Composed.RingSwitch.claimOf S.m
         { value := v, skip := skipWeights (cs.cf 0),
@@ -342,7 +342,7 @@ end Lc
 
 /-- **Zerocheck's claim is the witness's extension at its point**: `P_c(ζ)` of the prover's `round1_c` is the
 evaluation of the claim `(L(ζ), r)`. -/
-theorem Zc.c_claim_eval {m : ℕ} (hm : 13 ≤ m) (zcs : Zc.Coins) (tr : Trace) (w : Model.Witness m)
+theorem Zc.c_claim_eval {m : ℕ} (hm : 13 ≤ m) (zcs : Zc.Challenges) (tr : Trace) (w : Model.Witness m)
     (hz : ∀ a : Fin (2 ^ m), Zc.bitF tr.z a.val = ((w a).val : 𝔽)) (v : F128) :
     fOf (Zc.out m zcs tr).vC =
       (Discharge.Composed.RingSwitch.claimOf m
@@ -378,7 +378,7 @@ theorem mem_of_forall₂ {α β γ : Type} {P : α → β → γ → Prop} {pts 
 statement, at link points of `m_pts` coordinates. -/
 theorem claims_switch (st : Stmt) (hwf : StmtWF st) (hrw : RegionsWF st) (hm : 22 ≤ st.m) (w : Model.Witness st.m)
     (hsat : (stmtOf st hwf (regionsOf st)).Satisfies w) (tr : Trace)
-    (hz : ∀ a : Fin (2 ^ st.m), Zc.bitF tr.z a.val = ((w a).val : 𝔽)) (zcs : Zc.Coins) (cs : Lc.Coins)
+    (hz : ∀ a : Fin (2 ^ st.m), Zc.bitF tr.z a.val = ((w a).val : 𝔽)) (zcs : Zc.Challenges) (cs : Lc.Challenges)
     (points : Array (Array F128)) (hpts : ∀ p ∈ points.toList, p.size = st.mPts) :
     ∀ c ∈ abcClaims st.m st.c.kLog (Zc.out st.m zcs tr) (Lc.out st.circuitFold st.m tr (Zc.out st.m zcs tr) cs) ++
         val (st.extraClaims points), dot (wOf c) (switchVec tr c) = c.value := by

@@ -20,14 +20,14 @@ open Flock Transcript
 namespace Lc
 
 /-- The coins the prover's lincheck reads: `α`'s, `β`'s, round `j`'s, and `r'`'s. -/
-structure Coins where
+structure Challenges where
   ca : ℕ → F128
   cb : ℕ → F128
   cr : ℕ → ℕ → F128
   cf : ℕ → F128
 
 /-- Round `j`'s challenge. -/
-def Coins.τ (cs : Coins) (j : ℕ) : F128 := cs.cr j 0
+def Challenges.τ (cs : Challenges) (j : ℕ) : F128 := cs.cr j 0
 
 /-- The witness's columns folded on the outer variables: `Σ_o eq(ρ_out, o)·z[col + 2^kLog·o]` at `col`. -/
 def zr0 (c : CircuitFold) (m : ℕ) (tr : Trace) (zc : ZcOut) : Array F128 :=
@@ -36,40 +36,40 @@ def zr0 (c : CircuitFold) (m : ℕ) (tr : Trace) (zc : ZcOut) : Array F128 :=
       if tr.z[col + 2 ^ c.kLog * o]! then (eqTable (zc.rho.extract (c.kLog - 6) (m - 6)))[o]! else 0
 
 /-- The circuit's columns with `β` at the pin, halved at the first `i` challenges. -/
-def combT (c : CircuitFold) (full : Array F128) (cs : Coins) : ℕ → Array F128
+def combT (c : CircuitFold) (full : Array F128) (cs : Challenges) : ℕ → Array F128
   | 0 => full.modify c.pin (· + cs.cb 0)
   | i + 1 => halve (cs.τ i) (combT c full cs i)
 
 /-- The witness's folded columns, halved at the first `i` challenges. -/
-def zrT (c : CircuitFold) (m : ℕ) (tr : Trace) (zc : ZcOut) (cs : Coins) : ℕ → Array F128
+def zrT (c : CircuitFold) (m : ℕ) (tr : Trace) (zc : ZcOut) (cs : Challenges) : ℕ → Array F128
   | 0 => zr0 c m tr zc
   | i + 1 => halve (cs.τ i) (zrT c m tr zc cs i)
 
 /-- Round `i`'s message `(q(1), q(∞))`. -/
-def msg (c : CircuitFold) (m : ℕ) (tr : Trace) (zc : ZcOut) (full : Array F128) (cs : Coins) (i : ℕ) : F128 × F128 :=
+def msg (c : CircuitFold) (m : ℕ) (tr : Trace) (zc : ZcOut) (full : Array F128) (cs : Challenges) (i : ℕ) : F128 × F128 :=
   let a := combT c full cs i
   let z := zrT c m tr zc cs i
   (sumF (a.size / 2) fun k => a[k + a.size / 2]! * z[k + a.size / 2]!,
     sumF (a.size / 2) fun k => (a[k]! + a[k + a.size / 2]!) * (z[k]! + z[k + a.size / 2]!))
 
 /-- **The prover's lincheck proof.** -/
-def proof (c : CircuitFold) (m : ℕ) (tr : Trace) (zc : ZcOut) (full : Array F128) (cs : Coins) : LincheckProof :=
+def proof (c : CircuitFold) (m : ℕ) (tr : Trace) (zc : ZcOut) (full : Array F128) (cs : Challenges) : LincheckProof :=
   ⟨pushes (msg c m tr zc full cs) (c.kLog - 6), zrT c m tr zc cs (c.kLog - 6)⟩
 
 /-- **The prover's `LcOut`.** -/
-def out (c : CircuitFold) (m : ℕ) (tr : Trace) (zc : ZcOut) (cs : Coins) : LcOut :=
+def out (c : CircuitFold) (m : ℕ) (tr : Trace) (zc : ZcOut) (cs : Challenges) : LcOut :=
   { w := dot (skipWeights (cs.cf 0)) (zrT c m tr zc cs (c.kLog - 6)), rPrime := cs.cf 0,
     rIn := (pushes cs.τ (c.kLog - 6)).reverse }
 
 /-- The label absorbed. -/
 def t₁ (t : Transcript) : Transcript := ⟨t.rounds, t.k, pLabel "flock-lincheck-v0" t.pending⟩
 
-def t₂ (cs : Coins) (t : Transcript) : Transcript := afterSq (t₁ t) 1 1 cs.ca
+def t₂ (cs : Challenges) (t : Transcript) : Transcript := afterSq (t₁ t) 1 1 cs.ca
 
-def t₃ (cs : Coins) (t : Transcript) : Transcript := afterSq (t₂ cs t) 1 1 cs.cb
+def t₃ (cs : Challenges) (t : Transcript) : Transcript := afterSq (t₂ cs t) 1 1 cs.cb
 
 /-- The prover's transcript at the rounds, from `t₃`: round `i` absorbs its message and squeezes one coin. -/
-def loopT (c : CircuitFold) (m : ℕ) (tr : Trace) (zc : ZcOut) (full : Array F128) (cs : Coins) (t : Transcript) :
+def loopT (c : CircuitFold) (m : ℕ) (tr : Trace) (zc : ZcOut) (full : Array F128) (cs : Challenges) (t : Transcript) :
     ℕ → Transcript
   | 0 => t₃ cs t
   | i + 1 =>
@@ -78,18 +78,18 @@ def loopT (c : CircuitFold) (m : ℕ) (tr : Trace) (zc : ZcOut) (full : Array F1
     afterSq ⟨T.rounds, T.k, pF g.2 (pF g.1 T.pending)⟩ 1 1 (cs.cr i)
 
 /-- `z_partial` absorbed. -/
-def t₄ (c : CircuitFold) (m : ℕ) (tr : Trace) (zc : ZcOut) (full : Array F128) (cs : Coins) (t : Transcript) :
+def t₄ (c : CircuitFold) (m : ℕ) (tr : Trace) (zc : ZcOut) (full : Array F128) (cs : Challenges) (t : Transcript) :
     Transcript :=
   let T := loopT c m tr zc full cs t (c.kLog - 6)
   ⟨T.rounds, T.k, pSlice (zrT c m tr zc cs (c.kLog - 6)) T.pending⟩
 
 /-- **The prover's transcript after lincheck**: `r'` squeezed. -/
-def tEnd (c : CircuitFold) (m : ℕ) (tr : Trace) (zc : ZcOut) (full : Array F128) (cs : Coins) (t : Transcript) :
+def tEnd (c : CircuitFold) (m : ℕ) (tr : Trace) (zc : ZcOut) (full : Array F128) (cs : Challenges) (t : Transcript) :
     Transcript :=
   afterSq (t₄ c m tr zc full cs t) 1 1 cs.cf
 
 /-- The coins of the replies to the sends from the `L`-th on, with `n` rounds. -/
-def coinsAt (resp : ℕ → Claims.Msg) (L n : ℕ) : Coins :=
+def coinsAt (resp : ℕ → Claims.Msg) (L n : ℕ) : Challenges :=
   ⟨coinOf (resp L), coinOf (resp (L + 1)), fun j => coinOf (resp (L + 2 + j)), coinOf (resp (L + 2 + n))⟩
 
 end Lc
@@ -143,7 +143,7 @@ theorem lincheckP_go (resp : ℕ → Claims.Msg) (c : CircuitFold) (m : ℕ) (tr
 
 namespace Lc
 
-variable {c : CircuitFold} {m : ℕ} {tr : Trace} {zc : ZcOut} {full : Array F128} {cs : Coins}
+variable {c : CircuitFold} {m : ℕ} {tr : Trace} {zc : ZcOut} {full : Array F128} {cs : Challenges}
 
 theorem loopT_k (t : Transcript) (i : ℕ) : (loopT c m tr zc full cs t i).k = t.k + 2 + i := by
   induction i with
@@ -215,7 +215,7 @@ end Lc
 stops where the prover's transcript did, if the circuit fold at the prover's coins is `comb` of width 64 and the rounds'
 claim from `α·v_A + v_B + β` ends at `dot comb z_partial`. -/
 theorem lincheckWith_of (hs : Hashes V) (c : CircuitFold) (m : ℕ) (tr : Trace) (zc : ZcOut) (full : Array F128)
-    (cs : Lc.Coins) (t : Transcript) (hk : t.k = t.rounds.size) {R : Array Round}
+    (cs : Lc.Challenges) (t : Transcript) (hk : t.k = t.rounds.size) {R : Array Round}
     (hR : Agrees R (tEnd c m tr zc full cs t).rounds t.k) {comb : Array F128}
     (hcomb : c.folded (cs.ca 0) (cs.cb 0) (skipWeights zc.z) (zc.rho.extract 0 (c.kLog - 6))
       (pushes cs.τ (c.kLog - 6)) = .ok comb)
@@ -259,7 +259,7 @@ theorem lincheckWith_of (hs : Hashes V) (c : CircuitFold) (m : ℕ) (tr : Trace)
     have e : R[t.k + 2 + i]! = r := by rw [getElem!_def, hr]
     have hpi : p.rounds[i]! = msg c m tr zc full cs i := pushes_get _ _ i hi
     rw [e, hN, hC, hb, hpi]
-    refine ⟨rfl, by simp [sent, Coins.τ, Array.range_succ_eq_map], ?_⟩
+    refine ⟨rfl, by simp [sent, Challenges.τ, Array.range_succ_eq_map], ?_⟩
     simp only [sent, framed, loopT_pending]
   have hcoin : ∀ i < n, (R[t.k + 2 + i]!).coins.getD 0 0 = (#[cs.τ i] : Array F128).getD 0 0 := by
     intro i hi
@@ -333,7 +333,7 @@ def _root_.FlockComplete.Run.zcOut (o : Run H rel) (i r : ℕ) : ZcOut :=
   Zc.out o.tabs[i]!.m (o.zcCoins i r) (o.trace i)
 
 /-- Table `i`'s rep `r`'s lincheck coins: the replies from the first send after zerocheck's on. -/
-def _root_.FlockComplete.Run.lcCoins (o : Run H rel) (i r : ℕ) : Lc.Coins :=
+def _root_.FlockComplete.Run.lcCoins (o : Run H rel) (i r : ℕ) : Lc.Challenges :=
   Lc.coinsAt o.resp (repStart o.spec o.sts (2 * i + r) + 3 + (o.tabs[i]!.m - 6)) (o.tabs[i]!.fold.kLog - 6)
 
 /-- The statement's circuit fold at the lincheck's `α`. -/

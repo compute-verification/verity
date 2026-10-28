@@ -81,7 +81,7 @@ variable (F : VStarFamily T CT cls regs sch L Reg Cm Reg' Reg₂) (dg : ByteArra
 proof, unit `unO ℓ r j`'s row `nIn + 1` (V*'s `acc_out`, `OutsLaid`) is a registered read of a port with registration
 `s`, at the row after the opening's (rec_outer.py:238, 242: `acc_out` reads `rec-acc`'s row `p + 1`). Its registration
 and position are `outRead_drawn`'s where `s` is `acc0`'s and `accReads`' rows are the chain's. -/
-def OutKeysS (s : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → Site) : Prop :=
+def OutKeysS (s : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → RegFields) : Prop :=
   ∀ R ω t R₂ τ o, Accepted (I := ℐ) F.zs dg N k Rw R ω t R₂ τ o → ∀ r : Fin 2, ∀ ℓ < F.sh.sched.levels.size,
     ∀ j < F.q ℓ, ∃ hq : HmOut.nIn (F.Vs (F.sessO ℓ)).c + 1 < (F.Vs (F.sessO ℓ)).c.ports.size,
       (F.zs R ω t R₂ (F.sessO ℓ)).rd.isRead (.inl (F.unO ℓ r j, ⟨_, hq⟩)) ∧
@@ -92,7 +92,7 @@ def OutKeysS (s : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → Site) 
 /-- Obligation: discharged where the verifier checked the level's statement (`checkAcc`, `checkAccReads`:
 `outRead_drawn`, `accPos_of_checked`). **Each opening's `acc_out` row is read at registration `s`, one past its unit's
 row of `accReads`** (`u / q · n + Σ_{ℓ' < ℓ} q + u % q`). -/
-def OutReadsS (s : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → Site) : Prop :=
+def OutReadsS (s : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → RegFields) : Prop :=
   ∀ R ω t R₂ τ o, Accepted (I := ℐ) F.zs dg N k Rw R ω t R₂ τ o → ∀ r : Fin 2, ∀ ℓ < F.sh.sched.levels.size,
     ∀ j < F.q ℓ, ∃ hq : HmOut.nIn (F.Vs (F.sessO ℓ)).c + 1 < (F.Vs (F.sessO ℓ)).c.ports.size,
       (F.zs R ω t R₂ (F.sessO ℓ)).rd.isRead (.inl (F.unO ℓ r j, ⟨_, hq⟩)) ∧
@@ -104,7 +104,7 @@ def OutReadsS (s : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → Site)
 `r · q + j` (`hunO`, within the level's `2 q` instances, `hnv`), whose row is the opening's chain position
 (`accRow_opening`). -/
 theorem outKeysS_of_reads (hnv : ∀ ℓ < F.sh.sched.levels.size, 2 * F.q ℓ ≤ (F.Vs (F.sessO ℓ)).nv)
-    {s : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → Site} (h : OutReadsS F dg N k Rw s) : OutKeysS F dg N k Rw s := by
+    {s : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → RegFields} (h : OutReadsS F dg N k Rw s) : OutKeysS F dg N k Rw s := by
   intro R ω t R₂ τ o ha r ℓ hℓ j hj
   obtain ⟨hq, hrd, hsite, hat⟩ := h R ω t R₂ τ o ha r ℓ hℓ j hj
   refine ⟨hq, hrd, hsite, ?_⟩
@@ -120,7 +120,7 @@ each level's circuit has V*'s output layout at copy 0 (`hlaid`) and each opening
 registration `s` at its next chain position (`OutKeysS`), the layer's `acc_out` is the first two elements of `V`'s row
 there, wherever the registrant's rows of `s` are `V`'s (`AccRowsAreS`). -/
 theorem accOutL_of_keysS (hU : F.HOpenUnits) (V : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → ℕ → Array F128)
-    (s : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → Site) (hacc : F.AccRowsAreS dg N k Rw V s)
+    (s : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → RegFields) (hacc : F.AccRowsAreS dg N k Rw V s)
     (hlaid : ∀ ℓ < F.sh.sched.levels.size, OutsLaid (F.Vs (F.sessO ℓ)).c 0) (hk : OutKeysS F dg N k Rw s) :
     F.AccOutL dg N k Rw V := by
   intro R ω t R₂ τ o h r ℓ hℓ j hj i hi

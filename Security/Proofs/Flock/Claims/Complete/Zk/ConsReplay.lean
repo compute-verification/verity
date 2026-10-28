@@ -104,7 +104,7 @@ proof is the plain one masked by the pads (`ZcZ.proof`, `LcZ.proof`); the plain 
 carry the prover's coins at plain's sends, which live coins give (the coin at a send is the send's reply). -/
 theorem replay_rows_zero_honest (st : Setup) (lay : Zk.PadLayout) (h : Array F128) (p : Proof) (root : ByteArray)
     (hm : 14 ≤ st.m) {t t' : Transcript} {rp : Zk.Replayed} (hrun : Zk.replay st lay p root t = .ok (rp, t'))
-    (c : CircuitFold) (tr : Trace) (zcs : Zc.Coins) (cs : Lc.Coins) (full : Array F128)
+    (c : CircuitFold) (tr : Trace) (zcs : Zc.Challenges) (cs : Lc.Challenges) (full : Array F128)
     (hfd : st.fold = c) (hk : st.kLog = c.kLog)
     (hpz : p.zerocheck = ZcZ.proof lay h st.m zcs tr)
     (hpl : p.lincheck = LcZ.proof lay h c st.m tr (Zc.out st.m zcs tr) full cs)

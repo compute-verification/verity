@@ -35,7 +35,7 @@ theorem Agrees.self (P : Array Round) (k₀ : ℕ) : Agrees P P k₀ :=
   fun j h _ => ⟨P[j], Array.getElem?_eq_getElem h, rfl, rfl, rfl⟩
 
 theorem InZ.tEnd_size (lay : Zk.PadLayout) (p : PadsZk) (finalC : F128) (cons : Array (String × Zk.Lin))
-    (h : ByteArray → ByteArray) (cs : InZ.Coins) (t : Transcript) :
+    (h : ByteArray → ByteArray) (cs : InZ.Challenges) (t : Transcript) :
     (InZ.tEnd lay p finalC cons h cs t).rounds.size = t.rounds.size + 4 := by
   simp [InZ.tEnd, InZ.t₇, InZ.t₆, InZ.t₅, InZ.t₄, InZ.t₃, InZ.t₂, InZ.t₁, afterSq]
 

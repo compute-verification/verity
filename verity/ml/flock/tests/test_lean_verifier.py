@@ -755,15 +755,15 @@ def test_qcall_and_input_bindings_agree_with_the_reference(tmp_path):
 @pytest.mark.slow
 @pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
 def test_merkle_collision_is_not_met_by_a_split_string(tmp_path):
-    """`MerkleScheme.Collision` is a collision of the hash, not of how its input is split: one byte string split two ways
+    """`MerkleScheme.HasCollision` is a collision of the hash, not of how its input is split: one byte string split two ways
     (`[0] ‖ []` against `[] ‖ [0]`) gives one node, and must not count, since the children are not of the digest's width
     (PR #146's red-team review). The same witness for `Sha256.Collision` needs two different inputs, which it does not have."""
     build_proofs_verifier()
     for goal, witness in [
-        ('(MerkleScheme.sha256 "flock-leaf/sha256-unsalted").Collision',
+        ('(MerkleScheme.sha256 "flock-leaf/sha256-unsalted").HasCollision',
          "⟨.node (ByteArray.mk #[0]) ByteArray.empty ByteArray.empty (ByteArray.mk #[0]), by simp only [MerklePair.Collides]; "
          "exact ⟨by decide, by decide, by decide, by decide, by decide, rfl⟩⟩"),
-        ("MerkleScheme.hm96Sha512.Collision",
+        ("MerkleScheme.hm96Sha512.HasCollision",
          "⟨.node (ByteArray.mk #[0]) ByteArray.empty ByteArray.empty (ByteArray.mk #[0]), by simp only [MerklePair.Collides]; "
          "exact ⟨by decide, by decide, by decide, by decide, by decide, rfl⟩⟩"),
     ]:
