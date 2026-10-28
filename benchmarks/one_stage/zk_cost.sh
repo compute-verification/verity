@@ -8,7 +8,8 @@
 # (on vy-nebius-2 a guest job adds --preemptible; one arm a run, ZK_ARMS=fw, takes about 3.5 h with its verification, the builds cached)
 # env: ZK_KS=4096,14336  ZK_SIZES=1,8,64,512  ZK_DRAWS=1,8,64,c  ZK_ARMS=fw,nofw  ZK_COLD=2  ZK_RUNS=3  ZK_WARM=1
 #      LEASE_MAX_MIN=30 (one GPU lease a point)  ZK_SM (the build's SM; default the GPU's compute_cap, else 120)
-#      CUDA_TK (a toolkit the node's driver runs, such as an H200 node's /usr/local/cuda-13.0; default CUDA 13.3)
+#      CUDA_TK (a CUDA 13.3 toolkit, whose ptxas the kernels' clmad needs: an H200 node's 13.0 fails; default
+#      /usr/local/cuda-13.3, else apt's 13.3 packages unpacked under FLOCK_WORK)
 #      FLOCK_WORK=/workspace/jobs/proof-throughput (the CUDA prover's build and venv, as proof_throughput's job.sh keeps them)
 #      PT_WORK=/workspace/cache/proof-throughput (the Lean verifier's build, as its verify.sh keeps it)
 # Kept in $OUT: the records (stage, prove and verify .jsonl), the fit (fit.json, fit.md, observations.json) and the logs;
