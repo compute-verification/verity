@@ -115,14 +115,14 @@ GPU machine.
 
 | Demo | What it serves and audits | Command | Details |
 | --- | --- | --- | --- |
-| The H200 demo | A fixed multi-query attention shape on one H200, every proof block's values committed. It runs sampled proofs, remote's sampled-proofs half: live coins draw proof blocks, which C-Flock `--zk` proves and the Lean verifier checks. Its other pieces are only a skeleton on fixture coins, and the demo claims none of them: PoUS and network certification (onsite's subprotocols), and the bandwidth audit over PoUS's store and memory wipes (subprotocols of neither composite yet). | `verity example h200` | `demos/h200/README.md`, `demos/h200/interfaces/README.md` |
-| vLLM | Llama-3.2-1B in bf16, served by vLLM on one RTX PRO 6000 through the committing endpoint. It runs sampled proofs, remote's sampled-proofs half: live coins draw proof blocks, which C-Flock `--zk` proves and the Lean verifier checks. | `verity example vllm` | `demos/vllm/README.md` |
-| Lifecycle | Both composites, onsite and remote, stepped through one monitoring period on CPU in about 2 s: a toy two-layer int8 model, every party simulated in one process, a labelled stand-in for C-Flock's prover, and the verdict by the composition's Python mirror, with every deviation it lists refused. The only example that steps through the whole remote composite. It runs; nothing about it is proved. | `verity example lifecycle` | `demos/lifecycle/README.md` |
+| The H200 demo | A fixed multi-query attention shape on one H200, every proof block's values committed. It runs sampled proofs, remote's sampled-proofs half: live coins draw proof blocks, which C-Flock `--zk` proves and the Lean verifier checks. Its other pieces are only a skeleton on fixture coins, and the demo claims none of them: PoUS and network certification (onsite's subprotocols), and the bandwidth audit over PoUS's store and memory wipes (subprotocols of neither composite yet). | `verity demo h200` | `demos/h200/README.md`, `demos/h200/interfaces/README.md` |
+| vLLM | Llama-3.2-1B in bf16, served by vLLM on one RTX PRO 6000 through the committing endpoint. It runs sampled proofs, remote's sampled-proofs half: live coins draw proof blocks, which C-Flock `--zk` proves and the Lean verifier checks. | `verity demo vllm` | `demos/vllm/README.md` |
+| Lifecycle | Both composites, onsite and remote, stepped through one monitoring period on CPU in about 2 s: a toy two-layer int8 model, every party simulated in one process, a labelled stand-in for C-Flock's prover, and the verdict by the composition's Python mirror, with every deviation it lists refused. The only demo that steps through the whole remote composite. It runs; nothing about it is proved. | `verity demo lifecycle` | `demos/lifecycle/README.md` |
 | Full utilization | An 8B model's linear layers in s8 at M = 16,384 on one H200, with PoUW crediting the work through Dither's no-fold receipt. No runner yet. | none yet | `demos/dither_full_util/README.md` |
 
 The remote protocol's verifier, `remote check`, has no run of record yet; its first is due Wed 28 Oct, 11 AM PDT.
-`verity example lifecycle` is the only example that steps through the whole remote composite, with a stand-in prover;
-`verity example vllm` and `verity example h200` each run remote's sampled-proofs half for real, and PoUW's half has no
+`verity demo lifecycle` is the only demo that steps through the whole remote composite, with a stand-in prover;
+`verity demo vllm` and `verity demo h200` each run remote's sampled-proofs half for real, and PoUW's half has no
 runner yet ([the remote protocol's demo](verity/core/protocols/remote/README.md#the-demo)).
 
 The prover's side serves and proves. The auditor's side runs the verifier, the challenger that draws the live coins,

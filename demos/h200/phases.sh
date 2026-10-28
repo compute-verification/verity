@@ -4,7 +4,7 @@
 # Demo A is not one command: it is eight runs, each phase's output the next one's input, the coin drawn only after the
 # registration is in the challenger's ledger. Each phase below starts its job by the run recorder (`research run`) on its
 # machine (or, for `register`, here on the CPU) with the variables it names; --dry-run prints the command and starts
-# nothing, and further FLAGs go to the recorder. Each phase's run of record is in example.toml's `runs`:
+# nothing, and further FLAGs go to the recorder. Each phase's run of record is in demo.toml's `runs`:
 #   commit    the step on the H200 under a fresh salt secret kept on the node: 32 steps at batch 512, every op's output
 #             committed, roots.json out (m3proper_job.sh PHASE=commit)
 #   weights   the registration of the 733 seeded INT8 weights under the served Program, its 0600 witness kept on the

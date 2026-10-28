@@ -11,6 +11,6 @@ it decides them in C-Flock `--zk` and Lean. The figure the run reports is ε, th
 certified, with its terms: model slack, idle pipes, ε_skip at δ = 1%, and exchanged bits. Beside ε it reports γ and a
 refused negative.
 
-It runs nothing yet (`example.toml`: `run` `moved`, read from its `level = 0`): its runner isn't on `main`, so
-`verity example dither_full_util` has nothing to run, and no run of record exists. When the H200's run of record exists,
-its id goes in `example.toml`, and a `run.sh` that calls the runner in place makes it `runs`.
+It runs nothing yet (`demo.toml`: `run` `moved`, read from its `level = 0`): its runner isn't on `main`, so
+`verity demo dither_full_util` has nothing to run, and no run of record exists. When the H200's run of record exists,
+its id goes in `demo.toml`, and a `run.sh` that calls the runner in place makes it `runs`.

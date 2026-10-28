@@ -19,7 +19,7 @@
 # varied requests (network-accounting's traffic, `serve_load.py --varied`), each numbered under a fresh release run and
 # sent up to the jitter late, then `tools/admit_rows_check.py` over the serve dir: every window's first rows must be in
 # admission order, else the endpoint stops (exit 14). After UNTIL the check runs again over everything served.
-# `verity example vllm serve` (run.sh) starts it where placement.toml's [run.serve] says, on one leased GPU, with the node's VENV,
+# `verity demo vllm serve` (run.sh) starts it where placement.toml's [run.serve] says, on one leased GPU, with the node's VENV,
 # CUDA_HOME, HF_HOME, HIDDEN_SO and NORM_TAP_SO, the run's SERVE_ROOT, and the workload's REPO, REV and ROW (the Commit of record's
 # workload dir) as its environment; --env PORT=... and --env UNTIL=... after `serve` change the run's own. Windows are sealed off the engine loop and close at WINDOW_GB committed; the server itself also refuses to start, and later
 # stops taking requests, below DISK_FLOOR_GB free on the serve dir's filesystem, and copies its records into $OUT after each
@@ -36,7 +36,7 @@ set -uo pipefail
 OUT=${OUT:-${RESEARCH_RUN_DIR:-.}/out}; mkdir -p "$OUT"
 PORT=${PORT:-18084} UNTIL=${UNTIL:-13:30} ADMIT=${ADMIT:-arrival} MAX_MODEL_LEN=${MAX_MODEL_LEN:-512} BURSTS=${BURSTS:-8} PER_BURST=${PER_BURST:-4} CAP=${CAP:-8388608}
 for v in REPO REV ROW HIDDEN_SO NORM_TAP_SO VENV CUDA_HOME HF_HOME SERVE_ROOT; do
-  [ -n "${!v:-}" ] || { echo "serve.sh: no $v: start it with \`verity example vllm serve\` (demos/vllm/run.sh)"; exit 2; }
+  [ -n "${!v:-}" ] || { echo "serve.sh: no $v: start it with \`verity demo vllm serve\` (demos/vllm/run.sh)"; exit 2; }
 done
 TREE=$PWD
 ROOT=$SERVE_ROOT
