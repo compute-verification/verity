@@ -68,8 +68,14 @@ import zipfile
 import zlib
 from pathlib import Path
 
-#: the system python3 of an exit before chain_record's setup may have no numpy: `Finder` then scans in pure Python
-np = importlib.import_module("numpy") if importlib.util.find_spec("numpy") else None
+#: the system python3 of an exit before chain_record's setup may have no numpy: `Finder` then scans in pure Python.
+#: numpy's import starts its BLAS threads, which start with SIGTERM blocked: a SIGTERM the kernel gave one of them would
+#: reach the guard only once the main thread's read returned, however long that read blocks.
+_mask = signal.pthread_sigmask(signal.SIG_BLOCK, {signal.SIGTERM})
+try:
+    np = importlib.import_module("numpy") if importlib.util.find_spec("numpy") else None
+finally:
+    signal.pthread_sigmask(signal.SIG_SETMASK, _mask)
 
 DECLARED = Path(__file__).resolve().with_name("leak_guard.json")
 SCHEMA = "network-traces/leak-guard/v1"

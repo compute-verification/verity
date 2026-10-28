@@ -312,8 +312,10 @@ def _guard_rc(tmp: Path, run: Path, *extra: str) -> int:
 
 
 def test_a_guard_ended_by_sigterm_leaves_out_without_the_held_files(tmp_path):
-    """A slow guard (here held reading its gates, a FIFO the test holds open) ended by SIGTERM, as a job's time limit
-    ends it, exits 143 and releases nothing: out/ holds none of the held outputs, which stay in the hold."""
+    """A slow guard (here held reading its gates, a FIFO the test closes once it has signalled, so a signal that lands
+    just before the guard's read is seen when the read returns) ended by SIGTERM, as a job's time limit ends it, exits
+    143 and releases nothing: out/ holds none of the held outputs, which stay in the hold. Without the signal the
+    empty gate would be refused (exit 2)."""
     _gate(tmp_path / "G" / "g1")
     run, out, hold = _held(tmp_path)
     fifo = tmp_path / "fetch.tgz"
@@ -323,7 +325,7 @@ def test_a_guard_ended_by_sigterm_leaves_out_without_the_held_files(tmp_path):
                          stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
     with open(fifo, "wb"):
         p.send_signal(signal.SIGTERM)
-        said, _ = p.communicate()
+    said, _ = p.communicate()
     assert p.returncode == 143, said
     assert "SIGTERM ended the guard: nothing more released" in said
     assert not list(out.iterdir()) and (hold / "report.json").is_file() and (hold / "n2" / "planted.json").is_file()
@@ -409,8 +411,8 @@ def test_chain_record_withholds_the_record_on_a_signal(tmp_path):
 
 def test_chain_record_releases_nothing_when_sigterm_ends_its_guard(tmp_path):
     """A timeout's SIGTERM to the job's process group while the guard reads (held here unpacking one more gate, a FIFO the
-    test holds open) ends the guard and the job (exit 143) with nothing released: the run dir is left empty, and the
-    job's outputs and logs stay in the hold, out of the record."""
+    test closes once it has signalled) ends the guard and the job (exit 143) with nothing released: the run dir is left
+    empty, and the job's outputs and logs stay in the hold, out of the record."""
     run = _sent(tmp_path)
     fifo = tmp_path / "slow.tgz"
     os.mkfifo(fifo)
@@ -420,7 +422,7 @@ def test_chain_record_releases_nothing_when_sigterm_ends_its_guard(tmp_path):
     p = _chain(tmp_path, "gate.tgz absent.tgz", py=str(py), start_new_session=True)
     with open(fifo, "wb"):
         os.killpg(p.pid, signal.SIGTERM)
-        out, _ = p.communicate()
+    out, _ = p.communicate()
     q = tmp_path / "quarantine" / "r1"
     assert p.returncode == 143, out
     assert "SIGTERM ended the leak guard (exit 143)" in out and "nothing released from" in out
