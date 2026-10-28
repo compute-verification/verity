@@ -19,7 +19,7 @@ def main(kind: str, k: int, path: Path, tree: Path) -> None:
         import fast_stage
         fast_stage.install(path.parent / f".scratch-{kind}-k{k}")
     spec = importlib.util.spec_from_file_location("h1_lanes_run", pouw / "h1_lanes" / "run.py")
-    L = importlib.util.module_from_spec(spec)
+    L = sys.modules[spec.name] = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(L)
     ctx = L.Ctx(path.parent, "unit-lowering", k, 0)
     ctx.wp = 2 * L.LL.words(k)
