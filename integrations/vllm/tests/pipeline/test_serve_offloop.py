@@ -1,5 +1,5 @@
 """serve-openai's windows sealed off the engine loop (`serve_seal.Sealer` over `serve_seal.freeze`), bounded on disk
-(`serve_seal.DiskFloor`), and its records copied into the run's ``$OUT`` (`serve_commit.Mirror`). CPU only."""
+(`serve_guard.DiskFloor`), and its records copied into the run's ``$OUT`` (`serve_commit.Mirror`). CPU only."""
 from __future__ import annotations
 
 import copy
@@ -19,6 +19,7 @@ from verity_vllm.commit.served_record import served_rows
 from verity_vllm.config import UsageError
 from verity_vllm.pipeline import cli
 from verity_vllm.pipeline import serve_commit as sc
+from verity_vllm.pipeline import serve_guard as sg
 from verity_vllm.pipeline import serve_openai as so
 from verity_vllm.pipeline import serve_seal as ss
 from verity_vllm.pipeline.serve_admit import Admission, Delta
@@ -656,7 +657,7 @@ def test_a_size_bound_crossed_inside_a_step_closes_its_window_at_the_step_bounda
 
 def test_below_the_disk_floor_a_window_is_not_sealed_and_the_server_stops_cleanly(tmp_path, monkeypatch):
     monkeypatch.setattr(sc, "seal_window", lambda *_a, **_k: pytest.fail("a window under the floor is sealed"))
-    disk = ss.DiskFloor(tmp_path, 1000, usage=lambda _p: SimpleNamespace(free=1001))
+    disk = sg.DiskFloor(tmp_path, 1000, usage=lambda _p: SimpleNamespace(free=1001))
     sealer = ss.Sealer(1 << 40)
     s = Sealed(tmp_path, sealer=sealer, disk=disk)
     with s:
@@ -687,11 +688,11 @@ def test_the_disk_floor_refuses_to_start_below_one_window_beyond_it(tmp_path):
     with pytest.raises(UsageError, match="disk floor .*--disk-floor-gb"):
         so.preflight(opts, which=lambda _: "/v/bin/ninja", usage=lambda _p: SimpleNamespace(free=309 * ss.GB))
     so.preflight(opts, which=lambda _: "/v/bin/ninja", usage=lambda _p: SimpleNamespace(free=310 * ss.GB))
-    assert so.disk_floor_of(opts).path == tmp_path.resolve(), "the nearest directory --out is on"
+    assert sg.disk_floor_of(opts).path == tmp_path.resolve(), "the nearest directory --out is on"
     no_floor = cli.parse("serve-openai", [*base, "--disk-floor-gb", "0"], environ={})
-    assert so.disk_floor_of(no_floor) is None
-    assert ss.DiskFloor(tmp_path, 100, usage=lambda _p: SimpleNamespace(free=160)).short(50, pending=10) is None
-    assert ss.DiskFloor(tmp_path, 100, usage=lambda _p: SimpleNamespace(free=160)).short(50, pending=11)["free_gb"] == 0.0
+    assert sg.disk_floor_of(no_floor) is None
+    assert sg.DiskFloor(tmp_path, 100, usage=lambda _p: SimpleNamespace(free=160)).short(50, pending=10) is None
+    assert sg.DiskFloor(tmp_path, 100, usage=lambda _p: SimpleNamespace(free=160)).short(50, pending=11)["free_gb"] == 0.0
 
 
 def test_the_records_mirror_copies_whole_lines_and_a_replaced_file_again(tmp_path):
@@ -774,7 +775,7 @@ def test_no_collection_runs_while_the_map_is_built_and_the_collector_comes_back_
 def test_the_watchdog_records_each_wake_late_by_its_floor_or_more(tmp_path):
     t = [0.0]
     late = iter([0.0, 0.5, 0.1, 2.0])
-    wd = ss.Watchdog(tmp_path / "pauses.jsonl", period_s=0.05, min_s=0.2, clock=lambda: t[0], wall=lambda: 1000.0 + t[0])
+    wd = sg.Watchdog(tmp_path / "pauses.jsonl", period_s=0.05, min_s=0.2, clock=lambda: t[0], wall=lambda: 1000.0 + t[0])
 
     def sleep(s: float) -> None:
         d = next(late, None)

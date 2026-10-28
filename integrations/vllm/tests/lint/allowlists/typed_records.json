@@ -257,7 +257,7 @@
     {"file": "verity_vllm/protocols/remote_bandwidth/registry.py", "kind": "schema-literal", "symbol": "RemoteBandwidthReceipt", "detail": "verity/remote-bandwidth/receipt/v0"},
     {"file": "verity_vllm/protocols/remote_bandwidth/remote.py", "kind": "schema-literal", "symbol": "CommitSession._session", "detail": "verity-vllm/remote-session/v0"},
     {"file": "verity_vllm/protocols/remote_bandwidth/remote.py", "kind": "schema-literal", "symbol": "CommitSession.end", "detail": "verity-vllm/remote-session/v0"},
-    {"file": "verity_vllm/query", "kind": "or-empty", "symbol": "<package>", "detail": ".get(k) or [] / {}", "count": 25},
+    {"file": "verity_vllm/query", "kind": "or-empty", "symbol": "<package>", "detail": ".get(k) or [] / {}", "count": 24},
     {"file": "verity_vllm/query/manifest", "kind": "or-empty", "symbol": "<package>", "detail": ".get(k) or [] / {}", "count": 15},
     {"file": "verity_vllm/query/manifest/format.py", "kind": "schema-literal", "symbol": "<module>", "detail": "verity-sweep/required-manifest/v1"},
     {"file": "verity_vllm/query/manifest/verify.py", "kind": "schema-literal", "symbol": "<module>", "detail": "verity-sweep/manifest-verify/v1"},
