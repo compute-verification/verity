@@ -50,10 +50,6 @@ leaves and challenge derivation), not with the expander.
   the same `⌊ρ·|C|⌋` at `1% + 2^-128` (`PeriodHeldDemo` at Demo B's `1038·2^16` blocks: 1,060,008,348,186 bits).  It
   is in the ring model, not abstract M1, and rests on the open conjecture `P2RingRoundSecureWide` (unchecked in `N`
   above `2^25`), the device model `RingDeviceAt` and the coin commitments' hiding at `N` (`WIDE_CLAIMS`).
-- At `k ≥ 320` challenges the run protocol takes `wide320_certificate` for `2^19` to `2^27` blocks:
-  `Pous.SecurityProofs.ObligationWide320`, P2's ring-model audit window of 320 reads, the state at most `⌊ρ·|C|⌋` at
-  each, passed with probability at most `2^-20` (`(1 − 0.043)^320 + 320·2^-137`), from the same conjecture. It bounds
-  the window at the store's snapshot, not the composed check, for which `periodHeldAt` holds at 105 reads only.
 - **The instantiation assumption is not accepted** (spec decision 8, Daniel's deferred default): that
   square–mask–square with fresh per-block keys instantiates M1's slow-inverse permutation is a novel, algebraic
   assumption, and it is outside Lean.
@@ -61,6 +57,10 @@ leaves and challenge derivation), not with the expander.
   twice `Δ + RTT` on the allowed hardware, a CPU or GPU core with cooperation within one chiplet.  `call_ns` stands for
   it, half the fastest such root (`ROOT_CALL_NS`), and the certificate allows no such call within the deadline.  The
   spec caps the RTT allowance at `RTT_ALLOWANCE_CAP_NS`.
+- At `k ≥ 320` challenges the run protocol takes `wide320_certificate` for `2^19` to `2^27` blocks:
+  `Pous.SecurityProofs.ObligationWide320`, P2's ring-model audit window of 320 reads, the state at most `⌊ρ·|C|⌋` at
+  each, passed with probability at most `2^-20` (`(1 − 0.043)^320 + 320·2^-137`), from `P2RingRoundSecureWide`. It
+  bounds the window at the store's snapshot, not the composed check, for which `periodHeldAt` holds at 105 reads only.
 - A shared mask with linear tweaks is model M2, which is not covered; the keys here are per block.
 - Neither codec is ever the default.  Its profile says so plainly (`EXPERIMENTAL`).
 """
