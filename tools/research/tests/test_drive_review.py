@@ -1288,6 +1288,127 @@ def test_a_red_after_landing_run_runs_on_and_is_cancelled_only_with_its_circuit_
     assert "step lean-agreement" not in h.postland()["red"] and "step lean-suites" not in h.postland()["red"]
 
 
+class Sharded(Review):
+    """A review drive whose after-landing run is ``shards`` shards of the whole check (`train.sh --shards N`), `r-shard-I-K` for
+    the Ith launch's shard K, and whose combines (`train.sh --combine`) are `r-combine-I`; a run's Attempt is in the store once
+    a test adds it to `stored`."""
+
+    def __init__(self, world, monkeypatch, shards: int = 2, **kw):
+        super().__init__(world, monkeypatch, **kw)
+        self.d.shards, self.combined, self.stored = shards, [], set()
+        self.d.launch_combine, self.d.stored = self.launch_combine, lambda rid: rid in self.stored
+
+    def launch_post(self, repo, commit, machine, steps, **kw):
+        ids = [f"r-shard-{len(self.posted)}-{k}" for k in range(1, kw.get("shards", 1) + 1)]
+        self.posted.append((commit, steps, kw))
+        self.run_state.update(dict.fromkeys(ids, ("running", None, None)))
+        return ids, ""
+
+    def launch_combine(self, repo, commit, machine, ids):
+        rid = f"r-combine-{len(self.combined)}"
+        self.combined.append((commit, list(ids)))
+        self.run_state[rid] = ("running", None, None)
+        return [rid], ""
+
+    def shards(self, world, i: int, states: dict[int, tuple], steps: dict[int, dict[str, str]]) -> list[str]:
+        """Launch ``i``'s shards in ``states`` (by K), each with its ``steps``' run dir."""
+        ids = [f"r-shard-{i}-{k}" for k in states]
+        self.run_state.update({f"r-shard-{i}-{k}": st for k, st in states.items()})
+        self.evidence = [_steps_run(world.tmp / f"launch-{i}", f"r-shard-{i}-{k}", steps.get(k, {})) for k in states]
+        return ids
+
+
+#: the after-landing steps a two-shard check splits between its shards (`ci.toml`'s plans), lean-audit in both
+HALVES = {1: {s: "passed" for s in AFTER_LANDING if s not in ("flock-circuit-build", "circuit-check", "flock-rust-tests")},
+          2: {s: "passed" for s in ("lean-audit", "flock-circuit-build", "circuit-check", "flock-rust-tests")}}
+
+
+def _sharded_landing(world, monkeypatch) -> tuple[Sharded, str]:
+    h = Sharded(world, monkeypatch)
+    world.gh.put(1, world.change({"a.txt": "1\n"}))
+    h.review(1)
+    assert h.tick().startswith("landed #1")
+    return h, _main(world)
+
+
+def test_a_sharded_after_landing_run_verifies_main_only_once_its_shards_are_recorded_as_one_check(world, monkeypatch):
+    """drive.toml's `shards` runs the after-landing run as that many shards of the whole check over its machines, at once, so
+    it takes about its longest shard's time rather than ~2.5 h.  The shards are read together as one run, and `main` is
+    verified only once `check.py --combine` recorded them as one `check/v1` (the record `research merge` reads, which
+    `merge.shard_set` admits only for a complete, matching, passing set): launched once every shard's Attempt is in the store,
+    never before."""
+    h, main = _sharded_landing(world, monkeypatch)
+    assert h.posted == [(main, ",".join(AFTER_LANDING), {"agreement": False, "no_cache": False, "circuit_cache": False,
+                                                            "no_regenerate": True, "shards": 2})]
+    assert h.postland()["run"]["shards"] == 2 and h.postland()["run"]["ids"] == ["r-shard-0-1", "r-shard-0-2"]
+    ids = h.shards(world, 0, {1: ("done", 0, None), 2: ("running", None, None)}, HALVES)
+    h.tick()
+    assert h.combined == [] and h.postland()["verified"] != main
+    h.run_state[ids[1]] = ("done", 0, None)
+    h.stored.add(ids[0])
+    h.tick()
+    assert h.combined == [] and h.postland()["verified"] != main          # shard 2 isn't in the store yet: no combine reads it
+    h.stored.add(ids[1])
+    h.tick()
+    assert h.combined == [(main, ids)] and h.postland()["verified"] != main
+    h.tick()
+    assert len(h.combined) == 1 and h.postland()["verified"] != main
+    h.run_state["r-combine-0"] = ("done", 0, None)
+    h.tick()
+    pl = h.postland()
+    assert pl["verified"] == main and pl["run"] is None and pl["pending"] == [] and len(h.posted) == 1
+    assert pl["green"]["step lean-audit"] == main and pl["green"]["step circuit-check"] == main
+    assert [x for x in world.logs if "recorded as one check by r-combine-0" in x], world.logs
+
+
+@pytest.mark.parametrize("case", ["a shard failed", "a shard never ran", "the combine refused", "never stored"])
+def test_an_incomplete_or_refused_shard_set_verifies_nothing(world, monkeypatch, case):
+    """A shard set is a check only whole: one shard failed is red (named, and no combine), one that never ran or was stopped
+    runs the whole set again, a combine that refuses the shards (`merge.shard_set`: missing, repeated or mismatched) verifies
+    nothing and is told to @ci, and so does a shard whose Attempt never reaches the store for `--combine` to read."""
+    from research.drive import LAUNCH_LOST_S
+
+    h, main = _sharded_landing(world, monkeypatch)
+    rc2 = {"a shard failed": 1, "a shard never ran": 75}.get(case, 0)
+    steps = {**HALVES, 2: {**HALVES[2], "circuit-check": "failed"}} if rc2 == 1 else HALVES
+    ids = h.shards(world, 0, {1: ("done", 0, None), 2: ("done", rc2, None)}, steps)
+    h.stored |= set(ids) if case != "never stored" else {ids[0]}
+    h.tick()
+    if case == "the combine refused":
+        h.run_state["r-combine-0"] = ("done", 1, None)
+        h.tick()
+    if case == "never stored":
+        h.tick()
+        assert h.combined == [] and h.postland()["run"] is not None
+        h.clock += LAUNCH_LOST_S + 1
+        h.tick()
+    pl = h.postland()
+    assert pl["verified"] != main
+    if case == "a shard failed":
+        assert h.combined == [] and "step circuit-check" in pl["red"]
+        assert "step lean-audit" not in pl["red"] and (pl.get("green") or {}).get("step circuit-check") != main
+    elif case == "a shard never ran":
+        assert h.combined == [] and [c for c, *_ in h.posted] == [main, main] and pl["run"]["ids"] == ["r-shard-1-1", "r-shard-1-2"]
+    else:
+        assert pl["failed"] == main and pl["run"] is None and len(h.posted) == 1
+        (post,) = [p for p in h.posts if "passed in every shard" in p]
+        assert ("its combine r-combine-0 refused them" if case == "the combine refused" else
+                "r-shard-0-2 never reached the store") in post, post
+        assert h.combined == ([(main, ids)] if case == "the combine refused" else [])
+
+
+def test_a_split_step_that_passed_in_one_shard_and_failed_in_another_is_red_from_where_it_last_passed(world, monkeypatch):
+    """lean-audit is split by Lake package over the shards: its pass in one shard isn't a pass of the step, or `main`'s tip would
+    be its newest green and the culprit search would find no landing below it."""
+    h, main = _sharded_landing(world, monkeypatch)
+    steps = {**HALVES, 2: {**HALVES[2], "lean-audit": "failed"}}
+    h.shards(world, 0, {1: ("done", 0, None), 2: ("done", 1, None)}, steps)
+    h.tick()
+    pl = h.postland()
+    assert pl["red"]["step lean-audit"]["base"] != main and (pl.get("green") or {}).get("step lean-audit") != main
+    assert h.combined == [] and pl["verified"] != main
+
+
 def test_a_read_guard_failure_rings_the_pr_that_added_the_reading_test(world, monkeypatch, tmp_path):
     """A suite the read guard failed names no failing test: its record's `outside` (path -> the test module that read it) is what
     implicates the PR that added the reading test."""
