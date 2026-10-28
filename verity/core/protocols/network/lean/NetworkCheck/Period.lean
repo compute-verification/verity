@@ -1011,8 +1011,8 @@ def windowCheck (p : Params) (l : Link) (clear : List ByteArray) (earlier : Arra
     | .accept _ prof => pure prof
     | .reject r => refuse s!"{what}: one-stage v2: {r}"
     | .undecided r => .error (.undecided, s!"{what}: one-stage v2: {r}")
-  unless prof.levels.map (fun lv => (lv.name, lv.size, lv.draw)) == #[(unitLevel, 1, some (Core.Draw.subset 1))] &&
-      prof.drawn == #[(unitLevel, 1)] do
+  unless prof.levels.map (fun lv => (lv.name, lv.size, lv.draw)) ==
+      #[(unitLevel, 1, some (Core.SamplingDesign.subset 1))] && prof.drawn == #[(unitLevel, 1)] do
     refuse s!"{what}: profile: not the link-window's one unit proved"
   opening p l w reg x.certificates salts e bs
 
