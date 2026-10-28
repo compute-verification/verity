@@ -120,8 +120,8 @@ def test_drive_s_attempt_is_the_landing_s_when_it_ran_on_the_commit_or_on_its_me
 
 
 def test_a_landing_ending_in_drives_lock_commit_is_labelled_on_the_trains_check(tmp_path, monkeypatch, capsys):
-    """20 Oct: 6bb53505d9e3 (with #2937) landed with drive's lock commit 616df64f83 on top, and its job labelled nothing: its check
-    ran on the train, the lock commit's parent, which `check_attempt` didn't read."""
+    """A landing with drive's lock commit on top has its check run on the train, the lock commit's parent, which
+    `check_attempt` reads, so its job labels it."""
     origin, repo = tmp_path / "origin.git", tmp_path / "repo"
     _git(tmp_path, "init", "-q", "--bare", "-b", "main", str(origin))
     _git(tmp_path, "clone", "-q", str(origin), str(repo))
@@ -228,8 +228,7 @@ def _launched(calls) -> str:
 
 
 def test_the_run_reserves_its_memory_and_sizes_its_workers_to_it(tmp_path, monkeypatch):
-    """19 Oct 05:31Z: the job ran about 20 workers at ~28 GB each with nothing reserved, filling vy-nebius-1's slice; two other
-    lanes' runs were killed."""
+    """About 20 workers at ~28 GB each with nothing reserved fill a node's slice and get other runs killed."""
     calls, _ = _fake_landing(tmp_path, monkeypatch, "r20261003-145201-e806")
     PT.main(["--workers", "40"])
     run = next(c for c in calls if c[0] == "run")
@@ -354,9 +353,9 @@ def test_a_later_landing_is_main_s_tip_when_it_is_a_landing_after_the_commit(tmp
 
 
 def test_a_later_landing_with_no_check_line_is_found_by_the_attempt_its_own_job_recorded(tmp_path, monkeypatch):
-    """19 Oct: drive's landings carry no `Check:` line and drive cancels a train's check once it lands, so no queued job was ever
-    superseded: five 200 GB regressions of about an hour each waited in line on node 1. Each job now records its landing's
-    attempt (`note_attempt`), and a job that waited finds main's tip by it."""
+    """drive's landings carry no `Check:` line and drive cancels a train's check once it lands, so without a record no queued
+    job would ever be superseded. Each job records its landing's attempt (`note_attempt`), and a job that waited finds main's
+    tip by it."""
     monkeypatch.setattr(PT, "LOCK", tmp_path / "post-train.lock")
     origin, repo = tmp_path / "origin.git", tmp_path / "repo"
     _git(tmp_path, "init", "-q", "--bare", "-b", "main", str(origin))

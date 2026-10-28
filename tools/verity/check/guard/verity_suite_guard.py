@@ -72,8 +72,8 @@ _current = "*"                                                   # the test modu
 _test = ""                                                       # the node id of the test running, if one is
 _reads: dict[str, set[str]] = {}                                 # test module (or "*") -> other test modules it opened
 #: node id -> seconds of its setup and call, None once a phase did not pass. Setup counts: a module-scoped fixture's setup goes
-#: to the first test that needs it, and ordering by call alone started those late (test_lean_witness, 12 Oct: 138 s of calls
-#: behind 1,270-1,475 s of `f1` setup per worker). A test enters only once its call passed: one stopped mid-call never counts
+#: to the first test that needs it, and ordering by call alone started those late (a module with 138 s of calls behind
+#: 1,270-1,475 s of fixture setup per worker). A test enters only once its call passed: one stopped mid-call never counts
 _outcomes: dict[str, float | None] = {}
 _setup_s: dict[str, float] = {}                                  # node id -> seconds of its passed setup, until its call reports
 _failed: set[str] = set()
