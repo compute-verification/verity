@@ -8,7 +8,7 @@ through the one-stage audit as warden_zk.py's.
     python benchmarks/network_traces/transfer_zk.py prove --bin flock-circuit --lean flock-verify --out DIR [--units 8]
       [--shape tiny|h200] [--dry]
 
-* **The blocks** (`Block`, ``--shape``):
+* **The blocks** (`BlockTemplate`, ``--shape``):
   - ``tiny``: K = 128 on sm_120's s8 step, the load ``w`` and ``sw`` n seeded channels, unit i reading channel i;
   - ``h200``: K = 256 on sm_90's (the H200's), the load the seeded weights' ``l0.wk`` and ``l0.wk.scale`` at the frozen
     H200 shape under its demo seed, whole, in its registered rows (128 words of 256 codes, the row
@@ -17,7 +17,7 @@ through the one-stage audit as warden_zk.py's.
 * **The circuit** (`circuit`): one template, n units, unit i a W8A8 linear's output coordinate on one token: ``x`` the
   token's s8 row and ``sx`` its scale (the request's rows, external ports), ``wrow`` its channel's s8 weights and ``sw``
   its scale (the weights' load), ``o0`` the coordinate (the response's rows, an external port). Every input row is a
-  registered read of its value (`Block.values`), at the rows `attestation`'s ``reads`` name.
+  registered read of its value (`BlockTemplate.values`), at the rows `attestation`'s ``reads`` name.
 * **The server block** (`blocks`, `verity/blocks/v1`): one server on uplink `UPLINK`, its server-time block window
   `WINDOW` of n steps, unit i's rows at step i; the two load values (ingress, the server session's window 0), the
   request's ``request`` and ``request_scale`` (ingress) and the ``response`` (egress, every unit's ``o0``).
@@ -86,7 +86,7 @@ H200_WIDTH, H200_HEAD, H200_CODES = 16384, 64, 256
 
 
 @dataclass(frozen=True)
-class Block:
+class BlockTemplate:
     """A server block's one template, ``ScaledMmS8Coordinate_v1{K}`` on the s8 step ``gemm``; each port's value, its
     kind and the link-window it crosses in (a load's the server session's, 0); and `load`, each load port's whole value
     as the certifier commits it, ``{port: (rows of u16 words, stride)}``, unit i reading row ``i * stride``."""
@@ -137,14 +137,15 @@ def h200_load(n: int, seed: bytes) -> dict[str, tuple[np.ndarray, int]]:
             "sw": (scale.view("<u2").reshape(H200_HEAD, 2).astype(np.uint16), 1)}
 
 
-TINY = Block("tiny", 128, GM.GEMM_SM120_S8,
-             {"x": ("request", "request", WINDOW), "sx": ("request_scale", "request", WINDOW), "wrow": ("w", "load", 0),
-              "sw": ("sw", "load", 0), "o0": ("response", "response", WINDOW)},
-             tiny_load, "a TINY server block of {n} W8A8 coordinates on {uplink}")
-H200 = Block("h200", H200_CODES, GM.GEMM_SM90_S8,
-             {"x": ("request", "request", WINDOW), "sx": ("request_scale", "request", WINDOW),
-              "wrow": ("l0.wk", "load", 0), "sw": ("l0.wk.scale", "load", 0), "o0": ("response", "response", WINDOW)},
-             h200_load, "{n} K = 256 parts of the frozen H200 shape's l0.wk on sm_90's s8 step, on {uplink}")
+TINY = BlockTemplate("tiny", 128, GM.GEMM_SM120_S8,
+                     {"x": ("request", "request", WINDOW), "sx": ("request_scale", "request", WINDOW),
+                      "wrow": ("w", "load", 0), "sw": ("sw", "load", 0), "o0": ("response", "response", WINDOW)},
+                     tiny_load, "a TINY server block of {n} W8A8 coordinates on {uplink}")
+H200 = BlockTemplate("h200", H200_CODES, GM.GEMM_SM90_S8,
+                     {"x": ("request", "request", WINDOW), "sx": ("request_scale", "request", WINDOW),
+                      "wrow": ("l0.wk", "load", 0), "sw": ("l0.wk.scale", "load", 0),
+                      "o0": ("response", "response", WINDOW)},
+                     h200_load, "{n} K = 256 parts of the frozen H200 shape's l0.wk on sm_90's s8 step, on {uplink}")
 BLOCKS = {b.name: b for b in (TINY, H200)}
 MEMBERS = {"honest": True, "forged": False, "unsigned": False, "request": False, "weight": False}
 #: the port each refused member is refused at, alone
@@ -155,7 +156,7 @@ WHY = {name: "does not open" for name in REFUSED_AT}
 CHANGED = {"request": "x", "weight": "wrow"}
 
 
-def head(heads: dict, block: Block, p: str) -> TR.TransferHead:
+def head(heads: dict, block: BlockTemplate, p: str) -> TR.TransferHead:
     """Port ``p``'s value's head among `blocks.certified`'s, which are by value and direction."""
     value, kind, _window = block.values[p]
     return heads[value, TR.KINDS[kind][0]]
@@ -167,7 +168,7 @@ def log(msg: str) -> None:
 
 # --- the circuit and its blocks ---------------------------------------------------------------------------------------
 
-def circuit(block: Block, n: int, load: dict) -> IF.Circuit:
+def circuit(block: BlockTemplate, n: int, load: dict) -> IF.Circuit:
     lay, tid = dict(IF.layout(block.coord).rows), block.tid
     stride = {p: load[p][1] if p in load else 1 for p in INS}
     rows = {p: len(load[p][0]) if p in load else n for p in INS}
@@ -176,7 +177,7 @@ def circuit(block: Block, n: int, load: dict) -> IF.Circuit:
                       registered=IF.Registered({block.values[p][0]: rows[p] * lay[p] for p in INS}, reads=reads))
 
 
-def blocks(block: Block, n: int) -> dict:
+def blocks(block: BlockTemplate, n: int) -> dict:
     steps = {"base": 0, "radix": [n], "step": [1]}
 
     def transfer(p: str, d: str) -> dict:
@@ -190,7 +191,7 @@ def blocks(block: Block, n: int) -> dict:
             "server_time": {"window": WINDOW, "steps": n}, "transfers": [*(transfer(p, "in") for p in INS), out]}
 
 
-def values(block: Block, n: int, seed: bytes, load: dict) -> dict[str, np.ndarray]:
+def values(block: BlockTemplate, n: int, seed: bytes, load: dict) -> dict[str, np.ndarray]:
     """n coordinates' rows, each port's ``(n, words)`` u16 words: a seeded s8 token row and positive f32 scale a unit
     (the request), the rows of the load each unit reads, and the Definition's outputs on them."""
     rng = np.random.default_rng(int.from_bytes(hashlib.sha512(b"request\0" + seed).digest()[:8], "little"))
@@ -202,7 +203,7 @@ def values(block: Block, n: int, seed: bytes, load: dict) -> dict[str, np.ndarra
     return {**words, "o0": outputs(block, words)}
 
 
-def outputs(block: Block, words: dict[str, np.ndarray]) -> np.ndarray:
+def outputs(block: BlockTemplate, words: dict[str, np.ndarray]) -> np.ndarray:
     """The Definition's ``o0`` on the units' input rows, ``(n, 1)``."""
     n = len(words["x"])
     ins = [np.ascontiguousarray(words["x"]).view(np.uint8), np.ascontiguousarray(words["sx"]).view(np.uint32).reshape(n),
@@ -210,7 +211,7 @@ def outputs(block: Block, words: dict[str, np.ndarray]) -> np.ndarray:
     return np.asarray(evaluate_batch(block.coord, *ins, kernel="reference"), dtype=np.uint16).reshape(n, 1)
 
 
-def changed(block: Block, words: dict[str, np.ndarray], p: str) -> tuple[dict[str, np.ndarray], int]:
+def changed(block: BlockTemplate, words: dict[str, np.ndarray], p: str) -> tuple[dict[str, np.ndarray], int]:
     """`words` with unit 0's row of port `p` one s8 code off (its low bit flipped), at the first code whose change leaves
     unit 0's output the one on the signed rows: a server that computed on a byte the network certifier didn't relay, and
     whose response is still the signed one, so that only the read of `p` can refuse it. Also the code's index."""
@@ -232,7 +233,7 @@ def certifier(directory: Path) -> SimpleNamespace:
     return SimpleNamespace(issuer=Issuer(signer, session), key=signer.public_key(), session=session)
 
 
-def attest(cert: SimpleNamespace, block: Block, program: str, value: str, rows) -> tuple[TR.Transfer, dict]:
+def attest(cert: SimpleNamespace, block: BlockTemplate, program: str, value: str, rows) -> tuple[TR.Transfer, dict]:
     """`value`'s rows as they crossed `UPLINK`, committed and signed: the certifier's opening (witness) and its
     registration (public)."""
     p = next(p for p, v in block.values.items() if v[0] == value)
@@ -244,7 +245,7 @@ def attest(cert: SimpleNamespace, block: Block, program: str, value: str, rows) 
     return t, TR.registration(t.head, c)
 
 
-def attestation(n: int, out: Path, block: Block = TINY, seed: bytes = TEST_SEED) -> SimpleNamespace:
+def attestation(n: int, out: Path, block: BlockTemplate = TINY, seed: bytes = TEST_SEED) -> SimpleNamespace:
     """The circuit record and its blocks; the load and the units' rows; the network certifier's transfers and
     registrations (each load value whole), the honest response's and the forged one's; and the prover's own commitment of
     its outputs."""
