@@ -436,7 +436,7 @@ def workers(notes: Path | None, workers_d: Path, registry: Path | None, coords: 
 def note_times(notes: Path | None, t: float) -> tuple[dict[str, float], dict[str, set[str]], dict[str, float]]:
     """(agent id -> its newest note's mtime, agent id -> the branches its notes' origins name, lane -> its newest note's mtime),
     over the notes `recent_notes` gives: a note is an agent's when its `origin:` names it (`ZKS10, bc-...; code
-    cursor/zk-frame-c7a9`), by its full id or its short one (`bc-7449b20e`, keyed as given: `short_id`), and its lane's by
+    cursor/zk-frame-c7a9`), by its full id or its short one (`bc-` and 8 hex digits, keyed as given: `short_id`), and its lane's by
     its directory under `lanes/` and its `lane:`."""
     heard: dict[str, float] = {}
     named: dict[str, set[str]] = {}

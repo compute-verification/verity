@@ -1618,8 +1618,8 @@ def test_a_silent_worker_is_rung_once_then_once_more_a_window_later_then_not_unt
 
 
 def test_a_note_naming_an_agent_by_its_short_id_is_its_activity(tmp_path):
-    """Notes often sign with the short id (`benchmarks coordinator (bc-7449b20e)`): a full-id-only match rang an agent
-    silent though its checkpoint was half an hour old."""
+    """Notes often sign with the short id (`ROLE (bc-xxxxxxxx)`): a full-id-only match rang an agent silent though its
+    checkpoint was half an hour old."""
     notes = tmp_path / "notes"
     note(notes, "circuits", "a.md", f"circuits worker W3 ({W1_}); code cursor/w3-branch-c7a9", age_s=2 * 3600)
     sh = FakeSh({"cursor/w3-branch-c7a9": "a" * 40, "main": "m" * 40})
