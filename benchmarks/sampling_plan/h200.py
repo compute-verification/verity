@@ -9,7 +9,7 @@ and the row units (RMSNorm, the quantizer, softmax, the residual add, the gather
 argmax), each id `stub:` until its Definition lands, its ANDs composed from pinned pieces.
 
 **The law is what Lean proves.** Each subcircuit is one sampling block of the block (`IntegrityPeriod`): one C-Flock `--zk`
-session drawing a uniform `subset:k` of its n units, split over `tables` tables of at most `_cap` drawn units each
+session drawing a uniform `subset:k` of its n units, split over `tables` tables of at most `Template.cap` drawn units each
 (m = k_log + nbl <= 35). Every subcircuit draws `k = ceil(ln(S/delta)/share)`, so by `IntegrityPeriodLog` each sampling block has
 fewer than `K0 = ln(S/delta) n/k` <= share n units wrong outside delta (the S sampling blocks of the block split delta), and by
 `IntegrityHorizon` a subcircuit's sampling blocks over any period have fewer than ln(S/delta) n/k in all. The faulty ANDs beside
@@ -37,7 +37,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import transformer as X  # noqa: E402
-from inputs import I  # noqa: E402
+from inputs import I, cap  # noqa: E402
 
 from verity.core.protocols.profile import Stratified, Stratum  # noqa: E402
 from verity.core.protocols.sampled_proofs.candidates import shape_of  # noqa: E402
@@ -105,6 +105,25 @@ class Template:
     def proved(self) -> int:
         """A drawn unit's ANDs with its rows' openings, the fit's feature."""
         return self.ands + sum(row_ands(r) for r in self.rows)
+
+    def _part(self, p: int) -> tuple[int, list[int]]:
+        return -(-self.ands // p), [-(-b // p) for b in self.rows]
+
+    @property
+    def parts(self) -> int:
+        """The least number of parts a unit proves in within C-Flock's block (`inputs.cap`), each its share of the ANDs and
+        of every row's bytes: a unit past the block is drawn whole and proved as its parts."""
+        if cap(0, [1] * len(self.rows)) < 1:
+            raise ValueError(f"{self.id}: its {len(self.rows)} rows alone fill a C-Flock block: cut its ports fewer ways")
+        p = 1
+        while cap(*self._part(p)) < 1:
+            p += 1
+        return p
+
+    @property
+    def cap(self) -> int:
+        """A statement's units: its parts' `inputs.cap`, shared among a unit's `parts`."""
+        return max(1, cap(*self._part(self.parts)) // self.parts)
 
 
 def templates(m: Shape, pins: dict[str, int] | None = None, *, tiles: bool = False,
@@ -199,10 +218,10 @@ class Window:
 
 
 def window(t: Template, k: int, windows: int, r: Rates) -> Window:
-    """`t`'s sampling block drawing k: its tables (at most `_cap` drawn units each, k rounded up to a multiple of them, as
+    """`t`'s sampling block drawing k: its tables (at most `Template.cap` drawn units each, k rounded up to a multiple of them, as
     `HiddenWindow.hdiv` needs), its expected proving cost, and at each delta `IntegrityPeriodLog`'s K0 (delta split over
     the block's `windows`) and `IntegrityHorizon`'s bound over any number of the subcircuit's sampling blocks."""
-    a, cap = t.proved, X._cap(t.proved)
+    a, cap = t.proved, t.cap
     k = min(t.units, k)
     tables = ceil(k / cap)
     k = min(t.units, tables * ceil(k / tables))
@@ -248,7 +267,7 @@ def budget_share(ts: list[Template], m: Shape, r: Rates, gpu_s: float) -> float 
 
 def window_blocks(ws: list[Window], m: Shape) -> int:
     """The least B for which sampling blocks of B blocks prove within their own GPU time. K0 = ln(S/delta) n/k is the same share
-    of a sampling block's units whatever its n, and `_cap` reads only a unit's ANDs, so a sampling block over B blocks keeps k, its
+    of a sampling block's units whatever its n, and `Template.cap` reads only a unit's ANDs and rows, so a sampling block over B blocks keeps k, its
     tables and its cost, and costs a block 1/B of it."""
     return ceil(proving(ws, m) / m.block_s)
 
@@ -294,7 +313,7 @@ def report(m: Shape, share: float, *, tiles: bool = False, pad: bool = False, se
         "informative_ands": {str(d): informative_ands(ws, d) for d in DELTAS},
         "periods": periods,
         "handoff": [{"templates": [[w.template.id, w.template.units]], "law": f"subset:{w.k}", "tables": w.tables,
-                     "cap": X._cap(w.template.proved), "K0": w.K0} for w in ws],
+                     "cap": w.template.cap, "K0": w.K0} for w in ws],
     }
 
 

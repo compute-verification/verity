@@ -20,20 +20,19 @@ import argparse
 import json
 import sys
 from dataclasses import replace
-from math import ceil, log, log2
+from math import ceil, log
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from inputs import (EPILOGUE, I, KEY, MODELS, S8_STEP, SCHEMES, Model, leaf_chain, observations,  # noqa: E402
-                    s8_coord_ands, serve_rows, tree_chain)
+from inputs import (EPILOGUE, I, KEY, MODELS, S8_STEP, SCHEMES, Model, cap, leaf_chain,  # noqa: E402
+                    observations, s8_coord_ands, serve_rows, tree_chain)
 
 from verity.core.protocols.sampled_proofs.candidates import Shape, cuts, pressure  # noqa: E402
 from verity.core.protocols.sampled_proofs.costfit import Fitted, fit  # noqa: E402
 from verity.core.protocols.sampled_proofs.optimize import (SHA512_ROWS, Candidate, Commitment, CostModel,  # noqa: E402
                                                            Objective, ReplayDomain, for_budget, for_target, frontier,
-                                                           needs_benchmark, overlaps, perturb, row_ands, structure,
-                                                           weigh)
+                                                           needs_benchmark, overlaps, perturb, structure, weigh)
 
 DELTA = 2.0 ** -40
 CHUNKS = (2048, 1024, 512, 256, 128, 64, 32)
@@ -54,19 +53,12 @@ def fitted(v: dict) -> Fitted:
                   fit(obs, "stage", ["one", "ands", "ands*staged"]), v["cpu"], KEY)
 
 
-def cap(ands: int) -> int:
-    """A statement's units under m = k_log + nbl <= 35, k_log = ceil(log2 ands) + 1 (the sweep's 25 at 14.8M ANDs and
-    A6's 23 at K = 2048; A6's K = 8192 cap is twice this)."""
-    return 1 << max(0, 35 - (ceil(log2(ands)) + 1))
-
-
 def s8_unit(name: str, length: int, out_bits: int, *, extra_rows: tuple[int, ...], commit_bits: int, bits: int,
             ways=()) -> Shape:
     noise = 2 + 2 * ceil(length * bits / 512)
     rows = (length, length) + extra_rows
     ands = (length // 32) * S8_STEP + noise * SHA512_ROWS + (EPILOGUE if out_bits == 16 else 0)
-    total = ands + sum(row_ands(r) for r in rows)
-    return Shape(name, ands, length, out_bits, 1, rows, commit_bits, 0.0, cap=min(cap(total), 1 << 20), ways=ways)
+    return Shape(name, ands, length, out_bits, 1, rows, commit_bits, 0.0, cap=cap(ands, rows), ways=ways)
 
 
 def linear(k: int, bits: int, chunks=CHUNKS, tiles=((2, 1), (16, 16))) -> Shape:
@@ -81,8 +73,8 @@ def linear(k: int, bits: int, chunks=CHUNKS, tiles=((2, 1), (16, 16))) -> Shape:
         n = r * c
         tile_ands = n * (coord.ands - (2 + 2 * ceil(k * bits / 512)) * SHA512_ROWS) \
             + (2 + (r + c) * ceil(k * bits / 512)) * SHA512_ROWS
-        shape = Shape(f"S8Tile{{K={k},{r}x{c}}}", tile_ands, n * k, 16 * n, n, (k,) * (r + c) + (2 * n, 4 * r, 4 * c),
-                      0, 0.0, cap=min(cap(tile_ands + sum(row_ands(x) for x in (k,) * (r + c))), 1 << 20),
+        rows = (k,) * (r + c) + (2 * n, 4 * r, 4 * c)
+        shape = Shape(f"S8Tile{{K={k},{r}x{c}}}", tile_ands, n * k, 16 * n, n, rows, 0, 0.0, cap=cap(tile_ands, rows),
                       parts=((shape, n // (shape.work // k)),))
     return shape
 
