@@ -31,3 +31,4 @@ import SampledProofs.WiresSpan
 import SampledProofs.WiresSound
 import SampledProofs.WiresComplete
 import SampledProofs.WiresDrawn
+import SampledProofs.SiteDifftest
