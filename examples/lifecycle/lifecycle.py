@@ -889,9 +889,11 @@ def frame_commitment(data: bytes, salt: bytes) -> str:
     return hashlib.sha512(b"lifecycle/frame/v1\0" + salt + data).hexdigest()
 
 
-IDS = {**parties.IDS, "sampled-proofs": V2, "pouw-period": period_check.ID, "wipe": wipe_period.PROTOCOL}
+IDS = {**parties.IDS, "sampled-proofs": V2, "pouw-period": period_check.ID, "wipe": wipe_period.PROTOCOL,
+       "bandwidth": parties.SUBPROTOCOLS["verity/onsite/v0"]["bandwidth"]}
 """Each subprotocol's id as the composites run it (`products`): integrity is one-stage v2 (`SampledProofs.OneStageZk`) in
-both, onsite's work is PoUW's period, and onsite's memory challenger also runs a wipe."""
+both, onsite's work is PoUW's period, its PoUB the one over PoUS's P2 store, and onsite's memory challenger also runs a
+wipe."""
 
 
 def label(seed: str, i: int) -> str:

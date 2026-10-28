@@ -106,7 +106,7 @@ declaration 1
                verity/inference-only/v0                 accept
                verity/certifier/v0                      accept
                verity/pous/p2/v4/run                    accept
-               verity/remote-bandwidth/v0               accept
+               verity/remote-bandwidth/p2/v0            accept
                verity/wipe/v0                           accept
                composite verity/onsite/v0               accept
 6 accounting
