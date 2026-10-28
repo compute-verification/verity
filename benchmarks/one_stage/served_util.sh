@@ -3,7 +3,7 @@
 # on the GPU by Nsight Systems' GPU metrics (Tensor Active, 10 kHz) over the engine's steady state; `served_util.py` reads
 # the profile and the server's step trace.  cwd: the source tree's root; the node holds the venv, the B4 row's traced Build
 # (ROW, which names the row, ROW_ID) and the taps under UTIL_ROOT. Every arm but graphs and async serves under the row's Build
-# of record (`serve_seal.row_refusal`), which `verity-vllm predict row` writes into PRED (the run's scratch) on the CPU
+# of record (`serve_row.row_refusal`), which `verity-vllm predict row` writes into PRED (the run's scratch) on the CPU
 # before the lease.
 #
 # The mix: N requests of exactly 1,024 prompt ids, max_tokens 1, greedy, all queued at once (`serve_load.py --varied N

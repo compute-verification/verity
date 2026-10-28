@@ -7,7 +7,7 @@
         [--prefix-caching] [--system-prompts N] [--system-tokens 384] [--turns N]
 
 The engine is serve-openai's (`verity_vllm.LLM`, in-process engine core, Model Runner V2) and so is its Commit: rows-sha512
-(`serve_seal.committer`, built from the row's ``--required-manifest``, its Build of record's, `serve_seal.row_refusal`, and
+(`serve_seal.committer`, built from the row's ``--required-manifest``, its Build of record's, `serve_row.row_refusal`, and
 taps, with serve-openai's step-input port)
 committing every step, values retained on host, with a `served_record.SamplerInputsSource` attached and the served default seed (`engine.served_seed`). It is
 stepped here, without HTTP, under seeded varied traffic: CERT-VARLEN's (``varied_requests`` in
@@ -47,6 +47,7 @@ from typing import Any
 
 from verity_vllm.commit.challenge import stream
 from verity_vllm.config import UsageError, option
+from verity_vllm.pipeline import serve_row as RW
 from verity_vllm.pipeline import serve_seal as SS
 from verity_vllm.pipeline.serve_retention import RetentionOptions
 
@@ -128,7 +129,7 @@ def preflight(opts: Options, which: Callable[[str], str | None] = shutil.which) 
         raise UsageError(f"commit-arb commits as serve-openai does, under {SS.ROWS} with the Commit of record's parts, which its "
                          "row's manifest names: pass --required-manifest DIR/manifest.json, DIR the row's Build of record (`verity-vllm "
                          "predict row --row ROW --out DIR`), and the row's --hidden-so, --norm-tap-so")
-    if why := SS.row_refusal(opts.required_manifest):
+    if why := RW.row_refusal(opts.required_manifest):
         raise UsageError(why)
     if which("ninja") is None:
         raise UsageError("the rows-sha512 committer JIT-builds its kernels with ninja, which is not on PATH: put the environment's "

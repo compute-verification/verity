@@ -64,7 +64,7 @@ ingress, its finish, its committed rows and seeds, and its check), ``request_use
 `serve_commit.advice_trace`'s file. The Commit is rows-sha512 (``--scheme``'s default: hm96-sha512 rows in frame-v3-sha512 trees,
 64-byte roots), as the bench row's declared Commit commits, with its committer parts built from the row's ``--required-manifest``
 and taps (the acquisition plan under ``acquisition/``): the manifest of the row's Build of record, which the ahead-of-time compiler
-writes (``verity-vllm predict row``; `serve_seal.row_refusal` refuses any other, a traced Build's among them). ``--scheme vllm-v1`` (SHA-256, 32-byte roots) only serves again the
+writes (``verity-vllm predict row``; `serve_row.row_refusal` refuses any other, a traced Build's among them). ``--scheme vllm-v1`` (SHA-256, 32-byte roots) only serves again the
 recorded vllm-v1 run ``--of-record`` names (`serve_seal.scheme_refusal`). ``--seal`` seals each closed
 window as a deferred Commit's row dir (`serve_seal`), each seal a line of ``seals.jsonl``. ``--retain-exclude hidden_m1``
 commits the attention interiors without retaining them, and each seal's manifest names them (`serve_retention.RetentionOptions`). ``--retain device --release-after P,Q`` holds each window's values in a

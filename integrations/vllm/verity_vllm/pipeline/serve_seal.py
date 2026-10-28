@@ -3,7 +3,7 @@
 `committer` builds the server's committer: ``--scheme rows-sha512`` (the default) the declared Commit of record's
 (`pipeline.commit.make_committer`'s ``native_collect_v2b``: hm96-sha512 rows in frame-v3-sha512 trees, 64-byte roots) with its
 acquisition built as the Commit builds it (`pipeline.commit_attach.attach_of_record`) over the row's required manifest
-(``--required-manifest``, the one ``verity-vllm predict row`` wrote with the row's Build of record, `row_refusal`): the attention
+(``--required-manifest``, the one ``verity-vllm predict row`` wrote with the row's Build of record, `serve_row`): the attention
 hidden tap (``--hidden-so``), the norm-scale tap (``--norm-tap-so``) and the hook sets of
 the acquisition plan, so its name is the Commit's (``...+hidden_m1+norm_scale+plan``) and a part the manifest names that did not
 attach is refused (`parts_missing`); ``--scheme vllm-v1`` `NativeHostCommitter` (SHA-256, 32-byte roots), which only a recorded
@@ -52,7 +52,6 @@ import contextlib
 import copy
 import functools
 import gc
-import hashlib
 import json
 import shutil
 import threading
@@ -69,7 +68,7 @@ from verity_vllm.commit import step_rows
 from verity_vllm.commit.served_record import PORT_NAMES, StepInputPort
 from verity_vllm.config import UsageError
 from verity_vllm.pipeline.serve_retention import retention_refusal
-from verity_vllm.records import predicted_row as PR
+from verity_vllm.pipeline.serve_row import programs_root_of, row_refusal
 
 ROWS, V1 = step_rows.NAME, "vllm-v1"
 #: the token budget's floor under rows-sha512: the step-input port's ids fill whole ``step_rows.ROW_BYTES`` rows
@@ -90,27 +89,11 @@ def recorded_scheme(rec: Mapping[str, Any]) -> str | None:
     return rec.get("scheme", V1) if rec.get("commit") else None
 
 
-def row_refusal(manifest: str) -> str | None:
-    """Why the served Commit can't bind the row whose manifest is ``manifest`` (None: it can): the row's Build of record is the
-    ahead-of-time compiler's (`program.predict.aot.write_row`), whose record beside it (`records.predicted_row`) names its sha256."""
-    m = Path(manifest)
-    if not m.is_file():
-        return f"--required-manifest {manifest}: no such file"
-    how = ("write the row's Build of record with `verity-vllm predict row --row ROW --out DIR` and pass --required-manifest "
-           "DIR/manifest.json (a traced Build is its cross-check, `verity-vllm predict compare ROW_DIR --predicted DIR`)")
-    try:
-        rec = PR.PredictedRow.of(json.loads((path := m.parent / PR.FILE).read_text()), str(path))
-    except (OSError, ValueError) as e:
-        return f"--required-manifest {manifest}: no record of predict's beside it ({type(e).__name__}: {e}): {how}"
-    if hashlib.sha256(m.read_bytes()).hexdigest() != rec.manifest_sha256:
-        return f"--required-manifest {manifest}: its sha256 is not the one {path} names, so predict didn't write it: {how}"
-    return None
-
-
 def scheme_refusal(opts: Any) -> str | None:
-    """Why ``opts`` can't commit under its scheme (None: it can). A row's manifest is predict's (`row_refusal`), committing or not;
-    rows-sha512 needs the GPU tree, it and a token budget of whole step-input port rows (`PORT_IDS`). vllm-v1 commits SHA-256,
-    which only a recorded run's readers take, so it only serves again a recorded vllm-v1 run of the same model (``--of-record``)."""
+    """Why ``opts`` can't commit under its scheme (None: it can). rows-sha512 needs the GPU tree, the row's manifest and a token
+    budget of whole step-input port rows (`PORT_IDS`); a row's manifest, which the engine's scheduler follows too (`serve_row`),
+    is predict's (`serve_row.row_refusal`), committing or not. vllm-v1 commits SHA-256, which only a recorded run's readers take,
+    so it only serves again a recorded vllm-v1 run of the same model, the one ``--of-record`` names."""
     if why := retention_refusal(opts):
         return why
     if opts.of_record and opts.scheme != V1:
@@ -160,11 +143,6 @@ def committer_args(opts: Any) -> SimpleNamespace:
                            hidden_so=opts.hidden_so, hidden_ns=opts.hidden_ns, tap_cap_mb=opts.tap_cap_mb, out=opts.out,
                            tap_sources=TapSources(norm_tap_so=opts.norm_tap_so), memory_map=None, moe_source="auto",
                            required_classes=None)
-
-
-def programs_root_of(opts: Any) -> str | None:
-    """The row's Build of record, the manifest's partition's and attention record's: the manifest's directory (`row_refusal`)."""
-    return str(Path(opts.required_manifest).resolve().parent) if opts.required_manifest else None
 
 
 def manifest_of_record(opts: Any) -> dict[str, Any]:

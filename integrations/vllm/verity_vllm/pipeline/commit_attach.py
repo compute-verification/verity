@@ -1,7 +1,7 @@
 """The Commit of record's acquisition on a built committer: its required classes (`classes_of_record`) and every source, tap and
 hook set its required-value manifest asks for (`attach_of_record`). `pipeline.commit.main` builds every committer of a Commit
 through these, and serve-openai's rows-sha512 Commit (`pipeline.serve_seal.committer`) builds its own through them too, over
-the manifest of the row's Build of record (predict's, `serve_seal.row_refusal`)."""
+the manifest of the row's Build of record (predict's, `serve_row.row_refusal`)."""
 from __future__ import annotations
 
 import json

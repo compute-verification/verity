@@ -15,7 +15,7 @@ The record path reaches this package only through a switched row (its `aot` in `
 `predict emit` (`aot`), each refused unless the predicted Program is the one its comparison's trace holds.  No module of the Build,
 Match or Commit imports it, and the trace that checks it forbids it as an input (`program.frontend.inputs_trace`).  The served
 Commit binds a row's Build of record as predict writes it (`aot.write_row`, ``predict row``), through its record
-(`records.predicted_row`, `pipeline.serve_seal.row_refusal`), and a traced Build only cross-checks it (``predict compare
+(`records.predicted_row`, `pipeline.serve_row.row_refusal`), and a traced Build only cross-checks it (``predict compare
 --predicted``).  A served Commit may take `compiled`'s Build as its Build of record: its treatment rebuilds the Build from its
 own compile artifact, and `compiled verify` holds the two equal.
 """

@@ -1,4 +1,4 @@
-"""A row's Build of record as the served Commit's preflight reads it (`serve_seal.row_refusal`): its manifest, and beside it the
+"""A row's Build of record as the served Commit's preflight reads it (`serve_row.row_refusal`): its manifest, and beside it the
 record `predict row` writes (`records.predicted_row`), naming the manifest's bytes."""
 from __future__ import annotations
 
