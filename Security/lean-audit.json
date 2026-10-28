@@ -2425,7 +2425,6 @@
    "Claims.Sampling.FaultyBoundary": "proved of every program (`Claims.Sampling.faultyBoundary`), not of a deployment",
    "Claims.Sampling.InScope": "a helper the claims read: the programs and partitions the sampling scope takes",
    "Claims.Sampling.LogColl": "a helper the claims read: a collision in a log of `H` calls",
-   "Claims.Sampling.Netlist.Fits": "a helper the claims read: a netlist of a size class",
    "Claims.Sampling.OneStage.WellFormed": "a helper the claims read: a well-formed one-stage design",
    "Claims.Sampling.Partition.Partitions": "a helper the claims read: a partition of a program's gates into proof units",
    "Claims.Sampling.Prog.Correct": "a helper the claims read: a correct gate interval on committed values",
@@ -2449,7 +2448,8 @@
    "Claims.Recursion.accAt": "`F0`'s loop condition (does a run as it may abort accept), a finder's internal test that `KSFlockLin` reads through `F0`, no claim",
    "Claims.Recursion.opensAt": "`FC`'s loop condition (does a run as it may abort accept and open a cap position), a finder's internal test that `KSFlockLin` reads through `FC`, no claim",
    "Claims.Recursion.accAtI": "`F0I`'s loop condition (does a draw's opened inner view accept), a finder's internal test that `KSLin2` and `BitsLin2` read through `F0I`, no claim",
-   "Claims.Recursion.opensAtI": "`FCI`'s loop condition (does a draw's opened inner view accept and open an inner cap position), a finder's internal test that `KSLin2` and `BitsLin2` read through `FCI`, no claim"
+   "Claims.Recursion.opensAtI": "`FCI`'s loop condition (does a draw's opened inner view accept and open an inner cap position), a finder's internal test that `KSLin2` and `BitsLin2` read through `FCI`, no claim",
+   "Claims.Sampling.PrivateCircuit.Fits": "a helper the claims read: a private circuit of a size class"
   }
  },
  "witnesses": {
@@ -5714,10 +5714,10 @@
    "owner": "@proofs",
    "signature": [
     "Claims.Sampling.universal_meets :",
-    "  Exists fun c => Exists fun n => Exists fun x => And (Claims.Sampling.Netlist.Fits c n) (Eq x.length c.nIn)"
+    "  Exists fun c => Exists fun n => Exists fun x => And (Claims.Sampling.PrivateCircuit.Fits c n) (Eq x.length c.nIn)"
    ],
    "assumptions": [],
-   "type_hash": "b08360cf751d2b6dd16de075df1216368538d3c6302577877fb8206d4f0b89fc"
+   "type_hash": "c33a70c7450a5f376fb9f4c873d3a01d04b2740479e935bcebb10ea09abc74ba"
   },
   "Claims.ScopeMatches_fails": {
    "owner": "@proofs",
@@ -18656,7 +18656,7 @@
    ]
   },
   "Definitions.Claims.Sampling": {
-   "digest": "561db0ff7cde8643adfbfa8782c806c2b33c3800aef17c71ad80efc9e421b330",
+   "digest": "2d5a1e78d04c5547b7ac428d429fbe5b78ffa24a6ca4f280e43d010468332a69",
    "definitions": {
     "Claims.Sampling.BGate": "63a981e57403ae475c097446b58799e6bbc6ebb87e4a1ff8911d63f602542833",
     "Claims.Sampling.BGate.and": "5e97bb022ac07b984f8303744fbc545e8aa6f37c7e6ec025083230906f800909",
@@ -18725,13 +18725,6 @@
     "Claims.Sampling.KSCount": "2efbb9432a8bc328bb911364ff9eceba711c48f28c6a06625967f2ae42354688",
     "Claims.Sampling.KSLinOn": "3cd3242c014dcfc2396edb1804401628881a6073f98b1da31842b3655b58e08b",
     "Claims.Sampling.LogColl": "556b27152133c315374dc4629cb20ba9925e4044187c7529eb9fb9c86de3ce30",
-    "Claims.Sampling.Netlist": "a5715809f46a4bb1974daf0b51e94642c1eb1b849c47def7d144b613e20c7af7",
-    "Claims.Sampling.Netlist.Fits": "459dc5d554c6c82dd0dac7534ecd4a6b485ebaa8f5f67a340674b4b37812a8a7",
-    "Claims.Sampling.Netlist.args": "f7e955d38bdbd5252ce99cdb56bb8dfbdddebd283a3d827e7fefdd3db3ee78a0",
-    "Claims.Sampling.Netlist.eval": "38bb58b607cf9cd2848aa46095e50061127dbf774fc6e1a0d4c5bf0845b7b7a1",
-    "Claims.Sampling.Netlist.gates": "b6c4f6a11e62c9e2a345b9386b1dbd99a1a6fc1c18945494d3840124ac3a18bd",
-    "Claims.Sampling.Netlist.nIn": "2c5a6e8598a69b21e15f28dd6a79a2624503263b4058f1e3c242136f14b097fd",
-    "Claims.Sampling.Netlist.outs": "ef33629e00cb854dc4ea52bd7de952916683ae96afa64e7349283de0b5cafcd4",
     "Claims.Sampling.Nontrivial": "30b73ab94434bb5e9f1c61616ff8de2b50587ca519a8a182ccede96b9c9ce759",
     "Claims.Sampling.OneStage": "cb6f56d99cbeb7b90e49aad0236a7e95d8bced32274eddffb6f4d26787814637",
     "Claims.Sampling.OneStage.Pa": "95b64751bb03cee2fbc0a999b82c0002e34f83f6ba13ba49ce3c651333ee1cb4",
@@ -18754,6 +18747,13 @@
     "Claims.Sampling.Partition.gates": "25e5fb5905cc384b6e985f12b5229025d519824f1158448897ab96edf9625cf8",
     "Claims.Sampling.Partition.rus": "10777adc5994a81b09c8af3f294707525aaddf608893de5be95fa459559c510d",
     "Claims.Sampling.Partition.sizes": "bc0005b8a3db8c1603fb0a051760b1bb2c422a599d96103777481f8154623c2e",
+    "Claims.Sampling.PrivateCircuit": "9813f5b18d83cd45f9d1ae8139ea289b797dd039267411c9256e418fc22578d5",
+    "Claims.Sampling.PrivateCircuit.Fits": "24112cd715fb564fa24e1e75189fddbcb14df7f2ba073735ddb87bbf657c5241",
+    "Claims.Sampling.PrivateCircuit.args": "8be38f16f5683514d112fc2ca764c6f7f4c32fd5f6b506d8798764044a8da29c",
+    "Claims.Sampling.PrivateCircuit.eval": "79a4affbe3415fa6822f159c0a5068e4f8286454106831b7fd914b23609b1d2c",
+    "Claims.Sampling.PrivateCircuit.gates": "901b30c9bcd6bdcb7f9838bc8b590d7b10a039b34ac90d6a40c774d77e5204ea",
+    "Claims.Sampling.PrivateCircuit.nIn": "db1d776f8180d23928d6cb840d37962603ab84afd87dbbb67ce0e0a93474b8ed",
+    "Claims.Sampling.PrivateCircuit.outs": "3dd7af5abeecd9ef16be98fc8a796ced876632fe9213e94c8acd06d5284de587",
     "Claims.Sampling.Prog": "c2bb2738f48ac496bbcf4942328a7048143095ce1ede1a1ca4e29765a59de40a",
     "Claims.Sampling.Prog.Boundary": "a3c4ad00a2bf2a1dae48b48ca2f5eaa07e43700d2400c180fd61cdbe751f98f2",
     "Claims.Sampling.Prog.Correct": "0b1ac97ea17b99f0b873f9e23f52830249f5a6abe05f5aabfd62a3de3190d288",
@@ -18797,7 +18797,7 @@
     "Claims.Sampling.Stmt.design": "1fdbf54f9ad131f163e801bc749976468a1852a10e59b71c9aea6552d84d2454",
     "Claims.Sampling.Stmt.prog": "089c7fb4fb8a1ee49e604cd8b3273677380388299c2538a80d3cbfcada0e7d9a",
     "Claims.Sampling.Stmt.roots": "defeddbeb4d990ea5f00d2e65cd72e719efe6512a98012c1046d31943d023ebc",
-    "Claims.Sampling.Universal": "25bd8974411f983bb9f2e4a6016ac2b27026d35c6c7fb21faacf2f6e822380dc",
+    "Claims.Sampling.Universal": "5dbe07df281a53420ead028462208aba891ee2756837f520e65c966cf73f5cf1",
     "Claims.Sampling.Wit": "6590ee24e3986e3cb508f9f39c39524cab60381d1b8fa8b6d746b9f41ce7acdd",
     "Claims.Sampling.Wit.val": "e0a4b81ff68ae11a7b8a4969774aac99d59443e22c6fa612f8b4b4158be1c510",
     "Claims.Sampling.Wit.vals": "690bd2a215b755609deff90c629481ece226295941bd46dfc8c6dbfbe44f6cc2",
