@@ -243,10 +243,14 @@ class CommitWindows:
     `NativeHostCommitter` with a `served_record.SamplerInputsSource` attached (or its offline stand-in in the tests:
     ``reset``, ``install``, ``uninstall``, ``finalize``, ``_layouts``, ``_step_index``, ``sources``, and to close off the loop
     ``enable_window_views`` and ``detach``, whose view has ``wait_absorbed`` and ``finalize``); ``eos_ids`` and
-    ``decode`` are the tokenizer's, for the finish check (`served_record.finish_problems`). ``arm`` (`serve_h1.H1Windows`)
-    opens on each window once its committer is installed and closes first at its close, before the committer comes off,
-    its hooks being on top of the committer's; what its ``close`` returns is the window line's ``pouw_h1``, and when that
-    is a `Future` (its release off the loop) the line is written once it resolves, the loop and the sealer going on."""
+    ``decode`` are the tokenizer's, for the finish check (`served_record.finish_problems`). A window closed on the loop takes
+    the committer off the engine and the next one installs it again; one closed off the loop leaves it installed, its view
+    detached, for the next window, which opens before the next engine step (`before_step`), so every step the hooks see is
+    in an open window and an off-loop window costs no install (`serve_openai.main` closes the committer at the end). ``arm``
+    (`serve_h1.H1Windows`) opens on each window once its committer is installed and closes first at its close, before the
+    committer comes off or its window is detached, its hooks being on top of the committer's; what its ``close`` returns is
+    the window line's ``pouw_h1``, and when that is a `Future` (its release off the loop) the line is written once it
+    resolves, the loop and the sealer going on."""
 
     def __init__(self, committer: Any, out: Path, *, run_id: str, window_steps: int, idle_close_steps: int = 1,
                  eos_ids: Sequence[int] = (), decode: Callable[[Sequence[int]], str] | None = None,
@@ -274,6 +278,7 @@ class CommitWindows:
         self.names: dict[str, str] = {}                  # every admitted engine id -> its name in a sealed window (`user`, else HTTP id)
         self.record = Record(known=self.known)
         self.window, self.open_s, self.is_open = -1, 0.0, False
+        self.installed = False                           # the committer's hooks are on the engine (an off-loop close leaves them)
         self.step_t: dict[int, float] = {}               # the open window's committed steps -> when their engine step ended
         self.ledgers: dict[str, Ledger] = {}
         self.records: list[dict[str, Any]] = []
@@ -342,7 +347,9 @@ class CommitWindows:
         self.in_window = set()
         self.off_loop = self._views()
         self.com.reset()
-        self.com.install()
+        if not self.installed:
+            self.com.install()
+            self.installed = True
         if self.arm is not None:
             try:
                 self.arm.open(self.window)
@@ -426,7 +433,7 @@ class CommitWindows:
         readback = self.record.absorb(self.com, self.window) if rc is not None else None
         lap("readback")
         self.com.uninstall()
-        self.is_open = False
+        self.installed = self.is_open = False
         c = _Closed(self.window, self.com, self.step_t, self.ledgers, [], self.open_s)
         rec, job = self._record(c, rc, readback, lap)
         c.finished = self._pop_finished()
@@ -447,10 +454,8 @@ class CommitWindows:
 
     def _close_off_loop(self, laps: list[tuple[str, float]], lap: Callable[[str], None]) -> None:
         view = self.com.detach() if int(self.com._step_index) else None
-        lap("detach")
-        self.com.uninstall()
         self.is_open = False
-        lap("uninstall")
+        lap("detach")
         ledgers = {e: led if led.finished else replace(led, streamed=list(led.streamed)) for e, led in self.ledgers.items()}
         finished = self._pop_finished()
         with self._lock:
