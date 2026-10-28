@@ -51,6 +51,10 @@
   `n2_tie_zk.py prove --class warden`'s, proved (``--tie``, `tie_step`); the scan is `scan_zk.py prove
   --warden-run`'s. Each is held to the warden run the certificates step read (`on_warden`), every one is required,
   and the report names what the path stands on (`WARDEN_STUBBED`).
+* **The coins** (`coins_step`, required on every path): each round's coin source from the drivers' summaries, a
+  session of the auditor's challenger for each scan round and each member of a sampled N2 period (`round_coins`),
+  none for a round that reads no coin (Selection All); refused when a scan round has no session or a session's
+  evidence doesn't hold. ``open`` names the coins that aren't the challenger's: every Flock session's.
 * **leak**: K per monitoring period (week, month, year; one machine and 1,000) on the warden gate run, pooled at
   δ = 1% and 10⁻⁶ and in the per-period form, each beside its share of Llama-3.2-1B's BF16 weights (`leak`).
 """
@@ -117,6 +121,8 @@ WARDEN_STUBBED = (
     "the endpoint's advice is bound to the warden's certified I/O and rebuilt from it in the clear at the auditor, "
     "and the output tie to the Commit's port isn't proved",
     "the weights' load isn't certified: nothing here shows the endpoint served the registered weights")
+#: a round that reads no coin (`n2_zk.NO_COIN`'s)
+NO_COIN = "selection all: no coin, no session"
 #: the rehearsal's strategies its own check accepts (certifier_serve.ACCEPTED): token's changed bytes only the tie refuses
 REHEARSAL_ACCEPTS = ("honest", "token")
 #: a proof block's outputs, at most 16 bits: a faulty proof block's leak
@@ -467,7 +473,7 @@ def n2_step(s: dict | None, certs_doc: dict, job: dict | None = None) -> dict:
             "ok": s.get("ok"), "unit": (s.get("link") or {}).get("unit"), "members": members,
             "negatives": {k: "escaped the draw" if v["escaped_the_draw"] else v["network_accepted"] is False
                           for k, v in members.items() if k != "honest"},
-            "challenger": s.get("challenger"),
+            "challenger": (s.get("coins") or {}).get("challenger"),
             "clocks": s.get("clocks") or {"source": "declared", "by": "plan.json's syncs (n2_zk); the certificates step "
                                                                       "found them equal to the signed ones: "
                                                                       f"{certs_doc.get('signed_are_declared')}"},
@@ -504,6 +510,32 @@ def scan_step(s: dict | None, warden_run: str | None, job: dict | None = None) -
             "warden_run": warden_run, "eps_at_delta": eps_at_delta(units, int(k or s.get("drawn") or units),
                                                                     f"stratified:{k}" if k else s.get("law") or "all"),
             "in_the_clear": CLEAR["scan"]}
+
+
+def coins_step(scan: dict | None, n2: dict | None, tie: dict | None, job: dict) -> dict:
+    """Each round's coin source, from the drivers' summaries' ``coins``: a scan round's and a sampled N2 member's
+    session of the auditor's challenger (`round_coins`), or none (Selection All: N2 at every window, the tie).
+    Accepted when every scan round the summary ran, and a sampled N2 period (the job's ``n2_sampled``), has a session
+    and every session held (`round_coins.Session.held`'s ``ok``); ``open`` names the coins that aren't the
+    challenger's, every Flock session's (`round_coins.FLOCK`)."""
+    rounds: dict[str, dict] = {}
+    for step, doc in (("scan", scan), ("n2", n2)):
+        for name, r in (((doc or {}).get("coins") or {}).get("rounds") or {}).items():
+            rounds[f"{step}/{name}"] = {k: r.get(k) for k in ("source", "root", "session", "coins_reason", "error",
+                                                               "read_bytes", "negatives_refused", "ok", "draw")
+                                        if k in r}
+    if tie is not None:
+        rounds["tie"] = {"source": None, "draw": (tie.get("coins") or {}).get("draw") or NO_COIN}
+    missing = [f"scan/{n}" for n in (scan or {}).get("rounds") or {} if f"scan/{n}" not in rounds]
+    if job.get("n2_sampled") and not any(k.startswith("n2/") for k in rounds):
+        missing.append("n2 (sampled)")
+    bad = {k: v.get("coins_reason") or v.get("error") or "the session's evidence doesn't hold"
+           for k, v in rounds.items() if v.get("source") and not v.get("ok")}
+    why = "; ".join([*(f"{k}: no challenger session" for k in missing), *(f"{k}: {v}" for k, v in bad.items())])
+    flock = next((d["coins"]["flock"] for d in (scan, n2, tie) if (d or {}).get("coins", {}).get("flock")), None)
+    return {"verdict": "refused" if why else "accepted", "why": why or None, "challenger": job.get("challenger"),
+            "rounds": rounds, "open": [f"every Flock session's coins (scan, N2, tie): {flock['by']}"] if flock else [],
+            "in_the_clear": "the sessions' evidence: the challenger's key, ledger, pins and released coins, public"}
 
 
 def scan_exit(s: dict | None, job: dict) -> str | None:
@@ -738,9 +770,9 @@ def leak_markdown(doc: dict) -> str:
 
 
 def merged_n2(paths: list[str] | None) -> dict | None:
-    """N2's summaries of one period's members proved in several runs (``--n2 A B …``, each run's draw on its own
-    challenger session, every one of the same population and K): one summary, its members and sampled draws their
-    union, ``ok`` only when every run's is, and each run's challenger session kept."""
+    """N2's summaries of one period's members proved in several runs (``--n2 A B …``, each member's draw on its own
+    challenger session, every one of the same population and K): one summary, its members, sampled draws and
+    members' sessions their union, ``ok`` only when every run's is."""
     docs = [d for d in map(_json, [paths] if isinstance(paths, str) else paths or []) if d]
     if len(docs) < 2:
         return docs[0] if docs else None
@@ -749,8 +781,9 @@ def merged_n2(paths: list[str] | None) -> dict | None:
         raise SystemExit(f"--n2: the runs' draws differ: {sorted(draws)}")
     return {**docs[0], "members": {k: v for d in docs for k, v in (d.get("members") or {}).items()},
             "sampled": {k: v for d in docs for k, v in (d.get("sampled") or {}).items()},
-            "challenger": [d.get("challenger") for d in docs], "ok": all(d.get("ok") is True for d in docs),
-            "runs": len(docs)}
+            "coins": {**(docs[0].get("coins") or {}),
+                      "rounds": {k: v for d in docs for k, v in ((d.get("coins") or {}).get("rounds") or {}).items()}},
+            "ok": all(d.get("ok") is True for d in docs), "runs": len(docs)}
 
 
 def stubbed(job: dict, custody_doc: dict) -> list[str]:
@@ -884,9 +917,10 @@ def report(a) -> dict:
     scan = ({"verdict": "not run", "why": STUBBED[0], "in_the_clear": CLEAR["scan"]} if certifier_only
             else scan_step(_json(a.scan), a.warden_run, job))
     certificates = {k: v for k, v in cert.items() if k != "rows"}
-    tie = None
+    tie, tie_doc = None, _json(getattr(a, "tie", None)) if warden else None
+    coins = coins_step(None if certifier_only else _json(a.scan), merged, tie_doc, job)
     if warden:
-        run_id, tie_doc = cert.get("warden_run"), _json(getattr(a, "tie", None))
+        run_id = cert.get("warden_run")
         certificates = on_warden(certificates, _json(a.certs), run_id, "the certificates step's input")
         endpoint = on_warden(endpoint, _json(a.endpoint), run_id, "the endpoint's report")
         n2 = on_warden(n2, merged, run_id, "N2's summary") | {
@@ -903,10 +937,11 @@ def report(a) -> dict:
                                     "binary": job.get("lean"), "in_the_clear": CLEAR["lean"],
                                     "n2_windows_proved": ((n2.get("members") or {}).get("honest") or {}).get(
                                         "lean_proved"),
-                                    "scan_rounds": {k: v.get("verdicts") for k, v in scan.get("rounds", {}).items()}}}
-    required = (("custody", "certificates", "endpoint", "tie", "n2", "scan") if warden else
+                                    "scan_rounds": {k: v.get("verdicts") for k, v in scan.get("rounds", {}).items()}},
+             "coins": coins}
+    required = (("custody", "certificates", "endpoint", "tie", "n2", "scan", "coins") if warden else
                 ("custody", "certificates", *(("endpoint",) if job.get("profile") == ADVICE else ()),
-                 *(() if scan_only else ("n2",)), *(() if certifier_only else ("scan",))))
+                 *(() if scan_only else ("n2",)), *(() if certifier_only else ("scan",)), "coins"))
     accepted = (all(steps[k].get("verdict") == "accepted" for k in required)
                 and not any(steps[k].get("stand_in") for k in ("n2", "scan")))
     rehearsal = {f"rehearsal/{g['gate_run']}/{s}": v == "refused" for g in cust.get("gate_runs") or []
@@ -939,7 +974,7 @@ def markdown(r: dict) -> str:
     if r.get("stubbed"):
         lines += ["Stubbed:", *[f"- {x}" for x in r["stubbed"]], ""]
     lines += ["| step | verdict | ε at δ | in the clear |", "|---|---|---|---|"]
-    shown = [k for k in ("custody", "certificates", "endpoint", "tie", "n2", "scan", "lean") if k in s]
+    shown = [k for k in ("custody", "certificates", "endpoint", "tie", "n2", "scan", "lean", "coins") if k in s]
     for k in shown:
         e = s[k].get("eps_at_delta") or {}
         eps = (f"{e['law']}, {e['drawn']} of {e['units']}: wrong ≤ {e['wrong_units_at_delta']}" if e else "")
@@ -952,7 +987,12 @@ def markdown(r: dict) -> str:
                                                                 f"certified I/O {ep.get('io')}"))
     if s.get("tie", {}).get("tie"):
         notes.append(f"- tie: link-windows tied by member {s['tie']['tie']}")
-    lines += ["", *notes, "", f"Negatives refused: {r['negatives_refused']}", "", "## D1", ""]
+    c = s.get("coins") or {}
+    coins = [f"- {k}: " + (f"{v['source']}, session {v.get('session')}, {'held' if v.get('ok') else 'NOT held'}"
+                           if v.get("source") else str(v.get("draw"))) for k, v in (c.get("rounds") or {}).items()]
+    lines += ["", *notes, "", f"Negatives refused: {r['negatives_refused']}", "",
+              f"## Coins (the challenger: {c.get('challenger')})", "", *coins, *[f"- open: {x}" for x in c.get("open") or []],
+              "", "## D1", ""]
     d = r["d1"]
     lines += [f"- {d['theorem']}; {d['sum']}", f"- windows {d['windows']}, all accepted {d['all_accepted']}",
               f"- Σ ε_w = {d['sum_eps']}"]

@@ -92,11 +92,11 @@ fetch, so the endpoint step checks the endpoint's trace against the certified I/
 `witness/`, stays in a 0700 directory outside the run dir, and `$OUT` gets only the bundle less `witness/` and the
 session's outcome. `chain` runs the chain's warden path on the kept fetch, and only from a tree with the record's leak
 guard. `session --gate local` is the dry rehearsal: this tree's gate on a scratch host, with `demo_stub.py serve` as
-the endpoint. `chain --coins gate` draws the scan's units on the gate's coins on the auditor's side, the node the chain
-runs on (vy-nebius-cpu-2), which the challenger's coin link reaches through that node's own line of
-`/etc/vy/coin-ports` (ports 7821-7830). It refuses the served node as the draw's peer, since the gate key and the
-warden run's witness never go on the prover's machine. Without the gate's coins the chain draws on the verifier's
-(`--coins verifier`, the default).
+the endpoint. Every round of `chain` that draws (each scan round, each member of N2's sampled period) reads its coins
+from a session of its own of the auditor's challenger (`--challenger`, `round_coins.py`): by default the gate's, on
+the network certifier's machine, whose coin link reaches the node the chain runs on through that node's own line of
+`/etc/vy/coin-ports` (vy-nebius-cpu-2's is ports 7821-7830); `--challenger local` is a dry run's. Nothing draws on
+the verifier's own coins, and a challenger that fails fails the round.
 
 `certifier_piece.py` is the network certifier's piece of `benchmarks/one_stage/served_verdicts.sh`. Its `front`
 (`CERTIFIER_FRONT`) runs before that run's requests: the gate's scan rehearsal sends one group of the window circuit's
@@ -106,8 +106,9 @@ closes it into the run's earliest window, the one the run audits, and the gate's
 endpoint records, run dir and quarantine private beside the fetch, and answers with `network-period check` on the rows
 form of the scan's link-window (`scan_period.rows_case`). The answer is accept only when the chain accepted, every request
 of the audited window is a certified one inside that link-window, and the Lean check accepts. Anything else is a reject,
-or undecided when a step couldn't run. With no fetch kept the piece refuses to run (`refused.txt`), which leaves the
-certifier missing.
+or undecided when a step couldn't run. With no fetch kept, or when a drawing round's challenger session didn't open or
+its evidence doesn't hold, the piece refuses to run (`refused.txt`), which leaves the certifier missing; each round's
+challenger evidence goes in its public files.
 
 ## The chain's run of record
 
@@ -143,9 +144,10 @@ the (j mod n)-th; `--margin`: the plan's over the probes, 1 to 8, 2 otherwise). 
 | scan | the scan's ingress and egress proof blocks of a sampling block, one registration, `verify --zk --registered` | the audit's `wrong_units` at the draw's sampling design | each proof block's output bit; the I/O tie stays outside the proofs |
 | Lean | every proof of both steps is the verifier's own `flock-verify verify --zk` run | per proof, ε_ks + ε_bind | nothing |
 
-The job's environment picks what it runs: N2's sampled draw on the gate's coins is `CR_N2_CMD` (`n2_advised_zk.py prove
---e2e --draw K --challenger gate:…`), the scan of the gate's own rows is `CR_WARDEN_RUN` with `CR_SCAN_ARGS="--draw K
---challenger gate:…"` (`scan_zk.py prove --warden-run`), and the client's `certificates.jsonl` and `clocks.jsonl` are
+The job's environment picks what it runs: `CR_CHALLENGER` (`local` or `gate:…`, required whenever a round draws) is the
+auditor's challenger every drawing round takes a session of, each scan round and each member of N2's sampled period
+(`CR_N2_DRAW`, or `--draw K` in `CR_N2_ARGS`); the scan of the gate's own rows is `CR_WARDEN_RUN` with
+`CR_SCAN_ARGS="--draw K"` (`scan_zk.py prove --warden-run`), and the client's `certificates.jsonl` and `clocks.jsonl` are
 `CR_CLIENT`, by default the network certifier rehearsal's own `client/`. A step on a stand-in (the scan on its own
 synthetic run, or N2 on `CR_N2_STANDIN=simulated`) never makes the report accepted, and a step that fails or doesn't run
 says why.

@@ -4,7 +4,8 @@ the active warden in front of serve-openai there (its ``CERTIFIER_FRONT``).
     python certifier_piece.py front PORT SERVE_DIR OUT [--gate USER@HOST | --gate local] [--key KEY] [--peer NAME]
         [--prompts 4] [--prompt-ids 24] [--tokens 4] [--vocab 128000] [--height 10] [--minutes M]
     python certifier_piece.py piece SERVE_DIR WINDOW DIR [--eos-ids IDS] [--lean EXE] [--draw K] [--chain-cmd CMD]
-        [CR_K=V ...]
+        [--challenger gate:USER@HOST --challenger-key RECORD [--coin-peer NAME] [--key KEY] | --challenger local]
+        [--main FILE] [CR_K=V ...]
     python certifier_piece.py relay --listen PORT --to PORT
 
 * **front** runs before served_verdicts.sh's requests when ``CERTIFIER_FRONT`` names it: the gate's scan rehearsal
@@ -28,13 +29,18 @@ the active warden in front of serve-openai there (its ``CERTIFIER_FRONT``).
   3. The chain (`served_session.py chain`: chain_record.sh's warden path, certs, endpoint, N2, tie and scan) on the
      kept run, with the serve dir's endpoint records (`ENDPOINT`, copied to SERVE_DIR/`PRIVATE`/RUN/endpoint), its run
      dir and quarantine under SERVE_DIR/`PRIVATE`/RUN, so nothing of the witness reaches a record. N2 and the tie
-     take every link-window of a run of at most 8 (`sized`). Its report's verdict ``accepted`` goes on; any other is a
-     reject with its why.
+     take every link-window of a run of at most 8 (`sized`). Every round that draws reads its coins from a session of
+     its own of the auditor's challenger (``--challenger``: the gate's, `served_session.GATE`, by default, its client
+     on this node, ``--coin-peer`` as the gate's peers file names it; ``local``, a dry run's). The report's coins step
+     not accepted (no challenger, the gate unreachable, a session refused or its evidence not holding) is `NotRun`:
+     nothing falls back to other coins. Else its verdict ``accepted`` goes on; any other is a reject with its why.
   4. The period's link-window is the scan's (``answers.json``'s one window): every window request's release and
      streamed ids lie in it, else reject.
   5. The period check: `scan_period.rows_case` of the warden run and the chain's scan, checked by ``network-period``
      (``--lean``, else built in verity/core/protocols/network/lean); its answer is the piece's.
-  DIR also gets the chain's public report, job and leak-guard files and the check's three input files in DIR/period,
+  DIR also gets the chain's public report, job and leak-guard files, each drawing round's challenger evidence (its
+  ``challenger/`` directory: the session's files, the ledger, the pins log and ``coins.json``, `CHALLENGER`), and the
+  check's three input files in DIR/period,
   the case's only copy (its params alone run to tens of megabytes on a served window); the record's leak guard
   (`leak_guard.py`) then reads DIR against the warden run's witness. Only the protocol rejects: a step that can't run
   (no kept run, a build, a tool or the chain failing without a report, an input missing, the leak guard failing, or
@@ -78,6 +84,10 @@ LEAN_DIR = TREE / "verity" / "core" / "protocols" / "network" / "lean"
 #: the window circuit's class (4 slots, prompts of at most 32 ids, 4 outputs) and the scan's lanes
 PROMPTS, PROMPT_IDS, TOKENS = 4, 24, 4
 HEIGHT = 10
+#: the served node, where the piece and its chain run, as the gate's peers file names it
+SERVED = "vy-dc-h200"
+#: each drawing round's challenger evidence in the chain's out/ (`round_coins.Session`)
+CHALLENGER = ("scan/*/challenger", "n2/*/challenger", "n2/*/verifier/period-certificates.json")
 
 
 def answer(verdict: str, reason: str) -> dict:
@@ -236,16 +246,24 @@ def sized(windows: int, sets: list[str]) -> list[str]:
             *([f"CR_TIE_WINDOWS={windows}"] if "CR_TIE_WINDOWS" not in given else []), *sets]
 
 
-def run_chain(keep: Path, run: str, endpoint: Path, eos: str, draw: int | None, sets: list[str],
+def coin_argv(a: argparse.Namespace) -> list[str]:
+    """`served_session.py chain`'s challenger flags (`served_session.coin_env`), the piece's own."""
+    return ["--challenger", a.challenger, "--coin-peer", a.coin_peer, "--key", str(a.key),
+            *(["--challenger-key", str(a.challenger_key)] if a.challenger_key else []),
+            *(["--main", str(a.main)] if a.main else [])]
+
+
+def run_chain(keep: Path, run: str, endpoint: Path, eos: str, draw: int | None, sets: list[str], coins: list[str],
               cmd: str | None = None) -> int:
-    """`served_session.py chain` on the kept run (or ``cmd``, run as ``bash -c CMD _ KEEP RUN ENDPOINT``), its run dir
-    (RESEARCH_RUN_DIR, whose out/ holds the report) and quarantine private under KEEP/RUN."""
+    """`served_session.py chain` on the kept run, its rounds drawn on the challenger `coins` (`coin_argv`), or
+    ``cmd``, run as ``bash -c CMD _ KEEP RUN ENDPOINT``; its run dir (RESEARCH_RUN_DIR, whose out/ holds the report)
+    and quarantine private under KEEP/RUN."""
     d = keep / run
     env = dict(os.environ, RESEARCH_RUN_DIR=str(d / "chain"), CR_QUARANTINE=str(d / "quarantine"))
     (d / "chain").mkdir(mode=0o700, exist_ok=True)
     argv = ["bash", "-c", cmd, "_", str(keep), run, str(endpoint)] if cmd else [
         sys.executable, str(HERE / "served_session.py"), "chain", "--run", run, "--keep", str(keep),
-        "--endpoint", str(endpoint), "--eos-ids", eos, *(["--draw", str(draw)] if draw else []), *sets]
+        "--endpoint", str(endpoint), "--eos-ids", eos, *(["--draw", str(draw)] if draw else []), *coins, *sets]
     with open(d / "chain" / "stdout.log", "w") as log:
         return subprocess.run(argv, cwd=TREE, env=env, stdout=log, stderr=subprocess.STDOUT).returncode
 
@@ -282,6 +300,13 @@ def publish(chain_out: Path, d: Path) -> None:
         if (chain_out / rel).is_file():
             (d / "chain" / rel).parent.mkdir(parents=True, exist_ok=True)
             shutil.copyfile(chain_out / rel, d / "chain" / rel)
+    for p in (p for pattern in CHALLENGER for p in sorted(chain_out.glob(pattern))):
+        to = d / "chain" / p.relative_to(chain_out)
+        to.parent.mkdir(parents=True, exist_ok=True)
+        if p.is_dir():
+            shutil.copytree(p, to, dirs_exist_ok=True)
+        else:
+            shutil.copyfile(p, to)
 
 
 def decide(serve_dir: Path, window: int, d: Path, *, chain: Callable[[Path, str, Path, int], int],
@@ -309,6 +334,10 @@ def decide(serve_dir: Path, window: int, d: Path, *, chain: Callable[[Path, str,
         if not report.is_file():
             raise NotRun(f"the chain wrote no report (exit {rc}): see chain/ and the kept run's stdout.log")
         doc = json.loads(report.read_text())
+        coins = (doc.get("steps") or {}).get("coins") or {}
+        if coins.get("verdict") != "accepted":
+            raise NotRun(f"the challenger's coins ({coins.get('challenger')}): "
+                         f"{coins.get('why') or 'the report has no coins step'}"[:1800])
         if doc.get("verdict") != "accepted":
             raise Rejected(f"the chain {doc.get('verdict')}: {json.dumps(doc.get('why'), default=str)}"[:1800])
         try:
@@ -371,9 +400,11 @@ def piece(a: argparse.Namespace) -> int:
         if not any((serve_dir / PRIVATE).glob("*/fetch.tar.gz")):
             raise NotRun(f"no warden run kept under {serve_dir / PRIVATE}: the run's load didn't go through the "
                          "certifier's front (CERTIFIER_FRONT unset, or the gate, its tunnel or ssh failed)")
+        if why := SS.challenger_refusal(a):
+            raise NotRun(f"no challenger for the chain's coins: {why}")
         exe = period_exe(a.lean)
         chain = lambda keep, run, ep, n: run_chain(keep, run, ep, a.eos_ids, a.draw, sized(n, a.set),  # noqa: E731
-                                                   a.chain_cmd)
+                                                   coin_argv(a), a.chain_cmd)
         got, unpacked = decide(serve_dir, a.window, d, chain=chain, check=lambda c, p: period_check(exe, c, p))
         (d / "answer.json").write_text(json.dumps(got, indent=1, sort_keys=True) + "\n")
         g = guard(d, unpacked, serve_dir / PRIVATE / "quarantine")
@@ -402,7 +433,7 @@ def parser() -> argparse.ArgumentParser:
     f.add_argument("out", type=Path)
     f.add_argument("--gate", default=SS.GATE, help="USER@HOST, the gate's; or local, the dry run's")
     f.add_argument("--key", type=Path, default=SS.KEY)
-    f.add_argument("--peer", default="vy-dc-h200")
+    f.add_argument("--peer", default=SERVED)
     f.add_argument("--prompts", type=int, default=PROMPTS)
     f.add_argument("--prompt-ids", type=int, default=PROMPT_IDS)
     f.add_argument("--tokens", type=int, default=TOKENS)
@@ -417,6 +448,8 @@ def parser() -> argparse.ArgumentParser:
     q.add_argument("--lean", help="network-period, built (else built here)")
     q.add_argument("--draw", type=int, help="the scan's K drawn units (every unit by default)")
     q.add_argument("--chain-cmd", help="replaces served_session.py chain: bash -c CMD _ KEEP RUN ENDPOINT")
+    SS.coin_flags(q, SERVED)
+    q.add_argument("--key", type=Path, default=SS.KEY, help="with --challenger gate:…: the lane's gate key")
     q.add_argument("set", nargs="*", help="CR_K=V")
     r = sub.add_parser("relay")
     r.add_argument("--listen", type=int, required=True)

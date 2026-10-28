@@ -5,7 +5,8 @@
 # the network slots:
 #   research run --on vy-nebius-cpu-2 --source . --project verity --as LANE --cwd clone --timeout 240m \
 #     --send GATE.tgz -- env CHECK_SLOTS=/workspace/research/locks/network/slots python3 tools/verity/check/slot.py \
-#     --by LANE -- env CR_MEM_GB=128 CR_GATES=GATE.tgz bash benchmarks/network_traces/chain_record.sh
+#     --by LANE -- env CR_MEM_GB=128 CR_GATES=GATE.tgz CR_CHALLENGER=local \
+#     bash benchmarks/network_traces/chain_record.sh
 # Steps, each kept under $OUT and read by the report:
 #   custody  each gate run's files against its end.json (chain_record.py custody)
 #   certs    the client's kept certificates.jsonl (or certified.jsonl) and clocks.jsonl, verified (chain_record.py certs)
@@ -15,7 +16,8 @@
 #            (a sampled draw on signed clocks); else on the advice profile n2_advised_zk.py --e2e on the bound
 #            advice and the certifier's clock certificates, and on the others n2_zk.py prove
 #   scan     the scan's chained units, --zk, held by Lean verify --zk --registered (scan_zk.py prove, with
-#            --warden-run when CR_WARDEN_RUN names the gate's warden run and scan_zk takes it)
+#            --warden-run when CR_WARDEN_RUN names the gate's warden run and scan_zk takes it), each round drawn on a
+#            session of CR_CHALLENGER's
 #   tie      on the warden path, the I/O tie on the warden's ingress, proved (n2_tie_zk.py prove --class warden)
 #   report   $OUT/report/report.json and report.md (chain_record.py report)
 #   guard    on every exit, before custody publishes the run dir, the record's leak guard (leak_guard.py): each file in it
@@ -34,7 +36,7 @@
 #      CR_N2_ROUNDS (n2_zk.py's --rounds)  CR_N2_WINDOWS (n2_advised_zk.py's --windows)
 #      CR_N2_MEMBERS (its --members)  CR_N2_STANDIN=simulated (a dry run's: on the advice profile when the
 #      advice doesn't bind, the advised unit on n2_advised_zk's simulated link, labelled a stand-in)
-#      CR_N2_ARGS (more n2_advised_zk.py arguments, e.g. "--draw 4", a sampled period on the verifier's own coins)
+#      CR_N2_ARGS (more n2_advised_zk.py arguments, e.g. "--draw 4", a sampled period on the challenger's coins)
 #      CR_N2_CMD (replaces the above; run with HONEST, CLIENT, BIN, LEAN, E2E and N2OUT set, writing N2OUT/summary.json)
 #      CR_WARDEN_RUN (the warden rehearsal's run, a path under the unpacked gates)  CR_SCAN_ARGS (more scan_zk.py
 #      arguments, e.g. "--draw 8")  CR_SCAN_CMD (replaces scan_zk.py prove; SCANOUT/summary.json)
@@ -43,7 +45,12 @@
 #      CR_PATH=warden (above)  CR_EOS_IDS (the warden path's endpoint step: the model's EOS token ids, comma-separated,
 #      e.g. 128001 for Llama-3.2-1B; a warden run records none)  CR_TIE_WINDOWS (the tie's link-windows, the run's all
 #      by default)  CR_TIE_GPU=1 and CR_N2_GPU=1 (the tie's and N2's provers on the GPU)  CR_N2_DRAW (n2_zk.py's
-#      --draw K: N2's period sampled, K of the link-windows drawn on the verifier's coins; every one by default)
+#      --draw K: N2's period sampled, K of the link-windows drawn on the challenger's coins; every one by default)
+#      CR_CHALLENGER=local|gate:USER@HOST (required unless nothing draws: the auditor's challenger, a session of its
+#      own for each scan round and each member of a sampled N2 period, round_coins; local is a dry run's, on this
+#      machine) with CR_MAIN (the verifier's main first-parent history, a path or a name under inputs/; by default
+#      fetched from the tree's origin) and, for gate:…, CR_PEER (this node as the gate's /etc/vy/peers names it),
+#      CR_CHALLENGER_KEY (the deployment's challenger-key/v1 record) and CR_GATE_KEY (the lane's gate key)
 #      CR_AUDIT (the served units' compute audit windows, space-separated directories: the report's --audit, d1's K)
 #      CR_PERIOD_ANSWER (certifier/v0's network-period check answer on the period, X.answer.json with its case
 #      X.case.json beside it, a path or a name under inputs/) and CR_SERVER (the node the block ran on): network-period
@@ -147,6 +154,34 @@ mkdir -p "$OUT/gates"
 (cd "$G" && find . -type f \( -name '*.json' -o -name '*.jsonl' -o -name '*.log' \) -size -64M ! -path '*/witness/*' \
   -print0 | xargs -0 -r -I{} cp --parents {} "$OUT/gates/")
 
+# ---- the challenger --------------------------------------------------------------------------------------------------
+# every round that draws (the scan's, a sampled N2 period's) reads its coins from a session of the auditor's challenger
+# of its own (round_coins), and nothing draws on the verifier's own: no challenger, no draw
+CH=()
+if [ -n "${CR_CHALLENGER:-}" ]; then
+  MAIN=${CR_MAIN:-}
+  if [ -n "$MAIN" ]; then [ -e "$MAIN" ] || MAIN=${RESEARCH_RUN_DIR:?}/inputs/$MAIN
+  else   # the verifier's own copy of main's first-parent history, which each session's pin must be on
+    MAIN=$OUT/main.txt UNSHALLOW=(); [ "$(git rev-parse --is-shallow-repository)" = true ] && UNSHALLOW=(--unshallow)
+    { git fetch -q "${UNSHALLOW[@]}" origin +refs/heads/main:refs/remotes/origin/main \
+        || git fetch -q "${UNSHALLOW[@]}" origin +refs/remotes/origin/main:refs/remotes/origin/main; } \
+      > "$OUT/fetch-main.log" 2>&1 && git rev-list --first-parent refs/remotes/origin/main > "$MAIN" \
+      || { log "chain: no main first-parent history for the challenger's pin (CR_MAIN)"; exit 3; }
+  fi
+  CH=(--challenger "$CR_CHALLENGER" --main "$MAIN")
+  case $CR_CHALLENGER in gate:*)
+    [ -n "${CR_PEER:-}" ] && [ -n "${CR_CHALLENGER_KEY:-}" ] \
+      || { log "chain: CR_CHALLENGER=gate:… needs CR_PEER and CR_CHALLENGER_KEY"; exit 3; }
+    CH+=(--peer "$CR_PEER" --challenger-key "$CR_CHALLENGER_KEY" ${CR_GATE_KEY:+--gate-key "$CR_GATE_KEY"});;
+  esac
+elif { [ -z "${CR_SCAN_CMD:-}" ] && [ "${CR_PATH:-}" != certifier-only ]; } || [ -n "${CR_N2_DRAW:-}" ] \
+    || [[ " ${CR_N2_ARGS:-} " == *" --draw "* ]]; then
+  log "chain: CR_CHALLENGER (local|gate:USER@HOST) names the auditor's challenger whose sessions the scan's rounds and a" \
+    "sampled N2 period draw on: nothing draws on the verifier's own coins"; exit 3
+fi
+CHS=; [ ${#CH[@]} = 0 ] || CHS=$(printf '%q ' "${CH[@]}")
+log "chain: the challenger ${CR_CHALLENGER:-none}"
+
 setup
 "$PY" "$CR" custody --gates "$G" --out "$OUT/custody.json" 2>&1 | tee -a "$OUT/job.log" | cut -c1-2000
 if [ "${CR_PATH:-}" = warden ]; then
@@ -200,10 +235,10 @@ keep() {   # keep FROM TO: the public files and what the verifier received, neve
 n2() {
   export HONEST CLIENT BIN LEAN E2E N2OUT=$W/n2
   local advised="$PY benchmarks/network_traces/n2_advised_zk.py prove --bin $BIN --lean $LEAN --out $N2OUT \
-    ${CR_N2_MEMBERS:+--members $CR_N2_MEMBERS} ${CR_N2_ARGS:-}"
+    ${CR_N2_MEMBERS:+--members $CR_N2_MEMBERS} $CHS ${CR_N2_ARGS:-}"
   if [ -n "${CR_N2_CMD:-}" ]; then cmd=$CR_N2_CMD
   elif [ "${CR_PATH:-}" = warden ]; then cmd="$PY benchmarks/network_traces/n2_zk.py prove --warden-run $WARDEN \
-    --bin $BIN --lean $LEAN --out $N2OUT ${CR_N2_GPU:+--gpu} ${CR_N2_DRAW:+--draw $CR_N2_DRAW}"
+    --bin $BIN --lean $LEAN --out $N2OUT ${CR_N2_GPU:+--gpu} ${CR_N2_DRAW:+--draw $CR_N2_DRAW $CHS}"
   elif [ "$PROFILE" != advice ]; then cmd="$PY benchmarks/network_traces/n2_zk.py prove --run $HONEST --bin $BIN \
     --lean $LEAN --out $N2OUT ${CR_N2_ROUNDS:+--rounds $CR_N2_ROUNDS}"
   elif [ "$BOUND" = 1 ]; then cmd="$advised --e2e $E2E ${CR_N2_WINDOWS:+--windows $CR_N2_WINDOWS}"
@@ -235,7 +270,7 @@ scan() {
   fi
   log "chain: scan ${CR_SCAN_CMD:+(CR_SCAN_CMD) }${wr:-on the synthetic warden run of scan_zk}"
   if [ -n "${CR_SCAN_CMD:-}" ]; then bash -c "$CR_SCAN_CMD"
-  else "$PY" benchmarks/network_traces/scan_zk.py prove --bin "$BIN" --lean "$LEAN" --out "$SCANOUT" $wr \
+  else "$PY" benchmarks/network_traces/scan_zk.py prove --bin "$BIN" --lean "$LEAN" --out "$SCANOUT" $wr "${CH[@]}" \
     ${CR_SCAN_ARGS:-}; fi > "$OUT/scan.log" 2>&1
   echo $? > "$W/scan.rc"; keep "$SCANOUT" "$OUT/scan"; log "chain: scan done, rc $(cat "$W/scan.rc")"
   [ "$(cat "$W/scan.rc")" = 0 ] || tail -n 1 "$OUT/scan.log" | cut -c1-600 > "$W/scan.why"
@@ -262,7 +297,9 @@ w = Path(sys.argv[2])
 text = lambda f: (w / f).read_text().strip() if (w / f).is_file() else None
 json.dump({"run": os.environ.get("RESEARCH_RUN_ID"), "tree": "${RESEARCH_SOURCE_SHA:-$(git -C "$SRC" rev-parse HEAD 2>/dev/null)}",
            "gates": "${CR_GATES}".split(), "endpoint": os.environ.get("CR_ENDPOINT"), "profile": "$PROFILE",
-           "path": os.environ.get("CR_PATH"),
+           "path": os.environ.get("CR_PATH"), "challenger": os.environ.get("CR_CHALLENGER"),
+           "n2_sampled": not os.environ.get("CR_SCAN_ONLY") and not os.environ.get("CR_N2_CMD") and (
+               bool(os.environ.get("CR_N2_DRAW")) or " --draw " in f" {os.environ.get('CR_N2_ARGS', '')} "),
            "lean": "$(sha256sum "$LEAN" | cut -c1-64) $LEAN", "bin": "$(sha256sum "$BIN" | cut -c1-64)",
            "n2_cmd": os.environ.get("CR_N2_CMD"), "scan_cmd": os.environ.get("CR_SCAN_CMD"),
            "scan_only": bool(os.environ.get("CR_SCAN_ONLY")),

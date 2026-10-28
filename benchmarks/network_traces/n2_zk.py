@@ -10,7 +10,7 @@ decides nothing.
     python benchmarks/network_traces/n2_zk.py prove --run DIR [--extra DIR] [--late DIR] --bin flock-circuit
       --lean flock-verify --out DIR [--jobs 1] [--gpu] [--debug-clear] [--dry]
     python benchmarks/network_traces/n2_zk.py prove --warden-run DIR --bin flock-circuit --lean flock-verify --out DIR
-      [--draw K]
+      [--draw K --challenger local|gate:USER@HOST --main FILE [--peer NAME --challenger-key RECORD] [--gate-key KEY]]
 
 * **The runs.** A certifier-serve run's directory (`certifier_serve.py rehearse`'s per strategy, or `virtual`'s): its
   `plan.json`, `calibration.json`, `deployment.json` and `certified.jsonl`. `virtual` makes them on an injected clock
@@ -26,11 +26,15 @@ decides nothing.
   output word by the gates' references, `LinkWindows.outputs`) say beforehand which windows each member's proofs refuse
   (`expected`).
 * **The period** (``--draw K``): each member's windows sampled rather than all proved, as `n2_advised_zk`'s: every
-  window's salted root committed, then K of them drawn on the verifier's own coins (`LinkWindows.period_draw`), and
-  only those registered, proved and decided; the network verdict is the sampled one, its ``wrong_units`` at the
+  window's salted root committed, then K of them drawn on the auditor's challenger's coins (`LinkWindows.period_draw`),
+  and only those registered, proved and decided; the network verdict is the sampled one, its ``wrong_units`` at the
   stream's δ, on the Lean verifier of record's draw. ``tampered`` then changes every window (`every_count`), which any
   draw refuses, and with K < n ``other_subset`` proves the honest records on another K-subset (`other_subset`), every
-  window accepted, which the network verdict refuses by name (``period-draw``).
+  window accepted, which the network verdict refuses by name (``period-draw``). Each member draws on a session of its
+  own (`period_member`; ``--challenger``, `round_coins`), on the root of its period's certificates, the step and the
+  member, held to the session's evidence (`period_held`); a session that doesn't open stops the driver. The summary's
+  ``coins`` names each member's session, or no coin (Selection All), and the Flock sessions' coins
+  (`round_coins.FLOCK`), which are not the challenger's.
 * **The statement** (`stager`, `stage`). One circuit, `LinkWindows.proof_unit` lowered once (the registered unit with each
   gate the Definition its pinned digest names), bound to the registered partition and Program. Each link-window is a
   statement of its own with one instance, unit 0: rows ``pub`` and ``wit`` (`LinkWindows.layout`, `LinkWindows.row`) and
@@ -80,25 +84,33 @@ sys.path.insert(0, str(HERE))
 
 import certifier_serve as cs  # noqa: E402
 import leak_scan as LS  # noqa: E402
+import round_coins as RC  # noqa: E402
 from verity.core.protocols.certifier import advised as AD, head_check as HC  # noqa: E402
 from verity.core.protocols.certifier import service as SVC  # noqa: E402
 from verity.core.protocols.certifier.certificate import CertifiedRecord, Direction, Issuer  # noqa: E402
 from verity.core.protocols.certifier.schedule import ClockSync  # noqa: E402
 from verity.core.protocols.certifier.service import LinkWindows  # noqa: E402
-from verity.core.protocols.sampled_proofs import service as S  # noqa: E402
 from verity.core.protocols.sampled_proofs.one_stage import partition as P  # noqa: E402
 
 ENDS = ("egress", "ingress")
 #: the sampled period's negative (``--draw K``, K < n): the prover proves another K-subset than the draw of record's
 OTHER = "other_subset"
 ROUNDS = ("honest", "tampered", "extra", "late")
+#: a sampled period's coins (``--draw K``, `period_session`)
+PERIOD_COINS = ("the auditor's challenger's: a session of its own for each member's period draw (round_coins), on the "
+                "root of the period's certificates, the step and the member, read only after the period's commitment "
+                "and held to the session's evidence by coins_reason")
+#: a round that reads no coin
+NO_COIN = {"source": None, "draw": "selection all: no coin, no session"}
 #: AGENTS.md's design rule, which `one_session` holds every driver's ``--jobs`` to
 ONE_SESSION = "outer proofs go through the firewall one at a time (AGENTS.md, 'Live coins only')"
 #: what the verifier receives per link-window, by file (`member`)
 RECEIVED = {"registration.json": "the registration record", "draw.json": "the stream's draw",
             "certificates.json": "the certificates' public fields (the certifier's)", "syncs.json": "the declared syncs",
             "pub-1.bin": "the statement's public file", "session-*": "the session's files",
-            "delivered.json": "the pub and o0 rows' salts and the output word", "outcome.json": "the outcome record"}
+            "delivered.json": "the pub and o0 rows' salts and the output word", "outcome.json": "the outcome record",
+            "period.json": "a sampled period's draw", "period-certificates.json": "a sampled period's certificates",
+            "coins.json": "a sampled period's challenger session's evidence"}
 
 
 def log(msg: str) -> None:
@@ -461,6 +473,65 @@ def other_subset(drawn: dict) -> list[int]:
     return sorted(([w for w in range(drawn["population"]) if w not in held] + drawn["units"])[:drawn["k"]])
 
 
+def period_certificates(rd: SimpleNamespace) -> list[list[dict]]:
+    """Every window's certificates' public fields, in window order: the certifier's, which the verifier receives for the
+    whole period, drawn or not, and which the prover can't vary."""
+    return [[_certificate(c) for c in x.certificates] for x in rd.windows]
+
+
+def period_session(a, name: str, rd: SimpleNamespace, out: Path) -> RC.Session | None:
+    """Member `name`'s period draw's session of the auditor's challenger (``--challenger``, `round_coins`) on its root
+    (`round_coins.root` of its period's certificates, `period_certificates`, step ``n2`` and the member), its need
+    planned (`round_coins.subset_need`), so it opens or is refused before anything of the member is proved; its
+    evidence under ``out / "challenger"``. None when the period isn't sampled (``--draw 0``: Selection All reads no
+    coin). A session that doesn't open stops the driver: nothing draws on other coins."""
+    if not a.draw:
+        return None
+    s = RC.Session(a, RC.root(RC.digest(period_certificates(rd)), "n2", name), out / "challenger")
+    try:
+        s.rank.plan(RC.subset_need(a.draw, len(rd.windows)))
+    except Exception as e:
+        raise SystemExit(f"{name}: the challenger's session for the period draw: {e}; {s.close().get('error')}") from e
+    log(f"{name}: the period draws on the challenger's ({a.challenger}) session {s.root[:16]}…, {s.rank.need} coins")
+    return s
+
+
+def period_held(s: RC.Session | None, name: str, rd: SimpleNamespace, res: dict, vdir: Path) -> dict | None:
+    """Member `name`'s period draw (`res`'s ``period``) held to its session's evidence (`round_coins.Session.held`): the
+    coins it read, which the network verdict's Lean drew on, released after its period's commitment, on the root the
+    verifier recomputes from the period's certificates it received. Writes those and the evidence beside what the
+    verifier received (``period-certificates.json``, ``coins.json``). None when the period isn't sampled."""
+    if s is None:
+        return None
+    p = res["period"]
+    held = s.held(bytes.fromhex(p["commitment"]), bytes.fromhex(p["read"]), res.get("segment"))
+    (vdir / "period-certificates.json").write_text(json.dumps(period_certificates(rd), sort_keys=True))
+    if (s.dest / "coins.json").exists():
+        shutil.copyfile(s.dest / "coins.json", vdir / "coins.json")
+    got = RC.root(RC.digest(json.loads((vdir / "period-certificates.json").read_text())), "n2", name)
+    return {**held, "root_ok": got == s.root, "ok": held["ok"] and got == s.root}
+
+
+def period_member(M, a, sg: SimpleNamespace, name: str, rd: SimpleNamespace, out: Path, port: int,
+                  forge=None) -> tuple[dict, dict | None]:
+    """`member` with its period drawn on a session of its own (`period_session`), closed once the member has drawn or
+    won't, and the draw held to it (`period_held`, the result's ``coins``). -> (the member's result, its coins held;
+    None when the period isn't sampled)."""
+    s = period_session(a, name, rd, out)
+    try:
+        res = member(M, a, sg, name, rd, out, port, coins=None if s is None else s.rank, forge=forge)
+    finally:
+        if s is not None:
+            s.close()
+    held = period_held(s, name, rd, res, out / "verifier")
+    if held is not None:
+        res["coins"] = held
+        log(f"{name}: the challenger's coins {'hold' if held['ok'] else 'REFUSED: ' + str(held['coins_reason'])} "
+            f"(session {held['session']}, root {'recomputed' if held['root_ok'] else 'NOT recomputed'}), "
+            f"{sum(held['negatives_refused'].values())}/{len(held['negatives_refused'])} coin negatives refused")
+    return res, held
+
+
 def member(M, a, sg: SimpleNamespace, name: str, rd: SimpleNamespace, out: Path, port: int,
            coins=None, forge=None) -> dict:
     """The member's link-windows on its own stream, in order: register, select, prove the statement live behind the
@@ -614,9 +685,8 @@ def prove(a) -> int:
         members[OTHER] = link_windows(run, warden=warden)
     summary["draw"] = ({"selection": "all", "k": n, "population": n, "coins": None} if not a.draw else {
         "selection": "sampled", "law": f"subset:{a.draw}", "k": a.draw, "population": n, "delta": cs.DELTA,
-        "coins": {"source": "verifier", "by": "the verifier's own: the operating system's bytes through the Lean "
-                  "verifier of record (sampled_proofs verifier.coins), read only after the period's commitment; not "
-                  "the auditor's challenger's"}})
+        "coins": {"source": f"challenger:{a.challenger}", "by": PERIOD_COINS}})
+    summary["coins"] = {"challenger": a.challenger if a.draw else None, "rounds": {}, "flock": RC.FLOCK}
     if warden:
         summary["warden_run"] = members["honest"].plan["warden_run"]
         summary["warden"] = {"syncs": "none: the warden runs no shaper clock, so a window declares no sync and the "
@@ -664,8 +734,9 @@ def prove(a) -> int:
     (out / "summary.json").write_text(json.dumps(summary, indent=1, sort_keys=True, default=str))
 
     def go(k: int, name: str) -> tuple[str, dict]:
-        res = member(M, a, sg, name, members[name], out / name, a.port + 100 * k if a.port else 0,
-                     coins=S.V.coins if a.draw else None, forge=other_subset if name == OTHER else None)
+        res, held = period_member(M, a, sg, name, members[name], out / name, a.port + 100 * k if a.port else 0,
+                                  forge=other_subset if name == OTHER else None)
+        summary["coins"]["rounds"][name] = held or NO_COIN
         res["received"] = _member_scan(M, sg, members[name], out / name,
                                        set(res["period"]["units"]) if "period" in res else None)
         return name, res
@@ -674,7 +745,9 @@ def prove(a) -> int:
     ok = True
     for name, res in done.items():
         rec, net = res["received"], res["network"]
-        good = (all(r["as_expected"] for r in res["windows"]) and net["accepted"] == (name == "honest")
+        held = res.get("coins") or {"ok": True}
+        accepted = net["accepted"] and held["ok"]
+        good = (all(r["as_expected"] for r in res["windows"]) and accepted == (name == "honest") and held["ok"]
                 and set(net.get("why") or ()) == ({SVC.PERIOD_DRAWN} if name == OTHER else set())
                 and not rec["leaked"] and rec["control"]["holds_all"])
         ok &= good
@@ -682,13 +755,13 @@ def prove(a) -> int:
         if "wrong_units" in net:
             sel, wu = net["selection"], net["wrong_units"]
             summary.setdefault("sampled", {})[name] = {
-                "accepted": net["accepted"], "proved": [r["window"] for r in res["windows"]], "why": net["why"],
-                "draw": {"law": f"subset:{sel['k']}", "coins": "verifier", "units": sel["units"],
+                "accepted": accepted, "proved": [r["window"] for r in res["windows"]], "why": net["why"],
+                "draw": {"law": f"subset:{sel['k']}", "coins": f"challenger:{a.challenger}", "units": sel["units"],
                          "of": sel["population"], "commitment": sel["commitment"], "by": sel["by"],
                          "coin_bytes": len(res["period"]["read"]) // 2},
-                "audit": {"accepted": net["accepted"], "wrong_units": wu},
-                "charge": {"delta": wu["delta"], "wrong_units": wu, "epsilon": wu["epsilon"]} if net["accepted"]
-                else None}
+                "audit": {"accepted": accepted, "wrong_units": wu},
+                "charge": {"delta": wu["delta"], "wrong_units": wu, "epsilon": wu["epsilon"]} if accepted else None,
+                "coins": held}
             log(f"member {name}: the draw of record ({sel['by']}) {sel['units']}, {sel['k']} of {sel['population']}: "
                 f"at most {wu['bound']} wrong, epsilon {wu['epsilon']:.4f} at delta {wu['delta']:.3g}"
                 + (f"; refused by name {sorted(net['why'])}" if net["why"] else ""))
@@ -730,9 +803,10 @@ def main(argv=None) -> int:
                    help="each verdict also carries the in-the-clear check on the opening, which decides nothing")
     p.add_argument("--gpu", action="store_true", help="each session's prover on the GPU (`flock-circuit prove --gpu`)")
     p.add_argument("--draw", type=int, default=0,
-                   help="K: each member's period sampled, K of its windows drawn on the verifier's coins after every "
+                   help="K: each member's period sampled, K of its windows drawn on the challenger's coins after every "
                         "window's root is committed, and only those proved (LinkWindows.period_draw); tampered then "
                         "changes every window, and other_subset proves another K-subset; 0 (the default): every window")
+    RC.add_args(p, "with --draw: each member's period draw")
     p.add_argument("--dry", action="store_true", help="the instances and their references only: nothing lowered or proved")
     a = ap.parse_args(argv)
     if a.command == "virtual":
@@ -746,6 +820,9 @@ def main(argv=None) -> int:
                          "tampered")
     if not a.dry and not (a.bin and a.lean):
         raise SystemExit("prove needs --bin and --lean, or --dry")
+    why = RC.refusal(a) if a.draw and not a.dry else None
+    if why:
+        p.error(why)
     return prove(a)
 
 

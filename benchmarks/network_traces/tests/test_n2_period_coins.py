@@ -1,27 +1,34 @@
-"""n2_advised_zk's period draws on the auditor's challenger's coins (`Challenger`, ``--challenger local``): one local
-session for every member, under live_challenger's stub of the Lean verifier's coins (as `test_a5_reserve` runs it), so
-nothing builds `sampled-proofs-verifier` and nothing is proved. Each member's draw is `LinkWindows.period_draw`'s on the
-session's coins: committed to its period's commitment, then `subset:K` read, then its turn ended (`drawn`)."""
+"""N2's sampled period draws on the auditor's challenger's coins (`n2_zk.period_session`, ``--challenger local``): each
+member on a session of its own, on the root of its period's certificates, the step and the member, under
+live_challenger's stub of the Lean verifier's coins (the fake challenger, `test_round_coins.fake_challenger`), so
+nothing builds `sampled-proofs-verifier` and nothing is proved. Each member's draw is `LinkWindows.period_draw`'s on its
+session's coins: committed to its period's commitment, then `subset:K` read, then its turn ended (`drawn`); the
+period's draw is then held to the session's evidence on the root the verifier recomputes from the certificates it
+received (`n2_zk.period_held`). A period that isn't sampled opens no session, and a session the challenger refuses
+stops the driver."""
 
 from __future__ import annotations
 
 import hashlib
 import importlib.util
+import json
 import sys
-import tempfile
+from dataclasses import dataclass
 from pathlib import Path
 from types import SimpleNamespace
+
+import pytest
 
 from verity.core.protocols.sampled_proofs import service as S
 
 HERE = Path(__file__).resolve().parents[1]
-TREE = HERE.parents[1]
-STUB = TREE / "benchmarks" / "live_challenger" / "tests" / "stub_serve.py"
+sys.path[:0] = [str(HERE), str(Path(__file__).resolve().parent)]
+import round_coins as RC  # noqa: E402
+from test_round_coins import fake_challenger  # noqa: E402
 
 
 def _load():
-    sys.path.insert(0, str(HERE))
-    spec = importlib.util.spec_from_file_location("network_traces_n2_advised_zk", HERE / "n2_advised_zk.py")
+    spec = importlib.util.spec_from_file_location("network_traces_n2_zk", HERE / "n2_zk.py")
     mod = importlib.util.module_from_spec(spec)
     sys.modules[spec.name] = mod
     spec.loader.exec_module(mod)
@@ -32,91 +39,97 @@ n2 = _load()
 N, K = 26, 8
 
 
-def _root(name: str, w: int) -> bytes:
-    return hashlib.sha512(f"{name}/{w}".encode()).digest()
+@dataclass(frozen=True)
+class Certificate:
+    window: int
+    signature: bytes
 
 
-def _session(tmp_path: Path, monkeypatch, names: list[str]):
-    sys.path.append(str(TREE / "benchmarks" / "one_stage"))
-    import a5_coins as AC
-
-    A = AC._module("a5_auditor", AC.TREE / "benchmarks" / "live_challenger" / "auditor.py")
-    real = A.serve_argv
-    monkeypatch.setattr(A, "serve_argv", lambda *a, **k: [sys.executable, str(STUB), *real(*a, **k)[2:]])
-    monkeypatch.setenv("COINS_LOG", str(tmp_path / "coins.log"))
-    monkeypatch.setattr(tempfile, "tempdir", str(tmp_path))
-    main = tmp_path / "main.txt"
-    main.write_text(AC.on_main([]) + "\n")
-    a = SimpleNamespace(challenger="local", main=str(main), gate_key=None, peer=None, challenger_key=None, draw=K)
-    rounds = {n: SimpleNamespace(windows=[SimpleNamespace(root=_root(n, w)) for w in range(N)], advice=None)
-              for n in names}
-    return n2.Challenger(a, rounds, tmp_path / "challenger"), rounds
+def _period(name: str, cert: str = "cert") -> SimpleNamespace:
+    """A period of N windows, each with its salted root and one certificate."""
+    return SimpleNamespace(advice=None, windows=[
+        SimpleNamespace(root=hashlib.sha512(f"{name}/{w}".encode()).digest(),
+                        certificates=[Certificate(w, hashlib.sha512(f"{cert}/{w}".encode()).digest())])
+        for w in range(N)])
 
 
-def _draw(ch, name: str, rounds) -> dict:
-    roots = [x.root.hex() for x in rounds[name].windows]
+def _draw(s: RC.Session, name: str, rd: SimpleNamespace) -> dict:
     commitment = hashlib.sha512(("period/" + name).encode()).hexdigest()
-    coins, read = ch.ranks[name], bytearray()
-    coins.commit(bytes.fromhex(commitment))
+    read = bytearray()
+    s.rank.commit(bytes.fromhex(commitment))
     rule = S.Law(f"subset:{K}")
-    draw = S.select_draw(rule, S.selection_law(rule, N), N, lambda m: read.extend(b := coins(m)) or b)
-    return {"period": {"roots": roots, "advice": None, "k": K, "commitment": commitment, "units": list(draw["units"]),
-                       "read": read.hex()},
-            "segment": coins.drawn()}
+    draw = S.select_draw(rule, S.selection_law(rule, N), N, lambda m: read.extend(b := s.rank(m)) or b)
+    return {"period": {"roots": [x.root.hex() for x in rd.windows], "k": K, "commitment": commitment,
+                       "units": list(draw["units"]), "read": read.hex()},
+            "segment": s.rank.drawn()}
 
 
-def test_every_members_draw_holds_on_the_one_session_and_a_draw_after_another_commitment_does_not(tmp_path, monkeypatch):
-    """Both members plan before the session opens (26 windows, `subset:8`), each reads its coins in its own turn after its
-    period's commitment, and each draw holds against the session's evidence (`coins.coins_reason`) on the root the
-    verifier recomputes from what it received, every `a5_coins.negatives` refused, and the coins the period records it
-    read (``read``, which the network verdict's Lean draws on) are the ones the session released. The same coins held to
-    another commitment, or to a root over a period whose roots changed, and a period recording other coins than those
-    released, are refused."""
-    names = ["honest", "tampered_all"]
-    ch, rounds = _session(tmp_path, monkeypatch, names)
+def _member(a, name: str, rd: SimpleNamespace, out: Path) -> tuple[RC.Session, dict]:
+    s = n2.period_session(a, name, rd, out / name)
     try:
-        done = {n: _draw(ch, n, rounds) for n in names}
+        res = _draw(s, name, rd)
     finally:
-        ch.close()
-    for n in names:
-        (tmp_path / "out" / n / "verifier").mkdir(parents=True)
-    got = ch.check(done, tmp_path / "out")
-    assert (tmp_path / "coins.log").read_text(), "the session's coins came from the stub, not a Lean build"
-    assert ch.published.get("error") is None, ch.published.get("error")
-    for n in names:
-        assert got[n]["ok"] and got[n]["root_ok"] and got[n]["coins_reason"] is None, got[n]
-        assert got[n]["read_is_released"] and got[n]["read_bytes"] == len(done[n]["period"]["read"]) // 2 > 0
-        assert got[n]["negatives_refused"] and all(got[n]["negatives_refused"].values()), got[n]["negatives_refused"]
-        assert len(done[n]["period"]["units"]) == K and (tmp_path / "out" / n / "verifier" / "coins.json").exists()
-    assert ch.published["plan"]["needs"] == {"0": n2.coin_need(K, N, 64), "1": n2.coin_need(K, N, 64)}
+        s.close()
+    (out / name / "verifier").mkdir(parents=True)
+    return s, res
 
-    read = done["honest"]["period"]["read"]
-    flipped = {**done, "honest": {**done["honest"], "period": {**done["honest"]["period"],
-                                                               "read": f"{int(read[:2], 16) ^ 1:02x}" + read[2:]}}}
-    refused = ch.check(flipped, tmp_path / "out")["honest"]
+
+def test_each_members_draw_holds_on_its_own_session_over_its_periods_certificates(tmp_path, monkeypatch):
+    """Two members (26 windows, `subset:8`) each open a session of their own on the root of their period's certificates,
+    read their coins after their period's commitment, and hold against their session's evidence on the root the
+    verifier recomputes from the certificates it received, every `a5_coins.negatives` refused and the coins read the
+    ones released. The same coins read as other bytes, held to another commitment, or on a period whose certificates
+    changed are refused."""
+    a = fake_challenger(tmp_path, monkeypatch, draw=K)
+    out = tmp_path / "out"
+    rds = {"honest": _period("honest"), "tampered": _period("tampered")}
+    got = {n: _member(a, n, rd, out) for n, rd in rds.items()}
+    assert (tmp_path / "coins.log").read_text(), "the sessions' coins came from the stub, not a Lean build"
+    roots = {n: s.root for n, (s, _) in got.items()}
+    assert roots["honest"] != roots["tampered"]
+    for n, (s, res) in got.items():
+        assert s.root == RC.root(RC.digest(n2.period_certificates(rds[n])), "n2", n)
+        held = n2.period_held(s, n, rds[n], res, out / n / "verifier")
+        assert held["ok"] and held["root_ok"] and held["coins_reason"] is None and held["session"], held
+        assert held["read_is_released"] and held["read_bytes"] == len(res["period"]["read"]) // 2 > 0
+        assert held["negatives_refused"] and all(held["negatives_refused"].values()), held["negatives_refused"]
+        assert len(res["period"]["units"]) == K and (out / n / "verifier" / "coins.json").is_file()
+        assert json.loads((out / n / "verifier" / "period-certificates.json").read_text()) == \
+            n2.period_certificates(rds[n])
+        assert (out / n / "challenger" / "coins.json").is_file()
+
+    s, res = got["honest"]
+    read = res["period"]["read"]
+    flipped = {**res, "period": {**res["period"], "read": f"{int(read[:2], 16) ^ 1:02x}" + read[2:]}}
+    refused = n2.period_held(s, "honest", rds["honest"], flipped, out / "honest" / "verifier")
     assert not refused["ok"] and not refused["read_is_released"], refused
-
-    other = {**done, "honest": {**done["honest"], "period": {**done["honest"]["period"], "commitment": "ee" * 64}}}
-    refused = ch.check(other, tmp_path / "out")["honest"]
+    other = {**res, "period": {**res["period"], "commitment": "ee" * 64}}
+    refused = n2.period_held(s, "honest", rds["honest"], other, out / "honest" / "verifier")
     assert not refused["ok"] and refused["coins_reason"], refused
-    moved = {**done, "tampered_all": {**done["tampered_all"], "period": {
-        **done["tampered_all"]["period"], "roots": ["dd" * 64] + done["tampered_all"]["period"]["roots"][1:]}}}
-    assert not any(v["ok"] or v["root_ok"] for v in ch.check(moved, tmp_path / "out").values())
+    moved = n2.period_held(s, "honest", _period("honest", cert="other"), res, out / "honest" / "verifier")
+    assert not moved["ok"] and not moved["root_ok"], moved
 
 
-def test_a_draw_that_never_ran_leaves_its_member_refused_and_the_session_closed(tmp_path, monkeypatch):
-    """A member whose draw raised before its commitment (its turn never taken) is skipped when the session closes: the
-    other member's draw still holds, and the one with no segment is refused by name."""
-    names = ["honest", "tampered_all"]
-    ch, rounds = _session(tmp_path, monkeypatch, names)
-    try:
-        done = {"honest": _draw(ch, "honest", rounds)}
-    finally:
-        ch.close()
-    roots = [x.root.hex() for x in rounds["tampered_all"].windows]
-    done["tampered_all"] = {"period": {"roots": roots, "advice": None, "k": K, "commitment": "aa" * 64, "read": ""}}
-    for n in names:
-        (tmp_path / "out" / n / "verifier").mkdir(parents=True)
-    got = ch.check(done, tmp_path / "out")
-    assert got["honest"]["ok"], got["honest"]
-    assert not got["tampered_all"]["ok"] and got["tampered_all"]["coins_reason"] == "the draw released no segment"
+def test_a_member_that_never_drew_is_refused_and_an_unsampled_period_opens_no_session(tmp_path, monkeypatch):
+    """A member whose draw raised before its commitment (its turn never taken) ends its session with no segment, and
+    is refused by name; at ``--draw 0`` (Selection All, every window) no session opens and nothing is held."""
+    a = fake_challenger(tmp_path, monkeypatch, draw=K)
+    rd = _period("honest")
+    s = n2.period_session(a, "honest", rd, tmp_path / "honest")
+    s.close()
+    (tmp_path / "verifier").mkdir()
+    held = n2.period_held(s, "honest", rd, {"period": {"commitment": "aa" * 64, "read": ""}}, tmp_path / "verifier")
+    assert not held["ok"] and held["coins_reason"] == "the draw released no segment", held
+    a.draw = 0
+    assert n2.period_session(a, "honest", rd, tmp_path / "all") is None
+    assert n2.period_held(None, "honest", rd, {}, tmp_path / "verifier") is None
+    assert not (tmp_path / "all").exists()
+
+
+def test_a_session_the_challenger_refuses_stops_the_driver(tmp_path, monkeypatch):
+    a = fake_challenger(tmp_path, monkeypatch, draw=K)
+    monkeypatch.setattr(RC.a5_coins(), "reserve_reason", lambda layout, needs: "the challenger refuses the reserve")
+    with pytest.raises(SystemExit, match="honest: the challenger's session for the period draw: .*the challenger "
+                                         "refuses the reserve"):
+        n2.period_session(a, "honest", _period("honest"), tmp_path / "honest")
+    assert not (tmp_path / "coins.log").exists()

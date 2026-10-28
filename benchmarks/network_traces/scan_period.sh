@@ -10,6 +10,7 @@
 #     env CHECK_SLOTS=/workspace/research/locks/research/slots python3 tools/verity/check/slot.py --by LANE -- \
 #     bash benchmarks/network_traces/scan_period.sh
 # env: SC_MEM_GB (scan_zk.sh's)  SC_LATE_MS (default 800)  SC_PERIOD_REF (default cursor/allp-cert-warden-form-061a)
+#      SC_CHALLENGER (scan_zk.sh's: the challenger each round draws on; local, the rehearsals' dry one, by default)
 # Kept in $OUT: honest/ and late/ (each scan_zk.sh's out/: the rehearsal's public files and the scan's kept files) and
 # period/ (each case's files and period.json).
 set -uo pipefail
@@ -22,7 +23,8 @@ export PYTHONPATH=$SRC:$SRC/verity/ml/flock/python:$SRC/integrations/vllm:$SRC/t
 setup
 export FLOCK_PROVE=$BIN FLOCK_SELFTEST=$SBIN FLOCK_VERIFY=$LEAN HZ_PYTHON=$PY
 export SC_CLASS=test SC_GROUP=1 SC_REHEARSE=1 SC_REQUESTS=${SC_REQUESTS:-4} SC_RATE=${SC_RATE:-1} \
-  SC_TAIL=${SC_TAIL:-3} SC_PROMPT_MAX=${SC_PROMPT_MAX:-40} SC_MAX_TOKENS=${SC_MAX_TOKENS:-8}
+  SC_TAIL=${SC_TAIL:-3} SC_PROMPT_MAX=${SC_PROMPT_MAX:-40} SC_MAX_TOKENS=${SC_MAX_TOKENS:-8} \
+  SC_CHALLENGER=${SC_CHALLENGER:-local}
 REF=${SC_PERIOD_REF:-cursor/allp-cert-warden-form-061a}
 if [ -f verity/core/protocols/network/tests/period_case.py ]; then
   P=$SRC; log "period: network-period and the mirror from the tree"
