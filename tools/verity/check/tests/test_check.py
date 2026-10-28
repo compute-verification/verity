@@ -371,8 +371,7 @@ def test_the_ratchet_gate_step_fails_a_train_naming_the_pr_whose_merge_grows_an_
     """With the ratchet gate out of drive's per-merge landing gates, the train's check is where an allowlist that grows is caught:
     the step judges each `Queue: #N` merge above the run's sent base against the one below, with the gate as the base has it, so
     a train holding one merge that grows an allowlist fails naming that PR, even when the PR also rewrites the gate to pass, and a
-    clean train passes.  Its verdicts are kept under the check's cache, and none under --no-cache; a base that names no commit
-    in the tree skips it, which no after-landing run passes."""
+    clean train passes.  Its verdicts are kept under the check's cache, and none under --no-cache."""
     import json
     import os
     import subprocess
@@ -424,9 +423,9 @@ def test_the_ratchet_gate_step_fails_a_train_naming_the_pr_whose_merge_grows_an_
     out = tmp_path / "run"
     (out / "inputs").mkdir(parents=True)
     monkeypatch.setenv("CHECK_CACHE", str(tmp_path / "cache"))
-    (out / "inputs" / CHECK.BASE_FILE).write_text(f"{CHECK._rev('HEAD')}\n")
-    (built,) = [s[1] for g in CHECK.groups(out, 2) for s in g if s[0] == "ratchet-gate"]
-    assert built == CHECK.ratchet_gate(out, True) and CHECK._rev("HEAD") in built, built
+    with monkeypatch.context() as m:
+        m.setattr(CHECK, "ratchet_gate", lambda out, cache: ["gate", str(out), str(cache)])
+        assert [s[1] for g in CHECK.groups(out, 2) for s in g if s[0] == "ratchet-gate"] == [["gate", str(out), "True"]]
     monkeypatch.setattr(CHECK, "ROOT", repo)
     (out / "inputs" / CHECK.BASE_FILE).write_text(f"{base}\n")
     merges = train("next", (1, 2, 3))
@@ -441,8 +440,49 @@ def test_the_ratchet_gate_step_fails_a_train_naming_the_pr_whose_merge_grows_an_
     train("clean", (1, 3))
     got = step()
     assert got.returncode == 0 and "2 change(s), 0 failed" in got.stdout, got.stdout + got.stderr
-    (out / "inputs" / CHECK.BASE_FILE).write_text("0" * 40 + "\n")
-    assert CHECK.ratchet_gate(out, True) == f"skipped: no base: {'0' * 40} names no commit here"
+
+
+def test_the_ratchet_gate_step_fails_when_its_base_is_head_or_above_it(tmp_path, monkeypatch):
+    """A run of `main`'s tip against origin/main, its own tip, judged no change and passed, so the step could never fail an
+    after-landing run: a base at or above HEAD fails it.  A base below HEAD, or on a branch beside it (a PR behind `main`), is
+    judged; one that names no commit here (the nightly's empty tree) skips it, which no after-landing run passes."""
+    import os
+    import subprocess
+
+    env = {**os.environ, "GIT_AUTHOR_NAME": "t", "GIT_AUTHOR_EMAIL": "t@t", "GIT_COMMITTER_NAME": "t", "GIT_COMMITTER_EMAIL": "t@t",
+           "GIT_CONFIG_GLOBAL": os.devnull, "GIT_CONFIG_NOSYSTEM": "1"}
+
+    def git(*args: str) -> str:
+        return subprocess.run(["git", *args], cwd=tmp_path, env=env, check=True, capture_output=True, text=True).stdout.strip()
+
+    def commit(message: str) -> str:
+        git("commit", "-q", "--allow-empty", "-m", message)
+        return git("rev-parse", "HEAD")
+
+    git("init", "-q", "-b", "main")
+    below = commit("verified main")
+    head = commit("landing")
+    above = commit("a later landing")
+    git("checkout", "-q", "-b", "side", below)
+    beside = commit("a PR's base")
+    git("checkout", "-q", "--detach", head)
+    monkeypatch.setattr(CHECK, "ROOT", tmp_path)
+    out = tmp_path / "run"
+    (out / "inputs").mkdir(parents=True)
+
+    def gate(base: str) -> list[str] | str:
+        (out / "inputs" / CHECK.BASE_FILE).write_text(f"{base}\n")
+        return CHECK.ratchet_gate(out, True)
+
+    for at in (head, above):
+        why = gate(at)
+        assert isinstance(why, str) and why.startswith(f"failed: its base {at} is HEAD or above it"), why
+        rec = CHECK._step("ratchet-gate", why, tmp_path, out, True, CHECK.Steps(out))
+        assert rec["status"] == "failed" and rec["detail"] == why
+    for at in (below, beside):
+        argv = gate(at)
+        assert not isinstance(argv, str) and argv[4] == at, argv
+    assert gate("0" * 40) == f"skipped: no base: {'0' * 40} names no commit here"
     (out / "inputs" / CHECK.BASE_FILE).unlink()
     assert CHECK.ratchet_gate(out, True) == "skipped: no base: origin/main names no commit here"
 
@@ -1509,6 +1549,8 @@ def test_train_sh_refuses_every_flag_but_agreement(tmp_path):
     assert p.returncode == 2 and "train: --circuit-cache refused without --no-cache" in p.stderr, p.stderr
     p = train("--against", "main")
     assert p.returncode == 2 and "train: --against refused" in p.stderr, p.stderr
+    p = train("--base", "main")
+    assert p.returncode == 2 and "train: --base refused without --deferred" in p.stderr, p.stderr
 
 
 @pytest.mark.parametrize("twins", [False, True])
@@ -1625,6 +1667,24 @@ def test_train_sh_runs_with_priority_and_posts_a_launch_that_registers_no_run(tm
     (tmp_path / "bin" / "sleep").write_text("#!/bin/sh\n")                # the fetch's backoffs: nothing launches to wait for
     p = train("HEAD", "vy-x")
     assert p.returncode == 1 and "git fetch origin failed" in (tmp_path / "posted").read_text()
+
+
+def test_train_sh_hands_check_the_base_below_the_tip_that_drive_sends(tmp_path):
+    """Drive's after-landing run of `main`'s tip names the last verified `main` (`--base`), so ratchet-gate judges the landings
+    above it, not the tip against itself: train.sh resolves it after its fetch and hands check.py that commit, and registers
+    no run for a base that is no commit."""
+    git, train, argv = _train_repo(tmp_path)
+    verified = git("rev-parse", "HEAD")
+    (tmp_path / "repo" / "a").write_text("b\n")
+    git("commit", "-q", "-am", "landing")
+    git("push", "-q", "origin", "HEAD:main")
+    p = train("HEAD", "vy-x", "--deferred", "pytest,ratchet-gate", "--no-cache", "--base", "HEAD~1")
+    args = argv.read_text().split()
+    assert p.returncode == 0 and args[args.index("--base"):] == ["--base", verified], (p.stderr, args)
+    assert args[args.index("--deferred"):args.index("--base")] == ["--deferred", "pytest,ratchet-gate", "--no-cache"], args
+    argv.unlink()
+    p = train("HEAD", "vy-x", "--deferred", "ratchet-gate", "--base", "nope")
+    assert p.returncode == 1 and "--base nope: no such commit" in p.stderr and not argv.exists(), p.stderr
 
 
 def test_train_sh_retries_a_failed_first_fetch_twice_with_a_backoff(tmp_path):

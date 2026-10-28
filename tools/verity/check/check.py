@@ -132,7 +132,8 @@ doesn't name:
                     commit in the run's `check-base.txt`, which `--record --on` sends: its --base REF's; else origin/main)
                     grows the vLLM integration's lint ratchets.  On a train each `Queue: #N` merge is judged against the one
                     below, so its log names the PR whose merge fails (`  #N (COMMIT): failed: ...`), which drive takes as
-                    the culprit; a BASE that names no commit here skips it
+                    the culprit.  A BASE at or above HEAD fails it, since it would judge nothing (drive's after-landing
+                    run sends the last verified `main`, below the tip); one that names no commit here skips it
 
 Caches (``$CHECK_CACHE``, default ``~/.cache/verity-check``; ``--no-cache`` for a cold run), each a hit only on identical inputs:
 
@@ -1056,7 +1057,7 @@ def record(argv: list[str]) -> int:
         cmd += ["--on", on, "--source", "."]
         if "--verdicts-in" in rest:                    # the pack travels with the run; on the machine it's found in the run's inputs/
             cmd += ["--send", str(Path(rest[rest.index("--verdicts-in") + 1]).resolve())]
-        (d / BASE_FILE).write_text(f"{_rev(base)}\n")
+        (d / BASE_FILE).write_text(f"{_rev(base) or base}\n")
         cmd += ["--send", str(d / BASE_FILE)]
     try:
         if both:
@@ -1200,11 +1201,15 @@ def grant_when_alone(path: Path, beside: list[threading.Event], gb: int) -> None
 
 def ratchet_gate(out: Path, cache: bool) -> list[str] | str:
     """ratchet-gate's command: `ratchet_gate.py BASE HEAD` as BASE has it, BASE being the commit in the run's `BASE_FILE`
-    (`--record --on` sends it) else origin/main, with its verdicts kept under the check's cache unless ``cache`` is off."""
+    (`--record --on` sends it) else origin/main, with its verdicts kept under the check's cache unless ``cache`` is off.  A
+    BASE at or above HEAD would judge nothing, so the step fails (`_step`: a reason that isn't a skip)."""
     sent = out / "inputs" / BASE_FILE
     named = sent.read_text().strip() if sent.is_file() else "origin/main"
     if not (base := _rev(f"{named}^{{commit}}")):
         return f"skipped: no base: {named} names no commit here"
+    if subprocess.run(["git", "merge-base", "--is-ancestor", "HEAD", base], cwd=ROOT, capture_output=True).returncode == 0:
+        return (f"failed: its base {named} is HEAD or above it, so no change lies above the base to judge: check this commit "
+                "against one below it (`--record --base REF`; drive's after-landing run sends the last verified `main`)")
     keep = str(cache_dir() / "ratchet-gate") if cache else ""
     script = ('g=$(mktemp -d) && trap \'rm -rf "$g"\' EXIT && git show "$1:$2" > "$g/ratchet_gate.py" && '
               'RATCHET_GATE_CACHE="$3" "$4" "$g/ratchet_gate.py" "$1" HEAD')
