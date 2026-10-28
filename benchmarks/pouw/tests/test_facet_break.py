@@ -33,7 +33,7 @@ def _load(name: str, path: Path):
 loads = _load("facet_break_loads", FB / "loads.py")
 gen = _load("facet_break_generate", FB / "generate.py")
 
-#: TENSOR's tensor_kinds records (r20261017-041754-7630): IMMA.16832 alone, beside IADD3+FFMA interleaved at 4 lane ops a
+#: TENSOR's tensor_kinds records: IMMA.16832 alone, beside IADD3+FFMA interleaved at 4 lane ops a
 #: MMA (mixu R32), and FFMA alone
 MIXU_R32 = {"probe": "tensor_kinds", "mode": "mixu", "form": "imma_s8_m16n8k32", "ops_per_mma": 4.0, "mma_warps": 16,
             "op_warps": 0, "cyc_med": 20034030, "mhz": 2090.9, "mmas_per_sm": 4634624, "ops_per_sm": 18538496}
@@ -82,7 +82,7 @@ def test_class_of():
 
 
 def test_a_bulk_instruction_counts_its_shared_memory_bytes():
-    """A5b (RT4-SHEET-1): a bulk or TMA instruction counts `S/99 KB` in UTMABIG, `S` its size, which it reads or writes
+    """A5b: a bulk or TMA instruction counts `S/99 KB` in UTMABIG, `S` its size, which it reads or writes
     in a block's shared memory on at least one side, so DS-120 charges it `S` on DS_smem and at most its one issue slot.
     fold_bulk.cu's fbw trip reduces 32 KB and twice 16 KB into global memory."""
     big = loads.BULK_BYTES
@@ -189,7 +189,7 @@ def test_only_imma16832_takes_the_generic_mma_lines(census):
 
 
 def test_interleaved_imma_ffma_beats_r1_and_kffma0(tmp_path, census, capsys):
-    """V1 and V2 of note:20261017T0524Z-draft-eps1-facet-break: the axes hold, the interleaved point beats both rows."""
+    """The axes hold, the interleaved point beats both rows."""
     c, cu = census
     path = _records(tmp_path, MIXU_R32, ALONE, FFMA)
     by = {p["probe"].split(":")[0]: loads.program(p, c, cu) for p in loads.load_rows([path])}
