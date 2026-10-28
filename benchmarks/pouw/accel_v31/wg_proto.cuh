@@ -57,7 +57,12 @@ constexpr int BK = 128, TM = 128, SMEM_BUDGET = 220 * 1024, MAX_STAGES = 8, TW =
 template <int RP> __host__ __device__ constexpr int threads() { return RP == 3 ? 2 * 128 : RP == 5 ? 4 * 128 : 3 * 128; }
 // RP 5's register splits (HR, the producer and hash warpgroups'), each a build of gemm_r5. At 104 the consumers' 152
 // can't keep a 128 x 256 tile's MMAs in flight (ptxas C7512 serializes them) and spill 1 KB; at 88 the hash spills.
+// V31_R5_SPLITS: a build's own list (its first, V31_R5H's default)
+#ifdef V31_R5_SPLITS
+constexpr int R5_SPLITS[] = {V31_R5_SPLITS};
+#else
 constexpr int R5_SPLITS[] = {96, 88};
+#endif
 // TST's slot: a box of 64 rows of 128 bytes (32 O cells or 64 prefix sums a row)
 constexpr uint32_t TSLOT = 64 * 128;
 // RP 4's and 5's hasher, H: lpt() rows a 128 x 128 tile; h(ct, j, stop, budget) hashes on row j of commit tile ct (tm N /
@@ -99,9 +104,17 @@ struct alignas(128) Args {
   int M, N, K, L, S, lp, dz, dy, TT, group, mode, diag, KQ;
   int hall;                   // RP 4, 5: 1, the hash warps hash every row, past the consumers' end (timing their own rate);
                               // -1, none (timing the GEMM alone in the plan's CTA)
+  int hnw;                    // RP 4, 5: the hash warps that hash, the first hnw (0: all of them)
+  unsigned long long* clk;    // or null: thread 0 of CTA 0 (a consumer, on its SM the whole launch) adds the launch's
+                              // clock64 cycles to clk[0] and its globaltimer ns to clk[1] (clk[2], clk[3]: its start)
 };
 
 WGD uint32_t smem_at(const void* p) { return (uint32_t)__cvta_generic_to_shared(p); }
+WGD unsigned long long gtimer() {
+  unsigned long long t;
+  asm volatile("mov.u64 %0, %%globaltimer;" : "=l"(t));
+  return t;
+}
 WGD void mbar_init(uint32_t bar, uint32_t count) {
   asm volatile("mbarrier.init.shared::cta.b64 [%0], %1;" ::"r"(bar), "r"(count) : "memory");
 }
@@ -234,7 +247,8 @@ enum { TAIL_NONE = 0, TAIL_X128 = 1, TAIL_XM128 = 2, TAIL_CAPTURE = 3, TAIL_Q = 
 // Without hall, nothing starts once the consumers are done, and stop() ends the row's hash where it is.
 template <int BN, int NHW, int W0, class H>
 WGD void hash_warps(const Args& p, const H& h, const uint32_t* posted, int tiles_m, int tiles_n, int ntile) {
-  if (p.hall < 0) return;
+  const unsigned nw = p.hnw > 0 && p.hnw < NHW ? (unsigned)p.hnw : NHW;
+  if (p.hall < 0 || threadIdx.x / 32 - W0 >= nw) return;
   const unsigned w = threadIdx.x / 32 - W0, lane = threadIdx.x % 32, lpo = h.lpt(), Lg = (BN / TW) * lpo,
                  nq = (unsigned)ntile * Lg, nb = (nq + 31) / 32, done = 8u * (unsigned)ntile;
   auto stop = [&]() { return !p.hall && ld_acq(posted) >= done; };
@@ -249,7 +263,7 @@ WGD void hash_warps(const Args& p, const H& h, const uint32_t* posted, int tiles
     return h((unsigned long long)tm * (p.N / TW) + (unsigned long long)tn * (BN / TW) + jj / lpo, jj % lpo, stop, budget);
   };
   if (!h.chunk) {
-    for (unsigned b = w; b < nb; b += NHW) {
+    for (unsigned b = w; b < nb; b += nw) {
       unsigned v = posts();
       if (!p.hall && v >= done) break;
       while (v < need(b)) {
@@ -267,8 +281,8 @@ WGD void hash_warps(const Args& p, const H& h, const uint32_t* posted, int tiles
       __nanosleep(256);
       continue;
     }
-    for (unsigned b = lo; b < nb && v >= need(b) && (p.hall || v < done); b += NHW) {
-      if (__all_sync(~0u, visit(b, h.chunk)) && b == lo) lo += NHW;
+    for (unsigned b = lo; b < nb && v >= need(b) && (p.hall || v < done); b += nw) {
+      if (__all_sync(~0u, visit(b, h.chunk)) && b == lo) lo += nw;
       v = posts();
     }
   }
@@ -337,6 +351,10 @@ __device__ void body(const Args& p, const H& h = H{}) {
   const bool segs = (proto || (RP == 5 && p.mode == 1)) && !(p.diag & 1);
   const int kpl = p.L / BK;
   const int tid = threadIdx.x, wg = tid / 128;
+  if (p.clk && blockIdx.x == 0 && tid == 0) {
+    p.clk[2] = clock64();
+    p.clk[3] = gtimer();
+  }
   if (tid == 0) {
     *posted = 0;
     for (int s = 0; s < STAGES; s++) { mbar_init(bars + 8 * s, 1); mbar_init(bars + 8 * (STAGES + s), NWG * 4); }
@@ -672,6 +690,10 @@ __device__ void body(const Args& p, const H& h = H{}) {
       if (j % 8 == 7) ld_fence();
     }
     post();
+  }
+  if (p.clk && blockIdx.x == 0 && tid == 0) {
+    atomicAdd(p.clk, clock64() - p.clk[2]);
+    atomicAdd(p.clk + 1, gtimer() - p.clk[3]);
   }
 }
 

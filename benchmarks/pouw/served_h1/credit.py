@@ -1,4 +1,4 @@
-"""served_h1's credit by the padded-window rule (PADCREDIT round 2 with RT10's fixes, coordinator 22:35Z and 22:39Z): credit
+"""served_h1's credit by the padded-window rule (PADCREDIT round 2 with RT10's fixes): credit
 only the admitted slots, from admissions that always-proved units compute from the committed request queue and the rows'
 scales.
 
@@ -9,14 +9,14 @@ scales.
               a function of the slot's row, and admitted iff it is selected and its row's scale is nonzero (`queue_admit`,
               the word of `PouwQueueAdmit`): a row can withhold its slot's admission, never grant it; the admit unit
               refuses a slot that is not admitted unless its row is the canonical empty row (K zero bytes, scale 0:
-              `junk`) and a slot that is selected whose row is the canonical empty row (`hollow`, RT-ALGO-4); it reads no
+              `junk`) and a slot that is selected whose row is the canonical empty row (`hollow`); it reads no
               row byte, so a selected row of zero bytes under a nonzero scale (`scale_only`) is admitted
     words     a call's T admit bits as T / 16 words of 16 bits (bit b of word q is slot 16 q + b), one admit unit each: a
               proof block's outputs are at most 16 bits; each word is its own hiding leaf, in the call's admit tree
     tile      a unit (32 slot rows by 32 weight rows) is `PouwH1Tile_v4`, whose `admit` input is its 32 rows' admit bits,
               bound by commitment equality to the two admit-tree leaves the tally reads: its live bit is their OR, so
               the tiles the circuit treats as live are exactly the tiles the tally credits, and an admitted tile of
-              zero-byte rows is live, noised, receipted and credited (RT4-LOGIC-4, RT4-LOGIC-20)
+              zero-byte rows is live, noised, receipted and credited
     dead      a unit is dead iff its 32 slots' admit bits are all 0: its rows are the canonical empty row (the admit unit
               refuses any other), it skips the H1 noise and receipt, and its receipt leaf is the canonical empty receipt
               (2 (KS + m) zero words), so the receipt trees keep their shape
@@ -112,7 +112,7 @@ def junk(rows: np.ndarray, bits: np.ndarray) -> list[int]:
 
 
 def hollow(rows: np.ndarray, selected: np.ndarray) -> list[int]:
-    """The slots the admit unit refuses: selected by the queue, yet holding the canonical empty row (RT-ALGO-4).  The unit
+    """The slots the admit unit refuses: selected by the queue, yet holding the canonical empty row.  The unit
     admits none of them, so they credit nothing even unrefused."""
     return [int(i) for i in np.flatnonzero(~nonempty(rows) & np.asarray(selected, dtype=bool))]
 

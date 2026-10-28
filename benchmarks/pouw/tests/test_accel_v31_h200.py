@@ -1,4 +1,5 @@
-"""h200_step.py: the H200 step at M = 16,384 from `v31 bench`'s JSON lines, and its refusal of an incomplete step."""
+"""h200_step.py: the H200 step at M = 16,384 from `v31 fill-bench`'s JSON lines, and its refusal of an incomplete step;
+h200_pipes.py: each pipe's duty over the overlapped call."""
 from __future__ import annotations
 
 import json
@@ -9,52 +10,6 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "accel_v31"))
 import h200_step
-
-
-def _line(n: int, k: int, ms: float, lp: int = 512, t: int = 8, row: int = 1024, m: int = 16384) -> str:
-    arms = {a: {"ms": ms, "mhz": 1980 if a == "ovl" else None} for a in h200_step.ARMS}
-    return json.dumps({"shape": f"h200-{n}-{k}", "m": m, "n": n, "k": k, "lp": lp, "t": t, "row": row, "S": k // (lp * t),
-                       "arms": arms, "gamma_call": 1.0, "gamma_ovl": 1.0, "gamma_gemm": 1.0})
-
-
-def test_step_counts_each_call_of_52_layers_and_the_head(tmp_path):
-    f = tmp_path / "bench-row1024.jsonl"
-    f.write_text("\n".join(["noise"] + [_line(n, k, 2.0) for n, k in h200_step.CALLS]
-                           + [_line(n, k, 5.0, t=16) for n, k in h200_step.CALLS]) + "\n")
-    g = tmp_path / "bench-row1024-wrap4.jsonl"
-    g.write_text("\n".join(_line(n, k, 3.0) for n, k in h200_step.CALLS) + "\n")
-    st = h200_step.steps(h200_step.rows([str(f), str(g)]))
-    assert set(st) == {(512, 8, 1024, "row1024"), (512, 16, 1024, "row1024"), (512, 8, 1024, "row1024-wrap4")}
-    assert st[(512, 8, 1024, "row1024")]["s"]["ovl"] == pytest.approx(261 * 2e-3)
-    assert st[(512, 8, 1024, "row1024-wrap4")]["s"]["ovl"] == pytest.approx(261 * 3e-3)
-    assert st[(512, 16, 1024, "row1024")]["s"]["gemm"] == pytest.approx(261 * 5e-3)
-    macs = 16384 * (104 * 16384**2 + 52 * 128 * 16384 + 104 * 65536 * 16384 + 256 * 16384)
-    assert st[(512, 8, 1024, "row1024")]["macs"] == macs
-    assert st[(512, 8, 1024, "row1024")]["mhz"] == (1980, 1980)
-
-
-def test_the_8b_step_is_32_layers_of_its_four_linears_against_cublaslt(tmp_path, capsys, monkeypatch):
-    calls = h200_step.MODELS["8b"]
-    f = tmp_path / "bench-row16384.jsonl"
-    f.write_text("\n".join(_line(n, k, 2.0, lp=128, row=16384) for n, k in calls) + "\n")
-    st = h200_step.steps(h200_step.rows([str(f)]), calls=calls)
-    assert st[(128, 8, 16384, "row16384")]["s"]["ovl"] == pytest.approx(128 * 2e-3)
-    assert st[(128, 8, 16384, "row16384")]["macs"] == 32 * 16384 * (6144 * 4096 + 4096 * 4096 + 28672 * 4096 + 4096 * 14336)
-    monkeypatch.setattr(sys, "argv", ["h200_step.py", str(f)])
-    assert h200_step.main() == 0
-    out = capsys.readouterr().out
-    assert "summary: 8b L 1024 row 16384 row16384: step 0.256 s overlapped, gamma_lt 1.000 against cuBLASLt's 0.256 s" in out
-    assert "mqa16k52" not in out
-
-
-def test_a_missing_call_or_another_m_gives_no_step(tmp_path, capsys, monkeypatch):
-    calls = list(h200_step.CALLS)
-    f = tmp_path / "bench-row1024.jsonl"
-    f.write_text("\n".join([_line(n, k, 1.0) for n, k in calls[1:]] + [_line(*calls[0], 1.0, m=8192)]) + "\n")
-    assert h200_step.steps(h200_step.rows([str(f)])) == {}
-    monkeypatch.setattr(sys, "argv", ["h200_step.py", str(f)])
-    assert h200_step.main() == 1
-    assert "summary: no complete step" in capsys.readouterr().out
 
 
 def _fill_line(n: int, k: int, served: bool, L: int = 4096, m: int = 16384) -> str:
@@ -80,12 +35,23 @@ def test_the_no_fold_step_takes_a_served_calls_per_call_weight_side_and_a_filler
     assert served["tensor"] == pytest.approx(261 * 1.5e-3)
     assert served["hashing"] == pytest.approx(261 * 0.65e-3) and filler["hashing"] == pytest.approx(261 * 0.85e-3)
     assert served["other"] == pytest.approx(261 * 0.05e-3)
-    assert h200_step.steps(h200_step.rows([str(f)])) == {}
-    monkeypatch.setattr(sys, "argv", ["h200_step.py", str(f)])
+    assert served["macs"] == 16384 * (104 * 16384**2 + 52 * 128 * 16384 + 104 * 65536 * 16384 + 256 * 16384)
+    assert served["mhz"] == (1900, 1900)
+    monkeypatch.setattr(sys, "argv", ["h200_step.py", str(f), "--wgmma", "3.06"])
     assert h200_step.main() == 0
     out = capsys.readouterr().out
     assert ("summary: mqa16k52 no-fold served L 4096 L' 256 row 16384 row16384-served1-L4096: step 0.783 s (ovl_w), "
             "gamma_u 0.256 against wgmma's 3.06 s, gamma_lt 3.000 against cuBLASLt's 0.261 s") in out
+
+
+def test_a_missing_call_or_another_m_gives_no_step(tmp_path, capsys, monkeypatch):
+    calls = list(h200_step.CALLS)
+    f = tmp_path / "fill-bench-row16384.jsonl"
+    f.write_text("\n".join([_fill_line(n, k, True) for n, k in calls[1:]] + [_fill_line(*calls[0], True, m=8192)]) + "\n")
+    assert h200_step.fill_steps(h200_step.rows([str(f)])) == {}
+    monkeypatch.setattr(sys, "argv", ["h200_step.py", str(f)])
+    assert h200_step.main() == 1
+    assert "summary: no complete step" in capsys.readouterr().out
 
 
 def test_the_no_fold_step_is_against_the_lines_own_wgmma_linear(tmp_path, capsys, monkeypatch):
