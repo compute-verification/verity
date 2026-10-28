@@ -11,9 +11,10 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 # verity.core.protocols.pous's registered schemes and S_chip from the bandwidth harness's summarize.py (loaded by path); joint.py runs the bandwidth audit's windows
 # (verity.core.protocols.bandwidth) through the bandwidth harness's prover (gpu.py, which imports reference.py beside it);
 # the rest of `verity` listed is what those packages import.
-# PoUW's, PoUS's and the bandwidth audit's Python verifiers answer through Core.Answer's Python (`answer.py`).
-inputs = ["verity/core/protocols/answer.py", "benchmarks/pouw/harness/price_twins.py", "benchmarks/pouw/harness/price_twins.json", "benchmarks/pouw/clear",
+inputs = ["benchmarks/pouw/harness/price_twins.py", "benchmarks/pouw/harness/price_twins.json", "benchmarks/pouw/clear",
           "benchmarks/bandwidth/summarize.py", "benchmarks/bandwidth/gpu.py", "benchmarks/bandwidth/reference.py",
+          # Core.Answer's Python, which PoUW's, PoUS's and the bandwidth audit's verifiers answer through
+          "verity/core/protocols/answer.py",
           "verity/__init__.py", "verity/errors.py", "verity/core/__init__.py", "verity/core/protocols/__init__.py",
           "verity/core/protocols/profile.py", "verity/core/protocols/bandwidth", "verity/core/protocols/pouw",
           "verity/core/protocols/pous", "verity/core/claims",

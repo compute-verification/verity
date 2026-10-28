@@ -10,9 +10,10 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 # through its path requires, C-Flock's verifier's Lean, core's randomness, the difftest server and the core protocol
 # interface (`RemoteAudit.Protocol`, which `test_protocol.py` holds to the period hook, `period.py`). The schedule check
 # (`schedule.py`) is a reference too.
-# PoUW's, PoUS's and the bandwidth audit's Python verifiers answer through Core.Answer's Python (`answer.py`).
-inputs = ["verity/core/protocols/answer.py", "verity/__init__.py", "verity/errors.py", "verity/core/__init__.py", "verity/core/protocols/__init__.py",
+inputs = ["verity/__init__.py", "verity/errors.py", "verity/core/__init__.py", "verity/core/protocols/__init__.py",
           "verity/core/protocols/profile.py", "verity/core/protocols/remote_bandwidth/__init__.py",
+          # Core.Answer's Python, which PoUW's, PoUS's and the bandwidth audit's verifiers answer through
+          "verity/core/protocols/answer.py",
           "verity/core/protocols/remote_bandwidth/audit.py", "verity/core/protocols/remote_bandwidth/codec.py",
           "verity/core/protocols/remote_bandwidth/wire.py",
           "verity/core/protocols/remote_bandwidth/coins.py", "verity/core/protocols/remote_bandwidth/receipts.py",

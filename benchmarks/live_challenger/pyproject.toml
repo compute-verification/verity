@@ -8,9 +8,10 @@ testpaths = ["tests"]
 [tool.verity.tests]
 # The load's verbs read and write the store with `benchmarks/network_traces/load_relay.py`, which commits with the
 # certifier's transfer rows and PoUS's P2 scheme. The rehearsal unit's RuntimeMaxSec bounds the gate's --minutes.
-# PoUW's, PoUS's and the bandwidth audit's Python verifiers answer through Core.Answer's Python (`answer.py`).
-inputs = ["verity/core/protocols/answer.py", "benchmarks/network_traces/load_relay.py", "verity/core/protocols/certifier", "verity/core/protocols/pous",
+inputs = ["benchmarks/network_traces/load_relay.py", "verity/core/protocols/certifier", "verity/core/protocols/pous",
           "tools/research/src/research/pods/nebius/challenger/vy-certifier@.service",
+          # Core.Answer's Python, which PoUW's, PoUS's and the bandwidth audit's verifiers answer through
+          "verity/core/protocols/answer.py",
           "verity/__init__.py", "verity/errors.py", "verity/core/__init__.py", "verity/core/protocols/__init__.py",
           "verity/core/protocols/profile.py", "verity/core/protocols/sampled_proofs/__init__.py",
           "verity/core/claims/__init__.py",

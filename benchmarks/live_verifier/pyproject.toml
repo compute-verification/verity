@@ -8,9 +8,10 @@ testpaths = ["tests"]
 markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 
 [tool.verity.tests]
-# PoUW's, PoUS's and the bandwidth audit's Python verifiers answer through Core.Answer's Python (`answer.py`).
-inputs = ["verity/core/protocols/answer.py", "verity/__init__.py", "verity/errors.py", "verity/core/__init__.py", "verity/core/protocols/__init__.py",
+inputs = ["verity/__init__.py", "verity/errors.py", "verity/core/__init__.py", "verity/core/protocols/__init__.py",
           "verity/core/protocols/profile.py", "verity/core/protocols/remote_bandwidth", "verity/ml/__init__.py",
+          # Core.Answer's Python, which PoUW's, PoUS's and the bandwidth audit's verifiers answer through
+          "verity/core/protocols/answer.py",
           "verity/ml/circuits", "verity/ml/crypto", "verity/ml/commitments", "verity/ml/randomness",
           # the Lean verifier a session runs beside audit.Session, and the difftest a replay serves: their Lake packages
           "verity/core/service/flock/Flock", "verity/core/service/flock/lakefile.toml",

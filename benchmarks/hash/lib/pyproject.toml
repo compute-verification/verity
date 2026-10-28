@@ -10,9 +10,10 @@ testpaths = ["tests"]
 # chunk leaves under sampled_proofs' Registered.commit), and commit_gpu's reference.py (the PRF salts); circuits, crypto
 # and randomness are what those import, and kernels' tc what pouw's
 # circuit reaches. vclib reads its variables through settings.py, on verity_config.settings.
-# PoUW's, PoUS's and the bandwidth audit's Python verifiers answer through Core.Answer's Python (`answer.py`).
-inputs = ["verity/core/protocols/answer.py", 
+inputs = [
   "tools/config/verity_config",
+  # Core.Answer's Python, which PoUW's, PoUS's and the bandwidth audit's verifiers answer through
+  "verity/core/protocols/answer.py",
   "verity/__init__.py", "verity/settings.py",
   "verity/errors.py",
   "verity/ml/__init__.py",

@@ -29,9 +29,10 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 # and bandwidth's period hooks (`pous.period`, `remote_bandwidth.period`), space's signed by
 # the memory challenger's tests' deployed key (`mc_cases.py`, which reads the PoUS tests' test signer by path); with
 # them what they import of `verity.ml` and `verity.errors`.
-# PoUW's, PoUS's and the bandwidth audit's Python verifiers answer through Core.Answer's Python (`answer.py`).
-inputs = ["verity/core/protocols/answer.py", "verity/__init__.py", "verity/errors.py", "verity/ml", "verity/core/__init__.py", "verity/core/claims",
+inputs = ["verity/__init__.py", "verity/errors.py", "verity/ml", "verity/core/__init__.py", "verity/core/claims",
           "verity/core/difftest", "verity/core/protocols/__init__.py", "verity/core/protocols/profile.py",
+          # Core.Answer's Python, which PoUW's, PoUS's and the bandwidth audit's verifiers answer through
+          "verity/core/protocols/answer.py",
           "verity/core/protocols/registration.py", "verity/core/wire",
           "verity/core/protocols/onsite", "verity/core/protocols/remote", "verity/core/protocols/interface",
           "verity/core/protocols/pouw", "verity/core/protocols/sampled_proofs",
