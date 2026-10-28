@@ -126,7 +126,6 @@ REF_INTEGRITY_RULE = {
                  "error evidence => unverified (never zero)",
     "evidence": ["fold_summary.json: errors, unresolved, unsupported (+ error_classes / per_step consistency)",
                  "fold_summary_2.json (when present): the same", "resolution.json (when present): totals.errors, totals.unsupported"],
-    "authorised_by": "R9 window brief §3 'Reference integrity' + DANIEL-BRIEF §6 (REF lane)",
 }
 #: Every gate `evaluate_gates` runs, in report order.
 ALL_GATES = GATES + STRUCTURAL_GATES + INTEGRITY_GATES

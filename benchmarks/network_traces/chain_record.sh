@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # The network chain's run of record (chain_record.py) on a CPU machine, from the gate's fetched tarballs, on hidden_zk's
 # builds (its job.sh, sourced: C-Flock's flock-circuit and the Lean flock-verify, the verifier of record) with the
-# firewall's Lean frame, N2's network-records and the sampled-proofs verifier built in the tree. From a clone, in a slot
-# of network-accounting's pool:
+# firewall's Lean frame, N2's network-records and the sampled-proofs verifier built in the tree. From a clone, in one of
+# the network slots:
 #   research run --on vy-nebius-cpu-2 --source . --project verity --as LANE --cwd clone --timeout 240m \
 #     --send GATE.tgz -- env CHECK_SLOTS=/workspace/research/locks/network/slots python3 tools/verity/check/slot.py \
 #     --by LANE -- env CR_MEM_GB=128 CR_GATES=GATE.tgz bash benchmarks/network_traces/chain_record.sh
@@ -12,10 +12,10 @@
 #   endpoint with CR_ENDPOINT, the endpoint's own advice bound to the run and the I/O tie on it, both in the clear
 #            (network-e2e's e2e.py --no-prove: chain.served_advice and chain.tie)
 #   n2       N2's units proved by C-Flock --zk and decided by its verifier of record, Lean included: CR_N2_CMD
-#            (N2-ZK's sampled draw on signed clocks); else on the advice profile n2_advised_zk.py --e2e on the bound
+#            (a sampled draw on signed clocks); else on the advice profile n2_advised_zk.py --e2e on the bound
 #            advice and the certifier's clock certificates, and on the others n2_zk.py prove
 #   scan     the scan's chained units, --zk, held by Lean verify --zk --registered (scan_zk.py prove, with
-#            --warden-run when CR_WARDEN_RUN names the gate's warden run and scan_zk takes it: IO-TIE)
+#            --warden-run when CR_WARDEN_RUN names the gate's warden run and scan_zk takes it)
 #   tie      on the warden path, the I/O tie on the warden's ingress, proved (n2_tie_zk.py prove --class warden)
 #   report   $OUT/report/report.json and report.md (chain_record.py report)
 #   guard    on every exit, before custody publishes the run dir, the record's leak guard (leak_guard.py): each file in it
