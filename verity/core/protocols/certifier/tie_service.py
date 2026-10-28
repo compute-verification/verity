@@ -303,7 +303,7 @@ class IngressTie:
         return R.record(self._program, self.query, {"law": "subset", "k": self.T}, S.SCHEME, roots,
                         self.provenance(head.window), previous=previous)
 
-    def register(self, stream: S.Stream, record: Mapping[str, Any]) -> S.Registration:
+    def register(self, stream: S.Stream, record: Mapping[str, Any]) -> S.WindowCommitmentRecord:
         """`stream.register` with the window's own ports, after holding its `window` provenance to exactly
         `{"kind": "served", "window": order}`."""
         window = len(stream.records)

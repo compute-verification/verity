@@ -379,7 +379,7 @@ def lean_side(audit: dict | None) -> dict | None:
 
 
 def verifier_negatives(stream_of: Callable[[Callable[[int], bytes]], S.Stream],
-                       register: Callable[[S.Stream], S.Registration], honest: S.Stream, coins: VerifierCoins,
+                       register: Callable[[S.Stream], S.WindowCommitmentRecord], honest: S.Stream, coins: VerifierCoins,
                        draw: S.Draw, outcome: Callable[[S.Stream, S.Draw, dict | None], tuple[S.Outcome, dict | None]],
                        window: str, closure: dict[int, list[int]] | None = None) -> dict[str, dict]:
     """The refusals that apply to a draw `draw` from the verifier's own `coins` on stream `honest`, once its outcome is
