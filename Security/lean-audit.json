@@ -9929,18 +9929,6 @@
    "assumptions": [],
    "type_hash": "3ed31232024990431903fe4c620f6d25eca2f8d6b2e0ec876ad0089a1a8c53e5"
   },
-  "Pous.SecurityProofs.SecureErasureMeets96GiB": {
-   "owner": "@memory-accounting",
-   "signature": ["Pous.SecurityProofs.SecureErasureMeets96GiB : Pous.Guarantees.SecureErasureMeets96GiB"],
-   "assumptions": [],
-   "type_hash": "318251ded382a3566886a469f97ee26b768d7831c549344a67d6f22af787c9ad"
-  },
-  "Pous.SecurityProofs.SecureErasureMeetsFamily": {
-   "owner": "@memory-accounting",
-   "signature": ["Pous.SecurityProofs.SecureErasureMeetsFamily : Pous.Guarantees.SecureErasureMeetsFamily"],
-   "assumptions": [],
-   "type_hash": "e877b6118f63c5f3114ffd8ab8a54911832b8c4449ff3cdb5d652fe3aa74d2fe"
-  },
   "Pous.SecurityProofs.SegMeets14": {
    "owner": "@memory-accounting",
    "signature": ["Pous.SecurityProofs.SegMeets14 : Pous.Guarantees.SegMeets14"],
@@ -13262,8 +13250,6 @@
    "Pous.SecurityProofs.P3ConcreteMeets14GB": "frozen (no-function,hash): a `Meets` in an ideal model, which no Lean function computes.",
    "Pous.SecurityProofs.P3ConcreteMeets64": "frozen (no-function,hash): a `Meets` in an ideal model, which no Lean function computes.",
    "Pous.SecurityProofs.P3ConcreteMeets64D12": "frozen (no-function,hash): a `Meets` in an ideal model, which no Lean function computes.",
-   "Pous.SecurityProofs.SecureErasureMeets96GiB": "frozen (no-function,hash): an `EraseMeets` in an ideal model, which no Lean function computes.",
-   "Pous.SecurityProofs.SecureErasureMeetsFamily": "frozen (no-function,hash): an `EraseMeets` in an ideal model, which no Lean function computes.",
    "Pous.SecurityProofs.SegMeets14": "frozen (no-function,hash): a `Meets` in an ideal model, which no Lean function computes.",
    "Pous.SecurityProofs.SegTagMeets14": "frozen (no-function,hash): a `Meets` in an ideal model, which no Lean function computes.",
    "Accounting.SecurityProofs.Remote.SketchBoundSession": "frozen (no-function,hash): It is about a model of the receipts' sketch over a remote session (Accounting.Remote.Sketch: a uniform registered store, verbatim-sector devices chosen by the prover's coins and the earlier passes' keys, and each candidate seed's signs and receipt-hash key what the session's key map (Session.keys) gives at the outcome's SHA-512), not the verifier's code (remote_bandwidth.receipts); its random-oracle step is one named premise, Accounting.Assumptions.SketchHashRandom at ε_ro (claim random-oracle: at every prover coin and store, the keys SHA-512 gives at the candidate seeds are within ε_ro of uniform on every event, not uniform: two distinct seeds can share a 256-bit sign key; note:20261024T1817Z-report-rt4-fixes), which the proof uses once to carry the bound from the model's coins to the outcomes at the cost of ε_ro, added to δs (Session.pr_coins_le), and the store's uniformity stays in the outcome's coins; it derives SketchBound on a trace over the outcomes that Receipted and Present tie to that model, under SketchRank and the per-pass hash budget KeyBudget (note:20261024T0839Z-report-sketchbound, note:20261024T1350Z-report-sketch-named)",
@@ -28024,13 +28010,6 @@
     "NetTiming.SecurityProofs.PeriodLeakAccepted"
    ]
   },
-  "Definitions.Pous.Accounting.EraseMeets": {
-   "digest": "6c5d0a62e2cad38786ca153fe3f00541c79ff8d277b1bd5ac7599dc7315bc298",
-   "definitions": {
-    "Pous.EraseMeets": "2fae65625d879d92a291808f8bb16943defd93eaf769067963c05004937eab3d"
-   },
-   "guarantees": ["Pous.SecurityProofs.SecureErasureMeets96GiB", "Pous.SecurityProofs.SecureErasureMeetsFamily"]
-  },
   "Definitions.Pous.Accounting.GradedMeets": {
    "digest": "4af4e7e25629ec16f9bfab71b839349841691b42f7e8ac3a56849edb1457d745",
    "definitions": {
@@ -28097,8 +28076,6 @@
     "Pous.SecurityProofs.P3ConcreteMeets14GB",
     "Pous.SecurityProofs.P3ConcreteMeets64",
     "Pous.SecurityProofs.P3ConcreteMeets64D12",
-    "Pous.SecurityProofs.SecureErasureMeets96GiB",
-    "Pous.SecurityProofs.SecureErasureMeetsFamily",
     "Pous.SecurityProofs.SegMeets14",
     "Pous.SecurityProofs.SegTagMeets14"
    ]
@@ -28262,8 +28239,6 @@
     "Pous.SecurityProofs.P3ConcreteMeets14GB",
     "Pous.SecurityProofs.P3ConcreteMeets64",
     "Pous.SecurityProofs.P3ConcreteMeets64D12",
-    "Pous.SecurityProofs.SecureErasureMeets96GiB",
-    "Pous.SecurityProofs.SecureErasureMeetsFamily",
     "Pous.SecurityProofs.SegMeets14",
     "Pous.SecurityProofs.SegTagMeets14"
    ]
@@ -28435,8 +28410,6 @@
     "Pous.SecurityProofs.P3ConcreteMeets14GB",
     "Pous.SecurityProofs.P3ConcreteMeets64",
     "Pous.SecurityProofs.P3ConcreteMeets64D12",
-    "Pous.SecurityProofs.SecureErasureMeets96GiB",
-    "Pous.SecurityProofs.SecureErasureMeetsFamily",
     "Pous.SecurityProofs.SegMeets14",
     "Pous.SecurityProofs.SegTagMeets14",
     "Pous.SecurityProofs.SnapshotFresh",
@@ -28577,14 +28550,6 @@
     "Pous.SecurityProofs.P2SlackFamilyWide"
    ]
   },
-  "Definitions.Pous.Guarantees.SecureErasure": {
-   "digest": "dbdfcc1ab1d74de92be9092948375047fa95ab6093a9aae4f76fc0ec59008365",
-   "definitions": {
-    "Pous.Guarantees.SecureErasureMeets96GiB": "79cd7827fdf92bae7a9327f48c8e553cbbc12dc6b55c516d6ded2a172bb9b858",
-    "Pous.Guarantees.SecureErasureMeetsFamily": "fe98dfda1970653f3ffcb889f2ef2beee6381b2343c5dc2cebed25773c0fc34d"
-   },
-   "guarantees": ["Pous.SecurityProofs.SecureErasureMeets96GiB", "Pous.SecurityProofs.SecureErasureMeetsFamily"]
-  },
   "Definitions.Pous.Guarantees.StreamedWipe": {
    "digest": "c984cc236c27a63dbd712cc69657597f482f450718cc277d46d59d27ef7c282f",
    "definitions": {
@@ -28651,7 +28616,7 @@
    ]
   },
   "Definitions.Pous.Model.Audit": {
-   "digest": "f6c3dc201c14558912fe133053d3c192061eded52845fc7e49f46830b30b8fcc",
+   "digest": "66ed02a652bb3fb7a7b3d8a1d10cc3476370b9dbb1f0a8071f6bd5efd1a1972b",
    "definitions": {
     "Pous.AuditSecure": "ef3659099abbe356183c134990bd1edac4d9933a8197ba7cce6d9a98e3e8616a",
     "Pous.Outcome": "8a846063357fda1c64344bf40951e0d962fa4631fe3b7e7630665e6035b9cacd",
@@ -28662,9 +28627,11 @@
     "Pous.Reveal.sequential": "0a82b9b23446951f1362179a872bbf8a02b362ab1c69b6ae4dc2ab4dfb15fe09",
     "Pous.Reveal.simultaneous": "ca1a86ec63df0c64cd9b6310e4fe58c2abd9f34b378ae8ab5f3e4ed3c7ddac7e",
     "Pous.SeqResponder": "99d61b6e2ca68756a3984b11affead8df45bb6bd18b4380a20319f09425cdb48",
+    "Pous.SeqResponder.step": "ad4eec293c4b1453907e92255e0595557783f3430e00414c77997d1addfc1350",
     "Pous.SeqResponderBy": "23655af7a5fd51b1768677ee7e896f21d3df2afff1c988c8610cf31f3e6f5c9e",
     "Pous.SeqResponderBy.step": "214e7db4b297d509cc488c1e8cea0864342e29dc0c097967cb73a7a0ca3cf2cb",
     "Pous.SimResponder": "4a644291172c61674f2d3f2020cc3b13834e4ebf5bd56615ff1b1229203957e1",
+    "Pous.SimResponder.prog": "616dcc38f1e8fb74da3c4c939245f25c0b3ec4302061a91a76c3b250069804fd",
     "Pous.SimResponderBy": "12d0b0dde3b0936592d3ddface91b141e247a8143e4ff0f44f4615752d0d29b0",
     "Pous.SimResponderBy.prog": "0dbb331c2979c338627991d77707e591f44810cd31e061502b1d068f2d8c5608",
     "Pous.seqAccepts": "4bf9424f048881fee8b72b6f58a8c7b31bb2ba651521b7db8d6fe4a47c8b23ec",
@@ -28733,8 +28700,6 @@
     "Pous.SecurityProofs.P3ConcreteMeets14GB",
     "Pous.SecurityProofs.P3ConcreteMeets64",
     "Pous.SecurityProofs.P3ConcreteMeets64D12",
-    "Pous.SecurityProofs.SecureErasureMeets96GiB",
-    "Pous.SecurityProofs.SecureErasureMeetsFamily",
     "Pous.SecurityProofs.SegMeets14",
     "Pous.SecurityProofs.SegTagMeets14"
    ]
@@ -28781,9 +28746,7 @@
     "Pous.SecurityProofs.BandPubMeetsFamilyD1",
     "Pous.SecurityProofs.BandPubMeetsFamilyD2",
     "Pous.SecurityProofs.ChainDenseMeets111",
-    "Pous.SecurityProofs.ChainDenseMeets64",
-    "Pous.SecurityProofs.SecureErasureMeets96GiB",
-    "Pous.SecurityProofs.SecureErasureMeetsFamily"
+    "Pous.SecurityProofs.ChainDenseMeets64"
    ]
   },
   "Definitions.Pous.Model.Continuous": {
@@ -28871,8 +28834,6 @@
     "Pous.SecurityProofs.ChainDenseMeets64",
     "Pous.SecurityProofs.DenseMeets",
     "Pous.SecurityProofs.DenseMeets64",
-    "Pous.SecurityProofs.SecureErasureMeets96GiB",
-    "Pous.SecurityProofs.SecureErasureMeetsFamily",
     "Pous.SecurityProofs.SegMeets14",
     "Pous.SecurityProofs.SegTagMeets14"
    ]
@@ -28955,8 +28916,6 @@
     "Pous.SecurityProofs.P3ConcreteMeets14GB",
     "Pous.SecurityProofs.P3ConcreteMeets64",
     "Pous.SecurityProofs.P3ConcreteMeets64D12",
-    "Pous.SecurityProofs.SecureErasureMeets96GiB",
-    "Pous.SecurityProofs.SecureErasureMeetsFamily",
     "Pous.SecurityProofs.SegMeets14",
     "Pous.SecurityProofs.SegTagMeets14"
    ]
@@ -29017,8 +28976,6 @@
     "Pous.SecurityProofs.P3ConcreteMeets14GB",
     "Pous.SecurityProofs.P3ConcreteMeets64",
     "Pous.SecurityProofs.P3ConcreteMeets64D12",
-    "Pous.SecurityProofs.SecureErasureMeets96GiB",
-    "Pous.SecurityProofs.SecureErasureMeetsFamily",
     "Pous.SecurityProofs.SegMeets14",
     "Pous.SecurityProofs.SegTagMeets14"
    ]
@@ -29134,9 +29091,7 @@
     "Pous.SecurityProofs.ChainDenseMeets64",
     "Pous.SecurityProofs.P3ConcreteMeets14GB",
     "Pous.SecurityProofs.P3ConcreteMeets64",
-    "Pous.SecurityProofs.P3ConcreteMeets64D12",
-    "Pous.SecurityProofs.SecureErasureMeets96GiB",
-    "Pous.SecurityProofs.SecureErasureMeetsFamily"
+    "Pous.SecurityProofs.P3ConcreteMeets64D12"
    ]
   },
   "Definitions.Pous.Model.PubEncoder": {
@@ -29263,25 +29218,9 @@
     "Pous.SecurityProofs.P3ConcreteMeets14GB",
     "Pous.SecurityProofs.P3ConcreteMeets64",
     "Pous.SecurityProofs.P3ConcreteMeets64D12",
-    "Pous.SecurityProofs.SecureErasureMeets96GiB",
-    "Pous.SecurityProofs.SecureErasureMeetsFamily",
     "Pous.SecurityProofs.SegMeets14",
     "Pous.SecurityProofs.SegTagMeets14"
    ]
-  },
-  "Definitions.Pous.Model.SecureErasure": {
-   "digest": "cefa5e8ced7f1bed84f06a75a81ae9c55c1fb7d54bc3006505b7538b601968b5",
-   "definitions": {
-    "Pous.EraseOutcome": "9ef1d096f7647dacf2f6ab6e49eabadf4d141dfe92e34f0097adb416af3c5bf6",
-    "Pous.EraseProver": "708524cdc2da87d40b81a11b61f530f795a1fce34045c77340cb72ce530c41c5",
-    "Pous.EraseProver.fill": "baf057fd38bf4719d7ada4c0ab86b30cdde703e6f964baf9a0f914a5b93297c2",
-    "Pous.EraseProver.keep": "4128d68c4e3c56f1a20bb61a34c8915ce5259840bfb8ddc3c6f63a4a84798ce2",
-    "Pous.EraseProver.read": "961833129734b2e9ebd675d6325d2954da83bbbe43ff53e3b790020bcba3c8b2",
-    "Pous.EraseSecure": "e4df3f196cc8f5645d2cd444f84d755d03b84af6a089670035a4ab230221ef9d",
-    "Pous.eraseAnswers": "28b84d7fa384e3172e691aea4e96b8cfaaab9333b03bfc0c2699004f5c52aab9",
-    "Pous.eraseWins": "268c648aa165ce43c4b61e6c39f5a1c303214428261899513eedd2d54dc05112"
-   },
-   "guarantees": ["Pous.SecurityProofs.SecureErasureMeets96GiB", "Pous.SecurityProofs.SecureErasureMeetsFamily"]
   },
   "Definitions.Pous.Model.StreamedWipe": {
    "digest": "301e08155a32208e66b451f123cec3a3525904a4e9d61b7fa6d1f589be774319",
