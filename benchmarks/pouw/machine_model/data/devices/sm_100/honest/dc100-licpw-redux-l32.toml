@@ -1,5 +1,5 @@
 # Honest at L = 32 on the B200 (sm_100) with the LI fold and LI-CP-W's checkpoint reduced across the warp by ONE
-# `redux.sync.xor.b32` a segment (DC EPS1 r9), in place of the 5-shuffle fallback dc100-licpw-l32 prices. Measured: the
+# `redux.sync.xor.b32` a segment, in place of the 5-shuffle fallback dc100-licpw-l32 prices. Measured: the
 # honest LI loop beside the saturated UTCIMMA folds 95.99 words/SM/clk with no checkpoint, 89.60 with the redux reduction
 # (+7.1% cycles) and 68.27 with the 5-shuffle one (+40.6%); so redux costs the latency-bound loop about a fifth of what
 # the dependent butterfly does, and one word a warp a segment still leaves the SM. redux has no census kind, so its one
