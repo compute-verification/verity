@@ -2,8 +2,8 @@
 GPU's receipts to word for word) in RT-ALGO-16's verifier form (#3574): a call's first position u0 is credit's (the
 window's earlier calls' units), its unit u = ri (N / 32) + cj at position u0 + u reads its call's seed_c at u0 and the
 blocks core's credit derives for tile t = u at the call's slot M (`core_check.j10r_blocks`), so its public rows are
-credit's `public_table` and its receipt `h1tile.j10r_reference`'s at them; and `forms.form_of` labels such an arm by
-#3574 when it is on credit's layout (`forms.j10r_part`)."""
+credit's `public_table` and its receipt `h1tile.j10r_reference`'s at them; and `forms.form_of` labels such an arm
+"j10r" when it is on credit's layout (`forms.j10r_part`)."""
 from __future__ import annotations
 
 import functools
