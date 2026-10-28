@@ -77,11 +77,13 @@ def user_of(body: Any) -> str | None:
 def advice_trace(out: Path, engine: Any) -> Any:
     """The scheduler step trace (`engine.step_trace.StepTrace`) of ``engine`` for the server's lifetime, at ``out/advice_trace.jsonl``
     (`step_trace.SERVED`, beside the committer's step_trace.jsonl), under the engine ids requests.jsonl records (vLLM's internal
-    suffix dropped): what `verity-vllm advice OUT` reads, with each window's open and close (``CommitWindows(marks=trace.window)``)."""
+    suffix dropped): what `verity-vllm advice OUT` reads, with each window's open and close (``CommitWindows(marks=trace.window)``).
+    Its writer thread writes the file (`StepTrace.writer`): the engine thread never waits on the serve dir's disk, which the seals
+    keep busy; `Mirror(before=trace.drain)` copies it whole."""
     from verity_vllm.engine.engine_driver import external_id
     from verity_vllm.engine.step_trace import SERVED, StepTrace
 
-    return StepTrace(Path(out) / SERVED, request_id=external_id, clock=time.time).install(engine)
+    return StepTrace(Path(out) / SERVED, request_id=external_id, clock=time.time, writer=True).install(engine)
 
 
 #: requests.jsonl's engine id to ``user`` map alone, a line each as requests.jsonl's: ``{"engine_id", "user"}``.  It holds no
@@ -107,14 +109,18 @@ def gc_of(rc: Any) -> dict[str, Any] | None:
 
 class Mirror:
     """The serve dir's records (`MIRRORED`) copied into ``dst`` (the run's ``$OUT``, which custody uploads), so they outlive the serve
-    dir: a JSON-lines file up to its last whole line, appended from where its copy ends; any other file whole. Any thread."""
+    dir: a JSON-lines file up to its last whole line, appended from where its copy ends; any other file whole. Any thread.
+    ``before``: called first, each time (the step trace's `drain`, so its writer's lines are in the file)."""
 
-    def __init__(self, src: str | Path, dst: str | Path, names: Sequence[str] = MIRRORED) -> None:
-        self.src, self.dst, self.names = Path(src), Path(dst), tuple(names)
+    def __init__(self, src: str | Path, dst: str | Path, names: Sequence[str] = MIRRORED, *,
+                 before: Callable[[], None] | None = None) -> None:
+        self.src, self.dst, self.names, self.before = Path(src), Path(dst), tuple(names), before
         self.errors: list[str] = []
         self._lock = threading.Lock()
 
     def __call__(self) -> None:
+        if self.before is not None:
+            self.before()
         with self._lock:
             self.dst.mkdir(parents=True, exist_ok=True)
             for name in self.names:
@@ -144,11 +150,11 @@ class Mirror:
                 g.write(data)
 
 
-def records_mirror(out: Path, dst: str | None) -> Mirror | None:
+def records_mirror(out: Path, dst: str | None, before: Callable[[], None] | None = None) -> Mirror | None:
     """`Mirror` of ``out``'s records into ``--copy-records-to`` (None without one, or when it is ``out``)."""
     if not dst or Path(dst).resolve() == Path(out).resolve():
         return None
-    return Mirror(out, dst)
+    return Mirror(out, dst, before=before)
 
 
 def disk_record(windows: CommitWindows | None) -> dict[str, Any] | None:
