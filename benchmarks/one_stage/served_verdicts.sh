@@ -71,7 +71,8 @@
 #     registration's root; its circuit.json less its run fields is held to the verifier's own window-circuit record at the
 #     class; then `records_audit.py audit --circuit --registered`, within V3C_AUDIT_TIMEOUT (default 30m), draws the
 #     registration's members (V3C_LAW, default subset:1) and proves them. `served_verdicts.sh v3c` runs only that step on an
-#     existing serve dir (D and its window K set), the build first, its limits 120m and 180m.
+#     existing serve dir (D and its window K set), the build first, its limits 120m and 180m. V3C_CLASS set empty leaves
+#     V3c out of the run, for a `served_verdicts.sh v3c` started once the window's advice is written.
 # Coins: sampled proofs' draw is Lean's IO.getRandomBytes in the verifier's process on the served node unless PP_CHALLENGER
 # names the live challenger (run.sh's gate:USER@HOST with PP_PEER, PP_CHALLENGER_KEY and PP_GATE_KEY). With H1_GATE (the
 # lane's gate command, by default "ssh -i $HOME/.ssh/vllm_gate_ed25519 -o BatchMode=yes research@204.12.178.84"; empty, no
@@ -157,7 +158,9 @@ print(f"registered before the first request: {len(v)} weight parameters rooted (
 EOF
 )"
 }
-V3C=${V3C_CLASS:-4,32,4} v3c_ok=0; vtag=${V3C//,/-}
+V3C=${V3C_CLASS-4,32,4} v3c_ok=0
+[ "${1:-}" = v3c ] && V3C=${V3C:-4,32,4}
+vtag=${V3C//,/-}
 if [ "${1:-}" = v3c ]; then V3C_TIMEOUT=${V3C_TIMEOUT:-120m} V3C_AUDIT_TIMEOUT=${V3C_AUDIT_TIMEOUT:-180m}
 else V3C_TIMEOUT=${V3C_TIMEOUT:-15m} V3C_AUDIT_TIMEOUT=${V3C_AUDIT_TIMEOUT:-30m}; fi
 v3c_commit() {  # window K of $D committed as V3C's class circuit's units, its circuit held to the verifier's window-circuit record
@@ -525,6 +528,7 @@ comp=0
 [ -z "${COMPOSITE-1}" ] || TPY=$TPY bash benchmarks/one_stage/served_composite.sh "$D" "$OUT" || comp=1
 measure
 # V3c after the record, each step within its limit: it gates nothing
-v3c_commit && v3c_audit
+if [ -n "$V3C" ]; then v3c_commit && v3c_audit
+else say "V3C: not in this run (V3C_CLASS empty): \`served_verdicts.sh v3c\` runs it on the serve dir"; fi
 echo "---- verdicts"; cat "$OUT/verdicts.txt"
 [ "$wc_ok" = 1 ] && [ "$rec" = 0 ] && [ "$comp" = 0 ] && grep -q '"composed": "\(pending\|accept\)"' "$OUT/verdicts.txt"
