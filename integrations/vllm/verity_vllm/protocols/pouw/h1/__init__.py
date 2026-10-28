@@ -761,8 +761,7 @@ class H1Run:
     def calls_root(self) -> bytes:
         """SHA-512 over the manifest, in order: what the install commits to (its positions and what was bound), and with
         ``served`` its registered trees' entries and the Commit's record (`calls_root`)."""
-        return calls_root(self.salt, self.manifest(), None if self.served is None else self.served.digest(),
-                          CT.record_of(self))
+        return calls_root(self.salt, self.manifest(), None if self.served is None else self.served.digest(), CT.record_of(self))
 
     def finish(self) -> None:
         """Close the window, commit its manifest, then open ``draw``'s coin after `pouw_h1_requests.draw_root` over the
