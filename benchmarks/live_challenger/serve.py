@@ -159,15 +159,6 @@ def log_hello(out: Path, n: int, why: str) -> None:
         os.fsync(f.fileno())
 
 
-def read_secret(path: Path | None) -> bytes | None:
-    if path is None:
-        return None
-    text = path.read_text().strip()
-    if not re.fullmatch(r"[0-9a-f]{64}", text):
-        raise ValueError(f"{path}: a session's secret is 64 lowercase hex digits")
-    return bytes.fromhex(text)
-
-
 @contextmanager
 def leaf_state(key: lms.PrivateKey, key_dir: Path, lock: Path | None) -> Iterator[lms.LeafState]:
     """The key's leaf state for one use, under `lock` (held exclusively, waiting for its holder) when given."""
@@ -192,7 +183,7 @@ def main(argv: list[str] | None = None) -> int:
               "certifier coin link, never its own ssh -R (--peer; CoinsConfidential)", file=sys.stderr)
         return 2
     try:
-        secret = read_secret(args.secret_file)
+        secret = None if args.secret_file is None else remote.read_secret(args.secret_file)
         params = lms.DEPLOYED if args.params is None else lms.Params(64, *map(int, args.params.split(",")))
         served_claim(V.coins)
         challenger = LiveChallenger(args.scheme, args.epoch, args.families, V.coins)
