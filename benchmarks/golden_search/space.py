@@ -47,6 +47,10 @@ GRIDS: dict[str, dict[str, tuple]] = {
     },
 }
 GRIDS["smoke"] = {k: v[:2] for k, v in GRIDS["coarse"].items()}
+#: the coarse grid less the values every coarse optimum's per-knob table shows dominated (the engineering levers taken, the
+#: flat rate dropped), for the sensitivity sweeps; the coarse run's per-knob table prices each dropped value
+GRIDS["oat"] = {**GRIDS["coarse"], "sampling": ("work",), "seal": ("roots",), "host": ("fixed",), "kernels": ("bar",),
+                "overlap": ("corun", "corun4")}
 GRIDS["fine"] = {**GRIDS["coarse"],
                  "tile": ((1, 1), (1, 2), (2, 2), (1, 4), (2, 4), (4, 4), (1, 8), (8, 8), (16, 16), (32, 32)),
                  "kchunk": (1, 2, 4, 8),
