@@ -264,6 +264,9 @@ WATCH_STATES = ("ok", "followed", "held", "held_again", "continued", "continue_f
 BURST_S = 15 * 60               # workers of one parent failing within this of the first are one alert (proofs' 14: 16:49-17:03Z)
 BURST_QUIET_S = 3 * 60          # ... posted once none has joined for this long (so a lone failure waits about a sweep)
 CONV_MSGS = 6                   # a failed worker's last assistant messages read for a wake-up it set itself
+#: a conversation read's timeout, and how long an agent whose read timed out goes unread: a coordinator's long transcript can
+#: take past the API's 60 s, and a few such reads spent a sweep's whole SWEEP_READS_S
+CONV_TIMEOUT_S, CONV_SKIP_S = 15, 30 * 60
 # a wake-up an agent says it set (subscribe_timer's tool call is not in the API's conversation, only what it says of it)
 WAKE_RE = re.compile(r"[^.!?\n]*\b(?:wake[- ]?up|subscribe_timer|timer)s?\b[^.!?\n]*[.!?]?", re.I)
 WAKE_IN_RE = re.compile(r"\bin (\d+) ?(min(?:ute)?s?|h(?:ours?)?)\b", re.I)
@@ -695,9 +698,9 @@ class Api:
             h["Content-Type"] = "application/json"
         return urllib.request.Request(self.base + path, data=data, method=method, headers=h)
 
-    def get(self, path: str, **params) -> dict:
+    def get(self, path: str, timeout: float | None = None, **params) -> dict:
         q = ("?" + urllib.parse.urlencode({k: v for k, v in params.items() if v is not None})) if params else ""
-        timeout = self.timeout
+        timeout = self.timeout if timeout is None else min(timeout, self.timeout)
         if self.reads_until is not None:
             if (timeout := min(timeout, self.reads_until - self.clock())) <= 0:
                 raise TimeoutError(f"this sweep's reads are spent ({SWEEP_READS_S // 60} min); the next sweep reads again")
@@ -812,6 +815,7 @@ class Watch:
         self.names: dict[str, str] = {}             # listed agent -> its name, for run_ended
         self.branches: dict[str, set[str]] = {}     # listed agent -> the branches its run records name
         self.worker_status: dict[str, str] = {}             # worker -> its status as this sweep read it, for status.json
+        self.slow_convs: dict[str, float] = {}              # agent -> until when its conversation goes unread (CONV_SKIP_S)
         self.agent_status: dict[str, str] = {}              # listed agent -> its status as this sweep read it, for run_ended
         self.registry, self.routes, self.timers = registry, routes, timers
         self.doorbells = ""                         # whether doorbells.json was fresh, stale or missing at the last sweep
@@ -936,9 +940,13 @@ class Watch:
     def conversation(self, agent: str) -> list[dict] | None:
         """An agent's messages (`GET /v0/agents/{id}/conversation`: user and assistant text only, no tool calls); None when
         the API won't read it."""
+        if self.clock() < self.slow_convs.get(agent, 0):
+            return None
         try:
-            msgs = (self.api.get(f"/v0/agents/{agent}/conversation") or {}).get("messages") or []
+            msgs = (self.api.get(f"/v0/agents/{agent}/conversation", timeout=CONV_TIMEOUT_S) or {}).get("messages") or []
         except (urllib.error.URLError, OSError, ValueError) as e:
+            if isinstance(e, TimeoutError) or isinstance(getattr(e, "reason", None), TimeoutError):
+                self.slow_convs[agent] = self.clock() + CONV_SKIP_S
             print(f"{iso(self.clock())} conversation of {agent}: {type(e).__name__}: {e}", file=sys.stderr, flush=True)
             return None
         return [m for m in msgs if isinstance(m, dict)]
