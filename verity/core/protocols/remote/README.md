@@ -71,22 +71,27 @@ SampledProofs.OneStage.protocol]`. Its executable is `remote id | check PARAMS C
 
 ## Lifecycle
 
-1. **Registration**, once, in the setup phase, before any coin. It fixes the public parameters (the protocol and its
-   version, the sampling design and δ, the size classes, the inference-only policy's c and k, and each subprotocol's
+1. **Setup phase**, once, before any coin. It fixes the public parameters (the protocol and its version, the sampling
+   design and δ, the size classes, the inference-only policy's c and k, the advice length ℓ_a, and each subprotocol's
    public Program and parameters, by digest), the registered information θ (for example the weights) and the registered
-   compiler B. It fixes no circuit: after each execution phase, B run on the advice the developer reported outputs that
-   execution block's circuit and its partition into blocks, and the registered circuit D and its (c, k)-partition 𝓘
-   into inference blocks are the concatenation of those outputs, D = B(a₁).circuit ‖ … ‖ B(aₙ).circuit (`ARCHITECTURE.md`,
-   "Reported advice"; 𝓘 is read by the inference-only policy once it joins). The Lean (`Verity.Declaration`, a free circuit with
-   a committed partition) still states the older shape until soundness's post-V3 PR.
-2. **Execution phase** j. The developer reports its advice a_j, a bit string the registered compiler compiles, its
-   length charged, and B(a_j), the phase's execution block, is appended to the registered circuit. The block's values
-   are committed under hiding commitments in SHA-512 trees before any coins are flipped.
-   `examples/lifecycle/README.md` ("Terms") runs these terms on a toy model.
-3. **Verification phase** j, one per execution phase. The challenger's coins select proof blocks. The developer proves each sampled proof block with
-   C-Flock `--zk` behind the ZK server, and the Lean verifier `flock-verify` checks each proof. PoUW's check
-   (`pouw-check`) reads each PoUW period's commitment and its sampled proofs and receipts, and credits that period's work.
-   No proof is retried, and a failed proof is a visible failure.
+   compiler B. It fixes no circuit. The Lean (`Verity.Declaration`, `Verity.Committed`) still states the older shape, a
+   circuit with a partition committed beside it; soundness's COMPILEREG PR (after V3) restates it as
+   `Verity.Registered`, with the compiler's output explaining the committed trace.
+2. **Execution phase** j. The hardware runs, and the developer commits every value it computes under hiding commitments
+   in SHA-512 trees: the committed trace.
+3. **Verification phase** j, one per execution phase (`ARCHITECTURE.md`, "How an audit works"):
+   1. The developer reports its advice a_j, at most ℓ_a bits, committed. B(a_j) outputs the execution block E_j,
+      partitioned into inference blocks, each of which is partitioned into proof blocks, with its placement. The
+      developer proves through the ZK server that it ran B correctly on the committed advice of at most ℓ_a bits, and
+      that B's output explains the committed trace: each proof block's inputs and outputs are committed values. The
+      same statement can prove that every inference block has c gates and reads at most k bits outside θ, which is the
+      inference-only policy's check.
+   2. Only then does the challenger flip the coins that select the sample, so the partition is fixed before any coin.
+   3. The developer proves each sampled proof block with C-Flock `--zk` behind the ZK server, and the Lean verifier
+      `flock-verify` checks each proof. PoUW's check (`pouw-check`) reads each PoUW period's commitment and its sampled
+      proofs and receipts, and credits the phase's work. No proof is retried, and a failed proof is a visible failure.
+   4. The composition accepts only if every subprotocol accepts and the commitments match (the verdict, below), and
+      accounting adds the phase's share (Accounting, below).
 4. **The verdict**, by the composition rule (`verity/core/protocols/composition/README.md`). The composite rejects if
    any subprotocol rejects. It also rejects if the cases don't fit (unknown, missing, repeated or out of order), or if
    the commitment isn't `bind` of the subprotocols' digests. It is undecided if it binds and some subprotocol is
