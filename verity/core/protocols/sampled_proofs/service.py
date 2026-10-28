@@ -111,8 +111,7 @@ registration to itself and the prover (`registration.check`'s `binding`). An out
 one-stage's audit record (null for `late` and `halted`). A `halted` outcome adds `"halt"`, the halt's cause, and
 its `draw` is null when the registration was not drawn. `Outcome.record` is its SHA-512.
 
-**Not built yet.** A stream refuses the `Sequential` rule, a window statement, a timed session and a
-check with no proof deadline. After R1 to R7, `register` refuses a sampling design whose drawn count varies (`shapes`: `bernoulli`
+**Not built yet.** A stream refuses a window statement, a timed session and a check with no proof deadline. After R1 to R7, `register` refuses a sampling design whose drawn count varies (`shapes`: `bernoulli`
 at `0 < p < 1`); a work draw's closure varies too and is not refused (a planned design).
 """
 from __future__ import annotations
@@ -151,7 +150,6 @@ _RECORD_KEYS = {"format", "protocol", "program", "query", "partition", "populati
                 "anchors", "window", "previous", "registered"}
 _LAYOUT = {"roots": ("leaves", "domain"), "registered": ("leaves", "words", "domain", "word_bits")}
 _DIGEST = re.compile(r"^[0-9a-f]{128}$")
-_UNIFORM = re.compile(r"^uniform:[1-9][0-9]*$")
 
 
 def _sha512(obj: Any) -> str:
@@ -254,25 +252,7 @@ class Law:
         return {"rule": "law", "law": self.text}
 
 
-@dataclass(frozen=True)
-class Sequential:
-    """A timed session's draw, one index a round (PoUS's audit): `law` is `uniform:k`, over the public item named by
-    `population`. A `Stream` refuses it until the memory challenger's timed mode lands (§6 step 5)."""
-
-    law: str
-    population: str
-
-    def __post_init__(self) -> None:
-        if not _UNIFORM.match(str(self.law)):
-            raise ValueError(f"a sequential rule's law is uniform:k, not {self.law!r}")
-        if not (isinstance(self.population, str) and self.population):
-            raise ValueError("a sequential rule names its population's public item")
-
-    def to_json(self) -> dict[str, Any]:
-        return {"rule": "sequential", "law": self.law, "population": self.population}
-
-
-Selection = All | Law | Sequential
+Selection = All | Law
 
 RETIRED_TWO_STAGE = ("two-stage sampling is retired (ASK-25: everything is committed at serve time); a selection rule is "
                      "all or a law")
@@ -350,8 +330,8 @@ class Spec:
             raise ValueError("a spec's values have distinct names")
         if _names_two_stage(self.selection):
             raise ValueError(RETIRED_TWO_STAGE)
-        if not isinstance(self.selection, (All, Law, Sequential)):
-            raise ValueError(f"a selection rule is All, Law or Sequential, not {self.selection!r}")
+        if not isinstance(self.selection, (All, Law)):
+            raise ValueError(f"a selection rule is All or Law, not {self.selection!r}")
         if not isinstance(self.check, Check):
             raise ValueError("a spec's check is a Check")
         if not (isinstance(self.public, tuple) and all(isinstance(p, Public) for p in self.public)):
@@ -367,8 +347,6 @@ class Spec:
         for o in self.check.public_outputs:
             if o not in items or items[o].kind != "output":
                 raise ValueError(f"public output {o!r} needs a public item of kind 'output', with its reason")
-        if isinstance(self.selection, Sequential) and self.selection.population not in items:
-            raise ValueError(f"a sequential rule's population {self.selection.population!r} is a declared public item")
         if not isinstance(self.context, bytes):
             raise ValueError("a spec's context is bytes")
 
@@ -1150,8 +1128,6 @@ class Stream:
     def __init__(self, spec: Spec, unit: SpecializedDefinition | Sequence[SpecializedDefinition], *, budget: int, delta: float, challenger: str,
                  coins: Callable[[int], bytes] = V.coins, clock: Callable[[], float] = time.monotonic,
                  sampler: Sampler | None = None, rounds: int = 1, prover: str | None = None) -> None:
-        if isinstance(spec.selection, Sequential):
-            raise ValueError("the service doesn't run a Sequential selection yet")
         if spec.check.window is not None or spec.check.deadline is not None:
             raise ValueError("the service doesn't prove a window statement or run a timed session yet")
         if spec.check.proof_deadline is None:
@@ -1708,6 +1684,5 @@ def _why(symbol: str, audit: Mapping[str, Any] | None,
 
 __all__ = ["ACCEPT", "All", "Check", "Draw", "Exhaustive", "Fleet", "HALTED", "HIDING", "KINDS", "LATE", "Law", "Outcome",
            "PHASES", "Pending", "ProofRun", "Public", "REJECT", "ROOTS", "ROUNDS", "Refused", "SCHEME", "SOURCES",
-           "Selection", "Sequential", "Spec", "Stream", "Terms", "Value", "WindowCommitmentRecord", "check_public",
-           "check_verdicts",
+           "Selection", "Spec", "Stream", "Terms", "Value", "WindowCommitmentRecord", "check_public", "check_verdicts",
            "select_draw", "selection_law"]
