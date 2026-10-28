@@ -3,9 +3,9 @@ import Proofs.Properties.NetworkCertifier.Grid
 /-!
 # What the check decides
 
-`check` read link-window by link-window: its shape checks are `EvidenceFits`, its parameters digests
-`ParamsDigests`, and with both a unit is accepted when no link-window has a violation, undecided when every violation
-is `no-verdict` and there is one, and rejected otherwise (`check_accept`, `check_undecided`). A link-window has no
+`check` read sampling block by sampling block: its shape checks are `EvidenceFits`, its parameters digests
+`ParamsDigests`, and with both a unit is accepted when no sampling block has a violation, undecided when every violation
+is `no-verdict` and there is one, and rejected otherwise (`check_accept`, `check_undecided`). A sampling block has no
 violation exactly when it is accepted (`egress_none`, `ingress_none`), and `no-verdict` exactly when it is `Pending`
 (`egress_noVerdict`, `ingress_noVerdict`).
 -/
@@ -26,7 +26,7 @@ theorem ba_beq {a b : ByteArray} : (a == b) = true ↔ a = b := by
   rw [beq_iff_eq]
   exact ⟨fun h => ByteArray.ext h, fun h => h ▸ rfl⟩
 
-/-! ## A link-window's records -/
+/-! ## A sampling block's records -/
 
 theorem found_toList (c : Commitment) (d : Direction) (l : String) (w : Nat) :
     (found c d l w).toList = recordsOf c d l w := by
@@ -45,7 +45,7 @@ theorem recordsOf_mem {c : Commitment} {d : Direction} {l : String} {w : Nat} {r
 theorem toOption_true {ε : Type} {x : Except ε Bool} : (x.toOption == some true) = true ↔ x = .ok true := by
   cases x <;> simp [Except.toOption]
 
-/-- `verifies` of a link-window's one record is `Signs`. -/
+/-- `verifies` of a sampling block's one record is `Signs`. -/
 theorem verifies_iff {p : Params} {c : Commitment} {d : Direction} {l : String} {w : Nat} {r : Certified}
     (hr : recordsOf c d l w = [r]) : verifies p r = true ↔ ∃ dg, Signs p c d l w r dg := by
   obtain ⟨hd, hl, hw⟩ := recordsOf_mem (hr ▸ List.mem_singleton_self r)
@@ -100,7 +100,7 @@ theorem status_ne (why : String) : s!"status:{why}" ≠ "no-verdict" := by
   have := congrArg (fun s : String => s.toList.head?) h
   simp at this
 
-/-- The check screens out a link-window's one record exactly when it is `Settled`. -/
+/-- The check screens out a sampling block's one record exactly when it is `Settled`. -/
 theorem screen_ok {p : Params} {c : Commitment} {d : Direction} {l : String} {w : Nat} {r : Certified} :
     screen p (found c d l w) = .ok r ↔ ∃ dg, Settled p c d l w r dg := by
   rw [screen_def]
@@ -128,7 +128,7 @@ theorem screen_ok {p : Params} {c : Commitment} {d : Direction} {l : String} {w 
     simp only
     rw [ite_eq_right (by simpa using (verifies_iff hs.1).mpr ⟨dg, hs⟩), ite_eq_right (by simp [hdl]), hst]
 
-/-- The check's `no-verdict` for a link-window's records is `Pending`. -/
+/-- The check's `no-verdict` for a sampling block's records is `Pending`. -/
 theorem screen_noVerdict {p : Params} {c : Commitment} {d : Direction} {l : String} {w : Nat} :
     screen p (found c d l w) = .error "no-verdict" ↔ Pending p c d l w := by
   rw [screen_def]
@@ -155,7 +155,7 @@ theorem screen_noVerdict {p : Params} {c : Commitment} {d : Direction} {l : Stri
       simp only
       rw [ite_eq_right (by simpa using (verifies_iff hs.1).mpr ⟨dg, hs⟩), ite_eq_left (by simp [hdl])]
 
-/-! ## A link-window's verdict -/
+/-! ## A sampling block's verdict -/
 
 theorem declares_declared {W : Nat} {link : Link} (h : link.syncs.size = W) : Declares link (declared W link) := by
   intro v
@@ -216,7 +216,7 @@ theorem not_not_true {b : Bool} (h : ¬ (!b) = true) : b = true := by simpa usin
 
 theorem not_true {b : Bool} (h : (!b) = true) : b = false := by simpa using h
 
-/-- **An egress link-window has no violation exactly when it is `EgressAccepted`.** -/
+/-- **An egress sampling block has no violation exactly when it is `EgressAccepted`.** -/
 theorem egress_none {p : Params} {c : Commitment} {e : Evidence} {eg : ByteArray} {l : String} {link : Link}
     {w : Nat} (hfit : EvidenceFits p e) (hl : link ∈ e.links.toList) (hw : w < p.windows) :
     egressVerdict p c e eg l link w = none ↔ EgressAccepted p c e eg l link w := by
@@ -268,7 +268,7 @@ theorem egress_none {p : Params} {c : Commitment} {e : Evidence} {eg : ByteArray
       dsimp only
       rw [ite_eq_left (ba_beq.mpr rfl)]
 
-/-- **An egress link-window's violation is `no-verdict` exactly when it is `Pending`.** -/
+/-- **An egress sampling block's violation is `no-verdict` exactly when it is `Pending`.** -/
 theorem egress_noVerdict {p : Params} {c : Commitment} {e : Evidence} {eg : ByteArray} {l : String} {link : Link}
     {w : Nat} : egressVerdict p c e eg l link w = some "no-verdict" ↔ Pending p c .egress l w := by
   constructor
@@ -293,7 +293,7 @@ theorem egress_noVerdict {p : Params} {c : Commitment} {e : Evidence} {eg : Byte
     unfold egressVerdict
     rw [screen_noVerdict.mpr h]
 
-/-- **An ingress link-window has no violation exactly when it is `IngressAccepted`.** -/
+/-- **An ingress sampling block has no violation exactly when it is `IngressAccepted`.** -/
 theorem ingress_none {p : Params} {c : Commitment} {ig : ByteArray} {l : String} {w : Nat} :
     ingressVerdict p c ig l w = none ↔ IngressAccepted p c ig l w := by
   constructor
@@ -317,7 +317,7 @@ theorem ingress_none {p : Params} {c : Commitment} {ig : ByteArray} {l : String}
     dsimp only
     rw [ite_eq_left (by simp only [Bool.and_eq_true, beq_iff_eq, ba_beq]; exact ⟨⟨⟨⟨h1, h2⟩, h3⟩, h4⟩, h5⟩)]
 
-/-- **An ingress link-window's violation is `no-verdict` exactly when it is `Pending`.** -/
+/-- **An ingress sampling block's violation is `no-verdict` exactly when it is `Pending`.** -/
 theorem ingress_noVerdict {p : Params} {c : Commitment} {ig : ByteArray} {l : String} {w : Nat} :
     ingressVerdict p c ig l w = some "no-verdict" ↔ Pending p c .ingress l w := by
   constructor

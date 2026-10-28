@@ -14,7 +14,7 @@ reservation is refused) with its head's encoding and digest, its salt, its certi
 `CertifiedRecord.verify` under the key and after the tamper, and `ClockCertificate.verify` of its certificate passed as
 a clock under the record's salt (`as_clock`); and at the end the issuer's `refused`. A clock call (`clock`: a link, a
 window and a sync, with the salt the issuer's coins give it) is `Issuer.clock` on the same issuer, under the salts its
-earlier clock certificates took: `null` where it refuses the salt, the sync or the link-window, or the clock
+earlier clock certificates took: `null` where it refuses the salt, the sync or the sampling block, or the clock
 certificate (`null` when the reservation is refused) with its sync, salt and certificate's fields,
 `ClockCertificate.verify` under the key and after the tamper. The Lean audit runs it (`runs` in `lean-audit.json`):
 compiled evaluation, a test and not a proof.

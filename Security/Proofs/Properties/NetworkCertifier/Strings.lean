@@ -35,7 +35,7 @@ def SaltedString (salt : ByteArray) (h : RecordHead) (x : ByteArray) : Prop :=
   ∃ dg, h.digest = .ok dg ∧ x = certificateInput salt dg
 
 /-- The strings the check hashes under egress parameters digest `eg`: each record's head, its digest under the
-record's salt and its certificate message, and the head and frame tree it recomputes of each egress link-window. -/
+record's salt and its certificate message, and the head and frame tree it recomputes of each egress sampling block. -/
 def CheckString (p : Params) (c : Commitment) (e : Evidence) (eg : ByteArray) (x : ByteArray) : Prop :=
   (∃ r ∈ c.records.toList, HeadString r.head x ∨ SaltedString r.salt r.head x ∨
     messageInput r.certificate.keyId p.session r.certificate.link r.certificate.direction r.certificate.window

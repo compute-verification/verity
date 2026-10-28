@@ -3,8 +3,8 @@ import Proofs.Properties.NetworkRecords.Check
 /-!
 # What the records check's acceptance means: the proof
 
-The check accepts exactly when the evidence fits, the parameters have their digests, and no link-window has a violation
-(`check_accept`); a link-window without one has its one complete record, the Program's (`egress_none`,
+The check accepts exactly when the evidence fits, the parameters have their digests, and no sampling block has a
+violation (`check_accept`); a sampling block without one has its one complete record, the Program's (`egress_none`,
 `ingress_none`), so acceptance means `ProgramRecords` (`acceptMeans`, `answerAcceptMeans`).
 -/
 

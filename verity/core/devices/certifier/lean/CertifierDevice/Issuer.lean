@@ -2,12 +2,12 @@ import CertifierDevice.Driver
 import Lms.Sign
 
 /-!
-# The issuer: one network certificate per closed link-window
+# The issuer: one network certificate per closed sampling block
 
 The executable form of `certificate.py`'s `Issuer`, `Certificate` and `CertifiedRecord`: a record's head (`recordHead`,
 under the grid's `parameters_digest`) and digest, that digest hidden under `salt_c`, 64 bytes of the certifier's own
 coins drawn for the record (`certificateDigest`), the message that binds the hidden digest to the key, the certifier
-session and the link-window (`certificateMessage`), and its LMS signature at a reserved leaf (`Lms.signAt`). The
+session and the sampling block (`certificateMessage`), and its LMS signature at a reserved leaf (`Lms.signAt`). The
 encodings are `NetworkCheck`'s and the signature `Lms`'s.
 
 Which leaf signs, and which session ids the key has started, is the signer's state (`lms.LeafState.reserve` and
@@ -29,7 +29,7 @@ it was signed under (`clockSalts`): under one salt two windows of one sync would
 syncs are equal. `clockSalts` is carried beside the `Issuer` rather than in it (Python's `Issuer.clock_salts`):
 `Properties.CertifierDevice.issuerVerifies` reads the structure, so a field there would change what it states. The
 salt, the digests and the message come
-first, so a salt the issuer can't take, or a sync or a link-window with no encoding, is refused before a session is
+first, so a salt the issuer can't take, or a sync or a sampling block with no encoding, is refused before a session is
 started or a leaf is spent; a refused start or reservation is listed in `refused` as a record's is, and leaves its salt
 untaken, since nothing was signed under it. `ClockCertificate.verify` is `certificate.CertifiedClock.verify`: an egress
 certificate of the key's whose digest the sync and the salt open, signed under the key in the session. A record
@@ -86,16 +86,16 @@ def clockCommitment (salt : ByteArray) (sync : NetworkCertifier.ClockSync) : Exc
     throw s!"a clock certificate's salt is {NetworkCheck.saltBytes} bytes"
   pure (NetworkCheck.certificateDigest salt (← clockDigest sync))
 
-/-- `certificate.CertifiedClock`: the sync the certifier's shaper ran one egress link-window under and the salt it drew
-for it (`salt_c`), both witness, and the certificate, the one public part, which signs the sync's clock digest salted
-by it (`clockCommitment`). -/
+/-- `certificate.CertifiedClock`: the sync the certifier's shaper ran one egress sampling block under and the salt it
+drew for it (`salt_c`), both witness, and the certificate, the one public part, which signs the sync's clock digest
+salted by it (`clockCommitment`). -/
 structure ClockCertificate where
   sync : NetworkCertifier.ClockSync
   salt : ByteArray
   certificate : Certificate
 
-/-- `certificate.Issuer`: the certifier's key, its session's id, the link-windows whose start or leaf the host refused,
-and whether its session has started. -/
+/-- `certificate.Issuer`: the certifier's key, its session's id, the sampling blocks whose start or leaf the host
+refused, and whether its session has started. -/
 structure Issuer where
   key : Lms.PrivateKey
   session : ByteArray
@@ -136,7 +136,7 @@ def certify (i : Issuer) (salt : ByteArray) (leaf : Except String Nat) (record :
   i.finish salt leaf record direction (← i.prepare salt record direction params parameters deadline)
 
 /-- What `Issuer.clock` signs: the sync's clock digest under `salt` (`clockCommitment`) and the certificate message over
-it for the egress link-window; refused (an error) where the salt is not 64 bytes or is one of `clockSalts`, those the
+it for the egress sampling block; refused (an error) where the salt is not 64 bytes or is one of `clockSalts`, those the
 issuer's earlier clock certificates were signed under, or where `clock_digest` or `certificate_message` raises. -/
 def prepareClock (i : Issuer) (clockSalts : Array ByteArray) (salt : ByteArray) (link : String) (window : Nat)
     (sync : NetworkCertifier.ClockSync) : Except String (ByteArray × ByteArray) := do
@@ -148,8 +148,8 @@ def prepareClock (i : Issuer) (clockSalts : Array ByteArray) (salt : ByteArray) 
   let digest ← clockCommitment salt sync
   pure (digest, ← NetworkCheck.certificateMessage i.key.I i.session link .egress window digest)
 
-/-- The prepared clock digest signed at the reserved leaf, its salt then taken (`clockSalts`), or the link-window listed
-in `refused` when the host refused the reservation (or the session's start before it), its salt untaken. -/
+/-- The prepared clock digest signed at the reserved leaf, its salt then taken (`clockSalts`), or the sampling block
+listed in `refused` when the host refused the reservation (or the session's start before it), its salt untaken. -/
 def finishClock (i : Issuer) (clockSalts : Array ByteArray) (salt : ByteArray) (leaf : Except String Nat)
     (link : String) (window : Nat) (sync : NetworkCertifier.ClockSync) (prepared : ByteArray × ByteArray) :
     Except String (Issuer × Array ByteArray × Option ClockCertificate) := do
@@ -161,9 +161,9 @@ def finishClock (i : Issuer) (clockSalts : Array ByteArray) (salt : ByteArray) (
     pure (i, clockSalts.push salt, some ⟨sync, salt, ⟨i.key.I, link, .egress, window, digest, signature.encode⟩⟩)
 
 /-- **`Issuer.clock`**, the clock's salt and its signer's reservation given: the clock certificate of the egress
-link-window, `sync` being the one the certifier's shaper ran it under, and `clockSalts` with its salt once signed;
-refused (an error) where the salt is not 64 bytes or one of `clockSalts`, the sync isn't three u64s or the link-window
-has no message, as Python raises `ValueError`. -/
+sampling block, `sync` being the one the certifier's shaper ran it under, and `clockSalts` with its salt once signed;
+refused (an error) where the salt is not 64 bytes or one of `clockSalts`, the sync isn't three u64s or the sampling
+block has no message, as Python raises `ValueError`. -/
 def clock (i : Issuer) (clockSalts : Array ByteArray) (salt : ByteArray) (leaf : Except String Nat) (link : String)
     (window : Nat) (sync : NetworkCertifier.ClockSync) :
     Except String (Issuer × Array ByteArray × Option ClockCertificate) := do
@@ -198,7 +198,8 @@ def clockWith (w : Core.World Out) (i : Issuer) (clockSalts : Array ByteArray) (
   pure ({ i' with started := i.started || started matches .ok () }, clockSalts', c?)
 
 /-- `CertifiedRecord.verify` under an `LmsKey` in certifier session `session`: the certificate is signed by `publicKey`
-over its message in that session, names the head's link-window and signs the head's digest under the record's salt. -/
+over its message in that session, names the head's sampling block and signs the head's digest under the record's salt.
+-/
 def CertifiedRecord.verify (c : CertifiedRecord) (params : Lms.Params) (publicKey session : ByteArray) : Bool :=
   let x := c.certificate
   let h := c.head

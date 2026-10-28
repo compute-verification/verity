@@ -10,7 +10,7 @@
 # env: N2_MEM_GB (what job.sh's stages may take, within the slot's)  N2_RUNS (the tarball's name under the run's inputs/)
 #      N2_REQUESTS (virtual's --requests)  N2_ROUNDS (n2_zk.py's --rounds, proved one after another: one firewalled
 #      session at a time)  N2_DEBUG_CLEAR=1 (each verdict also carries the in-the-clear comparison)  N2_CACHE (the build cache,
-#      kept across runs where writable)  N2_DRY=1 (the link-windows and their references only)
+#      kept across runs where writable)  N2_DRY=1 (the sampling blocks and their references only)
 # Kept in $OUT/n2zk: n2_zk's records and logs, the public files and everything the verifier received; never a prover's
 # file (inst-*, prover-instances.bin) nor a circuit (its pin is kept). $OUT/runs: the runs' public files.
 set -uo pipefail

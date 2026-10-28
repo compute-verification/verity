@@ -10,7 +10,7 @@ import Proofs.NetworkCertifier.Schedule
 LMS forgery, as this does) and the program's `expectedRow` being the reference's (`CodeExpectedRow`). The syncs the
 evidence declares are each in Σ_sync (the check's `advice` test, through `acceptsLinkWindows`), so they are advice of
 the reference's constant-rate Program; the device's egress records are the Program's grids, whose rows, read back as
-bits, are `expectedRow`'s (`bytesGrid_slot`); and its records of every link-window are complete.
+bits, are `expectedRow`'s (`bytesGrid_slot`); and its records of every sampling block are complete.
 
 `EncardAcceptedObservationsLe` follows: accepted runs' observation sequences are among Theorem 3's `AccSeqs` of that
 Program, so they number at most `#Ac · |Σ_sync|^W · D^(W·T)` (`NetTiming.encard_accSeqs_le_constantRate`), unless some

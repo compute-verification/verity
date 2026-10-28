@@ -6,7 +6,7 @@ import Proofs.Properties.CertifierNetwork.Instance
 # The certifier device's output is accepted: completeness, proved
 
 `DeviceOutputAccepted` (`Proofs.CertifierNetwork.Defs`), proved as the lower-case theorem of its name: the records a
-closed run publishes, one per link-window, each of its grid (`Proofs.CertifierNetwork.Bucketer`,
+closed run publishes, one per sampling block, each of its grid (`Proofs.CertifierNetwork.Bucketer`,
 `Proofs.CertifierNetwork.Records`); the frames the shaper hands, `8·B` bits each, read back as their bytes
 (`Proofs.CertifierNetwork.Frames`); each record's head and certificate (`Proofs.CertifierNetwork.Encode`,
 `Proofs.CertifierNetwork.Certify`); and the egress grids the Program's, so the check's honest transcript

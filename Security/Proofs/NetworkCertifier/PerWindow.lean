@@ -4,10 +4,10 @@ import Proofs.NetworkCertifier.Ingress
 /-!
 # Per window: the windows the accounting charges
 
-`docs/network-transparency/timing-channel.md` states its bounds per link-window. The guarantees count steps; these read
-the horizon of the run's first `m` whole windows of `T` buckets, `n = m·T`, and factor each bound per window: the
+`docs/network-transparency/timing-channel.md` states its bounds per sampling block. The guarantees count steps; these
+read the horizon of the run's first `m` whole windows of `T` buckets, `n = m·T`, and factor each bound per window: the
 shipped schedule's `#Σ_sync · D^T` (`encard_accSeqs_le_constantRate_windows` at `n = m·T`) and the ingress bound's
-`(r ℓ + 1)^T` per link-window (`encard_ingress_obsDecodable_le` and its content version at `n = m·T`). Each takes its
+`(r ℓ + 1)^T` per sampling block (`encard_ingress_obsDecodable_le` and its content version at `n = m·T`). Each takes its
 parent's hypotheses at that horizon and no other. The shipped schedule's factor is cumulative from the run's first
 window: a later window may carry more than `#Σ_sync · D^T`.
 -/
@@ -28,7 +28,7 @@ theorem windows_bound_le_perWindow (a s D T W m : ℕ) (hs : 0 < s) :
   rw [mul_pow, ← pow_mul, Nat.mul_comm T m, ← mul_assoc]
   exact Nat.mul_le_mul_right _ (Nat.mul_le_mul_left _ (Nat.pow_le_pow_right hs (min_le_right W m)))
 
-/-- The ingress bound at `n = m·T`, read per link-window. -/
+/-- The ingress bound at `n = m·T`, read per sampling block. -/
 theorem ingress_bound_eq_perWindow (r : Fin L → ℕ) (T m D : ℕ) :
     (∏ ℓ, (r ℓ + 1)) ^ (m * T) * D ^ (m * T) = ((∏ ℓ, (r ℓ + 1) ^ T) * D ^ T) ^ m := by
   rw [pow_mul', pow_mul', ← mul_pow, Finset.prod_pow]

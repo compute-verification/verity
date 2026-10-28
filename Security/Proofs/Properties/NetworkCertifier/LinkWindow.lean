@@ -3,7 +3,7 @@ import Proofs.Properties.CertifierDevice.Lms
 import Std.Data.TreeMap.Raw.WF
 
 /-!
-# N2's link-window verdict: what an acceptance establishes
+# N2's sampling block verdict: what an acceptance establishes
 
 The proof of `Properties.NetworkCertifier.LinkWindowAcceptMeans`: `verdict`'s accept bit is `acceptedOf` of its four
 checks (`verdict_shape`), and each check that holds is its predicate (`proved_spec`, `opened_spec`, `certified_spec`,
@@ -11,7 +11,7 @@ checks (`verdict_shape`), and each check that holds is its predicate (`proved_sp
 
 Its two lemmas:
 
-* honest: `linkWindowAcceptMeans_honest`, the converse, that a link-window proved, opened, certified and synced is
+* honest: `linkWindowAcceptMeans_honest`, the converse, that a sampling block proved, opened, certified and synced is
   accepted with the property's outputs and digest (each predicate is its check, `proved_of` … `synced_of`, and the
   verdict's digest always computes, `verdictDigest_ok`); and `linkWindowAcceptMeans_honest_warden`, that on a warden
   link a window proved and opened whose two certificates the certifier's device signed (`CertifierSigned`, under a key
@@ -20,9 +20,9 @@ Its two lemmas:
   the findings of its run of C-Flock's verifier (`WindowProved`) and the statement's public file holding the drawn
   unit's row commitments (`WindowOpened`, whose header line `commitments` reads through `Json.parse`, which the kernel
   doesn't evaluate, so no concrete file is shown to open here; the replays over recorded runs exhibit them);
-* nontrivial: `linkWindowAcceptMeans_nontrivial`, that a verifier accepting every link-window doesn't have the property
-  (`LinkWindowAcceptMeansBy`, which is the property at the verdict, `linkWindowAcceptMeans_by`): it accepts a warden
-  link-window with no findings, which isn't proved.
+* nontrivial: `linkWindowAcceptMeans_nontrivial`, that a verifier accepting every sampling block doesn't have the
+  property (`LinkWindowAcceptMeansBy`, which is the property at the verdict, `linkWindowAcceptMeans_by`): it accepts a
+  warden sampling block with no findings, which isn't proved.
 -/
 
 open NetworkCheck NetworkCheck.LinkWindow
@@ -304,7 +304,7 @@ theorem verdictDigest_ok (c : Case) : ∃ d, verdictDigest c true (acceptedOutpu
   simp only [ht, bind, Except.bind, pure, Except.pure]
   exact ⟨_, rfl⟩
 
-/-- **A link-window proved, opened, certified and synced is accepted** (the honest lemma of `LinkWindowAcceptMeans`,
+/-- **A sampling block proved, opened, certified and synced is accepted** (the honest lemma of `LinkWindowAcceptMeans`,
 its converse): the verdict accepts it, with the outputs and digest the property states. -/
 theorem linkWindowAcceptMeans_honest :
     ∀ c : Case, WindowAccepted c → (verdict c).map Verdict.accepted = .ok true ∧ WindowVerdict c := by
@@ -318,7 +318,7 @@ theorem linkWindowAcceptMeans_honest :
       Bool.and_self, Option.getD_some, hout, hd, bind, Except.bind, pure, Except.pure]
   exact ⟨by rw [hv]; rfl, _, hv, rfl, hd⟩
 
-/-- **An honest warden link-window is accepted** (the honest lemma of `LinkWindowAcceptMeans` on a warden link): one
+/-- **An honest warden sampling block is accepted** (the honest lemma of `LinkWindowAcceptMeans` on a warden link): one
 proved and opened whose two certificates the certifier's device signed under its key (a key `Lms.key` derives at
 parameters `Lms.Params.make` admits, the link's), whatever syncs it declares. -/
 theorem linkWindowAcceptMeans_honest_warden :
@@ -340,7 +340,7 @@ theorem linkWindowAcceptMeans_honest_warden :
 
 theorem linkWindowAcceptMeans_by : LinkWindowAcceptMeans ↔ LinkWindowAcceptMeansBy verdict := Iff.rfl
 
-/-- A warden link-window with no findings, on an empty grid: no verifier's acceptance of it means it was proved. -/
+/-- A warden sampling block with no findings, on an empty grid: no verifier's acceptance of it means it was proved. -/
 def unproved (w : ByteArray) : Case where
   link := ""
   run := ""
@@ -369,8 +369,8 @@ def unproved (w : ByteArray) : Case where
   ingress := ⟨⟨0, 0, 0, 0, 0⟩, none⟩
   kind := .warden w
 
-/-- **No verifier that accepts every link-window has `LinkWindowAcceptMeans`' property** (its nontrivial lemma): such a
-verifier accepts a warden link-window with no findings (`unproved`), which isn't `WindowProved`. -/
+/-- **No verifier that accepts every sampling block has `LinkWindowAcceptMeans`' property** (its nontrivial lemma): such
+a verifier accepts a warden sampling block with no findings (`unproved`), which isn't `WindowProved`. -/
 theorem linkWindowAcceptMeans_nontrivial : ∀ v, AcceptsAll v → ¬ LinkWindowAcceptMeansBy v := by
   intro v hall h
   obtain ⟨-, fs, hf, -⟩ := (h (unproved .empty) (hall _)).1.1

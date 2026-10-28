@@ -7,14 +7,14 @@ import Properties.Identity
 The properties of `NetworkCheck.protocol` (`verity/network-certificate/v4`, the port of `audit.py`'s `Audit`), stated
 against its functions as they run, each in one shape: for every input, if the function accepts (or, for a refusal,
 doesn't reject; for the undecided outcome, is undecided), its named conclusion holds. They say what `answer` and the
-check refuse, what an acceptance establishes about each link-window and what an undecided outcome means.
+check refuse, what an acceptance establishes about each sampling block and what an undecided outcome means.
 `Proofs.Properties.NetworkCertifier` proves them; the converses (that the check accepts, or is undecided on, what
 these conclusions describe) and the honest transcript's acceptance are completeness, at the end of
 `Proofs.Properties.NetworkCertifier.Outcomes`, each with one instance in `Proofs.Properties.NetworkCertifier.Instance`. What an accepted run of the certifier device is, is
 `Properties.CertifierNetwork.Runs`.
 
-The predicates below say what a link-window's records, certificate and digests are, in the check's own terms; none
-restates the check. A link-window is a direction, a link of the unit in that direction and a window `w < W`.
+The predicates below say what a sampling block's records, certificate and digests are, in the check's own terms; none
+restates the check. A sampling block is a direction, a link of the unit in that direction and a window `w < W`.
 -/
 
 open NetworkCheck hiding Params
@@ -23,14 +23,14 @@ open NetworkCertifier (ClockSync LogicalFrame expectedRow)
 
 namespace Properties.NetworkCertifier
 
-/-! ## A link-window's records and certificate -/
+/-! ## A sampling block's records and certificate -/
 
 /-- The unit's links in direction `d`. -/
 def linkNames (p : Params) : Direction → List String
   | .egress => p.egress.toList
   | .ingress => p.ingress.toList
 
-/-- The records of the commitment whose head names link-window `(d, l, w)`, in the commitment's order. -/
+/-- The records of the commitment whose head names sampling block `(d, l, w)`, in the commitment's order. -/
 def recordsOf (c : Commitment) (d : Direction) (l : String) (w : Nat) : List Certified :=
   c.records.toList.filter fun r => decide (r.head.direction = d ∧ r.head.link = l ∧ r.head.window = w)
 
@@ -38,7 +38,7 @@ def recordsOf (c : Commitment) (d : Direction) (l : String) (w : Nat) : List Cer
 def LmsVerifies (p : Params) (m sig : ByteArray) : Prop :=
   ∃ s, Lms.Signature.decode p.lms sig = .ok s ∧ Lms.verify p.lms p.key m s = .ok true
 
-/-- Link-window `(d, l, w)` has exactly one record `r`, and its certificate is the key's (the key's identifier `I`),
+/-- Sampling block `(d, l, w)` has exactly one record `r`, and its certificate is the key's (the key's identifier `I`),
 names `(d, l, w)`, signs the head's digest `dg` under the record's salt (`certificateDigest`), and verifies under the
 key over `certificateMessage` of them in the parameters' certifier session. -/
 def Signs (p : Params) (c : Commitment) (d : Direction) (l : String) (w : Nat) (r : Certified) (dg : ByteArray) :
@@ -54,7 +54,7 @@ def Settled (p : Params) (c : Commitment) (d : Direction) (l : String) (w : Nat)
     Prop :=
   Signs p c d l w r dg ∧ r.head.status = none ∧ r.head.deadline = true
 
-/-- Link-window `(d, l, w)` awaits its record: it has none, or one whose certificate `Signs` but whose head is not
+/-- Sampling block `(d, l, w)` awaits its record: it has none, or one whose certificate `Signs` but whose head is not
 settled by the deadline. -/
 def Pending (p : Params) (c : Commitment) (d : Direction) (l : String) (w : Nat) : Prop :=
   recordsOf c d l w = [] ∨ ∃ r dg, Signs p c d l w r dg ∧ r.head.deadline = false
@@ -89,8 +89,8 @@ def programGrid (p : Params) (syncs : Fin p.windows → ClockSync) (frames : Lis
     Array (Array (Option ByteArray)) :=
   bytesGrid p.grid.buckets (expectedRow p.grid.allocation p.grid.buckets p.windows syncs frames) w
 
-/-- Egress link-window `(l, w)`, opened by `link`, is accepted: it is `Settled` with digest `dg`, its declared sync is
-admitted, and `dg` is the digest of `record_head` of the Program's grid under the declared syncs (complete, settled,
+/-- Egress sampling block `(l, w)`, opened by `link`, is accepted: it is `Settled` with digest `dg`, its declared sync
+is admitted, and `dg` is the digest of `record_head` of the Program's grid under the declared syncs (complete, settled,
 under `eg`). -/
 def EgressAccepted (p : Params) (c : Commitment) (e : Evidence) (eg : ByteArray) (l : String) (link : Link)
     (w : Nat) : Prop :=
@@ -98,8 +98,8 @@ def EgressAccepted (p : Params) (c : Commitment) (e : Evidence) (eg : ByteArray)
     ∀ syncs : Fin p.windows → ClockSync, Declares link syncs →
       ∃ h, recordHead l .egress w (programGrid p syncs link.frames w) none p.grid eg true = .ok h ∧ h.digest = .ok dg
 
-/-- Ingress link-window `(l, w)` is accepted: it is `Settled`, and its head is of the ingress grid (T, r, B, τ_b) under
-its parameters digest `ig`. -/
+/-- Ingress sampling block `(l, w)` is accepted: it is `Settled`, and its head is of the ingress grid (T, r, B, τ_b)
+under its parameters digest `ig`. -/
 def IngressAccepted (p : Params) (c : Commitment) (ig : ByteArray) (l : String) (w : Nat) : Prop :=
   ∃ r dg, Settled p c .ingress l w r dg ∧ r.head.buckets = (p.ingressGrid.buckets : Int) ∧
     r.head.allocation = (p.ingressGrid.allocation : Int) ∧ r.head.frameBytes = (p.ingressGrid.frameBytes : Int) ∧
@@ -142,32 +142,32 @@ parameters the check doesn't reject have their digests. -/
 def UndigestedParamsReject : Prop :=
   ∀ (p : Params) c e, (∀ why, protocol.check p c e ≠ .reject why) → ParamsDigested p
 
-/-- Every link-window of the unit has exactly one record. -/
+/-- Every sampling block of the unit has exactly one record. -/
 def OneRecordEach (p : Params) (c : Commitment) : Prop :=
   ∀ d, ∀ l ∈ linkNames p d, ∀ w < p.windows, (recordsOf c d l w).length = 1
 
-/-- **An accepted unit has exactly one record of every link-window.** -/
+/-- **An accepted unit has exactly one record of every sampling block.** -/
 def AcceptsOneRecordEach : Prop :=
   ∀ (p : Params) c e, protocol.Accepts p c e → OneRecordEach p c
 
 /-! ## (2) What an acceptance establishes -/
 
-/-- Every link-window of the unit is accepted: the evidence fits, the parameters have their digests, every egress
-link-window is `EgressAccepted` and every ingress link-window `IngressAccepted`. -/
+/-- Every sampling block of the unit is accepted: the evidence fits, the parameters have their digests, every egress
+sampling block is `EgressAccepted` and every ingress sampling block `IngressAccepted`. -/
 def LinkWindowsAccepted (p : Params) (c : Commitment) (e : Evidence) : Prop :=
   EvidenceFits p e ∧ ∃ eg ig, ParamsDigests p eg ig ∧
     (∀ l link, (l, link) ∈ p.egress.toList.zip e.links.toList → ∀ w < p.windows, EgressAccepted p c e eg l link w) ∧
     ∀ l ∈ p.ingress.toList, ∀ w < p.windows, IngressAccepted p c ig l w
 
-/-- **An accepted unit has every link-window accepted** (`LinkWindowsAccepted`). (Its converse, that the check accepts
-such a unit, is completeness: `accepts_of_linkWindowsAccepted`.) -/
+/-- **An accepted unit has every sampling block accepted** (`LinkWindowsAccepted`). (Its converse, that the check
+accepts such a unit, is completeness: `accepts_of_linkWindowsAccepted`.) -/
 def AcceptsLinkWindows : Prop :=
   ∀ (p : Params) c e, protocol.Accepts p c e → LinkWindowsAccepted p c e
 
 /-! ## (3) Undecided -/
 
-/-- No link-window is refused and some awaits its record: the evidence fits, the parameters have their digests, every
-link-window is accepted or `Pending`, and some is `Pending`. -/
+/-- No sampling block is refused and some awaits its record: the evidence fits, the parameters have their digests, every
+sampling block is accepted or `Pending`, and some is `Pending`. -/
 def SomePending (p : Params) (c : Commitment) (e : Evidence) : Prop :=
   EvidenceFits p e ∧ ∃ eg ig, ParamsDigests p eg ig ∧
     (∀ l link, (l, link) ∈ p.egress.toList.zip e.links.toList → ∀ w < p.windows,
@@ -175,8 +175,8 @@ def SomePending (p : Params) (c : Commitment) (e : Evidence) : Prop :=
     (∀ l ∈ p.ingress.toList, ∀ w < p.windows, IngressAccepted p c ig l w ∨ Pending p c .ingress l w) ∧
     ∃ d, ∃ l ∈ linkNames p d, ∃ w < p.windows, Pending p c d l w
 
-/-- **An undecided unit has no link-window refused and some awaiting its record** (`SomePending`). (Its converse, that
-such a unit is undecided, is completeness: `undecided_of_somePending`.) -/
+/-- **An undecided unit has no sampling block refused and some awaiting its record** (`SomePending`). (Its converse,
+that such a unit is undecided, is completeness: `undecided_of_somePending`.) -/
 def UndecidedPending : Prop :=
   ∀ (p : Params) c e, (∃ why, protocol.check p c e = .undecided why) → SomePending p c e
 
@@ -227,7 +227,7 @@ def treeStrings (g : Grid) (grid : Array (Array (Option ByteArray))) : List Byte
 def declared (W : Nat) (link : Link) : Fin W → ClockSync := fun v => link.syncs.getD v.1 noSync
 
 /-- The strings the check hashes under egress parameters digest `eg`: each record's head, its digest under the record's
-salt and its certificate message, and the frame tree and head it recomputes of each egress link-window. -/
+salt and its certificate message, and the frame tree and head it recomputes of each egress sampling block. -/
 def checkStrings (p : Params) (c : Commitment) (e : Evidence) (eg : ByteArray) : List ByteArray :=
   c.records.toList.flatMap (fun r => headStrings r.head ++ saltedStrings r.salt r.head ++
     (messageInput r.certificate.keyId p.session r.certificate.link r.certificate.direction r.certificate.window

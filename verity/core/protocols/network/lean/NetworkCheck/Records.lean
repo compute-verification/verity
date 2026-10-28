@@ -25,20 +25,20 @@ UTF-8 link and digest, `STATUS_CODES` for the status, a raw grid of any shape (`
 any length), nothing left over in a body or after the last record. Its `digest` is
 `tagged_sha512("verity-network-certifier/records/v2", the commitment's bytes)`.
 
-**The verdict** of each link-window, in `Audit`'s order and with its names: `no-verdict` (no record), `duplicate` (more
-than one); one certified record's verdict is v4's; one raw or committed record has `status:<reason>` when its status in
-the clear is not complete, then on egress `advice` as v4, then `mismatch` when a raw record's grid is not the Program's
-(`expected_grids`, slot for slot) or a committed record's digest is not `record_digest` of the Program's grid with a
-complete status (`commitment.py`: SHA-256, padding elided). On ingress a raw or committed record is checked on its status
-alone.
+**The verdict** of each sampling block, in `Audit`'s order and with its names: `no-verdict` (no record), `duplicate`
+(more than one); one certified record's verdict is v4's; one raw or committed record has `status:<reason>` when its
+status in the clear is not complete, then on egress `advice` as v4, then `mismatch` when a raw record's grid is not the
+Program's (`expected_grids`, slot for slot) or a committed record's digest is not `record_digest` of the Program's grid
+with a complete status (`commitment.py`: SHA-256, padding elided). On ingress a raw or committed record is checked on
+its status alone.
 
 **Without the grid** (`check_link(grid=False)`, N2's, whose head check holds each certified head's grid):
-`evaluateNoGrid` gives each egress link-window `egressVerdictNoGrid`'s verdict, every test above but the grid comparison,
+`evaluateNoGrid` gives each egress sampling block `egressVerdictNoGrid`'s verdict, every test above but the grid comparison,
 in the same order and with the same names, and it refuses a raw or committed egress record, whose grid nothing else
 holds. Its refusals are otherwise `evaluate`'s, and its ingress verdicts the same.
 
 **Public** and **profile**: v4's. The `network-records` executable serves the protocol (`Core.Protocol.main`) and, as
-`network-records verdicts`, every link-window's verdict on a `serve` case through `Difftest.serve`: `verdicts`
+`network-records verdicts`, every sampling block's verdict on a `serve` case through `Difftest.serve`: `verdicts`
 (`verdictsFn`) and `verdicts-no-grid` (`verdictsNoGridFn`).
 -/
 
@@ -224,7 +224,8 @@ def Published.link : Published → String
   | .raw l .. | .committed l .. => l
   | .certified r => r.head.link
 
-/-- `_by_window`: the records of a link-window; a certified record of the other direction is another link-window's. -/
+/-- `_by_window`: the records of a sampling block; a certified record of the other direction is another sampling
+block's. -/
 def found (c : Commitment) (d : Direction) (l : String) (w : Nat) : Array Published :=
   c.records.filter fun
     | .raw l' w' .. | .committed l' w' .. => l' == l && w' == w
@@ -285,8 +286,8 @@ def expectedGridsOfBytes (g : Grid) (W : Nat) (l : ByteLink) : Array RawGrid :=
 def unitSync (e : ByteEvidence) (w : Nat) : ClockSync :=
   ((e.links[0]?).map (·.syncs.getD w Check.noSync)).getD Check.noSync
 
-/-- An egress link-window's violation (`check_link`), none when it is accepted; `expected` is the Program's grid of the
-link-window. A certified record's is v4's `Check.egressVerdict`. -/
+/-- An egress sampling block's violation (`check_link`), none when it is accepted; `expected` is the Program's grid of
+the sampling block. A certified record's is v4's `Check.egressVerdict`. -/
 def egressVerdict (p : Check.Params) (c : Commitment) (e : ByteEvidence) (egressDigest : ByteArray) (l : String)
     (link : ByteLink) (expected : RawGrid) (w : Nat) : Option String :=
   let screened : Except String (RawGrid → Bool) := match (found c .egress l w).toList with
@@ -311,7 +312,7 @@ def egressVerdict (p : Check.Params) (c : Commitment) (e : ByteEvidence) (egress
     else if agrees expected then none
     else some "mismatch"
 
-/-- An egress link-window's violation without its grid comparison (`check_link(grid=False)`, N2's), none when it is
+/-- An egress sampling block's violation without its grid comparison (`check_link(grid=False)`, N2's), none when it is
 accepted: `egressVerdict`'s tests before that comparison, in its order and with its names (`no-verdict`, `duplicate`,
 `signature`, `status:<reason>`, `advice`), and nothing after them, so it reads no Program grid and no record's grid
 or digest. -/
@@ -335,7 +336,7 @@ def egressVerdictNoGrid (p : Check.Params) (c : Commitment) (e : ByteEvidence) (
     if !(Check.inSyncSet p.syncSet s && s.delta == u.delta && s.rho == u.rho) then some "advice"
     else none
 
-/-- An ingress link-window's violation (`check_ingress_link`), none when it is accepted. -/
+/-- An ingress sampling block's violation (`check_ingress_link`), none when it is accepted. -/
 def ingressVerdict (p : Check.Params) (c : Commitment) (ingressDigest : ByteArray) (l : String) (w : Nat) : Option String :=
   match (found c .ingress l w).toList with
   | [] => some "no-verdict"
@@ -343,7 +344,7 @@ def ingressVerdict (p : Check.Params) (c : Commitment) (ingressDigest : ByteArra
   | [.raw _ _ st _] | [.committed _ _ st _] => statusViolation st
   | _ => some "duplicate"
 
-/-- Every link-window's verdict, in `Audit`'s order: each egress link's windows, then each ingress link's. -/
+/-- Every sampling block's verdict, in `Audit`'s order: each egress link's windows, then each ingress link's. -/
 def verdicts (p : Check.Params) (c : Commitment) (e : ByteEvidence) (egressDigest ingressDigest : ByteArray) :
     Array LinkWindow :=
   (((p.egress.toList.zip e.links.toList).flatMap fun (l, link) =>
@@ -355,7 +356,7 @@ def verdicts (p : Check.Params) (c : Commitment) (e : ByteEvidence) (egressDiges
       ({ direction := .ingress, link := l, window := w, violation := ingressVerdict p c ingressDigest l w } :
         LinkWindow)).toArray
 
-/-- Every link-window's verdict, or why the evidence or the parameters can't give them (v4's refusals). -/
+/-- Every sampling block's verdict, or why the evidence or the parameters can't give them (v4's refusals). -/
 def evaluate (p : Check.Params) (c : Commitment) (e : ByteEvidence) : Except String (Array LinkWindow) :=
   if e.links.size ≠ p.egress.size then
     .error s!"evidence: {e.links.size} links' frames and syncs for {p.egress.size} egress links"
@@ -368,7 +369,7 @@ def evaluate (p : Check.Params) (c : Commitment) (e : ByteEvidence) : Except Str
     | .ok eg, .ok ig => .ok (verdicts p c e eg ig)
     | _, _ => .error "the parameters digest has no canonical JSON"
 
-/-- `verdicts` with each egress link-window's verdict `egressVerdictNoGrid`'s, so no Program grid is computed. -/
+/-- `verdicts` with each egress sampling block's verdict `egressVerdictNoGrid`'s, so no Program grid is computed. -/
 def verdictsNoGrid (p : Check.Params) (c : Commitment) (e : ByteEvidence) (ingressDigest : ByteArray) :
     Array LinkWindow :=
   (((p.egress.toList.zip e.links.toList).flatMap fun (l, link) =>
@@ -386,7 +387,7 @@ def uncertifiedEgress (p : Check.Params) (c : Commitment) : Bool :=
     | .raw l .. | .committed l .. => p.egress.contains l
     | .certified _ => false
 
-/-- Every link-window's verdict without the egress grid comparison (`check_link(grid=False)`, N2's, whose head check
+/-- Every sampling block's verdict without the egress grid comparison (`check_link(grid=False)`, N2's, whose head check
 holds each certified head's grid), or why not: `evaluate`'s refusals in its order, with a refusal of a raw or committed
 egress record (`uncertifiedEgress`) after the evidence's, and then `verdictsNoGrid`. -/
 def evaluateNoGrid (p : Check.Params) (c : Commitment) (e : ByteEvidence) : Except String (Array LinkWindow) :=
@@ -450,7 +451,7 @@ def caseOf (j : Json) : Except String (Check.Params × Commitment × ByteEvidenc
   let e ← (Core.canonicalJson eb >>= evidenceOf).mapError (s!"evidence: {·}")
   pure (p, c, e)
 
-/-- `verdicts` on a `serve` case: `{"link_windows": [...]}`, every link-window's verdict in the audit's order, or a refusal
+/-- `verdicts` on a `serve` case: `{"link_windows": [...]}`, every sampling block's verdict in the audit's order, or a refusal
 (`caseOf`'s, or `evaluate`'s). -/
 def verdictsFn (j : Json) : Except String Json := do
   let (p, c, e) ← caseOf j

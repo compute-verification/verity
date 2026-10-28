@@ -10,7 +10,7 @@ returns: the records `CertifierDevice.step` publishes over the trace the world g
 assembly has its issuer sign for them. Each property here is stated over those outputs, for every input of the device and
 every commitment and evidence the check accepts under the device's parameters (`unitParams`), given the one premise of
 the network lane, that the device runs as built (`NetTiming.DeviceIntact`, the listed `trusted-host`). Everything
-else the old abstract device was assumed to do (each head its link-window's, each egress head `record_head` of its
+else the old abstract device was assumed to do (each head its sampling block's, each egress head `record_head` of its
 recorded grid) is now a fact about the device's code.
 
 **The unit is one link pair**, the device's, as in `Properties.CertifierNetwork`.

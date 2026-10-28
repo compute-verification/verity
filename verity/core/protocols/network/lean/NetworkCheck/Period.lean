@@ -4,7 +4,7 @@ import Flock.Program
 import Flock.Public
 
 /-!
-# The network certifier over a period, a core protocol: `verity/certifier/v0`
+# The network certifier over a monitoring period, a core protocol: `verity/certifier/v0`
 
 Onsite's communication component (`Core.Onsite.components`). A period is one node's link over `m` link-windows beside
 the period's compute audits (sampled proofs' one-stage, one answer per registered window of the workload). Its
@@ -45,8 +45,9 @@ The rows form has, in place of `sync_set`,
 
 the scan's Program, its descriptor (`verity-ir/descriptor/v1`, `scan_zk`'s `program.json`), and the network
 certifier's one fixed schedule (`warden.WardenParams`: each a positive integer, B = `cell_bytes` past a cell's 9-byte
-header, B, S = `lanes` · `slots` and T = `window` u32s, and `every`, a timestep's buckets, dividing T, so each
-link-window is T / `every` timesteps of `lanes` Program slots, `Schedule.programSlots` and `Schedule.windowPrograms`),
+header, B, S = `lanes` · `slots` and T = `window` u32s, and `every`, the slot stride in buckets, dividing T, so each
+sampling block is T / `every` slot strides of `lanes` Program slots, `Schedule.programSlots` and
+`Schedule.windowPrograms`),
 whose digest `WardenParams.digest` every registration binds; its `program` is the scan's registered Program, the
 descriptor's SHA-512 (`partition_object.program_sha512`), and its `link` the run's (`warden_serve.LINK`), whose fails record is certified under the link `<link>-fails`. The
 descriptor must decode (`Flock.Program.decode`) and be the scan of the schedule's link-window in the generator form:
@@ -60,7 +61,7 @@ leaves free. In the rows form the compute audits' layout terms and their units' 
 are checked as in the clock form.
 
 **Commitment**, canonical JSON `{"audits": [registration, …], "windows": [registration, …]}`: one-stage's registration
-record of each compute audit and of each link-window, in order, each of format `verity/registration/v1` or `v2`. Its
+record of each compute audit and of each sampling block, in order, each of format `verity/registration/v1` or `v2`. Its
 digest is `tagged_sha512("verity-network-certifier/period/v0", the commitment's bytes)`, and each registration's is
 one-stage's, SHA-512(format ‖ 0 ‖ canonical record) (`registration.digest`).
 
@@ -79,7 +80,7 @@ in the clock form, and in the rows form each link-window
             "row_schema", "rows", "value", "window", "wiring", "word_bits", "words"}
 
 the requests', responses' and fails' records' certificates (`certified.jsonl`'s), and the ingress and the egress rows'
-registrations (`warden_rows.registration`, `cells.jsonl`'s); a link-window of the other form than the parameters' is
+registrations (`warden_rows.registration`, `cells.jsonl`'s); a sampling block of the other form than the parameters' is
 refused.
 
 In the clock form: each audit's and each link-window's one-stage answer (`Core.Answer.ofJson`), and per link-window
@@ -106,11 +107,11 @@ against that salted digest is a later change to its circuit (the certifier PROTO
   `LinkWindows.verify`, is the answer's verifier of record);
 * in the rows form, link-window `w`: its registration (the scan's, per window) names the scan's Program; its three
   certificates are the requests' record's (the link's ingress), the responses' (its egress) and the fails'
-  (`<link>-fails`, egress) at `w`, each the key's and verifying in the session, so a link-window missing any record's
-  certificate is refused, and the network certifier certifies no record of a link-window in which it refused a
-  connection (traffic past the window's Program slots, `warden`'s "Admission"), so such a link-window is refused; its two registrations, ingress then egress, are what `warden_rows.check_registration` reads:
-  the link-window's value, link, end and window, the schedule's digest (a registration under another schedule is
-  refused), the schedule's rows, words, word bits, row format and layout, the link-window's domain in the session
+  (`<link>-fails`, egress) at `w`, each the key's and verifying in the session, so a sampling block missing any record's
+  certificate is refused, and the network certifier certifies no record of a sampling block in which it refused a
+  connection (traffic past the window's Program slots, `warden`'s "Admission"), so such a sampling block is refused; its two registrations, ingress then egress, are what `warden_rows.check_registration` reads:
+  the sampling block's value, link, end and window, the schedule's digest (a registration under another schedule is
+  refused), the schedule's rows, words, word bits, row format and layout, the sampling block's domain in the session
   (`warden_rows.domain`), and a certificate that is the key's, signs the head (`CellsHead.digest`) and verifies in the
   session (a registration not under the deployment key is refused); the scan's registration holds both, an entry of its
   `roots` or `registered` naming each one's root and domain, which bind the session, link, end and window (an answer
@@ -133,9 +134,9 @@ possible; `drawn` is the draw's `k`, or its `Σ k` stratified),
 `faulty_bits` = `b · bits`, with `bits` the most one of its Program's units commits (its template's return, `bitsOf`:
 the committed values `faultyBits` counts, the outputs a wrong unit computes and other units or the client read),
 `jitter` = `⌈log2 Dj^steps⌉`, and `K` the sum of the terms. The schedules term counts every assignment of a sync of
-Σ_sync to the `m` link-windows, so it is the same whichever syncs the certifier ran them under, and needs none of them.
-`eps` is the probability that `K` fails to bound the period's leak, the union of its audits' `δ`: their exact sum in
-lowest terms (`Core.Ratio.toString`, `"0"` with no audits), as PoUS's and remote bandwidth's publics carry theirs.
+Σ_sync to the `m` sampling blocks, so it is the same whichever syncs the certifier ran them under, and needs none of
+them. `eps` is the probability that `K` fails to bound the period's leak, the union of its audits' `δ`: their exact sum
+in lowest terms (`Core.Ratio.toString`, `"0"` with no audits), as PoUS's and remote bandwidth's publics carry theirs.
 
 In the rows form the terms are `PeriodLeakAccepted`'s over its windows, the link-windows' scans, whose statements read
 the network certifier's rows; the compute audits read none, so they are in no term (they are acceptance conditions):
@@ -222,10 +223,10 @@ structure Schedule where
 /-- S = lanes · r, a row's slots. -/
 def Schedule.allocation (s : Schedule) : Nat := s.lanes * s.slots
 
-/-- A timestep's Program slots, one a lane (`WardenParams.program_slots`). -/
+/-- A slot stride's Program slots, one a lane (`WardenParams.program_slots`). -/
 def Schedule.programSlots (s : Schedule) : Nat := s.lanes
 
-/-- A window's Program slots: T / `every` timesteps of `programSlots` (`WardenParams.window_programs`). -/
+/-- A sampling block's Program slots: T / `every` slot strides of `programSlots` (`WardenParams.window_programs`). -/
 def Schedule.windowPrograms (s : Schedule) : Nat := s.window / s.every * s.programSlots
 
 /-- The scan's terms, read off its Program: its monitoring period (`T`, the window's buckets), its free inputs (`T`
@@ -273,7 +274,7 @@ structure Layout where
   firstBucket : Nat
   deriving BEq
 
-/-- A link-window's rows in one direction, as `warden_rows.registration` writes them. -/
+/-- A sampling block's rows in one direction, as `warden_rows.registration` writes them. -/
 structure Rows where
   format : String
   value : String
@@ -619,7 +620,7 @@ def windowCheck (p : Params) (clear : List ByteArray) (earlier : Array ByteArray
       prof.drawn == #[(unitLevel, 1)] do
     refuse s!"{what}: profile: not the link-window's one unit proved"
 
-/-- `warden_rows.domain`'s id: the frame-v3-sha512 domain of link-window `w`'s rows in direction `d`, in the session,
+/-- `warden_rows.domain`'s id: the frame-v3-sha512 domain of sampling block `w`'s rows in direction `d`, in the session,
 under the schedule whose digest is `sd`. -/
 def rowsDomain (s : Schedule) (sd session : ByteArray) (link : String) (d : Direction) (w : Nat) : V ByteArray := do
   let binding ← Identity.identityDigestSha512 domainTag (Json.mkObj [
@@ -757,7 +758,7 @@ structure Public where
   audits : Array Facts
   cells : Nat
   /-- The terms of `PeriodLeakAccepted`'s windows: the clock form's compute audits', the rows form's scans', one a
-  link-window. -/
+  sampling block. -/
   units : Array AuditTerms
   /-- The rows form, whose units are its scans. -/
   rows : Bool := false
@@ -776,7 +777,7 @@ def Public.eps (x : Public) : Core.Ratio :=
 def capsTerm (cells : Array Nat) : Nat := (cells.map fun cap => clog2 (cap + 1)).foldl (· + ·) 0
 
 /-- The bound's terms from the audits' layout terms, Programs' bits and facts, the cells' caps, the jitter bound,
-`#Σ_sync` and the link-windows. -/
+`#Σ_sync` and the sampling blocks. -/
 def terms (audits : Array Audit) (facts : Array Facts) (cells : Array Nat) (jitter syncs windows : Nat) : Public :=
   { audits := facts
     cells := capsTerm cells
