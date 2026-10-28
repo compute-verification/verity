@@ -457,7 +457,7 @@ theorem instOutRowOf_none (outs : Finset (Fin (instN c n))) (hcr : HmOut.checkRo
   unfold instOutRowOf at h
   rw [hgu] at h
   dsimp only at h
-  rw [dif_pos hex] at h
+  rw [dite_eq_left hex] at h
   have hs := Classical.choose_spec (Classical.choose_spec hex)
   generalize Classical.choose (Classical.choose_spec hex) = p at hs h
   generalize Classical.choose hex = x' at hs
