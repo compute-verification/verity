@@ -1,5 +1,5 @@
 """`verity_flock.derive`, the prover's mirror of the verifier's `derive`: a flat unit's rows are `ir_lower.netlist`'s byte
-for byte; generated reads are `Flock.Lookup.buildV2`'s (#202's digests); on hand-built and random statements (placed and
+for byte; generated reads are `Flock.Lookup.buildV2`'s (`lookup_v2_vectors.json`'s digests); on hand-built and random statements (placed and
 inline calls and reads, exports, nested placement, the unit's parts), the rows solved in logical order compute
 `circuit_types.evaluate`, every row holds, and the logical order is topological. `derive_vectors.json` pins both orders for
 the Lean `derive` to reproduce: ``python test_derive.py --write``."""
@@ -207,7 +207,7 @@ def test_a_wide_unit():
 
 
 def _small_tables():
-    """#202's `lookup_v2_vectors.small_tables()`, reproduced: the same generator, so the same tables."""
+    """`lookup_v2_vectors.small_tables()`, reproduced: the same generator, so the same tables."""
     rng = random.Random(20260928)
 
     def words(n, f):
@@ -221,7 +221,7 @@ def _small_tables():
             ("random-20", 8, 5, 31, words(8, lambda i: rng.getrandbits(20)))]
 
 
-#: `rows_sha512` per small table in #202's `lookup_v2_vectors.json` (at `10d8e46b`): the verifier lane's `Flock.Lookup.rowsDigest`
+#: `rows_sha512` per small table in `lookup_v2_vectors.json` (at `10d8e46b`): the verifier's `Flock.Lookup.rowsDigest`
 LEAN_ROWS = {
     "full-8": "02199433a3386f563cd5656b18df015b5b4632478140036f1e3f57625922b051686b530a57c71faf07989e0f63094e8fa386b50c373ef01a3fccfbe5c2627ae1",
     "low5-const-high": "de1c49c45b82cfa80bd8aafa3c288d3326fefb1dbf5d84a249bb5121c7222d9561a2d3646d0cca9f3e035a95ec0bcbac3089c19711c6e1e076cc4425d0f6d195",
@@ -233,7 +233,7 @@ LEAN_ROWS = {
 
 
 def test_generated_reads_are_lean_buildv2():
-    """Each small table of #202's vectors: this generator's rows digest is the Lean one."""
+    """Each small table of `lookup_v2_vectors.json`: this generator's rows digest is the Lean one."""
     lean = HERE.parent / "verifier" / "lookup_v2_vectors.json"
     want = ({e["label"]: e["rows_sha512"] for e in json.loads(lean.read_text())["small"]} if lean.exists() else LEAN_ROWS)
     for label, n, lo, bits, ws in _small_tables():

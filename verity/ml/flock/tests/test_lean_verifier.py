@@ -639,14 +639,14 @@ def _one_stage_draw():
 
 @pytest.mark.slow
 @pytest.mark.skipif(shutil.which("lake") is None or _one_stage_draw() is None,
-                    reason="no Lean toolchain or no stratified law in core (PRs #161, #164)")
+                    reason="no Lean toolchain or no stratified law in core")
 def test_stratified_draw_agrees_with_core(tmp_path):
     subprocess.run(["lake", "build"], cwd=LEAN, check=True, capture_output=True)
     p = subprocess.run(["python3", str(Path(__file__).resolve().parent / "stratified_agree.py"), "--lean", str(LEAN / ".lake/build/bin/flock-verify"),
                         "--out", str(tmp_path), "--random", "20", "--os-draws", "100"], capture_output=True, text=True)
     assert p.returncode == 0, p.stdout + p.stderr
 
-@pytest.mark.skipif(shutil.which("lake") is None or _template_vectors() is None, reason="no Lean toolchain or no template vectors (PR #131)")
+@pytest.mark.skipif(shutil.which("lake") is None or _template_vectors() is None, reason="no Lean toolchain or no template vectors")
 def test_template_queries_agree_with_the_vectors(tmp_path):
     subprocess.run(["lake", "build"], cwd=LEAN, check=True, capture_output=True)
     p = subprocess.run(["python3", str(VERIFIER / "template_query_agree.py"), "--lean", str(LEAN / ".lake/build/bin/flock-verify"),
@@ -662,7 +662,7 @@ def _has_check_cut():
     return True
 
 
-@pytest.mark.skipif(shutil.which("lake") is None or not _has_check_cut(), reason="no Lean toolchain or no verity.ml.circuits.cut (PR #111)")
+@pytest.mark.skipif(shutil.which("lake") is None or not _has_check_cut(), reason="no Lean toolchain or no verity.ml.circuits.cut")
 def test_check_cut_agrees_with_the_reference(tmp_path):
     subprocess.run(["lake", "build"], cwd=LEAN, check=True, capture_output=True)
     p = subprocess.run(["python3", str(VERIFIER / "cut_check_agree.py"), "--lean", str(LEAN / ".lake/build/bin/flock-verify"),
@@ -680,7 +680,7 @@ def _qword_vector_file():
 
 
 @pytest.mark.skipif(shutil.which("lake") is None or _qword_vector_file() is None,
-                    reason="no Lean toolchain or no qword_vectors.json in core (PR #111)")
+                    reason="no Lean toolchain or no qword_vectors.json in core")
 def test_qword_cuts_agree_with_core_verify(tmp_path):
     """Every Call's cut on its whole graph (`qword-program --cuts`: the partition invariant and the width rule), against core's
     `partition_object.verify`: its pinned cut refusals, and each of its programs at several (X, W), under `Q_word` v1 and v2
@@ -703,7 +703,7 @@ def _qword_vectors():
     return _ir_tests() / "partition_vectors.json"
 
 
-@pytest.mark.skipif(shutil.which("lake") is None or _qword_vectors() is None, reason="no Lean toolchain or no Q_word evaluator (PR #111)")
+@pytest.mark.skipif(shutil.which("lake") is None or _qword_vectors() is None, reason="no Lean toolchain or no Q_word evaluator")
 def test_qword_evaluator_agrees_with_the_reference(tmp_path):
     subprocess.run(["lake", "build"], cwd=LEAN, check=True, capture_output=True)
     p = subprocess.run(["python3", str(VERIFIER / "qword_agree.py"), "--lean", str(LEAN / ".lake/build/bin/flock-verify"),
@@ -730,7 +730,7 @@ def test_the_reference_vectors_exist():
 
 @pytest.mark.slow
 @pytest.mark.skipif(shutil.which("lake") is None or _format_vectors() is None,
-                    reason="no Lean toolchain or no program format vectors (PR #120)")
+                    reason="no Lean toolchain or no program format vectors")
 def test_qword_over_programs_agrees_with_the_reference(tmp_path):
     ir = _format_vectors()
     subprocess.run(["lake", "build"], cwd=LEAN, check=True, capture_output=True)

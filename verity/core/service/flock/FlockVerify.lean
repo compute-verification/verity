@@ -1167,7 +1167,7 @@ def merkleTest (path : String) : IO UInt32 := do
   IO.println s!"merkle-test: {lines.size} cases, {bad} failures"
   return (if bad == 0 then 0 else 1)
 
-/-- `hm96-test VECTORS [sha512]`: PR #88's `hm96/vectors.json` against `Hm96.sha256` (PR #93's `vectors_sha512.json` against
+/-- `hm96-test VECTORS [sha512]`: `hm96/vectors.json` against `Hm96.sha256` (`vectors_sha512.json` against
 `Hm96.sha512`): the pinned key, the leaf prefix, every mask and every leaf. -/
 def hm96Test (path : String) (h : Hm96 := Hm96.sha256) : IO UInt32 := do
   let some v := (Lean.Json.parse (← IO.FS.readFile path)).toOption | IO.println "hm96-test: not JSON"; return 1
