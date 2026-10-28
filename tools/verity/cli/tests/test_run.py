@@ -78,6 +78,7 @@ REFUSALS = {
     "law": lambda c: c["service"].update(law="subset:8"),
     "commit": lambda c: c["program"].update(commit="main"),
     "float": lambda c: c["workload"].update(params={"steps": 2.0}),
+    "ascii": lambda c: c["workload"].update(name="caf\u00e9"),
     "workload": lambda c: c["workload"].update(params={"requests": []}),
     "principal": lambda c: party(c, "challenger").update(principal="developer"),
     "unknown-party": lambda c: c["party"].append({"name": "oracle", "machine": "local", "principal": "anyone"}),
@@ -122,6 +123,13 @@ def test_the_canonical_form_is_verity_canonical_json():
 
     cfg = K.check(config(), REG.components, REG.workloads)
     assert K.canonical(cfg) == canonical_json(cfg)
+    for v in ({"s": "".join(map(chr, range(0x20, 0x7f))), "c": "\t\n\x00\x1f", "n": [-1, 1 << 63]}, ["x", True, []]):
+        assert K.canonical(v) == canonical_json(v)
+    for v in ({"s": "d\u00e9"}, {"k\u00e9y": 1}, ["x\x7f"], {"s": "\U0001f600"}):
+        with pytest.raises(K.Refused, match="is not ASCII without DEL"):
+            K.canonical(v)
+        with pytest.raises(ValueError, match="is not ASCII without DEL"):
+            canonical_json(v)
 
 
 def test_config_check_and_hash_print_the_hash(capsys):
