@@ -407,7 +407,10 @@ def test_a_refused_report_names_each_failing_step_and_its_why_and_a_scan_that_ex
     ok = {"profile": "advice", "rc": {"n2": "0", "scan": "0"}}
     assert cr.report(_steps(tmp_path, ok))["why"] is None
     steps = _steps(tmp_path, ok | {"rc": {"n2": "0", "scan": "1"}})
-    found = lambda *k: {"audit": {"window_accepted": True, "received": {"verifier_found": list(k)}}}
+
+    def found(*k):
+        return {"audit": {"window_accepted": True, "received": {"verifier_found": list(k)}}}
+
     Path(steps.scan).write_text(json.dumps({"ok": False, "T": 1, "rounds": {
         "honest": found("first o1 0 @0"), "chain": found("first o1 0 @0"), "tampered": found()}}))
     got = cr.report(steps)
