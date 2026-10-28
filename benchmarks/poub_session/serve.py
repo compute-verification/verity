@@ -1,4 +1,4 @@
-"""vLLM serving under the remote bandwidth audit: an in-process vLLM engine (``VLLM_ENABLE_V1_MULTIPROCESSING=0``)
+"""vLLM serving under PoUB: an in-process vLLM engine (``VLLM_ENABLE_V1_MULTIPROCESSING=0``)
 with `verity_vllm.protocols.poub.binder.Binder` on it registers its weights and KV pool in a `Store`, and
 `verity_vllm.protocols.poub.remote.StoreBackend` proves that store to a verifier while the engine serves a trace of requests:
 before each pass the engine runs its next step (its allocs, appends and frees, one memory-map/v1 line), and the pass

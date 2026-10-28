@@ -1,6 +1,6 @@
 # benchmarks/poub_session
 
-PoUB's (proof of useful bandwidth) session harness, not the remote protocol's demo, which is `verity example vllm`. It
+PoUB's session harness, not the remote protocol's demo, which is `verity example vllm`. It
 runs the bandwidth audit (PoUB, `verity/core/protocols/poub`) end to end: a verifier's process and a prover's,
 over TCP, on one machine or two, and the memory line a gate run publishes.
 
