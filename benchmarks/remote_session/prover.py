@@ -53,11 +53,11 @@ the next pass's step waits on serving, whose write may wait on this pass's read.
 step is the session's own, before each pass, and a block lands in its slot when it is encoded.
 
 With a serving trace, the appends a pass's step made go out after the root before it and before the pass is computed,
-each its own message (its tree's root and size, `Session.append`; a pass's are sent together) answered with its
+each its own message (its tree's root and size, `AuditRun.append`; a pass's are sent together) answered with its
 coin, under which the backend encodes its blocks (`audit.Store.encode`); then the root's message carries the blocks
 released since the last root sent, as runs, with those among them the trace withdrew (`withdrawn`, freed before their
-encode landed, so never written: `Session.release(released, withdrawn)`), and the pass's plan as a change from the
-last one sent (`Session.receive(..., change=...)`).  The hello says whether the backend defers an appended block's
+encode landed, so never written: `AuditRun.release(released, withdrawn)`), and the pass's plan as a change from the
+last one sent (`AuditRun.receive(..., change=...)`).  The hello says whether the backend defers an appended block's
 residency to its encode (`deferred`, a backend's attribute, False if it has none), which the verifier refuses under a
 lifetime of one window, and whether any session of the plan appends (`appends`, false for a plan of `BANDWIDTH` modes
 only, whose sessions then reserve no append coins).  A pass's seed binds every append sent before its root (`audit.chained`), so a backend that appends
@@ -65,7 +65,7 @@ takes the chain over its appends when the pass is launched (`audit.Store.head`).
 sent, never dropped at a boundary, since a coin no root follows rejects the session; one dropped before its appends
 went out sends nothing, and the next pass sends its appends and changes too.
 
-Every root's message names the step its pass covers (`Session.receive(..., step=...)`, PROTOCOL.md §8 "The pass and
+Every root's message names the step its pass covers (`AuditRun.receive(..., step=...)`, PROTOCOL.md §8 "The pass and
 its step"): with serving ahead, the step the pass took; otherwise the backend's `step_of(ticket)` if it has one, which
 a serving backend takes from its engine, and else the count of the session's passes launched before it. A serving
 trace's step before pass n is recorded as step n − 1, so pass n reads the store that step left.

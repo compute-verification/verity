@@ -103,7 +103,7 @@ def registered(receipt: str, bind: bool, rows: int) -> audit.Store:
     return out
 
 
-def chain(st: audit.Store) -> tuple[coins.LiveOpening, list[dict], coins.LiveOpening, coins.Coins]:
+def chain(st: audit.Store) -> tuple[coins.LiveOpening, list[dict], coins.LiveOpening, coins.SessionCoins]:
     """Window 0's challenge, opened after R, its three passes under the registration's receipt kind and `bind` (the
     stub tiles' z when it binds them), its openings coin, opened after the last pass's root, and the session's coins."""
     reg, blocks = st.registration, st.blocks

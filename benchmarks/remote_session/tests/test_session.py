@@ -2,7 +2,7 @@
 a clock that advances by one tick per pass with both sides settled around each tick, so a session runs one schedule:
 an honest session is accepted and its γ terms computed, a prover that dropped blocks is rejected at its openings, a
 second session waits out the first's deadline, and KV pages appended and released mid-session (a memory map's steps)
-are audited, accepted when held and rejected when dropped. The Lean verifier decides, `audit.Session` keeps the books
+are audited, accepted when held and rejected when dropped. The Lean verifier decides, `audit.AuditRun` keeps the books
 beside it, and the two must agree at every event, window verdict and record field."""
 from __future__ import annotations
 
@@ -301,7 +301,7 @@ def test_an_unpaced_session_declares_its_snapshot_line_and_no_time_held_line(mon
 def test_a_paced_session_runs_k_passes_a_coin_and_declares_its_time_held_line(monkeypatch, k, schedule):
     """Paced (`pace_of`, `audit.Pace(k, T)`: two stretches of two windows and the closing stretch), the prover runs k
     passes under each coin and waits for the next, and the verifier sends each boundary as the window's (k − 1)-th
-    root arrives (`Session.next_boundary_ns`; k = 1: as the window before's root does), so on the pass clock window t
+    root arrives (`AuditRun.next_boundary_ns`; k = 1: as the window before's root does), so on the pass clock window t
     holds k passes, none discarded; γ is declared over the fixed windows of T from the first challenge to the last
     deadline, and the session declares all three memory forms.  Its lifetime cap counts groups, those of their nominal
     length (the stretch over its groups) in 30 s."""
@@ -423,13 +423,13 @@ def test_a_session_reserves_append_coins_only_when_its_plan_appends_and_an_appen
 
 def test_a_window_with_no_draws_settles_malformed_whatever_its_batches():
     """A window with no draws (none a session makes) settles `malformed` whatever its batches' results, as
-    `Session.verify` and the Lean's settle give it."""
+    `AuditRun.verify` and the Lean's settle give it."""
     from types import SimpleNamespace
 
     from checks import Checks
 
     class Books:
-        _fail = audit.Session._fail
+        _fail = audit.AuditRun._fail
 
         def __init__(self) -> None:
             self.windows, self.failed = [SimpleNamespace(draws=(), verdict=None)], None
@@ -817,7 +817,7 @@ def test_a_paced_session_puts_each_group_of_k_passes_under_a_live_coin_and_a_dro
 @pytest.mark.parametrize("k", [1, 3])
 def test_a_paced_group_is_drawn_as_its_k_th_root_arrives(k):
     """A paced window takes at most k roots, so its k-th makes them final once its boundary has left
-    (`audit.Session.close`), which the loop sends before that root: each group's draws go out as that root arrives, the
+    (`audit.AuditRun.close`), which the loop sends before that root: each group's draws go out as that root arrives, the
     last group's too, so the openings coin's request on the challenger's log names the group's last root when it came,
     not one root or a deadline later."""
     (r,), _ = run("honest", paces=[verifier.pace_of(f"{k}:{4 * k}:40:2", 1.0)])
@@ -829,7 +829,7 @@ def test_a_paced_group_is_drawn_as_its_k_th_root_arrives(k):
 def test_a_k_1_paced_root_asks_the_challenger_for_its_two_coins_in_one_round_trip(tmp_path, monkeypatch, k):
     """At k = 1 a group's root closes it and the next boundary is due at once, so the group's openings coin and the
     challenge the boundary releases, σ_(g+2), go to the challenger in one round trip, in that order, both after that
-    root (`coins.Coins.ahead`); the last two groups' boundaries release no coin, so their openings coins go alone. At
+    root (`coins.SessionCoins.ahead`); the last two groups' boundaries release no coin, so their openings coins go alone. At
     k = 3 a coin leaves at the following group's second root, so every coin goes alone. The session's transcript
     replays to its verdict through both verifiers. The clock ticks as each pass starts as well as when it ends, so
     time passes between a coin leaving and the root after it, as on the verifier's own clock: at one tick a pass, a
@@ -1224,7 +1224,7 @@ def test_the_verifier_closes_a_registration_left_live_from_its_registry_file(tmp
 
 
 def test_the_lean_verifier_accepts_an_honest_session_and_rejects_a_dropping_one(monkeypatch):
-    """The Lean verifier decides each window (its check's time is the window's `lean_check_ns`), `audit.Session`
+    """The Lean verifier decides each window (its check's time is the window's `lean_check_ns`), `audit.AuditRun`
     taking its verdicts: it accepts the honest session, rejects the prover that dropped half its blocks at a receipt,
     and closes the registration with the two sessions counted so in both registries."""
     monkeypatch.setattr(prover, "OPENINGS_PART", 4)
@@ -1239,7 +1239,7 @@ def test_the_lean_verifier_accepts_an_honest_session_and_rejects_a_dropping_one(
 
 
 def test_a_window_the_lean_rejects_is_rejected_on_the_books_at_its_draw(monkeypatch):
-    """A window's verdict is the Lean's, set on `audit.Session` (`Checks.settle`): the Lean's accepting window 1 read
+    """A window's verdict is the Lean's, set on `audit.AuditRun` (`Checks.settle`): the Lean's accepting window 1 read
     as a rejection at a draw rejects the session there, at that draw, with no disagreement."""
     monkeypatch.setattr(prover, "OPENINGS_PART", 4)
     settle = verifier.Pair.settle
@@ -1262,7 +1262,7 @@ def test_a_window_the_lean_rejects_is_rejected_on_the_books_at_its_draw(monkeypa
 
 def test_a_transcript_replays_each_session_to_its_verdict_through_both_verifiers(tmp_path, monkeypatch):
     """`--transcript DIR`: each session's difftest case, written as it runs, which `replay.py transcript` replays
-    through `RemoteAudit.Session` and `audit.Session` alike: the honest session accepted, every window verified, and
+    through `RemoteAudit.Session` and `audit.AuditRun` alike: the honest session accepted, every window verified, and
     the prover that dropped half its blocks rejected at the window and draw it was rejected at live, at a receipt,
     which only a transcript's openings can show. The file is the path, bytes and sha256 verifier.json gives it."""
     monkeypatch.setattr(prover, "OPENINGS_PART", 4)
@@ -1451,7 +1451,7 @@ def test_books_whose_record_is_not_the_leans_refuse_the_session_as_disagreement(
     the ledger reads: books whose record has another stale bound refuse the session at its end as `disagreement`."""
     import dataclasses
 
-    record = audit.Session.record
+    record = audit.AuditRun.record
 
     def stale(self):
         rec = record(self)
@@ -1459,7 +1459,7 @@ def test_books_whose_record_is_not_the_leans_refuse_the_session_as_disagreement(
         return dataclasses.replace(rec, windows=(dataclasses.replace(w, stale=tuple(b + 1 for b in w.stale)),
                                                  *rec.windows[1:]))
 
-    monkeypatch.setattr(audit.Session, "record", stale)
+    monkeypatch.setattr(audit.AuditRun, "record", stale)
     (r,), _ = run("honest")
     assert not r["accepted"] and r["failure"]["failure"] == "disagreement", r["failure"]
     assert r["disagreement"]["event"] == "record"
@@ -1550,7 +1550,7 @@ def test_a_lean_that_answers_nothing_until_the_passes_end_delays_no_coin_root_or
 @pytest.mark.parametrize("held", [False, True])
 def test_an_event_the_verifiers_answer_differently_is_refused_as_disagreement(monkeypatch, held_lean, held):
     """Each event goes to both verifiers at one reading of the clock, and their results are compared: a root the Lean
-    reads without its step is its `step` rejection where `audit.Session` takes the root, and the session is refused
+    reads without its step is its `step` rejection where `audit.AuditRun` takes the root, and the session is refused
     at that window as `disagreement`, also when the Lean's answer comes only after the prover's last pass."""
     if not held:
         monkeypatch.setattr(verifier.lv, "Lean", LEAN)
@@ -1581,8 +1581,8 @@ def test_an_append_is_answered_with_its_coin_and_a_root_message_is_applied_in_or
     params = audit.Params(8, 10 ** 9, 1, 2, 2.0 ** -40, window_ns=10, codec=P512, receipt=reg.receipt, rows=reg.rows)
 
     def session():
-        s = audit.Session(params, reg, None, coins.local(reg.digest, 0, params.windows, os.urandom), clock=lambda: 0,
-                          not_before_ns=0)
+        s = audit.AuditRun(params, reg, None, coins.local(reg.digest, 0, params.windows, os.urandom), clock=lambda: 0,
+                           not_before_ns=0)
         s.start()
         return s
 
@@ -1636,7 +1636,7 @@ def test_a_plan_change_is_the_runs_one_plan_adds_and_removes_from_the_other():
 
 
 def test_a_root_message_names_the_withdrawn_blocks_among_its_releases():
-    """`Verifier.root` hands a message's withdrawn runs to its release (`Session.release(released, withdrawn)`): an
+    """`Verifier.root` hands a message's withdrawn runs to its release (`AuditRun.release(released, withdrawn)`): an
     appended block no plan held, freed before its encode landed, is withdrawn; one a plan held, a registered one, or a
     withdrawal outside the message's releases is the session's `release` rejection."""
     reg = audit.register(os.urandom(32), audit.site_log(b"test-node", 8, bytes(64)), audit.STORE, P512)
@@ -1645,8 +1645,8 @@ def test_a_root_message_names_the_withdrawn_blocks_among_its_releases():
     root = (b"\7" * 64).hex()
 
     def session():
-        s = audit.Session(params, reg, None, coins.local(reg.digest, 0, params.windows, os.urandom), clock=lambda: 0,
-                          not_before_ns=0)
+        s = audit.AuditRun(params, reg, None, coins.local(reg.digest, 0, params.windows, os.urandom), clock=lambda: 0,
+                           not_before_ns=0)
         s.start()
         verifier.Verifier.append(s, {"type": "append", "root": root, "count": 3})
         return s
