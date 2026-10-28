@@ -44,7 +44,7 @@ variable {n : ℕ} {I : Inputs} {mPts : ℕ} (dj : Finset (Fin n) → Lean.Json)
 noncomputable def sitesShHI : SitesH (planShH (Reg := Reg) dj y₀) (tabShH dj y₀) where
   A S _ _ _ := (tableShH dj y₀ S).twinA
   B S _ _ _ := (tableShH dj y₀ S).twinB
-  sat S _ _ _ := (tableShH dj y₀ S).sat (zkTyped ht)
+  sat S _ _ _ := (tableShH dj y₀ S).sat (zkTyped ht) hc hrf
   acc S _ _ _ := (tableShH dj y₀ S).acc (zkTyped ht) hc hrf
   vu S _ u h := (tableShH dj y₀ S).vu u h
   hvu S _ u h := (tableShH dj y₀ S).hvu u h
