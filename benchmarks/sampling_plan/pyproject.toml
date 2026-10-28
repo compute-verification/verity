@@ -15,6 +15,6 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 inputs = ["verity/__init__.py", "verity/errors.py", "verity/core/__init__.py", "verity/core/protocols/__init__.py",
           "verity/core/protocols/profile.py", "verity/core/protocols/sampled_proofs", "verity/core/claims",
           "verity/core/protocols/pouw/__init__.py", "verity/core/protocols/pouw/window.py",
-          "verity/core/protocols/pous", "verity/ml/__init__.py",
+          "verity/core/protocols/pous", "verity/ml/__init__.py", "verity/ml/windows",
           "verity/ml/circuits", "verity/ml/kernels", "verity/ml/commitments", "verity/ml/crypto",
-          "verity/ml/randomness", "verity/ml/windows", "benchmarks/census/hardware.json"]
+          "verity/ml/randomness", "benchmarks/census/hardware.json"]
