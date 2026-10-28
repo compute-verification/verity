@@ -964,7 +964,7 @@ def test_a_tail_wired_out_of_order_of_at_is_refused_by_the_wiring_check(split):
     out = ev(tail, np.concatenate(sums, axis=1), w).reshape(1, 128)
     assert np.array_equal(out, ev(v2, x, res, w).reshape(1, 128))
     assert not np.array_equal(ev(tail, np.concatenate([sums[1], sums[0], *sums[2:]], axis=1), w).reshape(1, 128), out)
-    win = IF.Window(norm, "ab" * 64, {"law": "stratified", "k": 2}, 1)
+    win = IF.ExecutionBlockBuilder(norm, "ab" * 64, {"law": "stratified", "k": 2}, 1)
     for at, p in enumerate(parts):
         win.record(p, [x[:, 16 * at:16 * (at + 1)], res], [sums[at]])
     win.record(tail, [None, w], [out[:, :64], out[:, 64:]])
