@@ -829,13 +829,30 @@ variable (P : Prog) (F : Family)
 /-- Gates one member of node `node` holds. -/
 def memberGates (node : Node) : Nat := if node.form == .prim then 1 else (P.defs[node.fn]!).gates
 
-def isInputNode (node : Node) : Bool := let c := P.defs[node.fn]!; c.prim && isInputId c.key
+/-- Per Definition, whether it holds a computed gate and whether an input gate: a primitive its one gate, a body what its
+nodes' members hold. One pass, callees before their callers. -/
+def gateKinds : Array (Bool × Bool) := P.defs.foldl (init := #[]) fun acc d =>
+  if d.prim then acc.push (if isInputId d.key then (false, true) else (true, false))
+  else acc.push (d.body.nodes.foldl (init := (false, false)) fun (c, i) node =>
+    if node.members == 0 then (c, i) else let (c', i') := acc[node.fn]!; (c || c', i || i'))
 
-/-- Whether plans `ps`, all applied to one activation of body `d`, tile its computed gates: as a partition (`exact`),
-every computed gate in exactly one set and no input gate in any, else as a cover, every computed gate in at least one.
-The first failure, body by body in node order and members in order, depth first. Memoised on `d` and `ps` as a
-multiset, so a Definition's test serves every activation and every member range of it. -/
-def tiles (exact : Bool) : Nat → Nat → Array Nat → StateT (Std.HashMap String (Option String)) V (Option String)
+/-- Per plan, whether one activation's sets hold any gate (a sub plan comes before every plan that descends into it). -/
+def planHolds : Array Bool := F.plans.foldl (init := #[]) fun acc pl =>
+  let body := (P.defs[pl.d]!).body
+  let g := fun (j : Nat) => memberGates P body.nodes[j]!
+  acc.push (pl.entries.any fun e => match e.kind with
+    | .descend s => total e.members > 0 && acc[s]!
+    | .zip ns => total e.members > 0 && ns.any (g · > 0)
+    | .table rows _ => (Array.range rows.size).any fun j => rows[j]!.isSome && body.nodes[j]!.members * g j > 0
+    | _ => total e.members > 0 && g e.j > 0)
+
+/-- Whether plans `ps`, all applied to one activation of body `d`, tile its gates: as a partition (`exact`), every
+computed gate in exactly one set and no input gate in any, else as a cover, every computed gate in at least one. The
+first failure, body by body in node order and members in order, depth first. A node's members are cut where an entry's
+member ranges start or end, and one member decides its segment. Memoised on `d` and `ps` as a multiset, so a
+Definition's test serves every activation and every member range of it. `K` is `gateKinds`, `H` is `planHolds`. -/
+def tiles (K : Array (Bool × Bool)) (H : Array Bool) (exact : Bool) :
+    Nat → Nat → Array Nat → StateT (Std.HashMap String (Option String)) V (Option String)
   | 0, _, _ => throw "fuel: a tiling test takes more steps than this verifier follows"
   | fuel + 1, d, ps => do
     let key := s!"{d}|{ps.qsort (· < ·)}"
@@ -844,39 +861,35 @@ def tiles (exact : Bool) : Nat → Nat → Array Nat → StateT (Std.HashMap Str
     let mut direct : Std.HashMap Nat (Array (Nat × Nat)) := {}
     let mut subs : Std.HashMap Nat (Array (Array (Nat × Nat) × Nat)) := {}
     for p in ps do
-      let e := F.plans[p]!
-      for x in e.entries do
+      for x in F.plans[p]!.entries do
         match x.kind with
-        | .descend s => subs := subs.insert x.j ((subs.getD x.j #[]).push (x.members, s))
+        | .descend s => if H[s]! then subs := subs.insert x.j ((subs.getD x.j #[]).push (x.members, s))
         | _ => for (j, rs) in x.direct body do direct := direct.insert j ((direct.getD j #[]) ++ rs)
     let mut out : Option String := none
     for j in [0:body.nodes.size] do
       if out.isSome then break
       let node := body.nodes[j]!
       let n := node.members
+      if memberGates P node == 0 then continue
+      let (computed, input) := K[node.fn]!
       let ds := direct.getD j #[]
       let ss := subs.getD j #[]
       let cuts := ((ds.foldl (fun a (x, y) => a.push x |>.push y) #[0, n]) ++
         ss.foldl (fun a (rs, _) => rs.foldl (fun a (x, y) => a.push x |>.push y) a) #[]).filter (· ≤ n)
       let cuts := (cuts.qsort (· < ·)).foldl (fun a x => if a.back? == some x then a else a.push x) #[]
-      let input := isInputNode P node
-      let empty := memberGates P node == 0
       for i in [0:cuts.size - 1] do
         let a := cuts[i]!
         if a ≥ cuts[i + 1]! then continue
-        let inR := fun (rs : Array (Nat × Nat)) => rs.any fun (x, y) => x ≤ a && a < y
-        let c := ds.foldl (fun c r => if r.1 ≤ a && a < r.2 then c + 1 else c) 0
-        let inner := ss.filterMap fun (rs, s) => if inR rs then some s else none
+        let c := ds.foldl (fun c r => if r.1 ≤ a && a < r.2 then c + 1 else c) (0 : Nat)
+        let inner := ss.filterMap fun (rs, s) => if rs.any (fun (x, y) => x ≤ a && a < y) then some s else none
         let at_ := s!"{(P.defs[d]!).key} node {j} member {a}"
-        if input then
-          if exact && (c > 0 || !inner.isEmpty) then out := some s!"input-held: {at_}"
-        else if empty then pure ()
-        else if c ≥ 2 || (exact && c ≥ 1 && !inner.isEmpty) then
-          if exact then out := some s!"overlap: {at_}"
-        else if c == 1 then pure ()
-        else if inner.isEmpty then out := some s!"gate-in-no-set: {at_}"
+        if exact && c ≥ 1 && input then out := some s!"input-held: {at_}"
+        else if exact && (c ≥ 2 || (c == 1 && !inner.isEmpty)) then out := some s!"overlap: {at_}"
+        else if c ≥ 1 then pure ()
+        else if inner.isEmpty then
+          if computed then out := some s!"gate-in-no-set: {at_}"
         else
-          let r ← tiles exact fuel node.fn inner
+          let r ← tiles K H exact fuel node.fn inner
           if r.isSome then out := r
         if out.isSome then break
     modify (·.insert key out)
@@ -891,7 +904,7 @@ def Entry.maxSet (body : Body) (e : Entry) (subMax : Nat) : Nat :=
   | .zip ns => if total e.members > 0 then ns.foldl (fun s j => s + g j) 0 else 0
   | .table rows l => (List.range l).foldl (fun m v => max m ((Array.range rows.size).foldl (fun s j =>
       if rows[j]! == some v then s + body.nodes[j]!.members * g j else s) 0)) 0
-  | .descend _ => subMax
+  | .descend _ => if total e.members > 0 then subMax else 0
 
 /-- All an entry's sets hold together, in gates, summed over its sets. -/
 def Entry.allGates (body : Body) (e : Entry) : Nat :=
@@ -949,7 +962,7 @@ def groups (byName : Bool) : V (Array (String × Nat)) := do
       let body := (P.defs[pl.d]!).body
       match e.kind with
       | .descend _ => pure ()
-      | .zip _ | .table _ _ => refuse "term" "group over sets of several nodes"
+      | .zip _ | .table _ _ => if e.count 0 > 0 then refuse "term" "group over sets of several nodes"
       | _ =>
         if e.count 0 == 0 then continue
         let callee := P.defs[body.nodes[e.j]!.fn]!
@@ -976,7 +989,7 @@ def check (Φ : Meaning) (P : Prog) (D : Desc) : V Verdict := do
       pure (gs.size, some (gs.foldl (fun m (_, w) => max m w) 0))
   let refused := fun (code : String) => (pure { accept := false, code, count } : V Verdict)
   if let some t := Φ.tiling then
-    match (tiles P F (t == .partition) Steps.FUEL P.root #[F.top]).run' {} with
+    match (tiles P F (gateKinds P) (planHolds P F) (t == .partition) Steps.FUEL P.root #[F.top]).run' {} with
     | .error e => throw e
     | .ok (some why) => return ← refused ((why.splitOn ":").head!)
     | .ok none => pure ()
