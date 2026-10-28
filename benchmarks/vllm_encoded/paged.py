@@ -2,7 +2,7 @@
 attention, the append of a step's new tokens, the gather of whole pages and a decode step's windows (`window`, what an
 attention that reads each request's window whole takes: the exact-int8 attention's).
 
-A layer's cache is vLLM's tensor ([blocks][KV heads][slots][K ‖ V] bf16, or the inner three in any order); `Layout`
+A layer's cache is vLLM's tensor ([blocks][KV heads][slots][K ‖ V] bf16, or the inner three in any order); `CacheShape`
 reads its physical strides. Codec indices use the registered store instead: after `store_base`, physical slot u and
 layer l are the `store-order/v0` token-layer block u · layers + l.
 
@@ -64,7 +64,7 @@ class PagedLib(KB.Lib):
 
 
 @dataclass(frozen=True)
-class Layout:
+class CacheShape:
     """A layer cache's shape in words: blocks, slots a block, strides between blocks, heads and slots, a block's words."""
     blocks: int
     bs: int
@@ -77,7 +77,7 @@ class Layout:
         return self.blocks * self.sb
 
 
-def layout(cache, kv_heads: int, wb: int, dims=(0, 1, 2)) -> Layout:
+def layout(cache, kv_heads: int, wb: int, dims=(0, 1, 2)) -> CacheShape:
     """cache's layout, its dims (block, head, slot) in `dims` and K ‖ V its last, contiguous; refuses any whose block is
     not contiguous (the gather copies whole blocks) or whose strides are not whole words."""
     es = cache.element_size()
@@ -93,7 +93,7 @@ def layout(cache, kv_heads: int, wb: int, dims=(0, 1, 2)) -> Layout:
     bs, hw = cache.shape[s], 4 * K.HEAD_DIM // wb
     if sb != kv_heads * bs * hw or sorted((sh, ss)) != sorted((hw, kv_heads * hw) if sh < ss else (bs * hw, hw)):
         raise ValueError(f"a block is not contiguous: {tuple(cache.shape)} {cache.stride()}")
-    return Layout(cache.shape[b], bs, sb, sh, ss)
+    return CacheShape(cache.shape[b], bs, sb, sh, ss)
 
 
 def stream(torch) -> int:
@@ -113,7 +113,7 @@ def offsets(torch, values: list[int], f: K.Field):
     return torch.frombuffer(raw, dtype=torch.int32).reshape(len(values), f.limbs).cuda()
 
 
-def attn(lib: PagedLib, torch, cache, lay: Layout, store_base: int, layers: int, layer: int, encoded: int, k: int,
+def attn(lib: PagedLib, torch, cache, lay: CacheShape, store_base: int, layers: int, layer: int, encoded: int, k: int,
          q, out, part, lens, bt, batch: int, splits: int, nrows: int | None = None, qrow=None, ck=None, cv=None,
          receipts=None, bj=None, plain=None) -> None:
     """Decode attention of batch sequences (lens [≥ batch] int32, bt [≥ batch][bstride] int32) over one layer: q and out
@@ -138,7 +138,7 @@ def attn(lib: PagedLib, torch, cache, lay: Layout, store_base: int, layers: int,
              0 if epoch is None else epoch.data_ptr(), _ptr(bj), _ptr(plain), stream(torch))
 
 
-def append(lib: PagedLib, torch, cache, lay: Layout, store_base: int, layers: int, layer: int, encoded: int, k: int,
+def append(lib: PagedLib, torch, cache, lay: CacheShape, store_base: int, layers: int, layer: int, encoded: int, k: int,
            key, val, slots, bj=None, plain=None) -> None:
     """Tokens key[i], val[i] ([tokens][KV heads · head_dim] bf16, any row stride) at slot slots[i] (int64; < 0 skipped),
     encoded under their slots' bound offsets bj (`offsets`, one a physical slot; None: the seed's key). plain (uint8,
@@ -170,7 +170,7 @@ def encode_table(torch, entries):
     return torch.tensor(rows, dtype=torch.int64).reshape(-1)
 
 
-def encode(lib: PagedLib, torch, tab, layers: int, rows: int, lay: Layout, k: int, s=None) -> None:
+def encode(lib: PagedLib, torch, tab, layers: int, rows: int, lay: CacheShape, k: int, s=None) -> None:
     """Deferred residency's encode on stream s (default current), once the append's coin has arrived: every layer's
     listed slots of tab (a device int64 tensor of `encode_table`'s) encoded in place under their offsets, a slot whose
     flag is clear left as it is, then every listed slot's flag cleared. Nothing may read those layers meanwhile."""
@@ -189,7 +189,7 @@ def rekey_table(torch, entries):
     return torch.tensor(rows, dtype=torch.int64).reshape(-1)
 
 
-def rekey(lib: PagedLib, torch, tab, layers: int, rows: int, lay: Layout, k: int, ctas: int = 0, s=None) -> None:
+def rekey(lib: PagedLib, torch, tab, layers: int, rows: int, lay: CacheShape, k: int, ctas: int = 0, s=None) -> None:
     """The lifetime cap's re-key on stream s (default current): every layer's listed slots of tab (a device int64
     tensor of `rekey_table`'s) decoded under their offsets and encoded under their new ones in place, a flagged
     (plaintext) slot left as it is, then the new offsets written into the layer's. Nothing may read the listed slots
@@ -199,13 +199,13 @@ def rekey(lib: PagedLib, torch, tab, layers: int, rows: int, lay: Layout, k: int
              stream(torch) if s is None else s)
 
 
-def append_multi(lib: PagedLib, torch, tab, layers: int, rows: int, lay: Layout, encoded: int, k: int, s=None) -> None:
+def append_multi(lib: PagedLib, torch, tab, layers: int, rows: int, lay: CacheShape, encoded: int, k: int, s=None) -> None:
     """Every layer's appends of tab (a device int64 tensor of `table`'s) in one launch on stream s (default current)."""
     lib.call("pg_append_multi", tab.data_ptr(), layers, rows, lay.bs, lay.sb, lay.sh, lay.ss, encoded, k,
              stream(torch) if s is None else s)
 
 
-def gather(lib: PagedLib, torch, cache, lay: Layout, store_base: int, layers: int, layer: int, encoded: int, k: int,
+def gather(lib: PagedLib, torch, cache, lay: CacheShape, store_base: int, layers: int, layer: int, encoded: int, k: int,
            blocks, out, receipts=None, bj=None, plain=None) -> None:
     """Blocks blocks[b] (int32) of the layer into out's block b, decoded (encoded, under bj and plain as `attn` takes
     them) or copied."""
@@ -222,7 +222,7 @@ def window_offsets(lib: PagedLib, torch, lens, batch: int, wo) -> None:
     lib.call("pg_window_offsets", lens.data_ptr(), batch, wo.data_ptr(), stream(torch))
 
 
-def window(lib: PagedLib, torch, cache, lay: Layout, store_base: int, layers: int, layer: int, encoded: int, k: int,
+def window(lib: PagedLib, torch, cache, lay: CacheShape, store_base: int, layers: int, layer: int, encoded: int, k: int,
            lens, bt, wo, batch: int, outk, outv, order: int = 0, bj=None, plain=None, ck=None, cv=None, qrow=None,
            ctas: int = 0) -> None:
     """One layer's decode windows (no receipts): request i's tokens 0 … lens[i] − 1 under its block-table row bt[i], K into

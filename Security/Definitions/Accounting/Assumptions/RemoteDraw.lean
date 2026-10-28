@@ -12,11 +12,11 @@ verifier's opening draw (`Accounting.Remote.Draw`), each a named `Prop` on a ses
   window's roots arrived (`RemoteAudit.verifyWindow`), and a receipt is correct when the row its root holds
   (`Receipts.held`, the plurality of what the receipt shows over the window's continuations, read only off what
   precedes the coin) is: the roots bind the receipts only up to a collision, which is `Refused`'s and the guarantees'
-  binding term (`Receipts.binding`), not this premise. The guarantees take it of the
-  session the prover plays at each fixed coin commitment (`Committed.view c`), the world after the junk-commitment
-  hybrid: the deployed prover holds a commitment to every coin from the start, and a window sized off that
-  commitment's bits is not `Live` (red team RD-12). What the commitment reveals is the guarantees' hiding term
-  (`Committed.hide`), not this premise.
+  binding term (`Receipts.binding`), not this premise. The guarantees take it of the session the prover plays: the
+  challenger sends each coin as it releases it and its commitment to the session's coins only after the prover's last
+  root, with the outcome (`coins.Released`, `audit.AuditRun.disclose`), so nothing the prover holds before window `t`'s
+  coin reads that coin. A prover that held the commitment from the start could size a window off its bits, and that
+  session is not `Live` (red team RD-12).
 * `Refused`: the verifier refuses a window one of whose opened receipts is wrong as presented
   (`RemoteAudit.checkOpening`): on an accepted session each receipt a window's draw opens is correct, or moved
   (`Receipts.Moved`: accepted at its root and rank with a row other than the one the root holds). The guarantees
@@ -38,8 +38,8 @@ variable {n m : ℕ} {s : Fin n → ℕ} {κ : ℕ} {X : Type}
 
 /-- **Live coins, as the verifier releases them**: two outcomes that agree on the other coins and on the earlier
 windows' openings coins give window `t` the same size and the same correct receipts, whatever its own openings coin and
-the later ones. The guarantees read it of `Committed.view c` at every commitment `c`, the prover's session once the
-commitment it holds is fixed apart from the coins. -/
+the later ones. The guarantees read it of the session the prover plays, which holds no coin commitment while it runs;
+the memory line over the prover's records reads it of `Committed.view c` at every commitment `c`. -/
 def Live (D : Session n m s κ X) : Prop :=
   ∀ t (ω ω' : Coins n κ X), ω.1 = ω'.1 → (∀ j, j < t → ω.2 j = ω'.2 j) →
     D.size t ω = D.size t ω' ∧ D.correct t ω = D.correct t ω'

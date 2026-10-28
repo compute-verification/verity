@@ -1040,7 +1040,7 @@ end Accounting.RateSketch
 
 namespace Accounting.Requirement
 
-variable {V : Type} [DecidableEq V] (W : Wiring V) (e : Execution V) (ℓ : Layout V)
+variable {V : Type} [DecidableEq V] (W : Wiring V) (e : Execution V) (ℓ : Store.Placement V)
 
 /-- Over a window of at most `k` steps at each of which the store holds `W`'s credited blocks with at most `N` resident
 blocks and the plan covers `W`'s reads in at most `N` blocks, the live bits the audit credits and the bits read from

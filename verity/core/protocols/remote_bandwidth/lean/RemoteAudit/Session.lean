@@ -1,7 +1,7 @@
 import RemoteAudit.Window
 
 /-!
-# A session's bookkeeping: `audit.py`'s `Session`
+# A session's bookkeeping: `audit.py`'s `AuditRun`
 
 The verifier's side of one session as a state machine over the events it sees, on its own clock (each event carries the
 clock's reading where `Session` reads it) and with its own coins (the 2W committed coins, window t's challenge at t and
