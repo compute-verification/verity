@@ -38,7 +38,7 @@ witness the reference prover hands part `s`'s session (`RefParts.wit` at the run
 of `sts` (`TablesSat`: each fits the first table's blocks, and its share of the witness's hidden values satisfies its
 model statement). Not proved in Lean: it is the gate-level completeness of V\*'s part circuits, which compute the inner
 verifier's checks. It is witnessed outside Lean by a satisfaction check of the honest witness against each part's
-circuit in the deployed V\* difftest (CAPLOWER's). Witness run: none passing yet; its run id or `art:` id goes here,
+circuit in the deployed V\* difftest. Witness run: none passing yet; its run id or `art:` id goes here,
 and in the lock's witnesses entry, when it passes. -/
 def HonestWitSatisfies (H : Msg → Msg) (IV : Claims.Verifier Coin) (b : Brings) (x : Msg) (w : Claims.Flock.Wit)
     (ω : Tape b) (r : Fin ((V IV b.st).k x) → Coin) : Prop :=

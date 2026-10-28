@@ -399,6 +399,8 @@ class H1Run:
     def tables(self) -> dict[int, dict[str, str | None]]:
         """Each call's table roots (hex; z None when the run has no exact Y for it), once the GPU has hashed them all."""
         TD.settle(self, wait=True)
+        if self.served is not None:
+            self.served.settle()
         return self._roots
 
     @property
@@ -617,7 +619,7 @@ class H1Run:
             z = int_mm(a, weight)
         call = self._call(self.step, w, a, s_a, weight, weight_scale, records, zy)
         if self.retain:
-            y = ZR.split(records, call.rows, call.n)[0][:m] if records is not None else numpy_of(z)
+            y = ZR.split(ZR.host(records), call.rows, call.n)[0][:m] if records is not None else numpy_of(z)
             self.retained.append((call.index, numpy_of(a), numpy_of(s_a), y))
         self._recorded = (call, z, None if records is None else (records, s_a, weight_scale))
         return call
