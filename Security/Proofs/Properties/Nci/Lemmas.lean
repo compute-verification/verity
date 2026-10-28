@@ -14,7 +14,7 @@ set_option linter.unnecessarySeqFocus false
 namespace NciCheck.Properties.SecurityProofs
 
 open Lean (Json)
-open Flock.Program (Prog)
+open Flock.Program (Prog GateTable)
 
 /-! ## Folds over a range in `Except` -/
 
@@ -176,10 +176,10 @@ theorem getElem!_push_lt {α : Type} [Inhabited α] (xs : Array α) (x : α) {i 
 theorem getElem!_push_size {α : Type} [Inhabited α] (xs : Array α) (x : α) : (xs.push x)[xs.size]! = x := by
   rw [getElem!_pos (xs.push x) xs.size (by simp), Array.getElem_push_eq]
 
-theorem circuitOf_ok (P : Prog) (c : Circuit) (h : circuitOf P = .ok c) :
+theorem circuitOf_ok (P : Prog) (c : GateTable) (h : circuitOf P = .ok c) :
     c.N = gates P ∧ c.isInput.size = gates P ∧ c.reads.size = gates P ∧ c.registered.size = gates P ∧
       ∀ g < gates P, gateOf P g = .ok (c.w[g]!, c.isInput[g]!, c.registered[g]!, c.reads[g]!) := by
-  refine foldlM_range_ok _ _ (fun n (c : Circuit) => c.w.size = n ∧ c.isInput.size = n ∧ c.reads.size = n ∧
+  refine foldlM_range_ok _ _ (fun n (c : GateTable) => c.w.size = n ∧ c.isInput.size = n ∧ c.reads.size = n ∧
     c.registered.size = n ∧ ∀ g < n, gateOf P g = .ok (c.w[g]!, c.isInput[g]!, c.registered[g]!, c.reads[g]!))
     ⟨rfl, rfl, rfl, rfl, by simp⟩ ?_ _ c h
   rintro n c c' ⟨hw, hi, hr, hq, hg⟩ hs
@@ -187,9 +187,9 @@ theorem circuitOf_ok (P : Prog) (c : Circuit) (h : circuitOf P = .ok c) :
   · simp [hx, Functor.map, Except.map] at hs
   · simp only [hx, Functor.map, Except.map, Except.ok.injEq] at hs
     subst hs
-    refine ⟨by simp [Circuit.push, hw], by simp [Circuit.push, hi], by simp [Circuit.push, hr],
-      by simp [Circuit.push, hq], fun g hg' => ?_⟩
-    simp only [Circuit.push]
+    refine ⟨by simp [GateTable.push, hw], by simp [GateTable.push, hi], by simp [GateTable.push, hr],
+      by simp [GateTable.push, hq], fun g hg' => ?_⟩
+    simp only [GateTable.push]
     rcases Nat.lt_succ_iff_lt_or_eq.1 hg' with hlt | rfl
     · rw [getElem!_push_lt _ _ (by omega), getElem!_push_lt _ _ (by omega), getElem!_push_lt _ _ (by omega),
         getElem!_push_lt _ _ (by omega)]
@@ -256,12 +256,12 @@ theorem foldlM_range_error_indep {β : Type} (f : β → ℕ → Except String �
   foldlM_range_error_inv f b (fun _ _ => True) trivial (fun _ _ _ _ _ => trivial) ok fault (fun c i _ => hf c i)
     (fun c i k _ => he c i k) n k
 
-theorem push_map_ok (P : Prog) (c : Circuit) (g : ℕ) :
+theorem push_map_ok (P : Prog) (c : GateTable) (g : ℕ) :
     (∃ c', (c.push <$> gateOf P g) = .ok c') ↔ GateOk P g := by
   rw [gateOk_iff]
   rcases gateOf P g with e | x <;> simp [Functor.map, Except.map]
 
-theorem push_map_error (P : Prog) (c : Circuit) (g : ℕ) (k : String) :
+theorem push_map_error (P : Prog) (c : GateTable) (g : ℕ) (k : String) :
     (c.push <$> gateOf P g) = .error k ↔ GateFault P g k := by
   rw [← gateOf_error]
   rcases gateOf P g with e | x <;> simp [Functor.map, Except.map]
@@ -274,7 +274,7 @@ theorem circuitOf_isOk (P : Prog) : (∃ c, circuitOf P = .ok c) ↔ ∀ g < gat
   foldlM_range_isOk_indep _ _ _ (push_map_ok P) _
 
 /-- What `circuitOf` read of gate `g`, from the decoder. -/
-theorem circuitOf_gate {P : Prog} {c : Circuit} (h : circuitOf P = .ok c) {g : ℕ} (hg : g < gates P) :
+theorem circuitOf_gate {P : Prog} {c : GateTable} (h : circuitOf P = .ok c) {g : ℕ} (hg : g < gates P) :
     ∃ p sc, P.gate g = .ok (p, c.reads[g]!, sc) ∧ (P.defs[p]!).ret = .value c.w[g]! ∧
       c.isInput[g]! = Flock.Program.isInputId (P.defs[p]!).key ∧
       (c.isInput[g]! = true → c.reads[g]! = #[]) ∧ ∀ a ∈ c.reads[g]!, a < g := by
@@ -283,7 +283,7 @@ theorem circuitOf_gate {P : Prog} {c : Circuit} (h : circuitOf P = .ok c) {g : �
   obtain ⟨hw, hi, -, ho⟩ := hx
   refine ⟨p, sc, ho ▸ hs, hw ▸ hr, hi, fun h' => ho ▸ hin (hi ▸ h'), ho ▸ hlt⟩
 
-theorem circuitOf_isInput {P : Prog} {c : Circuit} (h : circuitOf P = .ok c) {g : ℕ} (hg : g < gates P) :
+theorem circuitOf_isInput {P : Prog} {c : GateTable} (h : circuitOf P = .ok c) {g : ℕ} (hg : g < gates P) :
     c.isInput[g]! = true ↔ IsInput P g := by
   obtain ⟨p, sc, hs, -, hi, -, -⟩ := circuitOf_gate h hg
   constructor
@@ -299,7 +299,7 @@ theorem isRegisteredId_iff (id : String) :
     isRegisteredId id = true ↔ (Flock.Program.inputId? id).map (·.1) = some Flock.Program.REGISTRATION := by
   simp [isRegisteredId]
 
-theorem circuitOf_registered {P : Prog} {c : Circuit} (h : circuitOf P = .ok c) {g : ℕ} (hg : g < gates P) :
+theorem circuitOf_registered {P : Prog} {c : GateTable} (h : circuitOf P = .ok c) {g : ℕ} (hg : g < gates P) :
     c.registered[g]! = true ↔ IsRegistered P g := by
   obtain ⟨p, ops, w, ⟨⟨sc, hs⟩, -, -⟩, -, hx⟩ := (gateOf_ok P g _).1 ((circuitOf_ok P c h).2.2.2.2 g hg)
   simp only [Prod.mk.injEq] at hx
@@ -318,7 +318,7 @@ theorem circuitOf_registered {P : Prog} {c : Circuit} (h : circuitOf P = .ok c) 
 
 theorem natOf?_str (s : String) : natOf? (.str s) = none := rfl
 
-theorem thetaStep_ok (c : Circuit) (s s' : Std.HashSet ℕ) (t : Json) :
+theorem thetaStep_ok (c : GateTable) (s s' : Std.HashSet ℕ) (t : Json) :
     thetaStep c s t = .ok s' ↔ ∃ g, natOf? t = some g ∧ g < c.N ∧ c.isInput[g]! = true ∧ c.registered[g]! = true ∧
       g ∉ s ∧ s' = s.insert g := by
   unfold thetaStep
@@ -331,7 +331,7 @@ theorem thetaStep_ok (c : Circuit) (s s' : Std.HashSet ℕ) (t : Json) :
       simp [h1, h1', h2, h3, h4, Std.HashSet.contains_iff_mem, throw, throwThe, MonadExceptOf.throw,
         eq_comm (a := s')]
 
-theorem thetaStep_error (c : Circuit) (s : Std.HashSet ℕ) (t : Json) (k : String) :
+theorem thetaStep_error (c : GateTable) (s : Std.HashSet ℕ) (t : Json) (k : String) :
     thetaStep c s t = .error k ↔
       (k = "theta-unknown" ∧ ∀ g, natOf? t = some g → c.N ≤ g) ∨
       (k = "theta-not-input" ∧ ∃ g, natOf? t = some g ∧ g < c.N ∧ c.isInput[g]! = false) ∨
@@ -351,7 +351,7 @@ theorem thetaStep_error (c : Circuit) (s : Std.HashSet ℕ) (t : Json) (k : Stri
       exact ⟨Eq.symm, Eq.symm⟩
 
 /-- The set after entry `n`: the gates the entries up to `n` name. -/
-theorem thetaStep_mem (c : Circuit) (theta : Array Json) (n : ℕ) (s s' : Std.HashSet ℕ)
+theorem thetaStep_mem (c : GateTable) (theta : Array Json) (n : ℕ) (s s' : Std.HashSet ℕ)
     (hQ : ∀ g, g ∈ s ↔ ∃ t < n, natOf? theta[t]! = some g) (hs : thetaStep c s theta[n]! = .ok s') :
     ∀ g, g ∈ s' ↔ ∃ t < n + 1, natOf? theta[t]! = some g := by
   intro g
@@ -369,12 +369,12 @@ theorem thetaStep_mem (c : Circuit) (theta : Array Json) (n : ℕ) (s s' : Std.H
       exact Or.inl (Option.some.inj h)
 
 /-- The entries before `n` that name a gate, as a set. -/
-theorem thetaFold_mem (c : Circuit) (theta : Array Json) : ∀ n s,
+theorem thetaFold_mem (c : GateTable) (theta : Array Json) : ∀ n s,
     (List.range n).foldlM (fun s t => thetaStep c s theta[t]!) {} = .ok s →
       ∀ g, g ∈ s ↔ ∃ t < n, natOf? theta[t]! = some g :=
   foldlM_range_ok _ _ _ (by simp) (thetaStep_mem c theta)
 
-theorem thetaStep_isOk {P : Prog} {c : Circuit} (hc : circuitOf P = .ok c) (theta : Array Json) (t : ℕ)
+theorem thetaStep_isOk {P : Prog} {c : GateTable} (hc : circuitOf P = .ok c) (theta : Array Json) (t : ℕ)
     (s : Std.HashSet ℕ) (hs : ∀ g, g ∈ s ↔ ∃ t' < t, natOf? theta[t']! = some g) :
     (∃ s', thetaStep c s theta[t]! = .ok s') ↔ ThetaOk P theta t := by
   have hN := (circuitOf_ok P c hc).1
@@ -389,7 +389,7 @@ theorem thetaStep_isOk {P : Prog} {c : Circuit} (hc : circuitOf P = .ok c) (thet
     obtain ⟨t', ht', h⟩ := (hs g).1 hm
     exact hne t' ht' h
 
-theorem thetaStep_error' {P : Prog} {c : Circuit} (hc : circuitOf P = .ok c) (theta : Array Json) (t : ℕ)
+theorem thetaStep_error' {P : Prog} {c : GateTable} (hc : circuitOf P = .ok c) (theta : Array Json) (t : ℕ)
     (s : Std.HashSet ℕ) (hs : ∀ g, g ∈ s ↔ ∃ t' < t, natOf? theta[t']! = some g) (k : String) :
     thetaStep c s theta[t]! = .error k ↔ ThetaFault P theta t k := by
   have hN := (circuitOf_ok P c hc).1
@@ -412,13 +412,13 @@ theorem thetaStep_error' {P : Prog} {c : Circuit} (hc : circuitOf P = .ok c) (th
     · exact Or.inr (Or.inr (Or.inr ⟨rfl, g, hg, hlt, (circuitOf_isInput hc hlt).2 hin,
         (circuitOf_registered hc hlt).2 hreg, (hs g).2 hm⟩))
 
-theorem thetaFold_isOk {P : Prog} {c : Circuit} (hc : circuitOf P = .ok c) (theta : Array Json) :
+theorem thetaFold_isOk {P : Prog} {c : GateTable} (hc : circuitOf P = .ok c) (theta : Array Json) :
     (∃ s, (List.range theta.size).foldlM (fun s t => thetaStep c s theta[t]!) {} = .ok s) ↔
       ∀ t < theta.size, ThetaOk P theta t :=
   foldlM_range_isOk_inv _ _ (fun n s => ∀ g, g ∈ s ↔ ∃ t < n, natOf? theta[t]! = some g) (by simp)
     (thetaStep_mem c theta) _ (fun s t hQ => thetaStep_isOk hc theta t s hQ) _
 
-theorem thetaFold_error {P : Prog} {c : Circuit} (hc : circuitOf P = .ok c) (theta : Array Json) (k : String) :
+theorem thetaFold_error {P : Prog} {c : GateTable} (hc : circuitOf P = .ok c) (theta : Array Json) (k : String) :
     (List.range theta.size).foldlM (fun s t => thetaStep c s theta[t]!) {} = .error k ↔
       FirstFault (ThetaOk P theta) (ThetaFault P theta) theta.size k :=
   foldlM_range_error_inv _ _ (fun n s => ∀ g, g ∈ s ↔ ∃ t < n, natOf? theta[t]! = some g) (by simp)
@@ -430,7 +430,7 @@ theorem thetaFold_error {P : Prog} {c : Circuit} (hc : circuitOf P = .ok c) (the
 theorem isInputTag_iff (j : Json) : isInputTag j = true ↔ j = .str "input" := by
   cases j <;> simp [isInputTag]
 
-theorem ownerOf_ok (c : Circuit) (g : ℕ) (j : Json) (o : Option ℕ) :
+theorem ownerOf_ok (c : GateTable) (g : ℕ) (j : Json) (o : Option ℕ) :
     ownerOf c g j = .ok o ↔ o = natOf? j ∧
       ((j = .str "input" ∧ c.isInput[g]! = true) ∨ ((∃ u, natOf? j = some u) ∧ c.isInput[g]! = false)) := by
   unfold ownerOf
@@ -445,7 +445,7 @@ theorem ownerOf_ok (c : Circuit) (g : ℕ) (j : Json) (o : Option ℕ) :
       simp [hj, pure, Except.pure, bind, Except.bind, throw, throwThe, MonadExceptOf.throw] <;>
       exact ⟨Eq.symm, Eq.symm⟩
 
-theorem ownerOf_error (c : Circuit) (g : ℕ) (j : Json) (k : String) :
+theorem ownerOf_error (c : GateTable) (g : ℕ) (j : Json) (k : String) :
     ownerOf c g j = .error k ↔
       (k = "owner-entry" ∧ j ≠ .str "input" ∧ natOf? j = none) ∨
       (k = "input-in-iu" ∧ (∃ u, natOf? j = some u) ∧ c.isInput[g]! = true) ∨
@@ -473,29 +473,29 @@ theorem FirstFault_congr {ok ok' : ℕ → Prop} {fault fault' : ℕ → String 
     exact ⟨i, hi, fun i' hi' => (hok i' (by omega)).2 (ho i' hi'), (hf i hi).2 hk⟩
 
 /-- An owner step, as the gate's own condition read off the circuit. -/
-def OwnerOkC (c : Circuit) (owner : Array Json) (g : ℕ) : Prop :=
+def OwnerOkC (c : GateTable) (owner : Array Json) (g : ℕ) : Prop :=
   (owner[g]! = .str "input" ∧ c.isInput[g]! = true) ∨ ((∃ u, natOf? owner[g]! = some u) ∧ c.isInput[g]! = false)
 
-def OwnerFaultC (c : Circuit) (owner : Array Json) (g : ℕ) (k : String) : Prop :=
+def OwnerFaultC (c : GateTable) (owner : Array Json) (g : ℕ) (k : String) : Prop :=
   (k = "owner-entry" ∧ owner[g]! ≠ .str "input" ∧ natOf? owner[g]! = none) ∨
     (k = "input-in-iu" ∧ (∃ u, natOf? owner[g]! = some u) ∧ c.isInput[g]! = true) ∨
     (k = "gate-in-no-iu" ∧ owner[g]! = .str "input" ∧ c.isInput[g]! = false)
 
-theorem ownerOkC_iff {P : Prog} {c : Circuit} (hc : circuitOf P = .ok c) (owner : Array Json) {g : ℕ}
+theorem ownerOkC_iff {P : Prog} {c : GateTable} (hc : circuitOf P = .ok c) (owner : Array Json) {g : ℕ}
     (hg : g < gates P) : OwnerOkC c owner g ↔ OwnerOk P owner g := by
   have h := circuitOf_isInput hc hg
   unfold OwnerOkC OwnerOk
   rw [← h]
   simp
 
-theorem ownerFaultC_iff {P : Prog} {c : Circuit} (hc : circuitOf P = .ok c) (owner : Array Json) {g : ℕ}
+theorem ownerFaultC_iff {P : Prog} {c : GateTable} (hc : circuitOf P = .ok c) (owner : Array Json) {g : ℕ}
     (hg : g < gates P) (k : String) : OwnerFaultC c owner g k ↔ OwnerFault P owner g k := by
   have h := circuitOf_isInput hc hg
   unfold OwnerFaultC OwnerFault
   rw [← h]
   simp
 
-theorem push_ownerOf_ok (c : Circuit) (owner : Array Json) (own : Array (Option ℕ)) (g : ℕ) :
+theorem push_ownerOf_ok (c : GateTable) (owner : Array Json) (own : Array (Option ℕ)) (g : ℕ) :
     (∃ own', (own.push <$> ownerOf c g owner[g]!) = .ok own') ↔ OwnerOkC c owner g := by
   rcases h : ownerOf c g owner[g]! with e | o
   · simp only [Functor.map, Except.map, reduceCtorEq, exists_false, false_iff]
@@ -508,13 +508,13 @@ theorem push_ownerOf_ok (c : Circuit) (owner : Array Json) (own : Array (Option 
   · simp only [Functor.map, Except.map, Except.ok.injEq, exists_eq', true_iff]
     exact ((ownerOf_ok c g _ o).1 h).2
 
-theorem push_ownerOf_error (c : Circuit) (owner : Array Json) (own : Array (Option ℕ)) (g : ℕ) (k : String) :
+theorem push_ownerOf_error (c : GateTable) (owner : Array Json) (own : Array (Option ℕ)) (g : ℕ) (k : String) :
     (own.push <$> ownerOf c g owner[g]!) = .error k ↔ OwnerFaultC c owner g k := by
   rw [OwnerFaultC, ← ownerOf_error]
   rcases ownerOf c g owner[g]! with e | o <;> simp [Functor.map, Except.map]
 
 /-- The owner fold: one entry per gate so far, gate `g`'s the IU its owner names. -/
-theorem ownerFold_ok (c : Circuit) (owner : Array Json) : ∀ n own,
+theorem ownerFold_ok (c : GateTable) (owner : Array Json) : ∀ n own,
     (List.range n).foldlM (fun own g => own.push <$> ownerOf c g owner[g]!) #[] = .ok own →
       own.size = n ∧ ∀ g < n, own[g]! = natOf? owner[g]! := by
   refine foldlM_range_ok _ _ _ ⟨rfl, by simp⟩ ?_
@@ -532,13 +532,13 @@ theorem ownerFold_ok (c : Circuit) (owner : Array Json) : ∀ n own,
       rw [e1]
       exact ((ownerOf_ok c _ _ o).1 hx).1
 
-theorem ownerFold_isOk {P : Prog} {c : Circuit} (hc : circuitOf P = .ok c) (owner : Array Json) :
+theorem ownerFold_isOk {P : Prog} {c : GateTable} (hc : circuitOf P = .ok c) (owner : Array Json) :
     (∃ own, (List.range c.N).foldlM (fun own g => own.push <$> ownerOf c g owner[g]!) #[] = .ok own) ↔
       ∀ g < gates P, OwnerOk P owner g := by
   rw [foldlM_range_isOk_indep _ _ _ (push_ownerOf_ok c owner) c.N, (circuitOf_ok P c hc).1]
   exact forall₂_congr fun g hg => ownerOkC_iff hc owner hg
 
-theorem ownerFold_error {P : Prog} {c : Circuit} (hc : circuitOf P = .ok c) (owner : Array Json) (k : String) :
+theorem ownerFold_error {P : Prog} {c : GateTable} (hc : circuitOf P = .ok c) (owner : Array Json) (k : String) :
     (List.range c.N).foldlM (fun own g => own.push <$> ownerOf c g owner[g]!) #[] = .error k ↔
       FirstFault (OwnerOk P owner) (OwnerFault P owner) (gates P) k := by
   rw [foldlM_range_error_indep _ _ _ _ (push_ownerOf_ok c owner) (push_ownerOf_error c owner) c.N k,
@@ -649,15 +649,15 @@ theorem iuCheck_iff (owner : Array Json) (own : Array (Option ℕ)) (hs : own.si
 /-! ## The division -/
 
 /-- θ's fold. -/
-abbrev thetaFold (c : Circuit) (theta : Array Json) : Except String (Std.HashSet ℕ) :=
+abbrev thetaFold (c : GateTable) (theta : Array Json) : Except String (Std.HashSet ℕ) :=
   (List.range theta.size).foldlM (fun s t => thetaStep c s theta[t]!) {}
 
 /-- The owners' fold. -/
-abbrev ownerFold (c : Circuit) (owner : Array Json) : Except String (Array (Option ℕ)) :=
+abbrev ownerFold (c : GateTable) (owner : Array Json) : Except String (Array (Option ℕ)) :=
   (List.range c.N).foldlM (fun own g => own.push <$> ownerOf c g owner[g]!) #[]
 
 open Classical in
-theorem divisionOf_eq (c : Circuit) (theta owner : Array Json) :
+theorem divisionOf_eq (c : GateTable) (theta owner : Array Json) :
     divisionOf c theta owner = match thetaFold c theta with
       | .error e => .error e
       | .ok mask => if owner.size ≠ c.N then .error "owner-length" else match ownerFold c owner with
@@ -676,7 +676,7 @@ theorem divisionOf_eq (c : Circuit) (theta owner : Array Json) :
     · simp [h2, bind, Except.bind, throw, throwThe, MonadExceptOf.throw]
 
 /-- What a checked division holds: θ as the set its entries name, and per gate the IU its owner names. -/
-theorem divisionOf_ok {P : Prog} {c : Circuit} (hc : circuitOf P = .ok c) {theta owner : Array Json} {d : Division}
+theorem divisionOf_ok {P : Prog} {c : GateTable} (hc : circuitOf P = .ok c) {theta owner : Array Json} {d : Division}
     (h : divisionOf c theta owner = .ok d) :
     (∀ t < theta.size, ThetaOk P theta t) ∧ (∀ g, g ∈ d.theta ↔ ∃ t < theta.size, natOf? theta[t]! = some g) ∧
       owner.size = gates P ∧ (∀ g < gates P, OwnerOk P owner g) ∧ d.owner.size = gates P ∧
@@ -700,7 +700,7 @@ theorem divisionOf_ok {P : Prog} {c : Circuit} (hc : circuitOf P = .ok c) {theta
   · rw [ite_eq_left h2] at h
     cases h
 
-theorem divisionOf_isOk {P : Prog} {c : Circuit} (hc : circuitOf P = .ok c) (theta owner : Array Json) :
+theorem divisionOf_isOk {P : Prog} {c : GateTable} (hc : circuitOf P = .ok c) (theta owner : Array Json) :
     (∃ d, divisionOf c theta owner = .ok d) ↔ (∀ t < theta.size, ThetaOk P theta t) ∧ owner.size = gates P ∧
       (∀ g < gates P, OwnerOk P owner g) ∧ ¬ EmptyIU owner := by
   constructor
@@ -722,7 +722,7 @@ theorem divisionOf_isOk {P : Prog} {c : Circuit} (hc : circuitOf P = .ok c) (the
     rw [ite_eq_left (by rw [hN, ← h2]; exact hi)]
     exact ⟨_, rfl⟩
 
-theorem divisionOf_error {P : Prog} {c : Circuit} (hc : circuitOf P = .ok c) (theta owner : Array Json)
+theorem divisionOf_error {P : Prog} {c : GateTable} (hc : circuitOf P = .ok c) (theta owner : Array Json)
     (k : String) : divisionOf c theta owner = .error k ↔
       FirstFault (ThetaOk P theta) (ThetaFault P theta) theta.size k ∨
         (∀ t < theta.size, ThetaOk P theta t) ∧
@@ -799,17 +799,17 @@ theorem readsFold_mem (reads : Array ℕ) (own : Array (Option ℕ)) (u : ℕ) (
       exact ⟨j, hj, by rw [getElem!_pos reads j hj], hne⟩
 
 /-- One step of `tally`. -/
-def tallyStep (c : Circuit) (d : Division) (acc : Array (ℕ × Std.HashSet ℕ)) (g : ℕ) : Array (ℕ × Std.HashSet ℕ) :=
+def tallyStep (c : GateTable) (d : Division) (acc : Array (ℕ × Std.HashSet ℕ)) (g : ℕ) : Array (ℕ × Std.HashSet ℕ) :=
   match d.owner[g]! with
   | some u => acc.modify u fun (s, into) =>
       (s + 1, c.reads[g]!.foldl (fun into a => if d.owner[a]! = some u then into else into.insert a) into)
   | none => acc
 
-theorem tally_eq (c : Circuit) (d : Division) :
+theorem tally_eq (c : GateTable) (d : Division) :
     tally c d = (List.range c.N).foldl (tallyStep c d) (Array.replicate d.n (0, {})) := rfl
 
 /-- `tally`'s first `m` steps: per IU, its gates so far and the gates outside it they read. -/
-theorem tally_inv (c : Circuit) (d : Division) : ∀ m,
+theorem tally_inv (c : GateTable) (d : Division) : ∀ m,
     let T := (List.range m).foldl (tallyStep c d) (Array.replicate d.n (0, {}))
     T.size = d.n ∧ ∀ u < d.n, T[u]!.1 = ((Finset.range m).filter fun g => d.owner[g]! = some u).card ∧
       ∀ x, x ∈ T[u]!.2 ↔ ∃ g < m, d.owner[g]! = some u ∧ x ∈ c.reads[g]! ∧ d.owner[x]! ≠ some u
@@ -869,7 +869,7 @@ theorem tally_inv (c : Circuit) (d : Division) : ∀ m,
             · exact ⟨g, hg, h1, h⟩
             · rw [ho] at h1; exact absurd (Option.some.inj h1) hvu
 
-theorem tally_spec (c : Circuit) (d : Division) :
+theorem tally_spec (c : GateTable) (d : Division) :
     (tally c d).size = d.n ∧ ∀ u < d.n,
       (tally c d)[u]!.1 = ((Finset.range c.N).filter fun g => d.owner[g]! = some u).card ∧
       ∀ x, x ∈ (tally c d)[u]!.2 ↔ ∃ g < c.N, d.owner[g]! = some u ∧ x ∈ c.reads[g]! ∧ d.owner[x]! ≠ some u := by
@@ -901,7 +901,7 @@ theorem hashSet_fold_sum {N : ℕ} (S : Std.HashSet ℕ) (F : Finset (Fin N)) (h
 /-! ## The check's arrays are the definition's circuit, baseline and partition -/
 
 /-- What `LaysOut` and `circuitOf` together say of gate `g`: the same width, input flag and reads. -/
-theorem laysOut_gate {P : Prog} {c : Circuit} (hc : circuitOf P = .ok c) {D : Verity.Circuit} (hL : LaysOut P D)
+theorem laysOut_gate {P : Prog} {c : GateTable} (hc : circuitOf P = .ok c) {D : Verity.Circuit} (hL : LaysOut P D)
     (g : Fin D.N) : D.w g = c.w[g.val]! ∧ D.isInput g = c.isInput[g.val]! ∧
       ∀ a : Fin D.N, a ∈ D.reads g ↔ a.val ∈ c.reads[g.val]! := by
   obtain ⟨p, ops, sc, hs, hr, hi, hreads⟩ := hL.2 g
@@ -944,7 +944,7 @@ theorem card_filter_fin (N : ℕ) (p : ℕ → Prop) [DecidablePred p] :
 
 /-- The setting of a verdict: the Program's circuit `c`, the checked division `dv`, a declaration `d` the Program lays
 out with the baseline θ names, and a partition `U` that the owners are. -/
-structure Setting (P : Prog) (theta owner : Array Json) (c : Circuit) (dv : Division) (d : Verity.Declaration)
+structure Setting (P : Prog) (theta owner : Array Json) (c : GateTable) (dv : Division) (d : Verity.Declaration)
     (n : ℕ) (U : Verity.Partition d.D n) : Prop where
   hc : circuitOf P = .ok c
   hd : divisionOf c theta owner = .ok dv
@@ -954,7 +954,7 @@ structure Setting (P : Prog) (theta owner : Array Json) (c : Circuit) (dv : Divi
 
 namespace Setting
 
-variable {P : Prog} {theta owner : Array Json} {c : Circuit} {dv : Division} {d : Verity.Declaration} {n : ℕ}
+variable {P : Prog} {theta owner : Array Json} {c : GateTable} {dv : Division} {d : Verity.Declaration} {n : ℕ}
   {U : Verity.Partition d.D n} (S : Setting P theta owner c dv d n U)
 include S
 
@@ -1194,7 +1194,7 @@ theorem parse_error (j : Json) (k : String) : parse j = .error k ↔
 
 /-- The circuit the Program lays out, built from `circuitOf`'s arrays: no outputs and every operation `0`, which
 `LaysOut` leaves free. -/
-def circuitFrom {P : Prog} {c : Circuit} (hc : circuitOf P = .ok c) : Verity.Circuit where
+def circuitFrom {P : Prog} {c : GateTable} (hc : circuitOf P = .ok c) : Verity.Circuit where
   N := c.N
   w g := c.w[g.val]!
   isInput g := c.isInput[g.val]!
@@ -1212,7 +1212,7 @@ def circuitFrom {P : Prog} {c : Circuit} (hc : circuitOf P = .ok c) : Verity.Cir
   op_congr _ _ _ _ := rfl
   outputs := ∅
 
-theorem laysOut_circuitFrom {P : Prog} {c : Circuit} (hc : circuitOf P = .ok c) : LaysOut P (circuitFrom hc) := by
+theorem laysOut_circuitFrom {P : Prog} {c : GateTable} (hc : circuitOf P = .ok c) : LaysOut P (circuitFrom hc) := by
   refine ⟨(circuitOf_ok P c hc).1, fun g => ?_⟩
   have hg : g.val < gates P := (circuitOf_ok P c hc).1 ▸ g.isLt
   obtain ⟨p, sc, hs, hr, hi, -, -⟩ := circuitOf_gate hc hg
@@ -1220,7 +1220,7 @@ theorem laysOut_circuitFrom {P : Prog} {c : Circuit} (hc : circuitOf P = .ok c) 
     ⟨fun h => (Finset.mem_filter.1 h).2, fun h => Finset.mem_filter.2 ⟨Finset.mem_univ _, h⟩⟩⟩
 
 /-- θ as the entries name it is a set of input gates of every circuit the Program lays out. -/
-theorem theta_inputs {P : Prog} {c : Circuit} (hc : circuitOf P = .ok c) {theta owner : Array Json}
+theorem theta_inputs {P : Prog} {c : GateTable} (hc : circuitOf P = .ok c) {theta owner : Array Json}
     {dv : Division} (hd : divisionOf c theta owner = .ok dv) {D : Verity.Circuit} (hL : LaysOut P D) :
     ∀ g : Fin D.N, (∃ t ∈ theta, natOf? t = some g.val) → D.isInput g = true := by
   intro g hg
@@ -1232,7 +1232,7 @@ theorem theta_inputs {P : Prog} {c : Circuit} (hc : circuitOf P = .ok c) {theta 
   exact (circuitOf_isInput hc (hL.1 ▸ g.isLt)).2 hin
 
 /-- The partition the owners are, of every circuit the Program lays out. -/
-theorem exists_partition {P : Prog} {c : Circuit} (hc : circuitOf P = .ok c) {theta owner : Array Json}
+theorem exists_partition {P : Prog} {c : GateTable} (hc : circuitOf P = .ok c) {theta owner : Array Json}
     {dv : Division} (hd : divisionOf c theta owner = .ok dv) {D : Verity.Circuit} (hL : LaysOut P D) :
     ∃ U : Verity.Partition D dv.n, Divides owner U := by
   obtain ⟨-, -, hsz, hok, hos, ho, hn, hne⟩ := divisionOf_ok hc hd
