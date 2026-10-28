@@ -1,4 +1,4 @@
-"""`b1`'s `RMSNormFusedCudaAdd_v1` parts and `RMSNormFusedCudaTail_v1`, wired as a window wires them (part j's x the norm's x
+"""`b1_norm_split`'s `RMSNormFusedCudaAdd_v1` parts and `RMSNormFusedCudaTail_v1`, wired as a window wires them (part j's x the norm's x
 on [j·C, (j+1)·C), its res the whole residual row, the tail reading the parts' r in order), return `RMSNormFusedCuda_v2`'s
 two outputs word for word: on Gaussian rows at three scales, on uniformly random words (NaN, ±inf, ±0 and subnormals among
 them), and on rows whose residual add, squares or variance overflow, underflow or cancel. Their gates are v2's, and at
@@ -15,6 +15,7 @@ import pytest
 from verity.ml.circuits.defs import REGISTRY, bind
 from verity.ml.circuits.evaluation import evaluate
 from verity.ml.definitions.registry import b1
+from verity.ml.definitions.registry import b1_norm_split as NS
 from verity.ml.windows import interface as IF
 
 #: (N, EPS, C): the norm after Llama-3.2-1B's down_proj in its 8 parts, and whole as one; 18 warps of one stride in 9 parts;
@@ -66,7 +67,7 @@ def _rows(rng, N: int) -> list[tuple[str, np.ndarray, np.ndarray, np.ndarray]]:
 
 
 def _units(N: int, EPS: float, C: int) -> tuple[list, object]:
-    return [bind(b1.RMSNormFusedCudaAdd, N=N, C=C, AT=j) for j in range(N // C)], bind(b1.RMSNormFusedCudaTail, N=N, EPS=EPS)
+    return [bind(NS.RMSNormFusedCudaAdd, N=N, C=C, AT=j) for j in range(N // C)], bind(NS.RMSNormFusedCudaTail, N=N, EPS=EPS)
 
 
 def _split(N: int, EPS: float, C: int, x: np.ndarray, res: np.ndarray, w: np.ndarray) -> list[int]:
@@ -139,4 +140,4 @@ def test_the_catalogs_count_holds_after_these_evaluations_in_one_process():
                                 {"N": 2048, "C": 0, "AT": 0}])
 def test_an_add_part_off_the_residual_row_is_refused_by_name(kw):
     with pytest.raises(ValueError, match=f"part AT={kw['AT']} of C={kw['C']} elements is not one of the N / C whole parts"):
-        bind(b1.RMSNormFusedCudaAdd, **kw)
+        bind(NS.RMSNormFusedCudaAdd, **kw)
