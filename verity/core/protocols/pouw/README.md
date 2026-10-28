@@ -15,8 +15,10 @@ one-stage audit and PoUW's period check, `PouwCheck.Period.protocol` (`verity/po
 (`Core.Remote.components` in `verity/core/protocols/remote/CoreRemote.lean`, id `verity/remote/v0`). It accepts only
 when both components accept their own cases, its commitment binds both components' commitments, and every window of the
 period names the one-stage audit's window record as its Commit record; either one's rejection rejects it
-(`Core.Composition.sameB`, `verity/core/protocols/composition/README.md`). PoUW's half of the remote demo has no
-runner yet: the remote demo, `verity example vllm`, runs the sampled-proofs half. The remote protocol's front door is
+(`Core.Composition.sameB`, `verity/core/protocols/composition/README.md`). In the remote demo, the vLLM demo
+(`verity example vllm`), PoUW runs on the served model as H1, under the challenger's development key, so its verdict
+credits nothing, and an H1 commitment's served execution blocks aren't yet a `verity/pouw/v1` case. The remote
+protocol's front door is
 `verity/core/protocols/remote/`; PoUW is also a component of the onsite protocol (`verity/core/protocols/onsite`).
 
 ## What runs
