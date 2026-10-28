@@ -7,19 +7,29 @@ leaf count. The CPU twin (`host_commit`, the kernels' functions under g++) runs 
 tests need CUDA and nvcc and skip elsewhere: there, rows go in several chunks and a tree wide enough for a launch a level,
 `commit` takes the GPU under ``VERITY_H1_REGISTER=gpu`` (and by default), and a small served H1 window registers the same
 entries, digest and manifest rows on either path, and the same again, with the same receipts, served from the device
-with its z/y records hashed where the arm wrote them."""
+with its z/y records hashed where the arm wrote them.
+
+A call's records are its call z table's rows too: `device_hash`'s ``also`` (`zy_commit.cu`, and `host_zy` its CPU twin)
+commits both from one read of each record, held to `hiding_rows`' root and the call tables' twin for the z table and to
+the NumPy path's strings and levels for the value, over 1 to 8 segments a record and trees a launch a level; a window
+served on the device with each z table committed beside its ``zy@<c>`` commits what it commits with each hashed apart:
+entries, digest, manifest rows, the values' strings, levels and paths, and receipts."""
 from __future__ import annotations
 
+import hashlib
 import shutil
 
 import numpy as np
 import pytest
 
 from verity.core.protocols.pouw import core_check as CC
-from verity.core.protocols.pouw.audit import hm96_salt
+from verity.core.protocols.pouw.audit import HM96, hm96_salt, rows_domain
+from verity.core.protocols.pouw.protocol import tagged
 from verity.core.protocols.sampled_proofs.one_stage import registered as G
 from verity_vllm.protocols.pouw.h1 import registered as NR
 from verity_vllm.protocols.pouw.h1 import registered_device as D
+from verity_vllm.protocols.pouw.h1 import requests as RQ
+from verity_vllm.protocols.pouw.h1 import tables_device as TD
 
 PROGRAM, WINDOW = "ab" * 64, "cd" * 64
 KEY = bytes(range(32))
@@ -69,6 +79,45 @@ def test_the_cpu_twin_is_cores_commit_with_given_salts_and_unaligned_rows():
         given = b"".join(bytes([j + 1]) * 192 for j in range(n))
         ref = _core(words, 0, given, window=WINDOW)
         assert D.host_commit(words, KEY, 0, given, ref.domain.domain_id) == (ref.bcs, ref.levels)
+
+
+#: (records, bytes a record, call): a z/y record's 6 KiB, 1 to 8 segments a record, call z nonces past 2^32
+ZY = [(1, 6144, 0), (2, 6144, 3), (5, 6144, (1 << 20) + 1), (3, 1024, 7), (4, 2048, 9), (3, 3072, 2), (2, 8192, 5),
+      (9, 7168, 4)]
+
+
+def _zy(n: int, rb: int, owner: int, python: bool = True):
+    """n random records of rb bytes as the value's words, the call z table's ``(domain id, nonce)`` and root (`hiding_rows`'
+    with ``python``, else the call tables' twin's), and the value's nonce, domain id and NumPy strings and levels."""
+    records = np.random.default_rng(n * 31 + rb).integers(0, 256, (n, rb), dtype=np.uint8)
+    binding = tagged(RQ.TABLE_TAGS["z"], hashlib.sha512(b"salt").digest(), owner)
+    call = (rows_domain(binding, owner, n, HM96).domain_id, RQ.TABLES_NONCE + 3 * owner + RQ.TABLE_NONCES["z"])
+    root = (RQ.hiding_rows(binding, owner, [r.tobytes() for r in records], KEY, call[1]).commitment.root if python
+            else TD.host_roots([(*call, *TD.record_rows(records))], KEY)[0])
+    nonce = (1 << 42) + 2 * owner + 1
+    want, did = _numpy(records.view("<u2"), nonce, window=WINDOW)
+    return records, call, root, nonce, did, want
+
+
+@needs_cxx
+@pytest.mark.parametrize("n,rb,owner", ZY)
+def test_the_cpu_twin_commits_a_calls_z_table_and_its_value_from_one_read(n, rb, owner):
+    """`host_zy`: the call z table's root is `hiding_rows`' and the call tables' twin's, and the value's strings and levels
+    the NumPy path's, from the same records."""
+    records, call, root, nonce, did, want = _zy(n, rb, owner)
+    assert TD.host_roots([(*call, *TD.record_rows(records))], KEY)[0] == root
+    assert D.host_zy(records.view("<u2"), KEY, nonce, did, call) == (root, *want)
+
+
+def test_both_tables_from_one_read_refuse_what_they_cant_commit(monkeypatch):
+    """Records of no whole segments, past 8 segments, or none; and ``also`` off the GPU path."""
+    for n, rb in ((0, 6144), (1, 1000), (1, 9216), (1, 0), (D.MAX_ROWS + 1, 1024)):
+        assert not D.zy_fits(n, rb)
+        with pytest.raises(ValueError):
+            D.zy_args(n, rb, KEY, (bytes(64), 0), (bytes(64), 0))
+    monkeypatch.setattr(NR, "MODE", "numpy")
+    with pytest.raises(ValueError, match="also"):
+        NR.commit(PROGRAM, "h1/v", _words(2, 512), KEY, 0, later=True, also=(bytes(64), 0), window=WINDOW)
 
 
 #: (context, first position, salts): a window's open root as `Served` has it, short and empty contexts, positions past 2^32
@@ -182,6 +231,59 @@ def test_a_public_table_hashed_on_the_device_derives_its_salts_and_reads_rows_bu
     if n <= 40:
         core = _core(words, 0, _public(context, first, n), window=WINDOW)
         assert (got.root, got.bcs, got.levels) == (core.root, core.bcs, core.levels)
+
+
+@pytest.mark.parametrize("n,rb,owner", [*ZY, (2049, 1024, 6), (5000, 6144, 1)])
+def test_the_device_commits_a_calls_z_table_beside_its_value_from_one_read(n, rb, owner):
+    """`device_hash` with ``also`` over records on the device: the call z table's root is `hiding_rows`' (the call tables'
+    twin's for the wide trees, whose lower levels are a launch each), and the value's strings and levels the NumPy path's
+    and those `device_hash` gives it alone; the call tables' kernels give that root from the same records."""
+    torch = _gpu()
+    records, call, root, nonce, did, want = _zy(n, rb, owner, python=n < 1000)
+    on = torch.from_numpy(records).cuda()
+    got = D.device_hash(on.view(torch.uint16), KEY, nonce, None, did, also=call)
+    assert (got.also(), *got.result()) == (root, *want)
+    assert D.device_hash(on.view(torch.uint16), KEY, nonce, None, did).result() == want
+    assert TD.device_roots([(*call, *TD.record_rows(on))], KEY) == [root]
+    with pytest.raises(ValueError, match="also"):
+        D.device_hash(records.view("<u2"), KEY, nonce, None, did, also=call)
+
+
+def test_a_window_served_on_the_device_commits_each_z_table_beside_its_value(monkeypatch):
+    """The window served from the device (as above, with receipts), each served call's z table committed by its
+    ``zy@<c>``'s hash (`pouw_h1_tables_device.take_z`): every entry, the served digest, each call's manifest row (its z
+    root among them), each z value's strings, levels and paths, each receipt and the calls' root are those of the same
+    window with each table hashing its own records."""
+    torch = _gpu()
+    from tests.protocols import test_pouw_h1_served as T
+
+    taken, take = [], TD.take_z
+
+    def took(run, call, words):
+        got = take(run, call, words)
+        if got is not None:
+            taken.append(call.index)
+        return got
+
+    monkeypatch.setattr(TD, "take_z", took)
+    monkeypatch.setattr(NR, "MODE", "gpu")
+
+    def window(fuse):
+        monkeypatch.setattr(TD, "FUSE", fuse)
+        torch.manual_seed(0)
+        weights, made = T._period(T._weights()), T._Prepared()
+        run, _ws, _got = T._window(T.W1, weights=weights, served=2, receipts=made, device="cuda")
+        assert not run.served.refused, run.served.refused
+        zy = {v: (r.root, r.bcs, r.levels, [r.path(p) for p in range(r.leaves)])
+              for v, r in run.served.registered.items() if "zy@" in v}
+        return run, (run.served.entries(), run.served.digest(), [run.tables[c.index] for c in run.calls], zy,
+                     {c: r.tobytes() for c, r in made.items()}, run.calls_root())
+
+    run, got = window(True)
+    fused = list(taken)
+    _run, want = window(False)
+    assert got == want and got[3] and all(t["z"] for t in got[2])
+    assert fused == [c.index for c in run.calls if c.m] and len(taken) == len(fused) and fused
 
 
 def test_auto_takes_the_gpu_where_it_runs(monkeypatch):
