@@ -3,7 +3,14 @@ You are <your name>, a worker of Verity's compute-research lane (coordinator bc-
 REFRAME (22:25Z; Daniel 3:16 PM PDT, after his 3-pager, https://app.notion.com/p/3e6399515d9e80bb86a6fea6920829ec). This block overrides the GOAL's δ, ε and n below.
 - **The period is enormous.** It is one year of the world's inference: about 2×10^16 requests of DeepSeek-V4-Pro (49B active), about 9×10^19 tokens and 8.8×10^30 forward FLOP (estimates from the 3-pager). On the demo's window that's n ≥ 10^12 windows, so headline everything at n → ∞. n = 1 is retired as a headline; keep it in a table if you have it.
 - **DECIDED (Daniel, 3:32 PM PDT; supersedes 3:25 PM's 10^-4): at least 99% of the committed work accounted for, at δ = 2^-40 per period.** "The core thing is lower bounding." Drop the absolute target (b) and δ = 1%. If your rerun already has them, keep them in a side table.
-- **"Accounted", defined:** A = coverage × (floor/G) × (1 − ε_skip) ≥ 0.99.
+- **"Accounted", defined in the proved theorem's terms (22:58Z; supersedes the three-factor form below, which left a term out, per GD-NOISE):** A = coverage × (1 − ε_A) ≥ 0.99. Here ε_A is `WorkSoundNoFold`'s ε, `epsWorkSound` + Ξ/C (Security/Definitions/Pouw/Dither.lean:384):
+  - **(H − pub_mm − pub_sha)/H:** the round's honest work that nothing forces. It is the floor's gap (floor/G < 1), plus the coin expansion, operand formation (X, a′) and answers. For fresh-U, coins and operands alone are 12% at T 8,192 and 29% at T 512.
+  - **ln(1/δ)/(ηC):** amortizes over the period.
+  - **βK/C:** egress, which needs a network certifier.
+  - **Ξ/C:** the extractor's walk.
+
+  Hashing is in pub_sha, so the theorem counts it as accounted work; say so beside A. Report every term.
+- (Superseded) three-factor form: A = coverage × (floor/G) × (1 − ε_skip).
   - **coverage:** the nominal MACs of the committed computation in credited calls. Main's D6 has 96–98%, with QKᵀ served plain. Report the non-matmul share beside it.
   - **floor/G:** the forced share of a credited call, its public best over its honest MACs, which SAK(matmul) takes as tight. Main's default t = 8 is G/2 (GD-BITS). Only t = 3 with one π a segment holds G, and that's a new instance.
   - **ε_skip:** `WorkSoundNoFold`'s ε, which is (ε_S + ε_net)(1 + W_ans/W_reg) in Dither's PROTOCOL. Sampling's ε_S is cheap: at 1% it takes about 2,800 draws a period. ε_net = β·E/W_reg needs the network certifier's count of exchanged bits, and remote v0 has none (GD-SPEC), so on remote ε is unbounded today. Price adding a certifier.
