@@ -261,7 +261,7 @@
   },
   "Properties.RemoteAudit.Component.HonestSchedule": {
    "owner": "@memory-accounting",
-   "digest": "78b64c8ef4f8e96c69c8f809928e38b51f2acc08b6fd52b48f9f65e4c17b4aa9"
+   "digest": "57002db7a08d9a57cdef151a2ec3720aa7cf8d42ec7ecc17714962946e55afdf"
   },
   "Properties.RemoteAudit.ScheduleLayoutGap": {
    "owner": "@memory-accounting",
@@ -2248,12 +2248,12 @@
     "                  Unit.unit node r)))"
    ],
    "assumptions": [],
-   "type_hash": "478696fabfd57c52cb1f3617db82912246d6179fff2f90bcfa09671561662e25"
+   "type_hash": "9bc7670d6a273aad40574e3d6a1dbc7cb51db8c2d03eac6a738af3b0d8bf9cb7"
   },
   "Properties.RemoteAudit.Component.lineHeldAtComponent_honest": {
    "owner": "@memory-accounting",
    "signature": [
-    "Properties.RemoteAudit.Component.lineHeldAtComponent_honest (node : Properties.RemoteAudit.Line.Node) (κ : Nat)",
+    "Properties.RemoteAudit.Component.lineHeldAtComponent_honest (node : Properties.RemoteAudit.Line.Setup) (κ : Nat)",
     "  (X Cm : Type) [Fintype X]",
     "  (prf : Fin node.draws → Pous.Bits κ → Accounting.Remote.Draw.Blocks Properties.RemoteAudit.Line.receiptMax)",
     "  (recs : Cm → Accounting.Remote.Draw.DrawCoins node.draws κ X → Properties.RemoteAudit.Line.Record)",
@@ -2330,7 +2330,7 @@
     "                        0)))))))))"
    ],
    "assumptions": [],
-   "type_hash": "68119fc717399f6d07868180d563fe3cf533bbcb1def1480fec85ab10d48199e"
+   "type_hash": "d809128eb0a7ed3ea8da1c255255fbbe6b10f1a097fe7864104430c1e63fef1c"
   },
   "Properties.RemoteAudit.Component.lineHeldAtComponent_nontrivial": {
    "owner": "@memory-accounting",
@@ -2342,12 +2342,12 @@
     "        fun x x_1 => Option.some sm)"
    ],
    "assumptions": [],
-   "type_hash": "8e9dfd782e77a8b94dc1f78b72c420e5cd9509465517c640acbc67e59b8be63d"
+   "type_hash": "3b1bcbd710aefd54eaf9febf8bac43015979a6c456f582245859bdd39d2b6989"
   },
   "Properties.RemoteAudit.Component.lineHeld_honest": {
    "owner": "@memory-accounting",
    "signature": [
-    "Properties.RemoteAudit.Component.lineHeld_honest (node : Properties.RemoteAudit.Line.Node) {Ω : Type} (passes : Nat)",
+    "Properties.RemoteAudit.Component.lineHeld_honest (node : Properties.RemoteAudit.Line.Setup) {Ω : Type} (passes : Nat)",
     "  (tick : Ω → Nat → Nat) (rec : Ω → Properties.RemoteAudit.Line.Record)",
     "  (htick : ∀ (ω : Ω) (p : Nat), instLTNat.lt (tick ω p) (tick ω (instHAdd.hAdd p 1))) (ω : Ω) :",
     "  And",
@@ -2359,7 +2359,7 @@
     "      node (rec ω))"
    ],
    "assumptions": [],
-   "type_hash": "87ba3d81078c3784f4d7772aadb06966b0635eb04f4e8d5dba3139fe02a59b44"
+   "type_hash": "db485131823277fffa073ca7fc4eba35d20164cebff3f9449c5265bc9520eb82"
   },
   "Properties.RemoteAudit.Component.lineHeld_nontrivial": {
    "owner": "@memory-accounting",
@@ -2368,7 +2368,7 @@
     "  Exists fun sm => Not (Properties.RemoteAudit.Component.LineHeldBy (fun x x_1 => True) fun x x_1 => Option.some sm)"
    ],
    "assumptions": [],
-   "type_hash": "990c4c47d19df2f440fdc69fd16e30334c6e6657de1b6b6d75b2a5e29e6763d4"
+   "type_hash": "88f3c652780fe6dea4fbe5dcc4560d167490066780de16976c90b4a0d0ee6dfb"
   },
   "Properties.RemoteAudit.Component.publishedEps": {
    "owner": "@memory-accounting",
@@ -4960,6 +4960,13 @@
    },
    "guarantees": [
     "Properties.RemoteAudit.Component.SecurityProofs.lineHeldAtComponent",
+    "Properties.RemoteAudit.Component.lineHeldAtComponent_bites",
+    "Properties.RemoteAudit.Component.lineHeldAtComponent_honest",
+    "Properties.RemoteAudit.Component.lineHeldAtComponent_nontrivial",
+    "Properties.RemoteAudit.Component.lineHeld_honest",
+    "Properties.RemoteAudit.Component.lineHeld_nontrivial",
+    "Properties.RemoteAudit.Component.publishedEps",
+    "Properties.RemoteAudit.Component.publishedEps_nontrivial",
     "Properties.RemoteAudit.Line.SecurityProofs.lineHeld",
     "Properties.Site.checks",
     "Properties.Site.entryValid",
@@ -6229,15 +6236,15 @@
    "guarantees": ["Properties.DeclaredCircuit.SecurityProofs.scheduledRequirement"]
   },
   "Definitions.Claims": {
-   "digest": "574fdd7b1cdcd6df4e7a1fc94424855ab51ad5bc73c35f4f79cb14be430144bd",
+   "digest": "0903263801475397ba8c3fb587805be429812007c55bf2cbd0958b53b5ecc907",
    "definitions": {
-    "Claims.Collision": "684d79c833f61a382736de6bea1d4837fddfeb6034c8b058487e8be7cf2d85ba",
+    "Claims.Collision": "c9aa38dcdefc9acdf1e2b55b91bd771bda4cbf43d796761cda34074058a3c4da",
     "Claims.Finder": "2c5c863ab2f4038487d9df359f7002207b9f7e4c49ed437cfe2437a71f7cbe32",
     "Claims.Finder.Pr": "dd2f1f6763dbbdfbcda827509bf2c4748a5dc264d47bce6f0137c160acfc4f9c",
     "Claims.Finder.S": "504b05057f5366f634351cdff7ea218ad75f23f52c3151b5e5d6bfd6aa89143c",
     "Claims.Finder.fin": "1b06b4fe8a3ad95a1a707b4e6b8cd1621884d7da8a367f1a224894e00fec2675",
     "Claims.Finder.out": "1f2e96ba2d94703b13797de2b60b1089e0014df7842a3a3beef4d8d4d62558e2",
-    "Claims.Msg": "cd27efe28dbe63e955675e914b64015f9a4bae60206675844abf0897070d4cbe",
+    "Claims.Msg": "9bc9b800b5bce281e5b98074a8e91abfc5cfac65815c16ebed337e3c22c81f1e",
     "Claims.Pr": "27c2a2e48a7f290e37323352d7f3f414ac2db95d6a888a4b1abb226570449e1d",
     "Claims.findColl": "91eb2cda582aad3ff3bebd649ad71847502a9b4ba4ab58b7917d2dea8856884c"
    },
@@ -6801,8 +6808,9 @@
    ]
   },
   "Definitions.Hash.Basic": {
-   "digest": "6e6f69445e5c149662f4e0f35f5d81cdc63b91153cae465a8ded619ddc212675",
+   "digest": "1dda192b6c96a4e3c3853dee3a4c556b84b14db8da97ef3a5c4eab9e51025d27",
    "definitions": {
+    "Hash.Collision": "6352b7c1183e5a22df83ca267ec49a423df2fbf74845e167f5927c3873f3c545",
     "Hash.Msg": "eae8a43b934169e52427b2520a329dbf40092e7d809802407f5c6cb3402c20f0",
     "Hash.be": "01de3b21507c05069030c976948b20b0c990e472322a8eebdf51fd204eda0ba4",
     "Hash.cstr": "cc8a9d2799527c9325f6d52d1f4af04631d52ef3849529d96cd70def0f45ab7b",
@@ -6811,6 +6819,7 @@
     "Hash.utf8": "ef81714f5482b6ab1df3203d386a5f234d14a69049d33735cee24064152636c6"
    },
    "guarantees": [
+    "MemoryChallenger.Attest.Properties.SecurityProofs.periodSound",
     "Properties.RemoteAudit.Component.SecurityProofs.lineHeldAtComponent",
     "Properties.RemoteAudit.Component.lineHeldAtComponent_honest",
     "Properties.RemoteAudit.Component.lineHeldAtComponent_nontrivial",
@@ -13622,27 +13631,27 @@
    ]
   },
   "Properties.RemoteAudit.Component": {
-   "digest": "00e9326e99e702e0ccc3f07a7f5cdb848d31094c862ee872fdfc9dc8b68f5b36",
+   "digest": "219596798663cf942972fb2e2ed05400c2257315ec06a0e0651985d72ae3306d",
    "definitions": {
     "Properties.RemoteAudit.Component.AcceptIsVerified": "4b48a72479e07767c7c8ab4732a4b729d5e85ec4fe7bcb21e932804cf70e487a",
     "Properties.RemoteAudit.Component.AcceptIsVerifiedFor": "0c3f4a9da00275a23933b27e77d475a148a04ee1cb42c5a1f88363dcd501549d",
-    "Properties.RemoteAudit.Component.HonestSchedule": "78b64c8ef4f8e96c69c8f809928e38b51f2acc08b6fd52b48f9f65e4c17b4aa9",
-    "Properties.RemoteAudit.Component.LineHeldAtComponent": "a02f7543684a06f7d7d02f333cf2ac7b67e5dcc8c88cbbf09e4672fd1b6453da",
-    "Properties.RemoteAudit.Component.LineHeldAtComponentBy": "5453a8e9a27d5bddb36524e21dbeaa324cf720256ddafe81a3e59f30d35ecce2",
-    "Properties.RemoteAudit.Component.LineHeldBy": "9b36c86bf9f1b5e627c4e102fd97115abcffa49671acb740739627ef02bf7aad",
+    "Properties.RemoteAudit.Component.HonestSchedule": "57002db7a08d9a57cdef151a2ec3720aa7cf8d42ec7ecc17714962946e55afdf",
+    "Properties.RemoteAudit.Component.LineHeldAtComponent": "49970c2347b02111e4320fd90428efc39284e13c469570a441dba08a02f20e3a",
+    "Properties.RemoteAudit.Component.LineHeldAtComponentBy": "ae79452df22bce6ba88ccaf34d8c34df40b8acca60249ec710bbc8b19795ec1b",
+    "Properties.RemoteAudit.Component.LineHeldBy": "d041427eba42dae63279f65304e68defc60689a56eb860b2cb601828bec46058",
     "Properties.RemoteAudit.Component.Plays": "9350c726cae1d0548764b71aa95ad75e93d0d75952c0189149740344c120e640",
-    "Properties.RemoteAudit.Component.PublishedEps": "ee33731b02e913f1a7490a860417ca61c9da9b8c1201e872194f5cf4c1796096",
-    "Properties.RemoteAudit.Component.PublishedEpsFor": "babf79f313f17f66bc69c337c274e98d8290700277851e72a7f4a75083b20ca2",
-    "Properties.RemoteAudit.Component.ReadBy": "a69f62343d85088d345e2a4f852bc7bbbc1b912bfddf15b52a3cf5fdc5872924",
-    "Properties.RemoteAudit.Component.groupsBy": "c422573c8504cb5d96410147effa3b08d13b6cf1fe738820e95d196be6ac3aed",
+    "Properties.RemoteAudit.Component.PublishedEps": "9205f301101e0b91ea9a1b686e8229a3bb35f817edcadc7cadd837e3e3492ae8",
+    "Properties.RemoteAudit.Component.PublishedEpsFor": "1e62a83f539193ca3d35abae7d0d6aef93293a5c9816295c60b5ed7c23f5e228",
+    "Properties.RemoteAudit.Component.ReadBy": "576656bfb673bd915d014f86c9dfa08368148e658ae9eca8f370de9378e17211",
+    "Properties.RemoteAudit.Component.groupsBy": "54577daa86bf1554528442b6d4fdc4de2e0a7990f46a35a201a4bcc049b5fef8",
     "Properties.RemoteAudit.Component.honestEvidence": "21347928e2ccd4cff7a8a36ddfa234616064103b45c7160c03bbae7e42289a50",
     "Properties.RemoteAudit.Component.honestParams": "f7f7d7f6403bf63d3c308a026cbbd4ddee5c527af0d0c5e10446cad36483240d",
-    "Properties.RemoteAudit.Component.honestTrace": "8cab1b1ed8145a02ebf4989a158cb820b4f8e636c56acfba6276fca5670cd601",
-    "Properties.RemoteAudit.Component.lineBy": "ccec17dd63bb3aa57e90638332f7a29998242db76a9f213ac1361b60739bcc0f",
+    "Properties.RemoteAudit.Component.honestTrace": "bb9b7a117b67fc86981538f88a20d04686cc86877a99cb9de5579eeb14ad71e0",
+    "Properties.RemoteAudit.Component.lineBy": "deb3f6e0ad4a11315061e48bf95b61b08239460ebe54638d91fc280ebb4f4f19",
     "Properties.RemoteAudit.Component.noOutside": "f8d878bb2ce8ec8ab5cb844f5020baa0e4ceaf5495459af75d66c57ea328802e",
-    "Properties.RemoteAudit.Component.paceBy": "31dce4163cfcff95c96f914a302db8e5d9c31d30fb40c5ab6ce9e37712433aad",
+    "Properties.RemoteAudit.Component.paceBy": "a0bf4ac62b1e5794e7e2f876916c68a6a86a0b806e624a6eabd6923a569dc555",
     "Properties.RemoteAudit.Component.quietIngress": "a590d1aa2c72d01771c1d03a9c3d3a3556b0fa395968ae545b552b485ab91aff",
-    "Properties.RemoteAudit.Component.traceBy": "4fc13f9a75ccbf7219be2a663d477537e0c260852796eea5be7a775317c53e23"
+    "Properties.RemoteAudit.Component.traceBy": "bfb00f9d5bb6ae1715e263d852d8bea6d3c6a2ce523b7d07525951bb2732a9c5"
    },
    "guarantees": [
     "Properties.RemoteAudit.Component.SecurityProofs.lineHeldAtComponent",
@@ -13659,15 +13668,12 @@
    ]
   },
   "Properties.RemoteAudit.Line": {
-   "digest": "1ad14380330cdba6c60fe53bc1b42e8b181d404062d0e7fad06801966a6e1b1a",
+   "digest": "03c499e54d49d0978ae131c016ed7b309588b3c5ad475b1af692081dbb13b829",
    "definitions": {
-    "Properties.RemoteAudit.Line.Credits": "9eec9eb1330187d597bef59966923e5ccf2461e6b517b9ffe07fbd35fba6844d",
-    "Properties.RemoteAudit.Line.HeldAt": "e2ebc487592ccd75aa9a830d840e3e676785571e62f183c09b729f6fd58c11dc",
     "Properties.RemoteAudit.Line.LineChecked": "1c5505e0b300c71854bafd0ede4feac0aea5016477e28030deb3bc4f7989742a",
-    "Properties.RemoteAudit.Line.LineHeld": "7f3f2660d30cb62585babb2047b0da3cd72ce6c677e60fc217dc91568e222cc0",
-    "Properties.RemoteAudit.Line.LineHeldIdentity": "e65ed3de00781207385882a4b84b290cf7a0f1bc4df1c3698c6f8cd097fd84a4",
+    "Properties.RemoteAudit.Line.LineHeld": "1bd5321d3c2e7de4c57193d9e037b9a9aec820e29c2998cc278be45eb6fff173",
     "Properties.RemoteAudit.Line.LineRegistered": "0a19ed5ecb3e46cc1cdec14b2943b045ca768feddbd06f60a7b96dc1543f79fc",
-    "Properties.RemoteAudit.Line.ReadAt": "4535720ca195dedf2c277f34ef9e6921ca5e4695a704dd34b41dc4074c2a4b7a",
+    "Properties.RemoteAudit.Line.ReadAt": "94e0942dd47106024c804642b8280576a2cdc9d071b2bc58943a1216bce430d1",
     "Properties.RemoteAudit.Line.StretchBound": "81d15d41252aa8d919aeb78bacb4b616b3eadb2ce5f86146d0fad010ac89cc97"
    },
    "guarantees": [
@@ -13680,21 +13686,8 @@
    ]
   },
   "Properties.RemoteAudit.Line.Record": {
-   "digest": "971d0cd889c63e7cdafc25257c8f9f84603c4bd508245a7e29cb098dbc24fe61",
+   "digest": "94319ccd7c6c42b6a37a8c0d57f776398b015fbcc67ae2a126cbd10635c7b3dc",
    "definitions": {
-    "Properties.RemoteAudit.Line.Node": "42711f27299bb2712c065ce499996be68bd26c2633bfabda7bdab0a113062b7d",
-    "Properties.RemoteAudit.Line.Node.blockBytes": "01096187cab77105f77d1a06703965cd55de643c51b4e42a5d232ab07571c01e",
-    "Properties.RemoteAudit.Line.Node.blocks": "527440108ac24a2d455b9a8089a5fdf791ba9978dbc8272f6cb6786ae63d3934",
-    "Properties.RemoteAudit.Line.Node.chipBytes": "5f4747a083196858938d24d66c04b71a339429b24cdce6293fef888d551bcfb4",
-    "Properties.RemoteAudit.Line.Node.delta": "a254624a0158879c7b29876d70140e149a9d172ae8335cd348b240a507a2cbcf",
-    "Properties.RemoteAudit.Line.Node.draws": "a2e5731644b69bcfdcbe1bd945f31b2fd39483983f9a1d5b0a55b1c2387ae88b",
-    "Properties.RemoteAudit.Line.Node.groupsPerCoin": "b18c5d52c1c67952ab72d21e669d2b43ba67b94ff1e1768225290ae46729cf89",
-    "Properties.RemoteAudit.Line.Node.nodeBytes": "fdd38bdb921f0c7526a0680cb5c064b387d3d0d21782847eefd20425ff0e45d6",
-    "Properties.RemoteAudit.Line.Node.params": "26c139396e952fe103fb8d8b9fee49d9eebd588a2d5269d3babb0099c0e026c4",
-    "Properties.RemoteAudit.Line.Node.per": "9da87e89dc52b55439e611c9a89680cbe9448de3e1b78ad2a34795a310de0ffa",
-    "Properties.RemoteAudit.Line.Node.rates": "86b5c1998dc45a23330ad6e86b0d974aeb8c31c61a13ea146aee1c09abb1944b",
-    "Properties.RemoteAudit.Line.Node.reg": "004bc0c9ed13d5abb0cf8ded0901386f463bf6fa024cc98a910718cb49c8c884",
-    "Properties.RemoteAudit.Line.Node.windows": "a16028e89598e629a9d5cacd2c56457219579d41837f601929e791e0074b712c",
     "Properties.RemoteAudit.Line.Record": "24b0e3ff65918ea52f44de242bca0604cebbbfc2fce109dacd56ce4fd12d1c4b",
     "Properties.RemoteAudit.Line.Record.appendCoins": "e068b0c99ecba24ea777fbe109c2498c44e6d2b407ed371995c58836afb2597f",
     "Properties.RemoteAudit.Line.Record.coins": "a867f8978decf6f86a14477f0c914645ff2183cc022ec2dc6936936a25ad81d0",
@@ -13710,29 +13703,21 @@
     "Properties.RemoteAudit.Line.Setup": "e8bcdd18178e9ad66469debfd46a97f4fa06c9184387216681a159ef3a65683f",
     "Properties.RemoteAudit.Line.Setup.blockBytes": "6a4b1636a35b34e221fbdbc19ea1854c390e07e2a650139582ca2df4d421c974",
     "Properties.RemoteAudit.Line.Setup.blocks": "22de7904cc448ca8731127d31328f1587027c002cf21e2c3666974488a09972f",
-    "Properties.RemoteAudit.Line.Setup.chipBlocks": "d08e59777f7178527642f4ff91507d05a28593838d9e2b0b14e8c6e9ce4c664b",
     "Properties.RemoteAudit.Line.Setup.chipBytes": "c75f23175fd87944c4f5bb56695a4a24282c97b602397fefc6b254715e0f2dac",
     "Properties.RemoteAudit.Line.Setup.delta": "2639e92368bac3833f2c13f67331967a7e645214a9ab3671a9f1d46a4c63457a",
     "Properties.RemoteAudit.Line.Setup.digest": "4e2490383331fdbab23ae5ea47cf9fb2322ef3c286d2b20287c5f1f03887067f",
-    "Properties.RemoteAudit.Line.Setup.disk": "f8cd903554d0b38f0dd1aa659296135c2af1b9f5a1693c9e7ae1d054c3c6c940",
-    "Properties.RemoteAudit.Line.Setup.diskBurst": "40dc27b6d53438e1788f0ce9369c3e2bba1cbec1de0e904e5ef69196bcc1858b",
     "Properties.RemoteAudit.Line.Setup.draws": "9306f1e4bf1c6016f4a7f2c8135df70260be4df4e394c313de64e4fa7d598325",
-    "Properties.RemoteAudit.Line.Setup.encode": "d8604ece9dd81ed8961217a46c0d8d08f83e9ae184c9824c3e9166e32372ea2c",
     "Properties.RemoteAudit.Line.Setup.gpus": "f8f00b77c6d55de0d685349136241269fbea9dff76723cef00cbedc045de6a4d",
     "Properties.RemoteAudit.Line.Setup.groupsPerCoin": "12a79d7b35402728ee1e9c70db11057b92c995d8056ebaed61951aa7c807460c",
     "Properties.RemoteAudit.Line.Setup.host": "6df8b5f955254aae1f9e08bed5a4e94349a9ac5fe9001b11ee6b1aed129201e9",
     "Properties.RemoteAudit.Line.Setup.hostCard": "5ee0b8fdd6d412e2616a6623232de1572aca1b986ee6c4e3e9ef395992b527f3",
     "Properties.RemoteAudit.Line.Setup.inputs": "9b455bed22eaf08568f5002d34eb9cc6795f9178b04782045974be401fc7df7f",
-    "Properties.RemoteAudit.Line.Setup.link": "2a417dcd4d64394231056eb811d26482f84f713316521531ba8f4c6658024a7c",
-    "Properties.RemoteAudit.Line.Setup.linkBurst": "07553cb3d04575857dbaf41876e7de91603958f0bab913c929e92826f360aea1",
     "Properties.RemoteAudit.Line.Setup.nodeBytes": "762e4f663ad918a6bc82dbbf3a95982f5abcc58d7277f97762ba994f0de9fe12",
     "Properties.RemoteAudit.Line.Setup.params": "141961673b91de1b02a2e0f18bc6f200a2c5e4c578901543354dbb5cf44f7c91",
     "Properties.RemoteAudit.Line.Setup.per": "b9bd6b32e9043539780792976537daecba222a646b0dd61994110158f5d76db4",
     "Properties.RemoteAudit.Line.Setup.rates": "0f548cb1956204c552a37d1085ec91d62ee6a9da9628338ca5aaee0595278cf8",
-    "Properties.RemoteAudit.Line.Setup.rebuildBurst": "591ea644f04f567e449dad8fda1cc4e1c0ad1de4193f17249ad93189117c8fc0",
     "Properties.RemoteAudit.Line.Setup.reg": "38aed1c3786f3c20a48e3f9f99709f2a4d8c66809e2022f77dbd7cb441fb04cf",
     "Properties.RemoteAudit.Line.Setup.site": "340d912eac10c39407825b8483bdd422d23ca3db12b6ce7bd371d09e181ff25e",
-    "Properties.RemoteAudit.Line.Setup.squarings": "58db6050f0f2dbc8471ff378e52bbd904171964f9abc2a499b3edeb22b6820db",
     "Properties.RemoteAudit.Line.Setup.stated": "bbe0de42abf6f857624d461412b45bf3b86cad3ffe1714cca217ad7a97804da4",
     "Properties.RemoteAudit.Line.Setup.windows": "d12825dd3925a69174dfd1c7b24bda471f26e55498485a1d8f7c457dc004b395",
     "Properties.RemoteAudit.Line.Verified": "2a2e41237b2fe9802788d3624b61dad97602689770e87159cb9f29b874ac0b05",
@@ -13744,8 +13729,8 @@
     "Properties.RemoteAudit.Line.played": "7e8162e42e5d5e40d2239b8d56434ee98caec9c6b266fdcfc4cbabc2f08e9687",
     "Properties.RemoteAudit.Line.reachStep": "884e7297a16cf5a6f000c23627bdbd068223c2ae013bb1af9e8ae9d776132265",
     "Properties.RemoteAudit.Line.receiptMax": "1507ed9d46115e7a1dd249ed140bb32f7f1e8eac179bbbaf164ffbd9b2076b03",
-    "Properties.RemoteAudit.Line.recordCommitted": "466d1dc07e3a890e2694f148b6eb850c37f2fbbd4ea2726fe3fca6a2e2622114",
-    "Properties.RemoteAudit.Line.recordDraw": "c24827f389c38a1fa529f58fa3955b27aa7925e8b81c64b267a46e0f32824868",
+    "Properties.RemoteAudit.Line.recordCommitted": "93e40fc1e17de7cdff2c27cae69b8569c8d60e005b321d6807070def6edb3241",
+    "Properties.RemoteAudit.Line.recordDraw": "e489b7ed11f2e5296eda296bae18a9eab7d9967d830f86397b42c6c29dc209b6",
     "Properties.RemoteAudit.Line.recordPace": "ec672ee863f3bd3f837c1c4a3a9604553d9fa0267d4c5c39b14cc1b537ab1a4d",
     "Properties.RemoteAudit.Line.released": "aa4c0e9650f0b709d54c8d67184b2d817882506059c4d3911b5b57a581e66c97",
     "Properties.RemoteAudit.Line.spanStart": "5abeb3e47b0228283062b5aa31507abf65ad01d964a30e39c7d247a3f8401e39",
