@@ -1,4 +1,4 @@
-"""E2E-120's attack library: each attack is a prover that departs from `window.Honest` at one step, played against today's
+"""e2e_120's attack library: each attack is a prover that departs from `window.Honest` at one step, played against today's
 round. `ATTACKS` names each one, how to play it, and whether today's check (`PouwSegCheckDither_v2{S, duo}`, the e2e slice's)
 catches it. benchmarks/pouw/tests/test_e2e_120.py asserts each is rejected, and marks xfail (with a reason) the ones today's
 check doesn't catch.
@@ -10,11 +10,11 @@ check doesn't catch.
     forge-opened       commits the honest receipts, then opens the drawn leaf with the thread's word changed by a bit
     mitm               computes and commits random receipts; at the draw it builds the window's S + 1 witness sets with the
                        drawn step right and solves two chains' words of a free set by meet-in-the-middle so the fold ends at
-                       its committed word (art:22e9a0398b2d's open_any.py, generalised to any drawn step). Today's check
+                       its committed word (open_any.py, generalised to any drawn step). Today's check
                        accepts it; PIN's pinned spot-check Definition (v3) is to bind every absorbed word
     swap-served        serves other weights (another model's W) and opens the registered weights' leaves
     swap-opened        serves other weights and opens their own tree's leaves (a root the registered one isn't)
-    skip-filler        the served design is H1 + fx1 (decision 83, one keyed IMAD a word before duo); this prover leaves the
+    skip-filler        the served design is H1 + fx1 (one keyed IMAD a word before duo); this prover leaves the
                        filler out and folds duo alone. Today's check folds duo, so duo receipts pass it; PIN's v3, folding
                        fx1, is to reject them
     replay             replays its previous round's receipts and witness (re-committed under this round's tree) in a round
@@ -95,7 +95,7 @@ def _chain_final(ci: int, y0: int, z0: int, sets: list[list[int]], start: int, v
 
 
 class Mitm(Honest):
-    """The meet-in-the-middle forgery (art:22e9a0398b2d): commit random receipts, then at the draw build a witness that opens
+    """The meet-in-the-middle forgery: commit random receipts, then at the draw build a witness that opens
     the thread's committed word for any drawn step. It computes no products; it serves honest operands so their leaves open."""
 
     def __init__(self, *a, candidates: int = 1 << 17, mitm_seed: int = 1, **k):

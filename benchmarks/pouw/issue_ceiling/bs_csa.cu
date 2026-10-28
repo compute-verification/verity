@@ -1,5 +1,5 @@
-// BS-CSA: the guarded bit-sliced carry-save counter of note lanes/compute-accounting *-draft-theorem-e-referee Part V
-// (csa_sim.py, art:3d8c4200...), on sm_120.  For X, Y in {+-1}^{MxK} x {+-1}^{KxN}, compute C = X*Y (int32) exactly.
+// BS-CSA: the guarded bit-sliced carry-save counter (csa_sim.py), on sm_120.  For X, Y in {+-1}^{MxK} x {+-1}^{KxN},
+// compute C = X*Y (int32) exactly.
 //
 // x = (-1)^a, y = (-1)^b; C_ij = K - 2*#{k: a_ik != b_kj}.  Y's sign bits are packed as bit-planes: a lane word holds
 // b_kj of 32 output columns (one plane per k).  A warp owns one output row i (so a_ik is warp-uniform); each of its 32

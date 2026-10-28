@@ -1,5 +1,5 @@
-"""E2E-120's driver: one served int8 window's committed values taken through today's spot check, printing accept/reject for
-the honest run and every attack, and the served design's ε and γ.
+"""e2e_120's driver: one served int8 window's committed values taken through today's spot check, printing accept/reject
+for the honest run and every attack, and the served design's ε and γ.
 
     python3 benchmarks/pouw/e2e_120/run.py [--m M --n N --k K --window S] [--seed SEED] [--json]
 
