@@ -8,6 +8,7 @@ import argparse
 import hashlib
 import json
 import random
+import re
 import sys
 from pathlib import Path
 
@@ -85,7 +86,7 @@ def test_blocks_of():
         L.blocks_of(-1, 2)
 
 
-def test_store_layout_is_cmp95s_at_the_frozen_shape():
+def test_store_layout_at_the_frozen_shape():
     """The frozen layout's numbers: 1,038 segments; layer l from block 1,307,915 l; QKV, O, up and down at blocks 0, 131,711,
     262,401 and 785,158 of it and staging offsets 0, 270,532,608, 538,968,064 and 1,612,709,888; the head at block
     68,011,580 over 2,043 blocks."""
@@ -195,6 +196,14 @@ def test_flat_views_any_dtype():
         S.flat(torch.zeros(4, 4).t())
 
 
+def test_timed_runs_the_warmup_then_before_ahead_of_each_timed_run():
+    calls: list[str] = []
+    ts = S.timed(lambda: calls.append("fn"), 2, torch.device("cpu"), lambda: calls.append("before"), warmup=1)
+    assert calls == ["fn", "before", "fn", "before", "fn"] and len(ts) == 2
+    calls.clear()
+    assert len(S.timed(lambda: calls.append("fn"), 3, torch.device("cpu"))) == 3 and calls == ["fn"] * 3
+
+
 def deployment_vector():
     v = next(v for v in VECTORS["vectors"] if v["id"] == "p2-v4/w16448/0")
     prefix = L.R.expand_prefix(bytes.fromhex(v["setup_salt"]), L.SPEC, bytes.fromhex(v["model_commitment"]))
@@ -202,23 +211,20 @@ def deployment_vector():
     return prefix, j, bytes.fromhex(v["c"]), bytes.fromhex(v["m"])
 
 
-def test_decode_block_is_the_spec_vector():
+def test_check_blocks_holds_the_spec_vector():
     prefix, j, c, m = deployment_vector()
     assert m[:L.LEAD] == bytes(L.LEAD)
-    assert L.decode_block(L.SPEC, prefix, j, c) == m[L.LEAD:]
-    assert L.check_blocks(L.SPEC, prefix, j, c, m[L.LEAD:]) == []
+    assert L.check_blocks(L.PARAMS, prefix, j, c, m[L.LEAD:]) == []
 
 
-def test_decode_block_refuses_what_the_store_refuses():
+def test_check_blocks_refuses_what_the_store_refuses():
     prefix, j, c, m = deployment_vector()
-    with pytest.raises(ValueError, match="not below p"):
-        L.decode_block(L.SPEC, prefix, j, S.P_BYTES)
-    with pytest.raises(ValueError, match="bytes, not"):
-        L.decode_block(L.SPEC, prefix, j, c[1:])
-    bad = L.check_blocks(L.SPEC, prefix, j + 1, c, m[L.LEAD:])
+    [(at, why)] = L.check_blocks(L.PARAMS, prefix, j, S.P_BYTES, m[L.LEAD:])
+    assert at == j and "not below p" in why
+    bad = L.check_blocks(L.PARAMS, prefix, j + 1, c, m[L.LEAD:])
     assert len(bad) == 1 and bad[0][0] == j + 1
     flipped = bytes([c[0], c[1] ^ 1]) + c[2:]
-    assert len(L.check_blocks(L.SPEC, prefix, j, flipped, m[L.LEAD:])) == 1
+    assert len(L.check_blocks(L.PARAMS, prefix, j, flipped, m[L.LEAD:])) == 1
 
 
 def test_twin_is_the_definition():
@@ -655,3 +661,13 @@ def test_full_stages_the_whole_toy_store_and_check_samples_it(tmp_path, monkeypa
     L.segment_path(root, 1, "json").unlink()
     with pytest.raises(SystemExit, match="not done"):
         full.main(run + ["--out", str(tmp_path / "o4")])
+
+
+def test_every_kept_path_has_a_reason_in_keep_json():
+    """session.sh keeps each node path under keep.json's owner and expiry with that path's reason; a `keep PATH WHAT`
+    whose WHAT has no reason would keep nothing."""
+    keep = json.loads((HERE / "keep.json").read_text())
+    whats = re.findall(r'^\s*keep "\$\w+" (\w+)$', (HERE / "session.sh").read_text(), re.M)
+    assert sorted(whats) == sorted(keep["why"])
+    assert keep["owner"].startswith("@") and keep["expires"]
+    assert all("{layer}" in why for why in keep["why"].values())

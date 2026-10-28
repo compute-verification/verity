@@ -1,7 +1,7 @@
 import Definitions.Pouw.Dimension.Defs
 
 /-!
-# Theorem D with causal inputs (red-team P7-1): trusted statements
+# Theorem D with causal inputs: trusted statements
 
 Unit `u`'s input `A_u` may depend on `F₁` and on the `E₁` of the units before it: each unit's `E₁` is derived from its
 own commitment `com(A_u)`, as in sequential decoding on shared weights, so `A_u` may be computed from earlier units'
@@ -27,7 +27,7 @@ def wordC (k m n N : ℕ) (R : Mat) (A : Noise N m n k → ℕ → Mat) (B : ℕ
     Noise N m n k → ℚ :=
   fun ω => (checked k m n N R (A ω) B ω u p : ℚ)
 
-/-- **Theorem D with causal inputs** (P7-1): under checkpoint independence and H_16, for every causal `A`, every
+/-- **Theorem D with causal inputs**: under checkpoint independence and H_16, for every causal `A`, every
 program on inputs in `V₀` that outputs the non-final checked words of the units in `U` costs at least
 `16·|U|·m·n·(3k/16 − 1)`. -/
 def AlgBoundCausal : Prop :=

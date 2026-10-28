@@ -63,8 +63,9 @@ and only where the window's registration (``--registration``) records that root 
 ``weights/<label>@<words>``, at the hiding root the committer registered for it once per model and key before the first
 window's coins (``--pins REGISTRATION``, the ``{program, values}`` the audit's ``--registered`` takes:
 `verity_vllm.program.predict.window_weights.weights_registration`), never a root the verifier computes from a checkpoint,
-and which `verity-vllm advice --weights-of-record` records in each window's registration. Its rotary table has no root,
-so its reads stay free.
+and which `verity-vllm advice --weights-of-record` records in each window's registration. Its rotary table has a root
+only where the committer registered the words its engine serves (within the analytic table's bound); else its reads stay
+free.
 
 ``--compilers FILE``: ``{name: {"digest": hex, "argv": [...], "code": [path, ...], "pythonpath": [path, ...]}}``, the
 registered compilers the verifier holds, each by the name and digest a registration names it under. A registration names
@@ -83,7 +84,7 @@ auditing tree. The compile command is ``argv --advice FILE --out FILE``:
 
 ``--challenger``: the draw on the auditor's challenger's coins (`a5_coins`), not the verifier's own, as `prove_path.py audit`
 takes them: ``local``, a development session on this machine, ``loopback:HOST:PORT``, that session on the challenger
-party's host (`challenger_party.py`, `verity run CONFIG --party challenger`), or ``gate:USER@HOST``, vy-challenger-1 through infra's gate with
+party's host (`challenger_party.py`, `verity run CONFIG --party challenger`), or ``gate:USER@HOST``, the auditor host through its SSH gate with
 the lane's gate key ``--gate-key``, its challenger on ``--peer``'s 127.0.0.1 (so the audit runs on that peer), under the
 deployment's key record ``--challenger-key``. The gate opens a root once, ever.
 
@@ -762,7 +763,7 @@ def main(argv: list[str] | None = None) -> int:
     sub = ap.add_subparsers(dest="cmd", required=True)
     p = sub.add_parser("audit", help="a window's audit from its records alone")
     p.add_argument("--window", required=True, help="the window's directory: circuit.json, registration.json, the value files")
-    p.add_argument("--law", required=True, help="the proof service's law of the window (subset:K, stratified:K, work:K)")
+    p.add_argument("--law", required=True, help="the proof system's law of the window (subset:K, stratified:K, work:K)")
     p.add_argument("--opening", help="the advice's opening (interface.advice_opening): the named gap, until the compile unit")
     p.add_argument("--compilers", help="with --opening: the registered compilers the verifier holds, {name: {digest, argv, "
                    "code, pythonpath}}")
@@ -790,11 +791,11 @@ def main(argv: list[str] | None = None) -> int:
                    help="after an accepted audit, at most N one-bit edits of its first drawn session's proof, each of which "
                    "Lean verify must refuse (`proof_edits`)")
     p.add_argument("--challenger", help="draw on the auditor's challenger's coins (a5_coins), not the verifier's: local, loopback:HOST:PORT or "
-                   "gate:USER@HOST (vy-challenger-1 through infra's gate, with --peer and --challenger-key)")
+                   "gate:USER@HOST (the auditor host through its SSH gate, with --peer and --challenger-key)")
     p.add_argument("--peer", help="with --challenger gate:USER@HOST: this machine as the gate's /etc/vy/peers names it, whose "
                    "127.0.0.1 the session's challenger listens on")
     p.add_argument("--challenger-key", help="with --challenger gate:USER@HOST: the challenger's key record of its deployment "
-                   "(infra's challenger-key/v1), never the session's key.json")
+                   "(challenger-key/v1), never the session's key.json")
     p.add_argument("--gate-key", help="with --challenger gate:USER@HOST: the lane's own gate key (default ssh's own)")
     p.add_argument("--main", help="with --challenger: the verifier's copy of main's first-parent history")
     p.add_argument("--registered", help="the registered values' entries the verifier pinned before the run, {program, "

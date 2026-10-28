@@ -1,10 +1,10 @@
-"""F-dA-15 admission: the HOST-retention bound of a `--retain host` Commit from the workload's DECLARED schedule, not from its
+"""Commit admission: the HOST-retention bound of a `--retain host` Commit from the workload's DECLARED schedule, not from its
 envelope.
 
 `step_bound_bytes` (native_host) bounds ONE step by the envelope -- every request at the longest prompt, B rows at every decode step,
 the FA2/FA3 M1 stream of a max-length prefill packed B-wide -- and `retained_bytes_bound` multiplies that envelope over the horizon.
 That is the right bound for the DEVICE staging block (one step at a time) and 10-13x loose for the whole run's HOST retention: a
-llama B16 1024/128 mixed-arrivals Commit on cp-big was told 559,384 MiB against a 359,535 MiB cgroup and committed 42.5 GiB (rc pinned at
+llama B16 1024/128 mixed-arrivals Commit was told 559,384 MiB against a 359,535 MiB cgroup and committed 42.5 GiB (rc pinned at
 ~99 GB RSS); the phi3 B8 1024/128 Commit beside it (582,111 MiB) died of the host SUM, not of its own bytes.  A bound
 that loose cannot gate a launch, and a launch predicted to exceed the cgroup is not made.
 
@@ -24,7 +24,6 @@ Soundness assumptions (named on the record): every request runs to its cap plus 
 removes bytes; the LAG is declared -- pass the Program's lag); a prompt longer than the step's token budget is chunked by the engine
 (the sum over chunks of rows x NB is <= the unchunked launch; one `per_step` of chunk padding is added per extra chunk); the module
 widths are those `step_bound_bytes` measured (a sizing record that predates the per-layer RoPE count is corrected here by name).
-The multiplier for the merkle levels (x1.25) is the one the F-dA-15 warning always used.
 
 CLI (torch-free, laptop):  verity-vllm admission-bound --workload <manifest.json> --sizing <arena_sizing_*.json>
                                   [--cap-bytes N] [--lag 1] [--observed <steps.jsonl>]
@@ -43,7 +42,7 @@ from verity_vllm.acquire.sources.hidden_source import CHUNK_WORDS, fa2_kblock_n,
 from verity_vllm.config import RowEngine, option, workload_arg
 
 SCHEMA = "verity-sweep/admission/f-da-15/v1"
-LEVELS_FACTOR = 1.25          # raw x1.25 for the merkle levels pinned beside the raw bytes (the factor of the original F-dA-15 warning)
+LEVELS_FACTOR = 1.25          # raw x1.25 for the merkle levels pinned beside the raw bytes
 MiB = 1 << 20
 
 
@@ -141,16 +140,16 @@ def scheduled_step_bytes(sizing: dict[str, Any], requests: list[dict[str, Any]],
             "per_step": steps}
 
 
-#: [R19 admit, F-dA-15 correction] the windowed collector (native_collect_v2b, row_pod default `--window-mb 256`) WITHOUT bounded staging
+#: the windowed collector (native_collect_v2b, row_pod default `--window-mb 256`) WITHOUT bounded staging
 #: copies EVERY window of every step to the pinned pool as the learning re-hash source / hit-plan hedge copy, whatever `--retain` says
-#: (R18 #60 datum: `--retain none` still allocated the 112 GiB pool).  The pool is a term of the run under every retention on that path.
+#: (`--retain none` still allocates the whole pool).  The pool is a term of the run under every retention on that path.
 HIDDEN_FAMILIES = ("fa2_hidden_m1", "fa3_hidden_m1")
 
 
 def predicted_pool_bytes(raw: int, hidden: int, *, retain: str, levels_factor: float, windowed: bool, bounded: bool,
                          retain_exclude: set[str] | frozenset[str] | None) -> tuple[int, str]:
     """The pinned host pool one Commit run allocates, by path, with the rule that produced it (named on the record):
-      unbounded windowed   raw x levels_factor under EVERY retention (hedge copies of every window; F-dA-15 correction)
+      unbounded windowed   raw x levels_factor under EVERY retention (hedge copies of every window)
       bounded, retain host (raw - excluded hidden) + raw x (levels_factor - 1): `--retain-exclude hidden_m1` keeps the C2 byte source
                            (the module outputs) and drops the M1 stream's chunk-aligned interior, which no C2 consumer reads (opens by
                            replay); the Merkle levels still span every leaf, the excluded ones too
@@ -166,7 +165,7 @@ def predicted_pool_bytes(raw: int, hidden: int, *, retain: str, levels_factor: f
         return int(raw * (levels_factor - 1.0)), f"bounded staging, retain {retain}: levels only, raw {raw >> 20} MiB x {levels_factor - 1.0:.2f} (raw bytes released per window, openings by replay)"
     if windowed:
         return int(raw * levels_factor), (f"unbounded windowed staging, retain {retain}: raw {raw >> 20} MiB x {levels_factor} -- every window is copied to the pinned pool "
-                                          "regardless of --retain (hedge copy / learning re-hash source; F-dA-15 correction: '0 MiB under retain != host' was wrong by name)")
+                                          "regardless of --retain (hedge copy / learning re-hash source)")
     if retain == "host":
         return int(raw * levels_factor), f"per-step blocks, retain host: raw {raw >> 20} MiB x {levels_factor}"
     return 0, f"per-step blocks, retain {retain}: no raw bytes copied to host"
@@ -190,10 +189,10 @@ def admission(sizing: dict[str, Any], requests: list[dict[str, Any]], host_cap_b
               max_num_batched_tokens: int | None = None, lag: int = 1, levels_factor: float = LEVELS_FACTOR,
               envelope_bound_bytes: int | None = None, windowed: bool = True, bounded: bool = False,
               retain_exclude: set[str] | frozenset[str] | None = None, resident: dict[str, Any] | None = None) -> dict[str, Any]:
-    """The F-dA-15 verdict for one Commit launch: predicted = the pinned pool the run allocates (`predicted_pool_bytes`, by staging path
-    and retention) + what the Commit holds beside it at its peak (`resident`, from `committer_resident`) against the container limit.  The REFUSAL domain is unchanged (`--retain host`, unbounded);
-    under another retention the pool is now PREDICTED and named (a non-host retention on the windowed path allocates it anyway: a
-    `--retain none` run still allocated the 112 GiB pool), recorded as `would_exceed_by_bytes`, never refused here.  `admitted` False names the excess; the
+    """The admission verdict for one Commit launch: predicted = the pinned pool the run allocates (`predicted_pool_bytes`, by staging path
+    and retention) + what the Commit holds beside it at its peak (`resident`, from `committer_resident`) against the container limit.  The REFUSAL domain is `--retain host`, unbounded;
+    under another retention the pool is PREDICTED and named (a non-host retention on the windowed path allocates it anyway: a
+    `--retain none` run allocates the 112 GiB pool), recorded as `would_exceed_by_bytes`, never refused here.  `admitted` False names the excess; the
     envelope bound is carried beside it for the record."""
     sched = scheduled_step_bytes(sizing, requests, max_num_batched_tokens=max_num_batched_tokens, lag=lag)
     raw = int(sched["total_bytes"])
@@ -213,19 +212,19 @@ def admission(sizing: dict[str, Any], requests: list[dict[str, Any]], host_cap_b
         over = (f"; WARNING the pool predicted for this path ({predicted >> 20} MiB: {pool_rule}) exceeds the limit {host_cap_bytes >> 20} MiB by "
                 f"{(predicted - host_cap_bytes) >> 20} MiB -- expect an OOM-kill unless the staging path changes"
                 if host_cap_bytes is not None and predicted > host_cap_bytes else f"; pool predicted {predicted >> 20} MiB ({pool_rule})")
-        who = f"retain={retain}" + (" + bounded staging (the bounded HOST BOUND governs, revb M-0254)" if bounded else "")
-        rec.update(admitted=True, why=f"{who}: outside the F-dA-15 refusal domain (--retain host, unbounded), recorded not refused{over}")
+        who = f"retain={retain}" + (" + bounded staging (the bounded HOST BOUND governs)" if bounded else "")
+        rec.update(admitted=True, why=f"{who}: outside the refusal domain (--retain host, unbounded), recorded not refused{over}")
     elif host_cap_bytes is None:
         rec.update(admitted=True, why="no container memory limit visible (memory.max unset): nothing to compare against; the scheduled bound is on the record")
     elif predicted > host_cap_bytes:
-        rec.update(admitted=False, why=(f"F-dA-15: predicted host {predicted >> 20} MiB (pool: raw {raw >> 20} MiB x{levels_factor} for levels = {pool >> 20} MiB; "
+        rec.update(admitted=False, why=(f"predicted host {predicted >> 20} MiB (pool: raw {raw >> 20} MiB x{levels_factor} for levels = {pool >> 20} MiB; "
                                         f"resident beside it {(predicted - pool) >> 20} MiB) exceeds the "
-                                        f"container memory limit {host_cap_bytes >> 20} MiB by {(predicted - host_cap_bytes) >> 20} MiB -- not launched unchanged "
-                                        f"(R17-7.3); the change that admits it is a larger container or a non-host retention, never a smaller check"))
+                                        f"container memory limit {host_cap_bytes >> 20} MiB by {(predicted - host_cap_bytes) >> 20} MiB -- not launched unchanged; "
+                                        f"the change that admits it is a larger container or a non-host retention, never a smaller check"))
     else:
         envp = rec["envelope_predicted_host_bytes"]
         env_note = (f"envelope bound {envp >> 20} MiB was {'over' if envp > host_cap_bytes else 'under'} it" if envp else "no envelope bound on this record")
-        rec.update(admitted=True, why=f"F-dA-15: predicted host {predicted >> 20} MiB (pool {pool >> 20} MiB = raw {raw >> 20} MiB x{levels_factor}; resident "
+        rec.update(admitted=True, why=f"predicted host {predicted >> 20} MiB (pool {pool >> 20} MiB = raw {raw >> 20} MiB x{levels_factor}; resident "
                                       f"{(predicted - pool) >> 20} MiB) fits the container limit "
                                       f"{host_cap_bytes >> 20} MiB with {(host_cap_bytes - predicted) >> 20} MiB to spare ({env_note})")
     return rec
@@ -255,7 +254,7 @@ def observed_steps(path: str | Path, pair: int = 0, arm: str = "instrumented") -
 
 
 def host_cap() -> tuple[int | None, str | None]:
-    """The host memory bound of this machine and its SOURCE by name: the cgroup limit when one is visible, else [rev S-r17-09 n1] the
+    """The host memory bound of this machine and its SOURCE by name: the cgroup limit when one is visible, else the
     machine's MemTotal (a bare host is still a bound; only an unreadable machine yields None)."""
     for cg in ("/sys/fs/cgroup/memory.max", "/sys/fs/cgroup/memory/memory.limit_in_bytes"):
         try:
@@ -281,7 +280,7 @@ class Options:
     cap_bytes: int | None = option("--cap-bytes", type=int, default=None,
                                    help="container memory limit (default: this host's cgroup, if any)")
     lag: int = option("--lag", type=int, default=1,
-                      help="post-EOS rows per request (R17-1 declared LAG; default 1 = async scheduling)")
+                      help="post-EOS rows per request (the declared LAG; default 1 = async scheduling)")
     retain: str = option("--retain", default="host", choices=["host", "device", "none", "sample"])
     per_step_blocks: bool = option("--per-step-blocks", default=False, action="store_true",
                                    help="the collector stages per-step blocks (--window-mb 0); default: windowed (row_pod's 256 MiB ring)")

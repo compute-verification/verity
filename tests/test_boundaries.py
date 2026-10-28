@@ -67,9 +67,9 @@ ALLOWED = {
     "core.wire": set(),
     "core.deploy": {"core.wire"},
     "core.protocols.profile": {"ml.circuits"},
-    # The verifier's coins sample its own bytes as the Lean verifier does (`coins`), and the proof service's challenger
+    # The verifier's coins sample its own bytes as the Lean verifier does (`coins`), and the proof system's challenger
     # draws with them (`service.Stream.select`); every coin source is named by a claim instance (`challenger.coin_claim`).
-    # 2026-10-27 (compute accounting, step 1 of the deployment API): its challenger, firewall, workers and verifier are
+    # Its challenger, firewall, workers and verifier are
     # parties of the deployment layer (`parties`), their messages the wire's.
     "core.protocols.sampled_proofs": {"core.claims", "core.wire", "core.deploy", "ml.circuits", "ml.commitments",
                                       "ml.randomness", "core.protocols.profile"},
@@ -82,7 +82,7 @@ ALLOWED = {
     "core.protocols.bandwidth": {"ml.crypto", "ml.randomness", "core.protocols.pous"},
     # The remote bandwidth audit commits receipts in frame-v3-sha512
     # trees, draws from the verifier's secret, and records its openings as an integrity profile.  Its coins are the
-    # proof service's one challenger's (`sampled_proofs.challenger`).
+    # proof system's one challenger's (`sampled_proofs.challenger`).
     # The remote bandwidth audit is over the P2-encoded weights store, and a P2 store is PoUS's `C*`, under its setup and `vk`, reused as they are (`p2.py`).
     "core.protocols.remote_bandwidth": {"ml.commitments", "ml.randomness", "core.protocols.profile",
                                         "core.protocols.sampled_proofs", "core.protocols.pous"},
@@ -91,7 +91,7 @@ ALLOWED = {
     # verifier recomputes): the one edge into the catalog.
     "core.protocols.pouw": {"ml.circuits", "ml.circuits.ops", "ml.circuits.silicon", "ml.commitments", "ml.crypto",
                             "ml.randomness", "core.protocols.profile", "core.protocols.sampled_proofs"},
-    # N2 of the proof-service plan: a link-window's network certificates are registered through the proof service; they
+    # N2 of the proof-system plan: a link-window's network certificates are registered through the proof system; they
     # are LMS signatures (`ml.crypto.lms`).
     "core.protocols.certifier": {"ml.circuits", "ml.commitments", "ml.crypto", "core.protocols.sampled_proofs"},
 }
@@ -136,7 +136,7 @@ ML_IMPORTS_CORE = {
 }
 #: A verifier imports no ``verity.ml`` code (AGENTS.md "Design rules"): Lean is the definition and the
 #: verifier of record, and ml's Python mirrors it.  Until a protocol's verifier of record is its Lean (the switch procedure,
-#: ``.agents/skills/friction/SKILL.md``), its Python verifier keeps the ml edges ``ALLOWED`` gave it on 18 Oct, frozen here,
+#: ``.agents/skills/friction/SKILL.md``), its Python verifier keeps the ml edges ``ALLOWED`` gave it when they were frozen here,
 #: and gains none; a core unit not listed has none.  When ``ALLOWED`` drops an edge, drop it here too.
 CORE_ML_EDGES = {
     "core.protocols.profile": {"ml.circuits"},
@@ -149,13 +149,13 @@ CORE_ML_EDGES = {
     "core.protocols.certifier": {"ml.circuits", "ml.commitments", "ml.crypto"},
 }
 #: The units of ``verity.ml`` core's Python verifiers read, directly or through one another (what ``ALLOWED`` lets core
-#: reach): their verdicts rest on them, so they are on the soundness path, and AGENTS.md names each.  Frozen on 18 Oct
+#: reach): their verdicts rest on them, so they are on the soundness path, and AGENTS.md names each.  Frozen
 #: with ``CORE_ML_EDGES``: it only shrinks, as each protocol's verifier of record becomes its Lean.  The rest of ml
 #: (C-Flock's prover, the private circuits) is not on it.
 SOUNDNESS_PATH = {"ml.circuits", "ml.circuits.ops", "ml.circuits.silicon", "ml.commitments", "ml.crypto", "ml.kernels",
                   "ml.randomness"}
 #: What a test that refuses a new core -> ml edge says.
-LEAN_OF_RECORD = ("a verifier imports no verity.ml code (Daniel, 18 Oct; AGENTS.md \"Design rules\", \"Lean is the definition "
+LEAN_OF_RECORD = ("a verifier imports no verity.ml code (AGENTS.md \"Design rules\", \"Lean is the definition "
                   "and the verifier of record\"): state it in Lean and import nothing from verity.ml")
 #: Files outside ``infra/`` that import a package of it, each with why.
 INFRA_IMPORTERS = {
@@ -163,12 +163,11 @@ INFRA_IMPORTERS = {
                                                 "deploy and Slack code in the follow-up to the platform layout move (#1450)",
 }
 #: Files outside ``benchmarks/`` that import a module of it, by name or by path, each with its owner and what it imports.
-#: ``benchmarks/`` is measurement only (top's repository organization plan, 27 Oct): a number a protocol uses reaches it
+#: ``benchmarks/`` is measurement only: a number a protocol uses reaches it
 #: through a card file citing an ``art:`` id, never as an import, and code a protocol runs moves out to the package that
 #: uses it.  It only shrinks.
 BENCHMARKS_IMPORTERS = {
-    # the H200 example (benchmarks/e2e_h200 and e2e_demo, moved to examples/h200 by #4903): its runner loads kernels' and
-    # memory-accounting's benchmark code by path
+    # the H200 example: its runner loads benchmark code by path
     "examples/h200/e2e_h200/attention.py": "compute-accounting: kernels' attn_ref (`benchmarks/torch_gpu/attn_ref`)",
     "examples/h200/e2e_h200/commit.py": "compute-accounting: kernels' commit_slots (`benchmarks/torch_gpu/commit_slots`)",
     "examples/h200/e2e_h200/percall.py": "compute-accounting: J10-R's sm_90 build (`benchmarks/torch_gpu/j10r_sm90`)",
@@ -657,7 +656,7 @@ def _tracked_python() -> dict[str, str]:
 
 
 def test_nothing_outside_benchmarks_imports_it() -> None:
-    """``benchmarks/`` is measurement only (top's repository organization plan, 27 Oct): no file outside it imports a module
+    """``benchmarks/`` is measurement only: no file outside it imports a module
     of it, by name or by path, apart from ``BENCHMARKS_IMPORTERS``, which only shrinks."""
     packages = _benchmarks_packages()
     assert {"verity_bench", "verity_numerical"} <= packages, packages

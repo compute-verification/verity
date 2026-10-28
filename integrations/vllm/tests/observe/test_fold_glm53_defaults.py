@@ -26,7 +26,7 @@ from verity_vllm.observe.fold.resolver import Collective, Compute, PerRow, Share
 from verity_vllm.observe.fold.tree import build_trees
 
 CUDA, H = "cuda:0", 6144
-#: the served GLM-5.3 engine's declared target: cc 9.0, off batch invariance (the default-kernels ruling)
+#: the served GLM-5.3 engine's declared target: cc 9.0, off batch invariance (vLLM's default kernels)
 H200 = dataclasses.replace(target_of_header(None)[0], compute_capability=(9, 0), num_sms=132, batch_invariant=False)
 
 

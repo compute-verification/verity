@@ -1,15 +1,15 @@
 #!/usr/bin/env bash
-# R15 hopper: the two Commit negatives of BRIEF §2 on an H100 / FlashAttention-3 row, run with the SAME commit_delta command line as the
-# row's positive Commit (row_pod.sh) minus/plus one thing, against the row's own required-value manifest (MAN-01):
+# The two Commit negatives on an H100 / FlashAttention-3 workload, run with the SAME commit_delta command line as the
+# workload's positive Commit (row_pod.sh) minus/plus one thing, against the workload's own required-value manifest:
 #
-#   omitted   no --hidden-so: the FA3 M1 producer is never attached -> exit 3.  With the row's manifest the MAN-01 identity-coverage
+#   omitted   no --hidden-so: the FA3 M1 producer is never attached -> exit 3.  With the workload's manifest the identity-coverage
 #             check fires first and names the unbound FA3 identities ("identity coverage: 2048 of 27427 required identities have no
-#             binding (first: step 0 fa3.m1/L0/g8x4096x8x128x64 ...)"); without a manifest (canary.sh) the REL-02 class check fires
+#             binding (first: step 0 fa3.m1/L0/g8x4096x8x128x64 ...)"); without a manifest (canary.sh) the required-class check fires
 #             ("required class 'fa3_hidden_m1_stream' not declared").  Either is the named fail-closed refusal; both are accepted.
 #   lateread  --late-read qkv_proj (the collector reads the module output one step late = a wrong-buffer read): openings still verify
 #             (binding != correctness) but the run root MUST differ from the positive run's root (and from the known-good root).
 #
-#   cd <lane tree> && bash verity_vllm/ops/fa3_row_negatives.sh <row-id> <ROLE> [<positive commit dir>]
+#   cd <tree> && bash verity_vllm/ops/fa3_row_negatives.sh <row-id> <ROLE> [<positive commit dir>]
 #   -> <SWEEP_DIR>/<row>/negatives/{neg_omitted,neg_lateread}/ + negatives.json ; last line NEGATIVES PASS|FAIL <detail>
 # Env as row_pod.sh: PY, HIDDEN_SO (default = the FA-version tap of TargetProfile.from_device(), as row_pod), GPU_UTIL (0.5), SWEEP_DIR.
 set -uo pipefail
@@ -22,7 +22,7 @@ export PYTHONPATH=$REPO HF_HOME=${HF_HOME:-/workspace/hf} HF_HUB_OFFLINE=1 VLLM_
 export VERITY_TREE=$REPO NATIVE_COLLECT_BUILD=${NATIVE_COLLECT_BUILD:-/workspace/cp/nc_build}
 GPU_UTIL=${GPU_UTIL:-0.5}
 FA_VER=$($PY -c "from verity_vllm.program.frontend.target_profile import TargetProfile; print(TargetProfile.from_device().effective_flash_attn_version())" 2>/dev/null || echo 2)
-G=$([ "${GUARDED_MAX_TAP:-1}" = 1 ] && echo G)   # the guarded-max build unless GUARDED_MAX_TAP=0 (config.CommitConfig), as the row selects it
+G=$([ "${GUARDED_MAX_TAP:-1}" = 1 ] && echo G)   # the guarded-max build unless GUARDED_MAX_TAP=0 (config.CommitConfig), as a workload selects it
 HIDDEN_SO=${HIDDEN_SO:-$([ "$FA_VER" = 3 ] && echo /workspace/cp/fa2/build/fa3_matReq$G/verity_fa3_matReq$G.so || echo /workspace/cp/fa2/build/matReq$G/verity_fa2_matReq$G.so)}
 CLASS=$([ "$FA_VER" = 3 ] && echo fa3_hidden_m1_stream || echo fa2_hidden_m1_stream)
 "${PY%/*}/verity-vllm" workload-file "$WL" > /dev/null || { echo "NEGATIVES FAIL workload $WL not fetched or not its digest"; exit 2; }

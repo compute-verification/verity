@@ -84,7 +84,7 @@ def _line(pid: int, since: str, extra: str = "") -> str:
 
 
 def test_a_one_gpu_timed_lease_beside_a_session_nobody_preempts_is_planned_as_gpu_lease_ran_it(c, tmp_path):
-    """Infra's ruling until the 7 Oct clamp: a partial `--timed` lease starts beside what it needn't displace, as `gpu-lease`
+    """Until the clamp, a partial `--timed` lease starts beside what it needn't displace, as `gpu-lease`
     starts it, so the shadow agrees with `gpu-lease` and the node breaks no rule."""
     sh = shadow.Shadow(c, tmp_path)
     t = epoch("2026-09-30T10:00:00Z")

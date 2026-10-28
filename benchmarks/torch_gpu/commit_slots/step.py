@@ -183,7 +183,7 @@ def best_enqueue_s(doc: dict[str, Any], graphs: bool) -> float:
 
 def verdict(name: str, doc: dict[str, Any]) -> str:
     s, slots, ref = best_s(doc), doc["slots"], doc["reference"]
-    against = f", {s / TARGET_S:.2f}x the <={TARGET_S} s target (CMP-149)" if slots == TARGET_SLOTS else ""
+    against = f", {s / TARGET_S:.2f}x the <={TARGET_S} s target" if slots == TARGET_SLOTS else ""
     modes = {st["graphs"] for st in doc["steps"]}
     host = "; ".join(f"{'on graphs' if g else 'eager'} {best_s(doc, g):.3f} s with the host enqueueing {best_enqueue_s(doc, g):.3f} s"
                      for g in sorted(modes))

@@ -23,7 +23,7 @@ again as the rows its readers read. With `shape.Forms`' chunk of C words (128 at
 A key's DOT is the step `replay` binds: the s8 coordinates' ``GEMM_SM90_S8`` and PV's ``GEMM_HOPPER``. At the frozen shape a
 slot commits 6,102,102 units in 6,102,832 rows, 5,970,688 of them s8 coordinates' 16-bit rows.
 
-``fused`` names the map's fusions (CIR-107; M1's map has none), each a proof block whose intermediate is never committed:
+``fused`` names the map's fusions (M1's map has none), each a proof block whose intermediate is never committed:
 
 * ``residual``: each residual add in its projection's W8A8 epilogue. ``wo``'s and ``wdown``'s coordinates are
   ``ScaledMmS8ResidualCoordinateRows_v1{K, R, DOT}``, coordinate i adding the projection's word to the residual stream's
@@ -36,20 +36,26 @@ slot commits 6,102,102 units in 6,102,832 rows, 5,970,688 of them s8 coordinates
   scale is ``QuantScaleS8_v1`` of the row's amax. The rows are a chunk's codes and its scale as before, so the coordinates
   read what they read unfused. The norm outputs' tables (``attn_norm``, ``mlp_norm``, ``final_norm``) and those quantizers'
   ``RmsNormOutSums_v1`` and ``QuantChunkS8_v1`` families go.
+* ``pv``: each head's softmax into its PV row. ``pv``'s blocks are ``QkSoftmaxPvPad_v1{T, K = 32, D, DOT}`` a head, reading
+  q's row, the slot's key and value rows and n, and the ``softmax`` table and its ``QkSoftmaxRowPad_v1`` family go. Its key
+  names the Boolean Definition and its step, ``GEMM_HOPPER``'s, since no word Definition is its view.
 """
 from __future__ import annotations
 
 from dataclasses import dataclass
 
+from verity.ml.circuits.ops.boolean import gemm as BG
+
 from ._replay import RP
 from .shape import PV_K, Shape, forms
 
 DEFINITION, PENDING = "definition", "pending-definition"
-#: the map's Definitions on main (#4517, `verity_vllm`'s registry, #4482); the rest are circuits' open PRs
+#: the map's Definitions on main (some in `verity_vllm`'s registry); the rest are pending
 ON_MAIN = frozenset({"ScaledMmS8CoordinateRows_v1", "ScaledMmS8ResidualCoordinateRows_v1", "AllGather_v1",
-                     "EmbeddingCoordinate_v1", "RmsNormAbsMax_v1", "RmsNormQuantCodes_v1", "QuantScaleS8_v1"})
+                     "EmbeddingCoordinate_v1", "RmsNormAbsMax_v1", "RmsNormQuantCodes_v1", "QuantScaleS8_v1",
+                     "QkSoftmaxPvPad_v1"})
 EPS_KEY = 1e-05
-FUSIONS = frozenset({"norm", "residual"})
+FUSIONS = frozenset({"norm", "pv", "residual"})
 
 
 @dataclass(frozen=True)
@@ -181,17 +187,25 @@ class Map:
                                                _units("embed.gather", key("AllGather_v1", WORLD=c, N=1), "embed", sh.width // c,
                                                       2 * c)))]
 
+    def attention(self, p: str) -> list[Entry]:
+        """Layer ``p``'s attention, a head a block: ``QkSoftmaxRowPad_v1`` writes ``softmax`` and ``PvRow_v1`` reads it and
+        writes ``pv``. Fused under ``pv``: ``QkSoftmaxPvPad_v1`` writes ``pv`` and there is no ``softmax``."""
+        sh, c = self.shape, self.f.chunk
+        d, h = sh.head_dim, sh.heads
+        gather = _units(p + "pv.gather", key("AllGather_v1", WORLD=c // d, N=d), p + "pv", h * d // c, 2 * c)
+        if "pv" in self.fused:
+            head = _units(p + "pv", key("QkSoftmaxPvPad_v1", T=PV_K, K=PV_K, D=d, DOT=BG.GEMM_HOPPER["DOT"]), p + "pv", h, 2 * d)
+            return [(Table(p + "pv", 2 * h * d), (head, gather))]
+        soft = _units(p + "softmax", key("QkSoftmaxRowPad_v1", T=PV_K, D=d), p + "softmax", h, 2 * PV_K)
+        pv = _units(p + "pv", key("PvRow_v1", T=PV_K, K=PV_K, D=d, DOT=RP.G.GEMM_HOPPER["DOT"]), p + "pv", h, 2 * d)
+        return [(Table(p + "softmax", 2 * h * PV_K), (soft,)), (Table(p + "pv", 2 * h * d), (pv, gather))]
+
     def layer(self, i: int) -> list[Entry]:
         sh, c, p = self.shape, self.f.chunk, f"l{i}."
         w, d, h = sh.width, sh.head_dim, sh.heads
         out = self.normed(p + "attn", p + "attn")
         out += self.linear(p + "wq", h * d, w, d) + self.linear(p + "wk", d, w, d) + self.linear(p + "wv", d, w, d)
-        out += [(Table(p + "softmax", 2 * h * PV_K), (_units(p + "softmax", key("QkSoftmaxRowPad_v1", T=PV_K, D=d), p + "softmax",
-                                                             h, 2 * PV_K),)),
-                (Table(p + "pv", 2 * h * d), (_units(p + "pv", key("PvRow_v1", T=PV_K, K=PV_K, D=d, DOT=RP.G.GEMM_HOPPER["DOT"]),
-                                                    p + "pv", h, 2 * d),
-                                             _units(p + "pv.gather", key("AllGather_v1", WORLD=c // d, N=d), p + "pv",
-                                                    h * d // c, 2 * c)))]
+        out += self.attention(p)
         out += self.quant(p + "o", w, False) + self.projection(p + "wo", h * d, p + "attn_residual")
         out += self.normed(p + "mlp", p + "up") + self.linear(p + "wup", sh.mlp, w, c)
         out += self.quant(p + "down", sh.mlp, True) + self.projection(p + "wdown", sh.mlp, p + "mlp_residual")

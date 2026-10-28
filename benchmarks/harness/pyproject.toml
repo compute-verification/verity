@@ -35,7 +35,7 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 # a test builds (it imports the spans module). served_commit's arm gates on the run phases
 # the runner names, which a test checks with a fake committer; it and its stock profiling arm read only the public
 # names of the engine the runner builds, which a test checks on the runner's local-checkpoint engine; its profiling arms
-# write each run's records after the run's timed window, which a test checks with the same fakes; and its TP decode
+# write each run's records after its timed run, which a test checks with the same fakes; and its TP decode
 # driver's phases, batches and gate are tested on recorded shapes. A Pearl-C protocol arm's own gate is the
 # experimental Pearl-C arm's call check, which a test runs on a fake device run. The served table reads each result's
 # labels through from the store's remote (research's labels_sync, which research doesn't export), which a test checks on a

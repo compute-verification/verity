@@ -21,10 +21,12 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 # cells of a network certifier run its tests drive tick by tick (`test_warden_serve._run`).
 # `examples/h200/interfaces/verity_e2e_demo`: served_verdicts' block record (`block_record`, its schema) and prove_bundle's
 # bundle check (`replay_bundle`, with kernels' commit call `commit_slots/slots.py`), and its bundle and registration
-# fixtures; `benchmarks/prove_path/records_audit.py`: prove_bundle's verifier window.
+# fixtures; `benchmarks/prove_path/records_audit.py`: prove_bundle's verifier window. `examples/vllm/serve_load.py`:
+# served_verdicts' load, whose timings file its tests read and whose fixed window `test_serve_load` runs against
+# serve-openai's endpoint (`integrations/vllm/verity_vllm`) over a stand-in engine.
 inputs = ["verity", "verity/core/service/sampled_proofs/lakefile.toml", "benchmarks/live_challenger",
           "examples/h200/interfaces/verity_e2e_demo", "benchmarks/torch_gpu/commit_slots/slots.py",
-          "benchmarks/prove_path/records_audit.py",
+          "benchmarks/prove_path/records_audit.py", "examples/vllm/serve_load.py",
           "examples/h200/interfaces/tests/fixtures/drawn-unit-bundle.json",
           "examples/h200/interfaces/tests/fixtures/drawn-unit-bundle.bin",
           "examples/h200/interfaces/tests/fixtures/drawn-unit-registration.json",

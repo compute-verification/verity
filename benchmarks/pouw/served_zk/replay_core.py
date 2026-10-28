@@ -16,7 +16,7 @@ Without ``--runs`` it selects every `job.sh` attempt in the evidence store and f
   REGISTERED says they were the verifier's own.  A REGISTERED check must pass every registration rule (the honest
   outcome it is paired with may still reject); an ACCEPT check must get accept; a REFUSED registration a reject by a
   registration rule (before ``outcome:``); a REJECT outcome a reject.  An accept's public outputs must be the recorded
-  ``outcome.json``'s.  A window recorded before the fixed-length rule (Daniel, 19 Oct, ASK-39: no ``length`` item) is
+  ``outcome.json``'s.  A window recorded before the fixed-length rule (no ``length`` item) is
   replayed under the verifier's length of its request (`LENGTH`, where its params name none), and a REGISTERED or ACCEPT
   of it must now get a reject as not of record (``window-form: no-fixed-length``).
 * **openings** (``open-u<t>``, ``open-filler``, ``open-foreign-*``), as `job.sh` maps them, go to `core_check.opening`
@@ -68,7 +68,7 @@ REGISTRATION_RULES = ("window", "window-form", "public-items", "level", "public-
                       "scheme")
 #: the verifier's length of every recorded window: e2e.py's served requests, one slot each at SERVED_TOKENS under ignore_eos
 LENGTH = {"max_tokens": [4], "stop": "fixed"}
-#: what PoUW's rule says of a window registered before the fixed-length rule (Daniel, 19 Oct, ASK-39): not of record
+#: what PoUW's rule says of a window registered before the fixed-length rule: not of record
 NO_FIXED_LENGTH = "window-form: no-fixed-length"
 V1_PASS = "verity-vllm/pouw-pearl-c-run/v1"
 #: The evidence a registration control is paired with in a window stopped before its outcome: a registration rule

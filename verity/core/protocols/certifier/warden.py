@@ -1,7 +1,7 @@
 """The active warden: the network certifier as a relay that knows bytes only and retransmits everything on a fixed
 schedule, so it rebuilds the framing of every connection it carries.
 
-The warden runs on an auditor host (`trusted-host`; co-located with the server for tonight's demo, a named
+The warden runs on an auditor host (`trusted-host`; co-located with the server for the demo, a named
 assumption). It terminates each client's TCP connection, opens one to the server for it, and forwards each direction's
 bytes unchanged in content: no tokenizer, API, request or stop string is the warden's. The one addition is the release
 order on the server's copy of an HTTP request (`release`): what the warden decides is the framing and the timing, both
@@ -14,7 +14,8 @@ exactly P bytes, `END` the last 0 … P of a direction, `PAD` none (marked paddi
 closed, for whatever reason), and `REFUSED` none (a connection the warden doesn't take). Both directions are cut
 the same way: byte k of a direction is in its cell ⌊k/P⌋, so a cell's content is fixed by the bytes and never by how
 they were read. The client speaks cells both ways through a thin, workload-blind shim (`cells`, `Shim`); the server
-gets the ingress payloads as bytes (co-located tonight; deployed, its own shim strips the cells as the client's does).
+gets the ingress payloads as bytes (co-located in the demo; deployed, its own shim strips the cells as the client's
+does).
 
 **Admission.** The k-th connection to arrive, from 0, has ordinal k + 1, as the active certifier's `Requests` streams
 it: ordinal 0 is no connection's. At most `lanes` connections are served at once; one that arrives with every lane

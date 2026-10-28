@@ -1,6 +1,6 @@
 """Dither's served standard number on one GPU: each arm a resident vLLM engine in its own worker process on the same GPU,
 the parent alternating reps between them (arm order rotated each rep), on int8-exact Llama-3.1-8B (the verity-int8 pin,
-CA's served_h1 row) and served_h1's prompts (`tests.engine.int8_exact_gpu.PROMPTS`, cycled).
+served_h1's row) and served_h1's prompts (`tests.engine.int8_exact_gpu.PROMPTS`, cycled).
 
 Measures, per arm and rep:
     tpot_b32_ms      decode at batch 32: 32 requests, greedy, ignore_eos; (t(N2) - t(N1)) / (N2 - N1) over two generate calls
@@ -41,16 +41,16 @@ Arms:
                  coin and the seeds between steps)
     dither-side  dither with the receipts in one `h1r` launch a step on a second stream, after the step's coin, beside the
                  next step (`dither_fused.patch(rc="side")`); the `h1f` launches compute z and y only
-    dither-1s    exact with every linear's y from Dither's one stream (`dither_one`, `h1o.cu`, CA's H1V3): y = dequant(O' -
+    dither-1s    exact with every linear's y from Dither's one stream (`dither_one`, `h1o.cu`, H1V3): y = dequant(O' -
                  sum_d 128^d D_d) from the noised mainloop the call's receipts fold, z that O; the call's A table, seeds
                  (the window's salt and root(A_j), root(B_j): epsilon 'seeded') and units in the forward; admit and z
                  tables, the step trees, the round and the receipt trees between steps.  It serves the dithered product, so
                  its tokens are not exact's (reported, not gated)
-    dither-1s-credit  dither-1s on an eager engine with every linear's `apply` inside CA's credit gate
+    dither-1s-credit  dither-1s on an eager engine with every linear's `apply` inside the credit gate
                  (`credit_gate.Trace`, the file DITHER_CREDIT_GATE names): the gate reports its verdicts (`credit_2684`)
     dither-1s-warp  dither-1s with its units a warp each (DITHER_UNITS=warp, `h1o_units`), not a block each
     dither-1s-split  dither-1s with its units in the split form (DITHER_UNITS=split, `h1o_unitss`: six warps a unit)
-    dither-1s-cpeel  dither-1s with the credited peel (DITHER_PEEL=1, `h1o_unitsbp`; CA, 11:02Z and 12:16Z, H1V3's
+    dither-1s-cpeel  dither-1s with the credited peel (DITHER_PEEL=1, `h1o_unitsbp`; H1V3's
                  PouwPeelSeg): z = O + 256 X wbᵀ - X cᵀ - (b - 256 xa) Bᵀ = A Bᵀ from the receipted stream's own O, so y is
                  today's served y and its tokens must equal exact's; the receipts are dither-1s's
     dither-1s-split-cpeel  dither-1s-cpeel in the split form (`h1o_unitssp`)
@@ -75,7 +75,7 @@ Arms:
                  -hbr's call from a second receipts-only build (HB_H1U_KC: sbench.sh's HB_KC_FLAGS, a candidate timed beside
                  -hbr in one run and held to its every gate), with its own libh1c.so where DITHER_H1C_KC names one
                  (sbench.sh's HB_KC_H1C_FLAGS) and its own DITHER_ZY1 where DITHER_ZY1_KC is set (1: -zy's z and y
-                 tables in one h1c_build, `dither_a.ZY1_ENV`).  Each with -zy commits CA's z/y leaves (one hiding leaf a
+                 tables in one h1c_build, `dither_a.ZY1_ENV`).  Each with -zy commits the per-unit z/y leaves (one hiding leaf a
                  32 x 32 unit holding its z and its y = dequant(z): the epilogue writes the records, the window
                  builds every call's table between steps),
                  and with -y commits no z at all (y only: the leaves' cost floor, never credited; its gate is its
@@ -85,15 +85,15 @@ Arms:
                  their own); -aom and -aoms are -ao and -aos on four such streams, call w's on stream w % 4 (no
                  call's A table reads another's); -aomn (-hbk, -hbr) is -aoms with each call's noise there as well, so
                  the side stream runs the units alone.  With -pt last, between steps the receipt trees and the admit tables run on streams of
-                 their own beside the z tables and the step trees (`Window.tree_streams`); with -ls after that, each step's
-                 seeds read the live salt of the round before it (`Window.step_salt`, CA's ask 11)
+                 their own beside the z tables and the step trees (`DitherState.tree_streams`); with -ls after that, each step's
+                 seeds read the live salt of the round before it (`DitherState.step_salt`)
     dither-a-so  dither-a-hbk-zy, dither-a-hbr-zy and dither-a-hbc-zy (-hbr's call from dither-a-hbc's builds,
-                 HB_H1U_KC, DITHER_H1C_KC and DITHER_ZY1_KC) in the statement's order (RT4-INT-12, `dither_so`): the
+                 HB_H1U_KC, DITHER_H1C_KC and DITHER_ZY1_KC) in the statement's order (`dither_so`): the
                  forward computes and commits a step's A, scales and z/y leaves, round s goes out before coin s, and step
                  s's seeds and units run after coin s on a ring of D steps' A slots, beside a later step's forward, their
                  receipts under round s + D - 1: dither-a-{hbk,hbr,hbc}-zy-{aom,aomn,ab,abn}[-pt]-so<D> (D 2 to 10), -aom
                  the A tables per call on four streams in the forward, -aomn with each call's noise on four streams
-                 beside the units, -ab and -abn the step's A tables in one build between steps (not ruled in by CA: a
+                 beside the units, -ab and -abn the step's A tables in one build between steps (not ruled in: a
                  separate arm); its gate adds the order's checks and two faults (fault_rearly, fault_zlate).  With
                  -ov last (-ov1: a ring of one step; -ovp: the engine on a stream above the trees' and the units'
                  priority), round s's trees build beside step s + 1's forward from ring copies
@@ -187,7 +187,7 @@ prefill row runs --serial: each arm's engine alone, built, gated, timed and stop
 
 Coins: a dither arm's window takes its round coins from the challenger off the node when its worker has a session
 (DITHER_CHALLENGERS' entry for the arm, ``{"ARM": {"session": ID, "address": "127.0.0.1:PORT", "secret_file": F,
-"commitment": HEX, "rounds": R}}``, each its own from infra's gate, `coins.py open` (R its --rounds, the layout a
+"commitment": HEX, "rounds": R}}``, each its own from the challenger's gate, `coins.py open` (R its --rounds, the layout a
 dither_so window takes), else $POUW_CHALLENGER, $POUW_CHALLENGER_SESSION,
 $POUW_CHALLENGER_SECRET_FILE and $POUW_CHALLENGER_COMMITMENT), one session a window, opened at the window's build (its
 hello's commitment held to HEX) and closed at the arm's stop; without one they are in-process, and the arm's stats say
@@ -1114,7 +1114,7 @@ def main() -> int:
             if failed:
                 timed_picks = [arm for arm in failed if gate_doc[arm].get("verdict", {}).get("ok") and pick_of(arm) is None]
                 hint = {"hint": f"{timed_picks}: verdict ok, tokens not exact's, under timed picks: the node's shared "
-                                "Inductor cache can hand an arm a reduction config exact never ran (VLLM-48); rerun with "
+                                "Inductor cache can hand an arm a reduction config exact never ran; rerun with "
                                 f"{PICK_ENV}=first {PICK_ARMS_ENV}=exact,dither"} if timed_picks else {}
                 print(json.dumps({"gate_failed": failed, "timed": a.time_passed, **hint}), flush=True)
                 for arm in failed if a.time_passed else arms:

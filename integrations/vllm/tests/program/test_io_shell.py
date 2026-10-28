@@ -1,11 +1,11 @@
 """`registry.io_shell` (ingress v0): the encoder's bytes in the layout, padded to whole SHA-512 blocks, `IngressPrompt_v1` as
 `reference` on bodies in the schema and on each way out of it (other padding among them), the statics it refuses, the
-Boolean Definition against its word, `TokenFeed_v1` down a class Program's positions, a slot's `SlotRow_v1` and
-`SlotMask_v1`, and the network certifier's scan state read (`ScanSlots_v1`), output collection (`OutCollect_v1`) and
-entry (`SlotEntry_v1`)."""
+Boolean Definition against its word, `TokenFeed_v1` down a class Program's positions, and the network
+certifier's scan state read (`ScanSlots_v2`), output collection (`OutCollect_v1`) and entry (`SlotEntry_v1`)."""
 from __future__ import annotations
 
 import json
+from types import SimpleNamespace
 
 import numpy as np
 import pytest
@@ -121,7 +121,8 @@ def test_statics_without_a_layout_are_refused(kw):
 def test_the_token_feed_is_its_reference_down_a_prompt_and_past_it():
     """`TokenFeed_v1` chained down a class Program of NP = 5 prompt ids from each prompt length lp = 1..5: positions below lp
     take the prompt's ids, every later one the select it reads, and each carries (lp − p − 1, ids[p + 1:], 0s) on; the first
-    position takes ids[0] whatever its slot's count, and the statics it has no layout for are refused."""
+    position takes ids[0] whatever its slot's count, and the statics it has no layout for are refused: FIRST=1 too, after
+    FIRST=True at the same NP is bound (as `window_weights.WEIGHTS_CLASS`'s feed is)."""
     NP, ids = 5, [7, 0xFFFFFFFF, 0, 123456, 1 << 31]
     sels = [1000 + p for p in range(NP)]
     first, rest = bind(X.TokenFeed, NP=NP, FIRST=True), bind(X.TokenFeed, NP=NP, FIRST=False)
@@ -142,31 +143,10 @@ def test_the_token_feed_is_its_reference_down_a_prompt_and_past_it():
             assert slot == [(lp - p - 1) & 0xFFFFFFFF, *ids[p + 1:], *[0] * (p + 1)]
         assert toks == ids[:lp] + sels[lp - 1:NP - 1]
     assert run(first, [0, *ids])[0] == ids[0]
-    with pytest.raises(ValueError, match="refuses this binding"):
-        bind(X.TokenFeed, NP=0, FIRST=True)
-    # `bind`'s cache keys FIRST=1 as FIRST=True, so once a class circuit in this process has bound its feed at NP = 2 (as
-    # `window_weights.WEIGHTS_CLASS`'s does) `bind` returns that one unrefused: the rule is checked on its own.
-    assert X.feed_refuse({"NP": 2, "FIRST": 1}) and X.feed_refuse({"NP": 2, "FIRST": True}) is None
-
-
-def test_a_slots_row_opens_into_its_occupancy_and_feed_and_an_empty_slot_outputs_no_token():
-    """`SlotRow_v1` copies a slot's ingress row (occupancy, lp, ids) out as its occupancy word and the first `TokenFeed_v1`'s
-    slot; `SlotMask_v1` passes the select through while the occupancy word's low bit is 1 and otherwise outputs `EMPTY`,
-    which no token id is, at every occupancy word and token tried."""
-    def run(fn, *rows):
-        args = [np.array([r], dtype=np.uint64).astype(np.uint32) for r in rows]
-        return [int(v) for v in np.asarray(evaluate_batch(fn, *args, kernel="reference"), dtype=np.uint64).reshape(-1)]
-
-    row, ids = bind(X.SlotRow, NP=3), [7, 0, 0xFFFFFFFF]
-    for occ, lp in ((1, 3), (0, 0), (0xFFFFFFFE, 1)):
-        assert run(row, [occ, lp, *ids]) == [occ, lp, *ids]
-    mask = bind(X.SlotMask)
-    for occ in (0, 1, 2, 3, 0x80000000, 0xFFFFFFFF):
-        for tok in (0, 5, 128255, 0xFFFFFFFF):
-            assert run(mask, [occ], [tok]) == [X.mask_reference(occ, tok)] == [tok if occ & 1 else X.EMPTY]
-    assert X.EMPTY >= 1 << 31
-    with pytest.raises(ValueError, match="refuses this binding"):
-        bind(X.SlotRow, NP=0)
+    bind(X.TokenFeed, NP=2, FIRST=True)
+    for kw in ({"NP": 0, "FIRST": True}, {"NP": 2, "FIRST": 1}):
+        with pytest.raises(ValueError, match="refuses this binding"):
+            bind(X.TokenFeed, **kw)
 
 
 def _run(fn, *rows):
@@ -174,31 +154,41 @@ def _run(fn, *rows):
     return [int(v) for v in np.asarray(evaluate_batch(fn, *args, kernel="reference"), dtype=np.uint64).reshape(-1)]
 
 
+def _lane(tok: int, slot: list[int], occ: int, head: list[int]) -> list[int]:
+    return [tok, *slot, occ, *head]
+
+
 def test_the_scan_slots_read_is_its_reference_and_reads_each_field_where_it_is_packed():
-    """`ScanSlots_v1` on a 40-word row with two lanes: random rows give `slots_reference`'s rows and heads, and a row packed
-    field by field (occupancy, lp, max_tokens, and ids at `position`'s index, K0 = 2 in the first cell and K = 3 in each
-    later one) reads each lane's fields back, ids cut to IDB bits.  A field past the row is refused."""
+    """`ScanSlots_v2` on a 40-word row with two lanes: random rows give `scan_reference`'s lanes, and a row packed field by
+    field (occupancy, lp, max_tokens, and ids at `position`'s index, K0 = 2 in the first cell and K = 3 in each later one)
+    gives each lane its first position's `TokenFeed_v1{FIRST}` on its row (ids cut to IDB bits), its occupancy word and its
+    head, at the prompt lengths where the decrement's borrow runs furthest (0, 1, 2^31 and 2^32 − 1). A field past the
+    row is refused, and its gates are the decrements' 30 ANDs a lane."""
     NS, NP, IDB, K0, K = 40, 4, 17, 2, 3
     OCC, LP, MAX, IDS = (3, 300), (40, 340), (80, 380), (120, 420)
     st = {"NS": NS, "NP": NP, "IDB": IDB, "K0": K0, "K": K, "OCC": OCC, "LP": LP, "MAX": MAX, "IDS": IDS}
-    fn = bind(X.ScanSlots, **st)
+    fn = bind(BX.ScanSlotsV2, **st)
+    assert BX.ScanSlotsV2.traced(SimpleNamespace(**st)).counts["and"] == 30 * 2
     state = np.random.default_rng(1).integers(0, 1 << 16, size=(3, NS), dtype=np.uint64)
     got = np.asarray(evaluate_words(fn, state.astype(np.uint32)), dtype=np.uint64)
     for i in range(3):
-        ref = X.slots_reference([int(w) for w in state[i]], NP, IDB, K0, K, OCC, LP, MAX, IDS)
-        assert [int(v) for v in got[i].reshape(-1)] == [v for row, head in ref for v in (*row, *head)]
-    lanes = [(1, 3, 64, [5, (1 << IDB) - 1, 0, 77]), (0, 0, 9, [0, 0, 0, 0])]
-    x = 0
-    for (occ, lp, m, ids), o, l, mx, at in zip(lanes, OCC, LP, MAX, IDS):
-        x |= occ << o | lp << l | m << mx
-        x |= sum(v << at + IDB * X.position(K0, K, p) for p, v in enumerate(ids))
-    words = [[x >> 16 * k & 0xFFFF for k in range(NS)]]
-    out = [int(v) for v in np.asarray(evaluate_words(fn, np.array(words, dtype=np.uint32)), dtype=np.uint64).reshape(-1)]
-    assert out == [v for occ, lp, m, ids in lanes for v in (occ, lp, *ids, lp, m)]
+        ref = X.scan_reference([int(w) for w in state[i]], NP, IDB, K0, K, OCC, LP, MAX, IDS)
+        assert [int(v) for v in got[i].reshape(-1)] == [v for lane in ref for v in _lane(*lane)]
+    for lp0, lp1 in ((3, 0), (1, 1 << 31), (X.M32, 2)):
+        lanes = [(1, lp0, 64, [5, (1 << IDB) - 1, 0, 77]), (0, lp1, 9, [0, 0, 0, 0])]
+        x = 0
+        for (occ, lp, m, ids), o, l, mx, at in zip(lanes, OCC, LP, MAX, IDS):
+            x |= occ << o | lp << l | m << mx
+            x |= sum(v << at + IDB * X.position(K0, K, p) for p, v in enumerate(ids))
+        words = [[x >> 16 * k & 0xFFFF for k in range(NS)]]
+        out = [int(v) for v in np.asarray(evaluate_words(fn, np.array(words, dtype=np.uint32)), dtype=np.uint64).reshape(-1)]
+        assert out == [v for occ, lp, m, ids in lanes
+                       for v in _lane(*X.feed_reference([lp, *ids], None, NP), occ, [lp, m])]
+        assert out[1] == (lp0 - 1) & X.M32 and out[2:NP + 1] == lanes[0][3][1:] and out[NP + 1] == 0
     assert [X.position(K0, K, p) for p in range(NP)] == [0, 1, 3, 4]
     for bad in ({"IDS": (120, 16 * NS - IDB)}, {"IDB": 33}, {"OCC": (3,)}):
         with pytest.raises(ValueError, match="refuses this binding"):
-            bind(X.ScanSlots, **{**st, **bad})
+            bind(BX.ScanSlotsV2, **{**st, **bad})
 
 
 @pytest.mark.parametrize("KO", [1, 2, 5])

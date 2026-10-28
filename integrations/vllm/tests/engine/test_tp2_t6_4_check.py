@@ -1,7 +1,7 @@
-"""CPU tests for tp2_worker._t6_4_check (moe cf29c7e72 folded by tp; rev-cb M-0424 T6-4 / report M-0435+M-0478).
+"""CPU tests for tp2_worker._t6_4_check, the late-read detector.
 
 The detector compares the committed fused-MoE received all-reduce output `<L>.mlp.experts/out` with the committed next norm's `/0`
-in the same step: an EQUAL pair is a late read.  tp's fold adds the not-applicable outcome for dense TP rows (no `/out` member).
+in the same step: an EQUAL pair is a late read.  The not-applicable outcome is for dense TP workloads (no `/out` member).
 The members are committed on the per-tensor host path and read through `oracle_compare.OpenedReader` (opened, verified against the run root).
 """
 from __future__ import annotations

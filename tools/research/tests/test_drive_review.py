@@ -1,6 +1,6 @@
-"""The review landing (`land = "review"`; Daniel, 24 Oct 06:05Z: PRs land on an eyeball review, and the full check runs after
-landing).  A tick lands `next`'s longest prefix whose every member has a land verdict at its head by a reviewer who isn't its owner,
-a Lean change only once a Lean check passed; the after-landing run checks `main`, and its failure reverts what it implicates once
+"""The review landing (`land = "review"`: PRs land on an eyeball review, and the full check runs after landing).  A tick
+lands `next`'s longest prefix whose every member has a land verdict at its head by a reviewer who isn't its owner, a Lean
+change only once a Lean check passed; the after-landing run checks `main`, and its failure reverts what it implicates once
 `main` passed that step before, bisecting when several PRs are implicated."""
 from __future__ import annotations
 
@@ -17,7 +17,7 @@ import pytest
 import research.queue as Q
 from research import merge
 from research.drive import AFTER_LANDING, AFTER_LANDING_OPTIONAL, LEAN_STEP
-from research.queue import QueueError, StoreLabels, label_target, lean_change
+from research.queue import PR, QueueError, StoreLabels, label_target, lean_change
 from research.store import vocab
 from test_queue import World, _git
 from test_queue_drive import Harness, _failed_run, _killed_run, _live_run, _steps_run, _tip
@@ -103,13 +103,13 @@ def test_a_reviewed_prefix_lands_and_awaits_the_after_landing_run_of_every_step(
     assert "lean-agreement" in pl["verified_as"]["steps"]         # ci's baseline passed it, and nothing it checks changed since
 
 
-def test_an_unreviewed_or_held_member_stops_the_prefix_below_it(world, monkeypatch):
+def test_an_unreviewed_member_new_to_next_or_a_held_one_stops_the_prefix_below_it(world, monkeypatch):
     h = Review(world, monkeypatch)
     for n, f in ((1, "a.txt"), (2, "b.txt"), (3, "c.txt")):
         world.gh.put(n, world.change({f: f"{n}\n"}))
     h.review(1)
     h.review(3)
-    assert h.tick().startswith("landed #1"), world.logs
+    assert h.tick().startswith("landed #1"), world.logs        # the lift moves only what `next` held before the sync
     assert _subject(world, "main").startswith("Queue: #1")
     h.review(2)
     h.review(2, "hold", by="other", ref="reads a stale fixture")
@@ -142,7 +142,7 @@ def test_a_lean_change_without_a_lock_change_waits_for_a_lean_check_and_the_afte
         world, monkeypatch):
     """A PR that changes a guarantee's statement, or a definition it reads, without its lock would land unchecked if only a
     changed lean-audit.json held it, and the after-landing lean-audit, passing on regenerated records nothing commits, would
-    leave `main`'s lock stale and Daniel's DM unsent."""
+    leave `main`'s lock stale and the spec-change DM unsent."""
     h = Review(world, monkeypatch)
     world.gh.put(1, world.change({"other/X.lean": "-- no lock in other/\n"}))
     world.gh.put(2, world.change({"pkg/T.lean": "theorem T : True := trivial\n"}))
@@ -196,8 +196,8 @@ def _rebuild_next(world: World, monkeypatch) -> None:
 
 
 def test_a_running_lean_check_holds_a_rebuilt_next_with_the_same_prs_heads_and_tree(world, monkeypatch):
-    """24 Oct: re-marks low on `next` rebuilt it, the check's commit left it, and drive cancelled r20261024-144858-46af and
-    r20261024-165000-3c72 mid-audit: nothing landed for 3 h.  A rebuilt `next` with the same PRs at the same heads onto the same
+    """A re-mark low on `next` rebuilds it and the check's commit leaves it; cancelling the check mid-audit would land nothing
+    for hours.  A rebuilt `next` with the same PRs at the same heads onto the same
     `main` has the same tree there, which the check still covers."""
     h = Review(world, monkeypatch, nonlean_first=False)       # a member that changes no Lean above a Lean change
     world.gh.put(1, world.change({"pkg/lean-audit.json": "{}"}))
@@ -274,9 +274,8 @@ def _lock_landing(world, monkeypatch, tmp_path, above: dict[str, str], lock: str
 @pytest.mark.parametrize("records", ['{"records": 3}\n', '{"records": 2}\n'])
 def test_a_landing_with_regenerated_locks_rebuilds_next_on_its_lock_commit_and_the_check_above_moves_with_it(
         world, monkeypatch, tmp_path, records):
-    """26 Oct 22:40Z: drive landed 17 PRs with a `Lock records regenerated` commit on top, `main` was no commit of `next`, and the
-    next sync merged all 93 members again: a passed Lean check at 41 and the running ones above went with their commits (CI-167
-    item 2; 20:47Z too).  `next` is rebuilt on the lock commit at once, each member with its merge's tree and those records, the
+    """A landing with a `Lock records regenerated` commit on top leaves `main` no commit of `next`, and a sync would merge every
+    member again: the passed and running Lean checks above would go with their commits.  `next` is rebuilt on the lock commit at once, each member with its merge's tree and those records, the
     next sync keeps them, and the check above, running on, moves to its commit's image and lands it with its own records: the
     tree it checked with them, which the lock gate checks against the commit it ran on.  When its records are the ones below,
     the image holds them already, and it lands as it is."""
@@ -341,7 +340,7 @@ def test_a_moved_check_that_didnt_regenerate_the_records_below_it_covers_nothing
 
 
 def test_pre_passed_carried_check_that_regenerated_nothing_covers_nothing(world, monkeypatch, tmp_path):
-    """CI-167 (b238bd44): the check above had passed before the landing below it moved it, so `_follow_lean` never judged it on
+    """The check above passed before the landing below it moved it, so `_follow_lean` never judged it on
     its image.  Having regenerated nothing, it checked a tree without the lock commit's records, and there is no lock commit
     for the lock gate to refuse: it covers nothing, and the image is checked again."""
     h, _, top = _lock_landing(world, monkeypatch, tmp_path, {}, passed=True)
@@ -451,7 +450,7 @@ def test_the_lean_check_stops_below_a_member_that_came_onto_next_within_the_sett
 
 
 def test_a_member_that_came_onto_next_a_tick_ago_no_longer_stops_the_lean_check(world, monkeypatch):
-    """24 Oct: one new head at position 2 capped the check at position 1 for an hour (three settle ticks)."""
+    """One new head at position 2 doesn't cap the check at position 1 for more than one settle tick."""
     h = Review(world, monkeypatch, nonlean_first=False)       # a member that changes no Lean above a Lean change
     world.gh.put(1, world.change({"a.txt": "1\n"}))
     h.review(1)
@@ -485,7 +484,7 @@ def _stacked(world, monkeypatch) -> tuple[Review, str, str]:
 
 
 def test_a_proof_only_lean_change_lands_on_its_verdict_and_a_lock_or_code_lean_change_waits(world, monkeypatch):
-    """Daniel, 25 Oct 11:19 PM PDT: Lean in `Security/` that touches no lock is proofs and lands on its land verdict (the
+    """Lean in `Security/` that touches no lock is proofs and lands on its land verdict (the
     after-landing lean-audit reverts it on a failure); a lock, or Lean outside `Security/` (it runs as code), still waits."""
     h = Review(world, monkeypatch)
     world.gh.put(1, world.change({"Security/lean-audit.json": "{}\n", "Security/Proofs/A.lean": "theorem A : True := trivial\n"}))
@@ -498,8 +497,21 @@ def test_a_proof_only_lean_change_lands_on_its_verdict_and_a_lock_or_code_lean_c
     assert h.q.chain()[0].pr == 2                                         # proofs only: non-Lean first puts it below
 
 
+def test_a_two_demos_lean_change_lands_on_its_verdict_and_another_waits(world, monkeypatch):
+    """A PR whose title says "two demos" lands on its land verdict with no Lean check first (its records passed at its
+    ready mark, and the after-landing lean-audit checks it); any other lock change still waits for one."""
+    h = Review(world, monkeypatch)
+    world.gh.put(1, head := world.change({"pkg/lean-audit.json": "{}"}))
+    world.gh.prs[1] = PR(1, head, "Two demos: the lock", "Lane `lane-1`.")
+    world.gh.put(2, world.change({"pkg/lean-audit.json": "{\n}"}, base=head))
+    for n in (1, 2):
+        h.review(n)
+    assert h.tick().startswith("landed #1"), world.logs
+    assert h.launched and h.launched[0][0] != head, world.logs              # #2's own check, never #1's
+
+
 def test_a_lean_check_is_stacked_at_nexts_top_for_a_lean_change_above_a_running_one(world, monkeypatch):
-    """25 Oct: Lean changes that came onto `next` above a running Lean check's commit waited for it to pass, then for a whole
+    """Lean changes that come onto `next` above a running Lean check's commit don't wait for it to pass, then for a whole
     check of their own (~1 h).  While it runs, one is stacked at `next`'s top, reviewed or not, with no free check slot needed,
     at most `max_lean_checks` running; the lower one is never cancelled for it, and the landing takes the highest that passed."""
     h, two, three = _stacked(world, monkeypatch)
@@ -519,7 +531,7 @@ def test_a_lean_check_is_stacked_at_nexts_top_for_a_lean_change_above_a_running_
 
 
 def test_nothing_is_stacked_for_a_member_above_the_running_check_that_changes_no_lean(world, monkeypatch):
-    """CI-167 stacked a check at the reviewed top whenever a check slot was free, though a member above the running check that
+    """No check is stacked at the reviewed top just because a check slot is free: a member above the running check that
     changes no Lean lands on that check alone."""
     h = Review(world, monkeypatch)
     world.gh.put(1, world.change({"pkg/lean-audit.json": "{}"}))
@@ -630,9 +642,8 @@ def test_members_that_change_no_lean_go_below_a_lean_change_and_land_while_its_l
 
 def test_reviewed_members_that_change_no_lean_above_a_lean_change_at_the_bottom_go_below_it_before_its_check_runs(
         world, monkeypatch):
-    """CI-172, 27 Oct: #4828, a Lean change already at the bottom of `next`, held every reviewed member above it for its Lean
-    check, 10:52Z-12:20Z: non-Lean first orders only what a sync merges anyway, and the check launched on the reviewed prefix's
-    top, holding them all.  While no Lean check of `next` runs, they go below it and land that tick, and its check starts on
+    """A Lean change already at the bottom of `next` would hold every reviewed member above it for its Lean check: non-Lean
+    first orders only what a sync adds, and the check launches on the reviewed prefix's top, holding them all.  While no Lean check of `next` runs, they go below it and land that tick, and its check starts on
     what is left.  Once it runs, nothing moves below it: one reviewed after waits above it, and lands on its pass."""
     h = Review(world, monkeypatch)
     world.gh.put(1, world.change({"pkg/lean-audit.json": "{}"}))
@@ -646,7 +657,7 @@ def test_reviewed_members_that_change_no_lean_above_a_lean_change_at_the_bottom_
     assert h.tick().startswith("landed #3"), world.logs
     assert _subject(world, "main").startswith("Queue: #3") and _subject(world, "main^1").startswith("Queue: #2")
     assert [m.pr for m in h.q.chain()] == [1] and h.launched == [(_tip(world), "m1", False)] and h.cancelled == []
-    assert any("#2 #3 (reviewed, no Lean change) go to the bottom" in x for x in world.logs), world.logs
+    assert any("#2 #3 #1 (reviewed) go to the bottom" in x for x in world.logs), world.logs
     world.gh.put(4, world.change({"c.txt": "4\n"}))
     h.review(4)
     assert not h.tick().startswith("landed")
@@ -687,10 +698,91 @@ def test_a_lift_leaves_an_unreviewed_member_a_pr_stacked_on_the_lean_change_and_
     assert [m.pr for m in h.q.chain()] == [1, 2, 3] and len(h.launched) == 1, world.logs
 
 
+def test_an_unreviewed_member_below_reviewed_ones_no_longer_stops_them_landing(world, monkeypatch):
+    """A member with no land verdict held every reviewed member above it, deep in `next`.  The members with a land verdict
+    go below those waiting for one, and land that tick; the one waiting holds only itself."""
+    h = Review(world, monkeypatch)
+    for n, f in ((1, "a.txt"), (2, "b.txt"), (3, "c.txt")):
+        world.gh.put(n, world.change({f: f"{n}\n"}))
+    h.tick()
+    assert [m.pr for m in h.q.chain()] == [1, 2, 3]
+    h.review(2)
+    h.review(3)
+    assert h.tick().startswith("landed #3"), world.logs
+    assert _subject(world, "main").startswith("Queue: #3") and _subject(world, "main^1").startswith("Queue: #2")
+    assert [m.pr for m in h.q.chain()] == [1]
+    assert any("#2 #3 (reviewed) go to the bottom" in x for x in world.logs), world.logs
+    h.review(1)
+    assert h.tick().startswith("landed #1") and _main(world) == _tip(world)
+
+
+def test_a_held_member_still_stops_the_members_above_it_a_hold_is_a_verdict(world, monkeypatch):
+    """Nothing moves past a held member: what is below it lands, past an unreviewed one, and what is above it waits."""
+    h = Review(world, monkeypatch)
+    for n, f in ((1, "a.txt"), (2, "b.txt"), (3, "c.txt"), (4, "d.txt")):
+        world.gh.put(n, world.change({f: f"{n}\n"}))
+    h.tick()
+    h.review(2)
+    h.review(3, "hold", by="other", ref="reads a stale fixture")
+    h.review(4)
+    assert h.tick().startswith("landed #2"), world.logs
+    assert [m.pr for m in h.q.chain()] == [1, 3, 4]
+    out = h.tick()
+    assert out.startswith("nothing reviewed lands: #1"), out
+    assert [m.pr for m in h.q.chain()] == [1, 3, 4] and _subject(world, "main").startswith("Queue: #2")
+
+
+def test_reviewed_first_keeps_a_stacked_pr_after_the_pr_it_contains(world, monkeypatch):
+    """A reviewed PR stacked on an unreviewed one stays above it; one stacked on a reviewed one goes down after it."""
+    h = Review(world, monkeypatch)
+    world.gh.put(1, world.change({"a.txt": "1\n"}))
+    world.gh.put(2, world.change({"b.txt": "2\n"}, base=world.gh.prs[1].head))
+    world.gh.put(3, world.change({"c.txt": "3\n"}))
+    world.gh.put(4, world.change({"d.txt": "4\n"}, base=world.gh.prs[3].head))
+    h.tick()
+    assert [m.pr for m in h.q.chain()] == [1, 2, 3, 4]
+    for n in (2, 3, 4):
+        h.review(n)
+    assert h.tick().startswith("landed #4"), world.logs
+    assert _subject(world, "main").startswith("Queue: #4") and _subject(world, "main^1").startswith("Queue: #3")
+    assert [m.pr for m in h.q.chain()] == [1, 2]
+    h.review(1)
+    assert h.tick().startswith("landed #2") and _main(world) == _tip(world)
+
+
+def test_a_member_whose_labels_cant_be_read_stops_the_lift_not_the_tick(world, monkeypatch):
+    h = Review(world, monkeypatch)
+    for n, f in ((1, "a.txt"), (2, "b.txt"), (3, "c.txt")):
+        world.gh.put(n, world.change({f: f"{n}\n"}))
+    h.tick()
+    h.review(2)
+    h.review(3)
+    reviews = h.d.reviews
+
+    def stale(pr, head):
+        if pr == 3:
+            raise QueueError(f"STALE: the labels of pr:3@{head} weren't pulled from the store's remote")
+        return reviews(pr, head)
+
+    h.d.reviews = stale
+    assert h.tick().startswith("landed #2"), world.logs
+    assert [m.pr for m in h.q.chain()] == [1, 3]
+    assert any("the lift stops below #3: STALE" in x for x in world.logs), world.logs
+
+
+def test_reviewed_first_off_keeps_an_unreviewed_member_where_it_is(world, monkeypatch):
+    h = Review(world, monkeypatch, reviewed_first=False)
+    for n, f in ((1, "a.txt"), (2, "b.txt")):
+        world.gh.put(n, world.change({f: f"{n}\n"}))
+    h.tick()
+    h.review(2)
+    assert h.tick().startswith("nothing reviewed lands: #1"), world.logs
+    assert [m.pr for m in h.q.chain()] == [1, 2]
+
+
 @pytest.mark.parametrize("fault", ["enospc", "after-audit"])
 def test_a_lean_check_failed_by_its_machine_runs_again_once_on_another_machine(world, monkeypatch, tmp_path, fault):
-    """27 Oct: #4828's Lean check hit ENOSPC after every audit passed, was counted as #4828's failure, and drive held `next`.
-    A check whose step ran out of disk, or that failed after its lean-audit passed, runs again once, on the machines it didn't
+    """A Lean check that hits ENOSPC after every audit passed is no failure of its change.  A check whose step ran out of disk, or that failed after its lean-audit passed, runs again once, on the machines it didn't
     run on; failed by its machine again, it is the change's."""
     h = Review(world, monkeypatch)
     h.d.on = "vy-a,vy-b,vy-c"
@@ -938,8 +1030,8 @@ def _red_landing(world, monkeypatch, tmp_path) -> tuple[Review, str]:
 
 def test_an_after_landing_failure_rings_its_culprit_and_the_suites_owner_and_reverts_it_an_hour_later(world, monkeypatch,
                                                                                                        tmp_path):
-    """25-26 Oct: 467 PRs landed on a `main` whose after-landing runs all failed, and each failure went to @ci alone.  Drive
-    names the one landing whose change touches the failing test, rings its owner and the suite's with the run and the first
+    """Without a culprit, PRs keep landing on a `main` whose after-landing runs all fail, each failure going to @ci alone.
+    Drive names the one landing whose change touches the failing test, rings its owner and the suite's with the run and the first
     error line, and reverts it once `FIX_WINDOW_S` passed with no fix marked."""
     from research.drive import FIX_WINDOW_S
 
@@ -991,8 +1083,7 @@ def test_a_marked_fix_holds_the_culprits_revert_while_it_stays_marked(world, mon
 
 
 def test_a_landed_fix_holds_the_culprits_revert_until_a_run_of_a_main_with_it_is_red_again(world, monkeypatch, tmp_path):
-    """27 Oct 02:07Z: drive told memory-accounting to revert #4798 by hand 19 min after its fix #4902 ('fixes suite
-    benchmarks/pous (#4798)') landed, since a fix counted only while it was an open PR.  A fix that landed after the red tip
+    """A fix counted only while it is an open PR would have drive ask for the culprit's revert after its fix landed.  A fix that landed after the red tip
     holds the revert, by its merge's title; once a run of a `main` with it is red again, it no longer does."""
     from research.drive import FIX_WINDOW_S
 
@@ -1014,7 +1105,7 @@ def test_a_landed_fix_holds_the_culprits_revert_until_a_run_of_a_main_with_it_is
 
 
 def test_an_unrelated_pr_that_names_the_red_suite_holds_no_revert(world, monkeypatch, tmp_path):
-    """26 Oct, top's review of #4737: counting any ready PR whose body names the suite let a suite called `research` be held
+    """Counting any ready PR whose body names the suite would let a suite called `research` be held
     for good by whatever PR mentions research.  Neither the name nor `suite research` without `fixes` holds the revert."""
     from research.drive import FIX_WINDOW_S
 
@@ -1167,8 +1258,8 @@ def test_an_after_landing_run_the_machine_killed_runs_again_once_and_killed_agai
 
 
 def test_a_red_after_landing_run_runs_on_and_is_cancelled_only_with_its_circuit_check_tail_left(world, monkeypatch, tmp_path):
-    """25-26 Oct: drive cancelled each after-landing run at its first failed suite, 1-63 min into a ~4 h run, and the cancel
-    killed lean-agreement mid-step, which read as failed.  A red run rings at once and runs on until every step but
+    """Cancelling an after-landing run at its first failed suite leaves the rest of a ~4 h run unknown, and the cancel kills
+    lean-agreement mid-step, which reads as failed.  A red run rings at once and runs on until every step but
     circuit-check and flock-rust-tests has ended, so every red suite is named; a step a cancel stopped reads `not run`."""
     from research.drive import TAIL
 
@@ -1221,7 +1312,7 @@ def test_a_read_guard_failure_rings_the_pr_that_added_the_reading_test(world, mo
 
 
 def test_main_far_behind_its_last_verified_commit_rings_ci_and_top_every_hour(world, monkeypatch, tmp_path):
-    """25-26 Oct: `main` went 30 h without a verified commit and nobody was told.  Once its oldest unverified landing is
+    """A `main` many hours without a verified commit must reach someone.  Once its oldest unverified landing is
     `BEHIND_S` old, drive rings @ci and @top, again every `BEHIND_EVERY_S` while it stays behind."""
     from research.drive import BEHIND_EVERY_S, BEHIND_S
 
@@ -1400,8 +1491,8 @@ def test_a_lean_check_above_the_landing_top_covers_it_only_with_no_lean_change_b
 
 
 def test_a_hand_lean_check_holds_the_members_up_to_its_commit_until_it_ends(world, monkeypatch):
-    """26 Oct 07:16Z: a `--first` rebuild of `next` came before ci's two hand Lean checks (`train.sh COMMIT MACHINES --deferred
-    lean-audit`, at 7d11a5e2 and 2823fe1e) landed anything, and threw both away: drive held `next` only under its own."""
+    """A `--first` rebuild of `next` before hand Lean checks (`train.sh COMMIT MACHINES --deferred lean-audit`) landed anything
+    would throw them away: drive holds `next` under them as under its own."""
     h = Review(world, monkeypatch)
     for n, f in ((1, "a.txt"), (2, "b.txt"), (3, "c.txt"), (4, "d.txt")):
         world.gh.put(n, world.change({f: f"{n}\n"}))
@@ -1536,10 +1627,13 @@ def test_review_without_sha_refuses_a_head_pushed_since_the_sync_and_takes_a_sho
     assert [lab.value for lab in world.store.labels(label_target(1, old), key=vocab.REVIEWED)] == ["hold"]
     with pytest.raises(QueueError, match="full 40-character SHA"):
         Q.review(h.q, world.store, labels, 1, "land", None, "lane-9", sha="0badc0de")
+    with pytest.raises(QueueError, match="neither #1's head"):                     # a mistyped full SHA
+        Q.review(h.q, world.store, labels, 1, "land", None, "lane-9", sha=new[:12] + "0" * 28)
+    assert Q.review(h.q, world.store, labels, 1, "land", None, "lane-9", sha=new) == 0
 
 
 def test_the_owner_of_an_unmarked_pr_a_marked_one_waits_for_is_told_once_per_pair_of_heads(world, monkeypatch):
-    """TOP-90: #4412, marked, waited on #4382's unmarked commits (CI-178) and nobody told #4382's owner.  Its owner hears once per
+    """A marked PR can wait on another's unmarked commits, and that one's owner is told.  Its owner hears once per
     (head of the waiting PR, head of the unmarked one), and nothing once it's admitted or when the waiting PR isn't marked."""
     _registry(world, "lane-5", "lane-7", "lane-8", "lane-9")
     h = Review(world, monkeypatch)
@@ -1597,8 +1691,7 @@ def _detached(h: Review, tmp_path, lean: bool = True, post: bool = False) -> lis
 
 
 def test_a_lean_check_launches_detached_and_a_later_tick_reads_its_run_ids(world, monkeypatch, tmp_path):
-    """26 Oct (note:ci/20261026T0926Z-finding-drive-tick-profile): drive's tick waited 9-12 min on each Lean check's train.sh
-    for its run ids, so every tick that launched one took 15-26 min.  The launch returns at once; a later tick reads the ids."""
+    """A tick that waited on each Lean check's train.sh for its run ids would take minutes per launch.  The launch returns at once; a later tick reads the ids."""
     h = Review(world, monkeypatch)
     starts = _detached(h, tmp_path)
     world.gh.put(1, world.change({"pkg/lean-audit.json": "{}"}))
@@ -1739,7 +1832,7 @@ def test_detach_returns_before_train_sh_prints_its_run_ids_and_launched_reads_th
 
 
 def test_a_detached_train_launch_runs_its_own_copy_of_train_sh(tmp_path, monkeypatch):
-    """infra, 26 Oct 09:54Z (#4657): bash reads a script as it runs, and a later tick resets and checks out the queue's clone, so
+    """Bash reads a script as it runs, and a later tick resets and checks out the queue's clone, so
     a train.sh that `main` changed meanwhile would change under a running launch.  It runs a copy in its launch directory, from
     the clone, and a rewrite of the clone's train.sh doesn't reach it."""
     from research.drive import LAUNCHES, launched, train_launch
@@ -1764,8 +1857,8 @@ def test_a_detached_train_launch_runs_its_own_copy_of_train_sh(tmp_path, monkeyp
 
 
 def test_a_hand_lean_check_through_drive_holds_next_from_its_launch_before_train_sh_registers_a_run(world, monkeypatch, tmp_path):
-    """26 Oct 10:36Z: train.sh registers a hand Lean check's run 5-10 min after its launch, and a tick in that window reordered
-    `next` and threw away S1's check at 19a382ca.  `research queue lean-check` records it in drive's state as it launches."""
+    """Train.sh registers a hand Lean check's run minutes after its launch, and a tick in that window could reorder `next` and
+    throw the check away.  `research queue lean-check` records it in drive's state as it launches."""
     h = Review(world, monkeypatch)
     starts = _detached(h, tmp_path)
     for n, f in ((1, "a.txt"), (2, "b.txt"), (3, "c.txt"), (4, "d.txt")):
@@ -1854,9 +1947,9 @@ def _passed_hand_check(world, monkeypatch) -> tuple[Review, str, str]:
 
 def test_a_passed_lean_check_of_a_reviewed_prefix_lands_it_though_a_new_head_below_conflicts_and_its_own_commit_failed(
         world, monkeypatch):
-    """26 Oct 18:55Z: ci's hand check of b43f74a3 passed over S1's 124 reviewed PRs, and in the same tick #4745's new head, below
-    it, rebuilt `next` from 51 up and conflicted: the pass left `next` with its commit, and nothing landed.  Below it, #4439's
-    own commit had failed its Lean check, which also held everything above it though the pass checked the tree that lands."""
+    """A hand check passes over the reviewed PRs, and in the same tick a new head below it rebuilds `next` and conflicts: the
+    pass would leave `next` with its commit, and nothing land.  Below it, a member's own commit failed its Lean check, which
+    must not hold everything above it when the pass checked the tree that lands."""
     _registry(world, "lane-1")
     h = Review(world, monkeypatch, nonlean_first=False)
     world.gh.put(1, world.change({"pkg/lean-audit.json": "{}", "x.txt": "1\n"}))
@@ -1914,9 +2007,72 @@ def test_a_passed_lean_check_holds_next_until_it_lands_and_an_ejection_below_it_
     assert [m.pr for m in chain] == [1, 3] and chain[0].commit == one and top not in {m.commit for m in chain}, world.logs
 
 
+def _two_lean_checks(world, monkeypatch, higher: str) -> tuple[Review, list[str]]:
+    """Five unreviewed members on `next`, a Lean check running at #2's commit and one at #4's in state ``higher`` (running or
+    passed): (the harness, the chain's commits)."""
+    h = Review(world, monkeypatch, nonlean_first=False)
+    for n in range(1, 6):
+        world.gh.put(n, world.change({f"f{n}.txt": f"{n}\n"}))
+    h.tick()
+    commits = [m.commit for m in h.q.chain()]
+    h.d.hand_lean(commits[1], "ci")
+    h.d.hand_lean(commits[3], "ci")
+    if higher == "passed":
+        rid = h.lean_ids()[1]
+        h.run_state[rid] = ("done", 0, None)
+        h.evidence = [_steps_run(world.tmp, rid, {LEAN_STEP: "passed"})]
+    h.tick()
+    lean = h.d.q.load_state()["drive"]["lean"]
+    assert lean[commits[1]]["state"] is None and lean[commits[3]]["state"] == (None if higher == "running" else "passed")
+    assert [m.commit for m in h.q.chain()] == commits, world.logs
+    return h, commits
+
+
+@pytest.mark.parametrize("higher", ["running", "passed"])
+def test_next_stays_up_to_the_higher_of_two_lean_checks_and_first_goes_above_it(world, monkeypatch, higher):
+    """A sync that put a `--first` fix and a re-head above the lower check's commit only would take the higher one's commit off
+    `next`, and with it a pass no land verdict yet lands (its prefix unreviewed), or a check mid-audit."""
+    h, commits = _two_lean_checks(world, monkeypatch, higher)
+    world.gh.put(5, world.change({"f5.txt": "five\n"}))                    # above both checks: it moves to the tip
+    world.gh.put(6, world.change({"f6.txt": "6\n"}))
+    h.q.first = (6,)
+    h.tick()
+    chain = h.q.chain()
+    assert [m.commit for m in chain[:4]] == commits[:4], world.logs
+    assert [m.pr for m in chain] == [1, 2, 3, 4, 6, 5] and h.cancelled == [], world.logs
+    assert commits[3] in h.d.q.load_state()["drive"]["lean"]
+
+
+@pytest.mark.parametrize("leaves", ["ejected", "re-headed"])
+def test_a_member_below_the_lower_lean_check_that_leaves_rebuilds_next_from_it(world, monkeypatch, leaves):
+    """The passed checks hold `next` only while every member up to them stays: one ejected, or pushed to a new head, below
+    the lower one leaves, and `next` is rebuilt from it."""
+    h = Review(world, monkeypatch, nonlean_first=False)
+    for n in range(1, 6):
+        world.gh.put(n, world.change({f"f{n}.txt": f"{n}\n"}))
+    h.tick()
+    commits = [m.commit for m in h.q.chain()]
+    for c in (commits[2], commits[3]):
+        h.d.hand_lean(c, "ci")
+        rid = h.lean_ids()[-1]
+        h.run_state[rid] = ("done", 0, None)
+        h.evidence = [_steps_run(world.tmp, rid, {LEAN_STEP: "passed"})]
+        h.tick()
+    assert {c: r["state"] for c, r in h.d.q.load_state()["drive"]["lean"].items()} == {commits[2]: "passed", commits[3]: "passed"}
+    if leaves == "ejected":
+        world.gh.ready.discard((2, world.gh.prs[2].head))
+    else:
+        world.gh.put(2, world.change({"f2.txt": "two\n"}))
+    h.tick()
+    chain = h.q.chain()
+    assert chain[0].commit == commits[0] and chain[1].commit != commits[1], world.logs
+    assert [m.pr for m in chain] == ([1, 3, 4, 5] if leaves == "ejected" else [1, 3, 4, 5, 2]), world.logs
+    assert not {commits[2], commits[3]} & {m.commit for m in chain}
+
+
 def test_an_eject_off_drive_leaves_next_under_a_running_lean_check_and_records_the_ejection(world, monkeypatch, capsys):
-    """26 Oct 19:41Z: compute-accounting's `research queue eject 4573`, of a PR not on `next`, rebuilt all 132 members of `next`
-    ("kept 0, merged 132"), and verity-agents[bot] force-pushed it, dropping two running hand Lean checks."""
+    """`research queue eject N` of a PR not on `next`, run off drive, would rebuild every member of `next` ("kept 0, merged
+    N") and force-push it, dropping running hand Lean checks."""
     import research.drive as D
     from research.cli import main as research_main
 
@@ -1971,8 +2127,8 @@ def test_a_hand_sync_on_drive_keeps_next_up_to_drives_running_and_passed_lean_ch
 
 
 def test_a_hand_sync_waits_for_a_running_lean_check_whose_prefix_holds_an_ejected_member(world, monkeypatch):
-    """CI-190 (3): drive's tick waits for such a check to end before the rebuild takes its commit off `next`; a hand sync, which
-    had no such step, rebuilt from the ejected member and threw the check away."""
+    """Drive's tick waits for such a check to end before the rebuild takes its commit off `next`; a hand sync waits
+    too, or it would rebuild from the ejected member and throw the check away."""
     h = Review(world, monkeypatch, nonlean_first=False)
     world.gh.put(1, world.change({"pkg/lean-audit.json": "{}"}))
     world.gh.put(2, world.change({"b.txt": "2\n"}))
@@ -1987,7 +2143,7 @@ def test_a_hand_sync_waits_for_a_running_lean_check_whose_prefix_holds_an_ejecte
 
 
 def test_research_queue_drive_refuses_off_drive_and_pushes_nothing(world, monkeypatch, capsys):
-    """CI-190 (1): a tick lands onto `main` and rebuilds `next`, which only drive's App may move."""
+    """A tick lands onto `main` and rebuilds `next`, which only drive's App may move."""
     import research.merge as M
     from research.cli import main as research_main
 
@@ -2011,8 +2167,8 @@ def test_research_queue_drive_refuses_off_drive_and_pushes_nothing(world, monkey
 
 
 def test_a_member_that_doesnt_compile_under_a_passed_lean_check_lets_its_pushed_fix_in(world, monkeypatch):
-    """CI-190: a passed Lean check held #2's old head on `next` (`_landable`) after `_compiles` cut below it and `_eject` left
-    it for its owner's fix, so drive landed #1 and then logged "nothing lands: #2 ... waits" every tick."""
+    """A passed Lean check must not hold #2's old head on `next` (`_landable`) after `_compiles` cut below it and `_eject` left
+    it for its owner's fix, or drive lands #1 and then logs "nothing lands: #2 ... waits" every tick."""
     h = Review(world, monkeypatch, nonlean_first=False)
     world.gh.put(1, world.change({"pkg/lean-audit.json": "{}"}))
     world.gh.put(2, broken := world.change({"pkg/bad.py": "def (:\n"}))
@@ -2035,8 +2191,8 @@ def test_a_member_that_doesnt_compile_under_a_passed_lean_check_lets_its_pushed_
 
 
 def test_a_cut_below_a_lean_change_under_a_passed_lean_check_waits_for_a_lean_check_of_what_lands(world, monkeypatch):
-    """CI-191: #1 and #2 both change pkg's lock, and #2 doesn't compile; a Lean check of #1 + #2 + #3 passed, `_compiles` cut
-    below #2, and drive landed #1 alone on that check, a tree no Lean check ever saw."""
+    """#1 and #2 both change pkg's lock, and #2 doesn't compile; a Lean check of #1 + #2 + #3 passed and `_compiles` cuts
+    below #2: #1 alone, a tree no Lean check saw, doesn't land on that check."""
     h = Review(world, monkeypatch, nonlean_first=False)
     h.d.max_lean_checks = 1                                                # one check holds both Lean changes
     world.gh.put(1, one := world.change({"pkg/lean-audit.json": '{"a": 1}'}))
@@ -2064,8 +2220,8 @@ def test_a_cut_below_a_lean_change_under_a_passed_lean_check_waits_for_a_lean_ch
 
 
 def test_a_failed_lean_check_below_a_passed_one_lands_nothing_on_a_check_of_another_lean(world, monkeypatch):
-    """CI-194: #1 and #3 change pkg's lock, #4 is unreviewed; the check of #1 + #2 (#1's Lean) failed and the one of #1..#4
-    passed, and drive landed #1 alone on the latter, telling @ci each Lean change below #2 had a passed Lean check."""
+    """#1 and #3 change pkg's lock, #4 is unreviewed; the check of #1 + #2 (#1's Lean) failed and the one of #1..#4
+    passed: #1 alone doesn't land on the latter."""
     h = Review(world, monkeypatch, nonlean_first=False)
     world.gh.put(1, one := world.change({"pkg/lean-audit.json": '{"a": 1}'}))
     world.gh.put(2, world.change({"a.txt": "2\n"}, base=one))
@@ -2096,8 +2252,8 @@ def test_a_failed_lean_check_below_a_passed_one_lands_nothing_on_a_check_of_anot
 
 
 def test_a_lean_change_below_a_failed_lean_check_waits_for_no_running_check_of_another_lean(world, monkeypatch):
-    """CI-194 (a): the check of #1 + #2 failed while the one of #1..#4 ran; #3 changes the lock between them, so that one's pass
-    can't cover #1, and #1 waited for it before its own check launched."""
+    """The check of #1 + #2 failed while the one of #1..#4 runs; #3 changes the lock between them, so that one's pass
+    can't cover #1, and #1 doesn't wait for it before its own check launches."""
     h = Review(world, monkeypatch, nonlean_first=False)
     world.gh.put(1, one := world.change({"pkg/lean-audit.json": '{"a": 1}'}))
     world.gh.put(2, world.change({"a.txt": "2\n"}, base=one))
@@ -2117,7 +2273,7 @@ def test_a_lean_change_below_a_failed_lean_check_waits_for_no_running_check_of_a
 
 
 def test_drives_own_pushes_of_main_refuse_off_drive_and_in_shadow_too(world, monkeypatch):
-    """CI-191 (a): `_land` and `_revert` push `main` whoever calls them; off drive they refuse before anything, `--shadow` too,
+    """`_land` and `_revert` push `main` whoever calls them; off drive they refuse before anything, `--shadow` too,
     which never reaches them."""
     h = Review(world, monkeypatch, baseline=False)                         # nothing lands before `main`'s own run
     world.gh.put(1, world.change({"a.txt": "1\n"}))
@@ -2143,8 +2299,8 @@ def test_drives_own_pushes_of_main_refuse_off_drive_and_in_shadow_too(world, mon
 
 
 def test_lean_check_refuses_a_commit_whose_recorded_lean_check_passed_naming_its_run(world, monkeypatch):
-    """infra's review of #4670 (26 Oct 11:04Z): a hand check at a commit drive records as passed replaced the pass with a pending
-    check, so what it covered waited again."""
+    """A hand check at a commit drive records as passed would replace the pass with a pending check, so what it covered
+    would wait again."""
     from research.merge import DRIVE_ENV
 
     h, top, rid = _passed_hand_check(world, monkeypatch)

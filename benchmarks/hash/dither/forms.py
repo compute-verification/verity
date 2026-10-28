@@ -7,40 +7,40 @@ the order, or z the row tables, or no z), dither_one's (dither-1s) and dither_fu
 the table doesn't know is beside.  This module imports nothing, so every arm's module reads the same table.
 
 Each arm's stats, every check document and every gate verdict carry {"form", "form_basis"} from it: dither_one's
-and dither_fused's `Window.stats`, `check` and `gate_verdict`; dither_a's and dither_so's through `dither_a.Side.label`."""
+and dither_fused's `DitherState.stats`, `check` and `gate_verdict`; dither_a's and dither_so's through `dither_a.Side.label`."""
 from __future__ import annotations
 
-FORM_A = "ASK-71 A (provisional)"
+FORM_A = "A (provisional)"
 BESIDE = "beside"
 UNADOPTED = "beside (unadopted arm)"
 
 # a dither-a arm's z commitment in the -so order: its form and why
-Z_FORMS = {"zy": (FORM_A, ("the served epilogue commits #3018's per-unit z/y records under round s's root before coin s; "
+Z_FORMS = {"zy": (FORM_A, ("the served epilogue commits the per-unit z/y records under round s's root before coin s; "
                            "the receipts need no z of their own")),
-           "row": (BESIDE, ("receipts beside the served GEMM; z committed as the window's row tables, not #3018's "
+           "row": (BESIDE, ("receipts beside the served GEMM; z committed as the window's row tables, not the "
                             "per-unit records (ambiguous: the same z under the same round, in another leaf shape)")),
            "none": (BESIDE, "receipts beside the served GEMM; no z committed (y only, never credited)")}
-OUT_OF_ORDER = ("receipts beside the served GEMM; outside the statement's order (RT4-INT-12): the step's units read a "
+OUT_OF_ORDER = ("receipts beside the served GEMM; outside the statement's order: the step's units read a "
                 "coin drawn before its A and z/y went under a round")
 # a -so arm's parts that no ruling has taken in, each making the arm unadopted
-UNADOPTED_PARTS = {"ab": "-ab/-abn: every call's A table built once a step (h1agate's batch), a per-step A commitment CA "
-                         "has not ruled in",
+UNADOPTED_PARTS = {"ab": "-ab/-abn: every call's A table built once a step (h1agate's batch), a per-step A commitment not "
+                         "ruled in",
                    "ov": "-ov/-ov1/-ovp: round s built beside forward s + 1 from ring copies, a round order not ruled in",
                    "j10r-off": ("DITHER_SO_UNITS=j10r off credit's layout ($DITHER_SO_J10R_M=live, "
-                                "$DITHER_UNITS_SKIP_DEAD=1, or a T that isn't a slot): blocks or dead tiles #3574's credit "
-                                "doesn't derive (its M is the window's slot, a power of two at least 32 rows, every row "
-                                "block computed; #3824's producer refuses skip_dead)")}
+                                "$DITHER_UNITS_SKIP_DEAD=1, or a T that isn't a slot): blocks or dead tiles credit doesn't "
+                                "derive (its M is the window's slot, a power of two at least 32 rows, every row block "
+                                "computed; served_h1's producer refuses skip_dead)")}
 # a -so arm's parts a ruling has taken in, each named in its arm's basis
-ADOPTED_PARTS = {"j10r": ("DITHER_SO_UNITS=j10r: the units under J10-R's call-scale noise in RT-ALGO-16's verifier form "
-                          "(#3574: a J10-R unit's public row holds its call's first position and its blocks, which credit "
-                          "derives from the window's layout at its slot M; PouwH1Tile_v5's receipt, every row block "
-                          "computed)")}
+ADOPTED_PARTS = {"j10r": ("DITHER_SO_UNITS=j10r: the units under J10-R's call-scale noise in the verifier's form "
+                          "(`credit.SHARED_J10R`: a J10-R unit's public row holds its call's first position and its "
+                          "blocks, which credit derives from the window's layout at its slot M; PouwH1Tile_v5's receipt, "
+                          "every row block computed)")}
 # the arms of the other two families, which aren't `FORM_A`'s form at all
 FAMILIES = {"dither-1s": ("dither_one: the served product is H1V3's noised mainloop and z the window's row tables, its "
-                          "noise from a coin drawn before its own A and z went under a round (outside RT4-INT-12's "
-                          "order); not ASK-71 A"),
+                          "noise from a coin drawn before its own A and z went under a round (outside the statement's "
+                          "order); not form A"),
             "dither-fused": ("dither_fused (dither, dither-side): z committed as the window's row tables (AROW's "
-                             "format), not #3018's per-unit z/y records; not ASK-71 A")}
+                             "format), not the per-unit z/y records; not form A")}
 
 
 def j10r_part(rows_mode: str, skip_dead: bool, t: int) -> str:

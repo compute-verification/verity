@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
-# [R15 compiled] Commit + overhead for an Execution=compiled row: vLLM torch.compile + CUDA graphs (enforce_eager=false), production DEFAULT
-# compiled configuration (ruling M-0380).  TAPS=kernels (default, DECISIONS-2 §7 S3): P_compiled's VU boundaries = every non-weight buffer of every
+# Commit + overhead for an Execution=compiled workload: vLLM torch.compile + CUDA graphs (enforce_eager=false), the production default
+# compiled configuration.  TAPS=kernels (default): P_compiled's VU boundaries = every non-weight buffer of every
 # Inductor kernel launch, acquired through Inductor's wrapper-level hook seam (kernels untouched; captured pieces copy into slots at graph
 # capture) -- verity_vllm/acquire/sources/compiled_kernel_source.py; the required manifest is P_compiled x query, built by
 # verity_vllm/acquire/compiled.py from the CONTROL process's Inductor output code (so the control runs first in round 1).
-# TAPS=on = the withdrawn record-op path (M-0389), kept for reference.
+# TAPS=on = the withdrawn record-op path, kept for reference.
 #
 # Two processes with IDENTICAL engine args (recorded in each versions.json `compilation`; compiled_merge refuses a mismatch):
 #   1. control   : commit_delta --only-arm control    --compiled-taps off      (no committer, no hooks; PAIRS runs; its Inductor dir -> the manifest)
@@ -30,12 +30,12 @@ cd "$VERITY_TREE" || exit 1
 D=${SWEEP_DIR:-/workspace/cp/sweep}/$ROW; mkdir -p "$D"
 WL=workloads/$ROW.json
 "${PY%/*}/verity-vllm" workload-file "$WL" > /dev/null || exit 2
-# [M-0779] fail CLOSED: a bi-compiled row's workload must DECLARE the compiled target (target.compilation, from workload.py --target
+# Fail closed: a bi-compiled workload must declare the compiled target (target.compilation, from workload.py --target
 # <device>:piecewise) -- with no target block target_of_workload() returns None, target_mismatches() checks nothing, and the engine
 # (built compiled by the explicit engine args below) would run UNDECLARED: a record without the TargetProfile of record.
 DECL=$(python3 -c "import json;print((json.load(open('$WL')).get('target') or {}).get('compilation') or '')" 2>/dev/null)
 if [ -z "$DECL" ]; then
-  echo "compiled_commit $ROW: REFUSED -- workload $WL declares no target.compilation (release carries an eager/R12 workload for a bi-compiled row; M-0779)" >&2
+  echo "compiled_commit $ROW: REFUSED -- workload $WL declares no target.compilation (the release carries an eager workload for a bi-compiled one)" >&2
   exit 2
 fi
 B=$(python3 -c "import json;print(json.load(open('$WL')).get('batch') or json.load(open('$WL')).get('max_num_seqs') or 1)" 2>/dev/null || echo 1)
@@ -45,7 +45,7 @@ HIDDEN_SO=${HIDDEN_SO:-/workspace/cp/fa2/build/matReq/verity_fa2_matReq.so}
 log() { echo "[$(date -u +%FT%TZ)] compiled_commit $ROW: $*" | tee -a "$D/stages.txt"; }
 COMMON=(--case "$ROLE" --workload "$WL" --committer native_collect_v2b --fast-copy --gpu-tree --hidden-so "$HIDDEN_SO" --openings 64 --pairs "$PAIRS" --warmup 2
         --max-num-seqs "$B" --engine-arg "gpu_memory_utilization=$GPU_UTIL" --engine-arg enforce_eager=false
-        # [M-0285 (b)] the compilation_config of record is the WORKLOAD's engine.args (workload.py --target: cudagraph_mode +
+        # the compilation_config of record is the WORKLOAD's engine.args (workload.py --target: cudagraph_mode +
         # inductor_compile_config {emulate_precision_casts: true} from TargetProfile.engine_args()); an explicit 3rd argument overrides the
         # cudagraph mode only and keeps the declared emulation (compiled_merge refuses arms whose inductor_compile_config differ);
         # the compilation_config engine arg itself is passed per process (run_arm: + the per-process cache_dir)
@@ -61,10 +61,10 @@ if [ -z "$REQUIRED_MANIFEST" ] && [ "$TAPS" != kernels ] && [ -f "$D/build_reque
   fi
 fi
 [ -n "$REQUIRED_MANIFEST" ] && [ -f "$REQUIRED_MANIFEST" ] && COMMON+=(--required-manifest "$REQUIRED_MANIFEST")
-# [MAN-09, coord M-0614 (1)] WEIGHTS OF RECORD: the served parameters are authenticated against the pinned checkpoint shards (an engine-free
+# Weights of record: the served parameters are authenticated against the pinned checkpoint shards (an engine-free
 # record, verity_vllm/check/weights_of_record.py, built from the model's Program weights struct x the pinned safetensors).  P_compiled
 # reads the SAME served parameters as the eager Program (the compiled GEMM/norm/RoPE kernels take the module weights as arguments -- their
-# C2 relations replay bit-for-bit with them), so the model's weights-of-record record applies to the compiled rows verbatim.
+# C2 relations replay bit-for-bit with them), so the model's weights-of-record record applies to the compiled workloads verbatim.
 WEIGHTS_OF_RECORD=${WEIGHTS_OF_RECORD:-}
 [ -n "$WEIGHTS_OF_RECORD" ] && [ -f "$WEIGHTS_OF_RECORD" ] && COMMON+=(--weights-of-record "$WEIGHTS_OF_RECORD")
 TRT_EXTRA=()
@@ -89,9 +89,9 @@ print(json.load(open(fs[-1]))['num_hidden_layers']+1) if fs else sys.exit(1)" 2>
        --out "$out" > "${out%.json}.log" 2>&1; then
     log "P_compiled manifest from $cdir -> $out: $(tail -n 1 "${out%.json}.log")"
     if [ "$out" = "$D/compiled_manifest.json" ]; then
-      # [COORD M-0205 C1 / int-6 require_build_program_digest] the Program digest of record for a compiled row is P_compiled derived from
-      # the CONTROL arm (production compiled, uninstrumented) -- the treatment reads it, and compiled_merge refuses the row unless the
-      # treatment's OWN derivation agrees (TIP2).  There is no separate Build step for a compiled row: the control's compile is the Build.
+      # (require_build_program_digest) the Program digest of record for a compiled workload is P_compiled derived from
+      # the CONTROL arm (production compiled, uninstrumented) -- the treatment reads it, and compiled_merge refuses the workload unless the
+      # treatment's OWN derivation agrees.  There is no separate Build step for a compiled workload: the control's compile is the Build.
       local pdig; pdig=$($PY -c "import json,sys; print(json.load(open(sys.argv[1]))['program_digest'])" "$out")
       TRT_EXTRA=(--required-manifest "$D/compiled_manifest.json" --program-digest "$pdig")
       log "Program digest of record (P_compiled from the control arm) $pdig"
@@ -102,13 +102,13 @@ print(json.load(open(fs[-1]))['num_hidden_layers']+1) if fs else sys.exit(1)" 2>
 }
 [ "$TAPS" = kernels ] && [ -f "$D/compiled_manifest.json" ] && [[ ",${ARMS:-control,treatment}," != *,control,* ]] && \
   TRT_EXTRA=(--required-manifest "$D/compiled_manifest.json" --program-digest "$($PY -c "import json,sys; print(json.load(open(sys.argv[1]))['program_digest'])" "$D/compiled_manifest.json")")
-# [MAN-09 W2] the eager Program of record whose served-parameter fields the compiled kernels read = the row's bi-eager counterpart's Build
-# digest (out/gen/sweep/rows/<row with bi-eager>.json program_digest; the digest is per model x dtype x target, so any bi-eager row of the
-# same model/target names it).  Named in the compiled manifest as components.weights_struct; the weights-of-record record must be that Program's.
+# The eager Program of record whose served-parameter fields the compiled kernels read = the workload's bi-eager counterpart's Build
+# digest (out/gen/sweep/rows/<row with bi-eager>.json program_digest; the digest is per model x dtype x target, so any bi-eager workload of
+# the same model/target names it).  Named in the compiled manifest as components.weights_struct; the weights-of-record record must be that Program's.
 WEIGHTS_PROGRAM_DIGEST=${WEIGHTS_PROGRAM_DIGEST:-}
 if [ -z "$WEIGHTS_PROGRAM_DIGEST" ] && [ "$TAPS" = kernels ]; then
-  # sources in order: the row dir's eager Build summary (row_pod's build step for this row), then the rows table (a >=16-hex prefix; the
-  # weights pin accepts a prefix of that length -- weights_of_record.check)
+  # sources in order: the workload dir's eager Build summary (row_pod's build step for this workload), then the sweep's `rows/`
+  # table (a >=16-hex prefix; the weights pin accepts a prefix of that length -- weights_of_record.check)
   for cand in "$D/build_summary.json" "out/gen/sweep/rows/${ROW/bi-compiled/bi-eager}.json" out/gen/sweep/rows/"${ROW%%__tp*}"__tp1__b1__*__greedy__bi-eager.json; do
     [ -f "$cand" ] || continue
     WEIGHTS_PROGRAM_DIGEST=$($PY -c "
@@ -128,10 +128,10 @@ run_arm() {
     rm -rf "$od"
     ( echo "\$ ${PY%/*}/verity-vllm commit ${COMMON[*]} --only-arm $arm --compiled-taps $taps --out $od   (attempt $attempt)"
       # per-process Inductor cache dir + vLLM compile cache OFF in BOTH arms: the Inductor output code of every compiled piece is digested
-      # from that dir into versions.json compilation.generated_kernels (coord M-0178 (2a)); a shared or vLLM-cached dir would hide it
+      # from that dir into versions.json compilation.generated_kernels; a shared or vLLM-cached dir would hide it
       local -a extra=(); [ "$arm" = instrumented ] && extra=("${TRT_EXTRA[@]}")
       # + the vLLM compile cache dir per process (compilation_config.cache_dir): vLLM dumps the split graph (rank_0_0/backbone/computation_graph.py
-      # = the piece wiring the manifest's dataflow needs, rev-pm M-0589) even with the compile cache disabled
+      # = the piece wiring the manifest's dataflow needs) even with the compile cache disabled
       VERITY_FAULT=${FAULT:-} TORCHINDUCTOR_CACHE_DIR="$od/inductor_cache" VERITY_INDUCTOR_DIR_PER_PROCESS=1 VLLM_DISABLE_COMPILE_CACHE=1 \
         timeout "$TO" "${PY%/*}/verity-vllm" commit "${COMMON[@]}" --only-arm "$arm" --compiled-taps "$taps" "${extra[@]}" \
           --engine-arg "compilation_config={\"cudagraph_mode\":\"$CGM\",\"inductor_compile_config\":{\"emulate_precision_casts\":${EMULATE:-false}},\"cache_dir\":\"$od/vllm_compile_cache\"}" --out "$od" ) > "$lf" 2>&1; rc=$?
@@ -144,7 +144,7 @@ run_arm() {
 }
 rcc=0; rct=0
 # ROUNDS (default 2): alternate the two processes -- round 1 control then treatment, round 2 treatment then control, ... -- so neither
-# arm always runs first (TABLE-RULES "interleaved pairs" at process granularity: the record ops live in the treatment process's graphs,
+# arm always runs first (interleaved pairs at process granularity: the record ops live in the treatment process's graphs,
 # so one process cannot host both arms). Each process runs PAIRS runs after its own warm-up; runs are paired by global index.
 ROUNDS=${ROUNDS:-2}
 CTRL_DIRS=(); TRT_DIRS=()
@@ -164,7 +164,7 @@ for r in $(seq 1 "$ROUNDS"); do
       run_arm instrumented "$TAPS" "$D/commit_treatment_r$r" "$D/commit_treatment_r$r.log"; rc=$?; [ $rc -ne 0 ] && rct=$rc
       log "round $r treatment rc=$rc wall=$(( $(date +%s) - t1 ))s"
       TRT_DIRS+=("$D/commit_treatment_r$r")
-      # [rev-pm M-0589 TIP2] the same derivation from the TREATMENT's Inductor output code: compiled_merge refuses the row unless the two
+      # the same derivation from the TREATMENT's Inductor output code: compiled_merge refuses the workload unless the two
       # program_digests (kernel set x launch table x dataflow) are equal -- the Program of record is the executed implementation of both arms
       [ "$TAPS" = kernels ] && [ ! -f "$D/compiled_manifest_treatment.json" ] && [ $rc -eq 0 ] && build_compiled_manifest "$D/commit_treatment_r$r" "$D/compiled_manifest_treatment.json"
     fi
@@ -180,16 +180,16 @@ fi
 "${PY%/*}/verity-vllm" compiled-merge $(printf -- "--control %s " "${CTRL_DIRS[@]}") $(printf -- "--treatment %s " "${TRT_DIRS[@]}") "${MERGE_EXTRA[@]}" --out "$D/commit" > "$D/commit_merge.log" 2>&1; rcm=$?
 cat "$D/commit_merge.log"
 cat "$D"/commit_control_r*.log "$D"/commit_treatment_r*.log > "$D/commit.log"
-# [MAN-05 for compiled rows] the manifest the treatment USED (control-derived) vs the same derivation from the treatment's own output code
+# the manifest the treatment USED (control-derived) vs the same derivation from the treatment's own output code
 if [ "$TAPS" = kernels ] && [ -f "$D/compiled_manifest.json" ] && [ -f "$D/compiled_manifest_treatment.json" ]; then
   "${PY%/*}/verity-vllm" compiled verify --manifest "$D/compiled_manifest.json" --rebuilt "$D/compiled_manifest_treatment.json" \
       --out "$D/commit/manifest_verify.json" > "$D/manifest_verify.log" 2>&1; rcv=$?
-  log "manifest verify (compiled MAN-05) rc=$rcv: $(tail -n 1 "$D/manifest_verify.log")"
+  log "manifest verify (the control's vs the treatment's own) rc=$rcv: $(tail -n 1 "$D/manifest_verify.log")"
   [ $rcv -ne 0 ] && [ $rcm -eq 0 ] && rcm=$rcv
 fi
 # the row_pod-shaped view of the record (what verity_vllm.check.verdict from-record reads): commit/runs.jsonl = the instrumented arm's records (binding,
 # value_correspondence components incl. sampled_replay / boundary_linkage / weights_pin) -- compiled_merge already wrote commit/runs.jsonl
-# + commit/verdict.json; the release line for stages.txt is the lane tree's commit
+# + commit/verdict.json; the release line for stages.txt is the tree's commit
 [ -n "${VERITY_TREE_COMMIT:-}" ] && log "release ${VERITY_RELEASE_TAG:-UNRELEASED lane/r15-compiled} commit=$VERITY_TREE_COMMIT"
 log "merge rc=$rcm -> $D/commit (control rc=$rcc treatment rc=$rct)"
 exit $rcm

@@ -1,13 +1,13 @@
 """The bridge between the layers: a placement of a Program onto a datacenter, what it implies, and what of it is public.
 
-A `Placement` puts each root node of the Program on a device at an engine step: each Call where it runs, each run input
+`Placed` puts each root node of the Program on a device at an engine step: each Call where it runs, each run input
 where it enters (the outside world, a block's own device, a trusted device), and each device maps its steps onto ticks of
 the trusted clock (`ticks`, strictly increasing). A registered input needs no device: registration put a copy of it in
-every block that reads it, before the epoch, as serving holds its weights and as the remote audit registers each copy
-(memory accounting, review 4). A registered value kept in one copy instead (`held`, or a registered parameter named in
-`place`) is moved to its readers in other blocks, and those crossings are bandwidth like any other. Every gate of a node
-is placed with it, so this is Lean's `Accounting.Placed` (and `Accounting.Requirement.Placement`, in #2399) at the
-census's grain: a gate's leaf and step are its node's. The placement is private and committed. A crossing is a census
+every block that reads it, before the epoch, as serving holds its weights and as the remote audit registers each copy.
+A registered value kept in one copy instead (`held`, or a registered parameter named in `place`) is moved to its readers
+in other blocks, and those crossings are bandwidth like any other. Every gate of a node is placed with it, so this is
+Lean's `Accounting.Placed` (and `Accounting.Requirement.Placement`) at the census's grain: a gate's leaf and step are its
+node's. The placement is private and committed. A crossing is a census
 value produced in one block and read in another; crossings are derived, never declared, since moving a value doesn't
 change it.
 
@@ -30,8 +30,8 @@ from verity.ml.circuits.program import Program
 
 from . import logical as L
 from .logical import Registration, Value
-from .memory import Store
-from .physical import Datacenter, Link, Port
+from .memory import StoreEntry
+from .physical import Datacenter, LinkEntry, Port
 from .plan import Plan
 
 #: where a node's bits come from: registration, a trusted device's fresh data (part of the verifier's coins), a device in a
@@ -58,7 +58,7 @@ def _partition(evaluate: Callable, program: Program, query: Mapping[str, Any]) -
 
 
 @dataclass
-class Placement:
+class Placed:
     """Where and when each root node runs."""
 
     program: Program
@@ -69,7 +69,7 @@ class Placement:
     #: the device the Program's outputs are delivered to (usually the outside world), or None
     deliver: str | None = None
     #: registered state, each on the device the registration says holds it
-    stores: tuple[Store, ...] = ()
+    stores: tuple[StoreEntry, ...] = ()
     #: the registration of the Program's registered inputs
     registration: Registration | None = None
     #: registered values (by census value id) kept in one copy, on this device, rather than in every reading block
@@ -258,7 +258,7 @@ class Profile:
     occupancy: dict[Port, dict[int, int]]
     work: dict[str, dict[str, float]]
     forced: dict[str, float]
-    stores: dict[str, Store]
+    stores: dict[str, StoreEntry]
     ands: dict[str, int] = field(default_factory=dict)
     salt: dict[str, float] = field(default_factory=dict)
     salt_out: dict[str, float] = field(default_factory=dict)
@@ -278,9 +278,9 @@ class Profile:
         return range(e.start // per, -(-e.end // per))
 
 
-def place(program: Program, dc: Datacenter, default: str, *, deliver: str | None = None, stores: tuple[Store, ...] = (),
-          registration: Registration | None = None, start: int = 0, ticks_per_step: int = 1, transfer_steps: int = 2,
-          **where: str) -> Placement:
+def place(program: Program, dc: Datacenter, default: str, *, deliver: str | None = None,
+          stores: tuple[StoreEntry, ...] = (), registration: Registration | None = None, start: int = 0,
+          ticks_per_step: int = 1, transfer_steps: int = 2, **where: str) -> Placed:
     """Place `program` on `dc`: each keyword names a root node (a parameter or a named Call) and the device it runs or
     enters on; any other Call or run input goes where its first reader runs, if that is in a block, else on `default`.
     A registered input goes nowhere unless named: registration put a copy in every block that reads it. Named, it is
@@ -311,7 +311,7 @@ def place(program: Program, dc: Datacenter, default: str, *, deliver: str | None
         elif L.binding(program, k) != L.REGISTRATION:
             inside = [device[r] for r in sorted(readers.get(k, ())) if dc.block_of(device[r]) is not None]
             device[k] = inside[0] if inside else default
-    p = Placement(program, dc, device, {}, {}, deliver, tuple(stores), registration)
+    p = Placed(program, dc, device, {}, {}, deliver, tuple(stores), registration)
     read: dict[int, list[Value]] = {}
     for v in vals:
         for r in v.reads:
@@ -336,17 +336,17 @@ class Crossing:
     value: Value
     src: str
     dst: str
-    path: tuple[Link, ...]
+    path: tuple[LinkEntry, ...]
     at: int = 0
 
 
-def route(dc: Datacenter, src: str, dst: str) -> tuple[Link, ...]:
+def route(dc: Datacenter, src: str, dst: str) -> tuple[LinkEntry, ...]:
     """The shortest path of links from device `src` to device `dst`."""
-    adj: dict[str, list[tuple[str, Link]]] = {}
+    adj: dict[str, list[tuple[str, LinkEntry]]] = {}
     for l in dc.links:
         adj.setdefault(l.a, []).append((l.b, l))
         adj.setdefault(l.b, []).append((l.a, l))
-    prev: dict[str, tuple[str, Link] | None] = {src: None}
+    prev: dict[str, tuple[str, LinkEntry] | None] = {src: None}
     queue = deque([src])
     while queue:
         u = queue.popleft()
@@ -365,7 +365,7 @@ def route(dc: Datacenter, src: str, dst: str) -> tuple[Link, ...]:
     return tuple(reversed(path))
 
 
-def hops(path: tuple[Link, ...], src: str) -> list[tuple[str, str]]:
+def hops(path: tuple[LinkEntry, ...], src: str) -> list[tuple[str, str]]:
     """The links of `path` as directed hops (from, to), walking from `src`."""
     out, here = [], src
     for l in path:
@@ -375,14 +375,14 @@ def hops(path: tuple[Link, ...], src: str) -> list[tuple[str, str]]:
     return out
 
 
-def crosses(p: Placement, v: Value, dst: str) -> bool:
+def crosses(p: Placed, v: Value, dst: str) -> bool:
     """Whether value `v`, read at device `dst`, comes from another block: never for a registered value with a copy in
     every block that reads it."""
     src = p.home(v)
     return src is not None and p.datacenter.block_of(src) is not p.datacenter.block_of(dst)
 
 
-def crossings(p: Placement) -> list[Crossing]:
+def crossings(p: Placed) -> list[Crossing]:
     """Every (value, reader device) pair where a value is read in a block other than its own, once each, at its first
     read; and each output the Program returns, at the delivery device the step after it is produced."""
     first: dict[tuple[int, str], int] = {}
@@ -401,7 +401,7 @@ def crossings(p: Placement) -> list[Crossing]:
     return out
 
 
-def traffic(p: Placement) -> dict[Port, dict[int, list[Value]]]:
+def traffic(p: Placed) -> dict[Port, dict[int, list[Value]]]:
     """The honest run's traffic at each certifier port, bucket by bucket: the crossing values it carries, each in the
     bucket of its read tick."""
     out: dict[Port, dict[int, list[Value]]] = {}
@@ -418,7 +418,7 @@ def frames(values: list[Value], frame_bits: int) -> int:
     return -(-sum(v.bits for v in values) // frame_bits)
 
 
-def occupancy(p: Placement) -> dict[Port, dict[int, int]]:
+def occupancy(p: Placed) -> dict[Port, dict[int, int]]:
     """The public occupancy profile: for each certifier port and each bucket, the frames the honest run shows there."""
     fb = p.datacenter.cadence.frame_bits
     return {port: {b: frames(vs, fb) for b, vs in row.items()} for port, row in traffic(p).items()}

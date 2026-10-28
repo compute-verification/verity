@@ -1,4 +1,4 @@
-"""Lane tp2 (mechanism prototype): the M1 capture driven through vLLM's multiprocess executor at `tensor_parallel_size > 1`.
+"""Mechanism prototype: the M1 capture driven through vLLM's multiprocess executor at `tensor_parallel_size > 1`.
 
     HF_HOME=/workspace/hf HF_HUB_OFFLINE=1 PYTHONPATH=. verity-vllm tp-capture \
         --workload workloads/workload_qwen15_32x16_1req.json --case B1 --tp 2 --out /vol/cp/tp2/runs/<name>/capture \
@@ -100,7 +100,7 @@ class Options:
     param_hashes: bool = option("--param-hashes", default=False, action="store_true",
                                 help="capture mode: sha256 of every rank's parameter shards -> param_hashes.rank<r>.json")
     record_collectives: bool = option("--record-collectives", default=False, action="store_true",
-                                      help="[R17 tp D90] capture mode: also run tp2_match's collective recorder in the same engine run -> <out>/coll.rank<r>.jsonl (+ .pt of --store-steps)")
+                                      help="capture mode: also run tp2_match's collective recorder in the same engine run -> <out>/coll.rank<r>.jsonl (+ .pt of --store-steps)")
     store_steps: int = option("--store-steps", type=int, default=1 << 30,
                               help="--record-collectives: store the partial/received tensors of steps < N (default all)")
     adapter_revision: str | None = option("--adapter-revision", default=None)
@@ -122,7 +122,7 @@ def main(args: Options) -> None:
     out = Path(args.out)
     out.mkdir(parents=True, exist_ok=True)
     wl = va.load_workload(args.workload, args.max_tokens)
-    TPL.acquire()        # a leased row's Match leg: every GPU of the task from here to the exit (`row_tp.TpRow.match`); nothing reads the device before
+    TPL.acquire()        # a leased row's Match stage: every GPU of the task from here to the exit (`row_tp.TpRow.match`); nothing reads the device before
     target = va.target_of_workload(wl)
     target_env, target_kw = TT.apply(target, wl["execution"])       # its env knobs before vLLM reads them; its engine args under the CLI's
     case = va.case_of(wl, args.case)
@@ -202,9 +202,9 @@ def main(args: Options) -> None:
             ranks_doc["param_hashes"] = llm.collective_rpc("tp2_param_hashes", timeout=args.rpc_timeout, kwargs={"out_dir": str(out)})
             print(f"[tp2] param shard hashes: {ranks_doc['param_hashes']}", flush=True)
         if args.record_collectives:
-            # [R17 tp D90] the collective recorder of tp2_match's capture arm in the SAME engine run as the observer: every collective of
+            # the collective recorder of tp2_match's capture arm in the SAME engine run as the observer: every collective of
             # every rank in call order (step, k, kind, module, partial + received sha256; tensors of the first --store-steps steps), the
-            # rows the cross-rank leg of the per-rank fold Match (tp2_fold_match / tp.rank_match) keys by the same engine step as the fold.
+            # rows the cross-rank check of the per-rank fold Match (tp2_fold_match / tp.rank_match) keys by the same engine step as the fold.
             # Its bookkeeping is hidden from the observer (tp2_worker.coll_wrap pauses the recorder's aten observer around the copies).
             # (rows land beside the logs -- the layout of tp2_match's capture arm, so `tp2_match --arm check` runs unchanged over this dir)
             ranks_doc["coll_install"] = llm.collective_rpc("tp2_coll_install", timeout=args.rpc_timeout,

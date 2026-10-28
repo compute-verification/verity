@@ -21,7 +21,8 @@
 #
 # Outside the lease: the lib unpacked and held to its MANIFEST.sha256, the layout to the fixture's LAYOUT_SHA512, the
 # manifest to MANIFEST_SHA256; layer LAYER's stream bytes generated once into SRC/w.bin (`weights write`, seed SEED) and
-# kept. Under one untimed lease of at most LEASE_MIN minutes (default 15; LEASE_TIMED=1 asks for a timed one), in order:
+# kept. SRC, STORE and ENC (by default under /workspace/tmp/p2-stage) are kept with `research keep` under keep.json's
+# owner, expiry and reasons. Under one untimed lease of at most LEASE_MIN minutes (default 15; LEASE_TIMED=1 asks for a timed one), in order:
 # `bench`, memory-accounting's decode_bench.py unchanged on the lib; then layer.py's `toy`, `encode` (development store
 # only, ENCODE_BUDGET seconds), `stage` and `gemm` at each batch of M (default 4096,16384). After the lease, `check`:
 # check.py on every block of the layer and the GEMM samples, on half the host's cores. Each step's exit code is in
@@ -32,9 +33,9 @@ D=benchmarks/torch_gpu/p2_stage
 PY=${VERITY_BENCH_VENV:-/workspace/cp/venv312}/bin/python
 CUDA=${CUDA:-/usr/local/cuda-13.0}
 LAYER=${LAYER:-0}
-SRC=${SRC:-/workspace/tmp/kernels-kstage/p2-stage-l$LAYER}
-STORE=${STORE:-/workspace/tmp/kernels-kstage/p2-stage-fixture-l$LAYER}
-ENC=${ENC:-/workspace/tmp/kernels-kstage/mem69-v2-l$LAYER}
+SRC=${SRC:-/workspace/tmp/p2-stage/stream-l$LAYER}
+STORE=${STORE:-/workspace/tmp/p2-stage/fixture-l$LAYER}
+ENC=${ENC:-/workspace/tmp/p2-stage/mem69-v2-l$LAYER}
 SEED=${SEED:-text:verity/cmp92/h200/weights/v1}
 # public: sha512("not-a-secret: verity/p2-stage/test-salt")[:24], the development store's salt
 SALT=${SALT:-011feb1ddfe7334099b02f79a43b4d1411bec106975fffe4}
@@ -52,6 +53,13 @@ export O D PY S SRC STORE ENC SALT LAYER STEPS LAYOUT MANIFEST PATH=$CUDA/bin:$P
   PYTHONPATH=$PWD:$PWD/benchmarks/pous:$S/tl${PYTHONPATH:+:$PYTHONPATH}
 : > "$O/rc.txt"
 step() { echo "$1 rc $2 at $(date -u +%H:%M:%SZ)" >> "$O/rc.txt"; }
+keep() {  # PATH WHAT: `research keep` PATH under keep.json's owner and expiry, with WHAT's reason
+  local owner expires why
+  IFS=$'\t' read -r owner expires why < <("$PY" -c 'import json, sys
+k = json.load(open(sys.argv[1]))
+print(k["owner"], k["expires"], k["why"][sys.argv[2]].format(layer=sys.argv[3]), sep="\t")' "$D/keep.json" "$2" "$LAYER")
+  research keep "$1" --owner "$owner" --expires "$expires" --priority normal --why "$why" > /dev/null 2>&1
+}
 
 mkdir -p "$S/lib" "$S/toy" "$S/tl/e2e_h200" && tar -C "$S/lib" -xf "$IN/p2lib.tar" \
   && (cd "$S/lib" && sha256sum -c --quiet MANIFEST.sha256) && tar -C "$S/toy" -xf "$IN/store-toy.tar" \
@@ -67,25 +75,20 @@ nvidia-smi --query-gpu=index,uuid,name,driver_version,clocks.max.sm,power.limit 
 "$PY" -c 'import torch; print(torch.__version__, torch.version.cuda)' > "$O/python.txt" 2>&1
 
 mkdir -p "$SRC"
-research keep "$SRC" --owner @kernels --expires 2026-11-01 --priority normal \
-  --why "KSTAGE (HASH-12): layer $LAYER's weights-stream bytes, the staging check's plaintext" > /dev/null 2>&1
+keep "$SRC" src
 if [ "${ENCODED:-0}" = 1 ]; then
   if [ -f "$IN/setup.json" ]; then
     mkdir -p "$ENC/seg" && cp "$IN/setup.json" "$ENC/" \
       && for f in "$IN"/[0-9][0-9][0-9][0-9][0-9].c "$IN"/[0-9][0-9][0-9][0-9][0-9].json; do
            ln -f "$f" "$ENC/seg/" 2>/dev/null || cp "$f" "$ENC/seg/"; done
   fi
-  research keep "$ENC" --owner @kernels --expires 2026-11-01 --priority normal \
-    --why "KSTAGE (HASH-12): layer $LAYER's segments of memory-accounting's MEM-69 store, a copy, read only" \
-    > /dev/null 2>&1
+  keep "$ENC" enc
   [ -f "$ENC/setup.json" ] && ls "$ENC/seg" > "$O/encoded-files.txt"
   step encoded $?
   STORE_ARGS=(--encoded "$ENC" --source "$SOURCE" --commitment "$COMMITMENT")
 else
   mkdir -p "$STORE"
-  research keep "$STORE" --owner @kernels --expires 2026-11-01 --priority normal \
-    --why "KSTAGE (HASH-12): layer $LAYER's P2 development store in CMP-95 item 2's layout, encoded across leases" \
-    > /dev/null 2>&1
+  keep "$STORE" store
   STORE_ARGS=(--store "$STORE" --salt "$SALT")
 fi
 df -h "$SRC" > "$O/df.txt" 2>&1

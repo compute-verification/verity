@@ -21,9 +21,13 @@ opens the next window, and the window's finalize, its readback, its records, its
 the sealer's thread in window order (`CommitWindows._finish`); a committer that detaches no window is finalized at the
 close and frozen for its seal (`serve_seal.freeze`). The window's line in ``windows.jsonl``, written once its finalize has
 run and before its seal, names its row dir (``seal``); what its seal wrote is its line in ``seals.jsonl``, once written,
-in window order. Each line says where its close's time went: ``seconds`` (``close``, and off the loop ``on_loop``, the
-loop's part, ``finalize_wait``, for the worker to absorb the window's steps, and ``seal_wait``, for the sealer's room) and
-``close_phases_s``. ``window_bytes`` closes a window once its steps have committed that many
+in window order; a sealer with a ``process`` (`seal_process.ProcessSealer`) writes only each seal's store files on its thread,
+and the rest of the seal runs in that spawned process. With ``release`` (`serve_release.Draws`, ``--retain device
+--release-after``) a window's seal, on either path, first waits for its draw-gated release, which keeps only the leaves its
+subprotocols' drawn blocks open, and its ``seals.jsonl`` line carries that release's record (``release``). Each line says
+where its close's time went: ``seconds`` (``close``, and off the loop ``on_loop``, the loop's part, ``finalize_wait``, for the
+worker to absorb the window's steps, and ``seal_wait``, for the sealer's room) and ``close_phases_s``. ``window_bytes``
+closes a window once its steps have committed that many
 bytes, which bounds its bundle. Every close is between engine steps, so a step's schedule, its committed values and its rows
 sit in one window, which runs past its bound by the step that crossed it (and by the steps the committer's worker had not
 yet absorbed); a request may still span windows. ``disk`` (`serve_seal.DiskFloor`) refuses the seal of a window that would take the
@@ -53,6 +57,7 @@ from typing import Any
 from verity.core.protocols.certifier import compile_slice as CS
 from verity.core.protocols.certifier import served_rows as SRW
 from verity_vllm.commit.served_record import Record, base_id, served_rows, window_commit
+from verity_vllm.pipeline.seal_process import SealFailed
 from verity_vllm.pipeline.serve_seal import GB, committed_bytes, extras_of, freeze, seal_window, thaw, window_requests
 
 #: The compile slice's size class beside the engine's statics; R and P (with the engine's L and T, and IW) shape the rows.
@@ -72,11 +77,13 @@ def user_of(body: Any) -> str | None:
 def advice_trace(out: Path, engine: Any) -> Any:
     """The scheduler step trace (`engine.step_trace.StepTrace`) of ``engine`` for the server's lifetime, at ``out/advice_trace.jsonl``
     (`step_trace.SERVED`, beside the committer's step_trace.jsonl), under the engine ids requests.jsonl records (vLLM's internal
-    suffix dropped): what `verity-vllm advice OUT` reads, with each window's open and close (``CommitWindows(marks=trace.window)``)."""
+    suffix dropped): what `verity-vllm advice OUT` reads, with each window's open and close (``CommitWindows(marks=trace.window)``).
+    Its writer thread writes the file (`StepTrace.writer`): the engine thread never waits on the serve dir's disk, which the seals
+    keep busy; `Mirror(before=trace.drain)` copies it whole."""
     from verity_vllm.engine.engine_driver import external_id
     from verity_vllm.engine.step_trace import SERVED, StepTrace
 
-    return StepTrace(Path(out) / SERVED, request_id=external_id, clock=time.time).install(engine)
+    return StepTrace(Path(out) / SERVED, request_id=external_id, clock=time.time, writer=True).install(engine)
 
 
 #: requests.jsonl's engine id to ``user`` map alone, a line each as requests.jsonl's: ``{"engine_id", "user"}``.  It holds no
@@ -102,14 +109,18 @@ def gc_of(rc: Any) -> dict[str, Any] | None:
 
 class Mirror:
     """The serve dir's records (`MIRRORED`) copied into ``dst`` (the run's ``$OUT``, which custody uploads), so they outlive the serve
-    dir: a JSON-lines file up to its last whole line, appended from where its copy ends; any other file whole. Any thread."""
+    dir: a JSON-lines file up to its last whole line, appended from where its copy ends; any other file whole. Any thread.
+    ``before``: called first, each time (the step trace's `drain`, so its writer's lines are in the file)."""
 
-    def __init__(self, src: str | Path, dst: str | Path, names: Sequence[str] = MIRRORED) -> None:
-        self.src, self.dst, self.names = Path(src), Path(dst), tuple(names)
+    def __init__(self, src: str | Path, dst: str | Path, names: Sequence[str] = MIRRORED, *,
+                 before: Callable[[], None] | None = None) -> None:
+        self.src, self.dst, self.names, self.before = Path(src), Path(dst), tuple(names), before
         self.errors: list[str] = []
         self._lock = threading.Lock()
 
     def __call__(self) -> None:
+        if self.before is not None:
+            self.before()
         with self._lock:
             self.dst.mkdir(parents=True, exist_ok=True)
             for name in self.names:
@@ -139,11 +150,11 @@ class Mirror:
                 g.write(data)
 
 
-def records_mirror(out: Path, dst: str | None) -> Mirror | None:
+def records_mirror(out: Path, dst: str | None, before: Callable[[], None] | None = None) -> Mirror | None:
     """`Mirror` of ``out``'s records into ``--copy-records-to`` (None without one, or when it is ``out``)."""
     if not dst or Path(dst).resolve() == Path(out).resolve():
         return None
-    return Mirror(out, dst)
+    return Mirror(out, dst, before=before)
 
 
 def disk_record(windows: CommitWindows | None) -> dict[str, Any] | None:
@@ -192,7 +203,7 @@ class Ledger:
     prompt_ids: list[int]
     ingress: dict[str, Any] = field(default_factory=dict)
     user: str | None = None                      # the body's `user`, the id the advice names the request by
-    release: Any = None                          # (the warden's run, its place in the release order), under --admit release-order
+    release: Any = None                          # (the network certifier's run, its place in the release order), under --admit release-order
     admitted: int = -1                           # its place in the order requests were added to the engine
     streamed: list[int] = field(default_factory=list)
     finish: dict[str, Any] | None = None
@@ -234,7 +245,8 @@ class CommitWindows:
     ``enable_window_views`` and ``detach``, whose view has ``wait_absorbed`` and ``finalize``); ``eos_ids`` and
     ``decode`` are the tokenizer's, for the finish check (`served_record.finish_problems`). ``arm`` (`serve_h1.H1Windows`)
     opens on each window once its committer is installed and closes first at its close, before the committer comes off,
-    its hooks being on top of the committer's; what its ``close`` returns is the window line's ``pouw_h1``."""
+    its hooks being on top of the committer's; what its ``close`` returns is the window line's ``pouw_h1``, and when that
+    is a `Future` (its release off the loop) the line is written once it resolves, the loop and the sealer going on."""
 
     def __init__(self, committer: Any, out: Path, *, run_id: str, window_steps: int, idle_close_steps: int = 1,
                  eos_ids: Sequence[int] = (), decode: Callable[[Sequence[int]], str] | None = None,
@@ -242,10 +254,13 @@ class CommitWindows:
                  marks: Callable[[int, str], None] | None = None, seal: Mapping[str, Any] | None = None,
                  served: Mapping[str, int] | None = None, sealer: Any = None, window_bytes: int | None = None, disk: Any = None,
                  on_floor: Callable[[str], None] | None = None, mirror: Callable[[], None] | None = None,
-                 request_cap: int = 0, arm: Any = None) -> None:
+                 request_cap: int = 0, arm: Any = None, release: Any = None) -> None:
         self.com, self.out, self.clock, self.wall, self.marks = committer, Path(out), clock, wall, marks
+        self.release = release                           # `serve_release.Draws`: each window's draw-gated release, before its seal
         self.arm, self._arm_out = arm, {}                # each window's arm outcome, until its line is written
         self.arm_failed: list[int] = []                  # the windows whose arm failed to open or close
+        self._arm_pending: set[int] = set()              # the windows whose arm is still closing off the loop
+        self._awaiting: dict[int, dict[str, Any]] = {}   # ... and their lines, held until it ends
         self.request_cap = int(request_cap)              # --window-requests: at most this many distinct requests a window (0: any)
         self.in_window: set[str] = set()                 # the engine ids live at any step of the open window
         self.seal = dict(seal) if seal is not None else None     # `seal_window`'s label, code and engine_of_record: seal every window
@@ -340,15 +355,36 @@ class CommitWindows:
             self.marks(self.window, "open")
 
     def _close_arm(self) -> None:
-        """The arm's window closed, before anything of the committer's: its outcome, or why it failed."""
+        """The arm's window closed, before anything of the committer's: its outcome, or why it failed. An arm that
+        releases off the loop hands back a `Future`, and the window's line waits for it (`_arm_closed`), not the loop."""
+        window = self.window
         try:
-            got = self.arm.close(self.window)
+            got = self.arm.close(window)
         except (ValueError, RuntimeError, OSError) as e:          # the window's visible failure; the Commit's close goes on
             got = {"error": f"close: {type(e).__name__}: {e}"[:500]}
-            if self.window not in self.arm_failed:
-                self.arm_failed.append(self.window)
+        if callable(getattr(got, "add_done_callback", None)):
+            with self._lock:
+                self._arm_pending.add(window)
+            got.add_done_callback(functools.partial(self._arm_closed, window))
+        else:
+            self._arm_closed(window, got)
+
+    def _arm_closed(self, window: int, got: Any) -> None:
+        """Window ``window``'s arm outcome, ``got`` or its `Future`'s: an error is a failed window's. Its line, if held for
+        it, is written now."""
+        if callable(getattr(got, "exception", None)):
+            e = got.exception()
+            got = got.result() if e is None else {"error": f"close: {type(e).__name__}: {e}"[:500]}
         with self._lock:
-            self._arm_out.setdefault(self.window, got)
+            if isinstance(got, Mapping) and "error" in got and window not in self.arm_failed:
+                self.arm_failed.append(window)
+            self._arm_out.setdefault(window, got)
+            self._arm_pending.discard(window)
+            rec = self._awaiting.pop(window, None)
+        if rec is not None:
+            self._write_window(rec)
+            if self.mirror is not None:
+                self.mirror()
 
     def stepped(self) -> None:
         """An engine step has returned: its committed steps ended now."""
@@ -503,12 +539,16 @@ class CommitWindows:
         return rec, job
 
     def _write_window(self, rec: dict[str, Any]) -> None:
+        """The window's line, with its arm's outcome; held while its arm is still closing (`_arm_closed` writes it)."""
         with self._lock:
+            if rec["window"] in self._arm_pending:
+                self._awaiting[rec["window"]] = rec
+                return
             if self.arm is not None:
                 rec["pouw_h1"] = self._arm_out.pop(rec["window"], None)
             self.records.append(rec)
-        with open(self.out / "windows.jsonl", "a") as fh:
-            fh.write(json.dumps(rec) + "\n")
+            with open(self.out / "windows.jsonl", "a") as fh:
+                fh.write(json.dumps(rec) + "\n")
 
     def _served_rows(self, rec: dict[str, Any], com: Any) -> dict[str, Any]:
         """The closed window's served rows committed under its run root (`commit_served`): the record's public part, with the
@@ -552,8 +592,9 @@ class CommitWindows:
             tokens = {q["request_id"]: list(by_name[q["request_id"]].streamed) for q in reqs if q["request_id"] in by_name}
             kw = dict(rec=rec, reqs=reqs, request_rows=request_rows, tokens=tokens, sampling={}, extras=self._extras_of(c.com, rc), **self.seal)
             if c.off_loop:
-                for metas in c.com._layouts.values():
-                    iter(metas)         # a plan's TensorMetas built once, here, as `freeze` builds them
+                if self.sealer.process is None:
+                    for metas in c.com._layouts.values():
+                        iter(metas)     # a plan's TensorMetas built once, here, as `freeze` builds them
                 return c.com, rc, kw
             return (freeze(self.com) if self.sealer is not None else self.com), rc, kw
         except Exception as e:  # noqa: BLE001  (a window that can't be sealed fails visibly; the server goes on)
@@ -585,8 +626,17 @@ class CommitWindows:
         def run(waited: float = 0.0) -> None:
             com, rc, kw = job
             t0 = self.clock()
+            released: dict[str, Any] | None = None
             try:
-                sealed = seal_window(com, rc, Path(rec["seal"]["row_dir"]), **kw)
+                if self.release is not None:
+                    released = self.release.release(rec["window"], com, self.clock)
+                if self.sealer is not None and self.sealer.process is not None:
+                    sealed = self.sealer.process.seal(com, rc, Path(rec["seal"]["row_dir"]),
+                                                      written=(lambda: thaw(com)) if com is not self.com else None, **kw)
+                else:
+                    sealed = seal_window(com, rc, Path(rec["seal"]["row_dir"]), **kw)
+            except SealFailed as e:
+                sealed = {"error": str(e)[:500]}
             except Exception as e:  # noqa: BLE001  (a window that can't be sealed fails visibly; the server goes on)
                 sealed = {"error": f"{type(e).__name__}: {e}"[:500]}
             finally:
@@ -594,6 +644,8 @@ class CommitWindows:
                     thaw(com)
             line = {"window": rec["window"], "run_id": rec["run_id"], "run_root": rec.get("run_root"), **sealed,
                     "queued_s": round(t0 - t_close, 3), "seal_wait_s": round(waited, 4)}
+            if self.release is not None:
+                line["release"] = released
             with self._lock:
                 self.seals.append(line)
             with open(self.out / "seals.jsonl", "a") as fh:
@@ -659,6 +711,7 @@ class CommitWindows:
         with self._lock:
             checked, records, seals = list(self.checked), list(self.records), list(self.seals)
             closing = {w: list(e) for w, e in self.closing.items()}
+            arm_closing = sorted(self._arm_pending)
         bad_req = [c for c in checked if not c["passed"]]
         bad_win = sorted({r["window"] for r in records if not r["passed"]} | {s["window"] for s in seals if "error" in s})
         queued = sum(1 for r in records if "row_dir" in (r.get("seal") or {}))
@@ -676,5 +729,7 @@ class CommitWindows:
                 "cache_hits": sum(1 for c in checked if c.get("cache_hit")),
                 "cached_positions": sum(int(c.get("cache_hit") or 0) for c in checked),
                 "unchecked": unchecked,
-                **({"pouw_h1": {**self.arm.summary(), "failed": self.arm_failed[:20]}} if self.arm is not None else {}),
-                "passed": bool(checked) and not bad_req and not bad_win and not unchecked and not closing and queued == len(seals)}
+                **({"pouw_h1": {**self.arm.summary(), "failed": self.arm_failed[:20], "closing": arm_closing}}
+                   if self.arm is not None else {}),
+                "passed": bool(checked) and not bad_req and not bad_win and not unchecked and not closing and not arm_closing
+                and queued == len(seals)}

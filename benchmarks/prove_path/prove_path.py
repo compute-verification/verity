@@ -1,4 +1,4 @@
-"""Prove path: a committed run and its advice through the proof service, for network accounting under arbitrary vLLM usage.
+"""Prove path: a committed run and its advice through the proof system, for network accounting under arbitrary vLLM usage.
 
 Each window's step units are Programs a registered compiler made from the advice (`pipeline.advice_windows`), not a declared
 workload's. The advice is private: the prover commits I1's canonical encoding under hiding rows (`advice_windows.commit_advice`),
@@ -44,7 +44,7 @@ Two kinds of committed run:
         [--peer NAME --challenger-key RECORD [--gate-key KEY]] [--builds DIR]
     prove_path.py compiler --serve-run DIR [--hf-config F] [--target F] [--cap-bits L] [--transfer-gate T ...]
     prove_path.py weights-registration --serve-run DIR --checkpoint-dir DIR --key FILE --out FILE [--checkpoints F] \\
-        [--hf-config F] [--target F]
+        [--tables DIR] [--hf-config F] [--target F]
     prove_path.py serve-standin --bundle DIR --row-dir DIR --workload F --out RUN [--hf-config F] [--cap-bits L]
     prove_path.py circuit --serve-run DIR --window K --partition F --advice FILE --out FILE [--hf-config F] [--target F] \\
         [--cap-bits L] [--transfer-gate T ...]
@@ -83,7 +83,8 @@ Two kinds of committed run:
   --compiler-name N --compiler-digest D`` registers the
   window's advice under.
 * **weights-registration** (the committer): a served run's weights registration (`weights_registration_of_serve`), each
-  weight committed under the committer's secret salts once its shards check against the checkpoint's manifest, the
+  weight committed under the committer's secret salts once its shards check against the checkpoint's manifest, and the
+  rotary table at the engine's served words once they are within the analytic table's bound (``--tables``), the
   document ``verity-vllm advice --weights-of-record`` records in each window's registration; its roots are what
   ``window-circuit --pins`` and ``records_audit.py count --pins`` take. The verifier pins them before the first window's
   coins and never recomputes one from the checkpoint.
@@ -136,7 +137,7 @@ the compiler listing none and under it less each one gate (`more_negatives`).
 **Coins**: each window's `service.Stream` draws on the verifier's own coins, or with ``--challenger local|gate:USER@HOST --main
 FILE`` on the auditor's challenger's (`a5_coins`: the run root's one session, committed to each registration before any coin is
 read; ``local`` is a development session on this machine, pinned on ``--main``, the verifier's copy of main's first-parent
-history; ``gate:USER@HOST`` is vy-challenger-1 through infra's gate with the lane's gate key ``--gate-key``, its challenger on
+history; ``gate:USER@HOST`` is the auditor host through its SSH gate with the lane's gate key ``--gate-key``, its challenger on
 ``--peer``'s 127.0.0.1, so the audit runs on that peer, under the deployment's key record ``--challenger-key``). The gate opens
 a root once, ever, and a window's honest and forged commits share the run root, so only one of them draws there.
 `advice_before_draw` holds the advice to the receipt of the stream that drew.
@@ -187,9 +188,9 @@ BODY_SAMPLING = ("temperature", "top_p", "top_k", "seed", "n")
 GATES_OF_RECORD: Mapping[str, tuple[str, ...]] = {"unsloth/Llama-3.2-1B": ("RoPEHead_v1{D=64}",)}
 #: the schema of the request Programs vllm's advice compiler writes into a served window's row dir (``manifest.json``)
 SERVED_PROGRAMS = "verity-vllm/served-window-programs/v1"
-#: what a plain audit's summary names as its interim (a5's `PLAIN_SCOPE` is the scope it refuses outside of)
-PLAIN_INTERIM = ("C-Flock plain on one table under a stratified draw, until proofs' multi-table coverage lands (PRs A, B and "
-                 "C); the statement reads no registered values and no shared rows")
+#: what a plain audit's summary names as its interim (a5's `PLAIN_SCOPE` is the scope it refuses outside of), with the
+#: changes it waits on (``sources.json``)
+PLAIN_INTERIM: str = json.loads((HERE / "sources.json").read_text())["plain_interim"]
 
 
 @dataclass(frozen=True)
@@ -609,7 +610,7 @@ def served_identity() -> tuple[str, str]:
     try:
         from verity_vllm.pipeline import advice as ADV
     except ImportError:
-        raise ValueError("a served window's registered compiler is `verity-vllm advice`'s (verity_vllm.pipeline.advice, #3619), "
+        raise ValueError("a served window's registered compiler is `verity-vllm advice`'s (verity_vllm.pipeline.advice), "
                          "which this tree lacks") from None
     inner = getattr(ADV.registered_compiler(), "inner", None)
     if inner is None:
@@ -1215,18 +1216,24 @@ def weights_registration_of_serve(a: argparse.Namespace) -> dict[str, Any]:
     """A served run's weights registration, the committer's (`window_weights.weights_registration` under the φ its window
     circuit lowers under, `registered_of_serve`): each weight committed under the committer's salts, drawn under ``--key``
     (`committer_key`, never sent), once the committer has checked ``--checkpoint-dir``'s shards against ``--checkpoints``
-    (default the tree's ``manifests/checkpoints.json``). Written to ``--out``: what the server's ``verity-vllm advice
-    --weights-of-record`` records in each window's registration, and the roots the verifier pins before the first window's
-    coins (``window-circuit --pins``, ``records_audit.py count --pins``); the verifier never recomputes one. Refused
-    (ValueError) for a checkpoint not of record or one the manifest pins as another model than ``serve.json``'s, and as
-    `advice.registered_weights` refuses it. -> how many roots it registers, and the weight parameters it leaves free
-    (``unrooted``)."""
+    (default the tree's ``manifests/checkpoints.json``), and the rotary table at the words the engine serves
+    (``--tables``' ``cos_sin_cache.npy``, serve-openai's, default under ``--serve-run``'s ``private/``) once they are
+    within the analytic table's bound; with no such file it stays unrooted. Written to ``--out``: what the server's
+    ``verity-vllm advice --weights-of-record`` records in each window's registration, and the roots the verifier pins
+    before the first window's coins (``window-circuit --pins``, ``records_audit.py count --pins``); the verifier never
+    recomputes one. Refused (ValueError) for a checkpoint not of record or one the manifest pins as another model than
+    ``serve.json``'s, a served rotary table outside its bound, and as `advice.registered_weights` refuses it. -> how many
+    roots it registers, and the weight parameters it leaves free (``unrooted``)."""
+    import numpy as np
+
     from verity_vllm.pipeline.advice import registered_weights
     from verity_vllm.program.predict.window_weights import weights_registration
 
     serve = json.loads((Path(a.serve_run) / "serve.json").read_text())
+    cos_sin = Path(a.tables or Path(a.serve_run) / "private") / "cos_sin_cache.npy"
     doc = weights_registration(registered_of_serve(serve, a.hf_config, a.target, CAP_BITS), committer_key(Path(a.key)),
-                               a.checkpoint_dir, checkpoints_manifest=a.checkpoints)
+                               a.checkpoint_dir, checkpoints_manifest=a.checkpoints,
+                               tables={"cos_sin": np.load(cos_sin)} if cos_sin.is_file() else None)
     roots = registered_weights(doc, serve)
     Path(a.out).write_text(json.dumps(doc, indent=1) + "\n")
     return {"roots": len(roots), "unrooted": sorted(doc["unrooted"]), "out": a.out}
@@ -1307,7 +1314,7 @@ def class_size_of_advice(a: argparse.Namespace) -> dict[str, Any]:
     requests = len(compile_advice(compiler, Path(a.advice).read_bytes()))
     probe, cls = window_class_of(a.probe), window_class_of(a.window_class)
     t0 = time.time()
-    seen = CZ.census(class_circuit(compiler.inner.registered, probe, 1))
+    seen = CZ.census(class_circuit(compiler.inner.registered, probe, 1, provable=False))
     lowered = time.time() - t0
     try:
         one = CZ.project(seen, probe, cls)
@@ -1527,11 +1534,11 @@ def main(argv: list[str] | None = None) -> int:
                    "stratified:K, each window one member with no registered reads or shared rows (a5.PLAIN_SCOPE)")
     p.add_argument("--challenger", help="draw each window on the auditor's challenger's coins, the run root's one session "
                    "(a5_coins), not the verifier's own: local (a development session on this machine), or gate:USER@HOST "
-                   "(vy-challenger-1 through infra's gate, with --peer and --challenger-key)")
+                   "(the auditor host through its SSH gate, with --peer and --challenger-key)")
     p.add_argument("--peer", help="with --challenger gate:USER@HOST: this machine as the gate's /etc/vy/peers names it, whose "
                    "127.0.0.1 the session's challenger listens on")
     p.add_argument("--challenger-key", help="with --challenger gate:USER@HOST: the challenger's key record of its deployment "
-                   "(infra's challenger-key/v1), never the session's key.json")
+                   "(challenger-key/v1), never the session's key.json")
     p.add_argument("--gate-key", help="with --challenger gate:USER@HOST: the lane's own gate key (default ssh's own)")
     p.add_argument("--main", help="with --challenger: the verifier's own copy of main's first-parent history (git rev-list "
                    "--first-parent origin/main), which must hold the commit the session's host pins")
@@ -1546,6 +1553,8 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--key", required=True, help="the committer's 32-byte salt key file, drawn there the first time (0600); "
                    "it never leaves the committer")
     p.add_argument("--checkpoints", help="the manifest pinning the checkpoint's shards (default the tree's manifests/checkpoints.json)")
+    p.add_argument("--tables", help="the dir holding the engine's served rotary table, cos_sin_cache.npy (serve-openai's; "
+                   "default SERVE_RUN/private): registered once within its bound, else unrooted")
     p.add_argument("--hf-config")
     p.add_argument("--target")
     p = sub.add_parser("serve-standin", help="a served run's dir laid out from a single-GPU Commit of record")
@@ -1587,7 +1596,7 @@ def main(argv: list[str] | None = None) -> int:
                    "opened from against the committed weights root")
     p.add_argument("--checkpoints", help="the manifest pinning the checkpoint's shards, checked when given (each tensor is "
                    "held to its committed tensor root either way)")
-    p.add_argument("--law", default="subset:1", help="the proof service's law of the window")
+    p.add_argument("--law", default="subset:1", help="the proof system's law of the window")
     p.add_argument("--cap", type=int, default=64, help="units a member (a statement)")
     p.add_argument("--workers", type=int, default=None, help="commit workers (default min(16, CPUs))")
     for name in ("window-circuit", "class-size", "window-commit"):

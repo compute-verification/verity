@@ -29,13 +29,14 @@ record digest under the certifier's salt and is all of the head the host's signa
 siblings in N2's tree, and `salt_c`, the 64 bytes the certifier drew for the record and handed over with its head.
 
 **What 1 means.** (1) The head opens at leaf 2 + direction of N2's commitment (`NetworkHidingRead`: its sha512/row/v2
-digest, hm96's hiding leaf, the frame-v3-sha512 read at depth 2). (2) Its fields are the ones the public inputs give (`NetworkHeadFields`): its link's length and name,
-its direction and window, the grid's T, r, B and τ_b, status 0 (complete) and the grid's parameters digest. (3) When
-COUNTS, its T counts are the profile's row (`NetworkHeadCounts`). (4) The certificate signs this head: R, the record
-digest of the head (`NetworkRecordDigest`, `tagged_sha512` of the record tag and the head), salted by `salt_c` is
-`signed`, SHA-512("verity/net-cert/v1" ‖ salt_c ‖ R) (`NetworkSignedDigest`). Two fields are free: the deadline byte,
-which N2's unit reads beside the head check for its public deadline bit (`service.OUTPUTS`), and the frames root,
-which nothing in N2 reads.
+digest, hm96's hiding leaf, the frame-v3-sha512 read at depth 2). (2) Its fields are the ones the public inputs give
+(`NetworkHeadFields`): its link's length and name, its direction and window, the grid's T, r, B and τ_b, status 0
+(complete) and the grid's parameters digest. (3) When COUNTS, its T counts are the profile's row
+(`NetworkHeadCounts`). (4) The certificate signs this head: R, the record digest of the head (`NetworkRecordDigest`,
+`tagged_sha512` of the record tag and the head), salted by `salt_c` is `signed`,
+SHA-512("verity/net-cert/v1" ‖ salt_c ‖ R) (`NetworkSignedDigest`). Two fields are free: the deadline byte, which N2's
+unit reads beside the head check for its public deadline bit (`service.OUTPUTS`), and the frames root, which nothing
+in N2 reads.
 
 `salt_c` is not committed: (4) holds it, up to a SHA-512 collision, to the one the certifier signed under, so the
 certificate binds the head the check opens, and the head leaf stays the head's bytes alone.
@@ -387,7 +388,7 @@ def gate(L: int, T: int, counts: bool) -> PrimitiveDefinition:
     (`@unpinned`), and no proof of its unit is accepted: give it a root in the sidecar's bindings and pin it with
     `circuit-check --update-pins`. The Program holds the gate rather than the Definition's body because the commitment
     gadgets' Boolean bodies (`Hm96Sha512Leaf`, `FrameV3Node`, `FrameV3Leaf`, `Sha512Compress`) encode to about 140 MB,
-    and the proof service encodes the Program on every registration."""
+    and the proof system encodes the Program on every registration."""
     d = unit(L, T, counts)
     return gate_of(d, pinned_digest(d), "N2's head check")
 

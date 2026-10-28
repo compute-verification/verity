@@ -515,8 +515,8 @@ def diff(expected: Any, actual: Any, path: str = "$") -> list[str]:
 DECISION_FIELDS = ("check", "since", "finding", "reason", "expected")
 #: what `[rows.<row>.retired.<check>]` must state (`Row.retired`)
 RETIREMENT_FIELDS = ("reason", "since", "needs")
-#: `status` of a decision: `accepted` (the default when absent: Daniel confirmed it) or `pending_review` (labelled by a lane, not yet
-#: confirmed); both sanction.
+#: `status` of a decision: `accepted` (the default when absent: confirmed) or `pending_review` (labelled, not yet confirmed); both
+#: sanction.
 DECISION_STATUSES = ("accepted", "pending_review")
 
 

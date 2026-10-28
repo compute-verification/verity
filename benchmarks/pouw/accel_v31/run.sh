@@ -48,7 +48,9 @@
 # cprio (lo), carve (100), dyn (1), wrap (2; 1 to 7), wcw (256), ccta (1), pf (0), diag (0), sched (0), ltw (0), served (0),
 # gemm (0), wgbn (256), cm (0), wgg (16), rp (0), r5h (96), r5w (1), tst (0), hall (0), hchunk (0), wgw (1), lminb (5), sahead (0) (v31.cu's
 # Knobs) and nreg (the GEMM's
-# register cap, V31_MAXNREG or under V31_WG V31_WG_NREG, a build of its own; default v31.cu's), default row=8192; REPS
+# register cap, V31_MAXNREG or under V31_WG V31_WG_NREG, a build of its own; default v31.cu's), and the commit's full (1),
+# sminb (4), lfold (0) and mask (0) (v31.cu's Knobs too), default row=8192; V31_ARMS, the fill bench's arms to time
+# (default all); REPS
 # (default 7); Q, the proof blocks a
 # verdict opens (default 64); LP, T, ROW (the gates' default 256 3 1024);
 # GENCODE (default arch=compute_120a,code=sm_120a; H200: arch=compute_90a,code=sm_90a); PY (default
@@ -79,6 +81,7 @@ git rev-parse HEAD > "$O/commit.txt" 2>&1
 knob() { local v; v=$(tr ',' '\n' <<< "$1" | sed -n "s/^$2=//p" | tail -1); echo "${v:-$3}"; }
 # knob_env VARIANT: its knobs as v31.cu's environment
 knob_env() {
+  echo -n "V31_FULL=$(knob "$1" full 1) V31_SMINB=$(knob "$1" sminb 4) V31_LFOLD=$(knob "$1" lfold 0) V31_MASK=$(knob "$1" mask 0) "
   echo "V31_CPRIO=$(knob "$1" cprio lo) V31_CARVE=$(knob "$1" carve 100) V31_DYN=$(knob "$1" dyn 1) V31_WRAP=$(knob "$1" wrap 2)" \
     "V31_WCW=$(knob "$1" wcw 256) V31_CCTA=$(knob "$1" ccta 1) V31_PF=$(knob "$1" pf 0) V31_DIAG=$(knob "$1" diag 0)" \
     "V31_SCHED=$(knob "$1" sched 0) V31_LTW=$(knob "$1" ltw 0) V31_SERVED=$(knob "$1" served 0)" \

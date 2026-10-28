@@ -69,7 +69,7 @@ def dev_minors(pid: int) -> set[int]:
     return {int(m.group(1)) for m in (re.fullmatch(r"nvidia(\d+)", n) for n in r.stdout.split()) if m}
 
 
-#: the only variables read from another process's environment (Daniel's ruling, 7 Oct): the rest may hold its secrets
+#: the only variables read from another process's environment: the rest may hold its secrets
 GPU_VARS = ("NVIDIA_VISIBLE_DEVICES", "CUDA_VISIBLE_DEVICES")
 
 

@@ -17,7 +17,7 @@ first = []
 # ratchet_gate caches each change's verdict and judges it once per `main` (uncached, one tick ran over 50 min)
 landing_gates = ["tools/verity/check/gates/markdown_caps.py", "integrations/vllm/tools/ratchet_gate.py"]
 # how `next` lands: "review", each member on a reviewer's land verdict (`research queue review`), a Lean change once a Lean check
-# passed, and the full check after landing, which reverts what it fails (Daniel, 24 Oct 06:05Z); the only landing there is
+# passed, and the full check after landing, which reverts what it fails; the only landing there is
 land = "review"
 # the after-landing run reuses no suite, Lean or step pass (`check.py --no-cache`), until a suite's reuse is per test; circuit-check
 # alone reuses its per-target passes (`--circuit-cache`), each keyed by everything that target read, since a cold `--all` (~4 h,
@@ -26,8 +26,11 @@ land = "review"
 after_landing_no_cache = true
 # the most review-landing Lean checks running at once: one, and those stacked above it on `next` for Lean changes it doesn't hold
 max_lean_checks = 5
-# a sync merges PRs that change no Lean below Lean changes, so they don't wait for a Lean check (members it keeps never move)
+# a sync merges PRs that change no Lean below Lean changes, so they don't wait for a Lean check (members on `next` never move)
 nonlean_first = true
+# while no Lean check of `next` runs, members with a land verdict go below those waiting for one, so a member waiting for its
+# review holds only itself (never past a held member, nor below a running Lean check's commit)
+reviewed_first = true
 # days an open PR not marked ready at its head stays idle (its head commit, and its ready, eject and review labels there) before
 # it is stale: `research queue status` says so and drive rings its owner once a day (`research.stale`); 0 is off
 stale_days = 3

@@ -21,7 +21,7 @@ multiples of 8 (`Int8ExactConfig` refuses a layer whose K or N is not).  An M < 
 to MIN_ROWS and keeps the product's first M rows: row i of an integer product reads only row i of X, so padding changes no
 row's value.  CPU and CUDA run the same padding.
 
-**The z/y records** (`scaled_mm_zy`, CA's layout, 21 Oct 04:32Z; `Accounting.Served.ValueChecked`): the call's product over
+**The z/y records** (`scaled_mm_zy`; `Accounting.Served.ValueChecked`): the call's product over
 its T slots (`rows`, H1's static layout: slot i < M is row i under s_a[i], every later slot an empty row, zero codes under
 scale 0) in `UNIT` = 32 x 32 units, one record each, unit (row block, column block) in row-major order (the compiled
 Program's), each `ZY_BYTES` bytes: its exact s32 z_u = X_u W_u^T over the whole K, row-major, then y_u = dq(z_u, s_a, s_w)

@@ -9,7 +9,7 @@ The binding is two keys of the registration's window provenance (`binding`, `tp.
 
 Core's ``verity/registration/v1`` record carries the window's provenance as one public item (``window``), which the record's digest
 covers and the coins commit to before the draw, so the draw comes after both are fixed and the record gains no field.  The advice
-is not published (Daniel, 24 Oct): its canonical encoding is committed as hiding rows (`commit_advice`: ``ROW_BITS``-bit rows,
+is not published: its canonical encoding is committed as hiding rows (`commit_advice`: ``ROW_BITS``-bit rows,
 zero-padded, under `verity.ml.commitments.advice`, hm96-sha512 leaves in one frame-v3-sha512 tree, its domain bound to the
 compiler), and only the root and the length are public.  The rows and their salts are the prover's (`opening`).
 
@@ -28,7 +28,7 @@ rank's `rank_replay.Loaded` for the requests the advice states (`requests_of`), 
 "prompt_len", "max_tokens"}`` with its output length as ``max_tokens``.  `Traced` is today's stand-in: the Build's Programs of
 record, by the manifest's lookup of record.  The ahead-of-time compiler takes its place under its own registered digest.
 
-**Transfer gates** (Daniel, 24 Oct): the units holding transfer gates, the I/O shell's ingress parse and egress render units, are
+**Transfer gates**: the units holding transfer gates, the I/O shell's ingress parse and egress render units, are
 proved with selection All, never sampled; every other unit is drawn as before.  The compiler lists them (``transfer_gates``: the
 templates whose units hold them, which its digest covers), and a ``work:K`` window draws by the work table
 `serving_rows.work_table_of` derives from that list and the window's own counts: each transfer-gate template works 0 with its

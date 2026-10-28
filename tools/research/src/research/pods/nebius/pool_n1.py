@@ -14,7 +14,7 @@ GPU and CPU Workloads. `ready_gpu_h`, `lease_waiters` and `kinds` are left out: 
   - `template-drift`: the dispatcher's templates (`$DISPATCH_SKY`) differ from `infra/nebius` as last pushed into node 1's bare repo
     (`refs/kueue-fold/infra-nebius`; neither node can read GitHub, so an agent pushes it and writes `ref.json` with the time).
 
-`delivered_by_hour` is the delivered-output metric (Daniel, 3:22 PM PDT Sep 30), one entry per UTC hour for the last 4, oldest first:
+`delivered_by_hour` is the delivered-output metric, one entry per UTC hour for the last 4, oldest first:
 {hour, leased_gpu_s, delivered_gpu_s, delivered_share, provisional}. Leased is each GPU Workload's admitted-to-finished time (or to
 now) × its GPUs, split across the hours it spans. It is delivered when its Job is not labelled `verity.dev/filler` and one of the
 Attempts its pods launched (the store's `attempts.host` is the pod) is `done` with validation `passed`, or with no validation and

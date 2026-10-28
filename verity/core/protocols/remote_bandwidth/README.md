@@ -1,12 +1,12 @@
-# Remote bandwidth audit (`verity.core.protocols.remote_bandwidth`)
+# PoUB (`verity.core.protocols.remote_bandwidth`)
 
-The remote bandwidth audit v0: a verifier with no hardware at the site certifies, window by window, how many reads of a
-node's registered store the node made. `PROTOCOL.md` has the semantics, the byte formats and the record.
+Proof of useful bandwidth (PoUB) v0: a verifier with no hardware at the site certifies, window by window, how many reads
+of a node's registered store the node made. `PROTOCOL.md` has the semantics, the byte formats and the record.
 
 ## Which side is the definition
 
-The verifier's definition is the Lean package `lean/` (`RemoteAudit`; Daniel, 18 Oct: Lean is the definition and the
-verifier of record, Python mirrors it, and the remote audit switches first). `audit.py` and what it calls here
+The verifier's definition is the Lean package `lean/` (`RemoteAudit`: Lean is the definition and the
+verifier of record, Python mirrors it, and PoUB switches first). `audit.py` and what it calls here
 (`receipts.py`, `codec.py`, `coins.py`) mirror it and are held to it by `lean/tests/`' difftest: every event's result,
 the session's outcome and its record, the registry (`Registry`: one live registration a node, each session's index
 `k`, the outcomes `close` counts, and `registry/v0`), and the pieces (registration and its codec seed, codec, plans,
@@ -91,7 +91,7 @@ A transcript written before it named its session's pace (20 Oct) replays only wi
   windows in flight or, at `in_flight` 1, each coin after the root before it), the record and its ledger.
 - `ledger.py`: the declared outputs from an accepted session's record (`declared`): γ at both R, per window and over
   the session, and the memory line's three forms (snapshot, time-held and link-charged) on the verifier's node
-  (`Node`).
+  (`Node`), the paced ones `line.py`'s stretch held over time with the whole session one stretch, in floats.
 - `coins.py`: a session's live coins, an epoch of the proof service's one challenger (`sampled_proofs.challenger`, in
   process or through `sampled_proofs.remote`), each opened after the root it follows, and what the auditor's ledger
   opens for the session's window inside the audit's period, read through `challenger.pinned_session`: the host's pins
@@ -123,7 +123,7 @@ A transcript written before it named its session's pace (20 Oct) replays only wi
   `benchmarks/remote_session/store_layout.py` writes pins and synthetic checkpoints.
 - `timing.py`: the honest schedule, the stated claim read through the ledger, and the sketch's rank bound.
 - `monitoring.py`: one accepted session's `q_bytes` and `eps` over a week, a month and a year of a deployment's
-  sessions, at δ = 1% and 10⁻⁶: pooled by #4413's count bound (all but M − 1 sessions certify), with each session at
+  sessions, at δ = 1% and 10⁻⁶: pooled by the count bound (all but M − 1 sessions certify), with each session at
   δ/T beside it. The deployment's machines and window are parameters.
 
 Tests: `uv run tools/verity/check/suites.py verity/core/protocols/remote_bandwidth` (the Python), and

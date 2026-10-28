@@ -1,4 +1,4 @@
-"""R13 lane tp, P4 step 3 — TP2 Match at the collective level, through the per-rank `worker_extension_cls` seam.
+"""TP2 Match at the collective level, through the per-rank `worker_extension_cls` seam.
 
     ... tp2_match --arm capture --workload <manifest> --case LLAMA32_1B --tp 2 --out <run>/capture [--engine-arg k=v ...]
     ... tp2_match --arm control --workload <manifest> --case LLAMA32_1B --tp 2 --out <run>/control
@@ -8,7 +8,7 @@
 warm-up, `tp2_coll_install` records EVERY collective of every rank in call order (step, k, kind, module, partial + received
 output, sha256s; the tensors of the first `--store-steps` steps are saved) and the driver writes `tokens.json`.
 `control`: the identical engine without the extension (`tokens.json` only).
-`check` (CPU, offline): the three parts of the TP-aware Match this lane can execute on the collective skeleton of the run —
+`check` (CPU, offline): the three parts of the TP-aware Match this module can execute on the collective skeleton of the run —
   1. STRUCTURE: per step and per rank, the sequence (kind, N) of the collectives equals the peer-input signature of THAT rank's
      Build (`tp_links.json` of `derive_step --tp 2 --rank r`), and the rows of every collective are the step's tokens or sampled rows
      in the schedule the capture realized (`step_rows`: arrivals and batch membership per step);
@@ -114,9 +114,9 @@ def _check_main(args) -> int:
     run = Path(args.out)
     cap, ctl = run / "capture", run / "control"
     res: dict = {"schema": "tp2-match/v1", "utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), "run": str(run),
-                 "campaign": os.environ.get("VERITY_CAMPAIGN", "r15"),       # [R15] was the hard-coded 'r13' label (R14 row note)
+                 "campaign": os.environ.get("VERITY_CAMPAIGN", "r15"),
                  "what": "collective-level TP-aware Match (structure + cross-rank provenance + tokens); NOT the instance-sequence Match"}
-    # [lane vllm-tp-n] the world is the number of rank Builds given (--build-rank in rank order; --build-rank0/1 are the two-rank spelling)
+    # the world is the number of rank Builds given (--build-rank in rank order; --build-rank0/1 are the two-rank spelling)
     builds = _build_dirs(args)
     world = len(builds)
     ranks = list(range(world))
@@ -129,7 +129,7 @@ def _check_main(args) -> int:
             _write(run, res)
             return 1
         recs[r] = [json.loads(l) for l in p.open() if l.strip()]
-    # [R17 tp D90, rev F-r17-03] the recorder files this check read, by digest: the provenance record below is bound to THESE rows (and
+    # the recorder files this check read, by digest: the provenance record below is bound to THESE rows (and
     # rank_match refuses a provenance record whose recorder digests are not those of the rows it loads itself)
     recorder_sha = {str(r): hashlib.sha256((cap / f"coll.rank{r}.jsonl").read_bytes()).hexdigest() for r in ranks}
     steps = sorted({x["step"] for r in ranks for x in recs[r]})
@@ -141,10 +141,10 @@ def _check_main(args) -> int:
     for r, bdir in enumerate(builds):
         links = read_tp_links(str(Path(bdir) / "tp_links.json"))
         sig = [(l["kind"], int(l["shape"][-1])) for l in links["links"]]
-        # [R15 rev-pm M-0398] site identity per k: the link's module_path ('inner.model.<path> (<Class>)') must equal the record's
+        # site identity per k: the link's module_path ('inner.model.<path> (<Class>)') must equal the record's
         # hooked module ('<path>'), so 96 width-H all-reduces are checked as the Program's SITES in the Program's ORDER, not as a
         # (kind, width) sequence that any interleaving / doubled hook / order swap would also produce.
-        sig_sites = [l.get("module") for l in links["links"]]     # [lane vllm-tp-n] recorder vocabulary, from the recorded model_root (read_tp_links)
+        sig_sites = [l.get("module") for l in links["links"]]     # recorder vocabulary, from the recorded model_root (read_tp_links)
         sites_exact = bool(links.get("model_root"))              # a v1 file has no recorded root: dotted-suffix identity (same_module_path)
         if int(links["rank"]) != r or int(links["world"]) != world:
             raise SystemExit(f"tp_links of build {bdir}: rank {links['rank']} world {links['world']} != rank {r} of world {world}")
@@ -157,8 +157,8 @@ def _check_main(args) -> int:
         for s in steps:
             xs = [x for x in recs[r] if x["step"] == s]
             got = [(x["kind"], int(x["shape"][-1])) for x in xs]
-            # rows (`step_rows`): the hidden-stream all-reduces carry the step's TOKENS; the all-gathers are of TWO row classes [R19 tp2
-            # F-r19-tp2-1]: the logits all-gather carries the step's SAMPLED rows and must be present, and a MID-MODULE all-gather
+            # rows (`step_rows`): the hidden-stream all-reduces carry the step's TOKENS; the all-gathers are of TWO row classes:
+            # the logits all-gather carries the step's SAMPLED rows and must be present, and a MID-MODULE all-gather
             # (OlmoeAttention's q/k gathers) carries the step's tokens like the all-reduces.  Any other row count fails.
             rows_ar = sorted({int(x["shape"][0]) for x in xs if x["kind"] == "all_reduce" and len(x["shape"]) == 2})
             rows_ag = sorted({int(x["shape"][0]) for x in xs if x["kind"] == "all_gather" and len(x["shape"]) == 2})
@@ -167,7 +167,7 @@ def _check_main(args) -> int:
                 bad_rows.append({"step": s, "rows_all_reduce": rows_ar, "rows_all_gather": rows_ag, "tokens": n_tok, "sampled": n_samp})
             ok = got == sig
             got_sites = [x.get("module") for x in xs]
-            # [rev-pm M-0470] fail CLOSED by absence: a link without module_path or a record without a module is a site mismatch at that
+            # fail CLOSED by absence: a link without module_path or a record without a module is a site mismatch at that
             # k (None == None never counts as equal), and the step passes only when every k is a NAMED equal pair.
             named_equal = sum(1 for g, e in zip(got_sites, sig_sites) if g is not None and e is not None and (g == e if sites_exact else same_module_path(g, e)))
             ok_sites = (len(got_sites) == len(sig_sites)) and named_equal == len(sig_sites)
@@ -187,7 +187,7 @@ def _check_main(args) -> int:
                                  "site_rule": ("record.module == link.module (link.module_path minus the derive's RECORDED model_root, ' (Class)' dropped), per k; "
                                                if sites_exact else
                                                "record.module is a dotted suffix of link.module_path (v1 tp_links: no recorded model_root), per k; ")
-                                              + "a None on either side is a mismatch (fail closed by absence, rev-pm M-0470)",
+                                              + "a None on either side is a mismatch (fail closed by absence)",
                                  "model_root": links.get("model_root"),
                                  "links_without_module_path": sum(1 for e in sig_sites if e is None),
                                  "prefill": per_step[steps[0]] if steps else None,
@@ -202,7 +202,7 @@ def _check_main(args) -> int:
     # ---- 2. cross-rank provenance on the stored steps
     prov = {"pass": True, "steps_checked": 0, "collectives_checked": 0, "elements_checked": 0, "all_reduce_checked": 0, "all_gather_checked": 0,
             "mismatches": [], "received_equal_both_ranks": 0,
-            # [rev F-r17-03] the stored tensors are BOUND to the recorder rows: sha256 of every .pt part / out (the recorder's own bytes rule:
+            # the stored tensors are BOUND to the recorder rows: sha256 of every .pt part / out (the recorder's own bytes rule:
             # contiguous, bf16 viewed as uint8) must equal the row's part_sha256 / out_sha256 at the same (rank, step, k); every mismatch or
             # missing row is a named FAIL; the digests of the recorder files themselves travel with the record
             "recorder_sha256": recorder_sha, "tensors_digested": 0, "digest_mismatches": [], "n_digest_mismatches": 0,
@@ -217,7 +217,7 @@ def _check_main(args) -> int:
         if len(prov["digest_mismatches"]) < 20:
             prov["digest_mismatches"].append({"rank": rank, "step": s, "k": k, "tensor": what, "why": why})
 
-    # [lane vllm-tp-n] world > 2: the Definition's chain of one-rounding bf16 adds in `allreduce_order(world)` (AllReduce_v2{WORLD,N}),
+    # world > 2: the Definition's chain of one-rounding bf16 adds in `allreduce_order(world)` (AllReduce_v2{WORLD,N}),
     # world 8 the routed Definition (`_route`); a mismatch is a named finding.  Diagnostics travel with it: how many received values equal
     # the f32-accumulate-then-round-once alternative (`alt_f32_once_equal`) and the ascending rank-order chain (`alt_ascending_equal`).
     from verity.ml.definitions.registry.b1_tp2 import allreduce_order
@@ -359,7 +359,7 @@ def _expected(kind: str, path: str | None, parts: list, outs: list, order: Any, 
         else:
             exp = parts[order[0]]
             for r_ in order[1:]:
-                exp = (exp.float() + parts[r_].float()).to(torch.bfloat16)      # world 2: exactly the R13 rule bf16(f32(a) + f32(b))
+                exp = (exp.float() + parts[r_].float()).to(torch.bfloat16)      # world 2: exactly bf16(f32(a) + f32(b))
             fam = "AllReduce2_v1" if len(parts) == 2 else "AllReduce_v2"
         prov["all_reduce_definitions"][fam] = prov["all_reduce_definitions"].get(fam, 0) + 1
         prov["all_reduce_checked"] += 1
@@ -455,7 +455,7 @@ class Options:
     build_rank0: str | None = option("--build-rank0", default=None)
     build_rank1: str | None = option("--build-rank1", default=None)
     build_rank: list[str] = option("--build-rank", action="append", default=[],
-                                   help="[lane vllm-tp-n] rank r's Build dir, repeated in rank order (world = count)")
+                                   help="rank r's Build dir, repeated in rank order (world = count)")
 
 
 def main(args: Options) -> int:

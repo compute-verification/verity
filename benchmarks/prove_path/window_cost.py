@@ -1,12 +1,12 @@
-"""The class-of-record window's commit against CMP-149's target (VLLM-128): a `class_rows.py` census priced in SHA-512
-compressions, seconds on the H200 and AND gates, beside the served window's ANDs and seconds, each lever alone and all of them
-stacked; the pad pass (positions whose values the engine never computed, recomputed) at three traffics; the registration's
-size; and the totals over monitoring periods of one week, one month and one year.
+"""The class-of-record window's commit against its target, 0.20 to 0.25 of the served window: a `class_rows.py` census priced in
+SHA-512 compressions, seconds on the H200 and AND gates, beside the served window's ANDs and seconds, each lever alone and
+all of them stacked; the pad pass (positions whose values the engine never computed, recomputed) at three traffics; the
+registration's size; and the totals over monitoring periods of one week, one month and one year.
 
 Costs. A fresh output row is its digest x (`class_rows.blocks(128 + b)`: P(8 nbytes) and its b bytes) and `Costs.fresh` more
 (hm96's c and h, two each, the frame leaf, and a port-tree node); an input row a wire or a registered read fills is re-leafed in
 its reader's port tree for `Costs.reused` (h, the leaf, the node). `CENSUS` is class_rows' model, a node one compression;
-`ENGINE` is the HASH-20 engine's, a node two (`commit_slots`: nine compressions a one-block row-slot). Compressions are priced
+`ENGINE` is the commit engine's, a node two (`commit_slots`: nine compressions a one-block row-slot). Compressions are priced
 in ANDs at `SHA512_ANDS` each; the served window is the class circuit's ANDs (`unit_ands`).
 
 Levers (`LEVERS`), each a change to the circuit's layout or the commitment's format, not to what the model computes:
@@ -14,24 +14,21 @@ Levers (`LEVERS`), each a change to the circuit's layout or the commitment's for
 - ``L1``, one FA3 tile. `fa3_tile` launches 64 × 192 when max_seqlen_q · (query heads a KV head) <= 64 and 192 × 128
   otherwise, so at Llama-3.2-1B a pure decode launch has key blocks of 192 and a prefill or mixed launch blocks of 128, and the
   class circuit, cut at the decode's 192, is inexact past 128 keys for every prompt position and every decode row of a mixed
-  launch (r20261026-230245-33cf). One tile at every launch (the pinned FA3's ``use_one_mma_wg`` off) makes every position the
+  launch. One tile at every launch (the pinned FA3's ``use_one_mma_wg`` off) makes every position the
   circuit's at blocks of 128 (`Heads.units` at ``BN=128``), so the engine's own values are the circuit's: no pad pass for a
   position the engine ran.
 - ``L2``, constants. An empty slot computes token 0 and then decodes greedily, a function of the weights and the class, and
   under a length-masked class Program (V3b's) a position past its request's end outputs zero rows: their rows are computed
   once and kept, and no pad pass runs them. Their hiding leaves stay fresh every window, since which slots are filled is
   private (their digests x could be kept too, which this doesn't price).
-- ``L3a``, key groups. A first block of w keys reads its keys and values as one `AllGather_v1{w, D}` row re-gathered at every
-  position (O(BN²) rows a block); read as ⌈w / 16⌉ rows of 16-key groups, each gathered once when it fills, only the last
-  partial group is re-gathered.
 - ``L3b``, one state row. A key block's running state (max, lane sums, O) is three rows, each hashed and re-leafed by its
   reader; as one row it is one.
 - ``W`` and ``R``, ports by reference: a reader's wired or registered port is the writer's or the pinned weight's leaves
   (a drawn member's port tree is derived at the audit), so no input row is re-leafed.
-- ``P``, shared output rows (CIR-113, `commit_slots --row-bytes`): units' outputs packed into rows of `ROW_BYTES`, so a
+- ``P``, shared output rows (`commit_slots --row-bytes`): units' outputs packed into rows of `ROW_BYTES`, so a
   fresh row's fixed cost is paid a KiB, not a unit's few bytes (its readers re-leaf as many rows as before, and a unit reads
   its segment for a few thousand ANDs, which this doesn't price).
-- ``L4``, one member root: the registration is O(members) today (`Registration`), every member's public body (every row's
+- ``L4``, one member root: the registration is O(members) (`RegistrationSize`), every member's public body (every row's
   b || c, 128 bytes) SHA-512'd on the CPU for `rows.leaf_layer` and written out, and every port root a JSON entry; under one
   Merkle root over members, each member's leaf over its port roots, it is a root, and an audit opens K members in O(K log M).
 
@@ -41,8 +38,8 @@ scores and probabilities at every key and each key block's running state), which
 circuit's units read wired, registered (weights) and ingress rows only, its key blocks' running states are its own units'
 outputs (`window_rows` evaluates them), and a served window draws no openings.
 
-    python window_cost.py CENSUS.json [--target h200|sm120] [--served-s 1.7] [--step-ms 23] [--project S,PROMPT,OUTPUTS]
-        [--measure-cpu SCRATCH | --cpu-rates FILE] [--stream SIZING] [--out FILE]
+    python window_cost.py CENSUS.json [--target h200|sm120] [--served-s 1.7] [--step-ms 23]
+        [--project S,PROMPT,OUTPUTS[,LANES,EVERY]] [--measure-cpu SCRATCH | --cpu-rates FILE] [--stream SIZING] [--out FILE]
 """
 from __future__ import annotations
 
@@ -54,32 +51,38 @@ from collections import Counter
 from dataclasses import dataclass, replace
 from pathlib import Path
 
+from verity_vllm.program.predict import scan_state as SS
+from verity_vllm.program.predict.window_circuit import WindowClass
+
+from verity.core.protocols.pous import wipe_monitoring
 from verity.core.protocols.sampled_proofs.optimize import SHA512_ANDS
+from verity.ml.circuits.defs import bind
+from verity.ml.definitions.registry import io_shell as IO
+from verity.ml.windows import interface as IF
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 import class_rows as CR  # noqa: E402
 import class_size as CS  # noqa: E402
 
-FIRST, END, GATHER = "AttnBlockFirst_v1", "AttnHeadEnd_v1", "AllGather_v1"
+FIRST, END = "AttnBlockFirst_v1", "AttnHeadEnd_v1"
 #: a full key block by target: FA3's (sm_90) and FA2's (sm_120)
 BLOCKS = {"h200": "AttnBlock_v4", "sm120": "AttnBlock_v5"}
-#: prefill is exact against the decode-shaped Definitions at this many keys or fewer (r20261026-230245-33cf)
+#: prefill is exact against the decode-shaped Definitions at this many keys or fewer
 EXACT_KEYS = 128
-#: the key group `L3a` reads a first block's keys in
-GROUP = 16
-#: a shared output row's bytes (`P`): CIR-113's 1 KiB rows
+#: a shared output row's bytes (`P`): 1 KiB rows
 ROW_BYTES = 1024
-#: a member's units: V3c's cap (note:20261026T2036Z-report-v3c-window-commit Q3)
+#: a member's units: V3c's cap
 CAP = 64
 #: one port root's entry in `registration.json` (``indent=1``): a port name of about 40 characters, 128 hex of root and of
 #: domain, leaves
 ROOT_JSON_BYTES = 360
-#: the H200's rates, compressions a second: #4666's measured step and commit_gpu's peak (`commit_slots`)
+#: the H200's rates, compressions a second: a measured step and commit_gpu's peak (`commit_slots`)
 RATES = {"3.1 G/s": 3.1e9, "4.79 G/s": 4.79e9}
 #: the reference datacenter (`benchmarks/census/deployments.json`, dc-12500-machines-600s)
 GPUS = 12_500 * 8
-PERIODS = {"week": 7 * 86_400, "month": 30 * 86_400, "year": 365 * 86_400}
+#: core's monitoring periods (`wipe_monitoring`), seconds by name
+PERIODS = dict(wipe_monitoring.PERIODS)
 
 
 @dataclass(frozen=True)
@@ -196,21 +199,16 @@ def kv_bytes(D: int) -> int:
     return 4 * D
 
 
-def gather(w: int, D: int, n: int) -> Unit:
-    return Unit(f"{GATHER}{{WORLD={w},N={D}}}", n, wired=w, out=1, out_bytes=2 * D * w, x=CR.blocks(128 + 2 * D * w),
-                wired_bytes=2 * D * w)
-
-
 @dataclass(frozen=True)
 class Heads:
     """The class circuit's attention as `window_circuit` cuts it: S slots of P positions, H heads a position (over the layers),
-    G key and value gathers a position, head dim D, key blocks of BN (`BLOCKS`' family ``block``), and the rows of a first
-    block, a full block and a head's end (``first``, ``full``, ``end``: `Unit`s of n = 1, a block's ``wired_bytes`` those
-    beside its keys' and values', `kv_bytes` a key)."""
+    R wired rows a key (its key's and its value's rows as their writers hold them), head dim D, key blocks of BN (`BLOCKS`'
+    family ``block``), and the rows of a first block, a full block and a head's end (``first``, ``full``, ``end``: `Unit`s of
+    n = 1, a block's ``wired`` and ``wired_bytes`` those beside its keys' and values', R rows and `kv_bytes` a key)."""
     S: int
     P: int
     H: int
-    G: int
+    R: int
     D: int
     BN: int
     block: str
@@ -236,18 +234,16 @@ class Heads:
         return self.H * (unit_ands(self.first_label(nvis, BN), target) + (nb - 1) * unit_ands(self.full_label(BN), target)
                          + unit_ands(self.end.label, target))
 
-    def units(self, BN: int | None = None, group: int | None = None, packed: bool = False) -> list[Unit]:
-        """The attention's units at key blocks of ``BN`` (the census's by default), its first blocks' keys in ``group``-key rows
-        (`L3a`), its blocks' state ``packed`` in one row (`L3b`)."""
+    def units(self, BN: int | None = None, packed: bool = False) -> list[Unit]:
+        """The attention's units at key blocks of ``BN`` (the census's by default), each block reading its keys' and values'
+        rows, its blocks' state ``packed`` in one row (`L3b`)."""
         BN = BN or self.BN
-        first, gathers, full = Counter(), Counter(), 0
+        first, full = Counter(), 0
         for T in range(1, self.P + 1):
             nb, nvis = self.blocks_at(T, BN)
             first[nvis] += 1
             full += nb - 1
-            if 1 < nvis < BN:
-                gathers[nvis] += 1
-        S, H, G, D, kv = self.S, self.H, self.G, self.D, kv_bytes(self.D)
+        S, H, R, kv = self.S, self.H, self.R, kv_bytes(self.D)
         fu, bu, eu = self.first, self.full, self.end
         if packed:
             fu = replace(fu, out=1, x=CR.blocks(128 + fu.out_bytes))
@@ -255,21 +251,11 @@ class Heads:
             eu = replace(eu, wired=1)
         out = [replace(eu, n=S * H * self.P)]
         for nvis, k in sorted(first.items()):
-            reads = 0 if group is None or nvis in (1, BN) else 2 * (-(-nvis // group) - 1)
-            out.append(replace(fu, label=self.first_label(nvis, BN), n=S * H * k, wired=fu.wired + reads,
+            out.append(replace(fu, label=self.first_label(nvis, BN), n=S * H * k, wired=fu.wired + R * nvis,
                                wired_bytes=fu.wired_bytes + kv * nvis))
         if full:
-            out.append(replace(bu, label=self.full_label(BN), n=S * H * full, wired_bytes=bu.wired_bytes + kv * BN))
-        for w, k in sorted(gathers.items()):
-            r = w if group is None else w % group
-            if r > 1:
-                out.append(gather(r, D, S * G * k))
-        blocks_filled = self.P // BN
-        if group is None:
-            out.append(gather(BN, D, S * G * blocks_filled))
-        else:
-            out.append(gather(group, D, S * G * (self.P // group)))
-            out.append(replace(gather(BN, D, S * G * blocks_filled), wired=BN // group))
+            out.append(replace(bu, label=self.full_label(BN), n=S * H * full, wired=bu.wired + R * BN,
+                               wired_bytes=bu.wired_bytes + kv * BN))
         return [u for u in out if u.n]
 
 
@@ -282,7 +268,7 @@ def _one(xs: list, what: str):
 def split(units: list[Unit], cls: dict, target: str = "h200") -> tuple[list[Unit], Heads]:
     """The census's units outside attention, and its attention (`Heads`, its full blocks ``target``'s family), refused unless
     `Heads.units` at the census's BN is exactly the census's attention, each unit's rows and bytes with its count: its first
-    blocks, full blocks and head ends, and as many of its key gathers as it has."""
+    blocks, full blocks and head ends, its rows a key read off its first blocks of the two fewest keys."""
     S, P, block = cls["slots"], cls["positions"], BLOCKS[target]
     firsts = [u for u in units if u.label.startswith(FIRST + "{")]
     ss = [CS.statics(u.label)[1] for u in firsts]
@@ -292,15 +278,16 @@ def split(units: list[Unit], cls: dict, target: str = "h200") -> tuple[list[Unit
     if any(u.label.split("{")[0] != block for u in fulls):
         raise ValueError(f"the census's full key blocks are not {target}'s {block}: {sorted({u.label for u in fulls})}")
     H = end.n // (S * P)
-    if P >= BN:
-        G = sum(u.n for u in units if u.label == f"{GATHER}{{WORLD={BN},N={D}}}") // (S * (P // BN))
-    else:
-        G = sum(u.n for u in units if u.label == f"{GATHER}{{WORLD=2,N={D}}}") // S
+    by_keys = {s["NVIS"]: u for u, s in zip(firsts, ss)}
+    if len(by_keys) < 2:
+        raise ValueError(f"the census's first blocks are at {sorted(by_keys)} keys: its rows a key need two key counts")
+    a, b = sorted(by_keys)[:2]
+    R = (by_keys[b].wired - by_keys[a].wired) // (b - a)
     kv = kv_bytes(D)
-    f0 = replace(firsts[0], label="", n=1, wired_bytes=firsts[0].wired_bytes - kv * ss[0]["NVIS"])
-    full = (replace(fulls[0], label="", n=1, wired_bytes=fulls[0].wired_bytes - kv * BN) if fulls else
-            replace(f0, wired=f0.wired + f0.out, wired_bytes=f0.wired_bytes + f0.out_bytes))
-    heads = Heads(S, P, H, G, D, BN, block, f0, full, replace(end, n=1))
+    f0 = replace(by_keys[a], label="", n=1, wired=by_keys[a].wired - R * a, wired_bytes=by_keys[a].wired_bytes - kv * a)
+    full = (replace(fulls[0], label="", n=1, wired=fulls[0].wired - R * BN, wired_bytes=fulls[0].wired_bytes - kv * BN)
+            if fulls else replace(f0, wired=f0.wired + f0.out, wired_bytes=f0.wired_bytes + f0.out_bytes))
+    heads = Heads(S, P, H, R, D, BN, block, f0, full, replace(end, n=1))
 
     def shape(u: Unit) -> tuple:
         return (u.wired, u.registered, u.other, u.out, u.out_bytes, u.x, u.wired_bytes, u.registered_bytes, u.other_bytes)
@@ -310,44 +297,29 @@ def split(units: list[Unit], cls: dict, target: str = "h200") -> tuple[list[Unit
         lab = u.label.replace(",CHECK=true", ",CHECK=false")
         have[lab] += u.n
         shapes.setdefault(lab, set()).add(shape(u))
-    want = {u.label: u for u in heads.units()}
     att = {u.label.replace(",CHECK=true", ",CHECK=false") for u in firsts + fulls + [end]}
     if ({lab: (have[lab], shapes[lab]) for lab in att} !=
-            {lab: (u.n, {shape(u)}) for lab, u in want.items() if not lab.startswith(GATHER + "{")}):
-        raise ValueError(f"the census's attention units are not the cut at D {D}, BN {BN}, {H} heads and {S} × {P} positions")
-    short = {lab: u.n for lab, u in want.items() if lab.startswith(GATHER + "{") and
-             (have[lab] < u.n or shapes[lab] != {shape(u)})}
-    if short:
-        raise ValueError(f"the census has fewer key gathers than {G} a position at BN {BN}, or of other rows: {short}")
-    want = Counter({lab: u.n for lab, u in want.items()})
+            {u.label: (u.n, {shape(u)}) for u in heads.units()}):
+        raise ValueError(f"the census's attention units are not the cut at D {D}, BN {BN}, {H} heads, {R} rows a key and "
+                         f"{S} × {P} positions")
     att = {u.label for u in firsts + fulls + [end]}
-    rest = []
-    for u in units:
-        if u.label in att:
-            continue
-        take = min(want.get(u.label, 0), u.n) if u.label.startswith(GATHER + "{") else 0
-        want[u.label] -= take
-        if u.n - take:
-            rest.append(replace(u, n=u.n - take))
-    return rest, heads
+    return [u for u in units if u.label not in att], heads
 
 
 LEVERS = {
     "L1": "one FA3 tile (blocks of 128 at every launch)",
     "L2": "empty slots and past-end positions as cached constants",
-    "L3a": "first blocks' keys in 16-key group rows",
     "L3b": "a key block's state in one row",
     "W": "wired ports by reference",
     "R": "registered ports by reference",
     "L4": "one Merkle root over members",
-    "P": "outputs in shared 1 KiB rows (CIR-113)",
+    "P": CS.SOURCES["levers"]["P"],
 }
 
 
 def window_units(rest: list[Unit], heads: Heads, levers: frozenset[str]) -> list[Unit]:
     """The window's units under ``levers`` (a shared row's share of a unit is fractional under ``P``)."""
-    us = rest + heads.units(BN=EXACT_KEYS if "L1" in levers else None, group=GROUP if "L3a" in levers else None,
-                            packed="L3b" in levers)
+    us = rest + heads.units(BN=EXACT_KEYS if "L1" in levers else None, packed="L3b" in levers)
     if "W" in levers:
         us = [replace(u, wired=0, wired_bytes=0) for u in us]
     if "R" in levers:
@@ -364,7 +336,7 @@ LEAF_JSON_BYTES = 150
 
 
 @dataclass(frozen=True)
-class Registration:
+class RegistrationSize:
     """The window's registration as `verity.ml.windows.rows.write` makes it, members of `CAP` units: ``members``, port
     ``roots`` (a unit's rows each a port, the cut rows ``p#j`` included), the public bodies' bytes (b || c a row a unit) and
     the private bodies' (every row's words and salt), the compressions (each public body's SHA-512 twice, for the leaf layer
@@ -382,7 +354,7 @@ class Registration:
     member_root: bool
 
     @classmethod
-    def of(cls, units: list[Unit], member_root: bool) -> Registration:
+    def of(cls, units: list[Unit], member_root: bool) -> RegistrationSize:
         members = sum(-(-u.n // CAP) for u in units)
         roots = round(sum(-(-u.n // CAP) * (u.ins + u.out) for u in units))
         rows = round(sum(u.n * (u.ins + u.out) for u in units))
@@ -405,10 +377,10 @@ class Registration:
 
 
 def measure_cpu(scratch: Path, mib: int = 256) -> dict:
-    """This host's rates as `Registration.cpu_s` prices them, one thread, each over ``mib`` MiB: SHA-512 (`hashlib`) of
-    member-sized public bodies (`CAP` units of 6 rows), `json.dumps` of port-root entries as `rows.registration` writes them
-    (``indent=1, sort_keys``), 64 MiB files written and fsynced into ``scratch``, and 1 KiB files created there (each removed
-    after)."""
+    """This host's rates as `RegistrationSize.cpu_s` prices them, one thread, each over ``mib`` MiB: SHA-512 (`hashlib`)
+    of member-sized public bodies (`CAP` units of 6 rows), `json.dumps` of port-root entries as `rows.registration` writes
+    them (``indent=1, sort_keys``), 64 MiB files written and fsynced into ``scratch``, and 1 KiB files created there (each
+    removed after)."""
     import hashlib
     import os
     import platform
@@ -496,8 +468,7 @@ def pad_pass(heads: Heads, traffic: Traffic, levers: frozenset[str], base_ands: 
 #: (three compressions) and the engine's fresh row
 STREAM_ROW_BYTES = 4096
 STREAM_ROW = CR.blocks(128 + STREAM_ROW_BYTES) + 3 + ENGINE.fresh
-#: the seal's store, bytes a second: VLLM-102's before arm (r20261027-054922-0f54) stored 29,327,490,072 committed bytes in
-#: 90.581 s
+#: the seal's store, bytes a second: a measured seal stored 29,327,490,072 committed bytes in 90.581 s
 SEAL_BYTES_S = 29_327_490_072 / 90.581
 STREAM_LEVER = "F: the attention interiors (fa*.m1) not committed"
 
@@ -530,76 +501,78 @@ def stream(sizing: dict, cls: dict, target: str, served_ands: float, served_s: f
     return out
 
 
-def project(census: dict, slots: int, prompt: int, outputs: int, target: str = "h200") -> tuple[list[Unit], Heads, dict]:
-    """A census of one Program at a probe class within one key block (`class_rows.py --probe`), projected to ``slots``
-    Programs of ``prompt`` ids and ``outputs`` outputs as `class_size.project` projects one: outside attention a fixed count
-    of each template a position (`TokenFeed_v1` a prompt position and `SlotRow_v1` one a Program, each reading and writing
-    its prompt's row of 4 bytes an id), refused unless each divides evenly; the heads rebuilt at the class's positions
-    (`Heads.units`)."""
+def _slot_definition(lab: str, cls: WindowClass) -> object:
+    """A slot's template (`class_size.placed`) at class ``cls``: its Definition, ``lab``'s statics bound (the entry's stop ids
+    none, which its rows don't read)."""
+    fam, s = CS.statics(lab)
+    if fam == CS.SCAN:
+        return SS.bridge(cls.scan, cls.prompt)
+    make = {CS.FEED: IO.TokenFeed, CS.COLLECT: IO.OutCollect, CS.ENTRY: IO.SlotEntry}[fam]
+    return bind(make, **s, **({"STOP": ()} if fam == CS.ENTRY else {}))
+
+
+def _slot_unit(u: Unit, lab: str, at: WindowClass, cls: WindowClass) -> Unit:
+    """The probe's slot template ``u`` (at class ``at``) as ``lab`` at class ``cls``: its Definition's rows there (as
+    class_rows counts them, uncut), read through ``u``'s one kind of row; refused unless ``u`` is its Definition's at ``at``."""
+    kind = [k for k in ("wired", "registered", "other") if getattr(u, k)]
+    if len(kind) != 1:
+        raise ValueError(f"the probe's {u.label} reads its rows through {len(kind)} kinds of row, not one")
+
+    def rows(lab: str, c: WindowClass) -> Unit:
+        fn = _slot_definition(lab, c)
+        ins, outs = IF.unit_rows(fn, None)
+        ob = [2 * w for _, w in IF.layout(fn).outs]
+        return replace(u, label=lab, out=len(outs), out_bytes=sum(ob), x=sum(CR.blocks(128 + b) for b in ob),
+                       **{kind[0]: len(ins), f"{kind[0]}_bytes": sum(bits // 8 for _, _, bits, _ in ins)})
+
+    if rows(u.label, at) != u:
+        raise ValueError(f"the probe's {u.label} is not its Definition's rows at the probe's class, uncut")
+    return rows(lab, cls)
+
+
+def project(census: dict, slots: int, prompt: int, outputs: int, target: str = "h200", lanes: int = 0,
+            every: int = 16) -> tuple[list[Unit], Heads, dict]:
+    """A census of one Program at a probe class within one key block (`class_rows.py --probe`), projected to the class of
+    ``slots`` Programs of ``prompt`` ids and ``outputs`` outputs (``lanes`` and ``every`` `window_circuit.WindowClass`'s), each
+    template outside attention at `class_size.projected`'s label and count, a slot's at its Definition's rows there; the
+    heads rebuilt at the class's positions (`Heads.units`)."""
     c0 = census["class"]
     if c0["slots"] != 1:
         raise ValueError(f"a probe of {c0['slots']} Programs: project one")
     rest, heads = split(units_of(census), c0, target)
-    P0, NP0, P = c0["positions"], c0["prompt"], prompt + outputs - 1
+    at, to = WindowClass(1, c0["prompt"], c0["outputs"]), WindowClass(slots, prompt, outputs, lanes, every)
     out = []
     for u in rest:
-        fam, s = CS.statics(u.label)
-        lab = u.label.replace(f"NP={NP0}", f"NP={prompt}")
-        if fam in (CS.FEED, CS.ROW):
-            d = 4 * (prompt - NP0)
-            grow = {k: getattr(u, k) + d for k in ("wired_bytes", "registered_bytes", "other_bytes") if getattr(u, k)}
-            if len(grow) != 1:
-                raise ValueError(f"the probe's {u.label} reads its prompt through {len(grow)} kinds of row, not one")
-            u = replace(u, out_bytes=u.out_bytes + d, x=u.x - CR.blocks(128 + 4 * NP0) + CR.blocks(128 + 4 * prompt), **grow)
-        if fam == CS.FEED:
-            n = 1 if s["FIRST"] else prompt - 1
-        elif fam == CS.ROW:
-            n = 1
-        elif u.n % P0:
-            raise ValueError(f"the probe has {u.n} {u.label} units, not a fixed count at each of its {P0} positions")
-        else:
-            n = u.n // P0 * P
+        lab, n = CS.projected(u.label, u.n, at, to)
+        if CS.placed(u.label, 1, at.positions) is not None:
+            u = _slot_unit(u, lab, at, to)
         out.append(replace(u, label=lab, n=slots * n))
-    cls = {"slots": slots, "prompt": prompt, "outputs": outputs, "positions": P}
-    return out, replace(heads, S=slots, P=P), cls
+    cls = {"slots": slots, "prompt": prompt, "outputs": outputs, "positions": to.positions}
+    return out, replace(heads, S=slots, P=to.positions), cls
 
 
 def position_layout(rest: list[Unit], heads: Heads, levers: frozenset[str], T: int) -> dict:
     """One slot's output rows at position T under ``levers`` as a `commit_slots` step layout (`slots._layout_json`'s form,
     for ``step.py time`` at ``--slots S``): a group a template, one tensor of its units' bytes, each unit its rows, a unit's
     bytes split evenly over its rows (the census keeps a unit's total, not each row's). A template outside attention is at
-    every position as often (`TokenFeed_v1` at its prompt position, `SlotRow_v1` at the first). No lever but ``P``, whose
-    shared rows are another layout (`e2e_h200.window.shared_layout`), changes a template's output rows outside attention."""
+    every position as often, a slot's where it places it (`class_size.placed`). No lever but ``P``, whose shared rows are
+    another layout (`e2e_h200.window.shared_layout`), changes a template's output rows outside attention."""
     if "P" in levers:
         raise ValueError("P's shared rows are FAMILIES' shared-row layout (e2e_h200.window.shared_layout), not this one")
     S, P, BN = heads.S, heads.P, EXACT_KEYS if "L1" in levers else heads.BN
     here = []
     for u in rest:
-        fam, s = CS.statics(u.label)
-        if fam == CS.FEED:
-            k = int(T == 1) if s["FIRST"] else int(1 < T <= s["NP"])
-        elif fam == CS.ROW:
-            k = int(T == 1)
-        else:
+        k = CS.placed(u.label, T, P)
+        if k is None:
             k, r = divmod(u.n, S * P)
             if r:
                 raise ValueError(f"{u.n} {u.label} units are not a fixed count at each of {S} × {P} positions")
         here.append((u, k))
     nb, nvis = heads.blocks_at(T, BN)
-    group = GROUP if "L3a" in levers else None
-    one = Heads(1, T, heads.H, heads.G, heads.D, BN, heads.block, heads.first, heads.full, heads.end)
-    for u in one.units(BN=BN, group=group, packed="L3b" in levers):
+    one = replace(heads, S=1, P=T, BN=BN)
+    for u in one.units(BN=BN, packed="L3b" in levers):
         fam, s = CS.statics(u.label)
-        if fam == FIRST:
-            k = heads.H if s["NVIS"] == nvis else 0
-        elif fam == heads.block:
-            k = heads.H * (nb - 1)
-        elif fam == END:
-            k = heads.H
-        else:
-            w, part = s["WORLD"], nvis if group is None else nvis % group
-            made = (w == BN and T % BN == 0) or (group is not None and w == group and T % group == 0)
-            k = heads.G if made or (w == part and 1 < part < BN) else 0
+        k = heads.H * (nb - 1) if fam == heads.block else heads.H if fam == END or s["NVIS"] == nvis else 0
         here.append((u, k))
     groups = []
     for u, k in here:
@@ -618,22 +591,22 @@ def position_layout(rest: list[Unit], heads: Heads, levers: frozenset[str], T: i
 
 
 #: the plan's order, each step stacked on those before it: exactness (no pad pass), the registration, the rows' layout
-PLAN = ("L1", "L2", "L4", "W", "R", "L3a", "L3b", "P")
+PLAN = ("L1", "L2", "L4", "W", "R", "L3b", "P")
 
 
 def price(census: dict, target: str = "h200", served_s: float = 1.7, step_s: float = 0.023,
-          to: tuple[int, int, int] | None = None, cpu: dict | None = None, sizing: dict | None = None) -> dict:
-    """Every figure the report prints, as data, for ``census`` or its projection ``to`` a class (slots, prompt, outputs): each
-    lever alone and the `PLAN` stacked. Every compression counts in ANDs wherever it runs. In seconds, the window's rows (and
-    under ``L4`` the member tree) run on the GPU at `RATES`; the registration without ``L4`` runs on the committer's CPU, at
-    ``cpu``'s measured rates (`measure_cpu`), else at the GPU's (``registration_cpu`` None: a lower bound). With an arena
-    ``sizing`` record, serving's own stream commit too (`stream`)."""
+          to: tuple[int, ...] | None = None, cpu: dict | None = None, sizing: dict | None = None) -> dict:
+    """Every figure the report prints, as data, for ``census`` or its projection ``to`` a class (slots, prompt, outputs[,
+    lanes, every]): each lever alone and the `PLAN` stacked. Every compression counts in ANDs wherever it runs. In seconds,
+    the window's rows (and under ``L4`` the member tree) run on the GPU at `RATES`; the registration without ``L4`` runs on
+    the committer's CPU, at ``cpu``'s measured rates (`measure_cpu`), else at the GPU's (``registration_cpu`` None: a lower
+    bound). With an arena ``sizing`` record, serving's own stream commit too (`stream`)."""
     if to is None:
         cls = census["class"]
         rest, heads = split(units_of(census), cls, target)
         total = census["total"]["compressions"]
     else:
-        rest, heads, cls = project(census, *to, target)
+        rest, heads, cls = project(census, *to[:3], target, *to[3:])
         total = None
     out = {"class": cls, "target": target, "served_s": served_s, "step_s": step_s, "sha512_ands": SHA512_ANDS,
            "census_compressions": total, "projected_from": None if to is None else census["class"], "cpu": cpu}
@@ -647,7 +620,7 @@ def price(census: dict, target: str = "h200", served_s: float = 1.7, step_s: flo
     for name, levers, costs in sets:
         us = window_units(rest, heads, levers)
         rows_c = round(sum(u.compressions(costs) for u in us))
-        reg = Registration.of(us, "L4" in levers)
+        reg = RegistrationSize.of(us, "L4" in levers)
         served = served_ands(rest, heads, levers, target)
         pads = {t.name: pad_pass(heads, t, levers, base_ands, step_s, target) for t in TRAFFIC}
         full = pads[TRAFFIC[0].name]
@@ -710,8 +683,8 @@ def report(doc: dict) -> str:
     st = doc.get("stream")
     if st:
         lines += ["", f"serving's own stream commit, made while it serves, before the window's commit and beside it (rows-sha512: "
-                  f"{STREAM_ROW} compressions a 4 KiB row; the seal's store at {SEAL_BYTES_S / 1e9:.3f} GB/s, VLLM-102's "
-                  f"r20261027-054922-0f54), the full window; {STREAM_LEVER}:", "",
+                  f"{STREAM_ROW} compressions a 4 KiB row; the seal's store at {SEAL_BYTES_S / 1e9:.3f} GB/s, "
+                  f"{CS.SOURCES['seal_store']}), the full window; {STREAM_LEVER}:", "",
                   "| schedule | stream bytes | fa*.m1 bytes (share) | commit ANDs (ratio) | commit s at 3.1 (4.79) G/s (ratio) | "
                   "seal s (ratio) | under F: commit ANDs (ratio) | commit s (ratio) | seal s (ratio) |",
                   "| --- | --- | --- | --- | --- | --- | --- | --- | --- |"]
@@ -747,8 +720,8 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--target", choices=("h200", "sm120"), default="h200")
     ap.add_argument("--served-s", type=float, default=1.7, help="the served window's seconds (V3c's estimate: 4 prefill and 63 "
                     "decode steps)")
-    ap.add_argument("--step-ms", type=float, default=23.0, help="a batch decode step's ms (the dry run's, r20261026-195741-11d7)")
-    ap.add_argument("--project", default=None, metavar="SLOTS,PROMPT,OUTPUTS",
+    ap.add_argument("--step-ms", type=float, default=23.0, help="a batch decode step's ms (a dry run's)")
+    ap.add_argument("--project", default=None, metavar="SLOTS,PROMPT,OUTPUTS[,LANES,EVERY]",
                     help="price a one-Program probe's projection to this class (`project`)")
     cpu = ap.add_mutually_exclusive_group()
     cpu.add_argument("--measure-cpu", default=None, metavar="SCRATCH", help="measure this host's CPU rates (`measure_cpu`), "
@@ -766,7 +739,7 @@ def main(argv: list[str] | None = None) -> int:
     to = tuple(int(v) for v in a.project.split(",")) if a.project else None
     if a.layout:
         census = json.loads(Path(a.census).read_text())
-        rest, heads = (project(census, *to, a.target)[:2] if to else
+        rest, heads = (project(census, *to[:3], a.target, *to[3:])[:2] if to else
                        split(units_of(census), census["class"], a.target))
         levers, d = frozenset(v for v in a.layout_levers.split(",") if v), Path(a.layout[1])
         d.mkdir(parents=True, exist_ok=True)

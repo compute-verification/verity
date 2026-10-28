@@ -48,6 +48,8 @@ PUBLIC = {
                                                   "verifier's pins of it (VLLM-113)",
     "verity_vllm.program.predict.window_rows": "I7: a window's rows, the window circuit's units filled from a served window's "
                                                "values (VLLM-125)",
+    "verity_vllm.program.predict.scan_state": "I7: the network certifier's scan state as a window class's Programs read it: "
+                                              "the registered value, its class, its words and a slot's bridge",
     "verity_vllm.pipeline.workload_file": "I1: a workload file, fetched from the evidence store when absent and checked against "
                                           "its digest",
 }
@@ -110,6 +112,9 @@ KNOWN = frozenset({
     "verity_vllm.pipeline.cpu_replay",
     "verity_vllm.pipeline.deferred_rows",
     "verity_vllm.pipeline.replay_bundle",
+    "verity_vllm.pipeline.serve_admit",
+    "verity_vllm.pipeline.serve_openai",
+    "verity_vllm.pipeline.serve_protocol",
     "verity_vllm.pipeline.serving_rows",
     "verity_vllm.pipeline.slice_rows",
     "verity_vllm.pipeline.tp.capture",

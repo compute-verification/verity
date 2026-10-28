@@ -1,8 +1,8 @@
-"""The scan's ingress side (NET-68's step-indexed scan router, note:network-accounting/20261025T0830Z-report-net68-scan-router):
-one unit a certifier bucket t, `IngressScanBucket`, which reads bucket t's ingress row, the carried state S_{t−1} and
-the Programs' row at t, and computes S_t from them and S_t's egress view, its outputs beside an ok bit (the generator
-form); the first bucket's, `IngressScanFirst`, reads no state and starts from the empty one. Every switch is computed
-from the state and the rows; none is witness. Nothing here is in a Spec.
+"""The ingress side of the step-indexed scan: one unit a certifier bucket t, `IngressScanBucket`, which reads bucket
+t's ingress row, the carried state S_{t−1} and the Programs' row at t, and computes S_t from them and S_t's egress
+view, its outputs beside an ok bit (the generator form); the first bucket's, `IngressScanFirst`, reads no state and
+starts from the empty one. Every switch is computed from the state and the rows; none is witness. Nothing here is
+in a Spec.
 
 **The row** is `warden_rows.window_rows`' row t of the ingress link: S = lanes·r slots of B-byte cells, lane block ρ
 (slots ρ·r … ρ·r + r − 1) the ρ-th live connection by ordinal and a block no connection holds r·B zero bytes. Its cells
@@ -40,13 +40,13 @@ unit, committed under its hiding leaf and registered as `verity/certifier/scan-s
 prompt ids, prompt position p at `ids[position(p)]` for p below `fields`, each IDB bits, beside the request's
 `max_tokens`, `seed`, `temperature` and `top_p`. The ids are the scan's own reading of the certified cells, each the
 decimal field of the warden's signed ingress row its request came in on, so the row is held to the certified bytes by
-the scan's gates and needs no other tie. A Program that reads its slot as i32s (vllm's `SlotRow_v1{NP}` row:
-occupancy, prompt length and NP ids) reads `occ`, `fields` and the ids each at its bits in the state row
-(`slot_row`), zero-extended: wires, no gate, but a read of the whole state row (`state_bits`, 9,353 words at w63's
-class). An empty slot's `fields` and ids aren't zeroed, nor are the ids past `fields` (they can be a request's not
+the scan's gates and needs no other tie. A Program that reads its slot as i32s (occupancy, prompt length and NP ids;
+vLLM's `ScanSlots_v2`) reads `occ`, `fields` and the ids each at its bits in the state row (`slot_row`),
+zero-extended, copies with no gate, through a read of the whole state row (`state_bits`, 9,353 words at w63's class).
+An empty slot's `fields` and ids aren't zeroed, nor are the ids past `fields` (they can be a request's not
 anchored at b, or an earlier request's), so such a Program masks its outputs by `occ` and reads a slot's first
 `fields` ids only. A window circuit of the link-window from scan bucket t0 reads the window's rows as one value
-(vllm's `SCAN_STATE`, row a for boundary a): `window_state`, the scan's rows t0 − 1 … t0 + buckets − 2, a constant
+(vLLM's `SCAN_STATE`, row a for boundary a): `window_state`, the scan's rows t0 − 1 … t0 + buckets − 2, a constant
 offset t0 − 1, with row −1, the first link-window's, the empty state's, since no unit registers S_{−1}.
 
 **The Programs' row** (`prog_encode`) at bucket t is NR entries, each n (u32) and KO output ids of IDB bits, then zeros
@@ -539,7 +539,7 @@ def token_row(cls: Class, st: State) -> list[tuple[int, int, tuple[int, ...]]]:
 
 
 def slot_row(cls: Class, j: int, NP: int) -> list[tuple[int, int]]:
-    """Where slot j's row of NP + 2 i32s (vllm's `SlotRow_v1{NP}`: occupancy, prompt length, then the ids of prompt
+    """Where slot j's row of NP + 2 i32s (as vLLM's `ScanSlots_v2` reads it: occupancy, prompt length, then the ids of prompt
     positions 0 … NP − 1) is in the state row: each i32's (offset, width) in bits (`layout`), its value those bits
     zero-extended, least significant first: `occ`, `fields`, then position p's id at `ids[position(p)]`."""
     if not 0 <= j < cls.NR:

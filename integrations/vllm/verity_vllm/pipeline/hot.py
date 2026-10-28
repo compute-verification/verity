@@ -1,4 +1,4 @@
-"""Hot Commit worker (BRIEF §5 / §8 #4): one commit_delta process serves consecutive Commit jobs of the SAME engine key
+"""Hot Commit worker: one commit_delta process serves consecutive Commit jobs of the SAME engine key
 instead of building a fresh vLLM engine per invocation.  Not a distributed service: one worker per pod, files under one directory,
 the client is a drop-in for `verity-vllm commit ARGS` (row_pod.sh `HOT_ENGINE=1`).
 
@@ -53,8 +53,8 @@ from verity_vllm.config import option, workload_file
 
 SCHEMA = "verity-sweep/hot-commit/v1"
 # PATH / LD_LIBRARY_PATH are part of the identity: they decide which nvcc / ninja / CUDA libs a JIT build in the worker would use (a worker
-# spawned from a shell without the venv on PATH cannot build the native collector -- hotval4 e2e 05:36Z), so a client with a different
-# toolchain view must not inherit that engine
+# spawned from a shell without the venv on PATH cannot build the native collector), so a client with a different toolchain view
+# must not inherit that engine
 ENV_PREFIXES = ("PYTHONPATH", "PATH", "LD_LIBRARY_PATH", "VLLM_", "VERITY_", "CUDA_", "HF_", "TORCH", "NATIVE_COLLECT_BUILD", "HIDDEN_GPU_BUILD",
                 "TOKENIZERS_PARALLELISM", "OMP_")
 ENV_PER_JOB = {"VERITY_TIMELINE", "VERITY_FOOTPRINT", "VERITY_TRACEDUMP", "VERITY_HOT_RESTART_REASON", "VERITY_HOT_SUBMIT", "VERITY_WEIGHTS_HASH", "HASH_THREADS"}
@@ -75,7 +75,7 @@ RELEASE_JSON = Path(settings.HOT_RELEASE_JSON)
 
 
 def release_json_sig() -> str | None:
-    """(tag, commit) of the tree on the pod, or None when there is no RELEASE.json (a lane tree run by hand)."""
+    """(tag, commit) of the tree on the pod, or None when there is no RELEASE.json (a tree run by hand)."""
     try:
         d = json.loads(RELEASE_JSON.read_text())
         return f"{d.get('tag')}@{str(d.get('commit'))[:9]}"
@@ -136,7 +136,7 @@ def so_identity(argv: list[str]) -> dict[str, str | None]:
         paths.append(hs)
     ncb = settings.NATIVE_COLLECT_BUILD
     if ncb:
-        # [R17 rel M-0803] NATIVE_COLLECT_BUILD is the PARENT; the .so this tree loads is in <parent>/<source digest12>/ (native_jit) --
+        # NATIVE_COLLECT_BUILD is the PARENT; the .so this tree loads is in <parent>/<source digest12>/ (native_jit) --
         # name that one when the digest is computable here, else every .so one level down (plus the flat legacy location)
         keyed: list[str] = []
         try:
@@ -289,7 +289,7 @@ def submit(argv: list[str], *, root: Path, idle_s: float, timeout_s: float | Non
     hints = unsafe_hints(argv)
     if hints:
         # torch-free pre-check of commit_delta.hot_unsafe_reasons: such a job would only be refused by the worker, so it must neither start
-        # one nor stop a live engine of another key on its way (hotval5 05:40Z: three negatives each spawned + stopped a worker)
+        # one nor stop a live engine of another key on its way
         log(f"[hot] HOT-UNSAFE by argv/env, no worker touched: {'; '.join(hints)}")
         return cold_run(argv, f"HOT-UNSAFE (client pre-check): {'; '.join(hints)}", log=log)
     t_key0 = time.time()
@@ -403,7 +403,7 @@ def cold_run(argv: list[str], reason: str, log=print) -> int:
 # ---------------------------------------------------------------------------------------------------------------------------- server
 # committer attributes that own device / pinned memory (native_collect window ring + scratch, the FA2/FA3 tap buffers of the hidden
 # sources, the staging arena, the pinned pool, the retained device store).  A cold process frees them at exit; the hot worker must drop them
-# explicitly after `close()` so the caching allocator can hand the memory to the next job (R16 sys: +2.3 GiB allocated per hot job otherwise).
+# explicitly after `close()` so the caching allocator can hand the memory to the next job (else +2.3 GiB stays allocated per hot job).
 DEVICE_ATTRS = ("win_tensors", "win_scratch", "arena", "pool", "_gpu_blocks", "_gpu_levels", "_levels", "_done", "_layouts", "_streams",
                 "_metas_cache", "_wrapped", "_handles", "_cur", "sources", "_nc", "_hi")
 
@@ -503,7 +503,7 @@ def serve(wdir: Path, *, idle_s: float, reason: str) -> int:
             if not queue:
                 if time.time() - last_job > idle_s:
                     return exit_with(f"idle {idle_s:.0f}s")
-                # [REL-07/REL-12] a release ship must never wait on an idle engine: the RELEASING marker (pod_release.sh) or a changed
+                # a release ship must never wait on an idle engine: the RELEASING marker (pod_release.sh) or a changed
                 # RELEASE.json (a new tree is on the pod: this worker's code identity is stale by definition) ends the worker at once
                 if releasing_live():
                     return exit_with("release in progress (RELEASING marker) -- idle engine released")

@@ -1,7 +1,7 @@
-"""Dither's served linear in one stream in compiled vLLM (`h1o.cu`, CA's H1V3): every int8-exact linear's y = dequant(z),
+"""Dither's served linear in one stream in compiled vLLM (`h1o.cu`, H1V3): every int8-exact linear's y = dequant(z),
 z = O' - sum_d 128^d D_d + 256 X (wb⁺ - wb⁻)^T from the noised mainloop whose words the call's H1 + fx1 receipts fold and
 the wrap bits of W' = B + c + U, computed in the unit from B and the noise (H1V3's exact wrap correction).  The seeds are
-the call's own, from the window's salt and root(A_j), root(B_j) (the 17 Oct seeded regime: epsilon is 'seeded'), so each
+the call's own, from the window's salt and root(A_j), root(B_j) (the seeded regime: epsilon is 'seeded'), so each
 call commits its A table on the device before its units and nothing waits on a later round.
 
     import dither_one as DO
@@ -16,10 +16,10 @@ forward's stream, is two launches: its A slot and table (`h1c_a_call`, the root 
 (each unit's seeds, receipt, z and y; DITHER_UNITS picks the form, `block` (`h1o_unitsb`, a unit a block, the default),
 `split` (`h1o_unitss`, a unit a block of six warps) or `warp` (`h1o_units`, a unit a warp)).  After step s's forward: its
 admit and z tables, the a-step,
-admit-step and z-step trees, the round over them, and the receipt trees (with `Window.tree_streams` set, the receipt
+admit-step and z-step trees, the round over them, and the receipt trees (with `DitherState.tree_streams` set, the receipt
 trees and the admit tables on streams of their own beside the rest), then the round root recorded
-(`sampled_proofs.challenger.LiveRecord`; its coin is not read: no seed waits on it).  With `Window.step_salt` set (CA's
-PERIOD-PATH ask 11) the salt is each step's instead: after step s's round is recorded, step s + 1's seeds read
+(`sampled_proofs.challenger.LiveRecord`; its coin is not read: no seed waits on it).  With `DitherState.step_salt` set the
+salt is each step's instead: after step s's round is recorded, step s + 1's seeds read
 `h1tile.live_salt` of that round's opened coin and root, copied to the device between steps (in record_host_ms), so
 each step's noise comes from the round before it.  The rounds' coins are `dither_fused`'s switch (`coins.open_coins`):
 the challenger off the node with ``$POUW_CHALLENGER`` and ``$POUW_CHALLENGER_SESSION``, so the auditor host's round
@@ -29,7 +29,7 @@ this process, labelled ``in-process (not certified)`` in `stats`.
 The served value is the dithered product z = X (B + c)^T, exact for every int8 B, with X the int8 A + b the MMA reads (it
 wraps where A = 127 and b = 1), so y is not today's served y (`gate` measures how far) and the tokens are not the exact
 arm's.  The gate records wb's density on the run's weights, and how many cells differ from (A + b)(B + c)^T and A B^T.
-Peeled (DITHER_PEEL=1, CA's 11:02Z and 12:16Z decisions, H1V3's PouwPeelSeg; the block and split forms) z is A B^T, today's
+Peeled (DITHER_PEEL=1, H1V3's PouwPeelSeg; the block and split forms) z is A B^T, today's
 product, taken from the same O: z = O + 256 X (wb⁺ - wb⁻)^T - X c^T - (b - 256 xa) B^T with xa = [A = 127 and b = 1],
 the binary-by-int8 MMAs beside the wrap MMA, never a product of A itself: y is today's served y and the tokens are exact's
 (both gated); the receipts are the same words, and a perturbed noised word moves z.
@@ -58,19 +58,19 @@ settings = of(__file__)
 F_DUMP, F_NW_TILES, F_NW_UNITS, F_FAULT, F_FAULT_WB, F_FAULT_XA = 1, 2, 4, 8, 16, 32     # h1o.cu's H1OStep.flags
 F_FAULT_Y = 64      # dither_a's ycommit only: bit 0 of the served y[0, 0] flipped, in place, every call
 # the round's leaves past a-step, admit-step and z-step (set before the window is built): "y-step" the calls' served-y
-# roots (an arm's Side fills them in `before_mid`), "receipt-step" the calls' receipt-table roots (RT4-INT-13), both
+# roots (an arm's Side fills them in `before_mid`), "receipt-step" the calls' receipt-table roots, both
 # under the round recorded before the next coin
 ROUND_EXTRA: tuple = ()
-CAPTURES = ("gate", "control", "fault", "fault_wb")     # a peeled window's add "fault_xa" (`Window.captures`)
+CAPTURES = ("gate", "control", "fault", "fault_wb")     # a peeled window's add "fault_xa" (`DitherState.captures`)
 LIB_ENV = "DITHER_H1O"
-PHASE_RANGE = "verity/dither/phase/"    # `Window.phase`'s NVTX ranges, under DITHER_NSYS=prof only
+PHASE_RANGE = "verity/dither/phase/"    # `DitherState.phase`'s NVTX ranges, under DITHER_NSYS=prof only
 UNITS_ENV = "DITHER_UNITS"
 UNITS_FORMS = {"split": "h1o_unitss_launch", "block": "h1o_unitsb_launch", "warp": "h1o_units_launch",   # h1o.cu's forms of the same units
                "split2": "h1o_unitss2_launch", "block2": "h1o_unitsb2_launch"}   # those two at the maximum carveout (`h1o_init`)
 # a form per call: (wide, narrow), wide where the call's column tiles outnumber the SMs (a second block an SM pays only
 # past one wave: qkv and gate_up at decode), narrow elsewhere
 MIX_FORMS = {"mix": ("block2", "split")}
-# "1": z = A B^T from O (CA's peel of b and c: `h1o_unitsbp` / `h1o_unitssp`), so y is today's served y; the warp form has none
+# "1": z = A B^T from O (the peel of b and c: `h1o_unitsbp` / `h1o_unitssp`), so y is today's served y; the warp form has none
 PEEL_ENV = "DITHER_PEEL"
 # the per-call challenger round, measured only: a file of waits (ns, one a line; "0": no wait) that h1o_percall replays, a call each
 PERCALL_ENV = "DITHER_PERCALL"
@@ -85,7 +85,7 @@ A_CHUNKS_ENV = "DITHER_A_CHUNKS"
 LIB = "dither1"
 REG = DF.REG
 CFG: dict = {}
-WIN: "Window | None" = None
+WIN: "DitherState | None" = None
 M32 = (1 << 32) - 1
 
 
@@ -95,7 +95,7 @@ class _O(C.Structure):
                 ("k", C.c_int), ("units", C.c_int)]
 
 
-class Window:
+class DitherState:
     """A window's device state: per linear one A, scale and z slot (a step's tables are built before the next step's
     forward reads its slots); the h1c sets (B tables once; the A, admit and z tables, the step trees and the round); one
     call table for the seeds and receipts; the `h1o` table and step struct; the epoch salt."""
@@ -509,10 +509,10 @@ def round_leaves(kinds) -> str:
 
 # -- the op and the patch --------------------------------------------------------------------------------------------------
 
-def _window(dev) -> Window:
+def _window(dev) -> DitherState:
     global WIN
     if WIN is None:
-        WIN = Window(CFG["t"], CFG["key"], CFG["h1c"], CFG["h1o"], CFG["gate"], dev)
+        WIN = DitherState(CFG["t"], CFG["key"], CFG["h1c"], CFG["h1o"], CFG["gate"], dev)
     return WIN
 
 
@@ -611,7 +611,7 @@ def patch(t: int, h1c: str, h1o: str, key: bytes | None = None, gate: bool = Fal
     IV.Int8PlainLinearMethod.apply = apply
 
 
-def hook(llm) -> Window:
+def hook(llm) -> DitherState:
     from verity_vllm.engine import handle
     runner = handle.model_runner(llm)
     win = WIN if WIN is not None else _window(torch.device("cuda"))
@@ -650,10 +650,10 @@ def cap_salt(win, g: dict) -> tuple[bytes, torch.Tensor]:
 
 
 def h1v3_unit(a32: np.ndarray, b32: np.ndarray, salt: bytes, position: int, roots: tuple[bytes, bytes]) -> dict:
-    """CA's definition on the CPU for one 32 x 32 unit (`h1tile.noise`, `segment.call_words` and the CP-W fold, as
+    """H1V3's Definition on the CPU for one 32 x 32 unit (`h1tile.noise`, `segment.call_words` and the CP-W fold, as
     `h1tile.reference`): z = O' - sum_d 128^d D_d + 256 X (wb⁺ - wb⁻)^T per cell (s32), wb⁺ = [B + c + U > 127] and
     wb⁻ = [B + c + U < -128] on the integers, the receipt, and the products to hold z to: X (B + c)^T with X the int8
-    A + b (z must equal it), (A + b)(B + c)^T and today's A B^T.  And CA's peel of b and c (11:02Z), as written,
+    A + b (z must equal it), (A + b)(B + c)^T and today's A B^T.  And the peel of b and c, as written,
     z - b B^T - A c^T - b c^T, and with the term the s8 X's wrap needs, + 256 xw (B + c)^T, xw = [A = 127 and b = 1]
     (X = -128 there): A B^T, as a peeled kernel's z must be; and the peeled kernel's own form of it (H1V3's PouwPeelSeg),
     z + 256 xw B^T - X c^T - b B^T."""
@@ -733,7 +733,7 @@ def a_chunks(k: int) -> int:
     return 1 if settings.get(A_CHUNKS_ENV) == "0" else WT.chunks(k)
 
 
-def a_step_fields(win: Window, k: int, s: int) -> dict:
+def a_step_fields(win: DitherState, k: int, s: int) -> dict:
     """A_STEP_ENV's table a/<k>@<s>: its domain's fields (kind "a-table", count n len(linears) T at n = `a_chunks` (k),
     which the fields name past 1)."""
     n = a_chunks(k)
@@ -748,7 +748,7 @@ def a_step_rows(q: np.ndarray, sc: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
     return q.reshape(-1, q.shape[1] // n), np.repeat(np.asarray(sc).reshape(-1), n)
 
 
-def a_roots_cpu(win: Window, s: int, calls, q_of, sc_of) -> dict[int, bytes]:
+def a_roots_cpu(win: DitherState, s: int, calls, q_of, sc_of) -> dict[int, bytes]:
     """commit.py's A root of each call in `calls` at step s from its slot rows q_of(w) ([T, k] int8) and scales sc_of(w)
     ([T] float32): its own table a/<s>/<w>, or under a_step its K's a/<K>@<s> (the K's calls' rows in call order, as
     `a_step_rows` leaves)."""
@@ -786,7 +786,7 @@ def a_bad_diag(g: dict, bad: list[int]) -> list[dict]:
 
 
 def h1v3_itself(units: list[dict]) -> dict:
-    """`h1v3_ref.py` under CA's tree: z and receipt of each unit by CA's own `h1tile.reference(stream=True)`. The tree is
+    """`h1v3_ref.py` under H1V3's tree: z and receipt of each unit by its own `h1tile.reference(stream=True)`. The tree is
     this source's own (PouwH1Tile_v4, ungated: v3's z, receipts and wrap bits with the peel) unless DITHER_H1V3_TREE
     names another (a launcher's H1V3_SHA)."""
     import json
@@ -810,19 +810,19 @@ def h1v3_itself(units: list[dict]) -> dict:
     return {"tree": tree, "sha": sha, **doc}
 
 
-def check(win: Window, lib_h1o: str, which: str = "gate", n_cpu_units: int = 3,
+def check(win: DitherState, lib_h1o: str, which: str = "gate", n_cpu_units: int = 3,
           cpu_calls: tuple = (0, 1, 2, 3, 126, 127)) -> dict:
     """`which`'s capture against references other than the served kernel: every call's A, admit and z roots, the receipt
     roots of CPU_CALLS and the step's round = commit.py's; every receipt = h1r v1's (another unit implementation, gated
     against receipts.py) on the saved slots under the window's salt and the CPU's roots; every z = h1o_ref's (noise from
     full compressions, T_last and Y by scalar dp4a, z = T_last - U Y + 256 X wbᵀ by a scalar scatter over the integer
     B + c + U, which also counts wb: its density); y (dumped) = dequant of the kernel's own z on the rows < m; a few units =
-    CA's definition on the CPU (`h1v3_unit`: z, receipt, z = X (B + c)^T) and by H1V3's own code (`h1v3_itself`).  Every
+    H1V3's Definition on the CPU (`h1v3_unit`: z, receipt, z = X (B + c)^T) and by H1V3's own code (`h1v3_itself`).  Every
     buffer read was 0xA5 before the kernels wrote it.  "fault" wants z off h1o_ref's by 2^FAULT_SHIFT at unit 0's cell
     (0, 0) of every call and nowhere else, that unit's receipt off h1r's and no other, and y = dequant of that z (the
     perturbed MMA word reached what serves).  "fault_wb" wants every receipt unmoved (wb is not receipted), z moved only in
     column 0 of unit 0, by `wb_fault_expected` on CPU_CALLS and by multiples of 256 elsewhere, and y = dequant of that z.
-    Peeled (`Window.peel`), z's reference is A B^T itself (a float64 product on the device, exact: every partial sum is
+    Peeled (`DitherState.peel`), z's reference is A B^T itself (a float64 product on the device, exact: every partial sum is
     an integer below 2^53), y must be today's served y (`int8_ops.scaled_mm`'s body) on every call, the CPU units' z the kernel's
     peel of their z, and each fault wants what it wants unpeeled against A B^T: so a z that reads no noised word (one
     computed beside the receipted MMAs) is refused at "fault".  "fault_xa" (peeled) wants every receipt unmoved, z moved
@@ -980,7 +980,7 @@ def check(win: Window, lib_h1o: str, which: str = "gate", n_cpu_units: int = 3,
             eq += int(torch.equal(yt, yk))
             rel.append(float((yk - yt).norm() / yt.norm().clamp_min(1e-30)))
         doc["y_vs_today"] = {"calls_equal": eq, "rel_l2_median": float(np.median(rel)), "rel_l2_max": float(np.max(rel))}
-    # CA's definition on the CPU, a few units of row tile 0
+    # H1V3's Definition on the CPU, a few units of row tile 0
     units_doc, h1v3_in, kernel_out = [], [], []
     if which == "gate":
         rng = np.random.default_rng(s)

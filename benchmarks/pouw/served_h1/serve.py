@@ -1,5 +1,5 @@
 """H1 + fx1 receipts beside vLLM's GEMM, not useful-work credit: a padded H1 + fx1 window (`eps1-sm120-h1fx1`) on vLLM's
-int8-exact row, one process on one GPU, in the static form (Daniel, 20:52Z): the window's tiles, rows and positions are a
+int8-exact row, one process on one GPU, in the static form: the window's tiles, rows and positions are a
 fixed function of public parameters alone.
 
 The receipts bind extra work beside cuBLASLt's served y, not the served kernel's.  vllm's PoUW option
@@ -38,7 +38,7 @@ roots follow the step's real rows, so this window doesn't use them (the seeded m
   the noise and the receipt: its leaf is the canonical empty receipt (zero words), so every receipt tree keeps its shape.
   There is one receipt tree per call.
 * **Coins** (``--coins``): seeded, the option's one salt, opened at install before serving; or live, a round a step from
-  the proof service's challenger (`coins.py`), whose salt coin opens first, against the registration root over the
+  the proof system's challenger (`coins.py`), whose salt coin opens first, against the registration root over the
   weights' root and the queue's root.  Step s's round root, over its A root and its admit root, is recorded before round
   s's coin opens (`sampled_proofs.challenger.LiveRecord`), and the step's units take the round's salt (`h1tile.live_salt`:
   `window.round_key(...).stream(0, 64)`), so every candidate and every selection a round's noise reads is committed before
@@ -1069,7 +1069,7 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--workers", type=int, default=0)
     ap.add_argument("--skip-timing", action="store_true")
     ap.add_argument("--coins", default=None, choices=["seeded", "live"],
-                    help="live: a round a step, its coin opened after its A tables' root (the proof service's challenger); "
+                    help="live: a round a step, its coin opened after its A tables' root (the proof system's challenger); "
                          "default live with a challenger address, else seeded")
     ap.add_argument("--challenger", default=None, metavar="HOST:PORT",
                     help=f"live: the challenger off the node (default ${CO.CHALLENGER_ENV}); none: in-process, not certified")

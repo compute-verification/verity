@@ -70,8 +70,8 @@ finite-sweep families and compares every output element with the model(s); ``--f
 
 Seeds are fixed (``--seed``, default 20260902) and recorded.  Outputs under ``--out``: ``probe_results.json`` (identity, layout
 check, per-family counts per model, first mismatches with A/B/C/D words, family summaries, SASS counts), ``capture_sample.json``
-(golden-format records sampled per family), ``tiles_<family>.npz`` (the full capture: A, Bt, C, D per tile) and, under
-``research run``, ``result.json`` with ``kind: tc-evidence/v1`` (``workload_fingerprint`` = instruction, arch, sku, driver, nvcc,
+(golden-format records sampled per family), ``tiles_<family>.npz`` (the full capture: A, Bt, C, D per tile) and, in a recorded
+run (``RESEARCH_RUN_ID`` set), ``result.json`` with ``kind: tc-evidence/v1`` (``workload_fingerprint`` = instruction, arch, sku, driver, nvcc,
 seed, n, families, models; ``tc_evidence`` = per-family counts, ``model_agrees`` per model, first mismatches; validation passed
 iff every mismatch count against a pinned model and every replay is zero).  ``--compile-only`` builds the instruction's kernel
 for its arch (sm_90a compiles wherever the toolkit is, whatever the GPU), runs ``--sass-check`` (cuobjdump: MMA-class
@@ -1510,7 +1510,7 @@ def sweep(probe: Probe, ins: Instruction, args, out: Path, identity: dict) -> tu
                 mism = (model != D) | err
                 any_mism |= mism
                 fam["models"][mname] = {"mismatches": int(mism.sum()), "domain_errors": int(err.sum())}
-            # compatibility with the WP1 field names: the first (declared) model's count
+            # the legacy bench-result/v1 field names (trust.py reads them): the first (declared) model's count
             fam["mismatches_vs_model"] = fam["models"][model_names[0]]["mismatches"]
             fam["model_domain_errors"] = fam["models"][model_names[0]]["domain_errors"]
             for t, i, j in list(zip(*np.nonzero(any_mism)))[:FIRST_MISMATCHES]:
@@ -1799,7 +1799,7 @@ def main() -> int:
             ap.error("--no-input-d is a tcgen05 mode (sm100.tcgen05.mma.bf16)")
         probe.set_enable_input_d(False)
         identity["enable_input_d"] = 0
-    results["pipeline"] = ins.models[0].pipeline.name  # WP1 field
+    results["pipeline"] = ins.models[0].pipeline.name  # the legacy field trust.py reads
     print("device", json.dumps(identity), flush=True)
     print("layout_check", json.dumps(results["layout_check"]), flush=True)
 

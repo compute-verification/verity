@@ -33,8 +33,8 @@ Every compute's ``new`` is ReplayStep_v1's: a kept slot's need, an admitted row'
 free's ``held`` is ReplayStep_v1's ⌈comp / B⌉, a victim's before the step, a leaver's after its row, and its ``ret`` is
 the ``ret`` ReplayStep_v1 reads. A compute caches the units from its walk entry's level up to ⌊t / B⌋ for t the
 tokens `cache_blocks` caches: min(comp + n, P + out − fl) for a running row, min(start + n, P + out) for an admitted
-one, comp − (the row samples) for a late cache. So none of new, held, nins or a call's slot is witness. REDTEAM phase
-18's free that overstates ``held`` by k adds k blocks that don't exist to the free count, so the next k allocations
+one, comp − (the row samples) for a late cache. So none of new, held, nins or a call's slot is witness. A free that
+overstates ``held`` by k adds k blocks that don't exist to the free count, so the next k allocations
 skip their evictions; a leaving request that shares a block with another slot can claim one block more and pass
 ReplayStep_v1's ``ret`` ≤ held and the free count. Here its ``ret`` is held to the free of ReplayStep_v1's own
 ⌈comp / B⌉, which refuses it. After the update each next running slot takes its placed slot's walk entry, mask bits
@@ -48,7 +48,7 @@ CU, each count within CacheStep_v2's widths, every request's tokens in ``cert``)
 the calls' pool (B_u on an idle step).
 
 **The reference** is `check`; `case` builds the rows of a prover's run (`scan`), with the choices: ``overstate``, the
-free of a request that holds ``held`` + k (REDTEAM phase 18's); ``made_up``, a compute that evicts the oldest queued
+free of a request that holds ``held`` + k; ``made_up``, a compute that evicts the oldest queued
 copies with no eviction due; ``taus`` and ``rets``, witness stamps and returns other than the pool's.
 
 **Statics**: CompileSlice_v1's with G always given (P for one ``srv`` row), PC = 1, and CacheStep_v2's D (CD) and SW. A
@@ -60,11 +60,10 @@ evicted.
 caches more, each CacheStep_v2's eviction, free and end and a window of KL, KC, 1 or no units (`cache_step_v2.size`).
 The demonstration units are 83,092 ANDs (`demo`, at G = 5 and G = 1) and 91,785 (`demo_async`). On corpus-smallkv's
 first seven steps (CN 24, CU 25, 16-token blocks of 17-bit tokens, CD 1, SW 12) the unit is 7,984,682 ANDs, against
-CompileSlice_v1's about 7.6M, and is its reference on the honest run and a stamp or a return off (run
-r20261025-022833-f907). At the crush traces' class (CN 159 = NB − 1, R 16, CU 256) a call's eviction is 41,476 ANDs,
-a unit of its window 99,172 and its free 10,694, so a step's calls are about 300M ANDs, 85% of them the R takes'
-KL = 160-unit windows: there `benchmarks/network_e2e/encodings/compile_slice_pool.py` holds the calls to the replay's
-`_KV`.
+CompileSlice_v1's about 7.6M, and is its reference on the honest run and a stamp or a return off. At the crush traces'
+class (CN 159 = NB − 1, R 16, CU 256) a call's eviction is 41,476 ANDs, a unit of its window 99,172 and its free 10,694,
+so a step's calls are about 300M ANDs, 85% of them the R takes' KL = 160-unit windows: there
+`benchmarks/network_e2e/encodings/compile_slice_pool.py` holds the calls to the replay's `_KV`.
 """
 from __future__ import annotations
 
@@ -757,7 +756,7 @@ def demo() -> tuple[dict, CS.Slice]:
     """The demonstration class's statics and slice: five steps at (R 2, W 1, A 2) on `DEMO_ENGINE`, three arrivals,
     five decisions, a 5-entry pool of 4-bit tokens with two copies an entry and 6-bit stamps, 4 units a request.
     Request 1 shares request 0's first block: it is looked up at step 0, takes that hit at step 1 and leaves at once,
-    freeing three blocks one of which slot 0 still holds (REDTEAM phase 18's free). Both computes of step 2 evict
+    freeing three blocks one of which slot 0 still holds (the shared-block free). Both computes of step 2 evict
     queued copies; request 2 is preempted at step 3 and readmitted at step 4 with a hit on its own first block."""
     st = statics(2, 1, 2, DEMO_ENGINE, 3, Q=3, D=5, P=5, K=3, CN=5, CTW=4, CU=4, CD=2, SW=6)
     tokens = ((8, 14, 9, 14, 10, 4, 3, 13, 9, 8, 11, 10, 13, 3, 2), (8, 14, 9, 14, 7, 8, 11, 12, 10, 11, 3, 10, 1),

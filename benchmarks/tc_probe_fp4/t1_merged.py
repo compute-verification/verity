@@ -53,8 +53,8 @@ from verity_config.settings import SHARED
 HERE = Path(__file__).resolve().parent
 EMULATION = HERE / "fp4_emulation_1ad1aaa2.py"
 EMULATION_SHA256 = "4b3e0e857bef64d947dd826ec4c509362d98c15249aa028af491040f05f84cae"
-EMULATION_ORIGIN = {"path": "benchmarks/pouw/fp4_emulation.py", "commit": "1ad1aaa2479fd976e5da77b71cd14779b0228c0e",
-                    "blob": "31259572226ead0860d4c9b778e646aabff8194f", "branch": "cursor/fp4-emulation-cf5b", "lane": "bc-f5bf55c8"}
+#: where ``EMULATION`` was copied from, as the result records it (``t1_merged_origin.json``, keyed by the file's name)
+EMULATION_ORIGIN = json.loads((HERE / "t1_merged_origin.json").read_text())[EMULATION.name]
 #: routes' defaults at 1ad1aaa2 (its --seed is passed on the command line: probe.py's own default differs)
 ROUTES = {"rows": 64, "cols": 64, "k": 8192, "delta": 0.25, "seed": 20260930,
           "families": ("gaussian", "t4", "massive", "spread", "spread-both")}
@@ -360,7 +360,7 @@ def main(args) -> int:
     if args.chain != 1:
         raise SystemExit("--chain is not defined for sp_nvf4_t1 (its chains are the whole k)")
     if args.fake_silicon and SHARED.RESEARCH_RUN_ID:
-        raise SystemExit("--fake-silicon is a dry run and never publishes: not under a research run")
+        raise SystemExit("--fake-silicon is a dry run and never publishes: unset RESEARCH_RUN_ID")
     if args.fake_silicon and args.fake_silicon not in FAKES:
         raise SystemExit(f"--fake-silicon for sp_nvf4_t1: one of {FAKES}")
     fams = args.families.split(",") if args.families else list(ROUTES["families"])

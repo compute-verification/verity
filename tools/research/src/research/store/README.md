@@ -349,9 +349,9 @@ algorithm: `remote-replicas/README.md`.
   lacks, and indexes just those. A fresh machine builds its catalog this way.
 - **Atomic rebuild.** `reindex` builds the new catalog beside the old one, carries the replica records over, and renames it into
   place once complete; an open `LocalStore` notices the new file and reopens it.
-- **Parity.** `research data parity --fresh DIR [--render] [--json-out F]` (`parity.py`) builds a store at DIR from the remote alone
-  and compares it with this one on content: ids and manifest bytes, attempt documents, label content hashes, every verified replica
-  row confirmed by HEAD (manifest + blobs, sizes), and with `--render` the `bench.tables` markdown. Every difference gets a cause
+- **Parity.** `research data parity --fresh DIR [--json-out F]` (`parity.py`) builds a store at DIR from the remote alone
+  and compares it with this one on content: ids and manifest bytes, attempt documents, label content hashes, and every verified replica
+  row confirmed by HEAD (manifest + blobs, sizes). Every difference gets a cause
   (`pending here`, `not pulled`, `uploaded during the run`); anything else fails (exit 1). Read-only for the store under test.
 
 ### 7.3 Fetched fixtures and the public export
@@ -369,8 +369,8 @@ algorithm: `remote-replicas/README.md`.
 
 ### 7.4 Retention on the remote — `research data gc` (`gc.py`)
 
-Blobs that only uncited artifacts past their kind's TTL hold leave the remote (Daniel, 26 Oct: the store grew ~840 GiB a day).
-TTLs are `gc.TTL_DAYS`, by the manifest's LastModified: run-record/v1 and vllm-replay-bundle/v1 7 days, vllm-rowdir-tar/v1 3,
+Blobs that only uncited artifacts past their kind's TTL hold leave the remote (the store grew ~840 GiB a day).
+TTLs are `gc.TTL_DAYS`, by the manifest's LastModified: run-record/v1, vllm-replay-bundle/v1 and vllm-replay-slim/v1 7 days, vllm-rowdir-tar/v1 3,
 run-files/v1 and vllm-row-meta/v1 14, telemetry/v1 30; every other kind keeps no TTL. Kept: an artifact or run that a label
 (target, ref or value), a citing tree (`--cite`: the notes repository, a checkout of the code with its fixture registry), Linear
 (`--cite-linear`, required with `--apply`: issues and comments, projects, project updates, documents) or a cited artifact's `meta` names, every `art:` id a cited run's attempt names, whatever a kept manifest's `refs` name, young and
@@ -379,6 +379,12 @@ A blob is deleted only after it has been a candidate for `gc.GRACE_S` (24 h, the
 after a fresh listing of `manifests/` before each batch of `gc.BATCH` (1,000) deletes, so an upload that reused it meanwhile
 keeps it; a blob deleted under an upload that landed during its batch is reported `lost` (the pass exits 1). Cite what you need before its TTL: a
 label (`research data label ART note ...`) or a note naming its id. The control pod runs it (`infra/control/store_gc.sh`).
+
+An artifact that holds values which must never be shared leaves by `research data withdraw ART... --reason T --ref ISSUE`
+(`withdraw.py`), cited or not: its blobs are deleted at once and each artifact gets a `withdrawn` label saying why, the
+tombstone. Its manifest stays, so a citation still resolves and `fetch` reports the payload absent. A blob another artifact
+also holds is kept and named (it holds the same bytes, so withdraw that one too or decide otherwise). Read-only without
+`--apply`; it runs where the store's write keys are, the control pod.
 
 ## 8. Labels
 
@@ -413,13 +419,13 @@ a table read the same key. One constant per key (`vocab.PROOF_CLASS`, never the 
 value form: `enum` (a closed set), `bool` (`true` | `false`), `int`, `number`, `text`, `list`. `research data vocab [--json]`
 prints the table; the groups are:
 
-- **result** — the producing lane about its own result (`ledger_to_store`, or `label` by hand): `candidate` (enum: the backend
+- **result** — the producing lane about its own result (the r20 ledger import, or `label` by hand): `candidate` (enum: the backend
   families A-GKR, B-Ligero, C-Flock, D-SP1, and the frozen ledger's B-AIR, C (the VOLE candidate), SP1 (D-SP1) and shared),
   `proof_class` (enum: the contract's classes + COMPONENT), `soundness`, `K`, `B`, `hardware`,
   `authentication` (enum: included | included-hash | excluded), `campaign`, `relation`, `mode` (enum: interactive | fiat-shamir), `zk` (bool),
   `overhead`, `seconds_per_vu`, `track` (enum), `scope` (enum: unit | vu | component), `label`, `note`, `assumptions` (list),
   `omitted` (list), `domain` (`total` | `finite-only`: the operand domain the statement covers), `breakthrough` (bool); grouping and configuration a table selects on: `lane`, `row`, `sweep`, `arm`, `stage`,
-  `source`, `superseded_by`, `of-record` (bool: the lane's evidence of record for its `goal`), `goal` (the outcome it is evidence for),
+  `source`, `superseded_by`, `of-record` (bool: the lane's evidence of record for its `goal`), `goal` (the outcome it is evidence for), `run_of_record` (the table record a run or artifact is, by the record's name),
   `interaction_attempt_of` (the cell an interaction attempt belongs to), `hash`, `sharing`, `fold` (int), `pipeline` (int);
   `abandoned` (text: the line of work the evidence belongs to was given up, in a few words; `label` refuses it unless `--ref`
   names the note that says why, as `note:<lane>/<file name without .md>` or the notes README's `note:<campaign>/<lane>/<name>`, which
@@ -443,7 +449,7 @@ Enum and bool values are compared as the catalog stores them (`scalar_text`: str
 (naming the nearest known one), a measurement (`l`, `subbatches`, `rtt_ms_path`, ...: the number belongs in the result or the
 artifact's meta), a ref written as a label, a value outside its enum, or a word where the form is bool / int / number.
 `--off-vocab` writes it anyway, for a concept the vocabulary has not learnt yet; add the word to `vocab.py` next. Readers stay
-lenient: whatever older writers stored is still read, old spellings as their canonical key. Consumers (`bench.tables`, the trust
+lenient: whatever older writers stored is still read, old spellings as their canonical key. Consumers (`verity_numerical`'s contract tests, the trust
 module) import the constants; the store imports no consumer.
 
 ## 9. CLI (v0.1)
@@ -470,8 +476,8 @@ research data refresh-fixtures [--preserve] [--dry-run] [--repo DIR] [--json]
                                               re-register every fixtures/artifacts.json entry whose bytes changed (§7)
 research data fetch-fixtures [PATH ...] [--repo DIR] [--check] [--stubs] [--public-url URL] [--no-private] [--jobs N] [--json]
                                               make the fetched registry entries under PATH present and exact (§7.3); exit 1 if any is missing
-research data export [--repo DIR] [--dry-run] [--no-previous] [--blobs FILE] [--jobs N] [--json]
-                                              copy every registry entry and its `previous` ids to the export bucket (§7.3)
+research data export [--repo DIR] [--dry-run] [--no-previous] [--blobs FILE] [--id ART]... [--jobs N] [--json]
+                                              copy every registry entry and its `previous` ids, and each --id, to the export bucket (§7.3)
 research data export --verify-url URL [...]   fetch all of it back through URL into a scratch store, every byte checked
 research data doctor [--clean] [--runs-dir D] [--json]
                                               run dirs holding a store_publish_error.json (§10): stale vs REAL; --clean deletes the stale ones
@@ -546,7 +552,7 @@ run-record/v1            every file of a run dir (logs included) as one tree; ou
 telemetry/v1             events.jsonl or resources.jsonl of an attempt
 redteam-findings/v1      meta {findings: [...]}; refs.target
 ledger-row/v1            one frozen overhead-ledger row whose run is not an attempt here: meta = the ledger/v1 row; payload null;
-                         the lane's claims are labels on it (`verity_numerical.bench.ledger_to_store`)
+                         the lane's claims are labels on it
 trust-dossier/v1         the computed trust level of one numerical target (`python benchmarks/tc_probe/trust.py --publish`): meta =
                          the TrustReport (level, criteria with evidence ids, D-entries, references, missing items, triggers, procedure);
                          refs.cited = every artifact it rests on, refs.previous = earlier dossiers; payload null; labels target,

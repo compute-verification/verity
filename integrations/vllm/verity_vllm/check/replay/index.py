@@ -133,7 +133,7 @@ class ProgramIndex:
         # TP-04 policy (the rank-local partials `part_rank<r>` / `shard_rank<r>` beside every collective output), the one the rank's
         # manifest was built with.  `tp` = {"rank": r, "world": W}.
         self.tp: dict[str, Any] | None = _tp_of(tp)
-        # [v2 flip, P2] Call id -> [(member, width, dtype)] of the required Values it produces, and the Program path they are spelt under
+        # Call id -> [(member, width, dtype)] of the required Values it produces, and the Program path they are spelt under
         # (`Population.program_path`: its owning module, a collective site's site path)
         self._v2: dict[int, list[tuple[str, int, str]]] = {}
         self._v2_ports: dict[int, dict[str, str]] = {}
@@ -188,7 +188,7 @@ class ProgramIndex:
                 self.foff.append(off)
                 off += c
         self._desc: dict[int, dict | None] = {}
-        # [MAN-06f v3, moe R16] the fused-MoE block rows of each step: per MoE module its geometry (M routed tokens, TOPK, E, H, I, N_up --
+        # the fused-MoE block rows of each step: per MoE module its geometry (M routed tokens, TOPK, E, H, I, N_up --
         # `manifest_format.moe_geometry`, the same numbers the manifest sizes the `moe_block_stream` planes with) and, per row, its
         # PAIR / TOKEN ordinal among the rows of its plane kind in Program order (router / sum rows: token t; up / act / down rows: pair
         # p = t*TOPK + k).  `describe` addresses these rows at their PLANE (op_path `moe/L<k>`, member = the plane).
@@ -278,7 +278,7 @@ class ProgramIndex:
         mod, node, hint, row = RM.split_name(r.get("name") or "")
         d: dict | None
         kind = self._moe_kind.get(i)
-        # [F-r19-int-24] FusedMoE.forward returns the MoeSum: a boundary Value (`<experts>/out`) beside its plane copy (MOE-TP-02 below)
+        # FusedMoE.forward returns the MoeSum: a boundary Value (`<experts>/out`) beside its plane copy (MOE-TP-02 below)
         tp_sum = kind == "sum" and bool(self._v2.get(i))
         if tp_sum:
             kind = None
@@ -293,28 +293,28 @@ class ProgramIndex:
             d = None if fault else {"family": fam, "statics": st, "module": mod2, "op_path": RM.collector_path(mod2, self.prefix), "hint": hint,
                                     "row": int(self._ordinal.get(i, 0)), "name_row": row, "members": list(self._v2.get(i, ())), "step": self.step_of(i)}
         if tp_sum and d is not None and d["members"]:
-            # [MOE-TP-02 / moe, tp M-1528] on a TP rank the MoeSum row's ONE output is committed under TWO required names: the module's
+            # on a TP rank the MoeSum row's ONE output is committed under TWO required names: the module's
             # `part_rank<r>` (tp_rank_partials, TP-04/TP-06: the all-reduce input) AND the MOE-01 plane `moe/L<k>/sum` (moe_block_stream,
             # staged by MoeBlockSource on the rank exactly as at TP1).  The manifest requires both (TP-06); the
-            # replay addressed the row at the partial only, so F-r17b-38's reconciliation read every `moe/L<k>/sum` identity as
-            # `identities_without_rows` (OLMoE TP2 B8 int-6: 6,944 per rank, COMMIT FAIL).  `copies` = the plane address of the same
+            # replay addressed the row at the partial only, so the reconciliation read every `moe/L<k>/sum` identity as
+            # `identities_without_rows` (OLMoE TP2 B8: 6,944 per rank, COMMIT FAIL).  `copies` = the plane address of the same
             # output: recorded in the population under the plane identity AND read back and compared against the same evaluated words
             # (two committed copies, one relation, both checked).  The plane mapping is the checked one (_describe_plane: geometry,
             # ordinal, dataflow); a mapping failure is NAMED here and the plane identity stays without rows -- fail closed, never aliased.
-            # The same holds at TP1: the MoeSum is the module's returned tensor `<experts>/out` (F-r19-int-24).
+            # The same holds at TP1: the MoeSum is the module's returned tensor `<experts>/out`.
             pd = self._describe_plane(i, fam, st, mod, hint, row, "sum")
             if pd.get("plane_error") or not pd["members"]:
                 d["copy_error"] = pd.get("plane_error") or "sum plane has no member"
             else:
                 pm = pd["members"][0]
-                why = "F-r19-int-24: the MoeSum output = the MoE module's returned tensor (a boundary Value) = its moe_block_stream sum plane"
+                why = "the MoeSum output = the MoE module's returned tensor (a boundary Value) = its moe_block_stream sum plane"
                 d["copies"] = [{"op_path": pd["op_path"], "member": pm[0], "width": int(pm[1]), "dtype": str(pm[2]), "row": int(pd["row"]),
                                 "of": d["members"][0][0], "why": why}]
         self._desc[i] = d
         return d
 
     def _describe_plane(self, i: int, fam: str, st: dict[str, Any], mod: str, hint: str, name_row: int | None, kind: str) -> dict:
-        """[MAN-06f v3] a fused-MoE block row -> its `moe_block_stream` PLANE address: op_path `moe/L<layer>`, members = the plane(s) the row
+        """A fused-MoE block row -> its `moe_block_stream` PLANE address: op_path `moe/L<layer>`, members = the plane(s) the row
         produces (router: `router_w` f32[TOPK] + `router_ids` i32[TOPK] per token; up: `up` bf16[N_up] per pair; act (the SiluMul under the
         MoE runner): `act` bf16[I] per pair; in_quant: `in_q` e4m3[H] + `in_scale` f32[H/G] per token; act_quant: `act_q` e4m3[I] +
         `act_scale` f32[I/G] per pair; down: `down` bf16[H] per pair; sum: `sum` bf16[H] per token), row = the row's token / pair

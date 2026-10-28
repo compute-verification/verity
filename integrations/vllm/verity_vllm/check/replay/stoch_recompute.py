@@ -236,27 +236,27 @@ def expected_executed_slots(served: list, cap: int, A: int | None, eos_ids: set 
     """[R3's one mechanism] the executed set {t : r_t = 1} (t from 1) the Program's stop rule PREDICTS for one request from
     its SERVED tokens (draw k serves slot k + 1), its cap C and the scheduler profile A (0 = sync, 1 = async: one lag slot after an EOS):
     r_1 = 1; while no served token is an EOS, every slot up to C executes; the first EOS at slot t_eos (before C) is followed by exactly
-    min(A, C - t_eos) executed lag slot(s) and nothing after -- the same rule as pad's `verity_vllm.program.lifting.continuation.recurrence` /
-    `executed_slots` (spec s7 three-state machine; n_executed = min(n + 1, C) under A = 1) and moe's executed-prefix rule (`commit.executed_prefix`).  Returns
+    min(A, C - t_eos) executed lag slot(s) and nothing after -- the same rule as `verity_vllm.program.lifting.continuation.recurrence` /
+    `executed_slots` (spec s7 three-state machine; n_executed = min(n + 1, C) under A = 1) and the executed-prefix rule (`commit.executed_prefix`).  Returns
     None (with the reason) when the rule cannot be evaluated: an undeclared EOS set with fewer draws than the cap, or an EOS before the cap
-    with the profile unattested.  When pad's module is importable the two computations are compared and a disagreement is named."""
-    from verity_vllm.program.lifting import continuation as CT  # pad's Continuation_v1 recurrence (lane/r17-pad 61fe06dff): THE mechanism, not a twin of it
+    with the profile unattested.  When the continuation module is importable the two computations are compared and a disagreement is named."""
+    from verity_vllm.program.lifting import continuation as CT  # the Continuation_v1 recurrence: THE mechanism, not a twin of it
 
     info: dict = {"rule": "verity_vllm.program.lifting.continuation.recurrence / executed_slots (pad, spec s7): EOS at slot t < C -> min(A, C - t) lag slot(s), then inactive"}
     served = list(served)
     if eos_ids is None:
         if len(served) < cap:
-            return None, info | {"unjudged": "the Program declares no stop_rule.eos_token_ids: an early stop cannot be read as an EOS stop (F-pm-24)"}
+            return None, info | {"unjudged": "the Program declares no stop_rule.eos_token_ids: an early stop cannot be read as an EOS stop"}
         eos_ids, t_eos = set(), None
     else:
         t_eos = next((k + 1 for k, y in enumerate(served[:cap]) if y is not None and int(y) in eos_ids), None)
     if t_eos is not None and t_eos < cap and A is None:
         return None, info | {"unjudged": f"EOS served at slot {t_eos} before the cap {cap} and the scheduler profile (eos_lag_rows / "
-                                         f"async_scheduling) is unattested: the lag slot cannot be judged (M-0213 / ruling 21)"}
+                                         f"async_scheduling) is unattested: the lag slot cannot be judged"}
     if A is not None and int(A) not in (0, 1):
-        return None, info | {"unjudged": f"scheduler profile A = {A} is not an admitted profile (DP-pad-02: LAG in (0, 1)); the recurrence refuses it"}
-    # served[:cap]: the recurrence runs over the C slots (pad's expected_draw_positions does the same); draws past C are EXTRA positions for
-    # the comparison to name (F-r17b-35 (a)), never a reason to stop judging.  A = 0 when no EOS is served before the cap: the lag term is
+        return None, info | {"unjudged": f"scheduler profile A = {A} is not an admitted profile (LAG in (0, 1)); the recurrence refuses it"}
+    # served[:cap]: the recurrence runs over the C slots (`expected_draw_positions` does the same); draws past C are EXTRA positions for
+    # the comparison to name, never a reason to stop judging.  A = 0 when no EOS is served before the cap: the lag term is
     # then never reached, so the profile does not matter.
     slots = CT.recurrence([None if y is None else int(y) for y in served[:cap]], cap=cap, A=int(A) if A is not None else 0, eos=eos_ids)
     exp = [int(t) for t in CT.executed_slots(slots)]
@@ -278,7 +278,7 @@ def draw_accounting(draws_seen: dict[str, list[dict]], workload: str | Path | No
         nothing after; a request that runs to C has no lag slot (nothing is scheduled past the length bound);
       * expected positions = {prompt_len - 1 + (t - 1) : r_t = 1}; every drawn position not in the set is 'the RNG advanced without r_t'
         (a draw past the cap without an EOS, a second draw after the lag slot, a draw for another row's counter), every expected position
-        not drawn is 'an executed slot did not draw' (a deleted step, F-pm-24 territory); one draw per engine step, in order;
+        not drawn is 'an executed slot did not draw' (a deleted step); one draw per engine step, in order;
       * an undeclared stop rule with an early stop, or an EOS before the cap with the profile unattested, leaves the request UNJUDGED --
         named, never a pass.
 
@@ -299,7 +299,7 @@ def draw_accounting(draws_seen: dict[str, list[dict]], workload: str | Path | No
     if sr.get("error"):
         out["problems"].append(f"draw ledger: {UNREADABLE}the Program's stop rule {sr['source']} ({sr['error']}): its EOS ids and declared lag are unknown")
     eos_ids = set(int(x) for x in sr["eos_token_ids"]) if sr.get("eos_token_ids") else None
-    # the lag: the RECORD's attestation of async_scheduling (M-0213 / ruling 21; the same fact GM-01 G6 reads), the Program's declared
+    # the lag: the RECORD's attestation of async_scheduling (the same fact GM-01 G6 reads), the Program's declared
     # stop_rule.eos_lag_rows beside it when it carries one; a disagreement is GM-01's to fail, named here
     lag_rec, lag_src = lag_attested if lag_attested is not None else (None, "not read")
     if lag_rec is None and str(lag_src).startswith(UNREADABLE):
@@ -312,7 +312,7 @@ def draw_accounting(draws_seen: dict[str, list[dict]], workload: str | Path | No
     if lag_rec is not None and lag_decl is not None and int(lag_decl) != lag_rec:
         out["problems"].append(f"draw ledger: the Program declares stop_rule.eos_lag_rows {lag_decl} but the record attests {lag_src} -> {lag_rec}")
     if lag is not None and int(lag) not in (0, 1):
-        out["problems"].append(f"draw ledger: scheduler profile A = {lag} is not 0 or 1 (R17-1 check_lag: one rule, no other profile)")
+        out["problems"].append(f"draw ledger: scheduler profile A = {lag} is not 0 or 1 (check_lag: one rule, no other profile)")
     probs = out["problems"]
     for rid, dr in sorted(draws_seen.items()):
         dr = sorted(dr, key=lambda x: (x["step"], x["row"]))
@@ -341,7 +341,7 @@ def draw_accounting(draws_seen: dict[str, list[dict]], workload: str | Path | No
             out["requests"][rid] = ent
             continue
         t_eos = info.get("t_eos")
-        # the RULE's positions are pad's (`expected_draw_positions`, 35408bbe9): slot t at pos L - 1 + (t - 1), the query position whose
+        # the RULE's positions are those of `expected_draw_positions`: slot t at pos L - 1 + (t - 1), the query position whose
         # logits slot t samples = the record's own `pos` fact (device_facts_match on every checked row; qwen B8 L=1024: first draw 1023);
         # served[:T] and A = 0 without an EOS as in expected_executed_slots (the same recurrence; a disagreement between the two calls is named)
         from verity_vllm.program.lifting import continuation as CT
@@ -358,7 +358,7 @@ def draw_accounting(draws_seen: dict[str, list[dict]], workload: str | Path | No
             probs.append(f"draw ledger {rid}: expected_draw_positions slots {pad_pos['slots'][:4]}.. != executed_slots {exp_slots[:4]}..: one recurrence, two answers")
         ent["lag_positions"] = pad_pos["lag_positions"]
         ent["first_forbidden_position"] = pad_pos["first_forbidden_position"]
-        cmp = CT.compare_draw_positions(expected, drawn)          # pad's comparison: extra / missing / repeated / out-of-order BY NAME
+        cmp = CT.compare_draw_positions(expected, drawn)          # the continuation's comparison: extra / missing / repeated / out-of-order BY NAME
         extra, missing = cmp["extra"], cmp["missing"]
         ent["expected_executed_slots"] = {"n": len(exp_slots), "first": exp_slots[0], "last": exp_slots[-1]}
         ent["expected_positions"] = {"n": len(expected), "first": expected[0], "last": expected[-1]}
@@ -366,8 +366,8 @@ def draw_accounting(draws_seen: dict[str, list[dict]], workload: str | Path | No
         ent["expected_not_drawn"] = missing
         ent["repeated"] = cmp["repeated"]
         ent["ordered_set_equal"] = cmp["ok"]
-        ent["compare"] = "verity_vllm.program.lifting.continuation.compare_draw_positions (pad 61fe06dff)"
-        if cmp["ok"] is False and not extra and not missing:      # repeated / out of order: pad's names, ours to carry
+        ent["compare"] = "verity_vllm.program.lifting.continuation.compare_draw_positions"
+        if cmp["ok"] is False and not extra and not missing:      # repeated / out of order: the continuation's names, ours to carry
             probs.extend(f"draw ledger {rid}: {p}" for p in cmp["problems"])
         if t_eos is None or t_eos >= T:
             ent["finish"] = "length" if t_eos is None else "eos-at-cap"
@@ -396,7 +396,7 @@ def draw_accounting(draws_seen: dict[str, list[dict]], workload: str | Path | No
                          + f"): {what} -- the RNG advanced without r_t")
         if missing:
             probs.append(f"draw ledger {rid}: {len(missing)} executed slot(s) did not draw (positions {missing[:4]} of the expected "
-                         f"{expected[0]}..{expected[-1]}): a deleted step (F-pm-24 territory)" + (" -- the lag slot did not draw" if t_eos is not None and t_eos < T and missing[-1] == expected[-1] else ""))
+                         f"{expected[0]}..{expected[-1]}): a deleted step" + (" -- the lag slot did not draw" if t_eos is not None and t_eos < T and missing[-1] == expected[-1] else ""))
         out["requests"][rid] = ent
     n_ex = out["requests_with_eos_before_cap"]
     out["measured"] = (f"R5 MEASURED on this record: {n_ex} request(s) stopped at EOS before the cap; the drawn positions of every request equal "
@@ -465,14 +465,14 @@ def recompute_run(log_path: Path, snapshots_dir: Path, max_rows: int | None = No
     tally = {"exact-match": 0, "mismatch": 0, "no-snapshot": 0, "skipped": 0}
     rows_without_seed = 0             # skipped rows whose request record declares no seed: a FAIL, not an INCOMPLETE
     steps_seen = 0
-    sampled_rows_total = 0            # [rev-pm M-0541 T1] every sampled row of the record counts; the verdict names k of n value-checked
-    program_S, splits_unreadable = _program_splits(build_dir, workload)      # [T3] the Program's S per request (int or per-event schedule), if a Build is given
+    sampled_rows_total = 0            # every sampled row of the record counts; the verdict names k of n value-checked
+    program_S, splits_unreadable = _program_splits(build_dir, workload)      # the Program's S per request (int or per-event schedule), if a Build is given
     reasons.extend(f"Build result unreadable ({u}): the Program's S of its request shape is not read" for u in splits_unreadable)
     events_of: dict[str, int] = {}                         # sampled events attributed to each request so far (the event index of the next row)
     s_disagree: list[str] = []
-    chain_absent: list[str] = []      # [rev-pm M-0738] engine steps whose sampler chain is incomplete in the record are NAMED, not dropped
+    chain_absent: list[str] = []      # engine steps whose sampler chain is incomplete in the record are NAMED, not dropped
     engine_steps = len(per_step)
-    draws_seen: dict[str, list[dict]] = {}                 # [R17-32 R5] every sampled row of every request, snapshot or not: the draw ledger
+    draws_seen: dict[str, list[dict]] = {}                 # every sampled row of every request, snapshot or not: the draw ledger
     for step, d in sorted(per_step.items()):
         g, se, ss = d["gumbel"], d["sample_end"], d["start"]
         _lrows = list(getattr(ss, "logits_rows", None) or ())
@@ -481,7 +481,7 @@ def recompute_run(log_path: Path, snapshots_dir: Path, max_rows: int | None = No
             draws_seen.setdefault(str(_rid), []).append({"step": int(step), "row": int(_row), "pos": int(_pos),
                                                          "served": int(_srv[_row]) if _row < len(_srv) else None})
         if g is None or se is None or d["mask"] is None:
-            # [rev-pm M-0738] the denominator is the RECORD's sampled rows (StepStart.logits_rows at every engine step), not the tool's
+            # the denominator is the RECORD's sampled rows (StepStart.logits_rows at every engine step), not the tool's
             # view of which steps carry a complete chain: a step whose gumbel launch / top-p mask / SampleEnd is absent still counts
             # its rows as sampled-and-unchecked, and is named
             n_abs = len(getattr(ss, "logits_rows", None) or ()) or len(list(getattr(se, "sampled_token_ids", None) or ()))
@@ -535,9 +535,9 @@ def recompute_run(log_path: Path, snapshots_dir: Path, max_rows: int | None = No
                    "served": int(served[row]) if row < len(served) else None,
                    "V": int(V), "S": S, "chain": list(d["topp"]) + (["_temperature_kernel"] if d["temp"] is not None else []),
                    "gumbel_constexprs": {k: v for k, v in cx.items()}}
-            if rid in program_S:      # [rev-pm M-0541 T3] record BOTH the kernel's S (mask constexpr) and the Program's S; name a disagreement
+            if rid in program_S:      # record BOTH the kernel's S (mask constexpr) and the Program's S; name a disagreement
                 sp = program_S[rid]
-                if isinstance(sp, dict):       # [R16 M-0169] derived: S_t = SplitsFor_v1(|live(t)|, num_SMs), |live(t)| = the record's logits rows at t
+                if isinstance(sp, dict):       # derived: S_t = SplitsFor_v1(|live(t)|, num_SMs), |live(t)| = the record's logits rows at t
                     from verity.ml.definitions.registry.topp_geometry import splits_for as _sf
                     nsm = sp.get("derived")
                     pS = int(_sf(int(n_rows_step), int(nsm))) if nsm is not None and 1 <= int(n_rows_step) <= 64 else None
@@ -596,7 +596,7 @@ def recompute_run(log_path: Path, snapshots_dir: Path, max_rows: int | None = No
             rec["device_facts_match"] = not mism and not unsnap
             rec["device_facts_checked"] = [k for k, v in dev.items() if v is not None]
             rec["device_facts_not_snapshotted"] = unsnap
-            if unsnap:      # [rev-pm M-0541 T2] the token alone is not evidence of the declared fact; the snapshotted device fact is
+            if unsnap:      # the token alone is not evidence of the declared fact; the snapshotted device fact is
                 reasons.append(f"step {step} row {row} ({rid}): the kernel-consumed {', '.join(unsnap)} not snapshotted -- the declared "
                                f"value cannot be tied to the execution at this step")
             if mism:
@@ -611,7 +611,7 @@ def recompute_run(log_path: Path, snapshots_dir: Path, max_rows: int | None = No
             pending.append((len(rows), (int(V), int(S), words), None if masked_obs is None else masked_obs[row].view(np.uint32).copy()))
             rows.append(rec)
     # evaluate the pending rows (the Definition of record, GumbelTopPTokenSelect_v1{V,S}) -- by the interpreter ('lane', the path of
-    # record) or by the vectorised twins ('rows'); [R17 stoch lever (a)] under 'rows', `reference_rows` of them ALSO go through the lane
+    # record) or by the vectorised twins ('rows'); under 'rows', `reference_rows` of them ALSO go through the lane
     # walk and both results are compared word for word (token + masked row): a disagreement between the two evaluators is a FAIL by
     # name, never resolved in favour of either.  Both evaluators and the reference count are on the record.
     if evaluator not in EVALUATORS:
@@ -668,7 +668,7 @@ def recompute_run(log_path: Path, snapshots_dir: Path, max_rows: int | None = No
     s_ok = not s_disagree
     s_checked = sum(1 for r in rows if r.get("S_agree") is True)
     reasons.extend(chain_absent)
-    # [R17-32 R5 record half, revb M-0566] the draw ledger: one draw per request per step at pos = prompt_len - 1 + k, draws == cap or
+    # the draw ledger: one draw per request per step at pos = prompt_len - 1 + k, draws == cap or
     # EOS + exactly eos_lag_rows lag draw(s) and none after; a ledger problem is a FAIL reason by name
     ledger = draw_accounting(draws_seen, workload, build_dir, lag_attested=record_lag_rows(header, snapshots_dir))
     reasons.extend(ledger["problems"])
@@ -682,10 +682,10 @@ def recompute_run(log_path: Path, snapshots_dir: Path, max_rows: int | None = No
             ledger["problems"] or rows_without_seed:
         verdict = "FAIL"
     elif not complete:
-        verdict = "INCOMPLETE"          # [rev-pm M-0541 T1] k of n value-checked is not a PASS (row_pod: anything but PASS fails the Match)
+        verdict = "INCOMPLETE"          # k of n value-checked is not a PASS (row_pod: anything but PASS fails the Match)
     else:
         verdict = "PASS" if not reasons else "FAIL"
-    # [rev-pm M-0541 T4] what is declared vs what is observed, said in the verdict: the fold's sampler Const32/Const64 (temperature,
+    # what is declared vs what is observed, said in the verdict: the fold's sampler Const32/Const64 (temperature,
     # top_p, pos) and the seed Param are sourced from the run header's request records (structure, DECLARED); the execution tie is
     # THIS check -- the snapshotted small buffers the kernels consumed (seeds_ptr/pos_ptr/temp_ptr/P), at every checked row.
     n_dev = sum(1 for r in rows if r.get("device_facts_match") is True)
@@ -699,12 +699,12 @@ def recompute_run(log_path: Path, snapshots_dir: Path, max_rows: int | None = No
             "declared_facts": facts, "run_header_facts": run_facts, "program_splits": program_S,
             "header_vs_manifest": header_vs_manifest, "structure_note": structure_note,
             "variant": VARIANT, "definition": "GumbelTopPTokenSelect_v1{V,S} = TemperatureScale_v1 -> TopPMask_v1 -> GumbelSelectF32_v1 (verity/ml/definitions/registry/sampling.py)",
-            # [R17 stoch lever (a)] WHICH evaluator produced the value check, and the lane-walk reference beside it: both named
+            # WHICH evaluator produced the value check, and the lane-walk reference beside it: both named
             "evaluator": {"name": evaluator, "what": EVALUATOR_DOC[evaluator], "eval_seconds_total": eval_seconds_total,
                           "reference": ref_check, "jobs": jobs, "cpu_quota": _cpu_quota()},
-            # [R17-32 R5, revb S-r17b-16] the record states the RNG's statelessness so 'RNG advances iff r_t' is read off it: a lag slot
-            # (executed, unserved) draws Philox(seed, L - 1 + n) with n served slots (slot t = n + 1 at pos L - 1 + (t - 1), the record's pos fact;
-            # pad 35408bbe9 / F-r17b-40) and nothing else moves; a wrong pos on a device row is a mismatch by name above
+            # the record states the RNG's statelessness so 'RNG advances iff r_t' is read off it: a lag slot
+            # (executed, unserved) draws Philox(seed, L - 1 + n) with n served slots (slot t = n + 1 at pos L - 1 + (t - 1), the record's pos fact)
+            # and nothing else moves; a wrong pos on a device row is a mismatch by name above
             "rng": {"kind": "counter (Philox4x32-10 word 0), key (seed_lo, seed_hi), counter (pos_lo, pos_hi, 0, 0) -- tl.randint(seed, pos)",
                     "state": "none: the draw of a row is a pure function of (seed, pos, lane); no draw is consumed or advanced by another row",
                     "advances_iff_executed": "a row's draw exists iff the row executed (r_t = 1) at its own pos; an EOS-stopped request's lag "
@@ -712,7 +712,7 @@ def recompute_run(log_path: Path, snapshots_dir: Path, max_rows: int | None = No
                                              "pos is drawn; the served rows' draws are unchanged",
                     "checked_here": "declared pos/seed (Program request facts) == device pos/seed (kernel-consumed pos_ptr/seeds_ptr snapshot) "
                                     "at every value-checked row (device_facts_checked); the draw LEDGER below (rng_advances_iff_run)",
-                    # [revb M-0566] R5's record half, MEASURED per request: the ledger of every sampled row (snapshot or not)
+                    # R5's record half, MEASURED per request: the ledger of every sampled row (snapshot or not)
                     "rng_advances_iff_run": ledger},
             "sampling": dict((header.workload or {}).get("sampling") or {}),
             "summary": {"engine_steps_in_record": engine_steps, "sampled_steps_in_log": steps_seen, "steps_chain_absent": len(chain_absent),
