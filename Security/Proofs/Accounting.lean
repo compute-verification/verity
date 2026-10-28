@@ -85,6 +85,7 @@ import Proofs.Pouw.H1Zy.Stream
 import Proofs.Accounting.TS.HeldSound
 import Proofs.Accounting.TS.Session.Tile.Computes
 import Proofs.Accounting.TS.TileSound
+import Proofs.Accounting.TS.PeriodSound
 import Proofs.Accounting.Actual
 import Proofs.Accounting.Responder
 import Proofs.Accounting.Responder.Latency
