@@ -1,8 +1,8 @@
-"""The physical layer's declaration: devices, zones, links and datacenters, with every number a named assumption.
+"""The physical layer's declaration: devices, blocks, links and datacenters, with every number a named assumption.
 
 This mirrors Lean's physical model (`Security/Definitions/Accounting/Physical.lean`, `Hardware`): a datacenter is a
-tree of locations whose leaves are devices; a zone is a set of devices behind one boundary (`Hardware.SpatialUnit`);
-a link joins two devices, and a link that crosses a zone boundary must pass a network certifier (coverage,
+tree of locations whose leaves are devices; a block is a set of devices behind one boundary (`Hardware.SpatialUnit`);
+a link joins two devices, and a link that crosses a block boundary must pass a network certifier (coverage,
 `Accounting.Covered`). Certifiers and challengers are the trusted devices: the auditor's hardware. Nothing here is
 proved: each number is an `Assumption` with its source, and the account reads them by name.
 """
@@ -75,7 +75,7 @@ class Link:
 
 @dataclass(frozen=True)
 class Port:
-    """One direction of a certifier: what leaves its zone (`egress`) or enters it (`ingress`). The certifier keeps one
+    """One direction of a certifier: what leaves its block (`egress`) or enters it (`ingress`). The certifier keeps one
     grid per port (`NetTiming.Grid`) and signs one record per port and window."""
 
     certifier: str
@@ -107,8 +107,8 @@ class Cadence:
 
 
 @dataclass(frozen=True)
-class Zone:
-    """A zone of the site: devices behind one boundary, the unit the account credits."""
+class Block:
+    """Devices behind one boundary: the unit the account credits."""
 
     name: str
     devices: tuple[Device, ...]
@@ -123,53 +123,53 @@ class Zone:
 
 @dataclass
 class Datacenter:
-    """Zones, the fabric devices between them (switches, certifiers, the challenger, the outside world), the links,
+    """Blocks, the fabric devices between them (switches, certifiers, the challenger, the outside world), the links,
     the certifiers' cadence, and whether they seal their pair links."""
 
     name: str
-    zones: list[Zone]
+    blocks: list[Block]
     fabric: list[Device] = field(default_factory=list)
     links: list[Link] = field(default_factory=list)
     cadence: Cadence = field(default_factory=Cadence)
-    #: every link between two zones' certifiers is a sealed pair link (the certifier's `Proxy(pair=…)`, PROTOCOL.md
-    #: "Sealed pair links"), so what crosses from one zone to another is ciphertext off the two certifiers, and the
+    #: every link between two blocks' certifiers is a sealed pair link (the certifier's `Proxy(pair=…)`, PROTOCOL.md
+    #: "Sealed pair links"), so what crosses from one block to another is ciphertext off the two certifiers, and the
     #: export is charged at the facility boundary only (`Placement._exported`). Off by default.
     sealed: bool = False
 
     @property
     def devices(self) -> dict[str, Device]:
-        out = {d.name: d for b in self.zones for d in b.devices}
+        out = {d.name: d for b in self.blocks for d in b.devices}
         out.update({d.name: d for d in self.fabric})
         return out
 
-    def zone_of(self, device: str) -> Zone | None:
-        return next((b for b in self.zones if device in b), None)
+    def block_of(self, device: str) -> Block | None:
+        return next((b for b in self.blocks if device in b), None)
 
-    def zone(self, name: str) -> Zone:
-        return next(b for b in self.zones if b.name == name)
+    def block(self, name: str) -> Block:
+        return next(b for b in self.blocks if b.name == name)
 
     @property
     def boundary(self) -> list[Link]:
-        """The links with exactly one end in a zone, or with ends in two zones."""
-        return [l for l in self.links if self.zone_of(l.a) is not self.zone_of(l.b)]
+        """The links with exactly one end in a block, or with ends in two blocks."""
+        return [l for l in self.links if self.block_of(l.a) is not self.block_of(l.b)]
 
     def uncovered_links(self) -> list[Link]:
-        """The links outside every zone with no trusted device at either end (a switch-to-switch fabric link, an outside
+        """The links outside every block with no trusted device at either end (a switch-to-switch fabric link, an outside
         host's link to a switch), where two machines the auditor doesn't control meet with no certifier between them.
         The network certifiers cover every link when this is empty."""
         devices = self.devices
-        inside = lambda l: self.zone_of(l.a) is not None and self.zone_of(l.a) is self.zone_of(l.b)  # noqa: E731
+        inside = lambda l: self.block_of(l.a) is not None and self.block_of(l.a) is self.block_of(l.b)  # noqa: E731
         return [l for l in self.links if not inside(l)
                 and not any(devices[e].trusted for e in (l.a, l.b) if e in devices)]
 
     def port(self, a: str, b: str) -> Port | None:
         """The certifier port a hop from device `a` to device `b` passes, if the hop crosses a boundary at a certifier."""
         devices = self.devices
-        if self.zone_of(a) is self.zone_of(b):
+        if self.block_of(a) is self.block_of(b):
             return None
-        if devices[b].kind == "certifier" and self.zone_of(a) is not None:
+        if devices[b].kind == "certifier" and self.block_of(a) is not None:
             return Port(b, "egress")
-        if devices[a].kind == "certifier" and self.zone_of(b) is not None:
+        if devices[a].kind == "certifier" and self.block_of(b) is not None:
             return Port(a, "ingress")
         return None
 
@@ -186,14 +186,14 @@ class Datacenter:
         return next(l for l in self.links if {l.a, l.b} == {a, b})
 
     def uplink(self, certifier: str) -> Link:
-        """The link between a certifier and the zone it watches."""
+        """The link between a certifier and the block it watches."""
         return next(l for l in self.links if certifier in (l.a, l.b)
-                    and self.zone_of(l.b if l.a == certifier else l.a) is not None)
+                    and self.block_of(l.b if l.a == certifier else l.a) is not None)
 
-    def watched(self, port: Port) -> Zone:
-        """The zone whose boundary `port` watches."""
+    def watched(self, port: Port) -> Block:
+        """The block whose boundary `port` watches."""
         l = self.uplink(port.certifier)
-        return self.zone_of(l.b if l.a == port.certifier else l.a)
+        return self.block_of(l.b if l.a == port.certifier else l.a)
 
     def validate(self) -> list[str]:
         """Every way the declaration falls short of the model; empty when it is an instance of it."""
@@ -222,20 +222,20 @@ class Datacenter:
         return list(out.values())
 
     def prefixed(self, prefix: str, keep: frozenset[str] = frozenset({"world"})) -> Datacenter:
-        """The same datacenter with every device, zone and the datacenter itself renamed `prefix.<name>` (but the
+        """The same datacenter with every device, block and the datacenter itself renamed `prefix.<name>` (but the
         devices in `keep`), so several can join a fleet."""
         r = lambda s: s if s in keep else f"{prefix}.{s}"  # noqa: E731
-        return Datacenter(prefix, [Zone(r(b.name), [replace(d, name=r(d.name)) for d in b.devices]) for b in self.zones],
+        return Datacenter(prefix, [Block(r(b.name), [replace(d, name=r(d.name)) for d in b.devices]) for b in self.blocks],
                           [replace(d, name=r(d.name)) for d in self.fabric],
                           [replace(l, a=r(l.a), b=r(l.b)) for l in self.links], self.cadence, self.sealed)
 
 
 @dataclass
 class Fleet:
-    """Several datacenters under one developer, and the links between them. Zones are the only units the account
-    credits, and coverage is per zone: every link off a zone passes a certifier of its own, wherever the link's other
+    """Several datacenters under one developer, and the links between them. Blocks are the only units the account
+    credits, and coverage is per block: every link off a block passes a certifier of its own, wherever the link's other
     end is. A link between datacenters is fabric, as a switch is, so it needs no certifier, and the outside world is
-    everything off every zone."""
+    everything off every block."""
 
     datacenters: list[Datacenter]
     links: list[Link] = field(default_factory=list)
@@ -249,13 +249,13 @@ class Fleet:
                 if d.name not in seen:
                     seen.add(d.name)
                     fabric.append(d)
-        return Datacenter("+".join(dc.name for dc in self.datacenters), [b for dc in self.datacenters for b in dc.zones],
+        return Datacenter("+".join(dc.name for dc in self.datacenters), [b for dc in self.datacenters for b in dc.blocks],
                           fabric, [l for dc in self.datacenters for l in dc.links] + list(self.links),
                           self.datacenters[0].cadence, all(dc.sealed for dc in self.datacenters))
 
     def validate(self) -> list[str]:
         """Each datacenter's own problems, a device name in two of them (but the outside world's), and a link between
-        them that names an unknown device or leaves a zone without passing a certifier."""
+        them that names an unknown device or leaves a block without passing a certifier."""
         problems = [f"{dc.name}: {p}" for dc in self.datacenters for p in dc.validate()]
         seen: dict[str, str] = {}
         for dc in self.datacenters:
@@ -267,7 +267,7 @@ class Fleet:
         for l in self.links:
             unknown = [end for end in (l.a, l.b) if end not in merged.devices]
             problems += [f"inter-datacenter link {l.a}-{l.b} names an unknown device {end!r}" for end in unknown]
-            if unknown or merged.zone_of(l.a) is merged.zone_of(l.b):
+            if unknown or merged.block_of(l.a) is merged.block_of(l.b):
                 continue
             if merged.port(l.a, l.b) is None and merged.port(l.b, l.a) is None:
                 problems.append(f"inter-datacenter link {l.a}-{l.b} passes no certifier (coverage)")

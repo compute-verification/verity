@@ -6,9 +6,9 @@ from __future__ import annotations
 
 import pytest
 
-from datacenter import (BLOCK_BITS, Append, Assumption, Cadence, Challenge, Datacenter, Deviation, Device, Held,
-                        Interval, Link, Plan, Read, ReadWindow, Rekey, Release, Refused, Store, Zone, account, audit,
-                        place, register, run)
+from datacenter import (BLOCK_BITS, Append, Assumption, Block, Cadence, Challenge, Datacenter, Deviation, Device, Held,
+                        Interval, Link, Plan, Read, ReadWindow, Rekey, Release, Refused, Store, account, audit, place,
+                        register, run)
 from datacenter.models import WEIGHTS, X, two_stage
 
 GB = 8e9
@@ -20,7 +20,7 @@ REG = register(PROGRAM, WEIGHTS)
 INPUTS = {"x": X}
 
 
-def node(n: str) -> Zone:
+def node(n: str) -> Block:
     gpu = Device(f"{n}.gpu", "gpu", rate={"square-1024": Assumption("rtx-pro-6000/squarings-p1024", 1.499e10, "1/s"),
                                           "mac:bf16": Assumption(f"{n}.gpu.bf16", 1e12, "MAC/s"),
                                           "cuda:gate": Assumption(f"{n}.gpu.gates", 1e14, "gate/s")},
@@ -28,7 +28,7 @@ def node(n: str) -> Zone:
                  bandwidth=Assumption(f"{n}.gpu.hbm_bw", 1.6e12 * 8, "bit/s"))
     dram = Device(f"{n}.dram", "dram", memory=Assumption(f"{n}.dram.size", 512 * GB, "bits"),
                   bandwidth=Assumption(f"{n}.dram.bw", 200e9 * 8, "bit/s"))
-    return Zone(n, [gpu, dram])
+    return Block(n, [gpu, dram])
 
 
 def datacenter() -> Datacenter:
@@ -118,10 +118,10 @@ def test_a_read_windows_bits_are_its_output_and_local_beyond_every_path_into_the
     p, plan, profile = setup(Plan(Interval(0, 16), reads=[ReadWindow("kv", start=0, boundary=10, deadline=12)]))
     claims = audit(run(p, INPUTS, plan), profile)
     assert Read("kv", 1 * GB, Interval(0, 10)) in claims
-    a = account(claims, profile).zones[0]
+    a = account(claims, profile).blocks[0]
     assert a.reads == 1 * GB and a.reads_local_at_least == pytest.approx(1 * GB - (NET + PCIE) * 1e-3)
     for elsewhere, rate in (("a.dram", PCIE), ("b.gpu", NET)):
-        moved = account(audit(run(p, INPUTS, plan, Deviation(moved={"kv": elsewhere})), profile), profile).zones[0]
+        moved = account(audit(run(p, INPUTS, plan, Deviation(moved={"kv": elsewhere})), profile), profile).blocks[0]
         assert moved.reads == pytest.approx(rate * 1e-3) and moved.reads_local_at_least == 0
     late = Plan(Interval(0, 16), reads=[ReadWindow("kv", start=0, boundary=10, deadline=10)])
     assert [c.why for c in audit(run(p, INPUTS, late), p.public(late)) if isinstance(c, Refused)] == [

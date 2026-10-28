@@ -1,7 +1,7 @@
 """The two exports a datacenter's network needs: the plan of Linux network namespaces that `mockdc.py` stands up, and
 Shadow's network graph.
 
-They read any `datacenter.Datacenter` (`benchmarks/datacenter`, the Lean physical model's mirror: `Zone`s, fabric
+They read any `datacenter.Datacenter` (`benchmarks/datacenter`, the Lean physical model's mirror: `Block`s, fabric
 `Device`s and `Link`s, in bits, seconds and bits per second, every capacity a named `Assumption` with its source). The
 declarations themselves, the measured node and the leaf-spine datacenter of them among them, are
 `datacenter.examples`'s, the node's constants read from `verity.core.protocols.remote_bandwidth.timing`. Each block is
@@ -43,10 +43,10 @@ def network(dc: Datacenter) -> tuple[dict[str, str], list[tuple[Link, str, str]]
     """The network the exports stand up: each node's role (`block`, or a fabric device's kind) and each link between
     two nodes, with the node at each end."""
     def node(x: str) -> str:
-        b = dc.zone_of(x)
+        b = dc.block_of(x)
         return b.name if b else x
 
-    roles = {b.name: "block" for b in dc.zones} | {d.name: d.kind for d in dc.fabric}
+    roles = {b.name: "block" for b in dc.blocks} | {d.name: d.kind for d in dc.fabric}
     links = [(e, node(e.a), node(e.b)) for e in dc.links if node(e.a) != node(e.b)]
     return roles, links
 

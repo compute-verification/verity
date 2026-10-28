@@ -134,7 +134,7 @@ def test_a_block_down_for_maintenance_is_refused_without_the_plan_and_charged_wh
     entry = summary["blocks"]["b0"]
     assert [(link, w, raw) for link, w, raw, _ in entry["verdicts"] if raw] == \
         [("responses", 1, "no-verdict"), ("requests", 1, "no-verdict")]
-    held = sum(float(d.memory) for d in dc.zone("b0").devices if d.memory is not None)
+    held = sum(float(d.memory) for d in dc.block("b0").devices if d.memory is not None)
     line_rate = float(dc.uplink("b0.cert").capacity) * 6.0
     planned, bare = entry["datacenter"], entry["datacenter"]["unplanned"]
     assert planned["accepted"] and planned["refused"] == [] and planned["carried"] == 4
@@ -162,7 +162,7 @@ def test_a_fleet_is_validated_and_stood_up_merged(m, tmp_path):
     shape = dict(declaration=None, fleet=True, blocks=1, leaves=1, spines=0, fabric_latency_us=2000,
                  wan_latency_us=30_000)
     dc = m.lab(argparse.Namespace(**shape))
-    assert dc.name == "east+west" and [b.name for b in dc.zones] == ["east.b0", "west.b0"]
+    assert dc.name == "east+west" and [b.name for b in dc.blocks] == ["east.b0", "west.b0"]
     assert [(e.a, e.b, e.delay) for e in dc.links if e.kind == "wan"] == [("east.leaf0", "west.leaf0", 0.03)]
     path = tmp_path / "fleets.py"
     path.write_text("from datacenter import Fleet, Link\n"

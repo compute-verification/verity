@@ -4,8 +4,8 @@ The device graph, and a mock datacenter of Linux network namespaces that runs th
 accounting layer's declarations, `datacenter.Datacenter`, which `datacenter.examples` (`benchmarks/datacenter`) declares:
 `rtx_node` is the measured node (8 GPUs on two sockets, each GPU on a PCIe root port of its own, one NIC on socket 1) as
 one zone, `leaf_spine` puts such nodes behind a leaf-spine fabric, each through its zone's certifier, with hosts
-outside every zone, and `two_sites` joins two leaf-spines by a WAN between their spines. This package's code and
-its flags still call a zone a block (`--blocks`, the `block` role, `workload.block`).
+outside every zone, and `two_sites` joins two leaf-spines by a WAN between their spines. The code and its flags still
+call a zone a block (`datacenter.physical.Block`, `--blocks`).
 
 - `graph.py`: the exports, which read any `Datacenter` that validates, a fleet's merged one included: the netns plan
   `mockdc.py` stands up, and Shadow's GML. `python graph.py --blocks 2 --netns` prints `leaf_spine(2)`'s plan, and

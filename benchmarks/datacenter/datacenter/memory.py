@@ -154,10 +154,10 @@ def answer_time(dc: Datacenter, challenger: str, registered: str, actual: str, b
 
 
 def regen_time(dc: Datacenter, store: Store, bits: float) -> float:
-    """Seconds the prover needs to rebuild `bits` of `store` from its seed at its zone's summed `rate["square-1024"]`,
+    """Seconds the prover needs to rebuild `bits` of `store` from its seed at its block's summed `rate["square-1024"]`,
     as `ledger.Node.rebuild` sums a node's; infinite for a store that can't be rebuilt."""
-    zone = dc.zone_of(store.device)
-    devices = zone.devices if zone is not None else dc.devices.values()
+    block = dc.block_of(store.device)
+    devices = block.devices if block is not None else dc.devices.values()
     rate = sum(float(d.rate["square-1024"]) for d in devices if "square-1024" in d.rate and not d.trusted)
     return bits * store.regen / rate if store.regen and rate else float("inf")
 

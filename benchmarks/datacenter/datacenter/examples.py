@@ -14,7 +14,7 @@ the upper bound that claims nothing; the residuals are declared.
 `with_dpu` adds an NVIDIA BlueField-3 DPU between a node's NIC and its way out, and the DPU's BMC behind it, with Amodo's
 measured stores and wipe coverage (amododesign.com/notes/2026-10-02-dpu-memory-wipes): what a wipe can't reach on them is
 each device's residual, and neither states a write ceiling. `leaf_spine` puts nodes behind a leaf-spine fabric, each
-through its own certifier, with hosts outside every zone and challengers on the leaves. `rack` is the demo's: nodes with DPUs on one leaf, a challenger, and
+through its own certifier, with hosts outside every block and challengers on the leaves. `rack` is the demo's: nodes with DPUs on one leaf, a challenger, and
 the outside world over a WAN. `two_sites` is a fleet: two leaf-spines joined by a WAN between their spines.
 """
 from __future__ import annotations
@@ -23,7 +23,7 @@ import math
 
 from verity.core.protocols.remote_bandwidth import timing as T
 
-from .physical import Assumption, Cadence, Datacenter, Device, Fleet, Link, Zone
+from .physical import Assumption, Block, Cadence, Datacenter, Device, Fleet, Link
 
 GB = 8e9
 INF = math.inf
@@ -57,7 +57,7 @@ SOCKET_LINK = Assumption("socket/inter-socket", INF, "bit/s", "measured")
 
 
 def rtx_node(name: str = "node") -> Datacenter:
-    """One node, a datacenter of one zone named `name` and no fabric. A link inside it has no latency until one is
+    """One node, a datacenter of one block named `name` and no fabric. A link inside it has no latency until one is
     measured: a delay of 0, the bound that claims nothing for a path's delay."""
     devices, links = [], []
     for s in range(2):
@@ -75,38 +75,38 @@ def rtx_node(name: str = "node") -> Datacenter:
     devices.append(nic)
     links += [Link(nic.name, f"{name}.pcie1", PCIE_NIC, kind="pcie"),
               Link(f"{name}.cpu0", f"{name}.cpu1", SOCKET_LINK, kind="upi")]
-    return Datacenter(name, [Zone(name, devices)], [], links)
+    return Datacenter(name, [Block(name, devices)], [], links)
 
 
 def with_dpu(node: Datacenter) -> Datacenter:
-    """`node` (one zone, as `rtx_node` declares it) with a BlueField-3 DPU after its NIC, which becomes the zone's way
+    """`node` (one block, as `rtx_node` declares it) with a BlueField-3 DPU after its NIC, which becomes the block's way
     out, and the DPU's BMC behind it. Amodo's measurements: the DPU's 32 GB DDR is at least 85% wipeable and its 40 GB eMMC
     and 128 GB NVMe at least 99%; the BMC's 1 GB DDR at least 75%, its 256 MB SPI flash at least 50%, and its 64 MB
     secure-firmware flash not at all. Each device's residual is what those leave."""
-    (zone,) = node.zones
-    n = zone.name
+    (block,) = node.blocks
+    n = block.name
     dpu = Device(f"{n}.dpu", "dpu", memory=Assumption(f"{n}.dpu.stores", (32 + 40 + 128) * GB, "bits"),
                  residual=Assumption(f"{n}.dpu.unwiped", (0.15 * 32 + 0.01 * 40 + 0.01 * 128) * GB, "bits", "measured"))
     bmc = Device(f"{n}.bmc", "bmc", memory=Assumption(f"{n}.bmc.stores", (1 + 0.256 + 0.064) * GB, "bits"),
                  residual=Assumption(f"{n}.bmc.unwiped", (0.25 * 1 + 0.5 * 0.256 + 0.064) * GB, "bits", "measured"))
     links = [Link(f"{n}.nic0", dpu.name, Assumption("dpu_link", 400e9, "bit/s"), US, "pcie"),
              Link(dpu.name, bmc.name, Assumption("bmc_link", 1e9, "bit/s"), US)]
-    return Datacenter(node.name, [Zone(n, [*zone.devices, dpu, bmc])], list(node.fabric), node.links + links, node.cadence,
+    return Datacenter(node.name, [Block(n, [*block.devices, dpu, bmc])], list(node.fabric), node.links + links, node.cadence,
                       node.sealed)
 
 
-def leaf_spine(zones: int, *, leaves: int = 1, spines: int = 0, outside: tuple[str, ...] = ("ext0",),
+def leaf_spine(blocks: int, *, leaves: int = 1, spines: int = 0, outside: tuple[str, ...] = ("ext0",),
                challengers: tuple[str, ...] = (), dpus: bool = False, prefix: str = "b", name: str | None = None,
                uplink_gbps: int = 400, spine_gbps: int = 400, fabric_latency: float = 2e-6, uplink_latency: float = 1e-6,
                outside_latency: float | None = None, cadence: Cadence | None = None) -> Datacenter:
-    """`zones` nodes (`rtx_node`, named `{prefix}0`, `{prefix}1`, …, each `with_dpu` when `dpus`) behind a leaf-spine
+    """`blocks` nodes (`rtx_node`, named `{prefix}0`, `{prefix}1`, …, each `with_dpu` when `dpus`) behind a leaf-spine
     fabric: each node's way out (its NIC, or its DPU) to its own certifier (`{prefix}I.cert`), the certifier to a leaf
-    switch (round-robin over `leaves`), every leaf to every spine, and the hosts `outside` every zone (kind `outside`)
+    switch (round-robin over `leaves`), every leaf to every spine, and the hosts `outside` every block (kind `outside`)
     and the `challengers` on the leaves too. With one leaf, `spines` may be 0. Latencies are one way, in seconds:
     `uplink_latency` from a node to its certifier, `fabric_latency` a fabric hop, and an outside host's link a WAN of
     `outside_latency` when it is given, else a fabric hop. `cadence` is the certifiers' (`Cadence`'s default when None)."""
-    if zones < 1 or leaves < 1 or (leaves > 1 and spines < 1):
-        raise ValueError("at least one zone and one leaf, and spines to join more than one leaf")
+    if blocks < 1 or leaves < 1 or (leaves > 1 and spines < 1):
+        raise ValueError("at least one block and one leaf, and spines to join more than one leaf")
     up = Assumption("fabric/uplink", uplink_gbps * 1_000_000_000, "bit/s", "declared")
     trunk = Assumption("fabric/spine", spine_gbps * 1_000_000_000, "bit/s", "declared")
     nic_hop = Assumption("fabric/uplink-latency", uplink_latency, "s", "declared")
@@ -115,11 +115,11 @@ def leaf_spine(zones: int, *, leaves: int = 1, spines: int = 0, outside: tuple[s
                                                                         "declared"), "wan")
     switches = [Device(f"leaf{j}", "switch") for j in range(leaves)]
     nodes, certs, links = [], [], []
-    for i in range(zones):
+    for i in range(blocks):
         n = f"{prefix}{i}"
         node = with_dpu(rtx_node(n)) if dpus else rtx_node(n)
         cert = Device(f"{n}.cert", "certifier")
-        nodes += node.zones
+        nodes += node.blocks
         certs.append(cert)
         links += node.links
         links += [Link(f"{n}.dpu" if dpus else f"{n}.nic0", cert.name, up, nic_hop, "ethernet"),
@@ -130,7 +130,7 @@ def leaf_spine(zones: int, *, leaves: int = 1, spines: int = 0, outside: tuple[s
     links += [Link(x.name, switches[c % leaves].name, up, *wan) for c, x in enumerate(hosts)]
     checkers = [Device(x, "challenger") for x in challengers]
     links += [Link(x.name, switches[c % leaves].name, up, hop, "ethernet") for c, x in enumerate(checkers)]
-    return Datacenter(name or f"leaf-spine-{zones}", nodes, switches + certs + tops + hosts + checkers, links,
+    return Datacenter(name or f"leaf-spine-{blocks}", nodes, switches + certs + tops + hosts + checkers, links,
                       cadence or Cadence())
 
 
@@ -144,16 +144,16 @@ def rack(nodes: int = 2, dpus: bool = True, cadence: Cadence | None = None) -> D
                                                  tick=Assumption("tick", 1e-4, "s", "declared")))
 
 
-def two_sites(zones: int = 2, *, leaves: int = 2, spines: int = 1, fabric_latency: float = 2e-6,
+def two_sites(blocks: int = 2, *, leaves: int = 2, spines: int = 1, fabric_latency: float = 2e-6,
               wan_latency: float = 20e-3, wan_gbps: int = 100, outside: str = "ext0",
               cadence: Cadence | None = None) -> Fleet:
-    """Two sites under one developer, `east` and `west`, each a `leaf_spine` of `zones` nodes, named `east.b0`, ….
+    """Two sites under one developer, `east` and `west`, each a `leaf_spine` of `blocks` nodes, named `east.b0`, ….
     One WAN link joins the two sites' spines (`east.spine0`, `west.spine0`; their leaves when they have no spine), of
-    `wan_gbps` and `wan_latency` one way, both declared. The WAN is fabric: every zone is behind its own certifier
-    already. The one host outside every zone, `outside`, is on the west site, so the east zones reach it across the
+    `wan_gbps` and `wan_latency` one way, both declared. The WAN is fabric: every block is behind its own certifier
+    already. The one host outside every block, `outside`, is on the west site, so the east blocks reach it across the
     WAN, through their own certifiers and both sites' fabric."""
     top = "spine0" if spines else "leaf0"
-    sites = [leaf_spine(zones, leaves=leaves, spines=spines, outside=(outside,) if name == "west" else (),
+    sites = [leaf_spine(blocks, leaves=leaves, spines=spines, outside=(outside,) if name == "west" else (),
                         fabric_latency=fabric_latency, cadence=cadence).prefixed(name, keep=frozenset({outside}))
              for name in ("east", "west")]
     wan = Link(f"east.{top}", f"west.{top}",

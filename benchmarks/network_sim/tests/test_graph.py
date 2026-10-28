@@ -159,7 +159,7 @@ def test_a_fleets_wan_joins_its_sites_switches_and_has_its_own_jitter(g, ex):
     ext = plan.address("ext0", "west.leaf0")
     out = str(ipaddress.ip_interface(plan.namespace("ext0").interfaces[0].address).network)
     assert dict(plan.namespace("east.spine0").routes)[out] == plan.address("west.spine0", "east.spine0")
-    for b in (b.name for b in dc.zones):
+    for b in (b.name for b in dc.blocks):
         cert = g.netns_name(f"{b}.cert")
         assert walk(plan, "na-ext0", plan.fabric_address(f"{b}.cert")) == cert and walk(plan, cert, ext) == "na-ext0"
         assert walk(plan, "na-ext0", plan.address(b, f"{b}.cert")) is None and walk(plan, g.netns_name(b), ext) is None
