@@ -34,7 +34,7 @@
   so the step digest, and with it round s's root, commits them before round s's coin, and slot i of round s's slot
   table names leaf i of those A tables. `tables_reason` refuses a window where it names leaves of an A table no round
   root commits: a call with no A table root, at a step no round closes, or off its round's step digest. Round s + 1's
-  root also commits round s's receipt roots (`receipts_digest`), and the draw coin opens after `draw_root`, over the
+  root also commits round s's receipt roots (`receipts_digest`), and the draw coin opens after `credit.draw_root`, over the
   manifest, the last round's receipts and every round's root and coin, so the draw follows every round coin by hash.
 * **The A rows under the round roots** (`credit.a_link`): the root round s's coin follows is over the round's
   ``inner`` root (all of the above, `round_root`) and its ``a`` segments: step s's A table ``a/<K>@<s>`` of each K, the
@@ -61,7 +61,7 @@ import numpy as np
 from verity.core.protocols.pouw import window as Wd
 from verity.core.protocols.pouw.audit import HM96, HM96_SALT, ROW_SCHEMA, rows_domain
 from verity.core.protocols.pouw import credit as CR
-from verity.core.protocols.pouw.credit import CREDIT
+from verity.core.protocols.pouw.credit import CREDIT, draw_root
 from verity.core.protocols.pouw.protocol import tagged
 from verity.core.protocols.sampled_proofs.challenger import CoinError, LiveCommitment, LiveOpening, live_reason
 from verity.ml.commitments import Commitment, MerkleTree, Opening, VerificationLimits, verify_opening
@@ -107,7 +107,6 @@ REQUESTS_TAG = "verity/pouw/h1/requests/v2"
 OPEN_REQUESTS_TAG = "verity/pouw/h1/requests/round-0/v1"
 SLOTS_TAG = "verity/pouw/h1/slots/v1"
 RECEIPTS_TAG = "verity/pouw/h1/receipts/v1"
-DRAW_TAG = "verity/pouw/h1/draw/v1"
 #: round 0's ``receipts``: no round precedes it
 NO_RECEIPTS = bytes(64)
 #: the pouw setting ``admission``: requests admitted in round 0 only (the default), or in every round
@@ -267,13 +266,6 @@ def receipts_digest(salt: bytes, r: int, roots: Sequence[tuple[int, bytes | None
     """Round r's receipts: each of its calls' (index, receipt root), in call order, an empty root where none was handed
     over; committed under round r + 1's root, or for the last round in `draw_root`."""
     return tagged(RECEIPTS_TAG, salt, r, *(p for i, root in roots for p in (i, root or b"")))
-
-
-def draw_root(calls_root: bytes, receipts: bytes, log: Sequence[Mapping[str, Any]]) -> bytes:
-    """What the draw coin opens after: the window's manifest (``calls_root``), its last round's receipts and every round's
-    root and coin, so the draw follows every round coin by hash."""
-    return tagged(DRAW_TAG, calls_root, receipts,
-                  *(p for x in log for p in (bytes.fromhex(x["root"]), bytes.fromhex((x.get("coin") or {}).get("coin", "")))))
 
 
 @dataclass(frozen=True)
