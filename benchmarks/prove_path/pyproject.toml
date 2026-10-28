@@ -7,8 +7,11 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 [tool.verity.tests]
 # `integrations/vllm`: advice_windows, the TP serving rows and the stand-in TP Commit the tests build; `benchmarks/one_stage`:
 # a5, which prove_path imports; `verity`: what both import; `verity_numerical.bench`'s input sets and templates, which a5
-# imports; `leak_scan.py`: the received-pieces scan served_tie_zk and served_statics_zk import.
+# imports; `leak_scan.py`: the received-pieces scan served_tie_zk and served_statics_zk import; of `research`, what the served
+# compiler's identity imports (`code_identity`: `research_tools` and `source_identity`).
 inputs = ["verity", "integrations/vllm", "benchmarks/one_stage", "benchmarks/network_traces/leak_scan.py",
+          "tools/research/src/research/__init__.py", "tools/research/src/research/pythonpath.py",
+          "tools/research/src/research/store", "tools/research/src/research/telemetry",
           "benchmarks/numerical/python/verity_numerical/__init__.py",
           "benchmarks/numerical/python/verity_numerical/bench/__init__.py",
           "benchmarks/numerical/python/verity_numerical/bench/input_sets.py",
