@@ -1908,8 +1908,11 @@ def test_an_unwitnessed_guarantee_is_listed_with_its_statement_and_the_list_only
     old = sha("before the move")
     moved = facts(pins={"P.sound": f["pins"]["P.sound"] | {"moved": {"sha256": old}}}, own_modules=sorted(WOWN))
     was = {**bare, "guarantees": {"P.sound": {"owner": "@lean", "type_hash": old}}, "unwitnessed": {"P.sound": old}}
-    assert witness_codes(was, moved) == ["witnesses.unwitnessed-changed"]
+    assert witness_codes(was, moved) == [], "one `--update --moved` run passes on a moved guarantee's old entry"
     assert A.unwitnessed_kept(was, moved, {}) == {"P.sound": h}
+    assert witness_codes({**was, "guarantees": {"P.sound": {"owner": "@lean", "type_hash": sha("x")}}}, moved) == \
+        ["witnesses.unwitnessed-changed"], "a moved guarantee whose statement changed still carries its witnesses"
+    assert witness_codes({**was, "unwitnessed": {"P.sound": sha("y")}}, moved) == ["witnesses.unwitnessed-changed"]
     assert A.unwitnessed_kept({**was, "guarantees": {"P.sound": {"owner": "@lean", "type_hash": sha("x")}}}, moved, {}) == {}
 
     assert A.renamed_witnesses({"witnesses": {"P.a": {"honest": ["P.a_h"], "nontrivial": "P.a_n"}},
