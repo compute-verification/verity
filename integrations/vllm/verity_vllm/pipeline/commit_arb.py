@@ -26,7 +26,7 @@ requests that committed those ids (`RequestRecord.prefix_cover`), and the run th
 prefix in its records and requires both requests' checks to fail (`prefix_negative`); with the cache on, a run with no
 hit fails.
 
-A Commit window closes after ``--window-steps`` committed steps or when the engine is idle; `served_record.Record` reads it
+A Commit window closes after ``--window-steps`` committed steps or when the engine is idle; `served_record.BlockValues` reads it
 back. Each finished request is checked (`RequestRecord.check`) against what the engine streamed for it (the
 ``RequestOutput`` deltas an HTTP server sends), with the seed it carried. Under ``--out``: ``run.json`` (the engine, the
 traffic's parameters, the scheduler's resolved configuration), ``windows.jsonl`` (each window's Commit verdict and
@@ -261,7 +261,7 @@ def build(opts: Options) -> tuple[Any, Any]:
 
 
 class Windows:
-    """The committer's windows over the stepped engine, each read back into one `served_record.Record`."""
+    """The committer's windows over the stepped engine, each read back into one `served_record.BlockValues`."""
 
     def __init__(self, com: Any, record: Any, out: Path, window_steps: int) -> None:
         self.com, self.record, self.out, self.window_steps = com, record, out, int(window_steps)
@@ -334,13 +334,13 @@ def run(llm: Any, com: Any, requests: list[dict[str, Any]], out: Path, window_st
     from vllm import SamplingParams
     from vllm.sampling_params import RequestOutputKind
 
-    from verity_vllm.commit.served_record import Record
+    from verity_vllm.commit.served_record import BlockValues
     from verity_vllm.engine import served_seed
 
     engine = llm.vllm.llm_engine
     seed_hooks = served_seed.install(engine)
     by_id = {q["request_id"]: q for q in requests}
-    record = Record(known=by_id)
+    record = BlockValues(known=by_id)
     windows = Windows(com, record, out, window_steps)
     streamed: dict[str, list[int]] = {rid: [] for rid in by_id}
     finish: dict[str, dict[str, Any]] = {}
