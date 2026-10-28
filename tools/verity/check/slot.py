@@ -287,7 +287,7 @@ def reserve(slot: dict, now: datetime, priority: bool = False) -> str | None:
         return None
     gb = round(slot["mem"] * 2 ** 30 / 1e9, 1)                  # mem= is in GiB (`memory_gb`), research.mem's GB are 10^9 bytes
     path = RAMLOCK / f"check-{slot['name']}.json"
-    run_dir = os.environ.get("RESEARCH_RUN_DIR")
+    run_dir = research_run_dir()
     doc = {"owner": "check", "gb": gb, "started": f"{now:%Y-%m-%dT%H:%M:%SZ}", "pid": os.getpid(),
            "note": f"check slot {slot['name']}: {os.environ.get('RESEARCH_RUN_ID') or os.getcwd()}",
            **({"priority": True} if priority else {}), **({"run_id": os.environ.get("RESEARCH_RUN_ID"), "run_dir": run_dir} if run_dir else {})}
@@ -456,6 +456,11 @@ def describe(who: dict) -> str:
     return ", ".join(p for p in parts if p)
 
 
+def research_run_dir() -> str | None:
+    """The run dir of the `research run` this process runs in (RESEARCH_RUN_DIR), else None."""
+    return os.environ.get("RESEARCH_RUN_DIR")
+
+
 def _read(p: Path) -> dict:
     try:
         return json.loads(p.read_text() or "{}")
@@ -518,10 +523,7 @@ def defer_run(waited_s: float, line: str, run_dir: str | None) -> str | None:
     if not run_dir or waited_s <= 0:
         return None
     ctl = Path(run_dir) / RUN_TIMEOUT
-    try:
-        doc = json.loads(ctl.read_text() or "{}")
-    except (OSError, ValueError):
-        doc = {}
+    doc = _read(ctl)
     now = doc.get("timeout_s") if isinstance(doc, dict) else doc
     if not isinstance(now, (int, float)) or isinstance(now, bool):
         now = _read(Path(run_dir) / "status.json").get("timeout_s")
@@ -839,7 +841,7 @@ def main(argv: list[str], now=lambda: datetime.now(timezone.utc), sleep=time.sle
     me = asker(by, pair)
     ticket, tfd = join(SLOTS.parent, priority=priority, who=me, rank=rank)
     told, joined, peeked = None, now(), None
-    run_dir = os.environ.get("RESEARCH_RUN_DIR")
+    run_dir = research_run_dir()
     since = {"since": f"{joined:%Y-%m-%dT%H:%M:%SZ}", **({"priority": True} if priority else {}), **({"twin": pair} if pair else {}),
              **({"rank": rank} if rank is not None else {})}
     record_slot(run_dir, {"state": "waiting", **since})

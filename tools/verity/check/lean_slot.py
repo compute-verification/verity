@@ -193,7 +193,7 @@ def wait(pool: str, by: str | None = None, now=lambda: datetime.now(timezone.utc
     os.replace(tmp, path)
     log(f"lean-slot: Lean audit slot {name}/{i} of {n} ({SLOTS})")
     if slept and (moved := SLOT.defer_run(round(mono() - began, 3), f"lean-slot: the line for pool {name}",
-                                          os.environ.get("RESEARCH_RUN_DIR"))):
+                                          SLOT.research_run_dir())):
         log(moved)
     return name, i, fd
 
