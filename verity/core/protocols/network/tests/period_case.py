@@ -5,7 +5,8 @@ that runs it: its mirror, `answer` (as `reference`), and its cases, `build` and 
 (`verity_difftest.protocol.answer`): it decodes the protocol's formats (`NetworkCheck/Period.lean`'s module docstring)
 and checks a period with the Python the period's pieces already have: one-stage's answers and integrity profiles as PoUW
 reads them (`pouw.core_check.answer_of` and `integrity`), the network certifier's certificates and clock certificates
-under its LMS key (`certifier.certificate`), Σ_sync (`certifier.schedule`), `registration.digest`, and in the rows form
+under its LMS key (`certifier.certificate`), Σ_sync (`certifier.schedule`), one-stage's `registration.digest` (a
+registration record is ASCII-only, where its canonical JSON is Lean's), and in the rows form
 the schedule (`warden.WardenParams`) and the verifier's read of each row registration
 (`warden_rows.check_registration`), and the scan's terms read off its Program's descriptor (`_scan`), as each compute
 audit's units and their committed bits are read off its own (`_audit`). Its verdict,
@@ -61,6 +62,7 @@ from verity.core.protocols.certifier.certificate import (SALT_BYTES, Certificate
 from verity.core.protocols.certifier.schedule import ClockSync, SyncSet
 from verity.core.protocols.certifier.warden import WardenParams
 from verity.core.protocols.pouw import core_check as CC
+from verity.core.protocols.sampled_proofs.one_stage import registration as R
 from verity.core.protocols.sampled_proofs.one_stage.draw import stratum_k
 from verity.ml.circuits import boolean as BL, codec, metadata as AN, population
 from verity.ml.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
@@ -74,8 +76,8 @@ from verity.ml.definitions.registry.sampling import bit_at
 
 ID = "verity/certifier/v0"
 COMMITMENT_TAG = "verity-network-certifier/period/v0"
-ONE_STAGE = "verity/sampled-proofs/one-stage/v1"
-FORMATS = ("verity/registration/v1", "verity/registration/v2")
+ONE_STAGE = R.PROTOCOL
+FORMATS = (R.FORMAT, R.FORMAT_V2)
 #: a proof unit's public outputs are at most 16 bits (the values it commits can be wider)
 OUT_BITS = 16
 UNIT = "unit"
@@ -159,15 +161,10 @@ class Scan:
 
 
 @dataclasses.dataclass(frozen=True)
-class Registration:
-    record: dict
-    digest: bytes
-
-
-@dataclasses.dataclass(frozen=True)
 class Commitment:
-    audits: list[Registration]
-    windows: list[Registration]
+    """One-stage's registration records of the audits and the link-windows, as they decode."""
+    audits: list[dict]
+    windows: list[dict]
     bytes: bytes
 
 
@@ -594,17 +591,12 @@ def params(j) -> Params:
                   schedule, scan)
 
 
-def registration_digest(record: dict) -> bytes:
-    """`registration.digest`: SHA-512(format ‖ 0 ‖ the canonical record)."""
-    return hashlib.sha512(record["format"].encode() + b"\0" + D.canonical(record).encode()).digest()
-
-
-def _registration(j, ctx: str) -> Registration:
+def _registration(j, ctx: str) -> dict:
     if not isinstance(j, dict) or not isinstance(j.get("format"), str):
         raise D.Reject(f"{ctx}: no format")
     if j["format"] not in FORMATS:
         raise D.Reject(f"{ctx}: format is not {' or '.join(FORMATS)}")
-    return Registration(j, registration_digest(j))
+    return j
 
 
 def commitment(b: bytes) -> Commitment:
@@ -697,10 +689,10 @@ def clear_clocks(ss: SyncSet) -> set[bytes]:
     return {d for d in (_clock_digest(ClockSync(x, rho)) for x in ss.deltas for rho in ss.rhos) if d is not None}
 
 
-def _answered(what: str, reg: Registration, a: dict) -> tuple[dict, object]:
+def _answered(what: str, reg: dict, a: dict) -> tuple[dict, object]:
     if a["protocol"] != ONE_STAGE:
         raise Finding(REJECT, f"{what}: protocol {a['protocol']}")
-    if a["commitment"] != reg.digest.hex():
+    if a["commitment"] != R.digest(reg):
         raise Finding(REJECT, f"{what}: the answer is for another registration")
     if a["verdict"] == ACCEPT:
         try:
@@ -714,12 +706,12 @@ def served(w: int) -> dict:
     return {"kind": "served", "window": w}
 
 
-def _window_check(p: Params, clear: set[bytes], earlier: list[bytes], w: int, reg: Registration, x: Window) -> None:
+def _window_check(p: Params, clear: set[bytes], earlier: list[bytes], w: int, reg: dict, x: Window) -> None:
     what = f"window {w}"
     if x.clock is None:
         raise Finding(REJECT, f"{what}: registrations, not a clock certificate")
-    if not (reg.record.get("program") == p.program
-            and D.canonical(reg.record.get("window")) == D.canonical(served(w))):
+    if not (reg.get("program") == p.program
+            and D.canonical(reg.get("window")) == D.canonical(served(w))):
         raise Finding(REJECT, f"{what}: registration")
     if not (len(x.certificates) == 2
             and all(_certifies(p, d, w, c) for c, d in zip(x.certificates, (EGRESS, INGRESS)))):
@@ -744,9 +736,9 @@ def _rows_check(p: Params, w: int, d: Direction, doc: dict) -> None:
         raise Finding(REJECT, f"window {w}: the {d.value} rows: {e}") from None
 
 
-def _holds(reg: Registration, doc: dict) -> bool:
+def _holds(reg: dict, doc: dict) -> bool:
     """The scan's registration holds the rows: an entry of its `roots` or `registered` names their root and domain."""
-    entries = [e for k in ("roots", "registered") if isinstance(reg.record.get(k), list) for e in reg.record[k]]
+    entries = [e for k in ("roots", "registered") if isinstance(reg.get(k), list) for e in reg[k]]
     return any(isinstance(e, dict) and e.get("root") == doc["root"] and e.get("domain") == doc["domain"]
                for e in entries)
 
@@ -783,42 +775,42 @@ def _entries(j: dict, k: str) -> list[dict]:
     return [e for e in v if isinstance(e, dict)] if isinstance(v, list) else []
 
 
-def _prog(reg: Registration) -> list[dict]:
+def _prog(reg: dict) -> list[dict]:
     """The scan's registration's `scan/prog` entries (`PROG`) whose root and domain are strings."""
-    return [e for e in [*(e for e in _entries(reg.record, "roots") if e.get("port") == PROG),
-                        *(e for e in _entries(reg.record, "registered") if e.get("value") == PROG)]
+    return [e for e in [*(e for e in _entries(reg, "roots") if e.get("port") == PROG),
+                        *(e for e in _entries(reg, "registered") if e.get("value") == PROG)]
             if isinstance(e.get("root"), str) and isinstance(e.get("domain"), str)]
 
 
-def _tied_audits(audits: list[Registration], reg: Registration) -> list[int]:
+def _tied_audits(audits: list[dict], reg: dict) -> list[int]:
     """`tiedAudits`: the audits, by index, whose registration's `roots` has an output port's or an entries port's entry
     (`output_port`, `entries_port_name`) at the root and domain of the scan's registration's `scan/prog` entry
     (`PROG`)."""
     return [i for i, a in enumerate(audits)
             if any(any((output_port(q := o.get("port")) or entries_port_name(q)) and o.get("root") == e["root"]
-                       and o.get("domain") == e["domain"] for o in _entries(a.record, "roots"))
+                       and o.get("domain") == e["domain"] for o in _entries(a, "roots"))
                    for e in _prog(reg))]
 
 
-def _wired(p: Params, audits: list[Registration], reg: Registration) -> bool:
+def _wired(p: Params, audits: list[dict], reg: dict) -> bool:
     """`wired`: the scan's `scan/prog` entry is at the root and domain of an audit's entries port (`entries_port`) of
     a `SlotEntry_v1` template of that audit's own Program (`Audit.entries`), a pinned Definition (its closure digest
     one of `SLOT_ENTRY_PINS`), with one member a slot of the window."""
     s = p.schedule
     return any(n == s.window // s.every * s.lanes and d in SLOT_ENTRY_PINS
                and any(o.get("port") == entries_port(k) and o.get("root") == e["root"]
-                       and o.get("domain") == e["domain"] for e in _prog(reg) for o in _entries(r.record, "roots"))
+                       and o.get("domain") == e["domain"] for e in _prog(reg) for o in _entries(r, "roots"))
                for a, r in zip(p.audits, audits) for k, n, d in a.entries)
 
 
-def _states(reg: Registration) -> list[dict]:
+def _states(reg: dict) -> list[dict]:
     """`stateEntries`: a registration's `roots` entries whose port is `STATE` and `registered` entries whose value is
     `SCAN_STATE`."""
-    return [*(e for e in _entries(reg.record, "roots") if e.get("port") == STATE),
-            *(e for e in _entries(reg.record, "registered") if e.get("value") == SCAN_STATE)]
+    return [*(e for e in _entries(reg, "roots") if e.get("port") == STATE),
+            *(e for e in _entries(reg, "registered") if e.get("value") == SCAN_STATE)]
 
 
-def _state_tied(p: Params, audits: list[Registration], reg: Registration) -> bool:
+def _state_tied(p: Params, audits: list[dict], reg: dict) -> bool:
     """`stateTied`: the scan's registration has a state entry (`_states`), every one at one root and domain, both
     strings, and an audit wired to its `prog` (`_wired`) has one, every one at that root and domain."""
     es = _states(reg)
@@ -833,12 +825,12 @@ def _state_tied(p: Params, audits: list[Registration], reg: Registration) -> boo
         for a, r in zip(p.audits, audits))
 
 
-def _prog_tied(audits: list[Registration], reg: Registration) -> bool:
+def _prog_tied(audits: list[dict], reg: dict) -> bool:
     """`progTied`: some audit is tied to the scan's `prog` (`_tied_audits`)."""
     return bool(_tied_audits(audits, reg))
 
 
-def _tied_in(audits: list[Registration], windows: list[Registration], i: int) -> bool:
+def _tied_in(audits: list[dict], windows: list[dict], i: int) -> bool:
     """`tiedIn`: some link-window's `prog` is audit `i`'s output (`_tied_audits`)."""
     return any(i in _tied_audits(audits, reg) for reg in windows)
 
@@ -848,14 +840,14 @@ def records(link: str) -> tuple[tuple[str, Direction], ...]:
     return (link, INGRESS), (link, EGRESS), (f"{link}-fails", EGRESS)
 
 
-def _rows_window_check(p: Params, audits: list[Registration], w: int, reg: Registration,
+def _rows_window_check(p: Params, audits: list[dict], w: int, reg: dict,
                        x: Window) -> tuple[Facts, int]:
     """`rowsWindowCheck`: on acceptance the scan's facts and its tied audits' free inputs, the parameters' `free` of
     each audit its `prog` is an output of (`_tied_audits`)."""
     what = f"window {w}"
     if x.registrations is None:
         raise Finding(REJECT, f"{what}: a clock certificate, not registrations")
-    if reg.record.get("program") != p.program:
+    if reg.get("program") != p.program:
         raise Finding(REJECT, f"{what}: registration")
     if not (len(x.certificates) == 3
             and all(_certifies_on(p, link, d, w, c) for c, (link, d) in zip(x.certificates, records(p.link)))):
@@ -894,11 +886,11 @@ def _facts(what: str, prof: dict, pub) -> Facts:
     return Facts(lv["size"], drawn, prof["delta"], bound)
 
 
-def _audit_check(i: int, audit: Audit, reg: Registration, a: dict, tied: bool = False) -> Facts:
+def _audit_check(i: int, audit: Audit, reg: dict, a: dict, tied: bool = False) -> Facts:
     """`auditCheck`: the registration names the audit's Program, the answer's units are the Program's, and one tied to
     a link-window's scan (`_tied_in`, in the rows form) has every unit drawn."""
     what = f"audit {i}"
-    if reg.record.get("program") != audit.program:
+    if reg.get("program") != audit.program:
         raise Finding(REJECT, f"{what}: registration: not its Program")
     prof, pub = _answered(what, reg, a)
     f = _facts(what, prof, pub)
@@ -1381,8 +1373,7 @@ def build(m: str, seed: int, small: bool = False) -> dict:
     key = _key(ki)
     N, W, H, toy = KEYS[ki]
     session = r.randbytes(lms.SESSION_BYTES)
-    # the rows form binds the link in its domain's canonical JSON, whose strings are ASCII without DEL
-    link = r.choice(["eth0", "a", "d-e" if rows else "dé"])
+    link = r.choice(["eth0", "a", "eth-1"])
     program = hashlib.sha512(b"link program %d" % r.randrange(3)).hexdigest()
     least_windows = 2 if m in ("undecided-and-reject", "clock-reused", "delta") else 1
     least_audits = 2 if m == "state-untied" else \
@@ -1529,7 +1520,7 @@ def build(m: str, seed: int, small: bool = False) -> dict:
                "protocol": ONE_STAGE, where: entries, "window": {"kind": "stand-in", "window": w}}
         if aimed and m == "program":
             rec["program"] = r.choice([hashlib.sha512(b"another program").hexdigest(), program.upper(), None])
-        digest = registration_digest(rec)
+        digest = bytes.fromhex(R.digest(rec))
         answer = _accepted(digest, program, rec["partition"], units, k,
                            r.choice([d for d in DELTAS if d != delta]) if aimed and m == "delta" else delta,
                            r.randint(0, units), strata)
@@ -1537,7 +1528,7 @@ def build(m: str, seed: int, small: bool = False) -> dict:
             if m == "answer-protocol":
                 answer["protocol"] = "verity/sampled-proofs/two-stage/v1"
             elif m == "answer-other":
-                answer["commitment"] = r.choice([r.randbytes(64), registration_digest(rec | {"population": 1})]).hex()
+                answer["commitment"] = r.choice([r.randbytes(64).hex(), R.digest(rec | {"population": 1})])
             elif m == "answer-reject":
                 answer = _refused(answer, REJECT)
             elif m in ("answer-undecided", "undecided-and-reject"):
@@ -1562,7 +1553,7 @@ def build(m: str, seed: int, small: bool = False) -> dict:
             rec["program"] = r.choice([hashlib.sha512(b"another program").hexdigest(), program.upper(), None])
         elif aimed and m == "provenance":
             rec["window"] = r.choice([served(w + 1), {"kind": "batch", "window": w}, served(w) | {"run": 0}, None])
-        digest = registration_digest(rec)
+        digest = bytes.fromhex(R.digest(rec))
         egress = sign(link, EGRESS, w, r.randbytes(64))
         ingress = sign(link, INGRESS, w, r.randbytes(64))
         clock = sign(link, EGRESS, w, clock_commitment(r.randbytes(SALT_BYTES), sync))
@@ -1599,7 +1590,7 @@ def build(m: str, seed: int, small: bool = False) -> dict:
             elif m == "answer-protocol":
                 answer["protocol"] = "verity/sampled-proofs/two-stage/v1"
             elif m == "answer-other":
-                answer["commitment"] = r.choice([r.randbytes(64), registration_digest(rec | {"population": 2})]).hex()
+                answer["commitment"] = r.choice([r.randbytes(64).hex(), R.digest(rec | {"population": 2})])
             elif m == "answer-reject":
                 answer = _refused(answer, REJECT)
             elif m in ("answer-undecided", "undecided-and-reject"):
@@ -1663,7 +1654,7 @@ def build(m: str, seed: int, small: bool = False) -> dict:
             else:
                 desc = json.loads(audit_descriptor(((n_prog, r.choice([o for o in UNIT_BYTES if o != outs[0]])),),
                                                    entries, renamed))
-        digest = registration_digest(rec)
+        digest = bytes.fromhex(R.digest(rec))
         answer = _accepted(digest, prog, rec["partition"], units, k, r.choice(["1/100", "1/1000000", "1/10"]),
                            r.randint(0, units), strata)
         if i == a:
