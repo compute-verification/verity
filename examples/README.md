@@ -11,7 +11,7 @@ or `run.sh`.
 Remote Verity (`verity/remote/v0`, `Core.Remote` in `verity/core/protocols/remote/CoreRemote.lean`) is what the verifier
 establishes with no hardware of its own at the prover's site. It composes three protocols (`Core.Remote.components`):
 
-- integrity, by sampled proofs' one-stage audit (`verity/sampled-proofs/one-stage/v1`): the prover commits every value of
+- integrity, by sampled proofs' one-stage audit (`verity/sampled-proofs/one-stage/v2`): the prover commits every value of
   a served window under hiding leaves, a live coin from the challenger draws proof blocks, the prover proves each drawn
   block in C-Flock `--zk`, and the Lean verifier checks each proof against the committed roots;
 - work, by PoUW's window check (`verity/pouw/v1`): the GPU's time is credited to useful matmuls through receipts the live
@@ -19,8 +19,9 @@ establishes with no hardware of its own at the prover's site. It composes three 
 - the inference-only policy (`verity/inference-only/v0`): the declared circuit divides into inference blocks within
   their gate and fresh-input budgets, checked from the declared circuit and the registered information alone.
 
-Remote accepts only when all three accept over one commitment that binds them; any one's rejection rejects it, whatever
-the others answer. It rests on live coins (drawn after the commitment, never redrawn) and on what each component's own
+Remote accepts only when all three accept over one commitment that binds them, each having committed to the same record
+(`Core.Composition.same`); any one's rejection rejects it, whatever the others answer. It rests on live coins (drawn after
+the commitment, never redrawn) and on what each component's own
 guarantee assumes; each component states its guarantee in `Security/`, and the composite states none of its own in Lean
 yet, so no example's `proof` is past `none`. Its verifier, `remote check`, has no run of record yet; its first is due
 Wed 28 Oct, 11 AM PDT. `lifecycle/` is the only example that steps through the whole remote composite, on CPU with a
@@ -85,8 +86,8 @@ checks are `tools/verity/cli/verity_cli/examples.py`'s; a new role goes in its `
   the H200 to its drawn blocks proved. In its run of record, 8 proof blocks drawn by one live coin are each proved by
   C-Flock `--zk` and accepted by the Lean verifier, and a flipped bit is refused. It is not `placed`: the Lean verifier ran
   on a CPU node beside the prover. It claims only sampled proofs: PoUS and network certification (onsite's
-  subprotocols), and the bandwidth audit over PoUS's store and the memory wipe (neither composite's yet), exist here as
-  a skeleton on fixture coins, not as runs, and nothing claims them.
+  subprotocols), the memory wipe (onsite's) and the bandwidth audit over PoUS's store (neither composite's yet), exist
+  here as a skeleton on fixture coins, not as runs, and nothing claims them.
 - `dither_full_util/` (`run` `moved`, `proof` `none`): the remote protocol's PoUW half, as PoUW's work unit. The H200 at
   full utilization on useful s8 GEMMs, credited by PoUW over Dither's no-fold receipt. It has no runner and no run of
   record, so `verity example dither_full_util` runs nothing yet, and it is not a remote run.

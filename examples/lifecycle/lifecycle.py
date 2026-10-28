@@ -45,10 +45,13 @@ from typing import Any
 import numpy as np
 
 from verity.core.deploy.party import Finish, Identity, Received, Record, Send, Timer
+from verity.core.protocols.pous import wipe_period
+from verity.core.protocols.pouw import period_check
 from verity.core.protocols.pouw import window as pouw_window_rules
+from verity.core.protocols.sampled_proofs import parties
 from verity.core.protocols.sampled_proofs.coins import OwnRandomness, draw_first
 from verity.core.protocols.sampled_proofs.one_stage import registered as R
-from verity.core.protocols.sampled_proofs.parties import IDS
+from verity.core.protocols.sampled_proofs.one_stage.proofs import V2
 from verity.core.wire import Body, Int, Message, Schema
 from verity.ml.circuits import boolean as BL
 from verity.ml.circuits import codec
@@ -886,6 +889,16 @@ def frame_commitment(data: bytes, salt: bytes) -> str:
     return hashlib.sha512(b"lifecycle/frame/v1\0" + salt + data).hexdigest()
 
 
+IDS = {**parties.IDS, "sampled-proofs": V2, "pouw-period": period_check.ID, "wipe": wipe_period.PROTOCOL}
+"""Each subprotocol's id as the composites run it (`products`): integrity is one-stage v2 (`SampledProofs.OneStageZk`) in
+both, onsite's work is PoUW's period, and onsite's memory challenger also runs a wipe."""
+
+
+def label(seed: str, i: int) -> str:
+    """Label i of the wipe stand-in's fill: SHA-512 over the memory challenger's seed and i, its first 8 bytes."""
+    return hashlib.sha512(b"lifecycle/wipe/v1\0" + bytes.fromhex(seed) + i.to_bytes(4, "big")).hexdigest()[:16]
+
+
 def answer(protocol: str, verdict: str, commitment: str | None, reason: str | None = None,
            public: Any = None, profile: Any = None) -> dict[str, Any]:
     """`Core.Protocol`'s outcome (`verity/core/protocols/interface`): public outputs and a profile on acceptance only."""
@@ -904,17 +917,19 @@ def sampled_proofs(d: Declaration, blk: Block, units: Sequence[int], checks: Map
                   {"law": law, "population": blk.n, "delta": str(DELTA)})
 
 
-def pouw_window(sp: Mapping[str, Any], blk: Block) -> dict[str, Any]:
+def pouw_window(sp: Mapping[str, Any], blk: Block, protocol: str = IDS["pouw"]) -> dict[str, Any]:
     """PoUW's window check over sampled proofs' answer: sampled proofs accepted the declaration's registration, at
-    subset:K' over the grid's n units; it publishes the credited work at ε and δ."""
+    subset:K' over the grid's n units; it publishes the credited work at ε and δ. Remote's work is the window's
+    (`verity/pouw/v1`); onsite's is PoUW's period (`verity/pouw/period/v1`), answered here a declaration at a time, over
+    its one window."""
     work = pouw_window_rules.bucket(blk.real)
     if sp["verdict"] != "accept":
-        return answer(IDS["pouw"], sp["verdict"], sp["commitment"], "sampled proofs did not accept the window")
+        return answer(protocol, sp["verdict"], sp["commitment"], "sampled proofs did not accept the window")
     d = sp["public"]["draw"]
     if (d["law"], d["k"], d["population"]) != ("subset", draw_size(blk), work.n):
-        return answer(IDS["pouw"], "reject", sp["commitment"], "the draw is not subset:K' over the window's grid")
-    return answer(IDS["pouw"], "accept", sp["commitment"], public={"work": work.credited * MACS, "tiles": work.credited,
-                                                                   "eps": str(EPS), "delta": str(DELTA)})
+        return answer(protocol, "reject", sp["commitment"], "the draw is not subset:K' over the window's grid")
+    return answer(protocol, "accept", sp["commitment"], public={"work": work.credited * MACS, "tiles": work.credited,
+                                                                "eps": str(EPS), "delta": str(DELTA)})
 
 
 GAMMA, ALPHA = 1 << 15, Fraction(1, 256)
@@ -992,17 +1007,20 @@ def products() -> dict[str, tuple[str, tuple[str, ...]]]:
 
 def compose(protocol: str, answers: Mapping[str, Mapping[str, Any]]) -> dict[str, Any]:
     """A declaration's composite verdict: the composition's rule over exactly the product's subprotocols (any reject
-    rejects, then any undecided leaves it undecided), and its commitment the binding of their digests
+    rejects, then any undecided leaves it undecided), after its record tie (`Core.Composition.same`: the subprotocols it
+    ties committed to one record, or it rejects), and its commitment the binding of their digests
     (`Core.Composition.bind`)."""
     ref = _reference()
     pid, ids = products()[protocol]
     missing = [i for i in ids if i not in answers]
     verdicts = [answers[i]["verdict"] if i in answers else "undecided" for i in ids]
-    rule = ref.verdict(verdicts)
+    stray = {"onsite": ref.ONSITE, "remote": ref.REMOTE}[protocol].strays([(i, answers[i]) for i in ids if i in answers])
+    rule = "reject" if stray else ref.verdict(verdicts)
     digests = [(i, bytes.fromhex(answers[i]["commitment"])) for i in ids if i in answers and answers[i]["commitment"]]
     bound = ref.bind(pid, digests).hex() if len(digests) == len(ids) else None
-    reason = " | ".join(f"{i}: {answers[i]['reason']}" for i in ids if i in answers and answers[i]["verdict"] == "reject"
-                        ) or (f"no answer from {missing}" if missing else None)
+    reason = stray or " | ".join(f"{i}: {answers[i]['reason']}" for i in ids
+                                 if i in answers and answers[i]["verdict"] == "reject"
+                                 ) or (f"no answer from {missing}" if missing else None)
     return {"product": pid, "verdict": rule, "commitment": bound, "reason": None if rule == "accept" else reason,
             "components": {i: v for i, v in zip(ids, verdicts)}}
 
@@ -1133,6 +1151,7 @@ class Developer:
         self.blocks: list[Declared] = []
         self.pending: list[list[int]] = []
         self.held: list[Send] = []
+        self.fill: list[str] = []
         return [Send("coins", Message("CoinsDraw", {"n": 64}))]
 
     def on(self, r: Received) -> list[Any]:
@@ -1166,11 +1185,16 @@ class Developer:
             out = self._serve_and_declare(xs)
             self.blocks[-1].frames = {int(i): f for i, f in body(m)["frames"].items()}
             return out
+        if m.type == "Fill":
+            f = body(m)
+            self.fill = ["00" * 8] * f["n"] if self.cheat == "foreign" else [label(f["seed"], i) for i in range(f["n"])]
+            return []
         if m.type == "Challenge":
             rows = [opening(self.private.theta, i) for i in body(m)["rows"]]
             if self.cheat == "lost-theta":
                 rows[0] = {**rows[0], "row": [(c + 1) & 0xFF for c in rows[0]["row"]]}
-            reply = Send(CHALLENGER, msg("Answer", m.fields["k"], {"rows": rows}))
+            labels = [self.fill[i] for i in body(m)["reads"]]
+            reply = Send(CHALLENGER, msg("Answer", m.fields["k"], {"rows": rows, "labels": labels}))
             if self.cheat == "off-node":
                 self.held.append(reply)
                 return [Timer(r.at + OFF_NODE_TICKS)]
@@ -1256,6 +1280,9 @@ class Verifier:
     after the commitment; checks the drawn proof blocks' proofs; runs PoUW's window check; composes each declaration's verdict
     with the subprotocols the composite lists (onsite: network certification and the memory challenger's report); and
     accounts for the monitoring period. Its outcome is every phase's public output."""
+
+    work = IDS["pouw"]
+    """The composite's PoUW component, which answers the window check."""
 
     def start(self, params: Mapping[str, Any], identity: Identity) -> list[Any]:
         self.protocol, self.total = params["protocol"], params["declarations"]
@@ -1355,7 +1382,7 @@ class Verifier:
 
     def answers(self, k: int, checks: Mapping[int, Mapping[str, Any]]) -> dict[str, dict[str, Any]]:
         """The subprotocols' answers for declaration k beyond sampled proofs, PoUW and the inference-only policy (onsite:
-        the certifier, PoUS and the bandwidth audit)."""
+        the certifier, PoUS, the bandwidth audit and the wipe)."""
         return {}
 
     def _advance(self) -> list[Any]:
@@ -1372,7 +1399,8 @@ class Verifier:
         checks = {u: verify(self.statement(k, u), proofs.get(str(u), {})) for u in self.draws[k]}
         dk = Declaration(k, d["advice"], d["record"])
         sp = sampled_proofs(dk, blk, self.draws[k], checks)
-        answers = {sp["protocol"]: sp, IDS["pouw"]: pouw_window(sp, blk), IDS["inference-only"]: inference_only(dk, blk),
+        answers = {sp["protocol"]: sp, self.work: pouw_window(sp, blk, self.work),
+                   IDS["inference-only"]: inference_only(dk, blk),
                    **self.answers(k, checks)}
         line = {"k": k, "record": d["digest"], "advice": d["advice"], "advice_bits": len(d["advice"]),
                 "layout": d["record"]["placement"]["layout"], "placement": d["record"]["placement"]["units"],
@@ -1425,9 +1453,10 @@ CHEATS = ("hardware", "builder", "placement", "unreported", "advice-cap", "recom
 """Each way the developer deviates in the tests, by the phase that refuses it: hardware registration (`hardware`: a later
 entry names a device again), registration (`builder`), operation (`placement`: B places a unit on a device before its
 registration; `unreported`), declaration (`advice-cap`, `recommit`), audit (`wrong-value`) and accounting (`fork`)."""
-ONSITE_CHEATS = ("io-mismatch", "lost-theta", "off-node")
+ONSITE_CHEATS = ("io-mismatch", "lost-theta", "off-node", "foreign")
 """The deviations only an onsite composite's own devices see: the wire carrying other outputs than the committed ones,
-answering the memory challenger with a row that isn't theta's, and fetching theta from off the node."""
+answering the memory challenger with a row that isn't theta's, fetching theta from off the node, and keeping other
+content where the memory challenger's fill should be."""
 OFF_NODE_TICKS = 3_000_000
 """`off-node`: the round trip to where a developer that doesn't hold theta on the node keeps it."""
 

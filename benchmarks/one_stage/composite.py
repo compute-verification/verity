@@ -129,11 +129,12 @@ def missing(product: str, pieces: Sequence[dict[str, Any]]) -> list[str]:
 
 def outcome(id: str, answer: str | None) -> dict[str, str]:
     """What of a Lean answer line is public: ``{"id", "verdict"}`` (``none`` when there is no answer), and ``refusal``,
-    the name of the reason a verdict other than accept gives (``refused`` when that is not a short name)."""
+    the name of the reason a verdict other than accept gives (``refused`` when that is not a short name, ``unparsed``
+    when the line isn't JSON)."""
     try:
         a = json.loads(answer) if answer else {}
     except ValueError:
-        a = {}
+        return {"id": id, "verdict": "none", "refusal": "unparsed"}
     a = a if isinstance(a, dict) else {}
     out = {"id": id, "verdict": a["verdict"] if a.get("verdict") in VERDICTS else "none"}
     reason = a.get("reason")

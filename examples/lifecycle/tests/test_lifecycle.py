@@ -14,8 +14,7 @@ import numpy as np
 import onsite
 import pytest
 import remote
-
-from verity.core.protocols.sampled_proofs.parties import IDS
+from lifecycle import IDS
 
 MODS = {"onsite": onsite, "remote": remote}
 
@@ -25,7 +24,7 @@ REFUSED = {"hardware": ("duplicate-id", "hardware registration"), "builder": ("b
 """Deviations the verifier refuses, ending the run: the refusal's name and the phase whose check it breaks."""
 REJECTED = {"wrong-value": (("onsite", "remote"), 2, "sampled-proofs"), "unreported": (("onsite",), 2, "certifier"),
             "io-mismatch": (("onsite",), 2, "certifier"), "lost-theta": (("onsite",), 1, "pous"),
-            "off-node": (("onsite",), 1, "bandwidth")}
+            "off-node": (("onsite",), 1, "bandwidth"), "foreign": (("onsite",), 1, "wipe")}
 """Deviations a component rejects: the composites they reach, the first declaration they touch, and the component."""
 
 
@@ -199,11 +198,15 @@ def test_inference_only_policy() -> None:
         assert out["failure"] == [0, "size" if gamma < L.GAMMA else "nci"], out
     wrong = L.inference_only(L.Declaration(1, line["advice"], {"circuit": "00" * 64}), blk)
     assert wrong["verdict"] == "reject" and wrong["reason"] == "the record does not name the declared circuit"
+    other = {**a, "commitment": L.Declaration(1, line["advice"], {"circuit": blk.program, "prev": "00"}).digest}
+    assert other["commitment"] != a["commitment"]
     for protocol in MODS:
         _, ids = L.products()[protocol]
         assert IDS["inference-only"] in ids
         rejected = L.compose(protocol, {i: (a if i != IDS["inference-only"] else wrong) for i in ids})
         assert rejected["verdict"] == "reject" and IDS["inference-only"] in rejected["reason"]
+        tied = L.compose(protocol, {i: (a if i != IDS["inference-only"] else other) for i in ids})
+        assert tied["verdict"] == "reject" and tied["reason"].startswith(f"record: {IDS['inference-only']} committed ")
 
 
 def test_remote_unreported_is_uncredited() -> None:
