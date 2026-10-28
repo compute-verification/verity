@@ -1,6 +1,6 @@
 """The Lean card tables agree with the card files, number by number.
 
-Each card file names its Lean table (``lean``). Its ``clock`` and ``card`` definitions are evaluated as exact rationals
+A GPU card file names its Lean table (``lean``). Its ``clock`` and ``card`` definitions are evaluated as exact rationals
 (``^`` a power, ``/`` exact, and a natural-number field refused where Lean's division would truncate) and each arm is
 compared with what the card file gives, for every store, resource and format the ACCEL ops are priced in
 (``Security/Definitions/Core/Accel/Isa.lean``): a constructor added there fails here until the card files carry it.
@@ -20,6 +20,7 @@ from verity.hardware import load, skus
 
 ROOT = Path(__file__).resolve().parents[3]
 ISA = ROOT / "Security/Definitions/Core/Accel/Isa.lean"
+LEAN = [sku for sku in skus("gpu") if "lean" in load(sku)]
 WORD = 4  # bytes in a 32-bit word, the unit of every store and of device memory's rate
 OPS = {ast.Add: operator.add, ast.Sub: operator.sub, ast.Mult: operator.mul, ast.Div: operator.truediv}
 
@@ -116,7 +117,7 @@ def disagreements(card: dict, text: str) -> list[str]:
     return out
 
 
-@pytest.mark.parametrize("sku", skus())
+@pytest.mark.parametrize("sku", LEAN)
 def test_lean_table_agrees_with_the_card_file(sku: str) -> None:
     card = load(sku)
     found = disagreements(card, (ROOT / card["lean"]).read_text(encoding="utf-8"))
