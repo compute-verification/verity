@@ -4,7 +4,7 @@ size, unsigned, under one adversarial edit (`wipe_cases.MUTATIONS`), one JSON ed
 session; and `wipe-protocol serve` under S1's LMS on each named wipe (`wipe_protocol_case.EXPECT`): an honest one, a
 segment certified at `StreamedWipeMeetsReads`' threshold at `k = 2152` and one at `k = 5231` with memory past the fill, a
 prover keeping one label past the threshold of foreign content, a late read and a session never signed, each with the
-verdict it is aimed at."""
+verdict it is aimed at; and a commitment of no reads, refused by both as they decode it."""
 
 from __future__ import annotations
 
@@ -114,6 +114,18 @@ def test_the_named_wipes(deployed_server):
     assert seen["untrusted"]["reason"] == "the session is signed by a key that is not a trusted memory challenger's"
     assert seen["tampered"]["reason"] == "the signature does not verify"
     assert seen["commitment"]["commitment"] is None and seen["evidence"]["commitment"] is not None
+
+
+def test_a_wipe_of_no_reads_is_refused_as_it_decodes(deployed_server):
+    """A commitment of `k = 0` timed reads, which `gaps` would leave uncertified, never reaches the check: the Lean and
+    the Python refuse it as they decode it, before its digest."""
+    port = deployed_port(st.none())
+    c = C.build("honest")
+    c["commitment"] = D.canonical(json.loads(bytes.fromhex(c["commitment"])) | {"k": 0}).encode().hex()
+    lean = D.replay(port, c, deployed_server)
+    assert port.key(lean) == port.key(port.python(c)), lean
+    for a in (json.loads(lean[1]), C.answer(c)):
+        assert (a["verdict"], a["commitment"]) == ("reject", None) and "1 <= batch <= k" in a["reason"], a
 
 
 def test_each_kind_gets_its_verdict(deployed_server):
