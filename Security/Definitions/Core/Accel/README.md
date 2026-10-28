@@ -11,14 +11,14 @@ Sources:
   10.0 to 12.0, sm_120 among them).
 - **PTX**: PTX ISA 9.0.
 - **Sheet**: the machine model's device sheets for sm_90 and sm_100.
-- **Census**: the DS-120 and DC-90 SASS census.
+- **Census**: the sm_120 and sm_90 SASS census (`benchmarks/pouw/sass_census/`).
 
 Marks:
 - **covered**: the same semantics at the same or fewer units;
 - **coarse**: a model opcode that does at least as much, at no more units;
 - **over-approximated**: an exact integer version at the unit's rate and in its register layout. It equals the unit on
   its format's exact integers once the card's float codes are read as those integers (`Card.decode`, the encoding
-  `Assumptions.CardWithinAccel` refines up to, RT-LEAN-2 L30). Use out of that range is outside the claim on the contents where it occurs;
+  `Assumptions.CardWithinAccel` refines up to). Use out of that range is outside the claim on the contents where it occurs;
 - **missing**: not in the model.
 
 Where the two cards differ, a row says which. Otherwise it holds for both.
@@ -27,25 +27,25 @@ Where the two cards differ, a row says which. Otherwise it holds for both.
 
 | SASS | PTX | Mark | Model, or what is missing |
 |---|---|---|---|
-| IMMA.16816, IMMA.16832 (s8, u8, `.SAT`) | `mma.sync` m16n8k16/k32 | covered | `mma` s8/u8; dot pinned (`HOPPER_SM90_S8_K32`, `BLACKWELL_SM120_S8_M16N8K32`). On the H200 the tensor rate is `Open.sync` (CALIB) |
+| IMMA.16816, IMMA.16832 (s8, u8, `.SAT`) | `mma.sync` m16n8k16/k32 | covered | `mma` s8/u8; dot pinned (`HOPPER_SM90_S8_K32`, `BLACKWELL_SM120_S8_M16N8K32`). On the H200 the tensor rate is `Open.sync` until measured |
 | HMMA.16816 (f16, bf16), HMMA.1688 (tf32) | `mma.sync` | covered | `mma`. The bf16 dot is pinned; f16 and tf32 are `Open.dot`. On the H200 the rate is `Open.sync` |
 | HMMA with f16 accumulators | `mma.sync` `.f16` D | missing | f16 accumulators |
 | BMMA (b1 `.and.popc`, `.xor.popc`) | `mma.sync` `.b1` | coarse | `mma` b1 at `Open.b1` tensor units and an issue slot. `.xor.popc` is missing |
 | HGMMA, IGMMA, QGMMA, BGMMA (sm_90) | `wgmma.mma_async` | covered | `mma` at m = 64, A in registers or shared memory, B in shared memory, its operand words paying bank units (R2) |
-| QMMA.16832 (sm_120: e4m3, e5m2, e2m1) | `mma.sync` `kind::f8f6f4` | covered | `mma`. The E4M3 and E5M2 same-format K32 dots are pinned at every accumulator (`Sm120.f8Pipeline`, RT-MODEL M8); E2M1 and the mixed pairings are `Open.dot`. FP6 (e3m2, e2m3) is missing |
+| QMMA.16832 (sm_120: e4m3, e5m2, e2m1) | `mma.sync` `kind::f8f6f4` | covered | `mma`. The E4M3 and E5M2 same-format K32 dots are pinned at every accumulator (`Sm120.f8Pipeline`); E2M1 and the mixed pairings are `Open.dot`. FP6 (e3m2, e2m3) is missing |
 | OMMA.SF.16864 (sm_120: nvf4, mxf4) | `mma.sync` `kind::mxf4nvf4` `.block_scale` | covered | `mma` nvf4/mxf4. The dot is `Open.dot` (pinned in Python only) |
 | QMMA.SF (sm_120 `kind::mxf8f6f4`) | `mma.sync` `.block_scale` | missing | block-scaled FP8 and FP6 |
 | HMMA.SP, IMMA.SP, QMMA.SP, the sparse GMMA | `mma.sp`, `wgmma.mma_async.sp` | covered | `Op.mmaSp`: the kept pairs (each kept element of A with the element of B its 2-bit selector names) at the dense forms' tensor units a real product, so twice the logical rate; dots `Open.dotSp` under `AccelProductForm` |
 | OMMA.SP (sm_120) | `mma.sp` `kind::mxf4nvf4` | missing | block-scaled sparse FP4 |
 | DMMA (sm_90) | `mma.sync` `.f64` | over-approximated | `Op.dmma`: exact integer MMA on FP64's exact integers, on the tensor cores at 128 MACs an SM clock at 1980 MHz (32 units of `tensor` and `tensorLong` a MAC, as ALGO-COST A18 measured it beside `wgmma`, so it shares the low-precision formats' budget) |
-| DMMA (sm_120) | `mma.sync` `.f64` | over-approximated | `Op.dmma` at 32 MACs an SM clock; rate undocumented, CALIB measured 1.75 (r20261017-041103-d35d) |
+| DMMA (sm_120) | `mma.sync` `.f64` | over-approximated | `Op.dmma` at 32 MACs an SM clock; rate undocumented, measured at 1.75 |
 
 ## Integer and floating-point lanes
 
 | SASS | Mark | Model, or what is missing |
 |---|---|---|
-| IADD3, IMAD, IMAD.WIDE, LOP3, SHF, PRMT, POPC, FLO, BREV, ISETP, SEL, IMNMX, LEA | covered | `Lane` (`iadd3`, `mad`, `madWide` at two `imad` lanes (CPG Table 7 footnote 6, RT-UNITS U13), `lop3`, `shf`, `prmt`, `popc`, `flo`, `brev`, `setp`, `sel`, `min`, `max`, `lea`) |
-| IMAD.HI, LEA.HI | covered, semantics not captured | `Lane.madHi` (PTX `mad.hi`), `Lane.leaHi` (the high word of the funnel shift, plus `b`); added at FOLD-SAT's report (CMP-131); their SASS semantics are to capture, and FOLD-SAT's SMT models are to align |
+| IADD3, IMAD, IMAD.WIDE, LOP3, SHF, PRMT, POPC, FLO, BREV, ISETP, SEL, IMNMX, LEA | covered | `Lane` (`iadd3`, `mad`, `madWide` at two `imad` lanes (CPG Table 7 footnote 6), `lop3`, `shf`, `prmt`, `popc`, `flo`, `brev`, `setp`, `sel`, `min`, `max`, `lea`) |
+| IMAD.HI, LEA.HI | covered, semantics not captured | `Lane.madHi` (PTX `mad.hi`), `Lane.leaHi` (the high word of the funnel shift, plus `b`); their SASS semantics are to capture, and the fold's SMT models are to align with them |
 | IDP.4A (dp4a) | covered | `Lane.dp4a` |
 | IDP.2A (dp2a) | missing | |
 | IABS, BMSK, SGXT, IMUL.HI (`mul.hi`), ISCADD | missing | each is a short sequence of covered lanes, at more units |
@@ -74,7 +74,7 @@ Where the two cards differ, a row says which. Otherwise it holds for both.
 |---|---|---|
 | MOV | coarse | a register copy on the `alu` |
 | SHFL | covered | `Lane.shfl` on the shuffle pipe (`Res.shfl`, 32 lanes a SM-clock), beside the `alu` |
-| LDG, STG, LDS, STS, LDL, STL, LD, ST | covered | `copy` of at most 4 words, direct or `indirect` (an address register plus an offset); a load whose lanes read one address is `bcast`, its words read once (RT-MODEL M6(c)) |
+| LDG, STG, LDS, STS, LDL, STL, LD, ST | covered | `copy` of at most 4 words, direct or `indirect` (an address register plus an offset); a load whose lanes read one address is `bcast`, its words read once |
 | LDSM, STSM (`ldmatrix`, `stmatrix`) | coarse | 4-word copies. The `.trans` forms move 16-bit halves across lanes, which is missing |
 | MOVM (`movmatrix`) | missing | |
 | LDGSTS (`cp.async`) | coarse | a copy from device memory or L2 to shared memory, with no latency |
@@ -104,7 +104,7 @@ Where the two cards differ, a row says which. Otherwise it holds for both.
 ## Every opcode of BU's lists
 
 The rows below take every opcode name in BU §4.3 (Hopper, 204 names) and §4.4 (Blackwell and Rubin, 257 names), as
-the page lists them (docs.nvidia.com/cuda/cuda-binary-utilities, fetched 26 Oct 2026). §4.4 doesn't say which of its
+the page lists them (docs.nvidia.com/cuda/cuda-binary-utilities). §4.4 doesn't say which of its
 opcodes sm_120 has, so its rows are the family's: the `tcgen05` and tensor-memory rows are sm_100's. A mark here is by
 the opcode's name and BU's one-line description, not yet by each variant's semantics: a *covered* opcode can still have
 uncovered variants (`.64`, other atomic operations, `f16` accumulators).

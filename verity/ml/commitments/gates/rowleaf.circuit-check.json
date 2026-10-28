@@ -1,0 +1,12 @@
+{
+ "definitions": {
+  "Sha512RowSegOuter_v1{N_BITS=13}": {
+   "and": 78654,
+   "type": "57fc8b942c01bf833c53ec657ed92de83df374687324800fdb3757cc1721f0b3f4a6e693c22e34f21b31ddfb7e457094ec34c63bbccf5de033cc72190a0db8cf"
+  },
+  "Sha512RowSegSegment_v1{M=13}": {
+   "and": 76430,
+   "type": "5175ef451bc4a03e5bab21634231e89a32f87d5ec651658e8302f32ced7d83d914832c097e2ac6ff30ee050c629cdd1c8d45f6c16ba8405eb4b750ac1ec88dad"
+  }
+ }
+}

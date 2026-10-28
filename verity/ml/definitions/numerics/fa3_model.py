@@ -1,4 +1,4 @@
-"""Independent CPU model of vLLM's FlashAttention-3 forward on Hopper (sm_90, BF16, head dims 64, 128 and 256) — lane HP.
+"""Independent CPU model of vLLM's FlashAttention-3 forward on Hopper (sm_90, BF16, head dims 64, 128 and 256).
 
 The arithmetic is ``fa3_rows`` in ``cpp/fa2_model.cpp``: W11's FA2 per-row recurrence instantiated with the two things
 Hopper computes differently (REPORT §2 W4d) —
@@ -69,7 +69,7 @@ SUPPORTED_KBLOCK_N = (80, 128, 192)
 
 
 def kblock_n_for(D: int, seqlen_q: int, qh_per_kvh: int) -> int:
-    """[R13 hopper] kBlockN of the FA3 forward vLLM launches for head dim ``D`` (vllm-flash-attn 506341a1 ``hopper/tile_size.h::
+    """kBlockN of the FA3 forward vLLM launches for head dim ``D`` (vllm-flash-attn 506341a1 ``hopper/tile_size.h::
     tile_size_fwd_sm90``, element_size 2, causal, paged KV without TMA) with ``use_one_mma_wg = D in {64, 128} and seqlen_q *
     qheads_per_kvhead <= 64`` (``hopper/heuristics.h``; ``seqlen_q`` = the launch's max_seqlen_q under varlen): D <= 64 -> 192 under
     one MMA warpgroup (64 x 192 tile) else 128 (192 x 128 tile); D <= 128 -> 128; D = 256 -> 80 (the 128 x 80 tile, paged or not).
@@ -131,7 +131,7 @@ def kernel_geometry(seqlen_q: int, seqlen_k: int, rows: list[int] | np.ndarray, 
     kBlockN), ceil((m_idx_max + seqlen_k - seqlen_q) / kBlockN))`` with ``m_idx_max = (m_block + 1) * kBlockM``
     (PackGQA: divided by the GQA ratio); with kBlockM = kBlockN = 128 in prefill and one packed M tile in decode
     this equals ``ceil(col_limit / kBlockN)`` — no fully-masked block is ever visited (the typed program's
-    ``AttentionHead`` block count).  [R13 hopper] With kBlockM > kBlockN (hdim 64 prefill: 192 x 128; hdim 256: 128 x 80) the
+    ``AttentionHead`` block count).  With kBlockM > kBlockN (hdim 64 prefill: 192 x 128; hdim 256: 128 x 80) the
     kernel's per-tile count makes the first rows of an M tile visit fully-masked key blocks first; those are arithmetically
     neutral in this recurrence (S = -inf -> P = 0, running max -inf, l = o = 0, and the next block's rescale of that zero state is
     0 * x = 0 -- the kernel's own first-block path), so the per-row count is what is modelled.  ``kblock_m`` gives the kernel's

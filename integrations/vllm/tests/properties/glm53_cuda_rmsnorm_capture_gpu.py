@@ -257,7 +257,7 @@ def toolchain() -> dict[str, str]:
 
 def served() -> dict[str, Any]:
     """The switches vLLM's RMSNorm reads, as vLLM read them: batch invariance (`RMSNorm.forward_cuda` takes
-    `rms_norm_batch_invariant` under it, layernorm.py:96-115) and Oink (first in the IR ops' priority under it, platforms/cuda.py:
+    `rms_norm_batch_invariant` under it, layernorm.py:96-115) and Oink (first in the circuit ops' priority under it, platforms/cuda.py:
     736-745), both off at vLLM's defaults."""
     import vllm.envs as envs
 

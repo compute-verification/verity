@@ -30,7 +30,11 @@ class FakeGitHub:
 
     def __call__(self, *args: str) -> str:
         if args[:2] == ("pr", "list"):
-            return json.dumps(self.merged if "merged" in args else list(self.open.values()))
+            assert "merged" not in args, "a listing of merged PRs by number misses those that waited in the queue"
+            return json.dumps(list(self.open.values()))
+        if args[:2] == ("api", "graphql"):
+            assert f"query={M.MERGED_QUERY}" in args and "orderBy: {field: UPDATED_AT, direction: DESC}" in M.MERGED_QUERY
+            return json.dumps(self.merged)
         self.mutations.append(args)
         n = int(args[2])
         if args[:2] == ("pr", "close"):
@@ -104,8 +108,8 @@ def test_the_sweep_keeps_a_landed_branch_that_moved_past_its_landed_head(tmp_pat
 
 
 def test_the_sweep_closes_a_pr_whose_pinned_head_landed_and_whose_head_since_only_merged_main(tmp_path):
-    """#1273, #1274 and #1283 merged `main` into heads a tip had pinned (6 Oct): the tip lands them as the pinned heads, so the sweep
-    closes such a PR, saying so, and keeps its branch.  One whose head since adds content stays open."""
+    """PRs that merged `main` into heads a tip had pinned: the tip lands them as the pinned heads, so the sweep closes such a
+    PR, saying so, and keeps its branch.  One whose head since adds content stays open."""
     repo, gh, tips, _merge = _world(tmp_path)
     _git(repo, "checkout", "-q", "-b", "train", "main")
     _git(repo, "merge", "-q", "--no-ff", "-m", f"Merge #3 ({tips['C'][:8]})", tips["C"])
@@ -211,7 +215,7 @@ def _checked_c(tmp_path, monkeypatch, gh, repo):
 
 
 def test_a_merge_push_of_main_off_drive_is_refused_and_pushes_nothing(tmp_path, monkeypatch, capsys):
-    """23 Oct: GitHub's rulesets let only drive's App move `main`; a pure move lands from the control pod (`drive.sh merge`)."""
+    """GitHub's rulesets let only drive's App move `main`; a pure move lands from the control pod (`drive.sh merge`)."""
     repo, gh, _tips, _merge = _world(tmp_path)
     _checked_c(tmp_path, monkeypatch, gh, repo)
     monkeypatch.delenv("RESEARCH_DRIVE")
@@ -258,8 +262,8 @@ def test_after_a_landing_the_declarations_command_starts_detached_on_the_commit(
 
 
 def test_the_after_landing_command_runs_in_a_worktree_of_the_landed_commit_that_goes_when_it_ends(tmp_path):
-    """12 Oct: drive started `post_train.py` in its queue clone, which the next tick reset and cleaned, so d779760ce's run lost
-    the `.venv` `uv run` had made there; the command gets a tree of its own, which the caller's checkout moving can't touch."""
+    """Drive's queue clone is reset and cleaned every tick, so a `post_train.py` started there would lose the `.venv` `uv run`
+    made there; the command gets a tree of its own, which the caller's checkout moving can't touch."""
     repo, rec = tmp_path / "repo", tmp_path / "rec"
     (repo / "mytools").mkdir(parents=True)
     (repo / "mytools" / "decl.py").write_text(
@@ -326,8 +330,8 @@ def _marker(repo: Path) -> str:
 
 
 def test_a_landing_pushed_another_way_gets_its_after_landing_steps_on_the_next_merge_run_once(tmp_path, monkeypatch, capsys):
-    """#1206 (5 Oct) was the second landing to skip the spec DM, node 1's mirror and `post_train.py`: it reached main without
-    `research merge --push`.  Each `research merge` run catches them up from the marker, once, whoever runs it; a dry run runs
+    """A landing that reaches main without `research merge --push` would skip the spec DM, node 1's mirror and
+    `post_train.py`.  Each `research merge` run catches them up from the marker, once, whoever runs it; a dry run runs
     none, and a remote with no marker yet only gets one."""
     repo, gh, _tips, merge = _world(tmp_path)
     monkeypatch.setattr(M, "_gh_cli", lambda _repo, *args: gh(*args))
@@ -352,7 +356,7 @@ def test_a_landing_pushed_another_way_gets_its_after_landing_steps_on_the_next_m
 
 
 def test_the_after_landing_command_gets_the_attempt_drive_landed_the_tip_on(tmp_path, monkeypatch):
-    """CI-81: `post_train.py` refused every landing drive made with deferred steps, since none had a passed check in the store
+    """`post_train.py` would refuse every landing drive makes with deferred steps, since none has a passed check in the store
     yet; drive's `runs` names the attempt of the tip it pushed, and `after_land` gets it.  A tip it doesn't name gets none."""
     origin, repo = tmp_path / "origin.git", tmp_path / "repo"
     _git(tmp_path, "init", "-q", "--bare", "-b", "main", str(origin))
@@ -408,7 +412,7 @@ def _lean_repo(tmp_path: Path) -> tuple[Path, str, str, str]:
 
 def test_a_landing_that_touches_a_lean_package_starts_the_lean_cache_publish_and_one_that_does_not_does_not(tmp_path,
                                                                                                          monkeypatch):
-    """CI-174: the Lean cache was published only daily, so a landing's Lean waited on a stale cache.  A landing whose range
+    """A Lean cache published only daily leaves a landing's Lean waiting on a stale cache.  A landing whose range
     touches a Lake package's source starts infra's publisher with the landed SHA; one that touches none, or an absent script,
     starts nothing; every case is one line, with the seconds the script took to start."""
     repo, base, lean, docs = _lean_repo(tmp_path)
@@ -462,8 +466,8 @@ def test_a_lean_cache_publish_that_fails_is_logged_and_the_landing_stands(tmp_pa
 
 
 def test_a_spec_dm_that_failed_is_sent_again_by_the_next_sweep_which_fails_until_it_goes(tmp_path, monkeypatch, capsys):
-    """Tip 141 (8 Oct): the DM failed on the Slack broker's socket, the after-landing marker moved anyway, and only a hand retry
-    sent it.  The DM's own marker stays put until `alert` returns True, so the next run resends it, and `--sweep` exits 1 while it
+    """A DM that fails (on the Slack broker's socket, say) while the after-landing marker moves anyway would need a hand retry.
+    The DM's own marker stays put until `alert` returns True, so the next run resends it, and `--sweep` exits 1 while it
     lags main; the mirror and `after_land` still run once."""
     import research.spec_alert as S
 
@@ -552,7 +556,7 @@ def test_a_refused_node_1_push_leaves_the_merge_landed_and_names_the_command_tha
 
 def test_a_hand_landed_main_reaches_node_1_past_the_checkouts_push_guard(tmp_path, monkeypatch, capsys):
     """The guard judges pushes to origin's main; node 1's copy follows origin, so a main landed by hand, which has no check
-    attempt of its tree, still reaches it (61f64824c and 24aa9a9a4 didn't, 7 Oct)."""
+    attempt of its tree, still reaches it."""
     repo, _gh, _tips, _merge = _world(tmp_path)
     bare, _asked = _node1(tmp_path, monkeypatch)
     _git(repo, "config", "core.hooksPath", str(repo / ".git" / "hooks"))
@@ -611,8 +615,7 @@ def test_nothing_goes_to_node_1_when_origin_refuses_main(tmp_path, monkeypatch, 
 # ---- every landing is reported in the merge thread
 
 def test_each_landing_is_one_line_naming_what_it_merged_and_its_checked_run(tmp_path):
-    """Friction pass, 10 Oct: #1692 + #1694 and #1697 + #1706 were missing from the lander's reports, and a stacked member such
-    as #1706 reads closed on GitHub, so the lines come from main's first-parent log: a train's merges (`Merge #N`, `Merge
+    """Every landing is reported, and a stacked member can read closed on GitHub, so the lines come from main's first-parent log: a train's merges (`Merge #N`, `Merge
     origin/BRANCH`, or a pinned commit) through ``prs``, and the runs its `Checked:` trailer names, the lander's `*` id too."""
     repo = tmp_path / "r"
     repo.mkdir()
@@ -648,7 +651,7 @@ def test_each_landing_is_one_line_naming_what_it_merged_and_its_checked_run(tmp_
 
 
 def test_each_run_a_landing_names_gets_one_landed_label_on_the_remote_and_a_rerun_writes_none(tmp_path, monkeypatch):
-    """Step 3 of the store design: which check landed what is a `landed` label on the run (main's commit, at the commit's time),
+    """Which check landed what is a `landed` label on the run (main's commit, at the commit's time),
     so the store answers it without reading git; the lander's `*` id resolves to the one run with its suffix, and an id that
     names no run is said, never guessed."""
     from research.store.local import LocalStore
@@ -769,8 +772,9 @@ def test_the_landings_go_to_the_merge_thread_quietly_and_a_failed_post_leaves_th
 
 
 def test_the_sweep_deletes_the_head_branch_of_a_pr_github_marked_merged_itself(tmp_path):
-    """17 Oct (CI-48): drive lands a PR's commits; GitHub then marks the PR merged, so it was never open for the sweep, and its
-    branch stayed: 2,119 of the repository's 3,543 branches were already on main."""
+    """Drive lands a PR's commits; GitHub then marks the PR merged, so it was never open for the sweep, and its branch would
+    stay.  The merged PRs are the most recently updated ones (`MERGED_QUERY`; the fake refuses `gh pr list --state merged`):
+    the newest 200 by number would leave out PRs that had waited in the queue, and their branches would stay."""
     repo, gh, tips, _merge = _world(tmp_path)
     del gh.open[1], gh.open[2]
     gh.merged = [{"number": 1, "headRefName": "A", "headRefOid": tips["A"]}, {"number": 2, "headRefName": "B", "headRefOid": tips["B"]},
@@ -811,6 +815,14 @@ def test_the_branch_sweep_deletes_what_is_on_main_and_archives_idle_unmerged_wor
     del gh.open[1], gh.open[2]                                            # A and B landed; C, D and E stay open
     for name in ("A", "B"):                                               # landed with the train, and fresh at ``now``
         _git(repo, "push", "-q", "origin", f":refs/heads/{name}")
-    assert M.sweep_branches(repo, now=now, gh=gh, log=[].append) == (1, 1)  # old-landed deleted, old-work archived
+    log = []
+    assert M.sweep_branches(repo, now=now, gh=gh, log=log.append, limit=0) == (0, 0), "at its limit, it pushes nothing more"
+    assert "delete 0 of 1 branch(es)" in log[0] and "archive 0 of 1 unmerged" in log[0] and len(log) == 1, log
+    # old-landed deleted, by name; old-work, the head of a PR drive closed as stale, kept
+    log = []
+    assert M.sweep_branches(repo, now=now, gh=gh, log=log.append, keep=["old-work"]) == (1, 0)
+    assert "old-work" in _heads(repo) and "old-landed" not in _heads(repo)
+    assert "research merge: delete: old-landed" in log, log
+    assert M.sweep_branches(repo, now=now, gh=gh, log=[].append) == (0, 1)  # without it, old-work archived
     assert _heads(repo) == {"main", "C", "D", "E", "new-landed", "new-work", "cursor/verity-ci-3d4e"}
     assert "refs/archive/heads/old-work" in _git(repo, "ls-remote", "origin", "refs/archive/*")

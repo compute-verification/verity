@@ -1,20 +1,23 @@
-"""Layer 1, the prior: the inventory's locations, its dark leaves and the horizon, in gates (the working draft's §8).
+"""The physical model, `𝒜_phys`: the inventory's locations, its dark leaves and the horizon, in gates (the working
+draft's §8).
 
 `Units` is the one place a FLOP-model input becomes gates: `units.gates_per_flop` (`data/hardware.toml`), with its source
 and range. The datasheets' FLOP/s, the policy's `Γ`, the run's target, a sampled step's FLOPs and the classes' and
-attacks' FLOP-model statements all pass through it, so ρ and the time to the target don't depend on its value
-(`tests/test_hardware.py`).
+attacks' FLOP-model statements all pass through it, so under `structure.reference` (whose `s_×` moves with it) the
+overhead and the time to the target don't depend on its value (`tests/test_hardware.py`). Its `basis` says where the
+value comes from (`FLOP_MODEL`, or `boolean:<design>` when measured on one Boolean design); a structure's `s_×` must
+come from the same one (`classes.Structure.check`).
 
 A **location** is the largest set of devices joined by links no certifier sees (an 8-GPU server's NVLink domain, an NVL72
 rack, or a rack of servers whose certifiers sit only on its uplinks). Its `phi` is `Φ_X`, its capacity in gates per
 second (`|A[X,J]| ≤ Φ_X |J|`), `memory` its devices' bits, and its *hosts* (the servers or compute trays, each with its
 own NICs, certifier and side channels) carry host memory, disks, host CPUs and the boundary links whose line rate is
 `links` (`β_X`, `Accounting.linkCapacity`). `server_memory` is `M_s`, one server's memory over every tier (HBM, host
-RAM, disks): the capacity the wipe's per-server bound is stated against (Daniel, 26 Oct 12:16 PM PDT).
+RAM, disks): the capacity the wipe's per-server bound is stated against.
 
 A **fleet** is the inventory: the monitored locations, and the dark leaves `L_dark` with `Φ(L_dark) = ε_dark Φ_total`,
-one connected pool outside every monitored location (Daniel, 25 Oct). The prior bounds every gate at capacity, so the
-bound counts the dark leaves at `Φ`; `mfu_train` and `mfu_dark` are what a construction (an attack) gets of the
+one connected pool outside every monitored location (ruled). The physical model bounds every gate at capacity,
+so the bound counts the dark leaves at `Φ`; `mfu_train` and `mfu_dark` are what a construction (an attack) gets of the
 monitored and the dark gates. A **horizon** is the monitoring period a result is over.
 
 A location table may leave out its hosts: it is then one host with no host memory or CPUs counted and no known line
@@ -28,13 +31,18 @@ from dataclasses import dataclass
 
 from rho.params import Registry
 
+#: `gates_per_flop` as an assumed conversion of the FLOP model's inputs, not measured on a Boolean design
+FLOP_MODEL = "flop-model"
+
 
 @dataclass(frozen=True)
 class Units:
-    """The prior's one conversion from the FLOP model to Boolean gates."""
+    """The physical model's one conversion from the FLOP model to Boolean gates."""
 
     #: Boolean gates per FLOP at the training precision
     gates_per_flop: float
+    #: where `gates_per_flop` comes from: `FLOP_MODEL`, or `boolean:<design>` for a count on one Boolean design
+    basis: str = FLOP_MODEL
 
     def gates(self, flops: float) -> float:
         return flops * self.gates_per_flop

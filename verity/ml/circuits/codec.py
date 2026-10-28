@@ -16,21 +16,22 @@ the program digest hashes are RFC 8785 (JCS) of the descriptor without `annotati
 descriptor is held to (strings ASCII without DEL, integers of magnitude at most 2^53 - 1, no floats; `jcs_domain_error`).
 
 Schemas (`schema` field): `verity-ir/descriptor/v0` writes every body verbatim; `verity-ir/descriptor/v1`
-(the default since 2026-09-08) writes the same program with flat concatenations, the reference-sequence alias
+(the default) writes the same program with flat concatenations, the reference-sequence alias
 and interned callee ids / types (see `SCHEMA_V1` below). Both decode. The digest is a function of the
 encoding, so it differs between the schemas for one program; `descriptor_equivalence` is the test that two
-descriptors denote the same circuit (veritor's docs/vllm-poc/descriptor-codec.md).
+descriptors denote the same circuit.
 """
 
 from __future__ import annotations
 
+import gc
 import hashlib
 import json
 import re
 from typing import Callable, Any, Iterator
 
 from .defs import (Body, Builder, CompositeDefinition, FunctionDefinition, IdentityConflict, Node, PrimitiveDefinition, Registry,
-                   SpecializedDefinition, bind)
+                   SpecializedDefinition, _static_key, bind)
 from . import ports as P
 from .program import input_id, input_prim, is_input
 from .refs import Affine, Coll, Concat, Explicit, PartLog, Refs, Strided, refs_from_json
@@ -333,8 +334,8 @@ def _walk(program, done: Callable[[str, FunctionDefinition], None]) -> dict[str,
     duplicates: list[tuple[str, FunctionDefinition]] = []
     # One entry per distinct duplicate OBJECT, not per visit: a workload Program composed from request components decoded
     # separately refers to every shared definition through a re-decoded object from EVERY node that calls it, so the per-visit
-    # list held one entry per node (OLMoE B2: 146,523 visits of 95 distinct objects) and the identity check below re-encoded
-    # the definitions verbatim that many times (compose > 45 min; 8 s with the dedup; same descriptor).  [veritor R15 GP01-DUP]
+    # list held one entry per node (on a large workload, over a thousand visits an object) and the identity check below
+    # re-encoded the definitions verbatim that many times.
     dup_objects: set[tuple[str, int]] = set()
     visited: dict[int, FunctionDefinition] = {}  # a second visit of the same object changes nothing
 
@@ -520,10 +521,18 @@ def program_digest(program_or_desc) -> str:
     """SHA-512 of the descriptor's canonical JSON without ``annotations``; a program's is streamed (`descriptor_chunks`)."""
     if isinstance(program_or_desc, dict):
         return hashlib.sha512(canonical_json({k: v for k, v in program_or_desc.items() if k != "annotations"})).hexdigest()
-    h = hashlib.sha512()
-    for chunk in descriptor_chunks(program_or_desc):
-        h.update(chunk)
-    return h.hexdigest()
+    # The cyclic collector stays off while streaming: encoding frees its pieces by reference counting, and the collector's
+    # passes over a big program's live bodies cost more than the encoding itself.
+    on = gc.isenabled()
+    gc.disable()
+    try:
+        h = hashlib.sha512()
+        for chunk in descriptor_chunks(program_or_desc):
+            h.update(chunk)
+        return h.hexdigest()
+    finally:
+        if on:
+            gc.enable()
 
 
 def descriptor_size(program_or_desc) -> int:
@@ -539,8 +548,8 @@ def descriptor_size(program_or_desc) -> int:
 
 # Primitive families that are materialised on demand (one definition per width / constant / vocab) when a descriptor is
 # decoded in a process that has not built the program: (pattern over the primitive id, maker from the match).  A semantics
-# package registers its families with `register_lazy_family` (the IR never imports a semantics package).  An id matching
-# `program.INPUT_ID` or `program.REGISTERED_ID` always denotes the IR's own `Input<w>` or `RegisteredInput<w>`, ahead of
+# package registers its families with `register_lazy_family` (`verity.ml.circuits` never imports a semantics package).  An id matching
+# `program.INPUT_ID` or `program.REGISTERED_ID` always denotes `program`'s own `Input<w>` or `RegisteredInput<w>`, ahead of
 # any registry entry.  A pattern matches the whole id, and the member it makes must carry that id: a family has one spelling
 # per member.
 _LAZY_PRIMITIVE_FAMILIES: list[tuple[re.Pattern[str], Callable[[re.Match[str]], PrimitiveDefinition]]] = []
@@ -781,13 +790,27 @@ def _build_node(B: Builder, fid: str, k: int, nd: dict, fn: FunctionDefinition, 
         raise ValueError(f"definition {fid!r} node {k}: declares out {out!r}, computes {B.nodes[k].out!r}")
 
 
-def decode_program(desc: dict, registry: Registry) -> DecodedProgram:
+def _record_value(v: Any, fn: Callable[[str], Any]) -> Any:
+    """A binding record's static value, `_static_json` inverted; ``fn`` resolves each function reference's id."""
+    if isinstance(v, dict) and "fn" in v:
+        return fn(v["fn"])
+    if isinstance(v, dict) and "f64" in v:
+        return float.fromhex(v["f64"])
+    if isinstance(v, dict) and "dict" in v:
+        return {k: _record_value(x, fn) for k, x in v["dict"].items()}
+    if isinstance(v, list):
+        return tuple(_record_value(x, fn) for x in v)
+    return v
+
+
+def definition_decoder(desc: dict, registry: Registry, built: dict[str, Any] | None = None) -> Callable[[str], Any]:
+    """The per-definition reader `decode_program` uses: each definition of ``desc`` by its id, decoded into ``built``."""
     schema = desc.get("schema")
     if schema not in SCHEMAS:
         raise ValueError(f"unexpected descriptor schema {schema!r}")
     _check_domain(desc)
     ddefs = desc["definitions"]
-    built: dict[str, Any] = {}
+    built = {} if built is None else built
     if schema == SCHEMA_V0:
         callee_id, arg_type = (lambda f: f), _type
     else:
@@ -818,19 +841,8 @@ def decode_program(desc: dict, registry: Registry) -> DecodedProgram:
         cdef = CompositeDefinition(f"{name}", int(ver), statics, lambda S: ((), None), lambda *_: None, register=False)
         sp = SpecializedDefinition(cdef, {}, ())
         built[fid] = sp
-        def static_of(v):
-            if isinstance(v, dict) and "fn" in v:
-                return get(v["fn"])
-            if isinstance(v, dict) and "f64" in v:
-                return float.fromhex(v["f64"])
-            if isinstance(v, dict) and "dict" in v:
-                return {k2: static_of(v2) for k2, v2 in v["dict"].items()}
-            if isinstance(v, list):
-                return tuple(static_of(x) for x in v)
-            return v
-
-        bindings = {k: static_of(v) for k, v in d["bindings"].items()}
-        sp.bindings.update(bindings)
+        sp.bindings.update({k: _record_value(v, get) for k, v in d["bindings"].items()})
+        ours(fid)
         b = d["body"]
         params = tuple((n, _type(t)) for n, t in b["params"])
         ret_type = _type(b["ret_type"])
@@ -866,9 +878,41 @@ def decode_program(desc: dict, registry: Registry) -> DecodedProgram:
                           if "ports" in d else None)
         return sp
 
+    admitted: dict[str, Any] = {}
+
+    def ours(fid: str):
+        """``fid`` as `bind` would admit it: where the registry holds its composite, that composite specialized at the file's
+        binding record (function references the registry's own where it holds them too), once the composite has every static
+        the record names and its `refuse` has no reason against the record; otherwise the decoded definition. Uncached, so a
+        file's record never enters the registry's binding cache."""
+        if fid in admitted:
+            return admitted[fid]
+        d = ddefs[fid]
+        reg = registry[d["id"]] if d["form"] == "composite" and d["id"] in registry else None
+        if not isinstance(reg, CompositeDefinition):
+            admitted[fid] = get(fid)
+            return admitted[fid]
+        record = {k: _record_value(v, ours) for k, v in d["bindings"].items()}
+        if unknown := [k for k in record if k not in reg.statics]:
+            raise ValueError(f"definition {fid!r}: {reg.id} has no static parameter {unknown[0]!r}")
+        try:
+            why = reg.refuse(record) if reg.refuse is not None else None
+        except (TypeError, ValueError, KeyError, IndexError, AttributeError) as e:
+            why = f"{type(e).__name__} judging the record: {e}"
+        if why:
+            raise ValueError(f"definition {fid!r}: {reg.id} refuses this binding: {why}")
+        admitted[fid] = SpecializedDefinition(reg, record, tuple((k, _static_key(record[k])) for k in reg.statics if k in record))
+        return admitted[fid]
+
+    return get
+
+
+def decode_program(desc: dict, registry: Registry) -> DecodedProgram:
+    built: dict[str, Any] = {}
+    get = definition_decoder(desc, registry, built)
     root = get(desc["root"])
     if not isinstance(root, SpecializedDefinition) or root.body.params:
         raise ValueError(f"root {desc['root']!r}: the root is a composite without parameters")
-    pfn_fns = tuple(get(fid) for fid in _record_function_ids(desc["program_fn"]) if fid in ddefs)
+    pfn_fns = tuple(get(fid) for fid in _record_function_ids(desc["program_fn"]) if fid in desc["definitions"])
     P.check(root)
     return DecodedProgram(root, built, desc, pfn_fns)

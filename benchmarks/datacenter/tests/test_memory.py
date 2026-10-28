@@ -88,7 +88,7 @@ def test_a_small_sample_locates_by_latency_and_labels_rebuilt_in_time_locate_now
 
 
 def test_a_store_changes_as_blocks_land_and_leave_under_the_verifiers_coins():
-    """Memory's event shapes. KV blocks are appended under append coins and count from when their encode lands
+    """A store's event shapes. KV blocks are appended under append coins and count from when their encode lands
     (deferred residency); they are released, or re-keyed at their lifetime cap (the old indices go at once, the new
     ones count from their residency); a block released before it lands is withdrawn and never counts. A store's bits
     change mid-window, so a challenge's Held is the average over its interval."""

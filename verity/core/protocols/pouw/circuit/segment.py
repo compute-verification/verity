@@ -20,7 +20,7 @@ The fold is a parameter (``FOLD``, `FOLDS`):
   z = mix32(y + 0x9E3779B9) (NW = KS / S windows). Chain 4 (t % 2) + e absorbs entry 4 t + e at position t:
   u = y ^ p ^ kx_t, y = u a_t + z, z = rotl(u, r_t) + y (mod 2^32, a_t odd, fgemm.cu's lane-0 keys); R = xor_i (y_i ^
   rotl(z_i, 16)).
-- ``xin`` (P2-FF r9's XOR-in with rotations (13, 19), note:20261016T1117Z-draft-fullfloor-s-r9; provisional): state y (8
+- ``xin`` (XOR-in with rotations (13, 19); provisional): state y (8
   chains, duo's y keys), chain t absorbing entries 4 t .. 4 t + 3 as d0 .. d3: y = (rotl(y, 13) ^ d0) a0_t + d1, then
   y = (rotl(y, 19) ^ d2) a1_t + d3, the multipliers odd and outside Lambda8 (`key_ok`); R = xor_t y_t.
 
@@ -64,7 +64,7 @@ through a row of known content.
     PouwSegCheckDither_v2{S, FOLD}   the same with decision 29's dither on the served side: B' = B + d (`PouwI8AddBit_v2`),
                                      d in {0, 1} the coin bit ``f`` carries (the served X = floor(x / s) + b)
 
-v2 is unsound (LEDGER, note:20261017T1723Z-draft-ledger): it ties only T_j to T_(j-1), so every other set of ``p`` is free
+v2 is unsound: it ties only T_j to T_(j-1), so every other set of ``p`` is free
 witness, and a meet-in-the-middle over two of their words opens any committed R_w (`tests/test_circuit_segment.py`). The
 checks below take no prefix word as witness: every word a fold absorbs is recomputed in the proof from committed operands
 and the coin, from T_(-1) = 0, so a thread's (or warp's) whole call is one unit and the committed value is binding by
@@ -98,7 +98,7 @@ thread's dither bits, coin bits, U and digit coins z_d(row slot, residue), its k
 leaf with the thread's N words at slot rsel: FOLD ``duo`` or ``fx1``, OUT ``chains`` (H1's 8 words, N = 8) or ``state``
 (the full state, N = 16). 1 exactly when the leaf's N words are the fold's over the recomputed words.
 
-LI-CP-W (decision 97, note:20261017T1848Z-draft-li-alt): li's chains (8 a lane: chain c absorbs `li_entries`(c) as two
+LI-CP-W: li's chains (8 a lane: chain c absorbs `li_entries`(c) as two
 half steps a set, y <- (y ^ d0 ^ `LK`[c][h]) `LA`[c][h] + d1, from duo's y keys) and a checkpoint after every set, the XOR
 of the warp's chain states (redux.sync.xor), one word a set, KS + m words a warp in leaves of their own.
 
@@ -110,14 +110,14 @@ XOR), 1 exactly when word s of rc is the checkpoint after set s for every s < KS
 ceil(P (KS + m) / 512) leaves in order (P = 1 here; L = 2 for duo and fx1 at K = 8192: KS = 256, m = 3, 518 words), and
 the words after the last checkpoint are unread.
 
-DUO-CP-W and FX1-CP-W (#2438): duo's or fx1's chains with a full-state checkpoint after every set, the XOR over the warp
+DUO-CP-W and FX1-CP-W: duo's or fx1's chains with a full-state checkpoint after every set, the XOR over the warp
 of every chain's y and, separately, of every chain's z (`warp_checkpoint`), two words a set.
 
     PouwWarpCheck_v2{KS, NL, FOLD}  (PouwWarpCheck_v1's ports, st: Array<NL, Array<P 8, u32>>) -> bit
 
 FOLD li (P = 1, `PouwWarpCheck_v1`), duo or fx1 (P = 2, st each lane's y then z); 1 exactly when words P s .. P s + P - 1
 of rc are the checkpoint after set s for every s < KS + m. The checkpoint is a set's, never spaced wider: the
-binding proved without FOLD-R's whole-state assumption is a set's 4 words a chain (note:20261018T0515Z-draft-proj-r4).
+binding proved without FOLD-R's whole-state assumption is a set's 4 words a chain.
 
 A statement holds the operand leaves and ``rc`` to the trees committed before and after the coin, and recomputes the
 noise, keys and selections from the coin and the draw.

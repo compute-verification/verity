@@ -46,9 +46,9 @@ don't, when the stream holds a registration past A's windows or misses one, and 
 isn't the warden's cut of A's prompt lengths (`framing`) or names an own frame, which the warden's ingress has none
 of. A connection's lanes chain by construction from (0, 0) into its first bucket to (0, n) out of its `END`'s, so an
 accepted verdict on every window says what IoTieRequest's units say together: connection i + 1 is an id request of
-v0's `prompt_len` prompt fields (REDTEAM phase 9 (b): a carried field count is held by the bucket before). That is
+v0's `prompt_len` prompt fields (a carried field count is held by the bucket before). That is
 the premise `advised.ends` reads, from the verifier's own tie source alone (`Ties`, the tie, its stream and the
-release as `service.LinkWindows.ties`), never from what the prover delivers (REDTEAM phase 10), and `advised.view`
+release as `service.LinkWindows.ties`), never from what the prover delivers, and `advised.view`
 holds the verdict to the link and the registrations the source records, so a verdict on another link or another
 ingress record isn't reused.
 

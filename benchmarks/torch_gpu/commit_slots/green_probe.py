@@ -4,12 +4,11 @@ the commit (`slots_gpu`, the shared-row layout from `overlap.stand_in`'s tables,
 primary context), each alone and then both at once, each stream timed by its own events and the pair by wall clock. JSON
 to ``--out``/green_probe.json, a line a case to stdout.
 
-Together is uncoupled (no dependency between the streams) or coupled as today's loop couples the forward and the commit
-(`e2e_h200.commit`): a group's GEMMs stand for its forward, then the group is added (the side stream waits for the GEMMs'
-stream), and the GEMMs' stream waits until the side stream has read the group `LAG` before. Two streams on disjoint SMs
-that run at once take max(commit, GEMMs) together; streams that take turns take their sum. ``overlap`` is
-(commit + GEMMs - together) / min(commit, GEMMs): 1 at once, 0 in turns. The partitions stay open to the end: the
-stand-in tables are held for every plan's stream.
+Together is uncoupled (no dependency between the streams) or coupled as the serving loop couples the forward and the
+commit (`e2e_h200.commit`): a group's GEMMs stand for its forward, then the group is added (the side stream waits for
+the GEMMs' stream), and the GEMMs' stream waits until the side stream has read the group `LAG` before. Two streams on
+disjoint SMs that run at once take max(commit, GEMMs) together; streams that take turns take their sum. ``overlap`` is
+(commit + GEMMs - together) / min(commit, GEMMs): 1 at once, 0 in turns. The partitions stay open to the end.
 """
 from __future__ import annotations
 
@@ -22,8 +21,7 @@ from typing import Any
 
 import torch
 
-HERE = Path(__file__).resolve().parent
-sys.path.insert(0, str(HERE))
+sys.path.insert(0, str(Path(__file__).resolve().parent))
 import overlap as O
 
 G, CM, S = O.G, O.CM, O.S
@@ -70,7 +68,7 @@ def timed(work: dict[str, tuple[Any, Any]]) -> dict[str, float]:
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--out", type=Path, required=True)
-    ap.add_argument("--shared", type=Path, required=True, help="circuits' shared-row Layout JSON (CIR-113)")
+    ap.add_argument("--shared", type=Path, required=True, help="circuits' shared-row Layout JSON")
     ap.add_argument("--sms", type=int, nargs="+", default=[32, 64])
     ap.add_argument("--batch", type=int, default=4096)
     ap.add_argument("--gemm-n", type=int, default=8192)
@@ -80,7 +78,7 @@ def main(argv: list[str] | None = None) -> int:
     a.out.mkdir(parents=True, exist_ok=True)
     dev = torch.device("cuda")
     shape = O.SHAPES["h200"]
-    layout = O.load_layout(a.shared)
+    layout = S.load(a.shared)
     ctx, _ = CM.fixture_secrets(a.run_id)
     salt = CM.fixture_salt(a.run_id)(0)
     tabs = O.stand_in(shape, a.batch, dev, 20261026)

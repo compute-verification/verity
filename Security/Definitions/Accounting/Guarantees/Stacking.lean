@@ -120,7 +120,7 @@ side capacity `S + (L − ρ·256) + X` as one more source, a carrier being a so
 with `I = 8·R_in·life` and `q·b ≤ 1024·c_ρ·reads·life/E`. In the verbatim class a sector the device decodes from a
 carrier is one it computes rather than reads at its position, a rebuild.
 
-* **Writes during the session.** A pass's store is the one resident going into the step it is bound to (#2378: a
+* **Writes during the session.** A pass's store is the one resident going into the step it is bound to (a
   step's record takes effect after its reads, and the pass's plan is that step's reads, `Requirement.PlanMatches`). It
   may depend on every coin drawn before the pass: a page written from an earlier pass's receipts is in the view, and
   what it carries about other blocks is its carrier, chosen at the prefix, so charged in `C`. It may not depend on the
@@ -263,7 +263,7 @@ def StackedSessionConservationRelay : Prop :=
 requirement.** `StackedSessionConservationSketchDeployed`'s session, hypotheses and bound, with the session's shortfall
 measured against a declared circuit `W`'s requirement (`Definitions/Accounting/Requirement.lean`) over a window `win`
 of engine steps. The window has at most `n·P` steps, one for each pass the session's passes are bound to (a pass names
-the step whose reads it covers, #2378). At each of its steps the memory map `mm` holds `W`'s credited blocks
+the step whose reads it covers). At each of its steps the memory map `mm` holds `W`'s credited blocks
 (`Requirement.StoreMatches`: every block holding a live value the audit credits, `W`'s live values in complete blocks,
 is resident, the live values are packed in 4 KiB tiles, and each credited value is in its block's payload) with at most
 `N` blocks resident, and the plan of the pass bound to it covers `W`'s reads from complete blocks
@@ -286,7 +286,7 @@ at most its bits of `W`'s reads (`RequirementMoved`). So an accepted session rea
 the audit credits and of the bits `W` reads from complete blocks, counted in bits; `RequirementUncredited` and
 `RequirementUnplanned` bound what a block still being written leaves out. Each pass reads its own store, the plan's
 blocks resident going into its step, made from the coins before it; that its tiles are the memory map's blocks, so
-that the bits read are `W`'s, is the binding's (`remote_bandwidth`'s Replay and #2378), and is not in this game.
+that the bits read are `W`'s, is the binding's (`remote_bandwidth`'s Replay and each pass's bound step), and is not in this game.
 
 **The memory map and the append coin.** With `mm`, the execution `e` and the layout `ℓ` fixed before the seed, as the
 statement takes them, which blocks are resident at each step, their indices and their order are fixed with `mm`: frees,

@@ -1,11 +1,12 @@
-// The frozen decoder's non-matmul units on sm_90a, each word its twin's (words.py and the unit modules' OPS docstrings):
-// RMSNorm, the per-row s8 quantizer (units_quant up to 16384 words, units_quant4 a cluster of four CTAs for 65536),
-// softmax over a QK^T row, argmax over the head, ReLU, the residual add, and units_sweep, which runs the helpers below on
-// every operand word so check.py can hold them to the twins' instructions exhaustively.
+// The frozen decoder's non-matmul units on sm_90a and sm_120a, each word its twin's (words.py and the unit modules' OPS
+// docstrings): RMSNorm, the per-row s8 quantizer (units_quant up to 16384 words, units_quant4 a cluster of four CTAs for
+// 65536), softmax over a QK^T row, argmax over the head, ReLU, the residual add, and units_sweep, which runs the helpers
+// below on every operand word so check.py can hold them to the twins' instructions exhaustively.
 //
 // Every f32 operation is a named IEEE round-to-nearest-even instruction (__fadd_rn, __fsub_rn, __fmul_rn, __fdiv_rn,
 // __fsqrt_rn, __fmaf_rn), built with -fmad=false and no FTZ flag, so nothing is contracted or flushed; the one approximate
-// operation is ex2.approx.ftz.f32 (MUFU.EX2, `mufu.MufuEx2Ftz`), in softmax only.  Every f32 reduction is sequential in a
+// operation is ex2.approx.ftz.f32 (MUFU.EX2, `mufu.MufuEx2Ftz`), in softmax only.  The sweep also runs MUFU.RSQ's two PTX
+// forms, which no unit reads, and only in the sm_120a cubin (SM120 below).  Every f32 reduction is sequential in a
 // fixed order from +0 by one thread; threads meet only through shared memory, shuffles, __syncthreads and the cluster
 // barrier.  No atomics.  Only the integer maxima (the quantizer's absmax tree) are taken in a free order: an integer max is
 // exact, so every node's word is the same in any order.
@@ -28,6 +29,12 @@ typedef uint64_t u64;
 
 #define D __device__ __forceinline__
 #define FULL 0xFFFFFFFFu
+// What only the sm_120a cubin holds: the sm_90a cubin stays byte for byte the one the H200's check ran
+#if defined(__CUDA_ARCH__) && __CUDA_ARCH__ >= 1200
+#define SM120 1
+#else
+#define SM120 0
+#endif
 
 D float fadd(float a, float b) { return __fadd_rn(a, b); }
 D float fsub(float a, float b) { return __fsub_rn(a, b); }
@@ -40,6 +47,10 @@ D float widen(u32 h) { return __uint_as_float((h & 0xFFFFu) << 16); }
 D u16 bf16(float f) { u16 r; asm("cvt.rn.bf16.f32 %0, %1;" : "=h"(r) : "f"(f)); return r; }
 D float ex2(float x) { float r; asm("ex2.approx.ftz.f32 %0, %1;" : "=f"(r) : "f"(x)); return r; }
 D u32 s8(float x) { int r; asm("cvt.rni.sat.s8.f32 %0, %1;" : "=r"(r) : "f"(x)); return (u32)r & 0xFFu; }
+#if SM120
+D float rsq_ftz(float x) { float r; asm("rsqrt.approx.ftz.f32 %0, %1;" : "=f"(r) : "f"(x)); return r; }
+D float rsq(float x) { float r; asm("rsqrt.approx.f32 %0, %1;" : "=f"(r) : "f"(x)); return r; }
+#endif
 D int order16(u32 v) { int m = (int)(v & 0x7FFFu); return (v & 0x8000u) ? -m : m; }
 D bool isnan16(u32 v) { return (v & 0x7F80u) == 0x7F80u && (v & 0x7Fu); }
 // +0 where 0 > v strictly and v is not NaN: exactly the words 0x8001..0xFF80
@@ -425,7 +436,7 @@ extern "C" __global__ void units_add(const u16* __restrict__ a, const u16* __res
     y[i] = bf16(fadd(widen(a[i]), widen(b[i])));
 }
 
-// ---- the sweep: block b of 1024 threads covers operands i in [b 2^24, (b + 1) 2^24) below n, and writes
+// ---- the sweep: CTA b of 1024 threads covers chunk b, the operands i in [b 2^24, (b + 1) 2^24) below n, and writes
 // sum_i splitmix64((i << 32) | op(i)) mod 2^64 (sweep.py) --------------------------------------------------------------
 D u64 splitmix64(u64 z) {
   z += 0x9E3779B97F4A7C15ull;
@@ -445,6 +456,10 @@ D u32 sweep_op(int op, u32 i, u32 arg, u32 one) {
     case 6: return bf16(f32(i));
     case 7: return quant_scale(i, arg);
     case 8: return bf16(fadd(widen(i >> 16), widen(i)));
+#if SM120
+    case 9: return __float_as_uint(rsq_ftz(f32(i)));
+    case 10: return __float_as_uint(rsq(f32(i)));
+#endif
     default: return 0xFFFFFFFFu;
   }
 }
@@ -467,3 +482,11 @@ extern "C" __global__ void __launch_bounds__(1024) units_sweep(int op, u64 n, u3
     partial[blockIdx.x] = total;
   }
 }
+
+#if SM120
+// op(i) for the operands i in [lo, lo + count): a chunk whose digest disagrees, word by word
+extern "C" __global__ void units_sweep_words(int op, u64 lo, u32 count, u32 arg, u32 one, u32* __restrict__ out) {
+  const u32 k = blockIdx.x * blockDim.x + threadIdx.x;
+  if (k < count) out[k] = sweep_op(op, (u32)(lo + k), arg, one);
+}
+#endif

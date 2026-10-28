@@ -47,7 +47,7 @@ theorem eval_op (a : C.Transcript) {g : Fin C.N} (h : C.isInput g = false) :
     C.eval a g = C.op g (C.eval a) :=
   C.run_free (by simp [h])
 
-/-- The honest transcript agrees with its inputs. -/
+/-- The honest trace agrees with its inputs. -/
 theorem inputsAgree_eval (a : C.Transcript) : C.InputsAgree (C.eval a) a :=
   fun _ h => C.eval_input a h
 
@@ -274,7 +274,7 @@ theorem exists_wrong_fine {X Y : C.Transcript} (hY : ∀ g ∈ Pc.committed, Y g
     simpa using hgu
   rw [← hY g hg, hf v hvu g (r.committed_subset hg) hv, r.localEval_eq hY hf g.val g v rfl hv hvu]
 
-/-- A fine transcript that extends a coarse one has at least as many wrong fine units as the coarse one has wrong
+/-- A fine trace that extends a coarse one has at least as many wrong fine units as the coarse one has wrong
 coarse units. -/
 theorem card_wrong_le {X Y : C.Transcript} (hY : ∀ g ∈ Pc.committed, Y g = X g) :
     (Pc.wrong X).card ≤ (Pf.wrong Y).card := by

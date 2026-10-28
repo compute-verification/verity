@@ -117,9 +117,9 @@ def AllGather2(B, S, parts):
 
 
 # ---------------------------------------------------------------------------------------------------------
-# [lane vllm-tp-n] world-parametric collectives.  IDENTITY RULE: a Definition's identity is `Name_vN{statics}` (defs.SpecializedDefinition.id),
+# World-parametric collectives.  IDENTITY RULE: a Definition's identity is `Name_vN{statics}` (defs.SpecializedDefinition.id),
 # so the family NAME is part of every recorded Program's digest.  `AllReduce2_v1{N}` / `AllGather2_v1{N}` therefore stay the identities of
-# every world-2 collective (the frozen #70 / #75 rank Programs name them); `AllReduce_v2{WORLD,N}` / `AllGather_v1{WORLD,N}` are the
+# every world-2 collective (the frozen rank Programs name them); `AllReduce_v2{WORLD,N}` / `AllGather_v1{WORLD,N}` are the
 # identities for WORLD > 2 only.  `all_reduce(world)` / `all_gather(world)` are the ONE place a caller picks the family: world 2 -> the
 # `*2` composites (bit-identical body: one Bf16Add per element), world > 2 -> the parametric ones.  Nothing in the two-rank path changes.
 # ---------------------------------------------------------------------------------------------------------

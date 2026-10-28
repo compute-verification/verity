@@ -14,147 +14,90 @@ description: >
 # Process design
 
 A **process** is anything that runs on work other than the change that introduces it: a rule agents read, a check in
-`check`, a gate in `research merge`, a required reviewer, a file every PR must update, a convention every lane follows. A
-test in your own package that guards your own code is not one. Every process costs something on each change it touches
-and pays off only on the few where it catches an error, so assess it before proposing it, and retire it once it no
-longer pays.
+`check`, a gate in `research merge`, a required reviewer, a file every PR must update, a convention every lane follows (a
+test guarding your own package's code is not one). It costs something on every change it touches and pays only on the
+few where it catches an error, so assess it before proposing it, and retire it once it no longer pays.
 
-## What research velocity is
+## What it costs
 
-Research velocity is the rate at which Verity produces results someone can act on: security claims proved under named
-assumptions, benchmark measurements, design decisions, working integrations. It is not the rate of commits: a fast result
-that is later retracted costs velocity. A process moves it through five channels:
+Research velocity is the rate of results someone can act on (proved claims, measurements, design decisions, working
+integrations), not of commits: a retracted result costs it. A process costs **loop latency** (idea to trusted result),
+**parallelism** (lanes working at once without colliding) and **decision latency** (time waiting on a human) on every
+change it touches, and pays in **yield** (results that stay true) and **reuse** (results found, cited, built on) only
+where an error or a reuse happens. It earns its place when that benefit exceeds its cost on all of them.
 
-- **Loop latency:** the time from an idea to a trusted result. Steps, builds, queues and reviews on the critical path add
-  to it.
-- **Parallelism:** how many lanes can work at once without colliding. Shared files, single queues and global rules
-  subtract from it.
-- **Decision latency:** the time a result waits for a human. Every blocking question adds to it; defaults and delegation
-  cut it.
-- **Yield:** how many results stay true. A check at the right point raises it; an error caught late costs rework and
-  retractions.
-- **Reuse:** how easily a result is found, cited and built on: the evidence store, labels, generated views.
-
-The first three are paid on every change the process touches. The last two pay off only on the changes where an error
-would have happened or a result gets reused. A process earns its place when its benefit on those few changes exceeds its
-cost on all of them.
-
-**Price only the scarce resources.** Machine time and agent time are cheap and run in parallel. These are not:
-
-1. **the human's attention**, the bottleneck;
-2. **the merge path:** `next`, its reviewers, a Lean change's Lean check, the coordinator;
-3. **files and queues many lanes pass through;**
-4. **the words every agent reads before working:** the root `AGENTS.md`, the lane contract, the `AGENTS.md` of the
-   subtree;
-5. **pods and money.**
-
-Agents follow rules literally and at scale, and they don't push back on a bad one. A rule's cost is multiplied by the
-number of agents and how often it fires, and nothing prunes it unless someone does.
+Price only the scarce resources: the human's attention (the bottleneck); the merge path (`next`, its reviewers, a Lean
+change's Lean check, the coordinator); files and queues many lanes pass through; the words every agent reads first (the
+root `AGENTS.md`, the lane contract, a subtree's `AGENTS.md`); pods and money. Machine and agent time are cheap. Agents
+follow rules literally and at scale and never push back, so a rule's cost multiplies by the agents and how often it
+fires, and nothing prunes it unless someone does.
 
 ## The ten tests
 
-Ask each of these of a proposed process. A "no" costs velocity unless the proposal says why it's worth it.
+A "no" costs velocity unless the proposal says why it's worth it.
 
-1. **Is it priced in scarce resources, not in steps?** Ten automatic checks of a few seconds cost less than one approval
-   per change. Good: suites cached by input, so only what changed reruns. Bad: a named reviewer on every change, when the
-   reviewer is always the human.
-2. **Does it fire where results are relied on, not where they're made?** The reliance points are landing on `main`,
-   publishing a table or a Notion page, citing a theorem as proved, and handing a spec to another implementer. Most
-   exploration results are thrown away. Good: records only for cited theorems (guarantees); `experimental` schemes.
-   Bad: a `PROTOCOL.md` kept current on every behavior change, which cost 64 commits to the protocols' prose against 70
-   to their Python in the week of Sep 22–29.
-3. **Is it code, with the fix in its failure message?** A check costs nothing until it fires, and it teaches when it
-   does. Prose taxes every agent's context and is followed unreliably; the lane contract says it: "a rule you can't see
-   enforced is not protection". Good: the Lean check's `escapes` list; `tests/test_boundaries.py`.
-4. **Does it label rather than block, unless the error would pass unnoticed?** A label lets work go on and lets readers
-   filter. Block only for errors nobody would notice until they cost a lot: #118 made `merkle_binding` vacuous by
-   redefining `MerkleScheme.Collision`, the axiom audit passed it, and only the guarantees' records and a person reading
-   them catch that. Good: `(alg.)` on algebraic-hash results.
-5. **Does it keep one source and generate the rest?** Every hand-kept copy doubles edits and drifts. Bad: the dense
-   scheme's Lean re-certified as "matching the code" after the tag format had diverged between Lean and Python;
-   hand-written proved/open tables.
-6. **Does it add no serialization point?** A file every PR edits, one queue or one reviewer caps how many lanes can work
-   at once and turns one failure into many waits. Bad: soundness's flat root import list, which conflicted across trains.
-7. **Is following it the cheapest way to explore?** If it isn't, work moves outside it and the cost comes back at
-   integration. Bad: research Lean kept outside the repository, whose landing needed flattened files and renames by
-   regex checked by hand.
-8. **Does every decision it asks for stand alone, with a default that proceeds?** Waits grow sharply once a reviewer is
-   near capacity, so one blocking question stalls many lanes. A provisional default keeps them moving and is cheap to
-   reverse. Good: POUS's provisional `Meets` clauses.
-9. **Does it have an owner, a named failure and an exit?** Rules accrete one per incident and rarely leave.
-10. **Is it a rare change, made in code?** Rule churn has a cost of its own: every agent's instructions and every
-    in-flight brief go stale. The root `AGENTS.md` took 25 edits on Sep 27.
+1. **Priced in scarce resources, not steps?** Ten cached automatic checks cost less than one approval per change.
+2. **Fires where results are relied on** (landing on `main`, publishing a table or Notion page, citing a theorem as
+   proved, handing a spec to another implementer), **not where they're made?** Most exploration is thrown away.
+3. **Code, with the fix in its failure message?** A check costs nothing until it fires; prose taxes every agent's context
+   and is followed unreliably.
+4. **Labels rather than blocks**, unless the error would pass unnoticed until it cost a lot (a redefinition that makes a
+   guarantee vacuous while the axiom audit passes)?
+5. **One source, the rest generated?** A hand-kept copy doubles edits and drifts.
+6. **No serialization point?** A file every PR edits, one queue or one reviewer caps parallel lanes and turns one failure
+   into many waits.
+7. **Following it is the cheapest way to explore?** Otherwise work moves outside it and the cost returns at integration.
+8. **Each decision it asks for stands alone, with a default that proceeds?** Waits grow sharply near a reviewer's
+   capacity; a provisional default is cheap to reverse.
+9. **An owner, a named failure and an exit?** Rules accrete one per incident and rarely leave.
+10. **A rare change, made in code?** Rule churn stales every agent's instructions and in-flight brief.
 
-In one sentence: a good process makes the right thing the easy thing while exploring, and makes the wrong thing loud
-where a result is relied on.
+A good process makes the right thing easy while exploring, and the wrong thing loud where a result is relied on.
 
 ## Assess a proposed process
 
-1. **Name the failure:** an incident (a PR, commit or note id) or a concrete risk, how often it happens, and what it costs
-   when found late: rework, a retracted table, a false claim to a colleague. No failure, no process.
-2. **Find the smallest mechanism.** Try these in order, and stop at the first that works: nothing (the failure is rare
-   and cheap to fix late); a label; a code check in the suite that owns the files it reads (see
-   `.agents/skills/testing/SKILL.md`); a generated artifact in place of a hand-kept one; and only then a prose rule or a
-   human gate.
-3. **Pull the real changes.** Take the last one or two weeks of history in the area the process touches, and group the
-   changes by type, with counts: behavior changes, refactors, proofs, experiments, promotions (a scheme becomes the
-   default, a format gets a new version), publications.
+1. **Name the failure:** an incident (PR, commit or note id) or a concrete risk with its rate, and its cost when found
+   late (rework, a retracted table, a false claim to a colleague). No failure, no process.
+2. **Find the smallest mechanism**, stopping at the first that works: nothing (rare and cheap to fix late); a label; a
+   code check in the suite that owns the files it reads (the testing skill); a generated artifact in place of a hand-kept
+   one; only then a prose rule or a human gate.
+3. **Pull the real changes** of the last one or two weeks in the area, grouped by type with counts: behavior changes,
+   refactors, proofs, experiments, promotions (a new default scheme or format version), publications.
 
    ~~~sh
    git fetch origin main
-   git log origin/main --since=2.weeks --date=format:'%m-%d %H:%M' --format='%h %ad %s' -- verity/core/protocols/pous   # changes by path
-   git log origin/main --since=1.week --format=%h -- AGENTS.md | wc -l                                        # how often a file changes
+   git log origin/main --since=2.weeks --date=format:'%m-%d %H:%M' --format='%h %ad %s' -- verity/core/protocols/pous  # changes by path
+   git log origin/main --since=1.week --format=%h -- AGENTS.md | wc -l  # how often a file changes
    gh pr list --state merged --limit 300 --json number,createdAt,mergedAt,files --jq '
      .[] | select(any(.files[]; .path | startswith("verity/core/protocols/")))
-     | [.number, (((.mergedAt|fromdate) - (.createdAt|fromdate)) / 3600 * 10 | floor / 10)] | @tsv'         # hours to merge
-   wc -w AGENTS.md ~/.research/notes/kb/LANE-CONTRACT.md                                                      # always-read words
+     | [.number, (((.mergedAt|fromdate) - (.createdAt|fromdate)) / 3600 * 10 | floor / 10)] | @tsv'  # hours to merge
+   wc -w AGENTS.md ~/.research/notes/kb/LANE-CONTRACT.md  # always-read words
    ~~~
 
-4. **Walk each type through the process.** For each, record the steps it adds, the wall-clock time it adds on the
-   critical path, whether it blocks or labels, and who acts: the machine, an agent, the coordinator or the human. Walk the
-   bursts too: research moves in them (POUS changed its default scheme three times in nine hours on Sep 27–28), and a
-   gate that is cheap on average can serialize a burst.
-5. **Price it per week** in the scarce resources: the human's minutes, merge-path minutes, new files or queues many lanes
-   touch, words added to always-read rules, pod money. Compare the total with the failure's expected cost per week: how
-   often it happens times what it costs when found late.
-6. **Run the ten tests,** with a one-line answer to each.
-7. **Simplify and walk again.** Drop every piece whose cost exceeds its benefit, and repeat steps 4 to 6 on what's left.
-8. **Pilot.** Apply it to one package or one lane for about eight hours, measure the same numbers, then extend it or retire
-   it. Lanes work around the clock, so a pilot gets hours, not the week a human team would give it.
+4. **Walk each type through it:** the steps and critical-path time it adds, whether it blocks or labels, and who acts
+   (machine, agent, coordinator or human). Walk the bursts too: a gate cheap on average can serialize one.
+5. **Price it per week**, from those commands' numbers, not estimates, in the scarce resources (human minutes,
+   merge-path minutes, files or queues many lanes touch, always-read words, pod money) against the failure's expected
+   cost per week (rate times late cost).
+6. **Run the ten tests**, one line each.
+7. **Simplify and walk again:** drop every piece whose cost exceeds its benefit, and repeat steps 4 to 6.
+8. **Pilot** it on one package or lane for about eight hours, measure the same numbers, then extend or retire it.
 
-### Default budget
+**Default budget**; exceeding a line needs a stated reason:
 
-Exceeding any of these needs a stated reason in the proposal:
-
-- no new step on the common path (branch edits, exploratory runs) unless it's automatic and takes under a minute;
+- no new step on the common path (branch edits, exploratory runs) unless automatic and under a minute;
 - no new blocking human approval on the common path: human gates sit at reliance points, as stand-alone questions with a
   default;
-- no new file or queue that most PRs must touch;
-- a few lines at most added to `AGENTS.md` or the lane contract: the detail goes in a skill or in the check's failure
-  message;
-- an owner, a named failure with its incident, and an exit.
-
-### Worked example
-
-The Lean-first protocol norms, as first proposed: `check` regenerates each protocol's vectors from its Lean spec on every
-commit; the Python passes every vector except those in a hand-kept lag list; and it must match at three points
-(publishing a result, citing a theorem for a run, and making a scheme the default or bumping a wire format). Walked
-through a week of changes to POUS, PoUW, the one-stage audit and sampled proofs:
-
-- about 30 Python changes that don't change behavior, 3 experimental scheme versions and about 14 Lean proofs: no cost;
-- about 6 changes of a default or a law: each would wait 1 to 3 hours for an executable spec, new vectors and a
-  guarantee review, which would have serialized POUS's three default switches in nine hours;
-- the lag list: a second source, and a file lanes would collide on.
-
-The walkthrough justifies neither the lag list nor the default-switch match point, because a result built on an
-unmatched default is labelled already. The lighter version keeps one match point, publishing or citing a result as the
-protocol's, and `check` detects lag by itself: the Python may fail a vector only if that vector's expected value changed
-since the Python last passed it.
+- no new file or queue most PRs must touch;
+- a few lines at most added to `AGENTS.md` or the lane contract, routing and invariants only, removing any rule they
+  replace in the same change; the detail goes in a skill or a check's failure message, and a check runs in the suite that
+  owns the files it reads;
+- an owner, a named failure with its incident, an exit and a pilot.
 
 ## Write the proposal
 
-Put it in the PR description. When the process needs a decision before any code is written, put it in a `kind: draft`
-note under `~/.research/notes/lanes/<lane>/` instead, for the coordinator to forward. Keep it under a page:
+In the PR description, under a page; when it needs a decision before any code, in a `kind: draft` note under
+`~/.research/notes/lanes/<lane>/` for the coordinator to forward:
 
 ~~~markdown
 **Failure.** <incident id or concrete risk>; <how often>; <cost when found late>.
@@ -175,30 +118,15 @@ Pods: <$>. Against the failure's expected cost: <per week>.
 
 ## Retire a process
 
-Rules only accumulate unless someone removes them. Run a retirement pass:
-
-- when asked, or when a process feels heavy;
-- before adding a rule to `AGENTS.md` or the lane contract, over the section you're adding it to;
-- weekly over the root `AGENTS.md` and the lane contract; the coordinator owns this one.
-
-For each rule, find where it came from (`git log origin/main -S'<phrase>' --format='%h %ad %s' --date=short -- AGENTS.md`;
-the lane contract's rules carry a "Why:"), then take the first of these that applies:
+Run a retirement pass when asked or a process feels heavy, over the section a new rule joins before adding it, and
+weekly over the root `AGENTS.md` and the lane contract (the coordinator's). For each rule, find its origin (`git log origin/main -S'<phrase>' --format='%h %ad %s' --date=short -- AGENTS.md`; the lane
+contract's rules carry a "Why:") and take the first that applies:
 
 - **enforced in code already:** delete the prose, or cut it to a pointer at the check;
 - **enforceable in code:** write the check, with the fix in its failure message, and delete the prose;
-- **needed by one kind of work only:** move it into that work's skill, or into the subtree's `AGENTS.md`;
+- **needed by one kind of work only:** move it into that work's skill or the subtree's `AGENTS.md`;
 - **its failure hasn't recurred and would be cheap to catch late, or it fails most of the ten tests:** delete it;
-- **otherwise:** keep it, and give it an owner and an exit if it lacks them.
+- **otherwise:** keep it, with an owner and an exit.
 
-Make the removals in one PR, with one line of reason per rule. A removal that changes agreed semantics or acceptance
-criteria goes to the human as a stand-alone question with a default.
-
-## Before you land it
-
-- The failure is an incident, or a concrete risk with a rate, not "it could happen".
-- The numbers come from the commands above, not from estimates.
-- The budget is met, or each line it exceeds has a reason.
-- A code check fails with a message that says how to fix the failure, and runs in the suite that owns the files it reads.
-- What the change adds to `AGENTS.md` or the lane contract is routing and invariants only, and any rule it replaces is
-  removed in the same change.
-- The proposal names an owner, an exit and a pilot.
+Make the removals in one PR, one line of reason per rule. A removal that changes agreed semantics or acceptance criteria
+goes to the human as a stand-alone question with a default.

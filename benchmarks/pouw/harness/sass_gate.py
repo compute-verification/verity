@@ -1,7 +1,6 @@
-"""The SASS gate: no shipped kernel computes a value the verifier's scalar model can't replay (09:34Z, 09:58Z, 10:07Z,
-10:21Z, 11:00Z; the assessor's fp-model/sm120-scalar check `r20260930-091638-9747`). Before anything is timed, `bench.py` passes
-it every binary an arm declares (its build record's ``binaries``) and every library with device code mapped into the run;
-NVIDIA's own libraries (cuBLASLt, the runtime, the driver) are listed as not scanned.
+"""The SASS gate: no shipped kernel computes a value the verifier's scalar model can't replay. Before anything is timed,
+`bench.py` passes it every binary an arm declares (its build record's ``binaries``) and every library with device code
+mapped into the run; NVIDIA's own libraries (cuBLASLt, the runtime, the driver) are listed as not scanned.
 
 Two kinds of SASS instruction are flagged: any with .FTZ among its suffixes (FADD, FFMA, FMUL, and also FSETP, FMNMX, F2I,
 F2F, HADD2 and every other), which -ftz=true and --use_fast_math emit and which flush subnormals the model keeps; and any FP32

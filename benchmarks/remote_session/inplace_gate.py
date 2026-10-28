@@ -4,17 +4,17 @@ The gate, before anything is timed, is over a store registered as vLLM's binder 
 `Store`, `TorchBacking`, `PagedBacking` and `page_layout`): weight tensors (bf16 with an unregistered tail, int8 held
 transposed, a view 48 bytes into a fused tensor, a plain bf16 matrix) and a KV pool of three layers, two in
 FlashAttention's layout (2, pages, slots, heads, dim) sharing one storage and one page-major (pages, 2, ...). Each
-check is against the driver's reference over each block as the binder reads it (`backing.read`):
+check is against the driver's reference over each chunk as the binder reads it (`backing.read`):
 
     plans      every receipt and the root (`receipts.tree`, salts `device.store_salt`) of the whole store, of a mixed
-               plan of weight runs and live pages, of the same blocks out of store order, and of one- and two-leaf
+               plan of weight runs and live pages, of the same chunks out of store order, and of one- and two-leaf
                plans; the fused pass's kept levels equal to the tree hashed after its receipts (`unfused_kept`), at the
                gate's h0 and at h0 = 0 and FUSED_H0
-    openings   every plan's (`receipts.verify_leaf`, each block as stored), paths through kept levels and subtrees
-    appended   blocks appended at the store's end at their slots' bytes, a page's and single blocks (`InPlace.append`)
+    openings   every plan's (`receipts.verify_leaf`, each chunk as stored), paths through kept levels and subtrees
+    appended   chunks appended at the store's end at their slots' bytes, a page's and single chunks (`InPlace.append`)
     written    a pass after weights and KV are written in place, nothing re-registered
     contiguous the mapped receipts of a weight tensor equal to `rs_sketch16_receipts`'s over its bytes
-    refusals   a misaligned region, a gap, a plan past the store, a plane of part blocks, a CPU tensor, pages past
+    refusals   a misaligned region, a gap, a plan past the store, a plane of part chunks, a CPU tensor, pages past
                their storage
 
 Timing is at Llama-3.1-8B's weights as vLLM holds them in bf16 (the embedding; per layer qkv, o, gate_up, down and two
@@ -72,7 +72,7 @@ def register(torch, weights: list, kv: list, pages: int, slots: int):
 
 
 def held(store, backs) -> list[bytes]:
-    """Every store block as the binder reads it."""
+    """Every store chunk as the binder reads it."""
     out = []
     for info, b in zip(store.layout().regions, backs):
         raw = b.read(0, info.blocks * BLOCK)
@@ -133,7 +133,7 @@ def gate(torch, lib: Lib, rng, log) -> dict:
     ip = InPlace(torch, lib, [Region.of_backing(r.first, b) for r, b in zip(store.layout().regions, backs)], key,
                  kept_from=2)
     blocks = held(store, backs)
-    page_blocks = 2 * 2   # planes · plane_blocks: a page's blocks in a layer's region
+    page_blocks = 2 * 2   # planes · plane_blocks: a page's chunks in a layer's region
     out = {"blocks": N, "regions": [(r.name, r.kind, r.first, r.blocks) for r in store.layout().regions]}
 
     def check(name: str, plan: rb.Plan, draws: int = 0) -> bool:

@@ -208,7 +208,7 @@ def unit_reason(unit: Any) -> str | None:
             "its proof passes on rows formed under any salt")
 
 
-# TODO(#2722): a window's credit is its outcome's verdict within a period: the period's cap and circuit recorded before
+# TODO: a window's credit is its outcome's verdict within a period: the period's cap and circuit recorded before
 # window 0's first coin, each window's first coin after the previous window's draw, closed at the first refused window.
 # `Registrations` is none of that.
 class Registrations:

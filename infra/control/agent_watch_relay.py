@@ -143,6 +143,8 @@ def rung(rec: dict) -> str | None:
         return UNROUTED
     if rec.get("quiet"):        # the watch's own judgement that nobody must act: a run its lane cancelled, a relaunch declined
         return None
+    if rec.get("kind") == "run_ended" and rec.get("sender_status") == "ACTIVE":
+        return None             # its sender is in a turn and sees its own run end; if it then idles, the watch resumes it
     if rec.get("kind") in TOP or (rec.get("kind") == "silent" and rec.get("owner") == "top"):
         return "top"
     handles = {h["handle"] for h in REG.get("handles") or []}
@@ -212,6 +214,9 @@ def text(rec: dict) -> str:
                    else f"lane {rec.get('handle') or '?'}")
             return (f"*Agent watch:* {run} of {who} {line}, cancelled by its own lane ({rec.get('cancelled_by') or '?'}: "
                     f"\u201c{str(rec.get('cancel_reason') or '')[:160]}\u201d): nothing to resume.")
+        if rec.get("sender_status") == "ACTIVE" and rec.get("role") in ("worker", "coordinator"):
+            who = f"worker {name}" if rec.get("role") == "worker" else name
+            return f"*Agent watch:* {run} of {who} ({link}) {line}; its sender is in a turn, so no one is rung."
         if rec.get("role") == "worker" and rec.get("listed"):
             return (f"{lead}*Agent watch:* {run} of worker {name} ({link}) {line}; the watch starts a run on it with the "
                     "result if it is still idle in 10 min.")

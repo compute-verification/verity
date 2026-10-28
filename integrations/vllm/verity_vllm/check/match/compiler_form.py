@@ -3,8 +3,9 @@
 The Build's request Programs are the registered compiler's (`prune.kept_records`): without the units no output reads, each
 Definition with dead gates bound to its version without them, and each linear read only in part narrowed to the columns read.  The
 fold records what the runtime ran: vLLM runs every prompt row through the last layer, with the v1 kernels.  When every component is in
-that form (`components_in_form`: its derive report counts no dead computed gate, the form's defining property), the Match puts the
-fold in it before anything reads it (`compiled`), by the compiler's three rules over the instances:
+that form (`components_in_form`: its derive report counts no dead computed gate, the form's defining property, or, where the form
+leaves dead gates no rule removes, as an int8 row's unnarrowed linears, its Program names the dead-free versions and none of the v1s
+they replace), the Match puts the fold in it before anything reads it (`compiled`), by the compiler's three rules over the instances:
 
 * live: a sampling event, or an instance a live one reads.  Every sampling event is an output, a partial prefill chunk's discarded
   sample too: G6 counts it against the record's logits rows and the sampler geometry reads its split count.  So a chunked prefill
@@ -37,7 +38,8 @@ _WORDS = re.compile(r"Array<(\d+),(Value<\d+>)>")
 
 def components_in_form(dirs: Iterable[str]) -> dict:
     """Whether every component dir holds a Program in the registered compiler's form: its `derive-report.json` counts no dead
-    computed gate, exactly (`dead_gates`, not approximate).  A dir without that record is not in the form."""
+    computed gate, exactly (`dead_gates`, not approximate), or its Program names only the dead-free versions (`_swapped`).  A dir
+    without that record is not in the form."""
     dirs = list(dict.fromkeys(dirs))
     out = [d for d in dirs if not _in_form(d)]
     return {"in_form": bool(dirs) and not out, "components": len(dirs), "not_in_form": [os.path.basename(d.rstrip("/")) for d in out[:4]]}
@@ -58,7 +60,21 @@ def _in_form(d: str) -> bool:
         dg = json.load(open(os.path.join(d, "derive-report.json"))).get("dead_gates")
     except (OSError, ValueError):
         return False
-    return isinstance(dg, dict) and dg.get("dead_computed_gates") == 0 and dg.get("approximate") is False
+    return (isinstance(dg, dict) and dg.get("dead_computed_gates") == 0 and dg.get("approximate") is False) or _swapped(d)
+
+
+def _swapped(d: str) -> bool:
+    """Whether the component's Program (its `result.json` `spec_histogram`, one entry per root node) names a dead-free version
+    `prune.dead_free_versions` binds and none of the Definitions they replace.  `prune` swaps only inside `dead_free`, so such a
+    Program is in the form whatever dead gates it counts: those no rule of the form removes (an int8 linear read in part:
+    `ScaledMmS8_v1` is no `prune.COLUMNS` linear, so the last layer's qkv on the prompt rows before the last keeps its query columns)."""
+    try:
+        hist = json.load(open(os.path.join(d, "result.json")))["spec_histogram"]
+        bases = {_base(k)[1] for k in hist}
+    except (OSError, ValueError, KeyError, TypeError, AttributeError):
+        return False
+    table = prune.dead_free_versions()
+    return bool(bases & {v.id for v in table.values()}) and not bases & set(table)
 
 
 def _base(spec: str) -> tuple[str, str, str]:

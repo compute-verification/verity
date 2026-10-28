@@ -3,17 +3,17 @@
 A `Placement` puts each root node of the Program on a device at an engine step: each Call where it runs, each run input
 where it enters (the outside world, a block's own device, a trusted device), and each device maps its steps onto ticks of
 the trusted clock (`ticks`, strictly increasing). A registered input needs no device: registration put a copy of it in
-every block that reads it, before the epoch, as serving holds its weights and as the remote audit registers each copy
-(memory accounting, review 4). A registered value kept in one copy instead (`held`, or a registered parameter named in
-`place`) is moved to its readers in other blocks, and those crossings are bandwidth like any other. Every gate of a node
-is placed with it, so this is Lean's `Accounting.Placed` (and `Accounting.Requirement.Placement`, in #2399) at the
-census's grain: a gate's leaf and step are its node's. The placement is private and committed. A crossing is a census
+every block that reads it, before the epoch, as serving holds its weights and as the remote audit registers each copy.
+A registered value kept in one copy instead (`held`, or a registered parameter named in `place`) is moved to its readers
+in other blocks, and those crossings are bandwidth like any other. Every gate of a node is placed with it, so this is
+Lean's `Accounting.Placed` (and `Accounting.Requirement.Placement`) at the census's grain: a gate's leaf and step are its
+node's. The placement is private and committed. A crossing is a census
 value produced in one block and read in another; crossings are derived, never declared, since moving a value doesn't
 change it.
 
 What is public is the placement's `Profile`: the occupancy each certifier port must show, the committed bits each block
-exports through it, the work each block is to be credited with and the proof blocks it rests on, the trusted data each
-block consumes, the registered stores and the registration's root. `audit` and `account` read the profile; only `audit`, which runs inside the proof, reads the
+exports through it, the work each block runs, the ANDs it is credited and the proof blocks they rest on, the trusted
+data each block consumes, the registered stores and the registration's root. `audit` and `account` read the profile; only `audit`, which runs inside the proof, reads the
 placement itself.
 """
 from __future__ import annotations
@@ -25,6 +25,7 @@ from dataclasses import dataclass, field
 from functools import cached_property
 from typing import Any
 
+from verity.ml.circuits.census import NoBooleanWork
 from verity.ml.circuits.program import Program
 
 from . import logical as L
@@ -116,21 +117,26 @@ class Placement:
     def _gates(self) -> dict[int, list[int]]:
         return {}
 
-    def public(self, plan: Plan, ticks: dict[str, float] | None = None, weights: dict[str, float] | None = None,
-               record: Mapping[str, Any] | None = None, query: Mapping[str, Any] | None = None) -> Profile:
+    def public(self, plan: Plan, ticks: dict[str, float] | None = None, record: Mapping[str, Any] | None = None,
+               query: Mapping[str, Any] | None = None) -> Profile:
         """The placement's public properties for the epoch `plan` audits. `ticks` is PoUW's proved bound per block
         (`benchmarks/pouw/proved_ticks.py`): (1 − ε) of the block-ticks the floor program ♭ takes for the block's census
-        at the data sheet's rates, which outside δ no accepted window undercuts over any route. `weights` is what an
-        audit credits for one unit of each kind of work (PoUW's W_ref, a public constant of its scheme), 1 for a kind it
-        doesn't list. `record` is the sampled proofs' one-stage registration of the Program and `query` the verifier's
-        copy of its partition query: each block's proof blocks are the units of that partition whose gates run there, and
-        the record must name that query, its partition and its population (proofs, review 4). Without a record they are
-        the served query's (`partition_object.query()`, Q_word v1 at X = 16), which the profile marks as assumed
-        (`Profile.partition`), and none for a Program that query doesn't apply to."""
+        at the data sheet's rates, which outside δ no accepted window undercuts over any route. `record` is the sampled
+        proofs' one-stage registration of the Program and `query` the verifier's copy of its partition query: each
+        block's proof blocks are the units of that partition whose gates run there, and the record must name that query,
+        its partition and its population (proofs, review 4). Without a record they are the served query's
+        (`partition_object.query()`, Q_word v1 at X = 16), which the profile marks as assumed (`Profile.partition`), and
+        none for a Program that query doesn't apply to."""
         dc = self.datacenter
+        try:
+            doc, per_call, uncounted = L.census_of(self.program, boolean=True), L.ands(self.program), None
+        except NoBooleanWork as e:
+            doc, per_call, uncounted = L.census_of(self.program), {}, str(e)
         work: dict[str, dict[str, float]] = {b.name: {} for b in dc.blocks}
+        ands = {b.name: 0 for b in dc.blocks}
         for k, w in L.work(self.program).items():
             if (b := self.block(self.device[k])) is not None:
+                ands[b] += per_call.get(k, 0)
                 for kind, n in w.items():
                     work[b][kind] = work[b].get(kind, 0.0) + n
         units, partition = self._units(record, query)
@@ -141,10 +147,10 @@ class Placement:
                     forced[b] += v.bits
         stores = {s.name: s for s in self.stores}
         stores.update({w.store.name: w.store for w in plan.wipes})
-        salt, salt_out, pinned = self._custody(plan.registration, weights or {})
-        return Profile(dc, plan, occupancy(self), work, forced, stores, dict(weights or {}), salt, salt_out, pinned,
-                       dict(ticks or {}), self.registration.root if self.registration else None, units,
-                       L.census_of(self.program)["digest"], partition, self._exported(plan))
+        salt, salt_out, pinned = self._custody(plan.registration)
+        return Profile(dc, plan, occupancy(self), work, forced, stores, ands, salt, salt_out, pinned, dict(ticks or {}),
+                       self.registration.root if self.registration else None, units, doc["digest"], partition,
+                       self._exported(plan), uncounted)
 
     def _exported(self, plan: Plan) -> dict[Port, float]:
         """The committed bits each egress port carries out of its block in the epoch: every crossing from a block, to
@@ -191,13 +197,13 @@ class Placement:
                 units[b] = units.get(b, 0) + n
         return units, how
 
-    def _custody(self, registration: int, weights: dict[str, float]) -> tuple[dict[str, float], ...]:
+    def _custody(self, registration: int) -> tuple[dict[str, float], ...]:
         """For each block whose own certifier releases a salt into it: the salt's bits, the bits other than timing that
         could carry it out before registration (the values the salt reaches that cross out, and the block's inside inputs
-        that reach anything crossing out, both at the census's grain, which can only over-count), and the credit of the
+        that reach anything crossing out, both at the census's grain, which can only over-count), and the ANDs of the
         block's work that depends on it, gate by gate within the Calls it reaches (`logical.reach`; none past the
-        explicit limit)."""
-        dc, program = self.datacenter, self.program
+        explicit limit nor on a word gate)."""
+        dc = self.datacenter
         readers: dict[int, set[int]] = {}
         for v in self.values:
             readers.setdefault(v.node, set()).update(v.reads)
@@ -226,20 +232,20 @@ class Placement:
                     reach_k = cone({k})
                     if any(x.value.node in reach_k and self.block(x.src) == b for x in out):
                         salt_out[b] += sum(v.bits for v in self.values if v.node == k)
-            pinned[b] = sum(weights.get(kind, 1.0) * n for k, w in L.reach(self.program, frozenset(roots)).items()
-                            if self.block(self.device.get(k)) == b for kind, n in w.items())
+            pinned[b] = sum(n for k, n in L.reach(self.program, frozenset(roots)).items()
+                            if self.block(self.device.get(k)) == b)
         return salt, salt_out, pinned
 
 
 @dataclass(frozen=True)
 class Profile:
     """A placement's public properties, with the declaration and the verifier's plan they are read against: the frames
-    each certifier port shows in each bucket (`occupancy`), the work each block is to be credited with, by kind
-    (`work`; per-kind counts, as the census gives them), what one unit of each kind is credited (`weights`, W_ref),
+    each certifier port shows in each bucket (`occupancy`), the work each block runs, by kind (`work`, never credited),
+    its Calls' ANDs (`ands`, its credit; none, and `uncounted` says why, for a Program the census can't lower to bits),
     the trusted data each block consumes (`forced`, in bits), the registered stores and the registration's root
-    (`registered`), and the digest of the census/v1 its values and work are read from (`census`, which names the
-    Program's digest). For a block whose certifier holds a salt for it: the salt's bits (`salt`), what besides timing could
-    carry it out before registration (`salt_out`, in bits), and the credit of the block's work that depends on it
+    (`registered`), and the digest of the census/v1 it is read from (`census`, which names the Program's digest and the
+    lowering). For a block whose certifier holds a salt for it: the salt's bits (`salt`), what besides timing could
+    carry it out before registration (`salt_out`, in bits), and the ANDs of the block's work that depends on it
     (`pinned`). For a block whose work PoUW timed: its proved bound (`ticks`, in block-ticks), which the account credits
     in place of the per-facet loads, since a prover may route work to another facet than the honest design does. Each
     block's proof blocks (`units`): the units of the Program's partition whose gates run there, which its `Computed` claim
@@ -253,7 +259,7 @@ class Profile:
     work: dict[str, dict[str, float]]
     forced: dict[str, float]
     stores: dict[str, Store]
-    weights: dict[str, float] = field(default_factory=dict)
+    ands: dict[str, int] = field(default_factory=dict)
     salt: dict[str, float] = field(default_factory=dict)
     salt_out: dict[str, float] = field(default_factory=dict)
     pinned: dict[str, float] = field(default_factory=dict)
@@ -263,10 +269,7 @@ class Profile:
     census: str | None = None
     partition: str | None = None
     exported: dict[Port, float] = field(default_factory=dict)
-
-    def credit(self, block: str) -> float:
-        """The work `block` is to be credited with: each kind's units at its weight."""
-        return sum(self.weights.get(k, 1.0) * n for k, n in self.work[block].items())
+    uncounted: str | None = None
 
     @property
     def windows(self) -> range:

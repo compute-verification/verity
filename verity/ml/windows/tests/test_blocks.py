@@ -2,16 +2,19 @@
 tile each template's units into (slot, step) exactly once at the class's S and T, the proof block is the record's partition,
 network accounting's keys are carried as given and its servers' unit ranges cut the members, and an output-row `Read` names
 the leaves a unit's output row is of a value without filling an input row. Pinned on `test_interface`'s two-request chain
-and on CMP-92's class circuit (S = 4 slots, NP = 8 prompt bytes, O = 24 outputs, T = 31 steps) with one server and with
-two (layer 0 | layer 1 and the head)."""
+and on a class circuit (`cmp92`: S = 4 slots, NP = 8 prompt bytes, O = 24 outputs, T = 31 steps) on one server; its split
+across two (layer 0 | layer 1 and the head) puts every inference block on both, which network accounting's check refuses
+(an inference block runs on one server)."""
 from __future__ import annotations
 
 import json
+import re
 from dataclasses import replace
 
 import pytest
 import test_interface as TI
 
+from verity.core.protocols.certifier import blocks as BK
 from verity.ml.circuits.codec import descriptor_id
 from verity.ml.circuits.defs import bind
 from verity.ml.circuits.ops import gemm as G
@@ -19,6 +22,12 @@ from verity.ml.circuits.ops.boolean import elementwise as EW
 from verity.ml.windows import interface as I, rows as CS
 
 GID, RUN = TI.GID, TI.RUN
+
+
+def held(*params: str) -> dict[str, dict[str, str]]:
+    """`interface.input_count`'s pins and the window's roots holding ``params``: each pinned at the root the window records."""
+    pins = {p: "ab" * 64 for p in params}
+    return {"pins": pins, "roots": pins}
 
 
 def chain_blocks(**edit) -> I.Blocks:
@@ -99,8 +108,8 @@ def test_the_inference_entries_tile_each_templates_units_exactly_once_at_the_cla
 def test_members_are_cut_where_a_servers_units_begin_or_end():
     """Network accounting's keys are carried as given; the members read only the servers' unit ranges, cutting a template's
     units where one begins or ends as at a wire's ends, so every statement's units sit on one server. A range outside its
-    template's units, or servers without units, are refused; that the servers partition the units is network accounting's
-    check."""
+    template's units, or servers without units, are refused; that the servers partition the units, and run each inference
+    block on one, is network accounting's check."""
     net = {"server": [{"name": "a", "uplink": "l0", "units": [[GID, 0, 3]]}, {"name": "b", "uplink": "l1", "units": [[GID, 3, 5]]}],
            "server_time": [{"server": s, "steps": [0, TI.STEPS]} for s in "ab"], "transfers": []}
     plain, split = I.Window(TI.chain(), RUN, TI.LAW, 8), I.Window(blocked(chain_blocks(network=net)), RUN, TI.LAW, 8)
@@ -134,8 +143,8 @@ def test_an_output_row_read_names_a_values_leaves_and_fills_no_input_row():
     reg = TI.declared().registered
     out = I.Read(TI.G8ID, "o0", "resp", at=0, radix=(6,), base=0, step=(8,))
     c = TI.declared(registered=replace(reg, params={**reg.params, "resp": 48}, reads=(*reg.reads, out)))
-    assert I.input_count(c.description(), pins={"weights", "resp"}) == \
-        I.input_count(TI.declared().description(), pins={"weights"})
+    assert I.input_count(c.description(), **held("weights", "resp")) == \
+        I.input_count(TI.declared().description(), **held("weights"))
     with pytest.raises(ValueError, match="both fill rows"):
         TI.declared(registered=replace(reg, params={**reg.params, "resp": 48, "wire": 48},
                                        reads=(*reg.reads, out, replace(out, param="wire"))))
@@ -158,8 +167,8 @@ SPLIT = {"s0": [[EID, 0, H * T * S], [QID, 0, 6 * T * S], [KID, 0, QK_LAYER], [O
 
 
 def cmp92(servers: int) -> I.Circuit:
-    """CMP-92's class circuit (S slots, NP prompt bytes, O outputs, T = NP + O − 1 steps) at its block layout and width
-    H = 16, its row ops stood in by catalog units until CIR-100's Definitions land, rows gathered by WIRES' cut. At step p,
+    """The class circuit (S slots, NP prompt bytes, O outputs, T = NP + O − 1 steps) at its block layout and width
+    H = 16, its row ops stood in by catalog units, rows gathered by the wire cut. At step p,
     slot j: the token's embedding as H ``Bf16Add`` coordinates (the token and the position's weight, units (p·S + j)·H + c);
     per layer, six ``Gemm_v2{16, 16}`` head rows (q0 q1 k0 k1 v0 v1) reading the H coordinates cut a row each, QKᵀ as
     ``GemmCoordinate_v2{16}`` over every key so far in the plan's order (head, key, slot: layer l's at l·S·T(T+1) +
@@ -169,7 +178,8 @@ def cmp92(servers: int) -> I.Circuit:
     response's leaf j·O + k. With two servers, the rows crossing between them are wire transfers: layer 0's coordinates into
     layer 1 an output-row read on the writer and a read on the reader (``x1``), and the token back into the embedding a read
     of the response's leaves on the reader, the head's output row being read once, as the response; each server loads its
-    own weights."""
+    own weights. That split puts every inference block (slot, step) on both servers, the form network accounting forbids: it is the
+    negative of network accounting's check (`test_cmp92s_split_across_two_servers_is_refused`)."""
     two = servers == 2
     w0, w1 = ("weights0", "weights1") if two else ("weights", "weights")
     pos, layer = T * H, 8 * H * H
@@ -230,32 +240,43 @@ def circuits() -> dict[int, I.Circuit]:
     return {n: cmp92(n) for n in (1, 2)}
 
 
-def test_cmp92s_class_circuit_on_one_server_and_on_two_has_one_inference_and_nothing_free(circuits):
-    """Both splits are one class circuit's units with one inference block, the plan's QKᵀ entry at step p
+def test_cmp92s_class_circuit_on_one_server_has_one_inference_and_nothing_free(circuits):
+    """The class circuit's units with one inference block, the plan's QKᵀ entry at step p
     ``{at: S·p(p+1), radix: [2, p+1, S], axes: [-, -, slot], step: p}`` among them; with the verifier's pins (the weights
-    and the request on one server; with two, each server's weights, the wire transfer ``x1`` and the response, which the
-    token back into the embedding reads) no input row is free, the response and ``x1`` on their writers being output-row
-    reads that fill none. The records' blocks differ in the network keys alone."""
-    one, two = circuits[1], circuits[2]
-    assert one.units == two.units and list(one.units.values()) == [H * T * S, 12 * T * S, 2 * QK_LAYER, 2 * H * T * S, O * S]
+    and the request) no input row is free, the response on its writer being an output-row read that fills none."""
+    one = circuits[1]
+    assert list(one.units.values()) == [H * T * S, 12 * T * S, 2 * QK_LAYER, 2 * H * T * S, O * S]
     assert {"template": KID, "at": S * 5 * 6, "radix": [2, 6, S], "axes": ["-", "-", "slot"], "step": 5} in \
         [e.doc() for e in one.blocks.inference]
-    pins = {1: {"weights", "request"}, 2: {"weights0", "weights1", "request", "x1", "response"}}
-    for n, c in circuits.items():
-        count = I.input_count(json.loads(json.dumps(c.description())), pins=pins[n])
-        assert count["free"] == 0 and count["ingress"] == 0, count
-    r1, r2 = one.blocks_record(), two.blocks_record()
+    count = I.input_count(json.loads(json.dumps(one.description())), **held("weights", "request"))
+    assert count["free"] == 0 and count["ingress"] == 0, count
+    assert one.blocks_record()["proof"] == {"units": 15472, "partition": I.descriptor_record(one, 1 << 20)["partition"]}
+
+
+def test_cmp92s_split_across_two_servers_is_refused(circuits):
+    """A server's ingress and egress carry only its inference blocks' declared inputs and outputs,
+    and an inference block runs on one server. Network accounting's check of the servers (`certifier.blocks.server_blocks`,
+    on the record's ``blocks``) accepts the class circuit on one server and refuses it split layer 0 | layer 1 and the head,
+    where every (slot, step) has units on both, by naming the first such block. The records' blocks differ in the network
+    keys alone."""
+    docs = {n: {**c.description(), "blocks": c.blocks_record()} for n, c in circuits.items()}
+    lays = {t: lay for t, (lay, _n) in circuits[1].layouts.items()}
+    assert [s.name for s in BK.server_blocks(docs[1], docs[1]["blocks"]["server"], lays)] == ["s0"]
+    with pytest.raises(ValueError, match=re.escape(f"inference block (slot 0, step 0): units of {KID} on server s0 and of {KID} "
+                                                   "on server s1; an inference block runs on one server, the one that may "
+                                                   "read its inputs")):
+        BK.server_blocks(docs[2], docs[2]["blocks"]["server"], lays)
+    r1, r2 = docs[1]["blocks"], docs[2]["blocks"]
     assert {k: v for k, v in r1.items() if k not in I.NETWORK} == {k: v for k, v in r2.items() if k not in I.NETWORK}
-    assert r1["proof"] == {"units": 15472, "partition": I.descriptor_record(one, 1 << 20)["partition"]}
-    assert [t["kind"] for t in r2["transfers"]] == ["request", "response", "load", "load", "wire", "wire", "wire", "wire"]
 
 
 def test_cmp92s_two_server_split_cuts_every_template_at_the_server_boundary(circuits):
     """With one server the layer row units are one statement (their one wire covers both layers); with two, each template is
     cut where s0's units end, so no statement's units span both servers, and the verifier derives the same members from the
     descriptor record. The window's blocks are byte-identical under any run. The members are the circuits' without their
-    registered reads: `members` fills tables for uncut reads of whole registered rows over whole members only, and CMP-92's
-    weight reads start mid-row and its two-server ``x1`` read is cut."""
+    registered reads: `members` fills tables for uncut reads of whole registered rows over whole members only, and the class
+    circuit's weight reads start mid-row and its two-server ``x1`` read is cut. The cut is the interface's alone: network accounting
+    refuses this split (`test_cmp92s_split_across_two_servers_is_refused`)."""
     cap = 1 << 20
     with pytest.raises(ValueError, match="whole registered rows"):
         I.members(circuits[1], cap)

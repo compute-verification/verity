@@ -99,7 +99,7 @@ TopPNumkeep = PrimitiveDefinition("TopPNumkeep", 1, (("numdup", I32), ("q", F32)
                                   conformance="exact-model-tested")
 
 
-# --- the composite word gates: one body each, built as IR or evaluated on ints ------------------------------------------------
+# --- the composite word gates: one body each, built as gates or evaluated on ints ------------------------------------------------
 
 class _Num:
     """Evaluate a body on ints."""

@@ -13,23 +13,23 @@ f = { value = 4, low = 1, high = 8, source = "FanOutReadIntensity docstring (Kim
 width = { value = 390, low = 48, high = 512, source = "PartialSumCoverBound docstring (a = 390)", status = "derived" }
 per_param = { value = 2, low = 1, high = 2, source = "Dgrad on the forward's tokens (FanOutIntensity docstring)", status = "derived" }
 bcol = { value = 1, low = 1, high = 2.5, source = "ColumnsIncompressible at Kimi K2 (FanOutIntensity docstring)", status = "conjecture" }
-beta_x = { value = 0.87, low = 0.39, high = 0.94, source = "note:training-20261024T2336Z-report-tvi-findings: replay-consistent, exact block on Qwen2.5-1.5B (art:ff2237e531a9); the best coder's rate, so an upper bound on what the premise may assume, carried to other models at fixed F/d", status = "assumed" }
+beta_x = { value = 0.87, low = 0.39, high = 0.94, source = "measured: replay-consistent, exact block on Qwen2.5-1.5B; the best coder's rate, so an upper bound on what the premise may assume, carried to other models at fixed F/d", status = "assumed" }
 thread_d = { value = 10, source = "benchmarks/nci/rows.json pretrain-full", status = "derived" }
 thread_c = { value = 2, source = "benchmarks/nci/rows.json pretrain-full", status = "derived" }
 thread_k = { value = 2e7, unit = "bit", source = "Nci.Guarantees.ReferenceThreaded: the Threading certificate checked for Kimi K2 at S = 2e7 bits (benchmarks/nci/rows.json pretrain-full)", status = "declared" }
 c_w = { value = 2.5, low = 0.8, high = 3.4, source = "Nci.Cover.Guarantees.CoveringBoundAdditive docstring (c_w = 2.5 at Kimi K2, b_w.pretrained/frontier-lossy); low: b_w's; high: Nci.Guarantees.CoveringBoundPriced docstring, a uniform c_w is at most the cheapest 1%'s 2.3-3.4", status = "conjecture" }
 c_a = { value = 4, low = 1, high = 16, source = "Nci.Cover.Guarantees.CoveringBoundAdditive docstring: each counted product's output reads all four bits of its FP4 activation; high: CoveringBoundPriced's bf16 activation, 16", status = "derived" }
-price = { value = 2.8, low = 2.3, high = 6.7, source = "Nci.Guarantees.CoveringBoundPriced docstring at Kimi K2 (note:training-20261022T1045Z-cover-assumptions-realism): a uniform price at most the cheapest 1%'s 2.3-3.4; high: priced per parameter, the weights' mean, 6.7 bits", status = "derived" }
+price = { value = 2.8, low = 2.3, high = 6.7, source = "Nci.Guarantees.CoveringBoundPriced docstring at Kimi K2: a uniform price at most the cheapest 1%'s 2.3-3.4; high: priced per parameter, the weights' mean, 6.7 bits", status = "derived" }
 price_max = { value = 8, low = 8, high = 16, unit = "bit", source = "Nci.Guarantees.CoveringBoundPriced docstring: t is at most a weight's width, 8 bits in FP8; high: bf16's 16", status = "derived" }
-gamma = { value = 1, source = "E1 Proposition 3' (note:training-20261024T2310Z-draft-tvi-e1-sections): the splitting margin of H_gamma^t; exact coverings measured splitting at 1.1-1.5x (art:2f1eae928df7, premise.e1-h-gamma)", status = "assumed" }
-beta_v = { value = 0.63, low = 0.18, high = 0.63, unit = "bit", source = "E1 Proposition 6b (note:training-20261024T2310Z-draft-tvi-e1-sections): beta_v^R 0.18-0.63 at FP8 (premise.e1-output-premise)", status = "derived" }
-h_eff = { value = 17, unit = "bit", source = "E1 Corollary 4a (note:training-20261024T2310Z-draft-tvi-e1-sections): a partial sum held at a 17-bit token's bits", status = "derived" }
+gamma = { value = 1, source = "E1 Proposition 3': the splitting margin of H_gamma^t; exact coverings measured splitting at 1.1-1.5x (premise.e1-h-gamma)", status = "assumed" }
+beta_v = { value = 0.63, low = 0.18, high = 0.63, unit = "bit", source = "E1 Proposition 6b: beta_v^R 0.18-0.63 at FP8 (premise.e1-output-premise)", status = "derived" }
+h_eff = { value = 17, unit = "bit", source = "E1 Corollary 4a: a partial sum held at a 17-bit token's bits", status = "derived" }
 b_ps = { value = 1, low = 1, high = 16, unit = "bit", source = "E1 Corollary 4a: bits per weight-gradient accumulator read, its two cases 1 and 16 (bf16)", status = "conjecture" }
 step_tokens = { value = 6.7e7, unit = "token", source = "Kimi K2 report (arXiv 2507.20534): 67M tokens a batch (benchmarks/nci/kappa.py batch_tokens); a run that states its batch sets its own", status = "datasheet" }
-beta_x_marginal = { value = 2.6, low = 0.87, high = 4, unit = "bit", source = "E1's column tile at the margin (draft:E1-tile, note:training-20261024T2336Z-report-tvi-findings): fresh bits per extra activation occurrence; low: the exact block's beta_x; high: an FP4 activation's width", status = "assumed" }
+beta_x_marginal = { value = 2.6, low = 0.87, high = 4, unit = "bit", source = "E1's column tile at the margin (draft:E1-tile): fresh bits per extra activation occurrence; low: the exact block's beta_x; high: an FP4 activation's width", status = "assumed" }
 psum_bits = { value = 16, unit = "bit", source = "a bf16 partial sum handed to the next tile", status = "declared" }
 tile_weight_bits = { value = 8, unit = "bit", source = "an FP8 weight read at its stored width (a precision caps it at its own)", status = "datasheet" }
-token_bits = { value = 20, low = 17, high = 20, unit = "bit", source = "ruling: Daniel 25 Oct, a session returns at most 2.5 MB, 1M tokens at 20 bits (policy.v4-pro-session.k); low: E1's 17-bit token", status = "ruled" }
+token_bits = { value = 20, low = 17, high = 20, unit = "bit", source = "ruled: a session returns at most 2.5 MB, 1M tokens at 20 bits (policy.v4-pro-session.k); low: E1's 17-bit token", status = "ruled" }
 grad_bits = { value = 16, low = 8, high = 32, unit = "bit", source = "a bf16 gradient accumulator per updated weight inside an optimizer step; low: FP8; high: FP32", status = "assumed" }
 
 [family.full.efficiency]
@@ -38,22 +38,22 @@ pretrain = { value = 1.0, source = "the reference algorithm", status = "declared
 # Number formats: precision.<name> sets beta_x, caps b_a and f at its bits, and multiplies the family's efficiency.
 
 [precision.fp8]
-beta_x = { value = 0.87, low = 0.39, high = 0.94, source = "note:training-20261024T2336Z-report-tvi-findings (art:ff2237e531a9): replay-consistent exact blocks on Qwen2.5-1.5B GRPO, 0.39-0.87; high: the cheapest boundary's 0.87-0.94; coders' rates, so upper bounds on what the premise may assume", status = "assumed" }
+beta_x = { value = 0.87, low = 0.39, high = 0.94, source = "measured: replay-consistent exact blocks on Qwen2.5-1.5B GRPO, 0.39-0.87; high: the cheapest boundary's 0.87-0.94; coders' rates, so upper bounds on what the premise may assume", status = "assumed" }
 bits = { value = 8, unit = "bit", source = "E4M3: 8 bits an entry", status = "datasheet" }
 
 [precision.fp8.efficiency]
 pretrain = { value = 1.0, low = 1.0, high = 1.053, source = "benchmarks/nci/parameters.json train.compute_multiplier/w8a8 (0.95, 1, 1), inverted", status = "measured" }
 sft = { value = 1.0, low = 1.0, high = 1.053, source = "train.compute_multiplier/w8a8 (pretraining at 7B-175B), taken for SFT", status = "assumed" }
-rl-elicit = { value = 1.67, low = 1.0, high = 1.67, source = "note:training-20261024T2336Z-report-tvi-findings A1: FP8 weights and activations train GRPO at about 60% of bf16's gain in 100 steps, inverted; low: w8a8's parity in pretraining", status = "measured" }
+rl-elicit = { value = 1.67, low = 1.0, high = 1.67, source = "A1, measured: FP8 weights and activations train GRPO at about 60% of bf16's gain in 100 steps, inverted; low: w8a8's parity in pretraining", status = "measured" }
 rl-agentic = { value = 1.67, low = 1.0, high = 1.67, source = "as rl-elicit (A1's GRPO), untested on agentic RL", status = "conjecture" }
 
 [precision.nvfp4]
-beta_x = { value = 0.26, low = 0.195, high = 0.26, source = "note:training-20261024T2336Z-report-tvi-findings (art:ff2237e531a9): at most 0.26 at NVFP4; low: the cheapest boundary's 0.195; a coder's rate, so an upper bound on what the premise may assume", status = "assumed" }
+beta_x = { value = 0.26, low = 0.195, high = 0.26, source = "measured: at most 0.26 at NVFP4; low: the cheapest boundary's 0.195; a coder's rate, so an upper bound on what the premise may assume", status = "assumed" }
 bits = { value = 4.5, unit = "bit", source = "NVFP4: a 4-bit entry and an 8-bit scale per 16", status = "datasheet" }
 
 [precision.nvfp4.efficiency]
 pretrain = { value = 1.33, low = 1.11, high = 1.82, source = "benchmarks/nci/parameters.json train.compute_multiplier/w4a4 (0.55, 0.75, 0.9), inverted", status = "measured" }
-sft = { value = 1.0, low = 1.0, high = 1.75, source = "note:training-20261024T2336Z-report-tvi-findings A1 follow-up (art:008363451bda): NVFP4 SFT matches bf16 on the 88-bit and 2.4-kbit keys at about 1.75x and 1.0x its FLOPs", status = "measured" }
+sft = { value = 1.0, low = 1.0, high = 1.75, source = "A1's follow-up, measured: NVFP4 SFT matches bf16 on the 88-bit and 2.4-kbit keys at about 1.75x and 1.0x its FLOPs", status = "measured" }
 rl-elicit = { value = 1.75, low = 1.0, high = 3.0, source = "no NVFP4 RL run: between FP8 GRPO's 1/0.6 (A1) and NVFP4 SFT's 1.75 (A1 follow-up); high assumed", status = "conjecture" }
 rl-agentic = { value = 1.75, low = 1.0, high = 3.0, source = "as rl-elicit", status = "conjecture" }
 
@@ -70,7 +70,7 @@ kind = "full"
 premises = "full"
 precision = "nvfp4"
 kappa = { value = 0.602, source = "as family.full", status = "derived" }
-state_bits_per_param = { value = 4.5, low = 4.5, high = 16, source = "note:training-20261024T2336Z-report-tvi-findings A1 follow-up (art:008363451bda): weights stored only in NVFP4, and sign descent with no optimizer state learns the 88-bit key; high: family.full's FP8 weights and moment", status = "measured" }
+state_bits_per_param = { value = 4.5, low = 4.5, high = 16, source = "A1's follow-up, measured: weights stored only in NVFP4, and sign descent with no optimizer state learns the 88-bit key; high: family.full's FP8 weights and moment", status = "measured" }
 
 [family.full-nvfp4.efficiency]
 pretrain = { value = 1.0, source = "the reference algorithm, in NVFP4 (precision.nvfp4 prices the format)", status = "declared" }
@@ -125,7 +125,7 @@ bits = { value = 16, unit = "bit", source = "a bf16 adapter (benchmarks/nci/rows
 overhead = { value = 1.7, source = "benchmarks/nci/kappa.py: what isn't a weight matmul at 32k rollouts (1.11 at 4k)", status = "derived" }
 
 [family.lora-r16.efficiency]
-rl-elicit = { value = 1.0, low = 1.0, high = 1.11, source = "benchmarks/nci/parameters.json rl.small_state_retention/math-rlvr: rank-1 LoRA matches full RL at 8B (schulman-2025-lora-without-regret); note:training-20261024T2336Z-report-tvi-findings A2 (art:d8feafe2a5fc): 10 kB keeps 0.95 of full RL's gain at 1.5B, 1.08 at 7B", status = "measured" }
+rl-elicit = { value = 1.0, low = 1.0, high = 1.11, source = "benchmarks/nci/parameters.json rl.small_state_retention/math-rlvr: rank-1 LoRA matches full RL at 8B (schulman-2025-lora-without-regret); A2, measured: 10 kB keeps 0.95 of full RL's gain at 1.5B, 1.08 at 7B", status = "measured" }
 rl-agentic = { value = 1.3, low = 1.0, high = 10, source = "benchmarks/nci/parameters.json rl.small_state_retention/agentic-frontier: Yin's retention 0.77 at rank 16, inverted; high: the retention's low 0.1", status = "conjecture" }
 sft = { value = 1.5, low = 1.0, high = 4.0, source = "schulman-2025-lora-without-regret (benchmarks/nci/rows.json): LoRA matches full fine-tuning until the data exceeds its capacity; b_w.delta/sft: SFT deltas lack RL's low-rank structure", status = "conjecture" }
 
@@ -181,13 +181,13 @@ kind = "adapter"
 premises = "full"
 form = "tied"
 rank = { value = 2, source = "as family.tinylora", status = "assumed" }
-params = { value = 13, unit = "param", source = "note:training-20261024T2336Z-report-tvi-findings A2 tiny13: 13 values", status = "measured" }
+params = { value = 13, unit = "param", source = "A2's tiny13: 13 values", status = "measured" }
 bits = { value = 16, unit = "bit", source = "A2's tiny13: bf16 values", status = "measured" }
 seed_bits = { value = 64, unit = "bit", source = "A2's tiny13 is 272 bits: 13 x 16 and a 64-bit projection seed", status = "derived" }
 overhead = { value = 1.7, source = "benchmarks/nci/kappa.py: what isn't a weight matmul at 32k rollouts (1.11 at 4k)", status = "derived" }
 
 [family.tinylora-13.efficiency]
-rl-elicit = { value = 2.2, low = 1.32, high = 6.7, source = "note:training-20261024T2336Z-report-tvi-findings A2 (art:e14d89c33b0d): tiny13 reaches 0.45 [0.15, 0.76] of full RL's T = 1 gain on Qwen2.5-7B base, inverted", status = "measured" }
+rl-elicit = { value = 2.2, low = 1.32, high = 6.7, source = "A2, measured: tiny13 reaches 0.45 [0.15, 0.76] of full RL's T = 1 gain on Qwen2.5-7B base, inverted", status = "measured" }
 
 # Seeded updates: the state is the description (steps x population scalars).
 
@@ -200,7 +200,7 @@ population = { value = 30, source = "benchmarks/nci/algorithms.json es-30", stat
 
 [family.es.efficiency]
 pretrain = { value = 2780, low = 2780, high = 7.1e7, source = "benchmarks/nci/algorithms.json es-30 multiplier 0.00036 (dahal-2026-dust: FLOPs to equal loss against backprop at 37.7M), inverted; high: its shrinks-with-scale extrapolation, 1.4e-8 at 1e12 parameters", status = "measured" }
-rl-elicit = { value = 1.0, low = 0.5, high = 50, source = "Qiu et al. 2025 (arXiv 2509.24372): ES at population 30 matches or beats GRPO on Countdown at 0.5-8B; high: note:training-20261024T2336Z-report-tvi-findings R1 (art:5621b1caf9e7), ES fails a new 88-bit skill at over 50-230x backprop's FLOPs", status = "conjecture" }
+rl-elicit = { value = 1.0, low = 0.5, high = 50, source = "Qiu et al. 2025 (arXiv 2509.24372): ES at population 30 matches or beats GRPO on Countdown at 0.5-8B; high: R1, measured: ES fails a new 88-bit skill at over 50-230x backprop's FLOPs", status = "conjecture" }
 
 [family.mezo]
 kind = "seed"
@@ -234,7 +234,7 @@ kappa = { value = 0.602, source = "as family.full", status = "derived" }
 state_bits_per_param = { value = 16, source = "as family.full", status = "assumed" }
 workers = { value = 8, source = "SparseLoCo's tables (sarfi-2025-sparseloco)", status = "assumed" }
 sync_every = { value = 15, unit = "step", source = "benchmarks/nci/algorithms.json sparseloco: H = 15 in its tables", status = "declared" }
-sync_bits = { value = 0.085, low = 0.018, high = 0.16, unit = "bit/param", source = "ruling: Daniel 25 Oct, at least 17 GB a SparseLoCo sync of V4-Pro (exfil.sparseloco-sync, 1.36e11 bits over 1.6e12 parameters); low: benchmarks/nci/parameters.json grad.compression_ratio/frontier central 889x of bf16; high: its low, 100x", status = "ruled" }
+sync_bits = { value = 0.085, low = 0.018, high = 0.16, unit = "bit/param", source = "ruled: at least 17 GB a SparseLoCo sync of V4-Pro (exfil.sparseloco-sync, 1.36e11 bits over 1.6e12 parameters); low: benchmarks/nci/parameters.json grad.compression_ratio/frontier central 889x of bf16; high: its low, 100x", status = "ruled" }
 
 [family.sparseloco.efficiency]
 pretrain = { value = 1.0, low = 0.909, high = 1.064, source = "benchmarks/nci/algorithms.json sparseloco multiplier 1.0 (final loss against dense DiLoCo, 178M-2B); range: DiLoCo's", status = "measured" }

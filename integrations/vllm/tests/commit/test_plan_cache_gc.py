@@ -3,7 +3,7 @@
 Every full collection walks every object the collector tracks. The worker keeps each plan's record for two runs
 (`plan_cache`), and every committed step's layout is its plan's record. A record that held one `TensorMeta` per tensor made
 two runs' plans about 420k tracked objects at Llama-3.2-1B's 197 tensors per step, and every full collection of the serving
-process walked them (circuits' heap census of the network_traces Commit chunk, art:ef0c3e05). Here the committer of
+process walked them (a heap census of the network_traces Commit chunk). Here the committer of
 `test_native_collect_plan_cache` commits runs of 9 and of 200 tensors per step, with the identity check on, and after a
 collection counts what the cache keeps tracked per plan and what the layouts keep per step, before and after `finalize`.
 """

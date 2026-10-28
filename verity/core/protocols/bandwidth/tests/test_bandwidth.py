@@ -119,7 +119,7 @@ def p2_store():
 
 @pytest.fixture(scope="module")
 def big_store():
-    """37 blocks of 2,056 bytes, P2's width: not a power of two, and a short last leaf for the polynomial tag."""
+    """37 labels of 2,056 bytes, P2's width: not a power of two, and a short last leaf for the polynomial tag."""
     store = bv.store(37)
     return _Setup(store, bv.vk_of(store), bv.DEVICE, bv.COMMITMENT, bv.SOURCE)
 
@@ -151,7 +151,7 @@ def test_blake3_tag_is_its_formula() -> None:
 @pytest.mark.parametrize("name", TAGS)
 def test_every_tag_is_seed_first(name: str) -> None:
     """`H(σ, j, E_j)`: σ is framed inside the first 128 bytes the tag hashes (the SHA-512 prefix, or the input of the
-    BLAKE3 key every compression starts from), ahead of `j` and the block, and the tag changes with σ alone."""
+    BLAKE3 key every compression starts from), ahead of `j` and the label, and the tag changes with σ alone."""
     head = tags.prefix(tags.TAG_DOMAIN, name, bv.SEED)
     assert len(head) == 128 and frame(bv.SEED) in head and head.index(frame(bv.SEED)) + len(frame(bv.SEED)) <= 128
     block, other = bv.block(2), bytes(range(32, 64))
@@ -174,7 +174,7 @@ def test_polynomial_tag_is_the_polynomial_at_the_block_point() -> None:
 
 def test_points_reject_values_at_or_past_p_minus_two() -> None:
     """With a modulus near 2^30 about half the 31-bit values are rejected: the point is 2 plus the first value below
-    p − 2, in counter order, and some block's first value is rejected."""
+    p − 2, in counter order, and some label's first value is rejected."""
     p = (1 << 30) + 3
     head = hashlib.sha512(tags.prefix(tags.TAG_DOMAIN, "gf31-poly/v1", bv.SEED))
     first_rejected = 0
@@ -194,7 +194,7 @@ def test_points_differ_per_block_and_per_seed() -> None:
 
 
 def test_polynomial_tag_binds_words_only_mod_p() -> None:
-    """The word map is not injective: w and w + p agree, so the tag binds ⌈W·log2 p⌉ bits of a block, not all of it."""
+    """The word map is not injective: w and w + p agree, so the tag binds ⌈W·log2 p⌉ bits of a label, not all of it."""
     t = tags.get("gf31-poly/v1")
     a = bytearray(bv.block(9))
     w = int.from_bytes(a[:4], "little") % P
@@ -283,7 +283,7 @@ def test_malformed_root_is_rejected(big_store, state_of) -> None:
 
 
 class _Corrupt(audit.TagCommitment):
-    """A prover whose tags are wrong on the blocks `bad` names (it skipped them and guessed)."""
+    """A prover whose tags are wrong on the labels `bad` names (it skipped them and guessed)."""
 
     def __init__(self, store, tag, seed, bad):
         honest = audit.tag_pass(store, tag, seed)
@@ -300,7 +300,7 @@ def test_guessed_tags_are_caught(big_store, state_of, name: str) -> None:
 
 
 def test_a_skipped_fraction_passes_only_when_no_sample_lands_in_it(big_store, state_of) -> None:
-    """Skipping blocks `0..k-1` passes exactly the windows whose samples all miss them."""
+    """Skipping labels `0..k-1` passes exactly the windows whose samples all miss them."""
     store, vk = big_store
     params = _params("gf31-poly/v1", samples=4)
     outcomes = set()
@@ -367,7 +367,7 @@ def test_a_window_runs_once(big_store, state_of) -> None:
 
 def test_one_window_over_a_store_is_open_at_a_time(big_store, state_of) -> None:
     """While one window over a store is open the verifier refuses to start another, which stays unstarted and starts
-    once the first has its commitment: one read of each block never answers two windows."""
+    once the first has its commitment: one read of each label never answers two windows."""
     store, vk = big_store
     params = _params("ro-blake3/v1")
     clock = _Clock()
@@ -643,7 +643,7 @@ def test_a_window_open_when_its_challenger_stops_never_passes(big_store, tmp_pat
 
 
 def _forge(store: audit.Store, tag: str, seed: bytes, known: set[int]) -> audit.TagCommitment:
-    """A prover that tags only the blocks in `known` (samples it learned elsewhere) and guesses the rest."""
+    """A prover that tags only the labels in `known` (samples it learned elsewhere) and guesses the rest."""
     return _Corrupt(store, tag, seed, lambda j: j not in known)
 
 
@@ -673,7 +673,7 @@ def test_a_second_verifier_of_the_store_repeats_no_window(big_store, state_of) -
 def test_another_tags_window_reveals_no_samples(big_store, state_of) -> None:
     """The fast check's window and the certified tag's window over one store, both the first of their verifiers, draw
     different samples: the samples a `gf31-poly/v1` window reveals after its commitment pass no `ro-blake3/v1` window,
-    and a prover that tags only those blocks is rejected."""
+    and a prover that tags only those labels is rejected."""
     store, vk = big_store
     state = state_of(vk)
     fast, certified = (big_store.verifier(_params(t), state) for t in ("gf31-poly/v1", "ro-blake3/v1"))

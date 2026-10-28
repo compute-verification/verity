@@ -1,4 +1,4 @@
-"""memory-map/v1 of DeepSeek-V4-Pro's attention caches, for a warm request's (MEM-48): its sliding window, compressor state and
+"""memory-map/v1 of DeepSeek-V4-Pro's attention caches, for a warm request's: its sliding window, compressor state and
 compressed (c4, c128) and indexer caches, which a prefix-cache hit reads from the request that computed them as the dense
 attention's K and V (`commit.memory_map`, `cached`).  Neither is on main: no DeepSeek-V4 Program takes a cached prefix (only the
 dense attention rule seeds one, `kv_prefix`), and the map lays out none of these caches, so the test is marked to fail until both
@@ -14,7 +14,7 @@ from verity_vllm.commit import memory_map as MM
 
 
 @pytest.mark.xfail(strict=True, raises=ValueError,
-                   reason="MEM-48: memory-map/v1 lays out none of DeepSeek-V4's caches, and no DeepSeek-V4 Program takes a cached prefix")
+                   reason="memory-map/v1 lays out none of DeepSeek-V4's caches, and no DeepSeek-V4 Program takes a cached prefix")
 def test_a_warm_deepseek_v4_requests_compressed_caches_are_its_producers(flashmla_small):
     rng = np.random.default_rng(4)
     model = V4._SparseAttn(rng, 4, 28, (30, 1, 1))
@@ -22,4 +22,4 @@ def test_a_warm_deepseek_v4_requests_compressed_caches_are_its_producers(flashml
     assert rep.program is not None, rep.unsupported
     MM.rows(rep.program)
     pytest.fail("memory-map/v1 lays out DeepSeek-V4's caches now: replace this marker with a warm request's test that its window, "
-                "compressor state, c4, c128 and indexer pages are its producers' and written once (MEM-48)")
+                "compressor state, c4, c128 and indexer pages are its producers' and written once")

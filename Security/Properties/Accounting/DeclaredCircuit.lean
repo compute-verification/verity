@@ -29,7 +29,7 @@ and the schedule check's acceptance at the cap `cap`, which is the event's first
 `c` of the session's coins before a pass and the codec and append coins `y`, the check at `cap` over `blocks` registered
 blocks accepts some schedule for a session whose appends are `appended c y` and whose pass `idx c` sent the runs
 `sent c y`. The gap: the pass's layout is the verifier's positions `pos c` of those appends and runs. `cap` is the one
-cap the session committed before its first coin, over which the check refuses a schedule (#4021), so on the coins the
+cap the session committed before its first coin, over which the check refuses a schedule, so on the coins the
 check accepts the layout reads `y` only through the accepted schedule's `cap + 1` padded bits
 (`Properties.RemoteAudit.steered_of_checked`).
 

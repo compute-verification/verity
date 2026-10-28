@@ -1,5 +1,5 @@
 """The streamed wipe's memory challenger as a party of its own, so it runs on a host the prover doesn't control (the
-challenger host, `trusted-nebius-host`) while the prover stays on its node: `challenger_party`'s shape, for the wipe.
+challenger host, `trusted-host`) while the prover stays on its node: `challenger_party`'s shape, for the wipe.
 
 The challenger listens and the prover connects. The challenger streams the fill as frames `F ‖ u64 first ‖ u32 count ‖
 labels` and ends it with `D`, which the prover acknowledges with `A` once it holds the fill, so that no read's time
@@ -44,7 +44,7 @@ from . import streamed_wipe as sw
 from . import wipe_stream
 
 MODULE = "verity.core.protocols.pous.wipe_party"
-PREMISE = "trusted-nebius-host"
+PREMISE = "trusted-host"
 FILL, DONE, ACK, CHALLENGE, END = b"F", b"D", b"A", b"C", b"E"
 CHUNK = 1 << 14
 """Labels a fill frame: 1 MiB."""
@@ -106,10 +106,11 @@ def serve(f: BinaryIO, request: Mapping[str, Any], *, signer: mc.Signer, log: mc
 
 def answer(f: BinaryIO, prover: sw.Prover, stop_after: int | None = None) -> int:
     """The prover's side over the connection `f`: each fill frame kept by `prover` (read straight into its store when
-    it has `receive_into`, as `wipe_store.StoreProver`), each batch answered from it until the challenger ends the
-    session (or, with `stop_after`, the prover leaves after that many batches); the batches answered."""
+    it has `receive_into`, as `wipe_store.StoreProver`), the fill acknowledged once it is in the store (after the
+    prover's `sync`, when it has one: a disk's writes on the media), each batch answered from it until the challenger
+    ends the session (or, with `stop_after`, the prover leaves after that many batches); the batches answered."""
     n = 0
-    into = getattr(prover, "receive_into", None)
+    into, sync = getattr(prover, "receive_into", None), getattr(prover, "sync", None)
     while (tag := _read(f, 1)) != END:
         if tag == FILL:
             first, count = int.from_bytes(_read(f, 8), "big"), int.from_bytes(_read(f, 4), "big")
@@ -118,6 +119,8 @@ def answer(f: BinaryIO, prover: sw.Prover, stop_after: int | None = None) -> int
             else:
                 prover.receive(first, _read(f, sw.LABEL_BYTES * count))
         elif tag == DONE:
+            if sync is not None:
+                sync()
             f.write(ACK)
             f.flush()
         elif tag == CHALLENGE:
@@ -206,7 +209,7 @@ def link(name: str, node: str, to: str, via: str, *, mbps: int | None = None,
 def placement(node: str, host: str, *, verifier: str | None = None, store: Mapping[str, Any] | None = None,
               simulated: bool = False, links: Sequence[Mapping[str, Any]] = (),
               undeclared: Sequence[Mapping[str, Any]] = ()) -> dict[str, Any]:
-    """Which host ran each party, and whether `trusted-nebius-host`'s premise holds: that the memory challenger ran on a
+    """Which host ran each party, and whether `trusted-host`'s premise holds: that the memory challenger ran on a
     machine the prover doesn't control, which is never the prover's node. `kind` names the placement: `own-host`,
     `simulated` (the challenger a process of its own on the prover's node, standing in for its own host, the premise
     assumed) or `prover-node`. `store` is the memory the prover kept the fill in (`wipe_store`'s `info`), when it says.

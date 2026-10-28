@@ -10,7 +10,7 @@ import Proofs.Nci.Cover.Charge
 
 `intensity`: the counted products a block computes whole lie in `J × L`, with `#J ≤ k` (`activationCharge`) and
 `b #L ≤ k` (`UpdateHardness` on them), so `b #whole ≤ k²`; the rest are at most `k` (`finished_sdiff_whole_card_le`).
-It is this vocabulary's form of the per-block step of Daniel's covering bound at `c_w = b`, `c_a = 1`
+It is this vocabulary's form of the per-block step of the covering bound at `c_w = b`, `c_a = 1`
 (`Nci.Guarantees.CoveringBoundTwoCosts`), with the upstream certificate in place of activation-chaining, and the bridge
 to a compliant declaration (`CoverTraining`) sums it. `cover_sum` adds a per-block
 bound over a cover: every counted product's output gate is a non-input gate, so some block finishes it.

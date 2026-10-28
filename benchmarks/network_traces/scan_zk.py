@@ -1,4 +1,4 @@
-"""scan-zk: NET-68's step-indexed scan composed in zero knowledge, in the generator form. Ingress bucket t
+"""scan-zk: the network certifier's step-indexed scan composed in zero knowledge, in the generator form. Ingress bucket t
 (`ingress_scan.IngressScanBucket`; bucket 0's `IngressScanFirst`, from the empty state) reads the warden's ingress row
 t, the scan's state S_{t−1} and the Programs' row t, and computes S_t and its egress view; egress bucket t
 (`egress.EgressBucket`) reads that view and computes the warden's egress row t. A group of link-windows is one
@@ -13,10 +13,10 @@ challenger's coins (``--challenger``), a `service.Stream`'s.
 
 * **The setups** (`SETUPS`, ``--class``): ``w63`` (`W63`, whose `CLASS`, `SHAPE` and `PARAMS` these are), w63's class
   (B 512, r 4, 4 lanes, C 47, IDB 17, EVERY 16, WITHIN 12: 4 Program slots a timestep, 8 a link-window) with the
-  warden's delay D 27 (WITHIN + EVERY − 1) and KO 64 outputs a request,
+  warden's delay D 27 (WITHIN + EVERY − 1), KO 64 outputs and KI 1,024 prompt ids a request,
   egress at `CLASS.egress` (16 cells in lanes of 4, 4 request slots of 64 17-bit ids), the warden at `PARAMS`, 32-bucket
   link-windows; and ``test`` (`TEST`), the certifier tests' class (B 512, r 2, 2 lanes, C 4, EVERY 2, WITHIN 3, D 5,
-  KO 8) and 16-bucket link-windows, whose units a CPU proves in minutes.
+  KO 8, KI 100) and 16-bucket link-windows, whose units a CPU proves in minutes.
 * **The run** (`scan_traffic.serve`: the warden's own `_ingress` and `_egress`, ticked as `Warden._tick` ticks them)
   carries the setup's warden-form id requests and their responses: w63's five (3, 40, 64, 8 and 5 ids; the fifth waits
   in the queue until request 1's egress ends at bucket 27 and takes its slot at 28), test's three (the third in the
@@ -79,7 +79,7 @@ challenger's coins (``--challenger``), a `service.Stream`'s.
   the challenger) held to the Python's, and each altered evidence (`a5_coins.negatives`, the evidence for another
   window) refused by `coins.coins_reason` and the Lean's run (`coins_outcome`). ``local`` is a development session on
   this machine (its own key; it shows the path, not an auditor's coins); ``gate:USER@HOST`` is vy-challenger-1's through
-  infra's gate, its challenger on ``--peer``'s 127.0.0.1, under the deployment's key record ``--challenger-key``. The
+  its gate, its challenger on ``--peer``'s 127.0.0.1, under the deployment's key record ``--challenger-key``. The
   gate opens a root once, ever: a run's group is drawn once (the synthetic run's registrations carry fresh salts, so
   each synthetic run has a root of its own). The other rounds keep the verifier's Lean's own coins: one session serves
   one draw, and their refusal is Lean's registered reads, whatever the coins.
@@ -151,17 +151,17 @@ class Setup(NamedTuple):
 
 
 W63 = Setup(
-    "w63", IS.Class(B=512, r=4, lanes=4, C=47, IDB=17, EVERY=16, WITHIN=12, D=27, KO=64),
+    "w63", IS.Class(B=512, r=4, lanes=4, C=47, IDB=17, EVERY=16, WITHIN=12, D=27, KO=64, KI=1024),
     W.WardenParams(cell_bytes=512, slots=4, bucket_ms=100, delay=27, lanes=4, queue=4, window=32, ingress_cells=47,
                    ingress_buckets=12, egress_cells=65, every=16),
-    (tuple((7 * k + 11) % 128_256 for k in range(1500)), tuple(100_000 + k for k in range(600)),
+    (tuple((7 * k + 11) % 128_256 for k in range(1024)), tuple(100_000 + k for k in range(600)),
      tuple(131_071 - 3 * k for k in range(40)), tuple((k * k) % 128_256 for k in range(300)),
      tuple(5_000 + k for k in range(100))),
     (0, 2, 2, 12, 15),
     tuple(tuple((97 * k + 13 * q) % (1 << 17) for k in range(n)) for q, n in enumerate((3, 40, 64, 8, 5), 1)),
     windows=2, A=9, max_tokens=16, seed=7)
 TEST = Setup(
-    "test", IS.Class(B=512, r=2, lanes=2, C=4, IDB=17, EVERY=2, WITHIN=3, D=5, KO=8),
+    "test", IS.Class(B=512, r=2, lanes=2, C=4, IDB=17, EVERY=2, WITHIN=3, D=5, KO=8, KI=100),
     W.WardenParams(cell_bytes=512, slots=2, bucket_ms=100, delay=5, lanes=2, queue=2, window=16, ingress_cells=4,
                    ingress_buckets=3, egress_cells=9, every=2),
     ((1000, 1007, 1014), tuple(2000 + 3 * k for k in range(60)), tuple(131071 - k for k in range(100))),
@@ -617,7 +617,7 @@ def host(out: Path, run: Path | None = None, draw: int | None = None, setup: Set
 # --- the statements ---------------------------------------------------------------------------------------------------
 
 def _defs(cls: IS.Class) -> dict[str, object]:
-    st = {k: getattr(cls, k) for k in ("B", "r", "lanes", "C", "IDB", "EVERY", "WITHIN", "D", "KO")}
+    st = {k: getattr(cls, k) for k in IS.STATICS}
     sh = cls.egress
     return {"first": bind(IS.IngressScanFirst, **st), "ingress": bind(IS.IngressScanBucket, **st),
             "egress": bind(EG.EgressBucket, B=sh.B, R=sh.R, r=sh.r, NR=sh.NR, K=sh.K, IB=sh.IB, D=sh.D)}
@@ -1276,11 +1276,11 @@ def main(argv=None) -> int:
                         "every unit")
     p.add_argument("--challenger", help="with --draw: the honest round's K drawn on the auditor's challenger's coins "
                    "(a5_coins, the round's service.Stream), not the verifier's: local, or gate:USER@HOST "
-                   "(vy-challenger-1 through infra's gate, with --peer and --challenger-key)")
+                   "(vy-challenger-1 through its gate, with --peer and --challenger-key)")
     p.add_argument("--peer", help="with --challenger gate:USER@HOST: this machine as the gate's /etc/vy/peers names it, "
                    "whose 127.0.0.1 the session's challenger listens on")
     p.add_argument("--challenger-key", help="with --challenger gate:USER@HOST: the challenger's key record of its "
-                   "deployment (infra's challenger-key/v1), never the session's key.json")
+                   "deployment (challenger-key/v1), never the session's key.json")
     p.add_argument("--gate-key", help="with --challenger gate:USER@HOST: the lane's own gate key (default ssh's own)")
     p.add_argument("--main", help="with --challenger: the verifier's own copy of main's first-parent history (git "
                    "rev-list --first-parent origin/main), which must hold the commit the session's host pins")

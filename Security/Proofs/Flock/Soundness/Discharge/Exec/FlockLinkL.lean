@@ -198,34 +198,10 @@ theorem opOfVL_spec {c : vb.Pos} {e : TrialOutL L D Sl} {v : vb.Val}
 /-- **Every success of the finder outputs a collision.** -/
 theorem outC_specL (c : vb.Pos) (x : TrialOutL L D Sl × List (TrialOutL L D Sl))
     (hS : Succ (rdTL P H E Lf plan tab vb R τ c) x) :
-    ∃ a b, outCL P H E Lf plan tab vb R τ c x = some (a, b) ∧ a ≠ b ∧ Hc a = Hc b := by
-  classical
-  have hex : ∃ p : TrialOutL L D Sl × vb.Val × vb.Val, p.2.1 ≠ p.2.2 ∧
-      p.2.1 ∈ rdTL P H E Lf plan tab vb R τ c x.1 ∧ p.2.2 ∈ rdTL P H E Lf plan tab vb R τ c p.1 ∧
-      (p.1 = x.1 ∨ nextRead (rdTL P H E Lf plan tab vb R τ c) x.2 = some p.1) := by
-    rcases hS with h2 | ⟨v, hv, e', hn, hne⟩
-    · obtain ⟨a, ha, b, hb, hab⟩ := Finset.one_lt_card.1 (by omega :
-        1 < (rdTL P H E Lf plan tab vb R τ c x.1).card)
-      exact ⟨(x.1, a, b), hab, ha, hb, Or.inl rfl⟩
-    · have hnon : (rdTL P H E Lf plan tab vb R τ c e').Nonempty := by
-        have := List.find?_some hn
-        simpa using this
-      have hw : ∃ w ∈ rdTL P H E Lf plan tab vb R τ c e', w ≠ v := by
-        by_contra hall
-        push Not at hall
-        apply hne
-        obtain ⟨w₀, hw₀⟩ := hnon
-        refine Finset.eq_singleton_iff_unique_mem.2 ⟨?_, hall⟩
-        rw [← hall w₀ hw₀]
-        exact hw₀
-      obtain ⟨w, hw, hwv⟩ := hw
-      exact ⟨(e', v, w), Ne.symm hwv, by rw [hv]; exact Finset.mem_singleton_self v, hw, Or.inr hn⟩
-  unfold outCL
-  rw [dite_eq_left_of_eq_true (eq_true hex)]
-  obtain ⟨hne, h1, h2, -⟩ := Classical.choose_spec hex
-  have s1 := opOfVL_spec P H E Lf plan tab vb R τ h1
-  have s2 := opOfVL_spec P H E Lf plan tab vb R τ h2
-  exact ⟨_, _, rfl, vb.collide_spec _ _ (s1.1.trans s2.1.symm) (by rw [s1.2, s2.2]; exact hne)⟩
+    ∃ a b, outCL P H E Lf plan tab vb R τ c x = some (a, b) ∧ a ≠ b ∧ Hc a = Hc b :=
+  outOf_spec (rdTL P H E Lf plan tab vb R τ c) (opOfVL P H E Lf plan tab vb R τ c) vb.collide
+    (fun o => vb.com o = vb.cs R c) vb.val (fun _ _ hv => opOfVL_spec P H E Lf plan tab vb R τ hv)
+    (fun o o' h h' hv => vb.collide_spec o o' (h.trans h'.symm) hv) x hS
 
 /-! ## The trial's expectations -/
 

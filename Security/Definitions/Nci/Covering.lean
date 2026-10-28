@@ -3,8 +3,8 @@ import Definitions.Core.Declaration
 /-!
 # Coverings by inference blocks, and multiplication blocks
 
-The vocabulary of the covering bound (Daniel, 22 Oct 2026), with one width `b` and one compression rate `r` for weights
-and activations alike, in the standard form of his talk. `C` is a declaration's circuit, read as a finite DAG: its
+The vocabulary of the covering bound, with one width `b` and one compression rate `r` for weights
+and activations alike. `C` is a declaration's circuit, read as a finite DAG: its
 sources `in(C)` are the gates with no predecessors (`sources`), and `θ ⊆ in(C)` are its registered parameters (the
 baseline). The statement counts gates; in the Boolean profile (`w = 1`) a gate is a bit.
 

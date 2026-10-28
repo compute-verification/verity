@@ -12,7 +12,7 @@ _CUDA_MEMORY_TYPE_DEVICE = 2     # cudaMemoryTypeDevice
 
 #: Ops whose output is their input, the same storage and view: a snapshot of their call holds no new value, and the capture
 #: takes none.  ``torch::from_blob`` dispatches ``aten.detach`` on the tensor C++ code just wrapped, whose device may not be
-#: its memory's (VLLM-8).
+#: its memory's.
 IDENTITY_ALIAS_OPS = frozenset({"aten.detach.default", "aten.alias.default", "aten.lift_fresh.default"})
 #: The snapshot index's reason for a `device_backed` tensor.
 DEVICE_BACKED = "a CPU tensor whose storage is device memory (torch::from_blob without its device): not readable on the host"
@@ -42,7 +42,7 @@ def _runtime() -> Any:
 
 def device_backed(t: torch.Tensor) -> bool:
     """True when ``t`` says it is on the CPU but its storage is device memory: a tensor C++ code wrapped with
-    ``torch::from_blob`` and no device (DeepGEMM's paged MQA logits, VLLM-8).  Reading its bytes on the host faults.  False
+    ``torch::from_blob`` and no device (DeepGEMM's paged MQA logits).  Reading its bytes on the host faults.  False
     for a device tensor, without CUDA, or when the runtime can't say."""
     if t.device.type != "cpu" or not torch.cuda.is_available():
         return False

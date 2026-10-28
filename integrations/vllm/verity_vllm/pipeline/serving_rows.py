@@ -3,8 +3,9 @@ through an opened reader, registered weights for weight slices), committed in M0
 :mod:`verity.ml.windows.rows`, with core's one-stage registration over them.  Three ways in, one window, two kinds:
 
 * **In the Commit** (opt-in, ``commit --serving-rows``): the row stage writes a request ``{"dir", "partition", "run",
-  "committer"}``, and the in-process C2 replay commits the window after the Commit's roots are final and before its seed (``readers``).
-  The window is ``served``: its roots are serving's own commitment, made before any draw.  The profile makes no claim that they
+  "committer"}``, and the in-process C2 replay commits the window after the Commit's roots are final and before its seed (``readers``);
+  a Commit whose replay is deferred to its bundle (``--replay-deferred``, not slim) commits it at its C2 site, before the bundle is
+  sealed and any draw (`c2_replay.serving_rows`). The window is ``served``: its roots are serving's own commitment, made before any draw.  The profile makes no claim that they
   hold the values under the Commit's roots.
 * **In a TP Commit** (``tp-commit --serving-rows``, `pipeline.tp.serving_rows`): one ``served`` window per rank, committed in the
   rank's process once every rank's root is final and the TP run root fixed, before the challenge; its run is the TP run root and

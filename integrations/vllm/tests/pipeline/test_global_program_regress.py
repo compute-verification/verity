@@ -1,7 +1,6 @@
-"""GP-01 / GM-01 regression tests for the FIXED-POPULATION global Program (R16 lane `padrev`, BRIEF §8 #14; DECISIONS-2 §1/§2,
-DECISIONS-3 §1/§2).  CPU only, toy request Programs (the same lowering / codec as derive_step's request wrappers, as in
-`tests/program/test_workload_program.py`).  Each test states the property the lifted (⊥-padded) Program must keep, so that
-`Lifted[Workload]` can be run through the same file once it exists (LIFTING-SPEC v0.4 §4 [R1]/[R3]: same population, same addresses).
+"""GP-01 / GM-01 regression tests for the FIXED-POPULATION global Program.  CPU only, toy request Programs (the same lowering /
+codec as derive_step's request wrappers, as in `tests/program/test_workload_program.py`).  Each test states the property the lifted
+(⊥-padded) Program must keep, so that `Lifted[Workload]` can be run through the same file (same population, same addresses).
 
   1. ONE VALUE NAMESPACE — every gate of the workload root has exactly one address (input / component intervals partition
      [0, gates)); the shared weights are ONE interval every request maps onto; a position has ONE identity (no duplicated or
@@ -9,22 +8,20 @@ DECISIONS-3 §1/§2).  CPU only, toy request Programs (the same lowering / codec
   2. FIXED REQUEST POPULATION — the Program, its digest, address map, chronology and output population are functions of the
      manifest (prompt_len, max_tokens, arrive_step) only: two builds from the same manifest are byte-equal, the builder reads no
      execution record, `T != cap-1` is refused, and D_MAX = cap positions exist per request whatever an execution later serves.
-  3. DAG WITHIN-STEP CRITERION (COORD M-0177) — `dag_multiset` is invariant under a DAG-safe permutation of independent
+  3. DAG WITHIN-STEP CRITERION — `dag_multiset` is invariant under a DAG-safe permutation of independent
      instances and sensitive to an operand swap (a-b vs b-a), a repeated operand ([v,v] vs [v,w]) and a re-wiring.
   4. ARRIVAL CHRONOLOGY — engine-step membership follows `arrive_step` (not manifest order); every (request, step) is programmed
      exactly once; the horizon is max(arrive + cap); an early stop is never a builder input.
-  5. batch_decomp WITH MANY WEIGHTS INPUT NODES (F-fp8-GM1 class, M-0823) — a fold whose weights Record is not width-homogeneous
+  5. batch_decomp WITH MANY WEIGHTS INPUT NODES — a fold whose weights Record is not width-homogeneous
      lowers to one Input node per leaf field (FP8: e4m3 weights + f32 scales + bf16 norms = 435 nodes at Qwen3-4B-FP8); `decompose`
      must treat EVERY Input node that is not a request's prompt/seed parameter as weights (shared), never as another request's
      parameter (XREQ), never refuse on the node count, and resolve each weights node's reads at its Record-global offset (the
-     Projection must carry `input_base`).  Independent regression of `global`'s fix lane/r16-global 47bcf9bcf (R16 M-0023): this
-     file DEPENDS on that unit — on the pre-fix tree the fixture raises '+1 weights expected' (measured 04:21Z) and with the fix
-     it PASSes (measured against 47bcf9bcf's batch_decomp.py 04:24Z).  Integrate after / together with 47bcf9bcf.
-  6. S READS NO ACTIVITY (COORD M-0169; CIR-87 (1)) — GM-01 G6's `sampler_geometry_check` holds every launch to the registered
+     Projection must carry `input_base`).
+  6. S READS NO ACTIVITY — GM-01 G6's `sampler_geometry_check` holds every launch to the registered
      S = SplitsFor_v1(1, num_SMs) the served engine pins, whatever the live batch; G6 alone pins the record's rows to the Program's
      activity — request r live at t iff arrive_r <= t <= arrive_r + n_r - 1 with n_r = committed tokens up to and including the first
      declared EOS, capped — in both directions (a missing row: 'declared schedule not exercised'; a row after the EOS: 'execution past
-     EOS').  The tests pin that on a real passing record and on the async-scheduling placeholder row (DP-pad-02 / F-pad-16), and that
+     EOS').  The tests pin that on a real passing record and on the async-scheduling placeholder row, and that
      vLLM's own batch-derived S is refused.
 """
 
@@ -114,7 +111,7 @@ def _wl(shapes, arrivals=None, ids=None, canon=None):
 
 
 def test_every_gate_has_exactly_one_address_and_the_weights_are_one_interval():
-    """One value namespace (DECISIONS-2 §1): the input intervals and the component intervals partition [0, gates) — no gate is
+    """One value namespace: the input intervals and the component intervals partition [0, gates) — no gate is
     unaddressed, none has two addresses; the shared weights are ONE global interval that every request's local weights parameter
     maps onto (weights once, never per-request copies); same-shape requests are the same specialization at disjoint addresses."""
     wl = _wl([(3, 2), (5, 0), (3, 2)])
@@ -173,7 +170,7 @@ def test_no_second_identity_per_output_position_and_no_root_node_beyond_inputs_a
 
 
 def test_program_is_a_function_of_the_manifest_only_two_builds_are_byte_equal():
-    """Fixed population (DECISIONS-2 §2, LIFTING-SPEC §1.1/§4): the Program, its digest, address map, chronology and descriptor are
+    """Fixed population: the Program, its digest, address map, chronology and descriptor are
     byte-equal across two constructions from the same manifest facts; nothing an execution later produces (served length, EOS
     step, chunk count, split geometry) is an input of the builder — the builder has no parameter for any of them."""
     a, b = _wl([(4, 3), (2, 1)], arrivals=[0, 2]), _wl([(4, 3), (2, 1)], arrivals=[0, 2])
@@ -195,7 +192,7 @@ def test_program_is_a_function_of_the_manifest_only_two_builds_are_byte_equal():
 
 def test_a_program_rebuilt_from_a_served_length_is_refused_by_name():
     """The population is D_MAX steps x declared requests: a component whose T is not cap-1 (a Program rebuilt to the served
-    length, the ROW9 pruning DECISIONS-2 §2 retired) is refused by name, at every cap and for every request position."""
+    length) is refused by name, at every cap and for every request position."""
     canon = {}
     c = W.request_component(_desc(3, 2), REGISTRY, _WP(3), canon=canon)          # a T=2 component: cap must be 3
     for cap in (1, 2, 4, 8):
@@ -227,7 +224,7 @@ def _derived_dir(tmp_path, LP, T, execution="bi-eager"):
 
 
 def _manifest(tmp_path, reqs, name="workload.json", **extra):
-    """A workload record (`records.workload`) of `reqs`, its greedy sampling block holding `extra`, on an eager row."""
+    """A workload record (`records.workload`) of `reqs`, its greedy sampling section holding `extra`, on an eager workload."""
     p = tmp_path / name
     json.dump({"schema": WL.SCHEMA, "model": "toy", "engine": {}, "variants": {"greedy": {"temperature": 0.0, "top_p": 1.0, "top_k": 0}},
                "requests": [{"request_id": f"uuid-{i}", "prompt_token_ids": list(range(1, r["LP"] + 1)), "max_tokens": r["cap"],
@@ -249,7 +246,7 @@ def test_gp01_build_reads_no_execution_record_and_is_stable_across_builds(tmp_pa
     assert a["workload_digest"] == b["workload_digest"]
     assert a["inputs"]["execution_record_read"] is False
     assert a["stop_rule"]["eos_token_ids"] == [7]                                # activity is derived from committed tokens vs THIS set
-    assert [r["request_id"] for r in a["requests"]] == ["r0", "r1", "r2"]         # r<k> identity, manifest position (COORD ruling 2)
+    assert [r["request_id"] for r in a["requests"]] == ["r0", "r1", "r2"]         # r<k> identity, manifest position
     assert [r["cap"] for r in a["requests"]] == [3, 1, 3] and [r["arrive_step"] for r in a["requests"]] == [0, 1, 2]
     assert json.load(open(tmp_path / "out_a" / "address_map.json")) == json.load(open(tmp_path / "out_b" / "address_map.json"))
     # a component of the wrong shape for a declared cap is not silently reused: the missing shape is named (exit 4 path)
@@ -259,9 +256,9 @@ def test_gp01_build_reads_no_execution_record_and_is_stable_across_builds(tmp_pa
 
 
 def test_gp01_build_to_from_gprog_carries_the_declared_lag_static_end_to_end(tmp_path):
-    """[R17-1, F-r17-02 (rev M-0062) / coord M-0070] GP-01 `build` -> GM-01 `from_gprog` on ITS OWN artifact + descriptor: the Program's
+    """GP-01 `build` -> GM-01 `from_gprog` on ITS OWN artifact + descriptor: the Program's
     `lag` static is read where the codec writes it (program_fn / root spec ids inside the verified digest) and equals the artifact's
-    lag.value; LAG 0 and LAG 1 are two Programs (two digests); an edited lag block over an intact Program is refused by name."""
+    lag.value; LAG 0 and LAG 1 are two Programs (two digests); an edited lag section over an intact Program is refused by name."""
     from verity_vllm.check.match import global_match as gm
     reqs = [{"LP": 3, "cap": 3}, {"LP": 5, "cap": 1, "arrive": 1}]
     derived = [_derived_dir(tmp_path, 3, 2), _derived_dir(tmp_path, 5, 0)]
@@ -283,7 +280,7 @@ def test_gp01_build_to_from_gprog_carries_the_declared_lag_static_end_to_end(tmp
         assert g["lag"]["value"] == lag and g["stop_rule"]["lag"] == lag
         outs[(lag, target is None)] = (a["workload_digest"], out)
     assert outs[(1, True)][0] == outs[(1, False)][0] != outs[(0, False)][0]     # the same LAG = one Program however declared; LAG 0 != LAG 1
-    # the block edited to the other value over the intact Program -> refused by name, and the artifact edited to claim NO lag as well
+    # the section edited to the other value over the intact Program -> refused by name, and the artifact edited to claim NO lag as well
     d1, out1 = outs[(1, True)]
     p = os.path.join(out1, "workload_program.json"); art = json.load(open(p))
     json.dump({**art, "lag": {**art["lag"], "value": 0}}, open(p, "w"))
@@ -328,7 +325,7 @@ def _two_chain_def(name, order="ab", op_c=ADD16, second_operand="b"):
 
 
 def test_dag_multiset_is_permutation_invariant_and_operand_order_sensitive():
-    """COORD M-0177 / DECISIONS-3 §1: the within-step criterion abstracts the EMISSION ORDER of independent instances (a DAG-safe
+    """The within-step criterion abstracts the EMISSION ORDER of independent instances (a DAG-safe
     permutation) and nothing else — an operand swap (a-b vs b-a), a repeated operand ([v,v] vs [v,w]) and a re-wiring are all
     different DAGs.  The sequence criterion (canonical sha over the emission sequence) differs under the permutation, as it must."""
     P_ab = _prog_of(_two_chain_def("PrDagAB"), "ab")
@@ -378,7 +375,7 @@ def test_dag_hash_carries_the_producer_hash_not_its_position():
 
 
 def test_chronology_follows_arrivals_not_manifest_order_and_programs_every_step_once():
-    """Arrival chronology (DECISIONS-2 §1 'no Ingress/Egress primitives': arrivals are the declaration): r1 arrives BEFORE r0 —
+    """Arrival chronology (no Ingress/Egress primitives: arrivals are the declaration): r1 arrives BEFORE r0 —
     engine-step membership follows `arrive_step`, the address map follows manifest order; every (request, s) for s in [0, cap) is
     programmed exactly once (fixed population, no step dropped after an early stop); the horizon is max(arrive + cap)."""
     wl = _wl([(3, 3), (5, 1), (2, 2)], arrivals=[2, 0, 5])
@@ -476,7 +473,7 @@ def _oracle_dir(tmp_path, reqs):
 
 
 def test_batch_decomp_treats_every_non_request_input_node_as_shared_weights(tmp_path):
-    """F-fp8-GM1 class: B=2 fold over a mixed-width weights Record (3 weights Input nodes after the 2 prompts).  Expected: no refusal,
+    """B=2 fold over a mixed-width weights Record (3 weights Input nodes after the 2 prompts).  Expected: no refusal,
     every instance attributed, ZERO cross-request reads (the wa/wb/wc reads are SHARED weights, not r1's parameter), every request
     canonical-equal to its own-shape component -> PASS.  One request finishes early (T=1 vs T=2) so the later engine step has one row."""
     reqs = [{"id": "r0", "LP": 3, "T": 2}, {"id": "r1", "LP": 2, "T": 1}]
@@ -512,9 +509,8 @@ def test_batch_decomp_refuses_a_header_that_disagrees_with_the_programs_input_la
 
 
 def test_single_weights_input_node_baseline_still_passes(tmp_path):
-    """Control for the F-fp8-GM1 fixture machinery: the same toy with a width-HOMOGENEOUS weights Record (ONE Input node on both sides,
-    one weight tensor `weights` named by every hint — the pre-R15 dense layout) goes through `decompose` as every dense row does
-    today — attributed, no XREQ, canonical-equal, PASS — so the xfail above is about the weights node COUNT and nothing else."""
+    """Control for the mixed-width fixture machinery: the same toy with a width-HOMOGENEOUS weights Record (ONE Input node on both sides,
+    one weight tensor `weights` named by every hint — the dense layout) goes through `decompose` as every dense workload does — attributed, no XREQ, canonical-equal, PASS — so the xfail above is about the weights node COUNT and nothing else."""
     HREC = Record(("wa", Array(2, Value(16))), ("wc", Array(2, Value(16))))
     HREC_REPR = "{wa: Array<2,Value<16>>, wc: Array<2,Value<16>>}"
 
@@ -592,7 +588,7 @@ def test_single_weights_input_node_baseline_still_passes(tmp_path):
     assert by["r1"]["T"] == 1 and by["r0"]["T"] == 2                                # the early finisher keeps its own T, r0 its own
 
 
-# ------------------------------------------------------- 6. the derived S reads the Program's activity (M-0169; LIFTING-REVIEW P-6 / A9)
+# ------------------------------------------------------- 6. the derived S reads the Program's activity
 # GM-01's own e2e fixtures (test_global_match: toy fold + batched record with declared arrivals / caps / an EOS stop) are the record of
 # reference here; `memory` is their fold fixture.  R1_EOS: cap 4, stops on the declared EOS 11 after 2 events -> a_r = n_r = 2.
 
@@ -605,14 +601,13 @@ from verity.ml.definitions.registry.topp_geometry import registered_splits, spli
 NSM = 4   # a num_SMs at which vLLM's own S discriminates 1 vs 2 live rows: splits_for(1, 4) = 4, splits_for(2, 4) = 2 (142 SMs gives 32 for both)
 S_REG = registered_splits(NSM)   # 4: the split count the pinned engine launches at every batch
 
-# this section regresses global's derived-S unit (lane/r16-global 7aa472c07): on a tree without it there is nothing to regress -- named skip
+# this section regresses GM-01's derived-S unit: on a tree without it there is nothing to regress -- named skip
 _needs_derived_s = pytest.mark.skipif(not hasattr(SG, "sampler_geometry_check"),
-                                      reason="GM-01 without sampler_geometry_check: lane/r16-global 7aa472c07 (COORD M-0169 derived S) not on this tree")
+                                      reason="GM-01 without sampler_geometry_check")
 
 
 def _program_activity(gpd: dict, transcripts: dict[str, list[int]], eos_ids: set[int], lag: int = 0) -> dict[int, int]:
-    """The Program's activity count per engine step under scheduler lag `lag` (LIFTING-SPEC v0.4 s7 [P1]; DP-pad-01 (a); DP-pad-02 (b) /
-    ruling 21): request r is live at t iff arrive_r <= t <= arrive_r + n_r - 1, n_r = its committed tokens up to and INCLUDING the
+    """The Program's activity count per engine step under scheduler lag `lag`: request r is live at t iff arrive_r <= t <= arrive_r + n_r - 1, n_r = its committed tokens up to and INCLUDING the
     first declared EOS plus `lag` placeholder rows when the EOS came before the cap (an EOS AT the cap is a length stop: no placeholder),
     capped at max_tokens.  A function of the declaration, the committed tokens and the attested lag only -- never of which rows the
     engine happened to launch."""
@@ -636,7 +631,7 @@ def _transcripts(oracle: str) -> dict[str, list[int]]:
 
 
 class _OperandStubFold:
-    """stoch M-0254 / global M-0287 (f9c892163): the select carries NO S static (`GumbelTopPTokenSelect_v1{V}`); its launch S is the value of
+    """The select carries NO S static (`GumbelTopPTokenSelect_v1{V}`); its launch S is the value of
     the `Const32[S]` 6th operand that compare.Prog._bind_splits removed from the sequence and kept in `splits_values[select node]`."""
 
     def __init__(self, s_by_index: list[int]):
@@ -650,9 +645,8 @@ def _reader_takes_the_bound_operand() -> bool:
     return f is not None and len(inspect.signature(f).parameters) >= 3
 
 
-# the S representation the fold carries: R15 static `{V,S}` (7aa472c07 reads it); stoch's operand BOUND by compare (f9c892163 reads
-# `splits_values`); the same operand UNBOUND -- the `Const32[S]` instance right before the select, read by one run ("n", kc, 0, 1)
-# (3fc05bcae reads it; global's `_OperandFold` stub is that shape) -- the §6 properties are about the live COUNT and hold for every form;
+# the S representation the fold carries: a static `{V,S}`; the operand BOUND by compare (`splits_values`); the same operand
+# UNBOUND -- the `Const32[S]` instance right before the select, read by one run ("n", kc, 0, 1) (`_OperandFold`'s shape) -- the §6 properties are about the live COUNT and hold for every form;
 # a form runs only where its reader exists
 _S_FORMS = ["static"] + (["operand"] if _reader_takes_the_bound_operand() else []) + (["unbound"] if hasattr(TGM, "_OperandFold") else [])
 
@@ -680,7 +674,7 @@ def _topp_fold_for(live_per_step: dict[int, int], s_of: dict[int, int], form: st
 def test_the_registered_s_holds_on_every_step_of_a_passing_record_whatever_its_activity(memory, tmp_path, form):
     """On a record GM-01 PASSES, the record's row count at every engine step equals the Program's activity (declared arrival x committed
     tokens, truncated at the verified EOS) -- not the declared-to-cap schedule: r1 (cap 4) stops on EOS at event 1, so steps 2 and 3 of
-    its declared schedule are NOT live, and step 3 is not a step of the record at all.  S reads none of it (CIR-87 (1)): the registered
+    its declared schedule are NOT live, and step 3 is not a step of the record at all.  S reads none of it: the registered
     S = SplitsFor_v1(1, 4 SMs) = 4 passes at 2 live rows as at 1, and vLLM's own batch-derived S (2 live -> S=2) is refused by name."""
     gpd, oracle = TGM.assemble([TGM.R0, TGM.R1_EOS], tmp_path)
     res = gm.check(gpd, oracle)
@@ -710,19 +704,18 @@ R1_PLACEHOLDER = {"id": "r1", "prompt": [4, 6], "sampled": [8, 11, 504], "cap": 
 @_needs_derived_s
 @pytest.mark.parametrize("form", _S_FORMS)
 def test_a_placeholder_row_after_the_verified_eos_is_not_activity_the_record_fails_g6_and_s_alone_would_not_see_it(memory, tmp_path, form):
-    """DP-pad-02 / F-pad-16 (exec M-0140 on cp-r1): with async scheduling vLLM computes ONE more step for a request after its EOS and
+    """With async scheduling vLLM computes ONE more step for a request after its EOS and
     samples a token there (504 on the pod).  That row is in the engine's sampler batch but it is not the Program's lag-0 activity
     (a_r = 2).  Contract: (1) GM-01 FAILS the record at G6 by name (execution past EOS, n_r 3 > a_r 2) so the S check never certifies
-    it; (2) the S check ALONE reports no problem -- the pinned launch's S is the registered one whatever the batch (CIR-87 (1)), so
-    only G6's activity pinning sees the row.  Under R17-1 (DP-pad-02
-    (b) as Daniel ruled it; supersedes the ruling-21 reader) the placeholder rule is the PROGRAM'S declared LAG, which the record's
+    it; (2) the S check ALONE reports no problem -- the pinned launch's S is the registered one whatever the batch, so
+    only G6's activity pinning sees the row.  The placeholder rule is the PROGRAM'S declared LAG, which the record's
     attestation must agree with: this Program declares LAG 0 (the toy preamble attests async_scheduling False), so the record is a lag-0
     execution and the contract above stands; the LAG-1 Program on the attested-True reading of the same record is the next test."""
     gpd, oracle = TGM.assemble([TGM.R0, R1_PLACEHOLDER], tmp_path, lag=0)
     res = gm.check(gpd, oracle)
     assert res["verdict"] == "FAIL" and "G6" in res["failed_checks"], res["reasons"]
     g6 = TGM._check(res, "G6")["problems"]
-    # 7aa472c07 text '... 1 more token(s) were served (n_r 3 > a_r 2)'; f65abdd66 '... (n_r 3 > a_r 2 + eos_lag_rows 0)'; R17-1 names the two
+    # the text is '... 1 more token(s) were served (n_r 3 > a_r 2)', '... (n_r 3 > a_r 2 + eos_lag_rows 0)', or names the two
     # lengths: '... where the Program's declared scheduler (Program lag 0 ...) computes LAG 0 after an EOS (executed_prefix_len 3 >
     # served_output_len 2 + LAG 0)' -- every form names the count
     assert any("r1: execution past EOS -- output event 1 is the declared EOS id 11 but 1 more " in p
@@ -743,20 +736,20 @@ def test_a_placeholder_row_after_the_verified_eos_is_not_activity_the_record_fai
     assert rec["sampler_batch"].get(2) in (None, 2)
 
 
-# this section regresses global's G6 EOS lag rule (lane/r16-global f65abdd66, COORD M-0213 / ruling 21 / DP-pad-02 (b)); named skip without it
+# this section regresses GM-01's G6 EOS lag rule; named skip without it
 _needs_lag_rule = pytest.mark.skipif(not (hasattr(TGM, "_set_async_scheduling") and hasattr(TGM, "_driver_stop_at")),
-                                     reason="GM-01 without the G6 EOS lag rule: lane/r16-global f65abdd66 (COORD M-0213 / ruling 21) not on this tree")
+                                     reason="GM-01 without the G6 EOS lag rule")
 
 
 @_needs_derived_s
 @_needs_lag_rule
 @pytest.mark.parametrize("form", _S_FORMS)
 def test_under_an_attested_async_scheduler_the_placeholder_row_is_declared_activity(memory, tmp_path, form):
-    """R17-1 / DP-pad-02 (b): the SAME placeholder record under the LAG-1 Program (the workload Program's declared specialization
+    """The SAME placeholder record under the LAG-1 Program (the workload Program's declared specialization
     parameter), attesting async_scheduling True with the driver's word for an EOS stop (generated_token_ids ends at the EOS, finish_step
     = the EOS step, the lag sample reported nowhere): G6 PASSES and the lag row IS r1's declared activity at step 2 (active internal
-    computation: VUs required, sampled token not served; the lifted Program's lag-1 live: live_s iff no EOS at an event <= s-2;
-    LIFTING-REVIEW PAD-05).  served_output_len 2, executed_prefix_len 3.  The live count at step 2 is 2, and the registered S holds
+    computation: VUs required, sampled token not served; the lifted Program's lag-1 live: live_s iff no EOS at an event <= s-2).
+    served_output_len 2, executed_prefix_len 3.  The live count at step 2 is 2, and the registered S holds
     there as everywhere.  One recorded fact, consumed by Build and Match alike, no inference: the attestation
     flipped to False on the very same record FAILS by name (the LAG-0 header on the LAG-1 Program; G1 + G6) before any S is certified,
     and the unattested record is refused by name rather than read as lag 0 or lag 1."""
@@ -790,7 +783,7 @@ def test_under_an_attested_async_scheduler_the_placeholder_row_is_declared_activ
     assert TGM._check(res_f, "G6")["stop_rule"]["eos_lag_rows"] == 1 and res_f["lag"]["agree"] is False
     TGM._set_async_scheduling(oracle, None)
     res_n = gm.check(gpd, oracle)
-    assert res_n["verdict"] == "FAIL" and any("does not attest async_scheduling" in p and "refuse by name (R17-1)" in p for p in TGM._check(res_n, "G6")["problems"])
+    assert res_n["verdict"] == "FAIL" and any("does not attest async_scheduling" in p and "refuse by name" in p for p in TGM._check(res_n, "G6")["problems"])
     assert TGM._check(res_n, "G6")["stop_rule"]["eos_lag_rows"] == 1 and res_n["lag"]["record_attests"] is None
     # the S the declared-to-cap schedule would prescribe never enters: at step 3 (declared live 1) there is no row to check
     declared = gp.declared_live_counts([{"arrive_step": g["arrive_step"], "cap": g["max_tokens"]} for g in gpd["requests"]])

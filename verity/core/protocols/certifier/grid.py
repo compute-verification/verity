@@ -142,6 +142,11 @@ class Certifier:
     def queued(self) -> int:
         return len(self._queue)
 
+    @property
+    def faulted(self) -> Reason | None:
+        """The window's first fault so far, None while its coverage holds."""
+        return self._fault
+
     def enqueue(self, frame: bytes, *, first: bool = False) -> None:
         if self._fault is not None:
             return

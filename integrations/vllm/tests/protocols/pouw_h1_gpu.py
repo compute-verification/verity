@@ -1,5 +1,5 @@
-"""VLLM-20 on one GPU: the int8 Llama-3.1-8B pin (as `tests/engine/int8_exact_gpu.py` finds or makes it) served on the eager
-int8_exact row with PoUW's H1 + fx1 (``pouw:eps1-sm120-h1fx1``, `protocol_options.pouw_h1`), checked on the host.
+"""On one GPU: the int8 Llama-3.1-8B pin (as `tests/engine/int8_exact_gpu.py` finds or makes it) served on the eager
+int8_exact workload with PoUW's H1 + fx1 (``pouw:eps1-sm120-h1fx1``, `protocol_options.pouw_h1`), checked on the host.
 
 One process writes `<out>/pouw_h1_gpu.json` and the option's record (`<out>/pouw-h1-calls.json`):
 
@@ -8,12 +8,12 @@ One process writes `<out>/pouw_h1_gpu.json` and the option's record (`<out>/pouw
             ``max_num_batched_tokens`` is T (``--rows``), with chunked prefill, so no step puts more rows in a linear.
   calls     the static window (`H1Run`, T rows a call, S = ``--steps``): every (step, linear) call in order at s·U + off(w),
             the served ones recorded and the rest empty, nothing refused; the credit (served rows) beside the padding.
-  compile   every served shape compiled to `eps1-sm120-h1fx1` (`H1Run.check`): its Program digest, units, one seed group and
-            only full 32 x 32 grid tiles. A shape takes minutes on the host (about 0.13 s a unit), so only `--compile` does it
+  compile   every served shape compiled to `eps1-sm120-h1fx1` (`H1Run.check`): its Program digest, proof blocks, one seed group and
+            only full 32 x 32 grid tiles. A shape takes minutes on the host (about 0.13 s a proof block), so only `--compile` does it
             here; otherwise `--compile-from <out>/pouw-h1-calls.json` does it on a CPU node from the record, with each call's
-            positions against its shape's compiled units, and writes `<out>/pouw_h1_compile.json`.
+            positions against its shape's compiled proof blocks, and writes `<out>/pouw_h1_compile.json`.
   z         the last retained calls' exact Y (`engine.int8_exact.int_mm` on the GPU) against the s8 product on the host, and
-            with `--compile`, a unit's z (`Call.z`) against its cells.
+            with `--compile`, a proof block's z (`Call.z`) against its cells.
   hook      a listener (`H1Run.listen`) gets every call with the served tensors on the GPU: A int8 [m, k] and s_a f32 [m]
             (the Commit's ``Int8RowQuant_v1`` /0 and /1), the layer's own int8 weight and scales; what it returns is in the
             manifest; steps begin at linear 0, and every step's calls run over the same layers in order.
@@ -21,30 +21,30 @@ One process writes `<out>/pouw_h1_gpu.json` and the option's record (`<out>/pouw
             live coin, and every served row's slot names its request (`h1_settings`: the engine's runner and the window's
             round coins; `requests_check`), one entry a served request and no served row without one.
 
-``--workload fill`` serves `pouw_h1.FILL` instead (VLLM-52, PERIOD-PATH's ask 1): 64 one-token prompts (`fill_prompts`) under
-VLLM-31's static schedule (``ignore_eos``, every request to its cap, host prefix cache off), with ``max_num_seqs`` 64 and T = 64,
+``--workload fill`` serves `pouw_h1.FILL` instead: 64 one-token prompts (`fill_prompts`) under
+the static schedule (``ignore_eos``, every request to its cap, host prefix cache off), with ``max_num_seqs`` 64 and T = 64,
 so all 64 prefill at step 0 and decode together for the 16 served steps of an S = 18 window. Without the option it serves
-the 64 and then the first alone (the 1-sequence row); with it, the 64 in one window (`<out>/pouw-h1-calls.json`) and the
+the 64 and then the first alone (the 1-sequence workload); with it, the 64 in one window (`<out>/pouw-h1-calls.json`) and the
 first alone in a second (`<out>/solo/`). It records each window's step rows against the declaration (`Static.check`), its
 u (`H1Run.utilization`), the credit gate's verdict, each step's seconds (at linear 0 of the next) and tokens/s, and the
 static schedule's check (`engine.static_schedule.check`) of every request. Compile is `--compile-from` on each record.
 
 ``--challenger HOST:PORT --session JSON --gate CMD`` takes the window's salt and round coins from the auditor host's
-challenger, in the session infra's gate reserved for the window (``--session``, the gate's reserve answer), which the
+challenger, in the challenge phase the challenger gate reserved for the window (``--session``, the gate's reserve answer), which the
 window opens through ``CMD open --session S --root R`` on its window-open root once round 0 is admitted
-(`gate_command`; `pouw_h1_window.Window`; on PEER, the port the gate forwards), one session a window, so the fill
+(`gate_command`; `pouw_h1_window.Window`; on PEER, the port the gate forwards), one challenge phase a window, so the fill
 workload serves only the 64's window. With ``--peer NAME`` in place of ``--session`` each window the run serves reserves
-a session of its own (`window_sessions`: ``CMD reserve --peer NAME``) just before it is installed, and the next is
-reserved only once that session's end entry is in the gate's ``status`` (`session_end`), so ``--commit``'s windows
+a challenge phase of its own (`window_sessions`: ``CMD reserve --peer NAME``) just before it is installed, and the next is
+reserved only once that challenge phase's end entry is in the gate's ``status`` (`session_end`), so ``--commit``'s windows
 and the solo window all take the auditor host's coins. ``--check-challenger CALLS_JSON DIR --key-sha512 HEX --ledger HEAD [--ledger HEAD
 ...] --pins HEAD [--pins HEAD ...] --main FILE`` is the verifier's side on no GPU, ``--ledger`` given once per head
-infra published, ``--pins`` once per head of the host's pins log infra published and ``--main`` the auditor's ``git
+the gate published, ``--pins`` once per head of the host's pins log the gate published and ``--main`` the auditor's ``git
 rev-list --first-parent origin/main`` (without them every window is refused). With ``--window WINDOW_JSON``
-(``{root}``, the window's open root) DIR is the challenger run's own ``out/``: the window's coins against the session
+(``{root}``, the window's open root) DIR is the challenger run's own ``out/``: the window's coins against the challenge phase
 the auditor's signed ledger (the longest of the heads, each extending the others) opens and ends for the window
 (`pouw_h1_challenger.trusted_rounds_reason`). Without it the ledger is read as the newest that the others extend
-(`pouw_h1_challenger.Ledger.load`, core's check), and DIR the session's tree as the gate's ``fetch`` gives it: the window held to the
-session the ledger opened for its Commit's root (`pouw_h1_challenger.session_reason`). Either way the record is held to
+(`pouw_h1_challenger.Ledger.load`, core's check), and DIR the challenge phase's tree as the gate's ``fetch`` gives it: the window held to the
+challenge phase the ledger opened for its Commit's root (`pouw_h1_challenger.session_reason`). Either way the record is held to
 its coins as one manifest (`pouw_h1_challenger.manifest_reason`), and with ``--period NAME`` the ledger must credit the lane's period
 with the window accepted and presented as its close's windows, its open committing ``draw_k``
 (`pouw_h1_challenger.period_reason`, core's `credit.period`). The batch workload admits the first prompt alone after the
@@ -53,30 +53,30 @@ batch, so it admits per round; the fill workload admits in round 0 only.
 ``--served`` (fill) commits each call's A and z/y tables and the weights' B as its window Program's registered values
 (`pouw_h1_served.Served`, the pouw setting ``served``), under the round roots, which the commitment carries, and records
 the trees and `pouw_h1_served.register`'s outcome (`served_check`). With ``--model M --circuit C`` (and ``--gate``) the
-weights' ``b/<K>`` are the period's (`pouw_h1_served.Weights`, VLLM-72): the gate's ``model-key --model M --circuit C``
+weights' ``b/<K>`` are the period's (`pouw_h1_served.Weights`): the gate's ``model-key --model M --circuit C``
 answers the auditor's registration of M under the period's circuit C and its salt key (`model_key_of`), and the served
 model's rows are registered under that key before the salt, the window refused unless they fold to the registration's
-weights' root, the one ``period-open --model M`` signed. ``pouw_h1_rehearsal.py`` runs it all against infra's gate.
+weights' root, the one ``period-open --model M`` signed. ``pouw_h1_rehearsal.py`` runs it all against the challenger gate.
 ``--baseline-h1`` (fill, with ``--served``) serves an H1 window without `Served` first, in the solo window's place, so
 one engine measures plain, H1 and H1 with its registered tables; each window records its host RSS, and a served one
-its registration's seconds a step (``registered_s``, VLLM-76), the part of them inside `pouw_h1_registered.commit`
-(``hashed_s``) and where that hashed (``register_path``: the GPU or NumPy, VLLM-79). The period's declared Program and its digest are
+its registration's seconds a step (``registered_s``), the part of them inside `pouw_h1_registered.commit`
+(``hashed_s``) and where that hashed (``register_path``: the GPU or NumPy). The period's declared Program and its digest are
 declared once before any window (`period_program`), as the period's.
 
 ``--receipts SO`` (fill, ``--served``, no ``--handoff``) registers each call's ``receipt@<c>`` too (BRIDGE2), computed on the
-serving GPU by kernels' producer (``benchmarks/pouw/served_h1/producer.py``, `receipts_producer`): h1u.cu's units kernel of
+serving GPU by kernels' producer (``benchmarks/pouw/served_h1/producer.py``, `receipts_producer`): h1u.cu's proof-block kernel of
 the -hbc build SO (``producer_gpu.sh``'s ``h1u_hbc.so``) over each linear's own int8 weight, its seeds taking the
-registered roots of the call's step's ``a/<K>@<s>`` and ``b/<K>``. The first block's linears' calls at step 0 and at the
-window's last step are kept, and their first unit of each row block is held to `h1tile.reference` word for word
+registered roots of the call's step's ``a/<K>@<s>`` and ``b/<K>``. The first layer's linears' calls at step 0 and at the
+window's last step are kept, and their first proof block of each row block is held to `h1tile.reference` word for word
 (`receipts_check`: live row blocks at step 0, dead at the last step). A ``.cubin`` SO (``served_h1/noise.cu``'s) computes
 them with the producer's torch chain over noise.cu's noise instead. ``--j10r`` declares the period's window Program over
-J10-R's tile unit (`period_unit`, `h1tile.PouwH1Tile5`), so the producer computes J10-R's receipts (one noise stream a call)
-and they are held to `h1tile.j10r_reference`; v1's unit is the default.
+J10-R's tile proof block (`period_unit`, `h1tile.PouwH1Tile5`), so the producer computes J10-R's receipts (one noise stream a call)
+and they are held to `h1tile.j10r_reference`; v1's proof block is the default.
 
 ``--credit`` (with ``--commit`` and ``--receipts``) runs core credit's statement steps over the honest Commit window
 (`credit_check`, `pouw_h1_credit`): `credit.registered_file`, `credit._verified` on a stand-in verifier of record that
-opens each drawn unit's pub, o0 and o1 rows against that file's roots and recomputes its receipt, `credit._proved` and
-`credit._registration`, the drawn units the first and last of each kept call; then a receipt word flipped (with and
+opens each drawn proof block's pub, o0 and o1 rows against that file's roots and recomputes its receipt, `credit._proved` and
+`credit._registration`, the drawn proof blocks the first and last of each kept call; then a receipt word flipped (with and
 without its round's root re-listed), a public table under another step's A root and an ok row 0, each to be refused.
 
 ``--commit`` (fill, ``--served``) serves the 64's window again with the Commit in the engine
@@ -93,13 +93,13 @@ window twice more with an honest Commit, H1 handed all-zero A codes or one A row
 (`EXPERT_NEGATIVE`): the Commit acquires each expert call's rows under its H1 name (`acquire.h1_commit.H1Source`). ``--declare SLOTS,CAP,T,S`` shrinks the fill workload (`declared_of`) so the pure-Python registration fits a run.
 Without ``--challenger`` its windows' coins are this process's, so every call's credit gate verdict is
 `pouw_h1.IN_PROCESS`; with ``--challenger --gate --peer`` each window draws its salt, round and draw coins from a
-session of its own, and ``commit.coins`` (`coins_summary`) holds each window's coin source, session and credit gate,
+challenge phase of its own, and ``commit.coins`` (`coins_summary`) holds each window's coin source, challenge phase and credit gate,
 ``ok`` only when every window's coins are the challenger's and the honest Commit window's gate refuses none of its calls.
 
 ``--handoff SOCK --handoff-state DIR`` (fill, with ``--challenger``) splits the window at its last served step, so the
 GPU is held only while it serves: the serving process records what only it sees (`served_measures`), saves the window,
-hands its session's stream to the holder at SOCK and exits (`hand_off`, `pouw_h1_handoff`), and ``--close-from DIR
---stream-fd FD`` closes and releases it on no GPU (`fill_close`): the same close, trees, draw and session close, the
+hands its challenge phase's stream to the holder at SOCK and exits (`hand_off`, `pouw_h1_handoff`), and ``--close-from DIR
+--stream-fd FD`` closes and releases it on no GPU (`fill_close`): the same close, trees, draw and challenge phase close, the
 record the same `RECORD`.
 """
 from __future__ import annotations
@@ -154,7 +154,7 @@ print(json.dumps({"digest": digest, "s": round(time.monotonic() - t, 1),
 
 
 def period_unit(j10r: bool, arch: str | None = None) -> Any:
-    """The window Program's tile unit at each K (`pouw_h1_served.declared`'s ``unit``, as `PERIOD_DIGEST` builds it): None,
+    """The window Program's tile proof block at each K (`pouw_h1_served.declared`'s ``unit``, as `PERIOD_DIGEST` builds it): None,
     v1's (`h1window.tile_unit`'s on ``arch``, `declared`'s), or with ``j10r`` J10-R's, `h1tile.PouwH1Tile5` under `h1zy`
     on ``arch`` (``--j10r``)."""
     if not j10r:
@@ -168,7 +168,7 @@ def period_unit(j10r: bool, arch: str | None = None) -> Any:
 def period_program(model: Any, rows: int, steps: int, j10r: bool = False,
                    arch: str | None = None) -> tuple[Any, str, dict[str, Any]]:
     """The period's declared Program (`pouw_h1_served.declared` of the shapes and names `pouw._install_h1` gives its run,
-    over `period_unit`'s tile unit on the serving card's ``arch``, which refuses a K outside its H1 record's domain), its
+    over `period_unit`'s tile proof block on the serving card's ``arch``, which refuses a K outside its H1 record's domain), its
     digest (the period's ``--circuit``) and what declaring them cost, once before any window, as a period declares them.
     The digest is taken in a child process, since at FILL it alone takes minutes and tens of GB, which no window pays, so
     this process's RSS is the windows' own."""
@@ -216,8 +216,8 @@ def listening(port: int) -> bool:
 
 def await_listener(port: int, polls: int = 300) -> int | None:
     """The polls (one a second, at most `polls`) until `port` listens here (`listening`), or None: the live challenger
-    reaches the serving node through ``ssh -R`` once the gate's open has answered, and a probe connect would take the
-    place of the session's one client."""
+    reaches the serving node through its certifier coin link once the gate's open has answered, and a probe connect
+    would take the place of the challenge phase's one client."""
     for i in range(polls):
         if listening(port):
             return i
@@ -226,7 +226,7 @@ def await_listener(port: int, polls: int = 300) -> int | None:
 
 
 def await_end(status: Any, polls: int = 300) -> dict[str, Any]:
-    """`status()` (the gate's ``status S``) once session S has its ``end`` entry (serve.py's exit after the window's
+    """`status()` (the gate's ``status S``) once challenge phase S has its ``end`` entry (serve.py's exit after the window's
     close), was never opened or is refused, polled once a second at most `polls` times: the live gate has no ``wait``."""
     for _ in range(polls):
         s = status()
@@ -241,7 +241,7 @@ def gate_command(argv: list[str]) -> Any:
     --session S --root R``, its JSON answer's ``commitment`` (null until serve.py signs its record) then read from ``status
     S``, and the answer returned once its ``port`` listens on this host (`await_listener`). ``reserve(peer, steps)`` is
     the gate's reserve of a window of S = `steps` rounds served on `peer` (its answer; ValueError naming what the gate
-    said when it refuses), and ``ended(session)`` the session's ``status`` once it has its end entry (`await_end`)."""
+    said when it refuses), and ``ended(session)`` the challenge phase's ``status`` once it has its end entry (`await_end`)."""
     def verb(*args: str) -> dict[str, Any]:
         return json.loads(subprocess.run(gate_argv(argv, args), check=True, capture_output=True, text=True).stdout)
 
@@ -272,8 +272,8 @@ def gate_command(argv: list[str]) -> Any:
 
 
 def window_sessions(gate: Any, peer: str, steps: int) -> Any:
-    """With ``--peer``: each window the run serves gets a session of its own, reserved at the gate (``gate.reserve``) just
-    before the window is installed, since the auditor host's challenger serves one window a session and a session opens
+    """With ``--peer``: each window the run serves gets a challenge phase of its own, reserved at the gate (``gate.reserve``) just
+    before the window is installed, since the auditor host's challenger serves one window a challenge phase and a challenge phase opens
     once; ``sessions(name)`` is window `name`'s reserve answer (`pouw_h1_window.reserved_of`), and a name asked for twice
     is refused (ValueError), as is a reserve the gate refuses. ``sessions.held`` maps each window to its answer."""
     from verity_vllm.protocols.pouw.h1 import window as PHW
@@ -294,9 +294,9 @@ def window_sessions(gate: Any, peer: str, steps: int) -> Any:
 
 
 def session_end(gate: Any, reserved: dict[str, Any]) -> dict[str, Any]:
-    """Window's session `reserved` (its reserve answer) once released: its ``end`` entry as the gate's ``status`` gives it,
+    """Window's challenge phase `reserved` (its reserve answer) once released: its ``end`` entry as the gate's ``status`` gives it,
     ``ok`` when the challenger's client closed it and every coin family released all its coins (``complete``). The next
-    window's session is reserved only after this one has ended."""
+    window's challenge phase is reserved only after this one has ended."""
     s = gate.ended(reserved["session"])
     end = ((s.get("end") or {}).get("body") or {}) if isinstance(s.get("end"), dict) else {}
     return {"session": reserved["session"], "seq": reserved.get("seq"), "opened": s.get("open") is not None,
@@ -373,7 +373,7 @@ def h1_settings(eng: Any, rows: int, steps: int, challenger: str | None = None, 
                 **kw: Any) -> dict[str, Any]:
     """The option's settings for one served window: the engine's model runner (where the scheduler's admissions arrive) and
     the window's coins, its salt coin and one live round coin a step: the auditor host's at `challenger` (``HOST:PORT``, one
-    session a window, `pouw_h1_challenger`) in the `session` infra's gate reserved for it, which `gate` opens on the
+    challenge phase a window, `pouw_h1_challenger`) in the `session` the challenger gate reserved for it, which `gate` opens on the
     window's open root, else held in this process, which no verifier trusts and which credits nothing (a measurement)."""
     if challenger:
         return {"pouw": {"challenger": challenger, "session": session, "gate": gate, "runner": eng.runner, "rows": rows,
@@ -392,8 +392,8 @@ def requests_check(h1: Any, requests: int) -> dict[str, Any]:
     that admitted it, recorded before that round's coin, at a first slot naming it (`pouw_h1_requests.request_reason`), every slot
     of every step naming the request its row is, under a round no later than its step (`slot_reason`), the log against the
     coins (`rounds_reason`), no served row without an entry (``gaps``), and each call's A table under its round's root
-    (``a_roots``, `pouw_h1_requests.tables_reason`). With the Commit the request and slot tables are live (VLLM-85): their
-    leaves open in each round's ``live@<s>``, so ``live`` holds each round's verdict (`pouw_h1_live.verdicts`, its unit's
+    (``a_roots``, `pouw_h1_requests.tables_reason`). With the Commit the request and slot tables are live: their
+    leaves open in each round's ``live@<s>``, so ``live`` holds each round's verdict (`pouw_h1_live.verdicts`, its proof block's
     circuit evaluated on its statement) in place of the openings."""
     from verity_vllm.protocols.pouw.h1 import live as LV
     from verity_vllm.protocols.pouw.h1 import requests as RQ
@@ -555,7 +555,7 @@ def fill_prompts(tokenizer: Any, n: int) -> list[int]:
 
 
 def generate_static(llm: Any, prompts: list[int], max_tokens: int) -> list[dict[str, Any]]:
-    """Greedy one-token prompts under VLLM-31's static schedule (``ignore_eos``: every request runs to its cap)."""
+    """Greedy one-token prompts under the static schedule (``ignore_eos``: every request runs to its cap)."""
     from vllm import SamplingParams
     outs = llm.generate([{"prompt_token_ids": [t]} for t in prompts],
                         SamplingParams(temperature=0.0, max_tokens=max_tokens, seed=0, ignore_eos=True), use_tqdm=False)
@@ -666,7 +666,7 @@ def fill(a: argparse.Namespace) -> dict[str, Any]:
         if commit:
             from verity_vllm.acquire import h1_commit as HC
             com, _src, tap = HC.attach(eng, layers, run_id=f"pouw-h1-commit-{os.getpid()}")
-        # in-process coins open no session, so a local window's key is its own (`Served.key`)
+        # in-process coins open no challenge phase, so a local window's key is its own (`Served.key`)
         if commit and a.served and registry is None and shared[0] is None:
             t0 = time.monotonic()
             shared[0] = local_weights(eng.model, layers, decl.rows, decl.steps, period, arch)
@@ -945,7 +945,7 @@ def closed_measures(h1: Any, out: dict[str, Any], want: int, weight_of: Any, bad
 
 def released(name: str, h1: Any, out: dict[str, Any], served: Any, tdir: Path, challenger: bool,
              register: bool = True) -> dict[str, Any]:
-    """A fill window's commitment and how its session closed, once released, and its served trees' check (with
+    """A fill window's commitment and how its challenge phase closed, once released, and its served trees' check (with
     ``register``, the first and last calls' ``--registered`` files too)."""
     out["commitment"] = dict(h1.commits)
     out["coin_source"], out["challenger"] = out["commitment"].get("coin_source"), h1.details.get("challenger")
@@ -959,12 +959,12 @@ def released(name: str, h1: Any, out: dict[str, Any], served: Any, tdir: Path, c
     return out
 
 
-#: the serving stage's record when it hands its window off (`hand_off`), which the close stage completes
+#: the serving phase's record when it hands its window off (`hand_off`), which the close phase completes
 SERVING = "pouw_h1_gpu.serving.json"
 
 
 def hand_off(h1: Any, a: argparse.Namespace, doc: dict[str, Any]) -> dict[str, Any]:
-    """With ``--handoff SOCK --handoff-state DIR``: the served window saved to DIR and its session's stream handed to the
+    """With ``--handoff SOCK --handoff-state DIR``: the served window saved to DIR and its challenge phase's stream handed to the
     holder at SOCK (`pouw_h1_handoff`), its record so far in ``SERVING``; this process then exits, and with it its GPU
     lease, and ``--close-from DIR`` closes and releases the window on the CPU (`fill_close`)."""
     from verity_vllm.protocols.pouw.h1 import handoff as HO
@@ -983,7 +983,7 @@ def hand_off(h1: Any, a: argparse.Namespace, doc: dict[str, Any]) -> dict[str, A
 
 
 def fill_close(a: argparse.Namespace) -> dict[str, Any]:
-    """The close stage, on no GPU: the window ``--close-from`` holds, its session the stream ``--stream-fd``, closed and
+    """The close phase, on no GPU: the window ``--close-from`` holds, its challenge phase the stream ``--stream-fd``, closed and
     released as the serving process would have (`pouw_h1_handoff`), and the fill record completed from ``SERVING``."""
     from verity_vllm.protocols.pouw.h1 import handoff as HO
     from verity_vllm.protocols.pouw.h1 import window as PHW
@@ -1075,7 +1075,7 @@ def negatives_of(layers: list[Any]) -> tuple[str, ...]:
 
 
 def editor(kind: str) -> Any:
-    """The codes H1 is handed of the ones the arm quantized: every call's all zero (``a-zero``, the RT4 A = 0 probe),
+    """The codes H1 is handed of the ones the arm quantized: every call's all zero (``a-zero``, the A = 0 probe),
     row 1's first code moved off by one in the first call of two rows or more (``a-row-off``), or the first routed
     expert down call with rows all zero (``a-zero-expert``: its K, the intermediate width, is the experts' alone). The
     edit's ``at`` names the expert site it zeroed."""
@@ -1173,9 +1173,9 @@ def negative_verdict(out: dict[str, Any]) -> dict[str, Any]:
 
 def coins_summary(doc: dict[str, Any], challenger: bool) -> dict[str, Any]:
     """A ``--commit`` run's coins, window by window (the Commit window, each negative, the fill window): its coin source,
-    its session and how that ended, and its credit gate (`pouw_h1.H1Run.credit`): the gate-passed rows, the refused calls
+    its challenge phase and how that ended, and its credit gate (`pouw_h1.H1Run.credit`): the gate-passed rows, the refused calls
     with each reason, and the credited share, gate-passed MACs over served MACs. ``ok`` without ``challenger``; with it,
-    when every window's coins are the auditor host's from a session of its own that ended closed and complete, and the
+    when every window's coins are the auditor host's from a challenge phase of its own that ended closed and complete, and the
     honest Commit window's gate passes rows and refuses none of its calls."""
     wins = {"commit": doc.get("h1_commit"), **{f"commit-{k}": v.get("window") for k, v in (doc.get("negatives") or {}).items()},
             "fill": doc.get("h1")}
@@ -1237,7 +1237,7 @@ def layout_of(linears: Any, calls: Any, m: int, tile: Any) -> dict[str, Any]:
 def served_check(h1: Any, served: Any, tdir: Path, register: bool = True) -> dict[str, Any]:
     """The window's registered tables (`pouw_h1_served`): each committed value's entry, what was refused, and the outcome of
     `pouw_h1_served.register`, the first and last calls' ``--registered`` files written into ``tdir``: a file holds one
-    entry a unit of the window for each of its ports (`h1window.table_reads_file`), so at FILL's 1.5M units each call's is
+    entry a proof block of the window for each of its ports (`h1window.table_reads_file`), so at FILL's 1.5M proof blocks each call's is
     hundreds of MB, and the window's 2304 about a TB. Without ``register`` (``--commit``'s windows, ``--skip-register``)
     only the entries: at FILL `register`'s template partition (`partition.evaluate`) encodes the window Program again,
     past 197 GB and 17 min."""
@@ -1279,9 +1279,9 @@ def producer() -> Any:
 
 def receipts_producer(so: str, served: Any, h1: Any, layers: Any, steps: int) -> Any:
     """``--receipts SO``: `served`'s receipts (`Served.receipts`) from the producer (`producer().Receipts`) for the window
-    `h1`, h1u.cu's units kernel of the -hbc build `so` over each linear's int8 weight in `layers` in place (no second copy
+    `h1`, h1u.cu's proof-block kernel of the -hbc build `so` over each linear's int8 weight in `layers` in place (no second copy
     on the GPU), or with a ``.cubin`` SO (noise.cu's) receipts.py's torch chain over noise.cu's noise, keeping the first
-    block's linears' calls at step 0 and at step `steps` - 1 for `receipts_check`. The noise is the window Program's form,
+    layer's linears' calls at step 0 and at step `steps` - 1 for `receipts_check`. The noise is the window Program's form,
     v1's or J10-R's (``--j10r``)."""
     P = producer()
     kernel = {"cubin": P.RC.Cubin(so)} if so.endswith(".cubin") else {"units": P.Units(so)}
@@ -1292,8 +1292,8 @@ def receipts_producer(so: str, served: Any, h1: Any, layers: Any, steps: int) ->
 
 
 def receipts_check(made: Any) -> dict[str, Any]:
-    """The kept calls' receipts (`receipts_producer`) at the first unit of each row block against `h1tile.reference`
-    seeded from the unit's public row as the verifier builds it, word for word (`producer().check`; a unit is bad unless
+    """The kept calls' receipts (`receipts_producer`) at the first proof block of each row block against `h1tile.reference`
+    seeded from the proof block's public row as the verifier builds it, word for word (`producer().check`; a proof block is bad unless
     that row is also the producer's salt, position and roots); ``ok`` needs live and dead row blocks both."""
     rows = []
     for c, kept in sorted(made.kept.items()):
@@ -1308,7 +1308,7 @@ def receipts_check(made: Any) -> dict[str, Any]:
 
 def credit_check(h1: Any, served: Any, made: Any) -> dict[str, Any]:
     """``--credit``: core credit's statement steps (`pouw_h1_credit.check`) over the honest Commit window with receipts
-    on, the drawn units the first and last of each kept call (`receipts_producer`'s: the first block's linears at step 0
+    on, the drawn proof blocks the first and last of each kept call (`receipts_producer`'s: the first layer's linears at step 0
     and the last step), their operands and receipts the producer's on the serving GPU; then each prover-side negative
     (`pouw_h1_credit.NEGATIVES`) at the first of them."""
     from tests.protocols import pouw_h1_credit as PC
@@ -1340,7 +1340,7 @@ def _check(h1: Any) -> tuple[dict[str, Any], bool]:
 
 def compile_from(calls_file: str, out: str) -> dict[str, Any]:
     """The record's calls compiled on the host: every shape by `H1Run.check`, the window static, and each call (s, w) at
-    s·U + off(w) counted in its shapes' compiled units."""
+    s·U + off(w) counted in its shapes' compiled proof blocks."""
     from verity_vllm.protocols.pouw import h1 as PH
 
     rec = json.loads(Path(calls_file).read_text())
@@ -1375,14 +1375,14 @@ def check_challenger(calls_file: str, directory: str, public_sha512: str, out: s
                      pins: list[str] | None = None, main: list[str] | None = None) -> dict[str, Any]:
     """The verifier's side, on no GPU: the served window's coins (`calls_file`'s commitment) against the challenger's own
     directory under the auditor's key, pinned by the SHA-512 of its public key (`pouw_h1_challenger.pinned_key`), `ledger`
-    every head infra published of the auditor's signed ledger, `pins` every head of the host's pins log (infra's
-    ``pins.jsonl``, the gate's ``pins``; none refuses every session: `pouw_h1_challenger.pins_head`) and `main` the
-    auditor's own first-parent history of main (none refuses every session, as `challenger.pinned_session` refuses
+    every head the gate published of the auditor's signed ledger, `pins` every head of the host's pins log (the host's
+    ``pins.jsonl``, the gate's ``pins``; none refuses every challenge phase: `pouw_h1_challenger.pins_head`) and `main` the
+    auditor's own first-parent history of main (none refuses every challenge phase, as `challenger.pinned_session` refuses
     it). With `window_file` (the window's ``{root}``) `directory` is
-    the challenger run's ``out/`` (``research fetch RUN --all``), as the session the longest of the heads, each extending
+    the challenger run's ``out/``, fetched whole, as the challenge phase the longest of the heads, each extending
     the others, opens and ends for the window (`trusted_rounds_reason`); without it the ledger is read as the newest that
-    the others extend (`Ledger.load`, core's check), the window held to the session it opened for its Commit's root
-    (`session_reason`), `directory` being that session's tree as the gate's ``fetch SESSION`` gives it (its ``out/``
+    the others extend (`Ledger.load`, core's check), the window held to the challenge phase it opened for its Commit's root
+    (`session_reason`), `directory` being that challenge phase's tree as the gate's ``fetch SESSION`` gives it (its ``out/``
     within). The record is held to its coins as one manifest (`pouw_h1_challenger.manifest_reason`), and with `period` the ledger
     must credit the lane's period with the window accepted and presented as its close's windows, its open committing
     ``draw_k`` (`pouw_h1_challenger.period_reason`, core's `credit.period`). Its ``credit`` is core's
@@ -1513,11 +1513,11 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--model", metavar="ROLE", help="fill with --served and --gate: the served model's int8 checkpoint role "
                                                     "(LLAMA31_8B_INT8), whose registration under --circuit the gate's "
                                                     "model-key answers; each K's b/<K> is registered under its key before "
-                                                    "the window's salt (pouw_h1_served.Weights, VLLM-72)")
+                                                    "the window's salt (pouw_h1_served.Weights)")
     ap.add_argument("--circuit", metavar="SHA512", help="with --model: the period's circuit (its declared Program's digest)")
     ap.add_argument("--workload", choices=("batch", "fill"), default="batch",
                     help="batch: PROMPTS batched and the first alone (--rows, --steps, --max-tokens); fill: pouw_h1.FILL, 64 in "
-                         "flight every served step (VLLM-52; its own T, S and cap)")
+                         "flight every served step (its own T, S and cap)")
     ap.add_argument("--handoff", metavar="SOCK", help="fill with --challenger: once served, hand the window (to "
                                                      "--handoff-state) and its session's stream (to the holder at SOCK) "
                                                      "off and exit, the close left to --close-from (pouw_h1_handoff)")

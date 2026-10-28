@@ -1,4 +1,4 @@
-"""`pouw_h1_registered_device` (VLLM-79): H1's registered values hashed by `pouw_cuda/registered_rows.cu`, held byte for byte to
+"""`pouw_h1_registered_device`: H1's registered values hashed by `pouw_cuda/registered_rows.cu`, held byte for byte to
 `pouw_h1_registered.commit`'s NumPy path and to core's `registered.Registered.commit`. Over random rows of 16-bit words (one row
 to a few thousand, one word to a z/y record's 3072, a row whose bytes sit 2 and 4 bytes off an 8-byte boundary), under each
 domain binding, nonces past 2^32 and 2^63, and given salts: the ``b || c`` strings, every tree level, the root, domain and

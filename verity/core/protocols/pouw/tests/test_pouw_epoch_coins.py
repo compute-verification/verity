@@ -132,7 +132,7 @@ def test_a_challenger_has_no_entropy_of_its_own():
 
 
 def test_a_served_challengers_coins_are_named_by_a_claim_instance():
-    """CMP-52: the Lean verifier of record's `coins` is named by A3 (`verifier.CLAIM`, ``uniform/io-getrandombytes``),
+    """The Lean verifier of record's `coins` is named by A3 (`verifier.CLAIM`, ``uniform/io-getrandombytes``),
     and a challenger keeps the claim instance its entropy carries; one without a claim instance, `os.urandom` among
     them, is refused as a served challenger's source (`challenger.served_claim`)."""
     assert Ch.served_claim(verifier.coins) == verifier.CLAIM == "uniform/io-getrandombytes"

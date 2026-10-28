@@ -1,1 +1,0 @@
-{"server_argv": ["--max-model-len", "4096", "--max-num-seqs", "256", "--no-async-scheduling", "--enable-prefix-caching", "--enable-chunked-prefill", "--max-num-batched-tokens", "256"]}

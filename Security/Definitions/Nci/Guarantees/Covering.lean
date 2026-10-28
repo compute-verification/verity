@@ -3,7 +3,7 @@ import Definitions.Nci.Assumptions.Covering
 /-!
 # The covering bound at one width `b` and one compression rate `r`
 
-Daniel's lower bound on inference blocks (22 Oct 2026): a circuit that computes many chained multiplications of updated
+A lower bound on inference blocks: a circuit that computes many chained multiplications of updated
 weights cannot be covered by few small blocks that each read little. It is a statement beside `Complies`, `Chain` and
 `F`, not a specialization of them: a covering's blocks may overlap and recompute, so it is not a division into IUs, and
 its multiplication blocks are any disjoint gate sets with an output gate, not a chain's products and sums.

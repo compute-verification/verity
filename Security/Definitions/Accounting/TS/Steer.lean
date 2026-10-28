@@ -3,7 +3,7 @@ import Definitions.Accounting.TS.Slots
 /-!
 # Steering a segmented consumer (trusted)
 
-STEER-PROOF's route B (note:20261018T0303Z-draft-steer-proof): the consumer rows SAMPLING's LIN-STEER is about
+STEER-PROOF's route B: the consumer rows SAMPLING's LIN-STEER is about
 (`Consumer`), with their words at a stride. A consumer of a row of `m` coordinates commits one word a segment (`seg i`
 the segment of coordinate `i`, `G` segments, a partial sum at stride `L`), so zeroing coordinates of its noised operand
 spares a segment's work only once the segment has nothing left to sum.

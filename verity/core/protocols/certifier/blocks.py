@@ -5,8 +5,8 @@ that certificate alone (`pins`), so with every other input row wired, the circui
 `input_count` under those pins) are 0.
 
 The schema, `verity/blocks/v1` (`FORMAT`), is kept here, in network accounting's module, until circuits' window interface
-(`verity.ml.windows.interface`) carries it in ``circuit.json`` beside the circuit's other declarations, with circuits'
-proof and inference blocks; until then a check takes it beside the circuit record:
+(`verity.ml.windows.interface`) carries it in ``circuit.json`` beside the circuit's other declarations, as it carries
+circuits' proof and inference blocks (the record's ``blocks``); until then a check takes it beside the circuit record:
 
     {"format": "verity/blocks/v1",
      "server": [{"name": S, "uplink": LINK, "units": "all" | [[tid, at, n], ...]}, ...],
@@ -31,6 +31,14 @@ a row, the size of the commitment the certifier makes of it row by row), never o
 
 - the servers each a new name on a new uplink (one network certifier an uplink), their units together a partition of
   every template's units ("all": the one server's);
+- each inference block on one server (NET-92; Daniel, 26 Oct: a server's ingress and egress carry only its inference
+  blocks' declared inputs and outputs, and an inference block runs on a single server, so which server may read its
+  input bits is unambiguous): the record's inference entries (``blocks.inference``, the window interface's
+  `InferenceEntry`, each unit's (slot, step)) tile every template's units, and no (slot, step) has units on two servers;
+  with two servers or more the record states them. Which server runs which units is protocol structure, deployment
+  configuration as NCI's declaration is, public and not a private partition, so this is checked in the clear with no
+  proof block (`server_blocks`). The work is per entry, server run and digit: an entry's units on one run are at most
+  two boxes a digit of its mixed radix, each a rectangle of (slot, step);
 - a transfer a new value, but a wire's other one, its kind in its direction (`transfer_rows.KINDS`), on a server, in its
   window, its ``t`` within the server-time block's T steps and over its rows;
 - an ``in`` transfer's value a registered parameter read by its server's units alone, each read a whole row of it (base
@@ -61,7 +69,7 @@ from __future__ import annotations
 
 import itertools
 import math
-from collections.abc import Iterable, Mapping, Sequence
+from collections.abc import Iterable, Iterator, Mapping, Sequence
 from dataclasses import dataclass
 from typing import Any
 
@@ -78,6 +86,10 @@ _OUT = ("leaves", "writes")
 _READ = ("reader", "port", "param", "at", "radix", "base", "step")
 _WRITE = ("writer", "out", "at", "radix", "base", "step")
 _WIRE = ("reader", "port", "writer", "out", "at", "radix", "base", "step")
+#: an inference entry (the window interface's `InferenceEntry`): unit ``at + i``'s (slot, step) is its slot digit and
+#: ``step`` plus its step digit, i's digits in mixed radix ``radix`` named by ``axes``
+_ENTRY = ("template", "at", "radix", "axes", "step")
+_AXES = ("slot", "step", "-")
 
 
 def _nat(x: Any, lo: int = 0) -> bool:
@@ -137,7 +149,7 @@ def _pattern(d: Any, keys: Sequence[str], what: str, cut: bool = False) -> Patte
 
 @dataclass(frozen=True)
 class Server:
-    """A server block: proof units ``units`` (each ``(tid, at, n)``) on uplink ``uplink``, which one network certifier
+    """A server block: proof blocks ``units`` (each ``(tid, at, n)``) on uplink ``uplink``, which one network certifier
     watches."""
 
     name: str
@@ -235,6 +247,99 @@ def _server_of(runs: Mapping[str, list[list[Any]]], tid: str, lo: int, hi: int) 
     return next((s for a, b, s in runs.get(tid, ()) if a <= lo and hi <= b), None)
 
 
+def _boxes(lo: int, hi: int, radix: Sequence[int], fixed: tuple[int, ...] = ()) -> Iterator[tuple[tuple[int, ...], int, int]]:
+    """Indices ``[lo, hi)`` of the digits after ``fixed`` in mixed radix ``radix`` (the first the slowest), as at most two
+    boxes a digit, each ``(fixed', a, b)``: the digits ``fixed'``, then one in ``[a, b)``, then every later one any."""
+    if lo >= hi:
+        return
+    w = math.prod(radix[len(fixed) + 1:])
+    a, ra = divmod(lo, w)
+    b, rb = divmod(hi, w)
+    if a == b:
+        yield from _boxes(ra, rb, radix, (*fixed, a))
+        return
+    if ra:
+        yield from _boxes(ra, w, radix, (*fixed, a))
+        a += 1
+    if a < b:
+        yield fixed, a, b
+    if rb:
+        yield from _boxes(0, rb, radix, (*fixed, b))
+
+
+def _digit(box: tuple[tuple[int, ...], int, int], radix: Sequence[int], d: int) -> tuple[int, int]:
+    """Digit ``d``'s range ``[lo, hi)`` over a box of `_boxes`."""
+    fixed, a, b = box
+    return (fixed[d], fixed[d] + 1) if d < len(fixed) else (a, b) if d == len(fixed) else (0, radix[d])
+
+
+def _one_server(doc: Mapping[str, Any], tpl: Mapping[str, tuple[Any, Any, int]], runs: Mapping[str, list[list[Any]]],
+                servers: Sequence[Server]) -> None:
+    """Refuse an inference block of the record's (``blocks.inference``) whose units are on two servers, entries that don't
+    tile every template's units, and two servers or more over a record that states none (module docstring)."""
+    blocks = doc.get("blocks")
+    inference = blocks.get("inference") if isinstance(blocks, Mapping) else None
+    if inference is None:
+        if len(servers) > 1:
+            raise ValueError(f"{len(servers)} servers over a circuit record that states no inference block "
+                             "(blocks.inference): an inference block runs on one server, and with two servers "
+                             "or more the record's inference entries are what say which")
+        return
+    entries = inference.get("entries") if isinstance(inference, Mapping) else None
+    if not isinstance(entries, list):
+        raise ValueError(f"a circuit's inference block is its entries, a list, not {inference!r}")
+    for e in entries:
+        if not (isinstance(e, Mapping) and set(e) == set(_ENTRY) and isinstance(e["template"], str) and e["template"] in tpl
+                and _nat(e["at"]) and _nat(e["step"]) and isinstance(e["radix"], list) and e["radix"]
+                and all(_nat(r, 1) for r in e["radix"]) and isinstance(e["axes"], list)
+                and len(e["axes"]) == len(e["radix"]) and all(a in _AXES for a in e["axes"])
+                and e["axes"].count("slot") == 1 and e["axes"].count("step") <= 1):
+            raise ValueError(f"inference entry {e!r}: {{{', '.join(_ENTRY)}}}, a template of the record's, a first unit and "
+                             f"a step, and one axis of {_AXES} a digit of radix 1 or more, one the slot and at most one "
+                             "the step")
+    for t, (_r, _o, n) in tpl.items():
+        end = 0
+        for at, k in sorted((e["at"], math.prod(e["radix"])) for e in entries if e["template"] == t):
+            if at != end:
+                raise ValueError(f"template {t}: units [{min(at, end)}, {max(at, end)}) are "
+                                 f"{'in no inference entry' if at > end else 'in two inference entries'}; the entries "
+                                 "tile each template's units exactly once")
+            end = at + k
+        if end != n:
+            raise ValueError(f"template {t}: inference entries tile units [0, {end}) of its {n}; they tile each "
+                             "template's units exactly once")
+    if len(servers) == 1:
+        return
+    rects = []
+    for e in entries:
+        radix, axes, at = e["radix"], e["axes"], e["at"]
+        for lo, hi, s in runs[e["template"]]:
+            for box in _boxes(max(lo, at) - at, min(hi, at + math.prod(radix)) - at, radix):
+                slot = _digit(box, radix, axes.index("slot"))
+                step = _digit(box, radix, axes.index("step")) if "step" in axes else (0, 1)
+                rects.append((*slot, e["step"] + step[0], e["step"] + step[1], s, e["template"]))
+    rects.sort()
+    live: list[tuple[Any, ...]] = []
+    for r in rects:
+        live = [q for q in live if q[1] > r[0]]
+        for q in live:
+            if q[4] != r[4] and q[2] < r[3] and r[2] < q[3]:
+                raise ValueError(f"inference block (slot {r[0]}, step {max(q[2], r[2])}): units of {q[5]} on server "
+                                 f"{q[4]} and of {r[5]} on server {r[4]}; an inference block runs on one server, the one "
+                                 "that may read its inputs")
+        live.append(r)
+
+
+def server_blocks(doc: Mapping[str, Any], server: Any, layouts: Mapping[str, Any]) -> tuple[Server, ...]:
+    """The servers ``server`` (a blocks object's, or the record's ``blocks.server``) of the circuit record ``doc`` against
+    ``layouts`` (as `check` takes them), refused (ValueError, naming the rule) unless each is a new name on a new uplink,
+    together they partition every template's units, and each inference block of the record's runs on one of them."""
+    tpl = _templates(doc, layouts)
+    servers, runs = _servers(server, tpl)
+    _one_server(doc, tpl, runs, servers)
+    return servers
+
+
 def _disjoint(rects: Sequence[tuple[tuple[str, str], int, int, int, int]], what: str) -> None:
     """Refuse two rectangles (units × rows) of one port that meet."""
     by: dict[tuple[str, str], list[tuple[int, int, int, int]]] = {}
@@ -299,13 +404,15 @@ def _cut(doc: Mapping[str, Any], tid: str, port: str) -> int:
 def check(doc: Mapping[str, Any], blocks: Any, layouts: Mapping[str, Any]) -> Blocks:
     """Refuse (ValueError, naming the rule) a circuit's blocks that break the module docstring's rules, against its stated
     circuit record ``doc`` (``circuit.json``: its templates, wires, external ports, cuts, registered reads and ingress,
-    which the window interface's own checks have held well-formed, `check_inputs`) and ``layouts``, each template's bit rows
+    which the window interface's own checks have held well-formed, `check_inputs`, and its inference block, each unit's
+    (slot, step), which puts each inference block on one server, `server_blocks`) and ``layouts``, each template's bit rows
     by descriptor id (the interface's `layout`: its ``rows`` and ``outs``, each ``(name, words)``), the verifier's own from
     its catalog. The work is per declaration, never per unit."""
     tpl = _templates(doc, layouts)
     if not isinstance(blocks, Mapping) or blocks.get("format") != FORMAT or set(blocks) != set(_KEYS):
         raise ValueError(f"a circuit's blocks are a {FORMAT} object of {list(_KEYS)}")
     servers, runs = _servers(blocks["server"], tpl)
+    _one_server(doc, tpl, runs, servers)
     by_name = {s.name: s for s in servers}
     st = blocks["server_time"]
     if not (isinstance(st, Mapping) and set(st) == {"window", "steps"} and _nat(st["window"]) and _nat(st["steps"], 1)):

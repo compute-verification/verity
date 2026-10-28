@@ -3,8 +3,7 @@ import Definitions.Pous.Model.Audit
 /-!
 # The graded sequential audit: up to `t` late rounds, each within a hard bound
 
-Added on 3 Oct 2026, with `Pous.Guarantees.BandGradedMeetsFamily` (PR #905), after the red
-team's hold on unbounded late rounds (`red-team-905`). `GradedMeets`
+Its guarantee is `Pous.Guarantees.BandGradedMeetsFamily`. `GradedMeets`
 (`Security/Definitions/Pous/Accounting/GradedMeets.lean`) is `Meets` with this audit in place of the sequential
 one.
 

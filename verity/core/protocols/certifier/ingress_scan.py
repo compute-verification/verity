@@ -1,8 +1,8 @@
-"""The scan's ingress side (NET-68's step-indexed scan router, note:network-accounting/20261025T0830Z-report-net68-scan-router):
-one unit a certifier bucket t, `IngressScanBucket`, which reads bucket t's ingress row, the carried state S_{t−1} and
-the Programs' row at t, and computes S_t from them and S_t's egress view, its outputs beside an ok bit (the generator
-form); the first bucket's, `IngressScanFirst`, reads no state and starts from the empty one. Every switch is computed
-from the state and the rows; none is witness. Nothing here is in a Spec.
+"""The ingress side of the step-indexed scan: one unit a certifier bucket t, `IngressScanBucket`, which reads bucket
+t's ingress row, the carried state S_{t−1} and the Programs' row at t, and computes S_t from them and S_t's egress
+view, its outputs beside an ok bit (the generator form); the first bucket's, `IngressScanFirst`, reads no state and
+starts from the empty one. Every switch is computed from the state and the rows; none is witness. Nothing here is
+in a Spec.
 
 **The row** is `warden_rows.window_rows`' row t of the ingress link: S = lanes·r slots of B-byte cells, lane block ρ
 (slots ρ·r … ρ·r + r − 1) the ρ-th live connection by ordinal and a block no connection holds r·B zero bytes. Its cells
@@ -40,12 +40,14 @@ unit, committed under its hiding leaf and registered as `verity/certifier/scan-s
 prompt ids, prompt position p at `ids[position(p)]` for p below `fields`, each IDB bits, beside the request's
 `max_tokens`, `seed`, `temperature` and `top_p`. The ids are the scan's own reading of the certified cells, each the
 decimal field of the warden's signed ingress row its request came in on, so the row is held to the certified bytes by
-the scan's gates and needs no other tie. A Program that reads its slot as i32s (vllm's `SlotRow_v1{NP}` row:
-occupancy, prompt length and NP ids) reads `occ`, `fields` and the ids each at its bits in the state row
-(`slot_row`), zero-extended: wires, no gate, but a read of the whole state row (`state_bits`, 9,353 words at w63's
-class). An empty slot's `fields` and ids aren't zeroed, nor are the ids past `fields` (they can be a request's not
+the scan's gates and needs no other tie. A Program that reads its slot as i32s (occupancy, prompt length and NP ids;
+vLLM's `ScanSlots_v2`) reads `occ`, `fields` and the ids each at its bits in the state row (`slot_row`),
+zero-extended, copies with no gate, through a read of the whole state row (`state_bits`, 9,353 words at w63's class).
+An empty slot's `fields` and ids aren't zeroed, nor are the ids past `fields` (they can be a request's not
 anchored at b, or an earlier request's), so such a Program masks its outputs by `occ` and reads a slot's first
-`fields` ids only.
+`fields` ids only. A window circuit of the link-window from scan bucket t0 reads the window's rows as one value
+(vLLM's `SCAN_STATE`, row a for boundary a): `window_state`, the scan's rows t0 − 1 … t0 + buckets − 2, a constant
+offset t0 − 1, with row −1, the first link-window's, the empty state's, since no unit registers S_{−1}.
 
 **The Programs' row** (`prog_encode`) at bucket t is NR entries, each n (u32) and KO output ids of IDB bits, then zeros
 to a whole word: entry j the outputs of the Program in slot j of the boundary t, all zero for an empty slot (`occ` 0
@@ -69,13 +71,14 @@ S_t's view, 302 words at w63's class, where reading S_t itself would hash its 9,
 3. a block's cells in order: its data cells (`DATA` or `END`), none once its slot is `done`, then its `PAD`s (kind,
    length and payload zero); each data cell is the next frame of its slot's request (`io_request._reading`,
    a first frame from `left` = 0, whose head's fields go into the slot), `END` exactly when it holds the request's last
-   byte, its length the request's bytes in it, its slot's `cells` below C, and its ids, each below 2^IDB, written at
-   the slot's cell `cells` (a new slot's ids from the slot's last request are overwritten as its request comes in,
-   and no Program reads past a slot's `fields`);
+   byte, its length the request's bytes in it, its slot's `cells` below C, its slot's `fields` at most KI after it,
+   and its ids, each below 2^IDB, written at the slot's cell `cells` (a new slot's ids from the slot's last request
+   are overwritten as its request comes in, and no Program reads past a slot's `fields`);
 4. `now` + 1, `phase` + 1 wrapping to 0 at EVERY (a `phase` of EVERY or more is refused), `last` the last new block's
    q, and a slot live iff a block continued or took it or it is held;
-5. a slot `due` (live in S_{t−1}, its anchor `now`) takes its n and `out` from its entry of the Programs' row; every
-   other entry, and the entry of a slot whose `occ` in S_{t−1} is 0 (a due slot's included), is zero;
+5. a slot `due` (live in S_{t−1}, its anchor `now`) takes its n and `out` from its entry of the Programs' row, n at
+   most KO where its `occ` in S_{t−1} is 1; every other entry, and the entry of a slot whose `occ` in S_{t−1} is 0 (a
+   due slot's included), is zero;
 6. each slot's `occ` in S_t: 1 where it is live, `done` and its anchor is S_t's `now`, else 0.
 The outputs are o0, a u16 whose bit 0, ok, is 1 iff every check holds (its other 15 bits 0), o1, S_t, and o2, S_t's
 egress view at t. Where a check fails, o1 and o2 are what the gates compute (`reference` gives none), and o0 refuses
@@ -87,6 +90,10 @@ at most C, whose `ingress_buckets` is at most WITHIN (a request's `END` is in S_
 delay is D (at least WITHIN + EVERY − 1, so a request's anchor is at most admitted + D, where its egress starts) and
 whose `egress_cells` is at most KO + 1 (a response's ids fit `out`). The warden frees a lane after its
 connection's `END` cell, at admitted + D + ⌊n / r⌋, the bucket the slot's hold ends, so NR = lanes slots suffice.
+A request the class can't hold is refused, never truncated: a prompt of more than KI ids (the warden bounds a
+request's cells, not its ids) at the cell that takes its `fields` past KI, and a Program that gives more than KO
+outputs (`SlotEntry_v1`'s n = KO + 1 for a request that doesn't fit its window circuit's class) at its anchor, so
+the link-window fails visibly at the scan's unit.
 
 **Structural Fits.** A unit reads only bucket t's row and S_{t−1}, so the scan's carried state is its only path from
 one bucket's ingress to a later bucket's gates: each step reads the state the step before wrote, whatever the arrivals
@@ -101,9 +108,9 @@ bucket t computed: the carried state and the view are wires through the register
 `IngressScanFirst`, has no `sin`: its S_{−1} is the empty state, constants of the circuit, so no row the prover commits
 stands in for it. Only o0 is public: a unit proof's public output is at most 16 bits, and o1 and o2 are committed.
 
-    IngressScanBucket{B, r, lanes, C, IDB, EVERY, WITHIN, D, KO}(row: Array<lanes·r·B, Byte>, sin: Array<NS>,
+    IngressScanBucket{B, r, lanes, C, IDB, EVERY, WITHIN, D, KO, KI}(row: Array<lanes·r·B, Byte>, sin: Array<NS>,
         prog: Array<NP>) -> (u16, Array<NS>, Array<NV>)
-    IngressScanFirst{B, r, lanes, C, IDB, EVERY, WITHIN, D, KO}(row: Array<lanes·r·B, Byte>, prog: Array<NP>)
+    IngressScanFirst{B, r, lanes, C, IDB, EVERY, WITHIN, D, KO, KI}(row: Array<lanes·r·B, Byte>, prog: Array<NP>)
         -> (u16, Array<NS>, Array<NV>)
         NS = `state_bits`: 96 + lanes·(338 + CB + (KO + C·K)·IDB) rounded up to a multiple of 16, K = (B − 9) // 11
         NP = `prog_bits`: lanes·(32 + KO·IDB) rounded up to a multiple of 16
@@ -130,6 +137,8 @@ BIT, BYTE = HC.BIT, HC.BYTE
 HEAD = (("now", 32), ("phase", 32), ("last", 32))
 #: a ratio field's seven digits' value: below 10^7
 RATIO_BITS = (10 ** 7 - 1).bit_length()
+#: the class's fields, the Definitions' statics in order
+STATICS = ("B", "r", "lanes", "C", "IDB", "EVERY", "WITHIN", "D", "KO", "KI")
 
 
 @dataclass(frozen=True)
@@ -139,7 +148,7 @@ class Class:
     bucket t ≡ 0 mod EVERY of the scan, with SLOTS = lanes Program slots) and WITHIN, the buckets a request's ingress
     may take (δ): a request admitted at s is anchored at the first boundary at or after s + WITHIN, whose Programs
     read the state before it; the warden's delay D, at least WITHIN + EVERY − 1 so that a request's anchor is at most
-    admitted + D, and KO outputs a request at most."""
+    admitted + D, KO outputs a request at most and KI prompt ids a request at most, at most the ids a slot holds."""
 
     B: int
     r: int
@@ -150,9 +159,10 @@ class Class:
     WITHIN: int = 12
     D: int = 27
     KO: int = 64
+    KI: int = 1024
 
     def __post_init__(self) -> None:
-        for name in ("B", "r", "lanes", "C", "IDB", "EVERY", "WITHIN", "D", "KO"):
+        for name in STATICS:
             v = getattr(self, name)
             if type(v) is not int or v < 1:
                 raise ValueError(f"{name} is a positive integer, not {v!r}")
@@ -163,6 +173,9 @@ class Class:
             raise ValueError(f"WITHIN + EVERY - 1 <= D < 2^31 and KO < 2^16, not D={self.D}, KO={self.KO}")
         Q.layout(self.B)
         self.egress
+        if self.KI > self.prompt_room:
+            raise ValueError(f"KI <= {self.prompt_room}, the prompt ids a slot of C = {self.C} cells holds, "
+                             f"not {self.KI}")
 
     @cached_property
     def lay(self) -> Q.Layout:
@@ -195,6 +208,11 @@ class Class:
     def K0(self) -> int:
         """A first cell's prompt fields at most."""
         return (self.lay.room - self.lay.start) // ID_FIELD_BYTES
+
+    @property
+    def prompt_room(self) -> int:
+        """The prompt ids a slot holds: a first cell's K0 and C − 1 continuations' K."""
+        return self.C * self.K - self.K + self.K0
 
     @property
     def CB(self) -> int:
@@ -408,6 +426,8 @@ def step(cls: Class, row: bytes, st: State, prog: Sequence[Out] | None = None) -
     dues = due(cls, st)
     if any((not d or not s.occ & 1) and (n or any(ids)) for d, s, (n, ids) in zip(dues, st.slots, prog)):
         return None
+    if any(n > cls.KO for n, _ in prog):
+        return None
     blocks = [[row[(p * r + i) * B:(p * r + i + 1) * B] for i in range(r)] for p in range(cls.lanes)]
     qs = []
     for blk in blocks:
@@ -480,6 +500,8 @@ def step(cls: Class, row: bytes, st: State, prog: Sequence[Out] | None = None) -
                 cur.fields = fr.fields
             else:
                 cur.fields = (cur.fields + fr.fields) % (1 << 32)
+            if cur.fields > cls.KI:
+                return None
             cur.ids[cur.cells * cls.K:(cur.cells + 1) * cls.K] = vals
             cur.cells, cur.left, cur.done = cur.cells + 1, rest, int(rest == 0)
         cur.live, cur.q = 1, qs[p]
@@ -517,17 +539,37 @@ def token_row(cls: Class, st: State) -> list[tuple[int, int, tuple[int, ...]]]:
 
 
 def slot_row(cls: Class, j: int, NP: int) -> list[tuple[int, int]]:
-    """Where slot j's row of NP + 2 i32s (vllm's `SlotRow_v1{NP}`: occupancy, prompt length, then the ids of prompt
+    """Where slot j's row of NP + 2 i32s (as vLLM's `ScanSlots_v2` reads it: occupancy, prompt length, then the ids of prompt
     positions 0 … NP − 1) is in the state row: each i32's (offset, width) in bits (`layout`), its value those bits
     zero-extended, least significant first: `occ`, `fields`, then position p's id at `ids[position(p)]`."""
     if not 0 <= j < cls.NR:
         raise ValueError(f"slot {j}: the state has NR = {cls.NR} slots")
-    top = cls.C * cls.K - cls.K + cls.K0
+    top = cls.prompt_room
     if not 1 <= NP <= top:
         raise ValueError(f"NP = {NP}: a slot holds the ids of prompt positions 0 … {top - 1}")
     lay = layout(cls)
     at = lay[f"{j}.ids"][0]
     return [lay[f"{j}.occ"], lay[f"{j}.fields"], *((at + position(cls, p) * cls.IDB, cls.IDB) for p in range(NP))]
+
+
+#: the registered value whose rows are the scan's state rows, as a window circuit reads them (`window_state`)
+SCAN_STATE = "verity/certifier/scan-state/v1"
+
+
+def window_state(cls: Class, rows: Sequence[Sequence[int]], t0: int, buckets: int) -> list[list[int]]:
+    """The state rows a window circuit of the link-window of `buckets` buckets from scan bucket t0 reads (the module
+    docstring's token-id row), row a the state boundary a's Programs read: the scan's rows t0 − 1 … t0 + buckets − 2
+    of `rows` (S_0, S_1, … as the units register them), row −1 the empty state's. ValueError, naming the fix, unless
+    the link-window is whole timesteps and `rows` reach its last."""
+    if t0 < 0 or buckets < 1 or t0 % cls.EVERY or buckets % cls.EVERY:
+        raise ValueError(f"a link-window starts at a boundary and is whole timesteps: t0 >= 0 and buckets >= 1, each "
+                         f"a multiple of EVERY = {cls.EVERY}, not t0 = {t0}, buckets = {buckets}")
+    if t0 + buckets - 1 > len(rows):
+        raise ValueError(f"the link-window from {t0} reads state rows up to {t0 + buckets - 2}: register "
+                         f"{t0 + buckets - 1} rows, not {len(rows)}")
+    if any(len(rows[t]) != state_bits(cls) for t in range(max(t0 - 1, 0), t0 + buckets - 1)):
+        raise ValueError(f"a state row is {state_bits(cls)} bits")
+    return [encode(cls, empty(cls)) if t < 0 else list(rows[t]) for t in range(t0 - 1, t0 + buckets - 1)]
 
 
 def scan(cls: Class, rows: Sequence[bytes], outputs: dict[int, Sequence[int]] | None = None,
@@ -548,7 +590,7 @@ def scan(cls: Class, rows: Sequence[bytes], outputs: dict[int, Sequence[int]] | 
 
 
 def _cls(S) -> Class:
-    return Class(S.B, S.r, S.lanes, S.C, S.IDB, S.EVERY, S.WITHIN, S.D, S.KO)
+    return Class(*(getattr(S, k) for k in STATICS))
 
 
 def _outs(cls: Class) -> Tuple:
@@ -681,6 +723,7 @@ def _scan(C, cls: Class, row: Sequence, sin: list, prog: list) -> list:
     for j in range(NR):
         reads = C.AND(due[j], slots[j]["occ"][0])
         oks.append(C.AND(reads.inv(), or_reduce(C, entries[f"{j}.n"] + entries[f"{j}.out"])).inv())
+        oks.append(_lt(C, const_bits(cls.KO, 32), entries[f"{j}.n"]).inv())
     match = [[and_reduce(C, [empty_[p].inv(), slots[j]["live"][0], _eq(C, slots[j]["q"], qs[p])]) for j in range(NR)]
              for p in range(L)]
     for p in range(L):
@@ -728,6 +771,7 @@ def _scan(C, cls: Class, row: Sequence, sin: list, prog: list) -> list:
                 cur[n] = mux(C, first, v, cur[n])
             total = add(C, cur["fields"], count, width=32)
             cur["fields"] = mux(C, data, mux(C, start, count, total), cur["fields"])
+            oks.append(C.AND(data, _lt(C, const_bits(cls.KI, 32), cur["fields"])).inv())
             cur["cells"] = mux(C, data, add(C, cur["cells"], [ONE], width=CB), cur["cells"])
             cur["left"] = mux(C, data, rest, cur["left"])
             cur["done"] = [OR(C, cur["done"][0], C.AND(data, ended))]
@@ -791,19 +835,20 @@ def _append(C, cls: Class, sels: Sequence, writes: Sequence, ids: Sequence) -> l
 
 _STEP = ("each block continues the live slot on its ordinal or takes the lowest free slot (live and up to admitted + D "
          "+ floor(n / r) is held) as a new connection above `last`, its data cells are the next frames of the slot's "
-         "warden-form id request and its ids (IDB bits each) are appended at the slot's cell count, below C; a slot "
-         "whose anchor is now and whose occupancy word occ has bit 0 set takes its n and KO output ids from prog, every "
-         "other entry of prog zero; each slot's occ in S_t is 1 where it is live, its END is in and its anchor is "
-         "now + 1, else 0; every switch is computed from the state, prog and the row")
+         "warden-form id request and its ids (IDB bits each) are appended at the slot's cell count, below C, its prompt "
+         "at most KI ids; a slot whose anchor is now and whose occupancy word occ has bit 0 set takes its n, at most "
+         "KO, and KO output ids from prog, every other entry of prog zero; each slot's occ in S_t is 1 where it is "
+         "live, its END is in and its anchor is now + 1, else 0; every switch is computed from the state, prog and the "
+         "row")
 IngressScanBucket = _part(
-    "IngressScanBucket", ("B", "r", "lanes", "C", "IDB", "EVERY", "WITHIN", "D", "KO"), _sig, _build,
+    "IngressScanBucket", STATICS, _sig, _build,
     "the scan's state S_t = `ingress_scan.step` of sin, bucket t's ingress row (lanes·r warden cells of B bytes, a "
     "block of r a live connection in ordinal order) and the Programs' row prog, and its egress view at t "
     "(`egress.EgressBucket`'s state), with 1 in bit 0 of the first output iff every check of the step holds: " + _STEP,
     version=2)
 IngressScanBucket.gated = True  # type: ignore[attr-defined]  # circuit-check holds its digest pins
 IngressScanFirst = _part(
-    "IngressScanFirst", ("B", "r", "lanes", "C", "IDB", "EVERY", "WITHIN", "D", "KO"), _sig_first, _build_first,
+    "IngressScanFirst", STATICS, _sig_first, _build_first,
     "the scan's first state S_0 = `ingress_scan.step` of the empty state (all zeros, constants), bucket 0's ingress "
     "row and the Programs' row prog, and its egress view at 0, with 1 in bit 0 of the first output iff every check of "
     "the step holds: " + _STEP, version=2)
@@ -818,7 +863,7 @@ def arguments(cls: Class, cases: Sequence[tuple[bytes, Sequence[int], Sequence[i
     return [rows, *([list(c[k]) for c in cases] for k in range(1, len(cases[0])))]
 
 
-__all__ = ["Class", "IngressScanBucket", "IngressScanFirst", "NONE", "Out", "Slot", "State", "arguments", "decode",
-           "due", "empty", "encode", "held", "layout", "position", "prog_bits", "prog_decode", "prog_encode",
+__all__ = ["Class", "IngressScanBucket", "IngressScanFirst", "NONE", "Out", "STATICS", "Slot", "State", "arguments",
+           "decode", "due", "empty", "encode", "held", "layout", "position", "prog_bits", "prog_decode", "prog_encode",
            "programs", "reference", "scan", "slot_row", "state_bits", "step", "token_row", "view", "view_bits",
-           "view_encode"]
+           "view_encode", "window_state"]

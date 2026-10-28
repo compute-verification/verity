@@ -23,7 +23,7 @@ SCHEME = "verity/test/coins/v1"
 FAMILIES = [("other", 2), ("draw", 80)]
 ROOT = bytes([0xab]) * 64
 SUBSET = {"law": "subset", "k": 4}
-#: `draw_first`'s stream for subset:4 over 678 units: 2 k · width(678) + 64 bytes, width 10
+#: `draw_first`'s stream for subset:4 over 678 proof blocks: 2 k · width(678) + 64 bytes, width 10
 NEED = 2 * 4 * 10 + 64
 
 

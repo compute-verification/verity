@@ -57,9 +57,9 @@ def _mha(d: int, layers: int, heads: int, head_dim: int, context: int, sequences
                                    ("down", d, 4 * d, "down")), heads, head_dim, context, sequences)
 
 
-#: compute-accounting's shapes (estimated, frozen with the circuits on 26 Oct), each a non-gated 4x MLP and int8 weights:
-#: mqa16k52, its shape H for one H200 (MQA at width 16384, 52 layers, context 32, 20,480 sequences a step; 25 Oct 23:00Z), and
-#: for the RTX PRO 6000 MQA at width 16384 (22:40Z) and MHA at width 8192 (22:20Z)
+#: the models' shapes (estimated, frozen with the circuits), each a non-gated 4x MLP and int8 weights: mqa16k52 for one
+#: H200 (MQA at width 16384, 52 layers, context 32, 20,480 sequences a step), and for the RTX PRO 6000 MQA at width 16384
+#: and MHA at width 8192
 _MQA16K = (("q", 16384, 16384, "attn"), ("kv", 128, 16384, "attn"), ("o", 16384, 16384, "o"), ("up", 65536, 16384, "mlp"),
            ("down", 16384, 65536, "down"))
 MODELS = {
@@ -87,36 +87,36 @@ def linears(d: int) -> dict[str, tuple[int, int]]:
     return {name: (n, k) for name, n, k, _ in model(f"d{d}").linears}
 
 
-#: what a layer commits a token row (commit.py): the served commit's quantizer tables, compute-accounting's fused cuts, every op
-UNIT_SETS = ("quantize", "fused", "every")
+#: what a layer commits a token row (commit.py): the served commit's quantizer tables, the fused cuts, every op
+TABLE_SETS = ("quantize", "fused", "every")
 
 
-def units(md: Model, unit_set: str) -> list[tuple[str, int, bool]]:
+def tables(md: Model, table_set: str) -> list[tuple[str, int, bool]]:
     """One layer's tables, (op under ``model.layers.L.``, bytes a token row, whether it ends in an f32 scale): the four
     quantizers' s8 codes; fused adds each linear's bf16 output, attention's output and its probabilities (heads x the full
     context), and the two residual adds; every adds the two RMSNorms', the ReLU's and attention's scores."""
     d, up, att = md.d, md.mlp, md.heads * md.head_dim
     rows = [("self_attn.input_quant", d, True), ("self_attn.o_proj.input_quant", att, True), ("mlp.input_quant", d, True),
             ("mlp.down_proj.input_quant", up, True)]
-    if unit_set == "quantize":
+    if table_set == "quantize":
         return rows
     rows += [(f"{'mlp' if q in ('mlp', 'down') else 'self_attn'}.{name}_proj", 2 * n, False) for name, n, _k, q in md.linears]
     rows += [("self_attn.attn_out", 2 * att, False), ("self_attn.residual", 2 * d, False), ("mlp.residual", 2 * d, False)]
     if md.context:
         rows.append(("self_attn.probs", 2 * md.heads * md.context, False))
-    if unit_set == "every":
+    if table_set == "every":
         rows += [("input_layernorm", 2 * d, False), ("post_attention_layernorm", 2 * d, False), ("mlp.act", 2 * up, False)]
         if md.context:
             rows.append(("self_attn.scores", 2 * md.heads * md.context, False))
-    if unit_set not in UNIT_SETS:
-        raise ValueError(f"{unit_set}: not one of {UNIT_SETS}")
+    if table_set not in TABLE_SETS:
+        raise ValueError(f"{table_set}: not one of {TABLE_SETS}")
     return rows
 #: the largest K the s8 Definitions take that is a multiple of 32 (S8_K_LIMIT = 2^17 refuses 2^17)
 EDGE_K = 131040
 S32_MAX = 2**31 - 1
 
 #: Ms the gate runs: decode (a masked tile at 7, 33, 257 and 1023, the models' steps at 1023, 4096 and 20480, the e2e demo's
-#: batches at 4096 for the skeleton and 16384 for the block) and prefill
+#: batches at 4096 and 16384) and prefill
 GATE_MS = (1, 7, 16, 32, 33, 64, 128, 256, 257, 512, 1023, 2048, 4096, 8192, 16384, 20480)
 STRUCTURED = ("min", "max", "zero", "alt")
 STRUCT_ROWS = {1: "min", 2: "max", 3: "zero"}

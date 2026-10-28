@@ -431,7 +431,7 @@ VC_DEV void chacha_qr(u32& a, u32& b, u32& c, u32& d) {
   a += b; d ^= a; d = __funnelshift_l(d, d, 8);
   c += d; b ^= c; b = __funnelshift_l(b, b, 7);
 }
-// ChaCha20 block `ctr` as 8 big-endian u64 (its 64 bytes in order)
+// ChaCha20 chunk `ctr` as 8 big-endian u64 (its 64 bytes in order)
 VC_DEV void chacha_block(const LeafK& K, u64 ctr, u64* out) {
   u32 s[16] = {0x61707865u, 0x3320646Eu, 0x79622D32u, 0x6B206574u, K.cc_key[0], K.cc_key[1], K.cc_key[2], K.cc_key[3],
                K.cc_key[4], K.cc_key[5], K.cc_key[6], K.cc_key[7], (u32)ctr, K.cc_ctr64 ? (u32)(ctr >> 32) : K.cc_w13,

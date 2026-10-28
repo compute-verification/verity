@@ -3,7 +3,7 @@ import Proofs.Flock.Soundness.ExecSetup
 import Proofs.Flock.Soundness.Discharge.Integrate.Bridge
 
 /-!
-# A templated file's nets fit their slots (PRF-133)
+# A templated file's nets fit their slots
 
 The setup facts `nets_ok` gives a flat file's nets (`NetOK`: the constant and input rows inside the slot, the ports
 inside the input rows; at least a word of rows; and the constant row reading itself, `ConstRow`) hold of a net

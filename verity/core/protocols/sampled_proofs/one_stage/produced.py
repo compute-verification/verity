@@ -1,5 +1,5 @@
 """Produced values: a value committed after the draw that several statements of a session read, each read opened
-against the one root the record names (PRF-134: a served H1 leaf proved as its 32 lanes and a combine, which share the
+against the one root the record names (a served H1 leaf proved as its 32 lanes and a combine, which share the
 leaf's lane partials, `pouw.leaf_lanes`).
 
 A *produced value* is rows the prover computes after the draw from what it committed before it (H1's partials: lane l's
@@ -95,7 +95,7 @@ def entry(program: str, value: str, leaves: int, words: int, registration: str,
 
 def port(value: str, e: Mapping[str, Any], root: str, rows: Sequence[int | None], schema: str = G.SCHEMA) -> dict[str, Any]:
     """The Lean verifier's ``--registered`` port (`registered.reads_file`'s form) reading ``value`` at ``rows`` (one per
-    unit, None where the unit doesn't read it): ``e`` its entry (`entry`, or a registered value's from the accepted
+    proof block, None where the proof block doesn't read it): ``e`` its entry (`entry`, or a registered value's from the accepted
     registration) and ``root`` the accepted record's."""
     return {"value": value, "root": root, "leaves": int(e["leaves"]), "words": int(e["words"]),
             "word_bits": int(e.get("word_bits", G.WORD_BITS)), "domain": e["domain"], **G.schema_entry(schema),

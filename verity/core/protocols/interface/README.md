@@ -70,15 +70,15 @@ the toy protocol whose guards cover both.
 `Core.Integrity` is `verity.core.protocols.profile.IntegrityProfile.to_json`: `programs`, `prescribed`,
 `linked`, `covered`, the `levels` coarse to fine (name, query, size, and draw: `{"bernoulli":"p"}`, `{"subset":k}` or
 `{"law":"stratified","strata":[...]}`), `delta` and `drawn`. The one change is that δ is an exact ratio, not a float. A
-protocol whose acceptance isn't a sampling design over units (a timed storage audit, a certificate check) declares its
+protocol whose acceptance isn't a sampling design over proof blocks (a timed storage audit, a certificate check) declares its
 own profile type and JSON.
 
 ## Properties
 
 A protocol's properties go in `Security/Properties/<Protocol>.lean`, stated against `P.check` (or `P.Accepts`) with its
 actual parameters, every input covered and assumptions as named `Prop`s. They, not the
-port, are what makes a verifier proven. All protocols share one Lake package for them, `security_properties` (#1494), with the statements in
-`Properties.<Protocol>` and the proofs in `Proofs.Properties.<Protocol>` (top, 1791398523.782759):
+port, are what makes a verifier proven. All protocols share one Lake package for them, `security_properties`, with the statements in
+`Properties.<Protocol>` and the proofs in `Proofs.Properties.<Protocol>`:
 - It requires `security` (Definitions and Models) and, by path, the code it states properties of. It never requires
   `security_proofs`, so code requires nothing, `security` requires no code, and nothing pulls in ArkLib.
 - A result whose proof needs `security_proofs` keeps its statement in `Properties.<Protocol>`, and its proof goes in

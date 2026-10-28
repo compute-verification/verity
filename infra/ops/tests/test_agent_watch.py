@@ -375,6 +375,37 @@ def test_a_sweeps_reads_stop_at_its_budget_and_its_actions_still_go(monkeypatch)
     assert asked == [("GET", 60), ("GET", 30.0), ("POST", 60)]
 
 
+def test_the_agents_listing_halves_its_page_on_each_503_down_to_its_floor(monkeypatch):
+    """27 Oct: GET /v1/agents 503'd at the fixed page of 25 from ~00:00Z while 10 answered, and every sweep failed for 3.5 h."""
+    class Resp:
+        def __init__(self, doc):
+            self.doc = doc
+
+        def __enter__(self):
+            return io.BytesIO(json.dumps(self.doc).encode())
+
+        def __exit__(self, *a):
+            return False
+
+    limits = []
+
+    def urlopen(req, timeout=None):
+        q = W.urllib.parse.parse_qs(W.urllib.parse.urlparse(req.full_url).query)
+        limits.append(n := int(q["limit"][0]))
+        if n > 3:
+            raise W.urllib.error.HTTPError(req.full_url, 503, "Service Unavailable", {}, io.BytesIO(b""))
+        return Resp({"items": [{"id": f"bc-{len(limits)}"}], "nextCursor": None if "cursor" in q else "c1"})
+
+    monkeypatch.setattr(W.urllib.request, "urlopen", urlopen)
+    api = W.Api("k")
+    assert [a["id"] for a in api.agents()] == ["bc-3", "bc-4"]
+    assert limits == [W.AGENTS_PAGE, W.AGENTS_PAGE // 2, 2, 2] and api.page == 2
+    monkeypatch.setattr(W.urllib.request, "urlopen", lambda req, timeout=None: (_ for _ in ()).throw(
+        W.urllib.error.HTTPError(req.full_url, 503, "Service Unavailable", {}, io.BytesIO(b""))))
+    with pytest.raises(W.urllib.error.HTTPError):
+        list(api.agents())
+
+
 def test_a_run_read_that_times_out_skips_its_agent_and_the_sweep_goes_on(tmp_path):
     """An IDLE agent's run read (`Watch.read`) caught only HTTP errors, so a timeout there, or a spent read budget, failed the
     whole sweep and left status.json stale."""
@@ -1331,6 +1362,44 @@ def test_a_worker_that_goes_idle_is_recorded_once_per_transition(tmp_path):
         "the ACTIVE read before a restart of the watch counts (state.json)"
 
 
+def test_a_worker_whose_parent_got_its_task_result_is_not_recorded_idle_and_one_resumed_later_is(tmp_path):
+    """INF-277: a worker that ended its turn by reporting back (its parent's Task call completed as it stopped) needs no one,
+    whether the result streams in before the IDLE read or while the record is held; resumed (its Task call running again) and
+    stopped without a result, it is recorded as before."""
+    notes = tmp_path / "notes"
+    note(notes, "circuits", "a.md", f"circuits worker W3 ({W1_})")
+    api, clock, w = coordinators(tmp_path, [], {}, workers={W1_: worker("ACTIVE", "2026-10-18T19:31:00Z")}, notes=notes)
+    w.sweep(lambda r: None)
+    clock.t += 6 * 60
+    api.workers[W1_] = worker("IDLE", W.iso(clock.t - 30))
+    w.child(CO, {"name": "task", "status": "completed", "args": {"agentId": W1_}}, clock.t)
+    for _ in range(W.BURST_QUIET_S // 60 + 2):
+        clock.t += 60
+        w.sweep(lambda r: None)
+    assert records(tmp_path) == [], "reported back: nobody must act"
+    w.child(CO, {"name": "task", "status": "running", "args": {"agentId": W1_}}, clock.t)
+    api.workers[W1_] = worker("ACTIVE", W.iso(clock.t))
+    w.sweep(lambda r: None)
+    clock.t += 10 * 60
+    api.workers[W1_] = worker("IDLE", W.iso(clock.t - 30))
+    w.sweep(lambda r: None)
+    clock.t += 60
+    w.child(CO, {"name": "task", "status": "completed", "args": {"agentId": W1_}}, clock.t)
+    for _ in range(W.BURST_QUIET_S // 60 + 2):
+        clock.t += 60
+        w.sweep(lambda r: None)
+    assert records(tmp_path) == [], "a result that streams in while the record is held drops it"
+    w.child(CO, {"name": "task", "status": "running", "args": {"agentId": W1_}}, clock.t)
+    api.workers[W1_] = worker("ACTIVE", W.iso(clock.t))
+    w.sweep(lambda r: None)
+    clock.t += 10 * 60
+    api.workers[W1_] = worker("IDLE", stopped := W.iso(clock.t - 30))
+    for _ in range(W.BURST_QUIET_S // 60 + 2):
+        clock.t += 60
+        w.sweep(lambda r: None)
+    assert [(r["kind"], r["at"]) for r in records(tmp_path)] == [("worker_idle", stopped)], "no result: rung as before"
+
+
 def test_a_worker_first_seen_idle_is_not_recorded(tmp_path):
     """Idle before the watch knew it: it may have reported back hours ago."""
     notes = tmp_path / "notes"
@@ -1519,7 +1588,7 @@ def silent(tmp_path):
 
 
 def test_a_silent_worker_is_rung_once_then_once_more_a_window_later_then_not_until_it_shows_activity(tmp_path):
-    """Daniel, 19 Oct: agents go quiet and nobody notices (proofs' 20 workers, 18 Oct). A worker ACTIVE 90 min with no note of
+    """Agents go quiet and nobody notices. A worker ACTIVE 90 min with no note of
     its and no push to its branch rings its coordinator's handle; a second silent window rings again; then nothing until a
     note or a push."""
     notes = tmp_path / "notes"
@@ -1590,6 +1659,25 @@ def test_a_coordinator_working_with_no_note_or_push_is_silent_but_never_no_step(
     got = [r for r in records(tmp_path) if r["kind"] == "no_step"]
     assert [(r["agent"], r["hours"], r["owner"]) for r in got] == [(CO, 6, "top")]
     assert W.epoch(got[0]["since"]) >= stopped - 5 * 60
+
+
+def test_a_coordinators_lane_note_is_its_activity(tmp_path):
+    """top, 27 Oct: four silent rings on coordinators in 70 min were false; each was syncing notes signed with its lane, not its
+    id. A note under `lanes/<handle>/` counts for that handle's coordinator."""
+    run = {"status": "RUNNING", "createdAt": W.iso(T0), "updatedAt": W.iso(T0)}
+    notes = tmp_path / "notes"
+    sh = FakeSh({"main": "m" * 40})
+    api, clock, w = coordinators(tmp_path, [{"id": CO, "name": "verity: circuits", "status": "ACTIVE", "latestRunId": "run-r"}],
+                                 {"run-r": run}, notes=notes, git_remote=REMOTE, sh=sh)
+    (notes / "lanes").mkdir(parents=True)
+    w.sweep(lambda r: None)
+    for _ in range(12):
+        sweeps(w, clock, 20)
+        p = note(notes, "circuits", f"c{clock.t:.0f}.md", "circuits coordinator", age_s=0)
+        W.os.utime(p, (clock.t, clock.t))
+    assert [r for r in silent(tmp_path) if r["agent"] == CO] == [], "its lane's notes every 20 min are activity"
+    sweeps(w, clock, 65)
+    assert [r["agent"] for r in silent(tmp_path)] == [CO], "with no note for an hour it is silent again"
 
 
 def test_a_push_to_an_agents_branch_is_activity(tmp_path):
@@ -1743,6 +1831,9 @@ def test_a_run_that_ends_rings_its_senders_handle_once(tmp_path):
                                   "lane": "zk-port"},
         "r20261018-195500-0004": {"agent": "", "name": "", "handle": "vllm", "role": "lane", "node": "vy-nebius-2",
                                   "what": "slot --by vllm --", "rc": 1, "state": "failed", "after": "30 s", "lane": "vllm"}}
+    assert {r["run"]: r.get("sender_status") for r in ended(tmp_path) if r["role"] != "unknown"} == {
+        "r20261018-195000-0002": "IDLE", "r20261018-195500-0003": "ACTIVE", "r20261018-195500-0004": "unknown"}, \
+        "the sender's status at its run's end, for the relay to ring only a sender not in a turn (INF-277)"
     assert status(tmp_path)[CO]["watch_state"] != "run_ended", "a research run's end is not the agent's state"
     for _ in range(3):
         clock.t += 5 * 60
@@ -1879,7 +1970,7 @@ def test_the_deployed_nodes_file_names_the_nebius_nodes_and_an_ssh_argv():
 
 
 def test_a_running_run_that_streams_nothing_for_30_min_is_stalled_cancelled_and_continued(tmp_path):
-    """Daniel, 19 Oct (proofs sat 7 h): a run that reads RUNNING and streams nothing, while its agent's updatedAt stands still,
+    """A run that reads RUNNING and streams nothing, while its agent's updatedAt stands still,
     is a hung call or a suspended VM, which the API doesn't show. Its owner (top, for a coordinator) is rung with the record."""
     api, clock, w = coordinators(tmp_path, [{"id": CO, "name": "verity: circuits", "status": "ACTIVE", "latestRunId": "run-r",
                                              "updatedAt": W.iso(T0)}], {"run-r": {"status": "RUNNING"}}, timers=None)
@@ -1938,7 +2029,7 @@ def run_end_for(tmp_path, roots, clock, w, agent, rid="r20261018-200100-0002"):
 
 
 def test_a_coordinator_idle_after_its_run_ended_is_resumed_with_the_result_10_min_on(tmp_path):
-    """Rule (b), Daniel 19 Oct: a coordinator that ended its turn to wait on a run, and wasn't woken when it ended."""
+    """Rule (b): a coordinator that ended its turn to wait on a run, and wasn't woken when it ended."""
     api, clock, w, sh, roots = nodes_setup(tmp_path)
     ended = run_end_for(tmp_path, roots, clock, w, CO)
     while clock.t < ended + W.RESUME_S - 60:

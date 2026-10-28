@@ -3,7 +3,7 @@ import Definitions.Nci.Guarantees.Remote
 /-!
 # The compute dampener, remote protocol, over a monitoring period: the statement
 
-`DampenerRemote` over a monitoring period of `T` windows (Daniel, 25 Oct: results per monitoring period), with its
+`DampenerRemote` over a monitoring period of `T` windows (results are per monitoring period), with its
 three premises on the protocols, `PouwSound`, `SampledDetection` and the thread bound's `Complies`, replaced by what
 each protocol's own guarantee gives on live coins. A window is one round of the verifier's live coins: window `t`'s
 coins `Ω t` are uniform and independent of the other windows', and a run of the period is `ξ : (t : Fin T) → Ω t`. Each
@@ -89,8 +89,8 @@ Then, for any `ε' > 0` and `K`, with probability at least `1 − δ` over the p
 `δ = p/ε' + J (1 − q)^(K+1) + ∑_t ks t`, the compute efficiency is at most
 `s + (1 − s)(r̂ + ε_W W_cert/C + ε' + JΔ/H + J K B/C) + ν_T + χ`, and the hardware multiple the developer needs is at
 least `ρ = max(1, 1/(s + ((1 − s)(r̂ + ε_W W_cert/C + ε' + JΔ/H + J K B/C) + ν_T + χ)/MFU₀))`, with
-`r̂ = 1 − W_cert/C`, `s = U/(C + U)` and `ν_T = (1 − s) · 2αΛ/(κ b_a)`. At a pooled `δ` (1% and 10⁻⁶, Daniel's 25
-Oct ruling), `ε' = 2p/δ` and `K ≥ ln(2J/δ)/q` give `δ + ∑_t ks t`; the per-window figure is the statement at `T = 1`.
+`r̂ = 1 − W_cert/C`, `s = U/(C + U)` and `ν_T = (1 − s) · 2αΛ/(κ b_a)`. At a pooled `δ` (1% and 10⁻⁶),
+`ε' = 2p/δ` and `K ≥ ln(2J/δ)/q` give `δ + ∑_t ks t`; the per-window figure is the statement at `T = 1`.
 With every proof block proved (`q = 1`), `K = 0` and the escape share is 0. -/
 def DampenerRemotePeriod : Prop :=
   ∀ (T : ℕ) (Ω : Fin T → Type) [∀ t, Fintype (Ω t)] [∀ t, Nonempty (Ω t)]

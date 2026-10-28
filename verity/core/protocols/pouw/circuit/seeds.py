@@ -21,7 +21,7 @@ one position.
 The one-stage verifier fills the salt, the positions and the roots itself, so the prover chooses none of them (`compile`'s
 docstring, `sampled_proofs.one_stage.registered.supplied_rows`).
 
-**J10-R** (note:compute-accounting/20261019T0845Z-draft-rt-algo-r3, RT-ALGO-11 and -16), a second noise form beside the
+**J10-R**, a second noise form beside the
 one above, which no unit takes by default (`h1tile.PouwH1Tile5`, `h1tile.PouwH1Tile6`): one noise seed a call, one stream
 per call row and per call column, and σ_R still the unit's own.
 

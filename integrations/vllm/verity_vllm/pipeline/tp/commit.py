@@ -1,4 +1,4 @@
-"""R13 lane tp, P4 step 4 — rank-aware Commit + overhead at `--tp 2`: `commit_delta`'s pairs protocol with the collector installed in
+"""Rank-aware Commit + overhead at `--tp 2`: `commit_delta`'s pairs protocol with the collector installed in
 EVERY rank through the `worker_extension_cls` seam (`tp2_worker.tp2_commit_*`).
 
     ... tp2_commit --workload <manifest> --case LLAMA32_1B --tp 2 --committer native_collect_v2b --hidden-so <so> --openings 64 --pairs 3 \
@@ -14,7 +14,7 @@ are drawn (`pipeline.commit_coins`: with ``--challenger-gate``, the auditor host
 without it they are this process's own, a measurement); the challenge of rank r is `challenge_positions(tp_run_root,
 leaves_per_step_r, k, salt=pair/rank r)` from the pair's positions coin, and its population openings come from the identities coin,
 so no rank's values can be recomputed after the challenge.  FAIL-CLOSED: a rank that does not return a root (fewer
-results than `world` from the collective RPC, or an exception) fails the run; REL-02 required classes are checked PER RANK; the
+results than `world` from the collective RPC, or an exception) fails the run; required classes are checked PER RANK; the
 per-rank X-03 verdict (`commit_verdict`) must PASS on every rank; control vs instrumented tokens (the engine's = rank 0's sampler)
 must be equal.  Output: `runs.jsonl` (one row per arm per pair: wall, per-rank commit blocks, the combined root, verdict) and
 `summary.json` (delta wall, roots, per-rank coverage counts).  FAIL-FAST: the Commit stops after its first failed run (a rank's verdict
@@ -39,7 +39,7 @@ from verity_vllm.acquire import as_loaded as AL
 from verity_vllm.acquire.sources import taps as TAPS
 from verity_vllm.check import weights_of_record as WR
 from verity_vllm.check.component_programs import post_load_tensors
-from verity_vllm.config import group, option
+from verity_vllm.config import group, option, workload_arg
 from verity_vllm.engine import served as SV
 from verity_vllm.pipeline import commit_coins as CC, replay_bundle as RB
 from verity_vllm.pipeline.tp import c2 as C2
@@ -112,7 +112,7 @@ def build_program_digest(d: str | None) -> tuple[str | None, str | None]:
 
 
 def _build_dirs(args) -> dict[int, str]:
-    """[lane vllm-tp-n] rank -> Build dir from `--build-rank <dir>` repeated in rank order (world N) or the two-rank `--build-rank0/1` spelling."""
+    """rank -> Build dir from `--build-rank <dir>` repeated in rank order (world N) or the two-rank `--build-rank0/1` spelling."""
     if args.build_rank:
         if args.build_rank0 or args.build_rank1:
             raise SystemExit("--build-rank (rank order) and --build-rank0/1 are alternative spellings; give one")
@@ -124,7 +124,7 @@ def _build_dirs(args) -> dict[int, str]:
 
 @dataclass(kw_only=True)
 class Options:
-    workload: str = option("--workload")
+    workload: str = option("--workload", type=workload_arg)
     out: str = option("--out")
     checkpoints: str = option("--checkpoints", default="manifests/checkpoints.json")
     case: str | None = option("--case", default=None)
@@ -147,24 +147,24 @@ class Options:
     rpc_timeout: float = option("--rpc-timeout", type=float, default=3600.0)
     build_rank0: str | None = option("--build-rank0", default=None, help="derive_step out dir of rank 0's Program (result.json) -> program_digest for the binding map / population")
     build_rank1: str | None = option("--build-rank1", default=None)
-    build_rank: list[str] = option("--build-rank", action="append", default=[], help="[lane vllm-tp-n] rank r's Build dir, repeated in RANK order (world = --tp); the world-N spelling of --build-rank0/1")
+    build_rank: list[str] = option("--build-rank", action="append", default=[], help="rank r's Build dir, repeated in RANK order (world = --tp); the world-N spelling of --build-rank0/1")
     world: int | None = option("--world", type=int, default=None, help="alias of --tp (the communicator size)")
-    no_tp_partials: bool = option("--no-tp-partials", default=False, action="store_true", help="NEGATIVE (R14 TP-03): collect collective outputs only (the R13 state); the required class tp_rank_partials must fail the verdict")
+    no_tp_partials: bool = option("--no-tp-partials", default=False, action="store_true", help="NEGATIVE: collect collective outputs only; the required class tp_rank_partials must fail the verdict")
     omit_rank: int | None = option("--omit-rank", type=int, default=None, help="NEGATIVE (brief §4 'omit one TP rank'): drop this rank's entry from the commitment vector before the verdict; must fail closed")
     tap_sources: TAPS.TapSources = group(TAPS.TapSources)
-    required_manifest: str | None = option("--required-manifest", default=None, help="[R15 TP-04] the merged TP manifest (verity_vllm.pipeline.cli build-global --programs-root <rank r dir> --rank r ... --ranks W): the population of record per rank (rows with rank=r)")
-    relabel_rank: str | None = option("--relabel-rank", default=None, help="NEGATIVE (R15 TP-04 'relabel rank 0 as rank 1'): `<from>:<to>` -- rank <from> tags its partials part_rank<to>; coverage must FAIL naming rank <from>")
-    wrong_root_rank: int | None = option("--wrong-root-rank", type=int, default=None, help="NEGATIVE (R15 TP-04 'wrong root on one rank'): the commitment vector carries a wrong run root for this rank; its openings/context must FAIL")
-    xrank_per_stratum: int = option("--xrank-per-stratum", type=int, default=2, help="[R16 tp TP-12, rev F-r16-18] cross-rank collective-output pass: picks per (site, kind, phase) stratum, seeded by the pair's combined root; " "each pick evaluates the committed received output against the definition over the two ranks' COMMITTED partials (all_reduce: bf16(f32+f32); " "all_gather: concat) on a row subset; a FAIL names the site; 0 disables (component result None)")
-    flip_partial: str | None = option("--flip-partial", default=None, help="NEGATIVE (R16 tp TP-12): `<rank>:<module suffix>[:ulp]` -- that rank commits its genuine partial at that ONE site but feeds the collective a different " "tensor (element 0: 2x+1024, or with `:ulp` ONE bf16 ulp -- the discriminating case where tokens stay equal and only the cross-rank pass can name it); " "every per-rank record stays self-consistent; the cross-rank collective-output pass must FAIL naming the site")
-    omit_partial_site: str | None = option("--omit-partial-site", default=None, help="NEGATIVE (rev-cb M-0214): `<rank>:<module suffix>` -- that rank drops the partial of ONE collective site only (e.g. 1:layers.3.mlp.down_proj); coverage must FAIL naming the rank and the site")
-    omit_rank_partials: int | None = option("--omit-rank-partials", type=int, default=None, help="NEGATIVE (R15 TP-04 'omit rank 1's partials'): this rank collects collective outputs only; coverage must FAIL naming this rank")
-    value_check: bool = option("--value-check", default=False, action="store_true", help="[R15 TP-04 C2] one extra instrumented run per rank: committed bytes vs hook-time reference clones + re-execution (module outputs and TP partials)")
-    match_dir: str | None = option("--match-dir", default=None, help="[rev-cb M-0359 T6-3] tp2_match run dir (<dir>/capture/tokens.json = the Match record's per-request generated ids): per rank, " "every committed sampled-ids row is attributed to its request by the rank's request->rows map and compared to the record; a mismatch FAILS the row")
-    swap_requests: str | None = option("--swap-requests", default=None, help="NEGATIVE (rev-cb M-0359 T6-3): `<rank>:<ra>:<rb>[:<lo>-<hi>]` -- that rank labels request ra's rows as rb and rb's as ra (equal-count requests keep " "the identity counts; with `:<lo>-<hi>` [rev M-0460] the swap applies ONLY on engine steps lo..hi = the decode-only swap: prefill rows untouched, each swapped row one token, " "coverage/composition blind -- the per-(step, request) attribution alone must FAIL naming the rank)")
-    no_match_oracle: bool = option("--no-match-oracle", default=False, action="store_true", help="with --match-dir: skip the per-rank compare of every committed TP partial / MoE received output against " "the capture recorder's stored collectives (coord M-0481 form (B), TP family); default = run it and gate on it")
-    require_fold_match: bool = option("--require-fold-match", default=False, action="store_true", help="[R17 tp D90, rev M-0026 R1 at Commit] the --match-dir MUST carry the per-rank fold Match (fold_match/tp2_fold_match.json + " "tp2_rank_match.json): its peer_binding digests are bound to the recorder rows the match oracle compared the committed partials against, " "both ranks, every (step, k); absence or any mismatch FAILs the row by name (default: absent = component None, Match collective-level ◐)")
-    no_sampled_replay: bool = option("--no-sampled-replay", default=False, action="store_true", help="[TP-08 / manbind MAN-06 form (A)] skip the per-rank sampled exact replay + boundary linkage (default with " "--required-manifest: run it on every rank and gate on it -- O1: absence / partial / mismatch = FAIL named)")
+    required_manifest: str | None = option("--required-manifest", default=None, help="the merged TP manifest (verity_vllm.pipeline.cli build-global --programs-root <rank r dir> --rank r ... --ranks W): the population of record per rank (rows with rank=r)")
+    relabel_rank: str | None = option("--relabel-rank", default=None, help="NEGATIVE ('relabel rank 0 as rank 1'): `<from>:<to>` -- rank <from> tags its partials part_rank<to>; coverage must FAIL naming rank <from>")
+    wrong_root_rank: int | None = option("--wrong-root-rank", type=int, default=None, help="NEGATIVE ('wrong root on one rank'): the commitment vector carries a wrong run root for this rank; its openings/context must FAIL")
+    xrank_per_stratum: int = option("--xrank-per-stratum", type=int, default=2, help="cross-rank collective-output pass: picks per (site, kind, phase) stratum, seeded by the pair's combined root; " "each pick evaluates the committed received output against the definition over the two ranks' COMMITTED partials (all_reduce: bf16(f32+f32); " "all_gather: concat) on a row subset; a FAIL names the site; 0 disables (component result None)")
+    flip_partial: str | None = option("--flip-partial", default=None, help="NEGATIVE: `<rank>:<module suffix>[:ulp]` -- that rank commits its genuine partial at that ONE site but feeds the collective a different " "tensor (element 0: 2x+1024, or with `:ulp` ONE bf16 ulp -- the discriminating case where tokens stay equal and only the cross-rank pass can name it); " "every per-rank record stays self-consistent; the cross-rank collective-output pass must FAIL naming the site")
+    omit_partial_site: str | None = option("--omit-partial-site", default=None, help="NEGATIVE: `<rank>:<module suffix>` -- that rank drops the partial of ONE collective site only (e.g. 1:layers.3.mlp.down_proj); coverage must FAIL naming the rank and the site")
+    omit_rank_partials: int | None = option("--omit-rank-partials", type=int, default=None, help="NEGATIVE ('omit rank 1's partials'): this rank collects collective outputs only; coverage must FAIL naming this rank")
+    value_check: bool = option("--value-check", default=False, action="store_true", help="one extra instrumented run per rank: committed bytes vs hook-time reference clones + re-execution (module outputs and TP partials)")
+    match_dir: str | None = option("--match-dir", default=None, help="tp2_match run dir (<dir>/capture/tokens.json = the Match record's per-request generated ids): per rank, " "every committed sampled-ids row is attributed to its request by the rank's request->rows map and compared to the record; a mismatch FAILS the row")
+    swap_requests: str | None = option("--swap-requests", default=None, help="NEGATIVE: `<rank>:<ra>:<rb>[:<lo>-<hi>]` -- that rank labels request ra's rows as rb and rb's as ra (equal-count requests keep " "the identity counts; with `:<lo>-<hi>` the swap applies ONLY on engine steps lo..hi = the decode-only swap: prefill rows untouched, each swapped row one token, " "coverage/composition blind -- the per-(step, request) attribution alone must FAIL naming the rank)")
+    no_match_oracle: bool = option("--no-match-oracle", default=False, action="store_true", help="with --match-dir: skip the per-rank compare of every committed TP partial / MoE received output against " "the capture recorder's stored collectives (TP family); default = run it and gate on it")
+    require_fold_match: bool = option("--require-fold-match", default=False, action="store_true", help="the --match-dir MUST carry the per-rank fold Match (fold_match/tp2_fold_match.json + " "tp2_rank_match.json): its peer_binding digests are bound to the recorder rows the match oracle compared the committed partials against, " "both ranks, every (step, k); absence or any mismatch FAILs the row by name (default: absent = component None, Match collective-level ◐)")
+    no_sampled_replay: bool = option("--no-sampled-replay", default=False, action="store_true", help="skip the per-rank sampled exact replay + boundary linkage (default with " "--required-manifest: run it on every rank and gate on it -- O1: absence / partial / mismatch = FAIL named)")
     replay_per_stratum: int = option("--replay-per-stratum", type=int, default=2)
     replay_max: int = option("--replay-max", type=int, default=2000, help="cap on the stratified sample per rank (never below one VU per stratum)")
     replay_seed: int | None = option("--replay-seed", type=int, default=None, help="targeted seed (default: each rank's run root after commitment, O6)")
@@ -175,13 +175,13 @@ class Options:
                                               "seals a replay bundle (<out>/replay_bundle_p<pair>_rank<r>/, verity_vllm.pipeline.replay_bundle) and the Commit's "
                                               "verdict stays PENDING (exit 0 when every check this process runs passes) until `verity-vllm tp-commit-replay <out>` "
                                               "replays the bundles on CPU against the checkpoint and decides it as this process would have (TP2 and TP8 only: `c2.deferral_skipped`)")
-    checkpoint_dir: str | None = option("--checkpoint-dir", default=None, help="[manbind MAN-09, COORD M-0614 (1)] the PINNED checkpoint snapshot (safetensors shards + config.json): each rank " "builds its weights of record from its rank Program's shard map (engine-free) and compares every served shard's sha256 " "to it right after register_weights; a difference FAILs named (rank, param). Required with --required-manifest unless " "--no-weights-pin (then the record says 'weights unpinned (MAN-09)' and the Commit FAILs closed)")
+    checkpoint_dir: str | None = option("--checkpoint-dir", default=None, help="the PINNED checkpoint snapshot (safetensors shards + config.json): each rank " "builds its weights of record from its rank Program's shard map (engine-free) and compares every served shard's sha256 " "to it right after register_weights; a difference FAILs named (rank, param). Required with --required-manifest unless " "--no-weights-pin (then the record says 'weights unpinned (MAN-09)' and the Commit FAILs closed)")
     checkpoints_manifest: str | None = option("--checkpoints-manifest", default=None, help="manifests/checkpoints.json (default: the repo's) -- the shard sha256s of record")
     checkpoint_model: str | None = option("--checkpoint-model", default=None, help="HF repo id selecting the checkpoints.json entry when --checkpoint-dir is not its local_path")
     no_weights_pin: bool = option("--no-weights-pin", default=False, action="store_true", help="do not require the weights pin (the record stays 'weights unpinned (MAN-09)'; verdict FAIL closed)")
-    serve_shard_from: list[str] | None = option("--serve-shard-from", action="append", default=None, help="NEGATIVE (R16 tp TP-10, pin's acceptance set 'TP shard / reference mismatch'): <rank>:<served param name>:<from_rank> -- rank <rank> serves " "rank <from_rank>'s shard of that parameter, composed from the SAME pinned checkpoint (every byte is checkpoint bytes; the shard set over the " "world is unchanged; only the rank<->slice assignment the rank Program's shard map prescribes is wrong -- a whole-tensor hash cannot see it). " "The per-rank weights pin must FAIL naming the rank and the parameter. Repeatable: 0:X:1 1:X:0 = the two ranks swap their shards of X.")
-    flip_weight: str | None = option("--flip-weight", default=None, help="NEGATIVE (rev-cb M-0610 flipweight, TP form): <rank>:<served param name>:<flat index>[:<value>] -- one element of that " "rank's shard changed before register_weights; the weights pin must FAIL naming (rank, param)")
-    replay_challenge: str | None = option("--replay-challenge", default=None, help="[manbind MAN-06d, M-0608] verifier-issued POST-COMMITMENT challenge (hex/string): each rank's replay " "seed = sha256(challenge | that rank's run root)[:8]; without it the seed is the rank's run root (honest-prover measurement)")
+    serve_shard_from: list[str] | None = option("--serve-shard-from", action="append", default=None, help="NEGATIVE ('TP shard / reference mismatch'): <rank>:<served param name>:<from_rank> -- rank <rank> serves " "rank <from_rank>'s shard of that parameter, composed from the SAME pinned checkpoint (every byte is checkpoint bytes; the shard set over the " "world is unchanged; only the rank<->slice assignment the rank Program's shard map prescribes is wrong -- a whole-tensor hash cannot see it). " "The per-rank weights pin must FAIL naming the rank and the parameter. Repeatable: 0:X:1 1:X:0 = the two ranks swap their shards of X.")
+    flip_weight: str | None = option("--flip-weight", default=None, help="NEGATIVE (flipweight, TP form): <rank>:<served param name>:<flat index>[:<value>] -- one element of that " "rank's shard changed before register_weights; the weights pin must FAIL naming (rank, param)")
+    replay_challenge: str | None = option("--replay-challenge", default=None, help="verifier-issued POST-COMMITMENT challenge (hex/string): each rank's replay " "seed = sha256(challenge | that rank's run root)[:8]; without it the seed is the rank's run root (honest-prover measurement)")
     challenger_gate: str | None = option("--challenger-gate", default=None, metavar="CMD", help="the auditor host's challenger gate, its command as one string: the Commit reserves one session before its engine and opens it on its first instrumented pair's TP run root, and each pair's opening positions and population identities are its coins, opened after that pair's TP run root (verity_vllm.pipeline.commit_coins); without it each pair's coins are this process's own, a measurement that credits nothing")
     challenger_peer: str | None = option("--challenger-peer", default=None, metavar="NAME", help="with --challenger-gate: this machine's name in the auditor host's peers")
     replay_target: list[str] | None = option("--replay-target", action="append", default=None, help="<op_path>[@<step>]: add every VU of a module to every rank's sample")
@@ -224,12 +224,12 @@ def main(args: Options) -> int:
         parts = args.swap_requests.split(":")
         sr, sa, sb = parts[:3]
         swap_requests = {str(int(sr)): [sa, sb]}
-        if len(parts) > 3:     # [rev M-0460] `<lo>-<hi>`: swap ONLY on engine steps lo..hi (decode-only swap; prefill rows untouched)
+        if len(parts) > 3:     # `<lo>-<hi>`: swap ONLY on engine steps lo..hi (decode-only swap; prefill rows untouched)
             lo, hi = (int(x) for x in parts[3].split("-"))
             swap_requests[str(int(sr))] += [lo, hi]
     required_classes = tuple(c for c in (args.required_classes.split(",") if args.required_classes is not None else REQUIRED_CLASSES_DEFAULT) if c)
     if args.tp > 1 and args.required_classes is None and "tp_rank_partials" not in required_classes:
-        required_classes = required_classes + ("tp_rank_partials",)       # [R14 TP-03] the rank-local collective inputs are required per rank
+        required_classes = required_classes + ("tp_rank_partials",)       # the rank-local collective inputs are required per rank
 
     (out := Path(args.out)).mkdir(parents=True, exist_ok=True)
     wl = va.load_workload(args.workload, None)
@@ -284,17 +284,17 @@ def main(args: Options) -> int:
         pdr = man_doc.get("program_digest_per_rank") or {}
         for r in range(world):
             if pds.get(r) is None:
-                # [rev-cb M-0214 T2] the manifest names each rank's Program, but the manifest is an INPUT: without this rank's Build the
+                # the manifest names each rank's Program, but the manifest is an INPUT: without this rank's Build the
                 # wrong-Program check (manifest of another Program that is internally consistent) would be vacuous -> refuse, never default
                 raise SystemExit(f"fail-closed: --required-manifest needs --build-rank{r} (this rank's Build result.json) so the manifest's Program "
-                                 f"for rank {r} ({str(pdr.get(str(r)))[:16]}) is checked against the Build, not against itself (M-0214 T2)")
+                                 f"for rank {r} ({str(pdr.get(str(r)))[:16]}) is checked against the Build, not against itself")
             elif pdr.get(str(r)) not in (None, pds[r]):
                 raise SystemExit(f"fail-closed: --build-rank{r} Program {pds[r][:16]} != manifest Program for rank {r} {str(pdr.get(str(r)))[:16]}")
         if int(man_doc.get("ranks") or 1) != world:
             raise SystemExit(f"fail-closed: manifest ranks={man_doc.get('ranks')} != tp={world}")
     # workload -> request order / arrivals / caps (B>1 population; commit_delta's convention: r<i> in workload order)
     request_order = [str(r.get("request_id")) for r in reqs]
-    # request ids are r<index> (COORD R15 ruling 2): the workload's declared `index` when present, else declaration position -- the same
+    # request ids are r<index>: the workload's declared `index` when present, else declaration position -- the same
     # rule commit_delta applies, so the manifest's r<k> rows and the rank's request->rows map name the same request
     request_ids = {str(r.get("request_id")): f"r{int(r.get('index', i))}" for i, r in enumerate(reqs)}
     arrivals = {f"r{int(r.get('index', i))}": int(r.get("arrive_step") or 0) for i, r in enumerate(reqs)}
@@ -302,7 +302,7 @@ def main(args: Options) -> int:
     match_tokens, match_rec = TPM.match_record(args.match_dir, request_ids, world) if args.match_dir else (None, None)
     versions["match_record"] = match_rec
     match_capture_dir = (str(Path(args.match_dir) / "capture") if (args.match_dir and not args.no_match_oracle) else None)
-    # [TP-08 / manbind MAN-06 form (A), per rank] the sampled exact replay's Programs OF RECORD per rank: the manifest's per-rank Program
+    # the sampled exact replay's Programs OF RECORD per rank: the manifest's per-rank Program
     # (B1: the request Program itself) and, at B>=2, the component digests the GP-01 workload_program of that rank composed (its workload
     # digest is the manifest's per-rank digest, checked above) -- the worker refuses any loaded Program outside this set BY NAME
     replay_cfg = None
@@ -332,12 +332,12 @@ def main(args: Options) -> int:
                       "per_stratum": int(args.replay_per_stratum), "max_evaluate": int(args.replay_max), "seed": args.replay_seed, "workers": args.replay_workers,
                       "challenge": args.replay_challenge, "targets": list(args.replay_target or []), "ring_slots": ring_slots(args.committer, os.environ.get("VERITY_WINDOW_MB"), os.environ.get("VERITY_WINDOW_SLOTS"), retain_env)}
         versions["sampled_replay"] = {"of_record": of_record, "per_stratum": replay_cfg["per_stratum"], "max_evaluate": replay_cfg["max_evaluate"], "seed": args.replay_seed,
-                                      "challenge": args.replay_challenge, "rule": "manbind MAN-06 O1-O6 per rank: the rank's Programs of record x the rank's map x the rank's committed members + weight shards"}
+                                      "challenge": args.replay_challenge, "rule": "MAN-06 O1-O6 per rank: the rank's Programs of record x the rank's map x the rank's committed members + weight shards"}
         if args.replay_k:
             replay_cfg["k_per_rank"] = versions["sampled_replay"]["k_per_rank"] = TPC.replay_k_per_rank(args.replay_k, world)
     SRT.require(args, replay_cfg)
     TPC.replay_host(replay_cfg, versions, out, ranks_at_once=args.replay_ranks_at_once, memory_map=args.memory_map)
-    # [MAN-09 per rank] the weights of record: each rank composes its record from ITS rank Program + the pinned checkpoint shards
+    # the weights of record per rank: each rank composes its record from ITS rank Program + the pinned checkpoint shards
     weights_pin_cfg = None
     if args.checkpoint_dir:
         weights_pin_cfg = {"checkpoint_dir": str(args.checkpoint_dir), "checkpoints_manifest": args.checkpoints_manifest, "model": args.checkpoint_model,
@@ -377,13 +377,13 @@ def main(args: Options) -> int:
     if len(made) != world:
         raise SystemExit(f"fail-closed: committer constructed on {len(made)}/{world} ranks")
     (out / "committer_make.json").write_text(json.dumps(made, indent=1, default=str) + "\n")
-    # [lane vllm-tp-n / x03] the per-rank attention plane classes (fa2_plane_classes on THIS rank's Program record) -- said per rank
+    # the per-rank attention plane classes (fa2_plane_classes on THIS rank's Program record) -- said per rank
     for m in made:
         apc = m.get("attention_plane_classes") or {}
         print(f"[tp2commit] rank {m.get('rank')}: X-03 attention plane classes: {apc.get('declarations', 0)} layer declaration(s) from {apc.get('source')} "
               f"-> classes {apc.get('classes')} heads(NH,KVH,D) {apc.get('per_rank_heads')}; {apc.get('rule')}" + (f"; ERROR {apc['error']}" if apc.get("error") else ""), flush=True)
     versions["attention_plane_classes"] = {str(m.get("rank")): {k: v for k, v in (m.get("attention_plane_classes") or {}).items() if k != "rank"} for m in made}
-    # [R15 moe TP-MOE-SRC] an MoE model's bound block is a required class of every rank (REL-02, as commit_delta): the ranks report the
+    # an MoE model's bound block is a required class of every rank (as in commit_delta): the ranks report the
     # attached MoeBlockSource; all ranks must agree (a rank without MoE layers on an MoE model is a named refusal, not a silent hole)
     moe_ranks = [int(m["rank"]) for m in made if isinstance(m.get("moe_source"), dict) and int((m["moe_source"] or {}).get("layers") or 0) > 0]
     if moe_ranks and len(moe_ranks) != world:
@@ -411,9 +411,9 @@ def main(args: Options) -> int:
     bundles_of: dict[int, dict[int, dict | None]] = {}     # --replay-deferred: pair -> rank -> what its finalize wrote for its bundle
     tokens_ref, started = None, time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())   # started: this Commit's stamp on its rows, pair files, summary (tp.rejudge)
     all_pass = True
-    xrank_pairs: list[dict] = []     # [TP-12] one verdict per instrumented pair
+    xrank_pairs: list[dict] = []     # one verdict per instrumented pair
     from verity_vllm.program.frontend import collective_kinds
-    xrank_families = collective_kinds.cross_rank_families(world)      # [lane vllm-tp-n] the cross-rank families of THIS world, from the registry's composites
+    xrank_families = collective_kinds.cross_rank_families(world)      # the cross-rank families of THIS world, from the registry's composites
     xrank_on = args.xrank_per_stratum > 0 and not args.no_tp_partials
     runs = schedule(args.pairs, args.only_arm)
     stopped = None
@@ -517,7 +517,7 @@ def main(args: Options) -> int:
                                   "persistent_bytes": f["persistent_bytes"], "temporary_bytes_peak": f["temporary_bytes_peak"]}
                         ok, why = commit_verdict(cblock, row["tokens_equal_ref"], min_openings=min(64, args.openings), declaration=f["declaration"],
                                                  required_classes=required_classes)
-                        # [R14 BIND-01 x TP-03] the rank's binding map + coverage against its expected population gate the verdict too
+                        # the rank's binding map + coverage against its expected population gate the verdict too
                         b = f.get("binding") or {}
                         cblock["binding"] = b
                         if b.get("error"):
@@ -536,13 +536,13 @@ def main(args: Options) -> int:
                         if ok and f.get("run_root_actual"):
                             # the claimed root differs from the rank's actual root: openings verified against the claim must have failed
                             ok, why = False, f"claimed run root for rank {rk} {f['run_root'][:16]} != the rank's root (openings verified {op_r.get('verified')}/{op_r.get('n')} against the claim)"
-                        # [rev-cb M-0359 T6-3] per-(request, engine step) attribution against the Match record (when --match-dir is given)
+                        # per-(request, engine step) attribution against the Match record (when --match-dir is given)
                         att = f.get("attribution")
                         cblock["attribution"] = att
                         if match_tokens is not None and (att is None or not att.get("ok")):
                             why_ = f"request attribution vs Match record: {(att or {}).get('why') or 'not run'}"
                             ok, why = False, (f"{why}; also: {why_}" if not ok and why else why_)      # every failing gate is named, first fault first
-                        # [coord M-0481 C2 form (B), TP family] committed partials / MoE received outputs == the Match capture's stored
+                        # committed partials / MoE received outputs == the Match capture's stored
                         # collectives, per (step, k), this rank; exhaustive over the family or FAIL (a gate whenever the oracle was given)
                         mo = f.get("match_oracle")
                         cblock["match_oracle"] = mo
@@ -558,7 +558,7 @@ def main(args: Options) -> int:
                         if pair == 0:
                             (out / f"declaration_rank{rk}.json").write_text(json.dumps(f["declaration"], indent=1, default=str) + "\n")
                     if pair == 0:
-                        # [R15 TP-04] the per-rank binding maps themselves (not only their digests) into the evidence: binding_map_rank<r>.json
+                        # the per-rank binding maps themselves (not only their digests) into the evidence: binding_map_rank<r>.json
                         dumped = llm.collective_rpc("tp2_commit_binding_map_dump", timeout=args.rpc_timeout, kwargs={"out_dir": str(out)})
                         print(f"[tp2commit] binding maps: {[(d_.get('rank'), str(d_.get('digest') or d_.get('skipped'))[:16], d_.get('entries_n')) for d_ in dumped]}", flush=True)
                     # population-drawn openings per rank (bind's challenge_identities from the COMBINED root + the rank's map digest)
@@ -583,10 +583,10 @@ def main(args: Options) -> int:
                                 per_rank[rk]["commit_pass"] = False
                                 per_rank[rk]["commit_fail_reason"] = f"binding map context vs claimed root: {o['context'].get('why')}"
                                 reasons.append(f"rank {rk}: {per_rank[rk]['commit_fail_reason']}")
-                    # [R16 tp TP-12, rev F-r16-18] the cross-rank collective-output pass: the received AllReduce2 / AllGather2 / EmbeddingShard output
+                    # the cross-rank collective-output pass: the received AllReduce2 / AllGather2 / EmbeddingShard output
                     # each rank COMMITTED, evaluated bit-exactly against the definition over the two ranks' COMMITTED partials (picks seeded by the
                     # combined root, stratified per site x kind x phase).  The only evaluator of the collective-output VUs from committed bytes (the
-                    # per-rank replay has none: rev F-r16-18); a FAIL names the site and fails the ranks whose received output is not the definition.
+                    # per-rank replay has none); a FAIL names the site and fails the ranks whose received output is not the definition.
                     xr = {"result": None, "why": "not run (--xrank-per-stratum 0)"}
                     if xrank_on:
                         try:
@@ -597,17 +597,17 @@ def main(args: Options) -> int:
                                                     kwargs={"out_dir": str(out), "seed_hex": root.hex(), "pair": pair, "per_stratum": args.xrank_per_stratum})
                             dumps = {int(d_["rank"]): _torch.load(d_["file"], weights_only=False) for d_ in xd}
                             xr = XC.check_picks(dumps, world=world)
-                            XC.coverage_of_unreplayable(xr, xd)      # [rev M-0418] strata sites vs the Programs' unreplayable collective sites (fails by name)
+                            XC.coverage_of_unreplayable(xr, xd)      # strata sites vs the Programs' unreplayable collective sites (fails by name)
                             xr["dumps"] = [{k: v for k, v in d_.items()} for d_ in xd]
                             xr["pair"] = pair
                             for fn in {d_["file"] for d_ in xd}:
                                 Path(fn).unlink(missing_ok=True)      # the picks are re-derivable from the retained records; the JSON verdict is the evidence
                             (out / f"xrank_pair{pair}.json").write_text(json.dumps({"schema": "verity/tp2/xrank-collectives/v1", "tp": args.tp, "commit_started": started} | xr, indent=1, default=str) + "\n")
-                            print(f"[tp2commit] cross-rank collectives (TP-12) pair {pair}: result {xr['result']} picks {xr['picks']} equal {xr['equal']} mismatch {xr.get('mismatch_n')} "
+                            print(f"[tp2commit] cross-rank collectives pair {pair}: result {xr['result']} picks {xr['picks']} equal {xr['equal']} mismatch {xr.get('mismatch_n')} "
                                   f"missing {xr.get('missing_n')} families {sorted(xr.get('by_family') or {})} flipped {[d_.get('flipped_collective_inputs') for d_ in xd]}; {xr.get('why') or ''}", flush=True)
                         except Exception as e:  # noqa: BLE001
                             xr = {"result": False, "why": f"cross-rank collective pass did not run: {e!r}"[:300], "pair": pair}
-                            print(f"[tp2commit] cross-rank collectives (TP-12) pair {pair}: ERROR {e!r}", flush=True)
+                            print(f"[tp2commit] cross-rank collectives pair {pair}: ERROR {e!r}", flush=True)
                     xrank_pairs.append(xr)
                     if xr.get("result") is False:
                         # the ranks named by the first mismatches (received != definition) fail; when none is named (not evaluable) every rank fails
@@ -628,7 +628,7 @@ def main(args: Options) -> int:
                     if pair == 0 or reasons or pending:
                         cov_ok = all((c.get("binding") or {}).get("coverage", {}).get("ok") for c in per_rank.values()) and not reasons
                         man_hdrs = {r: ((c.get("binding") or {}).get("population") or {}).get("manifest") for r, c in per_rank.items()}
-                        cov = {"checker": ("verity/coverage/binding-r15-tp04 (verity_vllm.commit.binding per TP rank; population of record = manbind's required manifest "
+                        cov = {"checker": ("verity/coverage/binding-r15-tp04 (verity_vllm.commit.binding per TP rank; population of record = the required manifest "
                                            "(Program(rank) x canonical query, rows with rank=r: instance outputs incl. AllReduce2/AllGather2 outputs + tp_rank_partials + fa2 hidden + weights + tokens); "
                                            "coverage counted per rank; no rank folded)" if man_doc else
                                            "verity/coverage/binding-r14 (bind BIND-01 verity_vllm.commit.binding, per TP rank; population = structure x steps x rank + rank-local collective members)"),
@@ -642,7 +642,7 @@ def main(args: Options) -> int:
                                "manifest_digest": (man_doc.get("manifest_digest") if man_doc else "+".join(str((c.get("binding") or {}).get("population", {}).get("digest"))[:16] for _r, c in sorted(per_rank.items()))),
                                "manifest_digests_per_rank": {r: (c.get("binding") or {}).get("population", {}).get("digest") for r, c in per_rank.items()},
                                "manifest_rows_per_rank": {r: (h or {}).get("rows_for_rank") for r, h in man_hdrs.items()} if man_doc else None,
-                               # [rev-cb M-0214 (d)] informational only: the manifest coverage above is the verdict; this is the old structural population beside it
+                               # informational only: the manifest coverage above is the verdict; this is the old structural population beside it
                                "structural_coverage_ok_per_rank": {r: (h or {}).get("structural_coverage_ok") for r, h in man_hdrs.items()} if man_doc else None,
                                "structural_coverage_note": "informational (not a verdict): coverage of the collector's structural population, recorded beside the manifest coverage",
                                "population_n_per_rank": {r: (c.get("binding") or {}).get("population", {}).get("n") for r, c in per_rank.items()},
@@ -658,18 +658,18 @@ def main(args: Options) -> int:
                                "value_correctness": None,
                                "value_correctness_note": ("value correspondence (C2) is a separate labelled check: --value-check -> value_check.json (per rank: module outputs by "
                                                           "value_check.ValueChecker, TP partials by TPPartialSource.compare); never folded into this coverage verdict"),
-                               # [rev-cb M-0359 T6-3] per-(request, engine step) attribution of the committed sampled ids against the Match record, per rank
+                               # per-(request, engine step) attribution of the committed sampled ids against the Match record, per rank
                                "attribution_per_rank": {r: ({k2: (c.get("attribution") or {}).get(k2) for k2 in ("ok", "steps_checked", "rows_checked", "mismatches_n", "why", "swap_requests_negative")}
                                                             if c.get("attribution") is not None else None) for r, c in per_rank.items()},
                                "attribution_reference": versions.get("match_record"),
                                "openings_after_release": True, "collector_variant": "windowed", "retention": retain_env or "host",
-                               "negatives_suite": "tp2_commit --omit-rank / --omit-rank-partials <r> / --omit-partial-site r:site / --flip-partial r:site (TP-12) / --serve-shard-from r:param:from (TP-10) / --relabel-rank a:b / --wrong-root-rank <r> / --no-tp-partials / --swap-requests r:ra:rb (this lane) + bind test_binding_negatives.py (BIND-01, TP1)",
+                               "negatives_suite": "tp2_commit --omit-rank / --omit-rank-partials <r> / --omit-partial-site r:site / --flip-partial r:site (TP-12) / --serve-shard-from r:param:from (TP-10) / --relabel-rank a:b / --wrong-root-rank <r> / --no-tp-partials / --swap-requests r:ra:rb + bind test_binding_negatives.py (BIND-01, TP1)",
                                "negatives": versions["negatives"],
                                "reason": "; ".join(reasons) if reasons else None, "replay_pending_ranks": [int(r_) for r_ in pending] or None}
                         (out / ("coverage.json" if pair == 0 else f"coverage_pair{pair}.json")).write_text(json.dumps(cov, indent=1, default=str) + "\n")
                     row["commit"] = {"tp_run_root": root.hex(), "coins": coin, "world": world, "per_rank": per_rank, "root_combination": versions["root_combination"],
                                      "commitment_vector": [{"rank": int(f["rank"]), "run_root": f["run_root"], "leaves": f["leaves"], "steps": f["steps"]} for f in sorted(fin, key=lambda f: f["rank"])],
-                                     "root_form": f"{root_tag.decode().removeprefix('verity/')} (PROVISIONAL tagged {'SHA-512' if rows else 'SHA-256'} over the per-rank roots; canonical form per R13 12:25Z ruling = the per-rank entries of `commitment_vector` in the challenge-v1 commitment vector)",
+                                     "root_form": f"{root_tag.decode().removeprefix('verity/')} (PROVISIONAL tagged {'SHA-512' if rows else 'SHA-256'} over the per-rank roots; canonical form = the per-rank entries of `commitment_vector` in the challenge-v1 commitment vector)",
                                      "leaves": sum(c["leaves"] for c in per_rank.values()), "bytes_bound": sum(c["bytes_bound"] for c in per_rank.values()),
                                      "tensors": sum(c["tensors"] for c in per_rank.values()),
                                      "openings": {"n": sum(c["openings"]["n"] for c in per_rank.values()), "verified": sum(c["openings"]["verified"] for c in per_rank.values())},
@@ -706,7 +706,7 @@ def main(args: Options) -> int:
                       args.rpc_timeout, release=not args.value_check)
     vcheck = None
     if args.value_check and not stopped:
-        # [R15 TP-04 C2] one extra instrumented run per rank (untimed): committed bytes vs hook-time reference clones + re-execution
+        # one extra instrumented run per rank (untimed): committed bytes vs hook-time reference clones + re-execution
         gc.collect()
         with PH.TL.span("validate.value_check"):
             inst = llm.collective_rpc("tp2_commit_value_check_install", timeout=args.rpc_timeout)
@@ -719,7 +719,7 @@ def main(args: Options) -> int:
                   "verdict": ("PASS" if len(vres) == world and all(v.get("verdict") == "PASS" for v in vres) and r["tokens"] == tokens_ref else "FAIL"),
                   "method": (vres[0].get("method") if vres else None)}
         (out / "value_check.json").write_text(json.dumps(vcheck, indent=1, default=str) + "\n")
-        # [R15 moe, rev-cb M-0424 T6-4 / report M-0435] the late-read detector record, per rank, from the same value-check run
+        # the late-read detector record, per rank, from the same value-check run
         t64 = {int(v["rank"]): (v.get("t6_4") or {"result": False, "error": "no t6_4 in the rank's value-check result"}) for v in vres}
         # aggregate: True only when every rank is True; None (not applicable) when every rank recorded applicable False (dense TP row); else False
         t64_all_na = bool(t64) and all(v.get("applicable") is False and v.get("result") is None for v in t64.values())
@@ -752,14 +752,14 @@ def main(args: Options) -> int:
                 cj["value_correctness"] = vcheck["verdict"] == "PASS"
                 roots_seen = sorted({str((r.get("commit") or {}).get("tp_run_root")) for r in rows if r["arm"] != "control" and (r.get("commit") or {}).get("tp_run_root")})
                 cj["value_correspondence"] = {"method": vcheck["method"], "result": vcheck["verdict"] == "PASS", "file": "value_check.json", "artifact": str(out / "value_check.json"),
-                                              # [manbind M-0335 / rev-cb R2] per-component grades: what ran, what it was compared against
-                                              # [rev-cb M-0359 T6-3] `tap_reexec` is NOT a live oracle: the reference clone is taken in the committing process at hook time
+                                              # per-component grades: what ran, what it was compared against
+                                              # `tap_reexec` is NOT a live oracle: the reference clone is taken in the committing process at hook time
                                               # (an independent copy of the same producer's bytes -- it catches late reads / wrong offsets / wrong tensors, not a wrong producer);
                                               # `oracle_compare` is reserved for a compare against the MATCH RECORD (an independent run): the per-(request, engine step)
                                               # sampled-ids attribution below when --match-dir was given, else not run
                                               "components": {"tap_reexec": {"result": vcheck["verdict"] == "PASS", "reference": "hook-time reference clone (T) of every module output and TP partial + re-execution (R) of the registered relation / rank-local shard GEMM on the tapped inputs, per rank, in the committing process (value_check.json); not an independent oracle",
                                                                             "per_rank": {r_: v.get("verdict") for r_, v in vcheck["per_rank"].items()}},
-                                                             # [coord M-0481 form (B), TP family + sampled ids; `complete` False: collective-level Match, see c2.oracle_compare_component]
+                                                             # [TP family + sampled ids; `complete` False: collective-level Match, see c2.oracle_compare_component]
                                                              "oracle_compare": C2.oracle_compare_component(rows, versions, man_doc),
                                                              "linkage": C2.linkage_component(rows, versions),
                                                              "root_compare": {"result": None, "reference": ("no known-good TP2 run root pinned (known_roots has no tp2 entry); the instrumented pairs' combined roots were " + ("identical: " + roots_seen[0][:16] if len(roots_seen) == 1 else f"NOT identical: {[x[:16] for x in roots_seen]}")) if roots_seen else "no run root"},
@@ -772,7 +772,7 @@ def main(args: Options) -> int:
             print(f"[tp2commit] coverage.json value_correspondence annotate failed: {e!r}", flush=True)
 
     if vcheck is None and match_tokens is not None:
-        # [report M-0407] no value check this attempt, but the Match-record linkage ran: record it as a labelled component beside C1
+        # no value check this attempt, but the Match-record linkage ran: record it as a labelled component beside C1
         try:
             covp = out / "coverage.json"
             if covp.exists():
@@ -789,7 +789,7 @@ def main(args: Options) -> int:
         except Exception as e:  # noqa: BLE001
             print(f"[tp2commit] coverage.json linkage annotate failed: {e!r}", flush=True)
 
-    # [TP-08 / manbind MAN-06, report M-0512 form (A)] the C2 OF RECORD components, whatever else ran this attempt: components.sampled_replay +
+    # the C2 OF RECORD components, whatever else ran this attempt: components.sampled_replay +
     # components.boundary_linkage (per rank, AND-ed), the value_correspondence result AND-ed with them, the method naming the grade
     sr_comp, lk_comp = C2.sampled_replay_components(rows, versions)
     wp_comp = C2.weights_pin_component(rows, versions)
@@ -798,7 +798,7 @@ def main(args: Options) -> int:
     xr_comp["per_pair_artifacts"] = [str(out / f"xrank_pair{p}.json") for p in range(len(xrank_pairs)) if (out / f"xrank_pair{p}.json").exists()]
     (out / "xrank_collectives.json").write_text(json.dumps({"schema": "verity/tp2/xrank-collectives-fold/v1", "tp": args.tp} | xr_comp, indent=1, default=str) + "\n")
     (out / "weights_pin.json").write_text(json.dumps({"schema": "verity-sweep/tp-weights-pin/v1", "tp": args.tp} | wp_comp, indent=1, default=str) + "\n")
-    # [R17 tp D90, rev M-0026 R1 at Commit] the peer-input BINDER: the fold Match's peer_binding digests (fold peers_r[s,k] leaf == recorder
+    # the peer-input BINDER: the fold Match's peer_binding digests (fold peers_r[s,k] leaf == recorder
     # partial of rank 1-r at (s,k)) against the recorder rows the match oracle compared the COMMITTED partials to (bit-exact) -- by value,
     # both directions, every (step, k) of every rank.  False -> FAIL named; absent -> None (◐) unless --require-fold-match (then FAIL named)
     from verity_vllm.check.match import rank_match as _RM
@@ -811,7 +811,7 @@ def main(args: Options) -> int:
     if fb_comp.get("result") is False:
         all_pass = False
     qp_comp = C2.query_population_component(rows, replay_cfg is not None)
-    print(f"[tp2commit] C2 population vs Q(P) (F-r17b-38): result {qp_comp['result']} per rank "
+    print(f"[tp2commit] C2 population vs Q(P): result {qp_comp['result']} per rank "
           f"{ {r_: ((b or {}).get('ok'), (b or {}).get('counts')) for r_, b in sorted(qp_comp['per_rank'].items())} } {qp_comp.get('why') or ''}", flush=True)
     all_pass_but_c2 = all_pass
     if qp_comp["result"] is False:
@@ -852,17 +852,17 @@ def main(args: Options) -> int:
             "attribution": (None if match_tokens is None else {"match_record": versions.get("match_record"),
                                                                "per_rank": {r_: {k2: (c.get("attribution") or {}).get(k2) for k2 in ("ok", "steps_checked", "rows_checked", "mismatches_n", "why")}
                                                                             for r_, c in C2.last_per_rank(rows).items()}}),
-            # [coord M-0481 form (B), TP family] committed TP partials / MoE received outputs vs the Match capture's stored collectives, per rank
+            # committed TP partials / MoE received outputs vs the Match capture's stored collectives, per rank
             "match_oracle": (None if match_capture_dir is None else {r_: {k2: (c.get("match_oracle") or {}).get(k2) for k2 in TPS_SUMMARY_KEYS}
                                                                      for r_, c in C2.last_per_rank(rows).items()}),
             "oracle_compare": C2.oracle_compare_component(rows, versions, man_doc),
-            # [TP-08 / MAN-06 form (A) per rank] the C2 of record, folded over ranks and pairs (full records in finalize_pair<k>.json)
+            # the C2 of record, form (A) per rank, folded over ranks and pairs (full records in finalize_pair<k>.json)
             "sampled_replay": (None if replay_cfg is None else {k: sr_comp.get(k) for k in C2.SR_SUMMARY_KEYS}),
             "boundary_linkage": (None if replay_cfg is None else lk_comp),
             "cross_rank_collectives": xr_comp,
-            # [R17 tp D90, rev R1 at Commit] fold peer leaves bound by digest to the recorder rows the committed partials were compared against
+            # fold peer leaves bound by digest to the recorder rows the committed partials were compared against
             "fold_match_binding": {k: fb_comp.get(k) for k in ("result", "n_bindings", "n_recorder", "n_bad_bindings", "why")},
-            # [revb F-r17b-38 (i)] the replay population reconciled against Q(P) per rank (population.query_checks), in the verdict
+            # the replay population reconciled against Q(P) per rank (population.query_checks), in the verdict
             "query_population": qp_comp,
             "weights_pin": {k: wp_comp.get(k) for k in ("result", "per_rank", "why", "checkpoint_dir")},
             "required_manifest": (None if man_doc is None else {"path": args.required_manifest, "manifest_digest": man_doc.get("manifest_digest"),
@@ -872,7 +872,7 @@ def main(args: Options) -> int:
     if args.only_arm:
         summ.update(TPC.only_arm_summary(args.only_arm, rows, trt, summ["commit_pass"]))
     write_import_path_runtime(llm, out, args.rpc_timeout)
-    # [tp, measured b1_r16_tp12b 08:34Z] a NEGATIVE that did not inject is neither a detection nor a miss -- it is an ERROR and must never be
+    # a NEGATIVE that did not inject is neither a detection nor a miss -- it is an ERROR and must never be
     # recorded as a PASS (the ':ulp' flip spec on a tree without parse_flip left the site unmatched -> flipped 0 -> an honest PASS that a
     # finalizer would read as 'negative not detected').  The ranks report what they applied; when the requested negative did not fire the
     # treatment rows' commit_pass becomes None (not False: not a detection) with the reason, summary.pass None, exit 3.

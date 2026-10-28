@@ -1,18 +1,20 @@
-# The vLLM example's rung on the ladder (examples/README.md), placed where its runs of record ran. Level 2 needs the Lean
-# verifier off the nodes the prover runs: those runs ran it on vy-nebius-1 with the endpoint and the prover.
+# The vLLM example's level (examples/README.md): the remote protocol's integrity half, sampled proofs, on a served vLLM
+# sampling period (README.md). The next level needs the Lean verifier off the prover's node; its runs of record ran it on
+# the GPU node with the endpoint and the prover. Its proof is none: sampled proofs' guarantee
+# (Flock.Guarantees.SampledKSLiveV3) is proved, but no theorem yet carries it to Claims.Sampling.KS, which
+# NetTiming.Guarantees.SampledAuditAccepted takes (benchmarks/prove_path/README.md).
 protocol = "sampled_proofs"
 workload = "vllm"
-level = 1
+run = "runs"
+proof = "none"
 
 [placement]
-endpoint = "gpu-node"        # vy-nebius-1, one leased RTX PRO 6000
-prover = "gpu-node"          # vy-nebius-1
-verifier = "gpu-node"        # vy-nebius-1, the Lean verifier
-challenger = "auditor-host"  # vy-challenger-1, through infra's gate (PP_CHALLENGER)
+endpoint = "gpu-node"        # one leased RTX PRO 6000
+prover = "gpu-node"          # the endpoint's node
+verifier = "gpu-node"        # the Lean verifier, on the endpoint's node
+challenger = "auditor-host"  # the challenger's host, through its gate (PP_CHALLENGER)
 
 [evidence]
-# the row's Commit of record (commit.sh); the serve run the demo of record audited (serve.sh, port 18091); that demo's gate
-# run, on vy-challenger-1's coins (benchmarks/prove_path/README.md)
+# the workload's Commit of record (commit.sh), the serve run the audit of record read (serve.sh), and that audit's run on
+# the challenger's coins (benchmarks/prove_path/README.md)
 runs = ["r20261024-055630-5377", "r20261025-092311-15a1", "r20261025-100403-334e"]
-guarantee = "NetTiming.Guarantees.SampledAuditAccepted"
-proof = "NetTiming.SecurityProofs.SampledAuditAccepted"

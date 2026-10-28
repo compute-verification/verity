@@ -618,16 +618,21 @@ def deploy_drift(ctx: Ctx) -> list[Finding]:
     """Files on the nodes that aren't main's, still run old code, or stray (`research deploy drift --json`; it fetches origin,
     which the nodes can't): one incident per node and kind.  A node ssh can't connect to (a stopped VM) is skipped; any other
     read that fails, or every node unreachable, is the monitor's error."""
-    from .pods.nebius.preflight_probe import findings
-
     reps = json.loads(ctx.sh([*ctx.research, "deploy", "drift", "--json"], ok=(0, 1), timeout=900))
     none_read = all("error" in r for r in reps.values())
     if bad := sorted(n for n, r in reps.items() if "error" in r and (none_read or not r.get("unreachable"))):
         raise RuntimeError(f"deploy drift can't read {', '.join(bad)}: {str(reps[bad[0]]['error'])[:200]}")
     groups: dict[tuple[str, str], list[str]] = {}
-    for line in findings(reps):
-        n, kind, path = line.split(" ", 2)
-        groups.setdefault((n, kind), []).append(path)
+    for n, rep in sorted(reps.items()):
+        if "error" in rep:
+            continue
+        for e in rep["entries"]:
+            if e["state"] not in ("ok", "held") and not (e["state"] == "missing" and e.get("tree")):
+                groups.setdefault((n, e["state"]), []).append(e["path"])
+            if e.get("restart"):
+                groups.setdefault((n, "restart"), []).append(e["path"])
+        for p in rep["strays"]:
+            groups.setdefault((n, "stray"), []).append(p)
     return [Finding(f"{n}:{kind}", f"*Deploy drift on {n}: {len(ps)} {kind}*: {', '.join(f'`{p}`' for p in ps[:5])}"
                     + (f" and {len(ps) - 5} more" if len(ps) > 5 else "") + ".") for (n, kind), ps in sorted(groups.items())]
 
@@ -1270,12 +1275,28 @@ def failed_check(ctx: Ctx, reg: dict, machine: str, row: dict) -> Finding | None
                    thread=MERGE_THREAD)
 
 
+def on_main(ctx: Ctx, sha: str | None) -> bool:
+    """Whether ``sha`` is a commit of `main` (GitHub's compare of it with main is `ahead` or `identical`): the tip an
+    after-landing run checks, which runs to its end to name every red step and suite (TOP-90 row 75), so `cancel_failed` never
+    stops it.  27 Oct: main 54713f81's and 0600bab8's runs were cancelled for a Lean check's slot before their pytest step
+    reported, twice leaving main unverified.  False when GitHub can't say."""
+    if not sha:
+        return False
+    try:
+        got = ctx.sh(["gh", "api", f"repos/{REPO_SLUG}/compare/{sha}...main", "--jq", ".status"], timeout=30)
+    except Exception:  # noqa: BLE001  (cancelling stays the default)
+        return False
+    return got.strip() in ("ahead", "identical")
+
+
 def cancel_failed(ctx: Ctx, machine: str, row: dict, waiting: list[dict]) -> str | None:
     """Cancel a check whose step failed while a ticket waits for a check slot on its machine (top, 8 Oct: running on to find more
     failures is worth it only while nothing waits for its slot): what the post says, or None when it isn't cancelled. A suites.py
     run's failed suite only rings: the lander runs those to land a PR on, and decides whether a suite that failed is its change's
     (top, 9 Oct: 25ea's verity-ops failure was cpu-1's, and its circuit_check worth keeping)."""
     if not (ctx.act and waiting and row.get("step") and not row.get("suite") and row.get("state") == "running"):
+        return None
+    if on_main(ctx, row.get("sha")):
         return None
     who = ", ".join(w.get("run") or "a check" for w in waiting[:3]) + (f" and {len(waiting) - 3} more" if len(waiting) > 3 else "")
     ctx.sh([*ctx.research, "cancel", row["run"], "--on", machine, "--by", "infra", "--reason",

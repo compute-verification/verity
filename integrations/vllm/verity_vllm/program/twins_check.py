@@ -59,7 +59,7 @@ def _captured_providers(result, vals, store, spec_id: str, rng: np.random.Genera
 
 def check_log(log: str, profile_name: str, snapshots: str | None, *, seed: int, n_random: int, n_edge: int, k: int,
               safetensors: str | None = None, cos_sin: str | None = None, only: set[str] | None = None) -> dict:
-    """Every spec of the log: `check_spec`; plus the family-level small-statics sweep.  Fold WITHOUT Program (D69)."""
+    """Every spec of the log: `check_spec`; plus the family-level small-statics sweep.  Fold WITHOUT Program."""
     from verity_vllm.check.fold_compare import SnapshotStore, Values, WeightSource, _attach_specs, _max_rss_gb, fold_log, load_profile
     t0 = time.time()
     profile = load_profile(profile_name)
@@ -73,7 +73,7 @@ def check_log(log: str, profile_name: str, snapshots: str | None, *, seed: int, 
     store = SnapshotStore(snaps) if snaps is not None and (snaps / "snapshots.json").exists() else None
     cs = Path(cos_sin) if cos_sin else ((snaps / "cos_sin_cache.npy") if snaps is not None and (snaps / "cos_sin_cache.npy").exists() else None)
     weights = WeightSource(result.params[-1][1], [Path(p) for p in sorted(glob.glob(safetensors))] if safetensors else None, cs, repo=repo,
-                           config=dict(profile.config or {}))   # [SHARED-CODE lane cov-ln]
+                           config=dict(profile.config or {}))
     vals = Values(result, store, weights) if store is not None else None
     captured_note = None
     if store is None:

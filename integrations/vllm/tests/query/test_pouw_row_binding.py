@@ -1,7 +1,7 @@
 """A `pouw:ncp-v2` linear's output, committed under the Linear's tuple slot, binds the manifest's `out` (`verity_vllm.query.manifest.bind`).
 
-The fixture is the PoUW-linear part of a real row Commit's records: the Build's `manifest.json` and the Commit's `binding_map_p0.json` of
-`r20260929-153141-1c72` (Qwen2.5-0.5B, `qwen25-05b__bf16__rtx4090__tp1__b1__i32__o4__mixed__greedy__bi-eager`), whose BINDING /
+The fixture is the PoUW-linear part of a real row Commit's records: the Build's `manifest.json` and the Commit's `binding_map_p0.json`
+(Qwen2.5-0.5B, `qwen25-05b__bf16__rtx4090__tp1__b1__i32__o4__mixed__greedy__bi-eager`), whose BINDING /
 MANIFEST COVERAGE check found exactly these 384 identities missing and 384 extra. The manifest named every `NcpLinearRow_v1` /
 `NcpLinearRowBias_v1` output `out`; the collector committed `LinearBase.forward`'s slot `<linear>/0`, and the map took that name as
 its identity.

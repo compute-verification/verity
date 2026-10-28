@@ -1,4 +1,4 @@
-"""The encoded weights store (`p2_v1/store.py`, CMP-95 item 2): the real store's layout JSON and the toy fixture
+"""The encoded weights store (`p2_v1/store.py`): the real store's layout JSON and the toy fixture
 (`p2_v1/store-toy/`) regenerate as pinned, the layout, `W` and the staging buffers by their digests; the toy's `C*` decodes,
 layer by layer, to its `W`'s tensors by `reference.decode`, by the registered codec and by `layout.decode_tensor`,
 passes the public-encoder setup with the pinned root, and refuses each negative block with its flag; the spot vectors

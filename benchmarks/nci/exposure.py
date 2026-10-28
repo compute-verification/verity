@@ -29,9 +29,9 @@ RANGES = {
     "unmonitored": (0.0, 0.1, "guess: none, to a tenth of the fleet's compute hidden"),
     "residual": (0.01, 1.0, "best plausible design 0.01 (eight conditions); floor credit 0.323 at the locked clock, 0.213 attested (C7 dossier, its eps left to eps_w); nothing credited today 1"),
     "eps_w": (6e-4, 0.00917, "best plausible design 0.06% (C7 dossier); CircuitCredit's closed 0.744%, 0.681-0.917% over r = 1-4 (draft #2638)"),
-    "host_share": (0.0021, 0.131, "two EPYC 9015s without matrix units 0.21%; Xeon 6776P INT8 AMX 11.8%, 13.1% at fused maximum clocks"),
+    "host_share": (0.0022, 0.14, "against the card table's FP8 peak: two EPYC 9015s without matrix units 0.22%; Xeon 6776P INT8 AMX 12.6%, 14.0% at fused maximum clocks"),
     "eps_agg": (1e-6, 1e-3, "1e-6 needs per-window failure about 3 x 2^-47 for the same delta; 1e-3 lets delta fall tenfold"),
-    "clock_share": (0.0, 0.2, "0 with an attested clock; 6.4% from NVIDIA's dense headline; 0.2 the C4 dossier's adversarial phi = 1.25"),
+    "clock_share": (0.0, 0.2, "0: PoUW credits the card table's 2,430 MHz, the SKU's maximum (CMP-165, run r20261027-032043-e2d1); 0.2 the C4 dossier's adversarial phi = 1.25, a card whose SKU or firmware reaches past its table (unattested)"),
     "pous_rounds": (20.0, 74000.0, "low a guess; deployed 111; 74,000 with streamed labels (C8 dossier)"),
     "unfilled_gb": (3.05, 150.0, "on-chip alone 3.05; measured gaps 51 plus 7 of DPU, BMC and flash; high a guess"),
     "sigma": (10.0, 1e6, "guess: a shielded rack, to a loud channel"),
@@ -81,7 +81,7 @@ RANGES = {
     "years": (0.25, 3.0, "guess"),
 }
 
-#: compute-accounting's modelled design, where the residual sits below the memory cap
+#: the modelled design, where the residual sits below the memory cap
 DESIGN = {"residual": 0.01, "host_share": 0.05, "clock_share": 0.0}
 SCENARIOS = {
     "defaults": {},

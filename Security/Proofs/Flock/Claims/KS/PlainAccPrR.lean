@@ -148,8 +148,58 @@ theorem accR_draw {rd : Claims.Msg → Option FinalP} {x : Claims.Msg}
 
 /-! ## The simulator -/
 
-/-- **The roots `VR rd` links at `P`'s first message**: `linkR` at the statement's tables and the first message's rows' nodes
-(`plainRoot` at `decR`'s link). -/
+/-- Proof files as lists of byte values. -/
+def filesNat (fs : Array ByteArray) : List (List ℕ) := fs.toList.map fun b => b.data.toList.map UInt8.toNat
+
+theorem filesNat_inj : Function.Injective filesNat := by
+  have hb : Function.Injective fun b : ByteArray => b.data.toList.map UInt8.toNat := by
+    intro p q hpq
+    rcases p with ⟨⟨p⟩⟩
+    rcases q with ⟨⟨q⟩⟩
+    have e : p = q := List.map_injective_iff.mpr (fun _ _ h => UInt8.toNat_inj.mp h) hpq
+    rw [e]
+  intro a b h
+  rcases a with ⟨a⟩
+  rcases b with ⟨b⟩
+  have e : a = b := List.map_injective_iff.mpr hb h
+  rw [e]
+
+/-- **Proof files as a message**: tag `1`, then one zero per their code, so no message codes two and none is empty. -/
+def filesCode (fs : Array ByteArray) : Claims.Msg := 1 :: List.replicate (Encodable.encode (filesNat fs)) 0
+
+theorem filesCode_inj : Function.Injective filesCode := by
+  intro a b h
+  have e := congrArg List.length (List.cons.inj h).2
+  rw [List.length_replicate, List.length_replicate] at e
+  exact filesNat_inj (Encodable.encode_injective e)
+
+theorem filesCode_ne_nil (fs : Array ByteArray) : filesCode fs ≠ [] := List.cons_ne_nil _ _
+
+open Classical in
+/-- The proof files a message codes, none where it codes none. -/
+noncomputable def filesDecode (a : Claims.Msg) : Array ByteArray :=
+  if h : ∃ fs, filesCode fs = a then Classical.choose h else #[]
+
+theorem filesDecode_code (fs : Array ByteArray) : filesDecode (filesCode fs) = fs := by
+  have h : ∃ fs', filesCode fs' = filesCode fs := ⟨fs, rfl⟩
+  rw [filesDecode, dif_pos h]
+  exact filesCode_inj (Classical.choose_spec h)
+
+theorem filesDecode_nil : filesDecode [] = #[] := by
+  rw [filesDecode, dif_neg]
+  rintro ⟨fs, h⟩
+  exact filesCode_ne_nil fs h
+
+/-- **The simulator's wire at `VR rd`**: the plain wire, with the roots `linkR` reads from the first message's rows'
+nodes at the statement's tables, and the proof files `filesCode` writes. -/
+noncomputable def plainWR (spec : SessionSpec) (h : 2 * spec.mPts ≤ 65536) : Claims.Msg → Wire 65536 1 spec.mPts :=
+  fun x => { plainWire spec.mPts h with
+    root := fun a => (((setupOf false x).bind fun v =>
+      ((rowsOf a).map (List.map nodeOf)).bind (linkR v.2.2)).getD default).1.toArray
+    proofs := filesDecode }
+
+/-- **The roots `VR rd` links at `P`'s first message**: `linkR` at the statement's tables and the first message's rows'
+nodes (`plainRoot` at `decR`'s link). -/
 noncomputable def plainRootR {Ω : Type} (P : Claims.Prover Ω) (x : Claims.Msg) (ω : Ω) : Array ByteArray :=
   (((setupOf false x).bind fun v =>
     ((rowsOf ((P.next x [] ω).eval sha512).1).map (List.map nodeOf)).bind (linkR v.2.2)).getD default).1.toArray
@@ -183,16 +233,16 @@ def PlainClashRunR (rd : Claims.Msg → Option FinalP) {Ω : Type} (P : Claims.P
 `plainΦ`'s coins (`PlainSimRunR`), and where `VR rd` refuses it sends no proofs. -/
 def PlainSimR (rd : Claims.Msg → Option FinalP) {Ω : Type} (P : Claims.Prover Ω) (x : Claims.Msg) (ω : Ω)
     (spec : SessionSpec) (st : Stmt) (hw : 2 * spec.mPts ≤ 65536) (P' : Claims.Prover (Ω × plainTape x)) : Prop :=
-  (∀ u, (liveStrat (fun _ => 1) (fun _ => spec.mPts) plainN (plainDg spec) (plainW spec hw) sha512 P' x
+  (∀ u, (liveStrat (fun _ => 1) (fun _ => spec.mPts) plainN (plainDg spec) (plainWR spec hw) sha512 P' x
       (ω, u)).1 = plainRootR P x ω) ∧
     (∀ u pts, SchedL (plainDg spec)
-      (liveStrat (fun _ => 1) (fun _ => spec.mPts) plainN (plainDg spec) (plainW spec hw) sha512 P' x (ω, u)).1 pts
+      (liveStrat (fun _ => 1) (fun _ => spec.mPts) plainN (plainDg spec) (plainWR spec hw) sha512 P' x (ω, u)).1 pts
       (plainN x) (fun _ _ => []) (repRounds false spec st)
-      ((liveStrat (fun _ => 1) (fun _ => spec.mPts) plainN (plainDg spec) (plainW spec hw) sha512 P' x
+      ((liveStrat (fun _ => 1) (fun _ => spec.mPts) plainN (plainDg spec) (plainWR spec hw) sha512 P' x
         (ω, u)).2 pts)) ∧
-    PlainSimRunR rd P x ω spec.mPts plainN (plainDg spec) (plainW spec hw) P' (plainΦ x spec st) ∧
+    PlainSimRunR rd P x ω spec.mPts plainN (plainDg spec) (plainWR spec hw) P' (plainΦ x spec st) ∧
     ∀ u r', (Claims.run sha512 P (VR rd) x ω (plainΦ x spec st (u, r'))).out ≠ .acc →
-      (liveOut (fun _ => 1) (fun _ => spec.mPts) plainN (plainDg spec) (plainW spec hw) sha512 P' x (ω, u) r').proofs =
+      (liveOut (fun _ => 1) (fun _ => spec.mPts) plainN (plainDg spec) (plainWR spec hw) sha512 P' x (ω, u) r').proofs =
         #[]
 
 open Classical in
@@ -367,7 +417,7 @@ theorem plainOffL_le_rdR {x : Claims.Msg} {ins : Ins} {spec : SessionSpec} {st :
         (fun j => repsOf (D := Refine.Dig) execArith ([plainTab L m k0 l₀ l₁ rest ext hsch hm PT_LOCAL hlay].get j))
         j)
     (hw : 2 * spec.mPts ≤ 65536) {Ω : Type} (P : Claims.Prover Ω) (ω : Ω) (P' : Claims.Prover (Ω × plainTape x))
-    (hσ : ∀ u, (liveStrat (fun _ => 1) (fun _ => spec.mPts) plainN (plainDg spec) (plainW spec hw) sha512 P' x
+    (hσ : ∀ u, (liveStrat (fun _ => 1) (fun _ => spec.mPts) plainN (plainDg spec) (plainWR spec hw) sha512 P' x
       (ω, u)).1 = plainRootR P x ω)
     (C : Fin (wordLen false x) → List 𝔽) (T : Model.Oracle 𝔽) (r : Fin 2) (ℓ : Fin (l₀ :: l₁ :: rest).length) (j : ℕ)
     (hL : plainN x + 2 = (V false).k x)
@@ -377,7 +427,7 @@ theorem plainOffL_le_rdR {x : Claims.Msg} {ins : Ins} {spec : SessionSpec} {st :
         (plainVerdictAtJK id ins.read.I d C (plainRootR P x ω)) opn (plainDg spec)
         (plainDec (plainTab L m k0 l₀ l₁ rest ext hsch hm PT_LOCAL hlay)) (fun _ _ => true) (fun _ _ _ => [])
         (fun rs _ => capOfRoot rs[0]!) (plainN x) (hdec C (plainRootR P x ω)) (plainRootR P x ω)
-        (liveStrat (fun _ => 1) (fun _ => spec.mPts) plainN (plainDg spec) (plainW spec hw) sha512
+        (liveStrat (fun _ => 1) (fun _ => spec.mPts) plainN (plainDg spec) (plainWR spec hw) sha512
           P' x (ω, u)) (hσ u)))
     (rdD : (Fin ((V false).k x) → Coin) → Fin (2 ^ (lvOf ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ (ℓ.val + 1)).logLen) →
       Finset (Fin (2 ^ (lvOf ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ (ℓ.val + 1)).lanes) → 𝔽))
@@ -390,7 +440,7 @@ theorem plainOffL_le_rdR {x : Claims.Msg} {ins : Ins} {spec : SessionSpec} {st :
           (plainDec (plainTab L m k0 l₀ l₁ rest ext hsch hm PT_LOCAL hlay))
           (fun _ _ => true) (fun _ _ _ => []) (fun rs _ => capOfRoot rs[0]!)
           (fun j => repsOf (D := Refine.Dig) execArith ([plainTab L m k0 l₀ l₁ rest ext hsch hm PT_LOCAL hlay].get j))
-          (liveOut (fun _ => 1) (fun _ => spec.mPts) plainN (plainDg spec) (plainW spec hw) sha512
+          (liveOut (fun _ => 1) (fun _ => spec.mPts) plainN (plainDg spec) (plainWR spec hw) sha512
             P' x (ω, u) rr) a →
         ∀ q v, opCapL Refine.H512 Refine.enc512 Lf ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ r.val ℓ.val a q = some v →
           v ∈ rdD (plainΦ x spec st (u, rr)) q) :
@@ -408,7 +458,7 @@ theorem plainOffL_le_rdR {x : Claims.Msg} {ins : Ins} {spec : SessionSpec} {st :
           (plainVerdictAtJK id ins.read.I d C (plainRootR P x ω)) opn (plainDg spec)
           (plainDec (plainTab L m k0 l₀ l₁ rest ext hsch hm PT_LOCAL hlay)) (fun _ _ => true) (fun _ _ _ => [])
           (fun rs _ => capOfRoot rs[0]!) (plainN x) (hdec C (plainRootR P x ω)) (plainRootR P x ω)
-          (liveStrat (fun _ => 1) (fun _ => spec.mPts) plainN (plainDg spec) (plainW spec hw) sha512
+          (liveStrat (fun _ => 1) (fun _ => spec.mPts) plainN (plainDg spec) (plainWR spec hw) sha512
             P' x (ω, u)) (hσ u))) /
         Fintype.card (plainTape x) ≤
       ∑ q, Claims.Pr fun c : Fin ((V false).k x) → Coin => (rdD c q).Nonempty ∧ rdD c q ≠ {w c q} := by
@@ -427,9 +477,9 @@ theorem plainOffL_le_rdR {x : Claims.Msg} {ins : Ins} {spec : SessionSpec} {st :
       (plainTab L m k0 l₀ l₁ rest ext hsch hm PT_LOCAL hlay) _ (plainVerdictAtJK id ins.read.I d C (plainRootR P x ω)) opn
       (plainDg spec) (plainDec (plainTab L m k0 l₀ l₁ rest ext hsch hm PT_LOCAL hlay)) (fun _ _ => true)
       (fun _ _ _ => []) (fun rs _ => capOfRoot rs[0]!) (plainN x) (hdec C (plainRootR P x ω)) (plainRootR P x ω)
-      (liveStrat (fun _ => 1) (fun _ => spec.mPts) plainN (plainDg spec) (plainW spec hw) sha512
+      (liveStrat (fun _ => 1) (fun _ => spec.mPts) plainN (plainDg spec) (plainWR spec hw) sha512
         P' x (ω, u)) (hσ u) _ r.val ℓ.val j).trans
-      (Claims.Bridge.Live.offC_liveStrat_le plainN (plainDg spec) (plainW spec hw) sha512 P' x
+      (Claims.Bridge.Live.offC_liveStrat_le plainN (plainDg spec) (plainWR spec hw) sha512 P' x
         (ω, u) _ j (fun rr => w (plainΦ x spec st (u, rr)))
         (fun rr rr' h => hwj _ _ (plainΦ_prefix hL u h))))).trans
     (Claims.Ex_mono fun rr => Finset.sum_le_sum fun q _ => Claims.Bridge.ind_le_ind_imp fun hoff => ?_)
@@ -468,10 +518,10 @@ theorem plain_accPr_le_rdLR (rd : Claims.Msg → Option FinalP)
     (hT : ¬ Committed execArith (L.model (Refine.regionsOf st)) ⟨m, k0, l₀ :: l₁ :: rest, ext⟩
       (Claims.Flock.oracleOf C))
     (P' : Claims.Prover (Ω × plainTape x))
-    (hσ : ∀ u, (liveStrat (fun _ => 1) (fun _ => spec.mPts) plainN (plainDg spec) (plainW spec hw) sha512 P' x
+    (hσ : ∀ u, (liveStrat (fun _ => 1) (fun _ => spec.mPts) plainN (plainDg spec) (plainWR spec hw) sha512 P' x
       (ω, u)).1 = plainRootR P x ω)
-    (hrun : PlainSimRunR rd P x ω spec.mPts plainN (plainDg spec) (plainW spec hw) P' (plainΦ x spec st))
-    (hsc : PlainClashRunR rd P x ω spec.mPts plainN (plainDg spec) (plainW spec hw) P'
+    (hrun : PlainSimRunR rd P x ω spec.mPts plainN (plainDg spec) (plainWR spec hw) P' (plainΦ x spec st))
+    (hsc : PlainClashRunR rd P x ω spec.mPts plainN (plainDg spec) (plainWR spec hw) P'
       (plainΦ x spec st)
       (LiveSelfClash Refine.H512 Refine.enc512 Lf ⟨m, k0, l₀ :: l₁ :: rest, ext⟩
         (plainVerdictAtJK id ins.read.I d C (plainRootR P x ω)) opn
@@ -485,7 +535,7 @@ theorem plain_accPr_le_rdLR (rd : Claims.Msg → Option FinalP)
           (plainVerdictAtJK id ins.read.I d C (plainRootR P x ω)) opn (plainDg spec)
           (plainDec (plainTab L m k0 l₀ l₁ rest ext hsch hm PT_LOCAL hlay)) (fun _ _ => true) (fun _ _ _ => [])
           (fun rs _ => capOfRoot rs[0]!) (plainN x) (hdec C (plainRootR P x ω)) (plainRootR P x ω)
-          (liveStrat (fun _ => 1) (fun _ => spec.mPts) plainN (plainDg spec) (plainW spec hw) sha512
+          (liveStrat (fun _ => 1) (fun _ => spec.mPts) plainN (plainDg spec) (plainWR spec hw) sha512
             P' x (ω, u)) (hσ u)))
     (rdD : (r : Fin 2) → (ℓ : Fin (l₀ :: l₁ :: rest).length) → (Fin ((V false).k x) → Coin) →
       Fin (2 ^ (lvOf ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ (ℓ.val + 1)).logLen) →
@@ -501,7 +551,7 @@ theorem plain_accPr_le_rdLR (rd : Claims.Msg → Option FinalP)
           (plainDec (plainTab L m k0 l₀ l₁ rest ext hsch hm PT_LOCAL hlay))
           (fun _ _ => true) (fun _ _ _ => []) (fun rs _ => capOfRoot rs[0]!)
           (fun j => repsOf (D := Refine.Dig) execArith ([plainTab L m k0 l₀ l₁ rest ext hsch hm PT_LOCAL hlay].get j))
-          (liveOut (fun _ => 1) (fun _ => spec.mPts) plainN (plainDg spec) (plainW spec hw) sha512
+          (liveOut (fun _ => 1) (fun _ => spec.mPts) plainN (plainDg spec) (plainWR spec hw) sha512
             P' x (ω, u) rr) a →
         ∀ q v, opCapL Refine.H512 Refine.enc512 Lf ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ r.val ℓ.val a q = some v →
           v ∈ rdD r ℓ (plainΦ x spec st (u, rr)) q) :
@@ -513,29 +563,29 @@ theorem plain_accPr_le_rdLR (rd : Claims.Msg → Option FinalP)
         ∃ (p : Fin (wordLen false x)) (u : List 𝔽),
           Claims.Flock.lookCol (colsRV rd (Claims.run sha512 P (VR rd) x ω r).seen 0) p.val = some u ∧ u ≠ C p := by
   have hL := plainN_add hset
-  have htr := plain_first_of_simDR rd P x ω C spec.mPts hset hd plainN (plainDg spec) (plainW spec hw)
+  have htr := plain_first_of_simDR rd P x ω C spec.mPts hset hd plainN (plainDg spec) (plainWR spec hw)
     P' (plainΦ x spec st) (Pr_plainΦ hL) hrun
   have hmain := plain_le_sessionsRawLR rd Lf h L m k0 l₀ l₁ rest ext hsch hk0 hm hlay P ω C hT (plainTape x)
     (capOfRoot (plainRootR P x ω)[0]!) (fun u => simAt execArith Refine.H512 Refine.enc512 Lf
       (plainTab L m k0 l₀ l₁ rest ext hsch hm PT_LOCAL hlay) _ (plainVerdictAtJK id ins.read.I d C (plainRootR P x ω)) opn
       (plainDg spec) (plainDec (plainTab L m k0 l₀ l₁ rest ext hsch hm PT_LOCAL hlay)) (fun _ _ => true)
       (fun _ _ _ => []) (fun rs _ => capOfRoot rs[0]!) (plainN x) (hdec C (plainRootR P x ω)) (plainRootR P x ω)
-      (liveStrat (fun _ => 1) (fun _ => spec.mPts) plainN (plainDg spec) (plainW spec hw) sha512
+      (liveStrat (fun _ => 1) (fun _ => spec.mPts) plainN (plainDg spec) (plainWR spec hw) sha512
         P' x (ω, u)) (hσ u))
     (le_trans htr (mean_live_le_simAt execArith Refine.H512 Refine.enc512 Lf
       (plainTab L m k0 l₀ l₁ rest ext hsch hm PT_LOCAL hlay) _ (plainVerdictAtJK id ins.read.I d C (plainRootR P x ω)) opn
       (plainDg spec) (plainDec (plainTab L m k0 l₀ l₁ rest ext hsch hm PT_LOCAL hlay)) (fun _ _ => true)
       (fun _ _ _ => []) (fun rs _ => capOfRoot rs[0]!) (plainN x) (hdec C (plainRootR P x ω)) (plainRootR P x ω)
-      (fun u => liveStrat (fun _ => 1) (fun _ => spec.mPts) plainN (plainDg spec) (plainW spec hw) sha512
+      (fun u => liveStrat (fun _ => 1) (fun _ => spec.mPts) plainN (plainDg spec) (plainWR spec hw) sha512
         P' x (ω, u)) (hσ)))
   refine hmain.trans (add_le_add (add_le_add (add_le_add le_rfl ?_) ?_) le_rfl)
   · exact le_trans (mean_selfClash_le_live execArith Refine.H512 Refine.enc512 Lf
       (plainTab L m k0 l₀ l₁ rest ext hsch hm PT_LOCAL hlay) _ (plainVerdictAtJK id ins.read.I d C (plainRootR P x ω)) opn
       (plainDg spec) (plainDec (plainTab L m k0 l₀ l₁ rest ext hsch hm PT_LOCAL hlay)) (fun _ _ => true)
       (fun _ _ _ => []) (fun rs _ => capOfRoot rs[0]!) (plainN x) (hdec C (plainRootR P x ω)) (plainRootR P x ω)
-      (fun u => liveStrat (fun _ => 1) (fun _ => spec.mPts) plainN (plainDg spec) (plainW spec hw) sha512
+      (fun u => liveStrat (fun _ => 1) (fun _ => spec.mPts) plainN (plainDg spec) (plainWR spec hw) sha512
         P' x (ω, u)) (hσ))
-      (liveMix_le_Pr (fun _ => 1) (fun _ => spec.mPts) plainN (plainDg spec) (plainW spec hw) sha512
+      (liveMix_le_Pr (fun _ => 1) (fun _ => spec.mPts) plainN (plainDg spec) (plainWR spec hw) sha512
         P' x ω _ (plainEv₁R rd P x ω) (plainΦ x spec st) (Pr_plainΦ hL _) hsc)
   · rw [Finset.sum_range]
     refine Finset.sum_le_sum fun r _ => ?_
@@ -574,7 +624,7 @@ def PlainRdInR (rd : Claims.Msg → Option FinalP) (x : Claims.Msg) : Prop :=
       ∀ {Ω : Type} (P : Claims.Prover Ω) (ω : Ω), ∃ P' : Claims.Prover (Ω × plainTape x),
         PlainSimR rd P x ω spec st (plain_mPts hs hin hset).1 P' ∧
         ∀ C : Fin (wordLen false x) → List 𝔽, (∀ p, wide false x (C p)) →
-          PlainClashRunR rd P x ω spec.mPts plainN (plainDg spec) (plainW spec (plain_mPts hs hin hset).1) P'
+          PlainClashRunR rd P x ω spec.mPts plainN (plainDg spec) (plainWR spec (plain_mPts hs hin hset).1) P'
             (plainΦ x spec st)
             (LiveSelfClash Refine.H512 Refine.enc512 Lf ⟨m, k0, l₀ :: l₁ :: rest, ext⟩
               (plainVerdictAtJK id ins.read.I d C (plainRootR P x ω)) opn
@@ -589,7 +639,7 @@ def PlainRdInR (rd : Claims.Msg → Option FinalP) (x : Claims.Msg) : Prop :=
                 (fun j => repsOf (D := Refine.Dig) execArith
                   ([plainTab L m k0 l₀ l₁ rest ext hsch hm PT_LOCAL hlay].get j))
                 (liveOut (fun _ => 1) (fun _ => spec.mPts) plainN (plainDg spec)
-                  (plainW spec (plain_mPts hs hin hset).1) sha512 P' x (ω, u) rr) a →
+                  (plainWR spec (plain_mPts hs hin hset).1) sha512 P' x (ω, u) rr) a →
               ∀ (r : Fin 2) (ℓ : ℕ) (q : Fin (2 ^ (lvOf ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ (ℓ + 1)).logLen))
                 (v : Fin (2 ^ (lvOf ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ (ℓ + 1)).lanes) → 𝔽),
                 opCapL Refine.H512 Refine.enc512 Lf ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ r.val ℓ a q = some v →
@@ -635,7 +685,7 @@ theorem plain_accPr_le_rdAllR_of (rd : Claims.Msg → Option FinalP) {x : Claims
         (plainTab L _ k0 l₀ l₁ rest ext hsch hm13 PT_LOCAL hlay) _ _ opn (plainDg spec)
         (plainDec (plainTab L _ k0 l₀ l₁ rest ext hsch hm13 PT_LOCAL hlay)) (fun _ _ => true) (fun _ _ _ => [])
         (fun rs _ => capOfRoot rs[0]!) (plainN x) (hdec C (plainRootR P x ω)) (fun _ => rfl) (plainRootR P x ω)
-        (liveStrat (fun _ => 1) (fun _ => spec.mPts) plainN (plainDg spec) (plainW spec (plain_mPts hs hin hset).1)
+        (liveStrat (fun _ => 1) (fun _ => spec.mPts) plainN (plainDg spec) (plainWR spec (plain_mPts hs hin hset).1)
           sha512 P' x (ω, u)) (hσ u) (hS u)) r ℓ.val)
     rdD w hwj fun r ℓ u rr a ha q v hv => by
       obtain ⟨hacc, e, he, rfl⟩ := hrel u rr a ha r ℓ.val q v hv

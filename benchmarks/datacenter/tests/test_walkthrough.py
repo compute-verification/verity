@@ -14,7 +14,7 @@ from verity.ml.circuits.types import Array, Tuple
 
 from datacenter import (FLEET_CLOSED, Append, Assumption, Block, Cadence, Carried, Challenge, Credit, Datacenter,
                         Deviation, Device, Fleet, Interval, Ledger, Link, Maintenance, Plan, Port, ReadWindow, Refused,
-                        Release, Store, Wipe, account, audit, commit, crossings, double_credit, evaluate, names,
+                        Release, Store, Wipe, account, ands, audit, commit, crossings, double_credit, evaluate, names,
                         occupancy, place, read, register, run, values, work)
 from datacenter.examples import GB
 from datacenter.models import WEIGHTS, X, words
@@ -39,7 +39,7 @@ def section_1():
     print(program.gates, "gates:", ", ".join(f"{n} ({nd.gates})" for n, nd in zip(names(program), program.root.body.nodes)))
     for v in values(program):
         print(v, "read by", [names(program)[r] for r in v.reads], *(["and returned"] if v.output else []))
-    print(work(program))
+    print(work(program), ands(program))
     y = values(program)[-1]
     print([hex(w) for w in read(program, evaluate(program, {"x": X} | WEIGHTS), y)[:4]])
     return program
@@ -66,7 +66,8 @@ def gpu(name):
                   rate={"mac:bf16": Assumption(f"{name}.bf16", 1e9, "MAC/s"),
                         "cuda:gate": Assumption(f"{name}.gates", 1e10, "gate/s")},
                   memory=Assumption(f"{name}.hbm", 96 * GB, "bits"),
-                  residual=Assumption(f"{name}.residual", 8e6, "bits", "measured"))
+                  residual=Assumption(f"{name}.residual", 8e6, "bits", "measured"),
+                  write=Assumption(f"{name}.write", 4e14, "bit/s"))
 
 
 def section_4():
@@ -268,7 +269,7 @@ def walkthrough(between=lambda n: None):
 
 def test_the_walkthrough_runs_as_shown(capsys):
     program, acc, acc12, ledger = walkthrough()
-    assert acc.sound and sum(b.credited for b in acc.blocks) == sum(n for w in work(program).values() for n in w.values())
+    assert acc.sound and sum(b.credited for b in acc.blocks) == sum(ands(program).values())
     assert all(b.credited > 0 for b in acc.blocks)        # each stage is credited to the block it ran on
     assert acc.export_bits == 1024 and acc.uncovered == ["world-leaf"]   # h and y leave their blocks, uncharged
     assert acc12.sound and acc12.input_bits == {"x": 512, "temperature": 16}

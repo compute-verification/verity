@@ -1,5 +1,5 @@
 """The exports of `datacenter.examples`' declarations (coverage, the netns plan, Shadow's GML, the command line), and the
-declarations' values pinned against their sources: memory accounting's constants and the census."""
+declarations' tensor-core rates pinned against the census."""
 
 from __future__ import annotations
 
@@ -47,22 +47,13 @@ def test_a_path_around_a_certifier_breaks_coverage_and_no_export_takes_it(g, ex)
             export(dc)
 
 
-def test_the_capacities_are_memory_accountings_and_the_censuss(ex):
-    """The node states remote bandwidth's per-device constants: one GPU's, and each of the host's two sockets' halves.
-    Its tensor-core rates are the census's dense datasheet peaks, a multiply-add being two FLOP. What isn't measured yet
-    is infinite, so a reading that takes it as an upper bound concludes nothing from it."""
+def test_the_tensor_core_rates_are_the_censuss(ex):
+    """The tensor-core rates are the census's dense datasheet peaks, a multiply-add being two FLOP. What isn't measured
+    yet is infinite, so a reading that takes it as an upper bound concludes nothing from it."""
     from datacenter import serve_time
-    from verity.core.protocols.remote_bandwidth import timing
 
     dc = ex.leaf_spine(1)
     gpu, cpu = dc.devices["b0.gpu0"], dc.devices["b0.cpu0"]
-    assert gpu.on_chip.value == timing.GPU_CHIP_BYTES * 8 and gpu.memory.value == 96 * 2**30 * 8
-    assert gpu.bandwidth.value == timing.GPU_READ_BYTES_PER_S * 8
-    assert gpu.rate["oracle"].value == timing.GPU_SHA512_PER_S
-    assert 1.67 * gpu.rate["square-1024"].value == timing.GPU_SQUARINGS_PER_S["p1024"]
-    assert 1.567 * gpu.rate["square-512"].value == timing.GPU_SQUARINGS_PER_S["p512"]
-    assert 2 * cpu.on_chip.value == timing.HOST_CHIP_BYTES * 8
-    assert 2 * cpu.bandwidth.value == timing.HOST_READ_BYTES_PER_S * 8
     census = {e["id"]: e for e in json.loads(CENSUS.read_text())}
     macs = [a for k, a in gpu.rate.items() if k.startswith("mac:")]
     assert [a.name for a in macs] == ["rtx-pro-6000-server/bf16", "rtx-pro-6000-server/e4m3", "rtx-pro-6000-server/e2m1"]

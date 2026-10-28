@@ -1,5 +1,5 @@
-"""[R13 moe / MOE-01] The vLLM fused-MoE block (`vllm.moe_forward` -> `FusedMoEKernel(MoEPrepareAndFinalizeNoEP, TritonExperts)`, pinned
-d9105ea80) as REGISTERED Definitions -- promoted from `registry.quarantine.ov_moe` (lane ov-moe 2026-09-17, NvExpf from cov-moe) with the
+"""The vLLM fused-MoE block (`vllm.moe_forward` -> `FusedMoEKernel(MoEPrepareAndFinalizeNoEP, TritonExperts)`, pinned
+d9105ea80) as REGISTERED Definitions -- promoted from `registry.quarantine.ov_moe` with the
 same names / versions, so the specialization ids the accepted OLMoE eager records resolved to are unchanged.
 
 The block is: router top-k (`_moe_C.topk_softmax`) -> block schedule (`_moe_C.moe_align_block_size`, M*TOPK*4 > E; else the naive
@@ -10,9 +10,8 @@ word -- each output word of the pair-major intermediates is one ascending-k chai
 (`DotBf16`), then one f32 -> bf16 conversion (with the routing weight multiplied in before the conversion on the down projection).
 The tile constants (BLOCK_SIZE_M/N/K, GROUP_SIZE_M, num_warps/stages) vLLM picks per M (`try_get_optimal_moe_config`) schedule which
 CTA owns which pair rows and how the k-loop is chunked; a chunk of BLOCK_SIZE_K is BLOCK_SIZE_K/16 k16 steps into the SAME carried
-accumulator, so the per-coordinate chain is the tile-independent one -- checked, not assumed: `verity_vllm/ops/moe_kernel_xcheck.py`
-(cp-moe, R13) evaluates these bodies against the real kernels at several M (different tilings, naive vs sorted schedule, different
-routing patterns).
+accumulator, so the per-coordinate chain is the tile-independent one -- checked, not assumed: these bodies were evaluated against the
+real kernels at several M (different tilings, naive vs sorted schedule, different routing patterns).
 
 Representation (the one that fits the existing operand kinds; the precedent is `Embedding_v1`): the expert index `e` is an ordinary I32
 VALUE operand of the pair body -- produced by `MoeRouterTopK_v1` from the router logits, never a structural input or an observed
@@ -22,7 +21,7 @@ is arithmetic on a value the Program itself produced, exactly as the token id is
 
 The router's exponential is `NvExpf_v1`: the CUDA math-library `expf` sequence exactly as nvcc emits it for sm_89 (transcribed from the
 PTX of a kernel calling `expf`, CUDA 12.x headers; `cvt.sat` / `fma.rm` / `ex2.approx.ftz` / exponent-field scaling) -- bit-exact against
-`_moe_C::topk_softmax`'s weights (cov-moe: 192/192 words; R13 xcheck: every routed weight of every pattern).
+`_moe_C::topk_softmax`'s weights (192 of 192 words; the cross-check: every routed weight of every pattern).
 
 GLM-5.3's router (DeepSeek-V3's `noaux_tc`: sigmoid scores, `e_score_correction_bias` for selection only, one group, top-8 of 256,
 renormalized, x2.5) is `MoeRouterSigmoidBias_v1`: vLLM 0.28.1rc1.dev472's `GroupedTopKRouter` -> `fused_grouped_topk` ->
@@ -37,12 +36,13 @@ from verity.ml.circuits.defs import bind, composite, primitive
 from verity.ml.circuits.refs import Coll, array_of, concat, strided_view, tuple_of
 from verity.ml.circuits.types import Array, Tuple
 from verity.ml.circuits.ops.scalar import F32_NAN_PTX, BitAnd, BitNot, BitOr, F32BitsShl23, F32Eq, F32Fabs, F32Fmaxf, F32IsFinite, F32Neg, F32Sat
+from verity.ml.definitions.evidence import EVIDENCE
 from verity.ml.definitions.registry import b1
 from verity.ml.definitions.registry import prims as P
 from verity.ml.definitions.registry import ref_prims as R
 from verity.ml.definitions.registry.prims import BF16, BIT, F32, I32, _decode, f32_of, bits_of
 
-SEMANTIC_ID = "moe/FusedMoE@v1"   # (the quarantine module kept its ov-moe id)
+SEMANTIC_ID = "moe/FusedMoE@v1"
 
 # ---------------------------------------------------------------------------------------------------------
 # scalar primitives the router needs and the registry lacks
@@ -112,7 +112,7 @@ def F32FmaRmV2(a: int, b: int, c: int) -> int:
     return P.f32_gpu_nan(F32FmaRm.evaluate(a, b, c))
 
 
-#: The constants of nvcc's `expf` (sm_89, CUDA 12.x math headers; PTX of `y = expf(x)` on the pod, 2026-09-17):
+#: The constants of nvcc's `expf` (sm_89, CUDA 12.x math headers; PTX of `y = expf(x)`):
 #:   fma.rn  t  = x * 0f3BBB989D + 0.5          (0x3BBB989D = log2(e) / 252)
 #:   cvt.sat s  = clamp(t, 0, 1)                (NaN -> 0)
 #:   fma.rm  jb = s * 252 + 12582913            (round toward -inf: jb = 12582913 + floor(126 + x*log2e), an integer-valued f32
@@ -262,7 +262,7 @@ def _array(parts: list[Coll]) -> Coll:
            lambda S: ((("logits", Array(S.E, BF16)),), Tuple(Array(S.TOPK, F32), Array(S.TOPK, I32))),
            conformance="not-yet-established")
 def MoeRouterTopKNorm(B, S, logits):
-    """[R13 MOE-04] `topk_softmax(renormalize=True)` for one token row (Qwen3-MoE / Mixtral `norm_topk_prob`): the same kernel as
+    """`topk_softmax(renormalize=True)` for one token row (Qwen3-MoE / Mixtral `norm_topk_prob`): the same kernel as
     `MoeRouterTopK_v1` (same softmax geometry, same TOPK argmax rounds), then the lead thread's epilogue of
     `topkGatingSoftmax` (vLLM d9105ea80 csrc/libtorch_stable/moe/topk_softmax_kernels.cu, compiled WITHOUT --use_fast_math):
     `selected_sum` = the TOPK selected probabilities added in ascending slot order from 0.f, `denom = selected_sum > 0.f ?
@@ -554,13 +554,16 @@ def MoeRouterSigmoidNorm(B, S, w, v):
                    for k in range(S.TOPK)])
 
 
+_CC12, _CC90 = EVIDENCE["sigmoid_router_capture"]["cc12"], EVIDENCE["sigmoid_router_capture"]["cc90"]
+
+
 @composite("MoeRouterSigmoidBias", 1, ["E", "TOPK", "SCALE", "KERNEL"],
            lambda S: ((("logits", Array(S.E, F32)), ("bias", Array(S.E, F32))), Tuple(Array(S.TOPK, F32), Array(S.TOPK, I32))),
            conformance="exact-model-tested; the RTX PRO 6000's (cc 12.0, 188 SMs) _moe_C.grouped_topk at E=256, TOPK=8, SCALE=2.5, "
                        "both launches: 10,240 rows bit-exact against this Program and every MUFU-range logit word (65,873,464) "
-                       "against its twin (tests/properties/sigmoid_router_capture_gpu.py; runs r20261003-090316-1374 and "
-                       "r20261003-091025-e5e7, art:a827deda); likewise cc 9.0's (132 SMs) at vLLM d9105ea80's defaults "
-                       "(not batch invariant, the fused grouped top-k on; run r20261017-121712-18ba, art:f0439f03)")
+                       f"against its twin (tests/properties/sigmoid_router_capture_gpu.py; runs {_CC12['runs'][0]} and "
+                       f"{_CC12['runs'][1]}, {_CC12['art']}); likewise cc 9.0's (132 SMs) at vLLM d9105ea80's defaults "
+                       f"(not batch invariant, the fused grouped top-k on; run {_CC90['run']}, {_CC90['art']})")
 def MoeRouterSigmoidBias(B, S, logits, bias):
     """`_moe_C.grouped_topk(scores, n_group=1, topk_group=1, TOPK, renormalize=True, SCALE, bias, scoring_func=SIGMOID)` for one
     token row of f32 router logits (`GateLinear`'s f32 output) and the f32 `e_score_correction_bias`: per expert the sigmoid
@@ -650,7 +653,7 @@ def MoeExpertGemmW(B, S, x, e, g, w):
 # ---------------------------------------------------------------------------------------------------------
 
 SM120_EVIDENCE = ("RTX PRO 6000 (cc 12.0, 188 SMs), vLLM d9105ea80 fused_experts under VLLM_BATCH_INVARIANT=1 (BLOCK 64/64/32, GROUP_SIZE_M 8): "
-                  "DOT=HopperBF16WgmmaDot16_v1 reproduces every w13 and w2 output of run r20260930-032412-1313's 16 cases at "
+                  f"DOT=HopperBF16WgmmaDot16_v1 reproduces every w13 and w2 output of run {EVIDENCE['moe_expert_cc12_probe']['run']}'s 16 cases at "
                   "E=8, TOPK=2, H=2048, I=1024, M=16 (1,048,576 words per launch) where the Ampere step differs in 428 and 286")
 
 
@@ -695,12 +698,13 @@ def MoeExpertGemmWV2(B, S, x, e, g, w):
 # routed sum over the TOPK slots of a token (`moe_sum_vec_kernel<bf16, int, TOPK, false>`)
 # ---------------------------------------------------------------------------------------------------------
 
+_V4 = EVIDENCE["glm53_block_fp8_capture/v4"]
 
 SUM_CONF = ("exact-model-tested at TOPK = 8, H = 6144: vLLM d9105ea80's moe_sum (moe_sum_vec_kernel<bf16, int32, 8>) on cc 9.0 "
             "(132 SMs) at vLLM's defaults, inside GLM-5.3's served FusedMoEKernel (349 token rows) and on 8 planted rows (-0s, a tie into "
             "infinity, overflow, NaN payloads, infinities, ties, bf16 subnormals, order-dependent cancellations) on which descending "
             "order, a pairwise tree, the first slot's start, a bf16 accumulator, FTZ, NaN payloads kept and truncation each differ, "
-            "0 mismatches (property glm53_block_fp8_capture/v4, run r20261017-125608-3071, art:41943522)")
+            f"0 mismatches (property glm53_block_fp8_capture/v4, run {_V4['run']}, {_V4['art']})")
 
 
 @composite("MoeSumCoordinate", 1, ["TOPK"], lambda S: ((("col", Array(S.TOPK, BF16)),), BF16), conformance=SUM_CONF)

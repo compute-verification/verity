@@ -2,7 +2,7 @@
 
 A label is `n` components of `wc` bits (Lean `Lab n wc`), so its width is `m = n * wc`; component `v` of every lower
 label feeds top label `v` (the transpose).  `W` is `segments * n` lower inputs, and the codeword `C` is the
-`segments * n` top labels: `B = segments * n` blocks of `m` bits, rate 1.
+`segments * n` top labels: `B = segments * n` labels of `m` bits, rate 1.
 """
 
 from __future__ import annotations
@@ -44,12 +44,12 @@ class Params:
 
     @property
     def blocks_per_segment(self) -> int:
-        """`n`: one block per top label (`codec.Geometry`)."""
+        """`n`: one label per top label (`codec.Geometry`)."""
         return self.n
 
     @property
     def blocks(self) -> int:
-        """`B`: the number of codeword blocks, one top label each."""
+        """`B`: the number of codeword labels, one top label each."""
         return self.segments * self.n
 
     @property

@@ -1,5 +1,5 @@
 """`fp8.DynamicDeepGemmFp8Linear`: vLLM's default Hopper block-FP8 linear op, folded to the Definitions the Build's
-`DynamicDeepGemmFp8LinearRule` emits (VLLM-14).
+`DynamicDeepGemmFp8LinearRule` emits.
 
 * below 32 rows: `FlashInferFp8Linear_v1{K,N}`, its one output the op's;
 * from 32 rows: `DeepGemmFp8Linear_v1{K,N}`, (q, s, y) with only y in memory, so q and s are never written;

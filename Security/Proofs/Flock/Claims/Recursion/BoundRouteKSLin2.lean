@@ -300,8 +300,8 @@ theorem vstarAcceptsV_bound {W Col T : Type} (H : Msg → Msg) (I : Claims.Recur
       rw [Claims.Recursion.VStarB.LayoutB.msgs_getD L x ws hi,
         Claims.Recursion.VStarB.LayoutB.msg_of_pieces hfx hne]
       exact Claims.Recursion.VStarB.LayoutB.assembled_piece hsw hl hp
-    · intro i hi1 _ _
-      exact (hrd i (by omega)).trans (hshs.2 i hi1).symm
+    · exact Claims.Recursion.VStarB.LayoutB.cmtAgrees_of_eq fun i hi1 _ =>
+        (hrd i (by omega)).trans (hshs.2 i hi1).symm
     · exact hRows x ws htrue s ws[s] (List.getElem?_eq_getElem hsw)
   rcases hDec x st hst hf (Claims.coinSeq r) ws ho.1 htrue hchk with hd | hd
   · exact Or.inl hd

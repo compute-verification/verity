@@ -16,11 +16,10 @@ COMMIT_SPEC = "llama31-8b-fp8-1gpu-commit-served"
 ADDED = calendar.timegm((2026, 10, 24, 1, 0, 0))
 COMMIT = served_table.Protocol("Commit", (COMMIT_SPEC,), "commit@compiled", "stock-fp8", own_arm="commit")
 BY_SPEC = {
-    "protocols": (served_table.Protocol("PoUS bandwidth audit", ("llama31-8b-fp8-1gpu-bandwidth-served",),
+    "protocols": (served_table.Protocol("PoUS bandwidth audit", ("llama31-8b-fp8-1gpu-bandwidth-served-r6",),
                                         "bandwidth-audit", None), COMMIT),
     "factors": served_table.Protocol("conversion factor", ("llama31-8b-fp8-1gpu-compiled-full",), served_table.SERVED,
                                      "stock-fp8"),
-    "live": (),
     "breakdowns": (),
 }
 LIVE_ARM, LIVE_CONTROL = "dither-a@x", "exact-fused"
@@ -29,9 +28,10 @@ SCALE = {"stock-fp8": 2.0, "commit": 2.4, "stock-fp8@compiled": 1.0, "commit@com
 
 
 class ScaledEngine:
-    def __init__(self, arm, scale):
+    def __init__(self, arm, scale, gpu):
         self.arm, self.scale, self.reps = arm, scale, 0
-        self.identity = {"vllm_version": "0.fake+gd9105ea80", "kernel_digest": None, "engine_overrides": {}, "kv_cache_tokens": 1}
+        self.identity = {"vllm_version": "0.fake+gd9105ea80", "kernel_digest": None, "engine_overrides": {}, "kv_cache_tokens": 1,
+                         "gpu": gpu}
 
     def gate(self, point):
         return {f"{point.id}-0": (7, 9)}
@@ -56,19 +56,22 @@ class ScaledEngine:
 
 
 class ScaledFactory:
-    def __init__(self, commit_scale):
-        self.commit_scale = commit_scale
+    def __init__(self, commit_scale, gpu):
+        self.commit_scale, self.gpu = commit_scale, gpu
 
     def create(self, arm, preset, *, resident):
-        return ScaledEngine(arm, self.commit_scale if arm.id.startswith("commit") else 1.0)
+        return ScaledEngine(arm, self.commit_scale if arm.id.startswith("commit") else 1.0, self.gpu)
 
 
-def _result(point_id: str, commit_scale: float, reps: int = 2) -> dict:
+RTX, H200 = "NVIDIA RTX PRO 6000 Blackwell Server Edition", "NVIDIA H200"
+
+
+def _result(point_id: str, commit_scale: float, reps: int = 2, gpu: str = RTX) -> dict:
     [point] = [p for p in expand_sweep("quick") if p.id == point_id]
     arms = (Arm("stock-fp8"), Arm("commit", control="stock-fp8"), Arm("stock-fp8@compiled"),
             Arm("commit@compiled", control="stock-fp8@compiled"))
     return run_benchmark(load_spec(COMMIT_SPEC).preset, arms, (point,), sweep="quick", reps=reps,
-                         factory=ScaledFactory(commit_scale), git_commit="c" * 40)
+                         factory=ScaledFactory(commit_scale, gpu), git_commit="c" * 40)
 
 
 class Producer:
@@ -119,7 +122,7 @@ class Producer:
         return art
 
     def table(self, runs, label: str) -> str:
-        """A table art whose meta names its runs, as the benchmarks lane's table arts do."""
+        """A table art whose meta names its runs, as a record's table arts do."""
 
         path = self.tmp_path / "files" / f"table-{label}.md"
         path.parent.mkdir(parents=True, exist_ok=True)
@@ -129,7 +132,7 @@ class Producer:
         return art
 
     def live(self, run: str, summary: dict, stop: dict, *, rc=0) -> str:
-        """A kernels run: its run record holds sbench's summary and stop records under out/."""
+        """A live PoUW run: its run record holds sbench's summary and stop records under out/."""
 
         record = self._tree(run, {"out/summary.json": json.dumps(summary), "out/stop.json": json.dumps(stop)})
         self._attempt(run, "bash", {}, {"result": None, "run_record": record}, validation=None, rc=rc,
@@ -170,7 +173,9 @@ def test_the_served_table_takes_each_points_newest_passing_unsuperseded_run_from
     table = served_table.build(store=_fresh(tmp_path, producer), root=tmp_path, added=lambda spec: ADDED,
                                log=logged.append, **BY_SPEC)
 
-    assert logged == [f"pulled 5 attempts started since r20261023 from {producer.store.remote.describe()} (0 of 5 were here)"]
+    remote = producer.store.remote.describe()
+    assert logged == [f"pulled 3 labels from {remote} (0 of 3 were here)",
+                      f"pulled 5 attempts started since r20261023 from {remote} (0 of 5 were here)"]
     rows = _commit_rows(table)
     b8, b32 = rows["b8-p512-mixed"], rows["b32-p512-mixed"]
     assert (b8["run"], b8["art"], b8["reps"]) == ("r20261024-030000-0002", newest_b8, 3)
@@ -193,10 +198,31 @@ def test_the_served_table_takes_each_points_newest_passing_unsuperseded_run_from
 
     markdown = served_table.render(table)
     [line] = [line for line in markdown.splitlines() if line.startswith("| Commit |") and "b8-p512-mixed" in line]
+    assert line.startswith(f"| Commit | {RTX} | `{COMMIT_SPEC}` | b8-p512-mixed |")
     assert "| 1.500× ± 0.000 | 1.500× ± 0.000 | 1.500× ± 0.000 | 3 | r20261024-030000-0002 |" in line
     assert "served Commit at b8 \\| mechanism evidence only / no pinned sm_120 build" in line
-    assert "| PoUS bandwidth audit | `llama31-8b-fp8-1gpu-bandwidth-served` | b8-p512-mixed | — | — | — | — | no passing run |" in markdown
+    assert ("| PoUS bandwidth audit | — | `llama31-8b-fp8-1gpu-bandwidth-served-r6` | b8-p512-mixed | — | — | — | — "
+            "| no passing run |") in markdown
     assert "r20261024-030000-0005" in markdown.split("Passed over")[1]
+
+
+def test_a_labelled_run_is_its_protocols_row_over_a_newer_unlabelled_one(tmp_path):
+    """A record replaces the newest-run lookup of the same spec and point, while a protocol without a labelled record
+    still takes the newest passing run."""
+
+    producer = Producer(tmp_path)
+    producer.ran("r20261024-020000-0001", COMMIT_SPEC, "b8-p512-mixed", _result("b8-p512-mixed", 1.0))
+    producer.ran("r20261024-030000-0002", COMMIT_SPEC, "b8-p512-mixed", _result("b8-p512-mixed", 1.25))
+    producer.label("r20261024-020000-0001", "run_of_record", "commit", "2026-10-24T05:00:00Z")
+    of_record = served_table.Protocol("of record", (COMMIT_SPEC,), "commit@compiled", "stock-fp8", own_arm="commit",
+                                      record="commit")
+
+    table = served_table.build(store=_fresh(tmp_path, producer), root=tmp_path, added=lambda spec: ADDED,
+                               log=lambda _: None, protocols=(of_record, COMMIT), factors=BY_SPEC["factors"],
+                               breakdowns=())
+    assert [(row["point"], row["run"]) for row in table["rows"] if row["protocol"] == "of record"] == [
+        ("b8-p512-mixed", "r20261024-020000-0001")]
+    assert _commit_rows(table)["b8-p512-mixed"]["run"] == "r20261024-030000-0002"
 
 
 def test_local_only_reads_the_catalog_alone(tmp_path):
@@ -211,26 +237,31 @@ def test_local_only_reads_the_catalog_alone(tmp_path):
     assert all(row["run"] is None for row in table["rows"])
 
 
-def test_a_run_of_record_is_read_by_run_id_or_through_an_arts_runs_from_a_fresh_stores_remote(tmp_path):
-    """A protocol's record replaces the newest-run lookup: its runs, named by id or by an art's `runs` meta (a list, or
-    a map from point to run, read in sweep order), are read from the remote without a catalog pull, every point of
-    each is a row, the record art's labels are caveats beside the run's, and a record run that isn't a passing point
-    run is listed with why rather than read."""
+def test_a_run_of_record_is_a_labelled_run_or_a_labelled_arts_runs_from_a_fresh_stores_remote(tmp_path):
+    """A protocol's record replaces the newest-run lookup: the runs labelled `run_of_record=NAME`, and the runs a
+    labelled art's `runs` meta names (a list, or a map from point to run, read in sweep order), in label order, are read
+    from the remote without a catalog pull, every point of each is a row, the record art's labels are caveats beside the
+    run's, a target's latest label names its record, and a record run that isn't a passing point run is listed with
+    why rather than read."""
 
     producer = Producer(tmp_path)
     b32 = producer.ran("r20261024-020000-0001", COMMIT_SPEC, "b32-p512-mixed", _result("b32-p512-mixed", 1.1))
-    producer.ran("r20261024-020000-0002", COMMIT_SPEC, "b8-p512-mixed", _result("b8-p512-mixed", 1.25))
+    producer.ran("r20261024-020000-0002", COMMIT_SPEC, "b8-p512-mixed", _result("b8-p512-mixed", 1.25, gpu=H200))
     newer = producer.ran("r20261024-030000-0003", COMMIT_SPEC, "b8-p512-mixed", _result("b8-p512-mixed", 9.0))
     producer.ran("r20261024-040000-0004", COMMIT_SPEC, "b8-p512-mixed", None, validation="failed", rc=3)
     listed = producer.table(["r20261024-020000-0001"], "listed")
     mapped = producer.table({"b8-p512-mixed": "r20261024-020000-0002", "b32-p512-mixed": "r20261024-020000-0001"},
                             "mapped")
     producer.label(listed, "label", "prices it, doesn't credit it", "2026-10-24T05:00:00Z")
+    for target, record, ts in ((listed, "by-art", "05:00:01"), (mapped, "by-map", "05:00:02"),
+                               ("r20261024-020000-0001", "factor", "05:00:03"), (newer, "by-id", "05:00:04"),
+                               ("r20261024-040000-0004", "by-id", "05:00:05"),
+                               ("r20261024-020000-0002", "by-id", "05:00:06"), (newer, "retired", "05:00:07")):
+        producer.label(target, "run_of_record", record, f"2026-10-24T{ts}Z")
     protocols = (
-        served_table.Protocol("by art", (), "commit@compiled", "stock-fp8", own_arm="commit", record=(listed,)),
-        served_table.Protocol("by map", (), "commit@compiled", None, record=(mapped,)),
-        served_table.Protocol("by id", (), "commit@compiled", None,
-                              record=("r20261024-020000-0002", "r20261024-040000-0004")),
+        served_table.Protocol("by art", (), "commit@compiled", "stock-fp8", own_arm="commit", record="by-art"),
+        served_table.Protocol("by map", (), "commit@compiled", None, record="by-map"),
+        served_table.Protocol("by id", (), "commit@compiled", None, record="by-id"),
     )
 
     def never(spec):
@@ -238,7 +269,7 @@ def test_a_run_of_record_is_read_by_run_id_or_through_an_arts_runs_from_a_fresh_
 
     table = served_table.build(store=_fresh(tmp_path, producer), root=tmp_path, added=never, protocols=protocols,
                                factors=served_table.Protocol("factor", (), served_table.SERVED, "stock-fp8",
-                                                             record=(listed,)), live=(), breakdowns=())
+                                                             record="factor"), breakdowns=())
 
     rows = {(row["protocol"], row["point"]): row for row in table["rows"]}
     art_row = rows["by art", "b32-p512-mixed"]
@@ -250,8 +281,9 @@ def test_a_run_of_record_is_read_by_run_id_or_through_an_arts_runs_from_a_fresh_
     assert [point for protocol, point in rows if protocol == "by map"] == ["b8-p512-mixed", "b32-p512-mixed"]
     assert rows["by map", "b8-p512-mixed"]["over_eager"] is None
     by_id = rows["by id", "b8-p512-mixed"]
-    assert (by_id["run"], by_id["record"]) == ("r20261024-020000-0002", None)
+    assert (by_id["run"], by_id["record"], by_id["device"], art_row["device"]) == ("r20261024-020000-0002", None, H200, RTX)
     assert by_id["run"] != newer and by_id["over_served"]["time_per_output_token_s"]["mean"] == pytest.approx(1.5)
+    assert [point for protocol, point in rows if protocol == "by id"] == ["—", "b8-p512-mixed"]
     assert rows["by id", "—"]["run"] is None
     [failed] = table["skipped"]
     assert (failed["run"], failed["spec"]) == ("r20261024-040000-0004", COMMIT_SPEC)
@@ -261,11 +293,12 @@ def test_a_run_of_record_is_read_by_run_id_or_through_an_arts_runs_from_a_fresh_
 
     markdown = served_table.render(table)
     assert f"| r20261024-020000-0001 | `{b32[:16]}` (record `{listed[:16]}`) | prices it, doesn't credit it |" in markdown
+    assert f"| by id | {H200} | `{COMMIT_SPEC}` | b8-p512-mixed | 1.500× ± 0.000 |" in markdown
     assert "r20261024-040000-0004" in markdown.split("Passed over")[1]
 
 
 def _live_summary(steps, controls, *, live=True, tokens_equal=True):
-    """sbench's summary.json and stop.json for one PoUW arm beside its control, as kernels' runs write them."""
+    """sbench's summary.json and stop.json for one PoUW arm beside its control, as the live runs write them."""
 
     summary = {
         "arms": ["exact", LIVE_CONTROL, LIVE_ARM], "b": 32, "gate_failed": [], "ref_of": {LIVE_ARM: "exact"},
@@ -281,38 +314,43 @@ def _live_summary(steps, controls, *, live=True, tokens_equal=True):
 
 
 def test_a_live_pouw_row_is_its_runs_median_decode_step_over_its_controls_and_stands_only_on_live_gated_runs(tmp_path):
-    """Kernels' live rows are read from each run's record, never typed: the ratio is the arm's median decode step over
-    its control's in the same run, the run's labels are its caveat, and a run whose coins weren't live off-node or whose
-    tokens differ from the int8-exact engine's is passed over with why."""
+    """Kernels' live rows are read from each run's record, never typed: the runs are the entries of the `runs` meta of
+    an art labelled `run_of_record=pouw-live`, the ratio is the arm's median decode step over its control's in the same
+    run, the run's labels are its caveat, and a run whose coins weren't live off-node or whose tokens differ from the
+    int8-exact engine's is passed over with why."""
 
     producer = Producer(tmp_path)
-    record = producer.live("r20261024-212837-2302", *_live_summary([16.44, 16.49, 16.48], [3.74, 3.744, 3.78]))
-    producer.live("r20261024-212644-f308", *_live_summary([14.53, 14.29, 14.52], [3.04, 3.06, 3.05], live=False))
-    producer.live("r20261024-212645-0001", *_live_summary([14.0, 14.0, 14.0], [3.0, 3.0, 3.0], tokens_equal=False))
-    producer.label("r20261024-212837-2302", "label", "H200 gated live: gamma 4.40", "2026-10-24T21:41:42Z")
-    runs = ("r20261024-212837-2302", "r20261024-212644-f308", "r20261024-212645-0001", "r20991231-000000-0000")
-    live = tuple(served_table.Live("H200", run, LIVE_ARM, LIVE_CONTROL) for run in runs)
+    record = producer.live("r20261024-210000-0001", *_live_summary([16.44, 16.49, 16.48], [3.74, 3.744, 3.78]))
+    producer.live("r20261024-210000-0002", *_live_summary([14.53, 14.29, 14.52], [3.04, 3.06, 3.05], live=False))
+    producer.live("r20261024-210000-0003", *_live_summary([14.0, 14.0, 14.0], [3.0, 3.0, 3.0], tokens_equal=False))
+    producer.label("r20261024-210000-0001", "label", "H200 gated live: gamma 4.40", "2026-10-24T21:41:42Z")
+    runs = ("r20261024-210000-0001", "r20261024-210000-0002", "r20261024-210000-0003", "r20991231-000000-0000")
+    live = producer.table([{"device": "H200", "run": run, "arm": LIVE_ARM, "control": LIVE_CONTROL} for run in runs],
+                          "live")
+    producer.label(live, "run_of_record", served_table.LIVE, "2026-10-24T21:41:43Z")
 
     table = served_table.build(store=_fresh(tmp_path, producer), root=tmp_path, protocols=(),
-                               factors=served_table.Protocol("factor", (), served_table.SERVED, "stock-fp8"), live=live,
+                               factors=served_table.Protocol("factor", (), served_table.SERVED, "stock-fp8"),
                                breakdowns=())
 
     [row] = table["live"]
     assert (row["run"], row["record"], row["machine"], row["batch"], row["t"], row["reps"], row["coins"]) == (
-        "r20261024-212837-2302", record, "vy-dc-h200", 32, 64, 3, "off-node")
+        "r20261024-210000-0001", record, "vy-dc-h200", 32, 64, 3, "off-node")
     assert (row["step_ms"], row["control_ms"]) == (16.48, 3.744)
     assert row["ratio"] == pytest.approx(16.48 / 3.744)
     assert [c["value"] for c in row["caveats"]] == ["H200 gated live: gamma 4.40"]
     why = {s["run"]: s["why"] for s in table["skipped"]}
-    assert why["r20261024-212644-f308"] == ("no passing live window at the run's end (coins not live); coins absent, "
+    assert why["r20261024-210000-0002"] == ("no passing live window at the run's end (coins not live); coins absent, "
                                             "not passing off-node coins")
-    assert why["r20261024-212645-0001"] == "timed tokens differ from exact's"
+    assert why["r20261024-210000-0003"] == "timed tokens differ from exact's"
     assert why["r20991231-000000-0000"] == "not in the store or on its remote"
 
     markdown = served_table.render(table)
     assert (f"| H200 | vy-dc-h200 | 32 | 64 | 16.480 | `{LIVE_CONTROL}` | 3.744 | 4.402× | 3 | off-node | "
-            f"r20261024-212837-2302 | `{record[:16]}` | H200 gated live: gamma 4.40 |") in markdown
+            f"r20261024-210000-0001 | `{record[:16]}` | H200 gated live: gamma 4.40 |") in markdown
     assert "per step, not per token" in markdown
+    with pytest.raises(ValueError, match="label that art instead"):
+        served_table.live_runs(None, ["r20261024-210000-0001"])
 
 
 def test_the_served_table_command_prints_markdown_and_json(tmp_path, monkeypatch, capsys):
@@ -323,7 +361,6 @@ def test_the_served_table_command_prints_markdown_and_json(tmp_path, monkeypatch
     monkeypatch.setattr(served_table, "spec_added", lambda root, spec: ADDED)
     monkeypatch.setattr(served_table, "PROTOCOLS", BY_SPEC["protocols"])
     monkeypatch.setattr(served_table, "FACTORS", BY_SPEC["factors"])
-    monkeypatch.setattr(served_table, "LIVE", BY_SPEC["live"])
     monkeypatch.setattr(served_table, "BREAKDOWNS", BY_SPEC["breakdowns"])
 
     assert main(["served-table"]) == 0
@@ -335,16 +372,12 @@ def test_the_served_table_command_prints_markdown_and_json(tmp_path, monkeypatch
     assert _commit_rows(table)["b8-p512-mixed"]["run"] == "r20261024-020000-0001"
 
 
-def test_every_record_names_runs_or_arts_and_every_live_row_a_run():
-    from research.store import ids
+def test_every_record_has_its_own_name_in_the_vocabularys_form():
+    from research.store import vocab
 
-    for protocol in (*served_table.PROTOCOLS, served_table.FACTORS):
-        assert not (protocol.record and protocol.specs), protocol.name
-        assert all(ids.is_run_id(entry) or ids.is_art(entry) for entry in protocol.record), protocol.name
-    for entry in served_table.BREAKDOWNS:
-        assert entry.record and all(ids.is_run_id(e) or ids.is_art(e) for e in entry.record), entry.protocol
-    assert all(ids.is_run_id(live.run) for live in served_table.LIVE)
-    assert len({(live.run, live.arm) for live in served_table.LIVE}) == len(served_table.LIVE)
+    names = [entry.record for entry in (*served_table.PROTOCOLS, served_table.FACTORS, *served_table.BREAKDOWNS)]
+    assert len(set(names + [served_table.LIVE])) == len(names) + 1
+    assert all(vocab.check(served_table.RUN_OF_RECORD, name) is None for name in [*names, served_table.LIVE])
 
 
 def test_every_protocol_row_names_arms_its_specs_run_and_an_eager_stock_only_where_the_spec_is_eager():

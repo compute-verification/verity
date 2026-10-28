@@ -1,4 +1,4 @@
-"""GM-01 (R14 lane gmatch): `cb_a.global_match` on the CPU toy of `test_batch_decomp_e2e` extended with DECLARED ARRIVALS and
+"""GM-01: `cb_a.global_match` on the CPU toy of `test_batch_decomp_e2e` extended with DECLARED ARRIVALS and
 output caps -- positives (B=2 unequal LP/T; staggered arrivals with a co-scheduled prefill+decode step; EOS-truncated request
 against its bounded component) and the reviewer's five mutations of the global assembly, each of which must FAIL the named
 check: omit a request, duplicate one, swap two requests' outputs, alter an arrival association, break a dependency
@@ -31,7 +31,7 @@ from tests.observe.test_fold_synthetic import A_COS, C, memory  # noqa: F401 - `
 from verity_vllm.observe.fold.fold import fold
 from verity_vllm.observe.log import dumps as log_dumps
 
-KC = V(e2e.A_KC, (8, BS, 1, 8))   # 8 KV blocks: two private blocks per request for up to 4 requests
+KC = V(e2e.A_KC, (8, BS, 1, 8))   # 8 KV pages: two private pages per request for up to 4 requests
 VC = V(e2e.A_VC, (8, BS, 1, 8))
 
 
@@ -49,9 +49,9 @@ def _arr(r):
 
 def preamble(reqs, wl_sha=None):
     # the recorder's shape (vllm_adapter build_manifest -> RunHeader.profile): the effective engine kwargs and the compilation facts are
-    # nested under `profile` -- G1 reads them there [rev-pm M-0261 / F-pm-21]; an eager run attests mode "0" / cudagraph NONE.
-    # RunHeader.workload carries the manifest's sha256 and each request's seed as the driver records them [rev-pm M-0570]
-    # [M-0213 / ruling 21] the toy engine schedules synchronously: async_scheduling False is ON RECORD (the lag-0 instance of the EOS
+    # nested under `profile` -- G1 reads them there; an eager run attests mode "0" / cudagraph NONE.
+    # RunHeader.workload carries the manifest's sha256 and each request's seed as the driver records them
+    # the toy engine schedules synchronously: async_scheduling False is ON RECORD (the lag-0 instance of the EOS
     # lag rule needs the flag too -- a lag-0 record without it is indistinguishable from a lag-1 record with a deleted step)
     hdr = RunHeader("verity-capture/log/v1", "2026-09-19T00:00:00Z", "toy-profile",
                     {"vllm": "toy", "engine_kwargs": {"enforce_eager": True, "enable_prefix_caching": False, "async_scheduling": False, "max_num_seqs": len(reqs)},
@@ -252,7 +252,7 @@ def batched(reqs, d, leak=False, tgrouped=False, wl_sha=None, witness=None):
 
 
 def move_consumer_before_producer(oracle_dir, rid="r1", sampler_to_head=False):
-    """Fixture mutation (rev-pm M-0042 condition 2) on the PERSISTED record: one instance of request `rid` is re-emitted BEFORE the
+    """Fixture mutation on the PERSISTED record: one instance of request `rid` is re-emitted BEFORE the
     instance it consumes -- the same computation, the same wiring (every reference is re-indexed), only the emission order inside one
     request step violates the dependency order.  The IR builder cannot construct such a body (a forward reference has no value to
     substitute), so this is what a hand-edited program.json/instances.jsonl looks like; the DAG criterion must FAIL it (G3: the
@@ -292,7 +292,7 @@ def move_consumer_before_producer(oracle_dir, rid="r1", sampler_to_head=False):
 
     pick = None
     if sampler_to_head:
-        # [rev-pm M-0171 fixture (3)] the request's FIRST TokenSelect is re-emitted at the head of the request's instances of its engine
+        # the request's FIRST TokenSelect is re-emitted at the head of the request's instances of its engine
         # step: same computations, same wiring, the sampler before everything it consumes
         for c, nd in enumerate(nodes):
             mc = by_root.get(c)
@@ -356,12 +356,12 @@ def workload_doc(**fields):
 
 
 def row_workload(row_id, **sweep):
-    """The workload record of sweep row `row_id` (its `sweep` block also holding `sweep`), as GP-01 reads it."""
+    """The workload record of sweep workload `row_id` (its `sweep` section also holding `sweep`), as GP-01 reads it."""
     return WL.Workload.of(workload_doc(sweep={"row_id": row_id, **sweep}), "wl.json")
 
 
 def sampling_block(**fields):
-    """A workload record's greedy sampling block with `fields`, as GP-01's stop rule reads it."""
+    """A workload record's greedy sampling section with `fields`, as GP-01's stop rule reads it."""
     return WL.WorkloadSampling.of({"variant": "greedy", **fields}, "wl.json")
 
 
@@ -377,15 +377,14 @@ def _sha(path):
     return __import__("hashlib").sha256(json.dumps(json.load(open(path)), sort_keys=True, separators=(",", ":")).encode()).hexdigest()
 
 
-EOS = 11   # the fixture model's EOS id (R1_EOS stops on it); the Program declares it as its stop rule (F-pm-24)
+EOS = 11   # the fixture model's EOS id (R1_EOS stops on it); the Program declares it as its stop rule
 
 
 def assemble(reqs, tmp_path, leak=False, tgrouped=False, eos_token_ids=(EOS,), lag=0, witness=None):
     """workload manifest + one bounded component per distinct shape + the batched record -> (global Program, oracle dir).  The record's
-    RunHeader.workload.sha256 is the manifest's (the driver records the manifest it ran) [M-0570].  [R17-1] `lag` = the LAG the mock
-    Program DECLARES (default 0: the toy engine schedules synchronously and its preamble attests async_scheduling False); None = a
-    pre-R17-1 Program that declares no lag.  `witness`: the record's norms read the `schedule` witness (e2e.profile), the components'
-    their own."""
+    RunHeader.workload.sha256 is the manifest's (the driver records the manifest it ran).  `lag` = the LAG the mock Program DECLARES
+    (default 0: the toy engine schedules synchronously and its preamble attests async_scheduling False); None = a Program
+    that declares no lag.  `witness`: the record's norms read the `schedule` witness (e2e.profile), the components' their own."""
     tmp_path.mkdir(parents=True, exist_ok=True)
     wl = workload(reqs, tmp_path / "workload.json")
     oracle = batched(reqs, tmp_path / "batched", leak, tgrouped, wl_sha=_sha(wl), witness=witness)
@@ -429,7 +428,7 @@ def test_b2_unequal_requests_pass_globally(memory, tmp_path):
 
 @pytest.mark.slow
 def test_fast_path_releases_its_caches_when_the_outermost_check_returns(memory, tmp_path, monkeypatch):
-    """[R17 mprof unit 4, rev F-r17-06] MATCH_IMPL=fast memoises per Prog / Projection for the duration of ONE check() -- including its
+    """MATCH_IMPL=fast memoises per Prog / Projection for the duration of ONE check() -- including its
     nested alternate-criterion run -- and holds nothing afterwards, so a process that checks several records does not grow by one
     record's caches per record.  The document is the checker of record's, field for field."""
     from verity_vllm.check.match import global_match_fast as GMF
@@ -450,19 +449,19 @@ def test_fast_path_releases_its_caches_when_the_outermost_check_returns(memory, 
     assert GMF._depth == 0
     assert not GMF._dag_memo and not GMF._chash_memo and not GMF._cmp_memo and not GMF._live_memo and not GMF._proj_registry
     assert not GMF._merkle_ids and not GMF.stats
-    # [rev F-r17-09] the released counters survive as the document's telemetry: impl_info after check() is not empty
+    # the released counters survive as the document's telemetry: impl_info after check() is not empty
     assert GMF.last_stats and GMF.last_stats.get("projection_built", 0) >= 1
     if hasattr(gm, "impl_info"):   # mfast's dispatch block (their branch): the CLI's impl block reads the snapshot
         info = gm.impl_info(GMF)
         assert info["stats"] == GMF.last_stats
-        # [rev S-r17-17 condition] the DECLARED configuration is on the block: the workers cap as read, the operand form, the switches
+        # the DECLARED configuration is on the block: the workers cap as read, the operand form, the switches
         cfg = info["config"]
         assert cfg["match_workers"] >= 1 and cfg["operand_form"] in ("progressions/v1", "runs") and isinstance(cfg["match_compact"], bool)
         assert cfg["operand_form"] == ("progressions/v1" if cfg["match_compact"] else "runs")
         assert cfg["match_workers"] == (int(os.environ["MATCH_WORKERS"]) if os.environ.get("MATCH_WORKERS", "").strip() else min(os.cpu_count() or 1, 8))
         assert cfg["match_compact"] == (os.environ.get("MATCH_COMPACT", "1").strip() != "0")
     def strip(o):   # timings (seconds, mfast's phase marks) and the impl block are the only fields the path may differ in
-        if isinstance(o, dict):   # `utc` too (mfast, rev M-0542): two check() calls straddling a second boundary made this a 1-in-7 flake on rel's pod gate
+        if isinstance(o, dict):   # `utc` too: two check() calls straddling a second boundary made this a 1-in-7 flake on rel's pod gate
             return {k: strip(v) for k, v in o.items() if k not in ("seconds", "impl", "phases", "utc")}
         return [strip(v) for v in o] if isinstance(o, list) else o
     assert json.dumps(strip(res), sort_keys=True, default=str) == json.dumps(strip(ref), sort_keys=True, default=str)
@@ -538,13 +537,13 @@ def test_eos_truncated_request_is_compared_over_its_executed_prefix_and_labelled
     assert r1["eos_truncated"] and r1["unexecuted_steps"] == 2 and r1["finish"] == "eos" and r1["component"]["T"] == 3
     assert res["eos_truncated_requests"] == ["r1"]
     assert _check(res, "G7")["unexercised_declared"] > 0
-    # [F-pm-24] the truncation is EOS-VERIFIED: the last served token (11) is one of the Program's declared EOS ids
+    # the truncation is EOS-VERIFIED: the last served token (11) is one of the Program's declared EOS ids
     assert r1["eos_verified"] is True and r1["eos_token"] == EOS and _check(res, "G6")["stop_rule"]["eos_token_ids"] == [EOS]
 
 
 @pytest.mark.slow
 def test_early_stop_without_an_eos_token_fails_g6_whatever_the_driver_says(memory, tmp_path):
-    """rev-pm ALERT M-0537 (F-pm-24): a request that stopped before its cap on a NON-EOS token -- an engine that dropped or aborted it, a
+    """A request that stopped before its cap on a NON-EOS token -- an engine that dropped or aborted it, a
     stop string, or a prover that skipped the tail -- was accepted as 'eos-truncated' on the strength of finish_reason alone. The EOS is
     the evidence: G6 requires served[-1] in the declared set; finish_reason None and 'stop' both fail; and the achieved-concurrency
     shortfall such a request causes is not waived."""
@@ -558,7 +557,7 @@ def test_early_stop_without_an_eos_token_fails_g6_whatever_the_driver_says(memor
         res = gm.check(gp, oracle)
         assert res["verdict"] == "FAIL" and "G6" in res["failed_checks"], (finish, res["reasons"])
         g6 = _check(res, "G6")
-        assert any("on token 11, not a declared EOS id [99]" in p and "F-pm-24" in p for p in g6["problems"]), g6["problems"]
+        assert any("on token 11, not a declared EOS id [99]" in p and "an early stop without EOS is not modelled" in p for p in g6["problems"]), g6["problems"]
         r1 = next(e for e in res["requests"] if e["request_id"] == "r1")
         assert r1["eos_verified"] is False
         # the concurrency waiver is gone with it: observed max 2 (both requests live at step 0..1) vs programmed 2 here, so no
@@ -579,12 +578,12 @@ def test_early_stop_without_an_eos_token_fails_g6_whatever_the_driver_says(memor
     res5 = gm.check(gp5, oracle5)
     assert res5["verdict"] == "FAIL" and "G6" in res5["failed_checks"], res5["reasons"]
     assert any("no EOS-verified truncated request (1 truncated, 0 EOS-verified)" in p for p in _check(res5, "G6")["problems"]), _check(res5, "G6")["problems"]
-    # [COORD M-0571 (1)] and the shortfall is named per ENGINE STEP: r1 (unverified) was programmed for steps 2 and 3 as well
+    # and the shortfall is named per ENGINE STEP: r1 (unverified) was programmed for steps 2 and 3 as well
     assert any("engine steps [2, 3]: live requests observed [2, 1] != programmed [3, 2]" in p and "['r1'] stopped early without one" in p
                for p in _check(res5, "G6")["problems"]), _check(res5, "G6")["problems"]
     assert res5["achieved_concurrency"]["steps_short_of_programmed"] == 2
     assert res4["achieved_concurrency"]["steps_short_of_programmed"] == 0 and res4["achieved_concurrency"]["verified_eos_steps"] == [1]
-    # [rev-pm M-0622 TIP (a)] an honest EOS in the SampleEnd but another token in the driver's tokens.json (output association FAIL):
+    # an honest EOS in the SampleEnd but another token in the driver's tokens.json (output association FAIL):
     # eos_verified must read False beside the G6 FAIL, never True
     gp6, oracle6 = assemble([R0, R1_EOS], tmp_path / "assoc")
     tp6 = os.path.join(oracle6, "capture", "tokens.json")
@@ -615,7 +614,7 @@ def test_mutation_omit_request_fails(memory, tmp_path):
 
 
 def test_manifest_field_edited_after_the_build_is_named_per_request(memory, tmp_path):
-    # rev-pm M-0302 (a): a manifest whose per-request field was edited after the Build FAILs G1 naming the request (not by digest alone)
+    # A manifest whose per-request field was edited after the Build FAILs G1 naming the request (not by digest alone)
     gp, oracle = assemble([R0, R1_LATE], tmp_path)
     wl_path = gp["workload"]["path"]
     for field, value in (("max_tokens", 5), ("arrive_step", 0)):
@@ -660,7 +659,7 @@ def test_mutation_altered_arrival_association_fails_the_chronology(memory, tmp_p
     gp, oracle = assemble([R0, R1_LATE], tmp_path)
     next(r for r in gp["requests"] if r["request_id"] == "r1")["arrive_step"] = 0     # declared 0, executed at 1
     res = gm.check(gp, oracle)
-    # G6: the declaration disagrees with the observed arrival; G1 (M-0302 (a)): the Program's declaration also disagrees with the manifest
+    # G6: the declaration disagrees with the observed arrival; G1: the Program's declaration also disagrees with the manifest
     assert res["verdict"] == "FAIL" and res["failed_checks"] == ["G1", "G6"]
     assert any("declared arrival step 0 != observed 1" in p for p in _check(res, "G6")["problems"])
     assert any(p.startswith("r1: manifest arrive_step=1 != the Program's declared arrive_step=0") for p in _check(res, "G1")["problems"])
@@ -696,7 +695,7 @@ def test_missing_component_is_a_precise_failure_not_an_assumption(memory, tmp_pa
     assert res["verdict"] == "FAIL" and any("no component Program" in p for p in _check(res, "G3")["problems"])
 
 
-# ------------------------------------------------------------------------------- R15: request ids r<k> (COORD ruling 2)
+# ------------------------------------------------------------------------------- request ids r<k>
 
 U0 = dict(R0, id="0fe3d023-6b51-5e71-92f2-01412ddad63f")   # the manifest's UUIDs: the ids vLLM serves under
 U1 = dict(R1_LATE, id="ffe63996-f232-5aef-8946-d832cd542fa3")
@@ -714,7 +713,7 @@ def test_record_uuids_are_mapped_to_rk_and_the_program_names_requests_rk(memory,
     assert by["r1"]["first_step"] == 1 and by["r1"]["workload_request_id"] == U1["id"]
     assert res["achieved_concurrency"]["observed_max"] == res["achieved_concurrency"]["programmed_max"] == 2
     assert _check(res, "G6")["generated_lengths"] == {"r0": 3, "r1": 2}
-    # [GM-01 memory fix] X-09 shares this process's decoded fold and runs on the RAW record ids: the in-place r<k> renaming of the fold
+    # X-09 shares this process's decoded fold and runs on the RAW record ids: the in-place r<k> renaming of the fold
     # rows (canonicalize_record) must not reach it -- when it did, X-09 reported every request 'not in RunHeader.workload' (cp-dev1 B4)
     x = res["x09"]
     assert x["verdict"] == "PASS", x["reasons"]
@@ -732,7 +731,7 @@ def test_record_serving_a_request_the_program_did_not_declare_fails_g1(memory, t
     assert set(res["request_ids"]["unknown_ids"]) == {U1["id"]}   # the record's UUID is not in the Program's table -> undeclared
 
 
-# ------------------------------------------------- R15 M-ARRIVAL-ORDER (DECISION M-0021): the production emission order on CPU
+# ------------------------------------------------- arrival order: the production emission order on CPU
 
 # r0's decode at engine step 1 is position 3 (T=4); a prefill of LP 5 arriving at step 1 has a position-3 row -> AttentionScope's
 # T=4 group is created by r0's row first, so rX's position-3 attention is emitted before its positions 0..2 (the pod fixture:
@@ -751,7 +750,7 @@ def test_tgrouped_emission_without_displacement_passes_both_criteria(memory, tmp
 
 def test_coscheduled_prefill_tgrouped_emission_fails_the_sequence_criterion_as_on_the_pod(memory, tmp_path):
     gp, oracle = assemble([R0, RX_LATE], tmp_path, tgrouped=True)
-    res = gm.check(gp, oracle, within_step="sequence")   # the r14-v1 criterion as the verdict of record (default is dag since M-0177)
+    res = gm.check(gp, oracle, within_step="sequence")   # the r14-v1 criterion as the verdict of record (the default is dag)
     assert res["verdict"] == "FAIL" and res["failed_checks"] == ["G3", "G7", "G8"], (res["failed_checks"], res["reasons"])
     assert res["within_step_criterion"] == "sequence"
     r1 = next(e for e in res["requests"] if e["request_id"] == "r1")
@@ -768,7 +767,7 @@ def test_coscheduled_prefill_tgrouped_emission_passes_the_dag_criterion_with_the
     gp, oracle = assemble([R0, RX_LATE], tmp_path, tgrouped=True)
     res = gm.check(gp, oracle, within_step="dag")
     assert res["verdict"] == "PASS", res["reasons"]
-    assert res["within_step_criterion"] == "dag" and "M-0177" in res["within_step_note"]
+    assert res["within_step_criterion"] == "dag" and "dag: criterion of record" in res["within_step_note"]
     r1 = next(e for e in res["requests"] if e["request_id"] == "r1")
     assert r1["executed_steps_equal"] and r1["criterion"].startswith("dag")
     assert r1["within_step"]["permuted_instances"] > 0 and r1["within_step"]["sequence_also_equal"] is False
@@ -812,7 +811,7 @@ def test_dag_criterion_negatives_wrong_arrival_swapped_outputs_wiring(memory, tm
 
 
 def test_consumer_before_producer_emission_is_not_a_layout_it_fails_under_both_criteria(memory, tmp_path):
-    # the same DAG, one instance of r1 emitted before the instance it reads (rev-pm M-0042 condition 2)
+    # the same DAG, one instance of r1 emitted before the instance it reads
     gp, oracle = assemble([R0, R1], tmp_path, tgrouped=True)
     c_new, p_new = move_consumer_before_producer(oracle, "r1")
     assert c_new < p_new
@@ -833,7 +832,7 @@ def test_consumer_before_producer_emission_is_not_a_layout_it_fails_under_both_c
 
 
 def test_mis_emitted_sampler_is_named_as_a_segmentation_disagreement_not_a_resegmented_request(memory, tmp_path):
-    # rev-pm M-0171 fixture (3): r1's sampler re-emitted at the head of its engine step.  The request-local steps are segmented at the
+    # fixture (3): r1's sampler re-emitted at the head of its engine step.  The request-local steps are segmented at the
     # request's TokenSelects, so the mutation re-segments r1; G8 cross-checks that segmentation against the engine step the fold rows
     # record for every instance and names the disagreement (FAIL under both criteria, as before -- now with the cause stated).
     gp, oracle = assemble([R0, R1_LATE], tmp_path, tgrouped=True)
@@ -853,7 +852,7 @@ def test_mis_emitted_sampler_is_named_as_a_segmentation_disagreement_not_a_reseg
 
 
 def test_workload_applicability_refuses_a_row_the_components_do_not_model():
-    # COORD M-0063 (1): the workload Program declares the execution profile + engine conditions it models and refuses other rows
+    # The workload Program declares the execution profile + engine conditions it models and refuses other rows
     from verity_vllm.pipeline import global_program as G
     comps = {(256, 31): {"execution": "bi-eager", "numerics_profile": "b1-eager-v3", "gemm_target": "ada"},
              (11, 1): {"execution": "bi-eager", "numerics_profile": "b1-eager-v3", "gemm_target": "ada"}}
@@ -877,7 +876,7 @@ def test_workload_applicability_refuses_a_row_the_components_do_not_model():
 
 
 def test_gp01_component_provenance_refuses_a_descriptor_that_is_not_the_derived_program(tmp_path):
-    # rev-pm M-0123 (E): a component descriptor edited after the derive composed silently to another workload digest -> now refused, named
+    # a component descriptor edited after the derive composed silently to another workload digest -> now refused, named
     from verity.ml.circuits.codec import program_digest
     from verity_vllm.pipeline import global_program as G
     desc = {"schema": "toy/descriptor", "program_fn": "Toy_v1", "definitions": {"Toy_v1": {"form": "composite", "body": {"nodes": [1, 2]}}},
@@ -899,7 +898,7 @@ def test_gp01_component_provenance_refuses_a_descriptor_that_is_not_the_derived_
 
 
 def test_from_gprog_recomputes_the_build_digest_from_the_descriptor_and_refuses_an_edited_one(tmp_path):
-    # rev-pm M-0112: the artifact's workload_digest is a claim; the checker verifies it against the descriptor GP-01 wrote beside it
+    # The artifact's workload_digest is a claim; the checker verifies it against the descriptor GP-01 wrote beside it
     from verity.ml.circuits.codec import canonical_json, program_digest
     desc = {"schema": "toy/descriptor", "definitions": [{"name": "D0"}], "root": {"body": []}, "annotations": {"free": "text"}}
     d = tmp_path / "build_workload"
@@ -932,7 +931,7 @@ def test_from_gprog_recomputes_the_build_digest_from_the_descriptor_and_refuses_
 
 
 def test_from_gprog_relocates_component_dirs_beside_a_staged_build_artifact(tmp_path):
-    """[lane/vllm-v2-gm-scale] A `vllm-build/v1` records the building pod's absolute component paths (`/workspace/cp/<sweep>/<row>/
+    """A `vllm-build/v1` records the building pod's absolute component paths (`/workspace/cp/<sweep>/<row>/
     build_request_LP<lp>_T<t>`).  Staged elsewhere (another pod; pod_match_v2.sh's symlinked attempt dir) those paths dangle while the
     same dirs sit beside the artifact -- the v2 acquisition's B64 GM-01 died on exactly this FileNotFoundError.  from_gprog resolves them
     beside `<row>/build_workload/workload_program.json`, records what moved, and leaves an existing path / a path missing at both places
@@ -976,7 +975,7 @@ def test_from_gprog_relocates_component_dirs_beside_a_staged_build_artifact(tmp_
 
 
 def test_impl_module_defaults_to_the_match_of_record_and_names_what_runs(monkeypatch):
-    """[lane/vllm-v2-gm-scale] MATCH_IMPL unset -> `fast` (the Match of record, row_pod.sh's export); `record` still selects the audit
+    """MATCH_IMPL unset -> `fast` (the Match of record, row_pod.sh's export); `record` still selects the audit
     checker explicitly; an unknown name is an error.  The CLI banner names the implementation before the run."""
     monkeypatch.delenv(gm.IMPL_ENV, raising=False)
     assert gm.IMPL_DEFAULT == "fast"
@@ -998,7 +997,7 @@ def test_impl_module_defaults_to_the_match_of_record_and_names_what_runs(monkeyp
 def _real_workload_descriptor(lag: int | None):
     """A REAL workload Program through verity_vllm.program.workload + the descriptor codec (the toy request Programs of tests/program/
     test_workload_program.py): the `lag` static lands where GP-01's descriptor.json.gz carries it -- inlined in the program_fn spec id and the
-    root id, NOT a root `bindings` entry.  lag=None: a pre-R17-1 shaped descriptor (the static stripped from both ids)."""
+    root id, NOT a root `bindings` entry.  lag=None: an older shaped descriptor (the static stripped from both ids)."""
     from verity.ml.circuits.codec import encode_program
     from verity.ml.circuits.defs import REGISTRY
     from verity.ml.circuits.program import Program
@@ -1017,7 +1016,7 @@ def _real_workload_descriptor(lag: int | None):
 
 
 def test_from_gprog_reads_the_lag_static_where_the_codec_writes_it_and_refuses_an_edited_lag_block(tmp_path):
-    """[R17-1] (mechanism row OLMoE B2 16:43Z: the first real Build crashed GM-01 here -- the mock-shaped reader looked for a root
+    """(OLMoE B2's first real Build crashed GM-01 here -- the mock-shaped reader looked for a root
     `bindings.lag` the codec never writes).  The static is inlined in program_fn / the root id; both inside the verified digest."""
     from verity.ml.circuits.codec import canonical_json, program_digest
     for lag in (0, 1):
@@ -1034,22 +1033,22 @@ def test_from_gprog_reads_the_lag_static_where_the_codec_writes_it_and_refuses_a
         p = d / "workload_program.json"; p.write_text(json.dumps(art))
         gp = gm.from_gprog(str(p))
         assert gp["gprog_artifact"]["digest_verification"] == {**gp["gprog_artifact"]["digest_verification"], "verified": True, "lag_static": lag}
-        # the lag block edited to the other value under the intact Program -> refused by name (the block is a claim, the static is the Program)
+        # the lag section edited to the other value under the intact Program -> refused by name (the section is a claim, the static is the Program)
         p.write_text(json.dumps(dict(art, lag={"value": 1 - lag, "async_scheduling": not lag})))
         with pytest.raises(ValueError, match="lag declaration is not the Program's"):
             gm.from_gprog(str(p))
-        # the block deleted -> refused too (a Program that declares a lag must carry the block GM-01 consumes)
+        # the section deleted -> refused too (a Program that declares a lag must carry the section GM-01 consumes)
         p.write_text(json.dumps({k: v for k, v in art.items() if k != "lag"}))
         with pytest.raises(ValueError, match="lag declaration is not the Program's"):
             gm.from_gprog(str(p))
-    # a pre-R17-1 shaped descriptor: no static anywhere -> None; an artifact CLAIMING a lag over it is refused
+    # an older shaped descriptor: no static anywhere -> None; an artifact CLAIMING a lag over it is refused
     _, old = _real_workload_descriptor(None)
     assert GD.workload_lag_static(old) is None
     # program_fn and root disagreeing on the static -> not one Program
     _, dz = _real_workload_descriptor(1)
     with pytest.raises(ValueError, match="not one Program"):
         GD.workload_lag_static(dict(dz, root=dz["root"].replace(",lag=1}]", ",lag=0}]")))
-    # [rev S-r17-03 n2] an explicit root bindings.lag (mock form) disagreeing with the spec-id static -> refused too
+    # an explicit root bindings.lag (mock form) disagreeing with the spec-id static -> refused too
     dd = {k: (dict(v, bindings={**v.get("bindings", {}), "lag": 0}) if k == dz["root"] else v) for k, v in dz["definitions"].items()}
     with pytest.raises(ValueError, match="bindings.lag 0 != the spec-id lag static 1"):
         GD.workload_lag_static(dict(dz, definitions=dd))
@@ -1059,8 +1058,8 @@ def test_from_gprog_reads_the_lag_static_where_the_codec_writes_it_and_refuses_a
 
 def test_record_engine_conditions_outside_the_declared_applicability_fail_g1(memory, tmp_path):
     from verity_vllm.pipeline import global_program as G
-    # [R17-1] this test rewrites headers WITHOUT async_scheduling to exercise G1's other engine facts; a lag-declaring Program would (rightly)
-    # also fail G6 on every such header, so the Program here declares no lag (pre-R17-1 mock) and no request stops before its cap
+    # this test rewrites headers WITHOUT async_scheduling to exercise G1's other engine facts; a lag-declaring Program would (rightly)
+    # also fail G6 on every such header, so the Program here declares no lag (a mock without one) and no request stops before its cap
     gp, oracle = assemble([R0, R1], tmp_path, lag=None)
     gp["applicability"] = {"execution": "bi-eager", "row_execution": "bi-eager", "engine": dict(G.MODELLED_ENGINE), "refusal": None}
 
@@ -1094,12 +1093,12 @@ def test_record_engine_conditions_outside_the_declared_applicability_fail_g1(mem
     assert res["verdict"] == "PASS" and res["execution"]["effective_engine"] == {"enforce_eager": True, "enable_prefix_caching": False, "async_scheduling": False}
     assert "RunHeader.profile.engine_kwargs" in res["execution"]["source"]["enforce_eager"]
     assert res["execution"]["effective_compilation"] == {"mode": "NONE", "cudagraph_mode": "NONE"}
-    # [rev-pm M-0261 / F-pm-21] (a) cross-request cache reuse switched on AT THE RECORDER'S LOCATION: outside the modelled engine, FAIL
+    # (a) cross-request cache reuse switched on AT THE RECORDER'S LOCATION: outside the modelled engine, FAIL
     set_header(profile_engine=dict(eager_ek, enable_prefix_caching=True), profile_compilation=eager_comp)
     res = gm.check(gp, oracle)
     assert res["verdict"] == "FAIL" and res["failed_checks"] == ["G1"]
     assert any("enable_prefix_caching=True is outside the Program's declared applicability" in p for p in _check(res, "G1")["problems"])
-    # (b) a compiled record (enforce_eager false + the compiled record's compilation block) against the eager Program: FAIL, named twice
+    # (b) a compiled record (enforce_eager false + the compiled record's compilation section) against the eager Program: FAIL, named twice
     set_header(profile_engine=dict(eager_ek, enforce_eager=False, compilation_config={"cudagraph_mode": "PIECEWISE"}),
                profile_compilation={"mode": "3", "cudagraph_mode": "PIECEWISE", "enforce_eager": False, "capture_sizes": [1, 2]})
     res = gm.check(gp, oracle)
@@ -1128,7 +1127,7 @@ def test_record_engine_conditions_outside_the_declared_applicability_fail_g1(mem
     set_header(profile_engine=eager_ek, profile_compilation=dict(eager_comp, enforce_eager=False))
     res = gm.check(gp, oracle)
     assert res["verdict"] == "FAIL" and any("own sources disagree on enforce_eager" in p for p in _check(res, "G1")["problems"])
-    # [rev-pm M-0464] (g) a knob the Program declares but the record omits EVERYWHERE (prefix caching, vLLM V1 default ON) is not
+    # (g) a knob the Program declares but the record omits EVERYWHERE (prefix caching, vLLM V1 default ON) is not
     # applicability by absence: fail closed per declared key, named
     set_header(profile_engine={"enforce_eager": True, "max_num_seqs": 2}, profile_compilation=eager_comp)
     res = gm.check(gp, oracle)
@@ -1139,16 +1138,16 @@ def test_record_engine_conditions_outside_the_declared_applicability_fail_g1(mem
     gp2 = dict(gp, applicability={"execution": "bi-eager", "row_execution": "bi-eager", "refusal": None})
     res = gm.check(gp2, oracle)
     assert res["verdict"] == "FAIL" and any("declares no applicability.engine" in p for p in _check(res, "G1")["problems"])
-    # a Program that refused the row can never Match it
+    # a Program that refused the workload can never Match it
     gp["applicability"]["refusal"] = "row execution 'bi-compiled' is not modelled"
     res = gm.check(gp, oracle)
     assert res["verdict"] == "FAIL" and any("refused this row's applicability" in p for p in _check(res, "G1")["problems"])
 
 
 def test_compiled_execution_is_modelled_only_from_components_that_declare_its_compilation_facts():
-    # compiled M-0153 (4a) / M-0174: derive_step writes applicability.engine = profile.modelled_engine() (enforce_eager False +
+    # derive_step writes applicability.engine = profile.modelled_engine() (enforce_eager False +
     # compilation_mode/backend/cudagraph_mode/...) for a bi-compiled profile; GP-01 models the compiled execution iff every component
-    # declares it with AGREEING facts; the workload engine block = enforce_eager False + the normalised facts. Eager rows untouched.
+    # declares it with AGREEING facts; the workload engine section = enforce_eager False + the normalised facts. Eager workloads untouched.
     from verity_vllm.pipeline import global_program as G
     eng = {"enforce_eager": False, "compilation_mode": "VLLM_COMPILE", "backend": "inductor", "cudagraph_mode": "PIECEWISE",
            "attention": "splitting op executed outside the CUDA graphs", "program_derivation": "eager module-forward trace"}
@@ -1162,17 +1161,17 @@ def test_compiled_execution_is_modelled_only_from_components_that_declare_its_co
     # the label without any compilation facts: refused (the Program cannot state the compiled execution it models)
     bare = {k: {kk: vv for kk, vv in v.items() if kk not in ("engine", "compilation")} for k, v in comps.items()}
     assert "no compilation facts" in G.workload_applicability(row, bare)["refusal"]
-    # a compilation dict of facts (no engine block) is accepted too
+    # a compilation dict of facts (no engine section) is accepted too
     facts_only = {k: dict(bare[k], compilation={"mode": 3, "cudagraph_mode": "PIECEWISE", "capture_sizes": [1, 2]}) for k in bare}
     f = G.workload_applicability(row, facts_only)
-    # the CompilationMode enum VALUE (3) is spelled as its NAME so the record's own sources are comparable (M-0261)
+    # the CompilationMode enum VALUE (3) is spelled as its NAME so the record's own sources are comparable
     assert f["refusal"] is None and f["engine"]["compilation"] == {"mode": "VLLM_COMPILE", "cudagraph_mode": "PIECEWISE", "capture_sizes": [1, 2]}
-    # facts that disagree between components: refused; an engine block saying eager under the compiled label: refused
+    # facts that disagree between components: refused; an engine section saying eager under the compiled label: refused
     dis = {k: dict(v, engine=dict(v["engine"])) for k, v in comps.items()}
     dis[(11, 1)]["engine"]["cudagraph_mode"] = "FULL_AND_PIECEWISE"
     ref = G.workload_applicability(row, dis)["refusal"]
     assert "disagree" in ref and ("compilation facts" in ref or "engine" in ref)
-    # [M-0174 (a)] the components' agreed engine block travels verbatim into the workload engine block (claim text and all), the
+    # the components' agreed engine section travels verbatim into the workload engine section (claim text and all), the
     # facts normalised beside it under `compilation`; GP-01's own compose-level conditions stay
     claimed = {k: dict(v, engine=dict(v["engine"], claim="boundary-level: module outputs correspond under graph replay")) for k, v in comps.items()}
     e = G.workload_applicability(row, claimed)["engine"]
@@ -1180,7 +1179,7 @@ def test_compiled_execution_is_modelled_only_from_components_that_declare_its_co
     assert e["enable_prefix_caching"] is False
     eag = {k: dict(v, engine=dict(v["engine"], enforce_eager=True)) for k, v in comps.items()}
     assert "enforce_eager true" in G.workload_applicability(row, eag)["refusal"]
-    # an eager row served by compiled components is still refused (the label rule), and eager components keep GP-01's eager engine block
+    # an eager workload served by compiled components is still refused (the label rule), and eager components keep GP-01's eager engine section
     assert "'bi-eager' is not modelled" in G.workload_applicability(row_workload("x__bi-eager"), comps)["refusal"]
     eager = {k: dict(v, execution="bi-eager", engine={"enforce_eager": True}) for k, v in comps.items()}
     e = G.workload_applicability(row_workload("x__bi-eager"), eager)
@@ -1189,13 +1188,13 @@ def test_compiled_execution_is_modelled_only_from_components_that_declare_its_co
 
 def test_compiled_program_requires_the_record_to_attest_the_same_compilation_facts_g1(memory, tmp_path):
     from verity_vllm.pipeline import global_program as G
-    gp, oracle = assemble([R0, R1], tmp_path, lag=None)     # [R17-1] headers below omit async_scheduling: G1's compilation facts are the subject
+    gp, oracle = assemble([R0, R1], tmp_path, lag=None)     # headers below omit async_scheduling: G1's compilation facts are the subject
     decl = {"mode": "VLLM_COMPILE", "backend": "inductor", "cudagraph_mode": "PIECEWISE"}
     gp["applicability"] = {"execution": "bi-compiled", "row_execution": "bi-compiled", "refusal": None,
                            "engine": {**G.MODELLED_ENGINE, "enforce_eager": False, "compilation": decl}}
 
     def set_header(engine_kwargs=None, compilation=None):
-        """The facts at the RECORDER'S location, RunHeader.profile.{engine_kwargs,compilation} (M-0261); None = absent."""
+        """The facts at the RECORDER'S location, RunHeader.profile.{engine_kwargs,compilation}; None = absent."""
         p = f"{oracle}/capture/log.jsonl.gz"
         lines = gzip.open(p, "rt").read().splitlines()
         for i, line in enumerate(lines):
@@ -1221,11 +1220,11 @@ def test_compiled_program_requires_the_record_to_attest_the_same_compilation_fac
     set_header(engine_kwargs={"enforce_eager": False, "enable_prefix_caching": False})
     res = gm.check(gp, oracle, record_alternate=False)
     assert res["verdict"] == "FAIL" and any("carries no compilation facts" in p for p in _check(res, "G1")["problems"])
-    # compiled's RunHeader (M-0174): profile.engine_kwargs carries enforce_eager False + compilation_config={cudagraph_mode: PIECEWISE} -> passes
+    # compiled's RunHeader: profile.engine_kwargs carries enforce_eager False + compilation_config={cudagraph_mode: PIECEWISE} -> passes
     set_header(engine_kwargs={"enforce_eager": False, "enable_prefix_caching": False, "compilation_config": {"cudagraph_mode": "PIECEWISE"}})
     res = gm.check(gp, oracle, record_alternate=False)
     assert res["verdict"] == "PASS" and res["execution"]["effective_compilation"] == {"cudagraph_mode": "PIECEWISE"}
-    # the recorder's profile.compilation block (rev-pm M-0261: mode VLLM_COMPILE, cudagraph PIECEWISE, sizes [1,2]) is read there, the
+    # the recorder's profile.compilation section (mode VLLM_COMPILE, cudagraph PIECEWISE, sizes [1,2]) is read there, the
     # enum value spelling ("3") normalised to the name, compiled's key names (compilation_mode) normalised too
     set_header(engine_kwargs={"enforce_eager": False, "enable_prefix_caching": False},
                compilation={"mode": "3", "cudagraph_mode": "PIECEWISE", "backend": "inductor", "enforce_eager": False, "capture_sizes": [1, 2]})
@@ -1254,7 +1253,7 @@ def test_compiled_program_requires_the_record_to_attest_the_same_compilation_fac
 
 
 def test_default_criterion_is_dag_and_the_sequence_verdict_is_kept_beside_it(memory, tmp_path):
-    # COORD ruling M-0177: dag is the criterion of record; the sequence verdict on the same record stays in the artifact, never merged
+    # Dag is the criterion of record; the sequence verdict on the same record stays in the artifact, never merged
     assert gm.DEFAULT_WITHIN_STEP == "dag"
     gp, oracle = assemble([R0, RX_LATE], tmp_path, tgrouped=True)     # the M-ARRIVAL-ORDER shape
     res = gm.check(gp, oracle)
@@ -1270,7 +1269,7 @@ def test_default_criterion_is_dag_and_the_sequence_verdict_is_kept_beside_it(mem
     x = res["x09"]
     assert x["verdict"] == "PASS" and x["within_step_criterion"] == "dag"
     xr1 = next(e for e in x["requests"] if e["request_id"] == "r1")
-    assert xr1["canonical_equal"] is True and xr1["sequence_equal"] is False and xr1["dag_multiset_equal"] is True and "M-0177" in xr1["criterion"]
+    assert xr1["canonical_equal"] is True and xr1["sequence_equal"] is False and xr1["dag_multiset_equal"] is True and "within-step criterion of record" in xr1["criterion"]
     # explicit sequence as the verdict of record keeps the dag verdict beside it; X-09 then fails the displaced request as in r14-v1
     res2 = gm.check(gp, oracle, within_step="sequence")
     assert res2["verdict"] == "FAIL" and res2["alternate_verdict"]["criterion"] == "dag" and res2["alternate_verdict"]["verdict"] == "PASS"
@@ -1291,7 +1290,7 @@ def test_dag_criterion_is_not_vacuous_the_mutations_still_fail(memory, tmp_path)
 
 
 def test_gp01_stop_rule_is_read_from_the_pinned_checkpoint_and_the_manifest(tmp_path):
-    """[F-pm-24] the Program's declared EOS set = union of the checkpoint's config.json / generation_config.json `eos_token_id` (int or
+    """The Program's declared EOS set = union of the checkpoint's config.json / generation_config.json `eos_token_id` (int or
     list, Llama-3.2-Instruct declares [128001, 128008, 128009]) and the manifest's sampling.stop_token_ids; ignore_eos declares the EMPTY
     set (every early stop fails); no source at all -> None (GM-01 fails closed on early stops)."""
     from verity_vllm.pipeline import global_program as gp
@@ -1306,7 +1305,7 @@ def test_gp01_stop_rule_is_read_from_the_pinned_checkpoint_and_the_manifest(tmp_
     assert sr["eos_token_ids"] == [7, 42, 128001, 128008, 128009] and sr["source"]["manifest.sampling.stop_token_ids"] == [42]
     sr = gp.stop_rule(str(ck), None, sampling_block(ignore_eos=True))
     assert sr["eos_token_ids"] == [] and sr["ignore_eos"] is True
-    # [COORD M-0571 (1)] pinned INTO the manifest: the declaration of record; a checkpoint beside it must agree, else refused by name
+    # pinned INTO the manifest: the declaration of record; a checkpoint beside it must agree, else refused by name
     sr = gp.stop_rule(str(ck), None, sampling_block(eos_token_ids=[128009, 128001, 128008]))
     assert sr["eos_token_ids"] == [128001, 128008, 128009] and sr["source"]["manifest.sampling.eos_token_ids"] == [128001, 128008, 128009] and not sr.get("refusal")
     sr = gp.stop_rule(None, None, sampling_block(eos_token_ids=[2]))
@@ -1329,7 +1328,7 @@ def test_gp01_stop_rule_is_read_from_the_pinned_checkpoint_and_the_manifest(tmp_
 
 
 def test_gp01_binds_a_per_request_sampler_schedule_component_only_to_its_declared_arrival(tmp_path):
-    """rev-pm M-0560 (1) on DECISION M-0529 (A): under a per-EVENT split schedule S (stochastic top-p) two requests with equal (LP, T) but
+    """Under a per-EVENT split schedule S (stochastic top-p) two requests with equal (LP, T) but
     different arrivals have different request Programs; a component that declares the arrival its schedule was computed for must not be
     reused for the other request, and a schedule computed against another manifest's chronology must not compose."""
     from verity_vllm.pipeline import global_program as G
@@ -1367,7 +1366,7 @@ def test_gp01_binds_a_per_request_sampler_schedule_component_only_to_its_declare
 
 
 def test_a_registered_s_component_binds_by_shape_in_any_workload(tmp_path):
-    """[CIR-87 (1)] A component at the registered S = SplitsFor_v1(1, num_SMs), which the served engine pins whatever the batch,
+    """A component at the registered S = SplitsFor_v1(1, num_SMs), which the served engine pins whatever the batch,
     binds by shape alone: in a workload of one request and in one of several, whatever their arrivals."""
     from verity_vllm.pipeline import global_program as G
     d = tmp_path / "c_reg"
@@ -1383,7 +1382,7 @@ def test_a_registered_s_component_binds_by_shape_in_any_workload(tmp_path):
 
 @pytest.mark.slow
 def test_g1_ties_the_manifest_of_record_to_the_run_header_sha_and_sampling_fields(memory, tmp_path):
-    """rev-pm M-0570 (2): GM-01 was blind to the manifest's sampling fields -- seeds swapped or a seed deleted in the manifest (GP-01
+    """GM-01 was blind to the manifest's sampling fields -- seeds swapped or a seed deleted in the manifest (GP-01
     recomposed: digest unchanged, seeds are Inputs) passed G1 by ids/prompts/caps/arrivals. G1 now requires RunHeader.workload.sha256 ==
     the manifest of record and compares each request's seed and the workload sampling policy with the header, by name."""
     R0s, R1s = dict(R0, seed=1901028918), dict(R1, seed=2097394646)
@@ -1428,7 +1427,7 @@ def test_g1_ties_the_manifest_of_record_to_the_run_header_sha_and_sampling_field
     lab = GD.manifest_sampling(workload_doc(sampling={"variant": "stoch-t0.8-p0.95-k20"}, variants={"stoch-t0.8-p0.95-k20": {}}))
     assert {k: lab[k] for k in ("variant", "temperature", "top_p", "top_k")} == {"variant": "stoch-t0.8-p0.95-k20", "temperature": 0.8, "top_p": 0.95, "top_k": 20}
     assert "conflict" not in lab and lab["sources"] == {"temperature": ["label"], "top_p": ["label"], "top_k": ["label"]}
-    # [rev-pm M-0667 TIP N5] the driver consumes variants[variant] (vllm_adapter.load_workload), not the label: the table is the value of
+    # the driver consumes variants[variant] (vllm_adapter.load_workload), not the label: the table is the value of
     # record, and label / table / explicit fields / sweep params must agree -- a laundered header (sha recomputed over the edited doc) with
     # variants[v].top_p edited 0.95 -> 0.9 under the label p0.95 is caught by the manifest's OWN disagreement, fail closed, named
     tab = GD.manifest_sampling(workload_doc(sampling={"variant": "stoch-t0.8-p0.95"}, variants={"stoch-t0.8-p0.95": {"temperature": 0.8, "top_p": 0.9, "top_k": 0}}))
@@ -1438,7 +1437,7 @@ def test_g1_ties_the_manifest_of_record_to_the_run_header_sha_and_sampling_field
     assert "conflict" not in agree and agree["sources"]["top_p"] == ["label", "sweep.sampling_params", "variants_table"]
     assert "not in the manifest's `variants` table" in GD.manifest_sampling(workload_doc(sampling={"variant": "stoch-t0.8-p0.95"}, variants={"greedy": {}}))["conflict"][0]
 
-    # [rev-pm BLOCKER M-0717 (i)] a per-request variant pin added AFTER the run: the header has no per-request sampling record -> FAIL named
+    # a per-request variant pin added AFTER the run: the header has no per-request sampling record -> FAIL named
     def pin_r1_greedy(wl):
         wl["sampling"] = {"variant": "greedy"}
         wl["variants"] = {"greedy": {"temperature": 0.0, "top_p": 1.0, "top_k": 0}}
@@ -1465,14 +1464,14 @@ def test_g1_ties_the_manifest_of_record_to_the_run_header_sha_and_sampling_field
 
 
 def test_execution_past_a_declared_eos_fails_g6(memory, tmp_path):
-    """LIFTING-SPEC v0.3 s7 [P1] (i) / stoch M-0590: the served prefix n_r must equal the declared activity a_r in BOTH directions.
+    """The served prefix n_r must equal the declared activity a_r in BOTH directions.
     r0 serves [9, 3, 1] to its cap; with 3 declared as an EOS id the Program calls r0 finished after event 1 and the two further
     events are execution past EOS -> FAIL named (n_r 3 > a_r 2). With the EOS set {11} (r0 never emits it) the same record passes."""
     gp, oracle = assemble([R0, R1], tmp_path, eos_token_ids=(3, EOS))
     res = gm.check(gp, oracle)
     assert res["verdict"] == "FAIL" and "G6" in res["failed_checks"], res["reasons"]
     pr = _check(res, "G6")["problems"]
-    # [R17-1] the Program declares LAG 0 (the toy record attests async_scheduling False): the one row after the EOS is execution past EOS,
+    # the Program declares LAG 0 (the toy record attests async_scheduling False): the one row after the EOS is execution past EOS,
     # named with the two lengths (executed_prefix_len 3 > served_output_len 2 + LAG 0)
     assert any("r0: execution past EOS -- output event 1 is the declared EOS id 3 but 1 more row(s) were executed where the Program's declared "
                "scheduler (Program lag 0" in p and "computes LAG 0 after an EOS (executed_prefix_len 3 > served_output_len 2 + LAG 0)" in p for p in pr), pr
@@ -1487,7 +1486,7 @@ def test_execution_past_a_declared_eos_fails_g6(memory, tmp_path):
 R1_LAG = {"id": "r1", "prompt": [4, 6], "sampled": [8, EOS, 77], "cap": 4}   # EOS at event 1, then ONE placeholder row (input = the EOS, sample 77 discarded)
 
 
-_NULL = object()   # [R17-1 / revb N3] the key PRESENT with a JSON null: the recorder's read-back found no resolved bool (unattested, never a default)
+_NULL = object()   # the key PRESENT with a JSON null: the recorder's read-back found no resolved bool (unattested, never a default)
 
 
 def _set_async_scheduling(oracle, value):
@@ -1511,7 +1510,7 @@ def _set_async_scheduling(oracle, value):
 
 
 def _driver_stop_at(oracle, rid, n_answer, eos_step):
-    """The driver's word for an EOS stop under async scheduling (pad's fixture M-0162: generated_token_ids ends in the EOS, finish_step = the
+    """The driver's word for an EOS stop under async scheduling (generated_token_ids ends in the EOS, finish_step = the
     EOS step, the lag row's sample is NOT reported)."""
     tp = os.path.join(oracle, "capture", "tokens.json")
     tk = json.load(open(tp))
@@ -1522,7 +1521,7 @@ def _driver_stop_at(oracle, rid, n_answer, eos_step):
 
 
 def _driver_claims(oracle, rid=None, lag=None, **fields):
-    """[R17-1] the driver's tokens.json record-schema claims: doc.lag.value (the resolved fact as the driver wrote it) and per request the
+    """The driver's tokens.json record-schema claims: doc.lag.value (the resolved fact as the driver wrote it) and per request the
     served_output_len / executed_prefix_len / cap_exhausted fields m1_capture writes."""
     tp = os.path.join(oracle, "capture", "tokens.json")
     tk = json.load(open(tp))
@@ -1537,15 +1536,15 @@ def _r(res, rid):
     return next(e for e in res["requests"] if e["request_id"] == rid)
 
 
-R1_EOS_X_EOS = {"id": "r1", "prompt": [4, 6], "sampled": [EOS, 5, EOS], "cap": 5}   # [rev F-r17-14] EOS at event 0, served on, a second EOS
+R1_EOS_X_EOS = {"id": "r1", "prompt": [4, 6], "sampled": [EOS, 5, EOS], "cap": 5}   # EOS at event 0, served on, a second EOS
 
 
 def test_served_past_the_first_eos_fails_g6_by_name_f_r17_14(memory, tmp_path):
-    """[rev F-r17-14 (M-0540)] the GM-01 negative for the first-EOS rule, the same record the Commit's executed_prefix_of_record refuses:
+    """The GM-01 negative for the first-EOS rule, the same record the Commit's executed_prefix_of_record refuses:
     r1 sampled [EOS, 5, EOS] (cap 5) under a LAG-1 Program on a record attesting async_scheduling True, the driver reporting all three as
     generated_token_ids with finish_reason 'stop'.  The Program's rule stops at the FIRST EOS: a_r = 1, so the two rows after it are
     execution past EOS (2 > LAG 1) and the driver's three-token output is not the record's answer -- G6 FAILS by name on both; the second
-    EOS launders nothing (served_output_len 1, executed_prefix_len 3).  Continuation_v1 (pad R17-32) stops at the same index."""
+    EOS launders nothing (served_output_len 1, executed_prefix_len 3).  Continuation_v1 stops at the same index."""
     gp, oracle = assemble([R0, R1_EOS_X_EOS], tmp_path, lag=1)
     _set_async_scheduling(oracle, True)
     res = gm.check(gp, oracle)
@@ -1562,19 +1561,19 @@ def test_served_past_the_first_eos_fails_g6_by_name_f_r17_14(memory, tmp_path):
     # the Commit's executed_prefix_of_record on the same served list: the same refusal, by name, from the same rule
     from verity_vllm.commit import executed_prefix as EP
     e = EP.executed_prefix_of_record(["r1"], {"r1": [EOS, 5, EOS]}, caps={"r1": 5}, eos_of_record=[EOS], lag=1)
-    assert not e["ok"] and "served past an EOS at index 0" in e["problems"][0] and "F-r17-14" in e["problems"][0]
+    assert not e["ok"] and "served past an EOS at index 0" in e["problems"][0] and "stops at the FIRST EOS" in e["problems"][0]
 
 
 @pytest.mark.slow
 def test_g6_consumes_the_programs_declared_lag_and_the_record_must_attest_the_same_scheduler(memory, tmp_path):
-    """R17-1 / DP-pad-02 (b) (Daniel, BRIEF s4; supersedes the ruling-21 reader): LAG is the workload Program's DECLARED specialization
+    """LAG is the workload Program's DECLARED specialization
     parameter (mock: `lag=`; GP-01: the Workload_v1 `lag` static from TargetProfile.lag()).  vLLM's async scheduling computes ONE more row
     for a request after its EOS sample (input = the EOS, sample discarded by the driver): under LAG 1 that row is active internal
     computation -- its VUs required, its sampled token NOT a served output.  G6 consumes the Program's lag and nothing else; the record's
     attested async_scheduling (the engine's resolved read-back) must AGREE (G1 + G6 by name); nothing is inferred from the trace.  Per request
     the two lengths are kept distinct: served_output_len (a_r) and executed_prefix_len (a_r + LAG on an EOS stop before the cap).  FAILS by
     name: a LAG-0 header on a LAG-1 Program (and the reverse), an unattested record against a declaring Program, a deleted lag row, a second
-    lag row, a reported lag sample, a driver finish_step on the lag row, a pre-R17-1 Program (no lag) with an EOS stop, VARIABLE lag."""
+    lag row, a reported lag sample, a driver finish_step on the lag row, a Program with no lag and an EOS stop, VARIABLE lag."""
     # (1) LAG 1 Program, record attests async_scheduling True, the lag row served: PASS -- the row accepted and labelled, the lengths distinct
     gp, oracle = assemble([R0, R1_LAG], tmp_path / "lag1", lag=1)
     _set_async_scheduling(oracle, True)
@@ -1610,7 +1609,7 @@ def test_g6_consumes_the_programs_declared_lag_and_the_record_must_attest_the_sa
     assert _check(res, "G6")["lag"]["agree"] is False and res["lag"]["record_attests"] == 0 and res["lag"]["declared"] == 1
     # the EOS-stopped request itself is not established under the disagreement: named per request, its EOS evidence not accepted
     assert any("r1: EOS stop at engine step 1 on a record whose attested scheduler (async_scheduling=False (RunHeader.profile.engine_kwargs)) is not the "
-               "Program's declared LAG 1: the 1 post-EOS row(s) are not accepted as the declared lag (R17-1)" in p for p in pr), pr
+               "Program's declared LAG 1: the 1 post-EOS row(s) are not accepted as the declared lag" in p for p in pr), pr
     assert _r(res, "r1")["eos_verified"] is False and "eos_lag_rows_accepted" not in _r(res, "r1")
     # ... and the reverse: a LAG-0 Program on a record attesting True (a lag-1 trace) fails by name too, with the lag row named as execution past EOS
     gpr, oracler = assemble([R0, R1_LAG], tmp_path / "lag0_program_on_lag1_record", lag=0)
@@ -1628,14 +1627,14 @@ def test_g6_consumes_the_programs_declared_lag_and_the_record_must_attest_the_sa
     assert res["verdict"] == "FAIL" and {"G1", "G6"} <= set(res["failed_checks"])
     pr = _check(res, "G6")["problems"]
     assert any("the Program is specialized for LAG 1" in p and "but the record does not attest async_scheduling (not attested; RunHeader.profile.engine_kwargs / "
-               "RunHeader.engine_kwargs / capture/versions.json)" in p and "refuse by name (R17-1)" in p for p in pr), pr
+               "RunHeader.engine_kwargs / capture/versions.json)" in p and "refuse by name" in p for p in pr), pr
     assert _check(res, "G6")["lag"]["record_attests"] is None and _check(res, "G6")["lag"]["declared"] == 1
     gp0, oracle0 = assemble([R0, R1_EOS], tmp_path / "lag0_unattested", lag=0)
     _set_async_scheduling(oracle0, None)
     res0 = gm.check(gp0, oracle0)
     assert res0["verdict"] == "FAIL" and any("the Program is specialized for LAG 0" in p and "does not attest async_scheduling" in p
                                              for p in _check(res0, "G6")["problems"]), _check(res0, "G6")["problems"]
-    # [revb M-0042 N3] the key PRESENT with null (the recorder's read-back found no resolved bool): the RESOLVED boolean is what is compared --
+    # the key PRESENT with null (the recorder's read-back found no resolved bool): the RESOLVED boolean is what is compared --
     # null is not False (LAG 0) and not True: refused by name, G1 (declared key unattested) and G6 (not a boolean)
     _set_async_scheduling(oracle0, _NULL)
     res0 = gm.check(gp0, oracle0)
@@ -1685,8 +1684,8 @@ def test_g6_consumes_the_programs_declared_lag_and_the_record_must_attest_the_sa
     assert res7["verdict"] == "FAIL" and any("r1: driver finish_step 2 != observed 1 (the EOS step; the request's last served row is the lag row at 2)" in p
                                              for p in _check(res7, "G6")["problems"]), _check(res7, "G6")["problems"]
 
-    # (8) a pre-R17-1 Program (no lag declared): an EOS stop FAILS by name -- the record's attestation is NOT read as the rule (True attested,
-    # the lag row present: a ruling-21 reader would have passed it); with every request at its cap the record passes, labelled exercised=false
+    # (8) a Program with no lag declared: an EOS stop FAILS by name -- the record's attestation is NOT read as the rule (True attested,
+    # the lag row present: a reader of the attestation would have passed it); with every request at its cap the record passes, labelled exercised=false
     from verity_vllm.program.workload import eos_lag_rows_declared
     assert eos_lag_rows_declared({"async_scheduling": True}) == 1 and eos_lag_rows_declared({"async_scheduling": False}) == 0
     assert eos_lag_rows_declared({}) is None and eos_lag_rows_declared(None) is None and eos_lag_rows_declared({"async_scheduling": "maybe"}) is None
@@ -1698,9 +1697,9 @@ def test_g6_consumes_the_programs_declared_lag_and_the_record_must_attest_the_sa
     assert res8["verdict"] == "FAIL" and "G6" in res8["failed_checks"], res8["reasons"]
     pr8 = _check(res8, "G6")["problems"]
     assert any("r1: stopped on the declared EOS id 11 at engine step 1 with 1 more row(s) executed after it, but the Program declares no LAG "
-               "(Program declares no lag (pre-R17-1 Build); record attests async_scheduling=True (RunHeader.profile.engine_kwargs) (NOT used as the rule))"
+               "(Program declares no lag; record attests async_scheduling=True (RunHeader.profile.engine_kwargs) (NOT used as the rule))"
                in p and "nothing is inferred from the trace or read from the header as the rule" in p for p in pr8), pr8
-    assert _check(res8, "G6")["lag"]["declared"] is None and _check(res8, "G6")["lag"]["exercised"] is True and "pre-R17-1" in _check(res8, "G6")["lag"]["note"]
+    assert _check(res8, "G6")["lag"]["declared"] is None and _check(res8, "G6")["lag"]["exercised"] is True and "Program declares no lag" in _check(res8, "G6")["lag"]["note"]
     gp8b, oracle8b = assemble([R0, R1], tmp_path / "undeclared_caps", lag=None)      # every request to its cap
     res8b = gm.check(gp8b, oracle8b)
     assert res8b["verdict"] == "PASS", res8b["reasons"]
@@ -1715,8 +1714,8 @@ def test_g6_consumes_the_programs_declared_lag_and_the_record_must_attest_the_sa
     assert _r(res9, "r1")["finish"] == "length" and _r(res9, "r1")["cap_exhausted"] is True and res9["lag"]["exercised"] is False
 
     # (10) VARIABLE LAG: two EOS-stopped requests of ONE record, one followed by the lag row and one not, under the LAG-1 Program with True
-    # attested -> the deleted-step failure on the second AND the record-level variable-lag finding, surfaced by name in res.alerts (the lane
-    # posts ALERT + DECISIONS-PENDING; never folded into a constant-lag model)
+    # attested -> the deleted-step failure on the second AND the record-level variable-lag finding, surfaced by name in res.alerts (never
+    # folded into a constant-lag model)
     R2_EOS_NOLAG = {"id": "r2", "prompt": [3, 3, 3], "sampled": [6, EOS], "cap": 5}    # EOS at event 1, NO row after it
     gpv, oraclev = assemble([R0, R1_LAG, R2_EOS_NOLAG], tmp_path / "variable", lag=1)
     _set_async_scheduling(oraclev, True)
@@ -1725,14 +1724,14 @@ def test_g6_consumes_the_programs_declared_lag_and_the_record_must_attest_the_sa
     assert resv["verdict"] == "FAIL" and "G6" in resv["failed_checks"], resv["reasons"]
     prv = _check(resv, "G6")["problems"]
     assert any(p.startswith("VARIABLE LAG: the EOS-stopped requests of this record show different post-EOS row counts {'r1': 1, 'r2': 0} under one "
-                            "declared scheduler (Program LAG 1") and "never fold into a constant-lag model (R17-1)" in p for p in prv), prv
+                            "declared scheduler (Program LAG 1") and "never fold into a constant-lag model" in p for p in prv), prv
     assert any("r2: the Program's declared scheduler" in p and "a deleted step" in p for p in prv), prv
     assert resv["lag"]["variable_lag"] is True and resv["lag"]["lag_rows_observed"] == {"r1": 1, "r2": 0} and resv["lag"]["eos_stop_requests"] == ["r1", "r2"]
     assert resv["alerts"] == [{"kind": "variable_lag", "check": "G6", "lag_rows_observed": {"r1": 1, "r2": 0}, "declared": 1, "record_attests": 1,
-                               "action": "ALERT + DECISIONS-PENDING entry (R17-1)"}]
+                               "action": "ALERT"}]
     assert _r(resv, "r1")["executed_prefix_len"] == 3 and _r(resv, "r2")["executed_prefix_len"] == 2 and _r(resv, "r2")["served_output_len"] == 2
 
-    # (12) rev M-0027 (4): a LENGTH stop runs no post-cap row under any LAG -- REQUIRED from the trace: r1 = [8, 5, 77] executed against cap 2
+    # A LENGTH stop runs no post-cap row under any LAG -- REQUIRED from the trace: r1 = [8, 5, 77] executed against cap 2
     # (no EOS among them) under the LAG-1 Program is 'execution past cap', named with the two lengths (served 2 = cap, executed 3)
     R1_PASTCAP = {"id": "r1", "prompt": [4, 6], "sampled": [8, 5, 77], "cap": 2}
     gpp, oraclep = assemble([R0, R1_PASTCAP], tmp_path / "pastcap", lag=1)
@@ -1769,7 +1768,7 @@ def test_g6_consumes_the_programs_declared_lag_and_the_record_must_attest_the_sa
 
 
 def test_gp01_carries_manbind_weights_of_record_per_component_and_refuses_stale_incomplete_or_two_checkpoints(tmp_path):
-    """COORD M-0614 (1) / tp M-0632 / manbind MAN-09 (M-0638): the weights of record is ONE function (manbind's weights_of_record.py) of the
+    """The weights of record is ONE function (manbind's weights_of_record.py) of the
     pinned shards and the (rank) Program's weights struct; GP-01 carries each component's record into the workload Program -- per rank for
     TP -- and refuses a record that is not the component's (stale digest), incomplete, or a second checkpoint for the same rank."""
     from verity_vllm.pipeline import global_program as G
@@ -1804,12 +1803,12 @@ def test_gp01_carries_manbind_weights_of_record_per_component_and_refuses_stale_
     # (-) incomplete record (a field with no composition rule) -> refused by name, fail closed
     inc = G.weights_of_record_binding({"8,3": comp("h", rec("A" * 64, complete=False, unresolved=["model.layers.3.mlp.down_proj.weight"]))})
     assert "incomplete" in inc["refusal"] and "down_proj" in inc["refusal"]
-    # (-) [rev-pm M-0717 (ii)] no program_digest -> refused (the stale check could never fire); complete:true + unresolved -> refused
+    # (-) no program_digest -> refused (the stale check could never fire); complete:true + unresolved -> refused
     nod = G.weights_of_record_binding({"8,3": comp("i", rec("A" * 64, digest=None))})
     assert "carries no program_digest" in nod["refusal"]
     contra = G.weights_of_record_binding({"8,3": comp("j", rec("A" * 64, complete=True, unresolved=["k_scale"]))})
     assert "self-contradicting" in contra["refusal"] and "k_scale" in contra["refusal"]
-    # (-) [rev F-r16-06, M-0056] a root that was not composed from PINNED shards is not carried: all_shards_pinned False (a shard differs from
+    # (-) a root that was not composed from PINNED shards is not carried: all_shards_pinned False (a shard differs from
     # its pin) or None (no shard pins recorded) -> refused by name; a record describing LIVE parameters (the Commit side's re-registration
     # digest) is never the weights of record, whatever its root says
     unp = G.weights_of_record_binding({"8,3": comp("k", rec("A" * 64, pinned=False))})
@@ -1821,7 +1820,7 @@ def test_gp01_carries_manbind_weights_of_record_per_component_and_refuses_stale_
     assert ok["components"]["8,3"]["all_shards_pinned"] is True   # the carried entry records the guard's inputs
 
 
-# ------------------------------------------------------------------------------- [COORD M-0169 / M-0571 (3)] derived S: sampler geometry
+# ------------------------------------------------------------------------------- derived S: sampler geometry
 
 
 class _StubFold:
@@ -1834,7 +1833,7 @@ def _topp(V, S):
 
 
 def test_sampler_geometry_check_holds_every_launch_to_the_registered_s_whatever_the_live_count():
-    """[CIR-87 (1)] The served engine runs every top-p split launch at S = registered_splits(num_SMs) = SplitsFor_v1(1, num_SMs)
+    """The served engine runs every top-p split launch at S = registered_splits(num_SMs) = SplitsFor_v1(1, num_SMs)
     (`engine.topp_pin`); the fold carries the launch's S on every GumbelTopPTokenSelect of the step. GM-01 holds each to the registered
     S of the Program's declared num_SMs, at 8 live rows as at 4 -- and refuses vLLM's own batch-derived S (16 at 8 live on 142 SMs)."""
     from verity.ml.definitions.registry.topp_geometry import registered_splits, splits_for
@@ -1879,7 +1878,7 @@ def test_sampler_geometry_check_holds_every_launch_to_the_registered_s_whatever_
 
 
 class _OperandFold:
-    """stoch M-0254 / M-0268 (B): every select is `GumbelTopPTokenSelect_v1{V}` (no S static) and the fold carries ONE `Const32[S]` instance
+    """Every select is `GumbelTopPTokenSelect_v1{V}` (no S static) and the fold carries ONE `Const32[S]` instance
     right before it, read as the 6th operand by exactly one run ("n", kc, 0, 1) -- the shape compare.Prog._bind_splits binds; here UNBOUND
     (no splits_values), the way a Prog-shaped reader without compare's binding sees it."""
 
@@ -1897,7 +1896,7 @@ class _OperandFold:
 
 
 def test_sampler_geometry_check_reads_s_from_the_const32_splits_operand():
-    """stoch M-0268 (A): on the operand tree the S static is gone; G6 reads S from the Const32 splits operand -- through compare's binding
+    """On the operand tree the S static is gone; G6 reads S from the Const32 splits operand -- through compare's binding
     (splits_values, the of-record path) or, unbound, straight from the 6th operand's single run onto a Const32 instance -- and FAILS by name
     when the operand is anything else."""
     gp = {"applicability": {"components": {"num_sms": 142}}}
@@ -1952,7 +1951,7 @@ def test_greedy_rows_report_no_sampler_geometry_to_check(memory, tmp_path):
 
 
 def test_gp01_declares_the_sampler_geometry_for_a_stochastic_row_only():
-    """GP-01 (M-0169 (2b), CIR-87 (1)): a stochastic row's workload Program declares the registered S = SplitsFor_v1(1, num_SMs) of the
+    """GP-01: a stochastic workload's Program declares the registered S = SplitsFor_v1(1, num_SMs) of the
     components' agreed num_SMs, the same for 2 requests as for 8; greedy rows declare nothing; a stochastic sampler without num_SMs, or
     whose components carry another S (a derived-S build), is a named refusal."""
     from verity_vllm.pipeline import global_program as G
@@ -1969,7 +1968,7 @@ def test_gp01_declares_the_sampler_geometry_for_a_stochastic_row_only():
     assert "declare no num_SMs" in nod["refusal"] and nod["num_sms"] is None
 
 
-# ------------------------------------------------------------- R17 stoch: |live(t)| from the SCHEDULED workload state (BRIEF §6 / R17-1)
+# ------------------------------------------------------------- stoch: |live(t)| from the SCHEDULED workload state
 
 
 def _req(rid, first, a_r, cap=None, chunks=1, lag=0, finish="length", eos_verified=None, g6=0):
@@ -1991,8 +1990,8 @@ def _present(reqs, extra=None):
 
 
 def test_scheduled_live_counts_builds_the_workload_state_from_g6_facts_and_names_every_transition():
-    """R17 stoch / BRIEF §6: |live(t)| is derived from the facts G6 established per request -- the declared arrival, the served length (cap or
-    verified EOS), the DECLARED lag rows after an EOS stop (R17-1: the post-EOS step is active computation, its row IS in the sampler batch)
+    """|live(t)| is derived from the facts G6 established per request -- the declared arrival, the served length (cap or
+    verified EOS), the DECLARED lag rows after an EOS stop (the post-EOS step is active computation, its row IS in the sampler batch)
     and the prefill chunks -- never from the record's per-step row list. Transitions carry their causes."""
     # r0 arrives 0, cap 6 (length); r1 arrives 1, cap 6, EOS after 2 answers + 1 declared lag row -> sampler rows at steps 1, 2, 3;
     # r2 arrives 2 with a 2-chunk prefill (one discarded chunk sample) and 2 answers -> steps 2, 3, 4
@@ -2019,9 +2018,9 @@ def test_scheduled_live_counts_builds_the_workload_state_from_g6_facts_and_names
 
 
 def test_sampler_geometry_check_reads_live_from_the_scheduled_state_and_names_an_unscheduled_row():
-    """R17 stoch: with the scheduled state, the record's logits rows and the SampleEnd batch must EQUAL the scheduled live count. A
-    sampler row the workload does not schedule (an undeclared request, a row past a stop) inflates the observed batch -- the R16 form
-    (observed rows) accepted that; the scheduled form names both disagreements. S is the registered one at every step (CIR-87 (1))."""
+    """With the scheduled state, the record's logits rows and the SampleEnd batch must EQUAL the scheduled live count. A
+    sampler row the workload does not schedule (an undeclared request, a row past a stop) inflates the observed batch -- the older form
+    (observed rows) accepted that; the scheduled form names both disagreements. S is the registered one at every step."""
     gp = {"applicability": {"components": {"num_sms": 142}}}
     reqs = [_req(f"r{i}", 0, 2) for i in range(4)] + [_req("r4", 0, 1)]      # 5 live at step 0, 4 at step 1
     sc = SG.scheduled_live_counts(reqs, _present(reqs))
@@ -2035,7 +2034,7 @@ def test_sampler_geometry_check_reads_live_from_the_scheduled_state_and_names_an
     assert ok["info"]["live_to_S"] == {"live=4:S=32": 1, "live=5:S=32": 1}
     assert ok["info"]["transitions"][1] == {"step": 1, "live_from": 5, "live_to": 4, "arrivals": [],
                                             "departures": [{"request": "r4", "finish": "length", "lag_rows": 0, "answer_events": 1, "prefill_chunks": 1}]}
-    # (-) step 1 carries a FIFTH logits row (a request the workload does not schedule there): the R16 form (no scheduled state) reads
+    # (-) step 1 carries a FIFTH logits row (a request the workload does not schedule there): the older form (no scheduled state) reads
     # live = 5 and PASSES; the scheduled form names the row and the SampleEnd batch
     steps_x = {0: steps[0], 1: {"logits_rows": [(f"r{i}", 10) for i in range(4)] + [("rX", 3)]}}
     specs_x = [_topp(64, 32)] * 10
@@ -2064,7 +2063,7 @@ def test_sampler_geometry_check_reads_live_from_the_scheduled_state_and_names_an
 
 
 def test_scheduled_state_on_the_r15_b8_record_reproduces_the_kernel_s_flips():
-    """The R15 B8 staggered stoch record (157 engine steps, 8 requests arriving 0..44 with caps 2..128, every request served to its cap):
+    """The B8 staggered stoch record (157 engine steps, 8 requests arriving 0..44 with caps 2..128, every request served to its cap):
     the scheduled state from (arrival, cap, length stop) alone equals the recorded live count at every step and its S transitions are the
     kernel's flips (0,1,32) -> (32,5,16) -> (101,4,32)."""
     from verity.ml.definitions.registry.topp_geometry import splits_for
@@ -2089,9 +2088,9 @@ def test_scheduled_state_on_the_r15_b8_record_reproduces_the_kernel_s_flips():
 
 
 def test_g6_puts_the_scheduled_state_and_the_lag_row_on_the_record(memory, tmp_path):
-    """e2e on the toy record: the lag-1 request occupies its lag step in the scheduled state (R17-1: active internal computation); the
+    """e2e on the toy record: the lag-1 request occupies its lag step in the scheduled state (active internal computation); the
     transitions name the EOS departure with lag_rows 1; a greedy fold has no S to check but the state is on the record."""
-    gp, oracle = assemble([R0, R1_LAG], tmp_path / "sched", lag=1)   # [R17-1] the Program declares LAG 1
+    gp, oracle = assemble([R0, R1_LAG], tmp_path / "sched", lag=1)   # the Program declares LAG 1
     _set_async_scheduling(oracle, True)
     _driver_stop_at(oracle, "r1", n_answer=2, eos_step=1)
     res = gm.check(gp, oracle)
@@ -2102,7 +2101,7 @@ def test_g6_puts_the_scheduled_state_and_the_lag_row_on_the_record(memory, tmp_p
     dep = [d for t in sl["transitions"] for d in t["departures"] if d["request"] == "r1"]
     assert dep == [{"request": "r1", "finish": "eos", "lag_rows": 1, "answer_events": 2, "prefill_chunks": 1}]
     assert [t["step"] for t in res["sampler_geometry"]["transitions"]] == [t["step"] for t in sl["transitions"]]
-    # the R16 lag negatives still fail in G6 and the state marks the request unestablished (never the observed rows as a substitute)
+    # the older lag negatives still fail in G6 and the state marks the request unestablished (never the observed rows as a substitute)
     _set_async_scheduling(oracle, False)
     res = gm.check(gp, oracle)
     assert res["verdict"] == "FAIL" and res["scheduled_live"]["requests"]["r1"]["established"] is False and res["scheduled_live"]["unestablished_steps"] == 3
@@ -2110,7 +2109,7 @@ def test_g6_puts_the_scheduled_state_and_the_lag_row_on_the_record(memory, tmp_p
 
 @pytest.mark.slow
 def test_a_record_without_tokens_json_fails_g6_by_name_unless_tokens_optional_is_asked_for_and_labelled(memory, tmp_path):
-    """[F-r17-01, rev M-0035] capture/tokens.json is part of the record: absent -> G6 FAILS by name (the output-association legs cannot run);
+    """capture/tokens.json is part of the record: absent -> G6 FAILS by name (the output-association legs cannot run);
     tokens_optional=True (CLI --tokens-optional) accepts it LABELLED checks[G6].tokens_json=false -- mechanism/fixture runs only."""
     gp, oracle = assemble([R0, R1], tmp_path, lag=0)
     _set_async_scheduling(oracle, False)
@@ -2120,7 +2119,7 @@ def test_a_record_without_tokens_json_fails_g6_by_name_unless_tokens_optional_is
     res = gm.check(gp, oracle)
     assert res["verdict"] == "FAIL" and res["failed_checks"] == ["G6"], res["reasons"]
     pr = _check(res, "G6")["problems"]
-    assert any("the record has no capture/tokens.json: the output-association legs" in p and "--tokens-optional" in p and "(F-r17-01)" in p for p in pr), pr
+    assert any("the record has no capture/tokens.json: the output-association legs" in p and "--tokens-optional" in p for p in pr), pr
     assert _check(res, "G6")["tokens_json"] is False
     # the same record accepted when asked for, and the label stays on the check
     acc = gm.check(gp, oracle, tokens_optional=True)
@@ -2134,7 +2133,7 @@ def test_a_record_without_tokens_json_fails_g6_by_name_unless_tokens_optional_is
 
 
 def test_fast_path_dag_hash_ids_are_per_process_and_a_foreign_dict_is_refused(memory, tmp_path, monkeypatch):
-    """[rev F-r17-07] The compact Merkle payload names producers by small per-process ids; a dag_hashes dict computed in one process
+    """The compact Merkle payload names producers by small per-process ids; a dag_hashes dict computed in one process
     (a forked worker) must never be matched against one computed in another.  The memo refuses a seeded foreign dict by name."""
     import os
     from verity_vllm.check.match import program_compare as C
@@ -2151,7 +2150,7 @@ def test_fast_path_dag_hash_ids_are_per_process_and_a_foreign_dict_is_refused(me
         GMF._dag_memo[(id(B), None)] = (B, None, foreign)
         with pytest.raises(RuntimeError, match="per process"):
             dag_hashes(B)
-        GMF._dag_memo[(id(B), None)] = (B, None, dict(h))   # [F-r17-08] a pid-less plain dict is refused too
+        GMF._dag_memo[(id(B), None)] = (B, None, dict(h))   # a pid-less plain dict is refused too
         with pytest.raises(RuntimeError, match="without an origin"):
             dag_hashes(B)
     finally:
@@ -2282,12 +2281,12 @@ def test_fast_dag_hash_interning_induces_exactly_the_records_merkle_partition(me
 
 @pytest.mark.parametrize("count", [1, 2])
 def test_fast_dag_hash_progression_memo_does_not_carry_a_forward_ref_marker_to_a_resolved_consumer(count):
-    """[unit 6, F-r17-10 (rev M-0338 / M-0383)] the compact-form memo of the node-space progression walk is keyed on (prefix node,
+    """The compact-form memo of the node-space progression walk is keyed on (prefix node,
     base, delta, count) and used to store items computed with the hashes AT WALK TIME.  A consumer emitted BEFORE its producers (the
     G8 attack: a forward reference, named by the record's marker) and a consumer emitted AFTER them, reading the same progression,
     get different digests from the record (marker vs the producers' hashes); the memo handed the second the first's marker node --
-    fast A == B where record A != B, so the fast document put the resolved readers in the marker class.  Both shapes rev posted:
-    count 2 (M-0338: two producers) and the ordinary count-1 progression (M-0383: one producer, its other readers after it)."""
+    fast A == B where record A != B, so the fast document put the resolved readers in the marker class.  Both shapes:
+    count 2 (two producers) and the ordinary count-1 progression (one producer, its other readers after it)."""
     import inspect
     from verity_vllm.check.match import batch_decomp as BD
     from verity_vllm.check.match import global_match_fast as GMF
@@ -2296,7 +2295,7 @@ def test_fast_dag_hash_progression_memo_does_not_carry_a_forward_ref_marker_to_a
 
     class FakeProg:
         compact = True
-        label = "F-r17-10"
+        label = "fake-compact"
 
         def __init__(self):
             self.steps = [[0, 1, 2, 3, 4]]           # node order: [A consumer (forward refs), P1, P2, B consumer, C consumer]
@@ -2322,12 +2321,12 @@ def test_fast_dag_hash_progression_memo_does_not_carry_a_forward_ref_marker_to_a
     assert len({rec[i] for i in rec}) == len({fast[i] for i in fast})
 
 
-# ------------------------------------------------------------------------------------------- COORD R17-28 P1: one X-09 per row
+# ------------------------------------------------------------------------------------------- one X-09 per row
 
 
 @pytest.mark.parametrize("impl,workers", [("record", "1"), ("fast", "1"), pytest.param("fast", "3", marks=pytest.mark.slow)])
 def test_cli_decomp_out_is_the_standalone_batch_decomp_document(memory, tmp_path, monkeypatch, impl, workers):
-    """[COORD R17-28, mprof P1] row_pod runs cb_a.batch_decomp in its own process (match.compare) and GM-01 runs the same decompose()
+    """row_pod runs cb_a.batch_decomp in its own process (match.compare) and GM-01 runs the same decompose()
     again inside check() (the x09 block) -- 365 s twice at B8 1024/128.  `--decomp-out` writes the document GM-01's own X-09 run
     produced, in batch_decomp's CLI schema: key for key what a standalone decompose() over the same fold and components returns
     (utc / seconds aside), under both implementations; exit 4 when X-09 names missing derived shapes (row_pod's derive-and-rerun)."""
@@ -2343,7 +2342,7 @@ def test_cli_decomp_out_is_the_standalone_batch_decomp_document(memory, tmp_path
     assert rc == 0
     doc = json.loads(dout.read_text())
     comp_dirs = [g["component"]["dir"] for g in gp["requests"] if (g.get("component") or {}).get("dir")]
-    # the standalone stage: its own fold + component decode, the record's operations (the fixtures' components are fold records, as
+    # the standalone run: its own fold + component decode, the record's operations (the fixtures' components are fold records, as
     # check() reads them)
     ref = BD.decompose(str(oracle), comp_dirs, None, within_step="dag", ops=gm.match_ops(fast=False))
     def strip(o):
@@ -2355,7 +2354,7 @@ def test_cli_decomp_out_is_the_standalone_batch_decomp_document(memory, tmp_path
     assert doc["verdict"] == "PASS" and len(doc["requests"]) == 3
     gmdoc = json.loads(out.read_text())
     assert gmdoc["x09"]["verdict"] == doc["verdict"] and gmdoc["x09"]["xreq_total"] == doc["xreq_total"]
-    # [rev S-r17-27 n1] the GM-01 document states what its X-09 ran over and under which pipeline (distinguishable by content)
+    # the GM-01 document states what its X-09 ran over and under which pipeline (distinguishable by content)
     assert gmdoc["x09"]["derived_available"] == doc["derived_available"] and gmdoc["x09"]["missing_derived"] == doc["missing_derived"] == []
     assert gmdoc["x09"]["pipeline"] == {"shared": True, "decomp_out": str(dout), "derived_args": []} and gmdoc["x09"]["extra_derived"] == []
     # ... and ONLY under the shared pipeline: the record flow's CLI document carries none of these keys (the checker of record's document,
@@ -2401,7 +2400,7 @@ def test_cli_decomp_out_is_the_standalone_batch_decomp_document(memory, tmp_path
 
 
 def test_fold_encodes_its_program_once_and_program_json_carries_that_descriptor(memory, tmp_path):
-    """[COORD R17-28 F3] `_finish` encodes the Program for the digest; `persist_program` used to encode and digest it AGAIN (36 s +
+    """`_finish` encodes the Program for the digest; `persist_program` used to encode and digest it AGAIN (36 s +
     a second digest at B8 1024/128).  Now the FoldResult carries the descriptor and program.json's `program` IS it: its digest (the
     codec's canonical bytes) equals the fold's, and a result without a descriptor (older producer) still encodes and cross-checks."""
     from verity.ml.circuits import codec

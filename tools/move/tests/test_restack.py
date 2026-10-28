@@ -192,6 +192,31 @@ def test_a_lock_conflict_beside_a_content_conflict_is_still_a_conflict(repo):
     assert (r["status"], r["step"], r["files"]) == ("conflicted", "moved", ["app/core/util.py", "pkg/lean-audit.json"])
 
 
+def test_a_branch_based_after_the_moves_base_is_refused_with_the_plain_merge(repo, monkeypatch, capsys):
+    """TOP-90 row 18 (25 Oct): a branch based on a main past the move's base restacked `clean` with duplicate imports and lock
+    entries, because the last merge, based on the move, brought main's commits since the base in from both sides. Here main
+    adds an import after the base, and the moved main has it at the top of the file."""
+    git(repo, "checkout", "-q", "-b", "later", "base")
+    later = commit(repo, "main after the move's base", {"app/main.py": MAIN + "from app.util import f3\n"})
+    git(repo, "checkout", "-q", "-b", "pr-later", later)
+    commit(repo, "edit util", {"app/util.py": edit(UTIL, "return 5", "return 50")})
+    git(repo, "checkout", "-q", "main")
+    git(repo, "merge", "-q", "-s", "ours", "--no-ff", "-m", "land later", later)
+    landed = show(repo, "move", "app/main.py")
+    onto = commit(repo, "carry later's import across the move", {"app/main.py": "from app.core.util import f3\n" + landed})
+    r = RS.restack("pr-later", "move", onto=onto, cwd=str(repo))
+    assert r["status"] == "based-after" and "result" not in r and "steps" in r and not r["steps"], r
+    assert f"has {later[:12]}" in r["error"] and f"`git merge {onto[:12]}`" in r["error"]
+    assert RS.restack("pr", "move", onto=onto, cwd=str(repo))["status"] == "clean", "a branch based before the base still restacks"
+    assert RS.restack("pr-later", "move", cwd=str(repo), main="later")["status"] == "based-after", "main shows it before --onto does"
+    monkeypatch.chdir(repo)
+    assert RS.main(["pr-later", "--move-commit", "move", "--onto", onto, "--main", "main"]) == 1
+    assert "pr-later: based-after  [plain merge" in (o := capsys.readouterr().out) and "`git merge main`" in o
+    monkeypatch.setattr(RS, "based_after", lambda *a: None)
+    dup = RS.restack("pr-later", "move", onto=onto, cwd=str(repo))
+    assert dup["status"] == "clean" and show(repo, dup["result"], "app/main.py").count("import f3") == 2, "what it refuses"
+
+
 def test_a_conflict_with_the_tree_before_the_move(repo):
     git(repo, "checkout", "-q", "base")
     git(repo, "checkout", "-q", "-B", "main")

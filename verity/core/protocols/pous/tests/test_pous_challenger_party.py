@@ -36,7 +36,7 @@ class Clock:
 
 def _in_process() -> tuple[period.Period, run.Point, run.Setup, list[bytes], bytes]:
     """`period.run` in one process under a test signer at the small point: its period, point, published setup, `C*`'s
-    blocks and table."""
+    labels and table."""
     point = period.point_for(len(STORE), period.W, period.C0)
     p = period.run("n0", STORE, COINS, signer=ts.TestSigner(b"in process", 2), log=ts.session_log(), clock=Clock(),
                    point=point, schemes=ts.SCHEMES, protocol=TEST_ID)

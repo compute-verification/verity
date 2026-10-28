@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
-"""TT_OUT's gate at k = 256 on the H100 record (Daniel's ASK-91, option A): the two families the ticket-chain census does not
-cover, on the served scheme ``pearl-c-h100-v1-h3`` itself (its forming, chain, peel and debit, bit for bit).
+"""TT_OUT's gate at k = 256 on the H100 record: the two families the ticket-chain census does not cover, on the served
+scheme ``pearl-c-h100-v1-h3`` itself (its forming, chain, peel and debit, bit for bit).
 
 At k = 256 a word is 8 atoms in two promotion groups of 4, so both searches are exhaustive:
 
@@ -17,8 +17,8 @@ saving per word (an existence count, P1's convention) and per fragment (what the
 cells' credit (`PearlC.credit_of` at n = 6,144, GLM-5.3's down projections); an undebited atom costs `atom_units` (40), a
 peel step 16 BF16 MACs (32).  A cell is the tile's credited words (rows passing the noise floor and liveness).  Each cell
 also reports whether the verifier accepts it: its replayed debit within ρ of its credit (`tile_cap_ok`), and every
-credited row's within its row cap of its own (-h3's, `clear_work.check_opened`): 4ρ at k = 256 (`PearlC.row_cap_at`,
-Daniel's card a6872606), under seven flagged atom-words over a 64-column tile, where ρ would allow under two.
+credited row's within its row cap of its own (-h3's, `clear_work.check_opened`): 4ρ at k = 256 (`PearlC.row_cap_at`),
+under seven flagged atom-words over a 64-column tile, where ρ would allow under two.
 
 The gate passes when every in-domain cell's fragment saving (cross-group residual plus peel), accepted or not, is at most
 1/400 of its credit and the chain's exact runs (14 or more atoms) are none.  ``--b-samples FILE`` (an .npz of 64 x 256

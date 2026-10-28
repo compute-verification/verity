@@ -45,7 +45,9 @@ import torch
 
 from verity.core.protocols.remote_bandwidth import p2
 from verity.core.protocols.remote_bandwidth import receipts as R
+from verity_config.settings import of
 
+settings = of(__file__)
 HERE = Path(__file__).resolve().parent
 ROWS_DIR = HERE.parent / "sha512_rows"
 sys.path.insert(0, str(ROWS_DIR))
@@ -54,7 +56,7 @@ import engine as SE  # noqa: E402
 BLOCK, UNIT, PER = p2.BLOCK_BYTES, p2.UNIT_BYTES, p2.UNIT_BLOCKS
 DEVICE_SOURCES = (ROWS_DIR / "sha512x.cuh", HERE / "receipts.cuh", HERE / "receipts.cu")
 HOST_SOURCES = (ROWS_DIR / "sha512x.cuh", HERE / "receipts.cuh", HERE / "receipts_host.cpp")
-BUILD_DIR = Path(os.environ.get("P2_RECEIPTS_BUILD") or Path.home() / ".cache" / "verity" / "p2_receipts")
+BUILD_DIR = Path(settings.P2_RECEIPTS_BUILD or Path.home() / ".cache" / "verity" / "p2_receipts")
 vp, u64 = ctypes.c_void_p, ctypes.c_uint64
 
 

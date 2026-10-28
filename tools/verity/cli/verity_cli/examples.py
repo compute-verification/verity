@@ -1,10 +1,11 @@
-"""The ladder: each example's level of doneness, from its `examples/<name>/example.toml` (`examples/README.md`).
+"""The ladder: each example's doneness on two independent axes, from its `examples/<name>/example.toml` (`examples/README.md`).
 
-An example names its protocol (or a composite, or a list), its workload and its placement (role -> machine class), the level
-it has reached, and the evidence for that level and every one below it. `problems` says what a claimed level lacks, in the
-form that can be checked offline: run-id format, a guarantee listed in a `lean-audit.json`, declaration names found in the
-tracked `.lean` files. `tests/test_examples.py` fails an example with any, and `verity example --status` prints every
-example with what its next level needs.
+An example names its protocol (or a composite, or a list), its workload and its placement (role -> machine class), how far it
+runs (`run`: moved, runs, placed) and how far its guarantee is proved (`proof`: none, stated, proved, measured), and the
+evidence for each step up to those on each axis. `problems` says what a claimed step lacks, in the form that can be checked
+offline: run-id format, a guarantee listed in a `lean-audit.json`, declaration names found in the tracked `.lean` files.
+`tests/test_examples.py` fails an example with any, and `verity example --status` prints every example with what the next
+step on each axis needs.
 """
 from __future__ import annotations
 
@@ -16,7 +17,8 @@ from dataclasses import dataclass
 from functools import cache
 from pathlib import Path
 
-LEVELS = ("moved", "runs", "placed", "stated", "proved", "measured")
+#: each axis's steps in order; each axis needs the evidence of every step up to the one it claims, and none of the other's
+AXES = {"run": ("moved", "runs", "placed"), "proof": ("none", "stated", "proved", "measured")}
 #: the roles a placement names -> whose they are; the auditor's run only on an `auditor-host` (AGENTS.md "Auditor-trusted
 #: devices"). A new example's role goes here with its side.
 ROLES = {"prover": "prover", "endpoint": "prover", "store": "prover",
@@ -27,7 +29,11 @@ MACHINES = ("gpu-node", "cpu-node", "auditor-host", "local")
 RUN = re.compile(r"r\d{8}-\d{6}-[0-9a-f]{4}|art:[0-9a-f]{64}")
 NAME = re.compile(r"[a-z0-9_]+")
 PROOF = re.compile(r"\w+(\.\w+)*\.SecurityProofs\.\w+(\.\w+)*")
-KEYS = {"protocol", "workload", "level", "placement", "evidence"}
+KEYS = {"protocol", "workload", *AXES, "placement", "evidence"}
+#: the retired single ladder's `level` -> (run, proof), read from a file that gives neither axis. Remove once no
+#: example.toml says `level`.
+LEVEL = {0: ("moved", "none"), 1: ("runs", "none"), 2: ("placed", "none"), 3: ("placed", "stated"), 4: ("placed", "proved"),
+         5: ("placed", "measured")}
 EVIDENCE = {"runs", "tests", "guarantee", "honest", "nontrivial", "proof", "premises"}
 SCHEMA = "examples/README.md has the schema"
 WHERE = "tools/verity/cli/verity_cli/examples.py"
@@ -41,19 +47,22 @@ class Example:
     name: str
     data: dict | None       # example.toml, or None when it is missing or doesn't parse (`error`)
     error: str = ""
-    runner: str = ""        # run.py or run.sh, what `verity example NAME` runs
+    runner: str = ""        # config.toml (`verity run`), run.py or run.sh, what `verity example NAME` runs
 
 
 def examples(root: Path) -> list[Example]:
     out = []
     for d in sorted(p for p in (root / "examples").iterdir() if p.is_dir() and not p.name.startswith((".", "_"))):
-        runner = next((r for r in ("run.py", "run.sh") if (d / r).is_file()), "")
+        runner = next((r for r in ("config.toml", "run.py", "run.sh") if (d / r).is_file()), "")
         f = d / "example.toml"
         if not f.is_file():
             out.append(Example(d.name, None, f"no example.toml: add one ({SCHEMA})", runner))
             continue
         try:
-            out.append(Example(d.name, tomllib.loads(f.read_text()), "", runner))
+            data = tomllib.loads(f.read_text())
+            if data.get("level") in LEVEL and not set(AXES) & set(data):
+                data = {k: v for k, v in data.items() if k != "level"} | dict(zip(AXES, LEVEL[data["level"]]))
+            out.append(Example(d.name, data, "", runner))
         except tomllib.TOMLDecodeError as e:
             out.append(Example(d.name, None, f"example.toml doesn't parse: {e}", runner))
     return out
@@ -120,14 +129,17 @@ def vocabulary(root: Path) -> tuple[list[str], list[str]]:
 
 
 def schema(ex: Example, root: Path) -> list[str]:
-    """What's wrong with ``ex``'s example.toml as a document, whatever its level."""
+    """What's wrong with ``ex``'s example.toml as a document, whatever it claims."""
     if ex.data is None:
         return [ex.error]
     d, out = ex.data, []
     if not NAME.fullmatch(ex.name):
         out.append(f"name {ex.name!r}: rename the directory to lowercase letters, digits and _ (`verity example NAME` reads a - "
                    "as a _)")
-    if extra := sorted(set(d) - KEYS):
+    if "level" in d:
+        out.append("level is retired: give run (moved, runs, placed; the old 0-2) and proof (none, stated, proved, measured; "
+                   "the old 3-5), each with its own evidence")
+    if extra := sorted(set(d) - KEYS - {"level"}):
         out.append(f"unknown keys {extra}: example.toml has only {sorted(KEYS)} ({SCHEMA})")
     protocols, workloads = vocabulary(root)
     p = d.get("protocol")
@@ -138,9 +150,11 @@ def schema(ex: Example, root: Path) -> list[str]:
         out.append(f"protocol {unknown} is no package under verity/core/protocols/: one of {', '.join(protocols)}")
     if d.get("workload") not in workloads:
         out.append(f"workload {d.get('workload')!r}: one of {', '.join(workloads)} (a directory under integrations/, or none)")
-    lv = d.get("level")
-    if type(lv) is not int or not 0 <= lv < len(LEVELS):
-        out.append(f"level {lv!r}: an integer from 0 to {len(LEVELS) - 1} ({', '.join(f'{i} {n}' for i, n in enumerate(LEVELS))})")
+    for axis, steps in AXES.items():
+        if axis not in d:
+            out.append(f"add {axis}, one of {', '.join(steps)}")
+        elif d[axis] not in steps:
+            out.append(f"{axis} {d[axis]!r}: one of {', '.join(steps)}")
     pl = d.get("placement")
     if not isinstance(pl, dict) or not pl:
         out.append("placement: add a [placement] table from each role to its machine class, e.g. prover = \"gpu-node\"")
@@ -161,13 +175,13 @@ def schema(ex: Example, root: Path) -> list[str]:
     return out
 
 
-def missing(ex: Example, level: int, root: Path) -> list[str]:
-    """What ``ex`` lacks for ``level`` itself (not the levels below it), each saying what to add."""
+def missing(ex: Example, axis: str, step: str, root: Path) -> list[str]:
+    """What ``ex`` lacks for ``step`` of ``axis`` itself (not the steps below it), each saying what to add."""
     ev = ex.data.get("evidence", {}) if ex.data else {}
     ev = ev if isinstance(ev, dict) else {}
-    head = f"level {level} ({LEVELS[level]})"
+    head = f"{axis} {step}"
     runs, out = _names(ev.get("runs")), []
-    if level == 1:
+    if step == "runs":
         tests = _names(ev.get("tests"))
         for t in tests:
             path, _, fn = str(t).partition("::")
@@ -177,8 +191,7 @@ def missing(ex: Example, level: int, root: Path) -> list[str]:
         if not runs and not tests:
             out.append(f"{head}: add a run of record to [evidence] runs, or a CPU test that runs the example to tests "
                        "(PATH::NAME)")
-        return out
-    if level == 2:
+    elif step == "placed":
         if not runs:
             out.append(f"{head}: add a run of record on the declared placement to [evidence] runs")
         pl = ex.data.get("placement") or {}
@@ -189,8 +202,7 @@ def missing(ex: Example, level: int, root: Path) -> list[str]:
             out.append(f"{head}: the prover's roles {on} are on auditor-host, a machine the prover doesn't control")
         if not any(ROLES.get(r) == "auditor" for r in pl):
             out.append(f"{head}: place the auditor's roles (a verifier at least) in [placement]")
-        return out
-    if level == 3:
+    elif step == "stated":
         listed, _ = _locks(root)
         g = ev.get("guarantee")
         if not isinstance(g, str) or not g:
@@ -204,15 +216,13 @@ def missing(ex: Example, level: int, root: Path) -> list[str]:
             if not names:
                 out.append(f"{head}: add [evidence] {key}, the lemma that {what}")
             out += [f"{head}: {key} lemma {n!r} is declared in no tracked .lean file" for n in names if not declared(root, str(n))]
-        return out
-    if level == 4:
+    elif step == "proved":
         p = ev.get("proof")
         if not isinstance(p, str) or not PROOF.fullmatch(p):
             out.append(f"{head}: add [evidence] proof, the guarantee's <Area>.SecurityProofs.G")
         elif not declared(root, p):
             out.append(f"{head}: proof {p!r} is declared in no tracked .lean file")
-        return out
-    if level == 5:
+    elif step == "measured":
         _, assumptions = _locks(root)
         prem = ev.get("premises")
         if not isinstance(prem, dict) or not prem:
@@ -223,40 +233,46 @@ def missing(ex: Example, level: int, root: Path) -> list[str]:
                 out.append(f"{head}: premise {k!r} is an assumption no lean-audit.json lists")
             if not isinstance(v, str) or not RUN.fullmatch(v):
                 out.append(f"{head}: premise {k!r}: {v!r} is neither a run id (rYYYYMMDD-HHMMSS-xxxx) nor an art: id")
-        return out
     return out
 
 
 def problems(ex: Example, root: Path) -> list[str]:
-    """Everything ``ex`` lacks for the level it claims: the document's faults, then each level's evidence up to it."""
-    out = schema(ex, root)
-    lv = ex.data.get("level") if ex.data else None
-    if out or type(lv) is not int:
+    """Everything ``ex`` lacks for the steps it claims: the document's faults, then each axis's evidence up to its step."""
+    if out := schema(ex, root):
         return out
-    return [m for level in range(1, lv + 1) for m in missing(ex, level, root)]
+    return [m for axis, steps in AXES.items() for step in steps[1:steps.index(ex.data[axis]) + 1]
+            for m in missing(ex, axis, step, root)]
 
 
-def next_missing(ex: Example, root: Path) -> str:
-    if p := problems(ex, root):
-        return "BROKEN: " + p[0]
-    lv = ex.data["level"]
-    if lv + 1 >= len(LEVELS):
-        return "-"
-    return "; ".join(missing(ex, lv + 1, root)) or f"level {lv + 1} ({LEVELS[lv + 1]}): its evidence is there; raise level"
+def next_missing(ex: Example, axis: str, root: Path) -> str:
+    """What the step after ``ex``'s on ``axis`` needs, or why it has none."""
+    steps = AXES[axis]
+    i = steps.index(ex.data[axis])
+    if i + 1 == len(steps):
+        return f"{axis}: at its last step, {steps[i]}"
+    head = f"{axis} {steps[i + 1]}"
+    if not (lack := missing(ex, axis, steps[i + 1], root)):
+        return f"{head}: its evidence is there; raise {axis} to {steps[i + 1]!r}"
+    return f"{head}: " + "; ".join(m.removeprefix(f"{head}: ") for m in lack)
 
 
 def status(root: Path) -> int:
-    """Print every example's protocol, workload, level and next missing evidence; 1 when one lacks its claimed level's."""
-    rows, broken = [], 0
+    """Print every example's protocol, workload, both axes and each axis's next missing evidence; 1 when one lacks what it
+    claims."""
+    head = ("example", "protocol", "workload", *AXES, "runner")
+    rows, notes, broken = [head], {}, 0
     for ex in examples(root):
         d = ex.data or {}
-        lv = d.get("level")
-        nxt = next_missing(ex, root)
-        broken += nxt.startswith("BROKEN")
         rows.append((ex.name, "+".join(map(str, _names(d.get("protocol")))) or "?", str(d.get("workload", "?")),
-                     f"{lv} {LEVELS[lv]}" if type(lv) is int and 0 <= lv < len(LEVELS) else "?", ex.runner or "missing", nxt))
-    head = ("example", "protocol", "workload", "level", "runner", "next missing evidence")
-    w = [max(len(r[i]) for r in [head, *rows]) for i in range(5)]
-    for r in [head, *rows]:
-        print("  ".join(c.ljust(w[i]) for i, c in enumerate(r[:5])) + "  " + r[5])
+                     *(str(d.get(a, "?")) for a in AXES), ex.runner or "missing"))
+        if p := problems(ex, root):
+            broken += 1
+            notes[ex.name] = ["BROKEN: " + m for m in p]
+        else:
+            notes[ex.name] = ["next " + next_missing(ex, a, root) for a in AXES]
+    w = [max(len(r[i]) for r in rows) for i in range(len(head))]
+    for r in rows:
+        print("  ".join(c.ljust(w[i]) for i, c in enumerate(r)).rstrip())
+        for n in notes.get(r[0], []) if r is not head else []:
+            print("    " + n)
     return 1 if broken else 0

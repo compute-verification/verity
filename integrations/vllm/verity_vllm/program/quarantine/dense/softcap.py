@@ -1,5 +1,5 @@
 """`AttentionSoftcap_v1{T, NH, KVH, D, BN, CAP}` — FA2 attention WITH logit soft-capping (`flash_fwd_splitkv_kernel<..., Is_softcap=true>`,
-vLLM + Gemma-2 `attn_logit_softcapping = 50`), STRUCTURE ONLY (lane gemma, window 2026-09-17): the body of `Attention_v3` ->
+vLLM + Gemma-2 `attn_logit_softcapping = 50`), STRUCTURE ONLY: the body of `Attention_v3` ->
 `AttentionHead_v3` -> `AttnBlock_v3` with the one stage FA2 adds, in the place FA2 adds it.
 
 FA2 (`flash_api.cpp::set_params_fprop`, `flash_fwd_kernel.h::compute_attn_1rowblock`, `softmax.h::apply_softcap`):
@@ -20,7 +20,7 @@ sm_89 table lands, evaluating this composite raises `MufuTanhUnmeasured` on any 
 `softcap_tests.py` check the STRUCTURE (gate population = v3 + NVIS x {MufuTanh, F32MulFtz} + the two constants, the constants'
 bit patterns, static wiring); `softcap_difftest.py` is the adapter for the pod difftest vs `_vllm_fa2_C.varlen_fwd(softcap=CAP)`.
 
-[R15 dense, F-dense-05] PROMOTED: the Definition now lives in the accepted registry (`verity.ml.definitions.registry.dense.AttentionSoftcap`, bound by the pinned `b1-eager-v3` vocabulary; the X-08 pattern) — this module re-exports
+PROMOTED: the Definition now lives in the accepted registry (`verity.ml.definitions.registry.dense.AttentionSoftcap`, bound by the pinned `b1-eager-v3` vocabulary; the X-08 pattern) — this module re-exports
 the same object so the quarantine's difftest adapter, `ALL_DEFINITIONS` and `SEMANTIC_ID` are unchanged (no registry clash).
 """
 from __future__ import annotations

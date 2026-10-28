@@ -4,9 +4,9 @@
 moves here once no importer of the old path is left).  `evaluate(target, *args)` runs a target on one input of plain
 ints: a primitive through its evaluator, a composite specialization through the oracle on a one-call Program.
 
-A target is an IR Definition (`PrimitiveDefinition`, a static-free `CompositeDefinition`, a complete
+A target is a Definition (`PrimitiveDefinition`, a static-free `CompositeDefinition`, a complete
 `SpecializedDefinition`) or a `ScalarReference`: a silicon function that no core Definition wraps yet (the FP8 and NVFP4
-steps), with a signature in IR types so that batching, sampling and checking treat both alike.
+steps), with a signature in the Program's types so that batching, sampling and checking treat both alike.
 
 A table held in a registered input (`tanh_rn`: 2^27 entries of two words) can be passed to `evaluate` as a `RegisteredTable`
 instead of its flat word list: the same words, read one at a time when a gate asks for them.  The result is the flattened
@@ -46,7 +46,7 @@ __all__ = [
 
 @dataclass(frozen=True, eq=False)
 class ScalarReference:
-    """A scalar function on encodings with an IR-typed signature, for silicon semantics no core Definition wraps yet.
+    """A scalar function on encodings with a signature in the Program's types, for silicon semantics no core Definition wraps yet.
 
     ``fn(*args, **bindings)`` takes one int per ``Value`` parameter and a flat int sequence per aggregate parameter (leaf
     order), and returns an int (a ``Value`` result) or a flat int sequence.  ``signature(**bindings)`` returns
@@ -205,7 +205,7 @@ class _Operands:
 
 
 class _Transcript(dict):
-    """An execution transcript whose registered tables' Input gates are read through the table, never stored.
+    """An execution trace whose registered tables' Input gates are read through the table, never stored.
 
     ``in`` doesn't see those gates, only ``[]`` does. `evaluate_region` asks ``in`` only of Input gates inside its selection,
     and a standalone call's selection holds none."""
@@ -270,7 +270,7 @@ def evaluate(target: Target, *args: Any) -> tuple[int, ...]:
     parameter, in leaf order); returns the output leaves.  Raises whatever the reference raises outside its domain.
 
     An aggregate parameter that holds a registered table may take a `RegisteredTable` instead of its words: a primitive then
-    reads it through its ``evaluate_lazy``, a composite's gates through the transcript, and the result is the same."""
+    reads it through its ``evaluate_lazy``, a composite's gates through the trace, and the result is the same."""
     t = resolve(target)
     if any(isinstance(a, RegisteredTable) for a in args):
         return _evaluate_with_tables(t, args)

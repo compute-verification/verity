@@ -1,4 +1,4 @@
-"""`pouw_h1_registered.commit`'s hashing on the GPU (VLLM-79): a registered value's ``b || c`` strings and every level of its
+"""`pouw_h1_registered.commit`'s hashing on the GPU: a registered value's ``b || c`` strings and every level of its
 frame-v3-sha512 tree, computed by `protocol_options/pouw_cuda/registered_rows.cu` from the rows' words, the salts drawn on
 the device (ChaCha20 under the run's key at the value's nonce, `audit.hm96_salt`) or given, under the domain id the host
 computes (`registered.domain`).

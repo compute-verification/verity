@@ -1,4 +1,4 @@
-description = "the adopted design without SmoothQuant: dithered ±63 linears and the adopted attention (tonight's WikiText end to end, int8-rot-lin8rd-eqp=w64-poff64-psink-kc-kv=dith)"
+description = "the adopted design without SmoothQuant: dithered ±63 linears and the adopted attention"
 
 [[linear]]
 step = "rotate"

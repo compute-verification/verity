@@ -248,8 +248,12 @@ class LtPick:
                 "names": None if self.names is None else len(self.names)}
 
 
+#: the default pick: every configuration, up to the default limit
+EVERY = LtPick()
+
+
 def lt_enumerated(dev, fam: Family, shape: Shape, ops: Operands, lt, splitks: list[int], seen: set,
-                  refused: list[str] | None = None, pick: LtPick = LtPick()) -> tuple[list[Candidate], dict]:
+                  refused: list[str] | None = None, pick: LtPick = EVERY) -> tuple[list[Candidate], dict]:
     """Every configuration of every algorithm `lt` has for the family's types that cublasLtMatmulAlgoCheck accepts at the
     shape (lt.cu's ph_lt_enumerate) and `pick` takes, less those in `seen` (the heuristic's, by `lt_key`). Returns them
     and what was tried: configurations checked, accepted, whether the limit cut the list short, the sha256 of the
@@ -357,7 +361,7 @@ def cutlass_swizzles(tile: tuple[int, int], shape: Shape, swap: int) -> list[int
 
 
 def registry_source(name: str) -> str:
-    """A registry kernel's source: ``verity`` for nvf4_plain.cu's (#543's NVFP4, #570's FP8), else ``cutlass``."""
+    """A registry kernel's source: ``verity`` for nvf4_plain.cu's (NVFP4 and FP8), else ``cutlass``."""
     return "verity" if name.startswith("verity_") else "cutlass"
 
 

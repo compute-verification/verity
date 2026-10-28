@@ -1,17 +1,14 @@
-"""Serve a workload on the simulated datacenter, then check N3 in the clear.
+"""Serve a workload on the simulated datacenter and check its answers.
 
     python -m workload.run --out /tmp/netsim-run                        # the MLP on 3 blocks of 2 devices, in one process
     python -m workload.run --out /tmp/netsim-run --transport tcp        # one localhost TCP process per unit
-    python -m workload.run --out /tmp/netsim-run --tamper b0:fill       # a block writes into a frame's zero fill
     python -m workload.run --out /tmp/netsim-run --graph leaf_spine:2   # on `datacenter.examples.leaf_spine(2)`
     python -m workload.run --out /tmp/netsim-run --workload served --devices 1 --frame-bytes 1024
                                                                         # verity_vllm's serving Program, a stage a block
 
-(run from `benchmarks/network_sim/`, or with it on `PYTHONPATH`). The prover's side commits the placement (`statement`),
-the units serve and commit their values, and the check reads what `run` writes to `--out`: `public.json` (the statement:
-the Program's digest, the hardware, B, the placement's and units' roots, the occupancy profile), `witness.json` (the
-placement's and units' rows and salts), `records.json` (each certified link direction's frames) and `n3.json` (the
-check's report). It prints a summary and exits 1 when the check fails.
+(run from `benchmarks/network_sim/`, or with it on `PYTHONPATH`). The units serve and commit their values, and over TCP
+each writes its result, its values' commitment and its certified link directions' frames, to `--out`. It prints a
+summary and exits 1 when the answers aren't the reference's.
 """
 from __future__ import annotations
 
@@ -27,8 +24,7 @@ from pathlib import Path
 from verity.ml.circuits.codec import program_digest
 
 from . import model as M
-from . import n3
-from .block import TAMPERS, Context, MemoryNet
+from .block import Context, MemoryNet
 from .hardware import OUTSIDE, Hardware
 
 HERE = Path(__file__).resolve().parent
@@ -47,20 +43,6 @@ def declaration(spec: str):
     if not callable(fn):
         raise SystemExit(f"--graph is NAME[:ARG,…], NAME a declaration of datacenter.examples, not {spec!r}")
     return fn(*(int(a) for a in args.split(",") if a))
-
-
-def statement(ctx: Context, results: dict[str, dict]) -> tuple[dict, dict]:
-    """The public statement and the witness of a run: the placement committed once, each unit's committed values."""
-    reg = ctx.placement.commit()
-    held = {u: r["values"] for u, r in sorted(results.items()) if r["values"] is not None}
-    public = {"program": program_digest(ctx.model.program), "workload": ctx.workload, "spec": ctx.spec.to_json(),
-              "hardware": ctx.hw.to_json(),
-              "frame_bytes": ctx.phi.frame_bytes, "placement": reg.root.hex(),
-              "values": {u: {"root": v["root"], "count": v["count"]} for u, v in held.items()},
-              "occupancy": ctx.phi.occupancy()}
-    witness = {"placement": {"rows": [r.hex() for r in reg.rows], "salts": [s.hex() for s in reg.salts]},
-               "values": {u: {"rows": v["rows"], "salts": v["salts"]} for u, v in held.items()}}
-    return public, witness
 
 
 def run_memory(ctx: Context) -> dict[str, dict]:
@@ -117,7 +99,7 @@ def crossing_bits(ctx: Context) -> dict[str, tuple[int, int]]:
 
 
 def main(argv: list[str] | None = None) -> int:
-    ap = argparse.ArgumentParser(description="Serve a workload on the simulated datacenter and check N3 in the clear.")
+    ap = argparse.ArgumentParser(description="Serve a workload on the simulated datacenter and check its answers.")
     ap.add_argument("--out", required=True, type=Path, help="the directory to write the run's files to")
     ap.add_argument("--workload", choices=M.WORKLOADS, default="mlp",
                     help="the MLP, or verity_vllm's serving Program for a truncated SmolLM2 (`served`)")
@@ -140,7 +122,6 @@ def main(argv: list[str] | None = None) -> int:
                     help="a declaration of datacenter.examples to run on instead of the mock, e.g. leaf_spine:2")
     ap.add_argument("--seed", type=int, default=0)
     ap.add_argument("--transport", choices=("memory", "tcp"), default="memory")
-    ap.add_argument("--tamper", help=f"UNIT:MODE, MODE one of {', '.join(TAMPERS)}")
     args = ap.parse_args(argv)
 
     spec = ({"d": args.d, "layers": args.layers, "requests": args.requests, "groups": args.groups} if args.workload == "mlp"
@@ -152,42 +133,23 @@ def main(argv: list[str] | None = None) -> int:
         config["hardware"] = Hardware.from_datacenter(declaration(args.graph)).to_json()
     if args.step_ticks:
         config["step_ticks"] = args.step_ticks
-    if args.tamper:
-        unit, _, mode = args.tamper.partition(":")
-        config["tamper"] = {"unit": unit, "mode": mode}
     ctx = Context(config)
     args.out.mkdir(parents=True, exist_ok=True)
     results = run_tcp(ctx, args.out) if args.transport == "tcp" else run_memory(ctx)
-    public, witness = statement(ctx, results)
-    records, disagreements = n3.merge(results)
-    report = n3.check(public, witness, records)
-    report.violations[:0] = disagreements
 
-    for name, obj in (("public", public), ("witness", witness), ("n3", report.to_json()),
-                      ("records", {k: [[b, f.hex()] for b, f in v] for k, v in sorted(records.items())})):
-        (args.out / f"{name}.json").write_text(json.dumps(obj, indent=1))
     answers = results[OUTSIDE]["answers"]
     ref = ctx.model.reference(ctx.seed)
     hw = ctx.hw
-    print(f"program {public['program'][:16]}… {ctx.model.n} gates; placement root {public['placement'][:16]}… "
+    print(f"program {program_digest(ctx.model.program)[:16]}… {ctx.model.n} gates "
           f"({args.plan} on {len(hw.units)} blocks of {', '.join(str(len(hw.devices(u))) for u in sorted(hw.units))} "
           f"devices; ℓ across units {hw.cross_latency} ticks, a bucket {hw.bucket_ticks})")
     oracle = "integer reference" if args.workload == "mlp" else "Program evaluated in one process"
     print(f"answers {'equal' if answers == ref else 'differ from'} the {oracle}: {answers}")
     by_kind = ", ".join(f"{k} {n} values / {b} bits" for k, (n, b) in sorted(crossing_bits(ctx).items()))
     print(f"{len(ctx.edges)} crossing edges ({by_kind}) in {len(ctx.phi.messages)} messages, {args.frame_bytes}-byte frames")
-    for key, counts in public["occupancy"].items():
+    for key, counts in ctx.phi.occupancy().items():
         print(f"  occupancy {key:<22} {counts}")
-    s = report.stats
-    print(f"N3 {'holds' if report.ok else 'fails'}: {s['frames']} frames recorded, {s['explained']} φ frames and "
-          f"{s['declared']} HELLOs explained, {s['appearances']} value appearances checked against {s['values']} "
-          f"opened values")
-    for code, n in sorted(report.codes().items()):
-        print(f"  {code}: {n}")
-    for v in report.violations[:8]:
-        print(f"  {v.code} {v.where}: {v.detail}")
-    print(f"files in {args.out}")
-    return 0 if report.ok else 1
+    return 0 if answers == ref else 1
 
 
 if __name__ == "__main__":
