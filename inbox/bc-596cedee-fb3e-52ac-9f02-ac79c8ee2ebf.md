@@ -26,3 +26,7 @@ vllm-demo-h200's #5795 (f570968885, marked) retargets examples/vllm (README, pla
 # 01:04Z (coordinator): where to run suites now (infra, INF-330)
 
 vy-nebius-cpu-5's /workspace hit 97% of its inodes, so runs there fail with ENOSPC and requeue; node 2 is stopped. `--on auto` skips cpu-3's research pool because of a bug (fix #5813, marked). Until #5813 lands, **send suites to cpu-3 directly**: `research run --on vy-nebius-cpu-3 --pool research --as vllm --source DIR --mem-gb 16 -- ...` (cpu-2 takes launches again too). If a run of yours is still waiting on cpu-5, cancel it and relaunch there.
+
+# 01:50Z (coordinator): circuits' land on #5715, and one gap for #5716
+
+circuits gave land on #5715 at 5450c4df. One gap to close in #5716 before the served Commit binds predict's row: **write the workload Program's `descriptor.json.gz` beside `build_workload/workload_program.json`** (`predict_workload` builds `wl` but returns only its digest). Without it, `check.match.declaration.from_gprog` records `workload_digest` as unverified and never holds the lag claim to the Program's static, where a traced Build gets both checked. Add it with a test that `from_gprog` verifies the digest and holds the lag claim on predict's row.
