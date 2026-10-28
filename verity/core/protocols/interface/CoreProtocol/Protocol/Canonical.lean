@@ -161,12 +161,26 @@ def obj (s : String) (stop : Nat) :
               else none
 end
 
-/-- Every number in `j` is an integer: exactly when `Flock.canon j` doesn't fail. -/
-def integers : Json → Bool
-  | .num n => n.exponent == 0
-  | .arr a => a.attach.all fun x => integers x.1
-  | .obj kvs => kvs.toArray.attach.all fun p => integers p.1.2
-  | _ => true
+/-- Whether `s`'s bytes from `k` up to `stop` are all below `0x7f`. Over a whole string it is `Flock.ascii`: a character
+below `0x7f` is its one byte, and every byte of any other character is from `0x7f` on. -/
+def asciiFrom (s : String) (stop : Nat) : (fuel k : Nat) → Bool
+  | 0, _ => false
+  | fuel + 1, k => if stop ≤ k then true else if byte s k < 0x7f then asciiFrom s stop fuel (k + 1) else false
+
+/-- `Flock.ascii t`, read in place. -/
+@[inline] def ascii (t : String) : Bool := asciiFrom t t.utf8ByteSize (t.utf8ByteSize + 1) 0
+
+/-- `canonicalJson`'s refusal of a byte at or above `0x7f`, its first check. -/
+def NOT_ASCII : String := "not ASCII without DEL (a byte at or above 0x7f)"
+
+/-- `Flock.canon j`'s error, `none` when it writes `j`: the first non-integer number or string outside ASCII without DEL
+in the tree's order, an object's key before its value, as `canon` meets them. -/
+def canonError : Json → Option String
+  | .num n => if n.exponent == 0 then none else some "canonical JSON: a non-integer number"
+  | .str t => if ascii t then none else some Flock.notAscii
+  | .arr a => a.attach.findSome? fun x => canonError x.1
+  | .obj kvs => kvs.toArray.attach.findSome? fun p => if ascii p.1.1 then canonError p.1.2 else some Flock.notAscii
+  | _ => none
 termination_by j => sizeOf j
 decreasing_by
   · have := Array.sizeOf_lt_of_mem x.2
@@ -174,19 +188,22 @@ decreasing_by
     omega
   · exact Flock.sizeOf_lt_of_mem_toArray p.2
 
-/-- `canonicalJson`'s reason for refusing `t`, a text no canonical JSON is. -/
+/-- `canonicalJson`'s reason for refusing `t`, an ASCII text without DEL that no canonical JSON is. -/
 def refusal (t : String) : String :=
   match Json.parse t with
   | .error e => s!"not JSON ({e})"
-  | .ok j =>
-    if integers j then "not canonical JSON (compact, keys sorted, integers only)" else "canonical JSON: a non-integer number"
+  | .ok j => (canonError j).getD "not canonical JSON (compact, keys sorted, integers only)"
+
+/-- `canonicalJson`'s answer on the first `stop` bytes of `s` once they are ASCII without DEL. -/
+private def parseAscii (s : String) (stop : Nat) : V Json :=
+  match value s stop (2 * stop + 2) 0 with
+  | some (j, k) => if k == stop then pure j else throw (refusal (String.Pos.Raw.extract s 0 ⟨stop⟩))
+  | none => throw (refusal (String.Pos.Raw.extract s 0 ⟨stop⟩))
 
 /-- `canonicalJson`'s answer on the first `stop` bytes of `s` (a whole number of its characters): the JSON when they are
 its canonical form, else the reason. Only a refusal copies them. -/
 def parseUpTo (s : String) (stop : Nat) : V Json :=
-  match value s stop (2 * stop + 2) 0 with
-  | some (j, k) => if k == stop then pure j else throw (refusal (String.Pos.Raw.extract s 0 ⟨stop⟩))
-  | none => throw (refusal (String.Pos.Raw.extract s 0 ⟨stop⟩))
+  if asciiFrom s stop (stop + 1) 0 then parseAscii s stop else throw NOT_ASCII
 
 /-- `canonicalJson s.toUTF8`. -/
 def parse (s : String) : V Json := parseUpTo s s.utf8ByteSize
@@ -194,8 +211,9 @@ def parse (s : String) : V Json := parseUpTo s s.utf8ByteSize
 /-- `canonicalJson b`, with the text it read: `b` as a string, which a caller checking an encoding against it
 (`writes`) keeps in place of the JSON. -/
 def read (b : ByteArray) : V (Json × String) := do
+  unless b.data.all (· < 0x7f) do throw NOT_ASCII
   let some s := String.fromUTF8? b | throw "not UTF-8"
-  pure (← parse s, s)
+  pure (← parseAscii s s.utf8ByteSize, s)
 
 /-- `Flock.unhex s`'s bytes from `i` on, after `acc`: `none` at a byte that isn't a lowercase hex digit. -/
 def unhexFrom (s : String) (n : Nat) : (fuel i : Nat) → ByteArray → Option ByteArray
@@ -250,7 +268,7 @@ def strWrites (s t : String) (stop : Nat) : (fuel k i : Nat) → Option Nat
 def strAt (s : String) (stop : Nat) (t : String) (i : Nat) : Option Nat :=
   if i < stop && byte s i == QUOTE then strWrites s t stop (t.utf8ByteSize + 1) 0 (i + 1) else none
 
-/-- Where `Flock.canon j` ends when written in `s` from `i`, for `j` whose numbers are integers (`integers`). -/
+/-- Where `Flock.canon j` ends when written in `s` from `i`, for `j` that `canon` writes (`canonError j = none`). -/
 def writesAt (s : String) (stop : Nat) : Json → Nat → Option Nat
   | .null, i => lit s stop i "null"
   | .bool b, i => lit s stop i (if b then "true" else "false")
@@ -298,8 +316,9 @@ decreasing_by
 
 /-- `Flock.canon j == s`, or `canon j`'s error: whether `s` is `j`'s canonical JSON, compared in place. -/
 def writes (j : Json) (s : String) : V Bool :=
-  if integers j then pure (writesAt s s.utf8ByteSize j 0 == some s.utf8ByteSize)
-  else throw "canonical JSON: a non-integer number"
+  match canonError j with
+  | some e => throw e
+  | none => pure (writesAt s s.utf8ByteSize j 0 == some s.utf8ByteSize)
 
 /-! Each against the function it stands in for. -/
 
@@ -312,6 +331,14 @@ private def HEX : List String := ["", "00", "0", "0g", "ab", "AB", "é0", "éé"
   | .ok a, .ok b => a.toList == b.toList
   | .error a, .error b => a == b
   | _, _ => false
+
+#guard ["", "a", "~", "\x7f", "é", "aé", "😀", "a\x00b"].all fun t => ascii t == Flock.ascii t
+
+#guard [Json.mkObj [("a", .num ⟨1, 1⟩), ("é", .num 1)], Json.mkObj [("a", .str "é"), ("b", .num ⟨1, 1⟩)],
+  Json.mkObj [("é", .num ⟨1, 1⟩)], .arr #[.num ⟨1, 1⟩, .str "é"], .arr #[.str "é", .num ⟨1, 1⟩]].all fun j =>
+  match Flock.canon j with
+  | .ok _ => canonError j == none
+  | .error e => canonError j == some e
 
 private def JSONS : List Json := [Json.null, .bool true, .bool false, .num 0, .num (-7), .num ⟨15, 1⟩, .str "",
   .str "a\"b\\c\nd\re\tf\x08g\x0ch\x01i\x1fé😀", .arr #[], .arr #[.num 1, .str "x", .arr #[.null]],
