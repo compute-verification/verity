@@ -10,11 +10,12 @@ and `so:NS:contig` (fa3_tile.sh). Its output need not equal FA3's bytes, so each
 - finite, and determinism: equal bytes on a rerun;
 - batch invariance: equal bytes with another sequence ahead of the step's in the batch;
 - within ULP_BOUND bf16 ulp of FA3 (`served`) at the output's scale: max |out - FA3| at most ULP_BOUND ulp of max |FA3|;
-- no farther from an fp32 reference (`reference`, TF32 off) than FA3 is, plus one ulp: in max ulp, and in max abs plus
-  one ulp of max |reference|.
+- no farther from an fp32 reference (`reference`, TF32 off) than FA3 is, plus one ulp at the output's scale: max abs at
+  most FA3's plus one ulp of max |reference|.
 
-An arm that fails one is reported and never timed. Per-element ulps against FA3 are reported, not gated: where an output
-is near zero its ulp is tiny, so any kernel whose bytes differ from FA3's is many ulp from it there. Each gate row carries
+An arm that fails one is reported and never timed. Per-element ulps are reported, not gated: where an output is near zero
+its ulp is tiny, so any kernel whose bytes differ from FA3's is many ulp from it there, and FA3 itself is ~30,000 from
+the reference (a sign across zero). Each gate row carries
 the max abs and max ulp against FA3 and the reference, and the shares of output elements that differ from FA3 and that
 are more than ULP_BOUND ulp from it. Timing is attn_knobs.py's: rounds interleave the passing arms in graphed windows,
 and a window's useful causal MACs a SM clock are against bf16's 2,048.
@@ -71,7 +72,8 @@ def ulp_at(x: float) -> float:
 
 
 def against_ref(o: torch.Tensor, ref: torch.Tensor) -> dict:
-    return {"ulps": int(dist(o, ref.to(torch.bfloat16)).max()), "abs": float((o.float() - ref).abs().max())}
+    e = (o.float() - ref).abs()
+    return {"ulps": int(dist(o, ref.to(torch.bfloat16)).max()), "abs": float(e.max()), "mean_abs": float(e.mean())}
 
 
 def gate(arms: ak.Arms, a: str, s: ak.Step, bat: ak.Step, fa3, ref: torch.Tensor, fa3_ref: dict) -> dict:
@@ -83,10 +85,10 @@ def gate(arms: ak.Arms, a: str, s: ak.Step, bat: ak.Step, fa3, ref: torch.Tensor
     r = against_ref(o, ref)
     ref_abs_bound = fa3_ref["abs"] + ulp_at(float(ref.abs().max()))
     passed = (c["finite"] and c["repeat"]["eq"] and c["batch"]["eq"] and fa3_abs <= ULP_BOUND * fa3_scale
-              and r["ulps"] <= fa3_ref["ulps"] + 1 and r["abs"] <= ref_abs_bound)
+              and r["abs"] <= ref_abs_bound)
     return {**c, "vs_fa3_ulps": int(d.max()), "vs_fa3_abs": fa3_abs, "vs_fa3_scale_ulps": fa3_abs / fa3_scale,
             "vs_fa3_frac_ne": float((d > 0).float().mean()), "vs_fa3_frac_gt": float((d > ULP_BOUND).float().mean()),
-            "vs_ref_ulps": r["ulps"], "vs_ref_abs": r["abs"], "ref_ulps_bound": fa3_ref["ulps"] + 1,
+            "vs_ref_ulps": r["ulps"], "vs_ref_abs": r["abs"], "vs_ref_mean_abs": r["mean_abs"],
             "ref_abs_bound": ref_abs_bound, "pass": passed}
 
 
@@ -100,7 +102,7 @@ def table(rows: list[dict]) -> str:
            for k, rs in by.items()}
     refs = {r["prompt"]: r for r in rows if r.get("kind") == "reference"}
     out = ["| prompt | arm | of bf16 a clock | × FA3 | θ @1830 | SM MHz | µs a layer | vs FA3: max ulp, abs (ulp at scale), "
-           f"share ≠, share > {ULP_BOUND} ulp | vs fp32: max ulp, abs (FA3's) |", "|---|---|---|---|---|---|---|---|---|"]
+           f"share ≠, share > {ULP_BOUND} ulp | vs fp32: max abs, mean abs (FA3's) |", "|---|---|---|---|---|---|---|---|---|"]
     for (prompt, arm), m in sorted(med.items()):
         g = gates.get((prompt, arm), {})
         f = refs.get(prompt, {})
@@ -109,8 +111,8 @@ def table(rows: list[dict]) -> str:
         out.append(f"| {prompt} | {arm} | {m['of_peak']:.3f} | {x} | {m['theta_1830']:.3f} | {m['sm_mhz']:.0f} | "
                    f"{m['us_call']:.1f} | {g.get('vs_fa3_ulps', '—')}, {g.get('vs_fa3_abs', 0):.3g} "
                    f"({g.get('vs_fa3_scale_ulps', 0):.2f}), {g.get('vs_fa3_frac_ne', 0):.3%}, {g.get('vs_fa3_frac_gt', 0):.4%} | "
-                   f"{g.get('vs_ref_ulps', '—')} ({f.get('fa3_vs_ref_ulps', '—')}), {g.get('vs_ref_abs', 0):.3g} "
-                   f"({f.get('fa3_vs_ref_abs', 0):.3g}) |")
+                   f"{g.get('vs_ref_abs', 0):.3g} ({f.get('fa3_vs_ref_abs', 0):.3g}), {g.get('vs_ref_mean_abs', 0):.3g} "
+                   f"({f.get('fa3_vs_ref_mean_abs', 0):.3g}) |")
     refused = [f"{p} {a}" for (p, a), g in sorted(gates.items()) if not g.get("pass")]
     return "\n".join(out) + "\n" + (f"\nRefused (not timed): {', '.join(refused)}\n" if refused else "")
 
@@ -152,7 +154,7 @@ def main() -> None:
         ref = reference(s)
         fa3_ref = against_ref(fa3[0], ref)
         emit({"kind": "reference", "prompt": prompt, "fa3_vs_ref_ulps": fa3_ref["ulps"], "fa3_vs_ref_abs": fa3_ref["abs"],
-              "ref_max_abs": float(ref.abs().max())})
+              "fa3_vs_ref_mean_abs": fa3_ref["mean_abs"], "ref_max_abs": float(ref.abs().max())})
         guard = ak.Guard(s, bat)
 
         def intact(after: str, guard: ak.Guard = guard) -> None:
