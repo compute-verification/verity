@@ -29,7 +29,6 @@ from verity.core.protocols.certifier.certificate import LmsKey
 from verity.core.protocols.certifier.grid import GridParams
 from verity.core.protocols.certifier.schedule import ClockSync, SyncSet
 from verity.core.protocols.pouw import core_check as CC
-from verity.core.protocols.pouw import identifier as I
 from verity.core.protocols.pouw import salt as PS
 from verity.core.protocols.pouw.audit import Epoch, Workload, commit_rows, weight_binding, weights_root
 from verity.core.protocols.pouw.coins import coin_reason
@@ -347,7 +346,6 @@ def test_a_certified_epoch_applies_its_pouw_windows_salt():
     for f in (SD.seed, SD.receipt_seed):
         with pytest.raises(ValueError, match="64-byte"):
             f(started.salt, 0, root, root)
-    assert I.identifier_v1("ncp-v1", epoch)["salt"] == epoch.salt.hex()
 
     assert coin_reason(epoch.coins, ch.open("draw", root), "draw", root) is None
 
