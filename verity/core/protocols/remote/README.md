@@ -379,7 +379,7 @@ the local bound (an activation price, a joint price, a recoverable source), each
   `Nci.Assumptions.MinEntropyHard`) and the wiring property `Nci.Capability.Consumers.Upstream`, are named assumptions in
   the lock, which those proofs take as hypotheses; none is tested yet: no price is measured at a decoder budget, and the
   certificate is not checked on a named training circuit.
-- `Nci.Guarantees.DampenerRemote`: **proved**, but it is the threaded dampener, an older and different bound,
+- `Nci.Guarantees.DampenerRemote`: **proved**, but it is the older threaded slowdown bound, a different bound,
   ρ = max(1, 1/(s + x/MFU₀)) over the thread structure (`Nci.Dampener.remoteDampener`; MFU₀ divides only x), not
   the bound displayed above. It is arithmetic over inline
   hypotheses (`Nci.Assumptions.PouwSound` among them, which no PoUW guarantee discharges), not over the local bounds.
@@ -423,7 +423,7 @@ unregistered share, the prices), each labelled with its source in the calculator
   - The caps and the floor are proved, but their honest witnesses hold `DescriptionHard`, `SourceHard`, `Recovers` and
     coverage only degenerately (a decoder that compresses nothing, coverage of every computation): that the premises
     hold together at a decoder that compresses, and with coverage that excludes some computation, isn't shown yet.
-  - The displayed slowdown bound has no Lean statement; `DampenerRemote` is the older threaded dampener.
+  - The displayed slowdown bound has no Lean statement; `DampenerRemote` is the older threaded slowdown bound.
 
 ### Promising directions
 
