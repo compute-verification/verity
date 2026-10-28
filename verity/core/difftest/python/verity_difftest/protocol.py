@@ -29,9 +29,8 @@ def unhex(s: str) -> bytes:
 
 
 def canonical_json(b: bytes) -> Any:
-    """`Core.canonicalJson`: ASCII without DEL that is JSON and that `canonical` writes back byte for byte (so its strings
-    are ASCII without DEL too: `canonical` writes any other character raw, never as the escape the bytes hold)."""
-    if any(c >= 0x7F for c in b):
+    """`Core.canonicalJson`: ASCII without DEL that is JSON and that `canonical` writes back byte for byte."""
+    if any(c >= 0x7f for c in b):
         raise Reject("not ASCII without DEL (a byte at or above 0x7f)")
     try:
         s = b.decode("utf-8")
