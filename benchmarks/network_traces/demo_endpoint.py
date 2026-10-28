@@ -1,4 +1,4 @@
-"""demo-endpoint: an OpenAI endpoint in front of a decoder that isn't vLLM (the H200 demo's serving loop, CMP-96), for
+"""demo-endpoint: an OpenAI endpoint in front of a decoder that isn't vLLM (the H200 demo's serving loop), for
 the network certifier's rehearsal (`certifier_serve.py rehearse --upstream URL --traffic varied`), writing the records a
 `verity-vllm serve-openai` endpoint writes, so network-e2e's endpoint binding and I/O tie read it unchanged.
 
@@ -23,7 +23,7 @@ Commit window and writes ``summary.json``.
   finishes at its first EOS id (``--eos``) or at ``max_tokens``. Each step's rows are written in the runner's batch
   order, the scheduling order sorted stably by scheduled tokens (Model Runner V2's).
 * **The engine** (`Engine`: each sampling row's known tokens to its next token) is ``hash`` (a token from a SHA-512 of
-  the sequence, for the tests), ``seeded:SHAPE`` (`SeededDecoder`: CMP-95's seeded weights of `e2e_h200.served_weights`'s
+  the sequence, for the tests), ``seeded:SHAPE`` (`SeededDecoder`: the seeded weights of `e2e_h200.served_weights`'s
   SHAPE, ``tiny`` or ``phase1``, through this module's own W8A8 forward on CPU, not the H200 loop's kernels), or
   ``MODULE:FACTORY``, a factory the serving loop provides, called with ``seed`` and returning an `Engine`.
 * **The records**, in serve-openai's formats under ``--out``: ``serve.json`` (the engine, its context as
@@ -36,7 +36,7 @@ Commit window and writes ``summary.json``.
   after ``--window-steps`` steps, so a request may run in two windows (the carry `window_chain.join` binds). Its run root
   is a hiding commitment (`verity.ml.commitments.advice` rows under fresh salts, kept in ``served_rows/w<k>.json``) of
   the tokens it served, one row a sampled token: (step, request, position, token). It stands in for the serving loop's
-  own Commit (HASH-7's per-slot trees), which network accounting doesn't read.
+  own Commit (its per-slot trees), which network accounting doesn't read.
 """
 from __future__ import annotations
 
@@ -92,7 +92,7 @@ def _bf16(words: np.ndarray) -> np.ndarray:
 
 
 class SeededDecoder:
-    """CMP-95's seeded weights (`e2e_h200.served_weights`, interface 1) of `shape`, through a W8A8 pre-norm decoder in
+    """The seeded weights (`e2e_h200.served_weights`, interface 1) of `shape`, through a W8A8 pre-norm decoder in
     numpy: embeddings and positions added, per layer RMSNorm, the query, key and value projections (``kv_heads`` KV heads),
     causal softmax attention, the output projection and the residual, RMSNorm, the ReLU MLP and the residual, then the
     final norm and the head, greedy. A W8A8 linear quantizes its input row to s8 codes at max|x|/127 and scales the s8 dot by
@@ -460,7 +460,7 @@ def parser() -> argparse.ArgumentParser:
     ap = argparse.ArgumentParser(prog="demo_endpoint.py", description=__doc__.split("\n\n")[0])
     ap.add_argument("--out", required=True, type=Path)
     ap.add_argument("--engine", default="hash", help="hash, seeded:SHAPE (tiny, phase1) or MODULE:FACTORY")
-    ap.add_argument("--seed", type=int, default=0, help="the weights' seed (CMP-95's) or the hash engine's")
+    ap.add_argument("--seed", type=int, default=0, help="the seeded weights' seed or the hash engine's")
     ap.add_argument("--host", default="127.0.0.1")
     ap.add_argument("--port", type=int, default=0)
     ap.add_argument("--eos", default="0", help="EOS token ids, comma-separated (the byte vocabulary has none of its own)")

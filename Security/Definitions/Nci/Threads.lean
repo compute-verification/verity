@@ -3,7 +3,7 @@ import Definitions.Nci
 /-!
 # NCI over threads: the vocabulary
 
-The thread draft ("Distinguishing inference from frontier training via novel communication intensity", Notion) bounds
+The thread draft ("Distinguishing inference from frontier training via novel communication intensity") bounds
 the NCI of every small subcircuit of a reference training circuit `C` from two facts about `C`'s structure: each weight
 is used a bounded number of times per thread, and a subcircuit pays an entry fee before it can do much of a thread's work.
 It states them over `C` itself, not over the declared circuit, which reaches them through containment.

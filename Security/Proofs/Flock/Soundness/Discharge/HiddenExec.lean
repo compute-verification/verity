@@ -30,9 +30,9 @@ import Proofs.Flock.Soundness.Discharge.HiddenExec.SetupP
 /-!
 # flock-verify's acceptance under hidden outputs, and the headline over hidden-output sessions
 
-Since #757 main's prover writes the hidden-output statement (`verity/flock-circuit`, `Tags.hiddenOutputs = true`), which
-`Stmt.setupTables` sets up with `Stmt.setupHidden`. e2e-exec's acceptance lemmas (`Discharge/Exec`) and #828's headline
-(`Discharge/Integrate`) are about `Stmt.setupH`'s statements (`hh : I.tags.hiddenOutputs = false`). This area:
+Main's prover writes the hidden-output statement (`verity/flock-circuit`, `Tags.hiddenOutputs = true`), which
+`Stmt.setupTables` sets up with `Stmt.setupHidden`. e2e-exec's acceptance lemmas (`Discharge/Exec`) and the plain
+headline (`Discharge/Integrate`) are about `Stmt.setupH`'s statements (`hh : I.tags.hiddenOutputs = false`). This area:
 
 * `Defs`: `setupOne`, the setup `setupTables` calls for a tag.
 * `Statements`, `Setup`, `Accepts`: e2e-exec's acceptance lemmas without `hh` (`SetupTablesOkAny`, `AcceptsSetupOne`,
@@ -55,7 +55,7 @@ Since #757 main's prover writes the hidden-output statement (`verity/flock-circu
 * `KeyHP`: `KeyH` at `Placed.keyProgP`'s places at public inputs (`keyLayoutHP`, `keyRowsHP`, `keyRowsHP_computes`): a
   unit's public gates hold its public input words' bits in the population's public file (`pub_siteHP`).
 * `Inst`: the same at `instProg`'s places (`instLayoutH`, `instRowsH`, `instRowsH_computes`), from `InstKeysRow`.
-* `HeadlineExec`: `flock_headline_exec_hidden`, #828's `flock_headline_exec` for hidden-output sessions, `hdec` open.
+* `HeadlineExec`: `flock_headline_exec_hidden`, `flock_headline_exec` for hidden-output sessions, `hdec` open.
 * `HeadlineInst`: `flock_headline_exec_hidden_inst`, the same at `instProg`, with no condition on the unit's input
   groups or on where the outputs are returned.
 * `TablesP`, `SitesP`: the one-table plan at the verifier's public inputs `own` (`tableAtHP`, `planAtHP`, `tablesAtHP`)
