@@ -1,3 +1,4 @@
+import Flock.FV3
 import PouwCheck.Inputs
 import PouwCheck.Pass
 import PouwWindow.Record
@@ -95,14 +96,11 @@ def windowDomain? (p : Params) (c : Registration) : Except String Domain := do
     ("partition", c.partition), ("port", PouwWindow.port), ("schema", entrySchema), ("leaves", n), ("run", p.context)])
   Domain.mk? .sha512 binding owner n
 
-/-- `verify_path`: leaf `index` with siblings `sibs`, leaf level first, hashes up to `root`. -/
+/-- `verify_path`: leaf `index` with siblings `sibs`, leaf level first, climbs to `root` (`Flock.FV3.Sha512.climbL`; the
+check's domains are SHA-512). -/
 def verifyPath (dom : Domain) (root : ByteArray) (index : Int) (leaf : ByteArray) (sibs : List ByteArray) : Bool :=
-  if !(0 ≤ index && index < dom.count) || sibs.length != PouwCommit.depth dom.count then false
-  else
-    let (digest, _) := sibs.zipIdx.foldl (fun (acc : ByteArray × Nat) (s, level) =>
-      let (d, i) := acc
-      (if i % 2 == 0 then dom.node level (i / 2) d s else dom.node level (i / 2) s d, i / 2)) (leaf, index.toNat)
-    digest == root
+  if !(0 ≤ index && index < dom.count) || sibs.length != Flock.log2ceil dom.count then false
+  else Flock.FV3.Sha512.climbL dom.id leaf index.toNat 0 sibs == root
 
 /-- `_fromhex`: `bytes.fromhex` of a string of `n` bytes' hex. -/
 def fromHex? (n : Nat) : Json → Option ByteArray

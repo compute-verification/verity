@@ -12998,7 +12998,7 @@
    ]
   },
   "PouwCheck.Credit": {
-   "digest": "5081a71b4a45cd17da3399ac69ae45a1577500af7aa7c1adf7bc1d23e6c514fa",
+   "digest": "d55acdaffb1f0eaa7150b1b438cd70af55dd60a557f980c17be93b5dd3644ec7",
    "definitions": {
     "PouwCheck.Credit.BODY": "071fefb97f3971bcd352e1c3b07d11024a6f9c774c6fb6c3b46931a10dfb376c",
     "PouwCheck.Credit.CALLS_FORM": "d6bf6cb3768f79c8900ee97cb118d0b475d4456410e4d0a86afbe35047c0da92",
@@ -13203,8 +13203,8 @@
     "PouwCheck.Credit.tileOf": "ef888a2a964b35057888c226dbe84eaba8f51698704b4e58977db1b50ce25ffb",
     "PouwCheck.Credit.tileOf._sparseCasesOn_1": "abca97894aa5722346397160457c251915279b9013ba1976af3a05cecc562871",
     "PouwCheck.Credit.tileOf._sparseCasesOn_7": "78239315ebcb5d9480bca09597c7a6d7a33e58fa9009337d79979ffc7484fc6b",
-    "PouwCheck.Credit.treeAt": "1eff78f60fa733c562db3ceed944136346192685f89d767420c77eb2c4c33c82",
-    "PouwCheck.Credit.treeRoot": "a6bb8f3a8a58b3166ed9ade9510247e8956599715e5016a640a9131140b8c17c",
+    "PouwCheck.Credit.treeAt": "2e401b1d9d276aa5e926ac996378f6c3a6b338b3954632ef97a3416daec454c7",
+    "PouwCheck.Credit.treeRoot": "39297b5ec0555d4a408f1936541d4f883eecfc9bba4794e2ef60b07798f499ee",
     "PouwCheck.Credit.unpinnedModel": "95d773802cfe2bff29dede79e9cb709b91106fb18209d33851579cfd161b8942",
     "PouwCheck.Credit.weightsRefuse": "cab671286864c0608af4801816e2fec7db2e427bcddc2479f6dece9b124d58e2",
     "PouwCheck.Credit.weightsRoot": "b7dcec649a137d979f8c31ccfbd1d34af1e6fd047f03aca73dd605a9e2354f8d",
@@ -13705,7 +13705,6 @@
     "Properties.Pouw.Commit.frameInjective",
     "Properties.Pouw.Commit.frameSizes",
     "Properties.Pouw.Commit.leafRefusals",
-    "Properties.Pouw.PeriodJ10R.SecurityProofs.h1J10RCheckedCreditPeriod",
     "Properties.Pouw.PeriodJ10RStrata.SecurityProofs.h1J10RCheckedCreditPeriodStrata",
     "Properties.Pouw.Served.SecurityProofs.servedFreed",
     "Properties.Pouw.Served.SecurityProofs.servedWork",
