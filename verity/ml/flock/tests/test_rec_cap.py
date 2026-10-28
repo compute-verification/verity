@@ -3,7 +3,8 @@ past the node's 32, then zeros, so its outputs, which V* registers as zero rows,
 (`rec_live.top_rows`: the node's 32 words, then 32 zero words). The unit through its M0 layout, and the Definition evaluated
 from its descriptor, are that reference; the unit has no AND; its name and directory say its level; and staging refuses
 tops that are not a level's (level 0's one cap, or a later level's rep 0 then rep 1). The Lean verifier's side is
-`Flock.Test.RecCap` and `test_lean_rec_coins`."""
+`Flock.Test.RecCapSmall` (one of Flock's audit roots), `Flock.Test.RecCap` (built after landing by
+`test_lean_rec_cap_guards`) and `test_lean_rec_coins`."""
 from __future__ import annotations
 
 import random
