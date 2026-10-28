@@ -932,9 +932,12 @@ theorem canon_pr {j : Json} (h : Good j) : ∀ s, Flock.canon j = .ok s → Pr j
   | bool b => intro s h; rw [Flock.canon] at h; cases h; cases b <;> first | exact .tru | exact .fls
   | num m => intro s h; rw [Flock.canon] at h; cases h; exact .num m
   | str s =>
-    intro s' h; rw [Flock.canon] at h; cases h
-    rw [canonStr_toList]
-    exact .str s _ (esc_of _ cesc_esc s)
+    intro s' h; rw [Flock.canon] at h
+    by_cases ht : Flock.ascii s = true
+    · rw [if_pos ht] at h; cases h
+      rw [canonStr_toList]
+      exact .str s _ (esc_of _ cesc_esc s)
+    · rw [if_neg ht] at h; cases h
   | arr h ih =>
     rename_i a
     intro s hs
@@ -959,7 +962,8 @@ theorem canon_pr {j : Json} (h : Good j) : ∀ s, Flock.canon j = .ok s → Pr j
     rename_i m
     intro s hs
     rw [Flock.canon] at hs
-    cases hp : m.toArray.attach.mapM (fun p => do pure (p.1.1, ← Flock.canon p.1.2)) with
+    cases hp : m.toArray.attach.mapM (fun p =>
+        if Flock.ascii p.1.1 then do pure (p.1.1, ← Flock.canon p.1.2) else throw Flock.notAscii) with
     | error e => rw [hp] at hs; cases hs
     | ok vals =>
       rw [hp] at hs
@@ -969,14 +973,18 @@ theorem canon_pr {j : Json} (h : Good j) : ∀ s, Flock.canon j = .ok s → Pr j
           q.2.1 = q.1.1.1 ∧ Flock.canon q.1.1.2 = .ok q.2.2 := by
         intro q hq
         have := hz q hq
-        cases hc : Flock.canon q.1.1.2 with
-        | error e => rw [hc] at this; cases this
-        | ok sv =>
-          rw [hc] at this
-          have e : Except.ok (q.1.1.1, sv) = (Except.ok q.2 : Except String (String × String)) := this
-          injection e with e
-          rw [← e]
-          exact ⟨rfl, rfl⟩
+        try dsimp only at this
+        by_cases ht : Flock.ascii q.1.1.1 = true
+        · rw [if_pos ht] at this
+          cases hc : Flock.canon q.1.1.2 with
+          | error e => rw [hc] at this; cases this
+          | ok sv =>
+            rw [hc] at this
+            have e : Except.ok (q.1.1.1, sv) = (Except.ok q.2 : Except String (String × String)) := this
+            injection e with e
+            rw [← e]
+            exact ⟨rfl, rfl⟩
+        · rw [if_neg ht] at this; cases this
       have hw : ∀ w ∈ vals.toList, ∃ v, m.get? w.1 = some v ∧ Flock.canon v = .ok w.2 := by
         intro w hw'
         obtain ⟨i, hi, rfl⟩ := List.getElem_of_mem hw'

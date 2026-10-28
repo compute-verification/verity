@@ -10,10 +10,10 @@ import Proofs.Flock.Claims.Complete.Json.Canon
 outputs (`Out64`), and two named hypotheses in place of `StmtOk` and
 `ProverOk`:
 
-* `StmtOkZk`: a non-empty `Σ`, a printable draw that decodes (`DrawOk`), the statement's draw the one it was set up at,
-  and the verifier's `Hello` a JSON object whose `coins` is an object, printable with the prover's nonce put in (what
-  the prover's `Hello` and R7 need). The keyed coin tree is `readyZk`'s. It holds at every good masked case
-  (`stmtOkZk`, `Zk/Json/Stmt.lean`).
+* `StmtOkZk`: a non-empty `Σ`, a printable ASCII draw that decodes (`DrawOk`), the statement's draw the one it was set
+  up at, and the verifier's `Hello` a JSON object whose `coins` is an object, printable and ASCII with the prover's
+  nonce put in (what the prover's `Hello` and R7 need). The keyed coin tree is `readyZk`'s, and ASCII. It holds at
+  every good masked case (`stmtOkZk`, `Zk/Json/Stmt.lean`).
 * `ProverOkZk`: at the case's table, the masked commitment's cap, at the `--zk` schedule's first level, is non-empty and
   under `2^64` bytes, and each masked rep, on the table's extra claims at the link's points, records a round, each of
   at most `65536` coins (`RepOk`).
@@ -29,13 +29,15 @@ namespace FlockComplete.JsonRT
 open Flock Transcript FlockComplete FlockDeploy
 open Lean (Json JsonNumber)
 
-/-- **What the masked record needs of the statement**, at every good masked case: a non-empty `Σ`, a printable draw
-that decodes to the statement's instances, the statement's draw the one it was set up at, and the verifier's `Hello` a
-JSON object whose `coins` is an object, printable with the prover's nonce put in. -/
+/-- **What the masked record needs of the statement**, at every good masked case: a non-empty `Σ`, a printable ASCII
+draw that decodes to the statement's instances, the statement's draw the one it was set up at, the verifier's `Hello` a
+JSON object whose `coins` is an object, printable and ASCII with the prover's nonce put in, and an ASCII coin tree
+spec. -/
 def StmtOkZk (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed → Readable.Relation) : Prop :=
   ∀ c : CaseZk H rel, 0 < c.spec.sigma.size ∧ DrawOk c.spec ∧ c.spec.unitDraw = c.s.read.draw ∧
     ∃ m kvs : Std.TreeMap.Raw String Json compare, Flock.JsonParse.parse c.spec.hello = .ok (.obj m) ∧ m.WF ∧ kvs.WF ∧
-      m.get? "coins" = some (.obj kvs) ∧ Good (helloJ (.obj m))
+      m.get? "coins" = some (.obj kvs) ∧ Good (helloJ (.obj m)) ∧ Ascii (helloJ (.obj m)) ∧
+      ∀ ct, c.spec.coinTree = some ct → Ascii ct.toJson
 
 /-- **What the masked record needs of the prover's pieces**, at every good masked case's table: the masked
 commitment's cap, at the `--zk` schedule's first level, is non-empty and under `2^64` bytes, and each masked rep, on the
@@ -73,8 +75,8 @@ theorem RunZk.json (h64 : Claims.Out64 H) (hS : StmtOkZk H rel)
       o.live = ⟨#[rb], o.spec.tables.map fun _ => ByteArray.empty, pointsOf o.spec (Claims.coinSeq o.r 0),
         streams.map (·.map liveRound)⟩ := by
   obtain ⟨st, hst, hsp, -, -⟩ := o.table
-  obtain ⟨hsig, hdraw, -, m, kvs, hown, hm, hkv, hco, hg⟩ := hS o.toCaseZk
-  obtain ⟨hz, hc⟩ := FlockComplete.JsonRT.canon_ok _ hg
+  obtain ⟨hsig, hdraw, -, m, kvs, hown, hm, hkv, hco, hg, ha, hT⟩ := hS o.toCaseZk
+  obtain ⟨hz, hc⟩ := FlockComplete.JsonRT.canon_ok _ hg ha
   have hH : HelloOk o.spec hz := ⟨m, kvs, hown, hm, hkv, hco, hg, hc⟩
   obtain ⟨ct, hct⟩ : ∃ ct, o.spec.coinTree = some ct := Option.isSome_iff_exists.1 o.ready_parts.2.2.2.2
   obtain ⟨hC, hR⟩ := hP o.toCaseZk st (by rw [hst]; simp)
@@ -97,7 +99,7 @@ theorem RunZk.json (h64 : Claims.Out64 H) (hS : StmtOkZk H rel)
   have hdec : Record.decodeWith o.hs o.spec o.record =
       .ok (sessOf o.spec (Claims.hOf H) #[rb] (pointsOf o.spec (Claims.coinSeq o.r 0)) streams o.proofs) := by
     rw [hrec]
-    exact decode_recordObjZk (hOf_size h64) ht hct hH hdraw hsig hrb hpts hpm hss hrs o.proofs
+    exact decode_recordObjZk (hOf_size h64) ht hct (hT ct hct) hH hdraw hsig hrb hpts hpm hss hrs o.proofs
   have hlv : liveOf o.spec o.record = .ok ⟨#[rb], o.spec.tables.map fun _ => ByteArray.empty,
       pointsOf o.spec (Claims.coinSeq o.r 0), streams.map (·.map liveRound)⟩ := by
     rw [hrec]

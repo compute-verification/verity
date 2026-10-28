@@ -36,13 +36,14 @@ theorem mapM_array_ok_mem {α β : Type} (f : α → V β) (xs : Array α) (hf :
   obtain ⟨ys, h⟩ := mapM_list_ok_mem f xs.toList fun a ha => hf a (Array.mem_toList_iff.1 ha)
   exact ⟨ys.toArray, by rw [h]; rfl⟩
 
-/-- **What the masked record needs of the statement** (`StmtOkZk`), at a good case: a non-empty `Σ`, a printable draw
-that decodes to the statement's instances, the statement's draw the one it was set up at, and a `hello` that parses to
-an object with a `coins` object and prints. -/
+/-- **What the masked record needs of the statement** (`StmtOkZk`), at a good case: a non-empty `Σ`, a printable ASCII
+draw that decodes to the statement's instances, the statement's draw the one it was set up at, a `hello` that parses to
+an object with a `coins` object and prints, ASCII, and an ASCII coin tree spec. -/
 def StmtAt (c : Case H rel) : Prop :=
   0 < c.spec.sigma.size ∧ DrawOk c.spec ∧ c.spec.unitDraw = c.s.read.draw ∧
     ∃ m kvs : Std.TreeMap.Raw String Json compare, Flock.JsonParse.parse c.spec.hello = .ok (.obj m) ∧ m.WF ∧ kvs.WF ∧
-      m.get? "coins" = some (.obj kvs) ∧ Good (helloJ (.obj m))
+      m.get? "coins" = some (.obj kvs) ∧ Good (helloJ (.obj m)) ∧ Ascii (helloJ (.obj m)) ∧
+      ∀ ct, c.spec.coinTree = some ct → Ascii ct.toJson
 
 variable (H rel) in
 /-- Rep `rep` of table `i` of a good case as the session runs it, from its stream's domain: on the table's `--zk`
@@ -105,8 +106,8 @@ end Several
 return. -/
 theorem Case.sessionRuns (c : Case H rel) (hS : StmtAt c) (hR : ProverRunsAt c) :
     ∃ record proofs bodies, sessionS H c.resp c.spec c.sts c.w c.ω = (.ok (record, proofs), bodies) := by
-  obtain ⟨-, -, -, m, kvs, hown, -, -, -, hg⟩ := hS
-  obtain ⟨hz, hcn⟩ := FlockComplete.JsonRT.canon_ok _ hg
+  obtain ⟨-, -, -, m, kvs, hown, -, -, -, hg, ha, -⟩ := hS
+  obtain ⟨hz, hcn⟩ := FlockComplete.JsonRT.canon_ok _ hg ha
   obtain ⟨ct, hct⟩ : ∃ ct, c.spec.coinTree = some ct := Option.isSome_iff_exists.1 c.ready_parts.2.2.2.2
   have hfit := c.ready_parts.2.2.1
   obtain ⟨-, -, hspec, hall⟩ := c.tables

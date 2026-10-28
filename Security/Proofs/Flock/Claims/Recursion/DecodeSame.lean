@@ -144,10 +144,10 @@ theorem decodeJ_same {h : ByteArray → ByteArray}
       rw [ho₁ (same_null hdvs)]
       rfl
     | some d =>
-      rintro ⟨hn, hg, D, hD, hDs⟩ hdvs
+      rintro ⟨hn, hg, ha, D, hD, hDs⟩ hdvs
       simp only [Option.getD_some] at hdvs
       have hn' : dv ≠ Json.null := fun e => hn (same_null (e ▸ hdvs.symm))
-      obtain ⟨c, hc⟩ := FlockComplete.JsonRT.canon_ok d hg
+      obtain ⟨c, hc⟩ := FlockComplete.JsonRT.canon_ok d hg ha
       have hc' : canon dv = .ok c := by rw [← FlockComplete.JsonRT.canon_same _ _ hdvs, hc]
       rw [ho₂ hn']
       simp only [Draw.check, hc, hc', ok_bind, bne_self_eq_false, Bool.false_eq_true, ite_false, hD, hDs]

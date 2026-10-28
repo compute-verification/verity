@@ -2,7 +2,7 @@ import Lean.Data.Json
 import Std.Data.TreeMap.Raw.Basic
 
 /-!
-# JSON values alike, printable and well formed
+# JSON values alike, printable, ASCII and well formed
 
 What the completeness proofs read of the record's JSON values:
 
@@ -12,6 +12,7 @@ What the completeness proofs read of the record's JSON values:
   tree than the one printed, alike at every key lookup.
 * **Printable values** (`Good`): every object a well-formed tree, every number an integer (exponent `0`). The printer
   prints a number in its shortest form, so `1.50` comes back as `1.5`, another `JsonNumber`.
+* **ASCII values** (`Ascii`): every string and key ASCII without DEL, the only ones `Flock.canon` prints.
 * **Well-formed values** (`Wf`): every object a well-formed tree.
 
 The verifier's parser `Flock.JsonParse.parse` reads back an alike value from what the honest prover's printer and
@@ -44,6 +45,17 @@ inductive Good : Json → Prop
   | str (s : String) : Good (.str s)
   | arr {a : Array Json} (h : ∀ x ∈ a, Good x) : Good (.arr a)
   | obj {m : Std.TreeMap.Raw String Json} (hm : m.WF) (h : ∀ k v, m.get? k = some v → Good v) : Good (.obj m)
+
+/-- **An ASCII JSON value**: every string and every object key ASCII without DEL (each character below `0x7f`), the
+values the canonical printer prints. -/
+inductive Ascii : Json → Prop
+  | null : Ascii .null
+  | bool (b : Bool) : Ascii (.bool b)
+  | num (n : JsonNumber) : Ascii (.num n)
+  | str {s : String} (h : ∀ c ∈ s.toList, c.toNat < 0x7f) : Ascii (.str s)
+  | arr {a : Array Json} (h : ∀ x ∈ a, Ascii x) : Ascii (.arr a)
+  | obj {m : Std.TreeMap.Raw String Json} (hk : ∀ p ∈ m.toList, ∀ c ∈ p.1.toList, c.toNat < 0x7f)
+      (hv : ∀ p ∈ m.toList, Ascii p.2) : Ascii (.obj m)
 
 /-- **A well-formed JSON value**: every object a well-formed tree. -/
 inductive Wf : Json → Prop

@@ -64,10 +64,10 @@ theorem decodeZk_ofFields {h : ByteArray → ByteArray}
       rw [ho₁ (same_null hdvs)]
       rfl
     | some d =>
-      rintro ⟨hn, hg, D, hD, hDs⟩ hdvs
+      rintro ⟨hn, hg, ha, D, hD, hDs⟩ hdvs
       simp only [Option.getD_some] at hdvs
       have hn' : dv ≠ Json.null := fun e => hn (same_null (e ▸ hdvs.symm))
-      obtain ⟨c, hc⟩ := FlockComplete.JsonRT.canon_ok d hg
+      obtain ⟨c, hc⟩ := FlockComplete.JsonRT.canon_ok d hg ha
       have hc' : canon dv = .ok c := by rw [← FlockComplete.JsonRT.canon_same _ _ hdvs, hc]
       rw [ho₂ hn']
       simp only [Draw.check, hc, hc', ok_bind, bne_self_eq_false, Bool.false_eq_true, ite_false, hD, hDs]
@@ -380,7 +380,7 @@ the rest is the plain record's at `specZ`. -/
 theorem decode_recordObjZk {h : ByteArray → ByteArray}
     (h64 : ∀ b, (h b).size = 64)
     {spec : SessionSpec} {t : String} (ht : spec.tables = #[t]) {ct : CoinTree.Spec} (hct : spec.coinTree = some ct)
-    {hz : String} (hH : HelloOk spec hz) (hdraw : DrawOk spec) (hsig : 0 < spec.sigma.size)
+    (hA : Ascii ct.toJson) {hz : String} (hH : HelloOk spec hz) (hdraw : DrawOk spec) (hsig : 0 < spec.sigma.size)
     {rb : ByteArray} (hrb : 0 < rb.size)
     {points : Array (Array F128)} (hpts : points.size = spec.points) (hpm : ∀ p ∈ points, p.size = spec.mPts)
     {streams : Array (Array Round)} (hss : streams.size = spec.repStreams.size)
@@ -396,7 +396,7 @@ theorem decode_recordObjZk {h : ByteArray → ByteArray}
     str_same hs (recordObjZk_fields spec h hz ct _ points streams proofs (v := Json.str hz)
       (by simp [recordList, specZ]))
   obtain ⟨cj, hcj, hcjs⟩ := fld_same hs (recordObjZk_coinTree spec h hz ct #[rb] points streams proofs)
-  obtain ⟨key, hk⟩ := checkRecord_ok ct hcjs
+  obtain ⟨key, hk⟩ := checkRecord_ok ct hA hcjs
   rw [decodeWith_specZ _ hct hp hown hh (checkHello_ok hm hkv hco hg hc) hcj hk]
   exact decodeZk_ofFields h64 (spec := specZ spec hz) ht rfl hdraw hsig hrb hpts hpm hss hrs proofs hgood
     fun hm => recordObjZk_fields _ _ _ _ _ _ _ _ hm

@@ -101,8 +101,8 @@ theorem sessionRunsZk_goal (hS : StmtOkZk H rel)
     (hR : ProverRunsZk H rel) : SessionRunsZk H rel := by
   intro c
   obtain ⟨st, hst, hsp, hm1, hm2⟩ := c.table
-  obtain ⟨-, -, -, m, kvs, hown, -, -, -, hg⟩ := hS c
-  obtain ⟨hz, hc⟩ := FlockComplete.JsonRT.canon_ok _ hg
+  obtain ⟨-, -, -, m, kvs, hown, -, -, -, hg, ha, -⟩ := hS c
+  obtain ⟨hz, hc⟩ := FlockComplete.JsonRT.canon_ok _ hg ha
   obtain ⟨ct, hct⟩ : ∃ ct, c.spec.coinTree = some ct := Option.isSome_iff_exists.1 c.ready_parts.2.2.2.2
   have ht : c.spec.tables = #[st.tags.table] := by rw [hsp]; rfl
   obtain ⟨v, hv⟩ := zkSchedule_ok (m := (Setup.ofCircuit st).m) hm1 hm2

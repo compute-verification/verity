@@ -26,7 +26,7 @@ namespace FlockComplete.JsonRT
 open Lean (Json JsonNumber)
 open Flock
 
-export Claims.Json (Same Good Wf)
+export Claims.Json (Same Good Ascii Wf)
 
 /-! ## Alike values -/
 

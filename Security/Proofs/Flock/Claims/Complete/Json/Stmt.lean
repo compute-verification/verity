@@ -1,4 +1,5 @@
 import Proofs.Flock.Claims.Complete.Json.Session
+import Proofs.Flock.Claims.Complete.Json.Canon
 import Proofs.Flock.Soundness.Discharge.Hidden.Spec
 import Proofs.Flock.Soundness.Discharge.HiddenExec.Accepts
 import Proofs.Flock.Soundness.Discharge.FailClosed.PublicTies
@@ -8,9 +9,9 @@ import Proofs.Flock.Claims.Complete.Json.Parse
 /-!
 # What the record needs of the statement, from its setup
 
-`stmtOk`: at every good case, the session spec names no keyed coin tree, a non-empty `Σ`, a printable draw that decodes
-to the statement's instances (`DrawOk`), and the statement's draw is the one it was set up at: `StmtOk`, from the case's
-setup alone, with no premise on the JSON library: the verifier keeps what it parsed rebuilt (`Flock.norm`), and the coin
+`stmtOk`: at every good case, the session spec names no keyed coin tree, a non-empty `Σ`, a printable ASCII draw that
+decodes to the statement's instances (`DrawOk`), and the statement's draw is the one it was set up at: `StmtOk`, from the
+case's setup alone, with no premise on the JSON library: the verifier keeps what it parsed rebuilt (`Flock.norm`), and the coin
 tree its coins name.
 
 * The plain verifier's coins are the OS's or a seed's (`Raw.ins`: only `--zk` keys a coin tree), and the statement
@@ -303,6 +304,36 @@ theorem unitDraw_of {tags : Tags} {c : Circuit} {pf : ByteArray}
   cases hw with
   | obj hwf _ => exact drawn_header hwf hm hd
 
+set_option maxHeartbeats 4000000 in
+/-- `HmRow.drawn` prints the header it puts the draw in (`publicDigest`'s `canon`), so the draw is ASCII. -/
+theorem drawn_ascii {c : Circuit} {pub pub' : Public} {d : Json} {m : Std.TreeMap.Raw String Json compare}
+    (hm : m.WF) (hp : pub.header = .obj m) (h : HmRow.drawn c pub d = .ok pub') : Ascii d := by
+  have hu := drawn_header hm hp h
+  unfold HmRow.drawn at h
+  dsimp only at h
+  simp only [throw_bind'] at h
+  repeat' walk_step
+  all_goals
+    simp only [pure, Except.pure, Except.ok.injEq] at h
+    subst h
+    have hc := ‹HmRow.publicDigest _ _ = Except.ok _›
+    unfold HmRow.publicDigest at hc
+    obtain ⟨_, hs, -⟩ := ebind_ok hc
+    have ha := ascii_of_canon hs
+    try dsimp only at hu
+    rw [hp] at hu ha
+    simp only [Json.setObjVal!] at hu ha
+    exact ascii_getObjVal hm.insert.insert.insert.insert ha hu
+
+/-- **A draw's statement over a loaded public file has an ASCII draw**: the setup prints the header it is in. -/
+theorem ascii_of_drawn {tags : Tags} {c : Circuit} {pf : ByteArray} {pop pub : Public} {d : Json}
+    (hl : HmRow.loadPublic tags c pf = .ok pop) (hd : HmRow.drawn c pop d = .ok pub) : Ascii d := by
+  obtain ⟨⟨j, hj⟩, m, hm⟩ := loadPublic_header hl
+  have hw := FlockDeploy.wf_norm j
+  rw [← hj, hm] at hw
+  cases hw with
+  | obj hwf _ => exact drawn_ascii hwf hm hd
+
 /-! ## The coins name no coin tree -/
 
 theorem good_nil : ∀ p ∈ ([] : List (String × Json)), Good p.2 := fun _ h => by cases h
@@ -575,7 +606,7 @@ theorem stmtOk : StmtOk H rel := by
       rcases law_of_lawWhy hlw with ⟨K, strata, hK⟩ | ⟨k, hk⟩
       · exact good_stratified (draw_wf hdraw hdd) hD hK
       · exact good_subset (draw_wf hdraw hdd) hD hk
-    refine ⟨fun hn' => ?_, hg, D, hD, by rw [hspec]; exact hn⟩
+    refine ⟨fun hn' => ?_, hg, ascii_of_drawn hl (hd d hdd), D, hD, by rw [hspec]; exact hn⟩
     rw [hn'] at hg
     rw [hn'] at hD
     cases hD

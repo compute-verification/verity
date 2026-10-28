@@ -317,16 +317,18 @@ theorem setupOne_of {x : Claims.Msg} {s : Ins} {spec : SessionSpec} {sts : Array
   · omega
 
 /-- **What the masked record needs of the statement, at one table**, under the JSON library's specification: a masked
-statement in scope whose drawn setup has one table has a non-empty `Σ`, a printable draw that decodes to its instances
-and is the statement's, and a `Hello` that reads back with `coins` an object, printable with the prover's nonce. -/
+statement in scope whose drawn setup has one table has a non-empty `Σ`, a printable ASCII draw that decodes to its
+instances and is the statement's, a `Hello` that reads back with `coins` an object, printable and ASCII with the
+prover's nonce, and an ASCII coin tree spec. -/
 theorem stmt_of_one {x : Claims.Msg} {s : Ins} {spec : SessionSpec} {sts : Array Flock.Stmt}
     (hsc : Claims.Flock.Scope (deployZk rel) x) (hs : setupOf true x = some (s, spec, sts))
     (hdr : s.read.draw.isSome = true) (h1 : sts.size = 1) :
     0 < spec.sigma.size ∧ DrawOk spec ∧ spec.unitDraw = s.read.draw ∧
       ∃ m kvs : Std.TreeMap.Raw String Json compare, Flock.JsonParse.parse spec.hello = .ok (.obj m) ∧ m.WF ∧ kvs.WF ∧
-        m.get? "coins" = some (.obj kvs) ∧ Good (helloJ (.obj m)) := by
+        m.get? "coins" = some (.obj kvs) ∧ Good (helloJ (.obj m)) ∧ Ascii (helloJ (.obj m)) ∧
+        ∀ ct, spec.coinTree = some ct → Ascii ct.toJson := by
   obtain ⟨st, -, hspec, hst⟩ := setupOne_of hsc hs h1
-  obtain ⟨⟨c, pop, hl, hd⟩, hinst, hsig, hhello⟩ := setupOne_stmt hst
+  obtain ⟨⟨c, pop, hl, hd⟩, hinst, hsig, hhello, hct0⟩ := FlockComplete.JsonRT.setupOne_stmt hst
   have hzk : s.read.zk = true := readOf_zk (x := x) (by
     unfold readOf
     rw [(setupOf_some hs).1]
@@ -339,8 +341,16 @@ theorem stmt_of_one {x : Claims.Msg} {s : Ins} {spec : SessionSpec} {sts : Array
   have hU : spec.unitDraw = some d := by
     rw [hspec]
     simp [Flock.Stmt.spec, hu, Except.toOption]
-  obtain ⟨m, kvs, hp, hm, hkv, hmg, hg⟩ := hello_ok hhello
-  refine ⟨by rw [hspec]; exact hsig, ?_, by rw [hU, hdd], m, kvs, by rw [hspec]; exact hp, hm, hkv, hmg, hg⟩
+  obtain ⟨m, kvs, hp, hm, hkv, hmg, hg, ha, hA⟩ := hello_ok hhello
+  refine ⟨by rw [hspec]; exact hsig, ?_, by rw [hU, hdd], m, kvs, by rw [hspec]; exact hp, hm, hkv, hmg, hg, ha,
+    fun ct hc' => ?_⟩
+  swap
+  · rw [hspec] at hc'
+    change st.coinTree = _ at hc'
+    rw [hct0, hco] at hc'
+    simp only [Coins.tree?, Option.some.injEq] at hc'
+    subst hc'
+    exact hA
   unfold DrawOk
   rw [hU]
   dsimp only
@@ -353,7 +363,7 @@ theorem stmt_of_one {x : Claims.Msg} {s : Ins} {spec : SessionSpec} {sts : Array
     | none => rfl
     | some _ => rw [e] at hdl; cases hdl
   have hw := (insOf_draw_norm (setupOf_some hs).1 hdd).2
-  refine ⟨ofJson_obj hD, ?_, D, hD, by rw [hspec]; exact hn⟩
+  refine ⟨ofJson_obj hD, ?_, ascii_of_drawn hl (hd d hdd), D, hD, by rw [hspec]; exact hn⟩
   rcases law_of_lawWhy hlw with ⟨K, strata, hK⟩ | ⟨k, hk⟩
   · exact good_stratified hw hD hK
   · exact (good_subset hw hD hk).1

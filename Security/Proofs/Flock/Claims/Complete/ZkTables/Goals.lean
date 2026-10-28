@@ -43,8 +43,8 @@ theorem Run.jsonJ (h64 : Out64 H) (o : Run H rel) (hS : StmtAt o.toCase) :
       liveOf o.spec o.record = .ok o.live ∧
       o.live = ⟨rbs, o.spec.tables.map fun _ => ByteArray.empty, pointsOf o.spec (Claims.coinSeq o.r 0),
         streams.map (·.map liveRound)⟩ := by
-  obtain ⟨hsig, hdraw, -, m, kvs, hown, hm, hkv, hco, hg⟩ := hS
-  obtain ⟨hz, hcz⟩ := FlockComplete.JsonRT.canon_ok _ hg
+  obtain ⟨hsig, hdraw, -, m, kvs, hown, hm, hkv, hco, hg, ha, hT⟩ := hS
+  obtain ⟨hz, hcz⟩ := FlockComplete.JsonRT.canon_ok _ hg ha
   have hH : HelloOk o.spec hz := ⟨m, kvs, hown, hm, hkv, hco, hg, hcz⟩
   obtain ⟨ct, hct⟩ : ∃ ct, o.spec.coinTree = some ct := Option.isSome_iff_exists.1 o.ready_parts.2.2.2.2
   have hn := o.toCase.tables_nodup
@@ -81,8 +81,8 @@ theorem Run.jsonJ (h64 : Out64 H) (o : Run H rel) (hS : StmtAt o.toCase) :
   have hdec : Record.decodeWith o.hs o.spec o.record =
       .ok (sessOf o.spec (Claims.hOf H) rbs (pointsOf o.spec (Claims.coinSeq o.r 0)) streams o.proofs) := by
     rw [hrec]
-    exact decode_recordObjZkJ (hOf_size h64) hn hct hH hdraw hsig hrbs (fun rb h => (hrb rb h).1) hpts hpm hss hrs
-      o.proofs
+    exact decode_recordObjZkJ (hOf_size h64) hn hct (hT ct hct) hH hdraw hsig hrbs (fun rb h => (hrb rb h).1) hpts
+      hpm hss hrs o.proofs
   have hlv : liveOf o.spec o.record = .ok ⟨rbs, o.spec.tables.map fun _ => ByteArray.empty,
       pointsOf o.spec (Claims.coinSeq o.r 0), streams.map (·.map liveRound)⟩ := by
     rw [hrec]

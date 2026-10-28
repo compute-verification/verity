@@ -6,7 +6,7 @@ import Proofs.Flock.Claims.Complete.Json.Canon
 
 `decode_recordObj`: with no premise on the JSON library, `Record.decodeWith` through
 `Hashes.ofSha512 h` reads the printed honest record (`printJ` of `recordObj`) back as `sessOf`, its every check passing,
-for one table, no keyed coin tree, a printable draw that decodes (`DrawOk`), a non-empty `Σ` and `root_B`, the
+for one table, no keyed coin tree, a printable ASCII draw that decodes (`DrawOk`), a non-empty `Σ` and `root_B`, the
 configured point shape, one recorded stream per rep stream and well-formed rounds, with `h`'s outputs 64 bytes (S12
 compares each round's digest length with the empty message's).
 
@@ -70,12 +70,12 @@ theorem array_mapIdxM_ok_of {α β : Type} (f : Nat → α → V β) (a : Array 
       simpa using hf i (by simpa using h₁) (by simpa using h₂)]
   simp
 
-/-- What the decoder's U1–U3 need of the statement's draw: none, or a non-null printable draw that decodes, its proved
-units the statement's instances. -/
+/-- What the decoder's U1–U3 need of the statement's draw: none, or a non-null printable ASCII draw that decodes, its
+proved units the statement's instances. -/
 def DrawOk (spec : SessionSpec) : Prop :=
   match spec.unitDraw with
   | none => True
-  | some d => d ≠ Json.null ∧ Good d ∧ ∃ D, Draw.UnitDraw.ofJson d = .ok D ∧ D.proved.size = spec.instances
+  | some d => d ≠ Json.null ∧ Good d ∧ Ascii d ∧ ∃ D, Draw.UnitDraw.ofJson d = .ok D ∧ D.proved.size = spec.instances
 
 /-- A recorded round as the decoder reads it back: its digest the retained bytes'. -/
 def roundRec (spec : SessionSpec) (h : ByteArray → ByteArray) (r : Round) : Round :=
@@ -150,10 +150,10 @@ theorem decode_recordObj {h : ByteArray → ByteArray}
       rw [ho₁ (same_null hdvs)]
       rfl
     | some d =>
-      rintro ⟨hn, hg, D, hD, hDs⟩ hdvs
+      rintro ⟨hn, hg, ha, D, hD, hDs⟩ hdvs
       simp only [Option.getD_some] at hdvs
       have hn' : dv ≠ Json.null := fun e => hn (same_null (e ▸ hdvs.symm))
-      obtain ⟨c, hc⟩ := FlockComplete.JsonRT.canon_ok d hg
+      obtain ⟨c, hc⟩ := FlockComplete.JsonRT.canon_ok d hg ha
       have hc' : canon dv = .ok c := by rw [← FlockComplete.JsonRT.canon_same _ _ hdvs, hc]
       rw [ho₂ hn']
       simp only [Draw.check, hc, hc', ok_bind, bne_self_eq_false, Bool.false_eq_true, ite_false, hD, hDs]

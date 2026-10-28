@@ -15,8 +15,8 @@ verifier's parser reads back of the honest prover's printer `printJ` is proved, 
   table's extra claims, records a round, each of at most `65536` coins (`RepOk`); it holds at `Out64`
   (`Replay.proverOk`).
 
-What they read of the statement, `StmtOk` (no keyed coin tree, a non-empty `Σ`, a printable draw that decodes, and the
-statement's draw), holds at every good case (`stmtOk`, `Stmt`).
+What they read of the statement, `StmtOk` (no keyed coin tree, a non-empty `Σ`, a printable ASCII draw that decodes,
+and the statement's draw), holds at every good case (`stmtOk`, `Stmt`).
 
 `Run.json` is the record at the run: `Record.decodeWith` reads `sessOf` and `liveOf` the live session, its points the
 first coin's (`coinOf_bytes`: a coin's bytes read back are the coin), the first send is the link of its `root_B`, and
