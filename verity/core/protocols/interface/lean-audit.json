@@ -22,7 +22,7 @@
   "CoreProtocol.Period": {
    "imports": ["Lean.Data.Json", "Flock.Canon"],
    "except": [],
-   "why": "the code's ticks, spans and monitoring period are spec: `Properties.Core` states them equal to Security's, so they import only Lean's JSON and C-Flock's canonical JSON"
+   "why": "the code's ticks, spans and monitoring period are spec: `Properties.Core.Period` states them equal to Security's, so they import only Lean's JSON and C-Flock's canonical JSON"
   },
   "CoreProtocol.PeriodDifftest": {
    "imports": ["CoreProtocol.Period", "Difftest", "Lean.Data.Json", "Flock.Canon"],

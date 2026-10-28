@@ -1,8 +1,8 @@
 /-
 Ticks, spans of ticks and the monitoring period, as the code reads them: the code packages' copy of
 `Security/Definitions/Core/Period.lean` (`Verity.Tick`, `Verity.TickSpan`, `Verity.MonitoringPeriod`), on Lean core and
-C-Flock's canonical JSON, so a verifier reads them without requiring `security`. `Properties.Core` states that the copy is
-the spec's, and `verity.core.periods` is its Python mirror, which `core-periods-difftest` holds to it.
+C-Flock's canonical JSON, so a verifier reads them without requiring `security`. `Properties.Core.Period` states that the
+copy is the spec's, and `verity.core.periods` is its Python mirror, which `core-periods-difftest` holds to it.
 
 * A span of ticks (`TickSpan`): the ticks `[start, start + len)` on the one clock (`OneClock`), ending at `stop`;
   `within` decides that one span lies inside another.

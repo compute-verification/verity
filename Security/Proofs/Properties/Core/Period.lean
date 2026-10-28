@@ -1,7 +1,7 @@
-import Properties.Core
+import Properties.Core.Period
 
 /-!
-# Proofs that the code's periods are the spec's (`Properties.Core`)
+# Proofs that the code's periods are the spec's (`Properties.Core.Period`)
 
 A code cut is its boundaries, an array; a spec cut is a monotone function from `Fin (n + 1)`. An array of boundaries
 that is `isCut` of a span is `Array.ofFn` of exactly one cut of it (`isCut_iff`): its first and last boundaries are the
@@ -9,7 +9,7 @@ span's start and stop, and `ordered` is monotone (`ordered_ofFn`). The parts of 
 consecutive values of `f` (`parts_ofFn`), which is `Cut.part`. A monitoring period then reads cut by cut.
 -/
 
-namespace Properties.Core
+namespace Properties.Period
 
 open _root_.Core (TickSpan MonitoringPeriod parts)
 
@@ -156,4 +156,4 @@ theorem monitoringPeriodIsSpec : MonitoringPeriodIsSpec := by
     simp only [Function.comp, parts_boundaries, List.map_ofFn]
     rfl
 
-end Properties.Core
+end Properties.Period

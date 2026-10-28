@@ -13,10 +13,10 @@ ticks, spans and the monitoring period without requiring `security`. These say t
   boundaries (`code`), no two spec monitoring periods hold the same ones, and its execution and sampling blocks' spans
   are the spec's.
 
-`Proofs.Properties.Core` proves both.
+`Proofs.Properties.Core.Period` proves both.
 -/
 
-namespace Properties.Core
+namespace Properties.Period
 
 /-- The spec's span a code span reads as: the same start and length. -/
 def spec (p : _root_.Core.TickSpan) : Verity.TickSpan := ⟨p.start, p.len⟩
@@ -46,4 +46,4 @@ def MonitoringPeriodIsSpec : Prop :=
   (∀ M : Verity.MonitoringPeriod,
     (code M).samplingSpans.map (·.map spec) = List.ofFn fun j => List.ofFn (M.samplingSpan j))
 
-end Properties.Core
+end Properties.Period

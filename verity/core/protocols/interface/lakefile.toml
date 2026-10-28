@@ -4,7 +4,7 @@
 # ticks, spans and monitoring period (`CoreProtocol.Period`), whose difftest port `core-periods-difftest` serves through
 # the difftest harness's Lean.
 name = "core_protocol"
-defaultTargets = ["CoreProtocol", "core-protocol-example", "core-periods-difftest"]
+defaultTargets = ["CoreProtocol", "core-protocol-example"]
 
 [leanOptions]
 autoImplicit = false
@@ -21,10 +21,11 @@ path = "../../difftest/lean"
 [[lean_lib]]
 name = "CoreProtocol"
 
-[[lean_exe]]
-name = "core-protocol-example"
-root = "CoreProtocol.ExampleMain"
-
+# Not a default target: the difftest harness builds it by name (`verity_difftest.build`).
 [[lean_exe]]
 name = "core-periods-difftest"
 root = "CoreProtocol.PeriodDifftestMain"
+
+[[lean_exe]]
+name = "core-protocol-example"
+root = "CoreProtocol.ExampleMain"
