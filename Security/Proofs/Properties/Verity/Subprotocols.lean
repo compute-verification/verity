@@ -197,8 +197,13 @@ theorem playOut_forward (ns : List ℕ) (θ F c b : ByteArray) (enc : List Relea
       forwardK b ns (fun log => Game.send ByteArray fun e => Game.ret (⟨θ, F, c, log, e⟩ : Exchange))
         fun log => ⟨enc log, PUnit.unit⟩ :=
     eq_of_heq ((cast_heq _ _).trans (cast_heq _ _))
+  have hout := outK_forwardK b ns
+    (fun log => Game.send ByteArray fun e => Game.ret (⟨θ, F, c, log, e⟩ : Exchange))
+    (fun log => ⟨enc log, PUnit.unit⟩) xs
   unfold playOut
-  rw [h, outK_forwardK]
+  rw [h]
+  exact congrArg (fun o : (log : List Release) × Game.Strategy
+    (Game.send ByteArray fun e => Game.ret (⟨θ, F, c, log, e⟩ : Exchange)) => (⟨θ, F, c, o.1, o.2.1⟩ : Exchange)) hout
 
 end Coins
 
