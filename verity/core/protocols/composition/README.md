@@ -84,8 +84,8 @@ audited.
 A stated exception: the policy's v0 publishes the declared division and each inference block's profile (its gates and
 fresh-input bits) in the clear. Both products compose it for the run of record of 28 Oct only, as an exception to
 everything-zero-knowledge, by Daniel's ruling: "Let's run it in the clear tonight as a stated exception." v1's
-private form (the division committed under hiding leaves, compliance proved, a padded profile) replaces it after
-15:00Z on 28 Oct. `tests/test_inference_only_not_composed.py` refuses any protocol that publishes
+private form (the division committed under hiding leaves, compliance proved, a padded profile) replaces it.
+`tests/test_inference_only_not_composed.py` refuses any protocol that publishes
 private data among the products' components unless its `KNOWN` lists it with its reason, and `KNOWN` only shrinks;
 `benchmarks/one_stage/composite.py` writes the exception's line into the record it renders.
 

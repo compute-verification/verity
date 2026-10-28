@@ -8,9 +8,10 @@ service holds them (`served.json`, `served-x.json`), with `register_served` on i
 (`out-port.json`; `served_registered.registered_file`), and `flock-verify verify --zk --registered` passes every check of
 the session on it, its verdict naming that program's digest (the partition's), and refuses it on the same file with the
 tree's root changed, or a bit row's port with its words or width changed.
-`--zk` holds the files to the form `SampledKSLiveV4` covers, or at a shared-row public file `SampledKSLiveV5`'s
-(`Flock.PortRoots`, `Flock.KsScope`). The rows of all three and their shared-row public files are in it, so each session
-is accepted.
+`--zk` holds the files (`Flock.PortRoots`, `Flock.KsScope`) to the form `SampledKSLiveV3` covers, or at a shared-row
+public file `SampledKSLiveV5`'s: their file preconditions, which the planned `SampledKSLiveV4`, not stated yet, is to
+read off this refusal for V3. The rows of all three and their shared-row public files are in it, so each session is
+accepted.
 A plain session of the row/v1 stage (`PLAIN`: no `--zk`, the verifier's own stratified draw) is accepted on that file too,
 and refused with the root changed and without `--registered`.
 Each verify sets up an m = 25 table (about 10 s), so the module is slow; it is the one test of `register_served`'s file on
@@ -139,8 +140,9 @@ def test_a_bit_row_port_whose_words_and_width_are_not_its_rows_is_refused(fx, tm
 
 
 def test_ks_form_is_the_default_under_zk_and_every_row_format_passes_its_rows_check(fx, tmp_path):
-    """`--zk` holds the files to the form `SampledKSLiveV4` covers, or at a shared-row public file `SampledKSLiveV5`'s
-    (`Flock.PortRoots.checkOf`, then `Flock.KsScope.checkOf`), which every served row format is in: the session at a
+    """`--zk` holds the files (`Flock.PortRoots.checkOf`, then `Flock.KsScope.checkOf`) to the form `SampledKSLiveV3`
+    covers, or at a shared-row public file `SampledKSLiveV5`'s (the planned `SampledKSLiveV4`, not stated yet, is to
+    read V3's file preconditions off this refusal), which every served row format is in: the session at a
     `row/v1` circuit, at `row/v2` rows and with `cs` a `row-seg/v1` row is accepted, and `--ks-form`, the check's old
     flag, gives the same verdict. `--ks-form` without `--zk` is a usage error."""
     import served_registered as SR

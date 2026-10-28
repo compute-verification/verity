@@ -42,9 +42,13 @@ coins, over window `t`'s own (`∀ ξ, P_a[E_t(ξ[t ↦ a])] ≤ p`).
   `NciCheck.Properties.DescThrottles` gives for every declaration a verdict of compliance of the check of record lays
   out (`NciCheck.Baseline.evaluate`, whose verdict is `Desc.evaluate`'s), at `Γ = gamma` and `α = num/den`, under
   `BaselineRegistered` and `WeightsIncompressible`, which the check does not see. Reading the check itself needs the
-  code (package `security_properties`), so the statement takes its verdict's conclusion. `DescThrottles` is not a
-  guarantee yet: it rests on `Novel.ReadsExact`, through `DescAgrees`. The cover theorem's factor on the same verdicts,
-  `NciCheck.Properties.CheckedCoverTraining`, would replace `ρ_T = b_a/(αΛ)` by its own.
+  code (package `security_properties`), so the statement takes its verdict's conclusion. `DescThrottles` is proved
+  (`NciCheck.Properties.SecurityProofs.DescThrottles`, a guarantee of `Security/Properties`' lock), from `DescAgrees`
+  (`SecurityProofs.DescAgrees`, itself proved from `Novel.readsExact`) and the gate-by-gate check's `Throttles`, and the
+  check of record's verdict is `Desc.evaluate`'s (`SecurityProofs.baseline_desc`). What is open on this leg is the
+  bridge from those verdicts to this premise, that each declared run `i` is a declaration such a verdict lays out, with
+  the threading `Th_i` the premise reads: it is not stated. The cover theorem's factor on the same verdicts,
+  `NciCheck.Properties.CheckedCoverTraining` (proved), would replace `ρ_T = b_a/(αΛ)` by its own.
 
 Every other premise is `DampenerRemote`'s: the model's accounting of the four sources of counted multiplications, the
 capacities `C` and `U` (`s = U/(C + U)`), and the hardware's rate `Φ` per identity. The developer's identities `I`

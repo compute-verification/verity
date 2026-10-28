@@ -17,9 +17,10 @@ proved here is the summaries' arithmetic, each step stated against the function 
   width: `novelWidth`'s count of a batch's whole members that no other read meets.
 
 Not proved here: that `analyze`'s reads per root node are the unrolled operands outside it (what `Prog.gate` returns,
-through §7's resolution; open as `Novel.ReadsExact`). That `novelWidth` is the width of the union of the gates it is
-given is proved in `Width` (`novelWidthExact`). The difftest holds the open one (`runs` `NciCheck.DescDifftestMain` in
-the package's `lean-audit.json`: 3,993 declarations, the description-sized check against the unrolled one).
+through §7's resolution), `Novel.ReadsExact`, proved in `Proofs.Properties.Nci.Agrees` (`Novel.readsExact`). That
+`novelWidth` is the width of the union of the gates it is given is proved in `Width` (`novelWidthExact`). The difftest
+holds the description-sized check against the unrolled one too (`runs` `NciCheck.DescDifftestMain` in the package's
+`lean-audit.json`: 3,993 declarations).
 -/
 
 namespace NciCheck.Properties.SecurityProofs.Desc

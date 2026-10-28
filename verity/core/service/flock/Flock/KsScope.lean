@@ -1,7 +1,10 @@
 /-
-The forms `verify --zk` refuses so that the sampled audit's knowledge soundness (`Flock.Guarantees.SampledKSLiveV4`) takes
-none of `SampledKSLiveV3`'s file preconditions as a hypothesis: no form goes ahead of its proof. Under `--zk` every session
-of a statement outside them is refused, beside `ProvedScope.check` and `PortRoots.check`:
+The forms `verify --zk` refuses: files outside the file preconditions the sampled audit's knowledge soundness takes as
+hypotheses (`Flock.Guarantees.SampledKSLiveV3`'s, or `SampledKSLiveV5`'s at a shared-row public file), so no form goes
+ahead of its proof. The refusals are meant to discharge V3's file preconditions: the theorem that reads them off this
+acceptance, as V3 reads V2's off `PortRoots.check` and the run's population check, is the planned `SampledKSLiveV4`, not
+stated yet. Under `--zk` every session of a statement outside them is refused, beside `ProvedScope.check` and
+`PortRoots.check`:
 
 * `tagsWhy tags`: a typed statement, one with public outputs, one without retained rounds, or one whose leaves are not
   `hm96-sha512/v1` (V3's `I.tags.typed = false` and `TagsOkZHJ`).
@@ -15,7 +18,7 @@ of a statement outside them is refused, beside `ProvedScope.check` and `PortRoot
   `k` the tables don't divide (V3's `kd % nTab = 0`).
 
 `checkOf parsed tags publicFile count draw` runs them on the circuit as `HmOut.parse` reads it and the public file as
-`HmOut.loadPublic` loads it; `check_ok` says what passing it establishes: V4's file preconditions, or V5's at a
+`HmOut.loadPublic` loads it; `check_ok` says what passing it establishes: V3's file preconditions, or V5's at a
 shared-row file. V3's sixth, that the unit is a built net, follows
 from the parse of an untyped statement. A V* session (`--rec-inner`) is the recursion's, whose guarantee is its own, so
 `verify` doesn't run the check on it. `flock-verify ks-form` runs `checkOf` alone on a statement's files, and the Python
@@ -203,7 +206,7 @@ theorem drawWhy_none {count : Nat} {draw : Option Json} (h : drawWhy count draw 
       next => cases h
 
 /-- **What `check` passing says of the files**: the tags pass `tagsWhy`, and at the circuit `HmOut.parse` reads and the
-public file `HmOut.loadPublic` loads, the circuit is in `scopeOkH`, the public file has no shared rows (V4's form) or is
+public file `HmOut.loadPublic` loads, the circuit is in `scopeOkH`, the public file has no shared rows (V3's form) or is
 in V5's shared-row form (`SharedOk`), and the draw passes `drawWhy`. -/
 theorem check_ok {tags : Tags} {cf pf : ByteArray} {tables : List (String × ByteArray)} {count : Nat}
     {draw : Option Json} {c : Circuit} {pub : Public} (h : check tags cf pf tables count draw = .ok ())

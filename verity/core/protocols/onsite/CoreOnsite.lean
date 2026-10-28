@@ -17,8 +17,7 @@ the same one: two records' digests reject onsite whatever the subprotocols answe
 A stated exception: the policy's v0 publishes the declared division and each inference block's profile (its gates and
 fresh-input bits) in the clear. Onsite composes it for the run of record of 28 Oct only, as an exception to
 everything-zero-knowledge, by Daniel's ruling: "Let's run it in the clear tonight as a stated exception." v1's
-private form (the division committed under hiding leaves, compliance proved, a padded profile) replaces it after
-15:00Z on 28 Oct.
+private form (the division committed under hiding leaves, compliance proved, a padded profile) replaces it.
 -/
 import CoreComposition.Blobs
 import CoreComposition.Cases

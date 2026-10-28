@@ -15,7 +15,9 @@ v1 audit (`OneStage`) with the verdicts computed here, from the statement's file
 * **check**: `flock-verify verify --zk --statement verity/flock-circuit` with `--circuit`, `--public`, `--partition`,
   `--program` and `--registered` the verifier's own and one `--session` a session, as `one_stage.proofs.verify` runs it
   (`verdicts`, the C-Flock library calls `verifyCmd` makes on that path, its last the files' ports and roots,
-  `Flock.PortRoots.checkOf`, and the form `Flock.Guarantees.SampledKSLiveV4` covers, `Flock.KsScope.checkOf`); then v1's
+  `Flock.PortRoots.checkOf`, and the files' form, `Flock.KsScope.checkOf`, which refuses files outside
+  `Flock.Guarantees.SampledKSLiveV3`'s file preconditions, or `SampledKSLiveV5`'s at a shared-row public file, and is
+  meant to discharge V3's in the planned `SampledKSLiveV4`, not stated yet); then v1's
   `check` on those verdicts, one of
   record a session (`flock-verify/<name>`). A session accepted under another program than the partition object's, proved
   units other than the evidence's `proved_units`, or a circuit, public or record file no blob holds, rejects; a rep
@@ -289,8 +291,9 @@ def coinKeyOf (record : String) (st : SetUp) : Option String :=
 
 /-- `verify --zk`'s verdict on one session set up as `st` at `draw`: its proof files, its coin-tree key fresh among
 `coinKeys`, `Zk.verify` and the checks `verifyCmd` makes after it, its last the files' ports and roots
-(`ksFiles`, `Flock.PortRoots.checkOf`) and the form `Flock.Guarantees.SampledKSLiveV4` covers at `draw`
-(`Flock.KsScope.checkOf`). -/
+(`ksFiles`, `Flock.PortRoots.checkOf`) and the files' form at `draw` (`Flock.KsScope.checkOf`:
+`Flock.Guarantees.SampledKSLiveV3`'s file preconditions, or `SampledKSLiveV5`'s at a shared-row public file, which the
+planned `SampledKSLiveV4`, not stated yet, is to discharge for V3). -/
 def verdictOf (I : Flock.Witness.Inputs) (scope ksFiles : V Unit) (coinKeys : Array String) (record : String)
     (draw : Option Json) (st : SetUp) (files : V (Array ByteArray)) (coinKey : Option String) : V Unit := do
   let proofs ← files

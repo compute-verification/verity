@@ -1,6 +1,7 @@
-"""`one_stage.proofs.ks_form_why`, the Python mirror of `verify --zk`'s refusal of a statement form the sampled audit's
-knowledge soundness (`SampledKSLiveV4`, and `SampledKSLiveV5` at a shared-row public file) does not cover
-(`Flock.KsScope.filesWhy`), held to `flock-verify ks-form`, which runs that check alone, on statements the prover wrote:
+"""`one_stage.proofs.ks_form_why`, the Python mirror of `verify --zk`'s refusal (`Flock.KsScope.filesWhy`) of a
+statement form outside the file preconditions the sampled audit's knowledge soundness takes (`SampledKSLiveV3`'s, and
+`SampledKSLiveV5`'s at a shared-row public file; the planned `SampledKSLiveV4`, not stated yet, is to discharge V3's),
+held to `flock-verify ks-form`, which runs that check alone, on statements the prover wrote:
 M0's flat hidden-output sets, RoPE (its unit returns its output) and GEMM (its unit reads two input groups and a tail
 stage returns the outputs, which both refuse, `SCOPE_WHY`), and the served registered RoPE stage (a shared-row public
 file in the form `SampledKSLiveV5` covers, which both pass). Each case's answer is Lean's and the mirror's alike.

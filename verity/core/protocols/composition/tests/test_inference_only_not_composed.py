@@ -2,7 +2,7 @@
 with its reason. The inference-only policy's public form, `verity/inference-only/v0` (`NciCheck.Protocol.protocol`),
 publishes the declared division, and each inference block's gates and fresh-input bits, so it isn't zero-knowledge; both
 composites compose it for the run of record of 28 Oct only, a stated exception by Daniel's ruling: "Let's run it in
-the clear tonight as a stated exception." v1's private form replaces it after 15:00Z on 28 Oct. The
+the clear tonight as a stated exception." v1's private form replaces it. The
 composites' components are read wherever they are listed: their Lean (`Core.Onsite.components`, which is also
 `Core.Product.registry`, and `Core.Remote.components`, with the ids each one's `#guard` pins), the reference's mirror of
 them (`reference.ONSITE`, `REMOTE`), and the ids a configuration may name as components (`parties.IDS`, which step0's

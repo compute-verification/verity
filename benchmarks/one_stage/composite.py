@@ -58,7 +58,7 @@ EXCEPTIONS = {
         "stated exception: verity/inference-only/v0 publishes the declared division and each inference block's profile "
         "in the clear, composed for the run of record of 28 Oct only (Daniel's ruling, 27 Oct, 9:39 PM PDT: \"Let's run "
         "it in the clear tonight as a stated exception.\"); v1's private form (division committed under hiding leaves, "
-        "compliance proved, padded profile) replaces it after 15:00Z on 28 Oct"),
+        "compliance proved, padded profile) replaces it"),
 }
 USAGE = 64
 LEAK = 65
