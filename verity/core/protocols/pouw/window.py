@@ -709,8 +709,7 @@ def session_cap(k_log: int, per_block: int = 1) -> int:
 
 
 def sessions(k: int, cap: int) -> int:
-    """S, the fixed-shape sessions of `cap` instances that hold a window's K′ = `k` drawn tiles.  Served windows draw
-    K′ <= 31,178 (ε = 0.1%, δ = 2^-40 over levels 87 to 143) and K′ <= 9,937 (ε = 1%, δ = 2^-128)."""
+    """S, the fixed-shape sessions of `cap` instances that hold a window's K′ = `k` drawn tiles (`k_prime`)."""
     if not (_positive(k) and _positive(cap)):
         raise ValueError(f"K′ and the cap are positive, not {k!r} and {cap!r}")
     return -(-k // cap)
