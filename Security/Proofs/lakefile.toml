@@ -63,4 +63,5 @@ roots = ["Proofs.Core", "Proofs.Nci", "Proofs.Pous", "Proofs.Pouw", "Proofs.Netw
   "Proofs.Properties.RemoteAudit.Component",
   "Proofs.Properties.Pouw.LiveSalt.Ledger", "Proofs.Properties.Nci.ReadsExact",
   "Proofs.Properties.Nci.BodiesOk.ReadsDecoded", "Proofs.Properties.Composition", "Proofs.Properties.Core.Site",
-  "Proofs.Properties.Nci.Protocol", "Proofs.Properties.Verity.Soundness"]
+  "Proofs.Properties.Nci.Protocol", "Proofs.Properties.Verity.Soundness",
+  "Proofs.Properties.Verity.Pous"]
