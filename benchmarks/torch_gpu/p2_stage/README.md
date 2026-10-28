@@ -16,7 +16,7 @@ on that buffer.
   built on `libp2v1.so` through `p2_v1.gpu.Kernels` (keys by `p2v1_keys` v4, then `p2v1_decode`). A chunk of labels is
   decoded at a time, and each row's payload bytes are scattered to their place in the buffer. What the reference refuses
   raises `StoreError` with the fixture's flag bits: 2 for a row that isn't a codeword or isn't below p, 3 for a last
-  block nonzero past its tensor's end, 0 for the library's own flag.
+  block nonzero past its tensor's end, 0 for the library's own flag. `timed` is the one timer the drivers below use.
 - `gemm.py`: the GEMM's check. `twin` checks every output word by an independent exact path, and `definition_words`
   evaluates `ScaledMmS8Coordinate_v1{K, GEMM_SM90_S8}` on samples.
 - `layer.py`: the GPU driver for one layer (the fixture's toy, encode a development store across leases, stage, gemm at
