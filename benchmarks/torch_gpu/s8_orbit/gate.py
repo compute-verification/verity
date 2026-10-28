@@ -4,7 +4,8 @@
           linear's epilogue on X·Wᵀ (cvt.rn.f32, mul.rn s_a, mul.rn s_w, cvt.rn.bf16), at shapes with tails in every dim
   full    int8 X on ±127 against a checkpoint's linears (or W on ±127): y32 plus `orbit_gpu.corrections` equal to X·Wᵀ
           mod 2^32, with carry bits counted
-  bfix    X on ±63 (A's forms never carry) against each linear: the orbit, then s8orbit_bfix (B's carries), equal to X·Wᵀ
+  bfix    X on ±63 (A's forms never carry) against each linear and a 200 x 192 random W at M 130: the orbit, then
+          s8orbit_bfix (B's carries), equal to X·Wᵀ
   entry   `orbit_gpu.int_mm`, the plain int8 GEMM entry with its corrections, equal to X·Wᵀ at M 1, 7, 34 and 2,048
 
     python gate.py --cubin C --out OUT [--snapshot DIR --layer 0] [--m 2048]
@@ -83,12 +84,14 @@ def full(lib: G.Lib, gen: torch.Generator, weights: dict[str, torch.Tensor], m: 
 
 
 def bfix(lib: G.Lib, gen: torch.Generator, weights: dict[str, torch.Tensor], m: int) -> list[dict]:
-    """X on ±63 (A's forms never carry) against each weight: the orbit, then s8orbit_bfix, equal to X·Wᵀ."""
+    """X on ±63 (A's forms never carry) against each weight, and a random one whose lists and rows end inside a group and
+    a CTA: the orbit, then s8orbit_bfix, equal to X·Wᵀ."""
     recs = []
-    for name, w in weights.items():
-        if w.shape[1] % 1024:
-            continue
+    tail = torch.randint(-127, 128, (200, 192), generator=gen, dtype=torch.int8, device="cuda")
+    for name, w, m in [(name, w, m) for name, w in weights.items()] + [("tail", tail, 130)]:
         p = G.prepare(w)
+        if p.fix is None:
+            continue
         x = torch.randint(-63, 64, (m, w.shape[1]), generator=gen, dtype=torch.int8, device="cuda")
         want = torch._int_mm(x, w.t())
         for bn in G.TILES:

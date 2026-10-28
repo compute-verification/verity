@@ -115,13 +115,14 @@ def cta_mhz(clk: torch.Tensor, grid: int) -> float:
 
 
 class Sha:
-    """The engine's row kernel over SHA_ROWS rows of 32 KiB in each of SHA_SLOTS slots, one call."""
+    """The engine's row kernel in its default variant (0000, sha512x.cuh's default compression) over SHA_ROWS rows of
+    32 KiB in each of SHA_SLOTS slots, one call."""
 
     def __init__(self) -> None:
         sys.path.insert(0, str(HERE.parent / "sha512_rows"))
         import engine as E
         self.E = E.Engine()
-        self.variant = "sx0000" if "sx0000" in self.E.variants else self.E.default
+        self.variant = self.E.default
         t = torch.empty((SHA_SLOTS, SHA_ROWS * SHA_ROW), dtype=torch.uint8, device="cuda").random_()
         self.tensors = [t]
         self.table = self.E.rows([[(0, i * SHA_ROW, SHA_ROW)] for i in range(SHA_ROWS)], self.tensors)
@@ -238,7 +239,8 @@ def main() -> int:
             if "wgmma" in arms:
                 r["vs_wgmma"] = r["ms"] / arms["wgmma"]["ms"]
         rec = {"n": n, "k": k, "macs": macs, "b_carries": bc, "b_density": sum(bc) / (7 * (n // 2) * (k // 2)),
-               "g_entries": prep.g_entries, "best_tile": best, "arms": arms}
+               "g_entries": prep.g_entries, "fix_slots": 32 * int(prep.fix[0][-1]) if prep.fix is not None else 0,
+               "best_tile": best, "arms": arms}
         if "bfix" in arms:
             # a correction MAC is one carry against one row of the other side (M/2 of them); kappa is its time in tensor MACs
             per_mac = arms["bfix"]["ms"] / 1e3 / (sum(bc) * (a.m // 2))

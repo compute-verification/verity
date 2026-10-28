@@ -10,7 +10,7 @@
 //
 // This kernel makes no carry corrections: its O is X W^T exactly when no form of A or B carries (|x|, |w| <= 63 suffice),
 // and X W^T mod 2^8 always.  `flags` counts the carry bits A's forms set, so a launch says whether its O is exact.
-// s8orbit_bfix, after it, adds B's carries' corrections (exact when A's forms don't carry).
+// s8orbit_bfix<R>, after it, adds B's carries' corrections (exact when A's forms don't carry).
 //
 // Persistent, one CTA an SM: CTA c takes tiles c, c + gridDim.x, ... of the (M/2 / 64) x (N/2 / BN) quadrant tiles
 // (`raster`).  Warpgroup 0 holds products M1, M2, M3, M6 and warpgroup 1 holds M4, M5, M7 (BN / 2 accumulators a product a
@@ -350,10 +350,11 @@ ORBIT(64)
 // With A's forms exact, O = (the orbit's output) + 256 X~ G^T: X~[r] = X[r] ‖ X[r + M/2] is local row r's pair row (2K
 // bytes) and G, made once a weight (orbit_gpu.fix_lists), sums each product's B carries through its A form's blocks and its
 // quadrants (orbit.C_SUMS).  List l = q (N/2) + c (quadrant q = 2 qm + qn, column c) holds G's entries (o, g) of output
-// column c of quadrant q, o ascending, each o << 8 | (uint8) g; those in chunk h (pair-row bytes [2048 h, 2048 h + 2048))
-// are ent[ptr[l (H + 1) + h] .. ptr[l (H + 1) + h + 1]), H = K / 1024.  A CTA takes FR local rows (a lane each) and FC
-// columns of every quadrant (FC / 2 lists a warp), stages the rows' pair rows a chunk at a time in shared memory, and adds
-// its 4 x FR x FC sums into y32 through shared memory, a row at a time.
+// column c of quadrant q, each o << 8 | (uint8) g.  The lists go in groups of 32, a lane each: group u's entries are
+// ent[32 e + lane] for e in [ptr[u], ptr[u + 1]), its longest list's length rounded up to 4, the shorter lists padded with
+// (0, 0).  A CTA takes R local rows and stages their pair rows transposed, fs[o R + r] = X~[r0 + r][o], so an entry is one
+// R-byte load and R dp4a into the lane's R sums (byte j of g << 8 j times byte j of a word of four rows); a warp takes
+// groups u = warp, warp + 16, ... and adds each lane's R sums into its column of y32, the 32 lanes' columns adjacent.
 struct FixParams {
   const int8_t* x;
   int32_t* y32;
@@ -362,59 +363,78 @@ struct FixParams {
   int M, N, K, pad;
 };
 static_assert(sizeof(FixParams) == 48, "orbit_gpu.py's FixParams");
-constexpr int FR = 32, FC = 128, FCHUNK = 2048, FROW = FCHUNK + 4, FLISTS = 4 * FC / 8;
-constexpr int FIX_SMEM = FR * FROW > 4 * FR * (FC + 1) * 4 ? FR * FROW : 4 * FR * (FC + 1) * 4;
+constexpr int FIX_NT = 512;
 
-extern "C" __global__ void __launch_bounds__(256, 1) s8orbit_bfix(const __grid_constant__ FixParams p) {
+template <int R> DEV void bfix_body(const FixParams& p) {
+  static_assert(R == 8 || R == 16, "a row word of four bytes, R / 4 of them a load");
   extern __shared__ __align__(16) uint8_t fs[];
   const int lane = threadIdx.x % 32, warp = threadIdx.x / 32;
-  const int hm = p.M / 2, hn = p.N / 2, H = p.K / 1024;
-  const int r0 = blockIdx.y * FR, c0 = blockIdx.x * FC;
-  int32_t acc[FLISTS];
+  const int hm = p.M / 2, hn = p.N / 2, r0 = blockIdx.x * R;
+  for (int t = threadIdx.x; t < p.K / 2; t += FIX_NT) {
+    const int o = 4 * t, src = o < p.K ? o : o - p.K, off = o < p.K ? 0 : hm;
+    uint32_t w[R];
 #pragma unroll
-  for (int i = 0; i < FLISTS; i++) acc[i] = 0;
-  for (int h = 0; h < H; h++) {
-    __syncthreads();
-    for (int t = threadIdx.x; t < FR * (FCHUNK / 16); t += 256) {
-      const int rr = t / (FCHUNK / 16), o = FCHUNK * h + 16 * (t % (FCHUNK / 16)), r = r0 + rr;
-      uint4 v = make_uint4(0, 0, 0, 0);
-      if (r < hm) v = *reinterpret_cast<const uint4*>(o < p.K ? p.x + (size_t)r * p.K + o : p.x + (size_t)(r + hm) * p.K + (o - p.K));
-      uint32_t* d = reinterpret_cast<uint32_t*>(fs + rr * FROW + 16 * (t % (FCHUNK / 16)));
-      d[0] = v.x, d[1] = v.y, d[2] = v.z, d[3] = v.w;
+    for (int r = 0; r < R; r++)
+      w[r] = r0 + r < hm ? __ldg(reinterpret_cast<const uint32_t*>(p.x + (size_t)(r0 + r + off) * p.K + src)) : 0u;
+    uint32_t v[4][R / 4];
+#pragma unroll
+    for (int i = 0; i < R / 4; i++) {
+      const uint32_t a = __byte_perm(w[4 * i], w[4 * i + 1], 0x5140), b = __byte_perm(w[4 * i + 2], w[4 * i + 3], 0x5140);
+      const uint32_t c = __byte_perm(w[4 * i], w[4 * i + 1], 0x7362), d = __byte_perm(w[4 * i + 2], w[4 * i + 3], 0x7362);
+      v[0][i] = __byte_perm(a, b, 0x5410), v[1][i] = __byte_perm(a, b, 0x7632);
+      v[2][i] = __byte_perm(c, d, 0x5410), v[3][i] = __byte_perm(c, d, 0x7632);
     }
-    __syncthreads();
-    const int8_t* row = reinterpret_cast<const int8_t*>(fs + lane * FROW) - FCHUNK * h;
 #pragma unroll
-    for (int i = 0; i < FLISTS; i++) {
-      const int l = warp + 8 * i, c = c0 + l % FC;
-      if (c < hn) {
-        const int32_t* q = p.ptr + ((l / FC) * hn + c) * (H + 1) + h;
-        const int b = __ldg(q), e = __ldg(q + 1);
-        int a = acc[i];
-        for (int t = b; t < e; t++) {
-          const uint32_t v = __ldg(p.ent + t);
-          a += (int)(int8_t)(v & 0xff) * (int)row[v >> 8];
+    for (int b = 0; b < 4; b++) {
+      if constexpr (R == 16)
+        *reinterpret_cast<uint4*>(fs + (o + b) * R) = make_uint4(v[b][0], v[b][1], v[b][2], v[b][3]);
+      else
+        *reinterpret_cast<uint2*>(fs + (o + b) * R) = make_uint2(v[b][0], v[b][1]);
+    }
+  }
+  __syncthreads();
+  const int groups = (2 * p.N + 31) / 32;
+  for (int u = warp; u < groups; u += FIX_NT / 32) {
+    int acc[R];
+#pragma unroll
+    for (int r = 0; r < R; r++) acc[r] = 0;
+    const int e1 = __ldg(p.ptr + u + 1);
+    for (int e = __ldg(p.ptr + u); e < e1; e += 4) {
+      uint32_t ev[4];
+#pragma unroll
+      for (int s = 0; s < 4; s++) ev[s] = __ldg(p.ent + (size_t)32 * (e + s) + lane);
+#pragma unroll
+      for (int s = 0; s < 4; s++) {
+        const uint32_t g = ev[s] & 0xffu;
+        uint32_t xw[R / 4];
+        if constexpr (R == 16) {
+          const uint4 q = *reinterpret_cast<const uint4*>(fs + (ev[s] >> 8) * R);
+          xw[0] = q.x, xw[1] = q.y, xw[2] = q.z, xw[3] = q.w;
+        } else {
+          const uint2 q = *reinterpret_cast<const uint2*>(fs + (ev[s] >> 8) * R);
+          xw[0] = q.x, xw[1] = q.y;
         }
-        acc[i] = a;
+#pragma unroll
+        for (int i = 0; i < R / 4; i++)
+#pragma unroll
+          for (int j = 0; j < 4; j++) acc[4 * i + j] = __dp4a((int)xw[i], (int)(g << (8 * j)), acc[4 * i + j]);
       }
     }
-  }
-  __syncthreads();
-  int32_t* res = reinterpret_cast<int32_t*>(fs);
+    const int l = 32 * u + lane, q = l / hn, c = l % hn;
+    if (l < 2 * p.N) {
+      int32_t* y = p.y32 + (size_t)((q >> 1) * hm + r0) * p.N + (q & 1) * hn + c;
 #pragma unroll
-  for (int i = 0; i < FLISTS; i++) {
-    const int l = warp + 8 * i;
-    res[((l / FC) * FR + lane) * (FC + 1) + l % FC] = acc[i];
-  }
-  __syncthreads();
-  for (int t = threadIdx.x; t < 4 * FR * FC; t += 256) {
-    const int cc = t % FC, rr = (t / FC) % FR, q = t / (FC * FR), r = r0 + rr, c = c0 + cc;
-    if (r < hm && c < hn) p.y32[(size_t)((q >> 1) * hm + r) * p.N + (q & 1) * hn + c] += 256 * res[(q * FR + rr) * (FC + 1) + cc];
+      for (int r = 0; r < R; r++)
+        if (r0 + r < hm) y[(size_t)r * p.N] += 256 * acc[r];
+    }
   }
 }
 
+extern "C" __global__ void __launch_bounds__(FIX_NT, 1) s8orbit_bfix16(const __grid_constant__ FixParams p) { bfix_body<16>(p); }
+extern "C" __global__ void __launch_bounds__(FIX_NT, 1) s8orbit_bfix8(const __grid_constant__ FixParams p) { bfix_body<8>(p); }
+
 // what orbit_gpu.py takes from this build, checked when it loads the cubin: Params' size and offsets, then each tile's
-// shared memory and stages in ORBIT's order, then FixParams' size and the correction pass's shared memory
+// shared memory and stages in ORBIT's order, then FixParams' size and the correction pass's threads
 extern "C" __global__ void s8orbit_layout(int* out) {
   out[0] = sizeof(Params);
   out[1] = offsetof(Params, sa);
@@ -426,5 +446,5 @@ extern "C" __global__ void s8orbit_layout(int* out) {
   out[7] = Orbit<64>::SMEM;
   out[8] = Orbit<64>::STAGES;
   out[9] = sizeof(FixParams);
-  out[10] = FIX_SMEM;
+  out[10] = FIX_NT;
 }

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # s8_orbit.cubin for sm_90a (the H100 and H200), built off the card, and the ship run.sh unpacks there: the cubin, ptxas's
-# report (refused on a spill, local memory, a serialized wgmma, or an orbit kernel without IGMMA; s8orbit_bfix has none),
+# report (refused on a spill, local memory, a serialized wgmma, or an orbit kernel without IGMMA; the correction pass has none),
 # its SASS's instruction counts per kernel (sass.json),
 # the toolchain, the commit and MANIFEST.sha256.  On a CPU node with CUDA >= 12.8 (CUDA names the toolkit, default
 # /usr/local/cuda-13.0):  bash benchmarks/torch_gpu/s8_orbit/build.sh OUT
@@ -38,11 +38,10 @@ for line in open(f"{out}/s8_orbit.sass"):
     if cur is not None and op:
         cur[op.group(1)] += 1
 for name, c in kernels.items():
-    if name.startswith("s8orbit_") and name not in ("s8orbit_layout", "s8orbit_bfix"):
-        if not any(o.startswith("HGMMA") or o.startswith("IGMMA") for o in c):
-            problems.append(f"{name}: no IGMMA")
-        if c.get("STL", 0) or c.get("LDL", 0):
-            problems.append(f"{name}: local memory in SASS")
+    if re.fullmatch(r"s8orbit_\d+", name) and not any(o.startswith("HGMMA") or o.startswith("IGMMA") for o in c):
+        problems.append(f"{name}: no IGMMA")
+    if c.get("STL", 0) or c.get("LDL", 0):
+        problems.append(f"{name}: local memory in SASS")
 regs = {m.group(1): int(m.group(2)) for m in re.finditer(r"Function properties for (\S+)[\s\S]*?Used (\d+) registers", ptx)}
 doc = {"problems": problems, "registers": regs,
        "kernels": {n: {"igmma": {o: v for o, v in c.items() if "GMMA" in o}, "instructions": sum(c.values())} for n, c in kernels.items()}}

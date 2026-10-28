@@ -62,9 +62,13 @@ class FixParams(C.Structure):
 
 
 assert C.sizeof(FixParams) == 48
-#: s8orbit_bfix's rows and columns a CTA, its pair-row chunk, and its shared memory
-FR, FC, FCHUNK = 32, 128, 2048
-FIX_SMEM = max(FR * (FCHUNK + 4), 4 * FR * (FC + 1) * 4)
+#: s8orbit_bfix<R>'s threads a CTA
+FIX_NT = 512
+
+
+def fix_rows(k: int) -> int | None:
+    """The correction pass's rows a CTA at depth k: 16, or 8 where 16 rows' pair rows (2K bytes each) don't fit."""
+    return next((r for r in (16, 8) if 2 * k * r <= SMEM_LIMIT), None)
 
 
 def stage_bytes(bn: int) -> int:
@@ -131,10 +135,11 @@ def _exact_mm(a: torch.Tensor, b: torch.Tensor) -> torch.Tensor:
 def fix_lists(cb: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor, int]:
     """s8orbit_bfix's lists of B's carries cb [7, N/2, K/2]: G_qb = Σ_j σ_qj s_jb c_B,j for quadrant q and A block b (the
     sign of M_j in C_q times that of A_b in A_j), entry (o, g) of list q (N/2) + c at pair-row byte o = bm K + bk K/2 + k.
-    Returns ptr int32 [2N (H + 1)] (each list's first entry in each 2,048-byte chunk, H = K / 1024, and its end), ent int32
-    (o << 8 | (uint8) g, by list then o) and G's entries."""
+    The lists go in groups of 32, a lane each, entry e of lane i at ent[32 e + i]: returns ptr int32 [groups + 1] (each
+    group's first e, its longest list rounded up to 4, the rest padded with (0, 0)), ent int32 (o << 8 | (uint8) g, a list's
+    by o) and G's entries."""
     _, hn, hk = cb.shape
-    k2, h = 4 * hk, hk // 512
+    k2 = 4 * hk
     names = ("11", "12", "21", "22")
     keys, gs = [], []
     for qi, q in enumerate(names):
@@ -154,10 +159,15 @@ def fix_lists(cb: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor, int]:
     assert gv.numel() == 0 or int(gv.abs().max()) < 128
     key, order = torch.sort(key)
     gv = gv[order]
-    bounds = torch.arange(4 * hn, device=cb.device)[:, None] * k2 + torch.arange(h + 1, device=cb.device)[None, :] * FCHUNK
-    ptr = torch.searchsorted(key, bounds.reshape(-1)).to(torch.int32)
-    ent = (((key % k2) << 8) | (gv.long() & 0xFF)).to(torch.int32)
-    return ptr, ent if ent.numel() else torch.zeros(1, dtype=torch.int32, device=cb.device), int(key.numel())
+    groups = cdiv(4 * hn, 32)
+    lst = key // k2
+    counts = torch.bincount(lst, minlength=32 * groups)
+    ptr = torch.zeros(groups + 1, dtype=torch.int64, device=cb.device)
+    ptr[1:] = torch.cumsum((counts.view(groups, 32).amax(1) + 3) // 4 * 4, 0)
+    rank = torch.arange(key.numel(), device=cb.device) - (torch.cumsum(counts, 0) - counts)[lst]
+    ent = torch.zeros(max(32 * int(ptr[-1]), 1), dtype=torch.int32, device=cb.device)
+    ent[32 * (ptr[lst // 32] + rank) + lst % 32] = (((key % k2) << 8) | (gv.long() & 0xFF)).to(torch.int32)
+    return ptr.to(torch.int32), ent, int(key.numel())
 
 
 def a_terms(x: torch.Tensor, wb: torch.Tensor) -> torch.Tensor:
@@ -221,8 +231,9 @@ class Lib:
             f = self.fn(f"s8orbit_{bn}")
             self.ck("cuFuncSetAttribute", f, MAX_DYN_SMEM, smem(bn))
             self.fns[bn] = f
-        self.fix = self.fn("s8orbit_bfix")
-        self.ck("cuFuncSetAttribute", self.fix, MAX_DYN_SMEM, FIX_SMEM)
+        self.fix = {r: self.fn(f"s8orbit_bfix{r}") for r in (16, 8)}
+        for f in self.fix.values():
+            self.ck("cuFuncSetAttribute", f, MAX_DYN_SMEM, SMEM_LIMIT)
         self.maps: dict[tuple, bytes] = {}
         self.flags_t = torch.zeros(1, dtype=torch.int64, device="cuda")
         self.layout = self._layout()
@@ -249,7 +260,7 @@ class Lib:
         self._launch(self.fn("s8orbit_layout"), 1, 1, 0, u64(out.data_ptr()))
         got = out.tolist()
         want = [C.sizeof(Params), Params.sa.offset, Params.M.offset] + [v for bn in TILES for v in (smem(bn), stages(bn))]
-        want += [C.sizeof(FixParams), FIX_SMEM]
+        want += [C.sizeof(FixParams), FIX_NT]
         if got[:len(want)] != want:
             raise RuntimeError(f"{self.path}'s s8orbit_layout {got[:len(want)]} is not orbit_gpu.py's {want}: rebuild or update")
         return {f"n{bn}": {"smem": smem(bn), "stages": stages(bn)} for bn in TILES}
@@ -321,14 +332,15 @@ class Lib:
         """y32 += 256 X~·Gᵀ, B's carries' share of O (`fix_lists`' ptr and ent of the same weight), after `mm`."""
         m, k = x.shape
         n = y32.shape[1]
-        assert k % 1024 == 0 and m % 2 == 0 and x.is_contiguous() and y32.dtype == torch.int32 and y32.is_contiguous()
-        assert ptr.dtype == torch.int32 and ptr.numel() == 2 * n * (k // 1024 + 1) and ent.dtype == torch.int32
+        r = fix_rows(k)
+        assert r and m % 2 == 0 and x.is_contiguous() and y32.dtype == torch.int32 and y32.is_contiguous()
+        assert ptr.dtype == torch.int32 and ptr.numel() == cdiv(2 * n, 32) + 1 and ent.dtype == torch.int32
         p = FixParams()
         p.x, p.y32, p.ptr, p.ent = x.data_ptr(), y32.data_ptr(), ptr.data_ptr(), ent.data_ptr()
         p.M, p.N, p.K = m, n, k
-        grid = (cdiv(n // 2, FC), cdiv(m // 2, FR))
-        self._launch(self.fix, grid, 256, FIX_SMEM, p)
-        return {"grid": grid}
+        grid = cdiv(m // 2, r)
+        self._launch(self.fix[r], grid, FIX_NT, 2 * k * r, p)
+        return {"grid": grid, "rows": r}
 
 
 @functools.cache
@@ -340,7 +352,7 @@ def lib() -> Lib:
 class Prepared:
     """A weight w [N, K] int8 made ready for `int_mm` once, at load: B's seven wrapped forms as the kernel reads them
     ([7, N/2, K/2] int8), their carries (int8, -1/0/1) with each form's count, and s8orbit_bfix's lists of them (`fix_lists`;
-    None unless K is a multiple of 1,024) with G's entries."""
+    None where `fix_rows` has none) with G's entries."""
 
     n: int
     k: int
@@ -357,7 +369,7 @@ def prepare(w: torch.Tensor) -> Prepared:
     assert w.dtype == torch.int8 and w.is_cuda
     wb, cb = forms(w, B_FORMS, False)
     fix, g = None, 0
-    if w.shape[1] % 1024 == 0:
+    if fix_rows(w.shape[1]):
         ptr, ent, g = fix_lists(cb)
         fix = (ptr, ent)
     return Prepared(w.shape[0], w.shape[1], wb, cb, [int(torch.count_nonzero(cb[j])) for j in range(7)], fix, g)
