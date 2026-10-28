@@ -1146,17 +1146,22 @@ def known(members: list[dict], at: SimpleNamespace) -> bytes:
 def refs_of(m: dict) -> bytes:
     """Member m's refs in its public file (`shared_bcs`' format): each instance's table row of each port, u32
     little-endian, instance-major, which the statement fixes before any witness (a unit's own row, or its boundary's
-    slot entry). They are small integers, which a witness row's small fields can equal (S_0's ``now``, ``phase`` and an
-    empty slot). Its header and b‖c stay scanned: its roots, paths and commitments are computed from the witness.
-    Refused unless each ref is a row of its port's table."""
+    slot entry in first-read order, `registered.table`). They are small integers, which a witness row's small fields
+    can equal (S_0's ``now``, ``phase`` and an empty slot). Its header and b‖c stay scanned: its roots, paths and
+    commitments are computed from the witness. Refused unless each port's refs are its table's rows in first-read
+    order: each at most one past the largest before it, ending at its last row."""
     head, body = (m["dir"] / f"pub-{m['n']}.bin").read_bytes().split(b"\n", 1)
     h = json.loads(head)
     rows = [int(h["shared_rows"][p.name]) for p in m["ports"]]
     at, n = 128 * sum(rows), int(h["instances"])
     refs = body[at:at + 4 * n * len(rows)]
-    if len(refs) != 4 * n * len(rows) or any(int.from_bytes(refs[4 * k:4 * k + 4], "little") >= rows[k % len(rows)]
-                                             for k in range(n * len(rows))):
-        raise SystemExit(f"{m['name']}: its public file's refs aren't one row of each port's table an instance")
+    top, ok = [-1] * len(rows), len(refs) == 4 * n * len(rows)
+    for k in range(n * len(rows) if ok else 0):
+        x, q = int.from_bytes(refs[4 * k:4 * k + 4], "little"), k % len(rows)
+        ok = ok and x <= top[q] + 1
+        top[q] = max(top[q], x)
+    if not ok or n and top != [r - 1 for r in rows]:
+        raise SystemExit(f"{m['name']}: its public file's refs aren't each port's table rows in first-read order")
     return refs
 
 

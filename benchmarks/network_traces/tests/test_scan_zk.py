@@ -398,7 +398,8 @@ def test_the_scan_leaves_out_each_members_refs_which_the_statement_fixes_and_sti
     """A member's refs (`refs_of`), each instance's table row of each port, are small integers its statement fixes:
     S_0's first 16 bytes (``now`` and ``phase`` 1, ``last`` 0, slot 0 empty) equal instance 1's refs where it reads
     (row, sin, prog0, prog1) = (1, 1, 0, 0), as a group's ingress member's do. That piece is left out of the scan; a
-    witness piece in the same file's b‖c is still scanned for, and refs past their tables are refused."""
+    witness piece in the same file's b‖c is still scanned for, and refs that aren't each port's table rows in first-read
+    order (past a table, out of order, or leaving a row unread) are refused."""
     cls = sz.TEST.cls
     s0 = sz._bytes(sz.IS.encode(cls, sz.IS.State(1, 1, 0, sz.IS.empty(cls).slots)))
     names, n = ("row", "sin", "prog0", "prog1", "o0", "o1", "o2"), 4
@@ -425,8 +426,9 @@ def test_the_scan_leaves_out_each_members_refs_which_the_statement_fixes_and_sti
     kept = sz.LS.public_pieces(a8, blobs, set(blobs), sz.known([m], at), fields=True)[0]
     assert "first o1 0 @0" not in kept and kept["ingress-0 o1 2 @0"] == secret and secret in pub
     assert "first o1 0 @0" in sz.LS.public_pieces(a8, blobs, set(blobs), sz.known([], at), fields=True)[0]
-    with pytest.raises(SystemExit, match="refs aren't one row of each port's table"):
-        sz.refs_of(member([[i, i, i, i, i, i, i] for i in range(n)]))
+    for bad in (lambda i: [i] * 7, lambda i: [i, i, 1 - i // 2, i // 2, i, i, i], lambda i: [i, i, i // 2, 0, i, i, i]):
+        with pytest.raises(SystemExit, match="refs aren't each port's table rows in first-read order"):
+            sz.refs_of(member([bad(i) for i in range(n)]))
 
 
 def test_schedule_prints_the_classs_schedule_as_warden_serves_flags(capsys):
