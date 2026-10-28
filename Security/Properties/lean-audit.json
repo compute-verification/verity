@@ -7380,28 +7380,37 @@
    ]
   },
   "Flock.FV3": {
-   "digest": "032cd73e88b02bf50f703a0f6ed6d4a9b0a09a07f70e73d6d79132ba2a90affc",
+   "digest": "4940b923a3edcebf1e9ae6d48d5c34b80cc4fed5db24bef847cbe4a5cb4172c6",
    "definitions": {
+    "Flock.FV3.Domain": "36a9410f0bb424a2c38165b764ed69a1207ee86948fa393f705d1ddc0fbdd692",
+    "Flock.FV3.Domain.climb": "99fcc386553517f89ea585cbe1cc9a8cee9e5fb19434a237ebb775106fb7ddeb",
+    "Flock.FV3.Domain.count": "00669812938e079ede9a7f6b3b9b14592e8fb0f67ce48711b87bef352ea79042",
+    "Flock.FV3.Domain.emptyRoot": "425cd197b05f5e48d715b28d544bac3e501e329debca58dea7169404493d775a",
+    "Flock.FV3.Domain.id": "2eee3f9e5b49a1eef6d3f76063bf50d9eb72902041e6512ca5b82719f43d8cd3",
+    "Flock.FV3.Domain.leaf": "fd8ff419c4f1c4b1e068239aabe7b98afbe568eef31144c501a12d81f27f9701",
+    "Flock.FV3.Domain.levels": "5bfab251a2a33a8481316c39a170361702127d84a3e2399b341afcb5d94f9ffd",
+    "Flock.FV3.Domain.make": "fe6a3da637a0319c1c47b4521b8e26f6ae6be1d77ac38b5c25c9e7bb099b2232",
+    "Flock.FV3.Domain.node": "e8f4cf0542a2f4dc4321fb5aaf576640e0c3efab9129fd2266d7922aa7a240c3",
+    "Flock.FV3.Domain.pad": "9d44af71884f37c849c22724fe66af4da40f22eac80fcae49d8ca19e29139f48",
+    "Flock.FV3.Domain.root": "f90c58b7ee255b2124723e8121c06a08c4fa871093ed9df8d4ccfa93b4ecdc9b",
+    "Flock.FV3.Domain.start": "690b3c8c8cbd58c869736902c0081bdc21ef24e5ab5194be41de7a655d9d3333",
+    "Flock.FV3.Domain.verifyOpening": "3f2d192672170e31c74412b452cd6a0551687e18e36d729de0684b517ae09c75",
     "Flock.FV3.FRAME": "7a59c990468cab7e2b8010a7dcb24e3ed28bce0494751048f05c32a61f8a71e8",
-    "Flock.FV3.Sha512.Domain": "2593903cfa541601a9fb46c474f389eb66d626c8afb164efa049eb3fa3f7ab19",
-    "Flock.FV3.Sha512.Domain.climb": "93bc3a3db1aacbc60aadd5c4dfdcd065c291bfd88f5f05c03d83d8352089067e",
-    "Flock.FV3.Sha512.Domain.count": "324500790c988dbc1b481a973377c37fe054eda301e014810e1ef607e3cf4afb",
-    "Flock.FV3.Sha512.Domain.emptyRoot": "3baa79bc0c0260906c7fa62a50269cba5707b6d783f12f124ad6a2730f4aafbf",
-    "Flock.FV3.Sha512.Domain.id": "01c902a1e46e7cdfc4e7d7c02848a9af24b46c11ac039581a3b4c895258c997f",
-    "Flock.FV3.Sha512.Domain.leaf": "3d79f390ec49b6b7b32c1603ebf79648d50fa016602fbdc5aef34c98f0dde7e7",
-    "Flock.FV3.Sha512.Domain.levels": "2d07ba09f1e1e898c5a0a69d132e49a27d1c6c3e0f0aecb18f8c384fcef2db45",
-    "Flock.FV3.Sha512.Domain.make": "23d5861452e0168219572b413752d1c640eb3b74d10922e307a773bb41cc9c9e",
-    "Flock.FV3.Sha512.Domain.node": "c07622f068a4cdd6cd0faad9b3d178103d1f106575c2f62ee77a4087ae5ad942",
-    "Flock.FV3.Sha512.Domain.pad": "b60c7c90a48e83d74716c1eb3d5eb6d10f34fcdcb932a61c5779046a57540dc5",
-    "Flock.FV3.Sha512.Domain.root": "c0133b640b027e7bfca469983c703f4175ad29ca23dc4066f194107c08d8223a",
-    "Flock.FV3.Sha512.Domain.start": "ec571e73d2ad0c87d96194d3b423bec18a81cff5ce16e6f8ba92e81c2f7cb38a",
-    "Flock.FV3.Sha512.Domain.verifyOpening": "1bf27a74d6e4d9b0b4f9ea1b7e74fd5a68b07b8f47a5125fc45dbe46e93ec8b1",
+    "Flock.FV3.Scheme": "b9471a025ee99b233e91e250387ac09fd73e64a90e740c9a1cfc9b61f19586e1",
+    "Flock.FV3.Scheme.H": "aaa2508a9b3d14dbc6eb6b08591310cde599443c2e547cc7d5a29bff221d4c4f",
+    "Flock.FV3.Scheme.bytes": "487644863c8e6d3a60aa01fb248012cf91c276a9266ac24884974305df1c4f9b",
+    "Flock.FV3.Scheme.climbL": "6ff4a7ee77835ac6473c730a0f047dc4e6e78563e67c08ad8071f04798ba0517",
+    "Flock.FV3.Scheme.hash": "7d3ee1761c38b7a2fd4e4e0b2bf23a9cfe25c13f97f2df8588b05cfc34d84957",
+    "Flock.FV3.Scheme.node": "87ffb1b5f55b1abd9fb17713ac7c8edfe21d77ecee4d230b37e3922e996dae1a",
+    "Flock.FV3.Scheme.rangeIdentity": "b67480470c212359652b8e44ecc938081dc1685d97e8eb94533e97997eac54a8",
+    "Flock.FV3.Scheme.tagged": "41b70083c747476a997118599a4bbde8d8d200b4121b7927aff145507d61ef46",
+    "Flock.FV3.Sha512.Domain": "f8d773c717e66f7707a46c038770723800014d820c457bccf529fb3d090ada5e",
+    "Flock.FV3.Sha512.Domain.make": "49e79738d506d2dd17a440c763c0acc6baf8772bbef117b2931e89d131105cea",
     "Flock.FV3.Sha512.TAGGED": "0060c2dc6a0f1e1a0892285612b4245c4d6bfe1681632815167c80f73d48820b",
-    "Flock.FV3.Sha512.climbL": "6970bf2ef3ba16060d2a389006911ef7d85f55854e9df0ae496efe6f70e2875c",
-    "Flock.FV3.Sha512.hash": "65eb0dc95ee344351cca2dd0437d7ff6313b9a242f42a499e16a680766319b0d",
+    "Flock.FV3.Sha512.climbL": "c86d47654ff71acb0a5784241b7d31c41ccbf72b7ec22ecf1aedbc7ecfc73eab",
     "Flock.FV3.Sha512.leafAs": "b0f201a7ace51ea5c4e9c2cf9b4abd20feb7efe774025a43fca5d29e44e3730c",
     "Flock.FV3.Sha512.node": "2b5a1399f0c3465babd3baa43fcd702f9e6b625f22297197a46124a1881ec695",
-    "Flock.FV3.Sha512.rangeIdentity": "a2c3d5a8246f9692d3f79f5cbd99fdcdb3e385a81f8eb458c839cdad5a2c0787",
+    "Flock.FV3.Sha512.scheme": "0a2e745f691ffb3b648a322d3e45fb092e0e8cb428f54f10f1cbe498f488dffc",
     "Flock.FV3.Sha512.taggedSha512": "7ce543bed847ab1a41082253496f3001a227e9eb208cb74f462b08fcc3a80355",
     "Flock.FV3.hash": "cc9e4c8cff49884c029e2dcd72eacfcff412be1262f7605a1340423d22de694c",
     "Flock.FV3.input": "40f6284bef69a01c2183abb181d134f0933c86d920af89dbdd6287181a68493c",
@@ -8556,7 +8565,7 @@
    ]
   },
   "MemoryChallenger.Records": {
-   "digest": "c8efbe8864350e2e618acab356c33a805257fdea4dbf302c4d9e4ddc6f5ed001",
+   "digest": "35f74d2496f089fe7ac7b46796314db8191c1e329ddccbd8d4966f28837236ac",
    "definitions": {
     "MemoryChallenger.CLOCK": "c62d8ef353db15b9b0e1cb6626ff8f2a40800017bbb67c1c07366903bf25aac3",
     "MemoryChallenger.COIN_BINDING": "48cf245cc1cbab220a213486e0fb74d209689db0adae15e9e56f6743018ec505",
@@ -8574,7 +8583,7 @@
     "MemoryChallenger.CoinTree.indices": "0e2a5a6b2f1d9384d8c065719db0a803e4ed76eda6d8c4007bee243d8838ec18",
     "MemoryChallenger.CoinTree.k": "0fe8aeeeb3186fb5063b393791f98f4236d413ca3dc958078ddf4a6e7e85e332",
     "MemoryChallenger.CoinTree.key": "e8816d917e1f7c0ccc43c08d439e4ad304c904862440adbfc63920be73f80a8d",
-    "MemoryChallenger.CoinTree.make": "80828b59a45735adb56da511e4c99c698cc89eeac9372813c532ffe67545861c",
+    "MemoryChallenger.CoinTree.make": "ecdcaed9b38f54aea78987c8574779aa108bb975e03a5bb48d289a05b9a242fa",
     "MemoryChallenger.CoinTree.root": "6100657735795727f4f3c969337fe4da8714f3aecbc95171fdd107ee517664e2",
     "MemoryChallenger.CoinTree.session": "c904b761372eb2eb6541aeaa462b3d624c67d24df9b4b358d0c7fc360701a82b",
     "MemoryChallenger.DRAW_BYTES": "68f85e41afb606989e1aaa0bbfe522d5c78ce32c0feecfbd531c263925303fe0",
@@ -8619,8 +8628,8 @@
     "MemoryChallenger.instBEqSessionCommitment.beq": "fc559134d62c8328730d4711c4732821d8255538575ae507ddf54f792ff45c86",
     "MemoryChallenger.message": "c7f4d39c27b0c2b6d78b2e86ccd054863dff64347b17493c7816933ef495434b",
     "MemoryChallenger.pyJsonStr": "4b73401b7a9b129fc9ebbea967e554592113d2094c19b2745d3f71528320dbbd",
-    "MemoryChallenger.recordsRoot": "82c22242eefed56bc50abb4fcfa96279a198a7d044d11a2551762919606bc137",
-    "MemoryChallenger.verifyCoin": "a9dc006fbe434da3c28a9616241024f6492027d9560d497095b8a4b1373fde00",
+    "MemoryChallenger.recordsRoot": "90f3e00d61b117fa9267b6ae255d6961e49bff72c66246feb92d6b0ce8d61970",
+    "MemoryChallenger.verifyCoin": "c54685a7ce7f1a0bf9512d57bdc070e3791de5a50a379ec02d0eec7ff72d9ac9",
     "_private.MemoryChallenger.Records.0.MemoryChallenger.hex4": "80136896de271de3b068aef00e4ff59d3d632b8b23fc484a59e049fdf9584d45"
    },
    "guarantees": [
@@ -11765,7 +11774,7 @@
    ]
   },
   "Properties.Pous.MemoryChallenger": {
-   "digest": "d4b306fc4fc741d64aae703f5c5a6a3bad3401bc1585dd7b9fe7a7c81954d9d1",
+   "digest": "51793aa016c6eeb25b04ec9d78954046e96eced8c7b2fc843aa967d72a93e5ca",
    "definitions": {
     "MemoryChallenger.Properties.Accepted": "812d273231ae986d14633bee1380b0e4876b7c6f00ee1a7ac3fb1d49ec5b9d45",
     "MemoryChallenger.Properties.Device": "ed4511488da53c85b9b883e3e5507cc6d495c8c85a88bed7b19b97e66c8bc6e8",
@@ -11796,7 +11805,7 @@
     "MemoryChallenger.Properties.runStrings": "2c9c3fd897d472e33860e5f09784fa44bbc7653916fa29ebc4512d8a9d35ee06",
     "MemoryChallenger.Properties.sessionMessage": "5b6a2bc60aa00caaaa6084b68bb84cf6b1dc305635e267cdeff47e130f8b2e48",
     "MemoryChallenger.Properties.sessionStrings": "d1cde6b26ffce139133bf1f1b50c00cbaa5f01b3bf43295c918556c878599ab0",
-    "MemoryChallenger.Properties.treeStrings": "e8edfdd75745baf5dd43245ff63ead9407dd635aeb7dc199a25553db6a2d56c8"
+    "MemoryChallenger.Properties.treeStrings": "3d99dea70208f39c41d1968350b39acae0c06cca6efe071224abeae848f97f27"
    },
    "guarantees": [
     "Accounting.SecurityProofs.Bridge.SpaceOfPeriodHeld",
@@ -12238,7 +12247,7 @@
    ]
   },
   "Properties.RemoteAudit": {
-   "digest": "85e86c68c09f3c569260986299d64cfdf00f9be8ec0121a3ddbef7075942b839",
+   "digest": "b7de1f552ec6f9430d7c698df71d2eebfb9b230b365dad68a839953933137071",
    "definitions": {
     "Properties.RemoteAudit.AcceptChecksOpenings": "0bf65e9aef5437ddc1cadafde1c35cb3b71402356b5c1001458d589e75da7505",
     "Properties.RemoteAudit.AcceptOpensDraws": "0f8c70ad6ebf0dd5463cc5001e3a6e8b9b1bea586dc30addfe41469203af1da7",
@@ -12248,7 +12257,7 @@
     "Properties.RemoteAudit.ChunkedIsWhole": "7bba0ca9052ae3fce19ceba644f14980fc38492973da7594bcb4b462085f5ed6",
     "Properties.RemoteAudit.DrawIsSubset": "3d4a3c6996d19773d00c33844deabed1798001dfec004031c0aab6136bf92e9f",
     "Properties.RemoteAudit.LifetimeCapped": "8aef5477936822360b90e4a360c65023821725b344d83358210716419fa6717c",
-    "Properties.RemoteAudit.OpeningPasses": "fcd4f3ac8b2fdece0ab4c28aa2fc30624dc2e3e455d4d76b7b1791407ba3a702",
+    "Properties.RemoteAudit.OpeningPasses": "ea782a94ae9d73ee988dc3f2ec7a9142445970bf7bea8b24ece8b4873a416b08",
     "Properties.RemoteAudit.PassesChained": "ea715c2456f65e362fb37dd397810e6b7d9750bc063d42d2c5663e6fdc67466f",
     "Properties.RemoteAudit.PassesReadDistinct": "3ee1fc7cc3e41d62cc0b7b3c0d3bebb56bb4588fcd83adadca1f759d1c4337d5",
     "Properties.RemoteAudit.PassesStepped": "d0b4d1bb980b52e49d85797e0f92f03aa41d8ff17254d49e616fac0a148cd078",
@@ -12940,7 +12949,7 @@
    ]
   },
   "RemoteAudit.Receipts": {
-   "digest": "3656a1490f428699623a51c096da06d44be66eec13fe6856adf313510ea56256",
+   "digest": "f8700d56ccb4c0c8877cec567ae69b203939b360c7888ea3287c3c8b65a3297d",
    "definitions": {
     "RemoteAudit.APPENDS_DOMAIN": "2b166138902859bc94cc8e9e904e194f5b309ec600d0c099da1ef655f5e74c08",
     "RemoteAudit.CHAINED_DOMAIN": "25494f754865049cbc11e58b7f9ca62fd1d50eb9942d66846f5b0caac5889948",
@@ -12979,7 +12988,7 @@
     "RemoteAudit.signBits": "aa2c9c434d06c7e0af0eb033c348c5f6950cf1052053a29c90b1e905374bbd7e",
     "RemoteAudit.sketch": "1ad8b9d7cc0b52ce3fc74ceb114b516aabc9529efa5053500cd456a829be80c8",
     "RemoteAudit.treeDomain": "d8654cadfde3f08fd0a6ddd5b6ea1d2db17e2492aca8f66d1141d5c65aa2161b",
-    "RemoteAudit.verifyLeaf": "3fcf75bd8dee95629c35b8ddf2552d0c9be720ac3b2f43e94177b15e39e74542",
+    "RemoteAudit.verifyLeaf": "3bd052db5fc4a9c9a1d1c4da8998e9d806689cacdf7e86943c5ff2c7231082e8",
     "_private.RemoteAudit.Receipts.0.RemoteAudit.int8": "2114b38fdafbbc67fd7ad41804515b6ea6392c15c33a79a135ff50d8050a0ff7"
    },
    "guarantees": [
@@ -13218,7 +13227,7 @@
    "guarantees": ["Properties.RemoteAudit.liveIsRun"]
   },
   "RemoteAudit.Window": {
-   "digest": "b3951e7c77202dfe7477948c60cc6d9452527357d981c3a963432e9fd372cb05",
+   "digest": "6e40aa82a446beceab5fb2d0c88a9230ee41a9fbf4c4b1bd53f797db3d0b742a",
    "definitions": {
     "RemoteAudit.APPEND_DOMAIN": "a6604c74aef32ccdec542c5fecc103a1660e0ff141fb68613846fb35472b3103",
     "RemoteAudit.Append": "ccd67ec7f7f0426061b78ed18c4d6500de3ff3ad539add283f9f43bf3f3ae9c6",
@@ -13292,7 +13301,7 @@
     "RemoteAudit.WindowRecord.seedOf": "a4639ca5afedfbc45620b84c0ffca575862af0c6e75cd3ee8e5f96465206fff5",
     "RemoteAudit.appendDomain": "4eef34327740429bfbd8fc7fd7c9ed0e85259b2a0c532cc9ccb51ce6816f0d4a",
     "RemoteAudit.appendOf": "f5fd3cb2f37a92a67148004f9de9ccc6d6923ddf9afc710617e1e89ca6470ae7",
-    "RemoteAudit.checkOpening": "9da959c6ba644f90f9bb40cbeb67999af6fd1050c98f138d2f9a10c6e87a8206",
+    "RemoteAudit.checkOpening": "3e0a9a3483a27ccb99c67a128dfa195ad2c3c6b98a873350f7a298c335268646",
     "RemoteAudit.checkOpening._sparseCasesOn_3": "ef1137b1eb2bcc7019043983896ecd27181e92a35f69f6eb06b9ec64c95455b1",
     "RemoteAudit.checkWindow": "e591335b9a06c750f734466f88d1d42a08a0ffa1bb119ec72a9c234208203aab",
     "RemoteAudit.checkWindowChunked": "5c1b54436795d6a53a4eadb6ad262a296bfa89f95e278b3be563b38abc787b58",
