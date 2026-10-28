@@ -388,7 +388,21 @@ def spans(S: Step, design: str, tokens: Iterable[int], layers: Iterable[int] | N
     for kind in DESIGNS[design]:
         for i in (layers if kind.per_layer else [None]):
             for t in tokens:
-                out[(kind.name, i, t)] = sorted((s.offset, s.offset + s.spec.gates) for s in kind.region(S, i, t))
+                out[(kind.name, i, t)] = intervals((s.offset, s.offset + s.spec.gates) for s in kind.region(S, i, t))
+    return out
+
+
+def intervals(pairs: Iterable[tuple[int, int]]) -> list[tuple[int, int]]:
+    """A region's activations as sorted gate intervals, adjacent ones merged (a batch's members are contiguous, so a token's
+    words of an add are one interval); activations that overlap are refused."""
+    out: list[tuple[int, int]] = []
+    for lo, hi in sorted(p for p in pairs if p[1] > p[0]):
+        if out and lo < out[-1][1]:
+            raise ValueError(f"activations [{out[-1][0]}, {out[-1][1]}) and [{lo}, {hi}) overlap")
+        if out and lo == out[-1][1]:
+            out[-1] = (out[-1][0], hi)
+        else:
+            out.append((lo, hi))
     return out
 
 
@@ -401,17 +415,19 @@ def overlap_weights(regions: dict) -> dict:
             if hi > lo:
                 events += [(lo, 1, c), (hi, -1, c)]
     events.sort(key=lambda e: (e[0], e[1]))
-    active: Counter = Counter()
+    active: set = set()
     most = {c: 1 for c in regions}
     for _pos, d, c in events:
-        active[c] += d
-        if active[c] > 1:
+        if d < 0:
+            active.discard(c)
+            continue
+        if c in active:
             raise ValueError(f"region {c}'s intervals overlap")
-        if d > 0:
-            m = sum(1 for v in active.values() if v)
-            for a, v in active.items():
-                if v and m > most[a]:
-                    most[a] = m
+        active.add(c)
+        m = len(active)
+        for a in active:
+            if m > most[a]:
+                most[a] = m
     return {c: Fraction(1, m) for c, m in most.items()}
 
 

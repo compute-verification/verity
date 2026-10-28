@@ -135,6 +135,12 @@ def test_interval_overlap_weights_are_the_multiplicity_weights():
         assert U.overlap_weights(sets, [got[c] for c in regions])[0]
 
 
+def test_a_regions_intervals_merge_where_adjacent_and_refuse_an_overlap():
+    assert CC.intervals([(5, 9), (0, 3), (3, 5), (12, 12), (10, 11)]) == [(0, 9), (10, 11)]
+    with pytest.raises(ValueError):
+        CC.intervals([(0, 4), (3, 6)])
+
+
 @pytest.mark.skipif(not os.environ.get("VERITY_CIRCUIT_PROPERTIES_STEP"),
                     reason="builds the scaled TrainStep_v1 (about 3 min and 6 GB): set VERITY_CIRCUIT_PROPERTIES_STEP=1")
 def test_the_scaled_steps_layer_uses_are_certified_and_disjoint_and_cover_its_linear_products():

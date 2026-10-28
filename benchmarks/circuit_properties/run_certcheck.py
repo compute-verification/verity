@@ -2,13 +2,16 @@
 weights, where the step's counted products are, and the explicit cross-checks (`circuit_properties.certcheck`).
 
     uv run benchmarks/circuit_properties/run_certcheck.py [--shape scaled|real] [--step L,B,S] [--tokens all|T,..]
-        [--layers all|L,..] [--designs layer,gemm] [--outputs default|none|W:ROW:COORD,..] [--bits all|B,..]
-        [--explicit default|none|D:K:L:T,..] [--out DIR]
+        [--layers all|L,..] [--overlap-tokens all|T,..] [--designs layer,gemm] [--outputs default|none|W:ROW:COORD,..]
+        [--bits all|B,..] [--explicit default|none|D:K:L:T,..] [--out DIR]
 
 ``scaled`` is `TrainStep_v1{L=2,B=1,S=16}` at `training.SCALED` (the refusals `training.scaled` lifts), every consumer of
 it by default; ``real`` is `TrainStep_v1{L=30,B=8,S=512}` at smollm2-135m's shape as the registry builds it, on the tokens
 and layers given. `--step` takes another L, B, S at the same shape: the registry builds smollm2-135m's at B·S = 256 or
-4096, with S = 256 or 512. An explicit cross-check lists the region gate by gate, reruns `upstream.required` on that wiring and
+4096, with S = 256 or 512. The overlap weights are over every layer's uses of the overlap tokens: every token at the scaled
+shape; at the real one, the first two, a sequence's last, the next sequence's first and the step's last, besides the
+measured ones (a whole-call region is shared by its sequence's tokens, so its weight there counts only those taken). An
+explicit cross-check lists the region gate by gate, reruns `upstream.required` on that wiring and
 checks `upstream.holds` (the Lean `Upstream`, mirrored) with the G found. Writes DIR/certcheck.json (DIR defaults to $OUT),
 rewritten after every consumer, and prints one line each.
 """
@@ -96,6 +99,7 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--step", default=None)
     ap.add_argument("--tokens", default=None)
     ap.add_argument("--layers", default=None)
+    ap.add_argument("--overlap-tokens", default=None)
     ap.add_argument("--designs", default="layer,gemm")
     ap.add_argument("--outputs", default="default")
     ap.add_argument("--bits", default="all")
@@ -130,12 +134,15 @@ def main(argv: list[str] | None = None) -> int:
         layers = _ints(a.layers or ("all" if a.shape == "scaled" else ends), range(S.L))
         doc["tokens"], doc["layers"] = tokens, layers
         designs = [d for d in a.designs.split(",") if d]
+        edges = ",".join(str(t) for t in sorted({0, 1, S.S - 1, S.S, S.M - 1, *tokens} & set(range(S.M))))
+        doc["overlap_tokens"] = overlap = _ints(a.overlap_tokens or ("all" if a.shape == "scaled" else edges), range(S.M))
         weights = {}
         for d in designs:
-            w = CC.overlap_weights(CC.spans(S, d, range(S.M)))
+            w = CC.overlap_weights(CC.spans(S, d, overlap))
             weights[d] = {str(k): n for k, n in Counter(w.values()).items()}
+            print(f"overlap weights of {d}'s uses at every layer, tokens {overlap}: {weights[d]}, {time.time() - t0:.0f}s",
+                  flush=True)
         doc["overlap_weights"] = weights
-        print("overlap weights over every use", weights, flush=True)
         save()
         for d in designs:
             for kind in CC.DESIGNS[d]:
