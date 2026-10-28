@@ -1999,7 +1999,8 @@ def inline_failures(policy: dict, facts: dict) -> tuple[list[Failure], dict, dic
     assumed = assumed if isinstance(assumed, dict) else {}
     held = set(spec.get("properties") or {}) - set(spec.get("frozen") or {})
     own = set(facts["own_modules"]) if "own_modules" in facts else own_modules(facts)
-    statements = {h: g for g in guarantees if (h := ((facts["pins"].get(g) or {}).get("lift") or {}).get("head"))}
+    lifts = {g: (facts["pins"].get(g) or {}).get("lift") or {} for g in guarantees}
+    statements = {v["head"]: g for g, v in lifts.items() if v.get("head") and spec_module(v.get("module") or "")}
     fails, kept, offenders = [], {g: v for g, v in allow.items() if g not in guarantees}, {}
     for g in sorted(guarantees):
         pin, old = facts["pins"].get(g) or {}, allow.get(g) or {}

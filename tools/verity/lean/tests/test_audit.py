@@ -2015,6 +2015,59 @@ def test_a_grandfathered_inline_hypothesis_passes_and_the_list_only_shrinks():
     assert inline_codes(pol | {"shape": {"inline": ["P.t"]}}, grown) == ["shape.inline-form"]
 
 
+INLINE_G = "import Control.Defs\n\ndef Control.Guarantees.G : Prop := ∀ n : Nat, 0 < n → Control.double n = 5 → True\n"
+INLINE = """import Control.Assumptions
+import Control.Guarantees
+
+namespace Control
+
+theorem ranges (n : Nat) (x y : Int) (w : Fin 3 → Nat) (hn : 0 < n) (hx : x ≤ 1) (hxy : (n : Int) ≤ y)
+    (hw : ∀ i, 0 ≤ w i) (hf : Fits n) (hall : ∀ ω : Nat, Fits (ω * n)) : True := trivial
+
+theorem offends (n : Nat) (x y : Int) (h2 : x ≤ 2 * y) (he : double n = 4 ∧ 0 < n) (hω : ∀ ω : Nat, double ω = n) :
+    True := trivial
+
+theorem SecurityProofs.G : Guarantees.G := fun _ _ _ => trivial
+
+theorem uses_g : True ∧ (Guarantees.G → True) := ⟨trivial, fun _ => trivial⟩
+
+end Control
+"""
+
+
+@pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
+def test_inline_hypotheses_are_read_past_lifts_foralls_and_conjunctions_on_a_real_build(tmp_path):
+    """`Facts.lean`'s `inline` on a real build: plain ranges over bound variables and numerals, under a cast and of a
+    family (`∀ i, 0 ≤ w i`), and a named assumption, bare and under a leading `∀ ω`, pass; a bound against a term, an
+    equation split out of a conjunction and one under `∀ ω` fail, and so does the equation a guarantee lifted into a
+    `Guarantees` definition takes, which the hypotheses rule never sees (its statement as written binds nothing); that
+    definition taken inside a conjunct is another listed guarantee's statement."""
+    pkg = tmp_path / "control"
+    shutil.copytree(HERE / "fixtures" / "control", pkg, ignore=shutil.ignore_patterns(".lake"))
+    src = pkg / "Control" / "Assumptions.lean"
+    src.write_text(src.read_text().replace("end Control", "def Fits (n : Nat) : Prop := n < 100\n\nend Control"))
+    (pkg / "Control" / "Guarantees.lean").write_text(INLINE_G)
+    (pkg / "Control" / "Inline.lean").write_text(INLINE)
+    (pkg / "Control.lean").write_text((pkg / "Control.lean").read_text() + "import Control.Inline\n")
+    subprocess.run(["lake", "build"], cwd=pkg, check=True, capture_output=True, env=A.lake_env())
+    names = ["Control.ranges", "Control.offends", "Control.SecurityProofs.G", "Control.uses_g"]
+    policy = unclaimed(A.load(pkg))
+    policy["guarantees"] = policy["guarantees"] | {n: {"owner": "@lean"} for n in names}
+    policy["assumptions"] = policy["assumptions"] | {"Control.Fits": {"owner": "@lean"}}
+    f = A.facts_of(pkg, policy, tmp_path)
+    got = {n: [(p["binder"], p["range"]) for p in f["pins"][n]["inline"]] for n in names}
+    assert got["Control.ranges"] == [("hn", True), ("hx", True), ("hxy", True), ("hw", True), ("hf", False),
+                                     ("hall", False)]
+    assert got["Control.offends"] == [("h2", False), ("he", False), ("he", True), ("hω", False)]
+    assert [p["head"] for p in f["pins"]["Control.uses_g"]["inline"]] == ["Control.Guarantees.G"]
+    _, _, offenders = A.inline_failures(policy, f)
+    assert sorted(offenders) == ["Control.SecurityProofs.G", "Control.offends"]
+    assert len(offenders["Control.offends"]) == 3 and offenders["Control.offends"][2].startswith("∀")
+    assert len(offenders["Control.SecurityProofs.G"]) == 1 and "5" in offenders["Control.SecurityProofs.G"][0]
+    fails = [x for x in A.judge(policy, f, A.lean_modules(pkg))[0] if x.code == "guarantees.inline-hypothesis"]
+    assert sorted(x.entry for x in fails) == ["Control.SecurityProofs.G", "Control.offends"]
+
+
 def test_a_lifted_guarantee_is_witnessed_as_the_statement_it_lifts():
     """A four-name guarantee (`P.SecurityProofs.sound : P.Guarantees.sound`) is read with its `Guarantees` definition
     unfolded once (`lifted`): its nontrivial witness negates the head of the lifted statement, and its witnesses are not
