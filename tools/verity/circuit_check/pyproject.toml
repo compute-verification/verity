@@ -49,9 +49,9 @@ worker_gb = 8
 # (`units._unchanged`), and which a whole build never imports. pouw/weights.py and sampled_proofs/__init__.py: h1zy reads an
 # H1 lane's chunks along K from weights (`chunks`), and weights imports one_stage. sampled_proofs/challenger.py and
 # claims/__init__.py: pouw/coins.py names its entropy's claim instance through the challenger's `coin_claim`.
+# pouw/core_check.py and pouw/leaf_lanes.py: circuit/h1window.py imports both, so building the H1 units reads them.
 # verity_vllm/engine/spec.py: what the package's lazy `EngineSpec` (in its `__all__`) imports when a session fixture resolves
 # the package's names.
-# pouw/core_check.py and pouw/leaf_lanes.py: circuit/h1window.py imports both, so building the H1 units reads them.
 inputs_only = true
 inputs = ["verity/__init__.py", "verity/errors.py", "verity/core/__init__.py", "verity/core/protocols/__init__.py", "verity/ml/__init__.py",
           "verity/core/protocols/sampled_proofs/__init__.py",
