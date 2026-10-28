@@ -3,7 +3,7 @@ A semantically meaningful part of the declared or actual circuit is a block, alw
 (`ARCHITECTURE.md`, Glossary, "Block"): a proof unit is a proof block, and a faulty unit a faulty
 proof block. The proof service is the proof system (`ARCHITECTURE.md`, Glossary, "Proof system").
 
-Scanned: every tracked text file but the Lean (`.lean` files and their locks' reasons, `lean-audit.json`). A term matches case-insensitively as two words, hyphenated, or wrapped onto the next
+Scanned: every tracked text file but the Lean (`.lean` files, their packages' `lakefile.toml` and their locks' reasons, `lean-audit.json`). A term matches case-insensitively as two words, hyphenated, or wrapped onto the next
 line (behind a comment marker or not). Identifiers (`proof_unit`) are code; the retired-terms table
 (`GLOSSARY.md`) names them. What may stay: the table's own rows (``RETIRED_ROWS``), a spelling baked into a
 record or a digest (``ALLOWED``, one reason each; an entry that matches nothing fails too), and a file whose lines a PR
@@ -87,7 +87,7 @@ PENDING: dict[str, str] = {
 
 def scanned(files: list[str]) -> list[str]:
     """Every file but the Lean, PENDING and this one, which names the terms to find them."""
-    return sorted(f for f in files if not f.endswith((".lean", "lean-audit.json"))
+    return sorted(f for f in files if not f.endswith((".lean", "lean-audit.json", "lakefile.toml"))
                   and f not in PENDING and f != "tests/test_retired_terms.py")
 
 
