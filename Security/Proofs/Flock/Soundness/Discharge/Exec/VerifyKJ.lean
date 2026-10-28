@@ -29,7 +29,7 @@ open Lean (Json)
 /-- **`verifyWithMK_tables_cap` at the record's parsed value `j`.** -/
 theorem verifyJWithMK_tables_cap (keep : Bool → Bool) (hs : Hashes Flock.V) {spec : SessionSpec} {tabs : Array Setup}
     {j : Json} {proofs : Array ByteArray} (h : verifyJWithMK keep hs spec tabs j proofs = .ok ()) :
-    ∃ (sess : Session) (schs : Array Flock.Schedule), Record.decodeJWithK keep hs spec j = .ok sess ∧
+    ∃ (sess : RunRecord) (schs : Array Flock.Schedule), Record.decodeJWithK keep hs spec j = .ok sess ∧
       tabs.size = spec.tables.size ∧ 0 < tabs.size ∧ schs.size = tabs.size ∧
       ∀ (i : ℕ) (hi : i < tabs.size), ∃ (hs' : i < schs.size) (c : ByteArray),
         Flock.fast100 tabs[i].m = some schs[i] ∧
@@ -85,7 +85,7 @@ theorem verifyJWithMK_tables_cap (keep : Bool → Bool) (hs : Hashes Flock.V) {s
 theorem verifyJK_ok_tables (keep : Bool → Bool) {spec : SessionSpec} {tabs : Array Setup} {j : Json}
     {proofs : Array ByteArray} (hN : ∀ st ∈ tabs, st.merkle.Named)
     (h : verifyJWithMK keep With.std spec tabs j proofs = .ok ()) :
-    ∃ (sess : Session) (schs : Array Flock.Schedule), Record.decodeJWithK keep With.std spec j = .ok sess ∧
+    ∃ (sess : RunRecord) (schs : Array Flock.Schedule), Record.decodeJWithK keep With.std spec j = .ok sess ∧
       tabs.size = spec.tables.size ∧ 0 < tabs.size ∧ schs.size = tabs.size ∧
       ∀ (i : ℕ) (hi : i < tabs.size), ∃ (hs : i < schs.size) (c : ByteArray),
         Flock.fast100 tabs[i].m = some schs[i] ∧
@@ -112,7 +112,7 @@ theorem verifyJK_one_ok (keep : Bool → Bool) {spec : SessionSpec} {st : Setup}
 set_option maxHeartbeats 1000000 in
 /-- **`decodeWithK_points` at the record's parsed value `j`.** -/
 theorem decodeJWithK_points (keep : Bool → Bool) (hs : Hashes Flock.V) {spec : SessionSpec} {j : Json}
-    {sess : Session} (h : Record.decodeJWithK keep hs spec j = .ok sess) :
+    {sess : RunRecord} (h : Record.decodeJWithK keep hs spec j = .ok sess) :
     sess.points.size = spec.points ∧ ∀ p ∈ sess.points.toList, p.size = spec.mPts := by
   unfold Record.decodeJWithK at h
   dsimp only at h
@@ -125,7 +125,7 @@ theorem decodeJWithK_points (keep : Bool → Bool) (hs : Hashes Flock.V) {spec :
 set_option maxHeartbeats 1000000 in
 /-- **`decodeWithK_roundsWF` at the record's parsed value `j`.** -/
 theorem decodeJWithK_roundsWF (keep : Bool → Bool) (hs : Hashes Flock.V) {spec : SessionSpec} {j : Json}
-    {sess : Session} (h : Record.decodeJWithK keep hs spec j = .ok sess) :
+    {sess : RunRecord} (h : Record.decodeJWithK keep hs spec j = .ok sess) :
     ∀ s ∈ sess.streams.toList, RoundsWF s.rounds := by
   unfold Record.decodeJWithK at h
   dsimp only at h
@@ -154,7 +154,7 @@ theorem decodeJWithK_roundsWF (keep : Bool → Bool) (hs : Hashes Flock.V) {spec
 set_option maxHeartbeats 1000000 in
 /-- **`decodeWithK_retained` at the record's parsed value `j`.** -/
 theorem decodeJWithK_retained (keep : Bool → Bool) (hs : Hashes Flock.V) {spec : SessionSpec} {j : Json}
-    {sess : Session} (hr : spec.retainRounds = true) (h : Record.decodeJWithK keep hs spec j = .ok sess) :
+    {sess : RunRecord} (hr : spec.retainRounds = true) (h : Record.decodeJWithK keep hs spec j = .ok sess) :
     ∀ s ∈ sess.streams.toList, ∀ r ∈ s.rounds.toList, ∃ b, r.bytes = some b := by
   unfold Record.decodeJWithK at h
   dsimp only at h
@@ -191,7 +191,7 @@ theorem decodeJWithK_retained (keep : Bool → Bool) (hs : Hashes Flock.V) {spec
 
 /-- **`decodeWithK_allRetained` at the record's parsed value `j`.** -/
 theorem decodeJWithK_allRetained (keep : Bool → Bool) (hs : Hashes Flock.V) {spec : SessionSpec} {j : Json}
-    {sess : Session} (hr : spec.retainRounds = true) (h : Record.decodeJWithK keep hs spec j = .ok sess) :
+    {sess : RunRecord} (hr : spec.retainRounds = true) (h : Record.decodeJWithK keep hs spec j = .ok sess) :
     ∀ s ∈ sess.streams.toList, AllRetained s.rounds := fun s hs' i hi => by
   rw [getElem!_pos s.rounds i hi]
   exact decodeJWithK_retained keep hs hr h s hs' _ (Array.getElem_mem_toList hi)
@@ -201,7 +201,7 @@ theorem decodeJWithK_allRetained (keep : Bool → Bool) (hs : Hashes Flock.V) {s
 /-- **The decoder read through `keep` accepts a record text exactly where the record parses and the decoder accepts
 its parsed value** (`Record.decodeWithK_of_parse`; a record that doesn't parse is refused). -/
 theorem decodeWithK_ok_iff (keep : Bool → Bool) (hs : Hashes Flock.V) (spec : SessionSpec) (text : String)
-    (sess : Session) :
+    (sess : RunRecord) :
     Record.decodeWithK keep hs spec text = .ok sess ↔
       ∃ j, Json.parse text = .ok j ∧ Record.decodeJWithK keep hs spec j = .ok sess := by
   cases hp : Json.parse text with

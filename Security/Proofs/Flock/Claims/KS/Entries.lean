@@ -110,7 +110,7 @@ has its level-0 openings verifying against that cap at level 0's lanes and path 
 openings' positions and rows are the reps' `plainRepColsOf` entries, rep 0's then rep 1's, at the table's shape, the
 reps' stream rounds and the proof files. -/
 theorem accepts_opens₀L {I : Inputs} {t : Transcript} (h : Accepts I t) :
-    ∃ (spec : SessionSpec) (sts : Array Flock.Stmt) (sess : Session), setupOf I t.record = .ok (spec, sts) ∧
+    ∃ (spec : SessionSpec) (sts : Array Flock.Stmt) (sess : RunRecord), setupOf I t.record = .ok (spec, sts) ∧
       Record.decode spec t.record = .ok sess ∧
       ∀ (j : ℕ) (hj : j < sts.size), ∃ sch : Flock.Schedule, Flock.fast100 sts[j].m = some sch ∧
         ∀ (hwf : StmtWF sts[j]) (hr : RegionsWF sts[j]) (hm : 13 ≤ sts[j].m) (p₀ p₁ : Proof) (s₀ s₁ : StreamRec)
