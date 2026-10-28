@@ -62,7 +62,10 @@ COLLECT0, COLLECT = "OutCollect_v1{KO=2,FIRST=true}", "OutCollect_v1{KO=2,FIRST=
 def held(circuit) -> dict[str, dict[str, str]]:
     """`interface.input_count`'s pins and the window's roots holding every registered parameter of ``circuit``: each
     weight's own, ``weights/<label>@<words>``, and the scan state's, `scan_state.SCAN_STATE`, pinned by the verifier at
-    the root the window's registration records for it."""
+    the root the window's registration records for it. Each pin here is the window's own root, the scan state's included,
+    which is why a count under it reports zero free inputs: the verifier pins the scan state at the network certifier's
+    scan rows' root (`SCAN_PIN`), and each slot's occupancy, prompt length and token ids are free unless the window reads
+    that state."""
     roots = {p: "ab" * 64 for p in circuit.registered.params}
     return {"pins": roots, "roots": roots}
 
