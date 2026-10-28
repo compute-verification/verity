@@ -137,11 +137,16 @@ MOE_FLUSH_PLANES = frozenset({"up"})
 
 
 WINDOW_MB, WINDOW_SLOTS = 256, 8
-# rows-sha512 (`rows_hold_bytes`): the most of a step's h (a learning step's, before its length is known) and, apart, of its leaves (a
-# step that keeps no levels, before its tree) the worker holds on the device.  Past it a learning step's later windows re-hash from
-# host, and the held leaves fold into their windows' top nodes, so a step holds at most 2 x this beyond the ring and one window's
-# transients, whatever its length.  A constant, not a share of the memory the engine leaves free.
+# rows-sha512 (`rows_hold_bytes`): the most of a step's h (a learning step's, before its length is known) and, apart, of its leaves
+# (before their windows' subtrees) the worker holds on the device.  Past it a learning step's later windows re-hash from host, and the
+# held leaves fold into their windows' top nodes, so a step holds at most 2 x this beyond the ring and one window's transients,
+# whatever its length.  A constant, not a share of the memory the engine leaves free.
 ROWS_HOLD_BYTES = 1 << 30
+# rows-sha512, a step that keeps levels: its held leaves fold at ROWS_FOLD_BYTES (or half the hold, when smaller), their levels copied
+# to host on the worker's copy stream while the next windows hash.  A fold's leaves and levels stay on the device until that copy
+# ends, and the next fold waits for it, so the held leaves and one fold behind them stay within the hold.  Smaller folds launch more
+# narrow levels; larger ones leave a longer last copy after the step's hashing (64 MiB of leaves and as much of levels: about 3 ms).
+ROWS_FOLD_BYTES = 64 << 20
 
 
 def window_mb_default(windowed_worker: bool, retain: str) -> int:
@@ -226,6 +231,7 @@ class NativeCollectCommitter(NativeHostCommitter):
         self.row_keys: dict[int, bytes] = {}
         self.replay_row_keys: dict[int, bytes] | None = None
         self._row_tn: Any | None = None
+        self._copy = None                           # the worker's stream for rows-sha512 level copies (created lazily on the worker thread)
         self._row_consts = (step_rows.row_prefix(8 * step_rows.ROW_BYTES), step_rows.INST.salt_prefix,
                             step_rows.INST.leaf_prefix(step_rows.KEY)) if self.rows else None
         # BOUNDED staging (VERITY_STAGING_BOUNDED; unset = on whenever staging is windowed): under chunk-leaf-v1 the
@@ -973,6 +979,8 @@ class NativeCollectCommitter(NativeHostCommitter):
         n_tops = state["width"] // top_span if rows else -(-state["n_total"] // top_span)
         if rows and state.get("leaves"):
             self._fold_leaves(state, side)
+        if rows and self._copy is not None:
+            side.wait_stream(self._copy)                                        # rows_tree's sync covers the window levels' copies
         if sum(int(t.shape[0]) for t in state["tops"]) != n_tops:
             raise RuntimeError(f"windowed absorb: {len(state['tops'])} window subtrees for {state['n_total']} leaves (expected {n_tops})")
         with torch.inference_mode(), torch.cuda.stream(side):
@@ -1000,23 +1008,38 @@ class NativeCollectCommitter(NativeHostCommitter):
         return levels, mr, tree_ms
 
     def _hold_leaves(self, state: dict[str, Any], lv: Any, side: Any) -> None:
-        """rows-sha512, a step that keeps no levels: window leaves `lv` wait on the device for the step's window levels, built in one pass
-        of wide launches rather than one subtree a window; the leaves held so far fold first when `lv` would take them past
-        `rows_hold_bytes`."""
-        if state["leaves"] and sum(int(t.numel()) for t in state["leaves"]) + int(lv.numel()) > self.rows_hold_bytes:
+        """rows-sha512: window leaves `lv` wait on the device for their windows' levels, built over many windows at once in wide launches
+        rather than one subtree a window; the leaves held so far fold first when `lv` would take them past `rows_hold_bytes`, or, for a
+        step that keeps levels, past ROWS_FOLD_BYTES or half the hold."""
+        bound = self.rows_hold_bytes if state["views"] is None else min(self.rows_hold_bytes // 2, ROWS_FOLD_BYTES)
+        if state["leaves"] and sum(int(t.numel()) for t in state["leaves"]) + int(lv.numel()) > bound:
             self._fold_leaves(state, side)
             self._win_leaf_folds = getattr(self, "_win_leaf_folds", 0) + 1
         state["leaves"].append(lv)
 
     def _fold_leaves(self, state: dict[str, Any], side: Any) -> None:
         """The held leaves, whole windows from the first not yet folded, to their windows' top nodes (level n_levels - 1), after the
-        step's earlier tops; the held tensors are released once concatenated, before the levels above them are built."""
-        n_levels = state["n_levels"]
+        step's earlier tops; the held tensors are released once concatenated, before the levels above them are built.  A step that
+        keeps levels copies them into its host level slices on the copy stream, once the previous fold's copy has ended."""
+        n_levels, views = state["n_levels"], state["views"]
         first = sum(int(t.shape[0]) for t in state["tops"]) << (n_levels - 1)
+        copy = None
+        if views is not None:
+            if self._copy is None:
+                self._copy = torch.cuda.Stream()
+            copy = self._copy
+            if (prev := state.get("copied")) is not None:
+                prev.synchronize()
         with torch.inference_mode(), torch.cuda.stream(side):
             lv = torch.cat(state["leaves"]) if len(state["leaves"]) > 1 else state["leaves"][0]
             state["leaves"] = []
-            state["tops"].append(self._hasher.rows_tree_window(state["rs"], lv, n_levels, first, side.cuda_stream, []))
+            n = int(lv.shape[0])
+            dsts = [views[L][first >> L:(first >> L) + (n >> L)] for L in range(n_levels)] if copy is not None else []
+            state["tops"].append(self._hasher.rows_tree_window(state["rs"], lv, n_levels, first, side.cuda_stream, dsts,
+                                                               copy.cuda_stream if copy is not None else 0))
+        if copy is not None:
+            state["copied"] = torch.cuda.Event()
+            state["copied"].record(copy)
 
     def _retain_from_transient(self, job: _StepJob, tblocks: list[tuple[int, Any, Any, int]], keep_set: Any, chunk_parts: Any,
                                ranges: list[tuple[int, int, Any]], side: Any) -> int:
@@ -1113,18 +1136,15 @@ class NativeCollectCommitter(NativeHostCommitter):
             return H.rows_leaves(rs, src, nbytes, first, min(1 << j, state["width"] - first), state["n_total"], tn, side.cuda_stream)[0]
 
         def absorb(k: int, lv_k: Any) -> None:
-            """Subtree of window k (lv_k = its leaves, device) -> host level slices + top node kept on device."""
+            """Subtree of window k (lv_k = its leaves, device) -> host level slices + top node kept on device; under rows-sha512 the
+            leaves are held and fold with later windows'."""
             n_k = int(lv_k.shape[0])
             views, n_levels = state["views"], state["n_levels"]
             if rows:
+                # the window's leaves (64 B a row) wait on the device and fold with the next windows' (_hold_leaves): a window's own
+                # subtree is two launches of a few blocks each, bound by latency and by waiting for SMs
                 state["absorbed"].append(k)
-                if views is None:
-                    # no levels kept: the window's leaves (64 B a row) wait on the device for its tree (_window_root) up to rows_hold_bytes;
-                    # a window's own subtree is two launches of a few blocks each, bound by latency and by waiting for SMs
-                    self._hold_leaves(state, lv_k, side)
-                    return
-                dsts = [views[L][k << (j - L):(k << (j - L)) + (n_k >> L)] for L in range(n_levels)]
-                state["tops"].append(H.rows_tree_window(state["rs"], lv_k, n_levels, k << j, side.cuda_stream, dsts))
+                self._hold_leaves(state, lv_k, side)
                 return
             if views is None:
                 state["tops"].append(H.tree_window_top(lv_k, n_levels, side.cuda_stream))
@@ -1266,7 +1286,7 @@ class NativeCollectCommitter(NativeHostCommitter):
                         lv_k = row_leaves(st, padded_k, k)
                     else:
                         lv_k = H.leaves_window(st, padded_k, (k * W) // C, job.step, self.GPU_TREE_SRC, C, m_words, side.cuda_stream)
-                    absorb(k, lv_k)                                             # syncs the side stream: the slot's reads are done here
+                    absorb(k, lv_k)                                             # the slot's release below is ordered after its reads (side stream)
                     del lv_k
                 elif inplace and padded_k and self.layout_v2:
                     # v2 learning step: the header does not bind the step length, so the window is hashed in place now; its leaves (1/8 of
@@ -1329,6 +1349,8 @@ class NativeCollectCommitter(NativeHostCommitter):
         if discard:
             # learn-only outcome: the plan is exported (end_step), nothing is hashed; placeholder commitment (root b"") -- the warm-up
             # instrumented run is never a record, and a record run never reaches here (raised above / in the loop)
+            if self._copy is not None:
+                side.wait_stream(self._copy)
             side.synchronize()
             for _kk, hb, _hv, _n in tblocks:
                 self.pool.give_back(hb)
