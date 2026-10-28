@@ -28,7 +28,7 @@ monitoring period's pooled bound, `Session*` a run of a subprotocol, and `window
 - `RemoteChallenger` (`verity/core/protocols/sampled_proofs/remote.py`), the client of a challenger on another host;
 - `RemoteCertifier` (`verity/core/protocols/certifier/active.py`), onsite's network certifier reached over the network;
 - the overhead bound's remote regime, `Nci.Guarantees.DampenerRemote` (the inference-only policy's Lean is still named
-  `Nci`) and `benchmarks/rho`'s `regime.remote`: a bound over this protocol (see the guarantee below), not a part of it;
+  `Nci`) and `benchmarks/rho`'s `regime.remote`: a bound over this protocol (layer 5 of the security argument below), not a part of it;
 - "run remotely": a job run on a cluster node (`research run --on`), which has nothing to do with any protocol.
 
 ## Parties
@@ -93,40 +93,178 @@ SampledProofs.OneStage.protocol]`. Its executable is `remote id | check PARAMS C
    (`Flock.Guarantees.IntegrityHorizon` for sampled proofs, `Accounting.Guarantees.ComposePeriod.CircuitCreditPeriod`
    for PoUW), and the overhead calculator turns them into overhead (see Results).
 
-## The guarantee
+## The security argument, end to end
 
-**In words.** Suppose the remote verdict accepts every sampling period of a monitoring period. Then, except with a
-failure probability set by the draw and by SHA-512, two things hold:
+**The claim.** If the remote verdict accepts every sampling period of a monitoring period, then, except with a small
+failure probability set by the draw and by SHA-512:
 
-- the committed computation satisfies the declared circuit, except on at most the proof blocks a draw of that size
-  misses at δ;
-- the period's credited live work is at least (1 − ε) of the declared work.
+- the committed computation satisfies the declared circuit, except on few proof blocks;
+- the hardware's credited time went to the declared work;
+- the declared work, divided into small inference blocks, can't train a new frontier model at useful speed, so training
+  one must run on the capacity that isn't credited, and takes correspondingly longer.
 
-Everything is about the committed trace. That the declared circuit computes what the served model computes is
-completeness, never a security claim.
+It is built in six layers, each resting on the one before. Each states what it establishes, what it assumes, where it is
+in Lean and how far that is: **proved** (its proof is in a lock on `main`: `<Area>.SecurityProofs.G : <Area>.Guarantees.G`
+in `Security/lean-audit.json`, or a property's proof in `Security/Properties/lean-audit.json`), **stated** (in a lock,
+with no proof yet) or **open** (not in Lean). The derivations are in `Security/README.md`'s security argument; the named
+`Prop`s are listed under Assumptions, by name, below.
 
-**The pieces.** "Proved" means its proof is in a lock on `main`. For a guarantee, that's `<Area>.SecurityProofs.G :
-<Area>.Guarantees.G` in `Security/lean-audit.json`. For a property of the code, it's its proof in
-`Security/Properties/lean-audit.json` (`Properties.Composition.acceptMeans : Properties.Composition.AcceptMeans`). The
-last column is the end-to-end chain's status in `benchmarks/prove_path/e2e_chains/README.md`. That page's row for the
-remote composite is "none" (the open gap), so the column gives its subprotocols' rows (Sampled proofs / C-Flock `--zk`,
-PoUW `--zk`), and a chain can be "none" while each piece is proved.
+### The assumptions, in plain words
 
-| Piece | Lean declaration | Lock | End to end |
-|---|---|---|---|
-| The verdict rule | `Properties.Composition.AcceptMeans`, `AnswerAccepts` (`Security/Properties/Composition.lean`; proofs `acceptMeans`, `answerAccepts`) | **proved** | — |
-| Sampled proofs' accept rule | `Properties.SampledProofs.AcceptMeans` (`Security/Properties/SampledProofs.lean`; proof `acceptMeans`) | **proved** | — |
-| A C-Flock `--zk` proof, read in the sampling relation: Pr[accept ∧ faulty proof blocks outside what the draw catches at δ] ≤ δ + ε_ks + δ_link | `Flock.Guarantees.SampledKSLiveV3` (stated in `Security/Proofs/Flock/Bridge/Refused.lean`, proved in `Security/Proofs/Flock/Bridge/KSLive.lean`) | **proved** | sampled proofs `--zk`: proved |
-| Sampled proofs over a monitoring period | `Flock.Guarantees.IntegrityPeriod`, `IntegrityHorizon` (`Security/Proofs/Flock/EndToEnd/Period/Statement.lean`) | **proved** | — |
-| The verifier's verdicts tied to those theorems | none: remote reads one-stage v1, which takes the verdicts as evidence; v2 (`verity/sampled-proofs/one-stage/v2`) runs `flock-verify verify --zk` itself, and remote doesn't read v2 yet | **open** | — |
-| PoUW's accept rule, and its accepted prefix tied to the period credit | `Properties.Pouw.Check.AcceptMeans`, and `Properties.Pouw.Period.H1CheckedCreditPeriod`, the instance at the deployed H1 tile unit of the general `CheckedCreditPeriod` (`Security/Properties/Pouw/Period.lean`; proofs `Properties.Pouw.Check.acceptMeans`, `Properties.Pouw.Period.SecurityProofs.h1CheckedCreditPeriod` and `checkedCreditPeriod`, all in `Security/Properties/lean-audit.json`) | **proved**, under the PoUW assumptions below | — |
-| PoUW's credit over a monitoring period | `Accounting.Guarantees.ComposePeriod.CircuitCreditPeriod` | **proved** | — |
-| PoUW's proof layer | `Accounting.Guarantees.TS.SessionSoundAt`: proved, but it needs `AcceptedLive`, which no served path meets yet | **open** as a chain | PoUW `--zk`: broken at the proof layer |
-| The overhead over remote, per period | `Nci.Guarantees.DampenerRemote` (`Security/Definitions/Nci/Guarantees/Remote.lean`) | **proved** | none with a proof layer: it takes `PouwSound`, which no PoUW guarantee instantiates |
-| The overhead over a monitoring period | `Nci.Guarantees.DampenerRemotePeriod` (`RemotePeriod.lean`): only `DampenerRemotePeriodStated` is in the lock | **open** | — |
-| The composed soundness of remote | `Verity.Soundness`: not yet in Lean, and `lean-audit.json` here lists no guarantee (the open gap, above) | **open** | — |
+The whole argument rests on a short list. Everything else is a theorem or a named gap.
 
-## Assumptions
+| Kind | Assumption | How to test it |
+|---|---|---|
+| Cryptography | SHA-512 is collision resistant; the commitments hide their values. | Standard; no attack known. |
+| The auditor's devices | The challenger runs on a host the developer doesn't control, its coins are uniform, and they reach the developer only after the commitment. | Inspect the deployment: where the challenger runs, and its coin path. |
+| The hardware | Each GPU computes at most at its data sheet's rates; hosts carry no hidden compute; unregistered hardware is at most a stated share of the fleet. | Measure the cards; inventory the fleet. The share is about the world, not the protocol. |
+| Matrix products | Nobody multiplies the protocol's random noised matrices faster than the known way. Only noised calls are credited: the premise is over random operands, never the prover's. | A faster algorithm for random matrix products refutes it. |
+| Learning, 1: fresh weights are incompressible | After enough training since registration, a short program that runs no longer than a block may run can't reproduce many freshly trained weight values: each costs about p bits, even to a program that knows the registered model and may replay a little training. | Compress the update: on adversarially chosen sets of updated weights, find the shortest program that outputs them within the time budget (codecs, low-rank fits, predictors from the registered model, short replays). A program well under p bits a weight refutes the price. |
+| Learning, 2: no cheap way around it | Any way of reaching the target, at a cost we want to rule out, repeatedly combines freshly trained weights with fresh per-token values, many times over. | Try to reach the target cheaply without that: small adapters, independently trained small experts, distillation from the served model, frozen features. A cheap success refutes it at that target. |
+
+That each use of a weight needs its own token's context is not an assumption: it is a property of the training circuit's
+wiring (the upstream certificate, part 2 of `Security/README.md`), checked on the circuit. The first two learning rows are
+all the slowdown assumes about learning, and they are where its scientific content lies; the second is the least
+certain.
+
+### 1. One proof
+
+**Establishes.** One C-Flock `--zk` session is knowledge sound: if the verifier accepts, the prover knows values
+satisfying the drawn proof blocks, except with probability ε_ks. It is zero knowledge: the verifier's view is
+simulatable without those values, to within the commitments' hiding gap.
+
+**Assumes.** SHA-512 collision resistance (`cr/sha-512`, `ecr/sha-512`); uniform coins; the hiding gap of hm96 at its
+pinned key, which is below 2^-193 for all but 2^-64 of keys but not proved small for the pinned one.
+
+**Lean.** `Flock.Guarantees.EndToEndRegisteredRows` (knowledge soundness), **proved**.
+`Flock.Guarantees.ZeroKnowledgeHidden` (honest-verifier zero knowledge at each fixed coin vector), **proved**; against a
+verifier choosing its coins, `Claims.Flock.ZK`.
+
+### 2. Sampling
+
+**Establishes.** Live coins, drawn after the commitment, pick which proof blocks are proved. If every drawn block is
+proved, the proof blocks the draw missed hold the only possible faults:
+Pr[accept ∧ more faulty proof blocks than the draw allows at δ] ≤ δ + ε_ks + δ_link.
+
+**Assumes.** The verifier's coins are uniform (`FlockSoundness.Assumptions.UniformRandomBytes`); the record the verifier
+reads is the live run's (`FlockSoundness.Assumptions.Zk.RecordCustodyZKJ`); the challenger is the auditor's device
+(`Verity.Assumptions.TrustedHost`); its coins reach the developer only after the commitment (`CoinsConfidential`, in
+prose only).
+
+**Lean.** `Flock.Guarantees.SampledKSLiveV3`, **proved**.
+
+### 3. The audit of each sampling period
+
+**Establishes.** Sampled proofs bound the faulty proof blocks. PoUW establishes that the period's credited live work is
+at least (1 − ε) of the declared work, crediting only noised calls: an un-noised call has no live coin, so nothing forces
+its work. The composite accepts only if every subprotocol accepts and their commitments bind into one.
+
+**Assumes.** PoUW's premises: the proof service is sound (`Properties.Pouw.Period.ServiceSound`), the published draw is
+the coin's (`DrawIsCoin`), registration precedes the draw (`RegisteredBeforeDraw`), the salt is a live coin
+(`SaltIsLiveCoin`), the staged statement pins the receipts' tile (`StagedPins`), and the receipts' premises (`OperandHMu`,
+`ReceiptLuckAt`, `GuessLuckAt`, `UnitFixed`). The time credit adds the data sheet's rates.
+
+**Lean.**
+
+- The verdict rule: `Properties.Composition.AcceptMeans`, **proved**.
+- Sampled proofs' accept rule: `Properties.SampledProofs.AcceptMeans`, **proved**.
+- PoUW's accept rule and period credit: `Properties.Pouw.Check.AcceptMeans` and `Properties.Pouw.Period.H1CheckedCreditPeriod`,
+  **proved** under the premises above.
+- The time credit: `Accounting.Guarantees.Compose.CircuitCredit`, **proved**, reading the data sheet.
+- The verifier's verdicts tied to these theorems: **open**. Remote reads sampled proofs' one-stage v1, which takes the
+  sessions' verdicts as evidence; v2 runs `flock-verify verify --zk` itself.
+- PoUW's proof layer, `Accounting.Guarantees.TS.SessionSoundAt`: **proved**, but it needs `AcceptedLive`, which no
+  served path meets yet.
+
+### 4. The monitoring period
+
+**Establishes.** The sampling periods' bounds pool over a monitoring period, even when the developer adapts each period
+to the coins before it: the chance that some subprotocol of some period accepts while its claim fails is at most the sum
+of their errors. For sampled proofs,
+Pr[every period accepted ∧ faulty proof blocks ≥ ln(1/δ)/q] ≤ δ + Σ_t (ε_ks,t + δ_link,t), q the draw's coverage.
+PoUW's per-period δ is 2^-40 (`verity/core/protocols/pouw/credit.py`'s `DELTA`), so the pooled δ stays small over a year
+of periods. The figures for a week, a month and a year, for one datacenter and for the world, are under Results per
+monitoring period.
+
+**Assumes.** Nothing beyond layers 1 to 3.
+
+**Lean.** `Accounting.Guarantees.JointHorizonLive` (all subprotocols, one adaptive game), `Flock.Guarantees.IntegrityHorizon`
+(sampled proofs) and `Accounting.Guarantees.ComposePeriod.CircuitCreditPeriod` (PoUW): **proved**.
+
+### 5. The training slowdown
+
+**Establishes.** Training a new frontier model on the monitored fleet takes at least
+
+$$ \rho \;\ge\; \frac{\Omega_*}{C_{\mathrm{ref}}\,\big[\bar\zeta\,f + (q/c)\,(1 - f)\big]} $$
+
+times the fleet-time it would take unmonitored, up to probability η.
+
+- Ω_* is the training work any covered method needs.
+- C_ref is a demonstrated reference run's fleet-time.
+- f is the share of capacity outside correct credited declared work, and ζ̄ the rate at which work can be done there.
+- q/c is the most training work a verified inference block of c gates can do, per gate.
+
+**The mechanism, in words.** Learning repeatedly combines freshly learned weights with fresh per-token information. The
+inference-only policy divides declared work into blocks of c gates, each taking in at most k fresh bits. A block can
+import information, spending its fresh bits, or reconstruct it, spending its gates. Fresh weights are incompressible, so
+it holds few of them. Each use of a weight needs its own token's context, so it serves few uses. So verified work does
+little learning, and learning at scale has to run on the uncredited capacity, which PoUW keeps small. The per-block cap
+is about h·(k + c/g) weighted weight-uses, h the bits of fresh weights a block can hold and g the gates a use's context
+takes to rebuild. When rebuilding that context needs more fresh weights than a block holds, the cap falls to h·k.
+
+**Assumes.** The learning rows of the table above, the hardware rows, and the protocol's layers 1 to 4. The local bound
+can be strengthened with further premises (an activation price, a joint price, a recoverable source), each a new
+hypothesis to earn; `Security/README.md`, part 2, lists them as one repertoire.
+
+**Lean.**
+
+- The local bounds: the premises `Nci.Assumptions.DescriptionHard` and `Nci.Assumptions.CoversEfficientMethods`, the
+  certificate `Nci.Capability.Upstream`, and the caps `Nci.Guarantees.HeldBudget`, `Nci.Guarantees.ImportOrRecompute`,
+  `Nci.Guarantees.RecomputeByGates`, `Nci.Guarantees.RecomputeByState`, `Nci.Guarantees.WeightedProductCap` and
+  `Nci.Guarantees.CapabilityFloor`: **stated**.
+- The slowdown over remote, `Nci.Guarantees.DampenerRemote`: **proved**, but as arithmetic over inline hypotheses, not
+  over the local bounds.
+- Over a monitoring period, `Nci.Guarantees.DampenerRemotePeriod`: **stated** (its lock entry is
+  `DampenerRemotePeriodStated`).
+- Lemma 1 (`Verity.Guarantees.BlockDescription`) and the counting theorem (`Verity.Guarantees.Counting`): **proved**.
+
+### 6. What is completeness, not security
+
+That the declared circuit computes what the served model computes is completeness: an honest developer's run is
+accepted. No security claim rests on it, and a wrong circuit costs the developer acceptance, not the auditor a false
+verdict. Likewise the slowdown's numbers depend on measured and assumed parameters (the reference run, the unregistered
+share, the prices), each labelled with its source in the calculator.
+
+### What's open
+
+- **`Verity.Soundness`**, the one theorem composing layers 1 to 4 over everything the compiled verifier accepts: not in
+  Lean yet. Its owner is soundness. Until it is, the layers compose by hand.
+- **The inference-only policy runs as v0 in the clear** for the current run of record, a stated exception to everything
+  being zero knowledge: it publishes the division into inference blocks and their profile. Its private form, v1 (the
+  division committed under hiding leaves, its compliance proved, the profile padded), replaces it.
+- **Layer 5's premises are hypotheses.** No update price has been measured at a decoder budget, the upstream certificate
+  hasn't been checked on a named training circuit, and coverage is untested. The local bounds are stated, not proved.
+
+### Promising directions
+
+- **Measure update prices.** Fresh-weight incompressibility is the argument's one information premise. Measure it on
+  real fine-tunes: bits per updated weight, for adversarially chosen sets, against decoders that may use the registered
+  model, low-rank fits and short replays within the block's time.
+- **Measure the width of a use.** The minimal premises charge one fresh bit per use, which makes the per-block cap grow
+  like k². How many bits of a token's upstream values a block must import before rebuilding the rest becomes cheap is a
+  local description length of the operand given what the block holds. If it is near a token's hidden state, the cap
+  becomes linear in k and the slowdown large. This is the measurement worth most.
+- **Choose (c, k) per block type.** The caps bind only when a block's own capacity is well above what its fresh bits
+  allow. Decoding reads earlier tokens' cached keys and values as fresh input, so how k counts them decides whether any
+  cap bites.
+- **Weight the structure.** With overlap weights and per-weight prices fixed, the strongest bound the certificate gives
+  is a linear program over the weights; solving it on the training circuit replaces "every value is hard" with "enough
+  priced, structurally supported work".
+- **Test coverage directly.** Compute to the target for compact-state methods (adapters, independent small experts,
+  distillation from served outputs) against full training, at matched targets. The ratio is what bounds the slowdown from
+  above.
+
+## Assumptions, by name
 
 Each is a named `Prop` in a lock's `assumptions` (`Security/lean-audit.json`, and `Security/Properties/lean-audit.json`
 for the `Properties.*` ones), one line in plain words, except the two coin premises below, which are prose only.
