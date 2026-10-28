@@ -52,7 +52,7 @@ on the H100.  The pipeline parameters were *recovered* on the device
 (neutral-subgroup, internal-precision and
 parameter-fit families; ``16:26:-133`` is the unique zero-mismatch candidate
 over groups x width x floor) and the special-value rules R1-R8 were re-tested
-with L6's case families.
+with the A100 / RTX 4090 campaign's case families.
 The instruction's ``scale-d = 0`` form (accumulator ignored, CUTLASS
 ``ScaleOut::Zero``) was measured equal to ``acc = +0``.  On finite operands
 the function is :func:`verity.ml.circuits.silicon.silicon.tc_dot` on
