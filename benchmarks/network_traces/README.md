@@ -259,7 +259,7 @@ It is not the record's number.
 
 K also rests on these conditions:
 - The generator reading of the scan's statement, in which each unit's registered rows are its boundary values. That
-  reading is a claim, with lean and Daniel.
+  reading is a claim, not yet a locked guarantee.
 - log2 #S_s = 0 only once the schedule's digest binds each connection's admission bucket and lane, and the server
   can't move an admission. Neither holds.
 - The scan proves link-window 0. A period's figures scale its per-link-window and per-request terms at the run's rate.
