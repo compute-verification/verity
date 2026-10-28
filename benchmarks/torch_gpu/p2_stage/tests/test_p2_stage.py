@@ -203,23 +203,20 @@ def deployment_vector():
     return prefix, j, bytes.fromhex(v["c"]), bytes.fromhex(v["m"])
 
 
-def test_decode_block_is_the_spec_vector():
+def test_check_blocks_holds_the_spec_vector():
     prefix, j, c, m = deployment_vector()
     assert m[:L.LEAD] == bytes(L.LEAD)
-    assert L.decode_block(L.SPEC, prefix, j, c) == m[L.LEAD:]
-    assert L.check_blocks(L.SPEC, prefix, j, c, m[L.LEAD:]) == []
+    assert L.check_blocks(L.PARAMS, prefix, j, c, m[L.LEAD:]) == []
 
 
-def test_decode_block_refuses_what_the_store_refuses():
+def test_check_blocks_refuses_what_the_store_refuses():
     prefix, j, c, m = deployment_vector()
-    with pytest.raises(ValueError, match="not below p"):
-        L.decode_block(L.SPEC, prefix, j, S.P_BYTES)
-    with pytest.raises(ValueError, match="bytes, not"):
-        L.decode_block(L.SPEC, prefix, j, c[1:])
-    bad = L.check_blocks(L.SPEC, prefix, j + 1, c, m[L.LEAD:])
+    [(at, why)] = L.check_blocks(L.PARAMS, prefix, j, S.P_BYTES, m[L.LEAD:])
+    assert at == j and "not below p" in why
+    bad = L.check_blocks(L.PARAMS, prefix, j + 1, c, m[L.LEAD:])
     assert len(bad) == 1 and bad[0][0] == j + 1
     flipped = bytes([c[0], c[1] ^ 1]) + c[2:]
-    assert len(L.check_blocks(L.SPEC, prefix, j, flipped, m[L.LEAD:])) == 1
+    assert len(L.check_blocks(L.PARAMS, prefix, j, flipped, m[L.LEAD:])) == 1
 
 
 def test_twin_is_the_definition():
