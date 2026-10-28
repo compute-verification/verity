@@ -11,6 +11,9 @@ The quantizer (`Int8QuantElement`, one code; `Int8RowQuant{K}`, one scale over K
     s    = RN32(max(max_k |x_k|, RN32(1e-30)) / 127)            the max is exact, so its order is not part of the value
     X_k  = s8(clamp(rint(RN32(x_k / s)), -127, 127))           F32Div, then F32Rint (ties to even), then the exact clamp and cast
 
+`Int8RowQuant_v3{K,R}` is `Int8RowQuant_v1{K}` with x as R rows of K/R values in the same leaf order, so a cut can read its port
+as R rows where v1's is one.
+
 The linear (`Int8Linear{K,N}` on one token row: `Int8RowQuant`, then `ScaledMmS8_v1{K,N,DOT=BlackwellS8ImmaDot32_v1}`, two Calls
 in a served Program), weights W [N, K] s8 with per-row scales s_w; per output, `ScaledMmS8Coordinate_v1`:
 
@@ -226,11 +229,34 @@ def Int8StaticQuant(B, S, x, s):
     return B.batch(Int8QuantElement, x, s, axes=(0, None))
 
 
+def _row_quant(B, K: int, x: Coll):
+    s = B.call(bind(Int8RowScale, K=K), x)
+    return tuple_of(B.call(bind(Int8StaticQuant, K=K), x, s), s)
+
+
 @composite("Int8RowQuant", 1, ["K"], lambda S: ((("x", Array(S.K, BF16)),), Tuple(Array(S.K, V8), F32)), conformance=_CONF)
 def Int8RowQuant(B, S, x):
     """(codes, s): the row's scale (`Int8RowScale`) and its K codes under it (`Int8StaticQuant`)."""
-    s = B.call(bind(Int8RowScale, K=S.K), x)
-    return tuple_of(B.call(bind(Int8StaticQuant, K=S.K), x, s), s)
+    return _row_quant(B, S.K, x)
+
+
+def row_parts_refusal(b: dict) -> str | None:
+    """`bind`'s refusal for `Int8RowQuant_v3`: x is R rows of K/R values, so K and R are positive integers and R divides K."""
+    K, R = b.get("K"), b.get("R")
+    for name, v in (("K", K), ("R", R)):
+        if v is not None and (type(v) is not int or v < 1):
+            return f"{name}={v!r}: x is R rows of K/R values, so K and R are positive integers"
+    if K is not None and R is not None and K % R:
+        return f"K={K}, R={R}: x is R rows of K/R values, so R divides K"
+    return None
+
+
+@composite("Int8RowQuant", 3, ["K", "R"], lambda S: ((("x", Array(S.R, Array(S.K // S.R, BF16))),), Tuple(Array(S.K, V8), F32)),
+           conformance="exact-model-tested: Int8RowQuant_v1{K} with x read as R rows of K/R values", refuse=row_parts_refusal)
+def Int8RowQuantV3(B, S, x):
+    """`Int8RowQuant_v1{K}` with x as R rows of K/R values in v1's leaf order, so a cut can read the port as R rows: v1's body over
+    x viewed as one array of K by reference, with no gate of its own."""
+    return _row_quant(B, S.K, Coll(Array(S.K, BF16), x.refs))
 
 
 # ---- the linear ----------------------------------------------------------------------------------------------------------
@@ -389,4 +415,5 @@ def Int8KvQuant(B, S, k, v, sk):
 
 
 INT8_COMPOSITES = [Int8QuantElement, Int8RowScale, Int8StaticQuant, Int8RowQuant, Int8Linear, Int8AttnScale, Int8LutSoftmax,
-                   Int8AttnOut, Int8LutAttentionRow, Int8ColumnQuant, Int8KvQuant, Exp2Lut127V2, Int8LutSoftmaxV2, Int8LutAttentionRowV2]
+                   Int8AttnOut, Int8LutAttentionRow, Int8ColumnQuant, Int8KvQuant, Exp2Lut127V2, Int8LutSoftmaxV2, Int8LutAttentionRowV2,
+                   Int8RowQuantV3]
