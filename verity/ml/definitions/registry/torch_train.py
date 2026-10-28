@@ -1,7 +1,10 @@
-"""torch 2.14's training-step kernels on CUDA as Boolean Definitions: the transpose a transposed GEMM reads, and the
-backward of HF `LlamaRMSNorm` and of SiLU, each as PyTorch eager computes it in bf16 with f32 opmath.
+"""torch 2.14's training-step kernels on CUDA as Boolean Definitions: the transpose a transposed GEMM reads, and HF
+`LlamaRMSNorm` and SiLU forward and backward, each as PyTorch eager computes it in bf16 with f32 opmath.
 
     Transpose_v1{R, C}                      (x: Array<R, Array<C, U16>>) -> Array<C, Array<R, U16>>
+    RmsNormTorch_v1{H, LANES, EPS, RSQRT}   (x, w: Array<H, BF16>) -> Tuple<y: Array<H, BF16>, hb: Array<H, BF16>, r: F32>
+      RmsNormTorchIn_v1{H, LANES, EPS}      (x: Array<H, BF16>) -> F32
+      RmsNormTorchOut_v1{H}                 (x, w: Array<H, BF16>, r: F32) -> Tuple<Array<H, BF16>, Array<H, BF16>>
     RmsNormTorchBackward_v1{H, LANES}       (dy, x, w: Array<H, BF16>, r: F32) -> Array<H, BF16>
     RmsNormTorchWeightGrad_v1{M, H}         (dy, hb: Array<M, BF16>) -> BF16
     SiluTorch_v1{N, EX2}                    (x: Array<N, BF16>) -> Array<N, BF16>
@@ -13,6 +16,20 @@ backward of HF `LlamaRMSNorm` and of SiLU, each as PyTorch eager computes it in 
 (dX = dY·W reads Wᵀ, dW = dYᵀ·X reads Xᵀ and dYᵀ, attention's backward Pᵀ, dSᵀ, Kᵀ, Qᵀ and dOᵀ) reads it from a transposed copy,
 and the transposed GEMMs are then today's GEMM Definitions on its rows. At R = C = 128 a tile is 128 rows of 128 bf16 words in
 and out, each row one 256 B commitment row (262,144 bits each way); the 1 KiB layout's 512×512 tile is past K_MAX.
+
+`RmsNormTorch_v1` is one token of ``w * (x.float() * rsqrt(x.float().pow(2).mean(-1) + eps)).to(bf16)``, each step one ATen
+kernel, every f32 NaN 0x7FFFFFFF and every bf16 NaN 0x7FFF:
+
+    s  = Σ RN(f32(x) * f32(x))                   ``pow(2)`` is ``base * base``; the sum is `Reduce.cuh`'s, as ``gr`` below
+    v  = RN(RN(s * RN(1 / H)) + f32(EPS))        `MeanOps`' ``acc * factor``, factor ``(float)num_out / numel`` = RN(1 / H)
+                                                 while M·H < 2^24; then the add of the f32 eps word EPS
+    r  = RSQRT(v)                                ``::rsqrt``, `rsqrt.approx.f32`
+    hb = bf16(RN(f32(x) * r))                    the multiply, then `_to_copy` (cvt.rn.bf16.f32)
+    y  = bf16(RN(f32(w) * f32(hb)))              the weight's bf16 multiply
+
+RSQRT is a static, the Definition of ``rsqrt.approx.f32``: `mufu.RsqrtApprox_v2`, MUFU.RSQ by the library's ``rsq`` table
+with the subnormal range scaling. `RmsNormTorchIn_v1` is the kernels up to v and `RmsNormTorchOut_v1` those after r, so
+RSQRT is one call between them; r is an output, which the backward reads.
 
 `RmsNormTorchBackward_v1` is one token's input gradient through the autograd chain of
 ``w * (x.float() * rsqrt(x.float().pow(2).mean(-1) + eps)).to(bf16)``, r the saved ``rsqrt`` output, each line one ATen kernel
@@ -58,13 +75,15 @@ import numpy as np
 from verity.ml.circuits import boolean as BL
 from verity.ml.circuits.defs import CompositeDefinition, FunctionDefinition, SpecializedDefinition, bind, composite
 from verity.ml.circuits.ops.boolean.elementwise import specialized
+from verity.ml.circuits.refs import tuple_of
 from verity.ml.circuits.silicon import fp
 from verity.ml.circuits.types import Array, Tuple
 from verity.ml.definitions.registry.boolean_moe import nv_expf_in, nv_expf_out
 
-__all__ = ["RmsNormTorchBackward", "RmsNormTorchWeightGrad", "SiluTorch", "SiluTorchBackward", "SiluTorchBackwardOut",
-           "SiluTorchIn", "SiluTorchOut", "Transpose", "column_ctas", "column_sum", "reduce_lanes", "rmsnorm_backward", "row_sum",
-           "silu_backward_out", "silu_out"]
+__all__ = ["RmsNormTorch", "RmsNormTorchBackward", "RmsNormTorchIn", "RmsNormTorchOut", "RmsNormTorchWeightGrad", "SiluTorch",
+           "SiluTorchBackward", "SiluTorchBackwardOut", "SiluTorchIn", "SiluTorchOut", "Transpose", "column_ctas", "column_sum",
+           "mean_factor", "reduce_lanes", "rmsnorm_backward", "rmsnorm_out", "rmsnorm_variance", "row_sum", "silu_backward_out",
+           "silu_out"]
 
 U16 = Array(16, BL.BIT)
 BF16 = U16
@@ -194,6 +213,100 @@ RmsNormTorchBackward = specialized(
     doc="torch 2.14 CUDA autograd of HF's RMS norm (bf16) for one token on bits: g = f32(bf16(dy w)); dx = bf16(RN(g r) + "
         "RN(RN(RN(RN(gr -0.5) RN(RN(r r) r)) f32(1/H)) RN(2 f32(x)))), gr = sum RN(g f32(x)) in Reduce.cuh's float4 order at "
         "LANES threads; r the saved rsqrt; NaN 0x7FFF")
+
+
+# --- RMSNorm forward -------------------------------------------------------------------------------------------------------
+
+def _eps(S: Any) -> int:
+    e = S.EPS
+    if isinstance(e, bool) or not isinstance(e, int) or not 0 <= e < 1 << 32:
+        raise ValueError(f"EPS is an f32 word, not {e!r}")
+    return e
+
+
+def mean_factor(H: int) -> int:
+    """`MeanOps`' factor over a row of H, ``(float)num_out / numel``: the f32 word RN(1 / H)."""
+    return int((np.float32(1) / np.float32(_count("H", H))).view(np.uint32))
+
+
+def rmsnorm_variance(C, x, lanes: int, eps: int):
+    """``RN(RN(Σ RN(f32(x)²) * RN(1 / H)) + EPS)`` of one token's bf16 x, the sum in `row_sum`'s order."""
+    x32 = [fp.bf16_to_f32(v) for v in x]
+    s = row_sum(C, [fp.f32_mul(C, a, a, nan_word=NAN) for a in x32], lanes)
+    mean = fp.f32_mul(C, s, fp.f32_const(mean_factor(len(x))), nan_word=NAN)
+    return fp.f32_add(C, mean, fp.f32_const(eps), nan_word=NAN)
+
+
+def rmsnorm_out(C, x, w, r):
+    """(y, hb) of one token from bf16 x and w and the f32 rsqrt r: hb = bf16(RN(f32(x) r)), y = bf16(RN(f32(w) f32(hb)))."""
+    hb = [fp.f32_to_bf16(C, fp.f32_mul(C, fp.bf16_to_f32(v), r, nan_word=NAN), BF16_NAN) for v in x]
+    y = [fp.f32_to_bf16(C, fp.f32_mul(C, fp.bf16_to_f32(a), fp.bf16_to_f32(b), nan_word=NAN), BF16_NAN)
+         for a, b in zip(w, hb, strict=True)]
+    return y + hb
+
+
+def _rms_in_signature(S: Any):
+    _lanes(S)
+    _eps(S)
+    return (("x", Array(S.H, BF16)),), F32
+
+
+RmsNormTorchIn = specialized(
+    "RmsNormTorchIn", 1, ("H", "LANES", "EPS"),
+    lambda S: lambda C, *x: [rmsnorm_variance(C, x, _lanes(S), _eps(S))], _rms_in_signature,
+    doc="HF's RMS norm (torch 2.14 CUDA, bf16) up to its rsqrt for one token on bits: RN(RN(sum RN(f32(x)^2) RN(1/H)) + "
+        "EPS), the sum in Reduce.cuh's float4 order at LANES threads; NaN 0x7FFFFFFF")
+
+
+def _rms_out_signature(S: Any):
+    row = Array(_count("H", S.H), BF16)
+    return (("x", row), ("w", row), ("r", F32)), Tuple(row, row)
+
+
+RmsNormTorchOut = specialized(
+    "RmsNormTorchOut", 1, ("H",), lambda S: lambda C, *e: rmsnorm_out(C, e[:S.H], e[S.H:2 * S.H], e[2 * S.H]),
+    _rms_out_signature,
+    doc="HF's RMS norm (torch 2.14 CUDA, bf16) after its rsqrt r for one token on bits: hb = bf16(RN(f32(x) r)), "
+        "y = bf16(RN(f32(w) f32(hb))); NaN 0x7FFF")
+
+
+def _rsqrt(S: Any) -> FunctionDefinition:
+    f = bind(S.RSQRT) if isinstance(S.RSQRT, CompositeDefinition) else S.RSQRT
+    if not isinstance(f, FunctionDefinition) or isinstance(f, SpecializedDefinition) and not f.complete:
+        raise ValueError(f"RSQRT is a complete Definition of rsqrt.approx.f32, not {S.RSQRT!r}")
+    params, ret = f.signature()
+    if [t for _, t in params] != [F32] or ret != F32:
+        raise ValueError(f"RSQRT = {f.id} is not (F32) -> F32 on bits")
+    return f
+
+
+def _refuse_rms(b: dict) -> str | None:
+    try:
+        if "RSQRT" in b:
+            _rsqrt(type("S", (), {"RSQRT": b["RSQRT"]}))
+        if "EPS" in b:
+            _eps(type("S", (), {"EPS": b["EPS"]}))
+    except ValueError as e:
+        return str(e)
+    return None
+
+
+def _rms_fwd_signature(S: Any):
+    _lanes(S)
+    _eps(S)
+    _rsqrt(S)
+    row = Array(S.H, BF16)
+    return (("x", row), ("w", row)), Tuple(row, row, F32)
+
+
+@composite("RmsNormTorch", 1, ["H", "LANES", "EPS", "RSQRT"], _rms_fwd_signature, conformance="exact-model-tested",
+           refuse=_refuse_rms)
+def RmsNormTorch(B, S, x, w):
+    """torch 2.14's eager HF RMS norm for one bf16 token on bits: `RmsNormTorchIn_v1`, RSQRT, then `RmsNormTorchOut_v1`;
+    (y, hb, r)."""
+    r = B.call(_rsqrt(S), B.call(bind(RmsNormTorchIn, H=S.H, LANES=S.LANES, EPS=S.EPS), x))
+    o = B.call(bind(RmsNormTorchOut, H=S.H), x, w, r)
+    return tuple_of(o[0], o[1], r)
 
 
 # --- RMSNorm weight gradient -----------------------------------------------------------------------------------------------
