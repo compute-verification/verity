@@ -1,14 +1,17 @@
 """The Python the composition's Lean (`CoreComposition`, `CoreOnsite`, `CoreRemote`) is held to: the composition rule
 of onsite and remote, over the harness's framing of the core interface (`verity_difftest.protocol.answer`, as
-`Core.Protocol.case` and `answer` decode a case), and each component's own Python: PoUW's `core_check.case`
-(`verity/pouw/v1`, remote's work) and `period_check.case` (`verity/pouw/period/v1`, onsite's work), the network certifier's period check's difftest's `reference` (`verity/certifier/v0`, its Python
-mirror over the certifier's certificates and one-stage's answers,
-`verity/core/protocols/network/tests/test_network_period_protocol.py`), for sampled proofs' one-stage audit on the
+`Core.Protocol.case` and `answer` decode a case), and each subprotocol's own Python: PoUW's `core_check.case`
+(`verity/pouw/v1`, remote's work) and `period_check.case` (`verity/pouw/period/v1`, onsite's work), the network
+certifier's period check's difftest's `reference` (`verity/certifier/v0`, its Python mirror over the certifier's
+certificates and one-stage's answers, `verity/core/protocols/network/tests/test_network_period_protocol.py`), the
+inference-only policy's difftest's `reference` (`verity/inference-only/v0`, the policy's Python check,
+`nci_reference.check_baseline`, behind the protocol's decoders,
+`verity/core/protocols/network/tests/test_inference_only_protocol.py`), for sampled proofs' one-stage audit on the
 proofs themselves (`verity/sampled-proofs/one-stage/v2`) `one_stage_zk`: v2's framing over v1's `one_stage` and decoders
 (`verity/core/service/sampled_proofs/tests/test_difftest.py`), on the cases v2 decides without a proof, the wipe's
-(`verity/wipe/v0`) `wipe_protocol_case.answer`, and for space (`verity/pous/p2/v4/run`) and bandwidth
-(PoUB-P2, `verity/remote-bandwidth/p2/v0`) their Python verifiers' answers on small periods of their hooks (`Recorded`,
-`periods.py`). Each component's own difftest holds its Lean to that Python; this one holds the composition of them.
+(`verity/wipe/v0`) `wipe_protocol_case.answer`, and for space (`verity/pous/p2/v4/run`) and bandwidth (PoUB-P2,
+`verity/remote-bandwidth/p2/v0`) their Python verifiers' answers on small periods of their hooks (`Recorded`,
+`periods.py`). Each subprotocol's own difftest holds its Lean to that Python; this one holds the composition of them.
 
 The trial's rule, onsite's and remote's over their components' statements:
 
@@ -75,6 +78,9 @@ POUW_PERIOD_CASES = module("pouw_period_cases", CORE / "protocols/pouw/lean/chec
 #: The network certifier's period difftest: `reference` is the period check's Python mirror, and `build` makes a signed
 #: period with one change.
 PERIOD = module("network_period_difftest", CORE / "protocols/network/tests/test_network_period_protocol.py")
+#: The inference-only policy's difftest: `reference` is the policy's Python check (`check_baseline`) behind the
+#: protocol's decoders, and `drawn` draws a declaration's case with one change.
+INFERENCE = module("inference_only_protocol_difftest", CORE / "protocols/network/tests/test_inference_only_protocol.py")
 #: The wipe protocol in Python: `answer`, its mirror under S1's LMS, and `case`, a signed wipe aimed at a kind (`KINDS`).
 WIPE_CASES = module("wipe_protocol_case", CORE / "devices/memory_challenger/lean/tests/wipe_protocol_case.py")
 
@@ -211,6 +217,7 @@ def one_stage_zk(case: Any) -> dict:
 
 
 CERTIFIER = Ported("verity/certifier/v0", PERIOD.reference)
+INFERENCE_ONLY = Ported("verity/inference-only/v0", INFERENCE.reference)
 POUW = Ported("verity/pouw/v1", core_check.case)
 
 
@@ -224,7 +231,7 @@ def _period_answer(case: str) -> str:
 POUW_PERIOD = Ported(period_check.ID, lambda case: json.loads(_period_answer(canonical(case))))
 #: Integrity: one-stage v2, the audit on the proofs themselves (`SampledProofs.OneStageZk`).
 SAMPLED_PROOFS = Ported(V2, one_stage_zk, blobs=True)
-#: Space and bandwidth, `PousCheck.RunProtocol.protocol` and `RemoteAudit.P2Protocol.protocol`.
+#: Space and bandwidth, `PousCheck.RunProtocol.protocol` and `RemoteAudit.Protocol.protocol`.
 POUS = Recorded("verity/pous/p2/v4/run")
 BANDWIDTH = Recorded("verity/remote-bandwidth/p2/v0")
 #: The wipe, `MemoryChallenger.WipeProtocol.protocol`.
@@ -354,7 +361,7 @@ class Product:
 @dataclass(frozen=True)
 class Same(Product):
     """`Core.Composition.sameB id ss components`: `product`, except that once the cases fit, the components ``same``
-    (each committing to a window record) must all have committed to the first one's digest."""
+    (each committing to the run's record) must all have committed to the first one's digest."""
 
     same: tuple = ()
 
@@ -392,12 +399,11 @@ class Tie:
     what: str
     names: tuple = ()
 
-    def strays(self, answers: list[tuple[str, dict]], ev: list) -> str | None:
-        """`Core.Composition.Tie.strays`. A component's answer carries its digest exactly when its commitment decodes,
-        and then its commitment holds what its function reads; where it doesn't, the component rejects, and so does the
-        composition."""
-        digests, cases = dict(answers), {k[0]: k[2] for k in ev}
-        if any(digests.get(s, {}).get("commitment") is None or s not in cases for s, _ in self.names):
+    def strays(self, ev: list) -> str | None:
+        """`Core.Composition.Tie.strays`, on cases whose commitments all decode (`holdTies` reads it only when the
+        composition doesn't reject, so that every component's does)."""
+        cases = {k[0]: k[2] for k in ev}
+        if any(s not in cases for s, _ in self.names):
             return None
         (s, d), *rest = [(s, f(cases[s])) for s, f in self.names]
         return next((f"{self.what}: {s} committed {d.hex()}, {t} committed {e.hex()}" for t, e in rest if e != d), None)
@@ -414,9 +420,9 @@ STORE = Tie("store", (("verity/pous/p2/v4/run", _commitment_hex("root")),
 
 
 @dataclass(frozen=True)
-class Tied(Product):
-    """`Core.Composition.tiedB id components ties`: `product`, except that once the cases fit, the components of each
-    tie of ``ties`` must have committed to one value."""
+class TiedSame(Same):
+    """`Core.Composition.tiedSameB id ss ties components`: `same`, except that when it doesn't reject, the components
+    of a tie of ``ties`` that didn't all commit to one value reject (`holdTies`)."""
 
     ties: tuple = ()
 
@@ -424,13 +430,16 @@ class Tied(Product):
         answers = self.run(ps, ev, blobs)
         if isinstance(answers, str):
             return REJECT, answers
-        if stray := next(filter(None, (t.strays(answers, ev) for t in self.ties)), None):
+        if stray := self.strays(answers):
             return REJECT, stray
-        return self.judge(answers, c)
+        out = self.judge(answers, c)
+        if out[0] != REJECT and (stray := next(filter(None, (t.strays(ev) for t in self.ties)), None)):
+            return REJECT, stray
+        return out
 
     def tied(self, case: Any) -> list[tuple[str, bool]]:
-        """On a case whose components fit the composition, each tie whose components' commitments all decode, by what
-        it ties, and whether they committed to one value."""
+        """On a case whose components fit the composition and whose tied components' commitments all decode, each tie
+        by what it ties, and whether they committed to one value."""
         ev: list = []
 
         def answers():
@@ -442,7 +451,9 @@ class Tied(Product):
                 if all(digests.get(s, {}).get("commitment") is not None and s in cases for s, _ in t.names)]
 
 
-#: `Core.Remote.protocol` and `Core.Onsite.protocol`, over their components in the order of their ids: remote's two
-#: committing to one window record, and onsite's PoUS and PoUB-P2 on one store.
-REMOTE = Same("verity/remote/v0", (POUW, SAMPLED_PROOFS), (POUW.id, SAMPLED_PROOFS.id))
-ONSITE = Tied("verity/onsite/v0", (CERTIFIER, POUS, POUW_PERIOD, BANDWIDTH, SAMPLED_PROOFS, WIPE), (STORE,))
+#: `Core.Remote.protocol` and `Core.Onsite.protocol`, over their subprotocols in the order of their ids: remote's three
+#: committing to one window record, onsite's policy and integrity (v2) to one registration record, and onsite's PoUS
+#: and PoUB-P2 on one store.
+REMOTE = Same("verity/remote/v0", (INFERENCE_ONLY, POUW, SAMPLED_PROOFS), (INFERENCE_ONLY.id, POUW.id, SAMPLED_PROOFS.id))
+ONSITE = TiedSame("verity/onsite/v0", (CERTIFIER, INFERENCE_ONLY, POUS, POUW_PERIOD, BANDWIDTH, SAMPLED_PROOFS, WIPE),
+                  (INFERENCE_ONLY.id, SAMPLED_PROOFS.id), (STORE,))

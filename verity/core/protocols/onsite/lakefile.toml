@@ -1,8 +1,8 @@
-# Onsite Verity as one `Core.Protocol` (`verity/onsite/v0`): the composition of integrity (sampled proofs), work (PoUW's
-# period credit, `verity/pouw/period/v1`), space (PoUS's run check), bandwidth (the remote bandwidth session),
-# communication (the network certifier over the period, `verity/certifier/v0`) and the wipe (`verity/wipe/v0`). Its
-# executable is the core CLI (`onsite id | check | serve`), which the difftest
-# drives. Code: no Mathlib.
+# Onsite Verity as one `Core.Protocol` (`verity/onsite/v0`): the composition of integrity (sampled proofs), the
+# inference-only policy (`verity/inference-only/v0`), work (PoUW's period credit, `verity/pouw/period/v1`), space (PoUS's
+# run check), bandwidth (the remote bandwidth session), communication (the network certifier over the period,
+# `verity/certifier/v0`) and the wipe (`verity/wipe/v0`). Its executable is the core CLI (`onsite id | check | serve`),
+# which the difftest drives. Code: no Mathlib.
 name = "core_onsite"
 defaultTargets = ["CoreOnsite", "onsite", "CoreProduct", "product"]
 
@@ -32,6 +32,11 @@ path = "../../service/sampled_proofs"
 name = "pouw_check"
 path = "../pouw/lean/check"
 
+# The inference-only policy: its check as a core protocol (`NciCheck.Protocol`).
+[[require]]
+name = "nci_check"
+path = "../network/nci/lean"
+
 # Communication: the network certifier's period check (`NetworkCheck.Period`), with the certifier program and the LMS
 # verifier it reads certificates with.
 [[require]]
@@ -43,7 +48,7 @@ path = "../network/lean"
 name = "pous_check"
 path = "../pous/check"
 
-# Bandwidth: the remote bandwidth audit's session.
+# Bandwidth: the remote bandwidth audit's P2 session on PoUS's store (`RemoteAudit.P2Protocol`).
 [[require]]
 name = "remote_audit"
 path = "../remote_bandwidth/lean"
@@ -61,7 +66,7 @@ name = "onsite"
 root = "OnsiteMain"
 
 # A configuration's product: `Core.Composition.productB` over exactly the components its `protocols` lists (onsite for all
-# six), `product IDS id | check | serve` (CoreProduct.lean).
+# seven), `product IDS id | check | serve` (CoreProduct.lean).
 [[lean_lib]]
 name = "CoreProduct"
 
