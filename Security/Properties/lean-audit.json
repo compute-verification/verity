@@ -25,7 +25,7 @@
   "Properties.Evaluate",
   "Properties.NetworkRecords",
   "Properties.NetworkPeriod",
-  "Properties.Core",
+  "Properties.Core.Period",
   "Properties.SampledProofs",
   "Properties.SampledProofs.Draw",
   "Properties.SampledProofs.Halt",
@@ -336,7 +336,7 @@
   "Definitions.Pouw.PearlC",
   "Definitions.Pouw.Fp8Atom",
   "Definitions.Pouw.Game.Defs",
-  "Properties.Core"
+  "Properties.Core.Period"
  ],
  "layers": {
   "Properties.Pouw": {
@@ -569,10 +569,11 @@
    "except": [],
    "why": "the properties are stated against the composition's own functions and the core interface's, on Lean core: nothing of Mathlib or of `security`"
   },
-  "Properties.Core": {
+  "Properties.Core.Period": {
    "imports": ["CoreProtocol.Period", "Definitions.Core.Period"],
    "except": [],
-   "why": "the code's periods are stated equal to the spec's: the code's copy and the spec's ticks, spans and monitoring period, never a proof"
+   "why": "the code's periods are stated equal to the spec's: the code's copy and the spec's ticks, spans and monitoring period, never a proof",
+   "sealed": true
   },
   "Properties.RemoteAudit.Component": {
    "imports": ["RemoteAudit", "Properties.RemoteAudit.Line"],
@@ -978,15 +979,15 @@
    "assumptions": [],
    "type_hash": "9ef48444197e3ddf011a98db92e86110363c2cf80dde2491249648d8fe97dbc2"
   },
-  "Properties.Core.monitoringPeriodIsSpec": {
+  "Properties.Period.monitoringPeriodIsSpec": {
    "owner": "@network-accounting",
-   "signature": ["Properties.Core.monitoringPeriodIsSpec : Properties.Core.MonitoringPeriodIsSpec"],
+   "signature": ["Properties.Period.monitoringPeriodIsSpec : Properties.Period.MonitoringPeriodIsSpec"],
    "assumptions": [],
    "type_hash": "09ddaaf6097de9af2ede528fcb7a0d704c8e59bec5ce64636c04c85193b4cb96"
   },
-  "Properties.Core.tickSpanIsSpec": {
+  "Properties.Period.tickSpanIsSpec": {
    "owner": "@network-accounting",
-   "signature": ["Properties.Core.tickSpanIsSpec : Properties.Core.TickSpanIsSpec"],
+   "signature": ["Properties.Period.tickSpanIsSpec : Properties.Period.TickSpanIsSpec"],
    "assumptions": [],
    "type_hash": "ae2e64d76b008496fa2bcc2fa6f4dfae63322354cc6fbd26a1736f95ab6a0d28"
   },
@@ -3575,14 +3576,14 @@
     "function": "Core.Protocol.answer",
     "outcome": "accept"
    },
-   "Properties.Core.monitoringPeriodIsSpec": {
+   "Properties.Period.monitoringPeriodIsSpec": {
     "conjuncts": [
      {
       "function": "Core.MonitoringPeriod.valid",
       "outcome": "none"
      },
      {
-      "function": "Properties.Core.code",
+      "function": "Properties.Period.code",
       "outcome": "none"
      },
      {
@@ -3595,10 +3596,10 @@
      }
     ]
    },
-   "Properties.Core.tickSpanIsSpec": {
+   "Properties.Period.tickSpanIsSpec": {
     "conjuncts": [
      {
-      "function": "Properties.Core.spec",
+      "function": "Properties.Period.spec",
       "outcome": "none"
      },
      {
@@ -4239,7 +4240,7 @@
     "Core.TickSpan.within": "790694008a763c362a6b93cccdcb269e1274e99a527dfac926129d35e37d6f2a",
     "Core.parts": "e431fd3c560b5a3b129b9b343ac1bb67ec5134a909f282caef8cfaf68181880c"
    },
-   "guarantees": ["Properties.Core.monitoringPeriodIsSpec", "Properties.Core.tickSpanIsSpec"]
+   "guarantees": ["Properties.Period.monitoringPeriodIsSpec", "Properties.Period.tickSpanIsSpec"]
   },
   "CoreProtocol.Profile": {
    "digest": "6b48d70a03be47bbc16fb54d2b4ca09269285cd9442ce7211c9abdf9cec0535b",
@@ -5895,7 +5896,7 @@
     "Verity.TickSpan.stop": "1f0de44d6b409f7a8a8c786d1d0bed7e8e565879e0522919bbae3651ad35128e",
     "Verity.TickSpan.ticks": "f3d74b5a49ba7e597036d07ffbc2bb7a7a7a7740a70d08c966ac3094d4e74f07"
    },
-   "guarantees": ["Properties.Core.monitoringPeriodIsSpec", "Properties.Core.tickSpanIsSpec"]
+   "guarantees": ["Properties.Period.monitoringPeriodIsSpec", "Properties.Period.tickSpanIsSpec"]
   },
   "Definitions.Core.Prims": {
    "digest": "4312e4a3d0083549f51fbce5cb2aaec7b9ad11629465723400d743378a31d747",
@@ -11347,16 +11348,16 @@
    },
    "guarantees": ["Properties.Composition.acceptMeans", "Properties.Composition.answerAccepts"]
   },
-  "Properties.Core": {
-   "digest": "1d337c15b2b47440163b38492ad98d94d8257575be1aa8d755254a032b59fc69",
+  "Properties.Core.Period": {
+   "digest": "9892abae38297c35223a059b00fe4970638b324228e4335fe63f74c3eca25628",
    "definitions": {
-    "Properties.Core.MonitoringPeriodIsSpec": "0d8d976c7e701841e1afc5a8c1264fe07ec98de0de8223ba7a2f3c0f7cbff4af",
-    "Properties.Core.TickSpanIsSpec": "6d4b5836980de66827135daff0aa931bab64982e6f51791872e8101ba7c0de82",
-    "Properties.Core.boundaries": "169f9c3a1a036487f93403c6ec5b08b71165e2d97b0856f347f28da15557f9d7",
-    "Properties.Core.code": "b96adc723c395a01982c92bc5ead34c7754a30dde8d2f39b19bba8a52084a02b",
-    "Properties.Core.spec": "768d40a5dbb6307ff4b7496f26dc417ea0f026b349223bb86c938911b368f1b7"
+    "Properties.Period.MonitoringPeriodIsSpec": "0d8d976c7e701841e1afc5a8c1264fe07ec98de0de8223ba7a2f3c0f7cbff4af",
+    "Properties.Period.TickSpanIsSpec": "6d4b5836980de66827135daff0aa931bab64982e6f51791872e8101ba7c0de82",
+    "Properties.Period.boundaries": "169f9c3a1a036487f93403c6ec5b08b71165e2d97b0856f347f28da15557f9d7",
+    "Properties.Period.code": "b96adc723c395a01982c92bc5ead34c7754a30dde8d2f39b19bba8a52084a02b",
+    "Properties.Period.spec": "768d40a5dbb6307ff4b7496f26dc417ea0f026b349223bb86c938911b368f1b7"
    },
-   "guarantees": ["Properties.Core.monitoringPeriodIsSpec", "Properties.Core.tickSpanIsSpec"]
+   "guarantees": ["Properties.Period.monitoringPeriodIsSpec", "Properties.Period.tickSpanIsSpec"]
   },
   "Properties.Evaluate": {
    "digest": "cd5c4e08ef821abd0b2f6be9c8d87edbb721cbc76cde9c021adc8949e7a7e177",

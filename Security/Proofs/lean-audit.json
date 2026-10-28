@@ -32,7 +32,7 @@
   "Proofs.Properties.CertifierNetwork.Runs",
   "Proofs.Properties.Identity",
   "Proofs.Properties.Evaluate",
-  "Proofs.Properties.Core",
+  "Proofs.Properties.Core.Period",
   "Proofs.Properties.NetworkRecords",
   "Proofs.Properties.NetworkPeriod",
   "Proofs.Properties.SampledProofs",
