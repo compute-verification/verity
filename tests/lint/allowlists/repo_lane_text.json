@@ -815,6 +815,7 @@
     {"file": "integrations/vllm/tests/engine/test_tp2_rank_profiles.py", "count": 2},
     {"file": "integrations/vllm/tests/engine/test_tp2_t6_4_check.py", "count": 3},
     {"file": "integrations/vllm/tests/lint/README.md", "count": 7},
+    {"file": "integrations/vllm/tests/lint/test_p11_names.py", "count": 6},
     {"file": "integrations/vllm/tests/observe/test_chunked_attribution.py", "count": 3},
     {"file": "integrations/vllm/tests/observe/test_fold_group_part_event.py", "count": 1},
     {"file": "integrations/vllm/tests/observe/test_gen_ovbatch.py", "count": 1},
