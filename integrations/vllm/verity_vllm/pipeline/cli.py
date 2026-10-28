@@ -121,6 +121,7 @@ COMMANDS: dict[str, tuple[str, str]] = {
     "twins": ("verity_vllm.program.twins_check", "vectorized twins of the registered bodies"),
     "verdict": ("verity_vllm.pipeline.verdict_record", "a row's Commit verdict record, rebuilt from its evidence"),
     "weights-of-record": ("verity_vllm.check.weights_of_record", "the weights of record"),
+    "weights-tie": ("verity_vllm.program.predict.weights_tie", "the weights registration's checkpoint tie: its window (commit), the verifier's (verify), the pins (pins)"),
     "workload": ("verity_vllm.pipeline.workload", "the deterministic sweep workload generator"),
     "workload-file": ("verity_vllm.pipeline.workload_file", "workload files fetched by their art ids and checked against SHA256SUMS"),
 }
