@@ -131,6 +131,10 @@ def certified(s: Scenario) -> dict | None:
     if cert.declared:
         out |= {"r_in": cert.r_in, "r_out": cert.r_out, "window_buckets": cert.window_buckets,
                 "declared_x": cert.declared_x, "faulty_unit_bits": cert.faulty_unit_bits}
+    k = cert.leak_bounds(c)
+    if k is not None:
+        w = regime.wipe.wipe_s
+        out["leak"] = k.json() | {"reading": cert.leak, "share": cert.leak_share(c, w) / w, "binds": regime.leak_binds(c)}
     return out
 
 
@@ -147,8 +151,15 @@ def certified_md(d: dict | None) -> list[str]:
                  f"{fmt(d['links'])} bit/s, is its upper end until Lean proves that bound")
     else:
         basis = "`intake · α Φ`, a server's ingress only its declared inputs (draft:declared-ingress)"
-    return [(f"**Certified ingress:** {fmt(d['prompts'])} bit/s into a location, intake {fmt(d['intake'])} × α Φ: "
-             f"{basis}; plus {fmt(d['channels'])} bit/s of timing and side channels."), ""]
+    out = [(f"**Certified ingress:** {fmt(d['prompts'])} bit/s into a location, intake {fmt(d['intake'])} × α Φ: "
+            f"{basis}; plus {fmt(d['channels'])} bit/s of timing and side channels."), ""]
+    if "leak" in d:
+        k = d["leak"]
+        out += [(f"**Leak bound K** ({k['reading']} reading, over the monitoring period): {fmt(k['per_link'])} bits per "
+                 f"link; {fmt(k['total'])} bits summed over the datacenter's {fmt(k['links'])} links "
+                 f"({k['statement']}), {fmt(k['datacenter'])} bits the datacenter bound. A location's share, "
+                 f"{fmt(k['share'])} bit/s, {'sets' if k['binds'] else 'is above'} the certified channel."), ""]
+    return out
 
 
 def operating_md(points: list[operating.Point]) -> list[str]:

@@ -26,6 +26,11 @@ cryptography's advantage:
   `intake · α Φ`, at most `α Φ` since a server's ingress carries only its inference blocks' declared inputs;
   with `declared` (`regime.onsite-w63`), each server's declared inputs at a cadence the warden form's public parameters
   set. Its δ is 0: the certifier is the auditor's device (`trusted-host`), and the side channels an assumed cap.
+  With `leak` (on a declared certifier), the certified channel is also at most its share of the network certifiers'
+  leak bound K (`rho.leak`): the datacenter bound over the monitoring period, the sum over links or the datacenter's
+  own where tighter, shared evenly over the period's serving blocks, and the serving block reads the lesser of the two.
+  K's pooled form adds its δ; its per-period form leaves each sampling block's own audit error to the caller, a term
+  this package doesn't carry yet.
 * The NCI check is a registration check, not an envelope: the declared circuit's `(c, k)`-partition into inference
   blocks (`Policy`), registered once.
 
@@ -47,6 +52,7 @@ from collections.abc import Mapping
 from dataclasses import dataclass, fields
 from typing import Any, Protocol
 
+from rho import leak
 from rho.hardware import Fleet, Horizon, Location, Units
 from rho.params import Registry
 from rho.theorem import Blocks, Budget, Cut, Partition, ServingBlock
@@ -345,18 +351,37 @@ class Certifier:
     #: the certified prompt ingress as a multiple of the declared bound, at most line rate (`Location.links`): 1 under
     #: the declared-ingress rule, and line rate the upper end until Lean proves the per-server bound
     declared_x: float = 1.0
+    #: the network certifier's leak bound K (`rho.leak`, network-accounting's `leak_bounds`) as a second bound on the
+    #: certified channel: off (""), or the reading of the scan's free inputs it counts (`leak.READINGS`); with
+    #: `declared` only, whose class sets the link and its rate
+    leak: str = ""
+    #: δ of K's pooled form, `HorizonLeakAccepted`'s (nan: the per-period form, `PeriodLeakAccepted`'s, with no δ term)
+    leak_delta: float = math.nan
+    #: the datacenter's own bound on K over the monitoring period, bits (inf: none, so the sum over its links)
+    leak_datacenter: float = math.inf
 
     CITES = ("NetTiming.Guarantees.EncardIngressDecodableLeContents", "Accounting.Covered", "Accounting.TrustedUnits")
     INTAKE = ("draft:declared-ingress",)
     DECLARED = ("draft:declared-ingress", "draft:per-server-ingress")
+    #: K where it sets the certified channel: one link's statement (the per-period form, or the pooled form at a δ,
+    #: conditional on SampledKSLive and P2), and the datacenter's sum over links and its share a serving block, which
+    #: no Lean statement covers
+    LEAK = ("NetTiming.Guarantees.PeriodLeakAccepted", "draft:datacenter-leak")
+    POOLED = ("draft:horizon-leak-accepted", "draft:datacenter-leak")
 
     def __post_init__(self) -> None:
         unset = [k for k in DECLARED_IO if self.declared and not math.isfinite(getattr(self, k))]
         if unset:
             raise ValueError(f"the declared I/O bound needs {unset}")
+        if self.leak and (self.leak not in leak.READINGS or not self.declared):
+            raise ValueError(f"leak is one of {leak.READINGS} on a declared certifier (its class sets the link), not "
+                             f"{self.leak!r} with declared = {self.declared}")
 
     def cites(self) -> tuple[str, ...]:
         return self.CITES + (self.DECLARED if self.declared else self.INTAKE)
+
+    def leak_cites(self) -> tuple[str, ...]:
+        return self.LEAK if math.isnan(self.leak_delta) else self.POOLED
 
     @property
     def ids_per_cell(self) -> int:
@@ -435,8 +460,23 @@ class Certifier:
         """`r_in + r_side`: bit/s of unregistered input into a location."""
         return self.prompts(ctx) + ctx.location.hosts * (self.timing + self.side)
 
+    def leak_bounds(self, ctx: Context) -> leak.Leak | None:
+        """K over the monitoring period, per link and per datacenter (a network certifier on each host's uplink), or
+        None without `leak`."""
+        if not self.leak:
+            return None
+        return leak.bounds(self, ctx.fleet.count * ctx.location.hosts, ctx.horizon.seconds)
+
+    def leak_share(self, ctx: Context, seconds: float) -> float:
+        """A location's share over `seconds` of the datacenter bound on K, `K_dc · seconds / (count · horizon)`
+        (math.inf without `leak`)."""
+        k = self.leak_bounds(ctx)
+        if k is None:
+            return math.inf
+        return k.datacenter * seconds / (ctx.fleet.count * ctx.horizon.seconds)
+
     def delta(self, ctx: Context) -> tuple[float, float]:
-        return 0.0, 0.0
+        return (self.leak_delta if self.leak and not math.isnan(self.leak_delta) else 0.0), 0.0
 
 
 class Regime(Protocol):
@@ -541,7 +581,7 @@ class Onsite(Remote):
     SERVING = ("Accounting.Guarantees.Actual.WindowsAt", "Accounting.Placed.Causal", "Accounting.Placed.ComputeRate",
                "Accounting.Placed.Links", "draft:windows-information-form")
     PHYSICAL = tuple(dict.fromkeys(LINKS + SERVING + Wipe.SERVER + Wipe.DEVICE + Certifier.CITES + Certifier.INTAKE
-                                   + Certifier.DECLARED))
+                                   + Certifier.DECLARED + Certifier.LEAK + Certifier.POOLED))
 
     def __post_init__(self) -> None:
         if self.form not in FORMS:
@@ -550,11 +590,14 @@ class Onsite(Remote):
     def envelopes(self) -> dict[str, Any]:
         return super().envelopes() | {"wipe": self.wipe, "certifier": self.certifier}
 
-    def cites(self) -> tuple[str, ...]:
-        """The serving cut's citations."""
+    def cites(self, ctx: Context | None = None) -> tuple[str, ...]:
+        """The serving cut's citations, with K's where it sets the certified channel (at `ctx`)."""
         if self.form == "links":
             return self.LINKS
-        return tuple(dict.fromkeys(self.SERVING + self.wipe.cites() + self.certifier.cites()))
+        out = self.SERVING + self.wipe.cites() + self.certifier.cites()
+        if ctx is not None and self.leak_binds(ctx):
+            out += self.certifier.leak_cites()
+        return tuple(dict.fromkeys(out))
 
     def state(self, ctx: Context) -> float:
         """Bits a serving block carries in: all its servers' memory `M_s` (`links`), or what a wipe leaves
@@ -566,19 +609,35 @@ class Onsite(Remote):
         """Bit/s into a serving block: its line rate (`links`), or `r_in + r_side` (`certified`)."""
         return ctx.location.links if self.form == "links" else self.certifier.rate_in(ctx)
 
-    def budget(self, ctx: Context) -> Budget:
-        """`(c_S, k_S)`: `⌊Φ_s Δ_wipe⌋` gates and `k_wipe + (r_in + r_side) Δ_wipe` bits."""
+    def leak_binds(self, ctx: Context) -> bool:
+        """Whether the certified channel is K's share rather than the certified ingress."""
         w = self.wipe.wipe_s
-        return Budget(float(math.floor(ctx.location.phi * w)), self.state(ctx) + self.rate_in(ctx) * w)
+        return self.form != "links" and self.certifier.leak_share(ctx, w) < self.certifier.prompts(ctx) * w
+
+    def inputs(self, ctx: Context) -> float:
+        """Bits into a serving block over `Δ_wipe` besides its state: the line rate's (`links`), or the certified
+        channel, `r_in Δ_wipe` or the location's share of K where that is less, plus `r_side Δ_wipe` (`certified`)."""
+        w = self.wipe.wipe_s
+        if self.form == "links":
+            return self.rate_in(ctx) * w
+        c = self.certifier
+        certified = min(c.prompts(ctx) * w, c.leak_share(ctx, w))
+        return certified + ctx.location.hosts * (c.timing + c.side) * w
+
+    def budget(self, ctx: Context) -> Budget:
+        """`(c_S, k_S)`: `⌊Φ_s Δ_wipe⌋` gates and `k_wipe + (r_in + r_side) Δ_wipe` bits, the certified channel at K's
+        share where that is less."""
+        w = self.wipe.wipe_s
+        return Budget(float(math.floor(ctx.location.phi * w)), self.state(ctx) + self.inputs(ctx))
 
     def partition(self, ctx: Context) -> Partition:
         budget = self.budget(ctx)
-        serving = Cut("serving", (Blocks("serving", budget, 1.0),), {}, self.cites())
+        serving = Cut("serving", (Blocks("serving", budget, 1.0),), {}, self.cites(ctx))
         # The uncertified block may take the whole serving block's input: generous to the adversary, since the
         # inference blocks' prompts come out of it too.
         uncertified = Budget(math.fsum(self.abiding(ctx, budget.gates).values()), budget.inputs)
         layout = Cut("layout", (self.blocks(ctx, budget.gates), Blocks("uncertified", uncertified, 1.0)), {},
-                     self.cites())
+                     self.cites(ctx))
         count = ctx.fleet.count * ctx.horizon.seconds / self.wipe.wipe_s
         block = ServingBlock("serving-block", budget.gates, count, (self.inference(ctx, budget.gates), serving),
                              layout, ctx.fleet.mfu_train)

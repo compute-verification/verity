@@ -72,7 +72,9 @@ A bound is argued in three parts, as the Notation states it, and each module's d
   sampled proofs, the wipe, the certifier) is one envelope `𝒜_a` with its parameters, its slack (the uncertified gates
   by route: `undecl.*`, `skip.*`, `break.*`, `exfil.faulty`) and its `δ_a`, split into `δ_coin` and `δ_crypto`. The NCI
   check is the registration (`Policy`). A regime is the envelopes that run, and builds the serving blocks with their
-  cuts.
+  cuts. A declared certifier with `leak` also reads the network certifiers' leak bound K (`leak.py`, from
+  `benchmarks/network_traces/leak_bounds.py`), per link and per datacenter: a serving block's certified channel is the
+  lesser of its ingress and its share of the datacenter bound (the sum over links, or the datacenter's own if tighter).
 - **The exclusion bound** (`classes.py`, `attacks.py`, `theorem.py`): the training classes as per-block caps
   `q_T(c, k)`, the attacks as constructions, and the serving-block bound: each serving block's least cut
   (`theorem.local`), summed over blocks (`theorem.overhead`), with the minimum of global bounds beside it
@@ -119,6 +121,7 @@ implementation, or different numbers in `data/`, never an edit to the modules ar
 | `circuits.py` | `Circuit` (a measured training step), `compare → Comparison` with the FLOP model, `in_place` |
 | `hardware.py` | `Units`, `Location`, `Fleet`, `Horizon` |
 | `envelopes.py` | `Pouw`, `Detection`, `Wipe`, `Certifier`; `Regime.partition`, `Regime.delta`; `Policy` |
+| `leak.py` | `link`, `bounds → Leak` (K per link and per datacenter) |
 | `params.py` | `Registry`: dotted keys over `data/*.toml`, `override`, `fields` |
 | `scenario.py` | `build`, `evaluate → Result`, `seconds` |
 | `analysis.py` | `sweep`, `tornado`, `threshold`, `dangers`, `rescues`, `corner`, `margins`, `phase`, `frontier`, `attribution`, `upto` |

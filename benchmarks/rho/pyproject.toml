@@ -10,7 +10,12 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 # test_classes and test_attacks cross-check the threaded class and the shard attack against benchmarks/nci's
 # implementations, imported by path (slowdown.py imports catalog.py). families.Nci reads the NCI library's algorithms
 # and their traits. test_envelopes pins theorem.multiple_bound to Lean's remoteDampener and DampenerRemote's text.
+# rho/leak.py reads K from network-accounting's leak_bounds.py, whose imports span the certifier, PoUS and sampled proofs.
 inputs = ["Security/lean-audit.json", "Security/Properties/lean-audit.json", "benchmarks/nci/tiers.py",
           "Security/Definitions/Nci/Remote.lean", "Security/Definitions/Nci/Guarantees/Remote.lean",
           "benchmarks/census/hardware.json", "benchmarks/census/adversary.json", "benchmarks/nci/slowdown.py",
-          "benchmarks/nci/catalog.py", "benchmarks/nci/algorithms.json"]
+          "benchmarks/nci/catalog.py", "benchmarks/nci/algorithms.json", "benchmarks/network_traces/leak_bounds.py",
+          "verity/__init__.py", "verity/errors.py", "verity/core/__init__.py", "verity/core/claims",
+          "verity/core/protocols/__init__.py", "verity/core/protocols/profile.py", "verity/core/protocols/certifier",
+          "verity/core/protocols/pous", "verity/core/protocols/sampled_proofs", "verity/ml/__init__.py",
+          "verity/ml/circuits", "verity/ml/commitments", "verity/ml/crypto", "verity/ml/randomness"]

@@ -75,6 +75,11 @@ outputs = { value = 64, unit = "id/request", source = "benchmarks/network_traces
 bucket_s = { value = 0.1, unit = "s", source = "benchmarks/network_traces/scan_zk.py W63: WardenParams bucket_ms", status = "declared" }
 window_buckets = { value = 32, unit = "bucket", source = "benchmarks/network_traces/scan_zk.py W63: WardenParams window, a link-window's buckets, the length the per-server bound's windowBits is stated per", status = "declared" }
 declared_x = { value = 1, unit = "x declared", low = 1, high = 1e8, source = "ruled: a server's ingress carries only its inference blocks' declared inputs (draft:declared-ingress); high: line rate, the upper end until Lean states the per-server bits (the ingress is at most the location's links, 5.3e7 x the declared bound on a server and 2.6e7 x on a GB200 tray)", status = "ruled" }
+# K, the network certifiers' leak bound (rho/leak.py, benchmarks/network_traces/leak_bounds.py), per link and per
+# datacenter (Daniel, 27 Oct 7:44 PM PDT): one link a host at the class's rate, in the per-period form
+# (PeriodLeakAccepted's; leak_delta sets the pooled form's δ), the datacenter's bound the sum over links unless
+# leak_datacenter gives its own, tighter. The serving block reads the lesser of r_in and its share of the datacenter's K.
+leak = "registered"
 
 # Today's wipe: about 12 GB a server, every tier but the boot disk, which it doesn't reach. A measurement of the wipe
 # decides whether the 5 GB of regime.onsite is reached.

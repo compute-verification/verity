@@ -290,14 +290,18 @@ def test_a_servers_certified_ingress_is_its_declared_inputs_and_line_rate_the_up
 
 def test_onsite_w63_beside_the_reference():
     """W63's cadence beside the reference H200 server (`reference-onsite-h200`, ingress α Φ = 3.23 Mbit/s): 91.1 kbit/s
-    a 32-bucket link-window, 0.028 α Φ at v4-pro-session, so a day's input drops from 3.19e11 to 4.80e10 bits and the
-    lower bound's padded size ratio, which a dark share of 1% caps near 100, rises from 98.7 to 99.8, with the best
-    attack's at 249 and 250; at line rate both fall to remote's (2.99, at the card table's clock). The cadence feeds the
-    serving this package credits only if outputs outnumber prompts more than 20:1, so it isn't the default."""
+    a 32-bucket link-window, 0.028 α Φ at v4-pro-session, and the network certifiers' K a location's share of 44.8
+    kbit/s below it, so a day's input drops from 3.19e11 to 4.40e10 bits (4.80e10 at r_in alone) and the lower bound's
+    padded size ratio, which a dark share of 1% caps near 100, rises from 98.7 to 99.8, with the best attack's at 249
+    and 250. At line rate the reference falls to remote's (2.99, at the card table's clock), and W63 doesn't: K caps
+    its certified channel whatever the declared bound's multiple. The cadence feeds the serving this package credits
+    only if outputs outnumber prompts more than 20:1, so it isn't the default."""
     reg = REG.override({"fleet.world-h200.eps_dark": 0.01})
     ref, w63 = evaluate_named(reg, "reference-onsite-h200"), evaluate_named(reg, "onsite-w63")
     inputs = [r.scenario.regime.budget(r.scenario.context).inputs for r in (ref, w63)]
-    assert inputs == [pytest.approx(3.193e11, rel=1e-3), pytest.approx(4.803e10, rel=1e-3)]
+    assert inputs == [pytest.approx(3.193e11, rel=1e-3), pytest.approx(4.403e10, rel=1e-3)]
+    bare = evaluate_named(reg.override({"regime.onsite-w63.leak": ""}), "onsite-w63")
+    assert bare.scenario.regime.budget(bare.scenario.context).inputs == pytest.approx(4.803e10, rel=1e-3)
     assert w63.scenario.regime.certifier.intake_of(w63.scenario.context) == pytest.approx(0.02819, rel=1e-3)
     padded = [(round(r.families[0].combined.padded, 1), round(r.families[0].best_attack.padded)) for r in (ref, w63)]
     assert padded == [(98.7, 249), (99.8, 250)]
@@ -305,7 +309,8 @@ def test_onsite_w63_beside_the_reference():
                          "regime.onsite-w63.declared_x": REG.param("regime.onsite-w63.declared_x").high})
     at_line = [evaluate_named(line, n) for n in ("reference-onsite-h200", "onsite-w63")]
     remote = evaluate_named(reg, "reference-remote-h200")
-    assert all(r.lo == pytest.approx(remote.lo, rel=1e-9) for r in at_line)
+    assert at_line[0].lo == pytest.approx(remote.lo, rel=1e-9)
+    assert round(at_line[1].families[0].combined.padded, 1) == 99.8
     assert round(remote.families[0].combined.padded, 2) == 2.99
 
 
