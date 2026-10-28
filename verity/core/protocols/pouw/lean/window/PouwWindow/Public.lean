@@ -1,7 +1,7 @@
 /-!
 # What the window makes public (`window.py`, "Public items")
 
-`PUBLIC`, the draft's list and the rows' fixed length (19 Oct), in the service's `Public` form, `REGISTERED`, the items
+`PUBLIC`, the draft's list and the rows' fixed length, in the service's `Public` form, `REGISTERED`, the items
 a registration carries, `LEGACY_REGISTERED`, what one made before the fixed-length rule carries, and `KINDS`, the kinds
 of an entry.
 -/
