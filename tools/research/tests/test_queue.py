@@ -1208,9 +1208,14 @@ def test_a_cutoff_admits_only_ready_marks_written_at_or_after_it(tmp_path, monke
 
 
 def test_ready_marks_are_pulled_for_every_pr_at_once_and_each_pr_alone_when_that_fails(tmp_path, monkeypatch):
-    """One listing of the store's remote per open PR, in turn, would take seconds of every drive tick."""
-    from research.queue import StoreLabels
+    """One listing of the store's remote per open PR, in turn, would take seconds of every drive tick; and one GET at a time
+    took a fresh VM's listing four minutes for `next`'s ~1,000 labels (CI-273), so the listings and the GETs each run
+    `PREFETCH_JOBS` at once."""
+    from research.queue import PREFETCH_JOBS, StoreLabels
 
+    pools: list[int] = []
+    pool = labels_sync.ThreadPoolExecutor
+    monkeypatch.setattr(labels_sync, "ThreadPoolExecutor", lambda max_workers: pools.append(max_workers) or pool(max_workers))
     heads = {n: f"{n:040x}" for n in (1, 2, 3)}
     cfg = tmp_path / "store.toml"
     cfg.write_text(f'[remote]\ntype = "fs"\npath = "{tmp_path / "vault"}"\n')
@@ -1223,10 +1228,15 @@ def test_ready_marks_are_pulled_for_every_pr_at_once_and_each_pr_alone_when_that
     pull = labels_sync.pull_targets
     monkeypatch.setattr(labels_sync, "pull_targets", lambda store, targets, jobs=1: pulls.append((len(targets), jobs))
                         or pull(store, targets, jobs=jobs))
+    for n in (1, 2):
+        lane.add_label(label_target(n, heads[n]), vocab.REVIEWED, "land", "ci", ts="2026-10-12T08:00:00Z")
+    assert labels_sync.push_targets(lane, [label_target(n, heads[n]) for n in (1, 2)])["failed"] == []
+    pools.clear()
     labels = StoreLabels(LocalStore(tmp_path / "q1"))
     labels.prefetch(list(heads.items()))
     assert [labels.ready(n, heads[n]) for n in (1, 2, 3)] == [True, False, False]
-    assert pulls == [(3, labels_sync.SYNC_JOBS)]
+    assert [len(labels.reviews(n, heads[n])) for n in (1, 2, 3)] == [1, 1, 0]
+    assert pulls == [(3, PREFETCH_JOBS)] and pools == [3, 4]          # the listings, then the four labels' GETs
 
     pulls.clear()
     monkeypatch.setattr(labels_sync, "remote_labels_for", lambda r, t, f=labels_sync.remote_labels_for:
@@ -1234,7 +1244,7 @@ def test_ready_marks_are_pulled_for_every_pr_at_once_and_each_pr_alone_when_that
     labels = StoreLabels(LocalStore(tmp_path / "q2"))
     labels.prefetch(list(heads.items()))
     assert [labels.ready(n, heads[n]) for n in (1, 2, 3)] == [True, False, False]
-    assert pulls == [(3, labels_sync.SYNC_JOBS), (1, 1), (1, 1), (1, 1)]
+    assert pulls == [(3, PREFETCH_JOBS), (1, 1), (1, 1), (1, 1)]
 
 
 def test_admission_prefetches_the_marks_of_every_pr_it_will_ask_of(world):
@@ -1273,6 +1283,33 @@ def test_status_on_any_vm_applies_the_rules_cutoff_as_drive_does(world, monkeypa
     assert got[2][0] == "ready" and "the next sync merges it onto `next`" in got[2][1]
     assert research_main([*argv, "--marked-after", "2026-10-01T00:00:00Z"]) == 0
     assert {e["pr"]: e["state"] for e in json.loads(capsys.readouterr().out)} == {1: "ready", 2: "ready"}
+
+
+def test_status_and_the_review_listing_free_the_queue_lock_before_they_read_labels(world, monkeypatch, capsys):
+    """The lock refuses a second queue command at once, and a fresh VM's listing read labels for minutes under it, so every
+    verdict meanwhile was refused (CI-273).  A command that only reads holds it while it clones and fetches, not after."""
+    import research.queue as Qm
+
+    cfg = world.tmp / "store.toml"
+    cfg.write_text(f'[remote]\ntype = "fs"\npath = "{world.tmp / "vault"}"\n')
+    monkeypatch.setenv("RESEARCH_STORE_CONFIG", str(cfg))
+    monkeypatch.setattr(Qm, "GitHub", lambda repo: world.gh)
+    world.gh.put(1, world.change({"1.txt": "x\n"}), ready=False)
+    workdir = world.tmp / "q" / "verity"
+    free: list[bool] = []
+
+    def prefetch(self, heads) -> None:
+        try:
+            Qm._lock(workdir).close()
+            free.append(True)
+        except QueueError:
+            free.append(False)
+
+    monkeypatch.setattr(Qm.StoreLabels, "prefetch", prefetch)
+    common = ["--workdir", str(workdir), "--remote", str(world.origin), "--repo", "o/verity", "--store", str(world.tmp / "qs")]
+    assert research_main(["queue", "status", "--json", *common]) == 0 and free == [True]
+    assert research_main(["queue", "review", *common]) == 0 and free == [True, True]
+    capsys.readouterr()
 
 
 def test_an_ejection_withdraws_the_heads_ready_mark_in_the_store(world):

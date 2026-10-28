@@ -167,7 +167,8 @@ with no effect on them; its `sync`, `land` and `drive` still run only on drive (
 
 Files.  The queue works only in its own clone (`--workdir`, default ~/.research/queue/verity), and fetches with forced refspecs: a
 local copy of a branch that wasn't force-fetched once put a train on a stale base.  `state.json` beside the clone keeps ejections and
-the notices sent; losing it costs a retry.  One queue command runs at a time per workdir (`queue.lock`).  The clone authenticates as
+the notices sent; losing it costs a retry.  One queue command runs at a time per workdir (`queue.lock`), and one that only reads
+(`status`, `review` without N) holds it only while it clones and fetches, not while it reads labels.  The clone authenticates as
 the caller's checkout does (`credential_args`): a cloud VM sets its credential helper in the checkout's own config, which a clone
 elsewhere never reads.  Git never prompts, so a remote the queue can't read fails the command instead of answering from what the
 clone fetched last.
@@ -674,6 +675,11 @@ def lean_change(repo: Path, commit: str, base: str | None = None) -> bool:
     return any(p == "." or f.startswith(p + "/") for f in lean for p in pkgs)
 
 
+#: the listings and GETs `StoreLabels.prefetch` makes at once: a fresh VM's store lacks every label of `next`'s ~500 members
+#: (about 1,000 files), which one GET at a time took four minutes to pull
+PREFETCH_JOBS = 32
+
+
 class StoreLabels:
     """Ready marks from the evidence store: `ready` labels on `pr:{n}@{head}`, pulled from the remote first.  Without that pull it
     raises: a cloud VM's shell that lost its store secrets has no remote, and its local labels are whatever it last pulled."""
@@ -694,7 +700,7 @@ class StoreLabels:
         if not targets or getattr(self.store, "remote", None) is None:
             return
         try:
-            labels_sync.pull_targets(self.store, targets, jobs=labels_sync.SYNC_JOBS)
+            labels_sync.pull_targets(self.store, targets, jobs=PREFETCH_JOBS)
         except Exception:  # noqa: BLE001
             return
         self._fresh.update(targets)
@@ -844,6 +850,9 @@ class Queue:
         self.lift: list[int] = []
         self._lifted: list[int] = []
         self.now: Callable[[], float] = time.time
+        #: releases the workdir's lock (`_lock`): a command that only reads calls it once its clone and fetches are done, so a
+        #: listing that reads hundreds of members' labels doesn't refuse a verdict meanwhile
+        self.unlock: Callable[[], None] = lambda: None
         self.branch = SHADOW_BRANCH if shadow else BRANCH
         self.state_path = self.workdir.parent / f"{self.workdir.name}.state.json"
         #: whether git takes `--attr-source` (`_merge`), until it refuses it once
@@ -1446,6 +1455,7 @@ class Queue:
         state = self.load_state()
         open_prs = self.github.open_prs()
         prs, waiting = self.fetch_prs([p for p in open_prs if p.base == "main"])
+        self.unlock()
         entries = self.entries(prs, state)
         entries.update(waiting)
         entries.update(self.off_main(open_prs))
@@ -3443,8 +3453,9 @@ def review(q: Queue, store, labels: StoreLabels, pr: int | None, verdict: str | 
 
     q._clone()
     q.fetch()
-    main = _out(q.workdir, "rev-parse", "refs/remotes/origin/main")
-    chain = [m for m in q.chain() if _git(q.workdir, "merge-base", "--is-ancestor", m.commit, main, check=False).returncode]
+    if pr is None:
+        q.unlock()
+    chain = q.chain()
     opened = {p.number: p for p in q.github.open_prs()}
     if pr is None:
         labels.prefetch([(m.pr, m.head) for m in chain])
@@ -3857,7 +3868,8 @@ def main(argv: list[str]) -> int:
                   auth=credential_args(Path.cwd(), remote), first=tuple(int(n) for n in (a.first or "").split(",") if n),
                   before_cutoff=labels.before_cutoff, marked_by=labels.marked_by, marked_at=labels.marked_at,
                   prefetch=labels.prefetch)
-        lock = _lock(a.workdir)  # noqa: F841
+        lock = _lock(a.workdir)
+        q.unlock = lock.close
         if ignored := [f"--{k.replace('_', '-')}" for k in ("max_running", "train_size") if getattr(a, k) is not None]:
             q.log(f"research queue drive: {' and '.join(ignored)} ignored: train landing was deleted (#5070); drop them from "
                   "drive's args")
