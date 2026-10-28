@@ -5,9 +5,10 @@ measured beside the flat form, at any K and R × C tile. A leaf is proved as one
 lane, the lane index public) and ``combine`` (`h1zy.combine`), the statements `h1_lanes` stages, which
 `h1window.leaf_unit` derives at a K of whole lanes. Each must fit C-Flock's block (``k_log <= 27``).
 
-* ``lower K R C OUT [--unit tile|lane|combine] [--form structural|flat] [--path FILE]``: a tile through
-  `pouw_h1_circuits._lower` itself (the ``--lower`` command's body, ``HZ_STAGE`` as it reads it), a lane or combine
-  through `h1unit.stager` with `h1_lanes`' rows, in this process, bound to `BIND`. OUT (JSON): the lowering (its class,
+* ``lower K R C OUT [--unit tile|lane|combine] [--form structural|flat] [--staging fast|library] [--path FILE]``: a tile
+  through `pouw_h1_circuits._lower` itself (the ``--lower`` command's body, ``HZ_STAGE`` set to the staging), a lane or
+  combine through `h1unit.stager` with `h1_lanes`' rows, in this process, bound to `BIND`; at ``fast`` (the default)
+  `fast_stage` patches the library first, for the same bytes. OUT (JSON): the lowering (its class,
   the unrolled ANDs, rows and references, the template's Definitions, rows and calls), its seconds and peak RSS before
   compose and at the end, and the file's bytes, SHA-512 and META block fields; or the refusal, before lowering (`refusal`)
   or compose's (a block past ``K_MAX``, ``k_log`` the block it needs) with the lowering's counts. The file goes to FILE,
@@ -16,8 +17,8 @@ lane, the lane index public) and ``combine`` (`h1zy.combine`), the statements `h
   (honest leaves, a record off in one bit, random words): each output word of the template (`TmplLowering.evaluate`)
   against the flat unit's (`ir_lower.Lowering.evaluate`) and both against `h1zy.reference`, the word reference; then
   `circuit_check.structural.check_unit`'s verdict on the template against the flat unit.
-* ``sweep --shapes K:R:C[:UNIT],.. --out DIR [--form F] [--jobs J]``: ``lower`` of each shape (UNIT ``tile`` unless
-  given) in a process of its own, its peak RSS from ``wait4`` (so also when it is killed):
+* ``sweep --shapes K:R:C[:UNIT],.. --out DIR [--form F] [--staging S] [--jobs J]``: ``lower`` of each shape (UNIT
+  ``tile`` unless given) in a process of its own, its peak RSS from ``wait4`` (so also when it is killed):
   DIR/<form>-<unit>-k<K>-<R>x<C>.json and DIR/sweep-<form>.json.
 """
 from __future__ import annotations
@@ -46,6 +47,7 @@ BIND = {"partition": "0" * 128, "program": "0" * 128}
 BLOCK = ("format", "statement", "layout", "k_log", "unit_log", "vus_per_block", "per_vu")
 SEED = 20261028
 UNITS = ("tile", "lane", "combine")
+STAGINGS = ("fast", "library")
 NAMES = {"tile": "unit/pouw-h1-tile", "lane": "unit/pouw-h1-lane", "combine": "unit/pouw-h1-combine"}
 
 
@@ -106,14 +108,15 @@ def leaf_statement(U, unit: str, k: int, r: int, c: int) -> tuple:
     return Z.combine(t), rows
 
 
-def stage(U, unit: str, k: int, r: int, c: int, path: Path) -> None:
+def stage(U, unit: str, k: int, r: int, c: int, path: Path, staging: str) -> None:
     """``unit``'s statement file at `path`, bound to `BIND`, staged as its benchmark stages it."""
     if unit == "tile":
         from tests.protocols import pouw_h1_circuits as PC
+        os.environ["HZ_STAGE"] = staging
         PC._lower(k, r, c, BIND, path)
         return
     from verity.ml.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2
-    if os.environ.get("HZ_STAGE", "fast") == "fast":
+    if staging == "fast":
         import fast_stage
         fast_stage.install(path.parent / f".scratch-k{k}")
     d, rows = leaf_statement(U, unit, k, r, c)
@@ -161,7 +164,7 @@ def lower(args) -> int:
     from verity_flock import class_statement as CS
 
     rec = {"k": args.k, "r": args.r, "c": args.c, "tile": [args.r, args.c], "unit": args.unit, "form": args.form,
-           "staging": os.environ.get("HZ_STAGE", "fast"), "layout": U.layout(), "bind": BIND}
+           "staging": args.staging, "layout": U.layout(), "bind": BIND}
     if why := refusal(args.unit, args.k, args.r, args.c):
         return _done(args, rec | {"written": False, "refused": why, "seconds": 0.0, "peak_gib": peak_gib()})
     got: dict = {}
@@ -187,7 +190,7 @@ def lower(args) -> int:
     path = Path(args.path) if args.path else Path(scratch.name) / f"k{args.k}.circuit.txt"
     t0 = time.time()
     try:
-        stage(U, args.unit, args.k, args.r, args.c, path)
+        stage(U, args.unit, args.k, args.r, args.c, path, args.staging)
         rec["written"] = True
     except ValueError as e:
         rec |= {"written": False, "refused": str(e)}
@@ -325,7 +328,7 @@ def sweep(args) -> int:
         k, r, c, unit = shape
         tag = f"{args.form}-{unit}-k{k}-{r}x{c}"
         cmd = [sys.executable, __file__, "lower", str(k), str(r), str(c), str(out / f"{tag}.json"), "--form", args.form,
-               "--unit", unit]
+               "--unit", unit, "--staging", args.staging]
         t0 = time.time()
         with open(out / "logs" / f"{tag}.log", "w") as log:
             p = subprocess.Popen(cmd, stdout=log, stderr=subprocess.STDOUT)
@@ -365,12 +368,14 @@ def main() -> None:
         if nm == "lower":
             p.add_argument("--unit", choices=UNITS, default="tile")
             p.add_argument("--form", choices=("structural", "flat"), default="structural")
+            p.add_argument("--staging", choices=STAGINGS, default="fast")
             p.add_argument("--path")
         else:
             p.add_argument("--no-check", action="store_true")
     p = sub.add_parser("sweep")
     p.add_argument("--shapes", type=shapes, required=True)
     p.add_argument("--form", choices=("structural", "flat"), default="structural")
+    p.add_argument("--staging", choices=STAGINGS, default="fast")
     p.add_argument("--jobs", type=int, default=1)
     p.add_argument("--out", required=True)
     a = ap.parse_args()
