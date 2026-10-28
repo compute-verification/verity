@@ -1,4 +1,4 @@
-"""C-Flock ZK (lane flock-zk): real against Goldreich–Kahan-simulated views of ``flock-circuit --zk`` for malicious
+"""C-Flock ZK: real against Goldreich–Kahan-simulated views of ``flock-circuit --zk`` for malicious
 verifiers.
 
 Input: the ``ZKVIEW``, ``ZKVIEWP`` and ``ZKREWIND`` lines of ``flock-circuit zkrewind --zk --n N``. Per verifier strategy V*
