@@ -4835,6 +4835,8 @@
     "Properties.Pouw.Period.SecurityProofs.checkedWorkPeriod",
     "Properties.Pouw.Period.SecurityProofs.h1CheckedCreditPeriod",
     "Properties.Pouw.PeriodJ10R.SecurityProofs.h1J10RCheckedCreditPeriod",
+    "Properties.Pouw.Served.SecurityProofs.servedFreed",
+    "Properties.Pouw.Served.SecurityProofs.servedWork",
     "Properties.Pouw.ServedValues.SecurityProofs.rightValues"
    ]
   },
@@ -14544,7 +14546,7 @@
    "guarantees": ["Properties.RemoteAudit.liveIsRun"]
   },
   "RemoteAudit.Window": {
-   "digest": "3fdb09bb91dc7d82a98c2d7a7fca19c5a1e2608b04cab2a862ab6be2ed5ce20c",
+   "digest": "46aebd8de557fdf910b06da998e40781095fd1f09b8040a14125886847e809fa",
    "definitions": {
     "RemoteAudit.APPEND_DOMAIN": "a6604c74aef32ccdec542c5fecc103a1660e0ff141fb68613846fb35472b3103",
     "RemoteAudit.Append": "ccd67ec7f7f0426061b78ed18c4d6500de3ff3ad539add283f9f43bf3f3ae9c6",
@@ -14635,8 +14637,6 @@
     "RemoteAudit.instInhabitedPassRecord": "2f9f7f261b12a41ba2ef8454383169e835f7e5627e91f9c34bf42aa15478d82f",
     "RemoteAudit.instInhabitedPassRecord.default": "4aa3bab51a1782112304eb69e11d681f3c53af6ebbcfcd6f290e69e8e674b292",
     "RemoteAudit.instReprFailure.repr.match_1": "9c370c8a7072abbfa9228173fcd4096587ee5988bae95c6ecefa8484d83c332b",
-    "RemoteAudit.subsetExact": "207f3f825371442339a4f7c2b72d902a179047c00c4ee715dd5453c811f4d934",
-    "RemoteAudit.subsetExact._sparseCasesOn_1": "9e57c6d3a974f71465c3160d5a8a945af5da7ccdf38a0dbacd4ed00b6a27d502",
     "RemoteAudit.verifyWindow": "8f212324e329f2b7a48bb2295d9e3fd277360d56b1eea0f2f2d7cfe9cacfa55f"
    },
    "guarantees": [
