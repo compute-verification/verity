@@ -449,9 +449,6 @@
    ],
    "assumptions": [],
    "type_hash": "5e617dd64b1e2cd62d76d06af0007fbc6d7f698d153f042690fab45ac466a7de"
-  },
-  "Flock.RecLinks.check_sound": {
-   "owner": "@proofs"
   }
  },
  "shape": {
@@ -459,10 +456,6 @@
   "properties": {
    "Flock.Firewall.Contract.holds_coins_binding": {
     "function": "Flock.Firewall.Contract.run",
-    "outcome": "accept"
-   },
-   "Flock.RecLinks.check_sound": {
-    "function": "Flock.RecLinks.check",
     "outcome": "accept"
    }
   },
