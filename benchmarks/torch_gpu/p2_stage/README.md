@@ -17,7 +17,7 @@ on that buffer.
   decoded at a time, and each row's payload bytes are scattered to their place in the buffer. What the reference refuses
   raises `StoreError` with the fixture's flag bits: 2 for a row that isn't a codeword or isn't below p, 3 for a last
   block nonzero past its tensor's end, 0 for the library's own flag. `timed` is the one timer the drivers below use.
-  `Store.decode_into` by W offset is also the GPU decode of `examples/h200`'s `P2Store` and of `verity_vllm`'s PoUS
+  `EncodedRows.decode_into` by W offset is also the GPU decode of `examples/h200`'s `P2Store` and of `verity_vllm`'s PoUS
   store, each under a layout of no tensors.
 - `gemm.py`: the GEMM's check. `twin` checks every output word by an independent exact path, and `definition_words`
   evaluates `ScaledMmS8Coordinate_v1{K, GEMM_SM90_S8}` on samples.
@@ -33,7 +33,7 @@ on that buffer.
 - `sketch.py`: the remote bandwidth audit's receipts beside the decode (Demo B's bandwidth leg; the interface is
   `verity/core/protocols/remote_bandwidth/PROTOCOL.md` §11, the fixture `benchmarks/pous/p2_v1/serve.py fixture`). With
   a pass attached (`store.sketch = sketch.Pass(seed, units, device)`, `units = sketch.plan_units(layout.tensors)`: the
-  units the store's tensors lie in, so the encoded padding past the head is in no receipt), `Store.decode_rows`
+  units the store's tensors lie in, so the encoded padding past the head is in no receipt), `EncodedRows.decode_rows`
   sketches the units of each chunk before decoding it, from the same rows on the device: σ of each unit's 8,224 stored
   bytes against the pass's 16 sign rows in one int8 GEMM (its four blocks' partials π summed in the accumulators; `Pass.partials` gives each
   block's π). At the step's end `Pass.finish` takes y (`receipts.cu`, one SHA-512 compression a unit from the seed
