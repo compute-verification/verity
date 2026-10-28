@@ -11,7 +11,7 @@ subprotocols' packages, with no Mathlib:
   (`Registered.lean`); all three over blobs (`Blobs.lean`); the stub subprotocols (`Stubs.lean`); and the `#guard`s
   that pin the rules (`Guards.lean`).
 - `core_onsite` (`../onsite`, `Core.Onsite.protocol`, `verity/onsite/v0`): sampled proofs, PoUW, PoUS, proof of useful
-  bandwidth (PoUB), network certification and the memory challenger's wipe, after NCI's registration check.
+  bandwidth (PoUB), network certification and the memory challenger's wipe, a `productB`.
 - `core_remote` (`../remote`, `Core.Remote.protocol`, `verity/remote/v0`): sampled proofs and PoUW, on one window
   record.
 
@@ -63,8 +63,9 @@ subprotocol accepts its own case, and the commitment is `bind` of the subprotoco
 | proof of useful bandwidth, PoUB (its session) | yes | | `RemoteAudit.Protocol.protocol` (`remote_audit`, `../remote_bandwidth/lean`) | `verity/remote-bandwidth/v0` |
 | the wipe (the memory challenger's streamed-label wipe of the period) | yes | | `MemoryChallenger.WipeProtocol.protocol` (`core_memory_challenger`, `../../devices/memory_challenger/lean`) | `verity/wipe/v0` |
 
-Every subprotocol of both products is ported to its own `Core.Protocol`. NCI is a registration check, not a subprotocol
-(below), and the inference-only policy is not a subprotocol of either product yet.
+Every subprotocol of both products is ported to its own `Core.Protocol`. NCI is neither a subprotocol nor a
+registration check of either product: its check reads the division into inference blocks in the clear, which is private,
+so onsite doesn't run it. The inference-only policy is not a subprotocol of either product yet.
 
 A subprotocol without a port is a stub, `Core.Example.protocol` under an id that says so (`Stubs.lean`). A port replaces
 its stub in `Core.Onsite.components` and `Core.Remote.components` with its own `Core.Protocol` value, its package a
@@ -82,10 +83,8 @@ carries them as hex under `blobs`.
 ## A registration check
 
 `registered id R s components` checks a registration before composing, in its commit phase, and `registeredB` is the
-same over blobs. Onsite is one, with NCI's check of record as `R` (`NciCheck.Protocol.protocol`, `verity/nci/v1`):
-`registeredB "verity/onsite/v0" NciCheck.Protocol.protocol SampledProofs.OneStageZk.protocol.id components`, whose
-registration is the one sampled proofs' one-stage audit commits to, one registration digest in both. Onsite has six
-subprotocols, and NCI is none of them. Its formats are the product's with the registration's beside the subprotocols':
+same over blobs, the registration being the one the subprotocol `s` commits to, one registration digest in both. Neither
+product is one today. Its formats are the product's with the registration's beside the subprotocols':
 
 | input | format |
 | --- | --- |
@@ -107,8 +106,8 @@ Every subprotocol whose commitment is a window record must commit to the composi
 all commit to the first one's digest reject it whatever the subprotocols answer (`strays`: `record: s committed D, t
 committed D'`); one whose commitment doesn't decode rejects as a subprotocol. Its formats are the product's. Remote is
 one: `sameB "verity/remote/v0" [verity/pouw/v1, verity/sampled-proofs/one-stage/v2] components`, whose PoUW window and
-one-stage audit each commit to the window record. At onsite the one-stage audit commits to the record NCI checked
-(above). Onsite's PoUW period and network certification name one record a window, in their evidence and their period
+one-stage audit each commit to the window record. At onsite the one-stage audit commits to the window record too.
+Onsite's PoUW period and network certification name one record a window, in their evidence and their period
 commitment, so they join the check when each window's record names the registration log's head (`Core.Registration`,
 `../interface`), which then is the one every subprotocol names.
 

@@ -7,14 +7,11 @@ or a directory whose subdirectories each hold one. A case is the subprotocol's c
 ``case.json``: ``{"params", "commitment", "evidence"}`` with the commitment and evidence hex, and ``blobs``, the paths
 of the files it reads (sampled proofs v2's ``case-v2.json`` is one); beside its own Lean answer on that case,
 ``answer.json``, whose ``protocol`` is its id and ``commitment`` its digest (null when its commitment didn't decode, and
-then the case's own commitment stands in, which a rejection never binds). For onsite, the case whose answer is NCI's
-(`verity/nci/v1`) is the registration it checks before composing; its digest is the one sampled proofs' case commits
-to.
+then the case's own commitment stands in, which a rejection never binds).
 
 A case's evidence is witness, and so are its params' bodies, so the output is split. ``--private-out`` (created 0700,
 its files 0600) gets the product's params (``params.json``), commitment (``commitment.bin``: `bind` of the digests in
-the order of the ids, then the registration's digest) and evidence (``evidence.json``), all canonical, as
-`Core.Composition.registeredB` and `productB` read them (the composition README's formats), the blobs' paths
+the order of the ids) and evidence (``evidence.json``), all canonical, as `Core.Composition.productB` reads them (the composition README's formats), the blobs' paths
 (``blobs.txt``), each piece's answer (``pieces/N.answer.json``) and the product's (``answer.json``). An answer's
 query, digests, profile and reason are private too (a partition's digest is the query), so ``--public-out`` gets only
 ``composite.json``: the product, the composite's commitment, each case's id, params digest (SHA-512 of its canonical
@@ -50,7 +47,6 @@ COMPONENTS = {
                "verity/sampled-proofs/one-stage/v2", "verity/wipe/v0"),
     "remote": ("verity/pouw/v1", "verity/sampled-proofs/one-stage/v2"),
 }
-REGISTRATION = "verity/nci/v1"
 USAGE = 64
 LEAK = 65
 #: Public bytes sharing a run of twice this with a case's evidence are refused: the evidence's windows at this stride,
@@ -111,29 +107,21 @@ def piece(d: Path) -> dict[str, Any]:
             "blobs": [str(b) for b in case.get("blobs") or []], "answer": line}
 
 
-def compose(product: str, pieces: Sequence[dict[str, Any]], registration: dict[str, Any] | None = None
-            ) -> tuple[dict, bytes, bytes, list[str]]:
+def compose(product: str, pieces: Sequence[dict[str, Any]]) -> tuple[dict, bytes, bytes, list[str]]:
     """The product's params, commitment, evidence and blobs, the subprotocols in the order of their ids."""
     xs = sorted(pieces, key=lambda p: p["id"])
     params: dict[str, Any] = {"components": [{"id": p["id"], "params": p["params"]} for p in xs]}
     evidence: dict[str, Any] = {"components": [{"commitment": p["commitment"].hex(), "evidence": p["evidence"].hex(),
                                                 "id": p["id"], "params": p["params"]} for p in xs]}
     commitment = bind(PRODUCTS[product], [(p["id"], p["digest"]) for p in xs])
-    if registration is not None:
-        params["registration"] = {"id": registration["id"], "params": registration["params"]}
-        evidence["registration"] = {"commitment": registration["commitment"].hex(),
-                                    "evidence": registration["evidence"].hex(), "id": registration["id"],
-                                    "params": registration["params"]}
-        commitment += registration["digest"]
     blobs = list(dict.fromkeys(b for p in xs for b in p["blobs"]))
     return params, commitment, canonical(evidence), blobs
 
 
-def missing(product: str, pieces: Sequence[dict[str, Any]], registration: dict[str, Any] | None) -> list[str]:
-    """The product's subprotocols with no piece that ran, then onsite's registration when it has none."""
+def missing(product: str, pieces: Sequence[dict[str, Any]]) -> list[str]:
+    """The product's subprotocols with no piece that ran."""
     ids = {p["id"] for p in pieces}
-    out = [i for i in COMPONENTS[product] if i not in ids]
-    return out + ([REGISTRATION] if product == "onsite" and registration is None else [])
+    return [i for i in COMPONENTS[product] if i not in ids]
 
 
 def outcome(id: str, answer: str | None) -> dict[str, str]:
@@ -141,8 +129,8 @@ def outcome(id: str, answer: str | None) -> dict[str, str]:
     the name of the reason a verdict other than accept gives (``refused`` when that is not a short name)."""
     try:
         a = json.loads(answer) if answer else {}
-    except ValueError:
-        a = {}
+    except ValueError as e:
+        a = {"unread": type(e).__name__}
     a = a if isinstance(a, dict) else {}
     out = {"id": id, "verdict": a["verdict"] if a.get("verdict") in VERDICTS else "none"}
     reason = a.get("reason")
@@ -198,15 +186,13 @@ def run(a: argparse.Namespace) -> int:
         print("composite.py: --private-out may not be or lie inside --public-out", file=sys.stderr)
         return USAGE
     found = [piece(d) for d in case_dirs(a.cases)]
-    reg = next((p for p in found if p["id"] == REGISTRATION), None) if a.product == "onsite" else None
-    pieces = [p for p in found if p is not reg]
-    params, commitment, evidence, blobs = compose(a.product, pieces, reg)
+    params, commitment, evidence, blobs = compose(a.product, found)
     files = {"params.json": canonical(params), "commitment.bin": commitment, "evidence.json": evidence,
              "blobs.txt": "".join(f"{b}\n" for b in blobs).encode()}
     files |= {f"pieces/{n}.answer.json": (p["answer"] + "\n").encode() for n, p in enumerate(found)}
     write_private(priv, files)
-    cases = sorted(pieces, key=lambda p: p["id"]) + ([reg] if reg is not None else [])
-    gone = missing(a.product, pieces, reg)
+    cases = sorted(found, key=lambda p: p["id"])
+    gone = missing(a.product, found)
     lines = [line("PIECE", outcome(p["id"], p["answer"])) for p in cases]
     lines += [f"NOT_ESTABLISHED missing {', '.join(gone)}"] if gone else []
     cmd = [a.exe or a.product, "check", *(str(priv / n) for n in ("params.json", "commitment.bin", "evidence.json")),
