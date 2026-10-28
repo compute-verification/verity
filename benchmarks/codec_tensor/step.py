@@ -11,7 +11,7 @@ into their sketch-sha512 receipts, store chunk nvec + u layers + l after the wei
 pass's commit covers. The same step on
 plain data (each linear's fastest native FP8 GEMM, the faster plain attention form, a plain append) is its
 denominator, and a native pass (a read of every byte the step reads) its unit. Writes `step.json` and `step.log` under
-`--out`, and in a `research run` its `result.json`.
+`--out`, and, with `RESEARCH_RUN_DIR` set, its `result.json` there.
 
 Nothing is timed before its gate passed:
 - wt.cu's decode primitives at inputs that take their rare branches (`gate_prims`), which no gate's random words reach;
