@@ -1,7 +1,7 @@
 // SHA-512 compressions for CTAs beside the GEMM: each thread chains reps compressions of sha512_rows' sx::compress<0, 1>,
-// feeding its chaining value back into the next chunk, and each CTA stamps its start, end, clock64 and SM. The CTA sizes are
-// the ones that fit beside a GEMM CTA's register budget: at 80 registers, 6 warps beside a GEMM launched at 128 registers a
-// thread (16,384 left) and 7 beside 120; 256 threads at 64 registers fill the same 16,384.
+// feeding its chaining value back into the next chunk, and each CTA stamps its start, end, clock64 and SM. Forms 0 and 1
+// fit beside a GEMM CTA launched at 160 registers a thread (4,096 of the register file left): one warp at 128 registers or
+// two at 64. Forms 2..4 (128, 256 and 512 threads at their launch bounds) are the hash alone.
 #include <cuda_runtime.h>
 
 #include <cstdint>
@@ -60,7 +60,8 @@ __global__ void __launch_bounds__(T, 1) hash_k(u64* io, int reps, HStamp* out) {
   chain(io, reps, out);
 }
 
-__global__ void __maxnreg__(64) hash_k256r64(u64* io, int reps, HStamp* out) { chain(io, reps, out); }
+__global__ void __maxnreg__(128) hash_k32r128(u64* io, int reps, HStamp* out) { chain(io, reps, out); }
+__global__ void __maxnreg__(64) hash_k64r64(u64* io, int reps, HStamp* out) { chain(io, reps, out); }
 
 // spins until *counter reaches want: the hash stream's wait for every GEMM CTA to be resident
 __global__ void wait_k(const volatile unsigned* counter, unsigned want) {
@@ -71,12 +72,11 @@ using HashFn = void (*)(u64*, int, HStamp*);
 
 HashFn pick(int form, int* threads) {
   switch (form) {
-    case 0: *threads = 128; return hash_k<128>;
-    case 1: *threads = 192; return hash_k<192>;
-    case 2: *threads = 224; return hash_k<224>;
+    case 0: *threads = 32; return hash_k32r128;
+    case 1: *threads = 64; return hash_k64r64;
+    case 2: *threads = 128; return hash_k<128>;
     case 3: *threads = 256; return hash_k<256>;
-    case 4: *threads = 256; return hash_k256r64;
-    case 5: *threads = 512; return hash_k<512>;
+    case 4: *threads = 512; return hash_k<512>;
     default: *threads = 0; return nullptr;
   }
 }
@@ -85,7 +85,7 @@ HashFn pick(int form, int* threads) {
 
 extern "C" {
 
-// A hash form's threads, registers and local (spill) bytes as JSON; forms 0..5.
+// A hash form's threads, registers and local (spill) bytes as JSON; forms 0..4.
 int u2_hash_info(int form, char* buf, int n) {
   int threads = 0;
   HashFn f = pick(form, &threads);

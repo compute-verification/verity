@@ -9,17 +9,42 @@
 //   U2_NOSMEM              1: the epilogue stores from registers (NoSmemWarpSpecialized), else through shared memory by TMA
 //   U2_MAXNREG             0: CUTLASS's launch bounds (384 threads at 168 registers, the register file); N: launched at
 //                          N registers a thread, with U2_LOAD_REGS and U2_MMA_REGS the producer's and consumers' setmaxnreg
-//                          (build.sh's patch of the kernel headers reads them), so CTAs of another kernel fit beside it
+//                          (build.sh's patch of the kernel headers reads them), so CTAs of another kernel fit beside it.
+//                          ptxas allocates the whole kernel within N, and a consumer's wgmma m64n256 holds 128 accumulator
+//                          registers, so N is at least 160
+//   U2_HOOK                1 (cooperative only): the producer warpgroup's three warps that a static scheduler and a void C
+//                          leave idle chain SHA-512 compressions while the consumers run, at U2_LOAD_REGS registers, until
+//                          a consumer warpgroup of their CTA ends its tiles; off until bench.py switches it on (U2_FN(hook))
 #include <cuda_runtime.h>
 
 #include <cstdint>
 #include <cstdio>
+#include <cstring>
 
 #ifndef U2_LOAD_REGS
 #define U2_LOAD_REGS (!HeavyRegisterPressure ? 40 : 24)
 #endif
 #ifndef U2_MMA_REGS
 #define U2_MMA_REGS (!HeavyRegisterPressure ? 232 : 240)
+#endif
+#ifndef U2_HOOK
+#define U2_HOOK 0
+#endif
+
+// build.sh's patch puts U2_PRODUCER_HOOK after the cooperative kernel's producer warp roles and U2_CONSUMER_HOOK after its
+// consumers' tile loop
+namespace U2_NAME::hook {
+__device__ __forceinline__ void idle(int warp);
+__device__ __forceinline__ void done();
+}  // namespace U2_NAME::hook
+#if U2_HOOK
+#define U2_PRODUCER_HOOK \
+  if (warp_idx_in_warp_group != 0) ::U2_NAME::hook::idle(warp_idx_in_warp_group);
+#define U2_CONSUMER_HOOK \
+  if (thread_idx % 128 == 0) ::U2_NAME::hook::done();
+#else
+#define U2_PRODUCER_HOOK
+#define U2_CONSUMER_HOOK
 #endif
 
 #include "cute/tensor.hpp"
@@ -34,13 +59,15 @@
 #error "build for sm_90a"
 #endif
 
-using namespace cute;
-
 #define U2_CAT2(a, b) a##_##b
 #define U2_CAT(a, b) U2_CAT2(a, b)
 #define U2_FN(f) U2_CAT(U2_NAME, f)
 
-namespace {
+// a namespace of the configuration's own, since every configuration is linked into one library (an anonymous one collides
+// with cute's in nvcc's host stub)
+namespace U2_NAME {
+
+using namespace cute;
 
 using Tile = Shape<Int<U2_TM>, Int<U2_TN>, Int<U2_TK>>;
 using Cluster = Shape<Int<U2_CM>, Int<U2_CN>, _1>;
@@ -67,6 +94,52 @@ using Mainloop = typename cutlass::gemm::collective::CollectiveBuilder<
     Stages, MainSched>::CollectiveOp;
 using GK = cutlass::gemm::kernel::GemmUniversal<Shape<int, int, int, int>, Mainloop, Epilogue,
                                                 cutlass::gemm::PersistentScheduler>;
+#if U2_HOOK
+static_assert(!U2_PINGPONG && U2_LOAD_REGS * 128 + U2_MMA_REGS * 256 <= 384 * 168,
+              "the hook is the cooperative kernel's, within its launch's registers");
+#endif
+
+// inside the configuration's namespace: its __constant__ tables would collide across the library's units at global scope
+#include "sha512x.cuh"
+
+namespace hook {
+struct Args {
+  unsigned long long* sink;
+  unsigned int* done;  // a counter per CTA, which each consumer warpgroup bumps as it ends its tiles
+  unsigned long long* count;
+  int on;
+};
+__device__ Args args;
+
+__device__ __forceinline__ unsigned cta_index() { return blockIdx.x + gridDim.x * (blockIdx.y + gridDim.y * blockIdx.z); }
+
+// hash.cu's chain on producer warp 1..3, polled once a compression
+__device__ __forceinline__ void idle(int warp) {
+  const Args a = args;
+  if (!a.on) return;
+  const unsigned cta = cta_index(), lane = threadIdx.x % 32;
+  const volatile unsigned* flag = a.done + cta;
+  const unsigned v0 = __shfl_sync(~0u, *flag, 0);
+  const unsigned long long t = ((unsigned long long)cta * 3 + (warp - 1)) * 32 + lane;
+  unsigned long long st[8], w[16];
+  sx::iv(st);
+#pragma unroll
+  for (int i = 0; i < 16; ++i) w[i] = t * 16 + i;
+  unsigned n = 0;
+  do {
+#pragma unroll
+    for (int i = 0; i < 8; ++i) w[i] ^= st[i];
+    sx::compress<0, 1>(st, w);
+    ++n;
+  } while (__shfl_sync(~0u, *flag, 0) == v0);
+  if (st[0] == 0x0123456789abcdefull) a.sink[t] = st[1];
+  if (lane == 0) atomicAdd(a.count, 32ull * n);
+}
+
+__device__ __forceinline__ void done() {
+  if (args.on) atomicAdd(args.done + cta_index(), 1u);
+}
+}  // namespace hook
 
 // One call's stamps: the earliest start (as its complement, so atomicMax keeps the minimum of a zeroed record), the latest
 // end, and the consumer warpgroups' summed clock64 and %globaltimer spans.
@@ -122,8 +195,6 @@ struct Handle {
   void* workspace;
 };
 
-}  // namespace
-
 extern "C" {
 
 // The configuration as JSON: its macros, threads, shared memory, the kernel's registers and spill from the CUDA runtime.
@@ -132,11 +203,19 @@ int U2_FN(info)(char* buf, int n) {
   const cudaError_t e = cudaFuncGetAttributes(&a, entry);
   return snprintf(buf, n,
                   "{\"tile\": [%d, %d, %d], \"cluster\": [%d, %d], \"stages\": %d, \"pingpong\": %d, \"nosmem\": %d, "
-                  "\"maxnreg\": %d, \"threads\": %d, \"smem\": %d, \"regs\": %d, \"local_bytes\": %zu, "
+                  "\"maxnreg\": %d, \"hook\": %d, \"threads\": %d, \"smem\": %d, \"regs\": %d, \"local_bytes\": %zu, "
                   "\"load_regs\": %d, \"mma_regs\": %d, \"attr_error\": \"%s\"}",
                   U2_TM, U2_TN, U2_TK, U2_CM, U2_CN, (int)Mainloop::DispatchPolicy::Stages, U2_PINGPONG, U2_NOSMEM,
-                  U2_MAXNREG, (int)GK::MaxThreadsPerBlock, (int)GK::SharedStorageSize, a.numRegs, a.localSizeBytes,
-                  (int)GK::LoadRegisterRequirement, (int)GK::MmaRegisterRequirement, cudaGetErrorString(e));
+                  U2_MAXNREG, U2_HOOK, (int)GK::MaxThreadsPerBlock, (int)GK::SharedStorageSize, a.numRegs,
+                  a.localSizeBytes, (int)GK::LoadRegisterRequirement, (int)GK::MmaRegisterRequirement,
+                  cudaGetErrorString(e));
+}
+
+// The hook's switch and buffers (U2_HOOK): done holds a counter per CTA of the grid, count gathers the compressions.
+int U2_FN(hook)(void* sink, void* done, void* count, int on) {
+  const hook::Args a{static_cast<unsigned long long*>(sink), static_cast<unsigned int*>(done),
+                     static_cast<unsigned long long*>(count), on};
+  return (int)cudaMemcpyToSymbol(hook::args, &a, sizeof a);
 }
 
 // A call's handle for D = A·Bᵀ on device pointers. raster: 0 CUTLASS's heuristic, 1 along M, 2 along N. sms: the SMs the
@@ -244,3 +323,5 @@ void U2_FN(free)(void* hp) {
 }
 
 }  // extern "C"
+
+}  // namespace U2_NAME

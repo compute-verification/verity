@@ -12,7 +12,9 @@ int8, A M×K and B N×K, from a seeded generator, so they stream from HBM in eve
   clock stamps, so its MACs per SM clock use the clock of the configurations' items in the same round;
 - beside items: a configuration's calls on one stream and SHA-512 compressions (hash.cu) in one CTA per SM on a second,
   launched once every GEMM CTA of the first call is resident, so each fits beside a GEMM CTA; the hash's rate is over the
-  4.355 G/s bar, and the GEMM's is over the calls inside the hash's window. A hash-alone item of the same form follows.
+  4.355 G/s bar, and the GEMM's is over the calls inside the hash's window. A hash-alone item of the same form precedes it;
+- fused items: a hook configuration (U2_HOOK) timed as a GEMM item with its producer warpgroup's idle warps hashing, the
+  hash's rate its compressions over the item's span. The gate's second call of a hook configuration runs with the hook on.
 
 nvidia-smi samples the board every 100 ms (--smi-ms); an item's watts are the mean and max of its samples after its first
 quarter second, and pJ per MAC its mean watts over its MAC rate. Writes items.jsonl, gates.json, configs.json and
@@ -75,6 +77,7 @@ class Gemm:
         make = lib.fn(name, "make", [ctypes.c_int] * 3 + [P] * 3 + [ctypes.c_int] * 3, P)
         self._run = lib.fn(name, "run", [P, P, P], ctypes.c_int)
         self._free = lib.fn(name, "free", [P], None)
+        self._hook = lib.fn(name, "hook", [P, P, P, ctypes.c_int], ctypes.c_int)
         M, K = A.shape
         N = B.shape[0]
         self.macs = M * N * K
@@ -90,6 +93,14 @@ class Gemm:
         e = self._run(self.h, stream.cuda_stream, rec_ptr)
         if e:
             raise RuntimeError(f"{self.name}: launch error {e}")
+
+    def hook(self, bufs):
+        """The fused hash on (bufs: sink, done, count tensors) or off (None), between calls."""
+        torch.cuda.synchronize()
+        p = [b.data_ptr() for b in bufs] if bufs else [None] * 3
+        e = self._hook(*p, 1 if bufs else 0)
+        if e:
+            raise RuntimeError(f"{self.name}: hook error {e}")
 
     def close(self):
         self._free(self.h)
@@ -176,8 +187,9 @@ def main():
     ap.add_argument("--out", required=True)
     ap.add_argument("--shapes", default="12288x11264x32768,6144x5632x32768,1536x2816x32768,12288x11264x8192")
     ap.add_argument("--configs", default="", help="comma-separated names (default: every one in build.json)")
-    ap.add_argument("--beside", default="c128x256_c2x1_ns4_r128:1,c128x256_c2x1_tma_r128:1,c128x256_c2x1_ns4_r120:2",
+    ap.add_argument("--beside", default="c128x256_c2x1_ns4_r160:0,c128x256_c2x1_ns4_r160:1",
                     help="config:hash form pairs for the beside items")
+    ap.add_argument("--hash-ref", type=int, default=4, help="a hash form timed alone each round (-1: none)")
     ap.add_argument("--rounds", type=int, default=2)
     ap.add_argument("--item-s", type=float, default=2.0)
     ap.add_argument("--lo", type=int, default=0)
@@ -197,7 +209,7 @@ def main():
     props = torch.cuda.get_device_properties(dev)
     assert props.multi_processor_count == SMS, props
     infos = {n: lib.info(n) for n in names}
-    hforms = sorted({f for _, f in beside})
+    hforms = sorted({f for _, f in beside} | ({a.hash_ref} if a.hash_ref >= 0 else set()))
     infos["hash"] = {f: lib.hash_info(f) for f in hforms}
     json.dump({"device": props.name, "torch": torch.__version__, "cuda": torch.version.cuda, "configs": infos,
                "args": vars(a)}, open(os.path.join(a.out, "configs.json"), "w"), indent=1)
@@ -214,8 +226,8 @@ def main():
             row["pj_per_mac"] = w / row["mac_per_s"] * 1e12
         items.write(json.dumps(row) + "\n")
         items.flush()
-        keep = {k: row.get(k) for k in ("arm", "config", "shape", "round", "frac_peak_clk", "theta", "sm_mhz",
-                                        "hash_frac_bar", "pj_per_mac")}
+        keep = {k: row.get(k) for k in ("arm", "config", "hash_form", "shape", "round", "frac_peak_clk", "theta",
+                                        "sm_mhz", "hash_frac_bar", "pj_per_mac")}
         print("ITEM", json.dumps(keep), "W", row["smi"]["w_mean"], row["smi"]["w_max"], flush=True)
 
     for shape in a.shapes.split(","):
@@ -229,6 +241,8 @@ def main():
             Dlt = torch.empty_like(D)
         torch.cuda.synchronize()
         rmax = int(R.abs().max())
+        hook_bufs = (torch.zeros(SMS * 96, dtype=torch.int64, device=dev),
+                     torch.zeros(1024, dtype=torch.int32, device=dev), torch.zeros(1, dtype=torch.int64, device=dev))
         gemms = {}
         for n in sorted(set(names) | {c for c, _ in beside if c in names}):
             try:
@@ -238,12 +252,20 @@ def main():
                 print("GATE", gates[-1], flush=True)
                 continue
             ok, why = True, []
+            hooked = infos[n].get("hook") == 1
             for call in range(2):
                 with torch.cuda.stream(sg):
                     poison(D)
                     rec = torch.zeros((1, 5), dtype=torch.int64, device=dev)
+                if hooked and call == 1:
+                    hook_bufs[2].zero_()
+                    G.hook(hook_bufs)
                 G.run(sg, rec.data_ptr())
                 torch.cuda.synchronize()
+                if hooked and call == 1:
+                    G.hook(None)
+                    if int(hook_bufs[2].item()) == 0:
+                        why.append("call 1: the hook ran no compressions")
                 r = recs_of(rec)[0]
                 eq = bool(torch.equal(D, R))
                 if not eq:
@@ -272,17 +294,28 @@ def main():
             torch.cuda.synchronize()
             return span_stats(recs_of(rec), macs, 2 * G.ctas)["span_s"] / 3
 
-        def gemm_item(G, rnd, secs):
+        def gemm_item(G, rnd, secs, fused=False):
             ncalls = max(2, math.ceil(secs / calibrate(G)))
             rec = torch.zeros((ncalls, 5), dtype=torch.int64, device=dev)
+            if fused:
+                hook_bufs[2].zero_()
+                G.hook(hook_bufs)
             torch.cuda.synchronize()
             h0 = time.time()
             for i in range(ncalls):
                 G.run(sg, rec[i].data_ptr())
             torch.cuda.synchronize()
             h1 = time.time()
-            row = {"arm": "cutlass", "config": G.name, "shape": shape, "round": rnd, "host_t0": h0, "host_t1": h1}
+            row = {"arm": "cutlass+fused" if fused else "cutlass", "config": G.name, "shape": shape, "round": rnd,
+                   "host_t0": h0, "host_t1": h1}
             row.update(span_stats(recs_of(rec), macs, 2 * G.ctas))
+            if fused:
+                G.hook(None)
+                comps = int(hook_bufs[2].item())
+                rate = comps / row["span_s"]
+                row.update({"hash_form": "fused", "hash_compressions": comps, "hash_per_s": rate,
+                            "hash_frac_bar": rate / BAR,
+                            "hash_frac_bar_clk": rate / (row["sm_mhz"] * 1e6 * SMS) / BAR_CLK})
             emit(row)
             return row
 
@@ -389,6 +422,11 @@ def main():
                 if n in names:
                     mhz.append(gemm_item(G, rnd, a.item_s)["sm_mhz"])
             lt_item(rnd, a.item_s, statistics.fmean(mhz) if mhz else None)
+            for n, G in gemms.items():
+                if n in names and infos[n].get("hook") == 1:
+                    gemm_item(G, rnd, a.item_s, fused=True)
+            if a.hash_ref >= 0:
+                hash_alone(a.hash_ref, rnd, a.item_s)
             for n, form in beside:
                 if n not in gemms:
                     continue
@@ -407,7 +445,9 @@ def summarize(path, out):
              "gap to 0.985 | gap to 0.97 |", "|" + "---|" * 13]
     groups = {}
     for r in rows:
-        key = (r["arm"], r["config"] + (f" + form{r['hash_form']}" if "hash_form" in r else ""), r["shape"])
+        hf = r.get("hash_form")
+        key = (r["arm"], r["config"] + ("" if hf is None else f" + {hf}" if isinstance(hf, str) else f" + form{hf}"),
+               r["shape"])
         groups.setdefault(key, []).append(r)
 
     def mean(rs, k):

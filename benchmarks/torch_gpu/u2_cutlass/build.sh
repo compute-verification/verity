@@ -7,7 +7,9 @@
 #   cutlass.patch, ptxas/*.txt, MANIFEST.sha256
 # CUTLASS is header-only, fetched at the pinned commit into scratch and patched there (never vendored): the cooperative and
 # ping-pong kernels' setmaxnreg constants become macros, U2_LOAD_REGS and U2_MMA_REGS, defaulting to CUTLASS's values in
-# u2_gemm.cu, so a configuration launched at fewer registers can hand its consumers what the launch holds.
+# u2_gemm.cu, so a configuration can split its launch's registers its own way, and the cooperative kernel gains two empty
+# hook points (U2_PRODUCER_HOOK after the producer warp roles, U2_CONSUMER_HOOK after the consumers' tiles) that U2_HOOK
+# fills.
 # Usage: build.sh OUT [NAME ...] (default every configuration); env CUDA (default /usr/local/cuda-13.0, else
 # /usr/local/cuda), JOBS (parallel compiles, default 4: a CUTLASS 3.x unit takes up to 7 GB in cicc), CUTLASS_DIR (an
 # unpatched checkout at the pinned commit, instead of the fetch).
@@ -23,17 +25,18 @@ CUTLASS_TAG=v4.8.0
 CUTLASS_COMMIT=098de2a652cf8f00fd70b2df54051c7eccbb855a
 SHA_DIR=$ROOT/benchmarks/torch_gpu/sha512_rows
 
-# name  tile M N K  cluster M N  stages(0 auto)  pingpong  nosmem  maxnreg(0 stock)  load_regs  mma_regs
+# name  tile M N K  cluster M N  stages(0 auto)  pingpong  nosmem  maxnreg(0 stock)  load_regs  mma_regs  hook
+# (the hook's 120 + 2 x 192 a warpgroup's thread is the stock launch's 168 x 3; r160's 4 stages leave a hash CTA its smem)
 CONFIGS=(
-  "c128x256_c2x1_tma     128 256 128  2 1  0  0 0    0  -   -"
-  "c128x256_c2x1_ns4     128 256 128  2 1  4  0 1    0  -   -"
-  "c128x256_c1x1_tma     128 256 128  1 1  0  0 0    0  -   -"
-  "c256x128_c1x2_tma     256 128 128  1 2  0  0 0    0  -   -"
-  "c128x256_c2x1_tma_s3  128 256 128  2 1  3  0 0    0  -   -"
-  "c128x256_c2x1_ns4_r128 128 256 128 2 1  4  0 1  128 40 168"
-  "c128x256_c2x1_tma_r128 128 256 128 2 1  0  0 0  128 40 168"
-  "c128x256_c2x1_ns4_r120 128 256 128 2 1  4  0 1  120 24 168"
-  "p128x128_c2x1_tma     128 128 128  2 1  0  1 0    0  -   -"
+  "c128x256_c2x1_tma     128 256 128  2 1  0  0 0    0  -   -   0"
+  "c128x256_c2x1_ns4     128 256 128  2 1  4  0 1    0  -   -   0"
+  "c128x256_c1x1_tma     128 256 128  1 1  0  0 0    0  -   -   0"
+  "c256x128_c1x2_tma     256 128 128  1 2  0  0 0    0  -   -   0"
+  "c128x256_c2x1_tma_s3  128 256 128  2 1  3  0 0    0  -   -   0"
+  "p128x128_c2x1_tma     128 128 128  2 1  0  1 0    0  -   -   0"
+  "c128x256_c2x1_tma_hk  128 256 128  2 1  0  0 0    0 120 192  1"
+  "c128x256_c2x1_ns4_hk  128 256 128  2 1  4  0 1    0 120 192  1"
+  "c128x256_c2x1_ns4_r160 128 256 128 2 1  4  0 1  160  40 168  0"
 )
 want=("$@")
 
@@ -52,10 +55,14 @@ for f in sm90_gemm_tma_warpspecialized_cooperative sm90_gemm_tma_warpspecialized
     -e 's/MmaRegisterRequirement = !HeavyRegisterPressure ? 232 : 240;/MmaRegisterRequirement = U2_MMA_REGS;/' "$h"
   [ "$(grep -c 'U2_LOAD_REGS;\|U2_MMA_REGS;' "$h")" = 2 ] || { echo "the setmaxnreg patch didn't apply to $f" >&2; exit 2; }
 done
+h=$S/cutlass/include/cutlass/gemm/kernel/sm90_gemm_tma_warpspecialized_cooperative.hpp
+sed -i -e 's|^      } // Epilogue Producer Warp End$|&\n      U2_PRODUCER_HOOK|' \
+  -e 's|^    } // Consumer Warp Groups End$|      U2_CONSUMER_HOOK\n&|' "$h"
+[ "$(grep -c 'U2_PRODUCER_HOOK$\|U2_CONSUMER_HOOK$' "$h")" = 2 ] || { echo "the hook patch didn't apply" >&2; exit 2; }
 git -C "$S/cutlass" diff > "$OUT/cutlass.patch"
 
 FLAGS=(-O3 -std=c++17 -gencode arch=compute_90a,code=sm_90a -Xcompiler -fPIC --expt-relaxed-constexpr -Xptxas -v)
-INC=(-I"$S/cutlass/include" -I"$S/cutlass/tools/util/include")
+INC=(-I"$S/cutlass/include" -I"$S/cutlass/tools/util/include" -I"$SHA_DIR")
 objs=(); names=()
 compile() {  # NAME then the -D flags
   local name=$1; shift
@@ -63,10 +70,10 @@ compile() {  # NAME then the -D flags
     || { echo "compile $name failed:" >&2; tail -30 "$OUT/ptxas/$name.txt" >&2; return 1; }
 }
 for row in "${CONFIGS[@]}"; do
-  read -r name tm tn tk cm cn st pp ns mr lr rr <<< "$row"
+  read -r name tm tn tk cm cn st pp ns mr lr rr hk <<< "$row"
   if [ ${#want[@]} -gt 0 ] && [[ ! " ${want[*]} " == *" $name "* ]]; then continue; fi
   d=(-DU2_NAME="$name" -DU2_TM="$tm" -DU2_TN="$tn" -DU2_TK="$tk" -DU2_CM="$cm" -DU2_CN="$cn" -DU2_STAGES="$st"
-     -DU2_PINGPONG="$pp" -DU2_NOSMEM="$ns" -DU2_MAXNREG="$mr")
+     -DU2_PINGPONG="$pp" -DU2_NOSMEM="$ns" -DU2_MAXNREG="$mr" -DU2_HOOK="$hk")
   [ "$lr" = - ] || d+=(-DU2_LOAD_REGS="$lr" -DU2_MMA_REGS="$rr")
   while [ "$(jobs -rp | wc -l)" -ge "$JOBS" ]; do wait -n || true; done
   echo "compile $name at $(date -u +%H:%M:%SZ)"
@@ -100,6 +107,7 @@ for row in rows:
     cfg[f[0]] = {"tile": list(map(int, f[1:4])), "cluster": list(map(int, f[4:6])), "stages": int(f[6]),
                  "pingpong": int(f[7]), "nosmem": int(f[8]), "maxnreg": int(f[9]),
                  "load_regs": None if f[10] == "-" else int(f[10]), "mma_regs": None if f[11] == "-" else int(f[11]),
+                 "hook": int(f[12]),
                  "ptxas_regs": regs, "ptxas_spill": spill, "warnings": [l for l in ptx.splitlines() if "warning" in l]}
 sass = {}
 for line in open(f"{out}/sass_mma.tsv"):
