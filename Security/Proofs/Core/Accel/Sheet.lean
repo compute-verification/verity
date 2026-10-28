@@ -11,7 +11,7 @@ The H200's table, held to the sheet's dense peaks (`Accounting.TS.Sheets.H200`, 
   sheet's figure a second at the clock the sheet quotes it at (1830 MHz for s8, FP8, f16, bf16 and tf32, 1980 MHz for
   f64). So no format's rate in the table is under the sheet's (θ at or above the sheet).
 * `tensor_sheet_clock`: off f64 they are the sheet's figures exactly, its per-SM-clock peaks times its SMs at the
-  1830 MHz tensor clock the table runs the tensor at; f64's weight is rounded down, so its rate is above the sheet's.
+  1830 MHz tensor clock ceiling the table takes the tensor at; f64's weight is rounded down, so its rate is above the sheet's.
 -/
 
 open scoped NNRat
