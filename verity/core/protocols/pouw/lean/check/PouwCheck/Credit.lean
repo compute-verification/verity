@@ -13,6 +13,7 @@ import PouwWindow.Rounds
 import SampledProofs.ChallengerSession
 import SampledProofs.PyJson
 import SampledProofs.Registered
+import Identity.Domains
 
 /-!
 # A served window's credited set, its drawn units and their outcome, its A rows and its period (`credit.py`)
@@ -1138,7 +1139,7 @@ def shapeOf (descriptor : ByteArray) : Shape := Id.run do
     | _ => []
   return ⟨pre, tiles⟩
 
-def PARTITION_FORMAT : String := "verity/partition/v1"
+def PARTITION_FORMAT : String := Domains.PARTITION
 def QUERY_NAME : String := "Q_template_instances"
 def QUERY_VERSION : Nat := 0
 
@@ -2267,5 +2268,17 @@ def periodCredit (key ledger pins main name windows : Json) : R PeriodCredit := 
     work := work ++ [creditedWork layout got rows]
     eps := eps ++ [established layout got rows bigK]
   pure ⟨out, work, bigK, DELTA, eps⟩
+
+/-! Each separator below keeps its literal while a lock reads its definition, whose record hashes the value as
+written: tied here to its entry of the table (`Identity.Domains`), it reads the entry at its next record change. -/
+example : CALLS_TAG = Domains.POUW_H1_CALLS.toUTF8.push 0 := rfl
+example : DRAW_TAG = Domains.POUW_H1_SAMPLING := rfl
+example : ROUND_TAG = Domains.POUW_H1_ROUND_A := rfl
+example : COMMIT_TAG = Domains.POUW_H1_COMMIT.toUTF8.push 0 := rfl
+example : COMMIT_FORMAT = Domains.REGISTRATION := rfl
+example : SCHEMA = Domains.IR_DESCRIPTOR := rfl
+example : OK_SALT_TAG = Domains.POUW_H1_OK_ROW_SALT.toUTF8.push 0 := rfl
+example : REQUESTS_IDS_TAG = Domains.POUW_H1_REQUEST_IDS := rfl
+example : WEIGHTS_TAG = Domains.POUW_H1_WEIGHTS := rfl
 
 end PouwCheck.Credit

@@ -78,7 +78,7 @@ from verity.ml.circuits.silicon.integer import (
     exact_k_limit,
 )
 from verity.ml.circuits.types import Array, Value
-from verity.ml.commitments import hm96
+from verity.ml.commitments import domains, hm96
 from verity.ml.commitments.identity import identity_digest_sha512
 from verity.ml.commitments.indexed import RangeIndexedDomain
 from verity.ml.commitments.limits import VerificationLimits
@@ -89,12 +89,12 @@ from verity.ml.commitments.rowleaf import row_leaf, sha512_row_v2_digest
 from . import segment as SG
 
 #: a served call's values tree, and a filler's (no O)
-TAG = "verity/pouw/dither/call/v1"
-FILL_TAG = "verity/pouw/dither/fill/v1"
-OPERAND_TAG = "verity/pouw/dither/operand/v1"
-CHECKPOINT_TAG = b"verity/pouw/dither/checkpoint/v1\0"
-SEEDS_TAG = b"verity/pouw/dither/seeds/v1\0"
-FILL_SEEDS_TAG = b"verity/pouw/dither/fill-seeds/v1\0"
+TAG = domains.POUW_DITHER_CALL
+FILL_TAG = domains.POUW_DITHER_FILL
+OPERAND_TAG = domains.POUW_DITHER_OPERAND
+CHECKPOINT_TAG = domains.POUW_DITHER_CHECKPOINT.encode() + b"\0"
+SEEDS_TAG = domains.POUW_DITHER_SEEDS.encode() + b"\0"
+FILL_SEEDS_TAG = domains.POUW_DITHER_FILL_SEEDS.encode() + b"\0"
 #: a call's coin streams; a filler's seeds add the pad's
 STREAMS = ("dA", "dB", "U", "V", "P")
 PAD = "pad"

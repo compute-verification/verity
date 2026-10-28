@@ -65,6 +65,7 @@ from typing import Any
 from verity.ml.circuits.defs import bind
 from verity.ml.circuits.ops import s8 as OS8
 from verity.ml.circuits.ops import prims as P
+from verity.ml.commitments import domains
 
 from ..protocol import DomainError
 from . import segment as SG
@@ -73,10 +74,10 @@ from . import segment as SG
 SCHEME = "eps1-sm120-h1fx1"
 KIND = "h1fx1"
 #: the seed's domain separator (`seed`); a byte string, as every SHA-512 tag here is
-TAG = b"eps1-sm120-h1fx1/seed/v1"
+TAG = domains.POUW_EPS1_SEED.encode()
 #: σ_R's domain separator (`receipt_seed`): the receipt folds' keys and their chains' starts, under a tag of
 #: their own (`seeds.PouwUnitSeeds`' RECEIPT_TAG), never the noise seed's, so no fold key is a function of seed_j
-RECEIPT_TAG = b"verity/pouw/receipt/v1"
+RECEIPT_TAG = domains.POUW_RECEIPT.encode()
 #: the fold H1's receipt uses and its receipt layout (`segment.PouwCallCheck`): fx1, the eight chain words a thread
 FOLD, OUT = "fx1", "chains"
 #: the per-dot work the TS conjecture credits is open until proofs link TS to EndToEnd (§5 item 3)
