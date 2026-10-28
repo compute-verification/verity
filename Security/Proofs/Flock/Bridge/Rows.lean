@@ -108,7 +108,7 @@ def SampledKSLiveV2Z : Prop :=
     let vreg : Fin Cc.N → Bool := fun g =>
       if rd.isRead (vb.pos g) then vb.bit (vb.val (wo (vb.pos g))) g else Cc.eval Xr g
     prob (fun o => LiveAcceptsZK I o ∧
-        ¬ Claims.Sampling.RelS Claims.Sampling.sha512Msg Cd δ (Bridge.stmtOf P κ kd desc q roots) (Bridge.partOf P)
+        ¬ Claims.Sampling.RelS Claims.Sampling.sha512Msg Cd δ (Bridge.stmtOf P κ kd desc q roots) (Bridge.partOf P κ)
           (Bridge.witRows Cc Cd Claims.Sampling.sha512Msg roots vreg))
         (auditLive L Reg (liveOfZJ dg (planZHJ dj y₀) N wr)) τ ≤
       ((n - K₀).choose kd : ℝ≥0∞) / (n.choose kd : ℝ≥0∞) +
@@ -139,7 +139,7 @@ theorem _root_.Flock.Bridge.sampledKSLiveV2Z_of_count (hT : Bridge.TransportsLiv
     Bridge.constsOf_isInput (Discharge.Layout.outsOf D.unroll hU n) h
   set W := wrongRegZc execArith P (planZHJ dj y₀) (tabZHJ dj y₀) vb canon (reg σ) Xr ∪
     rowsWrongZ execArith P (planZHJ dj y₀) (tabZHJ dj y₀) vb rd.isRead wo Xr with hW
-  have hsub : (Claims.Sampling.faulty Claims.Sampling.sha512Msg Cd (Bridge.stmtOf P κ kd desc q roots) (Bridge.partOf P)
+  have hsub : (Claims.Sampling.faulty Claims.Sampling.sha512Msg Cd (Bridge.stmtOf P κ kd desc q roots) (Bridge.partOf P κ)
         (Bridge.witRows Cc Cd Claims.Sampling.sha512Msg roots vreg)).filter (· < n) ⊆ W.map Fin.valEmbedding := by
     classical
     intro v hv
@@ -169,7 +169,7 @@ theorem _root_.Flock.Bridge.sampledKSLiveV2Z_of_count (hT : Bridge.TransportsLiv
   have hK₁ : min K₀ (n - kd + 1) ≤ n := (min_le_left _ _).trans hK₀
   have hev : ∀ o : Reg × Finset (Fin n) × Discharge.Exec.Transcript,
       (LiveAcceptsZK I o ∧
-        ¬ Claims.Sampling.RelS Claims.Sampling.sha512Msg Cd δ (Bridge.stmtOf P κ kd desc q roots) (Bridge.partOf P)
+        ¬ Claims.Sampling.RelS Claims.Sampling.sha512Msg Cd δ (Bridge.stmtOf P κ kd desc q roots) (Bridge.partOf P κ)
           (Bridge.witRows Cc Cd Claims.Sampling.sha512Msg roots vreg)) →
       LiveAcceptsZK I o ∧ min K₀ (n - kd + 1) ≤ W.card := fun o ho =>
     ⟨ho.1, (hC P kd K₀ hkd1 hkd _ _ κ desc q roots _ ho.2).trans

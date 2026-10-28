@@ -129,7 +129,7 @@ def SampledKSLiveV2 : Prop :=
     let BR := Bridge.strictComp (StrictCR.oneRun G τ fun o =>
         rd.pick o.1 (Discharge.ZkReg.regPathsHJ I D.unroll pub o.2.2 rd.port)) qR
     prob (fun o => Discharge.ZkReg.LiveAcceptsZKR I own o ∧
-        ¬ Claims.Sampling.RelS Claims.Sampling.sha512Msg Cd δ (Bridge.stmtOf P κ kd desc q roots) (Bridge.partOf P)
+        ¬ Claims.Sampling.RelS Claims.Sampling.sha512Msg Cd δ (Bridge.stmtOf P κ kd desc q roots) (Bridge.partOf P κ)
           (Bridge.witRows Cc Cd Claims.Sampling.sha512Msg roots (vreg o)))
         G τ ≤
       ((n - K₀).choose kd : ℝ≥0∞) / (n.choose kd : ℝ≥0∞) +
@@ -169,10 +169,10 @@ theorem sampledKSLiveV2_of (hX : Bridge.SampledKSLiveXr) (hV : SampledKSLiveV2Z)
       Ω Lb src hA3 hTags hCust k Rw M hk hRw hM ρ hρ hr K₀ hK₀ τ q
     have hsub : ∀ o : Reg × Finset (Fin n) × Discharge.Exec.Transcript,
         (LiveAcceptsZKR I own o ∧
-          ¬ Claims.Sampling.RelS Claims.Sampling.sha512Msg Cd δ (Bridge.stmtOf P κ kd desc q roots) (Bridge.partOf P)
+          ¬ Claims.Sampling.RelS Claims.Sampling.sha512Msg Cd δ (Bridge.stmtOf P κ kd desc q roots) (Bridge.partOf P κ)
             (Bridge.witRows Cc Cd Claims.Sampling.sha512Msg roots (vreg o))) →
         (LiveAcceptsZK I o ∧
-          ¬ Claims.Sampling.RelS Claims.Sampling.sha512Msg Cd δ (Bridge.stmtOf P κ kd desc q roots) (Bridge.partOf P)
+          ¬ Claims.Sampling.RelS Claims.Sampling.sha512Msg Cd δ (Bridge.stmtOf P κ kd desc q roots) (Bridge.partOf P κ)
             (Bridge.witDep Cc Cd Claims.Sampling.sha512Msg roots Xr)) ∨
         ((LiveAcceptsZKR I own o ∧ OwnReadsHJ I own D.unroll pub o.2.2 rd.isRead rd.port rd.readAt) ∧
           rd.Off o.1) := by
@@ -215,10 +215,10 @@ theorem sampledKSLiveV2_of (hX : Bridge.SampledKSLiveXr) (hV : SampledKSLiveV2Z)
     N Ω Lb src hA3 hTags hCust k Rw M hk hRw hM ρ hρ hr K₀ hK₀ τ q
   have hsub : ∀ o : Reg × Finset (Fin n) × Discharge.Exec.Transcript,
       (LiveAcceptsZKR I own o ∧
-        ¬ Claims.Sampling.RelS Claims.Sampling.sha512Msg Cd δ (Bridge.stmtOf P κ kd desc q roots) (Bridge.partOf P)
+        ¬ Claims.Sampling.RelS Claims.Sampling.sha512Msg Cd δ (Bridge.stmtOf P κ kd desc q roots) (Bridge.partOf P κ)
           (Bridge.witRows Cc Cd Claims.Sampling.sha512Msg roots (vreg o))) →
       LiveAcceptsZK I o ∧
-        ¬ Claims.Sampling.RelS Claims.Sampling.sha512Msg Cd δ (Bridge.stmtOf P κ kd desc q roots) (Bridge.partOf P)
+        ¬ Claims.Sampling.RelS Claims.Sampling.sha512Msg Cd δ (Bridge.stmtOf P κ kd desc q roots) (Bridge.partOf P κ)
           (Bridge.witRows Cc Cd Claims.Sampling.sha512Msg roots fun g =>
             if rd.isRead (vb.pos g) then vb.bit (vb.val (wo (vb.pos g))) g else Cc.eval Xr g) := by
     rintro o ⟨hA, hrel⟩
@@ -317,7 +317,7 @@ def SampledKSLiveV3 : Prop :=
     let BR := Bridge.strictComp (StrictCR.oneRun G τ fun o =>
         rd.pick o.1 (Discharge.ZkReg.regPathsHJ I D.unroll pub o.2.2 rd.port)) qR
     prob (fun o => (Bridge.LiveAcceptsKSR I own o ∧ Bridge.RunPopOk desc qr n) ∧
-        ¬ Claims.Sampling.RelS Claims.Sampling.sha512Msg Cd δ (Bridge.stmtOf P κ kd desc q roots) (Bridge.partOf P)
+        ¬ Claims.Sampling.RelS Claims.Sampling.sha512Msg Cd δ (Bridge.stmtOf P κ kd desc q roots) (Bridge.partOf P κ)
           (Bridge.witRows Cc Cd Claims.Sampling.sha512Msg roots (vreg o)))
         G τ ≤
       ((n - K₀).choose kd : ℝ≥0∞) / (n.choose kd : ℝ≥0∞) +

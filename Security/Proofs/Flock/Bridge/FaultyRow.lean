@@ -43,18 +43,21 @@ theorem faulty_row {n : ℕ} (P : FlockSoundness.Audit.Partition C n) (kd : ℕ)
     {g i : Fin C.N} {b : List (Fin C.N)} {u : Fin n} (hg : g ∈ C.outputs) (hu : P.unit g = some u)
     (hop : C.op g = .row [i] b) (hi : C.op i = .input) (hκ : κ i = none) (hvi : v i = false)
     (hvg : ∀ d, Cm.Opens H roots ⟨posOf C g, v g, d⟩ = true → v g = true) :
-    u.val ∈ faulty H Cm (stmtOf P κ kd desc q roots) (partOf P) (witRows C Cm H roots v) := by
+    u.val ∈ faulty H Cm (stmtOf P κ kd desc q roots) (partOf P κ) (witRows C Cm H roots v) := by
   classical
-  have hr0 := partOf_rus P u
-  have hlen : u.val < (partOf P).rus.length := (List.getElem?_eq_some_iff.1 hr0).1
+  have hr0 := rus_partOf_getElem? (κ := κ) P u
+  have hlen : u.val < (partOf P κ).rus.length := (List.getElem?_eq_some_iff.1 hr0).1
   unfold Claims.Sampling.faulty
   refine Finset.mem_filter.2 ⟨Finset.mem_range.2 hlen, ?_⟩
   rintro ⟨r, hr, ι, hc⟩
   rw [hr0] at hr
   cases hr
   have hc' : (progOf C κ).Correct (RU.ref (progOf C κ) [unitGates P u]
-      ((witRows C Cm H roots v).val H Cm (stmtOf P κ kd desc q roots)) ι) (unitGates P u) :=
-    hc (unitGates P u) (List.mem_singleton_self _)
+      ((witRows C Cm H roots v).val H Cm (stmtOf P κ kd desc q roots)) ι) (unitGates P u) := by
+    have h := hc (unitGates P u) (List.mem_append_left _ (List.mem_singleton_self _))
+    change (progOf C κ).Correct (RU.ref (progOf C κ) (slotOf P κ u)
+      ((witRows C Cm H roots v).val H Cm (stmtOf P κ kd desc q roots)) ι) (unitGates P u) at h
+    rwa [ref_slotOf] at h
   have hgates : RU.gates [unitGates P u] = unitGates P u := by simp [RU.gates]
   have hs : (stmtOf P κ kd desc q roots).roots = roots := rfl
   have href : ∀ p, ((progOf C κ).Boundary (unitGates P u) p = true ∨ p ∉ unitGates P u) →
@@ -133,12 +136,12 @@ theorem not_relS_row {n : ℕ} (P : FlockSoundness.Audit.Partition C n) (kd : �
     {δ : ℝ} (hδ : 0 ≤ δ) {g i : Fin C.N} {b : List (Fin C.N)} {u : Fin n} (hg : g ∈ C.outputs)
     (hu : P.unit g = some u) (hop : C.op g = .row [i] b) (hi : C.op i = .input) (hκ : κ i = none) (hvi : v i = false)
     (hvg : ∀ d, Cm.Opens H roots ⟨posOf C g, v g, d⟩ = true → v g = true) :
-    ¬ RelS H Cm δ (stmtOf P κ kd desc q roots) (partOf P) (witRows C Cm H roots v) := by
+    ¬ RelS H Cm δ (stmtOf P κ kd desc q roots) (partOf P κ) (witRows C Cm H roots v) := by
   subst hkd
   intro h
-  have h' : δ < (designOf kd).Pa (partOf P)
-      (faulty H Cm (stmtOf P κ kd desc q roots) (partOf P) (witRows C Cm H roots v)) := h
-  rw [pa_zero P (faulty_row P kd desc q roots H Cm v hg hu hop hi hκ hvi hvg)] at h'
+  have h' : δ < (designOf kd).Pa (partOf P κ)
+      (faulty H Cm (stmtOf P κ kd desc q roots) (partOf P κ) (witRows C Cm H roots v)) := h
+  rw [pa_zero P (κ := κ) (faulty_row P kd desc q roots H Cm v hg hu hop hi hκ hvi hvg)] at h'
   linarith
 
 /-- **`commitDep` opens only at a wire with a row.** -/

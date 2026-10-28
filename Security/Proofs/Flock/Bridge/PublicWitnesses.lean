@@ -54,24 +54,16 @@ theorem unit_some {C : FlockSoundness.Audit.Circuit} {n : ℕ} (P : FlockSoundne
   | none => simp [(P.input_iff g).1 h] at hgi
   | some u => exact ⟨u, rfl⟩
 
-/-- Slot `u` of `partOf P` is unit `u`'s replay unit. -/
-theorem partOf_rus {C : FlockSoundness.Audit.Circuit} {n : ℕ} (P : FlockSoundness.Audit.Partition C n) (u : Fin n) :
-    (partOf P).rus[u.val]? = some [unitGates P u] := by
-  have h : (partOf P).rus = ((List.finRange n).map fun u => [unitGates P u]) ++ (inputClassOf C).flatten := by
-    simp [Claims.Sampling.Partition.rus, partOf]
-  rw [h, List.getElem?_append_left (by simp)]
-  simp
-
 /-- **A unit holding a returned gate is faulty when nothing opens**: the returned gate's value is committed, and no
 opening gives it one. -/
 theorem faulty_mem {C : FlockSoundness.Audit.Circuit} {n : ℕ} (P : FlockSoundness.Audit.Partition C n)
     (κ : Fin C.N → Option Bool) (kd : ℕ) (desc : Claims.Msg) (q : Claims.Sampling.Query) (roots : List Claims.Msg)
     (H : Claims.Msg → Claims.Msg) (Cm : Claims.Sampling.Commitment Bool) (hCm : ∀ o, Cm.Opens H roots o = false)
     (w : Claims.Sampling.Wit) {g : Fin C.N} {u : Fin n} (hg : g ∈ C.outputs) (hu : P.unit g = some u) :
-    u.val ∈ Claims.Sampling.faulty H Cm (stmtOf P κ kd desc q roots) (partOf P) w := by
+    u.val ∈ Claims.Sampling.faulty H Cm (stmtOf P κ kd desc q roots) (partOf P κ) w := by
   classical
-  have hr0 := partOf_rus P u
-  have hlen : u.val < (partOf P).rus.length := (List.getElem?_eq_some_iff.1 hr0).1
+  have hr0 := rus_partOf_getElem? (κ := κ) P u
+  have hlen : u.val < (partOf P κ).rus.length := (List.getElem?_eq_some_iff.1 hr0).1
   have hpos : 0 < gateSize (C.op g) := by cases C.op g <;> simp [gateSize]
   have hp : posOf C g ∈ unitGates P u := by
     unfold unitGates
@@ -93,11 +85,15 @@ theorem faulty_mem {C : FlockSoundness.Audit.Circuit} {n : ℕ} (P : FlockSoundn
   rintro ⟨r, hr, ι, hc⟩
   rw [hr0] at hr
   cases hr
-  obtain ⟨b, hb', -⟩ := (hc (unitGates P u) (List.mem_singleton_self _) (posOf C g) hp).2 (hb _)
+  have hc' := hc (unitGates P u) (List.mem_append_left _ (List.mem_singleton_self _))
+  change (progOf C κ).Correct (Claims.Sampling.RU.ref (progOf C κ) (slotOf P κ u)
+    (w.val H Cm (stmtOf P κ kd desc q roots)) ι) (unitGates P u) at hc'
+  rw [ref_slotOf] at hc'
+  obtain ⟨b, hb', -⟩ := (hc' (posOf C g) hp).2 (hb _)
   have hcond : ¬ (posOf C g ∈ Claims.Sampling.RU.gates [unitGates P u] ∧
-      (stmtOf P κ kd desc q roots).prog.Boundary (Claims.Sampling.RU.gates [unitGates P u]) (posOf C g) = false) :=
+      (progOf C κ).Boundary (Claims.Sampling.RU.gates [unitGates P u]) (posOf C g) = false) :=
     fun h => by have := (hb _).symm.trans h.2; cases this
-  have hnone : Claims.Sampling.RU.ref (stmtOf P κ kd desc q roots).prog [unitGates P u]
+  have hnone : Claims.Sampling.RU.ref (progOf C κ) [unitGates P u]
       (w.val H Cm (stmtOf P κ kd desc q roots)) ι (posOf C g) = none := by
     unfold Claims.Sampling.RU.ref
     rw [if_neg hcond, wit_val_none (s := stmtOf P κ kd desc q roots) hCm]
@@ -106,17 +102,13 @@ theorem faulty_mem {C : FlockSoundness.Audit.Circuit} {n : ℕ} (P : FlockSoundn
 
 /-- **A draw of every unit catches a faulty one**: under `designOf n`, a set holding a unit's slot is accepted with
 probability 0. -/
-theorem pa_zero {C : FlockSoundness.Audit.Circuit} {n : ℕ} (P : FlockSoundness.Audit.Partition C n) {B : Finset ℕ}
-    {u : Fin n} (hu : u.val ∈ B) : (designOf n).Pa (partOf P) B = 0 := by
+theorem pa_zero {C : FlockSoundness.Audit.Circuit} {n : ℕ} (P : FlockSoundness.Audit.Partition C n)
+    {κ : Fin C.N → Option Bool} {B : Finset ℕ} {u : Fin n} (hu : u.val ∈ B) : (designOf n).Pa (partOf P κ) B = 0 := by
   have hn : 0 < n := u.pos
   have hc : 1 ≤ (Claims.Sampling.window 0 n B).card :=
     Finset.card_pos.2 ⟨u.val, Finset.mem_image.2 ⟨u.val, Finset.mem_filter.2 ⟨hu, Nat.zero_le _, by
       simpa using u.isLt⟩, by simp⟩⟩
-  simp only [Claims.Sampling.Design.Pa, designOf, partOf, Claims.Sampling.classesPa, Claims.Sampling.Rule.Pa,
-    Claims.Sampling.OneStage.Pa, Claims.Sampling.strataSizes, List.map_cons, List.map_nil,
-    List.sum_cons, List.sum_nil, List.flatten_cons, List.flatten_nil, List.append_nil, List.length_map,
-    List.length_finRange, add_zero]
-  rw [Nat.choose_eq_zero_of_lt (n := n - (Claims.Sampling.window 0 n B).card) (k := n) (by omega)]
+  rw [pa_partOf_window, Nat.choose_eq_zero_of_lt (n := n - (Claims.Sampling.window 0 n B).card) (k := n) (by omega)]
   simp
 
 /-- **The transfer: at a commitment that opens nothing, a returned computed gate fails the claim for every witness**,
@@ -126,13 +118,13 @@ theorem not_relS_unopened {C : FlockSoundness.Audit.Circuit} {n : ℕ} (P : Floc
     (roots : List Claims.Msg) (H : Claims.Msg → Claims.Msg) (Cm : Claims.Sampling.Commitment Bool)
     (hCm : ∀ o, Cm.Opens H roots o = false) (w : Claims.Sampling.Wit) {δ : ℝ} (hδ : 0 ≤ δ) {g : Fin C.N}
     (hg : g ∈ C.outputs) (hgi : (C.op g).isInput = false) :
-    ¬ Claims.Sampling.RelS H Cm δ (stmtOf P κ kd desc q roots) (partOf P) w := by
+    ¬ Claims.Sampling.RelS H Cm δ (stmtOf P κ kd desc q roots) (partOf P κ) w := by
   obtain ⟨u, hu⟩ := unit_some P hgi
   intro h
-  have h' : δ < (designOf kd).Pa (partOf P)
-      (Claims.Sampling.faulty H Cm (stmtOf P κ kd desc q roots) (partOf P) w) := h
+  have h' : δ < (designOf kd).Pa (partOf P κ)
+      (Claims.Sampling.faulty H Cm (stmtOf P κ kd desc q roots) (partOf P κ) w) := h
   rw [hkd] at h'
-  rw [pa_zero P (faulty_mem P κ n desc q roots H Cm hCm w hg hu)] at h'
+  rw [pa_zero P (κ := κ) (faulty_mem P κ n desc q roots H Cm hCm w hg hu)] at h'
   linarith
 
 /-- `δ + f(p) < 1` at the deployed parameters (`Flock.SecurityProofs.DeltaPubDeployed`). -/
@@ -217,7 +209,7 @@ theorem toy_not_relS (κ : Fin toyCircuit.N → Option Bool) (desc : Claims.Msg)
     (roots : List Claims.Msg) (H : Claims.Msg → Claims.Msg) (c : Flock.Circuit) (nl : ℕ) (xv : Fin toyCircuit.N → Bool)
     {δ : ℝ} (hδ : 0 ≤ δ) :
     ¬ Claims.Sampling.RelS H (commitDep toyCircuit (fun _ => none) c nl roots) δ
-      (stmtOf toyPartition κ 1 desc q roots) (partOf toyPartition) (witDep toyCircuit (commitDep toyCircuit (fun _ => none) c nl roots) H roots xv) :=
+      (stmtOf toyPartition κ 1 desc q roots) (partOf toyPartition κ) (witDep toyCircuit (commitDep toyCircuit (fun _ => none) c nl roots) H roots xv) :=
   not_relS_unopened toyPartition κ 1 rfl desc q roots H (commitDep toyCircuit (fun _ => none) c nl roots)
     (commitDep_opens_none toyCircuit (fun _ => none) (fun _ => rfl) c nl H roots)
     (witDep toyCircuit (commitDep toyCircuit (fun _ => none) c nl roots) H roots xv) hδ (g := ⟨1, by decide⟩)
@@ -233,7 +225,7 @@ theorem toy_exceeds {α : Type} {G : Game α} (s : Strategy G) (κ : Fin toyCirc
     ENNReal.ofReal (deltaPub 1 1 1 kDep (2 ^ 192) (2 ^ 192) (ioSum toyPartition) (1 / 2) +
       lossPub kDep (ioSum toyPartition) (1 / 2) p) <
       prob (fun _ => True ∧ ¬ Claims.Sampling.RelS H (commitDep toyCircuit (fun _ => none) c nl roots) δ
-        (stmtOf toyPartition κ 1 desc q roots) (partOf toyPartition)
+        (stmtOf toyPartition κ 1 desc q roots) (partOf toyPartition κ)
         (witDep toyCircuit (commitDep toyCircuit (fun _ => none) c nl roots) H roots xv)) G s :=
   exceeds_of_not s (toy_not_relS κ desc q roots H c nl xv hδ)
     (deltaPub_lt_one (n := 1) (kd := 1) (K₀ := 1) one_pos le_rfl (by norm_num) toy_ioSum_le hp0 hp)
@@ -316,7 +308,7 @@ def SampledKSLivePubAll : Prop :=
       (Bridge.strictComp (FlockSoundness.StrictCR.oneRun G τ fun o =>
         rd.pick o.1 (Discharge.ZkReg.regPathsHJ I D.unroll pub o.2.2 rd.port)) qR)
     prob (fun o => True ∧
-        ¬ Claims.Sampling.RelS Claims.Sampling.sha512Msg Cd δ (Bridge.stmtOf P κ kd desc q roots) (Bridge.partOf P)
+        ¬ Claims.Sampling.RelS Claims.Sampling.sha512Msg Cd δ (Bridge.stmtOf P κ kd desc q roots) (Bridge.partOf P κ)
           (Bridge.witRows Cc Cd Claims.Sampling.sha512Msg roots (vreg o)))
         G τ ≤
       ENNReal.ofReal (Bridge.deltaPubR n kd K₀ k M Rw (Bridge.ioSum P) ρ +
@@ -401,7 +393,7 @@ theorem sampledKSLiveV2Z_unopened :
         rowsPrZC execArith hs512 P (planZHJ dj y₀) (tabZHJ dj y₀) vb rd.isRead wo Bridge.kDep (1 / 2) (reg σ)
           (cont σ) <
       prob (fun _ => True ∧
-          ¬ Claims.Sampling.RelS Claims.Sampling.sha512Msg Cd δ (Bridge.stmtOf P κ kd desc q roots) (Bridge.partOf P)
+          ¬ Claims.Sampling.RelS Claims.Sampling.sha512Msg Cd δ (Bridge.stmtOf P κ kd desc q roots) (Bridge.partOf P κ)
             (Bridge.witRows Cc Cd Claims.Sampling.sha512Msg roots vreg))
         (auditLive L Reg (liveOfZJ dg (planZHJ dj y₀) N wr)) τ := by
   intro n Reg I ht D hD hU pub hpub hpt hscope desc kd hkd hdiv dj S₀ d₀ y₀ rd wr dg N Ω _ _ Lb src hTags hCust K₀ hK₀

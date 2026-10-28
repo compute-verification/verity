@@ -97,7 +97,7 @@ def SampledKSLiveV2All : Prop :=
     let BR := Bridge.strictComp (StrictCR.oneRun G τ fun o =>
         rd.pick o.1 (Discharge.ZkReg.regPathsHJ I D.unroll pub o.2.2 rd.port)) qR
     prob (fun o => True ∧
-        ¬ Claims.Sampling.RelS Claims.Sampling.sha512Msg Cd δ (Bridge.stmtOf P κ kd desc q roots) (Bridge.partOf P)
+        ¬ Claims.Sampling.RelS Claims.Sampling.sha512Msg Cd δ (Bridge.stmtOf P κ kd desc q roots) (Bridge.partOf P κ)
           (Bridge.witRows Cc Cd Claims.Sampling.sha512Msg roots (vreg o)))
         G τ ≤
       ((n - K₀).choose kd : ℝ≥0∞) / (n.choose kd : ℝ≥0∞) +
@@ -182,7 +182,7 @@ def SampledKSLiveV3All : Prop :=
     let BR := Bridge.strictComp (StrictCR.oneRun G τ fun o =>
         rd.pick o.1 (Discharge.ZkReg.regPathsHJ I D.unroll pub o.2.2 rd.port)) qR
     prob (fun o => True ∧
-        ¬ Claims.Sampling.RelS Claims.Sampling.sha512Msg Cd δ (Bridge.stmtOf P κ kd desc q roots) (Bridge.partOf P)
+        ¬ Claims.Sampling.RelS Claims.Sampling.sha512Msg Cd δ (Bridge.stmtOf P κ kd desc q roots) (Bridge.partOf P κ)
           (Bridge.witRows Cc Cd Claims.Sampling.sha512Msg roots (vreg o)))
         G τ ≤
       ((n - K₀).choose kd : ℝ≥0∞) / (n.choose kd : ℝ≥0∞) +
