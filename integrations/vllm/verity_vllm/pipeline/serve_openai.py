@@ -1,8 +1,8 @@
 """`verity-vllm serve-openai`: an OpenAI-compatible HTTP server whose engine is the in-process committing vLLM engine.
 
     verity-vllm serve-openai --model REPO --revision SHA --out DIR [--port 18082] [--precision verity_int8|int8_exact|pin]
-        [--protocol vllm|plain|ids [--id-payload 503]] [--no-commit] [--window-steps 64]
-        [--force-include-usage | --no-force-include-usage] [--retain-exclude hidden_m1]
+        [--protocol vllm|plain|ids [--id-payload 503]] [--no-commit] [--window-steps 64] [--no-learn-warmup]
+        [--force-include-usage | --no-force-include-usage] [--retain-exclude hidden_m1] [--learn-host-budget-mb 4096]
         [--required-manifest ROW/manifest.json --hidden-so SO --norm-tap-so SO | --scheme vllm-v1 --of-record RUN] [--seal]
         [--no-seal-off-loop] [--no-seal-process] [--seal-hold-gb 64] [--seal-warm-gb 0] [--window-gb 32] [--disk-floor-gb 300]
         [--copy-records-to $OUT] [--admit arrival|release-order [--admit-hold-ms 5000]] [--switch-interval-ms 0.1]
@@ -50,7 +50,8 @@ window back from the committed bytes into the served record (`commit.served_reco
 committed input ids (the step-input port's ``step.input/ids``, `served_record.IDS_NAMES`), sampled ids and
 seeds, by position. Once a request has finished, `Record.check` holds them to what was served: its prompt ids and
 streamed ids, the seed it carried, and where its finish says the stream ends. ``--prefix-caching``: vLLM's prefix cache
-(off otherwise); a hit's check names the requests that committed its prefix (`RequestRecord.prefix_cover`).
+(off otherwise); a hit's check names the requests that committed its prefix (`RequestRecord.prefix_cover`). Before it
+listens, under bounded staging, the committer learns its declared static shape's plans in a learn-only pass (`serve_learn`).
 
 Under ``--out`` the server writes ``serve.json`` (the engine, the protocol in use, the address), ``windows.jsonl`` (one
 line a Commit: its run root, step roots, the committer's errors and identity check, the requests it holds, and the public
@@ -112,6 +113,7 @@ from verity_vllm.pipeline import seal_process as SP, serve_h1 as SH, serve_remot
 from verity_vllm.pipeline.serve_admit import ADMIT, Admission, Delta, ReleaseOrder, engine_id_of, keep_scheduler_rows, new_http_id
 from verity_vllm.pipeline.serve_commit import (SERVED_CLASS, CommitWindows, advice_trace, disk_record, ingress_of, param_of,
                                                records_mirror, served_statics, user_of)
+from verity_vllm.pipeline import serve_learn as SL
 from verity_vllm.pipeline.serve_protocol import (ID_PAYLOAD, PROTOCOLS, SSE_DONE, Completion, PlainProtocol, RequestError,
                                                  VllmProtocol, error_body, framing_agrees, http_chunk, sse, usage_of)
 
@@ -227,6 +229,7 @@ class Options:
     gate: SH.GateOptions = group(SH.GateOptions)
     remote: SR.RemoteOptions = group(SR.RemoteOptions)
     retention: SS.RetentionOptions = group(SS.RetentionOptions)
+    learning: SL.LearnOptions = group(SL.LearnOptions)
 
 
 # ---------------------------------------------------------------------------------------------------------------- engine loop
@@ -646,7 +649,7 @@ def preflight(opts: Options, which: Callable[[str], str | None] = shutil.which,
         raise UsageError(f"--seal: {why}")
     if why := SS.scheme_refusal(opts):
         raise UsageError(why)
-    if why := SH.refusal(opts) or SR.refusal(opts):
+    if why := SH.refusal(opts) or SR.refusal(opts) or SL.refusal(opts):
         raise UsageError(why)
     if opts.required_manifest and not Path(opts.required_manifest).is_file():
         raise UsageError(f"--required-manifest {opts.required_manifest}: no such file")
@@ -662,7 +665,7 @@ def build(opts: Options, session: SR.ServeSession | None = None, row: Mapping[st
 
     engine_env.apply_engine(opts.hf_home)
     if opts.commit:
-        engine_env.apply_target({"VERITY_RETAIN": "host"})
+        engine_env.apply_target({"VERITY_RETAIN": "host", **SL.settings_of(opts)})
     scope = register_int8(opts.precision)
     from verity_vllm.llm import LLM
 
@@ -674,15 +677,12 @@ def build(opts: Options, session: SR.ServeSession | None = None, row: Mapping[st
             raise RuntimeError(f"a {opts.precision} engine whose layers run int8 scope {got!r}, not {scope!r}")
     if session is not None:
         session.built(llm)
-    if not opts.commit:
-        return llm, None
-    return llm, SS.committer(opts, llm)
+    return llm, (SL.warmed(SS.committer(opts, llm), llm, opts) if opts.commit else None)
 
 
 def main(opts: Options) -> int:
     preflight(opts)
-    out = Path(opts.out)
-    out.mkdir(parents=True, exist_ok=True)
+    (out := Path(opts.out)).mkdir(parents=True, exist_ok=True)
     session = SR.session_of(opts, out)
     llm, com = build(opts, session, row := RW.of(opts))
     engine = llm.vllm.llm_engine
@@ -742,7 +742,7 @@ def main(opts: Options) -> int:
               "admit": opts.admit, "admit_hold_ms": opts.admit_hold_ms if order is not None else None,
               "step_rows": "scheduler" if rows is not None else "runner",
               "commit": opts.commit, "scheme": getattr(com, "commit_scheme", SS.V1) if com is not None else None,
-              "of_record": opts.of_record,
+              "of_record": opts.of_record, "learn_warmup": getattr(com, "learn_warmup", None),
               "sealed": "windows/w<k>/" if windows is not None and windows.seal is not None else None,
               "served_rows_statics": windows.served if windows is not None else None,
               "seal_off_loop": sealer is not None, "seal_hold_gb": opts.seal_hold_gb if sealer is not None else None, "pool_warmed": warmed,
