@@ -98,6 +98,14 @@ theorem encard_accSeqs_le_advice {Adv : Type} [Fintype Adv] (P : EgressPredictio
     _ = ((Fintype.card Adv * D ^ n : ℕ) : ℕ∞) := by
         rw [card_product, Fintype.card_piFinset]; simp
 
+/-- **Theorem 3, the fixed advice budget.** With the advice `E` strings of exactly `k` bits, one per execution block,
+the accepted sequences number at most `2^(E·k) · D^n`. -/
+theorem encard_accSeqs_le_adviceBits (E k : ℕ) (P : Program L S In (Fin E → Fin k → Bool))
+    (op : ℕ → List (Obs L K S) → In) (n D : ℕ) :
+    (AccSeqs P op n D).encard ≤ ((2 ^ (E * k) * D ^ n : ℕ) : ℕ∞) := by
+  have := encard_accSeqs_le_advice P op n D
+  rwa [Fintype.card_fun, Fintype.card_fun, Fintype.card_bool, Fintype.card_fin, Fintype.card_fin, ← pow_mul'] at this
+
 /-- **Theorem 3, the clock-sync form.** This is the `2^A` cap with the advice type `Ac × (Fin W → Sync)`: one
 clock-sync value per window from `Sync`, for example an offset δ and a rate ρ, 16 × 8 values. Over `W` windows the
 accepted sequences number at most `#Ac · #Sync^W · D^n`, that is `A_c + W·log2 #Sync` bits plus jitter.
