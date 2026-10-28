@@ -1,27 +1,24 @@
 #!/usr/bin/env bash
 # Dither's served standard number on the H200 and the B200: the fused served linear (h1f.cu, h1c.cu, dither_fused.py,
 # dither_one.py) and the served bench (sbench.py) from the run's source tree. A tree with hb_sbench.py and its hb_*.py
-# serves them from itself; an older one needs them sent with --send, as the example below does. DITHER_NSYS=prof captures sbench's prof op instead of the gate (steps.py, stepprof.py), and an
+# serves them from itself; an older one needs them in $RESEARCH_RUN_DIR/inputs, as the example below puts them. DITHER_NSYS=prof captures sbench's prof op instead of the gate (steps.py, stepprof.py), and an
 # exact-fused or -xl arm runs only after exactlin's kgate.py passes in the same lease (HB_KGATE=0|1 overrides).
-# Two modes, so no CPU phase runs on a dc node:
-#   build ARCH[,ARCH]  (vy-nebius-2) libh1c.so, libh1f.so and libh1o.so for each arch into $OUT/lib/ARCH, their SASS and resource
+# Two modes, so no CPU phase runs on the GPU host:
+#   build ARCH[,ARCH]  (a CPU host) libh1c.so, libh1f.so and libh1o.so for each arch into $OUT/lib/ARCH, their SASS and resource
 #                      usage, and BUILD.txt: the source commit and arch, and per library the sha256 of the files nvcc -M names
 #                      (and its nvcc flags); with HB_KC_FLAGS set (even empty) the dither-a-hbc arm's h1u_kc.so too, and
 #                      with HB_KC_H1C_FLAGS its libh1c_kc.so, built as sbench.sh builds them (HB_H1U_KC, DITHER_H1C_KC);
 #                      with HB_KC_FLAGS_B a second h1u_kc, h1u_kcb.so (HB_H1U_KC_B: sbench.py's ARM-kcb arms)
-#   run ARCH [ARGS]    (vy-dc-h200 sm_90a, vy-dc-b200 sm_100a) sbench.py through hb_sbench.py on one leased GPU for at most
+#   run ARCH [ARGS]    (an H200 for sm_90a, a B200 for sm_100a) sbench.py through hb_sbench.py on one leased GPU for at most
 #                      14 minutes, every shipped library checked against the source's files first; ARGS go to sbench.py
 #                      (HB_SCRIPT=h1agate.py, or another script of this directory, runs it in hb_sbench.py's place with
 #                      the same libraries, environment and lease)
 #
-#   git worktree add --detach /tmp/rtx-src <rtx commit>
-#   research run --on vy-nebius-2 --preemptible --queue --phase cpu --cpus 4 --mem-gb 8 --disk-gb 1 --project verity \
-#     --campaign dither-loop --source /tmp/rtx-src --cwd source --timeout 20m \
-#     --send benchmarks/hash/dither/hb_served.sh -- bash -c 'bash "$RESEARCH_RUN_DIR/inputs/hb_served.sh" build sm_90a,sm_100a'
-#   research run --on vy-dc-h200 --project verity --campaign dither-loop --source /tmp/rtx-src --cwd source --timeout 60m \
-#     --send benchmarks/hash/dither/hb_served.sh --send benchmarks/hash/dither/hb_sbench.py \
-#     --send BUILD_RUN/out/lib/sm_90a/libh1c.so --send BUILD_RUN/out/lib/sm_90a/libh1f.so --send BUILD_RUN/out/lib/sm_90a/BUILD.txt \
-#     --env DITHER_NSYS=1 -- bash -c 'bash "$RESEARCH_RUN_DIR/inputs/hb_served.sh" run sm_90a --arms stock,exact,dither --gate ...'
+#   git worktree add --detach /tmp/rtx-src <rtx commit> && cd /tmp/rtx-src   (H: this tree's benchmarks/hash/dither)
+#   RESEARCH_RUN_DIR=B bash H/hb_served.sh build sm_90a,sm_100a              (a CPU host, up to 20 minutes)
+#   mkdir -p R/inputs && cp B/out/lib/sm_90a/* H/hb_sbench.py R/inputs/
+#   RESEARCH_RUN_DIR=R DITHER_NSYS=1 bash H/hb_served.sh run sm_90a --arms stock,exact,dither --gate ...
+#     (an H200 under a GPU lease, up to 60 minutes)
 #
 # The stock arm is native compiled vLLM int8 (compressed-tensors W8A8) on TritonInt8ScaledMMLinearKernel, whose dequant
 # order is the int8-exact path's: sbench disables vLLM's first choice, CutlassInt8ScaledMMLinearKernel, which refuses int8
@@ -41,7 +38,7 @@
 # Inside the lease everything runs on the leased GPU's NUMA node (numabind.py: that node's CPUs among the run's, and its
 # memory; the source's, else one sent), or unbound with DITHER_NUMA=0 or without numactl, a node or numabind.py;
 # env/numa.json, the `numa:` line and summary.json's "numa" say which.
-# Env: HB_WHO (the lease owner, default kernels-dither-hb), DITHER_NSYS=1 (sbench's nsys capture of the gate's kernels; kernels.py counts each dither arm's inside its NVTX
+# Env: HB_WHO (the lease owner, default dither/ and the run's id), DITHER_NSYS=1 (sbench's nsys capture of the gate's kernels; kernels.py counts each dither arm's inside its NVTX
 # range, so the source must be dither-rtx's f2c0071c7c or later; HB_KEEP_SQLITE=1 keeps its sqlite, gzipped), LEASE (default "--max-min 14"), RUN_TIMEOUT (seconds
 # inside the lease, default 820), VERITY_BENCH_VENV (default /workspace/cp/venv312), NVCC (default CUDA 13.0's),
 # POUW_CHALLENGER and POUW_CHALLENGER_SESSION, or DITHER_CHALLENGERS (the windows' coins off the node, sessions from
@@ -123,29 +120,29 @@ if [ "$MODE" = build ]; then
 fi
 
 [ "$MODE" = run ] || { echo "hb_served.sh: no mode $MODE" >&2; exit 2; }
-[ -f "$INPUTS/BUILD.txt" ] || { echo "hb_served.sh: no inputs/BUILD.txt: --send the build's lib/$ARCH/BUILD.txt" >&2; exit 2; }
-[ -f "$HB/hb_sbench.py" ] || { echo "hb_served.sh: --send benchmarks/hash/dither/hb_sbench.py" >&2; exit 2; }
+[ -f "$INPUTS/BUILD.txt" ] || { echo "hb_served.sh: no inputs/BUILD.txt: copy the build's lib/$ARCH/BUILD.txt into $INPUTS" >&2; exit 2; }
+[ -f "$HB/hb_sbench.py" ] || { echo "hb_served.sh: no hb_sbench.py: copy benchmarks/hash/dither/hb_sbench.py into $INPUTS" >&2; exit 2; }
 case " $* " in *dither-hb*)
   [ -f "$HB/hb_side.py" ] && [ -f "${HB_H1U:-/nonexistent}" ] || {
-    echo "hb_served.sh: dither-hb needs --send benchmarks/hash/dither/hb_side.py, a job.sh build's h1u .so and --env HB_H1U=ITS_NAME" >&2
+    echo "hb_served.sh: dither-hb needs benchmarks/hash/dither/hb_side.py and a job.sh build's h1u .so in $INPUTS, and HB_H1U=ITS_NAME" >&2
     exit 2; }
   export HB_H1U ;;
 esac
 case " $* " in *dither-1s-hb*)
   [ -f "$HB/hb_one.py" ] && [ -f "$HB/hb_side.py" ] && [ -f "${HB_H1U:-/nonexistent}" ] || {
-    echo "hb_served.sh: dither-1s-hb needs --send benchmarks/hash/dither/hb_one.py and hb_side.py, a job.sh build's h1u .so and --env HB_H1U=ITS_NAME" >&2
+    echo "hb_served.sh: dither-1s-hb needs benchmarks/hash/dither/hb_one.py, hb_side.py and a job.sh build's h1u .so in $INPUTS, and HB_H1U=ITS_NAME" >&2
     exit 2; }
   export HB_H1U ;;
 esac
 case " $* " in *dither-1s-hbp*)
   [ -f "$HB/hb_peel.py" ] && [ -f "${HB_H1U_PEEL:-${HB_H1U:-/nonexistent}}" ] || {
-    echo "hb_served.sh: dither-1s-hbp needs --send benchmarks/hash/dither/hb_peel.py too (and HB_H1U_PEEL's .so, if set)" >&2
+    echo "hb_served.sh: dither-1s-hbp needs benchmarks/hash/dither/hb_peel.py in $INPUTS too (and HB_H1U_PEEL's .so, if set)" >&2
     exit 2; }
   [ -n "${HB_H1U_PEEL:-}" ] && export HB_H1U_PEEL ;;
 esac
 case " $* " in *dither-1s-hbk*)
   [ -f "$HB/hb_peel.py" ] && [ -f "${HB_H1U_KSPLIT:-/nonexistent}" ] || {
-    echo "hb_served.sh: dither-1s-hbk needs --send benchmarks/hash/dither/hb_peel.py and an H1U_KSPLIT build's .so, --env HB_H1U_KSPLIT=ITS_NAME" >&2
+    echo "hb_served.sh: dither-1s-hbk needs benchmarks/hash/dither/hb_peel.py and an H1U_KSPLIT build's .so in $INPUTS, and HB_H1U_KSPLIT=ITS_NAME" >&2
     exit 2; }
   export HB_H1U_KSPLIT ;;
 esac
@@ -154,7 +151,7 @@ read -r bsha barch < "$INPUTS/BUILD.txt"
 [ "$barch" = "$ARCH" ] || { echo "hb_served.sh: the libraries are $barch's, not $ARCH's" >&2; exit 2; }
 for lib in libh1c libh1f libh1o ${HB_H1U_KC:+$(basename "$HB_H1U_KC" .so)} ${HB_H1U_KC_B:+$(basename "$HB_H1U_KC_B" .so)} \
            ${DITHER_H1C_KC:+$(basename "$DITHER_H1C_KC" .so)}; do
-  [ -f "$INPUTS/$lib.so" ] || { echo "hb_served.sh: no inputs/$lib.so: --send the build's lib/$ARCH/$lib.so" >&2; exit 2; }
+  [ -f "$INPUTS/$lib.so" ] || { echo "hb_served.sh: no inputs/$lib.so: copy the build's lib/$ARCH/$lib.so into $INPUTS" >&2; exit 2; }
   read -r _ _ h paths <<< "$(grep "^src $lib " "$INPUTS/BUILD.txt")"
   [ -n "$h" ] && [ "$(srchash $paths)" = "$h" ] || {
     echo "hb_served.sh: $lib.so was built (source $bsha) from files that differ at $SHA, or BUILD.txt has no src line for it: rebuild (HB_KC_FLAGS / HB_KC_H1C_FLAGS for the KC builds)" >&2; exit 2; }
@@ -247,7 +244,7 @@ if [ ${#NUMA[@]} = 0 ]; then
   echo "numa: unbound (no numabind.py in the source or inputs)"
 fi
 echo "hb_served: asking for one GPU at $(date -u +%H:%M:%SZ)"
-GPU_LEASE_WHO=${HB_WHO:-kernels-dither-hb} gpu-lease 1 --wait "${lease[@]}" -- "${NUMA[@]}" bash -c '
+GPU_LEASE_WHO=${HB_WHO:-dither/${RESEARCH_RUN_ID:-local}} gpu-lease 1 --wait "${lease[@]}" -- "${NUMA[@]}" bash -c '
   q=clocks.sm,clocks.max.sm,clocks.mem,temperature.gpu,power.draw,name,uuid
   nvidia-smi -i "$GPU_LEASE_UUID" --query-gpu=$q --format=csv > "$0/clocks.before.csv"
   nvidia-smi -i "$GPU_LEASE_UUID" --query-gpu=index,clocks.sm,clocks.mem,power.draw,temperature.gpu,utilization.gpu \
