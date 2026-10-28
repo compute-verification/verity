@@ -4,14 +4,14 @@ specialized for it.
 The engine is built with vLLM's ``async_scheduling`` as ``--async-scheduling`` says (`serve_openai.engine_options`), never
 left to vLLM's own resolution (on at the pinned revision). Under ``--required-manifest`` the row's Build of record (predict's,
 `serve_seal.row_refusal`) records the engine its workload Program models in `WORKLOAD_PROGRAM` (`global_program`'s
-``applicability.engine``). Its ``async_scheduling`` is the value the Program's ``lag`` static is built from (LAG 1 under async scheduling, 0 synchronous), and the one a record of the row
-must attest (GM-01 G1). serve-openai reads it (`of`; ``serve.json``'s ``row_scheduling``) and refuses a flag that
-disagrees with it before the model loads, and refuses a server whose engine resolved other than the flag (`checked`)
-before it listens. Under the flag ``serve.json``'s target declares async scheduling too (`serve_seal.target_of`), so the
-φ a served window's Programs are predicted from is specialized for LAG 1 by declaration. The Commit (and H1 on it) serves
-under the flag as it does synchronously: the native collector learns the declared static shape's plans before the server
-listens (`serve_learn`), and an async step commits the rows the synchronous step does, under the same rows-sha512 root
-(``tests/pipeline/serve_async_commit_gpu.py``).
+``applicability.engine``). Its ``async_scheduling`` is the value the Program's ``lag`` static is built from (LAG 1 under
+async scheduling, 0 synchronous), and the one a record of the row must attest (GM-01 G1). serve-openai reads it (`of`;
+``serve.json``'s ``row_scheduling``) and refuses a flag that disagrees with it before the model loads, and refuses a server
+whose engine resolved other than the flag (`checked`) before it listens. Under the flag ``serve.json``'s target declares
+async scheduling too (`serve_seal.target_of`), so the φ a served window's Programs are predicted from is specialized for
+LAG 1 by declaration. The Commit (and H1 on it) serves under the flag as it does synchronously: the native collector learns
+the declared static shape's plans before the server listens (`serve_learn`), and an async step commits the rows the
+synchronous step does, under the same rows-sha512 root (``tests/pipeline/serve_async_commit_gpu.py``).
 """
 from __future__ import annotations
 
