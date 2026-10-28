@@ -174,7 +174,7 @@ def pool(groups: list[tuple[float, Work]] | tuple[tuple[float, Work], ...]) -> W
 
 
 @dataclass(frozen=True)
-class Window:
+class CapacityCell:
     """A window and node cell: groups of (share of its SMSP-time, certified work), read on their pooled load."""
     groups: tuple[tuple[float, Work], ...]
     vector: str
@@ -210,10 +210,10 @@ class Window:
 
 
 def window(pi: Machine, groups: list[tuple[float, Work]] | tuple[tuple[float, Work], ...],
-           useful: dict[str, float] | None = None) -> Window:
+           useful: dict[str, float] | None = None) -> CapacityCell:
     tot = sum(w for w, _ in groups)
     if abs(tot - 1.0) > 1e-6:
         raise SystemExit(f"capacity: the groups' shares of SMSP-time sum to {tot:g}, not 1")
     empty = hidden(pi, Work("empty", {}), useful).hidden
-    return Window(tuple(groups), pi.vector, empty, hidden(pi, pool(groups), useful),
-                  tuple(hidden(pi, g, useful) for _, g in groups))
+    return CapacityCell(tuple(groups), pi.vector, empty, hidden(pi, pool(groups), useful),
+                        tuple(hidden(pi, g, useful) for _, g in groups))
