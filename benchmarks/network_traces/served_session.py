@@ -42,9 +42,13 @@ request's max_tokens, at most KO.
   The lane's own fetch, with ``witness/``, goes to KEEP/RUN/fetch.tar.gz (KEEP and KEEP/RUN 0700, refused inside the
   run dir: custody publishes all of ``--out``). ``--out`` gets ``bundle.tgz``, what ``fetch`` gives any other key (the
   bundle less ``witness/``), and ``session.json``, the public outcome: the gate run, its rc, the check's verdict and
-  counts, the link-windows, the origin and the session's span. Before it exits, every file of ``--out`` and member of
-  ``bundle.tgz`` is read for a prompt's ids, and one that holds them is removed (exit 4). Exit 0 when the gate's check
-  accepted the run, its rc (or 1) when it didn't, 2 when the gate refused the request.
+  counts, the link-windows, the origin and the session's span. Every file is first written to a fresh hold under
+  KEEP/held (0700), and reaches ``--out`` only through the record's leak guard (``leak_guard.py``), whatever the exit:
+  each file of the hold and member of ``bundle.tgz`` that holds a prompt's ids is removed, then the guard reads
+  ``--out`` and the hold against the kept fetch, moves what holds a piece of the witness to KEEP/quarantine and releases
+  the rest (exit 4 when either found one). A guard that fails or runs past its budget releases nothing (exit 5), nor
+  does SIGTERM (exit 143): the files stay in the hold, out of the record. Exit 0 when the gate's check accepted the run,
+  its rc (or 1) when it didn't, 2 when the gate refused the request.
 * **io** writes the kept warden run's certified I/O (`warden_chain.io`: each request's prompt and streamed ids as the
   warden's cells carry them) and its deployment.json to KEEP/RUN/certified-io.json (0600), on `AUDITOR`, and prints only
   its path and counts.
@@ -131,6 +135,7 @@ import os
 import secrets
 import shlex
 import shutil
+import signal
 import subprocess
 import sys
 import tarfile
@@ -380,14 +385,19 @@ def local(a: argparse.Namespace, data: bytes, keep: Path) -> bytes:
     return A.certifier_fetch(run, host, witness=True)
 
 
-def session(a: argparse.Namespace, data: bytes, ps: list[list[int]]) -> int:
-    out = a.out.resolve()
-    keep = keep_dir(a.keep, out)
-    keep.mkdir(parents=True, exist_ok=True)
-    keep.chmod(0o700)
+class Ended(BaseException):
+    """SIGTERM reached the session."""
+
+
+def _ended(signum, _frame):
+    raise Ended(signal.Signals(signum).name)
+
+
+def _session(a: argparse.Namespace, data: bytes, ps: list[list[int]], keep: Path, hold: Path) -> tuple[dict, Path]:
+    """The session, its files written to `hold`: its outcome and the kept fetch."""
     if a.at:
         wait_until(a.at)
-    full = local(a, data, keep) if a.gate == "local" else remote(a, data, out)
+    full = local(a, data, keep) if a.gate == "local" else remote(a, data, hold)
     shown = public(full)
     doc = outcome(shown)
     run = doc["run"]
@@ -396,15 +406,59 @@ def session(a: argparse.Namespace, data: bytes, ps: list[list[int]]) -> int:
     kept = keep / run / "fetch.tar.gz"
     kept.write_bytes(full)
     kept.chmod(0o600)
-    (out / "bundle.tgz").write_bytes(shown)
+    (hold / "bundle.tgz").write_bytes(shown)
     doc |= {"gate": a.gate, "request": shlex.join(words(a)), "prompts": {"count": len(ps), "ids": sum(map(len, ps))},
             "keep": str(kept)}
-    (out / "session.json").write_text(json.dumps(doc, indent=1, sort_keys=True) + "\n")
-    found = leaked(out, needles(ps))
-    for rel in found:
-        (out / rel).unlink()
-    print(json.dumps(doc | {"leaked_removed": found}, sort_keys=True), flush=True)
-    if found:
+    (hold / "session.json").write_text(json.dumps(doc, indent=1, sort_keys=True) + "\n")
+    return doc, kept
+
+
+def release(out: Path, hold: Path, quarantine: Path, kept: Path | None) -> int:
+    """The record's leak guard on `out` and `hold` against the kept fetch, which releases the hold to `out` once it
+    passes (0 when it found nothing, 3 when it moved a find to `quarantine`)."""
+    got = subprocess.run([sys.executable, str(HERE / "leak_guard.py"), str(out), str(quarantine),
+                          *(["--gates", str(kept)] if kept is not None and kept.is_file() else []),
+                          "--hold", str(hold), "--release-to", str(out), "--report", str(out / "leak-guard.json")],
+                         capture_output=True, text=True)
+    print(f"leak guard (exit {got.returncode}): {(got.stdout.strip() or got.stderr.strip())[-600:]}", flush=True)
+    return got.returncode
+
+
+def session(a: argparse.Namespace, data: bytes, ps: list[list[int]]) -> int:
+    out = a.out.resolve()
+    keep = keep_dir(a.keep, out)
+    keep.mkdir(parents=True, exist_ok=True)
+    keep.chmod(0o700)
+    (keep / "held").mkdir(mode=0o700, exist_ok=True)
+    hold = Path(tempfile.mkdtemp(dir=keep / "held", prefix="session-"))
+    was = signal.signal(signal.SIGTERM, _ended)
+    doc, kept, refused = None, None, None
+    try:
+        try:
+            doc, kept = _session(a, data, ps, keep, hold)
+        except Refused as e:
+            refused = e
+        found = leaked(hold, needles(ps))
+        for rel in found:
+            (hold / rel).unlink()
+        g = release(out, hold, keep / "quarantine" / hold.name, kept)
+    except Ended as e:
+        print(f"{e} ended the session: nothing released, its files stay in {hold}, out of the record", file=sys.stderr,
+              flush=True)
+        return 143
+    finally:
+        signal.signal(signal.SIGTERM, was)
+    if g not in (0, 3):
+        print(f"the leak guard failed (exit {g}): nothing released, the session's files stay in {hold}", file=sys.stderr,
+              flush=True)
+        return 5
+    if not any(hold.iterdir()):
+        hold.rmdir()
+    if refused is not None:
+        raise refused
+    if (out / "session.json").is_file():
+        print(json.dumps(doc | {"leaked_removed": found}, sort_keys=True), flush=True)
+    if found or g == 3:
         return 4
     return 0 if doc["rc"] == 0 and (doc["verdict"] or {}).get("accepted") is True else (doc["rc"] or 1)
 
