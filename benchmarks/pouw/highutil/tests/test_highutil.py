@@ -93,18 +93,17 @@ def test_the_h200_s_terms_are_at_both_clocks_and_the_certified_macs_apart():
     assert math.isclose(lo["certified_share"] / lo["terms"]["accounted"], m["certified_over_declared"])
 
 
-def test_each_period_s_clock_and_power_are_nvidia_smi_s_over_its_pinned_window():
+def test_each_period_s_clock_is_nvidia_smi_s_over_its_pinned_window():
     periods = [{"period": 0, "arm": "plain", "wall_s": 4.0, "blocks": [{"sm_mhz": 1830}]},
                {"period": 1, "arm": "proto", "wall_s": 6.0, "session_open_s": 2.0, "blocks": [{"sm_mhz": 1700}, {"sm_mhz": 1800}],
                 "coins": {"session": "s20261027T120010Z-abc"}}]
-    head = "timestamp, clocks.current.sm [MHz], clocks.current.graphics [MHz], power.draw [W]"
-    rows = [f"2026/10/27 12:00:{sec:02d}.000, {mhz} MHz, {mhz} MHz, {w} W" for sec, mhz, w in
-            [(6, 1500, 100.0), (7, 1980, 600.0), (8, 1980, 610.0), (9, 1980, 620.0), (13, 1755, 700.0), (14, 1785, 699.0),
-             (16, 1770, 698.0), (18, 1500, 100.0)]]
-    cp = terms.clock_and_power(periods, terms.smi_samples("\n".join([head, *rows])))
+    head = "timestamp, clocks.current.sm [MHz], clocks.current.graphics [MHz]"
+    rows = [f"2026/10/27 12:00:{sec:02d}.000, {mhz} MHz, {mhz} MHz" for sec, mhz in
+            [(6, 1500), (7, 1980), (8, 1980), (9, 1980), (13, 1755), (14, 1785), (16, 1770), (18, 1500)]]
+    cp = terms.clocks(periods, terms.smi_samples("\n".join([head, *rows])))
     assert [c["blocks_sm_mhz_median"] for c in cp] == [1830, 1750]
-    assert cp[0]["smi"] == {"samples": 3, "clocks_sm_mhz": 1980, "power_draw_w": 610.0}
-    assert cp[1]["smi"] == {"samples": 3, "clocks_sm_mhz": 1770, "power_draw_w": 699.0}
+    assert cp[0]["smi"] == {"samples": 3, "clocks_sm_mhz": 1980}
+    assert cp[1]["smi"] == {"samples": 3, "clocks_sm_mhz": 1770}
 
 
 def test_gamma_is_against_the_first_baseline_timed_and_each_baseline_has_its_own():

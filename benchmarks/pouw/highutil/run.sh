@@ -14,7 +14,7 @@
 # PEER, CHALLENGER_KEY, the deployment's key record, and GATE_KEY); MAIN (default inputs/main.txt): the verifier's copy of
 # main's first-parent line. CARD (default inputs/card.toml, sent with --send; skipped when absent): θ's card, verity/hardware's
 # card file or its SKU, for summary.json's certified share at the card's clock ceiling and, with NSYS=1, terms.json (terms.py:
-# where θ x wall goes at each reading of the clock, and each period's clock and power); nvidia-smi's clock event reasons go to clocks-{before,after}.txt. PLAIN (default
+# where θ x wall goes at each reading of the clock, and each period's clock); nvidia-smi's clock event reasons go to clocks-{before,after}.txt. PLAIN (default
 # lt,int_mm): period.py's --plain, the plain arm's baselines, gamma's first: cuBLASLt (v31's lt_setup) and torch._int_mm. CKPT: the pinned checkpoint's snapshot directory (default the node's HF cache), or `seeded`
 # (seeded A and B, no capture). BLOCKS, STEPS, Q, PERIODS (0: none), NEGATIVE: period.py run's; ROW (default 8192), LP, LP_MAX
 # and L (default 512, 512 and 16384: S = 1 at every layer, down as four K-slices at L' 512; LP_MAX=1024 runs it as two at
@@ -85,10 +85,10 @@ export D PY TORCH_PY CKPT TEXT LIB BLOCKS STEPS Q PERIODS NEGATIVE COINS MAIN PL
 export GATE_ARGS="${GATE[*]}" CARD_ARGS="${CARDA[*]}"
 [ -f "$CARD" ] && cp "$CARD" "$O/card.toml"
 $LEASE bash -c '
-  nvidia-smi --query-gpu=index,uuid,name,driver_version,clocks.sm,clocks.max.sm,clocks.mem,power.limit --format=csv \
+  nvidia-smi --query-gpu=index,uuid,name,driver_version,clocks.sm,clocks.max.sm,clocks.mem --format=csv \
     ${GPU_LEASE_UUID:+-i "$GPU_LEASE_UUID"} > "$O/gpu.txt" 2>&1
   nvidia-smi -q -d PERFORMANCE,CLOCK ${GPU_LEASE_UUID:+-i "$GPU_LEASE_UUID"} > "$O/clocks-before.txt" 2>&1
-  nvidia-smi --query-gpu=timestamp,clocks.sm,clocks.gr,clocks.mem,power.draw,utilization.gpu,temperature.gpu --format=csv -lms 500 \
+  nvidia-smi --query-gpu=timestamp,clocks.sm,clocks.gr,clocks.mem,utilization.gpu,temperature.gpu --format=csv -lms 500 \
     ${GPU_LEASE_UUID:+-i "$GPU_LEASE_UUID"} > "$O/smi.csv" 2>&1 &
   smi=$!
   if [ "$CKPT" != seeded ]; then

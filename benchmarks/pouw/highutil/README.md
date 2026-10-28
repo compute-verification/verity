@@ -30,7 +30,7 @@ time, and γ against plain cuBLASLt on the same calls, interleaved.
   reading of the clock side by side (the H200's: the 1,830 MHz tensor clock and the 1,980 MHz boost clock), as the
   accounted share (the declared MACs alone: tensor-only accounting credits none of the protocol's work), the plain
   GEMM's floor, the protocol's share and the host's gaps, with the certified MACs (the declared plus the peels) apart and
-  each period's clock and power.
+  each period's clock.
 - The prover is `benchmarks/pouw/accel_v31`, with its sm_90a port and no-fold fast path: `period.py` imports its `v31`
   and `v31lib`, and `run.sh` builds its `v31.cu` (`-DV31_LIB`) and records their hashes. It builds for both cards:
   sm_120a, and sm_90a with `-DV31_WG=1` (run.sh's header), where `V31_SCHED 2`, `V31_LMINB 4` and `V31_SAHEAD 1` are

@@ -4,7 +4,7 @@ and the boost clock nvidia-smi reports: `h200_step.CLOCKS_MHZ`; any other card, 
 the terms sum to 1:
 
 - accounted: the declared MACs at θ over the wall, the declared utilization;
-- the plain GEMM's floor: the same run's plain cuBLASLt arm (at the power cap where the card reaches it) past the MACs
+- the plain GEMM's floor: the same run's plain cuBLASLt arm (at whatever clock the card holds there) past the MACs
   at θ, what no protocol could recover;
 - the protocol: the protocol block's GPU time past the plain arm's, split into the GEMM beside the hashing (its GEMMs'
   time past the plain arm's), off the GEMM (the coins, forming and hashing with no GEMM running) and idle in a block;
@@ -12,8 +12,8 @@ the terms sum to 1:
 
 ε = ε_S + (1 - accounted), ε_S the sampling's (ε_skip). `credited` says what the accounted share counts. The certified
 MACs, the declared MACs plus the peels the honest route computes (Z_X U^T and V Y_W^T, 2 m n L' a call), are reported
-apart. With --periods and --smi, each period's SM clock (the blocks' samples) and nvidia-smi's clock and power over its
-wall-clock window: the window is pinned on the challenger session's id (its UTC second) and trimmed a second at each end.
+apart. With --periods and --smi, each period's SM clock (the blocks' samples) and nvidia-smi's over its wall-clock
+window: the window is pinned on the challenger session's id (its UTC second) and trimmed a second at each end.
 
     terms.py SUMMARY TIMELINE [--periods PERIODS.jsonl --smi SMI.csv]      prints one JSON object
 """
@@ -37,7 +37,7 @@ READINGS = {"h200-sxm-141gb": h200_step.CLOCKS_MHZ}
 
 CREDITED = ("the declared MACs alone: each accepted call's m n k, the served or filler product. Tensor-only accounting "
             "credits nothing the protocol does (the peels, the hashing, the coins, the forming), the host's time or the "
-            "GEMM's shortfall at the power cap: an accepted prover can run hidden tensor work beside each. The certified "
+            "GEMM's shortfall below θ: an accepted prover can run hidden tensor work beside each. The certified "
             "MACs (the declared plus the peels) are reported apart and not credited.")
 
 
@@ -79,18 +79,18 @@ def terms(summary: dict, timeline: dict, periods: list[dict] | None = None, smi:
             "certified_share": macs["certified"] / theta / wall, "plain_share": ideal / plain,
             "ideal_ms_per_step": ideal * 1e3}
     if periods is not None:
-        out["clock_and_power"] = clock_and_power(periods, smi or [])
+        out["clocks"] = clocks(periods, smi or [])
     return out
 
 
 def smi_samples(text: str) -> list[tuple[datetime, dict[str, float]]]:
-    """nvidia-smi's CSV (run.sh's: timestamp, clocks.sm, clocks.gr, clocks.mem, power.draw, ...) as (UTC time, values)."""
+    """nvidia-smi's CSV (run.sh's: timestamp, clocks.sm, clocks.gr, clocks.mem, ...) as (UTC time, values)."""
     rows = list(csv.reader(text.splitlines()))
     if not rows:
         return []
     head = [h.strip() for h in rows[0]]
     col = {k: next((i for i, h in enumerate(head) if h.startswith(p)), None)
-           for k, p in (("sm_mhz", "clocks.current.sm"), ("w", "power.draw"))}
+           for k, p in (("sm_mhz", "clocks.current.sm"),)}
     out = []
     for r in rows[1:]:
         if len(r) != len(head) or not re.fullmatch(r"\d{4}/\d\d/\d\d \d\d:\d\d:\d\d\.\d+", r[0].strip()):
@@ -120,7 +120,7 @@ def windows(periods: list[dict]) -> list[tuple[datetime, datetime] | None]:
     return out
 
 
-def clock_and_power(periods: list[dict], smi: list) -> list[dict]:
+def clocks(periods: list[dict], smi: list) -> list[dict]:
     out = []
     for r, w in zip(periods, windows(periods)):
         mhz = [b["sm_mhz"] for b in r["blocks"] if b.get("sm_mhz")]
@@ -130,8 +130,7 @@ def clock_and_power(periods: list[dict], smi: list) -> list[dict]:
             lo, hi = w[0] + timedelta(seconds=1), w[1] - timedelta(seconds=1)
             got = [v for t, v in smi if lo <= t <= hi]
             if got:
-                row["smi"] = {"samples": len(got), "clocks_sm_mhz": statistics.median(v["sm_mhz"] for v in got),
-                              "power_draw_w": statistics.median(v["w"] for v in got)}
+                row["smi"] = {"samples": len(got), "clocks_sm_mhz": statistics.median(v["sm_mhz"] for v in got)}
         out.append(row)
     return out
 
@@ -140,7 +139,7 @@ def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     ap.add_argument("summary")
     ap.add_argument("timeline")
-    ap.add_argument("--periods", help="periods.jsonl, for each period's clock and power")
+    ap.add_argument("--periods", help="periods.jsonl, for each period's clock")
     ap.add_argument("--smi", help="run.sh's smi.csv")
     a = ap.parse_args(argv)
     s, tl = (json.loads(Path(x).read_text()) for x in (a.summary, a.timeline))
