@@ -4,9 +4,9 @@ import Definitions.Pous.Model.M1
 /-!
 # The dense single-layer scheme (S1)
 
-The definitions of the dense draft (`lean/submissions/dense/DenseMeetsDraft.lean`), verbatim: the complete DAG, the
-label-shaped random oracle, and the scheme `C_i = H(i, C_{<i}) ⊕ W_i` at rate 1, with no `pp` and no coins. Then the
-segmented scheme of `lean/submissions/dense/DenseReCert.lean`, verbatim: `N` such segments of `B` blocks on global
+The definitions of the dense scheme (`Security/Proofs/Pous/Dense/DenseMeets.lean` proves `DenseMeets`): the complete
+DAG, the label-shaped random oracle, and the scheme `C_i = H(i, C_{<i}) ⊕ W_i` at rate 1, with no `pp` and no coins.
+Then the segmented scheme of `Security/Proofs/Pous/Dense/DenseReCert.lean`: `N` such segments of `B` blocks on global
 block indices `Fin (N*B)`, a node's parents being the earlier blocks of its own segment. Last, the same store keyed as
 the implementation keys it (`segTagScheme`): segment `s` is the dense scheme on `B` blocks with oracle `H(tag_s, ·)`,
 `tag_s = salt ‖ u64 s`, and local queries.

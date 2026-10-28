@@ -5,9 +5,9 @@ import Definitions.Pous.Model.Labelling
 # The two-directional column game over P3's two-layer labels
 
 The game in which the band certificate (`Pous.SecurityProofs.P3.Column`) is stated. It is the column game of the N10′
-draft (`lean/submissions/pebbling/ColumnAwareDraft.lean`): its holdings, one round, reachability, `ColumnHard` and
-base-path graphs, with the definitions verbatim and the docstrings shortened. The draft's model, bound and N10′
-statement are not part of the trusted layer yet.
+draft (the `Pebbling.ColumnAwareDraft` section of `Security/Proofs/Pous/Chain/Flat.lean`): its holdings, one round,
+reachability, `ColumnHard` and base-path graphs, with the definitions verbatim and the docstrings shortened. The
+draft's model, bound and N10′ statement are not part of the trusted layer yet.
 
 N10 (`Pous.Guarantees.InvExPostFactoTwoLayer`) is false because top label `v` reads only column `v` of the lower layer,
 so the adversary can hold a lower label one column at a time. Here a holding has whole lower labels (cost `n`),
