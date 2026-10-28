@@ -93,10 +93,10 @@ def collect(out: Path, window: int) -> dict[str, Any] | None:
     none; ValueError when what it wrote isn't a core answer of the remote bandwidth audit."""
     import served_verdicts as S
 
-    try:
-        a, summary = (json.loads((out / f).read_text()) for f in ("answer.json", "bandwidth.json"))
-    except FileNotFoundError:
+    files = [out / f for f in ("answer.json", "bandwidth.json")]
+    if not all(f.exists() for f in files):
         return None
+    a, summary = (json.loads(f.read_text()) for f in files)
     S.check_answer(a)
     if a.get("protocol") != p2_party.PROTOCOL:
         raise ValueError(f"the answer in {out} is {a.get('protocol')!r}'s, not the remote bandwidth audit's")
