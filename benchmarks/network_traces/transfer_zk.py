@@ -430,7 +430,7 @@ TIMING = ("e2e_s", "wait_s", "witness_s", "prove_total_s", "proof_bytes", "wire_
           "dense_m", "units", "ands_per_vu", "prover", "gpu")
 
 
-def firewall(M, m: dict) -> dict:
+def zk_server_env(M, m: dict) -> dict:
     """A firewalled prover's environment (`FC_FIREWALL=1`, its Lean frame named by ``FC_FIREWALL_LEAN``)."""
     if not os.environ.get("FC_FIREWALL_LEAN"):
         raise SystemExit("FC_FIREWALL_LEAN names no Lean firewall frame (flock-verify's flock-firewall)")
@@ -468,7 +468,7 @@ def audit_member(M, a, sg, m: dict, out: Path, port: int) -> dict:
     lean_draw = json.loads(next(x for x in p.stdout.splitlines() if x.startswith("DRAW ")).split(" ", 1)[1])
     local = sorted(u - m["base"] for u in lean_draw["units"] if m["base"] <= u < m["base"] + n)
     sdir = out / "session"
-    record, live, proc = M.a8.session(a, m, sdir, local, port, env=firewall(M, m))
+    record, live, proc = M.a8.session(a, m, sdir, local, port, env=zk_server_env(M, m))
     draw_t = (record or {}).get("unit_draw") or {}
     v = V.check_draw(draw_t, {"population": n}, {"law": "subset", "k": len(local)})
     verdicts = {f"m0-verifier/{name}": {"accepted": ((record or {}).get("verdict") or {}).get("accepted") is True
