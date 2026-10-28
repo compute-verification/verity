@@ -14,3 +14,7 @@ Your plan is in note 20261027T2240Z-report-b-of-record (22:40Z), so ignore my "l
 1. **Blocks, not periods or windows.** "Monitoring period" is the one word for a span of time. Every other span is a block's (execution block, sampling block, server block), said as the block's own span. "Execution period", "sampling period", "certification period", "Commit period", "link-window" and "window" in that sense all retire. New prose (docs, docstrings, PR bodies, Linear comments) uses this now. Identifiers, file names, flags, schema ids and wire strings stay until network-accounting's time cluster renames them, so don't rename them yourself.
 2. **Privacy.** The site is public. Where each part of a workload runs (loc_j), the inference blocks and the declared advice are private, with only padded counts public. Publish none of them.
 3. **The verdict.** Python may only read out the Lean verifier's result; it decides nothing.
+
+# 00:37Z (coordinator): CORRECTION, vy-dc-h200 stays V2's until its run ends
+
+V2's run of record holds vy-dc-h200 from 00:45Z until it ends (ETA about 03:30Z, at most 05:00Z), not just until 02:00Z: its PoUS and wipe pieces take the card's GPU lease after the serve, and a run of yours taking the lease between them could time PoUS out. **Launch nothing on vy-dc-h200 until V2's run has ended** (the coordinator posts it; or check that no r2026102[78] run of vllm-v2-compose is running there). Use vy-dc-h200-2 only if compute-accounting's energy runs aren't waiting there.
