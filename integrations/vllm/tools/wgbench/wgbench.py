@@ -22,8 +22,12 @@ to sleep after each call (`stamp.cu`'s rest, R times the call's clocks at 0.7 of
 of the span, so an item's rate is the GEMM's at that lower mean power and higher clock.  `--plan` times
 `int8_fused._plan`'s Triton config beside TRITON: what serves today where the shape has no row.
 
-    python wgbench.py --out OUT [--ms 8192,16384,32768] [--linears qkv,o,gate_up,down] [--variants all] [--secs 2]
-                      [--rounds 2] [--no-lt] [--gate-only] [--no-edges] [--time-kinds served,random] [--plan] [--rest R]
+It lives in the integration because it times `int8_wgmma`'s variants by name, which isn't a public interface of
+`verity_vllm`.
+
+    python integrations/vllm/tools/wgbench/wgbench.py --out OUT [--ms 8192,16384,32768] [--linears qkv,o,gate_up,down]
+        [--variants all] [--secs 2] [--rounds 2] [--no-lt] [--gate-only] [--no-edges] [--time-kinds served,random] [--plan]
+        [--rest R]
 """
 from __future__ import annotations
 
