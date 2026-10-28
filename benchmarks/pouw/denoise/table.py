@@ -60,6 +60,9 @@ def parts(r: dict) -> dict[str, float]:
         for o in ("plain_i8", "plain_bf16"):
             if o in a:
                 out[o] = a[o]
+        out["ts_floor"] = (r["Sw"] - 1) * r["Lw"] / r["k"] * a.get("plain_i8", p)
+        for lp in LPS:
+            out[f"served_floor-{lp}"] = out[f"served-{lp}"] - a["ts_srv"] + out["ts_floor"]
     return out
 
 
@@ -140,6 +143,14 @@ def main() -> int:
         for (lin, m), q in keyed:
             s = rows[(lin, m)]["Sw"] if lin != "model" else ""
             print(f"| {lin} | {m} | {s} | " + " | ".join(f.format(fn(q)) for _, fn, f in SERVED) + " |")
+        print("\nEstimate, not measured: the served call with T_s hashed in the noised GEMM's epilogue (PROTOCOL.md) rather than left in "
+              "DRAM, ts_srv replaced by (S - 1) L / K of the int8-out plain GEMM (of the int32 one where cuBLASLt has no int8 out); "
+              "the hashing itself excluded\n")
+        print("| shape | m | T_s floor | served call 32 | served call 128 | served call 512 |")
+        print("|---|---|---|---|---|---|")
+        for (lin, m), q in keyed:
+            print(f"| {lin} | {m} | {q['ts_floor'] / q['plain']:.3f} | "
+                  + " | ".join(f"{q[f'served_floor-{lp}'] / q['plain']:.3f}" for lp in LPS) + " |")
     print("\nRuns' conditions\n")
     print("| shape | m | GPU | SM MHz (plain) | steady | throttled arms | wrap rate A, B at L' 128 | flags |")
     print("|---|---|---|---|---|---|---|---|")
