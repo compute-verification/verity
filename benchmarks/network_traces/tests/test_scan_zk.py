@@ -394,6 +394,41 @@ def test_the_rows_forms_case_is_the_link_windows_rows_certificates_and_the_scans
         SP.rows_case(run, scan)
 
 
+def test_the_scan_leaves_out_each_members_refs_which_the_statement_fixes_and_still_scans_its_b_c(tmp_path):
+    """A member's refs (`refs_of`), each instance's table row of each port, are small integers its statement fixes:
+    S_0's first 16 bytes (``now`` and ``phase`` 1, ``last`` 0, slot 0 empty) equal instance 1's refs where it reads
+    (row, sin, prog0, prog1) = (1, 1, 0, 0), as a group's ingress member's do. That piece is left out of the scan; a
+    witness piece in the same file's b‖c is still scanned for, and refs past their tables are refused."""
+    cls = sz.TEST.cls
+    s0 = sz._bytes(sz.IS.encode(cls, sz.IS.State(1, 1, 0, sz.IS.empty(cls).slots)))
+    names, n = ("row", "sin", "prog0", "prog1", "o0", "o1", "o2"), 4
+    tables = {p: 2 if p.startswith("prog") else n for p in names}
+    bc = [hashlib.sha512(b"bc %d" % k).digest() * 2 for k in range(sum(tables.values()))]
+    secret = hashlib.sha512(b"secret").digest()[:16]
+    bc[5] = bc[5][:32] + secret + bc[5][48:]
+
+    def member(refs):
+        d = tmp_path / f"m{len(list(tmp_path.iterdir()))}"
+        d.mkdir()
+        body = b"".join(bc) + b"".join(r.to_bytes(4, "little") for row in refs for r in row)
+        (d / f"pub-{n}.bin").write_bytes(json.dumps({"instances": n, "shared_rows": tables}).encode() + b"\n" + body)
+        (d / "circuit.txt").write_text("circuit\n")
+        return {"name": "ingress-0", "dir": d, "n": n, "pin": d.name, "ports": [SimpleNamespace(name=p) for p in names]}
+
+    m = member([[i, i, i // 2, i // 2, i, i, i] for i in range(n)])
+    pub = (m["dir"] / f"pub-{n}.bin").read_bytes()
+    assert s0[:16] in pub and any(s0[:2]) and any(s0[4:6]) and not any(s0[8:16])
+    a8 = SimpleNamespace(PIECE=16, needles=lambda ps: {nd: k for k, x in ps.items() for nd in (x, x.hex().encode())},
+                         find=lambda data, table: {k: 1 for nd, k in table.items() if nd in data})
+    blobs = {"first o1 0": s0, "ingress-0 o1 2": secret * 2}
+    at = SimpleNamespace(setup=sz.TEST, ordinals=[1])
+    kept = sz.LS.public_pieces(a8, blobs, set(blobs), sz.known([m], at), fields=True)[0]
+    assert "first o1 0 @0" not in kept and kept["ingress-0 o1 2 @0"] == secret and secret in pub
+    assert "first o1 0 @0" in sz.LS.public_pieces(a8, blobs, set(blobs), sz.known([], at), fields=True)[0]
+    with pytest.raises(SystemExit, match="refs aren't one row of each port's table"):
+        sz.refs_of(member([[i, i, i, i, i, i, i] for i in range(n)]))
+
+
 def test_schedule_prints_the_classs_schedule_as_warden_serves_flags(capsys):
     assert sz.main(["schedule", "--class", "test"]) == 0
     flags = capsys.readouterr().out.split()
