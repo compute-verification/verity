@@ -196,6 +196,14 @@ def test_flat_views_any_dtype():
         S.flat(torch.zeros(4, 4).t())
 
 
+def test_timed_runs_the_warmup_then_before_ahead_of_each_timed_run():
+    calls: list[str] = []
+    ts = S.timed(lambda: calls.append("fn"), 2, torch.device("cpu"), lambda: calls.append("before"), warmup=1)
+    assert calls == ["fn", "before", "fn", "before", "fn"] and len(ts) == 2
+    calls.clear()
+    assert len(S.timed(lambda: calls.append("fn"), 3, torch.device("cpu"))) == 3 and calls == ["fn"] * 3
+
+
 def deployment_vector():
     v = next(v for v in VECTORS["vectors"] if v["id"] == "p2-v4/w16448/0")
     prefix = L.R.expand_prefix(bytes.fromhex(v["setup_salt"]), L.SPEC, bytes.fromhex(v["model_commitment"]))
