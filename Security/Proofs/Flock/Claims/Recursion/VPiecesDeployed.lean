@@ -113,7 +113,7 @@ theorem hR_vown (rd : Msg → Option FinalP) (rows : Msg → List VPiece) (holds
     (nOf : Msg → ℕ → ℕ) (hd : Msg → Flock.RecRecord.Record) (rest : Msg → List (Msg × Out) → List UInt8)
     (fin : (r : XR) → List (Fin r.w.parts.length × List (Msg × List HmNets.Lin))) (wE : Msg → ℝ)
     (final : Msg → Option (List (List (Msg × Salt)) × Msg)) (w : Msg → ℝ) (h : Top.Targets rd rows holds acc) :
-    ∀ (x : Msg) (st : Claims.Recursion.Stmt), (recR rd b aux nOf hd rest fin wE final w).parse x = some st →
+    ∀ (x : Msg) (st : Claims.Recursion.CompiledStatement), (recR rd b aux nOf hd rest fin wE final w).parse x = some st →
       Claims.Recursion.Form.Dense st.form →
       ∀ r ∈ (splitR rd rows holds acc h).checks (Claims.Recursion.xI (recR rd b aux nOf hd rest fin wE final w) x),
         ∀ s, ownP noB (vown ownR ownO ownC) x r = some s → s < (recR rd b aux nOf hd rest fin wE final w).nS x :=
