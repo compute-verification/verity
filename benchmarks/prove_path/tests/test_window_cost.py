@@ -156,6 +156,19 @@ def test_serving_streams_commit_is_its_4_kib_rows_and_F_leaves_out_its_fa3_inter
         assert r["all"]["seal_s"] - r["F"]["seal_s"] == pytest.approx(r["hidden_bytes"] / W.SEAL_BYTES_S)
 
 
+def test_a_compression_is_priced_at_its_circuit_check_pin():
+    """The commit's ANDs are its compressions at `Sha512Compress_v1`'s pinned AND rows, not the ripple-carry model's count."""
+    from verity.core.protocols.sampled_proofs.optimize import SHA512_ANDS, pinned_ands
+
+    sizing = json.loads(SIZING.read_text())["sizing"]
+    pin = pinned_ands("Sha512Compress_v1")
+    assert W.SHA512_ROWS == pin > SHA512_ANDS
+    for r in W.stream(sizing, {"slots": 4, "prompt": 40, "outputs": 3}, "h200", 1e12, 1.0, lanes=2, every=2).values():
+        for key in ("all", "F"):
+            assert r[key]["ands"] == r[key]["compressions"] * pin
+            assert r[key]["ratio_ands"] == pytest.approx(r[key]["compressions"] * pin / 1e12)
+
+
 def _ands(t) -> int:
     from verity.ml.circuits.evaluation import bits as BS
     return BS.compile(t).counts["and"]
