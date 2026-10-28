@@ -69,7 +69,8 @@
   "Proofs.Properties.Verity.Subprotocols",
   "Proofs.Properties.Verity.Network.Coupling",
   "Proofs.Properties.Verity.Network.Window",
-  "Proofs.Properties.Verity.Network.Legs"
+  "Proofs.Properties.Verity.Network.Legs",
+  "Proofs.Properties.Verity.Network.Bridge"
  ],
  "exempt": {
   "Proofs.Pouw.Bulk": "the bulk FP8 conformance test, under `runs`: compiled evaluation of the pins' predicates, a test and not a proof",

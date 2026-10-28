@@ -66,4 +66,4 @@ roots = ["Proofs.Core", "Proofs.Nci", "Proofs.Pous", "Proofs.Pouw", "Proofs.Netw
   "Proofs.Properties.Nci.BodiesOk.ReadsDecoded", "Proofs.Properties.Composition", "Proofs.Properties.Core.Site",
   "Proofs.Properties.Nci.Protocol", "Proofs.Properties.Verity.Soundness", "Proofs.Properties.Verity.Subprotocols",
   "Proofs.Properties.Verity.Network.Coupling", "Proofs.Properties.Verity.Network.Window",
-  "Proofs.Properties.Verity.Network.Legs"]
+  "Proofs.Properties.Verity.Network.Legs", "Proofs.Properties.Verity.Network.Bridge"]
