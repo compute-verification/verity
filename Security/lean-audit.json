@@ -2621,6 +2621,7 @@
   "Flock.SecurityProofs.SampledKSLiveStated": "6eb82e74bf701806a374272925b7f3b54c52a8347a519872322043a05dcb8203",
   "Flock.SecurityProofs.SampledKSLiveV2": "43e16e73206c75e215db6b95d1b2daba857ef90f89f56300e63260c0414d8aa5",
   "Flock.SecurityProofs.SampledKSLiveV3": "363e8e7a18f9b0417428098088fd441f7724d15f39eee5ae5f424e4559e7f84b",
+  "Flock.SecurityProofs.SampledKSLiveV5": "1da5c430cbb43b0232626e9ac21f59025a435c8829d4500927b3bd052f108f35",
   "Flock.SecurityProofs.SamplingClaimsStated": "12704b348a183d81be9329792dcc639f4deafa21e0fc0227ff7b0b23ccb3bf9b",
   "Flock.SoundAtBridge.soundAtBridge_nonvacuous": "27f84097c41752634b3c9c05e20a4cb02b0ea09db82bc2a57a574b18975fc05d",
   "FlockSoundness.Discharge.Composed.setupZJ_of_acceptsZK": "08d62e347db1b8265035f49a5c1ab74e0dd45cc0c92f9dd8c298a9963b56851b",
