@@ -1,5 +1,7 @@
-"""PoUW as one pass over a served Program (`PROTOCOL.md` §`compile`):
-`compile(program, scheme, groups)`.
+"""PoUW over a served Program, the registered compiler's output: its tiles as an annotation of that Program,
+`tiles(program, scheme, groups)` (Find and Tile, and the seed groups' checks), which reads the Program's description and
+never rewrites it; and `compile(program, scheme, groups)`, the same annotation with each tile then replaced by its unit
+(Replace), PoUW's own Program and not the served one.
 
 * **Find.** Every Call of a registered matmul family (`MATMULS`: each family's A and B ports, its (m, k, n) and the arm it is
   registered at) is one dot product, or N of them (`S8Matmul_v1`'s rows). Attention's QKᵀ is `DotBf16`'s, a kind like any
@@ -47,6 +49,9 @@
   the dither peel); served values reach a unit only through its z (``separator``); every node outside the units meets
   `cut.WIDTH_RULE` (``width``). `Compiled.check_gates` adds the gate-level cut (no value
   computed in two units), the separator and the width rule by reachability, for a Program small enough to flatten.
+  `tiles` refuses by the rules that read the served Program alone: the scheme's, ``coin-read``, Find's, ``span``,
+  ``cover`` and ``uncovered`` (a matmul step outside every registered family); `compile` adds the ones that read the
+  units it puts in.
 
 The Program is the verifier's, rebuilt from (served Program, scheme, groups): `rebuild`, `Compiled.check_descriptor`
 (`traced_as` at Program level). Each unit's noise-forced work, the floor compute attribution credits to the block it is
@@ -849,7 +854,7 @@ PouwCompiled = _composite(
 class Site:
     """A node of the served function and a kind of dot. `a_rows`, `b_rows`: A's and B's distinct rows, as references into the
     served function's body (parameters ``p``, nodes ``n``), first use first; dot d multiplies A row ``pairs[d][0]`` by B row
-    ``pairs[d][1]``. Its seed group (`Compiled.group_of`) is its slot of `pouw.roots`."""
+    ``pairs[d][1]``. Its seed group (`Tiles.group_of`) is its slot of `pouw.roots`."""
 
     index: int
     node: int
@@ -1005,16 +1010,14 @@ def _span(served: Any, plan: _Plan, group_of: Sequence[int]) -> tuple[int, int, 
 
 
 @dataclass(frozen=True, eq=False)
-class Compiled:
-    program: Program
+class Tiles:
+    """PoUW's tiles of a served Program, an annotation of it (`tiles`): its sites, their tiles as units and the seed groups,
+    read off the served Program's description with nothing rewritten, and the seed inputs a verifier fills for them."""
+
     served: Program
     scheme: Scheme
     plan: _Plan
     group_of: tuple[int, ...]                 # each site's seed group (its slot of `pouw.roots`)
-
-    @cached_property
-    def digest(self) -> str:
-        return program_digest(self.program)
 
     @property
     def boolean(self) -> bool:
@@ -1053,6 +1056,43 @@ class Compiled:
                     for m, u in enumerate(g.members)]
         return tuple(out)
 
+    def positions(self, base: int = 0) -> list[int]:
+        """`pouw.positions`' values: unit u's is ``base + u``. A salt seeds each (salt, position) once, so a verifier that runs
+        the Program more than once under one salt gives each run its own range (``base``); the one-stage verifier's is
+        every unit of the log's earlier records (`sampled_proofs.one_stage.registered.log_base`)."""
+        if base < 0 or base + len(self.units) > 1 << 64:
+            raise ValueError(f"positions {base} .. {base + len(self.units) - 1} are no u64s")
+        return [base + u.slot for u in self.units]
+
+    def seeds(self, salt: bytes, roots: Sequence[tuple[bytes, bytes]], base: int = 0) -> list[bytes]:
+        """Each unit's seed_j, as its proof derives it (`seeds.seed`), from its seed group's operand roots ``roots[group]``,
+        under the epoch's 64-byte `salt` (a certified epoch's, `audit.Epoch.certified`)."""
+        _check_salt(salt)
+        _check_roots(roots, len(self.groups))
+        return [SD.seed(salt, p, *roots[self.group_of[u.site]]) for u, p in zip(self.units, self.positions(base))]
+
+    def inputs(self, salt: bytes, roots: Sequence[tuple[bytes, bytes]], base: int = 0) -> list[list[int]]:
+        """The leaves of `pouw.salt` (the epoch's 64-byte salt, a certified epoch's), `pouw.positions` and `pouw.roots`
+        (a pair per seed group), the arguments after the served ones: the rows the one-stage verifier fills
+        (`sampled_proofs.one_stage.registered.supplied_rows`) from the window's salt, the log's ``base`` and the roots
+        the record names."""
+        _check_salt(salt)
+        _check_roots(roots, len(self.groups))
+        b = self.boolean
+        return [SD.leaves(salt, b), [v for p in self.positions(base) for v in SD.position_leaves(p, b)],
+                [v for ra, rb in roots for v in SD.leaves(bytes(ra) + bytes(rb), b)]]
+
+
+@dataclass(frozen=True, eq=False)
+class Compiled(Tiles):
+    """The served Program's tiles (`Tiles`) with each replaced by its unit (`compile`): `program`, PoUW's own Program."""
+
+    program: Program
+
+    @cached_property
+    def digest(self) -> str:
+        return program_digest(self.program)
+
     @cached_property
     def floor(self) -> tuple[Floor, ...]:
         """Every unit's noise-forced work, by slot: W_b, the floor `Accounting.Guarantees.PouwBlockCredit`
@@ -1086,32 +1126,6 @@ class Compiled:
             if not is_input(nd.fn):
                 seen.setdefault(descriptor_id(nd.fn), nd.fn)
         return template_instances_query(list(seen.values()))
-
-    def positions(self, base: int = 0) -> list[int]:
-        """`pouw.positions`' values: unit u's is ``base + u``. A salt seeds each (salt, position) once, so a verifier that runs
-        the Program more than once under one salt gives each run its own range (``base``); the one-stage verifier's is
-        every unit of the log's earlier records (`sampled_proofs.one_stage.registered.log_base`)."""
-        if base < 0 or base + len(self.units) > 1 << 64:
-            raise ValueError(f"positions {base} .. {base + len(self.units) - 1} are no u64s")
-        return [base + u.slot for u in self.units]
-
-    def seeds(self, salt: bytes, roots: Sequence[tuple[bytes, bytes]], base: int = 0) -> list[bytes]:
-        """Each unit's seed_j, as its proof derives it (`seeds.seed`), from its seed group's operand roots ``roots[group]``,
-        under the epoch's 64-byte `salt` (a certified epoch's, `audit.Epoch.certified`)."""
-        _check_salt(salt)
-        _check_roots(roots, len(self.groups))
-        return [SD.seed(salt, p, *roots[self.group_of[u.site]]) for u, p in zip(self.units, self.positions(base))]
-
-    def inputs(self, salt: bytes, roots: Sequence[tuple[bytes, bytes]], base: int = 0) -> list[list[int]]:
-        """The leaves of `pouw.salt` (the epoch's 64-byte salt, a certified epoch's), `pouw.positions` and `pouw.roots`
-        (a pair per seed group), the arguments after the served ones: the rows the one-stage verifier fills
-        (`sampled_proofs.one_stage.registered.supplied_rows`) from the window's salt, the log's ``base`` and the roots
-        the record names."""
-        _check_salt(salt)
-        _check_roots(roots, len(self.groups))
-        b = self.boolean
-        return [SD.leaves(salt, b), [v for p in self.positions(base) for v in SD.position_leaves(p, b)],
-                [v for ra, rb in roots for v in SD.leaves(bytes(ra) + bytes(rb), b)]]
 
     def check_descriptor(self, descriptor: dict) -> None:
         """Refuse a descriptor that is not the verifier's own compiled Program."""
@@ -1212,7 +1226,9 @@ def _reads_coin(served: Program) -> str | None:
     return None
 
 
-def _uncovered(fn: Any, units: set[int]) -> list[str]:
+def _uncovered(fn: Any, covered: Callable[[Any], bool]) -> list[str]:
+    """The registered Calls and matmul steps under `fn` outside every Definition `covered` holds (a unit, or a Call Find
+    tiles)."""
     bad, seen, todo = [], set(), [fn]
     while todo:
         f = todo.pop()
@@ -1220,7 +1236,7 @@ def _uncovered(fn: Any, units: set[int]) -> list[str]:
             continue
         seen.add(id(f))
         for k, nd in enumerate(f.body.nodes):
-            if id(nd.fn) in units:
+            if covered(nd.fn):
                 continue
             if _entry(nd.fn) is not None or STEP.fullmatch(nd.fn.id):
                 bad.append(f"{f.id} node {k}: {nd.fn.id}")
@@ -1327,7 +1343,7 @@ def _check(c: Compiled) -> None:
     fn, plan = c.program.fn, c.plan
     body = fn.body
     units = {id(g.unit) for g in plan.groups}
-    bad = _uncovered(fn, units)
+    bad = _uncovered(fn, lambda f: id(f) in units)
     if bad:
         raise CompileError("uncovered", f"a matmul is left outside every unit: {'; '.join(bad[:4])}")
     D, P = SD.types(plan.boolean)
@@ -1398,20 +1414,16 @@ def _check(c: Compiled) -> None:
 
 # -- the pass ----------------------------------------------------------------------------------------------------------------
 
-def compile(program: Program, scheme: str, groups: Callable[[Site], Any] | Sequence[Any] | None = None) -> Compiled:
-    """`program` with every registered matmul's dots in `scheme`'s tile units (the module docstring), checked. `groups` names
-    the calls committed together, each group one seed group (one slot of `pouw.roots`): a key per site, or a function of the
-    `Site` to its key; None is a group per site, one call."""
-    sch = _scheme(scheme)
+def _coin_read(program: Program) -> None:
     why = _reads_coin(program)
     if why is not None:
         raise CompileError("coin-read", f"the served Program reads a coin ({why}); the salt enters only through compile")
-    names = [n for n, _t in program.fn.signature()[0]]
-    for n in (SALT, POSITIONS, ROOTS):
-        if n in names:
-            raise CompileError("name", f"{program.fn.id} has a parameter named {n!r}")
-    registered = tuple(n for n, b in zip(names, program.bindings) if b == REGISTRATION)
-    served = _served_fn(program.fn)
+
+
+def _annotate(served: Any, sch: Scheme, scheme: str,
+              groups: Callable[[Site], Any] | Sequence[Any] | None) -> tuple[_Plan, tuple[int, ...]]:
+    """Find and Tile over the served function, and the seed groups' checks (``span``, ``cover``): the plan and each site's
+    seed group."""
     plan = _plan(served, scheme)
     group_of = _group_of(plan, groups)
     span = _span(served, plan, group_of)
@@ -1437,6 +1449,35 @@ def compile(program: Program, scheme: str, groups: Callable[[Site], Any] | Seque
                                             f"readers): commit more of the call's heads and requests together, and below "
                                             f"that (decode at a small batch, a short prompt) the group's noise is a live "
                                             f"per-round coin's, not a seed's")
+    return plan, group_of
+
+
+def tiles(program: Program, scheme: str, groups: Callable[[Site], Any] | Sequence[Any] | None = None) -> Tiles:
+    """PoUW's tiles of `program` under `scheme`, an annotation of it (the module docstring's Find and Tile): read off its
+    description, which nothing rewrites, and checked by the rules that read it alone. `groups` as `compile`'s."""
+    sch = _scheme(scheme)
+    _coin_read(program)
+    served = _served_fn(program.fn)
+    plan, group_of = _annotate(served, sch, scheme, groups)
+    bad = _uncovered(served, lambda f: _entry(f) is not None)
+    if bad:
+        raise CompileError("uncovered", f"a matmul is outside every registered family: {'; '.join(bad[:4])}")
+    return Tiles(program, sch, plan, group_of)
+
+
+def compile(program: Program, scheme: str, groups: Callable[[Site], Any] | Sequence[Any] | None = None) -> Compiled:
+    """`program` with every registered matmul's dots in `scheme`'s tile units (the module docstring), checked. `groups` names
+    the calls committed together, each group one seed group (one slot of `pouw.roots`): a key per site, or a function of the
+    `Site` to its key; None is a group per site, one call."""
+    sch = _scheme(scheme)
+    _coin_read(program)
+    names = [n for n, _t in program.fn.signature()[0]]
+    for n in (SALT, POSITIONS, ROOTS):
+        if n in names:
+            raise CompileError("name", f"{program.fn.id} has a parameter named {n!r}")
+    registered = tuple(n for n, b in zip(names, program.bindings) if b == REGISTRATION)
+    served = _served_fn(program.fn)
+    plan, group_of = _annotate(served, sch, scheme, groups)
     fn = bind(PouwCompiled, SERVED=served, SCHEME=scheme, GROUPS=group_of)
     try:
         compiled = Program(fn, registered=registered)
@@ -1444,7 +1485,7 @@ def compile(program: Program, scheme: str, groups: Callable[[Site], Any] | Seque
         if _ports is not None and isinstance(e, _ports.PortError):
             raise CompileError(e.code, str(e).removeprefix(f"{e.code}: ")) from e
         raise
-    c = Compiled(compiled, program, SCHEMES[scheme], plan, group_of)
+    c = Compiled(program, SCHEMES[scheme], plan, group_of, compiled)
     _check(c)
     return c
 
@@ -1459,4 +1500,4 @@ def rebuild(served: Program, scheme: str, descriptor: dict,
 
 __all__ = ["ANY", "BUILTIN", "CompileError", "Compiled", "Dot", "Floor", "GateCheck", "MATMULS", "Matmul", "POSITIONS",
            "PV_ROWS", "PouwCall", "PouwCompiled", "PouwRest", "QK_ROWS", "ROOTS", "ROWS", "RowNoise", "SALT", "SCHEMES", "STEP",
-           "Scheme", "Site", "Tile", "Unit", "Z", "compile", "rebuild", "register", "seed"]
+           "Scheme", "Site", "Tile", "Tiles", "Unit", "Z", "compile", "rebuild", "register", "seed", "tiles"]

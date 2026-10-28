@@ -1,6 +1,7 @@
-"""PoUW's clear audit: the protocol's lifecycle run in the clear, the same for every `PoUWScheme` (``PROTOCOL.md``,
-"Lifecycle").  It is a reference tool, not a verifier: every protocol is zero-knowledge, PoUW's served path is the served-ZK
-window, and its verifier of record is the Lean (`verity/core/protocols/pouw/lean/check`, `pouw.verifier`).  Benchmarks
+"""PoUW's clear audit: the protocol's lifecycle run in the clear, the same for every `PoUWScheme` (the lifecycle
+`verity/core/protocols/pouw/README.md` outlines).  It is a reference tool, not a verifier: every protocol is
+zero-knowledge, PoUW's served path is the served-ZK sampling block, and its verifier is the Lean
+(`verity/core/protocols/pouw/lean/check`, `pouw.verifier`).  Benchmarks
 replay recorded clear runs through it (`pearl_c_vllm/verify_run.py`, `pearl_c4/replay.py`), the schemes' tests run their
 end-to-end vectors through it, and the Lean's draws (`PouwCommit.Draws`) are difftested against `Sampled.select` and
 `draw_coin`.  This directory is not a package: callers put it on ``sys.path``.

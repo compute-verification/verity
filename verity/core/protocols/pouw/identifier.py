@@ -1,4 +1,4 @@
-"""The proof's identifier v1 (``PROTOCOL.md``, "The proof's identifier (v1)"): the JSON object in a C-Flock proof's header
+"""The proof's identifier v1: the JSON object in a C-Flock proof's header
 that names the oracle, the salt and the workload the proof is for.
 
 ``{"format": "verity/pouw/identifier/v1", "scheme": <the scheme's registered name>, "salt": <the epoch's salt, lowercase

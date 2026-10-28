@@ -1,5 +1,5 @@
 """`ncp-v2`: NCP-INT's noised GEMM as a `verity.ml.circuits` Program, verified by sampled proofs
-(`PROTOCOL.md` §`ncp-v2`).
+(`verity.core.protocols.pouw.schemes.ncp`).
 
 * `words`: PoUW's word primitives (every output at most 32 bits but `pc8`'s exact squares, which stay inside a row unit).
 * `boolean`: the six of them `pc4`'s and `pc8`'s row units call, and the four Keccak words their hiding tiles' digest calls,
@@ -20,7 +20,7 @@
   ports and the anchored inputs public input regions (`PORTS`).  No scheme of theirs is in `SCHEMES` yet.
 * `rowk`: their row units cut along k into a head, one form per segment and a tail (``Shape.row_k``, opt-in), so each
   piece fits C-Flock's block.
-* `compile`: PoUW as one pass over a served Program (`PROTOCOL.md` §`compile`): `compile(program, scheme,
+* `compile`: PoUW as one pass over a served Program: `compile(program, scheme,
   groups)` replaces every registered matmul's dots (`MATMULS`) with the scheme's r × c tile units, each deriving its seed
   and noise in its own proof from the one coin, the salt, and checks the result; `rebuild` is the
   verifier's side. Its schemes are its own `SCHEMES`, not this module's.
