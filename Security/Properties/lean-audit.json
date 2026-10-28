@@ -154,6 +154,10 @@
    "owner": "@memory-accounting",
    "digest": "ec84a74dad72a577c60f568cc9665016654feb62fad1857aef5f2f8a4bb9f098"
   },
+  "Nci.Assumptions.ThetaRegistered": {
+   "owner": "@compute-accounting",
+   "digest": "afd7f09e9bdab67ea4a2a26dc3760bfe5d0d3649fde36ad2357b96c9b16ac1b7"
+  },
   "Nci.Assumptions.WeightsIncompressible": {
    "owner": "@lean",
    "digest": "a9832cc41ed84cd3c55eccc606483e9c83d87fb29e05d1b1f92bb2680d32f8d8"
@@ -237,10 +241,6 @@
   "Properties.RemoteAudit.ScheduleLayoutGap": {
    "owner": "@memory-accounting",
    "digest": "7a9fc4b287459b57492b22f04af9961b0fea507e9e20f7d07ece852e1050d80b"
-  },
-  "Nci.Assumptions.ThetaRegistered": {
-   "owner": "@compute-accounting",
-   "digest": "afd7f09e9bdab67ea4a2a26dc3760bfe5d0d3649fde36ad2357b96c9b16ac1b7"
   }
  },
  "meaning": [

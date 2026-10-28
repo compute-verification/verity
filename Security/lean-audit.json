@@ -1294,6 +1294,10 @@
    "owner": "@lean",
    "digest": "8ed5bc6c9f877e1d994af693541c6e1be76f4708ae20468313c71f656cb2a0b8"
   },
+  "Nci.Assumptions.ThetaRegistered": {
+   "owner": "@compute-accounting",
+   "digest": "afd7f09e9bdab67ea4a2a26dc3760bfe5d0d3649fde36ad2357b96c9b16ac1b7"
+  },
   "Nci.Assumptions.TrainingIncompressible": {
    "owner": "@lean",
    "digest": "56a0698d9b227d57a5c2945972316c52628327b72b281a9a5443779df0957263"
@@ -2061,10 +2065,6 @@
   "Verity.TC.Relation.packHolds": {
    "owner": "@proofs",
    "digest": "ba87ddd4f64a0fe79b117e6376e5b113805dbe47547cd9ba45537cdafbfdc22e"
-  },
-  "Nci.Assumptions.ThetaRegistered": {
-   "owner": "@compute-accounting",
-   "digest": "afd7f09e9bdab67ea4a2a26dc3760bfe5d0d3649fde36ad2357b96c9b16ac1b7"
   }
  },
  "meaning": [
