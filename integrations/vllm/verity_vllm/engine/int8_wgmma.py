@@ -170,8 +170,7 @@ def scaled_mm_zy(xq: torch.Tensor, s_a: torch.Tensor, w: torch.Tensor, s_w: torc
                  zy: torch.Tensor, rows: int, cfg: WgCfg, flags: int = 0) -> int:
     """`scaled_mm` into y, and zy [units, ZY_BYTES] uint8, the call's records over `rows` slots (`int8_exact.zy_records`),
     in place; returns the grid.  y and zy are 16-byte aligned, and y and the records go out by TMA stores; `flags` 2 and 64
-    are timing probes (no epilogue; no record stores, which leave what they skip unwritten), and 128 takes the kernel
-    with two record slots a consumer."""
+    are timing probes (no epilogue; no record stores, which leave what they skip unwritten)."""
     m, k = xq.shape
     n = w.shape[0]
     assert xq.dtype == torch.int8 and w.dtype == torch.int8 and w.shape[1] == k and xq.is_contiguous() and w.is_contiguous()

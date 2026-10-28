@@ -252,6 +252,8 @@ def arm_fn(arm: str, ops: list, ys: list, after=lambda: None, zys=None):
             return lambda: [(X.scaled_mm_zy(xq, sa, w, sw, y, zy, m, *cfg), after())
                             for (xq, sa, w, sw), y, zy in zip(ops, ys, zys)]
         return lambda: [(X.scaled_mm(xq, sa, w, sw, y, *cfg), after()) for (xq, sa, w, sw), y in zip(ops, ys)]
+    if arm == "fill-zy":
+        return lambda: [(y.view(torch.int16).fill_(0), zy.fill_(0), after()) for y, zy in zip(ys, zys)]
     if arm == "lt":
         return lambda: [(torch._int_mm(xq, w.t()), after()) for (xq, sa, w, sw), y in zip(ops, ys)]
     if arm.startswith("wgzy:"):
@@ -396,7 +398,7 @@ def main() -> int:
     clock, dmon = Clock(stamp_lib(tmp)), Dmon()
     if a.zy:
         arms = (["triton-zy"] + (["plan-zy"] if a.plan else []) + [f"wgzy:{v}" for v in zy_variants]
-                + [v if v.startswith("wg:") else f"wgzy:{v}" for v in a.probes.split(",") if v]
+                + [v if v.startswith("wg:") or v == "fill-zy" else f"wgzy:{v}" for v in a.probes.split(",") if v]
                 + ([] if a.no_lt else ["lt"]))
     else:
         arms = (["triton"] + (["plan"] if a.plan else []) + [f"wg:{v}" for v in variants]
