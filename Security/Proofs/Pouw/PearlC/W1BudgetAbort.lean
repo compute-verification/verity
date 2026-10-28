@@ -104,7 +104,7 @@ theorem exec_mono (dv : W1Device) (h : Positive dv) :
 /-- Every word outside the pre-salt regions is below 256: the salt's bytes and zeros. -/
 def Small (M : Mem) : Prop := ∀ a : Addr, preSalt a = false → M a < 256
 
-theorem small_init (salt : List ℕ) (pr : Prog) (U : Workload) (act : ℕ → Codes) (σ : State) :
+theorem small_init (salt : List ℕ) (pr : CodeImage) (U : Workload) (act : ℕ → Codes) (σ : State) :
     Small (init salt pr U act σ) := by
   intro a ha
   have h2 : a.1 ≠ 2 := fun e => by simp [preSalt, e] at ha
@@ -195,7 +195,7 @@ theorem small_exec_code (dv : W1Device) (h : Positive dv) :
 /-! ## The counterexample -/
 
 /-- Unit 0's activation word `(0, 0)` moved into its ticket word `(0, 0)`: two nodes of text, within W1's bound. -/
-def copyAct : Prog := ⟨fun _ => [], fun _ => .op (.mov (ticketAt 0 0 0) (actAt 0 0 0)) .done,
+def copyAct : CodeImage := ⟨fun _ => [], fun _ => .op (.mov (ticketAt 0 0 0) (actAt 0 0 0)) .done,
   fun _ => by norm_num [W1.Code.size]⟩
 
 /-- What `copyAct` commits, on every oracle. -/
