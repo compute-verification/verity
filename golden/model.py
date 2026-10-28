@@ -145,11 +145,17 @@ INPUTS: dict[str, tuple[float, str, str]] = {
     "h1_tile_gates": (1.0e9, "M", "the brief: the K 2,048 32x32 H1 tile is about 1e9 gates, OOM at 600 GiB (TOP-138)"),
     # lowering (TOP-138) and prices
     "lower_bytes_per_gate": (16 * 2 ** 30 / 1.0e9, "E", "TOP-138's target: the 1e9-gate H1 tile in 16 GiB (17.2 B a "
-                                                        "gate); today's figure in lower_bytes_per_gate_today"),
-    "lower_bytes_per_gate_today": (600.0, "M", "the brief: about 600 B a gate at the H1 tile today (OOM at 600 GiB), "
-                                               "TOP-138; reported beside, as lower_peak_GiB_today"),
-    "lower_s_per_gate": (0.9e-6, "E", "TOP-138's target, 1e9 gates in 15 min; today's figure pending TOP-138"),
-    "gates_per_and": (3.5, "E", "the H1 tile's ~1e9 gates over its ~2.8e8 ANDs (1,024 cells x 64 s8 steps x 4,190)"),
+                                                        "gate); today's figure in lower_bytes_per_and_today"),
+    "lower_bytes_per_and_today": (4.912 * 2 ** 30 / 2_384_742, "M", "r20261028-184657-1d80 (TOP-138 harness, note:top/"
+                                  "20261028T1900Z-report-lowering-harness): the (64, 4x8) H1 unit, flat, 4.912 GiB peak "
+                                  "for 2,384,742 ANDs, 2,212 B an AND, fixed overheads included; reported beside as "
+                                  "lower_peak_GiB_today (the brief's 600 B a gate at the 1e9-gate tile is a floor: it OOMed)"),
+    "lower_s_per_and_today": (107.4 / 2_384_742, "M", "r20261028-184657-1d80: 1.79 min for the same unit, 45 us an AND"),
+    "lower_s_per_gate": (0.9e-6, "E", "TOP-138's target, 1e9 gates in 15 min"),
+    "gates_per_and": (1.0e9 / (32 * 23e6), "E", "the K 2,048 32x32 tile's ~1e9 gates over its 32 lanes of ~23 M ANDs "
+                                               "(note:top/20261028T1845Z-report-lowering-struct): 1.36"),
+    "k_max": (27, "M", "circuit.compose's K_MAX and the prover's IN_RANGE_K_LOG (live/src/circuit.rs:120): a block with "
+                       "k_log > 27 is refused (note:top/20261028T1845Z-report-lowering-struct)"),
     "cpu_s_in_gpu_s": (1 / 55, "M", "benchmarks/sampling_plan/inputs.py: vCPU $0.033/h against sm_120 $1.80/h"),
 }
 
@@ -313,11 +319,11 @@ SCHEMA = {
         "stmt_fixed": (None, "GPU-s a touched statement"),
         "stmt_per_and": (None, "GPU-s a statement per AND of its block"),
         "speed": (None, "prover speed on the H200 over sm_120's (None: 1.0, estimate)"),
-        "m_max": (35, "C-Flock's m = k_log + nbl cap"),
+        "m_max": (35, "C-Flock's m = k_log + nbl cap (a block's k_log itself is refused above INPUTS k_max, 27)"),
         "shared": (True, "statements hold only the drawn blocks (IntegrityPeriod's hidden window)"),
     },
     "lowering": {
-        "gates_per_and": (None, "gates a proof block's AND (None: 3.5, the H1 tile)"),
+        "gates_per_and": (None, "gates a proof block's AND (None: 1.36, the H1 tile's gates over its lanes' ANDs)"),
         "s_per_gate": (None, "CPU-s a gate lowered (None: TOP-138's target 0.9 us)"),
         "bytes_per_gate": (None, "peak bytes a gate (None: TOP-138's target 17.2; today's 600 is reported beside)"),
         "per": ("template", "template (lowered once a shape, cached) | instance (every drawn block)"),
@@ -739,8 +745,9 @@ def proving(d: dict, units: list, label: str) -> dict:
         ands = u["work"] + u["extra_ands"] + sum(row_ands(r) for r in u["open_rows"])
         k_log = math.ceil(math.log2(max(ands, 2))) + 1
         cap = 1 << max(0, pv["m_max"] - k_log)
-        if k_log > pv["m_max"]:
-            out["infeasible"].append(f"{u['name']}: {ands:.3g} ANDs needs k_log {k_log} > m_max {pv['m_max']}")
+        if k_log > I("k_max"):
+            out["infeasible"].append(f"{u['name']}: {ands:.3g} ANDs needs k_log {k_log} > {I('k_max')} (compose and "
+                                     f"the prover refuse it)")
         stmts = math.ceil(draws / cap) if draws > 0 else 0
         staged = draws if pv["shared"] else min(n, stmts * cap)
         gpu = (draws * o * ands + staged * so * ands + stmts * (f0 + f1 * ands)) / speed
@@ -756,8 +763,9 @@ def proving(d: dict, units: list, label: str) -> dict:
                                "openings_share": 1 - (u["work"] + u["extra_ands"]) / ands, "q": q, "draws": draws,
                                "cap": cap, "statements": stmts, "gpu_s": gpu, "lower_cpu_s": lower,
                                "lower_peak_GiB": peak,
-                               "lower_peak_GiB_today": gates * I("lower_bytes_per_gate_today") / 2 ** 30,
-                               "stage_cpu_s": stage, "verify_cpu_s": verify})
+                               "lower_peak_GiB_today": ands * I("lower_bytes_per_and_today") / 2 ** 30,
+                               "lower_cpu_s_today": lowerings * ands * I("lower_s_per_and_today"),
+                               "k_log": k_log, "stage_cpu_s": stage, "verify_cpu_s": verify})
         out["draws"] += draws
         out["gpu_s"] += gpu
         out["statements"] += stmts
