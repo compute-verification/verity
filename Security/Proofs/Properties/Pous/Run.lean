@@ -40,7 +40,7 @@ theorem need_ok {b : Bool} {reason : String} (h : Run.need b reason = .ok ()) : 
 
 /-- What an accepted `checkAt` checked, in its order. -/
 theorem checkAt_ok {schemes : Schemes} {pt : Run.Point} {trusted : List ByteArray} {pub : SetupProtocol.Public}
-    {digests : ByteArray} {r : Run.Session} {sid : ByteArray}
+    {digests : ByteArray} {r : Run.ChallengePhase} {sid : ByteArray}
     (h : Run.checkAt schemes pt trusted pub digests r sid = .ok ()) :
     pub.blocks = pt.params.blocks ∧ pub.salt.size = Run.SALT ∧ digests.size = pt.params.blocks * Merkle.DIGEST ∧
       Merkle.root (Run.rowLeaves pt.params pub.salt digests) = some pub.root ∧
@@ -262,7 +262,7 @@ theorem mem_table_leaf {pub : SetupProtocol.Public} {digests : ByteArray} {C : A
 /-! ## The theorem -/
 
 /-- What an accepted `check` checked, at the deployed point. -/
-theorem check_ok {trusted : List ByteArray} {pub : SetupProtocol.Public} {digests : ByteArray} {r : Run.Session}
+theorem check_ok {trusted : List ByteArray} {pub : SetupProtocol.Public} {digests : ByteArray} {r : Run.ChallengePhase}
     {sid : ByteArray} (h : Run.check trusted pub digests r sid = .ok ()) :
     AuditsSetup pub r.commitment ∧ r.commitment.session = sid ∧ digests.size = q.blocks * Merkle.DIGEST ∧
       Merkle.root (Run.rowLeaves q pub.salt digests) = some pub.root ∧

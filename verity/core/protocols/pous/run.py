@@ -2,11 +2,11 @@
 
 A run is the setup's public outputs (`verity/pous/p2/v4/setup` on acceptance, `{"blocks", "commitment", "root", "salt"}`,
 `root` the root of `C*`'s leaves under `salt`), the memory challenger's table of `C*` (every block's `sha512/row/v2` digest
-in block order, `memory_challenger.block_digest`: the harness's `DIGESTS.bin`) and one signed session (`Session`: the signed
-session, the commitment published before it and its coin openings).  `check` judges it with two inputs of the verifier's
-own: `trusted`, the verifier's list of memory-challenger keys, which never comes from the run's record (whoever writes
-the record could otherwise list its own key), and the 32-byte id the auditor designated for the audit's session.  It
-accepts the run at P2's deployed point (`DEPLOYED`: `2^19` blocks of 2,056 bytes in 8 segments, `k = 105`,
+in block order, `memory_challenger.block_digest`: the harness's `DIGESTS.bin`) and one signed session (`ChallengePhase`:
+the signed session, the commitment published before it and its coin openings).  `check` judges it with two inputs of the
+verifier's own: `trusted`, the verifier's list of memory-challenger keys, which never comes from the run's record
+(whoever writes the record could otherwise list its own key), and the 32-byte id the auditor designated for the audit's
+session.  It accepts the run at P2's deployed point (`DEPLOYED`: `2^19` blocks of 2,056 bytes in 8 segments, `k = 105`,
 `Δ + RTT ≤ 854,000 ns`) under S1's LMS (`memory_challenger.SCHEMES`) when, in order:
 
 1. the setup published the point's block count and a 24-byte salt;
@@ -68,9 +68,9 @@ class Setup:
 
 
 @dataclass(frozen=True, slots=True)
-class Session:
-    """One session as the memory challenger records it: what it signed, the commitment published before it and its coin
-    openings.  Which keys are trusted is the verifier's, never the record's (`check`'s `trusted`)."""
+class ChallengePhase:
+    """One challenge phase as the memory challenger records it: what it signed, the commitment published before it and
+    its coin openings.  Which keys are trusted is the verifier's, never the record's (`check`'s `trusted`)."""
 
     signed: mc.SignedSession
     commitment: mc.SessionCommitment
@@ -81,7 +81,7 @@ class Session:
                 "signed": self.signed.to_json()}
 
     @classmethod
-    def from_json(cls, doc: Mapping[str, Any]) -> Session:
+    def from_json(cls, doc: Mapping[str, Any]) -> ChallengePhase:
         return cls(mc.SignedSession.from_json(doc["signed"]), mc.SessionCommitment.from_json(doc["commitment"]),
                    tuple(mc.CoinOpening.from_json(o) for o in doc["openings"]))
 
@@ -96,7 +96,7 @@ def _need(ok: bool, reason: str) -> None:
 
 
 def check_at(point: Point, schemes: Mapping[str, mc.Verify], trusted: Collection[bytes], setup: Setup, digests: bytes,
-             session: Session, session_id: bytes) -> None:
+             session: ChallengePhase, session_id: bytes) -> None:
     """`check` at `point` under `schemes`."""
     q, sc = point.params, session.commitment
     _need(setup.blocks == q.blocks, f"the setup published {setup.blocks} blocks, not the point's {q.blocks}")
@@ -118,10 +118,10 @@ def check_at(point: Point, schemes: Mapping[str, mc.Verify], trusted: Collection
     _need(v.accepted, "; ".join(v.reasons))
 
 
-def check(trusted: Collection[bytes], setup: Setup, digests: bytes, session: Session, session_id: bytes) -> None:
+def check(trusted: Collection[bytes], setup: Setup, digests: bytes, session: ChallengePhase, session_id: bytes) -> None:
     """Accept the run, or raise `Refused` with the first reason (module docstring).  `trusted` is the verifier's list of
     memory-challenger keys and never comes from the run's record."""
     check_at(DEPLOYED, mc.SCHEMES, trusted, setup, digests, session, session_id)
 
 
-__all__ = ["DEPLOYED", "SALT_BYTES", "Point", "Refused", "Session", "Setup", "check", "check_at"]
+__all__ = ["DEPLOYED", "SALT_BYTES", "ChallengePhase", "Point", "Refused", "Setup", "check", "check_at"]
