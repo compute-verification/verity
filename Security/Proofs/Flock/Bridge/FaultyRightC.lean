@@ -79,15 +79,14 @@ theorem posOf_of_boundary {n : ℕ} {P : FlockSoundness.Audit.Partition C n} {u 
   exact ⟨hcom, Or.inl hu⟩
 
 /-- **What the unit needs, outside its interior, is its committed wires' positions**: a gate of `need` of
-`[unitGates P u]` outside the unit, or one the unit commits, is the position of a wire in `P.io u`. -/
+`unitGates P u` outside the unit, or one the unit commits, is the position of a wire in `P.io u`. -/
 theorem need_posOf {n : ℕ} {P : FlockSoundness.Audit.Partition C n} {u : Fin n} {i : ℕ}
-    (hi : i ∈ FlockSoundness.Discharge.ZkLink.WrongSet.need (progOf C κ) [unitGates P u])
+    (hi : i ∈ FlockSoundness.Discharge.ZkLink.WrongSet.need (progOf C κ) (unitGates P u))
     (hB : i ∉ unitGates P u ∨ (progOf C κ).Boundary (unitGates P u) i = true) :
     ∃ a ∈ P.io u, i = posOf C a := by
   by_cases hin : i ∈ unitGates P u
   · exact posOf_of_boundary hin (hB.resolve_left (not_not.2 hin))
-  have hgates : RU.gates [unitGates P u] = unitGates P u := by simp [RU.gates]
-  simp only [FlockSoundness.Discharge.ZkLink.WrongSet.need, hgates, List.mem_append, List.mem_flatMap] at hi
+  simp only [FlockSoundness.Discharge.ZkLink.WrongSet.need, List.mem_append, List.mem_flatMap] at hi
   rcases hi with hi | ⟨p, hp, hrd⟩
   · exact absurd hi hin
   obtain ⟨g, hu, j, hj, rfl⟩ := mem_unitGates.1 hp
@@ -167,16 +166,14 @@ theorem faultyRightC {n : ℕ} (P : FlockSoundness.Audit.Partition C n) {Pos Val
   apply hmem.2
   by_cases hN : Nonempty (Fin C.N)
   · obtain ⟨d⟩ := hN
-    refine ⟨[unitGates P u], rus_partOf_getElem? P u, fun i => C.eval Xr (wireAt C d i),
+    refine ⟨unitGates P u, blocks_partOf_getElem? P u, fun i => C.eval Xr (wireAt C d i),
       lowers P u (wireAt C d) (wireAt_posOf d) Xr hκ' _ fun i hi hc => ?_⟩
-    change RU.ref (progOf C κ) [unitGates P u] ((witDep C Cm H roots Xr).val H Cm (stmtOf P κ kd desc q roots))
+    change (progOf C κ).refIn (unitGates P u) ((witDep C Cm H roots Xr).val H Cm (stmtOf P κ kd desc q roots))
       (fun i => C.eval Xr (wireAt C d i)) i = some (C.eval Xr (wireAt C d i))
-    unfold RU.ref
+    unfold Claims.Sampling.Prog.refIn
     split_ifs with hin
     · rfl
-    · have hgates : RU.gates [unitGates P u] = unitGates P u := by simp [RU.gates]
-      rw [hgates] at hin
-      have hB : i ∉ unitGates P u ∨ (progOf C κ).Boundary (unitGates P u) i = true := by
+    · have hB : i ∉ unitGates P u ∨ (progOf C κ).Boundary (unitGates P u) i = true := by
         by_cases h1 : i ∈ unitGates P u
         · exact Or.inr (by simpa [h1] using hin)
         · exact Or.inl h1
@@ -188,10 +185,8 @@ theorem faultyRightC {n : ℕ} (P : FlockSoundness.Audit.Partition C n) {Pos Val
           exact absurd (gates_posOf_const (input_of_isInput (hκin a b hk)) hk) (hc b)
       rw [wireAt_posOf]
       exact hval a ha hnone
-  · refine ⟨[unitGates P u], rus_partOf_getElem? P u, fun _ => false, ?_⟩
-    intro pu hpu g hg
-    rw [List.mem_singleton] at hpu
-    subst hpu
+  · refine ⟨unitGates P u, blocks_partOf_getElem? P u, fun _ => false, ?_⟩
+    intro g hg
     obtain ⟨w, -⟩ := mem_unitGates.1 hg
     exact absurd ⟨w⟩ hN
 

@@ -17,12 +17,8 @@ Here each is the `Claims.Pr` that a model draw misses `B`:
   probability `P_a(B)`; `OneStage.Pa_strata`: every design but Bernoulli's is a strata draw (`OneStage.strata`: the
   stratified and work laws by definition, `all` and `subset` one stratum), with `OneStage.strata_sum`,
   `OneStage.strata_le`.
-* `nested_escape`, `Rule.Pa_nested`: **the nested escape**: a Bernoulli first stage over a class's replay units, then a
-  uniform `min(k, n_v)`-subset of each drawn one's `n_v` proof units, misses a faulty proof unit of every member of `B`
-  with probability `∏_{v ∈ B} (1 − p·min(k, n_v)/n_v)`, whichever faulty proof unit each first draw fixes (the interior
-  the prover commits after it); `Rule.Pa_none`: checking every proof unit, the first stage's `P_a`.
 * `classesPa_eq_prod`, `classesPa_eq_Pr`, `Design.Pa_eq_Pr`: **the classes' product**: `P_a` on the partition is the
-  product over its classes of each rule's `P̄_a` on the class's window (`classPa`), the probability that independent
+  product over its classes of each rule's `P_a` on the class's window (`classPa`), the probability that independent
   draws of the classes all miss; `classesPa_strata`, `Design.Pa_strata`: classes drawn as strata are one strata draw.
 
 `Live.lean` proves these distributions of the executable draw on uniform bytes, and `Select` of the deployed sampled
@@ -315,105 +311,18 @@ theorem OneStage.strata_le {ns : List ℕ} {d : OneStage} {ss : List (ℕ × ℕ
     obtain ⟨q, -, rfl⟩ := List.mem_map.1 hp
     exact min_le_left _ _
 
-/-! ## The nested escape -/
-
-/-- A uniform `m`-subset of `n` slots holds a given slot with probability `m/n`: it misses it with `1 − m/n`. -/
-theorem subset_miss_one {n m : ℕ} (hm : m ≤ n) (u : Fin n) :
-    Pr (fun S : {S : Finset (Fin n) // S.card = m} => u ∉ S.1) = 1 - (m : ℝ) / n := by
-  have h := subset_miss_eq hm {u}
-  rw [card_singleton] at h
-  rw [Pr_congr fun S => disjoint_singleton_right.symm, h]
-  obtain ⟨n', rfl⟩ : ∃ n', n = n' + 1 := ⟨n - 1, by have := u.isLt; omega⟩
-  have hc := Nat.choose_mul_succ_eq n' m
-  have hpos : (0 : ℝ) < ((n' + 1).choose m : ℕ) := by exact_mod_cast Nat.choose_pos hm
-  have hc' : ((n'.choose m : ℕ) : ℝ) * ((n' : ℝ) + 1) = ((n' + 1).choose m : ℕ) * ((n' : ℝ) + 1 - m) := by
-    have := congrArg (Nat.cast (R := ℝ)) hc
-    push_cast [Nat.cast_sub hm] at this
-    linarith
-  rw [Nat.add_sub_cancel, div_eq_iff hpos.ne']
-  push_cast
-  field_simp
-  linarith
-
-/-- The coins of the nested draw's second stage: a uniform `min(k, n_v)`-subset of each replay unit's `n_v` proof
-units. -/
-instance instNonemptyMinSubset (n k : ℕ) : Nonempty {S : Finset (Fin n) // S.card = min k n} := by
-  obtain ⟨t, -, ht⟩ := exists_subset_card_eq (s := (univ : Finset (Fin n))) (n := min k n)
-    (by rw [card_univ, Fintype.card_fin]; exact min_le_right k n)
-  exact ⟨⟨t, ht⟩⟩
-
-/-- **The nested escape**, the interior fixed by the shared first stage: a Bernoulli first stage at rate `num/den` over
-`m` replay units, then a uniform `min(k, n_v)`-subset of each replay unit's `n_v` proof units, independently. Whichever
-proof unit `f ω₁ v` of each replay unit the first draw `ω₁` fixes as faulty (the interior the prover commits after
-it), the checks miss it at every member of `B` with probability `∏_{v ∈ B} (1 − (num/den)·min(k, n_v)/n_v)`. -/
-theorem nested_escape {m num den k : ℕ} [NeZero den] (h : num ≤ den) (sz : Fin m → ℕ)
-    (f : (Fin m → Fin den) → (v : Fin m) → Fin (sz v)) (B : Finset (Fin m)) :
-    Pr (fun p : (Fin m → Fin den) × ((v : Fin m) → {S : Finset (Fin (sz v)) // S.card = min k (sz v)}) =>
-      ∀ v ∈ B, ¬ ((p.1 v).val < num ∧ f p.1 v ∈ (p.2 v).1)) =
-      ∏ v ∈ B, (1 - (num : ℝ) / den * (min k (sz v) : ℕ) / (sz v : ℝ)) := by
-  classical
-  set c : Fin m → ℝ := fun v => ((min k (sz v) : ℕ) : ℝ) / (sz v : ℝ) with hc
-  have hfix : ∀ a : Fin m → Fin den,
-      Pr (fun S : (v : Fin m) → {S : Finset (Fin (sz v)) // S.card = min k (sz v)} =>
-        ∀ v ∈ B, ¬ ((a v).val < num ∧ f a v ∈ (S v).1)) =
-      ∏ v, (if v ∈ B then 1 - (if (a v).val < num then (1 : ℝ) else 0) * c v else 1) := by
-    intro a
-    refine (Pr_pi_forall (Ω := fun v => {S : Finset (Fin (sz v)) // S.card = min k (sz v)}) B
-      (fun v S => ¬ ((a v).val < num ∧ f a v ∈ S.1))).trans ?_
-    rw [prod_ite_mem, univ_inter]
-    refine prod_congr rfl fun v _ => ?_
-    by_cases hv : (a v).val < num
-    · simp only [hv, true_and, ite_true, one_mul]
-      exact subset_miss_one (min_le_right k (sz v)) (f a v)
-    · simp only [hv, false_and, not_false_eq_true, ite_false, zero_mul, sub_zero]
-      exact Pr_true
-  rw [Pr_prod_eq_Ex]
-  refine (congrArg Ex (funext hfix)).trans ?_
-  rw [Ex_pi_prod (Ω := fun _ => Fin den) fun v x => if v ∈ B then 1 - (if x.val < num then (1 : ℝ) else 0) * c v
-    else 1, ← prod_subset (subset_univ B) fun v _ hv => by simp only [hv, ite_false]; exact Ex_const 1]
-  refine prod_congr rfl fun v hv => ?_
-  have hden : (0 : ℝ) < den := by exact_mod_cast Nat.pos_of_ne_zero (NeZero.ne den)
-  unfold Ex
-  simp only [hv, ite_true, sum_sub_distrib, sum_const, card_univ, Fintype.card_fin, nsmul_eq_mul, mul_one,
-    ← sum_mul, sum_boole]
-  rw [Fin.card_filter_val_lt, min_eq_right h, hc]
-  field_simp
-
-/-- **The two-stage rule's `P̄_a` is the nested escape**: under a Bernoulli first stage checking `k` proof units of
-each drawn replay unit, `P̄_a(B)` is the probability that the checks miss a faulty proof unit `f ω₁ v` of every member
-of `B`, whichever the first draw `ω₁` fixes. -/
-theorem Rule.Pa_nested {num den k : ℕ} [NeZero den] (h : num ≤ den) (ns sz : List ℕ) {B : Finset ℕ}
-    (hB : B ⊆ range sz.length) (f : (Fin sz.length → Fin den) → (v : Fin sz.length) → Fin (sz.getD v 0)) :
-    (⟨.bernoulli num den, some k⟩ : Rule).Pa ns sz B =
-      Pr (fun p : (Fin sz.length → Fin den) ×
-          ((v : Fin sz.length) → {S : Finset (Fin (sz.getD v 0)) // S.card = min k (sz.getD v 0)}) =>
-        ∀ v ∈ finOf sz.length B, ¬ ((p.1 v).val < num ∧ f p.1 v ∈ (p.2 v).1)) := by
-  rw [nested_escape h (fun v => sz.getD v 0) f]
-  show (∏ v ∈ B, _) = _
-  conv_lhs => rw [← map_finOf hB]
-  rw [prod_map]
-  rfl
-
-/-- **Checking every proof unit, a rule's `P̄_a` is its first stage's `P_a`.** -/
-theorem Rule.Pa_none {r : Rule} (h : r.check = none) (ns sz : List ℕ) (B : Finset ℕ) :
-    r.Pa ns sz B = r.first.Pa ns B := by
-  obtain ⟨first, check⟩ := r
-  simp only at h
-  subst h
-  cases first <;> rfl
-
 /-! ## The classes' product -/
 
-/-- The slot at which class `i` starts: the replay units of the classes before it. -/
-def classOff (cs : List (List (List RU))) (i : ℕ) : ℕ := ((cs.take i).map fun c => c.flatten.length).sum
+/-- The slot at which class `i` starts: the proof blocks of the classes before it. -/
+def classOff (cs : List (List (List (List ℕ)))) (i : ℕ) : ℕ := ((cs.take i).map fun c => c.flatten.length).sum
 
-/-- Class `i`'s factor: its rule's `P̄_a` on the members of `B` in its window. -/
-noncomputable def classPa (rs : List Rule) (cs : List (List (List RU))) (o : ℕ) (B : Finset ℕ) (i : ℕ) : ℝ :=
-  (rs.getD i ⟨.all, none⟩).Pa (strataSizes (cs.getD i [])) (ruSizes (cs.getD i []))
-    (window (o + classOff cs i) (cs.getD i []).flatten.length B)
+/-- Class `i`'s factor: its rule's `P_a` on the members of `B` in its window. -/
+noncomputable def classPa (rs : List OneStage) (cs : List (List (List (List ℕ)))) (o : ℕ) (B : Finset ℕ) (i : ℕ) :
+    ℝ :=
+  (rs.getD i .all).Pa (strataSizes (cs.getD i [])) (window (o + classOff cs i) (cs.getD i []).flatten.length B)
 
 /-- **The classes' product**: `classesPa` multiplies each class's factor on its own window. -/
-theorem classesPa_eq_prod : ∀ (rs : List Rule) (cs : List (List (List RU))) (o : ℕ) (B : Finset ℕ),
+theorem classesPa_eq_prod : ∀ (rs : List OneStage) (cs : List (List (List (List ℕ)))) (o : ℕ) (B : Finset ℕ),
     rs.length = cs.length → classesPa rs cs o B = ∏ i ∈ range rs.length, classPa rs cs o B i
   | [], [], _, _, _ => by simp [classesPa]
   | [], _ :: _, _, _, h => absurd h (by simp)
@@ -427,7 +336,7 @@ theorem classesPa_eq_prod : ∀ (rs : List Rule) (cs : List (List (List RU))) (o
 
 /-- **The classes drawn independently**: when each class's factor is the probability that its own draw misses, the
 classes' product is the probability that independent draws of every class all miss. -/
-theorem classesPa_eq_Pr (rs : List Rule) (cs : List (List (List RU))) (o : ℕ) (B : Finset ℕ)
+theorem classesPa_eq_Pr (rs : List OneStage) (cs : List (List (List (List ℕ)))) (o : ℕ) (B : Finset ℕ)
     (hl : rs.length = cs.length) {Ω : Fin rs.length → Type} [∀ i, Fintype (Ω i)] [∀ i, Nonempty (Ω i)]
     (E : ∀ i, Ω i → Prop) (hE : ∀ i : Fin rs.length, classPa rs cs o B i = Pr (E i)) :
     classesPa rs cs o B = Pr (fun ω : (i : Fin rs.length) → Ω i => ∀ i, E i (ω i)) := by
@@ -443,12 +352,12 @@ theorem Design.Pa_eq_Pr (d : Design) (P : Partition) (B : Finset ℕ) (hl : d.ru
     d.Pa P B = Pr (fun ω : (i : Fin d.rules.length) → Ω i => ∀ i, E i (ω i)) :=
   classesPa_eq_Pr d.rules P.classes 0 B hl E hE
 
-/-- **Classes drawn as strata are one strata draw**: when each class's `P̄_a` is a strata draw's over its slots, the
+/-- **Classes drawn as strata are one strata draw**: when each class's `P_a` is a strata draw's over its slots, the
 classes' product is the strata draw of all their strata, in order. -/
-theorem classesPa_strata : ∀ (rs : List Rule) (cs : List (List (List RU))) (sss : List (List (ℕ × ℕ))) (o : ℕ)
-    (B : Finset ℕ), rs.length = cs.length → sss.length = cs.length →
+theorem classesPa_strata : ∀ (rs : List OneStage) (cs : List (List (List (List ℕ)))) (sss : List (List (ℕ × ℕ)))
+    (o : ℕ) (B : Finset ℕ), rs.length = cs.length → sss.length = cs.length →
     (∀ p ∈ (rs.zip cs).zip sss, (p.2.map Prod.fst).sum = p.1.2.flatten.length ∧
-      ∀ B' ⊆ range p.1.2.flatten.length, p.1.1.Pa (strataSizes p.1.2) (ruSizes p.1.2) B' = strataPa p.2 0 B') →
+      ∀ B' ⊆ range p.1.2.flatten.length, p.1.1.Pa (strataSizes p.1.2) B' = strataPa p.2 0 B') →
     classesPa rs cs o B = strataPa sss.flatten o B
   | [], [], [], _, _, _, _, _ => rfl
   | [], [], _ :: _, _, _, _, h, _ => absurd h (by simp)
@@ -462,11 +371,11 @@ theorem classesPa_strata : ∀ (rs : List Rule) (cs : List (List (List RU))) (ss
       strataPa_append, hsum, classesPa_strata rs cs sss (o + c.flatten.length) B (by simpa using hl)
         (by simpa using hs) fun p hp => h p (by simp [hp])]
 
-/-- **A design whose classes are drawn as strata is one strata draw over the partition's replay units.** -/
+/-- **A design whose classes are drawn as strata is one strata draw over the partition's proof blocks.** -/
 theorem Design.Pa_strata (d : Design) (P : Partition) (sss : List (List (ℕ × ℕ)))
     (hl : d.rules.length = P.classes.length) (hs : sss.length = P.classes.length)
     (h : ∀ p ∈ (d.rules.zip P.classes).zip sss, (p.2.map Prod.fst).sum = p.1.2.flatten.length ∧
-      ∀ B' ⊆ range p.1.2.flatten.length, p.1.1.Pa (strataSizes p.1.2) (ruSizes p.1.2) B' = strataPa p.2 0 B')
+      ∀ B' ⊆ range p.1.2.flatten.length, p.1.1.Pa (strataSizes p.1.2) B' = strataPa p.2 0 B')
     (B : Finset ℕ) : d.Pa P B = strataPa sss.flatten 0 B :=
   classesPa_strata d.rules P.classes sss 0 B hl hs h
 
