@@ -1,0 +1,293 @@
+"""The H1 tile unit's templated structural statement (``H1_TMPL=structural``: `h1unit.stager`'s
+`UnitStager(layout=h1unit.LAYOUT, structural=True)`, the unit as `struct_lower`'s template, the flat unit never built),
+measured beside the flat statement the period-open commits.
+
+* ``lower K R C OUT [--form structural|flat] [--path FILE]``: `pouw_h1_circuits._lower` itself (the ``--lower`` command's
+  body, ``HZ_STAGE`` as it reads it), in this process, bound to `BIND`. OUT (JSON): the lowering (its class, the unrolled
+  ANDs, rows and references, the template's Definitions, rows and calls), its seconds and peak RSS before compose and at
+  the end, and the file's bytes, SHA-512 and META block fields; or compose's refusal (a block past ``K_MAX``) with the
+  lowering's counts. The file goes to FILE, else to a scratch directory removed at exit.
+* ``agree K R C OUT``: the flat and the structural stager at one shape, their units evaluated on the same rows (honest
+  leaves, a record off in one bit, random words): each output word of the template (`TmplLowering.evaluate`) against the
+  flat unit's (`ir_lower.Lowering.evaluate`) and both against `h1zy.reference`, the word reference; then
+  `circuit_check.structural.check_unit`'s verdict on the template against the flat unit.
+* ``sweep --shapes K:R:C,.. --out DIR [--form F] [--jobs J]``: ``lower`` of each shape in a process of its own, its peak
+  RSS from ``wait4`` (so also when it is killed): DIR/<form>-k<K>-<R>x<C>.json and DIR/sweep-<form>.json.
+"""
+from __future__ import annotations
+
+import argparse
+import hashlib
+import json
+import os
+import resource
+import subprocess
+import sys
+import tempfile
+import time
+from concurrent.futures import ThreadPoolExecutor
+from pathlib import Path
+
+import numpy as np
+
+ROOT = Path(__file__).resolve().parents[2]
+VLLM = ROOT / "integrations" / "vllm"
+H1_PROVE = ROOT / "benchmarks" / "pouw" / "h1_prove"
+#: the guard's bind: the file's bytes are pinned under it at small shapes
+BIND = {"partition": "0" * 128, "program": "0" * 128}
+#: META's fields that say how the statement fills C-Flock's block
+BLOCK = ("format", "statement", "layout", "k_log", "unit_log", "vus_per_block", "per_vu")
+SEED = 20261028
+
+
+def peak_gib() -> float:
+    return round(resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / 2**20, 3)
+
+
+def _h1unit(form: str):
+    os.environ["H1_TMPL"] = form
+    for p in (H1_PROVE, H1_PROVE.parent / "hidden_zk", VLLM):
+        if str(p) not in sys.path:
+            sys.path.insert(0, str(p))
+    import h1unit
+    return h1unit
+
+
+def _counts(low) -> dict:
+    out = {"lowering": type(low).__name__, **{k: int(v) for k, v in low.layout.counts.items() if isinstance(v, (int, np.integer))}}
+    t = getattr(low, "template", None)
+    if t is not None:
+        out |= {"template_defs": len(t.defs), "template_rows": sum(len(d.rows) for d in t.defs),
+                "template_calls": sum(len(d.calls) for d in t.defs),
+                "template_refs": sum(len(a) + len(b) for d in t.defs for _c, a, b in d.rows)}
+    return out
+
+
+def _file(path: Path) -> dict:
+    """The file's first line, its META line's bytes and its SHA-512, read in chunks: a templated file's META holds the
+    whole template."""
+    h, newlines, at = hashlib.sha512(), [], 0
+    with open(path, "rb") as f:
+        while b := f.read(1 << 24):
+            h.update(b)
+            start = 0
+            while len(newlines) < 2 and (nl := b.find(b"\n", start)) >= 0:
+                newlines.append(at + nl)
+                start = nl + 1
+            at += len(b)
+    with open(path, "rb") as f:
+        head = f.read(newlines[0]).decode()
+    return {"head": head, "meta_bytes": newlines[1] - newlines[0] - 1, "sha512": h.hexdigest()}
+
+
+def lower(args) -> int:
+    U = _h1unit(args.form)
+    from verity_flock import circuit as FC
+    from verity_flock import class_statement as CS
+    from tests.protocols import pouw_h1_circuits as PC
+
+    rec = {"k": args.k, "r": args.r, "c": args.c, "form": args.form, "staging": os.environ.get("HZ_STAGE", "fast"),
+           "layout": U.layout(), "bind": BIND}
+    got: dict = {}
+    library, meta_of = CS.unit_lowering, FC.meta_of
+
+    def captured(*a, **k):
+        t = time.time()
+        low, out_words = library(*a, **k)
+        got.update(low=low, lower_s=round(time.time() - t, 2), lower_peak_gib=peak_gib())
+        return low, out_words
+
+    def meta_captured(text):
+        m = meta_of(text)
+        tl = m.get("template")
+        got["meta"] = {**{k: m.get(k) for k in BLOCK}, "template_lines": len(tl) if isinstance(tl, list) else None}
+        return m
+
+    CS.unit_lowering, FC.meta_of = captured, meta_captured
+    scratch = None if args.path else tempfile.TemporaryDirectory(prefix="unit-lowering-")
+    path = Path(args.path) if args.path else Path(scratch.name) / f"k{args.k}.circuit.txt"
+    t0 = time.time()
+    try:
+        PC._lower(args.k, args.r, args.c, BIND, path)
+        rec["written"] = True
+    except ValueError as e:
+        rec |= {"written": False, "refused": str(e)}
+    rec |= {"seconds": round(time.time() - t0, 2), "peak_gib": peak_gib()}
+    if "low" in got:
+        low = got.pop("low")
+        rec |= _counts(low)
+        del low
+    rec |= got.pop("meta", {}) | got
+    if rec["written"]:
+        rec |= {"bytes": path.stat().st_size, **_file(path)}
+        rec["templated"] = rec["head"].startswith("flock-circuit/tmpl ")
+    if scratch is not None:
+        scratch.cleanup()
+    Path(args.out).parent.mkdir(parents=True, exist_ok=True)
+    Path(args.out).write_text(json.dumps(rec, indent=1))
+    print("LOWER " + json.dumps({k: rec.get(k) for k in ("k", "r", "c", "form", "lowering", "ands", "k_log", "bytes",
+                                                         "seconds", "peak_gib", "refused")}), flush=True)
+    return 0
+
+
+def _leaf(U, k: int, r: int, c: int, rng) -> tuple:
+    a = rng.integers(-128, 128, (r, k)).astype(np.int8)
+    b = rng.integers(-128, 128, (c, k)).astype(np.int8)
+    sa = (rng.uniform(1e-3, 0.1, r) / 127).astype(np.float32)
+    sw = (rng.uniform(1e-3, 0.5, c) / 127).astype(np.float32)
+    z, y = U.records(a, b, sa, sw)
+    return a, b, sa, sw, z, y
+
+
+def _instances(U, shape, rng) -> tuple[list[str], dict[str, np.ndarray], list[tuple]]:
+    """Each instance's rows by the stager's ports, and its salt, position and roots: two honest leaves, the second again
+    with one bit of its record's z off, and two of random words, each at its own salt, position and roots."""
+    r, c, k = shape.r, shape.c, shape.k
+    names, pubs = [], []
+    rows = {**{f"a{i}": [] for i in range(r)}, **{f"b{j}": [] for j in range(c)}, "zy": [], "pub": []}
+
+    def put(name, a, b, sa, sw, zw):
+        salt, pos = rng.bytes(64), int(rng.integers(0, 1 << 20))
+        roots = (rng.bytes(64), rng.bytes(64))
+        A, B = U.row_words(a, sa), U.row_words(b, sw)
+        for i in range(r):
+            rows[f"a{i}"].append(A[i])
+        for j in range(c):
+            rows[f"b{j}"].append(B[j])
+        rows["zy"].append(zw)
+        rows["pub"].append(U.pub_words(salt, pos, roots))
+        names.append(name)
+        pubs.append((salt, pos, roots))
+
+    for n in range(2):
+        a, b, sa, sw, z, y = _leaf(U, k, r, c, rng)
+        put(f"honest{n}", a, b, sa, sw, U.record_words(z, y))
+    zw = U.record_words(z, y)
+    zw[0] ^= 1 << 5
+    put("z-bit-off", a, b, sa, sw, zw)
+    for n in range(2):
+        a, b = (rng.integers(-128, 128, (m, k)).astype(np.int8) for m in (r, c))
+        sa, sw = (rng.integers(0, 1 << 32, m, dtype=np.uint64).astype(np.uint32).view(np.float32) for m in (r, c))
+        put(f"random{n}", a, b, sa, sw, rng.integers(0, 1 << 16, 3 * r * c).astype(np.uint16))
+    return names, {p: np.asarray(v, np.uint16) for p, v in rows.items()}, pubs
+
+
+def _reference(U, shape, rows: dict, i: int, pub: tuple) -> tuple[np.ndarray, int]:
+    """`h1zy.reference` on instance ``i``'s words, as `h1_prove/stage.py` holds a staged round to it."""
+    from verity.core.protocols.pouw.circuit import h1zy as Z
+    a = [U.split_row(rows[f"a{x}"][i]) for x in range(shape.r)]
+    b = [U.split_row(rows[f"b{x}"][i]) for x in range(shape.c)]
+    salt, pos, roots = pub
+    rc, ok = Z.reference([x for x, _s in a], [x for x, _s in b], [s for _x, s in a], [s for _x, s in b],
+                         U.split_record(rows["zy"][i], shape.r * shape.c), salt, pos, roots, stream=U.tile() == "v3")
+    return U.receipt_words(rc), ok
+
+
+def agree(args) -> int:
+    U = _h1unit("structural")
+    shape = U.Shape(args.k, args.r, args.c)
+    name = "unit/pouw-h1-tile"
+    rec = {"k": args.k, "r": args.r, "c": args.c, "layout": U.layout()}
+    t = time.time()
+    flat = shape.stager(name, flat=True)
+    rec |= {"flat_s": round(time.time() - t, 2), "flat": _counts(flat.low)}
+    t = time.time()
+    tm = shape.stager(name)
+    rec |= {"structural_s": round(time.time() - t, 2), "structural": _counts(tm.low), "class_flat": flat.class_sha512,
+            "class_structural": tm.class_sha512}
+    if not hasattr(tm.low, "template"):
+        raise SystemExit(f"H1_TMPL=structural gave the flat statement at {args.k, args.r, args.c}")
+    if flat.row_ports != tm.row_ports or flat.out_words != tm.out_words:
+        raise SystemExit(f"the two stagers' ports differ: {flat.row_ports, flat.out_words} and {tm.row_ports, tm.out_words}")
+    names, rows, pubs = _instances(U, shape, np.random.default_rng(SEED))
+    x = np.concatenate([rows[p] for p in tm.row_ports], axis=1).astype(np.uint64)
+    t = time.time()
+    got_f, _cut, ok_f = flat.low.evaluate(x)
+    rec["flat_eval_s"] = round(time.time() - t, 2)
+    t = time.time()
+    got_t, _cut, ok_t = tm.low.evaluate(x)
+    rec["structural_eval_s"] = round(time.time() - t, 2)
+    at = np.cumsum([0] + tm.out_words)
+    cases = {}
+    for i, nm in enumerate(names):
+        rc, ok = _reference(U, shape, rows, i, pubs[i])
+        f, s = (np.asarray(g[i], np.uint64).astype(np.uint16) for g in (got_f, got_t))
+        cases[nm] = {"reference_ok": ok, "flat_ok": int(f[at[1]]), "structural_ok": int(s[at[1]]),
+                     "receipt_words": int(at[1]), "structural_eq_flat": bool(np.array_equal(f, s)),
+                     "flat_eq_reference": bool(np.array_equal(f[:at[1]], rc) and f[at[1]] == ok),
+                     "structural_eq_reference": bool(np.array_equal(s[:at[1]], rc) and s[at[1]] == ok)}
+    rec |= {"cases": cases, "flat_rows_ok": int(ok_f) == (1 << len(names)) - 1, "structural_rows_ok": int(ok_t) == (1 << len(names)) - 1}
+    rec["agree"] = rec["flat_rows_ok"] and rec["structural_rows_ok"] and all(
+        v["structural_eq_flat"] and v["flat_eq_reference"] and v["structural_eq_reference"] for v in cases.values()) and \
+        [cases[n]["reference_ok"] for n in names] == [1, 1, 0, 0, 0]
+    if not args.no_check:
+        from circuit_check import structural as ST
+        tmpl = tm.low.template
+        del flat, tm
+        t = time.time()
+        r = ST.check_unit(shape.definition(), [(p, ps) for p, _s, _b, ps in
+                                               U.HW.statement_rows(shape.definition(), U.ports(shape.definition()))],
+                          tmpl, name=name)
+        rec["check_unit"] = {"verdict": r["structural"]["verdict"], "failures": r["failures"], "warnings": r["warnings"],
+                             "structural": r["structural"], "seconds": round(time.time() - t, 2)}
+    rec["peak_gib"] = peak_gib()
+    Path(args.out).parent.mkdir(parents=True, exist_ok=True)
+    Path(args.out).write_text(json.dumps(rec, indent=1, default=str))
+    print("AGREE " + json.dumps({"k": args.k, "r": args.r, "c": args.c, "agree": rec["agree"],
+                                 "verdict": rec.get("check_unit", {}).get("verdict"), "peak_gib": rec["peak_gib"]}), flush=True)
+    return 0 if rec["agree"] and rec.get("check_unit", {}).get("verdict", "syntactic") in ("syntactic", "exhaustive", "random") else 1
+
+
+def sweep(args) -> int:
+    out = Path(args.out)
+    (out / "logs").mkdir(parents=True, exist_ok=True)
+
+    def one(shape):
+        k, r, c = shape
+        tag = f"{args.form}-k{k}-{r}x{c}"
+        cmd = [sys.executable, __file__, "lower", str(k), str(r), str(c), str(out / f"{tag}.json"), "--form", args.form]
+        t0 = time.time()
+        with open(out / "logs" / f"{tag}.log", "w") as log:
+            p = subprocess.Popen(cmd, stdout=log, stderr=subprocess.STDOUT)
+            _pid, status, ru = os.wait4(p.pid, 0)
+        rc = os.waitstatus_to_exitcode(status)
+        got = out / f"{tag}.json"
+        rec = {"tag": tag, "rc": rc, "peak_gib": round(ru.ru_maxrss / 2**20, 3), "wall_s": round(time.time() - t0, 1),
+               "result": json.loads(got.read_text()) if got.exists() else None}
+        print(f"{tag}: rc {rc}, peak {rec['peak_gib']} GiB, {rec['wall_s']} s", flush=True)
+        return rec
+
+    with ThreadPoolExecutor(args.jobs) as pool:
+        recs = list(pool.map(one, args.shapes))
+    (out / f"sweep-{args.form}.json").write_text(json.dumps(recs, indent=1))
+    return 0 if all(r["rc"] == 0 for r in recs) else 1
+
+
+def shapes(s: str) -> list[tuple[int, int, int]]:
+    return [tuple(int(v) for v in x.split(":")) for x in s.split(",") if x]
+
+
+def main() -> None:
+    ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
+    sub = ap.add_subparsers(dest="cmd", required=True)
+    for nm in ("lower", "agree"):
+        p = sub.add_parser(nm)
+        for v in ("k", "r", "c"):
+            p.add_argument(v, type=int)
+        p.add_argument("out")
+        if nm == "lower":
+            p.add_argument("--form", choices=("structural", "flat"), default="structural")
+            p.add_argument("--path")
+        else:
+            p.add_argument("--no-check", action="store_true")
+    p = sub.add_parser("sweep")
+    p.add_argument("--shapes", type=shapes, required=True)
+    p.add_argument("--form", choices=("structural", "flat"), default="structural")
+    p.add_argument("--jobs", type=int, default=1)
+    p.add_argument("--out", required=True)
+    a = ap.parse_args()
+    sys.exit({"lower": lower, "agree": agree, "sweep": sweep}[a.cmd](a))
+
+
+if __name__ == "__main__":
+    main()
