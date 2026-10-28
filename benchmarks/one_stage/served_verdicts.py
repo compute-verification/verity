@@ -493,7 +493,8 @@ def pouw(serve_dir: Path, window: int, out: Path, *, gate: str | None, key: str 
             doc["check"] = {k: got.get(k) for k in ("ok", "reason", "manifest", "rounds", "coin_source")}
             doc["credit"] = {k: (got.get("credit") or {}).get(k) for k in ("window", "manifest", "k", "drawn", "eps", "calls", "credit")}
             reasons += [f"{k}: {got[r]}" for k, r in (("coins", "reason"), ("manifest", "manifest")) if got.get(r)]
-    doc.update(verdict="reject" if reasons else "accept", reasons=reasons, **premises(doc))
+    doc.update(verdict="reject" if reasons else "accept", reasons=reasons)
+    doc.update(premises(doc))
     (out / DEVELOPMENT).write_text(json.dumps(doc, indent=1, sort_keys=True, default=str) + "\n")
     return doc
 
