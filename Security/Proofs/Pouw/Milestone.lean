@@ -30,7 +30,7 @@ theorem d1_complete_m1Domain (P : D1.Params Q R S) (hN : P.NoiseRange) : P.toPro
 
 /-- **(d′)** `D1.m1` with `W_ref ≤ Ω_max·W_mm`, `Ω_max ≤ 199/198`, `AdmitsRef` and TT(0.5%, ε) meets §3.3's
 requirement at `γ = 1 − (199/200)/Ω_max ≤ 1%`. -/
-theorem milestoneRequirement : Pinned.MilestoneRequirement := by
+theorem milestoneRequirement : GameStatements.MilestoneRequirement := by
   intro CM Wref qref Ωmax ε hΩ hΩ1 hW hAdm hTT
   exact ⟨⟨(D1.m1 Wref).toProtocol, qref, d1_complete_m1Domain _ (M1.noiseRange Wref), hAdm,
     gammaFromTT D1.M1Q D1.M1R Salt CM (D1.m1 Wref).toProtocol D1.m1Domain Params.γ0 Ωmax ε γ0_lt_one hΩ hW hTT⟩,
