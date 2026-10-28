@@ -388,7 +388,7 @@ def test_a_served_window_under_release_after_pouw_releases_exactly_h1s_drawn_rea
     def seal() -> None:
         try:
             released.append(draws.release(0, dev))
-        except Exception as e:  # noqa: BLE001 -- the test reads it
+        except SL.DrawRefused as e:
             released.append(e)
     sealer = threading.Thread(target=seal)
     sealer.start()

@@ -560,7 +560,7 @@ class H1Windows:
             units = drawn_units(run.commits, self.layout(), k, stream)
             reads = drawn_reads(run.served.tap, self.layout(), units)
             self.draws.put(window, DRAWER, reads)
-        except Exception as e:  # noqa: BLE001 -- any failure refuses the release: a seal never waits on a draw not coming
+        except (ValueError, KeyError, IndexError, TypeError, RuntimeError, OSError) as e:   # a seal never waits on a draw not coming
             why = f"{ENTRY}: window {window}'s draw: {type(e).__name__}: {e}"[:500]
             self.draws.refuse(window, why)
             return {"refused": why}
