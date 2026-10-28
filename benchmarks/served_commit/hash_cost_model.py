@@ -25,7 +25,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from hash_cost_h import analyze
 
-GRID_MB = (10, 25, 50, 100, 200, 400, 800, 1600)
+GRID_MB = (10, 25, 50, 100, 200, 400, 800, 1600, 3200, 6400, 12800)
 SERVED = ("t256", "4", "split")                                # native_rows.cu as served: 256 threads, 4 data phases, split leaves
 
 
