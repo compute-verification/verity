@@ -6,8 +6,11 @@ installed and closes it before the committer comes off, its outcome the window's
 the model loads where the server can't serve them."""
 from __future__ import annotations
 
+import functools
 import json
 import shlex
+from concurrent.futures import Future
+from datetime import datetime, UTC
 from types import SimpleNamespace
 from typing import Any
 
@@ -92,7 +95,7 @@ def test_each_commit_window_is_an_h1_window_tied_to_the_servers_commit_on_coins_
     arm.open(2)
     idle = arm.close(2)
     assert (idle["tied"], idle["steps_served"], idle["gate"]["gate_passed"]["rows"]) == (None, 0, 0), "it served no step"
-    assert arm.summary() == {"windows": 3, "tied": 2, "untied": [], "gate_passed_rows": 0}
+    assert arm.summary() == {"windows": 3, "tied": 2, "untied": [], "gate_passed_rows": 0, "releasing": 0, "unused": []}
     srv.src.uninstall()
 
 
@@ -178,6 +181,143 @@ def test_a_commit_that_skips_a_linear_at_a_step_opens_no_h1_window(tmp_path, mon
     srv.src.uninstall()
 
 
+class Later:
+    """`serve_h1.worker` as the tests drive it: what it is handed waits, in turn, until `run` (``shutdown`` too), and
+    ``inside`` says whether one of its jobs is running now."""
+
+    def __init__(self) -> None:
+        self.jobs: list[tuple[Future, Any]] = []
+        self.inside = False
+
+    def submit(self, fn: Any, *args: Any) -> Future:
+        self.jobs.append((Future(), functools.partial(fn, *args)))
+        return self.jobs[-1][0]
+
+    def run(self) -> None:
+        while self.jobs:
+            fut, job = self.jobs.pop(0)
+            self.inside = True
+            try:
+                got = job()
+            except (ValueError, RuntimeError, OSError) as e:
+                self.inside = False
+                fut.set_exception(e)
+            else:
+                self.inside = False
+                fut.set_result(got)
+
+    def shutdown(self, wait: bool = True) -> None:
+        self.run()
+
+
+class _InOrderAuditor(_GateAuditor):
+    """`_GateAuditor` whose wait between polls ends only the oldest session still unended, the one whose window is
+    releasing (windows release in order), so a later window's session stays open meanwhile."""
+
+    def settle(self, _seconds: float) -> None:
+        sid = next((sid for sid, s in self.sessions.items() if "thread" in s and not s.get("ended")), None)
+        if sid is not None:
+            self.end(sid)
+            self.sessions[sid]["ended"] = True
+
+
+def test_reserves_and_releases_run_off_the_loop_while_the_next_window_serves(tmp_path, monkeypatch):
+    """With ``ahead`` and ``closer``: window 0's session is reserved at its open (after any period the run opened) and
+    window k+1's while window k serves, and window k's release (its manifest, draw coin, session close and the wait for
+    its end entry) runs after window k+1 has opened and served on a session of its own. The loop's gate calls are window
+    0's reserve and each window's open; each window keeps its own session, coins and transcript, and the outcomes are
+    recorded in window order."""
+    srv, auditor = _Server(monkeypatch), _InOrderAuditor(tmp_path, monkeypatch)
+    ahead, closer = Later(), Later()
+    calls: list[tuple[str, bool]] = []
+
+    def gate(argv: list[str]) -> tuple[int, str]:
+        calls.append((shlex.split(argv[-1])[0], ahead.inside or closer.inside))
+        return auditor.run(argv)
+    sessions = SH.GateSessions(CC.Gate(GATE, gate), PEER, STEPS, wait=auditor.settle, listens=lambda port: True,
+                               ahead=ahead, now=lambda: datetime(2026, 10, 20, 11, 8, tzinfo=UTC))
+    arm = SH.H1Windows(srv.model, srv.com, ROWS, STEPS, engine=object(), out=tmp_path, unit=_unit(), sessions=sessions,
+                       closer=closer)
+    assert (arm.describe()["reserve"], arm.describe()["release"]) == ("ahead", "off the loop")
+    assert not ahead.jobs and not calls, "nothing is reserved before window 0 opens"
+    pending, runs = [], []
+    for w, prompts in enumerate(PROMPTS):
+        ahead.run()
+        arm.open(w)
+        runs.append(srv.serve(prompts, w))
+        pending.append(arm.close(w))
+        assert not pending[-1].done() and not (tmp_path / "h1" / f"w{w}" / PH.CALLS_FILE).exists()
+        assert arm.summary()["releasing"] == w + 1 and arm.outcomes == []
+    assert "execute_model" not in vars(srv.runner) and "_acquire" not in vars(srv.com), "both windows' hooks are off"
+    closer.run()
+    outs = [f.result() for f in pending]
+    assert [o["window"] for o in outs] == [o["window"] for o in arm.outcomes] == [0, 1]
+    for w, (out, run) in enumerate(zip(outs, runs)):
+        assert "error" not in out and out["tied"] and out["coin_source"] == PH.CHALLENGER, out
+        assert out["session"]["end"] == {"opened": True, "rc": 0, "closed": True, "complete": True}
+        assert out["session"]["window"] == w and run.details["challenger"] == {"closed": True}
+        record = json.loads((tmp_path / "h1" / f"w{w}" / PH.CALLS_FILE).read_text())
+        assert record["commitment"]["session"]["session"] == out["session"]["session"]
+        assert set(out["seconds"]) == {"reserve", "install", "close_on_loop", "queued", "release", "ended"}
+    assert outs[0]["session"]["session"] != outs[1]["session"]["session"]
+    arm.drain()
+    assert [verb for verb, off in calls if not off] == ["reserve"] + ["open", "status"] * 2, \
+        "window 0's reserve, then round 0's open and its commitment by status"
+    assert [verb for verb, _off in calls].count("reserve") == 3, "window 2's, reserved ahead, is never opened"
+    assert arm.summary()["unused"] == [sessions.held[-1]["session"]] and sessions.held[-1]["window"] == 2
+    srv.src.uninstall()
+
+
+def test_a_reserve_ahead_that_expires_before_its_window_is_replaced_and_none_is_made_ahead_in_a_period(tmp_path,
+                                                                                                    monkeypatch):
+    """A session reserved ahead that expires within `MARGIN` of its window's open is left unused and the window reserves
+    another; a reserve the gate answers inside a period makes none ahead, since one no window opened would leave the
+    period incomplete."""
+    answers = iter([{"expires_utc": "2026-10-27T20:04:00Z", "period": None},
+                    {"expires_utc": "2026-10-27T22:00:00Z", "period": "p1"}])
+    seen: list[str] = []
+
+    def gate(argv: list[str]) -> tuple[int, str]:
+        seen.append(shlex.split(argv[-1])[0])
+        return 0, json.dumps({"session": f"s20261027T2000{len(seen):02d}Z-{len(seen):04x}", "seq": len(seen),
+                              "peer": PEER, "by": "vllm", **next(answers)})
+    ahead = Later()
+    sessions = SH.GateSessions(CC.Gate(GATE, gate), PEER, STEPS, ahead=ahead,
+                               now=lambda: datetime(2026, 10, 27, 20, 0, tzinfo=UTC))
+    sessions.ahead_of(0)
+    ahead.run()
+    got = sessions.take(0)
+    assert got["period"] == "p1" and sessions.held[0]["unused"].startswith("its reserve expires at 2026-10-27T20:04:00Z")
+    assert seen == ["reserve", "reserve"] and not ahead.jobs, "none ahead inside a period"
+
+
+def test_a_release_that_fails_off_the_loop_is_its_windows_outcome_in_order(tmp_path, monkeypatch):
+    """Window 0's release raises off the loop after its session closed: its outcome carries the error, recorded before
+    window 1's, which opened, served and released as its own."""
+    from verity_vllm.protocols.pouw.h1 import window as PHW
+
+    srv, closer = _Server(monkeypatch), Later()
+    finish = PHW.finish
+
+    def failing(run: Any, client: Any) -> None:
+        finish(run, client)
+        if str(run.transcript_dir).endswith("w0"):
+            raise RuntimeError("the draw's record was not written")
+    monkeypatch.setattr(PHW, "finish", failing)
+    arm = SH.H1Windows(srv.model, srv.com, ROWS, STEPS, engine=object(), out=tmp_path, unit=_unit(), closer=closer)
+    pending = []
+    for w, prompts in enumerate(PROMPTS):
+        arm.open(w)
+        srv.serve(prompts, w)
+        pending.append(arm.close(w))
+    closer.run()
+    outs = [f.result() for f in pending]
+    assert outs[0]["error"] == "close: RuntimeError: the draw's record was not written" and outs[0]["tied"]
+    assert "error" not in outs[1] and outs[1]["tied"]
+    assert [o["window"] for o in arm.outcomes] == [0, 1] and arm.summary()["releasing"] == 0
+    srv.src.uninstall()
+
+
 class ArmSpy:
     """`serve_h1.H1Windows` as `CommitWindows` drives it: at each open and close, whether the committer's patches of the
     runner are on; ``fail`` the windows whose open raises."""
@@ -221,7 +361,52 @@ def test_commit_windows_open_the_arm_on_the_installed_committer_and_close_it_fir
     assert [w["pouw_h1"] for w in wins] == [{"error": "open: ValueError: no int8 source"} if w["window"] in fail
                                             else {"window": w["window"], "tied": True} for w in wins]
     got = s.windows.summary()
-    assert got["passed"] and got["pouw_h1"] == {"windows": len(wins), "failed": list(fail)}
+    assert got["passed"] and got["pouw_h1"] == {"windows": len(wins), "failed": list(fail), "closing": []}
+
+
+class LaterArm(ArmSpy):
+    """`ArmSpy` whose close hands back a `Future` for its outcome, which the test resolves once serving has ended."""
+
+    def __init__(self, runner: Any) -> None:
+        super().__init__(runner)
+        self.futures: dict[int, Future] = {}
+
+    def close(self, window: int) -> Future:
+        super().close(window)
+        self.futures[window] = Future()
+        return self.futures[window]
+
+
+def test_commit_windows_write_a_windows_line_once_its_arms_release_ends(tmp_path):
+    """An arm whose release runs off the loop: the loop serves every window without waiting for any release, each
+    window's line is held until its arm's outcome comes, the lines are written in window order however the outcomes
+    come, and a release that raised is that window's failure, its error the line's ``pouw_h1``."""
+    spies: list[LaterArm] = []
+
+    def arm(runner: Any) -> LaterArm:
+        spies.append(LaterArm(runner))
+        return spies[-1]
+
+    bodies = [dict(CERTIFIER_BODY, prompt=[128000, 10 + i], max_tokens=3, min_tokens=3) for i in range(3)]
+    with Serving(tmp_path, window_steps=2, arm=arm) as s:
+        serve_concurrently(s, bodies)
+    (spy,) = spies
+    closed = sorted(spy.futures)
+    assert len(closed) > 1 and not (tmp_path / "windows.jsonl").exists()
+    held = s.windows.summary()
+    assert held["pouw_h1"]["closing"] == closed and held["windows"] == 0 and not held["passed"]
+    failed = closed[1]
+    for w in closed:
+        if w == failed:
+            spy.futures[w].set_exception(RuntimeError("its session's end entry never came"))
+        else:
+            spy.futures[w].set_result({"window": w, "tied": True})
+    wins = records(tmp_path, "windows.jsonl")
+    assert [w["window"] for w in wins] == closed and all(w["passed"] for w in wins)
+    assert [w["pouw_h1"] for w in wins] == [{"error": "close: RuntimeError: its session's end entry never came"}
+                                            if w["window"] == failed else {"window": w["window"], "tied": True} for w in wins]
+    got = s.windows.summary()
+    assert got["passed"] and got["pouw_h1"] == {"windows": len(wins), "failed": [failed], "closing": []}
 
 
 def test_serve_openai_refuses_protocols_it_cant_serve_before_the_model_loads(tmp_path):
