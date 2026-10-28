@@ -204,7 +204,7 @@ def main(argv: list[str] | None = None) -> int:
         commit={**committer.describe(), "context": "fixture"},
         results=results, prompts=prompts, outputs=outputs, replay=replay, legs=legs,
         extra={"serving": serving, "tamper": a.tamper or None, "registration": registration, "micro_batch": a.micro_batch or a.batch,
-               "attention": driver.attn.kind + (" (kernels' attn_ref and softmax_t)" if driver.attn.kind == "attn_ref"
+               "attention": driver.attn.kind + (" (attn_bf16's reference kernels and softmax_t)" if driver.attn.kind == "attn_ref"
                                                 else " (the Definitions' numpy kernels on the CPU)"),
                "gemm": "torch._int_mm + torch epilogue" if a.device.startswith("cuda") else "exact f64 matmul + torch epilogue",
                "cuda_peak_allocated_bytes": torch.cuda.max_memory_allocated() if a.device.startswith("cuda") else None})
