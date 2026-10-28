@@ -8,7 +8,7 @@ A spec-level reference for POUS, proof of useful space for model weights, with t
 - **the dense scheme** (`verity.core.protocols.pous.dense`, selectable): the same on the complete DAG (Lean's `chainDense`);
 - **P2** (`verity.core.protocols.pous.schemes.p2`, **experimental**): the squaring-based scheme, proved in abstract M1 under the
   pinned `P2SlackFamilyUncond` (k = 105), with its instantiation assumption not accepted; never the default.
-  `p2-16448/v4` has the spec's (v4) counter-mode SHA-512 keys, `p2-16448/v2` ChaCha8 keys, which the spec does not allow;
+  `p2-16448/v4` has P2 v4's counter-mode SHA-512 keys, `p2-16448/v2` ChaCha8 keys, which v4 does not allow ("P2" below);
 - **P3** (`verity.core.protocols.pous.scheme`, the fast research codec): two layers over the band graph `B(220, 12)` with a transpose
   connector and a tweakable `P` (Lean's `p3Scheme`).
 
@@ -169,3 +169,71 @@ rest counts in `R`.
 Tests: `uv run pytest verity/core/protocols/pous` (about 8 s). P3's 64 KB-label segment vector runs with `VERITY_POUS_SLOW=1`.
 Regenerate the vectors with `python verity/core/protocols/pous/tests/pous_vectors.py`, and the Lean vectors with
 `tests/lean/generate.sh`.
+
+## P2
+
+P2 v4 (`p2/v4`, `schemes/p2.py`) encodes payload `m` into block `j` as `E_j(m) = ρ(σ_K(ρ((m + t_j) mod p)))` and decodes
+it as `D_j(c) = (d(σ_K(d(c))) − t_j) mod p`: `d(z)` is `z² mod p`, negated when `z` is odd, `ρ` its inverse (one root,
+its parity chosen), and `σ_K(r)` is `r ⊕ K` when that is below `p` and `r` otherwise, never reduced. Its point is
+`w = 16,448` bits, `p = 2^16448 − 21065` (`p2-p16448-c21065`, `p ≡ 3 mod 4`), the payload profile `p2-2054B` (2,054
+payload bytes in each 2,056-byte block), `B = 2^19` blocks in 8 segments of `2^16`, `k = 105` challenges revealed one at
+a time, `Δ = 0.5 ms` plus a measured RTT allowance of at most 354 µs, and SHA-512 with its whole output for every digest.
+Every integer is fixed-width, unsigned and big-endian. A block's `K` and `t` are expanded where they are used:
+counter-mode SHA-512 over a prefix that frames the setup salt, drawn after `W` is committed, zero-padded to whole 128-byte
+chunks; `K` is the stream's first `w/8` bytes and `t` its first `w/8`-byte word below `p`. The challenges are
+`verity.ml.randomness` v2, bound to the epoch, the verification root and the salt. P2 is experimental: its
+instantiation assumption, P2–M1-SGI (`P2RingReducesToM1p`), is not accepted.
+
+- **Lean.** The package `pous_check` (`check/`) is P2's verifier: `PousCheck.P2`, `Keys` and `Wire.Codec` (the maps and
+  keys), `Commit`, `Merkle` and `Challenge` (the commitment to `W`, the verification tree in both leaf forms, the
+  challenges), `Wire.verifyAudit` and `Audit.check` (a setup and one timed audit, to its `FINAL` frame byte for byte),
+  `Certificate.gate` and `assess` (the certificate gate, `deadlineRefusals` and the StorageProfile), and
+  `RunProtocol.check` (a recorded run, whole). Its executables are `pous-setup`, `pous-timed-audit`, `pous-run` and
+  `pous-run-protocol`, and the difftests `pous-setup-difftest`, `pous-audit-difftest` and `pous-verdict-difftest`;
+  `check/interop.py --all` holds it to `wire.py` byte for byte on every vector.
+- **Guarantees** (`Security/Definitions/Pous/Guarantees/P2.lean`): `P2SlackFamilyUncond` (abstract M1 on `[0, p)`, the
+  `λ = 128` row at `k = 105` for every block count from `2^8` to `2^23`: the certificate), `P2SlackB19Uncond`,
+  `P2ErrorSplitB19Uncond`, `P2MeetsM1pB19Uncond`, `P2MeetsM1pFamilyUncond`, `P2MeetsM1pW8192Uncond`,
+  `P2SlackFamilyFreeBlocks`, `P2SlackFamilyWide`, `P2SlackFamilyFreeBlocksWide`, and the ring-model forms
+  `P2RingAuditSecureOfReduces`, `P2RingAuditSecureOfRoundSecure` and `P2RingGradedOfRoundSecure`; `P2ContentAbsorbs`
+  (`Guarantees/Obligation.lean`); above `2^23` blocks, `Pous.Period.SecurityProofs.periodHeldAt`. The named
+  assumptions (`Assumptions/P2.lean`): `PrimeP16448`, `P2RingAuditSecure`, `P2RingReducesToM1p`, `P2RingRoundSecure`,
+  `P2RingRoundSecureWide` and `CoinCommitHides`. `schemes.p2.P2_CLAIMS` and `WIDE_CLAIMS` are the claims a certificate
+  rests on.
+- **Python.** `schemes.p2`: `P2Params`, the schemes `P2` (`p2-16448/v4`) and `P2ChaCha` (`p2-16448/v2`),
+  `family_certificate`, `wide_certificate`, `expand_prefix`, `stream`, `below`, `sha512_keys`, `encode_segment`,
+  `decode_segment`, and `CERT_K`, `DELTA_NS`, `RTT_ALLOWANCE_CAP_NS` and `ROOT_CALL_NS` (half the fastest cooperating
+  16,448-bit root; the cap is the largest whole µs with `Δ + cap < ROOT_CALL_NS`). `benchmarks/pous/p2_v1/reference.py`
+  is the reference (the maps, keys, salt, tree and derivations), and `wire.py` beside it is `p2-audit-wire/v4`
+  (`envelope`, `setup_messages`, `open_message`, `challenge_message`, `response_message`, `record`, `final_message`,
+  `verify_path`, `parse_envelope`, `verify_audit`, `parse_final`).
+- **The registered scheme and the wire.** `p2-16448/v4` runs the generic protocol's setup, so four things differ from
+  `reference.py` and the wire: its setup salt (24 bytes from `setup.draw_salt`, not 32 from `verity/pous/p2-setup/v4`
+  over the commitment), its key prefix (it frames that salt), its leaf (`0x00 ‖ tag_s ‖ u16le(v) ‖ R`, not
+  `0x00 ‖ salt ‖ u64be(s) ‖ u16be(v) ‖ R`) and its challenges (`verity/pous/audit-challenge/v1`, not
+  `verity/pous/p2-audit-challenge/v4`). `PousCheck.Keys` and `Merkle` hold both forms.
+
+`p2-audit-wire/v4`: a frame is `"P2AU" ‖ 0x04 ‖ type ‖ u32be(len body) ‖ body`. Digests are 64 bytes; the setup salt,
+the audit id and the round nonce are 32; `n = w/8`, and `h` is the block's RFC 9162 path length.
+
+| Type | Code | Body |
+|---|---|---|
+| `SETUP_COMMIT` | `0x01` | `u32be(ml) ‖ manifest[ml ≤ 512] ‖ w_commitment` |
+| `SETUP_SALT` | `0x02` | `w_commitment ‖ setup_salt` (96) |
+| `SETUP_BLOCK` | `0x03` | `w_commitment ‖ setup_salt ‖ u64be(index) ‖ u32be(n) ‖ block[n]` |
+| `SETUP_ROOT` | `0x04` | `w_commitment ‖ setup_salt ‖ u64be(B) ‖ root ‖ setup_mode` (169) |
+| `AUDIT_OPEN` | `0x10` | `epoch_id ‖ audit_id ‖ mode ‖ u16be(k) ‖ u64be(Δ) ‖ u64be(rtt) ‖ flags ‖ u64be(counter)` (124) |
+| `CHALLENGE` | `0x11` | `epoch_id ‖ audit_id ‖ u16be(round) ‖ u64be(index) ‖ nonce` (138) |
+| `RESPONSE` | `0x12` | `epoch_id ‖ audit_id ‖ u16be(round) ‖ u64be(index) ‖ u32be(n) ‖ block[n] ‖ u16be(h) ‖ siblings[64·h]` |
+| `FINAL` | `0x13` | `epoch_id ‖ audit_id ‖ verdict ‖ code ‖ u16be(rounds) ‖ u64be(Δ) ‖ u64be(rtt) ‖ transcript_hash ‖ u16be(r) ‖ records[147·r]` |
+
+A record is `u16be(round) ‖ u64be(index) ‖ u64be(elapsed_ns) ‖ flags ‖ SHA-512(challenge frame) ‖ SHA-512(response
+frame)`, its flags bit 0 authenticated, bit 1 on time, bit 2 decode performed and bit 3 decode valid. The failure codes,
+in the order one is chosen when several apply: 1 malformed, 2 identity, round, index, replay or domain, 3
+authentication, 4 late, 5 decode or payload comparison; 6 is transport and 0 success. The transcript hash is
+`SHA-512("verity/pous/p2/transcript/v4\0" ‖ AUDIT_OPEN ‖ every challenge and response frame)`.
+
+The vectors are `vectors.json` (schema `p2-test-vectors/v4`), `audit-vectors.json` and `audit-negative-vectors.json`
+beside `reference.py`, which pins each file's SHA-512 (`VECTORS_SHA512`, `AUDIT_VECTORS_SHA512`,
+`NEGATIVE_VECTORS_SHA512`) and each entry's by width (`ENTRY_SHA512`, which `PousCheck.SetupDifftest` holds too).
+`cd benchmarks/pous && uv run python -m p2_v1.vectors` regenerates them and rewrites their pins.
