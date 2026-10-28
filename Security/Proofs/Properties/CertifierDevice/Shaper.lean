@@ -55,7 +55,7 @@ def handBody (T : Nat) (_ : Nat) (s : Shaper) : Id (ForInStep Shaper) :=
 def handStage (T : Nat) (s : Shaper) : Shaper := (forIn (List.range' 0 s.pending.size) s (handBody T)).run
 
 /-- `Shaper.tick`'s row and the window's close. -/
-def finishStage (T : Nat) (s : Shaper) : Shaper × Slots × Option Record :=
+def finishStage (T : Nat) (s : Shaper) : Shaper × Slots × Option BlockGrid :=
   let s1 : Shaper := { s with
     certifier := s.certifier.tick.1, queued := s.queued - min s.queued s.certifier.tick.1.params.allocation,
     t := s.t + 1 }

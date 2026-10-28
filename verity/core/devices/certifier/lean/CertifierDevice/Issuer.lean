@@ -101,7 +101,7 @@ namespace Issuer
 
 /-- What `Issuer.certify` computes before it signs: the record's head, the digest the certificate signs (the head's
 digest under `salt`, refused unless it is 64 bytes) and the certificate message. -/
-def prepare (i : Issuer) (salt : ByteArray) (record : Record) (direction : Direction) (params : Params)
+def prepare (i : Issuer) (salt : ByteArray) (record : BlockGrid) (direction : Direction) (params : Params)
     (parameters : ByteArray) (deadline : Bool) : Except String (RecordHead × ByteArray × ByteArray) := do
   if salt.size ≠ NetworkCheck.saltBytes then
     throw s!"the certifier's coins gave {salt.size} bytes for a {NetworkCheck.saltBytes}-byte salt"
@@ -113,7 +113,7 @@ def prepare (i : Issuer) (salt : ByteArray) (record : Record) (direction : Direc
 
 /-- The prepared record signed at the reserved leaf, or listed in `refused` when the host refused the reservation (or the
 session's start before it). -/
-def finish (i : Issuer) (salt : ByteArray) (leaf : Except String Nat) (record : Record) (direction : Direction)
+def finish (i : Issuer) (salt : ByteArray) (leaf : Except String Nat) (record : BlockGrid) (direction : Direction)
     (prepared : RecordHead × ByteArray × ByteArray) : Except String (Issuer × Option CertifiedRecord) := do
   let (head, digest, message) := prepared
   match leaf with
@@ -126,7 +126,7 @@ def finish (i : Issuer) (salt : ByteArray) (leaf : Except String Nat) (record : 
 refused reservation): refused (an error) where the salt is not 64 bytes or the record has no head, as Python raises
 `ValueError`; a record whose status isn't complete is listed in `refused` and signed nothing, whatever the
 reservation: the issuer certifies only a complete record. -/
-def certify (i : Issuer) (salt : ByteArray) (leaf : Except String Nat) (record : Record) (direction : Direction)
+def certify (i : Issuer) (salt : ByteArray) (leaf : Except String Nat) (record : BlockGrid) (direction : Direction)
     (params : Params) (parameters : ByteArray) (deadline : Bool := true) :
     Except String (Issuer × Option CertifiedRecord) := do
   let prepared ← i.prepare salt record direction params parameters deadline
@@ -172,7 +172,7 @@ end Issuer
 
 /-- `Issuer.certify` against the world: the salt from its coins, the head and the message, then the session's start
 unless it has started, then the reservation from its signer state, then the signature. -/
-def certifyWith (w : Core.World Out) (i : Issuer) (record : Record) (direction : Direction) (params : Params)
+def certifyWith (w : Core.World Out) (i : Issuer) (record : BlockGrid) (direction : Direction) (params : Params)
     (parameters : ByteArray) (deadline : Bool := true) : IO (Issuer × Option CertifiedRecord) := do
   let salt ← w.coins NetworkCheck.saltBytes
   let prepared ← IO.ofExcept (i.prepare salt record direction params parameters deadline)

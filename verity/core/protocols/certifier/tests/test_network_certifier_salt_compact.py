@@ -22,7 +22,7 @@ import pytest
 
 from verity.core.protocols.certifier import active as A
 from verity.core.protocols.certifier import served as SV
-from verity.core.protocols.certifier.grid import COMPLETE, Certifier, GridParams, Record, row_count
+from verity.core.protocols.certifier.grid import COMPLETE, Certifier, GridParams, BlockGrid, row_count
 from verity.core.protocols.certifier.schedule import ClockSync
 
 B = 128  # frame bytes, over the salt frame's
@@ -30,8 +30,8 @@ SYNC = ClockSync(0, Fraction(1, 1))
 PROFILE = SV.ServedProfile(response_frames=1, request_frames=1, windows=1, own=1)
 
 
-def _raw_record(grid: list) -> Record:
-    return Record("ingress", 0, tuple(grid), COMPLETE)
+def _raw_record(grid: list) -> BlockGrid:
+    return BlockGrid("ingress", 0, tuple(grid), COMPLETE)
 
 
 def _salt_frame() -> bytes:
@@ -42,7 +42,7 @@ def _data_frame() -> bytes:
     return A.encode_frame(A.DATA, A.CANONICAL_STREAM, b"q", B)
 
 
-def _salt_verdict(record: Record) -> str | None:
+def _salt_verdict(record: BlockGrid) -> str | None:
     revealed = {0: secrets.token_bytes(A.SALT_BITS // 8)}
     return A.check_salts(A.Audit(), "ingress", [record], windows=1, salts=revealed)[0].violation
 

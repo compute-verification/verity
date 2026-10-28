@@ -162,7 +162,7 @@ def evRow (st : State) : Event → Slots
 
 /-- The status of the record an event publishes from `st`, if it is an egress tick at a window's last bucket. -/
 def evStatus (st : State) : Event → Status
-  | .tick .egress now backlog => ((egressMid st now backlog).tick.2.2.map Record.status).getD .complete
+  | .tick .egress now backlog => ((egressMid st now backlog).tick.2.2.map BlockGrid.status).getD .complete
   | _ => .complete
 
 open Classical in

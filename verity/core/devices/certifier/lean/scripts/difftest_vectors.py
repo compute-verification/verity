@@ -97,7 +97,7 @@ from verity.core.protocols.certifier.active import (
     request_frames,
     salt_frame,
 )
-from verity.core.protocols.certifier.grid import Certifier, GridParams, Reason, Record, row_count
+from verity.core.protocols.certifier.grid import Certifier, GridParams, Reason, BlockGrid, row_count
 from verity.core.protocols.certifier.schedule import ClockSync, LogicalFrame, SyncSet, expected_grids
 from verity.core.protocols.certifier.served import Admission, ServedProfile, admits
 
@@ -158,7 +158,7 @@ class Harness:
             self.connecting[s] = future
         return await future
 
-    def publish(self, record: Record, params: GridParams) -> None:
+    def publish(self, record: BlockGrid, params: GridParams) -> None:
         self.actions.append(["publish", record_json(record), params_json(params)])
 
 
@@ -297,7 +297,7 @@ def params_json(p: GridParams) -> dict:
     return {"T": p.buckets, "r": p.allocation, "B": p.frame_bytes, "tau": p.bucket_ms, "Q": p.queue_capacity}
 
 
-def record_json(r: Record) -> dict:
+def record_json(r: BlockGrid) -> dict:
     return {"link": r.link, "window": r.window, "grid": [[None if x is None else x.hex() for x in row] for row in r.grid],
             "status": None if r.status.reason is None else r.status.reason.value}
 

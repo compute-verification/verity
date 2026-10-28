@@ -49,7 +49,7 @@ from pathlib import Path
 import verity.core.protocols.certifier
 from verity.core.protocols.certifier.certificate import (SALT_BYTES, CertifiedClock, Direction, Issuer, LmsKey,
                                                                  SignerRefused, parameters_digest)
-from verity.core.protocols.certifier.grid import GridParams, Reason, Record, Status
+from verity.core.protocols.certifier.grid import GridParams, Reason, BlockGrid, Status
 from verity.core.protocols.certifier.schedule import ClockSync, SyncSet
 from verity.ml.crypto import lms
 
@@ -185,9 +185,9 @@ def instance(seed: int) -> dict:
     return {"key": key, "session": session.hex(), "calls": calls}
 
 
-def record_of(x: dict) -> Record:
+def record_of(x: dict) -> BlockGrid:
     grid = tuple(tuple(None if s is None else bytes.fromhex(s) for s in row) for row in x["grid"])
-    return Record(x["link"], x["window"], grid, Status(None if x["status"] is None else Reason(x["status"])))
+    return BlockGrid(x["link"], x["window"], grid, Status(None if x["status"] is None else Reason(x["status"])))
 
 
 def tampered(c, key: LmsKey, private: lms.PrivateKey, q: int, session: bytes, tamper: list) -> bool:
