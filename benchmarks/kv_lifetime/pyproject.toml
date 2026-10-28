@@ -1,8 +1,0 @@
-# KV block lifetimes under a chat workload and the KV-credit frontier. Not a package: `serve.py` runs on a GPU node
-# (`run.sh`); the lifetime analysis (`lifetimes.py`, `analyze.py`) and the frontier table (`frontier.py`) run here as a
-# suite.
-[tool.pytest.ini_options]
-testpaths = ["tests"]
-
-[tool.verity.tests]
-inputs = []

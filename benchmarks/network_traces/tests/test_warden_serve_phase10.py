@@ -1,7 +1,7 @@
-"""REDTEAM phase 10, target 2 (cursor/redteam-phase10-warden-061a @a84b43077b), against #3654's `PublisherProcess`:
+"""Adversarial cases against the relay's `PublisherProcess`:
 the spawned process that alone holds the warden's key, rebuilds each record from the rows the warden releases a tick
 at a time, and keeps, certifies and commits it. Every case runs the warden on a `VirtualClock`, with no sleeps and no
-wall clock: the files the process writes are byte for byte the ones #3632's thread publisher writes on the same run
+wall clock: the files the process writes are byte for byte the ones the thread publisher writes on the same run
 and key, a faulted window's status included; a process killed mid-window fails the run at that window's close with
 its exit code, and the check refuses the window; a process a window behind moves no tick and keeps every record whole;
 a truncated file never makes the check accept. And the close marker carries the record's grid's SHA-512: a row lost,
@@ -56,7 +56,7 @@ def blocking_commit(link, direction, record, params, session, salts=None, wiring
 
 
 class ThreadPublisher:
-    """#3632's publisher: `Publisher.keep` on one worker thread of the warden's process, its results at `close`."""
+    """The thread publisher: `Publisher.keep` on one worker thread of the relay's process, its results at `close`."""
 
     def __init__(self, out: Path, key: Path, commit) -> None:
         self.signer = ws.cs.signer(key)
@@ -214,7 +214,7 @@ def _cells_without_cost(out: Path) -> list[dict]:
 
 @pytest.mark.parametrize("late", [None, {20: 0.1}], ids=["clean", "window-0-faulted"])
 def test_the_process_writes_byte_for_byte_what_the_thread_publisher_wrote(tmp_path, late):
-    """On one run and one key, the process's records, row salts and signed registrations are #3632's thread
+    """On one run and one key, the process's records, row salts and signed registrations are the thread
     publisher's byte for byte (the cost lines aside, which are timings), and its certificates are too but for what the
     certifier's fresh `salt_c` decides, each on the same LMS leaf and verifying on the head of the record the warden
     closed (no two runs share a `salt_c`, thread or process). With tick 20 late, window 0 of every link is
@@ -245,7 +245,7 @@ def test_a_process_killed_mid_window_fails_the_run_and_the_check_refuses_the_win
     """The process killed (SIGKILL, by its pid) ten ticks into window 1: no tick runs late, the warden's run raises at
     window 1's close, before publishing it, and `close` raises too, without waiting on the dead process. Nothing of
     window 1 is on disk, the check refuses it on every link, and every head it does find certified is that of the
-    record the warden closed. Both raise the process's exit code (REDTEAM's residual: a bare `EOFError`, the dead
+    record the relay closed. Both raise the process's exit code (rather than a bare `EOFError`, the dead
     process's end of the pipe reading as a message to `_receive`'s `poll` and `recv` hitting its EOF)."""
     (key,) = _key(tmp_path, "process-key")
     run = _drive(tmp_path / "run", key, process=True, kill_at=PARAMS.window + 10)
@@ -363,10 +363,10 @@ def test_the_close_marker_carries_the_records_grid_digest(tmp_path):
 
 @pytest.mark.parametrize("edit", [_shifted, _altered], ids=["shifted", "altered"])
 def test_a_row_lost_doubled_or_changed_between_the_processes_is_refused(tmp_path, edit):
-    """REDTEAM phase 10 (7): the process trusted that the rows since the last marker were the window's. With the
-    marker's digest it refuses window 0's egress record when a row was lost and another doubled on the way (the
-    count unchanged) or a frame's byte changed: the run fails with the process's refusal, nothing of that record is
-    signed, and the check refuses it. Window 0's ingress record, kept before it, stays certified."""
+    """The process once trusted that the rows since the last marker were the sampling block's. With the marker's
+    digest it refuses sampling block 0's egress record when a row was lost and another doubled on the way (the count
+    unchanged) or a frame's byte changed: the run fails with the process's refusal, nothing of that record is signed,
+    and the check refuses it. Sampling block 0's ingress record, kept before it, stays certified."""
     (key,) = _key(tmp_path, "process-key")
     run = _drive(tmp_path / "run", key, process=True, transport=_egress_rows(edit()))
     first = run["failed"] or run["close_error"]

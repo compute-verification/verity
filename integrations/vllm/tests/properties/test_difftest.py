@@ -72,7 +72,7 @@ def test_check_requires_edge_kinds(tmp_path, monkeypatch):
 
 
 def test_produce_writes_bf16_outputs_as_words(tmp_path, monkeypatch):
-    # [SHARED-CODE lane dense] a production op returning bfloat16 must cross to numpy as uint16 words (numpy has no bf16;
+    # a production op returning bfloat16 must cross to numpy as uint16 words (numpy has no bf16;
     # `Tensor.numpy()` raised "Got unsupported ScalarType BFloat16" and every bf16-output Definition was un-difftestable)
     torch = pytest.importorskip("torch")
     mod = types.ModuleType("fake_bf16_adapter")
