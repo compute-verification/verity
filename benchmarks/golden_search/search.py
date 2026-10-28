@@ -107,7 +107,8 @@ class Front:
 def summary(r: dict) -> dict:
     keep = ("J", "serve", "prove_ratio", "prove_gpu_s", "verify_cpu_s", "t_remote_ms", "t_stock_ms", "t_window_ms",
             "parts_ms", "prove_parts", "commit_gb", "words_gb", "retained_gb", "floor_min", "credited", "max_ands",
-            "gates", "lower_gib", "lower_gib_today", "lower_min", "draws_values", "draws_compute", "reasons")
+            "gates", "lower_gib", "lower_gib_today", "lower_min", "draws_values", "draws_compute", "credited_gpu_s",
+            "forced_gpu_s", "reasons")
     return {k: r[k] for k in keep if k in r}
 
 

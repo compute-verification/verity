@@ -23,25 +23,24 @@ from dataclasses import replace
 from itertools import product
 from pathlib import Path
 
-GD_MODEL_COMMIT = "ac1a321b4e"
+GD_MODEL_COMMIT = "494f80d0eb"
 sys.path.insert(0, os.environ.get("GD_MODEL") or str(Path(__file__).resolve().parent / "vendor"))
 import golden.model as M  # noqa: E402
 import golden.search_adapter as A  # noqa: E402
 
-#: GD-MODEL's inputs and ranges; the H200's drawn-AND cost is measured, but its 29x over sm_120 has an unchecked cause
-#: (GD-PROVER), so it is swept over GD-MODEL's own range for it
-INPUTS = {**A.INPUTS, "o_per_and_h200": replace(A.INPUTS["o_per_and_h200"], uncertain=True)}
+#: GD-MODEL's inputs and ranges (the H200 is GD-PROVER's measured fit in rows; sm_120's refit is swept at +-1 sigma)
+INPUTS = A.INPUTS
 POINTS = A.POINTS
 #: JR2's served H1 path at every host lever (as the interim took them)
 H1_LEVERS = {"h1_host": "stack", "kdhash": True, "hash_at_bar": True, "coin_off_loop": True}
 
 KNOBS = ("fuse", "cbits", "row", "seal", "host", "kernels", "overlap", "open", "scheme", "lp", "t", "noise", "drow",
          "credit", "joint", "form", "udraw", "ptile", "tile", "akeys", "census", "kmax", "mmax", "reps", "device",
-         "sampling", "stmt", "hiding", "steps", "retain", "period")
+         "warm", "sampling", "stmt", "hiding", "steps", "retain", "period")
 _DITHER_ONLY = ("lp", "t", "noise", "drow", "credit", "joint")
 _JR2_ONLY = ("form", "udraw")
 _ADAPTER = ("fuse", "row", "seal", "host", "kernels", "overlap", "open", "scheme", "ptile", "tile", "akeys", "kmax",
-            "mmax", "reps", "device", "sampling", "stmt", "steps", "retain", "period")
+            "mmax", "reps", "device", "warm", "sampling", "stmt", "steps", "retain", "period")
 
 _BASE = {
     "fuse": ("all", "fuse", "e2"),
@@ -69,6 +68,7 @@ _BASE = {
     "mmax": (35, 40),
     "reps": (2, 1),
     "device": ("h200", "sm120"),
+    "warm": (True,),
     "sampling": ("work", "stratified", "uniform"),
     "stmt": ("template", "universal"),
     "hiding": ("hm96",),
@@ -88,17 +88,20 @@ _GRIDS["sweep"] = {**_GRIDS["core"], "open": ("exact",), "lp": (32, 128, 512), "
 #: the accounting period n over the sweep grid, both hiding arms and both reps
 _GRIDS["period"] = {**_GRIDS["sweep"], "kmax": (27,), "akeys": (32,), "reps": (2, 1), "hiding": ("hm96", "prf"),
                     "period": (1, 10, 100, 1000, 10_000, 100_000)}
-#: the core grid with every lever that needs new work held at today's: the H200 proving, two reps, m <= 35, whole-row
-#: openings, a statement a template, k_log <= 27, hm96, retention on the device
+#: the core grid with every lever that needs new work held at today's: the H200 proving, a prover process a session
+#: (cold), two reps, m <= 35, whole-row openings, a statement a template, k_log <= 27, hm96, retention on the device
 _GRIDS["today"] = {**_GRIDS["core"], "open": ("whole",), "kmax": (27,), "mmax": (35,), "reps": (2,),
-                   "device": ("h200",), "stmt": ("template",), "retain": ("device",)}
+                   "device": ("h200",), "warm": (False,), "stmt": ("template",), "retain": ("device",)}
 #: today's grid against the accounting period n
 _GRIDS["today-period"] = {**_GRIDS["today"], "period": (1, 10, 100, 1000, 10_000, 100_000)}
 #: each grid at each point (`NAME-t8192`, `NAME-t512`). The demo's window is one step and its units are GD-PLANNER's
 #: census of the served 4,32,4 window, with its 35 attention templates separate (b4) or merged (b4-buckets); the
-#: model's own classes (None) undercount its templates, so they are `flips`' alone
+#: model's own classes (None) undercount its templates, so they are `flips`' alone. The census's Int8RowQuant_v3 at
+#: K 8,192 needs k_log 28, so at t512 every grid also has k_max 28
 GRIDS = {f"{name}-{pt}": {**g, **over} for name, g in _GRIDS.items() for pt, over in (
-    ("t8192", {"census": (None,)}), ("t512", {"steps": (1,), "retain": ("device",), "census": ("b4", "b4-buckets")}))}
+    ("t8192", {"census": (None,)}),
+    ("t512", {"steps": (1,), "retain": ("device",), "census": ("b4", "b4-buckets"),
+              "kmax": tuple(sorted({*g["kmax"], 28}))}))}
 GRIDS["smoke"] = {k: v[:2] for k, v in GRIDS["full-t8192"].items()}
 
 
@@ -134,7 +137,8 @@ def key(d: dict) -> str:
     s = (f"{d['fuse']}/b{d['cbits']}/row{d['row']}/{d['seal']}/{d['host']}/{d['kernels']}/{d['overlap']}/{d['open']}/"
          f"{pouw}/vt{'x'.join(map(str, d['tile']))}/ak{d['akeys']}/{d['census'] or 'classes'}/k{d['kmax']}/"
          f"m{d['mmax']}/r{d['reps']}/"
-         f"{d['device']}/{d['sampling']}/{d['stmt']}/{d['hiding']}/S{d['steps']}/{d['retain']}")
+         f"{d['device']}{'' if d['warm'] else '-cold'}/{d['sampling']}/{d['stmt']}/{d['hiding']}/S{d['steps']}/"
+         f"{d['retain']}")
     return s if d["period"] == 1 else f"{s}/n{d['period']}"
 
 
@@ -167,7 +171,8 @@ FLIPS = {
     "form": ("tile", "lanes"), "udraw": ("period", "call"), "ptile": ((1, 1), (1, 8), (4, 8), (8, 8), (32, 32)),
     "tile": ((1, 1), (1, 4), (4, 4)), "akeys": (32, 64, 128), "census": (None, "b4", "b4-buckets"),
     "kmax": (27, 28, 29, 30), "mmax": (35, 36, 37, 38, 39, 40), "reps": (1, 2),
-    "device": ("h200", "sm120"), "sampling": ("work", "stratified", "uniform"), "stmt": ("template", "universal"),
+    "device": ("h200", "sm120"), "warm": (True, False), "sampling": ("work", "stratified", "uniform"),
+    "stmt": ("template", "universal"),
     "hiding": ("hm96", "prf"), "steps": (1, 2, 4, 8, 16, 32, 64), "retain": ("device", "host"),
     "period": (1, 10, 100, 1000, 10_000, 100_000),
 }
@@ -181,6 +186,37 @@ def flips(d: dict, point: str, v: dict[str, float] | None = None) -> list[dict]:
             r = evaluate({**d, k: x}, v, point)
             out.append({"knob": k, "value": x, "at_d": x == d[k], "J": r["J"], "serve": r["serve"],
                         "prove_ratio": r["prove_ratio"], "feasible": r["feasible"], "reasons": r["reasons"]})
+    return out
+
+
+TILES = ((1, 1), (1, 8), (2, 4), (4, 8), (8, 8), (32, 32))
+
+
+def tiles(d: dict, point: str, v: dict[str, float] | None = None) -> list[dict]:
+    """PoUW's tile under each opening model and Commit row size, the rest of d held: its block's ANDs with openings,
+    their openings' share, draws a window, drawn ANDs a window, PoUW's GPU-s and J."""
+    seen: dict = {}
+    j = M.J
+
+    def capture(design):
+        seen["r"] = j(design)
+        return seen["r"]
+
+    M.J = capture
+    out = []
+    try:
+        for pt, op, row in product(TILES, ("whole", "exact"), FLIPS["row"]):
+            seen.clear()
+            r = evaluate({**d, "ptile": pt, "open": op, "row": row}, v, point)
+            cs = seen["r"]["proving"]["pouw"]["classes"] if "r" in seen else []
+            out.append({"ptile": pt, "open": op, "row": row, "J": r["J"], "feasible": r["feasible"],
+                        "reasons": r["reasons"], "pouw_gpu_s": r.get("prove_parts", {}).get("pouw", math.nan),
+                        "block_ands": max((c["ands_with_openings"] for c in cs), default=math.nan),
+                        "openings_share": max((c["openings_share"] for c in cs), default=math.nan),
+                        "draws": sum(c["draws"] for c in cs),
+                        "drawn_ands": sum(c["draws"] * c["ands_with_openings"] for c in cs)})
+    finally:
+        M.J = j
     return out
 
 
@@ -220,14 +256,25 @@ def evaluate(d: dict, v: dict[str, float] | None = None, point: str = "t8192") -
 
 
 def main(argv: list[str]) -> int:
-    """`gdm.py flips SEARCH_JSON GRID POINT [OUT]`: `flips` at the nominal best design of a reduced search.json."""
+    """`gdm.py flips|tiles SEARCH_JSON GRID POINT [OUT]`: `flips` or `tiles` at the nominal best design of a reduced
+    search.json."""
     import json
-    if len(argv) < 4 or argv[0] != "flips":
+    if len(argv) < 4 or argv[0] not in ("flips", "tiles"):
         print(main.__doc__)
         return 2
-    _, path, grid_name, point = argv[:4]
+    cmd, path, grid_name, point = argv[:4]
     best = json.loads(Path(path).read_text())["scenarios"][grid_name][point]["nominal"]["top"][0]
     d = {k: tuple(x) if isinstance(x, list) else x for k, x in best["design"].items()}
+    if cmd == "tiles":
+        rows = tiles(d, point)
+        text = json.dumps({"point": point, "design": d, "key": key(d), "tiles": rows}, indent=1, default=str)
+        if len(argv) > 4:
+            Path(argv[4]).write_text(text)
+        for r in rows:
+            print(f"{'x'.join(map(str, r['ptile'])):6} {r['open']:6} row {r['row']:6} block {r['block_ands']:.4g} "
+                  f"(openings {r['openings_share']:.0%}) draws {r['draws']:.0f} drawn {r['drawn_ands']:.4g} "
+                  f"PoUW {r['pouw_gpu_s']:.4g} GPU-s J {r['J']:.6g} {'' if r['feasible'] else '+'.join(r['reasons'])}")
+        return 0
     rows = flips(d, point)
     text = json.dumps({"point": point, "design": d, "key": key(d), "flips": rows}, indent=1, default=str)
     if len(argv) > 4:
