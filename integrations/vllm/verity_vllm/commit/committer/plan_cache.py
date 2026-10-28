@@ -48,6 +48,18 @@ class PlanMetas(Sequence):
         self.digest: bytes | None = None
         self._metas: list | None = None
 
+    def columns(self) -> tuple:
+        """The plan as plain tuples, what `of_columns` rebuilds it from in another process: never its built `TensorMeta`s."""
+        return self.names, self.dtypes, self.sizes, self.offsets, self.ranks, self.dims, self.chunk, self.digest
+
+    @classmethod
+    def of_columns(cls, cols: tuple) -> PlanMetas:
+        names, dtypes, sizes, offsets, ranks, dims, chunk, digest = cols
+        p = cls.__new__(cls)
+        p.names, p.dtypes, p.sizes, p.offsets, p.ranks, p.dims, p.chunk = names, dtypes, sizes, offsets, ranks, dims, chunk
+        p.nbytes, p.digest, p._metas = sum(sizes), digest, None
+        return p
+
     @classmethod
     def of_entries(cls, entries: Iterable[tuple], names: Sequence[str], chunk: int) -> PlanMetas:
         """The record of the collector's exported plan: `(name id, torch dtype, sizes, nbytes, offset, gap)` per tensor."""
