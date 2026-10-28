@@ -22,8 +22,12 @@ to sleep after each call (`stamp.cu`'s rest, R times the call's clocks at 0.7 of
 of the span, so an item's rate is the GEMM's at that lower mean power and higher clock.  `--plan` times
 `int8_fused._plan`'s Triton config beside TRITON: what serves today where the shape has no row.
 
-    python wgbench.py --out OUT [--ms 8192,16384,32768] [--linears qkv,o,gate_up,down] [--variants all] [--secs 2]
-                      [--rounds 2] [--no-lt] [--gate-only] [--no-edges] [--time-kinds served,random] [--plan] [--rest R]
+It lives in the integration because it times `int8_wgmma`'s variants by name, which isn't a public interface of
+`verity_vllm`.
+
+    python integrations/vllm/tools/wgbench/wgbench.py --out OUT [--ms 8192,16384,32768] [--linears qkv,o,gate_up,down]
+        [--variants all] [--secs 2] [--rounds 2] [--no-lt] [--gate-only] [--no-edges] [--time-kinds served,random] [--plan]
+        [--rest R]
 """
 from __future__ import annotations
 
@@ -174,7 +178,8 @@ def gate(m, n, k, variants, kinds=KINDS, seed=0) -> list[dict]:
         try:
             X.scaled_mm(xq, sa, w, sw, yt, tri)
             row["triton_vs_ref"] = int((yt.view(torch.int16) != ref).sum())
-        except Exception as e:  # noqa: BLE001  (a shape Triton's descriptors refuse is gated against the reference alone)
+        except (AssertionError, RuntimeError, ValueError) as e:
+            # a shape Triton's descriptors refuse (their asserts, or the launch) is gated against the reference alone
             row["triton_refused"] = repr(e)[:200]
         for v in variants:
             for call in (0, 1):
