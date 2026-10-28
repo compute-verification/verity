@@ -82,7 +82,8 @@ negatives.
   the tree has its piece and the node holds what the piece reads (its auditor key, the bandwidth audit's registered store).
   Finally the all-protocols window report and the block record, which accepts only when every subprotocol accepted on this
   node and names each one missing, rejecting or about another server, with its reason (PoUW's development piece: development
-  run, credits nothing). V3c runs last, within `V3C_TIMEOUT` and `V3C_AUDIT_TIMEOUT`, since nothing before it reads it. Each
+  run, credits nothing). An accept's clause says when its weights were held and their share of the checkpoint, where its
+  profile says so (PoUS's), and each δ of the block record's at which its quantity is not established. V3c runs last, within `V3C_TIMEOUT` and `V3C_AUDIT_TIMEOUT`, since nothing before it reads it. Each
   step's verdict line is in `out/verdicts.txt`.
 - `a6.sh`: run A6's entry point on a CPU machine, on hidden_zk's cached builds. A6 is the W8A8 coordinates of an int8
   decoder layer (`ScaledMmS8Coordinate_v1` at each K, Llama-3.2-1B's by default) under the stratified law, stand-in values
