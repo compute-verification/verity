@@ -1377,6 +1377,8 @@ def cmd_withdraw(argv: list[str]) -> int:
     ap.add_argument("--by", required=True)
     ap.add_argument("--cache", required=True, metavar="DIR", help="where manifests read from the remote are kept (gc's cache works)")
     ap.add_argument("--work", metavar="DIR", help="where the pass's blob table goes (default the temp dir)")
+    ap.add_argument("--path", dest="paths", action="append", metavar="PREFIX",
+                    help="withdraw only the files under PREFIX in the arts' trees (repeatable; a run's out/sampled-proofs/served, say)")
     ap.add_argument("--apply", action="store_true", help="delete the blobs and write the labels")
     ns = ap.parse_args(argv)
     st = LocalStore(ns.store)
@@ -1385,7 +1387,7 @@ def cmd_withdraw(argv: list[str]) -> int:
         return 2
     say = lambda s: print(s, file=sys.stderr, flush=True)  # noqa: E731
     try:
-        p = withdraw.plan(st.remote, Path(ns.cache), ns.arts, work=Path(ns.work) if ns.work else None, log=say)
+        p = withdraw.plan(st.remote, Path(ns.cache), ns.arts, work=Path(ns.work) if ns.work else None, log=say, paths=ns.paths)
         out: dict[str, Any] = {"remote": st.remote.describe(), **p.summary()}
         if p.missing:
             _dump(out)
@@ -1395,7 +1397,8 @@ def cmd_withdraw(argv: list[str]) -> int:
             out["applied"] = withdraw.apply(st.remote, p, log=say)
             lost = False
             for art in p.arts:
-                st.add_label(art, vocab.WITHDRAWN, ns.reason, ns.by, ref=ns.ref)
+                value = f"{ns.reason} (only {', '.join(ns.paths)})" if ns.paths else ns.reason
+                st.add_label(art, vocab.WITHDRAWN, value, ns.by, ref=ns.ref)
                 said, bad = _label_write_through(st, art)
                 say(f"{art}: withdrawn label {said}")
                 lost |= bad

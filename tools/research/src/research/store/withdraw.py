@@ -6,9 +6,13 @@ sealed bundle and the weights key of a served run, in three cited arts).  The ma
 resolves and `fetch` reports the payload absent; the label says why.  A blob that an artifact outside the withdrawn set also holds
 is not deleted: deleting it would break that artifact, and holding the same bytes it holds the same values, so the plan names it
 and the caller withdraws it too or decides otherwise.  Every manifest is read (through gc's cache) to find those holders.
+
+With `paths` only the files under those prefixes of the withdrawn arts' trees go (a run's `out/sampled-proofs/served/` in its
+attempt record, say); a blob one of their other files also holds is kept and named like any other holder's.
 """
 from __future__ import annotations
 
+import json
 import sqlite3
 import tempfile
 from dataclasses import dataclass, field
@@ -27,10 +31,25 @@ class Plan:
     blobs: dict[str, int] = field(default_factory=dict)
     shared: dict[str, list[str]] = field(default_factory=dict)
     missing: list[str] = field(default_factory=list)
+    paths: list[str] = field(default_factory=list)
 
     def summary(self) -> dict[str, Any]:
         return {"arts": self.arts, "missing": self.missing, "blobs": len(self.blobs), "bytes": sum(self.blobs.values()),
-                "shared": {b: holders for b, holders in sorted(self.shared.items())}}
+                "shared": {b: holders for b, holders in sorted(self.shared.items())}, **({"paths": self.paths} if self.paths else {})}
+
+
+def _files(remote: Any, h: str, tmp: Path) -> list[tuple[str, str, int]]:
+    """(path, blob hex, bytes) of each file in art `h`'s payload."""
+    local = tmp / f"{h}.json"
+    remote.get(f"manifests/{h}.json", local)
+    payload = json.loads(local.read_text()).get("payload") or {}
+    if payload.get("type") == "file":
+        return [(str(payload.get("path") or ""), payload["sha256"], int(payload["bytes"]))]
+    return [(str(f["path"]), f["sha256"], int(f["bytes"])) for f in payload.get("files") or []]
+
+
+def _under(path: str, prefixes: list[str]) -> bool:
+    return any(path == p.rstrip("/") or path.startswith(p.rstrip("/") + "/") for p in prefixes)
 
 
 def _hex(art: str) -> str:
@@ -41,11 +60,11 @@ def _hex(art: str) -> str:
 
 
 def plan(remote: Any, cache: Path, arts: list[str], *, jobs: int = JOBS, work: Path | None = None,
-         log: Callable[[str], None] | None = None) -> Plan:
+         log: Callable[[str], None] | None = None, paths: list[str] | None = None) -> Plan:
     say = log or (lambda s: None)
     want = sorted({_hex(a) for a in arts})
     listed = sorted(m.group(1) for k in remote.list("manifests/") if (m := MANIFEST_KEY.fullmatch(k)))
-    p = Plan(arts=[f"art:{h}" for h in want], missing=[f"art:{h}" for h in want if h not in set(listed)])
+    p = Plan(arts=[f"art:{h}" for h in want], missing=[f"art:{h}" for h in want if h not in set(listed)], paths=list(paths or []))
     if p.missing:
         return p
     rd = Reader(remote, cache, jobs)
@@ -61,9 +80,18 @@ def plan(remote: Any, cache: Path, arts: list[str], *, jobs: int = JOBS, work: P
         db.execute("CREATE INDEX bd ON b(digest)")
         db.execute("CREATE TABLE w(art TEXT PRIMARY KEY)")
         db.executemany("INSERT INTO w VALUES (?)", ((h,) for h in want))
+        inside: set[str] | None = None
+        outside: dict[str, set[str]] = {}
+        if p.paths:
+            inside = set()
+            for h in want:
+                for path, digest, _ in _files(remote, h, Path(tmp)):
+                    (inside.add(digest) if _under(path, p.paths) else outside.setdefault(digest, set()).add(f"art:{h}"))
         for digest, size in db.execute("SELECT DISTINCT b.digest, b.size FROM b JOIN w ON w.art = b.art").fetchall():
+            if inside is not None and digest not in inside:
+                continue
             others = [f"art:{a}" for (a,) in db.execute("SELECT DISTINCT art FROM b WHERE digest = ? AND art NOT IN (SELECT art FROM w)",
-                                                        (digest,))]
+                                                        (digest,))] + sorted(f"{a} (outside --path)" for a in outside.get(digest, ()))
             if others:
                 p.shared[digest] = sorted(others)
             else:
