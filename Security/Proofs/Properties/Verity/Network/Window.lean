@@ -20,7 +20,7 @@ verdict at the code `Vocab.Coupling.verdict` among them):
 | S2 | Period runs one-stage v2 on each window's case (`PeriodRunsV2`) | open |
 | S3 | v2's acceptance is `--zk`'s on every session (`V2AcceptMeans`) | open |
 | S4 | the sessions' coins are the live coins (`WindowCoinsLive`) | open |
-| S5 | the accepted sessions are an accepting sampled run (`SessionIsSampledRun`) | open |
+| S5 | the accepted sessions are an accepting sampled run, under a guard (`SessionIsSampledRun`) | open |
 | S6 | the realization is the compiled run's (`NetworkCouples`) | open |
 | S7 | a uniform coin map's event is below the run's (`pr_le_of_coins`) | proved |
 | S8 | `WindowGood` past the leak relation, on acceptance (`windowGood_of_accepts`) | proved, from premises |
@@ -98,12 +98,15 @@ def WindowCoinsLive (W : WindowRuns R) : Prop :=
   ∀ ξ i (q : R.Tape ξ i × (Fin (D.V.k (R.stmt ξ i)) → Coin) → Prop), Pouw.pr (fun x => q (W.coins ξ i x)) = Claims.Pr q
 
 /-- **S5 (the one-stage twin of `Verity.Recursive.acc_of_accepts`): the accepted sessions are an
-accepting run of the sampled verifier.** Where every session of window `i`'s proof is accepted at the coins `ξ` with the
-network audit's own coin `x`, the sampled verifier's run at the window's statement, against its prover at the tape and
-coins `x` gives, accepts. Were the bridge restated over C-Flock's game instead, the `SampledSession` coupling would give
-this, with the bridge's KS assumption changed: a claims change. -/
-def SessionIsSampledRun (W : WindowRuns R) : Prop :=
-  ∀ ξ i x, W.session (Function.update ξ (r.own .network) x) i →
+accepting run of the sampled verifier, where the guard `G` holds.** Where `G` holds and every session of window `i`'s
+proof is accepted at the coins `ξ` with the network audit's own coin `x`, the sampled verifier's run at the window's
+statement, against its prover at the tape and coins `x` gives, accepts. The guard is what the run may need beyond
+acceptance: at a coupling's verdict at the code (`Vocab.Coupling.verdict`), the releases its check read in the
+device's log and the coupling's break, the events its finder answers for, absent. `fun _ => True` is the unguarded
+form. Were the bridge restated over C-Flock's game instead, the `SampledSession` coupling would give this, with the
+bridge's KS assumption changed: a claims change. -/
+def SessionIsSampledRun (W : WindowRuns R) (G : ((i : I) → Ω i) → Prop) : Prop :=
+  ∀ ξ i x, G (Function.update ξ (r.own .network) x) → W.session (Function.update ξ (r.own .network) x) i →
     (Claims.run H (R.prover ξ i) D.V (R.stmt ξ i) (W.coins ξ i x).1 (W.coins ξ i x).2).out = .acc
 
 /-- **S6 (the bridge): the realization is the compiled run's**, in the `SampledSession.Couples` form:
@@ -365,19 +368,22 @@ theorem pr_le_add_off {α : Type} [Fintype α] {A B : α → Prop} {b : ℝ} (h 
 /-- **The network certifier's per-window bound at its compiled component**
 (`Verity.Subprotocol.NetworkWindowLe`, unfolded, at the component's acceptance), from S2–S6, the ρ gap and S8's two
 premises, with S1, S7 and S8 proved here. At each window and each value of the other coins, an accepted run of the
-network audit with window `i` not good maps, through the live coin map (S4), to an accepting run of the sampled
-verifier (S2, S3, S5) at whose every extractor coin the extraction fails the leak relation: an extracted witness would
-make the realization's witness one (S6), and with the component's acceptance, window `i` good (S8). -/
-theorem windowLe (W : WindowRuns R) {s : ((i : I) → Ω i) → Sent} (h2 : PeriodRunsV2 W s) (h3 : V2AcceptMeans W)
-    (h4 : WindowCoinsLive W) (h5 : SessionIsSampledRun W) (h6 : NetworkCouples R s W)
-    (hρ : WindowValuesRegistered R s) (hreg : WindowRegistersAs W s) (hcov : RecordCovers W s) :
+network audit under S5's guard `G` with window `i` not good maps, through the live coin map (S4), to an accepting run
+of the sampled verifier (S2, S3, S5) at whose every extractor coin the extraction fails the leak relation: an extracted
+witness would make the realization's witness one (S6), and with the component's acceptance, window `i` good (S8). -/
+theorem windowLe (W : WindowRuns R) {s : ((i : I) → Ω i) → Sent} {G : ((i : I) → Ω i) → Prop}
+    (h2 : PeriodRunsV2 W s) (h3 : V2AcceptMeans W) (h4 : WindowCoinsLive W) (h5 : SessionIsSampledRun W G)
+    (h6 : NetworkCouples R s W) (hρ : WindowValuesRegistered R s) (hreg : WindowRegistersAs W s)
+    (hcov : RecordCovers W s) :
     ∀ ξ i, Pouw.pr (fun x : Ω (r.own .network) =>
       ComponentAccepts .onsite .network (s (Function.update ξ (r.own .network) x)) ∧
+        G (Function.update ξ (r.own .network) x) ∧
         ¬ WindowGood H D L Kₒ S lay k δ reg Dj (R.sw i) (R.ρ i) R.tops (R.stmt (Function.update ξ (r.own .network) x) i)
           (R.wit (Function.update ξ (r.own .network) x) i) (R.obs (Function.update ξ (r.own .network) x) i)) ≤
     PrBad H D.V (Rlt R) (E D decode) (R.stmt ξ i) (R.prover ξ i) := by
   intro ξ i
-  refine pr_le_of_coins (W.coins ξ i) (h4 ξ i) fun x ⟨hca, hbad⟩ c => ⟨h5 ξ i x (h3 _ i (h2 _ i hca)), fun hx => ?_⟩
+  refine pr_le_of_coins (W.coins ξ i) (h4 ξ i) fun x ⟨hca, hg, hbad⟩ c =>
+    ⟨h5 ξ i x hg (h3 _ i (h2 _ i hca)), fun hx => ?_⟩
   have hex : ∃ w, Rlt R (R.stmt (Function.update ξ (r.own .network) x) i) w := by
     rw [h6.stmt]
     exact exists_of_ext hx
@@ -385,20 +391,21 @@ theorem windowLe (W : WindowRuns R) {s : ((i : I) → Ω i) → Sent} (h2 : Peri
 
 /-- **`windowLe` with S8's coverage off an event `Brk`** (`RecordCoversOff`): the bound gains `Brk`'s probability over
 the network audit's own coin. Under B, `Brk` is the forger's event (`CertForged`, `recordCoversOff_of_certified`). -/
-theorem windowLeOff (W : WindowRuns R) {s : ((i : I) → Ω i) → Sent} (h2 : PeriodRunsV2 W s) (h3 : V2AcceptMeans W)
-    (h4 : WindowCoinsLive W) (h5 : SessionIsSampledRun W) (h6 : NetworkCouples R s W)
-    (hρ : WindowValuesRegistered R s) (hreg : WindowRegistersAs W s) {Brk : ((i : I) → Ω i) → Prop}
-    (hcov : RecordCoversOff W s Brk) :
+theorem windowLeOff (W : WindowRuns R) {s : ((i : I) → Ω i) → Sent} {G : ((i : I) → Ω i) → Prop}
+    (h2 : PeriodRunsV2 W s) (h3 : V2AcceptMeans W) (h4 : WindowCoinsLive W) (h5 : SessionIsSampledRun W G)
+    (h6 : NetworkCouples R s W) (hρ : WindowValuesRegistered R s) (hreg : WindowRegistersAs W s)
+    {Brk : ((i : I) → Ω i) → Prop} (hcov : RecordCoversOff W s Brk) :
     ∀ ξ i, Pouw.pr (fun x : Ω (r.own .network) =>
       ComponentAccepts .onsite .network (s (Function.update ξ (r.own .network) x)) ∧
+        G (Function.update ξ (r.own .network) x) ∧
         ¬ WindowGood H D L Kₒ S lay k δ reg Dj (R.sw i) (R.ρ i) R.tops (R.stmt (Function.update ξ (r.own .network) x) i)
           (R.wit (Function.update ξ (r.own .network) x) i) (R.obs (Function.update ξ (r.own .network) x) i)) ≤
     PrBad H D.V (Rlt R) (E D decode) (R.stmt ξ i) (R.prover ξ i) +
       Pouw.pr (fun x : Ω (r.own .network) => Brk (Function.update ξ (r.own .network) x)) := by
   intro ξ i
   refine pr_le_add_off ?_
-  refine pr_le_of_coins (W.coins ξ i) (h4 ξ i) fun x ⟨⟨hca, hbad⟩, hnb⟩ c =>
-    ⟨h5 ξ i x (h3 _ i (h2 _ i hca)), fun hx => ?_⟩
+  refine pr_le_of_coins (W.coins ξ i) (h4 ξ i) fun x ⟨⟨hca, hg, hbad⟩, hnb⟩ c =>
+    ⟨h5 ξ i x hg (h3 _ i (h2 _ i hca)), fun hx => ?_⟩
   have hex : ∃ w, Rlt R (R.stmt (Function.update ξ (r.own .network) x) i) w := by
     rw [h6.stmt]
     exact exists_of_ext hx
