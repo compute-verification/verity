@@ -1,8 +1,10 @@
 # The NVIDIA H200 SXM 141 GB: the one source of its numbers (verity/hardware/README.md).
 # Each number is { value, unit, mark, source }. mark: "ceiling" (no program on this SKU and firmware exceeds it, what the
 # model's premises need), "measurement" (a measured value, so only a lower bound on the ceiling) or "placeholder"
-# (neither, open). Per-SM rates are a SM-clock's. Security/Definitions/Core/Accel/H200.lean is held to this file.
+# (neither, open). Per-SM rates are a SM-clock's. Security/Definitions/Core/Accel/H200.lean is held to this file. The
+# host the card sits in is its own card (xeon-platinum-8468-2s.toml on our nodes).
 
+kind = "gpu"
 sku = "h200-sxm-141gb"
 name = "NVIDIA H200 SXM 141 GB"
 die = "GH100"
@@ -63,15 +65,3 @@ f64 = { value = 32, unit = "tensor unit/MAC", mark = "ceiling", source = "H100 w
 [model]
 exact = { value = 31, unit = "bit", mark = "ceiling", source = "PTX ISA 9.0 mma and wgmma: integer MMAs accumulate in .s32, so a dot is exact at most while |C| + sum |a*b| < 2^31 (P1, Card.Exact); captured exact within it (silicon.integer.HOPPER_SM90_S8_K32, art:74353cac67fb, 0 mismatches)" }
 instruction_bytes = { value = 16, unit = "B/instruction", mark = "ceiling", source = "an instruction is 128 bits from Volta on (CUDA Binary Utilities 12.9), so code fits in store.dram / 16 instructions" }
-
-# The node's host CPUs (benchmarks/rho's host_ops): the server's, not the card's.
-[host]
-cpu = "Intel Xeon Platinum 8468 (Sapphire Rapids)"
-source = "lscpu on two H200 nodes: each VM sees 1 x 8 cores of the server's"
-sockets = { value = 2, unit = "socket", mark = "ceiling", source = "the 8468 is a 2S part (Intel ARK 231735), and HGX H200 hosts are dual-socket; the VMs can't see the server's socket count" }
-cores = { value = 48, unit = "core/socket", mark = "ceiling", source = "Intel ARK 231735 (Xeon Platinum 8468: 48 cores)" }
-amx = { value = 1024, unit = "INT8 MAC/cycle/core", mark = "ceiling", source = "Intel Optimization Reference Manual 248966-049 section 20.3 Table 20-2 (TDPBSSD, 16,384 MACs, 16-cycle throughput on Sapphire Rapids); not run on these nodes" }
-turbo = { value = 3.8, unit = "GHz", mark = "ceiling", source = "Intel ARK 231735: max turbo 3.8 GHz (all-core turbo 3.1); Intel publishes no AMX clock, so the ceiling takes max turbo on every core" }
-priority_turbo = { value = 3.8, unit = "GHz", mark = "ceiling", source = "Sapphire Rapids has no Priority Core Turbo: as turbo" }
-priority_cores = { value = 0, unit = "core/socket", mark = "ceiling", source = "Sapphire Rapids has no Priority Core Turbo" }
-ops = { value = 7.471104e14, unit = "op/s", mark = "ceiling", source = "2 ops a MAC x amx x sockets x (priority_cores x priority_turbo + (cores - priority_cores) x turbo), 7.471e14" }
