@@ -1027,7 +1027,7 @@ def test_a_window_is_credited_only_from_its_statements_proof_files_verified_by_c
 
 
 def test_a_period_open_without_draw_k_is_refused(periodic):
-    """The proof system commits the draw's K in the period's open (`credit.K_FIELD`) before any draw; a period
+    """The proof service commits the draw's K in the period's open (`credit.K_FIELD`) before any draw; a period
     opened without one leaves its windows no K to be drawn with, so the window, the period's reading and its credit are
     each refused (``budget``), and a window in no period has no committed K either."""
     auditor = periodic(None, files=FILES)
@@ -1085,7 +1085,7 @@ def test_the_drawn_set_from_a_fixed_coin_is_cores():
 
 
 def test_the_period_k_is_sized_for_the_expected_credited_share_and_the_verifier_reports_its_eps():
-    """The proof system sizes the K a period's open commits (`draw_k`) for the share of a window's work it
+    """The proof service sizes the K a period's open commits (`draw_k`) for the share of a window's work it
     expects credited (`EXPECTED_CREDIT`, 8/9) at `DRAW_EPS` and δ = 2^-40, through `window.k_prime`'s own inputs, since
     that share isn't known at the open: 31,178 for the declared 8B window, which at 8/9 credited establishes at most
     0.1% (`window.eps_at`, what `credit.established` reports), and K sized as if all were credited establishes less."""
