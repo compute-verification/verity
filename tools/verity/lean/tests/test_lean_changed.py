@@ -593,7 +593,7 @@ def _fake_sandbox(tmp: Path, monkeypatch) -> tuple[Path, Path]:
     monkeypatch.setattr(LC, "UNSHARE", ["env"])
     monkeypatch.setattr(LC, "READ_ONLY", 'while [ "$1" != -- ]; do shift; done; shift; exec "$@"')
     monkeypatch.setattr(LC, "sandboxed", lambda: True)
-    monkeypatch.setenv("PATH", f"{lake.parent}{os.pathsep}{os.environ['PATH']}")
+    monkeypatch.setenv("PATH", str(lake.parent), prepend=os.pathsep)
     monkeypatch.setenv("LOG", str(log))
     return log, lake
 
