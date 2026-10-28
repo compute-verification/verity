@@ -1,8 +1,9 @@
 """A J10-R call's workspace (h1u.cu's `kh_units_multi_j10r` with its _sm and _smc forms, and `kh_units_multi_j10rc`
 with ``rc``), sized by the loaded build: its `kh_j10r_workspace_bytes`, which dispatches on the build's own flags
 (`kh_j10r_flags`: H1U_JW's column tiles and W' after the rows, H1U_JRC's column tiles). Every loader that allocates
-the workspace (dither_so's tables, served_h1's `producer.Units`, unitsbench's `MultiJ10R`) takes its size from
-`workspace_bytes`, so no caller sizes an H1U_JW build by its rows alone and lets its units write past the buffer.
+the workspace (dither_so's tables, served_h1's `producer.Units`, unitsbench's `MultiJ10R`, j10r_sm90's `H1uCall`) takes
+its size from `workspace_bytes`, so no caller sizes an H1U_JW build by its rows alone and lets its units write past the
+buffer.
 
 A build from before `kh_j10r_flags` is sized by its `kh_j10r_jw_bytes` (every H1U_JW build exports it) or, built before
 H1U_JW, by its rows (`kh_j10r_rows_bytes`). `WorkspaceError` on any disagreement, never a smaller buffer: a flag this

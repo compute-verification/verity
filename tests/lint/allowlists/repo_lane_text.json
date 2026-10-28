@@ -271,7 +271,6 @@
     {"file": "benchmarks/harness/tests/test_bench.py", "count": 1},
     {"file": "benchmarks/hash/dither/dither_one.py", "count": 1},
     {"file": "benchmarks/hash/dither/h1o.cu", "count": 1},
-    {"file": "benchmarks/hash/dither/j10r90.py", "count": 1},
     {"file": "benchmarks/hash/dither/j10r_ca.py", "count": 1},
     {"file": "benchmarks/hash/exactlin/replay.py", "count": 1},
     {"file": "benchmarks/hash/exactlin/zybench.py", "count": 1},
