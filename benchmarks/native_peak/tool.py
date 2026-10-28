@@ -1,6 +1,6 @@
-"""Store declaration for the native-peak GEMM microbench (research.store README §6.1).
+"""Store declaration for the native-peak GEMM microbench (research.store README §6.1), for runs of
 
-    research run --tool native_peak --project verity --on vy-a100c --source . -- /workspace/venv312/bin/python benchmarks/native_peak/measure.py --dtype bf16
+    python benchmarks/native_peak/measure.py --dtype bf16
 
 Key params follow measure.py's argparse: what is measured (`dtype`, `sizes`, `warmup`, `reps`, `sustain_s`).  `--out`, `--device`
 and `--no-sass` never enter the derivation: the first names where the answer goes, the device is a condition (`hw.family`), and the

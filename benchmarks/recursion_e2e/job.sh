@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
-# The recursion bench's job (README.md): verity/ml/flock/pod/85-rec-reprice.sh's steps in order, as one research run, each
+# The recursion bench's job (README.md): verity/ml/flock/pod/85-rec-reprice.sh's steps in order, as one recorded run, each
 # invocation under its own RESEARCH_RUN_DIR ($OUT/steps/<step>/r<i>, so every record 85 writes is kept) and /usr/bin/time -v,
 # every CPU step REPEAT times and every GPU step once with its runs; then the result (run.py result) in
 # $OUT/recursion_e2e.json and $OUT/table.md. Run from the verity tree; `verity bench recursion_e2e run` prints and launches
 # it, a firewalled run (85's CPU prover, GPU=0) as a plain run on a CPU node:
-#   research run --on vy-nebius-cpu-2 --project verity --source . --cwd source --mem-gb 128 --timeout 327m -- \
+#   research run --on CPU_NODE --project verity --source . --cwd source --mem-gb 128 --timeout 327m -- \
 #     taskset -c 0-31 bash benchmarks/recursion_e2e/job.sh K=4096 N=2 GPU=0 FLOCK_WORK=/workspace/cache/rec-bench
-# and a GPU one as a GPU host job on vy-nebius-1's queue (85 leases a GPU around each prove itself).
+# and a GPU one as a GPU host job on a GPU node's queue (85 leases a GPU around each prove itself).
 # env: K=4096 N=2 (85's inner statement: N instances of GemmCoordinate_v2{K})
 #      STEPS=build,inner,icheck,vstage,vcap,oprove,oreplay,lean,forge-after,negative  REPEAT=3 (each CPU step; REPEAT_<STEP>=n one step's)
 #      WARM=1 RUNS=3 (the inner's runs)  OPROVE_WARM=0 OPROVE_RUNS=1 (each V* statement's releases)

@@ -26,7 +26,7 @@ shared memory with L1, 128 KB an SM (whitepaper: 128 KB of L1 and shared memory 
   an SM clock); the instance prices it at the `k32` rate, which lets a program do more, and a per-shape θ row would
   tighten it;
 * issue: 4 warp instructions an SM clock (four sub-partitions, one warp scheduler each), so 752;
-* `alu` and `imad`: 64 lanes an SM clock each (the DS-120 census: `LOP3` and `IMAD` two cycles a warp instruction on a
+* `alu` and `imad`: 64 lanes an SM clock each (the sm_120 census: `LOP3` and `IMAD` two cycles a warp instruction on a
   sub-partition; CUDA C++ Programming Guide §6.4.1 Table 7), so 12,032 each; `IMAD.WIDE` uses 2 `imad` lanes (Table 7's
   footnote 6, 32 for extended precision), and the pools overlap in full, generous as on the H200;
 * `f64`: 2 lanes an SM clock (Programming Guide Table 7, CC 12.0: 64-bit floating-point multiply-add 2), so 376; DMMA
