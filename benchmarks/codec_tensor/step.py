@@ -281,7 +281,7 @@ def gate_attention(kv, torch, b: int, ctx: int, ks, sms: int, log, wt=None) -> d
         pos = [torch.from_numpy(p).cuda() for p in heads]
         sk = torch.empty(slots * K.KV_HEADS, 16, dtype=torch.int32, device="cuda")
         tg = torch.empty(slots * layers, 16, dtype=torch.int32, device="cuda")
-        kv.call("kv_rc_buffers", KB.ptr(sk), None, None)
+        kv.call("kv_rc_buffers", KB.ptr(sk))
     for k in ks:
         KB.set_key(kv, KB.lib_key(kv, k))
         kv.call("kv_encode", KB.ptr(plain), KB.ptr(enc), n_words, 0, k, sms * 8, st)
@@ -325,7 +325,7 @@ def gate_attention(kv, torch, b: int, ctx: int, ks, sms: int, log, wt=None) -> d
            f"the shares sum to S · e of the block at {sum(whole.values())}/{len(whole)} k" if rc else "") + ")")
     del plain, enc, q, part, o_p, o_e, kvl
     if rc:
-        kv.call("kv_rc_buffers", None, None, None)
+        kv.call("kv_rc_buffers", None)
         del sk, tg, signs, mid
     torch.cuda.empty_cache()
     return {"ok": ok, "rel_err": rel, "equal": equal, "sketches": sketches, "receipts": receipts,
@@ -412,7 +412,7 @@ class Step:
         self.nkv = self.layers * self.slots if rc else 0
         if rc:
             self.rc_sk = torch.empty(self.slots * K.KV_HEADS, 16, dtype=torch.int32, device="cuda")
-            kv.call("kv_rc_buffers", self.rc_sk.data_ptr(), None, None)
+            kv.call("kv_rc_buffers", self.rc_sk.data_ptr())
         self.new_all = KB.random_words(torch, b * self.layers * self.tlw, f, 21)
         self.new_one = KB.random_words(torch, b * self.tlw, f, 22)
         self.xr = torch.zeros(1, dtype=torch.int64, device="cuda")
@@ -899,7 +899,7 @@ def main() -> int:
     kv = KB.Lib(wt.field.name, a.kv_lib)
     v, i, q = ctypes.c_void_p, ctypes.c_int, ctypes.c_uint64
     kv.so.kv_append.argtypes = [v, v, i, i, i, i, i, i, i, v]
-    kv.so.kv_rc_buffers.argtypes, kv.so.kv_rc_pass.argtypes = [v, v, v], [v, v, v]
+    kv.so.kv_rc_buffers.argtypes, kv.so.kv_rc_pass.argtypes = [v], [v, v, v]
     kv.so.kv_rc_receipts.argtypes = [v, q, i, i, q, v]
     wt.so.wt_prim.argtypes = [i, v, v, v, i, v]
     if not wt.field.full_slot or kv.field.n != wt.n or kv.mask != wt.mask or max(ks) > min(wt.kmax, kv.kmax):

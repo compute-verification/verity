@@ -117,7 +117,7 @@ def kv_launches(a, step: dict, torch, st) -> list[dict]:
     kv = BW_KV.Lib(BW.Lib(a.wt_lib).field.name, a.kv_lib)
     v, i, q64 = ctypes.c_void_p, ctypes.c_int, ctypes.c_uint64
     kv.so.kv_append.argtypes = [v, v, i, i, i, i, i, i, i, v]
-    kv.so.kv_rc_buffers.argtypes, kv.so.kv_rc_pass.argtypes = [v, v, v], [v, v, v]
+    kv.so.kv_rc_buffers.argtypes, kv.so.kv_rc_pass.argtypes = [v], [v, v, v]
     kv.so.kv_rc_receipts.argtypes = [v, q64, i, i, q64, v]
     sh = BW_KV.attn_shape(kv)
     b, ctx, layers = step["batch"], step["ctx"], 2
@@ -139,7 +139,7 @@ def kv_launches(a, step: dict, torch, st) -> list[dict]:
             sk = torch.empty(slots * sh["kv_heads"], 16, dtype=torch.int32, device="cuda")
             tg = torch.empty(slots * layers, 16, dtype=torch.int32, device="cuda")
             kv.call("kv_rc_pass", BW_KV.ptr(signs), BW_KV.ptr(mid), st)
-            kv.call("kv_rc_buffers", BW_KV.ptr(sk), None, None)
+            kv.call("kv_rc_buffers", BW_KV.ptr(sk))
         kv.call("kv_attn", BW_KV.ptr(cache), form, BW_KV.ptr(q), BW_KV.ptr(o), BW_KV.ptr(part), b, ctx, layers, 1, sp,
                 k, st)
         if rc:
@@ -153,7 +153,7 @@ def kv_launches(a, step: dict, torch, st) -> list[dict]:
                     "share_bytes": sk.numel() * 4 if rc else 0})
         if rc:
             out.append({"kernel": "kv_receipts", "k": k, "receipts": slots, "receipt_bytes": 64 * slots})
-            kv.call("kv_rc_buffers", None, None, None)
+            kv.call("kv_rc_buffers", None)
             del sk, tg, signs, mid
     del cache
     model_layers = BW.MODELS[step["model_name"]][0]
