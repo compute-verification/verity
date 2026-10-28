@@ -40,7 +40,7 @@ def token_layer_layout(kv_cache: Any, pages: int, slots: int, head_size: int, bl
 
 
 def store_bases(layout: Layout, pool: str = "kv", word_bytes: int | None = None) -> dict[int, int]:
-    """Each KV layer's region's first codec word, by layer index (``<pool>/<layer>``, `Store.register_kv_pool`'s names);
+    """Each KV layer's region's first codec word, by layer index (``<pool>/<layer>``, `NodeMemory.register_kv_pool`'s names);
     refused unless every one is a slot a block (``block_bytes`` the token-layer's).  With ``word_bytes``, the word is the
     session's codec's (block j's first at ``j * block_bytes / word_bytes``), not the region's own codec's."""
     out = {}
