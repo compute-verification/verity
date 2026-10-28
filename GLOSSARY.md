@@ -135,7 +135,7 @@ changes here and the older name gets a row under Older names, in the same change
   devices, their resources at data-sheet rates, its six ACCEL ops, and each SKU's **card table**; the **card premise**
   (`CardWithinAccel`), evidenced by the **opcode table**. Dither is PoUW's no-fold design (`Pouw.Dither`), proved over
   it: each segment's 16-bit noised **prefix sums** committed before the check coin. A **segment** is L inner indices of
-  one cell, t = L/L′ **noise periods**.
+  one cell, t = L/L′ **noise tiles**, L′ a length along K.
 - **Memory wipe** and **server block**: a registered server's life is cut into server blocks, the gates it computes
   between two memory wipes (`Verity.Block`, `Verity.Blocks`), each opened by a certified wipe: the device fills its
   store with labels from a fresh seed, the memory challenger runs timed spot reads, and what leaves meanwhile counts as
