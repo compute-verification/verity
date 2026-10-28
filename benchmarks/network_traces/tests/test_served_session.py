@@ -5,8 +5,10 @@ the session's fetch (with witness/) 0700 under KEEP and publishes only the bundl
 a published file that holds a prompt's ids, and refuses a KEEP inside --out; --at waits on the injected clock and sends
 nothing when late; chain runs chain_record.sh's warden path on the kept fetch, and is refused without the leak guard;
 on the endpoint's records artifact it reads requests.jsonl rebuilt in KEEP from the artifact's users map and the
-certified I/O, and refuses an endpoint with neither or an I/O that doesn't read whole; its draw on the gate's coins
-names the auditor's node as the coin link's peer, and the served node is refused."""
+certified I/O, and refuses an endpoint with neither or an I/O that doesn't read whole; its coins are the challenger's
+(CR_CHALLENGER, CR_MAIN, and the gate's CR_PEER, CR_CHALLENGER_KEY and CR_GATE_KEY), the gate's by default and
+``local`` for a dry run, and a challenger it can't name, or a CR_K=V naming the challenger or the scan's coins, is
+refused before chain_record.sh runs."""
 from __future__ import annotations
 
 import io
@@ -73,8 +75,8 @@ def test_the_plan_is_the_scan_rehearsal_at_the_scans_class_and_the_gate_takes_it
     run = shlex.split(doc["runs"]["chain"])
     assert "--store-read" in run[:run.index("--")] and run[run.index("--run-max") + 1] == "14400"
     inner = SS.parser().parse_args(shlex.split(run[-1])[2:])
-    assert (inner.cmd, inner.endpoint, inner.eos_ids, inner.draw, inner.coins, str(inner.challenger_key)) == (
-        "chain", "ART", "128001", 8, "gate", "$RESEARCH_RUN_DIR/inputs/challenger-key.json")
+    assert (inner.cmd, inner.endpoint, inner.eos_ids, inner.draw, inner.challenger, str(inner.challenger_key)) == (
+        "chain", "ART", "128001", 8, f"gate:{SS.GATE}", "$RESEARCH_RUN_DIR/inputs/challenger-key.json")
     assert all(w in doc["hand_start"] for w in ("--required-manifest ROW/manifest.json", "not examples/vllm/serve.sh",
                                                  "--disk-floor-gb 40"))
     long = SS.parser().parse_args(["plan", "--prompt-ids", str(SS.KI)])
@@ -169,14 +171,16 @@ def test_chain_runs_chain_records_warden_path_on_the_kept_fetch_and_needs_the_le
     (keep / RUN / "endpoint").mkdir(parents=True)
     (keep / RUN / "endpoint" / "requests.jsonl").write_text("")
     (keep / RUN / "fetch.tar.gz").write_bytes(b"")
-    argv = ["chain", "--run", RUN, "--keep", str(keep), "--eos-ids", "256", "CR_N2_DRAW=4"]
+    (tmp_path / "main.txt").write_text("abc\n")
+    argv = ["chain", "--run", RUN, "--keep", str(keep), "--eos-ids", "256", "--challenger", "local", "--main",
+            str(tmp_path / "main.txt"), "CR_N2_DRAW=4"]
     assert SS.main(argv) == 2
     (here / "leak_guard.py").write_text("")
     assert SS.main(argv) == 0
     seen = dict(line.split("=", 1) for line in (tmp_path / "seen").read_text().splitlines())
     assert seen == {"CR_PATH": "warden", "CR_GATES": str(keep / RUN / "fetch.tar.gz"), "CR_MEM_GB": "96",
                     "CR_N2_DRAW": "4", "CR_TIE_WINDOWS": "8", "CR_ENDPOINT": str(keep / RUN / "endpoint"),
-                    "CR_EOS_IDS": "256"}
+                    "CR_EOS_IDS": "256", "CR_CHALLENGER": "local", "CR_MAIN": str(tmp_path / "main.txt")}
     assert SS.main(["chain", "--run", RUN, "--keep", str(keep)]) == 2
     assert SS.main([*argv, "N2_DRAW=4"]) == 2
     assert SS.main([*argv, "--draw", "8"]) == 0
@@ -204,7 +208,9 @@ def test_chain_on_vllms_art_reads_requests_jsonl_rebuilt_in_keep_from_its_users_
         {"user": "user-1", "prompt": [7], "max_tokens": 4, "output": [1, 2]},
         {"user": "user-2", "prompt": [8], "max_tokens": 4, "output": [1, 2, 3, 4]}]}
     monkeypatch.setattr(SS, "certified_io", lambda fetch: io)
-    argv = ["chain", "--run", RUN, "--keep", str(keep), "--endpoint", "art:ep", "--eos-ids", "128001"]
+    (tmp_path / "main.txt").write_text("abc\n")
+    argv = ["chain", "--run", RUN, "--keep", str(keep), "--challenger", "local", "--main", str(tmp_path / "main.txt"),
+            "--endpoint", "art:ep", "--eos-ids", "128001"]
     assert SS.main(argv) == 0
     dest = keep / RUN / "endpoint-rebuilt"
     assert (tmp_path / "seen").read_text().strip() == f"CR_ENDPOINT={dest}" and dest.stat().st_mode & 0o777 == 0o700
@@ -227,42 +233,52 @@ def test_chain_on_vllms_art_reads_requests_jsonl_rebuilt_in_keep_from_its_users_
     assert "only when launched with --store-read" in capsys.readouterr().err
 
 
-def _gate_chain(tmp_path, monkeypatch, peer):
+def _gate_chain(tmp_path, monkeypatch):
     here = tmp_path / "here"
     here.mkdir(exist_ok=True)
-    (here / "chain_record.sh").write_text('env | grep "^CR_SCAN_ARGS=" > "$SEEN"\n')
+    (here / "chain_record.sh").write_text('for k in CR_SCAN_ARGS CR_CHALLENGER CR_MAIN CR_PEER CR_CHALLENGER_KEY '
+                                          'CR_GATE_KEY; do if [ -n "${!k+x}" ]; then printf "%s=%s\\n" "$k" "${!k}"; fi; '
+                                          'done > "$SEEN"\n')
     (here / "leak_guard.py").write_text("")
     monkeypatch.setattr(SS, "HERE", here)
     monkeypatch.setenv("SEEN", str(tmp_path / "seen"))
     (tmp_path / "challenger-key.json").write_text("{}")
     (tmp_path / "gate-key").write_text("")
     (tmp_path / "main.txt").write_text("abc\n")
-    buf = io.BytesIO()
-    with tarfile.open(fileobj=buf, mode="w:gz") as tar:
-        data = json.dumps({"device": "warden", "peer": peer}).encode()
-        info = tarfile.TarInfo(f"{RUN}/request.json")
-        info.size = len(data)
-        tar.addfile(info, io.BytesIO(data))
     (tmp_path / "keep" / RUN).mkdir(parents=True, exist_ok=True)
-    (tmp_path / "keep" / RUN / "fetch.tar.gz").write_bytes(buf.getvalue())
-    return ["chain", "--run", RUN, "--keep", str(tmp_path / "keep"), "--coins", "gate", "--draw", "8",
-            "--challenger-key", str(tmp_path / "challenger-key.json"), "--key", str(tmp_path / "gate-key"),
-            "--main", str(tmp_path / "main.txt")]
+    (tmp_path / "keep" / RUN / "fetch.tar.gz").write_bytes(b"")
+    return ["chain", "--run", RUN, "--keep", str(tmp_path / "keep"), "--draw", "8", "--key", str(tmp_path / "gate-key"),
+            "--main", str(tmp_path / "main.txt"), "--challenger-key", str(tmp_path / "challenger-key.json")]
 
 
-def test_a_gate_coin_draw_runs_on_the_auditors_side_and_never_on_the_served_node(tmp_path, monkeypatch, capsys):
-    argv = _gate_chain(tmp_path, monkeypatch, "vy-dc-h200-2")
+def test_the_chains_coins_are_the_gates_by_default_and_nothing_falls_back_to_the_verifiers_own(tmp_path, monkeypatch,
+                                                                                               capsys):
+    argv = _gate_chain(tmp_path, monkeypatch)
+
+    def seen() -> dict:
+        got = dict(line.split("=", 1) for line in (tmp_path / "seen").read_text().splitlines())
+        (tmp_path / "seen").unlink()
+        return got
+
     assert SS.main(argv) == 0
-    scan = (tmp_path / "seen").read_text().strip().removeprefix("CR_SCAN_ARGS=").split(" ")
-    assert scan == ["--draw", "8", "--challenger", f"gate:{SS.GATE}", "--main", str(tmp_path / "main.txt"), "--peer",
-                    SS.AUDITOR, "--challenger-key", str(tmp_path / "challenger-key.json"),
-                    "--gate-key", str(tmp_path / "gate-key")]
-    for peer in ("vy-dc-h200-2", "vy-nebius-1"):
-        argv = _gate_chain(tmp_path, monkeypatch, "vy-nebius-1")
-        assert SS.main([*argv, "--coin-peer", peer]) == 2
-        assert "is the served node, the prover's" in capsys.readouterr().err
-    assert SS.main([*argv, "CR_SCAN_ARGS=--peer vy-dc-h200-2"]) == 2
-    assert SS.main([*argv[:-2], "--key", str(tmp_path / "no-key")]) == 2
-    assert "no gate key" in capsys.readouterr().err
-    assert SS.main([a for a in argv if a not in ("--draw", "8")]) == 2
-    assert "give K" in capsys.readouterr().err
+    assert seen() == {"CR_SCAN_ARGS": "--draw 8", "CR_CHALLENGER": f"gate:{SS.GATE}",
+                      "CR_MAIN": str(tmp_path / "main.txt"), "CR_PEER": SS.AUDITOR,
+                      "CR_CHALLENGER_KEY": str(tmp_path / "challenger-key.json"),
+                      "CR_GATE_KEY": str(tmp_path / "gate-key")}
+    assert SS.main([*argv, "--coin-peer", SS.PEER]) == 0 and seen()["CR_PEER"] == SS.PEER
+    assert SS.main([*argv, "--challenger", "local"]) == 0
+    assert seen() == {"CR_SCAN_ARGS": "--draw 8", "CR_CHALLENGER": "local", "CR_MAIN": str(tmp_path / "main.txt")}
+    for flags, why in [
+        (argv[:-2], "needs --challenger-key"),
+        ([*argv, "--challenger", "verifier"], "gate:USER@HOST (the auditor's, on the network certifier's machine) or "
+                                              "local (a dry run's)"),
+        ([*argv, "--key", str(tmp_path / "no-key")], "no gate key"),
+        ([*argv, "--main", str(tmp_path / "no-main")], "no --main"),
+        ([*argv, "CR_CHALLENGER=local"], "CR_CHALLENGER: the chain's challenger is --challenger's"),
+        ([*argv, "CR_PEER=vy-dc-h200-2"], "CR_PEER: the chain's challenger is --challenger's"),
+        ([*argv, "CR_SCAN_ARGS=--peer vy-dc-h200-2"], "CR_SCAN_ARGS: the scan's draw and its coins"),
+        ([*argv, "CR_SCAN_CMD=python3 scan_zk.py --challenger local"], "CR_SCAN_CMD: the scan's draw and its coins"),
+    ]:
+        assert SS.main(flags) == 2, flags
+        assert why in capsys.readouterr().err, flags
+    assert not (tmp_path / "seen").exists()

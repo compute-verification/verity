@@ -6,8 +6,9 @@ and its outcome. The piece, on a serve dir whose window was the warden's synthet
 link-window: the period mirror's certifier/v0 accept (`period_case`) then goes through `served_verdicts.py record` into
 the block record's certifier leg, which `block_record.check` holds and its schema admits. A window request the warden
 didn't certify is rejected before any chain runs; a chain that refused, requests outside the scan's link-window and a
-period the check rejects are rejects; a step that can't run (no kept run, no report, no build, the time limit) refuses,
-which leaves the certifier missing. The leak guard reads the piece's DIR against the run's witness."""
+period the check rejects are rejects; a step that can't run (no kept run, no report, no build, the time limit, no
+challenger, coins not the challenger's) refuses, which leaves the certifier missing. The leak guard reads the piece's
+DIR, each drawing round's challenger evidence included, against the run's witness, and leaves the evidence."""
 from __future__ import annotations
 
 import importlib.util
@@ -86,20 +87,32 @@ def _serve_dir(d: Path, warden: dict, records: list[dict] | None = None, kept: b
     return d
 
 
-def _chain_out(d: Path, verdict: str, w: int) -> Path:
-    """What the chain leaves in its run dir's out/: its report and the scan's one link-window."""
+#: a drawing round's challenger evidence as the chain leaves it in out/ (`round_coins.Session`), which DIR publishes
+EVIDENCE = ("scan/honest/challenger/session.json", "scan/honest/challenger/pins.jsonl", "scan/honest/challenger/coins.json",
+            "n2/honest/challenger/coins.json", "n2/honest/verifier/period-certificates.json")
+
+
+def _chain_out(d: Path, verdict: str, w: int, coins: dict | None = None) -> Path:
+    """What the chain leaves in its run dir's out/: its report, its coins step `coins` (accepted on the challenger
+    ``local`` by default), each drawing round's challenger evidence and the scan's one link-window."""
     out = d / "out"
     (out / "report").mkdir(parents=True)
     (out / "scan" / "joint").mkdir(parents=True)
+    coins = {"verdict": "accepted", "challenger": "local", "why": None} if coins is None else coins
     (out / "report" / "report.json").write_text(json.dumps({"verdict": verdict, "why": None if verdict == "accepted"
-                                                            else {"n2": "a window refused"}}))
+                                                            else {"n2": "a window refused"},
+                                                            "steps": {"coins": coins} if coins else {}}))
     (out / "scan" / "answers.json").write_text(json.dumps({"registration": {"program": "ab" * 64}, "windows": [
         {"window": w, "answer": {"verdict": "accept"}, "registrations": []}]}))
     (out / "scan" / "joint" / "program.json").write_text("{}")
+    for rel in EVIDENCE:
+        (out / rel).parent.mkdir(parents=True, exist_ok=True)
+        (out / rel).write_text(json.dumps({"evidence": rel}) + "\n")
     return d
 
 
-def _piece_cmd(tmp_path: Path, chain: Path, answer: dict, cmd: str | None = None, lean: Path | None = None) -> str:
+def _piece_cmd(tmp_path: Path, chain: Path, answer: dict, cmd: str | None = None, lean: Path | None = None,
+               coins: str = "--challenger local") -> str:
     if lean is None:
         lean = tmp_path / "network-period"
         (tmp_path / "lean-answer.json").write_text(json.dumps(answer, sort_keys=True))
@@ -107,7 +120,7 @@ def _piece_cmd(tmp_path: Path, chain: Path, answer: dict, cmd: str | None = None
         lean.chmod(0o755)
     cmd = cmd or f'mkdir -p "$RESEARCH_RUN_DIR" && cp -r {shlex.quote(str(chain / "out"))} "$RESEARCH_RUN_DIR/"'
     return (f"{shlex.quote(sys.executable)} {shlex.quote(str(HERE / 'certifier_piece.py'))} piece \"$@\" "
-            f"--lean {shlex.quote(str(lean))} --chain-cmd {shlex.quote(cmd)}")
+            f"--lean {shlex.quote(str(lean))} --chain-cmd {shlex.quote(cmd)} {coins}")
 
 
 def _integrity() -> dict:
@@ -147,6 +160,7 @@ def test_the_pieces_certifier_row_is_the_period_checks_accept_and_composes_into_
     assert json.loads((piece / "chain" / "report" / "report.json").read_text())["verdict"] == "accepted"
     assert sorted(p.name for p in (piece / "period").iterdir()) == ["commitment.bin", "evidence.json", "params.json"]
     assert {p.name for p in piece.iterdir()} - {"piece.json"} == {"answer.json", "chain", "period", "piece.log"}
+    assert all(json.loads((piece / "chain" / rel).read_text()) == {"evidence": rel} for rel in EVIDENCE)
     assert "leak guard (exit 0)" in (piece / "piece.log").read_text()
     keep = d / CP.PRIVATE / RUN
     assert sorted(p.name for p in keep.iterdir()) == ["chain", "endpoint", "fetch.tar.gz"]
@@ -208,20 +222,29 @@ def test_a_refused_chain_a_request_off_the_scans_link_window_and_a_rejected_peri
     assert _decide(tmp_path / "period", warden, check=lambda c, p: rejected) == rejected
 
 
+REFUSED_COINS = {"verdict": "refused", "challenger": f"gate:{CP.SS.GATE}",
+                 "why": "scan/honest: the challenger's session: the gate is unreachable"}
+
+
 @pytest.mark.parametrize("case", ["no kept run", "corrupt fetch", "no report", "no build", "time limit",
-                                  "foreign answer"])
+                                  "foreign answer", "no challenger", "coins refused", "no coins step"])
 def test_a_step_that_cant_run_refuses_and_leaves_the_certifier_missing(case, tmp_path, warden, capsys, monkeypatch):
     """The front's failures (the gate refusing or busy, its tunnel or ssh) keep no run; a corrupt fetch, a chain that
     ends without a report, a missing Lean build, SIGTERM from the piece's time limit and a check that answers no
-    certifier/v0 verdict can't run: each leaves DIR/refused.txt and its log, no answer, and the certifier missing."""
+    certifier/v0 verdict can't run: each leaves DIR/refused.txt and its log, no answer, and the certifier missing. So
+    do the chain's coins when they aren't the challenger's: the gate named without its key record, or a report whose
+    coins step isn't accepted (the gate unreachable, a session refused) or that has none, with nothing drawn on other
+    coins in their place."""
     d = _serve_dir(tmp_path / "serve", warden, kept=case != "no kept run")
     if case == "corrupt fetch":
         (d / CP.PRIVATE / RUN / "fetch.tar.gz").write_bytes(b"not a tarball")
-    chain = _chain_out(tmp_path / "chain", "accepted", warden["w"])
+    coins = {"coins refused": REFUSED_COINS, "no coins step": {}}.get(case)
+    chain = _chain_out(tmp_path / "chain", "accepted", warden["w"], coins)
     cmd = {"no report": "exit 7", "time limit": 'kill -TERM "$PPID"; while :; do :; done'}.get(case)
     lean = tmp_path / "no-such-network-period" if case == "no build" else None
     answer = {"verdict": "accept", "protocol": "other"} if case == "foreign answer" else {}
-    env = dict(os.environ, CERTIFIER_CMD=_piece_cmd(tmp_path, chain, answer, cmd, lean))
+    flags = "" if case == "no challenger" else "--challenger local"
+    env = dict(os.environ, CERTIFIER_CMD=_piece_cmd(tmp_path, chain, answer, cmd, lean, flags))
     S.pieces(d, K, tmp_path / "pieces", env=env)
     piece = tmp_path / "pieces" / "certifier"
     why = (piece / CP.REFUSED).read_text()
@@ -229,7 +252,11 @@ def test_a_step_that_cant_run_refuses_and_leaves_the_certifier_missing(case, tmp
     assert S.piece_row("communication", tmp_path / "pieces")["verdict"] == "missing"
     assert {"no kept run": "no warden run kept", "corrupt fetch": "fetch.tar.gz: ReadError", "no report": "the chain wrote no report (exit 7)",
             "no build": "network-period check: FileNotFoundError", "time limit": "SIGTERM: the piece's time limit",
-            "foreign answer": "no verity/certifier/v0 verdict"}[case] in why
+            "foreign answer": "no verity/certifier/v0 verdict",
+            "no challenger": "no challenger for the chain's coins: --challenger gate:… needs --challenger-key",
+            "coins refused": f"the challenger's coins (gate:{CP.SS.GATE}): scan/honest: the challenger's session: the "
+                             "gate is unreachable",
+            "no coins step": "the challenger's coins (None): the report has no coins step"}[case] in why
     if case != "no kept run":
         assert not list((d / CP.PRIVATE / RUN).glob("unpacked-*"))
     rec, line = _record(monkeypatch, capsys, d, tmp_path / "pieces")

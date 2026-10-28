@@ -7,10 +7,11 @@ round's: honest accepted with every output 1, its state and view chains wires th
 members the Program's ranges. A warden_serve run's directory (`--warden-run`, here the synthetic run published as
 `warden_serve.Publisher` publishes a served one) is read under its deployment's key, its registration's
 ``rows/<direction>/<w>`` roots (`scan_zk.warden_roots`) the root and domain of each row registration in ``cells.jsonl``,
-and refused by name where a row, the key or the schedule isn't the warden's. The honest round on the challenger's coins
-(``--challenger``): its flags refused by name where they can't draw, the group's root bound to the warden's signed
-link-windows, and its Spec what the round's registration shows (`service.check_public`) over the units its `Stream`
-takes. Nothing here lowers or proves (`scan_zk.prove` does, on a node)."""
+and refused by name where a row, the key or the schedule isn't the warden's. Every round on a challenger session of its
+own (``--challenger``): flags that can't name one refused by name before anything runs, each round's root bound to the
+warden's signed link-windows, the step and the round, and the honest round's Spec what its registration shows
+(`service.check_public`) over the units its `Stream` takes. Nothing here lowers or proves (`scan_zk.prove` does, on a
+node)."""
 
 from __future__ import annotations
 
@@ -500,17 +501,41 @@ def test_a_fails_reason_outside_its_fails_bucket_is_refused_by_name_and_one_outs
 
 
 @pytest.mark.parametrize("flags,why", [
-    (["--challenger", "local", "--main", "m.txt"], "give --draw"),
-    (["--challenger", "remote", "--draw", "16", "--main", "m.txt"], "local or gate:USER@HOST, not 'remote'"),
-    (["--challenger", "gate:research@h", "--draw", "16", "--main", "m.txt", "--peer", "p"],
-     "needs --peer and --challenger-key"),
+    ([], "nothing draws on the verifier's own coins"),
+    (["--draw", "16", "--main", "m.txt"], "nothing draws on the verifier's own coins"),
+    (["--challenger", "remote", "--main", "m.txt"], "local, loopback:HOST:PORT or gate:USER@HOST, not 'remote'"),
+    (["--challenger", "gate:research@h", "--main", "m.txt", "--peer", "p"], "needs --peer and --challenger-key"),
     (["--challenger", "local", "--draw", "16"], "needs --main"),
     (["--group", "0"], "--group is 1 or more link-windows"),
 ])
-def test_a_challenger_draw_that_cant_draw_is_refused_by_name_before_anything_runs(tmp_path, capsys, flags, why):
+def test_a_scan_that_cant_name_its_challenger_is_refused_by_name_before_anything_runs(tmp_path, capsys, flags, why):
+    """Every round draws, every unit included, so a scan that proves anything names its challenger; only ``--dry``,
+    which draws nothing, runs without one."""
     with pytest.raises(SystemExit):
-        sz.main(["prove", "--dry", "--out", str(tmp_path / "out"), *flags])
-    assert re.search(why, capsys.readouterr().err) and not (tmp_path / "out").exists()
+        sz.main(["prove", "--bin", "b", "--lean", "l", "--out", str(tmp_path / "out"), *flags])
+    assert re.search(re.escape(why), capsys.readouterr().err) and not (tmp_path / "out").exists()
+
+
+def test_each_round_opens_a_session_of_its_own_on_its_root_and_ends_its_turn_on_the_way_out(tmp_path, monkeypatch):
+    """`scan_zk.challenger` on the fake challenger: each round's session is on `round_coins.root` of the group's
+    `window_root`, the step and the round, so no two rounds share coins; leaving the round, by an error too, ends its
+    turn and publishes the session's evidence, and a round that never planned its draw opened nothing."""
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+    from test_round_coins import fake_challenger
+
+    a = fake_challenger(tmp_path, monkeypatch)
+    at = sz.link(tmp_path / "syn")
+    roots = {}
+    for name in sz.ROUNDS:
+        with sz.challenger(a, at, name, tmp_path / name) as coins:
+            roots[name] = coins.root
+        assert "was not opened" in coins.published["error"], coins.published
+    assert roots == {n: sz.RC.root(sz.window_root(at), "scan", n) for n in sz.ROUNDS}
+    assert len(set(roots.values())) == len(sz.ROUNDS)
+    with pytest.raises(RuntimeError, match="the round failed"), sz.challenger(a, at, "honest", tmp_path / "again") as coins:
+        raise RuntimeError("the round failed")
+    assert coins.published is not None and not coins.held(b"", b"", None)["ok"]
+    assert not (tmp_path / "coins.log").exists()
 
 
 def test_the_window_root_is_the_wardens_signed_link_windows(tmp_path):

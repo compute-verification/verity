@@ -515,9 +515,9 @@ def scan_step(s: dict | None, warden_run: str | None, job: dict | None = None) -
 def coins_step(scan: dict | None, n2: dict | None, tie: dict | None, job: dict) -> dict:
     """Each round's coin source, from the drivers' summaries' ``coins``: a scan round's and a sampled N2 member's
     session of the auditor's challenger (`round_coins`), or none (Selection All: N2 at every window, the tie).
-    Accepted when every scan round the summary ran, and a sampled N2 period (the job's ``n2_sampled``), has a session
-    and every session held (`round_coins.Session.held`'s ``ok``); ``open`` names the coins that aren't the
-    challenger's, every Flock session's (`round_coins.FLOCK`)."""
+    Accepted when every scan round the summary ran, and a sampled N2 period (the job's ``n2_sampled``), has a session,
+    no two rounds share a session's root, and every session held (`round_coins.Session.held`'s ``ok``); ``open`` names
+    the coins that aren't the challenger's, every Flock session's (`round_coins.FLOCK`)."""
     rounds: dict[str, dict] = {}
     for step, doc in (("scan", scan), ("n2", n2)):
         for name, r in (((doc or {}).get("coins") or {}).get("rounds") or {}).items():
@@ -527,12 +527,17 @@ def coins_step(scan: dict | None, n2: dict | None, tie: dict | None, job: dict) 
     if tie is not None:
         rounds["tie"] = {"source": None, "draw": (tie.get("coins") or {}).get("draw") or NO_COIN}
     missing = [f"scan/{n}" for n in (scan or {}).get("rounds") or {} if f"scan/{n}" not in rounds]
-    if job.get("n2_sampled") and not any(k.startswith("n2/") for k in rounds):
-        missing.append("n2 (sampled)")
+    if job.get("n2_sampled"):
+        members = [k for k in rounds if k.startswith("n2/")]
+        missing += [k for k in members if not rounds[k].get("source")] if members else ["n2 (sampled)"]
     bad = {k: v.get("coins_reason") or v.get("error") or "the session's evidence doesn't hold"
            for k, v in rounds.items() if v.get("source") and not v.get("ok")}
+    first: dict[str, str] = {}
+    for k, v in rounds.items():
+        if v.get("root") and first.setdefault(v["root"], k) != k:
+            bad.setdefault(k, f"its session's root is {first[v['root']]}'s: each round draws on a session of its own")
     why = "; ".join([*(f"{k}: no challenger session" for k in missing), *(f"{k}: {v}" for k, v in bad.items())])
-    flock = next((d["coins"]["flock"] for d in (scan, n2, tie) if (d or {}).get("coins", {}).get("flock")), None)
+    flock = next((d["coins"]["flock"] for d in (scan, n2, tie) if ((d or {}).get("coins") or {}).get("flock")), None)
     return {"verdict": "refused" if why else "accepted", "why": why or None, "challenger": job.get("challenger"),
             "rounds": rounds, "open": [f"every Flock session's coins (scan, N2, tie): {flock['by']}"] if flock else [],
             "in_the_clear": "the sessions' evidence: the challenger's key, ledger, pins and released coins, public"}
