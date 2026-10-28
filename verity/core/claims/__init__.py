@@ -119,7 +119,7 @@ ENTRIES: dict[str, Entry] = {e.id: e for e in (
           "hm96-sha256/v1 and hm96-sha512/v1 (their hiding bound holds except for a 2^-64 fraction of keys)", "CRS"),
 
     Entry("random-oracle", "assumption", "A hash behaves as a random oracle", "Random oracle", "standard"),
-    # the device of PoUB's per-pass bound (Bandwidth.Guarantees.AuditRO, Security/Definitions/Accounting/Guarantees/Bandwidth.lean):
+    # the device of PoUB's per-pass bound (Bandwidth.Device, Security/Definitions/Accounting/Bandwidth/Game.lean):
     # the guarantee quantifies over devices bounded by S_chip, cap_side * T and T / R_regen, and these say a deployed one is
     # such; a co-audited set would be one such device over its members' stores, which no guarantee states yet, and side
     # sources that may carry a peer's tags are Bandwidth.Guarantees.AuditRelay's
