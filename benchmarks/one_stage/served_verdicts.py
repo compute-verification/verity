@@ -7,16 +7,26 @@ sampled proofs, and the one record of every verdict (the block record).
                                  [--model M]
     served_verdicts.py period close SERVE_DIR [--gate CMD]
     served_verdicts.py program OUT [--model M] [--rows T] [--steps S] [--like SERVE_DIR]
-    served_verdicts.py pieces --serve-run DIR --window K --out DIR [--node NAME]
+    served_verdicts.py pieces --serve-run DIR --window K --out DIR [--node NAME] [--only COMPONENT]... [--skip COMPONENT]...
     served_verdicts.py pouw SERVE_DIR WINDOW DIR [--gate CMD] [--key-sha512 HEX] [--main FILE] [--python PY]
                                 [--statements FILE] [--live-evidence FILE]
     served_verdicts.py record --serve-run DIR --window K --sampled-proofs DIR --pieces DIR --out DIR [--node NAME]
+    served_verdicts.py public-registration REGISTRATION
+    served_verdicts.py sampled-line LOG [--partition FILE]
+    served_verdicts.py front-line SESSION
+
+``public-registration`` prints what the run publishes of a window's advice registration (`public_registration`: the
+advice's length padded to its compiler's cap), ``sampled-line`` the SAMPLED-PROOFS line from the records audit's log
+(`sampled_line`: the partition the draw was over, the members it drew, and no length of the advice or count of the
+scope's members), and ``front-line`` the CERTIFIER-FRONT line from the front's session (`front_line`: `FRONT_PUBLIC`).
 
 ``window``: the sealed window to audit, from a serve-openai run's ``seals.jsonl``, ``windows.jsonl`` and ``requests.jsonl``
 (`pick`): sealed without error, its Commit passed, each of its requests checked and in no other window (V3b's window
 circuit refuses a request carried across windows), at most ``--slots`` of them (its class's); the most requests, then the
-earliest. ``--window K`` holds K to the same rules. Prints ``{window, requests, users, steps, refused}``, ``steps`` the
-window's ``[lo, hi)`` in the run's committed engine steps.
+earliest. ``--window K`` holds K to the same rules. Prints what the run publishes of it (`public_pick`):
+``{window, steps, engine_steps, slots, every_slot, refused}``, ``steps`` the window's ``[lo, hi)`` in the run's committed
+engine steps, ``every_slot`` whether its requests filled the class's slots, ``refused`` the windows refused, by number. Its
+requests' count, list and users stay on the node.
 
 ``pieces``: each subprotocol after sampled proofs (`PIECES`: PoUW, PoUS, the bandwidth audit, the network certifier) runs
 its piece where one is named (``POUW_CMD``, ``POUS_CMD``, ``BANDWIDTH_CMD``, ``CERTIFIER_CMD``: a command run in the tree as
@@ -30,7 +40,7 @@ leaves it missing; no verdict is made for a piece that didn't run. A development
 (`DEVELOPMENT`) in place of a core answer: its verdict is printed as a development run's, and it credits nothing. A piece
 that audited another server than the node it ran on says so in ``DIR/served.json`` (`SERVED`: ``{server, source}``,
 ``source`` ``fixture`` for an answer brought from a recorded run); one that names no server there leaves its answer about
-the node it ran on.
+the node it ran on. ``--only`` and ``--skip`` (a component each, repeatable) run those pieces alone, or all but those.
 
 ``gate``: before serving with H1's coins from infra's gate (``--gate``, default ``H1_GATE``): refused while the key's lane
 (``--lane``) has a period open, which a reserve would join; prints one ``GATE`` line with the gate's latest pin and,
@@ -215,18 +225,72 @@ def pick(serve_dir: Path, slots: int, want: int | None = None) -> dict[str, Any]
             "refused": {str(j): why for j, why in refused.items()}}
 
 
+def public_pick(got: Mapping[str, Any], slots: int) -> dict[str, Any]:
+    """What the run publishes of `pick`'s window: its engine steps and whether its requests filled the class's ``slots``,
+    with no count, list or user of them, and the windows refused by number alone."""
+    lo, hi = got["steps"]
+    return {"window": got["window"], "steps": [lo, hi], "engine_steps": hi - lo, "slots": slots,
+            "every_slot": got["requests"] == slots, "refused": sorted(int(j) for j in got["refused"])}
+
+
+#: The advice registration's fields that state the advice's own length, which `public_registration` pads to the cap.
+PADDED = ("binding.advice.bits", "rows", "bits_by_window")
+
+
+def public_registration(reg: Mapping[str, Any]) -> dict[str, Any]:
+    """What the run publishes of a window's advice registration: the advice's length (`PADDED`) at its compiler's
+    ``cap_bits``, the one length the class declares (its rows at ``row_bits`` each, every window's bits the cap), no count
+    or refusal of its requests, and the rest as registered. ``padded`` names the fields padded."""
+    cap, row_bits = int(reg["compiler"]["cap_bits"]), int(reg["row_bits"])
+    out = {k: v for k, v in reg.items() if k not in ("requests", "compiled", "refused")}
+    out["binding"] = {**reg["binding"], "advice": {**reg["binding"]["advice"], "bits": cap}}
+    out["rows"] = -(-cap // row_bits)
+    out["bits_by_window"] = {w: cap for w in reg.get("bits_by_window") or {}}
+    return {**out, "padded": list(PADDED)}
+
+
+def sampled_line(records: Mapping[str, Any], partition: Mapping[str, Any] | None) -> str:
+    """The SAMPLED-PROOFS line's account of the records audit's ``RECORDS`` row: what the draw was over (the partition's
+    templates, scope and law), which members it drew, and the row with no length of the advice (``leak.advice_bits``)
+    and no ``population``, the scope's unpadded member count, which counts the window's tokens."""
+    row = {k: v for k, v in records.items() if k != "population"}
+    if isinstance(row.get("leak"), Mapping):
+        row["leak"] = {k: v for k, v in row["leak"].items() if k != "advice_bits"}
+    part = partition or {}
+    scope = part.get("scope") or {}
+    over = (f"over {', '.join(part.get('templates') or ['?'])} at {scope.get('op_path_prefix', '?')} steps "
+            f"{scope.get('steps', '?')} (law {part.get('law', '?')})")
+    drawn = f"drawn members {row.get('draw')}" if row.get("draw") is not None else "no draw"
+    return f"{over}, {drawn}: RECORDS {json.dumps(row, sort_keys=True)}"
+
+
+#: The certifier front's session fields the CERTIFIER-FRONT line says. The rest (its prompts, request, kept fetch, gate
+#: and verdict's cells) count or name the group's requests, and stay in the serve dir.
+FRONT_PUBLIC = ("rc", "run", "ended", "ended_utc", "session_s", "pinned", "leaked_removed")
+
+
+def front_line(session: Mapping[str, Any]) -> str:
+    """The CERTIFIER-FRONT line's account of the front's ``session.json``: `FRONT_PUBLIC` alone, or that it refused."""
+    if "refused" in session:
+        return "refused (its reason in the serve dir's private/certifier-front/session.json)"
+    return json.dumps({k: session[k] for k in FRONT_PUBLIC if k in session})
+
+
 def _unset(comp: str, what: str) -> str:
     return f"{comp.upper()}_CMD unset: {what}"
 
 
 def pieces(serve_dir: Path, window: int, out: Path, env: Mapping[str, str] | None = None,
-           node: str | None = None) -> dict[str, dict[str, Any]]:
+           node: str | None = None, only: Sequence[str] | None = None, skip: Sequence[str] = ()) -> dict[str, dict[str, Any]]:
     """Each piece of `PIECES` run where ``<COMPONENT>_CMD`` names it, under `timeout` at its limit, else named missing;
-    one line each on stdout, its verdict the one `piece` gives the record."""
+    one line each on stdout, its verdict the one `piece` gives the record. ``only`` and ``skip`` name components: those
+    alone, or all but those, so one piece can run beside the others (`served_verdicts.sh` starts the certifier's early)."""
     env = dict(os.environ if env is None else env)
     node = node or socket.gethostname()
     got: dict[str, dict[str, Any]] = {}
     for key, (name, comp, owner, what) in PIECES.items():
+        if (only is not None and comp not in only) or comp in skip:
+            continue
         cmd = env.get(f"{comp.upper()}_CMD")
         if not cmd:
             got[comp] = {"verdict": "missing", "why": _unset(comp, what)}
@@ -647,10 +711,19 @@ def _ratio(e: Fraction, deltas: Sequence[Fraction]) -> str:
 
 def terms(r: Mapping[str, Any], leg: Mapping[str, Any] | None) -> list[str]:
     """What an accepted answer holds beyond its verdict: where its profile says when its weights were held and what share
-    of the checkpoint they are, those; and each δ of the block record's at which its leg's quantity is not established."""
+    of the checkpoint they are, those; where it says which host ran each party (the network certifier's ``placement``),
+    the link K counts, named, with every other link of the node uncounted and uncertified, and what its `trusted-host`
+    premise rests on; and each δ of the block record's at which its leg's quantity is not established. A placement
+    with no links (the front's ``--gate local``) states no link."""
     profile = (r.get("answer") or {}).get("profile")
     w = profile.get("weights") if isinstance(profile, Mapping) else None
-    out = []
+    place = profile.get("placement") if isinstance(profile, Mapping) else None
+    place = place if isinstance(place, Mapping) else {}
+    counted = [f"{x['from']} to {x['to']} through {x['via']}" for x in place.get("links") or () if x.get("counted")]
+    others = place.get("uncounted") or "every other link of the node"
+    out = ([f"K counts the relayed link alone, {'; '.join(counted)}; {others} is uncounted and uncertified"]
+           if counted else [])
+    out += [f"trusted-host {place['trusted-host']}"] if place.get("trusted-host") else []
     if isinstance(w, Mapping) and w.get("held"):
         out.append(f"its weights {w['held']}, not concurrently with the block")
     if isinstance(w, Mapping) and w.get("share"):
@@ -776,21 +849,47 @@ def main(argv: Sequence[str] | None = None) -> int:
     o.add_argument("--python", default=os.environ.get("PY") or sys.executable)
     o.add_argument("--statements", type=Path)
     o.add_argument("--live-evidence", type=Path)
+    rg = sub.add_parser("public-registration")
+    rg.add_argument("registration", type=Path)
+    sl = sub.add_parser("sampled-line")
+    sl.add_argument("log", type=Path)
+    sl.add_argument("--partition", type=Path)
+    fl = sub.add_parser("front-line")
+    fl.add_argument("session", type=Path)
     p = sub.add_parser("pieces")
     r = sub.add_parser("record")
     for q in (p, r):
         q.add_argument("--serve-run", type=Path, required=True)
         q.add_argument("--window", type=int, required=True)
     p.add_argument("--out", type=Path, required=True)
+    p.add_argument("--only", action="append", choices=[v[1] for v in PIECES.values()])
+    p.add_argument("--skip", action="append", default=[], choices=[v[1] for v in PIECES.values()])
     r.add_argument("--sampled-proofs", type=Path, required=True)
     r.add_argument("--pieces", type=Path, required=True)
     r.add_argument("--out", type=Path, required=True)
     for q in (p, r):
         q.add_argument("--node", default=socket.gethostname())
     a = ap.parse_args(argv)
+    if a.cmd == "public-registration":
+        print(json.dumps(public_registration(json.loads(a.registration.read_text())), indent=1, sort_keys=True))
+        return 0
+    if a.cmd == "sampled-line":
+        rows = [x[len("RECORDS "):] for x in a.log.read_text().splitlines() if x.startswith("RECORDS ")]
+        if not rows:
+            print("no RECORDS line")
+            return 1
+        print(sampled_line(json.loads(rows[0]), json.loads(a.partition.read_text()) if a.partition else None))
+        return 0
+    if a.cmd == "front-line":
+        try:
+            print(front_line(json.loads(a.session.read_text())))
+        except (OSError, ValueError) as e:
+            print(f"no session ({type(e).__name__})")
+            return 1
+        return 0
     if a.cmd == "window":
         try:
-            print(json.dumps(pick(a.serve_dir, a.slots, a.window), sort_keys=True))
+            print(json.dumps(public_pick(pick(a.serve_dir, a.slots, a.window), a.slots), sort_keys=True))
         except ValueError as e:
             print(f"served_verdicts.py window: {e}", file=sys.stderr)
             return 1
@@ -847,7 +946,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         return 0
     if a.cmd == "pieces":
         a.out.mkdir(parents=True, exist_ok=True)
-        got = pieces(a.serve_run, a.window, a.out, node=a.node)
+        got = pieces(a.serve_run, a.window, a.out, node=a.node, only=a.only, skip=a.skip)
         return 0 if all(g["verdict"] in ("accept", "missing") for g in got.values()) else 1
     steps = pick(a.serve_run, 1 << 30, a.window)["steps"]
     run = os.environ.get("RESEARCH_RUN_ID")
