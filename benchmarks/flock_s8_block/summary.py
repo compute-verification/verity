@@ -63,7 +63,8 @@ def floats(s: str) -> list[float]:
     return out
 
 
-def session_set(d: Path) -> dict:
+def session_set(d: Path, gpu: bool = True) -> dict:
+    """With ``gpu`` false (the CPU prover), the GPU's samples are left out: they show only other tenants of the card."""
     live = [(t, json.loads(l[5:])) for t, l in stamped(d / "prove.tsv") if l.startswith("LIVE")]
     if not live:
         return {"error": text(d / "prove.err")[-1500:]}
@@ -85,7 +86,7 @@ def session_set(d: Path) -> dict:
          "process": time_v(d / "time-prove.txt")}
     if t0 and t1:
         smi = [(t, floats(r)) for t, r in stamped(d / "smi.tsv")]
-        m = window_mean(smi, t0, t1)
+        m = window_mean(smi, t0, t1) if gpu else None
         if m and len(m) >= 4:
             s["gpu_util_mean_pct"], s["gpu_mem_mean_mib"], s["sm_clock_mean_mhz"], s["power_mean_w"] = (round(x, 2) for x in m[:4])
             s["gpu_busy_s_per_session"] = round(m[0] / 100 * s["session_s"], 4)
@@ -94,6 +95,8 @@ def session_set(d: Path) -> dict:
         after = [j for t, j in jif if t >= t1]
         if before and after:
             s["prover_cores_cpu_s_per_session"] = round((after[0] - before[-1]) / 100 / len(timed), 3)
+        if not gpu:
+            return s
         mem = [v[1] for _, v in smi if len(v) >= 2]
         s["gpu_mem_peak_mib"] = max(mem) if mem else None
         dcgm = [(t, floats(r.split("GPU", 1)[1])[1:] if "GPU" in r else []) for t, r in stamped(d / "dcgm.tsv")]
@@ -113,7 +116,7 @@ def main(out: Path) -> dict:
                                       "stage_process": time_v(st / "time-stage.txt")}
     for mode in ("gpu", "cpu", "gpu-nsys"):
         for d in sorted((out / mode).glob("k*-n*")):
-            res["statements"].setdefault(d.name, {})[mode] = session_set(d)
+            res["statements"].setdefault(d.name, {})[mode] = session_set(d, gpu=mode != "cpu")
     res["nsys"] = {f.name: nsys_total_s(f) for f in sorted((out / "nsys").glob("*.csv"))}
     return res
 
