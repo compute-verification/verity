@@ -210,6 +210,11 @@ def commitRows (s k : Nat) : String := s!"row-table/{s}/k{k}"
 /-- `credit.commit_ids`: the Commit's name for its step's input token ids at the window's round `s`. -/
 def commitIds (s : Nat) : String := s!"input-ids/{s}"
 
+/-- `credit.commit_outputs`: the Commit's name for its linear's output y at the window's call `c`'s tiles, as the call's
+z/y records hold it: what it registers as call c's z table `<prefix>zy@<c>` (one record a unit of the call in its tile
+order, z then y = dq(z), `h1zy.RECORD`). -/
+def commitOutputs (c : Nat) : String := s!"coord-out/{c}"
+
 def noBit (i : Nat) : String :=
   s!"manifest row {i} has no credit bit: the serving process commits each call's verdict as `{CREDIT}` (true or " ++
   "false) in its manifest row, under calls_root, before the draw coin"
@@ -832,6 +837,14 @@ def receiptCall? (v : Json) : Option Nat :=
   let c := String.ofList (last.toList.drop 8)
   if last.startsWith "receipt@" && (c == "0" || canonicalK c) then some c.toNat! else none
 
+/-- `credit.zy_call`: a z table's call, a name whose last part is `zy@<c>` (`<prefix>zy@<c>`, row t call c's t-th
+unit's z/y record, c a canonical decimal). -/
+def zyCall? (v : Json) : Option Nat :=
+  (str? v).bind fun v =>
+  let last := (v.splitOn "/").getLastD ""
+  let c := String.ofList (last.toList.drop 3)
+  if last.startsWith "zy@" && (c == "0" || canonicalK c) then some c.toNat! else none
+
 /-- `credit.pub_call`: a public table's call, a name whose last part is `pub@<c>` (`<prefix>pub@<c>`, row t call c's
 t-th unit's public row, which `registeredFile` builds, c a canonical decimal). -/
 def pubCall? (v : Json) : Option Nat :=
@@ -841,13 +854,14 @@ def pubCall? (v : Json) : Option Nat :=
   if last.startsWith "pub@" && (c == "0" || canonicalK c) then some c.toNat! else none
 
 /-- `credit.is_tied`: a value the round roots commit, an A value (`isA`), an input-ids table (`idsStep?`), a slot table
-(`slotsStep?`) or a receipt table (`receiptCall?`). -/
+(`slotsStep?`), a z table (`zyCall?`) or a receipt table (`receiptCall?`). -/
 def isTied (v : Json) : Bool :=
-  isA v || (idsStep? v).isSome || (slotsStep? v).isSome || (receiptCall? v).isSome
+  isA v || (idsStep? v).isSome || (slotsStep? v).isSome || (zyCall? v).isSome || (receiptCall? v).isSome
 
 def what (v : String) : String :=
   if isA (.str v) then "A value" else if (idsStep? (.str v)).isSome then "input-ids table"
-  else if (slotsStep? (.str v)).isSome then "slot table" else "receipt table"
+  else if (slotsStep? (.str v)).isSome then "slot table" else if (zyCall? (.str v)).isSome then "z table"
+  else "receipt table"
 
 /-- `credit.is_held`: a value held across windows, the weights' rows (`…/b/<K>`, K a canonical decimal); every other
 value a window registers is its own. -/
@@ -879,8 +893,9 @@ def aLinkRefuse {α : Type} (why : String) : R α := throw ("a-link", why)
 refusal. Of S rounds, round s's segments of a window's A value `…/a/<K>` of L rows tile its rows `[s·L/S, (s+1)·L/S)`;
 round s's A table of K `…/a/<K>@<s>` is committed whole by round s, whose segments tile all its rows, and no other
 round lists it. Round s's input-ids table `…/ids@<s>` (`idsStep?`) is committed whole by round s alike, as is its
-slot table `…/slots@<s>` (`slotsStep?`), and so is call c's receipt table `…/receipt@<c>` (`receiptCall?`) by c's
-round, of the window's `calls` calls (its manifest's rows; 0 admits no receipt table) the rounds' equal blocks. Each
+slot table `…/slots@<s>` (`slotsStep?`), and so are call c's z table `…/zy@<c>` (`zyCall?`) and receipt table
+`…/receipt@<c>` (`receiptCall?`) by c's round, of the window's `calls` calls (its manifest's rows; 0 admits no z or
+receipt table) the rounds' equal blocks. Each
 entry's leaf count is its rows in `rows` (`tableRows`, the layout's) when `rows` names it, else from 1 to `MAX_ROWS`,
 and every entry's count is checked before the verifier hashes any pad. A step of `window`, which first holds the round
 roots to the ones the challenger received (`roundsCheck`) and `layoutOf` the layout. -/
@@ -911,8 +926,8 @@ def Internal.aLink (rounds entries : Json) (calls : Nat) (rows : List (String ×
   for (p, r) in segs.zipIdx do
     for (v, _) in p do
       unless names.contains v do
-        aLinkRefuse (s!"round {r} lists segments of {v}, which is no registered A value, input-ids table or receipt " ++
-          "table of the window")
+        aLinkRefuse (s!"round {r} lists segments of {v}, which is no registered A value, input-ids table, z table " ++
+          "or receipt table of the window")
   let steps := xs.length
   let mut plan : List (String × ByteArray × ByteArray × Nat × Nat × Option (String × Nat)) := []
   for (v, e) in a do
@@ -928,14 +943,14 @@ def Internal.aLink (rounds entries : Json) (calls : Nat) (rows : List (String ×
       unless 1 ≤ count && count ≤ MAX_ROWS do
         aLinkRefuse (s!"registered {what v} {v}'s leaf count {count} is not from 1 to {MAX_ROWS} (the verifier " ++
           "hashes its pads)")
-    let (per, own) ← (match receiptCall? (.str v), idsStep? (.str v), slotsStep? (.str v),
-        (aValue? (.str v)).bind (·.2) with
+    let (per, own) ← (match (zyCall? (.str v)).orElse fun _ => receiptCall? (.str v), idsStep? (.str v),
+        slotsStep? (.str v), (aValue? (.str v)).bind (·.2) with
       | some c, _, _, _ => do
         unless calls % steps == 0 && c < calls do
-          aLinkRefuse (s!"registered receipt table {v} is call {c}'s, and the window's {calls} calls are not its " ++
+          aLinkRefuse (s!"registered {what v} {v} is call {c}'s, and the window's {calls} calls are not its " ++
             s!"{steps} rounds' equal blocks with a call {c}")
         let o := c / (calls / steps)
-        pure (count, some (s!"call {c}'s receipt table, its round {o}'s", o))
+        pure (count, some (s!"call {c}'s {what v}, its round {o}'s", o))
       | none, some s, _, _ => do
         if s ≥ steps then
           aLinkRefuse s!"registered input-ids table {v} is round {s}'s, and the window has {steps} rounds"
@@ -1193,7 +1208,8 @@ def stepRow (layout : Json) (steps call : Nat) : Nat × Nat × Nat :=
 /-- `credit.table_rows`: the rows the layout `layout` (one `layoutOf` accepted) gives each value the round roots commit
 but the input-ids tables, by name under `prefix_` (the descriptor's `PREFIX`), over its `steps` rounds: the window's
 `a/<K>` x·blocks·M (its blocks of K, x = `chunks?` K leaves a row), round s's A table of K `a/<K>@<s>`
-x·M·|round s's calls of K| (`stepTables`), and call c's receipt table `receipt@<c>` c's units (`callWork`). Empty when
+x·M·|round s's calls of K| (`stepTables`), and call c's z table `zy@<c>` and receipt table `receipt@<c>` c's units
+(`callWork`). Empty when
 `steps` doesn't divide the calls. `Internal.aLink` holds each such entry to these rows before it hashes any pad. -/
 def tableRows (layout : Json) (steps : Nat) (prefix_ : String) : List (String × Nat) := Id.run do
   let calls : List (String × Nat) := match get layout "calls" with
@@ -1213,8 +1229,9 @@ def tableRows (layout : Json) (steps : Nat) (prefix_ : String) : List (String ×
     let blocks := 1 + ((calls.filter fun (lin, _) => ks.lookup lin == some k).map (·.2)).foldl max 0
     (s!"{prefix_}a/{k}", x k * m * blocks)
   let tables := (stepTables layout steps).map fun (s, k, cs) => (s!"{prefix_}a/{k}@{s}", x k * m * cs.length)
+  let zys := (callWork layout).zipIdx.map fun ((size, _), c) => (s!"{prefix_}zy@{c}", size)
   let receipts := (callWork layout).zipIdx.map fun ((size, _), c) => (s!"{prefix_}receipt@{c}", size)
-  return whole ++ tables ++ receipts
+  return whole ++ tables ++ zys ++ receipts
 
 /-- `credit.registered_file`: the verifier's `--registered` file of call `call`'s statement in the window `layout`
 (one `strata` accepted, its circuit's descriptor of SHA-512 `program` and `shapeOf` `shape`, its calls `steps` rounds'
@@ -1387,9 +1404,10 @@ at that value's registered root, but for its call's public table (`pubCall?`) an
 (`<prefix>ok`, `OK_VALUE`), which no entry registers and `credit._verified` holds to the rows `registeredFile` built; and it opened its unit's K's A value: the window's `…/a/<K>` (K the unit's stratum's
 in `ss`) or its call's round's A table of K `…/a/<K>@<s>` (the call `layout`'s units place it in, `callAt`, s its round
 of `steps`, its calls the rounds' equal blocks), and its K's B
-rows, the window's `<prefix>b/<K>` (`prefix` the descriptor's `PREFIX`). A step of `window`, after `Internal.aLink` has
-held each A value's root to the segments the round roots commit and `periodWeights` each `<prefix>b/<K>` to the
-weights' root its period signed. -/
+rows, the window's `<prefix>b/<K>` (`prefix` the descriptor's `PREFIX`), and its call's z table `<prefix>zy@<c>`, the
+linear's output y at its tiles as the served Commit commits it (`Internal.arow`). A step of `window`, after
+`Internal.aLink` has held each A value's and z table's root to the segments the round roots commit and `periodWeights`
+each `<prefix>b/<K>` to the weights' root its period signed. -/
 def Internal.registration (window program prefix_ : String) (entries proofs : Json) (ss : Array Flock.Draw.WorkStratum)
     (layout : Json) (steps : Nat) (session : String) : R Unit := do
   let es := match entries with
@@ -1418,6 +1436,7 @@ def Internal.registration (window program prefix_ : String) (entries proofs : Js
         "unit's session against the window's committed circuit")
     let mut opened := false
     let mut weights := false
+    let mut zy := false
     for (port, v, root) in f do
       if (pubCall? (.str v)).isSome || v == prefix_ ++ OK_VALUE then continue
       let n := names.count (some v)
@@ -1437,6 +1456,7 @@ def Internal.registration (window program prefix_ : String) (entries proofs : Js
         | some (k', s') => k' == k && (s'.all (· == toString (c / per)))
         | none => false)
       weights := weights || v == s!"{prefix_}b/{k}"
+      zy := zy || v == s!"{prefix_}zy@{c}"
     unless opened do
       registrationRefuse (s!"drawn unit {u}'s proof opened no A value …/a/{k} or …/a/{k}@{c / per} (its call's " ++
         "round's) of the window, so nothing ties the A rows it proved to the ones the round roots committed: verify each drawn unit's " ++
@@ -1445,6 +1465,10 @@ def Internal.registration (window program prefix_ : String) (entries proofs : Js
       registrationRefuse (s!"drawn unit {u}'s proof opened no weights {prefix_}b/{k} of the window, so nothing ties " ++
         "the B rows it proved to the ones its period registered: verify each drawn unit's session with the window's " ++
         "weights registered")
+    unless zy do
+      registrationRefuse (s!"drawn unit {u}'s proof opened no z table {prefix_}zy@{c} (its call's) of the window, so " ++
+        "nothing ties the y it proved to the linear's output the served Commit committed at its tiles: verify each " ++
+        "drawn unit's session with its call's z table registered")
 
 def arowRefuse {α : Type} (why : String) : R α := throw ("arow", why)
 
@@ -1474,9 +1498,10 @@ registered `entries` is the Commit's value of the same rows among its record's `
 domain and leaf count; else the refusal (`arow`). The window's `layout` (`strata`'s) calls are its round log `rounds`'
 S rounds' equal blocks, and round s's `<prefix>a/<K>@<s>` (`prefix_` the descriptor's `PREFIX`, `stepTables`) holds M
 rows for each of the round's calls of K, call after call, and is the Commit's `commitRows` of s and K; round s's
-`<prefix>ids@<s>` is the Commit's `commitIds` of s. The Commit registers each of those values once. So the A rows a
-call's units read are its linear's input as the served Commit commits it, and the input token ids under each round's
-root are its step's (ROOTS1). The window registers no other input-ids table, and round 0's request root (`requests`,
+`<prefix>ids@<s>` is the Commit's `commitIds` of s; and call c's z table `<prefix>zy@<c>` is the Commit's
+`commitOutputs` of c. The Commit registers each of those values once. So the A rows a call's units read are its
+linear's input as the served Commit commits it, the input token ids under each round's root are its step's, and the y
+a call's units prove is its linear's output at their tiles as the Commit commits it (ROOTS1). The window registers no other input-ids table, and round 0's request root (`requests`,
 the one its open root binds) is `requestsRoot` of its request table's root (`request_table`) and `<prefix>ids@0`'s, so
 round 0's input ids are fixed before the salt coin. The window registers at most one request table (`isRequests`),
 `<prefix>requests@0`, at root `request_table`, so the live unit's `req` rows are round 0's admitted requests;
@@ -1502,11 +1527,12 @@ def Internal.arow (rounds : Array Json) (entries : Json) (registered : Array Jso
   let pairs := (stepTables layout steps).map (fun (s, k, cs) =>
       (s!"{prefix_}a/{k}@{s}", commitRows s k, s!"round {s}'s A table of K = {k}",
         some ((chunks? k).getD 1 * m * cs.length))) ++
-    (List.range steps).map fun s => (s!"{prefix_}ids@{s}", commitIds s, s!"round {s}'s input-ids table", none)
+    (List.range steps).map (fun s => (s!"{prefix_}ids@{s}", commitIds s, s!"round {s}'s input-ids table", none)) ++
+    (List.range calls).map fun c => (s!"{prefix_}zy@{c}", commitOutputs c, s!"call {c}'s z table", none)
   for (v, name, whose, rows) in pairs do
     let some e := ours.get? v
       | arowRefuse (s!"the window registers no {whose} {v}, so nothing ties it to the Commit's {name}: the served " ++
-          "window registers each round's A table of each K and its input-ids table")
+          "window registers each round's A table of each K and its input-ids table, and each call's z table")
     if let some n := rows then
       unless nat? (get e "leaves") == some n do
         arowRefuse (s!"{whose} {v} has {(nat? (get e "leaves")).getD 0} rows, not {n}: it holds the M rows of each " ++
@@ -1515,12 +1541,15 @@ def Internal.arow (rounds : Array Json) (entries : Json) (registered : Array Jso
     let got := theirs.getD name #[]
     if got.size != 1 then
       arowRefuse (s!"the Commit record registers {name} {if got.isEmpty then "not" else "twice"}: the served " ++
-        "Commit registers each round's A table of each K as row-table/<round>/k<K> and each round's input-ids " ++
-        "table as input-ids/<round>, once")
+        "Commit registers each round's A table of each K as row-table/<round>/k<K>, each round's input-ids " ++
+        "table as input-ids/<round> and each call's z table, its linear's output y at the call's tiles, as " ++
+        "coord-out/<call>, once")
     unless same e got[0]! do
       arowRefuse (s!"{whose} {v} is not the Commit's {name}: their root, domain or leaf count differ, so its rows " ++
-        "are not the ones the served Commit commits (ROOTS1). The Commit registers the window's own table as its " ++
-        "value, with no tree of its own")
+        "are not the ones the served Commit commits (ROOTS1" ++
+        (if (zyCall? (.str v)).isSome then
+          ", and a z table's y is not the linear's output the Commit committed at the call's tiles" else "") ++
+        "). The Commit registers the window's own table as its value, with no tree of its own")
   let want := pairs.map (·.1)
   let es := match entries with
     | .arr a => a.toList

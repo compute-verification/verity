@@ -118,16 +118,21 @@ returns the credit bits whatever the proofs' outcome, and `_a_link` trusts the r
   challenger received for round s is `round_root` of the serving process's own round root (``inner``) and those
   segments. The verifier recomputes each value's root from the segments and its domain's pads. So the rows a unit reads
   are the ones fixed before its round's coin. Round s's input-ids table ``…/ids@<s>`` (slot i's input token id) is
-  committed whole by round s, as its A tables are, and so is each of its calls' receipt table ``…/receipt@<c>`` (one
-  row a unit of the call, its receipt, which a call's statement then reads as its output row o0, `registered_file`).
-  The z and y records are not yet bound to the round roots.
-* **The A rows and input ids are the served Commit's** (`_arow`, ROOTS1): the window's evidence carries the record of the
+  committed whole by round s, as its A tables are, and so are each of its calls' z table ``…/zy@<c>`` (one row a
+  unit of the call, its z/y record, `zy_call`) and receipt table ``…/receipt@<c>`` (one row a unit of the call, its
+  receipt, which a call's statement then reads as its output row o0, `registered_file`). So the z and y a unit reads
+  are fixed before its round's coin, and so before the draw coin.
+* **The A rows, input ids and outputs are the served Commit's** (`_arow`, ROOTS1): the window's evidence carries the record of the
   Commit that ran in the window's engine (``commit``, one-stage's `verity/registration/v2` record, its canonical JSON in
   hex), whose digest `calls_root` binds before the draw coin, so it is fixed before any coin that selects a unit. Round
   s's A table of K ``…/a/<K>@<s>`` holds M rows for each of the round's calls of K (`step_tables`) and must have the
   root, domain and leaf count of the Commit's `commit_rows` value of its round and K, and round s's ``…/ids@<s>`` those
-  of its `commit_ids` value: the Commit registers the window's own tables, so one tree is both. So the A rows a call's
-  units read are its linear's input as the Commit commits it, and
+  of its `commit_ids` value, and call c's z table ``…/zy@<c>`` those of its `commit_outputs` value, the linear's output
+  y at the call's tiles as the Commit committed it (its rows the call's z/y records: each tile's z, then the Commit's y
+  at the tile's coordinates): the Commit registers the window's own tables, so one tree is both. So the A rows a call's
+  units read are its linear's input as the Commit commits it, the y each drawn unit proves is dq of its tile's product
+  (`h1zy`) and, by its z table's tie, the linear's output the Commit committed at those coordinates (a y computed
+  beside the served path, with the Commit's output from another computation, opens no root of the Commit's), and
   the input token ids under each round's root are its step's. Round 0's ``…/ids@0`` is also inside round 0's request
   table: the round-0 request root the window's open root binds is `requests_root` of the table's root and ids@0's, so
   the prompt tokens are fixed before the salt coin. Its domain binds the window's session in place of the open root,
@@ -354,6 +359,7 @@ COMMIT_FORM = ("the window's Commit record is not the bytes in lowercase hex of 
 _IDS = re.compile(r"ids@(0|[1-9][0-9]*)")
 _SLOTS = re.compile(r"slots@(0|[1-9][0-9]*)")
 _RECEIPT = re.compile(r"receipt@(0|[1-9][0-9]*)")
+_ZY = re.compile(r"zy@(0|[1-9][0-9]*)")
 #: a tile unit's receipt, its return's field (`h1window.OUTPUTS`), and the statement's output row of it
 #: (`h1window.STATEMENT_OUT_ROWS`), which reads call c's receipt table when the window registers one
 RECEIPT_FIELD, RECEIPT_PORT = "receipt", "o0"
@@ -415,6 +421,13 @@ def commit_rows(s: int, k: int) -> str:
     return f"row-table/{s}/k{k}"
 
 
+def commit_outputs(c: int) -> str:
+    """The Commit's name for its linear's output y at the window's call `c`'s tiles, as the call's z/y records hold it:
+    what it registers as call c's z table ``<prefix>zy@<c>`` (`h1window.table`, one record a unit of the call in its tile
+    order, z then y = dq(z), `h1zy.RECORD`)."""
+    return f"coord-out/{c}"
+
+
 def step_tables(layout: dict, steps: int) -> list[tuple[int, int, list[int]]]:
     """Each round's A tables of a layout `strata` accepted, over its `steps` rounds (its calls the rounds' equal blocks,
     in order): ``(s, K, calls)`` for each K round s's calls have, in order of its first call there, `calls` the round's
@@ -444,8 +457,8 @@ def table_rows(layout: dict, steps: int, prefix: str) -> dict[str, int]:
     """The rows the layout `layout` (one `layout_of` accepted) gives each value the round roots commit but the
     input-ids tables, by name under `prefix` (the descriptor's ``PREFIX``), over its `steps` rounds: the window's
     ``a/<K>`` x·blocks·M (its blocks of K, x = `weights.chunks` (K) leaves a row, `h1window`'s), round s's A table of K
-    ``a/<K>@<s>`` x·M·|round s's calls of K| (`step_tables`), and call c's receipt table ``receipt@<c>`` c's units
-    (`call_work`). Empty when `steps` doesn't divide the calls, a window `_arow` refuses. `_a_link` holds each such
+    ``a/<K>@<s>`` x·M·|round s's calls of K| (`step_tables`), and call c's z table ``zy@<c>`` and receipt table
+    ``receipt@<c>`` c's units (`call_work`). Empty when `steps` doesn't divide the calls, a window `_arow` refuses. `_a_link` holds each such
     entry to these rows before it hashes any pad."""
     calls = layout["calls"]
     if not (type(steps) is int and steps >= 1 and len(calls) % steps == 0):
@@ -454,6 +467,7 @@ def table_rows(layout: dict, steps: int, prefix: str) -> dict[str, int]:
     out = {f"{prefix}a/{k}": chunks(k) * m * (1 + max(blk for lin, blk in calls if ks[lin] == k))
            for k in sorted(set(ks.values()))}
     out |= {f"{prefix}a/{k}@{s}": chunks(k) * m * len(cs) for s, k, cs in step_tables(layout, steps)}
+    out |= {f"{prefix}zy@{c}": size for c, (size, _work) in enumerate(call_work(layout))}
     return out | {f"{prefix}receipt@{c}": size for c, (size, _work) in enumerate(call_work(layout))}
 
 
@@ -1291,9 +1305,9 @@ def _registration(window: str, program: str, prefix: str, entries: list, ss: lis
     `OK_VALUE`), which no entry registers and `_verified` holds to the rows `registered_file` built; and it opened its unit's K's A value: the window's ``…/a/<K>`` (K the unit's stratum `ss`'s)
     or its call's round's A table of K ``…/a/<K>@<s>`` (the call `layout`'s units place it in, s its round of `steps`,
     its calls the rounds' equal blocks), and its K's B rows, the window's ``<prefix>b/<K>`` (`prefix` the descriptor's
-    ``PREFIX``). A step of `window`, after `_a_link` has held each
-    A value's root to the segments the round roots commit and `_period_weights` each ``<prefix>b/<K>`` to the weights'
-    root its period signed."""
+    ``PREFIX``), and its call's z table ``<prefix>zy@<c>``, the linear's output y at its tiles as the served Commit
+    commits it (`_arow`). A step of `window`, after `_a_link` has held each A value's and z table's root to the segments
+    the round roots commit and `_period_weights` each ``<prefix>b/<K>`` to the weights' root its period signed."""
     def held(v: str, e: dict) -> str | None:
         if not _entry(e):
             return (f"registered value {v}'s entry is not one-stage's {{value, root, leaves, words, domain}} (with "
@@ -1320,7 +1334,7 @@ def _registration(window: str, program: str, prefix: str, entries: list, ss: lis
             return "registration", (f"drawn unit {u}'s proof was verified against another circuit than the window's (its "
                                     "program is not the SHA-512 of the descriptor whose layout the window was drawn over): "
                                     "verify every drawn unit's session against the window's committed circuit")
-        opened, weights = False, False
+        opened, weights, zy = False, False, False
         for port, v, root in _finding(p["registered"]):
             if pub_call(v) is not None or v == f"{prefix}{OK_VALUE}":
                 continue
@@ -1341,6 +1355,7 @@ def _registration(window: str, program: str, prefix: str, entries: list, ss: lis
             got = a_value(v)
             opened = opened or (got is not None and got[0] == k and got[1] in (None, str(c // per)))
             weights = weights or v == f"{prefix}b/{k}"
+            zy = zy or v == f"{prefix}zy@{c}"
         if not opened:
             return "registration", (f"drawn unit {u}'s proof opened no A value …/a/{k} or …/a/{k}@{c // per} (its "
                                     "call's round's) of "
@@ -1350,6 +1365,10 @@ def _registration(window: str, program: str, prefix: str, entries: list, ss: lis
             return "registration", (f"drawn unit {u}'s proof opened no weights {prefix}b/{k} of the window, so nothing "
                                     "ties the B rows it proved to the ones its period registered: verify each drawn "
                                     "unit's session with the window's weights registered")
+        if not zy:
+            return "registration", (f"drawn unit {u}'s proof opened no z table {prefix}zy@{c} (its call's) of the window, "
+                                    "so nothing ties the y it proved to the linear's output the served Commit committed "
+                                    "at its tiles: verify each drawn unit's session with its call's z table registered")
     return None
 
 
@@ -1365,9 +1384,10 @@ def _arow(rounds: list, entries: list, registered: list, layout: dict, prefix: s
     and leaf count; else the refusal (``arow``, and why). The window's `layout` (`strata`'s) calls are its round log
     `rounds`' S rounds' equal blocks, and round s's ``<prefix>a/<K>@<s>`` (`prefix` the descriptor's ``PREFIX``,
     `step_tables`) holds M rows for each of the round's calls of K, call after call, and is the Commit's `commit_rows`
-    of s and K; round s's ``<prefix>ids@<s>`` is the Commit's `commit_ids` of s. The Commit registers each of those
-    values once. So the A rows a call's units read are its linear's input as the served Commit commits it, and the
-    input token ids under each round's root are its step's (ROOTS1). The window registers no other input-ids table, and
+    of s and K; round s's ``<prefix>ids@<s>`` is the Commit's `commit_ids` of s; and call c's z table ``<prefix>zy@<c>``
+    is the Commit's `commit_outputs` of c. The Commit registers each of those values once. So the A rows a call's units
+    read are its linear's input as the served Commit commits it, the input token ids under each round's root are its
+    step's, and the y a call's units prove is its linear's output at their tiles as the Commit commits it (ROOTS1). The window registers no other input-ids table, and
     round 0's request root (``requests``, the one its open root binds) is `requests_root` of its request table's root
     (``request_table``) and ``<prefix>ids@0``'s, so round 0's input ids are fixed before the salt coin. The window
     registers at most one request table (`is_requests`), ``<prefix>requests@0``, at root ``request_table``, so the
@@ -1386,10 +1406,12 @@ def _arow(rounds: list, entries: list, registered: list, layout: dict, prefix: s
     pairs = [(f"{prefix}a/{k}@{s}", commit_rows(s, k), f"round {s}'s A table of K = {k}",
               chunks(k) * layout["m"] * len(cs)) for s, k, cs in step_tables(layout, steps)]
     pairs += [(f"{prefix}ids@{s}", commit_ids(s), f"round {s}'s input-ids table", None) for s in range(steps)]
+    pairs += [(f"{prefix}zy@{c}", commit_outputs(c), f"call {c}'s z table", None) for c in range(len(calls))]
     for v, name, whose, rows in pairs:
         if v not in ours:
             return "arow", (f"the window registers no {whose} {v}, so nothing ties it to the Commit's {name}: the "
-                            "served window registers each round's A table of each K and its input-ids table")
+                            "served window registers each round's A table of each K and its input-ids table, and each "
+                            "call's z table")
         if rows is not None and ours[v]["leaves"] != rows:
             return "arow", (f"{whose} {v} has {ours[v]['leaves']} rows, not {rows}: it holds the M rows of each of the "
                             "round's calls of K, call after call, each row K's chunks' leaves (weights.chunks), so a "
@@ -1397,12 +1419,15 @@ def _arow(rounds: list, entries: list, registered: list, layout: dict, prefix: s
         got = theirs.get(name, [])
         if len(got) != 1:
             return "arow", (f"the Commit record registers {name} {'twice' if got else 'not'}: the served Commit "
-                            "registers each round's A table of each K as row-table/<round>/k<K> and each round's "
-                            "input-ids table as input-ids/<round>, once")
+                            "registers each round's A table of each K as row-table/<round>/k<K>, each round's "
+                            "input-ids table as input-ids/<round> and each call's z table, its linear's output y at the "
+                            "call's tiles, as coord-out/<call>, once")
         if not _same(ours[v], got[0]):
             return "arow", (f"{whose} {v} is not the Commit's {name}: their root, domain or leaf count differ, so its "
-                            "rows are not the ones the served Commit commits (ROOTS1). The Commit registers the "
-                            "window's own table as its value, with no tree of its own")
+                            "rows are not the ones the served Commit commits (ROOTS1"
+                            + (", and a z table's y is not the linear's output the Commit committed at the call's tiles"
+                               if zy_call(v) is not None else "")
+                            + "). The Commit registers the window's own table as its value, with no tree of its own")
     want = {v for v, _name, _whose, _rows in pairs}
     for v in ours:
         if ids_step(v) is not None and v not in want:
@@ -2677,6 +2702,13 @@ def receipt_call(value: Any) -> int | None:
     return None if m is None else int(m[1])
 
 
+def zy_call(value: Any) -> int | None:
+    """A z table's call: a name whose last part is ``zy@<c>`` (``<prefix>zy@<c>``, `h1window.table`'s: row t call c's
+    t-th unit's z/y record), c a canonical decimal; None for any other name."""
+    m = _ZY.fullmatch(value.split("/")[-1]) if isinstance(value, str) else None
+    return None if m is None else int(m[1])
+
+
 def pub_call(value: Any) -> int | None:
     """A public table's call: a name whose last part is ``pub@<c>`` (``<prefix>pub@<c>``, `h1window.table`'s
     `h1window.PUBS`: row t call c's t-th unit's public row, which `registered_file` builds), c a canonical decimal; None
@@ -2687,14 +2719,15 @@ def pub_call(value: Any) -> int | None:
 
 def is_tied(value: Any) -> bool:
     """A value the round roots commit (`_a_link`): an A value (`is_a`), an input-ids table (`ids_step`), a slot table
-    (`slots_step`) or a receipt table (`receipt_call`)."""
+    (`slots_step`), a z table (`zy_call`) or a receipt table (`receipt_call`)."""
     return (is_a(value) or ids_step(value) is not None or slots_step(value) is not None
-            or receipt_call(value) is not None)
+            or zy_call(value) is not None or receipt_call(value) is not None)
 
 
 def _what(value: str) -> str:
     return ("A value" if is_a(value) else "input-ids table" if ids_step(value) is not None
-            else "slot table" if slots_step(value) is not None else "receipt table")
+            else "slot table" if slots_step(value) is not None else "z table" if zy_call(value) is not None
+            else "receipt table")
 
 
 def is_held(value: Any) -> bool:
@@ -2712,9 +2745,9 @@ def _a_link(rounds: Any, entries: Any, calls: int = 0, rows: dict[str, int] | No
     and why). Of S rounds, round s's segments of a window's A value ``…/a/<K>`` of L rows tile its rows
     ``[s·L/S, (s+1)·L/S)``; round s's A table of K ``…/a/<K>@<s>`` is committed whole by round s, whose segments tile
     all its rows, and no other round lists it. Round s's input-ids table ``…/ids@<s>`` (`ids_step`) is committed whole
-    by round s alike, as is its slot table ``…/slots@<s>`` (`slots_step`), and so is call c's receipt table
-    ``…/receipt@<c>`` (`receipt_call`) by c's round, of the window's `calls` calls (its manifest's rows; 0, the default,
-    admits no receipt table) the rounds' equal blocks. Each entry's leaf count is its rows in `rows` (`table_rows`, the
+    by round s alike, as is its slot table ``…/slots@<s>`` (`slots_step`), and so are call c's z table ``…/zy@<c>``
+    (`zy_call`) and receipt table ``…/receipt@<c>`` (`receipt_call`) by c's round, of the window's `calls` calls (its
+    manifest's rows; 0, the default, admits no z or receipt table) the rounds' equal blocks. Each entry's leaf count is its rows in `rows` (`table_rows`, the
     layout's) when `rows` names it, else from 1 to `MAX_ROWS`, and every entry's count is checked before the verifier
     hashes any pad. A step of `window`, which first holds the round roots to the ones the challenger received
     (`core_check.rounds`) and `layout_of` the layout."""
@@ -2747,8 +2780,8 @@ def _a_link(rounds: Any, entries: Any, calls: int = 0, rows: dict[str, int] | No
     for r, p in enumerate(segs):
         for v in sorted(p):
             if v not in names:
-                return "a-link", (f"round {r} lists segments of {v}, which is no registered A value, input-ids table "
-                                  "or receipt table of the window")
+                return "a-link", (f"round {r} lists segments of {v}, which is no registered A value, input-ids table, "
+                                  "z table or receipt table of the window")
     steps, rows, plan = len(rounds), rows or {}, []
     for e in a:
         v, root, domain, count = e["value"], _digest(e.get("root")), _digest(e.get("domain")), e.get("leaves")
@@ -2761,14 +2794,15 @@ def _a_link(rounds: Any, entries: Any, calls: int = 0, rows: dict[str, int] | No
         if v not in rows and not 1 <= count <= MAX_ROWS:
             return "a-link", (f"registered {_what(v)} {v}'s leaf count {count} is not from 1 to {MAX_ROWS} (the verifier "
                               "hashes its pads)")
-        step, slots, call = ids_step(v), slots_step(v), receipt_call(v)
+        step, slots = ids_step(v), slots_step(v)
+        call = receipt_call(v) if zy_call(v) is None else zy_call(v)
         at = None if step is not None or slots is not None or call is not None else a_value(v)[1]
         if call is not None:
             if not (calls % steps == 0 and call < calls):
-                return "a-link", (f"registered receipt table {v} is call {call}'s, and the window's {calls} calls are "
+                return "a-link", (f"registered {_what(v)} {v} is call {call}'s, and the window's {calls} calls are "
                                   f"not its {steps} rounds' equal blocks with a call {call}")
             own = call // (calls // steps)
-            per, whose = count, f"call {call}'s receipt table, its round {own}'s"
+            per, whose = count, f"call {call}'s {_what(v)}, its round {own}'s"
         elif step is not None:
             if step >= steps:
                 return "a-link", f"registered input-ids table {v} is round {step}'s, and the window has {steps} rounds"
@@ -2903,8 +2937,8 @@ __all__ = ["CALL_RANGE_CODE", "CALLS_TAG", "CIRCUIT_FILES", "COMMIT_FORMAT", "CO
            "LENGTH_KEYS", "ROWS_FIELD", "LEVELS",
            "LIVE", "LIVE_FN", "LIVE_KEYS", "LIVE_RECORD", "LIVE_STATEMENT_KEYS", "LIVE_STATEMENTS", "LIVE_UNIT", "MAX_K", "MODEL_FIELD", "MODEL_KEYS", "MODELS", "PARTITION_FORMAT", "PASS_REFUSED", "PEARL_C_FORM", "PEARL_C_KEYS", "PERIOD_KEYS", "PINNED_MODELS", "PROOF_KEYS", "PROVED_KEYS", "QUERY", "RECORD", "REPEATED_CALL", "REQUESTS_IDS_TAG", "REQUESTS_OUTSIDE", "REQUESTS_TABLE", "ROUND_TAG",
            "SALT_ONLY", "SCHEMA", "SERVED_ROWS", "STATEMENT_KEYS", "TILE_FN", "VERDICTS", "WEIGHTS_FIELD", "WINDOW_FN", "WINDOW_KEYS",
-           "call_work", "calls_root", "commit_ids", "commit_of", "commit_rows", "committed_files", "committed_k", "committed_length", "committed_rows", "committed_weights", "cover",
+           "call_work", "calls_root", "commit_ids", "commit_of", "commit_outputs", "commit_rows", "committed_files", "committed_k", "committed_length", "committed_rows", "committed_weights", "cover",
            "credited_work", "domain_of", "draw_root", "drawn", "established", "a_value", "ids_step", "is_a", "is_held", "is_requests", "is_tied", "law", "layout_of", "live_of",
            "merkle_depth", "partition_of", "passes_distinct", "pearl_c_period_credit", "period", "period_credit", "registered_file", "requests_root", "round_root", "shape_of",
            "served_rows", "served_work", "slots_step", "step_row", "step_tables", "strata", "table_rows", "tree_root",
-           "window"]
+           "window", "zy_call"]

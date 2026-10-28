@@ -53,17 +53,18 @@ window's open root or another circuit, their trees under those domains so `_a_li
 (``other-registration``), give one proof's session another registration's root for a value it opened
 (``proof-other-registration``), change an opened B value's registered root (``entry-root``: the entry is not the root
 the sessions opened, which the weights step refuses before any proof is read) or register it twice, verify one proof
-against another circuit, drop a proof's A ports or every proof's B ports (``proof-no-b``), open an unregistered value,
-and break an opened A entry's form. A window registers main's served form: each round's A table of each K
-``…/a/<K>@<s>`` (M rows for each of the round's calls of K, call after call, `credit.step_tables`), each call's z/y
-``…/zy@<c>`` (`h1window.table`) and each round's input-ids table ``…/ids@<s>``, every value but the weights' binding
-the window's open root, each drawn unit's proof opening its own call's round's table. Its mutations register the A
+against another circuit, drop a proof's A ports, its z port (``proof-no-zy``) or every proof's B ports (``proof-no-b``),
+open an unregistered value, and break an opened A entry's form. A window registers main's served form: each round's A
+table of each K ``…/a/<K>@<s>`` (M rows for each of the round's calls of K, call after call, `credit.step_tables`),
+each call's z/y ``…/zy@<c>`` (`h1window.table`, one row a unit, committed whole by its call's round) and each round's
+input-ids table ``…/ids@<s>``, every value but the weights' binding the window's open root, each drawn unit's proof
+opening its own call's round's table and its call's z table. Its mutations register the A
 tables with no window root (``a-call-unbound``) and point a proof at another round's or K's table
-(``proof-other-call``). Its Commit record (`commit_record`, ROOTS1) registers each round's A tables and each ids table
-over its true rows under the Commit's names; its mutations (`AROW_NAMES`, made before the draw) register one A table
+(``proof-other-call``). Its Commit record (`commit_record`, ROOTS1) registers each round's A tables, each ids table and
+each z table over its true rows under the Commit's names; its mutations (`AROW_NAMES`, made before the draw) register one A table
 with every row other (``a-zero``), one row other (``a-row-off``) or its calls' rows offset by one call
 (``a-call-off``), one with a call missing that the Commit registers so too (``a-call-missing``), one ids table with a
-row other (``ids-off``) or none (``ids-missing``), drop one of the Commit's values or register one twice, drop a MoE
+row other (``ids-off``) or none (``ids-missing``), one z table with a row other (``zy-off``), drop one of the Commit's values or register one twice, drop a MoE
 window's (`expert_layout`) round's A table of its routed experts' downs (``commit-missing-expert``), present
 another Commit record than the one its draw root
 binds (``commit-unbound``) and break the record's form (``credit-commit-form``). Round 0's ids table ``…/ids@0`` binds
@@ -176,9 +177,10 @@ def _draw_root(d: dict) -> str:
 #: (``a-call-off``), one missing a call (``a-call-missing``, the Commit's too), one round's ids table one row other
 #: (``ids-off``) or unregistered (``ids-missing``), and a Commit record lacking a table's value or registering it twice;
 #: on a MoE window (`expert_layout`), a Commit record lacking a round's A table of the experts' downs
-#: (``commit-missing-expert``: their K is the experts' alone, so its calls are expert calls only)
+#: (``commit-missing-expert``: their K is the experts' alone, so its calls are expert calls only); and one call's z
+#: table one row other than the Commit's linear output at its tiles (``zy-off``)
 AROW_NAMES = ["a-zero", "a-row-off", "a-call-off", "a-call-missing", "ids-off", "ids-missing", "commit-missing",
-              "commit-twice", "commit-missing-expert"]
+              "commit-twice", "commit-missing-expert", "zy-off"]
 #: the `AROW_NAMES` that need a round's A table of two calls or more
 TWO_CALLS = ("a-call-off", "a-call-missing")
 #: each way round 0's input-ids table is not inside round 0's request table under the window's session, made before the
@@ -194,12 +196,15 @@ REQ0_NAMES = ["req0-root-off", "req0-twice", "req0-other-prefix", "req0-other-se
 IDS_WORDS = 2
 #: a request table's words a row (`circuit.live.HEADER_WORDS`: five u32 headers as u16 words)
 REQUEST_WORDS = 10
+#: a z table's words a row in these cases (`_a_link` and `_arow` read its rows' count, not their width)
+ZY_WORDS = 3
 
 
 def _a_log(rng: random.Random, steps: int, ks: list[int], program: str, window: str | Callable[[str | None], str],
            other: str | None = None, calls: list[int] | None = None, prefix: str | None = None,
            weights: list[dict] | None = None, off: str | None = None, sid: str = "s-1", m: int = 1,
-           requests: str | None = None, t: int | None = None) -> tuple[list[dict], list[dict], dict[str, dict]]:
+           requests: str | None = None, t: int | None = None, units: list[int] | None = None
+           ) -> tuple[list[dict], list[dict], dict[str, dict]]:
     """A window's registered entries under its registration (the circuit whose descriptor's SHA-512 is `program`, and the
     window's open root `window`, or `window` of round 0's registered input-ids table's root when it is a function, since
     that root is inside the open root), each value under `prefix` (a random ``h1/w-<i>/`` when None), its round log over
@@ -209,14 +214,15 @@ def _a_log(rng: random.Random, steps: int, ks: list[int], program: str, window: 
     (``…/a/<K>``, `steps` equal blocks of K/2 words, its domain binding the window's open root, its tree under that
     domain) or, with `calls` (each call's K, in call order, `steps` dividing their count), the tables main's served form
     has (`h1window.table`): each round s's A table of each K ``…/a/<K>@<s>``, M = `m` rows for each of the round's calls
-    of K, committed whole by round s, and each call c's z table ``…/zy@<c>``, both binding the window's open root, and
+    of K, committed whole by round s, and each call c's z table ``…/zy@<c>`` of ``units[c]`` rows (the call's units,
+    `credit.call_work`), committed whole by c's round, both binding the window's open root, and
     each round s its input-ids table
     ``…/ids@<s>`` of as many slots, committed whole by round s, ids@0's domain binding the window's session `sid` in
     its open root's place (`credit.domain_of`); and at random a z value. ``other`` registers the A values and call
     tables under another window's open root and ids@0 under another session (``window``), another circuit
     (``program``) or no window root nor session (``unbound``, main's h1_prove form). `off` (`AROW_NAMES`') registers an
-    A table or an ids table over other rows than its true ones, an A table one call short (its true rows too), or no ids
-    table of a round, and ``ids0-other-session`` binds ids@0's domain to another session. With `calls` and round 0's
+    A table, an ids table or a z table over other rows than its true ones, an A table one call short (its true rows too),
+    or no ids table of a round, and ``ids0-other-session`` binds ids@0's domain to another session. With `calls` and round 0's
     request table's root `requests`, it registers (at random, always under `REQ0_NAMES` or with `t`) the request table
     ``…/requests@0`` at that root, its domain binding the session as ids@0's does, which `REQ0_NAMES` break. With `t`
     (the period's T) its request table has T rows, and each round s registers its slot table ``…/slots@<s>`` (T leaves
@@ -239,6 +245,8 @@ def _a_log(rng: random.Random, steps: int, ks: list[int], program: str, window: 
         target = rng.choice([v for v, _w, n, _s, _x in tables if n > 1])
     elif calls and off in ("ids-off", "ids-missing"):
         target = f"{prefix}ids@{rng.randrange(steps)}"
+    elif calls and off == "zy-off":
+        target = f"{prefix}zy@{rng.randrange(len(calls))}"
 
     def a(v: str, words: int, leaves: int, rnd: int | None) -> None:
         if v == target and off == "ids-missing":
@@ -278,8 +286,7 @@ def _a_log(rng: random.Random, steps: int, ks: list[int], program: str, window: 
     for v, words, n, st, x in tables:
         a(v, words, (n - (v == target and off == "a-call-missing")) * m * x, st)
     for c, k in enumerate(calls or []):
-        zy = {"value": f"{prefix}zy@{c}", "root": _hex(rng), "leaves": rng.randint(1, 8), "words": 3}
-        entries.append({**zy, "domain": G.domain(prog, zy["value"], 3, zy["leaves"], window=own).domain_id.hex()})
+        a(f"{prefix}zy@{c}", ZY_WORDS, units[c], c // (len(calls) // steps))
     for s in range(1, steps if calls else 0):
         a(f"{prefix}ids@{s}", IDS_WORDS, leaves, s)
     if calls and t is not None:
@@ -308,14 +315,16 @@ def _a_log(rng: random.Random, steps: int, ks: list[int], program: str, window: 
 
 def commit_record(rng: random.Random, true: dict[str, dict], steps: int, off: str | None = None) -> str:
     """The served Commit's record (`credit.COMMIT_FORMAT`) in hex of its canonical JSON: its registered values `true`'s
-    A tables and ids tables (`_a_log`'s) under the Commit's names (`credit.commit_rows` of each A table's round and K,
-    and `credit.commit_ids`), among values of its own; ``commit-missing`` drops one of them and ``commit-twice``
-    registers one twice."""
+    A tables, ids tables and z tables (`_a_log`'s) under the Commit's names (`credit.commit_rows` of each A table's
+    round and K, `credit.commit_ids` and `credit.commit_outputs`), among values of its own; ``commit-missing`` drops
+    one of them and ``commit-twice`` registers one twice."""
     names = {}
     for v in true:
-        s, a = Cr.ids_step(v), Cr.a_value(v)
+        s, a, c = Cr.ids_step(v), Cr.a_value(v), Cr.zy_call(v)
         if s is not None:
             names[v] = Cr.commit_ids(s)
+        elif c is not None:
+            names[v] = Cr.commit_outputs(c)
         elif a is not None and a[1] is not None:
             names[v] = Cr.commit_rows(int(a[1]), int(a[0]))
     reg = [{**e, "value": names[v]} for v, e in sorted(true.items()) if v in names]
@@ -392,11 +401,12 @@ def honest_credit(rng: random.Random, name: str = "honest", rows: int | None = N
                   leaf: int = rc.RECORD_LEAF, ks: list[int] | None = None, program: str | None = None,
                   other: str | None = None, calls: list[int] | None = None, prefix: str | None = None,
                   weights: list[dict] | None = None, off: str | None = None, rounds: int | None = None, m: int = 1,
-                  served: list | None = None, t: int | None = None) -> tuple[dict, rc.Session]:
+                  served: list | None = None, t: int | None = None, units: list[int] | None = None
+                  ) -> tuple[dict, rc.Session]:
     """An honest served window of `rows` manifest rows (one to five when None), each call's served rows ``served[i]``
     (`credit.SERVED_ROWS`; `MISSING` drops it) when given, whose draw coin opened after its draw root
     (none for ``no-draw``), its session `sid` signing its record at `leaf`. Its round log and entries are `_a_log`'s at
-    the contractions `ks` (and `calls`, a round count dividing theirs) under the circuit `program` (random ones when
+    the contractions `ks` (and `calls`, a round count dividing theirs, each call's `units`) under the circuit `program` (random ones when
     None), `other`, `prefix`, `weights`, `off` and the A slot `m`, and its Commit record `commit_record`'s over their
     true tables, bound under its draw root, over `rounds` rounds (one to three dividing the calls
     when None); with `weights`, its open root is `salt.window_open_root` of their
@@ -423,7 +433,7 @@ def honest_credit(rng: random.Random, name: str = "honest", rows: int | None = N
 
     ks = rng.sample([64, 4096, 14336], rng.randint(1, 2)) if ks is None else ks
     entries, log, true = _a_log(rng, rounds, ks, _hex(rng) if program is None else program, open_root, other,
-                                calls, prefix, weights, off, sid, m, table, t)
+                                calls, prefix, weights, off, sid, m, table, t, units)
     window = opened["window"]
     log[0]["requests"], log[0]["request_table"] = opened["requests"], table
     d = {"salt": _hex(rng), "calls": [_row(rng, i) for i in range(rng.randint(1, 5) if rows is None else rows)],
@@ -1446,7 +1456,7 @@ def honest_window(rng: random.Random, name: str = "honest", sid: str = "s-1", le
                          sid=sid, leaf=leaf, ks=sorted(set(k_of.values())), program=program, other=other,
                          calls=[k_of[lin] for lin, _blk in lay["calls"]], prefix=prefix, weights=weights,
                          off=name if name in [*AROW_NAMES, *IDS0_NAMES, *REQ0_NAMES, *LIVE_TABLE_NAMES] else None,
-                         m=lay["m"], rounds=steps, t=t,
+                         m=lay["m"], rounds=steps, t=t, units=[size for size, _w in Cr.call_work(lay)],
                          served=served_rows(rng, t, len(lay["calls"]), steps, name, length_rows(rng, length, steps, t)))
     d["length"] = {"max_tokens": length, "stop": Wd.STOP_FIXED}
     d["layout"], d["k"], d["descriptor"], d["weights"], d["rows"] = lay, _k(rng, lay), desc, weights, t
@@ -1582,6 +1592,9 @@ def window_instance(rng: random.Random, name: str = "honest", lay: dict | None =
         case "proof-no-a":
             p = rng.choice(d["proofs"])
             p["registered"] = {port: x for port, x in p["registered"].items() if not port.startswith("a")}
+        case "proof-no-zy":
+            p = rng.choice(d["proofs"])
+            p["registered"] = {port: x for port, x in p["registered"].items() if port != "zy"}
         case "proof-no-b":
             for p in d["proofs"]:
                 p["registered"] = {port: x for port, x in p["registered"].items() if not port.startswith("b")}
@@ -1646,8 +1659,8 @@ WINDOW_WEIGHTS_NAMES = ["weights-period", "weights-unsigned", "weights-model", "
 LENGTH_NAMES = ["length-none", "length-eos", "length-form", "length-past", "length-early", "length-slots"]
 #: each way a window's entries or its drawn units' proofs are not its registration's
 REGISTRATION_NAMES = ["other-registration", "a-call-unbound", "proof-other-registration", "entry-root",
-                      "proof-other-circuit", "proof-other-call", "proof-no-a", "proof-no-b", "proof-unregistered",
-                      "entry-twice", "entry-form"]
+                      "proof-other-circuit", "proof-other-call", "proof-no-a", "proof-no-b", "proof-no-zy",
+                      "proof-unregistered", "entry-twice", "entry-form"]
 WINDOW_NAMES = ["manifest-count", "chosen", "failed", "missing", "descriptor-hex", *DESC_NAMES,
                 "credit-changed", "credit-no-draw", "credit-forged-ledger", "credit-branch-pin", "k-form", "k-past-units",
                 "never-received", "round-coin", "a-untied", "no-a", *REGISTRATION_NAMES, *WINDOW_WEIGHTS_NAMES,
