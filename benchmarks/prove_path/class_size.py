@@ -21,7 +21,8 @@ tests hold to the exact lowering at larger classes:
 `size` prices a census with the ANDs and k_log a unit at Llama-3.2-1B (`measured`, each with its source, scaled or
 bounded where only another binding was measured, and saying so), and m = ceil(log2 Σ units · 2^k_log), refusing a unit
 past a 2^27-bit block as C-Flock refuses it, and refusing every unit nothing measured, naming each: the cut's softmax
-steps and P·V groups have no measurement at Llama-3.2-1B yet. A unit composed of few ANDs takes its rows' k_log
+steps and P·V groups are measured at a full key block only (NVIS 192, groups of 96 keys), so a first visited block of
+fewer keys, and its short group, have no price yet. A unit composed of few ANDs takes its rows' k_log
 (`rows_k`: C-Flock's composer gives each row a unit reads or writes an hm96 slot).
 
     prove_path.py class-size --serve-run DIR --window K --row-dir DIR --advice FILE \\
@@ -200,6 +201,14 @@ MEASURED: dict[str, tuple[int, int, str]] = {lab: (ands, k, SOURCES["measured"][
     "TokenSelectGroups_v1{C=2672,G=16}": (292_083, 27, None),
     "TokenSelectCombine_v2{V=128256,C=16}": (1_346_657, 26, None),
     "AttnHeadEnd_v1{D=64}": (169_842, 22, None),
+    "AttnBlockSoftmax_v1{D=64,NVIS=192,FIRST=true,CHECK=true,PK=96,LAST=false}": (7_321_487, 27, None),
+    "AttnBlockSoftmax_v1{D=64,NVIS=192,FIRST=true,CHECK=true,PK=96,LAST=true}": (7_321_487, 27, None),
+    "AttnBlockSoftmax_v1{D=64,NVIS=192,FIRST=false,CHECK=false,PK=96,LAST=false}": (7_507_816, 27, None),
+    "AttnBlockSoftmax_v1{D=64,NVIS=192,FIRST=false,CHECK=false,PK=96,LAST=true}": (7_507_816, 27, None),
+    "AttnBlockSoftmax_v2{D=64,NVIS=192,FIRST=false,CHECK=false,PK=96,LAST=false}": (7_507_753, 27, None),
+    "AttnBlockSoftmax_v2{D=64,NVIS=192,FIRST=false,CHECK=false,PK=96,LAST=true}": (7_507_753, 27, None),
+    "AttnBlockPv_v1{D=64,N=96,VS=32,FIRST=false}": (3_161_472, 27, None),
+    "AttnBlockPv_v1{D=64,N=96,VS=32,FIRST=true}": (3_141_888, 27, None),
     "ScanSlots_v2{NS=9353,NP=1024,IDB=17,K0=12,K=45}": (120, 24, None),
     "OutCollect_v1{KO=64,FIRST=true}": (155, 22, ROWS_3),
     "OutCollect_v1{KO=64,FIRST=false}": (2_141, 22, ROWS_3),

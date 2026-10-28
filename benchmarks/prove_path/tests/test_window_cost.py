@@ -10,8 +10,8 @@
 * at the class of record, every lever leaves the commit's compressions no larger and every step of the plan lowers them,
   and the plan from ``L1 + L2`` on leaves no pad pass at any traffic, once every template of Llama-3.2-1B's probe has a
   measured price: its probe lowers and quantizers `Int8RowQuant_v3` are priced as v1, but the cut's softmax steps and
-  P·V groups, the scan off the class of record's lanes, `SiluMul_v2` at I 2,048 and the norm's add parts and tail have
-  none yet;
+  P·V groups at a first block of fewer than 192 keys, the scan off the class of record's lanes, `SiluMul_v2` at I 2,048
+  and the norm's add parts and tail have none yet (a full key block's steps and groups are priced, `unit_ands`);
 * serving's stream commit is its stream's 4 KiB rows under both schedules, its FA3 interiors the hand count of each launch,
   and ``F`` leaves out exactly those;
 * the H200's AND tables are `BS.compile`'s counts.
@@ -88,6 +88,16 @@ def test_a_probe_unit_its_definition_doesnt_give_is_refused():
     probe["templates"][scan]["bytes"]["value"] += 2
     with pytest.raises(ValueError, match=r"ScanSlots_v2\{.*\} is not its Definition's rows at the probe's class"):
         W.project(probe, 2, 4, 2)
+
+
+def test_a_full_key_blocks_steps_are_priced_and_a_shorter_first_blocks_refused():
+    """`unit_ands` prices a full key block's softmax step and P·V group at Llama-3.2-1B, on the H200 and sm_120 alike,
+    from `class_size.MEASURED`, and refuses a first visited block of 127 keys by name."""
+    full = "AttnBlockSoftmax_v2{D=64,NVIS=192,FIRST=false,CHECK=false,PK=96,LAST=true}"
+    group = "AttnBlockPv_v1{D=64,N=96,VS=32,FIRST=false}"
+    assert [W.unit_ands(lab, t) for lab in (full, group) for t in ("h200", "sm120")] == [7_507_753] * 2 + [3_161_472] * 2
+    with pytest.raises(ValueError, match=r"no measured ANDs or k_log for AttnBlockSoftmax_v1\{D=64,NVIS=127,FIRST=true,"):
+        W.unit_ands("AttnBlockSoftmax_v1{D=64,NVIS=127,FIRST=true,CHECK=true,PK=96,LAST=false}")
 
 
 def _heads() -> W.Heads:

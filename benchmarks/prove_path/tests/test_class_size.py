@@ -11,8 +11,9 @@
   groups, ceil(T / 4) - 1 blocks below it (none guarded: a one-row decode's kernel guards its first visited block only),
   each its softmax step and 2 groups, block 0's softmax LAST, and its end;
 * a probe that doesn't divide evenly, or whose heads aren't the cut's, is refused, and so is a template `size` has no
-  measurement for (the cut's steps among them); m is the log of the cells; a select with its collector (and the entry)
-  is its Calls' ANDs at the combine's k_log;
+  measurement for (the cut's steps at a first block of fewer than 192 keys among them, while a head of full blocks is
+  priced); m is the log of the cells; a select with its collector (and the entry) is its Calls' ANDs at the combine's
+  k_log;
 * a unit of few ANDs takes its rows' k_log (an hm96 slot each), as composed at every W + 1 rows measured, and a unit of
   257 rows needs a block of 2^28 bits, which `size` refuses as C-Flock does;
 * with no ``--class``, ``prove_path.py`` takes the class of record.
@@ -130,6 +131,17 @@ def test_size_prices_the_measured_units_and_refuses_the_unmeasured(monkeypatch):
                                              "SelectCollect_v1{V=128256,C=16,KO=64,FIRST=false}",
                                              "SelectEntry_v1{V=128256,C=16,KO=64,FIRST=false,IDB=17,NP=1024}")] == [
         (1_346_657 + 155, 26), (1_346_657 + 2_141, 26), (1_346_657 + 2_141 + 5_676, 26)]
+
+
+def test_a_head_of_full_key_blocks_is_priced_and_a_shorter_first_block_refused():
+    """At Llama-3.2-1B on the H200 (D 64, BN 192, PK 96, VS 32, FA3's `AttnBlockSoftmax_v2` below the first block) a head of
+    384 keys is two full blocks, each step and group measured whole (`MEASURED`), each unit 2^27 bits but the end's; a head
+    of 1,087, whose first visited block has 127 keys, is refused naming that block's step and its short group."""
+    s = CZ.size(CZ.head(384, 64, 192, 96, 32, "AttnBlockSoftmax_v2"))
+    assert (s["units"], s["ands"], s["m"]) == (7, 7_321_487 + 3_141_888 + 3 * 3_161_472 + 7_507_753 + 169_842, 30)
+    with pytest.raises(ValueError, match=r"for AttnBlockSoftmax_v1\{D=64,NVIS=127,FIRST=true,CHECK=true,PK=96,LAST=false\}, "
+                                         r"AttnBlockPv_v1\{D=64,N=31,VS=32,FIRST=false\}: add each to MEASURED"):
+        CZ.size(CZ.head(1087, 64, 192, 96, 32, "AttnBlockSoftmax_v2"))
 
 
 def test_window_circuit_and_class_size_default_to_the_class_of_record():
