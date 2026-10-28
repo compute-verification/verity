@@ -28,7 +28,7 @@ entry (a layer's field, a `compile_time` digest).
 Exit 0: merged. Exit 1: refused, the entries named on stderr and OURS left as it was, which git reports as a conflict; then
 regenerate the record on the merged tree (`check.py --update`), as without the driver. A merged record is a candidate, never
 a verdict: `check`'s Lean audit rebuilds every record of the merged tree and fails on any difference, as for any record; a
-train's (`--regenerate`) commits the regenerated records on landing, and Daniel's landing DM shows each one that changed
+train's (`--regenerate`) commits the regenerated records on landing, and the landing DM shows each one that changed
 against `main`.
 
 The layer rules (`layers`), which two branches that each widen a layer for a guarantee both change, merge field by field: `imports`

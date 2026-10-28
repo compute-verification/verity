@@ -1131,7 +1131,7 @@ def test_a_definitions_record_is_the_same_whichever_guarantees_read_it():
 
 def test_regrouped_records_of_unchanged_declarations_are_one_line_the_dm_leaves_out():
     """A record whose declarations are unchanged but whose generated constants are grouped differently (`group_keys`) is
-    counted on one line that `statement_changes` leaves out, so Daniel's DM lists only real changes; a changed declaration
+    counted on one line that `statement_changes` leaves out, so the landing DM lists only real changes; a changed declaration
     among them is still listed."""
     enc = {"name": "P.Enc", "module": "P.Defs", "kind": "inductive", "hash": "1" * 32, "own": ["P.Enc.mk"]}
     mk = {"name": "P.Enc.mk", "module": "P.Defs", "kind": "constructor", "hash": "2" * 32, "own": []}
@@ -1573,7 +1573,7 @@ def test_a_statement_whose_premises_could_not_be_read_fails():
 
 
 def test_the_verifiers_path_has_no_unlisted_compiled_code_and_hashes_through_its_parameter():
-    """Daniel's checks (a) and (b) on the verifier's path (`verifier` in the policy): an `@[extern]` or `@[implemented_by]`
+    """The two checks on the verifier's path (`verifier` in the policy): an `@[extern]` or `@[implemented_by]`
     constant its entries reach fails unless `allow` names it (a name prefix, or `module:` for a module), and so does each
     entry into the `hash` namespace that bypasses `stop`, naming its path; a missing entry is named; no rule, no checks."""
     path = {"missing": ["P.gone"], "reached": 40,

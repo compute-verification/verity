@@ -110,7 +110,7 @@ allowed axioms replaces it.  `--update` writes the records and `reads` from the 
 whole `lean-audit.json`, changed or not, beside the package's reports too (`audit-TAG/` under `--out`, which a recorded run
 publishes), and prints what changed: each changed guarantee's signature before and after, and each changed definition a
 guarantee reads with its source now.  A weakened definition passes every axiom check and the replay, so a person has to see
-those changes: Daniel gets a DM with them when they land on `main` (`research merge`'s `spec_alert`).  An audit without
+those changes: the landing DM lists them when they land on `main` (`research merge`'s `spec_alert`).  An audit without
 `--update` whose every failure is a record difference (its code is in `RECORD_DIFFERENCE`: two records each right on its
 side of a merge whose definitions changed, an owned entry with no record yet, a premise the lock doesn't list) writes the
 same `lean-audit.json` and `review.txt` there, and its report's `regenerated` names the file, so a failed check of a train's
