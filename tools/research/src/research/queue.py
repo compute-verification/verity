@@ -1,7 +1,7 @@
 """`research queue`: the merge queue (infra plan change 5).  `next` is `checked` (drive.toml's `land_into`: `Queue.into`) plus every
 admitted PR, one merge commit each, in the order they were admitted.  Drive (`research.drive`) fast-forwards `checked` to the top
 of the longest prefix of `next` whose every member has a reviewer's land verdict at its head, and `main` to a commit of `checked`
-only once that commit's after-landing run, the full check, passed every step: `main` holds only tested commits (Daniel, CI-239).
+only once that commit's after-landing run, the full check, passed every step: `main` holds only tested commits.
 
     research queue status [--json]                 each open PR: its place in `next`, what it waits for, or why it was refused;
                                                    `stale` when it is unmarked at its head and idle drive.toml's `stale_days`
@@ -385,7 +385,7 @@ class DriveFlags:
     #: how `next` lands: "review", each member on a reviewer's verdict, the full check running after landing (`Driver`)
     land: str = "review"
     #: the branch a review landing fast-forwards and `next` is built on (`Queue.into`): `checked`, which `main` follows only to
-    #: a commit whose after-landing run passed every step (`Driver._promote`; Daniel, CI-239), or `main` itself
+    #: a commit whose after-landing run passed every step (`Driver._promote`), or `main` itself
     land_into: str = "main"
     #: the after-landing run reuses no pass but circuit-check's per-target ones (`check.py --no-cache --circuit-cache`)
     after_landing_no_cache: bool = False
@@ -987,7 +987,7 @@ class Queue:
     @property
     def into(self) -> str:
         """The branch drive's review landing fast-forwards and `next` is built on: `land_into`, else drive.toml's at `main` as
-        last fetched.  `checked` (Daniel, CI-239: `main` holds only fully checked commits): `main` follows it to each commit
+        last fetched.  `checked`: `main` follows it only to each commit
         whose after-landing run passed every step (`Driver._promote`)."""
         if self.land_into is not None:
             return self.land_into

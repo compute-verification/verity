@@ -1,4 +1,4 @@
-"""The review landing onto `checked` (drive.toml's `land_into`; Daniel, 27 Oct, CI-239: `main` holds only tested commits).  A
+"""The review landing onto `checked` (drive.toml's `land_into`: `main` holds only tested commits).  A
 landing fast-forwards `checked`, never `main`; `main` is fast-forwarded only to a commit of `checked` whose after-landing run
 passed every step; a red run moves nothing on `main`, and its culprit is reverted on `checked`."""
 from __future__ import annotations

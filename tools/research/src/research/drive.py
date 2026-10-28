@@ -9,7 +9,7 @@ What only a PR's owner acts on goes to that owner alone (`tell`).  Each tick app
 at `stale_close_days` drive closes it, its branch kept.  After a landing, the owner of each unmarked open PR whose head contains
 a landed PR's head hears once that its base landed and to merge `main` (`_stacked`).
 
-Review landing, the only landing.  `main` holds only tested commits (Daniel, 27 Oct, CI-239): PRs land on a review onto the
+Review landing, the only landing.  `main` holds only tested commits: PRs land on a review onto the
 landing branch, drive.toml's `land_into` (`checked`: `Queue.into`), and `main` is fast-forwarded only to a commit of it whose
 after-landing run passed every step (`_promote`); with `land_into = "main"` they land on `main` and are checked after.  A tick
 syncs `next` (`Queue.sync`: admit and drop PRs, rebuild on a moved `checked`), then lands its longest prefix whose every member has a land verdict at its head and no hold

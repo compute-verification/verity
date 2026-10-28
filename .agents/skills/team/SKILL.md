@@ -43,7 +43,7 @@ AGENTS.md states the code's layout and rules. This skill states how the team tha
 
 ## Landing
 
-`main` holds only tested commits (Daniel, 27 Oct, CI-239): reviewed PRs land on `checked`, the full check runs there, and
+`main` holds only tested commits: reviewed PRs land on `checked`, the full check runs there, and
 `main` moves only to a commit whose check passed. ci's `research queue drive` lands them
 (`research.drive`'s docstring has the rules; `tools/verity/check/drive.toml` the settings):
 
