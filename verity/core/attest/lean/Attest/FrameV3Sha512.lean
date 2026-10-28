@@ -15,7 +15,8 @@ import Identity.Domains
   left, right])`, pad `H(frame "pad" [id, uint rank])`, empty root `H(frame "empty" [id])`;
 * the tree pads its leaves to a power of two, `2^depth` with `depth = bit_length(count − 1)` (0 for one leaf).
 
-Separable from the memory challenger: a later shared package of core's commitments takes it as it is.
+The memory challenger's session records and every auditor party's period tree (`Attest.Period`) are trees of this
+frame; a later shared package of core's commitments takes it as it is.
 -/
 
 namespace FrameV3Sha512
