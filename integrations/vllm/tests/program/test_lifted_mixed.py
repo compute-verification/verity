@@ -27,7 +27,7 @@ from __future__ import annotations
 import pytest
 
 from verity.ml.circuits import Program
-from verity.ml.circuits.codec import _spec_id, encode_program, program_digest
+from verity.ml.circuits.codec import encode_program, program_digest
 from verity.ml.circuits.defs import REGISTRY, bind, composite
 from verity_vllm.program import workload as W
 from verity.ml.circuits.refs import Coll, array_of, coll_concat, tuple_of
