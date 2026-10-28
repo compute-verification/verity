@@ -51,7 +51,7 @@ the instance's own copy. -/
 def reloc (o q a : ℕ) : ℕ := if a < B.nIn then B.port q a else o + q * B.len + (a - B.nIn)
 
 /-- Gate `a` of the template as instance `q`'s copy: the template's width and value, its reads relocated. -/
-def gateAt (o q a : ℕ) : Gate := ⟨(B.S.gate a).w, false, (B.S.gate a).rd.map (B.reloc o q), (B.S.gate a).f⟩
+def gateAt (o q a : ℕ) : GateRow := ⟨(B.S.gate a).w, false, (B.S.gate a).rd.map (B.reloc o q), (B.S.gate a).f⟩
 
 end Block
 
@@ -129,7 +129,7 @@ variable (W : Whole)
 def N : ℕ := W.nIn + blocksLen W.blocks
 
 /-- Gate `g`: an input, or the copy of its template's gate in its instance. -/
-def gate (g : ℕ) : Gate :=
+def gate (g : ℕ) : GateRow :=
   if g < W.nIn then ⟨W.inW g, true, [], fun _ => 0⟩
   else match locate W.blocks W.nIn 0 g with
     | some l => l.B.gateAt l.o l.q l.a
