@@ -55,5 +55,3 @@ def table := Difftest.table [("annot.term", term), ("annot.check", check), ("ann
   ("annot.sets", sets)]
 
 end AnnotDifftest
-
-def main : IO Unit := Difftest.serve AnnotDifftest.table
