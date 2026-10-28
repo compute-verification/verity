@@ -171,7 +171,7 @@ theorem verifierRows_kappa {sh : Shape} {rounds : Array (Array F128)} {extras : 
     kappa.size = sh.sched.levels.size ∧
       ∀ ℓ < sh.sched.levels.size, ∀ r < 2, ((kappa[ℓ]!)[r]!).size = levelLanes sh ℓ := by
   unfold verifierRows at hrows
-  cases hl : residualLins sh (Coins.ofRounds rounds) extras with
+  cases hl : residualLins sh (CoinSource.ofRounds rounds) extras with
   | error e => rw [hl] at hrows; cases hrows
   | ok q =>
     obtain ⟨lins, info'⟩ := q

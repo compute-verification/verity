@@ -21,7 +21,7 @@ open Flock FlockSoundness.Refine
 
 /-! ## `CM` -/
 
-theorem cm_bind {A B : Type} {x : CM A} {f : A → CM B} {k : Nat} {src : Coins} {r : B × Nat}
+theorem cm_bind {A B : Type} {x : CM A} {f : A → CM B} {k : Nat} {src : CoinSource} {r : B × Nat}
     (h : (x >>= f) k src = .ok r) : ∃ a k₁, x k src = .ok (a, k₁) ∧ f a k₁ src = .ok r := by
   have e : (x >>= f) k src = (x k src).bind (fun p => f p.1 p.2 src) := rfl
   rw [e] at h
@@ -29,11 +29,11 @@ theorem cm_bind {A B : Type} {x : CM A} {f : A → CM B} {k : Nat} {src : Coins}
   | error e => rw [hx] at h; cases h
   | ok p => rw [hx] at h; exact ⟨p.1, p.2, rfl, h⟩
 
-theorem cm_pure {A : Type} {a : A} {k : Nat} {src : Coins} {r : A × Nat}
+theorem cm_pure {A : Type} {a : A} {k : Nat} {src : CoinSource} {r : A × Nat}
     (h : (Pure.pure a : CM A) k src = .ok r) : r = (a, k) := by
   cases h; rfl
 
-theorem coinVec_ok {n k k' : Nat} {src : Coins} {v : Array F128} (h : coinVec n k src = .ok (v, k')) :
+theorem coinVec_ok {n k k' : Nat} {src : CoinSource} {v : Array F128} (h : coinVec n k src = .ok (v, k')) :
     (n = 0 ∧ v = #[] ∧ k' = k) ∨ (n ≠ 0 ∧ src.round k n = .ok v ∧ k' = k + 1) := by
   unfold coinVec at h
   split at h
@@ -46,7 +46,7 @@ theorem coinVec_ok {n k k' : Nat} {src : Coins} {v : Array F128} (h : coinVec n 
     | error e => rw [hr] at h; cases h
     | ok r => rw [hr] at h; cases h; exact .inr ⟨hn, rfl, rfl⟩
 
-theorem coinOne_ok {k k' : Nat} {src : Coins} {x : F128} (h : coinOne k src = .ok (x, k')) :
+theorem coinOne_ok {k k' : Nat} {src : CoinSource} {x : F128} (h : coinOne k src = .ok (x, k')) :
     ∃ c, src.round k 1 = .ok c ∧ x = c[0]! ∧ k' = k + 1 := by
   obtain ⟨v, k₁, hv, h⟩ := cm_bind h
   cases cm_pure h
@@ -54,7 +54,7 @@ theorem coinOne_ok {k k' : Nat} {src : Coins} {x : F128} (h : coinOne k src = .o
   · cases h1
   · exact ⟨v, hr, rfl, rfl⟩
 
-theorem liftE_ok {A : Type} {e : Except String A} {k : Nat} {src : Coins} {r : A × Nat}
+theorem liftE_ok {A : Type} {e : Except String A} {k : Nat} {src : CoinSource} {r : A × Nat}
     (h : liftE e k src = .ok r) : ∃ a, e = .ok a ∧ r = (a, k) := by
   cases e with
   | error e => cases h
@@ -68,7 +68,7 @@ variable {α : Type} [Val α]
 
 /-- `run`'s residuals are its stages': the zerocheck's, the lincheck's, the ring switches', Ligerito's and the absorbed
 `T`'s, each stage run on the coins the one before left. -/
-theorem run_stages {sh : Shape} {M : Messages α} {extras : Array Claim} {k k' : Nat} {src : Coins}
+theorem run_stages {sh : Shape} {M : Messages α} {extras : Array Claim} {k k' : Nat} {src : CoinSource}
     {rs : Array α} {info : Info α} (h : run sh M extras k src = .ok ((rs, info), k')) :
     sh.claims = 2 + extras.size ∧ ∃ (r0 r1 : α) (rsr lgr : Array α) (k1 k2 k3 : Nat),
       zerocheck sh.m M k src = .ok ((r0, info.zc), k1) ∧
@@ -138,13 +138,13 @@ structure ZcProofOf (M : Messages F128) (vc : F128) (p : ZerocheckProof) : Prop 
   fb : p.finalB = M.fb
   fc : p.finalC = vc
 
-section Coins
+section CoinSource
 
 variable {α : Type} [Val α]
 
 /-- The residual rounds draw one round each, its first coin the round's challenge. -/
 theorem zcRounds_coins (r : Array F128) :
-    ∀ (l : List (α × α)) (i : Nat) (claim : α) (rho : Array F128) (k k' : Nat) (src : Coins) (claim' : α)
+    ∀ (l : List (α × α)) (i : Nat) (claim : α) (rho : Array F128) (k k' : Nat) (src : CoinSource) (claim' : α)
       (rho' : Array F128),
       zcRounds r l i claim rho k src = .ok ((claim', rho'), k') →
       rho'.size = rho.size + l.length ∧ (∀ j < rho.size, rho'[j]! = rho[j]!) ∧ k' = k + l.length ∧
@@ -169,7 +169,7 @@ theorem zcRounds_coins (r : Array F128) :
 
 /-- **The zerocheck's coins.** The rounds `zerocheck` draws its points from, when `r_outer` is not empty: `r_skip`
 (6 coins, unused), `r_outer` (`m − 13`), `z`, then one round per residual round, its challenge. -/
-theorem zerocheck_coins {m : Nat} (hm : 14 ≤ m) {M : Messages α} {k k' : Nat} {src : Coins} {r0 : α}
+theorem zerocheck_coins {m : Nat} (hm : 14 ≤ m) {M : Messages α} {k k' : Nat} {src : CoinSource} {r0 : α}
     {zc : ZcPts α} (h : zerocheck m M k src = .ok ((r0, zc), k')) :
     ∃ c₀ c₁ c₂, src.round k 6 = .ok c₀ ∧ src.round (k + 1) (m - 13) = .ok c₁ ∧ src.round (k + 2) 1 = .ok c₂ ∧
       zc.r = pinned ++ c₁ ∧ zc.z = c₂[0]! ∧ zc.rho.size = M.zc.size ∧ k' = k + 3 + M.zc.size ∧
@@ -192,12 +192,12 @@ theorem zerocheck_coins {m : Nat} (hm : 14 ≤ m) {M : Messages α} {k k' : Nat}
   simp only [Array.length_toList, Array.size_empty, Nat.zero_add] at hsz hk hco
   exact ⟨c₀, c₁, c₂, hr₀, hr₁, hr₂, rfl, rfl, hsz, hk, hco⟩
 
-end Coins
+end CoinSource
 
 /-- The residual rounds over F are the fold of `Refine.zStep` on round `i`'s messages and on coins `C` whose first
 entries are the challenges drawn. -/
 theorem zcRounds_fold (r : Array F128) (rounds : Array (F128 × F128)) (C : Nat → Array F128) :
-    ∀ (l : List (F128 × F128)) (i : Nat) (claim : F128) (rho : Array F128) (k k' : Nat) (src : Coins)
+    ∀ (l : List (F128 × F128)) (i : Nat) (claim : F128) (rho : Array F128) (k k' : Nat) (src : CoinSource)
       (claim' : F128) (rho' : Array F128),
       zcRounds r l i claim rho k src = .ok ((claim', rho'), k') →
       (∀ j (hj : j < l.length), rounds[i + j]! = l[j]) →
@@ -236,7 +236,7 @@ theorem zcRounds_fold (r : Array F128) (rounds : Array (F128 × F128)) (C : Nat 
 `v_C` for `final_c`, passes both `check`s of `bindAndZerocheck` at its points: `P_c(z) = final_c` (Piop.lean:84), and
 on any coins `C` whose first entries are its challenges `ρ`, the residual rounds end at `final_a · final_b`
 (Piop.lean:98) with challenges `ρ`. -/
-theorem zerocheck_checks {m : Nat} {M : Messages F128} {k k' : Nat} {src : Coins} {r0 : F128} {zc : ZcPts F128}
+theorem zerocheck_checks {m : Nat} {M : Messages F128} {k k' : Nat} {src : CoinSource} {r0 : F128} {zc : ZcPts F128}
     (h : zerocheck m M k src = .ok ((r0, zc), k')) (h0 : r0 = 0) {p : ZerocheckProof} (hp : ZcProofOf M zc.vc p)
     (hsab : M.ab.size = 64) (hsc : M.c.size = 64) (hszc : M.zc.size = m - 6)
     {C : Nat → Array F128} (hC : ∀ i < m - 6, (C i).getD 0 0 = zc.rho[i]!) :

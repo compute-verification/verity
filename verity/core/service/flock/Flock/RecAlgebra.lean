@@ -31,13 +31,13 @@ open Flock
 
 /-- Where the verifier's coins come from (`rec_algebra.CoinSource`, rec_algebra.py:229–249): `round k n` is round `k`'s coins
 when the verifier draws `n` of them, `drawnAll k` that every recorded round is drawn once `k` are. -/
-structure Coins where
+structure CoinSource where
   round : Nat → Nat → Except String (Array F128)
   drawnAll : Nat → Bool
 
 /-- A session record's coins by round (`CoinSource(rounds)`, rec_algebra.py:232–242). A recorded round of no coins is no
 draw (§6.2), so it is skipped (`CoinSource.__init__`): z_partial's round in a holo session absorbs elements and draws none. -/
-def Coins.ofRounds (recorded : Array (Array F128)) : Coins :=
+def CoinSource.ofRounds (recorded : Array (Array F128)) : CoinSource :=
   let rounds := recorded.filter (·.size ≠ 0)
   { round := fun k n => match rounds[k]? with
       | some r => if r.size = n then .ok r else .error s!"round {k}: {n} coins drawn, the record has {r.size}"
@@ -46,10 +46,10 @@ def Coins.ofRounds (recorded : Array (Array F128)) : Coins :=
 
 /-- Coins in whatever rounds the verifier draws, all zero (`_dummy_coins`, rec_algebra.py:884–901, whose coins are
 random: the structure depends on the rounds, not on the coins). -/
-def Coins.zeros : Coins := ⟨fun _ n => .ok (Array.replicate n 0), fun _ => true⟩
+def CoinSource.zeros : CoinSource := ⟨fun _ n => .ok (Array.replicate n 0), fun _ => true⟩
 
 /-- The coins drawn so far, read from a source. -/
-abbrev CM := StateT Nat (ReaderT Coins (Except String))
+abbrev CM := StateT Nat (ReaderT CoinSource (Except String))
 
 /-- `CoinSource.vec` (rec_algebra.py:235–242): a draw of `n` coins is one round of `n`; none is no round (§6.2). -/
 def coinVec (n : Nat) : CM (Array F128) := do
@@ -824,7 +824,7 @@ def build (sh : Shape) (lins : Array Lin) : Except String Built := do
   return ⟨⟨(wNames sh).size, vNames.size, st.ops, res⟩, vNames, st.vVals, st.kappa⟩
 
 /-- The symbolic residuals at a coin source (`_residual_lins`, rec_algebra.py:825–827). -/
-def residualLins (sh : Shape) (coins : Coins) (extras : Array Claim) : Except String (Array Lin × Info Lin) :=
+def residualLins (sh : Shape) (coins : CoinSource) (extras : Array Claim) : Except String (Array Lin × Info Lin) :=
   ((run sh (symbolic sh) extras).run' 0).run coins
 
 /-- Extra claims of the statement's number, all zero (`_extras_like`, rec_algebra.py:904–909, whose are random). -/
@@ -833,14 +833,14 @@ def extrasLike (sh : Shape) : Array Claim :=
 
 /-- `GfResiduals_v1{S}`'s S, a function of the shape alone (`rec_algebra.structure`, rec_algebra.py:915–921). -/
 def structureOf (sh : Shape) : Except String GfS := do
-  let (lins, _) ← residualLins sh Coins.zeros (extrasLike sh)
+  let (lins, _) ← residualLins sh CoinSource.zeros (extrasLike sh)
   return (← build sh lins).S
 
 /-- `GfResiduals`' v port at the rep's coins (the comb last), the coin-derived points and `kappa`
 (`rec_algebra.verifier_rows`, rec_algebra.py:931–940); refused when the structure moved with the coins. -/
 def verifierRows (sh : Shape) (rounds : Array (Array F128)) (extras : Array Claim) (comb : Array F128) :
     Except String (Array F128 × Info Lin × Array (Array (Array F128))) := do
-  let (lins, info) ← residualLins sh (Coins.ofRounds rounds) extras
+  let (lins, info) ← residualLins sh (CoinSource.ofRounds rounds) extras
   let b ← build sh lins
   if some b.S ≠ (structureOf sh).toOption then throw "the structure moved with the coins"
   return (b.vVals ++ comb, info, b.kappa)

@@ -74,9 +74,9 @@ theorem coef_of_check {c3 : Flock.RecCoins.C3} {c : Flock.Circuit} {pub : Flock.
     (hx : ∀ as bs, FlockC3.Opening.coinClaim c3 c.unit.name sh 0 = .ok as →
       FlockC3.Opening.coinClaim c3 c.unit.name sh 1 = .ok bs →
       ∃ v : Fin 2 → Flock.F128, a = #[⟨v 0, as.skip, as.x⟩, ⟨v 1, bs.skip, bs.x⟩])
-    (h₁ : Flock.RecAlgebra.ringSwitch (msgsO sh w ops) a 0 (Flock.RecAlgebra.Coins.ofRounds cs) = .ok ((rsr, rs), k₂))
+    (h₁ : Flock.RecAlgebra.ringSwitch (msgsO sh w ops) a 0 (Flock.RecAlgebra.CoinSource.ofRounds cs) = .ok ((rsr, rs), k₂))
     (h₂ : Flock.RecAlgebra.ligerito sh.sched (msgsO sh w ops) ((msgsO sh w ops).tAtom.getD rs.T) rs.sws k₂
-      (Flock.RecAlgebra.Coins.ofRounds cs) = .ok ((lgr, lg), k₁))
+      (Flock.RecAlgebra.CoinSource.ofRounds cs) = .ok ((lgr, lg), k₁))
     (halpha : ∀ ℓ < sh.sched.levels.size, ops.alpha ℓ = (lg.conss[ℓ]!).alpha) {ℓ : ℕ}
     (hℓ : ℓ < sh.sched.levels.size) (hL : FlockVBridge.AccChain.levelLanes sh ℓ = LANES)
     (hH : (sh.sched.levels[ℓ]!).d - (sh.sched.levels[ℓ]!).cap = H) (hq : ops.q ℓ = (sh.sched.levels[ℓ]!).q)

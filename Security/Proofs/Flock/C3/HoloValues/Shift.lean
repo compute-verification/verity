@@ -6,7 +6,7 @@ import Proofs.Flock.C3.HoloValues.Runs
 `ligShift : LigShift`. A computation in `CM` or `LM` shifts (`CShift`, `LShift`) when, on coins `B` that draw at
 round `k + 1` what `A` draws at round `k` (`Later`), it returns from round `k + 1` what it returns on `A` from `k`, one
 round later. `coinVec` shifts, since it alone reads the counter and the coins; so do `pure` and the operations on
-Ligerito's state, and bind keeps it. `ligeritoRun` is built from these, its loops by induction. `Coins.ofRounds` with a
+Ligerito's state, and bind keeps it. `ligeritoRun` is built from these, its loops by induction. `CoinSource.ofRounds` with a
 round of some coins in front is `Later` than without it.
 -/
 
@@ -14,9 +14,9 @@ namespace FlockC3.HoloValues
 
 open Flock Flock.RecAlgebra
 
-/-- `B` draws at round `k + 1` what `A` draws at `k`. Only draws that succeed: `Coins.ofRounds`' errors name the
+/-- `B` draws at round `k + 1` what `A` draws at `k`. Only draws that succeed: `CoinSource.ofRounds`' errors name the
 round. -/
-def Later (A B : RecAlgebra.Coins) : Prop := ∀ k n r, A.round k n = .ok r → B.round (k + 1) n = .ok r
+def Later (A B : RecAlgebra.CoinSource) : Prop := ∀ k n r, A.round k n = .ok r → B.round (k + 1) n = .ok r
 
 /-- `m` returns on `B` from round `k + 1` what it returns on `A` from `k`, one round later, when `B` is `Later`. -/
 def CShift {β : Type} (m : CM β) : Prop :=
@@ -41,7 +41,7 @@ theorem CShift.bind' {β γ : Type} {m : CM β} {f : β → CM γ} (hm : CShift 
 
 theorem CShift.coinVec' (n : ℕ) : CShift (coinVec n) := by
   intro A B hAB k k' b h
-  have hr : ∀ (j : ℕ) (C : RecAlgebra.Coins), (StateT.run (read : CM RecAlgebra.Coins) j).run C = pure (C, j) :=
+  have hr : ∀ (j : ℕ) (C : RecAlgebra.CoinSource), (StateT.run (read : CM RecAlgebra.CoinSource) j).run C = pure (C, j) :=
     fun _ _ => rfl
   unfold coinVec at h ⊢
   by_cases hn : n = 0
@@ -180,16 +180,16 @@ theorem ligeritoRun_shift (sch : Schedule) (M : Messages α) : LShift (RecAlgebr
 
 /-! ## The coins one round later -/
 
-/-- A round of some coins in front: `Coins.ofRounds` keeps it, so round `k + 1` is the shorter coins' round `k`. -/
+/-- A round of some coins in front: `CoinSource.ofRounds` keeps it, so round `k + 1` is the shorter coins' round `k`. -/
 theorem later_ofRounds {c : Array (Array F128)} {x : Array F128} (hx : x.size ≠ 0) :
-    Later (Coins.ofRounds c) (Coins.ofRounds (#[x] ++ c)) := by
+    Later (CoinSource.ofRounds c) (CoinSource.ofRounds (#[x] ++ c)) := by
   intro k n r h
   have hx' : x ≠ #[] := fun e => hx (by rw [e]; rfl)
   have h1 : (#[x].filter (·.size ≠ 0)).size = 1 := by simp [hx']
   have e : ((#[x] ++ c).filter (·.size ≠ 0))[k + 1]? = (c.filter (·.size ≠ 0))[k]? := by
     rw [Array.filter_append, Array.getElem?_append_right (by omega), h1, Nat.add_sub_cancel]
     exact Array.size_append ..
-  unfold Coins.ofRounds at h ⊢
+  unfold CoinSource.ofRounds at h ⊢
   dsimp only at h ⊢
   rw [e]
   revert h

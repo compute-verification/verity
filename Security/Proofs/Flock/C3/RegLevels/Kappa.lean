@@ -27,10 +27,10 @@ theorem opening_lg {c3 : Flock.RecCoins.C3} {unit : String} {o : Flock.RecCoins.
       (lgr : Array Flock.RecAlgebra.Lin),
       c3.coins unit s!"{Flock.RecVStar.STACKED}/rep0" = .ok c ∧
       FlockC3.Opening.coinClaim c3 unit o.sh 0 = .ok as ∧ FlockC3.Opening.coinClaim c3 unit o.sh 1 = .ok bs ∧
-      Flock.RecAlgebra.ringSwitch (Flock.RecAlgebra.symbolic o.sh) #[as, bs] 0 (Flock.RecAlgebra.Coins.ofRounds c) =
+      Flock.RecAlgebra.ringSwitch (Flock.RecAlgebra.symbolic o.sh) #[as, bs] 0 (Flock.RecAlgebra.CoinSource.ofRounds c) =
         .ok ((rsr, rs), k₂) ∧
       Flock.RecAlgebra.ligerito o.sh.sched (Flock.RecAlgebra.symbolic o.sh)
-        ((Flock.RecAlgebra.symbolic o.sh).tAtom.getD rs.T) rs.sws k₂ (Flock.RecAlgebra.Coins.ofRounds c) =
+        ((Flock.RecAlgebra.symbolic o.sh).tAtom.getD rs.T) rs.sws k₂ (Flock.RecAlgebra.CoinSource.ofRounds c) =
         .ok ((lgr, o.lg), k₁) := by
   unfold Flock.RecCoins.opening at h
   cases hr : c3.stacked with
@@ -74,10 +74,10 @@ theorem lg_eq_of_opening {c3 : Flock.RecCoins.C3} {unit : String} {o : Flock.Rec
     (hx : ∀ as bs, FlockC3.Opening.coinClaim c3 unit o.sh 0 = .ok as →
       FlockC3.Opening.coinClaim c3 unit o.sh 1 = .ok bs →
       ∃ v : Fin 2 → Flock.F128, a = #[⟨v 0, as.skip, as.x⟩, ⟨v 1, bs.skip, bs.x⟩])
-    (h₁ : Flock.RecAlgebra.ringSwitch (FlockC3.Opening.decodedO o.sh w cons) a 0 (Flock.RecAlgebra.Coins.ofRounds c) =
+    (h₁ : Flock.RecAlgebra.ringSwitch (FlockC3.Opening.decodedO o.sh w cons) a 0 (Flock.RecAlgebra.CoinSource.ofRounds c) =
       .ok ((rsr, rs), k₂))
     (h₂ : Flock.RecAlgebra.ligerito o.sh.sched (FlockC3.Opening.decodedO o.sh w cons)
-      ((FlockC3.Opening.decodedO o.sh w cons).tAtom.getD rs.T) rs.sws k₂ (Flock.RecAlgebra.Coins.ofRounds c) =
+      ((FlockC3.Opening.decodedO o.sh w cons).tAtom.getD rs.T) rs.sws k₂ (Flock.RecAlgebra.CoinSource.ofRounds c) =
       .ok ((lgr, lg), k₁)) :
     lg = o.lg := by
   obtain ⟨c', as, bs, rsr', rs', k₂', k₁', lgr', hc', has, hbs, h₁', h₂'⟩ := opening_lg hop
@@ -119,9 +119,9 @@ theorem alpha_of_opening {c3 : Flock.RecCoins.C3} {unit : String} {o : Flock.Rec
     {lg : Flock.RecAlgebra.LgPts} (hcust : c3.coins unit s!"{Flock.RecVStar.STACKED}/rep0" = .ok c)
     (hx : ∀ as bs, FlockC3.Opening.coinClaim c3 unit sh 0 = .ok as → FlockC3.Opening.coinClaim c3 unit sh 1 = .ok bs →
       ∃ v : Fin 2 → Flock.F128, a = #[⟨v 0, as.skip, as.x⟩, ⟨v 1, bs.skip, bs.x⟩])
-    (h₁ : Flock.RecAlgebra.ringSwitch (msgsO sh w ops) a 0 (Flock.RecAlgebra.Coins.ofRounds c) = .ok ((rsr, rs), k₂))
+    (h₁ : Flock.RecAlgebra.ringSwitch (msgsO sh w ops) a 0 (Flock.RecAlgebra.CoinSource.ofRounds c) = .ok ((rsr, rs), k₂))
     (h₂ : Flock.RecAlgebra.ligerito sh.sched (msgsO sh w ops) ((msgsO sh w ops).tAtom.getD rs.T) rs.sws k₂
-      (Flock.RecAlgebra.Coins.ofRounds c) = .ok ((lgr, lg), k₁))
+      (Flock.RecAlgebra.CoinSource.ofRounds c) = .ok ((lgr, lg), k₁))
     (halpha : ∀ ℓ < sh.sched.levels.size, ops.alpha ℓ = (lg.conss[ℓ]!).alpha) :
     ∀ ℓ < sh.sched.levels.size, (o.lg.conss[ℓ]!).alpha = ops.alpha ℓ := by
   subst hosh
@@ -137,9 +137,9 @@ theorem coef_of_opening {c3 : Flock.RecCoins.C3} {unit : String} {o : Flock.RecC
     {lg : Flock.RecAlgebra.LgPts} (hcust : c3.coins unit s!"{Flock.RecVStar.STACKED}/rep0" = .ok c)
     (hx : ∀ as bs, FlockC3.Opening.coinClaim c3 unit sh 0 = .ok as → FlockC3.Opening.coinClaim c3 unit sh 1 = .ok bs →
       ∃ v : Fin 2 → Flock.F128, a = #[⟨v 0, as.skip, as.x⟩, ⟨v 1, bs.skip, bs.x⟩])
-    (h₁ : Flock.RecAlgebra.ringSwitch (msgsO sh w ops) a 0 (Flock.RecAlgebra.Coins.ofRounds c) = .ok ((rsr, rs), k₂))
+    (h₁ : Flock.RecAlgebra.ringSwitch (msgsO sh w ops) a 0 (Flock.RecAlgebra.CoinSource.ofRounds c) = .ok ((rsr, rs), k₂))
     (h₂ : Flock.RecAlgebra.ligerito sh.sched (msgsO sh w ops) ((msgsO sh w ops).tAtom.getD rs.T) rs.sws k₂
-      (Flock.RecAlgebra.Coins.ofRounds c) = .ok ((lgr, lg), k₁))
+      (Flock.RecAlgebra.CoinSource.ofRounds c) = .ok ((lgr, lg), k₁))
     (halpha : ∀ ℓ < sh.sched.levels.size, ops.alpha ℓ = (lg.conss[ℓ]!).alpha)
     (hreg : ∀ ℓ < sh.sched.levels.size, ∀ j < ops.q ℓ, ops.coef ℓ j =
       Flock.RecCoins.coefAt (o.kappa[ℓ]!) (FlockVBridge.AccChain.levelLanes sh ℓ)

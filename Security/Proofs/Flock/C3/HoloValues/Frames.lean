@@ -10,7 +10,7 @@ a squeeze of none, the next round issues `r′` and retains `h`, and the rounds 
 (`holoFrameAt`, `HoloCoinsShaped`). `holoCounts_of_shaped` gives `UnitFrames`' counts and frames up to `r′`
 (`HoloCounts`) on G's `streamRounds` at those frames, as `runs_filesAt` gives `run_of_frames`' at plain.
 
-V* reads the record through `Coins.ofRounds`, which skips the empty round: `filter_getElem!_after` and
+V* reads the record through `CoinSource.ofRounds`, which skips the empty round: `filter_getElem!_after` and
 `filter_size_after` give its rounds past it as the record's one later.
 -/
 

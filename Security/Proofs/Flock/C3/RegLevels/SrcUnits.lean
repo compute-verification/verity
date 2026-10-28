@@ -54,7 +54,7 @@ theorem levelTie_of_units (zs : (s : Fin nS) → (Vs s).Outer Reg') (Lb : (s : F
     {a : Array (Flock.RecAlgebra.AClaim Flock.F128)} {c : Array (Array Flock.F128)} {k₀ k₁ : ℕ}
     {res : Array Flock.F128} (hell : hp.EllOk (execClassAt st).cls.kLog)
     (hsh : Flock.RecOpening.shape? (holoAt st hp).cls.shape.mReg cl = some sh)
-    (hrun : Flock.RecOpening.run sh (msgsO sh w ops) a k₀ (Flock.RecAlgebra.Coins.ofRounds c) = .ok (res, k₁))
+    (hrun : Flock.RecOpening.run sh (msgsO sh w ops) a k₀ (Flock.RecAlgebra.CoinSource.ofRounds c) = .ok (res, k₁))
     (hz : ∀ x ∈ res, x = 0) (hne : Flock.RecAlgebra.NoEmpty c)
     {msId : String} {cap : Array ByteArray} {p : Flock.LigeritoProof} (hcap : capDig cap = cap₀)
     (hpm : p.messages = (msgsO sh w ops).msgs.map fun mm => (Flock.RecAlgebra.kv mm.1, Flock.RecAlgebra.kv mm.2))
@@ -71,8 +71,8 @@ theorem levelTie_of_units (zs : (s : Fin nS) → (Vs s).Outer Reg') (Lb : (s : F
     (hq : ∀ ℓ < sh.sched.levels.size, ops.q ℓ = (sh.sched.levels[ℓ]!).q)
     (hR : ∀ (rsr : Array Flock.F128) (rs : Flock.RecAlgebra.RsPts Flock.F128) (k₂ : ℕ) (lgr : Array Flock.F128)
       (lg : Flock.RecAlgebra.LgPts),
-      Flock.RecAlgebra.ringSwitch (msgsO sh w ops) a k₀ (Flock.RecAlgebra.Coins.ofRounds c) = .ok ((rsr, rs), k₂) →
-      Flock.RecAlgebra.ligerito sh.sched (msgsO sh w ops) rs.T rs.sws k₂ (Flock.RecAlgebra.Coins.ofRounds c) =
+      Flock.RecAlgebra.ringSwitch (msgsO sh w ops) a k₀ (Flock.RecAlgebra.CoinSource.ofRounds c) = .ok ((rsr, rs), k₂) →
+      Flock.RecAlgebra.ligerito sh.sched (msgsO sh w ops) rs.T rs.sws k₂ (Flock.RecAlgebra.CoinSource.ofRounds c) =
         .ok ((lgr, lg), k₁) →
       (∀ ℓ < sh.sched.levels.size, ops.alpha ℓ = (lg.conss[ℓ]!).alpha) ∧ OpensUnits zs Lb sh ops sibs cap p lg ∧
       (∃ nc, OpenRel sh.sched.m nc rs.T rs.sws u.opened) ∧
@@ -193,7 +193,7 @@ theorem levelTie_of_reads (zs : (s : Fin nS) → (Vs s).Outer Reg') (Lb : (s : F
     {a : Array (Flock.RecAlgebra.AClaim Flock.F128)} {c : Array (Array Flock.F128)} {k₀ k₁ : ℕ}
     {res : Array Flock.F128} (hell : hp.EllOk (execClassAt st).cls.kLog)
     (hsh : Flock.RecOpening.shape? (holoAt st hp).cls.shape.mReg cl = some sh)
-    (hrun : Flock.RecOpening.run sh (msgsO sh w ops) a k₀ (Flock.RecAlgebra.Coins.ofRounds c) = .ok (res, k₁))
+    (hrun : Flock.RecOpening.run sh (msgsO sh w ops) a k₀ (Flock.RecAlgebra.CoinSource.ofRounds c) = .ok (res, k₁))
     (hz : ∀ x ∈ res, x = 0) (hne : Flock.RecAlgebra.NoEmpty c) (msId : String) (e0 : ℕ → ByteArray)
     (sb : ℕ → ℕ → ℕ → ByteArray) (e : ℕ → ℕ → ByteArray) (hcap : capDig (capR sh e0) = cap₀)
     (hrs : ∀ ℓ < sh.sched.levels.size, (ops.rows ℓ).size = (sh.sched.levels[ℓ]!).q)
@@ -202,8 +202,8 @@ theorem levelTie_of_reads (zs : (s : Fin nS) → (Vs s).Outer Reg') (Lb : (s : F
     (hq : ∀ ℓ < sh.sched.levels.size, ops.q ℓ = (sh.sched.levels[ℓ]!).q)
     (hR : ∀ (rsr : Array Flock.F128) (rs : Flock.RecAlgebra.RsPts Flock.F128) (k₂ : ℕ) (lgr : Array Flock.F128)
       (lg : Flock.RecAlgebra.LgPts),
-      Flock.RecAlgebra.ringSwitch (msgsO sh w ops) a k₀ (Flock.RecAlgebra.Coins.ofRounds c) = .ok ((rsr, rs), k₂) →
-      Flock.RecAlgebra.ligerito sh.sched (msgsO sh w ops) rs.T rs.sws k₂ (Flock.RecAlgebra.Coins.ofRounds c) =
+      Flock.RecAlgebra.ringSwitch (msgsO sh w ops) a k₀ (Flock.RecAlgebra.CoinSource.ofRounds c) = .ok ((rsr, rs), k₂) →
+      Flock.RecAlgebra.ligerito sh.sched (msgsO sh w ops) rs.T rs.sws k₂ (Flock.RecAlgebra.CoinSource.ofRounds c) =
         .ok ((lgr, lg), k₁) →
       (∀ ℓ < sh.sched.levels.size, ops.alpha ℓ = (lg.conss[ℓ]!).alpha) ∧
       OpensUnits zs Lb sh ops (sibsR sh ops sb e) (capR sh e0) (pR sh e0 w ops sb e) lg ∧

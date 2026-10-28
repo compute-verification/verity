@@ -32,7 +32,7 @@ theorem opening_rounds {c3 : RecCoins.C3} {unit : String} {o : RecCoins.Opening}
     ∃ (c : Array (Array F128)) (a b : AClaim Lin) (lins : Array Lin) (k₁ : Nat) (res : Array Res) (bs : BSt),
       c3.coins unit s!"{RecVStar.STACKED}/rep0" = .ok c ∧
       coinClaim c3 unit o.sh 0 = .ok a ∧ coinClaim c3 unit o.sh 1 = .ok b ∧
-      RecOpening.run o.sh (symbolic o.sh) #[a, b] 0 (RecAlgebra.Coins.ofRounds c) = .ok (lins, k₁) ∧
+      RecOpening.run o.sh (symbolic o.sh) #[a, b] 0 (RecAlgebra.CoinSource.ofRounds c) = .ok (lins, k₁) ∧
       (RecOpening.buildAll o.sh lins.toList 0).run { kappa := kappa0 o.sh } = .ok (res, bs) ∧
       RecOpening.structureOf o.sh = .ok ⟨RecOpening.nw o.sh, bs.vNames.size, bs.ops, res⟩ ∧
       o.v = bs.vVals ∧ o.kappa = bs.kappa := by
@@ -124,7 +124,7 @@ theorem run_of_sessionAt
     ∃ (a b : RecAlgebra.AClaim RecAlgebra.Lin) (rs : Array F128) (k₁ : ℕ),
       coinClaim c3 unit sh 0 = .ok a ∧ coinClaim c3 unit sh 1 = .ok b ∧
       RecOpening.run sh (decodedO sh w (consO ops)) (claimsO sh w c3 unit) 0
-        (RecAlgebra.Coins.ofRounds (rep0 c3 unit)) = .ok (rs, k₁) ∧ ∀ x ∈ rs, x = 0 := by
+        (RecAlgebra.CoinSource.ofRounds (rep0 c3 unit)) = .ok (rs, k₁) ∧ ∀ x ∈ rs, x = 0 := by
   obtain ⟨op, hop, hsh', hw, ⟨Sg, gs, sess, un, cp, hS, hg, hparts⟩, ⟨acc, sessA, unA, cpA, hopen, hcoef, hrd⟩⟩ := hs
   obtain ⟨c, a, b, lins, k₁, res, bs, hc, ha, hb, hrun, hbuild, hSeq, hv, hk⟩ := opening_rounds hop
   rw [hsh'] at ha hb hrun hbuild hSeq
@@ -188,12 +188,12 @@ def MapsLeft (M : FlockC3.Reps.StackedMaps stmt Vs) (zs : (s : Fin S) → (Vs s)
   let c := FlockC3.Opening.rep0 c3 unit
   Flock.RecAlgebra.NoEmpty c ∧ capDig (capR sh e0) = cap₀ ∧
     (∀ (rsr : Array Flock.F128) (rs : Flock.RecAlgebra.RsPts Flock.F128) (k₂ : ℕ),
-      Flock.RecAlgebra.ringSwitch (msgsO sh w ops) a 0 (Flock.RecAlgebra.Coins.ofRounds c) = .ok ((rsr, rs), k₂) →
+      Flock.RecAlgebra.ringSwitch (msgsO sh w ops) a 0 (Flock.RecAlgebra.CoinSource.ofRounds c) = .ok ((rsr, rs), k₂) →
       u.op.filterMap Sum.getRight? = ((List.range' 0 k₂).map fun i => c[i]!).map (coinArr fOf)) ∧
     (∀ (rsr : Array Flock.F128) (rs : Flock.RecAlgebra.RsPts Flock.F128) (k₂ : ℕ) (lgr : Array Flock.F128)
       (lg : Flock.RecAlgebra.LgPts) (k₁ : ℕ),
-      Flock.RecAlgebra.ringSwitch (msgsO sh w ops) a 0 (Flock.RecAlgebra.Coins.ofRounds c) = .ok ((rsr, rs), k₂) →
-      Flock.RecAlgebra.ligerito sh.sched (msgsO sh w ops) rs.T rs.sws k₂ (Flock.RecAlgebra.Coins.ofRounds c) =
+      Flock.RecAlgebra.ringSwitch (msgsO sh w ops) a 0 (Flock.RecAlgebra.CoinSource.ofRounds c) = .ok ((rsr, rs), k₂) →
+      Flock.RecAlgebra.ligerito sh.sched (msgsO sh w ops) rs.T rs.sws k₂ (Flock.RecAlgebra.CoinSource.ofRounds c) =
         .ok ((lgr, lg), k₁) →
       OpensAtMaps (readMaps M sh.sched) zs Lb sh (sibsR sh ops sb e) (capR sh e0) (pR sh e0 w ops sb e) lg ∧
       u.lg = FlockSoundness.Discharge.Exec.weave (ligShape GF128 GF256 Dig (holoAt st hp).rsch.sch)

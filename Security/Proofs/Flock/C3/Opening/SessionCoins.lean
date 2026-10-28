@@ -40,7 +40,7 @@ theorem mapM_two {A : Type} {f : Nat → Except String A} {cs : Array A} (h : #[
       cases h
       exact ⟨a, b, rfl, rfl, rfl⟩
 
-theorem run'_ok {A : Type} {x : CM A} {k : Nat} {src : RecAlgebra.Coins} {a : A}
+theorem run'_ok {A : Type} {x : CM A} {k : Nat} {src : RecAlgebra.CoinSource} {a : A}
     (h : (StateT.run' x k).run src = .ok a) : ∃ k', x k src = .ok (a, k') := by
   have e : (StateT.run' x k).run src = Prod.fst <$> x k src := rfl
   rw [e] at h
@@ -109,7 +109,7 @@ theorem coinClaim_ok {c3 : RecCoins.C3} {unit : String} {sh : Shape} {k : Nat} {
 zero over its residuals, the S they build the shape's (`structureOf`, "the structure moved"), and the opening's `v`
 and `kappa` the passes'. -/
 theorem opening_ok {c3 : RecCoins.C3} {unit : String} {o : RecCoins.Opening} (h : RecCoins.opening c3 unit = .ok o) :
-    ∃ (r : RecVStar.StackedShape) (a b : AClaim Lin) (src : RecAlgebra.Coins) (lins : Array Lin) (k₁ : Nat)
+    ∃ (r : RecVStar.StackedShape) (a b : AClaim Lin) (src : RecAlgebra.CoinSource) (lins : Array Lin) (k₁ : Nat)
       (res : Array Res) (bs : BSt),
       c3.stacked = some r ∧ RecOpening.shape? r.m 2 = some o.sh ∧
       coinClaim c3 unit o.sh 0 = .ok a ∧ coinClaim c3 unit o.sh 1 = .ok b ∧
@@ -298,12 +298,12 @@ theorem claimsLike_ren (sh : Shape) :
   rfl
 
 theorem runLins_ren {sh : Shape} {lins : Array Lin}
-    (h : ((RecOpening.run sh (symbolic sh) (RecOpening.claimsLike sh)).run' 0).run RecAlgebra.Coins.zeros =
+    (h : ((RecOpening.run sh (symbolic sh) (RecOpening.claimsLike sh)).run' 0).run RecAlgebra.CoinSource.zeros =
       .ok lins) :
     lins.map (Lin.ren bump) = lins := by
   obtain ⟨k, hk⟩ := run'_ok h
   have hs :=
-    run_simO (ren_hom bump_inj) sh (symbolic sh) (RecOpening.claimsLike sh) 0 RecAlgebra.Coins.zeros _ _ hk
+    run_simO (ren_hom bump_inj) sh (symbolic sh) (RecOpening.claimsLike sh) 0 RecAlgebra.CoinSource.zeros _ _ hk
   rw [symbolic_ren, claimsLike_ren, hk] at hs
   simp only [Except.ok.injEq, Prod.mk.injEq] at hs
   exact hs.1.symm

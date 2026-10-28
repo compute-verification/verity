@@ -250,7 +250,7 @@ theorem verifierRows_v_size {sh : Shape} {GS : Flock.RecAlgebra.GfS} (hS : struc
     {kappa : Array (Array (Array F128))} (h : verifierRows sh rounds extras comb = .ok (v, info, kappa))
     (hc : comb.size = 64) : v.size = GS.nv := by
   unfold verifierRows at h
-  cases hl : Flock.RecAlgebra.residualLins sh (Flock.RecAlgebra.Coins.ofRounds rounds) extras with
+  cases hl : Flock.RecAlgebra.residualLins sh (Flock.RecAlgebra.CoinSource.ofRounds rounds) extras with
   | error e => rw [hl] at h; cases h
   | ok q =>
     obtain ⟨lins, info'⟩ := q
@@ -355,7 +355,7 @@ theorem ioColAt_of_readCol {Q : VStmt} (u : Fin Q.nv) {col : ℕ} (hc : col < (R
 elements. -/
 def combOf (sh : Shape) {cls : HClass} (TF : TableFiles cls) (rounds : Array (Array F128)) : Array F128 :=
   let c : Array F128 :=
-    match Flock.RecAlgebra.residualLins sh (Flock.RecAlgebra.Coins.ofRounds rounds) TF.extras with
+    match Flock.RecAlgebra.residualLins sh (Flock.RecAlgebra.CoinSource.ofRounds rounds) TF.extras with
     | .ok (_, info) =>
       match TF.st.fold.folded info.lc.fold.alpha info.lc.fold.beta info.lc.fold.lw info.lc.fold.rhoIn
           info.lc.fold.ts with

@@ -6,7 +6,7 @@ import Proofs.Flock.VBridge.Runs.Rs
 # A holo rep's ring switching and Ligerito, from E
 
 G's `rs_of_residuals` and `hlg_of_frames` at a holo record, whose one round of no coins (`z_partial`'s,
-`HoloCoinsShaped`) V* skips (`Coins.ofRounds`): ring switching and Ligerito run on the record one round later than
+`HoloCoinsShaped`) V* skips (`CoinSource.ofRounds`): ring switching and Ligerito run on the record one round later than
 V*'s index for them.
 
 * `holoRs_of_residuals`: `rs_of_residuals` on the record with its empty round filtered out (V*'s view; `verifierRows`
@@ -149,13 +149,13 @@ theorem holoRs_of_residuals {sh : Shape} {d : RepData} {v : Array F128} {info : 
 /-! ## Ligerito -/
 
 /-- **V*'s Ligerito run behind one more round** (`ligShift`, `Shift.lean`). On coins with one more round of some coins
-in front, V*'s Ligerito returns the same from one round later: `Coins.ofRounds` keeps that round, so its round `k + 1`
+in front, V*'s Ligerito returns the same from one round later: `CoinSource.ofRounds` keeps that round, so its round `k + 1`
 is the shorter coins' round `k`, and `coinVec`, which alone reads the counter (RecAlgebra.lean:55–61), draws the same. -/
 def LigShift : Prop :=
   ∀ (sch : Flock.Schedule) (M : Messages F128) (s₀ : LSt F128) (k k' : ℕ) (c : Array (Array F128)) (x : Array F128)
     (out : (Array F256 × Array (Array F256) × ℕ) × LSt F128), x.size ≠ 0 →
-    (ligeritoRun sch M).run s₀ k (Coins.ofRounds c) = .ok (out, k') →
-      (ligeritoRun sch M).run s₀ (k + 1) (Coins.ofRounds (#[x] ++ c)) = .ok (out, k' + 1)
+    (ligeritoRun sch M).run s₀ k (CoinSource.ofRounds c) = .ok (out, k') →
+      (ligeritoRun sch M).run s₀ (k + 1) (CoinSource.ofRounds (#[x] ++ c)) = .ok (out, k' + 1)
 
 /-- `fits_of` from round `k₀` on: the coins need be `c`'s only there. -/
 theorem fits_from {c : Array (Array F128)} {F : ℕ → ByteArray} {rs : Array Round} {k₀ : ℕ}

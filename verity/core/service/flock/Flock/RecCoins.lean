@@ -477,7 +477,7 @@ def opening (c3 : C3) (unit : String) : V Opening := do
     let (lgr, lg) ← RecAlgebra.ligerito sh.sched M tIn rs.sws
     return (rsr ++ lgr ++ #[RecAlgebra.instValLin.add tIn rs.T], lg)
   let built : Except String Opening := do
-    let (lins, lg) ← (run.run' 0).run (RecAlgebra.Coins.ofRounds rounds)
+    let (lins, lg) ← (run.run' 0).run (RecAlgebra.CoinSource.ofRounds rounds)
     let kappa := sh.sched.levels.map fun lv => Array.replicate 2 (Array.replicate (2 ^ lv.lanes) (0 : F128))
     let (res, st) ← (RecOpening.buildAll sh lins.toList 0).run { kappa }
     if some (⟨RecOpening.nw sh, st.vNames.size, st.ops, res⟩ : RecAlgebra.GfS) != (RecOpening.structureOf sh).toOption then

@@ -86,7 +86,7 @@ theorem folds_ofCircuit {S : Setup} {s : Stmt} (hS : S = Setup.ofCircuit s) (hwf
     (hs : ∀ r ∈ s.c.ranges.toList, FlockComplete.JsonRT.SlotOk s.c r) (h14 : 14 ≤ s.m) {sh : Shape}
     (hm : sh.m = s.m) (hk : sh.kLog = s.c.kLog) {rounds : Array (Array F128)} {extras : Array Claim}
     {lins : Array RecAlgebra.Lin} {info : RecAlgebra.Info RecAlgebra.Lin}
-    (h : RecAlgebra.residualLins sh (RecAlgebra.Coins.ofRounds rounds) extras = .ok (lins, info)) :
+    (h : RecAlgebra.residualLins sh (RecAlgebra.CoinSource.ofRounds rounds) extras = .ok (lins, info)) :
     ∃ c, S.fold.folded info.lc.fold.alpha info.lc.fold.beta info.lc.fold.lw info.lc.fold.rhoIn info.lc.fold.ts =
       .ok c ∧ c.size = 64 := by
   subst hS
@@ -311,7 +311,7 @@ theorem rowG (acc : ℕ → Array F128) {xo : Claims.Msg} {sto : Claims.Recursio
     exact extras_shape he (by omega)
   · intro r v info kappa h
     obtain ⟨lins, hl⟩ := FlockVBridge.Family.residualLins_of_verifierRows h
-    have hl' : RecAlgebra.residualLins (D.sh cls i) (RecAlgebra.Coins.ofRounds (FlockVBridge.Family.roundsOf
+    have hl' : RecAlgebra.residualLins (D.sh cls i) (RecAlgebra.CoinSource.ofRounds (FlockVBridge.Family.roundsOf
         (D.files cls i) r)) (D.files cls i).extras = .ok (lins, info) := hl
     obtain ⟨c, hcf, hcs⟩ := folds_ofCircuit (S := (D.files cls i).st) (D.tab_eq hi) hwf hslot (by omega) hshm hshk hl'
     show (D.files cls i).st.fold.folded info.lc.fold.alpha info.lc.fold.beta info.lc.fold.lw info.lc.fold.rhoIn

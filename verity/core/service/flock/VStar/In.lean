@@ -42,7 +42,7 @@ structure PortIn where
 abbrev PartIn := Array (String × PortIn)
 
 /-- One inner Ligerito opening (`rec_vstar.Query`, plain leaves): its row's elements, its siblings bottom up, its position. -/
-structure Opening where
+structure Query where
   rep : Nat
   level : Nat
   j : Nat
@@ -58,7 +58,7 @@ structure Src where
   /-- round `i` (`rec_algebra.rounds`), rep `r`: the inner prover's row and the salt it committed it under (`rec-c<i>`) -/
   msgs : Array (Array Row)
   /-- both reps' openings (`rec_vstar.queries`) -/
-  openings : Array Opening
+  openings : Array Query
   /-- rep, level: each node of the rep's top (64 bytes) with the firewall's salt (`rec_vstar.tops`) -/
   tops : Array (Array (Array (ByteArray × ByteArray)))
   /-- the running sums' `N + 1` salts (`rec_vstage.acc_salts`) -/
@@ -94,28 +94,28 @@ def accRef (acc : Array Nat) (coef row : Array F128) : Array Nat :=
   let t := (Array.range 2).map fun r => (Array.range L).foldl (fun s l => s + coef[r * L + l]! * row[l]!) a[r]!
   RecCoins.words t ++ acc.extract 16 acc.size
 
-/-- Opening `o`'s coefficients (`rec_outer.coefficients` at its rep's κ and eq(α)): κ[level][0]'s then κ[level][1]'s, each
+/-- Query `o`'s coefficients (`rec_outer.coefficients` at its rep's κ and eq(α)): κ[level][0]'s then κ[level][1]'s, each
 times eq(α)[j]. -/
-def coefOf (src : Src) (o : Opening) : Array F128 :=
+def coefOf (src : Src) (o : Query) : Array F128 :=
   let kap := src.kappa[o.rep]![o.level]!
   let e := src.eqA[o.rep]![o.level]![o.j]!
   kap[0]!.map (· * e) ++ kap[1]!.map (· * e)
 
 /-- `(rep, level, j)` before `(rep', level', j')`, lexicographically. -/
-def before (a b : Opening) : Bool :=
+def before (a b : Query) : Bool :=
   a.rep < b.rep || (a.rep == b.rep && (a.level < b.level || (a.level == b.level && a.j < b.j)))
 
-def same (a b : Opening) : Bool := a.rep == b.rep && a.level == b.level && a.j == b.j
+def same (a b : Query) : Bool := a.rep == b.rep && a.level == b.level && a.j == b.j
 
 /-- The chain's order (`rec_outer.chain_order`): every opening, rep-major, then by level and query. -/
-def order (src : Src) : Array Opening := src.openings.qsort before
+def order (src : Src) : Array Query := src.openings.qsort before
 
 /-- The running sums' rows (`rec_outer.Chain.build`): row 0 zero, row `p + 1` opening `p`'s `acc_out` on row `p`. -/
 def chainRows (src : Src) : Array (Array Nat) :=
   (order src).foldl (fun rows o => rows.push (accRef rows.back! (coefOf src o) o.row)) #[Array.replicate 64 0]
 
-/-- Opening `o`'s position in the chain. -/
-def at? (src : Src) (o : Opening) : Option Nat := (order src).findIdx? (same o)
+/-- Query `o`'s position in the chain. -/
+def at? (src : Src) (o : Query) : Option Nat := (order src).findIdx? (same o)
 
 /-- The rows before a rep's first opening and after its last (`rec_outer.Chain.rep_ends`). -/
 def repEnds (src : Src) (rep : Nat) : Except String (Nat × Nat) := do
