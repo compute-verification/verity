@@ -444,7 +444,7 @@ def checkInnerRange (i : RecVStar.Inner) (st : Stmt) : V Unit := do
 
 /-- R's registered opening as the verifier computes it: its opening-only shape, `v` (the coefficient slots; no comb), each
 Ligerito level's query positions and eq(α), and the final check's κ. -/
-structure Opening where
+structure RegisteredOpening where
   sh : Shape
   v : Array F128
   lg : RecAlgebra.LgPts
@@ -456,7 +456,7 @@ structure Opening where
 `(r_k, ζ_p, ρ_t)` from its sparse coins, zero-padded to R's `m`, its skip weights eq(point[:6], ·) and `x` the rest; a
 claim's value is a row of `rec-claim`, w's, so it is none of v's. Refused unless some part of that S holds each running
 sum (`RecOpening.accHeld`). -/
-def opening (c3 : C3) (unit : String) : V Opening := do
+def opening (c3 : C3) (unit : String) : V RegisteredOpening := do
   let some r := c3.stacked | throw s!"rec-coins: {unit}: the verifier's inner shape names no R (the inner circuit's META's stacked)"
   let some sh := RecOpening.shape? r.m r.claims
     | throw s!"rec-coins: {unit}: R's shape (m {r.m}, claims {r.claims}) has no fast100 schedule"
@@ -476,7 +476,7 @@ def opening (c3 : C3) (unit : String) : V Opening := do
     let tIn := M.tAtom.getD rs.T
     let (lgr, lg) ← RecAlgebra.ligerito sh.sched M tIn rs.sws
     return (rsr ++ lgr ++ #[RecAlgebra.instValLin.add tIn rs.T], lg)
-  let built : Except String Opening := do
+  let built : Except String RegisteredOpening := do
     let (lins, lg) ← (run.run' 0).run (RecAlgebra.CoinSource.ofRounds rounds)
     let kappa := sh.sched.levels.map fun lv => Array.replicate 2 (Array.replicate (2 ^ lv.lanes) (0 : F128))
     let (res, st) ← (RecOpening.buildAll sh lins.toList 0).run { kappa }

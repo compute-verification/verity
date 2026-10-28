@@ -27,7 +27,7 @@ section Rounds
 open Flock Flock.RecAlgebra
 
 /-- **`opening_ok` at `stacked/rep0`'s coins**: the run `RecCoins.opening` accepted is from round 0 of them. -/
-theorem opening_rounds {c3 : RecCoins.C3} {unit : String} {o : RecCoins.Opening}
+theorem opening_rounds {c3 : RecCoins.C3} {unit : String} {o : RecCoins.RegisteredOpening}
     (h : RecCoins.opening c3 unit = .ok o) :
     ∃ (c : Array (Array F128)) (a b : AClaim Lin) (lins : Array Lin) (k₁ : Nat) (res : Array Res) (bs : BSt),
       c3.coins unit s!"{RecVStar.STACKED}/rep0" = .ok c ∧

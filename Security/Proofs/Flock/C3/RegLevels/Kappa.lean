@@ -20,7 +20,7 @@ namespace FlockC3.RegLevels
 
 /-- **What `RecCoins.opening` ran**: ring switching on the symbolic messages and the claims `coinClaim` builds, from
 round 0 of `stacked/rep0`'s coins, then Ligerito from the absorbed `T` on its output, whose points are `o.lg`. -/
-theorem opening_lg {c3 : Flock.RecCoins.C3} {unit : String} {o : Flock.RecCoins.Opening}
+theorem opening_lg {c3 : Flock.RecCoins.C3} {unit : String} {o : Flock.RecCoins.RegisteredOpening}
     (h : Flock.RecCoins.opening c3 unit = .ok o) :
     ∃ (c : Array (Array Flock.F128)) (as bs : Flock.RecAlgebra.AClaim Flock.RecAlgebra.Lin)
       (rsr : Array Flock.RecAlgebra.Lin) (rs : Flock.RecAlgebra.RsPts Flock.RecAlgebra.Lin) (k₂ k₁ : ℕ)
@@ -66,7 +66,7 @@ theorem opening_lg {c3 : Flock.RecCoins.C3} {unit : String} {o : Flock.RecCoins.
 w holds, at claims with the points `coinClaim` builds (any values), from round 0 of `stacked/rep0`'s coins (`hcust`),
 switches the same claims and ends at the same round (`ringSwitch_spec`), and Ligerito from the absorbed `T` on them is
 `RecCoins.opening`'s under `Lin.eval` (`ligerito_sim`), whose points are the symbolic run's. -/
-theorem lg_eq_of_opening {c3 : Flock.RecCoins.C3} {unit : String} {o : Flock.RecCoins.Opening}
+theorem lg_eq_of_opening {c3 : Flock.RecCoins.C3} {unit : String} {o : Flock.RecCoins.RegisteredOpening}
     (hop : Flock.RecCoins.opening c3 unit = .ok o) {w : Array Flock.F128} {cons : ℕ → ℕ → Flock.F128}
     {a : Array (Flock.RecAlgebra.AClaim Flock.F128)} {c : Array (Array Flock.F128)} {rsr lgr : Array Flock.F128}
     {rs : Flock.RecAlgebra.RsPts Flock.F128} {k₂ k₁ : ℕ} {lg : Flock.RecAlgebra.LgPts}
@@ -112,7 +112,7 @@ theorem lg_eq_of_opening {c3 : Flock.RecCoins.C3} {unit : String} {o : Flock.Rec
 /-- **The verifier's α is the run's** (`SessionAt`'s coef tie, its algebra), at any `ops` whose α is the points' of a
 run from round 0 of `stacked/rep0`'s coins (`hcust`) on the messages w holds at `ops`' consistency sums, at claims with
 the verifier's points (`lg_eq_of_opening`). -/
-theorem alpha_of_opening {c3 : Flock.RecCoins.C3} {unit : String} {o : Flock.RecCoins.Opening}
+theorem alpha_of_opening {c3 : Flock.RecCoins.C3} {unit : String} {o : Flock.RecCoins.RegisteredOpening}
     (hop : Flock.RecCoins.opening c3 unit = .ok o) {sh : Flock.Shape} (hosh : o.sh = sh) {w : Array Flock.F128}
     {ops : FlockVBridge.AccChain.Openings} {a : Array (Flock.RecAlgebra.AClaim Flock.F128)}
     {c : Array (Array Flock.F128)} {rsr lgr : Array Flock.F128} {rs : Flock.RecAlgebra.RsPts Flock.F128} {k₂ k₁ : ℕ}
@@ -130,7 +130,7 @@ theorem alpha_of_opening {c3 : Flock.RecCoins.C3} {unit : String} {o : Flock.Rec
 
 /-- **`SessionAt`'s coef tie** at such `ops`: an opening's `coef` as the verifier registers it, at its own α
 (`checkStackedLevel`), is the one at `ops`' α. -/
-theorem coef_of_opening {c3 : Flock.RecCoins.C3} {unit : String} {o : Flock.RecCoins.Opening}
+theorem coef_of_opening {c3 : Flock.RecCoins.C3} {unit : String} {o : Flock.RecCoins.RegisteredOpening}
     (hop : Flock.RecCoins.opening c3 unit = .ok o) {sh : Flock.Shape} (hosh : o.sh = sh) {w : Array Flock.F128}
     {ops : FlockVBridge.AccChain.Openings} {a : Array (Flock.RecAlgebra.AClaim Flock.F128)}
     {c : Array (Array Flock.F128)} {rsr lgr : Array Flock.F128} {rs : Flock.RecAlgebra.RsPts Flock.F128} {k₂ k₁ : ℕ}

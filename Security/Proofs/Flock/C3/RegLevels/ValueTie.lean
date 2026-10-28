@@ -529,7 +529,7 @@ theorem value_tie {salt : String → ℕ → ByteArray} {port value : String} {r
 (without segments), the read is of opening `u`, and the registrant's bit `b < H` is bit `b` of the verifier's
 position (`dirsRow pos H`'s), at every valid `H` (`H ≤ 32`), or `valueColl` collides. -/
 theorem dirs_tie {c3 : RecCoins.C3} {LANES H : ℕ} (h : RecCoins.checkStackedLevel c3 c zo.pub zo.own LANES H = .ok ())
-    {o : RecCoins.Opening} (hop : RecCoins.opening c3 c.unit.name = .ok o) {ℓ : ℕ} (hℓ : ℓ < o.sh.sched.levels.size)
+    {o : RecCoins.RegisteredOpening} (hop : RecCoins.opening c3 c.unit.name = .ok o) {ℓ : ℕ} (hℓ : ℓ < o.sh.sched.levels.size)
     (hL : 2 ^ (o.sh.sched.levels[ℓ]!).lanes = LANES)
     (hH : (o.sh.sched.levels[ℓ]!).d - (o.sh.sched.levels[ℓ]!).cap = H) (h32 : H ≤ 32) {prog : String}
     (hprog : c.metaJ.getObjValAs? String "program_sha512" = .ok prog) {u : Fin nv} {q : Fin c.ports.size}

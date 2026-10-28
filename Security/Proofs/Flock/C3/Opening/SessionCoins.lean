@@ -108,7 +108,7 @@ theorem coinClaim_ok {c3 : RecCoins.C3} {unit : String} {sh : Shape} {k : Nat} {
 `RecOpening.run` on the symbolic messages and those claims at some coins (`run_of_inline`), the passes from `kappa`
 zero over its residuals, the S they build the shape's (`structureOf`, "the structure moved"), and the opening's `v`
 and `kappa` the passes'. -/
-theorem opening_ok {c3 : RecCoins.C3} {unit : String} {o : RecCoins.Opening} (h : RecCoins.opening c3 unit = .ok o) :
+theorem opening_ok {c3 : RecCoins.C3} {unit : String} {o : RecCoins.RegisteredOpening} (h : RecCoins.opening c3 unit = .ok o) :
     ∃ (r : RecVStar.StackedShape) (a b : AClaim Lin) (src : RecAlgebra.CoinSource) (lins : Array Lin) (k₁ : Nat)
       (res : Array Res) (bs : BSt),
       c3.stacked = some r ∧ RecOpening.shape? r.m 2 = some o.sh ∧

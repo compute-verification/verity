@@ -188,7 +188,7 @@ holding `dirsRow` of each opening's position at the filter's level `l`. -/
 theorem dirsLevel_of_check {c3 : Flock.RecCoins.C3} {c : Flock.Circuit} {pub : Flock.Public}
     {own : Array Flock.Registered.Port} {LANES H : ℕ}
     (h : Flock.RecCoins.checkStackedLevel c3 c pub own LANES H = .ok ()) :
-    ∃ (o : Flock.RecCoins.Opening) (l : ℕ) (what : ℕ → String), Flock.RecCoins.opening c3 c.unit.name = .ok o ∧
+    ∃ (o : Flock.RecCoins.RegisteredOpening) (l : ℕ) (what : ℕ → String), Flock.RecCoins.opening c3 c.unit.name = .ok o ∧
       (∀ ℓ < o.sh.sched.levels.size, 2 ^ (o.sh.sched.levels[ℓ]!).lanes = LANES →
         (o.sh.sched.levels[ℓ]!).d - (o.sh.sched.levels[ℓ]!).cap = H → ℓ = l) ∧
       Flock.RecCoins.checkValue c pub own "dirs" Flock.RecCoins.DIRS_VALUE
@@ -217,7 +217,7 @@ run's at `lg_eq_of_opening`), at every valid `H` (`H ≤ 32`, `RecOpen.valid`): 
 16 a word in its first two words. -/
 theorem dirs_of_check {c3 : Flock.RecCoins.C3} {c : Flock.Circuit} {pub : Flock.Public}
     {own : Array Flock.Registered.Port} {LANES H : ℕ}
-    (h : Flock.RecCoins.checkStackedLevel c3 c pub own LANES H = .ok ()) {o : Flock.RecCoins.Opening}
+    (h : Flock.RecCoins.checkStackedLevel c3 c pub own LANES H = .ok ()) {o : Flock.RecCoins.RegisteredOpening}
     (hop : Flock.RecCoins.opening c3 c.unit.name = .ok o) {ℓ : ℕ} (hℓ : ℓ < o.sh.sched.levels.size)
     (hL : 2 ^ (o.sh.sched.levels[ℓ]!).lanes = LANES)
     (hH : (o.sh.sched.levels[ℓ]!).d - (o.sh.sched.levels[ℓ]!).cap = H) (h32 : H ≤ 32) (P : ℕ → ℕ → Bool → Prop)
