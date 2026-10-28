@@ -110,8 +110,7 @@
    "Flock.MerkleScheme.sha512",
    "Flock.Pinned.rowKey",
    "Flock.Pinned.tableSha",
-   "Flock.RecOpen.ivW",
-   "Flock.Tags.leafSchemeHm96Os"
+   "Flock.RecOpen.ivW"
   ],
   "hash": "Flock.Sha512",
   "allow": [
