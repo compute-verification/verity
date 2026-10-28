@@ -16,7 +16,7 @@ own Commit.
   descriptor, declaring it and its digest grow with the calls, not the units. The server logs both counts and both
   times.
 * **Coins.** With ``--challenger-gate CMD`` and ``--challenger-peer NAME`` (`sessions_of`), the auditor host's
-  challenger's, one session a window through infra's gate (`GateSessions`, `commit_coins.GateHost`): window 0's session is
+  challenger's, one session a window through infra's gate (`GateSessions`, `commit_coins.Gate`): window 0's session is
   reserved (scheme `pouw_h1_challenger.SCHEME`, `pouw_h1_challenger.families` (S)) at its open and window k+1's while
   window k serves, off the engine loop (`GateSessions.take`); round 0 opens it on the window's open root
   (`pouw_h1_window.Window`), reached on this machine's 127.0.0.1 at the port the gate's open answers once the auditor

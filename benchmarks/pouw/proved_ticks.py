@@ -48,8 +48,8 @@ What it rests on:
   peer GPUs together, priced on the GPUs' sheet (A1–A7 price none of its other devices: its CPUs, its DPU). Read as
   the G GPUs' own time, it needs LOC's host deduction (decision 37) and every billable GPU on the node credited each
   window (the machine model's README, "The headline is per node"; RT-SCOPE, #2681);
-- per zone only under attribution's grade: PoUW credits the prover system (decision 111), so the ledger puts this on
-  the zone only as far as `ZoneAccount.local_at_least` places it there, graded by its anchor (`Credit.grade`), and
+- per block only under attribution's grade: PoUW credits the prover system (decision 111), so the ledger puts this on
+  the block only as far as `BlockAccount.local_at_least` places it there, graded by its anchor (`Credit.grade`), and
   the rest on the datacenter.
 """
 from __future__ import annotations
