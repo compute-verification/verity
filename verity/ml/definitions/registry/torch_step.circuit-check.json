@@ -1,0 +1,28 @@
+{
+ "definitions": {
+  "LinearTorchDw_v1{M=64,K=1,N=1,ROUTE={745c0f349a3e}}": {
+   "and": 29451,
+   "type": "0dcbf87c3b06e1ddecedf9b187454a241078f7b819beb18b9e329fa1b61b1624dc8e8a008d29065197e5ed583de8b8b8399a838fcccf728333c1a6839617296f"
+  },
+  "LinearTorchDw_v1{M=64,K=1,N=1,ROUTE={a045c83750e4}}": {
+   "and": 27372,
+   "type": "326fbced6f124dd3bee8a6adbd143447ff54007be668d0f75dc3c38cba50628791be21a5f2ccc713c8e9c94e85577f2877e77a2d50610bfbf62fb3ad56b3824d"
+  },
+  "LinearTorchDx_v1{M=1,K=1,N=64,ROUTE={3278cabce5bf}}": {
+   "and": 29136,
+   "type": "89fdee3eaa30eab33910559cb6751acccc0a2e74afb59ed45e7946ad06e3be5b64e5167ba0c21068b7a170eea196109618d3d9640f6538dbaef5618bd3b4afee"
+  },
+  "LinearTorchDx_v1{M=1,K=1,N=64,ROUTE={a045c83750e4}}": {
+   "and": 27372,
+   "type": "326fbced6f124dd3bee8a6adbd143447ff54007be668d0f75dc3c38cba50628791be21a5f2ccc713c8e9c94e85577f2877e77a2d50610bfbf62fb3ad56b3824d"
+  },
+  "LinearTorch_v1{M=1,K=64,N=1,ROUTE={a045c83750e4}}": {
+   "and": 27372,
+   "type": "326fbced6f124dd3bee8a6adbd143447ff54007be668d0f75dc3c38cba50628791be21a5f2ccc713c8e9c94e85577f2877e77a2d50610bfbf62fb3ad56b3824d"
+  },
+  "TrainStepConstants_v1": {
+   "and": 0,
+   "type": "630f9be8cb85896c060acab067e896126f653ce5ad077170019d45cbee797cf32df5e6fb5d233ecc6a55f515fa7c8a3d7837dc8cbbc05d8bba25eb6967bb7dd3"
+  }
+ }
+}
