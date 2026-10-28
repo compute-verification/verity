@@ -1,4 +1,4 @@
-# Scenarios over the algorithm families (rho/scenario.py): one target each, the families an adversary could train it
+# Scenarios over the algorithm families (overhead/scenario.py): one target each, the families an adversary could train it
 # with. Same keys as scenarios.toml.
 
 [scenario.onsite-h200-kimi-rl]

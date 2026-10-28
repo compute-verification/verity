@@ -122,5 +122,5 @@ def in_place(registry: Registry, name: str) -> Registry:
     c = circuit(registry, name)
     u = units(registry, c)
     g = Param("units.gates_per_flop", u.gates_per_flop, "gate/FLOP",
-              source=f"circuit.{name}: its gates over its run's FLOPs (rho/circuits.py units)", status="derived")
+              source=f"circuit.{name}: its gates over its run's FLOPs (overhead/circuits.py units)", status="derived")
     return registry.override({"structure.default": c.structure, "units.gates_per_flop": g, "units.basis": u.basis})

@@ -1,4 +1,4 @@
-# Model architectures and training runs (rho/instances.py). A model's matrices are, by group, rows of
+# Model architectures and training runs (overhead/instances.py). A model's matrices are, by group, rows of
 # [name, d_in, d_out, copies in the model, copies a token uses]; legs and fanout are derived from them
 # (instances.derived_legs, instances.derived_fanout) wherever their status is "derived".
 

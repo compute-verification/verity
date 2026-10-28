@@ -1,4 +1,4 @@
-# Scenarios over the datacenter layer's locations and regime variants (rho/scenario.py; keys as data/scenarios.toml).
+# Scenarios over the datacenter layer's locations and regime variants (overhead/scenario.py; keys as data/scenarios.toml).
 
 [scenario.onsite-gb200-kimi]
 fleet = "reference-gb200"

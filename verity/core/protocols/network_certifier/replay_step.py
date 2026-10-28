@@ -4,8 +4,8 @@
         -> (ok, taken, used[, looked], rows, state')
 
 The precommitted compiler (committed Programs = compile(advice) under the advice's hiding root, total, refusing every
-ill-formed advice up to the cap ℓ) need not read the schedule from the advice: ENC-REPLAY replays vLLM's
-scheduler step for step from the certified I/O and a residual of a few bits per certifier window
+ill-formed advice up to the cap ℓ) need not read the schedule from the advice: vLLM's scheduler is
+replayed step for step from the certified I/O and a residual of a few bits per certifier window
 (`benchmarks/network_e2e/encodings/replay.py`). This Definition is one step of that replay, `reference` its
 specification in Python, and the replay's own steps are its difftest (`benchmarks/network_e2e/encodings/replay_vectors.py`).
 
@@ -74,8 +74,8 @@ leaving requests leave it; and the next state.
   request's last known token (h·B ≥ P + out; vLLM keeps one to compute), or more blocks returned than held.
 
 **Not modeled.** The prefix-hash state (which blocks hold which tokens, the free queue's order, eviction):
-ENC-DERIVED's canonical source and hit rules carry it and supply h, the evictable count and the returns, which this
-circuit bounds but doesn't derive: `compile_slice_v3` derives them, in vLLM's order on CacheStep_v2's pool, through
+the derived encoding's canonical source and hit rules carry it and supply h, the evictable count and the returns, which
+this circuit bounds but doesn't derive: `compile_slice_v3` derives them, in vLLM's order on CacheStep_v2's pool, through
 `_build`'s ``derive`` hooks. Also priority scheduling, speculative decoding, LoRA, structured output, encoder inputs
 and KV connectors.
 

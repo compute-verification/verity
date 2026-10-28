@@ -1,4 +1,4 @@
-# Algorithm families (rho/families.py). A family is a kind (families.KINDS) with its parameters; `premises = "<family>"`
+# Algorithm families (overhead/families.py). A family is a kind (families.KINDS) with its parameters; `premises = "<family>"`
 # takes the premise numbers it doesn't give from that family. efficiency.<run kind>: compute to reach that kind of
 # target (instances.RUN_KINDS), in multiples of the reference algorithm's; a kind left out can't be reached.
 

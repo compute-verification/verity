@@ -1,4 +1,4 @@
-"""The auditor host's challenger service (vy-challenger-1): `serve.py` runs only as the `auditor` user, from a pinned
+"""The auditor host's challenger service: `serve.py` runs only as the `auditor` user, from a pinned
 tree, one session a window, each recorded in a signed append-only ledger before its first coin.
 
     vy-challenger-gate reserve --peer NAME --scheme S --families JSON [--epoch E] [--minutes M] [--for LANE]
@@ -24,7 +24,7 @@ tree, one session a window, each recorded in a signed append-only ledger before 
   (`vy-challenger-gate LANE`, from `/etc/vy/challenger-gate-keys`, `vy-challenger-setup`), and only such a key reserves and
   opens a window: the reserve records that name as `by`, its prover. A key forced with no name (the shared lane key, which
   the control pod's publisher holds) reads only: `status`, `ledger`, `pins`, `pubkey`, `fetch`. A lane names a window and gets a
-  session; it never names code. Infra's `vy-admin` runs the same gate (`sudo vy-challenger-gate VERB ...`, `by` vy-admin),
+  session; it never names code. The admin account `vy-admin` runs the same gate (`sudo vy-challenger-gate VERB ...`, `by` vy-admin),
   and it alone may reserve a window for a lane that has no key of its own (`--for LANE`: the reserve records `for` and
   keeps `by` vy-admin, and the window's prover is LANE). Nothing else runs as `research` there, and nothing runs as
   `auditor` but the session unit, `reserve`, `admit` and a rehearsal's unit (the certifier's or the warden's).
@@ -333,7 +333,7 @@ WARDEN_TOKENS = (16, 256)
 #: `WARDEN_RATE` a second drawn from `WARDEN_SEED`, the run lasting `WARDEN_TAIL_S` past the last
 WARDEN_RATE, WARDEN_TAIL_S, WARDEN_SEED = 0.5, 60, 0
 #: a scan rehearsal's (`--scan`) schedule, scan_zk's (`scan_zk.PARAMS`, `scan_zk.py schedule`), the only one
-#: `scan_zk.py prove --warden-run` takes, as `cell_certifier_serve.py`'s flags
+#: `scan_zk.py prove --warden-run` takes, as `warden_serve.py`'s flags
 SCAN_SCHEDULE = ("--cell-bytes", "512", "--slots", "4", "--bucket-ms", "100", "--delay", "27", "--lanes", "4",
                  "--queue", "4", "--window", "32", "--ingress-cells", "47", "--ingress-buckets", "12",
                  "--egress-cells", "65", "--every", "16")
@@ -363,7 +363,7 @@ LOAD_SHAPES = ("h200", "tiny")
 #: a load's streams to the H200's sink, each through a tunnel of its own, and how many by default
 LOAD_STREAMS, LOAD_DEFAULT_STREAMS = (1, 8), 4
 #: the link's rate a load's minutes are sized on (about 95 MB/s, measured over 4 streams from this host to
-#: vy-dc-h200-2 through the tunnel), and the seconds the endpoint has after the load to answer
+#: the H200 through the tunnel), and the seconds the endpoint has after the load to answer
 LOAD_RATE, LOAD_READY_S = 80e6, 900
 #: a store write's minutes: interface 1's H200 stream generated (about 15 s a GiB a core), written and read back
 WEIGHTS_MINUTES = 150
@@ -385,13 +385,17 @@ class Refused(Exception):
     """A request the gate or the session refuses, with why."""
 
 
+#: the auditor host's name, which its records give it
+HOST_NAME: str = json.loads((HERE / "host.json").read_text())["name"]
+
+
 @dataclass(frozen=True)
 class Host:
     """Where the service keeps its state, and the name its records give the host."""
 
     root: Path = Path("/var/lib/vy-challenger")
     peers: Path = Path("/etc/vy/peers")
-    name: str = "vy-challenger-1"
+    name: str = HOST_NAME
     pins: Path = Path("/opt/vy-challenger/pins.jsonl")
 
     @property
@@ -1162,7 +1166,7 @@ def _minutes(arrivals_s: int, height: int) -> int:
 
 
 def warden_windows(requests: int, scan: bool = True) -> int:
-    """The most link-windows a warden rehearsal of `requests` requests runs (`cell_certifier_serve.rehearse` counts its
+    """The most link-windows a warden rehearsal of `requests` requests runs (`warden_serve.rehearse` counts its
     traffic's last arrival and tail): `warden_minutes`'s arrivals and three tails, in link-windows of the scan's
     schedule with `scan` and of `WARDEN_WINDOW_MS` otherwise."""
     window_ms = SCAN["--window"] * SCAN["--bucket-ms"] if scan else WARDEN_WINDOW_MS
@@ -1205,7 +1209,7 @@ def warden_group_minutes(groups: int, tokens: int, height: int = REHEARSAL_HEIGH
 def parse_warden(argv: list[str], host: Host, *, load: bool = False) -> dict:
     """A warden rehearsal's request: the peer, the endpoint's port on its loopback, the minutes it may run (at least
     `warden_minutes` of its requests and height), how many requests its traffic sends, when given the most tokens a
-    request asks for (`cell_certifier_serve.py`'s 256 otherwise) and `--scan` (the scan's schedule and traffic), the sampling
+    request asks for (`warden_serve.py`'s 256 otherwise) and `--scan` (the scan's schedule and traffic), the sampling
     (`sampling`) and the key's height. `--prompts` (with `--scan`) marks the request's prompts as the gate's stdin,
     and `--window-per-group` (with `--prompts`) sends them a group a link-window's span; `warden_prompts` reads them
     and checks what depends on them. With `load` (`load-relay`) it is the serving session with its load first

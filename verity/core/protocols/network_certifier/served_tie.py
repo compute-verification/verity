@@ -12,7 +12,7 @@ Commit holds, so a prover can't register cheaper rows at serve time than the bat
 ids, then its positions, each T little-endian elements (IB and PB bytes) with zeros past the step's N tokens, T the engine's
 token budget (``max_num_batched_tokens``). So the positions are the stream's bytes [T·IB, T·(IB + PB)), K chunks of the
 step's rows-sha512 tree at fixed leaf indices (`geometry`), and the binding map's entries for the ids and the positions
-(``step.input/ids`` and ``step.input/positions``) name those ranges. IO-TIE's ingress tie, ``IoTieRequest``, reads the ids
+(``step.input/ids`` and ``step.input/positions``) name those ranges. The ingress tie, ``IoTieRequest``, reads the ids
 from the same chunks through the same layout (`positions` and `ids`, the shared read).
 
 **The rows** (each zero-padded to whole 16-bit words):
@@ -34,7 +34,7 @@ slot's ids, at its tokens, to its certified request's prompt ids at those positi
 input to the request's last sample.
 
 **The routing** (`ServedTieStep`). ``ServedTieSlots`` makes each slot's record (v, start): v = lo + 1 for a live slot (n > 0
-and lo below N and T), else 0. ``IoTieRoute``, IO-TIE's Beneš network over M = 2^D ≥ max(T, R) positions, takes the R
+and lo below N and T), else 0. ``IoTieRoute``, a Beneš network over M = 2^D ≥ max(T, R) positions, takes the R
 records and M − R zero ones by the prover's switches; any setting is a permutation. ``ServedTieScan`` holds each position t
 to v ∈ {0, t + 1} (v = 0 from T on), so every live record lands at its lo and nothing else marks a run's start, and then
 reads the tokens in order: token t's position is the start routed to t where a run starts there (always at t = 0), else

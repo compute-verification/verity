@@ -1,4 +1,4 @@
-"""`verity bench rho`: the overhead for every scenario, how it moves, and where it falls below a target.
+"""`verity bench overhead`: the overhead for every scenario, how it moves, and where it falls below a target.
 
     uv run python benchmarks/overhead/run.py [--scenario NAME ...] [--target 10 --target 100] [--set KEY=VALUE ...]
                                         [--out DIR] [--figures DIR]
@@ -8,7 +8,7 @@ stand and whether it is vacuous against the comparator `μ / MFU`; the inference
 modeled); and its best known attack in a table of its own, a construction beside the bound rather than an end of it.
 
 Prints Markdown; with `--out` (or `$OUT`, as under `research run`) also writes `rho.md`, `rho.json` and the figures (in
-`figures/`) there. `--figures DIR` writes the figures (`rho/figures.py`, matplotlib) to DIR. `--set` overrides any
+`figures/`) there. `--figures DIR` writes the figures (`overhead/figures.py`, matplotlib) to DIR. `--set` overrides any
 registry key for the whole run.
 """
 

@@ -1,4 +1,4 @@
-# Training steps measured as Boolean circuits (rho/circuits.py): what the circuits census counts on a step's circuit and
+# Training steps measured as Boolean circuits (overhead/circuits.py): what the circuits census counts on a step's circuit and
 # what circuit_properties' measure finds of its counted products, beside the run it is one step of (data/models.toml)
 # and the structure (data/exclusion.toml) its s_x is. The runs that measured it are that structure's evidence.
 

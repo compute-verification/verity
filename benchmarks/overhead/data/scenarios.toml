@@ -1,4 +1,4 @@
-# Scenarios: one choice from every layer (rho/scenario.py). bounds/attacks default to all of them.
+# Scenarios: one choice from every layer (overhead/scenario.py). bounds/attacks default to all of them.
 
 [scenario.onsite-h200-kimi]
 fleet = "reference-h200"

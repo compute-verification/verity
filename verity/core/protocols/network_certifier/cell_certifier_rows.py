@@ -64,7 +64,7 @@ root, leaves, words, word bits, domain and row schema, and `reads`: unit `reads_
 and the schedule's (ordinals and first rows in admission order, r cells a row, at most `lanes` connections a row), and
 refuses a read of a connection it doesn't hold, of a cell past the connection's, or of a cell another read opens. So a
 read opens its own connection's cell and no other: never an empty slot, a foreign connection's cell or a cell twice.
-The unit's cell is at its slot's words of the row (`Wiring.place`). A population of one unit a bucket (IO-TIE's)
+The unit's cell is at its slot's words of the row (`Wiring.place`). A population of one unit a bucket (the I/O tie's)
 reads whole rows instead (`bucket_port`): unit `reads_from + t` opens row t, every slot held or not, and no wiring.
 
 **The units' wiring is the Program's** (`Units`): which cell each unit reads is pinned with the Program, from public
@@ -77,8 +77,8 @@ it states `Units`. `bucket_port` names the head's value too, and needs no `Units
 statement's positions are all it can vary, and Lean's registered reads hold each to its unit's row.
 
 **The wiring is opened to the verifier for now** (the named gap, whose plan is in PROTOCOL.md): it gives away each
-connection's first row and cells. q is the cells' stream field, the warden's ordinal: the k-th connection to reach it,
-from 0, is q = k + 1, as the active certifier's `Requests` streams it and IO-TIE's map puts advice request k
+connection's first row and cells. q is the cells' stream field, the cell certifier's ordinal: the k-th connection to reach it,
+from 0, is q = k + 1, as the active certifier's `Requests` streams it and the I/O tie's map puts advice request k
 (`order[k] + 1`).
 """
 
@@ -100,7 +100,7 @@ from verity.core.protocols.network_certifier.active import HEADER
 from verity.core.protocols.network_certifier.certificate import (DIGEST_BYTES, Certificate, Direction, Issuer, PublicKey, _text,
                                                          _u)
 from verity.core.protocols.network_certifier.grid import Record
-from verity.core.protocols.network_certifier.cell_certifier import CellCertifierParams, CellCertifierParams as WardenParams
+from verity.core.protocols.network_certifier.cell_certifier import CellCertifierParams
 from verity.core.protocols.sampled_proofs.one_stage import produced
 from verity.core.protocols.sampled_proofs.one_stage import registered as G
 
@@ -500,8 +500,8 @@ def port(head: CellsHead, wiring_: Wiring, params: CellCertifierParams, reads: U
     return _port(head, head.value if units is None else units.value(head), rows, reads_from)
 
 
-def bucket_port(head: CellsHead, params: WardenParams, reads_from: int = 0) -> dict[str, Any]:
-    """The verifier's own `--registered` port of a population of one unit a bucket (IO-TIE's `IoTieBucket`): unit
+def bucket_port(head: CellsHead, params: CellCertifierParams, reads_from: int = 0) -> dict[str, Any]:
+    """The verifier's own `--registered` port of a population of one unit a bucket (`IoTieBucket`): unit
     `reads_from + t` opens row t, its bucket's every slot, held or not. It names no connection, so it reads no
     wiring, and the head's rows alone fix its reads, so there is no units' wiring to name: the port names the head's
     value."""

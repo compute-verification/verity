@@ -22,7 +22,7 @@ queue. Each eviction removes the blocks of the hashes vLLM evicts. Beside each h
 (`dropped_with_descendant`), the fact `cache_step_v2`'s N = NB − 1 rests on.
 
     python3 cache_pool_vectors.py tests/fixtures/async-prefix-cache.jsonl tests/fixtures/async-crush.json.gz \\
-        [--out ../../../verity/core/protocols/certifier/tests/fixtures/cache_step_v2_vectors.json]
+        [--out ../../../verity/core/protocols/network_certifier/tests/fixtures/cache_step_v2_vectors.json]
 """
 from __future__ import annotations
 

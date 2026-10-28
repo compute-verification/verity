@@ -1,5 +1,5 @@
-"""`CacheStep_v1` (`verity.core.protocols.network_certifier.cache_step`) against ENC-DERIVED's prefix rules (`derived.Prefixes`)
-over a trace's rows, and its difftest vectors.
+"""`CacheStep_v1` (`verity.core.protocols.network_certifier.cache_step`) against the derived rules' prefix rules
+(`derived.Prefixes`) over a trace's rows, and its difftest vectors.
 
 `drive` runs the cache as the replay's composition calls it. It takes the rows in the advice's order, which must be the
 scheduling order (`row_order` "scheduling"; a corpus trace loads so with `row_order="scheduling"`). An admitting row makes two calls: the lookup, then the units
@@ -11,7 +11,7 @@ the same rows and holds the two to each other:
 - the lookup and the computed units in one call give the same table as the two calls.
 
     python cache_vectors.py --trace tests/fixtures/corpus-smallkv --trace tests/fixtures/sync-crush.json.gz \\
-        --out ../../../verity/core/protocols/certifier/tests/fixtures/cache_step_vectors.json
+        --out ../../../verity/core/protocols/network_certifier/tests/fixtures/cache_step_vectors.json
 """
 from __future__ import annotations
 
@@ -149,7 +149,7 @@ def drive(adv, tokens: Sequence[Sequence[int]], cfg, sent_from: int, st: dict, *
 
 
 def load(corpus: Path) -> dict:
-    """A TRACE-CORPUS trace (Llama 3's stop ids) with its rows in the scheduler's order."""
+    """A trace-corpus trace (Llama 3's stop ids) with its rows in the scheduler's order."""
     return D.load_corpus_trace(corpus, eos_token_id=128009, stop_token_ids=(128001, 128008), row_order="scheduling")
 
 
@@ -204,7 +204,7 @@ def slice_of(tr: dict, N: int, steps: int) -> dict:
 def main(argv: Sequence[str] | None = None) -> None:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--trace", type=Path, action="append", required=True,
-                    help="a TRACE-CORPUS directory or a sched_trace JSON, each a slice")
+                    help="a trace-corpus directory or a sched_trace JSON, each a slice")
     ap.add_argument("--steps", type=int, default=200)
     ap.add_argument("--N", type=int, default=128)
     ap.add_argument("--out", type=Path, required=True)
