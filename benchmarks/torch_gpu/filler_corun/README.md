@@ -15,14 +15,18 @@ and no second CTA would fit on an SM.
 
 | an SM (65,536 registers, 233,472 B shared) | threads | registers | shared memory |
 |---|---|---|---|
-| GEMM CTA: 2 MMA warpgroups + 1 producer warp | 288 | 288 x 160 = 46,080 | 4 stages x 48 KB + 2 KB, +1 KB reserved |
-| hash CTA: sx0000, 7 warps | 224 | 224 x 80 = 17,920 | 1 KB reserved |
+| GEMM CTA: 2 MMA warpgroups, thread 0 the TMA producer | 256 | 256 x 160 = 40,960 | 4 stages x 48 KB + 2 KB, +1 KB reserved |
+| hash CTA: sx0000, 8 warps | 256 | 256 x 80 = 20,480 | 1 KB reserved |
+
+The registers are four sub-partitions of 16,384, and each warp's come from one of them. Eight GEMM warps put two warps
+(10,240 registers) on each, which leaves two hash warps of up to 96 registers on every one. A ninth, producer warp would
+put 15,360 on one sub-partition, and no hash CTA of more than six warps could sit beside it.
 
 **The GEMM.** O = A B^T, with s32 O compared against `torch._int_mm` word for word. It is s8_linear's sm_90a kernel
 (`../s8_linear/s8_wgmma.cu`) with these changes:
 
 - the 128 x 256 tile's s32 sums are stored as they are;
-- the producer is one warp;
+- there is no producer warpgroup: thread 0 issues each TMA between its own wgmmas, one stream of k-blocks across tiles;
 - the kernel is capped at 160 registers a thread with no setmaxnreg;
 - it is persistent over `passes` passes, so a 2 s item has no wave tail.
 
@@ -38,7 +42,7 @@ against hashlib. `hash_chain` is the bar's own form: compressions chained in reg
 `torch._int_mm`, then every digest against hashlib. After that come 2 s items, interleaved over rounds:
 
 - the GEMM alone;
-- the hash alone, in the same 7-warp CTA held to one an SM, plus the 16-warp ruler;
+- the hash alone, in the same 8-warp CTA held to one an SM, plus the 16-warp ruler (two CTAs an SM);
 - the co-run;
 - `torch._int_mm` back to back.
 
@@ -51,10 +55,8 @@ Clocks come from clock64 over `%globaltimer` in each CTA. The other numbers are:
 
 `summary.py` holds the arithmetic, and `tests/` holds it on synthetic stamps.
 
-```bash
-research run --on NODE --project verity --source . --cwd source --env GPU_LEASE_WHO=WHO -- \
-  bash benchmarks/torch_gpu/filler_corun/run.sh [--k 16384] [--rounds 3]
-```
+`run.sh` builds and gates the cubin on an H200 node and runs `corun.py` under one GPU lease, from the tree's root:
+`bash benchmarks/torch_gpu/filler_corun/run.sh [--k 16384] [--rounds 3]`.
 
 | file | what |
 |---|---|

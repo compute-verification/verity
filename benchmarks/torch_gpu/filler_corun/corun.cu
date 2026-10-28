@@ -2,15 +2,21 @@
 //
 // gemm_<CL>: O = A B^T, O [M, N] s32, A [M, K] and B [N, K] row-major int8 (depth contiguous), every sum exact (s32 over K,
 // the operands' range bounding it: u2 bytes in [0, 3] give at most 9 K). s8_linear's sm_90a GEMM (s8_wgmma.cu) with
-// three changes: the epilogue stores the s32 sums themselves (torch._int_mm's words), the producer is one warp rather
-// than a warpgroup, and the kernel is capped at GEMM_REGS registers a thread with no setmaxnreg, so that one GEMM CTA an
-// SM leaves registers for a hash CTA beside it. ptxas sizes each wgmma by the launch's registers a thread, so the cap
-// must cover m64n256k32's (154). A CTA is a 128 x 256 tile: two consumer warpgroups (warps 0..7), each a 64 x 256 wgmma
-// tile (m64n256k32 .s32.s8.s8, 128 accumulators a thread), and the producer (warp 8), whose lane 0 issues every TMA into
-// STAGES stages of 128 bytes of depth with SWIZZLE_128B, each stage's arrival counted on an mbarrier (full) and its
-// release on another (empty: lane 0 of each consumer warp). Persistent: CTA c takes tiles c, c + gridDim.x, ... of
-// `passes` passes over the tiles (raster: groups of `group` tile rows, column by column), so a long item has no wave
-// tail inside it. CL = 2 runs clusters of two CTAs on M-adjacent tiles that share each B box by TMA multicast.
+// three changes: the epilogue stores the s32 sums themselves (torch._int_mm's words), there is no producer warpgroup
+// (thread 0 issues every TMA between its own wgmmas), and the kernel is capped at GEMM_REGS registers a thread with no
+// setmaxnreg, so that one GEMM CTA an SM leaves registers for a hash CTA beside it. ptxas sizes each wgmma by the
+// launch's registers a thread, so the cap must cover m64n256k32's (154). A CTA is a 128 x 256 tile: two warpgroups
+// (warps 0..7), each a 64 x 256 wgmma tile (m64n256k32 .s32.s8.s8, 128 accumulators a thread). The k-blocks of the CTA's
+// tiles are one stream through STAGES stages of 128 bytes of depth with SWIZZLE_128B, each stage's arrival counted on an
+// mbarrier (full) and its release on another (empty: lane 0 of each warp); when thread 0 has released element g it
+// loads element g + STAGES into that stage, across tile boundaries, so the next tile's loads overlap this one's
+// epilogue. Persistent: CTA c takes tiles c, c + gridDim.x, ... of `passes` passes over the tiles (raster: groups of
+// `group` tile rows, column by column), so a long item has no wave tail inside it. CL = 2 runs clusters of two CTAs on
+// M-adjacent tiles that share each B box by TMA multicast.
+//
+// An SM's registers are four sub-partitions of 16,384, and a warp's come from its own sub-partition. Eight GEMM warps
+// at 160 take 10,240 of each, leaving room for two hash warps at up to 96 on every sub-partition; a ninth (producer)
+// warp would fill one sub-partition and leave a hash CTA of more than six warps no place.
 //
 // hash_rows: sx0000 (sha512x.cuh's compress<0, 1>) over 1 KiB messages read from memory: message i is bytes
 // [1024 i, 1024 i + 1024) of `msg` (the GEMM's O), its digest SHA-512 of those bytes (nine compressions), written to
@@ -46,7 +52,7 @@ struct Stamp {
 };
 static_assert(sizeof(Stamp) == 48, "corun.py's STAMP");
 
-constexpr int TM = 128, BN = 256, BK = 128, NWG = 2, NA = BN / 2, STAGES = 4, THREADS = 32 * (4 * NWG + 1);
+constexpr int TM = 128, BN = 256, BK = 128, NWG = 2, NA = BN / 2, STAGES = 4, THREADS = 128 * NWG;
 constexpr u32 A_BYTES = TM * BK, STAGE = (TM + BN) * BK;
 constexpr int SMEM = 1024 + STAGES * STAGE + 16 * STAGES;
 constexpr int LOGMAX = 4096;
@@ -163,6 +169,35 @@ template <int CL> DEV void release(u32 bar) {
 }
 
 // ---------------------------------------------------------------- the GEMM
+struct Stream {
+  int KB, rows_u, tiles_n, units, first_u, step_u, rank, group;
+  long n;  // k-blocks in this CTA's stream
+};
+
+// element e of the CTA's k-block stream into stage e % STAGES, once every warp (both CTAs' with CL = 2) released it
+template <int CL> DEV void produce(const Params& p, const Stream& q, u32 base, u32 bars, long e) {
+  const int s = (int)(e % STAGES);
+  const u32 round = (u32)(e / STAGES), st = base + s * STAGE, full = bars + 8 * s;
+  if constexpr (CL == 1)
+    mbar_wait(bars + 8 * (STAGES + s), (round & 1) ^ 1);
+  else
+    mbar_wait_cluster(bars + 8 * (STAGES + s), (round & 1) ^ 1);
+  const long it = e / q.KB;
+  const int kb = (int)(e - it * q.KB);
+  int tm, tn;
+  raster((int)((q.first_u + it * q.step_u) % q.units), q.rows_u, q.tiles_n, q.group, tm, tn);
+  tm = tm * CL + q.rank;
+  constexpr u32 B_PART = BN / CL * BK;
+  mbar_expect_tx(full, STAGE);
+  tma_load(st, &p.a, full, kb * BK, tm * TM);
+  const u32 bdst = st + A_BYTES + q.rank * B_PART;
+  const int brow = tn * BN + q.rank * (BN / CL);
+  if constexpr (CL == 1)
+    tma_load(bdst, &p.b, full, kb * BK, brow);
+  else
+    tma_load_mc(bdst, &p.b, full, kb * BK, brow, 0x3);
+}
+
 template <int CL> DEV void gemm_body(const Params& p) {
   extern __shared__ __align__(1024) uint8_t smem[];
   const u32 base = (smem_at(smem) + 1023) & ~1023u, bars = base + STAGES * STAGE;
@@ -170,6 +205,8 @@ template <int CL> DEV void gemm_body(const Params& p) {
   const int KB = p.K / BK, tiles_m = p.M / TM, tiles_n = p.N / BN, rows_u = tiles_m / CL, units = rows_u * tiles_n;
   const long total = (long)units * p.passes;
   const int rank = CL == 1 ? 0 : (int)cta_rank(), first_u = blockIdx.x / CL, step_u = gridDim.x / CL;
+  const Stream q{KB, rows_u, tiles_n, units, first_u, step_u, rank, p.group,
+                 first_u < total ? (long)KB * ((total - first_u + step_u - 1) / step_u) : 0};
   u64 t0 = 0, c0 = 0;
   if (tid == 0) {
     for (int s = 0; s < STAGES; s++) {
@@ -186,54 +223,31 @@ template <int CL> DEV void gemm_body(const Params& p) {
   else
     cluster_sync();
 
-  if (warp == 4 * NWG) {
-    if (lane == 0) {
-      tma_prefetch(&p.a);
-      tma_prefetch(&p.b);
-      constexpr u32 B_PART = BN / CL * BK;
-      int s = 0;
-      u32 ph = 0;
-      for (long t = first_u; t < total; t += step_u) {
-        int tm, tn;
-        raster((int)(t % units), rows_u, tiles_n, p.group, tm, tn);
-        tm = tm * CL + rank;
-        for (int kb = 0; kb < KB; kb++) {
-          const u32 st = base + s * STAGE, full = bars + 8 * s;
-          if constexpr (CL == 1)
-            mbar_wait(bars + 8 * (STAGES + s), ph ^ 1);
-          else
-            mbar_wait_cluster(bars + 8 * (STAGES + s), ph ^ 1);
-          mbar_expect_tx(full, STAGE);
-          tma_load(st, &p.a, full, kb * BK, tm * TM);
-          const u32 bdst = st + A_BYTES + rank * B_PART;
-          const int brow = tn * BN + rank * (BN / CL);
-          if constexpr (CL == 1)
-            tma_load(bdst, &p.b, full, kb * BK, brow);
-          else
-            tma_load_mc(bdst, &p.b, full, kb * BK, brow, 0x3);
-          if (++s == STAGES) { s = 0; ph ^= 1; }
-        }
-      }
-      // the peer's consumers arrive on this CTA's barriers: it stays until both have released every stage it loaded
-      if constexpr (CL == 2)
-        for (int i = 0; i < STAGES; i++) {
-          mbar_wait_cluster(bars + 8 * (STAGES + s), ph ^ 1);
-          if (++s == STAGES) { s = 0; ph ^= 1; }
-        }
-    }
-    // the warp meets the end's aligned barriers converged
-    __syncwarp();
-  } else {
+  if (tid == 0) {
+    tma_prefetch(&p.a);
+    tma_prefetch(&p.b);
+    for (long e = 0; e < STAGES && e < q.n; e++) produce<CL>(p, q, base, bars, e);
+  }
+  __syncwarp();
+  {
     const int x = tid % 128;
-    int s = 0, n = 0, li = 0;
-    u32 ph = 0;
+    int n = 0, li = 0;
+    long g = 0;  // the stream's next element
     int32_t d[NA];
+    // release element g - 1 (its wgmma has retired) and load element g - 1 + STAGES into its stage
+    auto retire = [&]() {
+      const int s = (int)((g - 1) % STAGES);
+      if (lane == 0) release<CL>(bars + 8 * (STAGES + s));
+      if (tid == 0 && g - 1 + STAGES < q.n) produce<CL>(p, q, base, bars, g - 1 + STAGES);
+      __syncwarp();
+    };
     for (long t = first_u; t < total; t += step_u) {
       int tm, tn;
       raster((int)(t % units), rows_u, tiles_n, p.group, tm, tn);
       tm = tm * CL + rank;
-      for (int kb = 0; kb < KB; kb++) {
-        mbar_wait(bars + 8 * s, ph);
+      for (int kb = 0; kb < KB; kb++, g++) {
+        const int s = (int)(g % STAGES);
+        mbar_wait(bars + 8 * s, (u32)(g / STAGES) & 1);
         __syncwarp();
         const u32 a0 = base + s * STAGE + wg * 64 * BK, b0 = base + s * STAGE + A_BYTES;
         WG_FENCE;
@@ -243,12 +257,11 @@ template <int CL> DEV void gemm_body(const Params& p) {
         imma(d, desc_sw128(a0 + 96), desc_sw128(b0 + 96), 1);
         WG_COMMIT;
         WG_WAIT(1);
-        if (kb > 0 && lane == 0) release<CL>(bars + 8 * (STAGES + (s == 0 ? STAGES - 1 : s - 1)));
-        if (++s == STAGES) { s = 0; ph ^= 1; }
+        if (kb > 0) retire();
       }
       WG_WAIT(0);
       acc_fence(d);
-      if (lane == 0) release<CL>(bars + 8 * (STAGES + (s == 0 ? STAGES - 1 : s - 1)));
+      retire();
       const int row = tm * TM + wg * 64 + 16 * (x / 32) + (x % 32) / 4, col0 = tn * BN + 2 * (x % 4);
       int2* o0 = reinterpret_cast<int2*>(p.o + (size_t)row * p.N + col0);
       int2* o1 = reinterpret_cast<int2*>(p.o + (size_t)(row + 8) * p.N + col0);
@@ -314,8 +327,8 @@ DEV void block_stamp(Stamp* stamps, u64 t0, u64 c0, u32 n, u64 work) {
   }
 }
 
-// beside the GEMM CTA the hash CTA has 80 registers a thread: its loop state is 32-bit and its start time stays in shared
-// memory, so the chaining value, its copy in the rounds and the schedule fit without a spill
+// beside the GEMM CTA the hash CTA has 80 registers a thread: compress has one call site (the padding chunk is the block
+// loop's ninth turn; a second inlined compress spills), the loop state is 32-bit and the start time stays in shared memory
 extern "C" __global__ void __maxnreg__(HASH_REGS) hash_rows(const HashArgs a) {
   __shared__ u64 start[2];
   if (threadIdx.x == 0) { start[0] = gtimer(); start[1] = clock64(); }
@@ -331,20 +344,22 @@ extern "C" __global__ void __maxnreg__(HASH_REGS) hash_rows(const HashArgs a) {
     u64 st[8], w[16];
     sx::iv(st);
 #pragma unroll 1
-    for (int b = 0; b < 8; b++) {
+    for (int b = 0; b < 9; b++) {
+      if (b < 8) {
 #pragma unroll
-      for (int q = 0; q < 8; q++) {
-        const uint4 v = __ldcg(m + 8 * b + q);
-        w[2 * q] = be64(v.x, v.y);
-        w[2 * q + 1] = be64(v.z, v.w);
+        for (int q = 0; q < 8; q++) {
+          const uint4 v = __ldcg(m + 8 * b + q);
+          w[2 * q] = be64(v.x, v.y);
+          w[2 * q + 1] = be64(v.z, v.w);
+        }
+      } else {
+        w[0] = 0x8000000000000000ull;
+#pragma unroll
+        for (int q = 1; q < 15; q++) w[q] = 0;
+        w[15] = 1024 * 8;
       }
       sx::compress<0, 1>(st, w);
     }
-    w[0] = 0x8000000000000000ull;
-#pragma unroll
-    for (int q = 1; q < 15; q++) w[q] = 0;
-    w[15] = 1024 * 8;
-    sx::compress<0, 1>(st, w);
     u64* o = a.dig + (u64)i * 8;
 #pragma unroll
     for (int q = 0; q < 8; q++) o[q] = st[q];

@@ -4,15 +4,14 @@
 # among them), a spill or local memory, and without IGMMA.64x256x32 in each GEMM kernel; ptxas's report and the SASS
 # opcode counts kept in $OUT; a Python with torch and pynvml (VERITY_BENCH_VENV, the node's /workspace/cp/venv312, else
 # torch 2.13.0+cu129 in scratch). Then one lease of at most LEASE_MIN (default 15) minutes for corun.py with this
-# script's arguments, nvidia-smi sampling the card beside it.
+# script's arguments, nvidia-smi sampling the card beside it. Outputs go to OUT (default $RESEARCH_RUN_DIR/out).
 #
-#   research run --on NODE --project verity --source . --cwd source --env GPU_LEASE_WHO=WHO -- \
-#     bash benchmarks/torch_gpu/filler_corun/run.sh [corun.py's options]
+#   bash benchmarks/torch_gpu/filler_corun/run.sh [corun.py's options]
 #
 # Exit: corun.py's (0 every gate passed and every item counted, 1 one didn't), 3 the build or the venv failed, else
 # the lease's code.
 set -uo pipefail
-D=${RESEARCH_RUN_DIR:?run under research run}; OUT=$D/out; mkdir -p "$OUT"
+OUT=${OUT:-${RESEARCH_RUN_DIR:?set OUT or RESEARCH_RUN_DIR}/out}; mkdir -p "$OUT"
 ROOT=$PWD HERE=benchmarks/torch_gpu/filler_corun
 TMP=/workspace/tmp; [ -w "$TMP" ] || TMP=${TMPDIR:-/tmp}
 S=$(mktemp -d "$TMP/tmp-filler-corun.XXXXXX"); trap 'rm -rf "$S"' EXIT

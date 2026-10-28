@@ -6,7 +6,7 @@ poisoned first. Then timed items of about `--item-s` seconds each, interleaved o
 
 - gemm (gemm_1, and gemm_2 when 66 clusters of two fit): one persistent launch of 132 CTAs, `passes` passes over the
   tiles, calibrated to the item's length;
-- hash (hash_rows, the 7-warp CTA one an SM, held there by dynamic shared memory; hash_chain at 7 and at 16 warps an
+- hash (hash_rows, the 8-warp CTA one an SM, held there by dynamic shared memory; hash_chain at 8 and at 16 warps an
   SM, the bar's own form): until the item's time;
 - corun (each gemm with hash_rows, and with hash_chain): the GEMM launched first, then on a second stream gate_k, which
   waits until all 132 GEMM CTAs have started, then the hash, which stops when the GEMM's last CTA sets `stop`;
@@ -39,7 +39,7 @@ import summary as S  # noqa: E402
 import wgmma as W  # noqa: E402
 
 TM, BN, BK = 128, 256, 128
-GEMM_THREADS, HASH_THREADS, RULER_THREADS = 288, 224, 256
+GEMM_THREADS, HASH_THREADS = 256, 256
 LOGMAX = 4096
 MSG_BYTES = 1024
 NUM_REGS, PREFERRED_CARVEOUT = 4, 9
@@ -417,7 +417,7 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--group", type=int, default=8)
     ap.add_argument("--item-s", type=float, default=2.0)
     ap.add_argument("--rounds", type=int, default=2)
-    ap.add_argument("--seed", type=int, default=20261028)
+    ap.add_argument("--seed", type=int, default=1)
     ap.add_argument("--arms", default="gemm,hash,corun,int_mm")
     a = ap.parse_args(argv)
     a.out.mkdir(parents=True, exist_ok=True)
@@ -458,7 +458,7 @@ def main(argv: list[str] | None = None) -> int:
         if "hash" in arms:
             items += [lambda: b.item_hash(pw, "hash_rows", HASH_THREADS, 1, a.item_s),
                       lambda: b.item_hash(pw, "hash_chain", HASH_THREADS, 1, a.item_s),
-                      lambda: b.item_hash(pw, "hash_chain", RULER_THREADS, 2, a.item_s)]
+                      lambda: b.item_hash(pw, "hash_chain", HASH_THREADS, 2, a.item_s)]
         if "corun" in arms:
             items += [lambda cl=cl, k=k: b.item_corun(pw, cl, passes[cl], k) for cl in cls for k in ("hash_rows", "hash_chain")]
         if "int_mm" in arms:
