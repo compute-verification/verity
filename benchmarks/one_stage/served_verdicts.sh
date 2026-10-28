@@ -33,7 +33,7 @@
 #     then gates here instead); then the window audited from its records alone
 #     (`prove_path/run.sh` with PP_RECORDS=1, `records_audit.py`): C-Flock `--zk` on the drawn proof blocks behind the Lean
 #     firewall, and the Lean verifier's verdict. Those proof blocks are the sealed window's step units (PP_PARTITION, default
-#     layer 0's SiluMul_v2 at step 1), not the window circuit's.
+#     layer 0's SiluMul_v2 at step 1, or at step 0 with MAX_TOKENS 1, whose window has no step 1), not the window circuit's.
 #  4. PoUW (H1 credit), the bandwidth audit, PoUS and the network certifier: `served_verdicts.py pieces` runs each one's piece
 #     where POUW_CMD, BANDWIDTH_CMD, POUS_CMD or CERTIFIER_CMD names it, one at a time, each within <COMPONENT>_TIMEOUT
 #     (else PIECE_TIMEOUT, default 60m), else names it MISSING with the command it lacks and its owner. No verdict is made
@@ -439,6 +439,7 @@ wc_ok=0
 circuits && wc_ok=1
 wait "$BUILD"; rc=$?
 [ "$rc" = 0 ] || { tail -30 "$OUT/build.log"; stop build "$rc"; }
+[ "$MAX_TOKENS" = 1 ] && export PP_PARTITION=${PP_PARTITION:-benchmarks/prove_path/llama32_1b_silu_mul_v2_i8192_l0_step0.json}
 env -u PYTHONPATH PP_SERVE_RUN="$D" PP_WINDOW="$K" PP_SERVE_ROWS="$D/windows/w$K" PP_RECORDS=1 PP_ONLY="${PP_ONLY:-honest}" \
   PP_VLLM_PYTHON="$PY" PP_FLOCK_WORK="$FW" OUT="$OUT/sampled-proofs" bash benchmarks/prove_path/run.sh > "$OUT/sampled-proofs.log" 2>&1
 rc=$?
