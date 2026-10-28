@@ -246,7 +246,7 @@ from verity.core.protocols.sampled_proofs.costfit import fit
   commitments, `certify` recomputes a plan's `Certificate`, `sensitivity` and `needs_benchmark` name what moves it,
   and `work_law` registers it as `work:1`.
 - `candidates`: `cuts` derives the `Candidate`s from a Definition DAG of `Shape`s by a DP, each proof block's outputs
-  in a public size class (`one_stage.partition.unit_class`); `pressure` gives the developer hints.
+  in a public size class (`verity.ml.circuits.partition_v2.unit_class`); `pressure` gives the developer hints.
 - `costfit`: C-Flock's cost model fitted from measurements, as a cost-model/v1 record.
 
 ## Not yet in Lean
