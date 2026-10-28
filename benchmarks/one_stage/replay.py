@@ -1,9 +1,9 @@
-"""Replay every recorded one-stage run through sampled proofs' Lean protocol and today's Python, against the verdict the
+"""Replay every recorded one-stage run through sampled proofs' Lean protocol and the current Python, against the verdict the
 run recorded.
 
     python benchmarks/one_stage/replay.py --index INDEX.json --runs DIR [--fetch] --lean EXE --out DIR [--only RUN ...]
 
-* **Index.** `one-stage-run/v0` rows (`research data select` of every run that holds one-stage registration or audit
+* **Index.** `one-stage-run/v0` rows (the store's selection of every run that holds one-stage registration or audit
   records): each run's art, the registration formats it holds and the Python verdicts it recorded.
 * **Case.** For each recorded audit, the case `sampled-proofs-one-stage serve` reads: the verifier's parameters as
   `OneStage.paramsOfJson` reads them (its own program descriptor, query, law, scheme, ports, leaf layer, log, partition,
@@ -16,20 +16,20 @@ run recorded.
   (`audit.session_registered(verdicts, registration)`), on both sides.
 * **The public file.** A0's check of the verifier's own public file against the record (`matches_public`: the scheme,
   the roots, their domains and the instance count in the header of `stage/pub-<n>.bin`), the honest one and each
-  recorded refusal, by the verifier of record's Lean (`one_stage.verifier.lean`) and today's Python.
+  recorded refusal, by the verifier of record's Lean (`one_stage.verifier.lean`) and the current Python.
 * **Negatives.** Each recorded refusal that is one of the protocol's checks (R1-R7, the draw's, the record's: proved,
   receipt, served, roots, registered; the verdicts'; the public file's) becomes the base case with the one change the
   run made; a refusal by a check the protocol does not make (`flock-verify`'s U1-U3 and roots, M0's selftests and
   bindings, a tampered set before the verifier of record) is listed as outside, with the reason, and where the protocol
   has a check of the same kind its analog is replayed and counted apart.
-* **Verdicts.** Lean (`serve`), today's Python (`registration.check`, `draw.check_draw`, `audit.audit_record`, written
+* **Verdicts.** Lean (`serve`), the current Python (`registration.check`, `draw.check_draw`, `audit.audit_record`, written
   as `OneStage.check` writes its outcome) and the recorded verdict, compared by verdict, stage (registration, draw,
   checks, verdict; public) and codes.
 * **The whole record.** Where the registration passes and the draw is an object, the audit record itself by the
   verifier of record (`one_stage.verifier.audit_record`: the Lean's `record` beside Python's `audit_record`, equal under
   canonical JSON), on the case's evidence with its floats; whether they agree, and the fields where they don't.
 * **No recorded verdict.** A run that recorded no verdict (a serving bundle no verifier audited in its own run, an A2
-  or A4 run that stopped before its audit record) compares Lean with today's Python on the stages it holds: the whole
+  or A4 run that stopped before its audit record) compares Lean with the current Python on the stages it holds: the whole
   audit where it kept the session, else the registration alone (its `stages`; each outcome read up to them, one that
   got past them a pass). Its own line in the counts (`no_recorded_verdict`); a run that holds nothing either side reads
   is listed with why.
@@ -70,7 +70,7 @@ ROW = "hm96-sha512/row/v1"
 STAND_IN_BINDINGS = {"verity/flock-circuit/binding/v2": identity_digest_sha512,
                      "verity/flock-ir-frame/binding/v1": lambda tag, doc: bytes.fromhex(identity_digest(tag, doc))}
 SERVED_BINDINGS = {"sha512": identity_digest_sha512, "v1": lambda tag, doc: bytes.fromhex(identity_digest(tag, doc))}
-#: `registration.WINDOW_DOMAIN`, today's and before it
+#: `registration.WINDOW_DOMAIN`, the current one and the one before it
 SERVED_TAGS = (R.WINDOW_DOMAIN, "verity/one-stage/served-domain/v0")
 STAGES = ("registration", "draw", "checks", "verdict")
 REGISTRATION = ("registration",)
@@ -124,7 +124,7 @@ def decode(desc: dict):
 
 
 def decode_opaque(desc: dict) -> tuple[Any, list[str]]:
-    """`decode`, each primitive the descriptor names that today's registry lacks standing in by the descriptor's own
+    """`decode`, each primitive the descriptor names that the current registry lacks standing in by the descriptor's own
     signature, never evaluated (the registration's checks and the draw read the program's shape only); and their ids."""
     from verity.ml.circuits.defs import REGISTRY, PrimitiveDefinition
     from verity.ml.circuits.types import type_from_json
@@ -420,7 +420,7 @@ def served_ports(form: tuple[str, str], part: dict, layout: dict[str, tuple[str,
 
 
 def choose_served(part: dict, layout: dict[str, tuple[str, int]], run: str, rec: dict) -> tuple[dict, str, tuple[str, str]]:
-    """The served domains under the era's form that the record's match (R3 passed in the run), else today's (a gap)."""
+    """The served domains under the era's form that the record's match (R3 passed in the run), else the current ones (a gap)."""
     for form in SERVED_FORMS:
         ports = served_ports(form, part, layout, run)
         if matches(ports, rec):
@@ -436,7 +436,7 @@ def matches(ports: dict, rec: dict, only: Callable[[str], bool] = lambda p: True
 
 def choose(variants: Iterator[tuple[str, dict]], rec: dict, today: str, only: Callable[[str], bool] = lambda p: True
            ) -> tuple[dict, str]:
-    """The era's derivation of the ports under which every one matches the record (R3 passed in the run); else today's,
+    """The era's derivation of the ports under which every one matches the record (R3 passed in the run); else the current one,
     named as a reconstruction gap."""
     seen = {}
     for name, ports in variants:
@@ -1546,7 +1546,7 @@ ERA_PATHS = ("verity", "catalog/verity_catalog", "kernels/verity_kernels", "benc
 
 
 def era_tree(run: Run, commit: str) -> Path:
-    """The run's commit's own code (`ERA_PATHS`, from git history), for a verifier's copy today's code can't build."""
+    """The run's commit's own code (`ERA_PATHS`, from git history), for a verifier's copy the current code can't build."""
     out = run.sets.root.parent / "_trees" / commit[:12]
     if (out / ".done").exists():
         return out
@@ -1892,7 +1892,7 @@ def a5(run: Run) -> Iterator[Case]:
     """A5 (`a5.py`), and each rank's A5 of a TP Commit's stand-in (`out/standin-<I>/rank<r>/`): a deferred
     Commit's window, its registration over serving's rows of the Commit's values. The verifier's copies are its window of
     record as the run wrote it: the program its `program.json` defines (the record's; each template rebuilt from it into
-    the population program, a primitive today's registry lacks an opaque stand-in), the canonical query over the members
+    the population program, a primitive the current registry lacks an opaque stand-in), the canonical query over the members
     `summary.json` names, its law and δ, the served domains over the record's ports under the run root of record
     (`summary.json`'s `run_root`), and the leaf layer over each member's public body (`serving_rows.leaf_layer`, each
     file's header line dropped). One draw by the subset law, each member served its share."""
@@ -1983,7 +1983,7 @@ def a5_audit(run: Run, base: str) -> Iterator[Case]:
 def a6(run: Run) -> Iterator[Case]:
     """A6 (`a6.py`): the W8A8 coordinates of an int8 decoder layer, one template per K, staged as members of at most
     `chunk_cap` units, sampled by the stratified law. The verifier's copies are A6's own: the population program and
-    canonical `Q_template_instances` over `ScaledMmS8Coordinate` at each K of `summary.json`'s `members_spec` (today's
+    canonical `Q_template_instances` over `ScaledMmS8Coordinate` at each K of `summary.json`'s `members_spec` (the current
     Definition, else the templates the run's `program.json` defines), the law `stratified:k`, each member port's set-bound
     domain over its member's set (A6's row layout: x row-seg, w and o0 row-v2), and the leaf layer the SHA-512 of the
     map from member to its public file's SHA-512."""
@@ -2110,7 +2110,7 @@ def a7(run: Run) -> Iterator[Case]:
     """A7 (`a7.py`): a stand-in requirement's plan and memory-map units (`requirement_units`), one member per template
     with a unit per step, sampled by the stratified law, beside the canonical commitments their rows bind to. The
     verifier's copies are A7's own: the population program and canonical `Q_template_instances` over `PlanMatch` and
-    `MemoryMapStep` at the statics `summary.json` records (today's Definitions, else the templates the run's
+    `MemoryMapStep` at the statics `summary.json` records (the current Definitions, else the templates the run's
     `program.json` defines), the law `stratified:k`, each member port's set-bound domain over its set (every row row-v2;
     the ports the Definition's rows and `o0`), each canonical commitment's over the rows it publishes, and the leaf
     layer the SHA-512 of the map from each member and `canon/<kind>` to its public file's SHA-512. Check 3's audit
