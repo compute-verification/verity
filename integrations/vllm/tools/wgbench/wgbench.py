@@ -29,9 +29,12 @@ twice) equal the reference's, its y and `int8_exact.zy_records` of the exact s32
 scale 0 past M) and its dequant, and `exactlin_scaled_mm_zy_tma`'s at TRITON, byte for byte.  The Triton arms are then
 `scaled_mm_zy` at TRITON and (`--plan`) at `_plan`'s config, what serves the records today.
 
-    python wgbench.py --out OUT [--ms 8192,16384,32768] [--linears qkv,o,gate_up,down] [--variants all] [--secs 2]
-                      [--rounds 2] [--no-lt] [--gate-only] [--no-edges] [--time-kinds served,random] [--plan] [--rest R]
-                      [--zy]
+It lives in the integration because it times `int8_wgmma`'s variants by name, which isn't a public interface of
+`verity_vllm`.
+
+    python integrations/vllm/tools/wgbench/wgbench.py --out OUT [--ms 8192,16384,32768] [--linears qkv,o,gate_up,down]
+        [--variants all] [--secs 2] [--rounds 2] [--no-lt] [--gate-only] [--no-edges] [--time-kinds served,random] [--plan]
+        [--rest R] [--zy]
 """
 from __future__ import annotations
 
@@ -189,7 +192,8 @@ def gate(m, n, k, variants, kinds=KINDS, seed=0) -> list[dict]:
         try:
             X.scaled_mm(xq, sa, w, sw, yt, tri)
             row["triton_vs_ref"] = int((yt.view(torch.int16) != ref).sum())
-        except Exception as e:  # noqa: BLE001  (a shape Triton's descriptors refuse is gated against the reference alone)
+        except (AssertionError, RuntimeError, ValueError) as e:
+            # a shape Triton's descriptors refuse (their asserts, or the launch) is gated against the reference alone
             row["triton_refused"] = repr(e)[:200]
         for v in variants:
             for call in (0, 1):
@@ -228,7 +232,7 @@ def gate_zy(m, n, k, rows, variants, kinds=KINDS, seed=0) -> list[dict]:
         try:
             X.scaled_mm_zy(xq, sa, w, sw, y, zy, rows, tri)
             row["triton_vs_ref"] = differing(y, zy, ref_y, ref_zy)
-        except Exception as e:  # noqa: BLE001  (as `gate`)
+        except (AssertionError, RuntimeError, ValueError) as e:  # as `gate`
             row["triton_refused"] = repr(e)[:200]
         for v in variants:
             text, _, flags = v.partition("#")
