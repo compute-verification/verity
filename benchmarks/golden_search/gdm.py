@@ -94,9 +94,11 @@ _GRIDS["today"] = {**_GRIDS["core"], "open": ("whole",), "kmax": (27,), "mmax": 
                    "device": ("h200",), "stmt": ("template",), "retain": ("device",)}
 #: today's grid against the accounting period n
 _GRIDS["today-period"] = {**_GRIDS["today"], "period": (1, 10, 100, 1000, 10_000, 100_000)}
-#: each grid at each point (`NAME-t8192`, `NAME-t512`): the census is the demo's alone, and its window one step
+#: each grid at each point (`NAME-t8192`, `NAME-t512`). The demo's window is one step and its units are GD-PLANNER's
+#: census of the served 4,32,4 window, with its 35 attention templates separate (b4) or merged (b4-buckets); the
+#: model's own classes (None) undercount its templates, so they are `flips`' alone
 GRIDS = {f"{name}-{pt}": {**g, **over} for name, g in _GRIDS.items() for pt, over in (
-    ("t8192", {"census": (None,)}), ("t512", {"steps": (1,), "retain": ("device",)}))}
+    ("t8192", {"census": (None,)}), ("t512", {"steps": (1,), "retain": ("device",), "census": ("b4", "b4-buckets")}))}
 GRIDS["smoke"] = {k: v[:2] for k, v in GRIDS["full-t8192"].items()}
 
 
