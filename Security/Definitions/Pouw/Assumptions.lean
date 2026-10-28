@@ -58,6 +58,7 @@ import Definitions.Pouw.Assumptions.PearlC.TTOutUOnly
 import Definitions.Pouw.Assumptions.PearlC.TTOutW1
 import Definitions.Pouw.Assumptions.Pinned
 import Definitions.Pouw.Assumptions.RelativeSecurity
+import Definitions.Pouw.Assumptions.ServedWork
 import Definitions.Pouw.Assumptions.ShaRealize
 /-!
 # PoUW's named assumptions, and the definitions and statements over them (trusted)
