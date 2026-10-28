@@ -31,12 +31,12 @@ from typing import Any, Callable
 
 AUTO_NODE, AUTO_PROJECT = "vy-nebius-2", "verity"
 #: (machine, pool) where `--on auto` may spill, in the order `choose` tries them: the `research` pools (slot_only.POOLS) of cpu-1,
-#: 5, 3, 2 and 6 to 9, each any lane's. cpu-2's shares the train slot's and proofs' cores; cpu-6's to cpu-9's share theirs with
-#: the proofs and soundness Lean pools, and cpu-9's with the ci pool too. cpu-4's cores are the train slot's, proofs' and
-#: soundness's, so it has none here.
+#: 5, 3, 2 and 6 to 8, each any lane's. cpu-2's shares the train slot's and proofs' cores; cpu-6's to cpu-8's share theirs with
+#: the proofs and soundness Lean pools. cpu-4's cores are the train slot's, proofs' and soundness's, and cpu-9's are its ci
+#: pool's too, so neither has one here.
 SPILL = (("vy-nebius-cpu-1", "research"), ("vy-nebius-cpu-5", "research"), ("vy-nebius-cpu-3", "research"),
          ("vy-nebius-cpu-2", "research"), ("vy-nebius-cpu-6", "research"), ("vy-nebius-cpu-7", "research"),
-         ("vy-nebius-cpu-8", "research"), ("vy-nebius-cpu-9", "research"))
+         ("vy-nebius-cpu-8", "research"))
 DESCRIPTION = Path("infra/cluster/descriptions/nebius.toml")
 SLOT_PY = Path("tools/verity/check/slot.py")
 READ_TIMEOUT_S = 30
