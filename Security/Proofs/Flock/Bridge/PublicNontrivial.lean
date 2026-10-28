@@ -76,6 +76,7 @@ open Flock.Test.ToyPubFiles (circuit pub progDesc progQuery)
 open Flock.Assumptions (toyPubI toyPubI_typed toyPubI_tags toyPubI_div ToyΩ toyLb toySrc toySrc_uniform)
 open Flock.Bridge.ToyPub (gOut xIn)
 
+attribute [local irreducible] Flock.Test.ToyPubFiles.circuit in
 open Classical in
 /-- **`SampledKSLivePub`'s nontrivial lemma**: `SampledKSLivePub` at the verifier that accepts everything is false, at
 the toy session's files (`Bridge.Assumptions.ToyFilesParse`, interim) and its setup (`Assumptions.ToySetupPub`,
@@ -129,9 +130,11 @@ theorem sampledKSLivePub_nontrivial (hf : Bridge.Assumptions.ToyFilesParse) (hs 
     have hr := Bridge.commitDep_rows_of_opens _ _ _ _ _ _ _ _ hd
     obtain ⟨⟨ug, qg, kg⟩, hrow⟩ := Option.ne_none_iff_exists'.1 fun h => hr (Option.map_eq_none_iff.2 h)
     have hq := Bridge.ToyPub.rowOf_gOut hU hrow
+    have hrow' : FlockSoundness.Discharge.HiddenExec.rowOfH circuit hU 1
+        (FlockSoundness.Discharge.Layout.outsOf circuit hU 1) (gOut hU) = some (ug, ⟨qg, kg⟩) := hrow
     beta_reduce
     split
-    · exact (Bridge.ToyPub.bit_lie hrow []).trans (by simp [hq])
+    · exact (Bridge.ToyPub.bit_lie hrow' []).trans (decide_eq_true hq)
     · rename_i hn
       exact (hn ⟨Or.inr ho, ug, qg, Bridge.vbOf_pos_row hrow⟩).elim
 
