@@ -1,5 +1,5 @@
-# Dither-2S: both operands dithered with fresh bits, no U, the last checked word served (SKIP's design A; the name,
-# decision 79), so no peel on the linears, lm_head or QKᵀ; P·V keeps the recorded w64 peel.
+# Dither-2S: both operands dithered with fresh bits, no U, the last checked word served, so no peel on the
+# linears, lm_head or QKᵀ; P·V keeps the recorded w64 peel.
 name = "dither-2s"
 title = "Dither-2S"
 aliases = ["dither-two-sided", "A", "adopted-bd-lm"]

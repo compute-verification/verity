@@ -1,7 +1,7 @@
-# VF3c: VF3 with one head credit for every 32-bit word an instruction writes (§15).
+# VF3c: VF3 with one head credit for every 32-bit word an instruction writes.
 name = "VF3c"
 epoch = "VF3c"
-summary = "VF3 with one head credit for every 32-bit word an instruction writes (§15)."
+summary = "VF3 with one head credit for every 32-bit word an instruction writes."
 rows = [
     "issue", "M", "R1", "F", "VMNX", "H", "I", "A",
     "F2FS", "XU", "R6r", "LDSi", "R6w", "LDG", "L2red", "UP",

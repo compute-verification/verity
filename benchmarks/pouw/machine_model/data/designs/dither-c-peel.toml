@@ -1,5 +1,5 @@
-# Dither-C with Dither-2S's P·V (SKIP's Bc): co32c on the linears and lm_head, cohalf on QKᵀ, and the recorded w64 peel
-# on P·V, whose whole strip is free at a one-hot P row (CHECKED-STRIP Result 3), which Dither-C's pv closes. Its arm
+# Dither-C with Dither-2S's P·V: co32c on the linears and lm_head, cohalf on QKᵀ, and the recorded w64 peel
+# on P·V, whose whole strip is free at a one-hot P row, which Dither-C's pv closes. Its arm
 # `co32c` is the one Dither-C perplexity measured on main.
 base = "dither-c"
 name = "dither-c-peel"
