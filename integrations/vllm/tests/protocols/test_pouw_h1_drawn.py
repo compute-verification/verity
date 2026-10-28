@@ -1,8 +1,8 @@
 """``benchmarks/pouw/h1_prove/drawn.py`` on a window serve-openai's H1 arm served over J10-R units at one K (the pouw
-setting ``unit`` j10r, the served tests' stand-in tile, `test_pouw_h1_served.StandInJ10R`), on a gate session whose
-period opened its draw K: ``stage`` rebuilds every value a drawn call's statement reads from the prover's state and the
-served weights at the roots the window registered, stages the call on the circuit file `pouw_h1_circuits` built for K,
-and ``statements`` and ``check`` hand core's credit statements its ``proved`` accepts (`credit._verified`, then
+setting ``unit`` j10r, over a stand-in tile with J10-R's signature, `StandInJ10R`, or under `REAL` J10-R's own), on a
+gate session whose period opened its draw K: ``stage`` rebuilds every value a drawn call's statement reads from the
+prover's state and the served weights at the roots the window registered, stages the call on the circuit file
+`pouw_h1_circuits` built for K, and ``statements`` and ``check`` hand core's credit statements its ``proved`` accepts (`credit._verified`, then
 `credit._proved`), here with a stand-in ``flock-verify`` that accepts a session only when its proof binds every file
 credit hands it (`test_pouw_credit_statements.FAKE`'s). A prover state that is not what was served, and b/<K> under
 another key, are refused before anything is staged."""
@@ -11,6 +11,7 @@ from __future__ import annotations
 import hashlib
 import importlib.util
 import json
+import os
 import sys
 from pathlib import Path
 
@@ -62,6 +63,9 @@ StandInJ10R = CompositeDefinition("H1DrawnTestTileJ10R", 0, ("K", "R", "C"), _si
                                               ret={"receipt": Out(sink=True)}))
 
 DRAWN = PC.H1_PROVE / "drawn.py"
+#: VERITY_VLLM_H1_DRAWN_J10R=1: the window served over J10-R's own tile unit (`served.unit_of` ``j10r``), so ``--recompose``
+#: holds its lowered outputs to the word reference drawn.py stages without composing (`drawn.unit_outputs`); run remotely
+REAL = os.environ.get("VERITY_VLLM_H1_DRAWN_J10R") == "1"
 WKEY = bytes(range(32))
 FAKE = f"""#!{sys.executable}
 import hashlib, json, sys
@@ -95,10 +99,11 @@ def served(tmp_path, monkeypatch):
     """One window served over the stand-in J10-R tile at K on a gate session of period p1 (draw K 2), with a prover dir
     and b/<K> under `WKEY`; its K's circuit file built by `pouw_h1_circuits` (``--strata K``); the served weights as
     drawn.py's ``--weights``."""
-    j10r = _unit(defn=StandInJ10R)
-    monkeypatch.setattr(SV, "unit_of", lambda name: j10r if name == "j10r" else None)
-    monkeypatch.setattr(HW, "tile_unit", lambda k, tile, definition=None:
-                        (j10r if definition is HT.PouwH1Tile5 else _unit())(k))
+    if not REAL:
+        j10r = _unit(defn=StandInJ10R)
+        monkeypatch.setattr(SV, "unit_of", lambda name: j10r if name == "j10r" else None)
+        monkeypatch.setattr(HW, "tile_unit", lambda k, tile, definition=None:
+                            (j10r if definition is HT.PouwH1Tile5 else _unit())(k))
     monkeypatch.setenv("HZ_STAGE", "library")
     srv, auditor = _Server(monkeypatch), _PeriodAuditor(tmp_path, monkeypatch)
     sessions = SH.GateSessions(CC.Gate(GATE, auditor.run), PEER, STEPS, wait=auditor.settle, listens=lambda port: True)
@@ -121,7 +126,8 @@ def served(tmp_path, monkeypatch):
     exe.write_text(FAKE)
     exe.chmod(0o755)
     DR = _drawn()
-    monkeypatch.setattr(DR, "reference_check", lambda *a: None)
+    if not REAL:
+        monkeypatch.setattr(DR, "reference_check", lambda *a: None)
     return DR, d, tmp_path
 
 
