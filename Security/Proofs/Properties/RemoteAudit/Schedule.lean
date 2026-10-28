@@ -763,14 +763,15 @@ theorem size_sha512 (b : ByteArray) : (RemoteAudit.sha512 b).size = 64 := by
   unfold RemoteAudit.sha512 Flock.Sha512.hash
   exact Array.size_ofFn
 
-theorem size_frameHash (tag : String) (parts : List ByteArray) : (FrameV3.hash tag parts).size = 64 := by
-  unfold FrameV3.hash
+theorem size_frameHash (tag : String) (parts : List ByteArray) : (Flock.FV3.Sha512.hash tag parts).size = 64 := by
+  unfold Flock.FV3.Sha512.hash Flock.FV3.hash
   exact size_sha512 _
 
-theorem size_node (d : FrameV3.Domain) (l i : ℕ) (a b : ByteArray) : (d.node l i a b).size = 64 :=
+theorem size_node (d : Flock.FV3.Sha512.Domain) (l i : ℕ) (a b : ByteArray) : (d.node l i a b).size = 64 :=
   size_frameHash _ _
 
-theorem size_leaf (d : FrameV3.Domain) (r q : ℕ) (s : String) (v : ByteArray) : (d.leaf r q s v).size = 64 :=
+theorem size_leaf (d : Flock.FV3.Sha512.Domain) (r q : ℕ) (s : String) (v : ByteArray) :
+    (d.leaf r q s v).size = 64 :=
   size_frameHash _ _
 
 theorem zeros_size (n : ℕ) : (zeros n).size = n :=
@@ -780,73 +781,40 @@ theorem receipt_size (r : Receipter) (j : ℕ) (b : ByteArray) : (r.receipt j b)
   unfold Receipter.receipt
   split <;> exact size_sha512 _
 
-/-- A `for` loop over a list in `Id` whose every step keeps `P` ends in a state `P` holds of. -/
-theorem forIn'_inv {α σ : Type} (P : σ → Prop) :
-    ∀ (l : List α) (f : (a : α) → a ∈ l → σ → Id (ForInStep σ)),
-      (∀ a h b, P b → P (f a h b).value) → ∀ init, P init → P (forIn' l init f)
-  | [], _, _, _, h => h
-  | x :: l, f, hf, init, h => by
-    rw [List.forIn'_cons]
-    have hx := hf x List.mem_cons_self init h
-    revert hx
-    cases f x List.mem_cons_self init with
-    | done b => intro hx; exact hx
-    | yield b =>
-      intro hx
-      exact forIn'_inv P l (fun a m s => f a (List.mem_cons_of_mem x m) s)
-        (fun a m s hs => hf a (List.mem_cons_of_mem x m) s hs) b hx
-
-/-- The same over a range. -/
-theorem forIn'_range_inv {σ : Type} (P : σ → Prop) (r : Std.Legacy.Range) (init : σ)
-    (f : (a : ℕ) → a ∈ r → σ → Id (ForInStep σ)) (hf : ∀ a h b, P b → P (f a h b).value) (h0 : P init) :
-    P (forIn' r init f) := by
-  rw [Std.Legacy.Range.forIn'_eq_forIn'_range']
-  exact forIn'_inv P _ (fun a h => f a (Std.Legacy.Range.mem_of_mem_range' h)) (fun a h b hb => hf a _ b hb) init h0
-
-theorem id_bind_eq {α β : Type} (x : Id α) (k : α → Id β) : (x >>= k) = k x := rfl
-
-/-- A loop over a range whose state's first part stays 64 bytes, read back by that part: 64 bytes. -/
-theorem bind_forIn'_size {r : Std.Legacy.Range} {init : ByteArray × ℕ}
-    {f : (a : ℕ) → a ∈ r → ByteArray × ℕ → Id (ForInStep (ByteArray × ℕ))}
-    {k : ByteArray × ℕ → Id ByteArray} (hk : ∀ s, k s = s.fst)
-    (hf : ∀ a h b, b.fst.size = 64 → ((f a h b).value).fst.size = 64) (h0 : init.fst.size = 64) :
-    (forIn' r init f >>= k).size = 64 := by
-  rw [id_bind_eq, hk]
-  exact forIn'_range_inv (fun s : ByteArray × ℕ => s.fst.size = 64) r init f hf h0
+/-- A digest of 64 bytes climbs, through any siblings, to a node or itself: 64 bytes. -/
+theorem climbL_size (dom : ByteArray) : ∀ (cur : ByteArray) (idx l : ℕ) (sibs : List ByteArray), cur.size = 64 →
+    (Flock.FV3.Sha512.scheme.climbL dom cur idx l sibs).size = 64
+  | _, _, _, [], h => h
+  | cur, idx, l, sib :: rest, _ => by
+    simp only [Flock.FV3.Scheme.climbL]
+    exact climbL_size dom _ _ _ rest (by split <;> exact size_frameHash _ _)
 
 /-- A root climbed to is a node or the leaf: 64 bytes. -/
-theorem climb_size (d : FrameV3.Domain) (pos : ℕ) (schema : String) (value : ByteArray) (path : Array ByteArray) :
-    (FrameV3.climb d pos schema value path).size = 64 := by
-  unfold FrameV3.climb
-  simp only [Id.run]
-  apply bind_forIn'_size
-  · intro s
-    cases s
-    rfl
-  · intro a h b _
-    obtain ⟨dg, cur⟩ := b
-    dsimp only
-    split <;> exact size_node _ _ _ _ _
-  · exact size_leaf _ _ _ _ _
+theorem climb_size (d : Flock.FV3.Sha512.Domain) (pos : ℕ) (schema : String) (value : ByteArray)
+    (path : Array ByteArray) : (d.climb pos schema value path).size = 64 := by
+  simp only [Flock.FV3.Domain.climb]
+  exact climbL_size d.id _ _ _ _ (size_leaf _ _ _ _ _)
 
-/-- A path of `depth count` siblings, each 64 zero bytes. -/
-def zeroPath (d : FrameV3.Domain) : Array ByteArray := Array.replicate (FrameV3.depth d.count) (zeros 64)
+theorem scheme_bytes : Flock.FV3.Sha512.scheme.bytes = 64 := rfl
+
+/-- A path of `log2ceil count` siblings, each 64 zero bytes. -/
+def zeroPath (d : Flock.FV3.Sha512.Domain) : Array ByteArray := Array.replicate (Flock.log2ceil d.count) (zeros 64)
 
 /-- The root `value` at `position` climbs to along `zeroPath`. -/
-def zeroRoot (d : FrameV3.Domain) (position : ℕ) (value : ByteArray) : ByteArray :=
-  FrameV3.climb d position SCHEMA value (zeroPath d)
+def zeroRoot (d : Flock.FV3.Sha512.Domain) (position : ℕ) (value : ByteArray) : ByteArray :=
+  d.climb position SCHEMA value (zeroPath d)
 
-theorem verifyOpening_zeroRoot (d : FrameV3.Domain) (pos : ℕ) (v : ByteArray) (hc : 0 < d.count)
-    (hs : d.start ≤ pos) (hp : pos < d.start + d.count) :
-    FrameV3.verifyOpening d (zeroRoot d pos v) pos v SCHEMA (zeroPath d) = true := by
+theorem verifyOpening_zeroRoot (d : Flock.FV3.Sha512.Domain) (pos : ℕ) (v : ByteArray) (hs : d.start ≤ pos)
+    (hp : pos < d.start + d.count) : d.verifyOpening (zeroRoot d pos v) d.count pos v SCHEMA (zeroPath d) = true := by
   have hall : (zeroPath d).all (·.size == 64) = true := by
     rw [Array.all_eq_true]
     intro i _
     simp [zeroPath, zeros_size]
-  have hlen : (zeroPath d).size = FrameV3.depth d.count := Array.size_replicate
-  unfold FrameV3.verifyOpening
+  have hlen : (zeroPath d).size = Flock.log2ceil d.count := Array.size_replicate
+  unfold Flock.FV3.Domain.verifyOpening
+  simp only [scheme_bytes]
   rw [hall]
-  simp [zeroRoot, climb_size, hlen, hc, hs, hp]
+  simp [zeroRoot, climb_size, hlen, hs, hp]
 
 theorem leafReceipt_first {R : ByteArray} (hR : R.size = 64) : leafReceipt (R ++ zeros 960) 0 130023424 = some R := by
   have hs : (R ++ zeros 960).size = 1024 := by rw [ByteArray.size_append, hR, zeros_size]
@@ -934,8 +902,8 @@ theorem checkOpening_of {reg : Registration} {digest : ByteArray} {appends : Arr
     (hy : leafReceipt o.leaf p pr.plan.length = some y)
     (hleaf : verifyLeaf (w.seedOf i) pr.plan pr.root p o.leaf o.leafSalt o.receiptPath = true)
     (hdec : Codec.decode o.block j reg.key none = .ok (some payload))
-    (hver : FrameV3.verifyOpening reg.payloadDomain reg.payloadRoot j (hidden payload o.payloadSalt) SCHEMA
-      o.payloadPath = true)
+    (hver : reg.payloadDomain.verifyOpening reg.payloadRoot reg.payloadDomain.count j (hidden payload o.payloadSalt)
+      SCHEMA o.payloadPath = true)
     (hrec : R.receipt j o.block = y) :
     checkOpening reg digest appends w R i p o = none := by
   have hany : ((o.receiptPath ++ o.payloadPath).any fun x => decide (x.size ≠ DIGEST_BYTES)) = false := by
@@ -956,7 +924,7 @@ def honestCodec : Codec.Codec := ⟨Codec.P1024, 3, true⟩
 of `rows` rows, and a payload tree holding `zeroPayload` at block 0. -/
 def honestReg (node codecSeed : ByteArray) (rows : ℕ) : Registration :=
   let key := Codec.key codecSeed honestCodec
-  let pd := FrameV3.Domain.make (RemoteAudit.sha512 (PAYLOAD_DOMAIN ++ frameBytes node)) 0 0 130023424
+  let pd := Flock.FV3.Sha512.Domain.make (RemoteAudit.sha512 (PAYLOAD_DOMAIN ++ frameBytes node)) 0 0 130023424
   { node, blocks := 130023424, payloadRoot := zeroRoot pd 0 (hidden (zeroPayload key) (zeros SALT_BYTES)),
     codecSeed, codec := honestCodec, receipt := .sketch, rows, key }
 
@@ -984,17 +952,10 @@ theorem honest_checks (reg : Registration) (challenge previous : ByteArray) (hB 
     (hroot : reg.payloadRoot = zeroRoot reg.payloadDomain 0 (hidden (zeroPayload reg.key) (zeros SALT_BYTES))) :
     checkOpening reg reg.digest #[] (honestWindow reg challenge previous)
       (receipterOf reg (honestWindow reg challenge previous) 0) 0 0 (honestOpening reg challenge previous) = none := by
-  have hc : 0 < (treeDomain (seed challenge 0 previous) (Plan.whole 130023424)).count := by
-    show 0 < leaves (Plan.whole 130023424).length
-    decide
   have hs : (treeDomain (seed challenge 0 previous) (Plan.whole 130023424)).start ≤ 0 := Nat.le_refl 0
   have hp : 0 < (treeDomain (seed challenge 0 previous) (Plan.whole 130023424)).start +
       (treeDomain (seed challenge 0 previous) (Plan.whole 130023424)).count := by
     show 0 < 0 + leaves (Plan.whole 130023424).length
-    decide
-  have hc' : 0 < reg.payloadDomain.count := by
-    show 0 < reg.blocks
-    rw [hB]
     decide
   have hs' : reg.payloadDomain.start ≤ 0 := Nat.le_refl 0
   have hp' : 0 < reg.payloadDomain.start + reg.payloadDomain.count := by
@@ -1024,9 +985,9 @@ theorem honest_checks (reg : Registration) (challenge previous : ByteArray) (hB 
     rcases hx with ⟨-, rfl⟩ | ⟨-, rfl⟩ <;> exact zeros_size 64
   · unfold verifyLeaf
     exact verifyOpening_zeroRoot (treeDomain (seed challenge 0 previous) (Plan.whole 130023424)) 0
-      (hidden (honestLeaf reg (seed challenge 0 previous)) (zeros SALT_BYTES)) hc hs hp
+      (hidden (honestLeaf reg (seed challenge 0 previous)) (zeros SALT_BYTES)) hs hp
   · rw [hroot]
-    exact verifyOpening_zeroRoot reg.payloadDomain 0 (hidden (zeroPayload reg.key) (zeros SALT_BYTES)) hc' hs' hp'
+    exact verifyOpening_zeroRoot reg.payloadDomain 0 (hidden (zeroPayload reg.key) (zeros SALT_BYTES)) hs' hp'
 
 theorem honestReg_make (node codecSeed : ByteArray) (rows : ℕ) (hnode : 1 ≤ node.size ∧ node.size ≤ 64)
     (hseed : codecSeed.size = Codec.SEED_BYTES) (hrows : rows = 16 ∨ rows = 64) :

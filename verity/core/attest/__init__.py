@@ -93,7 +93,7 @@ def path(records: Sequence[bytes], position: int) -> tuple[bytes, ...]:
 
 def verify_opening(root_: bytes, count: int, position: int, record: bytes, siblings: Sequence[bytes]) -> bool:
     """Whether ``record`` at ``position`` climbs ``siblings`` to ``root_`` in a period tree of ``count`` records
-    (`MemoryChallenger.Attest.check`'s test of each read, ``FrameV3Sha512.verifyOpening``)."""
+    (`MemoryChallenger.Attest.check`'s test of each read, ``FV3.Domain.verifyOpening``)."""
     if len(root_) != 64 or not 0 <= position < count or len(siblings) != _depth(count):
         return False
     if any(len(s) != 64 for s in siblings):
