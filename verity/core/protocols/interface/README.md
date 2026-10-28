@@ -51,6 +51,13 @@ profile's types derive `DecidableEq`.
   JSON, and writes one flushed outcome line per case. This is the mode the difftest harness drives.
 - A usage error exits 64, and an outcome that can't be written canonically exits 70.
 
+A case is read in place by `Core.Canonical` (`CoreProtocol/Protocol/Canonical.lean`), which gives `canonicalJson`'s and
+`Flock.unhex`'s answers at any size, and a protocol's decoder reads evidence that can be gigabytes with it too (PoUS's,
+a composition's). Those two go through `String.toList`, whose runtime counts characters in 32 bits and spends about 30
+bytes on each: they refuse a canonical text holding a string of `2^32` characters or more, or read a prefix of it.
+`Canonical` imports only what `Protocol` does, so it sits in `Protocol`'s layer. `serve` frees a case's line before it
+decodes the evidence, and its peak memory is about 2.6 times the line.
+
 ## Blobs (`CoreProtocol/Blobs.lean`)
 
 A check that reads bytes too large for canonical JSON (a statement's circuit file, its public file, its sessions'
