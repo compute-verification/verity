@@ -392,9 +392,8 @@ private def isBodyOf (kind : String) (v2 : Bool) (b : Json) : Bool :=
   | _ => false
 
 /-- `_ledger_entry`: a ledger line's entry when it is its own `ledger_text` (`PyJson.canonical`), escapes no surrogate,
-is in canonical JSON's domain (`Flock.canon`: integers only, and strings ASCII without DEL), in at most
-`MAX_LEDGER_LINE` characters, and is of the ledger's form: a session's entry names its session, a period's names
-none. -/
+has only integers (`Flock.canon`), in at most `MAX_LEDGER_LINE` characters, and is of the ledger's form: a session's
+entry names its session, a period's names none. -/
 def ledgerEntry? (line : Json) : Option LedgerEntry := do
   let .str text := line | none
   guard (text.length ≤ MAX_LEDGER_LINE)
