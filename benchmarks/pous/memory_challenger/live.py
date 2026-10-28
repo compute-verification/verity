@@ -87,7 +87,7 @@ RECORD_VERDICT = "lean"
 DISAGREE = "the Lean and Python verdicts disagree"
 WARMUP_PINGS = 8
 """Pings before each session's first round, after the previous session's signature: a session's round 0 otherwise follows
-the challenger's own Python work (one 655.8 µs round 0 of 26 µs at the responder in `r20261006-061825-bba8`)."""
+the challenger's own Python work (one measured round 0 took 655.8 µs, 26 µs of it at the responder)."""
 
 
 def test_signer() -> Any:

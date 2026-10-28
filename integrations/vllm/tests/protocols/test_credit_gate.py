@@ -724,7 +724,7 @@ def _one_row(xq):
     (lambda: ZyArm(), [0, 7, 2], "round 0's input-ids table h1/ids@0 is not the Commit's input-ids/0"),
 ], ids=["a-all-zero", "one-a-row-off", "ids-off-the-prompt"])
 def test_a_window_whose_tables_are_not_the_commits_is_refused_by_core(periodic, monkeypatch, arm, ids, want):
-    """ROOTS1, by core's credit (`credit._arow`): H1 handed every A code zero (the RT4 A = 0 probe) or one A
+    """ROOTS1, by core's credit (`credit._arow`): H1 handed every A code zero (the A = 0 probe) or one A
     row off the codes the Commit acquired at the linear's row_quant, or the Commit acquired an input id other than the
     prompt's (round 0's ids table is the prompt's, fixed before the salt), each with an honest Commit, whose record
     registers its own tree for those rows. The serving process credits nothing (`pouw_h1_commit.UNTIED`); a prover
