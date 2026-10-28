@@ -15,8 +15,8 @@ own Commit.
   template a call (S × the linears), its tile units (`units`, S × slot(T)/32 × Σn/32) the batch's members, so its
   descriptor, declaring it and its digest grow with the calls, not the units. The server logs both counts and both
   times. The digest is hashed as the descriptor is written, ``h1/`` `PROGRAM` beside `PROGRAM_META` (`served.write_program`),
-  so the period-open of it (``served_verdicts.py period open``) can go out once the server listens, before any window
-  reserves.
+  and ``served_verdicts.py program`` writes the same file without serving, so the period-open of it (``served_verdicts.py
+  period open``) goes out before the server starts, ahead of window 0's reserve at startup.
 * **Coins.** With ``--challenger-gate CMD`` and ``--challenger-peer NAME`` (`sessions_of`), the auditor host's
   challenger's, one session a window through infra's gate (`GateSessions`, `commit_coins.Gate`): window 0's session is
   reserved (scheme `pouw_h1_challenger.SCHEME`, `pouw_h1_challenger.families` (S)) at startup (`arm_of`) and window
@@ -55,7 +55,11 @@ admission and gaps, the credit gate, the coins, the commitment's calls root, its
 port, how the session closed and its end entry) and where its time went (``seconds``); a window whose H1 failed to open
 or close carries its error there instead, and the Commit serves on. ``serve.json``'s ``protocols`` is
 `H1Windows.describe`, ``summary.json``'s ``pouw_h1`` `H1Windows.summary` with the windows that failed.
-``--protocols-config`` is the pouw settings the server doesn't set itself, ``{"pouw": {...}}`` (`config_of`)."""
+``--protocols-config`` is the pouw settings the server doesn't set itself, ``{"pouw": {...}}`` (`config_of`). Its ``unit``
+and ``ks`` shape the declared Program: ``{"pouw": {"unit": "j10r", "ks": [2048]}}`` declares J10-R's tile unit
+(`pouw_h1_served.unit_of`) over the linears at K 2,048 alone, the form a period's guarantee covers (core's
+`period_check.form`), and the linears at any other K serve on their arm unrecorded, uncredited as attention is. Unset,
+the Program is v1's over every linear."""
 from __future__ import annotations
 
 import bisect
@@ -422,11 +426,13 @@ class H1Windows:
     coins); ``prover`` the directory each window's prover state and live rows go in (``--h1-prover``, `prover_of`;
     None: kept nowhere, so no drawn unit or round of it can be proved). ``closer`` (a `worker`) runs each window's
     release off the engine loop, and `close` hands back its outcome's `Future`; None: on the loop, the outcome itself.
-    ``clock`` times each part."""
+    ``draws`` is serve-openai's draw-gated release (`serve_release.Draws`), into which each window's release puts its
+    draw under `DRAWER` (`drawn`) when it waits for one. ``clock`` times each part."""
 
     def __init__(self, model: Any, com: Any, rows: int, steps: int, *, engine: Any, out: Path,
                  config: Mapping[str, Any] | None = None, key: bytes | None = None, unit: Any = None,
                  sessions: GateSessions | None = None, prover: str | Path | None = None, closer: Any = None,
+                 draws: Any = None,
                  clock: Callable[[], float] = time.perf_counter) -> None:
         from verity_vllm.protocols import pouw
         from verity_vllm.protocols.pouw.h1 import hooks as PHK
@@ -439,7 +445,10 @@ class H1Windows:
         self.draws: Any = None
         self._layout: dict[str, Any] | None = None
         self._period_k: dict[str, int] = {}
-        self.layers = PHK.layers(model, pouw.linear_types())
+        pw = pouw.Settings.of(self.config.get("pouw", {}))
+        self.layers = PHK.layers(model, pouw.linear_types(), pw.ks)
+        if unit is None:
+            self.unit = unit = SV.unit_of(pw.unit)
         if not self.layers:
             raise ValueError(f"{ENTRY}: the served model has no int8 linear H1 records (serve an int8 precision)")
         shapes = [tuple(int(d) for d in m.weight.shape) for m in self.layers]
