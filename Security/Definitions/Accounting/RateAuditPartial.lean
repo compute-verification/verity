@@ -113,7 +113,7 @@ def queries (w : World N b h ρ) : PChip N b h ρ α → List (Bits ρ × Fin N 
 
 end PChip
 
-/-- A device with partial completion: `Device`'s on-chip state, device memory and free side sources, laid out from the
+/-- A device with partial completion: `Prover`'s on-chip state, device memory and free side sources, laid out from the
 store before the seed and the stream, and a chip program with completions from that state. In every world the program
 takes in at most `L` bits over the side link (free side sources and the certified stream together) and makes at most
 `q` oracle queries. -/

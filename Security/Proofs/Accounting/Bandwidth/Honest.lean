@@ -106,7 +106,7 @@ theorem loop_eq (w : World N b h) (js : List (Fin N)) (acc : Fin N → Bits h) :
 
 /-- The honest device: no on-chip state, no side sources, no regeneration; device memory holds the store as it is,
 and the chip reads every block once and queries the oracle at it. -/
-def honest (N b h : ℕ) : Device N b h 0 0 0 N where
+def honest (N b h : ℕ) : Prover N b h 0 0 0 N where
   state _ := Fin.elim0
   mem := layout
   side _ _ := false
@@ -127,7 +127,7 @@ theorem honest_accepts {s : ℕ} (E : Store N b) (O : Oracle N b h) (I : Fin s �
     Accepts (honest N b h) E O I ∧ (honest N b h).ingress E O = N * b := by
   refine ⟨fun i => honest_tags E O (I i), ?_⟩
   have := (loop_eq ((honest N b h).world E O) (List.finRange N) (fun _ _ => false)).2.1
-  simpa [Device.ingress, honest] using this
+  simpa [Prover.ingress, honest] using this
 
 end Bandwidth.Completeness
 

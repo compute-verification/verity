@@ -24,8 +24,8 @@ variable {N b h S c G q : ℕ}
 
 namespace RelayDevice
 
-/-- The device at one oracle: a `Device` whose side sources hold what the relay device's hold for `O`. -/
-def atOracle (A : RelayDevice N b h S c G q) (O : Oracle N b h) : Device N b h S c G q where
+/-- The device at one oracle: a `Prover` whose side sources hold what the relay device's hold for `O`. -/
+def atOracle (A : RelayDevice N b h S c G q) (O : Oracle N b h) : Prover N b h S c G q where
   state := A.state
   mem := A.mem
   side E := A.side E O

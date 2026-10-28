@@ -4,7 +4,7 @@ import Proofs.Accounting.Bandwidth.Interactive
 /-!
 # B3 for the chip as a tick-by-tick transducer over the links' signals
 
-The bandwidth audit's model prover (`InteractiveDevice`) from the chip in the window, read tick by tick as the
+The bandwidth audit's model prover (`InteractiveProver`) from the chip in the window, read tick by tick as the
 actual-circuit model describes it: causal from the window's start, the chip's behaviour is a function of its state then
 and of what it observes at each tick. The audited location is the chip, and HBM's only link is to it, so HBM hears only
 the chip: its reply is a function of the store and of the requests the chip sent it, and it computes no tag. The rest of
@@ -272,8 +272,8 @@ theorem hbmBits_le (C : Chip N b h S) (βs βm : ℕ) (hw : ∀ st o, C.width st
 /-- **The transducer as an interactive device** over `T` ticks: its state from the store, HBM as device memory, the
 rest as side sources, and `prog` from the state, capped at `c` side bits and `q` queries. -/
 def device (C : Chip N b h S) (βs T : ℕ) (state : Store N b → Bits S) (hbm : Hbm N b) (rest : Rest N b h)
-    (c q : ℕ) : InteractiveDevice N b h S c 0 q :=
-  InteractiveDevice.ofRuns state (mem hbm) (side rest) fun st => prog C βs st (C.tags st) T [] []
+    (c q : ℕ) : InteractiveProver N b h S c 0 q :=
+  InteractiveProver.ofRuns state (mem hbm) (side rest) fun st => prog C βs st (C.tags st) T [] []
 
 theorem device_run (C : Chip N b h S) (βs qt T : ℕ) (hq : ∀ st o, (C.ask st o).length ≤ qt)
     (state : Store N b → Bits S) (hbm : Hbm N b) (rest : Rest N b h) (E : Store N b) (O : Oracle N b h) :
@@ -282,7 +282,7 @@ theorem device_run (C : Chip N b h S) (βs qt T : ℕ) (hq : ∀ st o, (C.ask st
       (device C βs T state hbm rest (T * βs) (T * qt)).ingress E O =
         hbmBits (observe C βs (state E) hbm rest E O T [] [] []) := by
   obtain ⟨c2, c3, c4⟩ := prog_counts C βs qt hq (state E) (C.tags (state E)) (world hbm rest E O) T [] [] []
-  obtain ⟨ht, hi⟩ := InteractiveDevice.ofRuns_run (c := T * βs) (G := 0) (q := T * qt) state (mem hbm) (side rest)
+  obtain ⟨ht, hi⟩ := InteractiveProver.ofRuns_run (c := T * βs) (G := 0) (q := T * qt) state (mem hbm) (side rest)
     (fun st => prog C βs st (C.tags st) T [] []) E O ⟨c2.le, c3.le, c4⟩
   exact ⟨ht.trans (prog_run C βs (state E) (C.tags (state E)) hbm rest E O T [] [] []),
     hi.trans ((add_zero _).symm.trans (prog_ingress C βs (state E) (C.tags (state E)) hbm rest E O T [] [] []))⟩
@@ -349,7 +349,7 @@ theorem audit_reads_ro (C : Ticked.Chip N b h S) (βs qt T : ℕ) (hq : ∀ st o
       (device C βs T state hbm rest (T * βs) (T * qt)).side E O' := by
     intro E O O'
     funext v a
-    simp only [device, InteractiveDevice.ofRuns, side, hrest E O O']
+    simp only [device, InteractiveProver.ofRuns, side, hrest E O O']
   refine (pr_mono fun x hx => ?_).trans
     (AuditInteractiveRO N b h S (T * βs) 0 (T * qt) s k lam (device C βs T state hbm rest (T * βs) (T * qt)) hside)
   obtain ⟨ht, hi⟩ := device_run C βs qt T hq state hbm rest x.1 x.2.1

@@ -85,11 +85,12 @@ def queries (w : IWorld N b h) : List Bool → IChip N b h α → List (Fin N ×
 
 end IChip
 
-/-- A device whose side sources answer what its chip sent: on-chip state and device memory laid out from the store
+/-- A prover whose side sources answer what its chip sent, on a device of the device model (`Accounting.Device`)
+and bounded by its figures as `Prover` is: on-chip state and device memory laid out from the store
 before the seed, side sources that answer as any function of the store, the oracle and the bits sent so far, and a chip
 program from the state. In every world, starting from nothing sent, the program reads at most `c` bits of side sources,
 regenerates at most `G` blocks and makes at most `q` oracle queries. -/
-structure InteractiveDevice (N b h S c G q : ℕ) where
+structure InteractiveProver (N b h S c G q : ℕ) where
   state : Store N b → Bits S
   mem : Store N b → ℕ → Bool
   side : Store N b → Oracle N b h → List Bool → ℕ → Bool
@@ -97,27 +98,27 @@ structure InteractiveDevice (N b h S c G q : ℕ) where
   bounded : ∀ (st : Bits S) (w : IWorld N b h),
     (chip st).sideBits w [] ≤ c ∧ (chip st).regens w [] ≤ G ∧ ((chip st).queries w []).length ≤ q
 
-namespace InteractiveDevice
+namespace InteractiveProver
 
 variable {N b h S c G q : ℕ}
 
 /-- The world an interactive device's chip runs in, for store `E` and oracle `O`. -/
-def world (A : InteractiveDevice N b h S c G q) (E : Store N b) (O : Oracle N b h) : IWorld N b h :=
+def world (A : InteractiveProver N b h S c G q) (E : Store N b) (O : Oracle N b h) : IWorld N b h :=
   ⟨O, A.mem E, A.side E O, E⟩
 
 /-- The tags the device commits to. -/
-def tags (A : InteractiveDevice N b h S c G q) (E : Store N b) (O : Oracle N b h) : Fin N → Bits h :=
+def tags (A : InteractiveProver N b h S c G q) (E : Store N b) (O : Oracle N b h) : Fin N → Bits h :=
   (A.chip (A.state E)).run (A.world E O) []
 
 /-- The device's ingress in the window, in bits. -/
-def ingress (A : InteractiveDevice N b h S c G q) (E : Store N b) (O : Oracle N b h) : ℕ :=
+def ingress (A : InteractiveProver N b h S c G q) (E : Store N b) (O : Oracle N b h) : ℕ :=
   (A.chip (A.state E)).ingressBits (A.world E O) []
 
 /-- The verifier accepts: every sampled block's committed tag is the oracle's tag of that block. -/
-def Accepts {s : ℕ} (A : InteractiveDevice N b h S c G q) (E : Store N b) (O : Oracle N b h) (I : Fin s → Fin N) :
+def Accepts {s : ℕ} (A : InteractiveProver N b h S c G q) (E : Store N b) (O : Oracle N b h) (I : Fin s → Fin N) :
     Prop :=
   ∀ i, A.tags E O (I i) = O (I i, E (I i))
 
-end InteractiveDevice
+end InteractiveProver
 
 end Bandwidth

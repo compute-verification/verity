@@ -39,19 +39,19 @@ oracle and sample with ingress exactly `N·b`.
 Frozen (no-function, hash): a bound in the random-oracle model over an abstract chip program, which no Lean function of
 the bandwidth audit's code computes. -/
 def AuditRO : Prop :=
-  ∀ (N b h S c G q s k lam : ℕ) (A : Device N b h S c G q),
+  ∀ (N b h S c G q s k lam : ℕ) (A : Prover N b h S c G q),
     pr (fun x : Store N b × Oracle N b h × (Fin s → Fin N) =>
         Accepts A x.1 x.2.1 x.2.2 ∧ A.ingress x.1 x.2.1 + S + c + G * b + lam < k * b)
       ≤ (((k - 1 : ℕ) : ℝ≥0∞) / N) ^ s + (s : ℝ≥0∞) / 2 ^ h + (q.choose k : ℝ≥0∞) / 2 ^ lam
 
 /-- **Completeness of `AuditRO`: an honest device is accepted, and its ingress is exactly the store.** For every `N`,
 `b` and `h` there is a device with no on-chip state, no side sources and no regeneration that makes `N` oracle queries
-(a `Device N b h 0 0 0 N`) whose tags are accepted on every store, oracle and sample, and whose ingress is exactly `N·b`
+(a `Prover N b h 0 0 0 N`) whose tags are accepted on every store, oracle and sample, and whose ingress is exactly `N·b`
 bits. The device reads every block once and queries the oracle at it. Against `AuditRO` at `S = c = G = 0` and `q = N`,
 the honest `N·b` sits above the floor `k·b − λ` by the sample's slack `(N − k)·b`, about `ε_s·N·b`, plus `λ`. Proof:
 `Bandwidth.SecurityProofs.HonestPasses`. -/
 def HonestPasses : Prop :=
-  ∀ N b h : ℕ, ∃ A : Device N b h 0 0 0 N,
+  ∀ N b h : ℕ, ∃ A : Prover N b h 0 0 0 N,
     ∀ (E : Store N b) (O : Oracle N b h) (s : ℕ) (I : Fin s → Fin N), Accepts A E O I ∧ A.ingress E O = N * b
 
 /-- **The bandwidth audit v0 with relayed tags, in the random-oracle model.** `AuditRO` for a `RelayDevice`, whose side
@@ -79,7 +79,7 @@ def AuditRelay : Prop :=
         + ((q.choose (k - m) : ℕ) : ℝ≥0∞) / 2 ^ lam
 
 /-- **The bandwidth audit v0 with interactive side sources, in the random-oracle model.** `AuditRelay`'s bound for an
-`InteractiveDevice`, whose chip may send bits and whose side sources answer each read as any function of the store,
+`InteractiveProver`, whose chip may send bits and whose side sources answer each read as any function of the store,
 the oracle and every bit sent so far. `c` bounds only the side bits the chip read, and sends are free: however many
 bits the chip sends, and however they depend on the seed, the deficit is `S + c + m·b + G·b + λ`, as for a relay
 device.
@@ -92,20 +92,20 @@ source is addressed by what was sent and where.
 Frozen (no-function, hash): a bound in the random-oracle model over an abstract chip program, which no Lean function of
 the bandwidth audit's code computes. -/
 def AuditInteractive : Prop :=
-  ∀ (N b h S c G q s k m lam : ℕ) (A : InteractiveDevice N b h S c G q),
+  ∀ (N b h S c G q s k m lam : ℕ) (A : InteractiveProver N b h S c G q),
     pr (fun x : Store N b × Oracle N b h × (Fin s → Fin N) =>
         A.Accepts x.1 x.2.1 x.2.2 ∧ A.ingress x.1 x.2.1 + S + c + m * b + G * b + lam < k * b)
       ≤ (((k - 1 : ℕ) : ℝ≥0∞) / N) ^ s + (N.choose m : ℝ≥0∞) * 2 ^ c / 2 ^ (h * m)
         + ((q.choose (k - m) : ℕ) : ℝ≥0∞) / 2 ^ lam
 
 /-- **The bandwidth audit v0 with interactive side sources that ignore the oracle.** `AuditRO`'s bound for an
-`InteractiveDevice` whose side sources' answers don't depend on the oracle. They may still depend on everything the
+`InteractiveProver` whose side sources' answers don't depend on the oracle. They may still depend on everything the
 chip sent, including tags it computed. No relayed-tag term: the deficit is `S + c + G·b + λ` at `AuditRO`'s error,
 with `c` the side bits read. Proof: `Bandwidth.SecurityProofs.AuditInteractiveRO`, from `AuditRO`.
 
 Frozen (no-function, hash): as `AuditInteractive`. -/
 def AuditInteractiveRO : Prop :=
-  ∀ (N b h S c G q s k lam : ℕ) (A : InteractiveDevice N b h S c G q),
+  ∀ (N b h S c G q s k lam : ℕ) (A : InteractiveProver N b h S c G q),
     (∀ E O O', A.side E O = A.side E O') →
     pr (fun x : Store N b × Oracle N b h × (Fin s → Fin N) =>
         A.Accepts x.1 x.2.1 x.2.2 ∧ A.ingress x.1 x.2.1 + S + c + G * b + lam < k * b)

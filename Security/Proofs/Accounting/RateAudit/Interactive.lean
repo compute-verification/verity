@@ -5,10 +5,10 @@ import Proofs.Accounting.RateAudit.Relay
 /-!
 # The rate audit with interactive side sources: the proof
 
-An interactive device is a relay device (`InteractiveDevice.toRelay`), as in the bandwidth audit
+An interactive device is a relay device (`InteractiveProver.toRelay`), as in the bandwidth audit
 (`Proofs/Accounting/Bandwidth/Interactive.lean`). Its chip, translated (`IChip.toChip`), drops its sends, and where it
 would read side address `a` having sent `v`, it reads the one address `addr v a`; the relay device's side source answers
-there what the interactive source answers to `v` at `a` (`InteractiveDevice.relaySide`), for the store, the stream and
+there what the interactive source answers to `v` at `a` (`InteractiveProver.relaySide`), for the store, the stream and
 the oracle. In every world the translation keeps the run, the ingress, the footprint, the link bits, the rebuilds and
 the queries (`IChip.toChip_run` and the five after it), so the device's tags, footprint, compute and bounds are the
 relay device's. The bounds are then `RelayDevice.audit`'s, `RateAudit`'s, when the answers ignore the oracle
@@ -17,7 +17,7 @@ relay device's. The bounds are then `RelayDevice.audit`'s, `RateAudit`'s, when t
 What the sends carry never enters the bounds, because the compression behind both encodes the bits the chip read, not
 what its sources hold: a source addressed by everything sent may be as large as it likes.
 
-The class is not vacuous: a `Device` is an interactive device that never sends (`Device.toInteractive`), with the same
+The class is not vacuous: a `Prover` is an interactive prover that never sends (`Prover.toInteractive`), with the same
 tags, ingress, footprint and compute, so every run that realizes `RateAudit`'s game realizes this one
 (`RealizesRate.toInteractive`), with side sources that ignore the oracle; `Proofs/Accounting/Sanity.lean` applies it to
 its honest rate run.
@@ -117,20 +117,20 @@ theorem toChip_queries (w : World N b h ρ) (p : IChip N b h ρ α) (v : List Bo
 
 end IChip
 
-namespace InteractiveDevice
+namespace InteractiveProver
 
 variable {N b h ρ S L q : ℕ}
 
 /-- The relay device's side source: at `addr v a`, the answer to `v` at `a`; nothing at an address that is no such
 pair. -/
-def relaySide (A : InteractiveDevice N b h ρ S L q) (E : Store N b) (R : Bits ρ) (O : Oracle N b h ρ) (n : ℕ) : Bool :=
+def relaySide (A : InteractiveProver N b h ρ S L q) (E : Store N b) (R : Bits ρ) (O : Oracle N b h ρ) (n : ℕ) : Bool :=
   match (Encodable.decode n : Option (List Bool × ℕ)) with
   | some p => A.side E R O p.1 p.2
   | none => false
 
 /-- **An interactive device as a relay device**: the same state and device memory, the side source `relaySide`, and
 the chip translated. Its bounds are the interactive device's, in the interactive world each chip world is. -/
-def toRelay (A : InteractiveDevice N b h ρ S L q) : RelayDevice N b h ρ S L q where
+def toRelay (A : InteractiveProver N b h ρ S L q) : RelayDevice N b h ρ S L q where
   state := A.state
   mem := A.mem
   side := A.relaySide
@@ -139,37 +139,37 @@ def toRelay (A : InteractiveDevice N b h ρ S L q) : RelayDevice N b h ρ S L q 
     rw [IChip.toChip_linkBits, IChip.toChip_queries]
     exact A.bounded st (IChip.lift w)
 
-theorem lift_world (A : InteractiveDevice N b h ρ S L q) (E : Store N b) (R : Bits ρ) (O : Oracle N b h ρ) :
+theorem lift_world (A : InteractiveProver N b h ρ S L q) (E : Store N b) (R : Bits ρ) (O : Oracle N b h ρ) :
     IChip.lift (A.toRelay.world E R O) = A.world E R O := by
   simp only [IChip.lift, RelayDevice.world, toRelay, world, IWorld.mk.injEq, true_and, and_true]
   funext v a
   simp [relaySide, IChip.addr, Encodable.encodek]
 
-theorem toRelay_tags (A : InteractiveDevice N b h ρ S L q) (E : Store N b) (R : Bits ρ) (O : Oracle N b h ρ) :
+theorem toRelay_tags (A : InteractiveProver N b h ρ S L q) (E : Store N b) (R : Bits ρ) (O : Oracle N b h ρ) :
     A.toRelay.tags E R O = A.tags E R O := by
   change ((A.chip (A.state E)).toChip []).run (A.toRelay.world E R O) = _
   rw [IChip.toChip_run, lift_world]
   rfl
 
-theorem toRelay_footprint (A : InteractiveDevice N b h ρ S L q) (E : Store N b) (R : Bits ρ) (O : Oracle N b h ρ) :
+theorem toRelay_footprint (A : InteractiveProver N b h ρ S L q) (E : Store N b) (R : Bits ρ) (O : Oracle N b h ρ) :
     A.toRelay.footprint E R O = A.footprint E R O := by
   change (((A.chip (A.state E)).toChip []).addrs (A.toRelay.world E R O)).card = _
   rw [IChip.toChip_addrs, lift_world]
   rfl
 
-theorem toRelay_compute (A : InteractiveDevice N b h ρ S L q) (cTag cEnc : ℕ) (E : Store N b) (R : Bits ρ)
+theorem toRelay_compute (A : InteractiveProver N b h ρ S L q) (cTag cEnc : ℕ) (E : Store N b) (R : Bits ρ)
     (O : Oracle N b h ρ) : A.toRelay.compute cTag cEnc E R O = A.compute cTag cEnc E R O := by
   change (((A.chip (A.state E)).toChip []).queries (A.toRelay.world E R O)).length * cTag +
     ((A.chip (A.state E)).toChip []).rebuilds (A.toRelay.world E R O) * cEnc = _
   rw [IChip.toChip_queries, IChip.toChip_rebuilds, lift_world]
   rfl
 
-theorem toRelay_accepts {s : ℕ} (A : InteractiveDevice N b h ρ S L q) (E : Store N b) (R : Bits ρ)
+theorem toRelay_accepts {s : ℕ} (A : InteractiveProver N b h ρ S L q) (E : Store N b) (R : Bits ρ)
     (O : Oracle N b h ρ) (I : Fin s → Fin N) : A.toRelay.Accepts E R O I ↔ A.Accepts E R O I := by
   simp only [RelayDevice.Accepts, Accepts, toRelay_tags]
 
 /-- The footprint is at most the ingress: each address is read at least once. -/
-theorem footprint_le_ingress (A : InteractiveDevice N b h ρ S L q) (E : Store N b) (R : Bits ρ)
+theorem footprint_le_ingress (A : InteractiveProver N b h ρ S L q) (E : Store N b) (R : Bits ρ)
     (O : Oracle N b h ρ) : A.footprint E R O ≤ A.ingress E R O := by
   rw [← toRelay_footprint]
   have h := Chip.card_addrs_le (A.toRelay.world E R O) ((A.chip (A.state E)).toChip [])
@@ -177,13 +177,13 @@ theorem footprint_le_ingress (A : InteractiveDevice N b h ρ S L q) (E : Store N
   exact h
 
 /-- When the answers ignore the oracle, so does the relay device's side source. -/
-theorem toRelay_side (A : InteractiveDevice N b h ρ S L q) (hA : ∀ E R O O', A.side E R O = A.side E R O') :
+theorem toRelay_side (A : InteractiveProver N b h ρ S L q) (hA : ∀ E R O O', A.side E R O = A.side E R O') :
     ∀ E R O O', A.toRelay.side E R O = A.toRelay.side E R O' := by
   intro E R O O'
   funext n
   simp only [toRelay, relaySide, hA E R O O']
 
-end InteractiveDevice
+end InteractiveProver
 
 /-! ## A device as an interactive device -/
 
@@ -266,12 +266,12 @@ theorem toIChip_queries (c : Chip N b h ρ α) (w : IWorld N b h ρ) (v : List B
 
 end Chip
 
-namespace Device
+namespace Prover
 
 variable {N b h ρ S L q : ℕ}
 
 /-- A device as an interactive device that never sends: its side sources answer every read as the device's do. -/
-def toInteractive (A : Device N b h ρ S L q) : InteractiveDevice N b h ρ S L q where
+def toInteractive (A : Prover N b h ρ S L q) : InteractiveProver N b h ρ S L q where
   state := A.state
   mem := A.mem
   side E _ _ _ := A.side E
@@ -280,24 +280,24 @@ def toInteractive (A : Device N b h ρ S L q) : InteractiveDevice N b h ρ S L q
     rw [Chip.toIChip_linkBits, Chip.toIChip_queries]
     exact A.bounded st (w.atSent [])
 
-theorem toInteractive_tags (A : Device N b h ρ S L q) (E : Store N b) (R : Bits ρ) (O : Oracle N b h ρ) :
+theorem toInteractive_tags (A : Prover N b h ρ S L q) (E : Store N b) (R : Bits ρ) (O : Oracle N b h ρ) :
     A.toInteractive.tags E R O = A.tags E R O :=
   Chip.toIChip_run _ _ _
 
-theorem toInteractive_ingress (A : Device N b h ρ S L q) (E : Store N b) (R : Bits ρ) (O : Oracle N b h ρ) :
+theorem toInteractive_ingress (A : Prover N b h ρ S L q) (E : Store N b) (R : Bits ρ) (O : Oracle N b h ρ) :
     A.toInteractive.ingress E R O = A.ingress E R O :=
   Chip.toIChip_ingressBits _ _ _
 
-theorem toInteractive_compute (A : Device N b h ρ S L q) (cTag cEnc : ℕ) (E : Store N b) (R : Bits ρ)
+theorem toInteractive_compute (A : Prover N b h ρ S L q) (cTag cEnc : ℕ) (E : Store N b) (R : Bits ρ)
     (O : Oracle N b h ρ) : A.toInteractive.compute cTag cEnc E R O = A.compute cTag cEnc E R O := by
-  simp only [InteractiveDevice.compute, Device.compute, toInteractive, Chip.toIChip_queries, Chip.toIChip_rebuilds]
+  simp only [InteractiveProver.compute, Prover.compute, toInteractive, Chip.toIChip_queries, Chip.toIChip_rebuilds]
   rfl
 
-theorem toInteractive_accepts {s : ℕ} (A : Device N b h ρ S L q) (E : Store N b) (R : Bits ρ) (O : Oracle N b h ρ)
+theorem toInteractive_accepts {s : ℕ} (A : Prover N b h ρ S L q) (E : Store N b) (R : Bits ρ) (O : Oracle N b h ρ)
     (I : Fin s → Fin N) : A.toInteractive.Accepts E R O I ↔ A.Accepts E R O I := by
-  simp only [InteractiveDevice.Accepts, Device.Accepts, toInteractive_tags]
+  simp only [InteractiveProver.Accepts, Prover.Accepts, toInteractive_tags]
 
-end Device
+end Prover
 
 end Accounting.Rate
 
@@ -311,9 +311,9 @@ def RealizesRate.toInteractive {p : Price} {cTag cEnc N b h ρ s : ℕ} {ι : Ty
     {α ΩW ΩS : Type} [Fintype α] [DecidableEq α] {r : Run d α ΩW (RateCoins N b h ρ s) ΩS}
     (real : RealizesRate p cTag cEnc r) : RealizesRateInteractive p cTag cEnc r where
   dev z := (real.dev z).toInteractive
-  accepts_iff x y s' := (real.accepts_iff x y s').trans (Rate.Device.toInteractive_accepts _ _ _ _ _).symm
-  ingress_le x y s' := (Rate.Device.toInteractive_ingress _ _ _ _).trans_le (real.ingress_le x y s')
-  compute_le x y s' := (Rate.Device.toInteractive_compute _ _ _ _ _ _).trans_le (real.compute_le x y s')
+  accepts_iff x y s' := (real.accepts_iff x y s').trans (Rate.Prover.toInteractive_accepts _ _ _ _ _).symm
+  ingress_le x y s' := (Rate.Prover.toInteractive_ingress _ _ _ _).trans_le (real.ingress_le x y s')
+  compute_le x y s' := (Rate.Prover.toInteractive_compute _ _ _ _ _ _).trans_le (real.compute_le x y s')
 
 theorem RealizesRate.toInteractive_side {p : Price} {cTag cEnc N b h ρ s : ℕ} {ι : Type} [Fintype ι] {d : Device ι}
     {α ΩW ΩS : Type} [Fintype α] [DecidableEq α] {r : Run d α ΩW (RateCoins N b h ρ s) ΩS}
@@ -326,7 +326,7 @@ end Accounting
 
 namespace Accounting.SecurityProofs
 
-open Accounting.Rate Accounting.Rate.InteractiveDevice
+open Accounting.Rate Accounting.Rate.InteractiveProver
 open Pous (Bits pr)
 open scoped ENNReal
 

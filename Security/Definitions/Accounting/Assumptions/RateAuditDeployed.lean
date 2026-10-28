@@ -51,12 +51,12 @@ oracle queries total at most `qtot`, at every signs, oracle family and data:
 measured cap the deployed parameters state for a single candidate's `q` (at most `2^55` compressions a pass). The
 budget is what makes grinding pay for its queries once rather than per candidate: a candidate the prover grinds spends
 real compressions, so the `G` candidates' queries add within the one budget instead of each getting it whole. The
-per-candidate cap `Device.bounded` alone gives only the trivial budget `qtot = G·q`
-(`Accounting.RateSketch.Device.budget_of_bounded` in `Security/Proofs/Accounting/RateAudit/DeployedSketchSum.lean`),
+per-candidate cap `Prover.bounded` alone gives only the trivial budget `qtot = G·q`
+(`Accounting.RateSketch.Prover.budget_of_bounded` in `Security/Proofs/Accounting/RateAudit/DeployedSketchSum.lean`),
 at which the budgeted bound recovers the multiplicative one. As for `SquaringCeiling`, the bound holds in every world:
 it is the hardware's capacity, which no oracle answer raises. -/
 def SketchHashBudget {N m ρ h S L q w G : ℕ} {X Sig Dg : Type}
-    (A : Fin G → RateSketch.Device N m ρ h S L q w X Sig Dg) (qtot : ℕ) : Prop :=
+    (A : Fin G → RateSketch.Prover N m ρ h S L q w X Sig Dg) (qtot : ℕ) : Prop :=
   ∀ (σ : Sig) (Os : Fin G → RateSketch.Oracle N ρ h X Dg) (D : RateSketch.Data N m ρ X),
     ∑ c, (((A c).prog σ D).queries (Os c) D).length ≤ qtot
 

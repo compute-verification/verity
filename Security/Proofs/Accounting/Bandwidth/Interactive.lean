@@ -6,7 +6,7 @@ import Proofs.Accounting.Bandwidth.Relay
 
 An interactive device is a relay device. Its chip, translated (`IChip.toChip`), drops its sends, and where it would
 read side address `a` having sent `v`, it reads the one address `addr v a`. The relay device's side source answers there
-what the interactive source answers to `v` at `a` (`InteractiveDevice.relaySide`). In every world the translation
+what the interactive source answers to `v` at `a` (`InteractiveProver.relaySide`). In every world the translation
 keeps the run, the ingress, the side bits, the regenerations and the queries (`IChip.toChip_run` and the four after
 it), so the device's tags, ingress and bounds are the relay device's. The bound is then `AuditRelay`'s
 (`AuditInteractive`), and `AuditRO`'s when the answers ignore the oracle (`AuditInteractiveRO`), through the relay
@@ -93,20 +93,20 @@ theorem toChip_queries (w : World N b h) (p : IChip N b h α) (v : List Bool) :
 
 end IChip
 
-namespace InteractiveDevice
+namespace InteractiveProver
 
 variable {N b h S c G q : ℕ}
 
 /-- The relay device's side source: at `addr v a`, the answer to `v` at `a`; nothing at an address that is no such
 pair. -/
-def relaySide (A : InteractiveDevice N b h S c G q) (E : Store N b) (O : Oracle N b h) (n : ℕ) : Bool :=
+def relaySide (A : InteractiveProver N b h S c G q) (E : Store N b) (O : Oracle N b h) (n : ℕ) : Bool :=
   match (Encodable.decode n : Option (List Bool × ℕ)) with
   | some p => A.side E O p.1 p.2
   | none => false
 
 /-- **An interactive device as a relay device**: the same state and device memory, the side source `relaySide`, and
 the chip translated. Its bounds are the interactive device's, in the interactive world each chip world is. -/
-def toRelay (A : InteractiveDevice N b h S c G q) : RelayDevice N b h S c G q where
+def toRelay (A : InteractiveProver N b h S c G q) : RelayDevice N b h S c G q where
   state := A.state
   mem := A.mem
   side := A.relaySide
@@ -115,38 +115,38 @@ def toRelay (A : InteractiveDevice N b h S c G q) : RelayDevice N b h S c G q wh
     rw [IChip.toChip_sideBits, IChip.toChip_regens, IChip.toChip_queries]
     exact A.bounded st (IChip.lift w)
 
-theorem lift_world (A : InteractiveDevice N b h S c G q) (E : Store N b) (O : Oracle N b h) :
+theorem lift_world (A : InteractiveProver N b h S c G q) (E : Store N b) (O : Oracle N b h) :
     IChip.lift (A.toRelay.world E O) = A.world E O := by
   simp only [IChip.lift, RelayDevice.world, toRelay, world, IWorld.mk.injEq, true_and, and_true]
   funext v a
   simp [relaySide, IChip.addr, Encodable.encodek]
 
-theorem toRelay_tags (A : InteractiveDevice N b h S c G q) (E : Store N b) (O : Oracle N b h) :
+theorem toRelay_tags (A : InteractiveProver N b h S c G q) (E : Store N b) (O : Oracle N b h) :
     A.toRelay.tags E O = A.tags E O := by
   change ((A.chip (A.state E)).toChip []).run (A.toRelay.world E O) = _
   rw [IChip.toChip_run, lift_world]
   rfl
 
-theorem toRelay_ingress (A : InteractiveDevice N b h S c G q) (E : Store N b) (O : Oracle N b h) :
+theorem toRelay_ingress (A : InteractiveProver N b h S c G q) (E : Store N b) (O : Oracle N b h) :
     A.toRelay.ingress E O = A.ingress E O := by
   change ((A.chip (A.state E)).toChip []).ingressBits (A.toRelay.world E O) = _
   rw [IChip.toChip_ingressBits, lift_world]
   rfl
 
-theorem toRelay_accepts {s : ℕ} (A : InteractiveDevice N b h S c G q) (E : Store N b) (O : Oracle N b h)
+theorem toRelay_accepts {s : ℕ} (A : InteractiveProver N b h S c G q) (E : Store N b) (O : Oracle N b h)
     (I : Fin s → Fin N) : A.toRelay.Accepts E O I ↔ A.Accepts E O I := by
   simp only [RelayDevice.Accepts, Accepts, toRelay_tags]
 
 /-- When the answers ignore the oracle, the relay device at any one oracle runs, at every oracle, as the relay device
 does. -/
-theorem atOracle_world (A : InteractiveDevice N b h S c G q) (hA : ∀ E O O', A.side E O = A.side E O')
+theorem atOracle_world (A : InteractiveProver N b h S c G q) (hA : ∀ E O O', A.side E O = A.side E O')
     (O₀ : Oracle N b h) (E : Store N b) (O : Oracle N b h) :
     (A.toRelay.atOracle O₀).world E O = A.toRelay.world E O := by
-  simp only [Device.world, RelayDevice.world, RelayDevice.atOracle, World.mk.injEq, true_and, and_true]
+  simp only [Prover.world, RelayDevice.world, RelayDevice.atOracle, World.mk.injEq, true_and, and_true]
   funext n
   simp only [toRelay, relaySide, hA E O₀ O]
 
-theorem atOracle_tags (A : InteractiveDevice N b h S c G q) (hA : ∀ E O O', A.side E O = A.side E O')
+theorem atOracle_tags (A : InteractiveProver N b h S c G q) (hA : ∀ E O O', A.side E O = A.side E O')
     (O₀ : Oracle N b h) (E : Store N b) (O : Oracle N b h) :
     (A.toRelay.atOracle O₀).tags E O = A.tags E O := by
   rw [← toRelay_tags]
@@ -154,7 +154,7 @@ theorem atOracle_tags (A : InteractiveDevice N b h S c G q) (hA : ∀ E O O', A.
   rw [atOracle_world A hA]
   rfl
 
-theorem atOracle_ingress (A : InteractiveDevice N b h S c G q) (hA : ∀ E O O', A.side E O = A.side E O')
+theorem atOracle_ingress (A : InteractiveProver N b h S c G q) (hA : ∀ E O O', A.side E O = A.side E O')
     (O₀ : Oracle N b h) (E : Store N b) (O : Oracle N b h) :
     (A.toRelay.atOracle O₀).ingress E O = A.ingress E O := by
   rw [← toRelay_ingress]
@@ -162,14 +162,14 @@ theorem atOracle_ingress (A : InteractiveDevice N b h S c G q) (hA : ∀ E O O',
   rw [atOracle_world A hA]
   rfl
 
-end InteractiveDevice
+end InteractiveProver
 
 /-! ## Bounded only where it runs
 
 A device built from an actual circuit is bounded only in the worlds it runs in, where physics bounds what it reads,
-while `InteractiveDevice.bounded` asks for every world. `IChip.cap` ends a program at the step that would exceed a
+while `InteractiveProver.bounded` asks for every world. `IChip.cap` ends a program at the step that would exceed a
 budget, which bounds it in every world and changes nothing in a world where it was within budget. So a program
-bounded on its runs is an interactive device (`InteractiveDevice.ofRuns`) with the same tags and ingress on them. -/
+bounded on its runs is an interactive device (`InteractiveProver.ofRuns`) with the same tags and ingress on them. -/
 
 namespace IChip
 
@@ -245,7 +245,7 @@ theorem cap_eq (d : α) (w : IWorld N b h) (p : IChip N b h α) (c G q : ℕ) (v
 
 end IChip
 
-namespace InteractiveDevice
+namespace InteractiveProver
 
 variable {N b h S c G q : ℕ}
 
@@ -254,7 +254,7 @@ whose run, in the world of every store and oracle, reads at most `c` side bits, 
 makes at most `q` queries. The device runs the program capped at those budgets. -/
 def ofRuns (state : Store N b → Bits S) (mem : Store N b → ℕ → Bool)
     (side : Store N b → Oracle N b h → List Bool → ℕ → Bool) (chip : Bits S → IChip N b h (Fin N → Bits h)) :
-    InteractiveDevice N b h S c G q where
+    InteractiveProver N b h S c G q where
   state := state
   mem := mem
   side := side
@@ -271,11 +271,11 @@ theorem ofRuns_run (state : Store N b → Bits S) (mem : Store N b → ℕ → B
         (chip (state E)).ingressBits ⟨O, mem E, side E O, E⟩ [] :=
   IChip.cap_eq _ _ (chip (state E)) c G q [] hb.1 hb.2.1 hb.2.2
 
-end InteractiveDevice
+end InteractiveProver
 
 namespace SecurityProofs
 
-open InteractiveDevice
+open InteractiveProver
 
 /-- **The bandwidth audit v0 with interactive side sources** (`Bandwidth.Guarantees.AuditInteractive`). -/
 theorem AuditInteractive : Bandwidth.Guarantees.AuditInteractive := by
@@ -298,7 +298,7 @@ theorem AuditInteractiveRO : Bandwidth.Guarantees.AuditInteractiveRO := by
       fun x => Accepts (A.toRelay.atOracle O₀) x.1 x.2.1 x.2.2 ∧
         (A.toRelay.atOracle O₀).ingress x.1 x.2.1 + S + c + G * b + lam < k * b := by
     funext x
-    simp only [Bandwidth.Accepts, InteractiveDevice.Accepts, atOracle_tags A hA, atOracle_ingress A hA]
+    simp only [Bandwidth.Accepts, InteractiveProver.Accepts, atOracle_tags A hA, atOracle_ingress A hA]
   rw [hev]
   exact AuditRO N b h S c G q s k lam (A.toRelay.atOracle O₀)
 

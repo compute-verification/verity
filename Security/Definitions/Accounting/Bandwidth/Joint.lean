@@ -15,7 +15,7 @@ namespace Bandwidth
 open Pous (Bits)
 
 /-- A device whose layout is any function of the store and of `n` more bits `z`, and whose chip outputs its tags and a
-value of `n` bits. Its bounds are `Device`'s: in every world the program reads at most `c` bits of side sources,
+value of `n` bits. Its bounds are `Prover`'s: in every world the program reads at most `c` bits of side sources,
 regenerates at most `G` blocks and makes at most `q` oracle queries. -/
 structure JointDevice (N b h S c G q n : ℕ) where
   state : Store N b → Bits n → Bits S

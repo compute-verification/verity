@@ -129,55 +129,56 @@ def reads (O : Oracle N ρ h X Dg) (D : Data N m ρ X) : Chip N m ρ h X Dg α �
 
 end Chip
 
-/-- A device: the store sectors it holds on chip when the window opens (`w` bits each, at most `S` bits), and its
+/-- A prover: its strategy on a device of the device model (`Accounting.Device`), bounded by that device's figures. It
+holds store sectors on chip when the window opens (`w` bits each, at most `S` bits, the device's `chip`), and runs its
 chip program from the signs and those sectors. In every run the program takes in at most `L` bits over the side link
-and makes at most `q` oracle queries. -/
-structure Device (N m ρ h S L q w : ℕ) (X Sig Dg : Type) where
+(its `cap` over the window) and makes at most `q` oracle queries. -/
+structure Prover (N m ρ h S L q w : ℕ) (X Sig Dg : Type) where
   held : Finset (Fin N × Fin m)
   held_le : held.card * w ≤ S
   chip : Sig → (held → X) → Chip N m ρ h X Dg (Fin N → Bits h)
   bounded : ∀ (σ : Sig) (v : held → X) (O : Oracle N ρ h X Dg) (D : Data N m ρ X),
     (chip σ v).linkSteps O D * w ≤ L ∧ ((chip σ v).queries O D).length ≤ q
 
-namespace Device
+namespace Prover
 
 variable {N m ρ h S L q w : ℕ} {X Sig Dg : Type}
 
 /-- The device's program in the window at signs `σ` and data `D`: its chip program from the sectors it holds. -/
-def prog (A : Device N m ρ h S L q w X Sig Dg) (σ : Sig) (D : Data N m ρ X) : Chip N m ρ h X Dg (Fin N → Bits h) :=
+def prog (A : Prover N m ρ h S L q w X Sig Dg) (σ : Sig) (D : Data N m ρ X) : Chip N m ρ h X Dg (Fin N → Bits h) :=
   A.chip σ (fun p => D (.inl p.1))
 
 /-- The tags the device commits to. -/
-def tags (A : Device N m ρ h S L q w X Sig Dg) (σ : Sig) (O : Oracle N ρ h X Dg) (D : Data N m ρ X) :
+def tags (A : Prover N m ρ h S L q w X Sig Dg) (σ : Sig) (O : Oracle N ρ h X Dg) (D : Data N m ρ X) :
     Fin N → Bits h :=
   (A.prog σ D).run O D
 
 /-- The device's footprint in the window: the distinct store sectors it read from device memory, in bits. -/
-def footprint (A : Device N m ρ h S L q w X Sig Dg) (σ : Sig) (O : Oracle N ρ h X Dg) (D : Data N m ρ X) : ℕ :=
+def footprint (A : Prover N m ρ h S L q w X Sig Dg) (σ : Sig) (O : Oracle N ρ h X Dg) (D : Data N m ρ X) : ℕ :=
   ((A.prog σ D).mems O D).card * w
 
 /-- The device's compute in the window, at `c_tag` per oracle query and `c_enc` per rebuilt sector. -/
-def compute (A : Device N m ρ h S L q w X Sig Dg) (cTag cEnc : ℕ) (σ : Sig) (O : Oracle N ρ h X Dg)
+def compute (A : Prover N m ρ h S L q w X Sig Dg) (cTag cEnc : ℕ) (σ : Sig) (O : Oracle N ρ h X Dg)
     (D : Data N m ρ X) : ℕ :=
   ((A.prog σ D).queries O D).length * cTag + (A.prog σ D).rebuilds O D * cEnc
 
 /-- The verifier accepts: every sampled tile's committed tag is the oracle's tag of the stream, the tile's index and
 the digest `dig σ` of the tile. -/
-def Accepts {s : ℕ} (A : Device N m ρ h S L q w X Sig Dg) (dig : Sig → (Fin m → X) → Dg) (σ : Sig)
+def Accepts {s : ℕ} (A : Prover N m ρ h S L q w X Sig Dg) (dig : Sig → (Fin m → X) → Dg) (σ : Sig)
     (O : Oracle N ρ h X Dg) (D : Data N m ρ X) (I : Fin s → Fin N) : Prop :=
   ∀ i, A.tags σ O D (I i) = O (D.stream, I i, dig σ (D.tile (I i)))
 
 /-- Every tile whose committed tag is correct, whether or not a verifier sampled it. -/
-def correct (A : Device N m ρ h S L q w X Sig Dg) (dig : Sig → (Fin m → X) → Dg) (σ : Sig)
+def correct (A : Prover N m ρ h S L q w X Sig Dg) (dig : Sig → (Fin m → X) → Dg) (σ : Sig)
     (O : Oracle N ρ h X Dg) (D : Data N m ρ X) : Finset (Fin N) :=
   Finset.univ.filter fun t => A.tags σ O D t = O (D.stream, t, dig σ (D.tile t))
 
 /-- The positions a run obtained: the sectors held on chip and every position it read. -/
-def obtained (A : Device N m ρ h S L q w X Sig Dg) (σ : Sig) (O : Oracle N ρ h X Dg) (D : Data N m ρ X) :
+def obtained (A : Prover N m ρ h S L q w X Sig Dg) (σ : Sig) (O : Oracle N ρ h X Dg) (D : Data N m ρ X) :
     Finset (Pos N m ρ) :=
   A.held.map Function.Embedding.inl ∪ (A.prog σ D).reads O D
 
-end Device
+end Prover
 
 /-- **The digest's fiber** at signs `σ`: the most contents `a` of one sector `u` that give one digest `d` with the rest
 of the tile `x` fixed, and at least `1`. The guess term is `fib/|X|` per query. -/

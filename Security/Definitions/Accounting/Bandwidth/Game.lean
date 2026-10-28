@@ -101,10 +101,11 @@ def queries (w : World N b h) : Chip N b h α → List (Fin N × Bits b)
 
 end Chip
 
-/-- A device: its on-chip state (`S` bits), device memory and side sources, each laid out from the store before the
-seed, and its chip program from that state. In every world the program reads at most `c` bits of side sources,
-regenerates at most `G` blocks and makes at most `q` oracle queries. -/
-structure Device (N b h S c G q : ℕ) where
+/-- A prover: its strategy on a device of the device model (`Accounting.Device`), bounded by that device's figures. It
+lays out on-chip state (`S` bits, the device's `chip`), device memory and side sources, each from the store before the
+seed, and runs its chip program from that state. In every world the program reads at most `c` bits of side sources
+(its `cap` over the window), regenerates at most `G` blocks and makes at most `q` oracle queries. -/
+structure Prover (N b h S c G q : ℕ) where
   state : Store N b → Bits S
   mem : Store N b → ℕ → Bool
   side : Store N b → ℕ → Bool
@@ -112,26 +113,26 @@ structure Device (N b h S c G q : ℕ) where
   bounded : ∀ (st : Bits S) (w : World N b h),
     (chip st).sideBits w ≤ c ∧ (chip st).regens w ≤ G ∧ ((chip st).queries w).length ≤ q
 
-namespace Device
+namespace Prover
 
 variable {N b h S c G q : ℕ}
 
 /-- The world a device's chip runs in, for store `E` and oracle `O`. -/
-def world (A : Device N b h S c G q) (E : Store N b) (O : Oracle N b h) : World N b h :=
+def world (A : Prover N b h S c G q) (E : Store N b) (O : Oracle N b h) : World N b h :=
   ⟨O, A.mem E, A.side E, E⟩
 
 /-- The tags the device commits to. -/
-def tags (A : Device N b h S c G q) (E : Store N b) (O : Oracle N b h) : Fin N → Bits h :=
+def tags (A : Prover N b h S c G q) (E : Store N b) (O : Oracle N b h) : Fin N → Bits h :=
   (A.chip (A.state E)).run (A.world E O)
 
 /-- The device's ingress in the window, in bits. -/
-def ingress (A : Device N b h S c G q) (E : Store N b) (O : Oracle N b h) : ℕ :=
+def ingress (A : Prover N b h S c G q) (E : Store N b) (O : Oracle N b h) : ℕ :=
   (A.chip (A.state E)).ingressBits (A.world E O)
 
-end Device
+end Prover
 
 /-- The verifier accepts: every sampled block's committed tag is the oracle's tag of that block. -/
-def Accepts {N b h S c G q s : ℕ} (A : Device N b h S c G q) (E : Store N b) (O : Oracle N b h)
+def Accepts {N b h S c G q s : ℕ} (A : Prover N b h S c G q) (E : Store N b) (O : Oracle N b h)
     (I : Fin s → Fin N) : Prop :=
   ∀ i, A.tags E O (I i) = O (I i, E (I i))
 

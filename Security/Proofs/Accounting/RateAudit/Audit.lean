@@ -20,7 +20,7 @@ by whether the device queried the oracle, under the certified stream, at the con
   the oracle, since replaying the chip recomputes its queries (`Chip.replay_trace`).
 
 The argument is run on a `RelayDevice`, whose free side sources may depend on the certified stream and the oracle as
-well as the store. A `Device` is one (`Device.toRelay`), and so is an interactive device (`Interactive.lean`). The
+well as the store. A `Prover` is one (`Prover.toRelay`), and so is an interactive device (`Interactive.lean`). The
 compression never reads the side sources, only the bits the chip read from them, so it holds for any; the guessed tag
 needs sources that ignore the oracle (`RelayDevice.audit`), and `Relay.lean` bounds the rest.
 -/
@@ -34,7 +34,7 @@ open Bandwidth (card_line_le)
 variable {N b h ρ S L q : ℕ}
 
 /-- A device of `RateAudit`'s class whose free side sources may depend on the certified stream and the oracle as well as
-the store. Its other fields and its bounds are `Device`'s. -/
+the store. Its other fields and its bounds are `Prover`'s. -/
 structure RelayDevice (N b h ρ S L q : ℕ) where
   state : Store N b → Bits S
   mem : Store N b → ℕ → Bool
@@ -68,7 +68,7 @@ def Accepts {s : ℕ} (A : RelayDevice N b h ρ S L q) (E : Store N b) (R : Bits
 end RelayDevice
 
 /-- A device as a relay device whose side sources ignore the stream and the oracle. -/
-def Device.toRelay (A : Device N b h ρ S L q) : RelayDevice N b h ρ S L q :=
+def Prover.toRelay (A : Prover N b h ρ S L q) : RelayDevice N b h ρ S L q :=
   ⟨A.state, A.mem, fun E _ _ => A.side E, A.chip, A.bounded⟩
 
 /-- The words whose contents the device queried the oracle at, under the certified stream. -/

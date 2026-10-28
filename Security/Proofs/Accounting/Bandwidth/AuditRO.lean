@@ -24,7 +24,7 @@ open scoped ENNReal
 variable {N b h S c G q : ℕ}
 
 /-- The blocks whose contents the device queried the oracle at. -/
-def queried (A : Device N b h S c G q) (E : Store N b) (O : Oracle N b h) : Finset (Fin N) :=
+def queried (A : Prover N b h S c G q) (E : Store N b) (O : Oracle N b h) : Finset (Fin N) :=
   Finset.univ.filter (fun j => (j, E j) ∈ (A.chip (A.state E)).queries (A.world E O))
 
 namespace AuditRO
@@ -40,7 +40,7 @@ theorem card_sample (K : Finset (Fin N)) (s : ℕ) [DecidablePred (fun I : Fin s
 
 /-! ## A guessed tag -/
 
-theorem card_guess_le (A : Device N b h S c G q) (E : Store N b) (j : Fin N)
+theorem card_guess_le (A : Prover N b h S c G q) (E : Store N b) (j : Fin N)
     [DecidablePred (fun O : Oracle N b h => j ∉ queried A E O ∧ A.tags E O j = O (j, E j))] :
     (Finset.univ.filter (fun O : Oracle N b h => j ∉ queried A E O ∧ A.tags E O j = O (j, E j))).card * 2 ^ h ≤
       Fintype.card (Oracle N b h) := by
@@ -63,23 +63,23 @@ theorem card_guess_le (A : Device N b h S c G q) (E : Store N b) (j : Fin N)
 def stream (r : ℕ) (bits : Bits r) (n : ℕ) : Bool := if hn : n < r then bits ⟨n, hn⟩ else false
 
 /-- The queries a code (the chip's state, a padded trace and a set of query positions) replays to. -/
-def decoded (A : Device N b h S c G q) (O : Oracle N b h) (r : ℕ) (code : Bits S × Bits r × Finset ℕ) :
+def decoded (A : Prover N b h S c G q) (O : Oracle N b h) (r : ℕ) (code : Bits S × Bits r × Finset ℕ) :
     List (Fin N × Bits b) :=
   (A.chip code.1).replay O (stream r code.2.1)
 
 open Classical in
 /-- The stores a code describes: those holding, at each named position's query, its block. -/
-noncomputable def fib (A : Device N b h S c G q) (O : Oracle N b h) (r : ℕ) (code : Bits S × Bits r × Finset ℕ) :
+noncomputable def fib (A : Prover N b h S c G q) (O : Oracle N b h) (r : ℕ) (code : Bits S × Bits r × Finset ℕ) :
     Finset (Store N b) :=
   Finset.univ.filter (fun E => ∀ p ∈ code.2.2, ∀ x, (decoded A O r code)[p]? = some x → E x.1 = x.2)
 
 open Classical in
 /-- The blocks a code names. -/
-noncomputable def named (A : Device N b h S c G q) (O : Oracle N b h) (r : ℕ) (code : Bits S × Bits r × Finset ℕ) :
+noncomputable def named (A : Prover N b h S c G q) (O : Oracle N b h) (r : ℕ) (code : Bits S × Bits r × Finset ℕ) :
     Finset (Fin N) :=
   Finset.univ.filter (fun j => ∃ p ∈ code.2.2, ∃ x, (decoded A O r code)[p]? = some x ∧ x.1 = j)
 
-theorem card_fib (A : Device N b h S c G q) (O : Oracle N b h) (r : ℕ) (code : Bits S × Bits r × Finset ℕ) :
+theorem card_fib (A : Prover N b h S c G q) (O : Oracle N b h) (r : ℕ) (code : Bits S × Bits r × Finset ℕ) :
     (fib A O r code).card ≤ (2 ^ b) ^ (N - (named A O r code).card) := by
   classical
   calc (fib A O r code).card ≤ (Finset.univ : Finset (↥(named A O r code)ᶜ → Bits b)).card := by
@@ -95,7 +95,7 @@ theorem card_fib (A : Device N b h S c G q) (O : Oracle N b h) (r : ℕ) (code :
     _ = (2 ^ b) ^ (N - (named A O r code).card) := by
         simp
 
-theorem card_compress_le (A : Device N b h S c G q) (O : Oracle N b h) (k lam : ℕ)
+theorem card_compress_le (A : Prover N b h S c G q) (O : Oracle N b h) (k lam : ℕ)
     [DecidablePred (fun E : Store N b => k ≤ (queried A E O).card ∧ A.ingress E O + S + c + G * b + lam < k * b)] :
     (Finset.univ.filter (fun E : Store N b =>
         k ≤ (queried A E O).card ∧ A.ingress E O + S + c + G * b + lam < k * b)).card * 2 ^ lam ≤
@@ -119,7 +119,7 @@ theorem card_compress_le (A : Device N b h S c G q) (O : Oracle N b h) (k lam : 
     have hT : ((A.chip (A.state E)).trace (A.world E O)).length < r := by
       have h1 := Chip.trace_length (A.world E O) (A.chip (A.state E))
       have h2 : (A.chip (A.state E)).regens (A.world E O) * b ≤ G * b := Nat.mul_le_mul_right _ hreg
-      simp only [Device.ingress] at hlow
+      simp only [Prover.ingress] at hlow
       omega
     obtain ⟨Kk, hKk, hKkcard⟩ := Finset.exists_subset_card_eq hk
     set qs := (A.chip (A.state E)).queries (A.world E O) with hqs

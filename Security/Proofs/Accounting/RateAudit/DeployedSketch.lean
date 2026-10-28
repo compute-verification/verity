@@ -18,14 +18,14 @@ open Pous (pr)
 open scoped ENNReal
 open Bandwidth (pr_exists_le pr_le_of_card pr_mono pr_or_le)
 
-namespace Device
+namespace Prover
 
 variable {N m ρ h S L q ks : ℕ}
 
 /-- Outside the low-rank event, a verbatim pass's correct receipts are paid for by its held sectors, memory reads,
 side-link sectors and rebuilt sectors. -/
 theorem pr_unpaid_rank_le
-    (A : Device N m ρ h S L q 256 Sector (SketchSigns ks m) (Fin ks → ZMod (2 ^ 32)))
+    (A : Prover N m ρ h S L q 256 Sector (SketchSigns ks m) (Fin ks → ZMod (2 ^ 32)))
     (σ : SketchSigns ks m) (r X : ℕ)
     (hr32 : r ≤ 32)
     (hr : ∀ u, r ≤ ((Accounting.Tag.signMatrix (σ.block u)).map (Int.cast : ℤ → ℚ)).rank)
@@ -106,7 +106,7 @@ theorem pr_unpaid_rank_le
         (Ω := Oracle N ρ h Sector (Fin ks → ZMod (2 ^ 32)))
         (fun O => t ∈ A.correct sketch σ O D ∧ t ∉ queried A sketch σ O D)
         (2 ^ h) 1 (by positivity)
-        (by simpa [Device.correct, and_comm] using card_guess_le A sketch σ D t)
+        (by simpa [Prover.correct, and_comm] using card_guess_le A sketch σ D t)
       push_cast at hbound
       simpa using hbound
     refine (Finset.sum_le_sum (fun t _ => ht t)).trans (le_of_eq ?_)
@@ -141,7 +141,7 @@ theorem pr_unpaid_rank_le
     rw [hcancel]
     simp [ENNReal.div_eq_inv_mul, mul_comm]
 
-end Device
+end Prover
 
 namespace SketchDeployedWindow
 
@@ -259,7 +259,7 @@ theorem pr_unpaid_good_le (A : SketchDeployedWindow P N m ρ h S L q ks G) (σ :
       Finset.sum_le_sum fun _ _ => pr_exists_le _
     _ ≤ ∑ _j : Fin P, ∑ _c : Fin G, ε := Finset.sum_le_sum fun j _ =>
       Finset.sum_le_sum fun c _ => pr_unpaidAt_le A σ _ ε j c fun η =>
-        Device.pr_unpaid_rank_le (A.device j η c) σ r X hr32 hr (hX j η c)
+        Prover.pr_unpaid_rank_le (A.device j η c) σ r X hr32 hr (hX j η c)
     _ = (P : ℝ≥0∞) * (G * ε) := by
       simp [Finset.sum_const, Finset.card_univ, nsmul_eq_mul]
 
@@ -661,7 +661,7 @@ theorem sketchQueryTermCaps :
 
 /-- **The verbatim sketch session at the deployed receipt parameters, product form.** The multiplicative bound
 `2·2^-40 + n·ε + n·P·G·(N/2^512 + q/2^96)`: each grinding candidate at its own query cap `q`, which is the special
-case `qtot = G·q` of the deployed guarantee's shared budget (`Device.budget_of_bounded`). At the conservative caps
+case `qtot = G·q` of the deployed guarantee's shared budget (`Prover.budget_of_bounded`). At the conservative caps
 `q = G = 2^55` its query term alone is `2^14` before `n·P` (`sketchQueryTermCaps`), which is why the deployed
 guarantee (`Accounting.Guarantees.RemoteSessionConservationSketchDeployed`, proved in `DeployedSketchSum.lean`)
 states the sum form instead. -/

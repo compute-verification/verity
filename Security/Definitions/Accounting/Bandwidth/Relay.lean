@@ -14,7 +14,7 @@ namespace Bandwidth
 open Pous (Bits)
 
 /-- A device whose side sources may depend on the oracle as well as the store, so a peer can relay tags it computed
-after the seed. Its other fields and its bounds are `Device`'s: in every world the program reads at most `c` bits of
+after the seed. Its other fields and its bounds are `Prover`'s: in every world the program reads at most `c` bits of
 side sources, regenerates at most `G` blocks and makes at most `q` oracle queries. -/
 structure RelayDevice (N b h S c G q : ℕ) where
   state : Store N b → Bits S
