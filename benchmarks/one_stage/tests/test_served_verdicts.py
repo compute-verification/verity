@@ -99,21 +99,60 @@ def test_the_published_registration_pads_the_advices_length_to_the_cap(tmp_path,
     assert json.loads(capsys.readouterr().out) == got
 
 
-def test_the_sampled_proofs_line_names_the_partition_and_its_draw_and_no_advice_length(tmp_path, capsys):
-    row = {"ok": True, "accepted": True, "draw": [0, 2], "population": 3,
+def test_the_sampled_proofs_line_names_the_partition_and_its_draw_and_no_advice_length_or_population(tmp_path, capsys):
+    row = {"ok": True, "accepted": True, "draw": [0, 2], "population": 37,
            "leak": {"advice_bits": 832, "bound": "vacuous", "other_inputs": 786432, "registered": 0}}
     part = {"templates": ["SiluMul_v2{I=8192}"], "law": "subset:2",
             "scope": {"op_path_prefix": "model.layers.0.mlp.", "steps": [0, 1]}}
     line = S.sampled_line(row, part)
     head, _, rec = line.partition(": RECORDS ")
-    assert head == "over SiluMul_v2{I=8192} at model.layers.0.mlp. steps [0, 1] (law subset:2), drawn members [0, 2] of 3"
+    assert head == "over SiluMul_v2{I=8192} at model.layers.0.mlp. steps [0, 1] (law subset:2), drawn members [0, 2]"
     assert json.loads(rec)["leak"] == {"bound": "vacuous", "other_inputs": 786432, "registered": 0} and "832" not in line
+    assert "population" not in line and "37" not in line and row["population"] == 37
     (tmp_path / "log").write_text("+ set -x\nRECORDS " + json.dumps(row) + "\n")
     (tmp_path / "p.json").write_text(json.dumps(part))
     assert S.main(["sampled-line", str(tmp_path / "log"), "--partition", str(tmp_path / "p.json")]) == 0
     assert capsys.readouterr().out == line + "\n"
     (tmp_path / "log").write_text("refused\n")
     assert S.main(["sampled-line", str(tmp_path / "log")]) == 1
+
+
+def test_the_front_line_says_the_sessions_public_fields_alone(tmp_path, capsys):
+    """The CERTIFIER-FRONT line carries `FRONT_PUBLIC` of the front's session and none of its prompts, request, kept
+    fetch, gate or verdict's cells; a refused front's line names no reason, and a missing session says so."""
+    session = {"rc": 0, "run": "c1", "prompts": {"count": 4, "ids": 64}, "request": "warden-rehearse --requests 4",
+               "keep": "/serve/private/fetch.tar.gz", "gate": {"run": "g"}, "ended": "the rehearsal ended",
+               "ended_utc": "t", "session_s": 128.0, "pinned": "ab" * 20, "leaked_removed": [], "origin_unix": 1,
+               "verdict": {"cells": [7] * 3, "requests": 4, "wire_bits": 9}}
+    (tmp_path / "session.json").write_text(json.dumps(session))
+    assert S.main(["front-line", str(tmp_path / "session.json")]) == 0
+    said = json.loads(capsys.readouterr().out)
+    assert list(said) == list(S.FRONT_PUBLIC) and said == {k: session[k] for k in S.FRONT_PUBLIC}
+    (tmp_path / "session.json").write_text(json.dumps({"refused": "4 prompts of 64 ids: past one link-window"}))
+    assert S.main(["front-line", str(tmp_path / "session.json")]) == 0
+    assert "64" not in capsys.readouterr().out
+    assert S.main(["front-line", str(tmp_path / "absent.json")]) == 1
+    assert capsys.readouterr().out == "no session (FileNotFoundError)\n"
+
+
+def test_the_certifiers_chain_files_that_count_requests_move_to_the_serve_dirs_private_after_the_record(tmp_path):
+    """`served_verdicts.sh private-pieces` moves CERTIFIER_PRIVATE out of $OUT/pieces/certifier into the serve dir's
+    private/, 0700, and leaves the piece's answer, case and verdict where the record and its reader find them."""
+    piece, d = tmp_path / "out" / "pieces" / "certifier", tmp_path / "serve"
+    moved = ["chain/certs.json", "chain/report/report.json", "chain/tie/summary.json", "chain/n2/summary.json", "piece.log"]
+    kept = ["answer.json", "case.json", "chain/scan/answers.json"]
+    for f in moved + kept:
+        (piece / f).parent.mkdir(parents=True, exist_ok=True)
+        (piece / f).write_text(f)
+    env = {"PATH": os.defpath, "HOME": str(tmp_path), "D": str(d), "OUT": str(tmp_path / "out")}
+    rc = subprocess.run(["bash", str(HERE.parent / "served_verdicts.sh"), "private-pieces"], cwd=tmp_path, env=env,
+                        check=False).returncode
+    assert rc == 0
+    assert sorted(str(p.relative_to(piece)) for p in piece.rglob("*") if p.is_file()) == sorted(kept)
+    private = d / "private" / "pieces" / "certifier"
+    assert sorted(str(p.relative_to(private)) for p in private.rglob("*") if p.is_file()) == sorted(moved)
+    assert (private / "chain/tie/summary.json").read_text() == "chain/tie/summary.json"
+    assert all((d / p).stat().st_mode & 0o777 == 0o700 for p in ("private", "private/pieces", "private/pieces/certifier"))
 
 
 def test_one_piece_runs_alone_or_all_but_it(tmp_path, capsys):

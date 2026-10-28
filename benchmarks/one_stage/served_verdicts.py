@@ -13,10 +13,12 @@ sampled proofs, and the one record of every verdict (the block record).
     served_verdicts.py record --serve-run DIR --window K --sampled-proofs DIR --pieces DIR --out DIR [--node NAME]
     served_verdicts.py public-registration REGISTRATION
     served_verdicts.py sampled-line LOG [--partition FILE]
+    served_verdicts.py front-line SESSION
 
 ``public-registration`` prints what the run publishes of a window's advice registration (`public_registration`: the
-advice's length padded to its compiler's cap), and ``sampled-line`` the SAMPLED-PROOFS line from the records audit's log
-(`sampled_line`: the partition the draw was over, the members it drew, and no length of the advice).
+advice's length padded to its compiler's cap), ``sampled-line`` the SAMPLED-PROOFS line from the records audit's log
+(`sampled_line`: the partition the draw was over, the members it drew, and no length of the advice or count of the
+scope's members), and ``front-line`` the CERTIFIER-FRONT line from the front's session (`front_line`: `FRONT_PUBLIC`).
 
 ``window``: the sealed window to audit, from a serve-openai run's ``seals.jsonl``, ``windows.jsonl`` and ``requests.jsonl``
 (`pick`): sealed without error, its Commit passed, each of its requests checked and in no other window (V3b's window
@@ -247,17 +249,29 @@ def public_registration(reg: Mapping[str, Any]) -> dict[str, Any]:
 
 def sampled_line(records: Mapping[str, Any], partition: Mapping[str, Any] | None) -> str:
     """The SAMPLED-PROOFS line's account of the records audit's ``RECORDS`` row: what the draw was over (the partition's
-    templates, scope and law), which members it drew of how many, and the row with no length of the advice
-    (``leak.advice_bits``)."""
-    row = dict(records)
+    templates, scope and law), which members it drew, and the row with no length of the advice (``leak.advice_bits``)
+    and no ``population``, the scope's unpadded member count, which counts the window's tokens."""
+    row = {k: v for k, v in records.items() if k != "population"}
     if isinstance(row.get("leak"), Mapping):
         row["leak"] = {k: v for k, v in row["leak"].items() if k != "advice_bits"}
     part = partition or {}
     scope = part.get("scope") or {}
     over = (f"over {', '.join(part.get('templates') or ['?'])} at {scope.get('op_path_prefix', '?')} steps "
             f"{scope.get('steps', '?')} (law {part.get('law', '?')})")
-    drawn = f"drawn members {row.get('draw')} of {row.get('population')}" if row.get("draw") is not None else "no draw"
+    drawn = f"drawn members {row.get('draw')}" if row.get("draw") is not None else "no draw"
     return f"{over}, {drawn}: RECORDS {json.dumps(row, sort_keys=True)}"
+
+
+#: The certifier front's session fields the CERTIFIER-FRONT line says. The rest (its prompts, request, kept fetch, gate
+#: and verdict's cells) count or name the group's requests, and stay in the serve dir.
+FRONT_PUBLIC = ("rc", "run", "ended", "ended_utc", "session_s", "pinned", "leaked_removed")
+
+
+def front_line(session: Mapping[str, Any]) -> str:
+    """The CERTIFIER-FRONT line's account of the front's ``session.json``: `FRONT_PUBLIC` alone, or that it refused."""
+    if "refused" in session:
+        return "refused (its reason in the serve dir's private/certifier-front/session.json)"
+    return json.dumps({k: session[k] for k in FRONT_PUBLIC if k in session})
 
 
 def _unset(comp: str, what: str) -> str:
@@ -807,6 +821,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     sl = sub.add_parser("sampled-line")
     sl.add_argument("log", type=Path)
     sl.add_argument("--partition", type=Path)
+    fl = sub.add_parser("front-line")
+    fl.add_argument("session", type=Path)
     p = sub.add_parser("pieces")
     r = sub.add_parser("record")
     for q in (p, r):
@@ -830,6 +846,13 @@ def main(argv: Sequence[str] | None = None) -> int:
             print("no RECORDS line")
             return 1
         print(sampled_line(json.loads(rows[0]), json.loads(a.partition.read_text()) if a.partition else None))
+        return 0
+    if a.cmd == "front-line":
+        try:
+            print(front_line(json.loads(a.session.read_text())))
+        except (OSError, ValueError) as e:
+            print(f"no session ({type(e).__name__})")
+            return 1
         return 0
     if a.cmd == "window":
         try:

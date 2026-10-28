@@ -24,8 +24,10 @@
 #     that this tree's front doesn't take, or a front whose endpoint isn't on the warden's id form (SERVE_ARGS without
 #     `--protocol ids`), is refused before the lease. The
 #     lease ends once every closed window is sealed. What names a window's requests (the serve dir's windows.jsonl,
-#     seals.jsonl and requests.jsonl, the load's records, timings file and log) stays in the serve dir on the node; what
-#     leaves it is their aggregate ($OUT/serve/overhead.json, except with LOAD=front, whose warden-paced load no stock
+#     seals.jsonl, requests.jsonl and serve.json, each window's PoUW calls record, the load's records, timings file and
+#     log, and the certifier front's session, bundle and log, in the serve dir's private/, of which the CERTIFIER-FRONT
+#     line says only `served_verdicts.py front-line`'s fields) stays in the serve dir on the node; what leaves it is their
+#     aggregate ($OUT/serve/overhead.json, except with LOAD=front, whose warden-paced load no stock
 #     control compares to) and verdict lines that count no window's requests. The advice registration's published copies
 #     ($OUT/registration-w$K.json, the records audit's served-records) carry the advice's length padded to its compiler's
 #     cap (`served_verdicts.py public-registration`), and the audit's log and run.sh's served path (its summary,
@@ -64,7 +66,9 @@
 #     record reject: a failed wipe is never accepted.
 #  5. the record: `served_verdicts.py record`: the all-protocols window report ($OUT/record/verdicts.json) and the block
 #     record ($OUT/record/block-record.json), composed `pending` while any subprotocol is missing, `accept` only when every
-#     one accepted on this node; any other server's answer is carried as elsewhere. Then, unless COMPOSITE is set empty,
+#     one accepted on this node; any other server's answer is carried as elsewhere. The certifier's chain files that list
+#     or count the window's requests (CERTIFIER_PRIVATE) then move to the serve dir's private/pieces/certifier. Then,
+#     unless COMPOSITE is set empty,
 #     remote's and onsite's Lean verdicts on the run's cases (`served_composite.sh`'s docstring). Their verdicts gate
 #     nothing, but a composite that didn't run (a tree without composite.py) or whose Lean didn't answer fails the run.
 #  6. V3c, after the record since V2 doesn't read it: it proves the window circuit's own units at V3C_CLASS (default 4,32,4,
@@ -265,11 +269,13 @@ serve() {  # under the lease: the endpoint, the requests, every closed window se
     [ -f "$D/period.json" ] && period=1
   fi
   if [ -n "${CERTIFIER_FRONT:-}" ]; then  # the network certifier's warden in front of the endpoint, before the requests
-    # below: its group closes into the run's earliest window, which `served_verdicts.py window` picks on a tie in requests
-    (cd "$TREE" && timeout -k 1m "${CERTIFIER_FRONT_TIMEOUT:-20m}" bash -c "$CERTIFIER_FRONT" _ "$PORT" "$D" "$OUT/certifier-front") \
-      > "$OUT/certifier-front.log" 2>&1
+    # below: its group closes into the run's earliest window, which `served_verdicts.py window` picks on a tie in requests.
+    # Its session, bundle and log hold the group's prompts, request and cells, so they stay in the serve dir's private/
+    (umask 077; mkdir -p "$D/private")
+    (cd "$TREE" && timeout -k 1m "${CERTIFIER_FRONT_TIMEOUT:-20m}" bash -c "$CERTIFIER_FRONT" _ "$PORT" "$D" "$D/private/certifier-front") \
+      > "$D/private/certifier-front.log" 2>&1
     rc=$?
-    say "CERTIFIER-FRONT (exit $rc): $(tail -1 "$OUT/certifier-front.log" | cut -c1-600)"
+    say "CERTIFIER-FRONT (exit $rc): $("$PY" "$TREE/benchmarks/one_stage/served_verdicts.py" front-line "$D/private/certifier-front/session.json" 2>&1 | cut -c1-600)"
   fi
   if [ "$LOAD" != front ]; then
     release=$("$PY" -c 'import uuid; print(uuid.uuid4().hex)')
@@ -350,10 +356,22 @@ front_ok() {  # preflight: LOAD=front has a front, and each flag CERTIFIER_FRONT
       || { say "PREFLIGHT: CERTIFIER_FRONT passes $f, which this tree's certifier front doesn't take"; return 3; }
   done
 }
+# the certifier's chain files list and count the window's requests (its certs, its tie's prompt lengths, its N2 warden's
+# counts, its report and the piece's log); once the record has read them they move to the serve dir's private/
+CERTIFIER_PRIVATE="chain/certs.json chain/report chain/tie/summary.json chain/n2/summary.json piece.log"
+private_pieces() {
+  local f
+  for f in $CERTIFIER_PRIVATE; do
+    [ -e "$OUT/pieces/certifier/$f" ] || continue
+    (umask 077; mkdir -p "$D/private/pieces/certifier/$(dirname "$f")") \
+      && mv "$OUT/pieces/certifier/$f" "$D/private/pieces/certifier/$f"
+  done
+}
 
 if [ "${1:-}" = serve ]; then serve; exit $?; fi
 if [ "${1:-}" = circuits ]; then K=${2:?served_verdicts.sh circuits WINDOW}; circuits; rc=$?; measure; exit "$rc"; fi
 if [ "${1:-}" = front-flags ]; then front_ok; exit $?; fi
+if [ "${1:-}" = private-pieces ]; then private_pieces; exit $?; fi
 
 stop() { say "STOP at $1 (exit $2)"; exit "$2"; }
 { id -un; hostname; git -C "$TREE" rev-parse HEAD 2>/dev/null; nproc; free -g | head -2; nvidia-smi -L; echo "serve dir $D"; } \
@@ -448,8 +466,9 @@ print(f"SERVED-SEAL VERDICT: {'PASS' if ok else 'FAIL'} ({len(seals)} sealed win
 sys.exit(0 if ok else 1)
 EOF
 [ "${PIPESTATUS[0]}" = 0 ] || stop seal 11
-for f in serve.json period.json; do cp "$D/$f" "$OUT/serve/" 2>/dev/null; done
-[ -d "$D/h1" ] && (cd "$D" && find h1 -name pouw-h1-calls.json -exec cp --parents {} "$OUT/serve/" \;)
+# serve.json (the window's request count and prefill tokens) and the windows' PoUW calls records (their requests) stay
+# in the serve dir, where PoUW's piece and the record read them
+cp "$D/period.json" "$OUT/serve/" 2>/dev/null
 # the serve dir's step trace and the load's records stay on the node; what the stock control's table reads is their aggregate.
 # A front's load is the warden's, paced by its buckets, which no stock run's is, and one window's aggregate is its timing.
 if [ "$LOAD" = front ]; then
@@ -506,10 +525,10 @@ env -u PYTHONPATH PP_SERVE_RUN="$D" PP_WINDOW="$K" PP_SERVE_ROWS="$D/windows/w$K
 rc=$?
 SP=$D/sampled-proofs-served
 rm -rf "$SP"; [ ! -d "$OUT/sampled-proofs/served" ] || mv "$OUT/sampled-proofs/served" "$SP"
-# run.sh's records copy holds the window's request lists (windows.jsonl) and the advice's length (registration.json):
-# the published copy is the registration's public form alone
+# run.sh's records copy holds the window's request lists (windows.jsonl), its request count and prefill tokens
+# (serve.json) and the advice's length (registration.json): the published copy is the registration's public form alone
 SR=$OUT/sampled-proofs/served-records
-rm -f "$SR/windows.jsonl"
+rm -f "$SR/windows.jsonl" "$SR/serve.json"
 if [ -f "$SR/registration.json" ]; then
   "$PY" "$TREE/benchmarks/one_stage/served_verdicts.py" public-registration "$SR/registration.json" > "$SR/registration.public.json" \
     && mv "$SR/registration.public.json" "$SR/registration.json" || rm -f "$SR/registration.json" "$SR/registration.public.json"
@@ -528,6 +547,7 @@ TPY=$TREE/.venv/bin/python
 "$TPY" benchmarks/one_stage/served_verdicts.py record --serve-run "$D" --window "$K" --sampled-proofs "$SP" \
   --pieces "$OUT/pieces" --out "$OUT/record" 2>&1 | tee -a "$OUT/verdicts.txt"
 rec=${PIPESTATUS[0]}
+private_pieces
 comp=0
 [ -z "${COMPOSITE-1}" ] || TPY=$TPY bash benchmarks/one_stage/served_composite.sh "$D" "$OUT" || comp=1
 measure
