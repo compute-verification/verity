@@ -168,6 +168,9 @@ INPUTS: dict[str, tuple[float, str, str]] = {
     "h1_ands_per_mac": (350, "E", "J10-R's H1 leaf, ANDs a MAC with its noise and openings: the coordinator's "
                                   "calibration point (inbox 19:16Z: the 32x32 K 2,048 tile ~736 M ANDs, 32 lanes of "
                                   "~23 M; TOP-138 19:25Z: a lane ~92 M at K 8,192, ~161 M at K 14,336) until GD-PROVER"),
+    "retain_GB": (100.0, "E", "GB a window may retain until its draw: the H200's 141 GB less weights, KV cache and "
+                              "activations under --retain device; VERITY_RETAIN=host (served_verdicts.sh) is bounded by "
+                              "the pod's host cgroup instead (host_retention.py), size not looked up"),
     "partial_words_per_ks": (2, "M", "leaf_lanes: a lane partial is 2 (KS + m) u32, KS = K / 32 segments"),
     "cpu_s_in_gpu_s": (1 / 55, "M", "benchmarks/sampling_plan/inputs.py: vCPU $0.033/h against sm_120 $1.80/h"),
 }
@@ -353,9 +356,9 @@ SCHEMA = {
         "law": ("achievability", "achievability (q_u = min(1, Lambda w_u / C), Partitioning/Guarantees.lean) | uniform "
                                  "(the deployed audit's uniform kd-subset over a population's units, SampledKSLiveV3, "
                                  "at eps w_avg / w_max of the units, so that eps still bounds the wrong work)"),
-        "retain_GB": (100.0, "GB a window may hold until its draw (the Commit's step bytes, Dither's values, H1's "
-                             "records, times steps a window): an estimate, the H200's 141 GB less weights, KV cache "
-                             "and activations; over it, the design is listed infeasible"),
+        "retain_GB": (None, "GB a window may hold until its draw (the Commit's step bytes, Dither's values, H1's "
+                            "records, times steps a window; None: INPUTS retain_GB); over it, the design is listed "
+                            "infeasible"),
     },
     "partition": {
         "units": (None, "list of unit classes {name, per_token, work, extra_ands, open_rows, out_bits}; None: the "
@@ -1014,9 +1017,9 @@ def J(dsg: dict | None = None) -> dict:
     serve_term = win_remote_ms / win_stock_ms - 1
     prove_term = proving_gpu_s / stock_gpu_s
     infeasible = values["infeasible"] + pouw["infeasible"]
-    if retained > d["sampling"]["retain_GB"]:
-        infeasible.append(f"a window retains {retained:,.1f} GB for its draw > sampling.retain_GB "
-                          f"{d['sampling']['retain_GB']}")
+    retain_GB = _get(d, "sampling", "retain_GB", "retain_GB")
+    if retained > retain_GB:
+        infeasible.append(f"a window retains {retained:,.1f} GB for its draw > retain_GB {retain_GB}")
     return {
         "J": serve_term + prove_term,
         "serve_term": serve_term,

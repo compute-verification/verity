@@ -11,7 +11,7 @@ values, and returns GD-SEARCH's result keys. A knob GD-SEARCH leaves out keeps t
 
 A design is feasible when every credited linear's floor (Dither's forced work as a share of its G, at the best attack
 found) is at least 1 - eps ("floor"), every proof block is within compose's 2^27 ("k_log"), its largest block lowers
-within lowering.ram_gib and 15 minutes ("lowering"), and the window's retained bytes fit sampling.retain_GB
+within lowering.ram_gib and 15 minutes ("lowering"), and the window's retained bytes fit the retain_GB input
 ("retain").
 """
 from __future__ import annotations
@@ -60,6 +60,7 @@ RANGES = {
     "gates_per_and": (1.0, 2.1),
     "k_pad": (0, 1),
     "h1_ands_per_mac": (250.0, 500.0),
+    "retain_GB": (50.0, 1000.0),                         # device retention's margin to a host cgroup's pinned memory
 }
 
 INPUTS: dict[str, Input] = {
@@ -150,7 +151,7 @@ def evaluate(knobs: dict, v: dict | None = None, point: str = "t8192") -> dict:
         reasons.append("k_log")
     if lower_gib > d["lowering"]["ram_gib"] or lower_min > LOWER_MIN:
         reasons.append("lowering")
-    if r["retained_GB_per_window"] > d["sampling"]["retain_GB"]:
+    if any(m.startswith("a window retains") for m in r["infeasible"]):
         reasons.append("retain")
     return {
         "J": r["J"], "serve": r["serve_term"], "prove_ratio": r["prove_term"],
