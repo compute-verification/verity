@@ -404,7 +404,7 @@ def GumbelTokenSelect(B, S, logits, seed, pos, temp):
 # S is an OPERAND (i32), not a static: the split count is the launch geometry
 # S_t = SplitsFor_v1(|live(t)|, num_SMs) (`topp_geometry.splits_for_v1`), a WORKLOAD-level derived value -- the request Program reads it
 # from its request-owned `splits` Input per sampling event, the fold carries the split kernels' constexpr S as a `Const32[S]` operand,
-# and the Match checks the relation per engine step (GM-01 G6 'sampler geometry').  The keep word is TOTAL over the i32 operand:
+# and the global Match checks the relation per engine step (its sampler-geometry check).  The keep word is TOTAL over the i32 operand:
 # an S outside {1, 2, 4, 8, 16, 32} keeps no lane (`topp_keep`), a word no launched S produces; it never defaults to a split count.
 
 _TOPP_WORDS: dict = {}
@@ -444,7 +444,7 @@ def topp_mask_word(vocab: int) -> PrimitiveDefinition:
     with >= 64 SMs, 16 at 8 live on 142 SMs).  The word is defined for every i32 `splits`: any value outside {1, 2, 4, 8, 16, 32}
     (0, negative, not a power of two, above 32) keeps no lane -- word 0.  Every launched split count keeps at least one lane, so word 0
     is a value no served S produces (a wrong S is not mapped onto a plausible one), and the served S is held to the workload outside
-    this word: the Match's sampler geometry (GM-01 G6: S == SplitsFor_v1(|live(t)|, num_SMs) per engine step) and the Commit's
+    this word: the global Match's sampler geometry (S == SplitsFor_v1(|live(t)|, num_SMs) per engine step) and the Commit's
     prescribed-input linkage (the committed `splits` == SplitsFor_v1(committed live count, num_SMs of record)), both of which yield only
     the six split counts."""
     key = int(vocab)
