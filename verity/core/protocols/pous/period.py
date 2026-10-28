@@ -22,10 +22,10 @@ holds Demo B's `C*` of 1038 segments, 1,060,008,348,186 bits), else 0 and 0 with
 `point_for` gives the smallest such point holding a store, 256 blocks (526 KB) at least; the small point
 (`point_for(size, W, C0)`, 1,024-bit blocks) certifies nothing.
 
-Encoding is the cost: two 16,448-bit roots a block, about 3.7 s a block on one core in this pure-Python reference path
-(r20261025-202504-23f6), so 16 core-minutes at 256 blocks and 550 core-hours at the deployed `2^19`; `encode` splits it
+Encoding is the cost: two 16,448-bit roots a block, about 3.7 s a block on one core in this pure-Python reference path,
+so 16 core-minutes at 256 blocks and 550 core-hours at the deployed `2^19`; `encode` splits it
 over processes. The toy's 6,240,150-byte store is 3,039 blocks there, set up in 367 s in 32 processes (3.86 core-seconds
-a block, r20261026-161817-7dd1). An audit is cheap: about 1.7 s at `2^19` blocks, mostly the table's root.
+a block). An audit is cheap: about 1.7 s at `2^19` blocks, mostly the table's root.
 
 `leg(period_dir, node, out)` is `benchmarks/all_protocols`' leg for space: by default it sets the node's store up once at
 `point_for`'s certified point and audits it every period, the coins fresh from the OS. The memory challenger is a party
