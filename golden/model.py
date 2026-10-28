@@ -14,7 +14,7 @@ B4, one H200, window circuit 4,32,4; the demo's point is T 512 with 64 real toke
 The design dict (`design(**overrides)` builds one; `SCHEMA` lists every key, its default and its allowed values;
 `normalize` refuses an unknown key):
 
-    point     T, real_tokens, seqs, steps_per_window, async, window_class
+    point     T, real_tokens, seqs, steps_per_window, async, decode_steps, window_class
     forward   kernels ("stock" | "commit_taps"), gemm_eff, kfa3, graphs
     commit    on, values ("every_op" | "dedup" | "fused_mlp" | "layer" | "layer_kv" | "partition"), bytes_per_token,
               bits_per_word, row_bytes, hash_eff, corun, seal ("tree" | "none" | "roots"), host ("today" | "fixed"),
@@ -22,7 +22,7 @@ The design dict (`design(**overrides)` builds one; `SCHEMA` lists every key, its
     pouw      scheme ("off" | "j10r" | "jr2" | "dither"), K, L, L_prime, noise ("periodic" | "fresh" | "permuted"),
               record_bytes_per_cell, trees, h1_host ("pre" | "main" | "main+6192" | "stack" | "floor"), kdhash,
               hash_at_bar, coin_off_loop, noise_fused, denoise_g_frac, value_row_bytes, unit_cells
-    sampling  delta, eps, pouw_sampled
+    sampling  delta, eps, pouw_sampled, law ("achievability" | "uniform"), retain_GB
     partition units: [{name, per_token, work, extra_ands, open_rows, out_bits}] or None for the preset of
               `commit.values`
     prover    o_per_and, staged_per_and, stmt_fixed, stmt_per_and, speed, m_max, shared
@@ -245,6 +245,8 @@ SCHEMA = {
         "steps_per_window": (1, "engine steps a window (b921, a1fc, 5430 seal every step: 1); the prove term scales "
                                 "as 1 / steps_per_window, since a window's draws are ~Lambda / eps whatever its size"),
         "async": (False, "LAG 1: the async stack's host gap (a new Program digest, SYNC-PATH a)"),
+        "decode_steps": (0, "decode steps a window beside its steps_per_window, each computing one token a sequence "
+                            "(the demo's 4 outputs: 3 decode steps after the prefill)"),
         "window_class": ("8,1024,1", "the window class of the point's load (slots, prompt ids, outputs): the "
                                      "throughput point's load is 8 prompts of 1,024 ids, max_tokens 1 (b57f, b921, "
                                      "a1fc); the demo's is 4,32,4. Reported, not priced"),
@@ -294,6 +296,9 @@ SCHEMA = {
         "delta": (2.0 ** -40, "failure probability a window"),
         "eps": (0.01, "share of credited work allowed wrong"),
         "pouw_sampled": (True, "PoUW's units drawn at (eps, delta) a window too (guarantee 2)"),
+        "law": ("achievability", "achievability (q_u = min(1, Lambda w_u / C), Partitioning/Guarantees.lean) | uniform "
+                                 "(the deployed audit's uniform kd-subset over a population's units, SampledKSLiveV3; "
+                                 "eps then counts units)"),
         "retain_GB": (100.0, "GB a window may hold until its draw (the Commit's step bytes, Dither's values, H1's "
                              "records, times steps a window): an estimate, the H200's 141 GB less weights, KV cache "
                              "and activations; over it, the design is listed infeasible"),
@@ -333,7 +338,8 @@ SCHEMA = {
 
 PRESETS = {
     "throughput": {},
-    "demo": {"point": {"T": 512, "real_tokens": 64, "seqs": 4, "window_class": "4,32,4"}},
+    # served_verdicts.sh: 4 requests of 16 to 24 prompt ids and 4 outputs, so a prefill step and 3 decode steps
+    "demo": {"point": {"T": 512, "real_tokens": 64, "seqs": 4, "decode_steps": 3, "window_class": "4,32,4"}},
 }
 
 
@@ -455,7 +461,7 @@ def commit_parts(d: dict, stock: dict, units: list) -> tuple[dict, dict]:
         parts["Commit host copies"] = I("commit_copies_ms") * scale
         parts["Commit event syncs and launch gaps"] = I("commit_launch_gap_ms")
         if c["seal"] in ("tree", "roots"):
-            parts["seal: rest of the host gap"] = I("seal_rest_ms")
+            parts["seal: rest of the host gap"] = I("seal_rest_ms") / S
     if c["seal"] == "tree":
         seal_bytes = (tree["rows"] + tree["nodes"]) * 64
         parts["seal wait"] = seal_bytes / (I("seal_GBs") * 1e6) / S
@@ -658,14 +664,48 @@ def pouw_units(d: dict) -> list:
     return units
 
 
+def window_tokens(d: dict) -> float:
+    """Tokens a window's forwards compute: steps_per_window steps of real_tokens, and decode_steps of one a sequence."""
+    p = d["point"]
+    return p["steps_per_window"] * (p["real_tokens"] or p["T"]) + p["decode_steps"] * p["seqs"]
+
+
+def uniform_kd(n: float, eps: float, delta: float) -> float:
+    """The deployed audit's uniform kd-subset (Flock.Guarantees.SampledKSLiveV3): the least kd with
+    C(n - K0, kd) / C(n, kd) <= delta, K0 = floor(eps n) + 1. The ratio is C(n - kd, K0) / C(n, K0), summed term by term
+    for K0 <= 10^4 and at the midpoint n - K0/2 above (relative error well under 1e-3 there)."""
+    n = int(round(n))
+    k0 = math.floor(eps * n) + 1
+    if k0 > n:
+        return float(n)
+
+    def ok(kd: int) -> bool:
+        if kd > n - k0:
+            return True
+        if k0 <= 10_000:
+            r = sum(math.log1p(-kd / (n - i)) for i in range(k0))
+        else:
+            r = k0 * math.log1p(-kd / (n - k0 / 2))
+        return r <= math.log(delta)
+
+    lo, hi = 0, n
+    while lo < hi:
+        mid = (lo + hi) // 2
+        if ok(mid):
+            hi = mid
+        else:
+            lo = mid + 1
+    return float(lo)
+
+
 def proving(d: dict, units: list, label: str) -> dict:
     """A window's draws and proving cost for one sampled population. Achievability's law q_u = min(1, Lambda w_u / C)
-    with C = eps F, so draws ~ Lambda F / C = Lambda / eps; each drawn block costs o (ANDs + row openings) and each
-    touched statement stmt_fixed + stmt_per_and ANDs, with ceil(draws / cap) statements a class (cap = 2^(m_max -
-    k_log), k_log = ceil(log2 ANDs) + 1). Lowering is per class (template) or per draw (instance)."""
-    p, s = d["point"], d["sampling"]
-    S = p["steps_per_window"]
-    T = p["real_tokens"] or p["T"]                             # units cover what the forward computes
+    with C = eps F, so draws ~ Lambda F / C = Lambda / eps; or the deployed uniform kd-subset over the population's
+    units (ε then counts units, not ANDs). Each drawn block costs o (ANDs + row openings) and each touched statement
+    stmt_fixed + stmt_per_and ANDs, with ceil(draws / cap) statements a class (cap = 2^(m_max - k_log), k_log =
+    ceil(log2 ANDs) + 1). Lowering is per class (template) or per draw (instance)."""
+    s = d["sampling"]
+    T, S = window_tokens(d), 1                                 # units cover what the forwards compute
     lam = math.log(1 / s["delta"])
     pv = d["prover"]
     o = (pv["o_per_and"] if pv["o_per_and"] is not None else I("o_per_and"))
@@ -686,9 +726,15 @@ def proving(d: dict, units: list, label: str) -> dict:
            "infeasible": []}
     if F <= 0:
         return out
+    if s["law"] == "uniform":
+        n_all = sum(u["per_token"] * T * S for u in units)
+        kd = uniform_kd(n_all, s["eps"], s["delta"])
+        out["uniform_kd"] = kd
+    elif s["law"] != "achievability":
+        raise ValueError(f"sampling.law {s['law']!r}")
     for u in units:
         n = u["per_token"] * T * S
-        q = min(1.0, lam * u["work"] / C)
+        q = kd / n_all if s["law"] == "uniform" else min(1.0, lam * u["work"] / C)
         draws = n * q
         ands = u["work"] + u["extra_ands"] + sum(row_ands(r) for r in u["open_rows"])
         k_log = math.ceil(math.log2(max(ands, 2))) + 1
@@ -728,14 +774,11 @@ def proving(d: dict, units: list, label: str) -> dict:
 # J
 # ---------------------------------------------------------------------------------------------------------------------
 
-def J(dsg: dict | None = None) -> dict:
-    """The cost of a design: serve-overhead parts (ms a step), proving (GPU-s and CPU-s a window), verification
-    (CPU-s a window), the draws, and J = (t_remote / t_stock - 1) + proving GPU-s / stock GPU-s a window."""
-    d = normalize(dsg or {})
+def _step(d: dict, units: list) -> tuple:
+    """One engine step of d: (stock parts, t_stock, its anchor, remote parts, Commit info, PoUW info)."""
     stock = stock_parts(d)
     if d["price"]["baseline"] == "fastest":
-        base = normalize({**d, "point": {**d["point"], "async": True}})
-        t_stock = sum(stock_parts(base).values())
+        t_stock = sum(stock_parts(normalize({**d, "point": {**d["point"], "async": True}})).values())
         anchor = f"async stock at the design's point (2cd6's stack, {C2CD6})"
     elif d["price"]["baseline"] == "same":
         t_stock = sum(stock.values())
@@ -743,7 +786,6 @@ def J(dsg: dict | None = None) -> dict:
                   f"sync stock (b57f's stack, {B57F})") + " at the design's point"
     else:
         raise ValueError(f"price.baseline {d['price']['baseline']!r}")
-    units = d["partition"]["units"] or preset_units(d)
     remote = dict(stock)
     if d["forward"]["kernels"] == "commit_taps" and not d["commit"]["on"]:
         remote["the Commit's taps"] = I("taps_ms")
@@ -751,9 +793,33 @@ def J(dsg: dict | None = None) -> dict:
     wparts, winfo = pouw_parts(d, stock)
     remote.update(cparts)
     remote.update(wparts)
+    return stock, t_stock, anchor, remote, cinfo, winfo
+
+
+def J(dsg: dict | None = None) -> dict:
+    """The cost of a design: serve-overhead parts (ms a step), proving (GPU-s and CPU-s a window), verification
+    (CPU-s a window), the draws, and J = (t_remote / t_stock - 1) + proving GPU-s / stock GPU-s a window."""
+    d = normalize(dsg or {})
+    units = d["partition"]["units"] or preset_units(d)
+    stock, t_stock, anchor, remote, cinfo, winfo = _step(d, units)
     t_remote = sum(remote.values())
-    S = d["point"]["steps_per_window"]
-    stock_gpu_s = t_stock * S / 1e3
+    p = d["point"]
+    S, nd = p["steps_per_window"], p["decode_steps"]
+    win_stock_ms, win_remote_ms = S * t_stock, S * t_remote
+    retained = S * (cinfo.get("step_bytes", 0.0) + winfo.get("value_bytes", 0.0) + winfo.get("records_GB", 0.0) * 1e9)
+    decode = None
+    if nd:
+        dd = normalize({**d, "point": {**p, "real_tokens": p["seqs"], "steps_per_window": 1, "decode_steps": 0}})
+        dstock, dt_stock, _, dremote, dcinfo, dwinfo = _step(dd, units)
+        dremote.pop("seal: rest of the host gap", None)        # the seal's host work is once a window
+        decode = {"t_stock_ms": dt_stock, "t_remote_ms": sum(dremote.values()),
+                  "serve_overhead_ms": {k: v for k, v in dremote.items() if dstock.get(k) != v}}
+        win_stock_ms += nd * dt_stock
+        win_remote_ms += nd * decode["t_remote_ms"]
+        retained += nd * (dcinfo.get("step_bytes", 0.0) + dwinfo.get("value_bytes", 0.0)
+                          + dwinfo.get("records_GB", 0.0) * 1e9)
+    retained /= 1e9
+    stock_gpu_s = win_stock_ms / 1e3
     values = proving(d, units, "values (sampled proofs)")
     pouw = proving(d, pouw_units(d), "PoUW")
     price = d["price"]["cpu_s_in_gpu_s"] if d["price"]["cpu_s_in_gpu_s"] is not None else I("cpu_s_in_gpu_s")
@@ -761,10 +827,8 @@ def J(dsg: dict | None = None) -> dict:
     cpu_s = values["lower_cpu_s"] + values["stage_cpu_s"] + pouw["lower_cpu_s"] + pouw["stage_cpu_s"]
     proving_gpu_s = gpu_s + (cpu_s * price if d["price"]["cpu_in_J"] else 0.0)
     verify_cpu_s = values["verify_cpu_s"] + pouw["verify_cpu_s"]
-    serve_term = t_remote / t_stock - 1
+    serve_term = win_remote_ms / win_stock_ms - 1
     prove_term = proving_gpu_s / stock_gpu_s
-    retained = S * (cinfo.get("step_bytes", 0.0) + winfo.get("value_bytes", 0.0)
-                    + winfo.get("records_GB", 0.0) * 1e9) / 1e9
     infeasible = values["infeasible"] + pouw["infeasible"]
     if retained > d["sampling"]["retain_GB"]:
         infeasible.append(f"a window retains {retained:,.1f} GB for its draw > sampling.retain_GB "
@@ -777,6 +841,9 @@ def J(dsg: dict | None = None) -> dict:
         "t_stock_anchor": anchor,
         "window_class": d["point"]["window_class"],
         "t_remote_ms": t_remote,
+        "t_stock_window_ms": win_stock_ms,
+        "t_remote_window_ms": win_remote_ms,
+        "decode_step": decode,
         "stock_parts_ms": stock,
         "serve_overhead_ms": {k: v for k, v in remote.items() if k not in stock or remote[k] != stock[k]},
         "commit": cinfo,
