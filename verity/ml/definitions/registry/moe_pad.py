@@ -17,7 +17,8 @@ The construction, per token and MoE layer, with E expert slots FIXED before any 
     y      = Lifted[MoeSum_v1{TOPK,H}]_v2(u, a)                        the REGISTERED combine: ascending j from a zero f32 acc, one RNE
 
 A12 as written: the slot input `x` is NOT `Select(s_e, x, bot)` any more -- it is wired in unchanged, and every gate of the slot's body is
-owned by the slot call: `a_e = 1` -> the registered relation on its operands (bit for bit MOE-01's pair on the selected slot, (b));
+owned by the slot call: `a_e = 1` -> the registered relation on its operands (bit for bit the indexed-read construction's pair on the
+selected slot, (b));
 `a_e = 0` -> `enc(bot)` whatever the operands (A9.3; the slot's internally produced values -- g_e, the w13 rows, the activation, z_e -- are
 the bot words the integration materializes and commits, A14).  The E - TOPK disabled slots per token are therefore DISABLED
 computations, not strict propagation of a bot input (the v1 reading, superseded).  Under `a = 0` (a disabled row: the continuation's
@@ -29,8 +30,8 @@ pair body WITHOUT the expert-axis gather: `Gemm{K=H,N=2I}` (the w13 launch, `Moe
 fixed) -> `SiluMul{I}` (`_C.silu_and_mul`) -> `MoeSlotDown_v1{K=I,N=H}` (the w2 launch with MUL_ROUTED_WEIGHT=True:
 `bf16_rne(f32mul(DotBf16(a, W2[e][n,:]), g))`, the routed weight multiplied into the f32 accumulator before the ONE bf16 conversion --
 `MoeExpertCoordinateW_v1` minus `MoeExpertRow_v1`).  The multiplexing of the whole expert weight bank per pair (`GatherBf16x{E}` per
-weight element, MOE-01) is gone: each slot owns its weights.  MOE-01 (`registry/moe.py`) stays registered as the labelled ALTERNATIVE
-"indexed-read" the OLMoE rows of record were built on.
+weight element, the indexed-read construction) is gone: each slot owns its weights.  The indexed-read construction (`registry/moe.py`)
+stays registered as the labelled ALTERNATIVE the OLMoE rows of record were built on.
 
 Weights enter as lifted `Input<17>` words checked Active at the boundary (pad's `LServe` convention, `check_boundary(prescribed=True)`);
 an `Input` owns no enable (it is the Program's boundary, produced by no body).  The block returns the whole small assignment (y, ids,
@@ -51,7 +52,7 @@ from verity.ml.definitions.registry import prims as P
 from verity.ml.definitions.registry.prims import BF16, F32
 
 SEMANTIC_ID = "moe/PaddedFixedSlots@v1"
-LABEL = "padded-fixed-slots"          # the baseline representation; MOE-01 rows stay "MOE-01 indexed-read (alternative)"
+LABEL = "padded-fixed-slots"          # the baseline representation; the indexed-read rows keep their "alternative" label
 STAGE = 2                             # Stage 2: the complete small padded MoE (E=4, top-1 and top-2)
 
 
@@ -61,7 +62,7 @@ def V(w: int) -> Value:
 
 
 # ---------------------------------------------------------------------------------------------------------
-# the unlifted per-expert body with FIXED weights (new ids; the frozen MOE-01 pair bodies are untouched)
+# the unlifted per-expert body with FIXED weights (new ids; the frozen indexed-read pair bodies in `moe.py` are untouched)
 # ---------------------------------------------------------------------------------------------------------
 
 
@@ -199,7 +200,7 @@ def LMoeFfn(B, S, x, wg, w13, w2, a):
 def MoeFfnFixed(B, S, x, wg, w13, w2):
     """The UNLIFTED fixed-slot twin of `LMoeFfn_v1` (Stage 3 builder, route A (1)): router -> ALL `E` expert bodies on their own fixed
     weights (`g_e` = the routed weight of the slot the router picked, `0.0f` otherwise) -> the `TOPK` slot outputs selected by the router
-    ids -> `MoeSum_v1`.  Value-equal to MOE-01 on every input (the same pair body, `MoeExpertBody_v1`; the selection is by the same ids) and
+    ids -> `MoeSum_v1`.  Value-equal to the indexed-read construction on every input (the same pair body, `MoeExpertBody_v1`; the selection is by the same ids) and
     route-independent in structure; the frontend binds one call per token to it, and its lift is the HAND-AUTHORED `LMoeFfn_v1` (the
     unselected slots DISABLED by `a_e = LEnable(a, s_e)`, their values bot) -- the strict replay of THIS body would demand Active values nobody computed for the
     unselected bodies, which is why the lift is registered by hand and never replayed."""
@@ -227,7 +228,8 @@ def _fixed_core(B, S, x, logits, w13, w2):
 
 
 # Route A (2) (`lifted.register_hand_lift`): `LMoeFfn_v1` IS the padded-v1 lift of the twin --
-# `lift_def(bind(MoeFfnFixed, ...))` on the registry path AND on the descriptor-decoded path (GP-01 request_component / codec.decode_program:
+# `lift_def(bind(MoeFfnFixed, ...))` on the registry path AND on the descriptor-decoded path (the workload's request_component /
+# codec.decode_program:
 # the Build path) yields `bind(LMoeFfn, **same bindings)` in place of the node replay `Lifted[MoeFfnFixed_v1]_v2` (which would be an all-Active
 # Program).  Checked by name at registration (same statics, composites, one lift per id, before any replay lift of the id) and per binding
 # (the lift's signature == the twin's lifted params + ('enable', Value<2>) last).  The body is this module's.
@@ -274,7 +276,7 @@ def MoeFfnFixedL(B, S, x, logits, w13, w2):
     `vllm.moe_forward(hidden_states, router_logits)` -- `_moe_C.topk_softmax` -> `moe_align_block_size` (schedule marker) ->
     `fused_moe_kernel` x2 -> `_C.silu_and_mul` -> `_moe_C.moe_sum` -- as `MoeFfnFixed_v1` minus the router GEMM: the router top-k on the
     given logits, ALL E expert bodies on their own weights, the TOPK slot outputs selected by the ids, `MoeSum_v1`.  Value-equal to
-    MOE-01's six-Compute reading of the same launches on every input (the same pair body, the same ids); route-independent in structure
+    the indexed-read construction's six-Compute reading of the same launches on every input (the same pair body, the same ids); route-independent in structure
     (N-pad-09: the schedule's shapes -- blocks per expert, num_tokens_post_padded -- never enter the statics).  Its lift of record is the
     HAND-AUTHORED `LMoeFfnL_v1` (registered below), never the node replay."""
     return _fixed_core(B, S, x, logits, w13, w2)
@@ -284,8 +286,8 @@ HAND_LIFT_L = L.register_hand_lift(MoeFfnFixedL, LMoeFfnL)
 
 
 def block(E: int, TOPK: int, VPT: int, H: int, I: int):
-    """The fully bound fixed-slot block: the ONE Program of the (E, TOPK, VPT, H, I) envelope (PADDING-DECISION s1: for fixed
-    construction inputs the builder produces one Program; routes are assignments).  `admitted_routes` enumerates its value space."""
+    """The fully bound fixed-slot block: the ONE Program of the (E, TOPK, VPT, H, I) envelope (for fixed construction inputs the
+    builder produces one Program; routes are assignments).  `admitted_routes` enumerates its value space."""
     if E % VPT:
         raise ValueError("E must be a multiple of VPT (the router's reduction geometry)")
     if not (1 <= TOPK <= E):
