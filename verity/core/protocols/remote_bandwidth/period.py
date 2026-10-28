@@ -42,13 +42,13 @@ from pathlib import Path
 from typing import Any, Protocol
 
 from verity.core.protocols.pous.period import records
-from verity.ml.commitments import domains
 from verity.ml.commitments.identity import canonical_json_bytes
+from verity.ml.commitments import domains
 
 from . import audit, codec, pooled, receipts
 from . import coins as C
 
-PROTOCOL = domains.REMOTE_BANDWIDTH_PROTOCOL
+PROTOCOL = "verity/remote-bandwidth/v0"
 DELTA = Fraction(1, 2 ** 40)
 """`audit.DELTA`'s exact value, the pooled bound's δ (`RemoteAudit.Protocol.DELTA`)."""
 WORD_BYTES = 64

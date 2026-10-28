@@ -53,8 +53,8 @@ from fractions import Fraction
 from pathlib import Path
 from typing import Any
 
-from verity.ml.commitments import domains
 from verity.ml.commitments.identity import canonical_json_bytes
+from verity.ml.commitments import domains
 
 from . import memory_challenger as mc
 from . import streamed_wipe as sw
