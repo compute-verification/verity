@@ -1,11 +1,12 @@
 """`served_verdicts.py`'s window pick, its subprotocols' pieces and its record, on toy serve dirs and answers:
-the window it audits holds the most requests and none carried across windows; a subprotocol whose piece didn't run is
-undecided, ``not run``, and every row is a core answer. The window's verdict is onsite's or remote's answer through
-`composite.py` (a stand-in for each product's executable, and the record's reading of its line and exit status), onsite's
-when the pieces make it up, else remote's, else undecided naming what each lacks, with a block record that
-`block_record.check` holds and its schema admits; a rejected window has none, and a rejecting row fails the record,
-with none, whatever the window's verdict. The wipe composes only when its answer accepts on the record's server. PoUW's development piece checks
-the window's gate session and credits nothing,
+the window it audits holds the most requests and none carried across windows; a subprotocol whose piece didn't run, or
+refused to run, is undecided, ``not run``, one that ran and wrote nothing errs, and every row is a core answer. The
+window's verdict is onsite's or remote's Lean verdict through `composite.py` (a stand-in for each product's executable)
+on the pieces' private cases, onsite's when they make it up, else remote's, else undecided naming what each lacks, with
+a block record that `block_record.check` holds and its schema admits; a rejected window has none, and a rejecting row
+fails the record, with none, whatever the window's verdict. Of the composite only its public record is published: no
+byte of a case's evidence reaches the record, whatever the executable prints. The wipe composes only when its answer
+accepts on the record's server. PoUW's development piece checks the window's gate session and credits nothing,
 and the gate is refused while the lane has a period open. `served_verdicts.sh`'s window circuits gate on every class of
 CLASSES, and the class of record's count after them gates nothing. Its load, `serve_load.py --varied`, writes each
 request's send, first-token and done times beside its record, on an injected clock and a stand-in endpoint."""
@@ -92,23 +93,49 @@ def test_a_subprotocol_whose_piece_did_not_run_is_undecided_not_run(tmp_path, ca
         assert (row["verdict"], row["reason"], row["issue"]) == ("undecided", "not run", S.PIECES[key][3])
 
 
-def test_a_piece_that_ran_gives_its_answer_and_one_that_wrote_none_rejects(tmp_path, capsys):
+def test_a_piece_that_ran_gives_its_answer_and_one_that_wrote_none_errs(tmp_path, capsys):
     refusal = CA.Answer.reject(S.PROTOCOLS["space"], "no").canonical()
     env = {"POUS_CMD": f"echo '{refusal}' > \"$3/answer.json\"", "CERTIFIER_CMD": "true"}
     got = S.pieces(tmp_path, 1, tmp_path / "pieces", env=env)
     assert got["pous"] == {"verdict": "reject", "reason": "no", "rc": 0}
-    assert got["certifier"]["verdict"] == "reject" and "wrote no answer" in got["certifier"]["reason"]
+    assert (got["certifier"]["verdict"], got["certifier"]["error"]) == ("undecided", True)
+    assert "wrote no answer" in got["certifier"]["reason"]
     assert (got["pouw"]["verdict"], got["bandwidth"]["verdict"]) == ("undecided", "undecided")
     rows = {k: S.piece_row(k, tmp_path / "pieces") for k in S.PIECES}
     assert (rows["space"]["verdict"], rows["space"]["reason"]) == ("reject", "no")
-    assert rows["communication"]["answer"] == CA.Answer.reject("verity/certifier/v0", "its piece wrote no answer").to_json()
+    assert rows["communication"]["answer"] == CA.Answer.undecided(
+        "verity/certifier/v0", "its piece ran and wrote no answer; its log is certifier/piece.log").to_json()
+    assert rows["communication"]["error"] is True
 
 
-def test_a_piece_whose_answer_is_not_a_core_answer_rejects(tmp_path):
+def test_a_piece_that_refused_to_run_is_undecided_not_run_not_rejected(tmp_path, capsys, monkeypatch):
+    """A piece's ``refused.txt`` (a rehearsal the gate's check didn't pass, a step that can't run) with no answer: its
+    piece didn't run, so the subprotocol is undecided, "not run", naming why, and nothing rejects or errs."""
+    why = "the gate's rehearsal didn't pass, so it certified no served answer"
+    env = {"CERTIFIER_CMD": f"echo \"{why}\" > \"$3/refused.txt\"; exit 3"}
+    got = S.pieces(tmp_path, 1, tmp_path / "pieces", env=env)
+    assert got["certifier"] == {"verdict": "undecided", "reason": S.NOT_RUN, "rc": 3, "refused": why}
+    assert "NOT RUN the network certifier {" in capsys.readouterr().out
+    row = S.piece_row("communication", tmp_path / "pieces")
+    assert (row["verdict"], row["reason"], row["why"]) == ("undecided", S.NOT_RUN, f"its piece refused to run: {why}")
+    assert "error" not in row and row["answer"] == CA.Answer.undecided("verity/certifier/v0", S.NOT_RUN).to_json()
+    monkeypatch.setattr(S, "sampled_proofs_row", lambda _audit_dir, _run=None: _accepted())
+    (tmp_path / "serve").mkdir()
+    rc = S.main(["record", "--serve-run", str(_serve_dir(tmp_path / "serve")), "--window", "1",
+                 "--sampled-proofs", str(tmp_path / "audit"), "--pieces", str(tmp_path / "pieces"),
+                 "--out", str(tmp_path / "record"), "--node", "n"])
+    line = json.loads(capsys.readouterr().out.strip().splitlines()[-1].removeprefix("RECORD "))
+    assert rc == 0 and (line["verdict"], line["rejected"], line["errors"]) == ("undecided", [], [])
+    assert line["not_run"]["the network certifier"] == f"its piece refused to run: {why}"
+    assert "certifier" in line["record_missing"]
+
+
+def test_a_piece_whose_answer_is_not_a_core_answer_errs(tmp_path):
     (d := tmp_path / "pous").mkdir()
     (d / "answer.json").write_text(json.dumps({"verdict": "reject", "reason": "no"}))
     row = S.piece_row("space", tmp_path)
-    assert row["verdict"] == "reject" and row["reason"].startswith("ValueError: not a core answer: answer: protocol missing")
+    assert (row["verdict"], row["error"]) == ("undecided", True)
+    assert row["reason"].startswith("its answer isn't a core answer: ValueError: not a core answer: answer: protocol missing")
 
 
 def _accepted() -> dict:
@@ -133,53 +160,66 @@ def test_the_products_need_their_lean_components():
     assert S.PROTOCOLS["wipe"] == W.PROTOCOL and set(S.LEAN) == {"onsite", "remote"}
 
 
-def _piece(pieces: Path, name: str, pid: str, verdict: str = "undecided", case: bool = True) -> Path:
-    """A piece's directory under ``pieces``: its core answer on ``pid`` and, with ``case``, its case, blobs one file."""
-    d = pieces / name
-    d.mkdir(parents=True, exist_ok=True)
+def _piece(root: Path, name: str, pid: str, verdict: str = "undecided", case: bool = True,
+           evidence: bytes = b"{}") -> Path:
+    """A case directory ``root/name`` as a piece keeps it privately (0700, its files 0600): its own core answer on
+    ``pid`` and, with ``case``, its case, blobs one file."""
+    d = root / name
+    d.mkdir(parents=True, exist_ok=True, mode=0o700)
     digest = hashlib.sha512(pid.encode()).digest()
     a = {"accept": CA.Answer.accept(pid, digest, {"n": 1}, {"delta": "1/100"}),
          "reject": CA.Answer.reject(pid, "no", digest), "undecided": CA.Answer.undecided(pid, "later", digest)}[verdict]
     (d / "answer.json").write_text(a.canonical() + "\n")
     if case:
         (d / "blob.bin").write_bytes(pid.encode())
-        (d / "case.json").write_text(json.dumps({"commitment": "0a" * 4, "evidence": b"{}".hex(), "params": {"k": 1},
+        (d / "case.json").write_text(json.dumps({"commitment": "0a" * 4, "evidence": evidence.hex(), "params": {"k": 1},
                                                  "blobs": [str(d / "blob.bin")]}))
+    for f in d.iterdir():
+        f.chmod(0o600)
     return d
 
 
-def _exe(tmp_path: Path, name: str, answer: CA.Answer | str, rc: int | None = None) -> Path:
-    """A stand-in for a product's executable: records its arguments, prints ``answer``'s line and exits with its
-    verdict's status (or ``rc``)."""
+def _exe(tmp_path: Path, name: str, answer: CA.Answer | str, rc: int | None = None, stderr: str = "") -> Path:
+    """A stand-in for a product's executable: records its arguments, prints ``answer``'s line (and ``stderr``) and exits
+    with its verdict's status (or ``rc``)."""
     line = answer if isinstance(answer, str) else answer.canonical()
     rc = S.EXIT[answer.verdict] if rc is None else rc
     exe = tmp_path / "bin" / name
     exe.parent.mkdir(exist_ok=True)
     exe.write_text(f"#!{sys.executable}\nimport json, sys\nopen({str(tmp_path / (name + '.argv'))!r}, 'w')"
-                   f".write(json.dumps(sys.argv[1:]))\nprint({line!r})\nsys.exit({rc})\n")
+                   f".write(json.dumps(sys.argv[1:]))\nprint({line!r})\nprint({stderr!r}, file=sys.stderr)\n"
+                   f"sys.exit({rc})\n")
     exe.chmod(0o755)
     return exe
 
 
-def _record(tmp_path: Path, rows: dict, **lean: Path):
-    return S.record(rows, window=1, steps=(5, 11), node="vy-dc-h200", run="r1", pieces_dir=tmp_path / "pieces",
+PRIV = Path("serve") / "private"
+
+
+def _record(tmp_path: Path, rows: dict, cases=(), **lean: Path):
+    return S.record(rows, window=1, steps=(5, 11), node="vy-dc-h200", run="r1",
+                    cases=[(d.name, d) for d in cases], private=tmp_path / PRIV / "composite" / "w1",
                     out=tmp_path / "record", lean={p: lean.get(p, tmp_path / "no-lean") for p in S.LEAN})
 
 
 def test_pieces_that_make_up_neither_product_leave_the_window_undecided_naming_what_each_lacks(tmp_path):
     S.pieces(tmp_path, 1, tmp_path / "pieces", env={})
-    report, rec, line = _record(tmp_path, _rows(_accepted(), tmp_path / "pieces"))
+    rows = _rows(_accepted(), tmp_path / "pieces")
+    report, rec, line = S.record(rows, window=1, steps=(5, 11), node="vy-dc-h200", run="r1",
+                                 cases=S.case_dirs(tmp_path, 1, tmp_path / "pieces"),
+                                 private=tmp_path / PRIV / "composite" / "w1", out=tmp_path / "record")
     assert report["format"] == "verity/all-protocols-window/v2" and report["lean"]["product"] is None
     v = report["verdict"]
     assert (v["protocol"], v["verdict"], v["commitment"]) == ("verity/onsite/v0", "undecided", None)
     onsite, remote = v["reason"].split("; verity/remote/v0 lacks ")
     assert onsite.startswith("verity/onsite/v0 lacks verity/nci/v1 (no piece answers it), verity/certifier/v0 "
-                             "(undecided: not run; certifier/ holds no case.json), ")
+                             "(undecided; certifier holds no case.json), ")
     assert f"{V2} (no piece answers it), {W.PROTOCOL} (no piece answers it)" in onsite
-    assert remote == f"{POUW} (undecided: not run; pouw/ holds no case.json), {V2} (no piece answers it)"
-    assert report["lean"]["missing"]["verity/remote/v0"] == {POUW: "undecided: not run; pouw/ holds no case.json",
+    assert remote == f"{POUW} (undecided; pouw holds no case.json), {V2} (no piece answers it)"
+    assert report["lean"]["missing"]["verity/remote/v0"] == {POUW: "undecided; pouw holds no case.json",
                                                              V2: "no piece answers it"}
     assert CA.of_json(v).to_json() == v and not (tmp_path / "record" / "composite").exists()
+    assert not (tmp_path / PRIV / "composite").exists()
     jsonschema.Draft202012Validator(SCHEMA).validate(rec)
     assert BR.check(rec) == {} and rec["extends"] == "verity/all-protocols-window/v2"
     assert rec["composed"]["answer"] == {k: v[k] for k in ("protocol", "verdict", "reason", "commitment")}
@@ -189,7 +229,8 @@ def test_pieces_that_make_up_neither_product_leave_the_window_undecided_naming_w
     assert line["lean"] == {"product": None, "verdict": None, "error": None,
                             "missing": {"verity/onsite/v0": sorted(S.NEEDS["onsite"]), "verity/remote/v0": [POUW, V2]}}
     assert line["not_run"] == {"PoUW": "VLLM-33 G1", "the bandwidth audit": "VLLM-33 G2", "PoUS": "MEM-94",
-                               "the network certifier": "NET-83", "the wipe": "MEM-96"} and line["rejected"] == []
+                               "the network certifier": "NET-83", "the wipe": "MEM-96"}
+    assert (line["rejected"], line["errors"]) == ([], [])
     work = report["protocols"]["work"]
     assert work["answer"] == CA.Answer.undecided(POUW, "not run").to_json() and work["why"] == S.PIECES["work"][4]
 
@@ -205,76 +246,166 @@ def test_a_rejecting_row_no_product_composes_leaves_the_window_undecided_and_is_
 
 
 @pytest.mark.parametrize("verdict", ["accept", "reject", "undecided"])
-def test_pieces_that_make_up_remote_get_remotes_lean_answer_through_composite(tmp_path, verdict):
-    """`composite.py remote` on the two pieces (a piece answering for neither product rides along unused): the window's
-    verdict is the executable's answer exactly; a rejection leaves no block record."""
-    pieces = tmp_path / "pieces"
-    pw, v2 = _piece(pieces, "pouw", POUW), _piece(pieces, "sampled-proofs", V2)
-    _piece(pieces, "pous", "verity/pous/p2/v4/run", case=False)
+def test_cases_that_make_up_remote_get_remotes_lean_verdict_through_composite(tmp_path, verdict):
+    """`composite.py remote` on the two private cases (one answering for neither product rides along unused): the
+    composed case goes to the composite's private directory, the window's verdict is the executable's public outcome
+    (its verdict and refusal's name), and only the public record is published; a rejection leaves no block record."""
+    priv = tmp_path / PRIV
+    pw, v2 = _piece(priv, "pouw", POUW), _piece(priv, "sampled-proofs", V2)
+    pous = _piece(priv, "pous", "verity/pous/p2/v4/run", case=False)
     want = {"accept": CA.Answer.accept("verity/remote/v0", b"\1" * 64, {POUW: {}}, {POUW: {}}),
             "reject": CA.Answer.reject("verity/remote/v0", f"{POUW} reject: no", b"\1" * 64),
             "undecided": CA.Answer.undecided("verity/remote/v0", f"{V2} undecided: later", b"\1" * 64)}[verdict]
-    report, rec, line = _record(tmp_path, _rows(_accepted(), pieces), remote=_exe(tmp_path, "remote", want))
-    assert report["verdict"] == want.to_json() == report["lean"]["answer"] and report["lean"]["error"] is None
-    assert report["lean"]["product"] == "verity/remote/v0" and report["lean"]["pieces"] == {POUW: str(pw), V2: str(v2)}
-    out = tmp_path / "record" / "composite"
+    report, rec, line = _record(tmp_path, _rows(_accepted(), tmp_path / "pieces"), [pw, v2, pous],
+                                remote=_exe(tmp_path, "remote", want))
+    name = {"accept": None, "reject": f"{POUW} reject", "undecided": f"{V2} undecided"}[verdict]
+    assert report["verdict"] == {"protocol": "verity/remote/v0", "verdict": verdict, "reason": name}
+    assert report["lean"]["error"] is None and report["lean"]["product"] == "verity/remote/v0"
+    assert report["lean"]["cases"] == [POUW, V2]
+    out = tmp_path / PRIV / "composite" / "w1" / "out"
     argv = json.loads((tmp_path / "remote.argv").read_text())
     assert argv == ["check", *(str(out / f) for f in ("params.json", "commitment.bin", "evidence.json")),
                     str(pw / "blob.bin"), str(v2 / "blob.bin")]
     assert [c["id"] for c in json.loads((out / "params.json").read_text())["components"]] == [POUW, V2]
     body = ('{"components":[{"commitment":"' + hashlib.sha512(POUW.encode()).hexdigest() + f'","id":"{POUW}"}},'
             '{"commitment":"' + hashlib.sha512(V2.encode()).hexdigest() + f'","id":"{V2}"}}]}}')
-    assert (out / "commitment.bin").read_bytes() == hashlib.sha512(b"verity/remote/v0\0" + body.encode()).digest()
+    commitment = hashlib.sha512(b"verity/remote/v0\0" + body.encode()).digest()
+    assert (out / "commitment.bin").read_bytes() == commitment
+    assert (out / "answer.json").read_text().strip() == want.canonical()
+    assert {f.stat().st_mode & 0o777 for f in out.rglob("*") if f.is_file()} == {0o600}
+    assert (out.stat().st_mode & 0o777, out.parent.stat().st_mode & 0o777) == (0o700, 0o700)
+    pub = tmp_path / "record" / "composite"
+    assert sorted(f.name for f in pub.iterdir()) == ["composite.json", "verdicts.txt"]
+    assert report["lean"]["composite"] == json.loads((pub / "composite.json").read_text())
+    assert report["lean"]["composite"]["commitment"] == commitment.hex()
+    assert (pub / "verdicts.txt").read_text().splitlines()[-1] == " ".join(["VERDICT", "verity/remote/v0", verdict,
+                                                                             *([name] if name else [])])
     assert (line["lean"]["product"], line["lean"]["verdict"], line["rejected"]) == ("verity/remote/v0", verdict, [])
     assert (rec is None) == (verdict == "reject")
 
 
-def test_pieces_that_make_up_onsite_get_onsites_answer_with_the_registration(tmp_path):
-    pieces = tmp_path / "pieces"
-    nci = _piece(pieces, "nci", "verity/nci/v1", "accept")
-    for i in S.NEEDS["onsite"][1:]:
-        _piece(pieces, i.split("/")[1], i)
-    _piece(pieces, "pouw-window", POUW)
+def test_cases_that_make_up_onsite_get_onsites_verdict_with_the_registration(tmp_path):
+    priv = tmp_path / PRIV
+    cases = [_piece(priv, "nci", "verity/nci/v1", "accept")]
+    cases += [_piece(priv, i.split("/")[1], i) for i in S.NEEDS["onsite"][1:]]
+    cases += [_piece(priv, "pouw-window", POUW)]
     want = CA.Answer.undecided("verity/onsite/v0", f"{V2} undecided: later", b"\2" * 128)
-    report, _rec, line = _record(tmp_path, _rows(_accepted(), pieces), onsite=_exe(tmp_path, "onsite", want),
+    report, _rec, line = _record(tmp_path, _rows(_accepted(), tmp_path / "pieces"), cases,
+                                 onsite=_exe(tmp_path, "onsite", want),
                                  remote=_exe(tmp_path, "remote", CA.Answer.reject("verity/remote/v0", "x")))
-    assert report["verdict"] == want.to_json() and line["lean"]["product"] == "verity/onsite/v0"
+    assert report["verdict"] == {"protocol": "verity/onsite/v0", "verdict": "undecided", "reason": f"{V2} undecided"}
+    assert line["lean"]["product"] == "verity/onsite/v0"
     assert not (tmp_path / "remote.argv").exists() and line["lean"]["missing"]["verity/onsite/v0"] == []
-    out = tmp_path / "record" / "composite"
+    out = tmp_path / PRIV / "composite" / "w1" / "out"
     assert (out / "commitment.bin").read_bytes()[64:] == hashlib.sha512(b"verity/nci/v1").digest()
     params = json.loads((out / "params.json").read_text())
-    assert params["registration"] == {"id": "verity/nci/v1", "params": {"k": 1}} and str(nci) in report["lean"]["pieces"].values()
+    assert params["registration"] == {"id": "verity/nci/v1", "params": {"k": 1}} and "verity/nci/v1" in report["lean"]["cases"]
     assert [c["id"] for c in params["components"]] == list(S.NEEDS["onsite"][1:])
 
 
-def test_a_lean_check_that_cannot_answer_leaves_the_window_undecided_and_says_why(tmp_path):
-    pieces = tmp_path / "pieces"
-    _piece(pieces, "pouw", POUW)
-    _piece(pieces, "sampled-proofs", V2)
+def test_a_lean_check_that_cannot_answer_leaves_the_window_undecided_says_why_and_publishes_nothing(tmp_path):
+    """No executable, an exit status that isn't its verdict's, no answer, or a public record composite.py refuses as a
+    leak (here a case's evidence holding its params digest): the window is undecided, the reason public (none of the
+    executable's or composite.py's output but composite.py's own refusal), and nothing of the composite is published."""
+    priv = tmp_path / PRIV
+    pw = _piece(priv, "pouw", POUW)
+    digest = hashlib.sha512(b'{"k":1}').hexdigest().encode()
+    v2 = _piece(priv, "sampled-proofs", V2, evidence=b'{"x":"' + digest + b'"}')
     a = CA.Answer.reject("verity/remote/v0", "no")
-    for exe, why in ((tmp_path / "none", "no remote executable at"),
-                     (_exe(tmp_path, "r0", a, rc=0), "exited 0 on"),
-                     (_exe(tmp_path, "r1", json.dumps(a.to_json()), rc=1), "exited 1 on"),
-                     (_exe(tmp_path, "r2", CA.Answer.reject("verity/onsite/v0", "no")), "exited 1 on"),
-                     (_exe(tmp_path, "r3", "usage", rc=64), "exited 64 with no answer")):
-        report, _rec, line = _record(tmp_path, _rows(_accepted(), pieces), remote=exe)
-        assert report["lean"]["answer"] is None and why in report["lean"]["error"] and line["lean"]["error"]
+    for exe, cases, why in ((tmp_path / "none", [pw, _piece(priv, "v2", V2)], "no remote executable at"),
+                            (_exe(tmp_path, "r0", a, rc=0), [pw, priv / "v2"], "exited 0 on Lean's reject"),
+                            (_exe(tmp_path, "r1", "usage", rc=64, stderr="SECRET"), [pw, priv / "v2"],
+                             "exited 64: no Lean verdict"),
+                            (_exe(tmp_path, "r2", a), [pw, v2], "exited 65 with public output []: composite.py: the "
+                             f"public output holds bytes of {V2}'s evidence; nothing written to --public-out")):
+        report, _rec, line = _record(tmp_path, _rows(_accepted(), tmp_path / "pieces"), cases, remote=exe)
+        assert report["lean"]["composite"] is None and why in report["lean"]["error"] and line["lean"]["error"]
+        assert "SECRET" not in json.dumps(report) and not (tmp_path / "record" / "composite").exists()
         assert (report["verdict"]["protocol"], report["verdict"]["verdict"]) == ("verity/remote/v0", "undecided")
         assert report["verdict"]["reason"].startswith("the Lean check: ")
 
 
-def test_found_takes_a_piece_only_with_its_case_and_once(tmp_path):
-    _piece(tmp_path, "a", POUW)
-    _piece(tmp_path, "b", POUW)
-    _piece(tmp_path, "c", V2, case=False)
-    _piece(tmp_path, "d", W.PROTOCOL, "accept")
+def test_found_takes_a_case_only_with_its_answer_and_once(tmp_path):
+    dirs = [_piece(tmp_path, "a", POUW), _piece(tmp_path, "b", POUW), _piece(tmp_path, "c", V2, case=False),
+            _piece(tmp_path, "d", W.PROTOCOL, "accept"), tmp_path / "e", tmp_path / "none"]
     (tmp_path / "e").mkdir()
     (tmp_path / "e" / "answer.json").write_text('{"verdict": "accept"}')
     (tmp_path / "e" / "case.json").write_text("{}")
-    got, why = S.found(tmp_path)
+    got, why = S.found([(d.name, d) for d in dirs])
     assert got == {W.PROTOCOL: tmp_path / "d"}
-    assert why == {POUW: "answered by more than one piece: a, b", V2: "undecided: later; c/ holds no case.json"}
-    assert S.found(tmp_path / "none") == ({}, {})
+    assert why == {POUW: "answered by more than one piece: a, b", V2: "undecided; c holds no case.json",
+                   "e": "its answer.json is no core answer (Refused)"}
+    assert S.found([]) == ({}, {})
+
+
+def test_each_pieces_case_is_its_private_one_else_its_public_one(tmp_path):
+    """PoUS's case is in the private directory its pous.json names (else private/pous/w<K>), the wipe's in
+    private/wipe; a piece with no private case keeps its case in its public directory (the certifier's); ``--cases``
+    adds directories, or their subdirectories, as composite.py reads them."""
+    serve, pieces = tmp_path / "serve", tmp_path / "pieces"
+    elsewhere = _piece(tmp_path / "kept", "pous-w1", "verity/pous/p2/v4/run")
+    _piece(pieces, "pous", "verity/pous/p2/v4/run", case=False)
+    (pieces / "pous" / "pous.json").write_text(json.dumps({"private": str(elsewhere)}))
+    wipe = _piece(serve / "private", "wipe", W.PROTOCOL)
+    _piece(pieces, "wipe", W.PROTOCOL, case=False)
+    certifier = _piece(pieces, "certifier", "verity/certifier/v0")
+    _piece(serve / "private", "certifier", "verity/certifier/v0", case=False)
+    extra = tmp_path / "extra"
+    nci, v2 = _piece(extra, "nci", "verity/nci/v1"), _piece(extra, "v2", V2)
+    got = dict(S.case_dirs(serve, 1, pieces, [extra]))
+    assert got == {"pouw": pieces / "pouw", "bandwidth": pieces / "bandwidth", "pous": elsewhere, "certifier": certifier,
+                   "wipe": wipe, "nci": nci, "v2": v2}
+    (pieces / "pous" / "pous.json").unlink()
+    assert dict(S.case_dirs(serve, 1, pieces))["pous"] == pieces / "pous"
+    default = _piece(serve / "private" / "pous", "w1", "verity/pous/p2/v4/run")
+    assert dict(S.case_dirs(serve, 1, pieces))["pous"] == default
+    assert S.found(S.case_dirs(serve, 1, pieces, [extra]))[0] == {
+        "verity/pous/p2/v4/run": default, W.PROTOCOL: wipe, "verity/certifier/v0": certifier, "verity/nci/v1": nci,
+        V2: v2}
+
+
+def _windows(b: bytes) -> set[bytes]:
+    return {b[i:i + 64] for i in range(len(b) - 63)}
+
+
+def test_no_byte_of_a_cases_evidence_reaches_a_public_path(tmp_path, monkeypatch, capsys):
+    """A served record whose cases make up remote, each case's evidence random bytes, and an executable that prints the
+    evidence back in its answer's reason and on its stderr: no 64-byte run of any case's evidence, raw or hex, is in any
+    file under the run's public out (the record and the pieces' public directories) or on stdout, while the composed
+    case and every answer stay in the serve dir's private directory (0700, files 0600)."""
+    monkeypatch.setattr(S, "sampled_proofs_row", lambda _audit_dir, _run=None: _accepted())
+    serve, out = tmp_path / "serve", tmp_path / "out"
+    serve.mkdir()
+    _serve_dir(serve)
+    evidence = {pid: os.urandom(4096) for pid in (POUW, V2)}
+    pw = _piece(serve / S.PRIVATE, "pouw", POUW, "accept", evidence=evidence[POUW])
+    v2 = _piece(tmp_path / "audit-private", "v2", V2, "accept", evidence=evidence[V2])
+    (out / "pieces" / "pouw").mkdir(parents=True)
+    (out / "pieces" / "pouw" / "answer.json").write_text(CA.Answer.accept(POUW, os.urandom(64), {"n": 1},
+                                                                           {"delta": "1/100"}).canonical() + "\n")
+    leak = evidence[POUW].hex() + evidence[V2].hex()
+    exe = _exe(tmp_path, "remote", CA.Answer.reject("verity/remote/v0", f"params: {leak}").canonical(), rc=1,
+               stderr=leak)
+    rc = S.main(["record", "--serve-run", str(serve), "--window", "1", "--sampled-proofs", str(tmp_path / "audit"),
+                 "--pieces", str(out / "pieces"), "--out", str(out / "record"), "--node", "n", "--remote", str(exe),
+                 "--onsite", str(tmp_path / "no-lean"), "--cases", str(v2)])
+    stdout = capsys.readouterr().out
+    report = json.loads((out / "record" / "verdicts.json").read_text())
+    assert report["verdict"] == {"protocol": "verity/remote/v0", "verdict": "reject", "reason": "params"}
+    assert rc == 1 and report["lean"]["error"] is None and (out / "record" / "composite" / "composite.json").is_file()
+    public = [f for f in out.rglob("*") if f.is_file()]
+    assert {f.relative_to(out).as_posix() for f in public} >= {"record/verdicts.json", "record/composite/composite.json",
+                                                               "record/composite/verdicts.txt"}
+    runs = {pid: _windows(e) | _windows(e.hex().encode()) for pid, e in evidence.items()}
+    for where, b in [*((f.relative_to(out).as_posix(), f.read_bytes()) for f in public), ("stdout", stdout.encode())]:
+        leaked = sorted(pid for pid, r in runs.items() if not r.isdisjoint(_windows(b)))
+        assert not leaked, f"{where} holds bytes of the evidence of {leaked}"
+    private = serve / "private" / "composite" / "w1"
+    assert leak in (private / "out" / "answer.json").read_text() and leak in (private / "out" / "check.err").read_text()
+    assert evidence[POUW].hex() in (private / "out" / "evidence.json").read_text()
+    assert {f.stat().st_mode & 0o777 for f in private.rglob("*") if f.is_file() and "public" not in f.parts} == {0o600}
+    assert {d.stat().st_mode & 0o777 for d in (private, private / "out", private / "out" / "pieces")} == {0o700}
+    assert out not in private.parents and pw.parent == serve / "private"
 
 
 WIPE_ACCEPT = {"protocol": W.PROTOCOL, "verdict": "accept", "reason": None, "commitment": "cd" * 64,
@@ -328,20 +459,21 @@ def test_the_record_composes_the_wipe_only_when_it_accepted_on_the_records_serve
     elif case == "unserved":
         assert rec["legs"]["wipe"] is None and "the wipe" not in line["not_run"]
     else:
-        assert rec["legs"]["wipe"] is None and line["not_run"]["the wipe"] == "MEM-96"
+        assert rec["legs"]["wipe"] is None and line["errors"] == []
+        assert line["not_run"]["the wipe"] == "its piece refused to run: WIPE REFUSED: the card has a compute process"
         assert report["protocols"]["wipe"]["answer"] == CA.Answer.undecided(W.PROTOCOL, "not run").to_json()
 
 
 def test_pieces_without_a_built_product_fail_the_record(tmp_path, monkeypatch, capsys):
-    """Pieces that make up remote with no executable at ``--remote`` leave the window undecided, saying why, and the
-    record exits 1."""
+    """Cases that make up remote (PoUW's in its private directory, sampled proofs' a ``--cases``) with no executable
+    at ``--remote`` leave the window undecided, saying why, and the record exits 1."""
     monkeypatch.setattr(S, "sampled_proofs_row", lambda _audit_dir, _run=None: _accepted())
-    _piece(tmp_path / "pieces", "pouw", POUW)
-    _piece(tmp_path / "pieces", "sampled-proofs", V2)
-    (tmp_path / "serve").mkdir()
+    _piece(tmp_path / PRIV, "pouw", POUW)
+    v2 = _piece(tmp_path / "kept", "sampled-proofs", V2)
     rc = S.main(["record", "--serve-run", str(_serve_dir(tmp_path / "serve")), "--window", "1",
                  "--sampled-proofs", str(tmp_path / "audit"), "--pieces", str(tmp_path / "pieces"),
-                 "--out", str(tmp_path / "record"), "--node", "n", "--remote", str(tmp_path / "no-lean")])
+                 "--out", str(tmp_path / "record"), "--node", "n", "--remote", str(tmp_path / "no-lean"),
+                 "--cases", str(v2)])
     line = json.loads(capsys.readouterr().out.strip().splitlines()[-1].removeprefix("RECORD "))
     assert rc == 1 and line["verdict"] == "undecided" and "no remote executable at" in line["lean"]["error"]
     assert line["lean"]["product"] == "verity/remote/v0"
@@ -574,8 +706,8 @@ def test_serve_load_varied_writes_each_requests_timings_beside_its_record(tmp_pa
 
     monkeypatch.setattr(SL.urllib.request, "urlopen", urlopen)
     out = tmp_path / "load.jsonl"
-    a = argparse.Namespace(port=0, model="m", varied=3, rate=2.0, prompt_range="16:24", max_tokens=4, seed=1, release="run",
-                           jitter_ms=0.0, out=str(out))
+    a = argparse.Namespace(port=0, model="m", varied=3, fixed=0, rate=2.0, prompt_range="16:24", max_tokens=4, seed=1,
+                           release="run", jitter_ms=0.0, out=str(out))
     assert SL.run_varied(a, clock=clock, wall=lambda: 1.7e9, sleep=lambda s: None) == 0
     rows = [json.loads(line) for line in out.read_text().splitlines()]
     assert SL.timings_path(out) == tmp_path / "load.timings.json"

@@ -12,7 +12,10 @@
 #     why, or NO WEIGHTS REGISTRATION why not, and then every weight read counts free.
 #  2. requests: REQUESTS greedy requests (default SLOTS) from the certifier's traffic generator (`examples/vllm/serve_load.py --varied`:
 #     prompts of PROMPTS tokens, at most MAX_TOKENS outputs), numbered under one release run and sent together (RATE a second),
-#     so the engine's idle closes them into one window. The lease ends once every closed window is sealed. Each request's
+#     so the engine's idle closes them into one window. With LOAD=fixed (default varied) they are one full window of fixed
+#     length instead (`serve_load.py --fixed SLOTS --window-steps WINDOW_STEPS`): SLOTS requests of PROMPTS tokens, each
+#     with ignore_eos and max_tokens WINDOW_STEPS, all prefilled at the window's first step and run through its last. The
+#     lease ends once every closed window is sealed. Each request's
 #     send, first-token and done times (the load's timings file, `serve_load.py`'s docstring) go to $OUT/timings/; each
 #     committed step's end is $OUT/serve/step_trace.jsonl's t_end, on the clock of the timings' start_unix.
 #  3. sampled proofs, on the window `served_verdicts.py window` picks (the most requests, none carried across windows): every
@@ -32,21 +35,24 @@
 #     `records_audit.py audit --circuit --registered` the registration (V3C_LAW, default subset:1) draws and proves its members.
 #     `served_verdicts.sh v3c` runs only that step on an existing serve dir (D and its window K set), the build first.
 #  4. PoUW (H1 credit), the bandwidth audit, PoUS and the network certifier: `served_verdicts.py pieces` runs each one's piece
-#     where POUW_CMD, BANDWIDTH_CMD, POUS_CMD or CERTIFIER_CMD names it (its answer.json and case.json), else answers it
-#     undecided, "not run", and says NOT RUN with its issue. A subprotocol that runs on the serving engine (H1's `--protocols pouw:...`, the
+#     where POUW_CMD, BANDWIDTH_CMD, POUS_CMD or CERTIFIER_CMD names it (its public answer.json; its case in D/private), else
+#     answers it undecided, "not run", and says NOT RUN with its issue; a piece that refused to run (refused.txt) is "not
+#     run" too, since only the protocol's answer rejects. A subprotocol that runs on the serving engine (H1's `--protocols pouw:...`, the
 #     bandwidth session's `--remote-verifier HOST:PORT`) goes in SERVE_ARGS, serve-openai's further arguments, and its piece
 #     reads what it wrote in the serve dir. The wipe's piece runs in step 1 instead: with WIPE_CMD set (e.g.
 #     'bash benchmarks/pous/streamed_wipe/served_wipe.sh "$1" "$2" "$3"'), serve() calls it in TREE, under the serve's lease
 #     and before serve-openai starts, with (the serve dir D, `all`, $OUT/pieces/wipe), since the window isn't picked yet, and
 #     says its last line as WIPE. The record reads its pieces/wipe/answer.json, and takes the wipe into the block record
 #     only when that answer accepts and pieces/wipe/served.json names this node as the server it ran on. A wipe that wrote
-#     no answer (refused, or failed before its judge) is undecided, "not run", one served elsewhere stays out of the block
+#     no answer (refused) is undecided, "not run" (one that failed before its judge, an error), one served elsewhere stays out of the block
 #     record, and one whose answer rejects fails the run with no block record: a failed wipe is never accepted.
 #  5. the record: `served_verdicts.py record`: the all-protocols window report ($OUT/record/verdicts.json, every row a
-#     core answer) whose verdict is onsite's Lean answer (`composite.py onsite`, the `onsite` executable) when the pieces
-#     under $OUT/pieces with a case.json beside their answer make up onsite, else remote's (`composite.py remote`), else
-#     undecided naming what each lacks; and the block record ($OUT/record/block-record.json) unless the window or a
-#     subprotocol rejects. The run passes on a window that accepts or is undecided with no subprotocol rejecting.
+#     core answer) whose verdict is onsite's Lean verdict (`composite.py onsite`, the `onsite` executable) when the pieces'
+#     cases (each in its private directory under D, else beside its public answer) make up onsite, else remote's
+#     (`composite.py remote`), else undecided naming what each lacks; and the block record ($OUT/record/block-record.json)
+#     unless the window or a subprotocol rejects. composite.py's private output (the composed case, its evidence, every
+#     answer) stays in D/private/composite/wK; only its public record, held to its form, goes to $OUT/record/composite.
+#     The run passes on a window that accepts or is undecided with no subprotocol rejecting or erring.
 # Coins: sampled proofs' draw is on the verifier's own live coins (Lean's IO.getRandomBytes, in-process) unless PP_CHALLENGER
 # names the live challenger (run.sh's gate:USER@HOST with PP_PEER, PP_CHALLENGER_KEY and PP_GATE_KEY). With H1_GATE (the
 # lane's gate command, e.g. "ssh -i $HOME/.ssh/vllm_gate_ed25519 -o BatchMode=yes research@204.12.178.84") the endpoint serves
@@ -89,6 +95,7 @@ export PATH=$HOME/.local/bin:$HOME/.cargo/bin:$HOME/.elan/bin:$PATH
 say() { echo "$*" | tee -a "$OUT/verdicts.txt"; }
 count() { cat "$1" 2>/dev/null | grep -c .; }
 vv() { "$PY" -m verity_vllm.pipeline.cli "$@"; }
+case ${LOAD:=varied} in varied | fixed) ;; *) say "PREFLIGHT: LOAD is varied or fixed, not $LOAD"; exit 3 ;; esac
 CKPT=${CKPT:-$HF_HOME/hub/models--${REPO//\//--}/snapshots/$REV} WREG=$D/weights_registration.json
 NO_WEIGHTS="NO WEIGHTS REGISTRATION: no window registers a weight's root, so every weight read counts free"
 weights() {  # under the lease (its commit hashes on the leased GPU), before the first request: the committer's registration
@@ -191,9 +198,17 @@ serve() {  # under the lease: the endpoint, the requests, every closed window se
   fi
   say "SERVE $(grep -m1 'SERVE-OPENAI listening' "$OUT/serve.log" | cut -c1-300)"
   weights
+  if [ -n "${CERTIFIER_FRONT:-}" ]; then  # the network certifier's warden in front of the endpoint, before the requests
+    # below: its group closes into the run's earliest window, which `served_verdicts.py window` picks on a tie in requests
+    (cd "$TREE" && timeout -k 1m 20m bash -c "$CERTIFIER_FRONT" _ "$PORT" "$D" "$OUT/certifier-front") \
+      > "$OUT/certifier-front.log" 2>&1
+    say "CERTIFIER-FRONT (exit $?): $(tail -1 "$OUT/certifier-front.log" | cut -c1-600)"
+  fi
   release=$("$PY" -c 'import uuid; print(uuid.uuid4().hex)')
-  "$PY" "$TREE/examples/vllm/serve_load.py" --port "$PORT" --model "$REPO" --varied "$REQUESTS" --rate "$RATE" --prompt-range "$PROMPTS" \
-    --max-tokens "$MAX_TOKENS" --release "$release" --seed "$SEED" --out "$D/load.jsonl" > "$OUT/load.log" 2>&1
+  local load=(--varied "$REQUESTS" --rate "$RATE" --max-tokens "$MAX_TOKENS")
+  [ "$LOAD" = fixed ] && load=(--fixed "$SLOTS" --window-steps "$WINDOW_STEPS")
+  "$PY" "$TREE/examples/vllm/serve_load.py" --port "$PORT" --model "$REPO" "${load[@]}" --prompt-range "$PROMPTS" \
+    --release "$release" --seed "$SEED" --out "$D/load.jsonl" > "$OUT/load.log" 2>&1
   rc=$?
   say "REQUESTS (exit $rc, release run $release): $(tail -1 "$OUT/load.log" | cut -c1-300)"
   mkdir -p "$OUT/timings" && cp "$D/load.timings.json" "$OUT/timings/" || say "TIMINGS: no $D/load.timings.json"

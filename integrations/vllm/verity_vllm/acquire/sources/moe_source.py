@@ -534,8 +534,8 @@ class MoeBlockSource:
                               "flushed off the device right after staging (its workspace is the block's own w2 output: cache1/cache3 alias), "
                               "and on Marlin act and down after the w2 launch (moe_sum's output is carved from act's workspace) -- "
                               f"{self.stats['plane_flushes']} flushes; identity_check requires exactly "
-                              f"{per_layer} per layer per step; value correspondence: verity_vllm/ops/moe_kernel_xcheck.py (cp-moe, "
-                              f"registry.moe Definitions bit-exact vs the same kernels); shapes seen {self.stats['shapes']}")}]
+                              f"{per_layer} per layer per step; value correspondence: verity_vllm/ops/moe_kernel_xcheck.py "
+                              f"(registry.moe Definitions bit-exact vs the same kernels); shapes seen {self.stats['shapes']}")}]
 
 
 __all__ = ["MoeBlockSource", "moe_layers_of", "router_kernel", "grouped_topk_args", "binds_planes", "claims", "hash_router_input",
