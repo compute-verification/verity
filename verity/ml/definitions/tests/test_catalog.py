@@ -58,6 +58,8 @@ COUNT += 2  # ops' `ScaledMmS8ResidualCoordinateRows_v1` and `_v2`, a line of it
 
 COUNT += 3  # the key block's steps: `fa2_check_inf`'s AttnBlockSoftmax_v1 and AttnBlockPv_v1, `fa3_check_inf`'s AttnBlockSoftmax_v2
 
+COUNT += 4  # the key-block cut: `dead_free`'s AttentionHead_v21 and Attention_v21, `fa3_check_inf`'s AttentionHead_v22 and Attention_v22
+
 COUNT += 2  # ops' `PvRowPad_v1` and `_v2`, a line of its own so it merges with any other change to the count
 
 COUNT += 3  # io_shell's `ScanSlots_v2` (boolean_io_shell's), `OutCollect_v1` and `SlotEntry_v1`, a line of its own so it merges with any other change to the count
