@@ -23,13 +23,17 @@ if TYPE_CHECKING:
 
     Engine = Union[Wrapper, vllm.LLM, LLMEngine]
 
-__all__ = ["model_runner", "scheduler"]
+__all__ = ["engine_of", "model_runner", "scheduler"]
+
+
+def engine_of(llm: Engine) -> LLMEngine:
+    """The engine's ``LLMEngine``: what ``add_request``, ``step`` and ``has_unfinished_requests`` drive."""
+    eng = getattr(llm, "vllm", llm)
+    return getattr(eng, "llm_engine", eng)
 
 
 def _engine_core(llm: Engine) -> Any:
-    eng = getattr(llm, "vllm", llm)
-    eng = getattr(eng, "llm_engine", eng)
-    core = getattr(eng, "engine_core", None)
+    core = getattr(engine_of(llm), "engine_core", None)
     return getattr(core, "engine_core", None) or core
 
 
