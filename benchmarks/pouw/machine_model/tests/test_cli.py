@@ -17,7 +17,7 @@ RUN = "r20261016-000000-0000"
 def test_solve_prints_the_numbers_and_the_check(capsys):
     assert main(["solve", "VF3j-16"]) == 0
     out = capsys.readouterr().out
-    assert "τ 0.0610   τ at 600 W 0.0477   U/F_low 1.1563   margin 2.000" in out
+    assert "τ 0.0610   U/F_low 1.1563   margin 2.000" in out
     assert "(reproduced)" in out and "1306 attacks in 13 families at X ≥ 1.0: pass" in out
     assert "superseded by VF3k-16" in out
     assert "(π₃₂): every root-writing kind at ≥ 32 MACs a word: 84 kinds, holds (not split out at VF3j-8: ATOME32P)" in out
@@ -40,7 +40,7 @@ def test_solve_defaults_to_the_current_vector(capsys):
     assert main(["solve", "VF3r-16", "--json"]) == 0
     d = json.loads(capsys.readouterr().out)
     assert round(d["tau"], 4) == 0.0556 and d["failures"] == [] and d["unreproduced"] == []
-    assert (round(d["tau_600w"], 4), round(d["uf_low"], 4), d["margin"]) == (0.0435, 1.1563, 2.0)
+    assert (round(d["uf_low"], 4), d["margin"]) == (1.1563, 2.0)
     assert d["floors"] == {"pi32": {"kinds": 85, "below": [], "absent": []},
                            "loads16": {"kinds": 15, "below": [], "absent": []},
                            "copy16": {"kinds": 83, "below": ["UNI64 1.00 a word < 16"], "absent": []}}
