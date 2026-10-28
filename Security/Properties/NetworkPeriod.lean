@@ -28,10 +28,11 @@ supplies each of the statement's quantities as at most the check's number:
 The rows form's terms charge a tied audit (one a scan's `prog` is an output of) its free inputs and no faulty term,
 though a wrong unit's outputs would reach the egress; `RowsTiedDrawn` says the check accepts no tied audit with a unit
 undrawn. `RowsProgWired` says it accepts no link-window whose scan's `prog` is not a compute audit's slot entries,
-the entries port of a `SlotEntry_v1` template of that audit's own Program. `RowsUntiedRefused` says the rows form
-accepts no period of a link-window, while no check reads that a tied audit's Programs compute on the scan's state.
-Beside them, their nontrivial lemmas' objects: `RowsTiedDrawnOf`, `RowsProgWiredOf` and `RowsUntiedRefusedOf`, the
-properties of any period check, and `acceptAllRows`, a check that accepts every period.
+the entries port of a `SlotEntry_v1` template of that audit's own Program. `RowsStateTied` says it accepts no
+link-window whose scan's state is not the `SCAN_STATE` of an audit its `prog` is wired to, so a state that skips or
+alters one of the scan's transitions is no Program's input. Beside them, their nontrivial lemmas' objects:
+`RowsTiedDrawnOf`, `RowsProgWiredOf` and `RowsStateTiedOf`, the properties of any period check, and `acceptAllRows`, a
+check that accepts every period.
 -/
 
 namespace Properties.NetworkPeriod
@@ -102,24 +103,27 @@ def RowsProgWiredOf (chk : Params → Commitment → Evidence → Core.Outcome P
     chk p c e = .accept pub prof → ∀ (s : Schedule) (sd : ByteArray) (scan : Scan), p.form = .rows s sd scan →
       ∀ (i : ℕ) (reg : Registration), c.windows[i]? = some reg → wired p.audits s c.audits reg = true
 
-/-- **The rows form accepts no period of a link-window.** If the check accepts a period in the rows form, the period
-has no link-window: a slot's Program reads the requests from its own registered `SCAN_STATE`, and until a check reads
-that it is the scan's state (its root and domain), the Program can compute its entry on a state the prover chose; which
-slots are due and occupied is private, so the check refuses every such period (`untied`). -/
-def RowsUntiedRefused : Prop :=
+/-- **The rows form accepts no link-window whose scan's state is not its wired audit's `SCAN_STATE`.** If the check
+accepts a period in the rows form, each link-window's scan's registration has a state entry (`stateEntries`: a `roots`
+port `scan/state` or a `registered` value `verity/certifier/scan-state/v1`), every one at one root and domain, and an
+audit whose slot entries are the scan's `prog` (`wired`) has one, every one at that root and domain (`stateTied`). The
+scan's units read their state at that root and register the state their transition computes there, so the state a
+slot's Program reads is the scan's, and a `SCAN_STATE` that skips or alters a transition, at another root or domain, is
+refused. -/
+def RowsStateTied : Prop :=
   ∀ (p : Params) (c : Commitment) (e : Evidence) (pub : Public) (prof : Profile),
     check p c e = .accept pub prof → ∀ (s : Schedule) (sd : ByteArray) (scan : Scan), p.form = .rows s sd scan →
-      p.windows = 0
+      ∀ (i : ℕ) (reg : Registration), c.windows[i]? = some reg → stateTied p.audits s c.audits reg = true
 
-/-- `RowsUntiedRefused` of any period check. -/
-def RowsUntiedRefusedOf (chk : Params → Commitment → Evidence → Core.Outcome Public Profile) : Prop :=
+/-- `RowsStateTied` of any period check. -/
+def RowsStateTiedOf (chk : Params → Commitment → Evidence → Core.Outcome Public Profile) : Prop :=
   ∀ (p : Params) (c : Commitment) (e : Evidence) (pub : Public) (prof : Profile),
     chk p c e = .accept pub prof → ∀ (s : Schedule) (sd : ByteArray) (scan : Scan), p.form = .rows s sd scan →
-      p.windows = 0
+      ∀ (i : ℕ) (reg : Registration), c.windows[i]? = some reg → stateTied p.audits s c.audits reg = true
 
 /-- A period check that accepts every period, publishing the rows form's terms of no link-window: what
-`RowsTiedDrawnOf`, `RowsProgWiredOf` and `RowsUntiedRefusedOf` must fail at for `RowsTiedDrawn`, `RowsProgWired` and
-`RowsUntiedRefused` to say something. -/
+`RowsTiedDrawnOf`, `RowsProgWiredOf` and `RowsStateTiedOf` must fail at for `RowsTiedDrawn`, `RowsProgWired` and
+`RowsStateTied` to say something. -/
 def acceptAllRows (p : Params) (_ : Commitment) (_ : Evidence) : Core.Outcome Public Profile :=
   .accept (rowsTerms #[] ⟨0, 0, 0, 0⟩ #[] p.cells p.jitter p.windows) { link := p.link, windows := p.windows }
 

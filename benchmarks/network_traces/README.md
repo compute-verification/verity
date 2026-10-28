@@ -233,10 +233,12 @@ compute audit's `SlotEntry_v1` template's entries (`<descriptor id>/c0/o0`, one 
 prover's word (an entry of read 1 and no outputs passes the scan), so `NetworkCheck.Period` refuses the link-window by
 name (`wired`). `wired` pins the template's whole body by its closure digest (`slotEntryPins`, `io_shell.SlotEntry_v1`
 at its circuit-check rows), so the block round's `prog`, the o0 of scan_zk's `SlotEntry_v1` stand-in, whose entries,
-read bit included, are the prover's, is refused there (scan_period.py). A
-slot's Program reads the requests from its own registered `SCAN_STATE`, which nothing ties to the scan's state yet, so
-the check refuses every rows-form period of a link-window, last, by name (`untied`), and the rows form publishes no K
-yet.
+read bit included, are the prover's, is refused there (scan_period.py). A slot's Program reads the requests from its
+own registered `SCAN_STATE`, and the check refuses, last, by name, a link-window whose scan's state isn't a wired
+audit's `SCAN_STATE` by root and domain (`stateTied`). scan_zk's state tree is the window state
+(`ingress_scan.window_state`: leaf 0 the empty state, leaf t S_{t−1}), each leaf but the first the o1 of the unit that
+computes it and the sin of the next, both registered reads, so a state tree that skips or alters a transition is
+refused at that unit's o1; the block round's registration names it as `scan/state`.
 Tied (`NetworkCheck.Period`'s `progTied`, scan_zk's block round), the entries are a compute audit's outputs
 and the scan's own free term is 0: the bits are that audit's free inputs (the stand-in's `x`), which the rows form's
 K charges to the link-window's term (`tiedAudits`). The egress tie moves the free term from the scan's `prog` to the
