@@ -28,7 +28,9 @@
 #     leaves it is their aggregate ($OUT/serve/overhead.json, except with LOAD=front, whose warden-paced load no stock
 #     control compares to) and verdict lines that count no window's requests. The advice registration's published copies
 #     ($OUT/registration-w$K.json, the records audit's served-records) carry the advice's length padded to its compiler's
-#     cap (`served_verdicts.py public-registration`), and the audit's log stays in the serve dir.
+#     cap (`served_verdicts.py public-registration`), and the audit's log and run.sh's served path (its summary,
+#     registrations, sessions and audit log, which carry the advice's length) stay in the serve dir, where the record reads
+#     them.
 #  3. sampled proofs, on the window `served_verdicts.py window` picks (the most requests, none carried across windows; its
 #     WINDOW line gives its engine steps and whether its requests filled the SLOTS slots, and CLASSES the window circuit's
 #     classes beside the certifier's scan class, CERTIFIER_SCAN, default W63, the one the gate serves): every
@@ -502,6 +504,8 @@ wait "$BUILD"; rc=$?
 env -u PYTHONPATH PP_SERVE_RUN="$D" PP_WINDOW="$K" PP_SERVE_ROWS="$D/windows/w$K" PP_RECORDS=1 PP_ONLY="${PP_ONLY:-honest}" \
   PP_MAIN="${PP_MAIN:-${MAIN_FILE:-}}" PP_VLLM_PYTHON="$PY" PP_FLOCK_WORK="$FW" OUT="$OUT/sampled-proofs" bash benchmarks/prove_path/run.sh > "$D/sampled-proofs.log" 2>&1
 rc=$?
+SP=$D/sampled-proofs-served
+rm -rf "$SP"; [ ! -d "$OUT/sampled-proofs/served" ] || mv "$OUT/sampled-proofs/served" "$SP"
 # run.sh's records copy holds the window's request lists (windows.jsonl) and the advice's length (registration.json):
 # the published copy is the registration's public form alone
 SR=$OUT/sampled-proofs/served-records
@@ -521,7 +525,7 @@ TPY=$TREE/.venv/bin/python
 [ -z "$CERT" ] || { wait "$CERT"; tee -a "$OUT/verdicts.txt" < "$OUT/pieces-certifier.txt"; }
 
 # 5. one record of every verdict
-"$TPY" benchmarks/one_stage/served_verdicts.py record --serve-run "$D" --window "$K" --sampled-proofs "$OUT/sampled-proofs/served" \
+"$TPY" benchmarks/one_stage/served_verdicts.py record --serve-run "$D" --window "$K" --sampled-proofs "$SP" \
   --pieces "$OUT/pieces" --out "$OUT/record" 2>&1 | tee -a "$OUT/verdicts.txt"
 rec=${PIPESTATUS[0]}
 comp=0
