@@ -1613,6 +1613,13 @@ path check, `PousCheck.Merkle`), and \(y_g\) recomputed from the four blocks (`p
 path is `C*`'s block, by SHA-512's collision resistance. A P2 store is fixed at setup, so a session over it appends
 nothing (`append`).
 
+**Of record** (`lean/RemoteAudit/P2Session.lean`). The Lean verifier's process decides a P2 session (`p2_party.py`):
+it holds the registration file's bytes (its digest recomputed from its fields, a stated `digest` refused unless it is
+theirs) and reads the prover's request and each root and openings line as sent, a line out of form rejecting the
+session `malformed` at the window filling. Its bookkeeping is §4–§6's over the U units, and its openings are checked
+as above, on the registered vk root. `p2.Session` runs beside it as a veto: where the two differ the session is
+rejected `disagreement`.
+
 **What it rests on, and what is open.**
 
 - The record (`Session.record`) is §7's, with `block_bytes` 8,224, `codec` `p2-16448/v4` and layout `p2-unit4/v0`.
@@ -1624,9 +1631,10 @@ nothing (`append`).
   \(\varepsilon = 257 \cdot\) `timing.sign_rank_at_most(16, 11)` \(= 2^{-95.2491}\) (\(2^{-96.2548}\) at 4,096-byte
   blocks' 128 sectors). The memory line's `SketchBoundAt` follows from it by `SketchBoundLine`, which holds at every
   \(m\).
-- Not yet built: the Lean session over a P2 store (the Lean ports here are the registration digest, the partials,
-  the unit receipt and the opening check, `lean/RemoteAudit/P2.lean`), the registry's one live registration a node for
-  P2, and the zero-knowledge opening unit of a P2 unit (§8).
+- No property in `Security/Properties/RemoteAudit` states yet what the Lean accepts of a P2 session; the difftest
+  (`lean/tests/test_p2.py`'s `p2_session`) holds `p2.Session` to it.
+- Not yet built: the registry's one live registration a node for P2, and the zero-knowledge opening unit of a P2 unit
+  (§8).
 
 ## Appendix A. Live coins, and why the protocol doesn't use them
 
