@@ -200,13 +200,13 @@ ran. Without a usable remote it refuses rather than report them missing; `--loca
 
 ## Settings
 
-Every environment variable the harness reads is declared once in `verity_bench.settings`, with its type, default, doc and
-role: `value` (it can change what a point measures), `where` (only where and how long things run) or `debug` (refused on a
-point, which is always a run of record). A point writes the value settings in force, with their SHA-512 digest, to
-`out/settings.json` beside its result. `verity-bench` refuses a `VERITY_BENCH_*` variable that nothing in the tree reads,
-naming it. A variable the vLLM integration declares is never declared here: the harness writes one through
-`verity_vllm.engine.env`. `benchmarks/harness/tests/test_settings.py` holds the harness's other direct uses of `os.environ` to a shrink-only
-baseline.
+Every environment variable the harness reads is declared once in `verity_bench.settings`, a `verity_config.settings`
+`Registry`, with its type, default, doc and role: `value` (it can change what a point measures), `where` (only where and
+how long things run) or `debug` (refused on a point, which is always a run of record). A point writes the value settings
+in force, with their SHA-512 digest, to `out/settings.json` beside its result. `verity-bench` refuses a `VERITY_BENCH_*`
+variable that nothing in the tree reads, naming it. A variable the vLLM integration declares is never declared here: the
+harness writes one through `verity_vllm.engine.env`. `benchmarks/harness/tests/test_settings.py` holds the harness's
+other direct uses of `os.environ` to a shrink-only baseline.
 
 ## The served table
 

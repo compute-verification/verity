@@ -32,7 +32,7 @@ def test_every_variable_job_sh_reads_is_declared_and_every_declared_one_is_read(
 
 def test_run_refuses_an_unknown_job_variable_before_it_launches(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(RUN.subprocess, "run", lambda *a, **k: pytest.fail("launched"))
-    for bad, said in (("REPEAT_LAEN=1", "unknown setting REPEAT_LAEN: nothing in the tree reads it"),
+    for bad, said in (("REPEAT_LAEN=1", "unknown setting REPEAT_LAEN: nothing reads it"),
                       ("OPROVE_RUNZ=2", "unknown setting OPROVE_RUNZ"), ("REPEAT_LEAN=one", "REPEAT_LEAN='one'")):
         with pytest.raises(SystemExit, match=re.escape(said)):
             RUN.main(["run", "--dry-run", "--env", bad])
@@ -40,8 +40,11 @@ def test_run_refuses_an_unknown_job_variable_before_it_launches(monkeypatch: pyt
 
 
 def _record(tmp_path: Path, **env: str) -> subprocess.CompletedProcess:
-    base = {k: v for k, v in RS.REGISTRY.environ().items() if not k.startswith(RS.REGISTRY.prefixes) and k != "RESEARCH_RUN_ID"}
-    return subprocess.run([sys.executable, str(HERE / "settings.py"), "record", str(tmp_path / "settings.json")],
+    """job.sh's first command, as the pod's python3 runs it: no site-packages and no PYTHONPATH, so what settings.py imports
+    it finds in the tree itself."""
+    base = {k: v for k, v in RS.REGISTRY.environ().items()
+            if not k.startswith(RS.REGISTRY.prefixes) and k not in ("RESEARCH_RUN_ID", "PYTHONPATH")}
+    return subprocess.run([sys.executable, "-S", str(HERE / "settings.py"), "record", str(tmp_path / "settings.json")],
                           env={**base, **env}, capture_output=True, text=True, check=False)
 
 

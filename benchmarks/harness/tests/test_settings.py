@@ -2,24 +2,15 @@
 of the value settings, the refusal of a ``VERITY_BENCH_*`` variable nothing reads, and the ratchet on direct environment uses."""
 from __future__ import annotations
 
-import ast
 import json
 import re
-import sys
 from pathlib import Path
 
 import pytest
 from verity_bench import jobs, settings
 from verity_bench.cli import main
-from verity_bench.settings import (
-    DEBUG,
-    VALUE,
-    WHERE,
-    Registry,
-    Setting,
-    UnknownSetting,
-    direct_uses,
-)
+from verity_bench.settings import check, direct_uses
+from verity_config.settings import DEBUG, REDACTED, VALUE, WHERE, DebugOnRecord, Registry, Setting, UnknownSetting
 
 MEMBER = Path(__file__).resolve().parents[1]
 REGISTRY_FILE = "verity_bench/settings.py"
@@ -35,14 +26,6 @@ def test_every_setting_has_a_type_a_role_and_a_doc() -> None:
         assert name.startswith(settings.REGISTRY.prefixes) or not name.startswith("VERITY_"), name
 
 
-def test_the_registry_is_stdlib_only() -> None:
-    """The recursion job runs it with the pod's python3, outside any environment that has verity_bench's dependencies."""
-    tree = ast.parse((MEMBER / REGISTRY_FILE).read_text())
-    mods = {a.name for n in ast.walk(tree) if isinstance(n, ast.Import) for a in n.names}
-    mods |= {"." * n.level + (n.module or "") for n in ast.walk(tree) if isinstance(n, ast.ImportFrom)}
-    assert {m.split(".")[0] for m in mods} <= set(sys.stdlib_module_names) | {"__future__"}, sorted(mods)
-
-
 def test_a_read_parses_the_environment_at_the_read(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.delenv("RESEARCH_RUN_ID", raising=False)
     assert settings.RESEARCH_RUN_ID == "local" and not settings.is_set("RESEARCH_RUN_ID")
@@ -53,12 +36,12 @@ def test_a_read_parses_the_environment_at_the_read(monkeypatch: pytest.MonkeyPat
         _ = settings.VERITY_BENCH_NOT_A_SETTING
     with pytest.raises(AttributeError, match="not a declared setting"):
         settings.put("VERITY_BENCH_NOT_A_SETTING", "1")
-    numbers = Registry("x.py", "x/v1", [Setting("X_N", int, 3, VALUE, "a number")], prefixes=("X_",))
+    numbers = Registry("x.py", ("X_",), Setting("X_N", int, 3, VALUE, "a number"), shared=False)
     assert numbers.get("X_N", {}) == 3 and numbers.get("X_N", {"X_N": "4"}) == 4
     with pytest.raises(ValueError, match="X_N='four'"):
         numbers.get("X_N", {"X_N": "four"})
     with pytest.raises(ValueError, match="declared twice"):
-        Registry("x.py", "x/v1", [Setting("X_N", int, 3, VALUE, "a")] * 2, prefixes=("X_",))
+        Registry("x.py", ("X_",), *[Setting("X_N", int, 3, VALUE, "a")] * 2, shared=False)
 
 
 def test_put_setdefault_and_unset_write_only_declared_variables(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -76,18 +59,18 @@ def test_the_record_carries_the_value_settings_in_force() -> None:
     env = {"VERITY_BENCH_SETUP": "benchmarks/harness/setup/pearl_c.sh", "RESEARCH_SOURCE_SHA": "a" * 40,
            "VERITY_BENCH_VENV": "/v", "RESEARCH_RUN_ID": "r", "PATH": "/bin"}
     rec = settings.record(env)
-    assert rec["schema"] == "verity-bench/settings/v1"
+    assert rec["schema"] == "verity-config/settings/v1"
     assert rec["values"] == {"RESEARCH_SOURCE_SHA": "a" * 40, "VERITY_BENCH_SETUP": "benchmarks/harness/setup/pearl_c.sh"}
     assert rec["digest"] == ("8f3621ccf6b149240eb7d51f56bc8150b8aaa1c2eb1edb70dbfbd678417f3c6b"
                              "da0c4cde48e9f6b5600736fe733aa02bf35754807ec6f56335e92f97a7a3b691")
     assert settings.record({})["values"] == {}
-    keyed = Registry("x.py", "x/v1", [Setting("X_API_KEY", str, None, VALUE, "a credential")], prefixes=("X_",))
-    assert keyed.record({"X_API_KEY": "dummy-not-a-real-key"})["values"] == {"X_API_KEY": settings.REDACTED}
+    keyed = Registry("x.py", ("X_",), Setting("X_API_KEY", str, None, VALUE, "a credential"), shared=False)
+    assert keyed.record({"X_API_KEY": "dummy-not-a-real-key"})["values"] == {"X_API_KEY": REDACTED}
 
 
 def test_an_unknown_verity_bench_variable_is_refused_by_name() -> None:
     assert settings.unknown({"VERITY_BENCH_VENV": "/v", "VERITY_BENCH_FULL": "1", "VERITY_RETAIN": "none", "PATH": "/b"}) == []
-    with pytest.raises(UnknownSetting, match="unknown setting VERITY_BENCH_VNEV: nothing in the tree reads it"):
+    with pytest.raises(UnknownSetting, match="unknown setting VERITY_BENCH_VNEV: nothing reads it"):
         settings.validate({"VERITY_BENCH_VNEV": "/v"}, of_record=False)
 
 
@@ -99,15 +82,15 @@ def test_verity_bench_refuses_an_unknown_setting_at_startup(monkeypatch: pytest.
     assert e.value.code == 2 and "unknown setting VERITY_BENCH_VNEV" in capsys.readouterr().err
 
 
-def test_a_debug_setting_is_refused_on_a_run_of_record() -> None:
-    r = Registry("x.py", "x/v1", [Setting("X_TRACE", str, None, DEBUG, "a trace file"),
-                                  Setting("X_N", int, 3, VALUE, "a number")], prefixes=("X_",))
-    r.validate({"X_TRACE": "/t"}, of_record=False)
-    r.validate({"X_TRACE": ""}, of_record=True)
-    with pytest.raises(UnknownSetting, match=r"X_TRACE \(debug\) set on a run of record"):
-        r.validate({"X_TRACE": "/t"}, of_record=True)
+def test_check_refuses_a_value_that_doesnt_parse_and_a_debug_setting_on_a_run_of_record() -> None:
+    r = Registry("x.py", ("X_",), Setting("X_TRACE", str, None, DEBUG, "a trace file"),
+                 Setting("X_N", int, 3, VALUE, "a number"), shared=False)
+    check(r, {"X_TRACE": "/t"}, of_record=False)
+    check(r, {"X_TRACE": ""}, of_record=True)
+    with pytest.raises(DebugOnRecord, match="X_TRACE: debug setting, refused on a run of record"):
+        check(r, {"X_TRACE": "/t"}, of_record=True)
     with pytest.raises(ValueError, match="X_N='x'"):
-        r.validate({"X_N": "x"}, of_record=False)
+        check(r, {"X_N": "x"}, of_record=False)
 
 
 def test_every_prefixed_name_the_member_spells_is_declared() -> None:
