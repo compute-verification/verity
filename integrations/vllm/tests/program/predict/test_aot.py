@@ -110,7 +110,7 @@ def test_a_rank_composes_its_workload_from_each_requests_component_as_predicted(
     monkeypatch.setattr(A, "phi_at", lambda row, rank, config: phi)
     (tmp_path / "result.json").write_text(json.dumps({"M": 1, "pos0": 8}))
     names = [f"build_request_LP{lp}_T{t}" for lp, t in phi.request_shapes()]
-    got = A._predict_rank(("row", 0, "config.json", str(tmp_path), names))
+    got = A._predict_rank(("row", 0, "config.json", str(tmp_path), [(n, *s) for n, s in zip(names, phi.request_shapes())]))
     assert got["errors"] == {} and set(got["secs"]) == {"step", "workload", *names}
     assert got["requests"] == {n: build_program(phi, "request", LP=lp, T=t).digest for n, (lp, t) in zip(names, phi.request_shapes())}
     assert got["workload"] == S.predict_workload(phi)["digest"]
