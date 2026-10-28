@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # One update-price run: the fine-tune (train.py), then the pricing (price.py). Outputs go to $OUT; downloads and
 # checkpoints to a scratch directory removed at exit. From the repository root, as a research run:
-#   research run --on auto --cpus 16 --mem-gb 64 --max-min 600 --cwd source -- bash benchmarks/update_price/run.sh
+#   research run --on vy-nebius-cpu-3 --pool research --pool-wait 21600 --timeout 32400 --custody-ttl 16h \
+#     --source . --project verity --cwd source -- bash benchmarks/update_price/run.sh
 # Arguments go to train.py (a trial: --steps 3 --save 1,3 --state 1 --replay 1).
 set -euo pipefail
 : "${OUT:?run it under research run, which sets OUT}"

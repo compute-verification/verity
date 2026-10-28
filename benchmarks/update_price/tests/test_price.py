@@ -77,4 +77,10 @@ def test_pricing_pipeline_on_a_toy_run(tmp_path):
         res["versions"][k]["changed"] = 0
     text = P.render(res, train)
     assert "## λ implied" in text and "| 3 | fp32 | replay1 |" in text
-    json.dumps(res)
+    assert "| 3 | lattice1 |" in text and "| 3 | replay, tokens xz-coded |" in text
+    out = tmp_path / "out"
+    out.mkdir()
+    (out / "price.json").write_text(json.dumps(res))
+    (out / "train.json").write_text(json.dumps(train))
+    P.main(["--render", "--train", str(out / "train.json"), "--out", str(out)])
+    assert (out / "tables.md").read_text() == text

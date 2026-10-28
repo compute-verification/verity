@@ -426,6 +426,28 @@ def render(res: dict, train: dict) -> str:
              f"{train['machine']['cpu']}, {train['machine']['threads']} threads, {res['mean_step_s']:.2f} s/step (median). "
              "Bits per updated weight; t in training steps of this machine.", ""]
     keys = sorted(res["versions"], key=lambda k: (k.split("/")[1], int(k.split("/")[0])))
+    step_s = [s["fwd_s"] + s["bwd_s"] + s["opt_s"] for s in train["train"]["steps"]]
+    for fmt in FMTS:
+        lines += [f"## All {fmt} slots: bits per weight by method and its decoder's time t", "",
+                  "t is the steps the decoder replays plus its decode, summed over tensors on one 2-thread worker.", "",
+                  "| N | method | bits/weight | steps replayed | decode (s) | t (s) | t (steps) |", "|---|---|---|---|---|---|---|"]
+        for k in keys:
+            n, f = k.split("/")
+            if f != fmt:
+                continue
+            v = res["versions"][k]
+            a = v["groups"]["all"]
+            for meth, r in a["methods"].items():
+                m = replayed(meth)
+                lines.append(f"| {n} | {meth} | {fmt_bits(r['bits'] / a['n'])} | {m} | {r['dec_s']:.1f} | "
+                             f"{sum(step_s[:m]) + r['dec_s']:.1f} | {m + r['dec_s'] / res['mean_step_s']:.3g} |")
+            rp = v["replay"]
+            base = rp["record_bits"] + rp["trainer_bits"]
+            for label, bits, t in (("replay, data in R", base, n), ("replay, tokens xz-coded", base + rp["xz_token_bits"], n),
+                                   ("replay, tokens coded by the model", base + rp["prequential_bits"],
+                                    f"{n} + an autoregressive decode")):
+                lines.append(f"| {n} | {label} | {fmt_bits(bits / a['n'])} | {n} | - | {rp['seconds']:.1f} | {t} |")
+        lines.append("")
     for fmt in FMTS:
         lines += [f"## All {fmt} slots: bits per weight by decoder budget", "",
                   "| N | slots changed | ulp | lowrank | pred0 | lattice0 | best without replay | best with replay of M steps | replay (data in R) | replay (data not in R) | λ implied at the codec rate |",
@@ -465,7 +487,8 @@ def render(res: dict, train: dict) -> str:
         lines.append("")
     for fmt in FMTS:
         lines += [f"## Selections across tensors, {fmt}: bits per weight (description + index)", "",
-                  "| N | selection | slots | index bits | ulp | lattice0 | predM | latticeM |", "|---|---|---|---|---|---|---|---|"]
+                  "| N | selection | slots | index bits | ulp | ulp decode (s) | lattice0 | predM | latticeM |",
+                  "|---|---|---|---|---|---|---|---|---|"]
         for k in keys:
             n, f = k.split("/")
             if f != fmt:
@@ -475,7 +498,8 @@ def render(res: dict, train: dict) -> str:
                     return fmt_bits((row[key]["bits"] + row["index_bits"]) / row["n"]) if key in row else "-"
                 pk = [x for x in row if x.startswith("pred")]
                 mp = pk[0][4:] if pk else None
-                lines.append(f"| {n} | {s} | {row['n']} | {row['index_bits']:.4g} | {cell('ulp')} | {cell('lattice0')} | "
+                lines.append(f"| {n} | {s} | {row['n']} | {row['index_bits']:.4g} | {cell('ulp')} | {row['ulp']['dec_s']:.3g} | "
+                             f"{cell('lattice0')} | "
                              f"{cell(pk[0]) + ' (M=' + mp + ')' if pk else '-'} | {cell('lattice' + mp) if mp else '-'} |")
         lines.append("")
     lines += ["## λ implied: the deficit a uniform price at the all-slots rate needs to survive every selection tried", "",
@@ -511,7 +535,7 @@ def render(res: dict, train: dict) -> str:
 
 def main(argv=None) -> None:
     p = argparse.ArgumentParser(description=__doc__.split("\n")[0])
-    p.add_argument("--ckpt", type=Path, required=True)
+    p.add_argument("--ckpt", type=Path)
     p.add_argument("--train", type=Path, required=True)
     p.add_argument("--out", type=Path, required=True)
     p.add_argument("--workers", type=int, default=max(1, (os.cpu_count() or 2) // 2))
@@ -519,8 +543,14 @@ def main(argv=None) -> None:
     p.add_argument("--versions", default="", help="N values to price (default: every saved step)")
     p.add_argument("--seed", type=int, default=0)
     p.add_argument("--only", default="", help="price only the tensors whose names match this regex (a smoke run)")
+    p.add_argument("--render", action="store_true", help="only rewrite OUT/tables.md from OUT/price.json (a stored run's)")
     a = p.parse_args(argv)
     train = json.loads(a.train.read_text())
+    if a.render:
+        (a.out / "tables.md").write_text(render(json.loads((a.out / "price.json").read_text()), train))
+        return
+    if a.ckpt is None:
+        p.error("--ckpt is required unless --render")
     cfg = train["config"]
     names = [q[0] for q in train["train"]["params"] if re.search(a.only, q[0])]
     ns = [int(x) for x in (a.versions or cfg["save"]).split(",") if x]

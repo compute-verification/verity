@@ -56,14 +56,18 @@ The selections (`price.py`) are:
 - θ's binades, priced from the per-slot code lengths of the ulp coder and of lattice0.
 
 The decoder budget t is counted in training steps of the run's machine, with seconds beside it. A codec's t is its
-measured decode time: this numpy decoder takes a few training steps' time for all 135M slots, which a native rANS
-decoder would cut to well under one. predM and latticeM need M steps, and replay needs N.
+measured decode time, summed over tensors on one 2-thread worker: this numpy decoder takes a few training steps' time for
+all 135M slots, and a fraction of a step for a selection of up to about 10^7 slots. predM and latticeM need M steps
+first, and replay needs N. Decoding the tokens' prequential code is autoregressive, so it takes longer than the N steps
+it rides on; xz's token code decodes at once. Where a column takes the shorter of the two token codes, its t is N steps
+only for xz's.
 
 `tables.md` reports:
 
-- bits per updated weight for every slot, by method and t;
+- bits per updated weight for every slot, by method, with each decoder's t;
+- bits per updated weight for every slot, by decoder budget;
 - per class and per layer;
-- per selection;
+- per selection, with the ulp decode's time;
 - the λ a uniform price at the all-slots rate would need to survive every selection tried, and the largest uniform price
   that survives them at λ = 0;
 - the replay descriptions;
@@ -72,14 +76,18 @@ decoder would cut to well under one. predM and latticeM need M steps, and replay
 ## Run it
 
 ~~~sh
-research run --on auto --cpus 16 --mem-gb 64 --max-min 600 --cwd source -- bash benchmarks/update_price/run.sh
+research run --on vy-nebius-cpu-3 --pool research --pool-wait 21600 --timeout 32400 --custody-ttl 16h \
+  --source . --project verity --cwd source -- bash benchmarks/update_price/run.sh
 ~~~
+
+The run takes a research slot (16 cores and about 40 GB serve). `--custody-ttl` has to outlive the wait plus the run.
 
 `run.sh` passes its arguments to `train.py`, whose defaults are the run of record: 300 steps of 16×512 tokens, saves at
 steps 1, 10, 100 and 300, Adam moments at 1, 10 and 100, and `--replay 100`. For a trial on the machine, pass
 `--steps 3 --save 1,3 --state 1 --replay 1`. `train.json`, `price.json` and `tables.md` go to `$OUT`. Checkpoints (about
 6 GB) stay in the run's scratch directory and are removed at exit. Reprice a kept checkpoint directory with
-`python price.py --ckpt DIR --train train.json --out OUT [--versions 10,300] [--only REGEX]`.
+`python price.py --ckpt DIR --train train.json --out OUT [--versions 10,300] [--only REGEX]`, and re-render a stored
+run's tables from its `price.json` with `python price.py --render --train train.json --out OUT`.
 
 The tests (`tests/`) check that every codec round-trips exactly (with pinned encodings) and run the pricing end to end
 on a toy checkpoint.
