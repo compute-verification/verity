@@ -1660,8 +1660,8 @@ def test_a_silent_worker_still_showing_nothing_six_hours_on_is_one_no_step_for_t
     sweeps(w, clock, 1)
     sweeps(w, clock, 600)
     got = [r for r in records(tmp_path) if r["kind"] == "no_step"]
-    assert [{k: r[k] for k in ("agent", "since", "hours", "handle", "owner")} for r in got] == [
-        {"agent": W1_, "since": W.iso(T0), "hours": 6, "handle": "circuits", "owner": "top"}]
+    assert [{k: r[k] for k in ("agent", "since", "hours", "handle", "owner", "role")} for r in got] == [
+        {"agent": W1_, "since": W.iso(T0), "hours": 6, "handle": "circuits", "owner": "top", "role": "worker"}]
 
 
 def test_a_coordinator_working_with_no_note_or_push_is_silent_but_never_no_step(tmp_path):
@@ -1687,7 +1687,7 @@ def test_a_coordinator_working_with_no_note_or_push_is_silent_but_never_no_step(
     stopped = clock.t
     sweeps(w, clock, 6 * 60)
     got = [r for r in records(tmp_path) if r["kind"] == "no_step"]
-    assert [(r["agent"], r["hours"], r["owner"]) for r in got] == [(CO, 6, "top")]
+    assert [(r["agent"], r["hours"], r["owner"], r["role"]) for r in got] == [(CO, 6, "top", "coordinator")]
     assert W.epoch(got[0]["since"]) >= stopped - 5 * 60
 
 

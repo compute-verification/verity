@@ -29,15 +29,19 @@ from pathlib import Path
 from typing import Any, Callable
 
 AUTO_NODE, AUTO_PROJECT = "vy-nebius-2", "verity"
-#: (machine, pool) where `--on auto` may spill: these machines' `research` pools are any lane's, on cores no check slot holds
-#: (slot_only.POOLS). A machine with an idle research pool that isn't listed here never takes an auto job.
-#: cpu-2's cores are the train slot's and proofs', cpu-4's the train slot's, proofs' and soundness's.
+#: (machine, pool) where `--on auto` may spill: the `research` pools of cpu-1, 2, 3, 5, 6, 7 and 8 are any lane's
+#: (slot_only.POOLS on cpu-1). cpu-2's shares the train slot's and proofs' cores, which sat at load 45 of 256 while the other
+#: pools had 180 runs waiting; cpu-4's cores are the train slot's, proofs' and soundness's; cpu-9's research slots span every
+#: core of its ci pool, so it stays out.
 SPILL = (("vy-nebius-cpu-1", "research"), ("vy-nebius-cpu-5", "research"), ("vy-nebius-cpu-3", "research"),
-         ("vy-nebius-cpu-6", "research"), ("vy-nebius-cpu-7", "research"), ("vy-nebius-cpu-8", "research"),
-         ("vy-nebius-cpu-9", "research"))
+         ("vy-nebius-cpu-2", "research"), ("vy-nebius-cpu-6", "research"), ("vy-nebius-cpu-7", "research"),
+         ("vy-nebius-cpu-8", "research"))
 DESCRIPTION = Path("infra/cluster/descriptions/nebius.toml")
 SLOT_PY = Path("tools/verity/check/slot.py")
 READ_TIMEOUT_S = 30
+#: a machine whose DISK_PATH has fewer free inodes or GB than these takes no `--on auto` job: on 27 Oct cpu-5 and cpu-6 ran out of
+#: inodes with half their bytes free, and every job placed there failed shipping its source or mid-build with ENOSPC
+DISK_PATH, MIN_FREE_INODES, MIN_FREE_GB = "/workspace", 400_000, 50
 
 
 class Unplaceable(Exception):
@@ -77,11 +81,25 @@ def doc(f):
         return {"error": f"{type(e).__name__}: {e}"}
 
 
+def disk_short():
+    if not os.path.isdir(DISK):
+        return None
+    s = os.statvfs(DISK)
+    gb = s.f_bavail * s.f_frsize / 1e9
+    if s.f_files and s.f_favail < MIN_INODES:
+        return f"{DISK} has {s.f_favail} inodes free, under {MIN_INODES}"
+    if gb < MIN_GB:
+        return f"{DISK} has {gb:.0f} GB free, under {MIN_GB}"
+    return None
+
+
 out = {}
 if SHARE is not None:
     out["share"] = doc(lambda: share(SHARE, CLAIMS, CPU_ROOT))
+short = disk_short()
 for pool, slots in POOLS.items():
-    out[pool] = doc(lambda: load("auto_slot_" + pool, SLOT_SRC, {"CHECK_SLOTS": slots}).status_doc(datetime.now(timezone.utc)))
+    out[pool] = {"error": f"disk: {short}"} if short else \
+        doc(lambda: load("auto_slot_" + pool, SLOT_SRC, {"CHECK_SLOTS": slots}).status_doc(datetime.now(timezone.utc)))
 print(json.dumps(out))
 '''
 
@@ -110,7 +128,7 @@ def payload(source: Path, cpus: int, share: str | None, pools: list[str]) -> byt
 
     head = {"CORES_SRC": Path(cores.__file__).read_text(), "SLOT_SRC": (Path(source) / SLOT_PY).read_text() if pools else "",
             "JOB_CPUS": max(cpus, 1), "SHARE": share, "CLAIMS": str(cores.CLAIMS), "CPU_ROOT": str(cores.CPU_ROOT),
-            "POOLS": {p: slot_only.POOLS[p] for p in pools}}
+            "POOLS": {p: slot_only.POOLS[p] for p in pools}, "DISK": DISK_PATH, "MIN_INODES": MIN_FREE_INODES, "MIN_GB": MIN_FREE_GB}
     return ("".join(f"{k} = {v!r}\n" for k, v in head.items()) + PROBE).encode()
 
 
@@ -158,7 +176,8 @@ def _pool(doc: Any, cpus: int, mem_gb: float) -> tuple[int, int, int, str]:
     """A pool's fitting slots, free ones among them and waiters; ValueError when no slot of it fits the job."""
     if not isinstance(doc, dict) or "error" in doc:
         raise ValueError(doc.get("error") if isinstance(doc, dict) else doc or "not read")
-    fit = [s for s in doc.get("slots") or [] if not s.get("trains") and cpulist(s["cpus"]) >= cpus and (s.get("mem") or 0) >= mem_gb]
+    fit = [s for s in doc.get("slots") or [] if not s.get("trains") and cpulist(s["cpus"]) >= cpus
+           and (s.get("mem") is None or s["mem"] >= mem_gb)]  # slot.py raises a slot without mem= to what the run asks
     if not fit:
         raise ValueError(f"no slot of {doc.get('file')} gives {cpus} CPUs and {mem_gb:g} GB")
     free = [s for s in fit if s.get("holder") is None and not s.get("blocked")]
