@@ -61,8 +61,8 @@ subprotocol accepts its own case, and the commitment is `bind` of the subprotoco
 | proof of useful bandwidth, PoUB (its session) | yes | | `RemoteAudit.Protocol.protocol` (`remote_audit`, `../remote_bandwidth/lean`) | `verity/remote-bandwidth/v0` |
 | the wipe (the memory challenger's streamed-label wipe of the period) | yes | | `MemoryChallenger.WipeProtocol.protocol` (`core_memory_challenger`, `../../devices/memory_challenger/lean`) | `verity/wipe/v0` |
 
-Every subprotocol of both products is ported to its own `Core.Protocol`. NCI is a registration check, not a subprotocol,
-and the inference-only policy is not a subprotocol of either product yet.
+Every subprotocol of both products is ported to its own `Core.Protocol`. The inference-only policy is not a subprotocol of
+either product: onsite checks it as its registration check (below).
 
 A subprotocol without a port is a stub, `Core.Example.protocol` under an id that says so (`Stubs.lean`). A port replaces
 its stub in `Core.Onsite.components` and `Core.Remote.components` with its own `Core.Protocol` value, its package a
@@ -80,11 +80,11 @@ carries them as hex under `blobs`.
 ## A registration check
 
 `registered id R s components` checks a registration before composing, in its commit phase, and `registeredB` is the
-same over blobs. Onsite is one, with NCI's check of record as `R` (`NciCheck.Protocol.protocol`, `verity/nci/v1`):
-`registeredB "verity/onsite/v0" NciCheck.Protocol.protocol SampledProofs.OneStageZk.protocol.id components`, whose
-registration is the one sampled proofs' one-stage audit commits to, one registration digest in both. NCI is a
-registration check, not a subprotocol (onsite has six subprotocols, and NCI is none of them). Its formats are the
-product's with the registration's beside the subprotocols':
+same over blobs. Onsite is one, with the inference-only policy's check as `R` (`NciCheck.Protocol.protocol`,
+`verity/nci/v1`): `registeredB "verity/onsite/v0" NciCheck.Protocol.protocol SampledProofs.OneStageZk.protocol.id
+components`, whose registration is the one sampled proofs' one-stage audit commits to, one registration digest in both.
+The registration check is none of onsite's six subprotocols. Its formats are the product's with the registration's beside
+the subprotocols':
 
 | input | format |
 | --- | --- |
@@ -112,6 +112,7 @@ Lean to:
   decides without a session's proof;
 - network certification: its period difftest's `reference`, the Python mirror over the certifier's certificates and
   one-stage's answers, on small signed periods from its `build`;
+- the wipe: its mirror, `wipe_protocol_case.answer`, on signed wipes from its `case`;
 - PoUS and PoUB: their Python verifiers' answers on small periods of their hooks (`tests/periods.py`: `pous.period.run`
   signed at its deployed parameters, honest and cheating, and `remote_bandwidth.period.run`, honest, cheating and
   unverified), whose Lean their packages' difftests hold to those verifiers (`../pous/check/tests/test_run_protocol.py`,

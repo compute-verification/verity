@@ -47,8 +47,9 @@ roots = ["Proofs.Core", "Proofs.Nci", "Proofs.Pous", "Proofs.Pouw", "Proofs.Netw
   "Proofs.Properties.Pouw.LiveSalt.Canon", "Proofs.Properties.Pouw.LiveSalt.Coin", "Proofs.Properties.Pouw.Strata",
   "Proofs.Properties.Nci", "Proofs.Properties.CertifierDevice", "Proofs.Properties.Pous",
   "Proofs.Properties.Pous.TimedAudit", "Proofs.Properties.Pous.MemoryChallenger", "Proofs.Properties.Pous.Run",
-  "Proofs.Properties.Pous.Setup", "Proofs.Properties.Pous.RunAt",
-  "Proofs.Properties.NetworkCertifier", "Proofs.Properties.CertifierNetwork", "Proofs.Properties.CertifierNetwork.Runs",
+  "Proofs.Properties.Pous.Setup", "Proofs.Properties.Pous.RunAt", "Proofs.Properties.NetworkCertifier",
+  "Proofs.Properties.NetworkCertifier.Period", "Proofs.Properties.CertifierNetwork",
+  "Proofs.Properties.CertifierNetwork.Runs",
   "Proofs.Properties.Identity", "Proofs.Properties.Nci.DescVerdict", "Proofs.Properties.Nci.DescAgree",
   "Proofs.Properties.Nci.Walk", "Proofs.Properties.Nci.Resolve", "Proofs.Properties.Nci.BodiesOk",
   "Proofs.Properties.Nci.Width", "Proofs.Properties.Nci.Novel", "Proofs.Properties.Nci.BaselineSteps",
@@ -63,4 +64,6 @@ roots = ["Proofs.Core", "Proofs.Nci", "Proofs.Pous", "Proofs.Pouw", "Proofs.Netw
   "Proofs.Properties.RemoteAudit.Component",
   "Proofs.Properties.Pouw.LiveSalt.Ledger", "Proofs.Properties.Nci.ReadsExact",
   "Proofs.Properties.Nci.BodiesOk.ReadsDecoded", "Proofs.Properties.Composition", "Proofs.Properties.Nci.Protocol",
-  "Proofs.Properties.Verity.Soundness", "Proofs.Properties.Verity.Subprotocols"]
+  "Proofs.Properties.Verity.Soundness", "Proofs.Properties.Verity.Subprotocols",
+  "Proofs.Properties.Verity.Network.Coupling", "Proofs.Properties.Verity.Network.Window",
+  "Proofs.Properties.Verity.Network.Legs"]

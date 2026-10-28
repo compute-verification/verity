@@ -56,6 +56,8 @@
   "Properties.Nci.Protocol",
   "Properties.Verity.Soundness",
   "Properties.Verity.Game",
+  "Properties.NetworkCertifier.Period",
+  "Properties.Verity.Network",
   "Properties.Verity.Subprotocols"
  ],
  "proved_in": ["../Proofs"],
@@ -207,6 +209,14 @@
   "Pous.Period.RingDeviceAt": {
    "owner": "@memory-accounting",
    "digest": "87d161476d0c030f0ea03d2e74a6000290492c6e3d8e415189de12b6d5537ce7"
+  },
+  "Properties.NetworkCertifier.HonestProfileReads": {
+   "owner": "@network-accounting",
+   "digest": "686c063aa417d0ace8193b1448f777c124f3aa988319041aebf2ccb7ee057dd0"
+  },
+  "Properties.NetworkCertifier.JsonStrBeq": {
+   "owner": "@network-accounting",
+   "digest": "003fc38653f0d3fd95ce63d65ae4072518e949ffe0bdd897c0d3fe98ad898fde"
   },
   "Properties.Pouw.Period.DrawIsCoin": {
    "owner": "@compute-accounting",
@@ -430,9 +440,15 @@
    "why": "the bridge is stated against core's identity hash and C-Flock's SHA-512, on Lean core: nothing of Mathlib or of `security`"
   },
   "Properties.NetworkCertifier": {
-   "imports": ["NetworkCheck.Check", "NetworkCheck.LinkWindow", "Properties.Identity", "Lms.Sign"],
+   "imports": [
+    "NetworkCheck.Check",
+    "NetworkCheck.LinkWindow",
+    "Properties.Identity",
+    "NetworkCheck.Period",
+    "Lms.Sign"
+   ],
    "except": [],
-   "why": "the properties are stated against the code's own functions, the check's and N2's link-window verdict of record's, and the certificates the certifier's device signs against LMS's own signer (`CertifierSigned`), never a proof"
+   "why": "the properties are stated against the code's own functions, the check's and N2's link-window verdict of record's, and the certificates the certifier's device signs against LMS's own signer (`CertifierSigned`), never a proof; the properties are stated against the code's own functions, the check's, N2's link-window verdict of record's and the period check's (NetworkCheck.Period), never a proof; the period's honest instance signs with LMS's own key derivation and signer (Lms.Sign)"
   },
   "Properties.Evaluate": {
    "imports": ["Evaluate", "Definitions.Core.Scalar", "Definitions.Core.Fp32", "Definitions.Core.Prims"],
@@ -554,10 +570,12 @@
     "Definitions.Accounting.JointLive",
     "Definitions.Core.Game",
     "Definitions.Hash.RowLeaf",
-    "Flock.Hash"
+    "Flock.Hash",
+    "Properties.Verity",
+    "Properties.NetworkCertifier.Period"
    ],
    "except": [],
-   "why": "soundness at the verifier of record is stated over onsite's compiled code and its SHA-512, the composition's properties, the committed files as the verifier reads them (Flock.Bridge.circuitOfFile), the period model's vocabulary (Accounting.PeriodLive, the one definition of a period), the shared game and the row-leaf opening it reads the commitment through, never over a proof"
+   "why": "soundness at the verifier of record is stated over onsite's compiled code and its SHA-512, the composition's properties, the committed files as the verifier reads them (Flock.Bridge.circuitOfFile), the period model's vocabulary (Accounting.PeriodLive, the one definition of a period), the shared game and the row-leaf opening it reads the commitment through, the network period check's property (PeriodAcceptMeans, which the lift from ComponentAccepts .network reads) and its own modules (the game's vocabulary, which soundness and the subprotocols' component-level bounds read), never over a proof"
   },
   "Properties.Pouw.Period": {
    "imports": ["Definitions.Accounting", "Definitions.Accounting.Assumptions", "PouwCheck"],
@@ -1613,6 +1631,35 @@
    ],
    "assumptions": [],
    "type_hash": "610d10605450ee5a7692a41365797df1a88df14c95600e19330475dd2335d953"
+  },
+  "Properties.NetworkCertifier.periodAcceptMeans": {
+   "owner": "@network-accounting",
+   "signature": ["Properties.NetworkCertifier.periodAcceptMeans : Properties.NetworkCertifier.PeriodAcceptMeans"],
+   "assumptions": [],
+   "type_hash": "a03ac9ceefb2566c1415183a6ffc0ad1af4e0b29b14d1582d485d9ca52daa2b3"
+  },
+  "Properties.NetworkCertifier.periodAcceptMeans_honest": {
+   "owner": "@network-accounting",
+   "signature": [
+    "Properties.NetworkCertifier.periodAcceptMeans_honest (hj : Properties.NetworkCertifier.JsonStrBeq)",
+    "  (hr : Properties.NetworkCertifier.HonestProfileReads) :",
+    "  Eq",
+    "    (NetworkCheck.Period.protocol.check Properties.NetworkCertifier.honestParams",
+    "      Properties.NetworkCertifier.honestCommitment Properties.NetworkCertifier.honestEvidence)",
+    "    (Core.Outcome.accept (NetworkCheck.Period.terms List.nil.toArray List.nil.toArray List.nil.toArray 0 1 1)",
+    "      { link := \"link\", windows := 1 })"
+   ],
+   "assumptions": ["Properties.NetworkCertifier.HonestProfileReads", "Properties.NetworkCertifier.JsonStrBeq"],
+   "type_hash": "489da8cf50fb915f66214936ddef11a82921d59b6c98b1779acd0d8babd2f544"
+  },
+  "Properties.NetworkCertifier.periodAcceptMeans_nontrivial": {
+   "owner": "@network-accounting",
+   "signature": [
+    "Properties.NetworkCertifier.periodAcceptMeans_nontrivial :",
+    "  Not (Properties.NetworkCertifier.PeriodAcceptMeansOf Properties.NetworkCertifier.acceptAllPeriod)"
+   ],
+   "assumptions": [],
+   "type_hash": "366dda7544176736db2b6bcd31647f2ab3af422f219a1f809eb89aa1d6c9a0c2"
   },
   "Properties.NetworkCertifier.undecidedPending": {
    "owner": "@network-accounting",
@@ -3640,6 +3687,10 @@
    "Properties.RemoteAudit.Component.SecurityProofs.lineHeldAtComponent": {
     "function": "RemoteAudit.Protocol.check",
     "outcome": "accept"
+   },
+   "Properties.NetworkCertifier.periodAcceptMeans": {
+    "function": "NetworkCheck.Period.protocol.check",
+    "outcome": "accept"
    }
   },
   "frozen": {
@@ -3677,7 +3728,9 @@
    "Pous.Period.SecurityProofs.periodHeldDeployed": "frozen (premise): periodHeld at the deployed ring budget (RING_D, RING_Q, RING_L) = (16,446, 2^20, 2^64), the one pous-ring-speed derives from Delta + RTT = 854,000 ns and the measured round floor ROUND_NS = 361.55 / 3.490 ns (art:23a323f3, r20260929-060834-0ec4): DEADLINE_ROUNDS = 8,243 <= RING_D, and RING_D + 1 rounds take 1.995 x the limit; outside both regions where P2RingAuditSecure is refuted (D >= 32,894; L >= 2^169 at k = 105). Its premises are periodHeld's at that budget (CoinCommitHides, P2RingAuditSecure, Pous.Period.RingDevice), none under shape.premises.",
    "Pous.Period.SecurityProofs.periodHeldHonest": "completeness: the honest lemma of periodHeld and periodHeldDeployed: at an honest period on one H200 holding all of C* (honestRun, 2^30 bits on chip, one PCIe Gen 5 x16 side channel of 437,248,000 bits a round), RingDevice holds at the deployed budget for every audit, the certificate HONEST_S = 63,000,000 bits is positive and fits the state bound, and the budget is the deadline's at the measured floor (DEADLINE_ROUNDS <= RING_D, the 1.995x margin)",
    "Pous.Period.SecurityProofs.periodHeldNontrivial": "completeness: the nontrivial lemma of periodHeld and periodHeldDeployed: at a period whose capacity account holds nothing, an accept-all verdict fails their conclusion wherever the period's data holds no break (a concrete audit with no break needs SHA-512 on each of the table's 2^20 strings, so that is a hypothesis), and their event is false at the honest period",
-   "Properties.Pouw.ServedValues.SecurityProofs.rightValues": "frozen (no-function,world-unlisted): H1J10RCheckedCreditPeriod's period and premises, less UnitFixed and the play's folded words, with its bound in AND gates of the registered declaration D under the lowering pinned at registration (Verity.creditSize, Definitions.Core.Formalism): except with probability delta_s + n(delta_bind + delta_ks), delta_coin plus delta_crypto, an accepted period's right blocks (DrawnLayer.Good under periodMode) have total AND count at least (1 - eps_skip)_+ S, S the credited size of the windows before the first refusal, eps_skip = sigma eps(j) N_live / S, and each block's AND count taken outside the ledger of gates another protocol credits; not one acceptance hypothesis, a Pouw.RelativeSecurity.prob event that shape.events does not list. A values guarantee, not a compute claim: right values aren't work. Right is the accounting model's DrawnLayer.Good, not yet tied to the committed values Credit.window checks. No premise beyond H1's: TileDrawIsCoin, TileServiceSound, RegisteredBeforeDraw, SaltIsLiveCoin and SharedNoiseLucks, the one computational premise. Proved from H1J10RCheckedCreditPeriod at a play whose fixed words are the right blocks' (Proofs.Pouw.ServedValues), with an honest and a nontrivial witness (Proofs.Pouw.ServedValues.Honest)."
+   "Properties.Pouw.ServedValues.SecurityProofs.rightValues": "frozen (no-function,world-unlisted): H1J10RCheckedCreditPeriod's period and premises, less UnitFixed and the play's folded words, with its bound in AND gates of the registered declaration D under the lowering pinned at registration (Verity.creditSize, Definitions.Core.Formalism): except with probability delta_s + n(delta_bind + delta_ks), delta_coin plus delta_crypto, an accepted period's right blocks (DrawnLayer.Good under periodMode) have total AND count at least (1 - eps_skip)_+ S, S the credited size of the windows before the first refusal, eps_skip = sigma eps(j) N_live / S, and each block's AND count taken outside the ledger of gates another protocol credits; not one acceptance hypothesis, a Pouw.RelativeSecurity.prob event that shape.events does not list. A values guarantee, not a compute claim: right values aren't work. Right is the accounting model's DrawnLayer.Good, not yet tied to the committed values Credit.window checks. No premise beyond H1's: TileDrawIsCoin, TileServiceSound, RegisteredBeforeDraw, SaltIsLiveCoin and SharedNoiseLucks, the one computational premise. Proved from H1J10RCheckedCreditPeriod at a play whose fixed words are the right blocks' (Proofs.Pouw.ServedValues), with an honest and a nontrivial witness (Proofs.Pouw.ServedValues.Honest).",
+   "Properties.NetworkCertifier.periodAcceptMeans_honest": "lemma: PeriodAcceptMeans' honest witness (LEAN-66): the check accepts an honest one-window clock-form period under the named assumptions JsonStrBeq and HonestProfileReads; the witnesses rule holds it to its form once it runs",
+   "Properties.NetworkCertifier.periodAcceptMeans_nontrivial": "lemma: PeriodAcceptMeans' nontrivial witness (LEAN-66): a period check that accepts everything (acceptAllPeriod) fails PeriodAcceptMeansOf; the witnesses rule holds it to its form once it runs"
   },
   "conjectures": {
    "Pous.P2.Assumptions.P2RingAuditSecure": {
@@ -4349,6 +4402,9 @@
    "guarantees": [
     "Accounting.SecurityProofs.Bridge.WorkOfH1CheckedCreditPeriod",
     "Accounting.SecurityProofs.Bridge.WorkOfH1CheckedCreditPeriodH200",
+    "Properties.NetworkCertifier.periodAcceptMeans",
+    "Properties.NetworkCertifier.periodAcceptMeans_honest",
+    "Properties.NetworkCertifier.periodAcceptMeans_nontrivial",
     "Properties.Pouw.Check.acceptMeans",
     "Properties.Pouw.Check.acceptedDraw",
     "Properties.Pouw.Check.acceptedInRange",
@@ -4445,6 +4501,9 @@
     "Properties.NetworkCertifier.answerAccepts",
     "Properties.NetworkCertifier.decodeRefusals",
     "Properties.NetworkCertifier.malformedEvidenceRejects",
+    "Properties.NetworkCertifier.periodAcceptMeans",
+    "Properties.NetworkCertifier.periodAcceptMeans_honest",
+    "Properties.NetworkCertifier.periodAcceptMeans_nontrivial",
     "Properties.NetworkCertifier.undecidedPending",
     "Properties.NetworkCertifier.undigestedParamsReject",
     "Properties.NetworkRecords.acceptMeans",
@@ -4490,6 +4549,9 @@
    "guarantees": [
     "Accounting.SecurityProofs.Bridge.WorkOfH1CheckedCreditPeriod",
     "Accounting.SecurityProofs.Bridge.WorkOfH1CheckedCreditPeriodH200",
+    "Properties.NetworkCertifier.periodAcceptMeans",
+    "Properties.NetworkCertifier.periodAcceptMeans_honest",
+    "Properties.NetworkCertifier.periodAcceptMeans_nontrivial",
     "Properties.NetworkPeriod.clockKBoundsCount",
     "Properties.NetworkPeriod.rowsKBoundsCount",
     "Properties.Pouw.Check.acceptMeans",
@@ -7482,6 +7544,9 @@
     "Properties.NetworkCertifier.decodeRefusals",
     "Properties.NetworkCertifier.linkWindowAcceptMeans",
     "Properties.NetworkCertifier.malformedEvidenceRejects",
+    "Properties.NetworkCertifier.periodAcceptMeans",
+    "Properties.NetworkCertifier.periodAcceptMeans_honest",
+    "Properties.NetworkCertifier.periodAcceptMeans_nontrivial",
     "Properties.NetworkCertifier.undecidedPending",
     "Properties.NetworkCertifier.undigestedParamsReject",
     "Properties.NetworkRecords.acceptMeans",
@@ -7618,6 +7683,9 @@
     "Properties.NetworkCertifier.decodeRefusals",
     "Properties.NetworkCertifier.linkWindowAcceptMeans",
     "Properties.NetworkCertifier.malformedEvidenceRejects",
+    "Properties.NetworkCertifier.periodAcceptMeans",
+    "Properties.NetworkCertifier.periodAcceptMeans_honest",
+    "Properties.NetworkCertifier.periodAcceptMeans_nontrivial",
     "Properties.NetworkCertifier.undecidedPending",
     "Properties.NetworkCertifier.undigestedParamsReject",
     "Properties.NetworkRecords.acceptMeans",
@@ -8314,6 +8382,9 @@
     "Properties.NetworkCertifier.decodeRefusals",
     "Properties.NetworkCertifier.linkWindowAcceptMeans",
     "Properties.NetworkCertifier.malformedEvidenceRejects",
+    "Properties.NetworkCertifier.periodAcceptMeans",
+    "Properties.NetworkCertifier.periodAcceptMeans_honest",
+    "Properties.NetworkCertifier.periodAcceptMeans_nontrivial",
     "Properties.NetworkCertifier.undecidedPending",
     "Properties.NetworkCertifier.undigestedParamsReject",
     "Properties.NetworkRecords.acceptMeans",
@@ -9492,6 +9563,8 @@
     "NciCheck.Properties.SecurityProofs.ThrottlesDarkSlots",
     "NciCheck.Properties.SecurityProofs.ThrottlesSlots",
     "NciCheck.Properties.SecurityProofs.Witnesses",
+    "Properties.NetworkCertifier.periodAcceptMeans",
+    "Properties.NetworkCertifier.periodAcceptMeans_honest",
     "Properties.Pouw.PeriodJ10R.SecurityProofs.h1J10RCheckedCreditPeriod",
     "Properties.Pouw.ServedValues.SecurityProofs.rightValues",
     "Properties.SampledProofs.SecurityProofs.designWellFormed",
@@ -9655,6 +9728,9 @@
     "Pous.Period.SecurityProofs.periodHeldDeployed",
     "Pous.Period.SecurityProofs.periodHeldHonest",
     "Pous.Period.SecurityProofs.periodHeldNontrivial",
+    "Properties.NetworkCertifier.periodAcceptMeans",
+    "Properties.NetworkCertifier.periodAcceptMeans_honest",
+    "Properties.NetworkCertifier.periodAcceptMeans_nontrivial",
     "Properties.Pouw.Check.acceptMeans",
     "Properties.Pouw.Check.acceptedDraw",
     "Properties.Pouw.Check.acceptedInRange",
@@ -10902,6 +10978,8 @@
     "NciCheck.Properties.SecurityProofs.ThrottlesDarkSlots",
     "NciCheck.Properties.SecurityProofs.ThrottlesSlots",
     "NciCheck.Properties.SecurityProofs.Witnesses",
+    "Properties.NetworkCertifier.periodAcceptMeans",
+    "Properties.NetworkCertifier.periodAcceptMeans_honest",
     "Properties.SampledProofs.SecurityProofs.designWellFormed",
     "Properties.SampledProofs.SecurityProofs.drawMisses",
     "Properties.SampledProofs.acceptMeans",
@@ -11566,6 +11644,9 @@
     "Properties.NetworkCertifier.decodeRefusals",
     "Properties.NetworkCertifier.linkWindowAcceptMeans",
     "Properties.NetworkCertifier.malformedEvidenceRejects",
+    "Properties.NetworkCertifier.periodAcceptMeans",
+    "Properties.NetworkCertifier.periodAcceptMeans_honest",
+    "Properties.NetworkCertifier.periodAcceptMeans_nontrivial",
     "Properties.NetworkCertifier.undecidedPending",
     "Properties.NetworkCertifier.undigestedParamsReject",
     "Properties.NetworkRecords.acceptMeans",
@@ -11615,6 +11696,9 @@
     "Properties.NetworkCertifier.decodeRefusals",
     "Properties.NetworkCertifier.linkWindowAcceptMeans",
     "Properties.NetworkCertifier.malformedEvidenceRejects",
+    "Properties.NetworkCertifier.periodAcceptMeans",
+    "Properties.NetworkCertifier.periodAcceptMeans_honest",
+    "Properties.NetworkCertifier.periodAcceptMeans_nontrivial",
     "Properties.NetworkCertifier.undecidedPending",
     "Properties.NetworkCertifier.undigestedParamsReject",
     "Properties.NetworkRecords.acceptMeans",
@@ -11651,7 +11735,8 @@
     "Proofs.NetworkCertifier.acceptedRunsAreProgramRuns",
     "Proofs.NetworkCertifier.encardAcceptedObservationsLe",
     "Properties.CertifierDevice.issuerVerifies",
-    "Properties.NetworkCertifier.acceptedRowsAreProgramRows"
+    "Properties.NetworkCertifier.acceptedRowsAreProgramRows",
+    "Properties.NetworkCertifier.periodAcceptMeans_honest"
    ]
   },
   "Lms.Verify": {
@@ -11721,6 +11806,9 @@
     "Properties.NetworkCertifier.decodeRefusals",
     "Properties.NetworkCertifier.linkWindowAcceptMeans",
     "Properties.NetworkCertifier.malformedEvidenceRejects",
+    "Properties.NetworkCertifier.periodAcceptMeans",
+    "Properties.NetworkCertifier.periodAcceptMeans_honest",
+    "Properties.NetworkCertifier.periodAcceptMeans_nontrivial",
     "Properties.NetworkCertifier.undecidedPending",
     "Properties.NetworkCertifier.undigestedParamsReject",
     "Properties.NetworkRecords.acceptMeans",
@@ -12591,6 +12679,9 @@
     "Properties.NetworkCertifier.answerAccepts",
     "Properties.NetworkCertifier.decodeRefusals",
     "Properties.NetworkCertifier.malformedEvidenceRejects",
+    "Properties.NetworkCertifier.periodAcceptMeans",
+    "Properties.NetworkCertifier.periodAcceptMeans_honest",
+    "Properties.NetworkCertifier.periodAcceptMeans_nontrivial",
     "Properties.NetworkCertifier.undecidedPending",
     "Properties.NetworkCertifier.undigestedParamsReject",
     "Properties.NetworkRecords.acceptMeans",
@@ -12694,6 +12785,9 @@
     "Properties.NetworkCertifier.decodeRefusals",
     "Properties.NetworkCertifier.linkWindowAcceptMeans",
     "Properties.NetworkCertifier.malformedEvidenceRejects",
+    "Properties.NetworkCertifier.periodAcceptMeans",
+    "Properties.NetworkCertifier.periodAcceptMeans_honest",
+    "Properties.NetworkCertifier.periodAcceptMeans_nontrivial",
     "Properties.NetworkCertifier.undecidedPending",
     "Properties.NetworkCertifier.undigestedParamsReject",
     "Properties.NetworkRecords.acceptMeans",
@@ -12795,6 +12889,9 @@
     "Properties.NetworkCertifier.answerAccepts",
     "Properties.NetworkCertifier.decodeRefusals",
     "Properties.NetworkCertifier.malformedEvidenceRejects",
+    "Properties.NetworkCertifier.periodAcceptMeans",
+    "Properties.NetworkCertifier.periodAcceptMeans_honest",
+    "Properties.NetworkCertifier.periodAcceptMeans_nontrivial",
     "Properties.NetworkCertifier.undecidedPending",
     "Properties.NetworkCertifier.undigestedParamsReject",
     "Properties.NetworkRecords.acceptMeans",
@@ -13108,6 +13205,9 @@
     "_private.NetworkCheck.Period.0.NetworkCheck.Period.keysOf._sparseCasesOn_1": "065ae26563018312c1872bc0c9d25e56c60eb915f1b44cd5997925f95e24b2c9"
    },
    "guarantees": [
+    "Properties.NetworkCertifier.periodAcceptMeans",
+    "Properties.NetworkCertifier.periodAcceptMeans_honest",
+    "Properties.NetworkCertifier.periodAcceptMeans_nontrivial",
     "Properties.NetworkPeriod.clockKBoundsCount",
     "Properties.NetworkPeriod.rowsKBoundsCount",
     "Verity.soundness_of_subprotocols"
@@ -15502,6 +15602,45 @@
     "Properties.NetworkCertifier.acceptedOutputs._sparseCasesOn_3": "b347213697531154e3953614994ce2c3a53d8d9df9f2d03e71ea8df0dd208e98"
    },
    "guarantees": ["Properties.NetworkCertifier.linkWindowAcceptMeans"]
+  },
+  "Properties.NetworkCertifier.Period": {
+   "digest": "0a324d41aba5eaa122ad9a70aa762ede7bc9de2c24d49951e99e693d83738a19",
+   "definitions": {
+    "Properties.NetworkCertifier.HonestProfileReads": "686c063aa417d0ace8193b1448f777c124f3aa988319041aebf2ccb7ee057dd0",
+    "Properties.NetworkCertifier.JsonStrBeq": "003fc38653f0d3fd95ce63d65ae4072518e949ffe0bdd897c0d3fe98ad898fde",
+    "Properties.NetworkCertifier.PeriodAcceptMeans": "c9cf265591d93e53d3d492f593302be2f1a6d64ed2a360407313dea8a741e24c",
+    "Properties.NetworkCertifier.PeriodAcceptMeansOf": "597ea44c1b11b62c4389d0c44168e9a9cfca000332d6deb4c6d52af1320328f0",
+    "Properties.NetworkCertifier.PeriodRowsCertified": "91c87b18f6d26b2bed62798a7ca1967262be80fcda5aa5e15d7b46539ca3dd92",
+    "Properties.NetworkCertifier.PeriodRowsChecked": "293e835b6aa1f0f57ad8a896c660d69e9c11556aee11dbbf262c875292f3fa29",
+    "Properties.NetworkCertifier.PeriodRowsProved": "cdaedd95427b48d2ee0a0ad15ce0118824a2737badbffadceb70c6ee1ec30e60",
+    "Properties.NetworkCertifier.PeriodRowsRegistered": "9a1e5bec6abd6bcba17de4d915f84d2d11da5e992ebf24e39ecf835e2939c651",
+    "Properties.NetworkCertifier.PeriodRowsWindowAccepted": "e00dcb29190a8e39d818cd8e9d779250c168f1f3bd1cc5e2bf1c4756daf9503b",
+    "Properties.NetworkCertifier.PeriodWindowAccepted": "9da007c877f62344318fab296ff633ec4a03a5463881937110b40f8afb6b62c3",
+    "Properties.NetworkCertifier.PeriodWindowCertified": "bc7f4541c72d03f4dcf60a50964cc7348e8cfcfb52b2d48856c599ed79aaf421",
+    "Properties.NetworkCertifier.PeriodWindowClocked": "c2deb7db239282c321a5f520c77b4f7ddb6e79d542640dc356ad40d32c0d6b2a",
+    "Properties.NetworkCertifier.PeriodWindowProgram": "38461d2327829c59ded7f3191f5124271595c7ac33ef22425ee864fb7740b64d",
+    "Properties.NetworkCertifier.PeriodWindowProved": "2332df65a748ae6ad77ecd80458f7c69c1847dd0b9387113ac58d9816e8cf17b",
+    "Properties.NetworkCertifier.PeriodWindowRegistered": "64788c2583033bddd583fe9d353a121ebe08a0b112c39994bbe2892c1edc7f8e",
+    "Properties.NetworkCertifier.PeriodWindowsAccepted": "5e9f508caecfe2dc062656bcddfe69f27eab520b3107b755ca9362ba494224e5",
+    "Properties.NetworkCertifier.acceptAllPeriod": "af7a536c67c4bc55ccfb71dcee36e530570f80c29e0bbc3f44e5fcc1ca5f7b18",
+    "Properties.NetworkCertifier.honestAnswer": "631f1073003862474a1d9f1cedc0c2ba2d900d7e90501143cdc2e6a63ac02508",
+    "Properties.NetworkCertifier.honestCert": "064745aab861f20dc69a94cdf28b5491ebe3059f388b6a73a679575dad421a06",
+    "Properties.NetworkCertifier.honestCommitment": "1353d7d0b5e84bd05abdec0ae7134a88ff9fe04cefb1601c8ad9f0aa650bc3ef",
+    "Properties.NetworkCertifier.honestEvidence": "b059627183678b7bb18dca3ffa2538106cfc42fd68d9a75af6c5316d9a25110f",
+    "Properties.NetworkCertifier.honestI": "e5190543c1d6978218a31c543777c22f861b7267c3159168ba72e952acc7e0ce",
+    "Properties.NetworkCertifier.honestIntegrity": "9c50e6964a1c6693eb955c3ba55248f16248bcae6961d9d84c8a1d18e99dead8",
+    "Properties.NetworkCertifier.honestKey": "bccb40e7d08a3808a03e93508d120eea8045bb15a3e9a4c597ffd0f93be08d57",
+    "Properties.NetworkCertifier.honestParams": "d061f0874be35e2ce151e473ff17dd261699c2d6ea2c16979f7d7a128e086108",
+    "Properties.NetworkCertifier.honestRegistration": "92ee734e91ae461c53766a354dadede0510595d2de04888d0550a53524c4eece",
+    "Properties.NetworkCertifier.honestSession": "95d655def7b470ca175ed6e041b40c563f39291e75e3d749eff3fc16044fd833",
+    "Properties.NetworkCertifier.honestSyncs": "b1851fa0a549151313f49f0e4d43b61a081057488c32104cb0f8bb46773a4fff",
+    "Properties.NetworkCertifier.honestWindow": "dd4b15d1b7474c67b80d245bf34758d998098bccf218156acc727ac29e6a5e72"
+   },
+   "guarantees": [
+    "Properties.NetworkCertifier.periodAcceptMeans",
+    "Properties.NetworkCertifier.periodAcceptMeans_honest",
+    "Properties.NetworkCertifier.periodAcceptMeans_nontrivial"
+   ]
   },
   "Properties.NetworkPeriod": {
    "digest": "9dafbeaf53ee6b9d96f6bd7348c61e4c209bcd1f4d4652d89f496b1d18e09e1c",
@@ -18832,5 +18971,11 @@
   "plausible": "266681444eb79c332dec9abe5201b0811a5963e7093a906ee4455f0825de2559",
   "proofwidgets": "a896c5603e3bbf2a048ae4a2a2f9ab3108b6388beadf83510d5ab71388be4a5f",
   "toolchain": "ac912485d6144e796a0ebeed7f311b2d1f8f564afa836716dd453d4e65d1fe67"
+ },
+ "witnesses": {
+  "Properties.NetworkCertifier.periodAcceptMeans": {
+   "honest": ["Properties.NetworkCertifier.periodAcceptMeans_honest"],
+   "nontrivial": "Properties.NetworkCertifier.periodAcceptMeans_nontrivial"
+  }
  }
 }
