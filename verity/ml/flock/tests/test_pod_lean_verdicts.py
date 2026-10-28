@@ -8,6 +8,7 @@ import sys
 from pathlib import Path
 
 import pytest
+from verity_flock import rec_compose as RC
 
 POD = Path(__file__).resolve().parents[1] / "pod"
 sys.path.insert(0, str(POD))
@@ -223,21 +224,17 @@ def test_cover_says_whether_a_part_run_reads_the_forged_coin(capsys, kind, parts
 
 
 # `flock-verify rec-compose`'s rule (`RecCompose.check`, whose #guards are `Flock/Test/RecCompose.lean`), for the wiring:
-# one log per V* statement, every VERDICT accepted at the SHA-512 of the one rows file.
+# its mirror, `verity_flock.rec_compose`, which `test_lean_rec_compose.py` holds to the binary.
 COMPOSER = r'''
-import hashlib, json, sys
+import json, sys
+from verity_flock import rec_compose as RC
 a = sys.argv[1:]
 assert a[0] == "rec-compose", a
 flags = {a[i]: a[i + 1] for i in range(1, len(a) - 1) if a[i] in ("--rec-inner", "--rec-rows")}
 logs = [x for i, x in enumerate(a[1:], 1) if x not in flags and x not in flags.values()]
-digest = hashlib.sha512(open(flags["--rec-rows"], "rb").read()).hexdigest()
-n = json.load(open(flags["--rec-inner"]))["n"]
-parts, ok = [], True
-for f in logs:
-    vs = [json.loads(ln[8:]) for ln in open(f).read().splitlines() if ln.startswith("VERDICT ")]
-    ok = ok and bool(vs) and all(v.get("accepted") is True and v.get("rec_rows_sha512") == digest for v in vs)
-    parts.append(vs[0].get("rec_part") if vs else None)
-ok = ok and sorted(parts, key=str) == list(range(n))
+inner = open(flags["--rec-inner"], "rb").read()
+ok, why = RC.check(json.loads(inner)["n"], RC.digest(open(flags["--rec-rows"], "rb").read()), RC.digest(inner),
+                   [(f, open(f).read()) for f in logs])
 print("REC-COMPOSE " + json.dumps({"accepted": ok, "parts": len(logs)}))
 sys.exit(0 if ok else 1)
 '''
@@ -260,8 +257,13 @@ def _composer(d: Path, n: int, rows: bytes = b'{"ports":{}}') -> tuple[str, str]
 
 
 def _vpart(d: Path, name: str, j: int, digest: str, rc: int = 0, accepted: bool = True) -> None:
-    """A V* part 85 gave V*'s inputs (``own-PART.txt``): its log's VERDICT names its part and the rows it checked."""
-    v = {"session": f"/s/{name}", "accepted": accepted, "why": "" if accepted else "x", "rec_part": j, "rec_rows_sha512": digest}
+    """A V* part 85 gave V*'s inputs (``own-PART.txt``): its log's VERDICT names its part, the rows it checked, the
+    inputs every part shares (at DIR's ``rec-inner.json``), ``--zk`` and its coin key."""
+    shared = RC.shared(rec_inner=(d / "rec-inner.json").read_bytes(), inner_circuit=b"c", inner_public=b"p",
+                       inner_partition=b"{}", inner_session=b"s", inner_transcript=b"t", inner_statement="i",
+                       inner_statement_coins="os", inner_tables=[])
+    v = {"session": f"/s/{name}", "accepted": accepted, "why": "" if accepted else "x", "rec_part": j,
+         "rec_rows_sha512": digest, "rec_shared": shared, "zk": True, "coin_key": f"k-{name}"}
     (d / f"{name}.log").write_text(f"VERDICT {json.dumps(v)}\n")
     (d / f"time-{name}.txt").write_text(f"\tExit status: {rc}\n")
     (d / f"own-{name}.txt").write_text("--rec-rows rows.json")

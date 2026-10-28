@@ -44,10 +44,15 @@ own `--program` is refused (`refused: a session without the verifier's program (
 verifies, and the agreement check compares a session refused for that alone as accepted (`agree.py`'s `NO_PROGRAM`).
 
 A recursive statement is one `verify --zk` per V* part, and no part sees another. Each part's `VERDICT` names its part
-(`rec_part`) and the SHA-512 of the shared rows file it checked (`rec_rows_sha512`). `flock-verify rec-compose
---rec-inner F --rec-rows F LOG...` (`Flock.RecCompose.check`) gives the statement's verdict: it accepts only when there
-is one log per V* statement and every part is accepted at the one rows file the prover staged (`acc0`, the tops, the
-`rec-c<k>` rows). The pod's Lean step (`85-rec-reprice.sh`, `lean_verdicts.py --compose`) gives every part that one file.
+(`rec_part`), the SHA-512 of the shared rows file it checked (`rec_rows_sha512`) and of every other input V*'s parts
+share (`rec_shared`: the inner shape, the inner statement's files and how it is set up, the inner session's record, the
+coin server's transcript, the registration), whether it ran `--zk` and its session's coin key. `flock-verify
+rec-compose --rec-inner F --rec-rows F LOG...` (`Flock.RecCompose.check`) gives the statement's verdict: it accepts only
+when there is one log per V* statement with one `VERDICT`, every part is accepted under `--zk` without an identifier at
+the one rows file the prover staged (`acc0`, the tops, the `rec-c<k>` rows) and the composition's own inner shape, every
+part read one set of the other shared inputs, in the compiled verifier's form, and no two sessions share a coin key
+(`RecCompose.Accepts`, `check_accepts`; `Proofs.Flock.Claims.Recursion.ComposeParts.composed_parts` reads it at the
+compiled verifier's parts). `verity_flock.rec_compose` is its Python mirror (`tests/test_lean_rec_compose.py`). The pod's Lean step (`85-rec-reprice.sh`, `lean_verdicts.py --compose`) gives every part that one file.
 
 ## Build and run
 
