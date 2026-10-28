@@ -11,20 +11,22 @@ parameters `x`, with its public best methods `pb` and its node's hosts `hr`, on 
 cards and the other devices) and every accelerator `G` that is those devices (`OnCard`) with its oracle calls at a
 public compression (`CallsAtPub`), with the network certifier's counts and the auditor's clocks in the verdict.
 
-* `WorkSoundAt c pb hr`: at every `x` meeting θ's floors with the product form; `WorkSoundH200`, `WorkSoundSm120`.
+* `WorkSoundAt c pb hr`: at every `x` meeting (P1) and (P2); `WorkSoundH200`, `WorkSoundSm120`.
 * `WorkSoundOnCard c pb hr`: at the card's own `x`, the one `Assumptions.CardWithinAccel` gives with the card's runs as
-  its model's (`CardRunsAt`); `WorkSoundOnCardH200`, `WorkSoundOnCardSm120`. This is where trust base item 1 (the card
+  its model's (`CardRunsAt`); `WorkSoundOnCardH200`, `WorkSoundOnCardSm120`. This is where the card premise (the card
   can do no more than its model) and the product form enter the headline.
 
 `WorkSound` gives each (`Proofs.Pouw.DitherInstance`).
 -/
+
+open scoped NNRat
 
 namespace Pouw.Guarantees.DitherInstance
 
 open Pouw.RelativeSecurity Pouw.Dither Pouw.Assumptions
 
 /-- **The no-fold protocol is `(1 − ε)`-work-sound over a monitoring period on the card table `c` at the open parameters
-`x`**. For every period's devices `D` (`n` cards pooled, at `f` ticks a second, and the other devices), every
+`x`**. For every period's devices `D` (`n` cards pooled, at the table's rates, and the other devices), every
 sampling-block protocol `P` and layout `L`, every accelerator `G` of the machine model 𝓜 that is `D` at `x` under the
 resource match `e` (`OnCard`) whose oracle-call step is a public compression on the card (`CallsAtPub`), every number
 `nsb` of sampling blocks, every sampling block's set `Reg b` of registrable instances, every service verdict on the
@@ -118,44 +120,40 @@ def WorkSoundAtX (c : Verity.Accel.Card) (pb : PubBest c) (hr : HostRow) (x : Ve
       Pd ∧
     AnswersFit G P nsb (Timed (Counted verdict cin cout Ein Eout) Pd Δ opArrive t arrive sel τans tc ansAt) dev sel Pd
 
-/-- **The headline on the card table `c` at θ**: `WorkSoundAtX` at every open parameter `x` meeting the table's floors
-(`c.floors`) with the product form (`AccelProductForm`). -/
+/-- **The headline on the card table `c` at θ**: `WorkSoundAtX` at every semantics `x` meeting (P1), the table's
+exactness range (`c.Exact`), and (P2), the product form (`AccelProductForm`). -/
 def WorkSoundAt (c : Verity.Accel.Card) (pb : PubBest c) (hr : HostRow) : Prop :=
-  ∀ (x : Verity.Accel.Open), c.floors x → Verity.Assumptions.AccelProductForm x → WorkSoundAtX c pb hr x
+  ∀ (x : Verity.Accel.Open), c.Exact x → Verity.Assumptions.AccelProductForm x → WorkSoundAtX c pb hr x
 
-/-- **The headline on the card itself**: if the card can do no more than its
-accelerator model (`Assumptions.CardWithinAccel c cap oracle can`, trust base item 1, for the card's computations
-`can`), then at some open parameters `x` both hold: `x` meets θ's floors with the product form and the card's runs are
-`c.machine x`'s programs (`CardRunsAt`), and the headline holds at `x` (`WorkSoundAtX`). So the `x` the headline is
-read at is the card's own, the one its runs refine to, and the trust base's model premise is a hypothesis of the
-theorem and in the lock.
+/-- **The headline on the card itself**: if the card can do no more than its accelerator model (the card premise,
+`Assumptions.CardWithinAccel c can`, for the card's computations `can`), then
+at some semantics `x` both hold: `x` meets (P1) and (P2) and the card's runs are the machine `⟨c, x⟩`'s programs
+(`CardRunsAt`), and the headline holds at `x` (`WorkSoundAtX`). So the `x` the headline is read at is the card's own,
+the one its runs refine to, and the card premise is a hypothesis of the theorem and in the lock.
 
 Open: `G` is still any accelerator that is the devices at `x` (`OnCard`), not the canonical card-level accelerator
 whose programs are exactly the card's; the witness that `SAKMatmul` and `SAKSha` hold at such a `G`, with free
 guesses, is `Proofs.Pouw.DitherWitness`'s. A sampling block's commitment reads the oracle, which the card has no
 instruction for (the realization premise `Assumptions.ShaRealize`). -/
 def WorkSoundOnCard (c : Verity.Accel.Card) (pb : PubBest c) (hr : HostRow) : Prop :=
-  ∀ {ι : Type} (cap : ι → ℕ) (oracle : ℕ) (can : (c.Mem → c.Mem) → ℕ → (c.Mem → Prop) → Prop),
-    Verity.Assumptions.CardWithinAccel c cap oracle can →
-    ∃ x, c.floors x ∧ Verity.Assumptions.AccelProductForm x ∧ CardRunsAt c x cap oracle can ∧ WorkSoundAtX c pb hr x
+  ∀ can : (c.Mem → c.Mem) → ℚ≥0 → (c.Mem → Prop) → Prop,
+    Verity.Assumptions.CardWithinAccel c can →
+    ∃ x, c.Exact x ∧ Verity.Assumptions.AccelProductForm x ∧ CardRunsAt c x can ∧ WorkSoundAtX c pb hr x
 
-/-- **The headline on the H200 SXM at θ**: `WorkSoundAt` on `Verity.Accel.H200.card`, whose floors are `sync ≥ 1`
-(the data sheet's tensor peak is the core's, whichever instruction issues it), `b1 ≥ 1/8` (θ's BGMMA measurement)
-`madHi ≥ 2` (`IMAD.HI` at 32 lanes a SM-clock, CPG Table 7) and `slack ≥ 1` (the kernel idles a tick after
-every 20 `wgmma`s), with `pubBestH200`'s public bests on the H200 and the H200 node's hosts. -/
+/-- **The headline on the H200 SXM at θ**: `WorkSoundAt` on `Verity.Accel.H200.card`, with `pubBestH200`'s public
+bests on the H200 and the H200 node's hosts. -/
 def WorkSoundH200 : Prop := WorkSoundAt Verity.Accel.H200.card pubBestH200 hostH200
 
-/-- **The headline on the RTX PRO 6000 (sm_120) at θ**: `WorkSoundAt` on `Verity.Accel.Sm120.card`, whose floor is
-`madHi ≥ 2` and which has no native `b1` MMA (ptxas emulates it), with `pubBestSm120`'s public bests on the
-RTX PRO 6000 and its node's hosts. -/
+/-- **The headline on the RTX PRO 6000 (sm_120) at θ**: `WorkSoundAt` on `Verity.Accel.Sm120.card`, with
+`pubBestSm120`'s public bests on the RTX PRO 6000 and its node's hosts. -/
 def WorkSoundSm120 : Prop := WorkSoundAt Verity.Accel.Sm120.card pubBestSm120 hostSm120
 
-/-- **The headline on the H200 SXM itself**: `WorkSoundOnCard` on `Verity.Accel.H200.card`, at the open parameters
+/-- **The headline on the H200 SXM itself**: `WorkSoundOnCard` on `Verity.Accel.H200.card`, at the semantics
 `card-within-accel(H200)` gives, with `pubBestH200`'s public bests on the H200 and the H200 node's hosts. -/
 def WorkSoundOnCardH200 : Prop := WorkSoundOnCard Verity.Accel.H200.card pubBestH200 hostH200
 
-/-- **The headline on the RTX PRO 6000 (sm_120) itself**: `WorkSoundOnCard` on `Verity.Accel.Sm120.card`, at the open
-parameters `card-within-accel(RTX PRO 6000)` gives, with `pubBestSm120`'s public bests on it and its node's hosts. -/
+/-- **The headline on the RTX PRO 6000 (sm_120) itself**: `WorkSoundOnCard` on `Verity.Accel.Sm120.card`, at the
+semantics `card-within-accel(RTX PRO 6000)` gives, with `pubBestSm120`'s public bests on it and its node's hosts. -/
 def WorkSoundOnCardSm120 : Prop := WorkSoundOnCard Verity.Accel.Sm120.card pubBestSm120 hostSm120
 
 end Pouw.Guarantees.DitherInstance
