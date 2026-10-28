@@ -6,8 +6,9 @@ A call's components (compressions on the device; a leaf's row is R bytes):
   t_S    a filler's T_S rows (a served call's O implies its T_S): R / 128 + 1 a leaf, from P's midstate
   t_s    the T_s rows for s < S
   O      O's rows (a served call's), at 32 bits or, in layout (d), 16
-  act    layout (d)'s A′ rows in a gate-up call's value root: each of its m rows' n / 2 bytes in rows of R bytes, the last
-         short, from the same midstate (a row/v2 prefix is one block at every length)
+  act    layout (d)'s A′ rows in a gate-up call's value root: each of its m rows' n / 2 codes and its record (amax and S_i,
+         `dither.REC` bytes) in rows of R bytes, the last short, from the same midstate (a row/v2 prefix is one block at
+         every length)
   salt   a leaf's salt: prf_salt's y (3) and hm96's c = H(salt_prefix ‖ y) from its midstate (2)
   hide   a leaf's hm96 tree leaf from leaf_prefix's midstate (2) and its frame-v3 leaf (2)
   node   the tree's nodes over the leaves padded to a power of two, 2 each from the level's midstate
@@ -98,8 +99,8 @@ def components(m: int, n: int, k: int, lp: int = 512, L: int = 4096, row: int = 
     sh = dither.Shape(m, n, k, lp, L, o=o, ow=ow if o else 32, act=act)
     seg = sh.tiles * dither.TILE_WORD_BYTES
     by = {"t_S": 0 if o else seg, "t_s": (sh.S - 1) * seg, "O": sh.tiles * sh.ow // 8 * dither.CELLS if o else 0,
-          "act": m * sh.I if act else 0}
-    full, rest = divmod(sh.I, row)
+          "act": m * sh.arow}
+    full, rest = divmod(sh.arow, row)
     nl = {x: -(-b // row) for x, b in by.items()} | {"act": m * (full + bool(rest)) if act else 0}
     leaves = sum(nl.values())
     nodes, pads = tree(leaves)
@@ -278,7 +279,7 @@ CHECKS = ((128, 256, 768, 128, 256, 2048, "filler"), (256, 128, 1024, 128, 512, 
           (384, 256, 1024, 128, 512, 32768, "served"), (128, 384, 640, 128, 256, 8192, "filler"),
           (256, 256, 1024, 128, 512, 4096, "served", 16, True), (128, 768, 512, 128, 512, 256, "served", 16, True),
           (256, 512, 1024, 128, 1024, 32768, "served", 16, True), (128, 256, 512, 64, 512, 1024, "served", 16, False),
-          (256, 384, 768, 128, 256, 2048, "served", 16, True))
+          (256, 384, 768, 128, 256, 2048, "served", 16, True), (128, 512, 512, 128, 512, 256, "served", 16, True))
 
 
 def check() -> bool:

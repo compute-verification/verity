@@ -42,6 +42,16 @@ def test_a_served_call_of_one_segment_draws_no_noise_and_commits_O():
     assert c["parts"]["O"] == 4096 * 4 * C.row_blocks(16384)
 
 
+def test_layout_d_a_rows_carry_their_record():
+    """Under layout (d) the gate-up call's A′ rows hold their record: on 8B one 14,352-byte leaf a row, as many blocks as
+    its codes alone; on mqa16k52, whose codes fill two leaves, a 16-byte third leaf a row."""
+    c = C.components(16384, 28672, 4096, row=16384, kind="served", ow=16, act=True)
+    assert c["parts"]["act"] == 16384 * C.row_blocks(14336 + dither.REC) == 16384 * C.row_blocks(14336)
+    q = C.components(16384, 65536, 16384, row=16384, kind="served", ow=16, act=True)
+    assert q["parts"]["act"] == 16384 * (2 * C.row_blocks(16384) + C.row_blocks(dither.REC))
+    assert q["leaves"] - C.components(16384, 65536, 16384, row=16384, kind="served", ow=16)["leaves"] == 3 * 16384
+
+
 @pytest.mark.parametrize("row", [65536, 262144])
 def test_a_row_past_32_KiB_is_a_format_change(row):
     assert not C.legal(row) and C.legal(32768)
