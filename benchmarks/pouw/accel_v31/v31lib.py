@@ -107,7 +107,7 @@ class Lib:
 
 
 class Prover:
-    """One shape's GPU prover: m x n output cells at contraction k, noise period lp, segments of L, leaf rows of `row`
+    """One shape's GPU prover: m x n output cells at contraction k, noise tiles of lp, segments of L, leaf rows of `row`
     bytes, served calls or a filler's. `params_dir` keeps its CGP1 file (default a temporary one)."""
 
     def __init__(self, m: int, n: int, k: int, lp: int = 256, L: int = 4096, row: int = 1024, *, served: bool = False,
