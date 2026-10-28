@@ -211,7 +211,7 @@ def lane_fill(x: float, mix: dict[str, float] | None = None) -> Filler:
     receipts recomputed by the check (p = 0, `PINNED`)."""
     if mix is None:
         return Filler(per_word=x, mix={"ALU": 1.0, "IMAD": 1.0}, route="lanes",
-                      source="CALC: a lane chain of LOP3 and IMAD, receipts checked like the fold's (candidate)",
+                      source="a lane chain of LOP3 and IMAD, receipts checked like the fold's (candidate)",
                       p=0.0, luck=PINNED)
     return Filler(per_word=x, mix=dict(mix), route="lanes",
                   source=f"a lane chain in the mix {', '.join(f'{k} {v:g}' for k, v in mix.items())} (candidate)",

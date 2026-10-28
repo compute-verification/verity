@@ -21,7 +21,7 @@ TMA512 = 0.125  # the block's tiles into shared memory
 
 [operands]      # the least operand delivery any program pays a MMA (`--operands floor`); the register floor replaces it
 floor = { LDS128 = 0.2 }
-source = "CALC's register-capacity estimate: a lane holds an a x b tile of m16n8k32 accumulators (4ab registers) and its operand fragments (4a + 2b), so (4a + 2b)/4 LDS.128 feed ab MMAs; under 255 registers the least is 0.2 a MMA (a = 5, b = 10). Honest's 64x64 tile pays 0.25, and its TMA and address math 0.25 more"
+source = "the register-capacity estimate: a lane holds an a x b tile of m16n8k32 accumulators (4ab registers) and its operand fragments (4a + 2b), so (4a + 2b)/4 LDS.128 feed ab MMAs; under 255 registers the least is 0.2 a MMA (a = 5, b = 10). Honest's 64x64 tile pays 0.25, and its TMA and address math 0.25 more"
 
 [fold]          # the fold inside per_mma, lane instructions a committed word (128 words a MMA at L = 32: 12 warp instructions)
 name = "duo"    # u = y ^ d ^ k (LOP3); y = u*a + z (IMAD); z = rotl(u, r) + y (LEA.HI)
