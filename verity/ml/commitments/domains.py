@@ -312,17 +312,6 @@ WIPE_MONITORING_PERIOD = "verity/wipe-monitoring-period/v1"
 WIPE_PROTOCOL = "verity/wipe/v0"
 WIPE_EGRESS = "wipe-egress/v1"
 
-# Not yet read from here: the bandwidth audit
-GF31_POLY = "gf31-poly/v1"
-RO_BLAKE3 = "ro-blake3/v1"
-RO_SHA512 = "ro-sha512/v1"
-BANDWIDTH_CHALLENGER_STATE = "verity/bandwidth/challenger-state/v1"
-BANDWIDTH_OPENINGS = "verity/bandwidth/openings/v1"
-BANDWIDTH_SALT = "verity/bandwidth/salt/v2"
-BANDWIDTH_TAG_LEAF = "verity/bandwidth/tag-leaf/v1"
-BANDWIDTH_TAG = "verity/bandwidth/tag/v1"
-BANDWIDTH_PERIOD = "verity/bandwidth/window/v2"
-
 # Not yet read from here: the remote bandwidth audit
 REMOTE_BANDWIDTH_P2_BLOCK4 = "p2-unit4/v0"
 STORE_ORDER = "store-order/v0"
