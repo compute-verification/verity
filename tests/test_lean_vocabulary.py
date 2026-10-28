@@ -144,6 +144,10 @@ MIRRORS: dict[str, tuple[str, str, str]] = {
                                            "the LMS port verifies the Python's signatures"),
     f"{REQ_PY}::Store": (f"{REQ}::CircuitRequirement.Store", "requirement-difftest", "the requirement's port"),
     f"{REQ_PY}::Placement": (f"{REQ}::CircuitRequirement.Placement", "requirement-difftest", "the requirement's port"),
+    f"{SITE_PY}::Site": (f"{SITE_LEAN}::Core.Site", "site-difftest", "the Site's port folds the Python's logs and reads its views"),
+    f"{SITE_PY}::Link": (f"{SITE_LEAN}::Core.Site.Link", "site-difftest", "the Site's port reads the Python's links"),
+    f"{SITE_PY}::Registration": (f"{SITE_LEAN}::Core.Site.Registration", "site-difftest",
+                                 "the Site's port checks the Python's logs, refusal for refusal"),
     f"{RA_PY}::Opening": (f"{RA}Window.lean::RemoteAudit.Opening", "remote-audit-difftest", "the remote audit's port"),
     f"{RA_PY}::Registration": (f"{RA}Window.lean::RemoteAudit.Registration", "remote-audit-difftest", "the remote audit's port"),
     f"{RA_PY}::Registry": (f"{RA}Registry.lean::RemoteAudit.Registry", "remote-audit-difftest", "the remote audit's port"),
@@ -156,10 +160,6 @@ MIRRORS: dict[str, tuple[str, str, str]] = {
                                           "memory-challenger-difftest", "the memory challenger's port, for the streamed wipe"),
     f"{MC_PY}run.py::Session": ("verity/core/protocols/pous/check/PousCheck/Run.lean::PousCheck.Run.Session", "pous-run",
                                 "the PoUS run's protocol port reads the sessions the Python records"),
-    f"{SITE_PY}::Site": (f"{SITE_LEAN}::Core.Site", "site-difftest", "the Site's port folds the Python's logs and reads its views"),
-    f"{SITE_PY}::Link": (f"{SITE_LEAN}::Core.Site.Link", "site-difftest", "the Site's port reads the Python's links"),
-    f"{SITE_PY}::Registration": (f"{SITE_LEAN}::Core.Site.Registration", "site-difftest",
-                                 "the Site's port checks the Python's logs, refusal for refusal"),
 }
 
 
