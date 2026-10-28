@@ -1615,6 +1615,12 @@
    "assumptions": [],
    "type_hash": "9e643a105f5704513bd184fa62a05149067300421a23658f5650e0bfc18672ee"
   },
+  "Properties.NetworkScan.scanFits": {
+   "owner": "@network-accounting"
+  },
+  "Properties.NetworkScan.scanScopeAcc": {
+   "owner": "@network-accounting"
+  },
   "Properties.Pouw.Check.acceptMeans": {
    "owner": "@compute-accounting",
    "signature": ["Properties.Pouw.Check.acceptMeans : Properties.Pouw.Check.AcceptMeans"],
@@ -3582,8 +3588,6 @@
    "Pous.Period.SecurityProofs.periodCapacity": "frozen (premise,no-function): PeriodHeld's reading in the joint run: under PeriodHeld's premises and a capacity verdict that is the deployed acceptance outside a break, the capacity audit of an abstract run of the device model has CapacitySoundPerRun and CapacitySound, which bound Pouw.pr events of a verdict that is a field of the run, not a Lean function.",
    "Pous.EndToEnd.SecurityProofs.honestPassesRing": "completeness: the honest full-state server passes P2's ring audit with probability 1, so P2RingAuditSecure's and EndToEndRing's events are not vacuous",
    "Pous.EndToEnd.SecurityProofs.honestPassesAccepts": "completeness: the honest full-state server passes EndToEndRing's event with probability 1 (the coin tree is always built and the draw never rejects)",
-   "Properties.NetworkScan.ScanFits": "unstated: NetTiming.Layout.Fits' parts (1) and (2) at an accepted scan's layout are proved from scanOf's acceptance (scanFits_egress_ingress, Proofs.Properties.NetworkScan.Fits); part (3), no egress gate depending on a later step's ingress, is open, and ScanFits gets a guarantee entry with its proof",
-   "Properties.NetworkScan.ScanScopeAcc": "unstated: scanScopeAcc_of_scanFits (Proofs.Properties.NetworkScan) proves it from ScanFits, which is unstated until its part (3) is proved (its entry)",
    "Pous.EndToEnd.RunCertifies": "unstated: a step of periodHeld: it joins the composed check's runCheckAccepts with the setup check's acceptsDecodes and publishesRoot, all three proved, and runCertifies proves it from them",
    "Properties.Served.DrawMissesSubset": "unstated: the served draw's miss bound, proved in security_proofs by Properties.Served.SecurityProofs.drawMissesSubset; INT-TIE's draft statement (#2677), which gets a guarantee entry once red team has read it",
    "Properties.Served.SeededScheduleNotLive": "unstated: Compose's UnitsOfLayout and LayerCommitted exclude each other on a circuit with a read run input, proved by Properties.Served.seededScheduleNotLive; INT-TIE's draft statement (#2677), which gets a guarantee entry once red team has read it",

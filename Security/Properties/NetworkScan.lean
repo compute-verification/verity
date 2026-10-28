@@ -26,7 +26,9 @@ an input node, reading exactly the gates its operands name, returning the gates 
 * `ScanFits`: an accepted scan's layout fits every flattening of its Program over `T` steps.
 * `ScanScopeAcc`: at a deployment whose statements are their descriptors flattened and whose scope check is its scope,
   a statement the scope check takes, whose descriptor is the accepted scan's canonical bytes, is in the sampled audit's
-  scope at `layOf` and `T` (`ScopeAcc`). `Proofs.Properties.NetworkScan` derives it from `ScanFits`.
+  scope at `layOf` and `T` (`ScopeAcc`).
+
+`Proofs.Properties.NetworkScan` proves both (`scanFits`, and `scanScopeAcc` from it).
 -/
 
 namespace Properties.NetworkScan
