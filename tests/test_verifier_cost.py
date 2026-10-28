@@ -3,8 +3,9 @@
 A scan over the Lean under `verity/core/` (the verifiers of record and the code they run) refuses the forms an unrolled
 walk takes there: locating gates one by one through the canonical layout (`P.gate g`, `Flock.Program.Prog.gate`), a
 range or loop bounded by a Definition's gate count (`List.range (P.defs[P.root]!).gates`, `[0:defn.gates]`), and an
-array or loop bounded by a name bound to one (`let n := defn.gates` … `Array.mkEmpty n`, `for j in [0:n]`), and outside
-the tests a templated unit unrolled (`Tmpl.unroll`, `Tmpl.unrollAt`, `Tmpl.unitFull`, `Tmpl.posMap`, `Tmpl.foldRef`):
+array or loop bounded by a name bound to one (`let n := defn.gates` … `Array.mkEmpty n`, `for j in [0:n]`), a range or
+loop over a node's members (`for m in [0:node.members]`, `List.range node.members`: every batch member or scan iteration),
+and outside the tests a templated unit unrolled (`Tmpl.unroll`, `Tmpl.unrollAt`, `Tmpl.unitFull`, `Tmpl.posMap`, `Tmpl.foldRef`):
 a templated unit is read from its description (`Tmpl.unrollOk`, `Tmpl.unitNet`, `Tmpl.foldUnit`). The fix is in the
 scan's failure message: summarize once per specialized Definition and multiply through batch members and scan
 iterations, as `NciCheck.Desc` does (its docstring), so a Definition's summary serves every activation of it.
@@ -20,6 +21,15 @@ import re
 from test_repository import ROOT, _tracked
 
 ALLOWED: dict[str, str] = {
+    "verity/core/primitives/evaluate/Evaluate/Walk.lean":
+        "Evaluate.walk, the evaluator: a Program's values gate by gate, every member of every node, by definition; no "
+        "verifier imports it",
+    "verity/core/protocols/network/nci/lean/NciCheck/Desc.lean":
+        "NciCheck.Desc's members of a node reading part of a mapped argument, one by one: bounded by walkAtMost, "
+        "which refuses past its limit",
+    "verity/core/protocols/network/nci/lean/NciCheck/DescFuzz.lean":
+        "NciCheck.DescFuzz, the desc fuzzer the Lean audit runs (NciCheck.DescFuzzMain): it visits every member of every "
+        "node of a generated Program, under caps.work, to decide DescAgrees' open statements there; the verifier never runs it",
     "verity/core/protocols/network/nci/lean/NciCheck/Check.lean":
         "NciCheck.check, the gate-by-gate reference NciCheck.Desc is difftested against (runs NciCheck.DescDifftestMain); "
         "`nci-check` runs it only with --unrolled",
@@ -60,6 +70,8 @@ _ARG = r"(?:\((?:[^()\n]|\([^()\n]*\))*\.gates\)|(?:\([^()\n]*\))?[\w.\[\]!]*\.g
 RANGE = re.compile(rf"\b(?:List|Array)\.range\s*{_ARG}|\[\s*\w*\s*:\s*[^\]\n]*\.gates\s*\]")
 #: `let n := … .gates` at the end of a line: a name bound to a gate count
 BOUND = re.compile(r"\blet\s+(?:mut\s+)?(\w+)\s*(?::\s*\w+\s*)?:=[^\n]*\.gates\s*$", re.M)
+#: a range or loop over a node's members: every batch member or scan iteration
+MEMBERS = re.compile(r"\b(?:List|Array)\.range\s*\(?[\w.!\[\]()]*\.members\b|\[\s*\w*\s*:\s*[\w.!\[\]]*\.members\s*\]")
 #: a templated unit unrolled: its rows, every column's position, or the fold over its rows
 UNROLLED = re.compile(r"(?<![\w'])(?:unrollAt|unitFull|posMap|foldRef)\b(?!')|(?<![\w'])Tmpl\.unroll\b(?![\w'])")
 
@@ -71,6 +83,7 @@ def offenses(source: str, test: bool = False) -> list[tuple[int, str]]:
     if not test:
         hits += [(m.start(), "a templated unit unrolled") for m in UNROLLED.finditer(src)]
     hits += [(m.start(), "a range over a gate count") for m in RANGE.finditer(src)]
+    hits += [(m.start(), "a range over a node's members") for m in MEMBERS.finditer(src)]
     for b in BOUND.finditer(src):
         n = re.escape(b.group(1))
         use = re.compile(rf"\b(?:List|Array)\.range\s*\(?\s*{n}\b(?!\.)|\[\s*\w*\s*:\s*{n}\s*\]|"
@@ -106,6 +119,8 @@ def test_the_scan_sees_each_form():
     def h (t : Tmpl) (lays : Array Lay) := Tmpl.unrollAt t lays
     def i (t : Tmpl) := (Flock.Tmpl.posMap t lays).size + (Tmpl.unroll t).size + (Desc.unroll D).size
     def j (t : Tmpl) := Tmpl.unrollOk t lays && Tmpl.unitNet t lays == n && Tmpl.unrolled t
+    def k (node : Node) := for m in [0:node.members] do pure ()
+    def l (body : Body) := (List.range (body.nodes[k]!).members).map id ++ List.range node.membersOf
     """
-    assert [line for line, _ in offenses(src)] == [3, 4, 7, 8, 12, 13]
-    assert [line for line, _ in offenses(src, test=True)] == [3, 4, 7, 8]
+    assert [line for line, _ in offenses(src)] == [3, 4, 7, 8, 12, 13, 15, 16]
+    assert [line for line, _ in offenses(src, test=True)] == [3, 4, 7, 8, 15, 16]

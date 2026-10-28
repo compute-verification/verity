@@ -33,6 +33,7 @@
   "Flock.Test.RegFormats",
   "Flock.Test.RegComplete",
   "Flock.Test.RegProgram",
+  "Flock.Test.LinkUnits",
   "Flock.Test.RegCover",
   "Flock.Test.RegKnown",
   "Flock.Test.KnownRead",

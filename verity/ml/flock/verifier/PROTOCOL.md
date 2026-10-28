@@ -1628,16 +1628,20 @@ row. The public file holds roots, hiding leaves and structure only, under M0 and
   leaves `[lo, hi)` as the one output row holds outputs, a `hm96-sha512/row/v1` row of that row's words, at most that many
   leaves, a row once, the ranges disjoint. Staging (`class_statement.Wiring`) gives each reading instance its own link-row
   table row under its writer's output-row salt. The check holds for a hidden-output statement under a template query with
-  the verifier's own program (`--program`, `--partition`), over every unit of the registered population, before any draw, so
-  a drawn reader is held to its writer's committed row whether the writer is drawn or not. Per unit, from the program
-  (`Program.operands` of its root node and member): every parameter leaf that is another unit's output (its gate inside a
-  unit's interval) lies in a link's range; each link's leaves are either all circuit inputs (an ordinary input row there) or
+  the verifier's own program (`--program`, `--partition`), for every unit the draw proves (its units and their closure;
+  every unit of the registered population without a draw), against the population's file, so a drawn reader is held to
+  its writer's committed row whether the writer is drawn or not; an undrawn reader's wires are part of its own proof,
+  which the draw samples like the rest of it. Its work is the program's description and the proved units': a unit and a
+  gate's unit are read from the root body's nodes (`HmLinks.nodes`, `unitAt`, `ownerAt`), never from its members unrolled,
+  and on the whole population the check is the unrolled reference (`HmLinks.check_ref`, from `LinkUnits`' `unitAt_eq` and
+  `ownerAt_eq`). Per unit, from the program (`Program.operands` of its root node and member): every parameter leaf that
+  is another unit's output (its gate inside a unit's interval) lies in a link's range; each link's leaves are either all circuit inputs (an ordinary input row there) or
   exactly one writer unit's outputs, all of them, in order; that writer is a unit of the public file; and the reader's
   link-row `b ‖ c` equals the writer's output-row `b ‖ c`. Otherwise the verifier refuses, naming the leaves, the row, the
   writer and the reader (`links: cut wire [lo, hi) from unit v to unit u: …`). A template-query statement with no META
   `links` is held to the same check, so any cut wire between its units refuses it. META `links` without the program and
   partition, under any other query, or on a statement with public outputs (`setupH`) is refused. The live verifier
-  (`flock-circuit serve`, `replay`, `statement`) makes the same comparison on the population's file against the
+  (`flock-circuit serve`, `replay`, `statement`) makes the comparison for every unit of the population's file against the
   verifier's own `--links F` (`verity/flock-links/v1`: `circuit_sha512`, the partition digest, META's link ports, and every
   `[reader, port, writer]` instance triple, derived from its program by `class_statement.links_file`); a circuit with
   `links` needs the file and one without refuses it. Not checked: a link across statements (refused), that the class
