@@ -30,6 +30,7 @@ sys.path.insert(0, str(H1))
 import h1unit as U  # noqa: E402
 
 from verity.core.protocols.pouw import salt as PS  # noqa: E402
+from verity.core.protocols.pouw import weights as Wt  # noqa: E402
 from verity.core.protocols.pouw.circuit import h1zy as Z  # noqa: E402
 from verity.core.protocols.pouw.circuit import seeds as SD  # noqa: E402
 
@@ -124,7 +125,8 @@ def test_the_windows_partition_derives_exactly_the_tiles_h1_prove_proves(tmp_pat
     t of call c's z table, the salt, position u and the window's roots, and its outputs are row u of the receipt and of
     ok. The slot pads the token rows with zero rows of scale 0, and the public commitment holds no token count. Each
     call's A table is the slot's rows (with their scales) under its own salts and its z table its tiles' records, each
-    `scaled_mm_zy`'s (`h1zy.records`), the tables the verifier's Program names; a registration of z alone, or of one
+    `scaled_mm_zy`'s (`h1zy.records`), the tables the verifier's Program names; b/<K> is under θ's registered domain
+    (`weights.THETA`), and a b/<K> under the window Program's digest is refused; a registration of z alone, or of one
     window-wide zy, is refused; the units' roots are the A tables' digest and b/<K>'s root; and the verifier's
     ``--registered`` file of a call (`h1window.table_reads_file`, from the Program alone) reads, at every unit of the call
     and port, the row `h1unit.unit_reads` does, and none at any other call's unit."""
@@ -145,8 +147,12 @@ def test_the_windows_partition_derives_exactly_the_tiles_h1_prove_proves(tmp_pat
     wr = U.window_open_root(com)
     assert com["window_root"] == wr == U.open_root("w", bytes.fromhex(U.registered_of(com)[f"b/{K}"][1]))
     assert [e["domain"] for e in com["registered"]] == [
-        G.domain(win.obj["program"], v, U.value_words(v), n, window=None if v == f"b/{K}" else wr).domain_id.hex()
-        for v, n in tables.items()]
+        G.domain(Wt.THETA if v == f"b/{K}" else win.obj["program"], v, U.value_words(v), n,
+                 window=None if v == f"b/{K}" else wr).domain_id.hex() for v, n in tables.items()]
+    b_under_program = G.domain(win.obj["program"], f"b/{K}", U.value_words(f"b/{K}"), 32).domain_id.hex()
+    why = RN.check_registration(win, dict(com, registered=[dict(e, domain=b_under_program) if e["value"] == f"b/{K}" else e
+                                                           for e in com["registered"]]))
+    assert len(why) == 1 and why[0].startswith("its registered entries")
     assert RN.check_registration(win, dict(com, window_root=U.open_root("v", bytes(64)))) != []
     why = RN.check_registration(win, RN.unrooted(com))
     assert len(why) == 1 and why[0].startswith("its registered entries")
@@ -215,7 +221,7 @@ def test_the_windows_partition_derives_exactly_the_tiles_h1_prove_proves(tmp_pat
             assert e.get(G.PARAM_KEY) == params.get(p), "a renamed A or B row names the parameter it reads"
             assert {x: e[x] for x in e if x not in ("reads", G.READS_FROM, "known", G.PARAM_KEY)} == {
                 "value": v, "root": roots[v], "leaves": leaves[v], "words": U.value_words(v), "word_bits": 16,
-                "domain": G.domain(win.obj["program"], v, U.value_words(v), leaves[v],
+                "domain": G.domain(Wt.THETA if v == f"b/{K}" else win.obj["program"], v, U.value_words(v), leaves[v],
                                    window=None if v == f"b/{K}" else wr).domain_id.hex(), "row_schema": U.V2}
             assert (e[G.READS_FROM], e["reads"]) == (first, [U.unit_reads(win.program, win.tp, u)[p][1]
                                                               for u in range(first, first + n)])

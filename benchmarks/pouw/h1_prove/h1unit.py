@@ -31,7 +31,8 @@ prover and the verifier of `run.py` share.
   with its s_a, the token rows padded with zero rows of scale 0) under the call's own salts, and its z table ``zy@<c>``,
   one record a tile of the call in its tile order; ``b/<K>``, every call's B rows (the model's, each with its s_w), call
   after call; and ``receipt`` over the window's tiles. The tables and ``b/<K>`` are registered values (`tables`,
-  `register`: `registered.Registered.commit` under the window Program's digest, ``row/v2`` rows of 16-bit leaves,
+  `register`: `registered.Registered.commit` under the window Program's digest, b/<K> under θ's registered domain
+  (`weights.THETA`, registered once under no circuit), ``row/v2`` rows of 16-bit leaves,
   `value_words` a row; each table's domain, and ``ok``'s, binds the window's open root, `open_root`, and b/<K>'s none, as
   it is held across windows: PRF-127, `credit.domain_of`), so the Lean verifier opens every row a statement reads
   against their roots; ``receipt`` is the
@@ -75,6 +76,7 @@ from verity.ml.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2, row_l
 from verity.core.protocols.pouw import core_check as CC
 from verity.core.protocols.pouw import credit as CR
 from verity.core.protocols.pouw import salt as PS
+from verity.core.protocols.pouw import weights as Wt
 from verity.core.protocols.pouw.circuit import h1window as HW
 from verity.core.protocols.pouw.circuit import seeds as SD
 from verity.core.protocols.sampled_proofs.one_stage import partition as P
@@ -293,12 +295,19 @@ def bound_root(name: str, window_root: str) -> str | None:
     return None if CR.is_held(name) else window_root
 
 
+def registered_program(program: str, name: str) -> str:
+    """The ``program`` of the registered value ``name``'s domain: θ's registered domain (`weights.THETA`) for the weights'
+    b/<K>, registered once under no circuit, and the window Program's digest ``program`` for every other value."""
+    return Wt.THETA if CR.is_held(name) else program
+
+
 def register(program: str, name: str, words: np.ndarray, salts, window_root: str) -> G.Registered:
     """A window's rows of the registered value ``name`` (its bit rows' u16 words, `row_words` or `record_words`), committed
-    under the window Program's digest ``program`` in the tile's ports' format (``row/v2``, 16-bit leaves) with one of
-    ``salts`` a row, its domain binding the window's open root ``window_root`` unless ``name`` is b/<K> (`bound_root`)."""
-    return G.Registered.commit(program, name, np.asarray(words).tolist(), [bytes(s) for s in salts], G.WORD_BITS, V2,
-                               bound_root(name, window_root))
+    under the window Program's digest ``program`` (b/<K> under θ's domain, `registered_program`) in the tile's ports'
+    format (``row/v2``, 16-bit leaves) with one of ``salts`` a row, its domain binding the window's open root
+    ``window_root`` unless ``name`` is b/<K> (`bound_root`)."""
+    return G.Registered.commit(registered_program(program, name), name, np.asarray(words).tolist(),
+                               [bytes(s) for s in salts], G.WORD_BITS, V2, bound_root(name, window_root))
 
 
 def register_ok(program: str, window: str, population: int, window_root: str) -> G.Registered:
@@ -342,7 +351,8 @@ def check_known(program: str, window_root: str, port: str, entry: dict) -> str |
 
 
 def registered_domain(program: str, name: str, leaves: int, window_root: str) -> CommitmentDomain:
-    return G.domain(program, name, value_words(name), int(leaves), window=bound_root(name, window_root))
+    return G.domain(registered_program(program, name), name, value_words(name), int(leaves),
+                    window=bound_root(name, window_root))
 
 
 def registered_levels(program: str, name: str, bcs: list[bytes], window_root: str):

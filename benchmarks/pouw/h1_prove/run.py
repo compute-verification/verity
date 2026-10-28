@@ -208,9 +208,9 @@ def check_registration(win: SimpleNamespace, com: dict) -> list[str]:
     """Why a window commitment's registration is not of the verifier's own Program (``win``): it registers under the
     Program's digest, and its values are the weights' b/<K> (the calls' B rows) and each call's A table (the slot's rows)
     and z table (its tiles' records), the tables the verifier's Program names (`h1unit.program_tables`), each its own
-    width of 16-bit leaves (`h1unit.value_words`), under that digest's domains (`h1unit.registered_domain`), each table's
-    binding the window's open root, which the verifier computes itself (`h1unit.window_open_root`) and the commitment
-    records, and b/<K>'s none (PRF-127), with the commitment's roots."""
+    width of 16-bit leaves (`h1unit.value_words`), under that digest's domains (`h1unit.registered_domain`; b/<K> under
+    θ's, `weights.THETA`), each table's binding the window's open root, which the verifier computes itself
+    (`h1unit.window_open_root`) and the commitment records, and b/<K>'s none (PRF-127), with the commitment's roots."""
     k, prog, why = com["unit"]["k"], win.obj["program"], []
     if com.get("program_sha512") != prog:
         why.append(f"it registers under Program {com.get('program_sha512')}, not the verifier's {prog}")
@@ -239,8 +239,9 @@ def z_only(com: dict) -> dict:
 def unrooted(com: dict) -> dict:
     """``com`` as a prover that registers its per-window values with no window root states it (main's form before
     PRF-127): every entry's domain the registered domain of its value with no window bound."""
-    return dict(com, registered=[dict(e, domain=G.domain(com["program_sha512"], e["value"], e["words"],
-                                                         e["leaves"]).domain_id.hex()) for e in com["registered"]])
+    return dict(com, registered=[dict(e, domain=G.domain(U.registered_program(com["program_sha512"], e["value"]),
+                                                         e["value"], e["words"], e["leaves"]).domain_id.hex())
+                                 for e in com["registered"]])
 
 
 def check_opening(win: SimpleNamespace, com: dict, served: dict, op: dict, u: int) -> list[str]:

@@ -62,6 +62,7 @@ import run as L  # noqa: E402
 from verity.ml.circuits.codec import canonical_json, encode_program  # noqa: E402
 from verity.ml.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2  # noqa: E402
 from verity.core.protocols.pouw import leaf_lanes as LL  # noqa: E402
+from verity.core.protocols.pouw import weights as Wt  # noqa: E402
 from verity.core.protocols.pouw.circuit import h1zy as Z  # noqa: E402
 from verity.core.protocols.sampled_proofs.one_stage import partition as P  # noqa: E402
 from verity.core.protocols.sampled_proofs.one_stage import produced as PR  # noqa: E402
@@ -216,19 +217,19 @@ def extract(a) -> None:
 
 def smoke(a) -> None:
     """A stand-in window at ``--k`` in `extract`'s form: its A, B and z/y tables of random rows, committed as a served
-    window's (the record's tables under a random window root and Program digest, B under none), unit 3 of a 64 × 64 call
-    drawn: the harness's own check, never a served result."""
+    window's (the record's tables under a random window root and Program digest, B under θ's domain, `weights.THETA`,
+    and no window), unit 3 of a 64 × 64 call drawn: the harness's own check, never a served result."""
     rng = np.random.default_rng(a.seed)
     k, rb, cb, t, u = a.k, 1, 1, 3, 7
     root, program = os.urandom(64).hex(), os.urandom(64).hex()
     ca, cbw = (rng.integers(-128, 128, (64, k)).astype(np.int8) for _ in range(2))
     sa, sw = ((rng.uniform(1e-3, hi, 64) / 127).astype("<f4") for hi in (0.1, 0.5))
 
-    def tree(value, rows, window=root):
+    def tree(value, rows, window=root, program=program):
         return G.Registered.commit(program, value, rows, schema=V2, window=window)
 
     A, A2 = tree(f"h1/a/{k}@3", U.row_words(ca, sa).tolist()), tree(f"h1/a/{k}@5", U.row_words(ca[::-1], sa).tolist())
-    B = tree(f"h1/b/{k}", U.row_words(cbw, sw).tolist(), None)
+    B = tree(f"h1/b/{k}", U.row_words(cbw, sw).tolist(), None, Wt.THETA)
     recs = []
     for x in range(4):
         r_, c_ = divmod(x, 2)
