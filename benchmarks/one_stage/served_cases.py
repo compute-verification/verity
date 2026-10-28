@@ -19,7 +19,8 @@ is written: that digest is what remote's and onsite's record tie compare.
   - params: ``alpha`` and ``gamma`` (training's α and Γ, ``--alpha`` and ``--gamma``; without both no case is
     written), ``log`` (the deployment's records before this one, ``--log``; empty when the record's ``previous`` is
     null), ``program`` (v1's params' Program as canonical text, the one the record's ``program`` names) and
-    ``parameters`` (that Program's root parameters);
+    ``parameters`` (its program function's, which the descriptor doesn't carry: the population program rebuilt over
+    its root's templates and held to the record's ``program``, `parameters`);
   - commitment: the registration record;
   - evidence: ``owner`` per root node of the Program, ``theta`` and ``provenance``. The window's Program is its
     population program (`interface.Circuit.program`), one batch node per template holding that template's units for
@@ -143,15 +144,15 @@ def _chain(log: Sequence[Mapping[str, Any]], rec: Mapping[str, Any]) -> None:
         prev = R.digest(r)
 
 
-def blocks_of(table: Sequence[bytes], program: str) -> int:
-    """B's table (`predict.inference_blocks.rows`) held to the record's Program: its header names it, and each entry's
-    slot digit is of radix m, so every template's units span every block. -> m."""
+def blocks_of(table: bytes, program: str) -> int:
+    """B's table (`predict.inference_blocks.rows`, concatenated) held to the record's Program: its header names it, and
+    each entry's slot digit is of radix m, so every template's units span every block. -> m."""
     try:
         from verity_vllm.program.predict import inference_blocks as IB
     except ImportError as e:
         raise Refused(f"--blocks reads B's table with verity_vllm.program.predict.inference_blocks (#5763): {e}") from None
     try:
-        named, m, entries = IB.decode(table)
+        named, m, entries = IB.decode([table[i:i + IB.ROW_BYTES] for i in range(0, len(table), IB.ROW_BYTES)])
     except (ValueError, IndexError) as e:
         raise Refused(f"B's table doesn't decode: {e}") from None
     _need(named == program, "B's table names another Program than the record's")
@@ -160,8 +161,32 @@ def blocks_of(table: Sequence[bytes], program: str) -> int:
     return m
 
 
+def parameters(desc: Mapping[str, Any], root: Any) -> list[list[Any]]:
+    """The program function's ``[[name, type], ...]``, which the descriptor doesn't carry (it inlines the function into
+    its root): the population program (`population.mixed_population_program`, or `population_program` for one template)
+    rebuilt over the root's template batches in order, held to the descriptor's digest."""
+    from verity.ml.circuits.population import POPULATION_VERSIONS, mixed_population_program, population_program
+    from verity.ml.circuits.program import is_input
+
+    members = [(n.fn, getattr(n, "n", 1)) for n in root.body.nodes if not is_input(n.fn)]
+    builds = [lambda v: mixed_population_program(members, version=v)]
+    if len(members) == 1:
+        builds.append(lambda v: population_program(*members[0], version=v))
+    want = codec.program_digest(dict(desc))
+    for build in builds:
+        for v in POPULATION_VERSIONS:
+            try:
+                p = build(v)
+            except (ValueError, TypeError) as e:
+                raise Refused(f"v1's Program isn't a population program: {type(e).__name__}: {e}") from None
+            if codec.program_digest(p) == want:
+                return [[n, t.to_json()] for n, t in p.fn.signature()[0]]
+    raise Refused("v1's Program isn't the population program over its root's templates, so its program function's "
+                  "parameters aren't known")
+
+
 def registration_case(v1: Mapping[str, Any], alpha: Fraction | int | str, gamma: int,
-                      log: Sequence[Mapping[str, Any]] = (), table: Sequence[bytes] | None = None) -> dict[str, Any]:
+                      log: Sequence[Mapping[str, Any]] = (), table: bytes | None = None) -> dict[str, Any]:
     """Onsite's registration case (module docstring) from v1's case of the window's audit."""
     rec, _ = record_of(v1)
     desc = v1["params"].get("program") if isinstance(v1.get("params"), Mapping) else None
@@ -179,7 +204,7 @@ def registration_case(v1: Mapping[str, Any], alpha: Fraction | int | str, gamma:
     except (ValueError, KeyError, TypeError, AttributeError) as e:
         raise Refused(f"v1's Program doesn't decode: {type(e).__name__}: {e}") from None
     params = {"alpha": _ratio(alpha), "gamma": gamma, "log": [dict(r) for r in log],
-              "parameters": [[n, t.to_json()] for n, t in root.signature()[0]], "program": text}
+              "parameters": parameters(desc, root), "program": text}
     evidence = {"owner": ["input" if i else 0 for i in inputs], "provenance": [], "theta": []}
     return {"commitment": v1["commitment"], "evidence": codec.canonical_json(evidence).hex(), "params": params}
 
@@ -269,10 +294,7 @@ def produce(a: argparse.Namespace) -> int:
         _need(a.alpha is not None and a.gamma is not None, "α and Γ are training's (TRN-24): pass --alpha and --gamma")
         log = _json(a.log) if a.log is not None else []
         _need(isinstance(log, list), "--log is a JSON list of registration records")
-        table = None
-        if a.blocks is not None:
-            b = a.blocks.read_bytes()
-            table = [b[i:i + 128] for i in range(0, len(b), 128)]
+        table = a.blocks.read_bytes() if a.blocks is not None else None
         return registration_case(v1, a.alpha, a.gamma, log, table)
 
     one(REGISTRATION, registration, a.registration_exe or (lambda: build(*REGISTRATION_LEAN)))
