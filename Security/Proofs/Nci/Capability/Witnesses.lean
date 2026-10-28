@@ -9,7 +9,8 @@ import Mathlib.Tactic.Linarith
 
 Each witness of `Definitions.Nci.Guarantees.Capability.Witnesses`, at the toy instance (`Nci.Capability.Toy`). The
 facts about the toy they share come first: its `(2, 1)`-partition, a block program's bits, what the block recomputes,
-the decoder's description lengths, and the budgets of items priced one bit each.
+the decoder's description lengths, and the budgets of items priced one bit each; then the same for the advice's builder
+`Ra`, and the faulty proof block of `Xf` with what it injects.
 -/
 
 namespace Nci.Capability.Toy
@@ -126,6 +127,61 @@ theorem requires_K2 : K2.RequiresState W2 1 := by
     split_ifs <;> exact mem_singleton_self _
   · exact (show ∀ i : Fin 2, (if i = 0 then ({2} : Finset (Fin 4)) else {3}) ⊆ holds C {2, 3} by decide) i
   · simp [W2]
+
+theorem isCK_Rb (b : Bool) : (Rb b).P.IsCK (Rb b).d 2 1 := by
+  cases b
+  all_goals exact { boolean := ⟨fun _ => rfl, by decide⟩, card := by decide, reads := by decide }
+
+theorem blockProgram_Rb (b : Bool) (e : List Bool) (X : (Cb b).Transcript) (u : Fin 1) :
+    blockProgram (Rb b) e X u = e ++ [(X 1).getLsbD 0] := by
+  have h : (Rb b).d.unregistered ((Rb b).P.gates u) = {1} := by
+    revert u
+    cases b <;> decide
+  unfold blockProgram
+  rw [h]
+  simp [indexCode, Circuit.bits]
+
+theorem recompute_Rb_two (b : Bool) (X : (Cb b).Transcript) :
+    ((Rb b).recompute X 0 2).getLsbD 0 = (b && (X 1).getLsbD 0) := by
+  have h : (Rb b).recompute X 0 2 = (Cb b).op 2 ((Rb b).recompute X 0) := (Cb b).run_free (by simp)
+  have h0 : (Rb b).recompute X 0 0 = 1 := (Cb b).run_fixed (by simp)
+  have h1 : (Rb b).recompute X 0 1 = X 1 := (Cb b).run_fixed (by simp)
+  rw [h]
+  show (BitVec.ofBool (b && ((Rb b).recompute X 0 0).getLsbD 0 && ((Rb b).recompute X 0 1).getLsbD 0)).getLsbD 0 = _
+  rw [h0, h1]
+  simp
+
+theorem wrong_Xf : P2.wrong Xf = {0} := by
+  have hop : ∀ (u : Fin 2) (g : Fin 4), P2.unit g = some u →
+      P2.localEval Xf u g = BitVec.ofBool ((Xf 0).getLsbD 0 && (Xf 1).getLsbD 0) := by
+    intro u g hg
+    have h0 : P2.unit 0 ≠ some u := by simp [P2]
+    have h1 : P2.unit 1 ≠ some u := by simp [P2]
+    have hg2 : ¬ g.val < 2 := fun h => by simp only [P2, h, ↓reduceIte, reduceCtorEq] at hg
+    rw [P2.localEval_of_mem Xf hg]
+    show (if g.val < 2 then 0 else BitVec.ofBool _) = _
+    simp only [hg2, ↓reduceIte]
+    rw [P2.localEval_of_not_mem Xf h0, P2.localEval_of_not_mem Xf h1]
+  have h0 : ¬ P2.Correct Xf 0 := fun h => by
+    have := h 2 (by decide) (by decide)
+    rw [hop 0 2 (by decide)] at this
+    exact absurd this (by decide)
+  have h1 : P2.Correct Xf 1 := by
+    intro g _ hg
+    obtain rfl : g = 3 := by
+      revert g
+      decide
+    rw [hop 1 3 hg]
+    decide
+  ext u
+  rw [Partition.mem_wrong, mem_singleton]
+  refine ⟨fun hu => by_contra fun hu0 => hu ?_, fun hu => hu ▸ h0⟩
+  rw [(by decide : ∀ u : Fin 2, u ≠ 0 → u = 1) u hu0]
+  exact h1
+
+theorem injected_Xf : injected P2 Xf = {2} := by
+  rw [injected, wrong_Xf, singleton_biUnion]
+  decide
 
 end Nci.Capability.Toy
 
@@ -262,5 +318,39 @@ theorem WeightedProductCapNontrivial : Guarantees.WeightedProductCapNontrivial :
   unfold Guarantees.WeightedProductCapNontrivial
   rw [completed_R1]
   simp [W]
+
+theorem BlockDescriptionAdviceHonest : Guarantees.BlockDescriptionAdviceHonest := by
+  refine ⟨le_rfl, fun a ha u X => ?_, fun a _ => isCK_Rb _⟩
+  obtain ⟨b, rfl⟩ := List.length_eq_one_iff.1 ha
+  obtain rfl : u = 0 := Subsingleton.elim u 0
+  show M.run () (blockProgram (Rb b) ([] ++ [b]) X 0) 0 = some (ya [b] 0 ((Rb b).recompute X 0))
+  rw [blockProgram_Rb]
+  cases b
+  · simp [M, ya]
+  · simp only [ya, List.headD_cons, ↓reduceIte, recompute_Rb_two, Bool.true_and]
+    simp [M]
+
+theorem BlockDescriptionAdviceNontrivial : Guarantees.BlockDescriptionAdviceNontrivial := by
+  intro h
+  have := (ldl_ge 0 _).trans h
+  norm_num [Nat.clog_one_right] at this
+
+theorem FaultyInjectionHonest : Guarantees.FaultyInjectionHonest := by
+  refine ⟨isCK, fun g hg => ?_, wrong_Xf, fun v hv => ?_, fun u => ?_⟩
+  · rw [mem_singleton.1 hg]
+    rfl
+  · rw [wrong_Xf] at hv
+    rw [mem_singleton.1 hv]
+    decide
+  · rw [wrong_Xf]
+    exact (card_filter_le _ _).trans (by simp)
+
+theorem FaultyInjectionNontrivial : Guarantees.FaultyInjectionNontrivial := by
+  unfold Guarantees.FaultyInjectionNontrivial
+  rw [injected_Xf]
+  intro h
+  have := h.reads 0
+  revert this
+  decide
 
 end Nci.SecurityProofs

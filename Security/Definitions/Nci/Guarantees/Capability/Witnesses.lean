@@ -1,6 +1,7 @@
 import Definitions.Nci.Guarantees.Capability.Budgets
 import Definitions.Nci.Guarantees.Capability.Incidence
 import Definitions.Nci.Guarantees.Capability.Dependency
+import Definitions.Nci.Guarantees.Capability.Fresh
 import Definitions.Nci.Capability.Toy
 
 /-!
@@ -15,7 +16,9 @@ The structural premises (`HeldPriceAtMost`, `SlotsRead`, the incidence, `Consume
 `RequiresState`) are proved at the toy. So are the information premises, at the toy's decoder `M`, which reads only
 programs of two bits: every description length it gives is `2`, so description and source hardness hold at deficit `0`
 for prices summing to at most two bits; min-entropy hardness holds at deficit `0` for the product's value, a uniform
-bit. The operand caps share one nontrivial witness, since their conclusions are the same.
+bit. The operand caps share one nontrivial witness, since their conclusions are the same. The effective fresh input's
+two statements (`Fresh`) have theirs at the toy builder `Ra` and at the trace `Xf`, whose first proof block of `P2` is
+faulty.
 -/
 
 namespace Nci.Guarantees
@@ -138,5 +141,34 @@ def WeightedProductCapHonest : Prop :=
 exceed `h` times the weight it serves. -/
 def WeightedProductCapNontrivial : Prop :=
   ¬ (∑ q ∈ completedIn B (R1.P.gates 0), W.price q.1 * 1 ≤ 0 * ∑ _j ∈ served B (R1.P.gates 0), (1 : ℝ))
+
+/-- **`BlockDescriptionAdvice`'s premises hold together** at the toy builder `Ra`, whose one-bit advice gates the
+computed gates (`ℓa = 1`), with the empty evaluator (`aBlk = 0`), `c = 2` and `k = 1`: followed by any advice, the
+empty evaluator extracts the product's value when the advice is set and nothing otherwise, and every registration the
+builder makes is a `(2, 1)`-partition. -/
+def BlockDescriptionAdviceHonest : Prop :=
+  ([] : List Bool).length ≤ 0 ∧ EvaluatesAdvice M () 0 Ra 1 [] ya ∧
+    ∀ a : List Bool, a.length = 1 → (Ra a).P.IsCK (Ra a).d 2 1
+
+/-- **`BlockDescriptionAdvice`'s conclusion can fail** without the advice's share: under the advice `[true]` with
+`ℓa = 0` (the premise `a.length = ℓa` dropped), the extracted product's value has no description of at most
+`k + ⌈log₂ B⌉ + aBlk + ℓa = 1` bits, since every description the toy decoder gives is two bits long. -/
+def BlockDescriptionAdviceNontrivial : Prop :=
+  ¬ LDL M 0 () (ya [true] 0 ((Ra [true]).d.D.eval (Ra [true]).val)) ≤
+    ((1 + Nat.clog 2 (Ra [true]).B + 0 + 0 : ℕ) : ℕ∞)
+
+/-- **`FaultyInjection`'s premises hold together** at the toy with a faulty proof block: `R1` is a `(2, 1)`-partition
+into inference blocks, the trace `Xf` holds the registered weight, and of the proof blocks `P2` exactly the first, gate
+`2`, is faulty, with one output bit (`w = 1`), inside `R1`'s one inference block (`m = 1`). -/
+def FaultyInjectionHonest : Prop :=
+  R1.P.IsCK R1.d 2 1 ∧ R1.Honest Xf ∧ P2.wrong Xf = {0} ∧
+    (∀ v ∈ P2.wrong Xf, C.width (C.exits (P2.gates v)) ≤ 1) ∧
+    ∀ u, ((P2.wrong Xf).filter fun v => ¬ Disjoint (C.exits (P2.gates v)) (R1.P.gates u)).card ≤ 1
+
+/-- **`FaultyInjection`'s conclusion can fail** where the faulty block is not counted: at `m = 0`, the cut registration
+at what `P2`'s faulty block injects is no `(2, 1 + 0 · 1)`-partition, since its inference block reads two unregistered
+bits, the token and the injected product. -/
+def FaultyInjectionNontrivial : Prop :=
+  ¬ (cutReg R1 (injected P2 Xf)).P.IsCK (cutReg R1 (injected P2 Xf)).d 2 (1 + 0 * 1)
 
 end Nci.Guarantees

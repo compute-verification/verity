@@ -18,6 +18,10 @@ token (`O`, its operand) at gate `2`; its use is the one consumer of `K`, whose 
 item `Y p` is the product's value priced `p`. The decoder `M` reads only programs of two bits: a tag, then one bit it
 outputs when the tag is set; every description it gives is two bits long. The run distribution `μ` draws the token
 uniformly.
+
+The builder `Ra` takes a one-bit advice `b` to `Rb b`, the toy circuit with its computed gates gated by `b` (`Cb b`),
+registered as `R1`; `ya` is what its evaluator extracts. The trace `Xf` holds a wrong product at gate `2`, so the first
+proof block of `P2` is faulty.
 -/
 
 namespace Nci.Capability.Toy
@@ -156,5 +160,41 @@ noncomputable def μ : PMF C.Transcript := (PMF.uniformOfFintype Bool).map tok
 
 /-- The token's bit, the source the toy recovers. -/
 def z (T : C.Transcript) : List Bool := [(T 1).getLsbD 0]
+
+/-- The toy circuit with its computed gates gated by an advice bit `b`: gates `2` and `3` compute `b ∧ 0 ∧ 1`. -/
+@[reducible] def Cb (b : Bool) : Circuit where
+  N := 4
+  w := fun _ => 1
+  isInput := fun g => decide (g.val < 2)
+  reads := fun g => if g.val < 2 then ∅ else {0, 1}
+  reads_lt := by decide
+  input_reads := by decide
+  op := fun g v => if g.val < 2 then 0 else BitVec.ofBool (b && (v 0).getLsbD 0 && (v 1).getLsbD 0)
+  op_congr := by
+    intro g v v' h
+    by_cases hg : g.val < 2
+    · simp only [hg, ↓reduceIte]
+    · simp only [hg, ↓reduceIte]
+      rw [h 0 (by simp [hg]), h 1 (by simp [hg])]
+  outputs := {2, 3}
+
+/-- `Cb b`, registered as `R1` registers the toy circuit: the weight as `1`, both computed gates in one proof block. -/
+@[reducible] def Rb (b : Bool) : Registration where
+  d := { D := Cb b, θ := {0}, θ_input := by decide +revert }
+  val := fun _ => (1 : BitVec 1)
+  B := 1
+  P := { unit := fun g => if g.val < 2 then none else some 0, input_iff := by decide +revert }
+
+/-- The toy builder: the advice's first bit gates the computed gates, so the block's structure depends on the advice. -/
+@[reducible] def Ra (a : List Bool) : Registration := Rb (a.headD false)
+
+/-- What the toy evaluator extracts under the advice `a`: the product's value when the advice is set, and nothing
+otherwise. -/
+def ya (a : List Bool) (_u : Fin (Ra a).B) (T : (Ra a).d.D.Transcript) : List Bool :=
+  if a.headD false then [(T 2).getLsbD 0] else []
+
+/-- A trace with a faulty product: the weight `1` and the token `0`, with gate `2` holding `1` where it computes `0`, and
+gate `3` holding `0`. -/
+def Xf : C.Transcript := fun g => if g.val = 0 ∨ g.val = 2 then 1 else 0
 
 end Nci.Capability.Toy
