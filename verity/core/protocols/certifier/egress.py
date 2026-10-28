@@ -10,7 +10,7 @@ as a read of that row (`Flock.Registered.checkPort` accepts a hidden-output stat
 PROTOCOL.md §16.13; `warden_rows.bucket_port`: unit `reads_from + t` reads row t), so the proof opens the warden's
 registered row only when the row the state renders is it, bit for bit. Only o0 is public: a unit proof's public output
 is at most 16 bits, and o1 is committed. Every switch is computed from the state, none is witness, so the unit adds
-nothing to c, and bucket t's egress reads no ingress after bucket t: structural Fits (`NetTiming.Layout.Fits`: no
+nothing to c, and bucket t's egress reads no ingress after bucket t: structural Fits (`NetTiming.BoundaryGates.Fits`: no
 egress gate is an input, and none of step t depends on an ingress gate of a step t' > t) holds by construction. It
 reads S_t rather than S_{t−1} because the warden's egress row of a connection's admission bucket already holds its
 lane, a `PAD` on its q.

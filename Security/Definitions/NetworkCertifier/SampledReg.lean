@@ -22,7 +22,7 @@ def regVal (ops : List (Opening Bool)) (g : ℕ) : Bool :=
 
 /-- **The registration opens the registered inputs** `reg` under the statement's roots: each of its openings `ops`
 passes, and every gate of `reg` has one. -/
-def RegOpens (H : Msg → Msg) (Cm : Commitment Bool) (s : Stmt) (reg : Finset ℕ) (ops : List (Opening Bool)) : Prop :=
+def RegOpens (H : Msg → Msg) (Cm : Commitment Bool) (s : AuditStatement) (reg : Finset ℕ) (ops : List (Opening Bool)) : Prop :=
   (∀ o ∈ ops, Cm.Opens H s.roots o = true) ∧ ∀ g ∈ reg, ∃ o ∈ ops, o.pos = g
 
 /-- The `H` calls that check the openings `ops` under `roots`. -/
@@ -37,7 +37,7 @@ variable {Coin W : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin]
 extractor run, and the first collision among its own `H` calls and the calls that check the registration's openings
 `ops s` under the statement's roots. Its cost is the extraction's SHA-512 calls, its reruns' included, and the checks'. -/
 noncomputable def Breg (H : Msg → Msg) (V : Verifier Coin) (E : Extractor Coin W V) (Cm : Commitment Bool)
-    (parse : Msg → Option Stmt) (ops : Stmt → List (Opening Bool)) : FinderFamily :=
+    (parse : Msg → Option AuditStatement) (ops : AuditStatement → List (Opening Bool)) : FinderFamily :=
   fun Ω _ _ P x =>
     let rl := ((parse x).map fun s => regLog H Cm s.roots (ops s)).getD []
     { S := Ω × (Fin (V.k x) → Coin) × E.C x
