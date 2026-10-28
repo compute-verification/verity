@@ -44,7 +44,7 @@ its Definitions with their signatures.
   is named in `errors`, never read as "not registered". Consumers that resolve a Definition by id go through it, so a new
   module's Definitions resolve everywhere, not only where someone imported the module.
 - Each Definition module has two sidecars beside it: `<module>.circuit-check.py`, the small bindings `circuit-check`
-  checks it at, and `<module>.circuit-check.json`, its lowering pins (`tools/verity/circuit_check/README.md`).
+  checks it at, and `<module>.circuit-check.json`, its lowering pins (`tools/verity/circuit_check/`).
 - `tests/test_catalog.py` checks what the catalog loads.
 
 ## Boolean versions

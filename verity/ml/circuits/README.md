@@ -136,7 +136,7 @@ Pure functions of a Program, read by the resource audits:
 - `ops`: the hardware-faithful semantics of ML primitives (FP32 and BF16 arithmetic, MUFU tables, GEMM steps, softmax,
   norms, quantization, MoE routing), registered as Definitions; `ops.boolean` holds their Boolean versions. Each module's
   docstring says what it registers, and each Definition module has a circuit-check sidecar beside it
-  (`tools/verity/circuit_check/README.md`).
+  (`tools/verity/circuit_check/`).
 - `silicon`: the exact semantics of one tensor-core accumulator step per instruction class (`models`: `GroupSum`,
   `BlockScaledAlignAdd`), operand formats (`term`), and `instructions.INSTRUCTIONS`, which says for each instruction which
   model it uses and whether that model is pinned by captures or not yet probed. `benchmarks/tc_probe/` and
