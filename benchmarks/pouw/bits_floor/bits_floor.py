@@ -9,8 +9,10 @@ noised-floor), where X = d_A + V and W′ = d_B + Uπ exactly.
 
     python bits_floor.py --out DIR           # every experiment, then the tables: DIR/out.json and DIR/tables.md
 
-The price is tensor-pipe time at the card's weights, as in the floor note; `direct_inmodel` adds the alu pipe for
-Strassen's sparse corrections (time the max over pipes). Approximate routes are judged by the rate condition of
+The price is tensor-pipe time at the card's weights, as in the floor note (*tensor*), and *in-model*, the max over the
+tensor and alu pipes (ACCEL's rate premise G2 bounds each resource on its own): Strassen at depth 1 or 2 with its
+additions and sparse corrections on the alu (`direct_inmodel`), and F's high limb on a 2:4 sparse MMA (`Op.mmaSp`, E7),
+its leftover on the alu. Approximate routes are judged by the rate condition of
 `SAKMatmul` (Security/Definitions/Pouw/Assumptions/Dither.lean), linearized: a route of cost c failing a checked
 window with probability p_err stays within the moment iff p_err ≥ (1 − c/pub)(1 − p).
 """
@@ -40,10 +42,18 @@ DESIGNS = {
     "seg-t3": (1536, 256, 768),
     "cell-fresh": (2048, 2048, 2048),
     "cell-jr2": (2048, 2048, 2048),
+    "cell-2gemm": (2048, 2048, 2048),
 }
-#: JR2's shape (J10-R v2, an estimate of it): X = A + d_A, binary dither alone on the activation side, and W′ = B + U
-#: with U fresh along K; at A = B = 0, X = d_A and W′ = Uπ (Dither's U stream at L′ = K)
-JR2 = {"cell-jr2"}
+#: the designs whose X at A = 0 is d_A alone. JR2 (J10-R v2, #6369): the word b·(c + U)ᵀ, b = A + d_A, c = B, U fresh
+#: along K (#6369's U is on ±64; here Dither's U stream on ±80 at L′ = K). Fresh-R two-GEMM (GD-NOISE): the word
+#: wrap8(A + d_A)·Rᵀ, R a fresh uniform int8 n × K matrix, which doesn't read B
+BINX = {"cell-jr2", "cell-2gemm"}
+KIND = {"cell-jr2": "jr2", "cell-2gemm": "2gemm"}
+#: each design's operand set in E3, whose Strassen form-side wrap densities price its in-model corrections
+SIDE = {"seg-t8": "dither-A0B0", "seg-t3": "dither-A0B0", "cell-fresh": "dither-A0B0-fresh", "cell-jr2": "jr2-A0B0",
+        "cell-2gemm": "2gemm-A0"}
+#: designs whose W′ side is drawn per call, so Strassen's W′-side forms are alu work a call; two-GEMM's R is per period
+W_PER_CALL = {"seg-t8", "seg-t3", "cell-fresh", "cell-jr2"}
 
 
 def mask(n: int) -> int:
@@ -90,7 +100,7 @@ def bits_needed(lo: int, hi: int) -> int:
 # -- a call's coins ---------------------------------------------------------------------------------------------------------------
 
 class Call:
-    def __init__(self, K: int, lp: int, L: int, m: int = 128, n: int = 128, call: int = 0, jr2: bool = False):
+    def __init__(self, K: int, lp: int, L: int, m: int = 128, n: int = 128, call: int = 0, kind: str = "dither"):
         self.sh = sh = D.Shape(m, n, K, lp=lp, L=L)
         sd = D.seeds(COIN, RECEIPT, call)
         self.K, self.lp, self.L, self.t, self.S = K, lp, L, sh.t, sh.S
@@ -111,8 +121,11 @@ class Call:
         for i, j in [(0, 0), (5, 77), (127, 127)]:
             ref, _ = D.cell_values(sh, sd, [0] * K, [0] * K, i, j)
             assert [int(v) for v in T[:, i, j]] == ref, (i, j)
-        if jr2:
+        if kind in ("jr2", "2gemm"):
             self.X, self.W = self.dA, self.W - self.dB
+            if kind == "2gemm":
+                seed = hashlib.sha512(COIN + b"R" + call.to_bytes(8, "big")).digest()
+                self.W = np.random.default_rng(int.from_bytes(seed[:8], "big")).integers(-128, 128, (n, K))
             self.w = np.stack([self.X[:, a:b] @ self.W[:, a:b].T for a, b in self.segs])
 
     def split(self, s: int):
@@ -246,6 +259,7 @@ def e3(calls: dict, rng) -> dict:
     ops = {"dither-A0B0": (calls["seg-t8"].X, calls["seg-t8"].W),
            "dither-A0B0-fresh": (calls["cell-fresh"].X, calls["cell-fresh"].W),
            "jr2-A0B0": (calls["cell-jr2"].X, calls["cell-jr2"].W),
+           "2gemm-A0": (calls["cell-2gemm"].X, calls["cell-2gemm"].W),
            "uniform-int8": (rng.integers(-128, 128, (128, 2048)), rng.integers(-128, 128, (128, 2048)))}
     for name, (X, W) in ops.items():
         ref = X @ W.T
@@ -287,7 +301,7 @@ def e4(calls: dict) -> dict:
     by planes, against the reference; and the factors' widths against their bounds."""
     out = {}
     for name, c in calls.items():
-        if name in JR2:
+        if name in BINX:
             continue
         r = {"t": c.t, "L'": c.lp, "L": c.L, "hi_bits": hi_bits(c.t), "Y_bits": y_bits(c.t),
              "F_bound": [-NOISE * c.t, (NOISE + 1) * c.t]}
@@ -389,10 +403,13 @@ def lo_cost(n: int) -> float:
     return min(1.0, pairs(n) * B1)
 
 
-def route_costs(n: int, t: int) -> dict:
-    """Each approximate route's tensor cost (share of G) at a window ending at bit n: the products it keeps, mod 2^n."""
+def route_costs(n: int, t: int, sparse: bool = False) -> dict:
+    """Each approximate route's tensor cost (share of G) at a window ending at bit n: the products it keeps, mod 2^n;
+    with `sparse`, F's high limb on a 2:4 sparse MMA (E7)."""
     lo, y = lo_cost(n), min(1.0, pairs(n, y_bits(t), 8) * B1)
     hi = min(1.0, pairs(n - 8, hi_bits(t), 8) * B1) if n > 8 else 0.0
+    if sparse and n > 8:
+        hi = min(hi, 0.5)
     return {
         "sep-nobin": (lo + hi + y) / t,
         **{f"sep-nobin-k{k}": B1 * k / 8 + (lo + hi + y) / t for k in PARTIAL},
@@ -407,6 +424,18 @@ def route_costs(n: int, t: int) -> dict:
         "jr2-trunc-strassen-Wq1": STRASSEN * lo,
         **{f"jr2-planes-q{q}": B1 * max(0, min(n, 8) - q) for q in range(1, 8)},
     }
+
+
+def model_costs(n: int, t: int, left: float | None, inmodel: bool) -> dict:
+    """`route_costs` with F's high limb on a 2:4 sparse MMA wherever that's cheaper: in the tensor model only when its
+    leftover's alu time fits in the limb's own tensor time (64·left ≤ 1/2), in-model as the max over the two pipes."""
+    dense = route_costs(n, t)
+    if left is None or n <= 8:
+        return dense
+    sp = route_costs(n, t, sparse=True)
+    if not inmodel:
+        return {k: min(dense[k], sp[k]) for k in dense} if 64 * left <= 0.5 else dense
+    return {k: min(dense[k], max(sp[k], 64 * left / t)) for k in dense}
 
 
 def word_bits(design: str) -> int:
@@ -430,8 +459,8 @@ def e5(calls: dict) -> dict:
         w = c.w
         r = {"meta": meta, "routes": {}}
         for k, e in est.items():
-            if (c.t == 1 and k.startswith("sep")) or (k.startswith("jr2") != (name in JR2)) or (
-                    name in JR2 and k.startswith("direct-trunc")):
+            if (c.t == 1 and k.startswith("sep")) or (k.startswith("jr2") != (name in BINX)) or (
+                    name in BINX and k.startswith("direct-trunc")):
                 continue
             err = (e - w).reshape(-1)
             pe = {f"{rr},{b}": float((window(e, rr, b) != window(w, rr, b)).mean()) for rr, b in windows(name)}
@@ -461,6 +490,46 @@ def e6(calls: dict) -> dict:
     return out
 
 
+# -- E7: F's high limb on a 2:4 sparse MMA ----------------------------------------------------------------------------------------
+
+def two_four(x):
+    """x (rows × k, k a multiple of 4) split as kept + left: kept holds at most 2 nonzeros of each row's aligned group
+    of 4 (a 2:4 sparse MMA's A, its selectors per row), left the rest."""
+    g = x.reshape(x.shape[0], -1, 4)
+    nz = (g != 0).astype(np.int64)
+    keep = (np.cumsum(nz, axis=-1) <= 2) | (nz == 0)
+    kept = np.where(keep, g, 0).reshape(x.shape)
+    return kept, x - kept
+
+
+def e7(calls: dict) -> dict:
+    """Per segment design: F's high limb under the s8 split, F = wrap8(F) + 256 F_hi, as a 2:4 sparse operand (ACCEL's
+    `mmaSp`, at the dense form's tensor time for twice the logical MACs) plus a leftover; the segment sum mod 2^16 from
+    b1 d_A d_Bᵀ, F_lo Uᵀ, 256 (F_kept + F_left) Uᵀ and V Y_sᵀ, checked exact; and the leftover's share of entries."""
+    out = {}
+    for name, c in calls.items():
+        if name in BINX or c.t == 1:
+            continue
+        dens, left, groups, exact = [], [], [], True
+        for s in range(c.S):
+            bin_, F, Y = c.split(s)
+            lo = wrap8(F)
+            hi = (F - lo) >> 8
+            kept, rest = two_four(hi)
+            g = (kept.reshape(kept.shape[0], -1, 4) != 0).sum(-1)
+            assert g.max() <= 2
+            got = (bin_ + lo @ c.U.T + 256 * (kept @ c.U.T + rest @ c.U.T) + c.V @ Y.T) & D.M16
+            exact &= bool(np.array_equal(got, c.w[s] & D.M16))
+            dens.append(float((hi != 0).mean()))
+            left.append(float((rest != 0).mean()))
+            groups.append(float(((hi.reshape(hi.shape[0], -1, 4) != 0).sum(-1) > 2).mean()))
+        out[name] = {"t": c.t, "hi_range": [int(((c.split(0)[1] - wrap8(c.split(0)[1])) >> 8).min()),
+                                            int(((c.split(0)[1] - wrap8(c.split(0)[1])) >> 8).max())],
+                     "hi_density": float(np.mean(dens)), "groups_over_2of4": float(np.mean(groups)),
+                     "left_density": float(np.mean(left)), "exact_mod_2^16": exact}
+    return out
+
+
 # -- the price ------------------------------------------------------------------------------------------------------------------------
 
 def direct_exact(n: int, strassen_ok: bool = True) -> float:
@@ -470,24 +539,57 @@ def direct_exact(n: int, strassen_ok: bool = True) -> float:
     return STRASSEN * base if strassen_ok and n <= 8 else base
 
 
-def sep_exact(n: int, t: int, strassen_ok: bool = True) -> float:
-    """The separated route mod 2^n: b1 d_A d_Bᵀ, F's low limb, F's high limb by planes, V Y_sᵀ by planes or s8;
-    Strassen at depth 1 on its products while n ≤ 8."""
+def sep_exact(n: int, t: int, strassen_ok: bool = True, sparse: bool = False) -> float:
+    """The separated route mod 2^n: b1 d_A d_Bᵀ, F's low limb, F's high limb by planes (or, with `sparse`, as a 2:4
+    sparse s8 operand at 1/2, its leftover on the alu: E7), V Y_sᵀ by planes or s8; Strassen at depth 1 on its
+    products while n ≤ 8 (tensor time only: in-model its output adds cost more than it saves at inner width L′)."""
     sig = STRASSEN if (strassen_ok and n <= 8) else 1.0
     lo, y = lo_cost(n), min(1.0, pairs(n, y_bits(t), 8) * B1)
     hi = min(1.0, pairs(n - 8, hi_bits(t), 8) * B1) if n > 8 else 0.0
+    if sparse and n > 8:
+        hi = min(hi, 0.5)
     return B1 + sig * (lo + hi + y) / t
 
 
-def floor_low(n: int, t: int, jr2: bool = False) -> dict:
+#: a SWAR wrap-add of packed fields: 5 lane-ops a 32-bit lane (two masks, the add, the top bits' xor and its merge);
+#: a 32-bit add is one. An estimate, as is the square size the in-model Strassen adds are priced at
+SWAR_OPS = 5
+N_REF = 2048
+
+
+def strassen_adds(n: int, depth: int, w_per_call: bool = True, N: int = N_REF) -> float:
+    """Winograd's additions on the alu, share of G at an N-cube: per level, 4 X-side forms (and 4 W′-side, when W′ is
+    drawn per call) of (N/2)² int8 packed 4 a lane, and 7 output adds of (N/2)² n-bit words (4, 2 or 1 a lane); level
+    ℓ has 7^(ℓ−1) subproblems of side N/2^(ℓ−1). An alu lane-op is 64 s8 MACs of time."""
+    fields = 4 if n <= 8 else 2 if n <= 16 else 1
+    forms = (8 if w_per_call else 4) / 4 / 4 * SWAR_OPS
+    outs = 7 / 4 * (SWAR_OPS / fields if fields > 1 else 1)
+    return sum((forms + outs) * 64 / N * (7 / 4) ** lvl for lvl in range(depth))
+
+
+def floor_low(n: int, t: int, binx: bool = False, left: float | None = None, rhos: list | None = None,
+              w_per_call: bool = True) -> dict:
+    """The exact floor of a word's low n bits, two ways. *Tensor*: tensor-pipe time, Strassen at depth 1. *In-model*:
+    the max over the tensor and alu pipes, Strassen at depth 1 or 2 with its additions and sparse corrections on the
+    alu (`direct_inmodel`), and F's high limb on a 2:4 sparse MMA when E7 measured its leftover (`left`)."""
     d0, d1 = direct_exact(n, False), direct_exact(n)
-    if jr2:
+    if binx:
         d0 = min(1.0, pairs(n, 1, 8) * B1)
         d1 = min(d0, STRASSEN if n <= 8 else 1.0)
     s0 = sep_exact(n, t, False) if t > 1 else float("inf")
     s1 = sep_exact(n, t) if t > 1 else float("inf")
-    return {"n": n, "direct": d0, "direct_strassen": d1, "sep": s0, "sep_strassen": s1,
-            "floor_no_strassen": min(d0, s0), "floor": min(d0, d1, s0, s1)}
+    has = t > 1 and left is not None
+    sp_t = sep_exact(n, t, False, sparse=True) if has else float("inf")
+    sp_alu = 64 * left / t if (has and n > 8) else 0.0
+    sp = sp_t if 64 * (left or 0.0) <= 0.5 else float("inf")
+    row = {"n": n, "direct": d0, "direct_strassen": d1, "sep": s0, "sep_strassen": s1, "sep_sparse": sp,
+           "floor_no_strassen": min(d0, s0), "floor": min(d0, d1, s0, s1, sp)}
+    if rhos is not None:
+        im = {d: direct_inmodel(n, rhos, d, w_per_call, base=d0) for d in (1, 2)}
+        row["inmodel"] = im
+        row["sep_sparse_inmodel"] = max(sp_t, sp_alu)
+        row["floor_inmodel"] = min(d0, s0, im[1]["time"], im[2]["time"], row["sep_sparse_inmodel"])
+    return row
 
 
 def lane_per_side(n: int, rho: float) -> float:
@@ -502,15 +604,21 @@ def lane_per_side(n: int, rho: float) -> float:
     return rho / 8 * ops * 64
 
 
-def direct_inmodel(n: int, rhos: list) -> dict:
-    """Classic Strassen d = 1 with sparse lane corrections, time the max over the tensor and alu pipes."""
-    tensor = STRASSEN * lo_cost(n)
-    alu = sum(lane_per_side(n, r) for r in rhos)
-    return {"tensor": tensor, "alu": alu, "time": min(1.0, max(tensor, alu)) if n > 8 else min(1.0, tensor)}
+def direct_inmodel(n: int, rhos: list, depth: int = 1, w_per_call: bool = True, base: float | None = None) -> dict:
+    """Strassen at `depth` on the s8 product, time the max over the tensor and alu pipes: the alu holds Winograd's
+    additions (`strassen_adds`) and, at depth 1 and n > 8, classic Strassen's sparse lane corrections (`rhos`, E3's
+    form-side wrap densities). Depth 2 is priced only where it needs no correction (n ≤ 8); its second level's forms
+    wrap on about a quarter of entries, so its corrections cost more than the level saves."""
+    base = lo_cost(n) if base is None else base
+    if depth > 1 and n > 8:
+        return {"tensor": None, "alu": None, "time": float("inf")}
+    tensor = STRASSEN ** depth
+    alu = strassen_adds(n, depth, w_per_call) + (sum(lane_per_side(n, r) for r in rhos) if depth == 1 else 0.0)
+    return {"tensor": tensor, "alu": alu, "time": min(base, max(tensor, alu))}
 
 
 #: the 8-bit window each design's note recommends, [r, r + 8)
-RECOMMENDED = {"seg-t8": (4, 12), "seg-t3": (8, 16), "cell-fresh": (8, 16), "cell-jr2": (4, 12)}
+RECOMMENDED = {"seg-t8": (4, 12), "seg-t3": (8, 16), "cell-fresh": (8, 16), "cell-jr2": (4, 12), "cell-2gemm": (4, 12)}
 
 #: Llama-3.2-1B's linear layers a token, (K, N): qkv, o, gate+up, down; 16 layers (lm_head and attention left out)
 LLAMA_1B = [(2048, 3072), (2048, 2048), (2048, 16384), (8192, 2048)]
@@ -538,6 +646,7 @@ def word_bytes(res: dict) -> dict:
                     f"8-bit window {RECOMMENDED[name]}": (8, "S", top)}
         else:
             fmts = {"u16 prefix (today)": (16, "S-1", 16), f"low {nstar} bits, prefix": (nstar, "S-1", nstar),
+                    f"low {nim} bits, prefix (in-model n*)": (nim, "S-1", nim),
                     f"8-bit window {RECOMMENDED[name]} of each segment": (8, "S", top)}
         row = {}
         for fmt, (bits, w, width) in fmts.items():
@@ -556,49 +665,53 @@ def price(res: dict) -> dict:
     for name, (K, lp, L) in DESIGNS.items():
         t = L // lp
         bits = word_bits(name)
-        rows = [floor_low(n, t, name in JR2) for n in range(1, bits + 1)]
+        left = res["e7"][name]["left_density"] if name in res.get("e7", {}) else None
+        rhos = [x["density"] for x in res["e3"][SIDE[name]]["strassen"]["form_sides"]]
+        rows = [floor_low(n, t, name in BINX, left, rhos, name in W_PER_CALL) for n in range(1, bits + 1)]
         full = rows[-1]["floor"]
         full0 = rows[-1]["floor_no_strassen"]
+        full_im = rows[-1]["floor_inmodel"]
         nstar = min(r["n"] for r in rows if r["floor"] >= full - 1e-12)
         nstar0 = min(r["n"] for r in rows if r["floor_no_strassen"] >= full0 - 1e-12)
+        nstar_im = min(r["n"] for r in rows if r["floor_inmodel"] >= full_im - 1e-12)
         routes = res["e5"][name]["routes"]
         P = res["e6"][name]["p"]
         win = {}
         for rr, b in windows(name):
             n = rr + b
-            exact = rows[n - 1]["floor"]
             p = P[f"{rr},{b}"]["p"]
-            costs = route_costs(n, t)
-            beat = []
-            for k, v in routes.items():
-                delta = full - costs[k]
-                if delta <= 1e-12:
-                    continue
-                pe = v["p_err"][f"{rr},{b}"]
-                need = delta / full * (1 - p)
-                if pe < need:
-                    beat.append((costs[k], k, pe, need))
-            eff = min([exact] + [x[0] for x in beat])
-            win[f"{rr},{b}"] = {"exact": exact, "p": p, "beaten_by": sorted(beat)[:1], "floor": eff,
-                                "holds": eff >= full - 1e-12, "sampling": 1 / (1 - p)}
+            v_ = {"p": p, "sampling": 1 / (1 - p)}
+            for tag, exact, ref in (("", rows[n - 1]["floor"], full), ("_inmodel", rows[n - 1]["floor_inmodel"], full_im)):
+                costs = model_costs(n, t, left, bool(tag))
+                beat = []
+                for k, v in routes.items():
+                    delta = ref - costs[k]
+                    if delta <= 1e-12:
+                        continue
+                    pe = v["p_err"][f"{rr},{b}"]
+                    need = delta / ref * (1 - p)
+                    if pe < need:
+                        beat.append((costs[k], k, pe, need))
+                eff = min([exact] + [x[0] for x in beat])
+                v_.update({f"exact{tag}": exact, f"beaten_by{tag}": sorted(beat)[:1], f"floor{tag}": eff,
+                           f"holds{tag}": eff >= ref - 1e-12})
+            win[f"{rr},{b}"] = v_
         by_b = {}
         for b in range(1, 9):
-            ok = [(win[f"{rr},{b}"]["sampling"], rr) for rr, bb in windows(name) if bb == b and win[f"{rr},{b}"]["holds"]]
-            best = min(ok) if ok else None
-            lowfloor = rows[b - 1]["floor"]
-            by_b[b] = {"low_bits_floor": lowfloor, "windows_that_hold": sorted(rr for _, rr in ok),
-                       "best_r": best[1] if best else None, "sampling": best[0] if best else None,
-                       "best_floor_any_window": max(win[f"{rr},{bb}"]["floor"] for rr, bb in windows(name) if bb == b)}
+            row = {"low_bits_floor": rows[b - 1]["floor"], "low_bits_floor_inmodel": rows[b - 1]["floor_inmodel"]}
+            for tag in ("", "_inmodel"):
+                ok = [(win[f"{rr},{b}"]["sampling"], rr) for rr, bb in windows(name)
+                      if bb == b and win[f"{rr},{b}"][f"holds{tag}"]]
+                best = min(ok) if ok else None
+                row.update({f"windows_that_hold{tag}": sorted(rr for _, rr in ok),
+                            f"best_r{tag}": best[1] if best else None, f"sampling{tag}": best[0] if best else None})
+            by_b[b] = row
         bmin = min([b for b in by_b if by_b[b]["best_r"] is not None], default=None)
-        side = "jr2-A0B0" if name in JR2 else "dither-A0B0-fresh" if name.startswith("cell") else "dither-A0B0"
-        rhos = [x["density"] for x in res["e3"][side]["strassen"]["form_sides"]] if "e3" in res else []
-        inmodel = [direct_inmodel(n, rhos) for n in range(1, bits + 1)]
-        nstar_inmodel = min(n for n in range(1, bits + 1) if min(inmodel[n - 1]["time"], rows[n - 1]["floor"]) >= full
-                            - 1e-12) if rhos else None
+        bmin_im = min([b for b in by_b if by_b[b]["best_r_inmodel"] is not None], default=None)
         tabs[name] = {"t": t, "K": K, "L'": lp, "L": L, "word_bits": bits, "rows": rows, "full_floor": full,
-                      "inmodel_direct": inmodel, "n_star_inmodel": nstar_inmodel,
-                      "full_floor_no_strassen": full0, "n_star": nstar, "n_star_no_strassen": nstar0, "b_min": bmin,
-                      "by_b": by_b, "windows": win}
+                      "full_floor_inmodel": full_im, "n_star_inmodel": nstar_im, "b_min_inmodel": bmin_im,
+                      "sparse_left": left, "full_floor_no_strassen": full0, "n_star": nstar,
+                      "n_star_no_strassen": nstar0, "b_min": bmin, "by_b": by_b, "windows": win}
     return tabs
 
 
@@ -611,35 +724,40 @@ def tables_md(res: dict) -> str:
     for name, tb in res["price"].items():
         lp = tb["L'"]
         out.append(f"### {name}: t {tb['t']}, K {tb['K']}, L′ {lp}, L {tb['L']}, word {tb['word_bits']} bits\n")
-        out.append(f"full-word floor {tb['full_floor']:.4f} G ({tb['full_floor_no_strassen']:.4f} without Strassen); "
-                   f"low bits reach it at n* = {tb['n_star']} ({tb['n_star_no_strassen']} without Strassen); fewest "
-                   f"bits in a window that holds it: {tb['b_min']}\n")
-        out.append("| n low bits | direct | direct, Strassen d=1 | separated | separated, Strassen d=1 | floor |")
-        out.append("|---|---|---|---|---|---|")
-        for r in tb["rows"][:16]:
+        out.append(f"full-word floor {tb['full_floor']:.4f} G tensor ({tb['full_floor_no_strassen']:.4f} without "
+                   f"Strassen), {tb['full_floor_inmodel']:.4f} G in-model; low bits reach it at n* = {tb['n_star']} "
+                   f"tensor ({tb['n_star_no_strassen']} without Strassen), {tb['n_star_inmodel']} in-model; fewest bits "
+                   f"in a window that holds it: {tb['b_min']} tensor, {tb['b_min_inmodel']} in-model"
+                   + (f"; 2:4 leftover density {tb['sparse_left']:.5f}" if tb["sparse_left"] is not None else "") + "\n")
+        out.append("| n low bits | direct | direct, Strassen d=1 | separated | separated, Strassen d=1 | separated, "
+                   "2:4 hi | floor, tensor | in-model d=1 (tensor, alu) | in-model d=2 | floor, in-model |")
+        out.append("|---|---|---|---|---|---|---|---|---|---|")
+        for r in tb["rows"][:16] + tb["rows"][16:][-1:]:
+            i1, i2 = r["inmodel"][1], r["inmodel"][2]
             out.append(f"| {r['n']} | {f(r['direct'])} | {f(r['direct_strassen'])} | {f(r['sep'])} | "
-                       f"{f(r['sep_strassen'])} | {f(r['floor'])} |")
+                       f"{f(r['sep_strassen'])} | {f(r['sep_sparse'])} | {f(r['floor'])} | {f(i1['time'])} "
+                       f"({f(i1['tensor'])}, {f(i1['alu'])}) | {f(i2['time'])} | {f(r['floor_inmodel'])} |")
         out.append("")
-        out.append("| b | floor, low b bits | windows [r, r+b) that hold the full floor (r) | best r | 1/(1−p) |")
-        out.append("|---|---|---|---|---|")
+        out.append("| b | floor, low b bits (tensor / in-model) | windows [r, r+b) that hold, tensor (r) | in-model (r) | "
+                   "best r, in-model | 1/(1−p) |")
+        out.append("|---|---|---|---|---|---|")
         for b, v in tb["by_b"].items():
-            out.append(f"| {b} | {f(v['low_bits_floor'])} | {v['windows_that_hold'] or '—'} | {v['best_r']} | "
-                       f"{f(v['sampling'])} |")
+            out.append(f"| {b} | {f(v['low_bits_floor'])} / {f(v['low_bits_floor_inmodel'])} | "
+                       f"{v['windows_that_hold'] or '—'} | {v['windows_that_hold_inmodel'] or '—'} | "
+                       f"{v['best_r_inmodel']} | {f(v['sampling_inmodel'])} |")
         out.append("")
-        out.append(f"in-model (classic Strassen + sparse lane corrections, max over pipes; an estimate): n* = "
-                   f"{tb['n_star_inmodel']}; time at n = 9, 10, 11, 12, 16: "
-                   + ", ".join(f"{tb['inmodel_direct'][n - 1]['time']:.3f} (alu {tb['inmodel_direct'][n - 1]['alu']:.3f})"
-                               for n in (9, 10, 11, 12, 16)) + "\n")
         sd = res.get("second_draw", {}).get(name)
         if sd:
-            out.append(f"second coin draw: b_min {sd['b_min']}, n* {sd['n_star']}, verdicts that differ: "
-                       f"{sd['verdicts_that_differ'] or 'none'}\n")
-        out.append("| approximate route | cost / G at n = 16 | err std | p_err, b = 8 window at r = 4, 8, 10, 12, 14 (b = 2) |")
-        out.append("|---|---|---|---|")
-        costs = route_costs(16, tb["t"])
+            out.append(f"second coin draw: b_min {sd['b_min']} / {sd['b_min_inmodel']} in-model, n* {sd['n_star']}, "
+                       f"verdicts that differ: {sd['verdicts_that_differ'] or 'none'}\n")
+        out.append("| approximate route | cost / G at n = 16, tensor | in-model | err std | p_err, b = 8 window at r = 4, "
+                   "8, 10, 12, 14 (b = 2) |")
+        out.append("|---|---|---|---|---|")
+        c0 = model_costs(16, tb["t"], tb["sparse_left"], False)
+        c1 = model_costs(16, tb["t"], tb["sparse_left"], True)
         for k, v in res["e5"][name]["routes"].items():
             ps = ", ".join(f"{v['p_err'][key]:.3g}" for key in ("4,8", "8,8", "10,6", "12,4", "14,2"))
-            out.append(f"| {k} | {costs[k]:.4f} | {v['err_std']:.1f} | {ps} |")
+            out.append(f"| {k} | {c0[k]:.4f} | {c1[k]:.4f} | {v['err_std']:.1f} | {ps} |")
         out.append("")
     out.append("### PoUW word bytes a token, Llama-3.2-1B linear layers (estimate)\n")
     out.append("| design | format | bytes a token | ANDs a MAC in-circuit (arithmetic only) |")
@@ -657,7 +775,7 @@ def main() -> None:
     a.out.mkdir(parents=True, exist_ok=True)
     rng = np.random.default_rng(20261028)
     t0 = time.perf_counter()
-    calls = {k: Call(*v, jr2=k in JR2) for k, v in DESIGNS.items()}
+    calls = {k: Call(*v, kind=KIND.get(k, "dither")) for k, v in DESIGNS.items()}
     res = {"designs": DESIGNS, "coin": COIN.hex(), "receipt": RECEIPT.hex()}
     res["e1"] = e1(rng)
     res["e2"] = e2()
@@ -665,16 +783,21 @@ def main() -> None:
     res["e4"] = e4(calls)
     res["e5"] = e5(calls)
     res["e6"] = e6(calls)
+    res["e7"] = e7(calls)
     res["price"] = price(res)
     res["bytes"] = word_bytes(res)
-    alt = {k: Call(*v, call=1, jr2=k in JR2) for k, v in DESIGNS.items()}
-    res2 = {"e3": res["e3"], "e5": e5(alt), "e6": e6(alt)}
+    alt = {k: Call(*v, call=1, kind=KIND.get(k, "dither")) for k, v in DESIGNS.items()}
+    res2 = {"e3": res["e3"], "e5": e5(alt), "e6": e6(alt), "e7": e7(alt)}
     p2 = price(res2)
     res["second_draw"] = {name: {
-        "b_min": p2[name]["b_min"], "n_star": p2[name]["n_star"],
+        "b_min": p2[name]["b_min"], "b_min_inmodel": p2[name]["b_min_inmodel"], "n_star": p2[name]["n_star"],
+        "n_star_inmodel": p2[name]["n_star_inmodel"], "e7": res2["e7"].get(name),
         "windows_that_hold": {b: v["windows_that_hold"] for b, v in p2[name]["by_b"].items()},
+        "windows_that_hold_inmodel": {b: v["windows_that_hold_inmodel"] for b, v in p2[name]["by_b"].items()},
         "verdicts_that_differ": sorted(k for k, v in p2[name]["windows"].items()
-                                       if v["holds"] != res["price"][name]["windows"][k]["holds"])} for name in p2}
+                                       if (v["holds"], v["holds_inmodel"]) != (
+                                           res["price"][name]["windows"][k]["holds"],
+                                           res["price"][name]["windows"][k]["holds_inmodel"]))} for name in p2}
     res["seconds"] = time.perf_counter() - t0
     (a.out / "out.json").write_text(json.dumps(res, indent=1, default=str))
     (a.out / "tables.md").write_text(tables_md(res))
