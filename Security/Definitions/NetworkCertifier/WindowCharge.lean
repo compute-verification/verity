@@ -118,7 +118,7 @@ structure Carry where
 /-- **One window's advice**: the decisions of the slots that hold one, in order (`ds`); the hits' values (`hits`); and
 the order entries, each the arrival's position and rank `(p, r)` (`order`). A disabled slot changes nothing, so the
 charge is a function of these. -/
-structure Window where
+structure Advice where
   ds : List Bool
   hits : List ℕ
   order : List (ℕ × ℕ)
@@ -154,7 +154,7 @@ def entrySyms (bk : Book) : ℕ → ℕ → List (ℕ × ℕ) → Option (List S
 /-- **The window's symbols** (`reference_window`), in `code_v1._window`'s order, and the carry after them: n_arrived,
 the decisions, n_hits, the hits, n_resumes (0), n_order, the entries, n_lag (0). A count over `S` slots has
 `hi = 2^bitlen(S) − 1`. -/
-def syms (bk : Book) (N H O : ℕ) (cy : Carry) (x : Window) : Option (List Sym × Carry) :=
+def syms (bk : Book) (N H O : ℕ) (cy : Carry) (x : Advice) : Option (List Sym × Carry) :=
   (decSyms cy.dec x.ds).bind fun d =>
     (hitSyms bk x.hits).bind fun hs =>
       (entrySyms bk cy.pos cy.rank x.order).map fun e =>
@@ -165,13 +165,13 @@ def syms (bk : Book) (N H O : ℕ) (cy : Carry) (x : Window) : Option (List Sym 
 /-- **One window's charge** (`reference_window`, `ChargeCount_v2{N, H, O}`): of a window of `N` decision slots, `H` hit
 slots and `O` order slots, under the book `bk` and the carry `cy`, the charge and the next window's carry. It refuses a
 carry whose run is past 2 or whose rank is past `INDEX_CAP + 1`. -/
-def window (bk : Book) (N H O : ℕ) (cy : Carry) (x : Window) : Option (ℕ × Carry) :=
+def window (bk : Book) (N H O : ℕ) (cy : Carry) (x : Advice) : Option (ℕ × Carry) :=
   if x.ds.length ≤ N ∧ x.hits.length ≤ H ∧ x.order.length ≤ O ∧ cy.dec.run < 3 ∧ cy.rank ≤ INDEX_CAP + 1 then
     (syms bk N H O cy x).bind fun q => ((codeAll Tally.fresh q.1).bind finish).map fun L => (L, q.2)
   else none
 
 /-- **A run's charges**: each window's, the carry passed along. -/
-def session (bk : Book) (N H O : ℕ) : Carry → List Window → Option (List ℕ)
+def session (bk : Book) (N H O : ℕ) : Carry → List Advice → Option (List ℕ)
   | _, [] => some []
   | cy, x :: ws => (window bk N H O cy x).bind fun p => (session bk N H O p.2 ws).map fun ls => p.1 :: ls
 
@@ -179,12 +179,12 @@ def session (bk : Book) (N H O : ℕ) : Carry → List Window → Option (List �
 def Book.first (bk : Book) : Carry := ⟨⟨bk.priors, 0⟩, 0, 0⟩
 
 /-- **The run's charges per window**, from the session's first carry, for the advice of `W` windows. -/
-def charges (bk : Book) (N H O : ℕ) {W : ℕ} (a : Fin W → Window) : Option (List ℕ) :=
+def charges (bk : Book) (N H O : ℕ) {W : ℕ} (a : Fin W → Advice) : Option (List ℕ) :=
   session bk N H O bk.first (List.ofFn a)
 
 /-- **Advice v1's whole windows**: the advice of `W` windows whose charge no window refuses. A refused window fails its
 unit, so no accepted run has other advice. -/
-def Streams (bk : Book) (N H O W : ℕ) : Type := {a : Fin W → Window // (charges bk N H O a).isSome}
+def Streams (bk : Book) (N H O W : ℕ) : Type := {a : Fin W → Advice // (charges bk N H O a).isSome}
 
 /-- **The whole window's charge** (I1's `bits(advice, w)`): window `w`'s. -/
 def bits (bk : Book) (N H O : ℕ) {W : ℕ} (a : Streams bk N H O W) (w : Fin W) : ℕ :=
