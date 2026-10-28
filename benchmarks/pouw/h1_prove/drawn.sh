@@ -41,7 +41,8 @@ for d in $("$PY" -c 'import json, sys; print(" ".join(f"{c["dir"]}:{c["instances
   D=${d%:*} N=${d##*:} O=$OUT/$(basename "${d%:*}")
   mkdir -p "$O" && rm -rf "$D/sessions"
   log "drawn: $(basename "$D"): --zk session over its $N drawn units"
-  session "$D" "$O" || { log "drawn: $(basename "$D"): --zk session FAILED: $(tail -2 "$O/prove.err")"; exit 1; }
+  session "$D" "$O" && grep -q '"accepted":true' "$O/prove.out" \
+    || { log "drawn: $(basename "$D"): --zk session FAILED: $(tail -1 "$O/prove.out") $(tail -1 "$O/serve.log")"; exit 1; }
 done
 "$PY" "$J/../h1_prove/drawn.py" statements --work "$WK" --out "$ST" 2>&1 | tee -a "$OUT/job.log"
 [ "${PIPESTATUS[0]}" = 0 ] || exit 1
