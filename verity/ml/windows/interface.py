@@ -20,13 +20,13 @@ at a time, in four records:
 4. **On a draw, the openings**: a drawn member's private rows and salts as C-Flock's prover reads them
    (`flock_inputs.flock_input_files`), for the prover behind the firewall.
 
-An integration may label each run of units it records (``label``): the window's ``index.json``, whose SHA-512 the
-registration binds. A label is class structure, never a value. In a circuit with blocks, a labelled run starts and ends
-where its template's units change inference block (their (slot, step), the inference entries'), and its label names at
-most the run's ``step`` and ``slot`` and its ``form``, one of the window's ``forms`` (`LABEL_KEYS`, `Window.record`); the
-index writes an unlabelled stretch of runs as one run, so every bound it shows is such a change, a member's or a
-template's. A circuit without blocks states no inference blocks, and its labels are opaque JSON. Verity reads a label
-only to refuse it.
+An integration may label each run of units it records (``label``): the window's ``index.json``, prover only, which the
+registration binds by its hiding leaf (`rows.index_leaf`). A label is class structure, never a value. In a circuit with
+blocks, a labelled run starts and ends where its template's units change inference block (their (slot, step), the
+inference entries'), and its label names at most the run's ``step`` and ``slot`` and its ``form``, one of the window's
+``forms`` (`LABEL_KEYS`, `Window.record`); the index writes an unlabelled stretch of runs as one run, so every bound it
+shows is such a change, a member's or a template's. A circuit without blocks states no inference blocks, and its labels
+are opaque JSON. Verity reads a label only to refuse it.
 
 The verifier's window comes from the records alone (`of_records`: ``circuit.json`` held to the registration's digest),
 never from the integration's code. A unit's rows are its Definition's bit rows: one row per parameter, the little-endian
@@ -171,6 +171,9 @@ def _static(v: Any) -> Any:
         return tuple(_static(x) for x in v)
     return v
 
+
+# A walk of its own, not the registry's `catalog.load(scope="ops")`: `ml.windows` may not import `ml.definitions`
+# (`ALLOWED` in tests/test_boundaries.py).
 
 @functools.cache
 def _load_catalog() -> None:
@@ -1905,13 +1908,13 @@ class Window:
                               blocks=blocks.doc(sum(self.circuit.units.values()), self.window.partition_digest) if blocks else None)
 
     def write(self, c: CS.Committed, out_dir: str | Path, provenance: Mapping[str, Any], *, registrar: Any,
-              kind: str = "served") -> dict[str, Any]:
-        """The window's files (`rows.write`, its ``index.json`` the labels) and ``circuit.json``, the registration core's record
-        made by ``registrar`` (core's ``one_stage.registration``), its window naming ``provenance``, the circuit record's
-        SHA-512, the advice binding and each registered value's root by parameter (``registered_roots``, which
-        `input_count` holds to the verifier's pins); each member reading a registered value, its header naming each table
-        row's position and path (`close`), each path and each row it reads by reference written once for the window
-        (`rows.write`)."""
+              kind: str = "served", index_salt: bytes | None = None) -> dict[str, Any]:
+        """The window's files (`rows.write`, its prover-only ``index.json`` the labels, bound by their hiding leaf under
+        ``index_salt``) and ``circuit.json``, the registration core's record made by ``registrar`` (core's
+        ``one_stage.registration``), its window naming ``provenance``, the circuit record's SHA-512, the advice binding and
+        each registered value's root by parameter (``registered_roots``, which `input_count` holds to the verifier's pins);
+        each member reading a registered value, its header naming each table row's position and path (`close`), each path
+        and each row it reads by reference written once for the window (`rows.write`)."""
         d = Path(out_dir)
         d.mkdir(parents=True, exist_ok=True)
         body = circuit_bytes(self.circuit_record())
@@ -1919,7 +1922,8 @@ class Window:
         roots = {p: v.root.hex() for p, v in sorted((self.registered or {}).items())}
         bound = {**provenance, "circuit": hashlib.sha512(body).hexdigest(), **(self.advice or {}),
                  **({"registered_roots": roots} if roots else {})}
-        return CS.write(c, d, bound, self.labels(), kind=kind, registered=self._entries, registrar=registrar)
+        return CS.write(c, d, bound, self.labels(), kind=kind, registered=self._entries, registrar=registrar,
+                        index_salt=index_salt)
 
 
 class Integration(Protocol):
