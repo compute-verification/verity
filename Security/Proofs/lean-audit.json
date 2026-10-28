@@ -65,6 +65,7 @@
   "Proofs.Properties.Core.Site",
   "Proofs.Properties.Nci.Protocol",
   "Proofs.Properties.Verity.Soundness",
+  "Proofs.Properties.Verity.Subprotocols",
   "Proofs.Properties.Verity.Pous"
  ],
  "exempt": {

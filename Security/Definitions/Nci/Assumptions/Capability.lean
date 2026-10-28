@@ -49,7 +49,7 @@ if it finishes within `t`. Its meaning is its item family's:
 
 A deficit that cancels every useful price leaves it empty. Each decoder found gives an upper bound and can refute a
 price; failing to find a shorter one is evidence, not proof. -/
-def DescriptionHard (R : Registration) {ι : Type} (X : Items R.d.D ι) {ρ : Type} (M : Decoder ρ) (r : ρ) (t : ℕ)
+def DescriptionHard (R : Committed) {ι : Type} (X : Items R.d.D ι) {ρ : Type} (M : Decoder ρ) (r : ρ) (t : ℕ)
     (Λ : ℝ) : Prop :=
   ∀ a, R.Honest a → ∀ (U : Finset ι) (σ : ι → Finset (Fin R.d.D.N)), Selects X U σ →
     ENNReal.ofReal (∑ i ∈ U, X.price i - Λ) ≤
@@ -60,7 +60,7 @@ canonical encoding) of length `ℓz`, with deficiency `δ`, within `τ` steps: i
 `LDL_{τ,r}(z) ≥ ℓz − δ`. The deficiency is paid in every block's bound, so a `δ` far above a block's budget leaves the
 recovery route empty; a compressed representation of a structured update does not by itself give a source with small
 deficiency. -/
-def SourceHard (R : Registration) {ρ : Type} (M : Decoder ρ) (r : ρ) (τ : ℕ) (z : R.d.D.Transcript → List Bool)
+def SourceHard (R : Committed) {ρ : Type} (M : Decoder ρ) (r : ρ) (τ : ℕ) (z : R.d.D.Transcript → List Bool)
     (ℓz δ : ℝ) : Prop :=
   ∀ a, R.Honest a → ENNReal.ofReal (ℓz - δ) ≤ (LDL M τ r (z (R.d.D.eval a)) : ℝ≥0∞)
 
@@ -74,7 +74,7 @@ It is a capability, like Lemma 1's `Evaluates`, and the structural heart of the 
 not shorten the complement one coordinate each (for an exact linear map the rank counts, not the number of scalars), a
 bound on the candidates is not a decoder within `τ`, and inputs the recovery needs must be among what `SourceHard`'s
 decoder is given. -/
-def Recovers (R : Registration) {ρ : Type} (M : Decoder ρ) (r : ρ) (τ : ℕ) (e : List Bool)
+def Recovers (R : Committed) {ρ : Type} (M : Decoder ρ) (r : ρ) (τ : ℕ) (e : List Bool)
     (z : R.d.D.Transcript → List Bool) (ℓz βv amb : ℝ) (J : Fin R.B → ℕ) : Prop :=
   ∀ a, R.Honest a → ∀ u, ∃ s : List Bool, (s.length : ℝ) ≤ ℓz - βv * J u + amb ∧
     M.run r (blockProgram R e (R.d.D.eval a) u ++ s) τ = some (z (R.d.D.eval a))
