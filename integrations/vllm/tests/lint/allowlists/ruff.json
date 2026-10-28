@@ -260,7 +260,6 @@
     {"file": "verity_vllm/check/replay/stoch_recompute.py", "kind": "RUF100", "symbol": "draw_accounting", "detail": "Unused `noqa` directive (unused: `BLE001`)"},
     {"file": "verity_vllm/commit/committer/native_collect.py", "kind": "RUF100", "symbol": "NativeCollectCommitter._commit_step", "detail": "Unused `noqa` directive (unused: `BLE001`)"},
     {"file": "verity_vllm/commit/committer/native_host.py", "kind": "F821", "symbol": "tp_partials_bad", "detail": "Undefined name `Counter`"},
-    {"file": "verity_vllm/commit/committer/native_host.py", "kind": "F841", "symbol": "NativeHostCommitter._commit_step", "detail": "Local variable `n_stream` is assigned to but never used"},
     {"file": "verity_vllm/commit/committer/native_host.py", "kind": "RUF100", "symbol": "NativeHostCommitter.flush_after_plane", "detail": "Unused `noqa` directive (non-enabled: `ARG002`)"},
     {"file": "verity_vllm/commit/committer/native_host.py", "kind": "RUF100", "symbol": "_Footprint.__init__", "detail": "Unused `noqa` directive (non-enabled: `SIM115`)"},
     {"file": "verity_vllm/observe/capture.py", "kind": "F841", "symbol": "Capture.install", "detail": "Local variable `runner` is assigned to but never used"},
