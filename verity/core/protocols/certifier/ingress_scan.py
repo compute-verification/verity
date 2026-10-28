@@ -11,10 +11,10 @@ none, each on the connection's ordinal q. A connection's ingress is one warden-f
 (`active.id_request(..., offset=0)`: no LENGTH, its length the content-length plus the head), cut by `warden.cells`, so
 a bucket's cells of a connection are `DATA`, at most one `END`, then `PAD`s, and only `PAD`s once its `END` is in.
 
-**Fixed slots a timestep** (ASK-122, Daniel, 26 Oct: "fixed slots per network timestep"). The slot stride is EVERY
-buckets, the class's one constant: its boundary the bucket t ≡ 0 mod EVERY of the scan, and the warden's window a
-whole number of slot strides (EVERY divides T, `Class.schedule`), so every sampling block has its boundaries at the
-same buckets and one window circuit serves them all.
+**Fixed slots a timestep** (ASK-122, Daniel, 26 Oct: "fixed slots per network timestep"). A timestep is EVERY buckets,
+its boundary the bucket t ≡ 0 mod EVERY of the scan, and the warden's window is whole timesteps (EVERY divides T,
+`Class.schedule`), so every sampling block has its boundaries at the same buckets and one window circuit serves them
+all. The timestep is the slot stride, the class's one constant, which the warden's schedule takes from the class.
 A request admitted at bucket s is anchored at A(s), the first boundary at or after s + WITHIN (`Class.anchor`), WITHIN
 the class's ingress bound δ in buckets, and its Program reads its slot in S_{A−1}. Each boundary has SLOTS = lanes
 Program slots, slot j the Program that reads the scan's slot j: a request holds its slot from s to at least
