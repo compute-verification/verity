@@ -139,12 +139,7 @@ class StoreCompletion:
         from research.store import ids
         from research.store.local import StoreError
 
-        store = self.store
-        remote = store.remote
-        if remote is None:
-            why = getattr(store, "remote_error", None) or "no remote is configured"
-            raise RuntimeError(f"the evidence store has no remote here ({why}): a point another machine ran would read as "
-                               "missing; pass --local-only to read this machine's catalog alone")
+        store, remote = self.store, self._remote()
         since = time.strftime("r%Y%m%d", time.gmtime(started - COMMIT_MARGIN_S))
         listed = [key[len("attempts/"):-len(".json")]
                   for key, _ in remote.list_times("attempts/", start_after=f"attempts/{since}")]
@@ -177,6 +172,27 @@ class StoreCompletion:
         for line in skipped[:5]:
             self._log(f"skipped attempt {line}")
         return indexed
+
+    def pull_labels(self) -> int:
+        """Fetch every label the remote has and this store lacks (one listing of the remote's labels); how many."""
+
+        from research.store import labels_sync
+
+        remote = self._remote()
+        report = labels_sync.sync(self.store, push=False)
+        self._log(f"pulled {len(report['pulled'])} labels from {remote.describe()} "
+                  f"({report['already']} of {report['remote_before']} were here)")
+        for line in report["bad"][:5]:
+            self._log(f"skipped label {line}")
+        return len(report["pulled"])
+
+    def _remote(self) -> Any:
+        remote = self.store.remote
+        if remote is None:
+            why = getattr(self.store, "remote_error", None) or "no remote is configured"
+            raise RuntimeError(f"the evidence store has no remote here ({why}): a point another machine ran would read as "
+                               "missing; pass --local-only to read this machine's catalog alone")
+        return remote
 
 
 def make_plan(
@@ -337,7 +353,7 @@ def direct_command(plan: Plan, source: str | Path, item: PlannedPoint, root: Pat
         "env", f"CHECK_SLOTS={GPU_SLOTS}", "python3", "tools/verity/check/slot.py", "--by", "benchmarks",
         "--run-max", f"{minutes * 60:g}",
         "--",
-        # Without --max-min a lease has no end, which gpu-lease refuses while a booked window lies ahead; a guest's GPU
+        # Without --max-min a lease has no end, which gpu-lease refuses while a booked period lies ahead; a guest's GPU
         # job is preemptible, as the queued point's is.
         "gpu-lease", str(spec.preset.gpu_count), "--wait", "--max-min", f"{minutes:g}", "--preemptible",
         "--",

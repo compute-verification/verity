@@ -2,7 +2,7 @@
 name: friction
 description: >
   What to do when a tool, rule, check or step gets in your way in Verity: fix it yourself, ask its owner or your
-  coordinator when you can't tell, take only keys, access and claims to Daniel, record a ruling where the next agent reads
+  coordinator when you can't tell, take only claims and his own clicks to Daniel, record a ruling where the next agent reads
   it, or leave a friction note. Holds the standing rulings AGENTS.md and the other skills don't state (what an agent may
   change without asking, protocol and claim rulings) and the friction note format. Use when you worked around something,
   a step bit you twice or keeps you waiting, you see a better abstraction, you're unsure a change is yours, you just got a
@@ -20,7 +20,8 @@ bundle (`git bundle create B origin/BASE..BRANCH`, `research data put --kind evi
 art id, the branch and its head sha.
 
 Friction in shared infrastructure (Linear, Slack and `research msg`, `research run`, the queue, notes, the store) is usually
-everyone's: ask in the workflow thread first, `research msg reply --thread 1792037552.043289`, one question per post,
+everyone's: ask in the workflow thread first, `research msg reply --thread TS` with its `RULES_THREAD` in
+`infra/control/top_watch.py`, one question per post,
 starting with the tool's name. The tool's owner decides, makes the answer stick in code or its skill, and replies
 `settled: <PR or section>`.
 
@@ -90,7 +91,7 @@ note in its report, and its coordinator saves it. The notes are public: nothing 
 
 The admin (`@top`) reads new friction notes daily (`research notes mcp`'s `search_notes`, `kind: friction`, `since`),
 files each repeat or repeated wait as a dated issue in its owner's team, and checks that the fix landed and held; only one
-whose fix needs keys or a claim goes to Daniel.
+whose fix needs a claim or his own accounts goes to Daniel.
 
 ## Standing rulings
 
@@ -122,14 +123,18 @@ What an agent may change:
 
 Keys and access:
 
+- Keys and access between our own machines and accounts are the lanes' call: the lane that needs a key or a grant
+  (a lane key, a forced-command key, a challenger's or a wipe's key) sets it up with the machine's owner, infra for
+  shared nodes, with no ask and no wait. This is a simulation: nothing mimics deployment settings, and it needn't be
+  perfect. Daniel only clicks what needs an account he holds (the GitHub organization's admin, billing, the Nebius and
+  Cloudflare consoles).
 - The control pod holds a Nebius key that can only stop and read instances, root only, for infra's backstops,
-  so stopping a machine never waits on an agent VM. A key that could also start, create or delete is a new ask.
+  so stopping a machine never waits on an agent VM.
 - Workers open and edit their own lane's PRs with `research queue open|edit`, through a GitHub App on the
   control pod with pull-requests write only (no contents) whose token no worker holds; the tool refuses a PR whose head
   branch isn't the caller's lane's. Drive's App stays the only one that can move `main`.
-- A lane's development gate key on an auditor's gate (vy-challenger-1, vy-auditor-2) is no ask: the lane
-  makes an ed25519 key, sends infra only the public half, and infra registers it under that lane. Only the per-lane Cursor
-  secret that credit-bearing windows need is Daniel's.
+- A lane's gate key on an auditor's gate (vy-challenger-1, vy-auditor-2): the lane makes an ed25519 key, sends
+  infra only the public half, and infra registers it under that lane.
 
 Landing:
 
@@ -157,11 +162,11 @@ Protocols and claims:
   ties them by a premise or trusts them separately.
 - θ comes only from registered public data, registered at the start of a deployment; outputs of earlier runs
   are never θ (drops `NciCheck.Baseline`'s output provenance).
-- A protocol's verifier of record switches from Python to Lean only on evidence: its gap list shows nothing the
+- A protocol's verifier switches from Python to Lean only on evidence: its gap list shows nothing the
   Python checks that the Lean doesn't, and every recorded run replayed through the Lean gets the Python's verdict,
   negative controls included. The Python keeps running as the reference, the switch is one reversible line, and it moves
   the protocol's properties into `Properties/`. Where it leads: Lean is the definition and the
-  verifier of record, `verity.ml`'s Python mirrors it under difftest, and a verifier imports no `verity.ml` code.
+  verifier, `verity.ml`'s Python mirrors it under difftest, and a verifier imports no `verity.ml` code.
 - An auditor device releases its commitment to its coins only after the prover's commitment is in, so no
   soundness statement takes a hiding premise on it. A guarantee whose break includes a forged device release names two
   premises outside the theorem: `ecr/sha-512` for its finders and `euf-cma/lms-sha512-n64` for the forgery finder.
@@ -193,7 +198,7 @@ Protocols and claims:
   and a constant in V\*; hm96's pinned key stays only where a key is wired into a circuit, as a named exception. Salts
   are drawn from the OS, not expanded by a PRG.
 - A circuit restatement of a verifier (VBridge's V\*) is proved in one direction, that the circuit accepting
-  implies the verifier of record accepts; completeness stays a test.
+  implies the verifier accepts; completeness stays a test.
 - `hash-derived-key` (`Hm96Hiding` at the pinned key) stays a named assumption, and nobody works on proving the
   pinned key behaves like a fresh one.
 - A table that tabulates a fixed function is a value, even with no program parameter; an operation's own

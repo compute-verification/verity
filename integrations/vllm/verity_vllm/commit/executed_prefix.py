@@ -9,15 +9,15 @@ NOTHING is read from the trace.  Positions >= executed_prefix_len are programmed
 Call there is 'execution past the stop' (the caller checks the binding map against `request_steps`).
 
 Fail closed, by name: an early stop (a_r < cap) with no declared stop rule, no declared LAG, or a last served token that is not a declared
-EOS id (F-pm-24) is a problem -- the population then stays the cap's (nothing is accepted) and `ok` is False.  Never default LAG 0 or 1.
+EOS id is a problem -- the population then stays the cap's (nothing is accepted) and `ok` is False.  Never default LAG 0 or 1.
 
-The first record: OLMoE B2 i32/o32 mixedstop (cp-moe, lane e32550951): r0 served 11 / executed 12 (EOS 50279 at output
-index 10, LAG 1), r1 32 / 32 (cap) -- G6 PASS with the lag exercised; the Commit's population, placed over every request's cap, required
-r0's 20 unexecuted steps (bound 13808/19988) and failed by name.
+Example: on an OLMoE B2 i32/o32 mixed-stop workload r0 serves 11 / executes 12 (EOS 50279 at output index 10, LAG 1) and r1 32 / 32
+(cap) -- G6 PASS with the lag exercised; a population placed over every request's cap would require r0's 20 unexecuted steps and fail
+by name.
 
 This holds in a box -- the ACTIVE-REFERENCE table only, on three conditions `check.executed_prefix.link_to_match_account` checks:
 (a) n_exec is determined from the properly LINKED serving transcript: the Commit's own served tokens count only because they EQUAL the Match
-record's served output (capture/tokens.json of the same attempt) and the Match account (GM-01 G6: PASS, the same two lengths per request)
+record's served output (capture/tokens.json of the same attempt) and the Match account (global match G6: PASS, the same two lengths per request)
 -- "the committer says EOS happened here" is never sufficient by itself; (b) the lag rule is attested: declared == the engine's read-back ==
 the record's tokens.json; (c) any actual execution past the boundary FAILS (`rows_past_the_stop`).  NOT-EXECUTED-BY-RULE is an
 active-reference implementation classification only.  In the lifted fixed Program the corresponding positions are REQUIRED logical values
@@ -43,9 +43,8 @@ PROTOCOL SUMMARY (Commit phase: the execution extent check (`executed_prefix`) -
   Invariants: LAG is never defaulted to 0 or 1 -- an early stop with no declared EOS set / LAG, a non-EOS last token, or served > cap
     is a problem and the population stays the cap's; a prefix reduced from its cap on the committer's own count alone is never
     accepted (condition (a) above): it rests on the Match account or on served tokens opened from the run root, both when both are beside the
-    Commit and the row committed its sampled ids; the lag must agree on every leg (declared == tokens.json == G6, or declared == the
+    Commit and the row committed its sampled ids; the lag must agree on every account (declared == tokens.json == G6, or declared == the
     token record's == the engine's read-back); the boundary linkage a token record leans on runs over the same executed prefix; a committed Call past the prefix fails by name.
-  Protocol spec: Notion -> "vLLM integration — protocol spec (Build · Match · Commit)".
 """
 from __future__ import annotations
 
@@ -90,14 +89,14 @@ def executed_prefix_of_record(requests: Iterable[str], served_tokens: dict[str, 
         a = len(toks)
         rec["served_output_len"] = a
         rec["last_served_token"] = int(toks[-1]) if a else None
-        # [rev F-r17-14] the Program's rule stops at the FIRST declared EOS: a served list that carries an EOS at index k and more tokens
+        # the Program's rule stops at the FIRST declared EOS: a served list that carries an EOS at index k and more tokens
         # after it was served PAST the stop -- FAIL by name, whatever the last token is (served [EOS, x, EOS] is not an EOS stop at 3)
         first_eos = next((k for k, t in enumerate(toks) if eos_set is not None and int(t) in eos_set), None)
         rec["first_eos_index"] = first_eos
         if first_eos is not None and first_eos < a - 1:
             rec["why"] = (f"served past an EOS at index {first_eos}: served token {int(toks[first_eos])} is a declared EOS id but {a - 1 - first_eos} "
                           f"more token(s) were served after it (served {a}, cap {cap}); the Program's rule stops at the FIRST EOS -- served_output_len "
-                          f"would be {first_eos + 1} (F-r17-14)")
+                          f"would be {first_eos + 1}")
             problems.append(f"{rid}: {rec['why']}")
         elif a > cap:
             rec["why"] = f"served {a} tokens over the declared cap {cap}"
@@ -113,18 +112,18 @@ def executed_prefix_of_record(requests: Iterable[str], served_tokens: dict[str, 
             any_eos = True
             if eos_set is None:
                 rec["why"] = (f"served {a} of its cap {cap} and the Program declares no stop rule (eos_token_ids): the early stop cannot be "
-                              f"verified, fail closed (F-pm-24)")
+                              f"verified, fail closed")
                 problems.append(f"{rid}: {rec['why']}")
             elif rec["last_served_token"] not in eos_set:
                 rec["why"] = (f"served {a} of its cap {cap} but its last served token {rec['last_served_token']} is not a declared EOS id "
-                              f"{sorted(eos_set)[:8]} (F-pm-24)")
+                              f"{sorted(eos_set)[:8]}")
                 problems.append(f"{rid}: {rec['why']}")
             elif lag_v is None:
                 rec["why"] = (f"stopped by EOS at served {a} of its cap {cap} but the Program declares no LAG (or the engine does not attest the "
-                              f"declared scheduler): the executed prefix cannot be placed (R17-1) -- never default 0 or 1")
+                              f"declared scheduler): the executed prefix cannot be placed -- never default 0 or 1")
                 problems.append(f"{rid}: {rec['why']}")
             elif lag_v not in (0, 1):
-                rec["why"] = f"declared LAG {lag_v} is not in {{0, 1}} (R17-1)"
+                rec["why"] = f"declared LAG {lag_v} is not in {{0, 1}}"
                 problems.append(f"{rid}: {rec['why']}")
             else:
                 rec["executed_prefix_len"] = min(cap, a + lag_v)
@@ -142,20 +141,20 @@ def request_steps_of_record(epr: dict[str, Any], arrivals: dict[str, int]) -> di
 
 def executed_prefix_facts(epr: dict[str, Any], binding: CommitBinding | Mapping[str, Any] | None, linkage: dict[str, Any] | None, arrivals: dict[str, int],
                            stop: dict[str, Any], served_tokens: dict[str, list[int]] | None = None) -> dict[str, dict[str, Any]]:
-    """The per-request FACTS OF RECORD reqval's `sampled_replay.executed_prefix_of_record`
+    """The per-request FACTS OF RECORD `sampled_replay.executed_prefix_of_record`
     normalises into the not-executed class -- every one a named record fact, never a literal: `a_r` READ from the Match record
     (binding.coverage.match_account_link: tokens.json served_by_request, else G6 lengths_by_request; `a_r_source` names the file + sha256;
     with NO Match record a_r is the Commit's own served length, labelled so, and `linked` is False -> the class faults by name);
     `served_len_commit` = this run's own served length; `linked` = the Match-account link held (Commit served == Match served per request,
-    GM-01 PASS, G6 agrees) AND the C2 boundary linkage passed; `lag_attested` = declared == tokens.json == G6 declared == G6 record_attests;
-    `eos_declared` = the served token a_r-1 is a declared EOS id (F-pm-24); `rows_past_stop` = coverage's execution-past-the-stop count.
+    global match PASS, G6 agrees) AND the C2 boundary linkage passed; `lag_attested` = declared == tokens.json == G6 declared == G6 record_attests;
+    `eos_declared` = the served token a_r-1 is a declared EOS id; `rows_past_stop` = coverage's execution-past-the-stop count.
     With `served_tokens` (this run's own served ids per request) the facts also carry `served` (the list)
     and `eos_ids` (the Program's declared set) so a consumer that derives the class from Continuation_v1's recurrence (r_t) does so from the
     record's own list -- ONE code path on Build, Match and Commit; the caller passes only the keys the consumer's signature accepts.
     With no Match record beside the Commit (no `match_dir`) the account is the Commit's token record (binding.coverage.commit_account_link,
     check.commit_tokens): `a_r` is its served length, `linked` = that link held, every served token of the request was opened from the
     run root equal to the committed sampled id, the C2 boundary linkage passed AND ran over exactly the request's executed prefix, and
-    `lag_attested` is that link's, and `a_r_source` says so as a note, not a missing leg.  With both, both must hold wherever the token
+    `lag_attested` is that link's, and `a_r_source` says so as a note, not a missing account file.  With both, both must hold wherever the token
     record places a shorter prefix; a token-record link not applied (a row that committed no sampled id) places none."""
     cov = None if binding is None else CommitBinding.of(binding, "the Commit's binding").coverage
     link = None if cov is None else cov.match_account_link
@@ -165,10 +164,10 @@ def executed_prefix_facts(epr: dict[str, Any], binding: CommitBinding | Mapping[
     by_commit = cl is not None and not (link is not None and link.match_dir)
     with_commit = by_commit or (cl is not None and cl.required)
     horizon = (linkage or {}).get("horizon") or {}
-    # [r19-int-21, F-r19-int-19] the account legs that are NOT beside the Commit, named: #39 (qwen25-15b i4096, l40s4) had its match/capture/
-    # moved to /vault to free the disk (F-r19-int-14) while its Commit was queued; tokens.json (a_r per request, the lag attestation) went
-    # with it, the link fell to the G6 leg for a_r and the class faulted 'a_r is not linked (linked=False)' + 'LAG rule not attested' after
-    # 47 min -- a MISSING INPUT read as a verdict on the Program.  The fact names the missing leg(s); the consumer faults on it by name.
+    # the account files that are NOT beside the Commit, named: a Commit whose match/capture/ moved away while it was queued has no
+    # tokens.json (a_r per request, the lag attestation), the link falls to G6 for a_r, and the class would fault 'a_r is not linked
+    # (linked=False)' + 'LAG rule not attested' -- a MISSING INPUT read as a verdict on the Program.  The fact names the missing file(s);
+    # the consumer faults on it by name.
     account_missing = [] if by_commit else [leg for leg, present in (("tokens.json", tj is not None), ("global_match.json", g6 is not None)) if not present]
     past = {} if cov is None or cov.rows_past_the_stop is None else cov.rows_past_the_stop.steps_past_by_request
     eos_set = {int(x) for x in (stop.get("eos") or [])} if stop.get("eos") is not None else None
@@ -213,7 +212,7 @@ def executed_prefix_facts(epr: dict[str, Any], binding: CommitBinding | Mapping[
 
 def facts_accepted_by(fn, facts: dict[str, dict[str, Any]]) -> dict[str, dict[str, Any]]:
     """The facts a consumer's signature accepts (keyword-only parameters): a tree whose `executed_prefix_of_record` predates `served=` /
-    `eos_ids=` (reqval a8f110f5f) still receives the arithmetic's facts; a newer one receives the served list too.  Never a TypeError."""
+    `eos_ids=` still receives the arithmetic's facts; a newer one receives the served list too.  Never a TypeError."""
     import inspect
     try:
         params = inspect.signature(fn).parameters
@@ -225,7 +224,7 @@ def facts_accepted_by(fn, facts: dict[str, dict[str, Any]]) -> dict[str, dict[st
     return {rid: {k: v for k, v in f.items() if k in keep} for rid, f in facts.items()}
 
 
-#: [R17-42, reqval M-1318 (1)] the activity a PADDED record's binding map (`padded-binding-map/1`, pad's padding_steps) stamps on every entry:
+#: the activity a PADDED record's binding map (`padded-binding-map/1`, padding_steps) stamps on every entry:
 #: `bot-by-enablement` = the REQUIRED padding of a not-executed row (its value is tau(e) = bot by rule, NOT_EXECUTED_SCOPE verbatim), `active` =
 #: an executed row's committed value, `registered-input` = a named input.  An UNPADDED record's entries carry no `activity` (= active).
 ACTIVITY_PADDING = "bot-by-enablement"
@@ -272,7 +271,7 @@ def rows_past_the_stop(bmap: dict[str, Any], request_steps: dict[str, Iterable[i
             f"{rid} committed rows at engine steps {v}{'...' if len(past[rid]) > len(v) else ''} beyond its executed prefix "
             f"(steps {min(allowed[rid]) if allowed[rid] else '-'}..{max(allowed[rid]) if allowed[rid] else '-'})" for rid, v in named.items()))
     if inside:
-        errors.append("padding inside the executed prefix (inactive fallback, R17-42): " + "; ".join(
+        errors.append("padding inside the executed prefix (the prohibited inactive fallback): " + "; ".join(
             f"{rid} {ACTIVITY_PADDING} rows at engine steps {v}{'...' if len(inside[rid]) > len(v) else ''} the Program executed" for rid, v in named_in.items()))
     return {"ok": not past and not inside, "entries_n": n, "requests": named, "steps_past_by_request": counts,
             "padding_entries_n": n_pad, "padded_record": n_pad > 0 or n_inside > 0, "padding_inside_prefix": named_in,
@@ -302,7 +301,7 @@ def restrict_engine_steps(engine_steps: list[dict[str, Any]], request_steps: dic
     return out, {"members_dropped": dropped_m, "steps_dropped": dropped_s, "steps_changed": changed}
 
 
-#: what a manifest family's identities are addressed by -- the population's not-executed split (reqval: sampled_replay.split_not_executed)
+#: what a manifest family's identities are addressed by -- the population's not-executed split (sampled_replay.split_not_executed)
 #: classifies Program ROWS by their `request_id`; a batch-level row (`*` + `requests`) and a named input (the prompt ids) are outside
 #: its reach, so the Commit's count for those kinds is the only one on the record (reconcile_not_executed names them, never a FAIL there)
 KIND_ROW, KIND_BATCH, KIND_INPUT = "row", "batch-level", "named-input"
@@ -409,23 +408,22 @@ def reconcile_not_executed(commit_class: dict[str, Any] | None, population: dict
                            manifest_identities: list[dict[str, Any]] | None = None) -> dict[str, Any]:
     """ONE mechanism, checked on the record: the Commit's classification of the manifest
     identities (binding coverage, `commit_class` = load_required_manifest's header `not_executed_by_rule`) and the population's third bucket
-    (`population["not_executed_by_rule"]`, reqval: identities at request-relative steps >= n_exec leave the pool before any draw) must
+    (`population["not_executed_by_rule"]`: identities at request-relative steps >= n_exec leave the pool before any draw) must
     name the SAME identities.  Per request: the population's n_exec == the Commit's executed_prefix_len (`epr` = executed_prefix_of_record).
-    Per ROW family (kind `row`): the Commit's count == the population's N_excluded.  A NAMED-INPUT family (revb (i): a per-request family
-    by the executed-prefix rule; reqval 699bf6ee2 `kind_by_family[fam] = named-input`): the Commit's count == the population's N_excluded, exactly as
-    for rows.  A BATCH-LEVEL family (revb (ii): the plane identity stays required while any listed request executes, so identity-level
+    Per ROW family (kind `row`): the Commit's count == the population's N_excluded.  A NAMED-INPUT family (a per-request family
+    by the executed-prefix rule; `kind_by_family[fam] = named-input`): the Commit's count == the population's N_excluded, exactly as
+    for rows.  A BATCH-LEVEL family (the plane identity stays required while any listed request executes, so identity-level
     N_excluded 0 is right; the Commit expands the plane per request): the Commit's (request, plane) CELLS == the population's
-    `totals.by_family[fam].plane_cells_not_executed.cells` (== `batch_level[fam].cells_not_executed`, reqval 8eeff13eb / d13ea5153).
+    `totals.by_family[fam].plane_cells_not_executed.cells` (== `batch_level[fam].cells_not_executed`).
     When `manifest_identities` (engine-step annotated) are given, both are ALSO checked arithmetically against the population's own
     n_exec / arrive over the manifest's rows (expected_cells_from_population) -- a population statement that disagrees with its own facts
-    FAILS.  A family the population does not reach (an older population tree: no kind, no cells statement -- F-moe-r17-05 before
-    699bf6ee2) is NAMED under `outside_population_reach` with `population_reaches` False (pending, never read as equal) and, given the
+    FAILS.  A family the population does not reach (an older population tree: no kind, no cells statement) is NAMED under `outside_population_reach` with `population_reaches` False (pending, never read as equal) and, given the
     manifest, the Commit's count must still equal the arithmetic.  Not ok -> the caller fails coverage closed with `error`."""
     out: dict[str, Any] = {"schema": "verity-sweep/not-executed-reconciliation/v3", "ok": True, "problems": [], "n_exec": {}, "by_family": {},
                            "outside_population_reach": {}, "rule": RULE, "scope": ACTIVE_REFERENCE_ONLY}
     if not isinstance(population, dict) or not population:
         out["ok"] = False
-        out["problems"].append("the population carries no not_executed_by_rule block (reqval R17-26/R17-27 mechanism absent): nothing to reconcile against")
+        out["problems"].append("the population carries no not_executed_by_rule block (no one-mechanism classification): nothing to reconcile against")
         return out
     if not population.get("applied", False) and (epr or {}).get("any_eos_stop"):
         out["ok"] = False
@@ -441,8 +439,8 @@ def reconcile_not_executed(commit_class: dict[str, Any] | None, population: dict
     totals = ((population.get("totals") or {}).get("by_family")) or {}
     cc = commit_class or {}
     expected = expected_cells_from_population(manifest_identities, population) if manifest_identities is not None else None
-    pop_kind = population.get("kind_by_family") or {}                                      # reqval 699bf6ee2: the population names each family's kind
-    pop_batch = population.get("batch_level") or {}                                        # reqval 8eeff13eb: batch_level[fam].cells_not_executed
+    pop_kind = population.get("kind_by_family") or {}                                      # the population names each family's kind
+    pop_batch = population.get("batch_level") or {}                                        # batch_level[fam].cells_not_executed
     fams = set((cc.get("by_family") or {})) | set(totals)
     for fam in sorted(fams):
         mine = int((cc.get("by_family") or {}).get(fam, 0))
@@ -454,18 +452,18 @@ def reconcile_not_executed(commit_class: dict[str, Any] | None, population: dict
             out["by_family"][fam] = {"commit": mine, "population": n_ex, "equal": mine == n_ex}
             if mine != n_ex:
                 out["ok"] = False
-                out["problems"].append(f"{fam}: the Commit classified {mine} identities not-executed(R17-1), the population excluded {n_ex}")
+                out["problems"].append(f"{fam}: the Commit classified {mine} identities not-executed-by-rule, the population excluded {n_ex}")
             continue
         unit = "cells" if kind == KIND_BATCH else "identities"
         if kind == KIND_BATCH:
-            # revb (ii) / reqval d13ea5153: the population's statement of the (plane, request) cells past the stop -- the unit the Commit counts
+            # the population's statement of the (plane, request) cells past the stop -- the unit the Commit counts
             pc = theirs.get("plane_cells_not_executed") if isinstance(theirs, dict) else None
             pop_val = (int(pc["cells"]) if isinstance(pc, dict) and pc.get("cells") is not None
                        else int(pop_batch[fam]["cells_not_executed"]) if isinstance(pop_batch.get(fam), dict) and pop_batch[fam].get("cells_not_executed") is not None
                        else None)
             reaches = pop_val is not None
         else:
-            # revb (i) / reqval 699bf6ee2: a per-request family by R17-1's rule -> N_excluded, exactly as for rows, once the population names it
+            # a per-request family by the executed-prefix rule -> N_excluded, exactly as for rows, once the population names it
             reaches = (pop_kind.get(fam) is not None and pop_kind.get(fam) != "row") or (cells is not None and n_ex == cells and n_ex > 0)
             pop_val = n_ex if reaches else None
         if reaches:
@@ -473,7 +471,7 @@ def reconcile_not_executed(commit_class: dict[str, Any] | None, population: dict
                    **({"population_N_excluded": n_ex} if kind == KIND_BATCH else {})}
             if mine != pop_val:
                 out["ok"] = False
-                out["problems"].append(f"{fam} ({kind}): the Commit classified {mine} not-executed(R17-1) {unit}, the population excluded {pop_val}")
+                out["problems"].append(f"{fam} ({kind}): the Commit classified {mine} not-executed-by-rule {unit}, the population excluded {pop_val}")
             if cells is not None:
                 ent["expected_from_population_facts"] = cells                  # the population's own n_exec / arrive over the manifest's rows
                 if pop_val != cells:
@@ -482,14 +480,14 @@ def reconcile_not_executed(commit_class: dict[str, Any] | None, population: dict
             out["by_family"][fam] = ent
             continue
         ent = {"kind": kind, "commit": mine, "population_N_excluded": n_ex, "population_reaches": False,
-               "pending": f"F-moe-r17-05: this population tree does not reach {kind} families (no kind_by_family / cells statement; reqval 699bf6ee2+)",
+               "pending": f"this population tree does not reach {kind} families (no kind_by_family / cells statement)",
                "why": "the population split classifies Program rows by request_id; this family's identities are not rows of one request"}
         if cells is not None:
             ent["expected_from_population_facts"] = cells
             ent["equal"] = mine == cells
             if mine != cells:
                 out["ok"] = False
-                out["problems"].append(f"{fam} ({kind}): the Commit classified {mine} not-executed(R17-1) {unit}, the population's n_exec implies {cells}")
+                out["problems"].append(f"{fam} ({kind}): the Commit classified {mine} not-executed-by-rule {unit}, the population's n_exec implies {cells}")
         out["outside_population_reach"][fam] = ent
     out["total"] = (all(e.get("equal", False) for e in out["outside_population_reach"].values()) if out["outside_population_reach"] else True) and out["ok"]
     return out

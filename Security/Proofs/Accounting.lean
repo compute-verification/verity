@@ -1,5 +1,6 @@
 import Proofs.Accounting.Defs
 import Proofs.Accounting.Memory
+import Proofs.Accounting.MemoryShare
 import Proofs.Accounting.Device
 import Proofs.Accounting.Gates
 import Proofs.Accounting.FillerLuck
