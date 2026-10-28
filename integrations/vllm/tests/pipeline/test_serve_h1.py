@@ -122,7 +122,7 @@ def test_with_a_prover_dir_each_window_keeps_its_prover_state_and_its_rounds_liv
     srv.serve(PROMPTS[0], 0)
     out = arm.close(0)
     w0 = tmp_path / "prover" / "w0"
-    assert out["tied"] and out["live_dump"] == {"dir": str(w0 / "live"), "rounds": STEPS}, out["live_dump"]
+    assert out["tied"] is False and out["live_dump"] == {"dir": str(w0 / "live"), "rounds": STEPS}, out["live_dump"]
     assert stat.S_IMODE(w0.stat().st_mode) == 0o700 and (w0 / PV.KEY).is_file() and any((w0 / PV.CALLS).iterdir())
     pub = json.loads((w0 / "live" / "window.json").read_text())
     assert (pub["T"], pub["S"], pub["program"]) == (ROWS, STEPS, arm.digest) and len(pub["served"]) == STEPS
@@ -400,7 +400,7 @@ def test_the_arm_is_ready_before_the_server_listens(tmp_path, monkeypatch):
     arm.open(0)
     srv.serve(PROMPTS[0], 0)
     out = arm.close(0)
-    assert out["tied"] and out["session"]["session"] == held["session"], out
+    assert out["tied"] is False and out["session"]["session"] == held["session"], out
     assert [h["window"] for h in sessions.held] == [0, 1], "window 1's reserved ahead at window 0's open, none for 0"
     assert roots == [0, 1], "window 0's install reuses the roots computed before the server listened"
     arm.drain()
@@ -742,7 +742,8 @@ def test_the_pouw_settings_unit_and_ks_serve_a_j10r_window_over_the_linears_at_o
     """``{"pouw": {"unit": "j10r", "ks": [K]}}`` over a linear at K and one at 2K: H1's linears, its declared Program (its
     tile unit the setting's, `pouw_h1_served.unit_of`), its registered weights and its tap are the K linear's alone, so
     the Program's units are J10-R's at one K; the 2K linear serves on its arm unhooked, and the window names it
-    uncovered, as it does attention. The window ties at ROOTS1 as one over every linear does."""
+    uncovered, as it does attention. At ROOTS1 the window is untied as one over every linear is: the bench row's int8
+    source acquires no linear's y, so the K linear's z tables are not the Commit's."""
     monkeypatch.setattr(SV, "unit_of", lambda name: _unit(defn=StandInJ10R) if name == "j10r" else None)
     srv = _Server(monkeypatch, model=Model(ks=(K, 2 * K)))
     dense, wide = srv.model.model.layers
@@ -754,7 +755,8 @@ def test_the_pouw_settings_unit_and_ks_serve_a_j10r_window_over_the_linears_at_o
     assert "apply" in vars(dense.quant_method) and "apply" not in vars(wide.quant_method)
     run = srv.serve(PROMPTS[0], 0)
     out = arm.close(0)
-    assert out["tied"] and (out["steps_served"], out["refused"]) == (STEPS, []), out
+    assert out["tied"] is False and "is not the Commit's coord-out/0" in out["roots1"]["reason"], out
+    assert (out["steps_served"], out["refused"]) == (STEPS, []), out
     assert {(c.layer, c.k) for c in run.calls} == {(0, K)} and len(run.calls) == STEPS
     assert f"outside the pouw setting 'ks' [{K}]" in run.details["uncovered"]
     srv.src.uninstall()
