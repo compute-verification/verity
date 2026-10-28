@@ -306,7 +306,7 @@ class Scheduler:
         w, rows = self.window, self.window_rows
         data = [struct.pack(">IIII", *r) for r in rows] or [bytes(ROW_BITS // 8)]
         run_id = f"{self.run_id}/w{w}"
-        reg = AC.register(data, ROW_BITS, hashlib.sha512(BINDING + b"\0" + run_id.encode()).digest())
+        reg = AC.commit(data, ROW_BITS, hashlib.sha512(BINDING + b"\0" + run_id.encode()).digest())
         d = self.out / "served_rows"
         d.mkdir(exist_ok=True)
         (d / f"w{w}.json").write_text(json.dumps({"window": w, "rows": [list(r) for r in rows],
