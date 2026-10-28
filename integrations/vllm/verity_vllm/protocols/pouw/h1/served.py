@@ -86,10 +86,10 @@
 """
 from __future__ import annotations
 
+import collections
 import contextlib
 import hashlib
 import weakref
-from collections import deque
 from dataclasses import dataclass, field
 from typing import Any, Callable, Mapping, Sequence
 
@@ -111,7 +111,8 @@ from verity_vllm.protocols.pouw.h1 import registered as NR
 from verity_vllm.protocols.pouw.h1 import requests as RQ
 from verity_vllm.protocols.pouw.h1 import tables_device as TD
 from verity_vllm.protocols.pouw.h1.served_files import FILE, Registration, file_name, reads_file, register, trees
-from verity_vllm.protocols.pouw.h1.served_program import PREFIX, card_arch, declared, declared_layout, descriptor, layout
+from verity_vllm.protocols.pouw.h1.served_program import (PREFIX, card_arch, declared, declared_layout, descriptor, layout,
+                                                          write_program)
 from verity_vllm.protocols.pouw.h1.words import (EMPTY_ID, chunk_words, ids_words, receipt_words, record_words,
                                                          row_words, zy_words)
 
@@ -329,7 +330,8 @@ class Served:
     _scales: dict[int, np.ndarray] = field(default_factory=dict)
     #: the z tables still hashing on the GPU (`_register_later`), in registration order, each with the ``out`` its root goes in
     #: and the call's table roots its call z table's root goes in, when it commits that too (``also``)
-    _later: deque[tuple[str, dict[str, str | None], dict[str, Any] | None]] = field(default_factory=deque)
+    _later: collections.deque[tuple[str, dict[str, str | None], dict[str, Any] | None]] = field(
+        default_factory=collections.deque)
 
     def key(self, commits: Mapping[str, Any]) -> bytes:
         if self.window is not None:
@@ -771,4 +773,4 @@ def digest_of(entries: Sequence[Mapping[str, Any]], refused: Sequence[str]) -> b
 __all__ = ["B_NONCE", "EMPTY_ID", "FILE", "IDS_NONCE", "LOCAL_SESSION", "ModelKey", "NONCE", "PREFIX", "PublicRows", "Registration", "Served",
            "V2", "Weights", "card_arch", "chunk_words", "declared", "declared_layout", "descriptor", "digest_of", "file_name", "host_weight", "ids_words", "layout",
            "model_key", "nonce", "RECEIPT_NONCE", "reads_file", "receipt_words", "record_words", "register", "register_weights", "row_words", "trees",
-           "weights_of"]
+           "weights_of", "write_program"]
