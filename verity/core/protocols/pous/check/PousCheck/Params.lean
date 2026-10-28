@@ -1,5 +1,5 @@
 /-!
-The deployed P2 parameters (`p2/PROTOCOL.md` v1.1, profile `p2-2054B`): the prime, the block geometry, the audit's
+The deployed P2 parameters (P2 v4, profile `p2-2054B`): the prime, the block geometry, the audit's
 challenge count and its deadline.
 -/
 

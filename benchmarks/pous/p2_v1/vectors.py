@@ -2,11 +2,10 @@
 
     cd benchmarks/pous && uv run python -m p2_v1.vectors
 
-writes `vectors.json` (the maps and keys, spec §7), `audit-vectors.json` (a complete two-round w = 64 setup and audit, and
+writes `vectors.json` (the maps and keys), `audit-vectors.json` (a complete two-round w = 64 setup and audit, and
 one full-width response), `audit-negative-vectors.json` (31 failing or boundary transcripts, each self-checked against
 `wire.verify_audit`) and the package's copy of the keys (`verity/.../pous/tests/fixtures/p2-v4-keys.json`), then replaces
-every pinned hash that changed, in `reference.py`, the spec (`p2/PROTOCOL.md`) and the package's keys test, with its new
-value.
+every pinned hash that changed, in `reference.py` and the package's keys test, with its new value.
 
 Every setup salt, audit id, challenge index and nonce is `verity.ml.randomness`'s, so every file but the maps'
 `m`, `K`, `t` and `c` at a given salt moves when that derivation does; each file records the derivation it was made under
@@ -16,8 +15,10 @@ from __future__ import annotations
 
 import hashlib
 import json
+from dataclasses import replace
 from pathlib import Path
 
+from verity.core.protocols.pous.verifier import MerkleTree
 from verity.ml.commitments.identity import canonical_json_bytes
 from verity.ml.randomness import derive, frame
 
@@ -28,11 +29,10 @@ HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[2]
 AUDIT_VECTORS, NEGATIVE_VECTORS = R.AUDIT_VECTORS, R.NEGATIVE_VECTORS
 KEYS_FIXTURE = ROOT / "verity/core/protocols/pous/tests/fixtures/p2-v4-keys.json"
-SPEC = ROOT / "verity/core/protocols/pous/p2/PROTOCOL.md"
-PINNED_TEXT = (HERE / "reference.py", SPEC, KEYS_FIXTURE.parent.parent / "test_pous_protocol.py")
+PINNED_TEXT = (HERE / "reference.py", KEYS_FIXTURE.parent.parent / "test_pous_protocol.py")
 
-POINTS = (R.Params(64, 189, 7), R.Params(96, 17, 11), R.Params(128, 173, 15), R.DEPLOYMENT)
-"""The least c0 ≡ 1 mod 4 with 2^w − c0 prime at each reduced width (spec §1), and the deployment's."""
+POINTS = (*(R.vector_params(w, c0) for w, c0 in ((64, 189), (96, 17), (128, 173))), R.DEPLOYMENT)
+"""The least c0 ≡ 1 mod 4 with 2^w − c0 prime at each reduced width, and the deployment's."""
 PRIMALITY_METHOD = "GMP BPSW plus 64 Miller-Rabin repetitions"
 """The kit's screen of each point's p (`p2-test-vectors/v1`'s `primality`, whose results this carries: they are facts
 about p, unchanged by v4, and gmpy2 is not a dependency here)."""
@@ -69,10 +69,6 @@ def _sha512(data: bytes) -> str:
 def _counter(label: str, n: int) -> bytes:
     """The first n bytes of SHA512(label ‖ u32be 0) ‖ SHA512(label ‖ u32be 1) ‖ …: the vectors' own test inputs."""
     return b"".join(hashlib.sha512(label.encode() + i.to_bytes(4, "big")).digest() for i in range(-(-n // 64)))[:n]
-
-
-def _width_params(w: int, c0: int) -> R.Params:
-    return R.DEPLOYMENT if (w, c0) == (R.DEPLOYMENT.w, R.DEPLOYMENT.c0) else R.Params(w, c0, w // 8 - 1)
 
 
 # --- vectors.json ----------------------------------------------------------------------------------------------------------
@@ -120,15 +116,15 @@ def _setup(params: R.Params, w_bytes: bytes, payloads: list[int], source: bytes)
     for i, value in enumerate(payloads):
         k, t, _ = R.keys(salt, params, commitment, i // bps, i % bps)
         blocks.append(R.encode(params, value, k, t).to_bytes(n, "big"))
-    leaves = [R.leaf(salt, i // bps, i % bps, b) for i, b in enumerate(blocks)]
-    root = R.root(leaves)
-    return {"manifest": manifest, "commitment": commitment, "salt": salt, "blocks": blocks, "leaves": leaves, "root": root,
-            "epoch": R.epoch_id(params, commitment, salt, root),
+    tree = MerkleTree([R.leaf(salt, i // bps, i % bps, b) for i, b in enumerate(blocks)])
+    root = tree.root
+    return {"manifest": manifest, "commitment": commitment, "salt": salt, "blocks": blocks, "leaves": list(tree.leaves),
+            "tree": tree, "root": root, "epoch": R.epoch_id(params, commitment, salt, root),
             "messages": Wi.setup_messages(manifest, commitment, salt, blocks, root)}
 
 
 SMALL = R.Params(64, 189, 7, blocks_per_segment=8, segments=1, profile="p2-63b")
-FULL = R.Params(R.DEPLOYMENT.w, R.DEPLOYMENT.c0, 2054, blocks_per_segment=1, segments=1)
+FULL = replace(R.DEPLOYMENT, blocks_per_segment=1, segments=1)
 
 
 def small_vector() -> dict:
@@ -142,7 +138,7 @@ def small_vector() -> dict:
     for j in range(k):
         index, nonce = key.uniform(SMALL.blocks, j), key.stream(("nonce", j), 32)
         challenge = Wi.challenge_message(s["epoch"], audit_id, j, index, nonce)
-        response = Wi.response_message(s["epoch"], audit_id, j, index, s["blocks"][index], R.path(s["leaves"], index))
+        response = Wi.response_message(s["epoch"], audit_id, j, index, s["blocks"][index], s["tree"].path(index))
         transcript += [challenge, response]
         records.append(Wi.record(j, index, elapsed[j], 0x0F, hashlib.sha512(challenge).digest(),
                                  hashlib.sha512(response).digest()))
@@ -328,7 +324,7 @@ def _dump(doc: dict) -> bytes:
 
 
 def pins(maps: dict, audit: dict, negative: dict, files: dict[str, bytes]) -> dict[str, str]:
-    """Every hash the spec's §7 and `reference.py` pin, by name."""
+    """Every hash `reference.py` pins and the files carry, by name."""
     small, full = audit["small_end_to_end"], audit["full_width_response"]
     out = {name: _sha512(raw) for name, raw in files.items()}
     out |= {f"entry/{v['id']}": v["sha512"] for v in maps["vectors"]}
