@@ -46,7 +46,7 @@ FLAG = "MATCH_IMPL"
 # what this module IS at this revision, on every result document (`impl` block) and in the differential
 # harness's report header; `identity` meant "check re-exports the checker of record" (harness plumbing proof, 69a67a90e).
 IMPL_NAME = "fast"
-CANDIDATE_STAGE = "v6-memo-x09share-internhash-specid+legs+compactargs"   # mprof units 1-4b (memo, X-09 Projection share, G7 O(1), digest-id Merkle payload, identity shortcut, _spec_id on the definition, cache release, per-process ids enforced) + mfast legs (MATCH_WORKERS; G8 matching returned as facts) + mfast compact operand progressions (MATCH_COMPACT)
+CANDIDATE_STAGE = "v6-memo-x09share-internhash-specid+legs+compactargs"   # mprof units 1-4b (memo, X-09 Projection share, G7 O(1), digest-id Merkle payload, identity shortcut, descriptor_id on the definition, cache release, per-process ids enforced) + mfast legs (MATCH_WORKERS; G8 matching returned as facts) + mfast compact operand progressions (MATCH_COMPACT)
 _force: bool | None = None    # set by `check` below so the entry point selects the path, not only the environment
 
 # memo tables (per process). Values pin the Prog objects they were computed from, so ids stay unique while cached.
@@ -479,18 +479,18 @@ def dep_order_violations(P, rid: str) -> list[dict]:
 # ------------------------------------------------------------------------------------------------ the fast path's Programs and operations
 
 def _spec_id_memo(fn):
-    """`codec._spec_id(fn)` serialises a
+    """`codec.descriptor_id(fn)` serialises a
     specialization's static bindings to canonical JSON on EVERY call; `compare.Prog.__init__` calls it once per NODE (162 k for the
     B8 256/32 fold, 3-9 k per component), while the `fn` objects are shared by every node of the same specialization -- 11 % of a
     component's load on the real record.  The id is a pure function of the (immutable after construction) definition + bindings: it
     is kept ON the definition object (no memo table pins the decoded IR, which Prog.__init__ drops for memory), and only after a
-    successful computation -- `_spec_id` reads every static's binding, so a partially bound specialization raises instead of caching."""
+    successful computation -- `descriptor_id` reads every static's binding, so a partially bound specialization raises instead of caching."""
     try:
         return fn.__dict__["_gmf_spec_id"]
     except (AttributeError, KeyError):
         pass
-    from verity.ml.circuits.codec import _spec_id
-    sid = _spec_id(fn)
+    from verity.ml.circuits.codec import descriptor_id
+    sid = descriptor_id(fn)
     try:
         fn.__dict__["_gmf_spec_id"] = sid
     except AttributeError:   # a __slots__ definition class: nothing to keep it on; recompute as the checker of record does
@@ -501,7 +501,7 @@ def _spec_id_memo(fn):
 class MemoProg(_CanonMemo, SEQ.Prog):
     """The fast path's compare.Prog (what `ops()` loads the fold and the components as): canon computed once per instance
     (`_CanonMemo`), and a run-form decode whose two per-node functions are `_spec_id_memo` and `_runs_fast` (unit 5 (a)) -- each
-    returns what the record's `codec._spec_id` / `refs.runs` returns for the same node."""
+    returns what the record's `codec.descriptor_id` / `refs.runs` returns for the same node."""
 
     def _node_functions(self):
         return _spec_id_memo, _runs_fast

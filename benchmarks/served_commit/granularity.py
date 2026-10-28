@@ -84,13 +84,14 @@ def layer_of(module: str) -> tuple[str | None, str]:
 
 
 def analyze(build_dir: str, rates: dict[int, float]) -> dict:
+    from verity.ml.circuits.codec import descriptor_id
     from verity.ml.circuits.refs import runs
-    from verity_vllm.query.program_view import _spec_id, ports_of_type
+    from verity_vllm.query.program_view import ports_of_type
 
     calls, names, K, ret, source = load(build_dir)
     n = len(calls)
     reads = [[(r[1] - K, r[2], r[3]) for a in c.args for r in runs(a.refs) if r[0] == "n" and r[1] >= K] for c in calls]
-    family = [_spec_id(c.fn).split("{")[0] for c in calls]
+    family = [descriptor_id(c.fn).split("{")[0] for c in calls]
     module = [nm.module for nm in names]
     layer, child = zip(*(layer_of(m) for m in module)) if n else ((), ())
 
