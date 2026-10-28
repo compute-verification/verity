@@ -13,10 +13,10 @@ many reads of a node's registered blocks the node made in each window, from rece
    receipt kind, `bind`, the layout and the rows.  The verifier keeps one live registration a node (`Registry`): a
    second while one is live is refused and draws nothing, and a registration ends only when the verifier closes it,
    counting its sessions, an unended one as failed.
-2. Coins.  Before the session the proof service's challenger draws two live coins a window, its challenge `σ_t` and
-   its openings coin, and a coin an append, and commits to them (`coins.Coins`: session k's epoch of the one challenger,
-   on its own host when it is remote).  Each coin opens once, after the root the verifier recorded for it, which the
-   challenger's signed log keeps (`AuditRun.released_reason`), and the prover is sent its value and that root
+2. Coins.  Before the session the proof system's challenger draws two live coins a window, its challenge `σ_t` and
+   its openings coin, and a coin an append, and commits to them (`coins.SessionCoins`: session k's epoch of the one
+   challenger, on its own host when it is remote).  Each coin opens once, after the root the verifier recorded for it,
+   which the challenger's signed log keeps (`AuditRun.released_reason`), and the prover is sent its value and that root
    (`coins.Released`).  The commitment, a function of every coin, reaches the prover only once the session has its
    outcome, with every released coin's opening (`AuditRun.disclose`), and the prover checks each coin it was sent
    against them then (`Prover.end`).
@@ -70,12 +70,12 @@ many reads of a node's registered blocks the node made in each window, from rece
    `ledger` turns it, with the node's measured capacities and a squaring ceiling at its codec's width (`Rebuild`), into
    each γ term over the session's span and over each window's own (`WindowLedger`), μ_sample read per window and
    pooled over the session's horizon (`pooled`, `floors`).  It credits a receipt of a block appended after the seed
-   only on the property's verdict on the circuits that wrote it (`credit_post_seed`, I2's) and the session's schedule
+   only on the stacking property's verdict on the circuits that wrote it (`credit_post_seed`) and the session's schedule
    check (`schedule`, `AuditRun.scheduled`: every pass's plan the published schedule's at its step, the schedule within
    the cap on its bits the session's parameters committed before its first coin, `Params.schedule_cap`,
    `schedule.py`), and then charges what their carriers may hold (μ_carrier); without both, those receipts are
    certified but not credited.  On the served
-   circuit's requirement linked to the passes (`requirement`, a `RequirementLink`: I4's plan and memory-map units and
+   circuit's requirement linked to the passes (`requirement`, a `RequirementLink`: the plan and memory-map units and
    the census's layout rule, the memory-map unit's verdict on the record's appends and heads among them, `mapped`),
    each pass is credited the bits the circuit reads from complete blocks at its step, less a block for each planned
    block it credits no receipt of (`linked_bits`, `Accounting.Guarantees.RequirementMoved`; `GammaTerms.linked`), less
@@ -129,7 +129,7 @@ SLACK_LOG2 = 67
 """AuditRO's slack, the bits a pass is charged beyond `named_bits`: its last term C(q, k)/2^λ is then at most 2^-67 a
 pass, which γ's error and the memory line's δ add once a pass.  Up to 2^17 passes they add at most 2^-50, 2^-10 of
 `DELTA`: an hour, six times the stated 10-minute horizon, of the node's 41.2 ms passes over 130,023,424 blocks
-(532.6 GB, gate runs 8 and 9's store) at `timing.READ_BYTES_PER_S` is 87,326 passes."""
+(532.6 GB, eight GPUs' 62 GiB shards) at `timing.READ_BYTES_PER_S` is 87,326 passes."""
 WINDOW_NS = 60 * 10**9
 SAMPLES = 33_273
 DELTA = 2.0 ** -40
@@ -891,7 +891,7 @@ def _within(spans: list[tuple[int, int]], first: int, count: int) -> bool:
 
 class AuditRun:
     """The verifier's side of one session, driven by the coins it releases and the roots it receives, on its own clock.
-    `coins` are the session's coins through the one challenger (`coins.Coins`), committed before the session, each
+    `coins` are the session's coins through the one challenger (`coins.SessionCoins`), committed before the session, each
     asked for after the root it follows: σ_0 after the session's window root, σ_t after the last root received,
     window t's openings coin after its last root and an append's coin after its root.  `not_before_ns`, which
     every session names, is the earliest its first coin may leave on the verifier's clock: the previous session's
@@ -904,7 +904,7 @@ class AuditRun:
     codecs: tuple[type, ...] = (Codec,)
     block_bytes: int = BLOCK_BYTES
 
-    def __init__(self, params: Params, registration: Registration, tiles: Tiles | None, coins_: coins.Coins, *,
+    def __init__(self, params: Params, registration: Registration, tiles: Tiles | None, coins_: coins.SessionCoins, *,
                  not_before_ns: int, clock: Callable[[], int] = time.monotonic_ns) -> None:
         if type(params.codec) not in self.codecs:
             raise ValueError(f"a {type(self).__name__} is over a store under {[c.__name__ for c in self.codecs]}, not "
@@ -917,7 +917,7 @@ class AuditRun:
         if type(not_before_ns) is not int or not_before_ns < 0:
             raise ValueError("not_before_ns is the previous session's last deadline over the store, or the clock at "
                              "registration for its first: a nonnegative integer")
-        if (type(coins_) is not coins.Coins or coins_.registration != registration.digest
+        if (type(coins_) is not coins.SessionCoins or coins_.registration != registration.digest
                 or coins_.windows != params.windows or coins_.per_coin != params.groups_per_coin):
             raise ValueError(f"the challenger's coins are not this session's: {params.windows} windows' coins, "
                              f"{params.groups_per_coin} a draw, for this registration")
@@ -957,7 +957,7 @@ class AuditRun:
 
     def _release(self, t: int, now: int) -> coins.LiveOpening:
         """σ_t, after the last root received (R before any).  `now`, read before the coin leaves (and before the
-        challenger is asked, unless it was asked with the coin before it, `coins.Coins.ahead`), is its release in the
+        challenger is asked, unless it was asked with the coin before it, `coins.SessionCoins.ahead`), is its release in the
         record: the coin leaves later, so the record's span is the longer."""
         opening = self.coins.challenge(t, self._latest)
         self.windows.append(_Window(coins.coin(opening), now))
@@ -1057,7 +1057,7 @@ class AuditRun:
         the store's next fresh indices, from the first returned, and a plan received after this may hold them, until
         the lifetime cap: they join the window of the next root received, and no plan of a window `Params.lifetime` or
         more after it may hold them.  The seed of every pass whose root comes after this binds it (`chained`).  The
-        reply is the first index and the append's coin `c_a`, released now after the append's root (`coins.Coins.append`),
+        reply is the first index and the append's coin `c_a`, released now after the append's root (`coins.SessionCoins.append`),
         under which the prover encodes the blocks (`Store.encode`) and an opening decodes them.  Its rejection, `append`,
         if it is malformed or would take the store past its codec's `max_blocks`; `coin`, releasing none, if its root was
         sent before (a retry never redraws), the last window's roots are final, so no root can follow it, or the session's
@@ -1401,7 +1401,7 @@ def _outcomes(value: object) -> list[str]:
 
 
 class Registry:
-    """The verifier's registrations, at most one live a node (the red team's KB-4).  `register` draws a codec seed
+    """The verifier's registrations, at most one live a node.  `register` draws a codec seed
     (`register`) only for a node with none live: a second while one is live is refused (`RegistryError`) and counted
     (`refused`), and draws nothing, so a retry never redraws.  A registration ends only when the verifier closes it
     (`close`), which counts each of its sessions as it stands: accepted, the failure that rejected it, or `UNENDED`,
@@ -1447,7 +1447,7 @@ class Registry:
                 index: int | None = None, challenger: Callable[[int], object] | None = None) -> AuditRun:
         """The next session over the node's live registration, k its sessions so far (`index`, if given, must be k),
         kept to be counted at `close`.  Its coins are epoch k of `challenger(k)`, the one challenger's session for it
-        (`coins.Coins`), or without one a challenger in this process drawing from `entropy` (`coins.local`).  Refused
+        (`coins.SessionCoins`), or without one a challenger in this process drawing from `entropy` (`coins.local`).  Refused
         for a registration that isn't its node's live one, drawn here."""
         x = self._live.get(getattr(registration, "node", None))
         if x is None or x.registration is None or x.registration != registration:
@@ -1457,7 +1457,7 @@ class Registry:
             raise RegistryError(f"the registration's next session is {k}, not {index}")
         g = params.groups_per_coin
         c = (coins.local(registration.digest, k, params.windows, entropy, per_coin=g) if challenger is None
-             else coins.Coins(challenger(k), registration.digest, k, params.windows, per_coin=g))
+             else coins.SessionCoins(challenger(k), registration.digest, k, params.windows, per_coin=g))
         session = AuditRun(params, registration, tiles, c, not_before_ns=not_before_ns, clock=clock)
         x.sessions.append(session)
         return session
@@ -1524,11 +1524,11 @@ LEDGER_SOURCES = {
 
 
 class PostSeedVerdict(Protocol):
-    """The property's verdict on the circuits that wrote a session's post-seed blocks (I2, property/v1: P(c, R_in, L)),
-    as `ledger` reads it: whether it `holds`, and `carrier_bytes(read_bytes)`, the most the carriers among a window's
-    post-seed blocks can hold when its certified reads are `read_bytes`, R_in·L + (c_ρ·read_bytes·L/E)·b, the side
-    capacity the guarantee adds to c.  That the verdict is of the circuits that wrote this session's appends is I2's
-    to bind and check, not the ledger's."""
+    """The stacking property's verdict on the circuits that wrote a session's post-seed blocks (P(c, R_in, L),
+    `verity.ml.circuits.stacking`), as `ledger` reads it: whether it `holds`, and `carrier_bytes(read_bytes)`, the most
+    the carriers among a window's post-seed blocks can hold when its certified reads are `read_bytes`,
+    R_in·L + (c_ρ·read_bytes·L/E)·b, the side capacity the guarantee adds to c.  That the verdict is of the circuits
+    that wrote this session's appends is the property's proof to bind and check, not the ledger's."""
 
     @property
     def holds(self) -> bool: ...
@@ -1537,15 +1537,16 @@ class PostSeedVerdict(Protocol):
 
 
 class RequirementLink(Protocol):
-    """The served circuit's requirement, linked to a session's passes (A1's `Accounting.Requirement`), as `ledger`
+    """The served circuit's requirement, linked to a session's passes (Lean's `Accounting.Requirement`), as `ledger`
     reads it: whether the link `holds`, and `read_bits(step)`, the bits the circuit reads at a step from complete blocks
     (`creditedReadBits`: the bits of `requirement.credited_reads` in `verity.ml.circuits`; for a store of registered
     blocks only, the weights while KV isn't registered, the bits the step reads of registered values).  It holds once
     the proof blocks have shown, for every pass, that its plan holds every complete block the circuit reads at the
-    pass's step and the layout packs the values read into blocks (`PlanMatches`; the plan unit, I4's: PlanMatch, or
+    pass's step and the layout packs the values read into blocks (`PlanMatches`; the plan unit: PlanMatch, or
     PlanShard for a registered store, with `Packs` under the census's layout rule), and that every free in the memory
     map, of a registered block or a written one, is at its values' last structural reader on the public schedule, a
-    gather that may select one included (the memory-map unit, I4's; `memory_map.py`).  The link
+    gather that may select one included (the memory-map unit; `memory_map.py`), both units Definitions of
+    `verity.ml.circuits.requirement_units`.  The link
     is one-sided: a plan may hold blocks the circuit doesn't read at its step (filler, a gathered table's unselected
     rows, a paused request's pages), which carry none of its reads, so a planned block need carry none of its bits,
     and the ledger credits each pass the circuit's reads, never its receipts (`linked_bits`, `RequirementMoved`).  A
@@ -1818,7 +1819,7 @@ def ledger(record: Record, *, capacity_bytes_per_s: float, chip_bytes: int, rebu
     (`Accounting.Guarantees.Remote.SketchBoundDeployed`), whose terms add to the failure probability, not to γ:
     `timing.sketch_failure` of the prover's SHA-512 compressions over the session (`PROTOCOL.md` §4).
     The record credits the receipts of registered blocks, and those of blocks appended after the codec seed only on
-    `credit_post_seed`, the property's verdict on the circuits that wrote them (I2's; None credits none, and a verdict
+    `credit_post_seed`, the stacking property's verdict on the circuits that wrote them (None credits none, and a verdict
     that fails is refused), and only with this session's schedule check (`schedule`, `AuditRun.scheduled`): every
     pass's plan the published schedule's at its step and the schedule within the cap on its bits the session committed
     before its coins, so the layout the appended blocks are read at is the verifier's function of the schedule, steered

@@ -1,22 +1,26 @@
-"""Check 3 under zero knowledge: each receipt the remote session draws goes through the remote bandwidth audit's opening
-unit (`verity.ml.commitments.gates.block_check`, PROTOCOL.md §8's checks 1-3 and 5 as one unit) in place of its opening,
-so the verifier holds the drawn block, its payload, its receipt leaf, the step's plan row and every salt and path only
-inside the unit, and reads the unit's verdict.
+"""Check 3 through the opening unit, on the honest witness: each receipt the remote session draws is staged as the
+witness of the remote bandwidth audit's opening unit (`verity.ml.commitments.gates.block_check`, PROTOCOL.md §8's checks
+1-3 and 5 as one unit) in place of its opening, and decided by the unit's verdict.
+
+This module is the stand-in for the unit's proofs, not zero knowledge: `check` evaluates the unit's reference on the
+prover's own arguments, so the block, its payload, its receipt leaf, the plan row and every salt and path are in the
+caller's hands.  Proved, the verifier would hold them only inside the unit's proof and read its verdict.  No served
+session proves its openings: `period` and `verifier_party` send them to the verifier party in the clear
+(`audit.AuditRun.verify`), and only `benchmarks/one_stage/a8.py` proves one window's units in zero knowledge.
 
 For a draw (pass i of window t at step s, position p, block j = plan_i[p]) the prover stages one `BlockOpeningCheck`:
 the receipt leaf on its path to the pass's receipt root and the plan row holding j at p, the block decoding to its
 payload under b_j(c_a) (under the seed's key for a registered block), the payload on its path to its append's root (the
 registration's payload root for a registered block) and, appended, to the canonical payload commitment at row j - NR (the
 row the memory-map unit binds block j's ``pay`` row to, `requirement_units.map_value_leaves`), and the block's sketch
-receipt the leaf's entry p mod 16. The verifier opens only the unit's public rows, which it derives itself (`public`: the
-codec seed, j, the append's coin, the pass's chaining value, sign rows and p, the three roots with their domain ids, ranks
-and depths), and its verdict row; it holds the one witness row it doesn't open, the plan row, to the canonical plan row
-of step s by ``b || c`` (`plan_link`). No block, payload, receipt leaf or plan is opened.
+receipt the leaf's entry p mod 16. Proved, the verifier opens only the unit's public rows, which it derives itself
+(`public`: the codec seed, j, the append's coin, the pass's chaining value, sign rows and p, the three roots with their
+domain ids, ranks and depths), and its verdict row; it holds the one witness row it doesn't open, the plan row, to the
+canonical plan row of step s by ``b || c`` (`plan_link`). No block, payload, receipt leaf or plan is opened.
 
 `Session` is `audit.AuditRun` with check 3's outcome in place of `verify`'s openings (`drawn`, `decide`), and `Store` is
 `audit.Store` keeping the payloads it appends (the prover's witness, `witness`). `check` decides one draw by the unit's
-reference on the prover's arguments and the plan link, and `reference` a session's windows by it: the stand-in for the
-units' proofs where a session isn't proved."""
+reference on the prover's arguments and the plan link, and `reference` a session's windows by it."""
 from __future__ import annotations
 
 import bisect
@@ -173,7 +177,7 @@ def witness(d: PositionSample, ps: audit.Pass, store: Store, plan_row: Sequence[
 
 def commit(bits: int, words: Sequence[int], salt: bytes) -> bytes:
     """A bit row's ``b || c`` under ``salt``: hm96-sha512 over its sha512/row/v2 digest, the row of ``bits`` bits held in
-    ``words`` (u16, low bit first), as the proof service commits a unit's witness row."""
+    ``words`` (u16, low bit first), as the proof system commits a unit's witness row."""
     if len(words) != -(-bits // 16):
         raise ValueError(f"a row of {bits} bits is {-(-bits // 16)} u16 words, not {len(words)}")
     row = b"".join(int(w).to_bytes(2, "little") for w in words)[:-(-bits // 8)]

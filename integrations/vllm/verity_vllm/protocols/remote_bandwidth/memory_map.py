@@ -1,4 +1,4 @@
-"""`MemoryMap`: a `Store`'s KV events as memory-map/v1 (`remote_bandwidth.memory_map`, the program's I3), the prover's
+"""`MemoryMap`: a `NodeMemory`'s KV events as memory-map/v1 (`remote_bandwidth.memory_map`, the program's I3), the prover's
 record of the blocks each serving step wrote and freed beside its registered store.
 
 ~~~text
@@ -7,7 +7,7 @@ slot      the block's store index in the registry's numbering: region ``first`` 
 j         the store's next fresh index: N, the store's blocks when the map began, plus every block appended before
           it, in append order (a step's completed blocks by slot); the record writes the blocks in that order
 d_j       `codec.digest` of the block's payload, its region codec's decoding of the bytes it holds once written
-          (`Store.payload`)
+          (`NodeMemory.payload`)
 appended  a block `kv_append` completes, once its step's forward and frees are done (`complete`) if a free has not
           taken it back by then, and a block re-keyed: written again in its slot, the same payload at a fresh j, once
           its j is as old as the lifetime cap.  Each step's go out as one append (``on_append``), which the session
@@ -20,7 +20,7 @@ freed     an appended block (written since the map began, j >= N) of a page `kv_
           every plan) until a write completes it again under a new j.  A page's untouched blocks, registered before
           the seed and never written since, stay resident (`kv_free` leaves them in the filler).  And a live block a
           step's write reaches, completed or not: its bytes are no registered block until the block's write is
-          recorded (`Store`'s dirty), unless that step's record writes the slot (a write releases the slot's previous
+          recorded (`NodeMemory`'s dirty), unless that step's record writes the slot (a write releases the slot's previous
           block).  A block re-keyed: its old j at once, so it leaves the plans by the cap, its new j's write waiting
           for its encode.  And a block appended whose page `kv_free` returns before its write is recorded: its write
           is recorded all the same (its j is the session's), and its free in the next line, a step later, past its last
@@ -28,7 +28,7 @@ freed     an appended block (written since the map began, j >= N) of a page `kv_
           freed once; `kv_alloc` emits nothing
 ~~~
 
-Steps.  `Store.kv_append(appends, s)` opens step s's line: the engine has scheduled step s, whose forward is next.  A
+Steps.  `NodeMemory.kv_append(appends, s)` opens step s's line: the engine has scheduled step s, whose forward is next.  A
 `kv_free` is recorded in the open line, the step whose forward ran last, which bounds the freed values' last structural
 reader (where memory-map/v1 frees a block) from above: vLLM frees a finished request's pages in
 `Scheduler.update_from_output` after step s's forward, and a preempted request's in the next `Scheduler.schedule`,
@@ -56,7 +56,7 @@ plans before the first pass of window w, the first window that could not hold it
 write waits for its encode.  No margin past L is needed, provided the window of the next pass is open when the line
 closes (the binder takes the verifier's messages before `kv_append`).
 
-The header names the remote audit's `Registration.digest`, the one the verifier gives `Store.begin_window` for the
+The header names the remote audit's `Registration.digest`, the one the verifier gives `NodeMemory.begin_window` for the
 session's first window; without it there is no map.  Its indices are one session's (`audit.AuditRun`: a later session
 over the store starts again from N), so a store records one map.
 
@@ -74,6 +74,7 @@ import numpy as np
 
 from verity.core.protocols.remote_bandwidth import audit, codec
 from verity.core.protocols.remote_bandwidth.memory_map import Change, Header, MemoryMapError, Replay, Step, Written, dumps, parse
+from verity.ml.circuits import requirement
 
 LIFETIME = audit.lifetime_windows(audit.WINDOW_NS, deferred=True)
 """The lifetime cap a map keeps without the session's, in windows: the audit's at its stated window under deferred
@@ -83,10 +84,10 @@ residency, 2."""
 def record(store: Any, path: str | Path | None = None, registration: bytes | None = None,
            lifetime: int = LIFETIME, on_line: Callable[[Change], None] | None = None,
            on_append: Callable[[int, tuple[int, ...], tuple[bytes, ...], list[bytes]], None] | None = None) -> MemoryMap:
-    """Start ``store``'s memory map (`Store.record_memory_map`; ``store`` a `verity_vllm.protocols.remote_bandwidth.registry.Store`)."""
+    """Start ``store``'s memory map (`NodeMemory.record_memory_map`; ``store`` a `verity_vllm.protocols.remote_bandwidth.registry.NodeMemory`)."""
     if registration is None:
         raise ValueError("a memory map names the store's registration: pass the remote audit's Registration.digest, "
-                         "the one the session's first window chains from (Store.begin_window)")
+                         "the one the session's first window chains from (NodeMemory.begin_window)")
     if store.memory_map is not None:
         raise RuntimeError("the store already records a memory map")
     lay = store.layout()
@@ -293,11 +294,28 @@ class MemoryMap:
         return self.path.read_text() if self.path is not None else self._head + "".join(self._kept)
 
 
+def audit_store(m: MemoryMap | None) -> requirement.Store:
+    """The audit's store (`requirement.Store`, Lean's `CircuitRequirement.Store`) as the map ``m`` records it, replayed
+    from its header: its N registered blocks, each step's written indices and the indices it released (freed, or
+    overwritten by a write to their slot; a withdrawn index is never written, so never freed), and no payloads (the
+    map holds their digests)."""
+    if m is None:
+        raise RuntimeError("the audit's store is read off the memory map: start one (record_memory_map)")
+    head, steps = parse(m.text().splitlines(keepends=True))
+    r, written, freed = Replay(head), {}, {}
+    for st in steps:
+        change = r.apply(st)
+        written[st.step] = frozenset(w.index for w in st.written)
+        freed[st.step] = frozenset(j for f, n in change.released for j in range(f, f + n)) - set(st.withdrawn)
+    return requirement.Store(head.blocks, written, freed, {})
+
+
 def agreement(backend: Any) -> dict[str, Any]:
     """The memory map against the session and the store (``backend``, a `remote.StoreBackend`), once the session is done:
-    replayed from its header, its live indices are the session's last plan's and its blocks the audit's appends, in order,
-    up to those whose writes wait for their encodes (deferred residency); then, its open line closed, every slot it holds
-    at an appended index holds bytes of that index's digest in the store."""
+    replayed from its header, its live indices (`audit_store`'s resident blocks after its last step) are the session's
+    last plan's and its blocks the audit's appends, in order, up to those whose writes wait for their encodes (deferred
+    residency); then, its open line closed, every slot it holds at an appended index holds bytes of that index's digest
+    in the store."""
     trace, store = backend.trace, backend.store
 
     def replay() -> tuple[Replay, dict[int, bytes]]:
@@ -308,18 +326,13 @@ def agreement(backend: Any) -> dict[str, Any]:
             digests.update((w.index, w.digest) for w in st.written)
         return r, digests
 
-    def resident(r: Replay) -> np.ndarray:
-        out = np.zeros(max(r.extent, len(trace.live)), bool)
-        out[:r.header.blocks] = True
-        out[[x for x in r.moved if x < r.header.blocks]] = False
-        out[[j for j in r.moved.values() if j is not None]] = True
-        return out
-
     r, digests = replay()
     n = r.header.blocks
+    held = np.zeros(max(r.extent, len(trace.live)), bool)
+    held[sorted(audit_store(store.memory_map).resident(r.last + 1))] = True
     mine = np.zeros(max(r.extent, len(trace.live)), bool)
     mine[:len(trace.live)] = trace.live
-    live = bool(np.array_equal(resident(r), mine))
+    live = bool(np.array_equal(held, mine))
     appends = sorted(digests) == list(range(n, r.extent)) and trace.digests[:r.extent - n] == [digests[j] for j in sorted(digests)]
     store.memory_map.flush()
     r, digests = replay()
