@@ -111,6 +111,16 @@ def test_tensor_active_at_the_reference_clock(tmp_path):
     assert U.mhz(1599.3) == 1599.3
 
 
+@pytest.mark.parametrize("arm, served", [("stock", True), ("noseal", True), ("graphs", False), ("async", False)])
+def test_an_arm_off_the_served_stack_says_so(tmp_path, monkeypatch, capsys, arm, served):
+    out = tmp_path / "util.json"
+    monkeypatch.setattr(sys, "argv", ["served_util.py", "--sqlite", str(_report(tmp_path / "prof.sqlite")), "--trace",
+                                      str(_trace(tmp_path / "advice_trace.jsonl")), "--T", "8", "--arm", arm, "--out", str(out)])
+    assert U.main() == 0
+    assert json.loads(out.read_text())["served_stack"] is served
+    assert ("(not the served stack)" in capsys.readouterr().out) is not served
+
+
 def test_too_few_full_steps_is_said(tmp_path):
     got = U.analyse(_report(tmp_path / "prof.sqlite"), _trace(tmp_path / "advice_trace.jsonl", T=16), 8)
     assert got["all"]["steps"] == 0 and "fewer than two" in got["all"]["note"]

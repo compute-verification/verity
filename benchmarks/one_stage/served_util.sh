@@ -20,7 +20,8 @@
 #           our served stack: serve-openai serves eager, and the row's Program declares async scheduling off. Under async
 #           scheduling a step's slots stay held until the step before it is processed, so SEQS defaults to 2·T/1024
 #   async   stock eager with async scheduling on (UTIL_ENGINE_JSON's default {"async_scheduling": true}), without the bench
-#           row, as graphs
+#           row, as graphs: not the served stack either (the Commit and H1 refuse async scheduling), so util.json's
+#           served_stack is false for both
 # Env: ARM, T (8192), N (64), WARM (2·T/1024), GPU_HZ (10000), LEASE_MIN (90), EXTRA (more serve-openai arguments, split
 # on spaces), PROTOCOLS_CONFIG (one --protocols-config argument), PYSAMPLE=1 (Nsight Systems' Python backtrace sampling at
 # PYHZ, 1000, for the host gaps), SEQS (--max-num-seqs and --window-requests, T/1024, 2·T/1024 for graphs and async; the

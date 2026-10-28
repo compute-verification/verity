@@ -18,6 +18,9 @@ to 100 less the mean.
 Tensor Active counts cycles at the clock the card ran (the GPC Clock Frequency metric, sampled with it). ``sm_clock_mhz`` is
 that clock's mean over the window, and ``tensor_active_pct_at_ref`` the tensor-busy cycles over the cycles the window would
 hold at ``--ref-mhz`` (1,830): the mean over samples of Tensor Active times the sample's clock over the reference.
+
+``served_stack`` is false for the arms that override serve-openai's engine options and drop the bench row (NOT_SERVED),
+and their UTIL lines say so, so a table can't file them as the served step.
 """
 from __future__ import annotations
 
@@ -44,6 +47,8 @@ CATEGORIES = (
     ("elementwise", r"elementwise|vectorized|reduce|norm|rms|silu|act|rotary|rope|add|mul|unrolled|triton|sum|max|where"),
 )
 D2H, H2D = 2, 1                                      # CUPTI_ActivityMemcpyKind
+#: `served_util.sh`'s arms that serve with the engine's options overridden and no bench row
+NOT_SERVED = ("graphs", "async")
 
 
 def category(name: str) -> str:
@@ -339,7 +344,8 @@ def main() -> int:
     ap.add_argument("--ref-mhz", type=float, default=1830.0)
     ap.add_argument("--out", required=True, type=Path)
     a = ap.parse_args()
-    doc: dict[str, Any] = {"arm": a.arm, "T": a.T, "N": a.N, **analyse(a.sqlite, a.trace, a.T, last_send(a.timings), a.ref_mhz)}
+    doc: dict[str, Any] = {"arm": a.arm, "served_stack": a.arm not in NOT_SERVED, "T": a.T, "N": a.N,
+                           **analyse(a.sqlite, a.trace, a.T, last_send(a.timings), a.ref_mhz)}
     if a.serve_dir is not None:
         doc["serve"] = windows(a.serve_dir)
     if a.timings is not None and a.timings.exists():
@@ -362,7 +368,7 @@ def main() -> int:
             continue
         clock = (f" at {w['sm_clock_mhz']:.0f} MHz ({w['tensor_active_pct_at_ref']:.2f}% at {w['ref_mhz']:.0f} MHz)"
                  if w.get("sm_clock_mhz") is not None else "")
-        print(f"UTIL {a.arm} T {a.T} [{key}]: tensor active {w['tensor_active_pct']:.2f}%{clock} over {w['steps']} full steps, "
+        print(f"UTIL {a.arm}{'' if doc['served_stack'] else ' (not the served stack)'} T {a.T} [{key}]: tensor active {w['tensor_active_pct']:.2f}%{clock} over {w['steps']} full steps, "
               f"step wall {w['step_wall_ms']['mean']:.2f} ms (median {w['step_wall_ms']['median']:.2f}), GPU busy {w['gpu_busy_pct']:.1f}%, "
               f"D2H {w['copies']['d2h']['GB']:.1f} GB ({w['copies']['d2h']['busy_pct']:.1f}% of the time)")
         for r in w["losses"][:8]:
