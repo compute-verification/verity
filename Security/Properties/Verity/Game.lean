@@ -315,6 +315,14 @@ structure Vocab {ι : Type} (d : Device ι) (α : Type) [Fintype α] where
     (finder a θ F c σ).cost x ≤ callsMul θ a * cost θ F c σ + callsAdd θ a
   computed : (θ F c : ByteArray) → Game.Strategy (play (rounds θ) θ F c) → Exchange → Finset (Fin (read F).circuit.N)
   world : (θ F c : ByteArray) → Game.Strategy (play (rounds θ) θ F c) → Exchange → World d α
+  /-- the window PoUS's and PoUB-P2's claims read, fixed by the parameters before any coin -/
+  window : ByteArray → Accounting.Window
+  /-- the account PoUS's claim charges device memory to, fixed by the parameters before any coin -/
+  capacity : ByteArray → α
+  /-- every play's world is read over the parameters' window, never one PoUS's own coins chose -/
+  world_window : ∀ θ F c σ o, (world θ F c σ o).win = window θ
+  /-- every play's world charges device memory to the parameters' account, never one PoUS's own coins chose -/
+  world_capacity : ∀ θ F c σ o, (world θ F c σ o).acct Accounting.Resource.capacity = capacity θ
   /-- the declaration's registered inputs `θ`, input gates of the committed circuit -/
   theta : (θ F : ByteArray) → Finset (Fin (read F).circuit.N)
   theta_input : ∀ θ F, ∀ g ∈ theta θ F, (read F).circuit.isInput g = true
@@ -343,6 +351,10 @@ structure Vocab {ι : Type} (d : Device ι) (α : Type) [Fintype α] where
   certOf : ByteArray → Certificates
   crBound : ByteArray → Subprotocol → ℕ → ℝ
   delta : ByteArray → Subprotocol → ℕ → ℝ≥0∞
+  /-- **A subprotocol's LMS-forgery term** at the strategy's SHA-512 calls: the chance that a release outside the
+  device's log passes its check, a forgery of the device's LMS signature. A forgery needs SHA-512's one-wayness as
+  well as its collision resistance, and no lock premise bounds it yet, so this term is open: an instance supplies it. -/
+  forgery : ByteArray → Subprotocol → ℕ → ℝ≥0∞
   loss : Subprotocol → ByteArray → ℝ≥0∞ → ℝ≥0∞
 
 namespace Vocab
@@ -401,7 +413,8 @@ noncomputable def live (k : Verity.Registration.Composite) (θ F c : ByteArray) 
 transcript at `σ` (at most an `ε` share of the units unbound in it under the commitment's openings), PoUW's in gates (at
 least `W` gates of the committed circuit computed after their window's coin), and the others' on the world the play
 realized (at least `S` bits of device memory held on average, at least `Q` bits read, at most `K` bits through the
-network certifiers). The inference-only policy's: the declaration complies with `Nci.Complies` at the published `Γ` and
+network certifiers), whose window and capacity account are the parameters' (`world_window`, `world_capacity`), so PoUS's
+own coins choose neither. The inference-only policy's: the declaration complies with `Nci.Complies` at the published `Γ` and
 `α`. The wipe's: the play, read at the wipe's boundary as the wipe's game, doesn't keep foreign content past the
 published survivor threshold (`Verity.Wipe.OfRun.Kept`). -/
 def Holds (k : Verity.Registration.Composite) (θ F c : ByteArray) (σ : Game.Strategy (V.game θ F c)) :
@@ -415,7 +428,7 @@ def Holds (k : Verity.Registration.Composite) (θ F c : ByteArray) (σ : Game.St
   | .wipe, o => ¬ (V.wipeRun θ F c σ).Kept (V.foreignBits θ) o
 
 /-- Every release `a`'s check read is in the device's log; outside it, the release is a forgery of the device's LMS
-signature, which `a`'s finder turns into a collision. -/
+signature, which `a`'s error bounds by its forgery term (`Vocab.forgery`). -/
 def Logged (a : Subprotocol) (o : Exchange) : Prop := ∀ r ∈ V.coinsRead a o.sent, r ∈ o.log
 
 /-- **The finder for a second file with the registered digest**: on its one coin it hashes the committed blob and the
@@ -433,12 +446,14 @@ def FinderCR (a : Subprotocol) (θ F c : ByteArray) (σ : Game.Strategy (V.game 
   (V.finder a θ F c σ).Pr sha512Msg ≤ V.crBound θ a (V.cost θ F c σ)
 
 /-- **Subprotocol `a`'s error at a strategy**: where its finder meets its collision premise (`FinderCR`), its published
-`δ` at the strategy's SHA-512 calls plus its loss at the probability that the finder outputs a collision, the form of
-`Accounting.PeriodLive.error`; elsewhere no bound (`⊤`), as `Accounting.condError` reads it. C-Flock's conditional
-bound is the case `loss = 0`, the additive one the case `crBound = 1`. -/
+`δ` at the strategy's SHA-512 calls, plus its LMS-forgery term there (`forgery`), plus its loss at the probability that
+the finder outputs a collision, the form of `Accounting.PeriodLive.error` with the forgery term beside `δ`; elsewhere no
+bound (`⊤`), as `Accounting.condError` reads it. C-Flock's conditional bound is the case `loss = 0`, the additive one
+the case `crBound = 1`. -/
 noncomputable def error (a : Subprotocol) (θ F c : ByteArray) (σ : Game.Strategy (V.game θ F c)) : ℝ≥0∞ :=
   condError (V.FinderCR a θ F c)
-    (fun σ => V.delta θ a (V.cost θ F c σ) + V.loss a θ (ENNReal.ofReal ((V.finder a θ F c σ).Pr sha512Msg))) σ
+    (fun σ => V.delta θ a (V.cost θ F c σ) + V.forgery θ a (V.cost θ F c σ) +
+      V.loss a θ (ENNReal.ofReal ((V.finder a θ F c σ).Pr sha512Msg))) σ
 
 /-- **Soundness at composite `k` for the acceptance `acc`, in the causal game.** At all parameters `θ`, committed files
 `F` and commitments `c`, and for every strategy, the probability that `acc` holds of what the prover sent for a blob
