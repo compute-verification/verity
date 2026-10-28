@@ -19,6 +19,9 @@ units of their own (Llama-3.2-1B's head on sm_90 is a 64-dim row over kBlockN 19
 record's 1,087 keys).  v4's first iteration, `AttnBlock_v4{FIRST=True, CHECK=True}`, is FA2's word for word (both guard the running max
 before `max * scale`, and a first block has no rescale), so it is `AttnBlockFirst_v1`, which pads only what it reads; v4's epilogue is
 `AttnHeadEnd_v1`'s.
+
+`AttnBlockSoftmax_v2` is `fa2_check_inf.AttnBlockSoftmax_v1` under v4's guard: a key block below the first cut into its softmax step
+and its P·V groups (`AttnBlockPv_v1`, v4's P·V being v5's), word for word `AttnBlock_v4{FIRST=False}`.
 """
 from __future__ import annotations
 
@@ -175,6 +178,16 @@ def AttentionV20(B, S, q, kc, vc):
     return F2._check_inf_attention(B, S, q, kc, vc, AttentionHeadV20, ())
 
 
+@composite("AttnBlockSoftmax", 2, ["D", "NVIS", "FIRST", "DOT", "CHECK", "PK", "LAST"], F2._softmax_type,
+           conformance="not-yet-established: AttnBlock_v4's steps up to P", refuse=F2._softmax_refuse)
+def AttnBlockSoftmaxV2(B, S, q, k, *state):
+    """`AttnBlockSoftmax_v1` under `AttnBlock_v4`'s guard: FA3's `Check_inf`, CHECK guarding the running max before both the
+    rescale and `max * scale`, LAST likewise returning no running max.  Its P groups are `AttnBlockPv_v1`'s, as v4's P·V is
+    v5's."""
+    return F2.softmax_steps(B, S, q, k, state, guard_max_scaled_only=False)
+
+
 FA3_CHECK_INF_COMPOSITES = [AttnBlockV4, AttentionHeadV4, AttentionV4, AttentionHeadV20, AttentionV20]
 
-__all__ = ["AttnBlockV4", "AttentionHeadV4", "AttentionV4", "AttentionHeadV20", "AttentionV20", "FA3_CHECK_INF_COMPOSITES"]
+__all__ = ["AttnBlockSoftmaxV2", "AttnBlockV4", "AttentionHeadV4", "AttentionV4", "AttentionHeadV20", "AttentionV20",
+           "FA3_CHECK_INF_COMPOSITES"]
