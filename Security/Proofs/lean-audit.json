@@ -92,13 +92,16 @@
    "digest": "34be1e89abec1ac3c72f02d08dc9ac7c78124e56f609216a1ef9b345746e2edf"
   },
   "Proofs.Flock.Claims.Recursion.CallsLe": {
-   "why": "keep_walk, a macro that expands to repeated refine/exact of the module's keepL/keepT bind, pure and get lemmas (a logged computation keeps its log's prefix). It runs only inside the elaborator and does no IO, and the kernel replays every proof it builds."
+   "why": "keep_walk, a macro that expands to repeated refine/exact of the module's keepL/keepT bind, pure and get lemmas (a logged computation keeps its log's prefix). It runs only inside the elaborator and does no IO, and the kernel replays every proof it builds.",
+   "digest": "3b5080f54c4b73aea6b61de4721c9ec6c30aa29eb33d9bb0666a05ec19d1d431"
   },
   "Proofs.Flock.Claims.Recursion.CallsRep": {
-   "why": "tw_walk, tw_step and lw_step, macros that expand to first/repeat' over refine/exact of the module's calcCS/calcCS2 bind, pure, throw and sample lemmas (the call bound of a rep's verification). They run only inside the elaborator and do no IO, and the kernel replays every proof they build."
+   "why": "tw_walk, tw_step and lw_step, macros that expand to first/repeat' over refine/exact of the module's calcCS/calcCS2 bind, pure, throw and sample lemmas (the call bound of a rep's verification). They run only inside the elaborator and do no IO, and the kernel replays every proof they build.",
+   "digest": "21eefb3d7ab83b3a0ec14542c323777458cfddc7c0a92858eeb36cc31e03e988"
   },
   "Proofs.Flock.Claims.Recursion.CallsTop": {
-   "why": "cl_step, dec_step and ret_step, macros that expand to first over refine/exact of the module's CL/Ret bind, pure and throw lemmas, and cl_bind_of and cl_head, elabs that only read the goal and fail unless its program's head is the named constant. They run only inside the elaborator, read no files and do no IO, and the kernel replays every proof they build."
+   "why": "cl_step, dec_step and ret_step, macros that expand to first over refine/exact of the module's CL/Ret bind, pure and throw lemmas, and cl_bind_of and cl_head, elabs that only read the goal and fail unless its program's head is the named constant. They run only inside the elaborator, read no files and do no IO, and the kernel replays every proof they build.",
+   "digest": "b79afd58b999bf109956c0ce64b53f15e9ca536e0072ebb8218438d6c4b303f0"
   },
   "Proofs.Flock.Claims.Recursion.LogWalk": {
    "why": "retl_walk, the tactic (an elab) that walks RetL goals at elaboration, step by step on the logged computation's head (retlStep, in Recursion/DecodeLog.lean's proofs and the module's own). It reads no files and does no IO, and the kernel replays every proof it builds.",
