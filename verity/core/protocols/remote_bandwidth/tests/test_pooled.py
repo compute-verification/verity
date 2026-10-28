@@ -93,10 +93,10 @@ def test_the_greedy_takes_the_windows_by_receipts_a_draw_and_a_window_opened_who
     assert pooled.bound([(40, 40)] * 3, DELTA).wrong == 0
 
 
-def synthetic(n: int, u: int, s: int, delta: float) -> audit.Record:
+def synthetic(n: int, u: int, s: int, delta: float) -> audit.Summary:
     windows = tuple(audit.WindowRecord(t, (u,), t, t + 1, t + 1, IntegrityProfile(
         ("receipt",), (u,), {"receipt": Subset(s)}, delta, drawn={"receipt": s})) for t in range(n))
-    return audit.Record(bytes(64), bytes(64), u, 4096, windows)
+    return audit.Summary(bytes(64), bytes(64), u, 4096, windows)
 
 
 def test_audit_rounds_the_exact_bound_up_at_gate_runs_records():

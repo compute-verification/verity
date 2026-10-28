@@ -133,7 +133,7 @@ class Node:
                 "squarings_per_s": dict(self.squarings_per_s)}
 
 
-def sketch(record: audit.Record, node: Node) -> float:
+def sketch(record: audit.Summary, node: Node) -> float:
     """`SketchBound`'s δ for a sketch-sha512 record (`Accounting.Guarantees.Remote.SketchBoundDeployed`), every
     compression the prover could make over the span a guess or a key: Q = F·C, C the node's over the span and F its
     `sketch_outside` (`timing.sketch_failure`); 0 for another receipt kind. It is the δs of the memory line's
@@ -151,7 +151,7 @@ path's nodes, at most 64 since a rank is a u64, the frame leaf, the hm96 leaf, i
 row digest."""
 
 
-def rejection(record: audit.Record) -> float:
+def rejection(record: audit.Summary) -> float:
     """The draw's rejection, `PooledDraw`'s and `LineHeld`'s Σ_t k_t/2^64: 2^-`REJECTION_LOG2` a receipt draw t
     requested, k_t the record's `samples` in every draw (the k at which `DrawsOfRecord` holds), one draw a window, or
     ⌈W/g⌉ draws at `groups_per_coin` g.  Not the receipts drawn (`profile.drawn`, min(k_t, U_t), short of k_t in a draw
@@ -163,7 +163,7 @@ def rejection(record: audit.Record) -> float:
     return coins.openings_coins(len(record.windows), record.groups_per_coin) * record.samples * 2.0 ** -REJECTION_LOG2
 
 
-def hiding(record: audit.Record) -> float:
+def hiding(record: audit.Summary) -> float:
     """The coin commitment's hiding terms over the record's n windows (`Committed.hide`,
     `Accounting.Guarantees.Remote.PooledDraw`): window t's two distances between coin t's hm96 leaf and a leaf
     committing zeros, each within 2^-192 under the pinned key, n·2^-191 in all (claims `statistical-hiding`,
@@ -176,7 +176,7 @@ def hiding_over(windows: int) -> float:
     return 2 * 2.0 ** receipts.HM96.statistical_distance_log2(windows, key_failure_log2=64)
 
 
-def compressions(record: audit.Record, node: Node) -> int:
+def compressions(record: audit.Summary, node: Node) -> int:
     """C, the node's SHA-512 compressions over the record's span, at its stated rate."""
     return math.ceil(node.sha512_per_s * record.span_ns / 1e9)
 
@@ -199,7 +199,7 @@ def binding_over(draws: int, receipts: int, samples: int, queries: int) -> float
     return draws * math.sqrt(receipts * s) * (2 * queries + 2 * s * OPENING_HASHES) / 2 ** 256.5
 
 
-def binding(record: audit.Record, node: Node) -> float:
+def binding(record: audit.Summary, node: Node) -> float:
     """The receipts' binding term (`Accounting.Remote.Draw.Receipts.binding`): the probability that some opened
     receipt was presented with an accepted row other than the one its root holds (`Receipts.held`, the plurality of
     the rows it shows over its window's continuations from the cut before its coin).  Window t's fork finder runs the
@@ -246,12 +246,12 @@ class Draw:
                                             "in_total": False}}}
 
 
-def draw(record: audit.Record, node: Node) -> Draw:
+def draw(record: audit.Summary, node: Node) -> Draw:
     """The record's draw terms on `node`."""
     return Draw(rejection(record), hiding(record), binding(record, node))
 
 
-def windows(record: audit.Record) -> list[tuple[int, int]]:
+def windows(record: audit.Summary) -> list[tuple[int, int]]:
     """The spans γ is declared over, each `(from, to)` in ns: each window's own, `[b_(t−1), D_t]`, a stated window
     apart; or a paced session's fixed windows of the stated T (`audit.Pace.window_ns`) from its first challenge, the
     last ending at its last deadline.  Both are protocol structure: when a paced session's coins left is a value."""
@@ -300,7 +300,7 @@ class Gamma:
                              "window": w.window} for w in self.windows]}
 
 
-def _fixed(record: audit.Record, lg: audit.Ledger, chip_bytes: int, capacity: float) -> tuple[audit.WindowLedger, ...]:
+def _fixed(record: audit.Summary, lg: audit.Ledger, chip_bytes: int, capacity: float) -> tuple[audit.WindowLedger, ...]:
     """The ledger's window terms over a paced record's fixed windows (`windows`).  A pass is in the fixed window that
     holds it whole, from its challenge's release to its root's arrival, and in none if it straddles a boundary; each
     term is its passes': their credited receipts, chip and counting, and of each window they are from, its wrong
@@ -337,7 +337,7 @@ def _fixed(record: audit.Record, lg: audit.Ledger, chip_bytes: int, capacity: fl
     return tuple(out)
 
 
-def gamma(record: audit.Record, node: Node, capacity_bytes_per_s: float, *,
+def gamma(record: audit.Summary, node: Node, capacity_bytes_per_s: float, *,
           wrong: Callable[[IntegrityProfile], float] = IntegrityProfile.bound) -> Gamma:
     """γ against `capacity_bytes_per_s`, over the registered store only (nothing appended after the codec seed is
     credited), with the node's S_chip and squaring ceiling (`audit.ledger`), and per window as declared (`windows`):
@@ -377,7 +377,7 @@ class Line:
                 "lost_blocks": self.lost_blocks}
 
 
-def _arrivals(record: audit.Record) -> str | None:
+def _arrivals(record: audit.Summary) -> str | None:
     """Why a paced record's arrivals can't be read, or None: every root's, in order from its window's challenge to its
     deadline, on one clock."""
     if any(len(w.arrived_ns) != w.passes for w in record.windows):
@@ -389,7 +389,7 @@ def _arrivals(record: audit.Record) -> str | None:
     return None
 
 
-def _paced(record: audit.Record) -> str | None:
+def _paced(record: audit.Summary) -> str | None:
     """Why the record has no time-held line, or None: it must be paced, with a closing window after the first, every
     root's arrival in order (`_arrivals`), every pass reading every registered block (`Covers`: a block a pass leaves
     out can be absent across it with neither a wrong read nor a rebuild), and a credited span."""
@@ -409,7 +409,7 @@ def _paced(record: audit.Record) -> str | None:
     return None
 
 
-def delta_parts(record: audit.Record, node: Node) -> dict[str, float]:
+def delta_parts(record: audit.Summary, node: Node) -> dict[str, float]:
     """The memory line's δ (`memory`'s `Line.delta`, its parts added in `DELTA_PARTS`' order) in its six parts: the
     windows' profile δ, AuditRO's 2^-SLACK_LOG2 a pass over the record's passes, the coin commitment's hiding terms
     (`hiding`), the receipts' binding term at the session's bounds (`binding`), SketchBound's δs (`sketch`) and the
@@ -419,7 +419,7 @@ def delta_parts(record: audit.Record, node: Node) -> dict[str, float]:
             "rejection": rejection(record)}
 
 
-def memory(record: audit.Record, node: Node) -> tuple[Line, Line, Line]:
+def memory(record: audit.Summary, node: Node) -> tuple[Line, Line, Line]:
     """The memory line's three forms (`FORMS`)."""
     N, b, P = record.blocks, record.block_bytes, record.passes
     W = audit.pooled(record)[0]
@@ -473,7 +473,7 @@ class Declared:
                 "memory": {x.form: x.to_json() for x in self.memory}, "windows": self.windows}
 
 
-def declared(record: audit.Record, node: Node, *,
+def declared(record: audit.Summary, node: Node, *,
              wrong: Callable[[IntegrityProfile], float] = IntegrityProfile.bound) -> Declared:
     """`record`'s declared outputs on `node`.  `wrong` is each window's bound on its wrong receipts
     (`IntegrityProfile.bound`, computed once a window for both readings)."""

@@ -248,7 +248,7 @@ def average_line(windows: list[dict]) -> dict:
             "weights_bytes_rebuild_per_pass": min(x["credited_rebuild_per_pass"]["weights"] for x in windows)}
 
 
-def memory(record: audit.Record, plans, regions, *, hbm_bytes: int, rebuild: audit.Rebuild, chip_bytes: int = 0,
+def memory(record: audit.Summary, plans, regions, *, hbm_bytes: int, rebuild: audit.Rebuild, chip_bytes: int = 0,
            credit_post_seed: audit.PostSeedVerdict | None = None, schedule: audit.Scheduled | None = None) -> dict:
     """The node's memory a session's record shows held, against its HBM, in two forms.
 
@@ -920,7 +920,7 @@ class Pair:
         if got != mine:
             self._disagree(len(self.s.windows) - 1, "record", got, mine)
 
-    def record(self) -> audit.Record:
+    def record(self) -> audit.Summary:
         """The accepted session's record: the Lean's (its `outcome` at `end`, as `lv.record_of` reads it, with the
         session's bounds, `audit.Session.bounded`)."""
         return self.s.bounded(lv.record_of(self.outcome_json["record"], self.s.registration, self.s.commitment.root,
@@ -1418,7 +1418,7 @@ class Verifier:
             change = ([tuple(r) for r in added], [tuple(r) for r in removed])
         return session.receive(head["t"], head["i"], bytes.fromhex(head["root"]), change=change, step=head.get("step"))
 
-    def ledgers(self, record: audit.Record, arrivals: list[list[int]] = (), plans=None) -> dict:
+    def ledgers(self, record: audit.Summary, arrivals: list[list[int]] = (), plans=None) -> dict:
         """The session's declared outputs (`declared`), the protocol's (`ledger`: γ against the node's R at spec and
         measured, per window as declared, and the memory line's forms), on the verifier's node (`ledger.Node.stated`:
         every GPU's HBM and the host's DRAM, the node's S_chip and squaring ceiling, `--disk-bytes-per-s` and

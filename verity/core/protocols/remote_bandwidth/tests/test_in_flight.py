@@ -20,7 +20,7 @@ def logged(s: Session) -> tuple[coins.LiveCommitment, dict[str, tuple[bytes, ...
     return s.coins.commitment, {label: s.coins.afters(label) for label, _ in s.coins.commitment.families}
 
 
-def honest(store, k: int, f: int, windows: int = 5) -> tuple[Session, audit.Record]:
+def honest(store, k: int, f: int, windows: int = 5) -> tuple[Session, audit.Summary]:
     s, prover, passes, clock, _ = paced(store, params(windows=windows, samples=N, window_ns=1, pace=Pace(k, 1000, f)))
     assert all(v.accepted for v in finish(s, prover, passes, clock))
     return s, s.record()

@@ -466,7 +466,7 @@ class UnitsLink:
     def read_bits(self, step: int) -> int:
         return self.req.bits(RQ.credited_reads(self.req, self.layout, step))
 
-    def mapped(self, record: audit.Record) -> bool:
+    def mapped(self, record: audit.Summary) -> bool:
         passes = [(s, h) for w in record.windows for s, h in zip(w.steps, w.heads, strict=True)]
         return (self.holds and self.proved and record.appends == self.appends and self.life == record.lifetime
                 and all(s < len(self.heads) and h == self.heads[s] for s, h in passes))

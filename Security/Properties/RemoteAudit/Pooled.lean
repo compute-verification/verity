@@ -19,7 +19,7 @@ rational root, and W by the fractional knapsack's greedy. The draw's model reads
   stretch's) is at least the session's pooled bound.
 
 They take no premise. That the windows the line reads are the session's (each window's receipts and its draws, as the
-verifier's record holds them, `audit.Record`) is the record's, outside this statement.
+verifier's record holds them, `audit.Summary`) is the record's, outside this statement.
 -/
 
 open RemoteAudit

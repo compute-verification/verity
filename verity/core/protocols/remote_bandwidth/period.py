@@ -65,7 +65,7 @@ def payloads(store: bytes) -> list[bytes]:
                      for u in range(codec.BLOCK_BYTES // WORD_BYTES)) for b in range(n)]
 
 
-def certified(record: audit.Record) -> tuple[dict[str, Any], dict[str, Any]]:
+def certified(record: audit.Summary) -> tuple[dict[str, Any], dict[str, Any]]:
     """`RemoteAudit.Protocol.certify`: an accepted session's public outputs `{"eps", "q_bytes"}` and its profile."""
     windows, _ = audit.pooled_windows(record)
     us, ss = sum(u for u, _ in windows), sum(s for _, s in windows)

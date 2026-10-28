@@ -110,7 +110,7 @@ def params(**kw) -> Params:
     return Params(**{**base, **kw})
 
 
-def no_rebuild(r: audit.Record) -> audit.Rebuild:
+def no_rebuild(r: audit.Summary) -> audit.Rebuild:
     """A rebuild model of the record's codec at a ceiling of 0, for the tests of the other terms."""
     return audit.Rebuild(r.codec, 0.0)
 
@@ -398,11 +398,11 @@ def test_the_rebuild_term_is_the_record_s_codec_at_the_stated_ceiling() -> None:
         audit.Rebuild("p1024/k3/masked", 1e9)
 
 
-def synthetic(lengths: tuple[int, ...], drawn: int, delta: float) -> audit.Record:
+def synthetic(lengths: tuple[int, ...], drawn: int, delta: float) -> audit.Summary:
     """A record of windows of one pass each, `lengths[t]` receipts and `drawn` openings, a second apiece."""
     windows = tuple(audit.WindowRecord(t, (u,), t * 10**9, (t + 1) * 10**9, (t + 1) * 10**9, IntegrityProfile(
         ("receipt",), (u,), {"receipt": Subset(drawn)}, delta, drawn={"receipt": drawn})) for t, u in enumerate(lengths))
-    return audit.Record(bytes(64), bytes(64), max(lengths), 4096, windows)
+    return audit.Summary(bytes(64), bytes(64), max(lengths), 4096, windows)
 
 
 def test_the_ledger_reads_the_openings_per_window_and_over_the_horizon() -> None:

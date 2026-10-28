@@ -781,7 +781,7 @@ pass in flight and its root's trip up, together at most \(A + J\). So
 
 **Between sessions.** Sessions over one store are not chained to each other: each session's chain starts from the
 registration's digest. So a session's first coin leaves no earlier than the previous session's last deadline,
-`Record.end_ns`, less the trusted round-trip floor if there is one, and the store's first session's no earlier than
+`Summary.end_ns`, less the trusted round-trip floor if there is one, and the store's first session's no earlier than
 the verifier's clock at registration. Every `Session` names that time (`not_before_ns`, required: a session built
 without it is refused) and refuses an earlier `start`. Otherwise two sessions could share reads that neither ledger
 sees: one read a pass serving a receipt of each chain, both accepted, twice the reads credited. Two records over one
@@ -870,7 +870,7 @@ opening.
 
 ## 7. The record
 
-`Session.record()` returns a `Record` once every window is accepted. `public()` holds the registration digest, the coin
+`Session.record()` returns a `Summary` once every window is accepted. `public()` holds the registration digest, the coin
 commitment's root, \(N\), \(b\), the receipt kind, whether its receipts bind \(z\), the codec's name and parameters
 (`codec`, `codec_params`: the field \(p = 2^n - c\), \(k\) and the mask), the block layout, the sketch's rows
 (`rows`), each window's passes and receipts \(U_t\) and how many of them are of blocks appended after the seed
@@ -902,7 +902,7 @@ the clear on the wire, and that count follows the workload: this is a known open
 fixed before any KV credit by fixed-size padded appends on a
 public cadence. The record holds every input of
 \(\gamma_t\) but the node's measured \(R\) and \(S_{\text{chip}}\) and the models, so the every-window claim is
-checkable from the record (§1). `Record.end_ns` is the last deadline, which the next session over the store waits
+checkable from the record (§1). `Summary.end_ns` is the last deadline, which the next session over the store waits
 out.
 
 **How `IntegrityProfile` fits.** It fits the openings exactly. The one level is `receipt`, \(U_t\) members, with
@@ -933,7 +933,7 @@ That is two windows in flight, `Pace.in_flight` \(f = 2\), the default. At \(f =
 pace naming `in_flight`) window \(t\)'s boundary message is due once \(t\) has its \(k\) roots, at the latest at
 \(\max(b_{t-1} + k A, D_{t-1})\), and is refused before any of them arrived; a root of \(t\) after it is out of turn
 (`order`). So every coin leaves after the root before it, which the challenger's signed log shows
-(`coins.released_reason`) and a record naming \(f = 1\) holds (`Record`), and the honest prover waits a round trip on
+(`coins.released_reason`) and a record naming \(f = 1\) holds (`Summary`), and the honest prover waits a round trip on
 each coin. The Lean is `RemoteAudit.Flight`, which is the session at \(f = 2\) (`Flight.run_two`).
 
 Each root's arrival on the verifier's clock is in the record (`WindowRecord.arrived_ns`), so the record bounds when

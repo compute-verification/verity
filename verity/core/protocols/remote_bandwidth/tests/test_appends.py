@@ -265,17 +265,17 @@ class Link:
     def read_bits(self, step: int):
         return self.reads.get(step, 0)
 
-    def mapped(self, record: audit.Record):
+    def mapped(self, record: audit.Summary):
         self.asked.append(record)
         return self.maps
 
 
-def planned(record: audit.Record) -> dict:
+def planned(record: audit.Summary) -> dict:
     """Each pass's step, the circuit reading every bit of its plan's blocks there."""
     return {s: n * 8 * record.block_bytes for w in record.windows for n, s in zip(w.lengths, w.steps)}
 
 
-def units_mapped(record: audit.Record, appends, rekeys=()) -> bool:
+def units_mapped(record: audit.Summary, appends, rekeys=()) -> bool:
     """The memory-map unit's verdict as the record fixes it, for a map whose appends are `appends`, (step, first,
     count, root) in the map's order, and whose re-keys are `rekeys`, (step, old index): the chain over all of them is
     the record's, each pass's head is the chain through those of the steps below its own, and each re-key's old index
@@ -297,7 +297,7 @@ def units_mapped(record: audit.Record, appends, rekeys=()) -> bool:
     return all(next((b for s, b in zip(steps, bounds) if s > r), -1) > old for r, old in rekeys)
 
 
-def stale_of(record: audit.Record, received) -> list[tuple[int, ...]]:
+def stale_of(record: audit.Summary, received) -> list[tuple[int, ...]]:
     """Each pass's stale bound as the memory-map unit recomputes it inside its proof, from the appends, (first, count,
     root) in the order the verifier received them, and the record's `blocks`, `lifetime` and heads, never its
     `stale`: an append joined the window of the first pass whose head chains it, and a pass of window t is bounded at
@@ -323,7 +323,7 @@ class Units(Link):
     appends: tuple = ()
     rekeys: tuple = ()
 
-    def mapped(self, record: audit.Record):
+    def mapped(self, record: audit.Summary):
         self.asked.append(record)
         return units_mapped(record, self.appends, self.rekeys)
 
@@ -464,7 +464,7 @@ def test_a_record_carries_each_pass_s_head_and_stale_bound(honest) -> None:
                                   (2, second.first, second.count, second.root)])
     common = dict(capacity_bytes_per_s=4096 * 10**9 / 10, chip_bytes=0, rebuild=audit.Rebuild(P512, 0.0))
 
-    def shorn(**field) -> audit.Record:
+    def shorn(**field) -> audit.Summary:
         return dataclasses.replace(rec, windows=(dataclasses.replace(rec.windows[0], **field), rec.windows[1]))
 
     with pytest.raises(ValueError, match="name none"):
@@ -616,10 +616,10 @@ def test_a_link_credits_what_its_units_draw_proved_and_adds_its_delta_to_the_err
 
 
 def synthetic(lengths: tuple[int, ...], post: tuple[int, ...], steps: tuple[int, ...] = (), heads: tuple = (),
-              stale: tuple = ()) -> audit.Record:
+              stale: tuple = ()) -> audit.Summary:
     w = audit.WindowRecord(0, lengths, 0, 10**9, 10**9, IntegrityProfile(
         ("receipt",), (sum(lengths),), {"receipt": Subset(1)}, 1e-6, drawn={"receipt": 1}), post, steps, heads, stale)
-    return audit.Record(bytes(64), bytes(64), 10, 4096, (w,))
+    return audit.Summary(bytes(64), bytes(64), 10, 4096, (w,))
 
 
 def test_a_window_record_s_heads_and_stale_bounds_are_each_pass_s() -> None:

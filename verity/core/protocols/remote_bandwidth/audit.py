@@ -64,7 +64,7 @@ many reads of a node's registered blocks the node made in each window, from rece
 8. The record (`Session.record`): per window each pass's length and step, its challenge's release and its deadline on the
    verifier's clock, its openings coin's release, an `IntegrityProfile` over its receipts with `Subset(s)` drawn, and
    each pass's head (the append chain its seed binds) and stale bound (`WindowRecord.heads`, `WindowRecord.stale`);
-   and the chain over the session's appends (`Record.appends`);
+   and the chain over the session's appends (`Summary.appends`);
    `ledger` turns it, with the node's measured capacities and a squaring ceiling at its codec's width (`Rebuild`), into
    each γ term over the session's span and over each window's own (`WindowLedger`), μ_sample read per window and
    pooled over the session's horizon (`pooled`, `floors`).  It credits a receipt of a block appended after the seed
@@ -658,7 +658,7 @@ class WindowRecord:
     `Session._stale_below` takes it as the first index of the earliest append received before the pass's root that
     joined a window above `window` − L, or the store's extent at that root if none did.  `stale` is a value: the
     appends' counts it sums follow the workload, so the verifier keeps it in its own record and never publishes it
-    (`Record.public` has no bound), and the memory-map unit takes it inside its proof, recomputing it from the
+    (`Summary.public` has no bound), and the memory-map unit takes it inside its proof, recomputing it from the
     committed appends.  All three are empty in a record no session made, such as `timing.stated`'s model."""
 
     window: int
@@ -728,8 +728,9 @@ def window_profile(lengths: Sequence[int], drawn: int, delta: float) -> Integrit
 
 
 @dataclass(frozen=True, slots=True)
-class Record:
-    """An accepted session: its registration, its coin commitment's root, its store's `blocks`, every window's record,
+class Summary:
+    """An accepted session's summary, what the ledger reads (the Lean verifier's is `RemoteAudit.Session.Summary`): its
+    registration, its coin commitment's root, its store's `blocks`, every window's record,
     its pace (`Params.pace`, None unpaced), and the receipt kind the registration names, whether its receipts bind z,
     its codec, its block layout and its sketch rows (its digest binds all five; the record repeats them, since what a
     receipt rests on depends on the kind, `bind` and the rows, μ_rebuild on the codec, and which bytes a credited block
@@ -880,7 +881,7 @@ class Session:
     asked for after the root it follows: σ_0 after the session's window root, σ_t after the last root received,
     window t's openings coin after its last root and an append's coin after its root.  `not_before_ns`, which
     every session names, is the earliest its first coin may leave on the verifier's clock: the previous session's
-    `Record.end_ns` over the same store, less the trusted round-trip floor if there is one, or the clock at
+    `Summary.end_ns` over the same store, less the trusted round-trip floor if there is one, or the clock at
     registration for the store's first session, so that no read serves receipts of two sessions.  `tiles` is PoUW's
     check if the registration binds z, and None if it does not.  Blocks appended after the codec seed (`append`) are
     the session's: they take indices from N up, and a later session over the store starts again from N.  A session
@@ -1302,16 +1303,16 @@ class Session:
         _schedule.check(schedule, self.params.blocks, cap, passes, self.appended)
         return Scheduled(self.registration.digest, self.commitment.root, cap)
 
-    def record(self) -> Record:
+    def record(self) -> Summary:
         """The session's record, once every window is accepted, with its bounds (`bounded`)."""
         return self.bounded(self._record())
 
-    def bounded(self, record: Record) -> Record:
+    def bounded(self, record: Summary) -> Summary:
         """`record` with the bounds every window of this session obeys, whatever its outcome: its draw cap and the
-        append coins its coin commitment reserved (`Record.samples`, `Record.append_coins`, `ledger.binding`)."""
+        append coins its coin commitment reserved (`Summary.samples`, `Summary.append_coins`, `ledger.binding`)."""
         return replace(record, samples=self.params.samples, append_coins=self.commitment.family(coins.APPEND) or 0)
 
-    def _record(self) -> Record:
+    def _record(self) -> Summary:
         """The session's record without its bounds."""
         self._live()
         if len(self.windows) != self.params.windows or any(w.verdict is None or not w.verdict.accepted for w in self.windows):
@@ -1322,7 +1323,7 @@ class Session:
             profile = window_profile(lengths, len(w.draws), self.params.delta)
             out.append(WindowRecord(t, lengths, w.released_ns, self.deadline(t), w.opened_ns, profile, tuple(w.post),
                                     tuple(w.steps), tuple(w.heads), tuple(w.stale), tuple(w.arrived)))
-        return Record(self.registration.digest, self.commitment.root, self.params.blocks, self.block_bytes, tuple(out),
+        return Summary(self.registration.digest, self.commitment.root, self.params.blocks, self.block_bytes, tuple(out),
                       self.registration.receipt, self.registration.bind, self.registration.codec,
                       self.registration.layout, self.registration.rows, self.extent - self.params.blocks, self.released,
                       self.params.lifetime, self._head, self.params.pace, self.params.groups_per_coin,
@@ -1526,7 +1527,7 @@ class RequirementLink(Protocol):
     plan unit that lets a plan leave blocks out (PlanShard at GAPS > 0) makes each shard's count public, and so how
     many of a shard's blocks each plan holds; at GAPS = 0 every count is its shard's size.  `mapped(record)` is the
     memory-map unit's verdict on this session's record: that W's memory map, the one the plan unit's plans are of,
-    makes exactly the appends of the chain `Record.appends` (None without one), each a write at its production step,
+    makes exactly the appends of the chain `Summary.appends` (None without one), each a write at its production step,
     in the map's order, at the index the verifier gave it; that each pass's head (`WindowRecord.heads`) is the chain
     through the appends of the steps below the pass's step, so each append was sent after the passes of the steps up to
     its own and before the rest; a re-key only at the lifetime cap, its old index below the stale bound
@@ -1549,7 +1550,7 @@ class RequirementLink(Protocol):
 
     def read_bits(self, step: int) -> int: ...
 
-    def mapped(self, record: Record) -> bool: ...
+    def mapped(self, record: Summary) -> bool: ...
 
 
 @dataclass(frozen=True, slots=True)
@@ -1558,8 +1559,8 @@ class Scheduled:
     published schedule's at the pass's step, the appends were the schedule's, and the schedule was at most `cap` bits,
     the cap the session's parameters committed before its first coin (`Params.schedule_cap`).  So each pass's layout is
     the verifier's fixed function of a schedule of at most `cap` bits (`Accounting.ScheduleDeterministic`).  It names
-    its session by its registration and its coin commitment's root, as the record does (`Record.registration`,
-    `Record.coins`).  `cap` bounds the `a` that `Accounting.Assumptions.SteeredLayout` reads for this session: fewer
+    its session by its registration and its coin commitment's root, as the record does (`Summary.registration`,
+    `Summary.coins`).  `cap` bounds the `a` that `Accounting.Assumptions.SteeredLayout` reads for this session: fewer
     than 2^(cap+1) schedules encode in at most `cap` bits, and the cap was fixed before the coins, so on every coin the
     check accepts the layout is one of those schedules' plans.  The bits of the schedule published after the coins
     would not bound it: their length can follow the coins."""
@@ -1568,7 +1569,7 @@ class Scheduled:
     coins: bytes
     cap: int
 
-    def of(self, record: Record) -> bool:
+    def of(self, record: Summary) -> bool:
         return self.registration == record.registration and self.coins == record.coins
 
 
@@ -1663,7 +1664,7 @@ class Ledger(_Terms):
                           "window": w.window}}
 
 
-def pooled_windows(record: Record) -> tuple[list[tuple[int, int]], Fraction]:
+def pooled_windows(record: Summary) -> tuple[list[tuple[int, int]], Fraction]:
     """The pooled bound's inputs (`pooled.bound`): each draw's receipts U and draws s, a window's own at
     `groups_per_coin` g = 1 and its g windows' together above, and δ, the float's exact value."""
     g, ws = record.groups_per_coin, record.windows
@@ -1671,7 +1672,7 @@ def pooled_windows(record: Record) -> tuple[list[tuple[int, int]], Fraction]:
              for a in range(0, len(ws), g)], Fraction(ws[0].profile.delta))
 
 
-def pooled_bound(record: Record) -> _pooled.Bound:
+def pooled_bound(record: Summary) -> _pooled.Bound:
     """The record's pooled bound in exact rationals (`pooled.bound`, the Lean's `RemoteAudit.Pooled`)."""
     return _pooled.bound(*pooled_windows(record))
 
@@ -1682,7 +1683,7 @@ def _up(q: Fraction) -> float:
     return math.nextafter(x, math.inf) if Fraction(x) < q else x
 
 
-def floors(record: Record) -> tuple[float, ...]:
+def floors(record: Summary) -> tuple[float, ...]:
     """Each window's share of wrong receipts at most on `pooled`'s event, min(1 − s_t/U_t, d̄·S/s_t): every window's
     at once, except with δ.  Each is `pooled_bound`'s, rounded up.  At `groups_per_coin` g > 1 the bound's floor f is
     its draw's, over the draw's U receipts, so a window of U_t of them has at most min(1, f·U/U_t)."""
@@ -1691,7 +1692,7 @@ def floors(record: Record) -> tuple[float, ...]:
     return tuple(_up(min(Fraction(1), fs[t // g] * sum(us[t // g * g:(t // g + 1) * g]) / u)) for t, u in enumerate(us))
 
 
-def pooled(record: Record) -> tuple[float, float]:
+def pooled(record: Summary) -> tuple[float, float]:
     """The horizon reading of a record's openings: `(wrong, floor)`, at most `wrong` of the session's receipts wrong
     and at most a share `floor` of any window's, both except with probability δ together.
 
@@ -1775,7 +1776,7 @@ def linked_bits(window: WindowRecord, requirement: RequirementLink, block_bytes:
     return tuple(out)
 
 
-def ledger(record: Record, *, capacity_bytes_per_s: float, chip_bytes: int, rebuild: Rebuild, host: float = 0.0,
+def ledger(record: Summary, *, capacity_bytes_per_s: float, chip_bytes: int, rebuild: Rebuild, host: float = 0.0,
            link: float = 0.0, queries_log2: int = QUERIES_LOG2, slack_log2: int = SLACK_LOG2,
            wrong: Callable[[IntegrityProfile], float] = IntegrityProfile.bound,
            credit_post_seed: PostSeedVerdict | None = None, requirement: RequirementLink | None = None,

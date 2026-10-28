@@ -6,7 +6,7 @@ check runs on the process's threads and its verdict comes on a line of its own, 
 And the JSON the two verifiers are compared in: each event as the Lean reads it (`Difftest.eventOf`), and what
 `audit.Session` returns for it as the Lean writes its result (`Difftest.resultJ`), as the difftest's
 `ra_cases.apply` writes it; an accepted session's record as the Lean writes it (`summary_json`), and that record read
-back as the `audit.Record` the ledger reads (`record_of`)."""
+back as the `audit.Summary` the ledger reads (`record_of`)."""
 from __future__ import annotations
 
 import collections
@@ -205,7 +205,7 @@ def drew_json(out) -> dict:
     return verdict_json(out) if isinstance(out, audit.Verdict) else {"draws": [list(d) for d in out]}
 
 
-def summary_json(rec: audit.Record) -> dict:
+def summary_json(rec: audit.Summary) -> dict:
     """An accepted session's record as the Lean writes it (`Difftest.recordJ`, `ra_cases.summary`): all of it but the
     coin commitment's root, the block size, the registration's fields its digest binds, and of each window's profile
     more than its draws; `groups_per_coin` only above 1."""
@@ -220,16 +220,16 @@ def summary_json(rec: audit.Record) -> dict:
                         for w in rec.windows]}
 
 
-def record_of(j: dict, registration: audit.Registration, coins: bytes, delta: float, samples: int) -> audit.Record:
-    """The record the Lean gave an accepted session (`summary_json`'s form) as `audit.Record`: the rest from the
+def record_of(j: dict, registration: audit.Registration, coins: bytes, delta: float, samples: int) -> audit.Summary:
+    """The record the Lean gave an accepted session (`summary_json`'s form) as `audit.Summary`: the rest from the
     registration its digest names, the coin commitment's root `coins`, each window's openings law at `delta` over
     the Lean's lengths and draws (`audit.window_profile`), and the session's `samples`, which each window's draws
-    must be min(samples, U_t) at (`audit.Record`)."""
+    must be min(samples, U_t) at (`audit.Summary`)."""
     if j["registration"] != registration.digest.hex():
         raise ValueError(f"the Lean's record is of registration {j['registration'][:16]}…, not "
                          f"{registration.digest.hex()[:16]}…")
     pace = j["pace"]
-    return audit.Record(
+    return audit.Summary(
         registration.digest, coins, j["blocks"], audit.BLOCK_BYTES,
         tuple(audit.WindowRecord(t, tuple(w["lengths"]), w["released_ns"], w["deadline_ns"], w["opened_ns"],
                                  audit.window_profile(w["lengths"], w["drawn"], delta), tuple(w["post_seed"]),
