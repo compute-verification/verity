@@ -52,9 +52,12 @@ import a0  # noqa: E402
 import a6  # noqa: E402
 from verity.ml.circuits.codec import canonical_json, encode_program  # noqa: E402
 from verity.core.protocols.sampled_proofs.one_stage import partition as P  # noqa: E402
+from verity.core.protocols.sampled_proofs.optimize import HM96_ANDS as HM96  # noqa: E402
+from verity.core.protocols.sampled_proofs.optimize import SHA512_ANDS as SHA512  # noqa: E402
 
-#: ANDs of the pieces of a unit with its rows' openings (benchmarks/sampling_plan's inputs: its pins, hm96 PROTOCOL §5)
-S8_STEP, EPILOGUE, SHA512, HM96 = 4_190, 5_000, 58_120, 116_240
+#: ANDs of the pieces of a unit with its rows' openings (benchmarks/sampling_plan's inputs: their pins; a compression's is
+#: `Sha512Compress_v1`'s, through `optimize`)
+S8_STEP, EPILOGUE = 4_190, 5_000
 
 
 def unit_ands(K: int) -> int:

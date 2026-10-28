@@ -5,16 +5,19 @@ weight classes' weights, and the sensitivity queries."""
 
 from __future__ import annotations
 
+import json
 import random
 from dataclasses import replace
 from fractions import Fraction
 from itertools import combinations, product
 from math import ceil, comb, exp, fsum, log, log1p, log2, ulp
+from pathlib import Path
 
 import pytest
 
-from verity.core.protocols.sampled_proofs.optimize import (PROVING_ONLY, Grain, grain_costs, grain_optimum, leak_count,
-                                                           leak_draws, loc_bits, sqrt_grain)
+from verity.core.protocols.sampled_proofs.optimize import (HM96_ANDS, PROVING_ONLY, SHA512_ANDS, Grain, grain_costs,
+                                                           grain_optimum, leak_count, leak_draws, loc_bits, pinned_ands,
+                                                           sqrt_grain)
 from verity.core.protocols.profile import Stratified, Stratum
 from verity.core.protocols.sampled_proofs.one_stage.draw import work_k, work_table
 from verity.core.protocols.sampled_proofs.one_stage.partition import UNIT_CLASS_MAX
@@ -227,7 +230,28 @@ def test_for_budget_closes_the_grid_gaps(batched):
 
 
 def test_row_ands_follows_hm96_table():
-    assert [row_ands(n) for n in (4, 256, 4096)] == [174_360, 290_600, 2_034_200]
+    """Two hiding compressions and the digest's blocks, the 17 bytes of padding and length included."""
+    assert [row_ands(n) for n in (4, 111, 112, 256, 4096)] == [c * SHA512_ANDS for c in (3, 3, 4, 5, 35)]
+    assert HM96_ANDS == 2 * SHA512_ANDS
+
+
+def test_a_compression_costs_its_pin_which_is_the_gadgets_rows():
+    """`SHA512_ANDS` is `Sha512Compress_v1`'s circuit-check pin, the same as the opening unit's `RowCompress_v1`, and both
+    are `compress_gadget`'s AND rows on a `forms.Circuit`, its committed copies included (the ripple-carry model's
+    58,120 leaves them out)."""
+    from verity.ml.circuits.boolean.forms import Circuit
+    from verity.ml.commitments import gates
+    from verity.ml.commitments.gates.sha512 import compress_gadget
+
+    pins = {name: json.loads(Path(gates.__file__).with_name(f"{name}.circuit-check.json").read_text())["definitions"]
+            for name in ("lms", "block_check")}
+    assert SHA512_ANDS == pinned_ands("Sha512Compress_v1") == pinned_ands("RowCompress_v1", "block_check")
+    assert SHA512_ANDS == pins["lms"]["Sha512Compress_v1"]["and"] == pins["block_check"]["RowCompress_v1"]["and"]
+    assert pins["lms"]["Sha512Compress_v1"]["type"] == pins["block_check"]["RowCompress_v1"]["type"]
+    C = Circuit()
+    out = compress_gadget(C, [C.input(f"cv{i}", 64) for i in range(8)], [C.input(f"m{i}", 64) for i in range(16)])
+    C.output("cv", [b for w in out for b in w])
+    assert C.counts()["ands"] == SHA512_ANDS
 
 
 def test_candidates_fit_a_size_class():
@@ -246,7 +270,7 @@ def test_derived_costs_read_the_features_and_perturb_scales_one_group():
     c = Candidate("a", "A", 10, 1, 16, ands=1000, rows=(256, 4), commit_bits=64, commit_rows=1.0)
     costs = CostModel(per_and=1e-6, statement_fixed=2.0, statement_per_and=1e-7, staged_per_and=1e-9,
                       staged_per_unit=0.01, commit_per_bit=1e-3, commit_per_row=0.5)
-    ands = 1000 + 290_600 + 174_360
+    ands = 1000 + row_ands(256) + row_ands(4)
     assert costs.unit(c) == pytest.approx(1e-6 * ands)
     assert costs.statement(c) == pytest.approx((2.0 + 1e-7 * ands, 1e-9 * ands + 0.01))
     assert costs.commit(c) == pytest.approx(10 * (0.064 + 0.5))

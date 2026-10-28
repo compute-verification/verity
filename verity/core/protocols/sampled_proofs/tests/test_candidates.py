@@ -59,12 +59,12 @@ def test_size_classes_admit_rows_and_tiles_and_prune_past_the_widest():
 
 def test_boundary_pressure_names_the_unit_between_two_definitions():
     """With commitment against proving balanced at sqrt(c0 / (lam alpha)) between 32 and 1024 MACs, and no chunk
-    Definition to bind, proof blocks of an eighth of the dot beat both the dot and its steps."""
+    Definition to bind, proof blocks of a quarter of the dot beat both the dot and its steps."""
     dot = Shape("Dot{K=1024}", 32 * 4190, 1024, 16, rows=(1024, 1024, 2), commit_bits=16, cap=4096, parts=((STEP, 32),))
     _, alts, hints = cuts("dot", dot, N, CostModel(per_and=1e-10, commit_per_bit=1.1e-10), OBJECTIVE, grid=41)
     assert set(alts.values()) == {(("Dot{K=1024}", N),), (("Step", 32 * N),)}
     (h,) = hints
-    assert (h.kind, h.node, h.child, h.split) == ("boundary", "Dot{K=1024}", "Step", 8) and h.saving > 0.2
+    assert (h.kind, h.node, h.child, h.split) == ("boundary", "Dot{K=1024}", "Step", 4) and h.saving > 0.2
     assert pressure("dot", dot, N, CostModel(per_and=1e-10, commit_per_bit=1.1e-10), OBJECTIVE, h.lam) == [h]
     assert pressure("dot", dot, N, CostModel(per_and=1e-10, commit_per_bit=1.1e-10), OBJECTIVE, h.lam * 1e-6) == []
 
