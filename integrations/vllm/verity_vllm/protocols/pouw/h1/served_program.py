@@ -1,6 +1,6 @@
 """The window Program a served H1 window declares before it serves (`declared`), the layout it is declared over
-(`layout`, `declared_layout`), the bytes the period commits of it (`descriptor`, written by `write_program`), and the
-card it is declared for (`card_arch`): `pouw_h1_served.Served` declares one per period and every window of the period
+(`layout`, `declared_layout`), its tile unit (`unit_of`), the bytes the period commits of it (`descriptor`, written by
+`write_program`), and the card it is declared for (`card_arch`): `pouw_h1_served.Served` declares one per period and every window of the period
 serves it."""
 from __future__ import annotations
 
@@ -13,6 +13,7 @@ from pathlib import Path
 from typing import Any, Callable, Mapping, Sequence
 
 from verity.core.protocols.pouw.circuit import h1device as HD
+from verity.core.protocols.pouw.circuit import h1tile as HT
 from verity.core.protocols.pouw.circuit import h1window as HW
 from verity.ml.circuits.codec import canonical_json, descriptor_chunks, encode_program
 from verity.ml.circuits.program import Program
@@ -64,6 +65,17 @@ def declared(shapes: Sequence[tuple[int, int]], modules: Mapping[int, str], rows
     return HW.program([tuple(x) for x in lay["linears"]], [tuple(x) for x in lay["calls"]], lay["m"], tile, prefix, unit)
 
 
+def unit_of(name: str | None, tile: tuple[int, int] = PH.TILE) -> Callable[[int], Any] | None:
+    """`declared`'s ``unit`` for the pouw setting ``unit`` ``name`` (`pouw_h1_settings.UNITS`): None for v1 (unset), the
+    default; for ``j10r`` `h1window.tile_unit` over J10-R's `h1tile.PouwH1Tile5`, one noise stream a call, the tile a
+    period's guarantee covers (core's `period_check.COVERED_TILE`)."""
+    if name in (None, "v1"):
+        return None
+    if name == "j10r":
+        return functools.partial(HW.tile_unit, tile=tuple(tile), definition=HT.PouwH1Tile5)
+    raise ValueError(f"no tile unit {name!r}: the pouw setting 'unit' is v1 or j10r")
+
+
 def descriptor(program: Program) -> bytes:
     """`program`'s descriptor as the period commits it: its canonical JSON without annotations, the bytes whose SHA-512
     is its `codec.program_digest` (the period-open's ``circuit``) and from which core's credit reads the window's
@@ -107,4 +119,4 @@ def declared_layout(shapes: Sequence[tuple[int, int]], modules: Mapping[int, str
             "linears": [[mods[w], k, n] for w, (n, k) in enumerate(shapes)], "m": HW.slot(rows, tile), "tile": list(tile)}
 
 
-__all__ = ["PREFIX", "card_arch", "declared", "declared_layout", "descriptor", "layout", "write_program"]
+__all__ = ["PREFIX", "card_arch", "declared", "declared_layout", "descriptor", "layout", "unit_of", "write_program"]

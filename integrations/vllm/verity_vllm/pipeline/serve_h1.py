@@ -15,8 +15,8 @@ own Commit.
   template a call (S × the linears), its tile units (`units`, S × slot(T)/32 × Σn/32) the batch's members, so its
   descriptor, declaring it and its digest grow with the calls, not the units. The server logs both counts and both
   times. The digest is hashed as the descriptor is written, ``h1/`` `PROGRAM` beside `PROGRAM_META` (`served.write_program`),
-  so the period-open of it (``served_verdicts.py period open``) can go out once the server listens, before any window
-  reserves.
+  and ``served_verdicts.py program`` writes the same file without serving, so the period-open of it (``served_verdicts.py
+  period open``) goes out before the server starts, ahead of window 0's reserve at startup.
 * **Coins.** With ``--challenger-gate CMD`` and ``--challenger-peer NAME`` (`sessions_of`), the auditor host's
   challenger's, one session a window through infra's gate (`GateSessions`, `commit_coins.Gate`): window 0's session is
   reserved (scheme `pouw_h1_challenger.SCHEME`, `pouw_h1_challenger.families` (S)) at startup (`arm_of`) and window
@@ -41,15 +41,28 @@ own Commit.
   steps' calls, the manifest's commit, the draw coin, the session's close and the wait for its end entry) runs on
   ``closer``, one thread in window order, while the next window serves. Each window still has its own session,
   coins and transcript, and its outcome is recorded in window order once its release ends.
+* **Its draw, for the draw-gated release** (``--retain device --seal --release-after pouw``, `serve_release`). Once a
+  window's draw coin is open, its release puts H1's draw of the window under `DRAWER` (`H1Windows.drawn`): the proof
+  blocks core draws (`credit.drawn` over the window Program's layout, as `pouw_h1_challenger.drawn_of` draws them), each
+  read as the Commit's values it opens (`drawn_reads`): its call's x_q and s_a rows of its row tile at the engine step its
+  step maps to. With a gate session its stream is the window's open root and its K its period-open's ``draw_k``; with
+  in-process coins (no open root, no period, nothing credited) its calls_root and the proof service's K
+  (`pouw_h1_challenger.draw_k`). A window whose draw can't be formed (it never opened, its close failed, no draw coin,
+  no period) refuses its release by name, so its seal fails visibly and never waits.
 
 Each window's outcome (`H1Windows.close`) is its ``windows.jsonl`` line's ``pouw_h1``: ROOTS1's verdict, the requests'
 admission and gaps, the credit gate, the coins, the commitment's calls root, its gate session (the reserve, the open's
 port, how the session closed and its end entry) and where its time went (``seconds``); a window whose H1 failed to open
 or close carries its error there instead, and the Commit serves on. ``serve.json``'s ``protocols`` is
 `H1Windows.describe`, ``summary.json``'s ``pouw_h1`` `H1Windows.summary` with the windows that failed.
-``--protocols-config`` is the pouw settings the server doesn't set itself, ``{"pouw": {...}}`` (`config_of`)."""
+``--protocols-config`` is the pouw settings the server doesn't set itself, ``{"pouw": {...}}`` (`config_of`). Its ``unit``
+and ``ks`` shape the declared Program: ``{"pouw": {"unit": "j10r", "ks": [2048]}}`` declares J10-R's tile unit
+(`pouw_h1_served.unit_of`) over the linears at K 2,048 alone, the form a period's guarantee covers (core's
+`period_check.form`), and the linears at any other K serve on their arm unrecorded, uncredited as attention is. Unset,
+the Program is v1's over every linear."""
 from __future__ import annotations
 
+import bisect
 import dataclasses
 import functools
 import json
@@ -57,7 +70,7 @@ import os
 import sys
 import threading
 import time
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Mapping, Sequence
 from concurrent.futures import Future, ThreadPoolExecutor
 from datetime import datetime, timedelta, UTC
 from pathlib import Path
@@ -82,6 +95,10 @@ LISTEN_S = 0.1
 #: a session reserved ahead is opened only while its reserve has this long left before it expires (the gate refuses an
 #: expired reserve's open); else its window reserves another
 MARGIN = timedelta(minutes=5)
+#: the subprotocol H1's draw of each window is put under in serve-openai's draw-gated release (``--release-after``)
+DRAWER = "pouw"
+#: an s_a's bytes a row (f32)
+S_A_BYTES = 4
 
 
 def _cuda_device() -> int | None:
@@ -161,6 +178,10 @@ def config_of(value: str | None) -> dict[str, Any]:
 def refusal(opts: Any) -> str | None:
     """Why ``opts`` can't serve ``--protocols`` (None when they can, or none is asked for); `config_of`'s `UsageError` when
     it refuses ``--protocols-config``."""
+    after = getattr(getattr(opts, "retention", None), "release_after", "") or ""
+    if DRAWER in (p.strip() for p in after.split(",")) and opts.protocols != ENTRY:
+        return (f"--release-after {DRAWER} waits for PoUW H1's draw of each window, which only its arm puts: it needs "
+                f"--protocols {ENTRY}")
     gate, peer = opts.gate.challenger_gate, opts.gate.challenger_peer
     if bool(gate) != bool(peer):
         return ("--challenger-gate and --challenger-peer go together: the gate's command and this machine's name in the "
@@ -194,6 +215,60 @@ def units(shapes: Any, rows: int, steps: int) -> int:
 
     r, c = PH.TILE
     return int(steps) * (HW.slot(int(rows), PH.TILE) // r) * sum(int(n) // c for n, _k in shapes)
+
+
+def drawn_units(commits: Mapping[str, Any], layout: Mapping[str, Any], k: int, stream: str) -> list[int]:
+    """The proof blocks a closed window's draw coin draws at K ``k`` (`credit.drawn` over the window Program's
+    ``layout``, `credit.layout_of`'s, on stream ``stream``, registration the draw root and receipt its receipts, as
+    `pouw_h1_challenger.drawn_of` draws them), from its commitment ``commits``. ValueError when it opened no draw coin or
+    core refuses the draw."""
+    from verity.core.protocols.pouw import credit as CR
+    from verity.core.protocols.sampled_proofs.challenger import LiveOpening
+
+    draw = commits.get("draw")                              # None: the window committed no draw root
+    if draw is None or draw.get("coin") is None:
+        raise ValueError("the window opened no draw coin" + (f" ({draw['refused']})" if draw and draw.get("refused") else ""))
+    got, why = CR.drawn(LiveOpening.from_json(draw["coin"]).coin.hex(), stream, draw.get("root"),
+                        {"receipts": draw.get("receipts")}, dict(layout), k)
+    if why is not None:
+        raise ValueError(f"{why[0]}: {why[1]}")
+    return list(got)
+
+
+def drawn_reads(tap: Any, layout: Mapping[str, Any], drawn: Sequence[int]) -> list[tuple[int, str, int, int]]:
+    """What the proof blocks ``drawn`` of the window ``layout`` open of the server's Commit, as the draw-gated release takes
+    them (`serve_release.Read`: engine step, member, byte lo, hi): unit u, tile t of call c, opens A rows R·I .. R·I + R - 1
+    of its call, I = t // (n/C) its row block (`h1window.table_reads`), which are the Commit's x_q (K bytes a row) and s_a
+    rows of the call's site at the engine step its step maps to, as H1's tap ``tap`` registered them (``where``), under
+    the member names the Commit acquired them by (``acquired``), cut to the rows it acquired; a call of an empty step
+    opens none. KeyError on a drawn call the Commit registered no rows of."""
+    (r, cw), m = layout["tile"], int(layout["m"])
+    ks = {name: (int(k), int(n)) for name, k, n in layout["linears"]}
+    firsts, at = [0], 0
+    for lin, _blk in layout["calls"]:
+        at += (m // r) * (ks[lin][1] // cw)
+        firsts.append(at)
+    calls: dict[int, tuple[int | None, str, int]] = {}
+    for w in tap.where.values():
+        if "calls" in w:                                   # an A table's rows; a round's ids are no call's
+            for c, j, s, n in zip(w["calls"], w["steps"], w["sites"], w["rows"]):
+                calls[int(c)] = (j, s, int(n))
+    out: set[tuple[int, str, int, int]] = set()
+    for u in drawn:
+        c = bisect.bisect_right(firsts, u) - 1
+        if not 0 <= c < len(layout["calls"]):
+            raise KeyError(f"unit {u} is no unit of the window's {firsts[-1]}")
+        k, n = ks[layout["calls"][c][0]]
+        i = (u - firsts[c]) // (n // cw)
+        if c not in calls:
+            raise KeyError(f"unit {u}'s call {c}: the Commit registered no rows of it, so what it opens can't be kept")
+        j, site, rows = calls[c]
+        lo, hi = r * i, min(r * (i + 1), rows)
+        if j is None or hi <= lo:
+            continue
+        x_q, s_a = (tap.acquired[(int(j), site, port)] for port in ("0", "1"))
+        out |= {(int(j), x_q, lo * k, hi * k), (int(j), s_a, lo * S_A_BYTES, hi * S_A_BYTES)}
+    return sorted(out)
 
 
 def listening(port: int) -> bool:
@@ -351,11 +426,13 @@ class H1Windows:
     coins); ``prover`` the directory each window's prover state and live rows go in (``--h1-prover``, `prover_of`;
     None: kept nowhere, so no drawn unit or round of it can be proved). ``closer`` (a `worker`) runs each window's
     release off the engine loop, and `close` hands back its outcome's `Future`; None: on the loop, the outcome itself.
-    ``clock`` times each part."""
+    ``draws`` is serve-openai's draw-gated release (`serve_release.Draws`), into which each window's release puts its
+    draw under `DRAWER` (`drawn`) when it waits for one. ``clock`` times each part."""
 
     def __init__(self, model: Any, com: Any, rows: int, steps: int, *, engine: Any, out: Path,
                  config: Mapping[str, Any] | None = None, key: bytes | None = None, unit: Any = None,
                  sessions: GateSessions | None = None, prover: str | Path | None = None, closer: Any = None,
+                 draws: Any = None,
                  clock: Callable[[], float] = time.perf_counter) -> None:
         from verity_vllm.protocols import pouw
         from verity_vllm.protocols.pouw.h1 import hooks as PHK
@@ -365,7 +442,13 @@ class H1Windows:
         self.out, self.config, self.unit, self.sessions = Path(out), dict(config or {}), unit, sessions
         self.prover = None if prover is None else Path(prover)
         self.closer, self.clock = closer, clock
-        self.layers = PHK.layers(model, pouw.linear_types())
+        self.draws: Any = None
+        self._layout: dict[str, Any] | None = None
+        self._period_k: dict[str, int] = {}
+        pw = pouw.Settings.of(self.config.get("pouw", {}))
+        self.layers = PHK.layers(model, pouw.linear_types(), pw.ks)
+        if unit is None:
+            self.unit = unit = SV.unit_of(pw.unit)
         if not self.layers:
             raise ValueError(f"{ENTRY}: the served model has no int8 linear H1 records (serve an int8 precision)")
         shapes = [tuple(int(d) for d in m.weight.shape) for m in self.layers]
@@ -435,6 +518,7 @@ class H1Windows:
                 "program_file": f"h1/{PROGRAM}",
                 "weights_root": self.weights.root().hex(), "weights_key": "local", **coins,
                 "reserve": "ahead" if self.sessions is not None and self.sessions.ahead is not None else "at the open",
+                "draw": f"put as {DRAWER} into the draw-gated release" if self.draws is not None else None,
                 "release": "on the loop" if self.closer is None else "off the loop",
                 "linears": len(self.layers), "config": dict(self.config), "ready": self.readied}
 
@@ -484,8 +568,10 @@ class H1Windows:
         """Window ``window``'s H1 closed: on the loop its hooks and the tap come off the engine and the committer; then
         its release (`_release`), on ``closer`` when there is one, whose outcome this hands back as a `Future`, else here,
         and the outcome itself; here too when its hooks refused to come off, so nothing off the loop patches the engine.
-        None when no H1 window is open."""
+        None when no H1 window is open; then, if window ``window`` never opened one, its draw-gated release is refused."""
         if self.comp is None:
+            if self.draws is not None and window != self.window:
+                self.draws.refuse(window, f"{ENTRY}: window {window}'s H1 window never opened, so it has no draw")
             return None
         comp, run, tap, held, opened = self.comp, self.run, self.tap, self.held, self.opened
         self.comp = self.run = self.tap = self.held = None
@@ -509,10 +595,11 @@ class H1Windows:
     def _release(self, window: int, comp: Any, run: Any, held: dict[str, Any] | None, seconds: dict[str, float],
                  error: str | None, queued: float, off: bool = False) -> dict[str, Any]:
         """Window ``window``'s release: its option closed (the empty steps' calls, its manifest committed, the draw coin
-        opened and its session closed) and, with ``sessions``, its end entry waited for; its outcome, recorded in
-        ``outcomes``, with ``error`` when any of it failed. ``off``: on ``closer``, one of the windows ``releasing``."""
+        opened and its session closed), with ``draws`` its draw put (`drawn`), and, with ``sessions``, its end entry
+        waited for; its outcome, recorded in ``outcomes``, with ``error`` when any of it failed. ``off``: on ``closer``,
+        one of the windows ``releasing``."""
         t0 = t1 = self.clock()
-        end = None
+        end = drawn = None
         try:
             try:
                 comp.close()
@@ -520,11 +607,15 @@ class H1Windows:
                 error = error or f"{type(e).__name__}: {e}"
             finally:
                 t1 = self.clock()
+                if self.draws is not None:
+                    drawn = self.drawn(window, run, held, error)
                 if held:
                     end = self.sessions.ended(held["session"])
             seconds = {**seconds, "queued": round(t0 - queued, 4), "release": round(t1 - t0, 4),
                        "ended": round(self.clock() - t1, 4)}
             out = self._outcome(window, run, held, end, seconds)
+            if drawn is not None:
+                out["draw"] = drawn
             if error is not None:
                 out["error"] = f"close: {error}"[:500]
             with self._lock:
@@ -534,6 +625,68 @@ class H1Windows:
             if off:
                 with self._lock:
                     self.releasing -= 1
+
+    def drawing(self, draws: Any) -> None:
+        """Put each window's draw into ``draws`` (`serve_release.Draws`) from now on, when it waits for `DRAWER`'s."""
+        self.draws = draws if draws is not None and DRAWER in draws.protocols else None
+
+    def drawn(self, window: int, run: Any, held: dict[str, Any] | None, error: str | None) -> dict[str, Any]:
+        """Window ``window``'s draw put into ``draws`` under `DRAWER` once its draw coin is open: the units its coin draws
+        (`drawn_units`, at `draw_of`'s K and stream) and the Commit's values they open (`drawn_reads`). Its record for the
+        outcome's ``draw``; ``refused`` when the window's release was refused instead (its close failed, or the draw
+        can't be formed or put), naming why."""
+        try:
+            if error is not None:
+                raise ValueError(f"its close failed ({error})")
+            k, stream, source = self.draw_of(run, held)
+            units = drawn_units(run.commits, self.layout(), k, stream)
+            reads = drawn_reads(run.served.tap, self.layout(), units)
+            self.draws.put(window, DRAWER, reads)
+        except (ValueError, KeyError, IndexError, TypeError, RuntimeError, OSError) as e:   # a seal never waits on a draw not coming
+            why = f"{ENTRY}: window {window}'s draw: {type(e).__name__}: {e}"[:500]
+            self.draws.refuse(window, why)
+            return {"refused": why}
+        return {"k": k, "k_from": source, "units": len(units), "reads": len(reads),
+                "bytes": sum(hi - lo for _s, _n, lo, hi in reads)}
+
+    def layout(self) -> dict[str, Any]:
+        """The window Program's layout as core's credit reads it from its descriptor (`credit.layout_of`), once."""
+        if self._layout is None:
+            from verity.core.protocols.pouw import credit as CR
+
+            from verity_vllm.protocols.pouw.h1 import served as SV
+
+            layout, why = CR.layout_of(SV.descriptor(self.program))
+            if why is not None:
+                raise ValueError(f"the window Program's layout: {why[0]}: {why[1]}")
+            self._layout = layout
+        return self._layout
+
+    def draw_of(self, run: Any, held: dict[str, Any] | None) -> tuple[int, str, str]:
+        """The K a window is drawn at, its stream, and where that K comes from. A gate session's window: its period-open's
+        ``draw_k`` (`credit.committed_k` of the gate's ledger, read once a period) and its open root. An in-process
+        window has neither, and credits nothing: the proof service's K (`pouw_h1_challenger.draw_k`) and its calls_root.
+        ValueError when the session joined no period or the ledger commits it no K."""
+        from verity.core.protocols.pouw import credit as CR
+
+        from verity_vllm.protocols.pouw.h1 import challenger as PHC
+
+        if held is None:
+            return PHC.draw_k(self.layout()), run.commits["calls_root"], "the proof service's draw_k (in-process coins)"
+        period = held.get("period")
+        if period is None:
+            raise ValueError(f"session {held.get('session')} joined no period, so no period-open committed the K its "
+                             "window is drawn with")
+        if period not in self._period_k:
+            try:
+                k, why = CR.committed_k(self.sessions.gate.ledger(), period)
+            except StopIteration:
+                k, why = None, ("budget", f"the gate's ledger has no period-open of {period}")
+            if why is not None:
+                raise ValueError(f"{why[0]}: {why[1]}")
+            self._period_k[period] = k
+        session = run.commits.get("session")                # None: no gate session carried the run's coins
+        return self._period_k[period], session.get("root") if session else None, f"period {period}'s open"
 
     def _outcome(self, window: int, run: Any, held: dict[str, Any] | None, end: dict[str, Any] | None,
                  seconds: dict[str, float]) -> dict[str, Any]:

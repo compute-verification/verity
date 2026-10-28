@@ -110,9 +110,10 @@ from verity_vllm.protocols.pouw.h1.public_rows import PublicRows
 from verity_vllm.protocols.pouw.h1 import registered as NR
 from verity_vllm.protocols.pouw.h1 import requests as RQ
 from verity_vllm.protocols.pouw.h1 import tables_device as TD
-from verity_vllm.protocols.pouw.h1.served_files import FILE, Registration, file_name, reads_file, register, trees
+from verity_vllm.protocols.pouw.h1.model_key import ModelKey, model_key
+from verity_vllm.protocols.pouw.h1.served_files import FILE, WindowCommitmentEntries, file_name, reads_file, register, trees
 from verity_vllm.protocols.pouw.h1.served_program import (PREFIX, card_arch, declared, declared_layout, descriptor, layout,
-                                                          write_program)
+                                                          unit_of, write_program)
 from verity_vllm.protocols.pouw.h1.words import (EMPTY_ID, chunk_words, ids_words, receipt_words, record_words,
                                                          row_words, zy_words)
 
@@ -239,38 +240,6 @@ def register_weights(circuit: str, shapes: Sequence[tuple[int, int]], weights: M
         words = np.concatenate(rows)
         reg[k] = NR.commit(circuit, f"{prefix}b/{k}", words, key, B_NONCE + i, keep_rows=True)
     return Weights(circuit, reg, at, held)
-
-
-@dataclass(frozen=True)
-class ModelKey:
-    """The auditor's registration of the served model under the period's circuit, as the gate's ``model-key --model M
-    --circuit C`` answers a lane's gate key: its role ``model``, ``circuit``, the weights' root ``weights_root`` (hex) that
-    ``period-open --model M`` signs, and ``key``, the 32-byte salt key its ``b/<K>`` rows were committed under."""
-
-    model: str
-    circuit: str
-    weights_root: str
-    key: bytes = field(repr=False)
-
-
-def _hex512(v: Any) -> bool:
-    return type(v) is str and len(v) == 128 and all(c in "0123456789abcdef" for c in v)
-
-
-def model_key(answer: Mapping[str, Any]) -> ModelKey:
-    """The gate's ``model-key`` answer as a `ModelKey`; ValueError on a refusal, or an answer whose key isn't 32 bytes
-    whose SHA-512 is its ``key_sha512``, or whose circuit or weights' root isn't a SHA-512 digest."""
-    if "refused" in answer:
-        raise ValueError(f"model-key: refused: {answer['refused']}")
-    try:
-        key = bytes.fromhex(answer["key"])
-    except (KeyError, TypeError, ValueError):
-        raise ValueError("model-key: the answer has no key in hex") from None
-    if len(key) != 32 or hashlib.sha512(key).hexdigest() != answer.get("key_sha512"):
-        raise ValueError("model-key: the key is not 32 bytes whose SHA-512 is the answer's key_sha512")
-    if not (type(answer.get("model")) is str and _hex512(answer.get("circuit")) and _hex512(answer.get("weights_root"))):
-        raise ValueError("model-key: the answer names no model, circuit and weights' root (SHA-512 digests in hex)")
-    return ModelKey(answer["model"], answer["circuit"], answer["weights_root"], key)
 
 
 @dataclass
@@ -770,7 +739,8 @@ def digest_of(entries: Sequence[Mapping[str, Any]], refused: Sequence[str]) -> b
     return hashlib.sha512(DIGEST_TAG + canonical_json({"entries": list(entries), "refused": list(refused)})).digest()
 
 
-__all__ = ["B_NONCE", "EMPTY_ID", "FILE", "IDS_NONCE", "LOCAL_SESSION", "ModelKey", "NONCE", "PREFIX", "PublicRows", "Registration", "Served",
-           "V2", "Weights", "card_arch", "chunk_words", "declared", "declared_layout", "descriptor", "digest_of", "file_name", "host_weight", "ids_words", "layout",
+__all__ = ["B_NONCE", "EMPTY_ID", "FILE", "IDS_NONCE", "LOCAL_SESSION", "ModelKey", "NONCE", "PREFIX", "PublicRows", "Served",
+           "unit_of",
+           "V2", "Weights", "WindowCommitmentEntries", "card_arch", "chunk_words", "declared", "declared_layout", "descriptor", "digest_of", "file_name", "host_weight", "ids_words", "layout",
            "model_key", "nonce", "RECEIPT_NONCE", "reads_file", "receipt_words", "record_words", "register", "register_weights", "row_words", "trees",
            "weights_of", "write_program"]
