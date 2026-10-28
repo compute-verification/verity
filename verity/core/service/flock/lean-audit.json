@@ -464,11 +464,12 @@
     "      (And (Eq L ls.length)",
     "        (And (instLTNat.lt 0 L)",
     "          (And (Eq rows.size (Flock.RecLinks.grid L))",
-    "            (And (∀ (l : Flock.RecLinks.Link), List.instMembership.mem ls l → Flock.RecLinks.Holds sh inRow outRow l)",
+    "            (And",
+    "              (∀ (l : Flock.RecLinks.LinkEntry), List.instMembership.mem ls l → Flock.RecLinks.Holds sh inRow outRow l)",
     "              (List.map (fun l => { fst := l.reader, snd := l.port }) ls).Nodup))))"
    ],
    "assumptions": [],
-   "type_hash": "5798bc5808809e9f728d09061afde55a0dcb498935b09a22455d695061437a91"
+   "type_hash": "218aec79e075e338ef0fd887a1c7e9a60d6a9064f315409e1cc5c38a5569e883"
   }
  },
  "shape": {
@@ -728,30 +729,30 @@
    ]
   },
   "Flock.RecLinks": {
-   "digest": "606008cd18db63613c06d6dddb82eaa0189acd336e1dc7ebee736dfc59f5e1cc",
+   "digest": "db9828cbad6f3a86ce6597e90fc28215811a31c6c7fb344a14b418575951c83e",
    "definitions": {
     "Flock.RecLinks.FIELD_BYTES": "cd19ac2e7b0e432c174ce9b4250c8700af97d8327a63db3eb313b75bbc7e0354",
     "Flock.RecLinks.GRID_BITS": "eeb2f0a6a105f79b698798e5aafcc13ebfc1e0cea562e1aa51c0ff7c5c71843a",
-    "Flock.RecLinks.Holds": "dcc127f7fa0c4272a7ae8fef7683f6aacbf22f4950d4ab4975040641f01af2e7",
+    "Flock.RecLinks.Holds": "26a01af2ab52410549c3a8c8a9bfcc628396b797e409a3e83e1bc153cd2beb38",
     "Flock.RecLinks.KIND_LINK": "9acc91def4ca1b9deb533adbe0b9d2f23533f1e30c80a72a1f8dc75886b58224",
-    "Flock.RecLinks.Link": "d9204963a781fe564f40f8e5d4849359e5bde586f469c29b3f9119d041683c70",
-    "Flock.RecLinks.Link.out": "feae40b58c503d1348536fa43d8ba237bae84ac66fa0b5ad206137271a584012",
-    "Flock.RecLinks.Link.port": "4cf8196cd58973d3e909822f5ca4c1fded35c0d15c4e7405592eb8a4442ae32d",
-    "Flock.RecLinks.Link.reader": "5763dcf92d93d600a41b74047ebae01055d245dbb94b75a0121a178dedccbc10",
-    "Flock.RecLinks.Link.writer": "287a5c0d5720cfd5fbdda8144f757fd84f9626ab4dab4ae174809f654292da21",
+    "Flock.RecLinks.LinkEntry": "afae270e1d2f490bbe4d344264052005bbeac5b9a3f771a2a721f969fb999e76",
+    "Flock.RecLinks.LinkEntry.out": "657e12e90fd7fbbca291cffc3e4fb6f90ca897a8e3f44267d0712cd8b2071645",
+    "Flock.RecLinks.LinkEntry.port": "340a0af1fd396d783e67e4d1272537d7d506c36aee433f526d5a935f0cb41bd3",
+    "Flock.RecLinks.LinkEntry.reader": "ba9891833da0692d9a57e01a3e199fd3fdfeb4703cbe3c1264ac0f2dbcd1513a",
+    "Flock.RecLinks.LinkEntry.writer": "0590830db1b629c08babbe6e69c8a8f0302763bb571f21907076f3ad5db4faff",
     "Flock.RecLinks.ROW_BYTES": "8daa31911b82b78b22a2b186e7cdbc18c2d14d5c9a1d89cbeba5e0eea825549f",
     "Flock.RecLinks.Shape": "1f2c94dddc7afe6bd50d701b0910de518e5b9617f8462818a113169408d30c62",
     "Flock.RecLinks.Shape.ins": "56f1732fc788a155c1d00bdb0be88ffb601a31ab13ae38845196a6d7687a0d0a",
     "Flock.RecLinks.Shape.outs": "06b20acc8baf4a631a03766d329618ab1c441d58e43c614d8d4984165a8a032a",
     "Flock.RecLinks.Shape.units": "c4fe30365d7221516d4a2570a7619e2b04c64bbf43ef34e6eaa73ab2d0bbb1f2",
     "Flock.RecLinks.bitLength": "d2251ac6476350195dbf64988e3267c58455ac01366aeb9764c8b0e582b18955",
-    "Flock.RecLinks.check": "b938e3c3227614c852eea854e01537537300361e879dd8b8acc4e3910ff1ec21",
-    "Flock.RecLinks.decode": "881b5c5583dee85c32fef19734c7b6a74b0b445002a9a19d32ec1870d9ee789e",
-    "Flock.RecLinks.decodeAll": "ea926248ffa0224ba8d0e07cae68bd65be91d35454d04ea8c147407477df8fea",
+    "Flock.RecLinks.check": "66510dca4f460ec22e1082dbdb56c8f773ab64129bc466d43cc0b2efaae0242a",
+    "Flock.RecLinks.decode": "b3105bb61c9585019e87b00536996e1753d2182f60fbfa72c7521b808062a140",
+    "Flock.RecLinks.decodeAll": "6a93c4f91cf14549e6ba829baa140a4110bc5e62f64d2539dc2ee5daf58ce60d",
     "Flock.RecLinks.grid": "9b1119f854b0c580347111b443022997ddbba432e0deddf3771b75b8f82b7748",
-    "Flock.RecLinks.linkErr": "955e824ff51d723546d4141114f856a4868496103219548a1c51bf1722e13c41",
-    "Flock.RecLinks.links": "c068e4583f385523a44b51db14b5abcbef25bb1c80100f5bd493d932d9b0b4f3",
-    "Flock.RecLinks.ordered": "10fe0c9c7b6d4647e22a46e13aa011d4223d6bcbe57ed966cd20241d264e1d83",
+    "Flock.RecLinks.linkErr": "76baacbac0f59506afa611f47dfb5c1678a69334bf39a2c8690d20eb564fde28",
+    "Flock.RecLinks.links": "fd638b50d3f5862365779458cfa55f63252bf5253afcb911843ced5d79265ca4",
+    "Flock.RecLinks.ordered": "10414dfce5ab5fd6ffe51e49a963cad26e1782ea8cb71b9073406408156334e0",
     "Flock.RecLinks.u32At": "c1675f44eafac783a305179e813be310e7b341eaa28ee67706d1aa50d3aff4f6"
    },
    "guarantees": ["Flock.RecLinks.check_sound"]
