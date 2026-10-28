@@ -23,7 +23,9 @@ bits a covert sender in the server can move through the network certifier in the
 `NetTiming.Guarantees.PeriodLeakAccepted` counts them. In the rows form each link-window's scan's Programs' row must be a
 compute audit's slot entries (`wired`, below), and the state that audit's Programs read (its `SCAN_STATE`) the scan's
 state, by root and domain (`stateTied`), so a slot's entry is the one its Program computed on the requests the scan
-read.
+read. The network verdict (`verdict`, the protocol's check) is the check's in the clock form, and refuses a rows-form
+period the check accepts (`unproved`): no verifier proves the rows form's link-windows yet, and the verifier gains no
+form ahead of its proof.
 
 **Params**, JSON with exactly these keys (and each nested object exactly its own), in the clock form
 
@@ -52,7 +54,9 @@ the scan's Program, its descriptor (`verity-ir/descriptor/v1`, `scan_zk`'s `prog
 certifier's one fixed schedule (`warden.WardenParams`: each a positive integer, B = `cell_bytes` past a cell's 9-byte
 header, B, S = `lanes` · `slots` and T = `window` u32s, and `every`, a timestep's buckets, dividing T, so each
 link-window is T / `every` timesteps of `lanes` Program slots, `Schedule.programSlots` and `Schedule.windowPrograms`),
-whose digest `WardenParams.digest` every registration binds; its `program` is the scan's registered Program, the
+whose digest `WardenParams.digest` every registration binds, and each connection's cap at least its `egress_cells`, the
+most cells the network certifier holds a lane to, so no lane is longer than the cap `K` charges it (a lower cap is
+refused); its `program` is the scan's registered Program, the
 descriptor's SHA-512 (`partition_object.program_sha512`), and its `link` the run's (`warden_serve.LINK`), whose fails record is certified under the link `<link>-fails`. The
 descriptor must decode (`Flock.Program.decode`) and be the scan of the schedule's link-window in the generator form:
 its root batches one instance of a template whose parameters are `row` and a `prog<j>` a lane (`IngressScanFirst`,
@@ -116,9 +120,11 @@ against that salted digest is a later change to its circuit (the certifier PROTO
   `LinkWindows.verify`, is the answer's verifier of record);
 * in the rows form, link-window `w`: its registration (the scan's, per window) names the scan's Program; its three
   certificates are the requests' record's (the link's ingress), the responses' (its egress) and the fails'
-  (`<link>-fails`, egress) at `w`, each the key's and verifying in the session, so a link-window missing any record's
-  certificate is refused, and the network certifier certifies no record of a link-window in which it refused a
-  connection (traffic past the window's Program slots, `warden`'s "Admission"), so such a link-window is refused; its two registrations, ingress then egress, are what `warden_rows.check_registration` reads:
+  (`<link>-fails`, egress) at `w`, each the key's for its link, end and `w` and verifying in the session. A
+  certificate's message names no role, so the check refuses a link-window missing a record's certificate only where no
+  other certificate the key signed for that link, end and `w` stands in its slot: a rows head's (below) passes as the
+  requests' or the responses'. The network certifier signs nothing of a link-window in which it refused a connection
+  (traffic past the window's Program slots, `warden`'s "Admission"), so such a link-window is refused; its two registrations, ingress then egress, are what `warden_rows.check_registration` reads:
   the link-window's value, link, end and window, the schedule's digest (a registration under another schedule is
   refused), the schedule's rows, words, word bits, row format and layout, the link-window's domain in the session
   (`warden_rows.domain`), and a certificate that is the key's, signs the head (`CellsHead.digest`) and verifies in the
@@ -218,10 +224,9 @@ verifier of record checks inside the answer (`LinkWindows.verify`, with C-Flock'
 the clock form's link-window registration's domain; in the rows form, the records' certificates' digests against the
 rows (each signs its salted record, witness) and the scan's statements against its registration (lane `j`'s slot
 entries' input node the value it registers as `scan/prog<j>`), which one-stage's verifier of record checks inside the
-answer, and each connection's cap against its lane (the parameters' `cells`; the network certifier holds a lane to
-`egress_cells`); that a tied audit's `SelectEntry_v1` units read their `occ` from its `ScanSlots_v2` units, which read
-its `SCAN_STATE` (the check reads no wires of an audit's Program, only its root templates' ids and closure digests);
-and that the audits' answers are the sampled-proofs component's own,
+answer, and which record a certificate in a record's slot is of; that a tied audit's `SelectEntry_v1` units read their
+`occ` from its `ScanSlots_v2` units, which read its `SCAN_STATE` (the check reads no wires of an audit's Program, only
+its root templates' ids and closure digests); and that the audits' answers are the sampled-proofs component's own,
 which the composition's theorem is to bind.
 
 **The clock openings**, apart from the period's check: `clocksFn`, `network-records verdicts`' `clocks`, reads the
@@ -786,6 +791,9 @@ def paramsOf (j : Json) : V Params := do
   let form ← if keysOf j == paramsKeys then do pure (Form.clock (← syncSetOf (← Flock.J.get j "sync_set" "the object")))
     else do
       let s ← scheduleOf (← Flock.J.get j "schedule" "the object")
+      unless cells.all (s.egressCells ≤ ·) do
+        throw s!"cells: a connection's cap is below the schedule's egress_cells, {s.egressCells}, the most cells the \
+          network certifier holds a lane to, so K would charge a lane less than it can carry"
       pure (Form.rows s (← s.digest) (← scanOf (← Flock.J.get j "scan" "the object") program s))
   let windows ← Flock.J.nat j "windows" "the object"
   unless 1 ≤ windows do throw "windows: a period has at least one link-window"
@@ -1362,6 +1370,18 @@ def publicJson (x : Public) : Json :=
 def profileJson (pr : Profile) : Json :=
   Json.mkObj [("link", .str pr.link), ("windows", toJson pr.windows)]
 
+def unproved : String :=
+  "the rows form: the period passes every check, and no verifier proves its link-windows yet, so the network verdict \
+    refuses it"
+
+/-- **The network verdict**, the protocol's check: `check`'s outcome, but a rows-form period `check` accepts is refused
+(`unproved`), as no proof covers the rows form's link-windows yet. `check` keeps the rows form's checks and its public,
+which the properties read. -/
+def verdict (p : Params) (c : Commitment) (e : Evidence) : Core.Outcome Public Profile :=
+  match p.form, check p c e with
+  | .rows .., .accept .. => .reject unproved
+  | _, o => o
+
 def protocol : Core.Protocol where
   id := protocolId
   Params := Params
@@ -1373,7 +1393,7 @@ def protocol : Core.Protocol where
   commitment := commitmentOf
   evidence := evidenceOf
   digest c := (Identity.taggedSha512 commitmentTag c.bytes).toOption.getD .empty
-  check := check
+  check := verdict
   publicJson := publicJson
   profileJson := profileJson
 

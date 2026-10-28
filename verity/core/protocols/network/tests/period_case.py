@@ -1,5 +1,7 @@
 """The network certifier's period check (`NetworkCheck.Period`, `verity/certifier/v0`) in Python, for every difftest
-that runs it: its mirror, `answer` (as `reference`), and its cases, `build` and `case`.
+that runs it: its mirror, `answer` (as `reference`, Lean's `verdict`), and its cases, `build` and `case`. `analysis` is
+Lean's `check`, which differs from the verdict only on a rows-form period it accepts, which the verdict refuses
+(`UNPROVED`): the rows form's tests read the public there.
 
 `answer(case)` is the outcome of one `serve` line in the core interface's answer format
 (`verity_difftest.protocol.answer`): it decodes the protocol's formats (`NetworkCheck/Period.lean`'s module docstring)
@@ -621,6 +623,8 @@ def params(j) -> Params:
         sync_set, schedule, scan = _sync_set(j["sync_set"]), None, None
     else:
         schedule = _schedule(j["schedule"])
+        if any(cap < schedule.egress_cells for cap in cells):
+            raise D.Reject(f"cells: a connection's cap is below the schedule's egress_cells, {schedule.egress_cells}")
         sync_set, scan = None, _scan(j["scan"], program, schedule)
     windows = _nat(j["windows"], "windows")
     if windows < 1:
@@ -1092,9 +1096,32 @@ def check(p: Params, c: Commitment, e) -> tuple:
         "link": p.link, "windows": p.windows}
 
 
-def reference(case) -> dict:
-    return P.answer(ID, case, params=params, commitment=commitment, evidence=evidence, check=check,
+#: Lean's `unproved`: the network verdict's refusal of a rows-form period that passes every check.
+UNPROVED = "no verifier proves its link-windows yet"
+
+
+def verdict(p: Params, c: Commitment, e) -> tuple:
+    """Lean's `verdict`, the protocol's check: `check`'s, but a rows-form period `check` accepts is refused."""
+    out = check(p, c, e)
+    if p.schedule is not None and out[0] == ACCEPT:
+        return REJECT, f"the rows form: the period passes every check, and {UNPROVED}"
+    return out
+
+
+def _outcome(case, chk) -> dict:
+    return P.answer(ID, case, params=params, commitment=commitment, evidence=evidence, check=chk,
                     digest=lambda c: tagged_sha512(COMMITMENT_TAG, c.bytes))
+
+
+def reference(case) -> dict:
+    """The network verdict on `case`, Lean's protocol's."""
+    return _outcome(case, verdict)
+
+
+def analysis(case) -> dict:
+    """`check`'s outcome on `case`, Lean's `check`'s: in the rows form, what the verdict would be with its link-windows
+    proved, which the rows form's tests read (Lean's difftest sees only `reference`)."""
+    return _outcome(case, check)
 
 
 # --- the generator --------------------------------------------------------------------------------------------------------
@@ -1128,7 +1155,7 @@ EXPECT = {
     "undecided-and-reject": REJECT, "form": REJECT,
     "first": REJECT, "count-windows": REJECT, "count-audits": REJECT, "evidence-count": REJECT,
     "params": REJECT, "commitment": REJECT, "evidence": REJECT, "case": REJECT,
-    "rows-honest": ACCEPT, "rows-tied-partial": ACCEPT,
+    "rows-honest": REJECT, "rows-tied-partial": REJECT,
     "rows-program": REJECT,
     "rows-cert-missing": REJECT, "rows-cert-swap": REJECT, "rows-cert-fails-link": REJECT,
     "rows-cert-direction": REJECT, "rows-cert-forged": REJECT, "rows-cert-window": REJECT, "rows-cert-session": REJECT,
@@ -1875,8 +1902,9 @@ def build(m: str, seed: int, small: bool = False) -> dict:
         audit_regs.append(rec)
         audits.append(answer)
 
-    case_params = {"audits": audit_params, "cells": [r.randint(0, 100) for _ in range(r.randint(0, 3))], "first": first,
-                   "jitter": r.randint(1, 5), "key": lms.public_key(key).hex(), "link": link,
+    # the rows form's caps are at least the lanes the network certifier holds, `egress_cells`
+    cells = [r.randint(0, 100) + (bound.egress_cells if rows else 0) for _ in range(r.randint(0, 3))]
+    case_params = {"audits": audit_params, "cells": cells, "first": first, "jitter": r.randint(1, 5), "key": lms.public_key(key).hex(), "link": link,
                    "lms": {"H": H, "N": N, "W": W, "toy": toy}, "program": program, "session": session.hex(),
                    "windows": n_windows}
     if rows:
@@ -1933,7 +1961,7 @@ def _bad_params(p: dict, n: int) -> list:
                   p | {"schedule": s | {"cell_bytes": U32}}, p | {"schedule": s | {"lanes": U32}},
                   p | {"schedule": s | {"window": U32}}, p | {"schedule": s | {"every": s["window"] + 1}},
                   p | {"schedule": s | {"every": 0}}, p | {"sync_set": {"deltas": [0], "rhos": [[1, 1]]}},
-                  *bad_scans(p)]
+                  p | {"cells": [*p["cells"], s["egress_cells"] - 1]}, *bad_scans(p)]
 
 
 def bad_audits(p: dict) -> list[dict]:

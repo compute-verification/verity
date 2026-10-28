@@ -490,7 +490,8 @@ def test_the_rows_forms_case_is_the_link_windows_rows_certificates_and_the_scans
     and two row registrations, each named by the registration's roots. The period's mirror reads the block's
     `SlotEntry_v1` template's entries off its descriptor, a stand-in whose closure digest is no pinned Definition's
     (`period_case.SLOT_ENTRY_PINS`), and refuses the honest case at the wiring (`period_case.UNWIRED`); with that digest
-    pinned it accepts it, its scan's terms read off the test class's own templates with no free inputs, and refuses the
+    pinned it passes every check (`analysis`; the verdict refuses the rows form as unproved, `period_case.UNPROVED`),
+    its scan's terms read off the test class's own templates with no free inputs, and refuses the
     forged case (a certificate's signature changed) at the certificates, the tampered case (another Program's
     registration) at the registration, the chain case (the round's registration of the Program) at its refusal, a block
     whose entries are at other roots by name, and at the wiring (`period_case.UNWIRED`) one whose lanes' chunks are
@@ -582,8 +583,9 @@ def test_the_rows_forms_case_is_the_link_windows_rows_certificates_and_the_scans
     out = PC.reference(case)
     assert (out["verdict"], out["reason"]) == ("reject", f"window 0: {PC.UNWIRED}"), out
     monkeypatch.setattr(PC, "SLOT_ENTRY_PINS", (*PC.SLOT_ENTRY_PINS, digest))
-    out = PC.reference(case)
+    out = PC.analysis(case)
     assert (out["verdict"], out["public"]["windows"], out["public"]["scans"][0]["units"]) == ("accept", 1, 2 * T), out
+    assert PC.UNPROVED in PC.reference(case)["reason"], PC.reference(case)
     refused = {r: PC.reference(SP.rows_case(run, scan, r)) for r in ("forged", "tampered", "chain")}
     assert {r: (a["verdict"], a["reason"]) for r, a in refused.items()} == {
         "forged": ("reject", "window 0: certificates (none of a window in which the network certifier refused a "
