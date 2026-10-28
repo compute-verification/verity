@@ -1048,10 +1048,10 @@ theorem regions_layout_of {st : Stmt} (hdm : avoidsMask st = true) :
   rw [maskCol_iff_B] at hmc
   simp [hmc] at this
 
-/-- **What the mask layout reads of a setup**: `Layout`, `HmRow.check` on its circuit, and `m`. Both `Stmt.setupH` and
-`Stmt.setupHidden` (untyped) give it. -/
+/-- **What the mask layout reads of a setup**: `Layout` of it at some Δ (it reads the ranges and the pin), `HmRow.check`
+on its circuit, and `m`. Both `Stmt.setupH` and `Stmt.setupHidden` (untyped; its flat twin's Δ) give it. -/
 structure MaskSetup (st : Stmt) : Prop where
-  layout : Layout st
+  layout : ∃ da db, Layout { st with da := da, db := db }
   check : ∃ tags ls, HmRow.check st.c tags ls = .ok ()
   m : st.m = st.c.kLog + st.nbl
 
@@ -1063,13 +1063,13 @@ theorem maskSetup_of_setupH {tags : Tags} {circuitFile publicFile : ByteArray} {
     {tables : List (String × ByteArray)} {draw partition : Option Lean.Json} {program : Option ByteArray} {st : Stmt}
     (ht : tags.typed = false)
     (h : Stmt.setupH tags circuitFile publicFile coins tables draw partition program = .ok st) : MaskSetup st :=
-  ⟨setupH_layout ht h, let ⟨ls, hc⟩ := Refine.hm_parse_check (setupH_spec ht h).1; ⟨_, ls, hc⟩,
+  ⟨⟨st.da, st.db, setupH_layout ht h⟩, let ⟨ls, hc⟩ := Refine.hm_parse_check (setupH_spec ht h).1; ⟨_, ls, hc⟩,
     (Refine.setupH_mask h).2⟩
 
 /-- **A setup's layout facts**: `HmRow.check`'s mask range is one slot of at least a word, apart from every other range
 (`Layout`); the pin is a net slot's constant; Δ and the regions avoid the mask (`avoidsMask`). -/
 theorem maskLayout_of {st : Stmt} (M : MaskSetup st) (hdm : avoidsMask st = true) : MaskLayout st := by
-  have L := M.layout
+  obtain ⟨da, db, L⟩ := M.layout
   obtain ⟨_, _, hc⟩ := M.check
   have hmask := M.mask
   have hslot : ∀ m, st.c.ranges.toList.find? (fun r => r.kind == Kind.mask) = some m →
