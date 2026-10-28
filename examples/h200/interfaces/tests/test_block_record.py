@@ -1,6 +1,6 @@
-"""The block record: tonight's records (all-protocols runs r20261025-210358-993e and -203534-186b, wipe run
-r20261025-224222-91e2) fit their schema and check clean, every derived field is refused when it is not its legs', and a
-period whose six legs all accept on one server composes to accept."""
+"""The block record: the fixture records (built by `from-runs` from two all-protocols runs and a wipe run) fit their schema
+and check clean, every derived field is refused when it is not its legs', and a period whose six legs all accept on one
+server composes to accept."""
 from __future__ import annotations
 
 import copy
@@ -23,7 +23,7 @@ def _load(name: str) -> dict:
 
 
 @pytest.mark.parametrize("name", NAMES)
-def test_tonights_records_fit_their_schema_and_check_clean(name: str) -> None:
+def test_the_fixture_records_fit_their_schema_and_check_clean(name: str) -> None:
     rec = _load(name)
     jsonschema.Draft202012Validator(SCHEMA).validate(rec)
     assert R.check(rec) == {}
@@ -96,7 +96,7 @@ def _accepting_report() -> tuple[dict, dict]:
 
 
 def test_the_wipe_is_its_threshold_at_its_reads() -> None:
-    """The wipe's quantity is `verity/wipe/v0`'s `foreign_bits` at the `k` and `r` it publishes; tonight's wipe, from
+    """The wipe's quantity is `verity/wipe/v0`'s `foreign_bits` at the `k` and `r` it publishes; the fixtures' wipe, from
     before it published them, carries its profile's `k` and no `r`."""
     assert _load("block-record-r2-period0")["legs"]["wipe"]["quantity"] == {
         "symbol": "foreign_bits", "value": 1 << 28, "unit": "bits", "k": 2152, "r": None, "M": 1 << 28, "certified": False}
