@@ -130,14 +130,16 @@ def test_a_whole_attention_row_reads_its_tables_in_lookup_slots_and_an_rmsnorm_r
 
 def test_an_attention_heads_per_key_block_calls_read_their_tables_in_lookup_slots():
     """`chunk_rows.reads` of the Calls the window circuit cuts a decode head into (`window_circuit.CUTS`), FA2's
-    `AttentionHead_v19` and FA3's `AttentionHead_v20` at Llama-3.2-1B's statics on each target: its first visited block, the
-    full block below it and its epilogue each read in lookup slots, as the whole row they cut is."""
-    for head, inv, BN in ((DF.AttentionHeadV19, MU.Fa2InvSum, 128), (FA3.AttentionHeadV20, HP.Fa3InvSum, 192)):
-        nodes = bind(head, T=2 * BN, D=64, BN=BN, DOT=OP.HopperBF16WgmmaDot16, INV=inv, MASKED_FROM=1).body.nodes
-        assert len({n.fn.base_id for n in nodes}) == 3
+    `AttentionHead_v21` and FA3's `AttentionHead_v22` at Llama-3.2-1B's statics on each target (values of 32 words a row,
+    `window_circuit.group_keys`' PK): its first visited block's softmax, the full block's below it and its epilogue each
+    read in lookup slots, as the whole row they cut is, and the P·V groups, which read no table, inline."""
+    for head, inv, BN, PK, steps in ((DF.AttentionHeadV21, MU.Fa2InvSum, 128, 64, {"AttnBlockSoftmax_v1"}),
+                                     (FA3.AttentionHeadV22, HP.Fa3InvSum, 192, 96, {"AttnBlockSoftmax_v1", "AttnBlockSoftmax_v2"})):
+        nodes = bind(head, T=2 * BN, D=64, BN=BN, DOT=OP.HopperBF16WgmmaDot16, INV=inv, MASKED_FROM=1, VS=32, PK=PK).body.nodes
+        assert {n.fn.base_id for n in nodes} == steps | {"AttnBlockPv_v1", "AttnHeadEnd_v1"}
         for n in nodes:
             tp = SRW.template(descriptor_id(n.fn))
-            assert (tp.layout, CR.reads(tp)) == ("row", "slots"), tp.id
+            assert (tp.layout, CR.reads(tp)) == ("row", "inline" if n.fn.name == "AttnBlockPv" else "slots"), tp.id
 
 
 def test_a_scope_of_several_prefixes_takes_the_rows_under_any_of_them(rows):

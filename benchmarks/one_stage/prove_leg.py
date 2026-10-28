@@ -626,10 +626,21 @@ LLAMA = {"1b": {"H": 2048, "I": 8192, "NH": 32, "KVH": 8, "D": 64, "V": 128256, 
 #: the --zk statement's least and greatest log size (`stage`)
 M_MIN = 25
 #: the target each attention cut's decode head is served on, by family: the RTX PRO 6000 (FA2's `Attention_v5`, whose dead-free
-#: v18 `window_circuit.CUTS` cuts by `AttentionHead_v19`) and the H200 (FA3's `Attention_v4`, cut by `AttentionHead_v20`)
-CUT_TARGETS = {"attention-v19": ((12, 0), 188), "attention-v20": ((9, 0), 132)}
-#: an attention cut's Calls by name: its first visited key block, the full block below it and its epilogue
-CALLS = {"first": "AttnBlockFirst", "block": "AttnBlock", "end": "AttnHeadEnd"}
+#: v18 v19 cut a key block a Call and `window_circuit.CUTS` cuts by `AttentionHead_v21`, each block its softmax step and its
+#: P·V groups) and the H200 (FA3's `Attention_v4`, cut by `AttentionHead_v20` and by `AttentionHead_v22`)
+CUT_TARGETS = {"attention-v19": ((12, 0), 188), "attention-v20": ((9, 0), 132), "attention-v21": ((12, 0), 188),
+               "attention-v22": ((9, 0), 132)}
+#: a cut's family's version of the served row it cuts (v18, or FA3's v4) and its own
+CUT_OF = {"attention-v19": (18, 19), "attention-v20": (4, 20), "attention-v21": (18, 21), "attention-v22": (4, 22)}
+#: a v21 or v22 Call's value rows' words when its shape names none: the s8 value GEMM's slices at the default grain
+VS = 32
+#: an attention cut's Calls by name, each the first of its head's body that is it: its first visited key block (v21's and
+#: v22's: that block's softmax), the full block below it (its softmax), a P·V group reading the O before it (v21's and v22's)
+#: and its epilogue
+CALLS = {"first": lambda f: f.name == "AttnBlockFirst" or f.name == "AttnBlockSoftmax" and f.bindings["FIRST"],
+         "block": lambda f: f.name == "AttnBlock" or f.name == "AttnBlockSoftmax" and not f.bindings["FIRST"],
+         "pv": lambda f: f.name == "AttnBlockPv" and not f.bindings["FIRST"],
+         "end": lambda f: f.name == "AttnHeadEnd"}
 #: an attention Call's f32 running state, each parameter's stand-in (scale, mean): the running max, the lane sums and O
 STATE = {"m_prev": (2.0, 0.0), "l_prev": (4.0, 16.0), "o_prev": (4.0, 0.0), "l": (4.0, 16.0), "o": (4.0, 0.0)}
 #: the window circuit's units that no serving row commits (`serving_rows.template` refuses their one-bit leaves): their
@@ -657,26 +668,35 @@ def _bit_words(bits: Sequence[int]) -> np.ndarray:
 
 
 def attention_call(shape: str) -> Any:
-    """The Call ``shape`` (``attention-v19|attention-v20:M:T:first|block|end``) names: the served decode head of T keys on its
-    ``CUT_TARGETS`` target (`targets.attention_spec`, one query row), cut as `window_circuit.CUTS` cuts it, and its first
-    visited block (keys (nb - 1) BN ... T - 1), the full block below it (T > BN) or its epilogue."""
+    """The Call ``shape`` (``attention-v19|attention-v20:M:T:first|block|end``, or ``attention-v21|attention-v22:M:T:
+    first|block|pv|end[:VS]``) names: the served decode head of T keys on its ``CUT_TARGETS`` target
+    (`targets.attention_spec`, one query row), cut by its family's version (v21 and v22 as `window_circuit.CUTS` cuts it,
+    at values of VS words a row and `window_circuit.group_keys`' PK), and its first visited block (keys (nb - 1) BN ... T - 1;
+    v21's and v22's: its softmax), the full block below it (T > BN; its softmax), a P·V group that reads an O or its
+    epilogue."""
     from verity.ml.circuits.defs import bind
     from verity.ml.definitions.registry import dead_free as DF
+    from verity.ml.definitions.registry import fa3_check_inf as FA3
     from verity_vllm import TargetProfile
     from verity_vllm.program.frontend import targets as TG
-    from verity_vllm.program.predict.window_circuit import CUTS
+    from verity_vllm.program.predict.window_circuit import group_keys
 
-    fam, model, T, call = shape.split(":")
+    fam, model, T, call, *vs = shape.split(":")
     L, (cc, sms) = LLAMA[model], CUT_TARGETS[fam]
     row = TG.attention_spec(TargetProfile(compute_capability=cc, num_sms=sms), int(T), L["NH"], L["KVH"], L["D"], 1, row=0, own_rows=1)
     if row.base_id == "Attention_v5":
         row = bind(DF.AttentionV18, **row.bindings)
-    cut = bind(CUTS[row.version], **row.bindings)
-    if f"v{cut.version}" != fam.rsplit("-", 1)[1]:
-        raise SystemExit(f"{shape}: the served head is cut by Attention_v{cut.version}, not {fam}'s")
+    (of, version), defn = CUT_OF[fam], {19: DF.AttentionV19, 20: FA3.AttentionV20, 21: DF.AttentionV21, 22: FA3.AttentionV22}
+    if row.version != of:
+        raise SystemExit(f"{shape}: the served head is Attention_v{row.version}, which {fam} doesn't cut")
+    if version in (19, 20):
+        cut = bind(defn[version], **row.bindings)
+    else:
+        w = int(vs[0]) if vs else VS
+        cut = bind(defn[version], **row.bindings, VS=w, PK=group_keys(row.bindings["D"], row.bindings["BN"], w))
     head = next(n.fn for n in cut.body.nodes if n.fn.base_id.rsplit("_v", 1)[0] == "AttentionHead")
-    want = CALLS.get(call)
-    hit = [n.fn for n in head.body.nodes if n.form == "call" and n.fn.base_id.rsplit("_v", 1)[0] == want]
+    want = CALLS.get(call, lambda _f: False)
+    hit = [n.fn for n in head.body.nodes if n.form == "call" and want(n.fn)]
     if not hit:
         raise SystemExit(f"{shape}: {head.id} has no {call!r} Call (calls: {sorted(CALLS)}; a full block needs T > BN)")
     return hit[0]
@@ -698,9 +718,13 @@ def served(shape: str) -> tuple[Any, Callable[[np.random.Generator, int], dict[s
         token-select-combine:M[:V]  TokenSelectCombine_v2{V,C}, TokenSelect_v4's combine (``token-select-combine``), its
                                     partials the chunks' own of a stand-in logits row
         rope:M[:NHEADS]      RoPE_v1{NHEADS,D}, NHEADS the query heads by default
-        attention-v19:M:T:CALL  a Call of the RTX PRO 6000's decode head over T keys as the window circuit cuts it
+        attention-v19:M:T:CALL  a Call of the RTX PRO 6000's decode head over T keys as v19 cuts it, a key block a Call
                              (`attention_call`): first (AttnBlockFirst_v1), block (AttnBlock_v5) or end (AttnHeadEnd_v1)
         attention-v20:M:T:CALL  the same on the H200 (sm_90, FA3): AttnBlockFirst_v1, AttnBlock_v4 or AttnHeadEnd_v1
+        attention-v21:M:T:CALL[:VS]  a Call of the RTX PRO 6000's decode head as the window circuit cuts it (v21, values
+                             of VS words a row, 32 by default): first (AttnBlockSoftmax_v1{FIRST=true}), block
+                             (AttnBlockSoftmax_v1{FIRST=false}), pv (AttnBlockPv_v1{FIRST=false}) or end (AttnHeadEnd_v1)
+        attention-v22:M:T:CALL[:VS]  the same on the H200 (v22): its full block's softmax AttnBlockSoftmax_v2
         embedding-read:M[:V] EmbeddingRead_v1{V,H}, the window's embedding unit, each stand-in row opening at its token
     """
     from verity.ml.circuits.defs import bind
