@@ -409,12 +409,14 @@ def served_main(argv: list[str]) -> int:
     ap.add_argument("--credit", default=UNCREDITED)
     ap.add_argument("--key", default="all")
     ap.add_argument("--steps", action="append", default=[], metavar="FIRST-LAST",
-                    help="also these steps (each from the previous step's end), past util.json's window; repeatable")
+                    help="also these steps (each from the previous step's end), past util.json's window (alone when "
+                         "util.json has none, as when async scheduling leaves no run of full steps); repeatable")
     ap.add_argument("--text", type=Path, help="also write the table here")
     a = ap.parse_args(argv)
     trace = [json.loads(x) for x in a.trace.read_text().splitlines() if x.strip()]
     prof, util, serve = served_profile(sqlite3.connect(a.sqlite)), json.loads(a.util.read_text()), json.loads(a.serve.read_text())
-    rs = [served(prof, trace, util, serve, a.certified_over_declared, a.credit, a.key)]
+    has_window = bool((util.get(a.key) or {}).get("first_step"))
+    rs = [served(prof, trace, util, serve, a.certified_over_declared, a.credit, a.key)] if has_window or not a.steps else []
     for s in a.steps:
         lo, _, hi = s.partition("-")
         rs.append(served(prof, trace, util, serve, a.certified_over_declared, a.credit, steps=(int(lo), int(hi or lo))))
