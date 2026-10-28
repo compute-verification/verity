@@ -1,7 +1,7 @@
 """No retired term in the tree's prose (AGENTS.md "Working principles": a decision rolls out in the change that records it).
 A semantically meaningful part of the declared or actual circuit is a block, always named with a prefix
 (`ARCHITECTURE.md`, Glossary, "Block"): a proof unit is a proof block, and a faulty unit a faulty
-proof block.
+proof block. The proof service is the proof system (`ARCHITECTURE.md`, Glossary, "Proof system").
 
 Scanned: every tracked text file but the Lean (`.lean` files and their locks' reasons, `lean-audit.json`). A term matches case-insensitively as two words, hyphenated, or wrapped onto the next
 line (behind a comment marker or not). Identifiers (`proof_unit`) are code; the retired-terms table
@@ -21,13 +21,14 @@ import re
 from test_repository import ROOT, _tracked
 
 #: Each retired term and what to write instead.
-TERMS = {"proof unit": "proof block", "faulty unit": "faulty proof block"}
-_TERM = re.compile(r"\b(proof|faulty)(?:[ \t]+|-|[ \t]*\n[ \t]*(?:#+|//+|--|\*|;+)?[ \t]*)units?\b", re.I)
+TERMS = {"proof unit": "proof block", "faulty unit": "faulty proof block", "proof service": "proof system"}
+_SEP = r"(?:[ \t]+|-|[ \t]*\n[ \t]*(?:#+|//+|--|\*|;+)?[ \t]*)"
+_TERM = re.compile(rf"\b(?:(?:proof|faulty){_SEP}units?|proof{_SEP}services?)\b", re.I)
 
 #: The retired-terms table, the Glossary's older names (`ARCHITECTURE.md` links it).
 GLOSSARY = "GLOSSARY.md"
 #: The table's rows that name the terms, in GLOSSARY.
-RETIRED_ROWS = ('| "proof unit"', '| "wrong unit"')
+RETIRED_ROWS = ('| "proof unit"', '| "wrong unit"', '| "proof service"')
 
 #: Retired in the maintained docs' prose, and what to write instead.
 DOC_TERMS = {
@@ -53,6 +54,9 @@ ALLOWED: dict[str, str] = {
     "T proof units per registration, unit t the link-window's bucket row t": "a public item's reason in the ingress tie's "
                                                                              "Spec (`certifier.tie_service`): `Spec.digest` hashes it",
     '"proof-unit"': "the kind circuit-check's Boolean export records for a unit circuit (`boolean_export.Registry.type_of`)",
+    "verity/proof-service/": "the stream's and outcome's record formats (`sampled_proofs.service.STREAM`, `OUTCOME`), "
+                             "which their digests hash",
+    "report-proof-service-": "a cited note's id",
 }
 
 PENDING: dict[str, str] = {
@@ -99,7 +103,7 @@ def offenders(files: list[str], read=_read) -> tuple[list[tuple[str, int, str]],
     out, used = [], set()
     for f in scanned(files):
         text = read(f)
-        if text is None or "unit" not in text.lower():
+        if text is None or not ("unit" in text.lower() or "service" in text.lower()):
             continue
         allowed = [(m.start(), m.end(), s) for s in ALLOWED for m in re.finditer(re.escape(s), text)]
         lines = text.splitlines()
@@ -159,14 +163,16 @@ def test_the_scan_reads_each_form():
     docs = {
         "a.py": '"""A proof unit, two Proof-Units and a proof\n    units wrap."""\nx.proof_unit  # a faulty unit; unit tests\n',
         "b.rs": "/// the proof\n/// unit of it; a bulletproof unit\nlet reason = \"N, the round's proof units\";\n",
+        "d.py": '# the Proof-Service and a proof\n# services; proof_service, verity/proof-service/stream/v0; a faulty service\n',
         "c.lean": "-- a proof unit",
         "verity/README.md": "a proof unit",
         GLOSSARY: '| "proof unit", and "unit" alone meaning one | proof block |\n| other | a proof unit |\n',
     }
     found, used = offenders(list(docs), read=docs.__getitem__)
     assert found == [(GLOSSARY, 2, "proof unit"), ("a.py", 1, "proof unit"), ("a.py", 1, "Proof-Units"),
-                     ("a.py", 1, "proof units"), ("a.py", 3, "faulty unit"), ("b.rs", 1, "proof /// unit")]
-    assert used == {"N, the round's proof units"}
+                     ("a.py", 1, "proof units"), ("a.py", 3, "faulty unit"), ("b.rs", 1, "proof /// unit"),
+                     ("d.py", 1, "Proof-Service"), ("d.py", 1, "proof # services")]
+    assert used == {"N, the round's proof units", "verity/proof-service/"}
 
 
 def test_the_doc_scan_reads_each_form():

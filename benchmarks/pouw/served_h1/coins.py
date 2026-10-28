@@ -1,7 +1,7 @@
 """A served window's live coins: where they come from, and the verifier's check of them from the challenger's own run.
 
 * **Off the node** (`Session`: its id, the HOST:PORT its challenger listens on, the secret its hello carries and the
-  coin commitment's root the gate's open answered): the proof service's challenger on its auditor host
+  coin commitment's root the gate's open answered): the proof system's challenger on its auditor host
   (`sampled_proofs.remote.RemoteChallenger`), one session a window, from infra's gate in two steps; lanes don't start
   challenger sessions themselves. `reserve` (``ssh GATE reserve`` with the peer node and the window's layout) gives the
   window's session id; the reserve counts toward its lane's open period, and one not opened by its ``expires_utc`` is

@@ -3,7 +3,7 @@
 Proof of useful work: certifies that a served model's declared matrix products were computed, by sampled proofs over
 committed, noised checked values. An accepted run establishes a credited size S of noised matrix products, at least
 (1 − ε)·S of their AND gates computed right, except with probability δ. One protocol carries several named schemes
-behind one interface (`protocol.PoUWScheme`, `schemes.get`). The proof service registers each commit period, draws its
+behind one interface (`protocol.PoUWScheme`, `schemes.get`). The proof system registers each commit period, draws its
 proof blocks with live coins, proves them in zero knowledge (C-Flock `--zk`) and verifies them; PoUW states what each
 commit period commits, the Program each drawn proof block must pass, and what the outcome credits. It carries no policy
 parameter: it surfaces the ε at δ its draw established.
@@ -24,7 +24,7 @@ The verifier is Lean, three Lake packages under `lean/`:
 
 - `lean/check` (`pouw_check`): `PouwCheck.protocol`, the `Core.Protocol` with id `verity/pouw/v1` that the remote
   protocol composes. `PouwCheck.check` decides one commit period from its registration (the commitment) and the proof
-  service's answer to it (the evidence); `PouwCheck.Credit` decides what a served commit period, and a credit period
+  system's answer to it (the evidence); `PouwCheck.Credit` decides what a served commit period, and a credit period
   (below), credits. Its executable is `pouw-check` (`id | check | serve`, the core interface's commands).
 - `lean/window` (`pouw_window`): what a commit period registers and makes public: its grid level, its draw size K′, its
   fixed length, its committed entries and side trees, and its round coins (`PouwWindow.Grid`, `PouwWindow.Draw`,
