@@ -5,7 +5,8 @@
 # `{"listening"}` and the report on stdout), the fill and the reads over direct TCP to PEER's address at PORT (47611).
 # The cluster's nodes pass only ssh to each other (TCP 47611 times out), so there
 # --tunnel carries the fill and the reads in an ssh forward instead (this node's 127.0.0.1 to PEER's), and the record
-# names that link. DEMO_OPTIONS' --reads K starts the peer's challenger at K reads too. PEER is the lane's machine, not
+# names that link. DEMO_OPTIONS' --reads K starts the peer's challenger at K reads too, and their --site LOG (required)
+# goes to the peer as its challenger's own copy of the registered site. PEER is the lane's machine, not
 # the auditor's, so the run certifies nothing. cwd = a clone, as demo.sh's:
 #
 #   bash benchmarks/pous/streamed_wipe/peer.sh PEER [--port P] [--tunnel] -- DEMO_OPTIONS
@@ -53,8 +54,13 @@ if [ "$TUNNEL" = 1 ]; then
   LISTEN=127.0.0.1:$PORT TARGET=127.0.0.1:$LPORT
   LINK=(--link "challenger=$PEER@ssh to $ADDR:22, forwarding this node's 127.0.0.1:$LPORT to its 127.0.0.1:$PORT")
 fi
-READS=() A=("$@")
-for i in "${!A[@]}"; do [ "${A[$i]}" = --reads ] && READS=(--reads "${A[$((i + 1))]}"); done
+READS=() SITE= A=("$@")
+for i in "${!A[@]}"; do
+  [ "${A[$i]}" = --reads ] && READS=(--reads "${A[$((i + 1))]}")
+  [ "${A[$i]}" = --site ] && SITE=${A[$((i + 1))]}
+done
+[ -n "$SITE" ] || { echo "peer.sh: DEMO_OPTIONS' --site LOG, the registered site, is required (the peer's challenger reads its own copy)"; exit 2; }
+"${SSH[@]}" "cat > $D/site.json" < "$SITE"
 bash benchmarks/pous/streamed_wipe/demo.sh --challenger "$PEER" --challenger-address "$TARGET" \
-  --challenger-command "${SSH[*]} cd $D && exec $D/.venv/bin/python -m verity.core.protocols.pous.wipe_party --device $D/device --listen $LISTEN ${READS[*]} --streamer build" \
+  --challenger-command "${SSH[*]} cd $D && exec $D/.venv/bin/python -m verity.core.protocols.pous.wipe_party --device $D/device --site $D/site.json --listen $LISTEN ${READS[*]} --streamer build" \
   "${LINK[@]}" "$@"
