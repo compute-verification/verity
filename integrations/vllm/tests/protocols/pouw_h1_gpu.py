@@ -1075,7 +1075,7 @@ def negatives_of(layers: list[Any]) -> tuple[str, ...]:
 
 
 def editor(kind: str) -> Any:
-    """The codes H1 is handed of the ones the arm quantized: every call's all zero (``a-zero``, the RT4 A = 0 probe),
+    """The codes H1 is handed of the ones the arm quantized: every call's all zero (``a-zero``, the A = 0 probe),
     row 1's first code moved off by one in the first call of two rows or more (``a-row-off``), or the first routed
     expert down call with rows all zero (``a-zero-expert``: its K, the intermediate width, is the experts' alone). The
     edit's ``at`` names the expert site it zeroed."""
@@ -1379,7 +1379,7 @@ def check_challenger(calls_file: str, directory: str, public_sha512: str, out: s
     ``pins.jsonl``, the gate's ``pins``; none refuses every challenge phase: `pouw_h1_challenger.pins_head`) and `main` the
     auditor's own first-parent history of main (none refuses every challenge phase, as `challenger.pinned_session` refuses
     it). With `window_file` (the window's ``{root}``) `directory` is
-    the challenger run's ``out/`` (``research fetch RUN --all``), as the challenge phase the longest of the heads, each extending
+    the challenger run's ``out/``, fetched whole, as the challenge phase the longest of the heads, each extending
     the others, opens and ends for the window (`trusted_rounds_reason`); without it the ledger is read as the newest that
     the others extend (`Ledger.load`, core's check), the window held to the challenge phase it opened for its Commit's root
     (`session_reason`), `directory` being that challenge phase's tree as the gate's ``fetch SESSION`` gives it (its ``out/``
