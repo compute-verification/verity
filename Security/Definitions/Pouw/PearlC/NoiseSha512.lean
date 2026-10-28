@@ -9,7 +9,7 @@ noise Pearl-C's h3 hashing actually draws, as a function of the salt, the weight
 activations, through the spec's own SHA-512 (`Sha512.digest`), not a random oracle. A statement that wants the noise of
 the deployment instantiates `PearlCSem` with `sha512Sem`; the oracle `H` is then unused, and what is uniform is the salt.
 
-The rules, op for op, are `verity/core/protocols/pouw/schemes/pearl_c.py` (h3, row-seeded, forming v1):
+The rules, op for op, are `verity/ml/protocols/pouw/schemes/pearl_c.py` (h3, row-seeded, forming v1):
 - `s512 role msg` (`pearl_c.s512`): the first 32 bytes of SHA-512 over the role's label block
   (`"pearl-c/h3s/<role>\0"` zero-padded to 128 bytes) and `msg`.
 - `seedB` (`pearl_c.seed_b`): `s512 "seed-B" (salt ‖ root_B)`, one per weight and salt.

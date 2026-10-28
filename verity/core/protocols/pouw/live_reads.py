@@ -1,7 +1,8 @@
-"""A live statement's tables and reads (`circuit.live`'s ``live@<s>``), with no Program built: the registered values it
-reads, their rows' word layout, the known ``m@<s>``, ``round@<s>``, ``caps`` and ``live-ok`` rows, the statement's port rows and
-its verifier ``--registered`` file. Credit reads a live statement through these, and the served path registers its tables in their
-layout; `circuit.live` holds the unit's Definition and the live Program."""
+"""A live statement's tables and reads (`verity.ml.protocols.pouw.circuit.live`'s ``live@<s>``), with no Program
+built: the registered values it reads, their rows' word layout, the known ``m@<s>``, ``round@<s>``, ``caps`` and
+``live-ok`` rows, the statement's port rows and its verifier ``--registered`` file. Credit reads a live statement
+through these, and the served path registers its tables in their layout; `circuit.live` holds the unit's Definition and
+the live Program."""
 from __future__ import annotations
 
 import functools

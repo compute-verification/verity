@@ -597,7 +597,7 @@ wref     3·m·k·n + f·m·k, f = 24   (route U under W1 with sub-word moves pr
   within `wref` (`AdmitsRef`), and the byte-level noise expansion here (the Lean takes any expansion of H's answers with
   the stated ranges).
 
-## `pearl-fp8-v4`: Pearl's FP8 scheme (`schemes/pearl_kw.py`)
+## `pearl-fp8-v4`: Pearl's FP8 scheme (`verity/ml/protocols/pouw/schemes/pearl_kw.py`)
 
 Pearl's certificate-v4 FP8 scheme, as published: the whitepaper "Pearl Floating Point Scheme Specification" (Sep 2026)
 and pearl-research-labs/pearl PR #311 at `284b147b`, whose verifier code rules where the two differ. The module's
@@ -812,7 +812,7 @@ not a tile unit or is not its closure's first unit: a tile mapped to its X strip
 
 The profile is `Stratified` over the tile strata, and its `harm_bound`, at W_ref per tile, bounds the unsound work.
 
-## `pearl-c-h100-v0` and `pearl-c-h100-v1`: Pearl-C, Pearl's product with its noisy clean-up checked (`schemes/pearl_c.py`)
+## `pearl-c-h100-v0` and `pearl-c-h100-v1`: Pearl-C, Pearl's product with its noisy clean-up checked (`verity/ml/protocols/pouw/schemes/pearl_c.py`)
 
 The cheap-binding lane's H100 candidate. It takes Pearl's H100 product and output tickets, and adds #311's noisy clean-up
 pinned bit for bit, so that the useful output U is a checked value.
@@ -916,7 +916,8 @@ useful    U/(α_A·α_B), glue
     hash of every row digest and seed. h0's verifier refuses an -h3 transcript on its activation openings.
 - **Row tiles.** m is a multiple of 16, not of 64: the last row tile may be partial, in whole 16 × 16 ticket subtiles.
   Decode's 32 × 64 tile has a leaf over its 64 digests (2 KB), so decode is not padded to 64 rows.
-- **The debit** (`schemes/pearl_c_debit.py`) is `Skip.lean`'s, replayed by the verifier on a drawn tile.
+- **The debit** (`verity/ml/protocols/pouw/schemes/pearl_c_debit.py`) is `Skip.lean`'s, replayed by the verifier on a
+  drawn tile.
   - `word_flags` flags an atom when some set of its promotion group's atoms containing it, skipped jointly, leaves the
     word's output unchanged. The later promotions are tested by intervals found backward by bisection.
   - It equals P1's Lean-checked word vectors: all 552 when they were cut, and the 448 kept in
@@ -929,8 +930,8 @@ useful    U/(α_A·α_B), glue
   - The census's aligned-spike tile at R = 300 passes the domain with 74.6% of its atom-words flagged, about 15 times the
     cap.
 - **The work sampling design** is what the verifier credits, draws and checks. Its records (`Split`, `UnitRecord`,
-  `records_root`) are `schemes/pearl_c_work.py`'s, which vLLM's prover writes; its law and clear audit are a reference
-  tool, ``benchmarks/pouw/clear/clear_work.py``.
+  `records_root`) are `verity/ml/protocols/pouw/schemes/pearl_c_work.py`'s, which vLLM's prover writes; its law and
+  clear audit are a reference tool, ``benchmarks/pouw/clear/clear_work.py``.
   - A weight's `Split` holds at most ⌊k/100⌋ side channels. The unit reads the kept channels zero-padded to `k_unit`,
     and credit is on the kept width, so padding earns nothing. The audit recomputes S by the pinned rule through
     `split_check`, which the model integration supplies.
@@ -982,7 +983,7 @@ useful    U/(α_A·α_B), glue
     (`draw_key`). A replay of a recorded run keys them as the run recorded them (`RecordedDraw`, `replay_key`).
 - **The TurboSHAKE128 reference** is `verity.ml.crypto.turboshake`, checked against RFC 9861 and `hashlib`'s
   Keccak-f[1600].
-- **U's exact order, CPU-pinned** (`schemes/pearl_c_u.py`), for the Lean model of the clean-up.
+- **U's exact order, CPU-pinned** (`verity/ml/protocols/pouw/schemes/pearl_c_u.py`), for the Lean model of the clean-up.
   - It states the chain with its promotion, the fused columns, the factors' single BF16 roundings, P_B's FMA chain and the
     four K16 steps, and both tensor-core steps as integer grouped sums.
   - It equals `pearl_c` bit for bit.
@@ -990,7 +991,7 @@ useful    U/(α_A·α_B), glue
     gate's expected buffers, whose hashes they record.
   - The H100 capture confirms it on silicon.
 
-## `pearl-c-sm120-v1`: Pearl-C v1 on the RTX PRO 6000 Blackwell (`schemes/pearl_c_device.py`)
+## `pearl-c-sm120-v1`: Pearl-C v1 on the RTX PRO 6000 Blackwell (`verity/ml/protocols/pouw/schemes/pearl_c_device.py`)
 
 The same scheme as `pearl-c-h100-v1` on another device record. The record (`Device`) is a scheme parameter: the FP8 atom
 (E4M3, k = 32), the BF16 peel step (k = 16), G (atoms per promotion), the W1 prices (`Prices`) and the domain's k bound.
@@ -1116,7 +1117,7 @@ function's default, so every `pearl-c-h100-*` output and vector above is unchang
   - Not in it yet: the cap in a run. Until it is, Pearl-C's runs are checked by its reference audit, a development
     shortcut that opens rows.
 
-## `pearl-c-nvfp4-v0`: Pearl-C on sm_120's block-scaled FP4, NVFP4 only (`schemes/pearl_c4.py`)
+## `pearl-c-nvfp4-v0`: Pearl-C on sm_120's block-scaled FP4, NVFP4 only (`verity/ml/protocols/pouw/schemes/pearl_c4.py`)
 
 GPU 5's RTX PRO 6000 design. It is Pearl-C with the FP8 product replaced by `mma.sync kind::mxf4nvf4`, on NVFP4
 (UE4M3 scales per 16).
@@ -1493,7 +1494,7 @@ written `+0`. The `pc4` table registers the high half itself (`rows4`), and a ro
 `RowAdmit4` refuses the row, as the circuit's flag (`β ≤ F32_MAX`) does. `pc8Sem`'s forming value is `D_t`'s,
 and its `e4m3` is the code wherever `F32ToE4m3Sat_v1` agrees with `e4m3Word` and `D_t` is not NaN.
 
-## `compile`: PoUW as one pass over the served Program (`circuit/compile.py`)
+## `compile`: PoUW as one pass over the served Program (`verity/ml/protocols/pouw/circuit/compile.py`)
 
 Decision 102's shape: the served Program is the model's own, and PoUW is one compile pass over it. `compile(program, scheme,
 groups)` returns a `Compiled` (the compiled `Program`, the served one, the scheme, its `Site`s and `Unit`s, and each site's
@@ -1527,9 +1528,9 @@ sit at the root, one batch per site and tile shape, ahead of the node that read 
 `PouwRest_v1{FN=F}`, F without its dots, reading their z. The compiled Program is `PouwCompiled_v1{SERVED, SCHEME, GROUPS}`:
 the served parameters, `pouw.salt`, `pouw.positions` and `pouw.roots` to `{served: the served return, receipts}`.
 
-**Seeds and noise** (decision 105, `circuit/seeds.py`). The salt is the Program's one coin (`In(kind="coin")`), the
-epoch's 64 bytes, a certified epoch's (`Epoch.certified`); `seeds.seed`, `seeds.receipt_seed` and `Compiled.inputs` refuse
-any other width. A unit derives its seed in its own proof, and its noise from the seed:
+**Seeds and noise** (decision 105, `verity/ml/protocols/pouw/circuit/seeds.py`). The salt is the Program's one coin
+(`In(kind="coin")`), the epoch's 64 bytes, a certified epoch's (`Epoch.certified`); `seeds.seed`, `seeds.receipt_seed` and
+`Compiled.inputs` refuse any other width. A unit derives its seed in its own proof, and its noise from the seed:
 
 ~~~text
 seed_j  = SHA-512(u64(j) ‖ (SEED_TAG ‖ salt ‖ root(A_j) ‖ root(B_j)) ⊕ u64(j)*)        PouwSeed
@@ -1618,8 +1619,9 @@ some units before compile's own checks do: two seeds at one position (`E_COIN_RE
 **Schemes.** The pass's own `compile.SCHEMES`, separate from `circuit.SCHEMES`; `BUILTIN` loads this package's at the first
 name not registered.
 
-- `eps1-sm120-h1fx1` (`circuit/h1tile.py`, where `circuit/segment.py` is on the tree): sm_120's H1 + fx1 on a warp's 32 × 32
-  tile, for the s8 kinds on bits, under CP-W (decision 104, #2438's `PouwWarpCheck_v2` body). Each lane folds H1's sets over
+- `eps1-sm120-h1fx1` (`verity/ml/protocols/pouw/circuit/h1tile.py`, where
+  `verity/ml/protocols/pouw/circuit/segment.py` is on the tree): sm_120's H1 + fx1 on a warp's 32 × 32 tile, for the s8
+  kinds on bits, under CP-W (decision 104, #2438's `PouwWarpCheck_v2` body). Each lane folds H1's sets over
   X = A + b and W' = B + c + U with fx1 from its keys, and receipt words 2 s and 2 s + 1 are the warp's XOR of y and of z
   after set s: 2 (KS + m) words, 8,320 bits at K = 4096. Its noise is counter mode (`h1tile.Layout`): each row's and
   column's from blocks of seed_j's own, and each lane's fold keys, its chain's start, a block of σ_R's (`h1tile.fold_keys`).
@@ -1630,7 +1632,8 @@ name not registered.
 
 The seed, the unit's two seeds and the noise block (`_v1` on words, `_v2` on bits), `PouwU129` and `PouwH1Tile` are
 registered Definitions, each checked by circuit-check at its sidecar's binding (`seeds.circuit-check.py`,
-`h1tile.circuit-check.py`); `PouwH1Tile` only where `circuit/segment.py` is on the tree, at one lane (4 × 8, K = 64).
+`h1tile.circuit-check.py`); `PouwH1Tile` only where `verity/ml/protocols/pouw/circuit/segment.py` is on the tree, at
+one lane (4 × 8, K = 64).
 
 Not here yet: P·V as a registered Call, and a staged split for a dot whose operands its holder computes; a padded tile for a
 site that fills none (decode's few tokens); the vLLM integration serving the compiled Program.

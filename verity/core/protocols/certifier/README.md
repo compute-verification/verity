@@ -279,6 +279,9 @@ AEAD (`verity.ml.crypto.aead`). The certificate's signature scheme is a paramete
 `certificate.Issuer` takes a `Signer`, and the audit a `PublicKey`.
 From `verity`, `head_check` takes the circuits, their evaluator and the commitment gadgets, and `served` and `advised`
 the circuits and their evaluator.
+The Boolean Definitions above that core doesn't import (`advice_check`, `cache_step_v2`, `compile_slice_v2`,
+`compile_slice_v3`, `egress`, `ingress_scan`, `io_ids`, `served_statics`, `served_tie`, `window_charge`) are in
+`verity.ml.protocols.certifier`, stated over the ones here.
 `PROTOCOL.md` has the semantics and the correspondence to the Lean analysis (`Security/`, area `NetworkCertifier`).
 `lean/` is the certifier program, the Lake package `certifier_program` (Lean core only): List forms of the analysis's
 definitions, proved equal to them in `Security/Proofs/NetworkCertifier/Code.lean`, and the difftest that holds this

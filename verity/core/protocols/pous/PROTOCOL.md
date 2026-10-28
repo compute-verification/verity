@@ -689,10 +689,11 @@ a version bump in the strings they carry.
 
 `vk` (`docs/p3-instantiation.md` §4) is a SHA-512 Merkle tree over the blocks, with the shape of RFC 6962. Each leaf
 is `SHA512(0x00 || tag_s || u16(v) || R(c2_v))`, 99 bytes and one compression, where `R(c) = SHA512(P(8|c|) || c)` is
-the block's `sha512/row/v2` digest (`rowleaf.sha512_row_v2_digest`), the digest `answer_circuit`'s `PousRowDigest`
-checks; `tag_s` is 32 bytes and `v` 2, little-endian. Each node is `SHA512(0x01 || l || r)`. The memory challenger keeps
-the root and every 64-byte leaf digest, or only the root and checks the server's audit path. This follows the
-instantiation's byte format rather than `verity.ml.commitments`' frame v3.
+the block's `sha512/row/v2` digest (`rowleaf.sha512_row_v2_digest`), the digest
+`verity.ml.protocols.pous.answer_circuit`'s `PousRowDigest` checks; `tag_s` is 32 bytes and `v` 2, little-endian. Each
+node is `SHA512(0x01 || l || r)`. The memory challenger keeps the root and every 64-byte leaf digest, or only the root
+and checks the server's audit path. This follows the instantiation's byte format rather than `verity.ml.commitments`'
+frame v3.
 
 ## Rounds
 

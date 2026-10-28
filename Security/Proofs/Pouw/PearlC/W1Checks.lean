@@ -7,7 +7,7 @@ import Definitions.Pouw.PearlC.NoiseSha512
 - `sha512_abc`, `sha512_two_blocks`: `Sha512.digest` against `hashlib.sha512` (FIPS 180-2's `"abc"`, and 112 bytes,
   which pad to two blocks), evaluated by the kernel.
 - `rowDigest_vec`, `rowSeed_vec`, `seedB_vec`, `lineEA_vec`, `lineFB_vec`: `NoiseSha512` against
-  `verity/core/protocols/pouw/schemes/pearl_c.py` (`row_digest`, `row_seed`, `seed_b`, `sample_line`) on one 15-word row
+  `verity/ml/protocols/pouw/schemes/pearl_c.py` (`row_digest`, `row_seed`, `seed_b`, `sample_line`) on one 15-word row
   of unit 3, row 5, with salt `0, 1, …, 31` and root `(7i + 3) mod 256`, evaluated by the kernel.
 - `toPrices_h100`, `toPrices_sm120`, `toPrices_sm120Loop`: W1's tables give the coarse records the devices use;
   `toFp4Prices_fp4Sm120` (and `toFp4Prices_fp4Sm120At` at any scale path): the FP4 record's, `Fp4Prices.sm120`.
