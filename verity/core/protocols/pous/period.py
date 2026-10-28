@@ -411,14 +411,11 @@ def _json(data: str | bytes) -> Any:
 
 def _entry(line: Any) -> dict | None:
     """`line` as an entry of the auditor's ledger (`sampled_proofs.challenger.ledger_text`'s form): a record entry
-    (`record.of_json`) under one of its schemas, else None."""
+    (`record.is_entry`) under one of its schemas, else None."""
     if type(line) is not str or not line.startswith('{"body":'):
         return None
-    try:
-        e = core_record.of_json(_json(line))
-    except ValueError:
-        return None
-    return e if e["schema"] in LEDGER_SCHEMAS else None
+    e = _json(line)
+    return e if core_record.is_entry(e) and e["schema"] in LEDGER_SCHEMAS else None
 
 
 def _ledger(lines: Sequence[Any]) -> list[dict] | None:
