@@ -2,7 +2,6 @@
 name = "VF3l-16-copy16"
 epoch = "VF3l-16"
 summary = "VF3l-16 with every copy route at ≥ 16 MACs a word (π_c ≥ 16, r12): the UR fan-out, UNI and UNI64, at 16 a lane-word it serves; every other route is already at ≥ 16."
-note = "note:20261016T2055Z-draft-machine-model-vf3l"
 rows = [
     "issue", "M", "R1", "F", "VMNX", "H", "I", "A",
     "F2FS", "XU", "R6r", "LDSi", "R6w", "LDG", "L2red", "UP",
