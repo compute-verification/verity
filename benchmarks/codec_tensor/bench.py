@@ -1,6 +1,6 @@
 """The wide-word codec's benchmark on one GPU: `wt.cu`'s libraries (`--lib PATH`, one per field) gated against
-`wide.py`, then timed. Writes `codec-tensor.json` and `bench.log` under `--out`, and in a `research run` its
-`result.json`.
+`wide.py`, then timed. Writes `codec-tensor.json` and `bench.log` under `--out`, and, with
+`RESEARCH_RUN_DIR` set, its `result.json` there.
 
 Nothing is timed before its gate passed, in this order:
 - `gate`: per field and k, device encode equals `wide.encode_word` on random and edge payloads, and both decodes (CUDA
