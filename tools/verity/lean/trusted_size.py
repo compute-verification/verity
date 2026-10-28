@@ -1,4 +1,4 @@
-"""The size of a package's trusted text, per area: what LEAN-67 tracks over time.
+"""The size of a package's trusted text, per area, to track over time.
 
     python tools/verity/lean/trusted_size.py [PKG] [--facts FACTS.json | --run RUN] [--unread] [--json]
 

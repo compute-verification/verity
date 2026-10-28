@@ -530,15 +530,15 @@ def prune(pkg: Path) -> int:
 
 
 #: the kept builds a node holds before its least recently used go: every tree whose manifest or lakefile differs adds one
-#: (infra, 12 Oct: 71 of them, 19 GB, on a 200 GB disk). Each package's newest stays past it (`WarmBuilds.evict`): at 24, fewer
-#: than the ~30 packages, every check evicted some and rebuilt them cold (r20261026-040757-de32: Flock's build alone 1,094 s)
+#: (a node collects dozens, tens of GB). Each package's newest stays past it (`WarmBuilds.evict`), and the limit stays above
+#: the ~30 packages: below them, every check would evict some and rebuild them cold (Flock's build alone takes about 18 min)
 BUILDS_KEPT = 48
 #: the kept dependency trees (one per manifest and toolchain, `deps_key`) a node holds before its least recently used go:
-#: Security/Proofs' is about 35k files, and vy-nebius-2 held 24 (806k inodes) on 18 Oct (infra, LEAN-29)
+#: Security/Proofs' is about 35k files, so a few dozen of them hold most of a node's inodes
 DEPS_KEPT = 8
 #: the replay cache's entries a node keeps, last used first (a replay touches each entry it reuses): one per module and key,
 #: about 3k a version of the tree plus some 8k of Mathlib's and ArkLib's that every replay reuses, each a few hundred bytes;
-#: vy-nebius-2 held 180k on 18 Oct
+#: a node left to grow holds over 100k
 REPLAYS_KEPT = 60_000
 
 
@@ -635,7 +635,7 @@ def evict_lru(store: Path, kept: int, keep: set[str] = frozenset()) -> int:
 
 
 #: the fast path's (`lean_changed.py --records`) trees a node keeps, its most recently used: each is a checkout with its own
-#: builds, about 40 GB and 490k inodes (vy-nebius-cpu-2 reached 95% of its inodes on 21 Oct with nine). A node with more
+#: builds, about 40 GB and 490k inodes (nine of them nearly fill a node's inodes). A node with more
 #: `build` Lean slots keeps one per slot (`build_slots`)
 RECORDS_KEPT = 3
 #: `lean_slot.py`'s SLOTS: the node's Lean slot caps, `build N` among them
@@ -660,10 +660,10 @@ def build_slots(slots: Path | None = None) -> int:
 def prune_records(store: Path, kept: int | None = None, slots: int | None = None) -> int:
     """Remove all but ``kept`` trees of ``store`` (`lean-records/`), each only when its `.lock` is free: a run holding or
     waiting on it keeps it. ``kept`` is `RECORDS_KEPT`, or the node's ``slots`` (`build_slots`) when it has more, since each
-    slot's tree is the one a run there takes, and removing it hands that run a cold one (vy-nebius-cpu-1, 26 Oct: four
-    trees seeded for `build 8` and the hourly prune took two of them). The slots' own trees (`build-I`, I below ``slots``)
-    are kept first, then the rest by last use, the newest of their `.who`, `links.json` and `.lock`. A link to a tree
-    elsewhere goes with its target, and `passes/` is never touched. The number removed."""
+    slot's tree is the one a run there takes, and removing it hands that run a cold one (an hourly prune that kept only
+    `RECORDS_KEPT` would take trees seeded for the slots). The slots' own trees (`build-I`, I below ``slots``) are kept
+    first, then the rest by last use, the newest of their `.who`, `links.json` and `.lock`. A link to a tree elsewhere goes
+    with its target, and `passes/` is never touched. The number removed."""
     slots = build_slots() if slots is None else slots
     kept = max(RECORDS_KEPT, slots) if kept is None else kept
     own = {f"build-{i}" for i in range(slots)}

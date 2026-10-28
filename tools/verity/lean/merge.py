@@ -341,7 +341,7 @@ def kept(o: set, a: set, b: set) -> set:
     """The names a three-way merge of whole files keeps: (A ∩ B) ∪ (A − O) ∪ (B − O), what both sides have and what either
     added.  A name one side removed while the other kept it stays removed, however git splits the file into hunks: a line
     one side moved shows in a hunk as an addition, and the hunk alone would bring back what the other side removed
-    (#4690 onto `next`, 26 Oct: `Definitions.Accounting`'s retired import came back and Security stopped building)."""
+    (a retired import that comes back can stop Security building)."""
     return (a & b) | (a - o) | (b - o)
 
 

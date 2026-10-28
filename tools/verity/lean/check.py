@@ -201,7 +201,7 @@ GENERATED = re.compile(r"^(_.*|match_\d+|proof_\d+|eq_\d+|eq_def|mk|rec|recOn|ca
                        r"|binductionOn|ibelow|ctorIdx|inj|injEq|sizeOf_spec)$")
 ORDER = ("roots", "proved_in", "exempt", "runs", "axioms", "assumptions", "meaning", "escapes", "verifier", "claims", "compile_time",
          "dependency_unchecked", "layers", "reads_exempt", "trees", "upstream", "four_names", "guarantees", "shape", "reads", "dependencies")
-#: a guarantee's `owner`: the handle of the lane that answers for it (`@proofs`)
+#: a guarantee's `owner`: the handle of the lane that answers for it (`@` and the lane's name)
 OWNER = re.compile(r"@[a-z0-9][a-z0-9-]*")
 
 
@@ -278,8 +278,8 @@ def cores() -> int:
 #: what auditing a package that pins ArkLib (Security/Proofs, and Security, which audits it beside itself) needs: its build
 #: of C-Flock's soundness peaks at 15–24 GB (the lean-proofs skill); `VERITY_LEAN_MEM_FLOOR_GIB` sets another floor, 0 none
 MEM_FLOOR_GIB = 24
-#: an audit of a spec whose guarantees an ArkLib package proves (Security): its whole replay peaked at 145 GiB at 48 threads
-#: (r20261018-175656-1c85) and was killed at a 128 GiB cap at 16 (r20261019-084601-01a0), so the replay's resident base is
+#: an audit of a spec whose guarantees an ArkLib package proves (Security): its whole replay peaks at 145 GiB at 48 threads
+#: and is killed at a 128 GiB cap at 16, so the replay's resident base is
 #: about 120 GiB and a thread adds under 1: fewer threads don't make it fit, only the floor does
 SPEC_FLOOR_GIB = 160
 #: where a machine below the floor runs it instead
@@ -322,7 +322,7 @@ def memory_gib(proc: Path = Path("/proc"), cgroup: Path = Path("/sys/fs/cgroup")
 
 
 #: about what one `lean` of a Mathlib or ArkLib build peaks at: Lake runs as many at once as `LEAN_NUM_THREADS`, so a build
-#: of such a package runs no more than its memory holds (two queued Security builds were OOM-killed at 64 and 16 GB, 18 Oct)
+#: of such a package runs no more than its memory holds (a Security build sized to its CPUs alone is OOM-killed)
 BUILD_GIB_PER_JOB = 8
 
 
@@ -390,7 +390,7 @@ def plugin_targets(pkg: Path) -> list[str]:
     """The compiler plugins the package's fetched dependencies load (`plugins` of a `[[lean_lib]]` in their `lakefile.toml`),
     as targets `@dep/Lib:facet`.  Lake links one twice when two of a package's libraries load it, one under the module system
     and one not (ArkLib's `ArkLib` and `ArkLibTest` with `ArkLibLintPlugin:shared`), and the two links race on one file, so the
-    build links each alone first, after which both find it up to date (INF-62)."""
+    build links each alone first, after which both find it up to date."""
     out: list[str] = []
     for f in sorted((pkg / ".lake" / "packages").glob("*/lakefile.toml")):
         try:
@@ -1398,7 +1398,7 @@ def verifier_failures(rule: dict | None, found: dict | None, update: bool = Fals
     """The verifier's path (`verifier` in the policy: its `entries`, the constants it may reach without being expanded,
     `stop`, and the `hash` namespace): every `@[implemented_by]` or `@[extern]` constant the entries reach is compiled code
     no proof sees, so one fails unless `allow` admits it (`allowed_by`), and the entries reach the `hash` namespace only
-    through `stop`, so the verifier hashes through its parameter (Daniel's checks (a) and (b), LEAN-18). `allow` is a
+    through `stop`, so the verifier hashes through its parameter. `allow` is a
     record: `--update` writes each such constant into it by name (`verifier_allow`), a `module:` entry aside, and a name
     that admits nothing on the path fails. The walk follows `@[csimp]` replacements, so the code compiled in place of a
     constant is on the path; the rewrite itself is a theorem the replay checks, listed and never refused."""
@@ -1439,14 +1439,14 @@ def claim_witnesses(policy: dict) -> set[str]:
 
 
 def claim_failures(policy: dict, facts: dict) -> list[str]:
-    """Each claim definition has its witnesses (`claims` in the policy; LEAN-26, proofs' claims-landing norms): every predicate
+    """Each claim definition has its witnesses (`claims` in the policy): every predicate
     the spec declares under `claims.modules` (a named assumption, and one `claims.not` lists with the reason, aside) names
     under `claims.witnesses` a theorem `fails`, whose statement past its `∀` and `∃` binders is `¬ C …` with the claim `C`
     itself at the head (the claim is not true of everything), and theorems `meets`, one per deployed record, that state
     the claim's checkable antecedents there and not `C` itself (it is not true at the deployment only because nothing
     meets its antecedents). Each witness is a guarantee, so its record, and a change to it, shows in the landing DM.
     An entry is stale only when it names no predicate under `claims.modules`, so a named assumption (a claim a guarantee
-    takes as a premise) may keep its entry, which is then checked like any other. A `meets` witness must say something about the deployment (LEAN-32, `vacuous_meets`): its conclusion, past its `∀`,
+    takes as a premise) may keep its entry, which is then checked like any other. A `meets` witness must say something about the deployment (`vacuous_meets`): its conclusion, past its `∀`,
     `→` and `∃` binders and split at `∧` (each conjunct again past its own binders), is conjuncts that are each headed by
     a constant other than `C`, apply a definition under `meaning` themselves (the deployed record, a predicate or a field
     of it; `True`, or a fact of Init or Mathlib alone, applies none), and are neither a reflexivity (`a = a`, `a ↔ a`,
@@ -2495,7 +2495,7 @@ def setup(pkg: Path, toolchain: str, log: Path) -> tuple[int, str]:
 def dev_restore(pkg: Path, rc: int, text: str, log: Path) -> tuple[int, str]:
     """With `--dev-cache`, main's verified build of each package ``pkg`` requires by path too (`setup.sh` restores only
     ``pkg``'s): a rebuild of one isn't byte-identical to the published build, so every module above it would compile again
-    (Security/Proofs at the published commit, 21 Oct: 1,607 of its modules). A failed restore leaves those to `lake build`."""
+    (for Security/Proofs, well over a thousand of its modules). A failed restore leaves those to `lake build`."""
     if not DEV_CACHE or rc != 0 or not (deps := path_deps(pkg)):
         return rc, text
     # `cache.py get` unstages from inside each package, so Lake needs that package's dependencies where it looks: a path

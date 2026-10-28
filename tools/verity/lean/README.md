@@ -240,7 +240,7 @@ installs it first, so a machine without elan works), must pass clean and fail on
   with allowed axioms replaces it. A record written before guarantees were called that holds them (and each module's
   readers) under `pins`: the audit reads it so, `--update` rewrites it under today's names, and a record holding both
   is refused.
-- `owner`, in each guarantee's entry: the handle of the lane that answers for it (`@proofs`, `@compute-accounting`), whom
+- `owner`, in each guarantee's entry: the handle of the lane that answers for it (`research msg handles` lists them), whom
   a broken or restated guarantee goes to. The audit fails an entry without one. Write it by hand, or pass
   `--update --owner @lane`, which gives it to the new entries only: `--update` keeps an entry's owner, and writes no
   entry without one. A changed owner is one line in the review and no change of the statement.
@@ -286,7 +286,7 @@ installs it first, so a machine without elan works), must pass clean and fail on
   package whose statements are about its executable, not about a model of it), as an object {prefix: the reason}; an
   entry that exempts no read outside the spec fails, and no entry covers a spec module outside `meaning`, nor a module of
   the proofs tree (the trees check judges those).
-- **The trees** (Daniel, 24 Oct): `trees` names which module prefixes are the definitions tree (what a reader reads:
+- **The trees**: `trees` names which module prefixes are the definitions tree (what a reader reads:
   each area's vocabulary, named assumptions and guarantee statements), the properties tree (statements about the code)
   and the proofs tree (every proof, lemma and proof-only definition); a module's tree is that of its longest prefix
   (`Proofs.Properties` before `Properties`), and a package's trees reach the packages that require it by path
@@ -297,7 +297,7 @@ installs it first, so a machine without elan works), must pass clean and fail on
   excepts nothing fails. `Security`'s `except` is the cleanup's to-do.
   The report also lists, without failing, the spec definitions that no guarantee reads, its own or a dependent
   package's (`unread_spec` in `report.json`).
-- **Heartbeat overrides are listed, never refused** (Daniel, 2026-10-09). Each `set_option maxHeartbeats N` (and
+- **Heartbeat overrides are listed, never refused.** Each `set_option maxHeartbeats N` (and
   `synthInstance.maxHeartbeats`) in a package's sources is in its report (`heartbeats` in `report.json`, and printed
   under its `AUDIT` line, so the nightly lists them): its file and line, its value, the reason beside it (a `--` comment
   ending its line, else the `--` comments just above), and the build time of its module in the audit's own build. Write
@@ -337,10 +337,10 @@ are, and in place of `G as` the value of `G` at the type's universe levels with 
 theorems) put back in place, as a theorem's type keeps them. Nothing else is reduced, and the text is hashed as every
 type is. A certified lift gets one line, "lifted into G: the same statement, its definition unfolded once", and `G`, new and
 read by no other guarantee, needs no reading of its own; the review then holds no statement change. (No merge needs a
-statement reviewer, for a lift or any other change: Daniel, 8 Oct.) Any other lift prints in full: a `G` whose value differs from `e` in anything the hash sees
-(binder names and metadata aside), a `G` outside a `Guarantees` module, and a lift that moves a named assumption from the
-theorem's binders into `G`, which the record's `assumptions` would lose. Daniel's DM reads only the records, so it still
-lists a lifted guarantee as changed.
+statement reviewer, for a lift or any other change.) Any other lift prints in full: a `G` whose value differs from `e` in
+anything the hash sees (binder names and metadata aside), a `G` outside a `Guarantees` module, and a lift that moves a
+named assumption from the theorem's binders into `G`, which the record's `assumptions` would lose. Daniel's DM reads only
+the records, so it still lists a lifted guarantee as changed.
 
 `four_names` lists the namespace roots (`["Nci", "NetTiming"]`) whose guarantees are all in the four-name form: each is
 `X.SecurityProofs.G : X.Guarantees.G` (universe parameters aside), with `G` a definition of a `Guarantees` module, and the

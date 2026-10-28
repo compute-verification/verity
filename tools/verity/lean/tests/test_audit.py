@@ -358,7 +358,7 @@ def test_a_module_s_tree_is_its_longest_prefix_s_and_reaches_the_packages_requir
 
 
 def test_a_statement_reads_nothing_of_the_proofs_tree_and_the_trusted_trees_import_none_of_it():
-    """Daniel's three trees (24 Oct): a guarantee's or property's statement reads only the definitions tree and the code, and
+    """The three trees: a guarantee's or property's statement reads only the definitions tree and the code, and
     no module of the definitions or properties tree imports the proofs tree; each refusal says what to move where."""
     assert A.tree_failures({}, spec_facts(), TREES) == []
     read = A.tree_failures({}, spec_facts(reads=fact()["reads"] + AUX), TREES)
@@ -560,7 +560,7 @@ def test_a_32_bit_record_is_checked_as_it_is_and_rehashed_by_update():
 
 def test_facts_names_a_module_without_listing_every_module():
     """`EnvironmentHeader.moduleNames` maps over every imported module on each call. Indexed once per constant a
-    guarantee's reads reach, it was 1,471 s of `Security`'s 1,504 s audit (check r20261012-005706-568f)."""
+    guarantee's reads reach, it would be nearly all of `Security`'s audit time."""
     for tool in ("Facts.lean", "Upstream.lean"):
         assert "moduleNames[" not in (HERE.parent / tool).read_text(), \
             f"{tool}: name a module by `env.header.modules[i].module` (`moduleName env i`), not `env.header.moduleNames[i]`"
@@ -892,7 +892,7 @@ def test_a_package_pinning_arklib_is_refused_below_the_memory_floor(tmp_path):
 
 
 def test_a_mathlib_build_runs_no_more_lean_at_once_than_its_scope_s_memory_holds(tmp_path):
-    """Two queued Security builds were OOM-killed in 64 and 16 GB scopes on 18 Oct, with a `lean` per CPU: Lake runs as many
+    """A Security build with a `lean` per CPU is OOM-killed in a 64 or 16 GB scope: Lake runs as many
     at once as `LEAN_NUM_THREADS`, so a package that pins Mathlib or ArkLib builds with at most one per `BUILD_GIB_PER_JOB`.
     The scope's limit is read where `/proc/self/cgroup` says the process is, and the smallest of it and its parents' holds."""
     proc, cg = tmp_path / "proc", tmp_path / "cg"
@@ -920,7 +920,7 @@ def test_a_mathlib_build_runs_no_more_lean_at_once_than_its_scope_s_memory_holds
 
 
 def test_a_spec_whose_guarantees_an_arklib_package_proves_needs_the_spec_floor(tmp_path):
-    """A whole-Security replay holds about 120 GiB whatever its threads (killed at 128 GiB with 16 in r20261019-084601-01a0),
+    """A whole-Security replay holds about 120 GiB whatever its threads (killed at 128 GiB with 16),
     so auditing a spec with `proved_in` beside an ArkLib package needs `SPEC_FLOOR_GIB`, and is sent to the shape that has
     it; the package alone needs the build's floor."""
     proofs, spec = tmp_path / "Proofs", tmp_path / "Spec"
@@ -968,8 +968,8 @@ def test_the_dependencies_plugins_are_named_once_each():
 
 @pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
 def test_a_plugin_two_libraries_load_is_linked_alone_first_so_the_build_links_it_no_more(tmp_path):
-    """INF-62: Lake 4.34 links a plugin twice when a module-system library and a classic one load it, as ArkLib's `ArkLib` and
-    `ArkLibTest` load `ArkLibLintPlugin:shared`, and the two links of one file race (three proofs builds failed so on 18 Oct).
+    """Lake 4.34 links a plugin twice when a module-system library and a classic one load it, as ArkLib's `ArkLib` and
+    `ArkLibTest` load `ArkLibLintPlugin:shared`, and the two links of one file race, which fails the build.
     Whether a plain build schedules the second link depends on Lake's scheduling, so the test checks only the fix: linked
     alone first (`plugin_targets`), the build finds it up to date and links nothing."""
     dep, root = tmp_path / "dep", tmp_path / "root"
@@ -1317,8 +1317,8 @@ def test_a_closed_hypothesis_must_be_a_named_assumption():
 def test_a_premise_the_lock_does_not_list_fails():
     """A statement that takes an assumption applied to its own variables (`h : Premises.Hyp n`, an open hypothesis the
     hypotheses rule never names; `Facts.lean`'s `premises` sees through the abbrev and the `Guarantees` definitions to
-    `P.Hyp`) fails while the lock doesn't list it, and an update adds it with the guarantee's owner; on 14 Oct a merge
-    dropped `Flock.Assumptions.RegistrantCovers`' entry this way and the check passed. Without an import graph to say
+    `P.Hyp`) fails while the lock doesn't list it, and an update adds it with the guarantee's owner, so a merge that
+    drops such an entry (as `Flock.Assumptions.RegistrantCovers`' was) fails the check. Without an import graph to say
     which modules the repository builds, a premise outside an assumptions module is not counted (the next test has one)."""
     applied = [{"binder": "h", "type": "P.Premises.Hyp n", "closed": False, "named": None, "module": None}]
     pin = fact(signature="P.t (n : Nat) (h : P.Premises.Hyp n) : P.f n = n", hyps=applied)
@@ -1337,9 +1337,9 @@ def test_a_premise_the_lock_does_not_list_fails():
 
 
 def test_a_premise_defined_anywhere_the_repository_builds_is_listed_and_a_dependencys_is_not():
-    """LEAN-37 (RT2-LOGIC-2): `ProofLayer.SoundAt`, a premise defined in `Definitions/Accounting/TS`, passed unlisted, since
-    only a head in an assumptions module counted. A head in any module whose `.olean` a package of the repository builds
-    is listed now, in a lifted guarantee too (its premises are read through the `Guarantees` definition); one from the
+    """A premise defined outside an assumptions module (`ProofLayer.SoundAt`, in `Definitions/Accounting/TS`) would pass
+    unlisted if only a head in an assumptions module counted. A head in any module whose `.olean` a package of the repository
+    builds is listed, in a lifted guarantee too (its premises are read through the `Guarantees` definition); one from the
     toolchain or a fetched dependency (`Nat.le`, Mathlib's) is not."""
     pin = fact(signature="P.t (n : Nat) : P.Guarantees.t n", hyps=[])
     pin["premises"] = [{"binder": "h", "head": "P.Sound", "module": "P.Defs"},
@@ -1375,8 +1375,8 @@ def aliased(unfolds: dict, closed: bool = False) -> dict:
 
 
 def test_an_alias_of_listed_assumptions_is_no_new_named_assumption():
-    """TOP-90 row 17 (#4440, #4358): a premise that only packs listed assumptions (`def Both n := Hyp ∧ Hyp2 n`, or through
-    another such definition) failed as a new named assumption, and listing or renaming it took another records run. It is
+    """A premise that only packs listed assumptions (`def Both n := Hyp ∧ Hyp2 n`, or through another such definition)
+    would fail as a new named assumption, and listing or renaming it would take another records run. It is
     not one: the check holds its parts to the lock in its place (so a listed part reached only through it is read), an
     update doesn't add it, and taken closed, its parts are the guarantee's named assumptions."""
     listed = {**POLICY, "assumptions": {"P.Hyp": {"owner": "@lean"}, "P.Hyp2": {"owner": "@lean"}}}
@@ -1485,8 +1485,8 @@ def test_aliases_of_listed_assumptions_pass_and_aliases_hiding_others_fail_on_a_
 
 
 def test_a_premise_no_reads_record_holds_is_digested_with_what_it_reads():
-    """LEAN-60: a premise whose module is outside `meaning` (a Proofs module) has no `reads` record, and its entry was an
-    owner alone, so #4641's strengthened `RecDeploy.PlainLeavesAdmitted` changed no record. Its digest is now its walk's
+    """A premise whose module is outside `meaning` (a Proofs module) has no `reads` record, so with an entry that is an
+    owner alone, strengthening it (as `RecDeploy.PlainLeavesAdmitted` was) would change no record. Its digest is its walk's
     (`Facts.lean`'s `assumption_reads`: it and what it reads): a change to either fails under its name, and an update
     writes it, which the review prints."""
     pin = fact(signature="P.t (n : Nat) (h : P.Leaves n) : P.f n = n", hyps=[])
@@ -1516,7 +1516,7 @@ LEAVES = "import Control.LeafBound\nnamespace Control\ndef Leaves (n : Nat) : Pr
 
 @pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
 def test_a_premise_outside_meaning_changes_its_record_when_it_or_what_it_reads_changes(tmp_path):
-    """LEAN-60 on a real build: a premise defined outside `meaning` (`Control.Leaves`, as `RecDeploy.PlainLeavesAdmitted`
+    """The same on a real build: a premise defined outside `meaning` (`Control.Leaves`, as `RecDeploy.PlainLeavesAdmitted`
     is in a Proofs module), reading a definition of another such module (`leafBound`), gets a digest; a rebuild that
     changes neither keeps the lock byte for byte, and a change to the definition it reads, or to its own statement, changes
     its record and nothing else, which the audit refuses until `--update` records it."""
@@ -1596,7 +1596,7 @@ def test_the_verifiers_path_has_no_unlisted_compiled_code_and_hashes_through_its
 
 
 def test_verifier_allow_is_a_record_of_the_compiled_code_on_the_path_by_name():
-    """LEAN-33: `verifier.allow` lists by name each `@[extern]` and `@[implemented_by]` constant the verifier reaches, as
+    """`verifier.allow` lists by name each `@[extern]` and `@[implemented_by]` constant the verifier reaches, as
     `--update` writes it, so the landing DM shows one added: an Init extern the list doesn't name fails (no `module:Init`
     admitting all of Init), a name that admits nothing on the path fails, and a `module:` entry still admits its modules."""
     path = {"missing": [], "reached": 40, "hash": [], "csimp": [],
@@ -1624,7 +1624,7 @@ def test_verifier_allow_is_a_record_of_the_compiled_code_on_the_path_by_name():
 
 
 def test_every_claim_has_a_witness_that_it_fails_and_witnesses_that_its_antecedents_are_met():
-    """LEAN-26: each predicate the spec declares under `claims.modules` names a `fails` theorem stating `¬ C …` with that
+    """Each predicate the spec declares under `claims.modules` names a `fails` theorem stating `¬ C …` with that
     claim at the head, and `meets` theorems that are not `C` itself, each a guarantee; one without witnesses fails unless
     `claims.not` gives the reason, and a named assumption is no claim."""
     def spec(name, predicate=True):
@@ -1687,7 +1687,7 @@ def test_a_claim_a_guarantee_takes_as_a_premise_keeps_its_claims_entry():
 
 
 def test_a_meets_witness_says_something_about_the_deployment():
-    """LEAN-32: a `meets` witness whose statement is `True`, a conjunction of `True`s, a reflexivity, one of its own
+    """A `meets` witness whose statement is `True`, a conjunction of `True`s, a reflexivity, one of its own
     hypotheses, a bound variable, a fact of Init alone, or anything under a `False` hypothesis fails; one whose every
     conjunct applies a definition of the spec (`∃ s w, InScope deploy s ∧ RelS s w`, `deploy.zk = true`) passes."""
     def k(head, defs=("P.deploy",), refl=False, assumed=False):
@@ -1764,7 +1764,7 @@ def test_the_source_scan_refuses_kernel_bypasses_but_not_prose(tmp_path):
 
 
 def test_each_heartbeat_override_is_listed_with_its_value_reason_and_module_build_time_and_none_is_refused(tmp_path):
-    """`heartbeats` (Daniel, 2026-10-09: not banned, listed): an override with its reason ending its line, one with the
+    """`heartbeats` (not banned, listed): an override with its reason ending its line, one with the
     comments just above as its reason, one with none, `synthInstance`'s, and one in a comment, which is not an override;
     each with its module's time from the audit's build log (`build_seconds`, which skips a non-module like `:c.o`), or
     None for a module the build didn't build."""
@@ -2474,9 +2474,9 @@ def test_the_closure_replay_checks_each_imported_module_once_and_then_reuses_it(
 
 
 def test_a_replay_marks_every_entry_it_reuses_used_so_eviction_keeps_the_closure(tmp_path, monkeypatch):
-    """The replay cache keeps its `REPLAYS_KEPT` newest entries by mtime, and a reuse never touched one: Mathlib's and
-    ArkLib's entries, stored once and reused by every replay, were the first evicted, so Security's and Properties' replays
-    checked 1,300 to 3,800 closure modules again in most of 26 Oct's Lean checks (150 to 260 s each). A replay now marks
+    """The replay cache keeps its `REPLAYS_KEPT` newest entries by mtime, and a reuse that touched none would make Mathlib's
+    and ArkLib's entries, stored once and reused by every replay, the first evicted, so Security's and Properties' replays
+    would check thousands of closure modules again in most Lean checks (minutes each). A replay marks
     each entry it reuses, its own modules' and the closure's, and stores those it checked; nothing else is touched."""
     graph = {"Init": [], "Std": ["Init"], "Old": ["Init"], "A": ["Std"], "B": ["A"]}
     facts = {"graph": {m: {"imports": i} for m, i in graph.items()}, "modules": ["A", "B"], "axioms": []}
@@ -2505,8 +2505,8 @@ def test_a_replay_marks_every_entry_it_reuses_used_so_eviction_keeps_the_closure
 
 def test_two_packages_storing_one_replay_key_at_once_both_succeed(tmp_path, monkeypatch):
     """The gate audits its packages in threads of one process, and two whose closures share a module store its replay key
-    at once; with the temporary file named by the pid alone, the second store renamed the first's away and the first's
-    rename failed (r20261020-021950-2eb0). The store between the first's write and its rename runs on another thread."""
+    at once; with the temporary file named by the pid alone, the second store would rename the first's away and the first's
+    rename would fail. The store between the first's write and its rename runs on another thread."""
     real, nested = os.replace, []
 
     def replace(src, dst):
@@ -2525,7 +2525,7 @@ def test_two_packages_storing_one_replay_key_at_once_both_succeed(tmp_path, monk
 @pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
 def test_an_equation_lemma_two_modules_realize_counts_as_declared_by_the_imported_one(tmp_path):
     """`f.eq_1` is realized in B and in C, which don't import each other; D imports C and uses it. With B replayed and C
-    imported (it passed), D's use of the lemma is declared by C, which D imports (#2626's train: ZkQueryRound's
+    imported (it passed), D's use of the lemma is declared by C, which D imports (as with ZkQueryRound's
     `match_7.eq_2` and the `else_eq` that SimZk and ZkEq both realize). With B and C both imported (E, replayed, imports
     B), the imported environment names one module for the lemma, B, and D's import of C still declares it (the next
     train: `Exists.choose.congr_simp`, realized in Init.Control.Lawful.Lemmas and in the UpwardEnumerable that
@@ -2551,8 +2551,8 @@ def test_an_equation_lemma_two_modules_realize_counts_as_declared_by_the_importe
 def test_a_checked_declaration_waits_for_what_an_unchecked_one_it_unfolds_needs(tmp_path):
     """D's `a_t : f = 6 := rfl` makes the kernel unfold `f`, from M, which joins the replay unchecked (it passed, and it
     imports G, which hasn't), and `f`'s body mentions G's `zz_g`, checked in the same replay. Ordered only by what it
-    mentions itself, `a_t` went to the kernel before `zz_g` was in it: "unknown constant" (#2626's third train,
-    `Flock.sizeOf_lt_of_mem_toArray` and `Std.DTreeMap.Raw.Const.toList`)."""
+    mentions itself, `a_t` went to the kernel before `zz_g` was in it: "unknown constant" (as
+    `Flock.sizeOf_lt_of_mem_toArray` and `Std.DTreeMap.Raw.Const.toList` did)."""
     pkg = tmp_path / "behind"
     (pkg / "R").mkdir(parents=True)
     shutil.copy(HERE / "fixtures" / "control" / "lean-toolchain", pkg)
@@ -2577,7 +2577,7 @@ def test_the_controls(tmp_path):
 def test_a_step_records_the_peak_memory_of_every_process_it_waited_for(tmp_path):
     """`run` reaps with `os.wait4`, so a step's `peak_gib` covers the grandchildren a `lake` runs, not only `lake` itself;
     the output and exit code are what `subprocess.run` gave.  It runs in an interpreter of its own: a child's `ru_maxrss`
-    counts the resident set it was forked with, so in a test worker grown past 0.3 GiB even `true` peaked there (8577, 12 Oct)."""
+    counts the resident set it was forked with, so in a test worker grown past 0.3 GiB even `true` peaks there."""
     child = "import sys; b = bytearray(300 << 20); b[::4096] = b'x' * len(b[::4096]); print('out'); sys.exit(3)"
     script = f"""import importlib.util, sys
 from pathlib import Path
@@ -2639,7 +2639,7 @@ def test_a_property_takes_one_acceptance_its_inputs_and_premises_and_concludes_w
 
 
 def test_a_statement_in_another_order_or_with_a_shared_field_fits_as_its_restatement_would():
-    """LEAN-47: `OnePair` bound `w k` before its two acceptances and `LiveCoinBinding` took `c.root = c'.root`, each
+    """`OnePair` binds `w k` before its two acceptances and `LiveCoinBinding` takes `c.root = c'.root`, each
     equivalent to a form that fits. Binders reorder with the acceptances, the premises and what they mention first, so a
     hypothesis on a binder the acceptance doesn't read is the conclusion's, when the conclusion reads that binder too; an
     equation of one field of two inputs the acceptance reads is the field bound once. Nothing else moves: a hypothesis on
@@ -2830,8 +2830,8 @@ def test_a_dev_cache_run_restores_dependencies_and_is_never_a_verdict(monkeypatc
 
 
 def test_a_dev_cache_setup_restores_the_packages_required_by_path_too(monkeypatch, tmp_path):
-    """Security/Proofs at the published commit rebuilt 1,607 of its modules with `--dev-cache` (21 Oct), because only its
-    own build was restored: Security and Flock, which it requires by path, were built again, not byte-identically, and
+    """Security/Proofs at the published commit would rebuild over a thousand of its modules with `--dev-cache` if only its
+    own build were restored: Security and Flock, which it requires by path, would be built again, not byte-identically, and
     everything above them compiled. With `--dev-cache`, setup restores each path dependency's build too, lending one with no fetched dependencies of its own the root's for the restore; without it, or
     after a failed setup.sh, it restores nothing more."""
     calls, seen = [], []
