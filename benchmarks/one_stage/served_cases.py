@@ -1,8 +1,8 @@
 """Sampled proofs' v2 case and onsite's registration case for a served window, from its records audit, each beside its
 own Lean answer, for `composite.py` (`served_composite.sh` runs this after the record):
 
-    served_cases.py (--audit DIR | --serve-dir D) --private DIR [--alpha N/D --gamma G] [--log FILE]
-                    [--v2-exe PATH] [--registration-exe PATH]
+    served_cases.py (--audit DIR | --serve-dir D) --private DIR [--alpha N/D --gamma G | --from-division]
+                    [--log FILE] [--v2-exe PATH] [--registration-exe PATH]
 
 ``--audit`` is the window's `records_audit.py audit --circuit --registered` out directory (`served_verdicts.sh`'s
 ``$VW/audit``); ``--serve-dir`` finds it as the one ``D/v3c-w*/audit`` that holds a case. Both cases commit to the same
@@ -16,30 +16,35 @@ is written: that digest is what remote's and onsite's record tie compare.
   one member's `--zk` sessions). Its answer is `sampled-proofs-one-stage-zk check` on the case and its blobs.
 * **The registration case** (`registration_case`, `REGISTRATION`: `verity/inference-only/v0`; `verity/nci/v1` reads
   the same form, so a rename is `REGISTRATION` and `REGISTRATION_LEAN`):
-  - params: ``alpha`` and ``gamma`` (the policy's α and Γ, ``--alpha`` and ``--gamma``; without both no case is
-    written), ``log`` (the deployment's records before this one, ``--log``; empty when the record's ``previous`` is
-    null), ``program`` (v1's params' Program as canonical text, the one the record's ``program`` names) and
-    ``parameters`` (its program function's, which the descriptor doesn't carry: the population program rebuilt over
-    its root's templates and held to the record's ``program``, `parameters`);
+  - params: ``alpha`` and ``gamma`` (the policy's α and Γ: given, ``--alpha`` and ``--gamma``, or with
+    ``--from-division`` read off the case's own division, `division_policy`, which the registration's CASE line says
+    in its ``alpha_gamma``: the check then confirms that the division complies, and they're no security setting;
+    without either no case is written), ``log`` (the deployment's records before this one, ``--log``; empty when the
+    record's ``previous`` is null), ``program`` (v1's params' Program as canonical text, the one the record's
+    ``program`` names) and ``parameters`` (its program function's, which the descriptor doesn't carry: the population
+    program rebuilt over its root's templates and held to the record's ``program``, `parameters`);
   - commitment: the registration record;
   - evidence: ``owner`` per root node of the Program, ``theta`` and ``provenance``. The window's Program is its
     population program (`interface.Circuit.program`), one batch node per template holding that template's units for
     every slot, so no division into one block a slot is a division of its root nodes: every non-input node is block 0,
-    the window's m blocks of c gates as one of m·c, which complies only when Γ ≥ m·c. The Program registers no root
-    input (its inputs are `Input<w>`), so ``theta`` and ``provenance`` are empty and every input bit counts as fresh
-    against α.
+    the window's m blocks of c gates as one of m·c, which complies only when Γ ≥ m·c. So where a division into one
+    block a slot (k the most fresh-input bits in one) would give Γ = c and α = k/c, this one's gives Γ = m·c and α at
+    most k/c. The Program registers no root input (its inputs are `Input<w>`), so ``theta`` and ``provenance`` are
+    empty and every input bit counts as fresh against α.
 
 Each case goes to its own directory under ``--private`` (``sampled-proofs-v2/``, ``inference-only/``; 0700, files
 0600): ``case.json`` (``{"params", "commitment", "evidence"}``, hex commitment and evidence, and v2's ``blobs``) and
 ``answer.json``, its Lean answer line, the directory `composite.py --cases` reads. The Lean runs on files in a 0700
-scratch directory under ``--private``. This prints a ``CASE {"protocol", "verdict", "dir"}`` line per case written and
-a ``NOT_WRITTEN {"protocol", "reason"}`` line per case refused, and nothing of a case's params or evidence; the lines go
-to a private log (a reason may quote a5's ``case-v2-error.txt``), of which only a line's ``protocol`` and ``verdict``
-are public. Exit 0 when every case is written, 1 when one is refused, 64 on a usage error.
+scratch directory under ``--private``. This prints a ``CASE {"protocol", "verdict", "dir"}`` line per case written
+(the registration's with ``alpha_gamma`` too, given ``--from-division``) and a ``NOT_WRITTEN {"protocol", "reason"}``
+line per case refused, and nothing of a case's params or evidence; the lines go to a private log (a reason may quote
+a5's ``case-v2-error.txt``), of which only a line's ``protocol``, ``verdict`` and ``alpha_gamma`` are public. Exit 0
+when every case is written, 1 when one is refused, 64 on a usage error.
 """
 from __future__ import annotations
 
 import argparse
+import functools
 import importlib.util
 import json
 import os
@@ -64,6 +69,11 @@ NCI_REFERENCE = REGISTRATION_LEAN[0] / "scripts" / "nci_reference.py"
 DIRS = {V2: "sampled-proofs-v2", REGISTRATION: "inference-only"}
 CASE_KEYS = {"commitment", "evidence", "params"}
 USAGE = 64
+#: α and Γ past any block's (its gates and its fresh-input bits are each under 2^64), at which the policy's check reports
+#: the case's own division.
+UNBOUNDED = (2**64, 2**64)
+#: The registration CASE line's ``alpha_gamma`` with ``--from-division``.
+FROM_DIVISION = "read off the honest division, so the check confirms it complies; not a security setting"
 
 
 class Refused(Exception):
@@ -190,6 +200,22 @@ def registration_case(v1: Mapping[str, Any], alpha: Fraction | int | str, gamma:
     return {"commitment": v1["commitment"], "evidence": codec.canonical_json(evidence).hex(), "params": params}
 
 
+def division_policy(v1: Mapping[str, Any], log: Sequence[Mapping[str, Any]], exe: str | os.PathLike,
+                    scratch: Path) -> tuple[Fraction, int]:
+    """α and Γ read off the case's own division (``--from-division``): the policy's Lean check at no budget
+    (`UNBOUNDED`) profiles each block's gates and fresh-input bits; Γ is the largest block's gates and α the most bits a
+    gate of any block, so the check at them confirms that the division complies."""
+    answer, _ = lean_answer(exe, registration_case(v1, *UNBOUNDED, log), scratch)
+    profile = answer.get("profile")
+    blocks = profile.get("blocks") if isinstance(profile, Mapping) else None
+    _need(answer.get("verdict") == "accept",
+          f"the case's own division doesn't pass the check at no budget: {answer.get('reason')}")
+    _need(isinstance(blocks, list) and blocks != [] and all(
+        isinstance(b, list) and len(b) == 2 and all(type(x) is int for x in b) and b[0] > 0 for b in blocks),
+        "the check's profile isn't a nonempty list of [gates, bits] blocks with gates")
+    return max(Fraction(bits, gates) for gates, bits in blocks), max(gates for gates, _ in blocks)
+
+
 def lean_answer(exe: str | os.PathLike, case: Mapping[str, Any], scratch: Path) -> tuple[dict[str, Any], str]:
     """``exe check`` (`CoreProtocol.Cli`) on ``case`` and its blobs, its files in a 0700 directory under ``scratch``:
     the answer and its line."""
@@ -255,30 +281,37 @@ def produce(a: argparse.Namespace) -> int:
             print("NOT_WRITTEN " + json.dumps({"protocol": id, "reason": str(e)}, sort_keys=True), flush=True)
         return 1
 
+    said: dict[str, dict[str, str]] = {}
+
     def one(id: str, make, exe) -> None:
         nonlocal bad
         try:
             case = make()
-            answer, line = lean_answer(exe() if callable(exe) else exe, case, private / "scratch")
+            answer, line = lean_answer(exe(), case, private / "scratch")
             tie(answer, id, digest)
         except (Refused, PF.LeanError) as e:
             bad = 1
             print("NOT_WRITTEN " + json.dumps({"protocol": id, "reason": str(e)}, sort_keys=True), flush=True)
             return
         write(private / DIRS[id], case, line)
-        print("CASE " + json.dumps({"dir": str(private / DIRS[id]), "protocol": id, "verdict": answer.get("verdict")},
-                                   sort_keys=True), flush=True)
+        print("CASE " + json.dumps({"dir": str(private / DIRS[id]), "protocol": id, "verdict": answer.get("verdict")}
+                                   | said.get(id, {}), sort_keys=True), flush=True)
 
-    one(V2, lambda: v2_case(audit), a.v2_exe or PF.v2_executable)
+    one(V2, lambda: v2_case(audit), functools.cache(lambda: a.v2_exe or PF.v2_executable()))
+    registration_exe = functools.cache(lambda: a.registration_exe or build(*REGISTRATION_LEAN))
 
     def registration() -> dict[str, Any]:
-        _need(a.alpha is not None and a.gamma is not None, "α and Γ are the policy's, not the run's: pass --alpha and "
-              "--gamma")
         log = _json(a.log) if a.log is not None else []
         _need(isinstance(log, list), "--log is a JSON list of registration records")
-        return registration_case(v1, a.alpha, a.gamma, log)
+        if not a.from_division:
+            _need(a.alpha is not None and a.gamma is not None, "α and Γ are the policy's, not the run's: pass --alpha "
+                  "and --gamma, or --from-division")
+            return registration_case(v1, a.alpha, a.gamma, log)
+        alpha, gamma = division_policy(v1, log, registration_exe(), private / "scratch")
+        said[REGISTRATION] = {"alpha_gamma": FROM_DIVISION}
+        return registration_case(v1, alpha, gamma, log)
 
-    one(REGISTRATION, registration, a.registration_exe or (lambda: build(*REGISTRATION_LEAN)))
+    one(REGISTRATION, registration, registration_exe)
     return bad
 
 
@@ -296,10 +329,15 @@ def main(argv: Sequence[str] | None = None) -> int:
     ap.add_argument("--private", type=Path, required=True, help="where each case's directory goes (0700)")
     ap.add_argument("--alpha", type=Fraction, help="the policy's α, N/D: fresh-input bits a gate")
     ap.add_argument("--gamma", type=int, help="the policy's Γ: gates an inference block")
+    ap.add_argument("--from-division", action="store_true",
+                    help="α and Γ read off the case's own division (division_policy) instead of given")
     ap.add_argument("--log", type=Path, help="the deployment's registration records before the window's, a JSON list")
     ap.add_argument("--v2-exe", help="sampled-proofs-one-stage-zk (default: built here)")
     ap.add_argument("--registration-exe", help=f"{REGISTRATION_LEAN[1]} (default: built here)")
-    return produce(ap.parse_args(argv))
+    a = ap.parse_args(argv)
+    if a.from_division and (a.alpha is not None or a.gamma is not None):
+        ap.error("--from-division reads α and Γ off the division: not with --alpha or --gamma")
+    return produce(a)
 
 
 if __name__ == "__main__":
