@@ -243,14 +243,17 @@ theorem Witnesses : Properties.Witnesses := by
   exact ⟨dv.n, U, (Reports j out hev i' P d dv.n U hpar hdec hL hθ hU).2.2.1.1 hc⟩
 
 /-- **The check's rate refines the policy's budgets**: a block of at most `c` gates with at most `α` fresh input bits
-per gate has at most `k = α c`, as `α ≥ 0`. -/
+per gate has at most `k = α c`, as `α ≥ 0`, and a partition's blocks hold every computed gate. -/
 theorem Refines : Properties.Refines := by
   intro j out hev i P d n U hpar hdec hL hθ hU hc
   dsimp only
-  intro u
-  obtain ⟨hs, hr⟩ := (Reports j out hev i P d n U hpar hdec hL hθ hU).2.2.1.1 hc u
-  exact ⟨hs, hr.trans (mul_le_mul_of_nonneg_left (by exact_mod_cast hs)
-    (div_nonneg (Nat.cast_nonneg _) (Nat.cast_nonneg _)))⟩
+  refine ⟨fun u => ?_, fun g hg => ?_⟩
+  · obtain ⟨hs, hr⟩ := (Reports j out hev i P d n U hpar hdec hL hθ hU).2.2.1.1 hc u
+    exact ⟨hs, hr.trans (mul_le_mul_of_nonneg_left (by exact_mod_cast hs)
+      (div_nonneg (Nat.cast_nonneg _) (Nat.cast_nonneg _)))⟩
+  · obtain ⟨u, hu⟩ : ∃ u, U.unit g = some u :=
+      Option.ne_none_iff_exists'.1 fun h => by simp [(U.input_iff g).1 h] at hg
+    exact ⟨u, by simp [Verity.Partition.gates, hu]⟩
 
 /-! ## Completeness
 
