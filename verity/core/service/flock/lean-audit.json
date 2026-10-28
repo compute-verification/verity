@@ -65,6 +65,7 @@
   "Flock.Test.FrameStep",
   "Flock.Test.RegionBytes",
   "Flock.Test.PlainHidden",
+  "Flock.Test.Served",
   "Flock.Test.RequireLink",
   "VStar"
  ],

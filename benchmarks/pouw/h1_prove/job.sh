@@ -24,7 +24,8 @@
 #      as many at a time as 90% of H1_MEM_GB holds at 6x the circuit text each (two at K = 4096 and
 #      H1_MEM_GB=500), and the selftest build's controls on
 #      the drawn units' statement (H1_CONTROLS; at K = 4096 a selftest, prover and verifier in one process, peaks past
-#      170 GB)
+#      170 GB) under verity/flock-circuit+seed-injection: st-honest passes every check and is refused for that statement
+#      alone, each forged case by the check it breaks
 #   5. run.py summarize: out/summary.json, with window credit's registration step (credit._registration) on the honest
 #      checks' Lean findings under the window's open root, which every per-window registered value binds (PRF-127)
 # env: H1_MEM_GB (the job's --mem-gb)  H1_K (4096; a smaller K truncates every row: a smoke)  H1_COLS (each call's first

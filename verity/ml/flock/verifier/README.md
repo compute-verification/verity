@@ -71,16 +71,17 @@ the agreement job's sessions from upstream's binaries are. Each refuses the othe
   `--partition F`, the verifier's own copy of the partition object (§16.10).
   Its verdicts carry `partition = {rule, query, digest, units, note}`: `units` is `as stated` (not derived) until the verifier
   decodes the program and evaluates the query itself (§16.10).
-- `verity/flock-circuit+seed-injection`: the same statement as the circuit prover's (M0) selftest build pins it, for its recorded cases.
+- `verity/flock-circuit+seed-injection`: the same statement as the circuit prover's (M0) selftest build pins it, for its
+  recorded cases, which `verify` checks and then refuses (below).
 - `verity/flock-circuit+plain-leaves`: the same statement with plain SHA-512 Merkle leaves (`flock-leaf/sha512-unsalted`,
   §16.16), a recursive session's inner statement (`FLOCK_PLAIN_LEAVES=1`), ZK off. `verify` checks it without `--zk`,
   under the hidden-output headlines at the plain leaf (`Refine.leafOfId`), and refuses it under `--zk`.
 - `verity/flock-circuit/types` (and `+seed-injection`): the typed statement (§16.11) with hidden outputs (§16.13);
   `verity/flock-circuit/types@210d32e1` is its form with public outputs.
-- `verity/flock-circuit@cec3e347` and `verity/flock-circuit/types@cec3e347` (and `+seed-injection`): the two before, for
+- `verity/flock-circuit@cec3e347` and `verity/flock-circuit/types@cec3e347` (and the typed one's `+seed-injection`): the two before, for
   statements composed up to verity `cec3e347`, whose `--zk` identity names the pads and every table's draws ChaCha20
   streams of the prover's seed; the default's names the OS's bytes (§16.14).
-- `verity/flock-circuit@b3727bd9` and `verity/flock-circuit/types@b3727bd9` (and `+seed-injection`): `@cec3e347`'s, for
+- `verity/flock-circuit@b3727bd9` and `verity/flock-circuit/types@b3727bd9` (and the typed one's `+seed-injection`): `@cec3e347`'s, for
   statements composed up to verity `b3727bd9`, whose META `leaf_scheme.salt_source` names a ChaCha20 expansion of a
   per-proof OS key; from `@cec3e347` on it names the OS's bytes, each tree's read once (§16.10, §16.13).
 - `verity/flock-circuit@967b8d06` (and `+seed-injection`): PR #83 from `68ae79f2`, whose identity names the round digest,
@@ -92,6 +93,13 @@ the agreement job's sessions from upstream's binaries are. Each refuses the othe
 - `verity/flock-circuit@e51e2b86` (and `+seed-injection`): PR #83 from `e51e2b86`, for the runs staged before `68ae79f2`.
 - `verity/flock-circuit@eb90718f` (and `+seed-injection`): the same without the e2e bindings.
 - `verity/flock-circuit@631567f7`, `@fd02e847` and `@19c7269a`, and `verity/flock-netlist/v1`. These need `--comp`.
+
+`verify` accepts a session only at `verity/flock-circuit` or `verity/flock-circuit+plain-leaves` (`ProvedScope.served`), on
+live coins (`--coins os`, or under `--zk` the keyed coin tree). Every other version it sets up and checks, so the agreement
+corpus and the recorded fixtures replay, and then refuses the session (`ProvedScope.servedForm`, last, once every check has
+passed): a `+seed-injection` one as a selftest build's statement, the rest as superseded; a plain session on seed coins
+(`--coins seed`, the default without `--zk`) is refused the same way. A typed version, or one before hm96 rows, is refused
+earlier, for its form (`ProvedScope.check`).
 
 A session whose record carries a `unit_draw` is verified against the drawn units' statement, which the verifier derives
 from the population's public file and the draw (§7.3, §16.10).

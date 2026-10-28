@@ -1765,6 +1765,15 @@ the recursion's proof covers`, or `setup: <unit>: refused: a table of <n> of its
 session's table holds every instance, the only form the recursion's proof covers`. An honest V* session, one table
 drawn in full, passes both.
 
+Last of all, once every check and every refusal above has passed, `verify` refuses a session at any statement version
+other than `verity/flock-circuit` and `verity/flock-circuit+plain-leaves` (`ProvedScope.served`), and a plain session on
+seed coins (`--coins seed`, the default without `--zk`), whose coins all derive from the prover's seed
+(`ProvedScope.servedForm`): `refused: <name>, a selftest build's statement, whose coins the prover injected: verify takes
+only verity/flock-circuit and verity/flock-circuit+plain-leaves` for a `+seed-injection` version, `refused: <name>, a
+superseded statement version: ...` for the others, and `refused: a session on seed coins (--coins seed, the default
+without --zk): ...`. The versions stay in `Tags.all`, so the agreement corpus and the recorded fixtures replay through
+every check. The theorem's `Verifies` is broader than `verify` here, which only refuses more.
+
 The soundness package proves `scopeOk` and `scopeOkH` the computable checks (`FailClosed.scopeOk_eq`, `scopeOkH_eq`), and `FailClosed.*`'s headlines
 are over `Verifies` (accepted and in scope) with no hypothesis on the statement's form. Under hidden outputs a circuit
 the wires don't feed passes `scopeOkH`, and the headlines at the unit's program (`keyProg`) cover it; one they feed

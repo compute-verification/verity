@@ -153,6 +153,8 @@ BINDING = {"flipped-zy": "--zy-word", "wrong-receipt": "--receipt"}
 OK_ZERO = "in-z"
 #: a statement tag's suffix whose prover runs with FC_ZK_SELF_CHECK=skip (job.sh), sending its proof though the witness fails
 SKIP = "-skip"
+#: flock-verify's last refusal of the selftest build's statement (`ProvedScope.servedForm`), once every check has passed
+SELFTEST = "refused: verity/flock-circuit+seed-injection, a selftest build's statement"
 
 
 def log(msg: str) -> None:
@@ -898,7 +900,10 @@ def cmd_summarize(a) -> int:
     if firewall and not proofs.get("honest", {}).get("firewall_timed"):
         print("FAIL: H1_FIREWALL=1 but the honest prover's records carry no firewall times")
         ok = False
-    for c in plan["checks"] + [{"tag": f"st-{x}", "statement": "honest", "expect": "ACCEPT" if x == "honest" else "REJECT"}
+    # the selftest build's controls: its honest record passes every check and is refused last, for its statement
+    # (`ProvedScope.servedForm`); a forged one is refused before that, by the check it breaks
+    for c in plan["checks"] + [{"tag": f"st-{x}", "statement": "honest", "expect": "REJECT",
+                                **({"why": SELFTEST} if x == "honest" else {"not_why": SELFTEST})}
                                for x in a.controls.split()]:
         v = _verdict(out / "lean" / f"{c['tag']}.out")
         word = _verdict_word(v, out / "lean" / f"{c['tag']}.err")
@@ -921,7 +926,8 @@ def cmd_summarize(a) -> int:
         else:
             # an accepted unit's index binds its rows only as far as Lean derived it from the verifier's own Program
             good = (word == c["expect"] and (word != "ACCEPT" or (v or {}).get("partition", {}).get("units") == "derived")
-                    and c.get("why", "") in (v or {}).get("why", ""))
+                    and c.get("why", "") in (v or {}).get("why", "")
+                    and not ("not_why" in c and c["not_why"] in (v or {}).get("why", "")))
             extra = {"why_expected": c["why"]} if c.get("why") else {}
         ok &= good
         checks.append({"tag": c["tag"], "expect": c["expect"], "verdict": word, "pass": good,

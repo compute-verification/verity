@@ -82,7 +82,8 @@ OWNER = -1
 #: SHA-512 column digest, leaf = ``tree_leaf(key, b || c)``, an opening = the column and its 192-byte salt (``opened_salts``).
 #: Salts are the OS's own bytes, every leaf's 192 read a tree at a time in bulk (``zk_hooks::LeafSalts``; Daniel, 9 Oct, decision
 #: 4(a)), never reused or stored, as ``salt_source`` says. The Lean verifier pins this object (``Flock/Tags.lean``'s
-#: ``leafSchemeHm96Os``; statements composed up to verity ``b3727bd9`` name a per-proof ChaCha20 key, ``@b3727bd9``), and
+#: ``leafSchemeHm96Os``; statements composed up to verity ``b3727bd9`` name a per-proof ChaCha20 key, ``@b3727bd9``, a
+#: superseded version its ``verify`` refuses once every check has passed), and
 #: ``live/src/circuit.rs``'s ``leaf_scheme`` is the same object. The level-0 salts are shared by
 #: both reps (one root). Key: the scheme's ``default_key``, one constant of the statement for every
 #: tree, pinned by its SHA-512. Never a witness: a prover choosing the key after commitment solves for one that opens a leaf to

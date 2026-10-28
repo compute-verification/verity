@@ -9,7 +9,8 @@
 #      --zk run drawing all N (subset:N) with the proving build, the selftest build's recorded controls drawn the same way,
 #      and the Lean verifier on all of them:
 #        honest-own   the honest run                                                                         ACCEPT
-#        st-<case>    the selftest build's records under verity/flock-circuit+seed-injection: honest ACCEPT;
+#        st-<case>    the selftest build's records under verity/flock-circuit+seed-injection, a statement flock-verify
+#                     refuses once every check has passed (`ProvedScope.servedForm`): honest passes every check;
 #                     output_row_committed_false (a forged output word, committed and proved), output_claim_false and
 #                     unit_internal_bit_flipped REJECT
 #   3. summarize.py: out/<tag>/summary.json and out/summary.json

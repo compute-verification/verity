@@ -434,4 +434,34 @@ theorem programHeld_ok {program : Option ByteArray} (h : programHeld program = .
   · assumption
   · cases h
 
+/-- **The statement versions `verify` takes**: the current statement and a recursive session's inner one. Every other
+version `Tags.all` names is superseded: a `+seed-injection` one is a selftest build's, whose coins the prover injected, and
+the older ones' coins derive through SHA-256 or, under `--zk`, their pads are ChaCha20 streams of the prover's seed. They
+stay in `Tags.all` so the agreement corpus and the recorded fixtures replay: `verify` runs every check on them, then
+refuses the session (`servedForm`). -/
+def served : List String := [Tags.circuit.name, Tags.circuitPlainLeaves.name]
+
+def versionWhy (tags : Tags) : Option String :=
+  if served.contains tags.name then none
+  else
+    let what := if tags.name.endsWith "+seed-injection" then "a selftest build's statement, whose coins the prover injected"
+      else "a superseded statement version"
+    some s!"refused: {tags.name}, {what}: verify takes only {" and ".intercalate served}"
+
+/-- A session on seed coins (`--coins seed`, the default without `--zk`): every coin derives from the prover's seed, so
+none is live and no plain claim's record premise (`RecordCustodyExec`) can hold. -/
+def SEED_COINS : String :=
+  "refused: a session on seed coins (--coins seed, the default without --zk): every coin derives from the prover's seed, so none is live; verify a plain session with --coins os"
+
+def coinsWhy : Coins → Option String
+  | .seed => some SEED_COINS
+  | _ => none
+
+/-- **The session is in a form `verify` takes**: a statement version of `served`, on live coins (`--coins os`, or under
+`--zk` the keyed coin tree). `verify` runs it last, once every check has passed. -/
+def servedForm (tags : Tags) (coins : Coins) : Except String Unit :=
+  match versionWhy tags <|> coinsWhy coins with
+  | some why => .error why
+  | none => .ok ()
+
 end Flock.ProvedScope

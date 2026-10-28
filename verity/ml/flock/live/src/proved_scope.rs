@@ -1,7 +1,10 @@
 //! The statement forms the soundness proof covers (verifier PROTOCOL.md §16.15): the Lean verifier's `Flock.ProvedScope.check`,
 //! its rules in its order and its refusals word for word. The Lean verifier refuses every session of a statement outside
 //! them, so a form no theorem covers is never accepted; the live server does the same ([`crate::StatementVerifier::refusal`]),
-//! so its verdicts are the Lean verifier's.
+//! so its verdicts are the Lean verifier's. The Lean verifier also refuses, last, a session at a statement other than
+//! `verity/flock-circuit` and `verity/flock-circuit+plain-leaves`, and a plain session on seed coins
+//! (`ProvedScope.servedForm`): a selftest build's sessions ([`lean_name`]'s `+seed-injection`) and a seeded build's meet
+//! that refusal there once every check has passed, and not here.
 //!
 //! The live build writes only hm96-sha512 row statements with retained rounds and `hm96-sha512/v1` leaves, or, ZK off, plain
 //! SHA-512 leaves (a circuit whose META names [`crate::circuit::leaf_scheme_plain`]; `ProvedScope.leafOk`), so the Lean
