@@ -1,4 +1,4 @@
-"""`protocol_options.pouw_h1_registered` against core's `registered.Registered.commit` (VLLM-76): over random rows of
+"""`protocol_options.pouw_h1_registered` against core's `registered.Registered.commit`: over random rows of
 16-bit words, one row to a few dozen, one word to a z/y record's 3072, under each domain binding, the salts are
 `audit.hm96_salt`'s, and the ``b || c`` strings, levels, entry, paths and statement are core's; a row read opens under
 `registered.verify_read`. A window's rows aren't kept unless asked, and a read of one is refused. A small H1 window served

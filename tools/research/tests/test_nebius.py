@@ -298,7 +298,7 @@ def test_fill_runner_leaves_waiters_to_the_agent_while_it_holds_agent_lock(tmp_p
 
 
 def test_fill_runner_ranks_commits_first_reclaims_for_them_and_keeps_out_of_booked_windows(tmp_path, monkeypatch):
-    """Node 2's order (Daniel, 1 Oct): circuits' Commits, then pous, then proofs. A queued Commit with no free GPU stops the
+    """Node 2's order: circuits' Commits, then pous, then proofs. A queued Commit with no free GPU stops the
     newest proofs fill (one per Commit), never while a window waits; no GPU job starts whose max_min reaches a booked window;
     and a GPU job's lease scope is killed when it stops and swept once it exits."""
     gl, fill = tmp_path / "gl", tmp_path / "fill"
@@ -2104,7 +2104,7 @@ def test_n1_custody_takes_node_1s_own_ended_runs_to_r2_with_their_run_record_in_
 
     (state / "held" / R["big"]).unlink()
     monkeypatch.setenv("RESEARCH_STORE_CONFIG", str(node.remote))
-    assert data_main(["push", R["legacy"], "--store", str(jobs / "store")]) == 0       # a person's ruling: on R2 as it is
+    assert data_main(["push", R["legacy"], "--store", str(jobs / "store")]) == 0       # on R2 as it is
     done = round_(VY_CUSTODY_MAX_FILES="20")
     assert done.returncode == 0 and created()[-1] == n1["big"] and preserved(J["big"]), done.stdout
     assert "record-less" not in done.stdout and "1 attempt-no-record" in done.stdout
@@ -2921,7 +2921,7 @@ def test_gpu_adopt_holds_the_lease_of_a_gpu_used_outside_it_until_the_process_ex
 
 
 def test_gpu_stray_reads_only_the_gpu_variables_of_a_process(monkeypatch):
-    """Daniel's ruling (7 Oct): the probe reads another process's GPU variables and nothing else of its environment, which may
+    """The probe reads another process's GPU variables and nothing else of its environment, which may
     hold its secrets. Under sudo only the matching lines leave `grep`; read directly, the rest is dropped at once."""
     spec = importlib.util.spec_from_file_location("gpu_stray_under_test", NEBIUS / "gpu_stray.py")
     m = importlib.util.module_from_spec(spec)
