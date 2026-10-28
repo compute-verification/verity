@@ -155,11 +155,11 @@ theorem coinMode_collision (A : β → Prop) (g : β → γ) :
     rw [card_filter, Fintype.sum_prod_type, sum_filter]
     refine sum_congr rfl fun x _ => ?_
     by_cases hx : A x
-    · rw [if_pos hx, card_filter]
+    · rw [ite_eq_left hx, card_filter]
       exact sum_congr rfl fun y _ =>
         if_congr ⟨fun h => ⟨h.1.2, Ne.symm h.2⟩, fun h => ⟨⟨hx, h.1⟩, Ne.symm h.2⟩⟩ rfl rfl
-    · rw [if_neg hx]
-      exact sum_eq_zero fun y _ => if_neg fun h => hx h.1.1
+    · rw [ite_eq_right hx]
+      exact sum_eq_zero fun y _ => ite_eq_right fun h => hx h.1.1
   have hB : (univ.filter fun y => A y ∧ g y ≠ coinMode A g).card ≤ (univ.filter A).card := by
     have := hsplit (coinMode A g)
     omega
@@ -217,7 +217,7 @@ theorem stmtOf_eq_modeOf (x : Ω o) (hx : acc (Function.update ξ o x) ∧ P (de
     rw [← he]
     exact hy.2
   unfold stmtOf
-  rw [if_pos hs]
+  rw [ite_eq_left hs]
 
 /-- **The admissible part of the break `stmtOf` leaves, at the square root of a collision**: the probability over `o`
 that a play is accepted with an admissible decoded statement other than `stmtOf`'s, squared, is at most the
@@ -271,6 +271,7 @@ def OpensAs (H : Msg → Msg) (D : Deploy Coin Col T) (reg : Stmt → Finset ℕ
     (ρ : ℕ → Bool) (x : Msg) : Prop :=
   ∀ st, D.parse x = some st → RegOpens H D.commit st (reg st) (rops st) ∧ ∀ g ∈ reg st, regVal (rops st) g = ρ g
 
+omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [DecidableEq Col] [Zero Col] in
 /-- A statement that registers no inputs opens to any values with no openings. -/
 theorem opensAs_nil {ρ : ℕ → Bool} {x : Msg} (h : ∀ st, D.parse x = some st → reg st = ∅) :
     OpensAs H D reg (fun _ => []) ρ x := fun st hs => by
@@ -309,7 +310,7 @@ noncomputable def witOf (Rl : Rel Wit) (x : Msg) : Wit :=
 
 theorem witOf_spec (Rl : Rel Wit) {x : Msg} (h : ∃ w, Rl x w) : Rl x (witOf Rl x) := by
   unfold witOf
-  rw [dif_pos h]
+  rw [dite_eq_left h]
   exact Classical.choose_spec h
 
 /-- **S6's `wit` by construction**: a realization whose witnesses are `witOf`'s at the leak relation. -/
@@ -320,6 +321,7 @@ theorem couples_wit (h : ∀ ξ i, R.wit ξ i = witOf (Rlt R) (R.stmt ξ i)) :
 
 /-! ## The run's verdicts -/
 
+omit [Nonempty Coin] in
 /-- **`window_le` at a run that accepts nothing**: an event under a verdict that never holds is below any `PrBad`. -/
 theorem pr_rejects_le {β W Ω' : Type} [Fintype β] [Fintype Ω'] {A B : β → Prop} (hA : ∀ x, ¬ A x)
     (Vf : Verifier Coin) (Rl : Rel W) (E : Extractor Coin W Vf) (x : Msg) (P : Prover Ω') :
