@@ -13,7 +13,7 @@ circuit of record.
 Implementation carries over to declarations when it keeps fresh input fresh: an input gate of `t` outside `t.θ` is an
 input gate of `d` outside `d.θ`. Containment carries over as it is between the circuits, and says nothing about `θ`:
 that a containment keeps fresh input fresh is a premise about the protocol's rule for `θ`
-(`Nci.Assumptions.BaselineRegistered`), which each guarantee that needs it takes for its containment.
+(`Nci.Assumptions.ThetaRegistered`), which each guarantee that needs it takes for its containment.
 -/
 
 namespace Verity
