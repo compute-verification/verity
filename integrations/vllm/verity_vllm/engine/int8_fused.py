@@ -31,6 +31,12 @@ the same in any plan.
 writes `int8_exact`'s z/y records from the same int32 accumulator: the y it computes once is both the served y and the
 record's, and its grid covers the call's T slots, a row tile at or past M multiplying nothing and writing only its empty
 slots' records (z 0, y dq(0, 0, s_w)).  Split-K sums into the same workspace before the one epilogue.
+
+The fused producers (`engine.int8_producers` installs them) write a linear's input and its quantizer's codes and scales in
+one launch: `silu_mul_quant` is vLLM's `_C.silu_and_mul` then `quant_rows`, and `add_norm_quant` is vLLM's batch-invariant
+`_C.fused_add_rms_norm` (its generic kernel's per-thread sums, warp shuffle tree and warp-aggregate order at min(H, 1024)
+threads, `norm_threads`) then `quant_rows`, each bit for bit (`tests/engine/test_int8_producers.py`), at
+`producer_warps`' warps.
 """
 from __future__ import annotations
 
