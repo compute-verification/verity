@@ -7,7 +7,10 @@
 # window pick, missing pieces and block record on toy serve dirs, prove_bundle's hold of the H200 interfaces' bundle
 # fixture to its window's public part (nothing is lowered or proved), and a5_tp.sh's store of each session's circuits and
 # tables on a dry run's toy scratch (`test_a5_tp_store`, through `integrations/vllm/verity_vllm`'s `ops/store_trees.sh`),
-# and composite's onsite and remote cases from their subprotocols' cases (`composite.py`, on a stub executable).
+# composite's onsite and remote cases from their subprotocols' cases (`composite.py`, on a stub executable), and
+# served_cases' v2 and inference-only cases of a toy window and of the 4,32,4 class's Program (`verity_vllm`'s window
+# circuit), through their Lean checks (`sampled-proofs-one-stage-zk`, and `inference-only`, built in
+# `verity/core/protocols/network/nci/lean`).
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
@@ -36,6 +39,7 @@ inputs = ["verity", "verity/core/service/sampled_proofs/lakefile.toml", "benchma
           "demos/h200/interfaces/tests/fixtures/drawn-unit-registration.json",
           "benchmarks/numerical/python/verity_numerical/__init__.py",
           "benchmarks/numerical/python/verity_numerical/bench/__init__.py",
+          "verity/core/protocols/network/nci/lean/lakefile.toml",
           "benchmarks/numerical/python/verity_numerical/bench/input_sets.py",
           "benchmarks/numerical/python/verity_numerical/bench/templates.py",
           "integrations/vllm/verity_vllm", "benchmarks/network_traces",
