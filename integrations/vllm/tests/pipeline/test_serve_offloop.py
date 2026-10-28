@@ -540,7 +540,7 @@ def test_off_the_loop_the_committer_is_installed_once_and_stays_on_between_windo
         calls: list[str] = []
         out = tmp_path / com.__name__
         out.mkdir()
-        sealer = ss.Sealer(1 << 40)
+        sealer = st.Sealer(1 << 40)
         with Sealed(out, sealer=sealer, com=spied(com, calls), window_steps=2) as s:
             for i in range(3):
                 assert events(s.post("/v1/completions", _body(i))[1])[-1] == "[DONE]"
