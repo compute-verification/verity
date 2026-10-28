@@ -40,10 +40,11 @@ python tools/verity/lean/survey.py map|conventions|size|unused  the Lean read as
                                                   and the modules no guarantee uses (by `Facts.lean`'s usage mode)
 ~~~
 
-A lane's edit loop is `verity lean try FILE [--on NODE]`: `lean_changed.py --try FILE` on this checkout, uncommitted edits included,
-through `research run` on the warm tree of a node's `build` Lean slot. It builds only what changed among FILE's imports, then runs
-`lake env lean FILE` and exits with its status. It never runs this audit and never writes a record: `--records PKG --update` is for
-the lock and the mark only (`lean_changed.py`'s docstring).
+The edit loop is `verity lean try FILE`: `lake env lean FILE` in the Lake package that holds FILE (the nearest lakefile above it),
+against its built imports, exiting with lean's status. With `--on NODE`, through `research run`, it runs `lean_changed.py --try
+FILE` on this checkout, uncommitted edits included: in one of the node's `build` Lean slots, on the tree `--records` keeps warm,
+`lake build +MODULE:deps` (only what changed among FILE's imports) and then `lake env lean FILE`. Neither runs this audit or writes
+a record: `--records PKG --update` is for the lock and the mark only (`lean_changed.py`'s docstring).
 
 ## What it checks
 
@@ -87,7 +88,7 @@ Every declaration of the package's audited modules (not a list of theorems), fro
   expands everything, `stop` included. An executable's root that the audit doesn't import (exempt: two roots that each declare
   `main` can't share one environment) is read from its `.olean` files as data, and one that isn't built, declares no
   `main` or imports a module outside the audit fails; `--build` builds each root. `allow` and `allow_in` are records:
-  `--update` writes each such constant into them by name, so the review (with where the walk reached it from) and the
+  `--update` writes each such constant into them by name, so the review (with the walk's path) and the
   landing DM show one added, and a name that admits nothing fails; a `module:M` entry, which admits every constant of the
   modules under `M`, is kept as written (Flock's lock lists names only). The walk follows definitions' values,
   `implemented_by` targets and `@[csimp]` replacements, the code compiled in place of a constant; a csimp rewrite itself
@@ -298,9 +299,8 @@ installs it first, so a machine without elan works), must pass clean and fail on
   ({prefix: the reason}, the package's own) lists the exceptions by the read module or the importing one; an entry that
   excepts nothing fails. `Security`'s `except` is the cleanup's to-do.
   The report lists the spec definitions that no guarantee reads, its own or a dependent package's (`unread_spec` in
-  `report.json`). Where the lock has `unread` ({module: [names]}, the ones that predate the rule), any other such
-  definition fails (`unread_failures`): move it to `Proofs/`, or have a listed statement read it.
-  `--update` drops the names that are read now or gone, so the list only shrinks.
+  `report.json`). Where the lock has `unread` ({module: [names]}, the ones that predate the rule; `--update` only
+  shrinks it), any other such definition fails (`unread_failures`): move it to `Proofs/`, or have a listed statement read it.
 - **Heartbeat overrides are listed, never refused.** Each `set_option maxHeartbeats N` (and
   `synthInstance.maxHeartbeats`) in a package's sources is in its report (`heartbeats` in `report.json`, and printed
   under its `AUDIT` line, so the nightly lists them): its file and line, its value, the reason beside it (a `--` comment

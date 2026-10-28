@@ -6,6 +6,7 @@
   "Properties.Pouw.LiveSalt",
   "Properties.Pouw.Period",
   "Properties.Pouw.PeriodJ10R",
+  "Properties.Pouw.ServedValues",
   "Properties.Pouw.Strata",
   "Properties.Pouw.Credit",
   "Properties.Nci",
@@ -514,7 +515,12 @@
  "layers": {
   "Properties.Pouw": {
    "imports": ["PouwWindow", "PouwCheck", "PouwCommit"],
-   "except": ["Properties.Pouw.Credit", "Properties.Pouw.Period", "Properties.Pouw.PeriodJ10R"],
+   "except": [
+    "Properties.Pouw.Credit",
+    "Properties.Pouw.Period",
+    "Properties.Pouw.PeriodJ10R",
+    "Properties.Pouw.ServedValues"
+   ],
    "why": "the properties are stated against the code's own functions, on Lean core: nothing of Mathlib or of `security`"
   },
   "Properties.Pouw.Commit": {
@@ -741,6 +747,11 @@
    "imports": ["RemoteAudit", "Properties.RemoteAudit.Line"],
    "except": [],
    "why": "the bandwidth component's refinement is stated against its own check (`RemoteAudit.Protocol`) and the memory line of record (`Properties.RemoteAudit.Line`), whose model vocabulary it reads through that module; never a proof"
+  },
+  "Properties.Pouw.ServedValues": {
+   "imports": ["Definitions.Core.Formalism", "Properties.Pouw.PeriodJ10R"],
+   "except": [],
+   "why": "the served period's values in AND gates are stated against served H1's period and premises (`Properties.Pouw.PeriodJ10R`) and the AND count (`Definitions.Core.Formalism`), never a proof"
   }
  },
  "reads_exempt": {
@@ -2012,6 +2023,12 @@
    ],
    "assumptions": [],
    "type_hash": "4271b69b424ca1a5e9ef6c4d6854c39ebe1a149b1d6d22f08374a1ca2f7a443f"
+  },
+  "Properties.Pouw.ServedValues.SecurityProofs.rightValues": {
+   "owner": "@compute-research",
+   "signature": ["Properties.Pouw.ServedValues.SecurityProofs.rightValues : Properties.Pouw.ServedValues.RightValues"],
+   "assumptions": [],
+   "type_hash": "7d4c471713d37a6d31db1e6c5edf681d9307b72177d18ecd4e657b9726c9f0cb"
   },
   "Properties.Pouw.Strata.strataTile": {
    "owner": "@compute-accounting",
@@ -3761,7 +3778,8 @@
    "Pous.Period.SecurityProofs.periodHeldDemo": "frozen (premise): periodHeldAt at Demo B's store, N = 1038*2^16 blocks, state bound 1,060,008,348,186 bits; its premises are periodHeldAt's.",
    "Pous.Period.SecurityProofs.periodHeldDeployed": "frozen (premise): periodHeld at the deployed ring budget (RING_D, RING_Q, RING_L) = (16,446, 2^20, 2^64), the one pous-ring-speed derives from Delta + RTT = 854,000 ns and the measured round floor ROUND_NS = 361.55 / 3.490 ns (art:23a323f3, r20260929-060834-0ec4): DEADLINE_ROUNDS = 8,243 <= RING_D, and RING_D + 1 rounds take 1.995 x the limit; outside both regions where P2RingAuditSecure is refuted (D >= 32,894; L >= 2^169 at k = 105). Its premises are periodHeld's at that budget (CoinCommitHides, P2RingAuditSecure, Pous.Period.RingDevice), none under shape.premises.",
    "Pous.Period.SecurityProofs.periodHeldHonest": "completeness: the honest lemma of periodHeld and periodHeldDeployed: at an honest period on one H200 holding all of C* (honestRun, 2^30 bits on chip, one PCIe Gen 5 x16 side channel of 437,248,000 bits a round), RingDevice holds at the deployed budget for every audit, the certificate HONEST_S = 63,000,000 bits is positive and fits the state bound, and the budget is the deadline's at the measured floor (DEADLINE_ROUNDS <= RING_D, the 1.995x margin)",
-   "Pous.Period.SecurityProofs.periodHeldNontrivial": "completeness: the nontrivial lemma of periodHeld and periodHeldDeployed: at a period whose capacity account holds nothing, an accept-all verdict fails their conclusion wherever the period's data holds no break (a concrete audit with no break needs SHA-512 on each of the table's 2^20 strings, so that is a hypothesis), and their event is false at the honest period"
+   "Pous.Period.SecurityProofs.periodHeldNontrivial": "completeness: the nontrivial lemma of periodHeld and periodHeldDeployed: at a period whose capacity account holds nothing, an accept-all verdict fails their conclusion wherever the period's data holds no break (a concrete audit with no break needs SHA-512 on each of the table's 2^20 strings, so that is a hypothesis), and their event is false at the honest period",
+   "Properties.Pouw.ServedValues.SecurityProofs.rightValues": "frozen (no-function,world-unlisted): H1J10RCheckedCreditPeriod's period and premises, less UnitFixed and the play's folded words, with its bound in AND gates of the registered declaration D under the lowering pinned at registration (Verity.creditSize, Definitions.Core.Formalism): except with probability delta_s + n(delta_bind + delta_ks), delta_coin plus delta_crypto, an accepted period's right blocks (DrawnLayer.Good under periodMode) have total AND count at least (1 - eps_skip)_+ S, S the credited size of the windows before the first refusal, eps_skip = sigma eps(j) N_live / S, and each block's AND count taken outside the ledger of gates another protocol credits; not one acceptance hypothesis, a Pouw.RelativeSecurity.prob event that shape.events does not list. A values guarantee, not a compute claim: right values aren't work. Right is the accounting model's DrawnLayer.Good, not yet tied to the committed values Credit.window checks. No premise beyond H1's: TileDrawIsCoin, TileServiceSound, RegisteredBeforeDraw, SaltIsLiveCoin and SharedNoiseLucks, the one computational premise. Proved from H1J10RCheckedCreditPeriod at a play whose fixed words are the right blocks' (Proofs.Pouw.ServedValues), with an honest and a nontrivial witness (Proofs.Pouw.ServedValues.Honest)."
   },
   "conjectures": {
    "Pous.P2.Assumptions.P2RingAuditSecure": {
@@ -4344,7 +4362,7 @@
     "_private.CoreProtocol.Ratio.0.Core.natOf": "dd52a4d0265fa019fb204c0a90430954dc053bef4f8e47df1eaa149eed83a970"
    }
   },
-  "Definitions.Accounting.Actual.WipeDraw": {
+  "Definitions.Accounting.Actual.Sampler": {
    "digest": "e93a07d613ef24d8ce4fed26d4b9caf7e4c26bc0726e85305ada1a4f371bc77a",
    "definitions": {
     "Accounting.Actual.wordIndex": "d33dadd3418335eec0660359ccf6e2bc823b564c2bb7bd6cd5318f174a710aa5"
@@ -5313,12 +5331,13 @@
    }
   },
   "Definitions.Core.Circuit": {
-   "digest": "54b055a835f6c061dfcc3e44fc40bc16dbb199f51147eb053c3bbccc5798e7d6",
+   "digest": "110dc415d28c00a3caace224e87585aca0e95d756176805e2089792bbe9374b2",
    "definitions": {
     "Verity.Circuit": "c86ddd734da68edae1a4e99343f0dfc3e717418d0f7bc8a55a8a33af0f471a17",
     "Verity.Circuit.N": "41024293e7ed9a8b1848ff13d93bc8ddd2e8afa1f9ef29855dca860b83bd8022",
     "Verity.Circuit.Transcript": "143a8f7857fb47ed184789c9def351742e213359fb13b44d565fce324fbf8853",
     "Verity.Circuit.computed": "bfe4079fbbb9d2e78b9758d517ec8e9f9df876d8bbfb7a0d9c71531da5ebc9ef",
+    "Verity.Circuit.exits": "2a5d20416f1d70094895291568660b80757e0ff023589ec9af448f26de4b0cdb",
     "Verity.Circuit.into": "3aa2233c88538a9df262b86079d2755e8d2aab73ede32959405d8df3937da797",
     "Verity.Circuit.isInput": "afd969b1411d8262286149c0c2b784a934deee04648709a0a08fd6c9dabe544c",
     "Verity.Circuit.op": "52c6b3809c85fa1ecc4a24cdb391a9d07d94cf708e48cf598179a0b7b9631b03",
@@ -5345,6 +5364,15 @@
    "definitions": {
     "Verity.Digest": "1306038949efedffde7f9ab828bf417b29002b8e40e364f0ed16e96eb86bfe0d",
     "Verity.Digest.bytes": "2bc406687f126639704f222c23b5932365f591ee45f4de42b5d2601af62d2dae"
+   }
+  },
+  "Definitions.Core.Formalism": {
+   "digest": "b9c218a1f0522606c2492525556955626454d51f5079c4636c6d0fb5aa44bbc4",
+   "definitions": {
+    "Verity.Circuit.Affine": "07c5e2cd229c4e65ff7121784d37106a206f5bbe952384f97c0004fb1723a144",
+    "Verity.Circuit.IsAnd": "cde2e6a8622514f4f062846ba8ed7eb96f4d3ce2ad0c1c095dbe1f376dd4d10a",
+    "Verity.Circuit.andSize": "3b849ed3179d9c2b65811c48d03e2adcf55b4ef7d51aebf4132aa3f03824141a",
+    "Verity.Circuit.bitZ": "6e6df84b2a57ea4f505984ed58d1b5ddda2506cde0e6494be29dc3db1b6189da"
    }
   },
   "Definitions.Core.Fp32": {
@@ -9490,6 +9518,21 @@
     "Properties.Pouw.PeriodJ10R.tileCount": "294cbe291655d25c16ca6b696758908921beda6dfe08299ee58d4b1c93638257",
     "Properties.Pouw.PeriodJ10R.tileLayer": "414abffad6ce996ac797d9e02ef17e9b3e5382e07d8861f61e411e2763c447e8",
     "Properties.Pouw.PeriodJ10R.tileRun": "cec0665a41dda106f97939c5975a7ebf6cd1733f2d6211297445ffcc0673a4ca"
+   }
+  },
+  "Properties.Pouw.ServedValues": {
+   "digest": "39ec9139d1e90ee1860120ea43442b2d059bd69ce07e809ee892deccbcf1d96d",
+   "definitions": {
+    "Properties.Pouw.ServedValues.BlockMap": "453fdf8ea5d48c239d05c438631101d762a55b2f5843a695cbe40b5eb80dff31",
+    "Properties.Pouw.ServedValues.BlockMap.gates": "675c1c4b7386c9078e60f26df03c231f64744e3268ce0f6393182fa31d07fb50",
+    "Properties.Pouw.ServedValues.BlockMap.size": "fcc894f7cb16e5e984c4abb744d73a40e55783f7635bd134d5cc6b2562946a67",
+    "Properties.Pouw.ServedValues.RightValues": "f63e7414ab19becf2006d7d53da53b6c5c3ad2d5051777028c1bf133aa4c3e6d",
+    "Properties.Pouw.ServedValues.creditFloor": "ffff1c82d19708c5b5c820a9c621aa7b693faf1f75717b7a5661d0b447ca13ee",
+    "Properties.Pouw.ServedValues.creditedSize": "f3171da484d5a89cd6af1d3f03b9a2be8e2f86ddfb29bf588ab766b65eeffce4",
+    "Properties.Pouw.ServedValues.epsSkip": "bfef0dcd964fcd5edd0ff33051be4991d36e6c45f1e9d6fcc8cdf7152eb72e5b",
+    "Properties.Pouw.ServedValues.liveSize": "b09df032b09da04f61f9709655600aeb2b8921fd5dc19b8a3740635bebd87a3e",
+    "Properties.Pouw.ServedValues.rightSize": "9744e65973999cbc519074fc29f2ef40f158ddeabdacbd2272f21b209a04bfb9",
+    "Properties.Pouw.ServedValues.sizePerWord": "5696bb0b975868ec6bcd678a7e5fc3d2615a1166b136b9d18b3e0b73ce98a0e0"
    }
   },
   "Properties.Pouw.Strata": {
