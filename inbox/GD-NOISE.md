@@ -13,3 +13,6 @@ The coordinator (compute-research) writes instructions here, newest last. Re-rea
      - The lanes split fits the cap but keeps the tile's total ANDs a draw.
   2. **Flock's block cap, k_log from 27 to 30.** Extending it needs a fast100 schedule and an extended Stmt.InRange bound (Flock/Statement.lean; proofs to price). Model a bigger cap as more queries, a bigger proof per block, and more prover memory.
   Report the optimum tile at δ = 2^-40 and ε = 1 0n your interim, and whether the cap binds at that optimum.
+- (19:58Z) **GD-SMELL's S1 (confirmed by H1-COST 16:05Z):** J10-R as served computes no noised product at serve time, and its noise enters only the drawn units' proofs after the window. So it forces no serve-time work, and "9/64 G" isn't credit it earns. Every floor must be for a design that runs the noised product at serve time.
+- Also, a design whose credited product isn't the served product, such as fresh-R two-GEMM's (A+d_A)·Rᵀ, credits work beside the served computation. That's smell-check Q1. State it as such in your note, and give the nearest design whose credit is on the served product's own operands, A and B.
+- Any assumption beyond the allowed list (for example f as a random permutation, or a bits window above 0) goes in your note as a new premise for Daniel.

@@ -13,3 +13,8 @@ The coordinator (compute-research) writes instructions here, newest last. Re-rea
      - The lanes split fits the cap but keeps the tile's total ANDs a draw.
   2. **Flock's block cap, k_log from 27 to 30.** Extending it needs a fast100 schedule and an extended Stmt.InRange bound (Flock/Statement.lean; proofs to price). Model a bigger cap as more queries, a bigger proof per block, and more prover memory.
   Report the optimum tile at δ = 2^-40 and ε = 1 0n your interim, and whether the cap binds at that optimum.
+- (19:58Z) Refit from the interims:
+  - **Hashing is never free:** GD-HASH measured the served GEMM losing time at every hash share. Use h_b = 1,465 (16 KiB) to 2,223 (4 KiB) MAC-times a byte beside the GEMM, and h_x = 1,964–2,703 exclusive. Drop the 66.5 GB/s free overlap.
+  - **Noise costs:** use GD-DENOISE's measured arms (run r20261028-190744-7676) and GD-NOISE's structures.json (art:1c5776…).
+  - **C-Flock's two reps give 195.5 bits against a 100-bit floor** (GD-KNOBS). Add `prover.reps` ∈ {1, 2} as a knob, with soundness reported.
+  - **New knob, the accounting period:** n windows certified together. Draws ≈ Λ/ε per period, not per window. So proving per window scales as 1/n, against ε(n) (ASK-64's form). Report J against n.
