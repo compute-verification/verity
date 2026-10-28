@@ -8,7 +8,7 @@ is `Security/Definitions/Pous/Model/StreamedWipeDisk.lean`, the game `Security/D
 the proof `Security/Proofs/Pous/StreamedWipe/Disk.lean`.
 
 `StreamedWipeMeetsDisk` is its claim (`Security/Definitions/Pous/Claims/StreamedWipeDisk.lean`) at the wipe's own
-verdict, `StreamedWipe.Accepts`, with its honest lemma (`Pous.Claims.StreamedWipeMeetsDisk_meets`: its numeric
+acceptance rule, `StreamedWipe.Accepts`, with its honest lemma (`Pous.Claims.StreamedWipeMeetsDisk_meets`: its numeric
 antecedents hold at the session on vy-dc-h200-2's card and disks as measured) and its nontrivial lemma
 (`Pous.Claims.StreamedWipeMeetsDisk_fails`: the claim is false at `StreamedWipe.acceptAll`), both in
 `Security/Proofs/Pous/StreamedWipe/Disk.lean`. The PRF term is the advantage of the distinguisher built from the
@@ -19,7 +19,7 @@ and every tier counted, C5 and C6 are the game's shape, which the challenger's d
 every tier counted means `D` is every byte the disks can hold, each SSD's spare area and cache included, and what the
 fill doesn't overwrite (the root filesystem, filesystem metadata, the margin) counts in `R` in full. The root
 filesystem needs no premise of its own: it is in `R`. **What it covers:** the sequential reveal (batch size 1), the
-only one the verdict accepts.
+only one the wipe accepts.
 -/
 
 namespace Pous.Guarantees

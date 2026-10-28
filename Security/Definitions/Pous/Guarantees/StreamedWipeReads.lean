@@ -12,7 +12,7 @@ in all. The game is `Security/Definitions/Pous/Model/StreamedWipe.lean`, the pro
 
 **What they rest on.** No named assumption, as `StreamedWipe`: the PRF (C3) enters as its advantage in the conclusion,
 and every tier counted, C5 and C6 are the game's shape, which the challenger's deployment must make true. **What they
-cover:** the sequential reveal (batch size 1), the only one the verdict accepts.
+cover:** the sequential reveal (batch size 1), the only one the wipe accepts.
 -/
 
 namespace Pous.Guarantees
