@@ -12,11 +12,8 @@ from verity_vllm.check import oracle_compare as OC
 from verity_vllm.commit import opened as OV
 from verity_vllm.commit import step_rows as R
 from verity_vllm.commit import store_dump as SD
-from verity_vllm.commit.committer.native_collect import (
-    GPU_CHUNK_BYTES,
-    _HostRanges,
-    _HostWindows,
-)
+from verity_vllm.commit.committer.native_collect import _HostRanges, _HostWindows
+from verity_vllm.commit.committer.native_host import GPU_CHUNK_BYTES
 
 
 def _k(cs):
