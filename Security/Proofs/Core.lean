@@ -36,6 +36,7 @@ import Proofs.Core.Bilinear
 import Proofs.Core.HongKung
 import Proofs.Core.Blocks
 import Proofs.Core.DeviceFigures
+import Proofs.Core.CapacityWithinEstimate
 
 /-!
 # Proofs of core's guarantees
