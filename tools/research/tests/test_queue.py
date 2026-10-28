@@ -2257,6 +2257,22 @@ def test_a_head_that_changes_a_lock_is_marked_only_on_a_records_run_of_it_that_p
     assert _mark(world, 2, plain, store=LocalStore(world.tmp / "bare", config_path=world.tmp / "none.toml")) == 0
 
 
+def test_a_run_whose_indexed_manifest_cant_be_read_vouches_for_nothing_and_the_refusal_says_so(world, capsys):
+    """The records gate picks candidate runs by the command in the index's manifest; a row that doesn't parse is skipped, which
+    fails closed, and the refusal says how many were skipped and at which commit, rather than refusing with no trace of why."""
+    world.with_store_remote()
+    other = world.change({LOCK: _lock(A="2")})
+    _published(world, other, files={"lean-audit/audit.json": _audit()})
+    world.store.refresh(attempts_only=True)
+    with world.store.index.db as db:
+        db.execute("UPDATE attempts SET manifest_json = '{\"argv\": [\"lean_changed.py' WHERE source_commit = ?", (other,))
+    h = world.change({LOCK: _lock(A="2"), "pkg/A.lean": "theorem a : True := trivial\n"})
+    capsys.readouterr()
+    assert _mark(world, 1, h) == 1
+    assert f"1 attempt(s) whose manifest can't be read weren't searched for pkg's, e.g. at {other[:12]} (JSONDecodeError)" in \
+        capsys.readouterr().err
+
+
 def test_a_package_passes_as_a_requirer_on_a_reused_path_or_in_a_lean_check_and_only_its_own_verdict_counts(world, capsys):
     """A records run of PKG audits each package whose guarantees read PKG's build (`requirer-<path>/`): its pass there counts for
     that package, and a run that failed only PKG still passed it.  A run that took `path: reused` passed on the same inputs; a check

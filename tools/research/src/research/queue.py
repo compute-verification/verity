@@ -3030,16 +3030,21 @@ class RecordsGate:
                 "SELECT source_commit, manifest_json FROM attempts WHERE id > ? AND source_dirty = 0 AND source_commit IS NOT NULL "
                 "AND (manifest_json LIKE '%check.py%' OR manifest_json LIKE '%lean_changed.py%') ORDER BY id DESC", (self._since,))
             out: dict[str, None] = {}
+            bad: list[str] = []
             for c, doc in rows:
                 if c in out or not _SHA.fullmatch(str(c)):
                     continue
                 try:
                     argv = " ".join(map(str, json.loads(doc).get("argv") or []))
-                except (ValueError, AttributeError):
+                except (ValueError, AttributeError) as e:
+                    bad.append(f"{str(c)[:12]} ({type(e).__name__})")
                     continue
                 name = (m := RECORDS_RUN_RE.search(argv)) and m.group(1).strip("'\"").rstrip("/")
                 if (name and any(name in d for d in dirs)) or (not name and RECORDS_CHECK_RE.search(argv)):
                     out[c] = None
+            if bad:
+                self.notes.append(f"{len(bad)} attempt(s) whose manifest can't be read weren't searched for {pkg}'s, "
+                                  f"e.g. at {bad[0]}")
             if len(out) > RECORDS_FETCH:
                 self.notes.append(f"{len(out) - RECORDS_FETCH} older commit(s) with runs that may hold {pkg}'s are past the "
                                   f"search's bound of {RECORDS_FETCH}")
