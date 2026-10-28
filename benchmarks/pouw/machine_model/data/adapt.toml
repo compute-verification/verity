@@ -1,8 +1,8 @@
-# ε_adapt, SPEC's Theorem D under the one-σ order: the prover commits the circuit and its inputs, σ is drawn once, then
+# ε_adapt, Theorem D under the one-σ order: the prover commits the circuit and its inputs, σ is drawn once, then
 # the prover evaluates, so every operand is fixed before σ but enforced only by the sampled proofs, and a cheater can
 # steer instances in unproved regions. Its size depends on the proof block and its selection rule, the sampling
 # compiler's choice. It is part of ε_sample, never of the core ε. `eps --checking sampled` charges the design's own unit
-# (`unit`, whole dot products since decision 72), `--adapt NAME` another. The budget (S checks at δ, p) is the design's
+# (`unit`, whole dot products), `--adapt NAME` another. The budget (S checks at δ, p) is the design's
 # `[luck]`.
 
 [segment]
