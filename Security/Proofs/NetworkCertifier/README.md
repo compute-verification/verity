@@ -261,7 +261,7 @@ The other 29 are the rest of the Capacity table's bounds and the schedule's caus
   `EncardAccSeqsLeConstantRateWindows`, `EncardAccSeqsLeConstantRatePerWindow`.
 - **The ingress bound** (`NetTiming.SecurityProofs.Ingress`, `NetTiming.SecurityProofs.PerWindow`):
   `EncardIngressDecodableLe`, `EncardIngressObsDecodableLeContents`, `EncardIngressDecodableLeContents`,
-  `EncardIngressObsDecodableLeContentsPerSamplingBlock`.
+  `EncardIngressObsDecodableLeContentsPerWindow`.
 - **The leak bound** (`NetTiming.SecurityProofs.AdviceString`): `EncardAccSeqsWithinLeConstantRate`,
   `EncardDecodableWithinLeCompiled`, `EncardDecodableWithinLeCompiledPerWindow`.
 - **Advice v1's charge** (`NetTiming.SecurityProofs.AdviceV1`): `EncardChargedLe`, at most `2^c` decision streams
