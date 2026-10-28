@@ -286,8 +286,7 @@ end ChainGame
 - **Collision term width (erratum to red-team §25).** The collision term is `nPos² / 2^(ℓ+c)`, not `2^(ℓ+(ℓ+c))`. Two
   blocks share a real point (pad input) iff their `ℓ+c`-bit chaining values coincide — the `ℓ`-bit `padBlk` is a fixed
   constant — so the birthday is over `ℓ+c` bits. The earlier `2^(ℓ+(ℓ+c))` undercounted by `2^ℓ`; enlarging the term
-  only weakens the statement, and the deployment (`k = 111`) is unaffected (both are `≪ 2^-128`).
-  See `internal/p3-instantiation/chain-epf-progress.md`. -/
+  only weakens the statement, and the deployment (`k = 111`) is unaffected (both are `≪ 2^-128`). -/
 def ChainExPostFacto : Prop :=
   ∀ (B ℓ c m s D Q k : ℕ) (dom : ℕ → Bits c) (Wb : Fin B → Bits ℓ),
     Function.Injective (fun i : Fin B => dom i) → ChainHard (Dense.completeDAG B) Finset.univ c ℓ s D k →
