@@ -35,7 +35,7 @@ namespace Verity.Accel.H200.Resident
 open Machine (Operand)
 
 /-- An instruction of the kernel: an H200 opcode, its input operands and its output operands. -/
-abbrev Ins : Type := {o : Op Store // Avail o} × (ℕ → Operand) × (ℕ → Operand)
+abbrev Ins : Type := {o : Opcode Store // Avail o} × (ℕ → Operand) × (ℕ → Operand)
 
 /-- The instruction on the H200 machine, unpredicated. -/
 def Ins.instr {ι : Type} {x : Open} {cap : ι → ℕ} {oracle : ℕ} (a : Ins) : (machine x cap oracle).Instr :=
@@ -77,7 +77,7 @@ def load (n c : ℕ) : Ins :=
   else copyN .dram .smem (n / 4) h (addrB n (c - n) 0) (addrB n (c - n) 0)
 
 /-- The `wgmma`: `s8` by `s8`, `64 × 256 × 32`, both operands in shared memory, wrapping. -/
-def mmaOp : Op Store := .mma .s8 .s8 false ⟨64, 256, 32⟩ .smem .smem
+def mmaOp : Opcode Store := .mma .s8 .s8 false ⟨64, 256, 32⟩ .smem .smem
 
 /-- The blocks of 64 rows and 256 columns a slice has. -/
 def blocks (n : ℕ) : ℕ := n / 64 * (n / 256)

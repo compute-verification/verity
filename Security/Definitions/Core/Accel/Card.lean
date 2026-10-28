@@ -90,7 +90,7 @@ price, not tied to `IMAD`'s, and an `IMAD.WIDE` 2 (CUDA C++ Programming Guide §
 for extended precision against 64). A broadcast load to `k` lanes pays `k` lanes' share of a slot and its `n` words once at
 its source, as the card's port serves lanes that read one word at once (CUDA C++ Programming Guide, 'Shared
 Memory'; as `k` copies it would pay `k·n` bank units, 32 × the card's on a whole-warp broadcast). -/
-def opUse (weight : Fmt → ℚ≥0) (scale : Shape → ℚ≥0) (hi : ℚ≥0) : Op Store → Res → ℚ≥0
+def opUse (weight : Fmt → ℚ≥0) (scale : Shape → ℚ≥0) (hi : ℚ≥0) : Opcode Store → Res → ℚ≥0
   | .mma fa fb _ sh sa sb, r =>
     (if r = .tensor ∨ r = .tensorLong then (sh.m * sh.n * sh.k : ℕ) * weight fa * scale sh else 0) + (if r = .issue then 1 else 0) +
       ((if sa = .smem then (sh.wa fa : ℚ≥0) else 0) + (if sb = .smem then (sh.wb fb : ℚ≥0) else 0)) * port .smem r
@@ -147,7 +147,7 @@ structure Card where
   /-- the factor on an MMA's tensor units by its shape, from the open parameters (the H200's `mma.sync`, `Open.sync`) -/
   scale : Open → Shape → ℚ≥0
   /-- the opcodes the card has -/
-  Avail : Op Store → Prop
+  Avail : Opcode Store → Prop
   /-- the dots a capture pins: by formats, saturation and `k` -/
   captured : Fmt → Fmt → Bool → ℕ → Option Dot
   /-- the captured dots whose capture fixed a zero accumulator: the card's dot is the captured one only there -/
@@ -244,7 +244,7 @@ def machine {ι : Type} (cap : ι → ℕ) (oracle : ℕ) : Machine ι where
   Res := Res
   ρ := c.ρ
   slack := x.slack
-  Op := {o : Op Store // c.Avail o}
+  Op := {o : Opcode Store // c.Avail o}
   nIn o := o.1.nIn
   nOut o := o.1.nOut
   inStore o := o.1.inStore .reg

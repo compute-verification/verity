@@ -34,19 +34,19 @@ abbrev Compiler (L : ℕ) (In Adv Ω : Type) : Type := Adv → Ω → List In �
 /-- **The compiled Program**: the constant-rate Program whose frames are the compiler's on the declared advice string,
 its other inputs at `ω`. Its advice is the advice string and one clock-sync value per window. -/
 def compiledProgram {L S : ℕ} {In Adv Ω : Type} (T W : ℕ) (ss : SyncSet) (C : Compiler L In Adv Ω) (ω : Ω) :
-    Program L S In (Adv × (Fin W → ss.Elem)) :=
+    EgressPrediction L S In (Adv × (Fin W → ss.Elem)) :=
   constantRate T W ss fun ins a ℓ => C a ω ins ℓ
 
 /-- **Accepted within the caps**: some declared advice `(a, x)`, whose advice string `a` is charged at most `b w` in
 every window `w`, explains the first `k` steps (`Accepted`). -/
 def AcceptedWithin {L K S W : ℕ} {In Adv X : Type} (bits : Adv → Fin W → ℕ) (b : Fin W → ℕ)
-    (P : Program L S In (Adv × X)) (op : ℕ → List (Obs L K S) → In) (k : ℕ) (o : List (Obs L K S)) : Prop :=
+    (P : EgressPrediction L S In (Adv × X)) (op : ℕ → List (Obs L K S) → In) (k : ℕ) (o : List (Obs L K S)) : Prop :=
   ∃ a x, WithinCaps bits b a ∧ Accepted P op k o (a, x)
 
 /-- The observation sequences of length `n` whose jitter classes are below `D`, accepted within the caps `b`: what the
 leak bound counts. -/
 def AccSeqsWithin {L K S W : ℕ} {In Adv X : Type} (bits : Adv → Fin W → ℕ) (b : Fin W → ℕ)
-    (P : Program L S In (Adv × X)) (op : ℕ → List (Obs L K S) → In) (n D : ℕ) : Set (List (Obs L K S)) :=
+    (P : EgressPrediction L S In (Adv × X)) (op : ℕ → List (Obs L K S) → In) (n D : ℕ) : Set (List (Obs L K S)) :=
   {o | o.length = n ∧ (∀ x ∈ o, x.jitter < D) ∧ AcceptedWithin bits b P op n o}
 
 end NetTiming

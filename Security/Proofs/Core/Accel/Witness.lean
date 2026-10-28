@@ -598,7 +598,7 @@ theorem copy_exec (s t : Store) (len : ℕ) (h : Avail (.copy s t len)) (a b : �
   congr 1
   funext M' i
   have hi : (i : ℕ) < len := i.isLt
-  simp [Card.machine, machine, Op.eval, getD, Op.outStore, Op.inStore, Op.nIn, Machine.Operand.readIn,
+  simp [Card.machine, machine, Opcode.eval, getD, Opcode.outStore, Opcode.inStore, Opcode.nIn, Machine.Operand.readIn,
     Machine.Operand.locIn, hi]
 
 theorem copy_at (s t : Store) (len : ℕ) (h : Avail (.copy s t len)) (a b : ℕ)
@@ -807,7 +807,7 @@ theorem mma_in (n p : ℕ) (M : (machine x cap oracle).Mem) (i : ℕ) (hi : i < 
   have hwa : packedWords 64 (Fmt.s8.rowLen 32) Fmt.s8.bits = 512 := by decide
   have hwb : packedWords 256 (Fmt.s8.rowLen 32) Fmt.s8.bits = 2048 := by decide
   simp only [mmaV, getD, hn, hi, dite_true]
-  simp only [mma, mmaOp, Card.machine, machine, Op.inStore, Shape.wa, Shape.wb, hwa, hwb, Machine.Operand.readIn,
+  simp only [mma, mmaOp, Card.machine, machine, Opcode.inStore, Shape.wa, Shape.wb, hwa, hwb, Machine.Operand.readIn,
     Machine.Operand.locIn]
   by_cases h1 : i < 512
   · simp [h1]

@@ -75,7 +75,7 @@ advice `a.2 β` per block `β`, and cells `c` (a link and a step) with the occup
 there. The Program's rows at step `t` then read timing advice only through the occupancy it predicts at `t`: two
 advice strings with the same content advice and the same occupancy at every cell of step `t` give the same rows.
 Timing-driven batching that changes content is content advice. -/
-def FramesReadNoTimingAdvice (P : Program L S In (Ac × ((β : B) → At β))) (step : C → ℕ)
+def FramesReadNoTimingAdvice (P : EgressPrediction L S In (Ac × ((β : B) → At β))) (step : C → ℕ)
     (occ : (c : C) → List In → Ac × ((β : B) → At β) → U c) : Prop :=
   ∀ t ins (a a' : Ac × ((β : B) → At β)), a.1 = a'.1 →
     (∀ c, step c = t → occ c ins a = occ c ins a') → P.rows t ins a = P.rows t ins a'

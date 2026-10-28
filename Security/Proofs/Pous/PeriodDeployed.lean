@@ -41,7 +41,7 @@ theorem deadline_rounds : DEADLINE_ROUNDS = 8243 := by
 /-- **`RING_D` is one round short of a root**: `rootProg` at P2's exponent takes `16,447` multiplication rounds on
 every primitive (`PousP2Ring.rootProg_cost`), so no root finishes within `RING_D`. -/
 theorem rootProg_not_ringBounded (e : ℕ) (a : Bits 16448) (Q L : ℕ) :
-    ¬ (PousP2Ring.rootProg 16446 e a : Prog (ringRO (2 ^ 19) 16448 (2 ^ 16448 - 21065)) _).RingBounded RING_D Q L := by
+    ¬ (PousP2Ring.rootProg 16446 e a : OracleAlgorithm (ringRO (2 ^ 19) 16448 (2 ^ 16448 - 21065)) _).RingBounded RING_D Q L := by
   intro h
   obtain ⟨ω⟩ := (inferInstance : Nonempty (ringRO (2 ^ 19) 16448 (2 ^ 16448 - 21065)).Ω)
   have h1 := (h ω).1

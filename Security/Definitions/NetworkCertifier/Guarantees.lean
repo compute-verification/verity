@@ -67,7 +67,7 @@ clock sync. The shipped schedule is such a Program by its definition (`constantR
 `encard_accSeqs_le_advice` directly. -/
 def EncardAccSeqsLeSync : Prop :=
   ∀ {L K S : ℕ} {In Ac Sync : Type} [Fintype Ac] [Fintype Sync] (W : ℕ)
-    (P : Program L S In (Ac × (Fin W → Sync))) (op : ℕ → List (Obs L K S) → In) (n D : ℕ),
+    (P : EgressPrediction L S In (Ac × (Fin W → Sync))) (op : ℕ → List (Obs L K S) → In) (n D : ℕ),
     (AccSeqs P op n D).encard ≤ ((Fintype.card Ac * Fintype.card Sync ^ W * D ^ n : ℕ) : ℕ∞)
 
 /-- **A fixed clock.** With the clock-sync value fixed (`Sync = Unit`), the accepted sequences number at most
@@ -75,7 +75,7 @@ def EncardAccSeqsLeSync : Prop :=
 jitter, and nothing at all under J (`D = 1`): the zero-capacity theorem, with content advice. -/
 def EncardAccSeqsLeFixedClock : Prop :=
   ∀ {L K S : ℕ} {In Ac : Type} [Fintype Ac] (W : ℕ)
-    (P : Program L S In (Ac × (Fin W → Unit))) (op : ℕ → List (Obs L K S) → In) (n D : ℕ),
+    (P : EgressPrediction L S In (Ac × (Fin W → Unit))) (op : ℕ → List (Obs L K S) → In) (n D : ℕ),
     (AccSeqs P op n D).encard ≤ ((Fintype.card Ac * D ^ n : ℕ) : ℕ∞)
 
 /-- **Theorem 3, the block cap, under the two dataflow conditions.** The advice is content advice `Ac` and timing
@@ -85,7 +85,7 @@ in block `blk c`. Then the accepted sequences number at most
 def EncardAccSeqsLeBlocks : Prop :=
   ∀ {L K S : ℕ} {In Ac B C : Type} {At : B → Type} {U : C → Type}
     [Fintype Ac] [Fintype B] [DecidableEq B] [∀ β, Fintype (At β)] [Fintype C] [DecidableEq C] [∀ c, Fintype (U c)]
-    (P : Program L S In (Ac × ((β : B) → At β))) (op : ℕ → List (Obs L K S) → In) (n D : ℕ)
+    (P : EgressPrediction L S In (Ac × ((β : B) → At β))) (op : ℕ → List (Obs L K S) → In) (n D : ℕ)
     (step : C → ℕ) (blk : C → B) (occ : (c : C) → List In → Ac × ((β : B) → At β) → U c)
     (h1 : FramesReadNoTimingAdvice P step occ) (h2 : OccupancyReadsOwnBlock blk occ),
     (AccSeqs P op n D).encard ≤
@@ -98,7 +98,7 @@ cell is the count of its row, a value in `Fin (S + 1)`. Then the block cap reads
 def EncardAccSeqsLeBlocksCounts : Prop :=
   ∀ {L K S : ℕ} {In Ac B : Type} {At : B → Type}
     [Fintype Ac] [Fintype B] [DecidableEq B] [∀ β, Fintype (At β)]
-    (P : Program L S In (Ac × ((β : B) → At β))) (op : ℕ → List (Obs L K S) → In) (n D : ℕ)
+    (P : EgressPrediction L S In (Ac × ((β : B) → At β))) (op : ℕ → List (Obs L K S) → In) (n D : ℕ)
     (blk : Fin L × Fin n → B)
     (h1 : FramesReadNoTimingAdvice P (fun c : Fin L × Fin n => (c.2 : ℕ))
       (fun c ins a => rowCount (P.rows c.2 ins a c.1)))

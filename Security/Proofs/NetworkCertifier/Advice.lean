@@ -60,7 +60,7 @@ theorem eq_of_stepwise {n : ℕ} {o o' : List (Obs L K S)} (hl : o.length = n) (
 
 /-- **Theorem 3, the `2^A` cap.** With `Fintype.card Adv = 2^A`, the accepted observation sequences of length `n` with
 jitter below `D` number at most `2^A · D^n`. -/
-theorem encard_accSeqs_le_advice {Adv : Type} [Fintype Adv] (P : Program L S In Adv)
+theorem encard_accSeqs_le_advice {Adv : Type} [Fintype Adv] (P : EgressPrediction L S In Adv)
     (op : ℕ → List (Obs L K S) → In) (n D : ℕ) :
     (AccSeqs P op n D).encard ≤ ((Fintype.card Adv * D ^ n : ℕ) : ℕ∞) := by
   classical
@@ -107,7 +107,7 @@ clock sync. The shipped schedule is such a Program by its definition (`constantR
 `EncardAccSeqsLeConstantRate` states this bound for it. A sync alphabet that varies by window is covered by
 `encard_accSeqs_le_advice` directly. -/
 theorem encard_accSeqs_le_sync {Ac Sync : Type} [Fintype Ac] [Fintype Sync] (W : ℕ)
-    (P : Program L S In (Ac × (Fin W → Sync))) (op : ℕ → List (Obs L K S) → In) (n D : ℕ) :
+    (P : EgressPrediction L S In (Ac × (Fin W → Sync))) (op : ℕ → List (Obs L K S) → In) (n D : ℕ) :
     (AccSeqs P op n D).encard ≤ ((Fintype.card Ac * Fintype.card Sync ^ W * D ^ n : ℕ) : ℕ∞) := by
   have := encard_accSeqs_le_advice P op n D
   rwa [Fintype.card_prod, Fintype.card_fun, Fintype.card_fin] at this
@@ -116,7 +116,7 @@ theorem encard_accSeqs_le_sync {Ac Sync : Type} [Fintype Ac] [Fintype Sync] (W :
 `#Ac · D^n`. Instantiated for constant-rate release under a fixed logical schedule, timing carries nothing beyond the
 jitter, and nothing at all under J (`D = 1`): the zero-capacity theorem, with content advice. -/
 theorem encard_accSeqs_le_fixedClock {Ac : Type} [Fintype Ac] (W : ℕ)
-    (P : Program L S In (Ac × (Fin W → Unit))) (op : ℕ → List (Obs L K S) → In) (n D : ℕ) :
+    (P : EgressPrediction L S In (Ac × (Fin W → Unit))) (op : ℕ → List (Obs L K S) → In) (n D : ℕ) :
     (AccSeqs P op n D).encard ≤ ((Fintype.card Ac * D ^ n : ℕ) : ℕ∞) := by
   have := encard_accSeqs_le_sync W P op n D
   simpa using this
@@ -127,7 +127,7 @@ in block `blk c`. Then the accepted sequences number at most
 `#Ac · D^n · ∏_β min(#At β, ∏_{c ∈ β} #U c)`. -/
 theorem encard_accSeqs_le_blocks {Ac B C : Type} {At : B → Type} {U : C → Type}
     [Fintype Ac] [Fintype B] [DecidableEq B] [∀ β, Fintype (At β)] [Fintype C] [DecidableEq C] [∀ c, Fintype (U c)]
-    (P : Program L S In (Ac × ((β : B) → At β))) (op : ℕ → List (Obs L K S) → In) (n D : ℕ)
+    (P : EgressPrediction L S In (Ac × ((β : B) → At β))) (op : ℕ → List (Obs L K S) → In) (n D : ℕ)
     (step : C → ℕ) (blk : C → B) (occ : (c : C) → List In → Ac × ((β : B) → At β) → U c)
     (h1 : FramesReadNoTimingAdvice P step occ) (h2 : OccupancyReadsOwnBlock blk occ) :
     (AccSeqs P op n D).encard ≤
@@ -208,7 +208,7 @@ cell is the count of its row, a value in `Fin (S + 1)`. Then the block cap reads
 `#Ac · D^n · ∏_β min(#At β, (S + 1)^|β|)`. -/
 theorem encard_accSeqs_le_blocks_counts {Ac B : Type} {At : B → Type}
     [Fintype Ac] [Fintype B] [DecidableEq B] [∀ β, Fintype (At β)]
-    (P : Program L S In (Ac × ((β : B) → At β))) (op : ℕ → List (Obs L K S) → In) (n D : ℕ)
+    (P : EgressPrediction L S In (Ac × ((β : B) → At β))) (op : ℕ → List (Obs L K S) → In) (n D : ℕ)
     (blk : Fin L × Fin n → B)
     (h1 : FramesReadNoTimingAdvice P (fun c : Fin L × Fin n => (c.2 : ℕ))
       (fun c ins a => rowCount (P.rows c.2 ins a c.1)))
@@ -223,7 +223,7 @@ theorem encard_accSeqs_le_blocks_counts {Ac B : Type} {At : B → Type}
 all of whose runs are accepted up to `n`. Then `Zs` is no larger than the block cap. -/
 theorem encard_decodable_le_blocks {Ac B C : Type} {At : B → Type} {U : C → Type}
     [Fintype Ac] [Fintype B] [DecidableEq B] [∀ β, Fintype (At β)] [Fintype C] [DecidableEq C] [∀ c, Fintype (U c)]
-    (I : Interaction L K S Z In Act Wire) (P : Program L S In (Ac × ((β : B) → At β))) (n D : ℕ)
+    (I : Interaction L K S Z In Act Wire) (P : EgressPrediction L S In (Ac × ((β : B) → At β))) (n D : ℕ)
     (view : ℕ → Obs L K S → Wire) (hW2 : Regenerates I.certifier view) (hJ : JitterBounded I.certifier D)
     (step : C → ℕ) (blk : C → B) (occ : (c : C) → List In → Ac × ((β : B) → At β) → U c)
     (h1 : FramesReadNoTimingAdvice P step occ) (h2 : OccupancyReadsOwnBlock blk occ)

@@ -6,21 +6,21 @@ import Definitions.Core.Fp32
 # The instruction set (trusted)
 
 The opcodes an accelerator's instances draw on, each with its exact semantics on 32-bit words. An instance
-(`Accel.H200`, `Accel.Sm120`) says which of them the card has (`Op` restricted by its shapes), where each reads and
+(`Accel.H200`, `Accel.Sm120`) says which of them the card has (`Opcode` restricted by its shapes), where each reads and
 writes, and the units of each resource it uses; this module says what each computes.
 
-* **MMA** (`Op.mma`): `D = C + A·B` on the tensor core, `m × n` accumulators from `m` rows of `A` and `n` columns of
+* **MMA** (`Opcode.mma`): `D = C + A·B` on the tensor core, `m × n` accumulators from `m` rows of `A` and `n` columns of
   `B`, `k` products each. Output `(i, j)` is the format's dot (`Dot`) of accumulator `C i j` with row `i` and column
   `j` (`mmaEval`): the integer formats exactly (`intDot`, modulo `2^32` or clamped), the float formats as `TC.Spec`'s
   group-sum pipelines compute them (`floatDot`; BF16 is `TC.Spec.tcDotTotal` itself). A row's operands are its
   format's `bits` wide, packed into words, so an MMA can't multiply wider operands (P1), and each of its `m·n·k`
   products is formed inside one output's dot (P2).
-* **Lane functions** (`Op.lane`): one lane's CUDA-core instruction on registers: integer add, multiply-add (low, wide,
+* **Lane functions** (`Opcode.lane`): one lane's CUDA-core instruction on registers: integer add, multiply-add (low, wide,
   high), logic, shifts, byte permute, bit counts, compares, selects, `dp4a`, and FP32 `fma`, `add` and `mul`
   (`Verity.Fp32`).
-* **Copies** (`Op.copy`): `n` words from one store to another, unchanged: loads, stores, register moves, TMA. A
-  broadcast load (`Op.bcast`), the lanes of a warp instruction reading one address, reads its words once.
-* **Atomics** (`Op.atom`): a read-modify-write of one word of a store: integer add, exchange.
+* **Copies** (`Opcode.copy`): `n` words from one store to another, unchanged: loads, stores, register moves, TMA. A
+  broadcast load (`Opcode.bcast`), the lanes of a warp instruction reading one address, reads its words once.
+* **Atomics** (`Opcode.atom`): a read-modify-write of one word of a store: integer add, exchange.
 
 An opcode reads and writes only its operands, so a product leaves its accumulator only through further instructions,
 each of which pays its units (`Machine`'s G2).
@@ -32,7 +32,7 @@ written as two's-complement integers where the card holds float codes. `Card.dec
 registers, and `Assumptions.CardWithinAccel` is a refinement up to it. Out of range the version reads
 an operand as zero and keeps its result's low bits where the unit rounds; such uses are outside the claim on the
 contents where they occur (`CardWithinAccel`'s per-input scope limit). These are:
-DMMA (`Op.dmma`, exact on operands within FP64's ±2^53, each element two words); the FP64 lanes (`Lane.dfma`,
+DMMA (`Opcode.dmma`, exact on operands within FP64's ±2^53, each element two words); the FP64 lanes (`Lane.dfma`,
 likewise; `DADD` and `DMUL` are it with `b = 1` or `c = 0`); `HFMA2` (`Lane.hfma2`, each half exact on integers
 within f16's ±2048, both halves in one word; `HADD2`, `HMUL2` and the `bf16` forms, exact within ±256, likewise); the
 float reductions (`red`, `cp.reduce.async.bulk` on `f32`: exact integer adds, `iadd3`; on `f16x2` and `bf16x2`:
@@ -49,7 +49,7 @@ open Verity.TC
 FP32; and the block-scaled FP4 formats `nvf4` (a UE4M3 scale per 16 E2M1 operands) and `mxf4` (a UE8M0 scale per 32). -/
 inductive Fmt
   | s8 | u8 | b1 | e4m3 | e5m2 | e2m1 | f16 | bf16 | tf32 | nvf4 | mxf4
-  /-- FP64, DMMA's format: no `Op.mma` takes it; its MMA is `Op.dmma`, and this names its tensor units a MAC -/
+  /-- FP64, DMMA's format: no `Opcode.mma` takes it; its MMA is `Opcode.dmma`, and this names its tensor units a MAC -/
   | f64
   deriving DecidableEq
 
@@ -315,7 +315,7 @@ inductive Lane
   exact on their exact integers -/
   | add2
   /-- `REDUX`: the reduction by `g` (a `reduces` function) of 32 words, one a lane, to one word; only on the uniform
-  datapath (`Op.uni`), a warp instruction -/
+  datapath (`Opcode.uni`), a warp instruction -/
   | redux (g : Lane)
   deriving DecidableEq
 
@@ -441,7 +441,7 @@ end Lane
 /-! ## Opcodes -/
 
 /-- An opcode over stores `S`. -/
-inductive Op (S : Type) where
+inductive Opcode (S : Type) where
   /-- an MMA of `fa` rows by `fb` columns at shape `sh`, `A` read from store `sa` and `B` from `sb` (`C` and `D` are
   registers); `sat` clamps an integer MMA's result -/
   | mma (fa fb : Fmt) (sat : Bool) (sh : Shape) (sa sb : S)
@@ -484,11 +484,11 @@ def dmmaEval (s : Shape) (v : ℕ → Word) (o : ℕ) : Word :=
 /-- The `i`th of `n` words, zero past the end. -/
 def getD {n : ℕ} (v : Fin n → Word) (i : ℕ) : Word := if h : i < n then v ⟨i, h⟩ else 0
 
-namespace Op
+namespace Opcode
 
 variable {S : Type}
 
-def nIn : Op S → ℕ
+def nIn : Opcode S → ℕ
   | .mma fa fb _ sh _ _ => sh.wa fa + sh.wb fb + sh.m * sh.n
   | .mmaSp fa fb _ sh _ _ => sh.waSp fa + sh.wsel + sh.wb fb + sh.m * sh.n
   | .lane g | .uni g => g.nIn
@@ -497,7 +497,7 @@ def nIn : Op S → ℕ
   | .red _ _ n _ => 2 * n
   | .dmma sh => 2 * sh.m * sh.k + 2 * sh.k * sh.n + 2 * sh.m * sh.n
 
-def nOut : Op S → ℕ
+def nOut : Opcode S → ℕ
   | .mma _ _ _ sh _ _ | .mmaSp _ _ _ sh _ _ => sh.m * sh.n
   | .lane g | .uni g => g.nOut
   | .copy _ _ n | .red _ _ n _ => n
@@ -506,7 +506,7 @@ def nOut : Op S → ℕ
   | .dmma sh => 2 * sh.m * sh.n
 
 /-- The store input `i` is read from (`reg` is the register store). -/
-def inStore (reg : S) : (o : Op S) → Fin o.nIn → S
+def inStore (reg : S) : (o : Opcode S) → Fin o.nIn → S
   | .mma fa fb _ sh sa sb, i => if i.val < sh.wa fa then sa else if i.val < sh.wa fa + sh.wb fb then sb else reg
   | .mmaSp fa fb _ sh sa sb, i =>
     if i.val < sh.waSp fa then sa
@@ -518,7 +518,7 @@ def inStore (reg : S) : (o : Op S) → Fin o.nIn → S
   | .dmma _, _ => reg
 
 /-- The store output `i` is written to. -/
-def outStore (reg : S) : (o : Op S) → Fin o.nOut → S
+def outStore (reg : S) : (o : Opcode S) → Fin o.nOut → S
   | .mma .., _ | .mmaSp .., _ => reg
   | .lane _, _ | .uni _, _ => reg
   | .copy _ t _, _ => t
@@ -529,7 +529,7 @@ def outStore (reg : S) : (o : Op S) → Fin o.nOut → S
 
 /-- An opcode's semantics, the MMA's dot for formats `fa`, `fb`, saturation and `k` given by `dot`, and a sparse MMA's
 at its logical `k` by `dotSp`. -/
-def eval (dot dotSp : Fmt → Fmt → Bool → ℕ → Dot) : (o : Op S) → (Fin o.nIn → Word) → Fin o.nOut → Word
+def eval (dot dotSp : Fmt → Fmt → Bool → ℕ → Dot) : (o : Opcode S) → (Fin o.nIn → Word) → Fin o.nOut → Word
   | .mma fa fb sat sh _ _, v, o => mmaEval (dot fa fb sat sh.k) fa fb sh (getD v) o.val
   | .mmaSp fa fb sat sh _ _, v, o => mmaSpEval (dotSp fa fb sat sh.k) fa fb sh (getD v) o.val
   | .lane g, v, o | .uni g, v, o => g.eval (getD v) o.val
@@ -541,12 +541,12 @@ def eval (dot dotSp : Fmt → Fmt → Bool → ℕ → Dot) : (o : Op S) → (Fi
   | .dmma sh, v, o => dmmaEval sh (getD v) o.val
 
 /-- The products an MMA forms: `m·n·k`, and a sparse MMA's `m·n·k/2`. -/
-def macs : Op S → ℕ
+def macs : Opcode S → ℕ
   | .mma _ _ _ sh _ _ => sh.m * sh.n * sh.k
   | .mmaSp _ _ _ sh _ _ => sh.m * sh.n * (sh.k / 2)
   | .dmma sh => sh.m * sh.n * sh.k
   | _ => 0
 
-end Op
+end Opcode
 
 end Verity.Accel

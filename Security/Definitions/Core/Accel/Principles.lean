@@ -126,6 +126,6 @@ def P2Frame : Prop :=
 /-- **P2, priced moves**: every opcode uses at least `1/32` of an issue slot, at any tensor weights, so no instruction
 is free on every resource: not a `b1` MMA (a slot, whatever `Open.b1` is), a uniform instruction (a slot) or a move. -/
 def P2Priced : Prop :=
-  ∀ (weight : Fmt → ℚ≥0) (scale : Shape → ℚ≥0) (hi : ℚ≥0) (o : Op Store), 1 / 32 ≤ opUse weight scale hi o .issue
+  ∀ (weight : Fmt → ℚ≥0) (scale : Shape → ℚ≥0) (hi : ℚ≥0) (o : Opcode Store), 1 / 32 ≤ opUse weight scale hi o .issue
 
 end Verity.Accel

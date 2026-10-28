@@ -135,7 +135,7 @@ stated over the scheme, not at `N`, because Lean's structure command unfolds `N 
 structure RingServer {B w p : ℕ} [NeZero p] (sch : Scheme (ringRO B w p)) (S D Q L : ℕ) : Type where
   pre : Preprocessor sch S
   step : SessionCommitment → Bits sch.n → Bits sch.t → ℕ → Bits S → Fin sch.B →
-    Prog (ringRO B w p) (Bits sch.ℓ × Bits S)
+    OracleAlgorithm (ringRO B w p) (Bits sch.ℓ × Bits S)
   bounded : ∀ sc W pp j σ i, (step sc W pp j σ i).RingBounded D Q L
 
 set_option exponentiation.threshold 20000 in

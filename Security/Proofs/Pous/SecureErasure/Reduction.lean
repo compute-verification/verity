@@ -45,7 +45,7 @@ theorem pr_big_fibre_le {X Z : Type} [Fintype X] [Fintype Z] [DecidableEq Z] (ke
 /-- **The prover on codes.** If `d j (e j σ) = σ` for every memory `σ` that gives `z` back at a round `j < s`, then on
 any rounds where the prover keeps `z`, the responder that decodes its memory, runs the prover's step and encodes the
 next memory returns the prover's blocks. -/
-theorem seqAnswers_sim {ℓ S S' S_φ B : ℕ} (f : M.Qry → M.Ans) (step : ℕ → Bits S → Fin B → Prog M (Bits ℓ × Bits S))
+theorem seqAnswers_sim {ℓ S S' S_φ B : ℕ} (f : M.Qry → M.Ans) (step : ℕ → Bits S → Fin B → OracleAlgorithm M (Bits ℓ × Bits S))
     (keep : ℕ → Bits S → Bits S_φ) (z : Bits S_φ) (s : ℕ) (e : ℕ → Bits S → Bits S') (d : ℕ → Bits S' → Bits S)
     (hed : ∀ j < s, ∀ σ, keep j σ = z → d j (e j σ) = σ) (is : List (Fin B)) :
     ∀ (j : ℕ) (σ : Bits S), j + is.length ≤ s → (∀ a ∈ eraseAnswers f step keep j is σ, a.2 = z) →

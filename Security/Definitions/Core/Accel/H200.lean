@@ -43,7 +43,7 @@ reports.
   the 41.2 full overlap predicts), and a joint ALU + IMAD measurement for sm_90 is pending;
 * `f64`: 64 lanes an SM clock (Programming Guide Table 7, CC 9.0: 64-bit floating-point add, multiply, multiply-add
   64), so 8448: the FP64 cores, 64 an SM apart from the tensor cores (whitepaper Table 3, 'FP64 Cores / SM (excl.
-  Tensor)'); DMMA (`Op.dmma`) runs on the tensor cores (A100 whitepaper: the third-generation Tensor Cores accelerate
+  Tensor)'); DMMA (`Opcode.dmma`) runs on the tensor cores (A100 whitepaper: the third-generation Tensor Cores accelerate
   'all data types including FP16, BF16, TF32, FP64, INT8'), 128 MACs an SM clock at 1980 MHz (whitepaper: FP64 Tensor
   Core 67 TFLOPS over 132 SMs at 1980 MHz is 128.2), so a DMMA MAC uses 32 units of `tensor` and of `tensorLong`, as
   measured (DMMA at 1/32 of s8 a MAC beside a saturated `wgmma`, `benchmarks/pouw/sass_census/
@@ -88,10 +88,10 @@ move is `SHFL` on the shuffle pipe (32 lanes a SM-clock, its own pipe beside the
 shapes and twice their `k`, at the same tensor units a real product (so twice the logical rate: the census's
 `IMMA.SP.16864` row), their dots `Open.dotSp`.
 
-**Over-approximated** (`Accel.Isa`'s docstring: an exact integer version at the unit's rate): DMMA (`Op.dmma`, at
+**Over-approximated** (`Accel.Isa`'s docstring: an exact integer version at the unit's rate): DMMA (`Opcode.dmma`, at
 `m8n8k4` and `m16n8k4`, `k8`, `k16`, PTX ISA 9.0 §9.7.14.5.14), the FP64 lanes (`Lane.dfma` on the `f64` pipe),
 `HFMA2`, `HADD2`, `HMUL2` (`Lane.hfma2`, one lane on the FP32 pipe, an issue slot's share: Table 7, CC 9.0, gives
-16-bit FP multiply-add 256 results, two a lane), the float reductions (`Op.red` by `iadd3` and `add2`, `red.v8`
+16-bit FP multiply-add 256 results, two a lane), the float reductions (`Opcode.red` by `iadd3` and `add2`, `red.v8`
 included), and `redux.sync` (`Lane.redux`, a uniform instruction's slot).
 
 **Not yet in the instance** (each a gap in faithfulness, not a relaxation): `f16` accumulators, conversions (`I2F`,
@@ -157,7 +157,7 @@ def fp8 (f : Fmt) : Bool := f = .e4m3 || f = .e5m2
 def pair (fa fb : Fmt) : Bool := intPair fa fb || (fp8 fa && fp8 fb) || fa = fb
 
 /-- The opcodes the H200 has. -/
-def Avail : Op Store → Prop
+def Avail : Opcode Store → Prop
   | .mma fa fb _ sh sa sb =>
     pair fa fb ∧ sh.k ∈ ks fa ∧
       ((sh.m = 16 ∧ sh.n = 8 ∧ !fp8 fa ∧ sa = .reg ∧ sb = .reg) ∨
