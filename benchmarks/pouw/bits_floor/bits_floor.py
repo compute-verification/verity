@@ -39,7 +39,11 @@ DESIGNS = {
     "seg-t8": (2048, 128, 1024),
     "seg-t3": (1536, 256, 768),
     "cell-fresh": (2048, 2048, 2048),
+    "cell-jr2": (2048, 2048, 2048),
 }
+#: JR2's shape (J10-R v2, an estimate of it): X = A + d_A, binary dither alone on the activation side, and W′ = B + U
+#: with U fresh along K; at A = B = 0, X = d_A and W′ = Uπ (Dither's U stream at L′ = K)
+JR2 = {"cell-jr2"}
 
 
 def mask(n: int) -> int:
@@ -86,7 +90,7 @@ def bits_needed(lo: int, hi: int) -> int:
 # -- a call's coins ---------------------------------------------------------------------------------------------------------------
 
 class Call:
-    def __init__(self, K: int, lp: int, L: int, m: int = 128, n: int = 128, call: int = 0):
+    def __init__(self, K: int, lp: int, L: int, m: int = 128, n: int = 128, call: int = 0, jr2: bool = False):
         self.sh = sh = D.Shape(m, n, K, lp=lp, L=L)
         sd = D.seeds(COIN, RECEIPT, call)
         self.K, self.lp, self.L, self.t, self.S = K, lp, L, sh.t, sh.S
@@ -107,6 +111,9 @@ class Call:
         for i, j in [(0, 0), (5, 77), (127, 127)]:
             ref, _ = D.cell_values(sh, sd, [0] * K, [0] * K, i, j)
             assert [int(v) for v in T[:, i, j]] == ref, (i, j)
+        if jr2:
+            self.X, self.W = self.dA, self.W - self.dB
+            self.w = np.stack([self.X[:, a:b] @ self.W[:, a:b].T for a, b in self.segs])
 
     def split(self, s: int):
         """Segment s's (0-based) separated factors: bin = d_A d_Bᵀ, F = D_s + V M_s (m × L′), Y_s (n × L′)."""
@@ -238,6 +245,7 @@ def e3(calls: dict, rng) -> dict:
     out = {}
     ops = {"dither-A0B0": (calls["seg-t8"].X, calls["seg-t8"].W),
            "dither-A0B0-fresh": (calls["cell-fresh"].X, calls["cell-fresh"].W),
+           "jr2-A0B0": (calls["cell-jr2"].X, calls["cell-jr2"].W),
            "uniform-int8": (rng.integers(-128, 128, (128, 2048)), rng.integers(-128, 128, (128, 2048)))}
     for name, (X, W) in ops.items():
         ref = X @ W.T
@@ -279,6 +287,8 @@ def e4(calls: dict) -> dict:
     by planes, against the reference; and the factors' widths against their bounds."""
     out = {}
     for name, c in calls.items():
+        if name in JR2:
+            continue
         r = {"t": c.t, "L'": c.lp, "L": c.L, "hi_bits": hi_bits(c.t), "Y_bits": y_bits(c.t),
              "F_bound": [-NOISE * c.t, (NOISE + 1) * c.t]}
         widths = {"F": [0, 0], "hi_u8split": [0, 0], "Y": [0, 0]}
@@ -312,7 +322,8 @@ def _marg(x, y, L):
 #: sep-nobin-kN keeps d_A d_Bᵀ exactly on the first N/8 of each segment's inner indices
 PARTIAL = (2, 4, 6, 7)
 ROUTES = ("sep-nobin", *(f"sep-nobin-k{k}" for k in PARTIAL), "sep-noY", "sep-truncF", "sep-truncF-noY", "sep-truncF-noY-nobin", "direct-trunc-strassen-q1",
-          "direct-trunc-winograd-q2", "direct-strassen-nocorr", "direct-b1-top-planes")
+          "direct-trunc-winograd-q2", "direct-strassen-nocorr", "direct-b1-top-planes", "jr2-trunc-strassen-Wq1",
+          *(f"jr2-planes-q{q}" for q in range(1, 8)))
 
 
 def approx_routes(c: Call):
@@ -359,6 +370,14 @@ def approx_routes(c: Call):
         rest = sum(wx[i] * wy[j] * np.outer(px[i].sum(1), py[j].sum(1)) / L for i in range(8) for j in range(8)
                    if i + j < TOP)
         est["direct-b1-top-planes"].append(top + np.rint(rest).astype(np.int64))
+        Wh = W >> 1
+        got, sides = strassen(X, Wh, "strassen", 40)
+        if np.abs(X).max() <= 2:
+            assert all(sd["density"] == 0 for sd in sides)
+        est["jr2-trunc-strassen-Wq1"].append(2 * (X @ Wh.T) + _marg(X, W - 2 * Wh, L))
+        for q in range(1, 8):
+            hi_ = (W >> q) << q
+            est[f"jr2-planes-q{q}"].append(X @ hi_.T + _marg(X, W - hi_, L))
     return {k: np.stack(v) for k, v in est.items()}, meta
 
 
@@ -385,6 +404,8 @@ def route_costs(n: int, t: int) -> dict:
         "direct-trunc-winograd-q2": STRASSEN * lo,
         "direct-strassen-nocorr": STRASSEN * lo,
         "direct-b1-top-planes": B1 * sum(1 for i in range(8) for j in range(8) if TOP <= i + j < max(n, TOP + 1)),
+        "jr2-trunc-strassen-Wq1": STRASSEN * lo,
+        **{f"jr2-planes-q{q}": B1 * max(0, min(n, 8) - q) for q in range(1, 8)},
     }
 
 
@@ -409,7 +430,8 @@ def e5(calls: dict) -> dict:
         w = c.w
         r = {"meta": meta, "routes": {}}
         for k, e in est.items():
-            if c.t == 1 and k.startswith("sep"):
+            if (c.t == 1 and k.startswith("sep")) or (k.startswith("jr2") != (name in JR2)) or (
+                    name in JR2 and k.startswith("direct-trunc")):
                 continue
             err = (e - w).reshape(-1)
             pe = {f"{rr},{b}": float((window(e, rr, b) != window(w, rr, b)).mean()) for rr, b in windows(name)}
@@ -457,8 +479,11 @@ def sep_exact(n: int, t: int, strassen_ok: bool = True) -> float:
     return B1 + sig * (lo + hi + y) / t
 
 
-def floor_low(n: int, t: int) -> dict:
+def floor_low(n: int, t: int, jr2: bool = False) -> dict:
     d0, d1 = direct_exact(n, False), direct_exact(n)
+    if jr2:
+        d0 = min(1.0, pairs(n, 1, 8) * B1)
+        d1 = min(d0, STRASSEN if n <= 8 else 1.0)
     s0 = sep_exact(n, t, False) if t > 1 else float("inf")
     s1 = sep_exact(n, t) if t > 1 else float("inf")
     return {"n": n, "direct": d0, "direct_strassen": d1, "sep": s0, "sep_strassen": s1,
@@ -485,7 +510,7 @@ def direct_inmodel(n: int, rhos: list) -> dict:
 
 
 #: the 8-bit window each design's note recommends, [r, r + 8)
-RECOMMENDED = {"seg-t8": (4, 12), "seg-t3": (8, 16), "cell-fresh": (8, 16)}
+RECOMMENDED = {"seg-t8": (4, 12), "seg-t3": (8, 16), "cell-fresh": (8, 16), "cell-jr2": (4, 12)}
 
 #: Llama-3.2-1B's linear layers a token, (K, N): qkv, o, gate+up, down; 16 layers (lm_head and attention left out)
 LLAMA_1B = [(2048, 3072), (2048, 2048), (2048, 16384), (8192, 2048)]
@@ -531,7 +556,7 @@ def price(res: dict) -> dict:
     for name, (K, lp, L) in DESIGNS.items():
         t = L // lp
         bits = word_bits(name)
-        rows = [floor_low(n, t) for n in range(1, bits + 1)]
+        rows = [floor_low(n, t, name in JR2) for n in range(1, bits + 1)]
         full = rows[-1]["floor"]
         full0 = rows[-1]["floor_no_strassen"]
         nstar = min(r["n"] for r in rows if r["floor"] >= full - 1e-12)
@@ -565,7 +590,7 @@ def price(res: dict) -> dict:
                        "best_r": best[1] if best else None, "sampling": best[0] if best else None,
                        "best_floor_any_window": max(win[f"{rr},{bb}"]["floor"] for rr, bb in windows(name) if bb == b)}
         bmin = min([b for b in by_b if by_b[b]["best_r"] is not None], default=None)
-        side = "dither-A0B0-fresh" if name.startswith("cell") else "dither-A0B0"
+        side = "jr2-A0B0" if name in JR2 else "dither-A0B0-fresh" if name.startswith("cell") else "dither-A0B0"
         rhos = [x["density"] for x in res["e3"][side]["strassen"]["form_sides"]] if "e3" in res else []
         inmodel = [direct_inmodel(n, rhos) for n in range(1, bits + 1)]
         nstar_inmodel = min(n for n in range(1, bits + 1) if min(inmodel[n - 1]["time"], rows[n - 1]["floor"]) >= full
@@ -632,7 +657,7 @@ def main() -> None:
     a.out.mkdir(parents=True, exist_ok=True)
     rng = np.random.default_rng(20261028)
     t0 = time.perf_counter()
-    calls = {k: Call(*v) for k, v in DESIGNS.items()}
+    calls = {k: Call(*v, jr2=k in JR2) for k, v in DESIGNS.items()}
     res = {"designs": DESIGNS, "coin": COIN.hex(), "receipt": RECEIPT.hex()}
     res["e1"] = e1(rng)
     res["e2"] = e2()
@@ -642,7 +667,7 @@ def main() -> None:
     res["e6"] = e6(calls)
     res["price"] = price(res)
     res["bytes"] = word_bytes(res)
-    alt = {k: Call(*v, call=1) for k, v in DESIGNS.items()}
+    alt = {k: Call(*v, call=1, jr2=k in JR2) for k, v in DESIGNS.items()}
     res2 = {"e3": res["e3"], "e5": e5(alt), "e6": e6(alt)}
     p2 = price(res2)
     res["second_draw"] = {name: {
