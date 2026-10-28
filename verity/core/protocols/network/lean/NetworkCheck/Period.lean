@@ -1298,7 +1298,7 @@ def chargedOf (p : Params) (c : Commitment) (as : Array (Found Facts)) (i : Nat)
 to (`tiedAudits`) is charged (`chargedOf`) with a bound of at least one wrong unit, which can set any of the entries,
 else 0. -/
 def faultyEntries (p : Params) (c : Commitment) (as : Array (Found Facts)) (scan : Scan) (reg : Registration) : Nat :=
-  if (tiedAudits c.audits reg).any fun i => ((chargedOf p c as i).map (1 ≤ ·.wrong)).getD false then scan.entries
+  if (tiedAudits c.audits reg).any fun i => (chargedOf p c as i).any (1 ≤ ·.wrong) then scan.entries
   else 0
 
 /-- The rows form's public on acceptance: `rowsTerms` over the accepted audits' facts, each link-window's scan's facts,
@@ -1428,11 +1428,11 @@ def protocol : Core.Protocol where
 -- a tied audit of 3 units, its slot entries' template "E" of 1 and its scan slots' "S" of 1: drawn whole, or with both
 -- strata whole; not with either stratum sampled, nor drawn in part with no slot entries' template
 #guard
-  let prof := fun (ss : Array Core.Stratum) => ({ programs := #[], prescribed := #[], linked := false, covered := #[],
-    levels := #[{ name := unitLevel, query := none, size := 3, draw := some (.stratified ss) }], delta := ⟨1, 10⟩,
-    drawn := #[] } : Core.Integrity)
+  let prof := fun (ss : Array Core.Stratum) => ({
+    programs := #[], prescribed := #[], linked := false, covered := #[], delta := ⟨1, 10⟩, drawn := #[],
+    levels := #[{ name := unitLevel, query := none, size := 3, draw := some (.stratified ss) }] } : Core.Integrity)
   let a : Audit := ⟨0, 0, "", 3, 0, #[("E", 1, "")], #["S"]⟩
-  let whole := #[⟨"E", 1, 1⟩, ⟨"S", 1, 1⟩, ⟨"R", 1, 0⟩]
+  let whole : Array Core.Stratum := #[⟨"E", 1, 1⟩, ⟨"S", 1, 1⟩, ⟨"R", 1, 0⟩]
   drawsWhole a (prof whole) ⟨3, 2, ⟨1, 10⟩, 1⟩ && drawsWhole a (prof #[⟨"E", 1, 0⟩]) ⟨3, 3, ⟨1, 10⟩, 0⟩ &&
     !drawsWhole a (prof #[⟨"E", 1, 1⟩, ⟨"S", 1, 0⟩, ⟨"R", 1, 1⟩]) ⟨3, 2, ⟨1, 10⟩, 1⟩ &&
     !drawsWhole a (prof #[⟨"E", 1, 1⟩, ⟨"R", 2, 1⟩]) ⟨3, 2, ⟨1, 10⟩, 1⟩ &&
