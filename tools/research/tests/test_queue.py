@@ -240,8 +240,8 @@ def test_a_pull_ref_github_left_behind_takes_the_head_from_its_branch_when_the_b
 
 
 def test_a_pr_github_has_no_pull_ref_for_waits_and_the_others_sync(world):
-    """GitHub can list an open PR before it makes refs/pull/N/head (27 Oct: #5290, and every drive tick from 13:14Z ended rc=1,
-    since one missing ref failed the whole fetch): that PR waits, and the rest of the queue syncs."""
+    """GitHub can list an open PR before it makes refs/pull/N/head, and one missing ref would fail the whole fetch, and every
+    drive tick with it: that PR waits, and the rest of the queue syncs."""
     world.gh.put(1, world.change({"a.txt": "one\n"}))
     world.gh.put(2, two := world.change({"b.txt": "two\n"}))
     _git(world.origin, "update-ref", "-d", "refs/pull/2/head")
