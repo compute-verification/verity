@@ -30,7 +30,7 @@ torch = pytest.importorskip("torch")
 pytestmark = pytest.mark.skipif(not torch.cuda.is_available() or not os.environ.get("NATIVE_COLLECT_BUILD"),
                                 reason="needs a GPU and the JIT-built native_collect extension (NATIVE_COLLECT_BUILD)")
 
-from tests.commit import test_windowed_retain_levels as WR  # noqa: E402
+from tests.commit import test_windowed_rows_sha512 as RS  # noqa: E402
 from verity_vllm.commit import step_rows as R  # noqa: E402
 from verity_vllm.commit.committer import native_collect as NC  # noqa: E402
 
@@ -54,14 +54,14 @@ def step_tensors() -> list[tuple[str, torch.Tensor]]:
 def learn(mp, ts: list[tuple[str, torch.Tensor]], retain_levels: bool, *, hold: int | None = None,
           keys: dict[int, bytes] | None = None) -> SimpleNamespace:
     """One learning step on a fresh committer (with `keys`, a replay that takes them) -> its commitment, peak and salt keys."""
-    com = WR.committer(mp, retain_levels=retain_levels, commit_scheme=R.NAME)
+    com = RS.committer(mp, retain_levels=retain_levels)
     try:
         if hold is not None:
             com.rows_hold_bytes = hold
         com.reset()
         com.replay_row_keys = dict(keys) if keys else None
         com.install()
-        so = WR._Sched(KV)
+        so = RS._Sched(KV)
         com.runner.tensors = ts
         com.runner.input_batch = SimpleNamespace(req_ids=so.req_ids, num_reqs=len(KV), num_scheduled_tokens=None)
         torch.cuda.synchronize()
@@ -82,7 +82,7 @@ def learn(mp, ts: list[tuple[str, torch.Tensor]], retain_levels: bool, *, hold: 
 @pytest.mark.parametrize("form", ["", "split"], ids=["gpu-form", "split-form"])
 @pytest.mark.parametrize("retain_levels", [False, True], ids=["no-levels", "levels"])
 def test_a_learning_step_past_the_hold_peaks_within_twice_the_hold(monkeypatch, retain_levels, form):
-    monkeypatch.setattr(WR, "WINDOW_MB", str(WINDOW_MB))
+    monkeypatch.setattr(RS, "WINDOW_MB", str(WINDOW_MB))
     if form:
         monkeypatch.setenv("VERITY_ROWS_FORM", form)
     ts = step_tensors()

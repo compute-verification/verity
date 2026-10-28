@@ -1,15 +1,20 @@
-"""The windowed worker under ``rows-sha512`` (``commit_scheme``, ``verity_vllm.commit.step_rows``) commits what the reference
-does, on the real collector, window ring and kernels: each step's root is ``step_rows``'s over the step's packed stream (the same
-stream ``commit_block_offline`` hashes under vllm-v1) with the step's recorded salt key, on a learning run (each window hashed to
-its rows' h in place, the leaves from them once the step's length is known; re-hashed from host when it keeps bytes), a hit run
-(hashed in place, pad-only windows absorbed after the data windows), with and without the levels, and under bounded staging.
-Past ``rows_hold_bytes`` (what a step holds on the device: a learning step's h, a levelless step's leaves) the trees are the same
-as within it.  Openings of a run that kept no levels come from a replay that took its keys, and verify against its 64-byte roots, as
-the replay's range openings verify against its own; a tampered row, salt or path does not.  ``test_windowed_retain_levels`` holds
-vllm-v1's roots, unchanged.
+"""The windowed worker (``native_collect_v2b``, ``--window-mb``) commits what the reference does under ``rows-sha512``
+(``verity_vllm.commit.step_rows``, the collector's one scheme), on the real collector, window ring and kernels: each step's root is
+``step_rows``'s over the step's packed stream (each tensor at the next ALIGN offset, zero-padded to a row) with the step's recorded
+salt key, on a learning run (each window hashed to its rows' h in place, the leaves from them once the step's length is known;
+re-hashed from host when it keeps bytes), a hit run (hashed in place, pad-only windows absorbed after the data windows), with and
+without the levels, through either step end, and under bounded staging.
+
+The windows here are 8 KiB and the ring holds four, so every step of ~56 KiB refills each slot while the worker still has the previous
+window's kernels queued; a run that keeps no tree level leaves each window's subtree on the device and drops the per-window host copy
+and host sync, so a slot goes back to the ring with only an event on the worker's side stream between the hash kernels that read it
+and the gather that refills it.  Past ``rows_hold_bytes`` (what a step holds on the device: a learning step's h, a levelless step's
+leaves) the trees are the same as within it.  Openings of a run that kept no levels come from a replay that took its keys, and verify
+against its 64-byte roots, as the replay's range openings verify against its own; a tampered row, salt or path does not.
 """
 from __future__ import annotations
 
+import hashlib
 import os
 from dataclasses import replace
 from types import SimpleNamespace
@@ -21,24 +26,110 @@ torch = pytest.importorskip("torch")
 pytestmark = pytest.mark.skipif(not torch.cuda.is_available() or not os.environ.get("NATIVE_COLLECT_BUILD"),
                                 reason="needs a GPU and the JIT-built native_collect extension (NATIVE_COLLECT_BUILD)")
 
-from tests.commit import test_windowed_retain_levels as WR  # noqa: E402
 from verity_vllm.commit import step_rows as R  # noqa: E402
 from verity_vllm.commit.committer import native_collect as NC  # noqa: E402
 from verity_vllm.commit.committer import native_host as nh  # noqa: E402
 
-SCHED = WR.SCHED
+RUN_ID = "windowed-rows"
+PD, GEO = hashlib.sha256(b"program").digest(), hashlib.sha256(b"geo").digest()
+LAYERS, H, BN, VOCAB = 3, 1000, 16, 1003
+WINDOW_MB = str(8 / 1024)                                       # 8 KiB: two rows a window
+ENV = ("VERITY_RETAIN", "VERITY_WINDOW_MB", "VERITY_WINDOW_SLOTS", "VERITY_STAGING_BOUNDED", "VERITY_LEARN_HOST_BUDGET_MB",
+       "VERITY_RETAIN_EXCLUDE", "VERITY_FAULT", "VERITY_FOOTPRINT", "VERITY_HI_PRIO", "VERITY_CONSUMER_DELAY_MS", "VERITY_SKIP",
+       "VERITY_INLINE_D2H", "VERITY_ABL")
 
 
-def committer(mp, **kw) -> NC.NativeCollectCommitter:
-    com = WR.committer(mp, commit_scheme=R.NAME, **kw)
+class _Runner:
+    def __init__(self) -> None:
+        self.committer = None
+        self.tensors: list[tuple[str, object]] = []
+        self.input_batch = None
+
+    def execute_model(self, scheduler_output, *a, **kw):
+        com = self.committer
+        for name, t in self.tensors:
+            com._acquire(name, t, com._cur)
+
+
+class _Sched:
+    """A decode step: one new token for each request at its KV length."""
+
+    def __init__(self, kv: tuple[int, ...]) -> None:
+        self.req_ids = [f"r{i}" for i in range(len(kv))]
+        self.num_scheduled_tokens = dict.fromkeys(self.req_ids, 1)
+        self.total_num_scheduled_tokens = len(kv)
+        self.scheduled_new_reqs = []
+        self.scheduled_cached_reqs = SimpleNamespace(req_ids=self.req_ids, num_computed_tokens=list(kv))
+
+
+def committer(mp, *, retain: str = "none", retain_levels: bool = True, bounded: bool = False) -> NC.NativeCollectCommitter:
+    for k in ENV:
+        mp.delenv(k, raising=False)
+    mp.setenv("VERITY_RETAIN", retain)
+    mp.setenv("VERITY_WINDOW_MB", WINDOW_MB)
+    mp.setenv("VERITY_WINDOW_SLOTS", "4")
+    mp.setenv("VERITY_STAGING_BOUNDED", "1" if bounded else "0")
+    if bounded:
+        mp.setenv("VERITY_LEARN_HOST_BUDGET_MB", str(16 / 1024))   # under a step: a learn-only pass discards every learning step
+    eng = SimpleNamespace(model=torch.nn.Module(), runner=_Runner())
+    com = NC.NativeCollectCommitter(eng, run_id=RUN_ID, program_digest=PD, geo_digest=GEO, arena_bytes=None, wrap=True, gather=True,
+                                    native_hooks=True, auto_blocks=True, native_worker=True, retain_levels=retain_levels)
+    com.enable_windows(None)
+    eng.runner.committer = com
     assert com.rows and com.name.endswith("+" + R.NAME)
     return com
 
 
+def step_tensors(kv: tuple[int, ...]) -> list[tuple[str, torch.Tensor]]:
+    """One decode step's tensors, odd-sized so window boundaries fall inside them; the hidden plane is sized by every request's KV
+    blocks, so steps differ in length. The values are a function of the geometry."""
+    ntok, seed = len(kv), sum(kv)
+    shapes = [("model.embed_tokens/in", torch.int32, (ntok,))]
+    for layer in range(LAYERS):
+        shapes += [(f"model.layers.{layer}.self_attn.qkv_proj", torch.bfloat16, (ntok, 3 * H)),
+                   (f"fa2.m1/L{layer}/acc", torch.float32, (sum(-(-k // BN) for k in kv), 4)),
+                   (f"model.layers.{layer}.mlp.down_proj", torch.bfloat16, (ntok, H))]
+    shapes += [("logits", torch.float32, (ntok, VOCAB)), ("runner.sampler/sampled_token_ids", torch.int32, (ntok,))]
+    out = []
+    for i, (name, dtype, shape) in enumerate(shapes):
+        n = 1
+        for d in shape:
+            n *= d
+        v = (torch.arange(n, dtype=torch.int64) * 7 + seed * 13 + i * 31) % 251 - 125
+        out.append((name, v.to(dtype).reshape(shape).cuda()))
+    # a pitched view 1000 B into each row of the first qkv output (RoPE's q): its segments straddle windows at a 4 B source offset
+    qkv = out[1][1]
+    out.append(("model.layers.0.self_attn.rotary_emb/q", qkv[:, H // 2:H // 2 + H]))
+    return out
+
+
+def schedule(kv0: int, steps: int, batch: int = 2) -> list[tuple[int, ...]]:
+    return [tuple(kv0 + 37 * r + 9 * s for r in range(batch)) for s in range(steps)]
+
+
+def run(com: NC.NativeCollectCommitter, sched: list[tuple[int, ...]]):
+    """One commitment run (reset, install, the steps, finalize, uninstall); its blocks stay held until the next run's reset."""
+    com.reset()
+    com.install()
+    for kv in sched:
+        so = _Sched(kv)
+        com.runner.tensors = step_tensors(kv)
+        com.runner.input_batch = SimpleNamespace(req_ids=so.req_ids, num_reqs=len(kv), num_scheduled_tokens=None)
+        com.runner.execute_model(so)
+        com._end_step()
+    rc = com.finalize()
+    com.uninstall()
+    assert com.errors == [], com.errors[:3]
+    return rc
+
+
+SCHED = schedule(40, 6)
+
+
 def rows_root(step: int, tensors: list[tuple[str, torch.Tensor]], ks: bytes) -> bytes:
-    """step_rows's step root over the stream `commit_block_offline` packs (each tensor at the next ALIGN offset, zero-padded to a
-    row), its layout counted in rows."""
-    ref = nh.NativeHostCommitter(None, run_id=WR.RUN_ID, program_digest=WR.PD, geo_digest=WR.GEO, retain_values=False, gpu_tree=True)
+    """step_rows's step root over the step's packed stream (each tensor at the next ALIGN offset, zero-padded to a row), its layout
+    counted in rows."""
+    ref = nh.NativeHostCommitter(None, run_id=RUN_ID, program_digest=PD, geo_digest=GEO, retain_values=False, gpu_tree=True)
     stream, metas, first_leaf = bytearray(), [], 0
     for i, (name, t) in enumerate(tensors):
         raw = t.cpu().contiguous().reshape(-1).view(torch.uint8).numpy().tobytes()
@@ -52,19 +143,19 @@ def rows_root(step: int, tensors: list[tuple[str, torch.Tensor]], ks: bytes) -> 
     stream.extend(b"\0" * (-len(stream) % R.ROW_BYTES))
     rows = [bytes(stream[o:o + R.ROW_BYTES]) for o in range(0, len(stream), R.ROW_BYTES)]
     ctx = ref._ctx_digest(step)
-    tree_root = R.levels(R.domain(WR.PD, ctx, WR.GEO, len(rows)), rows, ks, 8 * R.ROW_BYTES)[-1][0]
-    return R.step_root(WR.PD, ctx, WR.GEO, ref.layout_digest(metas), len(rows), tree_root)
+    tree_root = R.levels(R.domain(PD, ctx, GEO, len(rows)), rows, ks, 8 * R.ROW_BYTES)[-1][0]
+    return R.step_root(PD, ctx, GEO, ref.layout_digest(metas), len(rows), tree_root)
 
 
 def reference(keys: dict[int, bytes]) -> list[bytes]:
-    return [rows_root(i, WR.step_tensors(kv), keys[i]) for i, kv in enumerate(SCHED)]
+    return [rows_root(i, step_tensors(kv), keys[i]) for i, kv in enumerate(SCHED)]
 
 
 def check_run(rc, keys: dict[int, bytes]) -> None:
     roots = [s.root for s in rc.steps]
     assert sorted(keys) == list(range(len(SCHED))) and len(set(keys.values())) == len(SCHED), "a fresh 64-byte key per step"
     assert roots == reference(keys)
-    assert rc.run_root == R.run_root(WR.PD, WR.GEO, roots) and len(rc.run_root) == R.ROOT_BYTES
+    assert rc.run_root == R.run_root(PD, GEO, roots) and len(rc.run_root) == R.ROOT_BYTES
     assert rc.extra["commit_scheme"] == R.NAME
 
 
@@ -72,9 +163,9 @@ def check_run(rc, keys: dict[int, bytes]) -> None:
 def test_learning_and_hit_runs_commit_step_rows_roots(monkeypatch, retain_levels):
     com = committer(monkeypatch, retain_levels=retain_levels)
     try:
-        learn = WR.run(com, SCHED)
+        learn = run(com, SCHED)
         learn_keys, reup, hfirst = dict(com.row_keys), com._win_reupload_bytes, com._win_hfirst_steps
-        hit = WR.run(com, SCHED)
+        hit = run(com, SCHED)
         assert reup == 0 and hfirst == len(SCHED), "a learning step that keeps no bytes hashes its windows to h in place (no re-upload)"
         assert com._win_reupload_bytes == 0 and com._win_hfirst_steps == 0, "the second run follows the first run's plans (in place)"
         check_run(learn, learn_keys)
@@ -85,7 +176,21 @@ def test_learning_and_hit_runs_commit_step_rows_roots(monkeypatch, retain_levels
         com.close()
 
 
-H_WINDOW = 64 * int(float(WR.WINDOW_MB) * (1 << 20)) // R.ROW_BYTES     # a full window's h, and its leaves: 64 B a row (two rows here)
+@pytest.mark.parametrize("fast", [True, False], ids=["native-end", "python-end"])
+def test_the_step_end_paths_commit_the_same_roots_and_row_order(monkeypatch, fast):
+    """The serving thread's step end in one native call with the row order expanded by the worker, or as before: the same roots and
+    the same `step_rows`."""
+    com = committer(monkeypatch)
+    com.native_end = com.rows_off_thread = fast
+    try:
+        rc = run(com, SCHED)
+        check_run(rc, com.row_keys)
+        assert list(com.step_rows.values()) == [[("r0", 0, 1), ("r1", 1, 2)]] * len(SCHED)
+    finally:
+        com.close()
+
+
+H_WINDOW = 64 * int(float(WINDOW_MB) * (1 << 20)) // R.ROW_BYTES     # a full window's h, and its leaves: 64 B a row (two rows here)
 
 
 @pytest.mark.parametrize("retain_levels", [True, False], ids=["levels", "no-levels"])
@@ -101,20 +206,20 @@ def test_steps_past_the_device_hold_commit_the_same_trees(monkeypatch, retain_le
     com.rows_hold_bytes = hold
     assert ref.rows_hold_bytes == NC.ROWS_HOLD_BYTES
     try:
-        for run in ("learn", "hit"):
-            rc = WR.run(com, SCHED)
+        for phase in ("learn", "hit"):
+            rc = run(com, SCHED)
             ref.replay_row_keys = dict(com.row_keys)
-            want = WR.run(ref, SCHED)
+            want = run(ref, SCHED)
             check_run(rc, com.row_keys)
             assert [s.root for s in rc.steps] == [s.root for s in want.steps] and rc.run_root == want.run_root
             assert sorted(com._gpu_levels) == sorted(ref._gpu_levels) == (list(range(len(SCHED))) if retain_levels else [])
             for s in com._gpu_levels:
                 got, ref_lv = com._gpu_levels[s], ref._gpu_levels[s]
-                assert len(got) == len(ref_lv) and all(torch.equal(a.cpu(), b.cpu()) for a, b in zip(got, ref_lv)), (run, s)
+                assert len(got) == len(ref_lv) and all(torch.equal(a.cpu(), b.cpu()) for a, b in zip(got, ref_lv)), (phase, s)
             w, wr = rc.extra["windows"], want.extra["windows"]
             assert w["rows_hold_bytes"] == hold and wr["leaf_folds"] == 0
             assert (w["leaf_folds"] > 0) is not retain_levels, "a levelless step folds its held leaves past the hold"
-            if run == "learn":
+            if phase == "learn":
                 assert w["hfirst_steps"] == (len(SCHED) if hold else 0) and wr["hfirst_steps"] == len(SCHED)
                 assert w["reupload_bytes"] > 0 and wr["reupload_bytes"] == 0, "the windows past the hold re-hash from host"
             else:
@@ -124,7 +229,7 @@ def test_steps_past_the_device_hold_commit_the_same_trees(monkeypatch, retain_le
         ref.close()
 
 
-class _SlotRunner(WR._Runner):
+class _SlotRunner(_Runner):
     """A replayed graph's step: the per-token tensors land in persistent slots (the captured copies) and are staged from them in one
     `stage_slot_plan` call and flushed (the source's drain); the rest are acquired one by one, as the logits and the sampled tokens are."""
 
@@ -167,17 +272,17 @@ def test_side_stream_drain_commits_step_rows_roots(monkeypatch):
         runner = _SlotRunner(lag)
         runner.committer, com.runner = com, runner
         try:
-            for run in ("learn", "hit"):
-                rc = WR.run(com, SCHED)
+            for phase in ("learn", "hit"):
+                rc = run(com, SCHED)
                 keys, roots = com.row_keys, [s.root for s in rc.steps]
                 want, plain = [], []
                 for i, kv in enumerate(SCHED):
-                    ts = WR.step_tensors(kv)
+                    ts = step_tensors(kv)
                     first = [(nm, t) for nm, t in ts if t.is_contiguous() and t.shape[0] == len(kv) and not nm.startswith(("logits", "runner."))]
                     want.append(rows_root(i, first + [(nm, t) for nm, t in ts if all(nm != p for p, _t in first)], keys[i]))
                     plain.append(rows_root(i, ts, keys[i]))
                 st = rc.extra["native_collect"]
-                assert roots == want, (side, lag, desc_dev, run, [i for i in range(len(SCHED)) if roots[i] != want[i]],
+                assert roots == want, (side, lag, desc_dev, phase, [i for i in range(len(SCHED)) if roots[i] != want[i]],
                                        [i for i in range(len(SCHED)) if roots[i] == plain[i]], st)
                 assert st["gather_side_flushes"] == (len(SCHED) if side else 0), st
                 assert (st["gather_desc_copies"] > 0) is desc_dev, st
@@ -190,9 +295,9 @@ def test_capped_runs_commit_step_rows_roots(monkeypatch):
     com = committer(monkeypatch)
     com.rows_cap_blocks, com.rows_cap_free = 1, 0
     try:
-        learn = WR.run(com, SCHED)
+        learn = run(com, SCHED)
         learn_keys = dict(com.row_keys)
-        hit = WR.run(com, SCHED)
+        hit = run(com, SCHED)
         check_run(learn, learn_keys)
         check_run(hit, com.row_keys)
     finally:
@@ -208,7 +313,7 @@ def test_bounded_record_run_commits_step_rows_roots(monkeypatch, hold):
     com.rows_hold_bytes = hold
     try:
         com.learn_only = True
-        warm = WR.run(com, SCHED)
+        warm = run(com, SCHED)
         if hold == NC.ROWS_HOLD_BYTES:
             assert not warm.extra["bounded_staging"]["learned_only_steps"] and com._win_hfirst_steps == len(SCHED), \
                 "learning steps that keep no bytes copy nothing to host within rows_hold_bytes, so over the budget they are committed"
@@ -216,11 +321,12 @@ def test_bounded_record_run_commits_step_rows_roots(monkeypatch, hold):
         else:
             assert warm.extra["bounded_staging"]["learned_only_steps"] == list(range(len(SCHED)))
         com.learn_only = False
-        rec = WR.run(com, SCHED)
+        rec = run(com, SCHED)
         bs = rec.extra["bounded_staging"]
         assert not bs["learned_only_steps"] and bs["plan_mismatches"] == 0 and bs["transient_peak_bytes"] == 0, bs
         assert (rec.extra["windows"]["leaf_folds"] > 0) is (hold != NC.ROWS_HOLD_BYTES)
         check_run(rec, com.row_keys)
+        assert not com._gpu_levels
     finally:
         com.close()
 
@@ -229,14 +335,16 @@ def test_a_run_without_levels_opens_from_a_replay_that_took_its_keys(monkeypatch
     com = committer(monkeypatch, retain_levels=False)
     rep = committer(monkeypatch, retain="host")
     try:
-        rc = WR.run(com, SCHED)
+        rc = run(com, SCHED)
         rep.replay_row_keys = dict(com.row_keys)
-        rrc = WR.run(rep, SCHED)
+        rrc = run(rep, SCHED)
         assert rep.replay_row_keys is None and rep.row_keys == com.row_keys
         assert [s.root for s in rrc.steps] == [s.root for s in rc.steps] and rrc.run_root == rc.run_root
         sample = [(s, i) for s, sc in enumerate(rc.steps) for i in sorted({0, 1, sc.n_leaves // 2, sc.n_leaves - 1})]
         ops = com.open(sample, values_from=rep, paths_from_replay=True)
         assert len(ops) == len(sample) and all(com.verify(rc, o) for o in ops)
+        with pytest.raises(RuntimeError, match="kept no tree levels"):
+            com.open(sample[:1], values_from=rep)
         assert all(len(o.salt) == R.SALT_BYTES and o.salt == R.salt(com.row_keys[o.step], o.index) for o in ops)
         o = ops[0]
         flip = bytes([o.value[0] ^ 1]) + o.value[1:]
@@ -252,7 +360,7 @@ def test_a_run_without_levels_opens_from_a_replay_that_took_its_keys(monkeypatch
         with pytest.raises(RuntimeError, match="no salt key for step 0"):
             rep._row_key(0)
         rep.replay_row_keys = None
-        unkeyed = WR.run(rep, SCHED[:1])
+        unkeyed = run(rep, SCHED[:1])
         assert unkeyed.steps[0].root != rc.steps[0].root, "a replay without the run's keys commits other trees"
     finally:
         com.close()
@@ -260,19 +368,20 @@ def test_a_run_without_levels_opens_from_a_replay_that_took_its_keys(monkeypatch
 
 
 def test_what_rows_sha512_refuses(monkeypatch):
-    for k in WR.ENV:
+    for k in ENV:
         monkeypatch.delenv(k, raising=False)
     monkeypatch.setenv("VERITY_WINDOW_MB", "0")
-    eng = SimpleNamespace(model=torch.nn.Module(), runner=WR._Runner())
-    base = dict(run_id=WR.RUN_ID, program_digest=WR.PD, geo_digest=WR.GEO, arena_bytes=None, wrap=True, gather=True, native_hooks=True,
+    eng = SimpleNamespace(model=torch.nn.Module(), runner=_Runner())
+    base = dict(run_id=RUN_ID, program_digest=PD, geo_digest=GEO, arena_bytes=None, wrap=True, gather=True, native_hooks=True,
                 auto_blocks=True, native_worker=True)
     with pytest.raises(ValueError, match="windowed worker"):
-        NC.NativeCollectCommitter(eng, commit_scheme=R.NAME, **base)
-    monkeypatch.setenv("VERITY_WINDOW_MB", WR.WINDOW_MB)
+        NC.NativeCollectCommitter(eng, **base)
+    monkeypatch.setenv("VERITY_WINDOW_MB", WINDOW_MB)
     with pytest.raises(ValueError, match="windowed worker"):
-        NC.NativeCollectCommitter(eng, layout="chunk-leaf-v2", commit_scheme=R.NAME, **base)
-    with pytest.raises(ValueError, match="unknown commit scheme"):
-        NC.NativeCollectCommitter(eng, commit_scheme="rows-sha256", **base)
+        NC.NativeCollectCommitter(eng, layout="chunk-leaf-v2", **base)
+    for scheme in ("vllm-v1", "rows-sha256"):
+        with pytest.raises(ValueError, match="unknown commit scheme"):
+            NC.NativeCollectCommitter(eng, commit_scheme=scheme, **base)
     com = committer(monkeypatch)
     try:
         with pytest.raises(ValueError, match=R.NAME):
