@@ -177,6 +177,23 @@ def test_the_pool_is_warmed_before_serving_in_blocks_that_hold_any_one_take(monk
     pool.mode = None
 
 
+def test_the_gpu_tree_extension_is_built_before_serving_only_for_a_worker_that_loads_it():
+    """A windowed or ``--gpu-tree`` committer's worker loads the extension in its first step, so it is built before serving;
+    any other committer never builds it."""
+    loads: list[Any] = []
+
+    def com(**kw):
+        c = SimpleNamespace(**({"windowed": False, "gpu_tree": False} | kw))
+        c._gpu_ext_load = lambda: loads.append(c)
+        return c
+
+    for kw in ({"windowed": True}, {"gpu_tree": True}):
+        c, t = com(**kw), iter([2.0, 31.25])
+        assert ss.warm_gpu_ext(c, clock=lambda: next(t)) == 29.25 and loads == [c]
+        loads.clear()
+    assert ss.warm_gpu_ext(com(), clock=lambda: pytest.fail("no build to time")) is None and loads == []
+
+
 def test_a_close_waits_for_room_only_while_the_windows_awaiting_their_seal_hold_the_bound():
     first, go, done = threading.Event(), threading.Event(), threading.Event()
     sealer = ss.Sealer(15, clock=lambda: (go.set(), 0.0)[1] if first.is_set() else 0.0)

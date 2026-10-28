@@ -68,7 +68,8 @@ window's finalize, its readback and records, then its seal run on a thread of th
 order, while the engine serves the next window: the engine loop's part of a close only detaches the window from the
 committer (`NativeHostCommitter.detach`), and it waits only while the windows awaiting their finalize and seal hold
 ``--seal-hold-gb`` of committed values, in the committer's pinned pool, which
-``--seal-warm-gb`` grows before serving rather than on the engine loop. A window closes once its steps have committed
+``--seal-warm-gb`` grows before serving rather than on the engine loop; the committer's GPU tree extension is built before
+serving too (`serve_seal.warm_gpu_ext`), not in its worker's first step. A window closes once its steps have committed
 ``--window-gb``, which bounds each bundle on disk; under ``--seal`` the server refuses to start unless ``--out``'s filesystem
 has ``--disk-floor-gb`` free beyond one such window, and once a window's seal would take it under that floor, the window is
 not sealed and the server stops: it refuses new requests, finishes those in flight, and exits. ``--copy-records-to`` (the
@@ -749,6 +750,7 @@ def main(opts: Options) -> int:
               "sealed": "windows/w<k>/" if windows is not None and windows.seal is not None else None,
               "served_rows_statics": windows.served if windows is not None else None,
               "seal_off_loop": sealer is not None, "seal_hold_gb": opts.seal_hold_gb if sealer is not None else None, "pool_warmed": warmed,
+              "gpu_ext_warm_s": getattr(com, "gpu_ext_warm_s", None),
               "finalize_off_loop": sealer is not None and windows.finalize_on_loop is None,
               "finalize_on_loop": windows.finalize_on_loop if windows is not None else None,
               "window_gb": opts.window_gb or None, "disk_floor": disk_record(windows), "copy_records_to": opts.copy_records_to,
