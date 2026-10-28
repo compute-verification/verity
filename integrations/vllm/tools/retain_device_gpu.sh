@@ -34,6 +34,8 @@ export PYTHONPATH=$TREE:$TREE/integrations/vllm:$TREE/tools/research/src
 export TORCH_EXTENSIONS_DIR=$ROOT/cache/torch-extensions TRITON_CACHE_DIR=$ROOT/cache/triton VLLM_CACHE_ROOT=$ROOT/cache/vllm
 export HIDDEN_GPU_BUILD=$ROOT/cache/jit/hidden_gpu NATIVE_COLLECT_BUILD=$ROOT/cache/jit/nc
 export VLLM_BATCH_INVARIANT=1 VERITY_WEIGHTS_HASH=${VERITY_WEIGHTS_HASH:-device-checked}
+# a prefill of SLOTS x PROMPT tokens is a learning step past the default 4 GiB of transient host copies (no warm-up learns its plan)
+export VERITY_LEARN_HOST_BUDGET_MB=${VERITY_LEARN_HOST_BUDGET_MB:-24576}
 HELP=$TREE/integrations/vllm/tools/retain_device_gpu.py
 say() { echo "$*" | tee -a "$OUT/summary.txt"; }
 count() { cat "$1" 2>/dev/null | grep -c .; }
