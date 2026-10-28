@@ -1,0 +1,17 @@
+{
+ "definitions": {
+  "PowerHeadFields_v1{L=8}": {
+   "and": 695,
+   "type": "279cc6cb5936c7c16e4fc4afb7a672dd4dca78f6b4b21fcb09aabd2ac018f0da2f8d4a5d9c97052d32f05da8ff0035b131a8ede537733add9ac93dae610babac"
+  },
+  "PowerThreshold_v1{J=3}": {
+   "and": 21613,
+   "type": "825cf6dd6f7939f3c5612e9efc2a6011f30a462ad0cd3ace4391f9247697e6e436be36240a513a1f90983be6453888cbe9a0ec78ec9dce7e2ebd9b740e1a3122"
+  }
+ },
+ "digests": {
+  "PowerCheck_v1{L=8,J=3,DH=2,DC=2}": {
+   "sha512": "806aee4cef76722e5448026f6465faf3fdc478e1f3d8bd0d9071e94cd3b32543c46243e7f2e1551f214508fff6036daaca58774eb16792435e4208fd97769105"
+  }
+ }
+}

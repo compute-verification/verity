@@ -19,6 +19,12 @@ A spec-level reference for network accounting's timing channel:
   `LinkWindows.network_verdict`, the AND over the link's link-windows with no ε or share credit: every window of the
   egress profile registered in order with an accepted outcome, and a rejected, late, missing or out-of-order window
   rejects the link;
+- the power certifier, onsite's power sub-protocol, as a second certificate kind on this machinery: its
+  record (`power`: one channel's certified energy over one block's span, signed under the certifier's salt as a network
+  record is, and the public threshold, quantized against the prover) and its proof block (`power_check`:
+  `PowerCheck_v1`, the head's and the span's committed counts' hiding openings, the head's fields, the threshold
+  E − floors − tolerance ≤ β·e_h·θ·Δ in integers, and the signed digest), whose one output is the verdict bit. No
+  issuer, Spec or Lean check yet;
 - a served link's counts (`served`, `LinkWindows(served=ServedProfile(F, F_in, windows, own))`), whose egress end has no
   occupancy profile: N2's served unit, `NetworkServedLinkWindow`, adds a Boolean Definition,
   `NetworkServedCounts_v1` (678,795 ANDs at T = 600, F = 1024, F_in = 1, R = 6, R_in = 1), that holds the egress
