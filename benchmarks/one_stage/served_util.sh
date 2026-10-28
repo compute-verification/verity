@@ -13,7 +13,8 @@
 #           window's close, so none of its blocks can be proved later
 #   seal    the Commit with --seal: each closed window sealed to UTIL_ROOT's scratch (deleted after the run)
 #   h1      the Commit (sealed iff H1_SEAL=1) and PoUW H1 at T and S 1 with the epoch's in-process coins (no challenger
-#           gate: it credits nothing; the gate's own costs are not in this run)
+#           gate: it credits nothing; the gate's own costs are not in this run). H1's verifier of record is the Lean
+#           `pouw-check-difftest`, built here with lake (elan under $HOME), so run this arm with `--cwd clone`
 #   graphs  stock with the engine's options overridden by UTIL_ENGINE_JSON (default: enforce_eager off, so torch.compile
 #           with CUDA graphs captured at every power of two up to T, and async scheduling on), without the bench row. Not
 #           our served stack: serve-openai serves eager, and the row's Program declares async scheduling off. Under async
@@ -50,6 +51,14 @@ if [ "${1:-}" != leased ]; then
     say "no taps: $HIDDEN_SO, $NORM_TAP_SO"; exit 3
   fi
   mkdir -p "$D"
+  if [ "$ARM" = h1 ]; then
+    export PATH=$HOME/.elan/bin:$PATH
+    command -v lake > /dev/null || curl -sSfL https://raw.githubusercontent.com/leanprover/elan/master/elan-init.sh \
+      | sh -s -- -y --default-toolchain none > "$OUT/lean.txt" 2>&1
+    (cd "$TREE/verity/core/protocols/pouw/lean/check" && lake build pouw-check-difftest) >> "$OUT/lean.txt" 2>&1
+    lrc=$?; say "LEAN pouw-check-difftest built (exit $lrc): $(tail -1 "$OUT/lean.txt" | cut -c1-200)"
+    [ "$lrc" = 0 ] || exit 4
+  fi
   research keep "$ROOT/scratch" --owner @vllm --expires 3d --priority normal \
     --why "vllm-util80 (VLLM-33): serve dirs of the utilization runs (request bodies, outputs, H1 transcripts)" > /dev/null 2>&1
   say "ARM $ARM T $T N $N WARM $WARM row $(basename "$ROW") tree $(git -C "$TREE" rev-parse --short HEAD 2>/dev/null)" \
@@ -68,7 +77,7 @@ fi
 
 # under the lease
 export HF_HOME=/workspace/hf HF_HUB_OFFLINE=1 CUDA_HOME=/usr/local/cuda-13.0
-export PATH=$VENV/bin:$CUDA_HOME/bin:$PATH
+export PATH=$VENV/bin:$CUDA_HOME/bin:$HOME/.elan/bin:$PATH
 export PYTHONPATH=$TREE:$TREE/integrations/vllm:$TREE/tools/research/src
 export TORCH_EXTENSIONS_DIR=$ROOT/cache/torch-extensions TRITON_CACHE_DIR=$ROOT/cache/triton VLLM_CACHE_ROOT=$ROOT/cache/vllm
 export VLLM_BATCH_INVARIANT=1 VERITY_RETAIN=host HIDDEN_GPU_BUILD=$ROOT/cache/jit/hidden_gpu NATIVE_COLLECT_BUILD=$ROOT/cache/jit/nc
