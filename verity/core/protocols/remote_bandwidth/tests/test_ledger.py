@@ -15,7 +15,7 @@ from test_remote_bandwidth import A, N, RTX, SCHEDULE, Clock, Entropy, challenge
 from verity.core import claims
 from verity.core.protocols.remote_bandwidth import audit, codec, ledger, line, receipts, timing
 from verity.core.protocols.remote_bandwidth.audit import Pace, Session
-from verity.core.site import Entry, Loc, Sheet, Site
+from verity.core.site import Auditor, Entry, Loc, Registration, Sheet, Site, check
 from verity.hardware import load
 from verity.hardware import node as hardware
 
@@ -371,6 +371,34 @@ def test_the_node_is_the_sites_node_h_read_off_its_devices_cards() -> None:
         ledger.figures(_site("rtx-pro-6000-server", "h200-sxm-141gb"), "node0", host, open_)
     with pytest.raises(ValueError, match="placeholder"):
         ledger.Node.of_site(_site("h200-sxm-141gb"), "node0", "xeon-platinum-8468-2s")
+
+
+def test_the_lines_reading_of_the_site_is_the_ledgers_on_the_cards() -> None:
+    """The line's inputs off the Site (`line.node_run_json`, which the Lean's `RemoteAudit.Line.ofSite` is held to)
+    are the ledger's on the vy-nebius cards: `Node.of_site`'s rates at the record's codec and its S_chip, and as its
+    memory the HBM and DRAM node0 registers, from a checked log that carries each card's figures beside its sheet."""
+    devices, host, open_ = hardware.VY_NEBIUS
+    sheets = {sku: Sheet.of_file(load(sku)) for sku in dict.fromkeys(devices)}
+    locs = (Loc("site0", "site"), Loc("node0", "host", "site0"), *(x for i, sku in enumerate(devices) for x in (
+        Loc(f"gpu{i}", "device", "node0", sheet=sheets[sku].digest()),
+        Loc(f"hbm{i}", "memory", f"gpu{i}", tier="hbm", bytes=sheets[sku].mem))),
+        Loc("dram0", "memory", "node0", tier="dram", bytes=1 << 40))
+    reg = Registration("remote")
+    reg = reg.append(reg.entry(tuple(sheets.values()), locs))
+    auditor = Auditor.of_files([load(sku) for sku in sheets])
+    figures = hardware.node(devices, host, open_)
+    n = ledger.Node.of_site(check(reg, auditor), "node0", host, open_, disk_bytes_per_s=4.4e9, link_bytes_per_s=5e10)
+    rates = n.rates(codec.DEFAULT)
+    j = {"log": reg.to_json(), "auditor": auditor.to_json(), "host": "node0",
+         "gpus": [{"sku": d.sku, "chip_bytes": d.chip_bytes,
+                   "squarings_per_s": {w: line.text(line.number(q)) for w, q in d.squarings_per_s.items()}}
+                  for d in figures.devices],
+         "host_card": {"chip_bytes": figures.host.chip_bytes, "link_window_bytes": figures.host.link_window_bytes},
+         "stated": {"field": codec.DEFAULT.field.name, "encode_squarings": codec.DEFAULT.encode_squarings,
+                    "disk_bytes_per_s": line.text(line.number(4.4e9)), "link_bytes_per_s": line.text(line.number(5e10)),
+                    "disk_burst_bytes": None, "link_burst_bytes": None}}
+    assert line.node_run_json(j) == {"chip_bytes": n.chip_bytes, "node_bytes": 8 * sheets[devices[0]].mem + (1 << 40),
+                                     "rates": rates.to_json()}
 
 
 def test_the_sketch_charges_the_outside_factor_the_node_states(store) -> None:

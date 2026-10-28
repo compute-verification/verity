@@ -66,10 +66,10 @@ def figures(site: Site, h: str, host: str, placeholders: Sequence[str] = ()) -> 
     figure it isn't told to read."""
     n = site.node(h)
     if n is None:
-        raise ValueError(f"{h!r} is no host the Site registers")
+        raise ValueError(f"{h} is no host the Site registers")
     skus = [n.sheet(d).sku for d in n.units]
     if not skus:
-        raise ValueError(f"host {h!r} holds no device the Site registers")
+        raise ValueError(f"host {h} holds no device the Site registers")
     return hardware.node(skus, host, placeholders)
 
 

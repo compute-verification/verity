@@ -45,6 +45,8 @@ from dataclasses import dataclass
 from fractions import Fraction
 from typing import Any
 
+from verity.core import site
+
 from . import audit, codec, pooled
 from . import receipts as _receipts
 from .audit import RECEIPT_LIMIT
@@ -675,3 +677,57 @@ def record_run_json(j: Mapping) -> dict:
         return line_of_record(**args).to_json()
     except Refused as e:
         return {"refused": str(e)}
+
+
+def node_run_json(j: Mapping) -> dict:
+    """The line's inputs off the Site (`RemoteAudit.Line.ofSite`, `remote-audit-difftest`'s `node`), as
+    `ledger.Node.of_site` reads them: host `host`'s node in the Site its `log` folds to (`site.check` against
+    `auditor`), each device by the SKU its sheet names with that SKU's card figures (`gpus`: `chip_bytes` and
+    `squarings_per_s` by width), the host card's (`host_card`: `chip_bytes` and `link_window_bytes`) and the run's
+    statements (`stated`).  Its rates are the devices' squarings at `stated.field` summed, the stated encode, disks and
+    links, a rebuild's burst S_chip, the disks' one second unless stated and the links' one host link window where they
+    are charged unless stated; `chip_bytes` is S_chip, the devices' and the host's, and `node_bytes` the node's HBM and
+    DRAM leaves.  `{"refused": why}` where there are none."""
+    reg, auditor = site.Registration.of_json(_field(j, "log")), site.Auditor.of_json(_field(j, "auditor"))
+    gpus: dict[str, tuple[int, dict[str, Fraction]]] = {}
+    for g in reversed(_field(j, "gpus")):
+        sq = _field(g, "squarings_per_s")
+        if not isinstance(sq, Mapping):
+            raise Malformed("squarings_per_s: not an object")
+        gpus[_field(g, "sku")] = (_nat(g, "chip_bytes"), {w: _rational(sq, w) for w in sq})
+    hc, st = _field(j, "host_card"), _field(j, "stated")
+    host_chip, window = _nat(hc, "chip_bytes"), Fraction(_nat(hc, "link_window_bytes"))
+    field, encode = _field(st, "field"), _nat(st, "encode_squarings")
+    disk, link = _rational(st, "disk_bytes_per_s"), _rational(st, "link_bytes_per_s")
+    disk_burst, link_burst = (None if _field(st, k) is None else _rational(st, k)
+                              for k in ("disk_burst_bytes", "link_burst_bytes"))
+    h = _field(j, "host")
+    try:
+        s = site.check(reg, auditor)
+    except site.Refused as e:
+        return {"refused": f"the Site's log is refused at entry {e.entry}: {e.name}"}
+    n = s.node(h)
+    if n is None:
+        return {"refused": f"{h} is no host the Site registers"}
+    if not n.units:
+        return {"refused": f"host {h} holds no device the Site registers"}
+    fs = []
+    for d in n.units:
+        k = n.sheet(d)
+        if k is None:
+            return {"refused": f"device {d} names no registered sheet"}
+        if k.sku not in gpus:
+            return {"refused": f"no card figures for {k.sku}"}
+        fs.append(gpus[k.sku])
+    if any(field not in sq for _, sq in fs):
+        return {"refused": f"the node states no squaring ceiling at {field}, the record's codec's width"}
+    for name, q in (("disk_bytes_per_s", disk), ("link_bytes_per_s", link), ("disk_burst_bytes", disk_burst or 0),
+                    ("link_burst_bytes", link_burst or 0)):
+        if q < 0:
+            return {"refused": f"{name} is nonnegative"}
+    chip = sum(c for c, _ in fs) + host_chip
+    tiers = s.tiers(h)
+    rates = Rates(sum((sq[field] for _, sq in fs), Fraction(0)), encode, disk, link, Fraction(chip),
+                  disk if disk_burst is None else disk_burst,
+                  (window if link else Fraction(0)) if link_burst is None else link_burst)
+    return {"chip_bytes": chip, "node_bytes": tiers["hbm"] + tiers["dram"], "rates": rates.to_json()}

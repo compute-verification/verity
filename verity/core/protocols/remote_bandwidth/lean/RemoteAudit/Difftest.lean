@@ -554,6 +554,47 @@ def lineFn (j : Json) : V Json := do
   pure (lineJ (Line.line groups (← nat j "per") (← nat j "blocks") (← nat j "block_bytes") (← nat j "chip_bytes")
     (← nat j "node_bytes") (← windowsOf j) (← ratIn j "delta" "input") (← ratesOf j)))
 
+private def ratsOf (j : Json) (k ctx : String) : V (List (String × Rat)) := do
+  match ← J.get j k ctx with
+  | v@(.obj kvs) => kvs.toList.mapM fun ⟨w, _⟩ => do pure (w, ← ratIn v w s!"{ctx}.{k}")
+  | _ => throw s!"{ctx}.{k}: not an object"
+
+private def ratOpt (j : Json) (k ctx : String) : V (Option Rat) := do
+  match ← J.get j k ctx with
+  | .null => pure none
+  | _ => some <$> ratIn j k ctx
+
+private def ratesJ (r : Line.Rates) : Json :=
+  Json.mkObj ([("encode_squarings", toJson r.encodeSquarings)] ++ r.named.map fun (k, q) => (k, ratJ q))
+
+/-- `line.node_run_json`: host `host`'s line inputs off the Site of `{"log", "auditor"}` (`Core.Site.Registration.check`
+at the deployed digests, refused at the first entry it refuses), its devices' card figures by SKU (`gpus`), its host
+card's (`host_card`) and the run's statements (`stated`): `Line.ofSite`'s rates, `chip_bytes` and `node_bytes`, or why
+it has none. -/
+def nodeFn (j : Json) : V Json := do
+  let (c, log) ← Core.Site.Registration.ofJson (← J.get j "log" "input")
+  let A ← Core.Site.Registration.Auditor.ofJson (← J.get j "auditor" "input")
+  let gpus ← (← J.arr j "gpus" "input").toList.mapM fun g => do
+    let sku ← J.str g "sku" "a gpu"
+    let f : Line.GpuFigures :=
+      { chipBytes := ← J.nat g "chip_bytes" "a gpu", squaringsPerS := ← ratsOf g "squarings_per_s" "a gpu" }
+    pure (sku, f)
+  let hc ← J.get j "host_card" "input"
+  let host : Line.HostFigures :=
+    { chipBytes := ← J.nat hc "chip_bytes" "host_card", linkWindowBytes := ← J.nat hc "link_window_bytes" "host_card" }
+  let s ← J.get j "stated" "input"
+  let st : Line.Stated :=
+    { field := ← J.str s "field" "stated", encodeSquarings := ← J.nat s "encode_squarings" "stated",
+      diskBytesPerS := ← ratIn s "disk_bytes_per_s" "stated", linkBytesPerS := ← ratIn s "link_bytes_per_s" "stated",
+      diskBurstBytes := ← ratOpt s "disk_burst_bytes" "stated", linkBurstBytes := ← ratOpt s "link_burst_bytes" "stated" }
+  let h ← J.str j "host" "input"
+  let D := Core.Site.Registration.sha512
+  pure (refusedOr (match Core.Site.Registration.check D A c log with
+    | .error (i, r) => .error s!"the Site's log is refused at entry {i}: {r.name}"
+    | .ok S => (fun (x : Line.Inputs) => Json.mkObj [("chip_bytes", toJson x.chipBytes),
+        ("node_bytes", toJson x.nodeBytes), ("rates", ratesJ x.rates)]) <$>
+      Line.ofSite S D.sheet h (fun k => (gpus.find? (·.1 == k)).map (·.2)) host st))
+
 private def natsOf (j : Json) (k : String) : V (Array Nat) := do (← J.arr j k "window").mapM (J.asNat · k)
 
 private def hexOrNull (j : Json) (ctx : String) : V (Option ByteArray) := do
@@ -755,7 +796,7 @@ def table : String → Option _root_.Difftest.Fn := _root_.Difftest.table [
   ("leaf_receipt", leafReceiptFn), ("draws", drawsFn), ("schedule", scheduleFn),
   ("pin", pinFn), ("canonical_json", canonicalJsonFn), ("checkpoint_sha512", checkpointFn),
   ("store_salt", storeSaltFn), ("expected_root", expectedRootFn), ("hold", holdFn), ("binding", bindingFn),
-  ("line", lineFn), ("line_record", lineRecordFn), ("pooled", pooledFn),
+  ("line", lineFn), ("line_record", lineRecordFn), ("node", nodeFn), ("pooled", pooledFn),
   ("p2_registration_digest", p2RegistrationDigestFn), ("p2_sketch", p2SketchFn), ("p2_opening", p2OpeningFn)]
 
 end RemoteAudit.Difftest
