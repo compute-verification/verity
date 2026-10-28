@@ -18,25 +18,17 @@ Sampled proofs' one-stage audit as a `Core.Protocol` (`one_stage.audit.audit_rec
   none registered; and `row_schemas`, the ones whose rows are not `row/v1` rows (`{value: schema}`, each of a value it
   expects registered and doesn't fill, one of `Registered.SCHEMAS`), which R7 counts a row's leaves in, refused in any
   other form; and it may add `binding`, `{"stream", "prover"}`: its stream's digest (lowercase hex of 64 bytes) and the
-  identity it registered the prover under (lowercase hex of whole bytes), refused in any other form; and it may add
-  `challenger`, `{"key", "label"}`: the auditor's challenger the draw's coins come from (its LMS key,
-  `ChallengerKey.ofJson`) and the family they are drawn from, which needs `window_root`, refused in any other form;
+  identity it registered the prover under (lowercase hex of whole bytes), refused in any other form;
 * **commitment**: the registration record, canonical JSON, fixed before the draw; its digest is
   `SHA-512(format || 0 || canon(record))` (`Registration.digest`), which the receipt names;
 * **evidence**: canonical JSON with exactly `receipt`, `draw` (the verifier's draw), `proved_units`, `instances`,
   `statement`, `verdicts` (`{name: {"accepted": true | false | null, "of_record", ...}}`, each verifier's verdict on the
   drawn units' sessions; one of record that accepted may report the roots it opened the sessions' registered reads
   against, `"registered": {port: {"value": string, "root"}}`), `sessions`, `served` and `session_roots` (each null when
-  absent), and `coins` when the parameters name a challenger: the evidence of the draw's coins
-  (`Challenger.drawCoins`'s, `{ledger, main, pins, segment, session}`);
-* **coins** (`coinsOf`): with a challenger, the coins `Challenger.drawCoins` reads from the evidence's `coins` under the
-  parameters' key, on their window, of their family, released after the registration's digest, refused when they don't
-  read; without one, none, and evidence that carries coins is refused;
-* **check** (`checkLive`, at the coins `checkAt`): with coins, that the draw's units are the ones their raw bytes draw
-  under the law (`drawnFrom`), every coin opened read (`coinsWhy`); then (`check`) R1–R7 (`Registration.check`), then the
-  record's checks (`Record.checks`: the draw, the proved units, the receipt, the served draw, the sessions' roots, and the
-  roots the verifiers of record report opening the sessions' registered reads against, `Record.sessionRegistered`, each
-  the registered one). It rejects when one fails or
+  absent);
+* **check**: R1–R7 (`Registration.check`), then the record's checks (`Record.checks`: the draw, the proved units, the
+  receipt, the served draw, the sessions' roots, and the roots the verifiers of record report opening the sessions'
+  registered reads against, `Record.sessionRegistered`, each the registered one). It rejects when one fails or
   a verdict that ran did not accept; it is undecided when they all hold but no verifier of record accepted because none
   is named or one has not run; and it accepts exactly when `audit_record` does;
 * on acceptance, **public** is the drawn and proved units with the exact bounds on wrong units at δ (`Bound.boundOf`,
@@ -45,10 +37,8 @@ Sampled proofs' one-stage audit as a `Core.Protocol` (`one_stage.audit.audit_rec
 -/
 import CoreProtocol.Cli
 import CoreProtocol.Profile
-import CoreProtocol.Live
 import SampledProofs.Registration
 import SampledProofs.Record
-import SampledProofs.ChallengerDraw
 
 namespace SampledProofs.OneStage
 
@@ -58,8 +48,6 @@ open Flock (V)
 structure Params where
   verifier : Registration.Verifier
   delta : Core.Ratio
-  /-- the auditor's challenger the draw's coins come from, and their family; none when the verifier draws from its own -/
-  challenger : Option (Challenger.ChallengerKey × String) := none
 
 structure Commitment where
   record : Json
@@ -75,7 +63,6 @@ structure Evidence where
   sessions : Array String
   served : Option (Array Nat)
   sessionRoots : Option Json
-  coins : Json := Json.null
 
 structure Public where
   drawn : Array Nat
@@ -133,7 +120,6 @@ def paramsOfJson (j : Json) : V Params := do
   let keys := if (field? j "row_schemas").isSome then keys.push "row_schemas" else keys
   let keys := if (field? j "window_root").isSome then keys.push "window_root" else keys
   let keys := if (field? j "held").isSome then keys.push "held" else keys
-  let keys := if (field? j "challenger").isSome then keys.push "challenger" else keys
   exactly j (if (field? j "binding").isSome then keys.push "binding" else keys) "the parameters"
   let program ← Program.parse (← Flock.canon (← obj (getD j "program") "program")).toUTF8
   let query ← obj (getD j "query") "query"
@@ -217,14 +203,6 @@ def paramsOfJson (j : Json) : V Params := do
     | .null => pure none
     | .str r => if r.length == 128 && isHex r then pure (some r) else throw "a window root is lowercase hex of 64 bytes"
     | _ => throw "a window root is lowercase hex of 64 bytes"
-  let challenger ← match field? j "challenger" with
-    | none => pure none
-    | some ch => do
-      exactly ch #["key", "label"] "the challenger"
-      let .str label := getD ch "label" | throw "the challenger's label is not a string"
-      let key ← Challenger.ChallengerKey.ofJson (getD ch "key")
-      if windowRoot.isNone then throw "a draw from the challenger's coins needs the window's open root (window_root)"
-      pure (some (key, label))
   let held ← match getD j "held" with
     | .null => pure #[]
     | .arr vs => vs.mapM fun v => match v with
@@ -236,7 +214,7 @@ def paramsOfJson (j : Json) : V Params := do
   if delta.num == 0 || delta.den ≤ delta.num then throw "delta is not in (0, 1)"
   let p : Params := { verifier := { program, query, law, workTable, scheme, ports, leafLayer, anchors, log, partition,
                                     registered, params, supplied, pinned, outputs, binding, schemas, windowRoot, held },
-                      delta, challenger }
+                      delta }
   let again := Registration.unwindowed p.verifier
   if !again.isEmpty then
     throw (s!"registered values {again.toList} were registered by an earlier record of the log under the domains they " ++
@@ -252,9 +230,8 @@ def commitmentOf (b : ByteArray) : V Commitment := do
 
 def evidenceOf (b : ByteArray) : V Evidence := do
   let j ← Core.canonicalJson b
-  let keys := #["draw", "instances", "proved_units", "receipt", "served", "session_roots", "sessions", "statement",
-    "verdicts"]
-  exactly j (if (field? j "coins").isSome then keys.push "coins" else keys) "the evidence"
+  exactly j #["draw", "instances", "proved_units", "receipt", "served", "session_roots", "sessions", "statement",
+    "verdicts"] "the evidence"
   let some instances := nat? (getD j "instances") | throw "instances is not a natural number"
   let verdicts ← (entries (← obj (getD j "verdicts") "verdicts")).mapM fun (n, v) => do pure (n, ← obj v s!"verdict {n}")
   if !verdicts.all fun (_, v) =>
@@ -274,7 +251,7 @@ def evidenceOf (b : ByteArray) : V Evidence := do
            served := ← match getD j "served" with
              | .null => pure none
              | x => some <$> nats x "served",
-           sessionRoots := ← opt "session_roots" (obj · "session_roots"), coins := getD j "coins" }
+           sessionRoots := ← opt "session_roots" (obj · "session_roots") }
 
 /-- `audit_record`'s checks after the draw's (`Record.checks`): the names of those that fail. The registered roots the
 sessions' reads were opened against are the verdicts' own (`Record.sessionRegistered`), for the registration's own
@@ -301,38 +278,6 @@ def verdictOf (verdicts : Array (String × Json)) : Core.Outcome Unit Unit :=
   | some (name, _) => .undecided s!"the verifier of record {name} has not run"
   | none => .accept () ()
 
-/-- The coins the draw read (module docstring, **coins**): with the parameters' challenger, what `Challenger.drawCoins`
-reads from the evidence's `coins` under its key, on the verifier's window, of its family, released after the
-registration's digest; none without one, when the evidence carries no coins. -/
-def coinsOf (p : Params) (c : Commitment) (e : Evidence) : V (Option ByteArray) :=
-  match p.challenger, p.verifier.windowRoot with
-  | some (key, label), some w =>
-    (some <$> Challenger.drawCoins key w label c.digest e.coins).mapError (s!"coins: {·}")
-  | some _, none => throw "coins: a draw from the challenger's coins needs the window's open root (window_root)"
-  | none, _ => if e.coins matches .null then pure none
-    else throw "coins: the evidence carries coins, and the verifier names no challenger they come from"
-
-/-- The draw the coins `src` give over `population` units under the expanded `law` (`Select.select`'s for a law rule):
-its units, and the number of bytes of `src` it read. -/
-def drawnFrom (v : Registration.Verifier) (law : Json) (population : Nat) (src : ByteArray) : V (Array Nat × Nat) := do
-  let derived ← Draw.deriveLaw v.program v.query v.law v.workTable
-  Draw.drawUnits (derived.getD (← Draw.flockLaw law population)) population src
-
-/-- Why the draw is not the one the coins `src` give under `law` (`drawnFrom`), every coin opened read; none when it is. -/
-def coinsReason (v : Registration.Verifier) (law rec_ draw : Json) (src : ByteArray) : Option String :=
-  match nat? (getD rec_ "population") with
-  | none => some "the record names no population"
-  | some n => match drawnFrom v law n src with
-    | .error why => some why
-    | .ok (units, read) =>
-      let drawn := match getD draw "units" with | .arr us => us.filterMap nat? | _ => #[]
-      if units != drawn then some "the draw's units are not the ones the challenger's coins draw"
-      else if (read + Challenger.COIN_BYTES - 1) / Challenger.COIN_BYTES != src.size / Challenger.COIN_BYTES then
-        some s!"the draw read {read} bytes of {src.size / Challenger.COIN_BYTES} coins: a coin opened and not read"
-      else none
-
-/-- R1–R7, the draw's checks, the record's checks and the verdicts (module docstring, **check**), at no coins: the
-check `checkAt` runs once the coins drew the draw. -/
 def check (p : Params) (c : Commitment) (e : Evidence) : Core.Outcome Public Core.Integrity :=
   let v := p.verifier
   let rec_ := c.record
@@ -364,25 +309,6 @@ def check (p : Params) (c : Commitment) (e : Evidence) : Core.Outcome Public Cor
         delta := p.delta, drawn := #[(Record.LEVEL, units.size)] }
   | _, _ => .reject "the law the draw passed under has no profile"
 
-/-- Why the draw is not the one the coins `src` give under the verifier's law as derived (`coinsReason`); none when it
-is, and when the law doesn't derive, which `check` refuses. -/
-def coinsWhy (p : Params) (c : Commitment) (e : Evidence) (src : ByteArray) : Option String :=
-  let v := p.verifier
-  match Draw.derive v.program v.query v.law v.workTable with
-  | .ok law => coinsReason v law c.record e.draw src
-  | .error _ => none
-
-/-- The check at the coins `ξ` (module docstring, **check**): with coins, a refusal when they don't draw the draw
-(`coinsWhy`), then `check`. -/
-def checkAt (p : Params) (c : Commitment) (ξ : Option ByteArray) (e : Evidence) : Core.Outcome Public Core.Integrity :=
-  match ξ.bind (coinsWhy p c e) with
-  | some why => .reject s!"draw: coins: {why}"
-  | none => check p c e
-
-/-- The audit's check: at the coins `coinsOf` reads (`checkAt`), refused with its reason when none read. -/
-def checkLive (p : Params) (c : Commitment) (e : Evidence) : Core.Outcome Public Core.Integrity :=
-  Core.atCoins (coinsOf p c e) (fun ξ => checkAt p c ξ e)
-
 def publicJson (x : Public) : Json :=
   Json.mkObj [("drawn", natsJson x.drawn), ("proved", natsJson x.proved),
     ("bound", Lean.toJson x.bound),
@@ -401,15 +327,8 @@ def protocol : Core.Protocol where
   commitment := commitmentOf
   evidence := evidenceOf
   digest c := c.digest
-  check := checkLive
+  check := check
   publicJson := publicJson
   profileJson := Core.Integrity.toJson
-
-/-- The audit reads its draw's coins (`coinsOf`) and decides at them (`checkAt`). -/
-def live : Core.Live protocol where
-  Coins := Option ByteArray
-  coins := coinsOf
-  checkAt := checkAt
-  factors _ _ _ := rfl
 
 end SampledProofs.OneStage
