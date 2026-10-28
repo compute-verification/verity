@@ -4,7 +4,7 @@ import Proofs.Core.Game.Prob
 /-! `Nci.SecurityProofs.CapabilityFloor : Nci.Guarantees.CapabilityFloor`: below `min Lc Tmax`, a computation in `𝒜`
 has no covered structure (each costs at least `Lc`), so its success there is among coverage's uncovered successes below
 `Tmax`. Its witnesses (`CapabilityFloorHonest`, `CapabilityFloorNontrivial`) are proved at the toy task
-`Accounting.Overhead.Toy`: a position holds one gate, so a run reaches at most one of the coin's two targets, and the
+`Accounting.Slowdown.Toy`: a position holds one gate, so a run reaches at most one of the coin's two targets, and the
 guess reaches one. -/
 
 /-- **Covered success below the floor is rare** (`Nci.Guarantees.CapabilityFloor`). -/
@@ -15,7 +15,7 @@ theorem Nci.SecurityProofs.CapabilityFloor : Nci.Guarantees.CapabilityFloor := b
   exact ⟨hA, hS, lt_of_lt_of_le hc (min_le_right _ _),
     fun hCore => absurd (hfloor C p.1 hA hCore) (not_le.2 (lt_of_lt_of_le hc (min_le_left _ _)))⟩
 
-namespace Accounting.Overhead.Toy
+namespace Accounting.Slowdown.Toy
 
 open scoped ENNReal
 
@@ -56,16 +56,16 @@ theorem prob_pos (E : Unit → Set (Fin 1 → List Bool) → Prop) (h : E () {y 
   rw [prob_eq]
   simp [h]
 
-end Accounting.Overhead.Toy
+end Accounting.Slowdown.Toy
 
 /-- **`CapabilityFloor`'s premises hold together** (`Nci.Guarantees.CapabilityFloorHonest`). -/
 theorem Nci.SecurityProofs.CapabilityFloorHonest : Nci.Guarantees.CapabilityFloorHonest := by
-  refine ⟨fun C pos => Accounting.Overhead.Toy.prob_le_half _ fun h =>
-      Accounting.Overhead.Toy.not_both (C ()) pos ⟨h.1.2.1, h.2.2.1⟩,
-    fun _ _ _ h => h, fun h => Accounting.Overhead.Toy.prob_pos _ ?_ (h Accounting.Overhead.Toy.comp
-      Accounting.Overhead.Toy.pos)⟩
-  exact ⟨Set.mem_univ _, Accounting.Overhead.Toy.guess_succeeds, (by decide : 1 < 10), (by decide : ¬ 2 ≤ 1)⟩
+  refine ⟨fun C pos => Accounting.Slowdown.Toy.prob_le_half _ fun h =>
+      Accounting.Slowdown.Toy.not_both (C ()) pos ⟨h.1.2.1, h.2.2.1⟩,
+    fun _ _ _ h => h, fun h => Accounting.Slowdown.Toy.prob_pos _ ?_ (h Accounting.Slowdown.Toy.comp
+      Accounting.Slowdown.Toy.pos)⟩
+  exact ⟨Set.mem_univ _, Accounting.Slowdown.Toy.guess_succeeds, (by decide : 1 < 10), (by decide : ¬ 2 ≤ 1)⟩
 
 /-- **`CapabilityFloor`'s conclusion can fail** (`Nci.Guarantees.CapabilityFloorNontrivial`). -/
 theorem Nci.SecurityProofs.CapabilityFloorNontrivial : Nci.Guarantees.CapabilityFloorNontrivial :=
-  Accounting.Overhead.Toy.prob_pos _ ⟨Set.mem_univ _, Accounting.Overhead.Toy.guess_succeeds, by decide⟩
+  Accounting.Slowdown.Toy.prob_pos _ ⟨Set.mem_univ _, Accounting.Slowdown.Toy.guess_succeeds, by decide⟩

@@ -12,12 +12,13 @@ each bound's premises holding together, and its conclusion failing where a premi
 * `1`, an unregistered input: the token's operand;
 * `2` and `3`, each `0 ∧ 1`: the product, and a second gate computing it again.
 
-The registration `R1` puts the computed gates in one proof block, a `(2, 1)`-partition (two gates, the token its one
-unregistered input bit); `R2` puts each in its own. One counted product (`B`) multiplies the weight (`W`, its slot) by
-the token (`O`, its operand) at gate `2`; its use is the one consumer of `K`, whose region and required gate are the
-token. The item `Y p` is the product's value at gate `2` priced `p`, and `Y2 p` its value at both gates `2` and `3`.
-The decoder `M` has programs of four lengths, and compresses: it describes `11`, the value of gates `2` and `3` when the
-token is set, in one bit, and every other two-bit string in three. The run distribution `μ` draws the token uniformly.
+The committed declaration `R1` puts the computed gates in one proof block, a `(2, 1)`-partition (two gates, the token
+its one unregistered input bit); `R2` puts each in its own. One counted product (`B`) multiplies the weight (`W`, its
+slot) by the token (`O`, its operand) at gate `2`; its use is the one consumer of `K`, whose region and required gate
+are the token. The item `Y p` is the product's value at gate `2` priced `p`, and `Y2 p` its value at both gates `2`
+and `3`. The decoder `M` has programs of four lengths, and compresses: it describes `11`, the value of gates `2` and `3`
+when the token is set, in one bit, and every other two-bit string in three. The run distribution `μ` draws the token
+uniformly.
 -/
 
 namespace Nci.Capability.Toy
@@ -57,15 +58,15 @@ def P2 : Partition C 2 where
   unit := fun g => if g.val < 2 then none else if g.val = 2 then some 0 else some 1
   input_iff := by decide
 
-/-- The registration with one proof block, the weight registered as `1`. -/
-@[reducible] def R1 : Registration where
+/-- The committed declaration with one proof block, the weight registered as `1`. -/
+@[reducible] def R1 : Committed where
   d := D
   val := fun _ => (1 : BitVec 1)
   B := 1
   P := P1
 
-/-- The registration with two proof blocks. -/
-@[reducible] def R2 : Registration where
+/-- The committed declaration with two proof blocks. -/
+@[reducible] def R2 : Committed where
   d := D
   val := fun _ => (1 : BitVec 1)
   B := 2

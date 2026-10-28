@@ -1,4 +1,4 @@
-import Definitions.Accounting.Overhead
+import Definitions.Accounting.Slowdown
 
 /-!
 # The floor's toy instance
@@ -10,7 +10,7 @@ a run's gate count. A guess, the one-gate run writing a fixed bit at the output 
 reaches the target on half the coins; no computation does better, since a position holds one gate.
 -/
 
-namespace Accounting.Overhead.Toy
+namespace Accounting.Slowdown.Toy
 
 open Accounting
 
@@ -56,4 +56,4 @@ def covered : (Unit → Actual.Run Unit) → Unit → Prop := fun C x => 2 ≤ (
 /-- The cost: a run's gate count. -/
 def cost : Actual.Run Unit → ℕ := fun R => R.A.N
 
-end Accounting.Overhead.Toy
+end Accounting.Slowdown.Toy

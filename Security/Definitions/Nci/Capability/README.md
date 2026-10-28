@@ -11,7 +11,7 @@ enter the security argument is `Security/README.md`, part 2.
 
 | Object | Symbol | Lean | Meaning |
 |---|---|---|---|
-| Registration | R | `Verity.Registration` | the declared circuit, the registered values θ, and a partition into B blocks |
+| Committed declaration | R | `Verity.Committed` | the declared circuit, the registered values θ, and a partition into B blocks |
 | Block | I | `Verity.Partition.IsCK` | c gates, at most k fresh bits; its **view** is those bits and its index |
 | Decoder budget | t | `Verity.LDL` | the time a reconstruction may take |
 | Item family | X | `Nci.Capability.Items` | things a block may hold; each item has **cells** (the gates of one version of its value) and a **price** p_i in bits |
@@ -144,7 +144,7 @@ when no block holds anything.
 Each bound has two witnesses, listed under the lock's `witnesses` and proved: an honest one, its premises holding
 together, and a nontrivial one, its conclusion failing where a premise is dropped. They are stated at the toy circuit
 `Nci.Capability.Toy` (four one-bit gates, one counted product; `Guarantees/Capability/Witnesses.lean`), and
-`CapabilityFloor`'s at the toy task `Accounting.Overhead.Toy`. The structural premises are proved there, and so are the
+`CapabilityFloor`'s at the toy task `Accounting.Slowdown.Toy`. The structural premises are proved there, and so are the
 information premises, none degenerately. `MinEntropyHard` holds at Λ = 0 for the product's value, a uniform bit. The toy
 decoder compresses: it describes `11`, the value of gates 2 and 3 in an honest run, in one bit, and every other two-bit
 string in three. Against it `DescriptionHard` holds at Λ = 1, `SourceHard` at δ = 1 and `Recovers` at amb = 1, and each

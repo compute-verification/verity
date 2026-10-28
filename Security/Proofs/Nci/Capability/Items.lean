@@ -7,7 +7,7 @@ import Proofs.Core.Formalism
 * `holds_mono`: more gates hold more;
 * `exists_selection`: the items a family of products reads, each among what its own gates hold, have a selection held by
   any gates containing those products;
-* `Registration.recompute_congr`: a proof block's recomputation, on what it holds, reads only `X`'s values on its
+* `Committed.recompute_congr`: a proof block's recomputation, on what it holds, reads only `X`'s values on its
   unregistered inputs;
 * `Circuit.bits_congr`: two runs agreeing on a bundle's gates give it the same bits.
 -/
@@ -51,7 +51,7 @@ theorem Circuit.bits_congr (C : Circuit) {X Y : C.Transcript} {l : List (Fin C.N
     simp only [Circuit.bits, List.flatMap_cons] at ih ⊢
     rw [h g List.mem_cons_self, ih fun x hx => h x (List.mem_cons_of_mem g hx)]
 
-theorem Registration.recompute_congr (R : Registration) {X Y : R.d.D.Transcript} {u : Fin R.B}
+theorem Committed.recompute_congr (R : Committed) {X Y : R.d.D.Transcript} {u : Fin R.B}
     (h : ∀ g ∈ R.d.unregistered (R.P.gates u), X g = Y g) :
     ∀ g ∈ Nci.Capability.holds R.d.D (R.P.gates u), R.recompute X u g = R.recompute Y u g := by
   intro g

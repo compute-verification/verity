@@ -83,8 +83,9 @@ EVIDENCE | serve` (`RemoteMain.lean`). The Lake package `core_remote` is code: i
 1. **Setup phase**, once, before any coin. The public parameters are fixed: the protocol and its version, the sampling
    design and δ, and the size classes. The developer commits to its registered compiler B and its registered
    information θ (for example, model weights), and registers each subprotocol's public Program and parameters, by
-   digest. In today's Lean the registration is R = (θ, D, 𝓘) (`Verity.Registration`): the registered circuit D and its
-   (c, k)-partition 𝓘 into inference blocks, which the compiler's execution blocks extend.
+   digest. In today's Lean the registration is the log the Site is folded from (`Verity.Registration`), and the
+   committed declaration R = (θ, D, 𝓘) (`Verity.Committed`) is the registered circuit D and its (c, k)-partition 𝓘
+   into inference blocks, which the compiler's execution blocks extend.
 2. **Execution phase.** The hardware runs and the developer reports its advice a_j, a bit string of public length cap
    whose length is charged as leakage. The registered compiler turns it into the phase's execution block E_j, its
    partition into proof blocks and its inference partition 𝓘_j, appended to the registered circuit. Every value in the
@@ -152,7 +153,7 @@ else is a theorem or a named gap.
 | Matrix products | Nobody multiplies the protocol's random noised matrices faster than the known way. Only noised calls are credited: the premise is over random operands, never ones the prover chooses. | `OperandHMu`, `FoldOpt`, `FillOpt` | A faster algorithm for random matrix products refutes it. |
 | PoUW's receipts | A skipped round passes its receipt, or a guessed fold state passes, only at the stated rate. Conjectured, as their docstrings say. | `ReceiptLuckAt`, `GuessLuckAt` | Believed because each receipt folds committed accumulator words under a key fixed after the commitment; search for a skipped round or a fold-state guess that passes more often than the rate. |
 | Enforcement | Sampled proofs catch each faulty proof block with probability at least q_det, whatever came before, and a detected cheat ends its identity and takes its hardware out of use within Δ. | `Nci.Assumptions.SampledDetection`, `Nci.Assumptions.TerminalDetection` | The first is what part 2's sample gives, not yet derived from it in Lean. The second is the auditor's policy: check that a refusal triggers it. |
-| The baseline | The data the registration names was public, not computed off the books before. | `Nci.Assumptions.BaselineRegistered` | Check the registered data's provenance: each named dataset or model is public, by its digest. |
+| The baseline | The data the registration names was public, not computed off the books before. | `Nci.Assumptions.ThetaRegistered` | Check the registered data's provenance: each named dataset or model is public, by its digest. |
 | Learning, 1: fresh weights are hard to hold | After enough training since registration, a short program that runs no longer than a block may run can't reproduce many freshly trained weight values: each costs about p bits, even to a program that knows the registered model and may replay a little training. | `Nci.Assumptions.DescriptionHard` | Compress the update: on adversarially chosen sets of updated weights, find the shortest program that outputs them within the time budget (codecs, low-rank fits, predictors from the registered model, short replays). A program well under p bits a weight refutes the price. |
 | Learning, 2: no cheap way around it | Any way of reaching the target, at a cost worth ruling out, repeatedly combines freshly trained weights with fresh per-token values. | `Nci.Assumptions.CoversEfficientMethods` | Try to reach the target cheaply without that: small adapters, independently trained small experts, distillation from the served model, frozen features. A cheap success refutes it at that target. |
 
@@ -263,7 +264,7 @@ expansion meets it at Γ·W gates. The Lean slowdown bound `DampenerRemote` inst
   form replaces it.
 
 **Assumes.** The data the registration names was public, not computed off the books before
-(`Nci.Assumptions.BaselineRegistered`; only part 6 reads its Lean form); the verifier's copy of the registration log
+(`Nci.Assumptions.ThetaRegistered`; only part 6 reads its Lean form); the verifier's copy of the registration log
 is the deployment's; SHA-512 collision resistance, for the one-registration tie; and that the registered roots bind
 their data (`RootsBind`, named in `BaselineProvenance`'s docstring, not yet stated). Nothing
 about learning: the policy restricts the shape of the registered circuit, and part 6's premises say why that shape
@@ -518,7 +519,7 @@ The slowdown, `DampenerRemote`:
   - `Nci.Assumptions.SampledDetection`: sampled proofs catch each faulty proof block with probability at least q,
     whatever came before.
   - `Nci.Assumptions.TerminalDetection`: a detected cheat ends its identity and takes its hardware out of use within Δ.
-- `Nci.Assumptions.BaselineRegistered` (`Security/Definitions/Nci/Assumptions/Baseline.lean`): the data the
+- `Nci.Assumptions.ThetaRegistered` (`Security/Definitions/Nci/Assumptions/Baseline.lean`): the data the
   registration names was public, not computed off the books before.
 - `Nci.Assumptions.WeightsIncompressible` (`Security/Definitions/Nci/Assumptions/Threads.lean`): no small subcircuit
   rebuilds the weights it uses from fewer bits than their width. It is the older form, which the local bounds below
