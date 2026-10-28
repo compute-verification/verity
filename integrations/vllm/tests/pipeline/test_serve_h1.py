@@ -181,7 +181,7 @@ def test_each_window_draws_its_coins_from_a_gate_session_of_its_own(tmp_path, mo
     key (`pouw_h1.WEIGHT_KEY`), raw or in hex."""
     srv, auditor = _Server(monkeypatch), _GateAuditor(tmp_path, monkeypatch)
     ports: list[int] = []
-    sessions = SH.GateSessions(CC.Gate(GATE, auditor.run), PEER, STEPS, wait=auditor.settle,
+    sessions = SH.GateSessions(CC.ChallengerGate(GATE, auditor.run), PEER, STEPS, wait=auditor.settle,
                                listens=lambda port: ports.append(port) or True)
     arm = SH.H1Windows(srv.model, srv.com, ROWS, STEPS, engine=object(), out=tmp_path, unit=_unit(), sessions=sessions)
     assert (arm.describe()["coins"], arm.describe()["peer"]) == ("challenger", PEER)
@@ -216,7 +216,7 @@ def test_a_window_whose_reserve_the_gate_refuses_installs_nothing(tmp_path, monk
     """The gate refuses the window's reserve: its open raises the refusal before any tap or hook goes on, so the Commit
     serves on and the window's line carries the error."""
     srv = _Server(monkeypatch)
-    sessions = SH.GateSessions(CC.Gate(GATE, lambda argv: (3, json.dumps({"refused": "--peer 'x': one of []"}))), PEER,
+    sessions = SH.GateSessions(CC.ChallengerGate(GATE, lambda argv: (3, json.dumps({"refused": "--peer 'x': one of []"}))), PEER,
                                STEPS, wait=lambda s: pytest.fail("no poll"), listens=lambda p: pytest.fail("no port"))
     arm = SH.H1Windows(srv.model, srv.com, ROWS, STEPS, engine=object(), out=tmp_path, unit=_unit(), sessions=sessions)
     with pytest.raises(CoinError, match="the challenger gate refused reserve"):
@@ -290,7 +290,7 @@ def test_reserves_and_releases_run_off_the_loop_while_the_next_window_serves(tmp
     def gate(argv: list[str]) -> tuple[int, str]:
         calls.append((shlex.split(argv[-1])[0], ahead.inside or closer.inside))
         return auditor.run(argv)
-    sessions = SH.GateSessions(CC.Gate(GATE, gate), PEER, STEPS, wait=auditor.settle, listens=lambda port: True,
+    sessions = SH.GateSessions(CC.ChallengerGate(GATE, gate), PEER, STEPS, wait=auditor.settle, listens=lambda port: True,
                                ahead=ahead, now=lambda: datetime(2026, 10, 20, 11, 8, tzinfo=UTC))
     arm = SH.H1Windows(srv.model, srv.com, ROWS, STEPS, engine=object(), out=tmp_path, unit=_unit(), sessions=sessions,
                        closer=closer)
@@ -338,7 +338,7 @@ def test_a_reserve_ahead_that_expires_before_its_window_is_replaced_and_none_is_
         return 0, json.dumps({"session": f"s20261027T2000{len(seen):02d}Z-{len(seen):04x}", "seq": len(seen),
                               "peer": PEER, "by": "vllm", **next(answers)})
     ahead = Later()
-    sessions = SH.GateSessions(CC.Gate(GATE, gate), PEER, STEPS, ahead=ahead,
+    sessions = SH.GateSessions(CC.ChallengerGate(GATE, gate), PEER, STEPS, ahead=ahead,
                                now=lambda: datetime(2026, 10, 27, 20, 0, tzinfo=UTC))
     sessions.ahead_of(0)
     ahead.run()
@@ -371,7 +371,7 @@ def test_the_arm_is_ready_before_the_server_listens(tmp_path, monkeypatch):
     def gate(argv: list[str]) -> tuple[int, str]:
         calls.append(shlex.split(argv[-1])[0])
         return auditor.run(argv)
-    sessions = SH.GateSessions(CC.Gate(GATE, gate), PEER, STEPS, wait=auditor.settle, listens=lambda port: True,
+    sessions = SH.GateSessions(CC.ChallengerGate(GATE, gate), PEER, STEPS, wait=auditor.settle, listens=lambda port: True,
                                ahead=Now(), now=lambda: datetime(2026, 10, 20, 11, 8, tzinfo=UTC))
     weight_root, ticks = PH.weight_root, iter(range(1000))
     monkeypatch.setattr(SH, "sessions_of", lambda opts: sessions)
@@ -408,7 +408,7 @@ def test_a_reserve_at_startup_that_fails_leaves_window_0_s_to_its_open():
     def gate(argv: list[str]) -> tuple[int, str]:
         refusals.append(shlex.split(argv[-1])[0])
         return 3, json.dumps({"refused": "--peer 'x': one of []"})
-    sessions = SH.GateSessions(CC.Gate(GATE, gate), PEER, STEPS, ahead=Now())
+    sessions = SH.GateSessions(CC.ChallengerGate(GATE, gate), PEER, STEPS, ahead=Now())
     assert sessions.settled(0) is None and not refusals
     sessions.ahead_of(0)
     assert sessions.settled(0) is None and refusals == ["reserve"]
@@ -497,7 +497,7 @@ def test_a_served_window_under_release_after_pouw_releases_exactly_h1s_drawn_rea
     sessions = None
     if coins == "gate":
         auditor = _PeriodAuditor(tmp_path, monkeypatch)
-        sessions = SH.GateSessions(CC.Gate(GATE, auditor.run), PEER, STEPS, wait=auditor.settle, listens=lambda port: True)
+        sessions = SH.GateSessions(CC.ChallengerGate(GATE, auditor.run), PEER, STEPS, wait=auditor.settle, listens=lambda port: True)
         k = _PeriodAuditor.K
     else:
         monkeypatch.setattr(PHC, "draw_k", lambda layout: 1)
@@ -565,7 +565,7 @@ def test_a_window_with_no_draw_refuses_its_release_by_name(tmp_path, monkeypatch
     from verity_vllm.pipeline import serve_release as SL
 
     srv, auditor, draws = _Server(monkeypatch), _GateAuditor(tmp_path, monkeypatch), SL.Draws((SH.DRAWER,))
-    sessions = SH.GateSessions(CC.Gate(GATE, auditor.run), PEER, STEPS, wait=auditor.settle, listens=lambda port: True)
+    sessions = SH.GateSessions(CC.ChallengerGate(GATE, auditor.run), PEER, STEPS, wait=auditor.settle, listens=lambda port: True)
     arm = SH.H1Windows(srv.model, srv.com, ROWS, STEPS, engine=object(), out=tmp_path, unit=_unit(), sessions=sessions)
     arm.drawing(draws)
     assert arm.close(3) is None

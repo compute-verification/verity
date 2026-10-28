@@ -258,7 +258,7 @@ def development_line(doc: Mapping[str, Any]) -> dict[str, Any]:
 
 
 def _gate_out(gate: str, *words: str) -> bytes:
-    """The gate's answer to `words` through its command `gate`, the words one shell-quoted line as `commit_coins.Gate`
+    """The gate's answer to `words` through its command `gate`, the words one shell-quoted line as `commit_coins.ChallengerGate`
     sends them; RuntimeError naming what it said when it refuses."""
     p = subprocess.run([*shlex.split(gate), shlex.join(words)], capture_output=True, check=False)
     if p.returncode:
