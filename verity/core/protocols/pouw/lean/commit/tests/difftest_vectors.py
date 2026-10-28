@@ -115,11 +115,13 @@ def generate(seed: int = 0) -> list[dict]:
         h = rng.choice(["sha256", "sha512", "hm96-sha512", "hm96-sha512"])
         digests = rng.random() < 0.4
         b, o, rows, key, nn = binding(), owner(), rows_for(h, digests), salt_key(), nonce()
-        res = _outcome(lambda: audit.commit_rows(b, o, rows, h, key, nn, digests).commitment.root.hex())
+        public = rng.random() < 0.8
+        res = _outcome(lambda: audit.commit_rows(b, o, rows, h, key, nn, digests, public).commitment.root.hex())
         add("commit_rows", {"binding": b.hex(), "owner": o, "rows": [r.hex() for r in rows], "hash": h,
-                            "salt_key": None if key is None else key.hex(), "nonce": nn, "digests": digests}, res)
+                            "salt_key": None if key is None else key.hex(), "nonce": nn, "digests": digests,
+                            "public": public}, res)
         if "ok" in res and rows:
-            trees.append((b, o, h, digests, audit.commit_rows(b, o, rows, h, key, nn, digests), audit.ROW_SCHEMA))
+            trees.append((b, o, h, digests, audit.commit_rows(b, o, rows, h, key, nn, digests, public), audit.ROW_SCHEMA))
 
     for _ in range(COUNTS["transcript"]):
         h = rng.choice(["sha256", "sha512", "hm96-sha512", "hm96-sha512"])
