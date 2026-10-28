@@ -1758,6 +1758,18 @@ shape: `refused: a recursive session (--rec-part, --rec-bindings or --rec-rows) 
 (--rec-inner F): V*'s checks and its full-draw refusal run under that shape, and the recursion's proof covers no session
 without it` (one line).
 
+After that, a session over an inner session whose record holds no draw is refused (`RecSetup.innerDrawn`), then a
+session at a holo (`"holo": true`, `rec-inner --hide`) or sparse (`"sparse"`, candidate 3's RecSparse phase) inner
+shape (`RecSetup.denseOnly`), and then a session with any `--rec-*` flag but no `--zk` (`RecSetup.zkOnly`): the
+recursion's guarantee, `RecursiveKS`, is proved at the dense inner form (`DenseAt`) of the masked verifier only, and the
+verifier refuses every form its proof doesn't cover. The verdicts are `refused: the verifier's inner shape
+(--rec-inner) is holo ("holo": true): RecursiveKS covers the dense form only (no holo, no sparse phase), and the verifier
+refuses every form its proof doesn't cover` (`sparse ("sparse", candidate 3's RecSparse phase)` for a sparse shape) and
+`refused: a recursive session (a --rec-* flag) without --zk: RecursiveKS covers the masked verifier (verify --zk) only,
+and the verifier refuses every form its proof doesn't cover` (one line each). `statement` and `rec-statements` still
+set those shapes up, for the prover; the compiled model refuses the same sessions (`RecDeploy.acc_dense`, and
+`RecDeploy.insO` reads no statement without `--zk`).
+
 Under `--rec-inner`, setup also refuses a session of more than one table, or one whose table holds fewer instances than
 its population (a table drawn short), since V*'s slots are read at the one table's addresses and RecCap reads every
 instance's (`RecSetup.oneFull`): `setup: refused: a V* session of <k> tables: a V* session is one table, the only form

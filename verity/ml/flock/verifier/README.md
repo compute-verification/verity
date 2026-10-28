@@ -38,7 +38,11 @@ or without a closure, and a subset draw without `--zk` at a statement with publi
 `refused: a session without a draw: every soundness claim is about a drawn session (D12)`, last, after the form's
 refusal (`lean_refuses_drawless`). Under `--rec-inner`, a V* session whose draw is not the `subset` draw of every unit of
 its population is refused after that, and so is a recursive session (`--rec-part`, `--rec-bindings` or `--rec-rows`)
-without `--rec-inner` (`Flock.RecSetup.fullDraw`, PROTOCOL.md). Last of all, a session verified without the verifier's
+without `--rec-inner` (`Flock.RecSetup.fullDraw`, PROTOCOL.md), and a session at a holo (`rec-inner --hide`) or sparse
+(candidate 3's RecSparse phase) inner shape, with `refused: the verifier's inner shape (--rec-inner) is holo|sparse …:
+RecursiveKS covers the dense form only …` (`Flock.RecSetup.denseOnly`): the recursion's guarantee is proved at the
+dense form only (`DenseAt`), and the compiled model refuses the same sessions (`RecDeploy.acc_dense`). `statement` and
+`rec-statements` still set those shapes up, for the prover. Last of all, a session verified without the verifier's
 own `--program` is refused (`refused: a session without the verifier's program (--program): …`,
 `Flock.ProvedScope.programHeld`), with or without `--zk`: a verifier that cannot read the Program cannot know what it
 verifies, and the agreement check compares a session refused for that alone as accepted (`agree.py`'s `NO_PROGRAM`).

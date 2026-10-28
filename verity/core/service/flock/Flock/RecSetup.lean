@@ -5,8 +5,9 @@ circuit's META), candidate 3's check 5 inputs (`c3`), candidate 3's checks befor
 (`checkInner`), and the V* checks both run on every statement (`checks`). Both call sites call these, so a statement
 about them is one about what either accepts. `verify`'s setup also refuses a V* session that is not one table holding
 its whole population (`oneFull`). `verify` also refuses, last in each verdict, a recursive session without
-the verifier's inner shape, a V* session whose draw is not every unit of its population (`fullDraw`), and a session over
-an inner session whose record holds no draw (`innerDrawn`).
+the verifier's inner shape, a V* session whose draw is not every unit of its population (`fullDraw`), a session over
+an inner session whose record holds no draw (`innerDrawn`), and a session at a holo or sparse inner shape or a
+recursive one without `--zk`, neither of which `RecursiveKS` covers (`denseOnly`, `zkOnly`).
 -/
 import Flock.RecCoins
 import Flock.RecRecord
@@ -251,6 +252,34 @@ source: `--rec-inner-session` with the inner statement's files), the record hold
 def innerDrawn (src : Option RecCoins.Source) : V Unit := do
   let some s := src | return
   if (RecCoins.recordDraw s.record).isNone then throw noInnerDraw
+
+/-- The refusal of an inner shape of the form `form`, one the recursion's proof doesn't cover. -/
+def notDense (form : String) : String :=
+  s!"refused: the verifier's inner shape (--rec-inner) is {form}: RecursiveKS covers the dense form only (no holo, " ++
+    "no sparse phase), and the verifier refuses every form its proof doesn't cover"
+
+/-- **The recursion's inner shape is dense**: `RecursiveKS` is proved at the dense inner form only (`Form.Dense`: not
+holo, no sparse phase), so under a holo inner shape (`rec-inner --hide`) or a sparse one (candidate 3's RecSparse phase)
+the session is refused, until a proof covers that form. Without an inner shape it passes. -/
+def denseOnly : Option RecVStar.Inner → V Unit
+  | some i =>
+    if i.holo then throw (notDense "holo (\"holo\": true)")
+    else if i.sparse.isSome then throw (notDense "sparse (\"sparse\", candidate 3's RecSparse phase)")
+    else pure ()
+  | none => pure ()
+
+/-- The refusal of a recursive session verified without `--zk`. -/
+def notZk : String :=
+  "refused: a recursive session (a --rec-* flag) without --zk: RecursiveKS covers the masked verifier (verify --zk) " ++
+    "only, and the verifier refuses every form its proof doesn't cover"
+
+/-- **A recursive session is masked**: the recursion's proof reads the masked verifier only (`verify --zk`; its model
+reads no statement without it), so a session verified with a recursive flag (`rec`) but without `--zk` is refused. -/
+def zkOnly (zk rec : Bool) : V Unit := if rec && !zk then throw notZk else pure ()
+
+theorem denseOnly_some {i : RecVStar.Inner} (h : denseOnly (some i) = .ok ()) : i.holo = false ∧ i.sparse = none := by
+  cases hh : i.holo <;> cases hs : i.sparse <;>
+    simp [denseOnly, hh, hs, throw, throwThe, MonadExceptOf.throw] at h ⊢
 
 end RecSetup
 end Flock

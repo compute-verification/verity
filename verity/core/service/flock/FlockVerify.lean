@@ -766,7 +766,9 @@ statement whose form the soundness proof does not cover (`ProvedScope.check`, th
 `ProvedScope.sizesOk`, §16.15) is refused, and
 so is a session without a draw, under `--rec-inner` a session whose draw is not every unit of its population, a
 session with `--rec-part`, `--rec-bindings` or `--rec-rows` but no `--rec-inner` (`RecSetup.fullDraw`), and a session
-over an inner session whose record (`--rec-inner-session`) holds no draw (`RecSetup.innerDrawn`), and a session
+over an inner session whose record (`--rec-inner-session`) holds no draw (`RecSetup.innerDrawn`), and a session at a
+holo or sparse inner shape, since `RecursiveKS` covers the dense form only (`RecSetup.denseOnly`), and a session with
+a `--rec-*` flag but no `--zk`, since it covers the masked verifier only (`RecSetup.zkOnly`), and a session
 verified without the verifier's own `--program` (`ProvedScope.programHeld`, `ProvedScope.NO_PROGRAM`: a verifier that cannot read the Program
 cannot know what it verifies), then a record not in its canonical text (`RecordText.check`, S0), and last under
 `--zk` files outside the form the sampled audit's knowledge soundness covers (`PortRoots.checkOf`: a port that is not a
@@ -966,7 +968,9 @@ def verifyCmd (args : List String) : IO UInt32 := do
       else verify spec tabs record proofs
       -- last, so a session that fails a check keeps that check's reason: the form's refusal (its statement's, then its
       -- tables' sizes), then a draw-less session's, then a recursive session's without --rec-inner or a V* session's
-      -- short of every unit, then a session's over an inner record without a draw, then a session's without the program,
+      -- short of every unit, then a session's over an inner record without a draw, then a session's at a holo or sparse
+      -- inner shape or a recursive one without --zk (`RecursiveKS` is the dense, masked form's), then a session's without
+      -- the program,
       -- then a record not in its canonical text (S0), then under --zk files whose rows, names or port roots the
       -- sampled audit's knowledge soundness doesn't cover (`PortRoots.checkOf`)
       scope
@@ -974,6 +978,8 @@ def verifyCmd (args : List String) : IO UInt32 := do
       if draw.isNone then ProvedScope.drawLaw zk tags plainTables draw
       RecSetup.fullDraw recInner (recPart.isSome || recBindings.isSome || recRows.isSome) draw record
       RecSetup.innerDrawn recCoins
+      RecSetup.denseOnly recInner
+      RecSetup.zkOnly zk (args.any (·.startsWith "--rec-"))
       ProvedScope.programHeld program
       RecordText.check record
       ksFiles
