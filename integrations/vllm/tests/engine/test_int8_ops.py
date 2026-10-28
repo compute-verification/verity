@@ -85,6 +85,33 @@ def test_the_cuda_kernels_are_the_torch_bodies(m, k, n):
 
 
 @cuda
+def test_every_quantizer_plan_is_the_torch_body():
+    """Each `profiles.int8_quant_plans.QUANT_PLANS` plan, forced on this device and as `row_quant` picks it, at its M floor and one row
+    past it (a partial block of rows a program), on random rows with a zero row, a tiny row and a spike: xq and s_a bit
+    for bit the CPU torch body's, and the kernel's PTX passes `ptx_check`.  A K's first plan whose floor M reaches wins,
+    else 16 warps a row."""
+    from verity_vllm.engine import int8_fused as F
+    assert F.quant_plan(1023, 2048, "sm_90") == (16, 1) and F.quant_plan(1024, 2048, "sm_90") == (8, 1)
+    assert F.quant_plan(2048, 2048, "sm_90") == (4, 1) and F.quant_plan(256, 14336, "sm_90") == (16, 2)
+    assert F.quant_plan(8192, 2048, "sm_120") == F.quant_plan(8192, 3072, "sm_90") == (16, 1)
+    plans = sorted({(k, floor, warps, rows) for table in F.QUANT_PLANS.values() for k, plan in table.items()
+                    for floor, warps, rows in plan})
+    for k, floor, warps, rows in plans:
+        for m in (floor, floor + 1):
+            x = torch.randn(m, k, generator=torch.Generator().manual_seed(k + m)) * 3
+            x[0], x[1], x[2, 7] = 0.0, x[1] * 1e-30, 3e4
+            x = x.bfloat16()
+            wq, ws = E.quantize_rows(x)
+            xq = torch.full((m, k), 0x5A, dtype=torch.int8, device="cuda")
+            sa = torch.full((m,), float("nan"), device="cuda")
+            kernel = F.quant_rows(x.cuda(), xq, sa, warps, rows)
+            assert torch.equal(xq.cpu(), wq) and torch.equal(sa.cpu(), ws), (k, m, warps, rows)
+            assert F.ptx_check(kernel)["ok"], (k, m, warps, rows, F.ptx_check(kernel))
+            xq, sa = OPS.row_quant(x.cuda())
+            assert torch.equal(xq.cpu(), wq) and torch.equal(sa.cpu(), ws), (k, m, F.quant_plan(m, k))
+
+
+@cuda
 @pytest.mark.parametrize("h, g, d, n_req, s_hi", [(8, 2, 64, 6, 120), (32, 8, 128, 8, 700), (4, 1, 32, 3, 1)])
 def test_the_cuda_attention_is_the_torch_body(h, g, d, n_req, s_hi):
     """On CUDA each attention op is one Triton launch (`int8_attention_triton`): kv_quant_batch's and kv_quant_window_batch's
