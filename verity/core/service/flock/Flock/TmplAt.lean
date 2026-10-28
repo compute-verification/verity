@@ -1,5 +1,5 @@
 /-
-A templated unit's committed net, checked on its description (PRF-133): `Tmpl.unrollAt` (the rows, `Net.ofRows`' checks,
+A templated unit's committed net, checked on its description: `Tmpl.unrollAt` (the rows, `Net.ofRows`' checks,
 then `Net.ofRowsAt`'s at `Tmpl.posMap`'s positions) refuses nothing that passes `Tmpl.unrollOk` at `layoutM`'s layouts
 (`FlockSoundness.TmplFold.unrollAt_ok`). Beyond `Tmpl.unroll`'s checks (`Flock.TmplUnroll.unroll_ok`) it checks, once per
 Definition's layout, what `posOk`, `outsOk`, the placed rows' widths and D11 read of every column's position:

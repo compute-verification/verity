@@ -196,7 +196,7 @@ def main(argv=None, slots=None, quiet=False):
     for k in ("--lean", "--upstream", "--circuit", "--public"):
         ap.add_argument(k, required=True)
     ap.add_argument("--comp", default=None, help="the BLAKE3 row leaf's compression circuit (statements before eb90718f)")
-    ap.add_argument("--partition", default=None, help="the verity/partition/v1 object the circuit binds (PR #83 from e51e2b86)")
+    ap.add_argument("--partition", default=None, help="the verity/partition/v1 object the circuit binds (the circuit prover from e51e2b86)")
     ap.add_argument("--program", default=None, help="the program's descriptor bytes, to derive a template query's units")
     ap.add_argument("--registered", default=None, help="the verifier's own registered reads (verity/registered-reads/v0)")
     ap.add_argument("--statement", default="verity/flock-circuit")
