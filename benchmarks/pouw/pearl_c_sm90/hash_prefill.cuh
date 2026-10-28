@@ -28,24 +28,23 @@ constexpr int PL_FTW = 33;   // a row's frame leaf blocks in shared memory, a wo
 DEV void pl_frame_msg(uint64_t dom, uint64_t r, uint64_t* f) {
   for (int t = 0; t < 32; t++) f[t] = 0;
   WMsg m{f, 0};
-  wm_frame(m, "leaf", 4, dom);
-  wm_uint(m, r);
-  wm_uint(m, r);
-  wm_be(m, 22, 8);
-  for (int j = 0; j < 22; j++) wm_byte(m, HM96_SCHEMA[j]);
+  wm_frame(m, "leaf", dom);
+  rc::put_uint(m, r);
+  rc::put_uint(m, r);
+  rc::put_part(m, HM96_SCHEMA, 22);
   const int at = wm_slot64(m);
-  if (wm_finish(m) != 2 || at - 128 != (r >= 256 ? PL_LEAF_WIDE : PD_LEAF_AT)) __trap();
+  if (rc::put_padding(m) != 2 || at - 128 != (r >= 256 ? PL_LEAF_WIDE : PD_LEAF_AT)) __trap();
 }
 
 // node (level, i)'s message (48 words: 3 blocks), its children zero, i < 65,536: pd_node_msg's, with the wide offsets
 DEV void pl_node_msg(uint64_t dom, int level, int i, uint64_t* buf) {
   for (int t = 0; t < 48; t++) buf[t] = 0;
   WMsg m{buf, 0};
-  wm_frame(m, "node", 4, dom);
-  wm_uint(m, (uint64_t)level);
-  wm_uint(m, (uint64_t)i);
+  wm_frame(m, "node", dom);
+  rc::put_uint(m, (uint64_t)level);
+  rc::put_uint(m, (uint64_t)i);
   const int left = wm_slot64(m), right = wm_slot64(m), wide = i >= 256;
-  if (wm_finish(m) != 3 || left - 128 != PD_LEFT_AT + wide || right - 128 != PD_RIGHT_AT + wide) __trap();
+  if (rc::put_padding(m) != 3 || left - 128 != PD_LEFT_AT + wide || right - 128 != PD_RIGHT_AT + wide) __trap();
 }
 // level l's node template (PD_TM words) for indices below 256 or (wide) from 256 on: the state after its first block, then
 // blocks 1 and 2 with the index's bytes zero.  Checked against the builder at the next index.  buf: 96 words
