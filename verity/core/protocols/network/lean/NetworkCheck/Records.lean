@@ -45,7 +45,7 @@ holds. Its refusals are otherwise `evaluate`'s, and its ingress verdicts the sam
 namespace NetworkCheck.Records
 
 open Lean (Json toJson)
-open NetworkCheck.Check (Grid Certified Link Evidence LinkWindow Profile)
+open NetworkCheck.Check (Grid Certified LinkOpening Evidence LinkWindow Profile)
 open NetworkCertifier (ClockSync)
 
 def protocolId : String := "verity/network-records/v3"
@@ -75,12 +75,12 @@ def ByteFrame.toLogical (f : ByteFrame) : NetworkCertifier.LogicalFrame := ⟨Ch
 /-- The frame without its content: when the shaper hands it (`eligible`) reads only its anchor and its index. -/
 def ByteFrame.timing (f : ByteFrame) : NetworkCertifier.LogicalFrame := ⟨[], f.anchor, f.index⟩
 
-/-- `Check.Link` with each payload kept as bytes. -/
+/-- `Check.LinkOpening` with each payload kept as bytes. -/
 structure ByteLink where
   frames : List ByteFrame
   syncs : Array ClockSync
 
-def ByteLink.toLink (l : ByteLink) : Link := ⟨l.frames.map ByteFrame.toLogical, l.syncs⟩
+def ByteLink.toLink (l : ByteLink) : LinkOpening := ⟨l.frames.map ByteFrame.toLogical, l.syncs⟩
 
 /-- `Check.Evidence` with each payload kept as bytes; `toEvidence` is `Check.evidenceOf`'s reading of the same JSON
 (`RecordsBytes.evidenceOf_toEvidence`). -/
@@ -261,7 +261,7 @@ def rows (S : Nat) (pay : Nat → ByteArray) : Nat → List Nat → List (Array 
 /-- `expected_grids(frames, syncs, params)`: the link's grid in each of the `W` windows, as `schedule.py` computes it, in
 time linear in the frames and the buckets: the hand times, the enqueue counts, the release counts, and the frames filled
 in order. Window `w`'s is `Check.expectedGrid`'s (`RecordsGrid.expectedGrids_eq`). -/
-def expectedGrids (g : Grid) (W : Nat) (l : Link) : Array RawGrid :=
+def expectedGrids (g : Grid) (W : Nat) (l : LinkOpening) : Array RawGrid :=
   let T := g.buckets
   let syncs : Fin W → ClockSync := fun v => l.syncs.getD v.1 Check.noSync
   let enq := enqueueCounts (W * T) (handingRev T W syncs 0 l.frames []).reverse
