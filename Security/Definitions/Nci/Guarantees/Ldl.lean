@@ -20,15 +20,15 @@ namespace Nci.Ldl.Guarantees
 
 open Verity
 
-/-- **Lemma 1 (block description)**: let the registration `R` (`Verity.Registration`) have at most `k` unregistered
-input bits per block, and let the run `X = eval inp` take the registered values. If the decoder evaluates blocks for
-the extraction rule `ext` within `t` at overhead `aBlk` (`EvaluatesBlocks`), every block's extraction `y_I = ext u X`
-has `LDL_{t,R}(y_I) ≤ k + ⌈log₂ B⌉ + aBlk`.
+/-- **Lemma 1 (block description)**: let the committed declaration `R` (`Verity.Committed`) have at most `k`
+unregistered input bits per block, and let the run `X = eval inp` take the registered values. If the decoder evaluates
+blocks for the extraction rule `ext` within `t` at overhead `aBlk` (`EvaluatesBlocks`), every block's extraction
+`y_I = ext u X` has `LDL_{t,R}(y_I) ≤ k + ⌈log₂ B⌉ + aBlk`.
 
 The description is the block index and its unregistered input bits: evaluated from them, the block holds the run's
 values, since the run is the circuit's evaluation. The block size `c` is not used. -/
 def BlockDescription : Prop :=
-  ∀ (R : Registration) (k : ℕ) (D : Decoder) (t : ℕ) (ext : Fin R.B → R.d.D.Transcript → List Bool) (aBlk : ℕ)
+  ∀ (R : Committed) (k : ℕ) (D : Decoder) (t : ℕ) (ext : Fin R.B → R.d.D.Transcript → List Bool) (aBlk : ℕ)
     (inp : R.d.D.Transcript),
     ReadCap R.d R.P k → R.Honest (R.d.D.eval inp) → Assumptions.EvaluatesBlocks D t R ext aBlk →
       ∀ u, LDL D t (ext u (R.d.D.eval inp)) ≤ (k + Nat.clog 2 R.B + aBlk : ℕ)
@@ -55,7 +55,7 @@ weights on the representatives gives the bound. No weight-price premise is used,
 subcircuit lies whole in its block: that is what makes `ActivationRate` plausible, and the counting doesn't read it.
 When `e h ≤ 0` the bound is at most `0`. -/
 def FanOutBound : Prop :=
-  ∀ (R : Registration) (c k : ℕ) {ι A : Type} [DecidableEq A] (M : Products R.d.D ι A)
+  ∀ (R : Committed) (c k : ℕ) {ι A : Type} [DecidableEq A] (M : Products R.d.D ι A)
     (e : ℕ) (D : Decoder) (t aBlk : ℕ) (a : Fin R.B → R.d.D.Transcript → List Bool) (β Λ T₀ : ℝ)
     (inp : R.d.D.Transcript),
     CKPartition R.d R.P c k → R.Honest (R.d.D.eval inp) → M.FanOut e → 0 < β → 0 < T₀ →
