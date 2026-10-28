@@ -388,8 +388,8 @@ def test_changed_selects_the_suites_a_change_touches_by_path_runner_or_lock(tmp_
 
 
 def test_changed_from_a_main_the_branch_is_behind_is_the_branchs_own_change(tmp_path, monkeypatch):
-    """`--changed origin/main` on a branch behind main diffed main's own progress too (20 Oct: ~50 suites in a run): the change is
-    measured from the merge-base."""
+    """`--changed origin/main` on a branch behind main would diff main's own progress too, and select dozens of suites no
+    one changed: the change is measured from the merge-base."""
     _workspace(tmp_path)
     _git(tmp_path, "add", "-A")
     _git(tmp_path, "commit", "-q", "-m", "base")
@@ -462,8 +462,9 @@ def test_changed_origin_main_in_a_shipped_tree_without_it_fetches_it_or_names_th
 
 
 def test_markdown_rekeys_and_selects_only_the_suites_that_list_markdown(tmp_path, monkeypatch):
-    """#1594's 13 `.md` files picked 35 suites. A directory keys without its `*.md` unless its suite lists a `.md`, whose guard
-    then lets it read Markdown (test_guard.py holds the others to reading none)."""
+    """A change to a few `.md` files must not pick every suite whose directory holds them. A directory keys without its
+    `*.md` unless its suite lists a `.md`, whose guard then lets it read Markdown (test_guard.py holds the others to reading
+    none)."""
     _workspace(tmp_path)
     (tmp_path / "a" / "README.md").write_text("prose\n")
     _git(tmp_path, "add", "-A")
@@ -493,7 +494,7 @@ def test_markdown_rekeys_and_selects_only_the_suites_that_list_markdown(tmp_path
 
 
 def test_a_nested_suite_leaves_the_key_of_the_suite_around_it_unless_that_one_declares_it(tmp_path, monkeypatch):
-    """benchmarks/pouw's key held exact_kit, a suite of its own under it (16 Oct), so every edit to the kit re-ran pouw's tests.
+    """benchmarks/pouw's key held exact_kit, a suite of its own under it, so every edit to the kit re-ran pouw's tests.
     A suite under another's directory is out of the outer one's key and `--changed` selection until the outer one declares it;
     the repository's own suite, whose tests read the whole tree, keeps it."""
     _workspace(tmp_path)
@@ -856,7 +857,7 @@ def test_inside_a_research_run_the_tests_get_its_custody_key_and_require_the_sto
 
 
 def test_each_test_process_gets_its_share_of_the_cpus_for_its_thread_pools(tmp_path, monkeypatch):
-    """Sized to the whole node, each xdist worker of ten lane runs ran 159-191 threads (24 Oct, load 522 on cpu-5's 192 cores):
+    """Sized to the whole node, each xdist worker of every lane run would run a thread per core, overloading the node:
     each test process's OpenMP, MKL, OpenBLAS and numexpr pools get the CPUs divided by --jobs, and a size the caller set stays."""
     S = _suites(monkeypatch, tmp_path)
     monkeypatch.setattr(S, "cpus", lambda: 192)
@@ -937,7 +938,7 @@ def _reused(tmp_path: Path) -> list[str]:
 
 
 def test_a_killed_suite_is_reported_by_its_signal_and_what_it_left_in_its_group_is_killed(tmp_path):
-    """A pytest the OOM killer ends wrote no report and left its forkserver running (network-accounting, #1202's tier): the
+    """A pytest the OOM killer ends wrote no report and left its forkserver running: the
     suite's own process group takes what it left with it, and the signal and peak RSS are said."""
     root, tests = tmp_path / "tree", tmp_path / "tree" / "pkg" / "tests"
     _per_test_workspace(root)
@@ -960,8 +961,8 @@ def test_a_killed_suite_is_reported_by_its_signal_and_what_it_left_in_its_group_
 
 
 def test_a_suite_past_its_bound_is_killed_and_fails_as_timed_out(tmp_path):
-    """45fe's test_suites.py waited 82 min on a FIFO nobody wrote until it was killed by hand (7 Oct). Here the test blocks the
-    same way, so the run ends only by its bound, whenever that fires: its group is killed, it fails timed out, and no pass is
+    """A test that waits on a FIFO nobody writes would hold its suite until it is killed by hand. Here the test blocks that
+    way, so the run ends only by its bound, whenever that fires: its group is killed, it fails timed out, and no pass is
     kept."""
     root, tests = tmp_path / "tree", tmp_path / "tree" / "pkg" / "tests"
     _per_test_workspace(root)
@@ -1634,8 +1635,8 @@ def _guard(monkeypatch):
 
 
 def test_a_passed_test_s_seconds_hold_its_setup_so_a_module_fixture_s_first_test_counts_as_heavy(monkeypatch):
-    """Ordering by call alone started `test_lean_witness`'s tests late behind 1,270-1,475 s of their `f1` setup per worker
-    (proofs, 12 Oct); the teardown is not counted, and a failed phase still drops the test."""
+    """Ordering by call alone started `test_lean_witness`'s tests late behind 1,270-1,475 s of their `f1` setup per worker;
+    the teardown is not counted, and a failed phase still drops the test."""
     from types import SimpleNamespace as R
 
     G = _guard(monkeypatch)
@@ -1933,8 +1934,9 @@ def _red_row(suite: str, *tests: str) -> dict:
 
 
 def test_known_red_is_the_newest_check_of_mains_first_parent_commits_that_reported_its_suites(tmp_path, monkeypatch):
-    """CI-173: a quick tier failed on tests already red on `main`, and its owner triaged them as the PR's. What is red there is read
-    from the newest post-landing run (or recorded check) of `main`'s first-parent commits that published its suite reports."""
+    """A quick tier that fails on tests already red on `main` must not send its owner to triage them as the PR's. What is
+    red there is read from the newest post-landing run (or recorded check) of `main`'s first-parent commits that published
+    its suite reports."""
     from research.store.local import LocalStore
 
     _git(tmp_path, "init", "-q", "-b", "main")
@@ -2028,7 +2030,7 @@ def _vault(tmp_path: Path) -> Path:
 
 
 def test_the_red_list_merges_every_part_of_mains_newest_after_landing_run_found_in_a_cold_store(tmp_path, monkeypatch):
-    """CI-211: drive's after-landing run of a commit is one attempt per twin part, and only the part that ran a suite reports it,
+    """Drive's after-landing run of a commit is one attempt per twin part, and only the part that ran a suite reports it,
     so all the commit's parts are merged and named. A cold catalog refreshes `KNOWN_RED_WINDOWS_H` before the whole walk; a commit
     counts in a window only once it landed inside it, so a newer commit whose run started before the window still wins over an
     older commit's recent run."""
@@ -2063,10 +2065,10 @@ def test_the_red_list_merges_every_part_of_mains_newest_after_landing_run_found_
 
 
 def test_a_recorded_runs_custody_key_reaches_the_lookup_on_a_machine_with_no_store_of_its_own(tmp_path, monkeypatch):
-    """CI-211: a `research run` job on a node whose `research` user has no store.toml ran `suites.py --known-red origin/main`; its
-    store had no remote, so the lookup read an empty catalog and reported no check of `main` at all. The run's custody dir
-    (`<root>/requests/<run id>/custody/`, beside its run dir) holds the store's key, as `$CHECK_STORE_CUSTODY` does for check's steps
-    and the quick tier, and the lookup takes it from either."""
+    """A `research run` job on a node whose `research` user has no store.toml, running `suites.py --known-red origin/main`,
+    has a store with no remote, so the lookup would read an empty catalog and report no check of `main` at all. The run's
+    custody dir (`<root>/requests/<run id>/custody/`, beside its run dir) holds the store's key, as `$CHECK_STORE_CUSTODY`
+    does for check's steps and the quick tier, and the lookup takes it from either."""
     import json
     import shutil
 

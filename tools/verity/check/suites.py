@@ -108,14 +108,14 @@ kept passes took longest (`longest`), so the run doesn't wait on a long test tha
 time, beside the others, which run side by side on as few of the processes as let them finish about when the longest of them
 does (`serial_slots`, from each suite's last duration); each lane goes longest first. Without pytest-xdist installed, a parallel
 suite runs in one process. Each test process's thread pools (OpenMP, so torch's, MKL, OpenBLAS, numexpr) get the CPUs divided by
-`--jobs` (`threads_per_process`) unless the environment already sets them: sized to the whole node, every xdist worker of ten
-lane runs at once ran 159-191 threads each (24 Oct, load 522 on cpu-5's 192 cores).
+`--jobs` (`threads_per_process`) unless the environment already sets them: sized to the whole node, every xdist worker of every
+lane would run a thread per core, and the node's load would reach several times its cores.
 
 Known red on main. With `--changed REV` (a PR's quick tier, a lane's pre-mark run; never check's own run), a failure is judged
-against what is already red on `main` (CI-173): the failed tests in the suite reports of the ended after-landing runs or recorded
+against what is already red on `main`: the failed tests in the suite reports of the ended after-landing runs or recorded
 checks of REV's newest first-parent commit that has one in the evidence store, merged over all of that commit's parts (`known_red`,
 read in a process of its own that alone gets a recorded run's store key, `$CHECK_STORE_CUSTODY` or the run's own custody dir:
-`known_red_on_main`, CI-211). A failed suite whose every failed test is on that list, and that failed for nothing else, is
+`known_red_on_main`). A failed suite whose every failed test is on that list, and that failed for nothing else, is
 `known-red` and fails nothing; one with other failures still fails, and says which of them are red on `main` too. The output names
 the runs and commit the list came from, or why none was found (no store remote here, a failed refresh, none in the walk), and then
 every failure counts. `--known-red REV` prints the list.
@@ -174,7 +174,7 @@ UNKEYED = frozenset({"VERITY_TEST_CACHE", "VERITY_TEST_CACHE_MIN_S"})
 UNKEYED_PREFIX = "VERITY_SUITE_"
 #: what a machine's runner gives a run's workload and check's steps never get (check.py's `ENV_PASS`): the run's `RESEARCH_*` and
 #: the machine's PYTHONPYCACHEPREFIX. Tests that start runs of their own would inherit them, so a suite run inside a `research
-#: run` would reach another verdict than inside check (test_remote_cwd, r20261008-010104-2b69)
+#: run` would reach another verdict than inside check (test_remote_cwd's)
 RUNNER_PREFIX, RUNNER_ENV = "RESEARCH_", ("PYTHONPYCACHEPREFIX",)
 #: check.py's: what its steps get inside a recorded run in place of the RESEARCH_* that named the machine's store (`store_custody`)
 CUSTODY_ENV, STORE_REQUIRED_ENV = "CHECK_STORE_CUSTODY", "VERITY_STORE_REQUIRED"
@@ -198,8 +198,8 @@ ELAN = ('command -v lake >/dev/null || command -v "$HOME/.elan/bin/lake" >/dev/n
         'https://raw.githubusercontent.com/leanprover/elan/master/elan-init.sh | sh -s -- -y --default-toolchain none >/dev/null; }; '
         'export PATH="$HOME/.elan/bin:$PATH"; ')
 #: `lake build` in the verifier, one at a time per tree: on a node every run of a commit shares its source tree, and a train's
-#: check and its touched-suites run built `.lake` there at once (21 Oct: 4430e936c3d8's link of flock-verify found its output
-#: gone, and drive bisected a failure no PR caused)
+#: check and its touched-suites run would otherwise build `.lake` there at once, and one's link could find its output gone: a
+#: failure no PR caused
 LAKE_BUILD = ELAN + "mkdir -p .lake && exec flock .lake/verity-build.lock lake build"
 QUICK = ["-m", "not slow"]
 REGISTRY = "fixtures/artifacts.json"
@@ -238,8 +238,8 @@ TEST_PROCESS_GB = 9
 def default_jobs(meminfo: Path = Path("/proc/meminfo"), limit_gb: float | None = None) -> int:
     """The default `--jobs`: the CPUs this process may use (`cpus`), or fewer where the memory available holds fewer test
     processes at `TEST_PROCESS_GB` each. The memory is the machine's MemAvailable or this run's own limit (``limit_gb``, by
-    default `slot_mem_gb`: the check slot's, else the cgroup's `memory.max`), whichever is less (19 Oct, r20261019-045749-398f:
-    an `--on auto` agent-test's 16 GiB scope on a node with 1.5 TB free started 32 test processes and was OOM-killed)."""
+    default `slot_mem_gb`: the check slot's, else the cgroup's `memory.max`), whichever is less (sized to
+    the machine's memory, a 16 GiB agent-test scope on a node with terabytes free starts more test processes than it holds)."""
     n = cpus()
     limit_gb = slot_mem_gb() if limit_gb is None else limit_gb
     limits = [] if limit_gb is None else [limit_gb]
@@ -1435,7 +1435,7 @@ def _durations() -> dict[str, float]:
 
 #: how many of a suite's longest tests the guard gets, of which it starts the longest it collected at the heads of the workers'
 #: shares: a run of some of a suite's files, or one that reuses passes, collects few of the suite's longest
-#: (r20261025-202541-cb5f collected none of verity-vllm's 4 longest, and ran its own longest two back to back on one worker)
+#: (one that collects none of the suite's longest can run its own longest two back to back on one worker)
 HEAVY_CANDIDATES = 1000
 
 
@@ -1496,14 +1496,14 @@ _PYTEST = "import sys, pytest; sys.path.append(sys.argv.pop(1)); sys.exit(pytest
 #: xdist's scheduling: an idle worker takes queued tests from a busy one, which evens out suites whose tests differ in length.
 DIST = ["--dist", "worksteal"]
 #: `--timeouts`: a suite's run is bounded by its `timeout_s`, else this. The longest passes on vy-nebius-1 took about an hour
-#: (verity-circuit-check, which declares its own); a suite that hangs holds its check slot until the run's own timeout (45fe hung
-#: 82 min in test_suites.py on a FIFO until it was killed by hand, 7 Oct).
+#: (verity-circuit-check, which declares its own); a suite that hangs holds its check slot until the run's own timeout (a test
+#: blocked on a FIFO nobody writes holds it until it is killed by hand).
 SUITE_TIMEOUT_S = 3600.0
 #: what `run` arms the bound with (a test injects one that fires at once)
 Timer = threading.Timer
 #: each suite's pytest `--basetemp` is `b` in `<tmp>/<BASETEMP>-<suites.py's pid>m*`, which holds its `OWNER` marker beside it
 #: (pytest empties the `--basetemp` it is given) and is removed when the suite ends: pytest's own keeps its last three runs, and a
-#: flock suite's is ~45 GB, which filled vy-cpu-1 and vy-cpu-2 three times on 11 Oct. Keep the path short: a test's AF_UNIX
+#: flock suite's is ~45 GB, and a few of them left behind fill a machine's disk. Keep the path short: a test's AF_UNIX
 #: socket under tmp_path has at most 107 bytes of path. The `m` after the pid: an older suites.py's sweep removes
 #: `<BASETEMP>-<pid>-*` whose pid it can't see, and skips these
 BASETEMP = "verity-suite"
@@ -1555,8 +1555,8 @@ def sweep_basetemps(tmp: Path | None = None, proc: Path = Path("/proc"), now: fl
     """Remove the basetemps no suite uses any more (its suites.py killed before it could remove them); returns them.
 
     One is in use while its marker shows this boot and pid namespace and an owner alive with its start time, or a process left
-    in pytest's session (pytest outlives a suites.py killed by SIGKILL: on vy-nebius-1, 18 Oct, the next suites.py's sweep took
-    two running flock suites' basetemps). One without such a marker (an older suites.py's, the guard's
+    in pytest's session (pytest outlives a suites.py killed by SIGKILL, and a sweep that ignored it would take running suites'
+    basetemps). One without such a marker (an older suites.py's, the guard's
     `verity-suite-host-*`, another namespace's or boot's) is removed only once nothing in it changed for `UNOWNED_AGE_S`."""
     now = time.time() if now is None else now
     try:
@@ -1607,7 +1607,7 @@ def store_custody() -> None:
     """Inside a `research run` whose custody key is staged, the tests reach the evidence store through it and require it, as check's
     steps do (check.py's `env()`, "The evidence store"). `run` drops RESEARCH_*, the machine's store among them, so without this a
     test that fetches a fixture skipped as "the evidence store is not reachable" under this runner and passed under a bare pytest
-    (r20261024-030225-1ea6: 13 of test_lean_session.py's 39, the firewall's wire-tamper negatives among them). Set here, before
+    (test_lean_session.py's firewall wire-tamper negatives among them). Set here, before
     `environment()`, so the requirement keys the pass and a pass earned with those skips is never reused for one without."""
     run_dir, run_id = os.environ.get("RESEARCH_RUN_DIR"), os.environ.get("RESEARCH_RUN_ID")
     if CUSTODY_ENV in os.environ or not run_dir or not run_id:
@@ -1823,7 +1823,7 @@ def slot_mem_gb() -> float | None:
 
 def cgroup_mem_gb(root: Path = Path("/")) -> float | None:
     """The tightest cgroup v2 `memory.max` over this process, in GiB, or None when none is set: a job outside a check slot
-    (the cluster queue's scope, 17 Oct: two `suites.py verity-flock --fresh` runs OOM-killed there) sizes itself to it."""
+    (the cluster queue's scope) sizes itself to it."""
     try:
         rel = next(line[3:].strip() for line in (root / "proc/self/cgroup").read_text().splitlines() if line.startswith("0::"))
     except (OSError, StopIteration):
@@ -1841,7 +1841,7 @@ def cgroup_mem_gb(root: Path = Path("/")) -> float | None:
 
 def wide_workers(s: Suite, n: int, mem_gb: float | None) -> int:
     """A parallel suite's xdist workers on a lane of ``n`` processes: fewer where ``mem_gb`` holds fewer at its `worker_gb`, else
-    at `TEST_PROCESS_GB` (16 Oct: verity_core_protocols_pous_check's undeclared workers reached 11 GB each)."""
+    at `TEST_PROCESS_GB` (a suite's undeclared workers can reach several GB each)."""
     if mem_gb is None:
         return n
     return max(1, min(n, int(mem_gb // worker_gb(s))))
@@ -1864,8 +1864,8 @@ def serial_slots(seconds: list[float | None], parallel: int, jobs: int, mem_gb: 
     none is recorded), the rest going to the ``parallel`` suites, which run one at a time over all of theirs. The fewest that let
     the one-process suites, longest first, finish about when their longest does, plus a slot for each with no recorded duration
     up to a quarter of the jobs (a fresh test cache, as the lander's `--fresh` runs have, times none): the parallel suites keep
-    every slot the others couldn't use.  With ``mem_gb``, no more than it holds at `TEST_PROCESS_GB` each (18 Oct: a 16 GiB
-    agent-test job on 48 CPUs ran 44 test processes and the OOM killer took the whole scope)."""
+    every slot the others couldn't use.  With ``mem_gb``, no more than it holds at `TEST_PROCESS_GB` each (a job sized
+    to its CPUs alone can run more test processes than its scope holds, and the OOM killer takes the whole scope)."""
     if not parallel:
         r = jobs
     elif not seconds:
@@ -1918,15 +1918,15 @@ def failing(out: Path, results: list[Result]) -> None:
 
 
 #: how many of `main`'s first-parent commits `known_red` looks down for one a check reported its suites at: drive's after-landing
-#: run checks `main`'s tip about every 4 h, and dozens of landings can come between two (25-26 Oct: 467 in a day and a half)
+#: run checks `main`'s tip about every 4 h, and dozens of landings can come between two (hundreds in a day and a half)
 KNOWN_RED_WALK = 200
 #: a check's suite reports among its run files (`check.py`'s `write_result` lists them), which drive reads a red suite from too
 KNOWN_RED_REPORTS = ("suites.json", "suites-lean.json")
 #: what `known_red_on_main` may take: a refresh of the store's attempts and one run's reports
 KNOWN_RED_S = 300
 #: the windows `known_red` refreshes the store's attempts over first, in hours before `main`'s tip landed, before the walk's whole
-#: span: a cold catalog fetches every attempt in its window (3,349 for 27 Oct's first 11 h took 188 s), and drive's after-landing
-#: run of `main` is rarely more than a few hours old
+#: span: a cold catalog fetches every attempt in its window (a few thousand in half a day take minutes), and drive's
+#: after-landing run of `main` is rarely more than a few hours old
 KNOWN_RED_WINDOWS_H = (6, 24)
 #: how far before a window its refresh starts: a run's id is its start on its own machine's clock, which may trail git's
 KNOWN_RED_SKEW_S = 3600
@@ -2075,7 +2075,7 @@ def _first_sigterm_stops(signum: int, frame: object) -> None:
 
 def main(argv: list[str] | None = None) -> int:
     # a manual stop (`research cancel`) sends SIGTERM to the run's process group, which the suites' own groups aren't in: as
-    # SIGINT, it stops them and removes their `--basetemp`s (a cancelled check left a 42 GB one on vy-cpu-2, 11 Oct)
+    # SIGINT, it stops them and removes their `--basetemp`s (a cancelled check's can hold tens of GB)
     signal.signal(signal.SIGTERM, _first_sigterm_stops)
     argv = sys.argv[1:] if argv is None else argv
     extra = argv[argv.index("--") + 1:] if "--" in argv else []
@@ -2329,7 +2329,7 @@ def main(argv: list[str] | None = None) -> int:
                     kill_group(g, signal.SIGINT)
 
             def kill_rest() -> None:                        # a pytest that ignores SIGINT (a node short of memory) would hold
-                with _GROUPS_LOCK:                          # the stop until its run ended (17 Oct, cpu-2: 94 workers)
+                with _GROUPS_LOCK:                          # the stop until its run ended
                     for g in list(_GROUPS):
                         kill_group(g, signal.SIGKILL)
 

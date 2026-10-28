@@ -72,7 +72,7 @@ def outside_a_slot(monkeypatch):
 
 @pytest.fixture(autouse=True)
 def no_host_memory(monkeypatch):
-    """A slot with mem= waits on this machine's free memory (`memory_gb()`), which no two hosts share (CI-182): a test that takes
+    """A slot with mem= waits on this machine's free memory (`memory_gb()`), which no two hosts share: a test that takes
     such a slot stubs it, and one that would read the host's fails. `memory_gb(root)` over a fake tree still reads that tree."""
     real = SLOT.memory_gb
     monkeypatch.setattr(SLOT, "memory_gb", lambda root=None: real(root) if root is not None else pytest.fail(
@@ -207,7 +207,7 @@ def test_a_scoped_check_on_a_node_that_caps_login_sessions_gets_the_same_memory_
 
 
 def test_a_scope_slot_where_systemd_run_cant_run_runs_its_check_unscoped(tmp_path, monkeypatch, capsys):
-    """Fail open (ci's review of #3336): a run with no user manager or bus would otherwise fail every train check the slot
+    """Fail open: a run with no user manager or bus would otherwise fail every train check the slot
     takes, which drive reads as the train failing."""
     monkeypatch.setattr(SLOT, "SLOTS", tmp_path / "slots")
     monkeypatch.setattr(SLOT.os, "sched_setaffinity", lambda pid, cpus: None)
@@ -240,7 +240,8 @@ def test_a_scope_slot_where_systemd_run_cant_run_runs_its_check_unscoped(tmp_pat
 
 
 def test_a_slot_added_while_a_check_waits_is_one_it_takes(tmp_path, monkeypatch):
-    """Node 1's slot d (2 Oct 06:58Z) sat free behind the head of the line, a check that had read the slots file before d was in it."""
+    """A slot added to the slots file is taken by the waiters, the head of the line among them, though it read the file before
+    the slot was in it."""
     slots = tmp_path / "slots"
     slots.write_text("a 0\n")
     monkeypatch.setattr(SLOT, "SLOTS", slots)
@@ -321,7 +322,8 @@ def test_a_waiter_goes_after_the_live_ones_that_came_before_it_and_a_dead_ones_t
 
 
 def test_a_waiter_names_the_slots_holders_and_the_waiters_ahead_of_it_each_time_its_reason_changes(tmp_path, monkeypatch, capsys):
-    """A check's log says whom it waits behind, not only how many (proofs, 2 Oct: "3-4 check(s) ahead in line" for 45 min)."""
+    """A check's log says whom it waits behind, not only how many (a count alone, "3-4 check(s) ahead in line", says
+    nothing to act on)."""
     (tmp_path / "slots").write_text("a 0\n")
     monkeypatch.setattr(SLOT, "SLOTS", tmp_path / "slots")
     held = _hold(tmp_path / "check-a.lock")
@@ -394,7 +396,7 @@ def test_a_pool_the_machine_lacks_is_refused_naming_the_pools_it_has(tmp_path, m
 
 
 def test_a_waiter_past_its_wait_max_leaves_the_line_and_exits_not_started(tmp_path, monkeypatch, capsys):
-    """Quick tiers sat 3 h in node 1's line and their run's timeout reported them failed (#1344, 6 Oct): --wait-max ends the
+    """A check that waits in the line until its run's timeout is reported failed: --wait-max ends the
     wait first, with an exit that says nothing ran."""
     (tmp_path / "slots").write_text("a 0\n")
     monkeypatch.setattr(SLOT, "SLOTS", tmp_path / "slots")
@@ -438,7 +440,7 @@ def test_run_max_counts_from_the_slot_taken_through_the_runs_timeout_control(tmp
 
 
 def test_a_run_s_slot_record_says_it_waits_until_it_takes_a_slot_or_leaves_the_line(tmp_path, monkeypatch):
-    """af2d (10 Oct) waited 95 min in node 1's line and was reported running since its launch: its run's slot.json says waiting,
+    """A check waiting in the line is not reported running since its launch: its run's slot.json says waiting,
     and why, until the slot is taken, then which slot and when; a waiter that gives up says it left, and why."""
     run = tmp_path / "run"
     run.mkdir()
@@ -492,7 +494,7 @@ def test_the_command_holds_the_slots_lock_on_the_slots_cores(tmp_path):
 
 
 def test_status_names_each_slots_holder_or_free(tmp_path, monkeypatch):
-    """Who holds check-a/b/c and since when, without `fuser` on the lock files (old-circuits-and-proofs, 1 Oct)."""
+    """Who holds check-a/b/c and since when, without `fuser` on the lock files."""
     w = tmp_path / "windows"
     w.write_text("2026-10-01T09:20Z 30\n")
     slots = SLOT.parse(f"a 32-63\nb 64-95\nd 0-47 windows={w}\n")
@@ -511,7 +513,7 @@ def test_status_names_each_slots_holder_or_free(tmp_path, monkeypatch):
 
 
 def test_status_lists_a_windowed_slots_windows_open_now_or_within_six_hours(tmp_path):
-    """A check slot paused for a timed window nobody saw coming (node 2, 3 Oct: a PR sat about 20 min on the 18:05Z window)."""
+    """A check slot paused for a timed window is visible before it pauses: the windows open now or within six hours."""
     w = tmp_path / "windows"
     w.write_text("# start UTC, minutes\n"
                  "2026-10-01T15:01Z 30 # beyond six hours\n"
@@ -566,7 +568,7 @@ def test_status_json_is_the_same_state_as_one_object(tmp_path, monkeypatch, caps
 
 
 def test_status_names_who_asked_for_each_held_slot_and_each_live_waiter(tmp_path):
-    """Which run, tree and agent hold or wait for a slot, without asking around (old-circuits-and-proofs, 2 Oct)."""
+    """Which run, tree and agent hold or wait for a slot, without asking around."""
     slots = SLOT.parse("a 0\nb 1\n")
     held = _hold(tmp_path / "check-a.lock")
     me = {"pid": os.getpid(), "run": "r20261002-040109-a7ed", "tree": "/workspace/research/src/6a1d0bf19", "by": "proofs"}
@@ -690,7 +692,7 @@ def test_agreement_sends_the_upstream_build_whatever_the_commit_changes(monkeypa
 
 
 def test_a_priority_waiter_goes_ahead_of_waiting_lane_checks_and_behind_older_priority_ones(tmp_path):
-    """Merges unblock everyone (root, 2 Oct): the lander's train check takes the next slot that frees ahead of lane checks
+    """Merges unblock everyone: the lander's train check takes the next slot that frees ahead of lane checks
     already waiting, never one a check is running in, and priority waiters keep their own arrival order."""
     line = tmp_path / SLOT.LINE
     line.mkdir()

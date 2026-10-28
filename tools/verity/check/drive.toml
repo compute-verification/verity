@@ -4,9 +4,9 @@
 
 # the machines train.sh launches drive's Lean checks and its after-landing run on (a machine, or `auto`)
 on = ["vy-nebius-2", "vy-nebius-cpu-1", "vy-nebius-cpu-2", "vy-nebius-cpu-4", "vy-nebius-cpu-5"]
-# ready marks written before this don't count: drive's cutoff, 12 Oct
+# ready marks written before this don't count
 marked_after = "2026-10-12T06:00:00Z"
-# land a prefix whose Lean check passed by committing the lock records it regenerated on top (CI-64)
+# land a prefix whose Lean check passed by committing the lock records it regenerated on top
 regenerate_locks = true
 # ready PRs to put at the bottom of `next`, in this order, ahead of members that keep their place (a fix `main` needs)
 first = []
@@ -21,7 +21,7 @@ landing_gates = ["tools/verity/check/gates/markdown_caps.py", "integrations/vllm
 land = "review"
 # the after-landing run reuses no suite, Lean or step pass (`check.py --no-cache`), until a suite's reuse is per test; circuit-check
 # alone reuses its per-target passes (`--circuit-cache`), each keyed by everything that target read, since a cold `--all` (~4 h,
-# ten SHA-512 Definitions at 141-167 GB one at a time) outlasted every after-landing run from 24 Oct. The nightly `audit-main`
+# ten SHA-512 Definitions at 141-167 GB one at a time) outlasts the after-landing runs. The nightly `audit-main`
 # (`--no-cache`, no circuit cache) still checks every part cold, so it checks that reuse daily
 after_landing_no_cache = true
 # the most review-landing Lean checks running at once: one, and those stacked above it on `next` for Lean changes it doesn't hold
@@ -37,5 +37,5 @@ stale_days = 3
 # days idle before drive closes such a PR, with a comment, its branch kept; never one with a hold label, a draft that says
 # "keep open", or one on `next`; 0 is off
 stale_close_days = 7
-# PRs the stale rule never judges, kept open by their owners with a reason (top, 26 Oct 02:38Z, thread 1792970372.621909)
+# PRs the stale rule never judges, kept open by their owners with a reason
 stale_keep = [2692, 2693, 2705, 2948, 3205, 3401, 3573]
