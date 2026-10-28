@@ -88,7 +88,7 @@ def test_a_p2_store_drawn_from_the_registration_log_is_the_registration_of_its_n
             p2.register(SOURCE, view, name, reg.commitment, vk)
 
 
-def params(reg: p2.Registration, **kw) -> audit.Params:
+def params(reg: p2.Public, **kw) -> audit.Params:
     base = dict(blocks=reg.blocks, deadline_ns=A, windows=2, samples=2, delta=1e-6, window_ns=1000, codec=reg.codec,
                 receipt=reg.receipt, layout=reg.layout, rows=reg.rows)
     return audit.Params(**{**base, **kw})
@@ -157,7 +157,7 @@ def test_the_registration_is_pous_setups(fixture, vk, store) -> None:
     with pytest.raises(ValueError, match="not the registered C"):
         p2.Store(reg, fixture["blocks"][1:] + fixture["blocks"][:1])
     with pytest.raises(ValueError, match="at least one unit"):
-        p2.Registration(NODE, codec.P2Codec(3, 1), reg.commitment, reg.salt, reg.root)
+        p2.Public(NODE, codec.P2Codec(3, 1), reg.commitment, reg.salt, reg.root)
 
 
 def test_a_units_sketch_is_its_blocks_partials_summed(store) -> None:
@@ -259,7 +259,7 @@ def test_a_p2_store_takes_no_append_and_no_sloth_session(store) -> None:
     with pytest.raises(ValueError, match="p2.Session"):
         audit.Session(params(reg), reg, None, coins.local(reg.digest, 0, 2, Entropy(b"c")), not_before_ns=0)
     sloth = audit.register(SOURCE, audit.site_log(NODE, 2, bytes(64)), audit.STORE, nonce=bytes(32))
-    with pytest.raises(ValueError, match="P2 Registration"):
+    with pytest.raises(ValueError, match="P2 store's Public"):
         p2.Session(params(reg), sloth, coins.local(sloth.digest, 0, 2, Entropy(b"c")), not_before_ns=0)
     with pytest.raises(ValueError, match="P2Codec"):
         p2.Session(audit.Params(blocks=2, deadline_ns=A, windows=2), reg, coins.local(reg.digest, 0, 2, Entropy(b"c")),

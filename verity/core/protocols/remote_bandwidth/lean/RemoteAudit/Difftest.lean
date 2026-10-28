@@ -705,13 +705,13 @@ def scheduleFn (j : Json) : V Json := do
   let got := Schedule.check ⟨registered, appends, steps⟩ (← nat j "blocks") (← nat j "cap") passes made
   pure (refusedOr ((fun b => Json.mkObj [("bits", toJson b)]) <$> got))
 
-def p2RegistrationOf (j : Json) : V P2.Registration := do
+def p2RegistrationOf (j : Json) : V P2.Public := do
   let c ← J.get j "codec" "registration"
-  P2.Registration.make? (← hex j "node") (← J.nat c "w" "codec") (← J.nat c "c0" "codec") (← J.str c "expander" "codec")
+  P2.Public.make? (← hex j "node") (← J.nat c "w" "codec") (← J.nat c "c0" "codec") (← J.str c "expander" "codec")
     (← J.nat c "blocks_per_segment" "codec") (← J.nat c "segments" "codec") (← hex j "commitment") (← hex j "salt")
     (← hex j "root") (← nat j "rows")
 
-/-- `p2.Registration.digest`. -/
+/-- `p2.Public.digest`. -/
 def p2RegistrationDigestFn (j : Json) : V Json := do pure (hexJ (← p2RegistrationOf j).digest)
 
 /-- `p2.stored` on an accepted registration log: `{"params", "log", "store", "blocks"}` to the node. -/

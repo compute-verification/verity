@@ -148,7 +148,7 @@ P2_LAYOUT = "p2-unit4/v0"
 @dataclass(frozen=True, slots=True)
 class P2Codec:
     """PoUS's P2 (`verity.core.protocols.pous.schemes.p2`, `p2-16448/v4`) as a P2 registration names it
-    (`p2.Registration`): the registered point's `w` and `c0`, keys by counter-mode SHA-512, and the store's
+    (`p2.Public`): the registered point's `w` and `c0`, keys by counter-mode SHA-512, and the store's
     segments.  A P2 store's labels are PoUS's 2,056-byte codewords, opened on PoUS's `vk` and never decoded by this
     protocol, and its receipts are of units under `P2_LAYOUT`.  Nothing of the Sloth codec above takes it, and
     `audit.Rebuild` refuses it: μ_rebuild over a P2 store waits on the squaring ceiling at P2's encode

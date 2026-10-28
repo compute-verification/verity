@@ -91,9 +91,11 @@ def _bytes(value: object, n: int, name: str) -> bytes:
 
 
 @dataclass(frozen=True, slots=True)
-class Registration:
-    """What the store is: the node, P2's parameters (`codec`), PoUS's setup's commitment to W, salt and vk root, and
-    sketch-sha512's rows k_s.  Its `blocks` are the store's units, what its sessions' plans range over."""
+class Public:
+    """A P2 store's public values: the node the registration log registers it under, P2's parameters (`codec`), PoUS's
+    setup's commitment to W and vk root, the salt (the verifier's coin, drawn after the commitment) and sketch-sha512's
+    rows k_s.  Its `blocks` are the store's units, what its sessions' plans range over; its `digest` is what the
+    sessions' coins are bound to."""
 
     node: bytes
     codec: P2Codec
@@ -142,7 +144,7 @@ class Registration:
 
 
 def register(source: bytes, view: log.View, store: str, commitment: bytes, vk: VerifierKey, *,
-             rows: int | None = None) -> Registration:
+             rows: int | None = None) -> Public:
     """`_draw` for the node whose P2 store, of vk's blocks, the registration log registers as `store` (`stored`): the
     node is the log's, never the prover's word."""
     if type(vk) is not VerifierKey:
@@ -151,7 +153,7 @@ def register(source: bytes, view: log.View, store: str, commitment: bytes, vk: V
 
 
 def _draw(source: bytes, node: bytes, commitment: bytes, vk: VerifierKey, *,
-          rows: int | None = None) -> Registration:
+          rows: int | None = None) -> Public:
     """The verifier's registration of a node's P2 store from its PoUS setup: the salt it draws from its own secret
     `source` after the commitment (`setup.draw_salt`), which `vk`, the key it built from the C* it decoded at setup
     (`setup.verifier_key_from_encoding`), must be under."""
@@ -159,7 +161,7 @@ def _draw(source: bytes, node: bytes, commitment: bytes, vk: VerifierKey, *,
     if type(vk) is not VerifierKey or type(vk.params) is not P2Params or vk.salt != salt:
         raise ValueError("vk is the verifier's own, built at PoUS's setup under the salt it drew after the commitment")
     rows = receipts.sketch_rows(receipts.SKETCH_SHA512, rows)
-    return Registration(node, codec_of(vk.params), commitment, salt, vk.root, rows)
+    return Public(node, codec_of(vk.params), commitment, salt, vk.root, rows)
 
 
 def stored(view: log.View, store: str, blocks: int) -> bytes:
@@ -227,7 +229,7 @@ class Store:
     """The prover's C* under a P2 registration: its N blocks and PoUS's vk tree over them, whose root must be the
     registration's."""
 
-    def __init__(self, registration: Registration, blocks: Sequence[bytes]) -> None:
+    def __init__(self, registration: Public, blocks: Sequence[bytes]) -> None:
         params = registration.params
         if len(blocks) != params.blocks or any(type(b) is not bytes or len(b) != BLOCK_BYTES for b in blocks):
             raise ValueError(f"the registration's C* is {params.blocks} blocks of {BLOCK_BYTES} bytes")
@@ -289,7 +291,7 @@ def _paths(paths: object) -> bool:
         type(x) is tuple and all(type(d) is bytes and len(d) == DIGEST_BYTES for d in x) for x in paths)
 
 
-def check(registration: Registration, seed: bytes, plan: Plan, root: bytes, i: int, p: int, o: Opening,
+def check(registration: Public, seed: bytes, plan: Plan, root: bytes, i: int, p: int, o: Opening,
           sketcher: Sketcher | None = None) -> str | None:
     """Opening `o` of receipt (i, p), position p of pass i under `seed` and `plan`, whose receipt tree's root is
     `root`: None if it checks, else the first of `malformed` (not (i, p), not four 2,056-byte blocks with four paths of
@@ -323,10 +325,10 @@ class Session(audit.Session):
     codecs = (P2Codec,)
     block_bytes = UNIT_BYTES
 
-    def __init__(self, params: audit.Params, registration: Registration, coins_: coins.Coins, *, not_before_ns: int,
+    def __init__(self, params: audit.Params, registration: Public, coins_: coins.Coins, *, not_before_ns: int,
                  clock: Callable[[], int] = time.monotonic_ns) -> None:
-        if type(registration) is not Registration:
-            raise ValueError("a P2 session is over a P2 Registration")
+        if type(registration) is not Public:
+            raise ValueError("a P2 session is over a P2 store's Public")
         super().__init__(params, registration, None, coins_, not_before_ns=not_before_ns, clock=clock)
 
     def append(self, root: bytes, count: int) -> tuple[int, bytes] | audit.Verdict:

@@ -132,7 +132,7 @@ def _nat(doc: Mapping[str, Any], k: str) -> int:
     return v
 
 
-def registration_json(r: p2.Registration, plan: Plan | None = None) -> dict[str, Any]:
+def registration_json(r: p2.Public, plan: Plan | None = None) -> dict[str, Any]:
     c = r.codec
     out = {"blocks_per_segment": c.blocks_per_segment, "c0": c.c0, "commitment": r.commitment.hex(),
            "digest": r.digest.hex(), "expander": c.expander, "node": r.node.hex(), "root": r.root.hex(),
@@ -140,7 +140,7 @@ def registration_json(r: p2.Registration, plan: Plan | None = None) -> dict[str,
     return out if plan is None else out | {"plan": [list(run) for run in plan.runs]}
 
 
-def plan_of(doc: Mapping[str, Any], reg: p2.Registration) -> Plan:
+def plan_of(doc: Mapping[str, Any], reg: p2.Public) -> Plan:
     """The plan of `registration_json`'s record `doc`, its `plan` runs `[first, count]` over `reg`'s units, or every
     unit without one; refused (ValueError) unless it is a plan of them."""
     runs = doc.get("plan")
@@ -152,13 +152,13 @@ def plan_of(doc: Mapping[str, Any], reg: p2.Registration) -> Plan:
     return Plan(tuple(tuple(r) for r in runs), reg.blocks)
 
 
-def registration_of(doc: Mapping[str, Any]) -> p2.Registration:
+def registration_of(doc: Mapping[str, Any]) -> p2.Public:
     """`registration_json`'s inverse (`P2Session.heldOf`), refused if its `digest` (when given) isn't the fields'."""
     if type(doc["expander"]) is not str:
         raise ValueError("expander is a string")
     params = P2Params(_nat(doc, "w"), _nat(doc, "c0"), _nat(doc, "blocks_per_segment"), _nat(doc, "segments"),
                       doc["expander"])
-    reg = p2.Registration(_unhex(doc["node"]), p2.codec_of(params), _unhex(doc["commitment"]), _unhex(doc["salt"]),
+    reg = p2.Public(_unhex(doc["node"]), p2.codec_of(params), _unhex(doc["commitment"]), _unhex(doc["salt"]),
                           _unhex(doc["root"]), _nat(doc, "rows"))
     if "digest" in doc and _unhex(doc["digest"]) != reg.digest:
         raise ValueError("the registration's digest is not its fields'")
@@ -191,7 +191,7 @@ def request_of(node: bytes, *, windows: int, passes: int, samples: int, window_n
             "window_ns": window_ns, "windows": windows}
 
 
-def params_of(reg: p2.Registration, request: Mapping[str, Any]) -> audit.Params:
+def params_of(reg: p2.Public, request: Mapping[str, Any]) -> audit.Params:
     """The session's parameters from the prover's request (`P2Session.paramsOf`), refused unless its node is the
     registration's and the rest are positive integers."""
     if not isinstance(request, dict) or sorted(request) != sorted(REQUEST_KEYS):
@@ -297,7 +297,7 @@ class Books:
     `malformed` at the window filling (`fail`), and `why` says what was out of form. `released` is the coin the last
     event released: a start's or a boundary's challenge, or a close's openings coin."""
 
-    def __init__(self, params: audit.Params, registration: p2.Registration, coins_: C.Coins, plan: Plan,
+    def __init__(self, params: audit.Params, registration: p2.Public, coins_: C.Coins, plan: Plan,
                  not_before_ns: int) -> None:
         self.clock, self.plan = P._Held(), plan
         self.s = p2.Session(params, registration, coins_, not_before_ns=not_before_ns, clock=self.clock)
@@ -387,7 +387,7 @@ class Twin:
         self.disagreement: dict[str, Any] | None = None
 
     @classmethod
-    def open(cls, lean: Lean, registration: p2.Registration, plan: Plan, line: bytes, secret: bytes,
+    def open(cls, lean: Lean, registration: p2.Public, plan: Plan, line: bytes, secret: bytes,
              not_before_ns: int) -> Twin:
         """The session the prover's request `line` asks for, on coins from `secret`: `_Refused` where the Lean refuses
         it, or the Python does where the Lean doesn't (the veto)."""
@@ -493,13 +493,13 @@ class Twin:
         return answer(self.books.s, why, self.books.plan) | {"disagreement": d}
 
 
-def held_json(r: p2.Registration, plan: Plan) -> dict[str, Any]:
+def held_json(r: p2.Public, plan: Plan) -> dict[str, Any]:
     """What the Lean answers on holding the store (`P2Session.Held.json`): its digest, units and plan."""
     return {"digest": r.digest.hex(), "plan": [list(run) for run in plan.runs], "plan_units": plan.length,
             "units": r.blocks}
 
 
-def hold(lean: Lean, data: bytes, chunk: int = CHUNK) -> tuple[p2.Registration, Plan]:
+def hold(lean: Lean, data: bytes, chunk: int = CHUNK) -> tuple[p2.Public, Plan]:
     """The registration file's bytes `data`, held by both verifiers: the Python's registration and plan
     (`registration_of`, `plan_of`), refused (ValueError) unless the Lean holds the same store, every `chunk` draws
     checked on a thread (`P2Session.heldOf`)."""
@@ -516,7 +516,7 @@ def hold(lean: Lean, data: bytes, chunk: int = CHUNK) -> tuple[p2.Registration, 
     return reg, plan
 
 
-def session(f_in: BinaryIO, f_out: BinaryIO, registration: p2.Registration, *, coins: bytes, lean: Lean,
+def session(f_in: BinaryIO, f_out: BinaryIO, registration: p2.Public, *, coins: bytes, lean: Lean,
             plan: Plan | None = None, clock: Callable[[], int] = time.monotonic_ns,
             sleep_until: Callable[[Callable[[], int], int], None] = P._sleep_until,
             log: Callable[[str], None] = lambda _m: None, host: str | None = None) -> dict[str, Any]:

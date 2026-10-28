@@ -1560,9 +1560,10 @@ segments). The receipt's vector is a unit, not a block, because block \(j\) star
 receipt of one block would leave sectors half read, and `SketchBoundSession`'s guess term, over sectors, would grow
 from \(Q/2^{96}\) to \(Q/2^{64}\).
 
-**Registration** (`p2.Registration`, `p2.register`). PoUS's setup: the prover commits to `W` (`setup.commit`), the
-verifier draws the salt from its own secret after the commitment (`setup.draw_salt`), and builds `vk` from the `C*` it
-decodes to the committed `W` (`setup.verifier_key_from_encoding`). The registration is the node, P2's parameters, the
+**Registration** (`p2.Public`, `p2.register`). PoUS's setup: the prover commits to `W` (`setup.commit`), the
+verifier draws the salt, its coin, from its own secret after the commitment (`setup.draw_salt`), and builds `vk` from
+the `C*` it decodes to the committed `W` (`setup.verifier_key_from_encoding`). The node is the one the registration
+log registers the store under (`p2.stored`). The store's public values are the node, P2's parameters, the
 commitment, the salt, `vk`'s root and \(k_s\); its digest is `p2.py`'s table, and it is the session's
 \(\text{root}_{(0,-1)}\) as in §4. The setup of record is commitment `9aaaf192…` and its salt.
 

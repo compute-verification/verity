@@ -45,7 +45,7 @@ def DELTA : Rat := 1 / ((2 ^ 40 : Nat) : Rat)
 
 /-- What the verifier holds of the store: its registration and the plan every pass reads. -/
 structure Held where
-  reg : P2.Registration
+  reg : P2.Public
   plan : Plan
 
 private def jsonOf (b : ByteArray) : Option Json := do
@@ -64,11 +64,11 @@ private def runsOf (j : Json) : V (Array (Int × Int)) := do
     pure (← J.asInt xs[0]! "registration.plan", ← J.asInt xs[1]! "registration.plan")
 
 /-- `p2_party.registration_of` and `plan_of` on the registration file's bytes: its fields' registration
-(`P2.Registration.make?`), refused if the `digest` it states isn't theirs, and its `plan` of runs over the store's
+(`P2.Public.make?`), refused if the `digest` it states isn't theirs, and its `plan` of runs over the store's
 units, every unit without one. -/
 def heldOf (bytes : ByteArray) : V Held := do
   let some j := jsonOf bytes | throw "a registration is a UTF-8 JSON object"
-  let reg ← P2.Registration.make? (← hexAt j "node") (← J.nat j "w" "registration") (← J.nat j "c0" "registration")
+  let reg ← P2.Public.make? (← hexAt j "node") (← J.nat j "w" "registration") (← J.nat j "c0" "registration")
     (← J.str j "expander" "registration") (← J.nat j "blocks_per_segment" "registration")
     (← J.nat j "segments" "registration") (← hexAt j "commitment") (← hexAt j "salt") (← hexAt j "root")
     (← J.nat j "rows" "registration")
@@ -118,7 +118,7 @@ def paramsOf (held : Held) (line : ByteArray) : V Session.Params := do
 /-- The registration `Session` keeps a P2 session's books on: the store's U units as its blocks, which is all of it
 `Session` reads here (the session's digest is the P2 registration's, `init`, and an opening is checked by
 `checkOpenings`, never `RemoteAudit.checkWindow`). -/
-def standIn (r : P2.Registration) : Registration :=
+def standIn (r : P2.Public) : Registration :=
   let codec : Codec.Codec := ⟨Codec.P512, 2, false⟩
   { node := r.node, blocks := r.units, payloadRoot := zeros DIGEST_BYTES, codecSeed := zeros Codec.SEED_BYTES, codec,
     receipt := .sketch, rows := r.rows,
@@ -132,7 +132,7 @@ def init (held : Held) (params : Session.Params) (coins : Array ByteArray) (notB
 /-- `p2.Session.verify` on window `w`'s draws: each opening checked on PoUS's vk root in the order drawn
 (`P2.checkOpeningWith`, each pass's seed and sign rows derived once), the first that fails with its draw, or accept;
 `malformed` for another number of openings than draws. -/
-def checkOpenings (reg : P2.Registration) (w : WindowRecord) (drawn : Array (Nat × Nat)) (openings : Array P2.Opening) :
+def checkOpenings (reg : P2.Public) (w : WindowRecord) (drawn : Array (Nat × Nat)) (openings : Array P2.Opening) :
     Verdict := Id.run do
   if openings.size ≠ drawn.size then return .reject .malformed none
   let mut keys : Std.HashMap Nat (ByteArray × Array ByteArray) := {}
@@ -149,7 +149,7 @@ def checkOpenings (reg : P2.Registration) (w : WindowRecord) (drawn : Array (Nat
 
 /-- `checkOpenings` over contiguous chunks of `size` draws, each chunk on a thread of its own: the first chunk's
 rejection in draw order, which is `checkOpenings`'s on the whole window, or accept. -/
-def checkOpeningsChunked (size : Nat) (reg : P2.Registration) (w : WindowRecord) (drawn : Array (Nat × Nat))
+def checkOpeningsChunked (size : Nat) (reg : P2.Public) (w : WindowRecord) (drawn : Array (Nat × Nat))
     (openings : Array P2.Opening) : Verdict := Id.run do
   if openings.size ≠ drawn.size then return .reject .malformed none
   let size := max 1 size

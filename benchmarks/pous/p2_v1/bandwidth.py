@@ -411,12 +411,12 @@ class VkPaths:
 
 # --- the store, the engine step and the prover -------------------------------------------------------------------------
 
-def registration_of_store(store: Path, node: bytes) -> p2.Registration:
+def registration_of_store(store: Path, node: bytes) -> p2.Public:
     """The prover's view of its store's registration: `store.json`'s commitment, salt and vk root under its setup's P2
     parameters, at sketch-sha512's 16 rows."""
     doc, m = json.loads((store / "store.json").read_text()), json.loads((store / "setup.json").read_text())["manifest"]
     params = P2Params(m["w"], m["c0"], m["blocks_per_segment"], m["segments"], m["expander"])
-    return p2.Registration(node, p2.codec_of(params), bytes.fromhex(doc["commitment"]), bytes.fromhex(doc["salt"]),
+    return p2.Public(node, p2.codec_of(params), bytes.fromhex(doc["commitment"]), bytes.fromhex(doc["salt"]),
                            bytes.fromhex(doc["root"]))
 
 
@@ -458,7 +458,7 @@ def tensor_plan(layout: dict, units: int) -> receipts.Plan:
 class Engine:
     """One engine step's weight reads through kernels' staging decode (module docstring), its rows sketched."""
 
-    def __init__(self, store: Path, layout: Path, lib: str, registration: p2.Registration, *, device: str = "cuda",
+    def __init__(self, store: Path, layout: Path, lib: str, registration: p2.Public, *, device: str = "cuda",
                  chunk: int = 1 << 16, readers: int = 6, skip_layer: int | None = None, ref_decode: bool = False) -> None:
         import full as F
         import layout as L
@@ -624,13 +624,13 @@ class Prover:
         return out
 
 
-def registration_file(reg: p2.Registration, path: Path, plan: receipts.Plan | None = None) -> None:
+def registration_file(reg: p2.Public, path: Path, plan: receipts.Plan | None = None) -> None:
     path.write_text(json.dumps(p2_party.registration_json(reg, plan), indent=1, sort_keys=True) + "\n")
 
 
 # --- the toy as an encoded store ---------------------------------------------------------------------------------------
 
-def toy(out: Path) -> p2.Registration:
+def toy(out: Path) -> p2.Public:
     """The toy's C* (`store-toy/`) as an encoded store under `out/store` (`setup.json`, `store.json`, `seg/`, `rows/`)
     and `out/layout.json`, with the verifier's registration of it (PoUS's setup decoding C* to the committed W) and its
     tensors' plan in `out/registration.json`: what `session --ref-decode` serves at fixture scale."""

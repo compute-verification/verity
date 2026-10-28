@@ -92,7 +92,7 @@ def blocks_of(store: S.Store, c_star: bytes) -> list[bytes]:
     return [c_star[nb * j:nb * (j + 1)] for j in range(store.params.blocks)]
 
 
-def registration(store: S.Store, doc: dict, c_star: bytes, node: bytes = NODE) -> p2.Registration:
+def registration(store: S.Store, doc: dict, c_star: bytes, node: bytes = NODE) -> p2.Public:
     """The verifier's registration of the toy's store: PoUS's setup decoding `C*` to the committed `W` under the salt
     it drew from its source after the commitment, then `p2.register`."""
     params, n = store.params, store.params.blocks_per_segment

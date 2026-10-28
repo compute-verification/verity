@@ -1,5 +1,5 @@
 """`p2.py`, the remote audit over PoUS's P2 store, held to its Lean (`RemoteAudit.P2`, through `remote-audit-difftest`) on
-drawn inputs that include what both sides must refuse: a registration's digest (`p2.Registration.digest`, with
+drawn inputs that include what both sides must refuse: a registration's digest (`p2.Public.digest`, with
 `codec.P2Codec`'s refusals), a unit's sketch from its blocks' partials (`p2.Sketcher`: π a block, σ their sum, and y
 from σ against y of the unit's bytes) and an opening's check (`p2.check`) on stores of drawn blocks under PoUS's leaf
 and vk tree, honest or with one field changed; a whole session of record (`RemoteAudit.P2Session`, which `p2_party.py`
@@ -58,15 +58,15 @@ def p2_blocks() -> st.SearchStrategy:
 
 # --- decoding, as `RemoteAudit.Difftest` decodes ----------------------------------------------------------------------
 
-def registration_of(v) -> p2.Registration:
+def registration_of(v) -> p2.Public:
     c = M._get(v, "codec")
     codec = P2Codec(M.nat(c, "blocks_per_segment"), M.nat(c, "segments"), M.nat(c, "w"), M.nat(c, "c0"),
                     M._str(c, "expander"))
-    return p2.Registration(M.hex_(v, "node"), codec, M.hex_(v, "commitment"), M.hex_(v, "salt"), M.hex_(v, "root"),
+    return p2.Public(M.hex_(v, "node"), codec, M.hex_(v, "commitment"), M.hex_(v, "salt"), M.hex_(v, "root"),
                            M.nat(v, "rows"))
 
 
-def registration_json(r: p2.Registration) -> dict:
+def registration_json(r: p2.Public) -> dict:
     return {"node": r.node.hex(), "codec": r.codec.to_json(), "commitment": r.commitment.hex(), "salt": r.salt.hex(),
             "root": r.root.hex(), "rows": r.rows}
 
@@ -251,7 +251,7 @@ def drawn_store(k: int, rows: int) -> p2.Store:
     blocks[-1] = b"\x7f" * p2.BLOCK_BYTES
     codec, salt = P2Codec(bps, segments), expand(b"salt %d" % k, 24)
     root = MerkleTree([leaf_hash(p2.pous_params(codec), salt, j, b) for j, b in enumerate(blocks)]).root
-    reg = p2.Registration(b"node %d" % k, codec, expand(b"commitment %d" % k, 64), salt, root, rows)
+    reg = p2.Public(b"node %d" % k, codec, expand(b"commitment %d" % k, 64), salt, root, rows)
     return p2.Store(reg, blocks)
 
 
@@ -493,7 +493,7 @@ def p2_events(store: p2.Store, plan: Plan, params, committed: list[bytes], not_b
     return events
 
 
-def p2_held(reg: p2.Registration, data: bytes, line: bytes):
+def p2_held(reg: p2.Public, data: bytes, line: bytes):
     """The plan and parameters the books hold from the registration file `data` and the request `line`, else the
     error they refuse them with (a session with no events after the request)."""
     try:
@@ -621,7 +621,7 @@ def committed() -> p2.Store:
     data = (FIXTURES / "p2-c-star.bin").read_bytes()
     assert hashlib.sha512(data).hexdigest() == meta["c_star_sha512"]
     m = meta["params"]
-    reg = p2.Registration(b"p2-node-under-test", P2Codec(m["blocks_per_segment"], m["segments"]),
+    reg = p2.Public(b"p2-node-under-test", P2Codec(m["blocks_per_segment"], m["segments"]),
                           bytes.fromhex(meta["commitment"]), bytes.fromhex(meta["salt"]), bytes.fromhex(meta["root"]))
     return p2.Store(reg, [data[p2.BLOCK_BYTES * j:p2.BLOCK_BYTES * (j + 1)] for j in range(len(data) // p2.BLOCK_BYTES)])
 
