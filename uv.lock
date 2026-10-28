@@ -37,6 +37,7 @@ members = [
     "verity-core-sampled-proofs",
     "verity-difftest",
     "verity-exact-kit",
+    "verity-filler-corun",
     "verity-flock",
     "verity-lean-audit",
     "verity-machine-model",
@@ -2338,6 +2339,11 @@ requires-dist = [
     { name = "python-sat", specifier = ">=1.8.dev0" },
     { name = "sympy", specifier = ">=1.13" },
 ]
+
+[[package]]
+name = "verity-filler-corun"
+version = "0.0.0"
+source = { virtual = "benchmarks/torch_gpu/filler_corun" }
 
 [[package]]
 name = "verity-flock"

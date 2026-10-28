@@ -1,0 +1,13 @@
+[project]
+name = "verity-filler-corun"
+version = "0.0.0"
+description = "The filler's exact int8 GEMM on the H200 with SHA-512 in separate CTAs on the same SMs, and its timing."
+requires-python = ">=3.12"
+dependencies = []
+
+# Not an installable package: a workspace member so that its tests run in the workspace environment.
+[tool.uv]
+package = false
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
