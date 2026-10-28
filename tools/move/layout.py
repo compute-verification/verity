@@ -13,8 +13,9 @@ retired directory has no destination, so a file that lands on main later gets a 
 What it rewrites, in every tracked text file the map doesn't exclude:
 - paths: root-relative ones (`packages/verity/src/verity/ir/cut.py`, also after `{ROOT}/`, `$ROOT/` or `~/verity/`),
   ones relative to the file (`../../packages/verity/lean` in a lakefile, `include_str!`), ones relative to an old package
-  root (`verity/ir/cut.py`, `verity_pouw/schemes/ncp.py`) when that file exists, Python joins (`ROOT / "census"`), and the
-  `Path(__file__).parents[N]` anchors of a moved file;
+  root (`verity/ir/cut.py`, `verity_pouw/schemes/ncp.py`) when that file exists, Python joins (`ROOT / "census"`), the
+  `Path(__file__).parents[N]` anchors of a moved file, and a shell script's paths from its own directory
+  (`$(dirname "$0")/../..`, also through `${BASH_SOURCE[0]}` or a variable the script sets to its own path);
 - modules: import statements (split when their names now live in different modules, made absolute when a relative one no
   longer resolves), `from M import n` in strings, and every dotted name (`-m`, `import_module`, `module:attr`, docs). A
   module whose own row keeps its name (a [paths] row with old == new) stays where it is when its package moves;
@@ -64,6 +65,29 @@ MOVES = "tools/research/src/research/store/moves.json"   # each layout move's [p
 FILE_SUFFIXES = {"py", "json", "toml", "md", "txt", "lean", "sh", "rs", "cu", "cuh", "yaml", "yml", "gz", "jsonl", "npy", "html"}
 #: file types whose plain relative paths (`fixtures/x.json`, with no `./`) are resolved against the file's directory
 RELATIVE_TYPES = {".py", ".toml", ".json", ".sh", ".md", ".rs", ".cu", ".cuh", ".yaml", ".yml", ".txt", ".cfg", ".lean"}
+#: a shell script's own directory and the path joined to it (`$(dirname "$0")/../..`); `ref` is what `dirname` takes
+SH_ANCHOR = re.compile(r'(?P<head>\$\(dirname\s+"(?P<ref>\$(?:\{[A-Za-z_0-9]\w*(?:\[0\])?\}|[A-Za-z_0-9]\w*))"\))'
+                       r'(?P<rel>(?:/[\w.\-]+)+)')
+#: a variable a shell script sets to its own path (`SELF=$(cd "$(dirname "$0")" && pwd)/$(basename "$0")`)
+SH_SELF = re.compile(r'^\s*(?:export\s+|readonly\s+|local\s+)?(?P<v>[A-Za-z_]\w*)=(?P<q>"?)'
+                     r'(?:\$\(cd\s+"\$\(dirname\s+"(?P<a>\$0|\$\{BASH_SOURCE\[0\]\})"\)"\s+&&\s+pwd\)/\$\(basename\s+"(?P=a)"\)'
+                     r'|\$\((?:realpath|readlink\s+-f)\s+"(?:\$0|\$\{BASH_SOURCE\[0\]\})"\))(?P=q)\s*$', re.M)
+SH_OWN = {"0", "BASH_SOURCE", "BASH_SOURCE[0]"}
+
+
+def is_shell(path: str, text: str) -> bool:
+    """A shell script: `*.sh`, or a file whose first line is a shell's `#!`."""
+    return path.endswith(".sh") or re.match(r"#!\S*(?:/|\s)(?:ba|da|z)?sh\b", text) is not None
+
+
+def sh_ref(ref: str) -> str:
+    """`$0`, `${BASH_SOURCE[0]}` or `$SELF` as the name it reads."""
+    return ref[1:].strip("{}")
+
+
+def sh_self_names(text: str) -> set[str]:
+    """The names whose `dirname` is a shell script's own directory: its own path's, and each variable it sets to that."""
+    return SH_OWN | {m.group("v") for m in SH_SELF.finditer(text)}
 
 
 def git(root: Path, *args: str, check: bool = True) -> str:
@@ -447,6 +471,8 @@ class Run:
             out = self._anchors(path, old, out)
             out = self._joins(path, old, out)
             out = self._imports(path, old, out)
+        if is_shell(path, out):
+            out = self._sh_anchors(path, old, out)
         if not path.endswith(".lean"):
             out = self._from_strings(path, out)
             out = self._dotted(path, out)
@@ -774,6 +800,45 @@ class Run:
         base = f"{m.group('head')}{r}.parents[{new_up}]" if m.group("n") is not None else \
             f"{m.group('head')}{r}" + ".parent" * (new_up + 1)
         return base + m.group("chain")
+
+    def _sh_anchors(self, path: str, old: str, text: str) -> str:
+        """`$(dirname "$0")/../..` in a shell script, or after `${BASH_SOURCE[0]}` or a variable the script sets to its own
+        path (`SH_SELF`): the path it names from the script's directory, from the script's new place."""
+        names = sh_self_names(text)
+        here_old, here_new = posixpath.dirname(old), posixpath.dirname(path)
+
+        def fix(m: re.Match) -> str:
+            if sh_ref(m.group("ref")) not in names:
+                return m.group(0)
+            rel = m.group("rel")[1:]
+            target = posixpath.normpath(posixpath.join(here_old, rel))
+            if target.startswith(".."):
+                return m.group(0)
+            target = "" if target == "." else target
+            if not target:
+                new_target = ""
+            elif self.L.kept(target, path):
+                return m.group(0)
+            elif target in self.known_old:
+                new_target = self.L.file(target) or target
+            elif target in self.old_dirs:
+                new_target, approx = self.L.directory(target)
+                if approx:
+                    self.note("shell anchors to a directory that splits", f"{path}: {m.group(0)} (was {target})")
+                new_target = new_target or target
+            else:
+                if path != old:
+                    self.note("shell anchors not recomputed", f"{path}: {m.group(0)} (names {target}, not in the tree)")
+                return m.group(0)
+            if path == old and new_target == target:
+                return m.group(0)
+            new_rel = posixpath.relpath(new_target or ".", here_new or ".")
+            if new_rel == rel:
+                return m.group(0)
+            self._count(path, "shell anchors")
+            return f"{m.group('head')}/{new_rel}"
+
+        return SH_ANCHOR.sub(fix, text)
 
     _JOIN = re.compile(r"""(?P<chain>(?:(?P<q>["'])[\w.\-]+(?P=q)\s*/\s*)*(?P<q2>["'])[\w.\-]+(?P=q2))""")
 

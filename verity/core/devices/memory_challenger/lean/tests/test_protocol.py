@@ -1,6 +1,6 @@
 """`verdict` as a core protocol (`MemoryChallenger.Protocol`): `memory-challenger-test serve` against `memory_challenger.verdict`
 under `pous_test_signer.SCHEMES`, and `memory-challenger serve` against it under `memory_challenger.SCHEMES`, on honest
-sessions, sessions under one adversarial edit (a late round, a wrong block digest, an index that isn't its opening's, a
+sessions, sessions under one adversarial edit (a late round, a wrong label digest, an index that isn't its opening's, a
 tampered header, a bad signature, a wrong key, a replayed leaf, and more: `mc_cases.MUTATIONS`) and malformed cases."""
 
 from __future__ import annotations
@@ -76,7 +76,7 @@ def test_the_named_rejections(signers_server):
 
 
 def _honest(spends=(1, 1, 1)) -> M.Session:
-    """A three-round session over 8 blocks of 16 bytes, its limit 10 ns, signed at leaf 1 of a height-1 test key."""
+    """A three-round session over 8 labels of 16 bytes, its limit 10 ns, signed at leaf 1 of a height-1 test key."""
     signer = M.test_signer(M.SECRETS[0], 1, 1)
     tree = mc.CoinTree.draw(b"source", bytes(32), 8, 3, key=M.COIN_KEYS[0], salts=[bytes([j]) * 192 for j in range(3)])
     clock = M.Clock(1_000)

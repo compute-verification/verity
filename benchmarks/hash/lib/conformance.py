@@ -61,7 +61,7 @@ def _load(name: str, path: Path):
 CG_REF = _load("commit_gpu_reference", ROOT / "benchmarks/pouw/commit_gpu/reference.py")
 
 
-#: SPLITK's vectors' generator (#3467): its cases (`SV.CASES`), their rows and keys, and credit's reading of a case
+#: the split-K rows' vectors' generator: its cases (`SV.CASES`), their rows and keys, and credit's reading of a case
 #: (`SV.commit`: `h1zy.chunk_words` under `Registered.commit`); `SV.OUT` the pinned vectors, every leaf's words_sha512,
 #: row_digest and frame_leaf and each value's domain and root
 SV = _load("splitk_rows_vectors", ROOT / "verity/core/protocols/pouw/tests/splitk_rows_vectors.py")

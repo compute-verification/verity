@@ -1,4 +1,4 @@
-"""`credit.py`'s rules on a served window and its period (RT4-INT-32, -34 and -42; PRF-132): each mutation of
+"""`credit.py`'s rules on a served window and its period: each mutation of
 `pouw_credit_cases` is refused by the rule it aims at, its message naming the fix, and the honest windows and periods are
 accepted. The drawn units are the draw coin's over the window's own layout, read from the descriptor of the circuit the
 period committed (`credit.layout_of`), whose strata are the compiled `h1window.program`'s, and the weights a window
@@ -708,7 +708,7 @@ def test_a_glm_window_at_k_6144_registers_its_b_rows_as_2_chunk_leaves_each_past
 
 @pytest.mark.parametrize("seed", SEEDS)
 def test_an_expert_call_whose_rows_the_commit_lacks_refuses(seed):
-    """VLLM-80 (ROOTS1 for MoE): a served MoE window lays out its routed experts' calls as H1 names them
+    """A served MoE window lays out its routed experts' calls as H1 names them
     (``prefix.expert.projection``), each expert's down at the intermediate width K, which only expert calls have. With
     every table the Commit's, the window is credited; with the Commit record lacking one round's A table of that K,
     whose calls are expert calls only, `_arow` refuses the window before any proof is read (``commit-missing-expert``)."""
@@ -952,7 +952,7 @@ def test_a_window_proving_another_circuit_refuses_the_period(seed):
 
 @pytest.mark.parametrize("seed", SEEDS)
 def test_a_window_whose_session_ran_a_branch_commit_refuses_the_period(seed):
-    """CMP-74: a window whose session ran a commit the host's pins log records but that is off main's first-parent line
+    """A window whose session ran a commit the host's pins log records but that is off main's first-parent line
     (a branch commit merged into main) counts toward no period (`challenger.credited_session`, the pin before the
     circuit), so its period earns nothing; the same period, with that commit on the verifier's copy of main, earns."""
     d = cases.period_instance(random.Random(f"branch-pin/{seed}"), "branch-pin")
@@ -1178,7 +1178,7 @@ def test_the_unit_count_form_is_refuted_at_its_cap(light, heavy):
 
 @pytest.mark.parametrize("seed", SEEDS)
 def test_a_period_open_with_no_k_refuses(seed):
-    """K is the proof service's selection, committed in the period-open before any draw: a period whose open commits
+    """K is the proof system's selection, committed in the period-open before any draw: a period whose open commits
     none, or a malformed one, earns nothing."""
     for name in ("no-k", "k-form"):
         got, refused = _period(name, seed)

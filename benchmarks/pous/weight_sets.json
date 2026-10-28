@@ -1,6 +1,6 @@
 {
  "schema": "pous-weight-sets/v1",
- "note": "The dataset every POUS implementation is measured on: weight sets as the serving engine holds them. The frozen EWB metric decodes every tensor from C once per pass; the bytes of W do not change the decode's cost, so the harness fills W (or C) deterministically and the checkpoint pins say which model's shapes these are. Source: integrations/vllm/workloads/dense_decode_shapes.json (#188) and manifests/checkpoints.json (#172).",
+ "note": "The dataset every POUS implementation is measured on: weight sets as the serving engine holds them. The frozen EWB metric decodes every tensor from C once per pass; the bytes of W do not change the decode's cost, so the harness fills W (or C) deterministically and the checkpoint pins say which model's shapes these are. Source: integrations/vllm/workloads/dense_decode_shapes.json and manifests/checkpoints.json.",
  "hardware": [
   "l40s-48gb/bf16"
  ],

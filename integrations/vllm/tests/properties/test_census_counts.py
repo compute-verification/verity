@@ -131,7 +131,7 @@ def test_an_allowlisted_kernel_passes_with_its_reason_recorded(reconcile, monkey
 
 
 def test_a9_untraced_in_place_overwrite_is_refused(reconcile):
-    """A9's repro (note:20261019T0602Z-report-a9-glm-moe-final): the device ran both step-0 fused norms, the log holds only
+    """An untraced in-place overwrite: the device ran both step-0 fused norms, the log holds only
     the final one.  The residue stays zero, since the final norm's declaration claims both launches by name; the count
     refuses it, naming the final norm's event and the buffers it writes."""
     rep = reconcile(device_census(), "untraced")

@@ -10,7 +10,7 @@ through the one-stage audit as warden_zk.py's.
 
 * **The blocks** (`Block`, ``--shape``):
   - ``tiny``: K = 128 on sm_120's s8 step, the load ``w`` and ``sw`` n seeded channels, unit i reading channel i;
-  - ``h200``: K = 256 on sm_90's (the H200's), the load CMP-95 interface 1's ``l0.wk`` and ``l0.wk.scale`` at the frozen
+  - ``h200``: K = 256 on sm_90's (the H200's), the load the seeded weights' ``l0.wk`` and ``l0.wk.scale`` at the frozen
     H200 shape under its demo seed, whole, in its registered rows (128 words of 256 codes, the row
     ``S8AccumulatorPart{K=256}`` reads, and 2 words of an f32 scale; `h200_load`), unit i reading channel i's first part
     (row 64·i) and its scale (row i). The test holds `seeded` to interface 1's fixture.
@@ -80,7 +80,7 @@ UPLINK, WINDOW = "s0/uplink", 1
 #: the deployed scheme (N = 64, W = 1) on a tree of 2^6 leaves
 PARAMS = lms.Params(64, 1, 6)
 INS, PORTS = ("x", "sx", "wrow", "sw"), ("x", "sx", "wrow", "sw", "o0")
-#: CMP-95 interface 1's seeds (`verity_torch_loop.weights`): the demo's public one and its fixture's
+#: the seeded weights' seeds (`e2e_h200.served_weights`): the demo's public one and its fixture's
 DEMO_SEED, TEST_SEED = b"verity/cmp92/h200/weights/v1", b"verity/seeded-weights/test-seed"
 H200_WIDTH, H200_HEAD, H200_CODES = 16384, 64, 256
 

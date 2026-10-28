@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Verity's vLLM CPU Builds on vy-nebius-2's idle CPUs (Daniel 19:12Z: the two nodes are one pool), as `project=verity` fill guests
+# Verity's vLLM CPU Builds on vy-nebius-2's idle CPUs (the two nodes are one pool), as `project=verity` fill guests
 # that node 2's fill runner pins to its Verity CPUs and freezes (SIGSTOP) through PoUW's timed windows. The Commit stays on node 1.
 #
 #   on node 1:  n2_build.sh submit KEY ITEM.json|-   (ITEM: the config-run item a lane gives dispatch.py, as in its ready files;
@@ -27,7 +27,7 @@ set -euo pipefail
 N1=${VY_N1:-vy-n1} N2=${VY_N2:-vy-n2}
 GUEST=/workspace/verity-guest
 # the fill prio of node 2's vLLM guests: above every other guest's (proofs' are 5 and 10), since circuits' vLLM work goes first
-# on both nodes (Daniel 1 Oct 01:35Z)
+# on both nodes
 PRIO=${VY_N2_PRIO:-20}
 DISPATCH=${VY_DISPATCH:-/workspace/jobs/dispatch/infra/nebius/dispatch.py}
 

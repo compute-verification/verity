@@ -1,4 +1,4 @@
-description = "CO-Dither's served values as CHECKED-STRIP specifies them (note:20261017T0030Z-draft-checked-strip, co32c on the linears, cohalf on Q K^T): the linears' weights 7-bit plus a fresh bit, their activations dithered on 8 bits (co32c's committed digits close the second limb); Q and K dithered on 7 bits; P V as in adopted (P's w64 peel, V dithered on 8 bits), psink, kc, SmoothQuant and the rotations as in adopted"
+description = "CO-Dither's served values (co32c on the linears, cohalf on Q K^T): the linears' weights 7-bit plus a fresh bit, their activations dithered on 8 bits (co32c's committed digits close the second limb); Q and K dithered on 7 bits; P V as in adopted (P's w64 peel, V dithered on 8 bits), psink, kc, SmoothQuant and the rotations as in adopted"
 
 [[linear]]
 step = "smooth"

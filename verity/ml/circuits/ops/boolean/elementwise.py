@@ -12,16 +12,12 @@ on bits.
     I32Add_v2                         (a, b: Array<32, Value<1>>) -> Array<32, Value<1>>        word view: I32Add_v1
 
 Each is traced from the builder C-Flock's lowering runs for its word primitive (`trace.definition`), so its And gates are that
-builder's live ANDs: `fp.f32_add` / `f32_mul` / `f32_div` with the IR's NaN words (numpy float32 on x86-64), `fp.f32_fma`, the
+builder's live ANDs: `fp.f32_add` / `f32_mul` / `f32_div` with the word primitives' NaN words (numpy float32 on x86-64), `fp.f32_fma`, the
 same four with every NaN the GPU's 0x7FFFFFFF for the `_v4`s (the `_v2` words, as C-Flock's `tail_pieces` lowers them), the
 f32 add or multiply of the widened operands rounded by `fp.f32_to_bf16` to the word's NaN (0x7FC0 for `Bf16Add_v1`, F2FP's
 0x7FFF for the others), and `forms.add` at 32 bits. None is flushed: a
 subnormal operand or result is kept, as the `_v1` words keep it. `F32Div_v3` is the IEEE divider (`div.rn.f32`, which
 `F32Div_v1` is); the MUFU pieces of `div.full.f32` (`DivFullRcp_v1`, `DivFullScaleA_v1`) are their own Calls, not inside it.
-
-`bf16_band` is the piece a function of one bf16 word reads where it is neither exact arithmetic nor a constant: a band of
-exponent fields per sign, held as a constant table of the function's own values and read with plain gates (one-hot minterms
-and fixed XORs of them).
 
 A row of an element-wise operation computes no value twice (`Q_word`'s no-recompute rule) when an operand every member shares
 is decoded once: `shared_operand` cuts a builder's circuit into the gates that read only that operand (one Call per row) and the
@@ -42,68 +38,15 @@ from verity.ml.circuits.types import Array, Type
 from .. import fp32 as W
 from .. import scalar as S
 from verity.ml.circuits.silicon import fp
-from verity.ml.circuits.boolean.forms import NOT, ZERO, add, and_reduce
+from verity.ml.circuits.boolean.forms import add
 from verity.ml.circuits.boolean.trace import Traced, definition, emit, trace, word_of
 
 __all__ = ["Bf16Add", "Bf16AddF2fp", "Bf16MulBf16", "Bf16MulF32", "F32Add", "F32AddV4", "F32Div", "F32DivV4", "F32Fma", "F32FmaV4",
-           "F32Mul", "F32MulV4", "I32Add", "bf16_band", "on_bits", "shared_operand", "shared_specialized", "specialized"]
+           "F32Mul", "F32MulV4", "I32Add", "on_bits", "shared_operand", "shared_specialized", "specialized"]
 
 F32 = I32 = Array(32, BL.BIT)
 BF16 = Array(16, BL.BIT)
 _AB = (("a", F32), ("b", F32))
-
-
-def _blocks(ks) -> dict[int, int]:
-    out: dict[int, int] = {}
-    for k in ks:
-        out[k >> 2] = out.get(k >> 2, 0) | 1 << (k & 3)
-    return out
-
-
-def bf16_band(C, g, value: Callable[[int], int], lo: int, hi: tuple[int, int]):
-    """The 15 magnitude bits of ``value(g)`` for a bf16 word g (LSB first) whose exponent field lies in ``[lo, hi[sign]]``, and
-    0 for every other g.
-
-    g's mantissa and lowest exponent bit decode to 256 one-hot minterms, and each row of the band (a sign and an exponent pair
-    e, e + 1) to one minterm; each output bit of a row is one AND of the row's minterm with a fixed XOR of low minterms, or its
-    complement, whichever has fewer terms. A column's XOR is a chain over blocks of four in ascending order, each block's part
-    a chain over its minterms, so equal parts and equal prefixes are one wire."""
-    if not all(0 <= lo <= h <= 255 for h in hi):
-        raise ValueError(f"not a band of exponent fields: [{lo}, {hi}]")
-    m, e, s = list(g[:7]), list(g[7:15]), g[15]
-    low = fp.decode(C, m + [e[0]])
-    high = fp.decode(C, e[1:4] + [s])
-    nibbles: dict[int, Any] = {}
-    parts: dict[tuple[int, int], Any] = {}
-
-    def part(b: int, mask: int):
-        if (b, mask) not in parts:
-            top = mask.bit_length() - 1
-            rest = mask ^ 1 << top
-            parts[(b, mask)] = part(b, rest) ^ low[4 * b + top] if rest else low[4 * b + top]
-        return parts[(b, mask)]
-
-    out = [ZERO] * 15
-    for sign in (0, 1):
-        for e0 in range(lo & ~1, hi[sign] + 1, 2):
-            n = e0 >> 4
-            if n not in nibbles:
-                nibbles[n] = and_reduce(C, [e[4 + i] if n >> i & 1 else NOT(e[4 + i]) for i in range(4)])
-            row = C.AND(high[(e0 & 0xF) >> 1 | sign << 3], nibbles[n])
-            words = [value(sign << 15 | (e0 | k >> 7) << 7 | k & 0x7F) & 0x7FFF if lo <= e0 | k >> 7 <= hi[sign] else 0
-                     for k in range(256)]
-            for j in range(15):
-                ones = [k for k in range(256) if words[k] >> j & 1]
-                if len(ones) == 256:
-                    out[j] = out[j] ^ row
-                elif ones:
-                    blocks, zeros = _blocks(ones), _blocks(sorted(set(range(256)) - set(ones)))
-                    pick, flip = (blocks, False) if len(blocks) <= len(zeros) else (zeros, True)
-                    col = None
-                    for b in sorted(pick):
-                        col = part(b, pick[b]) if col is None else col ^ part(b, pick[b])
-                    out[j] = out[j] ^ C.AND(row, NOT(col) if flip else col)
-    return out
 
 
 def _sub(T: Traced, keep: list[int], inputs: list[int], outputs: list[int]) -> Traced:
@@ -162,7 +105,7 @@ def shared_operand(names: tuple[str, str], version: int, build: Callable, params
 
     def split() -> list[Traced]:
         if not parts:
-            parts.extend(_split(trace(build, types, ret), types, shared))
+            parts.extend(_split(trace(build, types, ret, key=("/".join(names), version, {})), types, shared))
         return parts
 
     name, t = params[shared]
@@ -180,11 +123,12 @@ def shared_operand(names: tuple[str, str], version: int, build: Callable, params
 
 def specialized(name: str, version: int, statics: Sequence[str], build: Callable,
                 signature: Callable[[Any], tuple[Sequence[tuple[str, Type]], Type]], doc: str = "", word: Any = None,
-                register: bool = True) -> CompositeDefinition:
+                register: bool = True, refuse: Callable[[dict], str | None] | None = None, ports: Any = None,
+                conformance: str = "exact-model-tested") -> CompositeDefinition:
     """The Boolean Definition ``name_v{version}{statics}`` whose circuit for bindings S is the builder ``build(S)`` traced over
     ``signature(S)`` (`trace.trace`), so that a constant or a length the statics name is folded into its gates, never an operand.
     Traced once per binding, on first use; ``traced(S)``. ``word``, a function of the bindings, names the word Definition it
-    computes (`trace.word_of`)."""
+    computes (`trace.word_of`). ``refuse``, ``ports`` and ``conformance`` are `CompositeDefinition`'s."""
     made: dict[tuple, Traced] = {}
 
     def types(S) -> tuple[list[Type], Type]:
@@ -194,12 +138,12 @@ def specialized(name: str, version: int, statics: Sequence[str], build: Callable
     def traced(S) -> Traced:
         key = tuple(getattr(S, k) for k in statics)
         if key not in made:
-            made[key] = trace(build(S), *types(S))
+            made[key] = trace(build(S), *types(S), key=(name, version, dict(zip(statics, key))))
         return made[key]
 
     d = CompositeDefinition(name, version, tuple(statics), signature,
-                            lambda B, S, *c: emit(traced(S), *types(S), B, *c), doc=doc, conformance="exact-model-tested",
-                            register=register)
+                            lambda B, S, *c: emit(traced(S), *types(S), B, *c), doc=doc, conformance=conformance,
+                            register=register, refuse=refuse, ports=ports)
     d.traced = traced  # type: ignore[attr-defined]
     d.word = word  # type: ignore[attr-defined]
     return d
@@ -222,7 +166,8 @@ def shared_specialized(names: tuple[str, str], version: int, statics: Sequence[s
         if key not in made:
             params, ret = signature(S)
             types = [t for _, t in params]
-            made[key] = _split(trace(build(S), types, ret), types, shared, by_element)
+            made[key] = _split(trace(build(S), types, ret, key=("/".join(names), version, dict(zip(statics, key)))), types,
+                               shared, by_element)
         return made[key]
 
     def own_sig(S):

@@ -81,7 +81,7 @@ def pi2_keccak_f(m: int) -> int:
     This counts a whole call, which is what the ideal-permutation model charges.  It does not bound an adversary at
     this `Π₂`: each round function is a long SHAKE256 squeeze from a 200-byte post-absorb state, so a prover that keeps
     the five odd rounds' states of a block's last call (1000 B, 1.53% of a 64 KiB label) rebuilds the whole label in
-    481 sequential Keccak-f, with no call and no chain walk (red team, 4 Oct 2026, art:7617c8017e80)."""
+    481 sequential Keccak-f, with no call and no chain walk (the red team's state attack)."""
     half = (2 * m + CAPACITY_BITS) // 16
     return FEISTEL_ROUNDS * ((ROUND_PREFIX_BYTES + half) // SHAKE256_RATE + 1)
 

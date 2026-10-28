@@ -45,7 +45,7 @@ def _lg2_word(x: int) -> int:
 
 @pytest.mark.parametrize("c0", ["C0", "C0_max"])
 def test_lg2_reproduces_the_sm120_measurement(c0: str) -> None:
-    """Every mantissa at [1, 2) and the 2^20-word sweep of run r20261004-060203-ba52, by the digests the table records, at
+    """Every mantissa at [1, 2) and the 2^20-word sweep, by the digests the table records, at
     either end of C0's measured range."""
     mant, sweep_in, sweep_out = _digests()
     h = hashlib.sha256()

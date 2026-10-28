@@ -1,6 +1,6 @@
 """`protocol_options.credit_gate` and its place in H1's credit (`pouw_h1_hooks.traced`, `H1Run.judge`, `H1Run.credit`): a served
 call is credited only if the y the linear hands back is the credited kernel's own output, one GEMM invocation writing z and
-y, no other GEMM ran for it, and its z is its committed z/y records, every unit's y dq of its z and the served y theirs
+y, no other GEMM ran for it, and its z is its committed z/y records, every proof block's y dq of its z and the served y theirs
 (`pouw_h1_records.reason`).  vllm's int8 arm under H1 (``zy_rows`` set, ``verity_int8::scaled_mm_zy`` over T slots) is
 credited; the arm serving ``scaled_mm``'s y with z a second ``_int_mm`` beside it is refused with its named reason, and so
 is every way of handing over a z or records the served kernel didn't write for the served y."""
@@ -180,14 +180,14 @@ def _linear_is_the_stand_in(monkeypatch):
 
 
 AUDITOR = "vy-challenger-1:7811"
-#: the gate's reserve answer for the window's session, and the gate that opens it on the window's open root
+#: the gate's reserve answer for the window's challenge phase, and the gate that opens it on the window's open root
 RESERVED = {"session": CH.session_id(1)}
 GATE: dict = {}
 
 
 @pytest.fixture
 def auditor(tmp_path, monkeypatch):
-    """The auditor host's challenger, one session over a one-round live epoch, reached at `AUDITOR`, reserved as
+    """The auditor host's challenger, one challenge phase over a one-round live epoch, reached at `AUDITOR`, reserved as
     `RESERVED` and opened by `GATE`'s ``open``."""
     host = CH.Host(tmp_path / "auditor", Wd.live_challenger(0, 1, CH.entropy(1)), 1, gated=True)
     monkeypatch.setattr(R.RemoteChallenger, "connect",
@@ -200,14 +200,14 @@ PERIOD = "p1"
 #: the fixed length `_serve`'s one request serves (its max_tokens 1, the public-cap done source), as the period's
 #: open commits it (`credit.committed_length`)
 LENGTH = {"max_tokens": [1], "stop": Wd.STOP_FIXED}
-#: the served window's layout (`_serve`'s one call of N = 64 over T = `ROWS` slots), as the period declares it: 2 units
+#: the served window's layout (`_serve`'s one call of N = 64 over T = `ROWS` slots), as the period declares it: 2 proof blocks
 LAYOUT = SV.declared_layout([(64, K)], {0: "q"}, ROWS, 1)
 
 
 @functools.cache
 def _descriptor(shapes=((64, K),), modules=(("q"),), rows=ROWS, steps=1) -> bytes:
     """The declared window Program's descriptor bytes (`pouw_h1_served.descriptor`) on the served test's stand-in
-    unit: the period's circuit is their SHA-512, and core's credit reads the window's layout from them."""
+    proof block: the period's circuit is their SHA-512, and core's credit reads the window's layout from them."""
     from tests.protocols.test_pouw_h1_served import _unit
     return SV.descriptor(SV.declared(list(shapes), dict(enumerate(modules)), rows, steps, unit=_unit()))
 
@@ -216,7 +216,7 @@ def _circuit() -> str:
     return hashlib.sha512(_descriptor()).hexdigest()
 
 
-#: the prover's own weights key, which salted its b/<K> before the auditor's registration (VLLM-71)
+#: the prover's own weights key, which salted its b/<K> before the auditor's registration
 WKEY = bytes(range(32, 64))
 #: each K's circuit file's SHA-512 as a period-open commits them (``circuit_files``), and the live template's
 FILES = {f"k{K}": hashlib.sha512(b"the k64 template's circuit file").hexdigest(),
@@ -236,7 +236,7 @@ def _rows(edit=None):
 
 
 def _registry(edit=None) -> CH.Registry:
-    """The auditor's model registry (infra's, in process) holding `CH.MODEL`'s registration under the period's circuit:
+    """The auditor's model registry (in process) holding `CH.MODEL`'s registration under the period's circuit:
     its checkpoint `_rows` of `edit`, committed under the auditor's own salt key (the gate's ``model-register``)."""
     reg = CH.Registry()
     codes, scales = _rows(edit)
@@ -266,10 +266,10 @@ def _served(**kw) -> SV.Served:
 
 @pytest.fixture
 def periodic(tmp_path, monkeypatch):
-    """`auditor` with its session reserved inside lane vllm's period `PERIOD`, whose open commits `_circuit` and (unless
+    """`auditor` with its challenge phase reserved inside lane vllm's period `PERIOD`, whose open commits `_circuit` and (unless
     None) the draw K ``draw_k`` and the fixed length `LENGTH`, opened with ``--model`` `CH.MODEL` (unless ``model`` is
     False) on ``registry`` (default `_registry`), and ``files`` its circuit files: ``periodic(draw_k)`` is the host; close the period with
-    ``host.ledger.period_close`` once the session has ended."""
+    ``host.ledger.period_close`` once the challenge phase has ended."""
     def make(draw_k, model=True, files=None, registry=None):
         leaves = itertools.count()
         ledger = CH.Ledger(tmp_path / "auditor.jsonl", 1, leaves, registry=registry or _registry())
@@ -344,7 +344,7 @@ def _refused(run, reason, m=3, n=32):
 
 def test_the_int8_arm_under_h1_serves_scaled_mm_zy_and_is_credited(auditor):
     """vllm's int8 arm with H1 installed: the install sets its ``zy_rows`` to T, so it serves ``scaled_mm_zy`` (y bit for
-    bit the plain linear's) and hands over the records, which are the call's z table, one leaf a unit; the call is
+    bit the plain linear's) and hands over the records, which are the call's z table, one leaf a proof block; the call is
     credited and the window, its coins the auditor host's challenger's, credits its served rows; the install's close
     takes ``zy_rows`` back off."""
     arm = ZyArm()
@@ -362,7 +362,7 @@ def test_the_int8_arm_under_h1_serves_scaled_mm_zy_and_is_credited(auditor):
 
 
 def test_a_layer_whose_n_is_not_whole_units_is_left_on_scaled_mm_and_refused():
-    """``scaled_mm_zy`` writes whole 32-column units only, so a layer of N = 40 keeps ``scaled_mm``, commits no z table and
+    """``scaled_mm_zy`` writes whole 32-column proof blocks only, so a layer of N = 40 keeps ``scaled_mm``, commits no z table and
     credits nothing."""
     arm = ZyArm()
     _y, run = _serve(arm, n=40)
@@ -385,7 +385,7 @@ def test_todays_path_without_a_retained_z_is_refused_as_no_z():
 
 
 def test_serve_h1s_wrapper_is_refused_too():
-    """SERVE-H1's run tree (cursor/serve-h1-run-ea24, `pouw_h1.served`): the arm's apply serves y, then the wrapper
+    """The served H1 run's tree (`pouw_h1.served`): the arm's apply serves y, then the wrapper
     quantizes the same activations again and takes z from `int_mm`; the trace refuses it the same way."""
     layer = Linear(32, 1, TodayArm())
     x = (torch.randn(3, K, generator=torch.Generator().manual_seed(9)) * 3).bfloat16()
@@ -406,7 +406,7 @@ def test_records_from_a_second_scaled_mm_zy_beside_the_served_scaled_mm_are_refu
 
 
 def test_a_credited_call_in_a_window_whose_coins_were_held_in_process_credits_nothing():
-    """RT4-INT-21: the call passes the gate, but the window's coins were held in the serving process (no pouw setting
+    """The call passes the gate, but the window's coins were held in the serving process (no pouw setting
     'challenger'), so no verifier trusts them and the window credits nothing, naming why."""
     _y, run = _serve(FusedArm())
     (v,) = run.verdicts.values()
@@ -417,9 +417,9 @@ def test_a_credited_call_in_a_window_whose_coins_were_held_in_process_credits_no
 
 
 def test_in_process_coins_named_by_the_leans_claim_instance_still_credit_nothing(monkeypatch):
-    """CMP-52: a claim instance names where coins come from, not who holds them. The harness's coins, held in the
+    """A claim instance names where coins come from, not who holds them. The harness's coins, held in the
     serving process, credit nothing (``coins-not-the-auditors``) even when the Lean verifier of record's claim instance
-    names their source; a window is credited only on the auditor host's session (the int8 arm's test above)."""
+    names their source; a window is credited only on the auditor host's challenge phase (the int8 arm's test above)."""
     from verity.core.protocols.pouw import verifier
     held, real = [], Challenger
 
@@ -434,7 +434,7 @@ def test_in_process_coins_named_by_the_leans_claim_instance_still_credit_nothing
 
 
 def test_a_credited_call_in_a_window_serving_a_request_without_an_entry_credits_nothing():
-    """Review item 3 on #2916: the call passes the gate, but its rows are a request's with no entry (prompt embeddings), so
+    """The call passes the gate, but its rows are a request's with no entry (prompt embeddings), so
     the window credits nothing and names why."""
     _y, run = _serve(FusedArm(), prompt=False)
     (v,) = run.verdicts.values()
@@ -500,7 +500,7 @@ def test_records_of_another_call_are_refused_as_untraced():
 
 
 def _cell(i, j, y=False):
-    """Byte offset in a unit's record of its cell (i, j)'s z word (or y half-word with `y`)."""
+    """Byte offset in a proof block's record of its cell (i, j)'s z word (or y half-word with `y`)."""
     return (4 * 32 * 32 + 2 * (32 * i + j)) if y else 4 * (32 * i + j)
 
 
@@ -514,7 +514,7 @@ def _another_calls(y, zy, xq, s_a, w, s_w):
 
 
 def _consistent_but_not_served(y, zy, xq, s_a, w, s_w):
-    """Unit 0's z with one served cell moved and its y redone as dq of it, so the records hold together but aren't what
+    """Proof block 0's z with one served cell moved and its y redone as dq of it, so the records hold together but aren't what
     was served."""
     z, yr = E.zy_split(zy, ROWS, w.shape[0])
     z[0, 0] += 1 << 20
@@ -541,8 +541,8 @@ FORGERIES = {
 @pytest.mark.parametrize("name", list(FORGERIES))
 def test_a_kernel_whose_records_are_not_its_served_product_credits_nothing(name):
     """A kernel the trace credits (one opaque GEMM writing y and the records) that hands over records whose y isn't dq of
-    their z at the call's scales (a flipped y bit, a moved z word, two units swapped, another call's records), whose y
-    isn't the served y, or with a z on an empty slot: the call is refused as ``z-records``, naming the unit."""
+    their z at the call's scales (a flipped y bit, a moved z word, two proof blocks swapped, another call's records), whose y
+    isn't the served y, or with a z on an empty slot: the call is refused as ``z-records``, naming the proof block."""
     fn, why = FORGERIES[name]
     FORGE.append(fn)
     try:
@@ -595,7 +595,7 @@ def _credit(host, rec, statements=(), k=None, descriptor=None, run=None, live=No
 def _live(d, rec):
     """The window's live evidence (`credit.LIVE_STATEMENTS`): the live Program's descriptor at T = `ROWS`, the window's
     rounds and `SV.PREFIX`, and each round's statement, its files stand-ins in `d` (the verifier of record is
-    `_verifier`, which proves round s's unit s)."""
+    `_verifier`, which proves round s's proof block s)."""
     steps = len(rec["commitment"]["rounds"])
     return {"descriptor": SV.descriptor(L.program_v2(ROWS, steps, SV.PREFIX)).hex(),
             "statements": [{**{x: v for x, v in _statement(d / f"live{s}", s, 1).items() if x != "call"}, "round": s}
@@ -603,7 +603,7 @@ def _live(d, rec):
 
 
 def _statement(d, call, n):
-    """Call `call`'s statement over `n` sessions, its files stand-ins in `d` (the verifier of record is `_verifier`)."""
+    """Call `call`'s statement over `n` releases, its files stand-ins in `d` (the verifier of record is `_verifier`)."""
     d.mkdir(parents=True, exist_ok=True)
     for i in range(n):
         (d / f"s{i}").mkdir(exist_ok=True)
@@ -614,10 +614,10 @@ def _statement(d, call, n):
 
 
 def _verifier(units, reject=(), seen=None, opened=lambda port: True):
-    """A stand-in for the verifier of record (`proofs.verify`): session i proves ``units[i]``, accepted unless in
+    """A stand-in for the verifier of record (`proofs.verify`): release i proves ``units[i]``, accepted unless in
     `reject`, its verdict naming the program it was handed and its registered finding the ports of the `--registered`
     file credit built that `opened` keeps, each at the root credit read from the window's entries. A statement on the
-    live template's circuit file proves its round's unit, the round its ``m@<s>`` port names, and opens every port."""
+    live template's circuit file proves its round's proof block, the round its ``m@<s>`` port names, and opens every port."""
     from verity.core.protocols.sampled_proofs.one_stage import proofs as PF
 
     def run(proof, *, circuit_sha512, program, partition, registered):
@@ -636,7 +636,7 @@ def _verifier(units, reject=(), seen=None, opened=lambda port: True):
 
 
 def test_a_window_with_no_served_tables_credits_nothing(periodic):
-    """PRF-132: the gate-passed call's manifest row carries its credit bit and its z root under calls_root, but a window
+    """The gate-passed call's manifest row carries its credit bit and its z root under calls_root, but a window
     with no served trees registers no A table and no ``b/<K>`` of its period's weights and has no Commit in its engine,
     so core's credit refuses it before the draw (`credit.window`'s ``commit``, ROOTS1) and it credits nothing."""
     auditor = periodic(1, files=FILES)
@@ -652,9 +652,9 @@ def test_a_window_with_no_served_tables_credits_nothing(periodic):
 
 
 def test_an_honest_served_windows_weights_are_its_periods_and_its_evidence_carries_proof_files(periodic):
-    """VLLM-71, VLLM-72 and PRF-132: a served window whose b/<K> it registered at install under the auditor's
+    """A served window whose b/<K> it registered at install under the auditor's
     registration's key (`model-key`) registers the registration's ``b/<K>`` entries, its open root over their root (the
-    one the period's ``--model`` open signed), its round-0 request table and its session; its evidence
+    one the period's ``--model`` open signed), its round-0 request table and its challenge phase; its evidence
     (`window_evidence`) is core's `credit.WINDOW_KEYS`, its registered ``entries`` and its drawn calls' statements
     (proof files, never verdicts), round 0's ``requests`` the request table's root its open root binds. Core's credit
     (`credit.window`) passes its weights and refuses it only for want of its drawn calls' proof files."""
@@ -724,7 +724,7 @@ def _one_row(xq):
     (lambda: ZyArm(), [0, 7, 2], "round 0's input-ids table h1/ids@0 is not the Commit's input-ids/0"),
 ], ids=["a-all-zero", "one-a-row-off", "ids-off-the-prompt"])
 def test_a_window_whose_tables_are_not_the_commits_is_refused_by_core(periodic, monkeypatch, arm, ids, want):
-    """ROOTS1 (VLLM-73), by core's credit (`credit._arow`): H1 handed every A code zero (the RT4 A = 0 probe) or one A
+    """ROOTS1, by core's credit (`credit._arow`): H1 handed every A code zero (the A = 0 probe) or one A
     row off the codes the Commit acquired at the linear's row_quant, or the Commit acquired an input id other than the
     prompt's (round 0's ids table is the prompt's, fixed before the salt), each with an honest Commit, whose record
     registers its own tree for those rows. The serving process credits nothing (`pouw_h1_commit.UNTIED`); a prover
@@ -803,8 +803,8 @@ def test_a_window_opened_over_round_0s_bare_request_table_is_refused_by_core(per
 
 @pytest.mark.parametrize("other", [False, True], ids=["its-session", "another-session"])
 def test_round_0s_input_ids_bind_the_windows_session(periodic, monkeypatch, other):
-    """ROOTS1's ids@0 binds the window's session in place of the open root that contains it: core's registration
-    (`credit._registration`) holds the served window's entries to it, and refuses an ids@0 bound to another session."""
+    """ROOTS1's ids@0 binds the window's challenge phase in place of the open root that contains it: core's registration
+    (`credit._registration`) holds the served window's entries to it, and refuses an ids@0 bound to another challenge phase."""
     auditor = periodic(PHC.draw_k(LAYOUT), files=FILES)
     if other:
         _other_session(monkeypatch)
@@ -826,12 +826,12 @@ def test_the_serving_process_credits_nothing_in_a_window_off_the_commit(auditor)
 
 @pytest.mark.parametrize("edit", ["s_w", "code", "own-key", "unsigned"])
 def test_a_window_whose_b_rows_are_not_its_periods_is_refused(periodic, tmp_path, edit):
-    """VLLM-71 and VLLM-72, by core's credit (`credit.window`, #3201): a period opened with ``--model`` signs the
+    """By core's credit (`credit.window`): a period opened with ``--model`` signs the
     auditor's registration of the model, and a window whose served b/<K> differ from that registration's is refused
     (``weights``), though the window is consistent all through (its open root over its own served weights' root) and
-    every drawn session is accepted: the registration's checkpoint has one row's s_w, or one code, other than the ones
+    every drawn release is accepted: the registration's checkpoint has one row's s_w, or one code, other than the ones
     the window serves (the window's rows salted with the registration's key, so only the rows differ), or the window
-    salted the served rows with the prover's own key (VLLM-71's, before the registry). A window in a period whose open
+    salted the served rows with the prover's own key (as the served path did before the registry). A window in a period whose open
     names no model, so signs no weights' root, is refused too."""
     reg = _registry(None if edit in ("own-key", "unsigned") else edit)
     auditor = periodic(1, model=edit != "unsigned", files=FILES, registry=reg)
@@ -853,7 +853,7 @@ def test_a_window_whose_b_rows_are_not_its_periods_is_refused(periodic, tmp_path
 
 @pytest.mark.parametrize("edit", ["s_w", "code"])
 def test_a_window_serving_other_weights_than_the_registration_refuses_itself(periodic, edit):
-    """VLLM-72, the prover's own check: the served path registers its b/<K> at install from the served linear under the
+    """The prover's own check: the served path registers its b/<K> at install from the served linear under the
     registration's key (`Served`'s ``registry``, the lane's ``model-key``), and when they fold to another root than the
     registration's (its checkpoint has one row's s_w, or one code, other than the served one) the window registers no
     table and credits nothing, naming why."""
@@ -868,9 +868,9 @@ def test_a_window_serving_other_weights_than_the_registration_refuses_itself(per
 
 
 def test_a_period_opened_with_a_bare_weights_root_is_refused_at_the_open(tmp_path):
-    """VLLM-72: a period's weights' root is the auditor's registration, never the prover's. The gate's ``period-open``
-    with ``--weights-root`` the prover's own root (its served b/<K> under its own key, VLLM-71's) is refused before
-    anything is signed, by the in-process ledger and gate alike (infra's `models.opened`); naming the registration's
+    """A period's weights' root is the auditor's registration, never the prover's. The gate's ``period-open``
+    with ``--weights-root`` the prover's own root (its served b/<K> under its own key) is refused before
+    anything is signed, by the in-process ledger and gate alike (`models.opened`); naming the registration's
     own root signs it with its model, as ``--model`` does."""
     M = CH.models()
     own = SV.register_weights(_circuit(), [(64, K)], {0: _rows()}, WKEY).root().hex()
@@ -889,7 +889,7 @@ def test_a_period_opened_with_a_bare_weights_root_is_refused_at_the_open(tmp_pat
 
 
 def test_the_in_process_gate_registers_the_model_and_hands_the_lane_its_key():
-    """VLLM-72: `challenger_host.Gate` has infra's model registry verbs. ``model-register`` commits the checkpoint's
+    """`challenger_host.Gate` has the model registry's verbs. ``model-register`` commits the checkpoint's
     b/<K> under a fresh auditor key; ``model-key`` gives the lane that key, under which the served path's own
     registration of the same rows (`register_weights`) is the registration, root for root; ``period-open --model``
     signs its weights' root and model, which core's credit reads (`credit.committed_weights`). A model it has no
@@ -922,10 +922,10 @@ def test_the_in_process_gate_registers_the_model_and_hands_the_lane_its_key():
 
 
 def test_a_drawn_session_that_opened_no_weights_is_refused(periodic, tmp_path):
-    """#3201: each drawn unit's session must open its K's ``h1/b/<K>`` beside its A, since nothing else ties the B rows
+    """Each drawn proof block's release must open its K's ``h1/b/<K>`` beside its A, since nothing else ties the B rows
     it proved to the ones the period registered. The ``--registered`` file core hands the verifier for a drawn call is
-    vllm's own (`pouw_h1_served.register`'s, the one its prover's sessions read), its ``b_k<K>_<j>`` ports at
-    ``h1/b/<K>`` at the period's root; a session whose registered finding opened its A and record but no ``b`` port
+    vllm's own (`pouw_h1_served.register`'s, the one its prover's releases read), its ``b_k<K>_<j>`` ports at
+    ``h1/b/<K>`` at the period's root; a release whose registered finding opened its A and record but no ``b`` port
     refuses the window (``registration``), and so does one that opened no A."""
     auditor = periodic(PHC.draw_k(LAYOUT), files=FILES)
     _y, run = _serve(ZyArm(), remote=True, n=64, served=_served())
@@ -949,13 +949,13 @@ def test_a_drawn_session_that_opened_no_weights_is_refused(periodic, tmp_path):
 
 
 def test_a_window_is_credited_only_from_its_statements_proof_files_verified_by_credit(periodic, tmp_path):
-    """PRF-132: core's `credit.window` verifies each drawn call's statement itself (`proofs.verify`, here a stand-in that
+    """Core's `credit.window` verifies each drawn call's statement itself (`proofs.verify`, here a stand-in that
     reports what it was handed) on the circuit file the period's open committed for its K, against the ``--registered``
     file credit builds from the window's entries (the call tables' domains bound to the window's open root, the
-    weights' to none), and credits the gate-passed call only when every drawn unit's session is accepted and each
+    weights' to none), and credits the gate-passed call only when every drawn proof block's release is accepted and each
     round's live@<s> proves its step's served rows: none, a rejected one, another circuit's descriptor, or no live
     evidence refuses the whole window. The closed period's credit
-    (`period_credit`) is that window's, its period opened with ``--model`` (VLLM-72: the auditor's registration, whose
+    (`period_credit`) is that window's, its period opened with ``--model`` (the auditor's registration, whose
     key salted the window's b/<K>), and a window whose ``b/<K>`` aren't the period's is refused there too."""
     from verity.core.protocols.sampled_proofs.one_stage import registered as G
     k = PHC.draw_k(LAYOUT)
@@ -1009,7 +1009,7 @@ def test_a_window_is_credited_only_from_its_statements_proof_files_verified_by_c
 
 
 def test_a_period_open_without_draw_k_is_refused(periodic):
-    """PRF-132: the proof service commits the draw's K in the period's open (`credit.K_FIELD`) before any draw; a period
+    """The proof system commits the draw's K in the period's open (`credit.K_FIELD`) before any draw; a period
     opened without one leaves its windows no K to be drawn with, so the window, the period's reading and its credit are
     each refused (``budget``), and a window in no period has no committed K either."""
     auditor = periodic(None, files=FILES)
@@ -1030,7 +1030,7 @@ def test_a_period_open_without_draw_k_is_refused(periodic):
 
 
 def test_a_window_in_no_period_has_no_committed_k(auditor):
-    """PRF-132: a window whose session the auditor's ledger holds in no period is drawn with no K any open committed."""
+    """A window whose challenge phase the auditor's ledger holds in no period is drawn with no K any open committed."""
     _y, run = _serve(ZyArm(), remote=True, n=64, served=_served())
     assert auditor.ended() is None
     out = _credit(auditor, _record(run))
@@ -1039,10 +1039,10 @@ def test_a_window_in_no_period_has_no_committed_k(auditor):
 
 
 def test_the_drawn_set_from_a_fixed_coin_is_cores():
-    """PRF-132: the units vllm's verifier reads as drawn (`drawn_of`) are core's (`credit.drawn`, and
+    """The proof blocks vllm's verifier reads as drawn (`drawn_of`) are core's (`credit.drawn`, and
     `core_check.work_units` over `credit.strata` under the work law at K), over the layout core reads from the declared
     Program's descriptor (`credit.layout_of`, which `pouw_h1_served.declared_layout` is without building it): the
-    population is the units of ``h1window.program(linears, calls, m, tile)`` in its order, one stratum per K, on the
+    population is the proof blocks of ``h1window.program(linears, calls, m, tile)`` in its order, one stratum per K, on the
     stream of the window's root, the registration of its draw root and the receipt of its last round's receipts."""
     shapes, modules = ((64, 64), (32, 128)), ("q", "o")
     desc = _descriptor(shapes, modules, 64, 2)
@@ -1067,7 +1067,7 @@ def test_the_drawn_set_from_a_fixed_coin_is_cores():
 
 
 def test_the_period_k_is_sized_for_the_expected_credited_share_and_the_verifier_reports_its_eps():
-    """PRF-132: the proof service sizes the K a period's open commits (`draw_k`) for the share of a window's work it
+    """The proof system sizes the K a period's open commits (`draw_k`) for the share of a window's work it
     expects credited (`EXPECTED_CREDIT`, 8/9) at `DRAW_EPS` and δ = 2^-40, through `window.k_prime`'s own inputs, since
     that share isn't known at the open: 31,178 for the declared 8B window, which at 8/9 credited establishes at most
     0.1% (`window.eps_at`, what `credit.established` reports), and K sized as if all were credited establishes less."""
@@ -1084,7 +1084,7 @@ def test_the_period_k_is_sized_for_the_expected_credited_share_and_the_verifier_
 
 def _two_window_period(tmp_path):
     """Lane vllm's closed period `PERIOD` of two windows, each reserved, opened on its root and ended complete, as the
-    auditor's ledger (its record leaves between each open's and end's), and their sessions and roots, in order."""
+    auditor's ledger (its record leaves between each open's and end's), and their challenge phases and roots, in order."""
     leaves = itertools.count()
     ledger = CH.Ledger(tmp_path / "w.jsonl", 1, leaves)
     ledger.period_open(PERIOD, circuit=_circuit(), cap=2, draw_k=1)
@@ -1105,7 +1105,7 @@ def _two_window_period(tmp_path):
 
 
 def test_a_window_presented_outside_its_periods_close_or_out_of_order_is_refused(tmp_path):
-    """PRF-132: a period earns only as its close lists it (`credit.period`): exactly its windows, each once, in the
+    """A period earns only as its close lists it (`credit.period`): exactly its windows, each once, in the
     close's order. Presented out of order, with one missing, with one past the close, or with a window not its own, the
     period is refused, by `period_reason` and by `period_credit` before any window is read."""
     ledger, sessions, (a, b) = _two_window_period(tmp_path)
@@ -1126,7 +1126,7 @@ def test_a_window_presented_outside_its_periods_close_or_out_of_order_is_refused
 
 
 def test_a_credit_bit_changed_after_the_draw_coin_is_refused(periodic):
-    """PRF-132: the credit bit is under calls_root and so under the draw root the draw coin followed: flipping it after
+    """The credit bit is under calls_root and so under the draw root the draw coin followed: flipping it after
     the draw is refused, whether the draw root is left (it is no longer over the manifest) or recomputed (it is no longer
     the one root the challenger's log shows its draw coin followed); the honest record gets past them to its proofs."""
     auditor = periodic(1, files=FILES)
@@ -1153,7 +1153,7 @@ def test_a_credit_bit_changed_after_the_draw_coin_is_refused(periodic):
 def test_the_salt_key_and_a_calls_values_outlive_the_close_in_the_provers_directory_only(tmp_path):
     """DRAWN1: with a prover directory the run keeps its salt key and each served call's A rows, scales and z/y records
     there, owner-only, past the close; the run's published output (its transcript) holds neither the key's bytes nor
-    its hex; and the call's A and z tables rebuilt from them have the roots its manifest row carries, so a drawn unit
+    its hex; and the call's A and z tables rebuilt from them have the roots its manifest row carries, so a drawn proof block
     opens after the close, while a kept row changed afterwards is refused."""
     import stat
     prover, out, key = tmp_path / "prover", tmp_path / "out", bytes(range(32))

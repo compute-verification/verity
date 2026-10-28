@@ -256,7 +256,7 @@ __global__ void s64_all(Tally* t, uint64_t count) {
   add(t, c, s, 0, 0, nb);
 }
 
-// ---- kernels' units.cu (#4518) as ptxas builds it for sm_90a --------------------------------------------------------------
+// ---- units.cu as ptxas builds it for sm_90a -------------------------------------------------------------------------------
 // ptxas builds a function's slow-path bodies around its calls, so these three are copies of units.cu's kernels (its helpers,
 // unchanged) that build the bodies its rmsnorm and softmax take: units_sqrt the sqrt.rn one, units_rms the div.rn one of
 // rmsnorm's two divisions and units_soft softmax's, which loads its numerator (the parameter one_word, at the same offset)

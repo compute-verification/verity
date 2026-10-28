@@ -37,7 +37,7 @@ a row, the size of the commitment the certifier makes of it row by row), never o
   `InferenceEntry`, each unit's (slot, step)) tile every template's units, and no (slot, step) has units on two servers;
   with two servers or more the record states them. Which server runs which units is protocol structure, deployment
   configuration as NCI's declaration is, public and not a private partition, so this is checked in the clear with no
-  proof unit (`server_blocks`). The work is per entry, server run and digit: an entry's units on one run are at most
+  proof block (`server_blocks`). The work is per entry, server run and digit: an entry's units on one run are at most
   two boxes a digit of its mixed radix, each a rectangle of (slot, step);
 - a transfer a new value, but a wire's other one, its kind in its direction (`transfer_rows.KINDS`), on a server, in its
   window, its ``t`` within the server-time block's T steps and over its rows;
@@ -149,7 +149,7 @@ def _pattern(d: Any, keys: Sequence[str], what: str, cut: bool = False) -> Patte
 
 @dataclass(frozen=True)
 class Server:
-    """A server block: proof units ``units`` (each ``(tid, at, n)``) on uplink ``uplink``, which one network certifier
+    """A server block: proof blocks ``units`` (each ``(tid, at, n)``) on uplink ``uplink``, which one network certifier
     watches."""
 
     name: str
@@ -282,7 +282,7 @@ def _one_server(doc: Mapping[str, Any], tpl: Mapping[str, tuple[Any, Any, int]],
     if inference is None:
         if len(servers) > 1:
             raise ValueError(f"{len(servers)} servers over a circuit record that states no inference block "
-                             "(blocks.inference): an inference block runs on one server (NET-92), and with two servers "
+                             "(blocks.inference): an inference block runs on one server, and with two servers "
                              "or more the record's inference entries are what say which")
         return
     entries = inference.get("entries") if isinstance(inference, Mapping) else None
@@ -326,7 +326,7 @@ def _one_server(doc: Mapping[str, Any], tpl: Mapping[str, tuple[Any, Any, int]],
             if q[4] != r[4] and q[2] < r[3] and r[2] < q[3]:
                 raise ValueError(f"inference block (slot {r[0]}, step {max(q[2], r[2])}): units of {q[5]} on server "
                                  f"{q[4]} and of {r[5]} on server {r[4]}; an inference block runs on one server, the one "
-                                 "that may read its inputs (NET-92)")
+                                 "that may read its inputs")
         live.append(r)
 
 

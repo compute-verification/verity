@@ -209,7 +209,7 @@ def test_the_scan_reads_the_fold_pattern_modules():
 
 
 def test_a_fold_pattern_naming_the_older_silu_is_a_violation():
-    """The dense `SiluAndMul` named `SiluMul_v1` while the b1-eager-v3 Build binds `SiluMul_v2` (#820): exactly what rule 1 reports."""
+    """The dense `SiluAndMul` named `SiluMul_v1` while the b1-eager-v3 Build binds `SiluMul_v2`: exactly what rule 1 reports."""
     refs = {k: v for k, v in fold_references().items() if not k.startswith("SiluMul")}
     refs["SiluMul_v1"] = (b1.SiluMul, "verity_vllm.observe.fold.patterns.activations:37")
     assert violations(refs, DEFAULT) == ["rule 1: verity_vllm.observe.fold.patterns.activations:37 names SiluMul_v1; the b1-eager-v3 "

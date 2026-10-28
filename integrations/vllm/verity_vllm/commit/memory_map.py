@@ -6,7 +6,7 @@ Commit's committed words, `pipeline.memory_map`).
 row       one position's K (or V) in a layer: a row of an attention Call's `kc` (`vc`), `Array(T, row)`, or MLA's latent row
           of a sparse MLA Call's `kv` (`LATENT`: the normed latent, then the roped key, one plane); a layer's rows are the
           rows its Calls share, in the order its Calls first read them (its positions), K and V paired by position.  DSA's
-          indexer keys are no rows: their 132-byte rows pack across blocks, and memory accounting ruled them uncredited
+          indexer keys are no rows: their 132-byte rows pack across blocks, and memory accounting leaves them uncredited
           until the map packs them
 born      a row's step, and `last` its last structural reader's (the last step with a gate that has one of its values as
           an operand, a gather that may select one included, whichever it selected): the circuit's requirement
@@ -26,7 +26,7 @@ page      `block_size` slots in each layer as the engine lays them out (`page_of
 block     4,096 bytes of a plane (`store.registry._page_blocks`), at slot `firsts[layer] + ids[page, c]` (the `Store`'s
           numbering: a KV pool of one region per layer)
 appended  a block whose rows are all born, at the step of the last (its completion), if a later step reads it: a step's
-          record, its frees then its writes, takes effect after the step's reads (remote_bandwidth's convention, #2378),
+          record, its frees then its writes, takes effect after the step's reads (remote_bandwidth's convention),
           so a block whose last structural reader is the step that completes it is never read while resident and is in
           no record; nor
           is a block with a row no step writes (it stays dirty).  A step's blocks are one append, by slot

@@ -18,9 +18,9 @@ Per engine step s (parity p = s mod 2), around the runner's `execute_model`:
              step s + 1's launches read
 
 The window's coins are served_h1's (`coins.open_coins`, a live window of `ROUNDS` rounds at epoch 1): with
-``$POUW_CHALLENGER`` (HOST:PORT), ``$POUW_CHALLENGER_SESSION`` and ``$POUW_CHALLENGER_SECRET_FILE`` (the session infra's
-gate opened, and its secret: `coins.session`) the challenger off the node, one session a window, opened at the window's
-build; else `window.live_challenger` in this process.  `stats` says which (``coins``: ``off-node session ID at
+``$POUW_CHALLENGER`` (HOST:PORT), ``$POUW_CHALLENGER_SESSION`` and ``$POUW_CHALLENGER_SECRET_FILE`` (the session the
+challenger's gate opened, and its secret: `coins.session`) the challenger off the node, one session a window, opened at
+the window's build; else `window.live_challenger` in this process.  `stats` says which (``coins``: ``off-node session ID at
 HOST:PORT (unchecked)`` or ``in-process (not certified)``).  Only the round's coin changes source: the salt, the seeds
 and what they read are the same either way.
 
@@ -30,9 +30,9 @@ s - 1's (they read the slots step s + 1 overwrites).  What is committed, before 
 
 Labelled simplifications (none changes a step's cost): the admitted slots are the step's first m rows (SERVE-H1 admits
 from its queue); the window's registration, queue commit and close are not run (once a window, not a step); a window is
-the engine's life up to `ROUNDS` steps.  The z table and the third round leaf are this lane's rendering of CA's form (a z
-table in AROW's row-table format, a root per step before the coin); the kind, fields and labels are CA's to fix.  Its
-stats, checks and verdict say form=beside (`forms.form_of`): not ASK-71 A's form.
+the engine's life up to `ROUNDS` steps.  The z table and the third round leaf are this harness's rendering of the
+credit's form (a z table in the row-table format, a root per step before the coin); the credit fixes the kind, fields
+and labels.  Its stats, checks and verdict say form=beside (`forms.form_of`): not `forms.FORM_A`.
 """
 from __future__ import annotations
 
@@ -523,7 +523,7 @@ def check(win: Window, lib_h1r: str, which: str = "gate", n_ref_units: int = 3,
     rng = np.random.default_rng(s)
     for w in [0, 3, 2][:n_ref_units]:
         n, k = win.nk[w]
-        u = int(rng.integers(n // 32))          # row block 0, column block u
+        u = int(rng.integers(n // 32))          # row tile 0, column tile u
         zz, rr = RC.reference(RC.Call(g["a"][w], win.wt[w]), g["salt"], s * win.u_step + win.offs[w], g["a_roots"][w],
                               g["b_roots"][w], u)
         rk = (got_of(w)[u].cpu().numpy().astype(np.int64) & 0xFFFFFFFF).tolist()

@@ -206,7 +206,7 @@
   {"file": "verity/ml/definitions/registry/lifted.py", "kind": "path-predicate", "symbol": "register_hand_lift", "pattern": "^oid\\.startswith\\(\"Lifted\\[\"\\)$", "class": "L", "retires": "stays", "tag": "R17 lifted", "inventory": "A20"},
   {"file": "verity_vllm/program/lifting/lifted_records.py", "kind": "table", "symbol": "_LAG_STATIC_RE", "pattern": "^_LAG_STATIC_RE$", "class": "L", "retires": "stays", "tag": "R17 lifted", "inventory": "A20"},
   {"file": "verity/ml/definitions/registry/spec.py", "kind": "model-name", "symbol": "<module>", "pattern": "^Qwen/Qwen2\\.5\\-0\\.5B$", "class": "L", "retires": "stays", "tag": "", "inventory": "provenance pins of Definitions"},
-  {"file": "verity/ml/definitions/word.py", "kind": "table", "symbol": "_STREAM_NEW", "pattern": "^_STREAM_NEW$", "class": "P", "retires": "stays", "tag": "", "inventory": "report label (with _STREAM / committed_today): the tap a committed attention value needs, by primitive; decides nothing (PR #99)"},
-  {"file": "verity/ml/definitions/word.py", "kind": "path-predicate", "symbol": "tap_kernel", "pattern": "^head\\ in\\ _STREAM_NEW$", "class": "P", "retires": "stays", "tag": "", "inventory": "report label (with _STREAM / committed_today): the tap a committed attention value needs, by primitive; decides nothing (PR #99)"}
+  {"file": "verity/ml/definitions/word.py", "kind": "table", "symbol": "_STREAM_NEW", "pattern": "^_STREAM_NEW$", "class": "P", "retires": "stays", "tag": "", "inventory": "report label (with _STREAM / committed_today): the tap a committed attention value needs, by primitive; decides nothing"},
+  {"file": "verity/ml/definitions/word.py", "kind": "path-predicate", "symbol": "tap_kernel", "pattern": "^head\\ in\\ _STREAM_NEW$", "class": "P", "retires": "stays", "tag": "", "inventory": "report label (with _STREAM / committed_today): the tap a committed attention value needs, by primitive; decides nothing"}
  ]
 }

@@ -67,6 +67,7 @@ import Proofs.Flock.Soundness.SessionBatchAcc
 import Proofs.Flock.Soundness.Game.Seq
 import Proofs.Flock.Soundness.ExtractWait
 import Proofs.Flock.Soundness.LinkFinder
+import Proofs.Flock.Soundness.LinkCarry
 import Proofs.Flock.Soundness.Game.LockLin
 import Proofs.Flock.Soundness.Game.LockOff
 import Proofs.Flock.Soundness.ExtractAccLin
@@ -102,7 +103,6 @@ import Proofs.Flock.Soundness.ExecTemplateSetup
 import Proofs.Flock.Soundness.ExecFlatClass
 import Proofs.Flock.Soundness.ExecFlatCopies
 import Proofs.Flock.Soundness.Types.Flat
-import Proofs.Flock.Soundness.Rope.Lowering
 import Proofs.Flock.Soundness.Types.Dag
 import Proofs.Flock.Soundness.Types.Parts
 import Proofs.Flock.Soundness.Types.Flatten

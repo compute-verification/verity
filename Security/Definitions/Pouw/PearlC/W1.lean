@@ -10,10 +10,10 @@ import Definitions.Pouw.PearlC.Sha512
 `CostModel Q R S` (`Game.lean`) is abstract, and every TT_OUT form names "W1 at the device's measured prices" only in
 its docstring. This module is W1 as a definition: a machine, its instructions, their prices per device, and
 `w1 dv P salt : CostModel Q R S`, the cost of a program as W1 charges it. It states no assumption and changes no
-statement; a restatement of TT_OUT over it is the proofs lane's.
+statement; a restatement of TT_OUT over it is separate.
 
-**What W1 is** (the problem statement §3.1, `note:20261004T2202Z-report-relay-docs-pouw-problem-statement`; decided
-28 Sep, amended by H5):
+**What W1 is** (the problem statement §3.1,
+amended by H5):
 - an instruction is priced by its class at the measured rate, per 32-bit lane result, and a tensor-core instruction by
   its whole fragment, however few of its outputs a program uses (`w1-complete/sm120`);
 - oblivious whole-word moves are free, at any memory level;
@@ -59,7 +59,7 @@ protocol `P`: whether a unit is correct is `P`'s `Correct` on the transcript the
 
 **Prices per device** (`W1Prices`, in the record's unit: one dense E4M3 MAC with FP32 accumulation for the FP8
 records, one NVFP4 MAC for the FP4 record):
-- `W1Prices.sm120`: node 2's RTX PRO 6000 at locked 2,100 MHz (`r20260930-063213-c94a`, `r20260930-063827-e4c6`, every
+- `W1Prices.sm120`: node 2's RTX PRO 6000 at locked 2,100 MHz (every
   SASS, identity and numeric gate passed): QMMA E4M3 m16n8k32 1 per MAC, OMMA NVFP4 m16n8k64 0.5, HMMA BF16 m16n8k16
   2; FADD and FFMA 8.00 issue-bound (8.376 in the measured loop: `W1Prices.sm120Loop`); a cast 16 per F2FP instruction
   (7.7–8.0 per code alone, the shared half-rate integer pipe's 64 lanes per SM per clock); INT32 16 on that pipe. IMMA
@@ -103,10 +103,10 @@ element). At `fp4Sm120` it is `Fp4Prices.sm120At (1047/125) p`, so `Fp4Prices.sm
 - program text is free within its bound: the code tree is the program's control flow, and unrolled code carries no
   data (every operand is an address).
 
-**The text bound** (`Prog.bounded`; W1RT-1's fix F2, `note:compute-accounting/20261024T1730Z-report-w1-redteam`). At
+**The text bound** (`Prog.bounded`). At
 every layout a program has at most `2^64` code nodes (`Code.size`) and `2^64` constants. W1 charges only the path a run
 takes, so with unbounded text a tree of `ite`s on the salt's 256 bits holds one leaf per salt. That is a table of the
-reference at `NoiseSha512.sha512Sem`, which reads no oracle, selected for 256 INT32 instructions (W1RT-1). Under the bound
+reference at `NoiseSha512.sha512Sem`, which reads no oracle, selected for 256 INT32 instructions. Under the bound
 that tree is not a program (`Proofs.Pouw.PearlC.W1Tabulate.tree_not_code`). The bound narrows every statement over W1 to
 programs a machine can hold. A deployed program is far inside it: W1 has no loops, so an honest code tree has about one
 node per instruction a run executes, and `2^64` instructions is far more than a device runs in a window.
@@ -154,17 +154,16 @@ structure W1Prices where
   sha512 : ℚ
   fetch : ℚ
 
-/-- **sm_120's W1 prices**, issue-bound (node 2, locked 2,100 MHz; `r20260930-063213-c94a`, `r20260930-063827-e4c6`):
+/-- **sm_120's W1 prices**, issue-bound (node 2, locked 2,100 MHz):
 E4M3 1, BF16 2 and NVFP4 0.5 per MAC; FP32 8; a cast 16 per instruction (8 per code); INT32 16.
 
 S8 is 1 per MAC, from the data sheet; those runs did not measure it. NVIDIA's RTX PRO Blackwell GPU Architecture
 whitepaper v1.1, Appendix A, Table 4 (the RTX PRO 6000 Blackwell Workstation Edition, the same 188-SM GB202; the source
 `benchmarks/census/hardware.json` cites for `rtx-pro-6000-server/e4m3`) gives "Peak INT8 Tensor TOPS" 1007.6 dense,
 equal to "Peak FP8 Tensor TFLOPS with FP32 Accumulate" 1007.6. The Server Edition's product page and data sheet give no
-INT8 figure. Census run `r20261015-062626-f65b` measured the wrapping form (`m16n8k32.row.col.s32.s8.s8.s32`) at
+INT8 figure. The census measured the wrapping form (`m16n8k32.row.col.s32.s8.s8.s32`) at
 1,023.7 MACs per SM per clock at 16 warps, against E4M3's 1,023.8 (`f32.e4m3.e4m3.f32`, 16 warps); the `.satfinite`
-form's rate is not measured. `Pouw.TileBound.price` has int8 at 1 from the assessor's locked-clock runs
-`r20260930-060338-26b9` and `r20260930-062627-063a`. -/
+form's rate is not measured. `Pouw.TileBound.price` has int8 at 1 from locked-clock runs. -/
 def W1Prices.sm120 (sha fetch : ℚ) : W1Prices where
   mac := fun | .e4m3 => 1 | .bf16 => 2 | .e2m1 => 1 / 2 | .s8 => 1
   fp32 := 8
@@ -274,7 +273,7 @@ def W1Device.s8Sm120 (sha fetch : ℚ) : W1Device := W1Device.s8Sm120At (W1Price
 /-- The H100's fragments with INT8: `h100Frags` and S8 m64nNk32 with `.satfinite` (`IGMMA.64xNx32.S8.S8.SAT`) for
 `N = 64, 80, …, 256`, PTX's dense integer `wgmma` shapes at `N ≥ 64`, as `h100Frags`. Each output is
 `GEMM_SM90_S8`'s dot (`verity.ml.circuits.ops.gemm`, `BlackwellS8ImmaDot32`): k32, clamped once. Only N = 8 is pinned:
-`verity.ml.circuits.silicon.instructions` pins `sm90.wgmma.m64n8k32.s8` on an H200 (run `r20261019-043020-f267`). The
+`verity.ml.circuits.silicon.instructions` pins `sm90.wgmma.m64n8k32.s8` on an H200. The
 wider N here follow PTX's `wgmma` semantics, the same dot at each output, and no run has measured them. -/
 def h100S8Frags : List Frag := h100Frags ++ (List.range 13).map fun i => ⟨.s8, 64, 64 + 16 * i⟩
 
@@ -411,7 +410,7 @@ def s8Value (c : ℕ) : ℤ := if c < 128 then c else c - 256
 `IMMA.16832.S8.S8.SAT`): the accumulator word as an s32, plus every product `x_l·y_l` of the codes as s8, summed
 exactly and clamped once to `[-2^31, 2^31 - 1]`, as a 32-bit word. It is `verity.ml.circuits.silicon.integer`'s
 `BLACKWELL_SM120_S8_M16N8K32`, the served INT8 dot `BlackwellS8ImmaDot32`, which the RTX PRO 6000 reproduced on all
-10,243,968 words of run `r20261015-084000-06d8`, the clamp only at D; an H200 and a B200 compute the same function. -/
+10,243,968 words tested, the clamp only at D; an H200 and a B200 compute the same function. -/
 def s8Step (acc : ℕ) (x y : List ℕ) : ℕ :=
   let d := (if acc < 2 ^ 31 then (acc : ℤ) else (acc : ℤ) - 2 ^ 32) +
     (List.zipWith (fun a b => s8Value a * s8Value b) x y).sum
@@ -559,7 +558,7 @@ def Code.size : Code → ℕ
   | .ite _ t e k => t.size + e.size + k.size + 1
 
 /-- **A program**: a constant bank and a code tree, each a function of the public layout, of bounded text: at every
-layout at most `2^64` code nodes and `2^64` constants (W1RT-1's fix F2). -/
+layout at most `2^64` code nodes and `2^64` constants. -/
 structure Prog where
   consts : Layout → List ℕ
   code : Layout → Code
@@ -631,7 +630,7 @@ the run's device-memory read as the bandwidth account counts it, in 32-bit words
 def w1Read (dv : W1Device) (salt : List ℕ) (pr : Prog) (U : Workload) (act : ℕ → Codes) (σ : State) : ℕ :=
   (final dv salt pr U act σ).fetched.dedup.length
 
-/-- **W1 priced, with no refund** (Daniel, item 9): a run's compute, the instructions' prices (`final`'s `cost`), plus
+/-- **W1 priced, with no refund**: a run's compute, the instructions' prices (`final`'s `cost`), plus
 `fetch` per word it reads (`w1Read`). Compute goes to the compute account and the read to the bandwidth account, and the
 γ-gap property is stated over this priced sum. It reads neither the oracle nor the protocol. -/
 noncomputable def w1Priced (dv : W1Device) (salt : S → List ℕ) : CostModel Q R S where

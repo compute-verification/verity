@@ -6,7 +6,7 @@ import Definitions.Pouw.PearlC.FormingPDefs
 import Definitions.Pouw.PearlC.Sm120
 
 /-!
-# Pearl-C at a device record (trusted; the cheap-binding lane's file)
+# Pearl-C at a device record (trusted)
 
 `pearlCProtocol` is Pearl-C on the H100: the ticket chain is `hopperStep` promoted every 4 atoms, U is `PeelExact`'s
 Hopper BF16 order, the debit's flags are `Skip`'s, the salt-dead predicate is P3's at the Hopper atom-mix, and the costs
@@ -143,14 +143,13 @@ kernel tiles and, when the record promotes, of promotion groups, and `k ≤ 2^16
 condition is void: read as `32·0 ∣ k` it would force `k = 0` and leave the domain empty. At the H100 record it is
 `pearlCDomain Params.pi` with `n`'s floor (`pearlCDomainDev_h100`).
 
-The floor on `n` keeps out the units whose output words are cheaper to guess than TT_OUT's `εPearlC` allows (CMP-77,
-lean's red team of the named assumptions). The binding attack is partial guessing: compute most of a unit's words and
-guess the rest. Under W1 a winning strategy must save the unit's `n·c` (the weight-side forming and `B̃·F_A`, online and
-uncredited) plus `γ₀` of its credit, and the cheapest such saving guesses about 96% of one row: 124 words at `n = 64` on
-the H100 (123 on sm_120), about 995 at `n = 512`. Each guessed word then needs only about 1.04 bits of salt-dependent
-min-entropy at `n = 64`, and about 0.13 at `n = 512`, which TT_OUT already assumes. `64 ∣ n` matters as much as `64 ≤ n`:
-a `1 × (n mod 64)` edge tile is guessed whole. `m` stays free, so a one-row unit is in the domain
-(`pearlCDomainDev_split`). -/
+The floor on `n` keeps out the units whose output words are cheaper to guess than TT_OUT's `εPearlC` allows. The binding
+attack is partial guessing: compute most of a unit's words and guess the rest. Under W1 a winning strategy must save the
+unit's `n·c` (the weight-side forming and `B̃·F_A`, online and uncredited) plus `γ₀` of its credit, and the cheapest
+such saving guesses about 96% of one row: 124 words at `n = 64` on the H100 (123 on sm_120), about 995 at `n = 512`.
+Each guessed word then needs only about 1.04 bits of salt-dependent min-entropy at `n = 64`, and about 0.13 at
+`n = 512`, which TT_OUT already assumes. `64 ∣ n` matters as much as `64 ≤ n`: a `1 × (n mod 64)` edge tile is guessed
+whole. `m` stays free, so a one-row unit is in the domain (`pearlCDomainDev_split`). -/
 def pearlCDomainDev (d : PearlCDevice) (L : Layout) : Prop :=
   ∀ u < L.N, 0 < (L.shape u).m ∧ (64 ≤ (L.shape u).n ∧ 64 ∣ (L.shape u).n) ∧ 0 < (L.shape u).k ∧
     128 ∣ (L.shape u).k ∧ (d.G = 0 ∨ 32 * d.G ∣ (L.shape u).k) ∧ (L.shape u).k ≤ 2 ^ 16
@@ -176,7 +175,7 @@ def qwen3_8bLinears : Finset (ℕ × ℕ) := {(6144, 4096), (4096, 4096), (24576
 
 open Classical in
 /-- A tile's replayed debit at a device, as `PearlCSem.tileDebit` with the device's flags, salt-dead predicate and prices.
-The forming part is P3's per-tile rule (`internal/pouw-fp8/pearl-c-forming.md`, "The per-tile cap"). -/
+The forming part is P3's per-tile rule ("The per-tile cap"). -/
 noncomputable def PearlCSem.tileDebitDev (sem : PearlCSem Q R S) (d : PearlCDevice) (H : Q → R) (s : S) (U : Workload)
     (u : ℕ) (rows cols : Finset ℕ) (act : Codes) : ℚ :=
   let sh := U.layout.shape u

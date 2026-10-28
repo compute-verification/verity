@@ -1,19 +1,19 @@
 """Candidate cuts for the sampling planner (`optimize`), generated up a Definition DAG.
 
 A `Shape` is one node of the DAG at its statics: an instance's ANDs, its credited work, its output width, the rows a proved
-instance opens, what serving commits when the node is a unit (its outputs, now committed wires), and its ways down: its
+instance opens, what serving commits when the node is a proof block (its outputs, now committed wires), and its ways down: its
 body's children (`parts`) and other decompositions (`ways`), its statics re-bound (a dot's K cut into chunks that carry the
 accumulator) or a shared subcircuit recomputed inside each reader (a covering).
 
-`cuts` is a dynamic program at each density of `optimize`'s sweep: a node is a unit at its statics when its outputs fit a
+`cuts` is a dynamic program at each density of `optimize`'s sweep: a node is a proof block at its statics when its outputs fit a
 public size class (`one_stage.partition.unit_class`, the one-stage partition's), or descends by its cheapest way.  A
-unit is priced as the planner prices a subcircuit, serving's commitment on every instance plus the touched statements and
-proved units of its draw, so a finer cut pays for the wires it commits.
+proof block is priced as the planner prices a subcircuit, serving's commitment on every instance plus the touched statements and
+proved proof blocks of its draw, so a finer cut pays for the wires it commits.
 Each distinct cheapest cut over the grid becomes one alternative of the op (`Candidate.cut`), and the planner chooses among
-them exactly; the program's price is approximate where one Definition appears under several parents (their units merge
+them exactly; the program's price is approximate where one Definition appears under several parents (their proof blocks merge
 into one subcircuit only afterwards).
 
-Two hints come with the cuts (`Pressure`): `boundary`, where a unit between a node and its dominant child's size (interpolated
+Two hints come with the cuts (`Pressure`): `boundary`, where a proof block between a node and its dominant child's size (interpolated
 log-linearly between the two) would beat both, so a Definition at that size would pay; and `width`, where a node wider than
 the widest class would beat every legal cut, so the cap has a price there.
 """
@@ -34,7 +34,7 @@ Parts = tuple[tuple["Shape", int], ...]
 class Shape:
     """A Definition at its statics, `id` naming it: one instance has `ands` ANDs, credits `work` and forfeits `influence`
     downstream when wrong, returns `out_bits` over `out_gates` gates, opens `rows` (bytes each) when proved, and has serving
-    commit `commit_bits` in `commit_rows` rows when it is a unit; a statement holds at most `cap` of it.  It descends into
+    commit `commit_bits` in `commit_rows` rows when it is a proof block; a statement holds at most `cap` of it.  It descends into
     `parts` (its body's children, each with its count per instance) or any of `ways`, labelled."""
 
     id: str
@@ -56,8 +56,8 @@ class Shape:
 
 @dataclass(frozen=True)
 class Pressure:
-    """A developer hint at density `lam`: `kind` "boundary" when units of 1/`split` of `node` (between it and `child`)
-    would cost `saving` (a fraction) less than the best cut there, or "width" when `node` as a unit, wider than the widest
+    """A developer hint at density `lam`: `kind` "boundary" when proof blocks of 1/`split` of `node` (between it and `child`)
+    would cost `saving` (a fraction) less than the best cut there, or "width" when `node` as a proof block, wider than the widest
     class, would."""
 
     kind: str
@@ -143,7 +143,7 @@ def _geo(a: float, b: float, f: float) -> float:
 
 
 def _between(parent: Shape, child: Shape, count: int, split: int) -> Shape:
-    """A unit of 1/`split` of `parent`: its ANDs, rows and cap log-linear between the parent's (split 1) and the child's
+    """A proof block of 1/`split` of `parent`: its ANDs, rows and cap log-linear between the parent's (split 1) and the child's
     (split `count`), a row only the child opens (its incoming accumulator, say) opened whole, and its commitment the
     parent's plus the share 1 - 1/split of the boundaries the child's cut adds."""
     f, b = log(split) / log(count), (1 - 1 / split) / (1 - 1 / count)
@@ -190,9 +190,9 @@ def cuts(op: str, root: Shape, n: int, costs: CostModel, objective: Objective, *
          replay: tuple[str, int] | None = None, threshold: float = 0.1
          ) -> tuple[list[Candidate], dict[str, tuple[tuple[str, int], ...]], list[Pressure]]:
     """The op's alternatives for `optimize.frontier`: `n` instances of `root`, cut by the dynamic program at each density of
-    a `grid`, each distinct cheapest cut one alternative ("c0" the sparsest's, and on), its units merged by Definition.
-    Also each alternative's units (Definition id, instances) and the hints that save more than `threshold`.  `replay`
-    (domain, replay units) puts every subcircuit in that replay domain, `n` and each part's count splitting evenly."""
+    a `grid`, each distinct cheapest cut one alternative ("c0" the sparsest's, and on), its proof blocks merged by Definition.
+    Also each alternative's proof blocks (Definition id, instances) and the hints that save more than `threshold`.  `replay`
+    (domain, replay blocks) puts every subcircuit in that replay domain, `n` and each part's count splitting evenly."""
     found: dict[tuple, str] = {}
     out: list[Candidate] = []
     hints: list[Pressure] = []

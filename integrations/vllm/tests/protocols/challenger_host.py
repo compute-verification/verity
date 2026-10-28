@@ -1,4 +1,4 @@
-"""The proof service's challenger on its auditor host, in this process: a `LiveChallenger` its test hands in, its session
+"""The proof system's challenger on its auditor host, in this process: a `LiveChallenger` its test hands in, its session
 opened under an id with its record signed with an LMS key (`remote.open_session`), and `remote.serve` on one end of a socket
 pair, the serving side's `RemoteChallenger` on the other; the session's close is signed at the key's next leaf. The
 auditor's signed ledger (`Ledger`, infra's ``windows.jsonl``, v2) opens the session for its window before the first coin and
@@ -9,8 +9,7 @@ pins log (`PINS`, one pin of `PINNED`, every open's ``pinned``) in its opens as 
 and writes it as infra publishes it (``pins.jsonl``, the gate's ``pins``), so `challenger.pinned_session` holds each
 session to it, and to the verifier's copy of main's first-parent history `MAIN`, which holds `PINNED`. Each holds a
 `Registry`, infra's model registry in this process, whose registration a period opened with ``model`` signs (the gate's
-``period-open --model``) and whose key `Gate.model_key` hands the lane (``model-key``). #2643's
-`tests/check/challenger_host.py`, over any challenger."""
+``period-open --model``) and whose key `Gate.model_key` hands the lane (``model-key``), over any challenger."""
 from __future__ import annotations
 
 import functools
@@ -204,7 +203,7 @@ class Gate:
                     model: str | None = None, weights_root: str | None = None, length: dict | None = None,
                     **override) -> dict:
         """The period's open as the gate's ``period-open`` writes it, with its ``cap``, ``circuit``, ``draw_k`` (the
-        proof service's committed draw K, `credit.K_FIELD`), ``rows`` (the table rows T, `credit.ROWS_FIELD`) and
+        proof system's committed draw K, `credit.K_FIELD`), ``rows`` (the table rows T, `credit.ROWS_FIELD`) and
         ``length`` (``--length``, `credit.LENGTH_FIELD`) when
         given, and with ``model`` (``--model``) or
         ``weights_root`` (``--weights-root``) what the registry resolves them to (`Registry.opened`), Refused

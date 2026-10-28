@@ -240,7 +240,7 @@ local notation "ℐ" => holoInnerAt T CT st hp
 
 -- The session binders carry `ℐ` in their types, so they go on each theorem, never in a `variable` block: a
 -- `variable` whose binders use a local notation over section variables makes Lean silently drop every declaration
--- after it (the audit's `dropped` check, #1923, refuses the package).
+-- after it (the audit's `dropped` check refuses the package).
 
 /-- **`RoundReads` at the checked family** (`C3Family.checked`), at `ownAt ss`: `SessStmt` from the prover's sessions'
 tags (`sessStmt_checked`, the guarantee's `_hF`), `MsgNamesAt` from the verifier's checks (`msgNamesAt_of_accepted`,

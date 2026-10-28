@@ -2,7 +2,7 @@
 `make_wrapper` module for the rank's export: the stochastic wrappers' `seed` and `splits` come after the prompt, in the TP1 order, and
 the peers (`peers_<k>`, one per collective) after them, so the replay and the manifest find the sampler's inputs by the names TP1 gives
 them (`check.replay.index.SEED_PARAM`, `query.manifest.format.SPLITS_PARAM`).  The plain `WithPeers` took the prompt alone, and the seed
-landed in the peers: derive_step failed with `forward() missing 1 required positional argument: 'seed'` (r20261002-184501-2bea).  The
+landed in the peers: derive_step failed with `forward() missing 1 required positional argument: 'seed'`.  The
 greedy rank Program is the `WithPeers` one, its digest unchanged.
 
 The model is a stand-in for a TP rank's vLLM model (`forward(input_ids, positions)`, `compute_logits`) with one all-reduce per forward

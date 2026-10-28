@@ -1,7 +1,5 @@
 import Definitions.Pouw.Assumptions.Pinned
-import Definitions.Pouw.Basic.Mat
 import Definitions.Pouw.Basic.Prob
-import Definitions.Pouw.Basic.QTree
 import Definitions.Pouw.Game.Defs
 import Definitions.Pouw.Game.Params
 import Definitions.Pouw.Assumptions.Game

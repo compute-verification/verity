@@ -1,9 +1,9 @@
-"""`verity.ml.circuits.ops.quant` and `ops.boolean.quant`: the s8 quantizer's units are the torch loop's ``quantize`` of the row,
-relu'd first under RELU (here in numpy float32, the same IEEE operations; torch itself in `integrations/torch_loop`'s tests), on
-random rows and on the edge rows (all zero, all -0, all negative, ties at .5, NaN with saturating neighbours, ±inf, subnormal);
-a row wider than one unit, as RowAbsMax over the row then a chunk unit a chunk, is the row unit; the scale reads any amax word as
-``torch.where(amax > 0, amax / 127, 1)``; each Boolean unit computes its word Definition, at small widths; and `bind` refuses
-statics outside the family."""
+"""`verity.ml.circuits.ops.quant` and `ops.boolean.quant`: the s8 quantizer's proof blocks are torch's per-row s8 quantize of the
+row, relu'd first under RELU (here in numpy float32, the same IEEE operations), on random rows and on the edge rows (all zero, all
+-0, all negative, ties at .5, NaN with saturating neighbours, ±inf, subnormal); a row wider than one proof block, as RowAbsMax
+over the row then a chunk proof block a chunk, is the row proof block; the scale reads any amax word as
+``torch.where(amax > 0, amax / 127, 1)``; each Boolean proof block computes its word Definition, at small widths; and `bind`
+refuses statics outside the family."""
 from __future__ import annotations
 
 import numpy as np
@@ -66,7 +66,7 @@ def _same_amax(got: np.ndarray, want: np.ndarray) -> bool:
 
 
 def _split(out: np.ndarray, n: int) -> tuple[np.ndarray, np.ndarray]:
-    """A unit's output leaves as (its codes as u8, its scale's word)."""
+    """A proof block's output leaves as (its codes as u8, its scale's word)."""
     return out[:, :n].astype(np.uint8), out[:, n].astype(np.uint32)
 
 
@@ -93,9 +93,9 @@ def test_the_edge_rows_reach_their_edges() -> None:
 
 @pytest.mark.parametrize("relu", [True, False])
 def test_a_row_in_chunks_is_the_row_unit(relu) -> None:
-    """A row wider than one unit: its amax (whole; as the amax of four parts' amaxes without the ReLU; and as the last part's
-    values with the other three parts' amaxes, under the row's RELU), then four chunk units under it, whose codes are the row's
-    and whose scales are each the row's."""
+    """A row wider than one proof block: its amax (whole; as the amax of four parts' amaxes without the ReLU; and as the last part's
+    values with the other three parts' amaxes, under the row's RELU), then four chunk proof blocks under it, whose codes are the
+    row's and whose scales are each the row's."""
     xb = rows(H, np.random.default_rng(4))
     codes, scale, amax = reference(xb, relu)
     c = H // 4
@@ -128,8 +128,8 @@ def test_the_scale_is_torchs_where_on_every_kind_of_amax_word() -> None:
 @pytest.mark.parametrize("h", [8, 3])
 @pytest.mark.parametrize("relu", [True, False])
 def test_the_boolean_units_compute_their_word_definitions(h, relu) -> None:
-    """At small widths, since a unit's circuit is the same circuit at every element (H = 128 traces for ~40 s a unit: the torch
-    loop's served-rows test)."""
+    """At small widths, since a proof block's circuit is the same circuit at every element (H = 128 traces for ~40 s a proof
+    block)."""
     rng = np.random.default_rng(7 + h)
     xb = np.concatenate([rows(h, rng), rng.integers(0, 1 << 16, (64, h)).astype(np.uint16)])
     amax = E.evaluate_batch(bind(Q.RowAbsMax, N=h, RELU=relu), xb).astype(np.uint16)

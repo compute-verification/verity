@@ -20,13 +20,17 @@ function of its bindings); `word_of` reads it.
 
 `definition` keeps the builder as the Definition's ``build``, and a lowering into `forms` rows runs it instead of the gates:
 C-Flock's (`verity_flock.ir_lower.lower_gates`) lowers each activation of the Definition it holds whole by ``build`` on its
-own circuit, so a commit is a row there, and an AND operand the form its builder gave it.
+own circuit, so a commit is a row there, and an AND operand the form its builder gave it. `part` is `definition` for a builder
+``build(C, S, *elements)`` with statics, traced once per binding; gate by gate, a part's linear forms grow without bound (one
+SHA-512 compression passes 1 GB).
 """
 from __future__ import annotations
 
 import gc
 from bisect import bisect_left
 from dataclasses import dataclass
+from functools import lru_cache, wraps
+from types import SimpleNamespace
 from typing import Any, Callable, Sequence
 
 from verity.ml.circuits import boolean as BL
@@ -36,10 +40,10 @@ from verity.ml.circuits.types import Array, Type
 
 from .forms import ONE, Circuit, L
 
-__all__ = ["TL", "Traced", "TracingCircuit", "definition", "emit", "trace", "word_of"]
+__all__ = ["TL", "Traced", "TracingCircuit", "definition", "emit", "part", "trace", "word_of"]
 
 #: a form of more bits than this keeps them as a `_Set`, of at most this many as a frozenset (one of each per set)
-_SMALL = 64
+_SMALL = 8
 
 
 class _Set:
@@ -267,6 +271,8 @@ class TracingCircuit(Circuit):
 
 
 _KINDS = ("and", "xor", "not")
+#: the traced circuits this process reuses (`trace_cache.use`); None, as a verifier always has it, traces every time
+CACHE = None
 
 
 @dataclass
@@ -301,7 +307,11 @@ def _flat_out(res: Any, ret: Type) -> list[L]:
     return [f for e in res for f in e]
 
 
-def trace(build: Callable, params: Sequence[Type], ret: Type, *, cse: bool = True) -> Traced:
+def trace(build: Callable, params: Sequence[Type], ret: Type, *, cse: bool = True, key: tuple | None = None) -> Traced:
+    """``build``'s gate circuit over ``params`` to ``ret``. ``key``, a Definition's (name, version, bindings), lets `CACHE`, when a
+    build has turned it on, give the circuit an earlier trace of the same key and code made."""
+    if key is not None and CACHE is not None:
+        return CACHE.trace(key, build, params, ret, cse)
     # The cyclic collector stays off while tracing: reference counting frees a trace's forms, and the collector's passes over
     # the live ones cost more than the trace itself.
     on = gc.isenabled()
@@ -514,17 +524,40 @@ def definition(name: str, version: int, build: Callable, params: Sequence[tuple[
     word Definition ``word``."""
     types = [t for _, t in params]
     traced: list[Traced] = []
+    key = (name, version, {})
 
     def body(B, S, *colls):
         if not traced:
-            traced.append(trace(build, types, ret))
+            traced.append(trace(build, types, ret, key=key))
         return emit(traced[0], types, ret, B, *colls)
 
     d = CompositeDefinition(name, version, (), lambda S: (tuple(params), ret), body, doc=doc, conformance=conformance,
                             register=register)
     d.build = build  # type: ignore[attr-defined]
-    d.traced = lambda: traced[0] if traced else trace(build, types, ret)  # type: ignore[attr-defined]
+    d.traced = lambda: traced[0] if traced else trace(build, types, ret, key=key)  # type: ignore[attr-defined]
     d.word = word  # type: ignore[attr-defined]
+    return d
+
+
+def part(name: str, statics: tuple[str, ...], signature: Callable, build: Callable, doc: str,
+         version: int = 1, *, register: bool = True, conformance: str = "exact-model-tested") -> CompositeDefinition:
+    """The Definition ``name_v{version}`` traced from ``build(C, S, *elements)`` once per binding of ``statics`` (``traced(*key)``),
+    which keeps ``build`` as `definition` does. A lowering passes S only to a Definition with statics
+    (`verity_flock.ir_lower._boolean_activation`), so without any its ``build`` takes the elements alone."""
+
+    @lru_cache(maxsize=None)
+    def traced(*key) -> Traced:
+        S = SimpleNamespace(**dict(zip(statics, key)))
+        params, ret = signature(S)
+        return trace(lambda C, *e: build(C, S, *e), [t for _, t in params], ret)
+
+    def body(B, S, *colls):
+        params, ret = signature(S)
+        return emit(traced(*(getattr(S, k) for k in statics)), [t for _, t in params], ret, B, *colls)
+
+    d = CompositeDefinition(name, version, statics, signature, body, conformance=conformance, doc=doc, register=register)
+    d.build = build if statics else wraps(build)(lambda C, *e: build(C, SimpleNamespace(), *e))  # type: ignore[attr-defined]
+    d.traced = traced  # type: ignore[attr-defined]
     return d
 
 

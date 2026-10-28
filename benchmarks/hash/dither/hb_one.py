@@ -1,5 +1,5 @@
-"""The `dither-1s-hb` arm: kernels-dither-rtx's served linear in one stream (`dither_one`, CA's H1V3 with the exact wrap
-correction) with this lane's one-stream unit, h1u.cu's `kh_one` (the h1u walk, its receipts, and z = O' - sum_d 128^d D_d
+"""The `dither-1s-hb` arm: the served linear in one stream (`dither_one`, H1V3 with the exact wrap correction) with
+the one-stream unit h1u.cu's `kh_one` (the h1u walk, its receipts, and z = O' - sum_d 128^d D_d
 + 256 X (wb+ - wb-)^T and y = dequant(z) from the same MMAs), in place of h1o.cu's `h1o_units`.
 
 `patch(path)` replaces `dither_one.Window.launch` before the engine is built (vLLM captures its graphs inside `LLM()`, so
@@ -14,10 +14,10 @@ gate's no-write control (F_NW_TILES) the slot may go unwritten, so that one step
 reads xq); dither-1s arms' tokens are reported, not gated.
 
 The workspace (`kh_unit_ws`' noise, the largest linear's `kh_ws_bytes` at T rows) is allocated at the window's first
-call, vLLM's eager profile run; each call's J is set for the row blocks its M can hold live (M is fixed per captured
-graph). The library is h1u.cu built by job.sh on this lane's branch (`HB_H1U`), sent to the run with --send.
+call, vLLM's eager profile run; each call's J is set for the row tiles its M can hold live (M is fixed per captured
+graph). The library is h1u.cu built by job.sh (`HB_H1U`), in the run's inputs.
 
-`patch(path, peel=True)` is the `dither-1s-hbp` arm: `kh_one_peel` (CA's peel, 11:02Z) in kh_one's place, the same
+`patch(path, peel=True)` is the `dither-1s-hbp` arm: `kh_one_peel` (the peel) in kh_one's place, the same
 receipts and z = A B^T, so y is today's; its gate is hb_peel.py's.
 """
 from __future__ import annotations

@@ -1,4 +1,4 @@
-"""`GemmCoordinate_v2{K, DOT}` through the IR oracle on 30 authenticated RTX 4090 GEMM coordinates.
+"""`GemmCoordinate_v2{K, DOT}` through the oracle on 30 authenticated RTX 4090 GEMM coordinates.
 
 Ported from veritor ``verity.ir/tests/test_composition.py`` §3 (`test_gemm_on_ampere_captured_coordinates`), with the
 numpy fixture loading replaced by `array('H')`.  The recorded cross-architecture numbers (Hopper step on the same operands:
@@ -17,7 +17,7 @@ import pytest
 from verity.ml.circuits import codec
 from verity.ml.circuits.defs import CompositeDefinition, bind
 from verity.ml.circuits.evaluation.reference import standalone_call
-from verity.ml.circuits.evaluate import evaluate_call
+from verity.ml.circuits.evaluation import evaluate_call
 from verity.ml.circuits.program import Program
 from verity.ml.circuits.ops import gemm as G
 from verity.ml.circuits.ops import prims as P
@@ -41,7 +41,7 @@ def _standalone(spec):
 
 
 def _ev(spec, *arrays) -> tuple[int, ...]:
-    """Evaluate one call of `spec` on word arrays (flattened in parameter order) with the IR oracle."""
+    """Evaluate one call of `spec` on word arrays (flattened in parameter order) with the oracle."""
     prog, call = _standalone(spec)
     return evaluate_call(prog.circuit, call, [int(v) for a in arrays for v in a])
 
@@ -94,8 +94,8 @@ def test_gemm_on_ampere_captured_coordinates() -> None:
 
 
 def test_ir_evaluation_is_the_direct_chain() -> None:
-    """The oracle's answer for `GemmCoordinate_v2` is literally K/16 `tc_dot_total` steps then `cvt.rn.bf16.f32`: the IR
-    adds structure, not semantics.  Also fixes the verification-unit shape the proof work targets."""
+    """The oracle's answer for `GemmCoordinate_v2` is literally K/16 `tc_dot_total` steps then `cvt.rn.bf16.f32`: the Program
+    adds structure, not semantics.  Also fixes the proof-block shape the proofs target."""
     for f, x, w, out in list(_gemm_fixtures())[:4]:
         K = f["K"]
         acc = 0
@@ -263,9 +263,44 @@ def test_the_row_split_s8_coordinate_is_the_coordinate_on_its_parts_concatenated
         assert [p for p, _ in rows.signature()[0]] == [*(f"x{r}" for r in range(R)), "sx", *(f"wrow{r}" for r in range(R)), "sw"]
         got = E.evaluate_batch(rows, *np.split(x, R, axis=1), sx, *np.split(w, R, axis=1), sw, kernel="reference")
         assert np.array_equal(got, want), R
-    bits = lambda fn: [sum(t.leaf_widths()) for _, t in fn.signature()[0]]
+
+    def bits(fn):
+        return [sum(t.leaf_widths()) for _, t in fn.signature()[0]]
+
     assert bits(bind(G.ScaledMmS8CoordinateRows, K=65536, R=2, **G.GEMM_SM90_S8)) == [UNIT_CLASS_MAX] * 2 + [32] + [UNIT_CLASS_MAX] * 2 + [32]
     assert bits(bind(G.ScaledMmS8Coordinate, K=65536, **G.GEMM_SM90_S8)) == [2 * UNIT_CLASS_MAX, 32, 2 * UNIT_CLASS_MAX, 32]
+
+
+@pytest.mark.parametrize("K,R", [(128, 1), (128, 2), (128, 4), pytest.param(16384, 2, marks=pytest.mark.slow),
+                                 pytest.param(65536, 8, marks=pytest.mark.slow)])
+def test_the_residual_coordinate_is_the_unfused_coordinate_then_residual_add(K, R) -> None:
+    """`ScaledMmS8ResidualCoordinateRows_v1{K, R}` is the chain it fuses: `ScaledMmS8CoordinateRows_v1{K, R}`'s word, then
+    `Bf16AddRow_v1{N = 1}` of the residual stream's word r and it. At K = 128 for R = 1, 2 and 4, and at the frozen shape's
+    two projections back to the width, wo (K = 16,384, R = 2) and wdown (K = 65,536, R = 8); r random, every special word
+    (signed zeros, subnormals, the largest finites, infinities, NaNs) and the coordinate's own word negated (the exact +0)."""
+    import numpy as np
+
+    from verity.ml.circuits import evaluation as E
+    from verity.ml.circuits.ops import rows as RO
+
+    rng = np.random.default_rng(35 + K + R)
+    n = 1000 if K == 128 else 32
+    x, w = (rng.integers(0, 256, (n, K), dtype=np.uint8) for _ in range(2))
+    sx = (np.abs(rng.standard_normal(n)) / 127).astype(np.float32).view(np.uint32)
+    sw = (np.abs(rng.standard_normal(n)) * 0.02 / 127).astype(np.float32).view(np.uint32)
+    ports = [*np.split(x, R, axis=1), sx, *np.split(w, R, axis=1), sw]
+    y = E.evaluate_batch(bind(G.ScaledMmS8CoordinateRows, K=K, R=R, **G.GEMM_SM90_S8), *ports, kernel="reference")
+    y = y.reshape(n).astype(np.uint16)
+    special = np.array([0x0000, 0x8000, 0x0001, 0x8001, 0x007F, 0x0080, 0x7F7F, 0xFF7F, 0x7F80, 0xFF80, 0x7FC0, 0xFFC0,
+                        0x7F81, 0xFFFF], np.uint16)
+    s = len(special)
+    r = rng.integers(0, 1 << 16, n, dtype=np.uint32).astype(np.uint16)
+    r[:s], r[s:2 * s] = special, y[s:2 * s] ^ np.uint16(0x8000)
+    want = E.evaluate_batch(bind(RO.Bf16AddRow, N=1), r[:, None], y[:, None], kernel="reference").reshape(n)
+    got = E.evaluate_batch(bind(G.ScaledMmS8ResidualCoordinateRows, K=K, R=R, **G.GEMM_SM90_S8), *ports, r, kernel="reference")
+    assert np.array_equal(got.reshape(n).astype(np.uint16), want.astype(np.uint16))
+    finite = (y[s:2 * s] & 0x7F80) != 0x7F80
+    assert finite.any() and (want[s:2 * s][finite] == 0).all()
 
 
 def test_the_padded_coordinate_is_the_coordinate_on_zero_padded_operands_at_every_padded_k() -> None:
@@ -281,7 +316,9 @@ def test_the_padded_coordinate_is_the_coordinate_on_zero_padded_operands_at_ever
     coord = bind(G.GemmCoordinate, K=32, **G.GEMM_HOPPER)
     xs, ws = KT.sample_tc(np.random.default_rng(34), 3000, E.batch.signature_of(coord)[0])
     for T in (1, 5, 16, 17, 31, 32):
-        pad = lambda a: np.concatenate([a[:, :T], np.zeros((len(a), 32 - T), a.dtype)], axis=1)
+        def pad(a):
+            return np.concatenate([a[:, :T], np.zeros((len(a), 32 - T), a.dtype)], axis=1)
+
         want = E.evaluate_batch(coord, pad(xs), pad(ws))
         for k in (32, 48, 64):
             pad_k = bind(G.GemmCoordinatePad, T=T, K=k, **G.GEMM_HOPPER)
@@ -417,8 +454,9 @@ def test_the_padded_row_split_and_pv_forms_refuse_t_r_and_d_outside_their_range(
             with pytest.raises(ValueError, match=re.escape(f"T={T} is not in 1..K=32")):
                 bind(pv, T=T, K=32, D=64, **G.GEMM_HOPPER)
     for R in (0, 3, 256):
-        with pytest.raises(ValueError, match=re.escape(f"R={R} does not divide K=128")):
-            bind(G.ScaledMmS8CoordinateRows, K=128, R=R, **G.GEMM_SM90_S8)
+        for rows in (G.ScaledMmS8CoordinateRows, G.ScaledMmS8ResidualCoordinateRows):
+            with pytest.raises(ValueError, match=re.escape(f"R={R} does not divide K=128")):
+                bind(rows, K=128, R=R, **G.GEMM_SM90_S8)
     for D in (0, -64):
         for pv in (G.PvRow, G.PvRowPad):
             with pytest.raises(ValueError, match=re.escape(f"D={D} is not a head width")):
@@ -434,7 +472,8 @@ FAMILIES = [(G.DotBf16, 16, G.GEMM_HOPPER), (G.GemmCoordinate, 16, G.GEMM_AMPERE
             (G.GemmCoordinateE4m3, 32, G.GEMM_SM120_E4M3), (G.GemmCoordinateNvf4, 64, G.GEMM_SM120_NVF4),
             (G.GemmCoordinateMxf4, 64, G.GEMM_SM120_MXF4), (G.GemmAccumulatorS8, 32, G.GEMM_SM120_S8),
             (G.ScaledMmS8Coordinate, 32, G.GEMM_SM120_S8), (G.ScaledMmS8, 32, {"N": 2, **G.GEMM_SM120_S8}),
-            (G.ScaledMmS8CoordinateRows, 32, {"R": 1, **G.GEMM_SM90_S8})]
+            (G.ScaledMmS8CoordinateRows, 32, {"R": 1, **G.GEMM_SM90_S8}),
+            (G.ScaledMmS8ResidualCoordinateRows, 32, {"R": 1, **G.GEMM_SM90_S8})]
 S8_FAMILIES = FAMILIES[9:]
 
 

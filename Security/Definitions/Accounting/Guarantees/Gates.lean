@@ -163,28 +163,27 @@ def FoolingCap : Prop :=
     (∀ s ∈ F, ∀ s' ∈ F, s ≠ s' → ∃ o ∈ out, ¬ val C (x s) o ≡ val C (x s') o [ZMOD 2 ^ j]) →
     F.card ≤ 2 ^ (j * out.length)
 
-/-- **Re-normalization** (the red team's Lemma R, note:20261017T1859Z-report-property-redteam R3.3 and R4.1;
-unproved): a square's limbs come back to byte format only through budgeted gates, about one a limb. Take a circuit
-whose window is proven, with no run input, whose registered inputs are fixed and whose coin inputs are bytes of `a` or
-fixed (so units count what reads `a`), that on more than `ε ≥ 2^−t` of the `a ∈ [0, p)` holds its declared intervals
-(so is in its window) and outputs `L + c` values (`out l`, `L = n/8`), each within a byte format (`fmt l`), whose
-base-256 sum is `a²` mod `p`. Then `ε · 2^(8L) ≤ 2^(8·(budgeted C + d₀ + c))`, that is `budgeted C ≥ L − c − d(ε)`
-with `d(ε) = d₀ + log₂(1/ε)/8`. The outputs are any byte-format representation (signed digits, extra limbs,
-unreduced), since the chain's next squaring reads any; for one squaring no cap on operand bits is needed. The s8
-family forms the column sums of `a²` for free; what it can't do is carry, and `SquaringCarry` proves only bits of that
-(63 at p1024), not units. The claimed instance is p1024 with `d₀ = 4` and `t = 64`.
+/-- **Re-normalization** (Lemma R; unproved): a square's limbs come back to byte format only through budgeted gates,
+about one a limb. Take a circuit whose window is proven, with no run input, whose registered inputs are fixed and whose
+coin inputs are bytes of `a` or fixed (so units count what reads `a`), that on more than `ε ≥ 2^−t` of the `a ∈ [0, p)`
+holds its declared intervals (so is in its window) and outputs `L + c` values (`out l`, `L = n/8`), each within a byte
+format (`fmt l`), whose base-256 sum is `a²` mod `p`. Then `ε · 2^(8L) ≤ 2^(8·(budgeted C + d₀ + c))`, that is
+`budgeted C ≥ L − c − d(ε)` with `d(ε) = d₀ + log₂(1/ε)/8`. The outputs are any byte-format representation (signed
+digits, extra limbs, unreduced), since the chain's next squaring reads any; for one squaring no cap on operand bits is
+needed. The s8 family forms the column sums of `a²` for free; what it can't do is carry, and `SquaringCarry` proves only
+bits of that (63 at p1024), not units. The claimed instance is p1024 with `d₀ = 4` and `t = 64`.
 
-**`d₀` is not absolute, so the floor.** A circuit with no budgeted gate (`a`'s bytes as coin inputs declared
-`[0, D_l]`, `a²`'s column sums as s8-family steps, folded mod `p`) is exact on every `a` whose column sums don't carry,
-and such families grow with `L` faster than any fixed `d₀` covers: `2^33.30` members at `p = 256^27 − 377` (`d₀ ≥
-4.16`), `2^101.85` at p1024 (`d₀ ≥ 12.73`; the red team's, R4.1), and, sampled, at least `2^159.4` at p1024 (64
-digits from a geometric law; `d₀ ≥ 19.9`), which refutes the slope `1/7` too (`d = 4 + log₂(1/ε)/7` allows at most
-`2^156`). Every one sits at `ε ≤ 2^−182`, and none can reach the floor at p1024: a column holds `a_l²`, so a
-non-carrying `a` has digits below 16 and `ε ≤ 16^L/p ≈ 2^−512`. Above the floor every family found is within `d₀ = 4`:
-the exhaustive toy fields (implied `d₀ ≤ 2.18`), the non-carrying sets of the byte fields `L ≤ 10`, counted exactly
-(`≤ 2.48`), and at p1024 the red team's carry-guessing frontier (modeled, 10 to 15 bits a dropped carry: `d = 1 … 5`
-at `ε = 2^−9.8 … 2^−69.5`, against the formula's `5.2 … 12.7`). `t = 64` keeps the claim inside the range that
-frontier reaches; the bound reads `ε = 2^−40` (the headline) and `2^−20` (the property's carrier threshold). -/
+**`d₀` is not absolute, so the floor.** A circuit with no budgeted gate (`a`'s bytes as coin inputs declared `[0, D_l]`,
+`a²`'s column sums as s8-family steps, folded mod `p`) is exact on every `a` whose column sums don't carry, and such
+families grow with `L` faster than any fixed `d₀` covers: `2^33.30` members at `p = 256^27 − 377` (`d₀ ≥ 4.16`),
+`2^101.85` at p1024 (`d₀ ≥ 12.73`), and, sampled, at least `2^159.4` at p1024 (64 digits from a geometric law;
+`d₀ ≥ 19.9`), which refutes the slope `1/7` too (`d = 4 + log₂(1/ε)/7` allows at most `2^156`). Every one sits at
+`ε ≤ 2^−182`, and none can reach the floor at p1024: a column holds `a_l²`, so a non-carrying `a` has digits below 16
+and `ε ≤ 16^L/p ≈ 2^−512`. Above the floor every family found is within `d₀ = 4`: the exhaustive toy fields (implied
+`d₀ ≤ 2.18`), the non-carrying sets of the byte fields `L ≤ 10`, counted exactly (`≤ 2.48`), and at p1024 the
+carry-guessing frontier (modeled, 10 to 15 bits a dropped carry: `d = 1 … 5` at `ε = 2^−9.8 … 2^−69.5`, against the
+formula's `5.2 … 12.7`). `t = 64` keeps the claim inside the range that frontier reaches; the bound reads `ε = 2^−40`
+(the headline) and `2^−20` (the property's carrier threshold). -/
 def Renormalization (F : Field) (d₀ c t εnum εden : ℕ) : Prop :=
   ∀ {ι : Type} (C : Dag ι) (x : ℕ → ι → ℤ) (out : ℕ → ℕ) (fmt : ℕ → Int8Fmt) (good : Finset ℕ),
     εden ≤ 2 ^ t * εnum →

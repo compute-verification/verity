@@ -1,4 +1,4 @@
-"""circuit-check over every registered Definition and subcircuit template, a served row's request Program, and the checks' own
+"""circuit-check over every registered Definition and subcircuit template, a served workload's request Program, and the checks' own
 negatives (each check fires by name on a circuit built to break it).
 
 A failure is a correctness or invariant violation.  The ones `main` already has are listed in `circuit_check.known` with their
@@ -185,7 +185,7 @@ DECIDED = {"TokenSelect_v1{V=16}": "words", "RoPEHead_v1{D=8}": "words", "RoPEHe
 @pytest.mark.slow
 @pytest.mark.usefixtures("suite")
 def test_a_targeted_run_without_the_catalog_reports_what_one_with_it_does(monkeypatch):
-    """CIR-30: a targeted run built the whole catalog (`call_families`) before checking a target, 75 minutes at #2397.  The same
+    """A targeted run does not build the whole catalog (`call_families`) before checking a target.  The same
     targets checked with each `as_call` read off `call_families` and with it decided by `is_call` without the catalog get the
     same report."""
     from circuit_check import cli
@@ -215,7 +215,7 @@ def test_the_cli_resolves_each_targets_call_without_the_catalog(monkeypatch):
     attention = "Attention_v8{T=40,NH=2,KVH=1,D=16,BN=16,DOT=HopperBF16WgmmaDot16_v2,INV=Fa2InvSum_v2,MASKED_FROM=2}"
     cli._calls(["TokenSelect_v1{V=16}", "RoPEHead_v2{D=8}", attention, "F32Add_v1", "rope-head", "RoPEHead_v1{Q=8}"])
     assert {"TokenSelect_v1", "RoPEHead_v1"} <= TG._SHORT["words"]
-    assert {"RoPEHead_v2", "Attention_v8"} <= TG._SHORT["certified"], "a template's binding, and a root function's (CIR-42)"
+    assert {"RoPEHead_v2", "Attention_v8"} <= TG._SHORT["certified"], "a template's binding, and a root function's"
 
 
 @pytest.mark.slow
@@ -300,8 +300,8 @@ def test_row(tmp_path, results):
 
 @pytest.mark.slow
 def test_a_call_output_no_commitment_holds_is_named(tmp_path):
-    """The attention fixture's o_proj Gemm returns a value no later Call reads and the query does not require: a unit would end
-    at an uncommitted value, across Calls."""
+    """The attention fixture's o_proj Gemm returns a value no later Call reads and the query does not require: a proof block
+    would end at an uncommitted value, across Calls."""
     r = CK.check_row(_request_program(tmp_path, attn=True), OPTS, memo=MEMO, pins=PINS)
     assert "partition/output-not-committed Gemm_v1{K=48,N=16} (4 Call(s) under model.model.layers.0.self_attn.o_proj)" in \
         [f["name"] for f in r["failures"]]
@@ -385,7 +385,7 @@ def test_the_probed_entries_are_the_ends_and_each_regions_edges():
 
 def test_a_registered_table_is_probed_and_never_flattened(monkeypatch):
     """A Definition whose table parameter is over the input budget is checked on its other parameters' vectors plus one
-    instance per probed entry, each reading the table lazily; the record names the probed entries and counts the words read."""
+    vector per probed entry, each reading the table lazily; the record names the probed entries and counts the words read."""
     from verity.ml.circuits.evaluation import evaluate
 
     read, holds = _table_read(), _holds()
@@ -468,7 +468,7 @@ def test_a_value_computed_twice_in_one_unit_is_a_redundant_gate():
 
 
 def test_a_value_computed_in_two_units_is_a_recompute_failure():
-    """Two identical calls, each returned by its own unit (the body reads only its parameters, which `word.unit_rule` partitions
+    """Two identical calls, each returned by its own proof block (the body reads only its parameters, which `word.unit_rule` partitions
     node by node; the whole Definition's cut compares them)."""
     from verity.ml.circuits.refs import array_of
     from verity.ml.circuits.types import Array, Value
@@ -485,7 +485,7 @@ def test_a_value_computed_in_two_units_is_a_recompute_failure():
     assert [w["count"] for w in inner["warnings"] if w["check"] == "redundant-gates" and w["code"] == "ir"] == [1]
 
 
-#: a Boolean Call family (`RoPEHead_v1`'s Boolean version) whose cut computes 1,120 values in two units
+#: a Boolean Call family (`RoPEHead_v1`'s Boolean version) whose cut computes 1,120 values in two proof blocks
 BOOL_RECOMPUTE = "RoPEHead_v2{D=8}"
 
 
@@ -499,7 +499,7 @@ def _partition(fn, q_word, opts=OPTS):
 @pytest.mark.slow
 @pytest.mark.usefixtures("suite")
 def test_a_boolean_call_that_recomputes_across_units_passes_with_the_count():
-    """A Boolean Call is judged by `Q_word` v2: the values two units compute are recorded, in the entry and the summary, not
+    """A Boolean Call is judged by `Q_word` v2: the values two proof blocks compute are recorded, in the entry and the summary, not
     failed; under v1 the same cut fails by name."""
     from verity.ml.circuits import boolean as BL
 
@@ -535,7 +535,8 @@ def test_a_boolean_call_with_another_partition_code_still_fails(monkeypatch):
 
 
 def test_q_call_is_recorded_per_call_and_refuses_a_gate_wider_than_32_bits():
-    """`Q_call` v1 beside `Q_word`: a Boolean Call's units, committed bits and the values two units compute (reported); a Call with
+    """`Q_call` v1 beside `Q_word`: a Boolean Call's proof blocks, committed bits and the values two proof blocks compute
+    (reported); a Call with
     a 64-bit gate is refused, a warning and the summary's `q_call_refused`, not a failure."""
     from verity.ml.circuits.defs import PrimitiveDefinition
     from verity.ml.circuits.types import Array, Value
@@ -554,7 +555,7 @@ def test_q_call_is_recorded_per_call_and_refuses_a_gate_wider_than_32_bits():
     assert CK.summarize([{"definition": wide.id, "partition": rec, "failures": [], "warnings": []}])["q_call_refused"] == {wide.id: "gate-too-wide"}
 
 
-#: `Q_call{32}` on `BOOL_RECOMPUTE`: its eight 16-bit outputs, two to a unit, and the same values computed in two units as v2 reports
+#: `Q_call{32}` on `BOOL_RECOMPUTE`: its eight 16-bit outputs, two to a proof block, and the same values computed in two proof blocks as v2 reports
 QCALL_ROPE = {"X": 32, "checked": True, "units": 8, "committed": 128, "committed_bits": 128, "recomputed_across": 1120, "redundant_gates": 0,
               "codes": []}
 
@@ -573,8 +574,8 @@ def test_the_boolean_versions_of_the_served_calls_are_calls():
 #: Calls the suite checks over `Options.partition_max_gates`, each with why it is allowed: both are σ Definitions at their
 #: smallest bindings (`boolean_sigma.circuit-check.py`), and splitting them moves GLM-5.3's and DeepSeek-V4's word digests
 OVER_PARTITION_BUDGET = {
-    "AllReduceRmsNormMnnvl_v2{WORLD=2,N=256,SHOT=1,CLUSTER=1,EPS=1e-05,FMA=False}": "split pending, CIR-44",
-    "MhcFusedPostPre_v2{HC=2,H=64,NS=2,TH=8,TN=4,REPEAT=2,EPS=1e-06,HC_EPS=1e-06}": "split pending, CIR-44",
+    "AllReduceRmsNormMnnvl_v2{WORLD=2,N=256,SHOT=1,CLUSTER=1,EPS=1e-05,FMA=False}": "split pending",
+    "MhcFusedPostPre_v2{HC=2,H=64,NS=2,TH=8,TN=4,REPEAT=2,EPS=1e-06,HC_EPS=1e-06}": "split pending",
 }
 
 
@@ -584,7 +585,7 @@ def test_every_call_the_suite_checks_is_partitioned(catalog):
     at T = 17 are about 1.9M gates, 2.1M with Gemma-2's softcap; DeepSeek-V4's Boolean FlashMLA prefill and mHC Calls at their
     smallest whole blocks 4.1M to 4.6M) and `Options.partition_max_leaves`, apart from `OVER_PARTITION_BUDGET`, which holds
     only Calls that are still over it.  Gate counts are the catalog's (`Catalog.reached`): a target made from its record has
-    no body built, and building every Call's took 1,653 s (r20261022-011739-f87f)."""
+    no body built, and building every Call's would take about half an hour."""
     from verity.ml.circuits.evaluation.reference import signature_of
 
     suite = catalog.suite
@@ -745,7 +746,7 @@ def test_a_word_definition_that_differs_from_its_boolean_definition_is_caught():
 
 def test_a_boolean_constant_is_checked_on_its_one_instance():
     """A Boolean constant (`Const<w>[0x..]_v2`, `verity.ml.circuits.ops.boolean.scalar.const_word`) takes no operands: its lowering
-    and its word view each compare its one instance, every bit, so a constant one bit off its word constant is named."""
+    and its word view each compare its one vector, every bit, so a constant one bit off its word constant is named."""
     from verity.ml.circuits import boolean as BL
     from verity.ml.circuits.boolean.forms import const_bits
     from verity.ml.circuits.boolean.trace import definition
@@ -989,8 +990,8 @@ def test_a_result_is_not_stored_when_the_tree_changed_while_it_ran(tmp_path):
 
 
 def test_two_writers_of_one_entry_at_once_both_store_it(tmp_path, monkeypatch):
-    """16 Oct, r20261016-231951-72a9: two checks on one node stored the same entry; they shared its temporary file, and the second's
-    rename found it gone (FileNotFoundError), which failed the whole check."""
+    """Two checks on one node that store the same entry don't share its temporary file, where the second's rename would find
+    it gone (FileNotFoundError) and fail the whole check."""
     import subprocess
 
     from circuit_check import cache as CC

@@ -3,7 +3,7 @@ Part of the certifier's [PROTOCOL.md](../PROTOCOL.md).
 ## The clock certificate (`certificate.CertifiedClock`)
 
 N2's advised floor reads each egress window's sync (δ, ρ), and a δ below the one the window's traffic was certified
-under loosens it (REDTEAM phase 11). So `advised.view` refuses a window whose declared sync isn't the one the certifier
+under loosens it (the phase-11 attack). So `advised.view` refuses a window whose declared sync isn't the one the certifier
 ran it under, which the verifier takes only from its own clock source (`advised.ClockSource`). The clock certificate
 makes that source the certifier's signed record.
 
@@ -20,8 +20,8 @@ makes that source the certifier's signed record.
   the link, `egress` and the window). `CertifiedClock` is the sync, the salt and that certificate. A rehearsal's
   certifier (`certifier_serve.ServedProxy`, which hands its `CertifierProcess` each egress record with its shaper's
   sync) writes one line of its `clocks.jsonl` a window, with the opening (`certifier_serve.read_clocks`).
-- **What is public.** What the certifier signs is witness (AGENTS.md, "Auditor-trusted devices", applied to the clock
-  certificate on 25 Oct): the sync and its salt never reach the auditor in the clear. Only the certificate is public, a signature over
+- **What is public.** What the certifier signs is witness (AGENTS.md, "Auditor-trusted devices"): the sync and its
+  salt never reach the auditor in the clear. Only the certificate is public, a signature over
   a hiding commitment: its key id, link, direction and window, the salted digest and the LMS signature. The reveal
   endpoint serves that alone (`CertifyingPublisher.public`), and the client keeps it in its `clocks.jsonl`
   (`certifier_serve.keep_certificates`), checked under the deployment's key and session; it holds no opening.
@@ -33,9 +33,9 @@ makes that source the certifier's signed record.
 - **A certificate of its own, not a head field.** Signing the sync inside the egress head (`RecordHead.encode`) would
   change the head encoding that the head check's circuit, the Lean records and the CertifierDevice pin. The record
   certificate, the head and `active.py` are unchanged.
-- **Domain separation.** The record certificate of the same link-window signs SHA-512("verity/net-cert/v1" ‖ salt_c ‖
+- **Domain separation.** The record certificate of the same sampling block signs SHA-512("verity/net-cert/v1" ‖ salt_c ‖
   R), R a record digest, and the clock certificate the same over a clock digest, each digest under its own tag. So one
-  opens as the other only on a SHA-512 collision, as with the warden's cells certificate (`warden_rows`). Nor can the
+  opens as the other only on a SHA-512 collision, as with the network certifier's cells certificate (`warden_rows`). Nor can the
   head check take a clock certificate as a record's: that needs a head whose record digest is the clock digest.
 - **The verifier of record** is `LinkWindows(certified_clocks=…)`, whose `clock_source` is `advised.SignedClocks` under
   the link's own certifier key and session. It reads each window's sync through its opening, against the salted digest
@@ -44,7 +44,7 @@ makes that source the certifier's signed record.
   hold, and the windows run from 0 to the first one without exactly one such sync. `SignedClocks.refused` names each
   opening it took no sync from and why: not a salted clock's opening, not egress, another key's, a sync and salt that
   don't open the signed digest (an altered digest or sync), a signature that doesn't verify (forged, another
-  session's, or relabelled to another link or window), a salt another link-window's opening has too, or two signed
+  session's, or relabelled to another link or window), a salt another sampling block's opening has too, or two signed
   syncs for one window. Once a frame is released in a window without a sync no floor is under a signed sync, and
   every window of the link is refused. The link's verdict is the AND over its windows, so the link is refused either
   way. Whoever delivers the openings, the prover included, can't change what they open to.

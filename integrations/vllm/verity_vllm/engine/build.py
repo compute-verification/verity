@@ -2,7 +2,7 @@
 
 `profile.apply_env()`, `cp = checkpoint_for(case, manifests/checkpoints.json)` (case B0 = SmolLM2-135M, B1 = Qwen2.5-1.5B),
 `LLM(**engine_kwargs(cp, replay=False, enforce_eager=True), enable_prefix_caching=False, ...)`, `runner = handle.model_runner(llm)`
-(DESIGN §1 / §10).  The row's declared execution decides `enforce_eager`, and a declared `TargetProfile` adds its engine args and
+(DESIGN §1 / §10).  The workload's declared execution decides `enforce_eager`, and a declared `TargetProfile` adds its engine args and
 environment knobs; after the build the effective execution, compilation, attention version and async-scheduling mode are read back
 from the engine's `vllm_config` and checked against the declaration.
 """
@@ -21,7 +21,7 @@ import torch
 from verity_vllm.engine import env as engine_env, handle, served
 
 
-CASE = "B0"                       # default checkpoint role (SmolLM2-135M); [M6] `build_engine(case="B1")` serves Qwen2.5-1.5B
+CASE = "B0"                       # default checkpoint role (SmolLM2-135M); `build_engine(case="B1")` serves Qwen2.5-1.5B
 
 
 def case_of(workload: dict | None, case: str | None = None) -> str:
@@ -39,14 +39,14 @@ class Engine:
     env_flags: dict
     build_s: float
     case: str = CASE
-    target: Any = None   # [R13 hopper] the declared `TargetProfile` the engine was built under (None = none declared: vLLM's own selection)
-    execution: str | None = None   # [R15 EXEC-02] the row's declared execution label the engine was built FOR (bi-eager / bi-compiled / ...), None = undeclared
-    effective: dict | None = None  # [R15 EXEC-02] the execution the built engine actually realises (effective_execution_doc), None before LLM()
+    target: Any = None   # the declared `TargetProfile` the engine was built under (None = none declared: vLLM's own selection)
+    execution: str | None = None   # the workload's declared execution label the engine was built FOR (bi-eager / bi-compiled / ...), None = undeclared
+    effective: dict | None = None  # the execution the built engine actually realises (effective_execution_doc), None before LLM()
     environ: dict | None = None    # the process environment keys its build set or changed (`engine_env.set_since`), None when not built here
     credited_read: dict | None = None  # the int8 attention's credited read installed at the build (`int8_credited_env`), None when none
 
 
-# [R15 EXEC-02 / COORD M-0063 (2)] the row's execution label decides `enforce_eager`; it is never a literal of the harness.  Labels are the
+# the workload's execution label decides `enforce_eager`; it is never a literal of the harness.  Labels are the
 # row-id vocabulary (`…__bi-eager`, `…__bi-eager-fa2`, `…__bi-compiled`); a label this table does not know fails closed (no guessing).
 EXECUTION_ENFORCE_EAGER: dict[str, bool] = served.ENFORCE_EAGER
 
@@ -83,7 +83,7 @@ def effective_execution_doc(llm: Any, model: Any = None) -> dict:
         doc["dtype"] = str(getattr(mc, "dtype", None))
         doc["block_size"] = int(getattr(cc, "block_size")) if getattr(cc, "block_size", None) is not None else None
         doc["gpu_memory_utilization"] = float(getattr(cc, "gpu_memory_utilization")) if getattr(cc, "gpu_memory_utilization", None) is not None else None
-        doc["async_scheduling"] = resolved_async_scheduling(llm)      # [R16 sys int-3] resolved, not the CLI default (M-0213)
+        doc["async_scheduling"] = resolved_async_scheduling(llm)      # resolved, not the CLI default
         import vllm.envs as envs
         doc["batch_invariant"] = bool(envs.VLLM_BATCH_INVARIANT)
     except Exception as e:  # noqa: BLE001
@@ -109,7 +109,7 @@ def parse_target_arg(s: str | None):
 
 def target_of_workload(workload: dict | None, cli: str | None = None):
     """The `TargetProfile` a GPU stage builds its engine for: the CLI `--target` (JSON overrides / path) when given, else the
-    loaded workload's `target` (`vllm_adapter.load_workload`: the row file's `engine.target`, the row's declared overrides, e.g. `{"flash_attn_version": 2}` for `…__bi-eager-fa2`) laid over
+    loaded workload's `target` (`vllm_adapter.load_workload`: the workload file's `engine.target`, the workload's declared overrides, e.g. `{"flash_attn_version": 2}` for `…__bi-eager-fa2`) laid over
     THIS host's device facts (`TargetProfile.from_device()`: capability + SM count, as `derive_step` does without `--target`), else None
     (no declared target: vLLM's own selection, header records the device only)."""
     if cli:
@@ -120,7 +120,7 @@ def target_of_workload(workload: dict | None, cli: str | None = None):
     from verity_vllm.program.frontend.target_profile import TargetProfile
     base = TargetProfile.from_device() if torch.cuda.is_available() else TargetProfile.default()
     d = base.to_json()
-    unknown = set(t) - set(TargetProfile.__dataclass_fields__)   # [R15 fp8] the fields, not the serialised keys (None fields may be omitted)
+    unknown = set(t) - set(TargetProfile.__dataclass_fields__)   # the fields, not the serialised keys (None fields may be omitted)
     if unknown:
         raise ValueError(f"workload target: unknown TargetProfile fields {sorted(unknown)}")
     d.update(t)
@@ -128,7 +128,7 @@ def target_of_workload(workload: dict | None, cli: str | None = None):
 
 
 def parse_engine_args(items: list[str] | None) -> dict[str, Any]:
-    """[GEN batch SHARED-CODE] `--engine-arg key=value` (repeatable) -> `LLM(**kw)` overrides; the value is parsed as JSON when it is
+    """`--engine-arg key=value` (repeatable) -> `LLM(**kw)` overrides; the value is parsed as JSON when it is
     one (`64`, `true`, `null`, `"x"`), else kept as a string.  Only for scheduler/memory knobs the sweep varies (max_num_batched_tokens,
     enable_prefix_caching, ...); the pinned model / dtype / eager / attention profile stays `engine_kwargs`' business."""
     out: dict[str, Any] = {}
@@ -163,7 +163,7 @@ def engine_kwargs_for(checkpoints: str | Path = "manifests/checkpoints.json", *,
 
     if execution is not None and execution not in EXECUTION_ENFORCE_EAGER:
         raise RuntimeError(f"execution label {execution!r} is not modelled by the harness (known: {sorted(EXECUTION_ENFORCE_EAGER)}); refusing to build an engine")
-    # the execution label's batch invariance (`served.apply`), then [R15 fp8] the declared target's ENVIRONMENT knobs (`TargetProfile.env()`:
+    # the execution label's batch invariance (`served.apply`), then the declared target's ENVIRONMENT knobs (`TargetProfile.env()`:
     # VLLM_BATCH_INVARIANT, VLLM_USE_DEEP_GEMM for `fp8_block_gemm`), applied before vLLM reads them -- the same object the builder
     # applied; the header records them (`target_env`) and `target_mismatches` reads the selected FP8 kernel back
     env_flags = served.apply(execution)
@@ -197,16 +197,16 @@ def build_engine(checkpoints: str | Path = "manifests/checkpoints.json", *, max_
                  execution: str | None = None) -> Engine:
     from verity_vllm.engine import engine_profile as prof
 
-    # [R15 EXEC-02 / COORD M-0063 (2)] `enforce_eager` comes from the row's declared execution (`execution_of_workload`), not from a literal:
+    # `enforce_eager` comes from the workload's declared execution (`execution_of_workload`), not from a literal:
     # an undeclared execution (no row id) keeps the historical eager default and is recorded as `declared_execution: null`; an unknown label
     # fails closed.  A CLI `--engine-arg enforce_eager=...` that contradicts the declared execution is refused BEFORE any engine is built,
-    # so an eager engine can never serve a `__bi-compiled` row (and vice versa) under a green-looking header (rev-pm M-0040).
-    # [R13 hopper] `kernel_config.enable_flashinfer_autotune=False` by construction (the autotune dummy run must not depend on the shell's PATH);
-    # [GEN batch SHARED-CODE] explicit CLI engine args override last and are recorded in versions.json/run.json.  All of it in
-    # `engine_kwargs_for` (R16 sys: the hot worker computes the same keyword set to decide reuse vs restart).
+    # so an eager engine can never serve a `__bi-compiled` workload (and vice versa) under a green-looking header.
+    # `kernel_config.enable_flashinfer_autotune=False` by construction (the autotune dummy run must not depend on the shell's PATH);
+    # explicit CLI engine args override last and are recorded in versions.json/run.json.  All of it in
+    # `engine_kwargs_for` (the hot worker computes the same keyword set to decide reuse vs restart).
     env0 = engine_env.snapshot()
     kw, env_flags, cp = engine_kwargs_for(checkpoints, max_num_seqs=max_num_seqs, case=case, engine_args=engine_args, target=target, execution=execution)
-    from vllm import LLM  # noqa: E402  (after apply_env)
+    from vllm import LLM  # after apply_env
 
     from verity_vllm.engine import sparse_mla, topp_pin
     sparse_mla.arm()
@@ -223,12 +223,12 @@ def build_engine(checkpoints: str | Path = "manifests/checkpoints.json", *, max_
     runner = handle.model_runner(llm)
     model = runner.get_model()
     eng = Engine(llm, runner, model, cp, kw, env_flags, build_s, case, target, execution, None, engine_env.set_since(env0))
-    eng.effective = effective_execution_doc(llm, model)      # [R15 EXEC-02] read back from vllm_config: what this engine really executes
+    eng.effective = effective_execution_doc(llm, model)      # read back from vllm_config: what this engine really executes
     if execution is not None and eng.effective.get("enforce_eager") is not None and bool(eng.effective["enforce_eager"]) != want_eager:
         raise RuntimeError(f"execution mismatch after build: the row declares {execution!r} but vllm_config.model_config.enforce_eager="
                            f"{eng.effective['enforce_eager']} (compilation {eng.effective.get('mode')}, cudagraph {eng.effective.get('cudagraph_mode')})")
     if target is not None:
-        # fail closed: the engine's device and attention version must be the declared ones (the row is for THIS target, not the host's)
+        # fail closed: the engine's device and attention version must be the declared ones (the workload is for THIS target, not the host's)
         bad = target_mismatches(eng)
         if bad:
             raise RuntimeError("engine does not realise the declared TargetProfile: " + "; ".join(bad))
@@ -283,7 +283,7 @@ def target_mismatches(engine: Engine) -> list[str]:
     fav = observed_flash_attn_version(engine.model)
     if fav != tp.effective_flash_attn_version() and (fav is not None or flash_attn_versions(engine.model)):
         bad.append(f"flash_attn_version declared {tp.flash_attn_version!r} (effective {tp.effective_flash_attn_version()}), layers report {fav!r}")
-    # [R15 compiled] the engine must realise the declared EXECUTION: eager profile -> enforce_eager True; `piecewise` -> torch.compile
+    # the engine must realise the declared EXECUTION: eager profile -> enforce_eager True; `piecewise` -> torch.compile
     # (VLLM_COMPILE) + CUDAGraphMode PIECEWISE read back from the built vllm_config (an eager engine labelled compiled, or a compiled one
     # labelled eager, is refused here before anything is recorded)
     comp = compilation_facts(engine.llm)
@@ -302,7 +302,7 @@ def target_mismatches(engine: Engine) -> list[str]:
                 bad.append(f"profile declares Inductor emulate_precision_casts={want.get('emulate_precision_casts')!r}, engine compiled with "
                            f"{comp.get('emulate_precision_casts')!r} (inductor_compile_config {comp.get('inductor_compile_config')!r})")
     if getattr(tp, "fp8_block_gemm", None) is not None:
-        # [R15 fp8] the block-scaled FP8 GEMM kernel the FP8 linears carry must be the declared one (the builder read the same back)
+        # the block-scaled FP8 GEMM kernel the FP8 linears carry must be the declared one (the builder read the same back)
         from verity_vllm.program.frontend.target_profile import fp8_block_gemm_kernel_of
         got = fp8_block_gemm_kernel_of(engine.model)
         if got != tp.fp8_block_gemm_kernel():
@@ -335,8 +335,8 @@ def resolved_async_scheduling(llm: Any) -> bool | None:
 def compilation_facts(llm: Any) -> dict[str, Any]:
     """What the built engine actually compiles / graphs, read back from its vllm_config (never from the kwargs): CompilationMode
     (name; the pinned vLLM's IntEnum str() is the number, recorded too), CUDAGraphMode, capture sizes, inductor graph partition, enforce_eager,
-    compile-cache switch.  Written into the run header's `compilation` block beside the profile's `effective_compilation` (GM-01 G1 compares a
-    compiled Program's declared facts against it) and into commit_delta's versions.json (control and treatment must agree)."""
+    compile-cache switch.  Written into the run header's `compilation` block beside the profile's `effective_compilation` (the global match's G1
+    compares a compiled Program's declared facts against it) and into commit_delta's versions.json (control and treatment must agree)."""
     out: dict[str, Any] = {}
     try:
         vc = llm.llm_engine.vllm_config
@@ -353,7 +353,7 @@ def compilation_facts(llm: Any) -> dict[str, Any]:
         out["backend"] = str(getattr(cc, "backend", None) or ("inductor" if out["mode_value"] == 3 else None))
         out["enforce_eager"] = bool(vc.model_config.enforce_eager)
         out["compile_cache"] = "disabled" if os.environ.get("VLLM_DISABLE_COMPILE_CACHE") == "1" else "enabled"
-        # [R15 compiled, M-0285 (b)] the Inductor config the pieces were compiled with: emulate_precision_casts makes the compiled kernels
+        # the Inductor config the pieces were compiled with: emulate_precision_casts makes the compiled kernels
         # perform the bf16 roundings the Program specifies at every module/op boundary (Inductor otherwise carries fp32 through fused
         # regions) -- the fact that decides whether a materialised boundary value can change the computation
         out["inductor_compile_config"] = dict(getattr(cc, "inductor_compile_config", None) or {})

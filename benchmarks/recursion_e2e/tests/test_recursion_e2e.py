@@ -1,5 +1,5 @@
 """The recursion bench's reader (`rec_profile`) and CLI (`run.py`) on records written in 85-rec-reprice.sh's formats: the
-timed sessions' LIVE lines, `/usr/bin/time -v` files, serve's SESSION lines, the replay's UPSTREAM line and Lean's VERDICT.
+timed runs' LIVE lines, `/usr/bin/time -v` files, serve's SESSION lines, the replay's UPSTREAM line and Lean's VERDICT.
 No GPU, node or store: the job's own records are made here."""
 from __future__ import annotations
 
@@ -98,14 +98,14 @@ def test_stat_is_median_and_range() -> None:
     assert RP.Stat.of([None]) is None
 
 
-def test_prover_row_counts_timed_sessions_only(tmp_path: Path) -> None:
+def test_prover_row_counts_timed_runs_only(tmp_path: Path) -> None:
     doc = RP.read(job(tmp_path))
     r = row(doc, "inner M0")
-    assert r["kind"] == "gpu" and r["wall_s"]["values"] == [2.0, 1.0, 3.0]          # the warm 9.0 s session left out
+    assert r["kind"] == "gpu" and r["wall_s"]["values"] == [2.0, 1.0, 3.0]          # the warm 9.0 s run left out
     assert r["wall_s"]["median"] == 2.0 and r["e2e_s"]["median"] == 2.5
     assert r["peak_rss_gb"] == 3.0 and r["gpu_peak_mib"] == 4000.0
     assert r["proof_bytes"] == 2000 and r["ok"] is True
-    d = r["dominant"]                                     # the median session: prove 2.0, e2e 2.5, witness 0.1
+    d = r["dominant"]                                     # the median run: prove 2.0, e2e 2.5, witness 0.1
     assert d["phase"] == "t.ligerito" and d["s"] == 1.2 and d["share"] == 0.48 and d["of"] == "e2e_s"
     assert d["phases"]["wait.verifier"] == 0.4 and "t.arithmetic" not in d["phases"] and "h.setup" not in d["phases"]
     assert r["extra"]["serve_verify_s"]["values"] == [0.2, 0.2, 0.2]
@@ -113,7 +113,7 @@ def test_prover_row_counts_timed_sessions_only(tmp_path: Path) -> None:
     assert r["extra"]["witness_s"]["median"] == 0.1
 
 
-def test_a_session_waiting_on_its_verifier_is_dominated_by_the_wait(tmp_path: Path) -> None:
+def test_a_run_waiting_on_its_verifier_is_dominated_by_the_wait(tmp_path: Path) -> None:
     d = tmp_path / "p"
     d.mkdir()
     (d / "prove.tsv").write_text(live(1.0, True, 0.3, 6.0) + live(5.0, False, 0.25, 4.0))
@@ -121,7 +121,7 @@ def test_a_session_waiting_on_its_verifier_is_dominated_by_the_wait(tmp_path: Pa
     assert r["dominant"]["phase"] == "wait.verifier" and r["dominant"]["s"] == pytest.approx(3.65)
 
 
-def test_a_proxy_session_with_no_verdict_is_neither_accepted_nor_refused(tmp_path: Path) -> None:
+def test_a_proxy_run_with_no_verdict_is_neither_accepted_nor_refused(tmp_path: Path) -> None:
     d = tmp_path / "p"
     d.mkdir()
     (d / "prove.tsv").write_text(live(1.0, True, 1.0, 2.0, accepted=None) + live(3.0, False, 1.0, 2.0, accepted=None))
@@ -140,7 +140,7 @@ def test_outer_rows_by_mode_and_the_summary(tmp_path: Path) -> None:
     assert s["outer"]["dev"]["prove_s"] == 3.0 and s["outer"]["dev"]["statements"] == 2
     assert s["slowest"]["stage"] == "lean L0"                                             # 61.5 s, the largest median
     assert s["pipeline"]["outer prove (dev) e2e_s"] == 4.0    # dev proved both statements, firewall one
-    assert s["pipeline"]["V* staging_s (vstage + vcap steps)"] == 75.0     # the step's wall, not its parallel stages' sum
+    assert s["pipeline"]["V* staging_s (vstage + vcap steps)"] == 75.0     # the step's wall, not its parallel stagings' sum
     assert s["pipeline"]["Lean step_s"] == 75.0
     assert "outer alg-p0 (dev)" in s["not_ok"] and "lean alg-p0" in s["not_ok"]
 
@@ -195,7 +195,7 @@ def test_a_preempted_statement_says_how_often(tmp_path: Path) -> None:
     (out / "preempted.txt").write_text("".join(f"loopback L1-firewall: lease preempted, try {t}\n" for t in (1, 2, 3)))
     l1 = row(RP.read(o), "outer L1")
     assert l1["ok"] is False and l1["extra"]["preempted"] == 3
-    assert l1["note"] == "lease preempted 3x; no session finished in the lease's 2m00s"
+    assert l1["note"] == "lease preempted 3x; no run finished in the lease's 2m00s"
 
 
 def test_the_lean_firewall_is_read_from_the_runs_process_samples(tmp_path: Path) -> None:
@@ -221,7 +221,7 @@ def test_markdown_has_one_line_per_row(tmp_path: Path) -> None:
     assert len(table) == len(doc["rows"])
     assert "| inner M0 | inner |" in md and "2 [1–3] (n=3)" in md and "t.ligerito 1.2 s (48% of e2e_s)" in md
     assert "| 4.67 |" in md
-    assert "Slowest stage (a session's e2e, else a tool's wall): lean L0" in md
+    assert "Slowest row (a run's e2e, else a tool's wall): lean L0" in md
 
 
 def test_result_command_writes_both_files(tmp_path: Path) -> None:
@@ -273,7 +273,7 @@ def test_merge_takes_a_later_runs_row_for_the_same_step_stage_and_mode(tmp_path:
         (tmp_path / name).write_text(json.dumps(d))
     assert RUN.main(["table", str(tmp_path / "a.json"), str(tmp_path / "b.json"), "--merge"]) == 0
     md = capsys.readouterr().out
-    assert " run |" in md and "| rB |" in md and "| rA |" in md and "rA: commit abc123, the inner's 3 timed sessions" in md
+    assert " run |" in md and "| rB |" in md and "| rA |" in md and "rA: commit abc123, the inner's 3 timed runs" in md
 
 
 def test_a_run_id_is_read_from_its_records_not_its_result_file(tmp_path: Path, monkeypatch) -> None:
@@ -301,8 +301,8 @@ def test_a_cancelled_run_is_read_from_its_records(tmp_path: Path, monkeypatch, c
     assert not (o / "recursion_e2e.json").exists()
     assert RUN.main(["table", "r20261024-000000-cafe"]) == 0
     md = capsys.readouterr().out
-    assert "## r20261024-000000-cafe" in md and "Verdict: **not a whole recursive session**" in md
-    assert "| outer L1 | oprove |" in md and "no session finished before the step stopped" in md
+    assert "## r20261024-000000-cafe" in md and "Verdict: **not a whole recursive run**" in md
+    assert "| outer L1 | oprove |" in md and "no run finished before the step stopped" in md
     assert "oprove ?" in md
 
 
@@ -342,14 +342,14 @@ def test_a_flipped_coin_is_refused_when_one_statement_refuses_it_and_every_one_h
     assert doc["headline"]["negative_refused"] == {"challenge": True, "query": False} and doc["headline"]["ok"] is False
 
 
-def test_headline_is_a_whole_session_only_when_every_step_ran(tmp_path: Path) -> None:
+def test_headline_is_a_whole_run_only_when_every_step_ran(tmp_path: Path) -> None:
     o = job(tmp_path)
     assert RP.read(o)["headline"]["complete"] is False                     # no vcap: no RecCap, no V* verdict
     (o / "steps" / "vcap" / "r1" / "out").mkdir(parents=True)
     (o / "steps" / "vcap" / "r1" / "rc").write_text("0\n")
     doc = RP.read(o)
     assert doc["headline"]["complete"] is True and doc["headline"]["ok"] is False      # every step ran; alg-p0 is refused
-    assert "Verdict: one whole recursive session, **not accepted**" in RP.markdown(doc)
+    assert "Verdict: one whole recursive run, **not accepted**" in RP.markdown(doc)
     h = RP.headline([], {"not_ok": []}, {s: ["0"] for s in RP.E2E_STEPS})
     assert h["complete"] is True and h["ok"] is True
     h = RP.headline([], {"not_ok": []}, {s: ["0"] for s in RP.E2E_STEPS if s != "lean"})
@@ -357,7 +357,7 @@ def test_headline_is_a_whole_session_only_when_every_step_ran(tmp_path: Path) ->
     h = RP.headline([], {"not_ok": []}, {s: ["0"] for s in RP.E2E_STEPS} | {"lean": ["0", "1"]})
     assert h["complete"] is True and h["ok"] is False
     shutil.rmtree(o / "steps" / "oprove")
-    assert "Verdict: **not a whole recursive session**" in RP.markdown(RP.read(o))
+    assert "Verdict: **not a whole recursive run**" in RP.markdown(RP.read(o))
 
 
 def test_vstage_rows_carry_what_rec_vstage_staged(tmp_path: Path) -> None:
@@ -374,7 +374,7 @@ def test_vstage_rows_carry_what_rec_vstage_staged(tmp_path: Path) -> None:
     assert sorted(row(doc, "stage alg")["extra"]["units"]) == ["alg-p0", "alg-p1"]
 
 
-def test_each_statement_has_its_own_lease_from_its_firewalled_session(capsys) -> None:
+def test_each_statement_has_its_own_lease_from_its_firewalled_release(capsys) -> None:
     assert RUN.stmt_lease_min("L0") == 94 and RUN.stmt_lease_min("L3") == 12 and RUN.stmt_lease_min("cap-L3") == 2
     assert RUN.lease_min(1) == 94 and RUN.lease_min(2) == 187 and RUN.lease_min(1, firewall=False) == 10
     assert RUN.lease_min(1, levels="L3") == 12 and RUN.lease_min(1, levels="alg") == 22      # alg: alg-p0 and alg-p1
@@ -385,8 +385,8 @@ def test_each_statement_has_its_own_lease_from_its_firewalled_session(capsys) ->
     cmd = capsys.readouterr().out.split()
     assert "MODES=firewall" in cmd and "GPU_MAX_MIN=94" in cmd and "OPROVE_RUNS=1" in cmd
     every = int(cmd[cmd.index("--timeout") + 1].removesuffix("m"))
-    assert every > 7870 * 1.5 / 60                                         # every statement's session, one at a time
-    assert cmd[cmd.index("--mem-gb") + 1] == "128"                          # L0's firewalled session peaked at 99 GB
+    assert every > 7870 * 1.5 / 60                                         # every statement's release, one at a time
+    assert cmd[cmd.index("--mem-gb") + 1] == "128"                          # L0's firewalled release peaked at 99 GB
     assert RUN.main(["run", "--dry-run", "--env", "LEVELS=L3"]) == 0
     cmd = capsys.readouterr().out.split()
     assert "GPU_MAX_MIN=12" in cmd and int(cmd[cmd.index("--timeout") + 1].removesuffix("m")) < every - 60
@@ -470,6 +470,11 @@ def test_forge_after_runs_after_lean_whenever_its_kinds_are_forged(capsys) -> No
         return int(cmd[cmd.index("--timeout") + 1][:-1])
 
     assert limit("--forge", "coef") - limit() == pytest.approx(RUN.MARGIN * RUN.FW_S["L0"] / 60 + RUN.OTHER_MIN["forge-after"], abs=1)
+    # the message forgery proves alg-p1, which it leaves honest, beside alg-p0
+    alg = RUN.FW_S["alg-p0"] + RUN.FW_S["alg-p1"]
+    assert limit("--forge", "message") - limit() == pytest.approx(RUN.MARGIN * alg / 60 + RUN.OTHER_MIN["forge-after"], abs=1)
+    assert limit("--forge", "sum") - limit() == pytest.approx(RUN.MARGIN * (RUN.FW_S["L0"] + RUN.FW_S["L3"] + alg) / 60, abs=1)
+    assert all(RUN.statements(name) for v in RUN.FORGED.values() for name in v.split(","))   # each names a measured statement
     with pytest.raises(SystemExit, match="--forge: nope"):
         RUN.main(["run", "--dry-run", "--forge", "coef,nope"])
     assert RUN.main(["run", "--dry-run", "--steps", "lean,forge-after", "--repeat", "1"]) == 0
@@ -506,10 +511,10 @@ def test_forged_statements_are_ok_when_refused_and_forge_after_reads_each_case(t
     (fa / "out" / "forge-after.json").write_text(json.dumps({"verify": verify, "untouched": True}))
     doc = RP.read(o)
     coef = row(doc, "outer forged-coef-L0")
-    assert coef["ok"] is True and coef["note"].endswith(stop)        # the session the firewall stopped, from its LIVE record
+    assert coef["ok"] is True and coef["note"].endswith(stop)        # the release the firewall stopped, from its LIVE record
     outer = row(doc, "outer forged-dirs-L0")
-    assert outer["ok"] is True and outer["note"].startswith("no session finished") and "FIREWALL-REFUSED" in outer["note"]
-    assert doc["summary"]["outer"]["firewall"]["statements"] == 1      # a forged statement is no part of the session's cost
+    assert outer["ok"] is True and outer["note"].startswith("no run finished") and "FIREWALL-REFUSED" in outer["note"]
+    assert doc["summary"]["outer"]["firewall"]["statements"] == 1      # a forged statement is no part of the run's cost
     assert row(doc, "lean forged-top-L0")["ok"] is True
     assert row(doc, "lean forged-sum-alg-p0")["ok"] is True
     honest_part = row(doc, "lean forged-sum-alg-p1")

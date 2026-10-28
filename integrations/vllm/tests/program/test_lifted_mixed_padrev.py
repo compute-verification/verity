@@ -1,4 +1,4 @@
-"""padrev — adversarial tests for the MIXED BATCH stage (LIFTING-REVIEW attack list A1/A5/A12), Program side, TINY shape.
+"""Adversarial tests for the MIXED BATCH stage (LIFTING-REVIEW attack list A1/A5/A12), Program side, TINY shape.
 
 Two requests share ONE weights Input and one EOS set; request A stops early (EOS at event 3), request B never stops (cap decides).
 The attacks these tests aim at:
@@ -9,8 +9,8 @@ The attacks these tests aim at:
   A12 the S relation reads Program activity values, not observed liveness — n_live_t is Σ_r LIsActive(tok_in_{r,t}), a Program
       value, and it drops by exactly one at A's a_r while B's rows keep S Active.
 
-Written BEFORE pad's MIXED BATCH post against the skeleton (LServe_v1 ×2); the stage's record half (B2 mixedstop) is a separate
-review. Uses only pad's public lifted API; nothing here is implementation."""
+Written against the skeleton (LServe_v1 ×2) before the MIXED BATCH stage was built; the stage's record half (B2 mixedstop) is
+reviewed separately. Uses only the public lifted API; nothing here is implementation."""
 from __future__ import annotations
 
 import sys
@@ -20,15 +20,15 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
-from verity.ml.circuits import Program  # noqa: E402
-from verity.ml.circuits.defs import composite  # noqa: E402
-from verity.ml.circuits.layout import resolve  # noqa: E402
-from verity.ml.circuits.refs import Coll, concat  # noqa: E402
-from verity.ml.definitions.registry import lifted as L  # noqa: E402
-from verity.ml.definitions.numerics import serve3_reference as ref  # noqa: E402
-from verity.ml.definitions.registry.b1 import weights_type  # noqa: E402
-from tests.program.test_serve3 import D_MAX, EOS_FOR, LP, TINY, _inputs  # noqa: E402
-from verity.ml.circuits.types import Array, Value  # noqa: E402
+from verity.ml.circuits import Program
+from verity.ml.circuits.defs import composite
+from verity.ml.circuits.layout import resolve
+from verity.ml.circuits.refs import Coll, concat
+from verity.ml.definitions.registry import lifted as L
+from verity.ml.definitions.numerics import serve3_reference as ref
+from verity.ml.definitions.registry.b1 import weights_type
+from tests.program.test_serve3 import D_MAX, EOS_FOR, LP, TINY, _inputs
+from verity.ml.circuits.types import Array, Value
 
 I32 = Value(32)
 NEVER = 0x7FFFFFFF  # an EOS id no TINY event emits: the cap decides

@@ -10,8 +10,8 @@ those like any other caller. This file is the harness's contract: how a point is
 
 ~~~text
 verity-bench plan SPEC       # expand a spec; each point's identity and its passing run, if any
-verity-bench run SPEC        # one recorded `research run --queue` per point without a passing run
-                             # (--direct NODE: `research run --on NODE` through the node's GPU slots instead)
+verity-bench run SPEC        # one recorded run per point without a passing run, queued for any free GPU
+                             # (--direct NODE: on NODE itself, through its GPU slots, instead)
 verity-bench check SPEC      # exit 0 only when every point has a passing run, here or on the store's remote
 verity-bench compare A B     # accept two results only when their identities agree (--allow PATH to permit one)
 verity-bench table R1 R2...  # one table from one spec's per-point results, only when their identities agree
@@ -23,8 +23,8 @@ verity-bench vllm --preset SPEC --arms A,B --out DIR   # the same measurement in
 A spec is `benchmarks/specs/<name>.toml` (`verity-bench/vllm-spec/v0`): the preset (model and revision, precision, GPU,
 vLLM pin, engine settings), its arms and the modules of its experimental arms, its sweep (another file in
 `benchmarks/specs/`, `verity-bench/vllm-sweep/v0`), reps, eager or CUDA graphs, and admission (`max_minutes` and friends,
-which never enter identity). Loading is strict: an unknown key, a wrong type or an unknown GPU id is an error before
-anything runs. A preset's model is a Hugging Face id at a pinned `revision`, or a node-local directory with its
+which never enter identity). Loading is strict: an unknown key (an engine setting outside `presets.ENGINE_SETTINGS`
+included), a wrong type or an unknown GPU id is an error before anything runs. A preset's model is a Hugging Face id at a pinned `revision`, or a node-local directory with its
 `model_digest` (`presets.local_checkpoint`'s hash of its files but a Hub snapshot's dot-files and Markdown, which no loader
 reads), which a dispatched point recomputes and refuses to run on when it differs.
 
@@ -36,7 +36,7 @@ variable NAME (the cubin the spec's setup builds, say). The harness gives an arm
 its `coins` (`pouw.challenged`). The adapter ends one Pearl-C pass per model forward itself; the passes'
 counts (`passes`, `units`, `tiles`, screened, failing and unsure rows) are each timed rep's `pearl_c` spans, and the
 experimental arm's call check on the installed run is the arm's own gate. Pearl-C's y carries the epoch's live salt, so
-no stock arm is its token control (`llama31-8b-1gpu-pouw-protocol` has `"none"`). The table is part of the resolved spec
+no stock arm is its token control (`llama31-8b-1gpu-pouw-protocol-served` has `"none"`). The table is part of the resolved spec
 and so of every point's identity, and the arm's cubin digest is its `kernel_digest`.
 
 The precision `int8_exact` is the eager exact-int8 engine of an int8 pin (every linear and attention layer on the plain
@@ -62,12 +62,12 @@ invariant (`bi-eager`, `bi-compiled`).
 
 A served variant `BUILTIN@eager` or `BUILTIN@compiled` (`stock-fp8@compiled`) is a built-in arm's engine at vLLM's
 serving defaults in that execution, whatever the spec's `eager` and the preset's `serving_defaults` say for the other
-arms, so one spec times one engine in two executions (`llama31-8b-fp8-1gpu-compiled`). Its control is the built-in
+arms, so one spec times one engine in two executions (`llama31-8b-fp8-1gpu-compiled-full`). Its control is the built-in
 unless its `[arm_settings."ARM"]` names another arm or `"none"`, and its `execution` is in the arm's identity. An
 experimental arm may name its own `execution` the same way: `commit@compiled` (`verity_bench.vllm.commit_arm`) is the
 Commit on vLLM's compiled serving, token-controlled by `stock-fp8@compiled` (`llama31-8b-fp8-1gpu-commit-served`).
 `llama31-8b-fp8-1gpu-bandwidth-ablation` times where PoUS's bandwidth audit's time goes: the two credited arms beside
-memory accounting's spans arms (`benchmarks/vllm_encoded/README.md`) and the spans arms with the top-up off
+the bandwidth audit's spans arms (`benchmarks/vllm_encoded/README.md`) and the spans arms with the top-up off
 (`verity_bench.vllm.bandwidth_ablation`, `BandwidthArm(..., spans=True, topup=False)`), each token-controlled by
 `bandwidth-plain`; `verity-bench breakdown` renders it.
 
@@ -103,7 +103,7 @@ pin's BF16 base.
      GPU and overrides.
    - `arm-closing`: after an engine's warm-up and timed runs, before it closes, the runner reads the arm's own gate again
      (in `blocks`, one per engine lifetime, with its `cycle`), so an arm that judges every run it saw judges those too.
-2. **Resident interleaving, else alternating blocks.** When every arm's engine fits on the GPU at once (`resident`), each
+2. **Resident interleaving, else `blocks`.** When every arm's engine fits on the GPU at once (`resident`), each
    point is warmed per arm (discarded), then each rep runs every arm once. The baseline alternates between the first
    and last slot (`interleave_order`). An arm that needs its own engine lifetime makes the whole run `blocks`: each arm
    gets its own engine for two cycles, the second in reverse arm order, with discarded warm-ups per point in each. The
@@ -117,7 +117,7 @@ pin's BF16 base.
 3. **Measured, not estimated.** A timed rep synchronizes the device around the run and reads the engine's own request
    and step timings (`engine.arrivals.run_requests_arrivals` with `request_timing` and `step_timing`).
 4. **An arm's run is its own.** Around every run (gate, warm-up or timed), the runner calls an experimental arm's
-   `begin_run(target)` before the clock starts and `end_run(target)` inside the timed window, so the work an arm finishes
+   `begin_run(target)` before the clock starts and `end_run(target)` inside the timed run, so the work an arm finishes
    at the end of a run (the Commit's hashing backlog, a commitment's last roots) is in the run's time. `target.phase`
    (`gate`, `warmup` or `measure`), `target.point` (the sweep point's id) and `target.tokens` (the prompt and output tokens
    it serves) describe the run `begin_run` opens. `extras(target)`, read after a timed run, reports that run.
@@ -174,45 +174,59 @@ same way, allowing only `config.point_identity`.
 ## Dispatch and resume
 
 `verity-bench run` queues each missing point, as below. `verity-bench run SPEC --direct NODE` launches each missing point
-on NODE itself instead, for a node whose launcher takes a run only through a slot: vy-nebius-2 has refused every queued GPU
-point since about 11:50Z on 24 Oct (INF-217 tracks the queue-side fix). Each point is `research run --on NODE` with the queued point's tool, identity and environment, so `plan` and `check`
+on NODE itself instead, for a node whose launcher takes a run only through a slot. Each point is a recorded run on NODE with the queued point's tool, identity and environment, so `plan` and `check`
 find it the same way, and its command takes one of the node's GPU slots (`/workspace/research/locks/gpu/slots`, one per GPU)
 through `tools/verity/check/slot.py`, then its GPUs from the node's `gpu-lease`, preemptible. The spec's admission
 `max_minutes` bounds the run, its slot and its lease, so `--direct` refuses a spec without it, and it refuses any node but the
-GPU nodes in `verity_bench.jobs.DIRECT_NODES` (vy-nebius-1, -2 and -3). A preempted direct point is a failed run, which the
+GPU nodes in `verity_bench.jobs.DIRECT_NODES` (multi-GPU nodes, and single-GPU VMs whose one GPU kernels' leases
+share). A preempted direct point is a failed run, which the
 next `run --direct` launches again. Use the queue otherwise: it places each point on whichever node has a free GPU.
 
 `verity-bench run` launches each missing point as one queued, preemptible job of the kind registered for the spec's GPU
-count in `infra/cluster/kinds/benchmarks.toml` (`vllm-bench-1gpu`, `vllm-bench-8gpu`). The job runs
+count in `infra/cluster/kinds/benchmarks.toml` (`vllm-bench-1gpu`, the only one). The job runs
 `benchmarks/harness/run_point.sh`, which uses the node's pinned-vLLM environment (`benchmarks/harness/env.sh`, which a
 benchmark's own launcher sources too): `VERITY_BENCH_VENV`, which the dispatcher forwards, else the first that exists of
-`$WORK/venv312` (the integration's `pod_bootstrap.sh`), `$WORK/jobs/venv312` (vy-nebius-2's) and
-`$WORK/pouw/mvp-e2e/venv312`. `benchmarks` is on its path, so a spec names an experimental arm's module from there
-(`served_commit.prof_arm:SERVED_COMMIT_ROWS`). A point's identity hashes the resolved spec,
-the commit, `uv.lock`, the vLLM pin and the point. The tool declaration (`verity_bench.tool:VLLM_BENCH_POINT`) records it
-as the run's key param, and `plan`, `check` and `run` skip a point whose identity already has a passing run: validation
-passed, exit code 0 and a clean source tree. A requeued point first deletes its run's old `result.json`. The lookup
-reads the machine's catalog, and when a point isn't there, the store's remote: once per commit it fetches and indexes
-the attempts this store lacks among those started since a day before the commit's committer date (a point's runs
-can't start before its commit exists, and a run id begins with its UTC start), so a fresh machine finds the points
-other machines ran. Without a usable remote it refuses rather than report them missing; `--local-only` reads the
-catalog alone.
+`$WORK/venv312` (the integration's `pod_bootstrap.sh`), `$WORK/jobs/venv312` (a jobs node's),
+`$WORK/pouw/mvp-e2e/venv312` and `$WORK/cp/venv312` (the DC VMs'). `benchmarks` is on its path, so a spec names an experimental arm's module from there
+(`served_commit.prof_arm:SERVED_COMMIT_ROWS`). A point's identity hashes the resolved spec, the commit, `uv.lock`, the
+vLLM pin and the point. The tool declaration (`verity_bench.tool:VLLM_BENCH_POINT`) records it as the run's key param,
+and `plan`, `check` and `run` skip a point whose identity already has a passing run: validation passed, exit code 0 and a
+clean source tree. A requeued point first deletes its run's old `result.json`. The lookup asks the machine's catalog of
+the evidence store for an attempt of the tool `verity_bench.tool:VLLM_BENCH_POINT` with the point's `identity` param, at
+the commit's source tree (git must know the commit), and when a point isn't there, the store's remote: once per commit it fetches and indexes the
+attempts this store lacks among those started since a day before the commit's committer date (a point's runs can't start
+before its commit exists, and a run id begins with its UTC start), so a fresh machine finds the points other machines
+ran. Without a usable remote it refuses rather than report them missing; `--local-only` reads the catalog alone.
+
+## Settings
+
+Every environment variable the harness reads is declared once in `verity_bench.settings`, with its type, default, doc and
+role: `value` (it can change what a point measures), `where` (only where and how long things run) or `debug` (refused on a
+point, which is always a run of record). A point writes the value settings in force, with their SHA-512 digest, to
+`out/settings.json` beside its result. `verity-bench` refuses a `VERITY_BENCH_*` variable that nothing in the tree reads,
+naming it. A variable the vLLM integration declares is never declared here: the harness writes one through
+`verity_vllm.engine.env`. `benchmarks/harness/tests/test_settings.py` holds the harness's other direct uses of `os.environ` to a shrink-only
+baseline.
 
 ## The served table
 
 `verity-bench served-table` (`verity_bench.served_table`) renders each protocol's served overhead on Llama-3.1-8B from
-the store, never from numbers in code. It has four sections.
+the store, never from numbers or ids in code. A record is named by a store label: a run labelled `run_of_record=NAME`
+(`research data label RUN run_of_record NAME --by benchmarks`) is one of record NAME's runs, and an art so labelled names
+its runs in its `runs` meta (a list, or a map from point to run). A record's runs are in the order they were labelled,
+and a target's latest label names its record. The command first pulls the remote's labels. It has four sections.
 
-- **PoUW's run of record** is kernels' live rows (`LIVE`: device, run, PoUW arm, control). Each row is read from the
+- **PoUW's run of record** is its live rows: the entries (device, run, PoUW arm, control, and `out` where the run's
+  records aren't under `out/`) of the `runs` meta of an art of record `LIVE`. Each row is read from the
   `summary.json` and `stop.json` in the run's record: the arm's median decode step at batch 32 over its control's
   (the int8-exact engine without PoUW) in the same run. That ratio is per step, so it sits in its own section, apart
   from the per-token ratios over stock FP8. A row stands only when every gate the run records passed: the device gate,
   the tokens at the gate and at every timed rep, and a live window at the run's end on off-node coins. A run that fails
   one is passed over and listed with why.
-- **The served rows on the RTX PRO 6000** (`PROTOCOLS`) each come from a protocol's run of record or, without one, from
-  the newest passing run. A run of record (`Protocol.record`) is named by run id, or by an `art:` id whose `runs` meta
-  lists the runs (a list, or a map from point to run). It is read by id, from the remote where this machine lacks it,
-  and every point of each run is a row. Without a record, each point of each spec takes the newest passing
+- **The served rows** (`PROTOCOLS`), each on its device (the GPU its run's engines saw, the result's `identity.gpu`: the
+  RTX PRO 6000's, and the Commit's on an H200 and a B200 too), each come from a protocol's run of record
+  (`Protocol.record`) or, without one, from the newest passing run. A run of record is read by id, from the remote where
+  this machine lacks it, and every point of each run is a row. Without a record, each point of each spec takes the newest passing
   `vllm_bench_point` attempt whose `spec` and `point` params name it (the resume lookup's rule, without its one-commit
   identity), so a newer passing run supersedes an older one; the command first pulls the remote's attempts started
   since the oldest such spec was added, the same pull as `check`'s. A result labelled `superseded_by`, an invalid
@@ -221,12 +235,12 @@ the store, never from numbers in code. It has four sections.
   an eager stock, over that.
 - **The conversion factors** (`stock-fp8@compiled` over batch-invariant eager `stock-fp8`, `FACTORS`) are rendered the
   same way.
-- **Where the bandwidth audit's time goes** (`BREAKDOWNS`: a protocol and a record, as above) is the bandwidth
+- **Where the bandwidth audit's time goes** (`BREAKDOWNS`: a protocol and its record) is the bandwidth
   breakdown's rows (below) at each point of the record's runs, in ms an output token and not a ratio, beside the
-  protocol's row of record.
+  protocol's run of record.
 
-The caveat column is the newest `label` and `note` on the result's artifact, its run and the record art that named it,
-read through from the remote (and a live run's `row` label).
+The caveat column is the newest `label` and `note` on the result's artifact, its run and the record art that named it
+(and a live run's `row` label).
 
 ## The bandwidth breakdown
 
@@ -242,4 +256,4 @@ the audit's cost (the marks are in the spans arms' time). Then each spans arm's 
 ## Out of scope here
 
 Kernel-level timing, meaning whether a timed CUDA loop measures what it claims (opcodes in the loop, bank conflicts, live
-sinks), is compute accounting's GPU timing kit in `benchmarks/pouw/`, not this harness.
+sinks), is the GPU timing kit in `benchmarks/pouw/`, not this harness.

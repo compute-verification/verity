@@ -1,7 +1,7 @@
 """G4 (`per_request._compare_component`): the global Program's address map declares each request's component by its root nodes
 (`n_instances`), and the component the Match loads has `Prog._bind_splits` remove a single-request Program's splits constants (one
 `Const32[S]` per top-p select) from its compared sequence.  So G4 compares the address map with the compared sequence plus those bound
-constants (`addressed_instances`).  #101's fifth Match (r20260928-194951-f7ed) failed G4 by exactly its 32 selects: 46,686 declared, 46,654
+constants (`addressed_instances`).  Workload 101's fifth Match failed G4 by exactly its 32 selects: 46,686 declared, 46,654
 compared."""
 from __future__ import annotations
 
@@ -17,7 +17,7 @@ from verity_vllm.check.match.per_request import addressed_instances
 from verity_vllm.check.match.program_compare import load_derived
 from verity_vllm.records import workload as WL
 
-#: #101's fifth try (run r20260928-194951-f7ed): its Build (`build_request/` and `build_workload/`)
+#: workload 101's fifth try: its Build (`build_request/` and `build_workload/`)
 BUILD_101_TRY5 = "art:0e6911da"
 
 
@@ -45,7 +45,7 @@ def test_a_component_without_splits_constants_is_counted_as_compared():
 
 @pytest.mark.slow
 def test_101s_fifth_build_is_addressed_as_its_component_is_compared(tmp_path):
-    """#101's stored fifth Build: the address map's `n_instances` for r0 equals its request Program's compared instances plus its 32 bound
+    """Workload 101's stored fifth Build: the address map's `n_instances` for r0 equals its request Program's compared instances plus its 32 bound
     splits constants (46,654 + 32 = 46,686), the count G4 failed on."""
     from tests.regression import store_io
     if os.environ.get("VERITY_SKIP_STORE") == "1" or not store_io.reachable():

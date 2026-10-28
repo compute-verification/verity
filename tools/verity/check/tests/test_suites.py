@@ -8,6 +8,7 @@ import re
 import shutil
 import subprocess
 import sys
+import time
 from pathlib import Path
 
 import pytest
@@ -216,7 +217,7 @@ def test_jobs_default_to_no_more_test_processes_than_the_runs_own_memory_limit_h
 
 
 def test_a_research_run_reservation_bounds_the_run_where_no_cgroup_caps_it(tmp_path, monkeypatch):
-    """INF-118: on cpu-2 a `research run --mem-gb 32` is a reservation, not a cgroup cap; the quick tier sized itself to the node."""
+    """On a node with no cgroup cap, a `research run --mem-gb 32` is a reservation, not a cgroup cap; the quick tier sized itself to the node."""
     S = _suites(monkeypatch, tmp_path)
     monkeypatch.setattr(S, "cgroup_mem_gb", lambda: None)
     monkeypatch.delenv(S.SLOT_MEM_ENV, raising=False)
@@ -431,8 +432,8 @@ def _shipped(tmp_path: Path) -> tuple[Path, Path, str, str]:
 
 
 def test_changed_origin_main_in_a_shipped_tree_without_it_fetches_it_or_names_the_fix(tmp_path, monkeypatch, capsys):
-    """proofs, 25 Oct (NCILIVE, WIRES): the pre-mark `--changed origin/main` in a shipped tree with no origin/main exited 128 in
-    `git diff` and ran no suite, ~50 min each. It fetches main from the tree's origin (the machine's repository, or for a `--cwd
+    """The pre-mark `--changed origin/main` in a shipped tree with no origin/main would exit 128 in `git diff` and run no
+    suite. It fetches main from the tree's origin (the machine's repository, or for a `--cwd
     clone` the shipped tree, whose origin/main is a remote-tracking ref), takes a SHA as given, and otherwise names the fix."""
     bare, tree, main, head = _shipped(tmp_path)
     S = _suites(monkeypatch, tree)
@@ -874,7 +875,7 @@ def test_each_test_process_gets_its_share_of_the_cpus_for_its_thread_pools(tmp_p
 
 
 def test_a_pass_earned_on_one_machine_is_reused_on_another_and_names_its_run(tmp_path):
-    """Daniel's CI update (7 Oct): a suite's pass is reused on any machine while its inputs, the base image and the check code
+    """A suite's pass is reused on any machine while its inputs, the base image and the check code
     are as they were.  Machine a's passes travel as a verdict pack; on machine b a change to one suite's inputs runs that suite
     alone, and the other is listed as reused, citing the run that earned its pass."""
     root = tmp_path / "tree"
@@ -1739,8 +1740,7 @@ def test_a_package_under_a_name_git_quotes_is_a_suite(tmp_path, monkeypatch):
 
 
 def test_a_parallel_suite_that_declares_worker_gb_runs_as_many_workers_as_mem_gb_holds(tmp_path, monkeypatch):
-    """16 Oct 13:53Z: check r20261016-133552-a7e9's pytest ran verity_ml_flock on 38 xdist workers of 15.6 GB each beside
-    circuit-check, and the OOM killer took its workers at the session's 600 GiB cap (CI-35)."""
+    """A suite whose workers each need `worker_gb` runs only as many as its memory holds, or the OOM killer takes them."""
     S = _suites(monkeypatch, tmp_path)
     heavy = S.Suite("flock", "f", (), (), parallel=True, worker_gb=16)
     assert S.wide_workers(heavy, 69, 350) == 21 and S.wide_workers(heavy, 8, 350) == 8 and S.wide_workers(heavy, 69, 10) == 1
@@ -1750,8 +1750,8 @@ def test_a_parallel_suite_that_declares_worker_gb_runs_as_many_workers_as_mem_gb
 
 
 def test_parallel_suites_share_what_mem_gb_leaves_beside_the_one_process_suites(tmp_path, monkeypatch):
-    """17 Oct, cpu-2 (note:proofs/20261017T0625Z-friction-suites-mem-gb-concurrent): circuit_check's 53 workers and flock's 30
-    ran side by side, each sized to all of --mem-gb, and reached 800 GB together."""
+    """Two parallel suites side by side, each sized to all of --mem-gb, would together reach twice it (circuit_check's 53
+    workers and flock's 30 reached 800 GB)."""
     S = _suites(monkeypatch, tmp_path)
     assert S.wide_gb(480, 4) == 480 - 4 * S.TEST_PROCESS_GB and S.wide_gb(20, 4) == 0 and S.wide_gb(None, 4) is None
     flock = S.Suite("flock", "f", (), (), parallel=True, worker_gb=16)
@@ -1827,8 +1827,8 @@ def test_mem_gb_falls_back_to_the_jobs_cgroup_limit(tmp_path, monkeypatch):
 
 
 def test_the_verifiers_lake_build_holds_the_trees_build_lock_so_two_runs_of_one_tree_build_in_turn(tmp_path, monkeypatch):
-    """CI-147: on a node every run of a commit shares its source tree, and a train's check and its touched-suites run built the
-    verifier's `.lake` there at once (21 Oct: 4430e936c3d8's link of flock-verify found its output gone).  `lake` runs under
+    """On a node every run of a commit shares its source tree, so two runs could build the verifier's `.lake` there at once.
+    `lake` runs under
     `.lake/verity-build.lock`, so a second build of the tree waits for the first."""
     mod = _suites(monkeypatch, tmp_path)
     lean = tmp_path / "verity" / "core" / "service" / "flock"
@@ -1860,3 +1860,234 @@ def test_a_fetch_that_prints_no_report_names_its_error_and_keeps_its_own_log(tmp
     monkeypatch.setattr(S.subprocess, "run", lambda *a, **k: ok)
     assert S.fetch_fixtures({"f/a.bin": "art:" + "0" * 64}, second) == set()
     assert "Errno 2" in first.read_text() and "Errno 2" not in second.read_text()
+
+
+_RED_RUNS = iter(range(10_000))
+#: what drive's after-landing run is recorded with (`plan._post_landing` reads its argv)
+POST_LANDING = ["python3", "tools/verity/check/check.py", "--deferred", "pytest", "--no-cache"]
+
+
+def _recorded(store, commit: str, argv: list[str], reports: dict[str, list] | None, rc: int = 1, rid: str | None = None) -> str:
+    """An ended attempt of ``commit`` run as ``argv``, whose run files hold ``reports`` ({file name: rows}), as a check publishes them
+    (and pushes them, when ``store`` has a remote)."""
+    import json
+
+    rid = rid or f"r20261027-000000-{next(_RED_RUNS):04x}"
+    outputs = {}
+    if reports is not None:
+        tree = Path(store.root).parent / f"files-{rid}"
+        tree.mkdir(parents=True)
+        for name, rows in reports.items():
+            (tree / name).write_text(json.dumps(rows))
+        outputs["run_files"] = store.put_artifact("run-files/v1", {"run_id": rid, "files": len(reports), "listed": sorted(reports),
+                                                                   "missing": []}, tree=tree)
+    store.put_attempt({
+        "schema": "research/attempt/v0.1", "id": rid, "tool": {"name": "python3", "version": "1"}, "derivation": "drv:" + "0" * 64,
+        "reuse_key": None, "argv": argv, "params": {}, "key_params": [], "inputs": {}, "conditions": {}, "key_conditions": [],
+        "source": {"commit": commit, "dirty": False}, "closure": None, "execution": {}, "cost": None,
+        "status": {"state": "done", "rc": rc}, "outputs": outputs, "telemetry": None})
+    if store.remote is not None:
+        for art in outputs.values():
+            store.push(art)
+        store.push_attempt(rid)
+    return rid
+
+
+def _red_row(suite: str, *tests: str) -> dict:
+    return {"suite": suite, "name": suite, "status": "failed", "failed_tests": list(tests)}
+
+
+def test_known_red_is_the_newest_check_of_mains_first_parent_commits_that_reported_its_suites(tmp_path, monkeypatch):
+    """CI-173: a quick tier failed on tests already red on `main`, and its owner triaged them as the PR's. What is red there is read
+    from the newest post-landing run (or recorded check) of `main`'s first-parent commits that published its suite reports."""
+    from research.store.local import LocalStore
+
+    _git(tmp_path, "init", "-q", "-b", "main")
+    old = (_git(tmp_path, "commit", "-q", "--allow-empty", "-m", "old"), _git(tmp_path, "rev-parse", "HEAD"))[1]
+    checked = (_git(tmp_path, "commit", "-q", "--allow-empty", "-m", "checked"), _git(tmp_path, "rev-parse", "HEAD"))[1]
+    tip = (_git(tmp_path, "commit", "-q", "--allow-empty", "-m", "tip"), _git(tmp_path, "rev-parse", "HEAD"))[1]
+    S = _suites(monkeypatch, tmp_path)
+    store = LocalStore(tmp_path / "store", config_path=tmp_path / "no-remote.toml")
+    why = S.known_red(tip, store)["why"]
+    assert why.startswith("this machine's store has no remote") and f"a check of {tip[:12]} or its last 2 first-parent" in why, why
+    _recorded(store, old, POST_LANDING, {"suites.json": [_red_row("pkg", "tests/test_old.py::test_old")]})
+    rid = _recorded(store, checked, POST_LANDING, {"suites.json": [_red_row("pkg", "tests/test_a.py::test_a"),
+                                                                  {"suite": "ok", "status": "passed", "failed_tests": None}],
+                                                   "suites-lean.json": [_red_row("lean", "tests/test_l.py::test_l")]})
+    _recorded(store, tip, ["python3", "tools/verity/check/check.py", "--deferred", "lean-audit"], {})   # reported no suites
+    _recorded(store, tip, ["python3", "bench.py"], {"suites.json": [_red_row("pkg", "tests/test_b.py::test_b")]})  # not a check
+    assert S.known_red(tip, store) == {"runs": [rid], "commit": checked,
+                                       "red": {"pkg": ["tests/test_a.py::test_a"], "lean": ["tests/test_l.py::test_l"]}}
+
+
+def test_a_failed_suite_is_known_red_only_when_every_failed_test_is_red_on_main_and_nothing_else_failed(tmp_path, monkeypatch):
+    for d in ("a", "b", "c", "d"):
+        (tmp_path / d).mkdir()
+        (tmp_path / d / "pyproject.toml").write_text(f'[project]\nname = "{d}"\n\n[tool.pytest.ini_options]\ntestpaths = ["tests"]\n')
+    _git(tmp_path, "init", "-q")
+    S = _suites(monkeypatch, tmp_path)
+    a, b, c, d = sorted(S.discover(), key=lambda s: s.path)
+    rs = [S.Result(a, "failed", failed_tests=["t::x"]), S.Result(b, "failed", failed_tests=["t::x", "t::new"]),
+          S.Result(c, "failed", failed_tests=["t::x"], timed_out=60.0), S.Result(d, "failed", failed_tests=["t::other"])]
+    doc = {"runs": ["r1"], "commit": "c" * 40, "red": {"a": ["t::x"], "b": ["t::x"], "c": ["t::x"]}}
+    lines = S.mask_known_red(rs, doc)
+    assert [r.status for r in rs] == ["known-red", "failed", "failed", "failed"]
+    assert lines[0].startswith("known red on `main` (run r1, at cccccccccccc)") and "  known-red a: t::x" in lines
+    assert "  failed    b: 1 of its 2 failed tests are red there too, t::new not" in lines
+    assert any(ln.startswith("  failed    c: 1 of its 1") and "failed for more than its tests" in ln for ln in lines)
+    assert not any(" d:" in ln for ln in lines)
+    rs = [S.Result(a, "failed", failed_tests=["t::x"])]
+    assert S.mask_known_red(rs, {"why": "no store"}) == ["known red on `main`: not read (no store), so every failure here counts"]
+    assert rs[0].status == "failed"
+    assert S.mask_known_red(rs, {**doc, "runs": ["r1", "r2"]})[0].startswith("known red on `main` (runs r1, r2, at cccccccccccc)")
+
+
+def test_a_changed_run_fails_nothing_on_a_test_red_on_main_and_check_s_own_run_still_fails(tmp_path):
+    """End to end: `suites.py --changed MAIN` in a tree whose evidence store holds `main`'s post-landing run with `test_sibling`
+    red. The PR's change reaches `pkg`, whose `test_sibling` fails as on `main`: known red, exit 0. Without `--changed` (check's
+    own run) it fails; with no check of `main` in the store, it fails too."""
+    import json
+    import shutil
+
+    from research.store.local import LocalStore
+
+    root = tmp_path / "tree"
+    _per_test_workspace(root)
+    shutil.copy(HERE / "plan.py", root / "tools" / "verity" / "check" / "plan.py")
+    _git(root, "add", ".")
+    _git(root, "commit", "-q", "-m", "plan")
+    main = _git(root, "rev-parse", "HEAD")
+    (root / "pkg" / "tests" / "test_shared.py").write_text("X = 1\n\ndef test_shared():\n    assert X\n")
+    _git(root, "commit", "-q", "-am", "the PR")
+    out = tmp_path / "out.json"
+    p = _run_suite(root, tmp_path, "--changed", main, "--json", str(out))
+    assert p.returncode == 1 and "known red on `main`: not read (this machine's store has no remote" in p.stdout, p.stdout
+    store = LocalStore(tmp_path / "pod-store", config_path=tmp_path / "absent.toml")
+    rid = _recorded(store, main, POST_LANDING, {"suites.json": [_red_row("pkg", "tests/test_sibling.py::test_sibling")]})
+    p = _run_suite(root, tmp_path, "--changed", main, "--json", str(out))
+    assert p.returncode == 0, p.stdout + p.stderr
+    assert f"known red on `main` (run {rid}, at {main[:12]})" in p.stdout and "known-red pkg: tests/test_sibling.py::test_sibling" in p.stdout
+    assert "0 failed, 1 known red on main" in p.stdout
+    assert [r["status"] for r in json.loads(out.read_text())] == ["known-red"] and not _failed_beside(out)
+    p = _run_suite(root, tmp_path, "--fresh", "--json", str(out))
+    assert p.returncode == 1 and "known red" not in p.stdout and [r["status"] for r in json.loads(out.read_text())] == ["failed"]
+    shown = subprocess.run([sys.executable, str(root / "tools" / "verity" / "check" / "suites.py"), "--known-red", main], cwd=root,
+                           env={**os.environ, "RESEARCH_STORE": str(tmp_path / "pod-store"),
+                                "RESEARCH_STORE_CONFIG": str(tmp_path / "absent.toml")}, capture_output=True, text=True)
+    assert json.loads(shown.stdout) == {"runs": [rid], "commit": main, "red": {"pkg": ["tests/test_sibling.py::test_sibling"]}}
+
+
+def _landed(root: Path, msg: str, t: int) -> str:
+    """A first-parent commit of ``root`` committed at ``t`` (drive's merge onto `main`: when it landed)."""
+    subprocess.run(["git", "-c", "user.email=t@t", "-c", "user.name=t", "-c", "commit.gpgsign=false", "commit", "-q", "--allow-empty",
+                    "-m", msg], cwd=root, env={**os.environ, "GIT_COMMITTER_DATE": f"{t} +0000", "GIT_AUTHOR_DATE": f"{t} +0000"},
+                   check=True)
+    return _git(root, "rev-parse", "HEAD")
+
+
+def _vault(tmp_path: Path) -> Path:
+    """A store.toml whose remote is a directory: drive's runs publish to it, and a cold store on another machine refreshes from it."""
+    cfg = tmp_path / "vault.toml"
+    cfg.write_text(f'[remote]\ntype = "fs"\npath = "{tmp_path / "vault"}"\n')
+    return cfg
+
+
+def test_the_red_list_merges_every_part_of_mains_newest_after_landing_run_found_in_a_cold_store(tmp_path, monkeypatch):
+    """CI-211: drive's after-landing run of a commit is one attempt per twin part, and only the part that ran a suite reports it,
+    so all the commit's parts are merged and named. A cold catalog refreshes `KNOWN_RED_WINDOWS_H` before the whole walk; a commit
+    counts in a window only once it landed inside it, so a newer commit whose run started before the window still wins over an
+    older commit's recent run."""
+    from research.store.local import LocalStore
+
+    _git(tmp_path, "init", "-q", "-b", "main")
+    tip_t = 1_800_000_000
+    old = _landed(tmp_path, "old", tip_t - 30 * 3600)
+    checked = _landed(tmp_path, "checked", tip_t - 10 * 3600)
+    tip = _landed(tmp_path, "tip", tip_t)
+    S = _suites(monkeypatch, tmp_path)
+    drive = LocalStore(tmp_path / "drive-store", config_path=_vault(tmp_path))
+    at = lambda h, n: f"{S._run_id_at(tip_t - h * 3600)}-{n:04x}"           # noqa: E731  (a run that started h hours before the tip)
+    _recorded(drive, old, POST_LANDING, {"suites.json": [_red_row("pkg", "tests/test_old.py::test_old")]}, rid=at(1, 1))
+    part = POST_LANDING[:3] + ["lean-suites,pytest"]
+    pytest_part = _recorded(drive, checked, part, {"suites.json": [_red_row("pkg", "tests/test_a.py::test_a")]}, rid=at(9, 2))
+    lean_part = _recorded(drive, checked, part, {"suites-lean.json": [_red_row("lean", "tests/test_l.py::test_l"),
+                                                                     _red_row("pkg", "tests/test_a.py::test_a")]}, rid=at(9, 3))
+    _recorded(drive, checked, part, None, rc=75, rid=at(9, 4))                  # a twin that lost its claim reports nothing
+    cold = LocalStore(tmp_path / "cold-store", config_path=_vault(tmp_path))
+    since = []
+    refresh = cold.refresh
+    monkeypatch.setattr(cold, "refresh", lambda **k: (since.append(k["since"]), refresh(**k))[1])
+    assert S.known_red(tip, cold) == {"runs": sorted([pytest_part, lean_part]), "commit": checked,
+                                      "red": {"pkg": ["tests/test_a.py::test_a"], "lean": ["tests/test_l.py::test_l"]}}
+    assert since == [S._run_id_at(tip_t - h * 3600 - S.KNOWN_RED_SKEW_S) for h in (6, 24)]
+    (tmp_path / "vault-of-nothing.toml").write_text(f'[remote]\ntype = "fs"\npath = "{tmp_path / "nothing"}"\n')
+    empty = LocalStore(tmp_path / "empty-store", config_path=tmp_path / "vault-of-nothing.toml")
+    why = S.known_red("main", empty)["why"]
+    assert why.startswith(f"no check of {tip[:12]} (main) or its last 2 first-parent commits (back to ") and \
+        why.endswith(f"in the store (attempts refreshed from {S._run_id_at(tip_t - 30 * 3600 - S.KNOWN_RED_SKEW_S)})"), why
+
+
+def test_a_recorded_runs_custody_key_reaches_the_lookup_on_a_machine_with_no_store_of_its_own(tmp_path, monkeypatch):
+    """CI-211: a `research run` job on a node whose `research` user has no store.toml ran `suites.py --known-red origin/main`; its
+    store had no remote, so the lookup read an empty catalog and reported no check of `main` at all. The run's custody dir
+    (`<root>/requests/<run id>/custody/`, beside its run dir) holds the store's key, as `$CHECK_STORE_CUSTODY` does for check's steps
+    and the quick tier, and the lookup takes it from either."""
+    import json
+    import shutil
+
+    from research.store.local import LocalStore
+
+    root = tmp_path / "tree"
+    _per_test_workspace(root)
+    shutil.copy(HERE / "plan.py", root / "tools" / "verity" / "check" / "plan.py")
+    _git(root, "add", ".")
+    _git(root, "commit", "-q", "-m", "plan")
+    main = _git(root, "rev-parse", "HEAD")
+    started = time.strftime("r%Y%m%d-%H%M%S", time.gmtime(int(_git(root, "log", "-1", "--format=%ct")) + 60))
+    rid = _recorded(LocalStore(tmp_path / "drive-store", config_path=_vault(tmp_path)), main, POST_LANDING,
+                    {"suites.json": [_red_row("pkg", "tests/test_sibling.py::test_sibling")]}, rid=f"{started}-0001")
+    run_id = "r20261027-094912-0001"
+    custody = tmp_path / "research" / "requests" / run_id / "custody"
+    custody.mkdir(parents=True)
+    shutil.copy(_vault(tmp_path), custody / "store.toml")
+    (custody / "cred.json").write_text(json.dumps({"AWS_ACCESS_KEY_ID": "dummy", "AWS_SECRET_ACCESS_KEY": "not-to-be-copied"}))
+    (tmp_path / "research" / "runs" / run_id).mkdir(parents=True)
+    (tmp_path / "home").mkdir()
+    env = {k: v for k, v in os.environ.items() if not k.startswith(("R2_", "AWS_", "RESEARCH_", "VERITY_", "CHECK_"))}
+    env.update(HOME=str(tmp_path / "home"), RESEARCH_STORE=str(tmp_path / "node-store"))
+
+    def known_red(**extra):
+        p = subprocess.run([sys.executable, str(root / "tools" / "verity" / "check" / "suites.py"), "--known-red", main], cwd=root,
+                           env={**env, **extra}, capture_output=True, text=True)
+        return json.loads(p.stdout or json.dumps({"why": p.stderr}))
+
+    assert known_red()["why"].startswith("this machine's store has no remote")
+    want = {"runs": [rid], "commit": main, "red": {"pkg": ["tests/test_sibling.py::test_sibling"]}}
+    assert known_red(RESEARCH_RUN_DIR=str(tmp_path / "research" / "runs" / run_id), RESEARCH_RUN_ID=run_id) == want
+    shutil.rmtree(tmp_path / "node-store")
+    assert known_red(CHECK_STORE_CUSTODY=str(custody)) == want
+    monkeypatch.setenv("HOME", str(tmp_path / "home"))
+    S = _suites(monkeypatch, root)
+    assert S.store_key({"CHECK_STORE_CUSTODY": str(custody)}) == {
+        "RESEARCH_STORE_CONFIG": str(custody / "store.toml"), "AWS_ACCESS_KEY_ID": "dummy", "AWS_SECRET_ACCESS_KEY": "not-to-be-copied"}
+    assert S.store_key({"RESEARCH_STORE_CONFIG": str(tmp_path / "own.toml"), "CHECK_STORE_CUSTODY": str(custody)}) == {}
+    (tmp_path / "home" / ".research").mkdir()
+    (tmp_path / "home" / ".research" / "store.toml").write_text("")
+    assert S.store_key({"CHECK_STORE_CUSTODY": str(custody)}) == {}     # a machine with a store config of its own keeps it
+
+
+def _failed_beside(out: Path) -> bool:
+    return out.with_name(f"{out.stem}.failed.json").exists()
+
+
+def test_a_report_a_dying_pytest_left_empty_or_cut_short_is_no_report(monkeypatch, tmp_path):
+    """A suite whose pytest dies in its session finish leaves its report empty or half-written; reading it must not raise,
+    which took the invocation's other suites down before they reported (r20261027-114144-e99b)."""
+    S = _suites(monkeypatch, tmp_path)
+    report = tmp_path / "report.json"
+    assert S.read_report(report) is None
+    for text in ("", '{"reads": {', "[]", "null"):
+        report.write_text(text)
+        assert S.read_report(report) is None, text
+    report.write_text('{"reads": {}, "outside": {}}')
+    assert S.read_report(report) == {"reads": {}, "outside": {}}

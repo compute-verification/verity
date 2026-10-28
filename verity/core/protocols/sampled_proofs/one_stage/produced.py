@@ -1,5 +1,5 @@
 """Produced values: a value committed after the draw that several statements of a session read, each read opened
-against the one root the record names (PRF-134: a served H1 leaf proved as its 32 lanes and a combine, which share the
+against the one root the record names (a served H1 leaf proved as its 32 lanes and a combine, which share the
 leaf's lane partials, `pouw.leaf_lanes`).
 
 A *produced value* is rows the prover computes after the draw from what it committed before it (H1's partials: lane l's
@@ -24,10 +24,10 @@ hiding salts, and only their check bits leave.
 * **The reads** are the protocol's (H1's: `pouw.leaf_lanes.reads`), each a ``--registered`` port (`port`) at the row the
   verifier derives: a read at a position the verifier doesn't derive is no public read. Rows swapped in the tree open at
   no read's position under the root, and a row of another tree opens under no root the record names.
-* **The opened roots** (`opened`): the roots the verifiers of record report opening the sessions' reads of the produced
+* **The opened roots** (`opened`): the roots the verdicts of record report opening the sessions' reads of the produced
   values against (`audit.session_registered`, unfiltered) must each be the record's: ``P-opened`` otherwise, a produced
   value not opened included.
-* **The shared openings** (`shared`): every row the verifiers of record report opening (the verdicts' ``openings``) of a
+* **The shared openings** (`shared`): every row the verdicts of record report opening (their ``openings``) of a
   value the verifier holds openings of (the record's, `openings`, and its own ports', `known`) must be that opening:
   ``P-shared`` otherwise. Two openings of one root are a SHA-512 collision; this check makes every session that reads a
   row read the one opening the record fixed, so no argument about the sessions' sharing rests on collision resistance.
@@ -95,7 +95,7 @@ def entry(program: str, value: str, leaves: int, words: int, registration: str,
 
 def port(value: str, e: Mapping[str, Any], root: str, rows: Sequence[int | None], schema: str = G.SCHEMA) -> dict[str, Any]:
     """The Lean verifier's ``--registered`` port (`registered.reads_file`'s form) reading ``value`` at ``rows`` (one per
-    unit, None where the unit doesn't read it): ``e`` its entry (`entry`, or a registered value's from the accepted
+    proof block, None where the proof block doesn't read it): ``e`` its entry (`entry`, or a registered value's from the accepted
     registration) and ``root`` the accepted record's."""
     return {"value": value, "root": root, "leaves": int(e["leaves"]), "words": int(e["words"]),
             "word_bits": int(e.get("word_bits", G.WORD_BITS)), "domain": e["domain"], **G.schema_entry(schema),
@@ -207,7 +207,7 @@ def known_port(program: str, value: str, row: Sequence[int], salt: bytes, regist
 
 def opened(rec: Mapping[str, Any], session_registered: Mapping[str, str | None] | None) -> tuple[str, ...]:
     """``("P-opened",)`` unless each produced value of the accepted record ``rec`` was opened against its root: the
-    ``{value: root}`` the verifiers of record report (`audit.session_registered` without a registration, a value two of
+    ``{value: root}`` the verdicts of record report (`audit.session_registered` without a registration, a value two of
     them report under different roots None), at every produced value."""
     want = {e["value"]: e["root"] for e in rec["produced"]}
     got = dict(session_registered or {})

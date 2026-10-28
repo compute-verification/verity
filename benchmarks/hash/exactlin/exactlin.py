@@ -181,7 +181,7 @@ def default_cfg(m: int, n: int, k: int) -> Cfg:
 
 # Per architecture and (N, K): (m_max, config) rows, ksweep.py's winners where they beat vLLM's tiles (best.json).
 CONFIGS: dict[str, dict[tuple[int, int], list[tuple[int, str]]]] = {
-    "sm_120": {  # RTX PRO 6000: M <= 64 r20261019-173505-e13b; M 256 to 8192 r20261019-183925-ef93 (pointer and TMA)
+    "sm_120": {  # RTX PRO 6000: swept at M <= 64, then M 256 to 8192 (pointer and TMA)
         (6144, 4096): [(1, "16x64x128:w4:s5:k1"), (16, "16x32x128:w4:s4:k1"), (32, "32x32x128:w4:s4:k1"),
                        (64, "32x64x128:w4:s4:k1"), (256, "128x64x128:w4:s3:k1:t1"), (2048, "128x128x64:w4:s3:k1:t1"),
                        (8192, "128x128x64:w4:s3:k1:t1")],
@@ -201,7 +201,7 @@ CONFIGS: dict[str, dict[tuple[int, int], list[tuple[int, str]]]] = {
                         (64, "32x64x512:w8:s3:k1"), (256, "128x64x128:w4:s5:k1"), (2048, "128x128x64:w4:s3:k1:t1"),
                         (8192, "128x128x64:w4:s3:k1:t1")],
     },
-    "sm_90": {  # H200: M <= 32 r20261019-175307-6582; M 64 to 8192 r20261019-183823-8641 (pointer and TMA)
+    "sm_90": {  # H200: swept at M <= 32, then M 64 to 8192 (pointer and TMA)
         (6144, 4096): [(1, "16x64x512:w4:s4:k1"), (16, "16x64x512:w4:s4:k1"), (32, "32x32x512:w4:s3:k1"),
                        (64, "64x32x256:w4:s4:k1:t1"), (256, "128x128x256:w4:s3:k1:t1"),
                        (2048, "128x128x128:w4:s3:k1:t1"), (8192, "128x128x128:w4:s3:k1:t1")],
@@ -221,7 +221,7 @@ CONFIGS: dict[str, dict[tuple[int, int], list[tuple[int, str]]]] = {
                         (64, "64x32x256:w4:s5:k1:t2"), (256, "64x128x256:w8:s4:k1:t2"),
                         (2048, "128x128x128:w8:s3:k1:t1"), (8192, "128x128x128:w8:s3:k1:t1")],
     },
-    "sm_100": {  # B200: M <= 64 r20261019-180130-80c4; M 256 to 8192 r20261019-192530-a23e (pointer and TMA)
+    "sm_100": {  # B200: swept at M <= 64, then M 256 to 8192 (pointer and TMA)
         (6144, 4096): [(1, "16x64x512:w4:s4:k1"), (16, "16x64x512:w4:s4:k1"), (32, "32x16x256:w4:s4:k1"),
                        (64, "64x64x512:w4:s4:k1"), (256, "64x64x256:w4:s3:k1:t1"), (2048, "128x64x128:w4:s3:k1:t1"),
                        (8192, "128x64x128:w4:s3:k1:t1")],
@@ -375,7 +375,7 @@ def install() -> None:
     try:
         from verity_vllm.engine import int8_ops
     except ImportError as e:
-        raise SystemExit(f"exactlin.install: {e}; verity_vllm.engine.int8_ops is PR #2694's: run with its branch") from e
+        raise SystemExit(f"exactlin.install: {e}; install integrations/vllm (verity_vllm.engine.int8_ops)") from e
 
     int8_ops.row_quant.register_kernel("cuda")(row_quant)
     int8_ops.scaled_mm.register_kernel("cuda")(product)

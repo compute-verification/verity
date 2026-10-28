@@ -4,7 +4,7 @@ set -uo pipefail
 ROOT=$PWD
 cd integrations/vllm
 PY=/workspace/jobs/venv312/bin/python3
-export PYTHONPATH=.:$ROOT:$ROOT/tools/research/src:$ROOT/benchmarks/pouw/served_h1 HF_HOME=/workspace/hf
+export PYTHONPATH=.:$ROOT:$ROOT/tools/research/src:$ROOT/tools/config:$ROOT/benchmarks/pouw/served_h1 HF_HOME=/workspace/hf
 echo "research: $(command -v research)"
 ls -d /workspace/hf/hub/models--verity-int8--Llama-3.1-8B-INT8/snapshots/723d342ac443b040931242c768df342b0f6f15a7 || echo "PIN MISSING"
 CUDA_VISIBLE_DEVICES= "$PY" - <<'PY'

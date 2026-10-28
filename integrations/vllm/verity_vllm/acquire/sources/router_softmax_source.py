@@ -7,9 +7,9 @@ the block source's attribution) mark the layer that runs.  Inside a committed st
 is replaced by the tapped op of `ops/pod_router_tap.sh`, `verity_router_tap.topk_softmax_tap`: vLLM's `topkGating`, launched the same way,
 whose threads also store the row's max, exponentials, reciprocal sum and probabilities (and under renormalize the selected probabilities
 and the scale) into a float32 [rows, words] buffer.  Everywhere else the installed op runs.  The tapped op computes exactly the installed
-op's outputs and every word equals the ordered router's committed value in the IR (`properties.router_tap_exactness`).  The patch goes
+op's outputs and every word equals the ordered router's committed value in the circuit (`properties.router_tap_exactness`).  The patch goes
 through `engine.hooks` and `uninstall` undoes it.  A launch inside a manifest layer whose geometry is not the manifest's, or that carries a
-correction bias (not in the IR router), runs the installed op and is a collector error.  vLLM's padding mask (`is_padding`, under
+correction bias (not in the circuit's router), runs the installed op and is a collector error.  vLLM's padding mask (`is_padding`, under
 VLLM_MOE_SKIP_PADDING) is passed through: it changes a padding row's ids, never the softmax, and a padded launch has more rows than the
 manifest's router Calls, which the committer's identity check refuses.
 """

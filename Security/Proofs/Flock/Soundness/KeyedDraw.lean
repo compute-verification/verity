@@ -8,8 +8,9 @@ import Proofs.Flock.Soundness.Audit.RegDraw
 # The PoUW circuit's keyed draw escapes no more often than the model's
 
 `Key.subset` (`Randomness.subset`) draws each swap `i` of a `k`-subset from its own stream, index `("s", *index, i)`,
-where `Flock.Draw.subset` reads one stream. So its escape needs its own proof, on the same pieces as #408's: the swap map
-read as a permutation (`getD_swapAt`), the rejection sampler (`uniformL_le`) and the pool (`card_pool_mem`).
+where `Flock.Draw.subset` reads one stream. So its escape needs its own proof, on the same pieces as
+`Flock.Draw.subset`'s: the swap map read as a permutation (`getD_swapAt`), the rejection sampler (`uniformL_le`) and
+the pool (`card_pool_mem`).
 
 * `subsetOn_eq`, `subsetOn_misses`: the per-swap loop as a list recursion, and its `HashMap` read through a permutation.
 * `loopK_le`: swap `i` on its own uniform stream draws uniformly over the pool `π '' [i, n)`, so the loop escapes `B` with
@@ -17,7 +18,7 @@ read as a permutation (`getD_swapAt`), the rejection sampler (`uniformL_le`) and
 * `Law.subsetOn_escape_le`: over independent uniform streams, one per swap, `Key.subset` misses `B` with at most the
   uniform `k`-subset's escape.
 
-The window (`PlanDraw.window`, #364's `plan.draw` for each call under one key, admission refusing a repeated call index):
+The window (`PlanDraw.window`, `plan.draw` for each call under one key, admission refusing a repeated call index):
 
 * `drawAll_eq`, `drawK_eq_drawOn`: the calls' draws are one draw over the window's flat strata (`flat`), and on the key
   it is `drawOn` on the key's streams, stratum `p`'s swap `i` at index `("s", *context, i)`.
@@ -26,15 +27,15 @@ The window (`PlanDraw.window`, #364's `plan.draw` for each call under one key, a
   (`PlanStrata`).
 * `Law.keyedWindow`, `Law.keyedWindow_escape_le`: **tier 3**. The live window draw, on the key derived from a verifier
   secret of `S` bytes, escapes `B` with at most `(Law.stratified σ k hk).escape B + η`, under A4
-  (`Assumptions.KeyedStreamsUniform`) for the test `windowTest` and swap indices with distinct framings. As in #416, it
-  holds for every number of bytes `L` read per swap, and the unbounded Python stream is the limit.
+  (`Assumptions.KeyedStreamsUniform`) for the test `windowTest` and swap indices with distinct framings. As for
+  `Flock.Draw.subset`, it holds for every number of bytes `L` read per swap, and the unbounded Python stream is the limit.
 * `Randomness.frames_inj'`, `Law.windowIdx_inj`, `Law.keyedWindow_escape_le_of_names`: a frame parses uniquely, so the
   swap indices' framings are distinct when the calls are admitted and each call's stratum names are distinct. So tier 3
   holds from the draw's own checks, with every swap index framed in under `2^64` bytes.
 * `Law.keyedWindow_audit_of_record`, `Law.keyedWindow_extraction_audit_of_record`: **step 4**, the window pins on the live
   keyed draw at the sizing of record: `2^-40 + η + ε_ks + δ_link`, on a fresh uniform window secret (A5).
 * `Law.keyedWindowReg_extraction_audit_of_record` (the claim of record), `Law.keyedWindowReg_audit_of_record`: the same on the
-  real game, whose key context is the receipt digest (#423's C1), strategy by strategy (`prob_auditReg`).
+  real game, whose key context is the receipt digest, strategy by strategy (`prob_auditReg`).
 -/
 
 namespace FlockSoundness.Audit.KeyedDraw
@@ -1000,7 +1001,7 @@ whose escape `keyedWindow_escape_le_of_names` bounds by the product law's plus `
 draw's escape tests (`windowTest`), which cost the same for every `B`.
 
 The key's context is the receipt digest, so the draw depends on the registration: it holds per strategy, for the context
-`context` that the strategy's registration fixes (C1, #423: the key is derived from the complete receipt, and a call the
+`context` that the strategy's registration fixes (the key is derived from the complete receipt, and a call the
 receipt doesn't list is refused), and for every context, A4 and the `Analysis` taken uniformly over them. The window's
 secret is fresh and uniform (A5, C2). -/
 theorem keyedWindow_audit_of_record {C : ℕ} (σ : Fin n → Fin M) (call : Fin M → Fin C) (w v f : Fin M → ℕ)
@@ -1050,7 +1051,7 @@ theorem keyedWindow_extraction_audit_of_record {C : ℕ} (σ : Fin n → Fin M) 
     (fun B => keyedWindow_escape_le_of_names σ _ (windowK_le σ call w f 27713) calls hWS sec hsec L domain context η
       hnames hsmall hA4 B) A hks hlink hW hone hN hfy σ'
 
-/-- **The claim of record on the real, receipt-keyed game** (#423's C1): the key's context `ctx R` is the digest of the
+/-- **The claim of record on the real, receipt-keyed game**: the key's context `ctx R` is the digest of the
 registration's receipt, so the draw is `auditReg`'s. Strategy by strategy (`prob_auditReg`), it is
 `keyedWindow_extraction_audit_of_record` at `ctx (reg σ)`, with A4 and the analysis taken for every registration and one `η`
 for all of them. -/

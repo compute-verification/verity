@@ -1,4 +1,4 @@
-"""[R16 pin, coord ruling 36 (rev M-0410, reqval M-0417 (b), stoch M-0446)] the stochastic Program's PRESCRIBED sampler inputs are linked
+"""The stochastic Program's PRESCRIBED sampler inputs are linked
 to their approved source at Commit, independently of whether a random replay sample happens to expose a substitution:
 
   * SEED -- the committed `runner.sampler/seed` word at every (step, request) with a committed sampled id == the DECLARED workload seed
@@ -8,7 +8,7 @@ to their approved source at Commit, independently of whether a random replay sam
   * unlinked (missing word, unequal word, no S of record) -> the boundary linkage FAILs BY NAME (kind 'seed' / 'splits'), the same path
     as an unlinked token boundary; a greedy row (no declared seed, constant S) checks nothing and says so, its verdict byte-identical.
 
-Why this is required beside stoch's evaluator (cfb3cef2a, rev M-0444): the form-(A) evaluator makes the COMMITTED seed load-bearing, not
+Why this is required beside the selector's evaluator: the form-(A) evaluator makes the COMMITTED seed load-bearing, not
 the DECLARED one -- a prover that commits ids drawn with its own seed replays consistently.  The linkage ties the committed word to the
 workload of record.  Fixtures: a `_Store` of committed words by identity (the stoch test's shape), B=1 and B=3 with staggered arrivals
 so live(s) changes and SplitsFor_v1's S changes with it (142 SMs: live 1..4 -> 32, 5..8 -> 16; 132 SMs on Hopper likewise 1..4 -> 32).
@@ -109,7 +109,7 @@ def test_greedy_row_checks_nothing_and_says_so_verdict_unchanged():
     assert p["seed"]["checked"] == 0 and "not applicable" in p["seed"]["why"]
     assert p["splits"]["checked"] == 0 and "not applicable" in p["splits"]["why"]
     assert "prescribed-input" not in lk["method"]                                                        # the greedy method text is the old one
-    # an R15 constant-S Program (splits = 32) on a seeded row: the seed is linked, splits are not a rule
+    # an older constant-S Program (splits = 32) on a seeded row: the seed is linked, splits are not a rule
     store2, wreq2 = _world({"r0": (0, 3, 9)})
     lk2 = _lk(store2, wreq2, {"r0": 32})
     assert lk2["result"] is True and lk2["prescribed"]["seed"]["linked"] == 3 and lk2["prescribed"]["splits"]["checked"] == 0
@@ -119,13 +119,13 @@ def test_greedy_row_checks_nothing_and_says_so_verdict_unchanged():
 # ----------------------------------------------------------------------------------------------------------------------- negatives
 
 def test_a_committed_seed_that_is_not_the_declared_one_fails_by_name_at_the_step():
-    # the served run consumed its own seed at step 2 of r0 (the evaluator alone would replay it consistently -- rev M-0444)
+    # the served run consumed its own seed at step 2 of r0 (the evaluator alone would replay it consistently)
     store, wreq = _world({"r0": (0, 4, 1077402498)}, seed_word={("r0", 2): 4242})
     lk = _lk(store, wreq, {"r0": {"derived": NSM}})
     assert lk["result"] is False and lk["unlinked_n"] == 1
     u = lk["unlinked"][0]
     assert u["kind"] == "seed" and u["request_id"] == "r0" and u["engine_step"] == 2
-    assert lk["why"] == "committed runner.sampler/seed 4242 != declared workload seed 1077402498 of r0 at step 2 (prescribed input, ruling 36)"
+    assert lk["why"] == "committed runner.sampler/seed 4242 != declared workload seed 1077402498 of r0 at step 2 (prescribed input)"
     assert lk["prescribed"]["seed"] == {"rule": LK.SEED_RULE, "requests_declared": 1, "checked": 4, "linked": 3}
 
 
@@ -146,7 +146,7 @@ def test_a_missing_seed_word_where_a_sampled_id_is_committed_fails_by_name():
 
 
 def test_a_seed_word_that_changes_across_the_requests_steps_is_named_at_the_first_differing_step():
-    # stoch M-0446: the seed is constant per request; a per-step 'derivation' the run applied on its own is a substitution at every step
+    # The seed is constant per request; a per-step 'derivation' the run applied on its own is a substitution at every step
     store, wreq = _world({"r0": (0, 4, 100)}, seed_word={("r0", 1): 101, ("r0", 2): 102, ("r0", 3): 103})
     lk = _lk(store, wreq, {"r0": {"derived": NSM}})
     assert lk["result"] is False and lk["unlinked_n"] == 3 and [u["engine_step"] for u in lk["unlinked"]] == [1, 2, 3]
@@ -160,7 +160,7 @@ def test_a_committed_splits_word_that_is_not_splitsfor_of_the_committed_live_cou
     assert lk["result"] is False and lk["unlinked_n"] == 1
     u = lk["unlinked"][0]
     assert u["kind"] == "splits" and u["request_id"] == "r1" and u["engine_step"] == 3
-    assert lk["why"] == "committed runner.sampler/splits 2 != SplitsFor_v1(live 3, num_SMs 4) = 1 for r1 at step 3 (prescribed input, ruling 36)"
+    assert lk["why"] == "committed runner.sampler/splits 2 != SplitsFor_v1(live 3, num_SMs 4) = 1 for r1 at step 3 (prescribed input)"
 
 
 def test_an_omitted_request_moves_the_live_count_and_every_batch_mates_s_is_named():
@@ -223,10 +223,10 @@ def test_the_s_of_record_is_the_registry_relation_not_a_table(live, nsm, want):
     assert splits_for_v1(live, nsm) == want
 
 
-# ------------------------------------------------------------------------------------- ruling 35 sixth consumer: the linkage horizon
+# ----------------------------------------------------------------------------------------------- sixth consumer: the linkage horizon
 
 def test_linkage_horizon_is_the_program_of_records_steps_capped_by_the_declared_cap():
-    # B=1 eos-truncated (sys M-0466): cap 32, served-shape Program build_request_LP32_T11 has 12 steps -> 12 steps linked, not 32
+    # B=1 eos-truncated: cap 32, served-shape Program build_request_LP32_T11 has 12 steps -> 12 steps linked, not 32
     assert LK.linkage_horizon(0, 32, 12) == list(range(12))
     assert LK.linkage_horizon(5, 32, 12) == list(range(5, 17))
     assert LK.linkage_horizon(0, 32, None) == list(range(32))                     # unknown Program steps: the cap (older records)
@@ -255,7 +255,7 @@ def test_an_eos_truncated_request_links_completely_over_its_program_of_record_an
 
 
 
-# ------------------------------------------------------------------------------------------ rev M-0485 / M-0472 hardenings
+# ------------------------------------------------------------------------------------------ hardenings
 
 def _truncated(eos, lag=0):
     store, wreq = _world({"r0": (0, 12, None)})
@@ -274,9 +274,9 @@ def test_an_early_stopped_request_must_end_on_a_declared_eos_id_at_the_horizons_
     assert lk2["result"] is False and lk2["unlinked"][0]["kind"] == "eos" and lk2["unlinked"][0]["engine_step"] == 11
     assert f"committed sampled id {last_id} at the EOS step 11 (= last step 11 - lag 0) is not a declared EOS id [2]" in lk2["why"]
     assert lk2["horizon"]["r0"]["eos_of_record"]["verified"] is False
-    # no declared stop rule -> fail closed (F-pm-24), by name
+    # no declared stop rule -> fail closed, by name
     store, lk3 = _truncated(None)
-    assert lk3["result"] is False and "declares no stop rule (eos_token_ids)" in lk3["why"] and "fail closed (F-pm-24)" in lk3["why"]
+    assert lk3["result"] is False and "declares no stop rule (eos_token_ids)" in lk3["why"] and "fail closed" in lk3["why"]
     # ignore_eos: the declared set is EMPTY -> every early stop fails
     store, lk4 = _truncated([])
     assert lk4["result"] is False and lk4["unlinked"][0]["kind"] == "eos"
@@ -288,8 +288,8 @@ def test_an_early_stopped_request_must_end_on_a_declared_eos_id_at_the_horizons_
 
 
 def _sys_int3_earlystop_world(eos_at_10=0, ph_sample=504, ph_input=None):
-    """[padrev M-0517] sys M-0402's int-3 earlystop record in miniature: served T_r 11 -> Program of record LP32_T11, 12 steps 0..11, cap 32;
-    async_scheduling attested True (RULING 21, LAG 1): the EOS 0 is SAMPLED at step 10, step 11 is the placeholder fed the EOS whose sample
+    """An early-stop record in miniature: served T_r 11 -> Program of record LP32_T11, 12 steps 0..11, cap 32;
+    async_scheduling attested True (LAG 1): the EOS 0 is SAMPLED at step 10, step 11 is the placeholder fed the EOS whose sample
     504 ('The') the driver discards.  `ph_input`: forge the placeholder's committed embed input (default: the EOS, the honest record)."""
     store, wreq = _world({"r0": (0, 12, None)})
     store.blocks[("r0", 10, IX.SAMPLER_OP, RK.SAMPLED_MEMBER)] = np.asarray([eos_at_10], dtype=np.uint64)
@@ -300,7 +300,7 @@ def _sys_int3_earlystop_world(eos_at_10=0, ph_sample=504, ph_input=None):
 
 
 def test_padrev_m0517_under_the_attested_async_scheduler_the_eos_is_at_the_step_before_the_placeholder():
-    # the honest lag-1 record (sys M-0402 / padrev M-0517's expected eos_of_record) PASSes; f8dc277a1 read steps[-1] = 11 -> 504 and failed it
+    # the honest lag-1 record (its expected eos_of_record) PASSes; reading steps[-1] = 11 -> 504 would fail it
     store, req = _sys_int3_earlystop_world()
     lk = _lk(store, req, {"r0": None}, {0}, lag=1)
     assert lk["result"] is True and lk["pairs"] == 12 and lk["linked"] == 12, lk["why"]
@@ -369,7 +369,7 @@ def test_a_committed_seed_word_with_no_declared_source_is_unlinked_by_name_not_n
     assert lk2["result"] is True and "not applicable" in lk2["prescribed"]["seed"]["why"]
 
 
-# ------------------------------------------------------------------------------- rev M-0570 (1): one engine schedule of record
+# ------------------------------------------------------------------------------- one engine schedule of record
 
 def test_arrivals_of_record_follow_the_observed_schedule_only_when_the_population_was_placed_on_it():
     decl = {"r0": 0, "r1": 7}

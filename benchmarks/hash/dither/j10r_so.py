@@ -1,6 +1,6 @@
-"""dither_so's J10-R units form ($DITHER_SO_UNITS=j10r; RT-ALGO-16's verifier form, #3574: each unit's call is its call's
+"""dither_so's J10-R units form ($DITHER_SO_UNITS=j10r; the verifier's form: each unit's call is its call's
 first position and its blocks `core_check.j10r_blocks` at the call's slot M, as credit derives them from the window's
-layout, when M is "slot" on a slot T with every row block computed, `forms.j10r_part`): the gate's references for it,
+layout, when M is "slot" on a slot T with every row tile computed, `forms.j10r_part`): the gate's references for it,
 swapped into dither_a's check as j10served.py swaps banded noise's.
 
     every capture, the window's end   each receipt against h1r.cu's version 1 under J10-R (`RefH1R`: h1r_launch_j10r, its
@@ -17,7 +17,6 @@ from __future__ import annotations
 
 import contextlib
 import dataclasses
-import os
 
 import numpy as np
 import torch
@@ -25,14 +24,15 @@ import torch
 import dither_a as DA
 import dither_one as DO
 from h1r import H1R
+from verity_config.settings import of
 
+settings = of(__file__)
 J10R_SHA = "559bc0aa69"
 TREE_ENV = "DITHER_J10R_TREE"
-LABEL = ("J10-R units (J10R's Definition: h1tile.j10r_reference, PouwH1Tile_v5's receipt, #3403 on cursor/h1-j10r-1de3 at "
-         f"{J10R_SHA}; RT-ALGO-16's verifier form, #3574)")
+LABEL = f"J10-R units (J10R's Definition: h1tile.j10r_reference, PouwH1Tile_v5's receipt, at {J10R_SHA}; the verifier's form)"
 M_MODES = {"slot": "each call's A slot, T rows (j10r_blocks' docstring: the call's slot)",
            "live": "the step's live rows rounded up to 32"}
-# dither_so's $DITHER_UNITS_SKIP_DEAD: a row block wholly past the live rows computed in full (unset), or skipped ("1")
+# dither_so's $DITHER_UNITS_SKIP_DEAD: a row tile wholly past the live rows computed in full (unset), or skipped ("1")
 DEAD = {False: "computed in full (PouwH1Tile_v5 / v6)",
         True: "skipped: the zero receipt (h1tile's canonical dead tile, $DITHER_UNITS_SKIP_DEAD=1)"}
 
@@ -52,7 +52,7 @@ def checked_calls(L: int) -> list[int]:
 
 
 class RefH1R(H1R):
-    """h1r.py's H1R whose version 1 is h1r_launch_j10r at the class's layout rows M; unless SKIP, every call's row blocks
+    """h1r.py's H1R whose version 1 is h1r_launch_j10r at the class's layout rows M; unless SKIP, every call's row tiles
     all live (a dead one's units computed in full)."""
     M = 0
     SKIP = True
@@ -87,7 +87,7 @@ class Refs:
         return self.s * self.win.u_step + self.win.offs[w]
 
     def receipts(self, w: int, salt: bytes, root_a: bytes, root_b: bytes) -> np.ndarray:
-        """Call w's receipts (units, 2 sets): each live unit's by j10r_units, and a dead row block's by j10r_units too, or
+        """Call w's receipts (units, 2 sets): each live unit's by j10r_units, and a dead row tile's by j10r_units too, or
         under `skip` the zero receipt (the dead tile, as h1u and h1r then write it)."""
         import j10r_units as JU
         key = (w, salt, root_a, root_b)
@@ -112,7 +112,7 @@ class Refs:
     def itself(self, units: list[dict]) -> dict:
         """dither_one.h1v3_itself's place: J10R's own j10r_reference(stream=True) on its tree, each unit with its call and
         its (ri, cj) at layout rows M, from which the Definition derives its blocks."""
-        tree = os.environ.get(TREE_ENV)
+        tree = settings.get(TREE_ENV)
         if not tree:
             return {"tree": None, "sha": J10R_SHA, "error": f"no J10R tree: ${TREE_ENV} (sbench.sh's J10R_SHA={J10R_SHA})"}
         ins = []
@@ -120,16 +120,17 @@ class Refs:
             w, u = self.where(x["position"])
             ncb = self.win.nk[w][0] // 32
             ins.append({**x, "j10r": {"call": self.base(w), "m": self.M, "ri": u // ncb, "cj": u % ncb}})
-        saved = {k: os.environ.get(k) for k in ("DITHER_H1V3_TREE", "DITHER_H1V3_SHA")}
-        os.environ.update(DITHER_H1V3_TREE=tree, DITHER_H1V3_SHA=os.environ.get("DITHER_J10R_SHA") or J10R_SHA)
+        saved = {k: settings.raw(k) for k in ("DITHER_H1V3_TREE", "DITHER_H1V3_SHA")}
+        settings.put("DITHER_H1V3_TREE", tree)
+        settings.put("DITHER_H1V3_SHA", settings.DITHER_J10R_SHA or J10R_SHA)
         try:
             return self.itself0(ins)
         finally:
             for k, v in saved.items():
                 if v is None:
-                    os.environ.pop(k, None)
+                    settings.unset(k)
                 else:
-                    os.environ[k] = v
+                    settings.put(k, v)
 
     @contextlib.contextmanager
     def swapped(self):

@@ -36,22 +36,22 @@ of a pinned parameter leave the free inputs where the window's root for it is th
 them registered, its pins the ``--registered`` file's roots and the window's roots those its registration records
 (`window_roots`: its ``registered_roots``, `interface.Window.write`, and its committed values' entries).
 
-A registration whose window commits per-window values (``activations``: ``{program, values: {value: entry}}``, the torch
-loop's activation rows, `TorchLoop.commit_activations`) has them fixed before the draw with the rest of the registration;
+A registration whose window commits per-window values (``activations``: ``{program, values: {value: entry}}``, a
+loop's activation rows) has them fixed before the draw with the rest of the registration;
 the audit holds each entry's domain to the one core's ``registered.domain`` makes of the program, the value, its rows and
 the window's run root (`committed_activations`), and reports their roots. Those the circuit doesn't read take nothing from
-the free inputs. Those it reads as ties (the wired loop's activations: an output port writes every row an input port
+the free inputs. Those it reads as ties (a wired loop's activations: an output port writes every row an input port
 takes, `tied_values`) are pinned from the registration beside ``--registered``'s (`window_pins`), so Lean's registered
 reads tie each reader's row to its writer's. One it reads only through input ports is opened against its committed root
 too, but the prover chose its rows: its reads count free, and the count names it (``leak.untied``). PoUW's H1 tiles
-(`verity_torch_loop.pouw_audit`) have theirs pinned through ``--registered``, from the window's entries.
+have theirs pinned through ``--registered``, from the window's entries.
 
 The negatives (`negatives` before the draw, a5's after it) cost Lean verifies of their own; ``--skip-negatives`` leaves
 them out of an audit (its summary says so), for a run of several audits of one circuit, which runs them in its first.
 
     records_audit.py audit --window DIR --law L (--opening FILE --compilers FILE [--repo DIR] | --circuit SHA512) --run HEX \\
         [--template-sets DIR] [--outputs FILE] --m0-pythonpath PATH --bin flock-circuit --lean flock-verify --firewall flock-firewall \\
-        --out DIR [--delta D] [--port P] [--ports N] [--forged] [--challenger local|gate:USER@HOST --main FILE] \\
+        --out DIR [--delta D] [--port P] [--ports N] [--forged] [--challenger local|loopback:HOST:PORT|gate:USER@HOST --main FILE] \\
         [--peer NAME --challenger-key RECORD [--gate-key KEY]] [--registered FILE] [--skip-negatives]
     records_audit.py count --circuit FILE --bits N [--catalog MODULE ...] [--pin NAME=ROOT ...] [--pins FILE ...] [--registration FILE]
 
@@ -63,8 +63,9 @@ and only where the window's registration (``--registration``) records that root 
 ``weights/<label>@<words>``, at the hiding root the committer registered for it once per model and key before the first
 window's coins (``--pins REGISTRATION``, the ``{program, values}`` the audit's ``--registered`` takes:
 `verity_vllm.program.predict.window_weights.weights_registration`), never a root the verifier computes from a checkpoint,
-and which `verity-vllm advice --weights-of-record` records in each window's registration. Its rotary table has no root,
-so its reads stay free.
+and which `verity-vllm advice --weights-of-record` records in each window's registration. Its rotary table has a root
+only where the committer registered the words its engine serves (within the analytic table's bound); else its reads stay
+free.
 
 ``--compilers FILE``: ``{name: {"digest": hex, "argv": [...], "code": [path, ...], "pythonpath": [path, ...]}}``, the
 registered compilers the verifier holds, each by the name and digest a registration names it under. A registration names
@@ -82,7 +83,8 @@ auditing tree. The compile command is ``argv --advice FILE --out FILE``:
 * it exits 0 having compiled, `REFUSED` (2) on advice it refuses, the reason on stderr, and any other code on an error.
 
 ``--challenger``: the draw on the auditor's challenger's coins (`a5_coins`), not the verifier's own, as `prove_path.py audit`
-takes them: ``local``, a development session on this machine, or ``gate:USER@HOST``, vy-challenger-1 through infra's gate with
+takes them: ``local``, a development session on this machine, ``loopback:HOST:PORT``, that session on the challenger
+party's host (`challenger_party.py`, `verity run CONFIG --party challenger`), or ``gate:USER@HOST``, the auditor host through its SSH gate with
 the lane's gate key ``--gate-key``, its challenger on ``--peer``'s 127.0.0.1 (so the audit runs on that peer), under the
 deployment's key record ``--challenger-key``. The gate opens a root once, ever.
 
@@ -261,7 +263,7 @@ def source(w: Mapping[str, Any] | None, held: Mapping[str, Any]) -> dict[str, An
 
 def leak_count(members: Iterable[Any], external: Iterable[str], bits: int) -> dict[str, Any]:
     """The leak bound's count against the advice's charge (``bits``, the registered length; 0 for a circuit with no compiler).
-    ``other_inputs`` is #(otherInputs \\ registered): #4044's ``otherInputs`` (``SampledCharge.lean``), the circuit's input
+    ``other_inputs`` is #(otherInputs \\ registered): ``otherInputs`` (``SampledCharge.lean``), the circuit's input
     gates no step lists as ingress, less the inputs the registration fixes. The circuit's input gates are each of the
     verifier's ``members``' parameter rows' bits (16 a u16 word: `interface.layout` refuses a port of part words), once per
     unit, or once per table row for a shared-row port (``tables``), and none for a port wired from other units' outputs
@@ -391,6 +393,15 @@ def pinned(doc: Any) -> dict[str, dict[str, Any]]:
     except (KeyError, TypeError, AttributeError) as e:
         raise ValueError(f"a pin is {{program, values: {{param: entry}}}}, or a list of them: {type(e).__name__}: {e}") from e
     return {str(v): dict(e) for v, e in values.items()}
+
+
+def pin_roots(entries: Mapping[str, Mapping[str, Any]]) -> dict[str, str]:
+    """The pins `interface.input_count` holds to a window's roots (`window_roots`), ``{param: root}``, of pinned entries
+    (`pinned`, `window_pins`'): each entry's root alone, its domain and shape staying with the entries that
+    `interface.registered_reads` opens against. Refused (ValueError) where a root isn't hex digits."""
+    pins = {v: e["root"] for v, e in entries.items()}
+    IF.held_params(pins, {})
+    return pins
 
 
 def tied_values(circuit: Mapping[str, Any], values: Iterable[str], resolve: Callable[[str], Any] = IF.resolve) -> set[str]:
@@ -692,11 +703,11 @@ def audit(a: argparse.Namespace) -> int:
                                     "audit", "draw", "draw_counts", "negatives", "negatives_skipped", "coins",
                                     "timing", "outputs")}}
     bits = int((held["advice"] or {}).get("bits", 0))
-    pin_roots = {v: e["root"] for v, e in pins.items()}
-    row["leak"] = (declared_count(doc, bits, resolve, pin_roots, roots, untied)
+    counted = pin_roots(pins)
+    row["leak"] = (declared_count(doc, bits, resolve, counted, roots, untied)
                    if set(IF.DECLARED) & set(doc) else leak_count(mine.members, doc.get("external") or (), bits))
     if reads:
-        row["registered"] = {"pins": pin_roots, "roots": roots, "members": len(reads)}
+        row["registered"] = {"pins": counted, "roots": roots, "members": len(reads)}
     acts = committed_activations(w)
     if acts is not None:
         row["activations"] = acts
@@ -752,7 +763,7 @@ def main(argv: list[str] | None = None) -> int:
     sub = ap.add_subparsers(dest="cmd", required=True)
     p = sub.add_parser("audit", help="a window's audit from its records alone")
     p.add_argument("--window", required=True, help="the window's directory: circuit.json, registration.json, the value files")
-    p.add_argument("--law", required=True, help="the proof service's law of the window (subset:K, stratified:K, work:K)")
+    p.add_argument("--law", required=True, help="the proof system's law of the window (subset:K, stratified:K, work:K)")
     p.add_argument("--opening", help="the advice's opening (interface.advice_opening): the named gap, until the compile unit")
     p.add_argument("--compilers", help="with --opening: the registered compilers the verifier holds, {name: {digest, argv, "
                    "code, pythonpath}}")
@@ -779,12 +790,12 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--flip-proofs", type=int, default=0, metavar="N",
                    help="after an accepted audit, at most N one-bit edits of its first drawn session's proof, each of which "
                    "Lean verify must refuse (`proof_edits`)")
-    p.add_argument("--challenger", help="draw on the auditor's challenger's coins (a5_coins), not the verifier's: local, or "
-                   "gate:USER@HOST (vy-challenger-1 through infra's gate, with --peer and --challenger-key)")
+    p.add_argument("--challenger", help="draw on the auditor's challenger's coins (a5_coins), not the verifier's: local, loopback:HOST:PORT or "
+                   "gate:USER@HOST (the auditor host through its SSH gate, with --peer and --challenger-key)")
     p.add_argument("--peer", help="with --challenger gate:USER@HOST: this machine as the gate's /etc/vy/peers names it, whose "
                    "127.0.0.1 the session's challenger listens on")
     p.add_argument("--challenger-key", help="with --challenger gate:USER@HOST: the challenger's key record of its deployment "
-                   "(infra's challenger-key/v1), never the session's key.json")
+                   "(challenger-key/v1), never the session's key.json")
     p.add_argument("--gate-key", help="with --challenger gate:USER@HOST: the lane's own gate key (default ssh's own)")
     p.add_argument("--main", help="with --challenger: the verifier's copy of main's first-parent history")
     p.add_argument("--registered", help="the registered values' entries the verifier pinned before the run, {program, "
@@ -819,8 +830,8 @@ def main(argv: list[str] | None = None) -> int:
     if bool(a.opening) == bool(a.circuit) or bool(a.opening) != bool(a.compilers):
         ap.error("a compiled circuit: --opening FILE --compilers FILE; a circuit with no compiler: --circuit SHA512")
     if a.challenger:
-        if a.challenger != "local" and not a.challenger.startswith("gate:"):
-            ap.error(f"--challenger is local or gate:USER@HOST, not {a.challenger!r}")
+        if a.challenger != "local" and not a.challenger.startswith(("gate:", "loopback:")):
+            ap.error(f"--challenger is local, loopback:HOST:PORT or gate:USER@HOST, not {a.challenger!r}")
         if a.challenger.startswith("gate:") and not (a.peer and a.challenger_key):
             ap.error("--challenger gate:USER@HOST needs --peer and --challenger-key")
         if not a.main:

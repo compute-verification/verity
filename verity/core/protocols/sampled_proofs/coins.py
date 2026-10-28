@@ -1,13 +1,13 @@
 """The verifier's coins: its own randomness and the one-stage draws it makes from it.
 
 The verifier draws every coin from its own randomness (`OwnRandomness`), with no derivation and no beacon, after the
-prover's commitments are registered.  `draw_first` draws a one-stage law's units as the Lean verifier's
+prover's commitments are registered.  `draw_first` draws a one-stage sampling design's proof blocks as the Lean verifier's
 `Flock.Draw.drawWith` does from the same bytes, and `closure_of` widens a work draw by the verifier's closure map.  A
-drawn unit's outcome is final: nothing redraws.
+drawn proof block's outcome is final: nothing redraws.
 
 Each stream `draw_first` reads (one for `subset` and `bernoulli`, one per stratum for `stratified` and `work`) is
 `2 k · width(n) + 64` bytes (`2 n · width(den) + 64` for `bernoulli`), extended by as many again and rerun whenever it
-runs out (`OwnRandomness.stream`).  Nothing here derives a draw, the proof service's included: `service.Stream.select` is
+runs out (`OwnRandomness.stream`).  Nothing here derives a draw, the proof system's included: `service.Stream.select` is
 `draw_first` on the challenger's coins (`service.select_draw`), and its draw of record is Lean's `Select.select` on the
 bytes it read (`one_stage.verifier.select`).  A draw from the auditor's challenger reads its coins the same way
 (`ChallengerCoins`): one family's coins opened after the prover's commitment, concatenated in order, each checked against
@@ -102,9 +102,9 @@ def _on(src: bytes) -> Callable[[int], bytes]:
 
 class OwnRandomness:
     """The verifier's randomness, read directly: exact samplers over raw bytes from `source`, the caller's coins (the
-    proof service's are the Lean verifier's, `verifier.coins`; there is no default, so nothing here reads the operating
+    proof system's are the Lean verifier's, `verifier.coins`; there is no default, so nothing here reads the operating
     system), consumed in order, with no hash and no derivation.  They are the Lean verifier's `Flock.Draw` and
-    M0's `unit_draw` samplers: `uniform(n)` reads w = ceil((bitlen(n) + 64) / 8)-byte big-endian words and returns the
+    `flock-circuit`'s `unit_draw` samplers: `uniform(n)` reads w = ceil((bitlen(n) + 64) / 8)-byte big-endian words and returns the
     first below the largest multiple of n, mod n; `bernoulli(a/b)`, a/b in lowest terms, is `uniform(b) < a` (p = 0 and
     p = 1 read nothing); `subset` is a sparse partial Fisher-Yates."""
 
@@ -157,7 +157,7 @@ class ChallengerCoins:
     batch), each checked against the challenger's commitment (`live_reason`) before its bytes are used, so a rerun's
     extension reads only coins not opened before. Its `segments` are the record (`Segment.to_json`: the family, the first
     index, `after` and the openings), from which the verifier replays the bytes (`challenger_stream`, `read_reason`,
-    and `coins_reason`, which the Lean verifier of record's run checks). It
+    and `coins_reason`, which the Lean verifier's run checks). It
     refuses a commitment whose coins are opened already, a read before any commitment, and every read after a coin
     fails: a retry never redraws.
 
@@ -305,8 +305,9 @@ def coins_reason(coins: Any, window: str, after: bytes, read: bytes, verify: Ver
     verifier reads from the challenger's signed open of the registration's window (`registration.check`'s
     `window_root`), never the record's or the evidence's. So a prover picks no window: coins another window's session
     released after the same commitment are refused, and a prover with sessions in several windows gets one draw, not
-    the best of them. The session must be a withheld one (`withheld_on`), as `draw_coins`'s. `service.Stream.outcome` hands the evidence to the Lean verifier of record, whose run refuses a
-    draw from the challenger without evidence that holds (`Run.run`'s `select`, code `coins`)."""
+    the best of them. The session must be a withheld one (`withheld_on`), as `draw_coins`'s. `service.Stream.outcome`
+    hands the evidence to the Lean verifier, whose run refuses a draw from the challenger without evidence that holds
+    (`Run.run`'s `select`, code `coins`)."""
     if not isinstance(coins, Mapping) or sorted(coins) != ["key", "ledger", "main", "pins", "segment", "session"]:
         return COINS_FORM
     try:
@@ -346,7 +347,7 @@ def draw_coins(key: ChallengerKey, window: str, label: str, after: bytes, coins:
 
 
 def closure_of(closure: Mapping[int, Sequence[int]], units: Sequence[int]) -> list[int]:
-    """A draw's closure under the verifier's closure map (Lean `Flock.Draw.closureOf`): every unit in a drawn unit's
+    """A draw's closure under the verifier's closure map (Lean `Flock.Draw.closureOf`): every proof block in a drawn proof block's
     closure that is not itself drawn, ascending."""
     drawn = set(units)
     return sorted({c for u in units for c in closure.get(u, ()) if c not in drawn})
@@ -354,11 +355,11 @@ def closure_of(closure: Mapping[int, Sequence[int]], units: Sequence[int]) -> li
 
 def draw_first(randomness: OwnRandomness, law: Mapping[str, Any], population: int,
                closure: Mapping[int, Sequence[int]] | None = None) -> dict[str, Any]:
-    """A draw under a one-stage law: the one-stage draw object over the positions [0, population) (`one_stage.draw`;
-    `check_draw` holds it to the registration and the law), as the Lean verifier's `Flock.Draw.drawWith` draws it from
-    the same bytes: `subset` and `bernoulli` on one stream (`bernoulli` at the law's NUM/DEN as written), `stratified`
-    and `work` one stream per stratum, in order, each stratum's `subset k_s n_s` mapped to the stratum's units.  With the
-    verifier's closure map (a work law only, as `flock-verify draw --closure`), the draw carries its `closure`
+    """A draw under a one-stage sampling design: the one-stage draw object over the positions [0, population) (`one_stage.draw`;
+    `check_draw` holds it to the registration and the sampling design), as the Lean verifier's `Flock.Draw.drawWith` draws it from
+    the same bytes: `subset` and `bernoulli` on one stream (`bernoulli` at the sampling design's NUM/DEN as written), `stratified`
+    and `work` one stream per stratum, in order, each stratum's `subset k_s n_s` mapped to the stratum's proof blocks.  With the
+    verifier's closure map (a work sampling design only, as `flock-verify draw --closure`), the draw carries its `closure`
     (`closure_of`) when that is not empty."""
     problem = _law_problem(law)
     if problem:

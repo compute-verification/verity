@@ -18,15 +18,16 @@ allocation in it (as at the process's exit), nvidia-smi showing nothing left on 
 same list), then the lease's locks and holder let go. What follows (binding and manifest coverage, the replay bundle, the weights
 pin, the openings after release, the closure) reads host memory only. From there nothing in the process may touch CUDA:
 ``torch.cuda.is_available()`` is False, a context that reappears ends the process at once, and the process ends with its command
-(``run_main``), before the interpreter's teardown could open one. A Commit that still needs the device after its last run, or whose
-context did not go, keeps the lease to its exit and says why (``kept_reason``). Prechecks, manifest and weights of record come before
+(``run_main``), before the interpreter's teardown could open one. A Commit that still needs the device after its last run (one
+with ``--serving-rows``, whose window the C2 site commits from the engine's weights), or whose context did not go, keeps the
+lease to its exit and says why (``kept_reason``). Prechecks, manifest and weights of record come before
 the Commit process; the verdict, the row's records and the research run's publish after it. Without ``GPU_LEASE`` nothing changes.
 A grouped Commit (`commit_group`: the Commits of several rows of one engine in one process) holds one lease: its first row's
 ``acquire`` takes it, its later rows keep it and the devices it set (``LEASED``), and only its last row's last run releases it.
 A TP Commit (`pipeline.tp.lease`) takes all its GPUs with one ``acquire`` and gives them back together after its last run's
 finalize, its ranks off their devices first (``give_back`` is either release, over the engine in this process or over the ranks).
 A TP Match's capture and its control (`row_tp.TpRow.match`) each take all their GPUs the same way, right before their engine, and
-hold them to their exit (their record in ``match/lease/<leg>/``); the Match's check, its served-shape derives and its fold Match see
+hold them to their exit (their record in ``match/lease/<stage>/``); the Match's check, its served-shape derives and its fold Match see
 no device and hold no lease.
 A single-GPU Match (`row_stages.SingleRow.match`) runs as its two phases: the GPU phase (``match --phase gpu``: the capture, the
 control and the rest of `match.GPU_STAGES`) takes the lease the same way and holds it to its exit (its record in ``match/lease/``),
@@ -53,7 +54,7 @@ import traceback
 from typing import Any, Callable, MutableMapping
 
 RECORD = "gpu_lease.json"
-MATCH_LEG_KEPT = "a Match leg holds its GPUs to its exit: its engine is its last work"
+MATCH_LEG_KEPT = "a Match stage holds its GPUs to its exit: its engine is its last work"
 HEARTBEAT_S = 60
 WATCH_S = 0.2                      # after the release, how often the Commit checks that no CUDA context reappeared
 STARTED = "VERITY_LEASE_STARTED"   # set by the row for its Commit: the marker the holder writes; the Commit takes its own lease
@@ -245,6 +246,8 @@ def kept_reason(args: Any, coms: list[Any], eng: Any, environ: MutableMapping[st
             "the replay bundle reads the model's buffers at the C2 site (--replay-bundle-overlap 0)" if not getattr(args, "replay_bundle_overlap", 1) else
             "the replay bundle is written at the C2 site or the C2 replay runs in this process (replay_bundle.start began no write: a slim "
             "bundle, a live-only replay, a retention other than host, or a store over the cap)" if not bundle else
+            "--serving-rows commits its window at the C2 site, from the engine's weights (c2_replay.serving_rows)"
+            if getattr(args, "serving_rows", None) else
             "--tensor-digests reads the retained bytes after the run" if getattr(args, "tensor_digests", False) else
             next((why for why in (_kept_by(args, c) for c in coms) if why), None) or
             ("vLLM's engine core is not in this process" if getattr(core, "engine_core", None) is None else

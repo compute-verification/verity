@@ -2,9 +2,9 @@
 
 Reads `honest.json` and `cheater.json` (from `driver.py`) in `--dir` and writes `separation.md` and `summary.json`:
 
-- the honest digest-answer latency over `R` HBM-resident blocks (its `p50`, `p99`, `p999` and the device read rate it
+- the honest digest-answer latency over `R` HBM-resident labels (its `p50`, `p99`, `p999` and the device read rate it
   achieves), from `honest.json`'s `digest1`;
-- the cheater's best honest time when a fraction `f` of the challenged blocks live in pinned host DRAM, the faster of the
+- the cheater's best honest time when a fraction `f` of the challenged labels live in pinned host DRAM, the faster of the
   two methods (async H2D copy overlapped with the device digest, or UVA zero-copy reads), from `cheater.json`;
 - the separation: cheater(R, f) / honest(R) time ratio, and for each `R` the deadline `T` and the fraction `f` that a
   deadline tuned to HBM speed distinguishes with margin.

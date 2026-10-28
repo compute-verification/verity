@@ -6,6 +6,7 @@ import re
 import stat
 import urllib.error
 import urllib.parse
+from datetime import UTC, datetime
 
 import pytest
 
@@ -26,7 +27,9 @@ PROJECTS = [{"id": "PJ1", "name": "E2E toy deployment on one H200", "projectMile
 class FakeLinear:
     """Linear's token endpoint and GraphQL API: one team per name in `teams`, labels made on first use; the parent CMP-92 on
     PJ1's M3, the active `projects`, the open issues the audit pages through (`open`), the team keys the credentials see
-    (`visible`, default the teams') and the team of the issue a comment reads (`team_key`)."""
+    (`visible`, default the teams'), the team of the issue a comment reads (`team_key`), the issues' `relations` (an
+    issue's id is `I-` and its identifier), the workspace's `users`, and each relation, project or milestone mutation as
+    it was sent (`wrote`)."""
 
     def __init__(self, teams=("infra", "comms")):
         self.teams, self.labels, self.calls, self.grants, self.refuse = list(teams), {}, [], 0, set()
@@ -35,6 +38,13 @@ class FakeLinear:
         self.projects, self.open, self.updated, self.refuse_project = PROJECTS, [], [], False
         self.visible, self.team_key = None, "INF"
         self.parent = {"id": "P1", "project": {"id": "PJ1"}, "projectMilestone": {"id": "MS3"}}
+        self.relations, self.wrote = [], []
+        self.users = [{"id": "U1", "name": "Daniel Reuter"}, {"id": "U2", "name": "Verity Asks"}]
+
+    @staticmethod
+    def _issue(x: str) -> dict:
+        ident = x[2:] if x.startswith("I-") else x.upper()
+        return {"id": f"I-{ident}", "identifier": ident}
 
     @staticmethod
     def _author(user: str, i: dict, field: str) -> dict:
@@ -54,6 +64,25 @@ class FakeLinear:
         if headers["Authorization"] in self.refuse:
             raise urllib.error.HTTPError(url, 401, "Unauthorized", {}, io.BytesIO(b'{"errors": [{"message": "auth"}]}'))
         user = "the app" if headers["Authorization"].startswith("Bearer") else "Daniel"
+        if m := re.search(r"\{ (issueRelationCreate|issueRelationDelete|projectUpdateCreate|projectCreate|projectMilestoneCreate|"
+                          r"projectMilestoneUpdate)\(", q):
+            self.wrote.append((m[1], v))
+            if m[1] == "issueRelationCreate":
+                self.relations.append({"id": f"R{len(self.wrote)}", "type": v["i"]["type"], "issue": self._issue(v["i"]["issueId"]),
+                                       "relatedIssue": self._issue(v["i"]["relatedIssueId"])})
+            if m[1] == "issueRelationDelete":
+                self.relations = [r for r in self.relations if r["id"] != v["id"]]
+            return {"data": {m[1]: {"success": True, "project": {"url": "https://linear.app/x/project/1"},
+                                    "projectUpdate": {"url": "https://linear.app/x/update/1"}}}}
+        if "inverseRelations" in q:
+            a = self._issue(v["a"])
+            return {"data": {"a": {**a, "relations": {"nodes": [r for r in self.relations if r["issue"] == a]},
+                                   "inverseRelations": {"nodes": [r for r in self.relations if r["relatedIssue"] == a]}},
+                             "b": self._issue(v["b"])}}
+        if "projects(filter" in q:
+            return {"data": {"projects": {"nodes": [{"name": p["name"]} for p in self.projects if p["name"].lower() == v["n"].lower()]}}}
+        if "users(first" in q:
+            return {"data": {"users": {"nodes": self.users}}}
         if q.startswith("{ teams(first"):
             nodes = ([{"key": k, "name": k.lower()} for k in self.visible] if self.visible is not None
                      else [{"key": t[:3].upper(), "name": t} for t in self.teams])
@@ -275,8 +304,20 @@ def test_the_state_comment_and_list_verbs(fake, registry, capsys, lin):
     assert rc != 0 and "give the STATE" in err
 
 
+def test_a_dry_run_writes_nothing_to_linear_and_prints_what_it_would_do(fake, registry, routes_dirs, capsys, lin):
+    """--dry-run suppresses Linear's writes as well as Slack's sends: suppressing Slack's alone lets a dry run comment."""
+    lin.subscribers["I1"] = []
+    infra = inbox(fake, routes_dirs, "infra")
+    rc, out, _ = run(capsys, "linear", "state", "INF-1", "In Progress", "--dry-run")
+    assert rc == 0 and out.strip() == "dry-run: would move INF-1 to In Progress" and lin.moved == []
+    rc, out, _ = run(capsys, "linear", "comment", "INF-1", "picked up", "--as", "proofs", "--dry-run")
+    assert rc == 0 and out.strip() == "dry-run: would comment on INF-1 as proofs: picked up"
+    assert lin.sent("commentCreate") == [] and bells(fake, infra) == []
+    rc, out, _ = run(capsys, "linear", "place", "INF-1", "Runs", "--dry-run")
+    assert rc == 0 and out.strip() == "dry-run: would place INF-1 in Runs"
+
 def test_a_comment_rings_the_issues_team_and_the_names_it_starts_with_but_never_its_author(fake, registry, routes_dirs, capsys, lin):
-    """No one subscribes to Linear comments (each would echo its author), so a lane polled its issues instead (COMM-30)."""
+    """No one subscribes to Linear comments (each would echo its author), so without this ring a lane would poll its issues."""
     lin.subscribers["I1"] = []
     infra, circuits = inbox(fake, routes_dirs, "infra"), inbox(fake, routes_dirs, "circuits")
     rc, _, err = run(capsys, "linear", "comment", "INF-1", "@circuits the trace is up", "--as", "compute-accounting")
@@ -395,8 +436,9 @@ def child(updated: str, commented: str | None = None) -> dict:
     return {"updatedAt": updated, "comments": {"nodes": [{"createdAt": commented}] if commented else []}}
 
 
-def pr(n: int, status: str) -> dict:
-    return {"url": f"https://github.com/compute-verification/verity/pull/{n}", "sourceType": "github", "metadata": {"status": status, "number": n}}
+def pr(n: int, status: str, closed: str | None = None) -> dict:
+    return {"url": f"https://github.com/compute-verification/verity/pull/{n}", "sourceType": "github",
+            "metadata": {"status": status, "number": n, **({"closedAt": closed} if closed else {})}}
 
 
 AUDITED = [
@@ -427,6 +469,12 @@ AUDITED = [
     issue("INF-21", "Todo", updatedAt="2026-10-11T19:00:00Z", children={"nodes": [child("2026-10-18T19:00:00Z")]}),
     issue("INF-22", "Todo", updatedAt="2026-10-11T19:00:00Z", comments={"nodes": [{"createdAt": "2026-10-18T19:00:00Z"}]}),
     issue("INF-23", startedAt="2026-10-17T00:00:00Z", children={"nodes": [child("2026-10-17T00:00:00Z", "2026-10-17T01:00:00Z")]}),
+    issue("INF-24", attachments={"nodes": [pr(7, "merged", "2026-10-19T17:00:00Z"), pr(8, "closed", "2026-10-19T18:00:00Z")]},
+          comments={"nodes": [{"createdAt": "2026-10-19T18:30:00Z"}]}),                             # the piece left, named after
+    issue("INF-25", attachments={"nodes": [pr(9, "merged", "2026-10-19T18:00:00Z")]},
+          comments={"nodes": [{"createdAt": "2026-10-19T17:30:00Z"}]}),                             # landed: commented before
+    issue("INF-26", attachments={"nodes": [pr(10, "merged", "2026-10-19T17:00:00Z"), pr(11, "closed")]},
+          comments={"nodes": [{"createdAt": "2026-10-19T18:30:00Z"}]}),                             # landed: #11's close unknown
 ]
 
 
@@ -438,7 +486,7 @@ def test_the_audit_finds_each_kind_once_on_its_issue_and_nothing_on_the_rest(tmp
     assert [(f["issue"], f["kind"]) for f in found] == [
         ("DAN-1", "lane"), ("INF-2", "orphan"), ("INF-3", "milestone"), ("INF-4", "undated"), ("INF-5", "overdue"),
         ("INF-6", "quiet"), ("INF-8", "stale"), ("INF-9", "title"), ("INF-10", "title"), ("INF-11", "landed"),
-        ("INF-18", "title"), ("INF-23", "quiet")]
+        ("INF-18", "title"), ("INF-23", "quiet"), ("INF-25", "landed"), ("INF-26", "landed")]
     assert {f["issue"]: f["lane"] for f in found}["DAN-1"] == linear.NO_LANE
     by = {(f["issue"], f["kind"]): f for f in found}
     assert by[("INF-2", "orphan")] == {"issue": "INF-2", "url": "https://linear.app/x/issue/INF-2", "title": "The auditor-only host",
@@ -455,13 +503,14 @@ def test_the_audit_finds_each_kind_once_on_its_issue_and_nothing_on_the_rest(tmp
                                                "INF-4 --due YYYY-MM-DD`), or move it to Backlog")
     assert "(`research msg linear edit INF-5 --due YYYY-MM-DD`)" in by[("INF-5", "overdue")]["fix"]
     assert by[("INF-11", "landed")]["fix"].startswith("every attached PR is merged or closed (#1, #2): move it to Done")
+    assert by[("INF-25", "landed")]["fix"].endswith("(`research msg linear comment INF-25 TEXT`)")
     assert by[("DAN-1", "lane")]["fix"] == "team DAN has no handle: add `lane:<owner>`"
-    assert len(fake.sent("pageInfo")) == 7 and all("first: 4," in q for q, _, _ in fake.sent("pageInfo"))
+    assert len(fake.sent("pageInfo")) == 8 and all("first: 4," in q for q, _, _ in fake.sent("pageInfo"))
     assert all("children(first: 50, orderBy: updatedAt) { nodes { updatedAt comments(first: 1, orderBy: createdAt)" in q
                for q, _, _ in fake.sent("pageInfo"))                                                  # one field, no pass per issue
     assert fake.audited == {"state": {"type": {"in": ["triage", "unstarted", "started"]}}}
     assert linear.tally(found) == {"-": {"lane": 1}, "infra": {"orphan": 1, "milestone": 1, "undated": 1, "overdue": 1, "quiet": 2,
-                                                                "stale": 1, "title": 3, "landed": 1}}
+                                                                "stale": 1, "title": 3, "landed": 3}}
     linear.Linear(KEY, fake, cache=tmp_path / "t").audit({}, ["INF", "infra"], now=AUDIT_NOW)
     assert fake.audited["team"] == {"or": [{"key": {"in": ["INF", "infra"]}}, {"name": {"in": ["INF", "infra"]}}]}
 
@@ -494,12 +543,12 @@ def test_audit_prints_each_lanes_findings_and_their_counts_and_exits_1_on_any(fa
 
 
 def test_the_audit_names_the_teams_it_cant_read_skips_them_and_never_fails_on_them(fake, registry, capsys, lin):
-    """The app couldn't read HASH or TRN on 27 Oct, and Linear answers a filter on such a team with no issues, so a lane
-    would read its unread team as clean."""
+    """The app may lack access to a team, and Linear answers a filter on such a team with no issues, so a lane would read
+    its unread team as clean."""
     reg = json.loads(registry.read_text())
     for h in reg["handles"]:
-        if h["handle"] in ("soundness", "training"):
-            h["linear"] = {"soundness": "HASH", "training": "TRN"}[h["handle"]]
+        if h["handle"] in ("kernels", "training"):
+            h["linear"] = {"kernels": "HASH", "training": "TRN"}[h["handle"]]
     registry.write_text(json.dumps(reg))
     lin.visible = [k for k in linear.owners(reg) if k not in ("HASH", "TRN")]
     lin.open = [issue("INF-2", "Todo", project=None, projectMilestone=None)]
@@ -509,14 +558,15 @@ def test_the_audit_names_the_teams_it_cant_read_skips_them_and_never_fails_on_th
     assert rc == 1 and rep["unread"] == ["HASH", "TRN"] and [f["issue"] for f in rep["findings"]] == ["INF-2"]
     assert err.strip() == "linear audit: the app can't read team(s) HASH, TRN, so their issues aren't audited"
     n = len(lin.sent("pageInfo"))
-    rc, out, err = run(capsys, "linear", "audit", "soundness", "TRN", *now)
+    rc, out, err = run(capsys, "linear", "audit", "kernels", "TRN", *now)
     assert rc == 0 and out.strip() == "0 finding(s)" and "HASH, TRN" in err and len(lin.sent("pageInfo")) == n   # no audit of every team
-    rc, out, err = run(capsys, "linear", "audit", "soundness", "infra", *now)
+    rc, out, err = run(capsys, "linear", "audit", "kernels", "infra", *now)
     assert rc == 1 and "INF-2 orphan" in out and "team(s) HASH," in err and lin.audited["team"]["or"][0] == {"key": {"in": ["INF"]}}
     assert linear.Linear(KEY, FakeLinear()).unread(["inf", "Infra", "COMMS", "HASH"]) == ["HASH"]   # a key or a name, any case
 
 
-def test_place_and_an_ask_under_a_parent_from_the_cli(fake, registry, capsys, lin):
+def test_place_and_an_ask_under_a_parent_from_the_cli(fake, registry, capsys, lin, monkeypatch):
+    monkeypatch.setattr(slack, "_now", lambda: datetime(2026, 10, 27, 7, 10, tzinfo=UTC))
     rc, out, _ = run(capsys, "linear", "place", "TOP-1", "E2E", "toy", "--milestone", "M3")
     assert rc == 0 and out.strip() == "TOP-1 placed in E2E toy deployment on one H200 / M3 · composed"
     assert lin.updated == [("I1", {"projectId": "PJ1", "projectMilestoneId": "MS3"})]
@@ -526,7 +576,7 @@ def test_place_and_an_ask_under_a_parent_from_the_cli(fake, registry, capsys, li
     (_, v, _), = lin.sent("issueCreate")
     assert rc == 0 and v["i"]["parentId"] == "P1" and v["i"]["projectMilestoneId"] == "MS3" and v["i"]["title"] == "One host"
     assert out.startswith("linear: INF-1 https://linear.app/x/issue/INF-1 under CMP-92")
-    assert re.fullmatch(r"<!subteam\^SINFRA\|@infra> top 06:55Z \(sent \d\d:\d\dZ\): one host", fake.messages[COORD][-1]["text"].removesuffix(LINKED))  # Slack: the first line, as it was
+    assert re.fullmatch(r"<!subteam\^SINFRA\|@infra> top 06:55Z \(sent 07:10Z\): one host", fake.messages[COORD][-1]["text"].removesuffix(LINKED))  # Slack: the first line, as it was
     rc, _, _ = run(capsys, "send", "--as", "top", "--to", "@infra", "--title", "The host", "--text", "one host")
     assert rc == 0 and lin.sent("issueCreate")[-1][1]["i"]["title"] == "The host" and "parentId" not in lin.sent("issueCreate")[-1][1]["i"]
     root = fake.messages[COORD][-1]["ts"]
@@ -546,7 +596,7 @@ def test_edit_sets_the_title_due_date_description_and_parent_and_refuses_a_bad_d
     assert lin.edit("INF-1", parent="CMP-92", send=False) == {"parentId": "CMP-92"}                 # built, not sent
     for kw, says in (({}, "give at least one of --title, --due, --file and --parent"), ({"title": " "}, "--title: give"),
                      ({"due": "2026-10-32"}, "--due '2026-10-32': give a date as YYYY-MM-DD"), ({"due": "2026-1-5"}, "YYYY-MM-DD"),
-                     ({"due": "Friday"}, "YYYY-MM-DD"), ({"description": "\n"}, "--file: the brief is empty")):
+                     ({"due": "Friday"}, "YYYY-MM-DD"), ({"description": "\n"}, "--file: the file is empty")):
         with pytest.raises(linear.LinearError, match=re.escape(says)):
             lin.edit("INF-1", **kw)
     assert len(fake.updated) == 2
@@ -572,7 +622,7 @@ def test_edit_from_the_cli_replaces_the_description_with_the_file_and_a_dry_run_
 
 def test_a_lanes_worker_comments_as_lane_slash_name_through_the_app_and_rings_no_one(fake, registry, routes_dirs, capsys, lin,
                                                                                      monkeypatch, tmp_path):
-    """Workers hold no handle, so `--as` refuses them; they commented through the Linear MCP connector and showed as Daniel."""
+    """Workers hold no handle, so `--as` refuses them; the Linear MCP connector, their other way to comment, acts as Daniel."""
     monkeypatch.setenv("LINEAR_CLIENT_ID", APP["LINEAR_CLIENT_ID"])
     monkeypatch.setenv("LINEAR_CLIENT_SECRET", APP["LINEAR_CLIENT_SECRET"])
     monkeypatch.setenv("RESEARCH_LINEAR_TOKEN_CACHE", str(tmp_path / "tok"))
@@ -595,6 +645,144 @@ def test_a_lanes_worker_comments_as_lane_slash_name_through_the_app_and_rings_no
     rc, _, err = run(capsys, "linear", "comment", "INF-1", "x", "--worker", "W")
     assert rc == 2 and "INF-1's team DAN has no handle in the registry" in err
     assert len(lin.sent("commentCreate")) == 2 and lin.moved == []
+
+
+def stateless(fake: FakeLinear) -> bool:
+    """No request sent a state or a status: an edit that sends one can reset an issue's state (Done back to Todo)."""
+    return not any(k in json.dumps(v) for q, v, _ in fake.calls if q != "grant" for k in ("stateId", "statusId"))
+
+
+def test_relate_sends_each_kind_its_way_round_and_refuses_one_issue_twice_or_a_relation_that_exists(tmp_path):
+    fake = FakeLinear()
+    lin = linear.Linear(APP, fake, cache=tmp_path / "t")
+    assert lin.relate("INF-1", "blocks", "INF-2") == "INF-1 blocks INF-2"
+    assert lin.relate("INF-3", "blocked-by", "INF-1") == "INF-1 blocks INF-3"                     # the other one blocks it
+    assert lin.relate("INF-1", "related", "inf-4") == "INF-1 is related to INF-4"
+    assert lin.relate("INF-5", "duplicate", "INF-1") == "INF-5 is a duplicate of INF-1 (Linear moves INF-5 to its Duplicate status)"
+    assert fake.sent("a: issue(id: $a)")[0][1] == {"a": "INF-1", "b": "INF-2"}
+    assert fake.wrote == [("issueRelationCreate", {"i": {"issueId": f"I-INF-{x}", "relatedIssueId": f"I-INF-{y}", "type": t}})
+                          for x, y, t in ((1, 2, "blocks"), (1, 3, "blocks"), (1, 4, "related"), (5, 1, "duplicate"))]
+    n = len(fake.calls)
+    with pytest.raises(linear.LinearError, match="'blocking' is no relation: give one of blocks, blocked-by, related, duplicate"):
+        lin.relate("INF-1", "blocking", "INF-2")
+    assert len(fake.calls) == n                                                                    # refused before any request
+    for args, says in ((("INF-2", "blocked-by", "INF-1"), "INF-1 blocks INF-2 already: there is nothing to add"),
+                       (("INF-4", "related", "INF-1"), "INF-4 is related to INF-1 already"),                # either way round
+                       (("INF-1", "blocks", "inf-1"), "INF-1 and inf-1 are one issue: name two different issues")):
+        with pytest.raises(linear.LinearError, match=re.escape(says)):
+            lin.relate(*args)
+    assert len(fake.wrote) == 4
+    assert lin.relate("INF-2", "related", "INF-1") == "INF-2 is related to INF-1"                 # another kind is no duplicate
+    assert lin.unrelate("INF-2", "INF-1") == ["INF-2 is related to INF-1", "INF-1 blocks INF-2"]   # every one, either way
+    assert fake.wrote[-2:] == [("issueRelationDelete", {"id": "R5"}), ("issueRelationDelete", {"id": "R1"})]
+    with pytest.raises(linear.LinearError, match="INF-1 and INF-2 have no relation to remove"):
+        lin.unrelate("INF-1", "INF-2")
+    with pytest.raises(linear.LinearError, match="are one issue"):
+        lin.unrelate("INF-1", "INF-1")
+    assert len(fake.wrote) == 7 and stateless(fake)
+
+
+def test_update_posts_its_health_and_body_on_the_one_active_project_and_refuses_otherwise(tmp_path):
+    fake = FakeLinear()
+    lin = linear.Linear(APP, fake, cache=tmp_path / "t")
+    assert lin.update("e2e", "atrisk", "## Status\nM3 slips a day") == ("E2E toy deployment on one H200: update posted, atRisk "
+                                                                        "https://linear.app/x/update/1")
+    assert fake.wrote == [("projectUpdateCreate", {"i": {"projectId": "PJ1", "health": "atRisk", "body": "## Status\nM3 slips a day"}})]
+    for args, says in ((("e2e", None, "x"), "--health: give one of onTrack, atRisk, offTrack"),
+                       (("e2e", "green", "x"), "--health 'green': give one of onTrack, atRisk, offTrack"),
+                       (("e2e", "onTrack", None), "--body-file F: give the update's text as a markdown file"),
+                       (("e2e", "onTrack", " \n"), "--body-file: the file is empty"),
+                       (("Full", "onTrack", "x"), "active project 'Full' matches 2 of: Full proofs: one soundness theorem; Full stack")):
+        with pytest.raises(linear.LinearError, match=re.escape(says)):
+            lin.update(*args)
+    assert len(fake.wrote) == 1 and stateless(fake)
+
+
+def test_project_create_sends_its_teams_lead_date_and_body_and_refuses_a_name_taken_in_any_case(tmp_path):
+    fake = FakeLinear()
+    lin = linear.Linear(APP, fake, cache=tmp_path / "t")
+    out = lin.create_project(" Smaller messaging code ", ["INF", "comms"], "daniel", "2026-11-30", "# Why\nfewer lines")
+    assert out == ("project Smaller messaging code created: teams INF COM, lead Daniel Reuter, targetDate 2026-11-30, content 17 "
+                   "characters https://linear.app/x/project/1")
+    assert fake.wrote == [("projectCreate", {"i": {"name": "Smaller messaging code", "teamIds": ["T-infra", "T-comms"],
+                                                   "targetDate": "2026-11-30", "content": "# Why\nfewer lines", "leadId": "U1"}})]
+    assert fake.sent("projects(filter")[0][1] == {"n": "Smaller messaging code"}
+    for args, says in (((" full STACK", ["INF"]), "project 'Full stack' exists already: pick another name, or work in that one"),
+                       (("New", []), "project create: give its team, --team KEY (more: repeat it)"),
+                       (("New", ["NOPE"]), "no Linear team named 'NOPE'"),
+                       (("New", ["INF"], "lean"), "Linear user 'lean' matches none of: Daniel Reuter; Verity Asks"),
+                       (("New", ["INF"], None, "30 Nov"), "--target '30 Nov': give a date as YYYY-MM-DD"),
+                       (("New", ["INF"], None, None, ""), "--description-file: the file is empty")):
+        with pytest.raises(linear.LinearError, match=re.escape(says)):
+            lin.create_project(*args)
+    assert len(fake.wrote) == 1 and stateless(fake)
+
+
+def test_milestone_create_and_edit_by_prefix_and_refuse_a_name_the_project_has_in_any_case(tmp_path):
+    fake = FakeLinear()
+    lin = linear.Linear(APP, fake, cache=tmp_path / "t")
+    e2e = "E2E toy deployment on one H200"
+    assert lin.milestone("e2e", "M4 · served", "2026-11-02", "the served step", create=True) == (
+        f"{e2e} / M4 · served: created, targetDate 2026-11-02, description 15 characters")
+    assert lin.milestone("full p", "F3", create=True) == "Full proofs: one soundness theorem / F3: created"
+    assert lin.milestone("e2e", "m3", "none", rename="M3 · composed and served") == (
+        f"{e2e} / M3 · composed: set name M3 · composed and served, targetDate None")
+    assert lin.milestone("e2e", "M3", rename="m3 · COMPOSED") == f"{e2e} / M3 · composed: set name m3 · COMPOSED"   # its own name
+    assert fake.wrote == [
+        ("projectMilestoneCreate", {"i": {"projectId": "PJ1", "name": "M4 · served", "targetDate": "2026-11-02",
+                                          "description": "the served step"}}),
+        ("projectMilestoneCreate", {"i": {"projectId": "PJ2", "name": "F3"}}),
+        ("projectMilestoneUpdate", {"id": "MS3", "i": {"name": "M3 · composed and served", "targetDate": None}}),
+        ("projectMilestoneUpdate", {"id": "MS3", "i": {"name": "m3 · COMPOSED"}})]
+    for args, kw, says in (
+            (("e2e", "m3 · Composed"), {"create": True}, f"{e2e} has milestone 'M3 · composed' already: pick another name, or "
+                                                          "edit that one (`research msg linear milestone edit PROJECT NAME`)"),
+            (("e2e", "M3"), {"rename": "M1 · mon 8 AM PDT · walking skeleton"}, "has milestone 'M1 · Mon 8 AM PDT · walking skeleton' already"),
+            (("e2e", "M3"), {}, "milestone edit: give at least one of --date, --description-file and --rename"),
+            (("e2e", "M9"), {"date": "2026-11-02"}, f"milestone of {e2e} 'M9' matches none of: M1"),
+            (("Full s", "M1"), {"date": "2026-11-02"}, "there is no milestone of Full stack to match 'M1'"),
+            (("e2e", "M3"), {"date": "2026-02-30"}, "--date '2026-02-30': give a date as YYYY-MM-DD"),
+            (("e2e", "M3"), {"rename": " "}, "--rename: give the new name"),
+            (("Full", "X"), {"create": True}, "active project 'Full' matches 2 of")):
+        with pytest.raises(linear.LinearError, match=re.escape(says)):
+            lin.milestone(*args, **kw)
+    assert len(fake.wrote) == 4 and stateless(fake)
+
+
+def test_the_relation_and_project_verbs_from_the_cli_print_one_line_and_refuse_with_exit_2(fake, registry, capsys, lin, tmp_path):
+    body = tmp_path / "UPDATE.md"
+    body.write_text("M3 slips a day\n")
+    e2e = "E2E toy deployment on one H200"
+    for argv, want in (
+            (["relate", "INF-1", "blocked-by", "INF-2"], "INF-2 blocks INF-1"),
+            (["unrelate", "INF-1", "INF-2"], "INF-1 unrelated: removed INF-2 blocks INF-1"),
+            (["update", "E2E", "toy", "--health", "offTrack", "--body-file", str(body)],
+             f"{e2e}: update posted, offTrack https://linear.app/x/update/1"),
+            (["project", "create", "Smaller", "Lean", "--team", "INF", "--team", "COM", "--target", "2026-11-30",
+              "--description-file", str(body)],
+             "project Smaller Lean created: teams INF COM, targetDate 2026-11-30, content 15 characters https://linear.app/x/project/1"),
+            (["milestone", "create", "E2E", "M4 · served", "--date", "2026-11-02"], f"{e2e} / M4 · served: created, targetDate 2026-11-02"),
+            (["milestone", "edit", "E2E", "M3", "--rename", "M3 · served", "--description-file", str(body)],
+             f"{e2e} / M3 · composed: set name M3 · served, description 15 characters")):
+        assert run(capsys, "linear", *argv) == (0, want + "\n", "")
+    assert [w for w, _ in lin.wrote] == ["issueRelationCreate", "issueRelationDelete", "projectUpdateCreate", "projectCreate",
+                                         "projectMilestoneCreate", "projectMilestoneUpdate"]
+    assert lin.wrote[2][1]["i"]["body"] == "M3 slips a day\n" and lin.wrote[3][1]["i"]["content"] == "M3 slips a day\n"
+    for argv, says in ((["relate", "INF-1", "INF-2"], "linear relate: give ISSUE blocks|blocked-by|related|duplicate OTHER"),
+                       (["relate", "INF-1", "blocks", "INF-1"], "INF-1 and INF-1 are one issue"),
+                       (["unrelate", "INF-1"], "linear unrelate: give the OTHER issue"),
+                       (["unrelate", "INF-1", "INF-2"], "INF-1 and INF-2 have no relation to remove"),
+                       (["update", "--health", "onTrack", "--body-file", str(body)], "linear update: give the PROJECT"),
+                       (["update", "E2E", "--health", "onTrack", "--body-file", str(tmp_path / "missing.md")], "No such file"),
+                       (["update", "E2E", "--body-file", str(body)], "--health: give one of onTrack, atRisk, offTrack"),
+                       (["project", "edit", "Smaller", "Lean"], "linear project: give `create NAME`"),
+                       (["project", "create", "--team", "INF"], "linear project: give the project's NAME"),
+                       (["milestone", "rename", "E2E", "M3"], "linear milestone: give `create` or `edit`, then PROJECT NAME"),
+                       (["milestone", "create", "E2E"], "linear milestone create: give PROJECT"),
+                       (["relate", "INF-1", "blocks", "INF-2", "--dry-run"], "linear relate has no --dry-run (it would write)")):
+        rc, _, err = run(capsys, "linear", *argv)
+        assert rc == 2 and says in err, (argv, err)
+    assert len(lin.wrote) == 6 and stateless(lin)
 
 
 def slack_bot(registry) -> str:

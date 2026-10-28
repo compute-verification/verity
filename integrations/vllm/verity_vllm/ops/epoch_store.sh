@@ -1,24 +1,19 @@
 #!/bin/bash
-# epoch_store.sh ROWDIR: a row's Build and records as fixture/v1 trees, `research data put --preserve` with this run's own custody key
-# (research run --custody-r2 stages it under requests/<run id>/custody/; the pod holds no other credential), then
-# `research data preserved` on every tree it stored.  Run by epoch_row.sh inside the row's job, on every end of the row.
-#   build    the row dir without match/, commit/ and vu-export/: Programs, workload Program, manifest, summaries, logs (files <= 8 GB)
-#   records  match/ and commit/ files under 200 MB, and the row's verdict / stage / log files
-#   capture  match/capture/ as one tar, when it holds more than CAPTURE_TAR_FILES files (default 100000): a TP row's capture is ~0.5M
+# epoch_store.sh ROWDIR: a workload's Build and records as fixture/v1 trees, each under its meta (serving-view's record-build layout), stored
+# by store_trees.sh (`research data put --preserve` with this run's own custody key, then `research data preserved` on every tree it
+# stored).  Run by epoch_row.sh inside the workload's job, on every end of it.
+#   build    the workload dir without match/, commit/ and vu-export/: Programs, workload Program, manifest, summaries, logs (files <= 8 GB)
+#   records  match/ and commit/ files under 200 MB, and the workload's verdict / stage / log files
+#   capture  match/capture/ as one tar, when it holds more than CAPTURE_TAR_FILES files (default 100000): a TP workload's capture is ~0.5M
 #            small files, which a per-file upload does not finish inside a pod's life; the records tree then leaves it out
 #   large    (STORE_KINDS=... large) the match/ and commit/ files over 200 MB
 # Staged as hardlinks under $RESEARCH_STORE/../stage/<run id>/; what is left out is listed in evidence/store_omitted.txt.
-# Prints `STORED <kind> art:<id> <PRESERVED|FAILED>` per tree and `PRESERVED-CHECK <ok|FAILED> <arts>`; exit 0 only when every tree
-# asked for is PRESERVED and the check agrees.
+# Prints store_trees.sh's `STORED <kind> art:<id> <PRESERVED|FAILED>` per tree and `PRESERVED-CHECK <ok|FAILED> <arts>`, and exits
+# with its code: 0 only when every tree asked for is PRESERVED and the check agrees.
 set -u
 D=${1:?row dir}; ROWID=$(basename "$D")
-EV=$RESEARCH_RUN_DIR/evidence
-R=${RESEARCH_CLI:-python3 -m research}
-VV=${VV:-${PY:-/workspace/venv312/bin/python}}; [[ "$VV" == */verity-vllm ]] || VV=${VV%/*}/verity-vllm
-C=${CUSTODY_DIR:-$(dirname "$(dirname "$RESEARCH_RUN_DIR")")/requests/${RESEARCH_RUN_ID:?}/custody}
-[ -f "$C/cred.json" ] || { echo "no custody key at $C"; exit 4; }
-export RESEARCH_STORE_CONFIG=$C/store.toml
-eval "$("$VV" epoch custody-env "$C")"
+export EV=$RESEARCH_RUN_DIR/evidence
+VV=${VV:-${PY:-/workspace/venv312/bin/python}}; [[ "$VV" == */verity-vllm ]] || VV=${VV%/*}/verity-vllm; export VV
 S=${RESEARCH_STORE:-/workspace/epoch/store}/../stage/$RESEARCH_RUN_ID; rm -rf "$S"; mkdir -p "$S/build" "$S/records" "$S/large"
 
 cp -al "$D/." "$S/build/"
@@ -42,24 +37,10 @@ meta() {  # meta KIND ROLE -> the tree's meta (serving-view's record-build layou
     --gpu "${GPU_NAME:-}" --pod "${POD:-}" --epoch "${EPOCH_NAME:-vllm-rebaseline-epoch}"
 }
 
-rc=0; arts=""
 for kind in $KINDS; do
   case "$kind" in records) role=records;; large) role=records-large;; capture) role=records-capture;; *) role=programs;; esac
   meta "$kind" "$role" > "$EV/meta-$kind.json"
-  echo "=== $(date -u +%H:%M:%SZ) put $kind $(du -sh "$S/$kind" | cut -f1) $(find "$S/$kind" -type f | wc -l) files"
-  ok=0
-  for i in 1 2 3; do
-    $R data put --kind fixture/v1 --tree "$S/$kind" --meta @"$EV/meta-$kind.json" --preserve --json \
-      > "$EV/put-$kind.json" 2> "$EV/put-$kind.err" && { ok=1; break; }
-    tail -n 3 "$EV/put-$kind.err"; sleep $((20 * i))
-  done
-  art=$(grep -o 'art:[0-9a-f]\{64\}' "$EV/put-$kind.json" | head -n 1)
-  if [ "$ok" = 1 ] && [ -n "$art" ]; then echo "STORED $kind $art PRESERVED"; arts="$arts $art"; else echo "STORED $kind ${art:-none} FAILED"; rc=1; fi
 done
-if [ -n "$arts" ] && $R data preserved $arts > "$EV/preserved.log" 2>&1; then
-  echo "PRESERVED-CHECK ok$arts"
-else
-  echo "PRESERVED-CHECK FAILED$arts (preserved.log)"; rc=1
-fi
+bash "$(dirname "$0")/store_trees.sh" "$S" $KINDS; rc=$?
 rm -rf "$S"
 exit $rc

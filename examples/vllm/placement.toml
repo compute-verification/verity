@@ -7,29 +7,29 @@
 VENV = "/workspace/jobs/venv312"
 CUDA_HOME = "/workspace/jobs/cuda-12.9"
 HF_HOME = "/workspace/hf"
-# commit.sh's row dirs, LLAMA_ROOT/<commit run>/<row>; COMMIT_RUN is the Commit of record the endpoint commits under
+# commit.sh's workload dirs, LLAMA_ROOT/<commit run>/<workload>; COMMIT_RUN is the Commit of record the endpoint commits under
 LLAMA_ROOT = "/workspace/research/vllm-llama1b-commit"
 COMMIT_RUN = "r20261024-055630-5377"
-# top's rule for n1: no endpoint serves with less free on its serve dir's filesystem
+# no endpoint on n1 serves with less free on its serve dir's filesystem
 DISK_FLOOR_GB = "300"
 
 [node.vy-nebius-1.serving]
-# the endpoint's taps of record, which only the runs that serve get: a row's Build, Match and Commit pick theirs (HIDDEN_SO
-# would override that)
+# the endpoint's taps of record, which only the runs that serve get: a workload's Build, Match and Commit pick theirs (HIDDEN_SO would override that)
 HIDDEN_SO = "/workspace/cp/fa2/build/matReqG/verity_fa2_matReqG.so"
 NORM_TAP_SO = "/workspace/cp/norm_tap/build/verity_norm_tap.so"
 
 [run.window]
 # one served window through every subprotocol; the prover and the Lean verifier run on the serving node, after the lease ends.
 # The sampled proofs' coins are the verifier's own unless PP_CHALLENGER names the live challenger (vy-challenger-1 through
-# infra's gate: `--env PP_CHALLENGER=gate:USER@HOST` with PP_PEER, PP_CHALLENGER_KEY and PP_GATE_KEY)
+# infra's gate: `--env PP_CHALLENGER=gate:USER@HOST` with PP_PEER, PP_CHALLENGER_KEY and PP_GATE_KEY). CLASSES is V2's class,
+# whose window circuit the run needs; the class of record's is measured after it and gates nothing
 node = "vy-nebius-1"
 research = ["--cwd", "clone", "--timeout", "4h"]
 wrap = ["env", "CHECK_SLOTS=/workspace/research/locks/gpu/slots", "python3", "tools/verity/check/slot.py", "--by", "vllm", "--"]
-env = { LEASE_MEM_GB = "256" }
+env = { LEASE_MEM_GB = "256", CLASSES = "4,32,4" }
 
 [run.commit]
-# once per row: its Build, Match and Commit of record (a GPU leased only for the Match capture and the Commit's engine)
+# once per workload: its Build, Match and Commit of record (a GPU leased only for the Match capture and the Commit's engine)
 node = "vy-nebius-1"
 research = ["--cwd", "source", "--mem-gb", "192", "--timeout", "6h"]
 env = { GPU_LEASE_WHO = "vllm-llama1b-commit" }

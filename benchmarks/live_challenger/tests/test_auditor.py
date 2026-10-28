@@ -1,7 +1,7 @@
 """The auditor host's service (`auditor.py`) on a test key, with the gate's root steps (chown, systemctl) and the clock injected:
 a window is reserved, then opened at its root (one session a root), its entries signed before serve.py runs; the session's end entry seals its out/
 and counts the coins each family released; a session whose pin moved doesn't run; the gate refuses what it can't check; and the
-reference check refuses a ledger that was edited, cut, reordered or given a second session for a root. The red team's
+reference check refuses a ledger that was edited, cut, reordered or given a second session for a root. The
 witnesses against v1 are `test_auditor_rt4.py`'s."""
 
 from __future__ import annotations
@@ -306,8 +306,8 @@ def test_the_gate_refuses_a_reserve_it_cant_check(host, signer, bad, why):
                                    "vy-nebius-1 7810-7820\n", "vy-nebius-1 7890-7900\n", "vy-nebius-1 7820-7811\n",
                                    "vy-nebius-1 78a1\n"])
 def test_a_reserve_for_a_peer_without_a_certifier_coin_link_is_refused(host, signer, ports):
-    """A window's coins reach its peer only through the peer's certifier coin link (PRF-207), so a peer with no line of
-    /etc/vy/coin-ports, or one whose ports aren't the gate's, gets no window."""
+    """A window's coins reach its peer only through the peer's certifier coin link (`CoinsConfidential`), so a peer
+    with no line of /etc/vy/coin-ports, or one whose ports aren't the gate's, gets no window."""
     if ports is None:
         host.coin_ports.unlink()
     else:

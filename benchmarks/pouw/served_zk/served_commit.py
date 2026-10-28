@@ -1,5 +1,5 @@
 """A served audit window's commitment in the ZK statement's format, from a retained Pearl-C pass, registered, drawn and
-judged through the proof service (`sampled_proofs.service`, P1: a `Stream`'s `register`, `select`, `deliver` and
+judged through the proof system (`sampled_proofs.service`, P1: a `Stream`'s `register`, `select`, `deliver` and
 `outcome`), and the check that a hidden tile proof's committed rows are the drawn tile's.
 
   python served_commit.py params PASS_DIR OUT [--eps E --delta D --entries P --max-tokens T --registration-deadline S]
@@ -39,7 +39,7 @@ judged through the proof service (`sampled_proofs.service`, P1: a `Stream`'s `re
   each call, not W's rows, until registered rows (P7) read B from W.  ``commitment.json`` is what the committer registers:
   the context, the level, the public items and the two roots.  ``advice.json`` (the entries and their salts) and
   ``prover.npz`` (rows, salts, b ‖ c) are the prover's.
-- **The fixed length** (Daniel, 19 Oct, ASK-39): the request is served at a public max_tokens under ignore_eos, so its
+- **The fixed length**: the request is served at a public max_tokens under ignore_eos, so its
   useful work is public.  The verifier's parameters hold its request's max_tokens (``length``), the committer registers
   the runner's record of how it served it (``served.json`` beside the pass, `served_length`), and PoUW's rule refuses an
   EOS-keyed row or a served length other than max_tokens (``window-form``).  A pass with no served record registers no

@@ -498,8 +498,8 @@ theorem placement_of_setupH (ht : tags.typed = false) (h : Stmt.setupH tags cf p
         (fun u => st.c.unitRange.slot (g * st.c.upv + u)) ((setupH_layout ht h).hb hg)) :=
   (setupH_layout ht h).placement regs hg
 
-/-- **A drawn unit's place, from the executable's accept step** (#145's `UnitPlace`, which `loweringSoundB_of_place` and
-#171's `_placed` forms take): template instance `g`'s stacked unit slots in block `o` of the accepted statement, given the unit's
+/-- **A drawn unit's place, from the executable's accept step** (`UnitPlace`, which `loweringSoundB_of_place` and
+the `_placed` forms take): template instance `g`'s stacked unit slots in block `o` of the accepted statement, given the unit's
 instance in the audit circuit, whose inputs on one gate carry one value there (`Layout.Aliased`). -/
 noncomputable def unitPlace_of_setupH (ht : tags.typed = false)
     (h : Stmt.setupH tags cf pf coins tables draw partition program = .ok st)

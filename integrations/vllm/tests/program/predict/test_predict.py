@@ -7,7 +7,7 @@ Gemma-2-2B's from cov-p058-2, Qwen3-30B-A3B's from cov-p081 and OLMoE's from cov
 A library change that moves a Definition moves the traced digest too: re-trace the unit (`verity-vllm build --wrapper
 step --M 1 --pos0 8`, CPU only) and pin the new digest with the predictor's.
 `SiluMul_v2{I}` as the `silu_mul` kind moved every pin but Gemma-2's (GeGLU): each is the Build's re-trace of its unit from the
-same checkpoints on the declared rtxpro6000 target (run r20261002-123618-cee3, CPU only), and with `SiluMul_v1{I}` in its place
+same checkpoints on the declared rtxpro6000 target (CPU only), and with `SiluMul_v1{I}` in its place
 the predictor gives the rows' traced digests.
 """
 
@@ -79,7 +79,7 @@ def test_step_program_equals_the_traced_build(model, digest):
 
 @pytest.mark.slow
 def test_request_and_workload_programs_equal_the_traced_build():
-    """SmolLM2-135M B1 256/32 greedy (cov-k01-10): the request Program (LP 256, T 31) and GP-01's workload Program over it.
+    """SmolLM2-135M B1 256/32 greedy: the request Program (LP 256, T 31) and GP-01's workload Program over it.
     About 20 s: the only test that composes a workload, which the step pins cannot reach."""
     phi = _phi(json.loads((FIX / "smollm2-135m.config.json").read_text()),
                [{"request_id": "u0", "index": 0, "prompt_len": 256, "max_tokens": 32, "arrive_step": 0}])
@@ -136,7 +136,7 @@ def test_dsa_rank_step_equals_the_record(rank, tmp_path):
     ("request", {"LP": 11, "T": 12}, "f22d03019ee5c9324134c394b8628cf3bda5fa89d3e9e04b3fe56faf92e856bc5e05eb057ed2adb327e513dc39fa5c93597bfec0011deab079629e3c974c5bcd"),
 ])
 def test_dsa_launch_batch_equals_the_traced_build(wrapper, shape, digest, tmp_path):
-    """GLM-5.3's B8 mixed-arrivals row (no batch invariance) at rank 0, as the Build traced it in r20261017-194958-148e: the step of 8
+    """GLM-5.3's B8 mixed-arrivals row (no batch invariance) at rank 0, as the Build traced it: the step of 8
     rows, and the first request's Program under its launch batch (its prefill alone, then decodes beside the second request's
     prefill and decodes), every token-count-dependent selection at the launch's tokens."""
     r = build_program(_row_phi(GLM53_B8, "GLM53", tmp_path), wrapper, **shape)
@@ -153,9 +153,9 @@ def test_dsa_launch_batch_equals_the_traced_build(wrapper, shape, digest, tmp_pa
      "f11311f5b62f788edadc672304f7f6a37cb5355f48d31d8382322cc2f95801ccf3c66abb7cad0a577e27c2a78aa0e4b7641900270f559c661982e68b656819d3"),
 ])
 def test_dsa_stochastic_equals_the_traced_build(row, wrapper, shape, digest, tmp_path):
-    """GLM-5.3's seeded top-p rows (t0.8 p0.95) at rank 0: the B1 step as the Build traced it (r20261017-224230-de2d), and the B8 step
+    """GLM-5.3's seeded top-p rows (t0.8 p0.95) at rank 0: the B1 step as the Build traced it, and the B8 step
     and second request at the same registered split count, the select after the vocabulary's all-gather.  The B8 row's traced Build
-    (r20261018-105843-33c0) read a derived `splits` Input, which serving no longer produces (CIR-87 (1), `engine.topp_pin`); these two
+    read a derived `splits` Input, which serving no longer produces (`engine.topp_pin`); these two
     digests are the registered-S Programs, until that row is rebuilt.  The second request's launch batch is its realized arrival
     (`engine.arrivals.realized_arrive_steps`): the first request ends at forward 1, so the idle engine prefills it alone at forward 2
     and it decodes alone, not beside the step-13 prefills its declared arrive_step 9 would put it with."""
@@ -190,7 +190,7 @@ def test_the_execution_label_names_the_batch_invariance(tmp_path):
 @pytest.mark.parametrize("rank", [0, 7])
 def test_mhc_rank_step_equals_the_record(rank, tmp_path):
     """DeepSeek-V4-Pro at TP8 on H200 (block FP8, MXFP4 experts, cc 9.0): the first and last rank's step through the hyper-connected
-    decoder (`predict.dsv4`) is the rank's step Program `records.json` pins for the switched row (its traced Build art:826e06ff):
+    decoder (`predict.dsv4`) is the rank's step Program `records.json` pins for the switched row:
     the mHC pre and post-pre between sublayers, the compressed-attention decode over each layer's opened window, the table and
     sqrtsoftplus routers, the Marlin experts over the schedule's align keys.  About 25 s a rank, nearly all of it encoding the mHC
     Definitions' bodies for the digest; no cheaper test reaches this decoder, and the ranks between differ only in the peer order
@@ -324,8 +324,8 @@ def test_an_int8_rows_dtype_is_its_checkpoints():
         build_program(as_row(bf16, "float8_e4m3fn"), "step")
 
 
-#: The H200 int8 Llama-3.2-1B rows' Builds of record (#4770's tree 4f078675fe; vy-dc-h200 run r20261026-185144-3ccb, the same digests
-#: as vy-dc-h200-2's r20261026-182623-0d2a): each Program digest the row's `build_summary.json` gives (the step at its M and pos0 8,
+#: The H200 int8 Llama-3.2-1B rows' Builds of record (the same digests
+#: on two H200 nodes): each Program digest the row's `build_summary.json` gives (the step at its M and pos0 8,
 #: each request shape (LP, T), GP-01's workload) and its `manifest.json`'s digest and identities, with the Programs its header names
 #: (`program_digest`, and a batch's `component_digests`).  B4's lone `build_request` (LP256_T31, no request of its batch) is B1's.
 H200_INT8 = {

@@ -6,7 +6,7 @@ import Mathlib.Order.Interval.Finset.Nat
 /-!
 # The sampled audit and acceptance: what an accepted audit says about the egress, at `δ`
 
-Definitions only (PRF-144). Network accounting writes the whole computation as one program `C` of the Boolean profile,
+Definitions only. Network accounting writes the whole computation as one program `C` of the Boolean profile,
 each machine a subcircuit, and audits its committed trace with sampled proofs (`Claims.Sampling`). The transfer-gate
 units and N2's head checks are classes drawn `all`, and the internal step units are sampled. This module says what an
 accepted audit then establishes about the egress, in the network certifier's terms (`Program`, `Accepted`), on

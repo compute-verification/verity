@@ -16,7 +16,7 @@ from verity.ml.circuits.defs import REGISTRY
 
 FIXTURES = Path(__file__).parent / "fixtures"
 
-#: the Boolean Definitions the PoUW H1 tile unit (`h1unit.Shape(32).unit()`) reaches that lower in under a second each
+#: the Boolean Definitions the PoUW H1 tile's proof block (`h1unit.Shape(32).unit()`) reaches that lower in under a second each
 H1 = ["PouwLow8_v2", "PouwSx8_v2", "PouwAndBit_v2", "PouwI8AddBit_v2", "PouwI8Neg_v2", "PouwI8Add_v2", "PouwU129_v2",
       "PouwZyCell_v2", "F2fpBf16_v2", "PouwXinFinal_v2", "S32ToF32Rn_v2", "F32Mul_v4", "PouwSegDot0_v2", "PouwSegDot_v2",
       "BlackwellS8ImmaDot32_v2", "GemmAccumulatorS8_v2{K=32,DOT=BlackwellS8ImmaDot32_v2}", "PouwZyDequant_v2"]
@@ -33,7 +33,7 @@ def test_the_h1_units_definitions_lower_to_one_text_in_any_interpreter():
 @pytest.mark.slow
 def test_the_h1_units_larger_definitions_lower_to_one_text_in_any_interpreter():
     """PouwFx1Absorb and PouwNoiseBlock, the H1 tile's largest Definitions that lower in seconds (about 4 and 6 s a lowering,
-    three lowerings each): their builders (the absorb's fold, the noise block's SHA-512) are none of the small ones'."""
+    three lowerings each): their builders (the absorb's fold, the noise chunk's SHA-512) are none of the small ones'."""
     big = ["PouwFx1Absorb_v2", "PouwNoiseBlock_v2"]
     assert _verdicts(big) == dict.fromkeys(big, "same")
 

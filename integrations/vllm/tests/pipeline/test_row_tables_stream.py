@@ -1,5 +1,5 @@
 """A row-table window (`test_row_tables`' window: ScaledMmS8Coordinate chunks whose `x` ports link shared token rows of
-one table per engine step and linear) end to end through the proof service: its Spec declares every port's Value, the
+one table per engine step and linear) end to end through the proof system: its Spec declares every port's Value, the
 window's `row-table` port a tree over the step roots (`service.ROOTS`) over its tables' hiding leaves
 (`over=row_table.SCHEMA`), and one `Stream` over the window's template registers the window's record at the
 challenger's counts, draws from the auditor's challenger's coins, and runs each outcome by the Lean verifier of record,
@@ -47,7 +47,7 @@ def _spec(mine: CS.Window, table: bool = True) -> S.Spec:
 
 
 @pytest.mark.slow
-def test_a_row_table_window_runs_through_the_stream_on_the_challengers_coins(tmp_path, signer, monkeypatch):  # noqa: F811
+def test_a_row_table_window_runs_through_the_stream_on_the_challengers_coins(tmp_path, signer, monkeypatch):
     """The window's record, at row 101 + i for case i, registers on a stream whose Spec declares the `row-table` root
     as a tree over roots of row-seg leaves; drawn from the served challenger's coins after its digest, the honest draw's
     outcome is accepted by the Lean run and each of `coin_outcomes`' negatives is refused at its select (`coins`). Every

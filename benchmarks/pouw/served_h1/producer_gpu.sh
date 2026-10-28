@@ -34,7 +34,7 @@ nice -n 10 "$NVCC" -O3 -std=c++17 -gencode "$GENCODE" -I benchmarks/codec_tensor
   || { echo "producer_gpu: NVCC_FAIL noise.cu"; tail -30 "$OUT/build-noise.log"; exit 11; }
 sha256sum "$S/noise.cubin" | tee -a "$OUT/builds.txt"
 export VERITY_POUW_NOISE_CUBIN="$S/noise.cubin"
-export PYTHONPATH="$ROOT:$ROOT/integrations/vllm" GPU_LEASE_WHO=${GPU_LEASE_WHO:-kernels-rcpt}
+export PYTHONPATH="$ROOT:$ROOT/tools/config:$ROOT/integrations/vllm" GPU_LEASE_WHO=${GPU_LEASE_WHO:-kernels-rcpt}
 cd benchmarks/pouw
 rc=0
 for name in "${builds[@]}"; do

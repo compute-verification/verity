@@ -1,11 +1,11 @@
-"""The proof service's own run of C-Flock's Lean verifier of record (`one_stage.proofs`), on a pinned `--zk --registered`
-session: a RoPE d64 statement of 32 units, each reading its `cs` row from a registered served tree, proved by C-Flock in
+"""The proof system's own run of C-Flock's Lean verifier (`one_stage.proofs`), on a pinned `--zk --registered`
+session: a RoPE d64 statement of 32 proof blocks, each reading its `cs` row from a registered served tree, proved by C-Flock in
 one loopback session under a subset draw of 16 (`verity/ml/flock/pod/89-served-registered.sh`'s row/v1 fixture). The
 verifier's own program, partition and `--registered` file are the fixture's `stage/`, the ones
 `verity/ml/flock/tests/test_lean_served_registered.py` holds to `register_served`.
 
 Each verify sets up an m = 25 table (about 10 s), so the fixture's tests are slow. They are the one test that a protocol's
-verdict comes from core's own verifier run: the honest session is accepted with its program, registered finding and units
+verdict comes from core's own verifier run: the honest session is accepted with its program, registered finding and proof blocks
 read off that run, a circuit file other than the committed one is refused before the verifier runs, tampered proof bytes
 are rejected by the verifier itself, with the record's proof digests kept or rewritten to match, and the statement, whose
 ``cs`` reads are registered by the verifier's own file, is refused by Lean without that file, whether its public file
@@ -30,15 +30,15 @@ from verity.core.protocols.sampled_proofs.one_stage import proofs as PF
 
 #: `test_lean_served_registered.py`'s row/v1 fixture, fetched from the evidence store as that test fetches it (its records
 #: re-rendered in the canonical text the verifier requires)
-FIXTURE = "art:88544efa5af6f50ab24ad04a8e8d3118075e9f62898e41bbfb45ec3f3bc3d85b"
+FIXTURE = "art:48ed507aa908f8a220405467097af6ce986fab36ba32d2d7aede8b7cbc5213d5"
 VERIFIER = Path(__file__).resolve().parents[4] / "ml" / "flock" / "verifier"
 #: the SHA-512 of the fixture's circuit file, as an auditor would commit it (its public file's `circuit_sha512` pin)
 CIRCUIT = ("7b9e46f755bced2c6e00a7706f3fca90631864ca22a2d08b51c8b82260a7bd9a"
            "9ae7a191c0eabe2993a6fbf686b832c440f2a78dad65fa3b13b3cf5bd47284e0")
-CS_ROOT = ("948510d0ecf54caa346f3e026e5c8c88776f0987ebabcc9943df4703cdbcf069"
-           "4444af17eaad24879b0020b5a9cec4360a2c1c285a4f3d6689e3df1bbd12a4e5")
-#: the instances the session's own draw drew, which are the units, the public file's indices being 0..31
-DRAWN = (0, 1, 2, 3, 5, 7, 10, 13, 14, 18, 20, 21, 22, 24, 26, 29)
+CS_ROOT = ("8c31089e5864c2e01b73d983ea3bcfa704e49e961466476987a2a4d908a87ef3"
+           "d65628f58e1ac7eb5f3d86da77250db500a01d1a4c9cf77e0be83ca3aae5413a")
+#: the instances the session's own draw drew, which are the proof blocks, the public file's indices being 0..31
+DRAWN = (0, 3, 4, 5, 8, 11, 12, 13, 17, 18, 23, 26, 28, 29, 30, 31)
 
 #: a test that runs Lean on the fixture
 lean = pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
@@ -124,7 +124,7 @@ def test_lean_without_registered_reads_refuses_the_statement_that_reads_them(fx,
     """The program binds ``cs`` as a run input (`Input16_v1`), registered only by the verifier's own file, so `verify`
     without that file goes on to Lean: the honest public file, which names the ``cs`` read, is refused by
     `Registered.check`; with that name taken out and the shared rows kept, the session is still not accepted. Neither
-    finding proves a unit."""
+    finding proves a proof block."""
     assert not PF.reads_registered((fx / "stage" / "program.json").read_bytes())
     got, why = _verify(fx, fx / "session", public=_unnamed(fx) if unnamed else "pub-32.bin", own=False)
     assert why is None, why
@@ -166,7 +166,7 @@ def _tampered(fx: Path, to: Path, rehash: bool) -> Path:
 def test_tampered_proof_bytes_are_rejected_by_the_verifier_itself(fx, tmp_path, rehash):
     """One bit of the first rep's proof flipped: with the record's proof digest kept the verifier refuses the file the
     record doesn't bind, and with it rewritten to the flipped bytes it refuses the proof itself. Either way the finding is
-    the verifier's reject, with no units proved."""
+    the verifier's reject, with no proof blocks proved."""
     got, why = _verify(fx, _tampered(fx, tmp_path, rehash))
     assert why is None, why
     (f,) = got
@@ -201,9 +201,9 @@ def _same(v1, v2):
 @pytest.mark.slow
 def test_the_v2_audits_own_run_on_blobs_agrees_with_verify(fx, tmp_path):
     """The v2 audit (`SampledProofs.OneStageZk`) runs `flock-verify verify --zk`'s one-stage path inside its own Lean, on
-    the files as blobs: on the honest session (accepted, proving the drawn units), a session whose proof bytes were
+    the files as blobs: on the honest session (accepted, proving the drawn proof blocks), a session whose proof bytes were
     tampered with (record kept or rehashed), and the honest session without the verifier's registered file, its finding
-    is `verify`'s, reason and units included."""
+    is `verify`'s, reason and proof blocks included."""
     for session, own in ((fx / "session", True), (_tampered(fx, tmp_path / "kept", False), True),
                          (_tampered(fx, tmp_path / "rehashed", True), True), (fx / "session", False)):
         got, why = _verify(fx, session, own=own)

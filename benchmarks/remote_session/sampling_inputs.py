@@ -4,7 +4,7 @@ the line; and the serving cost of passes and of proved openings, at three served
 
     python sampling_inputs.py --verifier VERIFIER_JSON --cost-model COST_MODEL_JSON --out DIR
 
-`VERIFIER_JSON` is a run's `verifier.json` with accepted paced sessions (#2612's `ledger.paced`). The script recomputes
+`VERIFIER_JSON` is a run's `verifier.json` with accepted paced sessions (`ledger.paced`). The script recomputes
 every recorded stretch from the session's groups and refuses to go on unless the ledger's figures come back, then checks
 the closed form below against the same arithmetic on uniform sessions, and only then tabulates the closed form.
 `COST_MODEL_JSON` is a `sampled_proofs.costfit` record whose observations include `BlockOpeningCheck_v1`'s sessions.
@@ -58,15 +58,13 @@ BLOCK = 4096
 STATEMENT = 512
 """Openings a statement: C-Flock's ceiling, m = k_log + nbl ≤ 35, at the unit's k_log 26."""
 FLOOR_GPU_S = 0.0799
-"""An opening's GPU device phase at a full statement, firewall on: note:20261018T1937Z-report-zk-openings
-(r20261018-211523-93ec), measured."""
+"""An opening's GPU device phase at a full statement, firewall on: measured."""
 DEPLOYED_EXTRA_ANDS = (45.4e6 - 20.3e6) + 5e6
-"""p1024/k3/masked's decode over p512/k2's, and the deployed trees' depths, per opening: the same note's caveats,
-modeled."""
+"""p1024/k3/masked's decode over p512/k2's, and the deployed trees' depths, per opening: modeled."""
 MEMSAT = {"run": "r20261018-222953-fbf1", "plain": 4260.0, "codec": 3271.0,
           "arms": [(65.84, 5.91e-3, 0.9689, 1999.0), (29.81, 6.18e-3, 0.9862, 2669.0),
                    (14.90, 3.87e-3, 0.9934, 3083.0)]}
-"""int8 Llama-3.1-8B on one GPU at saturation (note:hash/20261018T1935Z-draft-memsat): output tokens/s plain and with
+"""int8 Llama-3.1-8B on one GPU at saturation (memsat): output tokens/s plain and with
 the codec, and per receipts arm (passes/s, serving s a pass, γ at spec R, tokens/s)."""
 
 
@@ -81,7 +79,7 @@ def groups_of(seen: list[dict]) -> SimpleNamespace:
 
 def span_line(g: SimpleNamespace, lo: int, hi: int, *, wrong: float, blocks: int, per_ns: float, chip: float,
               burst: float = 0.0) -> dict:
-    """`paced_line`'s arithmetic (#2612's verifier.py) over groups [lo, hi), group hi the one after them: the span (from
+    """`paced_line`'s arithmetic (`verifier.py`) over groups [lo, hi), group hi the one after them: the span (from
     the first group's end when lo is 0), L_max, and the blocks lost in both forms, `per_ns` the rebuild and ingress
     ceilings in blocks a ns, `chip` the chip's blocks and `burst` the routes' bursts in blocks (a record from before
     they were charged has none)."""
@@ -237,7 +235,7 @@ def points(recorded: list[dict]) -> dict:
                    "weights_bytes": 8 * 65_525_514_240, "c_s": max(x["c_s"] for x in recorded), "xi": xi,
                    "chip": rec["chip_blocks"],
                    "tokens_per_s": 1000.0, "codec_loss": None,
-                   "source": "W2 round 5 (note:20261018T0720Z-report-north-star-node; r20261018-200634-12c0): store, "
+                   "source": "W2 round 5 (r20261018-200634-12c0): store, "
                              "weights, c measured; tokens/s the offered load, not saturation"},
         "8B x8": {"label": "Llama-3.1-8B int8, an engine a GPU, 8 GPUs", "blocks": 8 * 2_359_296, "gpus": 8,
                   "shard_bytes": 9_663_676_416, "weights_bytes": 8 * (6.98e9 + 2 * 1.05e9),
@@ -248,7 +246,7 @@ def points(recorded: list[dict]) -> dict:
                   "shard_bytes": 9_663_676_416, "weights_bytes": 6.98e9 + 2 * 1.05e9, "c_s": 0.072 - 2 / 51.7,
                   "xi": xi, "chip": rec["chip_blocks"], "tokens_per_s": MEMSAT["codec"],
                   "codec_loss": 1 - MEMSAT["codec"] / MEMSAT["plain"],
-                  "source": "memsat (note:hash/20261018T1935Z-draft-memsat; r20261018-222953-fbf1), measured"},
+                  "source": "memsat (r20261018-222953-fbf1), measured"},
     }
 
 

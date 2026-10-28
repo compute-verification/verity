@@ -1,4 +1,4 @@
-"""The proof service: the Spec's types, the public-items rule, and a Stream's register, select, deliver and outcome over
+"""The proof system: the Spec's types, the public-items rule, and a Stream's register, select, deliver and outcome over
 the one-stage audit, with a stub verifier, injected coins and an injected clock."""
 
 from __future__ import annotations
@@ -101,7 +101,7 @@ def test_round_trip_register_select_deliver_outcome():
 def test_a_provers_stream_binds_each_registration_to_itself_and_the_prover():
     """A stream given the identity its challenger registered the prover under names it in its digest and binds every
     registration to the stream and the prover (`Stream.binding`, `registration.check`'s): a record whose window names
-    both runs round to an accepted outcome, by both verifiers of record, while the same record in another prover's
+    both runs round to an accepted outcome, by both verifiers, while the same record in another prover's
     stream, in the same window, is refused (`R6-stream`, `R6-prover`), as is one whose window names neither. A prover
     identity that is not lowercase hex bytes makes no stream."""
     def stream(prover):
@@ -272,7 +272,7 @@ def test_a_stream_refuses_what_isnt_built_and_another_unit():
 
 
 def test_a_two_stage_rule_is_refused_as_retired():
-    """Two-stage sampling is retired (ASK-25): a Spec whose selection rule names it fails closed, saying so."""
+    """Two-stage sampling is retired: a Spec whose selection rule names it fails closed, saying so."""
     for rule in ({"rule": "two-stage", "replay": "subset:4", "check": "all"}, "two-stage:subset:4"):
         with pytest.raises(ValueError, match="two-stage sampling is retired") as e:
             _spec(rule)
@@ -294,7 +294,7 @@ def test_one_stage_refusals_come_through_register():
 
 
 def test_a_law_whose_count_varies_is_refused_at_register():
-    """A Bernoulli law at 0 < p < 1 draws a count that varies, so one registration's sessions would set up tables of
+    """A Bernoulli sampling design at 0 < p < 1 draws a count that varies, so one registration's sessions would set up tables of
     different shapes: `register` refuses it (`shapes`) after R1-R7, and logs nothing. At p = 0 or 1 it registers."""
     for p in ("1/2", "2/3", "2/4"):
         stream = _stream(_spec(S.Law(f"bernoulli:{p}")))
@@ -308,7 +308,7 @@ def test_a_law_whose_count_varies_is_refused_at_register():
 
 def test_a_rate_law_keeps_every_units_inclusion_at_its_rate_however_the_prover_pads_n():
     """`rate:1/3:2` draws `subset:K` at K = ⌈N/3⌉ rounded up to a multiple of its 2 tables over each registration's N, so
-    a registration padded tenfold (N = 60 for 6) draws K = 20 and every unit is still drawn with probability K/N ≥ 1/3,
+    a registration padded tenfold (N = 60 for 6) draws K = 20 and every proof block is still drawn with probability K/N ≥ 1/3,
     where `subset:2` falls to 2/60. The draw, the Lean verifier's draw of record and the outcome's run (`verifier.run`,
     which an accept needs) are a subset's of K."""
     for n, k in ((6, 2), (60, 20)):
@@ -323,9 +323,9 @@ def test_a_rate_law_keeps_every_units_inclusion_at_its_rate_however_the_prover_p
 
 
 def test_a_rate_count_its_tables_dont_divide_rounds_up_and_one_past_n_is_refused():
-    """A rate's ⌈q·N⌉ rounds up to the next multiple of its tables: `rate:1/3:4` over 20 units draws 8 (not 7) and
+    """A rate's ⌈q·N⌉ rounds up to the next multiple of its tables: `rate:1/3:4` over 20 proof blocks draws 8 (not 7) and
     `rate:1/5:4` over 12 draws 4 (not 3), and a record that names the unrounded count fails R1. A count past N (`rate:9/10:4`
-    over 6 units, 8) is refused at register (`rate`) before R1-R7 and logs nothing. A rate is 0 < NUM <= DEN over T >= 1
+    over 6 proof blocks, 8) is refused at register (`rate`) before R1-R7 and logs nothing. A rate is 0 < NUM <= DEN over T >= 1
     tables, in ASCII digits."""
     for text, n, k in (("rate:1/3:4", 20, 8), ("rate:1/5:4", 12, 4)):
         stream = _stream(_spec(S.Law(text)))
@@ -418,7 +418,7 @@ def test_a_late_proof_is_a_reject():
 
 
 def test_a_proof_that_never_arrives_ends_late():
-    """A drawn unit whose proof is never delivered is pending until the proof deadline and a reject (`late`) after it:
+    """A drawn proof block whose proof is never delivered is pending until the proof deadline and a reject (`late`) after it:
     no draw stays pending forever, and the stream receives the next registration only once it ends."""
     clock = Clock()
     stream = _stream(clock=clock)
@@ -622,7 +622,7 @@ def test_a_sampler_draws_instead_and_is_held_to_the_law():
 
 
 def test_each_outcome_is_the_lean_runs_from_the_receipt_through_the_verdict(monkeypatch):
-    """A one-stage outcome on a draw from the coins is the verifier of record's run (`verifier.run`, the Lean's `Run.run`)
+    """A one-stage outcome on a draw from the coins is the verifier's run (`verifier.run`, the Lean's `Run.run`)
     from the registration, the bytes the draw read, the sessions and the verdicts: one run per outcome, agreeing on an
     accepted and a rejected round. A run the Python doesn't make alike (here, a draw said to read one byte more) rejects
     the round, its audit record failing `run`; a sampler's draw isn't run."""
@@ -679,7 +679,7 @@ def _refused(call) -> tuple[str, ...]:
 
 WORK = {PAIR.id: 10}
 STRATUM = S.Public(f"population:{PAIR.id}", "structure", "the work law's one stratum")
-#: The challenger's closure map: each unit is proved with the next.
+#: The challenger's closure map: each proof block is proved with the next.
 NEXT = {u: [(u + 1) % 6] for u in range(6)}
 
 
@@ -718,7 +718,7 @@ def test_a_closure_widens_a_work_draw_only_and_stays_in_range():
 @pytest.mark.parametrize("text", ["subset:2", "bernoulli:3/3", "stratified:2", "work:2"])
 def test_the_default_draw_is_draw_first_on_the_challengers_bytes(text):
     """The draw is Lean's `drawWith` on the coins (`coins.draw_first`), so `flock-verify draw` on the same bytes
-    draws the same units; a work draw's closure is the same too."""
+    draws the same proof blocks; a work draw's closure is the same too."""
     table = WORK if text.startswith("work") else None
     closure = NEXT if table else None
     for seed in range(8):

@@ -13,7 +13,7 @@ norm computes it (`query.norm_scales.site_of`):
 * `aten` (`RsqrtF32_v1`, an ATen-chain norm): the output of `torch.rsqrt` inside the module.
 
 Outside a committed step, or outside the manifest's norm modules, the installed kernels run.  The tapped kernels compute exactly the
-installed kernels' outputs and write every row's scale, which equals the IR model's (`properties.norm_tap_exactness`).  Every patch goes
+installed kernels' outputs and write every row's scale, which equals the circuit's (`properties.norm_tap_exactness`).  Every patch goes
 through `engine.hooks` and `uninstall` undoes it.  A norm kernel of another kind inside a norm module is a collector error.
 """
 from __future__ import annotations

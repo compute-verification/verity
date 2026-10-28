@@ -26,7 +26,7 @@ fi
 MODEL=${MODEL:-$WORK/models/llama-3.1-8b-instruct}
 export PATH=$WORK/venv312/bin:$PATH FLASHINFER_CUDA_ARCH_LIST=12.0f HF_HOME=${HF_HOME:-/workspace/hf}
 . benchmarks/pouw/pearl_c_vllm/flashinfer_env.sh
-export PYTHONPATH=$PWD:$PWD/integrations/vllm:$PWD/benchmarks/pouw:$PWD/benchmarks/pouw/pearl_c_vllm
+export PYTHONPATH=$PWD:$PWD/tools/config:$PWD/integrations/vllm:$PWD/benchmarks/pouw:$PWD/benchmarks/pouw/pearl_c_vllm
 export CUDA_VISIBLE_DEVICES=${CUDA_VISIBLE_DEVICES%%,*} CUDA_DEVICE_ORDER=PCI_BUS_ID SERVED_TREE=$PWD
 UUID=${GPU_LEASE_UUID:?run under gpu-lease}; UUID=${UUID%%,*}; export E2E_GPU_UUID=$UUID
 nvidia-smi --query-gpu=uuid,name,compute_cap,clocks.sm,clocks.mem,driver_version --format=csv,noheader -i "$UUID" > "$OUT/identity.csv"

@@ -1,4 +1,4 @@
-"""Resolve a raw observation log against a pinned profile (lane L3; torch-free).
+"""Resolve a raw observation log against a pinned profile (torch-free).
 
     uv run verity-vllm resolve-log data/logs/m1.jsonl.gz \
         --profile vllm_d9105ea80_sm89_eager [--step N] [--dump-trees] [--max-depth 6] [--out PATH] [--strict]
@@ -55,7 +55,7 @@ class StepResult:
     error: str | None = None
     seconds: float = 0.0
     target: dict | None = None                 # [X-01] per-step target-fact acceptances (patterns.X01_SCRATCH_KEY), None when none fired
-    gemm_target: dict | None = None            # [R13 ampere] per-step registered GEMM target selection (patterns.GEMM_TARGET_SCRATCH_KEY)
+    gemm_target: dict | None = None            # per-step registered GEMM target selection (patterns.GEMM_TARGET_SCRATCH_KEY)
 
     @property
     def unsupported(self) -> list[Unsupported]:
@@ -167,7 +167,7 @@ def short_label(r: Resolution) -> str:
     if isinstance(r, Transparent):
         extra = getattr(r, "also", ())
         return f"Transparent {r.effect}" + (f" (+{len(extra)} grouped)" if extra else "")
-    if isinstance(r, Group):   # SHARED-CODE (lane ov-moe): a `resolver.Group` root (D70) is neither spelling above
+    if isinstance(r, Group):   # a `resolver.Group` root is neither spelling above
         kinds = Counter("Compute" if isinstance(p, Compute) else "Transparent" if isinstance(p, Transparent) else type(p).__name__
                         for p in r.parts)
         return f"Group of {len(r.parts)}: " + ", ".join(f"{n} {k}" for k, n in sorted(kinds.items()))
@@ -291,7 +291,7 @@ def _target_facts(header: RunHeader | None, results: list[StepResult]) -> dict:
                  "num_sms_pinned_from_target": {"launches": sum(int(a.get("launches", 0)) for a in acc), "steps": len(acc)}}
     if acc:
         out["num_sms_pinned_from_target"].update({k: acc[0][k] for k in ("pinned", "source", "profile_default", "basis") if k in acc[0]})
-    gts = [sr.gemm_target for sr in results if sr.gemm_target]   # [R13 ampere] which registered GEMM specialization pinned the launch geometry
+    gts = [sr.gemm_target for sr in results if sr.gemm_target]   # which registered GEMM specialization pinned the launch geometry
     out["gemm_target"] = None if not gts else {**{k: gts[0].get(k) for k in ("target", "dot", "refusal", "compute_capability", "header_tuned_gemm_arch_family",
                                                                               "tuned_table_sha256", "basis")},
                                                "launches": sum(int(g.get("launches", 0)) for g in gts), "steps": len(gts)}

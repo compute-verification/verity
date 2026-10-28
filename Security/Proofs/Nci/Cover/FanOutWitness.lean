@@ -9,8 +9,8 @@ lookups, satisfying `UpdateHardness`, `ValueReadHardness` at `f = 2`, `ColumnsIn
 `k < bcol · V · (E + 1)` at `E = 1 < d`, and covered by inference blocks, of which one holds a lookup, one the root, and
 one spends a value.
 
-The circuit (`FanOutWitness.fC`, 15 gates, `θ = {0}`) is the proof red team's, widened so that every value is two bits
-and a block can afford one lookup. Gate 0 is the registered token, gates 1–3 and 4–6 the two lookups' columns (`V = 3`)
+The circuit (`FanOutWitness.fC`, 15 gates, `θ = {0}`) is a small counterexample circuit, widened so that every value
+is two bits and a block can afford one lookup. Gate 0 is the registered token, gates 1–3 and 4–6 the two lookups' columns (`V = 3`)
 and gate 7 the product's updated parameter. The lookups are gates 8–9, each reading the token and column 1–3, and 10–11,
 reading the token and column 4–6. The root is gates 12–13, each reading both lookups, its two legs (`d = 2`). The
 counted product is gate 14, reading the root, its activation, and gate 7.

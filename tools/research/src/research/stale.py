@@ -8,6 +8,7 @@ from __future__ import annotations
 import calendar
 import re
 import subprocess
+import sys
 import time
 from typing import Callable, Collection, Iterable
 
@@ -32,6 +33,7 @@ def _ts(stamp: str | None) -> float | None:
     try:
         return float(calendar.timegm(time.strptime(stamp.rstrip("Z")[:19], "%Y-%m-%dT%H:%M:%S"))) if stamp else None
     except ValueError:
+        print(f"stale: a label's time {stamp!r} isn't YYYY-MM-DDTHH:MM:SSZ, so it doesn't count", file=sys.stderr)
         return None
 
 

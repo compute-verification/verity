@@ -4,8 +4,8 @@ import Definitions.Core.NaiveStrassen
 /-!
 # Integer bilinear schemes against P1's floor: what is proved of "every scheme loses"
 
-CMP-167 item 1 (SAK-LB, `note:compute-research/20261026T2345Z-draft-sak-lb`), over D4's model
-(`Definitions.Core.NaiveStrassen`): exact int8 products priced by the tensor units alone, additions free.
+A part of the SAK lower bound (`Pouw.SakLb`), over D4's model (`Definitions.Core.NaiveStrassen`): exact int8
+products priced by the tensor units alone, additions free.
 
 * **The cover inequality** (`cover`): every integer bilinear scheme for an `m × k` by `k × n` product (Brent's
   equations, `IntScheme.Brent`) has `Σ_t ‖u_t‖₁ ‖v_t‖₁ ≥ m k n`: each of the `m k n` monomials `A_ij B_jl` is made by

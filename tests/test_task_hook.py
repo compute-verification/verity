@@ -1,5 +1,6 @@
 """`.cursor/hooks.json`'s Task hook keeps a coordinator from waiting on a local worker in the foreground, which holds its turn
-(and so every Slack, Linear and timer event) until the worker ends (proofs' rule 1, 18 Oct)."""
+(and so every Slack, Linear and timer event) until the worker ends, and keeps a cloud agent from
+writing Linear through its MCP connector, which acts as the person who connected it."""
 import json
 import os
 import subprocess
@@ -46,6 +47,28 @@ def test_other_dynamic_tools_pass_unlogged(tmp_path):
     a = answer(tmp_path, HOLDER, {"namespace": "Linear", "toolName": "get_issue", "arguments": {"id": "INF-1"}},
                "CallDynamicTool")
     assert a == {"permission": "allow"} and not (tmp_path / "task.jsonl").exists()
+
+
+@pytest.mark.parametrize("conversation_id", [HOLDER, WORKER])
+@pytest.mark.parametrize("tool", ["save_issue", "save_comment", "save_status_update", "delete_comment", "mark_notification"])
+def test_a_cloud_agents_linear_connector_write_is_refused_with_the_apps_way(tmp_path, conversation_id, tool):
+    a = answer(tmp_path, conversation_id, {"namespace": "Linear", "toolName": tool, "arguments": {"id": "INF-1"}},
+               "CallDynamicTool")
+    assert a["permission"] == "deny" and "acts as Daniel" in a["agent_message"] and f"`{tool}`" in a["agent_message"]
+    assert "research msg ask --as ME" in a["agent_message"] and "createAsUser" in a["agent_message"]
+    assert not (tmp_path / "task.jsonl").exists()
+
+
+@pytest.mark.parametrize("conversation_id,tool_input", [
+    (HOLDER, {"namespace": "Linear", "toolName": "list_issues", "arguments": {}}),
+    (WORKER, {"namespace": "Linear", "toolName": "search_documentation", "arguments": {}}),
+    (WORKER, {"namespace": "Linear", "toolName": "extract_images", "arguments": {}}),
+    ("6f1d2c3e-0000-4000-8000-000000000000", {"namespace": "Linear", "toolName": "save_issue", "arguments": {}}),
+    (None, {"namespace": "Linear", "toolName": "save_issue", "arguments": {}}),
+    (WORKER, {"namespace": "Notion", "toolName": "notion-update-page", "arguments": {}}),
+])
+def test_linear_reads_a_local_sessions_writes_and_other_connectors_pass(tmp_path, conversation_id, tool_input):
+    assert answer(tmp_path, conversation_id, tool_input, "CallDynamicTool") == {"permission": "allow"}
 
 
 @pytest.mark.parametrize("tool_input", [

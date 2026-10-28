@@ -5,7 +5,7 @@ A *registered value* is a root parameter of the program, read row by row: row `r
 `r * words`, in the parameter's leaf order, each leaf `word_bits` bits (16 or 32: the parameter's leaf width rounded up
 to whole u16 words, `width`). Each row is committed as the circuit statement commits that port's row
 (`hm96-sha512/row/v1`): its u16 words (`row_words`: each leaf `word_bits / 16` words, low first, zero-padded to whole
-SHA-512 blocks of 64 words, as a C-Flock port row and its `values` row are laid out), `x = SHA-512(sha512_row_prefix(ROLE_X,
+SHA-512 chunks of 64 words, as a C-Flock port row and its `values` row are laid out), `x = SHA-512(sha512_row_prefix(ROLE_X,
 16, n) || row)` over those `n` words u16 LE, a 192-byte salt `y` drawn from the operating system once, at registration,
 `b || c = hm96.SHA512.commit_string(default_key, x, y)`, and the frame-v3-sha512 leaf `row_leaf(D, r,
 hm96.SHA512.tree_leaf(default_key, b || c), "hm96-sha512/row/v1")`. The value's root is the frame-v3-sha512 root over its
@@ -31,8 +31,8 @@ own format: a port's rows must be of the format its registration names, and a bi
 A bit row's leaves pack the parameter's narrower leaves (`row_leaves`): H1's A, K int8 codes of one-bit leaves, is a
 `row/v2` value of `words = K/2` leaves of `word_bits = 16`, a row 8K of the parameter's leaves.
 
-A read is at a *public position* when the verifier derives it from its own program (`reads`): a unit's parameter whose
-leaves are exactly row `r` of a registered value reads row `r`, for every unit, before anything is served; a parameter
+A read is at a *public position* when the verifier derives it from its own program (`reads`): a proof block's parameter whose
+leaves are exactly row `r` of a registered value reads row `r`, for every proof block, before anything is served; a parameter
 that is an array of whole rows (H1's tile reads R rows of A) reads each element's row at its own key `name[i]`, the
 circuit's port of that row, and the Lean verifier holds each such port as its own registered port. A statement
 that reads row `r` commits it with the registration's salt, so its `b || c` is the registered one, and opens it: header
@@ -45,7 +45,7 @@ refused.
 A *supplied value* is a registered value the verifier fills itself, from what it holds before the draw: each row is the
 bytes of its sources in order, each source a root the record names (`{"port": P}`, the `roots` entry of port P;
 `{"value": V}`, the `registered` entry of value V, never a supplied value's), bytes of its own (`{"bytes": hex}`), a
-position (`{"position": "K"}`: K, a decimal below the record's population, after every unit of the log's earlier
+position (`{"position": "K"}`: K, a decimal below the record's population, after every proof block of the log's earlier
 records, `log_base`, as a u64 big-endian, so no two records of one log share a position) or its coin bound to its
 stream, its prover and the record's window (`{"window": hex}`: `window_salt`, SHA-512 of `WINDOW_SALT`, the coin, the
 verifier's binding, `{"stream", "prover"}`, and the window's canonical JSON: a salt per prover, stream and window, as R6
@@ -56,7 +56,7 @@ bits or 512 of one). Its rows are
 committed as any registered value's, under public salts (`supplied_salts`, row i's from the program's digest, the value's
 name and i alone), so its root is a function of the record and the verifier's bytes: R7 recomputes it
 (`supplied_root`) and refuses a record whose entry names another (`R7-supplied`). PoUW's seed inputs are such values: a
-unit's seed then reads the roots its operands are committed under, which the prover can't choose.
+proof block's seed then reads the roots its operands are committed under, which the prover can't choose.
 """
 from __future__ import annotations
 
@@ -82,7 +82,7 @@ from . import partition as P
 
 REGISTERED_DOMAIN = "verity/one-stage/registered-domain/v0"
 READS = "verity/registered-reads/v0"
-#: the format whose port may carry `READS_FROM`: unit `reads_from + i` reads `reads[i]`, every other unit nothing; each
+#: the format whose port may carry `READS_FROM`: proof block `reads_from + i` reads `reads[i]`, every other proof block nothing; each
 #: of its objects holds only its own keys (Flock's `Registered.FORMAT`, `FILE_KEYS`, `PORT_KEYS`)
 READS_V1 = "verity/registered-reads/v1"
 READS_FROM = "reads_from"
@@ -174,7 +174,7 @@ def domain(program: str, value: str, words: int, leaves: int, word_bits: int = W
 
 def row_words(row: Sequence[int], word_bits: int = WORD_BITS, schema: str = SCHEMA) -> list[int]:
     """A registered row as the statement's port row: each leaf's `word_bits / 16` u16 words, low first, zero-padded to
-    whole SHA-512 blocks (`BLOCK` words); a bit row's (`SCHEMA_V2`, `SCHEMA_SEG`) unpadded."""
+    whole SHA-512 chunks (`BLOCK` words); a bit row's (`SCHEMA_V2`, `SCHEMA_SEG`) unpadded."""
     k, bound = _width(word_bits) // 16, 1 << word_bits
     out: list[int] = []
     for v in row:
@@ -362,16 +362,16 @@ def _source(template: str, parameter: str, element: int | None) -> str:
 
 def reads(program: Program, query: Mapping[str, Any], values: Mapping[str, int],
           schemas: Mapping[str, str] | None = None) -> dict[str, dict[str, Any]]:
-    """Every unit's reads of the registered values, from the verifier's own program: `values` is `{parameter: words}`, and
-    the result `{template parameter: {"value", "rows"}}`, `rows` one entry per unit of the population (the row it reads,
-    None for a unit of another template). A unit's parameter that holds a registered leaf must be exactly one row, read
+    """Every proof block's reads of the registered values, from the verifier's own program: `values` is `{parameter: words}`, and
+    the result `{template parameter: {"value", "rows"}}`, `rows` one entry per proof block of the population (the row it reads,
+    None for a proof block of another template). A proof block's parameter that holds a registered leaf must be exactly one row, read
     under its own name, or an array whose every element is one whole row of the value (H1's A: a tile's R rows), each
     element `i` read under `name[i]`, as the circuit's port of that row; and a template's parameter reads the same value
-    in every unit or in none: a read at a computed position is no public read. `schemas` (`{value: schema}`) gives a
+    in every proof block or in none: a read at a computed position is no public read. `schemas` (`{value: schema}`) gives a
     value's row format when it is not `SCHEMA`, which sets how many leaves a row holds (`row_leaves`). A key is one
     parameter's or one row's of it (in every template that has it): two reads under one key, a parameter `a[0]` beside
-    row 0 of a parameter `a`, are refused, never merged. The units are a template query's instances; a `Q_word` or
-    `Q_call` unit reads no registered value (`ValueError`)."""
+    row 0 of a parameter `a`, are refused, never merged. The proof blocks are a template query's instances; a `Q_word` or
+    `Q_call` proof block reads no registered value (`ValueError`)."""
     tp = P.evaluate(program, query)
     if not isinstance(tp, TemplatePartition):
         raise ValueError("a registered value is read by a template query's instances, not by a Q_word or Q_call unit")
@@ -477,7 +477,7 @@ def bytes_leaves(data: bytes, bits: int) -> list[int]:
 
 
 def log_base(log: Sequence[Any]) -> int:
-    """The first position after the log's records: the sum of their populations, every unit of each one position."""
+    """The first position after the log's records: the sum of their populations, every proof block of each one position."""
     base = 0
     for e in log:
         n = e.get("population") if isinstance(e, Mapping) else None
@@ -568,7 +568,7 @@ def supplied_value(program: Program, value: str, rows: Sequence[Sequence[tuple[s
                    binding: Mapping[str, str] | None = None) -> Registered:
     """The prover's side of a supplied value: the rows the verifier fills from `rec` (a record without this value's own
     entry will do: no row reads it), the log and the binding under the public salts, whose `entry()` the record
-    registers and whose `statement` opens a unit's reads like any registered value's."""
+    registers and whose `statement` opens a proof block's reads like any registered value's."""
     got = supplied_rows(program, value, rows, rec, supplied, log, binding)
     prog = prog or P.program_digest(program)
     return Registered.commit(prog, value, got, supplied_salts(prog, value, len(got)), width(program, value))
@@ -580,7 +580,7 @@ def reads_file(program: Program, query: Mapping[str, Any], values: Mapping[str, 
                fixed: Sequence[str] = ()) -> dict[str, Any]:
     """The Lean verifier's `--registered` file, from the verifier's own program and query: per registered port, the value
     it reads, the value's leaf count, row width (`words` leaves of `word_bits`) and domain (`registered_entries`), each
-    unit's position (`reads`), and the value's root from `roots` (`{value: root}`, of a registration the verifier
+    proof block's position (`reads`), and the value's root from `roots` (`{value: root}`, of a registration the verifier
     accepted). `ports` names a template parameter's circuit port when they differ, and such a port names its parameter
     (`PARAM_KEY`); two reads it names one port are refused,
     as the Lean verifier refuses a file naming a port twice. `domains` (`{value: domain}`) gives

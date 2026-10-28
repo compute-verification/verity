@@ -1,4 +1,4 @@
-"""`PousCheck.Verdict`, the verdict unit `PousVerdict_v1{K, M, LIMIT}` as code, against the Definition
+"""`PousCheck.Verdict`, the verdict proof block's Program `PousVerdict_v1{K, M, LIMIT}` as code, against the Definition
 `verdict_circuit.PousVerdict`, compiled, through the core difftest harness (`pous-verdict-difftest`).
 
 `Proofs.Pous.Continuous.VerdictCode` proves the code's `prog` is `PousVerdict.verdictProg` gate for gate, so
@@ -41,7 +41,7 @@ LEAN = Path(__file__).resolve().parents[1]
 pytestmark = pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
 
 SIDECAR = [(132, 0, 500_000, 318_154), (4, 1, 500_000, 9_554)]
-"""`verdict_circuit.circuit-check.py`'s statics, the audit's 132 challenges with no miss and 4 with one, and the unit's
+"""`verdict_circuit.circuit-check.py`'s statics, the audit's 132 challenges with no miss and 4 with one, and the proof block's
 gate count at each (inputs included)."""
 RECORD, DIGEST, TOP = V.RECORD_BITS // 8, V.DIGEST_BITS // 8, (1 << 64) - 1
 

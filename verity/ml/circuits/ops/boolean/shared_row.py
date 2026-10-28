@@ -1,5 +1,5 @@
 """A proof block's output written as a segment of a shared row, and an input read as one, as Boolean Definitions (form (B) of
-circuits' shared-row commit, CIR-113). A shared row is one committed row that several proof blocks' outputs tile; the writer
+the shared-row commit). A shared row is one committed row that several proof blocks' outputs tile; the writer
 proves its segment holds its output, and a reader takes its input from a segment of the row it reads.
 
     SharedRowCheck_v1{W, ROW, OFF, G}       (y: Array<W, U16>, row: Array<ROW, U16>, j: U16) -> Array<W, U16>

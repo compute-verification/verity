@@ -3,7 +3,7 @@
 # engine behind the OpenAI API, writing serve-openai's records), the certifier rehearsal against it on varied traffic
 # (certifier_serve.py rehearse, honest and the tampers), the rehearsal kept as the gate keeps a certifier run
 # (request.json, out/, end.json with each file's SHA-512, as auditor.certifier_run writes them), then chain_record.sh on
-# it with the endpoint's records and CR_PATH=certifier-only. Off-host, in a slot of network-accounting's pool:
+# it with the endpoint's records and CR_PATH=certifier-only. Off-host, in one of the network slots:
 #   research run --on vy-nebius-cpu-2 --source . --project verity --as LANE --cwd clone --timeout 240m -- \
 #     env CHECK_SLOTS=/workspace/research/locks/network/slots python3 tools/verity/check/slot.py --by LANE -- \
 #     env CR_MEM_GB=128 CR_N2_ARGS="--draw 3" bash benchmarks/network_traces/demo_chain.sh
@@ -29,7 +29,7 @@ if mkdir -p "$CR_CACHE" 2>/dev/null && [ -w "$CR_CACHE" ]; then export HZ_CACHE=
 (source benchmarks/pouw/hidden_zk/job.sh && setup && echo "$PY" > "$D/py") || { log "demo-chain: setup FAILED"; exit 7; }
 PY=$(cat "$D/py")
 export PATH=$HOME/.elan/bin:$PATH
-export PYTHONPATH=$SRC:$SRC/verity/ml/flock/python:$SRC/integrations/vllm:$SRC/integrations/torch_loop:$SRC/tools/verity/circuit_check/src:$SRC/benchmarks/numerical/python:$SRC/tools/research/src
+export PYTHONPATH=$SRC:$SRC/verity/ml/flock/python:$SRC/integrations/vllm:$SRC/examples/h200:$SRC/tools/verity/circuit_check/src:$SRC/benchmarks/numerical/python:$SRC/tools/research/src
 
 EOS=${DC_EOS:-0}
 RUN=certifier-$(date -u +%Y%m%dT%H%M%SZ)-offhost

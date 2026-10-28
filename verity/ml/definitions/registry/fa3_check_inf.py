@@ -15,7 +15,7 @@ above it.  `targets.attention_spec` binds `Attention_v4` under `TargetProfile.fa
 discipline).
 
 `AttentionHead_v20` and `Attention_v20` are v4 with every step a Call, as `dead_free`'s v19 is FA2's v18, so a head's key blocks can be
-units of their own (VLLM-127: Llama-3.2-1B's head on sm_90 is a 64-dim row over kBlockN 192, up to 6 blocks at the window class of
+units of their own (Llama-3.2-1B's head on sm_90 is a 64-dim row over kBlockN 192, up to 6 blocks at the window class of
 record's 1,087 keys).  v4's first iteration, `AttnBlock_v4{FIRST=True, CHECK=True}`, is FA2's word for word (both guard the running max
 before `max * scale`, and a first block has no rescale), so it is `AttnBlockFirst_v1`, which pads only what it reads; v4's epilogue is
 `AttnHeadEnd_v1`'s.

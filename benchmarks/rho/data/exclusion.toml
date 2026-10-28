@@ -1,14 +1,33 @@
-# Layer 3, the exclusion: the elementary uncertified cap q_U(U) = omega_max U / s_times (rho/classes.py Structure), what
-# an uncertified or a dark gate holds under a bound. A scenario picks one by `structure` (default: reference).
+# The exclusion bound: the elementary uncertified cap q_U(U) = omega_max U / s_times (rho/classes.py Structure), what
+# an uncertified or a dark gate holds under a bound. A scenario picks one by `structure`, else structure.default.
+# s_times and units.gates_per_flop must come from one source (basis, as units.basis says it; Structure.check refuses a
+# mix): the bound holds a gate at u/w = omega_max 2G / (kappa s_times) of the reference's weight. A structure's
+# `evidence` (art: ids) is what measured its s_times, cited beside it.
+[structure]
+default = "reference"
 
 # s_times at the reference's gates per counted product, 2G / kappa of the adversary's family (831 gates at
-# units.gates_per_flop 250 and family.full's kappa 0.602), so it moves with both: the reference's average where the
-# bound needs the structural minimum, and valid only under draft:no-straddle. A measured minimum replaces it in gates.
+# units.gates_per_flop 250 and family.full's kappa 0.602), so it moves with both and G cancels (u = w): the dark leaves
+# count at the dark hardware's datasheet product rate (kappa/2 a datasheet FLOP, the physical model), not at any
+# Boolean structural minimum, and only under draft:no-straddle. A measured minimum replaces it in gates of one Boolean
+# design, with units.gates_per_flop counted on the same design (structure.train-step-v1).
 [structure.reference]
 s_times = { value = "reference", unit = "gate", source = "the reference's gates per counted product, 2G / kappa, standing in for the fewest gates in any counted operation's subcircuit until a measurement program (another worker's) supplies that minimum", status = "assumed" }
 omega_max = { value = 1, source = "a counted product's weight (rho/theorem.py: every counted product weighs 1)", status = "declared" }
+basis = "flop-model"
 
 # The elementary cap: one counted operation per gate, at most (each charged to its output gate, so none straddles).
 [structure.elementary]
 s_times = { value = 1, unit = "gate", source = "a counted operation has at least one gate, its output", status = "derived" }
 omega_max = { value = 1, source = "as structure.reference", status = "declared" }
+
+# s_times measured on one Boolean design, SmolLM2-135M's training step (data/circuits.toml circuit.smollm2-135m-step):
+# 113 gates, a dot step's lane, against 681 for a whole dot's. Its units are the design's own (rho/circuits.py
+# in_place: the step's gates over its FLOPs, 944 a FLOP), so a gate holds u/w = 2G / (kappa s_times), about 28 times
+# the reference's weight: the dark leaves would count at G / s_times, 8.4 products a datasheet FLOP, where the
+# physical model counts kappa/2. No default scenario takes it.
+[structure.train-step-v1]
+s_times = { value = 113, unit = "gate", source = "circuit.smollm2-135m-step.s_x", status = "measured" }
+omega_max = { value = 1, source = "as structure.reference", status = "declared" }
+basis = "boolean:TrainStep_v1"
+evidence = ["art:b24ef693be136271686fe47628b0f0460a60ddb27b64f385d0b99dd1697b366a", "art:ddb3da0e7c22fce0f8aad920e809dd6172f9797d8bcfaa90a1ffacc7aa68e463"]

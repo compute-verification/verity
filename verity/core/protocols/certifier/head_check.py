@@ -29,18 +29,17 @@ record digest under the certifier's salt and is all of the head the host's signa
 siblings in N2's tree, and `salt_c`, the 64 bytes the certifier drew for the record and handed over with its head.
 
 **What 1 means.** (1) The head opens at leaf 2 + direction of N2's commitment (`NetworkHidingRead`: its sha512/row/v2
-digest, hm96's hiding leaf, the frame-v3-sha512 read at depth 2), the leaf N3 opens for the same head
-(`N3HidingRead`). (2) Its fields are the ones the public inputs give (`NetworkHeadFields`): its link's length and name,
-its direction and window, the grid's T, r, B and τ_b, status 0 (complete) and the grid's parameters digest. (3) When
-COUNTS, its T counts are the profile's row (`NetworkHeadCounts`). (4) The certificate signs this head: R, the record
-digest of the head (`NetworkRecordDigest`, `tagged_sha512` of the record tag and the head), salted by `salt_c` is
-`signed`, SHA-512("verity/net-cert/v1" ‖ salt_c ‖ R) (`NetworkSignedDigest`). Two fields are free: the deadline byte,
-which N2's unit reads beside the head check for its public deadline bit (`service.OUTPUTS`), and the frames root,
-which N3's design holds the window's frames to on every port-window that recorded frames (a prototype in the clear,
-not a proof-service unit).
+digest, hm96's hiding leaf, the frame-v3-sha512 read at depth 2). (2) Its fields are the ones the public inputs give
+(`NetworkHeadFields`): its link's length and name, its direction and window, the grid's T, r, B and τ_b, status 0
+(complete) and the grid's parameters digest. (3) When COUNTS, its T counts are the profile's row
+(`NetworkHeadCounts`). (4) The certificate signs this head: R, the record digest of the head (`NetworkRecordDigest`,
+`tagged_sha512` of the record tag and the head), salted by `salt_c` is `signed`,
+SHA-512("verity/net-cert/v1" ‖ salt_c ‖ R) (`NetworkSignedDigest`). Two fields are free: the deadline byte, which N2's
+unit reads beside the head check for its public deadline bit (`service.OUTPUTS`), and the frames root, which nothing
+in N2 reads.
 
 `salt_c` is not committed: (4) holds it, up to a SHA-512 collision, to the one the certifier signed under, so the
-certificate binds the head the check opens, and the head leaf stays the head's bytes alone, the leaf N3 reads.
+certificate binds the head the check opens, and the head leaf stays the head's bytes alone.
 
 **Cost.** Beyond the opening, the fields are an equality of 736 + 8L bits and the counts one of 32·T bits, so
 32·T − 1 ANDs (19,199 at T = 600), and three ANDs join the four. The opening is SHA-512 of the head's 157 + L + 4T bytes
@@ -64,6 +63,7 @@ from typing import Callable, Sequence
 from verity.ml.circuits import boolean as BL
 from verity.ml.circuits.boolean import trace as TR
 from verity.ml.circuits.boolean.forms import and_reduce
+from verity.ml.circuits.boolean.trace import part as _part
 from verity.ml.circuits.codec import program_digest
 from verity.ml.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
 from verity.ml.circuits.evaluation.bits import evaluate_bits
@@ -114,26 +114,6 @@ def grid_bytes(params: GridParams, parameters: bytes) -> bytes:
 
 
 # --- the circuit: traced parts ----------------------------------------------------------------------------------------
-
-def _part(name: str, statics: tuple[str, ...], signature: Callable, build: Callable, doc: str,
-          version: int = 1) -> CompositeDefinition:
-    """A Definition ``name_v{version}`` traced from ``build(C, S, *elements)`` once per binding of ``statics``."""
-
-    @lru_cache(maxsize=None)
-    def traced(*key) -> TR.Traced:
-        S = SimpleNamespace(**dict(zip(statics, key)))
-        params, ret = signature(S)
-        return TR.trace(lambda C, *e: build(C, S, *e), [t for _, t in params], ret)
-
-    def body(B, S, *colls):
-        params, ret = signature(S)
-        return TR.emit(traced(*(getattr(S, k) for k in statics)), [t for _, t in params], ret, B, *colls)
-
-    d = CompositeDefinition(name, version, statics, signature, body, conformance="exact-model-tested", doc=doc)
-    d.traced = traced  # type: ignore[attr-defined]
-    d.build = build  # type: ignore[attr-defined]  # C-Flock lowers an activation by it, not gate by gate
-    return d
-
 
 def _same(x, want) -> object:
     """1 iff bit x is `want`: a bit of the circuit, or the constant 0 or 1."""
@@ -408,7 +388,7 @@ def gate(L: int, T: int, counts: bool) -> PrimitiveDefinition:
     (`@unpinned`), and no proof of its unit is accepted: give it a root in the sidecar's bindings and pin it with
     `circuit-check --update-pins`. The Program holds the gate rather than the Definition's body because the commitment
     gadgets' Boolean bodies (`Hm96Sha512Leaf`, `FrameV3Node`, `FrameV3Leaf`, `Sha512Compress`) encode to about 140 MB,
-    and the proof service encodes the Program on every registration."""
+    and the proof system encodes the Program on every registration."""
     d = unit(L, T, counts)
     return gate_of(d, pinned_digest(d), "N2's head check")
 

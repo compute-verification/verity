@@ -1,4 +1,4 @@
-"""H1's served activation quantizer (co32c-u16, decision 82) is bit-exact against steps.act_quant.
+"""H1's served activation quantizer (co32c-u16) is bit-exact against steps.act_quant.
 
 The GPU gate (benchmarks/pouw/edited_gemm/crun.sh) ties the served kernels crow_s + cquant_h1 to cgemm_ref.py's numpy
 recomputation; this ties that same numpy formula to steps.act_quant, so the served X equals steps' H1 arm. act_quant's

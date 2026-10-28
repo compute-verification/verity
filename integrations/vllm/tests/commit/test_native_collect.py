@@ -1,8 +1,8 @@
-"""R10 acq-native regression tests for the native collector (arena reuse, plan hit/miss, gap zeroing, byte layout, gather path).
+"""Regression tests for the native collector (arena reuse, plan hit/miss, gap zeroing, byte layout, gather path).
 
-Needs a CUDA device and nvcc (JIT build via torch.utils.cpp_extension); skipped otherwise.  The byte layout under test is CMT-3's
-(`NativeHostCommitter`, `ALIGN = 4`): 4-B aligned offsets, gaps zero-filled, tensors laid out in acquisition order -- the candidate must reproduce it
-bit-for-bit (same-layout root equality is the correctness gate of the lane).
+Needs a CUDA device and nvcc (JIT build via torch.utils.cpp_extension); skipped otherwise.  The byte layout under test is
+`NativeHostCommitter`'s (`ALIGN = 4`): 4-B aligned offsets, gaps zero-filled, tensors laid out in acquisition order -- the candidate must reproduce it
+bit-for-bit (same-layout root equality is the correctness gate).
 """
 from __future__ import annotations
 
@@ -211,7 +211,7 @@ def test_unflushed_stage_is_an_error(mod):
 
 
 def test_late_read_after_inplace_overwrite_binds_different_bytes(mod):
-    """Late-read regression (R10 acq-life `lifetimes.md`: qkv_proj out is rotated IN PLACE by RoPE at hook+1; o_proj / down_proj outputs
+    """Late-read regression (qkv_proj out is rotated IN PLACE by RoPE at hook+1; o_proj / down_proj outputs
     are overwritten by the fused norm at hook+1 -- zero-hook windows).  Staging the value and flushing only AFTER the in-place consumer
     binds the WRONG bytes; flushing before it (the P0/P1/P2 placement) binds the produced value.  Engine-level twin: `VERITY_FAULT=late_flush`
     (qkv_proj flush dropped -> read at o_proj, after RoPE) must yield a run root different from arm 2."""
@@ -239,7 +239,7 @@ def test_late_read_after_inplace_overwrite_binds_different_bytes(mod):
 
 
 def test_native_hook_body_collects_like_the_python_wrapper(mod):
-    """R11 v2: `HookFwd` (C++ forward wrapper) -- inactive collector: pass-through; active: every tensor of the output (tuple slots by
+    """`HookFwd` (C++ forward wrapper) -- inactive collector: pass-through; active: every tensor of the output (tuple slots by
     position), the first positional input when `nid_in >= 0`, then a flush when the module is a collection point."""
     c = mod.Collector()
     c.enable_gather(64)

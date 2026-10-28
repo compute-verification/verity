@@ -1,13 +1,13 @@
-"""`protocol_options.pouw_h1_commit` (ROOTS1, VLLM-73): with the Commit in H1's serving engine (`acquire.h1_commit.attach`:
+"""`protocol_options.pouw_h1_commit` (ROOTS1): with the Commit in H1's serving engine (`acquire.h1_commit.attach`:
 the int8 source at each linear's Int8RowQuant_v1 site and the step-input port, on a rows-sha512 committer whose acquires a
 `CommitTap` sees, refused under any other scheme or run root), its record
-registers each step's A table of K ``a/<K>@<s>`` (VLLM-77: both linears' rows, call after call) as its AROW of the
+registers each step's A table of K ``a/<K>@<s>`` (both linears' rows, call after call) as its AROW of the
 step and K and each round's input-ids table ``ids@<s>`` as its step's input ids, the window's own trees, and calls_root
 binds the record. A window whose served A is all zero codes, or one A row off the rows the Commit acquired, or whose
 step table holds its calls' rows shifted by a call, or whose Commit ids aren't its prompts, each with an honest Commit,
 credits nothing (`UNTIED`); core's credit refuses each at ``arow`` (here and `test_credit_gate`). The window here is a
 two-linear stand-in under the auditor host's coins (`test_pouw_h1._host`), or a linear and a MoE layer's routed experts
-(VLLM-80, `MoEModel`), whose calls' rows the Commit acquires under their H1 names, an idle expert's as its zero rows."""
+(`MoEModel`), whose calls' rows the Commit acquires under their H1 names, an idle expert's as its zero rows."""
 from __future__ import annotations
 
 import hashlib
@@ -232,14 +232,14 @@ GRAPH_PAD = 3
 
 
 def _manifest_sites(steps=range(FIRST, FIRST + STEPS), modules=("model.layers.0", "model.layers.1")):
-    """The bench row's manifest's Int8RowQuant_v1 sites (`int8_source.quant_sites`): (engine step, linear) -> its op path
+    """The bench workload's manifest's Int8RowQuant_v1 sites (`int8_source.quant_sites`): (engine step, linear) -> its op path
     ``<module>/<fx node>``, the fx nodes counted on through the run."""
     return {(e, m): f"{m}/row_quant_{i}" for i, (e, m) in enumerate((e, m) for e in steps for m in modules)}
 
 
 def _served_commit(com, model, quant=None):
     """serve-openai's committer as H1 sees it (`pipeline.serve_seal.committer`): the step-input port and the int8 source
-    of the bench row's manifest, ``com.sources``."""
+    of the bench workload's manifest, ``com.sources``."""
     from verity_vllm.acquire.sources.int8_source import Int8Source
     from verity_vllm.commit.served_record import StepInputPort
     port, src = StepInputPort(com, PORT_T), Int8Source(com, model, _manifest_sites() if quant is None else quant, [])
@@ -255,7 +255,7 @@ def _window(tmp_path, monkeypatch, edit=None, ids=lambda s, x: x, lay=None, mode
     out (`_Laid`). ``model`` is the two-linear `Model` unless given (`MoEModel`), H1's linears `pouw_h1_hooks.layers`
     of it; ``lie`` wraps them once H1 is installed (the GPU harness's `edited`); ``order`` the model's layers in the
     order the forward calls them (module order unless given). ``coins(eng, kw)`` is the window's settings as the GPU
-    harness makes them (`pouw_h1_gpu.h1_settings` with `kw`), else one session of `_host`'s; ``key`` the window's key
+    harness makes them (`pouw_h1_gpu.h1_settings` with `kw`), else one challenge phase of `_host`'s; ``key`` the window's key
     (`Served.window`), None for one keyed by its window-open root, as the harness's under a challenger. The Commit is
     H1's own (`h1_commit.attach` on the stand-in `Committer`), or with ``served_commit`` the server's (`_served_commit`,
     H1's tap on it `h1_commit.tap`); either way the ids are its step-input port's, each step's model input padded by
@@ -390,7 +390,7 @@ UNTIED_A = "roots1: round 0's A table h1/a/64@0 of calls [0, 1] is not the Commi
 
 @pytest.mark.parametrize("edit,own", [(_zero, 2), (_one_row, 1)], ids=["a-all-zero", "one-a-row-off"])
 def test_a_served_a_off_the_commits_arow_credits_nothing(tmp_path, monkeypatch, edit, own):
-    """H1 handed codes other than the ones the Commit acquired (every A all zero, the RT4 A = 0 probe; or one row of call
+    """H1 handed codes other than the ones the Commit acquired (every A all zero, the A = 0 probe; or one row of call
     0), with an honest Commit: the Commit registers those steps' rows as trees of its own at another root, so the
     serving process credits no call (`UNTIED`), and core's credit refuses the window at ``arow`` (also
     `test_credit_gate.test_a_window_whose_tables_are_not_the_commits_is_refused_by_core`)."""
@@ -416,7 +416,7 @@ def _offset(blocks):
     (_offset, "a-link", f"registered A value h1/a/64@0 has {3 * ROWS} rows, not the {2 * ROWS} the window's layout gives it"),
 ], ids=["rotated", "offset"])
 def test_a_step_table_with_a_calls_rows_shifted_by_a_call_is_refused_by_core(tmp_path, monkeypatch, lay, at, why):
-    """VLLM-77: a step's A table of K holds its calls of K's rows call after call, the j-th from row M·j, and a unit reads
+    """A step's A table of K holds its calls of K's rows call after call, the j-th from row M·j, and a proof block reads
     its call's rows at that offset. The window lays step s's table out shifted by a call, every row the served one: call 1's
     rows at row 0 and call 0's at row M (rotated), or each call's a call late behind an empty block (offset), with an
     honest Commit, which registers its own rows in call order at another root, so the serving process credits nothing.
@@ -468,7 +468,7 @@ def _experts(name):
 
 
 def test_each_routed_expert_calls_rows_are_the_commits_and_an_idle_experts_its_zero_rows(tmp_path, monkeypatch):
-    """VLLM-80: a MoE layer's routed experts are no modules, and the Commit acquires each expert call's Int8RowQuant_v1
+    """A MoE layer's routed experts are no modules, and the Commit acquires each expert call's Int8RowQuant_v1
     rows under the call's H1 name (`acquire.h1_commit.H1Source`), every expert at every step as `int8_experts.forward`
     calls them, an expert no row routed to as its zero rows. Its record registers each step's A table of K = 64 (the
     linear and the gate_ups) and of K = I (the downs) as their `credit.commit_rows`, the window's own trees; core's
@@ -513,7 +513,7 @@ def test_one_expert_calls_rows_off_the_commits_are_refused_by_core(tmp_path, mon
 
 def test_the_source_takes_every_linears_site_at_every_engine_step():
     """`source` names each of H1's linears by its module's name and taps its Int8RowQuant_v1 site at every engine step, so
-    X-03's targets at any step are each site's x_q and s_a; a layer not in the model is refused."""
+    The targets at any step are each site's x_q and s_a; a layer not in the model is refused."""
     model = Model()
     src = HC.source(Committer(), model, list(model.model.layers))
     want = {f"{CT.site(f'model.layers.{w}')}/{p}": 1 for w in range(2) for p in "01"}
@@ -535,7 +535,7 @@ def test_the_source_takes_every_linears_site_at_every_engine_step():
 
 def test_on_the_servers_commit_each_a_table_is_its_int8_sources_rows_and_each_rounds_ids_its_ports(tmp_path, monkeypatch):
     """serve-openai's rows-sha512 collector in the engine (`_served_commit`), H1's tap on it (`h1_commit.tap`) and no
-    Commit of H1's own: the tap reads each linear's x_q and s_a where the bench row's int8 source acquires them, under
+    Commit of H1's own: the tap reads each linear's x_q and s_a where the bench workload's int8 source acquires them, under
     the manifest's op paths, as the linear's site, and each step's ids at the port, its scheduled tokens only, so the
     graph's padded positions are neither ids nor cut from them again. The window ties as on H1's own Commit, core's
     ROOTS1 steps pass and every served call is credited; one whose served A is all zero, with the same honest Commit,
@@ -605,7 +605,7 @@ def test_h1_taps_the_servers_commit_only_where_it_acquires_every_linear_at_every
 
 class Top(nn.Module):
     """vLLM's top model as the step-input port's pre-hook sees it, called as ``(input_ids, positions)``: two linears and
-    an embedding it never calls, as GLM-5.3 at TP1 gathers its table fused (r20261024-015257-abac)."""
+    an embedding it never calls, as GLM-5.3 at TP1 gathers its table fused."""
 
     def __init__(self):
         super().__init__()
@@ -692,7 +692,7 @@ def test_the_gpu_harness_holds_each_window_to_cores_roots1_steps(tmp_path, monke
 
 def test_a_forward_out_of_module_order_ties_and_its_a_zero_is_refused_at_arow(tmp_path, monkeypatch):
     """A forward that calls linear 1 before linear 0, as GLM-5.3's DSA attention runs fused_qkv_a_proj and q_b_proj before
-    its indexer's wq_b, which module order puts first (r20261023-224227-ea5a, refused on layout): each call sits at its
+    its indexer's wq_b, which module order puts first (refused on layout before): each call sits at its
     (step, linear) index, each round's root is over its step's calls, and step s maps to the Commit's engine step at its
     first call, whichever linear that is. The two share K, so step s's A table of K is taken whole at linear 0's call,
     the last to come, with its rows (and the Commit's) in call order, linear 0's first. Core ties the honest window, and
@@ -716,10 +716,10 @@ def test_a_forward_out_of_module_order_ties_and_its_a_zero_is_refused_at_arow(tm
 
 
 class _Gate:
-    """Infra's gate for a run of several windows (`pouw_h1_gpu.window_sessions`): each ``reserve`` is a session of its own
+    """The challenger gate for a run of several windows (`pouw_h1_gpu.window_sessions`): each ``reserve`` is a challenge phase of its own
     on a challenger host of its own (`challenger_host.Host`, gated), all under one auditor key and one ledger, which
     reserves, opens and ends them in turn. Calling it is the gate's open (`pouw_h1_window.Gate`), the serving side
-    reaches the session opened last, and ``ended`` is the session's ``status`` once its end is in the ledger."""
+    reaches the challenge phase opened last, and ``ended`` is the challenge phase's ``status`` once its end is in the ledger."""
 
     def __init__(self, tmp_path, monkeypatch):
         self.dir, self.leaves, self.hosts, self.opened = tmp_path / "gate", itertools.count(), {}, None
@@ -749,7 +749,7 @@ class _Gate:
 
 def _live(gate, sessions, name):
     """``coins`` for `_window`: window `name`'s settings as the GPU harness makes them with ``--challenger --gate --peer``,
-    its session the one `sessions` (`pouw_h1_gpu.window_sessions`) reserves for it."""
+    its challenge phase the one `sessions` (`pouw_h1_gpu.window_sessions`) reserves for it."""
     from tests.protocols import pouw_h1_gpu as G
     return lambda eng, kw: G.h1_settings(eng, ROWS, STEPS, AUDITOR, sessions(name), gate, **kw)
 
@@ -761,7 +761,7 @@ def _in_process(eng, kw):
 
 
 def _summary_row(gate, sessions, name, record, run):
-    """Window `name` as the GPU harness's record keeps it for `pouw_h1_gpu.coins_summary`, its session ended."""
+    """Window `name` as the GPU harness's record keeps it for `pouw_h1_gpu.coins_summary`, its challenge phase ended."""
     from tests.protocols import pouw_h1_gpu as G
     end = G.session_end(gate, sessions.held[name]) if name in getattr(sessions, "held", {}) else None
     return {"coin_source": record["commitment"]["coin_source"], "gate": run.credit(), **({"session": end} if end else {})}
@@ -769,11 +769,11 @@ def _summary_row(gate, sessions, name, record, run):
 
 def test_each_commit_window_draws_every_coin_from_a_session_of_its_own(tmp_path, monkeypatch):
     """`pouw_h1_gpu.py --commit --challenger --gate --peer`: the honest Commit window and a negative each reserve their own
-    session at the gate (`window_sessions`), opened on that window's open root; every coin the credit gate checks, the
-    salt, each round's and the draw, is that session's, which the verifier trusts (`trusted_rounds_reason`) and which
+    challenge phase at the gate (`window_sessions`), opened on that window's open root; every coin the credit gate checks, the
+    salt, each round's and the draw, is that challenge phase's, which the verifier trusts (`trusted_rounds_reason`) and which
     ends closed and complete before the next is reserved (`session_end`). The honest window's credit gate passes every
     served call, the negative's refuses every one as untied (never as in-process), core still refuses the negative at
-    ``arow``, the harness's summary is ok, and a window asks for its session once."""
+    ``arow``, the harness's summary is ok, and a window asks for its challenge phase once."""
     from tests.protocols import pouw_h1_gpu as G
     gate = _Gate(tmp_path, monkeypatch)
     sessions = G.window_sessions(gate, "vy-nebius-1", STEPS)
@@ -814,7 +814,7 @@ def test_each_commit_window_draws_every_coin_from_a_session_of_its_own(tmp_path,
 
 
 def test_a_commit_window_on_coins_held_in_process_credits_nothing(tmp_path, monkeypatch):
-    """`pouw_h1_gpu.py --commit` without ``--challenger`` (LLAMAE2E's r20261024-180517-c69e): the Commit ties and core's
+    """`pouw_h1_gpu.py --commit` without ``--challenger``: the Commit ties and core's
     ROOTS1 steps pass, but the window's coins were drawn in the serving process, so its credit gate refuses every served
     call as ``coins-not-the-auditors`` and the harness's summary under a challenger run would not be ok."""
     from tests.protocols import pouw_h1_gpu as G
@@ -831,7 +831,7 @@ def test_a_commit_window_on_coins_held_in_process_credits_nothing(tmp_path, monk
 
 
 def test_a_run_mixing_live_and_in_process_coins_credits_only_the_live_window(tmp_path, monkeypatch):
-    """A run whose Commit window drew its coins from its own session and whose next window drew them in process: the live
+    """A run whose Commit window drew its coins from its own challenge phase and whose next window drew them in process: the live
     window credits every served call, the in-process one none (``coins-not-the-auditors``), and the summary is not ok,
     since every window of a challenger run must be the challenger's. One window's coins come from one source: settings
     with both the challenger and coins held in process are refused before anything is served."""
@@ -857,7 +857,7 @@ def test_a_run_mixing_live_and_in_process_coins_credits_only_the_live_window(tmp
 
 def test_a_refused_reserve_or_a_reused_session_serves_no_window():
     """`window_sessions` takes each window's reserve from the gate as it is: one the gate refuses, or an answer naming a
-    session another window of the run already holds, raises before the window is installed, so no coin is drawn."""
+    challenge phase another window of the run already holds, raises before the window is installed, so no coin is drawn."""
     from tests.protocols import pouw_h1_gpu as G
 
     class Refusing:
@@ -886,7 +886,7 @@ def test_a_refused_reserve_or_a_reused_session_serves_no_window():
 ])
 def test_the_harness_takes_commit_with_the_challenger_only_with_a_session_a_window(tmp_path, capsys, argv, why):
     """`pouw_h1_gpu.py --commit --challenger` serves several windows, so it needs ``--peer`` (each window reserves its own
-    session) and not one ``--session``; ``--peer`` needs ``--challenger`` and ``--gate``."""
+    challenge phase) and not one ``--session``; ``--peer`` needs ``--challenger`` and ``--gate``."""
     from tests.protocols import pouw_h1_gpu as G
     with pytest.raises(SystemExit):
         G.main(["--out", str(tmp_path), "--at", "t", "--by", "b", "--workload", "fill", "--served", *argv])
@@ -895,7 +895,7 @@ def test_the_harness_takes_commit_with_the_challenger_only_with_a_session_a_wind
 
 def test_credit_reads_round_zero_under_the_gate_session_the_window_was_served_in(tmp_path, monkeypatch):
     """`pouw_h1_gpu.py --credit` on a challenger window: round 0's input-ids and request tables bind the gate's reserved
-    session, so the stand-in's registration step (`pouw_h1_credit.check`) reads them under that session, never under the
+    challenge phase, so the stand-in's registration step (`pouw_h1_credit.check`) reads them under that challenge phase, never under the
     in-process one (`LOCAL_SESSION`), which gives them another domain."""
     from tests.protocols import pouw_h1_credit as PC
     from tests.protocols import pouw_h1_gpu as G

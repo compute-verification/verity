@@ -1,5 +1,5 @@
-"""A statement's proof files, verified by C-Flock's Lean verifier of record (`flock-verify verify --zk`, the Lake package
-`verity/core/service/flock`, built with `lake` on first use): the proof service's own run of the verifier, so a protocol
+"""A statement's proof files, verified by C-Flock's Lean verifier (`flock-verify verify --zk`, the Lake package
+`verity/core/service/flock`, built with `lake` on first use): the proof system's own run of the verifier, so a protocol
 reads each session's verdict from that run, never from a verdict record the prover hands in.
 
 `verify` takes a statement's files as the prover delivered them (`Proof`: the circuit file, the public file and the
@@ -8,16 +8,16 @@ committed for the circuit file, the program's descriptor, the partition object a
 registered values, the `--registered` file. It refuses
 a circuit file that doesn't hash to the committed digest before anything runs, so each verdict is over the circuit the
 auditor's own lowering built. The circuit file's tie to the program's Definitions rests on that lowering: the verifier
-holds the file to the program only as far as its META names it, until it derives the circuit from the descriptor
-(PRF-133). Then one `flock-verify verify --zk` over every session (`--registered` when the statement reads registered
+holds the file to the program only as far as its META names it, until it derives the circuit from the descriptor.
+Then one `flock-verify verify --zk` over every session (`--registered` when the statement reads registered
 values), and one `Finding` a session, in order:
 whether it was accepted and why not, the program its verdict names (`program_sha512`, the digest of the canonical
 descriptor without annotations, which an accepted verdict must give as the partition object's `program`),
-its registered finding (each port's value and opened root) and the units it proved, the public file's global unit
+its registered finding (each port's value and opened root) and the proof blocks it proved, the public file's global proof block
 indices of the instances its session drew (`unit_draw`), read only off a session the verifier accepted.
 
 The verifier reads the whole circuit file once a call, in time and memory linear in it (about six times the file at
-peak), then O(proof) a session: so a protocol verifies one statement a stratum, every drawn unit of it an instance.
+peak), then O(proof) a session: so a protocol verifies one statement a stratum, every drawn proof block of it an instance.
 
 The one-stage audit's v2 (`V2`, `SampledProofs.OneStageZk`) runs this verifier inside the audit's own Lean, on the files
 as content-addressed blobs: `check_v2` hands it v1's inputs with the verdicts replaced by the files' digests
@@ -45,7 +45,7 @@ from .verifier import PACKAGE as V2_PACKAGE
 
 PACKAGE = CORE / "service" / "flock"
 EXE = "flock-verify"
-#: the statement every drawn unit's session proves
+#: the statement every drawn proof block's session proves
 STATEMENT = "verity/flock-circuit"
 _DIGEST = re.compile(r"[0-9a-f]{128}")
 #: an input bound at registration (`program.REGISTERED_ID`, Lean's `Program.inputId?`), a descriptor's `definitions` key
@@ -70,7 +70,7 @@ class Proof:
 @dataclass(frozen=True)
 class Finding:
     """One session's verdict from the verifier's own run: accepted or not and why, the program its verdict names, its
-    registered finding (port -> {value, root}) and the global units it proved (none unless accepted)."""
+    registered finding (port -> {value, root}) and the global proof blocks it proved (none unless accepted)."""
 
     session: str
     accepted: bool
@@ -120,7 +120,7 @@ def reads_registered(program: bytes) -> bool:
 
 
 def proved_units(public: Path, session: Path) -> tuple[int, ...]:
-    """The global units a session proved: the public file's unit indices (``units.indices``) of the instances its record
+    """The global proof blocks a session proved: the public file's proof block indices (``units.indices``) of the instances its record
     drew (``unit_draw.units``), ascending. Read only off a session the verifier accepted."""
     indices = _header(public)["units"]["indices"]
     drawn = json.loads((session / "session.json").read_text())["unit_draw"]["units"]
@@ -129,9 +129,9 @@ def proved_units(public: Path, session: Path) -> tuple[int, ...]:
 
 def verify(proof: Proof, *, circuit_sha512: str, program: bytes, partition: Mapping[str, Any],
            registered: Mapping[str, Any] | None = None) -> tuple[list[Finding] | None, tuple[str, str] | None]:
-    """Each of `proof`'s sessions verified by the verifier of record against the verifier's own `program` (its
+    """Each of `proof`'s sessions verified by C-Flock's Lean verifier against the verifier's own `program` (its
     descriptor's bytes), `partition` and `registered` file (None only for a program that reads no registered value, such
-    as N2's, whose unit opens the committed value inside its circuit), on the circuit file the auditor committed as
+    as N2's, whose proof block opens the committed value inside its circuit), on the circuit file the auditor committed as
     `circuit_sha512`; the findings in session order and None, or None and the refusal (``registered``: `registered` is
     None and the program reads registered values, `reads_registered`; ``circuit``: the circuit file is not the
     committed one; ``proof``: a file is missing or the verifier's answer is not one verdict a session naming the

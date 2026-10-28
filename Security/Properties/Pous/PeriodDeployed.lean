@@ -13,9 +13,9 @@ floor give, outside both regions.
 
 * **The deadline and the floor.** `LIMIT_NS = Δ + RTT = 854,000 ns`, the memory challenger's limit. The fastest
   modelled multiplication round is `ROUND_NS = 361.55 / 3.490 ≈ 103.6 ns`: the timing red team's 361.55 ns per
-  16,448-bit squaring on one Zen 5 core (art:23a323f3), cut by the measured 8-core cooperation speedup of 3.490×
-  (r20260929-060834-0ec4). At that floor `DEADLINE_ROUNDS = ⌊LIMIT_NS / ROUND_NS⌋ = 8,243` sequential rounds fit the
-  deadline. The PoUS node itself (vy-dc-h200-2, r20261026-000854-1494) roots a block in 1.0931 s on its H200 and
+  16,448-bit squaring on one Zen 5 core, cut by the measured 8-core cooperation speedup of 3.490×. At that floor
+  `DEADLINE_ROUNDS = ⌊LIMIT_NS / ROUND_NS⌋ = 8,243` sequential rounds fit the deadline. The PoUS node itself roots a
+  block in 1.0931 s on its H200 and
   0.4602 s on one host core, about 26 and 61 of a block's 32,894 rounds in 854 µs.
 * **The budget** (`pous-ring-speed`). `RING_D = 16,446` multiplication rounds an answer: the most at which `rootProg`
   cannot finish one root (`PousP2Ring.rootProg_cost`, `PousP2Ring.p16448_root_bits`), at least `DEADLINE_ROUNDS`, and
@@ -47,8 +47,7 @@ open scoped ENNReal
 set_option exponentiation.threshold 20000
 
 /-- **The fastest modelled multiplication round, in ns**: the timing red team's 361.55 ns per 16,448-bit squaring on one
-Zen 5 core (art:23a323f3) cut by the measured 8-core cooperation speedup of 3.490× (r20260929-060834-0ec4), about
-103.6 ns. -/
+Zen 5 core cut by the measured 8-core cooperation speedup of 3.490×, about 103.6 ns. -/
 def ROUND_NS : ℚ := 36155 / 349
 
 /-- The sequential multiplication rounds that fit the memory challenger's limit at the floor:
@@ -90,8 +89,8 @@ def PeriodHeldDeployed : Prop :=
 /-- **The honest device**, one H200 serving `C*`, with one tick a round of the session: `2^30` bits of on-chip state, at
 least the H200's 992,061,184 bits of registers, shared memory with L1 and L2 at its data sheet
 (`Verity.Accel.H200.size`); `C*`'s `2^19 · 16,448` bits of device memory; and one side channel, its PCIe Gen 5 ×16
-link at its 64 GB/s line rate, 437,248,000 bits over a round of `854 µs` (the measured GPU-to-host copy is 57.2 GB/s,
-r20261019-061002-ee6b). -/
+link at its 64 GB/s line rate, 437,248,000 bits over a round of `854 µs` (the measured GPU-to-host copy is
+57.2 GB/s). -/
 def honestDevice : Accounting.Device Unit := ⟨2 ^ 30, FULL, fun _ => 0, 0, fun _ => 437248000⟩
 
 /-- A period on the honest device whose capacity account holds `m ≤ FULL` bits at every tick, its window the session's

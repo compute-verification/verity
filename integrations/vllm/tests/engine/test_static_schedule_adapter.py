@@ -1,4 +1,4 @@
-"""The adapter side of the static schedule (VLLM-31): a workload's `sampling.ignore_eos` reaches vLLM's SamplingParams, a static run is
+"""The adapter side of the static schedule: a workload's `sampling.ignore_eos` reaches vLLM's SamplingParams, a static run is
 refused under the host prefix cache before any request is added, and `run_requests` records `timing["static_schedule"]`.  Over a stub
 engine whose tokens depend on the prompt, so an EOS stop makes the schedule depend on contents and ignore_eos removes that."""
 from __future__ import annotations

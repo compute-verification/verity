@@ -1,7 +1,7 @@
-"""The proof service over a window of templates (a TP rank's served window): one `Stream` whose check is each template's
+"""The proof system over a window of templates (a TP rank's served window): one `Stream` whose check is each template's
 digest and `Q_template_instances` in the window's order, each registration's population the templates' mixed population
 at the challenger's own counts (`register(counts=)`), drawn once by `stratified:K`, a stratum per template each drawn at
-least once, and its whole run held to the Lean verifier of record's (`Run.run`) as one template's is."""
+least once, and its whole run held to the Lean verifier's (`Run.run`) as one template's is."""
 
 from __future__ import annotations
 
@@ -81,7 +81,7 @@ def test_a_windows_stream_takes_its_templates_digests_and_query_in_its_order():
 def test_a_two_template_window_runs_to_an_accepted_outcome_by_the_lean_run():
     """A window of PAIR x 1 and TRIPLE x 9 under `stratified:3`: registered at the challenger's own counts, drawn once
     from its coins with each stratum drawn its k (PAIR's by its floor of one), and run to an accepted outcome, the
-    verifier of record's whole run (`Run.run`, over the window's mixed population) agreeing."""
+    verifier's whole run (`Run.run`, over the window's mixed population) agreeing."""
     stream = _stream()
     rec = _record()
     reg = stream.register(rec, _ports(), counts=COUNTS)
@@ -100,7 +100,7 @@ def test_a_registration_of_another_window_is_refused():
     """The challenger builds the window's program from its own counts, so a record over another split of the same N
     (`R2-program`), over the templates in the other order (`query`), or over one template's population, is refused, and
     so are counts that miss a template, name another, give one none or a boolean, number other than N, or come to a
-    single unit's stream (`population`)."""
+    single proof block's stream (`population`)."""
     stream = _stream()
     other = {P.template_id(PAIR): 2, P.template_id(TRIPLE): 8}
     assert "R2-program" in _refused(lambda: stream.register(_record(other), _ports(), counts=COUNTS))
@@ -122,8 +122,8 @@ def test_a_registration_of_another_window_is_refused():
 
 
 def test_a_stratum_short_of_its_floor_is_refused():
-    """A record whose law draws PAIR's stratum none (below its floor of one) is refused (`R1-law`), and a draw short of
-    a stratum, from a sampler that draws only TRIPLE's units, is refused at the select (`check_draw`), before any proof."""
+    """A record whose sampling design draws PAIR's stratum none (below its floor of one) is refused (`R1-law`), and a draw short of
+    a stratum, from a sampler that draws only TRIPLE's proof blocks, is refused at the select (`check_draw`), before any proof."""
     rec = _record()
     short = {**rec, "law": {**rec["law"], "strata": [{**rec["law"]["strata"][0], "k": 0}, *rec["law"]["strata"][1:]]}}
     assert "R1-law" in _refused(lambda: _stream().register(short, _ports(), counts=COUNTS))

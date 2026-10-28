@@ -1,6 +1,6 @@
 """One proof session over several rounds (`Stream.session`): a stream of `rounds` R holds up to R registrations open, a
 session opens once after its last covered draw, the first covered round's proof deadline spans it, every covered draw's
-outcome binds the same delivered session, and each round's audit record reads only its own units and roots."""
+outcome binds the same delivered session, and each round's audit record reads only its own proof blocks and roots."""
 
 from __future__ import annotations
 
@@ -15,7 +15,7 @@ N = 6
 
 
 def _units(*draws):
-    """A sampler that draws `draws[i]` at its i-th call: each round its own units."""
+    """A sampler that draws `draws[i]` at its i-th call: each round its own proof blocks."""
     it = iter(draws)
     return lambda law, n: next(it)
 

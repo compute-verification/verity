@@ -280,7 +280,7 @@ At `D = 0` the responder makes no `Π₂` call and answers from its state alone,
 in-degree (every `d ≥ 0`). The same recipe gives `k = 89`, which `N = 1` (`p₀ ≤ 0.949459`) and `N ≥ 2`
 (`p₀ ≤ 0.949106` at `N = 2`) both need, with `r = 9495/10000` (`r^89 ≈ 0.00993`). `band_meets_family_d0` is
 `BandMultiMeetsFamily` with `D = 0`, `k = 89` and no bound on `d`; it is `Pous.Guarantees.BandMultiMeetsFamilyD0`,
-pinned (approved by Daniel, 3 Oct 2026). -/
+pinned. -/
 
 /-- The certificate's numbers at `D = 0`, `k = 89`, `r = 9495/10000`. -/
 theorem βOne_0_89 : βOne 0 89 = 267874909 := rfl

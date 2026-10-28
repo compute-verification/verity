@@ -4,7 +4,8 @@ Two commitment schemes, both wire-pinned by the SP1 kernel: transparent SHA-256 
 verifier-derived position domains, one word per leaf (``merkle``; ``verity.ml.commitments.multiproof`` opens many
 leaves of one tree at once), and trees over whole runtime tensor leaves under the ``verity-vllm/leaf/v1`` framing (``leaves``),
 the scheme the packed-word obligations of the serving path authenticate against.  ``indexed`` holds the domains,
-``identity`` the canonical-manifest digests every identity here is built from, ``limits`` the verifier's limits.
+``identity`` the canonical-manifest digests every identity here is built from, ``limits`` the verifier's limits, and
+``layout`` a serving step's Layout JSON (the rows a sequence slot commits), its checks and its digest.
 
 Two named schemes sit behind ``scheme.CommitmentScheme`` and are selectable by backends, each with a spec
 and conformance vectors beside it: ``frame_v3`` (word leaves and the ``sha256/row/v1`` / ``blake3-keyed/row/v2`` row

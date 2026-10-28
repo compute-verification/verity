@@ -1,6 +1,6 @@
 """The policy on a rank Program shaped like DeepSeek-V4-Pro's (`query.required.Population`):
 
-* TP-04: a row-parallel block-FP8 linear that reduces in its own body (`wo_b`: `DeepGemmFp8Linear_v1` then the all-reduce, both
+* a row-parallel block-FP8 linear that reduces in its own body (`wo_b`: `DeepGemmFp8Linear_v1` then the all-reduce, both
   under the linear's module) has its partial and every other port of the producer required, the partial spelt `part_rank<r>` and the
   others by their ports (`required.member_name`);
 * UNRETURNED: a Call no Call reads, the Program does not return and no policy requires (the indexer's projection on its short path)

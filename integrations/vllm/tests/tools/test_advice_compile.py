@@ -1,9 +1,11 @@
 """`tools/advice_compile.py --window K`'s inputs: the certified bodies are window K's own requests', so a user the run served
-again in a later window keeps the prompt it had in K; and K's carry is the close of the last window before it that ran steps."""
+again in a later window keeps the prompt it had in K; K's carry is the close of the last window before it that ran steps; and the
+default seed is the public one (`engine.served_seed`), whatever the run's server says it filled in."""
 from __future__ import annotations
 
 import importlib.util
 import json
+import re
 import sys
 from pathlib import Path
 
@@ -40,6 +42,17 @@ def test_a_window_reads_its_own_requests_when_a_user_is_served_again(tmp_path):
     assert reg == {"window": 0} and meta["default_seed"] == 7
     _, _, bodies, _ = AC.served_inputs(run, 3)
     assert bodies == {"u": {"max_tokens": 16, "prompt": [4, 5]}}
+
+
+def test_the_registered_default_seed_is_the_public_one_and_a_run_that_used_another_is_refused():
+    from verity_vllm.engine.served_seed import DEFAULT_SEED
+    assert AC.registered_seed({"default_seed": DEFAULT_SEED}) == DEFAULT_SEED
+    for seed in (7, 0, None, str(DEFAULT_SEED), float(DEFAULT_SEED)):
+        why = f"filled in default seed {seed!r}, and the registered one is engine.served_seed."
+        with pytest.raises(ValueError, match=re.escape(why)):
+            AC.registered_seed({"default_seed": seed})
+    with pytest.raises(ValueError, match="filled in default seed None"):
+        AC.registered_seed({})
 
 
 def test_a_user_with_two_requests_in_one_window_is_refused(tmp_path):

@@ -2,44 +2,40 @@
 # clone on every tick (`DriveFlags` in tools/research/src/research/queue.py), so a change here is a reviewed commit and needs no
 # restart. A flag given on the command line overrides its key here. ci owns this file; infra runs drive from it on the control pod.
 
-# the machines train.sh launches each train's check on (a machine, or `auto`)
+# the machines train.sh launches drive's Lean checks and its after-landing run on (a machine, or `auto`)
 on = ["vy-nebius-2", "vy-nebius-cpu-1", "vy-nebius-cpu-2", "vy-nebius-cpu-4", "vy-nebius-cpu-5"]
-# the most checks of `next` running at once
-max_running = 5
-# PRs per checked train on `next`
-train_size = 15
 # ready marks written before this don't count: drive's cutoff, 12 Oct
 marked_after = "2026-10-12T06:00:00Z"
-# steps a train lands without, still running; one that then fails reverts the landing (the Lean check's are never deferred; its
-# suites, lean-suites, are: Daniel's 11 Oct tier for parts whose cold run is over ~10 min, top 24 Oct 04:46Z)
-defer = ["circuit-check", "lean-suites", "pytest"]
-# land a train whose Lean check passed by committing the lock records it regenerated on top (CI-64)
+# land a prefix whose Lean check passed by committing the lock records it regenerated on top (CI-64)
 regenerate_locks = true
-# ready PRs to put at the bottom of `next`, in this order, ahead of members that keep their place (a fix the next train needs)
+# ready PRs to put at the bottom of `next`, in this order, ahead of members that keep their place (a fix `main` needs)
 first = []
 # scripts each PR passes, run from `main` as `python3 PATH MAIN TOP --json`: TOP is its head at the ready mark's preflight, and
-# its merge onto `next` at the sync, which leaves out what they refuse (26 Oct: #4238's merge took AGENTS.md over its cap); the
-# vLLM integration's lint ratchets don't grow, and a change to a lint is judged like source (Daniel's delegation to the vLLM
-# coordinator, 25 Oct 09:40Z). A sync's TOP holds every PR below it, so a gate is priced at a sync's N PRs, not one:
-# ratchet_gate caches each change's verdict and judges it once per `main` (26 Oct: uncached, one tick ran over 50 min)
+# its merge onto `next` at the sync, which leaves out what they refuse (a Markdown file over its cap); the
+# vLLM integration's lint ratchets don't grow, and a change to a lint is judged like source. A sync's TOP holds every PR
+# below it, so a gate is priced at a sync's N PRs, not one:
+# ratchet_gate caches each change's verdict and judges it once per `main` (uncached, one tick ran over 50 min)
 landing_gates = ["tools/verity/check/gates/markdown_caps.py", "integrations/vllm/tools/ratchet_gate.py"]
 # how `next` lands: "review", each member on a reviewer's land verdict (`research queue review`), a Lean change once a Lean check
-# passed, and the full check after landing, which reverts what it fails (Daniel, 24 Oct 06:05Z); "check", each train on its check
+# passed, and the full check after landing, which reverts what it fails; the only landing there is
 land = "review"
-# the after-landing run reuses no pass (`check.py --no-cache`), until a suite's reuse is per test
+# the after-landing run reuses no suite, Lean or step pass (`check.py --no-cache`), until a suite's reuse is per test; circuit-check
+# alone reuses its per-target passes (`--circuit-cache`), each keyed by everything that target read, since a cold `--all` (~4 h,
+# ten SHA-512 Definitions at 141-167 GB one at a time) outlasted every after-landing run from 24 Oct. The nightly `audit-main`
+# (`--no-cache`, no circuit cache) still checks every part cold, so it checks that reuse daily
 after_landing_no_cache = true
 # the most review-landing Lean checks running at once: one, and those stacked above it on `next` for Lean changes it doesn't hold
 max_lean_checks = 5
 # a sync merges PRs that change no Lean below Lean changes, so they don't wait for a Lean check (members it keeps never move)
 nonlean_first = true
-# the per-PR landing in shadow beside the trains (`research.drive`): at most this many of its checks at once, landing and ejecting
-# nothing; 0 is off (`research queue stats --per-pr` reads what it would land)
-per_pr_shadow = 0
+# while no Lean check of `next` runs, members with a land verdict go below those waiting for one, so a member waiting for its
+# review holds only itself (never past a held member, nor below a running Lean check's commit)
+reviewed_first = true
 # days an open PR not marked ready at its head stays idle (its head commit, and its ready, eject and review labels there) before
 # it is stale: `research queue status` says so and drive rings its owner once a day (`research.stale`); 0 is off
 stale_days = 3
 # days idle before drive closes such a PR, with a comment, its branch kept; never one with a hold label, a draft that says
-# "keep open", or one on `next`; 0 is off (TOP-90 row 36)
+# "keep open", or one on `next`; 0 is off
 stale_close_days = 7
 # PRs the stale rule never judges, kept open by their owners with a reason (top, 26 Oct 02:38Z, thread 1792970372.621909)
 stale_keep = [2692, 2693, 2705, 2948, 3205, 3401, 3573]

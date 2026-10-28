@@ -38,7 +38,7 @@ def test_the_recorded_sessions_reach_every_failure_but_tile() -> None:
 
 
 def test_a_session_that_defers_residency_at_a_lifetime_of_one_is_refused_by_both(server) -> None:
-    """Deferred, a block appended in window w is resident from w or w + 1, so its re-key falls at age L − 1: both sides
+    """Deferred, a chunk appended in window w is resident from w or w + 1, so its re-key falls at age L − 1: both sides
     refuse the parameters at L = 1, and take them at L = 2."""
     case = copy.deepcopy(M.recorded("honest-rekey")[0])
     case["params"]["deferred"] = True
@@ -50,7 +50,7 @@ def test_a_session_that_defers_residency_at_a_lifetime_of_one_is_refused_by_both
 
 @pytest.mark.parametrize("key", ["samples", "min_passes"])
 def test_a_session_that_could_draw_nothing_is_refused_by_both(server, key) -> None:
-    """A window draws `min(samples, U)` of its U ≥ `min_passes` receipts (a plan reads at least one block), so with
+    """A window draws `min(samples, U)` of its U ≥ `min_passes` receipts (a plan reads at least one chunk), so with
     both positive it draws at least one. Both sides refuse either at 0, so no session has a window with no draws, which
     both would reject `malformed` whatever its openings (`test_appends`, `test_opening`)."""
     case = copy.deepcopy(M.recorded("honest")[0])

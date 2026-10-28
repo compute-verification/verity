@@ -1,4 +1,4 @@
-"""One-stage audit: the demo partition query, the registration record, the draw and proved-unit checks, the profile."""
+"""One-stage audit: the demo partition query, the registration record, the draw and proved-block checks, the profile."""
 
 from __future__ import annotations
 
@@ -83,11 +83,11 @@ def test_the_size_classes_are_the_powers_of_two_from_16_to_the_widest():
 
 
 def test_a_unit_wider_than_the_widest_class_or_a_template_of_no_gate_is_refused():
-    """Each unit's committed bits fit a public size class, the least that holds them, and a template has a gate: a
+    """Each proof block's committed bits fit a public size class, the least that holds them, and a template has a gate: a
     template instance of 262,144 bits (the widest class, `Gemm_v2{K=2048,N=16384}`'s in the measured widths) is taken, one
-    of 262,208 bits and one of no gate are refused; a Call whose first unit at `X = 16` returns 16 bits and holds a
-    constant a later unit reads commits 24 bits, class 32, and is taken, as at `X = 8`, where that constant is in no
-    unit."""
+    of 262,208 bits and one of no gate are refused; a Call whose first proof block at `X = 16` returns 16 bits and holds a
+    constant a later proof block reads commits 24 bits, class 32, and is taken, as at `X = 8`, where that constant is in no
+    proof block."""
     v8x3 = Tuple(Value(8), Value(8), Value(8))
     const = PrimitiveDefinition("OneStageTestConst8", 1, (), Value(8), lambda: 0x5A, register=False)
     empty = bind(CompositeDefinition("OneStageTestEmpty", 0, (), lambda S: ((("x", Array(2, Value(8))),), Value(8)),
@@ -187,7 +187,7 @@ def test_v1_digests_are_pinned():
 def test_v1_names_a_template_by_its_descriptor_id_and_decodes_from_its_descriptor():
     """v1's record holds each template's descriptor id, so a float or string static is written canonically (not the readable
     `EPS=1e-05`). The decoder rebuilds either version's body from the descriptor's definitions, at the program's digest, ids
-    and units."""
+    and proof blocks."""
     prog = P.population_program(EPS, 2)
     assert prog.fn.bindings["template"] == codec.descriptor_id(EPS) != EPS.id
     assert codec.descriptor_id(prog.fn) == \
@@ -347,7 +347,7 @@ def test_profile_counts_wrong_units():
 
 def _v0(registration, draw, delta):
     """The record's `profile` and `wrong_units` as `audit.py` computed them before the profile was one type (`main` at
-    6746f408), kept as the oracle for the bytes recorded runs hold, but for a Bernoulli law's bound: then the linear
+    6746f408), kept as the oracle for the bytes recorded runs hold, but for a Bernoulli sampling design's bound: then the linear
     relaxation (`worst_case`), now the exact one the Lean computes (`Bernoulli.count_bound`, `Bound.bernoulliBound`)."""
     from verity.ml.circuits.partition import Level
     from verity.core.protocols.profile import Bernoulli, IntegrityProfile, Stratified, Stratum, Subset
@@ -378,7 +378,7 @@ def _v0(registration, draw, delta):
 
 
 def test_the_record_states_the_one_profile_in_its_recorded_bytes():
-    """One profile type for every law leaves the record's `profile` and `wrong_units` byte for byte as before (`_v0`)."""
+    """One profile type for every sampling design leaves the record's `profile` and `wrong_units` byte for byte as before (`_v0`)."""
     lean = {"accepted": True, "of_record": True, "digest": "dd" * 64}
     _, _, rec = _registration(6)
     d = {"law": "subset", "population": 6, "k": 2, "units": [1, 4]}
@@ -461,7 +461,7 @@ def test_the_wrong_unit_bound_matches_worst_case_and_scales():
     assert 9600 < big.bound() < 9750   # (1 - f)^256 = 2^-20 gives f ~ 5.27%, ~9,680 of 183,680
 
 
-# ---- the stratified law: strata per template, k_s = max(1, round(k n_s / n)) ---------------------------------------
+# ---- the stratified sampling design: strata per template, k_s = max(1, round(k n_s / n)) ---------------------------------------
 
 def _template(i: int):
     """A distinct one-input test template (its own descriptor id)."""
@@ -515,7 +515,7 @@ def test_r1_holds_the_registered_strata_to_the_verifiers_own():
     assert _check(rec, prog, q, law=rule).ok and _check(rec, prog, q, law=rec["law"]).ok
     strata = rec["law"]["strata"]
     tampered = [dict(rec["law"], strata=[{**strata[0], "k": 1}, strata[1]]),                          # a stratum's k
-                dict(rec["law"], strata=[{**strata[0], "units": [[0, 3]]}, {**strata[1], "units": [[3, 6]]}]),  # its units
+                dict(rec["law"], strata=[{**strata[0], "units": [[0, 3]]}, {**strata[1], "units": [[3, 6]]}]),  # its proof blocks
                 dict(rec["law"], strata=list(reversed(strata))),                                       # their order
                 dict(rec["law"], k=5), {"law": "subset", "k": 4}]
     for law in tampered:
@@ -539,7 +539,7 @@ def test_stratified_draw_checks():
     assert D.check_draw({**good, "units": [0, 1, 3, 5]}, rec, law).codes == ("strata-count",)
     assert D.check_draw({**good, "units": [1, 3, 4, 6]}, rec, law).codes == ("units-range", "strata-count")
     assert D.check_draw({**good, "k": 5}, rec, law).codes == ("law", "strata")
-    assert D.check_draw(good, rec, rule).codes == ("law",)            # the rule unexpanded is not the verifier's law
+    assert D.check_draw(good, rec, rule).codes == ("law",)            # the rule unexpanded is not the verifier's sampling design
     two = D.derive(prog, q, D.parse_law("stratified:2"))                  # k_s = 1, 1
     ones = [{**two["strata"][0], "k": True}, two["strata"][1]]           # `true` is not 1, as the Lean verifier reads it
     assert D.strata_problem(two, 6) is None and D.strata_problem({"k": 2, "strata": ones}, 6) is not None
@@ -556,7 +556,7 @@ def test_stratified_draw_checks():
 
 def test_one_stratified_draw_splits_over_several_tables():
     """A session of J tables splits one draw (Lean `Draw.tablesWhy`): a stratified draw whose sum of k_s is a positive
-    multiple of J, as a subset draw's k must be; a Bernoulli or work law never, whatever its count."""
+    multiple of J, as a subset draw's k must be; a Bernoulli or work sampling design never, whatever its count."""
     prog, q, rule, rec = _stratified_registration()
     law = D.derive(prog, q, rule)                                          # k_s = 2, 2
     good = {"law": "stratified", "population": 6, "k": 4, "strata": law["strata"], "units": [1, 3, 4, 5]}
@@ -573,7 +573,7 @@ def test_one_stratified_draw_splits_over_several_tables():
 
 def test_audit_record_under_the_stratified_law():
     """The bound is core's exact count_bound over the strata, each template's own bound is reported, and the integrity
-    profile carries the whole law."""
+    profile carries the whole sampling design."""
     from verity.core.protocols.profile import Stratified, Stratum
     prog, q, rule, rec = _stratified_registration()
     law = D.derive(prog, q, rule)
@@ -600,8 +600,8 @@ def test_the_subset_bound_is_now_the_exact_count():
 
 
 def test_a4_under_the_stratified_rule():
-    """A4 P6's population (six templates, 6,771,765 units) under `stratified:1024`: k_s = 1, 933, 2, 1, 1, 89, and at
-    most 91,063 wrong units at 2^-20 (uniform subset:1024: 91,051), with a floor in every template."""
+    """A4 P6's population (six templates, 6,771,765 proof blocks) under `stratified:1024`: k_s = 1, 933, 2, 1, 1, 89, and at
+    most 91,063 faulty proof blocks at 2^-20 (uniform subset:1024: 91,051), with a floor in every template."""
     sizes = (287, 6_171_648, 11_480, 287, 287, 587_776)
     temps = [_template(i) for i in range(6)]
     prog = P.mixed_population_program(list(zip(temps, sizes)))
@@ -653,7 +653,7 @@ def _core(program, q) -> dict:
 
 def test_the_partition_is_cores_on_the_pinned_q_word_vector():
     """One-stage names any `verity/partition/v1` object as core does, and applies the pinned `Q_word` vector as core does:
-    its units, some committing up to `W = 32` bits, fit the public classes."""
+    its proof blocks, some committing up to `W = 32` bits, fit the public classes."""
     prog = codec.decode_program(json.loads(QWORD["descriptor"]), REGISTRY)
     q = QWORD["object"]["query"]
     obj = P.partition(prog, q)
@@ -728,7 +728,7 @@ def test_a_pre_canonical_object_keeps_its_digest():
     assert P.digest(old) == hashlib.sha512(b"verity/partition/v1\x00" + codec.canonical_json(old)).hexdigest()
 
 
-# --- the work law (the draw law's second version; Lean `Flock.Draw.Law.work`) -------------------------------------------------
+# --- the work sampling design (the draw sampling design's second version; Lean `Flock.Draw.Law.work`) -------------------------------------------------
 
 def test_the_work_rule_sizes_by_work_above_the_floor():
     """`work_k` is Lean's `workK`: ceil(K w n_s / W), at least the floor and at most n_s; so every non-empty stratum draws at
@@ -755,7 +755,7 @@ def _work_program():
 
 
 def test_derive_expands_the_work_rule_over_the_verifiers_table():
-    """PAIR does the PoUW work; XOR3 stands for units credited nothing (dequantization, or filler: units of padded rows only,
+    """PAIR does the PoUW work; XOR3 stands for proof blocks credited nothing (dequantization, or filler: proof blocks of padded rows only,
     or declared uncredited), which draw their floor for integrity and add nothing to W."""
     prog, q = _work_program()
     table = {PAIR.id: 10, XOR3.id: 0}
@@ -796,7 +796,7 @@ def test_r1_holds_a_work_law_to_the_verifiers_own_table():
     assert rec["law"]["law"] == "work" and [s["k"] for s in rec["law"]["strata"]] == [1, 3]
     assert _check(rec, prog, q, law=rule, work_table=table).ok
     assert _check(rec, prog, q, law=rule, work_table={PAIR.id: 10, XOR3.id: 5}).codes == ("R1-law",)
-    assert _check(rec, prog, q, law=rule).codes == ("R1-law",)                           # no table: the law doesn't apply
+    assert _check(rec, prog, q, law=rule).codes == ("R1-law",)                           # no table: the sampling design doesn't apply
     assert _check(rec, prog, q, law=D.parse_law("stratified:4")).codes == ("R1-law",)
 
 
@@ -826,7 +826,7 @@ def test_work_draw_checks_and_closures():
 
 
 def test_audit_record_under_the_work_law():
-    """The work law is the stratified law at its sizes, so the profile is core's `Stratified` over the same strata at the
+    """The work sampling design is the stratified sampling design at its sizes, so the profile is core's `Stratified` over the same strata at the
     work sizes; the zero-work stratum is bounded by its floor draw."""
     from verity.core.protocols.profile import Stratified, Stratum
     prog, q, rule, table, rec = _work_registration()
@@ -842,7 +842,7 @@ def test_audit_record_under_the_work_law():
 
 def test_work_sizes_are_the_lean_verifiers():
     """The sizes `verity/ml/flock/tests/test_lean_verifier.py::test_work_draw_from_the_verifiers_own_program` pins for
-    `flock-verify draw --work K`: strata of 3, 3 and 4 units doing 3, 1 and 0 (W = 12), and its floor cases."""
+    `flock-verify draw --work K`: strata of 3, 3 and 4 proof blocks doing 3, 1 and 0 (W = 12), and its floor cases."""
     sizes, works = (3, 3, 4), (3, 1, 0)
     total = sum(w * n for w, n in zip(works, sizes))
     for k, want in {1: [1, 1, 1], 2: [2, 1, 1], 4: [3, 1, 1], 10: [3, 3, 1]}.items():

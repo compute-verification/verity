@@ -19,14 +19,13 @@ this file. `Accounting.Guarantees.TS.Sm100SheetHeadline` reads it.
   alone (A2). Its machine reproduces every DS-100 coefficient.
 * `d2s`, `model`: `dither-2s-licpw-redux-ldtm0-l32` as a TS model on the sheet's machine: writer kinds every MMA class
   of the census (ω its destination's 32-bit words a warp instruction, A6, sheet.toml's `omega`: an f64 element two) and
-  the uniform `UNI` (2, a UR pair: RT-HOPPER-7); the vector classes CUDA's lane classes and both readings' catch-alls
-  (NOROW, UNLISTED: A6 counts a vector word's instructions in them, and an instruction no class names, IMAD.WIDE among
-  them, counts in the catch-all, RT4-SHEET-14); the fold routes the design's fold and its 12 other bit-exact programs
-  (cp-seg4, cp-seg4u, cp-ats, cp-ats2, cp-ats8, cp-red, cp-red2, cp-red8, cp-red-generic, cp-red2-generic,
-  cp-red8-generic, cp-xt: the checkpoint's bit-exact loops, RT2-HOPPER-9, -11, RT3-DC-1, -4 and RT4-SHEET-7) on lanes,
-  and alone on the uniform datapath at the least of their counts; the table level's bytes counted in ALU, which `b_T =
-  0` prices at nothing (the census has no load class); A6's floors `q = q_T = ½`, `b_T = 0`; 32768 committed words a
-  unit of honest work (an UTCIMMA_M128_N256 at L = 32).
+  the uniform `UNI` (2, a UR pair); the vector classes CUDA's lane classes and both readings' catch-alls (NOROW,
+  UNLISTED: A6 counts a vector word's instructions in them, and an instruction no class names, IMAD.WIDE among them,
+  counts in the catch-all); the fold routes the design's fold and its 12 other bit-exact programs (cp-seg4, cp-seg4u,
+  cp-ats, cp-ats2, cp-ats8, cp-red, cp-red2, cp-red8, cp-red-generic, cp-red2-generic, cp-red8-generic, cp-xt: the
+  checkpoint's bit-exact loops) on lanes, and alone on the uniform datapath at the least of their counts; the table
+  level's bytes counted in ALU, which `b_T = 0` prices at nothing (the census has no load class); A6's floors `q = q_T =
+  ½`, `b_T = 0`; 32768 committed words a unit of honest work (an UTCIMMA_M128_N256 at L = 32).
 * `flat`: the floor program ♭ a unit: the MMA and the design's operand floor (word production), the fold (the fold
   routes' cheapest mix, by share of the words: cp-red2 65/72, cp-red8 7/72), no filler, and ε_skip's skippable work at
   FFMA's price, 0.698060% of ♭'s bound (`eps_budget.design_skip` on DS-100).

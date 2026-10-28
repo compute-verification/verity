@@ -7,7 +7,7 @@ holds only what GP-01 imports. The composed Program is then decoded in another f
 Three defects once failed only here: the descriptor writer aliased a node argument to its own node (`F32Eq(x, x)`), GP-01's
 registry lacked the keep word's word gates (`NvLogf_v1`), and the manifest's program view lacked `GumbelTopPTokenSelect_v2`.
 
-Deriving #101's own request Program needs vLLM (a GPU pod), so the `test_101s_…` tests take the Programs #101's Build wrote (preserved
+Deriving workload 101's own request Program needs vLLM (a GPU pod), so the `test_101s_…` tests take the Programs its Build wrote (preserved
 in the evidence store) through every later step the CPU can run: GP-01, the manifest step with its word check, the query's program
 view and the Match's and the Commit's lookups, each in a fresh interpreter. They skip where the store is unreachable.
 """
@@ -34,10 +34,10 @@ from verity_vllm.records import workload as WL
 from verity.ml.definitions.registry import b1
 
 VLLM_DIR = Path(__file__).resolve().parents[2]
-#: #101's Build on `edac1cf6` (main 432edb3b + #297; run r20260928-160311-303b): `build_request/` (the derived request Program) and
+#: workload 101's Build: `build_request/` (the derived request Program) and
 #: `build_workload/` (the workload Program GP-01 composed)
 BUILD_101 = "art:2d65d5d7bdc21af3df01c041272e5a72b40a86bc74cc09075c7e726cc01f1fd0"
-#: the row's manifest command (`row_stages.required_manifest`): every tap policy on, the word check at its default 16/32
+#: the workload's manifest command (`row_stages.required_manifest`): every tap policy on, the word check at its default 16/32
 MANIFEST_POLICY = ("--norm-scales", "--router-softmax", "--vocab-range", "--guarded-max")
 ROW_101 = "llama32-1b__bf16__l40s__tp1__b1__i256__o32__mixed__stoch-t0.8-p0.95__bi-eager"
 
@@ -81,7 +81,7 @@ def _compose(workload: Path, derived: Path, out: Path, eos: int) -> dict:
 
 def _decode_cold(descriptor: Path) -> int:
     """The gates of `descriptor` decoded in a fresh interpreter through the Match's registry (`instance_sequence._registry`, its own
-    module list), as the Build's next stage reads the workload Program."""
+    module list), as the Build's next phase reads the workload Program."""
     code = ("import gzip, json, sys\n"
             "from verity.ml.circuits.codec import decode_program\n"
             "from verity_vllm.check.match.instance_sequence import _registry\n"
@@ -117,7 +117,7 @@ def _build_101(tmp_path) -> Path:
 
 
 def _rekey_sha512(d: Path) -> None:
-    """#101's Build recorded its Program digest under SHA-256, before the identities moved to SHA-512. The record must be the SHA-256
+    """Workload 101's Build recorded its Program digest under SHA-256, before the identities moved to SHA-512. The record must be the SHA-256
     digest of the descriptor the Build wrote; each file of the request dir then carries that same descriptor's SHA-512 digest in its
     place, so nothing but the digest changes."""
     desc = json.load(gzip.open(d / "descriptor.json.gz"))
@@ -134,7 +134,7 @@ def _run(code: str, *args: str) -> subprocess.CompletedProcess:
 
 @pytest.mark.slow
 def test_101s_request_program_composes_as_its_build_does(tmp_path):
-    """#101's request Program (V = 128256, S = 32, 23.26 x 10^9 word gates once composed) through GP-01 and a cold decode."""
+    """Workload 101's request Program (V = 128256, S = 32, 23.26 x 10^9 word gates once composed) through GP-01 and a cold decode."""
     build = _build_101(tmp_path)
     r = _compose(VLLM_DIR / "workloads" / f"{ROW_101}.json", build / "build_request", tmp_path / "build_workload", eos=128001)
     assert r["requests"] == 1 and r["gates"] == 23_256_312_239
@@ -143,8 +143,8 @@ def test_101s_request_program_composes_as_its_build_does(tmp_path):
 
 @pytest.mark.slow
 def test_101s_manifest_step_resolves_every_call_as_its_build_does(tmp_path):
-    """`manifest build` as the row runs it, in its own interpreter: the program view finds every Call's Definition and the word check
-    runs over them all.  At the default gate limit its one violation is the sampler Call's size (the row raises the limit for it on a
+    """`manifest build` as the workload runs it, in its own interpreter: the program view finds every Call's Definition and the word check
+    runs over them all.  At the default gate limit its one violation is the sampler Call's size (the workload raises the limit for it on a
     big-memory pod, `VERITY_QWORD_MAX_GATES`), never a Definition the registry lacks."""
     build = _build_101(tmp_path)
     env = {k: v for k, v in os.environ.items() if k not in ("VERITY_QWORD_MAX_GATES", "VERITY_WORD_CHECK")}
@@ -157,7 +157,7 @@ def test_101s_manifest_step_resolves_every_call_as_its_build_does(tmp_path):
 
 @pytest.mark.slow
 def test_101s_program_view_and_word_lookups_resolve_every_call(tmp_path):
-    """In a fresh interpreter: the query's program view of #101's request Program (as the manifest reads it), every Call's ports and its
+    """In a fresh interpreter: the query's program view of workload 101's request Program (as the manifest reads it), every Call's ports and its
     Definition as the word check specialises it, the sampler's unit rule, and the Commit's replay evaluator for every family."""
     build = _build_101(tmp_path)
     code = ("import json, sys\n"
