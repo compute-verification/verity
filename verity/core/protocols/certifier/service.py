@@ -876,7 +876,7 @@ class LinkWindows:
     # the challenger
 
     def register(self, stream: S.Stream, record: Mapping[str, Any],
-                 drawn: Mapping[str, Any] | None = None) -> S.Registration:
+                 drawn: Mapping[str, Any] | None = None) -> S.WindowCommitmentRecord:
         """`stream.register` with the link-window's own ports, after holding the record's `window` provenance to exactly
         `{"kind": "served", "window": w}`: the service declares the provenance one public item and doesn't read it,
         and anything else there would reach the auditor. w is the registration's order in the stream, or with `drawn`,

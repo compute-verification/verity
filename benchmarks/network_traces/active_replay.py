@@ -163,7 +163,7 @@ from verity.core.protocols.certifier.schedule import (
 )
 from verity.core.protocols.certifier.served import Admission, ServedProfile, admits
 from verity.core.protocols.sampled_proofs.one_stage import registration as R
-from verity.core.protocols.sampled_proofs.service import Registration
+from verity.core.protocols.sampled_proofs.service import WindowCommitmentRecord
 
 MODEL = "llama-3.1-8b-instruct"
 HTTP_HEAD = b"HTTP/1.1 200 OK\r\ncontent-type: text/event-stream\r\ncache-control: no-cache\r\n\r\n"
@@ -1252,11 +1252,12 @@ def proxy_log(proxies: Sequence[Proxy]) -> dict:
             "prover": None if last.choices is None else last.choices.log} | salts | served_by | paced | _usage()
 
 
-def stand_in(window: int) -> Registration:
+def stand_in(window: int) -> WindowCommitmentRecord:
     """A stand-in for the proof system's registration of `window`, which the replay has none of: a record whose
     provenance names the window (`active.served_window`), with its receipt."""
     record = {"window": {"kind": "served", "window": window}}
-    return Registration(record, R.receipt(record, "active-replay", received=str(window)), R.digest(record), window)
+    return WindowCommitmentRecord(record, R.receipt(record, "active-replay", received=str(window)), R.digest(record),
+                                  window)
 
 
 def reveal_deadline(plan: dict, window_s: float) -> float:
