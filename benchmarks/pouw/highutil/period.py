@@ -394,7 +394,7 @@ def leaf_row(f: v31.Fill, afile: str, bfile: str, t: int, seeds: dict[str, bytes
     i0, j0 = tm * TILE + piece * nr, tn * TILE
     A = np.fromfile(afile, dtype=np.int8, count=nr * f.k, offset=(t * f.m + i0) * f.k).reshape(nr, f.k)
     B = np.fromfile(bfile, dtype=np.int8, count=TILE * f.k, offset=(t * f.n + j0) * f.k).reshape(TILE, f.k)
-    fm = v31.form(f, A, B, v31.Coins.rows(f, seeds, range(i0, i0 + nr), range(j0, j0 + TILE)))
+    fm = v31.form(f, A, B, v31.CallNoise.rows(f, seeds, range(i0, i0 + nr), range(j0, j0 + TILE)))
     X = fm.X
     if skip is not None:
         X = X.copy()
@@ -631,7 +631,7 @@ class RefDriver:
                 sd = v31.fill_seeds_from(rec[384 * (s * NL + li):384 * (s * NL + li + 1)])
                 skip = _cheated(kind) if kind != "none" and at in (None, li) else None
                 T = v31.fill_words(f, np.asarray(operand(self.cfg, "A", li, t)), np.asarray(operand(self.cfg, "B", li, t)),
-                                   v31.Coins.expand(f, sd), skip)
+                                   v31.CallNoise.expand(f, sd), skip)
                 key = (self.ks[li], self.calls[li] * f.leaves)
                 self.calls[li] += 1
                 cm = v31.fill_commit(f, v31.fill_buffer(f, T), *key)
