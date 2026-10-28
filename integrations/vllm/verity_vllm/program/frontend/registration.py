@@ -11,13 +11,13 @@ from verity.ml.circuits.types import Record, Type, Value
 from verity.ml.definitions.registry.tables import table_type
 
 
-class Registration:
+class RegisteredInputs:
     def __init__(self, values_param: int, tables: dict[str, int]) -> None:
         self.values_param, self.tables = values_param, dict(tables)
         self.fields: list[dict] = []   # {name, width, bits, offset}, in first-read order
 
     @classmethod
-    def declare(cls, params: list[tuple[str, Type]], ruleset, ep, mode: str) -> Registration:
+    def declare(cls, params: list[tuple[str, Type]], ruleset, ep, mode: str) -> RegisteredInputs:
         """Append `values` (filled by `finish`) and every declared table to `params`."""
         values_param, tables = len(params), {}
         params.append(("values", Record()))

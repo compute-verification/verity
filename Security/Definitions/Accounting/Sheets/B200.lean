@@ -116,9 +116,9 @@ inductive Ty
 
 /-- A1, f_max: 1965 MHz. Grade: measured only (the driver's maximum). Source: no NVIDIA document read states a B200
 clock (Blackwell Architecture Technical Brief V2.1, the Lenovo HGX B200 Product Guide, nvidia.com's HGX page); the
-driver's maximum at default clocks on vy-dc-b200 is 1965 MHz (sm_100/table.toml, EPS1 DC), and the tensor and clock
-probes saw at most 1957.1 MHz; the brief's 'FP64 Tensor Core 37 teraFLOPS' at the Guide's 64 FP64 results an SM clock
-over 148 SMs puts the FP64 clock at 1927 to 1980 MHz. -/
+driver's maximum at default clocks on the deployed B200 is 1965 MHz (sm_100/table.toml, EPS1 DC), and the tensor and
+clock probes saw at most 1957.1 MHz; the brief's 'FP64 Tensor Core 37 teraFLOPS' at the Guide's 64 FP64 results an SM
+clock over 148 SMs puts the FP64 clock at 1927 to 1980 MHz. -/
 def fmaxMHz : ℝ := 1965
 
 /-- The SMs A3's per-SM peaks multiply: 148. Grade: measured only. Source: no NVIDIA document read gives the B200's SM

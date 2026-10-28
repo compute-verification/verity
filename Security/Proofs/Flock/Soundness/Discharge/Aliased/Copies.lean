@@ -1,4 +1,5 @@
 import Proofs.Flock.Soundness.Discharge.Aliased.Rows
+import Proofs.Flock.Soundness.Discharge.Hm.SatEx
 
 /-!
 # `Layout.Aliased` from Δ's copy positions (`pp.aliased`)
@@ -60,11 +61,11 @@ variable {tags : Tags} {st : Stmt} (L : Layout st) (regs : List (Model.Region st
 def zeroPos {s₀ : ℕ} (hs₀ : s₀ < st.c.unitRange.count) : Fin (2 ^ (L.model regs).kLog) :=
   ⟨st.c.unitRange.slot s₀ + st.c.unit.useful, L.unit_slot_lt hs₀ F.check.unit_zero⟩
 
-/-- **A unit slot's forced-zero row carries 0**, in every block of a satisfying witness. -/
-theorem zeroPos_block {s₀ : ℕ} (hs₀ : s₀ < st.c.unitRange.count) {z : Model.Witness (L.model regs).m}
-    (hz : (L.model regs).Satisfies z) (o : Fin (2 ^ (L.model regs).nbl)) :
+/-- **A unit slot's forced-zero row carries 0**, in every block of a witness that satisfies it (`SatEx`). -/
+theorem zeroPos_block_ex {s₀ : ℕ} (hs₀ : s₀ < st.c.unitRange.count) {D : ℕ → Prop} {z : Model.Witness (L.model regs).m}
+    (hz : SatEx (L.model regs) D z) (hD : ¬ D (zeroPos L regs F hs₀).val) (o : Fin (2 ^ (L.model regs).nbl)) :
     (L.model regs).block z o (zeroPos L regs F hs₀) = 0 := by
-  have huse := (built_spec L.unit_built).2.1
+  have huse := (built_spec (L.built_flat F.parse.tmpl)).2.1
   have hA : ∀ j', sparseEntry st.c.unit.a st.c.unit.useful j' = 0 := fun j' => by
     unfold sparseEntry
     rw [ite_eq_right (by have := F.rowsA; omega)]
@@ -77,7 +78,13 @@ theorem zeroPos_block {s₀ : ℕ} (hs₀ : s₀ < st.c.unitRange.count) {z : Mo
   have hZ : ZeroRow (L.model regs) (zeroPos L regs F hs₀) :=
     ⟨fun j => (L.placed_zero hs₀ F.check.unit_zero huse hA hB _ j rfl).1,
       fun j => (L.placed_zero hs₀ F.check.unit_zero huse hA hB _ j rfl).2⟩
-  exact hZ.block_eq hz o
+  exact hZ.block_eq_ex hz hD o
+
+/-- **A unit slot's forced-zero row carries 0**, in every block of a satisfying witness. -/
+theorem zeroPos_block {s₀ : ℕ} (hs₀ : s₀ < st.c.unitRange.count) {z : Model.Witness (L.model regs).m}
+    (hz : (L.model regs).Satisfies z) (o : Fin (2 ^ (L.model regs).nbl)) :
+    (L.model regs).block z o (zeroPos L regs F hs₀) = 0 :=
+  zeroPos_block_ex L regs F hs₀ (hz.ex fun _ => False) not_false o
 
 /-- Unit slot `s₀`'s input `off`'s copy position: at a port bit, the column Δ copies into it (`flatSrcAt`), or the slot's
 forced-zero row when that column lies outside the block; at an input padding row, the row itself. -/
@@ -94,14 +101,14 @@ theorem copyAt_block {s₀ off : ℕ} (hs₀ : s₀ < st.c.unitRange.count) (hof
   unfold copyAt
   by_cases hm : off ∈ portBits st.c.unit.inGroups
   · rw [ite_eq_left hm]
-    have hnd := portBits_nodup L.unit_built
+    have hnd := portBits_nodup (L.built_flat F.parse.tmpl)
     obtain ⟨p, t, hp, ht, hpt⟩ := mem_portBits hm
     have hsrc : flatSrcAt st.c s₀ off = Flat.flatSrc st.c s₀ p t := by
       unfold flatSrcAt
       rw [hpt, portOf_eq hnd hp ht]
       congr 1
       omega
-    have hself := port_self L.unit_built (L.unitLog_le hs₀) hm
+    have hself := port_self (L.built_flat F.parse.tmpl) (L.unitLog_le hs₀) hm
     rw [hpt] at hself
     have hrow := fun j => L.placed_port F.parse F.check F.delta F.sha F.hm hnd hs₀ hp ht (fun j' => (hself j').1)
       (fun j' => by rw [L.unit_lookup]; exact (add_zero _).trans (hself j').2) r j (by rw [hr, hpt])
@@ -139,13 +146,11 @@ def copyPos {g : ℕ} (hg : g < st.c.g) (x : ℕ) : Fin (2 ^ (L.model regs).kLog
   else ⟨0, Nat.two_pow_pos _⟩
 
 /-- **Each of template instance `g`'s stacked unit inputs carries what its copy position carries**, at its place
-(`stackPlace`, which `Layout.Aliased` reads), in every block of a satisfying witness. -/
+(`Layout.col`, which `Layout.Aliased` reads), in every block of a satisfying witness. -/
 theorem copyPos_block {g : ℕ} (hg : g < st.c.g) (x : Fin ((unitRows st L.unit_built).stackW st.c.upv))
     (hx : x.val < ((unitRows st L.unit_built).stack st.c.upv).nIn) {z : Model.Witness (L.model regs).m}
     (hz : (L.model regs).Satisfies z) (o : Fin (2 ^ (L.model regs).nbl)) :
-    (L.model regs).block z o (stackPlace (L.model regs) (unitRows st L.unit_built) st.c.upv
-        (fun u => st.c.unitRange.slot (g * st.c.upv + u)) (L.hb hg) x) =
-      (L.model regs).block z o (copyPos L regs F hg x.val) := by
+    (L.model regs).block z o (L.col regs hg x) = (L.model regs).block z o (copyPos L regs F hg x.val) := by
   have hn := L.unitRows_nIn
   have hx' : x.val < st.c.upv * (unitRows st L.unit_built).nIn := hx
   have hx'' : x.val < st.c.upv * (st.c.unit.inWords * WORD) := by rw [← hn]; exact hx'
@@ -153,11 +158,7 @@ theorem copyPos_block {g : ℕ} (hg : g < st.c.g) (x : Fin ((unitRows st L.unit_
   rw [dite_eq_left hx'']
   refine copyAt_block L regs F _ (Nat.mod_lt _ (by
     exact Nat.pos_of_ne_zero fun h => by rw [h, Nat.mul_zero] at hx''; omega)) _ ?_ hz o
-  unfold stackPlace
-  rw [dite_eq_left hx']
-  show st.c.unitRange.slot (g * st.c.upv + x.val / (unitRows st L.unit_built).nIn) +
-    x.val % (unitRows st L.unit_built).nIn = _
-  rw [hn]
+  rw [L.col_val_in regs hg x hx', hn]
 
 /-- A forced-zero row of one of the unit slots. -/
 def IsZeroPos (q : Fin (2 ^ (L.model regs).kLog)) : Prop :=

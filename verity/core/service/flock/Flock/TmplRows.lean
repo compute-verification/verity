@@ -1,5 +1,5 @@
 /-
-A templated unit's input rows, checked on its description (PRF-133). `Net.ofRows` walks the unrolled input rows twice:
+A templated unit's input rows, checked on its description. `Net.ofRows` walks the unrolled input rows twice:
 each is a self row `A = B = [col]` or empty, and each input port bit has its self row (`Net.inputsOk`). `Tmpl.inputsT`
 checks both once per Definition and once over the root's copies (O(description), no copy unrolled): a Definition that
 writes only self rows wherever it is copied (`Def.selfOnly`), one whose self rows and runs of such copies side by side

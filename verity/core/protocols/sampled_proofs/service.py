@@ -1,4 +1,4 @@
-"""The proof service, the challenger's side: a protocol's `Spec`, the public-items rule (`check_public`), and a `Stream` of
+"""The proof system, the challenger's side: a protocol's `Spec`, the public-items rule (`check_public`), and a `Stream` of
 registrations, draws and outcomes over the one-stage audit (`one_stage`).
 
 A protocol states what it commits (`Spec.values`), which proof blocks need proofs (`Spec.selection`, its selection rule),
@@ -273,7 +273,7 @@ class Sequential:
 
 Selection = All | Law | Sequential
 
-RETIRED_TWO_STAGE = ("two-stage sampling is retired (ASK-25: everything is committed at serve time); a selection rule is "
+RETIRED_TWO_STAGE = ("two-stage sampling is retired (everything is committed at serve time); a selection rule is "
                      "all or a law")
 """The refusal of a selection rule that names two-stage sampling, here and in the Lean verifier (`Select.retiredTwoStage`)."""
 

@@ -8,4 +8,5 @@ vy-nebius-cpu-2 -i /home/research/.ssh/vy-cluster -o IdentitiesOnly=yes research
 vy-nebius-cpu-3 -i /home/research/.ssh/vy-cluster -o IdentitiesOnly=yes research@10.80.0.193
 vy-nebius-cpu-4 -i /home/research/.ssh/vy-cluster -o IdentitiesOnly=yes research@89.124.37.177
 vy-nebius-cpu-5 -i /home/research/.ssh/vy-cluster -o IdentitiesOnly=yes research@213.239.173.183
+vy-nebius-cpu-6 -i /home/research/.ssh/vy-cluster -o IdentitiesOnly=yes research@204.12.177.70
 vy-nebius-3 -i /home/research/.ssh/vy-cluster -o IdentitiesOnly=yes research@10.80.0.1

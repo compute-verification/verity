@@ -1,4 +1,4 @@
-"""RT-H200-EMP: every timed loop of a probe run against the data-sheet machine's facets, DS-90's rows (sm_90).
+"""Every timed loop of a probe run against the data-sheet machine's facets, DS-90's rows (sm_90).
 
   python3 emp.py RUN_OUT SASS_DIR [--json OUT]
 

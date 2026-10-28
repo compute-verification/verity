@@ -21,8 +21,9 @@ places the tile statement's reads (`h1window.table_reads`):
 * the partials: their own table from row 0 (`PouwWindow.Lanes.selfPlace`), the leaf's produced value.
 
 The tile's rounds are the round log's (`steps`, its calls the rounds' equal blocks), and its prefix and layout the
-descriptor's (`Credit.layoutOf`, `Credit.prefixOf`). `leafOwn?` is `PouwWindow.Lanes.leafOwn?` at that tile and
-placement, which `pouw-leaf-own-window` runs (`leafOwnCmd`). Its cost is the descriptor's bytes and the window's calls.
+descriptor's Program (`Credit.programOf`, `Credit.layoutOf`, `Credit.prefixOf`). `leafOwn?` is
+`PouwWindow.Lanes.leafOwn?` at that tile and placement, which `pouw-leaf-own-window` runs (`leafOwnCmd`). Its cost is
+the descriptor's bytes and the window's calls.
 -/
 
 namespace PouwCheck.LeafOwn
@@ -86,8 +87,9 @@ def placeOf (pre : String) (layout : Json) (steps call t : Nat) :
 `hm96-sha512/row/v2`. -/
 def leafOwn? (descriptor : ByteArray) (rounds registration produced file : Json) (u : Nat) (k : Option Nat) :
     Except String Unit := do
-  let layout ← (Credit.layoutOf descriptor).mapError (·.2)
-  let some pre := str? (Credit.prefixOf descriptor) | throw "the window's descriptor names no PREFIX"
+  let P ← (Credit.programOf descriptor).mapError (·.2)
+  let layout ← (Credit.layoutOf P).mapError (·.2)
+  let some pre := str? (Credit.prefixOf P) | throw "the window's descriptor names no PREFIX"
   let .arr log := rounds | throw "the round log is not a list"
   let (call, t) ← unitAt layout u
   let (T, place) ← placeOf pre layout log.size call t

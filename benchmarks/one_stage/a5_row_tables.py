@@ -44,7 +44,7 @@ RULE = "stratified:2"
 OF = {"fixture": "integrations/vllm/tests/pipeline/test_row_tables.py", "context": TR.CTX.hex()}
 
 
-def commit(out: Path) -> tuple[CS.Window, dict[int, bytes]]:
+def commit(out: Path) -> tuple[CS.Binding, dict[int, bytes]]:
     """The fixture's window under ``<ROOT>/rank0`` committed into ``out`` as serving commits it, its members' salts fresh;
     -> (the verifier's window, the step roots serving recorded)."""
     w, s, ms = TR.window()

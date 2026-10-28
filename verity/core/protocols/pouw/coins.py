@@ -29,13 +29,13 @@ from dataclasses import dataclass
 
 from verity.ml.commitments import (Commitment, CommitmentDomain, MerkleTree, Opening, RangeIndexedDomain,
                                            VerificationLimits, verify_opening)
-from verity.ml.commitments import hm96
+from verity.ml.commitments import domains, hm96
 from verity.core.protocols.sampled_proofs.challenger import coin_claim
 
 from .protocol import DomainError, tagged
 
-SCHEME = "verity/pouw/epoch-coins/v1"
-COIN_TAG = b"verity/pouw/epoch-coin/v1\0"
+SCHEME = domains.POUW_EPOCH_COINS
+COIN_TAG = domains.POUW_EPOCH_COIN.encode() + b"\0"
 LABELS = ("salt", "draw")
 COIN_BYTES = 32
 HM96 = hm96.SHA512
@@ -124,7 +124,7 @@ class Challenger:
     them at construction, before the epoch starts; `open` releases one coin, once, after the verifier has recorded
     `after`.  `entropy` has no default, so nothing here reads the operating system: a served challenger's is the Lean
     verifier of record's read of it (`verifier.coins`, `IO.getRandomBytes`, A3).  `claim` is the claim instance naming
-    `entropy` (the proof service's `challenger.coin_claim`), None for an unnamed source, which a served challenger
+    `entropy` (the proof system's `challenger.coin_claim`), None for an unnamed source, which a served challenger
     refuses (`challenger.served_claim`)."""
 
     def __init__(self, epoch: int, entropy: Callable[[int], bytes]):

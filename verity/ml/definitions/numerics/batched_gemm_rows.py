@@ -21,11 +21,10 @@ EVALUATOR = ("verity.ml.definitions.numerics.batched_gemm_rows.batched_gemm (Bat
 _CAPTURE = EVIDENCE["glm53_bf16_gemm_capture"]
 PROVENANCE = {
     "property": "glm53_bf16_gemm_capture (verity-vllm/glm53-bf16-gemm-capture/v3), tests/properties/glm53_bf16_gemm_capture_gpu.py",
-    "run": _CAPTURE["run"],
     "record": _CAPTURE["record"],
     "record_served_default": _CAPTURE["record_served_default"],
     "art": _CAPTURE["art"],
-    "device": "vy-glm53-eu, cc 9.0 with 132 SMs (the record's gate names the part), driver 580.173.02, torch 2.13.0+cu129 on the "
+    "device": "the capture node, cc 9.0 with 132 SMs (the record's gate names the part), driver 580.173.02, torch 2.13.0+cu129 on the "
               "venv's libcublas.so.12, vLLM 0.28.1rc1.dev472+gd9105ea80 (the record's cublas_version 130101 is the node's system "
               "libcublas.so.13, which that run's find_library picked, not the library torch loaded)",
     "captured_utc": _CAPTURE["captured_utc"],

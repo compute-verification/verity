@@ -3,14 +3,15 @@
 # verdict line in $OUT/verdicts.txt, and one record of every verdict. The chain, in order:
 #  1. serve: `verity-vllm serve-openai` of LLAMA32_1B_INT8 (REPO at REV, --precision PRECISION: verity-int8/Llama-3.2-1B-INT8, verity_int8) on one GPU
 #     under `gpu-lease`, `--scheme rows-sha512 --seal --admit release-order --window-requests SLOTS`, its committer built from
-#     the H200 int8 row's manifest (ROW/manifest.json) and taps (HIDDEN_SO, NORM_TAP_SO). Each closed window is sealed as a
+#     the H200 int8 row's manifest (ROW/manifest.json) and taps (HIDDEN_SO, NORM_TAP_SO), T tokens a step (--max-num-batched-tokens;
+#     T defaults to H1_T, else 512, with or without H1). Each closed window is sealed as a
 #     rows-sha512 row dir, and the seal opens each one's replay bundle (`deferred_rows.of_record`). Once it listens, before
 #     the first request, the committer registers its weights (`prove_path.py weights-registration`: each weight parameter of
 #     the checkpoint CKPT, REPO's snapshot at REV under HF_HOME, and the rotary table at the words the engine serves,
 #     $D/private/cos_sin_cache.npy, once within the analytic table's bound, committed under salts drawn from the committer's
 #     key $D/private/weights.key, 0600, neither of which a record copies); WEIGHTS says how many it roots and which it leaves unrooted, and
 #     why, or NO WEIGHTS REGISTRATION why not, and then every weight read counts free.
-#  2. requests: REQUESTS greedy requests (default SLOTS) from the certifier's traffic generator (`examples/vllm/serve_load.py --varied`:
+#  2. requests: REQUESTS greedy requests (default SLOTS) from the certifier's traffic generator (`demos/vllm/serve_load.py --varied`:
 #     prompts of PROMPTS tokens, at most MAX_TOKENS outputs), numbered under one release run and sent together (RATE a second),
 #     so the engine's idle closes them into one window. With LOAD=fixed (default varied) they are one full window of fixed
 #     length instead (`serve_load.py --fixed SLOTS --window-steps WINDOW_STEPS`): SLOTS requests of PROMPTS tokens, each
@@ -67,11 +68,19 @@
 # names the live challenger (run.sh's gate:USER@HOST with PP_PEER, PP_CHALLENGER_KEY and PP_GATE_KEY). With H1_GATE (the
 # lane's gate command, by default "ssh -i $HOME/.ssh/vllm_gate_ed25519 -o BatchMode=yes research@204.12.178.84"; empty, no
 # H1) the endpoint serves PoUW H1 (--protocols pouw:eps1-sm120-h1fx1 --challenger-gate H1_GATE --challenger-peer H1_PEER,
-# default vy-dc-h200, T H1_T 512 and S WINDOW_STEPS 16, the Program build H1 affords), each window's coins from a session of
+# default vy-dc-h200, at the engine's T and S WINDOW_STEPS 16, the Program build H1 affords), each window's coins from a session of
 # its own on vy-challenger-1, once `served_verdicts.py gate` finds no period of the lane open (a reserve would join it).
 # PoUW's piece (POUW_CMD's default then, `served_verdicts.py pouw`) checks the window's coins against the gate's session,
 # ledger and pins under H1_KEY_SHA512 (vy-challenger-1's key) and main's first-parent line from MAIN_SHA (default the tree's
 # HEAD). That key is a development key, so the run is a development run and credits nothing. The COINS line says which.
+# With H1_CIRCUITS too (a directory), once the endpoint listens and before the requests,
+# `pouw_h1_circuits --program D/h1 --out H1_CIRCUITS --live H1_T,WINDOW_STEPS --strata H1_STRATA` builds the circuit files of the Program serve-openai wrote (the live
+# file, and only the strata H1_STRATA lists, default none; a file already there under the same bind is reused), then
+# `served_verdicts.py period open` opens period H1_PERIOD (default served-RUN_ID) on the Program digest
+# serve-openai wrote, its draw K H1_DRAW_K (default `pouw_h1_challenger.draw_k`'s), its weights H1_MODEL's registration
+# (default none, which credit refuses), and its fixed length SLOTS requests of MAX_TOKENS; every window joins it, and
+# `period close` closes it once they're sealed. The PERIOD lines say what it committed. H1_STATEMENTS and
+# H1_LIVE_EVIDENCE (files) go to PoUW's piece as its --statements and --live-evidence, the evidence core's credit reads.
 # A step that can't run says why, and the chain stops there. C-Flock, Lean's flock-verify and sampled-proofs-verifier and the
 # tree's venv are built while the endpoint serves, C-Flock in FLOCK_WORK (kept on the node, so a rerun reuses its build).
 #   research run --on vy-dc-h200 --project verity --source TREE --cwd clone --timeout 6h -- \
@@ -90,6 +99,7 @@ VENV=${VENV:-/workspace/cp/venv312}
 REPO=${REPO:-verity-int8/Llama-3.2-1B-INT8} REV=${REV:-15b0976d400d796ee589e7737d03a919526bf800} PRECISION=${PRECISION:-verity_int8}
 PORT=${PORT:-18190} SLOTS=${SLOTS:-4} PROMPTS=${PROMPTS:-16:24} MAX_TOKENS=${MAX_TOKENS:-4} RATE=${RATE:-1000} SEED=${SEED:-1}
 REQUESTS=${REQUESTS:-$SLOTS} CLASSES=${CLASSES:-4,32,4} CAP=${CAP:-8388608} MAX_MODEL_LEN=${MAX_MODEL_LEN:-512}
+T=${T:-${H1_T:-512}}
 DISK_FLOOR_GB=${DISK_FLOOR_GB:-100}
 H1_KEY_SHA512=${H1_KEY_SHA512:-27271eaf917d1a817198cbcfe7684debd9bdb11b9e386460948bb981642fab3ae065c0a877330a0da68ae76969550eb786dc172319876aaca21fd116e5a193bc}
 H1_GATE=${H1_GATE-ssh -i $HOME/.ssh/vllm_gate_ed25519 -o BatchMode=yes research@204.12.178.84} H1_PEER=${H1_PEER:-vy-dc-h200}
@@ -197,7 +207,8 @@ serve() {  # under the lease: the endpoint, the requests, every closed window se
   cd "$TREE/integrations/vllm" || return 9
   local h1=()
   [ -n "$H1_GATE" ] && h1=(--protocols pouw:eps1-sm120-h1fx1 --challenger-gate "$H1_GATE"
-                           --challenger-peer "$H1_PEER" --max-num-batched-tokens "${H1_T:-512}")
+                           --challenger-peer "$H1_PEER")
+  [ -n "$H1_GATE" ] && [ -n "${H1_CIRCUITS:-}" ] && h1+=(--h1-prover "$D/private/h1")
   if [ -n "${WIPE_CMD:-}" ]; then  # the wipe of this card, before its engine loads
     mkdir -p "$OUT/pieces/wipe"
     (cd "$TREE" && timeout -k 1m "${WIPE_TIMEOUT:-20m}" bash -c "$WIPE_CMD" _ "$D" all "$OUT/pieces/wipe") \
@@ -207,7 +218,7 @@ serve() {  # under the lease: the endpoint, the requests, every closed window se
   # shellcheck disable=SC2086
   "$PY" -m verity_vllm.pipeline.cli serve-openai --model "$REPO" --revision "$REV" --out "$D" --port "$PORT" \
     --precision "$PRECISION" --run-id "${RESEARCH_RUN_ID:-local}" --scheme rows-sha512 --seal --gpu-tree \
-    --window-steps "$WINDOW_STEPS" "${h1[@]}" \
+    --max-num-batched-tokens "$T" --window-steps "$WINDOW_STEPS" "${h1[@]}" \
     --required-manifest "$ROW/manifest.json" --hidden-so "$HIDDEN_SO" --norm-tap-so "$NORM_TAP_SO" --tap-cap-mb 2048 \
     --admit release-order --window-requests "$SLOTS" --max-model-len "$MAX_MODEL_LEN" --window-gb 32 \
     --disk-floor-gb "$DISK_FLOOR_GB" --seal-hold-gb 32 --seal-warm-gb 0 --copy-records-to "$OUT/serve" ${SERVE_ARGS:-} \
@@ -226,6 +237,17 @@ serve() {  # under the lease: the endpoint, the requests, every closed window se
   fi
   say "SERVE $(grep -m1 'SERVE-OPENAI listening' "$OUT/serve.log" | cut -c1-300)"
   weights
+  local period=0
+  if [ -n "${H1_GATE:-}" ] && [ -n "${H1_CIRCUITS:-}" ]; then  # before the first window reserves, at its first engine step
+    (cd "$TREE/integrations/vllm" && PYTHONPATH=$PYTHONPATH:$TREE/verity/ml/flock/python "$PY" -m tests.protocols.pouw_h1_circuits \
+      --program "$D/h1" --out "$H1_CIRCUITS" --live "$T,$WINDOW_STEPS" --strata "${H1_STRATA:-none}") \
+      > "$OUT/h1-circuits.log" 2>&1 || say "H1-CIRCUITS refused (exit $?): $(tail -1 "$OUT/h1-circuits.log" | cut -c1-400)"
+    # shellcheck disable=SC2086
+    say "$("$PY" "$TREE/benchmarks/one_stage/served_verdicts.py" period open "$D" --gate "$H1_GATE" \
+      --name "${H1_PERIOD:-served-${RESEARCH_RUN_ID:-local}}" --circuits "$H1_CIRCUITS" --slots "$SLOTS" \
+      --max-tokens "$MAX_TOKENS" ${H1_DRAW_K:+--draw-k "$H1_DRAW_K"} ${H1_MODEL:+--model "$H1_MODEL"} 2>&1 | tail -1)"
+    [ -f "$D/period.json" ] && period=1
+  fi
   if [ -n "${CERTIFIER_FRONT:-}" ]; then  # the network certifier's warden in front of the endpoint, before the requests
     # below: its group closes into the run's earliest window, which `served_verdicts.py window` picks on a tie in requests
     (cd "$TREE" && timeout -k 1m "${CERTIFIER_FRONT_TIMEOUT:-20m}" bash -c "$CERTIFIER_FRONT" _ "$PORT" "$D" "$OUT/certifier-front") \
@@ -237,7 +259,7 @@ serve() {  # under the lease: the endpoint, the requests, every closed window se
     release=$("$PY" -c 'import uuid; print(uuid.uuid4().hex)')
     local load=(--varied "$REQUESTS" --rate "$RATE" --max-tokens "$MAX_TOKENS")
     [ "$LOAD" = fixed ] && load=(--fixed "$SLOTS" --window-steps "$WINDOW_STEPS")
-    "$PY" "$TREE/examples/vllm/serve_load.py" --port "$PORT" --model "$REPO" "${load[@]}" --prompt-range "$PROMPTS" \
+    "$PY" "$TREE/demos/vllm/serve_load.py" --port "$PORT" --model "$REPO" "${load[@]}" --prompt-range "$PROMPTS" \
       --release "$release" --seed "$SEED" --out "$D/load.jsonl" > "$D/load.log" 2>&1
     rc=$?
     say "REQUESTS (exit $rc, release run $release): $(tail -1 "$D/load.log" | sed -E 's/, prompts .*//' | cut -c1-300)"
@@ -254,6 +276,7 @@ serve() {  # under the lease: the endpoint, the requests, every closed window se
   trap - TERM INT
   kill -TERM "$srv" 2>/dev/null; wait "$srv"
   say "SERVE stopped (exit $?): $c window(s) closed, $s sealed"
+  [ "$period" = 1 ] && say "$("$PY" "$TREE/benchmarks/one_stage/served_verdicts.py" period close "$D" --gate "$H1_GATE" 2>&1 | tail -1)"
   [ "$rc" = 0 ] && [ "$c" -gt 0 ] && [ "$s" -ge "$c" ]
 }
 
@@ -358,8 +381,8 @@ if [ -n "$H1_GATE" ]; then
   "$PY" benchmarks/one_stage/served_verdicts.py gate --gate "$H1_GATE" ${MAIN_FILE:+--main "$MAIN_FILE"} 2>&1 \
     | tee -a "$OUT/verdicts.txt"
   [ "${PIPESTATUS[0]}" = 0 ] || stop gate 3
-  H1_COINS="PoUW H1: each window's coins from a session of its own on vy-challenger-1's gate (peer $H1_PEER, T ${H1_T:-512}, S $WINDOW_STEPS), a development run under the lane's development key: it credits nothing"
-  export POUW_CMD=${POUW_CMD:-"$TREE/.venv/bin/python benchmarks/one_stage/served_verdicts.py pouw \$1 \$2 \$3"}
+  H1_COINS="PoUW H1: each window's coins from a session of its own on vy-challenger-1's gate (peer $H1_PEER, T $T, S $WINDOW_STEPS), a development run under the lane's development key: it credits nothing"
+  export POUW_CMD=${POUW_CMD:-"$TREE/.venv/bin/python benchmarks/one_stage/served_verdicts.py pouw \$1 \$2 \$3${H1_STATEMENTS:+ --statements $H1_STATEMENTS}${H1_LIVE_EVIDENCE:+ --live-evidence $H1_LIVE_EVIDENCE}"}
 fi
 if [ -n "${PP_CHALLENGER:-}" ]; then
   say "COINS sampled proofs: the live challenger $PP_CHALLENGER (peer ${PP_PEER:-?}); $H1_COINS"

@@ -24,8 +24,8 @@ record, the sampling record's `flock`, and their antecedents are of that record 
 * `Sampling.scope_meets`: the sampling scope's readable form (`Sampling.InScope`) holds a program, partition and
   design; it reads no field of the record, of which the tree has no concrete one. It is the readable part of the
   sampling `Complete`'s antecedent, of what its `ScopeMatches` equates, and of `Nontrivial`'s runs.
-* `Sampling.universal_meets`: some netlist fits its size class, on inputs of the class's width, the antecedent of
-  `Universal`, which reads no field of the record either.
+* `Sampling.universal_meets`: some private circuit fits its size class, on inputs of the class's width, the antecedent
+  of `Universal`, which reads no field of the record either.
 -/
 
 open FlockDeploy
@@ -54,7 +54,7 @@ theorem Flock.masked_meets_zk (rel : Flock.Readable.Parsed → Flock.Readable.Re
 /-- **A statement of a record's readable scope**: `2^m` trace bits in blocks of `2^6`, the empty circuit, one table,
 hm96 rows (`rows-v1`) under SHA-512 leaves. -/
 def Flock.scopeStmt (m : ℕ) : Claims.Flock.Stmt :=
-  ⟨m, 6, ⟨0, [], []⟩, fun _ => [], fun _ => [], [],
+  ⟨m, 6, ⟨0, fun g => g.elim0, fun g => g.elim0, ∅⟩, fun _ _ => .pub 0, fun _ _ => .pub 0, [],
     ⟨true, false, true, "hm96-sha512/v1", 1, false, false, false, false, 1, false, 0, true, true, false, false⟩⟩
 
 /-- **The plain record's readable scope holds a statement with a witness in its relation.** -/
@@ -64,7 +64,7 @@ theorem Flock.scope_meets_plain (rel : Flock.Readable.Parsed → Flock.Readable.
   ⟨Flock.scopeStmt 22, ⟨[]⟩, by
     show Claims.Flock.InScope false _
     unfold Claims.Flock.InScope
-    decide, fun _ _ => rfl⟩
+    decide, fun _ _ o => o.elim0⟩
 
 /-- **The masked record's readable scope holds a statement with a witness in its relation**, at `2^25` trace bits. -/
 theorem Flock.scope_meets_zk (rel : Flock.Readable.Parsed → Flock.Readable.Relation) :
@@ -73,7 +73,7 @@ theorem Flock.scope_meets_zk (rel : Flock.Readable.Parsed → Flock.Readable.Rel
   ⟨Flock.scopeStmt 25, ⟨[]⟩, by
     show Claims.Flock.InScope true _
     unfold Claims.Flock.InScope
-    decide, fun _ _ => rfl⟩
+    decide, fun _ _ o => o.elim0⟩
 
 /-- **A statement of the sampling scope**: the one-gate program that returns its input, under `Q_word` v1, with the
 design that checks every unit of its one class. -/
@@ -100,11 +100,11 @@ theorem Sampling.scope_meets :
   · simp [Sampling.scopeStmt, Sampling.scopePartition, Claims.Sampling.Rule.WellFormed,
       Claims.Sampling.OneStage.WellFormed]
 
-/-- **A private circuit of a size class**: the class of one gate over two inputs and one output, and its netlist, the
-AND of the two inputs, on inputs of its width. -/
+/-- **A private circuit of a size class**: the class of one gate over two inputs and one output, and a private circuit
+of it, the AND of the two inputs, on inputs of its width. -/
 theorem Sampling.universal_meets :
-    ∃ (c : Claims.Sampling.SizeClass) (n : Claims.Sampling.Netlist) (x : List Bool), n.Fits c ∧ x.length = c.nIn :=
-  ⟨⟨1, 2, 1⟩, ⟨2, [(1, 0, 1)], [2]⟩, [true, false], by unfold Claims.Sampling.Netlist.Fits; decide, rfl⟩
+    ∃ (c : Claims.Sampling.SizeClass) (n : Claims.Sampling.PrivateCircuit) (x : List Bool), n.Fits c ∧ x.length = c.nIn :=
+  ⟨⟨1, 2, 1⟩, ⟨2, [(1, 0, 1)], [2]⟩, [true, false], by unfold Claims.Sampling.PrivateCircuit.Fits; decide, rfl⟩
 
 /-- **At a sampling record over the plain record**, its Flock record's decoder meets the list-decoding spec. -/
 theorem Sampling.decoder_meets_plain (rel : Flock.Readable.Parsed → Flock.Readable.Relation)

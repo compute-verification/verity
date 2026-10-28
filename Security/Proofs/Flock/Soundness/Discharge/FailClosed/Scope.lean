@@ -44,9 +44,8 @@ without `--zk` or `--plain-tables` at public outputs, or under `--plain-tables` 
 a header naming registered values without `--registered`; with it, `Registered.check` needs a shared-row public file,
 which the check passes only at hidden outputs and `hm96-sha512/v1` leaves, where `VerifiesR` and `VerifiesZKR` model the
 registered check), a coin-tree
-key an earlier session of the run used, and a session file it cannot read. A later session of a run whose draw has an earlier
-one's canonical form is verified against that earlier setup; `canon` takes integers only, so the two draws hold the same
-content.
+key an earlier session of the run used, and a session file it cannot read. Each drawn session of a run is set up at its own draw,
+and the draw-less setup, one statement, once.
 -/
 
 namespace FlockSoundness.Discharge.FailClosed
@@ -86,21 +85,24 @@ theorem portReadsB_eq (net : Net) : ProvedScope.portReadsB net = Layout.portRead
 
 /-- **The executable's `scopeOk` is `Layout.scopeOk`.** -/
 theorem scopeOk_eq (c : Circuit) : ProvedScope.scopeOk c = Layout.scopeOk c := by
-  simp only [ProvedScope.scopeOk, Layout.scopeOk, portReadsB_eq, ProvedScope.v1Ports, Layout.v1Ports]
+  simp only [ProvedScope.scopeOk, Layout.scopeOk, portReadsB_eq, ProvedScope.v1Ports, Layout.v1Ports,
+    ProvedScope.v1Rows, Layout.v1Rows, ProvedScope.unpinned, Layout.unpinned]
 
 /-- **The executable's `scopeOkH` is `Layout.scopeOkH`.** -/
 theorem scopeOkH_eq (c : Circuit) : ProvedScope.scopeOkH c = Layout.scopeOkH c := by
   have e : ProvedScope.v2Row = Layout.v2Row := rfl
   have e' : ProvedScope.segRow = Layout.segRow := rfl
   simp only [ProvedScope.scopeOkH, Layout.scopeOkH, portReadsB_eq, ProvedScope.v1Ports, Layout.v1Ports,
-    ProvedScope.bitRows, Layout.bitRows, e, e']
+    ProvedScope.v1Rows, Layout.v1Rows, ProvedScope.unpinned, Layout.unpinned,
+    ProvedScope.bitRows, Layout.bitRows, ProvedScope.bitRowsU, Layout.bitRowsU, e, e']
 
 /-- **The executable's `scopeOkI` is `Layout.scopeOkI`.** -/
 theorem scopeOkI_eq (c : Circuit) : ProvedScope.scopeOkI c = Layout.scopeOkI c := by
   have e : ProvedScope.v2Row = Layout.v2Row := rfl
   have e' : ProvedScope.segRow = Layout.segRow := rfl
   simp only [ProvedScope.scopeOkI, Layout.scopeOkI, portReadsB_eq, ProvedScope.v1Ports, Layout.v1Ports,
-    ProvedScope.bitRows, Layout.bitRows, e, e']
+    ProvedScope.v1Rows, Layout.v1Rows, ProvedScope.unpinned, Layout.unpinned,
+    ProvedScope.bitRows, Layout.bitRows, ProvedScope.bitRowsU, Layout.bitRowsU, e, e']
 
 /-! ## The check, and what it gives -/
 

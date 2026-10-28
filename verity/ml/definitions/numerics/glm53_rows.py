@@ -55,11 +55,10 @@ EVALUATORS = {
 _CAPTURE = EVIDENCE["glm53_bf16_gemm_capture"]
 PROVENANCE = {"LlBf16SplitKGemm_v1": {
     "property": "glm53_bf16_gemm_capture (verity-vllm/glm53-bf16-gemm-capture/v3), tests/properties/glm53_bf16_gemm_capture_gpu.py",
-    "run": _CAPTURE["run"],
     "record": _CAPTURE["record"],
     "record_served_default": _CAPTURE["record_served_default"],
     "art": _CAPTURE["art"],
-    "device": "vy-glm53-eu, cc 9.0 with 132 SMs, driver 580.173.02, torch 2.13.0+cu129, vLLM 0.28.1rc1.dev472+gd9105ea80",
+    "device": "the capture node, cc 9.0 with 132 SMs, driver 580.173.02, torch 2.13.0+cu129, vLLM 0.28.1rc1.dev472+gd9105ea80",
     "captured_utc": _CAPTURE["captured_utc"],
     "variants": {"split_k_off": "GO", "served_default": "GO"},
     "cases": {

@@ -4,6 +4,7 @@ import Flock.Hash
 import PouwCheck.Json
 import PouwCheck.Tile
 import PouwWindow.Length
+import Identity.Domains
 
 /-!
 # The check's three inputs (`core_check.py`, "the three inputs")
@@ -141,9 +142,9 @@ def rootOf? (j : Json) : Option Root := do
 its salt and the registered weights' entries (`valuesRoot?`). -/
 def WINDOW_VALUES : List String := ["activations", "registered"]
 
-/-- The record's `window`: its kind, its context, the items it registers, and its groups of committed values
-(`WINDOW_VALUES`), each `some` exactly when the window has the key, whatever its value. -/
-structure Window where
+/-- The record's `window` item, its execution block: its kind, its context, the items it registers, and its groups of
+committed values (`WINDOW_VALUES`), each `some` exactly when the item has the key, whatever its value. -/
+structure ExecutionBlockItem where
   kind : String
   context : String
   items : Json
@@ -161,7 +162,7 @@ structure Registration where
   population : Nat
   law : Json
   roots : Array Root
-  window : Window
+  window : ExecutionBlockItem
 
 def registrationOf (b : ByteArray) : V Registration := do
   let rec_ ← Core.canonicalJson b
@@ -181,7 +182,7 @@ def registrationOf (b : ByteArray) : V Registration := do
     | _ => none
   let some roots := roots | throw "roots is not a list of {domain, leaves, port, root}"
   let w := get rec_ "window"
-  let window : Option Window := do
+  let window : Option ExecutionBlockItem := do
     guard ((keys w).map (·.filter (!WINDOW_VALUES.contains ·)) == some ["context", "kind", "public"])
     let items := get w "public"
     guard (keys items).isSome
@@ -315,5 +316,9 @@ def evidenceOf (b : ByteArray) : V Evidence := do
     | .reject => pure (Said.reject (a.reason.getD ""), none)
     | .undecided => pure (Said.undecided (a.reason.getD ""), none)
   pure ⟨a.protocol, a.digest.map Flock.hexOf, said, salt⟩
+
+/-! Each separator below keeps its literal while a lock reads its definition, whose record hashes the value as
+written: tied here to its entry of the table (`Identity.Domains`), it reads the entry at its next record change. -/
+example : formats = [Domains.REGISTRATION_V1, Domains.REGISTRATION] := rfl
 
 end PouwCheck

@@ -84,7 +84,7 @@ pub const LABEL_R1CS: &[u8] = b"flock-r1cs-v0";
 
 /// Every thread's stack, the prover's and the verifier's, ours and Flock's (its pools and their helper threads, patched to
 /// `flock_core::THREAD_STACK`): Rust's 2 MiB default overflows on a large statement's proof
-/// (`RMSNormCudaVector8_v1{BLOCK=256}`, PRF-141; `SiluMul_v2{I=1536}` at m=27, PRF-146).
+/// (`RMSNormCudaVector8_v1{BLOCK=256}`; `SiluMul_v2{I=1536}` at m=27).
 pub const THREAD_STACK: usize = flock_core::THREAD_STACK;
 
 /// Rayon's global pool on [`THREAD_STACK`] stacks. First thing in a binary's `main`, before any parallel iterator builds the
@@ -1188,13 +1188,13 @@ pub struct SessionConfig {
     /// The prime prover's coins are served in this session (`Prime` rounds); `Commit` needs at least one before it.
     pub prime_live: bool,
     /// Step 0 (`coin_seed::SCHEME`): the verifier commits to a seed in answer to `Hello`, derives every coin from it and reveals
-    /// it in its verdict (lane flock-circuit). Off for every statement that does not ask for it.
+    /// it in its verdict. Off for every statement that does not ask for it.
     pub coin_seed: bool,
     /// The coin server keeps every round's bytes and the replay compares the proof's messages with them byte for byte (the
     /// round digests stay, as framing); the record carries them. Off for every statement that does not ask for it.
     pub retain_rounds: bool,
     /// The hash of every digest the record binds (root_F, root_B, publics, link, rounds, proofs, stream roots): SHA-256, or
-    /// SHA-512 for a statement that asks (Daniel's rule: SHA-512 on every binding path; named in `Hello`).
+    /// SHA-512 for a statement that asks (SHA-512 on every binding path; named in `Hello`).
     pub sha512_digests: bool,
     /// The draw this statement proves (its public header's `unit_draw`, under Σ); the record keeps it (U1).
     pub unit_draw: Option<Value>,

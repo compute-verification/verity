@@ -1,6 +1,6 @@
 """C-Flock's generic IR lowering: an IR Definition becomes a Flock binary circuit by composing :mod:`fp` pieces.
 
-:func:`lower` walks the Definition's gates in canonical order, as ``verity.ml.circuits.evaluate`` does, and maps each primitive to
+:func:`lower` walks the Definition's gates in canonical order, as ``verity.ml.circuits.evaluation.reference`` does, and maps each primitive to
 its piece in :data:`PIECES` (a primitive without one is an error naming it). Constant gates, and gates whose operands are
 all constant, are evaluated by the primitive's own evaluator and become constant wires. An activation of a Boolean
 Definition that the walk holds whole is lowered by the Definition's builder instead of its gates (:func:`lower_gates`).
@@ -885,7 +885,7 @@ def netlist(lay: Layout, name: str, cut: dict | None = None, leaves: dict | None
     """The layout as ``flock-ir-unit/v2`` text: a header line ``FORMAT name rows const n_in_groups (col words n bits..)..
     n_out_groups (col words n bits..)..``, then one line per row ``|A| A.. |B| B..``, then ``LEAVES <canonical JSON>``
     (:attr:`Lowering.leaves`) and, for a cut lowering, ``CUT <canonical JSON>`` (:attr:`Lowering.cut`): the netlist's sha256
-    pins the units' leaf maps (red-team-flock-2 IR6) and the cut structure (IR4)."""
+    pins the units' leaf maps and the cut structure."""
     head = [FORMAT, name, lay.useful, lay.const]
     for groups in (lay.in_groups, lay.out_groups):
         head.append(len(groups))
@@ -1110,7 +1110,7 @@ def lowering(definition, name: str, cut: Callable | None = None, group: int = 1,
 def cut_words(low: Lowering, flat_inputs: np.ndarray) -> np.ndarray:
     """``(n, len(cut))``: every instance's cut words by the IR reference evaluator (the verifier's own computation; the
     native tail's values included)."""
-    from verity.ml.circuits.evaluate import evaluate_call
+    from verity.ml.circuits.evaluation.reference import evaluate_call
 
     prog, call = standalone(low.definition)
     out = np.zeros((len(flat_inputs), len(low.units.cut)), dtype=np.uint64)
@@ -1223,7 +1223,7 @@ def write_instances(low: Lowering, flat_in: np.ndarray, flat_out: np.ndarray, pa
 
 def check_staged(low: Lowering, input_set, path) -> list[str]:
     """What differs between the instance file at ``path`` and the verifier's own staging of the same range of ``input_set``
-    (empty: byte-identical). A verifier proves against a file it staged itself, never a producer's (red-team-flock-2 IR2)."""
+    (empty: byte-identical). A verifier proves against a file it staged itself, never a producer's."""
     import tempfile
     from pathlib import Path
 

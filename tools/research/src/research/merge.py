@@ -1463,8 +1463,11 @@ def sweep(repo: Path, into: str = "main", remote: str = "origin", dry_run: bool 
     return [p["number"] for p in done], [p["number"] for p in moved]
 
 
-#: branches no sweep touches: the trunk, drive's train branch and its shadow
-KEEP_BRANCHES = frozenset({"main", "next", "queue-shadow"})
+#: the branch drive's review landing is to fast-forward, which `main` follows only to commits whose after-landing run passed
+#: every step
+CHECKED = "checked"
+#: branches no sweep touches: the trunk, drive's landing branch, its train branch and its shadow
+KEEP_BRANCHES = frozenset({"main", CHECKED, "next", "queue-shadow"})
 #: a lead's run branch (`cursor/verity-<lead>-XXXX`), which its agent pushes to again
 RUN_BRANCH_RE = re.compile(r"cursor/verity-[a-z0-9-]+-[0-9a-f]{4}")
 MERGED_IDLE_S, UNMERGED_IDLE_S = 86400, 3 * 86400
@@ -1939,9 +1942,9 @@ def spec_alert_lag(repo: Path, remote: str) -> str:
 
 
 #: set by the control pod's drive.sh for all it runs with the verity-drive App's token: GitHub's rulesets "main is append-only"
-#: and "only drive moves main and next" let only that App move `main` and `next`
+#: and "only drive moves main and next" let only that App move `main` and `next`, and `checked` once infra adds it to them
 DRIVE_ENV = "RESEARCH_DRIVE"
-DRIVE_ONLY = ("main", "next")
+DRIVE_ONLY = ("main", "next", CHECKED)
 
 
 def on_drive() -> bool:
@@ -1949,7 +1952,7 @@ def on_drive() -> bool:
 
 
 def off_drive(ref: str, verb: str) -> str:
-    """Why a push of ``ref`` from here is refused: only drive's App may move `main` and `next`."""
+    """Why a push of ``ref`` from here is refused: only drive's App may move `main`, `checked` and `next`."""
     return (f"`{ref}` is moved only by drive's App (GitHub's rulesets, 23 Oct), and this isn't drive (no {DRIVE_ENV}=1): run it "
             f"on the control pod, `/data/infra/drive.sh {verb}`")
 

@@ -34,19 +34,19 @@ completeness holds at it (`HonestWitSatisfies`), no part's recorded calls collid
 rounds before the last (`hist.take (kI x - 1)`) the inner prover's openings fit V\*'s levels (`IrShaped`) and the reps'
 tops differ (`TopsAt`).
 
-The run is r20261027-014625-06c6 (`benchmarks/recursion_e2e --e2e --cpu`, the toy deployment, K = 64, N = 16, under the
-firewall, at f1asm 16a44e3b86). Its outer tree, with each part's `inst.bin`, `fold.json`, `points.json` and
-`acc-salts.bin`, is art:886efa1d995543a70ba46e6ef713a2afe89a7022b7fc4988c9cc2dbd629a43a8. Each conjunct on it:
+The run is `benchmarks/recursion_e2e --e2e --cpu` (the toy deployment, K = 64, N = 16, under the firewall, at
+16a44e3b86). Its outer tree holds each part's `inst.bin`, `fold.json`, `points.json` and `acc-salts.bin`. Each conjunct
+on it:
 * `HonestRunAccepted`: the compiled `flock-verify` printed `VERDICT {"accepted":true}` (why `""`) on each of the 10 V\*
   parts (L0–L3, alg-p0, alg-p1, cap, cap-L1–L3) and on the inner session, and the parts that read a flipped challenge
   or query coin refused it.
-* `IrShaped`: passed in r20261027-025051-8aa6 (`vstar-difftest ir_shaped` on the stager's inputs from the run's tree:
+* `IrShaped`: passed (`vstar-difftest ir_shaped` on the stager's inputs from the run's tree:
   both reps open, 448 openings each; one opening fewer, or one past the tops, is refused).
-* `TopsAt`: holds in 8aa6 (the reps' tops differ at levels 1–3).
-* `HonestWitSatisfies`: passed in 8aa6 (`test_the_deployed_runs_parts_satisfy`, `vstar-trace --sat --session`): all 10
-  parts, each at the table `verify --zk` sets up at the draw its session records, under the zero mask and a random
-  one, 20 of 20 lines with no bad rows, pin or region bits.
-* `NoCollAt`: passed in r20261027-033500-eeb1 (`test_the_deployed_runs_calls_have_no_collision`, `vstar-trace
+* `TopsAt`: holds in the same check (the reps' tops differ at levels 1–3).
+* `HonestWitSatisfies`: passed in the same check (`test_the_deployed_runs_parts_satisfy`, `vstar-trace --sat
+  --session`): all 10 parts, each at the table `verify --zk` sets up at the draw its session records, under the zero
+  mask and a random one, 20 of 20 lines with no bad rows, pin or region bits.
+* `NoCollAt`: passed (`test_the_deployed_runs_calls_have_no_collision`, `vstar-trace
   --nocoll`): per part and over all 10 together, no SHA-512 output has two inputs (`findColl = none` on full input
   bytes): 44,952 calls, 32,323 distinct outputs for 32,323 distinct inputs. A planted pair (a recorded output under an
   input one byte longer) is caught. The calls are a superset of `NoCollAt`'s: every hm96 salt and row call the part's
@@ -65,15 +65,15 @@ What ties the two provers is `verity/core/service/vstar/tests/test_vstar_trace_d
 which `test_vstar_in_difftest` holds to Python's stager). The trace difftest holds `VStar.Trace.assign` (`vstar-trace`) to
 C-Flock's CPU prover's witness (`flock-trace`: `Stmt::row_inputs`, `unit_inputs`, `converge`, `witness`), block for
 block and range for range, on parts Python's `rec_vstage.stage` staged:
-* r20261026-232210-2d0b (`cursor/proofs-vstartrace-e146` 547915a62c, `test_the_recorded_plain_leaf_sessions_traces`)
+* `test_the_recorded_plain_leaf_sessions_traces` (at 547915a62c)
   passed on all 10 staged statements of `rec-coins`' recorded (16,16,8) session at 64 instances (L0–L3, alg/p0, alg/p1,
   cap, cap/L1–L3);
-* r20261027-014612-19c5 (e146 93dac12374, `vstar-trace --sat`) checks the trace against the table `verify --zk` sets up:
+* `vstar-trace --sat` (at 93dac12374) checks the trace against the table `verify --zk` sets up:
   its drawn level and cap passed (`test_the_trace_satisfies_the_verifiers_tables`), and so did L0 of the recorded
   session (`test_the_recorded_plain_leaf_sessions_satisfy`).
 
-8aa6's and eeb1's checks run on 06c6's own tree. Neither difftest compares `refP`'s inner rounds (the inner prover `Ir`'s
-messages) with Python's builder. -/
+The checks of `IrShaped`, `TopsAt`, `HonestWitSatisfies` and `NoCollAt` run on the run's own tree. Neither difftest
+compares `refP`'s inner rounds (the inner prover `Ir`'s messages) with Python's builder. -/
 def HonestFixture : Prop :=
   ∃ (mask : ℕ → ℕ → Bool) (Ir : InnerRec) (b0 : Brings) (x : Msg) (aux : Msg → ℕ → Flock.RecRecord.Round)
     (nOf : Msg → ℕ → ℕ) (hd : Msg → Flock.RecRecord.Record) (recRest : Msg → List (Msg × Out) → List UInt8)

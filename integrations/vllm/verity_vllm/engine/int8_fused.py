@@ -15,14 +15,17 @@ For x [M, K] bf16, W [N, K] int8 and s_w [N] float32 (`engine.int8_exact`'s stat
 
 Triton's `/` on float32 is div.full.f32 (approximate) and its libdevice calls are flush-to-zero by default, so the kernels
 use tl.div_rn, an inline cvt.rni, enable_reflect_ftz=False and enable_fp_fusion=False; `ptx_check` reads the compiled PTX
-for exactly these instructions.  The GEMM is vLLM's `triton_scaled_mm` (the stock arm's kernel) on the pointer path, without
+for exactly these instructions.  The quantizer divides each element by its row's reciprocal and two explicit fma.rn
+corrections, div.rn's own fast path, which equals div.rn.f32 on every finite bf16 input (`test_int8_ops`' exhaustive test).  The GEMM is vLLM's `triton_scaled_mm` (the stock arm's kernel) on the pointer path, without
 bias, with the same epilogue order (activation scale first); its config per architecture, shape and M is
 `engine.profiles.int8_gemm_configs.CONFIGS` (ksweep.py's gated winners), else vLLM's tiles.  A split-K config adds int32 partials (exact in any order) into a
 self-zeroing `Workspace`, and the last split applies the epilogue.  A TMA config runs `exactlin_scaled_mm_tma`, the same
 product and epilogue with X and W read through host tensor descriptors (kernel parameters, so a graph captures them;
 out-of-bounds boxes read zeros), optionally warp-specialized.  The product needs no row
 padding: a row of X W^T reads only that row, so M < 17 is just a masked tile (int8_exact pads only because torch._int_mm
-refuses M <= 16).  Non-finite activations are outside the statement and not gated.
+refuses M <= 16).  Non-finite activations are outside the statement and not gated.  The quantizer runs `quant_plan`'s
+warps and rows a program (`engine.profiles.int8_quant_plans.QUANT_PLANS`, else 16 warps a row); each row's arithmetic is
+the same in any plan.
 
 `scaled_mm_zy` (`verity_int8::scaled_mm_zy`'s CUDA body, `product_zy`) is `scaled_mm` at the same config whose epilogue also
 writes `int8_exact`'s z/y records from the same int32 accumulator: the y it computes once is both the served y and the
@@ -39,6 +42,7 @@ import triton.language as tl
 
 from verity_vllm.engine.int8_exact import UNIT, ZY_BYTES, zy_units
 from verity_vllm.engine.profiles.int8_gemm_configs import CONFIGS
+from verity_vllm.engine.profiles.int8_quant_plans import QUANT_PLANS
 
 OPTS = {"enable_fp_fusion": False, "enable_reflect_ftz": False}
 
@@ -54,26 +58,33 @@ def _membar_gl(v):
 
 
 @triton.jit
-def exactlin_quant_rows(x_ptr, q_ptr, s_ptr, K, stride_x, stride_q, BLOCK_K: tl.constexpr):
-    row = tl.program_id(0).to(tl.int64)
+def exactlin_quant_rows(x_ptr, q_ptr, s_ptr, M, K, stride_x, stride_q, BLOCK_M: tl.constexpr, BLOCK_K: tl.constexpr):
+    # BLOCK_M rows a program, each row's arithmetic the same as alone (a max is exact in any order)
+    rows = tl.program_id(0).to(tl.int64) * BLOCK_M + tl.arange(0, BLOCK_M)
     offs = tl.arange(0, BLOCK_K)
-    mask = offs < K
-    x = tl.load(x_ptr + row * stride_x + offs, mask=mask, other=0.0).to(tl.float32)
-    a = tl.max(tl.abs(x), axis=0)
+    live = rows < M
+    mask = live[:, None] & (offs < K)[None, :]
+    x = tl.load(x_ptr + rows[:, None] * stride_x + offs[None, :], mask=mask, other=0.0).to(tl.float32)
+    a = tl.max(tl.abs(x), axis=1)
     s = tl.div_rn(tl.maximum(a, 1e-30), 127.0)
     # x / s == (x * 2^e) / (s * 2^e) with s * 2^e in [1, 2): s is normal, so both products are exact (x * 2^e unless it is
-    # below 2^-126, where the quotient is too and X is 0 either way), and the rounded quotient is the same.  A |x * 2^e|
-    # under 0.25 has |quotient| < 0.25, so X = 0 without dividing; the divisions left never leave div.rn's fast path.
+    # below 2^-126, where the quotient is too and X is 0 either way), and the rounded quotient is the same.  It is divided
+    # as div.rn's fast path does, with the reciprocal taken once a row: y = RN(1/s1), q0 = x y, and two corrections
+    # q <- fma(fma(-s1, q, x), y, q); the first leaves q within an ulp, so the second is RN(x / s1) (Markstein's theorem),
+    # and a quotient too small to be exact rounds to X = 0 either way.
     sb = s.to(tl.int32, bitcast=True)
     s1 = ((sb & 0x7FFFFF) | 0x3F800000).to(tl.float32, bitcast=True)
     p = ((254 - (sb >> 23)) << 23).to(tl.float32, bitcast=True)
-    xs = x * p
-    small = tl.abs(xs) < 0.25
-    q = _rni_s32(tl.div_rn(tl.where(small, 1.0, xs), tl.broadcast_to(s1, (BLOCK_K,))))
-    q = tl.where(small, 0, q)
-    q = tl.minimum(tl.maximum(q, -127), 127).to(tl.int8)
-    tl.store(q_ptr + row * stride_q + offs, q, mask=mask)
-    tl.store(s_ptr + row, s)
+    y = tl.div_rn(tl.full(s1.shape, 1.0, tl.float32), s1)
+    xs = x * p[:, None]
+    ns = tl.broadcast_to(-s1[:, None], (BLOCK_M, BLOCK_K))
+    yb = tl.broadcast_to(y[:, None], (BLOCK_M, BLOCK_K))
+    q = xs * yb
+    q = tl.fma(tl.fma(ns, q, xs), yb, q)
+    q = tl.fma(tl.fma(ns, q, xs), yb, q)
+    q = tl.minimum(tl.maximum(_rni_s32(q), -127), 127).to(tl.int8)
+    tl.store(q_ptr + rows[:, None] * stride_q + offs[None, :], q, mask=mask)
+    tl.store(s_ptr + rows, s, mask=live)
 
 
 @triton.jit
@@ -240,6 +251,15 @@ def quant_warps(k: int) -> int:
     return 16
 
 
+def quant_plan(m: int, k: int, sm: str | None = None) -> tuple[int, int]:
+    """(num_warps, rows a program) of the row quantizer at [m, k] on `sm` (default: the current device's): QUANT_PLANS'
+    first plan for k whose M floor m reaches, else one row a program at `quant_warps`.  The plan never changes a value."""
+    for floor, warps, rows in QUANT_PLANS.get(sm or arch(torch.cuda.current_device()), {}).get(k, ()):
+        if m >= floor:
+            return warps, rows
+    return quant_warps(k), 1
+
+
 def tiles(m: int, n: int) -> tuple[int, int, int]:
     """vLLM triton_scaled_mm's heuristic (the stock arm's tiles)."""
     p = max(32, triton.next_power_of_2(m))
@@ -300,14 +320,17 @@ class Workspace:
         self.cnt = torch.zeros(tiles, dtype=torch.int32, device=device)
 
 
-def quant_rows(x: torch.Tensor, xq: torch.Tensor, s: torch.Tensor, num_warps: int | None = None):
-    """x [M, K] bf16 (unit stride along K) -> xq [M, K] int8 and s [M] (or [M, 1]) float32, in place."""
+def quant_rows(x: torch.Tensor, xq: torch.Tensor, s: torch.Tensor, num_warps: int | None = None, rows: int | None = None):
+    """x [M, K] bf16 (unit stride along K) -> xq [M, K] int8 and s [M] (or [M, 1]) float32, in place, at `quant_plan`'s
+    plan unless `num_warps` or `rows` is given."""
     m, k = x.shape
     assert x.dtype == torch.bfloat16 and x.stride(1) == 1, (x.dtype, x.stride())
     assert xq.dtype == torch.int8 and xq.shape == x.shape and xq.stride(1) == 1
     assert s.dtype == torch.float32 and s.numel() == m and s.is_contiguous()
-    return exactlin_quant_rows[(m,)](x, xq, s, k, x.stride(0), xq.stride(0), BLOCK_K=triton.next_power_of_2(k),
-                              num_warps=num_warps or quant_warps(k), **OPTS)
+    warps, r = quant_plan(m, k, arch(x.device.index))
+    warps, r = num_warps or warps, rows or r
+    return exactlin_quant_rows[(triton.cdiv(m, r),)](x, xq, s, m, k, x.stride(0), xq.stride(0), BLOCK_M=r,
+                                                     BLOCK_K=triton.next_power_of_2(k), num_warps=warps, **OPTS)
 
 
 def scaled_mm(xq: torch.Tensor, s_a: torch.Tensor, w: torch.Tensor, s_w: torch.Tensor, y: torch.Tensor,
@@ -386,14 +409,17 @@ def ptx_check(compiled) -> dict:
     doc = {"kernel": name, "ftz": ptx.count(".ftz"), "div_rn_f32": ptx.count("div.rn.f32"),
            "div_approx_or_full": ptx.count("div.approx") + ptx.count("div.full"), "cvt_rni_s32_f32": ptx.count("cvt.rni.s32.f32"),
            "fma_f32": sum(ptx.count(f) for f in ("fma.rn.f32", "fma.rn.ftz.f32", "mad.f32", "mad.rn.f32")),
+           "mad_f32": ptx.count("mad.f32") + ptx.count("mad.rn.f32"),
            "cvt_rn_f32_s32": ptx.count("cvt.rn.f32.s32"), "cvt_rn_bf16": ptx.count("cvt.rn.bf16"),
            # mma.sync's .s32.s8.s8.s32 (sm_80, sm_120), wgmma's .s32.s8.s8 (sm_90), tcgen05's kind::i8 (sm_100)
            "mma_s8": ptx.count(".s8.s8") + ptx.count("kind::i8"),
            "global_scratch": int(getattr(compiled.metadata, "global_scratch_size", 0) or 0),
            "atom_global": ptx.count("atom.global"), "membar_gl": ptx.count("membar.gl")}
     if name.startswith("exactlin_quant_rows"):
+        # its fma.rn are the division's corrections, written out; nothing is contracted into a mad
         doc["ok"] = (doc["ftz"] == 0 and doc["div_rn_f32"] >= 2 and doc["div_approx_or_full"] == 0
-                     and doc["cvt_rni_s32_f32"] >= 1 and doc["fma_f32"] == 0 and doc["global_scratch"] == 0)
+                     and doc["cvt_rni_s32_f32"] >= 1 and doc["fma_f32"] >= 4 and doc["mad_f32"] == 0
+                     and doc["global_scratch"] == 0)
     else:
         doc["ok"] = (doc["ftz"] == 0 and doc["div_approx_or_full"] == 0 and doc["fma_f32"] == 0 and doc["cvt_rn_f32_s32"] >= 1
                      and doc["cvt_rn_bf16"] >= 1 and doc["mma_s8"] >= 1 and doc["global_scratch"] == 0

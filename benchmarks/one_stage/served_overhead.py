@@ -11,7 +11,7 @@ engine's identity and scheduler, and no step's or request's own times or values.
 (`served_verdicts.sh`'s ``$OUT/serve/overhead.json``, `served_stock.sh`'s ``$OUT/<lifetime>/overhead.json``), and
 `table`'s RUN is such a file, or a serve dir when it runs on the node.
 
-Two rulers, each the same code in both arms. The client's is `examples/vllm/serve_load.py --varied`'s timings file
+Two rulers, each the same code in both arms. The client's is `demos/vllm/serve_load.py --varied`'s timings file
 (``load.timings.json`` beside its record; `served_verdicts.sh` copies the composed run's to ``$OUT/timings/``): each request's
 send, first-token and done times on the client's monotonic clock. Per load, from it:
 

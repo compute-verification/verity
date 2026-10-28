@@ -18,15 +18,15 @@ it contains. Your checkout and your prompt can be older than `main`: `git show o
   - `verity/ml/`: Python and CUDA: the provers, and Python that mirrors the Lean for speed. `circuits` (format in
     `circuits/PROTOCOL.md`; `ops`, the primitive circuits' Definitions; `silicon`, the GPUs' exact semantics),
     `kernels`, `commitments`, `crypto`, `randomness` (the one challenge derivation), `private_circuits`, `definitions`
-    (the served workloads' Definitions) and `flock/` (`verity_flock`, its own distribution: C-Flock, the proof system,
-    with its verifier's specification in `verifier/`). Until each protocol's verifier is Lean, the units its
+    (the served workloads' Definitions) and `flock/` (`verity_flock`, its own distribution: C-Flock, the proof
+    system's prover, with its verifier's specification in `verifier/`). Until each protocol's verifier is Lean, the units its
     Python verifier reads are on the soundness path: `ml.circuits`, `ml.circuits.ops`, `ml.circuits.silicon`,
     `ml.kernels`, `ml.commitments`, `ml.crypto` and `ml.randomness` (`SOUNDNESS_PATH`, which only shrinks). The rest
     can't affect soundness.
 - `Security/`: the Lean every guarantee is stated and proved in (Lean, below).
 - `integrations/`: one directory per serving stack, holding only what attaches Verity to it. `integrations/vllm/`
   (`verity_vllm`) builds each served workload's circuit and commits its values while serving.
-- `examples/`: one directory per example: its workload, placement, commands and doneness (`examples/README.md`).
+- `demos/`: one directory per example: its workload, placement, commands and doneness (`demos/README.md`).
 - `benchmarks/`: the measuring side: reproducible workloads and measurements, among them `one_stage/`, the one-stage audit
   end to end, GPU probes, and `benchmarks/census/`, data that `verity` only takes as parameters.
 - `tools/verity/`: the `verity` command, `check/` (the one check), `circuit_check/` and `lean/` (the Lean check).
@@ -68,9 +68,9 @@ The rules in force, each stated as itself; the friction skill has the standing r
   16-bit limit). A plain path, C-Flock without `--zk`, stays for a deployment whose values needn't be hidden: it
   works end to end beside the zero-knowledge paths, tests cover both, its guarantee is soundness alone, and `flock-verify`
   refuses a plain session past what the plain theorem covers (one table today).
-- **One proof service** for PoUW, PoUS and network accounting: the workers behind the firewall, the challenger and the
+- **One proof system** for PoUW, PoUS and network accounting: the workers behind the firewall, the challenger and the
   verifier. A protocol states what is committed, which units need proofs, the public Program each must pass and what it
-  does with the outcome; the service owns commitments, live coins, the record, the selection, proving, verifying and the
+  does with the outcome; the proof system owns commitments, live coins, the record, the selection, proving, verifying and the
   integrity profile. A protocol carries no policy parameter: it surfaces what its draw established (ε at δ), and the
   model's size is public.
 - **One hash: SHA-512 with its whole output, everywhere.** Commitments are hm96 rows in frame-v3-sha512 trees, and signatures
@@ -97,7 +97,9 @@ The rules in force, each stated as itself; the friction skill has the standing r
   Nothing the prover runs or hosts is trusted. "Network certifier" is its one name, never "warden" or "tap".
 - **The audited hardware is untrusted, and so is its vendor.** No guarantee rests on a GPU attesting its own
   SKU, firmware or clocks. Hardware constants (f_max, peak rates) come from the data sheet under two or three readings,
-  and later from a separate physical calibration.
+  and later from a separate physical calibration. A device's capacity is an assumed bound on its true peak compute
+  capacity, and nothing else: no power certifier, power ceiling, energy floor or meter enters a protocol, premise or
+  plan.
 - **Lean is the definition and the verifier.** Python in `verity.ml` mirrors it for the prover's
   speed, held to it by difftest. Each protocol switches by the friction skill's switching ruling; until then its
   Python verifier and the ml units it reads stay on `SOUNDNESS_PATH`, and no core → ml edge is added.
@@ -167,7 +169,8 @@ on review, and the full check runs after landing (how a PR lands: the team skill
   refactored onto the shared one.
 - **One vocabulary.** A concept more than one guarantee reads (the circuit, commitments and hashes, coins and draws,
   probability, partitions and proof blocks, devices and signatures) has one definition, in `Core` or `Hash`, which every
-  area and protocol reads; an area defines only its own, and no new Lean adds a second definition.
+  area and protocol reads; an area defines only its own, and no new Lean or Python adds a second definition
+  (`tests/test_lean_vocabulary.py`).
 - **Lean is code or security analysis.** Code stays with its component and never requires `Security/`: C-Flock's
   executable verifier and the ZK server (`verity/core/service/flock/`, with the release side in
   `verity/core/service/firewall/`), the PoUS grader, the certifier program, the inference-only policy's check and

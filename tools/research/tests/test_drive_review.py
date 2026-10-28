@@ -643,7 +643,7 @@ def test_members_that_change_no_lean_go_below_a_lean_change_and_land_while_its_l
 def test_reviewed_members_that_change_no_lean_above_a_lean_change_at_the_bottom_go_below_it_before_its_check_runs(
         world, monkeypatch):
     """A Lean change already at the bottom of `next` would hold every reviewed member above it for its Lean check: non-Lean
-    first orders only what a sync merges anyway, and the check launches on the reviewed prefix's top, holding them all.  While no Lean check of `next` runs, they go below it and land that tick, and its check starts on
+    first orders only what a sync adds, and the check launches on the reviewed prefix's top, holding them all.  While no Lean check of `next` runs, they go below it and land that tick, and its check starts on
     what is left.  Once it runs, nothing moves below it: one reviewed after waits above it, and lands on its pass."""
     h = Review(world, monkeypatch)
     world.gh.put(1, world.change({"pkg/lean-audit.json": "{}"}))
@@ -2005,6 +2005,69 @@ def test_a_passed_lean_check_holds_next_until_it_lands_and_an_ejection_below_it_
     h.tick()
     chain = h.q.chain()
     assert [m.pr for m in chain] == [1, 3] and chain[0].commit == one and top not in {m.commit for m in chain}, world.logs
+
+
+def _two_lean_checks(world, monkeypatch, higher: str) -> tuple[Review, list[str]]:
+    """Five unreviewed members on `next`, a Lean check running at #2's commit and one at #4's in state ``higher`` (running or
+    passed): (the harness, the chain's commits)."""
+    h = Review(world, monkeypatch, nonlean_first=False)
+    for n in range(1, 6):
+        world.gh.put(n, world.change({f"f{n}.txt": f"{n}\n"}))
+    h.tick()
+    commits = [m.commit for m in h.q.chain()]
+    h.d.hand_lean(commits[1], "ci")
+    h.d.hand_lean(commits[3], "ci")
+    if higher == "passed":
+        rid = h.lean_ids()[1]
+        h.run_state[rid] = ("done", 0, None)
+        h.evidence = [_steps_run(world.tmp, rid, {LEAN_STEP: "passed"})]
+    h.tick()
+    lean = h.d.q.load_state()["drive"]["lean"]
+    assert lean[commits[1]]["state"] is None and lean[commits[3]]["state"] == (None if higher == "running" else "passed")
+    assert [m.commit for m in h.q.chain()] == commits, world.logs
+    return h, commits
+
+
+@pytest.mark.parametrize("higher", ["running", "passed"])
+def test_next_stays_up_to_the_higher_of_two_lean_checks_and_first_goes_above_it(world, monkeypatch, higher):
+    """A sync that put a `--first` fix and a re-head above the lower check's commit only would take the higher one's commit off
+    `next`, and with it a pass no land verdict yet lands (its prefix unreviewed), or a check mid-audit."""
+    h, commits = _two_lean_checks(world, monkeypatch, higher)
+    world.gh.put(5, world.change({"f5.txt": "five\n"}))                    # above both checks: it moves to the tip
+    world.gh.put(6, world.change({"f6.txt": "6\n"}))
+    h.q.first = (6,)
+    h.tick()
+    chain = h.q.chain()
+    assert [m.commit for m in chain[:4]] == commits[:4], world.logs
+    assert [m.pr for m in chain] == [1, 2, 3, 4, 6, 5] and h.cancelled == [], world.logs
+    assert commits[3] in h.d.q.load_state()["drive"]["lean"]
+
+
+@pytest.mark.parametrize("leaves", ["ejected", "re-headed"])
+def test_a_member_below_the_lower_lean_check_that_leaves_rebuilds_next_from_it(world, monkeypatch, leaves):
+    """The passed checks hold `next` only while every member up to them stays: one ejected, or pushed to a new head, below
+    the lower one leaves, and `next` is rebuilt from it."""
+    h = Review(world, monkeypatch, nonlean_first=False)
+    for n in range(1, 6):
+        world.gh.put(n, world.change({f"f{n}.txt": f"{n}\n"}))
+    h.tick()
+    commits = [m.commit for m in h.q.chain()]
+    for c in (commits[2], commits[3]):
+        h.d.hand_lean(c, "ci")
+        rid = h.lean_ids()[-1]
+        h.run_state[rid] = ("done", 0, None)
+        h.evidence = [_steps_run(world.tmp, rid, {LEAN_STEP: "passed"})]
+        h.tick()
+    assert {c: r["state"] for c, r in h.d.q.load_state()["drive"]["lean"].items()} == {commits[2]: "passed", commits[3]: "passed"}
+    if leaves == "ejected":
+        world.gh.ready.discard((2, world.gh.prs[2].head))
+    else:
+        world.gh.put(2, world.change({"f2.txt": "two\n"}))
+    h.tick()
+    chain = h.q.chain()
+    assert chain[0].commit == commits[0] and chain[1].commit != commits[1], world.logs
+    assert [m.pr for m in chain] == ([1, 3, 4, 5] if leaves == "ejected" else [1, 3, 4, 5, 2]), world.logs
+    assert not {commits[2], commits[3]} & {m.commit for m in chain}
 
 
 def test_an_eject_off_drive_leaves_next_under_a_running_lean_check_and_records_the_ejection(world, monkeypatch, capsys):

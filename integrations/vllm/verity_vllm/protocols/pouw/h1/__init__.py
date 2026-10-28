@@ -77,7 +77,7 @@ from pathlib import Path
 from typing import Any, Callable, Mapping, Sequence
 
 import numpy as np
-from verity.core.protocols.pouw.audit import commit_rows, weight_binding
+from verity.core.protocols.pouw.audit import HM96_WEIGHTS, weight_binding
 from verity.core.protocols.pouw.circuit import compile as C
 from verity.core.protocols.pouw.circuit import h1tile as H
 from verity.core.protocols.pouw import credit as CR
@@ -106,6 +106,9 @@ TILE = (32, 32)
 I8_BITS, BF16_BITS = 8, 16
 RECORD = "verity-vllm/pouw-h1-calls/v2"
 CALLS_FILE = "pouw-h1-calls.json"
+#: the declared window Program a server writes under its ``h1/`` (`served.write_program`): its descriptor, gzipped, and
+#: what a period-open of it reads, so ``pouw_h1_circuits --program OUT/h1`` builds its circuit files
+PROGRAM, PROGRAM_META = "window-program.json.gz", "window-program.meta.json"
 SALT_TAG = b"verity/pouw/h1/program-salt/v1\0"
 #: the one coin source a credited window's coins come from (`pouw_h1_challenger`)
 CHALLENGER = "challenger"
@@ -201,11 +204,20 @@ def units(k: int, n: int, m: int) -> int:
     return (mp // TILE[0]) * (np_ // TILE[1])
 
 
-def weight_root(w: int, rows: np.ndarray) -> bytes:
-    """The epoch's commitment to weight `w` (its int8 rows [n, k] in a SHA-512 row tree), which the salt coin is opened after
-    (`audit.weights_root`); not root(B), which is compute accounting's."""
+#: this process's 32-byte key for its weight trees' leaf salts (`weight_root`): from the OS's CSPRNG when the module is first
+#: imported (a forked child keeps its parent's) and held only in memory, never written to a record, a manifest or the store;
+#: a tensor-parallel rank draws its own, since each commits only the weights it holds
+WEIGHT_KEY = os.urandom(32)
+
+
+def weight_root(w: int, rows: np.ndarray, key: bytes | None = None) -> bytes:
+    """The epoch's commitment to weight `w`, which the salt coin is opened after (`audit.weights_root`): its int8 rows [n, k]
+    in a hiding tree, ``audit.commit_rows(weight_binding(w), -2, rows, HM96, key, HM96_WEIGHTS + w)`` (`requests.hiding_rows`,
+    the same tree), so the root says nothing of the rows to anyone without ``key`` (`WEIGHT_KEY` when None). Not root(B),
+    which is compute accounting's."""
+    key = WEIGHT_KEY if key is None else key
     rows = np.ascontiguousarray(rows, dtype=np.int8)
-    return commit_rows(weight_binding(w), -2, [r.tobytes() for r in rows], hash="sha512").commitment.root
+    return RQ.hiding_rows(weight_binding(w), -2, [r.tobytes() for r in rows], key, HM96_WEIGHTS + w).commitment.root
 
 
 def layout(shapes: Sequence[tuple[int, int]], rows: int) -> tuple[list[int], int]:
@@ -607,18 +619,21 @@ class H1Run:
         if self.retain:
             y = ZR.split(records, call.rows, call.n)[0][:m] if records is not None else numpy_of(z)
             self.retained.append((call.index, numpy_of(a), numpy_of(s_a), y))
-        self._recorded = (call, z, None if records is None else (records, numpy_of(s_a), numpy_of(weight_scale)))
+        self._recorded = (call, z, None if records is None else (records, s_a, weight_scale))
         return call
 
     def judge(self, trace: CG.Trace, y: Any) -> dict[str, Any] | None:
         """The credit gate on the call `record` made inside ``trace`` (None if it made none): y is what the linear handed
-        back to vLLM; a call the trace credits whose records don't hold is refused (`pouw_h1_records.refusal`)."""
+        back to vLLM; a call the trace credits whose records don't hold is refused (`pouw_h1_records.refusal`), read on
+        the records' device first (`pouw_h1_records.holds_on`) and on the host's copy only when that doesn't hold."""
         made, self._recorded = self._recorded, None
         if made is None:
             return None
         call, z, held = made
         v = CG.verdict(trace, y, z)
-        if v["credit"] and (why := ZR.refusal(held, call, TD.row_words(y, call.m, "<i2"))):
+        if v["credit"] and not (held is not None and ZR.holds_on(z, call.rows, call.n, y, held[1], held[2])) \
+                and (why := ZR.refusal(held and (held[0], numpy_of(held[1]), numpy_of(held[2])), call,
+                                       TD.row_words(y, call.m, "<i2"))):
             v = {**v, "credit": False, "reason": f"credit: {CG.RECORDS}: {trace.linear} {why}"}
         self.verdicts[call.index] = v
         return v
@@ -780,7 +795,7 @@ class H1Run:
                                                     "refused": self.refused, "calls": self.manifest()}) + "\n")
 
 
-__all__ = ["CALLS_FILE", "CHALLENGER", "Call", "FILL", "H1Run", "IN_PROCESS", "Listener", "Opener", "RECORD", "SALT_TAG",
+__all__ = ["CALLS_FILE", "CHALLENGER", "Call", "FILL", "H1Run", "IN_PROCESS", "Listener", "Opener", "PROGRAM", "PROGRAM_META", "RECORD", "SALT_TAG",
            "SCHEME", "Static", "TABLE_TAGS", "TILE", "VllmInt8LinearH1", "bind_all", "calls_root", "check_tiles", "compiled",
            "coordinate", "layout", "numpy_of", "padded", "program", "program_salt", "slots",
-           "table_leaves", "units", "utilization", "weight_root", "TABLE_NONCES"]
+           "table_leaves", "units", "utilization", "weight_root", "TABLE_NONCES", "WEIGHT_KEY"]

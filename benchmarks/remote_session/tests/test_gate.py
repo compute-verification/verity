@@ -1,9 +1,10 @@
-"""`gate.sh probe`: before a gate run writes anything to either auditor host, it reads vy-challenger-1's key, pins and
-ledger and vy-auditor-1's status, and refuses (exit 3, the reason in probe.json) a key that isn't PIN, a used period, a
-period of the lane still open, a host pinned elsewhere or busy, and, before any request, a CIRCUIT that isn't COMMIT's
+"""`gate.sh probe`: before a gate run writes anything to either auditor host, it reads the challenger host's key, pins
+and ledger and the verifier host's status, and refuses (exit 3, the reason in probe.json) a key that isn't PIN, a used
+period, a period of the lane still open, a host pinned elsewhere or busy, and, before any request, a CIRCUIT that isn't COMMIT's
 and a COMMIT off origin/main's first-parent line (or no line to check it on). A host pinned elsewhere on that line is
 told to rerun at its pin; one pinned off it, to repin. Under DRY=1 nothing reaches ssh. The gates are a stub ssh on
-PATH; COMMIT is the head of a throwaway repository whose bare origin's main holds it and its parent."""
+PATH; COMMIT is the head of a throwaway repository whose bare origin's main holds it and its parent. `gate.sh host`
+paces its 60 s sessions at the clone's `audit.SAMPLES` unless PACED is given."""
 from __future__ import annotations
 
 import hashlib
@@ -15,7 +16,10 @@ from pathlib import Path
 
 import pytest
 
+from verity.core.protocols.remote_bandwidth import audit
+
 GATE = Path(__file__).resolve().parents[1] / "gate.sh"
+AUDIT_PY = "verity/core/protocols/remote_bandwidth/audit.py"
 FP = "SHA256:s8UdOpJZGMXJR1DjgmOyTsWpTqQX7GDJq/yQCYhSJhs"
 PUBLIC = bytes(range(80))
 PIN = hashlib.sha512(PUBLIC).hexdigest()
@@ -74,11 +78,12 @@ def probe(tmp_path: Path, repo: tuple[Path, str], *, ledger=CLOSED_7, pinned=Non
     (g / "ledger").write_text("".join(json.dumps(e) + "\n" for e in ledger))
     (g / "status").write_text(json.dumps({"pinned": pinned or head, "busy": list(busy), "pins": [], "runs": []}))
     (bin_ / "ssh").write_text(f'#!/bin/sh\nfor a; do last=$a; done\necho "$*" >> {g}/calls\ncat "{g}/$last"\n')
-    (bin_ / "ssh-keygen").write_text(f'#!/bin/sh\necho "# Host 81.85.1.145 found: line 1"\necho "81.85.1.145 ED25519 {FP}"\n')
+    (bin_ / "ssh-keygen").write_text(f'#!/bin/sh\necho "# Host 192.0.2.7 found: line 1"\necho "192.0.2.7 ED25519 {FP}"\n')
     for f in bin_.iterdir():
         f.chmod(0o755)
     env = {**os.environ, "PATH": f"{bin_}{os.pathsep}{os.environ['PATH']}", "OUT": str(out), "COMMIT": head,
-           "PERIOD": period, "PIN": PIN, "GATE_KEY": str(tmp_path / "key"), "AUDITOR_FP": FP}
+           "PERIOD": period, "PIN": PIN, "GATE_KEY": str(tmp_path / "key"), "AUDITOR_FP": FP,
+           "AUDITOR": "research@192.0.2.7", "CHALLENGER": "research@192.0.2.8"}
     if circuit:
         env["CIRCUIT"] = circuit
     if dry:
@@ -105,11 +110,11 @@ def test_the_probe_passes_reading_only(tmp_path, repo):
      "lane memory-accounting has period ma-remote-coins-x open: close it first (gate.sh close, PERIOD=ma-remote-coins-x)"),
     ({"public": bytes(80)}, f"the challenger's public key is {hashlib.sha512(bytes(80)).hexdigest()[:16]}..., "
                             f"not PIN {PIN[:16]}..."),
-    ({"pinned": "{parent}"}, "vy-auditor-1 is pinned at {parent}, not COMMIT {head}: rerun with COMMIT={parent}"),
+    ({"pinned": "{parent}"}, "the verifier host is pinned at {parent}, not COMMIT {head}: rerun with COMMIT={parent}"),
     ({"pinned": "9b062d027f612c9f39faae87da61fcc554c84b81"},
-     "vy-auditor-1 is pinned at 9b062d027f612c9f39faae87da61fcc554c84b81, off main's first-parent line, where no "
+     "the verifier host is pinned at 9b062d027f612c9f39faae87da61fcc554c84b81, off main's first-parent line, where no "
      "session credits: repin it at COMMIT {head} (vy-verifier-pin) and rerun"),
-    ({"busy": ["v20261024T000000Z-0000"]}, "vy-auditor-1 runs ['v20261024T000000Z-0000']: one unit at a time"),
+    ({"busy": ["v20261024T000000Z-0000"]}, "the verifier host runs ['v20261024T000000Z-0000']: one unit at a time"),
 ], ids=["used-period", "lane-open", "wrong-key", "host-elsewhere-on-main", "host-off-main", "host-busy"])
 def test_the_probe_refuses_before_any_write(tmp_path, repo, kw, why):
     at = {"head": repo[1], "parent": git(repo[0], "rev-parse", "HEAD~1")}
@@ -193,3 +198,31 @@ def test_fire_goes_on_for_a_lease_begun_by_lease_by(tmp_path):
     p, calls = fire(tmp_path, held("2026-10-24T12:45:02Z"), "2026-10-24T13:15Z")
     assert re.search(r"^\S+Z leased$", p.stdout, re.M) and "nothing opened" not in p.stdout, p.stdout
     assert len(calls) == 1 and "gpu-lease status" in calls[0]
+
+
+def dry_host(tmp_path: Path, audit_py: str | None) -> tuple[subprocess.CompletedProcess, str]:
+    """gate.sh host under DRY=1, no PACED, from a clone whose remote audit's audit.py is `audit_py` (None: it has none);
+    its result and the requests it would send."""
+    clone, out = tmp_path / "clone", tmp_path / "out"
+    (clone / AUDIT_PY).parent.mkdir(parents=True)
+    out.mkdir()
+    if audit_py is not None:
+        (clone / AUDIT_PY).write_text(audit_py)
+    env = {**os.environ, "OUT": str(out), "DRY": "1", "PERIOD": "ma-remote-coins-9", "PIN": PIN,
+           "GATE_KEY": str(tmp_path / "key")}
+    env.pop("PACED", None)
+    p = subprocess.run(["bash", str(GATE), "host"], cwd=clone, env=env, capture_output=True, text=True)
+    return p, (out / "gate.requests").read_text()
+
+
+def test_the_host_run_paces_the_stated_window_at_audit_samples(tmp_path):
+    p, requests = dry_host(tmp_path, Path(audit.__file__).read_text())
+    assert p.returncode == 0, p.stdout + p.stderr
+    s = audit.SAMPLES
+    assert f" --paced 1:60000:{s}:2 1:60000:{s}:2 1:1000:2773:7 1:1000:2773:7 --pace-pass-ms " in requests, requests
+
+
+def test_the_host_run_refuses_a_clone_without_audit_samples(tmp_path):
+    p, requests = dry_host(tmp_path, None)
+    assert p.returncode == 3 and f"no SAMPLES = N line in {AUDIT_PY}" in p.stdout, p.stdout + p.stderr
+    assert requests == ""

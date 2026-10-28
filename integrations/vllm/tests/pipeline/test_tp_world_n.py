@@ -10,7 +10,7 @@ import numpy as np
 import pytest
 
 from verity.ml.circuits.defs import bind
-from verity.ml.circuits.evaluate import evaluate_region
+from verity.ml.circuits.evaluation.reference import evaluate_region
 from verity.ml.circuits.layout import resolve
 from verity.ml.circuits.program import Program
 from verity.ml.definitions.registry import b1_tp2 as TP2, prims as P

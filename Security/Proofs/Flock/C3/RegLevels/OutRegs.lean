@@ -22,7 +22,7 @@ output row (`HiddenExec.rowOfH`, `outRowOf`): copy `j`'s output `o`, bit `t`, is
   `checkAcc`, `own_of_checkAcc`) and the session registers each row of a port the reads file names (`hread`, as
   `regReads_of_check`'s);
 * `accOutRegs_of_check`: at the verifier's unit, the `acc_out` columns registered as the bits of the row the `acc_out`
-  read holds, as `accOut_of_regOut` takes them (`AccOut.lean`'s `accOutL_of_keysS`).
+  read holds, as `accOut_of_regOut` takes them.
 -/
 
 namespace FlockC3.RegLevels

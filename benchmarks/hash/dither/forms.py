@@ -7,7 +7,7 @@ the order, or z the row tables, or no z), dither_one's (dither-1s) and dither_fu
 the table doesn't know is beside.  This module imports nothing, so every arm's module reads the same table.
 
 Each arm's stats, every check document and every gate verdict carry {"form", "form_basis"} from it: dither_one's
-and dither_fused's `Window.stats`, `check` and `gate_verdict`; dither_a's and dither_so's through `dither_a.Side.label`."""
+and dither_fused's `DitherState.stats`, `check` and `gate_verdict`; dither_a's and dither_so's through `dither_a.Side.label`."""
 from __future__ import annotations
 
 FORM_A = "A (provisional)"

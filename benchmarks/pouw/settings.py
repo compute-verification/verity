@@ -119,6 +119,7 @@ REGISTRY = Registry(
     S("POUW_HARNESS_LT2", str, None, VALUE, "the second cuBLASLt's library; unset, libpouw_lt2.so beside the harness's if "
                                             "built; none leaves it out"),
     S("POUW_LIBNVML", str, "libnvidia-ml.so.1", WHERE, f"NVML, for the harness's clocks and power: {LIB}"),
+    S("POUW_LIBCUDA", str, "libcuda.so.1", WHERE, f"the CUDA driver gemm_rate's torch_rate.py loads its stamp cubin through: {LIB}"),
     S("POUW_TIER", str, "2a", VALUE, "the evidence tier verify.py records a variant at (ledger.TIERS)"),
     S("POUW_LEDGER_PUBLISH", one, False, WHERE, "1: verify.py publishes the variant's record to the ledger"),
     # ---------------------------------------------------------------- served H1

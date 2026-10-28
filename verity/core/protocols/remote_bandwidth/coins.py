@@ -1,6 +1,7 @@
-"""The remote audit's coins on the proof service's one challenger (`verity/remote-bandwidth/coins/v1`): session k's coins
+"""The remote audit's coins on the proof system's one challenger (`verity/remote-bandwidth/coins/v1`): session k's coins
 are one epoch of `sampled_proofs.challenger`'s live coins, drawn and committed by the challenger before the session, on
-its own host when it is remote (`sampled_proofs.remote`), and each opened once, after the root the verifier recorded.
+its own host when it is remote (`sampled_proofs.remote`), each opened once, after the root the verifier recorded, and
+their commitment released to the prover only at the session's end.
 
 ~~~text
 scheme     verity/remote-bandwidth/coins/v1, epoch k: the session's index over its registration
@@ -12,14 +13,21 @@ R          SHA512("verity/remote-bandwidth/window/v1\0" ‖ registration digest 
            the auditor's ledger, which opens one challenger session a root, ever
 after      σ_0 after R; σ_t (t ≥ 1) after the last root the verifier had received when it left; draw c's openings coin
            after the last root of its last window, min((c + 1)g, W) − 1; append i's coin after append i's root
+released   (epoch, label, index, after, coin): what the prover is sent when a coin leaves (`Released`), no salt or path
+end        once the session has its outcome, so no root can follow: the commitment and every released coin's opening
+           (`audit.Session.disclose`), against which the prover checks each coin it was sent (`received_reason`)
 ~~~
 
-The prover has the commitment before the first coin and checks every coin it is sent against it (`coin_reason`), so no
-coin is chosen after a root.  hm96 keeps every unopened coin statistically hidden, so the commitment says nothing of a
-window's seeds or draws before its coins are released.  Within a window the passes' seeds are Fiat–Shamir, chained from
-the coin through the prover's roots (`receipts.seed`); the openings are drawn from a coin of their own.  An append's coin
-answers the append's root, a commitment the prover has already made: committed before the session like every coin, it
-opens after that root, once.
+The commitment's root is a function of every coin, the windows' to come among them, and a coin's salt and path give it
+with the coin, so the prover gets neither until the session ends: soundness takes no hiding premise on the root, and a
+prover that held it could make a window's roots depend on coins not yet released.  During the session the prover gets
+each coin's value and the root it was opened after (`Released`); at the end it checks every coin it was sent against
+the commitment and their openings (`received_reason`), so the record's commitment is the one its coins came from.  That
+no coin was chosen after a root is the challenger's to keep, as the auditor's device (`Faithful`): it commits before the
+session, logs each root before its coin leaves and signs the log, which the verifier holds the session to
+(`released_reason`).  Within a window the passes' seeds are Fiat–Shamir, chained from the coin through the prover's
+roots (`receipts.seed`); the openings are drawn from a coin of their own.  An append's coin answers the append's root, a
+commitment the prover has already made: committed before the session like every coin, it opens after that root, once.
 
 `Coins` is the verifier's side: the challenger (a `LiveChallenger`, or a `remote.RemoteChallenger` on the challenger's
 host) and one `LiveRecord` a family, so each coin is asked for after its root and recorded with it.  What the verifier
@@ -35,8 +43,10 @@ from __future__ import annotations
 
 import contextlib
 import hashlib
+import re
 import time
 from collections.abc import Callable, Iterator, Mapping, Sequence
+from dataclasses import dataclass
 from typing import Any
 
 from verity.core.protocols.sampled_proofs import remote
@@ -83,7 +93,51 @@ def window(registration: bytes, session: int) -> dict:
     return {"root": window_root(registration, session).hex()}
 
 
-def coin(opening: LiveOpening) -> bytes:
+RELEASED_FORM = "a released coin is {after, coin, epoch, index, label}: integers, a string and lowercase hex"
+_HEX = re.compile(r"(?:[0-9a-f]{2})*")
+
+
+@dataclass(frozen=True, slots=True)
+class Released:
+    """Coin (`label`, `index`) of epoch `epoch` as the prover is sent it when it leaves: the coin and the root it was
+    opened `after`, without the salt and path that would give the commitment's root (module docstring)."""
+
+    epoch: int
+    label: str
+    index: int
+    after: bytes
+    coin: bytes
+
+    @classmethod
+    def of(cls, opening: LiveOpening) -> Released:
+        return cls(opening.epoch, opening.label, opening.index, opening.after, opening.coin)
+
+    def to_json(self) -> dict:
+        return {"after": self.after.hex(), "coin": self.coin.hex(), "epoch": self.epoch, "index": self.index,
+                "label": self.label}
+
+    @classmethod
+    def from_json(cls, doc: Any) -> Released:
+        if not isinstance(doc, dict) or sorted(doc) != ["after", "coin", "epoch", "index", "label"]:
+            raise CoinError(RELEASED_FORM)
+        hexes = [bytes.fromhex(doc[k]) if type(doc[k]) is str and _HEX.fullmatch(doc[k]) else None
+                 for k in ("after", "coin")]
+        if type(doc["epoch"]) is not int or type(doc["index"]) is not int or type(doc["label"]) is not str or None in hexes:
+            raise CoinError(RELEASED_FORM)
+        return cls(doc["epoch"], doc["label"], doc["index"], *hexes)
+
+
+def released(coin_: Any) -> Released:
+    """What the prover holds of a coin it is sent: `coin_` itself, or a `LiveOpening`'s release (`Released.of`, its
+    salt and path unread)."""
+    if type(coin_) is Released:
+        return coin_
+    if type(coin_) is LiveOpening:
+        return Released.of(coin_)
+    raise CoinError("a coin the prover is sent is a released coin")
+
+
+def coin(opening: LiveOpening | Released) -> bytes:
     """The audit's coin: the opened coin's first `COIN_BYTES`."""
     return opening.coin[:COIN_BYTES]
 
@@ -107,13 +161,39 @@ def layout_reason(commitment: Any, session: int, windows: int, per_coin: int = 1
 
 def coin_reason(commitment: LiveCommitment, opening: Any, label: str, index: int) -> str | None:
     """Why `opening` is not coin (`label`, `index`) of `commitment`, opened after the root it names; None when it is.
-    The prover's check of every coin it is sent."""
+    The prover's check of every coin it was sent, at the session's end (`received_reason`)."""
     if type(opening) is not LiveOpening or type(index) is not int:
         return f"not {label} coin {index}"
     try:
         return live_reason(commitment, opening, label, index, opening.after)
     except CoinError as e:
         return str(e)
+
+
+def received_reason(commitment: Any, received: Sequence[Released], openings: Sequence[Any]) -> str | None:
+    """Why the coins the prover was sent during the session, `received`, are not coins of `commitment` as `openings`
+    open them; None when they are.  The prover's check at the session's end, once the verifier has sent it the
+    commitment and every released coin's opening (`audit.Session.disclose`): each coin it was sent is opened, once,
+    with the value and the root it was sent with, against the commitment (`coin_reason`)."""
+    if type(commitment) is not LiveCommitment:
+        return "a session's coin commitment is a live coin commitment"
+    by: dict[tuple[str, int], LiveOpening] = {}
+    for o in openings:
+        if type(o) is not LiveOpening:
+            return "the session's coins are opened by live coin openings"
+        if (o.label, o.index) in by:
+            return f"the session's {o.label} coin {o.index} is opened twice"
+        by[o.label, o.index] = o
+    for r in received:
+        o = by.get((r.label, r.index))
+        if o is None:
+            return f"the {r.label} coin {r.index} the prover was sent has no opening"
+        if Released.of(o) != r:
+            return f"the {r.label} coin {r.index} the prover was sent is not the one opened"
+        why = coin_reason(commitment, o, r.label, r.index)
+        if why is not None:
+            return f"the {r.label} coin {r.index} the prover was sent: {why}"
+    return None
 
 
 class Coins:
@@ -273,6 +353,6 @@ def trusted(coins: Coins, directory: Any, heads: Sequence[Any], key: ChallengerK
     return remote.trusted_session(directory, heads, w, key, verify)
 
 
-__all__ = ["APPEND", "APPENDS", "CHALLENGE", "COIN_BYTES", "Coins", "LABELS", "OPENINGS", "SCHEME", "WINDOW_DOMAIN",
-           "coin", "coin_reason", "families", "layout_reason", "local", "openings_coins", "released_reason", "trusted",
-           "window", "window_root"]
+__all__ = ["APPEND", "APPENDS", "CHALLENGE", "COIN_BYTES", "Coins", "LABELS", "OPENINGS", "RELEASED_FORM", "Released",
+           "SCHEME", "WINDOW_DOMAIN", "coin", "coin_reason", "families", "layout_reason", "local", "openings_coins",
+           "received_reason", "released", "released_reason", "trusted", "window", "window_root"]

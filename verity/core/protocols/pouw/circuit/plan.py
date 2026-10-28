@@ -1,6 +1,6 @@
 """Closure draws: the verification plan for `ncp-v2`'s partition (design note §12.2 (2′), §12.3).
 
-The strata are the verifier's own (`Flock/Draw.lean` `strataOf`, root's ruling on X-SPC-84): one per template of the
+The strata are the verifier's own (`Flock/Draw.lean` `strataOf`): one per template of the
 call's partition, its units as ranges, in the order of their first unit. The law draws each stratum; the plan then proves
 each drawn tile together with its **closure**: its X strip's unit, its strip's digest unit, the tree-node units on that
 strip's path to D_A and the call's key unit, each proved once, and its Y strip's unit in the weight's own Program
@@ -9,20 +9,20 @@ strip's path to D_A and the call's key unit, each proved once, and its Y strip's
 `harm_le_unsoundWork`, `closureLaw_escape`).
 
 **The law is a seam** (`TileLaw`), so the plan switches laws without changing:
-* `CountLaw` is the law on `main` today, one_stage's and #167's stratified law: one stratum per template, a uniform k_s-subset
+* `CountLaw` is one_stage's stratified law: one stratum per template, a uniform k_s-subset
   inside each, k_s = max(1, round(K·n_s/N)) (rounding half up), K the law's budget over the strata it draws.
-* `WorkLaw` is Verity root's work law (#362 with #374's floors, `Flock/Draw.lean` `workK`):
+* `WorkLaw` is the verifier's work law with its floors (`Flock/Draw.lean` `workK`):
   k_s = min(n_s, max(f_s, ⌈K·W_s/W⌉)), with K = `RECORD_K` = 27,713 at ε = 0.1% and δ = 2⁻⁴⁰ (`record_k`) and f_s the
   verifier's floor. `work_table` is the verifier's `--work-table` and `law_object` the law `verify` derives from it. K is
   a **window's** budget: a call draws its share K_c = ⌈K·W_c/W_window⌉, capped at its units, and its y cells at the
-  floor ⌈K_y·n_c/N⌉ of the window's N, K_y = K (`window_laws`, root's option B on X-SPC-105).
+  floor ⌈K_y·n_c/N⌉ of the window's N, K_y = K (`window_laws`).
 
 **The tile checks' layout** (`tile_layout`, `pc4` and `pc8`) is beside it: a drawn tile's closure is its rows' units
 in the call (`RowA`, or `rowk`'s pieces; TM rows, or `pc8`'s short last tile row's r), and its TN rows' units in the
 weight's Program (``b_rows``), each once per plan (`Plan.proved_b`); its W_ref is the caller's (the tile's cells' share of the scheme's).  It opens
 nothing: its rows are C-Flock-committed ports.
 
-**Openings** are row-granular (the red team's X-SPC-57): A and the weight are committed one leaf per row, so a proved
+**Openings** are row-granular: A and the weight are committed one leaf per row, so a proved
 unit opens exactly the rows it reads.
 
 **The layout is the verifier's.** `layout` derives each tile's own unit and its closure from the shape alone (through the
@@ -40,6 +40,7 @@ from decimal import ROUND_CEILING, Decimal, localcontext
 from typing import Mapping, Protocol, Sequence
 
 from verity.core.protocols.profile import Stratified, Stratum
+from verity.ml.commitments import domains
 from verity.ml.randomness import Key
 
 from ..protocol import DomainError
@@ -47,7 +48,7 @@ from ..schemes.ncp import FORM_UNITS
 from .ncp2 import D, Shape, rfc6962
 from .partition import Unit, units
 
-DRAW_DOMAIN = "verity/pouw/closure-draw/v1"
+DRAW_DOMAIN = domains.POUW_CLOSURE_SAMPLING
 
 
 @dataclass(frozen=True)
@@ -95,8 +96,9 @@ class CountLaw:
 def check_work_strata(strata: Sequence[StratumSpec]) -> None:
     """Refuse a call whose work is in more than one stratum, or whose tiles are of more than one template. The window pin's
     `covers_window` takes each call's work in one stratum as its hypothesis `hone`: where the cap K_c ≤ N_c binds, a
-    second work stratum is under-drawn (the red team's window: ten wrong units escape with 0.156 against a claimed
-    2.4·10⁻⁴). A stratum does work when 0 < w_s·n_s, its `work`. X-SPC-84 gives work to the tile template only; this
+    second work stratum is under-drawn (`tests/test_circuit_plan.py`'s window: ten wrong units escape with 0.156 against a
+    claimed 2.4·10⁻⁴). A stratum does work when 0 < w_s·n_s, its `work`. The verifier's layouts give work to the tile
+    template only; this
     makes that a check, not a convention."""
     worked = [s.name for s in strata if s.work > 0]
     if len(worked) > 1:
@@ -108,8 +110,8 @@ def check_work_strata(strata: Sequence[StratumSpec]) -> None:
 
 def record_k(epsilon: Fraction, delta: Fraction) -> int:
     """The smallest K with (1 − ε)^K ≤ δ, decided in exact integers: wrong units doing a fraction ε of the work escape the
-    work law's draw with at most (1 − ε)^K (#362's `work_escape_le`). At ε = 0.1% and δ = 2⁻⁴⁰ it is 27,713; 27,712 misses
-    (#362's `record_sizing`, `record_sizing_one_fewer`). That ε at δ is the default point the profile reports at, not a
+    work law's draw with at most (1 − ε)^K (`FlockSoundness.Audit.Work.work_escape_le`). At ε = 0.1% and δ = 2⁻⁴⁰ it is 27,713;
+    27,712 misses (`record_sizing`, `record_sizing_one_fewer`). That ε at δ is the default point the profile reports at, not a
     policy parameter: PoUW has none."""
     eps, dlt = Fraction(epsilon), Fraction(delta)
     if not (0 < eps < 1 and 0 < dlt < 1):
@@ -136,9 +138,9 @@ RECORD_K = 27_713
 
 @dataclass(frozen=True)
 class WorkLaw:
-    """The work law (Verity root's #362, `Flock/Draw.lean` `workK`): each stratum draws
+    """The work law (`Flock/Draw.lean` `workK`): each stratum draws
     k_s = min(n_s, max(f_s, ⌈K·W_s/W⌉)), W_s its work, W the strata's total, 1 ≤ K ≤ N, and f_s ≥ 1 its floor from the
-    verifier's own table (X-SPC-81; 1 for every template it doesn't name). The floor binds for the strata that do no work
+    verifier's own table (1 for every template it doesn't name). The floor binds for the strata that do no work
     (every template but the tile's). ``k`` is the budget K (`record_k`)."""
 
     k: int = RECORD_K
@@ -169,18 +171,18 @@ class WorkLaw:
 
 def window_laws(layouts: Sequence["Layout"], k: int = RECORD_K, floors: tuple[tuple[str, int], ...] = (),
                 k_y: int | None = None) -> list[WorkLaw]:
-    """Each call's work law in a window of calls: its share K_c = ⌈K·W_c/W_window⌉ of the window's budget K (X-SPC-83), capped
+    """Each call's work law in a window of calls: its share K_c = ⌈K·W_c/W_window⌉ of the window's budget K, capped
     at its units, over its own strata. That is the law `verify` enforces when each call is its own statement, given its own
     K_c (`--work K_c`) and work table. Within one Program (`ncp2.window`) the calls share their templates' strata and one K,
     which is what `verify` derives there instead.
 
-    **y's floors** (root's option B on X-SPC-105): each call's dequantization stratum s has floor f_s = ⌈K_y·n_s/N⌉, n_s its
+    **y's floors**: each call's dequantization stratum s has floor f_s = ⌈K_y·n_s/N⌉, n_s its
     units and N the window's dequantization units, so k_s = min(n_s, f_s) meets k_s·N ≥ K_y·n_s or proves the stratum, and a
     window draws at most K_y + C of its y cells. K_y = K = 27,713 keeps δ = 2⁻⁴⁰ over the window: a tile-bad and a y-bad
     wrong set are one family of the audit, so its sampling term is the larger of (1 − ε)^K and (1 − ε)^K_y, not their sum.
-    The other zero-work templates keep their floors (1 unless ``floors`` names them, X-SPC-84). Per call these are pinned
-    (`audit_work_floor`); over the window, the per-call split (X-SPC-83, 106) and B (X-SPC-105) are root's window pin
-    `audit_window_split_of_record` (`FlockSoundness/Audit/Window.lean`, #418), which takes each call's work
+    The other zero-work templates keep their floors (1 unless ``floors`` names them). Per call these are pinned
+    (`audit_work_floor`); over the window, the per-call split and y's floors are the window pin
+    `audit_window_split_of_record` (`FlockSoundness/Audit/Window.lean`), which takes each call's work
     in one stratum (`check_work_strata`) and each call's draw under its own key context (`Traced.draw`'s `Ledger`).
     It also takes a window that does some work (0 < W, its `hW`) and has y cells (0 < N, its `hN`): a window with
     either empty is refused here, so none is ever drawn or accepted."""
@@ -332,8 +334,8 @@ class Plan:
 def draw(key: Key, lay: Layout, law: TileLaw, call: Sequence[int] = ()) -> Plan:
     """The plan for one draw: a uniform k_s-subset of each stratum from ``key`` (the verifier's own randomness, derived under
     `DRAW_DOMAIN` after the receipt), then every drawn tile's closure.  ``call`` is the call's index (`anchors`'
-    `call_index`), which keys each stratum's subset with its template: the strata are the call's own (one per template,
-    X-SPC-84), and the calls of a window drawn under one key draw independently (X-SPC-96).  The verifier draws through
+    `call_index`), which keys each stratum's subset with its template: the strata are the call's own (one per template),
+    and the calls of a window drawn under one key draw independently.  The verifier draws through
     `Traced.draw`, over its own layout."""
     lay.check()
     sizes = law.sizes(lay.strata)
@@ -351,7 +353,7 @@ def draw(key: Key, lay: Layout, law: TileLaw, call: Sequence[int] = ()) -> Plan:
 
 
 def work_table(lay: Layout, law: WorkLaw = WorkLaw()) -> dict[str, dict[str, int]]:
-    """The verifier's work table (#362's `--work-table`, `Draw.workTableOfJson`): every template of the call, with its W_ref
+    """The verifier's work table (its `--work-table`, `Draw.workTableOfJson`): every template of the call, with its W_ref
     per unit (0 for units that do no PoUW work) and its floor f_s (`law.floors`). It refuses a call whose work is in more
     than one stratum (`check_work_strata`, the window pin's `hone`)."""
     check_work_strata(lay.strata)
@@ -359,8 +361,8 @@ def work_table(lay: Layout, law: WorkLaw = WorkLaw()) -> dict[str, dict[str, int
 
 
 def law_object(lay: Layout, law: WorkLaw) -> dict:
-    """The law `flock-verify draw --program P --partition Q --work K --work-table F` derives for this call (#362's
-    `Draw.deriveWork`, as `Law.toJson` writes it): each stratum `{template, units, work, floor, k}`, at the call's K
+    """The law `flock-verify draw --program P --partition Q --work K --work-table F` derives for this call
+    (`Draw.deriveWork`, as `Law.toJson` writes it): each stratum `{template, units, work, floor, k}`, at the call's K
     (`WorkLaw.budget`)."""
     sizes, table, k = law.sizes(lay.strata), work_table(lay, law), law.budget(lay.strata)
     return {"law": "work", "k": k, "strata": [{"template": s.name, "units": s.ranges(), "work": table[s.name]["work"],
@@ -370,7 +372,7 @@ def law_object(lay: Layout, law: WorkLaw) -> dict:
 def openings(lay: Layout, proved, proved_y=()) -> tuple[tuple[str, int], ...]:
     """The leaves a plan opens: a digest or X unit's strip's 16 A rows, one leaf per row; a Y unit's (the weight Program's,
     by column strip) 16 weight rows; and at each such column strip, ("y", strip), the call's Y and c₀ input there and the
-    weight Program's output there, which the verifier compares (`Traced.check_link`, X-SPC-95)."""
+    weight Program's output there, which the verifier compares (`Traced.check_link`)."""
     rows: set[tuple[str, int]] = set()
     for i in proved:
         u = lay.units[i]
