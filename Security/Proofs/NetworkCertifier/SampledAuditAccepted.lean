@@ -15,9 +15,8 @@ the audit's scope (`rAcc_of_r`), `PrBad` monotone in the relation (`Claims.Pr_mo
 * **`Accepted`** (`accepted_of`): at each step before the horizon, `C` run on the ingress up to the step and the advice
   holds the trace's value at every egress gate (`valOver_out`). A gate of a unit that isn't faulty computes what its
   proof unit computes on its committed values and interior (`valOver_unit`, by strong induction on the gate, every unit
-  correct there, `runIn_ne_none`), and a value it reads from outside its proof unit is a committed one: the reading
-  gate's own replay unit's, a held gate's or another correct unit's boundary value, each the trace's. An input reads
-  the ingress the trace carries (`inputOf_eq`): the layout fits the program, so no egress gate of a step depends on a
+  correct there, `runIn_ne_none`), and a value it reads from outside its proof unit is a committed one: a held gate's
+  or another correct unit's boundary value, each the trace's. An input reads the ingress the trace carries (`inputOf_eq`): the layout fits the program, so no egress gate of a step depends on a
   later step's ingress (`Good`).
 -/
 
@@ -35,53 +34,24 @@ theorem idx_eq_of_mem_flatten {α : Type} {L : List (List α)} (h : L.flatten.No
   · exact hij
   · exact (hp j i hj hi hij a hb a ha rfl).elim
 
-theorem gates_eq (P : Partition) : P.gates = (P.rus.map RU.gates).flatten := by
-  rw [Partition.gates, List.flatten_flatten]
-  rfl
-
-theorem mem_rus {P : Partition} {v : ℕ} {r : RU} (hr : P.rus[v]? = some r) :
-    RU.gates r ∈ P.rus.map RU.gates :=
-  List.mem_map.2 ⟨r, List.mem_of_getElem? hr, rfl⟩
-
-theorem mem_ru_gates {r : RU} {u : List ℕ} (hu : u ∈ r) {g : ℕ} (hg : g ∈ u) : g ∈ RU.gates r :=
-  List.mem_flatten.2 ⟨u, hu, hg⟩
-
-theorem mem_gates {P : Partition} {v : ℕ} {r : RU} (hr : P.rus[v]? = some r) {u : List ℕ} (hu : u ∈ r) {g : ℕ}
-    (hg : g ∈ u) : g ∈ P.gates := by
-  rw [gates_eq]
-  exact List.mem_flatten.2 ⟨_, mem_rus hr, mem_ru_gates hu hg⟩
+theorem mem_gates {P : Partition} {v : ℕ} {u : List ℕ} (hu : P.blocks[v]? = some u) {g : ℕ} (hg : g ∈ u) :
+    g ∈ P.gates :=
+  List.mem_flatten.2 ⟨u, List.mem_of_getElem? hu, hg⟩
 
 theorem exists_of_mem_gates {P : Partition} {g : ℕ} (h : g ∈ P.gates) :
-    ∃ (v : ℕ) (r : RU) (u : List ℕ), P.rus[v]? = some r ∧ u ∈ r ∧ g ∈ u := by
-  rw [gates_eq] at h
-  obtain ⟨l, hl, hg⟩ := List.mem_flatten.1 h
-  obtain ⟨r, hr, rfl⟩ := List.mem_map.1 hl
-  obtain ⟨u, hu, hgu⟩ := List.mem_flatten.1 hg
-  obtain ⟨v, hv, rfl⟩ := List.getElem_of_mem hr
-  exact ⟨v, _, u, List.getElem?_eq_getElem hv, hu, hgu⟩
+    ∃ (v : ℕ) (u : List ℕ), P.blocks[v]? = some u ∧ g ∈ u := by
+  obtain ⟨u, hu, hg⟩ := List.mem_flatten.1 h
+  obtain ⟨v, hv, rfl⟩ := List.getElem_of_mem hu
+  exact ⟨v, _, List.getElem?_eq_getElem hv, hg⟩
 
-/-- **A gate is in one replay unit**: two slots whose replay units hold it are one. -/
-theorem slot_unique {P : Partition} (hN : P.gates.Nodup) {v v' : ℕ} {r r' : RU} (hr : P.rus[v]? = some r)
-    (hr' : P.rus[v']? = some r') {g : ℕ} (hg : g ∈ RU.gates r) (hg' : g ∈ RU.gates r') : v = v' := by
-  rw [gates_eq] at hN
-  obtain ⟨hv, rfl⟩ := List.getElem?_eq_some_iff.1 hr
-  obtain ⟨hv', rfl⟩ := List.getElem?_eq_some_iff.1 hr'
-  have h1 : v < (P.rus.map RU.gates).length := by simpa using hv
-  have h2 : v' < (P.rus.map RU.gates).length := by simpa using hv'
-  exact idx_eq_of_mem_flatten hN h1 h2 (by simpa using hg) (by simpa using hg')
+/-- **A gate is in one proof unit**: two slots whose proof units hold it are one. -/
+theorem slot_unique {P : Partition} (hN : P.gates.Nodup) {v v' : ℕ} {u u' : List ℕ} (hu : P.blocks[v]? = some u)
+    (hu' : P.blocks[v']? = some u') {g : ℕ} (hg : g ∈ u) (hg' : g ∈ u') : v = v' := by
+  obtain ⟨hv, rfl⟩ := List.getElem?_eq_some_iff.1 hu
+  obtain ⟨hv', rfl⟩ := List.getElem?_eq_some_iff.1 hu'
+  exact idx_eq_of_mem_flatten (L := P.blocks) hN hv hv' hg hg'
 
-/-- **A gate is in one proof unit of its replay unit.** -/
-theorem unit_unique {P : Partition} (hN : P.gates.Nodup) {v : ℕ} {r : RU} (hr : P.rus[v]? = some r) {u u' : List ℕ}
-    (hu : u ∈ r) (hu' : u' ∈ r) {g : ℕ} (hg : g ∈ u) (hg' : g ∈ u') : u = u' := by
-  rw [gates_eq] at hN
-  have hrN : r.flatten.Nodup := (List.pairwise_flatten.1 hN).1 _ (mem_rus hr)
-  obtain ⟨i, hi, rfl⟩ := List.getElem_of_mem hu
-  obtain ⟨j, hj, rfl⟩ := List.getElem_of_mem hu'
-  have := idx_eq_of_mem_flatten hrN hi hj hg hg'
-  subst this
-  rfl
-
-/-! ## Boundaries, reads and the replay unit's values -/
+/-! ## Boundaries, reads and the proof unit's values -/
 
 theorem boundary_of_read {C : Prog} {u : List ℕ} {g' i : ℕ} {x : BGate} (hx : C.gates[g']? = some x)
     (hi : i ∈ x.reads) (hg' : g' ∉ u) : C.Boundary u i = true := by
@@ -110,16 +80,16 @@ theorem read_of_not_const {C : Prog} {ref : ℕ → Option Bool} {i : ℕ} (h : 
     exact absurd hb (h b)
   · rfl
 
-theorem ref_of_boundary {C : Prog} {r : RU} {ref : ℕ → Option Bool} {ι : ℕ → Bool} {g : ℕ}
-    (h : C.Boundary (RU.gates r) g = true) : RU.ref C r ref ι g = ref g := by
-  simp [RU.ref, h]
+theorem ref_of_boundary {C : Prog} {u : List ℕ} {ref : ℕ → Option Bool} {ι : ℕ → Bool} {g : ℕ}
+    (h : C.Boundary u g = true) : C.refIn u ref ι g = ref g := by
+  simp [Prog.refIn, h]
 
-theorem ref_of_not_mem {C : Prog} {r : RU} {ref : ℕ → Option Bool} {ι : ℕ → Bool} {g : ℕ} (h : g ∉ RU.gates r) :
-    RU.ref C r ref ι g = ref g := by
-  simp [RU.ref, h]
+theorem ref_of_not_mem {C : Prog} {u : List ℕ} {ref : ℕ → Option Bool} {ι : ℕ → Bool} {g : ℕ} (h : g ∉ u) :
+    C.refIn u ref ι g = ref g := by
+  simp [Prog.refIn, h]
 
-theorem read_ref_of_not_mem {C : Prog} {r : RU} {ref : ℕ → Option Bool} {ι : ℕ → Bool} {i : ℕ}
-    (h : i ∉ RU.gates r) : C.read (RU.ref C r ref ι) i = C.read ref i := by
+theorem read_ref_of_not_mem {C : Prog} {u : List ℕ} {ref : ℕ → Option Bool} {ι : ℕ → Bool} {i : ℕ}
+    (h : i ∉ u) : C.read (C.refIn u ref ι) i = C.read ref i := by
   unfold Prog.read
   split
   · rfl
@@ -221,26 +191,25 @@ section Run
 
 variable {C : Prog} {P : Partition} {ref : ℕ → Option Bool} {F : Finset ℕ} {inp : ℕ → Bool}
   (hT : C.Topological) (hP : P.Partitions C) (ι : ℕ → ℕ → Bool)
-  (hι : ∀ v r, P.rus[v]? = some r → v ∉ F → ∀ u ∈ r, C.Correct (RU.ref C r ref (ι v)) u)
+  (hι : ∀ v u, P.blocks[v]? = some u → v ∉ F → C.Correct (C.refIn u ref (ι v)) u)
   (Good : ℕ → Prop) (hgood : ∀ g x, C.gates[g]? = some x → Good g → ∀ i ∈ x.reads, Good i)
   (hinp : ∀ g, C.gates[g]? = some .input → Good g → inp g = traceVal C ref g)
 include hT hP hι hgood hinp
 
 /-- **A unit that isn't faulty computes what its proof unit does**: at a gate whose inputs read the trace, `C` run with
-the faulty units' gates held has the value the gate's proof unit computes on its replay unit's committed values and
-interior. -/
-theorem valOver_unit : ∀ g, Good g → ∀ v r u, P.rus[v]? = some r → v ∉ F → u ∈ r → g ∈ u →
-    valOver C inp (heldAdv C P F ref) g = (C.runIn (RU.ref C r ref (ι v)) u g).getD false := by
+the faulty units' gates held has the value the gate's proof unit computes on its committed values and interior. -/
+theorem valOver_unit : ∀ g, Good g → ∀ v u, P.blocks[v]? = some u → v ∉ F → g ∈ u →
+    valOver C inp (heldAdv C P F ref) g = (C.runIn (C.refIn u ref (ι v)) u g).getD false := by
   intro g
   induction g using Nat.strong_induction_on with
   | _ g ih =>
-  intro hgd v r u hr hv hu hg
+  intro hgd v u hu hv hg
   obtain ⟨hN, hlen, hcover, -⟩ := hP
-  have hglt : g < C.gates.length := hlen g (mem_gates hr hu hg)
+  have hglt : g < C.gates.length := hlen g (mem_gates hu hg)
   obtain ⟨x, hx⟩ : ∃ x, C.gates[g]? = some x := ⟨_, List.getElem?_eq_getElem hglt⟩
   have hnf : ¬ FaultyGate C P F g := by
-    rintro ⟨v', hv', r', hr', hg', -⟩
-    rw [slot_unique hN hr hr' (mem_ru_gates hu hg) hg'] at hv
+    rintro ⟨v', hv', u', hu', hg', -⟩
+    rw [slot_unique hN hu hu' hg hg'] at hv
     exact hv hv'
   rw [valOver_gate (heldAdv_of_not hnf) hx, Prog.runIn]
   simp only [hx, Option.bind_some]
@@ -255,20 +224,20 @@ theorem valOver_unit : ∀ g, Good g → ∀ v r u, P.rus[v]? = some r → v ∉
   have hgi := hgood g x hx hgd i hi
   rw [dite_eq_left hlt]
   by_cases hiu : i ∈ u
-  · rw [ite_eq_left hiu, dite_eq_left hlt, ih i hlt hgi v r u hr hv hu hiu]
+  · rw [ite_eq_left hiu, dite_eq_left hlt, ih i hlt hgi v u hu hv hiu]
     obtain ⟨b, hb⟩ := Option.ne_none_iff_exists'.1
-      (runIn_ne_none hT (hι v r hr hv u hu) (fun g' hg' => hlen g' (mem_gates hr hu hg')) i hiu)
+      (runIn_ne_none hT (hι v u hu hv) (fun g' hg' => hlen g' (mem_gates hu hg')) i hiu)
     rw [hb]
     rfl
   rw [ite_eq_right hiu]
-  obtain ⟨c, hc⟩ := Option.ne_none_iff_exists'.1 ((hι v r hr hv u hu g hg).1 x hx i hi hiu)
+  obtain ⟨c, hc⟩ := Option.ne_none_iff_exists'.1 ((hι v u hu hv g hg).1 x hx i hi hiu)
   rw [hc]
   congr 1
   by_cases hfi : FaultyGate C P F i
   · rw [valOver_held (heldAdv_of hfi)]
-    obtain ⟨v', hv', r', hr', hi', -⟩ := hfi
-    have hnot : i ∉ RU.gates r := fun hir => by
-      rw [slot_unique hN hr hr' hir hi'] at hv
+    obtain ⟨v', hv', u', hu', hi', -⟩ := hfi
+    have hnot : i ∉ u := fun hir => by
+      rw [slot_unique hN hu hu' hir hi'] at hv
       exact hv hv'
     rw [traceVal, ← read_ref_of_not_mem (ι := ι v) hnot, hc]
     rfl
@@ -280,28 +249,21 @@ theorem valOver_unit : ∀ g, Good g → ∀ v r u, P.rus[v]? = some r → v ∉
     exact Option.some.inj hc
   push Not at hconst
   have hilt : i < C.gates.length := hlt.trans hglt
-  obtain ⟨v', r', u', hr', hu', hiu'⟩ := exists_of_mem_gates (hcover i hilt hconst)
+  obtain ⟨v', u', hu', hiu'⟩ := exists_of_mem_gates (hcover i hilt hconst)
   rw [read_of_not_const hconst] at hc
-  by_cases hvv : v' = v
-  · subst hvv
-    rw [hr] at hr'
-    cases hr'
-    have hgu' : g ∉ u' := fun hgu' => hiu (unit_unique hN hr hu hu' hg hgu' ▸ hiu')
-    obtain ⟨b, hb, hrun⟩ := (hι v' r hr hv u' hu' i hiu').2 (boundary_of_read hx hi hgu')
-    rw [ih i hlt hgi v' r u' hr hv hu' hiu', hrun]
-    rw [hb] at hc
-    exact Option.some.inj hc
-  · have hnot : i ∉ RU.gates r := fun hir => hvv (slot_unique hN hr' hr (mem_ru_gates hu' hiu') hir)
-    have hgr' : g ∉ RU.gates r' := fun hgr => hvv (slot_unique hN hr hr' (mem_ru_gates hu hg) hgr).symm
-    have hbd : C.Boundary (RU.gates r') i = true := boundary_of_read hx hi hgr'
-    have hv' : v' ∉ F := fun hv' => hfi ⟨v', hv', r', hr', mem_ru_gates hu' hiu', hbd⟩
-    have hgu' : g ∉ u' := fun hgu' => hgr' (mem_ru_gates hu' hgu')
-    obtain ⟨b, hb, hrun⟩ := (hι v' r' hr' hv' u' hu' i hiu').2 (boundary_of_read hx hi hgu')
-    rw [ih i hlt hgi v' r' u' hr' hv' hu' hiu', hrun]
-    rw [ref_of_not_mem hnot] at hc
-    rw [ref_of_boundary hbd] at hb
-    rw [hb] at hc
-    exact Option.some.inj hc
+  have hgu' : g ∉ u' := fun hgu => hiu (by
+    obtain rfl := slot_unique hN hu' hu hgu hg
+    rw [hu] at hu'
+    obtain rfl := Option.some.inj hu'
+    exact hiu')
+  have hbd : C.Boundary u' i = true := boundary_of_read hx hi hgu'
+  have hv' : v' ∉ F := fun hv' => hfi ⟨v', hv', u', hu', hiu', hbd⟩
+  obtain ⟨b, hb, hrun⟩ := (hι v' u' hu' hv' i hiu').2 hbd
+  rw [ih i hlt hgi v' u' hu' hv' hiu', hrun]
+  rw [ref_of_not_mem hiu] at hc
+  rw [ref_of_boundary hbd] at hb
+  rw [hb] at hc
+  exact Option.some.inj hc
 
 /-- **At a returned gate, `C` run with the faulty units' gates held has the trace's value.** -/
 theorem valOver_out {g : ℕ} (hout : g ∈ C.outs) (hgd : Good g) :
@@ -315,11 +277,11 @@ theorem valOver_out {g : ℕ} (hout : g ∈ C.outs) (hgd : Good g) :
     rw [valOver_const hfree hb, traceVal, read_const hb]
     rfl
   push Not at hconst
-  obtain ⟨v, r, u, hr, hu, hg⟩ := exists_of_mem_gates (hP.2.2.1 g hglt hconst)
-  have hv : v ∉ F := fun hv => hfg ⟨v, hv, r, hr, mem_ru_gates hu hg, boundary_of_out hout⟩
-  obtain ⟨b, hb, hrun⟩ := (hι v r hr hv u hu g hg).2 (boundary_of_out hout)
-  rw [valOver_unit hT hP ι hι Good hgood hinp g hgd v r u hr hv hu hg, hrun, traceVal, read_of_not_const hconst,
-    ← ref_of_boundary (r := r) (ref := ref) (ι := ι v) (boundary_of_out hout), hb]
+  obtain ⟨v, u, hu, hg⟩ := exists_of_mem_gates (hP.2.2.1 g hglt hconst)
+  have hv : v ∉ F := fun hv => hfg ⟨v, hv, u, hu, hg, boundary_of_out hout⟩
+  obtain ⟨b, hb, hrun⟩ := (hι v u hu hv g hg).2 (boundary_of_out hout)
+  rw [valOver_unit hT hP ι hι Good hgood hinp g hgd v u hu hv hg, hrun, traceVal, read_of_not_const hconst,
+    ← ref_of_boundary (u := u) (ref := ref) (ι := ι v) (boundary_of_out hout), hb]
 
 end Run
 
@@ -364,18 +326,18 @@ theorem inputOf_eq {L K S : ℕ} {lay : Layout L S} {C : Prog} {ref : ℕ → Op
 /-! ## No faulty unit is drawn `all` -/
 
 /-- **A set that meets a class drawn `all` has acceptance probability `0`**: that class's factor is `0`. -/
-theorem classesPa_eq_zero : ∀ (rs : List Rule) (cs : List (List (List RU))) (o : ℕ) (B : Finset ℕ),
+theorem classesPa_eq_zero : ∀ (rs : List OneStage) (cs : List (List (List (List ℕ)))) (o : ℕ) (B : Finset ℕ),
     ¬ Disjoint B (allSlotsFrom rs cs o) → classesPa rs cs o B = 0
   | [], _, _, _, h => by simp [allSlotsFrom] at h
   | _ :: _, [], _, _, h => by simp [allSlotsFrom] at h
   | r :: rs, c :: cs, o, B, h => by
     simp only [classesPa]
     by_cases h2 : Disjoint B (allSlotsFrom rs cs (o + c.flatten.length))
-    · rw [allSlotsFrom, Finset.disjoint_union_right] at h
-      obtain ⟨first, check⟩ := r
-      cases first
+    · cases r
       case all =>
-        have h1 : ¬ Disjoint B (Finset.Ico o (o + c.flatten.length)) := fun h1 => h ⟨h1, h2⟩
+        have h1 : ¬ Disjoint B (Finset.Ico o (o + c.flatten.length)) := fun h1 =>
+          h (Finset.disjoint_union_right.2 ⟨h1, h2⟩ :
+            Disjoint B (Finset.Ico o (o + c.flatten.length) ∪ allSlotsFrom rs cs (o + c.flatten.length)))
         obtain ⟨v, hvB, hvI⟩ := Finset.not_disjoint_iff.1 h1
         have hw : window o c.flatten.length B ≠ ∅ := by
           intro he
@@ -384,10 +346,12 @@ theorem classesPa_eq_zero : ∀ (rs : List Rule) (cs : List (List (List RU))) (o
             exact ⟨v, ⟨hvB, Finset.mem_Ico.1 hvI⟩, rfl⟩
           rw [he] at hm
           simp at hm
-        have h0 : Rule.Pa ⟨.all, check⟩ (strataSizes c) (ruSizes c) (window o c.flatten.length B) = 0 := by
-          cases check <;> simpa [Rule.Pa, OneStage.Pa] using hw
+        have h0 : OneStage.Pa (strataSizes c) .all (window o c.flatten.length B) = 0 := by
+          simpa [OneStage.Pa] using hw
         rw [h0, zero_mul]
-      all_goals exact absurd ⟨Finset.disjoint_empty_right B, h2⟩ h
+      all_goals
+        exact absurd (Finset.disjoint_union_right.2 ⟨Finset.disjoint_empty_right B, h2⟩ :
+          Disjoint B (∅ ∪ allSlotsFrom rs cs (o + c.flatten.length))) h
     · rw [classesPa_eq_zero rs cs _ B h2, mul_zero]
 
 theorem disjoint_allSlots {d : Design} {P : Partition} {δ : ℝ} {B : Finset ℕ} (hδ : 0 ≤ δ) (hM : B ∈ d.M P δ) :
@@ -401,24 +365,24 @@ theorem disjoint_allSlots {d : Design} {P : Partition} {δ : ℝ} {B : Finset �
 /-! ## The relation -/
 
 open Classical in
-/-- **Every unit that isn't faulty has interior values making its proof units correct.** -/
+/-- **Every unit that isn't faulty has interior values making it correct.** -/
 theorem correct_of_not_faulty (H : Msg → Msg) (Cm : Commitment Bool) (s : AuditStatement) (P : Partition) (w : Wit) :
-    ∃ ι : ℕ → ℕ → Bool, ∀ v r, P.rus[v]? = some r → v ∉ faulty H Cm s P w →
-      ∀ u ∈ r, s.prog.Correct (RU.ref s.prog r (w.val H Cm s) (ι v)) u := by
-  have : ∀ v, ∃ ι : ℕ → Bool, ∀ r, P.rus[v]? = some r → v ∉ faulty H Cm s P w →
-      ∀ u ∈ r, s.prog.Correct (RU.ref s.prog r (w.val H Cm s) ι) u := by
+    ∃ ι : ℕ → ℕ → Bool, ∀ v u, P.blocks[v]? = some u → v ∉ faulty H Cm s P w →
+      s.prog.Correct (s.prog.refIn u (w.val H Cm s) (ι v)) u := by
+  have : ∀ v, ∃ ι : ℕ → Bool, ∀ u, P.blocks[v]? = some u → v ∉ faulty H Cm s P w →
+      s.prog.Correct (s.prog.refIn u (w.val H Cm s) ι) u := by
     intro v
-    by_cases h : ∃ r, P.rus[v]? = some r ∧ v ∉ faulty H Cm s P w
-    · obtain ⟨r, hr, hv⟩ := h
-      have hlt : v < P.rus.length := (List.getElem?_eq_some_iff.1 hr).1
+    by_cases h : ∃ u, P.blocks[v]? = some u ∧ v ∉ faulty H Cm s P w
+    · obtain ⟨u, hu, hv⟩ := h
+      have hlt : v < P.blocks.length := (List.getElem?_eq_some_iff.1 hu).1
       have hnf : ¬ Faulty H Cm s P w v := fun hf => hv (by
         unfold faulty
         exact Finset.mem_filter.2 ⟨Finset.mem_range.2 hlt, hf⟩)
-      obtain ⟨r', hr', ι, hι⟩ := not_not.1 hnf
-      rw [hr] at hr'
-      cases hr'
-      exact ⟨ι, fun r'' hr'' _ => by rw [hr] at hr''; cases hr''; exact hι⟩
-    · exact ⟨fun _ => false, fun r hr hv => absurd ⟨r, hr, hv⟩ h⟩
+      obtain ⟨u', hu', ι, hι⟩ := not_not.1 hnf
+      rw [hu] at hu'
+      cases hu'
+      exact ⟨ι, fun u'' hu'' _ => by rw [hu] at hu''; cases hu''; exact hι⟩
+    · exact ⟨fun _ => false, fun u hu hv => absurd ⟨u, hu, hv⟩ h⟩
   choose ι hι using this
   exact ⟨ι, hι⟩
 
@@ -428,7 +392,7 @@ committed gates at the trace's values and the other inputs at the trace's makes 
 and operator the trace carries with every status complete. -/
 theorem accepted_of {L K S : ℕ} {C : Prog} {P : Partition} {lay : Layout L S} {k : ℕ} (hT : C.Topological)
     (hP : P.Partitions C) (hfit : lay.Fits C k) {ref : ℕ → Option Bool} {F : Finset ℕ} (ι : ℕ → ℕ → Bool)
-    (hι : ∀ v r, P.rus[v]? = some r → v ∉ F → ∀ u ∈ r, C.Correct (RU.ref C r ref (ι v)) u)
+    (hι : ∀ v u, P.blocks[v]? = some u → v ∉ F → C.Correct (C.refIn u ref (ι v)) u)
     {op : ℕ → List (Obs L K S) → List Bool} {o : List (Obs L K S)} (hcar : Carries lay C ref op k o)
     (hcov : Covered k o) : Accepted (circuitProgram C lay k) op k o (traceVal C ref, heldAdv C P F ref) := by
   intro t ht

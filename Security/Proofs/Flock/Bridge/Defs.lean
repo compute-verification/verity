@@ -11,12 +11,12 @@ The C-Flock session's units, read as the sampling claims' statement, partition, 
   `(⊕ a) ∧ (⊕ b)` is three gates (the two XORs, then their AND), every other gate one. An input gate the constants
   `κ` fix to `b` is the constant `.const b`, public circuit structure, which a proof unit reads with no opening. Wire
   `g` sits at `posOf C g`, its last gate.
-* `partOf P κ`: one class, the population: one stratum of a replay unit per C-Flock unit. Slot `u` (`slotOf`) is
-  the proof unit of unit `u`'s lowered gates (`unitGates`), then a one-gate proof unit per input row `u` owns
-  (`insOf`): an input gate the constants `κ` don't fix, whose first reader is `u` (`owner`). **An input row is checked
-  with the unit that owns it**, as the deployed verifier opens it: its session (`HmRow.drawn`) opens only the rows its
-  drawn units read, and registration opens none. An input no unit reads is in no slot.
-* `designOf kd`: the population drawn `subset kd`, checking every proof unit of a drawn replay unit.
+* `partOf P κ`: one class, the population: one stratum of a proof block per C-Flock unit. Slot `u` (`blockOf`) is
+  unit `u`'s lowered gates (`unitGates`), then the position of each input row `u` owns (`insOf`): an input gate the
+  constants `κ` don't fix, whose first reader is `u` (`owner`). **An input row is checked with the unit that owns
+  it**, as the deployed verifier opens it: its session (`HmRow.drawn`) opens only the rows its drawn units read, and
+  registration opens none. An input no unit reads is in no slot.
+* `designOf kd`: the population drawn `subset kd`.
 * `stmtOf P κ kd desc q roots`: the statement of the program at constants `κ`, the query `q`, that design and the
   roots.
 * `commitOf pos bit val com cs`: an opening at wire `g`'s position passes when some opening of the registered commit
@@ -72,17 +72,16 @@ def owner {C : Circuit} {n : ℕ} (P : Partition C n) (g : Fin C.N) : Option (Fi
 def insOf {C : Circuit} {n : ℕ} (P : Partition C n) (κ : Fin C.N → Option Bool) (u : Fin n) : List (Fin C.N) :=
   (List.finRange C.N).filter fun g => (C.op g).isInput && (κ g).isNone && decide (owner P g = some u)
 
-/-- **Unit `u`'s replay unit**: the proof unit `unitGates P u`, then a one-gate proof unit per input it owns, at the
-input's position. -/
-def slotOf {C : Circuit} {n : ℕ} (P : Partition C n) (κ : Fin C.N → Option Bool) (u : Fin n) : Claims.Sampling.RU :=
-  [unitGates P u] ++ (insOf P κ u).map fun g => [posOf C g]
+/-- **Unit `u`'s proof block**: its lowered gates `unitGates P u`, then the position of each input it owns. -/
+def blockOf {C : Circuit} {n : ℕ} (P : Partition C n) (κ : Fin C.N → Option Bool) (u : Fin n) : List ℕ :=
+  unitGates P u ++ (insOf P κ u).map (posOf C)
 
-/-- **The partition**: the population, one stratum with slot `u` unit `u`'s replay unit `slotOf P κ u`. -/
+/-- **The partition**: the population, one stratum with slot `u` unit `u`'s proof block `blockOf P κ u`. -/
 def partOf {C : Circuit} {n : ℕ} (P : Partition C n) (κ : Fin C.N → Option Bool) : Claims.Sampling.Partition :=
-  ⟨[[(List.finRange n).map (slotOf P κ)]]⟩
+  ⟨[[(List.finRange n).map (blockOf P κ)]]⟩
 
-/-- **The design**: the population drawn `subset kd`, every proof unit of a drawn replay unit checked. -/
-def designOf (kd : ℕ) : Claims.Sampling.Design := ⟨[⟨.subset kd, none⟩]⟩
+/-- **The design**: the population drawn `subset kd`. -/
+def designOf (kd : ℕ) : Claims.Sampling.Design := ⟨[.subset kd]⟩
 
 /-- **The statement**: `progOf`'s program at constants `κ` under the query `q` and the descriptor bytes `desc`, the
 design `designOf kd`, and the roots. -/

@@ -78,8 +78,8 @@ def refP {ΩF : Type} (PF : Claims.Flock.Wit → Prover ΩF) (step : Msg → Lis
 /-- **The sessions' error at `x`**: the largest of `δ`, capped at `1`, over the statements of the sessions of `P`'s runs
 at a witness `R` relates to `x` and coins that check the session's unit; `0` where there are none. -/
 noncomputable def sessErrAt {Coin Ω : Type} [Inhabited Coin] (H : Msg → Msg) (R : Msg → Wit → Prop)
-    (P : Wit → Prover Ω) (V : Verifier Coin) (checked : (x : Msg) → (Fin (V.k x) → Coin) → List (ℕ × ℕ))
-    (session : Msg → ℕ × ℕ → Seen → Option (Msg × Seen)) (δ : Msg → ℝ) (x : Msg) : ℝ :=
+    (P : Wit → Prover Ω) (V : Verifier Coin) (checked : (x : Msg) → (Fin (V.k x) → Coin) → List ℕ)
+    (session : Msg → ℕ → Seen → Option (Msg × Seen)) (δ : Msg → ℝ) (x : Msg) : ℝ :=
   ⨆ xS : {xS : Msg // ∃ w ω r u vS, R x w ∧ u ∈ checked x r ∧
       session x u (run H (P w) V x ω r).seen = some (xS, vS)}, min 1 (δ xS.1)
 

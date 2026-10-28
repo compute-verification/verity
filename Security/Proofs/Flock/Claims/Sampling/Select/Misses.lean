@@ -15,102 +15,95 @@ namespace Properties.SampledProofs.SecurityProofs
 
 open FlockSoundness FlockSoundness.Game FlockSoundness.Audit Finset Claims.Sampling
 
-/-- The population's replay units, slot by slot. -/
-def popRUs (pop : Array (Array Slots.RU)) : List Slots.RU := pop.toList.flatMap (·.toList)
+/-- The population's proof blocks, slot by slot. -/
+def popBlocks (pop : Array (Array Slots.ProofBlock)) : List Slots.ProofBlock := pop.toList.flatMap (·.toList)
 
-theorem rus_toList (pop ic : Array (Array Slots.RU)) :
-    (({ classes := #[pop, ic] } : Slots.Layout).rus).toList = popRUs pop ++ popRUs ic := by
-  simp [Slots.Layout.rus, popRUs, List.flatten_append]
+theorem blocks_toList (pop ic : Array (Array Slots.ProofBlock)) :
+    (({ classes := #[pop, ic] } : Slots.Layout).blocks).toList = popBlocks pop ++ popBlocks ic := by
+  simp [Slots.Layout.blocks, popBlocks, List.flatten_append]
   rfl
 
 /-- The population's units, slot by slot. -/
 def popUnits (S : Array (String × Array (ℕ × ℕ))) : List ℕ := S.toList.flatMap fun p => expand p.2.toList
 
-theorem laysOut_units : ∀ (S : List (String × Array (ℕ × ℕ))) (pop : List (Array Slots.RU)), List.Forall₂ LaysOut S pop →
+theorem laysOut_units : ∀ (S : List (String × Array (ℕ × ℕ))) (pop : List (Array Slots.ProofBlock)),
+    List.Forall₂ LaysOut S pop →
     (pop.flatMap (·.toList)).map (·.unit) = (S.flatMap fun p => expand p.2.toList).map some ∧
-      (∀ r ∈ pop.flatMap (·.toList), r.pus.size = 1) ∧ pop.map (·.size) = S.map fun p => rsSize p.2
-  | [], [], .nil => ⟨rfl, fun r hr => absurd hr (by simp), rfl⟩
-  | p :: S, s :: pop, .cons ⟨hu, hp⟩ h => by
-    obtain ⟨ih1, ih2, ih3⟩ := laysOut_units S pop h
-    refine ⟨by simp only [List.flatMap_cons, List.map_append, hu, ih1], fun r hr => ?_, ?_⟩
-    · simp only [List.flatMap_cons, List.mem_append] at hr
-      rcases hr with hr | hr
-      · exact hp r hr
-      · exact ih2 r hr
-    · have : s.size = rsSize p.2 := by
-        have := congrArg List.length hu
-        simp only [List.length_map, Array.length_toList] at this
-        exact this
-      simp only [List.map_cons, this, ih3]
+      pop.map (·.size) = S.map fun p => rsSize p.2
+  | [], [], .nil => ⟨rfl, rfl⟩
+  | p :: S, s :: pop, .cons hu h => by
+    replace hu : s.toList.map (·.unit) = (expand p.2.toList).map some := hu
+    obtain ⟨ih1, ih2⟩ := laysOut_units S pop h
+    refine ⟨by simp only [List.flatMap_cons, List.map_append, hu, ih1], ?_⟩
+    have : s.size = rsSize p.2 := by
+      have := congrArg List.length hu
+      simp only [List.length_map, Array.length_toList] at this
+      exact this
+    simp only [List.map_cons, this, ih2]
 
-theorem inputClass_rus (d : Program) : ∀ r ∈ popRUs (inputClass d), r.unit = none ∧ r.pus.size = 1 := by
-  intro r hr
-  unfold popRUs inputClass at hr
-  dsimp only at hr
-  split at hr
-  · simp at hr
-  · simp only [List.flatMap_cons, List.flatMap_nil, List.append_nil, Array.toList_map, List.mem_map] at hr
-    obtain ⟨g, -, rfl⟩ := hr
-    exact ⟨rfl, rfl⟩
+theorem inputClass_blocks (d : Program) : ∀ b ∈ popBlocks (inputClass d), b.unit = none := by
+  intro b hb
+  unfold popBlocks inputClass at hb
+  dsimp only at hb
+  split at hb
+  · simp at hb
+  · simp only [List.flatMap_cons, List.flatMap_nil, List.append_nil, Array.toList_map, List.mem_map] at hb
+    obtain ⟨g, -, rfl⟩ := hb
+    rfl
 
 /-- **A draw that misses `B`**, over a layout of the population's strata `S` and an input class: no slot of `B` is an
 input slot, and no unit at a population slot of `B` is proved. -/
-theorem misses_layout (S : Array (String × Array (ℕ × ℕ))) (pop ic : Array (Array Slots.RU))
+theorem misses_layout (S : Array (String × Array (ℕ × ℕ))) (pop ic : Array (Array Slots.ProofBlock))
     (hlays : List.Forall₂ LaysOut S.toList pop.toList)
-    (hic : ∀ r ∈ popRUs ic, r.unit = none ∧ r.pus.size = 1) (proved : Array ℕ) (B : Finset ℕ)
+    (hic : ∀ b ∈ popBlocks ic, b.unit = none) (proved : Array ℕ) (B : Finset ℕ)
     (h : Misses B (Slots.checked { classes := #[pop, ic] } proved)) :
-    window (popUnits S).length (popRUs ic).length B = ∅ ∧
+    window (popUnits S).length (popBlocks ic).length B = ∅ ∧
       ∀ v ∈ window 0 (popUnits S).length B, (popUnits S).getD v 0 ∉ proved := by
-  obtain ⟨hu, hp, -⟩ := laysOut_units S.toList pop.toList hlays
-  replace hu : (popRUs pop).map (·.unit) = (popUnits S).map some := hu
-  replace hp : ∀ r ∈ popRUs pop, r.pus.size = 1 := hp
-  have hlen : (popRUs pop).length = (popUnits S).length := by
-    rw [← List.length_map (f := fun r : Slots.RU => r.unit), hu, List.length_map]
-  have hrus := rus_toList pop ic
+  obtain ⟨hu, -⟩ := laysOut_units S.toList pop.toList hlays
+  replace hu : (popBlocks pop).map (·.unit) = (popUnits S).map some := hu
+  have hlen : (popBlocks pop).length = (popUnits S).length := by
+    rw [← List.length_map (f := fun b : Slots.ProofBlock => b.unit), hu, List.length_map]
+  have hbl := blocks_toList pop ic
   constructor
   · refine Finset.eq_empty_of_forall_notMem fun j hj => ?_
-    have hjl : j < (popRUs ic).length := Finset.mem_range.1 (window_subset _ _ _ hj)
-    refine h _ ((mem_window hjl).1 hj) 0 ((mem_checked _ _ _ _).2 ?_)
-    have hv : (popUnits S).length + j < ({ classes := #[pop, ic] } : Slots.Layout).rus.size := by
-      rw [← Array.length_toList, hrus, List.length_append]; omega
-    have hr : ({ classes := #[pop, ic] } : Slots.Layout).rus[(popUnits S).length + j] = (popRUs ic)[j] := by
-      rw [← Array.getElem_toList, List.getElem_of_eq hrus, List.getElem_append_right (by omega)]
+    have hjl : j < (popBlocks ic).length := Finset.mem_range.1 (window_subset _ _ _ hj)
+    refine h _ ((mem_window hjl).1 hj) ((mem_checked _ _ _).2 ?_)
+    have hv : (popUnits S).length + j < ({ classes := #[pop, ic] } : Slots.Layout).blocks.size := by
+      rw [← Array.length_toList, hbl, List.length_append]; omega
+    have hr : ({ classes := #[pop, ic] } : Slots.Layout).blocks[(popUnits S).length + j] = (popBlocks ic)[j] := by
+      rw [← Array.getElem_toList, List.getElem_of_eq hbl, List.getElem_append_right (by omega)]
       congr 1; omega
-    refine ⟨hv, ?_, ?_⟩
-    · rw [hr, (hic _ (List.getElem_mem _)).1]; rfl
-    · rw [hr, (hic _ (List.getElem_mem _)).2]; omega
+    refine ⟨hv, ?_⟩
+    rw [hr, hic _ (List.getElem_mem _)]; rfl
   · intro v hv hpv
     have hvl : v < (popUnits S).length := Finset.mem_range.1 (window_subset _ _ _ hv)
     rw [mem_window hvl, zero_add] at hv
-    refine h v hv 0 ((mem_checked _ _ _ _).2 ?_)
-    have hvr : v < ({ classes := #[pop, ic] } : Slots.Layout).rus.size := by
-      rw [← Array.length_toList, hrus, List.length_append]; omega
-    have hr : ({ classes := #[pop, ic] } : Slots.Layout).rus[v] = (popRUs pop)[v] := by
-      rw [← Array.getElem_toList, List.getElem_of_eq hrus, List.getElem_append_left]
-    have hunit : (popRUs pop)[v].unit = some ((popUnits S).getD v 0) := by
-      have := List.getElem_of_eq hu (by rw [List.length_map]; omega : v < ((popRUs pop).map (·.unit)).length)
+    refine h v hv ((mem_checked _ _ _).2 ?_)
+    have hvr : v < ({ classes := #[pop, ic] } : Slots.Layout).blocks.size := by
+      rw [← Array.length_toList, hbl, List.length_append]; omega
+    have hr : ({ classes := #[pop, ic] } : Slots.Layout).blocks[v] = (popBlocks pop)[v] := by
+      rw [← Array.getElem_toList, List.getElem_of_eq hbl, List.getElem_append_left]
+    have hunit : (popBlocks pop)[v].unit = some ((popUnits S).getD v 0) := by
+      have := List.getElem_of_eq hu (by rw [List.length_map]; omega : v < ((popBlocks pop).map (·.unit)).length)
       rw [List.getElem_map, List.getElem_map] at this
       rw [List.getD_eq_getElem _ _ hvl]
       exact this
-    refine ⟨hvr, ?_, ?_⟩
-    · rw [hr, hunit]
-      simpa using hpv
-    · have := hp (popRUs pop)[v] (List.getElem_mem _)
-      rw [hr, this]; omega
+    refine ⟨hvr, ?_⟩
+    rw [hr, hunit]
+    simpa using hpv
 
-theorem slots_length (c : Array (Array Slots.RU)) :
-    (c.toList.map fun s => s.toList.map fun r => r.pus.toList.map puGates).flatten.length = (popRUs c).length := by
-  simp [popRUs, List.length_flatten, List.length_flatMap, Function.comp_def]
+theorem slots_length (c : Array (Array Slots.ProofBlock)) :
+    (c.toList.map fun s => s.toList.map puGates).flatten.length = (popBlocks c).length := by
+  simp [popBlocks, List.length_flatten, List.length_flatMap, Function.comp_def]
 
 /-- **The design's `P_a` on `Slots.layout`'s partition**: the population's first stage on its window of `B`, times the
 input class's `all`. -/
-theorem pa_slots (first : OneStage) (pop ic : Array (Array Slots.RU)) (B : Finset ℕ) :
-    (⟨[⟨first, none⟩, ⟨.all, none⟩]⟩ : Design).Pa (slotPartition { classes := #[pop, ic] }) B =
-      first.Pa (pop.toList.map (·.size)) (window 0 (popRUs pop).length B) *
-        (if window (popRUs pop).length (popRUs ic).length B = ∅ then 1 else 0) := by
+theorem pa_slots (first : OneStage) (pop ic : Array (Array Slots.ProofBlock)) (B : Finset ℕ) :
+    (⟨[first, .all]⟩ : Design).Pa (slotPartition { classes := #[pop, ic] }) B =
+      first.Pa (pop.toList.map (·.size)) (window 0 (popBlocks pop).length B) *
+        (if window (popBlocks pop).length (popBlocks ic).length B = ∅ then 1 else 0) := by
   unfold Design.Pa slotPartition
-  simp only [List.map_cons, List.map_nil, classesPa, Rule.Pa_none (r := ⟨first, none⟩) rfl,
-    Rule.Pa_none (r := ⟨.all, none⟩) rfl, strataSizes, slots_length, zero_add, mul_one]
+  simp only [List.map_cons, List.map_nil, classesPa, strataSizes, slots_length, zero_add, mul_one]
   congr 2
   simp [Function.comp_def]
 
@@ -119,9 +112,9 @@ theorem slotDesign_ok (rule : Select.Rule) (d : Program) (query : Lean.Json) (ta
     (D : Design) (h : slotDesign rule d query table = .ok D) :
     ∃ n named derived, Partition.units d query = .ok n ∧ rule.lawOver n = .ok named ∧
       Draw.deriveLaw d query named table = .ok derived ∧
-      ((rule = .all ∧ D = ⟨[⟨.all, none⟩, ⟨.all, none⟩]⟩) ∨
+      ((rule = .all ∧ D = ⟨[.all, .all]⟩) ∨
         (rule ≠ .all ∧ ∃ parsed, Draw.flockLaw (lawObj named derived) n = .ok parsed ∧
-          D = ⟨[⟨oneStageOf (derived.getD parsed), none⟩, ⟨.all, none⟩]⟩)) := by
+          D = ⟨[oneStageOf (derived.getD parsed), .all]⟩)) := by
   unfold slotDesign at h
   obtain ⟨n, hn, h⟩ := bind_eq_ok.1 h
   obtain ⟨named, hnamed, h⟩ := bind_eq_ok.1 h
@@ -181,7 +174,7 @@ theorem totalWork_eq (ws : Array Flock.Draw.WorkStratum) :
 /-- **The population's first stage misses `W`** with probability at most the claims' `P_a(W)` of the law it samples, on
 the population's strata: the units `drawUnits` draws hold none at a slot of `W`. -/
 theorem law_bound (d : Program) (query : Lean.Json) (rs : Array Flock.TemplateQuery.TRange)
-    (he : Partition.evaluate d query = .ok rs) (pop : Array (Array Slots.RU))
+    (he : Partition.evaluate d query = .ok rs) (pop : Array (Array Slots.ProofBlock))
     (hlays : List.Forall₂ LaysOut (Flock.Draw.strataOf (rs.map fun r => (r.template, r.first, r.count))).toList
       pop.toList)
     (named : Lean.Json) (table : Option Lean.Json) (derived : Option Flock.Draw.Law) (parsed : Flock.Draw.Law)
@@ -203,7 +196,7 @@ theorem law_bound (d : Program) (query : Lean.Json) (rs : Array Flock.TemplateQu
   have hnd : (popUnits S).Nodup := hperm.nodup_iff.2 List.nodup_range'
   have hlt : ∀ x ∈ popUnits S, x < (popUnits S).length := fun x hx => by
     rw [hlen]; have := List.mem_range'.1 (hperm.subset hx); omega
-  have hns : pop.toList.map (·.size) = S.toList.map fun p => rsSize p.2 := (laysOut_units _ _ hlays).2.2
+  have hns : pop.toList.map (·.size) = S.toList.map fun p => rsSize p.2 := (laysOut_units _ _ hlays).2
   have hsum : (pop.toList.map (·.size)).sum = (popUnits S).length := by rw [hns, length_popUnits]
   rcases deriveLaw_cases d query named table derived hd with ⟨rfl, hk1, hk2⟩ | ⟨S', k, law', hS', rfl, hlaw⟩
   · obtain ⟨hU, hcard⟩ := image_units _ hnd hlt W hW
@@ -290,11 +283,11 @@ theorem drawMisses : DrawMisses := by
     rw [hperm.length_eq, List.length_range']
     exact (Except.ok.inj hn).symm
   subst hnU
-  have hlenP : (popRUs pop).length = (popUnits S).length := by
-    obtain ⟨hu, -, -⟩ := laysOut_units _ _ hlays
-    rw [← List.length_map (f := fun r : Slots.RU => r.unit),
-      show (popRUs pop).map (·.unit) = (popUnits S).map some from hu, List.length_map]
-  have hstep : ∀ src, E src → window (popUnits S).length (popRUs (inputClass d)).length B = ∅ ∧
+  have hlenP : (popBlocks pop).length = (popUnits S).length := by
+    obtain ⟨hu, -⟩ := laysOut_units _ _ hlays
+    rw [← List.length_map (f := fun b : Slots.ProofBlock => b.unit),
+      show (popBlocks pop).map (·.unit) = (popUnits S).map some from hu, List.length_map]
+  have hstep : ∀ src, E src → window (popUnits S).length (popBlocks (inputClass d)).length B = ∅ ∧
       ∃ units : Array ℕ, (∀ v ∈ window 0 (popUnits S).length B, (popUnits S).getD v 0 ∉ units) ∧
         ((rule = .all ∧ units = Array.range (popUnits S).length) ∨
           (rule ≠ .all ∧ ∃ parsed read', Draw.flockLaw (lawObj named derived) (popUnits S).length = .ok parsed ∧
@@ -304,7 +297,7 @@ theorem drawMisses : DrawMisses := by
     obtain ⟨hl', draw, proved, read, hsel, rfl⟩ := slots_select_ok _ _ _ _ _ _ _ _ hs
     rw [hl] at hl'
     obtain rfl := (Except.ok.inj hl')
-    obtain ⟨hW1, hW0⟩ := misses_layout S pop (inputClass d) hlays (inputClass_rus d) proved B hm
+    obtain ⟨hW1, hW0⟩ := misses_layout S pop (inputClass d) hlays (inputClass_blocks d) proved B hm
     obtain ⟨n', named', derived', hn', hnamed', hd', units, hsub, hcase⟩ := select_ok _ _ _ _ _ _ _ _ _ hsel
     rw [hn] at hn'
     obtain rfl := Except.ok.inj hn'
@@ -313,7 +306,7 @@ theorem drawMisses : DrawMisses := by
     rw [hd] at hd'
     obtain rfl := Except.ok.inj hd'
     exact ⟨hW1, units, fun v hv hu => hW0 v hv (hsub _ hu), hcase⟩
-  by_cases hW1 : window (popUnits S).length (popRUs (inputClass d)).length B = ∅
+  by_cases hW1 : window (popUnits S).length (popBlocks (inputClass d)).length B = ∅
   swap
   · rcases hDc with ⟨-, rfl⟩ | ⟨-, -, -, rfl⟩ <;>
     · rw [hzero fun src hs => hW1 (hstep src hs).1, pa_slots, hlenP]

@@ -36,14 +36,10 @@ theorem val_some_of_input {H : Msg → Msg} {Cm : Commitment Bool} {s : AuditSta
   obtain ⟨ι, hι⟩ := correct_of_not_faulty H Cm s P w
   have hlt : g < s.prog.gates.length := (List.getElem?_eq_some_iff.1 hg).1
   have hmem : g ∈ P.gates := hP.2.2.1 g hlt fun b h => by rw [hg] at h; cases h
-  obtain ⟨v, r, u, hr, hu, hgu⟩ := exists_of_mem_gates hmem
-  have hv : v ∉ faulty H Cm s P w := fun hv => hnf ⟨v, hv, r, hr, mem_ru_gates hu hgu, boundary_of_input hg⟩
-  obtain ⟨b, hb, -⟩ := (hι v r hr hv u hu g hgu).2 (boundary_of_input hg)
-  have hc : ¬ (g ∈ RU.gates r ∧ s.prog.Boundary (RU.gates r) g = false) := fun h => by
-    rw [boundary_of_input hg] at h
-    exact Bool.noConfusion h.2
-  unfold RU.ref at hb
-  rw [ite_eq_right hc] at hb
+  obtain ⟨v, u, hu, hgu⟩ := exists_of_mem_gates hmem
+  have hv : v ∉ faulty H Cm s P w := fun hv => hnf ⟨v, hv, u, hu, hgu, boundary_of_input hg⟩
+  obtain ⟨b, hb, -⟩ := (hι v u hu hv g hgu).2 (boundary_of_input hg)
+  rw [ref_of_boundary (boundary_of_input hg)] at hb
   exact ⟨b, hb⟩
 
 theorem traceVal_of_val {C : Prog} {ref : ℕ → Option Bool} {g : ℕ} {b : Bool} (hg : C.gates[g]? = some .input)

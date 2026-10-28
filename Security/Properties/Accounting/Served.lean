@@ -14,8 +14,8 @@ the served schedule, which `Tie.commit` and `Tie.receipt` state. What stays of i
 * **units** (`CallUnits`): call site `c` is a run of linear `linearOf c`'s Program (`VllmInt8LinearH1{K, N, M = T}`, in
   the form's variant: with each unit's `z` words for `zTree`, its `y` words and the `dequant(z) = y` check for `yOpen`,
   neither variant written yet) on the gates `[start c, start (c + 1))` of the declared circuit; each non-input gate lies
-  in a proof-unit span of a replay unit of that Program's layout, and its declared unit is that replay unit's number
-  shifted by the call's first position (`Layout.base`); each input slot's gate is an input; and every replay unit's
+  in the gate span of a proof block of that Program's layout, and its declared unit is that proof block's number
+  shifted by the call's first position (`Layout.base`); each input slot's gate is an input; and every proof block's
   number is below the call's unit count (`Layout.unitsOf`), so the calls' units tile the window's positions without
   overlap (W-a);
 * **population** (`ServedUnits`): each linear's Program has the layout's unit count, and the declared circuit's units are
@@ -41,17 +41,17 @@ namespace Properties.Served
 open Accounting.Compose Accounting.Served
 
 /-- **Call site `c`'s gates are its Program's**, on layout `l` of linear `linearOf c`'s Program: each of the call's
-non-input gates `i` (its gates are `[start c, start (c + 1))`) lies in a proof-unit span of a replay unit of `l`, read as
-the Program's root gate `i − start c`, and its declared unit is `base (stepOf c) (linearOf c)` plus that replay unit's
-number; each input slot's gate is an input of the call; and every replay unit's number is below the call's units. -/
+non-input gates `i` (its gates are `[start c, start (c + 1))`) lies in the gate span of a proof block of `l`, read as
+the Program's root gate `i − start c`, and its declared unit is `base (stepOf c) (linearOf c)` plus that proof block's
+number; each input slot's gate is an input of the call; and every proof block's number is below the call's units. -/
 def CallUnits {ι : Type} (L : Layout) (Cd : Declared ι) (start : ℕ → ℕ) (c : ℕ) (l : SampledProofs.Slots.Layout) :
     Prop :=
   (∀ i, start c ≤ i → i < start (c + 1) → i < Cd.dag.length → Cd.binding i = none →
-    ∃ r ∈ l.rus.toList, ∃ u, r.unit = some u ∧ Cd.unit i = L.base (L.stepOf c) (L.linearOf c) + u ∧
-      ∃ g ∈ r.pus.toList, g.1 ≤ i - start c ∧ i - start c < g.2) ∧
-    (∀ r ∈ l.rus.toList, r.unit = none → ∀ g ∈ r.pus.toList,
-      start c + g.1 < start (c + 1) ∧ (Cd.binding (start c + g.1)).isSome) ∧
-    (∀ r ∈ l.rus.toList, ∀ u, r.unit = some u → u < L.unitsOf (L.linearOf c))
+    ∃ b ∈ l.blocks.toList, ∃ u, b.unit = some u ∧ Cd.unit i = L.base (L.stepOf c) (L.linearOf c) + u ∧
+      b.gates.1 ≤ i - start c ∧ i - start c < b.gates.2) ∧
+    (∀ b ∈ l.blocks.toList, b.unit = none →
+      start c + b.gates.1 < start (c + 1) ∧ (Cd.binding (start c + b.gates.1)).isSome) ∧
+    (∀ b ∈ l.blocks.toList, ∀ u, b.unit = some u → u < L.unitsOf (L.linearOf c))
 
 /-- **The declared circuit's units are the served window's, call by call**: linear `w`'s Program `prog w` under
 `query w` has `unitsOf w` units; the declared circuit has the window's `population` of units; each gate lies in its

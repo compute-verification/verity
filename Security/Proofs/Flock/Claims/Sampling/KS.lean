@@ -24,7 +24,7 @@ the deployed sampled verifier, each a hypothesis to discharge there.
 * `split`: **the deterministic half**. At an accepted run whose extraction fails, the failure event `Fails` holds or
   the extractor's own calls collide (`Commitment.Binds`).
 * `inner_bad_le`, `outer_bad_le`, `Pr_fails_le`: **the probabilistic half**. Each wait's truncation and union bound
-  (`wait_bad_le`), its union's size against the slack `c` (`k = 2^40·(n_RU + n_PU + 1)`), the draw law and Flock's
+  (`wait_bad_le`), its union's size against the slack `c` (`k = 2^40·(2·n_PU + 1)`), the draw law and Flock's
   error at the inner wait, averaged over the first stage and the tapes: `Pr[Fails] ≤ κ(δ) + √(γ·Pr[B])`.
 * `KS_of`, `Bits_of`, `KSCount_of_KS`: **the claims**: `KS` through `KSLin_of_ownColl`; `Bits` with the extractor's
   costs; and the count form, at the miss clamped at `0`.
@@ -179,7 +179,7 @@ variable {Coin Col T : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin]
 /-- **A checked proof unit's `E^rep`** at the run `r`, on the prover's runs `run'`: Flock's waits on the unit's session
 (`unitExt`'s), `none` when `r` shows no session for `u` or the waits find no witness. -/
 noncomputable def unitWit (H : Msg → Msg) (D : Deploy Coin Col T) (decode : List (ℕ × Col) → List T) (x : Msg)
-    (run' : (Fin (D.V.k x) → Coin) → Trace) (u : ℕ × ℕ) (r : Fin (D.V.k x) → Coin) (ρ : D.UnitCoins x) :
+    (run' : (Fin (D.V.k x) → Coin) → Trace) (u : ℕ) (r : Fin (D.V.k x) → Coin) (ρ : D.UnitCoins x) :
     Option Flock.Wit :=
   match D.session x u (run' r).seen with
   | none => none
@@ -193,7 +193,7 @@ noncomputable def unitWit (H : Msg → Msg) (D : Deploy Coin Col T) (decode : Li
 noncomputable def innerBody (D : Deploy Coin Col T) (decode : List (ℕ × Col) → List T) (x : Msg) (s : AuditStatement)
     (c : ECoins D x) (j : Fin (D.k x)) (li : Fin (D.k x) × ((Fin (D.V.k x) → Coin) × Seen)) :
     RP (Fin (D.V.k x) → Coin) (List (List Msg × Opening Bool)) :=
-  flatMapRP (fun iu : Fin (nPU D x) × (ℕ × ℕ) => unitExt D decode x s iu.2 li.2.1 li.2.2 (c.2.2 (j, li.1, iu.1)))
+  flatMapRP (fun iu : Fin (nPU D x) × ℕ => unitExt D decode x s iu.2 li.2.1 li.2.2 (c.2.2 (j, li.1, iu.1)))
     ((List.finRange (nPU D x)).zip (D.checked x li.2.1))
 
 /-- The extractor at one accepted outer run `jo`: the inner wait on the second stage, and `innerBody` at each. -/
@@ -248,7 +248,7 @@ theorem ownLog_E (H : Msg → Msg) (D : Deploy Coin Col T) (decode : List (ℕ �
 
 omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] in
 theorem Passes.unitExt (H : Msg → Msg) (D : Deploy Coin Col T) (decode : List (ℕ × Col) → List T) (x : Msg)
-    (run' : (Fin (D.V.k x) → Coin) → Trace) (s : AuditStatement) (u : ℕ × ℕ) (r : Fin (D.V.k x) → Coin) (v : Seen)
+    (run' : (Fin (D.V.k x) → Coin) → Trace) (s : AuditStatement) (u : ℕ) (r : Fin (D.V.k x) → Coin) (v : Seen)
     (ρ : D.UnitCoins x) : Passes H run' D.commit (Sampling.unitExt D decode x s u r v ρ) := by
   unfold Sampling.unitExt
   split
@@ -269,7 +269,7 @@ theorem Passes.found (H : Msg → Msg) (D : Deploy Coin Col T) (decode : List (�
 omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] in
 /-- A revealed opening that passes, from a unit whose `E^rep` found a witness, is among the unit's extraction's. -/
 theorem unitExt_mem (H : Msg → Msg) (D : Deploy Coin Col T) (decode : List (ℕ × Col) → List T) (x : Msg)
-    (run' : (Fin (D.V.k x) → Coin) → Trace) (s : AuditStatement) (u : ℕ × ℕ) (r : Fin (D.V.k x) → Coin) (ρ : D.UnitCoins x)
+    (run' : (Fin (D.V.k x) → Coin) → Trace) (s : AuditStatement) (u : ℕ) (r : Fin (D.V.k x) → Coin) (ρ : D.UnitCoins x)
     {xS : Msg} {vS : Seen} (hs : D.session x u (run' r).seen = some (xS, vS)) {wF : Flock.Wit}
     (hw : unitWit H D decode x run' u r ρ = some wF) {q : List Msg × Opening Bool}
     (hq : q ∈ D.reveal s u (run' r).seen wF) (hok : D.commit.Opens H q.1 q.2 = true) :
@@ -297,7 +297,7 @@ theorem mem_found (H : Msg → Msg) (D : Deploy Coin Col T) (decode : List (ℕ 
     {l : Fin (D.k x)} {d : Fin (D.V.k x) → Coin}
     (hl : (accList (fun d => (run' (forkOn (D.stage2 x) r d)).out = .acc) (D.k x)
       ((List.finRange (D.cap x)).map (c.2.1 j)))[l.val]? = some d)
-    {p : Fin (nPU D x)} {u : ℕ × ℕ} (hp : (D.checked x (forkOn (D.stage2 x) r d))[p.val]? = some u)
+    {p : Fin (nPU D x)} {u : ℕ} (hp : (D.checked x (forkOn (D.stage2 x) r d))[p.val]? = some u)
     {q : List Msg × Opening Bool}
     (hq : q ∈ ((Sampling.unitExt D decode x s u (forkOn (D.stage2 x) r d) (run' (forkOn (D.stage2 x) r d)).seen
       (c.2.2 (j, l, p))).eval H run').1) :
@@ -323,24 +323,17 @@ end Extractor
 
 /-! ## The faulty set's proof units -/
 
-/-- **A faulty unit has a wrong proof unit at any interior values**: at slot `v` of the faulty set, whatever interior
-values `ι`, some proof unit `ab` of its replay unit, at index `i`, is not correct on `ref_ι`. -/
-theorem faulty_choice {H : Msg → Msg} {Cm : Commitment Bool} {s : AuditStatement} {P : Partition} {w : Wit} {v : ℕ}
+/-- **A faulty unit is wrong at any interior values**: at slot `v` of the faulty set, whatever interior values `ι`, its
+proof block `b` is not correct on `ref_ι`. -/
+theorem faulty_wrong {H : Msg → Msg} {Cm : Commitment Bool} {s : AuditStatement} {P : Partition} {w : Wit} {v : ℕ}
     (hv : v ∈ faulty H Cm s P w) (ι : ℕ → Bool) :
-    ∃ rv, P.rus[v]? = some rv ∧ ∃ i : Fin (P.sizes.getD v 0), ∃ ab, rv[i.val]? = some ab ∧
-      ¬ s.prog.Correct (RU.ref s.prog rv (w.val H Cm s) ι) ab := by
+    ∃ b, P.blocks[v]? = some b ∧ ¬ s.prog.Correct (s.prog.refIn b (w.val H Cm s) ι) b := by
   classical
   unfold faulty at hv
   obtain ⟨hlt, hf⟩ := mem_filter.1 hv
-  have hlt' := mem_range.1 hlt
-  have hget : P.rus[v]? = some P.rus[v] := List.getElem?_eq_getElem hlt'
-  refine ⟨P.rus[v], hget, ?_⟩
-  unfold Faulty at hf
-  push Not at hf
-  obtain ⟨u, hu, hnc⟩ := hf P.rus[v] hget ι
-  obtain ⟨i, hi, hiu⟩ := List.getElem_of_mem hu
-  have hsz : P.sizes.getD v 0 = P.rus[v].length := by simp [Partition.sizes, hlt']
-  exact ⟨⟨i, hsz ▸ hi⟩, u, by rw [List.getElem?_eq_getElem hi, hiu], hnc⟩
+  have hlt' : v < P.blocks.length := mem_range.1 hlt
+  have hget : P.blocks[v]? = some P.blocks[v] := List.getElem?_eq_getElem hlt'
+  exact ⟨P.blocks[v], hget, fun hc => hf ⟨_, hget, ι, hc⟩⟩
 
 /-! ## What the deployed sampled verifier is taken to do -/
 
@@ -362,7 +355,7 @@ def SessionKS (H : Msg → Msg) (D : Deploy Coin Col T) : Prop :=
     ∀ (x : Msg) (Ω : Type) [Fintype Ω] [Nonempty Ω] (P : Prover Ω),
       ∃ β : Ω → (Fin (D.V.k x) → Coin) → ℝ, (∀ ω r, 0 ≤ β ω r) ∧
         Ex (fun p : Ω × (Fin (D.V.k x) → Coin) => β p.1 p.2) ≤ PrB H D.V P x ∧
-        ∀ ω r (sel : List (ℕ × ℕ) → Option (Fin (nPU D x))),
+        ∀ ω r (sel : List ℕ → Option (Fin (nPU D x))),
           Pr (fun p : (Fin (D.V.k x) → Coin) × (Fin (nPU D x) → D.UnitCoins x) =>
             (run H P D.V x ω (forkOn (D.stage2 x) r p.1)).out = .acc ∧
               ∃ i, sel (D.checked x (forkOn (D.stage2 x) r p.1)) = some i ∧
@@ -370,15 +363,14 @@ def SessionKS (H : Msg → Msg) (D : Deploy Coin Col T) : Prop :=
                   unitWit H D decode x (run H P D.V x ω) u (forkOn (D.stage2 x) r p.1) (p.2 i) = none) ≤
             κF D x + Real.sqrt (γF D x * β ω r)
 
-/-- **The draw law**: on a statement in scope, for each set `B` of replay units, a weight `esc` of the first-stage coins
-bounds, at each, the probability over the second stage that the checked units (the first `n_PU`) miss a fixed proof unit
-`f(v)` of every replay unit `v ∈ B`, and averages at most `P_a(B)`. -/
+/-- **The draw law**: on a statement in scope, for each set `B` of proof blocks, a weight `esc` of the first-stage coins
+bounds, at each, the probability over the second stage that the checked units (the first `n_PU`) miss every slot
+`v ∈ B`, and averages at most `P_a(B)`. -/
 def DrawLaw (D : Deploy Coin Col T) : Prop :=
   ∀ x s Pt, D.parse x = some s → D.partition s = some Pt → InScope Pt s →
-    ∀ B ⊆ range Pt.rus.length, ∃ esc : (Fin (D.V.k x) → Coin) → ℝ, (∀ r, 0 ≤ esc r) ∧
-      (∀ r (f : ℕ → ℕ), (∀ v ∈ B, f v < Pt.sizes.getD v 0) →
-        Pr (fun d : Fin (D.V.k x) → Coin => ∀ v ∈ B, ∀ p : Fin (nPU D x),
-          (D.checked x (forkOn (D.stage2 x) r d))[p.val]? ≠ some (v, f v)) ≤ esc r) ∧
+    ∀ B ⊆ range Pt.blocks.length, ∃ esc : (Fin (D.V.k x) → Coin) → ℝ, (∀ r, 0 ≤ esc r) ∧
+      (∀ r, Pr (fun d : Fin (D.V.k x) → Coin => ∀ v ∈ B, ∀ p : Fin (nPU D x),
+          (D.checked x (forkOn (D.stage2 x) r d))[p.val]? ≠ some v) ≤ esc r) ∧
       Ex esc ≤ s.design.Pa Pt B
 
 /-- **The verifier refuses what is out of scope**: an accepted run's statement parses, its query evaluates, and the
@@ -387,27 +379,27 @@ def Refuses (H : Msg → Msg) (D : Deploy Coin Col T) : Prop :=
   ∀ x (Ω : Type) (P : Prover Ω) ω r, (run H P D.V x ω r).out = .acc →
     ∃ s Pt, D.parse x = some s ∧ D.partition s = some Pt ∧ InScope Pt s
 
-/-- **The interior commitments precede the second stage**: the roots `iroots` a run shows for replay unit `v`'s
+/-- **The interior commitments precede the second stage**: the roots `iroots` a run shows for proof block `v`'s
 interior values are the same at fresh second-stage coins. -/
 def InteriorFixed (H : Msg → Msg) (D : Deploy Coin Col T) (iroots : Msg → Seen → ℕ → List Msg) : Prop :=
   ∀ x (Ω : Type) (P : Prover Ω) ω r d v,
     iroots x (run H P D.V x ω (forkOn (D.stage2 x) r d)).seen v = iroots x (run H P D.V x ω r).seen v
 
-/-- **A checked unit's Flock witness makes it correct**: on a statement in scope, at an accepted run that checks
-`u = (v, i)` and shows its session, a Flock witness in the session's relation reveals openings such that any values
-`val` and interior values `ι` agreeing with those that pass (under the statement's roots and the interior roots the run
-showed for `v`) make proof unit `i` of replay unit `v` correct on `ref_ι`. -/
+/-- **A checked unit's Flock witness makes it correct**: on a statement in scope, at an accepted run that checks slot
+`u` and shows its session, a Flock witness in the session's relation reveals openings such that any values `val` and
+interior values `ι` agreeing with those that pass (under the statement's roots and the interior roots the run showed for
+`u`) make the proof block at `u` correct on `ref_ι`. -/
 def SessionOpens (H : Msg → Msg) (D : Deploy Coin Col T) (iroots : Msg → Seen → ℕ → List Msg) : Prop :=
   ∀ x s Pt (Ω : Type) (P : Prover Ω) ω r u xS vS wF,
     D.parse x = some s → D.partition s = some Pt → InScope Pt s →
     (run H P D.V x ω r).out = .acc → (∃ p : Fin (nPU D x), (D.checked x r)[p.val]? = some u) →
     D.session x u (run H P D.V x ω r).seen = some (xS, vS) → Flock.check D.flock.parse xS wF = true →
-    ∃ rv pu, Pt.rus[u.1]? = some rv ∧ rv[u.2]? = some pu ∧
+    ∃ b, Pt.blocks[u]? = some b ∧
       ∀ (val : ℕ → Option Bool) (ι : ℕ → Bool),
         (∀ q ∈ D.reveal s u (run H P D.V x ω r).seen wF, D.commit.Opens H q.1 q.2 = true →
           (q.1 = s.roots → val q.2.pos = some q.2.val) ∧
-          (q.1 = iroots x (run H P D.V x ω r).seen u.1 → ι q.2.pos = q.2.val)) →
-        s.prog.Correct (RU.ref s.prog rv val ι) pu
+          (q.1 = iroots x (run H P D.V x ω r).seen u → ι q.2.pos = q.2.val)) →
+        s.prog.Correct (s.prog.refIn b val ι) b
 
 /-! ### Sessions that cover several checked units -/
 
@@ -428,12 +420,12 @@ def SessionOpensSlots (H : Msg → Msg) (D : Deploy Coin Col T) (iroots : Msg �
     (run H P D.V x ω r).out = .acc → p < S x → (D.checked x r)[p]? = some u' →
     D.session x u' (run H P D.V x ω r).seen = some (xS, vS) → Flock.check D.flock.parse xS wF = true →
     ∀ u, (∃ q : Fin (nPU D x), (D.checked x r)[q.val]? = some u) → D.session x u = D.session x u' →
-    ∃ rv pu, Pt.rus[u.1]? = some rv ∧ rv[u.2]? = some pu ∧
+    ∃ b, Pt.blocks[u]? = some b ∧
       ∀ (val : ℕ → Option Bool) (ι : ℕ → Bool),
         (∀ q ∈ D.reveal s u (run H P D.V x ω r).seen wF, D.commit.Opens H q.1 q.2 = true →
           (q.1 = s.roots → val q.2.pos = some q.2.val) ∧
-          (q.1 = iroots x (run H P D.V x ω r).seen u.1 → ι q.2.pos = q.2.val)) →
-        s.prog.Correct (RU.ref s.prog rv val ι) pu
+          (q.1 = iroots x (run H P D.V x ω r).seen u → ι q.2.pos = q.2.val)) →
+        s.prog.Correct (s.prog.refIn b val ι) b
 
 omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [DecidableEq Col] [Zero Col] in
 /-- **One session per unit covers every record.** -/
@@ -591,25 +583,24 @@ def ecoinsEquiv (D : Deploy Coin Col T) (x : Msg) :
   left_inv _ := rfl
   right_inv _ := rfl
 
-/-- The checked unit `(v, i)` is among the first `n_PU` the run `r'` checks, and its `E^rep` finds a witness. -/
+/-- The slot `v` is among the first `n_PU` the run `r'` checks, and its `E^rep` finds a witness. -/
 def Good (H : Msg → Msg) (D : Deploy Coin Col T) (decode : List (ℕ × Col) → List T) (x : Msg)
-    (run' : (Fin (D.V.k x) → Coin) → Trace) (r' : Fin (D.V.k x) → Coin) (v i : ℕ)
+    (run' : (Fin (D.V.k x) → Coin) → Trace) (r' : Fin (D.V.k x) → Coin) (v : ℕ)
     (u : Fin (nPU D x) → D.UnitCoins x) : Prop :=
-  ∃ p : Fin (nPU D x), (D.checked x r')[p.val]? = some (v, i) ∧ (unitWit H D decode x run' (v, i) r' (u p)).isSome
+  ∃ p : Fin (nPU D x), (D.checked x r')[p.val]? = some v ∧ (unitWit H D decode x run' v r' (u p)).isSome
 
-/-- **An outer run bad for `B`**, its second stage `g`: the inner wait comes up short, or, for some choice `f` of one
-proof unit in each replay unit of `B`, no kept inner run checks a chosen one and finds its witness. -/
+/-- **An outer run bad for `B`**, its second stage `g`: the inner wait comes up short, or no kept inner run checks a
+slot of `B` and finds its witness. -/
 def BadOuter (H : Msg → Msg) (D : Deploy Coin Col T) (decode : List (ℕ × Col) → List T) (x : Msg)
-    (run' : (Fin (D.V.k x) → Coin) → Trace) (Pt : Partition) (B : Finset ℕ)
+    (run' : (Fin (D.V.k x) → Coin) → Trace) (B : Finset ℕ)
     (g : (Fin (D.V.k x) → Coin) → Fin (D.V.k x) → Coin) (e : E1 D x) : Prop :=
   (accList (fun d => (run' (g d)).out = .acc) (D.k x) ((List.finRange (D.cap x)).map e.1)).length < D.k x ∨
-    ∃ f ∈ (univ : Finset ((v : B) → Fin (Pt.sizes.getD v 0))),
-      AllBad (fun d => (run' (g d)).out = .acc) (D.k x)
-        (fun d u => ∀ v : B, ¬ Good H D decode x run' (g d) v.1 (f v).1 u) ((List.finRange (D.cap x)).map e.1) e.2
+    AllBad (fun d => (run' (g d)).out = .acc) (D.k x)
+      (fun d u => ∀ v ∈ B, ¬ Good H D decode x run' (g d) v u) ((List.finRange (D.cap x)).map e.1) e.2
 
 /-- The faulty sets the relation at `δ` refuses: those of acceptance probability at most `δ`. -/
 noncomputable def S₁ (d : Design) (Pt : Partition) (δ : ℝ) : Finset (Finset ℕ) :=
-  (range Pt.rus.length).powerset.filter fun B => d.Pa Pt B ≤ δ
+  (range Pt.blocks.length).powerset.filter fun B => d.Pa Pt B ≤ δ
 
 /-- **The extraction's failure event**: the statement is in scope, and the outer wait comes up short or, for some
 refused faulty set `B`, every kept outer run is bad for `B`. -/
@@ -618,13 +609,13 @@ def Fails (H : Msg → Msg) (D : Deploy Coin Col T) (decode : List (ℕ × Col) 
   ∃ s Pt, D.parse x = some s ∧ D.partition s = some Pt ∧ InScope Pt s ∧
     ((accList (fun r => (run' r).out = .acc) (D.k x) ((List.finRange (D.cap x)).map c.1)).length < D.k x ∨
       ∃ B ∈ S₁ s.design Pt δ, AllBad (fun r => (run' r).out = .acc) (D.k x)
-        (fun r e => BadOuter H D decode x run' Pt B (forkOn (D.stage2 x) r) e) ((List.finRange (D.cap x)).map c.1)
+        (fun r e => BadOuter H D decode x run' B (forkOn (D.stage2 x) r) e) ((List.finRange (D.cap x)).map c.1)
         (toE1 D x c))
 
 /-- **The split**: at an accepted run whose extraction fails, the failure event holds or the extractor's own calls
 collide. Otherwise take `B` the assembled witness's faulty set, refused at `δ`, and a kept outer run `r`; at the
-interior values the kept openings under `r`'s interior roots give, each `v ∈ B` has a wrong proof unit `f(v)`
-(`faulty_choice`); a kept inner run that checks `f(v)` and finds its witness would make it correct (`SessionOpens`, the
+interior values the kept openings under `r`'s interior roots give, the proof block at each `v ∈ B` is wrong
+(`faulty_wrong`); a kept inner run that checks `v` and finds its witness would make it correct (`SessionOpens`, the
 kept openings agreeing), so `r` is bad for `B`. -/
 theorem split {H : Msg → Msg} {D : Deploy Coin Col T} [DecidableEq Col] [Zero Col] (decode : List (ℕ × Col) → List T)
     (δ : ℝ) (iroots : Msg → Seen → ℕ → List Msg) (hbind : D.commit.Binds H) (hopens : SessionOpens H D iroots)
@@ -662,12 +653,8 @@ theorem split {H : Msg → Msg} {D : Deploy Coin Col T} [DecidableEq Col] [Zero 
   by_cases hshort2 : (accList (fun d => (run' (forkOn (D.stage2 x) r d)).out = .acc) (D.k x)
     ((List.finRange (D.cap x)).map (c.2.1 j))).length < D.k x
   · exact Or.inl hshort2
-  have hch : ∀ v : faulty H D.commit s Pt w, ∃ rv, Pt.rus[v.1]? = some rv ∧
-      ∃ i : Fin (Pt.sizes.getD v.1 0), ∃ ab, rv[i.val]? = some ab ∧
-        ¬ s.prog.Correct (RU.ref s.prog rv (w.val H D.commit s) (ιOf fd (iroots x (run' r).seen v.1))) ab :=
-    fun v => faulty_choice v.2 _
-  choose rv hrv f ab hab hnc using hch
-  refine Or.inr ⟨f, mem_univ _, accList_length_eq hshort2, fun l d hl v hgood => ?_⟩
+  refine Or.inr ⟨accList_length_eq hshort2, fun l d hl v hv hgood => ?_⟩
+  obtain ⟨b, hb, hnc⟩ := faulty_wrong hv (ιOf fd (iroots x (run' r).seen v))
   obtain ⟨p, hp, hsome⟩ := hgood
   obtain ⟨wF, hwF⟩ := Option.isSome_iff_exists.1 hsome
   have hacc' : (run' (forkOn (D.stage2 x) r d)).out = .acc := by
@@ -675,7 +662,7 @@ theorem split {H : Msg → Msg} {D : Deploy Coin Col T} [DecidableEq Col] [Zero 
     exact h
   have hwF' := hwF
   unfold unitWit at hwF'
-  cases hsess : D.session x (v.1, (f v).1) (run' (forkOn (D.stage2 x) r d)).seen with
+  cases hsess : D.session x v (run' (forkOn (D.stage2 x) r d)).seen with
   | none =>
     rw [hsess] at hwF'
     exact absurd hwF' (by simp)
@@ -683,50 +670,26 @@ theorem split {H : Msg → Msg} {D : Deploy Coin Col T} [DecidableEq Col] [Zero 
     obtain ⟨xS, vS⟩ := xv
     rw [hsess] at hwF'
     have hchk := firstWait_some H run' _ _ _ _ _ wF hwF'
-    obtain ⟨rv', pu, hrv', hab', hcor⟩ :=
-      hopens x s Pt Ω P ω (forkOn (D.stage2 x) r d) (v.1, (f v).1) xS vS wF hs hPt hin hacc' ⟨p, hp⟩ hsess hchk
-    have hcorr := hcor (w.val H D.commit s) (ιOf fd (iroots x (run' r).seen v.1)) fun q hq hok => by
+    obtain ⟨b', hb', hcor⟩ :=
+      hopens x s Pt Ω P ω (forkOn (D.stage2 x) r d) v xS vS wF hs hPt hin hacc' ⟨p, hp⟩ hsess hchk
+    have hcorr := hcor (w.val H D.commit s) (ιOf fd (iroots x (run' r).seen v)) fun q hq hok => by
       have hqf : q ∈ fd := mem_found H D decode x s run' c hjZ hl hp
         (unitExt_mem H D decode x run' s _ _ _ hsess hwF hq hok)
       refine ⟨fun hr => ?_, fun hi => ?_⟩
       · rw [hr] at hok
         exact val_assemble hagree hqf hr hok
-      · rw [hfix x Ω P ω r d v.1] at hi
+      · rw [hfix x Ω P ω r d v] at hi
         rw [← hi]
         exact ιOf_eq hagree hqf
-    rw [hrv v, Option.some.injEq] at hrv'
-    subst hrv'
-    rw [hab v, Option.some.injEq] at hab'
-    have hnc' := hnc v
-    rw [hab'] at hnc'
-    exact hnc' hcorr
+    rw [hb, Option.some.injEq] at hb'
+    subst hb'
+    exact hnc hcorr
 
 end Split
 
 /-! ## The unions' sizes, against the waits' slack -/
 
-theorem sum_range_getD : ∀ l : List ℕ, ∑ v ∈ range l.length, l.getD v 0 = l.sum
-  | [] => by simp
-  | a :: l => by
-    rw [List.length_cons, sum_range_succ', List.sum_cons]
-    simp only [List.getD_cons_succ, List.getD_cons_zero, sum_range_getD l]
-    omega
-
-/-- The choices of one proof unit in each replay unit of `B` number at most `2^{n_PU}`. -/
-theorem card_choices_le {Pt : Partition} {B : Finset ℕ} (hB : B ⊆ range Pt.rus.length) :
-    Fintype.card ((v : B) → Fin (Pt.sizes.getD v 0)) ≤ 2 ^ Pt.sizes.sum := by
-  rw [Fintype.card_pi]
-  simp only [Fintype.card_fin]
-  have hlen : Pt.rus.length = Pt.sizes.length := by simp [Partition.sizes]
-  calc ∏ v : B, Pt.sizes.getD v 0 ≤ ∏ v : B, 2 ^ Pt.sizes.getD v 0 :=
-        Finset.prod_le_prod fun v _ => Nat.lt_two_pow_self.le
-    _ = 2 ^ ∑ v : B, Pt.sizes.getD v 0 := Finset.prod_pow_eq_pow_sum _ _ _
-    _ ≤ 2 ^ Pt.sizes.sum := by
-      refine Nat.pow_le_pow_right (by norm_num) ?_
-      rw [Finset.sum_coe_sort B (fun v => Pt.sizes.getD v 0), ← sum_range_getD, ← hlen]
-      exact sum_le_sum_of_subset hB
-
-theorem card_S₁_le (d : Design) (Pt : Partition) (δ : ℝ) : (S₁ d Pt δ).card ≤ 2 ^ Pt.rus.length :=
+theorem card_S₁_le (d : Design) (Pt : Partition) (δ : ℝ) : (S₁ d Pt δ).card ≤ 2 ^ Pt.blocks.length :=
   (card_filter_le _ _).trans (by rw [card_powerset, card_range])
 
 /-- At most `2^m` sets, `m ≤ M + 1`, spread over `k = 2^40·(M + 1)` accepted runs cost at most the slack. -/
@@ -755,18 +718,13 @@ variable {Coin Col T : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin]
 omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] in
 /-- The slack bound at the waits' `k`. -/
 theorem rpow_k_le_slack (D : Deploy Coin Col T) (x : Msg) {N m : ℕ} (hN : N ≤ 2 ^ m)
-    (hm : m ≤ nRU D x + nPU D x + 1) : (N : ℝ) ^ (1 / (D.k x : ℝ)) ≤ slack := by
+    (hm : m ≤ 2 * nPU D x + 1) : (N : ℝ) ^ (1 / (D.k x : ℝ)) ≤ slack := by
   unfold Deploy.k
   exact card_rpow_le_slack hN hm
 
 omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] in
-theorem nRU_eq {D : Deploy Coin Col T} {x : Msg} {s : AuditStatement} {Pt : Partition} (hs : D.parse x = some s)
-    (hPt : D.partition s = some Pt) : nRU D x = Pt.rus.length := by
-  simp only [nRU, hs, Deploy.part, hPt, Option.getD_some]
-
-omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] in
 theorem nPU_eq {D : Deploy Coin Col T} {x : Msg} {s : AuditStatement} {Pt : Partition} (hs : D.parse x = some s)
-    (hPt : D.partition s = some Pt) : nPU D x = Pt.sizes.sum := by
+    (hPt : D.partition s = some Pt) : nPU D x = Pt.blocks.length := by
   simp only [nPU, hs, Deploy.part, hPt, Option.getD_some]
 
 omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] in
@@ -786,68 +744,72 @@ theorem Pr_or_le {α : Type} [Fintype α] {p q r : α → Prop} {a b : ℝ} (h :
   (Pr_mono h).trans ((Pr_union_le q r).trans (add_le_add hq hr))
 
 omit [Inhabited Coin] in
-/-- **One outer run's inner wait**: at first-stage coins `r` where the second stage misses a fixed proof unit of each
-replay unit of `B` with probability at most `esc`, and the checked unit any selection picks finds no witness with
-probability at most `κs`, the inner wait (times its acceptance) comes up short or keeps only runs that miss or fail,
-for some choice, with probability at most `2k/K + e^{−k/8} + c·(esc + κs)`. -/
+/-- **One outer run's inner wait**: at first-stage coins `r` where the second stage misses every slot of `B` with
+probability at most `esc`, and the checked unit any selection picks finds no witness with probability at most `κs`, the
+inner wait (times its acceptance) comes up short or keeps only runs that miss or fail with probability at most
+`2k/K + e^{−k/8} + c·(esc + κs)`. -/
 theorem inner_bad_le (H : Msg → Msg) (D : Deploy Coin Col T) (decode : List (ℕ × Col) → List T) (x : Msg)
-    (run' : (Fin (D.V.k x) → Coin) → Trace) (Pt : Partition) (hPU : nPU D x = Pt.sizes.sum) {B : Finset ℕ}
-    (hB : B ⊆ range Pt.rus.length) (r : Fin (D.V.k x) → Coin) {esc κs : ℝ} (hesc0 : 0 ≤ esc) (hκs0 : 0 ≤ κs)
-    (hesc : ∀ f : ℕ → ℕ, (∀ v ∈ B, f v < Pt.sizes.getD v 0) →
-      Pr (fun d : Fin (D.V.k x) → Coin => ∀ v ∈ B, ∀ p : Fin (nPU D x),
-        (D.checked x (forkOn (D.stage2 x) r d))[p.val]? ≠ some (v, f v)) ≤ esc)
-    (hsess : ∀ sel : List (ℕ × ℕ) → Option (Fin (nPU D x)),
+    (run' : (Fin (D.V.k x) → Coin) → Trace) {B : Finset ℕ} (r : Fin (D.V.k x) → Coin) {esc κs : ℝ} (hesc0 : 0 ≤ esc)
+    (hκs0 : 0 ≤ κs)
+    (hesc : Pr (fun d : Fin (D.V.k x) → Coin => ∀ v ∈ B, ∀ p : Fin (nPU D x),
+      (D.checked x (forkOn (D.stage2 x) r d))[p.val]? ≠ some v) ≤ esc)
+    (hsess : ∀ sel : List ℕ → Option (Fin (nPU D x)),
       Pr (fun p : (Fin (D.V.k x) → Coin) × (Fin (nPU D x) → D.UnitCoins x) =>
         (run' (forkOn (D.stage2 x) r p.1)).out = .acc ∧
           ∃ i, sel (D.checked x (forkOn (D.stage2 x) r p.1)) = some i ∧
             ∃ u, (D.checked x (forkOn (D.stage2 x) r p.1))[i.val]? = some u ∧
               unitWit H D decode x run' u (forkOn (D.stage2 x) r p.1) (p.2 i) = none) ≤ κs) :
     Pr (fun d : Fin (D.V.k x) → Coin => (run' (forkOn (D.stage2 x) r d)).out = .acc) *
-        Pr (fun e : E1 D x => BadOuter H D decode x run' Pt B (forkOn (D.stage2 x) r) e) ≤
+        Pr (fun e : E1 D x => BadOuter H D decode x run' B (forkOn (D.stage2 x) r) e) ≤
       2 * (D.k x : ℝ) / D.cap x + Real.exp (-(D.k x : ℝ) / 8) + slack * (esc + κs) := by
-  have hy : ∀ f ∈ (univ : Finset ((v : B) → Fin (Pt.sizes.getD v 0))),
+  have hy : ∀ _u ∈ ({()} : Finset Unit),
       Pr (fun p : (Fin (D.V.k x) → Coin) × (Fin (nPU D x) → D.UnitCoins x) =>
         (run' (forkOn (D.stage2 x) r p.1)).out = .acc ∧
-          ∀ v : B, ¬ Good H D decode x run' (forkOn (D.stage2 x) r p.1) v.1 (f v).1 p.2) ≤ esc + κs := by
-    intro f _
-    obtain ⟨f', hf'⟩ : ∃ f' : ℕ → ℕ, ∀ v (h : v ∈ B), f' v = (f ⟨v, h⟩).1 :=
-      ⟨fun v => if h : v ∈ B then (f ⟨v, h⟩).1 else 0, fun v h => by simp [h]⟩
-    obtain ⟨sel, hsel⟩ : ∃ sel : List (ℕ × ℕ) → Option (Fin (nPU D x)), ∀ l,
-        (∃ q : Fin (nPU D x), ∃ v ∈ B, l[q.val]? = some (v, f' v)) →
-          ∃ i, sel l = some i ∧ ∃ v ∈ B, l[i.val]? = some (v, f' v) := by
+          ∀ v ∈ B, ¬ Good H D decode x run' (forkOn (D.stage2 x) r p.1) v p.2) ≤ esc + κs := by
+    intro _ _
+    obtain ⟨sel, hsel⟩ : ∃ sel : List ℕ → Option (Fin (nPU D x)), ∀ l,
+        (∃ q : Fin (nPU D x), ∃ v ∈ B, l[q.val]? = some v) →
+          ∃ i, sel l = some i ∧ ∃ v ∈ B, l[i.val]? = some v := by
       classical
-      refine ⟨fun l => (List.finRange (nPU D x)).find? fun q => decide (∃ v ∈ B, l[q.val]? = some (v, f' v)),
+      refine ⟨fun l => (List.finRange (nPU D x)).find? fun q => decide (∃ v ∈ B, l[q.val]? = some v),
         fun l ⟨q, hq⟩ => ?_⟩
       obtain ⟨i, hi⟩ := Option.isSome_iff_exists.1
-        ((List.find?_isSome (p := fun q : Fin (nPU D x) => decide (∃ v ∈ B, l[q.val]? = some (v, f' v)))).2
+        ((List.find?_isSome (p := fun q : Fin (nPU D x) => decide (∃ v ∈ B, l[q.val]? = some v))).2
           ⟨q, List.mem_finRange q, decide_eq_true hq⟩)
       have hpi := List.find?_some hi
       exact ⟨i, hi, of_decide_eq_true hpi⟩
     have hmiss := (Pr_fst (β := Fin (nPU D x) → D.UnitCoins x) (fun d : Fin (D.V.k x) → Coin =>
-      ∀ v ∈ B, ∀ q : Fin (nPU D x), (D.checked x (forkOn (D.stage2 x) r d))[q.val]? ≠ some (v, f' v))).trans_le
-      (hesc f' fun v hv => by rw [hf' v hv]; exact (f ⟨v, hv⟩).2)
+      ∀ v ∈ B, ∀ q : Fin (nPU D x), (D.checked x (forkOn (D.stage2 x) r d))[q.val]? ≠ some v)).trans_le hesc
     refine Pr_or_le (fun p hp => ?_) hmiss (hsess sel)
-    by_cases hm : ∀ v ∈ B, ∀ q : Fin (nPU D x), (D.checked x (forkOn (D.stage2 x) r p.1))[q.val]? ≠ some (v, f' v)
+    by_cases hm : ∀ v ∈ B, ∀ q : Fin (nPU D x), (D.checked x (forkOn (D.stage2 x) r p.1))[q.val]? ≠ some v
     · exact Or.inl hm
     right
     push Not at hm
     obtain ⟨q, v, hv, hq⟩ : ∃ q : Fin (nPU D x), ∃ v ∈ B,
-        (D.checked x (forkOn (D.stage2 x) r p.1))[q.val]? = some (v, f' v) := by
+        (D.checked x (forkOn (D.stage2 x) r p.1))[q.val]? = some v := by
       obtain ⟨v, hv, q, hq⟩ := hm
       exact ⟨q, v, hv, hq⟩
     obtain ⟨i, hi, v', hv', hi'⟩ := hsel _ ⟨q, v, hv, hq⟩
-    rw [hf' v' hv'] at hi'
     refine ⟨hp.1, i, hi, _, hi', ?_⟩
-    have hng := hp.2 ⟨v', hv'⟩
+    have hng := hp.2 v' hv'
     unfold Good at hng
     push Not at hng
     simpa using hng i hi'
   have hw := wait_bad_le (fun d => (run' (forkOn (D.stage2 x) r d)).out = .acc) (D.k x) (D.cap x) (cap_pos D x)
-    (k_pos D x) (univ : Finset ((v : B) → Fin (Pt.sizes.getD v 0)))
-    (fun f d u => ∀ v : B, ¬ Good H D decode x run' (forkOn (D.stage2 x) r d) v.1 (f v).1 u)
+    (k_pos D x) ({()} : Finset Unit)
+    (fun _ d u => ∀ v ∈ B, ¬ Good H D decode x run' (forkOn (D.stage2 x) r d) v u)
     (add_nonneg hesc0 hκs0) hy
-  have hcard : ((univ : Finset ((v : B) → Fin (Pt.sizes.getD v 0))).card : ℝ) ^ (1 / (D.k x : ℝ)) ≤ slack :=
-    rpow_k_le_slack D x (by rw [card_univ]; exact card_choices_le hB) (by rw [← hPU]; omega)
+  have hcard : (({()} : Finset Unit).card : ℝ) ^ (1 / (D.k x : ℝ)) ≤ slack :=
+    rpow_k_le_slack D x (m := 0) (by simp) (by omega)
+  have hE : Pr (fun e : E1 D x => BadOuter H D decode x run' B (forkOn (D.stage2 x) r) e) =
+      Pr (fun c : E1 D x =>
+        (accList (fun d => (run' (forkOn (D.stage2 x) r d)).out = .acc) (D.k x)
+          ((List.finRange (D.cap x)).map c.1)).length < D.k x ∨
+        ∃ _u ∈ ({()} : Finset Unit), AllBad (fun d => (run' (forkOn (D.stage2 x) r d)).out = .acc) (D.k x)
+          (fun d u => ∀ v ∈ B, ¬ Good H D decode x run' (forkOn (D.stage2 x) r d) v u)
+          ((List.finRange (D.cap x)).map c.1) c.2) :=
+    Pr_congr fun e => by simp [BadOuter]
+  rw [hE]
   exact hw.trans (add_le_add le_rfl (mul_le_mul_of_nonneg_right hcard (add_nonneg hesc0 hκs0)))
 
 set_option synthInstance.maxSize 1024 in
@@ -857,14 +819,13 @@ selection picks at first-stage coins `r` finds no witness with probability at mo
 acceptance) comes up short or, for some refused `B`, keeps only runs bad for `B`, with probability at most
 `T + c·(T + c·(δ + E[κs]))`, `T = 2k/K + e^{−k/8}`. -/
 theorem outer_bad_le (H : Msg → Msg) (D : Deploy Coin Col T) (decode : List (ℕ × Col) → List T) {δ : ℝ} (hδ : 0 ≤ δ)
-    (x : Msg) (run' : (Fin (D.V.k x) → Coin) → Trace) (s : AuditStatement) (Pt : Partition) (hPU : nPU D x = Pt.sizes.sum)
-    (hRU : nRU D x = Pt.rus.length) (κs : (Fin (D.V.k x) → Coin) → ℝ) (hκs0 : ∀ r, 0 ≤ κs r)
-    (hdraw : ∀ B ⊆ range Pt.rus.length, ∃ esc : (Fin (D.V.k x) → Coin) → ℝ, (∀ r, 0 ≤ esc r) ∧
-      (∀ r (f : ℕ → ℕ), (∀ v ∈ B, f v < Pt.sizes.getD v 0) →
-        Pr (fun d : Fin (D.V.k x) → Coin => ∀ v ∈ B, ∀ p : Fin (nPU D x),
-          (D.checked x (forkOn (D.stage2 x) r d))[p.val]? ≠ some (v, f v)) ≤ esc r) ∧
+    (x : Msg) (run' : (Fin (D.V.k x) → Coin) → Trace) (s : AuditStatement) (Pt : Partition)
+    (hPU : nPU D x = Pt.blocks.length) (κs : (Fin (D.V.k x) → Coin) → ℝ) (hκs0 : ∀ r, 0 ≤ κs r)
+    (hdraw : ∀ B ⊆ range Pt.blocks.length, ∃ esc : (Fin (D.V.k x) → Coin) → ℝ, (∀ r, 0 ≤ esc r) ∧
+      (∀ r, Pr (fun d : Fin (D.V.k x) → Coin => ∀ v ∈ B, ∀ p : Fin (nPU D x),
+          (D.checked x (forkOn (D.stage2 x) r d))[p.val]? ≠ some v) ≤ esc r) ∧
       Ex esc ≤ s.design.Pa Pt B)
-    (hsess : ∀ r (sel : List (ℕ × ℕ) → Option (Fin (nPU D x))),
+    (hsess : ∀ r (sel : List ℕ → Option (Fin (nPU D x))),
       Pr (fun p : (Fin (D.V.k x) → Coin) × (Fin (nPU D x) → D.UnitCoins x) =>
         (run' (forkOn (D.stage2 x) r p.1)).out = .acc ∧
           ∃ i, sel (D.checked x (forkOn (D.stage2 x) r p.1)) = some i ∧
@@ -874,7 +835,7 @@ theorem outer_bad_le (H : Msg → Msg) (D : Deploy Coin Col T) (decode : List (�
         Pr (fun c : (Fin (D.cap x) → Fin (D.V.k x) → Coin) × (Fin (D.k x) → E1 D x) =>
           (accList (fun r => (run' r).out = .acc) (D.k x) ((List.finRange (D.cap x)).map c.1)).length < D.k x ∨
             ∃ B ∈ S₁ s.design Pt δ, AllBad (fun r => (run' r).out = .acc) (D.k x)
-              (fun r e => BadOuter H D decode x run' Pt B (forkOn (D.stage2 x) r) e)
+              (fun r e => BadOuter H D decode x run' B (forkOn (D.stage2 x) r) e)
               ((List.finRange (D.cap x)).map c.1) c.2) ≤
       2 * (D.k x : ℝ) / D.cap x + Real.exp (-(D.k x : ℝ) / 8) +
         slack * (2 * (D.k x : ℝ) / D.cap x + Real.exp (-(D.k x : ℝ) / 8) + slack * (δ + Ex κs)) := by
@@ -882,19 +843,18 @@ theorem outer_bad_le (H : Msg → Msg) (D : Deploy Coin Col T) (decode : List (�
   have hEκ : 0 ≤ Ex κs := Ex_nonneg hκs0
   have hy : ∀ B ∈ S₁ s.design Pt δ,
       Pr (fun p : (Fin (D.V.k x) → Coin) × E1 D x =>
-        (run' p.1).out = .acc ∧ BadOuter H D decode x run' Pt B (forkOn (D.stage2 x) p.1) p.2) ≤
+        (run' p.1).out = .acc ∧ BadOuter H D decode x run' B (forkOn (D.stage2 x) p.1) p.2) ≤
       2 * (D.k x : ℝ) / D.cap x + Real.exp (-(D.k x : ℝ) / 8) + slack * (δ + Ex κs) := by
     intro B hB
     obtain ⟨hBsub, hBδ⟩ := mem_filter.1 hB
     obtain ⟨esc, hesc0, hesc, hEesc⟩ := hdraw B (mem_powerset.1 hBsub)
     refine (Pr_acc_forkOn (D.stage2 x) (fun r => (run' r).out = .acc)
-      (fun r e => BadOuter H D decode x run' Pt B (forkOn (D.stage2 x) r) e)
+      (fun r e => BadOuter H D decode x run' B (forkOn (D.stage2 x) r) e)
       fun r d e => by rw [forkOn_forkOn']).trans_le ?_
     calc Ex (fun r => Pr (fun d => (run' (forkOn (D.stage2 x) r d)).out = .acc) *
-          Pr (fun e : E1 D x => BadOuter H D decode x run' Pt B (forkOn (D.stage2 x) r) e))
+          Pr (fun e : E1 D x => BadOuter H D decode x run' B (forkOn (D.stage2 x) r) e))
         ≤ Ex (fun r => 2 * (D.k x : ℝ) / D.cap x + Real.exp (-(D.k x : ℝ) / 8) + slack * (esc r + κs r)) :=
-          Ex_mono fun r => inner_bad_le H D decode x run' Pt hPU (mem_powerset.1 hBsub) r (hesc0 r) (hκs0 r)
-            (hesc r) (hsess r)
+          Ex_mono fun r => inner_bad_le H D decode x run' r (hesc0 r) (hκs0 r) (hesc r) (hsess r)
       _ = 2 * (D.k x : ℝ) / D.cap x + Real.exp (-(D.k x : ℝ) / 8) + slack * (Ex esc + Ex κs) := by
           rw [Ex_add, Ex_const, Ex_mul_left, Ex_add]
       _ ≤ 2 * (D.k x : ℝ) / D.cap x + Real.exp (-(D.k x : ℝ) / 8) + slack * (δ + Ex κs) := by
@@ -903,9 +863,9 @@ theorem outer_bad_le (H : Msg → Msg) (D : Deploy Coin Col T) (decode : List (�
   have hy0 : 0 ≤ 2 * (D.k x : ℝ) / D.cap x + Real.exp (-(D.k x : ℝ) / 8) + slack * (δ + Ex κs) := by
     positivity
   have hw := wait_bad_le (fun r => (run' r).out = .acc) (D.k x) (D.cap x) (cap_pos D x) (k_pos D x)
-    (S₁ s.design Pt δ) (fun B r e => BadOuter H D decode x run' Pt B (forkOn (D.stage2 x) r) e) hy0 hy
+    (S₁ s.design Pt δ) (fun B r e => BadOuter H D decode x run' B (forkOn (D.stage2 x) r) e) hy0 hy
   have hcard : ((S₁ s.design Pt δ).card : ℝ) ^ (1 / (D.k x : ℝ)) ≤ slack :=
-    rpow_k_le_slack D x (card_S₁_le _ _ _) (by rw [← hRU]; omega)
+    rpow_k_le_slack D x (card_S₁_le _ _ _) (by rw [← hPU]; omega)
   exact hw.trans (add_le_add le_rfl (mul_le_mul_of_nonneg_right hcard hy0))
 
 end Bound
@@ -948,7 +908,7 @@ theorem Pr_fails_le (H : Msg → Msg) (D : Deploy Coin Col T) (decode : List (�
           (accList (fun r => (run H P D.V x ω r).out = .acc) (D.k x)
             ((List.finRange (D.cap x)).map c.1)).length < D.k x ∨
             ∃ B ∈ S₁ s.design Pt δ, AllBad (fun r => (run H P D.V x ω r).out = .acc) (D.k x)
-              (fun r e => BadOuter H D decode x (run H P D.V x ω) Pt B (forkOn (D.stage2 x) r) e)
+              (fun r e => BadOuter H D decode x (run H P D.V x ω) B (forkOn (D.stage2 x) r) e)
               ((List.finRange (D.cap x)).map c.1) c.2) := by
       refine Eq.trans ?_ (Pr_equiv (ecoinsEquiv D x) _)
       refine Pr_congr fun c => ⟨fun ⟨s', Pt', hs', hPt', _, h⟩ => ?_, fun h => ⟨s, Pt, hs, hPt, hin, h⟩⟩
@@ -958,7 +918,7 @@ theorem Pr_fails_le (H : Msg → Msg) (D : Deploy Coin Col T) (decode : List (�
       subst hPt'
       exact h
     rw [hF]
-    refine (outer_bad_le H D decode hδ x (run H P D.V x ω) s Pt (nPU_eq hs hPt) (nRU_eq hs hPt)
+    refine (outer_bad_le H D decode hδ x (run H P D.V x ω) s Pt (nPU_eq hs hPt)
       (fun r => κF D x + Real.sqrt (γF D x * β ω r)) (fun r => add_nonneg (κF_nonneg D x hε) (Real.sqrt_nonneg _))
       (hdraw x s Pt hs hPt hin) (hκs ω)).trans (le_of_eq ?_)
     rw [Ex_add, Ex_const]
@@ -1007,13 +967,13 @@ theorem Bits_of {H : Msg → Msg} {D : Deploy Coin Col T} (iroots : Msg → Seen
   Bits_of_KS (KS_of iroots hbind hsess hopens hfix hdraw hrefuse hε) hruns hown hε
 
 omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [DecidableEq Col] [Zero Col] in
-/-- A set of at least `t` replay units has acceptance probability at most the design's miss at `t`. -/
-theorem Pa_le_miss (d : Design) (P : Partition) {t : ℕ} {B : Finset ℕ} (hB : B ⊆ range P.rus.length)
+/-- A set of at least `t` proof blocks has acceptance probability at most the design's miss at `t`. -/
+theorem Pa_le_miss (d : Design) (P : Partition) {t : ℕ} {B : Finset ℕ} (hB : B ⊆ range P.blocks.length)
     (ht : t ≤ B.card) : d.Pa P B ≤ d.miss P t := by
-  have : Finite {B : Finset ℕ // B ⊆ range P.rus.length ∧ t ≤ B.card} :=
-    Finite.of_injective (fun B => (⟨B.1, mem_powerset.2 B.2.1⟩ : (range P.rus.length).powerset))
-      fun a b h => Subtype.ext (congrArg (fun z : (range P.rus.length).powerset => z.1) h)
-  exact le_ciSup (f := fun B : {B : Finset ℕ // B ⊆ range P.rus.length ∧ t ≤ B.card} => d.Pa P B.1)
+  have : Finite {B : Finset ℕ // B ⊆ range P.blocks.length ∧ t ≤ B.card} :=
+    Finite.of_injective (fun B => (⟨B.1, mem_powerset.2 B.2.1⟩ : (range P.blocks.length).powerset))
+      fun a b h => Subtype.ext (congrArg (fun z : (range P.blocks.length).powerset => z.1) h)
+  exact le_ciSup (f := fun B : {B : Finset ℕ // B ⊆ range P.blocks.length ∧ t ≤ B.card} => d.Pa P B.1)
     (Set.finite_range _).bddAbove ⟨B, hB, ht⟩
 
 /-- **Sampling: the count form from KS**: `KS` at `δ = max(0, miss(t))` (`missAt`), a faulty set in `M_δ` having

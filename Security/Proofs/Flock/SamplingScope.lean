@@ -28,16 +28,14 @@ def toyProg : Prog := ⟨[.input, .input], [0, 1]⟩
 /-- A query; the deployments here evaluate it to `toyPart`. -/
 def toyQuery : Query := ⟨"", 0, []⟩
 
-/-- One class of one stratum of two replay units, the proof units `{0}` and `{1}`. -/
-def toyPart : Partition := ⟨[[[[[0]], [[1]]]]]⟩
+/-- One class of one stratum of two proof blocks, `{0}` and `{1}`. -/
+def toyPart : Partition := ⟨[[[[0], [1]]]]⟩
 
 /-- The program, drawn `subset 1`: in scope. -/
-def toyStmt : AuditStatement := ⟨[], toyProg, toyQuery, ⟨[⟨.subset 1, none⟩]⟩, []⟩
+def toyStmt : AuditStatement := ⟨[], toyProg, toyQuery, ⟨[.subset 1]⟩, []⟩
 
 /-- The program, drawn `subset 3` from two units: out of scope. -/
-def holeStmt : AuditStatement := ⟨[], toyProg, toyQuery, ⟨[⟨.subset 3, none⟩]⟩, []⟩
-
-theorem toyPart_rus : toyPart.rus = [[[0]], [[1]]] := rfl
+def holeStmt : AuditStatement := ⟨[], toyProg, toyQuery, ⟨[.subset 3]⟩, []⟩
 
 /-- A `K`-subset of fewer than `K` members misses every set with probability `0`. -/
 theorem Pa_subset_gt {ns : List ℕ} {K : ℕ} (h : ns.sum < K) (B : Finset ℕ) : OneStage.Pa ns (.subset K) B = 0 := by
@@ -47,7 +45,7 @@ theorem Pa_subset_gt {ns : List ℕ} {K : ℕ} (h : ns.sum < K) (B : Finset ℕ)
 
 /-- **`subset 3` of two units has `P_a = 0` at every set.** -/
 theorem Pa_hole (B : Finset ℕ) : holeStmt.design.Pa toyPart B = 0 := by
-  simp only [Design.Pa, holeStmt, toyPart, classesPa, Rule.Pa]
+  simp only [Design.Pa, holeStmt, toyPart, classesPa]
   rw [Pa_subset_gt (by decide), zero_mul]
 
 /-- **No witness is in the relation** at the hole, at any `δ ≥ 0`: `M_δ` is empty. -/
@@ -61,8 +59,8 @@ theorem not_relS_hole (H : Msg → Msg) (Cm : Commitment Bool) {δ : ℝ} (hδ :
 /-- **The hole is out of scope**: its rule draws more units than its class has. -/
 theorem not_inScope_hole : ¬ InScope toyPart holeStmt := by
   rintro ⟨_, _, _, hw⟩
-  have := hw (⟨.subset 3, none⟩, [[[[0]], [[1]]]]) (by simp [holeStmt, toyPart])
-  simp [Rule.WellFormed, OneStage.WellFormed, strataSizes] at this
+  have := hw (.subset 3, [[[0], [1]]]) (by simp [holeStmt, toyPart])
+  simp [OneStage.WellFormed, strataSizes] at this
 
 /-! ## The in-scope design: `subset 1` of two units -/
 
@@ -77,16 +75,16 @@ theorem inScope_toy : InScope toyPart toyStmt := by
       subst hx
       simp [BGate.reads] at hi
     · simp [toyStmt, toyProg] at hx
-  · refine ⟨by decide, by decide, fun g hg _ => ?_, by decide, by decide, by decide⟩
+  · refine ⟨by decide, by decide, fun g hg _ => ?_, by decide, by decide⟩
     have hg2 : g < 2 := hg
     interval_cases g <;> decide
   · refine ⟨rfl, ?_⟩
-    simp [toyStmt, toyPart, Rule.WellFormed, OneStage.WellFormed, strataSizes]
+    simp [toyStmt, toyPart, OneStage.WellFormed, strataSizes]
 
 /-- The toy design's `P_a`: a uniform unit of two misses the set's members among them. -/
 theorem Pa_toy (B : Finset ℕ) :
     toyStmt.design.Pa toyPart B = ((2 - (window 0 2 B).card).choose 1 : ℝ) / 2 := by
-  simp [Design.Pa, toyStmt, toyPart, classesPa, Rule.Pa, OneStage.Pa, strataSizes]
+  simp [Design.Pa, toyStmt, toyPart, classesPa, OneStage.Pa, strataSizes]
 
 /-- **`M_{1/4}` has content**: it holds the empty set, and not the set of both units. -/
 theorem M_toy : ∅ ∈ toyStmt.design.M toyPart (1 / 4) ∧ ({0, 1} : Finset ℕ) ∉ toyStmt.design.M toyPart (1 / 4) := by
@@ -124,7 +122,7 @@ theorem k_of_toyNumbers {D : Deploy Coin Col T} {x : Msg} (h : ToyNumbers D x) :
     simp only [Deploy.part]
     rw [h.partition]
     rfl
-  simp only [Deploy.k, nRU, nPU, h.parse, hp]
+  simp only [Deploy.k, nPU, h.parse, hp]
   rfl
 
 /-- `e^{−a/8} ≤ 8/(a + 8)`, from `1 + y ≤ e^y`. -/

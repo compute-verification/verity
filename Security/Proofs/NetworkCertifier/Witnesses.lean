@@ -62,12 +62,12 @@ committed bits, all of them. -/
 theorem charge_bounds {Coin Col T : Type} (D : Claims.Sampling.Deploy Coin Col T) (δ : ℝ) :
     ∃ β : Claims.Sampling.AuditStatement → ℕ, ∀ s P, D.partition s = some P →
       ∀ F ∈ faultySets s.design P δ, faultyBits s.prog P F ≤ β s := by
-  refine ⟨fun s => ((D.partition s).map fun P => faultyBits s.prog P (Finset.range P.rus.length)).getD 0, ?_⟩
+  refine ⟨fun s => ((D.partition s).map fun P => faultyBits s.prog P (Finset.range P.blocks.length)).getD 0, ?_⟩
   intro s P hP F hF
   show faultyBits s.prog P F ≤
-    ((D.partition s).map fun P => faultyBits s.prog P (Finset.range P.rus.length)).getD 0
+    ((D.partition s).map fun P => faultyBits s.prog P (Finset.range P.blocks.length)).getD 0
   rw [hP]
-  show faultyBits s.prog P F ≤ faultyBits s.prog P (Finset.range P.rus.length)
+  show faultyBits s.prog P F ≤ faultyBits s.prog P (Finset.range P.blocks.length)
   classical
   simp only [faultySets, Finset.mem_filter, Finset.mem_powerset] at hF
   unfold faultyBits
@@ -143,10 +143,10 @@ def trivLay : Layout 1 1 := ⟨fun _ _ _ => (0, []), fun _ => []⟩
 def notProg : Claims.Sampling.Prog := ⟨[.input, .not 0], [1]⟩
 
 /-- The program, drawn `all`. -/
-def notStmt : Claims.Sampling.AuditStatement := ⟨[], notProg, ⟨"", 0, []⟩, ⟨[⟨.all, none⟩]⟩, []⟩
+def notStmt : Claims.Sampling.AuditStatement := ⟨[], notProg, ⟨"", 0, []⟩, ⟨[.all]⟩, []⟩
 
-/-- One class of one stratum of one replay unit, the proof unit `{0, 1}`. -/
-def notPart : Claims.Sampling.Partition := ⟨[[[[[0, 1]]]]]⟩
+/-- One class of one stratum of one proof unit, `{0, 1}`. -/
+def notPart : Claims.Sampling.Partition := ⟨[[[[0, 1]]]]⟩
 
 /-- Step `t`'s ingress is the input, and its egress slot's presence gate the negation. -/
 def notLay : Layout 1 1 := ⟨fun _ _ _ => (1, []), fun _ => [0]⟩
@@ -156,7 +156,7 @@ def obs0 : Obs 1 1 1 := ⟨fun _ _ => none, 0, fun _ => .complete⟩
 
 theorem inScope_not : Claims.Sampling.InScope notPart notStmt := by
   refine ⟨⟨fun g x hx i hi => ?_, by decide⟩,
-    ⟨by decide, by decide, by decide, by decide, by decide, by decide⟩, rfl, ?_⟩
+    ⟨by decide, by decide, by decide, by decide, by decide⟩, rfl, ?_⟩
   · rcases g with _ | _ | g
     · simp [notStmt, notProg] at hx
       subst hx
@@ -166,7 +166,7 @@ theorem inScope_not : Claims.Sampling.InScope notPart notStmt := by
       simp [BGate.reads] at hi
       omega
     · simp [notStmt, notProg] at hx
-  · simp [notStmt, notPart, Claims.Sampling.Rule.WellFormed, Claims.Sampling.OneStage.WellFormed]
+  · simp [notStmt, notPart, Claims.Sampling.OneStage.WellFormed]
 
 theorem notLay_fits : notLay.Fits notProg 1 := by
   refine ⟨fun t _ ℓ σ g hg => ?_, fun t _ g hg => ?_, fun t _ t' _ htt' => absurd htt' (by omega)⟩

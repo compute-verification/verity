@@ -77,16 +77,16 @@ theorem Flock.scope_meets_zk (rel : Flock.Readable.Parsed → Flock.Readable.Rel
 
 /-- **A statement of the sampling scope**: the one-gate program that returns its input, under `Q_word` v1, with the
 design that checks every unit of its one class. -/
-def Sampling.scopeStmt : Claims.Sampling.AuditStatement := ⟨[], ⟨[.input], [0]⟩, ⟨"Q_word", 1, []⟩, ⟨[⟨.all, none⟩]⟩, []⟩
+def Sampling.scopeStmt : Claims.Sampling.AuditStatement := ⟨[], ⟨[.input], [0]⟩, ⟨"Q_word", 1, []⟩, ⟨[.all]⟩, []⟩
 
-/-- Its partition: one class of one stratum of one replay unit, the one proof unit `{0}`. -/
-def Sampling.scopePartition : Claims.Sampling.Partition := ⟨[[[[[0]]]]]⟩
+/-- Its partition: one class of one stratum of one proof block, `{0}`. -/
+def Sampling.scopePartition : Claims.Sampling.Partition := ⟨[[[[0]]]]⟩
 
 /-- **The sampling scope holds a statement**: its readable form reads no field of the record. -/
 theorem Sampling.scope_meets :
     ∃ (P : Claims.Sampling.Partition) (s : Claims.Sampling.AuditStatement), Claims.Sampling.InScope P s := by
   refine ⟨Sampling.scopePartition, Sampling.scopeStmt, ⟨?_, ?_⟩,
-    ⟨by decide, by decide, by decide, by decide, by decide, by decide⟩, rfl, ?_⟩
+    ⟨by decide, by decide, by decide, by decide, by decide⟩, rfl, ?_⟩
   · intro g x hg i hi
     cases g with
     | zero =>
@@ -97,8 +97,7 @@ theorem Sampling.scope_meets :
   · intro o ho
     simp [Sampling.scopeStmt] at ho ⊢
     exact ho
-  · simp [Sampling.scopeStmt, Sampling.scopePartition, Claims.Sampling.Rule.WellFormed,
-      Claims.Sampling.OneStage.WellFormed]
+  · simp [Sampling.scopeStmt, Sampling.scopePartition, Claims.Sampling.OneStage.WellFormed]
 
 /-- **A private circuit of a size class**: the class of one gate over two inputs and one output, and its netlist, the
 AND of the two inputs, on inputs of its width. -/

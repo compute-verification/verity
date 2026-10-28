@@ -113,19 +113,19 @@ network check reads. -/
 def Covered {L K S : ℕ} (k : ℕ) (o : List (Obs L K S)) : Prop :=
   ∀ t (_ : t < k) (h : t < o.length), ∀ κ, o[t].status κ = Status.complete
 
-/-- Gate `g` is a committed gate of a faulty unit: it is on the boundary of the replay unit at a slot of `F`. -/
+/-- Gate `g` is a committed gate of a faulty unit: it is on the boundary of the proof unit at a slot of `F`. -/
 def FaultyGate (C : Prog) (P : Partition) (F : Finset ℕ) (g : ℕ) : Prop :=
-  ∃ v ∈ F, ∃ r, P.rus[v]? = some r ∧ g ∈ RU.gates r ∧ C.Boundary (RU.gates r) g = true
+  ∃ v ∈ F, ∃ u, P.blocks[v]? = some u ∧ g ∈ u ∧ C.Boundary u g = true
 
 /-- The slots of the classes the rules draw `all`, from slot `o`, as `classesPa` walks the classes. -/
-def allSlotsFrom : List Rule → List (List (List RU)) → ℕ → Finset ℕ
+def allSlotsFrom : List OneStage → List (List (List (List ℕ))) → ℕ → Finset ℕ
   | r :: rs, c :: cs, o =>
-    (match r.first with
+    (match r with
       | .all => Finset.Ico o (o + c.flatten.length)
       | _ => ∅) ∪ allSlotsFrom rs cs (o + c.flatten.length)
   | _, _, _ => ∅
 
-/-- **The slots drawn `all`**: the replay units of the classes whose rule draws every member. -/
+/-- **The slots drawn `all`**: the proof units of the classes whose rule draws every member. -/
 def allSlots (d : Design) (P : Partition) : Finset ℕ := allSlotsFrom d.rules P.classes 0
 
 /-- **The sampled audit's relation** at `δ`, on the statement's bytes. The statement parses, its query evaluates, and:

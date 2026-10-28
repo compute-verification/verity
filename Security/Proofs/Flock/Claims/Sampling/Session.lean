@@ -274,7 +274,7 @@ rounds), such that at coins `r'` agreeing with `r` off `u`'s rounds the sampled 
 `r'`'s session coins does (the session decides the run), and at coins agreeing with `r` on the rounds outside `u`'s
 before its first, `u`'s session is `P'`'s run and the sampled verifier makes its `H` calls. -/
 def SessionRuns (H : Msg → Msg) (D : Deploy Coin Col T) : Prop :=
-  ∀ x (Ω : Type) (P : Prover Ω) (ω : Ω) (r : Fin (D.V.k x) → Coin) (u : ℕ × ℕ),
+  ∀ x (Ω : Type) (P : Prover Ω) (ω : Ω) (r : Fin (D.V.k x) → Coin) (u : ℕ),
     (∃ p : Fin (nPU D x), (D.checked x r)[p.val]? = some u) →
     ∃ (xS : Msg) (emb : Fin (D.flock.V.k xS) → Fin (D.V.k x)) (P' : Prover Unit),
       StrictMono emb ∧ (∀ t, t ∈ D.rounds x u ↔ ∃ i, emb i = t) ∧
@@ -308,7 +308,7 @@ run on its rounds, as `SessionRuns` says of every checked unit. Where the slots 
 audit runs, is one obligation per run (`S = 1`), and one session per unit is `SessionRuns` itself (`S = nPU D`,
 `sessionRunsSlots_units_iff`). -/
 def SessionRunsSlots (H : Msg → Msg) (D : Deploy Coin Col T) (S : Msg → ℕ) : Prop :=
-  ∀ x (Ω : Type) (P : Prover Ω) (ω : Ω) (r : Fin (D.V.k x) → Coin) (p : ℕ) (u : ℕ × ℕ),
+  ∀ x (Ω : Type) (P : Prover Ω) (ω : Ω) (r : Fin (D.V.k x) → Coin) (p : ℕ) (u : ℕ),
     p < S x → (D.checked x r)[p]? = some u →
     ∃ (xS : Msg) (emb : Fin (D.flock.V.k xS) → Fin (D.V.k x)) (P' : Prover Unit),
       StrictMono emb ∧ (∀ t, t ∈ D.rounds x u ↔ ∃ i, emb i = t) ∧
@@ -338,26 +338,26 @@ omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [DecidableEq Col] [Zero Col
 every session a unit has, whichever units share it, so several sessions at `x` must have Flock's numbers alike: the
 same tables' shapes give the same `N₀`. -/
 theorem innerNumbers_one_iff (D : Deploy Coin Col T) (hs : ∀ x u u', D.session x u = D.session x u') :
-    InnerNumbers D ↔ ∀ x v xS vS, D.session x (0, 0) v = some (xS, vS) →
+    InnerNumbers D ↔ ∀ x v xS vS, D.session x 0 v = some (xS, vS) →
       D.flock.waits xS = D.innerWaits x ∧ D.flock.cap xS = D.innerCap x ∧ D.flock.N₀ xS = D.innerN₀ x ∧
         D.flock.εtable xS ≤ D.εtable x ∧ D.flock.weight xS ≤ D.weight x :=
-  ⟨fun h x v xS vS hv => h x (0, 0) v xS vS hv, fun h x u v xS vS hv => h x v xS vS (hs x u (0, 0) ▸ hv)⟩
+  ⟨fun h x v xS vS hv => h x 0 v xS vS hv, fun h x u v xS vS hv => h x v xS vS (hs x u 0 ▸ hv)⟩
 
 /-- The unit a selection picks among those checked at `R`. -/
-def selUnit (D : Deploy Coin Col T) (x : Msg) (sel : List (ℕ × ℕ) → Option (Fin (nPU D x)))
-    (R : Fin (D.V.k x) → Coin) : Option (ℕ × ℕ) :=
+def selUnit (D : Deploy Coin Col T) (x : Msg) (sel : List ℕ → Option (Fin (nPU D x)))
+    (R : Fin (D.V.k x) → Coin) : Option ℕ :=
   (sel (D.checked x R)).bind fun i => (D.checked x R)[i.val]?
 
 /-- Its session's rounds, none when no unit is picked. -/
-def selRounds (D : Deploy Coin Col T) (x : Msg) (sel : List (ℕ × ℕ) → Option (Fin (nPU D x)))
+def selRounds (D : Deploy Coin Col T) (x : Msg) (sel : List ℕ → Option (Fin (nPU D x)))
     (R : Fin (D.V.k x) → Coin) : Finset (Fin (D.V.k x)) :=
   match selUnit D x sel R with
   | some u => D.rounds x u
   | none => ∅
 
 omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [DecidableEq Col] [Zero Col] in
-theorem selUnit_mem {D : Deploy Coin Col T} {x : Msg} {sel : List (ℕ × ℕ) → Option (Fin (nPU D x))}
-    {R : Fin (D.V.k x) → Coin} {u : ℕ × ℕ} (h : selUnit D x sel R = some u) :
+theorem selUnit_mem {D : Deploy Coin Col T} {x : Msg} {sel : List ℕ → Option (Fin (nPU D x))}
+    {R : Fin (D.V.k x) → Coin} {u : ℕ} (h : selUnit D x sel R = some u) :
     ∃ p : Fin (nPU D x), (D.checked x R)[p.val]? = some u := by
   unfold selUnit at h
   obtain ⟨i, -, hi⟩ := Option.bind_eq_some_iff.1 h
@@ -365,7 +365,7 @@ theorem selUnit_mem {D : Deploy Coin Col T} {x : Msg} {sel : List (ℕ × ℕ) �
 
 omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [DecidableEq Col] [Zero Col] in
 theorem selUnit_forkOn {D : Deploy Coin Col T} (hdraw : DrawFixed D) {x : Msg}
-    {sel : List (ℕ × ℕ) → Option (Fin (nPU D x))} {R : Fin (D.V.k x) → Coin} {u : ℕ × ℕ}
+    {sel : List ℕ → Option (Fin (nPU D x))} {R : Fin (D.V.k x) → Coin} {u : ℕ}
     (h : selUnit D x sel R = some u) (σ : Fin (D.V.k x) → Coin) :
     selUnit D x sel (forkOn (D.rounds x u) R σ) = some u := by
   have hc := (hdraw x R u (selUnit_mem h)).2 σ
@@ -415,7 +415,7 @@ sampled run on the session's rounds. -/
 theorem fiber_bound {H : Msg → Msg} {D : Deploy Coin Col T} (hKS : Claims.Flock.KS H D.flock)
     (hruns : SessionRuns H D) (hnum : InnerNumbers D) (decode : List (ℕ × Col) → List T)
     (hdec : Flock.ListWithin D.flock.len D.flock.enc D.flock.θ decode) (x : Msg) {Ω : Type} (P : Prover Ω) (ω : Ω)
-    (R0 : Fin (D.V.k x) → Coin) (u : ℕ × ℕ) (hu : ∃ p : Fin (nPU D x), (D.checked x R0)[p.val]? = some u) :
+    (R0 : Fin (D.V.k x) → Coin) (u : ℕ) (hu : ∃ p : Fin (nPU D x), (D.checked x R0)[p.val]? = some u) :
     Pr (fun s : (Fin (D.V.k x) → Coin) × D.UnitCoins x =>
         (run H P D.V x ω (forkOn (D.rounds x u) R0 s.1)).out = .acc ∧
           unitWit H D decode x (run H P D.V x ω) u (forkOn (D.rounds x u) R0 s.1) s.2 = none) ≤
@@ -570,13 +570,13 @@ theorem fiber_bound {H : Msg → Msg} {D : Deploy Coin Col T} (hKS : Claims.Floc
 /-! ## The selected unit's session, resampled -/
 
 omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [DecidableEq Col] [Zero Col] in
-theorem selRounds_some {D : Deploy Coin Col T} {x : Msg} {sel : List (ℕ × ℕ) → Option (Fin (nPU D x))}
-    {R : Fin (D.V.k x) → Coin} {u : ℕ × ℕ} (h : selUnit D x sel R = some u) : selRounds D x sel R = D.rounds x u := by
+theorem selRounds_some {D : Deploy Coin Col T} {x : Msg} {sel : List ℕ → Option (Fin (nPU D x))}
+    {R : Fin (D.V.k x) → Coin} {u : ℕ} (h : selUnit D x sel R = some u) : selRounds D x sel R = D.rounds x u := by
   unfold selRounds
   rw [h]
 
 omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [DecidableEq Col] [Zero Col] in
-theorem selRounds_none {D : Deploy Coin Col T} {x : Msg} {sel : List (ℕ × ℕ) → Option (Fin (nPU D x))}
+theorem selRounds_none {D : Deploy Coin Col T} {x : Msg} {sel : List ℕ → Option (Fin (nPU D x))}
     {R : Fin (D.V.k x) → Coin} (h : selUnit D x sel R = none) : selRounds D x sel R = ∅ := by
   unfold selRounds
   rw [h]
@@ -584,7 +584,7 @@ theorem selRounds_none {D : Deploy Coin Col T} {x : Msg} {sel : List (ℕ × ℕ
 omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [DecidableEq Col] [Zero Col] in
 /-- Resampling the selected unit's rounds keeps them (`DrawFixed`). -/
 theorem selRounds_resample {D : Deploy Coin Col T} (hdraw : DrawFixed D) {x : Msg}
-    (sel : List (ℕ × ℕ) → Option (Fin (nPU D x))) (r d σ : Fin (D.V.k x) → Coin) :
+    (sel : List ℕ → Option (Fin (nPU D x))) (r d σ : Fin (D.V.k x) → Coin) :
     selRounds D x sel (forkOn (D.stage2 x) r (forkOn (selRounds D x sel (forkOn (D.stage2 x) r d)) d σ)) =
       selRounds D x sel (forkOn (D.stage2 x) r d) := by
   cases h : selUnit D x sel (forkOn (D.stage2 x) r d) with
@@ -596,13 +596,13 @@ theorem selRounds_resample {D : Deploy Coin Col T} (hdraw : DrawFixed D) {x : Ms
 /-- The probability over a unit's `E^rep` coins that the run at `R` accepts and the unit the selection picks finds no
 witness. -/
 noncomputable def selMiss (H : Msg → Msg) (D : Deploy Coin Col T) (decode : List (ℕ × Col) → List T) {Ω : Type}
-    (P : Prover Ω) (x : Msg) (ω : Ω) (sel : List (ℕ × ℕ) → Option (Fin (nPU D x))) (R : Fin (D.V.k x) → Coin) : ℝ :=
+    (P : Prover Ω) (x : Msg) (ω : Ω) (sel : List ℕ → Option (Fin (nPU D x))) (R : Fin (D.V.k x) → Coin) : ℝ :=
   Pr fun ρ0 : D.UnitCoins x => (run H P D.V x ω R).out = .acc ∧
     ∃ u, selUnit D x sel R = some u ∧ unitWit H D decode x (run H P D.V x ω) u R ρ0 = none
 
 omit [Nonempty Coin] [DecidableEq Col] [Zero Col] in
 theorem selMiss_none (H : Msg → Msg) (D : Deploy Coin Col T) (decode : List (ℕ × Col) → List T) {Ω : Type}
-    (P : Prover Ω) (x : Msg) (ω : Ω) (sel : List (ℕ × ℕ) → Option (Fin (nPU D x))) {R : Fin (D.V.k x) → Coin}
+    (P : Prover Ω) (x : Msg) (ω : Ω) (sel : List ℕ → Option (Fin (nPU D x))) {R : Fin (D.V.k x) → Coin}
     (h : selUnit D x sel R = none) : selMiss H D decode P x ω sel R = 0 := by
   unfold selMiss
   rw [h]
@@ -613,7 +613,7 @@ set_option synthInstance.maxSize 1024 in
 theorem selMiss_fiber {H : Msg → Msg} {D : Deploy Coin Col T} (hKS : Claims.Flock.KS H D.flock)
     (hdraw : DrawFixed D) (hruns : SessionRuns H D) (hnum : InnerNumbers D) (decode : List (ℕ × Col) → List T)
     (hdec : Flock.ListWithin D.flock.len D.flock.enc D.flock.θ decode) (x : Msg) {Ω : Type} (P : Prover Ω) (ω : Ω)
-    (sel : List (ℕ × ℕ) → Option (Fin (nPU D x))) {R0 : Fin (D.V.k x) → Coin} {u : ℕ × ℕ}
+    (sel : List ℕ → Option (Fin (nPU D x))) {R0 : Fin (D.V.k x) → Coin} {u : ℕ}
     (h : selUnit D x sel R0 = some u) :
     (Ex fun σ => selMiss H D decode P x ω sel (forkOn (D.rounds x u) R0 σ)) ≤
       κF D x + Real.sqrt (γF D x * Ex fun σ => collAt H D P x ω (forkOn (D.rounds x u) R0 σ)) := by
@@ -637,7 +637,7 @@ set_option synthInstance.maxSize 1024 in
 theorem resample_bound {H : Msg → Msg} {D : Deploy Coin Col T} (hKS : Claims.Flock.KS H D.flock)
     (hdraw : DrawFixed D) (hruns : SessionRuns H D) (hnum : InnerNumbers D) (hε : ∀ x, 0 ≤ D.εtable x)
     (decode : List (ℕ × Col) → List T) (hdec : Flock.ListWithin D.flock.len D.flock.enc D.flock.θ decode) (x : Msg)
-    {Ω : Type} (P : Prover Ω) (ω : Ω) (sel : List (ℕ × ℕ) → Option (Fin (nPU D x))) (r d : Fin (D.V.k x) → Coin) :
+    {Ω : Type} (P : Prover Ω) (ω : Ω) (sel : List ℕ → Option (Fin (nPU D x))) (r d : Fin (D.V.k x) → Coin) :
     (Ex fun σ => selMiss H D decode P x ω sel
         (forkOn (D.stage2 x) r (forkOn (selRounds D x sel (forkOn (D.stage2 x) r d)) d σ))) ≤
       κF D x + Real.sqrt (γF D x * Ex fun σ => collAt H D P x ω

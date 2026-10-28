@@ -189,12 +189,12 @@ theorem rows_holdAll (C : Prog) (lay : Layout L S) (n : ℕ) (hfits : lay.Fits C
 
 /-- The committed gates of the units at the slots `F`. -/
 def faultyGateSet (C : Prog) (P : Partition) (F : Finset ℕ) : Finset ℕ :=
-  F.biUnion fun v => ((RU.gates (P.rus.getD v [])).filter fun g => C.Boundary (RU.gates (P.rus.getD v [])) g).toFinset
+  F.biUnion fun v => ((P.blocks.getD v []).filter fun g => C.Boundary (P.blocks.getD v []) g).toFinset
 
 theorem mem_faultyGateSet {C : Prog} {P : Partition} {F : Finset ℕ} {g : ℕ} (h : FaultyGate C P F g) :
     g ∈ faultyGateSet C P F := by
   obtain ⟨v, hv, r, hr, hg, hb⟩ := h
-  have hr' : P.rus.getD v [] = r := by rw [List.getD_eq_getElem?_getD, hr, Option.getD_some]
+  have hr' : P.blocks.getD v [] = r := by rw [List.getD_eq_getElem?_getD, hr, Option.getD_some]
   simp only [faultyGateSet, Finset.mem_biUnion, List.mem_toFinset, List.mem_filter]
   exact ⟨v, hv, by rw [hr']; exact ⟨hg, hb⟩⟩
 
@@ -285,11 +285,11 @@ theorem eq_empty_of_mem_faultySets (d : Design) (P : Partition) {δ : ℝ} (hδ 
   obtain ⟨hsub, hM, -⟩ := hF
   by_contra hne
   have hcard : 1 ≤ F.card := Finset.card_pos.mpr (Finset.nonempty_iff_ne_empty.mpr hne)
-  have : Finite {B : Finset ℕ // B ⊆ Finset.range P.rus.length ∧ 1 ≤ B.card} :=
-    Finite.of_injective (β := ↥(Finset.range P.rus.length).powerset)
+  have : Finite {B : Finset ℕ // B ⊆ Finset.range P.blocks.length ∧ 1 ≤ B.card} :=
+    Finite.of_injective (β := ↥(Finset.range P.blocks.length).powerset)
       (fun B => ⟨B.1, Finset.mem_powerset.mpr B.2.1⟩) fun B B' h => Subtype.ext (by simpa using h)
   have hle : d.Pa P F ≤ d.miss P 1 :=
-    le_ciSup (f := fun B : {B : Finset ℕ // B ⊆ Finset.range P.rus.length ∧ 1 ≤ B.card} => d.Pa P B.1)
+    le_ciSup (f := fun B : {B : Finset ℕ // B ⊆ Finset.range P.blocks.length ∧ 1 ≤ B.card} => d.Pa P B.1)
       (Set.finite_range _).bddAbove ⟨F, hsub, hcard⟩
   exact absurd hM (not_lt.mpr (hle.trans hδ))
 

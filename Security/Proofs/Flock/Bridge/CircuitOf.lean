@@ -226,24 +226,23 @@ theorem boundary_posOf {κ : Fin C.N → Option Bool} {n : ℕ} {P : FlockSoundn
     · rw [hgx]
       simpa using hr
 
-/-- **A unit that is not faulty is correct on its openings**: when its one lowered proof unit is correct in
+/-- **A unit that is not faulty is correct on its openings**: when its lowered proof block is correct in
 `progOf C κ` on its committed values `val` (and any interior `ι`), each committed wire of the unit holds, in the wire
 values `val` opens, what the unit computes from them. -/
 theorem correct_of_progCorrect {κ : Fin C.N → Option Bool} {n : ℕ} (P : FlockSoundness.Audit.Partition C n)
     (u : Fin n) (val : ℕ → Option Bool) (ι : ℕ → Bool)
-    (h : (progOf C κ).Correct (RU.ref (progOf C κ) [unitGates P u] val ι) (unitGates P u)) :
+    (h : (progOf C κ).Correct ((progOf C κ).refIn (unitGates P u) val ι) (unitGates P u)) :
     P.Correct (openedOf C κ val) u := by
-  have hgates : RU.gates [unitGates P u] = unitGates P u := by simp [RU.gates]
   have hrefB : ∀ p, (progOf C κ).Boundary (unitGates P u) p = true →
-      RU.ref (progOf C κ) [unitGates P u] val ι p = val p := by
+      (progOf C κ).refIn (unitGates P u) val ι p = val p := by
     intro p hp
-    simp [RU.ref, hgates, hp]
-  have hrefO : ∀ p, p ∉ unitGates P u → RU.ref (progOf C κ) [unitGates P u] val ι p = val p := by
+    simp [Claims.Sampling.Prog.refIn, hp]
+  have hrefO : ∀ p, p ∉ unitGates P u → (progOf C κ).refIn (unitGates P u) val ι p = val p := by
     intro p hp
-    simp [RU.ref, hgates, hp]
+    simp [Claims.Sampling.Prog.refIn, hp]
   have hread : ∀ p ∈ unitGates P u, ∀ x, (progOf C κ).gates[p]? = some x → ∀ a : Fin C.N, posOf C a ∈ x.reads →
       posOf C a ∉ unitGates P u →
-      (progOf C κ).read (RU.ref (progOf C κ) [unitGates P u] val ι) (posOf C a) =
+      (progOf C κ).read ((progOf C κ).refIn (unitGates P u) val ι) (posOf C a) =
         some (P.localEval (openedOf C κ val) u a) := by
     intro p hp x hx a ha hna
     have hua : P.unit a ≠ some u := fun h' => hna (posOf_mem_unitGates.2 h')
@@ -280,14 +279,13 @@ theorem wrong_subset_faulty {n : ℕ} (P : FlockSoundness.Audit.Partition C n) (
   classical
   rw [FlockSoundness.Audit.Partition.mem_wrong] at hu
   have hlt := u.isLt
-  refine Finset.mem_filter.2 ⟨Finset.mem_range.2 (by rw [rus_length_partOf]; omega), ?_⟩
-  rintro ⟨r, hr, ι, hι⟩
-  rw [rus_partOf_getElem? P u] at hr
-  cases Option.some.inj hr
-  have h := hι (unitGates P u) (List.mem_append_left _ (List.mem_singleton_self _))
-  change (progOf C κ).Correct (RU.ref (progOf C κ) (slotOf P κ u) _ ι) (unitGates P u) at h
-  rw [ref_slotOf] at h
-  exact hu (correct_of_progCorrect P u _ ι h)
+  refine Finset.mem_filter.2 ⟨Finset.mem_range.2 (by rw [blocks_length_partOf]; omega), ?_⟩
+  rintro ⟨b, hb, ι, hι⟩
+  rw [blocks_partOf_getElem? P u] at hb
+  cases Option.some.inj hb
+  change (progOf C κ).Correct ((progOf C κ).refIn (blockOf P κ u) _ ι) (blockOf P κ u) at hι
+  rw [ref_blockOf, correct_blockOf] at hι
+  exact hu (correct_of_progCorrect P u _ ι hι.1)
 
 theorem card_wrong_le_faulty {n : ℕ} (P : FlockSoundness.Audit.Partition C n) (κ : Fin C.N → Option Bool) (kd : ℕ)
     (desc : Claims.Msg) (q : Query) (roots : List Claims.Msg) (H : Claims.Msg → Claims.Msg) (Cm : Commitment Bool)
