@@ -33,6 +33,7 @@ from dataclasses import dataclass
 from types import MappingProxyType
 
 from verity.core.protocols.profile import IntegrityProfile
+from verity.core.site import Site
 from verity.hardware import node as hardware
 
 from . import audit, coins, line, receipts, timing
@@ -57,6 +58,24 @@ def _rate(x: object, what: str) -> float:
     return float(x)
 
 
+def figures(site: Site, h: str, host: str | None = None) -> hardware.Node:
+    """The figures of host `h`'s node as `site` registers it (`Site.node h`): for each of its devices, in the log's
+    order, the card its sheet names (`Sheet.sku`), on the host of card `host`, by default the devices' one card (a
+    server card's `host` table).  An `h` the site registers as no host, a node without a device, and a node of mixed
+    cards with no host card named are refused, as `verity.hardware.node` refuses a placeholder figure."""
+    n = site.node(h)
+    if n is None:
+        raise ValueError(f"{h!r} is no host the Site registers")
+    skus = [n.sheet(d).sku for d in n.units]
+    if not skus:
+        raise ValueError(f"host {h!r} holds no device the Site registers")
+    if host is None:
+        if len(set(skus)) > 1:
+            raise ValueError(f"host {h!r}'s devices are of cards {sorted(set(skus))}: name its host's card")
+        host = skus[0]
+    return hardware.node(skus, host)
+
+
 @dataclass(frozen=True, slots=True)
 class Node:
     """The verifier's capacities for the node a session audits, each protocol structure, never the prover's report: its
@@ -69,8 +88,8 @@ class Node:
     maximal rebuild batch, one maximal disk read and one link window.  A burst of 0 states the rate down to one
     nanosecond, which no device with a nonzero rate meets.  Beside the read ceilings are the write ceilings, one GPU's
     and the host DRAM's (bytes a second), how fast a fill can write labels into each tier, which a wipe's timing reads;
-    the node states no DPU's.  `stated` takes the Site's figures for the node (`verity.hardware.node`), which a
-    reported read rate can only raise."""
+    the node states no DPU's.  `of_site` reads them off the Site's node (`Site.node h`, `figures`), and `stated` off
+    the node's figures (`verity.hardware.node`), which a reported read rate can only raise."""
 
     spec_bytes_per_s: float
     read_bytes_per_s: float
@@ -101,6 +120,11 @@ class Node:
         for width, rate in squarings.items():
             _rate(rate, f"the squaring ceiling at {width}")
         object.__setattr__(self, "squarings_per_s", MappingProxyType(squarings))
+
+    @classmethod
+    def of_site(cls, site: Site, h: str, *, host: str | None = None, **stated) -> Node:
+        """The node of host `h` as `site` registers it (`figures`), stated (`stated`)."""
+        return cls.stated(figures(site, h, host), **stated)
 
     @classmethod
     def stated(cls, figures: hardware.Node, *, reported_read_bytes_per_s: float = 0.0, disk_bytes_per_s: float = 0.0,

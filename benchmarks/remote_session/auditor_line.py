@@ -1164,7 +1164,15 @@ def main(argv: list[str] | None = None) -> int:
                     help="infra's record of the provider's lockdown of the gate node (`read_lockdown`): a gate "
                          "session whose signed span lies inside an applied interval is conditional on "
                          "ProviderLockdown in place of NoOutsideCompute (default: none is)")
+    ap.add_argument("--site", nargs=2, metavar=("LOG", "HOST"),
+                    help="the audited node: host HOST of the Site the registration log LOG registers "
+                         "(`verifier.site_node`), whose S_chip and link window the line charges (default: a vy-nebius "
+                         "node)")
+    ap.add_argument("--site-keys", type=Path, metavar="KEYS",
+                    help="--site: the auditor's devices' keys, a JSON object of id to key")
     a = ap.parse_args(argv)
+    if a.site:
+        V.NODE = V.site_node(Path(a.site[0]), a.site[1], a.site_keys)
     if (a.boundary is None) != (a.boundary_pin is None):
         ap.error("--boundary and --boundary-pin go together")
     boundary = None if a.boundary is None else read_boundary(a.boundary, a.boundary_pin)

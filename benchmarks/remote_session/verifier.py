@@ -132,6 +132,8 @@ sys.path.insert(0, str(HERE.parents[1]))
 
 from verity.core.protocols.remote_bandwidth import audit, coins, ledger, line, timing  # noqa: E402
 from verity.core.protocols.remote_bandwidth import store as rstore  # noqa: E402
+from verity.core import site  # noqa: E402
+from verity.hardware import load, skus  # noqa: E402
 from verity.hardware import node as hardware  # noqa: E402
 
 import challengers  # noqa: E402
@@ -142,11 +144,26 @@ from checks import Checks  # noqa: E402
 CHECK_BATCH = 1024
 """Openings a Lean thread checks at once (`checkWindowChunked`)."""
 NODE = hardware.node(*hardware.VY_NEBIUS)
-"""The audited node's figures, read off its cards (`verity.hardware.node`): a vy-nebius node until the Site registers
-the audited node."""
+"""The audited node's figures, read off its cards (`verity.hardware.node`): `--site`'s host's node (`site_node`), by
+default a vy-nebius node."""
 GPU_HBM_BYTES = 96 * 2 ** 30
 """One RTX PRO 6000's memory, 96 GiB (`benchmarks/census/hardware.json`)."""
-HBM_BYTES = len(NODE.devices) * GPU_HBM_BYTES
+
+
+def device_memory(node: hardware.Node) -> int:
+    """The node's device memory, bytes: each device's card's `store.dram`."""
+    return sum(int(load(d.sku)["store"]["dram"]["value"]) for d in node.devices)
+
+
+HBM_BYTES = device_memory(NODE)
+
+
+def site_node(log: Path, host: str, keys: Path | None = None) -> hardware.Node:
+    """The figures of host `host`'s node in the Site a registration log registers (`ledger.figures`): the log
+    (`verity.core.site.Registration`'s JSON) checked entry by entry (`site.check`) against the auditor's data sheets,
+    every card file's, and its own devices' keys, `keys` (a JSON object of id to key)."""
+    auditor = site.Auditor.of_files([load(sku) for sku in skus()], json.loads(keys.read_text()) if keys else None)
+    return ledger.figures(site.check(site.Registration.of_json(json.loads(log.read_text())), auditor), host)
 DISK_BYTES_PER_S = 4.4e9
 """The node's disks' read ceiling, each disk's highest second summed (4.311e9) and rounded up:
 how much of a paced line's ingress charge is its disks (`ingress_bursts`)."""
@@ -1523,6 +1540,7 @@ def save_registry(path: Path | None, registry: audit.Registry | dict) -> None:
 
 
 def main() -> int:
+    global NODE
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--host", default="127.0.0.1")
     ap.add_argument("--port", type=int, default=7781)
@@ -1546,8 +1564,13 @@ def main() -> int:
     ap.add_argument("--registry", type=Path,
                     help="the verifier's registrations, kept across its processes (`audit.Registry`): a node with a "
                          "live registration there is refused (default: this process's own)")
-    ap.add_argument("--hbm-bytes", type=int, default=HBM_BYTES,
-                    help="the node's HBM, the memory line's capacity (default: its GPUs' at 96 GiB each)")
+    ap.add_argument("--site", nargs=2, metavar=("LOG", "HOST"),
+                    help="the audited node: host HOST of the Site the registration log LOG registers (`site_node`), "
+                         "its figures read off its devices' cards (default: a vy-nebius node, `hardware.VY_NEBIUS`)")
+    ap.add_argument("--site-keys", type=Path, metavar="KEYS",
+                    help="--site: the auditor's devices' keys, a JSON object of id to key")
+    ap.add_argument("--hbm-bytes", type=int,
+                    help="the node's HBM, the memory line's capacity (default: its devices' cards' memory)")
     ap.add_argument("--host-bytes", type=int, default=0,
                     help="the node's host DRAM: with it the memory line is also by kind against HBM and DRAM "
                          "(`node_line`)")
@@ -1623,8 +1646,9 @@ def main() -> int:
                          "{file: SHA-512 hex}, checkpoint_sha512}), the registry's models.jsonl and its lines "
                          "of ROLE, or core's models.json ({ROLE: {checkpoint_sha512, files, ...}}) and its entry "
                          "of ROLE")
-    ap.add_argument("--engines", type=int, default=len(NODE.devices),
-                    help="--model's store: its arenas, an engine's at one GPU each, in GPU order")
+    ap.add_argument("--engines", type=int,
+                    help="--model's store: its arenas, an engine's at one GPU each, in GPU order (default: one a "
+                         "device of the node)")
     ap.add_argument("--arena-blocks", type=int, metavar="A",
                     help="--model's store: each arena's blocks, its weights then zero filler; the store's blocks "
                          "past the arenas are host filler")
@@ -1632,9 +1656,14 @@ def main() -> int:
                     help="processes hashing the pinned files and recomputing the expected payload root, and the Lean "
                          "verifier's threads recomputing it at the same time")
     a = ap.parse_args()
+    if a.site:
+        NODE = site_node(Path(a.site[0]), a.site[1], a.site_keys)
+    a.hbm_bytes = device_memory(NODE) if a.hbm_bytes is None else a.hbm_bytes
+    a.engines = len(NODE.devices) if a.engines is None else a.engines
     if a.memory_of is not None:
         v = json.loads(a.memory_of.read_text())
-        print(json.dumps([{"k": s["k"], "memory": recorded_memory(s, host_bytes=a.host_bytes)} | (
+        print(json.dumps([{"k": s["k"], "memory": recorded_memory(s, chip_bytes=NODE.chip_bytes,
+                                                                  host_bytes=a.host_bytes)} | (
             {"paced": recorded_paced(s, v["registration"], host_bytes=a.host_bytes,
                                      ingress_bytes_per_s=a.ingress_bytes_per_s)} if s.get("pace") else {})
                           for s in v["sessions"] if s["accepted"]], indent=1))

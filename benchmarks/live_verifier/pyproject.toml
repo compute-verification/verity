@@ -11,7 +11,9 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 inputs = ["verity/__init__.py", "verity/errors.py", "verity/core/__init__.py", "verity/core/protocols/__init__.py",
           "verity/core/protocols/profile.py", "verity/core/protocols/remote_bandwidth", "verity/ml/__init__.py",
           "verity/ml/circuits", "verity/ml/crypto", "verity/ml/commitments", "verity/ml/randomness",
-          # the audited node's figures, read off its cards (`verity.hardware.node`)
+          # the audited node's figures: the Site's node (`verity.core.site`, on the wire's canonical JSON), read off its
+          # cards (`verity.hardware.node`)
+          "verity/core/site/__init__.py", "verity/core/wire",
           "verity/hardware/__init__.py", "verity/hardware/node.py", "verity/hardware/cards",
           # the Lean verifier a session runs beside audit.Session, and the difftest a replay serves: their Lake packages
           "verity/core/service/flock/Flock", "verity/core/service/flock/lakefile.toml",

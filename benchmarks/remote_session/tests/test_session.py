@@ -7,6 +7,7 @@ beside it, and the two must agree at every event, window verdict and record fiel
 from __future__ import annotations
 
 import dataclasses
+import json
 import math
 import os
 import queue
@@ -24,6 +25,8 @@ sys.path.insert(0, str(HERE.parents[2]))
 
 from verity.core.protocols.remote_bandwidth import audit, coins, ledger, receipts as rb  # noqa: E402
 from verity.core.protocols.remote_bandwidth import codec as rcodec  # noqa: E402
+from verity.core import site  # noqa: E402
+from verity.hardware import load  # noqa: E402
 
 import prover  # noqa: E402
 import verifier  # noqa: E402
@@ -257,6 +260,28 @@ def test_the_ledgers_are_the_nodes_whatever_share_of_it_the_store_is_on(monkeypa
     assert lg["inputs"]["chip_bytes"] == 8 * gpu.chip_bytes + NODE.host.chip_bytes == 3_105_652_736
     assert lg["inputs"]["squarings_per_s"] == 8 * gpu.squarings_per_s["p512"]
     assert lg["spec"]["certified_bytes"] == pytest.approx(lg["measured"]["certified_bytes"], rel=1e-9)
+
+
+def test_the_audited_node_is_the_registered_hosts_read_off_its_cards(tmp_path):
+    """`--site LOG HOST`: the node is host HOST's in the Site its registration log registers, the log checked against
+    the card files' sheets (`verifier.site_node`), so eight RTX PRO 6000s registered under a host are a vy-nebius
+    node, and their memory the memory line's capacity; an id the Site registers as no host is refused, and so is a
+    log the check refuses."""
+    sheet = site.Sheet.of_file(load("rtx-pro-6000-server"))
+    gpus = [x for i in range(8) for x in (site.Loc(f"gpu{i}", "device", "node0", sheet=sheet.digest()),
+                                           site.Loc(f"hbm{i}", "memory", f"gpu{i}", tier="hbm", bytes=sheet.mem))]
+    log = site.Registration("remote").append(site.Registration("remote").entry((sheet,), (
+        site.Loc("site0", "site"), site.Loc("node0", "host", "site0"), *gpus,
+        site.Loc("dram0", "memory", "node0", tier="dram", bytes=1 << 40))))
+    path = tmp_path / "log.json"
+    path.write_text(json.dumps(log.to_json()))
+    node = verifier.site_node(path, "node0")
+    assert node == NODE and verifier.device_memory(node) == verifier.HBM_BYTES == 8 * 96 * 2 ** 30
+    with pytest.raises(ValueError, match="is no host the Site registers"):
+        verifier.site_node(path, "gpu0")
+    path.write_text(json.dumps(site.Registration("remote", (log.entries[0], log.entries[0])).to_json()))
+    with pytest.raises(site.Refused):
+        verifier.site_node(path, "node0")
 
 
 def test_the_timing_parts_reproduce_the_whole_node_sessions_split_and_sum_to_its_timing_term():

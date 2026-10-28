@@ -15,6 +15,9 @@ from test_remote_bandwidth import A, N, RTX, SCHEDULE, Clock, Entropy, challenge
 from verity.core import claims
 from verity.core.protocols.remote_bandwidth import audit, codec, ledger, line, receipts, timing
 from verity.core.protocols.remote_bandwidth.audit import Pace, Session
+from verity.core.site import Entry, Loc, Sheet, Site
+from verity.hardware import load
+from verity.hardware import node as hardware
 
 PASS_NS, DOWN_NS, UP_NS = 300, 20, 30
 B = codec.BLOCK_BYTES
@@ -332,6 +335,41 @@ def test_the_line_reads_the_rates_of_the_stated_node() -> None:
                                                 5e10, RTX.chip_bytes, 4.4e9, RTX.host.link_window_bytes)
     with pytest.raises(ValueError, match="no squaring ceiling at p512"):
         dataclasses.replace(n, squarings_per_s={"p1024": 1.0}).rates(codec.Codec(codec.P512, 2, False))
+
+
+def _site(*skus: str) -> Site:
+    """A site of one host, node0, holding a device of each card in `skus`, each with its device memory, and the host's
+    DRAM; a second host, node1, with DRAM alone."""
+    sheets = {sku: Sheet.of_file(load(sku)) for sku in dict.fromkeys(skus)}
+    devices = [x for i, sku in enumerate(skus) for x in (
+        Loc(f"gpu{i}", "device", "node0", sheet=sheets[sku].digest()),
+        Loc(f"hbm{i}", "memory", f"gpu{i}", tier="hbm", bytes=sheets[sku].mem))]
+    return Site.of_log([Entry("", tuple(sheets.values()), (
+        Loc("site0", "site"), Loc("node0", "host", "site0"), *devices,
+        Loc("dram0", "memory", "node0", tier="dram", bytes=1 << 40),
+        Loc("node1", "host", "site0"), Loc("dram1", "memory", "node1", tier="dram", bytes=1 << 40)))])
+
+
+def test_the_node_is_the_sites_node_h_read_off_its_devices_cards() -> None:
+    """`Node.of_site` reads host h's node off the Site (`Site.node h`): a device of the card each device's sheet names,
+    on the devices' server card's host, so eight RTX PRO 6000s registered under node0 are a vy-nebius node.  A host
+    with no device, an id the Site registers as no host, a node of mixed cards with no host card named, and a card
+    with a placeholder figure are each refused."""
+    site = _site(*hardware.VY_NEBIUS[0])
+    assert ledger.figures(site, "node0") == RTX
+    assert ledger.Node.of_site(site, "node0", disk_bytes_per_s=4.4e9) == ledger.Node.stated(RTX, disk_bytes_per_s=4.4e9)
+    with pytest.raises(ValueError, match="holds no device"):
+        ledger.figures(site, "node1")
+    for h in ("gpu0", "site0", "node9"):
+        with pytest.raises(ValueError, match="is no host the Site registers"):
+            ledger.figures(site, h)
+    mixed = _site("rtx-pro-6000-server", "h200-sxm-141gb")
+    with pytest.raises(ValueError, match="name its host's card"):
+        ledger.figures(mixed, "node0")
+    with pytest.raises(ValueError, match="placeholder"):
+        ledger.figures(mixed, "node0", host="rtx-pro-6000-server")
+    with pytest.raises(ValueError, match="placeholder"):
+        ledger.Node.of_site(_site("h200-sxm-141gb"), "node0")
 
 
 def test_the_sketch_charges_the_outside_factor_the_node_states(store) -> None:
