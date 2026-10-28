@@ -2831,10 +2831,10 @@ RECORDS_CHECK_RE, RECORDS_RUN_RE = re.compile(r"(?:^|[/\s])check\.py\b"), re.com
 #: and the `common.py` the audit's key counts among its files; `lean_slot.py` only takes a slot)
 RECORDS_SHARED = ("lean-toolchain", "tools/verity/lean", "tools/verity/check/common.py")
 #: the most commits with runs in the window that may vouch for a package, the newest first, that `RecordsGate` reads in its search for a run on the same inputs
-#: (a safety bound): those this clone lacks are fetched by sha, `RECORDS_FETCH_CHUNK` a `git fetch`, a chunk that fails split in
-#: halves until the commits the remote won't serve stand alone, in `RECORDS_FETCH_CALLS` fetches at most; one that can't be read
-#: vouches for nothing
-RECORDS_FETCH, RECORDS_FETCH_CHUNK, RECORDS_FETCH_CALLS = 1000, 200, 48
+#: (a safety bound, above the ~2,500 that 3 days held for `Security/Proofs`, whose inputs span most packages): those this clone
+#: lacks are fetched by sha, `RECORDS_FETCH_CHUNK` a `git fetch`, a chunk that fails split in halves until the commits the remote
+#: won't serve stand alone, in `RECORDS_FETCH_CALLS` fetches at most; one that can't be read vouches for nothing
+RECORDS_FETCH, RECORDS_FETCH_CHUNK, RECORDS_FETCH_CALLS = 5000, 200, 48
 #: the files of a package that a records run doesn't read, and so leaves out of its inputs (`RecordsGate._differs`): those in a
 #: `tests/` or `test/` directory of it, Markdown and READMEs; everything else stays, as a build may read any file
 RECORDS_UNREAD_DIRS = frozenset({"tests", "test"})
@@ -2919,6 +2919,8 @@ class RecordsGate:
         self._since = ""
         self._candidates: dict[str, list[str]] = {}
         self._readable: dict[str, list[str]] = {}
+        #: the commits a fetch has asked the remote for: another package's search doesn't ask again for those it won't serve
+        self._tried: set[str] = set()
         self.notes: list[str] = []
 
     def __call__(self, pr: PR) -> str | None:
@@ -3051,7 +3053,8 @@ class RecordsGate:
         if pkg not in self._readable:
             cands = self._commits(pkg, inputs)
             have = self._present(cands)
-            lacking = [c for c in cands if c not in have]
+            lacking = [c for c in cands if c not in have and c not in self._tried]
+            self._tried.update(lacking)
             todo = [lacking[i:i + RECORDS_FETCH_CHUNK] for i in range(0, len(lacking), RECORDS_FETCH_CHUNK)]
             calls = 0
             while todo and calls < RECORDS_FETCH_CALLS:
