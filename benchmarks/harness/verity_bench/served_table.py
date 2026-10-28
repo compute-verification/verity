@@ -29,7 +29,7 @@ from typing import Any
 from verity_bench import jobs
 from verity_bench.vllm import result as result_format
 from verity_bench.vllm.presets import expand_sweep, resolve_spec
-from verity_bench.vllm.runner import _summary
+from verity_bench.vllm.runner import summarize
 
 SCHEMA = "verity-bench/served-table/v1"
 SERVED = "stock-fp8@compiled"
@@ -177,7 +177,7 @@ def _judge(store: Any, run: str, art: str, commit: str, arms: Sequence[str], poi
     return [Found(run, art, commit, int(doc["execution"]["reps"]), row, caveats, device) for row in rows], None
 
 
-def _newest(store: Any, spec: str, point: str, arms: Sequence[str],
+def newest_passing(store: Any, spec: str, point: str, arms: Sequence[str],
             skipped: list[dict[str, Any]]) -> Found | None:
     """The newest passing run of `spec` at `point` whose result isn't superseded and holds `arms`; each newer run passed
     over goes into `skipped` with why."""
@@ -266,7 +266,7 @@ def _points(protocol: Protocol, record: Sequence[str], store: Any,
     arms = list(dict.fromkeys([*_arms(protocol), SERVED]))
     for spec in protocol.specs:
         for point in expand_sweep(resolve_spec(spec).sweep.id):
-            yield spec, point.id, _newest(store, spec, point.id, arms, skipped), None
+            yield spec, point.id, newest_passing(store, spec, point.id, arms, skipped), None
 
 
 def _source(spec: str, point: str, found: Found | None, record: str | None) -> dict[str, Any]:
@@ -290,7 +290,7 @@ def paired(point: Mapping[str, Any], arm: str, over: str, metric: str) -> dict[s
     pairs = [(a["metrics"].get(metric), b["metrics"].get(metric)) for a, b in zip(top, bottom, strict=True)]
     if not pairs or any(a is None or not b for a, b in pairs):
         return None
-    return _summary([float(a) / float(b) for a, b in pairs])
+    return summarize([float(a) / float(b) for a, b in pairs])
 
 
 def _live_failures(summary: Mapping[str, Any], stop: Mapping[str, Any], live: Live) -> list[str]:
@@ -481,7 +481,7 @@ def _sources(row: Mapping[str, Any]) -> list[str]:
     return [str(row["reps"]), row["run"], _art(row["art"]) + record, _caveat(row["caveats"])]
 
 
-def _ms(summary: Mapping[str, Any]) -> str:
+def ms_cell(summary: Mapping[str, Any]) -> str:
     ci = summary.get("ci95")
     return f"{summary['mean']:.3f}" if ci is None else f"{summary['mean']:.3f} ± {(ci[1] - ci[0]) / 2:.3f}"
 
@@ -506,9 +506,9 @@ def _breakdown(points: Sequence[Mapping[str, Any]]) -> list[str]:
                   "| row | " + " | ".join(f"{point['point']}, ms an output token | share" for point in group) + " |",
                   "|---|" + "---:|---:|" * len(group),
                   f"| `{AUDIT}` − `{PLAIN}` (credited lines, spans off) | "
-                  + " | ".join(f"{_ms(point['credited'])} | " for point in group) + " |",
+                  + " | ".join(f"{ms_cell(point['credited'])} | " for point in group) + " |",
                   f"| **`{AUDIT_SPANS}` − `{PLAIN_SPANS}`** | "
-                  + " | ".join(f"**{_ms(point['total'])}** | 100%" for point in group) + " |"]
+                  + " | ".join(f"**{ms_cell(point['total'])}** | 100%" for point in group) + " |"]
         for name in rows[0]:
             part = name.removeprefix("decode ")
             label = f"{name}: {DECODE_ROWS[part]}" if part in DECODE_ROWS else name
@@ -516,7 +516,7 @@ def _breakdown(points: Sequence[Mapping[str, Any]]) -> list[str]:
             for by_name in rows:
                 row = by_name.get(name)
                 share = "—" if row is None or row["share"] is None else f"{row['share']:.0%}"
-                cells.append(("—" if row is None else _ms(row["ms_per_token"])) + f" | {share}")
+                cells.append(("—" if row is None else ms_cell(row["ms_per_token"])) + f" | {share}")
             lines.append(f"| {label} | " + " | ".join(cells) + " |")
         lines.append("| sum of the rows | " + " | ".join(f"{point['sum']:.3f} | " for point in group) + " |")
         lines += [""] + [f"- {point['point']}: `{point['spec']}`, {point['reps']} reps, run {point['run']}, art "
