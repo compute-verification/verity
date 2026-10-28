@@ -7,9 +7,10 @@ and a composite Definition is a body of calls of other Definitions, possibly bat
 grows with the number of distinct Definitions it uses, not with its gate count, and every gate still has a fixed index
 in the canonical layout, so any gate can be located, evaluated and selected without expanding the circuit.
 
-Everything here is on the soundness path (`SOUNDNESS_PATH` in `tests/test_boundaries.py`): the verifiers in
-`verity.core` read Programs, their digests and these semantics. The descriptor format, its canonical bytes and its
-digests are specified in [`PROTOCOL.md`](PROTOCOL.md), and `tests/format_vectors.json` pins them.
+Everything here but the catalog (`ops`, `silicon`, `targets`) is on the soundness path (`SOUNDNESS_PATH` in
+`tests/test_boundaries.py`): the verifiers in `verity.core` read Programs, their digests and these semantics. The
+descriptor format, its canonical bytes and its digests are specified in [`PROTOCOL.md`](PROTOCOL.md), and
+`tests/format_vectors.json` pins them.
 
 ## Example
 
