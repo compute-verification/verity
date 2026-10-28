@@ -371,7 +371,7 @@ def slots(s: Scan) -> set[str]:
 
 
 #: The most lines ``KNOWN`` may hold. Raising it, for a new line, needs lean's review; `--prune` lowers it to the count.
-KNOWN_MAX = 388
+KNOWN_MAX = 385
 
 #: Every hit that is not a canonical, a mirror, a reading of the canonical or a protocol's slot, with its reason and owner.
 #: For new code, read the canonical or rename; `--prune` deletes the lines whose declarations went.
@@ -481,14 +481,8 @@ KNOWN: dict[str, str] = {
         "homonym, a hiding commitment to a partition's rows: rename (proofs)",
     "Security/Definitions/Core/Boolean.lean::FlockSoundness.Audit.Circuit":
         "duplicate of `Verity.Circuit`: becomes its Boolean case (proofs)",
-    "Security/Definitions/Core/Boolean.lean::Verity.Boolean.Circuit":
-        "duplicate of `Verity.Circuit`: becomes its Boolean case (proofs)",
     "Security/Definitions/Flock/Accounting/Bound.lean::FlockSoundness.Accounting.Stmt":
         "duplicate of `Flock.Stmt`: becomes a reading of its shape (lean)",
-    "Security/Definitions/Flock/Circuit.lean::FlockSoundness.Audit.Circuit":
-        "duplicate of `Verity.Circuit`: becomes it (a copy of Core/Boolean's) (lean)",
-    "Security/Definitions/Flock/Circuit.lean::FlockSoundness.Audit.Op":
-        "duplicate of `Verity.Boolean.Op`: becomes it (a copy of Core/Boolean's) (lean)",
     "Security/Definitions/Flock/Circuit.lean::FlockSoundness.Audit.Partition":
         "duplicate of `Verity.Partition`: becomes it (a copy of Core's) (lean)",
     "Security/Definitions/Flock/Lowering.lean::FlockSoundness.Placement":
@@ -653,12 +647,6 @@ KNOWN: dict[str, str] = {
         "homonym, a table of benchmark lowerings: rename (compute-accounting)",
     "benchmarks/numerical/python/verity_numerical/bench/templates.py::Draw":
         "homonym, one synthetic benchmark draw: rename (compute-accounting)",
-    "benchmarks/numerical/python/verity_numerical/bench/views.py::Hash":
-        "homonym, one hash a table row relies on: rename (compute-accounting)",
-    "benchmarks/numerical/python/verity_numerical/reference/leaf_v2.py::Session":
-        "homonym, the old word for a run: rename (compute-accounting)",
-    "benchmarks/numerical/python/verity_numerical/reference/leaf_v2.py::Verdict":
-        "duplicate of `Core.Verdict`: becomes a client of it (compute-accounting)",
     "benchmarks/one_stage/a5_coins.py::Gate": "homonym, infra's challenger gate (an SSH host): rename (proofs)",
     "benchmarks/pous/p2_v1/store.py::Store":
         "duplicate of `CircuitRequirement.Store`: becomes a client of it (memory-accounting)",
