@@ -39,7 +39,7 @@ the active warden in front of serve-openai there (its ``CERTIFIER_FRONT``).
   (`leak_guard.py`) then reads DIR against the warden run's witness. Only the protocol rejects: a step that can't run
   (no kept run, a build, a tool or the chain failing without a report, an input missing, the leak guard failing, or
   SIGTERM from the piece's time limit) is `NotRun`, and the piece then refuses: DIR keeps only its log and gets
-  DIR/`REFUSED` naming why, with no answer, which `served_verdicts.py` reads as the certifier missing. ``--draw K`` is the scan's K drawn units (every
+  DIR/`REFUSED` naming why, with no answer, which `served_verdicts.py` reads as the certifier undecided, "not run". ``--draw K`` is the scan's K drawn units (every
   unit by default); a CR_K=V goes to the chain; ``--chain-cmd`` replaces the chain (a test's, which writes the report
   and the scan's answers under RESEARCH_RUN_DIR/out).
 * **relay**: a TCP relay from 127.0.0.1:``--listen`` to 127.0.0.1:``--to``, the local gate's tunnel.
@@ -72,7 +72,7 @@ PRIVATE = Path("private") / "certifier"
 #: the endpoint's records the chain reads (network_e2e `chain.ENDPOINT`)
 ENDPOINT = ("advice_trace.jsonl", "requests.jsonl", "windows.jsonl", "serve.json")
 PROTOCOL = "verity/certifier/v0"
-#: a piece's refusal to run, which `served_verdicts.py` reads as the subprotocol missing
+#: a piece's refusal to run, which `served_verdicts.py` reads as the subprotocol undecided, "not run"
 REFUSED = "refused.txt"
 LEAN_DIR = TREE / "verity" / "core" / "protocols" / "network" / "lean"
 #: the window circuit's class (4 slots, prompts of at most 32 ids, 4 outputs) and the scan's lanes
