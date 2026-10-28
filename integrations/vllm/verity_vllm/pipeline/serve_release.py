@@ -12,9 +12,10 @@ the leaves the drawn blocks open.
   until every protocol of ``--release-after`` has drawn window k, then hands the union to the device pool's `release` (the
   window's `release_drawn`), which copies those leaves to host and frees the window's pool pieces. A
   release can't come before the last draw, and a window is released once: a second draw of a window by the same protocol is
-  refused (a draw is never redrawn), as is any draw once the window was released. The sealed bundle then holds the kept set,
-  and the commitment over every leaf with every step's levels and salt key, so each kept leaf's opening path stays whole until
-  the last proof that reads it ends; a read of a dropped leaf is refused by name (`refused`, and the committer's own `open`).
+  refused (a draw is never redrawn), as is any draw once the window was released. The sealed bundle then holds the kept set
+  with its leaves' salts, every step's root and the tree nodes an opening inside it reads (`store_dump.drawn`), so each kept
+  leaf's opening path stays whole until the last proof that reads it ends; a read of a dropped leaf is refused by name
+  (`refused`, and the committer's own `open`).
 * **Where draws come in.** `Draws.put` in process (PoUW H1's under ``pouw``, from its arm once the window's draw coin is
   open: `serve_h1.H1Windows.drawn`), or `DrawDir`: ``--draws-dir`` (default ``OUT/draws``) holds one file a draw,
   ``w<k>.<protocol>.json`` = ``{"window": k, "protocol": P, "reads": [[step, name, lo, hi], ...]}``, written whole (to a temporary
@@ -33,6 +34,7 @@ from collections.abc import Callable, Iterable, Mapping, Sequence
 from pathlib import Path
 from typing import Any
 
+from verity_vllm import settings
 from verity_vllm.commit.native_ranges import DROPPED
 from verity_vllm.commit.opened import meta_by_name
 
@@ -184,11 +186,12 @@ class Draws:
 
 class DrawDir:
     """``--draws-dir``: each ``w<k>.<protocol>.json`` put into `Draws` once; `scan` reads what's new, `start` scans every
-    ``period_s`` on a thread of its own until `stop`."""
+    ``period_s`` (default `VERITY_DRAWS_POLL_S`) on a thread of its own until `stop`."""
 
-    def __init__(self, path: str | Path, draws: Draws, *, period_s: float = 0.2,
+    def __init__(self, path: str | Path, draws: Draws, *, period_s: float | None = None,
                  sleep: Callable[[float], None] = time.sleep) -> None:
-        self.path, self.draws, self.period_s, self.sleep = Path(path), draws, float(period_s), sleep
+        self.path, self.draws, self.sleep = Path(path), draws, sleep
+        self.period_s = settings.VERITY_DRAWS_POLL_S if period_s is None else float(period_s)
         self.path.mkdir(parents=True, exist_ok=True)
         self.seen: set[str] = set()
         self._stop = threading.Event()
